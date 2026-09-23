@@ -10,7 +10,9 @@ variable {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
 /-- R2, executed flow: every term is a function of the actual history. -/
 theorem history_transcript_accounting_exact
     (root : DeploymentRoot cfg base deployed ca) (coalition : Finset Adr)
-    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future) :
+    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     coalitionUnits coalition ca future.state * chiN (future.state.getStor ca) +
         (transcriptTally scale.toNat freshNat scale.toNat 0
           (history.dripCalls coalition ca)).joinResidue +
@@ -23,7 +25,7 @@ theorem history_transcript_accounting_exact
         scale.toNat * (transcriptTally scale.toNat freshNat scale.toNat 0
           (history.dripCalls coalition ca)).joined := by
   obtain ⟨steps, realizes, faithful⟩ :=
-    dripTraceRealizes_transcript root coalition history
+    dripTraceRealizes_transcript root coalition history hcov
   have tally := Chain.transcriptTally_eq realizes.toRealizedChain
   rw [root.snapshot_eq coalition] at tally
   rw [← faithful, tally]
@@ -51,7 +53,9 @@ theorem history_transcript_balance_exact
 exceed its actual principal plus the floor of its actual realized accrual. -/
 theorem history_transcript_entitlement
     (root : DeploymentRoot cfg base deployed ca) (coalition : Finset Adr)
-    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future) :
+    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     (transcriptTally scale.toNat freshNat scale.toNat 0
         (history.dripCalls coalition ca)).paid ≤
       (transcriptTally scale.toNat freshNat scale.toNat 0
@@ -59,7 +63,7 @@ theorem history_transcript_entitlement
         (transcriptTally scale.toNat freshNat scale.toNat 0
           (history.dripCalls coalition ca)).accrual / scale.toNat := by
   obtain ⟨steps, realizes, faithful⟩ :=
-    dripTraceRealizes_transcript root coalition history
+    dripTraceRealizes_transcript root coalition history hcov
   have tally := Chain.transcriptTally_eq realizes.toRealizedChain
   rw [root.snapshot_eq coalition] at tally
   rw [← faithful, tally]
@@ -75,14 +79,16 @@ theorem realized_segment_certified
     {left right : List Nat}
     (callsL : historyL.dripCalls coalition ca = left.map Kind.drip)
     (callsR : historyR.dripCalls coalition ca = right.map Kind.drip)
-    (sameElapsed : left.sum = right.sum) :
+    (sameElapsed : left.sum = right.sum)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     natDistance (chiN (futureL.state.getStor ca)) (chiN (futureR.state.getStor ca)) ≤
       max (segmentDriftForward scale.toNat half.toNat rate.toNat scale.toNat left right)
           (segmentDriftForward scale.toNat half.toNat rate.toNat scale.toNat right left) := by
   obtain ⟨stepsL, realizesL, faithfulL⟩ :=
-    dripTraceRealizes_transcript root coalition historyL
+    dripTraceRealizes_transcript root coalition historyL hcov
   obtain ⟨stepsR, realizesR, faithfulR⟩ :=
-    dripTraceRealizes_transcript root coalition historyR
+    dripTraceRealizes_transcript root coalition historyR hcov
   have stateL := Chain.transcriptState_eq realizesL.toRealizedChain
   have stateR := Chain.transcriptState_eq realizesR.toRealizedChain
   rw [root.snapshot_eq coalition, faithfulL, callsL] at stateL
@@ -107,10 +113,12 @@ theorem realized_segment_certified
 theorem dripCalls_ne_nil_of_totalUnits
     (root : DeploymentRoot cfg base deployed ca) (coalition : Finset Adr)
     (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future)
-    (moved : totalN (future.state.getStor ca) ≠ 0) :
+    (moved : totalN (future.state.getStor ca) ≠ 0)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     history.dripCalls coalition ca ≠ [] := by
   obtain ⟨steps, realizes, faithful⟩ :=
-    dripTraceRealizes_transcript root coalition history
+    dripTraceRealizes_transcript root coalition history hcov
   intro none
   have total := Chain.totalUnits_eq_of_callKinds_nil realizes.toRealizedChain
     (by rw [faithful, none])
@@ -131,7 +139,8 @@ noncomputable def concreteHistoryTrace :
 theorem concreteHistory_dripCalls_ne_nil :
     concreteHistoryTrace.dripCalls {concreteCreateSender} concreteCreateTarget ≠ [] := by
   apply dripCalls_ne_nil_of_totalUnits concreteDeploymentRoot
-    {concreteCreateSender} concreteHistoryTrace
+    {concreteCreateSender} concreteHistoryTrace _
+    (fun _ _ hfork => concreteConfig_covered hfork)
   unfold totalN
   rw [concreteExited_values.2.2.2]
   decide

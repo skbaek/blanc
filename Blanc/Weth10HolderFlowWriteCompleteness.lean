@@ -703,6 +703,9 @@ private theorem ninst_ne_sstore_of_free {source : Ninst}
       cases operation <;> simp [ninstSstoreFree] at free ⊢
   | exec operation => simp
   | push bytes size => simp
+  | dupn a => simp
+  | swapn a => simp
+  | exchange a => simp
 
 /-- Executable finite certificate that a source body and every table body it
 can call within `fuel` contain no `SSTORE`.  A zero fuel is deliberately
@@ -5470,6 +5473,7 @@ theorem Exec.balanceSstoreClassification_of_mem_committedFrames
     (run : Exec pc sevm pre out)
     (installed : some (pre.getCode ca).toList = Prog.compile (weth10 dp))
     (rootPc : pc = 0) (rootMemory : pre.memory = Mem.empty)
+    (rootFork : CoveredFork sevm.benvStat.fork)
     {frame : Exec.Frame}
     (retained : frame ∈ Exec.committedFrames run)
     (invocation : Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame)
@@ -5482,7 +5486,7 @@ theorem Exec.balanceSstoreClassification_of_mem_committedFrames
         key value holder action := by
   have context :=
     Blanc.Weth10.Exec.Frame.authenticContext_of_mem_committedFrames_exactInvocation (frame := frame)
-      run installed rootPc rootMemory retained invocation
+      run installed rootPc rootMemory rootFork retained invocation
   exact complete frame context stepPre stepPost slot key value holder occurrence
 
 /-- Premise-free program-level C2 theorem: every address-shaped `SSTORE` in
@@ -5494,6 +5498,7 @@ theorem Exec.weth10BalanceSstoreClassification_of_mem_committedFrames
     (run : Exec pc sevm pre out)
     (installed : some (pre.getCode ca).toList = Prog.compile (weth10 dp))
     (rootPc : pc = 0) (rootMemory : pre.memory = Mem.empty)
+    (rootFork : CoveredFork sevm.benvStat.fork)
     {frame : Exec.Frame}
     (retained : frame ∈ Exec.committedFrames run)
     (invocation : Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame)
@@ -5506,7 +5511,7 @@ theorem Exec.weth10BalanceSstoreClassification_of_mem_committedFrames
         key value holder action := by
   exact Exec.balanceSstoreClassification_of_mem_committedFrames
     (compiledBalanceSstoreReverseComplete dp ca) run installed rootPc
-    rootMemory retained invocation occurrence
+    rootMemory rootFork retained invocation occurrence
 
 end Weth10
 

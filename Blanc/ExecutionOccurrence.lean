@@ -806,8 +806,15 @@ theorem ProcessCreateMessage.ok_getStor_eq_inner_of_clean
             | halt reason =>
                 have eq := Except.ok.inj settled
                 rw [eq] at clean
-                simp [processCreateMessage.exceptionalHalt,
-                  Devm.error, Devm.setMeta] at clean
+                cases hsg : msg.benv.stat.rules.stateGas with
+                | none =>
+                    simp only [hsg] at clean
+                    simp [processCreateMessage.exceptionalHalt,
+                      Devm.error, Devm.setMeta] at clean
+                | some sg =>
+                    simp only [hsg] at clean
+                    simp [processCreateMessage.exceptionalHaltAmsterdam,
+                      Devm.error, Devm.setMeta] at clean
             | revert => cases settled
             | crypto reason => cases settled
             | internal reason => cases settled
@@ -1080,10 +1087,11 @@ theorem Xinst.storageReplay_some_of_body
     (resumeRun : resume.run result = .ok post)
     (body : ∀ committed : Execution.commits out = true,
       Exec.StorageReplay childPre
-        (Execution.committedPost out committed) writes) :
+        (Execution.committedPost out committed) writes)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Exec.StorageReplay pre post
       (if Frame.settlementCommits frame out = true then writes else []) := by
-  rcases Xinst.step_shape sevm pre x with
+  rcases Xinst.step_shapeCovered sevm pre x hfork with
     ⟨execution, shape, hprefix⟩ |
     ⟨d, endowment, newAddress, mi, ms, hprefix, shape⟩ |
     ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
@@ -1177,6 +1185,12 @@ theorem Exec.Deriv.successfulSstore?_sound
               | exec exec =>
                   simp [Exec.Deriv.successfulSstore?, hget] at found
               | push bytes size =>
+                  simp [Exec.Deriv.successfulSstore?, hget] at found
+              | dupn imm =>
+                  simp [Exec.Deriv.successfulSstore?, hget] at found
+              | swapn imm =>
+                  simp [Exec.Deriv.successfulSstore?, hget] at found
+              | exchange imm =>
                   simp [Exec.Deriv.successfulSstore?, hget] at found
               | reg regular =>
                   cases regular <;>
@@ -1324,7 +1338,8 @@ recognized by `successfulSstore?`: either one raw SSTORE event or none. -/
 private theorem Exec.storageReplay_cont_head
     {pc pc' : Nat} {sevm : Sevm} {pre post : Devm} {out : Execution}
     (step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' post)
-    (next : Exec pc' sevm post out) :
+    (next : Exec pc' sevm post out)
+    (_hfork : CoveredFork sevm.benvStat.fork) :
     Exec.StorageReplay pre post
       ([⟨pc, sevm, pre, out, Exec.cont step next⟩].filterMap
         Exec.Deriv.successfulSstore?) := by
@@ -1371,6 +1386,27 @@ private theorem Exec.storageReplay_cont_head
                 Ninst.Hinv.inv (f := Devm.getStor)
                   (show Ninst.Run sevm pre (.push bytes bound) post from
                     ⟨.none, trivial, pc, nrun⟩)
+              simpa [Exec.Deriv.successfulSstore?, decoded] using
+                Exec.StorageReplay.of_getStor_eq equal.symm
+          | dupn imm =>
+              have frame := Ninst.dupn_instructionFrame_effectRec
+                (xl := .none) trivial nrun
+              have equal : Devm.getStor pre = Devm.getStor post :=
+                funext (Devm.InstructionFrame.getStor frame)
+              simpa [Exec.Deriv.successfulSstore?, decoded] using
+                Exec.StorageReplay.of_getStor_eq equal.symm
+          | swapn imm =>
+              have frame := Ninst.swapn_instructionFrame_effectRec
+                (xl := .none) trivial nrun
+              have equal : Devm.getStor pre = Devm.getStor post :=
+                funext (Devm.InstructionFrame.getStor frame)
+              simpa [Exec.Deriv.successfulSstore?, decoded] using
+                Exec.StorageReplay.of_getStor_eq equal.symm
+          | exchange imm =>
+              have frame := Ninst.exchange_instructionFrame_effectRec
+                (xl := .none) trivial nrun
+              have equal : Devm.getStor pre = Devm.getStor post :=
+                funext (Devm.InstructionFrame.getStor frame)
               simpa [Exec.Deriv.successfulSstore?, decoded] using
                 Exec.StorageReplay.of_getStor_eq equal.symm
           | exec executable =>
@@ -1441,7 +1477,8 @@ private theorem Exec.doneOk_getStor_eq
     {settled : Except (EvmError × State × AdrSet × Tra) Devm}
     (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
     (enter : frame.enter = .done settled)
-    (resumeRun : resume.run settled = .ok post) :
+    (resumeRun : resume.run settled = .ok post)
+    (_hfork : CoveredFork sevm.benvStat.fork) :
     Devm.getStor post = Devm.getStor pre := by
   rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
   have run : Xinst.Run sevm pre x .none (.ok post) := by
@@ -1491,7 +1528,8 @@ of the settlement-retained successful SSTORE events. -/
 theorem Exec.storageReplay_committedPost
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out)
-    (committed : Execution.commits out = true) :
+    (committed : Execution.commits out = true)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Exec.StorageReplay pre (Execution.committedPost out committed)
       (Exec.retainedStorageWrites run) := by
   induction run with
@@ -1504,8 +1542,8 @@ theorem Exec.storageReplay_committedPost
         Exec.StorageReplay.of_getStor_eq
           (Exec.halt_getStor_eq step committed)
   | cont step next ih =>
-      have head := Exec.storageReplay_cont_head step next
-      have tail := ih committed
+      have head := Exec.storageReplay_cont_head step next hfork
+      have tail := ih committed hfork
       convert head.append tail using 1
       simp [Exec.retainedStorageWrites, Exec.retainedNodes, committed,
         Exec.retainedNodesOfCommits, List.filterMap_cons]
@@ -1514,8 +1552,8 @@ theorem Exec.storageReplay_committedPost
       simp [Execution.commits] at committed
   | doneOk step enter resume next ih =>
       have head := Exec.StorageReplay.of_getStor_eq
-        (Exec.doneOk_getStor_eq step enter resume)
-      have tail := ih committed
+        (Exec.doneOk_getStor_eq step enter resume hfork)
+      have tail := ih committed hfork
       have hnone : Exec.Deriv.successfulSstore?
           (⟨_, _, _, _, Exec.doneOk step enter resume next⟩ :
             Exec.Deriv) = none := rfl
@@ -1527,9 +1565,11 @@ theorem Exec.storageReplay_committedPost
       simp [Execution.commits] at committed
   | runOk step enter child resume next childIH nextIH =>
       rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
+      have hfork_c := Evm.step_spawn_child_fork step enter hfork
       have throughChild := Xinst.storageReplay_some_of_body
-        spawn (RunFrame.of_run enter) resume childIH
-      have throughTail := nextIH committed
+        spawn (RunFrame.of_run enter) resume
+        (fun committed => childIH committed hfork_c) hfork
+      have throughTail := nextIH committed hfork
       convert throughChild.append throughTail using 1
       split
       · rename_i settles
@@ -1556,6 +1596,7 @@ theorem Exec.exists_lastRetainedSstore_of_getStor_ne
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out)
     (committed : Execution.commits out = true)
+    (hfork : CoveredFork sevm.benvStat.fork)
     {owner : Adr} {key : B256}
     (changed :
       (Devm.getStor pre owner).get key ≠
@@ -1569,7 +1610,7 @@ theorem Exec.exists_lastRetainedSstore_of_getStor_ne
         (Devm.getStor (Execution.committedPost out committed) owner).get key ∧
       write.IsLastRetained := by
   exact Exec.exists_lastRetainedSstore_of_replay
-    (Exec.storageReplay_committedPost run committed owner key) changed
+    (Exec.storageReplay_committedPost run committed hfork owner key) changed
 
 /-- The unique same-frame continuation edge.  Entered child proofs are not
 edges here: they are the chronological segment crossed by `runOk` before its
@@ -2293,7 +2334,8 @@ theorem Func.sourceSites_sound
       simp only [Func.sourceSites, List.mem_cons] at member
       rcases member with rfl | member
       · rcases of_subcode sub with ⟨compiled, hcompile, hslice⟩
-        rcases of_bind_eq_some hcompile with ⟨tailBytes, htail, hwhole⟩
+        rcases of_guard_eq_some hcompile with ⟨-, hrest⟩
+        rcases of_bind_eq_some hrest with ⟨tailBytes, htail, hwhole⟩
         rw [← of_pure_eq_some hwhole] at hslice
         exact Ninst.at_of_slice (List.slice_prefix hslice)
       · rcases Func.noPushBefore_next sub boundary with

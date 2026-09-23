@@ -568,11 +568,12 @@ theorem Xinst.allowanceRegionEffect_some_of_bodyEffect
     (hbody : ∀ (committed : Execution.commits raw = true),
       AllowanceRegionEffect ca cevm.dyna
         (Execution.committedPost raw committed)
-        (Exec.attributionStream dp ca child)) :
+        (Exec.attributionStream dp ca child))
+    (hfork : CoveredFork sevm.benvStat.fork) :
     AllowanceRegionEffect ca pre post
       (if Blanc.Frame.settlementCommits frame raw = true
        then Exec.attributionStream dp ca child else []) := by
-  rcases Xinst.step_shape sevm pre x with
+  rcases Xinst.step_shapeCovered sevm pre x hfork with
     ⟨ex, hs, hprefix⟩ |
     ⟨d, endowment, newAddress, mi, ms, hprefix, hs⟩ |
     ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
@@ -612,10 +613,11 @@ theorem Xinst.allowanceRegionEffect_some_of_bodyEffect
 /-- Contract-neutral childless interpreter transport. -/
 theorem Xinst.allowanceRegionEffect_none
     {ca : Adr} {sevm : Sevm} {pre post : Devm} {x : Xinst}
-    (hrun : Xinst.Run sevm pre x .none (.ok post)) :
+    (hrun : Xinst.Run sevm pre x .none (.ok post))
+    (hfork : CoveredFork sevm.benvStat.fork) :
     AllowanceRegionEffect ca pre post [] := by
   unfold Xinst.Run at hrun
-  rcases Xinst.step_shape sevm pre x with
+  rcases Xinst.step_shapeCovered sevm pre x hfork with
     ⟨execution, hs, hframe⟩ |
     ⟨d, endowment, newAddress, mi, ms, hprefix, hs⟩ |
     ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
@@ -643,7 +645,8 @@ interpreter transport above. -/
 theorem Ninst.foreignNoneAllowanceRegionEffect
     {ca : Adr} {pc : Nat} {sevm : Sevm} {pre post : Devm} {n : Ninst}
     (run : Ninst.StepRun pc sevm pre n .none (.ok post))
-    (hforeign : sevm.currentTarget ≠ ca) :
+    (hforeign : sevm.currentTarget ≠ ca)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     AllowanceRegionEffect ca pre post [] := by
   cases n with
   | reg r =>
@@ -663,10 +666,25 @@ theorem Ninst.foreignNoneAllowanceRegionEffect
           (Rinst.preserves_getCode hreg ca).symm
   | exec x =>
       simp only [Ninst.StepRun, Ninst.step_exec] at run
-      exact Xinst.allowanceRegionEffect_none (XStep.run_toStep.mp run)
+      exact Xinst.allowanceRegionEffect_none (XStep.run_toStep.mp run) hfork
   | push xs hxs =>
       have hframe := Ninst.push_instructionFrame_effectRec
         (hxs := hxs) (xl := .none) trivial run
+      exact AllowanceRegionEffect.of_getStorCode_eq
+        (hframe.getStor ca) (hframe.getCode ca)
+  | dupn imm =>
+      have hframe := Ninst.dupn_instructionFrame_effectRec
+        (imm := imm) (xl := .none) trivial run
+      exact AllowanceRegionEffect.of_getStorCode_eq
+        (hframe.getStor ca) (hframe.getCode ca)
+  | swapn imm =>
+      have hframe := Ninst.swapn_instructionFrame_effectRec
+        (imm := imm) (xl := .none) trivial run
+      exact AllowanceRegionEffect.of_getStorCode_eq
+        (hframe.getStor ca) (hframe.getCode ca)
+  | exchange imm =>
+      have hframe := Ninst.exchange_instructionFrame_effectRec
+        (imm := imm) (xl := .none) trivial run
       exact AllowanceRegionEffect.of_getStorCode_eq
         (hframe.getStor ca) (hframe.getCode ca)
 
@@ -692,81 +710,8 @@ theorem Linst.foreignAllowanceRegionEffect
   have hcodeFrame := Linst.run_codeFrame run
   have hcode : pre.getCode ca = post.getCode ca :=
     (hcodeFrame ca).symm
-  cases l with
-  | stop =>
-      simp [Linst.Run, Linst.run] at run
-      subst post
-      exact AllowanceRegionEffect.refl
-  | return_ =>
-      have hframe := Linst.run_instructionFrame sevm pre .return_ (by decide)
-      rw [run] at hframe
-      exact AllowanceRegionEffect.of_getStorCode_eq
-        (hframe.getStor ca) hcode
-  | revert =>
-      dsimp [Linst.Run, Linst.run] at run
-      rcases Except.bind_eq_ok run with ⟨first, hfirst, hrest⟩
-      rcases Except.bind_eq_ok hrest with ⟨second, hsecond, hrest⟩
-      rcases Except.bind_eq_ok hrest with ⟨third, hthird, hrest⟩
-      contradiction
-  | selfdestruct =>
-      dsimp [Linst.Run, Linst.run] at run
-      rcases Except.bind_eq_ok run with
-        ⟨⟨donee, devm1⟩, hpop, hrun1⟩
-      rcases Except.bind_eq_ok hrun1 with
-        ⟨devm2, hcharge, hrun2⟩
-      rcases Except.bind_eq_ok hrun2 with
-        ⟨_, hassert, hrun3⟩
-      rcases Except.bind_eq_ok hrun3 with
-        ⟨devm3, hsub, hrun4⟩
-      have hsubSome : devm2.subBal sevm.currentTarget
-          (devm1.getAcct sevm.currentTarget).bal = some devm3 := by
-        cases heq : devm2.subBal sevm.currentTarget
-            (devm1.getAcct sevm.currentTarget).bal
-        · rw [heq] at hsub
-          contradiction
-        · rw [heq] at hsub
-          injection hsub with h
-          subst h
-          rfl
-      have hsubState : devm2.state.subBal sevm.currentTarget
-          (devm1.getAcct sevm.currentTarget).bal = some devm3.state := by
-        dsimp [Devm.subBal, Option.bind] at hsubSome
-        cases heq : devm2.state.subBal sevm.currentTarget
-            (devm1.getAcct sevm.currentTarget).bal
-        · rw [heq] at hsubSome
-          contradiction
-        · rw [heq] at hsubSome
-          injection hsubSome with h
-          subst h
-          rfl
-      let transferred := devm3.addBal donee
-        (devm1.getAcct sevm.currentTarget).bal
-      have hpreToOne : Devm.getStor pre ca = Devm.getStor devm1 ca :=
-        congrFun (Devm.popToAdr_getStor_eq hpop) ca
-      have hchargeStor : Devm.getStor devm1 ca = Devm.getStor devm2 ca := by
-        have hcharged := chargeGas_getStor_eq hcharge
-        have hprefix : Devm.getStor
-            (if donee ∉ devm1.accessedAddresses then
-              (addAccessedAddress devm1 donee,
-                gasSelfDestruct + gasColdAccountAccess)
-            else (devm1, gasSelfDestruct)).1 ca =
-              Devm.getStor devm1 ca := by
-          split <;> rfl
-        exact hprefix.symm.trans (congrFun hcharged ca)
-      have htransferStor : Devm.getStor devm2 ca =
-          Devm.getStor transferred ca := by
-        exact (of_state_transfer_fields hsubState).1 ca |>.symm
-      have hpostStor : Devm.getStor transferred ca = Devm.getStor post ca := by
-        dsimp only [transferred] at hrun4 ⊢
-        split at hrun4
-        · have heq := Except.ok.inj hrun4
-          rw [← heq]
-          exact State.setBal_get_stor.symm
-        · have heq := Except.ok.inj hrun4
-          rw [← heq]
-      exact AllowanceRegionEffect.of_getStorCode_eq
-        (hpreToOne.trans (hchargeStor.trans
-          (htransferStor.trans hpostStor))) hcode
+  exact AllowanceRegionEffect.of_getStorCode_eq
+    (congrFun (Linst.getStor_eq run) ca).symm hcode
 
 /-! ## The five interpreter cases -/
 
@@ -791,15 +736,16 @@ theorem Exec.CoreAllowanceSound.nextNone
     (ih : Exec.CoreAllowanceSound dp ca
       (pc + n.size) sevm inter out) :
     Exec.CoreAllowanceSound dp ca pc sevm pre out := by
-  intro run committed hatp _
+  intro run committed hatp _ hcov
   have head := Ninst.foreignNoneAllowanceRegionEffect (ca := ca) hstep hforeign
+    hcov
   have hatpInter : Prog.At (weth10 dp) ca
       (pc + n.size) sevm inter := by
     refine ⟨?_, fun htarget => (hforeign htarget).elim⟩
     rw [← head.codeEq]
     exact hatp.1
   have tail := ih next committed hatpInter
-    (fun htarget => (hforeign htarget).elim)
+    (fun htarget => (hforeign htarget).elim) hcov
   have combined : AllowanceRegionEffect ca pre
       (Execution.committedPost out committed)
       (Exec.attributionStream dp ca next) := by
@@ -882,8 +828,14 @@ theorem Exec.CoreAllowanceSound.nextSome
       simp [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at hstep
   | push xs hxs =>
       simp [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hstep
+  | dupn imm =>
+      simp [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at hstep
+  | swapn imm =>
+      simp [Ninst.StepRun, Ninst.step_swapn, Step.run_ofExecution] at hstep
+  | exchange imm =>
+      simp [Ninst.StepRun, Ninst.step_exchange, Step.run_ofExecution] at hstep
   | exec x =>
-      intro run committed hatp _
+      intro run committed hatp _ hcov
       have hxrun := XStep.run_toStep.mp hstep
       cases hs : Xinst.step sevm pre x with
       | done execution =>
@@ -966,15 +918,16 @@ theorem Exec.CoreAllowanceSound.nextSome
                 exact ihChild child rawCommitted hchildAt
                   (fun htarget =>
                     ⟨⟨hpc0, hchildMemory⟩, hchildDirect htarget⟩)
+                  (Evm.step_spawn_child_fork hevm henter hcov)
               have head := Xinst.allowanceRegionEffect_some_of_bodyEffect
-                hs hframe hresume.symm child hatp.1 hbody
+                hs hframe hresume.symm child hatp.1 hbody hcov
               have hatpInter : Prog.At (weth10 dp) ca
                   (pc + 1) sevm inter := by
                 refine ⟨?_, fun htarget => (hforeign htarget).elim⟩
                 rw [← head.codeEq]
                 exact hatp.1
               have tail := ihNext next committed hatpInter
-                (fun htarget => (hforeign htarget).elim)
+                (fun htarget => (hforeign htarget).elim) hcov
               have combined := head.append tail
               rw [Exec.attributionStream_eq_attributionInner_of_currentTarget_ne
                   next committed hforeign] at combined
@@ -995,7 +948,7 @@ theorem Exec.CoreAllowanceSound.jump
     (hforeign : sevm.currentTarget ≠ ca)
     (ih : Exec.CoreAllowanceSound dp ca pc' sevm inter out) :
     Exec.CoreAllowanceSound dp ca pc sevm pre out := by
-  intro run committed hatp _
+  intro run committed hatp _ hcov
   have hevm : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' inter := by
     rw [Evm.step_jump hat]
     exact congrArg Step.ofJump hstep
@@ -1008,7 +961,7 @@ theorem Exec.CoreAllowanceSound.jump
     rw [← head.codeEq]
     exact hatp.1
   have tail := ih next committed hatpInter
-    (fun htarget => (hforeign htarget).elim)
+    (fun htarget => (hforeign htarget).elim) hcov
   have combined : AllowanceRegionEffect ca pre
       (Execution.committedPost out committed)
       (Exec.attributionStream dp ca next) := by
@@ -1029,7 +982,7 @@ theorem Exec.CoreAllowanceSound.last
     (hstep : Linst.Run sevm pre l out)
     (hforeign : sevm.currentTarget ≠ ca) :
     Exec.CoreAllowanceSound dp ca pc sevm pre out := by
-  intro run committed _ _
+  intro run committed _ _ _
   have hevm : Evm.step ⟨pc, sevm, pre⟩ = .halt out := by
     rw [Evm.step_last hat]
     exact congrArg Step.halt hstep
@@ -1105,11 +1058,12 @@ theorem CompiledBodyAllowanceHandler.installedAllowanceRegionEffect
     (committed : Execution.commits (.ok post) = true)
     (installed : Prog.At (weth10 dp) ca pc sevm pre)
     (root : Exec.Frame.IsRoot (Exec.Frame.ofRun run committed))
-    (direct : sevm.codeAddress = some ca) :
+    (direct : sevm.codeAddress = some ca)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     AllowanceRegionEffect ca pre post (Exec.attributionStream dp ca run) := by
   have hfa := Exec.coreAllowanceSound_of_compiledBodyAllowanceHandler handler
   have hcore := hfa pc sevm pre (.ok post) run installed
-  exact hcore run committed installed (fun _ => ⟨root, direct⟩)
+  exact hcore run committed installed (fun _ => ⟨root, direct⟩) hfork
 
 /-! ## Read-sound contract-neutral transport
 
@@ -1149,17 +1103,19 @@ theorem GenericCreate.allowanceRegionEffectSound_none
 /-- Read-sound form of `Xinst.allowanceRegionEffect_none`. -/
 theorem Xinst.allowanceRegionEffectSound_none
     {ca : Adr} {sevm : Sevm} {pre post : Devm} {x : Xinst}
-    (hrun : Xinst.Run sevm pre x .none (.ok post)) :
+    (hrun : Xinst.Run sevm pre x .none (.ok post))
+    (hfork : CoveredFork sevm.benvStat.fork) :
     AllowanceRegionEffectSound ca pre post [] :=
-  .of_nilLedger (Xinst.allowanceRegionEffect_none hrun)
+  .of_nilLedger (Xinst.allowanceRegionEffect_none hrun hfork)
 
 /-- Read-sound form of `Ninst.foreignNoneAllowanceRegionEffect`. -/
 theorem Ninst.foreignNoneAllowanceRegionEffectSound
     {ca : Adr} {pc : Nat} {sevm : Sevm} {pre post : Devm} {n : Ninst}
     (run : Ninst.StepRun pc sevm pre n .none (.ok post))
-    (hforeign : sevm.currentTarget ≠ ca) :
+    (hforeign : sevm.currentTarget ≠ ca)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     AllowanceRegionEffectSound ca pre post [] :=
-  .of_nilLedger (Ninst.foreignNoneAllowanceRegionEffect run hforeign)
+  .of_nilLedger (Ninst.foreignNoneAllowanceRegionEffect run hforeign hfork)
 
 /-- Read-sound form of `Jinst.allowanceRegionEffect`. -/
 theorem Jinst.allowanceRegionEffectSound
@@ -1531,11 +1487,12 @@ theorem Xinst.allowanceRegionEffectSound_some_of_bodyEffect
     (hbody : ∀ (committed : Execution.commits raw = true),
       AllowanceRegionEffectSound ca cevm.dyna
         (Execution.committedPost raw committed)
-        (Exec.attributionStream dp ca child)) :
+        (Exec.attributionStream dp ca child))
+    (hfork : CoveredFork sevm.benvStat.fork) :
     AllowanceRegionEffectSound ca pre post
       (if Blanc.Frame.settlementCommits frame raw = true
        then Exec.attributionStream dp ca child else []) := by
-  rcases Xinst.step_shape sevm pre x with
+  rcases Xinst.step_shapeCovered sevm pre x hfork with
     ⟨ex, hs, hprefix⟩ |
     ⟨d, endowment, newAddress, mi, ms, hprefix, hs⟩ |
     ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
@@ -1595,15 +1552,16 @@ theorem Exec.CoreAllowanceReadSound.nextNone
     (ih : Exec.CoreAllowanceReadSound dp ca
       (pc + n.size) sevm inter out) :
     Exec.CoreAllowanceReadSound dp ca pc sevm pre out := by
-  intro run committed hatp _
-  have head := Ninst.foreignNoneAllowanceRegionEffectSound (ca := ca) hstep hforeign
+  intro run committed hatp _ hcov
+  have head := Ninst.foreignNoneAllowanceRegionEffectSound (ca := ca) hstep
+    hforeign hcov
   have hatpInter : Prog.At (weth10 dp) ca
       (pc + n.size) sevm inter := by
     refine ⟨?_, fun htarget => (hforeign htarget).elim⟩
     rw [← head.codeEq]
     exact hatp.1
   have tail := ih next committed hatpInter
-    (fun htarget => (hforeign htarget).elim)
+    (fun htarget => (hforeign htarget).elim) hcov
   have combined : AllowanceRegionEffectSound ca pre
       (Execution.committedPost out committed)
       (Exec.attributionStream dp ca next) := by
@@ -1686,8 +1644,14 @@ theorem Exec.CoreAllowanceReadSound.nextSome
       simp [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at hstep
   | push xs hxs =>
       simp [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hstep
+  | dupn imm =>
+      simp [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at hstep
+  | swapn imm =>
+      simp [Ninst.StepRun, Ninst.step_swapn, Step.run_ofExecution] at hstep
+  | exchange imm =>
+      simp [Ninst.StepRun, Ninst.step_exchange, Step.run_ofExecution] at hstep
   | exec x =>
-      intro run committed hatp _
+      intro run committed hatp _ hcov
       have hxrun := XStep.run_toStep.mp hstep
       cases hs : Xinst.step sevm pre x with
       | done execution =>
@@ -1770,15 +1734,16 @@ theorem Exec.CoreAllowanceReadSound.nextSome
                 exact ihChild child rawCommitted hchildAt
                   (fun htarget =>
                     ⟨⟨hpc0, hchildMemory⟩, hchildDirect htarget⟩)
+                  (Evm.step_spawn_child_fork hevm henter hcov)
               have head := Xinst.allowanceRegionEffectSound_some_of_bodyEffect
-                hs hframe hresume.symm child hatp.1 hbody
+                hs hframe hresume.symm child hatp.1 hbody hcov
               have hatpInter : Prog.At (weth10 dp) ca
                   (pc + 1) sevm inter := by
                 refine ⟨?_, fun htarget => (hforeign htarget).elim⟩
                 rw [← head.codeEq]
                 exact hatp.1
               have tail := ihNext next committed hatpInter
-                (fun htarget => (hforeign htarget).elim)
+                (fun htarget => (hforeign htarget).elim) hcov
               have combined := head.append tail
               rw [Exec.attributionStream_eq_attributionInner_of_currentTarget_ne
                   next committed hforeign] at combined
@@ -1799,7 +1764,7 @@ theorem Exec.CoreAllowanceReadSound.jump
     (hforeign : sevm.currentTarget ≠ ca)
     (ih : Exec.CoreAllowanceReadSound dp ca pc' sevm inter out) :
     Exec.CoreAllowanceReadSound dp ca pc sevm pre out := by
-  intro run committed hatp _
+  intro run committed hatp _ hcov
   have hevm : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' inter := by
     rw [Evm.step_jump hat]
     exact congrArg Step.ofJump hstep
@@ -1812,7 +1777,7 @@ theorem Exec.CoreAllowanceReadSound.jump
     rw [← head.codeEq]
     exact hatp.1
   have tail := ih next committed hatpInter
-    (fun htarget => (hforeign htarget).elim)
+    (fun htarget => (hforeign htarget).elim) hcov
   have combined : AllowanceRegionEffectSound ca pre
       (Execution.committedPost out committed)
       (Exec.attributionStream dp ca next) := by
@@ -1833,7 +1798,7 @@ theorem Exec.CoreAllowanceReadSound.last
     (hstep : Linst.Run sevm pre l out)
     (hforeign : sevm.currentTarget ≠ ca) :
     Exec.CoreAllowanceReadSound dp ca pc sevm pre out := by
-  intro run committed _ _
+  intro run committed _ _ _
   have hevm : Evm.step ⟨pc, sevm, pre⟩ = .halt out := by
     rw [Evm.step_last hat]
     exact congrArg Step.halt hstep
@@ -1909,11 +1874,12 @@ theorem CompiledBodyAllowanceReadHandler.installedAllowanceRegionEffectSound
     (committed : Execution.commits (.ok post) = true)
     (installed : Prog.At (weth10 dp) ca pc sevm pre)
     (root : Exec.Frame.IsRoot (Exec.Frame.ofRun run committed))
-    (direct : sevm.codeAddress = some ca) :
+    (direct : sevm.codeAddress = some ca)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     AllowanceRegionEffectSound ca pre post (Exec.attributionStream dp ca run) := by
   have hfa := Exec.coreAllowanceReadSound_of_compiledBodyAllowanceReadHandler handler
   have hcore := hfa pc sevm pre (.ok post) run installed
-  exact hcore run committed installed (fun _ => ⟨root, direct⟩)
+  exact hcore run committed installed (fun _ => ⟨root, direct⟩) hfork
 
 end Weth10
 

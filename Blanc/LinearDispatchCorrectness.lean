@@ -42,6 +42,9 @@ theorem Devm.DispatchFramePreserved.trans {a b c : Devm}
   · exact hab.state.trans hbc.state
   · exact hab.createdAccounts.trans hbc.createdAccounts
   · exact hab.transientStorage.trans hbc.transientStorage
+  · exact hab.stateGas.trans hbc.stateGas
+  · exact hab.accountReads.trans hbc.accountReads
+  · exact hab.storageReads.trans hbc.storageReads
 
 /-- A pure gas burn preserves every dispatch-frame field except gas. -/
 theorem dispatchFrame_of_burnBy {cost : Nat} {a b : Devm}
@@ -61,6 +64,9 @@ theorem dispatchFrame_of_burnBy {cost : Nat} {a b : Devm}
   · exact h.state
   · exact h.createdAccounts
   · exact h.transientStorage
+  · exact h.stateGas
+  · exact h.accountReads
+  · exact h.storageReads
 
 theorem dispatchFrame_of_pushBurn {xs : List B256} {a b : Devm}
     (h : Devm.PushBurn xs a b) : Devm.DispatchFramePreserved a b := by
@@ -79,6 +85,9 @@ theorem dispatchFrame_of_pushBurn {xs : List B256} {a b : Devm}
   · exact h.state
   · exact h.createdAccounts
   · exact h.transientStorage
+  · exact h.stateGas
+  · exact h.accountReads
+  · exact h.storageReads
 
 theorem dispatchFrame_of_popBurnBy {xs : List B256} {cost : Nat}
     {a b : Devm} (h : Devm.PopBurnBy xs cost a b) :
@@ -98,6 +107,9 @@ theorem dispatchFrame_of_popBurnBy {xs : List B256} {cost : Nat}
   · exact h.state
   · exact h.createdAccounts
   · exact h.transientStorage
+  · exact h.stateGas
+  · exact h.accountReads
+  · exact h.storageReads
 
 private theorem dispatchFrame_of_popBurn {xs : List B256} {a b : Devm}
     (h : Devm.PopBurn xs a b) : Devm.DispatchFramePreserved a b := by
@@ -116,6 +128,9 @@ private theorem dispatchFrame_of_popBurn {xs : List B256} {a b : Devm}
   · exact h.state
   · exact h.createdAccounts
   · exact h.transientStorage
+  · exact h.stateGas
+  · exact h.accountReads
+  · exact h.storageReads
 
 theorem dispatchFrame_of_diffBurn {xs ys : List B256} {a b : Devm}
     (h : Devm.DiffBurn xs ys a b) : Devm.DispatchFramePreserved a b := by
@@ -134,6 +149,9 @@ theorem dispatchFrame_of_diffBurn {xs ys : List B256} {a b : Devm}
   · exact h.state
   · exact h.createdAccounts
   · exact h.transientStorage
+  · exact h.stateGas
+  · exact h.accountReads
+  · exact h.storageReads
 
 private theorem dupFrame {e : Sevm} {a b : Devm}
     (h : Ninst.Run e a (Ninst.dup 0) b) : Devm.DispatchFramePreserved a b := by
@@ -650,7 +668,7 @@ theorem Func.execWitness_linearDispatchWith_fallback
     (hroom : tail.length < 1022)
     (hget : fs[fallback]? = some fallbackBody)
     (hbody : Func.ExecWitness fs sevm
-      (entry.setMach ⟨tail, entry.memory, G⟩) fallbackBody ex) :
+      (entry.setMach ⟨tail, entry.memory, G, entry.stateGas⟩) fallbackBody ex) :
     Func.ExecWitness fs sevm entry
       (Blanc.linearDispatchWith fallback entries) ex := by
   induction entries generalizing entry G with
@@ -666,12 +684,12 @@ theorem Func.execWitness_linearDispatchWith_fallback
           let pushGas := pushCost word.toBytes.sig
           let afterPush := entry.setMach
             ⟨word :: selector :: tail, entry.memory,
-              G + callCost + branchCost + gVerylow⟩
+              G + callCost + branchCost + gVerylow, entry.stateGas⟩
           let afterEq := entry.setMach
             ⟨(0 : B256) :: tail, entry.memory,
-              G + callCost + branchCost⟩
+              G + callCost + branchCost, entry.stateGas⟩
           let afterBranch := entry.setMach
-            ⟨tail, entry.memory, G + callCost⟩
+            ⟨tail, entry.memory, G + callCost, entry.stateGas⟩
           have hpush : Ninst.RunCompiled sevm entry
               (Ninst.pushB256 word) afterPush := by
             simpa only [afterPush, hstack] using
@@ -685,7 +703,7 @@ theorem Func.execWitness_linearDispatchWith_fallback
                 (by rw [hstack]; simp only [List.length_cons]; omega))
           have heq : Ninst.RunCompiled sevm afterPush (.reg .eq)
               afterEq := by
-            simpa only [afterPush, afterEq, Devm.setMach_setMach,
+            simpa only [afterPush, afterEq, Devm.setMach_setMach, Devm.stateGas_setMach,
               Devm.stack_setMach, Devm.memory_setMach,
               Devm.gasLeft_setMach] using
               (Ninst.runCompiled_binary (sevm := sevm) (devm := afterPush)
@@ -705,7 +723,7 @@ theorem Func.execWitness_linearDispatchWith_fallback
               omega
             · dsimp only [afterBranch, callCost]
               simp only [Devm.gasLeft_setMach]
-            · simpa only [afterBranch, Devm.setMach_setMach,
+            · simpa only [afterBranch, Devm.setMach_setMach, Devm.stateGas_setMach,
                 Devm.stack_setMach, Devm.memory_setMach,
                 Devm.gasLeft_setMach] using hbody
           have hbranch : Func.ExecWitness fs sevm afterEq
@@ -730,15 +748,15 @@ theorem Func.execWitness_linearDispatchWith_fallback
           let restCost := linearDispatchFallbackCost remaining
           let afterDup := entry.setMach
             ⟨selector :: selector :: tail, entry.memory,
-              G + restCost + branchCost + gVerylow + pushGas⟩
+              G + restCost + branchCost + gVerylow + pushGas, entry.stateGas⟩
           let afterPush := entry.setMach
             ⟨word :: selector :: selector :: tail, entry.memory,
-              G + restCost + branchCost + gVerylow⟩
+              G + restCost + branchCost + gVerylow, entry.stateGas⟩
           let afterEq := entry.setMach
             ⟨(0 : B256) :: selector :: tail, entry.memory,
-              G + restCost + branchCost⟩
+              G + restCost + branchCost, entry.stateGas⟩
           let afterBranch := entry.setMach
-            ⟨selector :: tail, entry.memory, G + restCost⟩
+            ⟨selector :: tail, entry.memory, G + restCost, entry.stateGas⟩
           have hdup : Ninst.RunCompiled sevm entry (.reg (.dup 0))
               afterDup := by
             simpa only [afterDup, hstack] using
@@ -752,7 +770,7 @@ theorem Func.execWitness_linearDispatchWith_fallback
                 (by rw [hstack]; simp only [List.length_cons]; omega))
           have hpush : Ninst.RunCompiled sevm afterDup
               (Ninst.pushB256 word) afterPush := by
-            simpa only [afterDup, afterPush, Devm.setMach_setMach,
+            simpa only [afterDup, afterPush, Devm.setMach_setMach, Devm.stateGas_setMach,
               Devm.stack_setMach, Devm.memory_setMach,
               Devm.gasLeft_setMach] using
               (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := afterDup)
@@ -767,7 +785,7 @@ theorem Func.execWitness_linearDispatchWith_fallback
                   omega))
           have heq : Ninst.RunCompiled sevm afterPush (.reg .eq)
               afterEq := by
-            simpa only [afterPush, afterEq, Devm.setMach_setMach,
+            simpa only [afterPush, afterEq, Devm.setMach_setMach, Devm.stateGas_setMach,
               Devm.stack_setMach, Devm.memory_setMach,
               Devm.gasLeft_setMach] using
               (Ninst.runCompiled_binary (sevm := sevm) (devm := afterPush)
@@ -792,7 +810,7 @@ theorem Func.execWitness_linearDispatchWith_fallback
               simp only [Devm.stack_setMach]
             · dsimp only [afterBranch, restCost, remaining]
               simp only [Devm.gasLeft_setMach]
-            · simpa only [afterBranch, Devm.setMach_setMach,
+            · simpa only [afterBranch, Devm.setMach_setMach, Devm.stateGas_setMach,
                 Devm.stack_setMach, Devm.memory_setMach,
                 Devm.gasLeft_setMach] using hbody
           have hbranch : Func.ExecWitness fs sevm afterEq

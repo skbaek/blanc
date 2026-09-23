@@ -36,7 +36,7 @@ def fixtureBenv : Benv :=
     state := fixturePrestate
     stat :=
       { (default : BenvStat) with
-        rules := pragueRules
+        fork := .prague
         origState := fixturePrestate } }
 
 def upgradeMessage (data : Bytes) : Msg :=
@@ -616,7 +616,7 @@ private theorem DelegatecallSpawnDescriptor.parent_state_eq_callPre
   cases getDelegatedCodeAddress
       ((addAccessedAddress
         (callPre.setMach
-          ⟨spawn.stackTail, callPre.memory, callPre.gasLeft⟩)
+          ⟨spawn.stackTail, callPre.memory, callPre.gasLeft, callPre.stateGas⟩)
         spawn.codeWord.toAdr).state.getCode spawn.codeWord.toAdr) <;> rfl
 
 private theorem DelegatecallSpawnDescriptor.parent_logs_eq_callPre
@@ -632,7 +632,7 @@ private theorem DelegatecallSpawnDescriptor.parent_logs_eq_callPre
   cases getDelegatedCodeAddress
       ((addAccessedAddress
         (callPre.setMach
-          ⟨spawn.stackTail, callPre.memory, callPre.gasLeft⟩)
+          ⟨spawn.stackTail, callPre.memory, callPre.gasLeft, callPre.stateGas⟩)
         spawn.codeWord.toAdr).state.getCode spawn.codeWord.toAdr) <;> rfl
 
 /-- Extract the primary commit and nonempty setup boundary from the one exact
@@ -920,7 +920,12 @@ theorem upgradeToAndCall_primary_realizes_migration
   have childLogsEmpty : child.logs = [] := by
     calc
       child.logs = (initDevm spawn.child).logs := childEffect.2
-      _ = [] := rfl
+      _ = [] := by
+        change (match spawn.child.benv.stat.rules.stateGas with
+          | none => []
+          | some _ => _) = []
+        rw [show spawn.child.benv.stat.rules.stateGas = none from
+          spawn.covered.rules_stateGas_none]
   have parentLogs : spawn.parent.logs = afterPre.logs :=
     (Blanc.ProxyPair.Upgrade.DelegatecallSpawnDescriptor.parent_logs_eq_callPre
       spawn).trans (boundaryLogs.symm.trans setupLogs.symm)

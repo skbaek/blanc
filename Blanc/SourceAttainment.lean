@@ -128,6 +128,33 @@ lemma Ninst.exec_of_stepRun_extend {pc : Nat} {sevm : Sevm}
     exact ⟨.cont hcont tail, fun node hn => by
         simp only [Exec.rawNodes, List.mem_cons]; exact Or.inr hn,
       fun node hn => .step (.cont hcont tail) hn⟩
+  | dupn imm =>
+    rw [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at h_step
+    have hcont : Evm.step ⟨pc, sevm, devm⟩ =
+        .cont (pc + Ninst.size (.dupn imm)) devmMid := by
+      rw [hstep, Ninst.step_dupn, ← h_step.2]
+      rfl
+    exact ⟨.cont hcont tail, fun node hn => by
+        simp only [Exec.rawNodes, List.mem_cons]; exact Or.inr hn,
+      fun node hn => .step (.cont hcont tail) hn⟩
+  | swapn imm =>
+    rw [Ninst.StepRun, Ninst.step_swapn, Step.run_ofExecution] at h_step
+    have hcont : Evm.step ⟨pc, sevm, devm⟩ =
+        .cont (pc + Ninst.size (.swapn imm)) devmMid := by
+      rw [hstep, Ninst.step_swapn, ← h_step.2]
+      rfl
+    exact ⟨.cont hcont tail, fun node hn => by
+        simp only [Exec.rawNodes, List.mem_cons]; exact Or.inr hn,
+      fun node hn => .step (.cont hcont tail) hn⟩
+  | exchange imm =>
+    rw [Ninst.StepRun, Ninst.step_exchange, Step.run_ofExecution] at h_step
+    have hcont : Evm.step ⟨pc, sevm, devm⟩ =
+        .cont (pc + Ninst.size (.exchange imm)) devmMid := by
+      rw [hstep, Ninst.step_exchange, ← h_step.2]
+      rfl
+    exact ⟨.cont hcont tail, fun node hn => by
+        simp only [Exec.rawNodes, List.mem_cons]; exact Or.inr hn,
+      fun node hn => .step (.cont hcont tail) hn⟩
   | exec x =>
     rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at h_step
     cases hx : Xinst.step sevm devm x with
@@ -842,7 +869,8 @@ theorem Func.exec_of_runCompiledTo_routeTo_core :
       (Func.RunCompiledTo.next instructionRun tail) h_eq hFS pc sub hb
     rcases of_subcode sub with ⟨cd, h_eq', h_slice⟩
     rcases of_bind_eq_some h_eq' with ⟨cd', h_eq'', h_rw⟩
-    rw [← of_pure_eq_some h_rw] at h_slice
+    rcases of_bind_eq_some h_rw with ⟨pbs, h_pbs, h⟩; clear h_rw
+    rw [← of_pure_eq_some h] at h_slice
     have h_at : Ninst.At sevm.code pc instr :=
       Ninst.at_of_slice (List.slice_prefix h_slice)
     obtain ⟨occurrence, hnode, hinstr⟩ :=
@@ -861,7 +889,8 @@ theorem Func.exec_of_runCompiledTo_routeTo_core :
     rcases Func.noPushBefore_next sub hb with ⟨hb', sub'⟩
     rcases of_subcode sub with ⟨cd, h_eq', h_slice⟩
     rcases of_bind_eq_some h_eq' with ⟨cd', h_eq'', h_rw⟩
-    rw [← of_pure_eq_some h_rw] at h_slice
+    rcases of_bind_eq_some h_rw with ⟨pbs, h_pbs, h⟩; clear h_rw
+    rw [← of_pure_eq_some h] at h_slice
     have h_at : Ninst.At sevm.code pc instr :=
       Ninst.at_of_slice (List.slice_prefix h_slice)
     obtain ⟨excTail, occurrence, site, hpath, hmem, hpc, hinstr, hsite,

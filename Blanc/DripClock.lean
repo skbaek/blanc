@@ -99,6 +99,7 @@ caller's block statics. -/
 private def FuncSoundAt (Q : B256 → Prop) (P : Stor → Prop) (ca : Adr)
     (body : Func) : Prop :=
   ∀ {sevm : Sevm} {s r : Devm},
+    CoveredFork sevm.benvStat.fork →
     sevm.currentTarget = ca →
     Q sevm.benvStat.time →
     (ContractSpec.ofStorageOnly runtime P).Pre ca sevm s →
@@ -115,10 +116,10 @@ private theorem nonpayable_exactCalldata_funcSoundAt {Q : B256 → Prop}
     {P : Stor → Prop} {ca : Adr} {size : B256} {body : Func}
     (hbody : FuncSoundAt Q P ca body) :
     FuncSoundAt Q P ca (nonpayable (exactCalldata size body)) := by
-  intro sevm s r htarget hQ hpre hwf hih hrun
+  intro sevm s r hfork htarget hQ hpre hwf hih hrun
   rcases of_run_nonpayable_exactCalldata hrun with
     ⟨mid, -, -, hstate, hmemory, -, -, hbodyRun⟩
-  exact hbody htarget hQ (hpre.state_eq hstate.symm)
+  exact hbody hfork htarget hQ (hpre.state_eq hstate.symm)
     (by rw [← hmemory]; exact hwf) hih hbodyRun
 
 /-- Peeling a successful payable exact-calldata wrapper. -/
@@ -126,10 +127,10 @@ private theorem exactCalldata_funcSoundAt {Q : B256 → Prop}
     {P : Stor → Prop} {ca : Adr} {size : B256} {body : Func}
     (hbody : FuncSoundAt Q P ca body) :
     FuncSoundAt Q P ca (exactCalldata size body) := by
-  intro sevm s r htarget hQ hpre hwf hih hrun
+  intro sevm s r hfork htarget hQ hpre hwf hih hrun
   rcases of_run_exactCalldata hrun with
     ⟨mid, -, hstate, hmemory, -, -, hbodyRun⟩
-  exact hbody htarget hQ (hpre.state_eq hstate.symm)
+  exact hbody hfork htarget hQ (hpre.state_eq hstate.symm)
     (by rw [← hmemory]; exact hwf) hih hbodyRun
 
 /-- The entry frame image every raw endpoint walk starts from. -/
@@ -139,7 +140,7 @@ private theorem entryFrame {s : Devm} (hwf : Mem.Wf s.memory) :
 
 private theorem drip_funcSoundAt {Q : B256 → Prop} {P : Stor → Prop}
     (hP : StepClosedAt Q P) (ca : Adr) : FuncSoundAt Q P ca drip := by
-  intro sevm s r htarget hQ hpre hwf _ hrun
+  intro sevm s r _ htarget hQ hpre hwf _ hrun
   subst ca
   rcases of_run_drip auxLookup_runtime (entryFrame hwf) nil_pref hrun with
     ⟨-, -, hclock, -, hguards, hnof, hcap, hstor, -⟩
@@ -150,7 +151,7 @@ private theorem drip_funcSoundAt {Q : B256 → Prop} {P : Stor → Prop}
 
 private theorem join_funcSoundAt {Q : B256 → Prop} {P : Stor → Prop}
     (hP : StepClosedAt Q P) (ca : Adr) : FuncSoundAt Q P ca join := by
-  intro sevm s r htarget hQ hpre hwf _ hrun
+  intro sevm s r _ htarget hQ hpre hwf _ hrun
   subst ca
   rcases of_run_join_full auxLookup_runtime (entryFrame hwf) nil_pref hrun with
     ⟨hasset, -, -, -, -, hclock, -, hguards, hnof, hcap,
@@ -163,7 +164,7 @@ private theorem join_funcSoundAt {Q : B256 → Prop} {P : Stor → Prop}
 
 private theorem convertToAssets_funcSoundAt {Q : B256 → Prop} {P : Stor → Prop}
     (ca : Adr) : FuncSoundAt Q P ca convertToAssets := by
-  intro sevm s r htarget _ hpre hwf _ hrun
+  intro sevm s r _ htarget _ hpre hwf _ hrun
   subst ca
   rcases of_run_convertToAssets auxLookup_runtime (entryFrame hwf) nil_pref hrun with
     ⟨-, -, -, -, -, -, hstor, -⟩
@@ -174,7 +175,7 @@ private theorem convertToAssets_funcSoundAt {Q : B256 → Prop} {P : Stor → Pr
 
 private theorem convertToUnits_funcSoundAt {Q : B256 → Prop} {P : Stor → Prop}
     (ca : Adr) : FuncSoundAt Q P ca convertToUnits := by
-  intro sevm s r htarget _ hpre hwf _ hrun
+  intro sevm s r _ htarget _ hpre hwf _ hrun
   subst ca
   rcases of_run_convertToUnits auxLookup_runtime (entryFrame hwf) nil_pref hrun with
     ⟨-, -, -, -, -, -, hstor, -⟩
@@ -187,9 +188,9 @@ private theorem convertToUnits_funcSoundAt {Q : B256 → Prop} {P : Stor → Pro
 call is transported under the same-block deeper-frame hypothesis. -/
 private theorem exit_funcSoundAt {Q : B256 → Prop} {P : Stor → Prop}
     (hP : StepClosedAt Q P) (ca : Adr) : FuncSoundAt Q P ca exit := by
-  intro sevm s r htarget hQ hpre hwf hih hrun
+  intro sevm s r hfork htarget hQ hpre hwf hih hrun
   subst ca
-  rcases exit_pays_exactly_full auxLookup_runtime (entryFrame hwf) nil_pref hrun with
+  rcases exit_pays_exactly_full auxLookup_runtime (entryFrame hwf) nil_pref hrun hfork with
     ⟨-, -, -, hrowCover, htotalCover, -, -, hclock, -, hguards, hnof, hcap,
       callPre, callPost, guardPost, returnPre, hstorCallPre, hcodeCallPre,
       -, haccepted, hstorFinal, -, -⟩
@@ -206,7 +207,7 @@ private theorem exit_funcSoundAt {Q : B256 → Prop} {P : Stor → Prop}
     rw [hcodeCallPre]
     exact hpre.code
   have hchild : P (Devm.getStor callPost sevm.currentTarget) :=
-    (ContractSpec.ofStorageOnly_of_call_sameBenv hih hstack hcode hsettled hcall).1
+    (ContractSpec.ofStorageOnly_of_call_sameBenv hih hfork hstack hcode hsettled hcall).1
   refine ⟨trivial, ?_⟩
   change P (Devm.getStor r sevm.currentTarget)
   rw [congrFun hstorFinal sevm.currentTarget]
@@ -220,17 +221,17 @@ theorem soundAdmitted_of_stepClosedAt {Q : B256 → Prop} {P : Stor → Prop}
     (hP : StepClosedAt Q P) (ca : Adr) :
     (ContractSpec.ofStorageOnly runtime P).SoundAdmitted ca
       (fun sevm _ => Q sevm.benvStat.time) := by
-  intro sevm pre post execution hrun hca admitted ih hwf hpre
+  intro sevm pre post hfork execution hrun hca admitted ih hwf hpre
   have hQ : Q sevm.benvStat.time := admitted.root hca
   have hih : Exec.InvDepth sevm.depth ca runtime
       (fun sevm' pre' => sevm'.benvStat = sevm.benvStat ∧
         (ContractSpec.ofStorageOnly runtime P).PreWf ca sevm' pre')
       ((ContractSpec.ofStorageOnly runtime P).Post ca) := by
-    intro pc' sevm' devm' exn' child hdepth hat hσ
+    intro pc' sevm' devm' exn' child hdepth hat hfork' hσ
     cases exn' with
     | error => simp only [ifOk]
     | ok post' =>
-        refine ih pc' sevm' devm' post' child hdepth hat ?_ hσ.2
+        refine ih pc' sevm' devm' post' child hdepth hat hfork' ?_ hσ.2
         intro root member target
         rw [Exec.frameAdmitted_benvStat child ca root member target, hσ.1]
         exact hQ
@@ -258,31 +259,31 @@ theorem soundAdmitted_of_stepClosedAt {Q : B256 → Prop} {P : Stor → Prop}
         hmain hempty hselector (by simp [funcs]) with
         ⟨mid, hstate, hmemory, -, -, hbody⟩
       exact nonpayable_exactCalldata_funcSoundAt (convertToAssets_funcSoundAt ca)
-        hca hQ (hpreEntry.state_eq hstate.symm)
+        hfork hca hQ (hpreEntry.state_eq hstate.symm)
         (by rw [← hmemory]; exact hwfEntry) hih hbody
     · rcases main_body (f := nonpayable (exactCalldata 36 exit))
         hmain hempty hselector (by simp [funcs]) with
         ⟨mid, hstate, hmemory, -, -, hbody⟩
       exact nonpayable_exactCalldata_funcSoundAt (exit_funcSoundAt hP ca)
-        hca hQ (hpreEntry.state_eq hstate.symm)
+        hfork hca hQ (hpreEntry.state_eq hstate.symm)
         (by rw [← hmemory]; exact hwfEntry) hih hbody
     · rcases main_body (f := nonpayable (exactCalldata 36 convertToUnits))
         hmain hempty hselector (by simp [funcs]) with
         ⟨mid, hstate, hmemory, -, -, hbody⟩
       exact nonpayable_exactCalldata_funcSoundAt (convertToUnits_funcSoundAt ca)
-        hca hQ (hpreEntry.state_eq hstate.symm)
+        hfork hca hQ (hpreEntry.state_eq hstate.symm)
         (by rw [← hmemory]; exact hwfEntry) hih hbody
     · rcases main_body (f := nonpayable (exactCalldata 4 drip))
         hmain hempty hselector (by simp [funcs]) with
         ⟨mid, hstate, hmemory, -, -, hbody⟩
       exact nonpayable_exactCalldata_funcSoundAt (drip_funcSoundAt hP ca)
-        hca hQ (hpreEntry.state_eq hstate.symm)
+        hfork hca hQ (hpreEntry.state_eq hstate.symm)
         (by rw [← hmemory]; exact hwfEntry) hih hbody
     · rcases main_body (f := exactCalldata 4 join)
         hmain hempty hselector (by simp [funcs]) with
         ⟨mid, hstate, hmemory, -, -, hbody⟩
       exact exactCalldata_funcSoundAt (join_funcSoundAt hP ca)
-        hca hQ (hpreEntry.state_eq hstate.symm)
+        hfork hca hQ (hpreEntry.state_eq hstate.symm)
         (by rw [← hmemory]; exact hwfEntry) hih hbody
 
 /-- The clock bound after an accrual write: the clock becomes `now`, and the

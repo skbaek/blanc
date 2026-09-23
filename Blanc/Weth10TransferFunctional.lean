@@ -143,7 +143,11 @@ private lemma sload_logs {e : Sevm} {s r : Devm}
   refine (Devm.pop_of_pop hpop).logs.trans ?_
   suffices H : ∀ (d : Devm) (c : Nat), s1.logs = d.logs →
       (chargeGas c d >>=
-        fun y => Devm.push (Devm.getStorVal y e.currentTarget key) y) =
+        fun y =>
+          Devm.push
+            ((Devm.balReadStorage e.benvStat.rules e.currentTarget key y).getStorVal
+              e.currentTarget key)
+            (Devm.balReadStorage e.benvStat.rules e.currentTarget key y)) =
           .ok r → s1.logs = r.logs by
     split at htail
     · exact H s1 gasWarmAccess rfl htail
@@ -151,7 +155,8 @@ private lemma sload_logs {e : Sevm} {s r : Devm}
         gasColdSload rfl htail
   intro d c hlogs hrun'
   rcases Except.bind_eq_ok hrun' with ⟨s2, hcharge, hpush⟩
-  exact (hlogs.trans (Devm.burn_of_chargeGas hcharge).logs).trans
+  exact ((hlogs.trans (Devm.burn_of_chargeGas hcharge).logs).trans
+    Devm.balReadStorage_logs.symm).trans
     (Devm.push_of_push hpush).logs
 
 private lemma sload_output {e : Sevm} {s r : Devm}
@@ -162,7 +167,11 @@ private lemma sload_output {e : Sevm} {s r : Devm}
   refine (Devm.pop_of_pop hpop).output.trans ?_
   suffices H : ∀ (d : Devm) (c : Nat), s1.output = d.output →
       (chargeGas c d >>=
-        fun y => Devm.push (Devm.getStorVal y e.currentTarget key) y) =
+        fun y =>
+          Devm.push
+            ((Devm.balReadStorage e.benvStat.rules e.currentTarget key y).getStorVal
+              e.currentTarget key)
+            (Devm.balReadStorage e.benvStat.rules e.currentTarget key y)) =
           .ok r → s1.output = r.output by
     split at htail
     · exact H s1 gasWarmAccess rfl htail
@@ -170,7 +179,8 @@ private lemma sload_output {e : Sevm} {s r : Devm}
         gasColdSload rfl htail
   intro d c houtput hrun'
   rcases Except.bind_eq_ok hrun' with ⟨s2, hcharge, hpush⟩
-  exact (houtput.trans (Devm.burn_of_chargeGas hcharge).output).trans
+  exact ((houtput.trans (Devm.burn_of_chargeGas hcharge).output).trans
+    Devm.balReadStorage_output.symm).trans
     (Devm.push_of_push hpush).output
 
 private lemma debitLoadedBalance_logOutput
@@ -946,7 +956,8 @@ theorem of_callerBurnThen_callback_effect
           caller ::: arg amountArg +++ pushB256 0 ::: emitTransfer +++
           swap 0 ::: pop :::
           send +++ iszero :::
-          (.call sendErrorSlot) <?> next)) r) :
+          (.call sendErrorSlot) <?> next)) r)
+    (hfork : CoveredFork e.benvStat.fork) :
     ∃ callPre guardPost,
       BurnCallPrefix e s callPre guardPost e.caller
         (Sevm.argWord e amountArg) target ∧
@@ -1025,7 +1036,7 @@ theorem of_callerBurnThen_callback_effect
   rcases of_run_next run6 with ⟨testPost, hiszero, run7⟩
   rcases of_run_branch_call_revertWith h_error_lookup run7 with
     ⟨guardPost, hcallPop, hnext⟩
-  rcases of_run_call_val_with_depth_frame hpCall hcall with
+  rcases of_run_call_val_with_depth_frame hpCall hcall hfork with
       hcallFailed | hcallSuccess
   · exfalso
     have hpTest := prefix_of_iszero hiszero hcallFailed.1
@@ -1143,13 +1154,14 @@ theorem of_callerBurnThen_effect
           caller ::: arg amountArg +++ pushB256 0 ::: emitTransfer +++
           swap 0 ::: pop :::
           send +++ iszero :::
-          (.call sendErrorSlot) <?> next)) r) :
+          (.call sendErrorSlot) <?> next)) r)
+    (hfork : CoveredFork e.benvStat.fork) :
     ∃ callPre guardPost,
       BurnCallPrefix e s callPre guardPost e.caller
         (Sevm.argWord e amountArg) target ∧
       Func.Run ((weth10 dp).main :: weth10Aux) e guardPost next r := by
   rcases of_callerBurnThen_callback_effect dp amountArg send target
-      sendErrorSlot sendError h_send h_error_lookup h_wf h_reads run with
+      sendErrorSlot sendError h_send h_error_lookup h_wf h_reads run hfork with
     ⟨callPre, guardPost, hprefix, -, -, hnext⟩
   exact ⟨callPre, guardPost, hprefix, hnext⟩
 
@@ -1222,7 +1234,8 @@ theorem transferZero_effect (dp : DeployParams)
     (h_wf : Mem.Wf s.memory)
     (h_reads : Mem.Reads s.memory img)
     (run : Func.Run ((weth10 dp).main :: weth10Aux) e s
-      (transferZeroThen returnTrue) r) :
+      (transferZeroThen returnTrue) r)
+    (hfork : CoveredFork e.benvStat.fork) :
     BurnReturnTrueEffect e s r e.caller (Sevm.argWord e 1)
       e.caller.toB256 := by
   obtain ⟨callPre, guardPost, hprefix, hreturn⟩ :=
@@ -1232,7 +1245,7 @@ theorem transferZero_effect (dp : DeployParams)
         intro s0 r0 value xs hp hsend
         exact of_sendValueToCaller_frame hp hsend)
       (ethTransferError_lookup dp) h_wf h_reads
-      (by simpa only [transferZeroThen] using run)
+      (by simpa only [transferZeroThen] using run) hfork
   obtain ⟨htrue, hcode⟩ := of_returnTrue_exact nil_pref hreturn
   unfold BurnReturnTrueEffect
   exact ⟨callPre, guardPost, hprefix,
@@ -1247,7 +1260,8 @@ theorem withdraw_effect (dp : DeployParams)
     {e : Sevm} {s r : Devm} {img : Bytes}
     (h_wf : Mem.Wf s.memory)
     (h_reads : Mem.Reads s.memory img)
-    (run : Func.Run ((weth10 dp).main :: weth10Aux) e s withdraw r) :
+    (run : Func.Run ((weth10 dp).main :: weth10Aux) e s withdraw r)
+    (hfork : CoveredFork e.benvStat.fork) :
     BurnStopEffect e s r e.caller (Sevm.argWord e 0)
       e.caller.toB256 := by
   obtain ⟨callPre, guardPost, hprefix, hstop⟩ :=
@@ -1257,7 +1271,7 @@ theorem withdraw_effect (dp : DeployParams)
         intro s0 r0 value xs hp hsend
         exact of_sendValueToCaller_frame hp hsend)
       (ethTransferError_lookup dp) h_wf h_reads
-      (by simpa only [withdraw] using run)
+      (by simpa only [withdraw] using run) hfork
   have hr : r = guardPost := by
     cases hstop with
     | last h =>
@@ -1272,7 +1286,8 @@ theorem withdrawTo_effect (dp : DeployParams)
     {e : Sevm} {s r : Devm} {img : Bytes}
     (h_wf : Mem.Wf s.memory)
     (h_reads : Mem.Reads s.memory img)
-    (run : Func.Run ((weth10 dp).main :: weth10Aux) e s withdrawTo r) :
+    (run : Func.Run ((weth10 dp).main :: weth10Aux) e s withdrawTo r)
+    (hfork : CoveredFork e.benvStat.fork) :
     BurnStopEffect e s r e.caller (Sevm.argWord e 1)
       (Sevm.argWord e 0) := by
   obtain ⟨callPre, guardPost, hprefix, hstop⟩ :=
@@ -1283,7 +1298,7 @@ theorem withdrawTo_effect (dp : DeployParams)
         intro s0 r0 value xs hp hsend
         exact of_sendValueToArg_frame 0 hp hsend)
       (ethTransferError_lookup dp) h_wf h_reads
-      (by simpa only [withdrawTo] using run)
+      (by simpa only [withdrawTo] using run) hfork
   have hr : r = guardPost := by
     cases hstop with
     | last h =>
@@ -1300,7 +1315,8 @@ theorem transferThen_callbackPrefix_effect (dp : DeployParams)
     (h_wf : Mem.Wf pre.memory)
     (h_fresh : Mem.Reads pre.memory [])
     (run : Func.Run ((weth10 dp).main :: weth10Aux) e pre
-      (transferThen next) post) :
+      (transferThen next) post)
+    (hfork : CoveredFork e.benvStat.fork) :
     (Sevm.argWord e 0 = 0 ∧
       ∃ callPre callbackPre img,
         BurnCallPrefix e pre callPre callbackPre e.caller
@@ -1450,7 +1466,7 @@ theorem transferThen_callbackPrefix_effect (dp : DeployParams)
           intro s0 r0 value xs hp hsend
           exact of_sendValueToCaller_frame hp hsend)
         (ethTransferError_lookup dp) hwf4 hreads4
-        (by simpa only [transferZeroThen] using hzero)
+        (by simpa only [transferZeroThen] using hzero) hfork
     have hwrite : Bytes.writeAt [] 0 (Sevm.argWord e 1).toBytes =
         (Sevm.argWord e 1).toBytes :=
       Bytes.writeAt_zero_of_le (Nat.zero_le _)
@@ -1492,7 +1508,8 @@ theorem transfer_successEffect (dp : DeployParams)
     {e : Sevm} {s r : Devm} {img : Bytes}
     (h_wf : Mem.Wf s.memory)
     (h_reads : Mem.Reads s.memory img)
-    (run : Func.Run ((weth10 dp).main :: weth10Aux) e s transfer r) :
+    (run : Func.Run ((weth10 dp).main :: weth10Aux) e s transfer r)
+    (hfork : CoveredFork e.benvStat.fork) :
     TransferSuccessEffect e s r := by
   simp only [transfer, transferThen] at run
   rcases of_run_prepend (arg 0) _ run with ⟨s1, harg, run1⟩
@@ -1596,7 +1613,7 @@ theorem transfer_successEffect (dp : DeployParams)
     have hreads4 : Mem.Reads s4.memory img := by
       rw [← hmemory_s_s4]
       exact h_reads
-    have heffect := transferZero_effect dp hwf4 hreads4 hzero
+    have heffect := transferZero_effect dp hwf4 hreads4 hzero hfork
     left
     exact ⟨hargZero,
       heffect.of_entry_eq hstor_s_s4 hbal_s_s4 hcode_s_s4
@@ -1638,7 +1655,8 @@ theorem weth10_transfer_successEffect (dp : DeployParams)
     (h_code : some e.code.toList = Prog.compile (weth10 dp))
     (h_sel : Sevm.selector e =
       selector "transfer" [.address, .uint256])
-    (h_nonempty : e.data.length.toB256 ≠ 0) :
+    (h_nonempty : e.data.length.toB256 ≠ 0)
+    (hfork : CoveredFork e.benvStat.fork) :
     e.value = 0 ∧ TransferSuccessEffect e pre post := by
   have h_mem :
       (selector "transfer" [.address, .uint256], nonpayable transfer) ∈
@@ -1654,7 +1672,7 @@ theorem weth10_transfer_successEffect (dp : DeployParams)
   have hreadsMid : Mem.Reads mid.memory img := by
     rw [hmemory]
     exact h_reads
-  have heffect := transfer_successEffect dp hwfMid hreadsMid hbody
+  have heffect := transfer_successEffect dp hwfMid hreadsMid hbody hfork
   exact ⟨hvalue, heffect.of_entry_eq hstor.symm hbal.symm
     hcode.symm hlogs.symm houtput.symm⟩
 
@@ -1667,7 +1685,8 @@ theorem weth10_withdraw_successEffect (dp : DeployParams)
     (exc : Exec 0 e pre (.ok post))
     (h_code : some e.code.toList = Prog.compile (weth10 dp))
     (h_sel : Sevm.selector e = selector "withdraw" [.uint256])
-    (h_nonempty : e.data.length.toB256 ≠ 0) :
+    (h_nonempty : e.data.length.toB256 ≠ 0)
+    (hfork : CoveredFork e.benvStat.fork) :
     e.value = 0 ∧
       BurnStopEffect e pre post e.caller (Sevm.argWord e 0)
         e.caller.toB256 := by
@@ -1685,7 +1704,7 @@ theorem weth10_withdraw_successEffect (dp : DeployParams)
   have hreadsMid : Mem.Reads mid.memory img := by
     rw [hmemory]
     exact h_reads
-  have heffect := withdraw_effect dp hwfMid hreadsMid hbody
+  have heffect := withdraw_effect dp hwfMid hreadsMid hbody hfork
   exact ⟨hvalue, heffect.of_entry_eq hstor.symm hbal.symm
     hcode.symm hlogs.symm houtput.symm⟩
 
@@ -1699,7 +1718,8 @@ theorem weth10_withdrawTo_successEffect (dp : DeployParams)
     (h_code : some e.code.toList = Prog.compile (weth10 dp))
     (h_sel : Sevm.selector e =
       selector "withdrawTo" [.address, .uint256])
-    (h_nonempty : e.data.length.toB256 ≠ 0) :
+    (h_nonempty : e.data.length.toB256 ≠ 0)
+    (hfork : CoveredFork e.benvStat.fork) :
     e.value = 0 ∧
       BurnStopEffect e pre post e.caller (Sevm.argWord e 1)
         (Sevm.argWord e 0) := by
@@ -1717,7 +1737,7 @@ theorem weth10_withdrawTo_successEffect (dp : DeployParams)
   have hreadsMid : Mem.Reads mid.memory img := by
     rw [hmemory]
     exact h_reads
-  have heffect := withdrawTo_effect dp hwfMid hreadsMid hbody
+  have heffect := withdrawTo_effect dp hwfMid hreadsMid hbody hfork
   exact ⟨hvalue, heffect.of_entry_eq hstor.symm hbal.symm
     hcode.symm hlogs.symm houtput.symm⟩
 

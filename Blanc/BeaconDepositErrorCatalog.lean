@@ -81,7 +81,7 @@ theorem reachableErrorGuard_runCompiledTo
         (devm.setMach ⟨stack,
           Mem.writeStoresRev devm.memory
             (bytesWords (errorData (reasonString error.reason))).zipIdx,
-          G⟩).withOutput (errorData (reasonString error.reason)))) := by
+          G, devm.stateGas⟩).withOutput (errorData (reasonString error.reason)))) := by
   exact Func.runCompiledTo_errorGuard (reachableError_lookup error)
     h_ne h_stack hwf hr halign h_blob h_words h_gas h_room
 
@@ -101,13 +101,13 @@ theorem reachableErrorGuard_exact_runCompiledTo
     (h_room : stack.length < 1022) :
     Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨w :: stack, base.memory,
-        G + errorGuardCost base (reasonString error.reason)⟩)
+        G + errorGuardCost base (reasonString error.reason), base.stateGas⟩)
       ((.call error.slot) <?> otherwise)
       (.error (.revert,
         (base.setMach ⟨stack,
           Mem.writeStoresRev base.memory
             (bytesWords (errorData (reasonString error.reason))).zipIdx,
-          G⟩).withOutput (errorData (reasonString error.reason)))) := by
+          G, base.stateGas⟩).withOutput (errorData (reasonString error.reason)))) := by
   exact Func.runCompiledTo_errorGuard (reachableError_lookup error)
     h_ne rfl hwf hr halign h_blob h_words (by
       simp only [Devm.gasLeft_setMach, errorGuardCost, errorCallCost,
@@ -127,7 +127,7 @@ theorem reachableErrorGuard_noRawSstorePath
         (devm.setMach ⟨stack,
           Mem.writeStoresRev devm.memory
             (bytesWords (errorData (reasonString error.reason))).zipIdx,
-          G⟩).withOutput (errorData (reasonString error.reason))))}
+          G, devm.stateGas⟩).withOutput (errorData (reasonString error.reason))))}
     (h_ne : w ≠ 0) (h_stack : devm.stack = w :: stack) :
     Func.RunCompiledTo.NoRawSstorePath run := by
   cases run with

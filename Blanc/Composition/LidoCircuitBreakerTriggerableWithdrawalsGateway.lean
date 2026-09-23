@@ -139,6 +139,7 @@ the bubble and the bubble cannot end `.ok`.  Both `MessageExecutesProgram`
 witnesses and the concrete CALL/STATICCALL linkage are derived. -/
 theorem gatewayBoundaryExecutions_of_afterSet_ok
     {fs : List Func} {sevm : Sevm} {entry final : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {target : Adr} {duration : B256}
     {dp : LidoTriggerableWithdrawalsGateway.DeployParams}
     (h_empty : fs[emptyRevertSlot]? = some Func.revert)
@@ -154,7 +155,7 @@ theorem gatewayBoundaryExecutions_of_afterSet_ok
     (run : Func.RunCompiledTo fs sevm entry pauseAfterSet (.ok final)) :
     LidoPinnedBoundaryExecutions fs sevm entry target
       (LidoTriggerableWithdrawalsGateway.runtime dp) duration (.ok final) :=
-  directBoundaryExecutions_of_afterSet_ok h_empty h_bubble
+  directBoundaryExecutions_of_afterSet_ok hfork h_empty h_bubble
     (gatewayCode_compile dp) targetNe nonprecompile installed
     targetWindow durationWindow dynamic run
 
@@ -179,6 +180,7 @@ executions occur, and the gateway account is left paused at exactly
 `pauseForProjection entryTime duration` on the same successful final state. -/
 theorem publicPause_gatewayPinnedTarget
     {sevm : Sevm} {pre final : Devm} {owner : Adr}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {target duration idx0 len0 last0 : B256} {img : Bytes}
     {dp : LidoTriggerableWithdrawalsGateway.DeployParams}
     {ex : Execution}
@@ -203,12 +205,12 @@ theorem publicPause_gatewayPinnedTarget
         sevm pre target duration (gatewayCode dp) ex entry :=
     ⟨targetWindow, durationWindow, targetCodeAt, countDecrement, afterSetRun⟩
   subst success
-  have hook := gatewayBoundaryExecutions_of_afterSet_ok
+  have hook := gatewayBoundaryExecutions_of_afterSet_ok (hfork := hfork)
     (fs := (runtime officialParams).main :: (runtime officialParams).aux)
     (by rfl) (by rfl) targetNe nonprecompile
     targetCodeAt (by rw [canonicalTarget]; exact targetWindow) durationWindow
     premises.dynamic afterSetRun
-  exact publicPause_pinnedTarget premises targetNe publicRun
+  exact publicPause_pinnedTarget hfork premises targetNe publicRun
     (gateway_lidoPinnedPauseTarget dp sevm.currentTarget sevm.caller
       target.toAdr targetNe)
     entry reachedAt hook final rfl

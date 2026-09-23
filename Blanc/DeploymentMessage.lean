@@ -56,7 +56,7 @@ theorem processMessage_ok_of_exec
   unfold Frame.settle Frame.settleMsg
   simp only [Msg.withBenv, hcodeAddress] at hexec
   rw [hexec]
-  simp [executeCode.handleError, processMessage.settle, herror]
+  simp [executeCode.handleErrorWith_ok, processMessage.settle, herror]
 
 /-- Successful inner-message execution followed by successful code charging is
 the successful CREATE settlement, with the charged output installed at the
@@ -142,11 +142,12 @@ def deploymentTxPreludeBout
     (bout : BlockOutput) (tx : Tx) (index : Nat) : BlockOutput :=
   ExecutionTrace.transactionPreludeBout bout tx index
 
-def deploymentIntrinsicGas (tx : Tx) : Nat :=
-  (calculateIntrinsicCost tx).1
+def deploymentIntrinsicGas (benv : Benv) (tx : Tx) (sender : Adr) : Nat :=
+  (calculateIntrinsicCost benv.stat.rules tx sender).1
 
-def deploymentCalldataFloorGas (tx : Tx) : Nat :=
-  (calculateIntrinsicCost tx).2
+def deploymentCalldataFloorGas
+    (benv : Benv) (tx : Tx) (sender : Adr) : Nat :=
+  (calculateIntrinsicCost benv.stat.rules tx sender).2
 
 def deploymentEffectiveGasPrice (benv : Benv) (tx : Tx) : Nat :=
   match tx.type with
@@ -161,7 +162,7 @@ def deploymentTenv
     stat :=
       { origin := sender
         gasPrice := deploymentEffectiveGasPrice benv tx
-        gas := tx.gas - deploymentIntrinsicGas tx
+        gas := tx.gas - deploymentIntrinsicGas benv tx sender
         accessListAddresses := .ofList [benv.stat.coinbase]
         accessListStorageKeys := .ofList []
         blobVersionedHashes := []
@@ -169,11 +170,12 @@ def deploymentTenv
         indexInBlock := index
         txHash := getTxHash tx } }
 
-def deploymentUsedGasFromMessage (tx : Tx) (out : MsgCallOutput) : Nat :=
+def deploymentUsedGasFromMessage
+    (benv : Benv) (tx : Tx) (sender : Adr) (out : MsgCallOutput) : Nat :=
   max
     (tx.gas - out.gasLeft -
       min ((tx.gas - out.gasLeft) / 5) out.refundCounter.toNat)
-    (deploymentCalldataFloorGas tx)
+    (deploymentCalldataFloorGas benv tx sender)
 
 def deploymentFinalState
     (benv : Benv) (tx : Tx) (sender : Adr)
@@ -193,8 +195,9 @@ def deploymentFinalBout
   let charged :=
     {prelude with
       blockGasUsed := prelude.blockGasUsed + usedGas
+      cumulativeGasUsed := prelude.cumulativeGasUsed + usedGas
       blobGasUsed := prelude.blobGasUsed}
-  let receipt := makeReceipt tx out.error charged.blockGasUsed out.logs
+  let receipt := makeReceipt tx out.error charged.cumulativeGasUsed out.logs
   {charged with
     receiptKeys := charged.receiptKeys ++ [deploymentReceiptKey index]
     receiptsTrie := charged.receiptsTrie.insert
@@ -204,13 +207,13 @@ def deploymentFinalBout
 /-- Contract-neutral configured base and protocol-system-code facts. Every
 field describes only the supplied prestate. -/
 structure CanonicalDeploymentBase
-    (chainId : UInt64) (base : BlockChain) (sender ca : Adr) : Prop where
+    (fork : Fork) (chainId : UInt64) (base : BlockChain) (sender ca : Adr) : Prop where
   validContext : base.ValidContext
   chainId_eq : chainId = base.chainId
   sumNof : SumNof base.state.bal
   target_eq : ca = computeContractAddress sender (base.state.getNonce sender)
   target_ne_zero : ca ≠ 0
-  target_not_precompile : ¬ pragueRules.isPrecomp ca
+  target_not_precompile : ¬ (Fork.ruleSet fork).isPrecomp ca
   sender_ne_target : sender ≠ ca
   withdrawalRequest_ne_target : withdrawalRequestPredeployAddress ≠ ca
   consolidationRequest_ne_target : consolidationRequestPredeployAddress ≠ ca
@@ -234,7 +237,7 @@ structure CanonicalDeploymentBase
 /-- The mandatory beacon-roots and history-storage calls recovered from the
 real block prefix. This structure is conclusion evidence, never input data. -/
 structure DeploymentSystemPrefix
-    (base : BlockChain) (block : Block) (txInput : Benv) : Type where
+    (fork : Fork) (base : BlockChain) (block : Block) (txInput : Benv) : Type where
   outBeacon : MsgCallOutput
   stBeacon : State
   lastHash : B256
@@ -242,22 +245,22 @@ structure DeploymentSystemPrefix
   outHistory : MsgCallOutput
   beaconRun :
     processUncheckedSystemTransaction
-      (initBenv pragueRules base block.header)
+      (initBenv fork base block.header)
       beaconRootsAddress block.header.parentBeaconBlockRoot.toBytes =
       .ok (stBeacon, outBeacon)
   lastHashEq :
     List.getLast?
-      ((initBenv pragueRules base block.header).withState stBeacon).stat.blockHashes =
+      ((initBenv fork base block.header).withState stBeacon).stat.blockHashes =
         some lastHash
   historyRun :
     processUncheckedSystemTransaction
-      ((initBenv pragueRules base block.header).withState stBeacon)
+      ((initBenv fork base block.header).withState stBeacon)
       historyStorageAddress lastHash.toBytes = .ok (stHistory, outHistory)
   txInput_eq :
     txInput =
-      ((initBenv pragueRules base block.header).withState stBeacon).withState
+      ((initBenv fork base block.header).withState stBeacon).withState
         stHistory
-  environment_eq : txInput = initBenv pragueRules base block.header
+  environment_eq : txInput = initBenv fork base block.header
   state_eq : txInput.state = base.state
   createdAccounts_eq : txInput.createdAccounts = .emptyWithCapacity
 
@@ -269,6 +272,7 @@ private theorem processMessageCall_ok_of_compiled_exec
     (henter : (Frame.ofCall msg).enter = .run child)
     (hexec : exec child = .ok post)
     (herror : post.error = none)
+    (hstateGas : msg.benv.stat.rules.stateGas = none)
     (hrefund : 0 ≤ post.refundCounter) :
     processMessageCall msg = .ok
       (post.state,
@@ -282,8 +286,7 @@ private theorem processMessageCall_ok_of_compiled_exec
     unfold processMessage runFrame
     rw [henter]
     unfold Frame.settle Frame.settleMsg processMessage.settle
-      executeCode.handleError
-    simp only [hexec, herror, Frame.ofCall, Option.isSome,
+    simp only [hexec, executeCode.handleErrorWith_ok, herror, Frame.ofCall, Option.isSome,
       Bool.false_eq_true, if_false, bind, Except.bind]
   have hdelegation : getDelegatedCodeAddress msg.code = none := by
     unfold getDelegatedCodeAddress
@@ -296,7 +299,7 @@ private theorem processMessageCall_ok_of_compiled_exec
   unfold processMessageCall.call
   simp only [hauths, List.isEmpty, if_true, bind, Except.bind,
     hdelegation, hprocess, Except.bimap, id_eq, herror, Option.isNone,
-    htoNat, Option.toExcept, Nat.cast_zero, zero_add]
+    htoNat, Option.toExcept, Nat.cast_zero, zero_add, hstateGas]
   rfl
 
 /-- The neutral two-instruction system program executes exactly and leaves the
@@ -305,7 +308,8 @@ theorem processUncheckedSystemTransaction_deploymentSystemProgram
     (benv : Benv) (target : Adr) (data : Bytes)
     (hcode : some (benv.state.getCode target).toList =
       Prog.compile deploymentSystemProgram)
-    (hnp : ¬ benv.stat.rules.isPrecomp target) :
+    (hnp : ¬ benv.stat.rules.isPrecomp target)
+    (hfork : CoveredFork benv.stat.fork) :
     ∃ out,
       processUncheckedSystemTransaction benv target data =
         .ok (benv.state, out) ∧
@@ -332,7 +336,13 @@ theorem processUncheckedSystemTransaction_deploymentSystemProgram
   have hexec : exec (initEvm msg) = .ok post :=
     Prog.exec_of_runCompiled hrun hcompile
   have hnp' : ¬ benv.beginTransaction.stat.rules.isPrecomp target := by
-    simpa [Benv.beginTransaction] using hnp
+    change ¬ (Fork.ruleSet benv.stat.fork).isPrecomp target
+    exact hnp
+  have hstateGas' : benv.beginTransaction.stat.rules.stateGas = none := by
+    change (Fork.ruleSet benv.stat.fork).stateGas = none
+    exact hfork.stateGas_none
+  have hmsgStateGas : msg.benv.stat.rules.stateGas = none := by
+    simpa [msg, begun, processSystemTransactionMsg] using hstateGas'
   have henter : (Frame.ofCall msg).enter = .run (initEvm msg) := by
     simp [Frame.enter, Frame.ofCall, executeCode.enter,
       Msg.benvAfterTransfer, Msg.withBenv, msg, begun,
@@ -342,7 +352,7 @@ theorem processUncheckedSystemTransaction_deploymentSystemProgram
     (p := deploymentSystemProgram) (msg := msg)
     (child := initEvm msg) (post := post)
     (by rfl) (by rfl) hcompile henter hexec
-    (by rfl) (by simp [hrefund])
+    (by rfl) hmsgStateGas (by simp [hrefund])
   let out : MsgCallOutput :=
     { gasLeft := post.gasLeft
       refundCounter := post.refundCounter.toNat
@@ -358,13 +368,18 @@ theorem processUncheckedSystemTransaction_deploymentSystemProgram
   · unfold processUncheckedSystemTransaction processSystemTransaction
     change processMessageCall msg = .ok (benv.state, out)
     exact hcallOut
-  all_goals rfl
+  · rfl
+  · rfl
+  · simp [out, post, initDevm, Devm.setMach, Devm.logs, hmsgStateGas]
+  · rfl
+  · rfl
 
 theorem processCheckedSystemTransaction_deploymentSystemProgram
     (benv : Benv) (target : Adr) (data : Bytes)
     (hcode : some (benv.state.getCode target).toList =
       Prog.compile deploymentSystemProgram)
-    (hnp : ¬ benv.stat.rules.isPrecomp target) :
+    (hnp : ¬ benv.stat.rules.isPrecomp target)
+    (hfork : CoveredFork benv.stat.fork) :
     ∃ out,
       processCheckedSystemTransaction benv target data =
         .ok (benv.state, out) ∧
@@ -375,7 +390,7 @@ theorem processCheckedSystemTransaction_deploymentSystemProgram
       out.returnData = [] := by
   obtain ⟨out, hrun, herr, hrefund, hlogs, hdelete, hreturn⟩ :=
     processUncheckedSystemTransaction_deploymentSystemProgram
-      benv target data hcode hnp
+      benv target data hcode hnp hfork
   have hne : (benv.state.getCode target).isEmpty = false := by
     have hlistne : (benv.state.getCode target).toList ≠ [] := by
       intro hnil
@@ -397,22 +412,27 @@ theorem processCheckedSystemTransaction_deploymentSystemProgram
 /-- Reconstruct the mandatory beacon-roots and history-storage prefix from the
 configured prestate. -/
 theorem canonicalDeploymentSystemPrefix
-    (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (fork : Fork) (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
     (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca) :
-    Nonempty (Σ txInput, DeploymentSystemPrefix base cb.block txInput) := by
-  let initial := initBenv pragueRules base cb.block.header
+    (hbase : CanonicalDeploymentBase fork chainId base sender ca)
+    (hfork : CoveredFork fork) :
+    Nonempty (Σ txInput, DeploymentSystemPrefix fork base cb.block txInput) := by
+  let initial := initBenv fork base cb.block.header
   obtain ⟨outBeacon, hbeacon, _⟩ :=
     processUncheckedSystemTransaction_deploymentSystemProgram
       initial beaconRootsAddress cb.block.header.parentBeaconBlockRoot.toBytes
       (by simpa [initial, initBenv] using hbase.beaconCode)
-      (by change ¬ pragueRules.isPrecomp beaconRootsAddress; decide)
+      (by change ¬ (Fork.ruleSet fork).isPrecomp beaconRootsAddress
+          exact hfork.beaconRoots_not_precompile)
+      (by simpa [initial, initBenv, initBenvStat] using hfork)
   obtain ⟨lastHash, hlast⟩ := hbase.lastBlockHash
   obtain ⟨outHistory, hhistory, _⟩ :=
     processUncheckedSystemTransaction_deploymentSystemProgram
       (initial.withState base.state) historyStorageAddress lastHash.toBytes
       (by simpa [initial, initBenv, Benv.withState] using hbase.historyCode)
-      (by change ¬ pragueRules.isPrecomp historyStorageAddress; decide)
+      (by change ¬ (Fork.ruleSet fork).isPrecomp historyStorageAddress
+          exact hfork.historyStorage_not_precompile)
+      (by simpa [initial, initBenv, initBenvStat, Benv.withState] using hfork)
   refine ⟨⟨initial, {
     outBeacon := outBeacon
     stBeacon := base.state

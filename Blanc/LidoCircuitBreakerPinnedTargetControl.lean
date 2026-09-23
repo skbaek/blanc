@@ -352,16 +352,22 @@ private lemma error_eq_of_sload
   split at instructionRun
   · rcases Except.bind_eq_ok instructionRun with
       ⟨charged, charge, push⟩
+    have readError : charged.error =
+        (Devm.balReadStorage sevm.benvStat.rules sevm.currentTarget key charged).error := by
+      unfold Devm.balReadStorage; split <;> rfl
     exact popError.trans
       ((Devm.burn_of_chargeGas charge).error.trans
-        (Devm.push_of_push push).error)
+        (readError.trans (Devm.push_of_push push).error))
   · rcases Except.bind_eq_ok instructionRun with
       ⟨charged, charge, push⟩
     have accessError : afterKey.error =
         (addAccessedStorageKey afterKey sevm.currentTarget key).error := rfl
+    have readError : charged.error =
+        (Devm.balReadStorage sevm.benvStat.rules sevm.currentTarget key charged).error := by
+      unfold Devm.balReadStorage; split <;> rfl
     exact popError.trans (accessError.trans
       ((Devm.burn_of_chargeGas charge).error.trans
-        (Devm.push_of_push push).error))
+        (readError.trans (Devm.push_of_push push).error)))
 
 private lemma error_eq_of_mstore
     {sevm : Sevm} {pre post : Devm}
@@ -1134,7 +1140,7 @@ private theorem benignCallEvm8_childCode :
 
 private def benignCallBase : Devm :=
   benignCallEvm8.dyna.setMach
-    ⟨[], benignCallEvm8.dyna.memory, benignCallEvm8.dyna.gasLeft⟩
+    ⟨[], benignCallEvm8.dyna.memory, benignCallEvm8.dyna.gasLeft, benignCallEvm8.dyna.stateGas⟩
 
 private def benignCallDelegated : Devm :=
   addAccessedAddress benignCallBase benignCallTarget
@@ -1229,6 +1235,8 @@ private theorem benignCallXstep :
       (dp := false) (dadr := benignCallTarget)
       (code := benignCallChildCode) (dgc := 0)
       (d1 := benignCallDelegated)
+  · change CoveredFork .prague
+    exact CoveredFork.prague
   · rfl
   · rfl
   · exact benignCallDelegation
@@ -1917,7 +1925,9 @@ private theorem RetainedWriteFixture.notNoRetainedWrite (w :
   have committed : Execution.commits (.ok w.rootPost) = true := by
     simp [Execution.commits, w.rootClean]
   have preserved := Exec.committedCell_eq_of_noRetainedWriteTo w.run
-    committed retainedWriteCircuitBreaker retainedWriteKey noWrite
+    committed (by
+      rw [Frame.enter_run_benvStat w.enter]
+      decide) retainedWriteCircuitBreaker retainedWriteKey noWrite
   apply w.rootChanged
   simpa [Execution.committedPost] using preserved.symm
 
@@ -1973,7 +1983,9 @@ theorem retainedWrite_distinctTarget_descendant_falsifier
           retainedWriteCircuitBreaker).get retainedWriteKey := by
     simpa [Execution.committedPost] using w.rootChanged
   rcases Exec.exists_lastRetainedSstore_of_getStor_ne w.run committed
-      changed with
+      (by
+      rw [Frame.enter_run_benvStat w.enter]
+      decide) changed with
     ⟨write, retained, owner, key, value, last⟩
   have codeEq : w.rootEvm.sta.code = retainedWriteMsg.code :=
     Frame.enter_run_code w.enter

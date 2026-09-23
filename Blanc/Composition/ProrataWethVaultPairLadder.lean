@@ -115,7 +115,7 @@ abbrev pairVaultCodeSpec : ContractSpec :=
   ContractSpec.ofStorageOnly Blanc.ProrataWethVault.vault (fun _ => True)
 
 theorem pairVaultCodeSpec_preserves (vault : Adr) : pairVaultCodeSpec.Preserves vault :=
-  fun _ _ _ _ _ _ _ => ⟨trivial, trivial⟩
+  fun _ _ _ _ _ _ _ _ => ⟨trivial, trivial⟩
 
 /-- The code half and the ledger are the vault's whole state invariant. -/
 theorem vaultStateInv_of_code {vault : Adr} {w : State}
@@ -156,9 +156,18 @@ structure PairBenvInv (vault : Adr) (benv : Benv) : Prop where
   vaultNotCreated : vault ∉ benv.createdAccounts
   wethNotCreated : wethAccount ∉ benv.createdAccounts
   wethNonprecompile : benv.stat.rules.isPrecomp wethAccount = false
+  covered : CoveredFork benv.stat.fork
+
+/-- Equal rule records name the same fork: `BenvStat.rules` is `Fork.ruleSet` of the fork, and
+`Fork.ruleSet_fork` reads the fork back out of the record. -/
+private theorem fork_eq_of_rules_eq {s s' : BenvStat} (rules : s'.rules = s.rules) :
+    s'.fork = s.fork := by
+  have h := congrArg ForkRules.fork rules
+  simpa only [BenvStat.rules, Fork.ruleSet_fork] using h
 
 /-- The one transport every rung above the message uses: both code invariants by the generic ladder, the
-ledger by the rung's own replay, the rules by the rung's own statics. -/
+ledger by the rung's own replay, the rules by the rung's own statics.  Coverage travels with the rules,
+because a rule record names its fork. -/
 theorem PairBenvInv.transport {vault : Adr} {benv benv' : Benv}
     (inv : PairBenvInv vault benv)
     (code : pairVaultCodeSpec.BenvInv vault benv')
@@ -169,7 +178,8 @@ theorem PairBenvInv.transport {vault : Adr} {benv benv' : Benv}
     PairBenvInv vault benv' :=
   ⟨⟨vaultStateInv_of_code code.state conserved, weth.state, inv.world.distinct,
       inv.world.vaultNotSystem, inv.world.wethNotSystem⟩,
-    code.ca, weth.ca, by rw [rules]; exact inv.wethNonprecompile⟩
+    code.ca, weth.ca, by rw [rules]; exact inv.wethNonprecompile,
+    CoveredFork.of_eq (fork_eq_of_rules_eq rules).symm inv.covered⟩
 
 theorem PairBenvInv.afterTransaction {vault : Adr} {benv : Benv} {bout : BlockOutput}
     {tx : Tx} {index : Nat} {state : State} {bout' : BlockOutput}
@@ -180,9 +190,9 @@ theorem PairBenvInv.afterTransaction {vault : Adr} {benv : Benv} {bout : BlockOu
     PairBenvInv vault (benv.withState state) :=
   inv.transport
     (trace.benvInv (pairVaultCodeSpec_preserves vault) inv.world.sumNof
-      ⟨inv.world.vaultCode, inv.vaultNotCreated⟩)
+      ⟨inv.world.vaultCode, inv.vaultNotCreated⟩ inv.covered)
     (trace.benvInv (wethSpec_preserves wethAccount) inv.world.sumNof
-      ⟨inv.world.weth, inv.wethNotCreated⟩)
+      ⟨inv.world.weth, inv.wethNotCreated⟩ inv.covered)
     rfl (replay.conserved inv.world.conserved)
 -- PB:40–41 (`head.benvInv …`), twice, plus the replay.
 
@@ -194,8 +204,10 @@ theorem PairBenvInv.afterSystem {vault : Adr} {benv : Benv} {target : Adr} {data
       (PairBoundary.ofState vault state)) :
     PairBenvInv vault (benv.withState state) :=
   inv.transport
-    (trace.benvInv (pairVaultCodeSpec_preserves vault) ⟨inv.world.vaultCode, inv.vaultNotCreated⟩)
-    (trace.benvInv (wethSpec_preserves wethAccount) ⟨inv.world.weth, inv.wethNotCreated⟩)
+    (trace.benvInv (pairVaultCodeSpec_preserves vault) ⟨inv.world.vaultCode, inv.vaultNotCreated⟩
+      inv.covered)
+    (trace.benvInv (wethSpec_preserves wethAccount) ⟨inv.world.weth, inv.wethNotCreated⟩
+      inv.covered)
     rfl (replay.conserved inv.world.conserved)
 -- PB:104–106 / 183–188.
 
@@ -209,10 +221,10 @@ theorem PairBenvInv.afterTransactions {vault : Adr} {txs : List (Nat × Tx)}
     PairBenvInv vault finalBenv :=
   inv.transport
     (trace.benvInv (pairVaultCodeSpec_preserves vault) inv.world.sumNof
-      ⟨inv.world.vaultCode, inv.vaultNotCreated⟩)
+      ⟨inv.world.vaultCode, inv.vaultNotCreated⟩ inv.covered)
     (trace.benvInv (wethSpec_preserves wethAccount) inv.world.sumNof
-      ⟨inv.world.weth, inv.wethNotCreated⟩)
-    (by rw [trace.stat_eq]) (replay.conserved inv.world.conserved)
+      ⟨inv.world.weth, inv.wethNotCreated⟩ inv.covered)
+    (congrArg BenvStat.rules trace.stat_eq) (replay.conserved inv.world.conserved)
 -- PB:192–194; `stat_eq` is §4 (G+2).
 
 theorem PairBenvInv.afterWithdrawals {vault : Adr} {benv : Benv} {wds : List Withdrawal}
@@ -233,13 +245,16 @@ theorem PairWorldInv.afterHistory {vault : Adr} {cfg : ChainConfig}
     {checkpoint current : BlockChain}
     (inv : PairWorldInv vault checkpoint.state)
     (history : ConfiguredHistoryTrace cfg checkpoint current)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork)
     {ok : PairStepRecord vault → Prop}
     (replay : PairReplayWith vault ok (PairBoundary.ofState vault checkpoint.state)
       (PairBoundary.ofState vault current.state)) :
     PairWorldInv vault current.state :=
-  ⟨vaultStateInv_of_code (history.stateInv (pairVaultCodeSpec_preserves vault) inv.vaultCode)
+  ⟨vaultStateInv_of_code
+      (history.stateInv (pairVaultCodeSpec_preserves vault) inv.vaultCode hcov)
       (replay.conserved inv.conserved),
-    history.stateInv (wethSpec_preserves wethAccount) inv.weth,
+    history.stateInv (wethSpec_preserves wethAccount) inv.weth hcov,
     inv.distinct, inv.vaultNotSystem, inv.wethNotSystem⟩
 -- PH:78 (`prior.stateInv …`), twice, plus the replay.
 
@@ -252,6 +267,7 @@ structure PairMsgInv (vaultAddr : Adr) (msg : Msg) : Prop where
   weth : wethSpec.MsgInv wethAccount msg
   distinct : wethAccount ≠ vaultAddr
   wethNonprecompile : msg.benv.stat.rules.isPrecomp wethAccount = false
+  covered : CoveredFork msg.benv.stat.fork
   callerNotVault : msg.caller ≠ vaultAddr
   callerNotWeth : msg.caller ≠ wethAccount
 
@@ -382,7 +398,10 @@ theorem Exec.pairReplay_of_messageRootFaithful {vault : Adr} {msg : Msg} {entry 
     · exact absurd (targetEq hit) wethNe
   have core := Exec.corePairReplay vault 0 (initSevm (msg.withBenv entry))
     (initDevm (msg.withBenv entry)) out run wethAt
-  exact core run committed vaultAt wethAt inv vaultDirect wethDirect
+  have entryFork : CoveredFork (initSevm (msg.withBenv entry)).benvStat.fork := by
+    rw [initSevm_benvStat, Msg.withBenv_benvStat, benvAfterTransfer_stat transfer]
+    exact ready.covered
+  exact core run committed entryFork vaultAt wethAt inv vaultDirect wethDirect
     blockIndex transactionIndex [] 0
 -- PX:560–621 (`prorataAccountingReplay_of_messageRoot`) with two programs; the configuration clause is
 -- Pair.lean:504–507; `wethFresh` is `Frame.enter_run_fresh`'s `⟨rfl, rfl⟩` (ExecutionFrameEntry:25).
@@ -488,6 +507,9 @@ theorem retainedProcessCreateMessagePairReplayFaithful {vault : Adr} {msg : Msg}
           wethNonprecompile := by
             simpa [processCreateMessage.msg, Msg.withBenv, addCreatedAccount,
               Benv.setStor, Benv.incrNonce] using ready.wethNonprecompile
+          covered := by
+            simpa [processCreateMessage.msg, Msg.withBenv, addCreatedAccount,
+              Benv.setStor, Benv.incrNonce] using ready.covered
           callerNotVault := by
             simpa [processCreateMessage.msg, Msg.withBenv] using ready.callerNotVault
           callerNotWeth := by
@@ -526,7 +548,7 @@ theorem retainedMessageCallPairReplayFaithful {vault : Adr} {msg : Msg} {state :
   cases trace with
   | createCollision targetNone collision result =>
       have stateEq :=
-        processMessageCall_createCollision_state_eq targetNone collision result
+        processMessageCall_createCollision_state_eq targetNone collision result ready.covered
       exact PairReplayWith.nil_of_eq (by rw [stateEq])
   | createRun targetNone collision evm core inner result =>
       have vaultNe : msg.currentTarget ≠ vault := fun hit =>
@@ -535,14 +557,14 @@ theorem retainedMessageCallPairReplayFaithful {vault : Adr} {msg : Msg} {state :
         Bool.noConfusion ((ready.createCollision (.inr hit)).symm.trans collision)
       have fresh := messageCreateCollision_false_getStor_eq_empty collision
       have boundary := congrArg (PairBoundary.ofState vault)
-        (processMessageCall_createRun_state_eq targetNone collision core result)
+        (processMessageCall_createRun_state_eq targetNone collision core result ready.covered)
       rw [boundary]
       exact retainedProcessCreateMessagePairReplayFaithful inner ready targetNone vaultNe wethNe
         fresh blockIndex transactionIndex
   | callRun targetSome delegated refund delegation execMsg execMsgEq evm core inner result =>
       subst execMsgEq
       have stateEq :=
-        processMessageCall_callRun_state_eq targetSome delegation rfl core result
+        processMessageCall_callRun_state_eq targetSome delegation rfl core result ready.covered
       have execReady : PairMessageReady vault (messageCallExecutionMessage delegated) :=
         { vault := (ready.vault.of_messageCallDelegation delegation).messageCallExecutionMessage
           weth := (ready.weth.of_messageCallDelegation delegation).messageCallExecutionMessage
@@ -550,6 +572,9 @@ theorem retainedMessageCallPairReplayFaithful {vault : Adr} {msg : Msg} {state :
           wethNonprecompile := by
             rw [messageCallExecutionMessage_benv_stat, messageCallDelegation_benv_stat delegation]
             exact ready.wethNonprecompile
+          covered := by
+            rw [messageCallExecutionMessage_benv_stat, messageCallDelegation_benv_stat delegation]
+            exact ready.covered
           callerNotVault := by
             rw [messageCallExecutionMessage_caller_eq, messageCallDelegation_caller_eq delegation]
             exact ready.callerNotVault
@@ -591,7 +616,7 @@ theorem retainedTransactionPairReplayFaithful {vault : Adr} {benv : Benv} {bout 
       (fun r => PairProvenanceOk blockIndex transactionIndex [] r ∧
         PairStepRecord.OwnIn vault trace.rawFrames r)
       (PairBoundary.ofState vault benv.state) (PairBoundary.ofState vault state) := by
-  rcases trace.exists_stateChronology with ⟨chronology⟩
+  rcases trace.exists_stateChronology inv.covered with ⟨chronology⟩
   -- (1) nonce bump and up-front debit: storage-silent everywhere
   have debitBoundary : PairBoundary.ofState vault trace.msg.benv.state =
       PairBoundary.ofState vault benv.state := by
@@ -607,6 +632,9 @@ theorem retainedTransactionPairReplayFaithful {vault : Adr} {benv : Benv} {bout 
       wethNonprecompile := by
         rw [prepareMessage_benv trace.prepared]
         exact inv.wethNonprecompile
+      covered := by
+        rw [prepareMessage_benv trace.prepared]
+        exact inv.covered
       callerNotVault := envelope.1
       callerNotWeth := envelope.2 }
   have messageReplay :=
@@ -622,11 +650,11 @@ theorem retainedTransactionPairReplayFaithful {vault : Adr} {benv : Benv} {bout 
   have vaultKept := foldl_destroyAccount_get_eq
     (state := trace.coinbaseState chronology.refundCounter)
     (trace.accountsToDelete_ne (pairVaultCodeSpec_preserves vault)
-      inv.world.vaultCode inv.vaultNotCreated)
+      inv.world.vaultCode inv.vaultNotCreated inv.covered)
   have wethKept := foldl_destroyAccount_get_eq
     (state := trace.coinbaseState chronology.refundCounter)
     (trace.accountsToDelete_ne (wethSpec_preserves wethAccount)
-      inv.world.weth inv.wethNotCreated)
+      inv.world.weth inv.wethNotCreated inv.covered)
   have finalBoundary : PairBoundary.ofState vault state =
       PairBoundary.ofState vault trace.messageState := by
     have finalState : PairBoundary.ofState vault state =
@@ -699,6 +727,9 @@ theorem retainedSystemMessagePairReplayFaithful {vault : Adr} {benv : Benv} {tar
       weth := systemTransactionMessage_msgInv inv.world.weth inv.wethNotCreated
       distinct := inv.world.distinct
       wethNonprecompile := inv.wethNonprecompile
+      covered := by
+        simpa [systemTransactionMessage, processSystemTransactionMsg, Benv.beginTransaction]
+          using inv.covered
       callerNotVault := envelope.1
       callerNotWeth := envelope.2 }
   have replay := retainedMessageCallPairReplayFaithful trace.message ready blockIndex none
@@ -787,7 +818,7 @@ theorem retainedBodyPairReplayFaithful {vault : Adr} {benv : Benv} {txs : List (
     PairReplayWith.nil_of_eq (PairBoundary.ofState_eq
       (processWithdrawalsState_getStor_eq vault trace.transactionBenv.state wds)
       (processWithdrawalsState_getStor_eq wethAccount trace.transactionBenv.state wds))
-  have wdInv := txInv.afterWithdrawals (trace.transactionBound bound)
+  have wdInv := txInv.afterWithdrawals (trace.transactionBound bound inv.covered)
   -- (5) request calls, by R6
   have requestReplay := retainedRequestsPairReplayFaithful trace.requests wdInv blockIndex
   have sub : ∀ {F : List Exec.Deriv}, (∀ d ∈ F, d ∈ trace.rawFrames) →
@@ -798,15 +829,20 @@ theorem retainedBodyPairReplayFaithful {vault : Adr} {benv : Benv} {txs : List (
           (fun r => PairInBlock blockIndex r ∧ PairStepRecord.OwnIn vault trace.rawFrames r)
           pre post :=
     fun {_} inside {_} weaken {_ _} replay => replay.faithfulLift weaken inside
-  exact (sub (fun d member => by simp [AppliedBodyTrace.rawFrames, member])
-      (fun _ ok => ok.block) beaconReplay).append
-    ((sub (fun d member => by simp [AppliedBodyTrace.rawFrames, member])
-      (fun _ ok => ok.block) historyReplay).append
-    ((sub (fun d member => by simp [AppliedBodyTrace.rawFrames, member])
+  rw [congrArg (PairBoundary.ofState vault) trace.requestState_eq] at requestReplay
+  exact (sub (F := trace.beacon.rawFrames)
+      (fun d member => by simp [AppliedBodyTrace.rawFrames, member])
+      (fun r (ok : PairProvenanceOk blockIndex none [] r) => ok.block) beaconReplay).append
+    ((sub (F := trace.history.rawFrames)
+      (fun d member => by simp [AppliedBodyTrace.rawFrames, member])
+      (fun r (ok : PairProvenanceOk blockIndex none [] r) => ok.block) historyReplay).append
+    ((sub (F := trace.transactions.rawFrames)
+      (fun d member => by simp [AppliedBodyTrace.rawFrames, member])
       (fun _ ok => ok) txReplay).append
     (wdReplay.append
-      (sub (fun d member => by simp [AppliedBodyTrace.rawFrames, member])
-        (fun _ ok => ok.block) requestReplay))))
+      (sub (F := trace.requests.rawFrames)
+        (fun d member => by simp [AppliedBodyTrace.rawFrames, member])
+        (fun r (ok : PairProvenanceOk blockIndex none [] r) => ok.block) requestReplay))))
 
 /-- **R7.**  A whole successful block body, in `applyBody` order. -/
 theorem retainedBodyPairReplay {vault : Adr} {benv : Benv} {txs : List (Bytes ⊕ Tx)}
@@ -831,9 +867,13 @@ theorem retainedConfiguredBlockPairReplayFaithful {vault : Adr} {cfg : ChainConf
     PairReplayWith vault
       (fun r => PairInBlock blockIndex r ∧ PairStepRecord.OwnIn vault trace.rawFrames r)
       (PairBoundary.ofState vault pre.state) (PairBoundary.ofState vault post.state) := by
-  have benvInv : PairBenvInv vault (initBenv trace.rules pre trace.block.header) :=
+  have benvInv : PairBenvInv vault (initBenv trace.fork pre trace.block.header) :=
     ⟨trace.openingState ▸ inv, trace.not_mem_openingCreatedAccounts vault,
-      trace.not_mem_openingCreatedAccounts wethAccount, wethNonprecompile⟩
+      trace.not_mem_openingCreatedAccounts wethAccount,
+      by rw [show (initBenv trace.fork pre trace.block.header).stat.rules = trace.rules
+          from trace.rulesEq]
+         exact wethNonprecompile,
+      by simpa [initBenv, initBenvStat] using trace.covered⟩
   have replay :=
     retainedBodyPairReplayFaithful trace.bodyTrace benvInv trace.openingBound blockIndex
   have postBoundary := congrArg (PairBoundary.ofState vault) trace.postState
@@ -862,14 +902,16 @@ theorem retainedConfiguredHistoryPairReplayFaithful {vault : Adr} {cfg : ChainCo
     (history : ConfiguredHistoryTrace cfg checkpoint future)
     (inv : PairWorldInv vault checkpoint.state)
     (schedule : ∀ {timestamp : Nat} {rules : ForkRules},
-      cfg.rulesAt timestamp = .ok rules → rules.isPrecomp wethAccount = false) :
+      cfg.rulesAt timestamp = .ok rules → rules.isPrecomp wethAccount = false)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     PairReplayWith vault (fun r => PairStepRecord.OwnIn vault history.rawFrames r)
       (PairBoundary.ofState vault checkpoint.state)
       (PairBoundary.ofState vault future.state) := by
   induction history with
   | refl hcfg hctx hid => exact PairReplayWith.nil_of_eq rfl
   | step prior block ih =>
-      have current := inv.afterHistory prior ih
+      have current := inv.afterHistory prior hcov ih
       exact (ih.mono fun _ own => own.mono fun d member =>
           List.mem_append.mpr (Or.inl member)).append
         ((retainedConfiguredBlockPairReplayFaithful block current
@@ -883,11 +925,14 @@ theorem retainedConfiguredHistoryPairReplay {vault : Adr} {cfg : ChainConfig}
     (history : ConfiguredHistoryTrace cfg checkpoint future)
     (inv : PairWorldInv vault checkpoint.state)
     (schedule : ∀ {timestamp : Nat} {rules : ForkRules},
-      cfg.rulesAt timestamp = .ok rules → rules.isPrecomp wethAccount = false) :
+      cfg.rulesAt timestamp = .ok rules → rules.isPrecomp wethAccount = false)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     PairReplayWith vault (fun _ => True)
       (PairBoundary.ofState vault checkpoint.state)
       (PairBoundary.ofState vault future.state) :=
-  (retainedConfiguredHistoryPairReplayFaithful history inv schedule).mono fun _ _ => trivial
+  (retainedConfiguredHistoryPairReplayFaithful history inv schedule hcov).mono
+    fun _ _ => trivial
 -- PH:63–80 / G:593–606.
 
 /-- The post-installation root carries the pair invariant. -/
@@ -910,18 +955,22 @@ theorem PairWorldInv.of_root {cfg : ChainConfig} {deployed : BlockChain} {vault 
 /-- The pair history from its root: the whole configured continuation replays. -/
 theorem pair_history_replay {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
     (root : PairRoot cfg deployed vault)
-    (history : ConfiguredHistoryTrace cfg deployed future) :
+    (history : ConfiguredHistoryTrace cfg deployed future)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     PairReplayWith vault (fun _ => True)
       (PairBoundary.ofState vault deployed.state) (PairBoundary.ofState vault future.state) :=
   retainedConfiguredHistoryPairReplay history (PairWorldInv.of_root root)
-    (fun rulesAt => (root.notPrecompile rulesAt).2)
+    (fun rulesAt => (root.notPrecompile rulesAt).2) hcov
 
 /-- Every configured continuation of the root carries the pair invariant, unconditionally. -/
 theorem PairWorldInv.of_history {cfg : ChainConfig} {deployed future : BlockChain}
     {vault : Adr} (root : PairRoot cfg deployed vault)
-    (history : ConfiguredHistoryTrace cfg deployed future) :
+    (history : ConfiguredHistoryTrace cfg deployed future)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     PairWorldInv vault future.state :=
-  (PairWorldInv.of_root root).afterHistory history (pair_history_replay root history)
+  (PairWorldInv.of_root root).afterHistory history hcov (pair_history_replay root history hcov)
 
 /-- **`PairStable` of a history.**  Everything but the two backing numbers is unconditional; those two are
 the premises, because only D9 carries `supply ≤ offset · row` (design §3.3.6), and the supply cap's
@@ -929,13 +978,15 @@ preservation needs supply-slot facts the share operations do not yet export (§7
 theorem PairStable.of_history {cfg : ChainConfig} {deployed future : BlockChain}
     {vault : Adr} (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork)
     {timestamp : Nat} {rules : ForkRules} (rulesAt : cfg.rulesAt timestamp = .ok rules)
     (capped : supplyN (future.state.getStor vault) ≤ Blanc.ProrataWethVault.maxSupplyN)
     (backing : supplyN (future.state.getStor vault) ≤
       Blanc.ProrataWethVault.offsetN *
         (Stor.rest (future.state.getStor wethAccount) vault).toNat) :
     PairStable vault rules future.state := by
-  have world := PairWorldInv.of_history root history
+  have world := PairWorldInv.of_history root history hcov
   obtain ⟨vaultPrecomp, wethPrecomp⟩ := root.notPrecompile rulesAt
   exact ⟨world.vault.code, Option.some.inj (world.weth.code.trans Blanc.wethCode_compile),
     world.distinct, root.vaultNonzero, vaultPrecomp, wethPrecomp,

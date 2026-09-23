@@ -68,15 +68,17 @@ theorem chargeCodeGas_runtimeBaseline
     {rules : ForkRules} {raw : Devm}
     (houtput : raw.output = runtimeBaselineBytes)
     (hgas : ossifiableRuntimeCodeDepositGas ≤ raw.gasLeft)
-    (hmax : 2188 ≤ rules.code.maxCodeSize) :
+    (hmax : 2188 ≤ rules.code.maxCodeSize)
+    (hstateGas : rules.stateGas = none) :
     processCreateMessage.chargeCodeGas rules raw =
       .ok (raw.setMach
         ⟨raw.stack, raw.memory,
-          raw.gasLeft - ossifiableRuntimeCodeDepositGas⟩) := by
+          raw.gasLeft - ossifiableRuntimeCodeDepositGas, raw.stateGas⟩) := by
   unfold ossifiableRuntimeCodeDepositGas at hgas ⊢
   obtain ⟨tail, hcons⟩ := runtimeBaselineBytes_cons
   have hlength := runtimeBaselineBytes_length_exact
   unfold processCreateMessage.chargeCodeGas
+  rw [hstateGas]
   rw [houtput, hcons]
   rw [hcons] at hlength
   simp only [List.length_cons] at hlength
@@ -112,6 +114,7 @@ cleared target receives exactly the two ERC-1967 writes and their source-order
 logs. -/
 theorem processCreateMessage_ossifiable_emptySetup_success
     (msg : Msg) (implementation requestedAdmin : Adr)
+    (hfork : CoveredFork msg.benv.stat.fork)
     (hvalue : msg.value = 0)
     (hcodeAddress : msg.codeAddress = .none)
     (hcode : msg.code.toList =
@@ -241,6 +244,7 @@ theorem processCreateMessage_ossifiable_emptySetup_success
   obtain ⟨raw, hrun, hrawStorage, hrawLogs, hrawOutput, hrawGas,
       hrawError⟩ :=
     ossifiableConstructorProgram_canonicalEmptyInput_forward_exact
+      (hfork := by rw [hstat]; exact hfork)
       hseedValue hseedCode himplementationNonzero hrequestedNonzero
       hbaseImplementationCode haddressCold' himplementationRaw
       himplementationOriginal' himplementationCold' hadminRaw
@@ -253,13 +257,13 @@ theorem processCreateMessage_ossifiable_emptySetup_success
     simp only [ossifiableEmptyDataCreateInput, ossifiableFullCreateInput,
       ossifiableCreationTemplate, List.append_assoc]
   have hstart : initEvm seeded =
-      ⟨0, sevm, base.setMach ⟨[], Mem.empty, G + 320⟩⟩ := by
+      ⟨0, sevm, base.setMach ⟨[], Mem.empty, G + 320, base.stateGas⟩⟩ := by
     rw [hGadd]
     rfl
   have hexec : exec (initEvm seeded) = .ok raw := by
     rw [hstart]
     have hrun' : Prog.RunCompiled sevm
-        (base.setMach ⟨[], Mem.empty, G + 320⟩)
+        (base.setMach ⟨[], Mem.empty, G + 320, base.stateGas⟩)
         creationBaseline raw := by
       rw [creationBaseline_eq_numericProgram]
       exact hrun
@@ -292,8 +296,14 @@ theorem processCreateMessage_ossifiable_emptySetup_success
       [rawUpgradedLog msg.currentTarget implementation.toB256] ++
         [ossifiableConstructorAdminChangedLog msg.currentTarget 0
           requestedAdmin] := by
-    rw [hrawLogs, htarget]
-    change [] ++ _ ++ _ = _
+    have hbaseLogs : base.logs = [] := by
+      have hrules : sevm.benvStat.rules.stateGas = none := by
+        rw [hstat]; exact hfork.rules_stateGas_none
+      change (match sevm.benvStat.rules.stateGas with
+        | none => []
+        | some _ => _) = []
+      rw [hrules]
+    rw [hrawLogs, htarget, hbaseLogs]
     rfl
   have hrawGas' : raw.gasLeft =
       msg.gas - ossifiableConstructorExecutionGas := by
@@ -308,11 +318,11 @@ theorem processCreateMessage_ossifiable_emptySetup_success
     omega
   let charged := raw.setMach
     ⟨raw.stack, raw.memory,
-      raw.gasLeft - ossifiableRuntimeCodeDepositGas⟩
+      raw.gasLeft - ossifiableRuntimeCodeDepositGas, raw.stateGas⟩
   have hcharge : processCreateMessage.chargeCodeGas
       msg.benv.stat.rules raw = .ok charged := by
     simpa only [charged] using
-      chargeCodeGas_runtimeBaseline hrawOutput hdeposit hmax
+      chargeCodeGas_runtimeBaseline hrawOutput hdeposit hmax hfork.rules_stateGas_none
   have hchargedOutput : charged.output = runtimeBaselineBytes := by
     dsimp only [charged]
     rw [Devm.setMach_output]

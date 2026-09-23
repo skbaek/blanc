@@ -197,6 +197,7 @@ private def insertionLoopCarrier_step
 /-- Exact existential CPS composition of any dead insertion prefix. -/
 theorem insertionLoop_dead_iterations_exists_runCompiledTo
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {memory : Mem} {oldCount : B256} {s : InsertionLoopState}
     {stor : Stor} {n K : Nat} {P : Execution → Prop}
     (carrier : InsertionLoopCarrier origin base memory oldCount s)
@@ -219,13 +220,13 @@ theorem insertionLoop_dead_iterations_exists_runCompiledTo
           Func.RunCompiledTo fs sevm
             (base'.setMach
               ⟨[(insertionLoopIter sevm.currentTarget stor n s).height],
-                memory', K⟩)
+                memory', K, base'.stateGas⟩)
             insertionLoop ex) :
     ∃ ex, P ex ∧
       Func.RunCompiledTo fs sevm
         (base.setMach
           ⟨[s.height], memory,
-            K + insertionDeadGas sevm.currentTarget stor n s⟩)
+            K + insertionDeadGas sevm.currentTarget stor n s, base.stateGas⟩)
         insertionLoop ex := by
   induction n generalizing base memory s with
   | zero =>
@@ -270,7 +271,7 @@ theorem insertionLoop_dead_iterations_exists_runCompiledTo
       let loaded := afterSload sevm base s.key
       let staged :=
         (memory.write 0 left.toBytes).write 32 s.node.toBytes
-      let shaBase := loaded.setMach ⟨[], staged, 0⟩
+      let shaBase := loaded.setMach ⟨[], staged, 0, loaded.stateGas⟩
       have hpair : InsertionPairMemoryCarrier shaBase.memory
           oldCount s.size left s.node := by
         simpa only [shaBase, staged, Devm.memory_setMach] using
@@ -288,7 +289,7 @@ theorem insertionLoop_dead_iterations_exists_runCompiledTo
       obtain ⟨callPost, _hstack, _hmemory, hcallMemNE,
           _hgas, _hreturn, hstorage, hcode, haddresses, hkeys,
           hlogs, houtput, herror, hlift⟩ :=
-        insertionShaTail_runCompiledTo
+        insertionShaTail_runCompiledTo (hfork := hfork)
           (fs := fs) (sevm := sevm) (base := shaBase)
           (height := s.height) (K := K + tailGas)
           hpair hnodelegSha hwarmSha hpre hdepth hshaBound
@@ -335,7 +336,7 @@ theorem insertionLoop_dead_iterations_exists_runCompiledTo
           (callPost.setMach
             ⟨[s.height + 1],
               callPost.memory.write 608 (s.size >>> 1).toBytes,
-              K + tailGas⟩)
+              K + tailGas, callPost.stateGas⟩)
           insertionLoop ex := by
         simpa only [tailGas, next, InsertionLoopState.step] using hnextRun
       have hshaRun := hlift hnextRun'
@@ -349,13 +350,13 @@ theorem insertionLoop_dead_iterations_exists_runCompiledTo
           (base.setMach
             ⟨[s.height], memory,
               (K + tailGas + 285) + 51 +
-                sloadCost sevm base (branchBase + s.height)⟩)
+                sloadCost sevm base (branchBase + s.height), base.stateGas⟩)
           insertionLoop ex := by
-        apply insertionLoopDead_runCompiledTo
+        apply insertionLoopDead_runCompiledTo (hfork := hfork)
           carrier.mem hbit hvalDead
           (by simp only [List.length_nil]; omega)
         simpa only [shaBase, loaded, staged, hkey,
-          Devm.setMach_setMach, Devm.memory_setMach] using hshaRun
+          Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach] using hshaRun
       have hcost :
           sloadCost sevm base (branchBase + s.height) =
             insertionReadGas sevm.currentTarget s.keys s.key := by
@@ -376,6 +377,7 @@ iteration is storage-effect neutral; the list is inherited from the supplied
 terminal continuation. -/
 theorem insertionLoop_dead_iterations_exists_storageEffectRun
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {memory : Mem} {oldCount : B256} {s : InsertionLoopState}
     {stor : Stor} {n K : Nat} {P : Execution → Prop}
     {effects : List (Adr × B256 × B256)}
@@ -399,13 +401,13 @@ theorem insertionLoop_dead_iterations_exists_storageEffectRun
           Func.StorageEffectRun fs sevm
             (base'.setMach
               ⟨[(insertionLoopIter sevm.currentTarget stor n s).height],
-                memory', K⟩)
+                memory', K, base'.stateGas⟩)
             insertionLoop ex effects) :
     ∃ ex, P ex ∧
       Func.StorageEffectRun fs sevm
         (base.setMach
           ⟨[s.height], memory,
-            K + insertionDeadGas sevm.currentTarget stor n s⟩)
+            K + insertionDeadGas sevm.currentTarget stor n s, base.stateGas⟩)
         insertionLoop ex effects := by
   induction n generalizing base memory s with
   | zero =>
@@ -450,7 +452,7 @@ theorem insertionLoop_dead_iterations_exists_storageEffectRun
       let loaded := afterSload sevm base s.key
       let staged :=
         (memory.write 0 left.toBytes).write 32 s.node.toBytes
-      let shaBase := loaded.setMach ⟨[], staged, 0⟩
+      let shaBase := loaded.setMach ⟨[], staged, 0, loaded.stateGas⟩
       have hpair : InsertionPairMemoryCarrier shaBase.memory
           oldCount s.size left s.node := by
         simpa only [shaBase, staged, Devm.memory_setMach] using
@@ -468,7 +470,7 @@ theorem insertionLoop_dead_iterations_exists_storageEffectRun
       obtain ⟨callPost, _hstack, _hmemory, hcallMemNE,
           _hgas, _hreturn, hstorage, hcode, haddresses, hkeys,
           hlogs, houtput, herror, lift⟩ :=
-        insertionShaTail_storageEffectRun
+        insertionShaTail_storageEffectRun (hfork := hfork)
           (fs := fs) (sevm := sevm) (base := shaBase)
           (height := s.height) (K := K + tailGas)
           (effects := effects)
@@ -516,7 +518,7 @@ theorem insertionLoop_dead_iterations_exists_storageEffectRun
           (callPost.setMach
             ⟨[s.height + 1],
               callPost.memory.write 608 (s.size >>> 1).toBytes,
-              K + tailGas⟩)
+              K + tailGas, callPost.stateGas⟩)
           insertionLoop ex effects := by
         simpa only [tailGas, next, InsertionLoopState.step] using nextRun
       have shaRun := lift nextRun'
@@ -530,13 +532,13 @@ theorem insertionLoop_dead_iterations_exists_storageEffectRun
           (base.setMach
             ⟨[s.height], memory,
               (K + tailGas + 285) + 51 +
-                sloadCost sevm base (branchBase + s.height)⟩)
+                sloadCost sevm base (branchBase + s.height), base.stateGas⟩)
           insertionLoop ex effects := by
-        apply insertionLoopDead_storageEffectRun
+        apply insertionLoopDead_storageEffectRun (hfork := hfork)
           carrier.mem hbit hvalDead
           (by simp only [List.length_nil]; omega)
         simpa only [shaBase, loaded, staged, hkey,
-          Devm.setMach_setMach, Devm.memory_setMach] using shaRun
+          Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach] using shaRun
       have hcost :
           sloadCost sevm base (branchBase + s.height) =
             insertionReadGas sevm.currentTarget s.keys s.key := by
@@ -556,6 +558,7 @@ theorem insertionLoop_dead_iterations_exists_storageEffectRun
 exactly that branch write. -/
 theorem insertionLoop_deadThenLive_exists_storageEffectRun
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {memory : Mem} {oldCount : B256} {s : InsertionLoopState}
     {stor : Stor} {n G : Nat}
     (carrier : InsertionLoopCarrier origin base memory oldCount s)
@@ -586,24 +589,24 @@ theorem insertionLoop_deadThenLive_exists_storageEffectRun
           ⟨[s.height], memory,
             (G + 46 + insertionStoreCost sevm stor
                 (insertionLoopIter sevm.currentTarget stor n s)) +
-              insertionDeadGas sevm.currentTarget stor n s⟩)
+              insertionDeadGas sevm.currentTarget stor n s, base.stateGas⟩)
         insertionLoop
         (.ok ((afterSstore sevm finalBase
           (insertionLoopIter sevm.currentTarget stor n s).key
           (insertionLoopIter sevm.currentTarget stor n s).node).setMach
-            ⟨[], finalMemory, G⟩))
+            ⟨[], finalMemory, G, finalBase.stateGas⟩))
         [(sevm.currentTarget,
           (insertionLoopIter sevm.currentTarget stor n s).key,
           (insertionLoopIter sevm.currentTarget stor n s).node)] := by
   let final := insertionLoopIter sevm.currentTarget stor n s
   let terminalGas := G + 46 + insertionStoreCost sevm stor final
   obtain ⟨ex, hfinal, run⟩ :=
-    insertionLoop_dead_iterations_exists_storageEffectRun
+    insertionLoop_dead_iterations_exists_storageEffectRun (hfork := hfork)
       (P := fun ex => ∃ finalBase finalMemory,
         Nonempty (InsertionLoopCarrier origin finalBase finalMemory
           oldCount final) ∧
         ex = .ok ((afterSstore sevm finalBase final.key final.node).setMach
-          ⟨[], finalMemory, G⟩))
+          ⟨[], finalMemory, G, finalBase.stateGas⟩))
       (effects := [(sevm.currentTarget, final.key, final.node)])
       (K := terminalGas) carrier horiginStor hdead
       hnodeleg hwarm hpre hdepth
@@ -621,7 +624,7 @@ theorem insertionLoop_deadThenLive_exists_storageEffectRun
             insertionStoreCost sevm stor final := by
           simpa only [final] using hsentry
         rw [hcost, hkey] at hsentryFinal
-        have live := insertionLoopLive_storageEffectRun
+        have live := insertionLoopLive_storageEffectRun (hfork := hfork)
           (fs := fs) (sevm := sevm) (base := finalBase)
           (K := G) finalCarrier.mem hbit hsentryFinal hstatic
         have hcost' :
@@ -631,7 +634,7 @@ theorem insertionLoop_deadThenLive_exists_storageEffectRun
           rw [← hkey, ← hcost]
         rw [hcost'] at live
         refine ⟨.ok ((afterSstore sevm finalBase final.key final.node).setMach
-            ⟨[], finalMemory, G⟩),
+            ⟨[], finalMemory, G, finalBase.stateGas⟩),
           ⟨finalBase, finalMemory, ⟨finalCarrier⟩, rfl⟩, ?_⟩
         simpa only [terminalGas, final, hkey] using live)
   rcases hfinal with ⟨finalBase, finalMemory, ⟨finalCarrier⟩, rfl⟩
@@ -641,6 +644,7 @@ theorem insertionLoop_deadThenLive_exists_storageEffectRun
 /-- Fixed-outcome compatibility corollary of the existential CPS carrier. -/
 theorem insertionLoop_dead_iterations_runCompiledTo
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {memory : Mem} {oldCount : B256} {s : InsertionLoopState}
     {stor : Stor} {n K : Nat} {ex : Execution}
     (carrier : InsertionLoopCarrier origin base memory oldCount s)
@@ -662,15 +666,15 @@ theorem insertionLoop_dead_iterations_runCompiledTo
         Func.RunCompiledTo fs sevm
           (base'.setMach
             ⟨[(insertionLoopIter sevm.currentTarget stor n s).height],
-              memory', K⟩)
+              memory', K, base'.stateGas⟩)
           insertionLoop ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[s.height], memory,
-          K + insertionDeadGas sevm.currentTarget stor n s⟩)
+          K + insertionDeadGas sevm.currentTarget stor n s, base.stateGas⟩)
       insertionLoop ex := by
   obtain ⟨ex', hex, hrun⟩ :=
-    insertionLoop_dead_iterations_exists_runCompiledTo
+    insertionLoop_dead_iterations_exists_runCompiledTo (hfork := hfork)
       (P := fun ex' => ex' = ex) carrier horiginStor hdead
       hnodeleg hwarm hpre hdepth hbound
       hinsertionContinuation hinsertionLoop
@@ -684,6 +688,7 @@ theorem insertionLoop_dead_iterations_runCompiledTo
 exposed so downstream proofs can classify the one branch write exactly. -/
 theorem insertionLoop_deadThenLive_exists_runCompiledTo
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {memory : Mem} {oldCount : B256} {s : InsertionLoopState}
     {stor : Stor} {n G : Nat}
     (carrier : InsertionLoopCarrier origin base memory oldCount s)
@@ -714,21 +719,21 @@ theorem insertionLoop_deadThenLive_exists_runCompiledTo
           ⟨[s.height], memory,
             (G + 46 + insertionStoreCost sevm stor
                 (insertionLoopIter sevm.currentTarget stor n s)) +
-              insertionDeadGas sevm.currentTarget stor n s⟩)
+              insertionDeadGas sevm.currentTarget stor n s, base.stateGas⟩)
         insertionLoop
         (.ok ((afterSstore sevm finalBase
           (insertionLoopIter sevm.currentTarget stor n s).key
           (insertionLoopIter sevm.currentTarget stor n s).node).setMach
-            ⟨[], finalMemory, G⟩)) := by
+            ⟨[], finalMemory, G, finalBase.stateGas⟩)) := by
   let final := insertionLoopIter sevm.currentTarget stor n s
   let terminalGas := G + 46 + insertionStoreCost sevm stor final
   obtain ⟨ex, hfinal, hrun⟩ :=
-    insertionLoop_dead_iterations_exists_runCompiledTo
+    insertionLoop_dead_iterations_exists_runCompiledTo (hfork := hfork)
       (P := fun ex => ∃ finalBase finalMemory,
         Nonempty (InsertionLoopCarrier origin finalBase finalMemory
           oldCount final) ∧
         ex = .ok ((afterSstore sevm finalBase final.key final.node).setMach
-          ⟨[], finalMemory, G⟩))
+          ⟨[], finalMemory, G, finalBase.stateGas⟩))
       (K := terminalGas) carrier horiginStor hdead
       hnodeleg hwarm hpre hdepth
       (by simpa only [terminalGas, final] using hbound)
@@ -749,7 +754,7 @@ theorem insertionLoop_deadThenLive_exists_runCompiledTo
             sstoreCost sevm finalBase
               (branchBase + final.height) final.node := by
           exact hsentryFinal
-        have hlive := insertionLoopLive_runCompiledTo
+        have hlive := insertionLoopLive_runCompiledTo (hfork := hfork)
           (fs := fs) (sevm := sevm) (base := finalBase)
           (K := G) finalCarrier.mem hbit hsentry' hstatic
         have hcost' :
@@ -759,7 +764,7 @@ theorem insertionLoop_deadThenLive_exists_runCompiledTo
           rw [← hkey, ← hcost]
         rw [hcost'] at hlive
         refine ⟨.ok ((afterSstore sevm finalBase final.key final.node).setMach
-            ⟨[], finalMemory, G⟩),
+            ⟨[], finalMemory, G, finalBase.stateGas⟩),
           ⟨finalBase, finalMemory, ⟨finalCarrier⟩, rfl⟩, ?_⟩
         simpa only [terminalGas, final, hkey] using hlive)
   rcases hfinal with ⟨finalBase, finalMemory, ⟨finalCarrier⟩, rfl⟩

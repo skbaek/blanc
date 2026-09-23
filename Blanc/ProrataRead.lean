@@ -33,7 +33,9 @@ private theorem div_logs_hinv : Rinst.Hinv Devm.logs Rinst.div := by
 private theorem selfbalance_logs_hinv : Rinst.Hinv Devm.logs Rinst.selfbalance := ⟨by
   intro pc sevm pre post run
   simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.pushBurn_of_pushItem run).logs⟩
+  rcases Except.bind_eq_ok run with ⟨devm, hcharge, hpush⟩
+  exact (Devm.burn_of_chargeGas hcharge).logs.trans
+    ((Devm.balReadAccount_logs _ _ _).symm.trans (Devm.push_of_push hpush).logs)⟩
 
 private theorem revert_logs_hinv : Linst.Hinv Devm.logs Devm.logs Linst.revert := by
   constructor
@@ -206,7 +208,7 @@ private theorem convertToShares_guardPrefix_effect
       (B256.shiftRight (B256.shiftRight B256.max 130) 30 <? Sevm.argWord sevm 0) ::
       Sevm.argWord sevm 0 :: B256.shiftRight B256.max 130 :: B256.max :: [] <<+ d7.stack := by
     rw [← hbal6]
-    exact prefix_of_push (of_run_selfbalance qbalance) p6
+    exact prefix_of_push_stack (of_run_selfbalance_stack qbalance) p6
   have p8 : Devm.getBal pre sevm.currentTarget :: Devm.getBal pre sevm.currentTarget ::
       (B256.shiftRight (B256.shiftRight B256.max 130) 30 <? Sevm.argWord sevm 0) ::
       Sevm.argWord sevm 0 :: B256.shiftRight B256.max 130 :: B256.max :: [] <<+ d8.stack :=
@@ -565,7 +567,7 @@ private theorem convertToAssets_guardPrefix_effect
       (B256.shiftRight B256.max 130 <? Sevm.argWord sevm 0) ::
       Sevm.argWord sevm 0 :: B256.shiftRight B256.max 130 :: B256.max :: [] <<+ d5.stack := by
     rw [← hbal4]
-    exact prefix_of_push (of_run_selfbalance qbalance) p4
+    exact prefix_of_push_stack (of_run_selfbalance_stack qbalance) p4
   have p6 : Devm.getBal pre sevm.currentTarget :: Devm.getBal pre sevm.currentTarget ::
       (B256.shiftRight B256.max 130 <? Sevm.argWord sevm 0) ::
       Sevm.argWord sevm 0 :: B256.shiftRight B256.max 130 :: B256.max :: [] <<+ d6.stack :=

@@ -219,6 +219,7 @@ one.  This composes the AT3 transition kernel with the AT2 public view; neither
 source states it. -/
 theorem expiry_boundary_strict_control
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (pauser interval expiry : B256) (G : Nat)
     (hdata : sevm.data.length.toB256 = 36)
     (hvalue : sevm.value = 0)
@@ -237,7 +238,7 @@ theorem expiry_boundary_strict_control
     ∃ post,
       Prog.RunCompiled sevm
         (base.setMach ⟨[], Mem.empty,
-          G + isPauserLiveDispatchGas + temporalLiveBodyGasWarm⟩)
+          G + isPauserLiveDispatchGas + temporalLiveBodyGasWarm, base.stateGas⟩)
         (runtime dp) post ∧
       Devm.output post = (1 : B256).toBytes ∧
       Bytes.toB256 (Devm.output post) = 1 ∧
@@ -247,7 +248,7 @@ theorem expiry_boundary_strict_control
       some sevm.code.toList = Prog.compile (runtime dp) := by
   have live : IsPauserLiveAt sevm.benvStat.time expiry :=
     CheckedHeartbeatExtension.strict_of_interval_pos extension positive
-  rcases isPauserLive_runCompiled_of_live dp sevm base pauser expiry G
+  rcases isPauserLive_runCompiled_of_live dp sevm base hfork pauser expiry G
       hdata hvalue hselector hcodeAddress hcode hword hpauser hexpiry hwarm
       live with ⟨post, hrun, houtput, hworld, hlogs, hcompile⟩
   refine ⟨post, hrun, houtput, ?_, live, hworld, hlogs, hcompile⟩
@@ -259,6 +260,7 @@ returns zero, which is not the word it returns when liveness holds, so a mutant
 predicate admitting equality would disagree with the compiled dispatcher. -/
 theorem expiry_boundary_inclusive_rejected
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (pauser : B256) (G : Nat)
     (hdata : sevm.data.length.toB256 = 36)
     (hvalue : sevm.value = 0)
@@ -277,7 +279,7 @@ theorem expiry_boundary_inclusive_rejected
       ∃ post,
         Prog.RunCompiled sevm
           (base.setMach ⟨[], Mem.empty,
-            G + isPauserLiveDispatchGas + temporalLiveBodyGasWarm⟩)
+            G + isPauserLiveDispatchGas + temporalLiveBodyGasWarm, base.stateGas⟩)
           (runtime dp) post ∧
         Devm.output post = (0 : B256).toBytes ∧
         Devm.output post ≠ (1 : B256).toBytes ∧
@@ -289,7 +291,7 @@ theorem expiry_boundary_inclusive_rejected
     have decoded := congrArg Bytes.toB256 collision
     rw [B256.toB256_toBytes, B256.toB256_toBytes] at decoded
     exact absurd decoded (by decide)
-  rcases isPauserLive_runCompiled_at_expiry dp sevm base pauser G
+  rcases isPauserLive_runCompiled_at_expiry dp sevm base hfork pauser G
       hdata hvalue hselector hcodeAddress hcode hword hpauser hexpiry hwarm with
     ⟨post, hrun, houtput, hworld, hlogs, hcompile⟩
   exact ⟨IsPauserLiveAt.irrefl sevm.benvStat.time,
@@ -302,6 +304,7 @@ and no log is emitted.  The expiry key it reads is not the configuration key
 read by the interval view. -/
 theorem canonical_expiry_view_control
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (pauser expiry : B256) (G : Nat)
     (hdata : sevm.data.length.toB256 = 36)
     (hvalue : sevm.value = 0)
@@ -318,7 +321,7 @@ theorem canonical_expiry_view_control
     ∃ post,
       Prog.RunCompiled sevm
         (base.setMach ⟨[], Mem.empty,
-          G + heartbeatExpiryDispatchGas + heartbeatExpiryBodyGasWarm⟩)
+          G + heartbeatExpiryDispatchGas + heartbeatExpiryBodyGasWarm, base.stateGas⟩)
         (runtime dp) post ∧
       Bytes.toB256 (Devm.output post) =
         Devm.getStorVal base sevm.currentTarget (expirySlot pauser) ∧
@@ -326,7 +329,7 @@ theorem canonical_expiry_view_control
       Devm.WorldEq base post ∧
       post.logs = base.logs ∧
       some sevm.code.toList = Prog.compile (runtime dp) := by
-  rcases heartbeatExpiry_runCompiled dp sevm base pauser expiry G
+  rcases heartbeatExpiry_runCompiled dp sevm base hfork pauser expiry G
       hdata hvalue hselector hcodeAddress hcode hword hpauser hexpiry hwarm with
     ⟨post, hrun, houtput, hworld, hlogs, hcompile⟩
   refine ⟨post, hrun, ?_,
@@ -339,6 +342,7 @@ unchanged, and no log is emitted.  Its calldata is the bare four-byte selector,
 which is why no address argument appears. -/
 theorem heartbeat_interval_view_control
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (interval : B256) (G : Nat)
     (hdata : sevm.data.length.toB256 = 4)
     (hvalue : sevm.value = 0)
@@ -352,14 +356,14 @@ theorem heartbeat_interval_view_control
     ∃ post,
       Prog.RunCompiled sevm
         (base.setMach ⟨[], Mem.empty,
-          G + heartbeatIntervalDispatchGas + heartbeatIntervalBodyGasWarm⟩)
+          G + heartbeatIntervalDispatchGas + heartbeatIntervalBodyGasWarm, base.stateGas⟩)
         (runtime dp) post ∧
       Bytes.toB256 (Devm.output post) =
         Devm.getStorVal base sevm.currentTarget heartbeatIntervalSlot ∧
       Devm.WorldEq base post ∧
       post.logs = base.logs ∧
       some sevm.code.toList = Prog.compile (runtime dp) := by
-  rcases heartbeatInterval_runCompiled dp sevm base interval G
+  rcases heartbeatInterval_runCompiled dp sevm base hfork interval G
       hdata hvalue hselector hcodeAddress hcode hinterval hwarm with
     ⟨post, hrun, houtput, hworld, hlogs, hcompile⟩
   refine ⟨post, hrun, ?_, hworld, hlogs, hcompile⟩
@@ -1028,7 +1032,8 @@ macro "tw_defs" : tactic => `(tactic|
     Rinst.runCore, Bind.bind, Except.bind, Except.assert, assertDynamic,
     getOrigStorVal, getOrigAcct, Devm.getStorVal, Devm.getAcct,
     sstoreNewRefundCounter, safeSub, twoWriteSevm, twoWritePre, twoWriteCode,
-    default, Devm.withGasLeft, Devm.withStack, Devm.setMach, Devm.setMeta,
+    default, BenvStat.rules, Fork.ruleSet, pragueRules, Devm.balReadStorage, Devm.balReadAccount,
+    Option.isSome, Devm.withGasLeft, Devm.withStack, Devm.setMach, Devm.setMeta,
     Devm.setWorld, Devm.stack, Devm.gasLeft, Devm.state,
     Devm.accessedStorageKeys, Devm.refundCounter, addAccessedStorageKey,
     liftMachMetaPure, Meta.addAccessedStorageKey, Devm.withRefundCounter,
@@ -1165,7 +1170,7 @@ private theorem twoWrite_lastRetained_exists :
     decide
   obtain ⟨write, retained, owner, key, value, last⟩ :=
     Exec.exists_lastRetainedSstore_of_getStor_ne twoWriteRun twoWriteCommits
-      changed
+      CoveredFork.prague changed
   refine ⟨write, retained, owner, key, ?_, last⟩
   rw [value, show Execution.committedPost (.ok twoWriteEnd) twoWriteCommits =
     twoWriteEnd from rfl, twoWriteEnd_cell]
@@ -1737,7 +1742,7 @@ theorem pre_control_arbitrary_target_code_control
       callPre.getTransVal sevm.currentTarget lockKey = 1 ∧
       ∃ post,
         Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm'
-          (callPre.setMach ⟨[], Mem.empty, G + pauseReentrantGas⟩)
+          (callPre.setMach ⟨[], Mem.empty, G + pauseReentrantGas, callPre.stateGas⟩)
           pause (.error (.revert, post)) ∧
         post.output = customErrorData "ReentrantCall" := by
   obtain ⟨hassign', hlock'⟩ :=
@@ -1838,6 +1843,7 @@ a property of the message the CircuitBreaker builds, not a theorem that the
 child changed no state. -/
 theorem call_boundary_arbitrary_target_code_control
     (sevm : Sevm) (target : Adr) (duration : B256) (code : ByteArray)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (entry callPre callPost statPre statPost : Devm)
     (hcode : CodeAt entry target code)
     (hTarget : MemWordAt entry (targetWord * 32).toNat target.toB256)
@@ -1864,7 +1870,7 @@ theorem call_boundary_arbitrary_target_code_control
   -- Everything below comes out of `pause_externalBoundary` and the two
   -- relations it returns.  No staging lemma is invoked here.
   obtain ⟨callB, word, statB⟩ :=
-    pause_externalBoundary hTarget hDuration hCallStaging hDepth hDynamic
+    pause_externalBoundary hfork hTarget hDuration hCallStaging hDepth hDynamic
       hCall hStatStaging hStat
   obtain ⟨callParent, callChild, callMessage, callSlot, callDelegated,
     callCode, callGasWord, callChildGas,

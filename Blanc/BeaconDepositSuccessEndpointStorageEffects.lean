@@ -15,6 +15,7 @@ open Jaune.Ninst Blanc.Ninst
 and then its unique first-live branch write. -/
 theorem depositEndpoint_success_storageEffectRun
     {fs : List Func} {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {pubkey withdrawalCredentials signature : Bytes}
     {depositDataRoot : B256} {s s' : Acc} {ev : DepositEvent}
     {stor : Stor} {keys : KeySet} {countCost n G : Nat}
@@ -91,7 +92,7 @@ theorem depositEndpoint_success_storageEffectRun
         (logged.setMach
           ⟨[], depositEventMemory sevm.data
             (sevm.value / Nat.toB256 oneGwei)
-            (Nat.toB256 s.count), G⟩)
+            (Nat.toB256 s.count), G, logged.stateGas⟩)
         mid ∧
       Nonempty (InsertionLoopCarrier
         (afterSstore sevm mid depositCountSlot
@@ -104,13 +105,13 @@ theorem depositEndpoint_success_storageEffectRun
         (base.setMach
           ⟨[], Mem.empty,
             depositEndpointSuccessGas sevm base stor keys depositDataRoot
-              n (s.count + 1) countCost G⟩)
+              n (s.count + 1) countCost G, base.stateGas⟩)
         depositEndpoint
         (.ok
           ((afterSstore sevm finalBase (branchSlot n)
             (accumulatedNode Bytes.sha256 (accOfStor stor).branch
               0 n depositDataRoot)).setMach
-            ⟨[], finalMemory, G⟩))
+            ⟨[], finalMemory, G, finalBase.stateGas⟩))
         [(sevm.currentTarget, depositCountSlot, Nat.toB256 s.count + 1),
           (sevm.currentTarget, branchSlot n,
             accumulatedNode Bytes.sha256 (accOfStor stor).branch
@@ -187,9 +188,9 @@ theorem depositEndpoint_success_storageEffectRun
             accumulatedNode Bytes.sha256 (accOfStor stor).branch
               0 n depositDataRoot)])
       hdec.pubkeyTail hdec.withdrawalCredentialsTail hdec.signatureTail
-      (by simpa only [oldCount] using hcountValue) hstatic
+      hfork (by simpa only [oldCount] using hcountValue) hstatic
   let stagedBase := logged.setMach
-    ⟨[], depositEventMemory sevm.data amount oldCount, G⟩
+    ⟨[], depositEventMemory sevm.data amount oldCount, G, logged.stateGas⟩
   have hsource :
       ReconstructSourceMemoryCarrier stagedBase.memory
         (pubkey ++ zeros 16) (signature.take 64) (signature.drop 64)
@@ -237,7 +238,7 @@ theorem depositEndpoint_success_storageEffectRun
     rw [haddresses, Blanc.afterSload_accessedAddresses]
     exact hwarm
   obtain ⟨mid, finalBase, finalMemory, hmeta, hfinal, hsuffix⟩ :=
-    depositSuccessSuffix_storageEffectRun
+    depositSuccessSuffix_storageEffectRun (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := stagedBase)
       (pubkey := pubkey) (withdrawalCredentials := withdrawalCredentials)
       (signature := signature) (amountLE := le64 amount.toNat)
@@ -251,12 +252,12 @@ theorem depositEndpoint_success_storageEffectRun
   have heventRun : Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨[], depositEventInputMemory sevm.data amount,
-          suffixGas + 5799 + sloadCost sevm base depositCountSlot⟩)
+          suffixGas + 5799 + sloadCost sevm base depositCountSlot, base.stateGas⟩)
       (stageDepositEvent +++ depositAfterEvent)
       (.ok
         ((afterSstore sevm finalBase (branchSlot n)
           (accumulatedNode Bytes.sha256 (accOfStor stor).branch
-            0 n depositDataRoot)).setMach ⟨[], finalMemory, G⟩))
+            0 n depositDataRoot)).setMach ⟨[], finalMemory, G, finalBase.stateGas⟩))
       [(sevm.currentTarget, depositCountSlot, oldCount + 1),
         (sevm.currentTarget, branchSlot n,
           accumulatedNode Bytes.sha256 (accOfStor stor).branch
@@ -264,7 +265,7 @@ theorem depositEndpoint_success_storageEffectRun
     apply heventLift
     rw [show depositAfterEvent =
       reconstructDepositDataNode depositSuccessGuards by rfl]
-    simpa only [stagedBase, Devm.setMach_setMach, Devm.memory_setMach,
+    simpa only [stagedBase, Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach,
       suffixGas] using hsuffix
   have hguards := depositGuards_storageEffectRun
     (fs := fs) (sevm := sevm) (base := base)

@@ -305,10 +305,10 @@ private theorem decodeForwardImplementationStage_runCompiled
       ossifiableConstructorCodeWord sevm.code.toList 3437 =
         implementation.toB256)
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardHeadMemory sevm, G⟩)
+      (base.setMach ⟨[], decodeForwardHeadMemory sevm, G, base.stateGas⟩)
       (decodeForwardAfterImplementation body) post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardHeadMemory sevm, G + 32⟩)
+      (base.setMach ⟨[], decodeForwardHeadMemory sevm, G + 32, base.stateGas⟩)
       (decodeForwardAfterHeadCopy body) post := by
   have hv : Bytes.toB256
       ((decodeForwardHeadMemory sevm).read 0 32).1 =
@@ -351,7 +351,7 @@ private theorem decodeForwardImplementationStage_runCompiled
     decide
   · simp only [Devm.gasLeft_setMach]
     norm_num [gVerylow, gHigh]
-  · simpa only [Devm.setMach_setMach, Devm.memory_setMach] using hrest
+  · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using hrest
 
 private theorem decodeForwardAdminStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
@@ -359,10 +359,10 @@ private theorem decodeForwardAdminStage_runCompiled
     (hadmin : ossifiableConstructorCodeWord sevm.code.toList 3469 =
       requestedAdmin.toB256)
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardHeadMemory sevm, G⟩)
+      (base.setMach ⟨[], decodeForwardHeadMemory sevm, G, base.stateGas⟩)
       (decodeForwardAfterAdmin body) post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardHeadMemory sevm, G + 33⟩)
+      (base.setMach ⟨[], decodeForwardHeadMemory sevm, G + 33, base.stateGas⟩)
       (decodeForwardAfterImplementation body) post := by
   have hv : Bytes.toB256
       ((decodeForwardHeadMemory sevm).read 32 32).1 =
@@ -405,17 +405,17 @@ private theorem decodeForwardAdminStage_runCompiled
     decide
   · simp only [Devm.gasLeft_setMach]
     norm_num [gVerylow, gHigh]
-  · simpa only [Devm.setMach_setMach, Devm.memory_setMach] using hrest
+  · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using hrest
 
 private theorem decodeForwardOffsetBoundStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
     {body : Func} {G : Nat}
     (hoffset : ossifiableConstructorCodeWord sevm.code.toList 3501 = 96)
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardHeadMemory sevm, G⟩)
+      (base.setMach ⟨[], decodeForwardHeadMemory sevm, G, base.stateGas⟩)
       (decodeForwardAfterOffsetBound body) post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardHeadMemory sevm, G + 25⟩)
+      (base.setMach ⟨[], decodeForwardHeadMemory sevm, G + 25, base.stateGas⟩)
       (decodeForwardAfterAdmin body) post := by
   have hv : Bytes.toB256
       ((decodeForwardHeadMemory sevm).read 64 32).1 = 96 := by
@@ -447,10 +447,10 @@ private theorem decodeForwardPointerStoreStage_runCompiled
     {body : Func} {G : Nat}
     (hoffset : ossifiableConstructorCodeWord sevm.code.toList 3501 = 96)
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardPointerMemory sevm, G⟩)
+      (base.setMach ⟨[], decodeForwardPointerMemory sevm, G, base.stateGas⟩)
       (decodeForwardAfterPointer body) post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardHeadMemory sevm, G + 21⟩)
+      (base.setMach ⟨[], decodeForwardHeadMemory sevm, G + 21, base.stateGas⟩)
       (decodeForwardAfterOffsetBound body) post := by
   have hv : Bytes.toB256
       ((decodeForwardHeadMemory sevm).read 64 32).1 = 96 := by
@@ -479,7 +479,7 @@ private theorem decodeForwardPointerStoreStage_runCompiled
     exact Devm.extCost_of_size
       (decodeForwardHeadMemory_size sevm) (by decide)
   change Func.RunCompiled fs sevm
-    (base.setMach ⟨[], decodeForwardPointerMemory sevm, G⟩)
+    (base.setMach ⟨[], decodeForwardPointerMemory sevm, G, base.stateGas⟩)
     (decodeForwardAfterPointer body) post
   exact hrest
 
@@ -488,10 +488,10 @@ private theorem decodeForwardLengthCompleteStage_runCompiled
     {body : Func} {G : Nat}
     (hcodeSize : sevm.code.size = 3565)
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardPointerMemory sevm, G⟩)
+      (base.setMach ⟨[], decodeForwardPointerMemory sevm, G, base.stateGas⟩)
       (decodeForwardAfterLengthComplete body) post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardPointerMemory sevm, G + 30⟩)
+      (base.setMach ⟨[], decodeForwardPointerMemory sevm, G + 30, base.stateGas⟩)
       (decodeForwardAfterPointer body) post := by
   have hv : Bytes.toB256
       ((decodeForwardPointerMemory sevm).read 96 32).1 =
@@ -521,10 +521,10 @@ private theorem decodeForwardLengthCopyStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
     {body : Func} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G⟩)
+      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G, base.stateGas⟩)
       (decodeForwardAfterLengthCopy body) post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardPointerMemory sevm, G + 21⟩)
+      (base.setMach ⟨[], decodeForwardPointerMemory sevm, G + 21, base.stateGas⟩)
       (decodeForwardAfterLengthComplete body) post := by
   have hv : Bytes.toB256
       ((decodeForwardPointerMemory sevm).read 96 32).1 =
@@ -553,7 +553,7 @@ private theorem decodeForwardLengthCopyStage_runCompiled
     show (128 : B256).toNat = 128 by decide,
     show (32 : B256).toNat = 32 by decide]
   change Func.RunCompiled fs sevm
-    (base.setMach ⟨[], decodeForwardLengthMemory sevm, G⟩)
+    (base.setMach ⟨[], decodeForwardLengthMemory sevm, G, base.stateGas⟩)
     (decodeForwardAfterLengthCopy body) post
   exact hrest
 
@@ -562,10 +562,10 @@ private theorem decodeForwardLengthBoundStage_runCompiled
     {body : Func} {G : Nat}
     (hlength : ossifiableConstructorCodeWord sevm.code.toList 3533 = 0)
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G⟩)
+      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G, base.stateGas⟩)
       (decodeForwardAfterLengthBound body) post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G + 25⟩)
+      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G + 25, base.stateGas⟩)
       (decodeForwardAfterLengthCopy body) post := by
   have hv : Bytes.toB256
       ((decodeForwardLengthMemory sevm).read 128 32).1 = 0 := by
@@ -595,10 +595,10 @@ private theorem decodeForwardPayloadBoundStage_runCompiled
     (hcodeSize : sevm.code.size = 3565)
     (hlength : ossifiableConstructorCodeWord sevm.code.toList 3533 = 0)
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G⟩)
+      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G, base.stateGas⟩)
       (decodeForwardAfterPayloadBound body) post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G + 39⟩)
+      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G + 39, base.stateGas⟩)
       (decodeForwardAfterLengthBound body) post := by
   have hv3 : Bytes.toB256
       ((decodeForwardLengthMemory sevm).read 96 32).1 =
@@ -643,10 +643,10 @@ private theorem decodeForwardPayloadCopyStage_runCompiled
     {body : Func} {G : Nat}
     (hlength : ossifiableConstructorCodeWord sevm.code.toList 3533 = 0)
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G⟩)
+      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G, base.stateGas⟩)
       body post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G + 24⟩)
+      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G + 24, base.stateGas⟩)
       (decodeForwardAfterPayloadBound body) post := by
   have hv3 : Bytes.toB256
       ((decodeForwardLengthMemory sevm).read 96 32).1 =
@@ -694,7 +694,7 @@ private theorem decodeForwardPayloadCopyStage_runCompiled
     show (256 : B256).toNat = 256 by decide]
   simp
   change Func.RunCompiled fs sevm
-    (base.setMach ⟨[], decodeForwardLengthMemory sevm, G⟩) body post
+    (base.setMach ⟨[], decodeForwardLengthMemory sevm, G, base.stateGas⟩) body post
   exact hrest
 
 private theorem decodeForwardHeadStage_runCompiled
@@ -702,13 +702,13 @@ private theorem decodeForwardHeadStage_runCompiled
     {body : Func} {G : Nat}
     (hcodeSize : sevm.code.size = 3565)
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardHeadMemory sevm, G⟩)
+      (base.setMach ⟨[], decodeForwardHeadMemory sevm, G, base.stateGas⟩)
       (decodeForwardAfterHeadCopy body) post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], Mem.empty, G + 50⟩)
+      (base.setMach ⟨[], Mem.empty, G + 50, base.stateGas⟩)
       (ossifiableConstructorDecode 3437 body) post := by
   change Func.RunCompiled fs sevm
-    (base.setMach ⟨[], Mem.empty, G + 50⟩)
+    (base.setMach ⟨[], Mem.empty, G + 50, base.stateGas⟩)
     (ossifiablePushCreationCoordinate 3533 ::: codesize ::: lt :::
       ((.call 1) <?> decodeForwardAfterHead body)) post
   simp only [ossifiablePushCreationCoordinate_shape]
@@ -729,7 +729,7 @@ private theorem decodeForwardHeadStage_runCompiled
     show (96 : B256).toNat = 96 by decide,
     show (0 : UInt8) = Linst.toUInt8 .stop by decide]
   change Func.RunCompiled fs sevm
-    (base.setMach ⟨[], decodeForwardHeadMemory sevm, G⟩)
+    (base.setMach ⟨[], decodeForwardHeadMemory sevm, G, base.stateGas⟩)
     (decodeForwardAfterHeadCopy body) post
   exact hrest
 
@@ -826,13 +826,13 @@ private theorem decodeForwardOneWordHeadStage_runCompiled
     {body : Func} {G : Nat}
     (hcodeSize : sevm.code.size = 3597)
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardHeadMemory sevm, G⟩)
+      (base.setMach ⟨[], decodeForwardHeadMemory sevm, G, base.stateGas⟩)
       (decodeForwardAfterHeadCopy body) post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], Mem.empty, G + 50⟩)
+      (base.setMach ⟨[], Mem.empty, G + 50, base.stateGas⟩)
       (ossifiableConstructorDecode 3437 body) post := by
   change Func.RunCompiled fs sevm
-    (base.setMach ⟨[], Mem.empty, G + 50⟩)
+    (base.setMach ⟨[], Mem.empty, G + 50, base.stateGas⟩)
     (ossifiablePushCreationCoordinate 3533 ::: codesize ::: lt :::
       ((.call 1) <?> decodeForwardAfterHead body)) post
   simp only [ossifiablePushCreationCoordinate_shape]
@@ -853,7 +853,7 @@ private theorem decodeForwardOneWordHeadStage_runCompiled
     show (96 : B256).toNat = 96 by decide,
     show (0 : UInt8) = Linst.toUInt8 .stop by decide]
   change Func.RunCompiled fs sevm
-    (base.setMach ⟨[], decodeForwardHeadMemory sevm, G⟩)
+    (base.setMach ⟨[], decodeForwardHeadMemory sevm, G, base.stateGas⟩)
     (decodeForwardAfterHeadCopy body) post
   exact hrest
 
@@ -862,10 +862,10 @@ private theorem decodeForwardOneWordLengthCompleteStage_runCompiled
     {body : Func} {G : Nat}
     (hcodeSize : sevm.code.size = 3597)
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardPointerMemory sevm, G⟩)
+      (base.setMach ⟨[], decodeForwardPointerMemory sevm, G, base.stateGas⟩)
       (decodeForwardAfterLengthComplete body) post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardPointerMemory sevm, G + 30⟩)
+      (base.setMach ⟨[], decodeForwardPointerMemory sevm, G + 30, base.stateGas⟩)
       (decodeForwardAfterPointer body) post := by
   have hv : Bytes.toB256
       ((decodeForwardPointerMemory sevm).read 96 32).1 =
@@ -896,10 +896,10 @@ private theorem decodeForwardOneWordLengthBoundStage_runCompiled
     {body : Func} {G : Nat}
     (hlength : ossifiableConstructorCodeWord sevm.code.toList 3533 = 32)
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G⟩)
+      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G, base.stateGas⟩)
       (decodeForwardAfterLengthBound body) post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G + 25⟩)
+      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G + 25, base.stateGas⟩)
       (decodeForwardAfterLengthCopy body) post := by
   have hv : Bytes.toB256
       ((decodeForwardLengthMemory sevm).read 128 32).1 = 32 := by
@@ -929,10 +929,10 @@ private theorem decodeForwardOneWordPayloadBoundStage_runCompiled
     (hcodeSize : sevm.code.size = 3597)
     (hlength : ossifiableConstructorCodeWord sevm.code.toList 3533 = 32)
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G⟩)
+      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G, base.stateGas⟩)
       (decodeForwardAfterPayloadBound body) post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G + 39⟩)
+      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G + 39, base.stateGas⟩)
       (decodeForwardAfterLengthBound body) post := by
   have hv3 : Bytes.toB256
       ((decodeForwardLengthMemory sevm).read 96 32).1 =
@@ -978,10 +978,10 @@ private theorem decodeForwardOneWordPayloadCopyStage_runCompiled
     {body : Func} {G : Nat}
     (hlength : ossifiableConstructorCodeWord sevm.code.toList 3533 = 32)
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardOneWordPayloadMemory sevm, G⟩)
+      (base.setMach ⟨[], decodeForwardOneWordPayloadMemory sevm, G, base.stateGas⟩)
       body post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G + 39⟩)
+      (base.setMach ⟨[], decodeForwardLengthMemory sevm, G + 39, base.stateGas⟩)
       (decodeForwardAfterPayloadBound body) post := by
   have hv3 : Bytes.toB256
       ((decodeForwardLengthMemory sevm).read 96 32).1 =
@@ -1030,7 +1030,7 @@ private theorem decodeForwardOneWordPayloadCopyStage_runCompiled
     show (256 : B256).toNat = 256 by decide,
     show (0 : UInt8) = Linst.toUInt8 .stop by decide]
   change Func.RunCompiled fs sevm
-    (base.setMach ⟨[], decodeForwardOneWordPayloadMemory sevm, G⟩)
+    (base.setMach ⟨[], decodeForwardOneWordPayloadMemory sevm, G, base.stateGas⟩)
     body post
   exact hrest
 
@@ -1050,10 +1050,10 @@ theorem ossifiableConstructorDecode_oneWordSetup_runCompiled
     (hoffset : ossifiableConstructorCodeWord sevm.code.toList 3501 = 96)
     (hlength : ossifiableConstructorCodeWord sevm.code.toList 3533 = 32)
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], decodeForwardOneWordPayloadMemory sevm, G⟩)
+      (base.setMach ⟨[], decodeForwardOneWordPayloadMemory sevm, G, base.stateGas⟩)
       body post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], Mem.empty, G + 315⟩)
+      (base.setMach ⟨[], Mem.empty, G + 315, base.stateGas⟩)
       (ossifiableConstructorDecode 3437 body) post := by
   have hcopy :=
     decodeForwardOneWordPayloadCopyStage_runCompiled hlength hrest
@@ -1080,6 +1080,7 @@ initializer.  The 300-gas prefix is the exact sum of its accepted guards,
 head/pointer/length copies, and zero-byte payload copy. -/
 theorem ossifiableConstructorDecodeInitialize_emptySetup_runCompiled
     {sevm : Sevm} {base : Devm} {runtimeBytes : Bytes}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {implementation requestedAdmin : Adr} {G : Nat}
     (hcodeSize : sevm.code.size = 3565)
     (himplementation :
@@ -1112,7 +1113,7 @@ theorem ossifiableConstructorDecodeInitialize_emptySetup_runCompiled
     (hgas : 200000 ≤ G) :
     ∃ post,
       Func.RunCompiled (ossifiableConstructorFunctions 1249 2188) sevm
-        (base.setMach ⟨[], Mem.empty, G + 300⟩)
+        (base.setMach ⟨[], Mem.empty, G + 300, base.stateGas⟩)
         (ossifiableConstructorDecode 3437
           ossifiableConstructorInitializeImplementation) post ∧
       Devm.getStor post sevm.currentTarget =
@@ -1126,7 +1127,7 @@ theorem ossifiableConstructorDecodeInitialize_emptySetup_runCompiled
       post.gasLeft = G - 49894 ∧
       post.error = base.error := by
   obtain ⟨post, hbody, hstorage, hlogs, houtput, hgasPost, herrorPost⟩ :=
-    ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
+    ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled (hfork := hfork)
       (sevm := sevm) (base := base)
       (memory := decodeForwardLengthMemory sevm)
       (image := decodeForwardLengthImage sevm)
@@ -1165,11 +1166,11 @@ private theorem decodeForwardProgramMainStage_runCompiled
     {sevm : Sevm} {base post : Devm} {G : Nat}
     (hvalue : sevm.value = 0)
     (hrest : Func.RunCompiled (ossifiableConstructorFunctions 1249 2188) sevm
-      (base.setMach ⟨[], Mem.empty, G⟩)
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩)
       (ossifiableConstructorDecode 3437
         ossifiableConstructorInitializeImplementation) post) :
     Func.RunCompiled (ossifiableConstructorFunctions 1249 2188) sevm
-      (base.setMach ⟨[], Mem.empty, G + 19⟩)
+      (base.setMach ⟨[], Mem.empty, G + 19, base.stateGas⟩)
       (ossifiableConstructorProgram 1249 3437 2188).main post := by
   rw [ossifiableConstructorProgram_main_shape]
   func_run (3) [1]
@@ -1181,6 +1182,7 @@ program entry.  The additional 20 gas consists of the value guard's accepted
 arm (19) and the compiled program's leading `JUMPDEST` (1). -/
 theorem ossifiableConstructorProgram_emptySetup_runCompiled
     {sevm : Sevm} {base : Devm} {runtimeBytes : Bytes}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {implementation requestedAdmin : Adr} {G : Nat}
     (hvalue : sevm.value = 0)
     (hcodeSize : sevm.code.size = 3565)
@@ -1213,7 +1215,7 @@ theorem ossifiableConstructorProgram_emptySetup_runCompiled
     (hruntimeNonempty : runtimeBytes ≠ [])
     (hgas : 200000 ≤ G) :
     ∃ post,
-      Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, G + 320⟩)
+      Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, G + 320, base.stateGas⟩)
         (ossifiableConstructorProgram 1249 3437 2188) post ∧
       Devm.getStor post sevm.currentTarget =
         ((Devm.getStor base sevm.currentTarget).set implementationSlotLit
@@ -1226,7 +1228,7 @@ theorem ossifiableConstructorProgram_emptySetup_runCompiled
       post.gasLeft = G - 49894 ∧
       post.error = base.error := by
   obtain ⟨post, hdecode, hstorage, hlogs, houtput, hgasPost, herrorPost⟩ :=
-    ossifiableConstructorDecodeInitialize_emptySetup_runCompiled
+    ossifiableConstructorDecodeInitialize_emptySetup_runCompiled (hfork := hfork)
       hcodeSize himplementation hrequested
       hoffset hlength himplementationNonzero hrequestedNonzero
       hcodeSizeNonzero haddressCold himplementationRaw
@@ -1240,7 +1242,7 @@ theorem ossifiableConstructorProgram_emptySetup_runCompiled
   · rfl
   · change Func.RunCompiled
       (ossifiableConstructorFunctions 1249 2188) sevm
-      (base.setMach ⟨[], Mem.empty, G + 319⟩)
+      (base.setMach ⟨[], Mem.empty, G + 319, base.stateGas⟩)
       (ossifiableConstructorProgram 1249 3437 2188).main post
     simpa only [Nat.add_assoc] using hmain
 
@@ -1457,6 +1459,7 @@ private theorem ossifiableEmptyDataCreateInput_decodeSpec
 The returned bytes are the compiler-owned 2,188-byte runtime. -/
 theorem ossifiableConstructorProgram_canonicalEmptyInput_runCompiled
     {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {implementation requestedAdmin : Adr} {G : Nat}
     (hvalue : sevm.value = 0)
     (hinput : sevm.code.toList =
@@ -1479,7 +1482,7 @@ theorem ossifiableConstructorProgram_canonicalEmptyInput_runCompiled
     (hstatic : sevm.isStatic = false)
     (hgas : 200000 ≤ G) :
     ∃ post,
-      Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, G + 320⟩)
+      Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, G + 320, base.stateGas⟩)
         (ossifiableConstructorProgram 1249 3437 2188) post ∧
       Devm.getStor post sevm.currentTarget =
         ((Devm.getStor base sevm.currentTarget).set implementationSlotLit
@@ -1523,7 +1526,7 @@ theorem ossifiableConstructorProgram_canonicalEmptyInput_runCompiled
     have hlengthExact := runtimeBaselineBytes_length_exact
     rw [hnil] at hlengthExact
     simp at hlengthExact
-  exact ossifiableConstructorProgram_emptySetup_runCompiled
+  exact ossifiableConstructorProgram_emptySetup_runCompiled (hfork := hfork)
     hvalue hcodeSize himplementation hrequested hoffset hlength
     himplementationNonzero hrequestedNonzero hcodeSizeNonzero haddressCold
     himplementationRaw himplementationOriginal himplementationCold
@@ -1536,6 +1539,7 @@ empty, so the execution-derived prepared route supplies the two ERC-1967
 writes and source-ordered logs without consulting the total evaluator. -/
 theorem ossifiableConstructorProgram_canonicalEmptyInput_forward_exact
     {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {implementation requestedAdmin : Adr} {G : Nat}
     (hvalue : sevm.value = 0)
     (hinput : sevm.code.toList =
@@ -1558,7 +1562,7 @@ theorem ossifiableConstructorProgram_canonicalEmptyInput_forward_exact
     (hstatic : sevm.isStatic = false)
     (hgas : 200000 ≤ G) :
     ∃ post,
-      Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, G + 320⟩)
+      Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, G + 320, base.stateGas⟩)
         (ossifiableConstructorProgram 1249 3437 2188) post ∧
       Devm.getStor post sevm.currentTarget =
         ((Devm.getStor base sevm.currentTarget).set implementationSlotLit
@@ -1571,7 +1575,7 @@ theorem ossifiableConstructorProgram_canonicalEmptyInput_forward_exact
       post.output = runtimeBaselineBytes ∧
       post.gasLeft = G - 49894 ∧
       post.error = base.error :=
-  ossifiableConstructorProgram_canonicalEmptyInput_runCompiled
+  ossifiableConstructorProgram_canonicalEmptyInput_runCompiled (hfork := hfork)
     hvalue hinput himplementationNonzero hrequestedNonzero
     hcodeSizeNonzero haddressCold himplementationRaw
     himplementationOriginal himplementationCold hadminRaw hadminOriginal

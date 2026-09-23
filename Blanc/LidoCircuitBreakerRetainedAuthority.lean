@@ -124,6 +124,7 @@ theorem Exec.runtimeOwnerCellAuthority_of_committedPost_ne
       (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv).exactInvocation
         (runtime dp) ca ca)
     (committed : Execution.commits out = true)
+    (hfork : CoveredFork sevm.benvStat.fork)
     {key : B256}
     (changed :
       (Devm.getStor pre ca).get key ≠
@@ -131,7 +132,7 @@ theorem Exec.runtimeOwnerCellAuthority_of_committedPost_ne
     Exec.RuntimeOwnerCellAuthority dp ca run key
       ((Devm.getStor (Execution.committedPost out committed) ca).get key) := by
   rcases Exec.exists_lastRetainedSstore_of_getStor_ne
-      run committed changed with
+      run committed hfork changed with
     ⟨write, retained, owner, keyEq, valueEq, last⟩
   rcases Exec.retainedSstore_runtimeOwnerClosure
       run committed installed rootExact write retained owner with
@@ -174,6 +175,7 @@ the concrete message execution rather than supplied for the selected writer. -/
 theorem ProcessMessage.runtimeOwnerCellAuthority_of_clean_settled_ne
     {dp : DeployParams} {ca : Adr} {msg : Msg} {settled : Devm}
     {sevm : Sevm} {pre : Devm} {out : Execution}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (run : Exec 0 sevm pre out)
     (installed : Prog.At (runtime dp) ca 0 sevm pre)
     (rootExact :
@@ -209,7 +211,7 @@ theorem ProcessMessage.runtimeOwnerCellAuthority_of_clean_settled_ne
         equal
       _ = (Devm.getStor settled ca).get key :=
         (congrArg (fun storage => storage.get key) settledStorage).symm
-  have authority := Exec.runtimeOwnerCellAuthority_of_committedPost_ne
+  have authority := Exec.runtimeOwnerCellAuthority_of_committedPost_ne (hfork := hfork)
     run installed rootExact committed changedRaw
   have finalEq :
       (Devm.getStor (Execution.committedPost out committed) ca).get key =

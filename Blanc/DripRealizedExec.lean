@@ -128,7 +128,7 @@ def dripEntrySpec : ContractSpec where
 rises, and the exit form of the invariant is vacuous. -/
 theorem dripEntrySpec_preservesNoMem (ca : Adr) :
     dripEntrySpec.PreservesNoMem ca := by
-  intro sevm pre post run _ precondition
+  intro sevm pre post _hfork run _ precondition
   have effect := Exec.balance_effect run
   refine ⟨?_, ?_⟩
   · have side : sum pre.state.bal < 2 ^ 256 := precondition.side
@@ -370,6 +370,7 @@ structure ExitHandoff (coalition : Finset Adr) (sevm : Sevm) (pre post : Devm) w
   process : ProcessMessage childMsg xl (.ok child)
   childClean : child.error.isSome = false
   entryTransfer : childMsg.benvAfterTransfer = .ok entry
+  benvStat : childMsg.benv.stat = sevm.benvStat
   targetNe : childMsg.currentTarget ≠ sevm.currentTarget
   depth : (initSevm (childMsg.withBenv entry)).depth < sevm.depth
   childPre : dripEntrySpec.Pre sevm.currentTarget
@@ -557,6 +558,7 @@ theorem exit_handoff_of_components (coalition : Finset Adr) {sevm : Sevm}
     process := process
     childClean := clean
     entryTransfer := transfer'
+    benvStat := rfl
     targetNe := recipient_ne
     depth := by
       change sevm.depth - 1 < sevm.depth
@@ -574,9 +576,10 @@ theorem exit_exec_handoff (coalition : Finset Adr) {sevm : Sevm}
     (hnonempty : sevm.data.length.toB256 ≠ 0)
     (hcanon : pre.memory = Mem.empty)
     (precondition : dripEntrySpec.Pre sevm.currentTarget sevm pre)
-    (caller_ne : sevm.caller ≠ sevm.currentTarget) :
+    (caller_ne : sevm.caller ≠ sevm.currentTarget)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Nonempty (ExitHandoff coalition sevm pre post) := by
-  have full := exit_exec_effect_full exc hcode hsel hnonempty hcanon
+  have full := exit_exec_effect_full exc hcode hsel hnonempty hcanon hfork
   unfold ExitPaysExactlyFull at full
   dsimp only at full
   rcases full with
@@ -927,6 +930,7 @@ theorem exec_targetReplay (coalition : Finset Adr) {sevm : Sevm}
     (hcanon : pre.memory = Mem.empty)
     (precondition : dripEntrySpec.Pre sevm.currentTarget sevm pre)
     (caller_ne : sevm.caller ≠ sevm.currentTarget)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (exitNested : ∀ handoff : ExitHandoff coalition sevm pre post,
       ∃ nested, RealizedChain
         (snapshot coalition sevm.currentTarget handoff.entry.state) nested
@@ -937,7 +941,7 @@ theorem exec_targetReplay (coalition : Finset Adr) {sevm : Sevm}
     obtain ⟨joinDrip, exitDrip, exitJoin, -, -, -, -, -, -⟩ := selector_facts
     have hvalue := (exec_enters_exit exc hcode hsel hempty).1
     obtain ⟨handoff⟩ := exit_exec_handoff coalition exc hcode hsel hempty
-      hcanon precondition caller_ne
+      hcanon precondition caller_ne hfork
     rcases exitNested handoff with ⟨nested, chain⟩
     refine ⟨⟨_, _, _, handoff.effect⟩, nested, ?_, ?_, ?_⟩
     · exact (execEntrySnapshot_of_value_zero hvalue).symm
@@ -1017,6 +1021,31 @@ theorem exitChild_facts (coalition : Finset Adr) {sevm : Sevm}
     startEq,
     _root_.Blanc.ProcessMessage.ok_state_eq_committedPost process childCommitted⟩
 
+/-- A filled child frame runs under its message's block statics, so it is
+covered whenever the message carries the parent's statics (as the exit
+handoff record states for every actual child) and the parent is covered. -/
+theorem exitChild_covered {sevm : Sevm}
+    {childMsg : Msg} {hentry : Benv} {child : Devm}
+    {childPc : Nat} {childSevm : Sevm} {childPre : Devm} {childOut : Execution}
+    (process : ProcessMessage childMsg
+      (.some ⟨⟨childPc, childSevm, childPre⟩, childOut⟩) (.ok child))
+    (entryTransfer : childMsg.benvAfterTransfer = .ok hentry)
+    (benvStat : childMsg.benv.stat = sevm.benvStat)
+    (hfork : CoveredFork sevm.benvStat.fork) :
+    CoveredFork childSevm.benvStat.fork := by
+  have enter := (RunFrame.some_inv process).1
+  rcases Frame.enter_run_inv enter with ⟨entry, transfer, childEvmEq⟩
+  simp only [Frame.ofCall] at transfer childEvmEq
+  have entryEq : entry = hentry :=
+    Except.ok.inj (transfer.symm.trans entryTransfer)
+  subst entry
+  have childSevmEq : childSevm =
+      initSevm (childMsg.withBenv hentry) :=
+    congrArg (fun evm : Evm => evm.sta) childEvmEq
+  rw [childSevmEq, initSevm_benvStat, Msg.withBenv_benvStat,
+    benvAfterTransfer_stat entryTransfer, benvStat]
+  exact hfork
+
 /-! ## The interpreter recursion -/
 
 /-- T1.  Proof-indexed committed replay for one interpreter suffix.  The second
@@ -1026,6 +1055,7 @@ def _root_.Blanc.Exec.CoreDripAccounting (coalition : Finset Adr) (ca : Adr)
     (pc : Nat) (sevm : Sevm) (pre : Devm) (out : Execution) : Prop :=
   ∀ (_run : Exec pc sevm pre out)
     (committed : Execution.commits out = true),
+    CoveredFork sevm.benvStat.fork →
     Prog.At runtime ca pc sevm pre →
     dripEntrySpec.Pre ca sevm pre →
     (sevm.currentTarget = ca → sevm.codeAddress = some ca) →
@@ -1061,16 +1091,16 @@ theorem Exec.CoreDripAccounting.atTarget
         Exec.CoreDripAccounting coalition ca pc childSevm childPre childOut)) :
     Exec.CoreDripAccounting coalition ca 0 sevm pre (.ok post) := by
   subst ca
-  intro run committed installed precondition _ caller canonical
+  intro run committed hfork installed precondition _ caller canonical
   have hcode : sevm.code.toList = code := by
     have compiled := (installed.2 rfl).1
     rw [code_compile] at compiled
     exact Option.some.inj compiled
   have replay : TargetReplay coalition sevm.currentTarget sevm pre post := by
     apply exec_targetReplay coalition run hcode (canonical rfl) precondition
-      (caller rfl)
+      (caller rfl) hfork
     rintro ⟨childMsg, hentry, child, xl, filled, process, childClean,
-      entryTransfer, targetNe, depth, childPreH, _, _⟩
+      entryTransfer, benvStat, targetNe, depth, childPreH, _, _⟩
     dsimp only
     rcases ExecutionTrace.exists_retainedXlot_of_filled filled with
       ⟨retained⟩
@@ -1087,8 +1117,11 @@ theorem Exec.CoreDripAccounting.atTarget
             childDepth, startEq, childPost⟩ :=
           exitChild_facts coalition process childClean entryTransfer targetNe
             depth childPreH
+        have childFork :=
+          exitChild_covered process entryTransfer benvStat hfork
         rcases deeper childPc childSevm childPre childOut childRun
-            childDepth childAt childRun childCommitted childAt childPrecondition
+            childDepth childAt childRun childCommitted childFork childAt
+            childPrecondition
             (fun childTarget => (childTargetNe childTarget).elim)
             (fun childTarget => (childTargetNe childTarget).elim)
             (fun childTarget => (childTargetNe childTarget).elim) with
@@ -1126,18 +1159,18 @@ theorem Exec.CoreDripAccounting.nextNone
     (target_ne : sevm.currentTarget ≠ ca)
     (ih : Exec.CoreDripAccounting coalition ca (pc + n.size) sevm inter out) :
     Exec.CoreDripAccounting coalition ca pc sevm pre out := by
-  intro _ committed installed precondition _ _ _
+  intro _ committed hfork installed precondition _ _ _
   have interPre : dripEntrySpec.Pre ca sevm inter :=
     _root_.Blanc.ContractSpec.Ninst.none_preserves_precond
-      (c := dripEntrySpec) step target_ne precondition
+      (c := dripEntrySpec) hfork step target_ne precondition
   have installedInter : Prog.At runtime ca (pc + n.size) sevm inter :=
     ⟨interPre.code, fun target => (target_ne target).elim⟩
   have sumNof : sum pre.state.bal < 2 ^ 256 := precondition.side
   rcases (carrier coalition ca).ofStorageEqBalanceMono ()
-      (_root_.Blanc.Ninst.foreignNone_getStor_eq step target_ne)
-      (_root_.Blanc.Ninst.targetBalanceMono_of_none step target_ne sumNof) with
+      (_root_.Blanc.Ninst.foreignNone_getStor_eq hfork step target_ne)
+      (_root_.Blanc.Ninst.targetBalanceMono_of_none hfork step target_ne sumNof) with
     ⟨headSteps, headReplay⟩
-  rcases ih next committed installedInter interPre
+  rcases ih next committed hfork installedInter interPre
       (fun target => (target_ne target).elim)
       (fun target => (target_ne target).elim)
       (fun target => (target_ne target).elim) with
@@ -1154,7 +1187,7 @@ theorem Exec.CoreDripAccounting.last
     (step : Linst.Run sevm pre l out)
     (target_ne : sevm.currentTarget ≠ ca) :
     Exec.CoreDripAccounting coalition ca pc sevm pre out := by
-  intro _ committed _ precondition _ _ _
+  intro _ committed hfork _ precondition _ _ _
   cases out with
   | error error =>
       simp [Execution.commits] at committed
@@ -1178,13 +1211,13 @@ theorem Exec.CoreDripAccounting.jump
     (target_ne : sevm.currentTarget ≠ ca)
     (ih : Exec.CoreDripAccounting coalition ca pc' sevm inter out) :
     Exec.CoreDripAccounting coalition ca pc sevm pre out := by
-  intro _ committed _ precondition _ _ _
+  intro _ committed hfork _ precondition _ _ _
   have stateEq : inter.state = pre.state := Jinst.preserves_state step
   have interPre : dripEntrySpec.Pre ca sevm inter :=
     precondition.state_eq stateEq
   have installedInter : Prog.At runtime ca pc' sevm inter :=
     ⟨interPre.code, fun target => (target_ne target).elim⟩
-  rcases ih next committed installedInter interPre
+  rcases ih next committed hfork installedInter interPre
       (fun target => (target_ne target).elim)
       (fun target => (target_ne target).elim)
       (fun target => (target_ne target).elim) with
@@ -1202,7 +1235,8 @@ theorem Drip.foreignSpawn_facts {ca : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm}
     (child : Exec cevm.pc cevm.sta cevm.dyna raw)
     (target_ne : sevm.currentTarget ≠ ca)
     (installed : Prog.At runtime ca pc sevm pre)
-    (precondition : dripEntrySpec.Pre ca sevm pre) :
+    (precondition : dripEntrySpec.Pre ca sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ (frame : Jaune.Frame) (resume : Resume) (settled : Devm),
       Xinst.step sevm pre x = .spawn frame resume ∧
       RunFrame frame (.some ⟨cevm, raw⟩) (.ok settled) ∧
@@ -1212,7 +1246,8 @@ theorem Drip.foreignSpawn_facts {ca : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm}
       (cevm.sta.currentTarget = ca → cevm.sta.codeAddress = some ca) ∧
       (cevm.sta.currentTarget = ca → cevm.sta.caller ≠ ca) ∧
       (cevm.sta.currentTarget = ca → cevm.dyna.memory = Mem.empty) ∧
-      dripEntrySpec.Pre ca sevm inter := by
+      dripEntrySpec.Pre ca sevm inter ∧
+      CoveredFork cevm.sta.benvStat.fork := by
   have xrun : Xinst.Run sevm pre x (.some ⟨cevm, raw⟩) (.ok inter) := by
     simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep,
       Xinst.Run] using step
@@ -1299,7 +1334,7 @@ theorem Drip.foreignSpawn_facts {ca : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm}
             exact childMemoryEq
           obtain ⟨childPrecondition, continuationOfPost⟩ :=
             _root_.Blanc.ContractSpec.Xinst.some_preserves_precond
-              (c := dripEntrySpec) xrun child target_ne precondition
+              (c := dripEntrySpec) hfork xrun child target_ne precondition
           have childPost :
               ifOk (dripEntrySpec.Post ca cevm.sta) raw := by
             cases raw with
@@ -1310,14 +1345,14 @@ theorem Drip.foreignSpawn_facts {ca : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm}
                   rw [← childPcZero]
                   exact child
                 exact dripEntrySpec_preservesNoMem ca cevm.sta cevm.dyna
-                  rawPost childAtZero
+                  rawPost (Xinst.Run.some_child_fork xrun hfork) childAtZero
                   (fun childTarget => (childAt.2 childTarget).1)
                   childPrecondition
           have interPre : dripEntrySpec.Pre ca sevm inter :=
             continuationOfPost childPost
           exact ⟨frame, resume, settled, rfl, frameRun, resumeRun.symm,
             childAt, childPrecondition, childDirect, childCaller,
-            childCanonical, interPre⟩
+            childCanonical, interPre, Xinst.Run.some_child_fork xrun hfork⟩
 
 /-- A foreign filled child is replayed recursively, transported through
 complete CALL/CREATE settlement by the shared seam, and followed by the parent
@@ -1340,12 +1375,18 @@ theorem Exec.CoreDripAccounting.nextSome
       simp [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at step
   | push xs length =>
       simp [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at step
+  | dupn imm =>
+      cases (Step.run_ofExecution.mp step).1
+  | swapn imm =>
+      cases (Step.run_ofExecution.mp step).1
+  | exchange imm =>
+      cases (Step.run_ofExecution.mp step).1
   | exec x =>
-      intro _ committed installed precondition _ _ _
+      intro _ committed hfork installed precondition _ _ _
       obtain ⟨frame, resume, settled, spawnEq, frameRun, resumeRun, childAt,
           childPrecondition, childDirect, childCaller, childCanonical,
-          interPre⟩ :=
-        foreignSpawn_facts hat step child target_ne installed precondition
+          interPre, childFork⟩ :=
+        foreignSpawn_facts hat step child target_ne installed precondition hfork
       have installedInter :
           Prog.At runtime ca (pc + 1) sevm inter :=
         ⟨interPre.code, fun target => (target_ne target).elim⟩
@@ -1359,14 +1400,14 @@ theorem Exec.CoreDripAccounting.nextSome
               (snapshot coalition ca
                 (Execution.committedPost raw childCommitted).state) := by
         intro childCommitted
-        rcases ihChild child childCommitted childAt childPrecondition
+        rcases ihChild child childCommitted childFork childAt childPrecondition
             childDirect childCaller childCanonical with
           ⟨steps, chain, _⟩
         exact ⟨steps, chain⟩
       rcases (carrier coalition ca).xinstForeignSome spawnEq frameRun
-          resumeRun target_ne sumNof childBody with
+          resumeRun target_ne hfork sumNof childBody with
         ⟨headSteps, headReplay⟩
-      rcases ihNext next committed installedInter interPre
+      rcases ihNext next committed hfork installedInter interPre
           (fun target => (target_ne target).elim)
           (fun target => (target_ne target).elim)
           (fun target => (target_ne target).elim) with
@@ -1504,7 +1545,8 @@ theorem Exec.dripRealizedChain_of_messageRoot
     (evmEq : (⟨pc, sevm, pre⟩ : Evm) = initEvm (msg.withBenv entry))
     (committed : Execution.commits out = true)
     (ready : dripEntrySpec.MessageRunReady ca msg)
-    (caller_ne : msg.currentTarget = ca → msg.caller ≠ ca) :
+    (caller_ne : msg.currentTarget = ca → msg.caller ≠ ca)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ steps : List RealizedStep,
       RealizedChain (execEntrySnapshot coalition ca sevm pre.state) steps
         (snapshot coalition ca (Execution.committedPost out committed).state) ∧
@@ -1513,6 +1555,6 @@ theorem Exec.dripRealizedChain_of_messageRoot
   obtain ⟨installed, precondition, direct, caller, canonical⟩ :=
     messageRoot_facts transfer evmEq ready caller_ne
   exact Exec.coreDripAccounting coalition pc sevm pre out run installed run
-    committed installed precondition direct caller canonical
+    committed hfork installed precondition direct caller canonical
 
 end Blanc

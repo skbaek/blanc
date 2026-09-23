@@ -301,29 +301,31 @@ private def targetZeroMutantBase : Devm :=
 
 private def targetZeroMutantPre : Devm :=
   targetZeroMutantBase.setMach
-    ⟨[], targetZeroMutantBase.memory, 50001⟩
+    ⟨[], targetZeroMutantBase.memory, 50001, targetZeroMutantBase.stateGas⟩
 
 private def targetZeroMutantD0 : Devm :=
   targetZeroMutantBase.setMach
-    ⟨[], targetZeroMutantBase.memory, 50000⟩
+    ⟨[], targetZeroMutantBase.memory, 50000, targetZeroMutantBase.stateGas⟩
 
 private def targetZeroMutantD1 : Devm :=
   targetZeroMutantD0.setMach
-    ⟨[9], targetZeroMutantD0.memory, 49997⟩
+    ⟨[9], targetZeroMutantD0.memory, 49997, targetZeroMutantD0.stateGas⟩
 
 private def targetZeroMutantD2 : Devm :=
   targetZeroMutantD0.setMach
-    ⟨[assignmentSlot 0, 9], targetZeroMutantD0.memory, 49994⟩
+    ⟨[assignmentSlot 0, 9], targetZeroMutantD0.memory, 49994, targetZeroMutantD0.stateGas⟩
 
 private def targetZeroMutantD3 : Devm :=
   ((targetZeroMutantD0.withRefundCounter 0).setStorVal
     targetZeroMutantOwner (assignmentSlot 0) 9).setMach
-      ⟨[], targetZeroMutantD0.memory, 29994⟩
+      ⟨[], targetZeroMutantD0.memory, 29994, ((targetZeroMutantD0.withRefundCounter 0).setStorVal
+    targetZeroMutantOwner (assignmentSlot 0) 9).stateGas⟩
 
 private def targetZeroMutantPost : Devm :=
   ((targetZeroMutantD0.withRefundCounter 0).setStorVal
     targetZeroMutantOwner (assignmentSlot 0) 9).setMach
-      ⟨[], targetZeroMutantD0.memory, 29975⟩
+      ⟨[], targetZeroMutantD0.memory, 29975, ((targetZeroMutantD0.withRefundCounter 0).setStorVal
+    targetZeroMutantOwner (assignmentSlot 0) 9).stateGas⟩
 
 private theorem targetZeroMutant_push9 :
     Ninst.RunCompiled targetZeroMutantSevm targetZeroMutantD0
@@ -347,6 +349,7 @@ private theorem targetZeroMutant_store :
       Blanc.Ninst.sstore targetZeroMutantD3 := by
   apply Ninst.runCompiled_sstore_warm
       (c := gasStorageSet) (G := 29994)
+  · exact CoveredFork.rules_stateGas_none (by decide)
   · rfl
   · change (targetZeroMutantOwner, assignmentSlot 0) ∈
       (default : Devm).accessedStorageKeys.insert
@@ -422,7 +425,8 @@ private theorem targetZeroMutant_write
           (assignmentSlot 0) := by
     rw [targetZeroMutant_preValue, targetZeroMutant_postValue]
     decide
-  rcases Exec.exists_lastRetainedSstore_of_getStor_ne execution rfl hchanged with
+  rcases Exec.exists_lastRetainedSstore_of_getStor_ne execution rfl (by decide)
+      hchanged with
     ⟨write, hretained, howner, hkey, hvalue, _⟩
   refine ⟨write, hretained, howner, hkey, hvalue.trans ?_⟩
   simpa only [Execution.committedPost, Devm.getStor, Devm.getStorVal] using

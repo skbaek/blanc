@@ -29,7 +29,7 @@ def forwardingCleanResume
     (d : DelegatecallSpawnDescriptor sevm callPre) (child : Devm) : Devm :=
   (((incorporateChildOnSuccess d.parent child child.output).setMach
       ⟨1 :: d.parent.stack, d.parent.memory,
-        d.parent.gasLeft + child.gasLeft⟩).memWrite
+        d.parent.gasLeft + child.gasLeft, (incorporateChildOnSuccess d.parent child child.output).stateGas⟩).memWrite
     d.outputOffsetWord.toNat (child.output.take d.outputSizeWord.toNat))
 
 /-- The state immediately after a settled failing child is resumed. -/
@@ -38,7 +38,7 @@ def forwardingFailedResume
     (d : DelegatecallSpawnDescriptor sevm callPre) (child : Devm) : Devm :=
   (((incorporateChildOnError d.parent child child.output).setMach
       ⟨0 :: d.parent.stack, d.parent.memory,
-        d.parent.gasLeft + child.gasLeft⟩).memWrite
+        d.parent.gasLeft + child.gasLeft, (incorporateChildOnError d.parent child child.output).stateGas⟩).memWrite
     d.outputOffsetWord.toNat (child.output.take d.outputSizeWord.toNat))
 
 /-- Memory left after the forwarding tail copies and reads the complete child
@@ -63,7 +63,7 @@ def forwardingCleanPost
     (child : Devm) (gas : Nat) : Devm :=
   ((forwardingCleanResume d child).setMach
       ⟨d.parent.stack, forwardingCopiedMemory
-        (forwardingCleanResume d child) child.output, gas⟩).withOutput
+        (forwardingCleanResume d child) child.output, gas, (forwardingCleanResume d child).stateGas⟩).withOutput
     child.output
 
 /-- Exact reverting raw endpoint of the wrapper tail. -/
@@ -73,7 +73,7 @@ def forwardingFailedPost
     (child : Devm) (gas : Nat) : Devm :=
   ((forwardingFailedResume d child).setMach
       ⟨d.parent.stack, forwardingCopiedMemory
-        (forwardingFailedResume d child) child.output, gas⟩).withOutput
+        (forwardingFailedResume d child) child.output, gas, (forwardingFailedResume d child).stateGas⟩).withOutput
     child.output
 
 @[simp] theorem forwardingCleanPost_error
@@ -229,7 +229,7 @@ theorem forwardingCleanTailRun_of_budget
   have copiedCovers : n ≤ copied.size := copiedShape.2
   have terminalExt :
       (resume.setMach
-        ⟨0 :: w :: d.parent.stack, copied, gas⟩).extCost
+        ⟨0 :: w :: d.parent.stack, copied, gas, resume.stateGas⟩).extCost
           [⟨0, w.toNat⟩] = 0 := by
     rw [wordRoundtrip]
     exact Devm.extCost_zero_of_le copiedAligned (by omega)
@@ -255,7 +255,7 @@ theorem forwardingCleanTailRun_of_budget
   · change (1 :: d.parent.stack).length < 1024
     simp only [List.length_cons]
     omega
-  · try simp only [Devm.setMach_setMach]
+  · try simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
     refine Func.RunCompiledTo.next
       (Ninst.runCompiled_pushItem (r := .returndatasize) (x := w)
         (cost := gBase) (G := gas + (23 + copyCost))
@@ -273,7 +273,7 @@ theorem forwardingCleanTailRun_of_budget
           (by simp only [Devm.gasLeft_setMach]; unfold gBase; omega)
           (by simp only [resume, forwardingCleanResume_stack,
             Devm.stack_setMach, List.length_cons]; omega)) ?_
-      simp only [Devm.setMach_setMach, Devm.memory_setMach,
+      simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
         Devm.stack_setMach]
       refine Func.RunCompiledTo.next
         (Ninst.runCompiled_pushB256 (w := 0) (c := gBase)
@@ -281,7 +281,7 @@ theorem forwardingCleanTailRun_of_budget
           (by simp only [Devm.gasLeft_setMach]; unfold gBase; omega)
           (by simp only [resume, forwardingCleanResume_stack,
             Devm.stack_setMach, List.length_cons]; omega)) ?_
-      simp only [Devm.setMach_setMach, Devm.memory_setMach,
+      simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
         Devm.stack_setMach]
       refine Func.RunCompiledTo.next
         (Ninst.runCompiled_returndatacopy_of
@@ -303,7 +303,7 @@ theorem forwardingCleanTailRun_of_budget
         rw [List.takeD_eq_self (0 : UInt8) rfl]
       · simp only [Devm.gasLeft_setMach]
         omega
-      · simp only [Devm.setMach_setMach]
+      · simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
         refine Func.RunCompiledTo.next
           (Ninst.runCompiled_pushItem (r := .returndatasize) (x := w)
             (cost := gBase) (G := gas + 17)
@@ -323,7 +323,7 @@ theorem forwardingCleanTailRun_of_budget
                 simp only [Devm.gasLeft_setMach]
                 unfold gVerylow
                 omega)) ?_
-          try simp only [Devm.setMach_setMach, Devm.memory_setMach,
+          try simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
             Devm.stack_setMach]
           refine Func.runCompiledTo_branch_succ
             (w := 1) (s := 0 :: w :: d.parent.stack) (G := gas)
@@ -335,35 +335,35 @@ theorem forwardingCleanTailRun_of_budget
               simp only [Devm.gasLeft_setMach]
               unfold gVerylow gHigh gJumpdest
               omega) ?_
-          try simp only [Devm.setMach_setMach, Devm.memory_setMach]
+          try simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
           let readPost := resume.setMach
-            ⟨d.parent.stack, (copied.read 0 n).2, gas⟩
+            ⟨d.parent.stack, (copied.read 0 n).2, gas, resume.stateGas⟩
           have terminalRead :
               (resume.setMach
-                ⟨d.parent.stack, copied, gas⟩).memRead 0 n =
+                ⟨d.parent.stack, copied, gas, resume.stateGas⟩).memRead 0 n =
                 ⟨child.output, readPost⟩ := by
             apply Prod.ext
             · change (copied.read 0 n).1 = child.output
               exact copiedRead
             · show (resume.setMach
-                  ⟨d.parent.stack, copied, gas⟩).withMemory
+                  ⟨d.parent.stack, copied, gas, resume.stateGas⟩).withMemory
                     (copied.read 0 n).2 = readPost
               apply Devm.eq_of_proj <;> rfl
           have terminalMemory := congrArg Prod.snd terminalRead
           have terminalRun := Func.runCompiledTo_return_word
             (fs := ossifiableRuntimeFunctions) (sevm := sevm)
             (devm := resume.setMach
-              ⟨0 :: w :: d.parent.stack, copied, gas⟩)
+              ⟨0 :: w :: d.parent.stack, copied, gas, resume.stateGas⟩)
             (i := 0) (sz := w) (s := d.parent.stack)
             (out := child.output) (G := gas) (e := 0)
             rfl terminalExt (by simp) (by
               have outputRead := congrArg Prod.fst terminalRead
               simpa only [wordRoundtrip, B256.toNat_zero,
-                Devm.setMach_setMach, Devm.memory_setMach] using outputRead)
+                Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using outputRead)
           simpa [forwardingCleanPost, forwardingCopiedMemory,
             resume, copied, n, wordRoundtrip, readPost, terminalRead,
             terminalMemory, B256.toNat_zero,
-            Devm.setMach_setMach, Devm.memory_setMach] using
+            Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using
             terminalRun
 
 /-- A failing tail walk is likewise derived from primitive resources; its
@@ -395,7 +395,7 @@ theorem forwardingFailedTailRun_of_budget
   have copiedCovers : n ≤ copied.size := copiedShape.2
   have terminalExt :
       (resume.setMach
-        ⟨0 :: w :: d.parent.stack, copied, gas⟩).extCost
+        ⟨0 :: w :: d.parent.stack, copied, gas, resume.stateGas⟩).extCost
           [⟨0, w.toNat⟩] = 0 := by
     rw [wordRoundtrip]
     exact Devm.extCost_zero_of_le copiedAligned (by omega)
@@ -421,7 +421,7 @@ theorem forwardingFailedTailRun_of_budget
   · change (0 :: d.parent.stack).length < 1024
     simp only [List.length_cons]
     omega
-  · try simp only [Devm.setMach_setMach]
+  · try simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
     refine Func.RunCompiledTo.next
       (Ninst.runCompiled_pushItem (r := .returndatasize) (x := w)
         (cost := gBase) (G := gas + (22 + copyCost))
@@ -439,7 +439,7 @@ theorem forwardingFailedTailRun_of_budget
           (by simp only [Devm.gasLeft_setMach]; unfold gBase; omega)
           (by simp only [resume, forwardingFailedResume_stack,
             Devm.stack_setMach, List.length_cons]; omega)) ?_
-      simp only [Devm.setMach_setMach, Devm.memory_setMach,
+      simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
         Devm.stack_setMach]
       refine Func.RunCompiledTo.next
         (Ninst.runCompiled_pushB256 (w := 0) (c := gBase)
@@ -447,7 +447,7 @@ theorem forwardingFailedTailRun_of_budget
           (by simp only [Devm.gasLeft_setMach]; unfold gBase; omega)
           (by simp only [resume, forwardingFailedResume_stack,
             Devm.stack_setMach, List.length_cons]; omega)) ?_
-      simp only [Devm.setMach_setMach, Devm.memory_setMach,
+      simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
         Devm.stack_setMach]
       refine Func.RunCompiledTo.next
         (Ninst.runCompiled_returndatacopy_of
@@ -469,7 +469,7 @@ theorem forwardingFailedTailRun_of_budget
         rw [List.takeD_eq_self (0 : UInt8) rfl]
       · simp only [Devm.gasLeft_setMach]
         omega
-      · simp only [Devm.setMach_setMach]
+      · simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
         refine Func.RunCompiledTo.next
           (Ninst.runCompiled_pushItem (r := .returndatasize) (x := w)
             (cost := gBase) (G := gas + 16)
@@ -489,7 +489,7 @@ theorem forwardingFailedTailRun_of_budget
                 simp only [Devm.gasLeft_setMach]
                 unfold gVerylow
                 omega)) ?_
-          try simp only [Devm.setMach_setMach, Devm.memory_setMach,
+          try simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
             Devm.stack_setMach]
           refine Func.runCompiledTo_branch_zero
             (s := 0 :: w :: d.parent.stack) (G := gas)
@@ -501,35 +501,35 @@ theorem forwardingFailedTailRun_of_budget
               simp only [Devm.gasLeft_setMach]
               unfold gVerylow gHigh
               omega) ?_
-          try simp only [Devm.setMach_setMach, Devm.memory_setMach]
+          try simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
           let readPost := resume.setMach
-            ⟨d.parent.stack, (copied.read 0 n).2, gas⟩
+            ⟨d.parent.stack, (copied.read 0 n).2, gas, resume.stateGas⟩
           have terminalRead :
               ((resume.setMach
-                ⟨d.parent.stack, copied, gas⟩).memRead 0 w.toNat) =
+                ⟨d.parent.stack, copied, gas, resume.stateGas⟩).memRead 0 w.toNat) =
                 ⟨child.output, readPost⟩ := by
             apply Prod.ext
             · change (copied.read 0 w.toNat).1 = child.output
               rw [wordRoundtrip]
               exact copiedRead
             · show (resume.setMach
-                  ⟨d.parent.stack, copied, gas⟩).withMemory
+                  ⟨d.parent.stack, copied, gas, resume.stateGas⟩).withMemory
                     (copied.read 0 w.toNat).2 = readPost
               simp only [readPost, wordRoundtrip]
               apply Devm.eq_of_proj <;> rfl
           have terminalRun := Func.runCompiledTo_revert_of
             (fs := ossifiableRuntimeFunctions) (sevm := sevm)
             (devm := resume.setMach
-              ⟨0 :: w :: d.parent.stack, copied, gas⟩)
+              ⟨0 :: w :: d.parent.stack, copied, gas, resume.stateGas⟩)
             (i := 0) (sz := w) (s := d.parent.stack)
             (out := child.output) (d' := readPost) (G := gas) (e := 0)
             rfl terminalExt (by simp) (by
-              simpa only [B256.toNat_zero, Devm.setMach_setMach,
+              simpa only [B256.toNat_zero, Devm.setMach_setMach, Devm.stateGas_setMach,
                 Devm.memory_setMach] using
                 terminalRead)
           simpa [forwardingFailedPost, forwardingCopiedMemory,
             resume, copied, n, wordRoundtrip, readPost, terminalRead,
-            Devm.setMach_setMach, Devm.memory_setMach] using terminalRun
+            Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using terminalRun
 
 /-- Frame facts established by the runtime prefix before the exact
 `DELEGATECALL`.  Storage is compared with the outer message's saved world
@@ -546,6 +546,9 @@ structure ForwardingSettlementContext
     d.parent.state outer.benv.state
   parentTransient : MessageTransientEqualAt outer.currentTarget
     d.parent.transientStorage outer.tenv.transientStorage
+  /-- The outer message runs on a covered (pre-Amsterdam) fork, so its
+  settlement uses the legacy error handler. -/
+  covered : CoveredFork outer.benv.stat.fork
 
 private theorem clean_tail_relation
     (outer : Msg)
@@ -567,7 +570,7 @@ private theorem clean_tail_relation
           (.ok (forwardingCleanPost d child gas)) =
         .ok (forwardingCleanPost d child gas) := by
     simp only [Frame.ofCall, Frame.settle, Frame.settleMsg,
-      executeCode.handleError, processMessage.settle]
+      executeCode.handleErrorWith_ok, processMessage.settle]
     change (if (forwardingCleanPost d child gas).error.isSome = true then
       Except.ok ((forwardingCleanPost d child gas).rollback
         outer.benv.state outer.tenv.transientStorage)
@@ -611,7 +614,10 @@ private theorem failed_tail_relation
       (Frame.ofCall outer).settle
           (.error (.revert, forwardingFailedPost d child gas)) =
         .ok (MessageExecution.settledRevert outer
-          (forwardingFailedPost d child gas)) := rfl
+          (forwardingFailedPost d child gas)) := by
+    simp only [Frame.settle_eq_settleMsg_handleErrorWith, Frame.ofCall,
+      context.covered.rules_stateGas_none]
+    rfl
   rw [settledEq]
   change ChildToWrapperOkAt outer.currentTarget child _
   refine {
@@ -680,8 +686,14 @@ theorem forwarding_atCall_execSat
         cases error with
         | halt reason => exact (childNonConsensus (.halt reason) rfl).elim
         | revert => exact (childNonConsensus .revert rfl).elim
-        | crypto reason => rfl
-        | internal reason => rfl
+        | crypto reason =>
+            simp only [Frame.settle_eq_settleMsg_handleErrorWith,
+              executeCode.handleErrorWith_crypto]
+            rfl
+        | internal reason =>
+            simp only [Frame.settle_eq_settleMsg_handleErrorWith,
+              executeCode.handleErrorWith_internal]
+            rfl
       rw [outerResult]
       exact ⟨rfl, (fun _ => rfl), (fun _ => rfl)⟩
   | ok child =>
@@ -774,7 +786,7 @@ def OssifiableFallbackPrefixBudget.beforeSload
     ⟨implementationSlotLit :: 0 :: ossifiableFallbackSizeWord sevm ::
         0 :: 0 :: [],
       ossifiableFallbackCopiedMemory sevm entry,
-      budget.callGas + gBase + ossifiableFallbackSloadCost sevm entry⟩
+      budget.callGas + gBase + ossifiableFallbackSloadCost sevm entry, entry.stateGas⟩
 
 /-- Warmth-sensitive base state produced by the implementation-slot read. -/
 def OssifiableFallbackPrefixBudget.afterSloadBase
@@ -795,12 +807,13 @@ def OssifiableFallbackPrefixBudget.callPre
         entry.getStorVal sevm.currentTarget implementationSlotLit ::
         0 :: ossifiableFallbackSizeWord sevm :: 0 :: 0 :: [],
       ossifiableFallbackCopiedMemory sevm entry,
-      budget.callGas⟩
+      budget.callGas, budget.afterSloadBase.stateGas⟩
 
 /-- Construct the complete fallback prefix from primitive resources and hand
 the caller's arbitrary-outcome witness to the exact `DELEGATECALL` state. -/
 theorem OssifiableFallbackPrefixBudget.execWitness_proxyFallback
     {fs : List Func} {sevm : Sevm} {entry : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (budget : OssifiableFallbackPrefixBudget sevm entry)
     {ex : Execution}
     (tail : Func.ExecWitness fs sevm budget.callPre
@@ -830,21 +843,21 @@ theorem OssifiableFallbackPrefixBudget.execWitness_proxyFallback
     rw [sizeRoundtrip]
     exact Bytes.sliceD_zero_length rfl
   let s1 := entry.setMach
-    ⟨sizeWord :: [], entry.memory, r1⟩
+    ⟨sizeWord :: [], entry.memory, r1, entry.stateGas⟩
   let s2 := entry.setMach
-    ⟨(0 : B256) :: sizeWord :: [], entry.memory, r2⟩
+    ⟨(0 : B256) :: sizeWord :: [], entry.memory, r2, entry.stateGas⟩
   let s3 := entry.setMach
-    ⟨(0 : B256) :: 0 :: sizeWord :: [], entry.memory, r3⟩
+    ⟨(0 : B256) :: 0 :: sizeWord :: [], entry.memory, r3, entry.stateGas⟩
   let s4 := entry.setMach
-    ⟨[], copied, r4⟩
+    ⟨[], copied, r4, entry.stateGas⟩
   let s5 := entry.setMach
-    ⟨[(0 : B256)], copied, r5⟩
+    ⟨[(0 : B256)], copied, r5, entry.stateGas⟩
   let s6 := entry.setMach
-    ⟨[(0 : B256), 0], copied, r6⟩
+    ⟨[(0 : B256), 0], copied, r6, entry.stateGas⟩
   let s7 := entry.setMach
-    ⟨[sizeWord, 0, 0], copied, r7⟩
+    ⟨[sizeWord, 0, 0], copied, r7, entry.stateGas⟩
   let s8 := entry.setMach
-    ⟨[(0 : B256), sizeWord, 0, 0], copied, r8⟩
+    ⟨[(0 : B256), sizeWord, 0, 0], copied, r8, entry.stateGas⟩
   have h1 : Ninst.RunCompiled sevm entry calldatasize s1 := by
     simpa only [s1, budget.entryStack] using
       (Ninst.runCompiled_pushItem (sevm := sevm) (devm := entry)
@@ -857,7 +870,7 @@ theorem OssifiableFallbackPrefixBudget.execWitness_proxyFallback
             ossifiableFallbackPrefixCost] at hbudget ⊢
           omega) (by rw [budget.entryStack]; decide))
   have h2 : Ninst.RunCompiled sevm s1 (pushB256 0) s2 := by
-    simpa only [s1, s2, Devm.setMach_setMach, Devm.stack_setMach,
+    simpa only [s1, s2, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
       Devm.memory_setMach, Devm.gasLeft_setMach] using
       (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := s1)
         (w := 0) (c := zeroCost)
@@ -871,7 +884,7 @@ theorem OssifiableFallbackPrefixBudget.execWitness_proxyFallback
             List.length_nil]
           omega))
   have h3 : Ninst.RunCompiled sevm s2 (pushB256 0) s3 := by
-    simpa only [s2, s3, Devm.setMach_setMach, Devm.stack_setMach,
+    simpa only [s2, s3, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
       Devm.memory_setMach, Devm.gasLeft_setMach] using
       (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := s2)
         (w := 0) (c := zeroCost)
@@ -885,7 +898,7 @@ theorem OssifiableFallbackPrefixBudget.execWitness_proxyFallback
             List.length_nil]
           omega))
   have h4 : Ninst.RunCompiled sevm s3 calldatacopy s4 := by
-    simpa only [s3, s4, Devm.setMach_setMach, Devm.stack_setMach,
+    simpa only [s3, s4, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
       Devm.memory_setMach, Devm.gasLeft_setMach] using
       (Ninst.runCompiled_calldatacopy_of (sevm := sevm) (devm := s3)
         (di := 0) (si := 0) (sz := sizeWord) (s := [])
@@ -900,7 +913,7 @@ theorem OssifiableFallbackPrefixBudget.execWitness_proxyFallback
             dsimp only [s3, r3]
             simp only [Devm.gasLeft_setMach]))
   have h5 : Ninst.RunCompiled sevm s4 (pushB256 0) s5 := by
-    simpa only [s4, s5, Devm.setMach_setMach, Devm.stack_setMach,
+    simpa only [s4, s5, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
       Devm.memory_setMach, Devm.gasLeft_setMach] using
       (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := s4)
         (w := 0) (c := zeroCost)
@@ -912,7 +925,7 @@ theorem OssifiableFallbackPrefixBudget.execWitness_proxyFallback
           simp only [Devm.stack_setMach, List.length_nil]
           omega))
   have h6 : Ninst.RunCompiled sevm s5 (pushB256 0) s6 := by
-    simpa only [s5, s6, Devm.setMach_setMach, Devm.stack_setMach,
+    simpa only [s5, s6, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
       Devm.memory_setMach, Devm.gasLeft_setMach] using
       (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := s5)
         (w := 0) (c := zeroCost)
@@ -926,7 +939,7 @@ theorem OssifiableFallbackPrefixBudget.execWitness_proxyFallback
             List.length_nil]
           omega))
   have h7 : Ninst.RunCompiled sevm s6 calldatasize s7 := by
-    simpa only [s6, s7, Devm.setMach_setMach, Devm.stack_setMach,
+    simpa only [s6, s7, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
       Devm.memory_setMach, Devm.gasLeft_setMach] using
       (Ninst.runCompiled_pushItem (sevm := sevm) (devm := s6)
         (r := .calldatasize) (x := sizeWord) (cost := gBase)
@@ -940,7 +953,7 @@ theorem OssifiableFallbackPrefixBudget.execWitness_proxyFallback
             List.length_nil]
           omega))
   have h8 : Ninst.RunCompiled sevm s7 (pushB256 0) s8 := by
-    simpa only [s7, s8, Devm.setMach_setMach, Devm.stack_setMach,
+    simpa only [s7, s8, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
       Devm.memory_setMach, Devm.gasLeft_setMach] using
       (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := s7)
         (w := 0) (c := zeroCost)
@@ -955,7 +968,7 @@ theorem OssifiableFallbackPrefixBudget.execWitness_proxyFallback
   have h9 : Ninst.RunCompiled sevm s8
       (pushB256 implementationSlotLit) budget.beforeSload := by
     simpa only [s8, OssifiableFallbackPrefixBudget.beforeSload,
-      sizeWord, copied, G, Devm.setMach_setMach, Devm.stack_setMach,
+      sizeWord, copied, G, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
       Devm.memory_setMach, Devm.gasLeft_setMach] using
       (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := s8)
         (w := implementationSlotLit) (c := slotPushCost)
@@ -969,7 +982,7 @@ theorem OssifiableFallbackPrefixBudget.execWitness_proxyFallback
           omega))
   let afterSload := budget.afterSloadBase.setMach
     ⟨entry.getStorVal sevm.currentTarget implementationSlotLit :: 0 ::
-        sizeWord :: 0 :: 0 :: [], budget.beforeSload.memory, r10⟩
+        sizeWord :: 0 :: 0 :: [], budget.beforeSload.memory, r10, budget.afterSloadBase.stateGas⟩
   have h10 : Ninst.RunCompiled sevm budget.beforeSload sload
       afterSload := by
     have hstack : budget.beforeSload.stack =
@@ -1003,14 +1016,14 @@ theorem OssifiableFallbackPrefixBudget.execWitness_proxyFallback
         (k := implementationSlotLit)
         (v := entry.getStorVal sevm.currentTarget implementationSlotLit)
         (s := (0 : B256) :: sizeWord :: 0 :: 0 :: [])
-        (c := sloadCost) (G := r10) hstack hbase hcost hvalue hgas (by
+        (c := sloadCost) (G := r10) hstack hfork hbase hcost hvalue hgas (by
           simp only [List.length_cons, List.length_nil]
           omega))
   have h11 : Ninst.RunCompiled sevm afterSload gas budget.callPre := by
     have hmemory : budget.beforeSload.memory = copied := by
       rfl
     simpa only [afterSload, OssifiableFallbackPrefixBudget.callPre,
-      sizeWord, copied, G, Devm.setMach_setMach, Devm.stack_setMach,
+      sizeWord, copied, G, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
       Devm.memory_setMach, Devm.gasLeft_setMach, hmemory] using
       (Ninst.runCompiled_gas (sevm := sevm) (devm := afterSload)
         (G := G) (by
@@ -1130,7 +1143,7 @@ theorem runtimeSelectors_miss_of_shortData (sevm : Sevm)
 def ossifiableRuntimeFallbackEntry
     (outer : Msg) (afterTransfer : Benv) (gas : Nat) : Devm :=
   (initDevm (outer.withBenv afterTransfer)).setMach
-    ⟨[], (initDevm (outer.withBenv afterTransfer)).memory, gas⟩
+    ⟨[], (initDevm (outer.withBenv afterTransfer)).memory, gas, (initDevm (outer.withBenv afterTransfer)).stateGas⟩
 
 /-- Exact outer-runtime route to the named delegatecall descriptor.  The
 runtime prefix is represented only by primitive gas/length/state resources;
@@ -1197,21 +1210,22 @@ theorem OssifiableForwardingRoute.compiledPrefix
     Prog.ExecWitness (initSevm (outer.withBenv afterTransfer))
       (initDevm (outer.withBenv afterTransfer)) runtimeBaseline raw := by
   let sevm := initSevm (outer.withBenv afterTransfer)
+  have hfork : CoveredFork sevm.benvStat.fork := d.covered
   let initial := initDevm (outer.withBenv afterTransfer)
   let dispatchCost := linearDispatchFallbackCost runtimeBaselineEntries
   let afterJump := initial.setMach
     ⟨[], initial.memory,
-      route.fallbackGas + dispatchCost + fsigCost⟩
+      route.fallbackGas + dispatchCost + fsigCost, initial.stateGas⟩
   let afterFsig := initial.setMach
     ⟨Sevm.selector sevm :: [], initial.memory,
-      route.fallbackGas + dispatchCost⟩
+      route.fallbackGas + dispatchCost, initial.stateGas⟩
   have htail : Func.ExecWitness ossifiableRuntimeFunctions sevm
       route.prefixBudget.callPre (delegatecall ::: proxyReturnTail) raw := by
     simpa only [sevm, route.callPreEq] using rawWitness
   have hfallback : Func.ExecWitness ossifiableRuntimeFunctions sevm
       (ossifiableRuntimeFallbackEntry outer afterTransfer route.fallbackGas)
       proxyFallback raw :=
-    route.prefixBudget.execWitness_proxyFallback htail
+    route.prefixBudget.execWitness_proxyFallback (hfork := hfork) htail
   have hmiss : ∀ candidate ∈ runtimeBaselineEntries,
       candidate.1 ≠ Sevm.selector sevm := by
     intro candidate member
@@ -1232,7 +1246,7 @@ theorem OssifiableForwardingRoute.compiledPrefix
     · decide
     · rfl
     · simpa only [afterFsig, ossifiableRuntimeFallbackEntry, initial,
-        Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+        Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach,
         Devm.gasLeft_setMach] using hfallback
   have hmain : Func.ExecWitness ossifiableRuntimeFunctions sevm afterJump
       runtimeBaselineMain raw := by
@@ -1244,7 +1258,7 @@ theorem OssifiableForwardingRoute.compiledPrefix
       (by dsimp only [afterJump]; simp only [Devm.stack_setMach])
       (by dsimp only [afterJump]; simp only [Devm.gasLeft_setMach])
       (by decide)
-      (by simpa only [afterJump, afterFsig, Devm.setMach_setMach,
+      (by simpa only [afterJump, afterFsig, Devm.setMach_setMach, Devm.stateGas_setMach,
           Devm.stack_setMach, Devm.memory_setMach,
           Devm.gasLeft_setMach] using hdispatch)
     simpa only [runtimeBaselineMain] using h
@@ -1285,7 +1299,10 @@ theorem OssifiableForwardingRoute.settlement
     parentError := route.parentError
     parentLogs := route.parentLogs
     parentStorage := route.parentStorage
-    parentTransient := route.parentTransient }
+    parentTransient := route.parentTransient
+    covered := by
+      rw [← route.afterTransferStat]
+      exact d.covered }
 
 /-- The direct/delegated context certificate is constructed from the exact
 spawn descriptor plus the two genuinely non-definitional prefix facts:

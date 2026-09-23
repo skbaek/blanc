@@ -47,7 +47,8 @@ theorem ProcessMessageTrace.allowanceRegionDelta_of_forallDeeperAt
       msg.codeAddress = some ca)
     (hdeeper : ForallDeeperAt depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
-        Exec.CoreAllowanceSound dp ca pc sevm pre out)) :
+        Exec.CoreAllowanceSound dp ca pc sevm pre out))
+    (hfork : CoveredFork msg.benv.stat.fork) :
     AllowanceRegionEffect ca parent post
       (trace.retained.attributionStream dp ca) := by
   rcases trace with ⟨slot, retained, hprocess⟩
@@ -145,8 +146,11 @@ theorem ProcessMessageTrace.allowanceRegionDelta_of_forallDeeperAt
               simpa [initSevm, Msg.withBenv] using hdepth
             have hcore := hdeeper pc sevm pre (.ok raw) run
               hchildDepth hat
+            have hchildFork : CoveredFork sevm.benvStat.fork := by
+              rw [Frame.enter_run_benvStat henter]
+              exact hfork
             have childEffect := hcore run hcommit hat
-              (fun htarget => ⟨⟨hpc, hmemory⟩, hdirect htarget⟩)
+              (fun htarget => ⟨⟨hpc, hmemory⟩, hdirect htarget⟩) hchildFork
             have hpostState : post.state = raw.state :=
               ProcessMessage.ok_state_eq_committedPost hprocess hcommit
             have hpostStorage : Devm.getStor raw ca =
@@ -546,7 +550,8 @@ theorem Exec.Frame.CountedCursor.redeemAllowanceRegionStorage
       success)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
-        Exec.CoreAllowanceSound dp ca pc sevm pre out)) :
+        Exec.CoreAllowanceSound dp ca pc sevm pre out))
+    (hfork : CoveredFork frame.sevm.benvStat.fork) :
     ∀ key, InRegion .allowance key →
       (Devm.getStor frame.post ca).get key =
         applyAllowanceLedger (Devm.getStor cursor.pre ca)
@@ -737,7 +742,7 @@ theorem Exec.Frame.CountedCursor.redeemAllowanceRegionStorage
           rcases sendEvidence.stack with ⟨gasWord, hcallStack⟩
           have hcall : Ninst.Run e callCursor.pre Ninst.call midD :=
             Ninst.Run.of_runCompiled hcompiled
-          rcases of_run_call_val_with_depth_frame hcallStack hcall with
+          rcases of_run_call_val_with_depth_frame hcallStack hcall hfork with
               hfailed | hsuccess
           · exfalso
             have htest := prefix_of_iszero hiszeroRun hfailed.1
@@ -841,7 +846,7 @@ theorem Exec.Frame.CountedCursor.redeemAllowanceRegionStorage
                   have htargetCa : target.toAdr = ca := by
                     simpa only [callMsg] using hct
                   simp only [callMsg, htargetCa, hresolved htargetCa])
-                hdeeper
+                hdeeper hfork
             -- the zero-length return window leaves the memory frame intact
             have hmidMemory' : midD.memory = callParent.memory := by
               simpa only [show (0 : B256).toNat = 0 from rfl, List.take_zero,
@@ -933,7 +938,8 @@ private theorem Exec.Frame.CountedCursor.redeemAllowanceStorage
       (successLine +++ Func.last successLast))
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
-        Exec.CoreAllowanceSound dp ca pc sevm pre out)) :
+        Exec.CoreAllowanceSound dp ca pc sevm pre out))
+    (hfork : CoveredFork frame.sevm.benvStat.fork) :
     ∀ key, InRegion .allowance key →
       (Devm.getStor frame.post ca).get key =
         applyAllowanceLedger (Devm.getStor cursor.pre ca)
@@ -941,7 +947,7 @@ private theorem Exec.Frame.CountedCursor.redeemAllowanceStorage
   cursor.redeemAllowanceRegionStorage htarget hstack hwf hreads hcursorCode
     hsendChildless hsend
     (successAllowanceCloser_of_childless hsuccessChildless hsuccessStor)
-    hdeeper
+    hdeeper hfork
 
 /-! ## The three public redemption arms -/
 
@@ -997,7 +1003,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdraw
       exact redeemSendToCallerPrefix_effect hp hrun)
     (by simp)
     (by func_inv)
-    hdeeper
+    hdeeper context.covered
   have hnotlast : ownRecordLast frame.sevm = false := by
     simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
       withdrawSelector_ne_flashLoanSelector,
@@ -1075,7 +1081,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdrawTo
       exact redeemSendToArgPrefix_effect 0 hp hrun)
     (by simp)
     (by func_inv)
-    hdeeper
+    hdeeper context.covered
   have hnotlast : ownRecordLast frame.sevm = false := by
     simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
       withdrawToSelector_ne_flashLoanSelector,
@@ -1199,7 +1205,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferZero
     (by simp [redeemReturnTrueLine, mstoreAt, pushList, NinstIsChildless,
       Ninst.pushB256])
     (by func_inv)
-    hdeeper
+    hdeeper context.covered
   have hnotlast : ownRecordLast frame.sevm = false := by
     simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
       transferSelector_ne_flashLoanSelector,
@@ -1256,7 +1262,8 @@ theorem ProcessMessageTrace.allowanceRegionDeltaSound_of_forallDeeperAt
       msg.codeAddress = some ca)
     (hdeeper : ForallDeeperAt depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
-        Exec.CoreAllowanceReadSound dp ca pc sevm pre out)) :
+        Exec.CoreAllowanceReadSound dp ca pc sevm pre out))
+    (hfork : CoveredFork msg.benv.stat.fork) :
     AllowanceRegionEffectSound ca parent post
       (trace.retained.attributionStream dp ca) := by
   rcases trace with ⟨slot, retained, hprocess⟩
@@ -1354,8 +1361,11 @@ theorem ProcessMessageTrace.allowanceRegionDeltaSound_of_forallDeeperAt
               simpa [initSevm, Msg.withBenv] using hdepth
             have hcore := hdeeper pc sevm pre (.ok raw) run
               hchildDepth hat
+            have hchildFork : CoveredFork sevm.benvStat.fork := by
+              rw [Frame.enter_run_benvStat henter]
+              exact hfork
             have childEffect := hcore run hcommit hat
-              (fun htarget => ⟨⟨hpc, hmemory⟩, hdirect htarget⟩)
+              (fun htarget => ⟨⟨hpc, hmemory⟩, hdirect htarget⟩) hchildFork
             have hpostState : post.state = raw.state :=
               ProcessMessage.ok_state_eq_committedPost hprocess hcommit
             have hpostStorage : Devm.getStor raw ca =
@@ -1570,7 +1580,8 @@ theorem Exec.Frame.CountedCursor.redeemAllowanceRegionSound
       success)
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
-        Exec.CoreAllowanceReadSound dp ca pc sevm pre out)) :
+        Exec.CoreAllowanceReadSound dp ca pc sevm pre out))
+    (hfork : CoveredFork frame.sevm.benvStat.fork) :
     (∀ key, InRegion .allowance key →
         (Devm.getStor frame.post ca).get key =
           applyAllowanceLedger (Devm.getStor cursor.pre ca)
@@ -1765,7 +1776,7 @@ theorem Exec.Frame.CountedCursor.redeemAllowanceRegionSound
           rcases sendEvidence.stack with ⟨gasWord, hcallStack⟩
           have hcall : Ninst.Run e callCursor.pre Ninst.call midD :=
             Ninst.Run.of_runCompiled hcompiled
-          rcases of_run_call_val_with_depth_frame hcallStack hcall with
+          rcases of_run_call_val_with_depth_frame hcallStack hcall hfork with
               hfailed | hsuccess
           · exfalso
             have htest := prefix_of_iszero hiszeroRun hfailed.1
@@ -1869,7 +1880,7 @@ theorem Exec.Frame.CountedCursor.redeemAllowanceRegionSound
                   have htargetCa : target.toAdr = ca := by
                     simpa only [callMsg] using hct
                   simp only [callMsg, htargetCa, hresolved htargetCa])
-                hdeeper
+                hdeeper hfork
             -- the zero-length return window leaves the memory frame intact
             have hmidMemory' : midD.memory = callParent.memory := by
               simpa only [show (0 : B256).toNat = 0 from rfl, List.take_zero,
@@ -1983,7 +1994,8 @@ private theorem Exec.Frame.CountedCursor.redeemAllowanceSound
       (successLine +++ Func.last successLast))
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
-        Exec.CoreAllowanceReadSound dp ca pc sevm pre out)) :
+        Exec.CoreAllowanceReadSound dp ca pc sevm pre out))
+    (hfork : CoveredFork frame.sevm.benvStat.fork) :
     (∀ key, InRegion .allowance key →
         (Devm.getStor frame.post ca).get key =
           applyAllowanceLedger (Devm.getStor cursor.pre ca)
@@ -1993,7 +2005,7 @@ private theorem Exec.Frame.CountedCursor.redeemAllowanceSound
   cursor.redeemAllowanceRegionSound htarget hstack hwf hreads hcursorCode
     hsendChildless hsend
     (successAllowanceCloserSound_of_childless hsuccessChildless hsuccessStor)
-    hdeeper
+    hdeeper hfork
 
 
 /-! ## The read-sound redemption arms
@@ -2045,7 +2057,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_withdraw
       exact redeemSendToCallerPrefix_effect hp hrun)
     (by simp)
     (by func_inv)
-    hdeeper
+    hdeeper context.covered
   have hnotlast : ownRecordLast frame.sevm = false := by
     simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
       withdrawSelector_ne_flashLoanSelector,
@@ -2134,7 +2146,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_withdrawTo
       exact redeemSendToArgPrefix_effect 0 hp hrun)
     (by simp)
     (by func_inv)
-    hdeeper
+    hdeeper context.covered
   have hnotlast : ownRecordLast frame.sevm = false := by
     simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
       withdrawToSelector_ne_flashLoanSelector,
@@ -2269,7 +2281,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferZero
     (by simp [redeemReturnTrueLine, mstoreAt, pushList, NinstIsChildless,
       Ninst.pushB256])
     (by func_inv)
-    hdeeper
+    hdeeper context.covered
   have hnotlast : ownRecordLast frame.sevm = false := by
     simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
       transferSelector_ne_flashLoanSelector,

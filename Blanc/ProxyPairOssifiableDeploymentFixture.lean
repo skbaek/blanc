@@ -38,7 +38,7 @@ def benv : Benv :=
     state := state
     stat :=
       { (default : BenvStat) with
-        rules := pragueRules
+        fork := .prague
         origState := state } }
 
 def createCode : ByteArray :=
@@ -91,6 +91,8 @@ theorem message_success :
     ∃ post, OssifiableEmptySetupCreateResult message implementation admin post := by
   apply processCreateMessage_ossifiable_emptySetup_success
       message implementation admin
+  · change CoveredFork .prague
+    exact CoveredFork.prague
   · rfl
   · rfl
   · exact message_code

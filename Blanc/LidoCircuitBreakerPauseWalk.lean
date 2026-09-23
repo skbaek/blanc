@@ -197,7 +197,7 @@ theorem runCompiled_tload_of
     (hgas : pre.gasLeft = G + gasWarmAccess)
     (hroom : stack.length < 1024) :
     Ninst.RunCompiled sevm pre Ninst.tload
-      (pre.setMach ⟨value :: stack, pre.memory, G⟩) := by
+      (pre.setMach ⟨value :: stack, pre.memory, G, pre.stateGas⟩) := by
   refine Ninst.runCompiled_reg (by rintro ⟨⟩) ?_
   show (do
     let ⟨k, d⟩ ← pre.pop
@@ -205,14 +205,14 @@ theorem runCompiled_tload_of
   rw [Devm.pop_eq_ok hstack]
   simp only [bind, Except.bind]
   rw [show (pre.setMach
-    ⟨stack, pre.memory, pre.gasLeft⟩).getTransVal
+    ⟨stack, pre.memory, pre.gasLeft, pre.stateGas⟩).getTransVal
       sevm.currentTarget key = value by exact hvalue]
   rw [pushItem_eq_ok (by
     simp only [Devm.gasLeft_setMach]
     omega) (by
     simp only [Devm.stack_setMach]
     exact hroom)]
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach, Devm.gasLeft_setMach]
   rw [show pre.gasLeft - gasWarmAccess = G by omega]
 
@@ -220,13 +220,15 @@ theorem runCompiled_tload_of
 theorem runCompiled_tstore_of
     {sevm : Sevm} {pre : Devm} {key value : B256}
     {stack : List B256} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hstack : pre.stack = key :: value :: stack)
     (hstatic : sevm.isStatic = false)
     (hgas : pre.gasLeft = G + gasWarmAccess) :
     Ninst.RunCompiled sevm pre Ninst.tstore
-      ((pre.setMach ⟨stack, pre.memory, G⟩).setTransVal
+      ((pre.setMach ⟨stack, pre.memory, G, pre.stateGas⟩).setTransVal
         sevm.currentTarget key value) := by
   refine Ninst.runCompiled_reg (by rintro ⟨⟩) ?_
+  simp only [Rinst.runCore, hfork.rules_stateGas_none]
   show (do
     let ⟨k, d⟩ ← pre.pop
     let ⟨v, d⟩ ← d.pop
@@ -236,14 +238,14 @@ theorem runCompiled_tstore_of
   rw [Devm.pop_eq_ok hstack]
   simp only [bind, Except.bind]
   rw [Devm.pop_eq_ok
-    (devm := pre.setMach ⟨value :: stack, pre.memory, pre.gasLeft⟩) rfl]
-  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+    (devm := pre.setMach ⟨value :: stack, pre.memory, pre.gasLeft, pre.stateGas⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   rw [chargeGas_eq_ok
-    (devm := pre.setMach ⟨stack, pre.memory, pre.gasLeft⟩) (by
+    (devm := pre.setMach ⟨stack, pre.memory, pre.gasLeft, pre.stateGas⟩) (by
       simp only [Devm.gasLeft_setMach]
       omega)]
   have hremaining : pre.gasLeft - gasWarmAccess = G := by omega
-  simp only [Devm.setMach_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach,
     Devm.stack_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   rw [hremaining]
   simp [assertDynamic, Except.assert, hstatic]
@@ -272,14 +274,14 @@ theorem pause_dispatch_runCompiledTo
     (_hcodeAddress : sevm.codeAddress = some sevm.currentTarget)
     (hcode : sevm.code.toList = lidoCircuitBreakerCode dp)
     (hbody : Func.RunCompiledTo (runtimeMain dp :: aux) sevm
-      (base.setMach ⟨[], Mem.empty, G + bodyGas⟩) pause out) :
+      (base.setMach ⟨[], Mem.empty, G + bodyGas, base.stateGas⟩) pause out) :
     Prog.RunCompiledTo sevm
-      (base.setMach ⟨[], Mem.empty, G + pauseDispatchGas + bodyGas⟩)
+      (base.setMach ⟨[], Mem.empty, G + pauseDispatchGas + bodyGas, base.stateGas⟩)
       (runtime dp) out ∧
       some sevm.code.toList = Prog.compile (runtime dp) := by
   refine ⟨?_, ?_⟩
   · refine Prog.runCompiledTo_intro
-      (mid := base.setMach ⟨[], Mem.empty, G + 107 + bodyGas⟩)
+      (mid := base.setMach ⟨[], Mem.empty, G + 107 + bodyGas, base.stateGas⟩)
       (G := G + 107 + bodyGas) ?_ ?_ ?_
     · simp only [Devm.gasLeft_setMach, pauseDispatchGas, gJumpdest]
       omega
@@ -302,7 +304,7 @@ theorem pause_dispatch_runCompiledTo
       case a =>
         have hboundary : G + 107 + bodyGas - 107 = G + bodyGas := by
           omega
-        simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+        simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
           Devm.memory_setMach, Devm.gasLeft_setMach, hboundary,
           runtimeMain, hybridDispatchWith, splitDispatch, firstSelector, funcs,
           List.take, List.drop, List.head?, Option.map, Option.getD,
@@ -338,17 +340,17 @@ private theorem pauseStageDuration_runCompiled
     {duration : B256} {G : Nat} {rest : Func}
     (hrest : Func.RunCompiled fs sevm
       (base.setMach ⟨[],
-        Mem.empty.write (durationWord * 32).toNat duration.toBytes, G⟩)
+        Mem.empty.write (durationWord * 32).toNat duration.toBytes, G, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[duration], Mem.empty, G + 79⟩)
+      (base.setMach ⟨[duration], Mem.empty, G + 79, base.stateGas⟩)
       (mstoreAt durationWord +++ rest) post := by
   func_run (2) [73]
   case h_ext =>
     exact Devm.extCost_of_size (n := 0) rfl (by decide +kernel)
   case a =>
     have hgas : G + 79 - 79 = G := by omega
-    simpa only [prepend, Devm.setMach_setMach, Devm.stack_setMach,
+    simpa only [prepend, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
       Devm.memory_setMach, Devm.gasLeft_setMach, hgas] using hrest
 
 private theorem PauseStageMemory.runCompiled_pushMstore
@@ -360,10 +362,10 @@ private theorem PauseStageMemory.runCompiled_pushMstore
     (hfit : (offset * 32).toNat + 32 ≤ 768)
     (hrest : Func.RunCompiled fs sevm
       (base.setMach ⟨[],
-        memory.write (offset * 32).toNat value.toBytes, G⟩)
+        memory.write (offset * 32).toNat value.toBytes, G, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory, G + (pushGas + 6)⟩)
+      (base.setMach ⟨[], memory, G + (pushGas + 6), base.stateGas⟩)
       (pushB256 value ::: mstoreAt offset +++ rest) post := by
   apply Func.RunCompiled.next
   · apply Ninst.runCompiled_pushB256 (c := pushGas) (G := G + 6) hvalue
@@ -384,7 +386,7 @@ private theorem PauseStageMemory.runCompiled_pushMstore
           exact hfit)
       case a =>
         have hgas : G + 3 - 3 = G := by omega
-        simpa only [prepend, Devm.setMach_setMach, Devm.stack_setMach,
+        simpa only [prepend, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
           Devm.memory_setMach, Devm.gasLeft_setMach, hgas] using hrest
 
 private theorem PauseStageMemory.runCompiled_argTarget
@@ -395,10 +397,10 @@ private theorem PauseStageMemory.runCompiled_argTarget
     (hfit : (targetWord * 32).toNat + 32 ≤ 768)
     (hrest : Func.RunCompiled fs sevm
       (base.setMach ⟨[],
-        memory.write (targetWord * 32).toNat target.toBytes, G⟩)
+        memory.write (targetWord * 32).toNat target.toBytes, G, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory, G + 12⟩)
+      (base.setMach ⟨[], memory, G + 12, base.stateGas⟩)
       (arg 0 +++ mstoreAt targetWord +++ rest) post := by
   unfold arg cdl
   func_run (4) [0]
@@ -409,21 +411,21 @@ private theorem PauseStageMemory.runCompiled_argTarget
   case a =>
     rw [hargTarget]
     have hgas : G + 12 - 12 = G := by omega
-    simpa only [prepend, Devm.setMach_setMach, Devm.stack_setMach,
+    simpa only [prepend, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
       Devm.memory_setMach, Devm.gasLeft_setMach, hgas] using hrest
 
 private theorem pauseStageCall_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (memory : Mem) (G : Nat) (post : Devm)
     (hkernel : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], memory, G⟩) setPauserKernel post) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) setPauserKernel post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], memory, G + 12⟩)
+      (base.setMach ⟨[], memory, G + 12, base.stateGas⟩)
       (.call setPauserSlot) post := by
   func_run (1)
   case h_body =>
     have hgas : G + 12 - 12 = G := by omega
-    simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+    simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
       Devm.memory_setMach, Devm.gasLeft_setMach, hgas] using hkernel
 
 /-- The five scratch writes `pause`'s body performs between its liveness guard
@@ -438,10 +440,10 @@ theorem pause_stageArgs_runCompiled
     (target duration : B256) (kernelGas : Nat) (post : Devm)
     (hargTarget : Sevm.dataWord sevm (32 * 0 + 4) = target)
     (hkernel : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], pauseMemory target duration, kernelGas⟩)
+      (base.setMach ⟨[], pauseMemory target duration, kernelGas, base.stateGas⟩)
       setPauserKernel post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[duration], Mem.empty, kernelGas + 128⟩)
+      (base.setMach ⟨[duration], Mem.empty, kernelGas + 128, base.stateGas⟩)
       (mstoreAt durationWord +++
         arg 0 +++ mstoreAt targetWord +++
         pushB256 0 ::: mstoreAt newPauserWord +++
@@ -482,13 +484,13 @@ theorem pause_stageArgs_runCompiled
   have hM4 : PauseStageMemory M4 := by
     simpa only [M4] using hM3.write previousPauserWord 0 hpreviousFit
   have hcall : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], M5, kernelGas + 12⟩)
+      (base.setMach ⟨[], M5, kernelGas + 12, base.stateGas⟩)
       (.call setPauserSlot) post := by
     apply pauseStageCall_runCompiled dp sevm base M5 kernelGas post
     simpa only [M5, M4, M3, M2, M1, pauseMemory] using hkernel
   have hcontinuation :
       Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-        (base.setMach ⟨[], M4, kernelGas + 21⟩)
+        (base.setMach ⟨[], M4, kernelGas + 21, base.stateGas⟩)
         (pushB256 1 ::: mstoreAt continuationWord +++
           .call setPauserSlot) post := by
     simpa only [M5, show (kernelGas + 12) + (3 + 6) = kernelGas + 21 by omega]
@@ -496,7 +498,7 @@ theorem pause_stageArgs_runCompiled
         hcontinuationFit hcall
   have hprevious :
       Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-        (base.setMach ⟨[], M3, kernelGas + 29⟩)
+        (base.setMach ⟨[], M3, kernelGas + 29, base.stateGas⟩)
         (pushB256 0 ::: mstoreAt previousPauserWord +++
           pushB256 1 ::: mstoreAt continuationWord +++
           .call setPauserSlot) post := by
@@ -505,7 +507,7 @@ theorem pause_stageArgs_runCompiled
         hpreviousFit hcontinuation
   have hnew : Func.RunCompiled
       ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], M2, kernelGas + 37⟩)
+      (base.setMach ⟨[], M2, kernelGas + 37, base.stateGas⟩)
       (pushB256 0 ::: mstoreAt newPauserWord +++
         pushB256 0 ::: mstoreAt previousPauserWord +++
         pushB256 1 ::: mstoreAt continuationWord +++
@@ -514,7 +516,7 @@ theorem pause_stageArgs_runCompiled
       using hM2.runCompiled_pushMstore hnewOffset hpushZero hnewFit hprevious
   have htarget : Func.RunCompiled
       ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], M1, kernelGas + 49⟩)
+      (base.setMach ⟨[], M1, kernelGas + 49, base.stateGas⟩)
       (arg 0 +++ mstoreAt targetWord +++
         pushB256 0 ::: mstoreAt newPauserWord +++
         pushB256 0 ::: mstoreAt previousPauserWord +++
@@ -548,14 +550,14 @@ private theorem pausePushNotZero_prepend_runCompiled
     {dp : DeployParams} {sevm : Sevm} {base : Devm}
     {G : Nat} {tail : Func} {post : Devm} {target : B256}
     (htail : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨~~~(0 : B256) :: target :: [], Mem.empty, G⟩) tail post) :
+      (base.setMach ⟨~~~(0 : B256) :: target :: [], Mem.empty, G, base.stateGas⟩) tail post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨target :: [], Mem.empty, G + 5⟩)
+      (base.setMach ⟨target :: [], Mem.empty, G + 5, base.stateGas⟩)
       ([pushB256 0, not] +++ tail) post := by
   func_run (2) [~~~(0 : B256)]
   case a =>
     change Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨~~~(0 : B256) :: target :: [], Mem.empty, G⟩) tail post
+      (base.setMach ⟨~~~(0 : B256) :: target :: [], Mem.empty, G, base.stateGas⟩) tail post
     exact htail
 
 private theorem pauseShiftAddressMask_prepend_runCompiled
@@ -564,9 +566,9 @@ private theorem pauseShiftAddressMask_prepend_runCompiled
     (htail : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach
         ⟨((~~~(0 : B256)) <<< (Nat.toB256 160).toNat) :: target :: [],
-          Mem.empty, G⟩) tail post) :
+          Mem.empty, G, base.stateGas⟩) tail post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨~~~(0 : B256) :: target :: [], Mem.empty, G + 6⟩)
+      (base.setMach ⟨~~~(0 : B256) :: target :: [], Mem.empty, G + 6, base.stateGas⟩)
       ([pushB256 (Nat.toB256 160), shl] +++ tail) post := by
   func_run (2)
     [((~~~(0 : B256)) <<< (Nat.toB256 160).toNat)]
@@ -574,7 +576,7 @@ private theorem pauseShiftAddressMask_prepend_runCompiled
     change Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach
         ⟨((~~~(0 : B256)) <<< (Nat.toB256 160).toNat) :: target :: [],
-          Mem.empty, G⟩) tail post
+          Mem.empty, G, base.stateGas⟩) tail post
     exact htail
 
 private theorem pauseCanonicalBranch_success_runCompiled
@@ -582,9 +584,9 @@ private theorem pauseCanonicalBranch_success_runCompiled
     {G : Nat} {body : Func} {post : Devm} {target : B256}
     (hmask : addressMask &&& target = 0)
     (hbody : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, G⟩) body post) :
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩) body post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨addressMask :: target :: [], Mem.empty, G + 16⟩)
+      (base.setMach ⟨addressMask :: target :: [], Mem.empty, G + 16, base.stateGas⟩)
       ([Ninst.and] +++ ((.call emptyRevertSlot) <?> body)) post := by
   func_run (2) [0]
   case h_arm =>
@@ -596,16 +598,16 @@ private theorem pauseCheckNonAddress_success_runCompiled
     {G : Nat} {body : Func} {post : Devm} {target : B256}
     (hmask : addressMask &&& target = 0)
     (hbody : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, G⟩) body post) :
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩) body post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨target :: [], Mem.empty, G + 27⟩)
+      (base.setMach ⟨target :: [], Mem.empty, G + 27, base.stateGas⟩)
       (checkNonAddress +++ ((.call emptyRevertSlot) <?> body)) post := by
   have hbranch := pauseCanonicalBranch_success_runCompiled hmask hbody
   have hshiftRaw :
       Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
         (base.setMach
           ⟨((~~~(0 : B256)) <<< (Nat.toB256 160).toNat) :: target :: [],
-            Mem.empty, G + 16⟩)
+            Mem.empty, G + 16, base.stateGas⟩)
         ([Ninst.and] +++ ((.call emptyRevertSlot) <?> body)) post := by
     rw [← addressMask_eq_shl]
     exact hbranch
@@ -627,13 +629,13 @@ private theorem pauseCanonicalAddressArg0_success_runCompiled
     (harg : Sevm.dataWord sevm (32 * 0 + 4) = target)
     (hmask : addressMask &&& target = 0)
     (hbody : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, G⟩) body post) :
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩) body post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, G + 33⟩)
+      (base.setMach ⟨[], Mem.empty, G + 33, base.stateGas⟩)
       (canonicalAddressArg 0 body) post := by
   have hcheck := pauseCheckNonAddress_success_runCompiled hmask hbody
   have hargRun : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, G + 27 + 6⟩)
+      (base.setMach ⟨[], Mem.empty, G + 27 + 6, base.stateGas⟩)
       (arg 0 +++ checkNonAddress +++
         ((.call emptyRevertSlot) <?> body)) post := by
     unfold arg cdl
@@ -653,9 +655,9 @@ private theorem pauseRequireStaticArgs1_success_runCompiled
     {G : Nat} {body : Func} {post : Devm}
     (hdata : sevm.data.length.toB256 <? 36 = 0)
     (hbody : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, G⟩) body post) :
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩) body post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, G + 21⟩)
+      (base.setMach ⟨[], Mem.empty, G + 21, base.stateGas⟩)
       (requireStaticArgs 1 body) post := by
   unfold requireStaticArgs
   func_run (4) [0]
@@ -669,9 +671,9 @@ private theorem pauseAssignmentSlotArg0_prepend_runCompiled
     {G : Nat} {tail : Func} {post : Devm} {target : B256}
     (harg : Sevm.dataWord sevm (32 * 0 + 4) = target)
     (htail : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[assignmentSlot target], Mem.empty, G⟩) tail post) :
+      (base.setMach ⟨[assignmentSlot target], Mem.empty, G, base.stateGas⟩) tail post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, G + 12⟩)
+      (base.setMach ⟨[], Mem.empty, G + 12, base.stateGas⟩)
       (arg 0 +++ tagTop assignmentRegion +++ tail) post := by
   unfold arg cdl
   func_run (4) [assignmentSlot target]
@@ -683,9 +685,9 @@ private theorem pauseExpirySlotCaller_prepend_runCompiled
     {G : Nat} {tail : Func} {post : Devm} {pauser : B256}
     (hcaller : sevm.caller.toB256 = pauser)
     (htail : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[expirySlot pauser], Mem.empty, G⟩) tail post) :
+      (base.setMach ⟨[expirySlot pauser], Mem.empty, G, base.stateGas⟩) tail post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, G + 8⟩)
+      (base.setMach ⟨[], Mem.empty, G + 8, base.stateGas⟩)
       (caller ::: tagTop expiryRegion +++ tail) post := by
   func_run (3) [expirySlot pauser]
   case h_val => rw [hcaller]; rfl
@@ -718,6 +720,7 @@ three `gasColdSload` occurrences are the worst case of the three costs this
 statement leaves open. -/
 theorem pause_body_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (target pauser expiry duration : B256)
     (assignmentCost expiryCost durationCost kernelGas : Nat) (post : Devm)
     (hdataLength : sevm.data.length = 36)
@@ -745,10 +748,10 @@ theorem pause_body_runCompiled
     (hstatic : sevm.isStatic = false)
     (hkernel : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       ((pauseKernelBase sevm base target pauser).setMach
-        ⟨[], pauseMemory target duration, kernelGas⟩) setPauserKernel post) :
+        ⟨[], pauseMemory target duration, kernelGas, (pauseKernelBase sevm base target pauser).stateGas⟩) setPauserKernel post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach ⟨[], Mem.empty,
-        kernelGas + (469 + assignmentCost + expiryCost + durationCost)⟩)
+        kernelGas + (469 + assignmentCost + expiryCost + durationCost), base.stateGas⟩)
       pause post := by
   unfold pause
   set total :=
@@ -768,31 +771,33 @@ theorem pause_body_runCompiled
   func_run (1)
     -- The reentrancy lock reads zero.
   have htload : Ninst.RunCompiled sevm
-        (base.setMach ⟨[lockKey], Mem.empty, total - 57⟩) Ninst.tload
-        (base.setMach ⟨[0], Mem.empty, total - 57 - 100⟩) := by
+        (base.setMach ⟨[lockKey], Mem.empty, total - 57, base.stateGas⟩) Ninst.tload
+        (base.setMach ⟨[0], Mem.empty, total - 57 - 100, base.stateGas⟩) := by
       have h := runCompiled_tload_of (sevm := sevm)
-        (pre := base.setMach ⟨[lockKey], Mem.empty, total - 57⟩)
+        (pre := base.setMach ⟨[lockKey], Mem.empty, total - 57, base.stateGas⟩)
         (key := lockKey) (value := 0) (stack := [])
         (G := total - 57 - 100) rfl hlock
         (by simp only [Devm.gasLeft_setMach, gasWarmAccess]; omega)
         (by simp)
-      simpa only [Devm.memory_setMach, Devm.setMach_setMach] using h
+      simpa only [Devm.memory_setMach, Devm.setMach_setMach, Devm.stateGas_setMach] using h
   refine Func.RunCompiled.next htload ?_
   func_run (2) [1]
   func_run (2)
   -- The lock is taken; only transient storage changes.
   have htstore : Ninst.RunCompiled sevm
-      (base.setMach ⟨[lockKey, 1], Mem.empty, total - 57 - 123⟩)
+      (base.setMach ⟨[lockKey, 1], Mem.empty, total - 57 - 123, base.stateGas⟩)
       Ninst.tstore
       ((pauseLockPost sevm base).setMach
-        ⟨[], Mem.empty, total - 57 - 223⟩) := by
-    have h := runCompiled_tstore_of (sevm := sevm)
-      (pre := base.setMach ⟨[lockKey, 1], Mem.empty, total - 57 - 123⟩)
+        ⟨[], Mem.empty, total - 57 - 223, (pauseLockPost sevm base).stateGas⟩) := by
+    have h := runCompiled_tstore_of (hfork := hfork) (sevm := sevm)
+      (pre := base.setMach ⟨[lockKey, 1], Mem.empty, total - 57 - 123, base.stateGas⟩)
       (key := lockKey) (value := 1) (stack := [])
       (G := total - 57 - 223) rfl hstatic
       (by simp only [Devm.gasLeft_setMach, gasWarmAccess]; omega)
-    simpa only [Devm.memory_setMach, Devm.setMach_setMach,
-      setTransVal_setMach, pauseLockPost] using h
+    have hsg : (base.setTransVal sevm.currentTarget lockKey 1).stateGas =
+        base.stateGas := rfl
+    simpa only [Devm.memory_setMach, Devm.setMach_setMach, Devm.stateGas_setMach,
+      setTransVal_setMach, pauseLockPost, hsg] using h
   refine Func.RunCompiled.next htstore ?_
   have hassignmentGas : total - 57 - 223 = total - 57 - 235 + 12 := by
     dsimp only [total]
@@ -802,11 +807,11 @@ theorem pause_body_runCompiled
   -- The target's assignment names the caller.
   have hassignSload : Ninst.RunCompiled sevm
       ((pauseLockPost sevm base).setMach
-        ⟨[assignmentSlot target], Mem.empty, total - 57 - 235⟩)
+        ⟨[assignmentSlot target], Mem.empty, total - 57 - 235, (pauseLockPost sevm base).stateGas⟩)
       Ninst.sload
       ((pauseExpiryBase sevm base target).setMach
-        ⟨[pauser], Mem.empty, total - 57 - 235 - assignmentCost⟩) := by
-    have h := temporal_sload_runCompiled (sevm := sevm)
+        ⟨[pauser], Mem.empty, total - 57 - 235 - assignmentCost, (pauseExpiryBase sevm base target).stateGas⟩) := by
+    have h := temporal_sload_runCompiled (hfork := hfork) (sevm := sevm)
       (base := pauseLockPost sevm base) (key := assignmentSlot target)
       (value := pauser) (stack := []) (M := Mem.empty)
       (G := total - 57 - 235 - assignmentCost)
@@ -829,12 +834,12 @@ theorem pause_body_runCompiled
   have hexpirySload : Ninst.RunCompiled sevm
       ((pauseExpiryBase sevm base target).setMach
         ⟨[expirySlot pauser], Mem.empty,
-          total - 57 - 235 - assignmentCost - 27⟩)
+          total - 57 - 235 - assignmentCost - 27, (pauseExpiryBase sevm base target).stateGas⟩)
       Ninst.sload
       ((pauseDurationBase sevm base target pauser).setMach
         ⟨[expiry], Mem.empty,
-          total - 57 - 235 - assignmentCost - 27 - expiryCost⟩) := by
-    have h := temporal_sload_runCompiled (sevm := sevm)
+          total - 57 - 235 - assignmentCost - 27 - expiryCost, (pauseDurationBase sevm base target pauser).stateGas⟩) := by
+    have h := temporal_sload_runCompiled (hfork := hfork) (sevm := sevm)
       (base := pauseExpiryBase sevm base target) (key := expirySlot pauser)
       (value := expiry) (stack := []) (M := Mem.empty)
       (G := total - 57 - 235 - assignmentCost - 27 - expiryCost)
@@ -851,11 +856,11 @@ theorem pause_body_runCompiled
   have hdurationSload : Ninst.RunCompiled sevm
       ((pauseDurationBase sevm base target pauser).setMach
         ⟨[pauseDurationSlot], Mem.empty,
-          total - 57 - 235 - assignmentCost - 27 - expiryCost - 22⟩)
+          total - 57 - 235 - assignmentCost - 27 - expiryCost - 22, (pauseDurationBase sevm base target pauser).stateGas⟩)
       Ninst.sload
       ((pauseKernelBase sevm base target pauser).setMach
-        ⟨[duration], Mem.empty, kernelGas + 128⟩) := by
-    have h := temporal_sload_runCompiled (sevm := sevm)
+        ⟨[duration], Mem.empty, kernelGas + 128, (pauseKernelBase sevm base target pauser).stateGas⟩) := by
+    have h := temporal_sload_runCompiled (hfork := hfork) (sevm := sevm)
       (base := pauseDurationBase sevm base target pauser)
       (key := pauseDurationSlot) (value := duration) (stack := [])
       (M := Mem.empty) (G := kernelGas + 128) hdurationStorage (by simp)
@@ -900,9 +905,9 @@ theorem finishSetPauser_pauseAfterSet_runCompiled
     (hpause : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       ((base.addLog ⟨sevm.currentTarget,
           [pauserSetEvent, target, previousPauser, newPauser], []⟩).setMach
-        ⟨stack, M, G⟩) pauseAfterSet post) :
+        ⟨stack, M, G, (base.addLog ⟨sevm.currentTarget, [pauserSetEvent, target, previousPauser, newPauser], []⟩).stateGas⟩) pauseAfterSet post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨stack, M, G + 1934⟩) finishSetPauser post := by
+      (base.setMach ⟨stack, M, G + 1934, base.stateGas⟩) finishSetPauser post := by
   let eventLog : Log :=
     ⟨sevm.currentTarget,
       [pauserSetEvent, target, previousPauser, newPauser], []⟩
@@ -958,27 +963,27 @@ theorem finishSetPauser_pauseAfterSet_runCompiled
   have hlookup : fs[pauseAfterSetSlot]? = some pauseAfterSet := by
     simp [fs, runtime, aux, pauseAfterSetSlot]
   have hcall : Func.RunCompiled fs sevm
-      (eventBase.setMach ⟨stack, M, G + 12⟩)
+      (eventBase.setMach ⟨stack, M, G + 12, eventBase.stateGas⟩)
       (.call pauseAfterSetSlot) post := by
     apply Func.RunCompiled.call hlookup
       (by simp only [Devm.stack_setMach]; omega)
-    · simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+    · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
         Devm.memory_setMach] using
         (Devm.burnBy_setMach_gas
-          (devm := eventBase.setMach ⟨stack, M, G + 12⟩)
+          (devm := eventBase.setMach ⟨stack, M, G + 12, eventBase.stateGas⟩)
           (cost := gVerylow + gMid + gJumpdest) (G := G)
           (by simp only [Devm.gasLeft_setMach]
               norm_num [gVerylow, gMid, gJumpdest]))
     · exact hpause
   have hbranch : Func.RunCompiled fs sevm
-      (eventBase.setMach ⟨0 :: stack, M, G + 25⟩)
+      (eventBase.setMach ⟨0 :: stack, M, G + 25, eventBase.stateGas⟩)
       ((.call registerAfterSetSlot) <?> (.call pauseAfterSetSlot)) post := by
     apply Func.RunCompiled.zero
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)
-    · simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+    · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
         Devm.memory_setMach] using
         (Devm.popBurnBy_setMach
-          (devm := eventBase.setMach ⟨0 :: stack, M, G + 25⟩)
+          (devm := eventBase.setMach ⟨0 :: stack, M, G + 25, eventBase.stateGas⟩)
           (x := (0 : B256)) (s := stack)
           (cost := gVerylow + gHigh) (G := G + 12)
           (h_stk := rfl) (h := by
@@ -986,7 +991,7 @@ theorem finishSetPauser_pauseAfterSet_runCompiled
             norm_num [gVerylow, gHigh]))
     · exact hcall
   have hcontinuationRun : Func.RunCompiled fs sevm
-      (eventBase.setMach ⟨stack, M, G + 34⟩)
+      (eventBase.setMach ⟨stack, M, G + 34, eventBase.stateGas⟩)
       (loadWord continuationWord +++ Ninst.iszero :::
         ((.call registerAfterSetSlot) <?> (.call pauseAfterSetSlot))) post := by
     func_run (3) [3]

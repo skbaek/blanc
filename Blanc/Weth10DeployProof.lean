@@ -415,15 +415,16 @@ private theorem chargeCodeGas_weth10_output
     {rules : ForkRules} {d : Devm} (dp : DeployParams)
     (h_output : d.output = weth10Code dp)
     (h_gas : 1262600 ≤ d.gasLeft)
-    (h_max : 6313 ≤ rules.code.maxCodeSize) :
+    (h_max : 6313 ≤ rules.code.maxCodeSize)
+    (h_legacy : rules.stateGas = none) :
     processCreateMessage.chargeCodeGas rules d =
       .ok (d.setMach
-        ⟨d.stack, d.memory, d.gasLeft - 1262600⟩) := by
+        ⟨d.stack, d.memory, d.gasLeft - 1262600, d.stateGas⟩) := by
   obtain ⟨tail, hcons⟩ := weth10Code_cons dp
   have hlen : (weth10Code dp).length = 6313 :=
     weth10Code_length dp
   unfold processCreateMessage.chargeCodeGas
-  rw [h_output, hcons]
+  rw [h_legacy, h_output, hcons]
   rw [hcons] at hlen
   simp only [List.length_cons] at hlen
   simp only [List.length_cons, hlen, gasCodeDeposit]
@@ -450,13 +451,14 @@ private theorem chargeCodeGas_weth10_checkpoint
     {rules : ForkRules} {d : Devm} (dp : DeployParams)
     (h_output : d.output = weth10Code dp)
     (h_gas : 1262600 ≤ d.gasLeft)
-    (h_max : 6313 ≤ rules.code.maxCodeSize) :
+    (h_max : 6313 ≤ rules.code.maxCodeSize)
+    (h_legacy : rules.stateGas = none) :
     ∃ charged, Weth10CodeGasCheckpoint rules d dp charged := by
-  let m : Mach := ⟨d.stack, d.memory, d.gasLeft - 1262600⟩
+  let m : Mach := ⟨d.stack, d.memory, d.gasLeft - 1262600, d.stateGas⟩
   have hm :
       processCreateMessage.chargeCodeGas rules d = .ok (d.setMach m) := by
     simpa only [m] using
-      chargeCodeGas_weth10_output dp h_output h_gas h_max
+      chargeCodeGas_weth10_output dp h_output h_gas h_max h_legacy
   obtain ⟨charged, hc⟩ := chargeCodeGas_exists_of_eq hm
   refine ⟨charged, {
     charge := hc
@@ -495,7 +497,8 @@ private theorem processMessage_weth10_checkpoint
     (h_value : msg.value = 0)
     (h_codeAddress : msg.codeAddress = .none)
     (h_code : msg.code.toList = weth10InitCode)
-    (h_gas : 1471 ≤ msg.gas) :
+    (h_gas : 1471 ≤ msg.gas)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     ∃ initPost, Weth10InitCheckpoint msg initPost := by
   let prepared := processCreateMessage.msg msg
   obtain ⟨benv, h_transfer⟩ :=
@@ -554,7 +557,14 @@ private theorem processMessage_weth10_checkpoint
     gas := ?_ }⟩
   · rw [show initPost.state = (initDevm seeded).state from h_frame.1]
     exact h_benv_stor
-  · exact h_frame.2.1.trans (by rfl)
+  · have h_seed_rules : benv.stat.rules.stateGas = none := by
+      rw [h_stat]
+      exact hfork.rules_stateGas_none
+    refine h_frame.2.1.trans ?_
+    change (match benv.stat.rules.stateGas with
+      | none => []
+      | some _ => _) = []
+    rw [h_seed_rules]
   · exact (weth10InitFunc_runCompiled_zero
       (sevm := initSevm seeded) (base := initDevm seeded) (g := msg.gas)
       h_seed_value h_gas).2
@@ -576,7 +586,8 @@ private theorem processCreateMessage_weth10_charge_checkpoint
     (msg : Msg) {initPost : Devm}
     (init : Weth10InitCheckpoint msg initPost)
     (h_gas : 1264071 ≤ msg.gas)
-    (h_max : 6313 ≤ msg.benv.stat.rules.code.maxCodeSize) :
+    (h_max : 6313 ≤ msg.benv.stat.rules.code.maxCodeSize)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     ∃ charged, Weth10ChargeCheckpoint msg
       (freshDeployParams
         msg.benv.stat.chainId.toB256 msg.currentTarget) charged := by
@@ -589,7 +600,7 @@ private theorem processCreateMessage_weth10_charge_checkpoint
     chargeCodeGas_weth10_checkpoint
       (freshDeployParams
         msg.benv.stat.chainId.toB256 msg.currentTarget)
-      init.output h_deposit h_max
+      init.output h_deposit h_max hfork.rules_stateGas_none
   refine ⟨charged, {
     process := processCreateMessage_ok_of_processMessage_and_charge msg
       init.process init.error checkpoint.charge
@@ -671,7 +682,8 @@ private theorem processCreateMessage_weth10_success_raw
     (h_codeAddress : msg.codeAddress = .none)
     (h_code : msg.code.toList = weth10InitCode)
     (h_gas : 1264071 ≤ msg.gas)
-    (h_max : 6313 ≤ msg.benv.stat.rules.code.maxCodeSize) :
+    (h_max : 6313 ≤ msg.benv.stat.rules.code.maxCodeSize)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     ∃ post,
       processCreateMessage msg = .ok post ∧
       post.getCode msg.currentTarget =
@@ -691,9 +703,9 @@ private theorem processCreateMessage_weth10_success_raw
     freshDeployParams msg.benv.stat.chainId.toB256 msg.currentTarget
   obtain ⟨initPost, init⟩ :=
     processMessage_weth10_checkpoint msg h_value h_codeAddress h_code
-      (by omega)
+      (by omega) hfork
   obtain ⟨chargedPost, charged⟩ :=
-    processCreateMessage_weth10_charge_checkpoint msg init h_gas h_max
+    processCreateMessage_weth10_charge_checkpoint msg init h_gas h_max hfork
   exact weth10InstalledPost_certificate
     (charged := chargedPost) msg dp charged.process
     charged.output charged.stor charged.logs charged.error
@@ -711,7 +723,8 @@ theorem processCreateMessage_weth10_success
     (h_codeAddress : msg.codeAddress = .none)
     (h_code : msg.code.toList = weth10InitCode)
     (h_gas : weth10CreateMessageGasAccounting ≤ msg.gas)
-    (h_max : 6313 ≤ msg.benv.stat.rules.code.maxCodeSize) :
+    (h_max : 6313 ≤ msg.benv.stat.rules.code.maxCodeSize)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     ∃ post,
       processCreateMessage msg = .ok post ∧
       post.getCode msg.currentTarget =
@@ -730,7 +743,7 @@ theorem processCreateMessage_weth10_success
   obtain ⟨post, h_process, h_installed, h_stor, h_inv, h_logs,
       h_output, h_left, _, _, _⟩ :=
     processCreateMessage_weth10_success_raw msg h_value h_codeAddress
-      h_code h_gas' h_max
+      h_code h_gas' h_max hfork
   exact ⟨post, h_process, h_installed, h_stor, h_inv, h_logs, h_output,
     by simpa only [weth10CreateMessageGasAccounting_eq] using h_left⟩
 
@@ -742,7 +755,8 @@ theorem processCreateMessage_weth10_success_full
     (h_codeAddress : msg.codeAddress = .none)
     (h_code : msg.code.toList = weth10InitCode)
     (h_gas : weth10CreateMessageGasAccounting ≤ msg.gas)
-    (h_max : 6313 ≤ msg.benv.stat.rules.code.maxCodeSize) :
+    (h_max : 6313 ≤ msg.benv.stat.rules.code.maxCodeSize)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     ∃ post,
       processCreateMessage msg = .ok post ∧
       post.getCode msg.currentTarget =
@@ -763,7 +777,7 @@ theorem processCreateMessage_weth10_success_full
     exact h_gas
   simpa only [weth10CreateMessageGasAccounting_eq] using
     processCreateMessage_weth10_success_raw msg h_value h_codeAddress
-      h_code h_gas' h_max
+      h_code h_gas' h_max hfork
 
 
 /-! ## Static deployment certificate -/

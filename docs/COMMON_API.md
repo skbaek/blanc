@@ -38,6 +38,13 @@ registry has identified the likely vocabulary.
   [`Blanc/Basic.lean`](../Blanc/Basic.lean). Both are the substrate the
   branches below are stated over, so read the declaration and its module
   documentation there rather than expecting a need-first branch for it.
+- Fork coverage: `CoveredFork f` (`f ∈ coveredForks`) in `Blanc/Semantics.lean`.
+  Consume it only through `CoveredFork.stateGas_none`, `bal_none`,
+  `rules_stateGas_none`, `rules_bal_none`, `requests_eq`,
+  `beaconRoots_not_precompile`, `historyStorage_not_precompile`, `of_eq` and,
+  where a per-fork case split is unavoidable, `CoveredFork.cases`. Discharge a
+  schedule premise with `mainnetChainConfig_covered` or a concrete config lemma
+  such as `Drip.concreteConfig_covered`.
 
 ## E — execution
 
@@ -299,7 +306,11 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
   `genericCall.step_spawn_benvStat`, `genericCreate.step_spawn_benvStat`, or
   the instruction-neutral `Xinst.step_spawn_benvStat` in
   [`Blanc/Semantics.lean`](../Blanc/Semantics.lean), then combine it with
-  `Frame.enter_run_benvStat` or `RunFrame.benvStat_eq` after entry.
+  `Frame.enter_run_benvStat` or `RunFrame.benvStat_eq` after entry. When the
+  spawn runs under Amsterdam state-gas rules, use the
+  `genericCallAmsterdam`/`genericCreateAmsterdam` `step_spawn_depth` and
+  `step_spawn_benvStat` mirrors instead; `Xinst.step` selects them on
+  `stateGas`.
 
 For an exact `DELEGATECALL` boundary, use
 [`Blanc/DelegatecallEnvelope.lean`](../Blanc/DelegatecallEnvelope.lean).
@@ -1065,10 +1076,10 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   entries, child outcomes, commitment, gas, or liveness.
 - Persistent-storage silence of static execution:
   [`Blanc/StaticStorage.lean`](../Blanc/StaticStorage.lean).  `Devm.storageView`
-  is the extensional `Stor.get` observation the contract invariants use, and
-  the module already supplies its `PopBurn.Inv`, `Burn.Inv`, `Linst.Hinv`,
-  `Ninst.Hinv` and `Ninst.staticcall` instances, so a read-only contract
-  consumes them rather than restating static propagation.
+  is the extensional `Stor.get` observation the contract invariants use.  The
+  module supplies its `PopBurn.Inv`, `Burn.Inv`, and lifts the existing generic
+  `Linst.Hinv` / `Ninst.Hinv` facts to that observation; it deliberately does
+  not manufacture a universal `STATICCALL` `Hinv`.
   `Exec.rawNodes_isStatic_of_static`, `Exec.retainedStorageWrites_eq_nil_of_static`
   and `Exec.storageView_committedPost_eq_of_static` are the execution-level
   facts underneath: the static flag reaches every entered child frame and no
@@ -1080,10 +1091,15 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   *equal* storages) rather than the extensional `Devm.storageView`.
   `Exec.getStor_committedPost_eq_of_static` says a committing execution of a
   static frame ends with exactly its entry storage map at every account,
-  children included; `Ninst.staticcall_inv_getStor_exact` lifts that to every
-  successful `STATICCALL`, entering arbitrary code or not; and the instance
-  `staticcall_getStor_hinv : Ninst.Hinv Devm.getStor Ninst.staticcall` is what
-  `Func.SilentIn Devm.getStor` certificates consume.  Worked use:
+  children included on a fork named by the `CoveredFork` predicate (the four
+  pre-Amsterdam forks Prague, Osaka, BPO1 and BPO2; Amsterdam is excluded);
+  `Ninst.staticcall_inv_getStor_exact` lifts that to one successful
+  `STATICCALL` under the same explicit premise.
+  For a recursive source walk at one covered `Sevm`, use
+  `Func.SilentAt`, `Func.SilentIn.toSilentAt`, and
+  `Func.observe_eq_of_run_silentAt`: ordinary instruction leaves still use
+  their generic invariants, while the `STATICCALL` leaf consumes the covered
+  theorem directly.  Worked use:
   `Blanc/Composition/ProrataWethVaultPairVaultSegment.lean` discharges the
   vault's live-quoting read-only paths through it.  Import
   `Blanc.StaticCallStorage` (it imports only `Blanc.StaticStorage`).  Like its
@@ -1707,6 +1723,13 @@ Use [`Blanc/MessageExecution.lean`](../Blanc/MessageExecution.lean):
   entry-state identity.
 - `settledRevert` and `settledHalt`, with their projection lemmas, name the
   canonical settled error machines.
+- `Frame.settle` is `settleMsg` after the rules-selected error handler: use
+  `Frame.settle_eq_settleMsg_handleErrorWith` in
+  [`Blanc/Semantics.lean`](../Blanc/Semantics.lean) to expose it, then identify
+  the selected handler with `executeCode.handleErrorWith_none` (the legacy
+  `handleError`), `executeCode.handleErrorWith_some` (Amsterdam
+  `handleErrorAmsterdam`), or `executeCode.handleErrorWith_ok` (either handler
+  is the identity on clean results).
 - For the inversion direction, use
   [`Blanc/MessageExecutionInversion.lean`](../Blanc/MessageExecutionInversion.lean):
   `processMessage_clean_rawPost` recovers a clean successful raw post, while
@@ -2230,6 +2253,18 @@ the consumer instead of adding a premise that assumes the new semantics away.
   `DispatchTree.dispatchMiss_runCompiledTo_with_path` constructs the exact
   empty-revert walk together with raw-SSTORE freedom for the identical selected
   proof.  It deliberately requires no safety property of an unselected sibling.
+- EIP-8024 immediates in compiled code: `Func.compile` rejects forbidden
+  `DUPN`/`SWAPN`/`EXCHANGE` immediates through `Ninst.immAccepted`
+  ([`Blanc/CommonCore.lean`](../Blanc/CommonCore.lean)); the `Ninst.step`
+  equations for the three stack-access instructions are `Ninst.step_dupn`,
+  `Ninst.step_swapn`, and `Ninst.step_exchange`
+  ([`Blanc/Semantics.lean`](../Blanc/Semantics.lean)); accepted-immediate
+  byte classification for the `noPushBefore` boundary walk is
+  `toInstType_ne_p_of_decodeSingle` and `toInstType_ne_p_of_decodePair`
+  ([`Blanc/Compiled.lean`](../Blanc/Compiled.lean)). There is no recipe:
+  the guard fires inside the compiler equation and the classification
+  closes by `decide` over a private `DecidableEq`, neither exposing a
+  reusable goal trigger.
 
 ### C2. I need deployment/message correspondence
 
@@ -2516,11 +2551,12 @@ reduce the frame invariants to the storage predicate, and
 storage walk, declining the `nof`-class side condition a storage-determined
 invariant never needs.  The module's no-write and `STATICCALL` sections
 discharge targets that never write storage, and `ofStorageOnly_of_call`
-carries the invariant across a child `call` under the deeper-frame
-hypothesis.  `ofStorageOnly_of_call_sameBenv` is its general form: the
-deeper-frame hypothesis need only cover frames at the caller's `benvStat`,
-which is what a trace-admitted consumer whose entry condition reads the block
-environment can discharge (DRIP's `soundAdmitted_of_stepClosedAt`).
+carries the invariant across a child `call` under the deeper-frame hypothesis
+and an explicit `CoveredFork` premise.  `ofStorageOnly_of_call_sameBenv` is
+its general form: the deeper-frame hypothesis need only cover frames at the
+caller's `benvStat`, which is what a trace-admitted consumer whose entry
+condition reads the block environment can discharge (DRIP's
+`soundAdmitted_of_stepClosedAt`).
 
 ### C8. A `decide +kernel` over a committed artifact reports kernel deep recursion
 

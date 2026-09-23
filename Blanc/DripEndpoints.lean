@@ -1983,7 +1983,8 @@ def ExitPaysExactlyFull (sevm : Sevm) (entry post : Devm) : Prop :=
 theorem exit_pays_exactly_full {fs : List Func} (hlookup : AuxLookup fs)
     {sevm : Sevm} {entry s post : Devm} {image : Bytes} {tail : Stack}
     (frame : Frame image entry s) (hp : tail <<+ s.stack)
-    (run : Func.Run fs sevm s Drip.exit post) :
+    (run : Func.Run fs sevm s Drip.exit post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ExitPaysExactlyFull sevm entry post := by
   unfold ExitPaysExactlyFull
   dsimp only
@@ -2019,7 +2020,7 @@ theorem exit_pays_exactly_full {fs : List Func} (hlookup : AuxLookup fs)
     ⟨_, hzero, hrev⟩ |
       ⟨w, guardPost, returnPre, hw, hpop, hburn, hreturn⟩
   · exact (not_run_revert hrev).elim
-  rcases of_run_call_val_with_depth_frame hstack hcall with
+  rcases of_run_call_val_with_depth_frame hstack hcall hfork with
       hfailed | hentered
   · exact (hw (popBurn_pref hpop hfailed.1).1).elim
   rcases hentered with
@@ -2069,11 +2070,12 @@ claims do not require the derived no-wrap, cap, or call-preimage code facts. -/
 theorem exit_pays_exactly {fs : List Func} (hlookup : AuxLookup fs)
     {sevm : Sevm} {entry s post : Devm} {image : Bytes} {tail : Stack}
     (frame : Frame image entry s) (hp : tail <<+ s.stack)
-    (run : Func.Run fs sevm s Drip.exit post) :
+    (run : Func.Run fs sevm s Drip.exit post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ExitPaysExactly sevm entry post := by
   unfold ExitPaysExactly at ⊢
   dsimp only
-  rcases exit_pays_exactly_full hlookup frame hp run with
+  rcases exit_pays_exactly_full hlookup frame hp run hfork with
     ⟨harg, hrow, htotal, hown, hfund, hlower, hupper, hclock, helapsed,
       hguards, -, -, callPre, callPost, guardPost, returnPre, hstor, -, -,
       haccepted, hstorPost, hbalPost, hret⟩
@@ -2097,7 +2099,8 @@ the `Func.revert` construction (`PUSH0 PUSH0 REVERT`). -/
 theorem of_run_exit_child_outcome {fs : List Func} (hlookup : AuxLookup fs)
     {sevm : Sevm} {entry s r : Devm} {image : Bytes} {tail : Stack}
     (frame : Frame image entry s) (hp : tail <<+ s.stack)
-    (run : Func.Run fs sevm s Drip.exit r) :
+    (run : Func.Run fs sevm s Drip.exit r)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ExitPaysExactly sevm entry r ∨
       ∃ callPre callPost : Devm, ∃ rest : Stack,
         (0 : B256) :: rest <<+ callPost.stack ∧
@@ -2114,7 +2117,7 @@ theorem of_run_exit_child_outcome {fs : List Func} (hlookup : AuxLookup fs)
   rcases of_run_prepend sendToCaller _ suffix with ⟨callPost, hsend, hbranch⟩
   rcases exit_sendToCaller_frame hpSend hsend with
     ⟨callPre, _, hstack, hcall, _, _, _, _, _, _⟩
-  rcases of_run_call_val_with_depth_frame hstack hcall with hfailed | _
+  rcases of_run_call_val_with_depth_frame hstack hcall hfork with hfailed | _
   · obtain ⟨hflag0, hworld⟩ := hfailed
     have hstorW : Devm.getStor callPost = Devm.getStor callPre := by
       funext a
@@ -2126,7 +2129,7 @@ theorem of_run_exit_child_outcome {fs : List Func} (hlookup : AuxLookup fs)
     · exact Or.inr ⟨callPre, callPost, _, hflag0, hworld, hstorW, htraW,
         mid, hpop, hrev⟩
     · exact (hnz (popBurn_pref hpop hflag0).1).elim
-  · exact Or.inl (exit_pays_exactly hlookup frame hp run)
+  · exact Or.inl (exit_pays_exactly hlookup frame hp run hfork)
 
 end Drip
 

@@ -81,6 +81,7 @@ theorem Xinst.foreignSomeAccountingReplay
     (frameRun : RunFrame frame (.some ⟨cevm, raw⟩) (.ok settled))
     (resumeRun : resume.run (.ok settled) = .ok post)
     (target_ne : sevm.currentTarget ≠ ca)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (sum_nof : sum pre.state.bal < 2 ^ 256)
     (body : ∀ committed : Execution.commits raw = true, ∃ steps,
       ProrataAccountingReplay offset.toNat
@@ -92,7 +93,7 @@ theorem Xinst.foreignSomeAccountingReplay
         (RealizedSnapshot.ofState ca pre.state) steps
         (RealizedSnapshot.ofState ca post.state) :=
   (ProrataAccountingReplay.carrier ca).xinstForeignSome spawn frameRun
-    resumeRun target_ne sum_nof body
+    resumeRun target_ne hfork sum_nof body
 
 /-- Proof-indexed committed accounting replay for one interpreter suffix.
 `nextChild` is the ordinal of the next frame spawned by the current execution;
@@ -107,6 +108,7 @@ def Exec.CoreProrataAccounting
     prorataSpec.Pre ca sevm pre →
     (sevm.currentTarget = ca → sevm.codeAddress = some ca) →
     (sevm.currentTarget = ca → sevm.caller.toB256.toAdr ≠ ca) →
+    CoveredFork sevm.benvStat.fork →
     ∀ (_blockIndex : Nat) (_transactionIndex : Option Nat)
       (_framePath : List Nat) (_nextChild : Nat),
       ∃ steps,
@@ -135,7 +137,7 @@ theorem Exec.CoreProrataAccounting.atTarget
         Exec.CoreProrataAccounting ca pc childSevm childPre childOut)) :
     Exec.CoreProrataAccounting ca 0 sevm pre (.ok post) := by
   subst ca
-  intro run committed installed precondition direct caller
+  intro run committed installed precondition direct caller hfork
     blockIndex transactionIndex framePath nextChild
   let frame := Exec.Frame.ofRun run committed
   have invocation : frame.exactInvocation prorata
@@ -151,7 +153,7 @@ theorem Exec.CoreProrataAccounting.atTarget
     congrArg some (toAdr_toB256 sevm.caller)
   rcases
       _root_.Blanc.Prorata.Exec.Frame.accountingReplay_or_realizedWithdrawal
-        invocation precondition provenance actorEq (caller rfl) with
+        invocation precondition provenance actorEq (caller rfl) hfork with
     replay | withdrawal
   · rw [RealizedSnapshot.execEntry_of_target rfl]
     exact replay
@@ -193,6 +195,11 @@ theorem Exec.CoreProrataAccounting.atTarget
                 (withdrawal.payout.childMsg.withBenv
                   withdrawal.payout.entry) :=
             congrArg (fun evm : Evm => evm.sta) childEvmEq
+          have childFork : CoveredFork childSevm.benvStat.fork := by
+            rw [childSevmEq, initSevm_benvStat, Msg.withBenv_benvStat,
+              benvAfterTransfer_stat withdrawal.payout.entryTransfer,
+              withdrawal.payout.benvStat]
+            exact hfork
           have childPreEq : childPre =
               initDevm
                 (withdrawal.payout.childMsg.withBenv
@@ -222,6 +229,7 @@ theorem Exec.CoreProrataAccounting.atTarget
           rcases childCore childRun childCommitted childAt childPrecondition
               (fun childTarget => (childTargetNe childTarget).elim)
               (fun childTarget => (childTargetNe childTarget).elim)
+              childFork
               blockIndex transactionIndex (framePath ++ [nextChild]) 0 with
             ⟨steps, replay⟩
           have startEq :
@@ -256,11 +264,11 @@ theorem Exec.CoreProrataAccounting.nextNone
     (target_ne : sevm.currentTarget ≠ ca)
     (ih : Exec.CoreProrataAccounting ca (pc + n.size) sevm inter out) :
     Exec.CoreProrataAccounting ca pc sevm pre out := by
-  intro _ committed installed precondition _ _
+  intro _ committed installed precondition _ _ hfork
     blockIndex transactionIndex framePath nextChild
   have interPre : prorataSpec.Pre ca sevm inter :=
     _root_.Blanc.ContractSpec.Ninst.none_preserves_precond
-      (c := prorataSpec) step target_ne precondition
+      (c := prorataSpec) hfork step target_ne precondition
   have installedInter : Prog.At prorata ca (pc + n.size) sevm inter :=
     ⟨interPre.code, fun target => (target_ne target).elim⟩
   have sumNof : sum pre.state.bal < 2 ^ 256 := precondition.side
@@ -269,7 +277,7 @@ theorem Exec.CoreProrataAccounting.nextNone
       transactionIndex := transactionIndex
       framePath := framePath
       actor := none }
-  rcases Ninst.foreignNoneAccountingReplay step target_ne sumNof provenance
+  rcases Ninst.foreignNoneAccountingReplay hfork step target_ne sumNof provenance
       with ⟨headSteps, headReplay⟩
   cases stepShape : Ninst.step ⟨pc, sevm, pre⟩ n with
   | halt execution =>
@@ -286,6 +294,7 @@ theorem Exec.CoreProrataAccounting.nextNone
       rcases ih next committed installedInter interPre
           (fun target => (target_ne target).elim)
           (fun target => (target_ne target).elim)
+          hfork
           blockIndex transactionIndex framePath nextChild with
         ⟨tailSteps, tailReplay⟩
       rw [RealizedSnapshot.execEntry_of_target_ne target_ne] at tailReplay
@@ -300,6 +309,7 @@ theorem Exec.CoreProrataAccounting.nextNone
       rcases ih next committed installedInter interPre
           (fun target => (target_ne target).elim)
           (fun target => (target_ne target).elim)
+          hfork
           blockIndex transactionIndex framePath (nextChild + 1) with
         ⟨tailSteps, tailReplay⟩
       rw [RealizedSnapshot.execEntry_of_target_ne target_ne] at tailReplay
@@ -316,7 +326,7 @@ theorem Exec.CoreProrataAccounting.last
     (step : Linst.Run sevm pre l out)
     (target_ne : sevm.currentTarget ≠ ca) :
     Exec.CoreProrataAccounting ca pc sevm pre out := by
-  intro _ committed _ precondition _ _
+  intro _ committed _ precondition _ _ _
     blockIndex transactionIndex framePath _
   cases out with
   | error error =>
@@ -345,7 +355,7 @@ theorem Exec.CoreProrataAccounting.jump
     (target_ne : sevm.currentTarget ≠ ca)
     (ih : Exec.CoreProrataAccounting ca pc' sevm inter out) :
     Exec.CoreProrataAccounting ca pc sevm pre out := by
-  intro _ committed _ precondition _ _
+  intro _ committed _ precondition _ _ hfork
     blockIndex transactionIndex framePath nextChild
   have stateEq : inter.state = pre.state := Jinst.preserves_state step
   have interPre : prorataSpec.Pre ca sevm inter :=
@@ -355,6 +365,7 @@ theorem Exec.CoreProrataAccounting.jump
   rcases ih next committed installedInter interPre
       (fun target => (target_ne target).elim)
       (fun target => (target_ne target).elim)
+      hfork
       blockIndex transactionIndex framePath nextChild with
     ⟨steps, replay⟩
   rw [RealizedSnapshot.execEntry_of_target_ne target_ne] at replay
@@ -384,8 +395,14 @@ theorem Exec.CoreProrataAccounting.nextSome
       cases (Step.run_ofExecution.mp step).1
   | push xs length =>
       cases (Step.run_ofExecution.mp step).1
+  | dupn imm =>
+      cases (Step.run_ofExecution.mp step).1
+  | swapn imm =>
+      cases (Step.run_ofExecution.mp step).1
+  | exchange imm =>
+      cases (Step.run_ofExecution.mp step).1
   | exec x =>
-      intro _ committed installed precondition _ _
+      intro _ committed installed precondition _ _ hfork
         blockIndex transactionIndex framePath nextChild
       have xrun : Xinst.Run sevm pre x (.some ⟨cevm, raw⟩)
           (.ok inter) := XStep.run_toStep.mp step
@@ -466,7 +483,9 @@ theorem Exec.CoreProrataAccounting.nextSome
                 exact callerNe
               obtain ⟨childPrecondition, continuationOfPost⟩ :=
                 _root_.Blanc.ContractSpec.Xinst.some_preserves_precond
-                  (c := prorataSpec) xrun child target_ne precondition
+                  (c := prorataSpec) hfork xrun child target_ne precondition
+              have childFork : CoveredFork cevm.sta.benvStat.fork :=
+                Xinst.Run.some_child_fork xrun hfork
               have childPost :
                   ifOk (prorataSpec.Post ca cevm.sta) raw := by
                 cases raw with
@@ -477,7 +496,7 @@ theorem Exec.CoreProrataAccounting.nextSome
                       rw [← childPcZero]
                       exact child
                     exact prorataSpec_preservesNoMem ca cevm.sta cevm.dyna
-                      rawPost childAtZero
+                      rawPost childFork childAtZero
                       (fun childTarget => (childAt.2 childTarget).1)
                       childPrecondition
               have interPre : prorataSpec.Pre ca sevm inter :=
@@ -497,14 +516,15 @@ theorem Exec.CoreProrataAccounting.nextSome
                         (Execution.committedPost raw childCommitted).state) := by
                 intro childCommitted
                 exact ihChild child childCommitted childAt childPrecondition
-                  childDirect childCaller blockIndex transactionIndex
+                  childDirect childCaller childFork blockIndex transactionIndex
                   (framePath ++ [nextChild]) 0
               rcases Xinst.foreignSomeAccountingReplay spawnEq frameRun
-                  resumeRun.symm target_ne sumNof childBody with
+                  resumeRun.symm target_ne hfork sumNof childBody with
                 ⟨headSteps, headReplay⟩
               rcases ihNext next committed installedInter interPre
                   (fun target => (target_ne target).elim)
                   (fun target => (target_ne target).elim)
+                  hfork
                   blockIndex transactionIndex framePath (nextChild + 1) with
                 ⟨tailSteps, tailReplay⟩
               rw [RealizedSnapshot.execEntry_of_target_ne target_ne]
@@ -565,6 +585,7 @@ theorem Exec.prorataAccountingReplay_of_messageRoot
       initEvm (msg.withBenv entry))
     (committed : Execution.commits out = true)
     (ready : AccountingMessageReady ca msg)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (blockIndex : Nat) (transactionIndex : Option Nat) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
@@ -612,7 +633,7 @@ theorem Exec.prorataAccountingReplay_of_messageRoot
   have all := Exec.coreProrataAccounting (ca := ca)
   have core := all 0 (initSevm (msg.withBenv entry))
     (initDevm (msg.withBenv entry)) out run installed
-  exact core run committed installed precondition direct caller
+  exact core run committed installed precondition direct caller hfork
     blockIndex transactionIndex [] 0
 
 /-- PRORATA's realized accounting as an `AccountingLadder`.  Its ladder-level
@@ -629,9 +650,9 @@ def accountingLadder (ca : Adr) :
       actor := none }
   root := by
     intro blockIndex transactionIndex msg entry pc sevm pre out run transfer
-      evmEq committed runReady callerNe _
+      evmEq committed runReady callerNe hfork sumNof
     exact Exec.prorataAccountingReplay_of_messageRoot run transfer evmEq
-      committed ⟨runReady, callerNe⟩ blockIndex transactionIndex
+      committed ⟨runReady, callerNe⟩ hfork blockIndex transactionIndex
   preserves := prorataSpec_preserves ca
 
 /-- A retained raw message realizes a complete PRORATA accounting replay from
@@ -642,12 +663,13 @@ theorem retainedProcessMessageAccountingReplay
     {ca : Adr} {msg : Msg} {post : Devm}
     (trace : _root_.Blanc.ExecutionTrace.ProcessMessageTrace msg (.ok post))
     (ready : AccountingMessageReady ca msg)
+    (hfork : CoveredFork msg.benv.stat.fork)
     (blockIndex : Nat) (transactionIndex : Option Nat) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca msg.benv.state) steps
         (RealizedSnapshot.ofState ca post.state) :=
-  (accountingLadder ca).processMessage trace ready.runReady ready.caller_ne
+  (accountingLadder ca).processMessage trace ready.runReady ready.caller_ne hfork
     ready.runReady.ready.state.side blockIndex transactionIndex
 
 /-- CREATE counterpart of `retainedProcessMessageAccountingReplay`.  Fresh
@@ -658,6 +680,7 @@ theorem retainedProcessCreateMessageAccountingReplay
     (trace :
       _root_.Blanc.ExecutionTrace.ProcessCreateMessageTrace msg (.ok post))
     (ready : AccountingMessageReady ca msg)
+    (hfork : CoveredFork msg.benv.stat.fork)
     (targetNone : msg.target.isNone = true)
     (targetNe : msg.currentTarget ≠ ca)
     (fresh : msg.benv.state.getStor msg.currentTarget = .empty)
@@ -666,7 +689,7 @@ theorem retainedProcessCreateMessageAccountingReplay
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca msg.benv.state) steps
         (RealizedSnapshot.ofState ca post.state) :=
-  (accountingLadder ca).processCreateMessage trace ready.runReady
+  (accountingLadder ca).processCreateMessage trace ready.runReady hfork
     ready.runReady.ready.state.side targetNone targetNe fresh blockIndex
     transactionIndex
 
@@ -682,13 +705,14 @@ theorem retainedMessageCallAccountingReplay
     {ca : Adr} {msg : Msg} {state : State} {out : MsgCallOutput}
     (trace : _root_.Blanc.ExecutionTrace.MessageCallTrace msg state out)
     (ready : AccountingMessageReady ca msg)
+    (hfork : CoveredFork msg.benv.stat.fork)
     (blockIndex : Nat) (transactionIndex : Option Nat) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca msg.benv.state) steps
         (RealizedSnapshot.ofState ca state) :=
   (accountingLadder ca).messageCall trace ready.runReady ready.caller_ne
-    ready.runReady.ready.state.side blockIndex transactionIndex
+    ready.runReady.ready.state.side hfork blockIndex transactionIndex
 
 end Prorata
 

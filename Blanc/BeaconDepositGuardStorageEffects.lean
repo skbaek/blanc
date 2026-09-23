@@ -21,9 +21,9 @@ theorem depositLengthGuard_storageEffectRun
     (hwordPush : pushCost (word * 32).toBytes.sig = 3)
     (hexpectedPush : pushCost expected.toBytes.sig = 3)
     (htail : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], memory, G⟩) rest ex effects) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex effects) :
     Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], memory, G + 28⟩)
+      (base.setMach ⟨[], memory, G + 28, base.stateGas⟩)
       (loadWord word +++ pushB256 expected ::: eq ::: iszero :::
         ((.call slot) <?> rest)) ex effects := by
   have hmod : memory.size % 32 = 0 := by
@@ -36,7 +36,7 @@ theorem depositLengthGuard_storageEffectRun
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_nil]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_mload_of
@@ -50,14 +50,14 @@ theorem depositLengthGuard_storageEffectRun
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [List.length_nil]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_pushB256 (G := G + 19) hexpectedPush
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_binary
@@ -68,7 +68,7 @@ theorem depositLengthGuard_storageEffectRun
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [List.length_nil]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_unary
       (r := .iszero) (f := (B256.eqCheck · 0))
@@ -77,7 +77,7 @@ theorem depositLengthGuard_storageEffectRun
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [List.length_nil]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
   apply Func.StorageEffectRun.zero
     (by
       simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
@@ -85,7 +85,7 @@ theorem depositLengthGuard_storageEffectRun
     (Devm.popBurnBy_setMach (s := []) (G := G)
       (by simp only [Devm.stack_setMach])
       (by simp only [Devm.gasLeft_setMach, gVerylow, gHigh]))
-  simpa only [Devm.setMach_setMach, Devm.memory_setMach] using htail
+  simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using htail
 
 /-- The three successful decoded-length guards preserve exact chronology. -/
 theorem depositLengthGuards_storageEffectRun
@@ -101,9 +101,9 @@ theorem depositLengthGuards_storageEffectRun
     (hwithdrawal : withdrawalCredentials.length = 32)
     (hsignature : signature.length = 96)
     (htail : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], memory, G⟩) rest ex effects) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex effects) :
     Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], memory, G + 84⟩)
+      (base.setMach ⟨[], memory, G + 84, base.stateGas⟩)
       (loadWord 3 +++ pushB256 48 ::: eq ::: iszero :::
         ((.call pubkeyLengthErrorSlot) <?>
           (loadWord 4 +++ pushB256 32 ::: eq ::: iszero :::
@@ -147,9 +147,9 @@ theorem depositValueLowerGuard_storageEffectRun
     {effects : List (Adr × B256 × B256)}
     (hlower : Nat.toB256 oneEther ≤ sevm.value)
     (htail : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], memory, G⟩) rest ex effects) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex effects) :
     Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], memory, G + 21⟩)
+      (base.setMach ⟨[], memory, G + 21, base.stateGas⟩)
       (pushB256 (Nat.toB256 oneEther) ::: callvalue ::: lt :::
         ((.call slot) <?> rest)) ex effects := by
   apply Func.StorageEffectRun.next_effectNeutral
@@ -159,7 +159,7 @@ theorem depositValueLowerGuard_storageEffectRun
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [Devm.stack_setMach, List.length_nil]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_pushItem
@@ -169,7 +169,7 @@ theorem depositValueLowerGuard_storageEffectRun
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_binary
       (r := .lt) (f := B256.ltCheck) (cost := gVerylow)
@@ -180,7 +180,7 @@ theorem depositValueLowerGuard_storageEffectRun
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [List.length_nil]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
   apply Func.StorageEffectRun.zero
     (by
       simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
@@ -188,7 +188,7 @@ theorem depositValueLowerGuard_storageEffectRun
     (Devm.popBurnBy_setMach (s := []) (G := G)
       (by simp only [Devm.stack_setMach])
       (by simp only [Devm.gasLeft_setMach, gVerylow, gHigh]))
-  simpa only [Devm.setMach_setMach, Devm.memory_setMach] using htail
+  simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using htail
 
 /-- The successful gwei-multiple guard preserves exact chronology. -/
 theorem depositGweiMultipleGuard_storageEffectRun
@@ -197,9 +197,9 @@ theorem depositGweiMultipleGuard_storageEffectRun
     {effects : List (Adr × B256 × B256)}
     (hgwei : sevm.value % Nat.toB256 oneGwei = 0)
     (htail : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], memory, G⟩) rest ex effects) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex effects) :
     Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], memory, G + 23⟩)
+      (base.setMach ⟨[], memory, G + 23, base.stateGas⟩)
       (pushB256 (Nat.toB256 oneGwei) ::: callvalue ::: mod :::
         ((.call slot) <?> rest)) ex effects := by
   apply Func.StorageEffectRun.next_effectNeutral
@@ -209,7 +209,7 @@ theorem depositGweiMultipleGuard_storageEffectRun
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [Devm.stack_setMach, List.length_nil]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_pushItem
@@ -219,7 +219,7 @@ theorem depositGweiMultipleGuard_storageEffectRun
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_binary
       (r := .mod) (f := (· % ·)) (cost := gLow)
@@ -230,7 +230,7 @@ theorem depositGweiMultipleGuard_storageEffectRun
       (by simp only [Devm.gasLeft_setMach, gLow])
       (by simp only [List.length_nil]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
   apply Func.StorageEffectRun.zero
     (by
       simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
@@ -238,7 +238,7 @@ theorem depositGweiMultipleGuard_storageEffectRun
     (Devm.popBurnBy_setMach (s := []) (G := G)
       (by simp only [Devm.stack_setMach])
       (by simp only [Devm.gasLeft_setMach, gVerylow, gHigh]))
-  simpa only [Devm.setMach_setMach, Devm.memory_setMach] using htail
+  simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using htail
 
 /-- The successful upper-value guard preserves exact chronology and carries
 the expanded decoded-memory image into event staging. -/
@@ -252,9 +252,9 @@ theorem depositAmountUpperGuard_storageEffectRun
     (hupper : amount ≤ Nat.toB256 (2 ^ 64 - 1))
     (htail : Func.StorageEffectRun fs sevm
       (base.setMach
-        ⟨[], memory.write 672 amount.toBytes, G⟩) rest ex effects) :
+        ⟨[], memory.write 672 amount.toBytes, G, base.stateGas⟩) rest ex effects) :
     Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], memory, G + 86⟩)
+      (base.setMach ⟨[], memory, G + 86, base.stateGas⟩)
       (pushB256 (Nat.toB256 oneGwei) ::: callvalue ::: div ::: dup 0 :::
         mstoreAt amountWord +++
         pushB256 (Nat.toB256 (2 ^ 64 - 1)) ::: lt :::
@@ -266,7 +266,7 @@ theorem depositAmountUpperGuard_storageEffectRun
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [Devm.stack_setMach, List.length_nil]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_pushItem
@@ -276,7 +276,7 @@ theorem depositAmountUpperGuard_storageEffectRun
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_binary
       (r := .div) (f := (· / ·)) (cost := gLow)
@@ -286,14 +286,14 @@ theorem depositAmountUpperGuard_storageEffectRun
       (by simp only [Devm.gasLeft_setMach, gLow])
       (by simp only [List.length_nil]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_dup (n := 0) (w := amount) (G := G + 73) rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach, mstoreAt, prepend]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_pushB256 (w := amountWord * 32)
@@ -303,13 +303,13 @@ theorem depositAmountUpperGuard_storageEffectRun
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_mstore_of
       (sevm := sevm)
       (devm := base.setMach
-        ⟨amountWord * 32 :: amount :: amount :: [], memory, G + 70⟩)
+        ⟨amountWord * 32 :: amount :: amount :: [], memory, G + 70, base.stateGas⟩)
       (i := amountWord * 32) (v := amount) (s := amount :: [])
       (G := G + 19) (e := 48) rfl
       (by
@@ -317,7 +317,7 @@ theorem depositAmountUpperGuard_storageEffectRun
         exact Devm.extCost_of_size hmem.size_eq (by decide +kernel))
       (by simp only [Devm.gasLeft_setMach, gVerylow]) rfl)
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_pushB256
       (w := Nat.toB256 (2 ^ 64 - 1)) (c := gVerylow) (G := G + 16)
@@ -326,7 +326,7 @@ theorem depositAmountUpperGuard_storageEffectRun
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_binary
@@ -338,7 +338,7 @@ theorem depositAmountUpperGuard_storageEffectRun
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [List.length_nil]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
   apply Func.StorageEffectRun.zero
     (by
       simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
@@ -346,7 +346,7 @@ theorem depositAmountUpperGuard_storageEffectRun
     (Devm.popBurnBy_setMach (s := []) (G := G)
       (by simp only [Devm.stack_setMach])
       (by simp only [Devm.gasLeft_setMach, gVerylow, gHigh]))
-  simpa only [Devm.setMach_setMach, Devm.memory_setMach,
+  simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
     show (amountWord * 32 : B256).toNat = 672 by decide +kernel] using htail
 
 /-- The complete six-guard success traversal preserves exact chronology. -/
@@ -365,17 +365,17 @@ theorem depositGuards_storageEffectRun
     (hgwei : sevm.value % Nat.toB256 oneGwei = 0)
     (hupper : amount ≤ Nat.toB256 (2 ^ 64 - 1))
     (hbody : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], depositEventInputMemory sevm.data amount, G⟩)
+      (base.setMach ⟨[], depositEventInputMemory sevm.data amount, G, base.stateGas⟩)
       (stageDepositEvent +++ depositAfterEvent) ex effects) :
     Func.StorageEffectRun fs sevm
       (base.setMach
-        ⟨[], depositDecodedMemory sevm.data, G + depositGuardsGas⟩)
+        ⟨[], depositDecodedMemory sevm.data, G + depositGuardsGas, base.stateGas⟩)
       depositBody ex effects := by
   let memory := depositDecodedMemory sevm.data
   have hcarrier : DepositDecodedMemoryCarrier memory sevm.data :=
     depositDecodedMemory_carrier sevm.data
   have hbody' : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], memory.write 672 amount.toBytes, G⟩)
+      (base.setMach ⟨[], memory.write 672 amount.toBytes, G, base.stateGas⟩)
       (stageDepositEvent +++ depositAfterEvent) ex effects := by
     simpa only [memory, depositEventInputMemory] using hbody
   have hupperRun := depositAmountUpperGuard_storageEffectRun

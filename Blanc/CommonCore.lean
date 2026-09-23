@@ -513,6 +513,21 @@ def Ninst.toBytes : Ninst → Bytes
   | .reg o => [Rinst.toUInt8 o]
   | .exec o => [Xinst.toUInt8 o]
   | .push bs _ => pushToB8L bs
+  | .dupn a => [0xE6, a]
+  | .swapn a => [0xE7, a]
+  | .exchange a => [0xE8, a]
+
+/-- Whether Jaune accepts an EIP-8024 immediate: `decodeSingle` for
+`DUPN`/`SWAPN`, `decodePair` for `EXCHANGE`. Every other instruction is
+accepted unconditionally. `Func.compile` rejects forbidden immediates:
+Jaune's backward scan provably cannot advance past one (it conservatively
+reads a `PUSH`-byte immediate as covering the byte after it), so emitting
+one would break the boundary walk's completeness over compiled code. -/
+def Ninst.immAccepted : Ninst → Bool
+  | .dupn a => decide (decodeSingle a ≠ none)
+  | .swapn a => decide (decodeSingle a ≠ none)
+  | .exchange a => decide (decodePair a ≠ none)
+  | _ => true
 
 def compsize : Func → Nat
   | .last _ => 1
@@ -527,6 +542,7 @@ def table : Nat → List Func → List (Nat × Func)
 def Func.compile (l : List (Nat × Func)) (n : Nat) : Func → Option Bytes
   | .last o => pure [o.toUInt8]
   | .next i p => do
+    guard (Ninst.immAccepted i)
     let p_bts ← Func.compile l (n + i.size) p
     pure <| Ninst.toBytes i ++ p_bts
   | .branch p q => do
@@ -873,7 +889,18 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
     split <;>
     try { rename (UInt8.toInstType _ = _) => h
           rw [rw, Rinst.toInstType_toUInt8] at h; cases h }
-    rw [rw, toUInt8_toRinst]; rfl
+    -- `Rinst.toUInt8` never denotes an EIP-8024 stack-access byte: its
+    -- `toRinst` round-trip lands on `some`, while those bytes decode to none.
+    have hnone6 : UInt8.toRinst 230 = none := rfl
+    have hnone7 : UInt8.toRinst 231 = none := rfl
+    have hnone8 : UInt8.toRinst 232 = none := rfl
+    have hsome := toUInt8_toRinst (i := r)
+    simp only [rw]
+    split
+    · simp_all
+    · simp_all
+    · simp_all
+    · rw [toUInt8_toRinst]; rfl
   case exec x =>
     simp [Ninst.toBytes] at slice
     have eq := List.get?_eq_of_slice slice
@@ -886,6 +913,99 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
           rw [rw, Xinst.toInstType_toUInt8] at h; cases h }
     rw [rw, toUInt8_toXinst]; rfl
   case push xs le => apply (pushAt_of_slice le slice).2
+  case dupn a =>
+    simp only [Ninst.toBytes] at slice
+    rw [List.slice_cons_iff] at slice
+    rcases slice with ⟨eq0, slice1⟩
+    rw [List.slice_cons_iff] at slice1
+    rcases slice1 with ⟨eq1, _⟩
+    simp only [Ninst.At, ByteArray.getInst]
+    rw [dif_pos (ByteArray.lt_size_of_getElem?_eq_some eq0)]
+    have hbyte0 := ByteArray.getElem_of_getElem?_eq_some eq0
+      (ByteArray.lt_size_of_getElem?_eq_some eq0)
+    have hlt1 : pc + 1 < code.size :=
+      ByteArray.lt_size_of_getElem?_eq_some eq1
+    have hbyte1 : code[pc + 1] = a :=
+      ByteArray.getElem_of_getElem?_eq_some eq1 hlt1
+    have hD : code.byteD (pc + 1) = a := by
+      rw [ByteArray.byteD, dif_pos hlt1, hbyte1]
+    have hR : (0xE6 : UInt8).toInstType = .R := rfl
+    have hmapnone : (UInt8.toRinst 0xE6 <&> (Inst.next ∘ Ninst.reg)) = none := rfl
+    split <;>
+    try { rename (UInt8.toInstType _ = _) => h
+          rw [hbyte0, hR] at h; cases h }
+    split
+    · simp only [hD]
+    · simp_all
+    · simp_all
+    · simp only [hbyte0, hmapnone]
+      rename_i hne230 hne231 hne232
+      have hEq : ∀ (p : UInt8.toInstType code[pc] = InstType.R), p ≍ hR :=
+        hbyte0.symm ▸ (fun (p : UInt8.toInstType 230 = InstType.R) =>
+          by rw [proof_irrel p hR])
+      exact False.elim (hne230 hR hbyte0 (hEq _))
+  case swapn a =>
+    simp only [Ninst.toBytes] at slice
+    rw [List.slice_cons_iff] at slice
+    rcases slice with ⟨eq0, slice1⟩
+    rw [List.slice_cons_iff] at slice1
+    rcases slice1 with ⟨eq1, _⟩
+    simp only [Ninst.At, ByteArray.getInst]
+    rw [dif_pos (ByteArray.lt_size_of_getElem?_eq_some eq0)]
+    have hbyte0 := ByteArray.getElem_of_getElem?_eq_some eq0
+      (ByteArray.lt_size_of_getElem?_eq_some eq0)
+    have hlt1 : pc + 1 < code.size :=
+      ByteArray.lt_size_of_getElem?_eq_some eq1
+    have hbyte1 : code[pc + 1] = a :=
+      ByteArray.getElem_of_getElem?_eq_some eq1 hlt1
+    have hD : code.byteD (pc + 1) = a := by
+      rw [ByteArray.byteD, dif_pos hlt1, hbyte1]
+    have hR : (0xE7 : UInt8).toInstType = .R := rfl
+    have hmapnone : (UInt8.toRinst 0xE7 <&> (Inst.next ∘ Ninst.reg)) = none := rfl
+    split <;>
+    try { rename (UInt8.toInstType _ = _) => h
+          rw [hbyte0, hR] at h; cases h }
+    split
+    · simp_all
+    · simp only [hD]
+    · simp_all
+    · simp only [hbyte0, hmapnone]
+      rename_i hne230 hne231 hne232
+      have hEq : ∀ (p : UInt8.toInstType code[pc] = InstType.R), p ≍ hR :=
+        hbyte0.symm ▸ (fun (p : UInt8.toInstType 231 = InstType.R) =>
+          by rw [proof_irrel p hR])
+      exact False.elim (hne231 hR hbyte0 (hEq _))
+  case exchange a =>
+    simp only [Ninst.toBytes] at slice
+    rw [List.slice_cons_iff] at slice
+    rcases slice with ⟨eq0, slice1⟩
+    rw [List.slice_cons_iff] at slice1
+    rcases slice1 with ⟨eq1, _⟩
+    simp only [Ninst.At, ByteArray.getInst]
+    rw [dif_pos (ByteArray.lt_size_of_getElem?_eq_some eq0)]
+    have hbyte0 := ByteArray.getElem_of_getElem?_eq_some eq0
+      (ByteArray.lt_size_of_getElem?_eq_some eq0)
+    have hlt1 : pc + 1 < code.size :=
+      ByteArray.lt_size_of_getElem?_eq_some eq1
+    have hbyte1 : code[pc + 1] = a :=
+      ByteArray.getElem_of_getElem?_eq_some eq1 hlt1
+    have hD : code.byteD (pc + 1) = a := by
+      rw [ByteArray.byteD, dif_pos hlt1, hbyte1]
+    have hR : (0xE8 : UInt8).toInstType = .R := rfl
+    have hmapnone : (UInt8.toRinst 0xE8 <&> (Inst.next ∘ Ninst.reg)) = none := rfl
+    split <;>
+    try { rename (UInt8.toInstType _ = _) => h
+          rw [hbyte0, hR] at h; cases h }
+    split
+    · simp_all
+    · simp_all
+    · simp only [hD]
+    · simp only [hbyte0, hmapnone]
+      rename_i hne230 hne231 hne232
+      have hEq : ∀ (p : UInt8.toInstType code[pc] = InstType.R), p ≍ hR :=
+        hbyte0.symm ▸ (fun (p : UInt8.toInstType 232 = InstType.R) =>
+          by rw [proof_irrel p hR])
+      exact False.elim (hne232 hR hbyte0 (hEq _))
 
 
 lemma of_subcode {cd k} :
@@ -1185,7 +1305,7 @@ lemma Devm.pushBurn_of_run {x : B256} {pre inter : Devm} {cost : Nat} :
           Devm.memory, Devm.gasLeft, Devm.logs, Devm.refundCounter, Devm.output,
           Devm.accountsToDelete, Devm.returnData, Devm.error, Devm.accessedAddresses,
           Devm.accessedStorageKeys, Devm.state, Devm.createdAccounts,
-          Devm.transientStorage]
+          Devm.transientStorage, Devm.stateGas]
     · contradiction
 
 lemma Devm.pop_of_pop {x : B256} {devm devm' : Devm} :
@@ -1250,6 +1370,9 @@ lemma Devm.popBurn_of_pop_of_burn
   · exact Eq.trans pop.state burn.state
   · exact Eq.trans pop.createdAccounts burn.createdAccounts
   · exact Eq.trans pop.transientStorage burn.transientStorage
+  · exact Eq.trans pop.stateGas burn.stateGas
+  · exact Eq.trans pop.accountReads burn.accountReads
+  · exact Eq.trans pop.storageReads burn.storageReads
 
 lemma of_jumpi_run {pc sevm pre pc' inter}
     ( run :
@@ -1429,32 +1552,32 @@ lemma Devm.pushBurn_cons_popBurn_cons
     (h : Devm.PushBurn (x :: xs) s s')
     (h' : Devm.PopBurn (y :: ys) s' s'') :
     (x = y ∧ ∃ st, Devm.PushBurn xs s st ∧ Devm.PopBurn ys st s'') := by
-  rcases h with ⟨h_stack, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_return, h_err, h_acc, h_keys, h_state, h_cas, h_trans⟩
-  rcases h' with ⟨h'_stack, h'_mem, h'_gas, h'_logs, h'_refund, h'_out, h'_del, h'_return, h'_err, h'_acc, h'_keys, h'_cas, h'_state, h'_trans⟩
+  rcases h with ⟨h_stack, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_return, h_err, h_acc, h_keys, h_state, h_cas, h_trans, h_sg, h_ar, h_sr⟩
+  rcases h' with ⟨h'_stack, h'_mem, h'_gas, h'_logs, h'_refund, h'_out, h'_del, h'_return, h'_err, h'_acc, h'_keys, h'_cas, h'_state, h'_trans, h'_sg, h'_ar, h'_sr⟩
   have push_pop_stack := Stack.push_cons_pop_cons h_stack h'_stack
   rcases push_pop_stack with ⟨h_eq, stk, h_push, h_pop⟩
   refine' ⟨
     h_eq,
     s'.withStack stk,
-    ⟨h_push, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_return, h_err, h_acc, h_keys, h_state, h_cas, h_trans⟩,
-    ⟨h_pop, h'_mem, h'_gas, h'_logs, h'_refund, h'_out, h'_del, h'_return, h'_err, h'_acc, h'_keys, h'_cas, h'_state, h'_trans⟩
+    ⟨h_push, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_return, h_err, h_acc, h_keys, h_state, h_cas, h_trans, h_sg, h_ar, h_sr⟩,
+    ⟨h_pop, h'_mem, h'_gas, h'_logs, h'_refund, h'_out, h'_del, h'_return, h'_err, h'_acc, h'_keys, h'_cas, h'_state, h'_trans, h'_sg, h'_ar, h'_sr⟩
   ⟩
 
 lemma Devm.burn_of_popBurn_nil {s s'} (h : Devm.PopBurn [] s s') :
     Devm.Burn s s' := by
-  refine ⟨?_, h.memory, h.gasLeft, h.logs, h.refundCounter, h.output, h.accountsToDelete, h.returnData, h.error, h.accessedAddresses, h.accessedStorageKeys, h.state, h.createdAccounts, h.transientStorage⟩; change s.stack = s'.stack; simpa only [Stack.Pop, Split, List.nil_append] using h.stack
+  refine ⟨?_, h.memory, h.gasLeft, h.logs, h.refundCounter, h.output, h.accountsToDelete, h.returnData, h.error, h.accessedAddresses, h.accessedStorageKeys, h.state, h.createdAccounts, h.transientStorage, h.stateGas, h.accountReads, h.storageReads⟩; change s.stack = s'.stack; simpa only [Stack.Pop, Split, List.nil_append] using h.stack
 
 lemma Devm.burn_of_pushBurn_nil {s s'} (h : Devm.PushBurn [] s s') :
     Devm.Burn s s' := by
   rcases h with
     ⟨h_stack, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_return, h_err,
-      h_acc, h_keys, h_state, h_cas, h_trans⟩
-  refine ⟨?_, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_return, h_err, h_acc, h_keys, h_state, h_cas, h_trans⟩; change s.stack = s'.stack; simpa only [Stack.Push, Split, List.nil_append] using h_stack.symm
+      h_acc, h_keys, h_state, h_cas, h_trans, h_sg, h_ar, h_sr⟩
+  refine ⟨?_, h_mem, h_gas, h_logs, h_refund, h_out, h_del, h_return, h_err, h_acc, h_keys, h_state, h_cas, h_trans, h_sg, h_ar, h_sr⟩; change s.stack = s'.stack; simpa only [Stack.Push, Split, List.nil_append] using h_stack.symm
 
 lemma Devm.burn_trans {x y z} (h1 : Devm.Burn x y) (h2 : Devm.Burn y z) : Devm.Burn x z := by
-  rcases h1 with ⟨h1_stack, h1_mem, h1_gas, h1_logs, h1_refund, h1_out, h1_del, h1_return, h1_err, h1_acc, h1_keys, h1_state, h1_cas, h1_trans⟩
-  rcases h2 with ⟨h2_stack, h2_mem, h2_gas, h2_logs, h2_refund, h2_out, h2_del, h2_return, h2_err, h2_acc, h2_keys, h2_state, h2_cas, h2_trans⟩
-  refine' ⟨Eq.trans h1_stack h2_stack, Eq.trans h1_mem h2_mem, Nat.le_trans h2_gas h1_gas, Eq.trans h1_logs h2_logs, Eq.trans h1_refund h2_refund, Eq.trans h1_out h2_out, Eq.trans h1_del h2_del, Eq.trans h1_return h2_return, Eq.trans h1_err h2_err, Eq.trans h1_acc h2_acc, Eq.trans h1_keys h2_keys, Eq.trans h1_state h2_state, Eq.trans h1_cas h2_cas, Eq.trans h1_trans h2_trans⟩
+  rcases h1 with ⟨h1_stack, h1_mem, h1_gas, h1_logs, h1_refund, h1_out, h1_del, h1_return, h1_err, h1_acc, h1_keys, h1_state, h1_cas, h1_trans, h1_sg, h1_ar, h1_sr⟩
+  rcases h2 with ⟨h2_stack, h2_mem, h2_gas, h2_logs, h2_refund, h2_out, h2_del, h2_return, h2_err, h2_acc, h2_keys, h2_state, h2_cas, h2_trans, h2_sg, h2_ar, h2_sr⟩
+  refine' ⟨Eq.trans h1_stack h2_stack, Eq.trans h1_mem h2_mem, Nat.le_trans h2_gas h1_gas, Eq.trans h1_logs h2_logs, Eq.trans h1_refund h2_refund, Eq.trans h1_out h2_out, Eq.trans h1_del h2_del, Eq.trans h1_return h2_return, Eq.trans h1_err h2_err, Eq.trans h1_acc h2_acc, Eq.trans h1_keys h2_keys, Eq.trans h1_state h2_state, Eq.trans h1_cas h2_cas, Eq.trans h1_trans h2_trans, Eq.trans h1_sg h2_sg, Eq.trans h1_ar h2_ar, Eq.trans h1_sr h2_sr⟩
 
 lemma Devm.popBurn_of_burn_of_popBurn {devm devm' devm''} {xs}
     (burn : Devm.Burn devm devm')
@@ -1475,6 +1598,9 @@ lemma Devm.popBurn_of_burn_of_popBurn {devm devm' devm''} {xs}
   · exact Eq.trans burn.state popBurn.state
   · exact Eq.trans burn.createdAccounts popBurn.createdAccounts
   · exact Eq.trans burn.transientStorage popBurn.transientStorage
+  · exact Eq.trans burn.stateGas popBurn.stateGas
+  · exact Eq.trans burn.accountReads popBurn.accountReads
+  · exact Eq.trans burn.storageReads popBurn.storageReads
 
 lemma Devm.popBurn_of_popBurn_of_pop {devm devm' devm''} {xs}
     (popBurn : Devm.PopBurn xs devm devm')
@@ -1495,6 +1621,9 @@ lemma Devm.popBurn_of_popBurn_of_pop {devm devm' devm''} {xs}
   · exact Eq.trans popBurn.state burn.state
   · exact Eq.trans popBurn.createdAccounts burn.createdAccounts
   · exact Eq.trans popBurn.transientStorage burn.transientStorage
+  · exact Eq.trans popBurn.stateGas burn.stateGas
+  · exact Eq.trans popBurn.accountReads burn.accountReads
+  · exact Eq.trans popBurn.storageReads burn.storageReads
 
 
 
@@ -1522,7 +1651,8 @@ lemma Func.length_compile {l k p bs} (h : Func.compile l k p = some bs) :
     rw [ihp h_cp, ihq h_cq]; omega
   | last o => simp [compile] at h; rw [← h]; rfl
   | next o p ih =>
-    rcases of_bind_eq_some h with ⟨bs', h, h'⟩;
+    rcases of_bind_eq_some h with ⟨_, _, h'⟩; clear h
+    rcases of_bind_eq_some h' with ⟨bs', h, h'⟩;
     simp at h'; rw [← h']
     simp [List.length_append, compsize]
     rw [ih h, Nat.add_comm]
@@ -1582,7 +1712,7 @@ through the same traversal avoids the quadratic re-traversal that a nested
 branch tree would incur by separately calling `compsize` at every fork. -/
 inductive Func.CompileShape : Type
   | last
-  | next (size : Nat) (rest : Func.CompileShape)
+  | next (size : Nat) (acc : Bool) (rest : Func.CompileShape)
   | branch (left right : Func.CompileShape)
   | call (index : Nat)
 deriving DecidableEq
@@ -1591,13 +1721,13 @@ deriving DecidableEq
 widths, fork structure, and table-call indices. -/
 def Func.compileShape : Func → Func.CompileShape
   | .last _ => .last
-  | .next i p => .next i.size p.compileShape
+  | .next i p => .next i.size (Ninst.immAccepted i) p.compileShape
   | .branch p q => .branch p.compileShape q.compileShape
   | .call k => .call k
 
 private def Func.CompileShape.compsize : Func.CompileShape → Nat
   | .last => 1
-  | .next size p => p.compsize + size
+  | .next size _ p => p.compsize + size
   | .branch p q => p.compsize + q.compsize + 5
   | .call _ => 4
 
@@ -1641,7 +1771,7 @@ private def Func.compileDecision (l : List (Nat × Func)) (n : Nat) :
   | .last _ => (true, 1)
   | .next i p =>
       let r := Func.compileDecision l (n + i.size) p
-      (r.1, r.2 + i.size)
+      (Ninst.immAccepted i && r.1, r.2 + i.size)
   | .branch p q =>
       let rp := Func.compileDecision l (n + 4) p
       let loc := n + rp.2 + 4
@@ -1683,9 +1813,9 @@ private theorem Func.compileDecision_eq_of_compileShape
       cases q with
       | next j q =>
           simp only [Func.compileShape, Func.CompileShape.next.injEq] at hp
-          rcases hp with ⟨hsize, hshape⟩
+          rcases hp with ⟨hsize, hacc, hshape⟩
           simp only [Func.compileDecision]
-          rw [hsize, ih hshape]
+          rw [hsize, hacc, ih hshape]
       | last o | branch _ _ | call _ => simp [Func.compileShape] at hp
   | branch p r ihp ihr =>
       cases q with
@@ -1809,7 +1939,10 @@ theorem Func.isSome_compile (l : List (Nat × Func)) (n : Nat) (p : Func) :
           have hs := ih (n := n + i.size)
           rw [h] at hs
           simp only [Option.isSome_some] at hs
-          simp [Func.compile, Func.compiles, Func.compileDecision, h, hs]
+          cases hacc : Ninst.immAccepted i
+          · simp [Func.compile, Func.compiles, Func.compileDecision, hacc]
+          · simp [Func.compile, Func.compiles, Func.compileDecision, h, hs, hacc,
+              guard]
   | call k =>
       generalize h : l[k]? = entry
       cases entry with
@@ -2029,10 +2162,10 @@ theorem correct_core (f : Func) (fs : List Func) :
     exact Func.Run.last <| Linst.run_of_at exc <| Linst.at_of_slice sub
   | .next n p =>
     rcases of_subcode sub with ⟨cd, h_eq', h_slice⟩;
-    rcases of_bind_eq_some h_eq' with ⟨cd', h_eq'', h_rw⟩; clear h_eq'
+    rcases of_bind_eq_some h_eq' with ⟨_, _, h_rw⟩; clear h_eq'
+    rcases of_bind_eq_some h_rw with ⟨cd', h_eq'', h_rw⟩;
     simp [pure] at h_rw;
     rw [← h_rw] at h_slice;
-    clear h_rw cd
     have h_at : Ninst.At sevm.code pc n := by
       apply Ninst.at_of_slice
       apply List.slice_prefix h_slice

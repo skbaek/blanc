@@ -395,7 +395,8 @@ def contract_paths(manifest: dict[str, object]) -> list[pathlib.Path]:
     layering = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(layering)
     classified = {
-        ROOT / "Blanc" / f"{module}.lean"
+        # Layering names nested modules with dots (`A.B` is `Blanc/A/B.lean`).
+        ROOT / "Blanc" / (module.replace(".", "/") + ".lean")
         for modules in layering.CONTRACTS.values()
         for module in modules
     }

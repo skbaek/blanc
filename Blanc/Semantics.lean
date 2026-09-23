@@ -88,6 +88,7 @@ def Rinst.toUInt8 : Rinst → UInt8
   | .basefee      => 0x48
   | .blobhash     => 0x49
   | .blobbasefee  => 0x4A
+  | .slotnum      => 0x4B
   | .pop          => 0x50
   | .mload        => 0x51
   | .mstore       => 0x52
@@ -152,6 +153,9 @@ structure Devm.Rels : Type where
   (state : State → State → Prop)
   (createdAccounts : AdrSet → AdrSet → Prop)
   (transientStorage : Tra → Tra → Prop)
+  (stateGas : StateGasMeter → StateGasMeter → Prop)
+  (accountReads : AdrSet → AdrSet → Prop)
+  (storageReads : KeySet → KeySet → Prop)
 
 /-- Canonical relation between dynamic EVM states, assembled field by field. -/
 structure Devm.Rel (rels : Devm.Rels) (devm devm' : Devm) : Prop where
@@ -174,6 +178,11 @@ structure Devm.Rel (rels : Devm.Rels) (devm devm' : Devm) : Prop where
     rels.createdAccounts devm.createdAccounts devm'.createdAccounts )
   ( transientStorage :
     rels.transientStorage devm.transientStorage devm'.transientStorage )
+  (stateGas : rels.stateGas devm.stateGas devm'.stateGas)
+  ( accountReads :
+    rels.accountReads devm.meta.accountReads devm'.meta.accountReads )
+  ( storageReads :
+    rels.storageReads devm.meta.storageReads devm'.meta.storageReads )
 
 def Devm.Rels.eq : Devm.Rels :=
   {
@@ -190,7 +199,10 @@ def Devm.Rels.eq : Devm.Rels :=
     accessedStorageKeys := _root_.Eq,
     state := _root_.Eq,
     createdAccounts := _root_.Eq,
-    transientStorage := _root_.Eq
+    transientStorage := _root_.Eq,
+    stateGas := _root_.Eq,
+    accountReads := _root_.Eq,
+    storageReads := _root_.Eq
   }
 
 def Devm.Burn : Devm → Devm → Prop :=
@@ -243,8 +255,10 @@ def RunFrame (f : Frame) (xl : Xlot)
 def ExecuteCode (msg : Msg) (xl : Xlot)
     (ex : Except (EvmError × State × AdrSet × Tra) Devm) : Prop :=
   match executeCode.enter msg with
-  | .inl evm => ∃ raw, xl = .some ⟨evm, raw⟩ ∧ ex = executeCode.handleError raw
-  | .inr raw => xl = .none ∧ ex = executeCode.handleError raw
+  | .inl evm => ∃ raw, xl = .some ⟨evm, raw⟩ ∧
+    ex = executeCode.handleErrorWith msg.benv.stat.rules.stateGas raw
+  | .inr raw => xl = .none ∧
+    ex = executeCode.handleErrorWith msg.benv.stat.rules.stateGas raw
 
 def ProcessMessage (msg : Msg) (xl : Xlot)
     (ex : Except (EvmError × State × AdrSet × Tra) Devm) : Prop :=
@@ -287,6 +301,27 @@ def GenericCall
     (genericCall.step sevm devm gas value caller target codeAddress
       shouldTransferValue isStaticcall input_index input_size
       output_index output_size code disablePrecompiles)
+    xl ex
+
+def GenericCreateAmsterdam (sevm : Sevm) (state : StateGasRules) (devm : Devm)
+    (endowment : B256) (newAddress : Adr) (memoryIndex memorySize : Nat)
+    (xl : Xlot) (ex : Execution) : Prop :=
+  XStep.Run
+    (genericCreateAmsterdam.step sevm state devm endowment newAddress
+      memoryIndex memorySize)
+    xl ex
+
+def GenericCallAmsterdam (sevm : Sevm) (state : StateGasRules) (devm : Devm)
+    (gas reservoir : Nat) (value : B256)
+    (caller target codeAddress : Adr) (shouldTransferValue isStaticcall : Bool)
+    (input_index input_size output_index output_size : Nat) (code : ByteArray)
+    (disablePrecompiles newAccountCharged insufficientBalance : Bool)
+    (xl : Xlot) (ex : Execution) : Prop :=
+  XStep.Run
+    (genericCallAmsterdam.step sevm state devm gas reservoir value caller
+      target codeAddress shouldTransferValue isStaticcall input_index
+      input_size output_index output_size code disablePrecompiles
+      newAccountCharged insufficientBalance)
     xl ex
 
 def Xinst.Run (sevm : Sevm) (devm : Devm) :
@@ -377,38 +412,47 @@ the program-counter arithmetic that used to live in `exec` now lives in
 lemma Ninst.step_cont_pc {evm : Evm} {n : Ninst} {pc' : Nat} {devm' : Devm}
     (h : Ninst.step evm n = .cont pc' devm') : pc' = evm.pc + n.size := by
   unfold Ninst.step at h
-  rcases n with r | x | ⟨xs, hxs⟩ <;> simp only [] at h
+  rcases n with r | x | ⟨xs, hxs⟩ | a | a | a <;> simp only [] at h
   · exact (Step.ofExecution_cont h).1
   · unfold XStep.toStep at h
     split at h
     · exact (Step.ofExecution_cont h).1
     · cases h
   · exact (Step.ofExecution_cont h).1
+  · exact (Step.ofExecution_cont h).1
+  · exact (Step.ofExecution_cont h).1
+  · exact (Step.ofExecution_cont h).1
 
 lemma Ninst.step_spawn_pc {evm : Evm} {n : Ninst}
     {f : Frame} {rsm : Resume} {pc' : Nat}
     (h : Ninst.step evm n = .spawn f rsm pc') : pc' = evm.pc + n.size := by
   unfold Ninst.step at h
-  rcases n with r | x | ⟨xs, hxs⟩ <;> simp only [] at h
+  rcases n with r | x | ⟨xs, hxs⟩ | a | a | a <;> simp only [] at h
   · cases Step.ofExecution_ne_spawn h
   · unfold XStep.toStep at h
     split at h
     · cases Step.ofExecution_ne_spawn h
     · cases h; rfl
   · cases Step.ofExecution_ne_spawn h
+  · cases Step.ofExecution_ne_spawn h
+  · cases Step.ofExecution_ne_spawn h
+  · cases Step.ofExecution_ne_spawn h
 
 lemma Ninst.step_ne_halt_ok {evm : Evm} {n : Ninst} {devm' : Devm} :
     Ninst.step evm n ≠ .halt (.ok devm') := by
   unfold Ninst.step
-  rcases n with r | x | ⟨xs, hxs⟩ <;> simp only []
+  rcases n with r | x | ⟨xs, hxs⟩ | a | a | a <;> simp only []
   · exact Step.ofExecution_ne_halt_ok
   · unfold XStep.toStep
     split
     · exact Step.ofExecution_ne_halt_ok
     · simp
   · exact Step.ofExecution_ne_halt_ok
+  · exact Step.ofExecution_ne_halt_ok
+  · exact Step.ofExecution_ne_halt_ok
+  · exact Step.ofExecution_ne_halt_ok
 
-/-! ### The three branches of `Ninst.step`, made explicit. -/
+/-! ### The six branches of `Ninst.step`, made explicit. -/
 
 lemma Ninst.step_reg {evm : Evm} {r : Rinst} :
     Ninst.step evm (.reg r) = Step.ofExecution (evm.pc + 1) (r.run evm) := rfl
@@ -422,6 +466,48 @@ lemma Ninst.step_push {evm : Evm} {xs : Bytes} {le : xs.length ≤ 32} :
 lemma Ninst.step_exec {evm : Evm} {x : Xinst} :
     Ninst.step evm (.exec x) =
       XStep.toStep (evm.pc + 1) (Xinst.step evm.sta evm.dyna x) := rfl
+
+lemma Ninst.step_dupn {evm : Evm} {imm : UInt8} :
+    Ninst.step evm (.dupn imm) =
+      Step.ofExecution (evm.pc + 2)
+        (do if evm.sta.benvStat.rules.op.stackAccess then
+              let devm ← chargeGas gVerylow evm.dyna
+              match decodeSingle imm with
+              | none => .error ⟨.halt (.invalidOpcode .none), devm⟩
+              | some n =>
+                  match devm.stack[n - 1]? with
+                  | none => .error ⟨.halt (.stackUnderflow .none), devm⟩
+                  | some word => devm.push word
+            else
+              .error ⟨.halt (.invalidOpcode .none), evm.dyna⟩) := rfl
+
+lemma Ninst.step_swapn {evm : Evm} {imm : UInt8} :
+    Ninst.step evm (.swapn imm) =
+      Step.ofExecution (evm.pc + 2)
+        (do if evm.sta.benvStat.rules.op.stackAccess then
+              let devm ← chargeGas gVerylow evm.dyna
+              match decodeSingle imm with
+              | none => .error ⟨.halt (.invalidOpcode .none), devm⟩
+              | some n =>
+                  match Jaune.List.swap devm.stack (n - 1) with
+                  | none => .error ⟨.halt (.stackUnderflow .none), devm⟩
+                  | some stack => .ok (devm.withStack stack)
+            else
+              .error ⟨.halt (.invalidOpcode .none), evm.dyna⟩) := rfl
+
+lemma Ninst.step_exchange {evm : Evm} {imm : UInt8} :
+    Ninst.step evm (.exchange imm) =
+      Step.ofExecution (evm.pc + 2)
+        (do if evm.sta.benvStat.rules.op.stackAccess then
+              let devm ← chargeGas gVerylow evm.dyna
+              match decodePair imm with
+              | none => .error ⟨.halt (.invalidOpcode .none), devm⟩
+              | some (n, m) =>
+                  match Jaune.List.exchange devm.stack n m with
+                  | none => .error ⟨.halt (.stackUnderflow .none), devm⟩
+                  | some stack => .ok (devm.withStack stack)
+            else
+              .error ⟨.halt (.invalidOpcode .none), evm.dyna⟩) := rfl
 
 /-! ### Introducing frame relations from the frame-entry equation. -/
 
@@ -479,6 +565,15 @@ lemma benvAfterTransfer_stat {msg : Msg} {benv : Benv}
       cases hb2
       rfl
   · cases h; rfl
+
+/-- `initSevm` copies the message's block context. -/
+lemma initSevm_benvStat (msg : Msg) : (initSevm msg).benvStat = msg.benv.stat :=
+  rfl
+
+/-- `Msg.withBenv` replaces the whole block context. -/
+lemma Msg.withBenv_benvStat (msg : Msg) (benv : Benv) :
+    (msg.withBenv benv).benv.stat = benv.stat :=
+  rfl
 
 /-- Entering a frame preserves the block environment's static part.
 
@@ -563,10 +658,13 @@ lemma Ninst.step_spawn_inv {evm : Evm} {n : Ninst}
     {f : Frame} {rsm : Resume} {pc' : Nat}
     (h : Ninst.step evm n = .spawn f rsm pc') :
     ∃ x, n = .exec x ∧ Xinst.step evm.sta evm.dyna x = .spawn f rsm := by
-  rcases n with r | x | ⟨xs, hxs⟩
+  rcases n with r | x | ⟨xs, hxs⟩ | a | a | a
   · rw [Ninst.step_reg] at h; cases Step.ofExecution_ne_spawn h
   · rw [Ninst.step_exec] at h; exact ⟨x, rfl, XStep.toStep_spawn h⟩
   · rw [Ninst.step_push] at h; cases Step.ofExecution_ne_spawn h
+  · unfold Ninst.step at h; simp only [] at h; cases Step.ofExecution_ne_spawn h
+  · unfold Ninst.step at h; simp only [] at h; cases Step.ofExecution_ne_spawn h
+  · unfold Ninst.step at h; simp only [] at h; cases Step.ofExecution_ne_spawn h
 
 /-- The initial machine of an entered code frame is `initEvm` of the message,
 whichever decode branch `executeCode.enter` took. -/
@@ -597,7 +695,8 @@ lemma Frame.enter_run_inv {f : Frame} {cevm : Evm} (h : f.enter = .run cevm) :
 lemma ExecuteCode.some_inv {msg : Msg} {evm_ : Evm} {exn_ : Execution}
     {ex : Except (EvmError × State × AdrSet × Tra) Devm}
     (run : ExecuteCode msg (.some ⟨evm_, exn_⟩) ex) :
-    evm_ = initEvm msg ∧ ex = executeCode.handleError exn_ := by
+    evm_ = initEvm msg ∧
+      ex = executeCode.handleErrorWith msg.benv.stat.rules.stateGas exn_ := by
   unfold ExecuteCode at run
   rcases henter : executeCode.enter msg with evm | raw <;> rw [henter] at run
   · rcases run with ⟨raw, hxl, hex⟩
@@ -617,6 +716,29 @@ lemma executeCode.enter_inr {msg : Msg} {raw : Execution}
     split at h
     · cases h; exact ⟨adr, rfl⟩
     · cases h
+
+/-- Under `stateGas = none` the selected handler is `handleError`, textually;
+on the covered forks this bridge is `rfl`-transparent. -/
+lemma executeCode.handleErrorWith_none {raw : Execution} :
+    executeCode.handleErrorWith none raw = executeCode.handleError raw := rfl
+
+/-- Under `stateGas = some` the selected handler is `handleErrorAmsterdam`. -/
+lemma executeCode.handleErrorWith_some {s : StateGasRules} {raw : Execution} :
+    executeCode.handleErrorWith (some s) raw =
+      executeCode.handleErrorAmsterdam raw := rfl
+
+/-- The selected handler is the identity on clean results, whichever branch
+the rules select. -/
+lemma executeCode.handleErrorWith_ok {sg : Option StateGasRules}
+    {evm : Devm} :
+    executeCode.handleErrorWith sg (.ok evm) = .ok evm := by
+  cases sg <;> rfl
+
+/-- `Frame.settle` is `settleMsg` after the rules-selected handler. -/
+lemma Frame.settle_eq_settleMsg_handleErrorWith {f : Frame} {raw : Execution} :
+    f.settle raw =
+      f.settleMsg
+        (executeCode.handleErrorWith f.inner.benv.stat.rules.stateGas raw) := rfl
 
 /-- The frame-independent part of a frame relation: value transfer followed by
 code execution, before the frame's own settlement is applied.  Splitting
@@ -644,13 +766,21 @@ lemma RunFrame.decompose {f : Frame} {xl : Xlot}
   rcases hbenv : f.inner.benvAfterTransfer with e | benv <;>
     simp only [hbenv] at run
   · exact Or.inl ⟨e, rfl, run.1, run.2⟩
-  · rcases henter : executeCode.enter (f.inner.withBenv benv) with evm | raw <;>
+  · have hsg : benv.stat.rules.stateGas = f.inner.benv.stat.rules.stateGas :=
+      Msg.benvAfterTransfer_ok_stateGas hbenv
+    rcases henter : executeCode.enter (f.inner.withBenv benv) with evm | raw <;>
       simp only [henter] at run
     · rcases run with ⟨raw, hxl, hr⟩
-      exact Or.inr ⟨benv, executeCode.handleError raw, rfl,
-        by unfold ExecuteCode; rw [henter]; exact ⟨raw, hxl, rfl⟩, hr⟩
-    · exact Or.inr ⟨benv, executeCode.handleError raw, rfl,
-        by unfold ExecuteCode; rw [henter]; exact ⟨run.1, rfl⟩, run.2⟩
+      refine Or.inr ⟨benv,
+        executeCode.handleErrorWith benv.stat.rules.stateGas raw, rfl,
+        by unfold ExecuteCode; rw [henter]; exact ⟨raw, hxl, rfl⟩, ?_⟩
+      rw [hsg]
+      exact hr
+    · refine Or.inr ⟨benv,
+        executeCode.handleErrorWith benv.stat.rules.stateGas raw, rfl,
+        by unfold ExecuteCode; rw [henter]; exact ⟨run.1, rfl⟩, ?_⟩
+      rw [hsg]
+      exact run.2
 
 /-- `RunFrame` is exactly `FrameBody` composed with the frame's settlement. -/
 lemma RunFrame.iff_settleMsg {f : Frame} {xl : Xlot}
@@ -671,8 +801,18 @@ lemma RunFrame.iff_settleMsg {f : Frame} {xl : Xlot}
       rcases henter : executeCode.enter (f.inner.withBenv benv) with evm | raw <;>
         simp only [henter] at hbody ⊢
       · rcases hbody with ⟨raw, hxl, hr0⟩
-        exact ⟨raw, hxl, by rw [hr0]; rfl⟩
-      · exact ⟨hbody.1, by rw [hbody.2]; rfl⟩
+        refine ⟨raw, hxl, ?_⟩
+        rw [hr0]
+        show f.settleMsg (executeCode.handleErrorWith benv.stat.rules.stateGas raw)
+          = f.settle raw
+        rw [Msg.benvAfterTransfer_ok_stateGas hbenv]
+        exact Frame.settle_eq_settleMsg_handleErrorWith.symm
+      · refine ⟨hbody.1, ?_⟩
+        rw [hbody.2]
+        show f.settleMsg (executeCode.handleErrorWith benv.stat.rules.stateGas raw)
+          = f.settle raw
+        rw [Msg.benvAfterTransfer_ok_stateGas hbenv]
+        exact Frame.settle_eq_settleMsg_handleErrorWith.symm
 
 lemma ProcessMessage.iff_body {msg : Msg} {xl : Xlot}
     {r : Except (EvmError × State × AdrSet × Tra) Devm} :
@@ -735,13 +875,16 @@ lemma Evm.step_spawn_inv {pc : Nat} {sevm : Sevm} {devm : Devm}
   split at hs
   · cases hs
   · rename_i n hgi
-    rcases n with r | x | ⟨xs, hxs⟩ <;> simp only [Ninst.step] at hs
+    rcases n with r | x | ⟨xs, hxs⟩ | a | a | a <;> simp only [Ninst.step] at hs
     · cases Step.ofExecution_ne_spawn hs
     · refine ⟨x, hgi, XStep.toStep_spawn hs, ?_⟩
       unfold XStep.toStep at hs
       split at hs
       · cases Step.ofExecution_ne_spawn hs
       · cases hs; rfl
+    · cases Step.ofExecution_ne_spawn hs
+    · cases Step.ofExecution_ne_spawn hs
+    · cases Step.ofExecution_ne_spawn hs
     · cases Step.ofExecution_ne_spawn hs
   · cases Step.ofJump_ne_spawn hs
   · cases hs
@@ -950,6 +1093,42 @@ lemma genericCreate.step_spawn_depth
       createMsg, not_or] at *
   all_goals omega
 
+lemma genericCallAmsterdam.step_spawn_depth
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    {gas reservoir : Nat} {value : B256}
+    {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
+    {inputIndex inputSize outputIndex outputSize : Nat} {code : ByteArray}
+    {disablePrecompiles newAccountCharged insufficientBalance : Bool}
+    {f : Frame} {rsm : Resume}
+    (hs : genericCallAmsterdam.step sevm state devm gas reservoir value
+      caller target codeAddress shouldTransferValue isStaticcall inputIndex
+      inputSize outputIndex outputSize code disablePrecompiles
+      newAccountCharged insufficientBalance = .spawn f rsm) :
+    f.inner.depth < sevm.depth := by
+  simp only [genericCallAmsterdam.step, Bind.bind, Except.bind, Pure.pure,
+    Except.pure] at hs
+  repeat' split at hs
+  all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
+  all_goals obtain ⟨rfl, -⟩ := hs
+  all_goals simp only [Frame.ofCall, callMsg]
+  all_goals omega
+
+lemma genericCreateAmsterdam.step_spawn_depth
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm} {endowment : B256}
+    {newAddress : Adr} {memoryIndex memorySize : Nat} {f : Frame} {rsm : Resume}
+    (hs : genericCreateAmsterdam.step sevm state devm endowment newAddress
+      memoryIndex memorySize = .spawn f rsm) :
+    f.inner.depth < sevm.depth := by
+  simp only [genericCreateAmsterdam.step, Bind.bind, Except.bind, Pure.pure,
+    Except.pure] at hs
+  repeat' split at hs
+  all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
+  all_goals obtain ⟨rfl, -⟩ := hs
+  all_goals
+    simp only [Frame.ofCreate, processCreateMessage.msg, Msg.withBenv,
+      createMsg, not_or] at *
+  all_goals omega
+
 lemma Xinst.step_spawn_depth {sevm : Sevm} {devm : Devm} {x : Xinst}
     {f : Frame} {rsm : Resume}
     (hs : Xinst.step sevm devm x = .spawn f rsm) :
@@ -963,6 +1142,8 @@ lemma Xinst.step_spawn_depth {sevm : Sevm} {devm : Devm} {x : Xinst}
     first
       | exact genericCreate.step_spawn_depth hs
       | exact genericCall.step_spawn_depth hs
+      | exact genericCreateAmsterdam.step_spawn_depth hs
+      | exact genericCallAmsterdam.step_spawn_depth hs
 
 /-- A CALL-family spawn hands the parent's block statics to the child frame. -/
 lemma genericCall.step_spawn_benvStat
@@ -995,6 +1176,40 @@ lemma genericCreate.step_spawn_benvStat
   all_goals obtain ⟨rfl, -⟩ := hs
   rfl
 
+/-- An Amsterdam CALL-family spawn hands the parent's block statics to the child. -/
+lemma genericCallAmsterdam.step_spawn_benvStat
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm}
+    {gas reservoir : Nat} {value : B256}
+    {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
+    {inputIndex inputSize outputIndex outputSize : Nat} {code : ByteArray}
+    {disablePrecompiles newAccountCharged insufficientBalance : Bool}
+    {f : Frame} {rsm : Resume}
+    (hs : genericCallAmsterdam.step sevm state devm gas reservoir value
+      caller target codeAddress shouldTransferValue isStaticcall inputIndex
+      inputSize outputIndex outputSize code disablePrecompiles
+      newAccountCharged insufficientBalance = .spawn f rsm) :
+    f.inner.benv.stat = sevm.benvStat := by
+  simp only [genericCallAmsterdam.step, Bind.bind, Except.bind, Pure.pure,
+    Except.pure] at hs
+  repeat' split at hs
+  all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
+  all_goals obtain ⟨rfl, -⟩ := hs
+  rfl
+
+/-- An Amsterdam CREATE-family spawn hands the parent's block statics to the child. -/
+lemma genericCreateAmsterdam.step_spawn_benvStat
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm} {endowment : B256}
+    {newAddress : Adr} {memoryIndex memorySize : Nat} {f : Frame} {rsm : Resume}
+    (hs : genericCreateAmsterdam.step sevm state devm endowment newAddress
+      memoryIndex memorySize = .spawn f rsm) :
+    f.inner.benv.stat = sevm.benvStat := by
+  simp only [genericCreateAmsterdam.step, Bind.bind, Except.bind, Pure.pure,
+    Except.pure] at hs
+  repeat' split at hs
+  all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
+  all_goals obtain ⟨rfl, -⟩ := hs
+  all_goals rfl
+
 /-- Every spawning instruction hands the parent's block statics to the child. -/
 lemma Xinst.step_spawn_benvStat {sevm : Sevm} {devm : Devm} {x : Xinst}
     {f : Frame} {rsm : Resume} (hs : Xinst.step sevm devm x = .spawn f rsm) :
@@ -1008,6 +1223,8 @@ lemma Xinst.step_spawn_benvStat {sevm : Sevm} {devm : Devm} {x : Xinst}
     first
       | exact genericCreate.step_spawn_benvStat hs
       | exact genericCall.step_spawn_benvStat hs
+      | exact genericCreateAmsterdam.step_spawn_benvStat hs
+      | exact genericCallAmsterdam.step_spawn_benvStat hs
 
 lemma Ninst.step_spawn_depth {evm : Evm} {n : Ninst}
     {f : Frame} {rsm : Resume} {pc' : Nat}
@@ -1024,9 +1241,12 @@ lemma Step.spawn_depth_lt {pc : Nat} {sevm : Sevm} {devm : Devm}
   split at hs
   · cases hs
   · rename_i n hgi
-    rcases n with r | x | ⟨xs, hxs⟩ <;> simp only [Ninst.step] at hs
+    rcases n with r | x | ⟨xs, hxs⟩ | a | a | a <;> simp only [Ninst.step] at hs
     · cases Step.ofExecution_ne_spawn hs
     · exact Xinst.step_spawn_depth (XStep.toStep_spawn hs)
+    · cases Step.ofExecution_ne_spawn hs
+    · cases Step.ofExecution_ne_spawn hs
+    · cases Step.ofExecution_ne_spawn hs
     · cases Step.ofExecution_ne_spawn hs
   · cases Step.ofJump_ne_spawn hs
   · cases hs
@@ -1126,7 +1346,7 @@ set_option linter.defProp false in
 /-- **Adequacy, fuel-free.**  A closed derivation is exactly a total-`exec`
 equation.  Forward: `of_exec'` produces the driver equation at every budget
 past some threshold, and Jaune's `exec_eq_of_run` reads it off at a budget
-that also exceeds the frame's gas.  Backward: the sufficiency bridge
+that also exceeds the frame's gas measure.  Backward: the sufficiency bridge
 `execFueled_run_sufficientFuel` turns the total result into the driver equation
 `of_exec` recurses over. -/
 lemma exec_iff_exec_eq (pc : Nat) (sevm : Sevm) (devm : Devm) (exn : Execution) :
@@ -1134,7 +1354,7 @@ lemma exec_iff_exec_eq (pc : Nat) (sevm : Sevm) (devm : Devm) (exn : Execution) 
   constructor
   · intro ⟨exc⟩
     rcases of_exec' _ _ _ _ exc with ⟨fuel, eq⟩
-    have hlt : devm.gasLeft < max (fuel + 1) (devm.gasLeft + 1) :=
+    have hlt : devm.gasMeasure < max (fuel + 1) (devm.gasMeasure + 1) :=
       Nat.lt_of_lt_of_le (Nat.lt_succ_self _) (Nat.le_max_right _ _)
     refine exec_eq_of_run hlt ?_
     rw [eq _ (Nat.lt_of_lt_of_le (Nat.lt_succ_self _) (Nat.le_max_left _ _))]
@@ -1149,7 +1369,7 @@ result, so every entered frame carries a closed derivation for it.  This is the
 bridge from the total wrappers to the relational layer: no threshold obligation
 survives, because sufficiency discharges it once and for all. -/
 lemma Xlot.filled_exec (evm : Evm) : Xlot.Filled (.some ⟨evm, exec evm⟩) :=
-  of_exec (sufficientFuel evm.dyna.gasLeft) evm.pc evm.sta evm.dyna (exec evm)
+  of_exec (sufficientFuel evm.dyna.gasMeasure) evm.pc evm.sta evm.dyna (exec evm)
     (Fueled.ext (execFueled_run_sufficientFuel evm))
 
 lemma of_runFrame {f : Frame}
@@ -1180,5 +1400,101 @@ lemma of_processCreateMessage (msg : Msg)
       xl.Filled ∧
       ProcessCreateMessage msg xl ex :=
   of_runFrame eq
+
+-------------------------------------------------------------------------------
+-- FORK COVERAGE.  The user-approved verified-fork set for consuming a Jaune
+-- pin with Amsterdam semantics: the four pre-Amsterdam forks Prague, Osaka,
+-- BPO1, and BPO2 (user decision 2026-09-23).  Statements restricted by
+-- `CoveredFork` keep their historical denotation on every covered fork;
+-- Amsterdam coverage is never inferred from them.  Consumers use only the
+-- facts below (no state-gas or BAL dimension, the Prague request contracts,
+-- the system addresses are not precompiles), never the membership shape, so a
+-- change to the covered set changes this block and its eliminator alone.
+-------------------------------------------------------------------------------
+
+/-- The covered forks, in activation order. -/
+def coveredForks : List Fork := [.prague, .osaka, .bpo1, .bpo2]
+
+/-- The user-approved fork coverage: Prague, Osaka, BPO1, and BPO2
+(programme §B).  Amsterdam is not covered. -/
+def CoveredFork (f : Fork) : Prop := f ∈ coveredForks
+
+instance : DecidablePred CoveredFork :=
+  fun f => inferInstanceAs (Decidable (f ∈ coveredForks))
+
+/-- Eliminate a coverage proof into one case per covered fork.  The only place
+outside this block that should depend on which forks are covered. -/
+theorem CoveredFork.cases {motive : Fork → Prop} {f : Fork}
+    (h : CoveredFork f)
+    (prague : motive .prague) (osaka : motive .osaka)
+    (bpo1 : motive .bpo1) (bpo2 : motive .bpo2) : motive f := by
+  unfold CoveredFork coveredForks at h
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at h
+  rcases h with rfl | rfl | rfl | rfl
+  · exact prague
+  · exact osaka
+  · exact bpo1
+  · exact bpo2
+
+theorem CoveredFork.stateGas_none {f : Fork} (h : CoveredFork f) :
+    (Fork.ruleSet f).stateGas = none :=
+  h.cases (motive := fun f => (Fork.ruleSet f).stateGas = none)
+    rfl rfl rfl rfl
+
+theorem CoveredFork.bal_none {f : Fork} (h : CoveredFork f) :
+    (Fork.ruleSet f).bal = none :=
+  h.cases (motive := fun f => (Fork.ruleSet f).bal = none)
+    rfl rfl rfl rfl
+
+theorem CoveredFork.rules_stateGas_none {s : BenvStat}
+    (h : CoveredFork s.fork) : s.rules.stateGas = none :=
+  h.stateGas_none
+
+theorem CoveredFork.rules_bal_none {s : BenvStat} (h : CoveredFork s.fork) :
+    s.rules.bal = none :=
+  h.bal_none
+
+/-- Every covered fork runs the Prague general-purpose request contracts. -/
+theorem CoveredFork.requests_eq {f : Fork} (h : CoveredFork f) :
+    (Fork.ruleSet f).requests = pragueRequests :=
+  h.cases (motive := fun f => (Fork.ruleSet f).requests = pragueRequests)
+    rfl rfl rfl rfl
+
+/-- The beacon-roots system address is not a precompile on any covered fork. -/
+theorem CoveredFork.beaconRoots_not_precompile {fork : Fork}
+    (hfork : CoveredFork fork) :
+    ¬ (Fork.ruleSet fork).isPrecomp beaconRootsAddress :=
+  hfork.cases
+    (motive := fun f => ¬ (Fork.ruleSet f).isPrecomp beaconRootsAddress)
+    (by decide) (by decide) (by decide) (by decide)
+
+/-- The history-storage system address is not a precompile on any covered
+fork. -/
+theorem CoveredFork.historyStorage_not_precompile {fork : Fork}
+    (hfork : CoveredFork fork) :
+    ¬ (Fork.ruleSet fork).isPrecomp historyStorageAddress :=
+  hfork.cases
+    (motive := fun f => ¬ (Fork.ruleSet f).isPrecomp historyStorageAddress)
+    (by decide) (by decide) (by decide) (by decide)
+
+/-- Transport a coverage proof along a fork equation. -/
+theorem CoveredFork.of_eq {f1 f2 : Fork} (h : f1 = f2) (hf : CoveredFork f1) :
+    CoveredFork f2 := by
+  cases h; exact hf
+
+/-- Prague is covered. -/
+theorem CoveredFork.prague : CoveredFork .prague := by decide
+
+/-- Osaka is covered. -/
+theorem CoveredFork.osaka : CoveredFork .osaka := by decide
+
+/-- BPO1 is covered. -/
+theorem CoveredFork.bpo1 : CoveredFork .bpo1 := by decide
+
+/-- BPO2 is covered. -/
+theorem CoveredFork.bpo2 : CoveredFork .bpo2 := by decide
+
+/-- Amsterdam is not covered (the negative control on the covered set). -/
+theorem CoveredFork.not_amsterdam : ¬ CoveredFork .amsterdam := by decide
 
 end Blanc

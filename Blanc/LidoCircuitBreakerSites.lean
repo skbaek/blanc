@@ -276,6 +276,7 @@ theorem RuntimePersistentWrite.sourceSite?_sound
       cases regular <;> simp_all [isPersistentWriteInstruction]
   | exec execution => simp_all [isPersistentWriteInstruction]
   | push bytes bound => simp_all [isPersistentWriteInstruction]
+  | dupn _ | swapn _ | exchange _ => simp_all [isPersistentWriteInstruction]
 
 /-! ## Parameter-independent structural projection -/
 
@@ -395,6 +396,7 @@ theorem persistentSourceSites_eq
       | reg regular => rfl
       | exec execution => rfl
       | push bytes bound => rfl
+      | dupn _ | swapn _ | exchange _ => rfl
   | branch left right ihl ihr =>
       simp only [Func.sourceSites, List.filter_append, persistentSourceShape,
         PersistentSourceShape.sourceSites]
@@ -457,6 +459,7 @@ theorem filterPersistent_nonPush (sites : List Prog.SourceSite) :
   | reg regular => cases regular <;> rfl
   | exec execution => rfl
   | push bytes bound => rfl
+  | dupn _ | swapn _ | exchange _ => rfl
 
 theorem filterTransient_nonPush (sites : List Prog.SourceSite) :
     (sites.filter fun site =>
@@ -471,6 +474,7 @@ theorem filterTransient_nonPush (sites : List Prog.SourceSite) :
   | reg regular => cases regular <;> rfl
   | exec execution => rfl
   | push bytes bound => rfl
+  | dupn _ | swapn _ | exchange _ => rfl
 
 theorem filterExternal_nonPush (sites : List Prog.SourceSite) :
     (sites.filter fun site =>
@@ -485,6 +489,7 @@ theorem filterExternal_nonPush (sites : List Prog.SourceSite) :
   | reg regular => rfl
   | exec execution => rfl
   | push bytes bound => rfl
+  | dupn _ | swapn _ | exchange _ => rfl
 
 def persistentDispatchEntryShapes (xs : List (B256 × Func)) :
     List (B256 × PersistentSourceShape) :=
@@ -952,6 +957,7 @@ theorem runtimeTransientSourceSite_instruction
   | reg regular => cases regular <;> simp_all [isTransientWriteInstruction]
   | exec execution => simp_all [isTransientWriteInstruction]
   | push bytes bound => simp_all [isTransientWriteInstruction]
+  | dupn _ | swapn _ | exchange _ => simp_all [isTransientWriteInstruction]
 
 theorem runtimeExternalCallSourceSite_instruction
     {dp : DeployParams} {site : Prog.SourceSite}
@@ -964,6 +970,7 @@ theorem runtimeExternalCallSourceSite_instruction
   | reg regular => simp_all [isExternalCallInstruction]
   | exec execution => exact ⟨execution, rfl⟩
   | push bytes bound => simp_all [isExternalCallInstruction]
+  | dupn _ | swapn _ | exchange _ => simp_all [isExternalCallInstruction]
 
 /-- Every structural runtime external edge is exactly CALL or STATICCALL;
 CALLCODE and DELEGATECALL are absent. -/
@@ -1022,6 +1029,7 @@ theorem runtimePersistent_effectDomains_separate
         cases regular <;> simp_all [isPersistentWriteInstruction]
     | exec execution => simp_all [isPersistentWriteInstruction]
     | push bytes bound => simp_all [isPersistentWriteInstruction]
+    | dupn _ | swapn _ | exchange _ => simp_all [isPersistentWriteInstruction]
   constructor
   · intro transient
     rw [runtimeTransientSourceSite_instruction transient] at instruction

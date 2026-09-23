@@ -48,16 +48,21 @@ theorem TransactionTrace.benvInv_admitted
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
     (preserves : c.PreservesAdmitted ca entry)
+    (hfork : CoveredFork benv.stat.fork)
     (admitted : trace.FrameAdmitted ca entry)
     (sumNof : sum benv.state.bal < 2 ^ 256)
     (inv : c.BenvInv ca benv) :
     c.BenvInv ca (benv.withState state) := by
   have msgInv : c.MsgInv ca trace.msg :=
     trace.msgInv inv.state inv.ca
+  have msgFork : CoveredFork trace.msg.benv.stat.fork := by
+    rw [prepareMessage_benv trace.prepared]
+    simpa [Benv.beginTransaction] using hfork
   have messageInv :=
-    trace.message.stateInv_admitted preserves admitted msgInv
-  rcases trace.exists_stateChronology with ⟨chronology⟩
-  have bounds := trace.settlement_sum_bounds chronology.refundCounter sumNof
+    trace.message.stateInv_admitted preserves msgFork admitted msgInv
+  rcases trace.exists_stateChronology hfork with ⟨chronology⟩
+  have bounds :=
+    trace.settlement_sum_bounds chronology.refundCounter sumNof hfork
   have refundInv : c.StateInv ca
       (trace.refundedState chronology.refundCounter) :=
     StateInv.addBal bounds.1 messageInv.1
@@ -80,6 +85,7 @@ theorem ApplyTransactionsTrace.benvInv_admitted
     {bout finalBout : BlockOutput}
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
     (preserves : c.PreservesAdmitted ca entry)
+    (hfork : CoveredFork benv.stat.fork)
     (admitted : trace.FrameAdmitted ca entry)
     (sumNof : sum benv.state.bal < 2 ^ 256)
     (inv : c.BenvInv ca benv) :
@@ -89,12 +95,16 @@ theorem ApplyTransactionsTrace.benvInv_admitted
   | @cons index tx txs benv bout txState txBout finalBenv finalBout
       head tail ih =>
       have headInv : c.BenvInv ca (benv.withState txState) :=
-        head.benvInv_admitted preserves admitted.1 sumNof inv
+        head.benvInv_admitted preserves hfork admitted.1 sumNof inv
+      have nextFork : CoveredFork (benv.withState txState).stat.fork := by
+        change CoveredFork benv.stat.fork
+        exact hfork
       have nextSum : sum (benv.withState txState).state.bal < 2 ^ 256 := by
         exact Nat.lt_of_le_of_lt
-          (by simpa [Benv.withState] using processTransaction_sum_le head.result)
+          (by simpa [Benv.withState] using
+            processTransaction_sum_le head.result hfork.rules_stateGas_none)
           sumNof
-      exact ih admitted.2 nextSum headInv
+      exact ih nextFork admitted.2 nextSum headInv
 
 end ExecutionTrace
 

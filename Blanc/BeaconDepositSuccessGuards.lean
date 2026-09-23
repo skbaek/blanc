@@ -27,9 +27,9 @@ theorem depositRootGuard_runCompiledTo
     (hmem : InsertionStartMemoryCarrier memory oldCount node)
     (hroot : Sevm.argWord sevm 3 = node)
     (htail : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G⟩) rest ex) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G + 31⟩)
+      (base.setMach ⟨[], memory, G + 31, base.stateGas⟩)
       (loadWord nodeWord +++ arg 3 +++ eq ::: iszero :::
         ((.call rootMismatchErrorSlot) <?> rest)) ex := by
   have hmod : memory.size % 32 = 0 := by
@@ -52,7 +52,7 @@ theorem depositRootGuard_runCompiledTo
   case h_arm =>
     rw [show (nodeWord * 32 : B256).toNat = 640 by decide +kernel,
       hmemory]
-    simpa only [Devm.setMach_setMach, Nat.add_sub_cancel] using htail
+    simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Nat.add_sub_cancel] using htail
 
 /-- The tree-capacity guard passes in exactly 28 gas and leaves an arbitrary
 post-cap continuation. -/
@@ -63,9 +63,9 @@ theorem depositCapGuard_runCompiledTo
     (hmem : InsertionStartMemoryCarrier memory oldCount node)
     (hcap : oldCount < Nat.toB256 (2 ^ 32 - 1))
     (htail : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G⟩) rest ex) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G + 28⟩)
+      (base.setMach ⟨[], memory, G + 28, base.stateGas⟩)
       (pushB256 (Nat.toB256 (2 ^ 32 - 1)) :::
         loadWord oldCountWord +++ lt ::: iszero :::
         ((.call treeFullErrorSlot) <?> rest)) ex := by
@@ -90,7 +90,7 @@ theorem depositCapGuard_runCompiledTo
   case h_arm =>
     rw [show (oldCountWord * 32 : B256).toNat = 576 by decide +kernel,
       hmemory]
-    simpa only [Devm.setMach_setMach, Nat.add_sub_cancel] using htail
+    simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Nat.add_sub_cancel] using htail
 
 /-- When both post-reconstruction guards hold, their compiled path reaches the
 commit program without changing memory or world state and consumes exactly
@@ -103,9 +103,9 @@ theorem depositSuccessGuards_runCompiledTo
     (hroot : Sevm.argWord sevm 3 = node)
     (hcap : oldCount < Nat.toB256 (2 ^ 32 - 1))
     (htail : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G⟩) commitDeposit ex) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) commitDeposit ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G + 59⟩)
+      (base.setMach ⟨[], memory, G + 59, base.stateGas⟩)
       depositSuccessGuards ex := by
   have hcapRun := depositCapGuard_runCompiledTo hmem hcap htail
   have hrootRun := depositRootGuard_runCompiledTo hmem hroot hcapRun
@@ -117,6 +117,7 @@ model's `depositDataNode`, and the composed path reaches `commitDeposit` after
 exactly `1779 + 59 = 1838` gas. -/
 theorem reconstructDepositDataNode_successGuards_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {pubkey withdrawalCredentials signature amountLE : Bytes}
     {oldCount amount : B256} {G : Nat}
     (source : ReconstructSourceMemoryCarrier base.memory
@@ -144,14 +145,14 @@ theorem reconstructDepositDataNode_successGuards_runCompiledTo
       ReconstructMetaCarrier sevm base finalPost ∧
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm
-          (finalPost.setMach ⟨[], finalPost.memory, G⟩) commitDeposit ex →
+          (finalPost.setMach ⟨[], finalPost.memory, G, finalPost.stateGas⟩) commitDeposit ex →
         Func.RunCompiledTo fs sevm
-          (base.setMach ⟨[], base.memory, G + 1838⟩)
+          (base.setMach ⟨[], base.memory, G + 1838, base.stateGas⟩)
           (reconstructDepositDataNode depositSuccessGuards) ex := by
   have hnodeEq := reconstructedDepositNode_eq_model pubkey
     withdrawalCredentials signature amountLE hwithdrawal hamount hsignature
   obtain ⟨finalPost, hregisters, hreturn, hmeta, hlift⟩ :=
-    reconstructDepositDataNode_runCompiledTo
+    reconstructDepositDataNode_runCompiledTo (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := base)
       (pubkeyInput := pubkey ++ zeros 16)
       (signatureFirst := signature.take 64)
@@ -182,6 +183,7 @@ over the pre-reconstruction state; the reconstruction metadata carrier and the
 selected-`SSTORE` projections transfer them to the commit stage. -/
 theorem depositSuccessSuffix_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {pubkey withdrawalCredentials signature amountLE : Bytes}
     {oldCount amount node : B256} {stor : Stor} {keys : KeySet}
     {countCost n size G : Nat}
@@ -244,14 +246,14 @@ theorem depositSuccessSuffix_runCompiledTo
                   insertionFirstLiveStoreCost sevm stor keys 0 n node) +
                 insertionDeadGas sevm.currentTarget stor n
                   (insertionNatState 0 size node keys)) + 38 + countCost)) +
-              1838⟩)
+              1838, base.stateGas⟩)
         (reconstructDepositDataNode depositSuccessGuards)
         (.ok ((afterSstore sevm finalBase (branchSlot n)
           (accumulatedNode Bytes.sha256 (accOfStor stor).branch
-            0 n node)).setMach ⟨[], finalMemory, G⟩)) := by
+            0 n node)).setMach ⟨[], finalMemory, G, finalBase.stateGas⟩)) := by
   subst hnode
   obtain ⟨mid, hcarrier, _hreturn, hmeta, hlift⟩ :=
-    reconstructDepositDataNode_successGuards_runCompiledTo
+    reconstructDepositDataNode_successGuards_runCompiledTo (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := base)
       (pubkey := pubkey) (withdrawalCredentials := withdrawalCredentials)
       (signature := signature) (amountLE := amountLE)
@@ -295,7 +297,7 @@ theorem depositSuccessSuffix_runCompiledTo
       (hmeta.storage sevm.currentTarget)]
     exact hcount
   obtain ⟨finalBase, finalMemory, hfinal, hcommit⟩ :=
-    commitDeposit_firstLive_exists_runCompiledTo
+    commitDeposit_firstLive_exists_runCompiledTo (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := mid) (memory := mid.memory)
       (oldCount := oldCount) (n := n) (size := size) (G := G)
       hstart hshift hstorMid hkeysMid hheight hsize hfirst hnodelegMid

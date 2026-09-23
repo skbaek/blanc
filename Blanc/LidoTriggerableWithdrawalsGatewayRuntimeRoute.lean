@@ -830,6 +830,9 @@ theorem trigger_body_of_prog_run_empty_frame
     · exact hpopBurn.state
     · exact hpopBurn.createdAccounts
     · exact hpopBurn.transientStorage
+    · exact hpopBurn.stateGas
+    · exact hpopBurn.accountReads
+    · exact hpopBurn.storageReads
   have hprefixFrame : Devm.DispatchFramePreserved entry afterSig :=
     runtimePrefix_dispatchFrame hburn hguardRun hguardPop hsigFrame
   have hrouteFrame : Devm.DispatchFramePreserved afterSig bodyPre :=

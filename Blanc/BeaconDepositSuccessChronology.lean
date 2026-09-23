@@ -21,6 +21,7 @@ complete retained storage-effect list is count first and the unique first-live
 branch cell second. -/
 theorem deposit_success_retainedStorageEffectTriples
     (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (pubkey withdrawalCredentials signature : Bytes)
     (depositDataRoot : B256) (s' : Acc) (ev : DepositEvent)
     (stor : Stor) (keys : KeySet) (countCost n G : Nat)
@@ -94,7 +95,7 @@ theorem deposit_success_retainedStorageEffectTriples
               depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
                 ((accOfStor
                   (Devm.getStor base sevm.currentTarget)).count + 1)
-                countCost G⟩)
+                countCost G, base.stateGas⟩)
           (.ok post),
         Prog.RunCompiledTo sevm
           (base.setMach
@@ -102,7 +103,7 @@ theorem deposit_success_retainedStorageEffectTriples
               depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
                 ((accOfStor
                   (Devm.getStor base sevm.currentTarget)).count + 1)
-                countCost G⟩)
+                countCost G, base.stateGas⟩)
           runtime (.ok post) ∧
         Exec.retainedStorageEffectTriples execution =
           [(sevm.currentTarget, depositCountSlot,
@@ -124,7 +125,7 @@ theorem deposit_success_retainedStorageEffectTriples
   obtain ⟨_logged, _mid, finalBase, finalMemory, _hlogs, _hstorVal,
       _hstorMap, _hbal, _hloggedCode, _hloadedKeys, _haddresses,
       _houtput, _herror, _hmeta, _hfinal, hendpoint⟩ :=
-    depositEndpoint_success_storageEffectRun
+    depositEndpoint_success_storageEffectRun (hfork := hfork)
       (fs := runtime.main :: runtime.aux) (sevm := sevm) (base := base)
       (pubkey := pubkey) (withdrawalCredentials := withdrawalCredentials)
       (signature := signature) (depositDataRoot := depositDataRoot)
@@ -143,13 +144,13 @@ theorem deposit_success_retainedStorageEffectTriples
       0 n depositDataRoot
   let post :=
     (afterSstore sevm finalBase (branchSlot n) branchValue).setMach
-      ⟨[], finalMemory, G⟩
+      ⟨[], finalMemory, G, finalBase.stateGas⟩
   have hendpoint' : Func.StorageEffectRun
       (runtime.main :: runtime.aux) sevm
       (base.setMach
         ⟨[], Mem.empty,
           depositEndpointSuccessGas sevm base stor keys depositDataRoot n
-            (s.count + 1) countCost G⟩)
+            (s.count + 1) countCost G, base.stateGas⟩)
       depositEndpoint (.ok post)
       [(sevm.currentTarget, depositCountSlot, Nat.toB256 s.count + 1),
         (sevm.currentTarget, branchSlot n, branchValue)] := by

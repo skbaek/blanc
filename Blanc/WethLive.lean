@@ -93,11 +93,13 @@ set_option maxRecDepth 674 in
 /-- A `balanceOf(guy)` call on `weth` has a gas-exact run, and it returns
 `guy`'s balance slot.
 
-Every premise is what a fresh top-level message frame supplies: an empty stack,
-empty memory, a storage key not yet warmed, and enough gas.  The key is the
-calldata word the call carries, not a constant — WETH indexes balances by the
-raw argument word, so that is what both the premise and the conclusion name. -/
+At a covered fork, the remaining premises are what a fresh top-level message
+frame supplies: an empty stack, empty memory, a storage key not yet warmed,
+and enough gas. The key is the calldata word the call carries, not a constant
+— WETH indexes balances by the raw argument word, so that is what both the
+premise and the conclusion name. -/
 theorem weth_balanceOf_runCompiled {sevm : Sevm} {pre : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = boSel)
     (h_stack : pre.stack = [])
@@ -110,10 +112,11 @@ theorem weth_balanceOf_runCompiled {sevm : Sevm} {pre : Devm}
         (Devm.getStorVal pre sevm.currentTarget (Sevm.dataWord sevm 4)).toBytes := by
   rw [balanceOfGas_eq] at h_gas
   set g := pre.gasLeft with hg
+  have h_stateGas : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
   exact
     ⟨_,
       Prog.runCompiled_intro (G := g - 1)
-        (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+        (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack, h_mem])
         (by
@@ -134,8 +137,8 @@ first on a second contract.  `Blanc.Fmint.fmint_totalSupply_succeeds` is the
 first; read that theorem's docstring for what a statement of this shape does and
 does not claim, because every one of those limits applies here unchanged:
 
-* it is one entrypoint of one contract, and it is unconditional only because
-  `balanceOf` is call-free — its compiled path emits no spawning instruction;
+* it is one entrypoint of one contract at a covered fork, and it is call-free —
+  its compiled path emits no spawning instruction;
 * it is message-call altitude, not transaction level;
 * it fixes the selector, and says nothing in either direction about calldata
   carrying a different one;
@@ -151,6 +154,7 @@ not an artefact of this statement — the statement is quantified over the word,
 so it holds of those calls too and asserts nothing about their meaning. -/
 theorem weth_balanceOf_succeeds {sevm : Sevm} {pre : Devm}
     (h_code : some sevm.code.toList = Prog.compile weth)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = boSel)
     (h_stack : pre.stack = [])
@@ -162,7 +166,7 @@ theorem weth_balanceOf_succeeds {sevm : Sevm} {pre : Devm}
       Devm.output post =
         (Devm.getStorVal pre sevm.currentTarget (Sevm.dataWord sevm 4)).toBytes := by
   obtain ⟨post, h_run, h_out⟩ :=
-    weth_balanceOf_runCompiled h_value h_sel h_stack h_mem h_cold h_gas
+    weth_balanceOf_runCompiled hfork h_value h_sel h_stack h_mem h_cold h_gas
   exact ⟨post, Prog.exec_of_runCompiled h_run h_code, h_out⟩
 
 /-! ### What this target still does not exercise

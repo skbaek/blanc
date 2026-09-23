@@ -1503,7 +1503,8 @@ theorem rawTokenCallbackIndexedStepBoundary_of_prefix
       img pre callPre)
     (hcall : Ninst.Run e callPre call callPost)
     (hbool : Func.Run ((weth10 dp).main :: weth10Aux) e
-      callPost (.call boolReturnSlot) post) :
+      callPost (.call boolReturnSlot) post)
+    (hfork : CoveredFork e.benvStat.fork) :
     ∃ inputSize input parent child xl pc,
       RawTokenCallbackIndexedStepBoundary dp e e.currentTarget
         (Sevm.argWord e targetArg).toAdr (Sevm.argWord e targetArg)
@@ -1515,7 +1516,7 @@ theorem rawTokenCallbackIndexedStepBoundary_of_prefix
       houtput, _hwf, hreads⟩
   let input :=
     (callPre.memory.read callbackArgsOffset.toNat inputSize.toNat).1
-  rcases of_run_call_val_with_depth_frame hstack hcall with
+  rcases of_run_call_val_with_depth_frame hstack hcall hfork with
       hfailed | hsuccess
   · exact absurd hbool
       (not_run_call_boolReturn_of_zero dp hfailed.1)
@@ -1558,7 +1559,8 @@ theorem callBoolCallback_rawStepBoundary
     (h_wf : Mem.Wf pre.memory)
     (h_reads : Mem.Reads pre.memory img)
     (run : Func.Run ((weth10 dp).main :: weth10Aux) e pre
-      (callBoolCallback sel targetArg dataArg valueLine) post) :
+      (callBoolCallback sel targetArg dataArg valueLine) post)
+    (hfork : CoveredFork e.benvStat.fork) :
     ∃ inputSize input,
       RawTokenCallbackStepBoundary dp e e.currentTarget
         (Sevm.argWord e targetArg).toAdr (Sevm.argWord e targetArg)
@@ -1575,7 +1577,7 @@ theorem callBoolCallback_rawStepBoundary
   refine ⟨inputSize, input, ?_⟩
   unfold RawTokenCallbackStepBoundary
   refine ⟨rfl, h_input_size, ?_⟩
-  rcases of_run_call_val_with_depth_frame h_stack h_call with
+  rcases of_run_call_val_with_depth_frame h_stack h_call hfork with
       h_failed | h_success
   · exact absurd h_bool_call
       (not_run_call_boolReturn_of_zero dp h_failed.1)
@@ -1622,7 +1624,8 @@ theorem callBoolCallback_rawBoundary
     (h_wf : Mem.Wf pre.memory)
     (h_reads : Mem.Reads pre.memory img)
     (run : Func.Run ((weth10 dp).main :: weth10Aux) e pre
-      (callBoolCallback sel targetArg dataArg valueLine) post) :
+      (callBoolCallback sel targetArg dataArg valueLine) post)
+    (hfork : CoveredFork e.benvStat.fork) :
     ∃ inputSize input,
       RawTokenCallbackBoundary dp e e.currentTarget
         (Sevm.argWord e targetArg).toAdr (Sevm.argWord e targetArg)
@@ -1639,7 +1642,7 @@ theorem callBoolCallback_rawBoundary
   refine ⟨inputSize, input, ?_⟩
   unfold RawTokenCallbackBoundary
   refine ⟨rfl, h_input_size, ?_⟩
-  rcases of_run_call_val_with_depth_frame h_stack h_call with
+  rcases of_run_call_val_with_depth_frame h_stack h_call hfork with
       h_failed | h_success
   · exact absurd h_bool_call
       (not_run_call_boolReturn_of_zero dp h_failed.1)
@@ -1689,7 +1692,8 @@ theorem callBoolCallback_successEffect
     (h_wf : Mem.Wf pre.memory)
     (h_reads : Mem.Reads pre.memory img)
     (run : Func.Run ((weth10 dp).main :: weth10Aux) e pre
-      (callBoolCallback sel targetArg dataArg valueLine) post) :
+      (callBoolCallback sel targetArg dataArg valueLine) post)
+    (hfork : CoveredFork e.benvStat.fork) :
     TokenCallbackBoundary e e.currentTarget target sel valueWord data
       pre post := by
   rcases of_run_callBoolCallback_frame dp sel targetArg dataArg valueWord
@@ -1724,7 +1728,7 @@ theorem callBoolCallback_successEffect
       Mem.Reads.read h_reads_call, h_flat,
       show callbackArgsOffset.toNat = 28 from rfl,
       tokenCallbackWindow]
-  rcases of_run_call_val_with_depth_frame h_stack h_call with
+  rcases of_run_call_val_with_depth_frame h_stack h_call hfork with
       h_failed | h_success
   · exact absurd h_bool_call
       (not_run_call_boolReturn_of_zero dp h_failed.1)
@@ -2113,7 +2117,8 @@ theorem approveAndCall_successEffect (dp : DeployParams)
     (h_wf : Mem.Wf pre.memory)
     (h_fresh : Mem.Reads pre.memory [])
     (run : Func.Run ((weth10 dp).main :: weth10Aux) e pre
-      approveAndCall post) :
+      approveAndCall post)
+    (hfork : CoveredFork e.benvStat.fork) :
     ApproveAndCallSuccessEffect e pre post spender amount data := by
   have h_data_len : data.length < 2 ^ 256 := by
     have hceil := Nat.le_ceil32 data.length
@@ -2145,7 +2150,7 @@ theorem approveAndCall_successEffect (dp : DeployParams)
       (by unfold arg cdl; line_inv)
       h0.symm htl htb h_size
       (approvePrefixImage_nil_length e)
-      hwfCallback hreadsCallback hcallback
+      hwfCallback hreadsCallback hcallback hfork
   exact ⟨callbackPre, by simpa only [h1] using hstor,
     hlogs, hbal, hcode, houtput, hboundary⟩
 
@@ -2161,7 +2166,8 @@ theorem weth10_approveAndCall_successEffect (dp : DeployParams)
     (h_size : 132 + ceil32 data.length < 2 ^ 256)
     (h_wf : Mem.Wf pre.memory)
     (h_fresh : Mem.Reads pre.memory [])
-    (exc : Exec 0 e pre (.ok post)) :
+    (exc : Exec 0 e pre (.ok post))
+    (hfork : CoveredFork e.benvStat.fork) :
     e.value = 0 ∧
       ApproveAndCallSuccessEffect e pre post spender amount data := by
   have h_mem :
@@ -2179,7 +2185,7 @@ theorem weth10_approveAndCall_successEffect (dp : DeployParams)
     rw [hmemory]
     exact h_fresh
   have heffect := approveAndCall_successEffect dp h_dec h_size
-    hwfBody hfreshBody hbody
+    hwfBody hfreshBody hbody hfork
   refine ⟨hvalue, ?_⟩
   unfold ApproveAndCallSuccessEffect at heffect ⊢
   simpa only [hstor, hbal, hcodeFrame, hlogs, houtput] using heffect
@@ -2333,7 +2339,8 @@ theorem depositToAndCall_rawStepSuccessEffect (dp : DeployParams)
     (h_wf : Mem.Wf pre.memory)
     (h_fresh : Mem.Reads pre.memory [])
     (run : Func.Run ((weth10 dp).main :: weth10Aux) e pre
-      depositToAndCall post) :
+      depositToAndCall post)
+    (hfork : CoveredFork e.benvStat.fork) :
     DepositToAndCallRawStepSuccessEffect dp e pre post := by
   simp only [depositToAndCall] at run
   rcases of_run_prepend mintToPrefix _ run with
@@ -2360,7 +2367,7 @@ theorem depositToAndCall_rawStepSuccessEffect (dp : DeployParams)
         rcases Line.of_run_cons hline with ⟨c, hcv, hnil⟩
         cases hnil
         exact (of_run_callvalue hcv).output)
-      hwfCallback hreadsCallback hcallback with
+      hwfCallback hreadsCallback hcallback hfork with
     ⟨inputSize, input, hboundary⟩
   exact ⟨callbackPre, inputSize, input, hstor, hlogs, hbal, hcode,
     houtput, hboundary⟩
@@ -2372,7 +2379,8 @@ theorem depositToAndCall_rawSuccessEffect (dp : DeployParams)
     (h_wf : Mem.Wf pre.memory)
     (h_fresh : Mem.Reads pre.memory [])
     (run : Func.Run ((weth10 dp).main :: weth10Aux) e pre
-      depositToAndCall post) :
+      depositToAndCall post)
+    (hfork : CoveredFork e.benvStat.fork) :
     DepositToAndCallRawSuccessEffect dp e pre post := by
   simp only [depositToAndCall] at run
   rcases of_run_prepend mintToPrefix _ run with
@@ -2399,7 +2407,7 @@ theorem depositToAndCall_rawSuccessEffect (dp : DeployParams)
         rcases Line.of_run_cons hline with ⟨c, hcv, hnil⟩
         cases hnil
         exact (of_run_callvalue hcv).output)
-      hwfCallback hreadsCallback hcallback with
+      hwfCallback hreadsCallback hcallback hfork with
     ⟨inputSize, input, hboundary⟩
   exact ⟨callbackPre, inputSize, input, hstor, hlogs, hbal, hcode,
     houtput, hboundary⟩
@@ -2413,7 +2421,8 @@ theorem weth10_depositToAndCall_rawSuccessEffect (dp : DeployParams)
     (h_nonempty : e.data.length.toB256 ≠ 0)
     (h_wf : Mem.Wf pre.memory)
     (h_fresh : Mem.Reads pre.memory [])
-    (exc : Exec 0 e pre (.ok post)) :
+    (exc : Exec 0 e pre (.ok post))
+    (hfork : CoveredFork e.benvStat.fork) :
     DepositToAndCallRawSuccessEffect dp e pre post := by
   have h_mem :
       (depositToAndCallSelector, depositToAndCall) ∈ weth10Funcs dp := by
@@ -2428,7 +2437,7 @@ theorem weth10_depositToAndCall_rawSuccessEffect (dp : DeployParams)
     rw [hmemory]
     exact h_fresh
   have heffect := depositToAndCall_rawSuccessEffect dp
-    hwfBody hfreshBody hbody
+    hwfBody hfreshBody hbody hfork
   unfold DepositToAndCallRawSuccessEffect at heffect ⊢
   simpa only [hstor, hbal, hcodeFrame, hlogs, houtput] using heffect
 
@@ -2440,7 +2449,8 @@ theorem weth10_depositToAndCall_rawStepSuccessEffect (dp : DeployParams)
     (h_nonempty : e.data.length.toB256 ≠ 0)
     (h_wf : Mem.Wf pre.memory)
     (h_fresh : Mem.Reads pre.memory [])
-    (exc : Exec 0 e pre (.ok post)) :
+    (exc : Exec 0 e pre (.ok post))
+    (hfork : CoveredFork e.benvStat.fork) :
     DepositToAndCallRawStepSuccessEffect dp e pre post := by
   have h_mem :
       (depositToAndCallSelector, depositToAndCall) ∈ weth10Funcs dp := by
@@ -2455,7 +2465,7 @@ theorem weth10_depositToAndCall_rawStepSuccessEffect (dp : DeployParams)
     rw [hmemory]
     exact h_fresh
   have heffect := depositToAndCall_rawStepSuccessEffect dp
-    hwfBody hfreshBody hbody
+    hwfBody hfreshBody hbody hfork
   unfold DepositToAndCallRawStepSuccessEffect at heffect ⊢
   simpa only [hstor, hbal, hcodeFrame, hlogs, houtput] using heffect
 
@@ -2489,7 +2499,8 @@ theorem depositToAndCall_successEffect (dp : DeployParams)
     (h_wf : Mem.Wf pre.memory)
     (h_fresh : Mem.Reads pre.memory [])
     (run : Func.Run ((weth10 dp).main :: weth10Aux) e pre
-      depositToAndCall post) :
+      depositToAndCall post)
+    (hfork : CoveredFork e.benvStat.fork) :
     DepositToAndCallSuccessEffect e pre post recipient data := by
   have h_data_len : data.length < 2 ^ 256 := by
     have hceil := Nat.le_ceil32 data.length
@@ -2531,7 +2542,7 @@ theorem depositToAndCall_successEffect (dp : DeployParams)
         exact (of_run_callvalue hcv).output)
       h0.symm htl htb h_size
       (by rw [B256.length_toBytes]; omega)
-      hwfCallback hreadsCallback hcallback
+      hwfCallback hreadsCallback hcallback hfork
   exact ⟨callbackPre, hrecipient, hstor, hlogs, hbal, hcode,
     houtput, hboundary⟩
 
@@ -2546,7 +2557,8 @@ theorem weth10_depositToAndCall_successEffect (dp : DeployParams)
     (h_size : 132 + ceil32 data.length < 2 ^ 256)
     (h_wf : Mem.Wf pre.memory)
     (h_fresh : Mem.Reads pre.memory [])
-    (exc : Exec 0 e pre (.ok post)) :
+    (exc : Exec 0 e pre (.ok post))
+    (hfork : CoveredFork e.benvStat.fork) :
     DepositToAndCallSuccessEffect e pre post recipient data := by
   have h_mem :
       (depositToAndCallSelector, depositToAndCall) ∈ weth10Funcs dp := by
@@ -2561,7 +2573,7 @@ theorem weth10_depositToAndCall_successEffect (dp : DeployParams)
     rw [hmemory]
     exact h_fresh
   have heffect := depositToAndCall_successEffect dp h_dec h_size
-    hwfBody hfreshBody hbody
+    hwfBody hfreshBody hbody hfork
   unfold DepositToAndCallSuccessEffect at heffect ⊢
   simpa only [hstor, hbal, hcodeFrame, hlogs, houtput] using heffect
 
@@ -2657,10 +2669,11 @@ theorem transferAndCall_rawStepSuccessEffect (dp : DeployParams)
     (h_wf : Mem.Wf pre.memory)
     (h_fresh : Mem.Reads pre.memory [])
     (run : Func.Run ((weth10 dp).main :: weth10Aux) e pre
-      transferAndCall post) :
+      transferAndCall post)
+    (hfork : CoveredFork e.benvStat.fork) :
     TransferAndCallRawStepSuccessEffect dp e pre post := by
   simp only [transferAndCall] at run
-  rcases transferThen_callbackPrefix_effect dp h_wf h_fresh run with
+  rcases transferThen_callbackPrefix_effect dp h_wf h_fresh run hfork with
       hzero | hnonzero
   · rcases hzero with
       ⟨hargZero, callPre, callbackPre, img, hprefix, _hlen,
@@ -2676,7 +2689,7 @@ theorem transferAndCall_rawStepSuccessEffect (dp : DeployParams)
         (by unfold arg cdl; line_inv)
         (by unfold arg cdl; line_inv)
         (by unfold arg cdl; line_inv)
-        hwfCallback hreadsCallback hcallback with
+        hwfCallback hreadsCallback hcallback hfork with
       ⟨inputSize, input, hboundary⟩
     exact Or.inl ⟨hargZero, callPre, callbackPre, inputSize, input,
       hprefix, hboundary⟩
@@ -2695,7 +2708,7 @@ theorem transferAndCall_rawStepSuccessEffect (dp : DeployParams)
         (by unfold arg cdl; line_inv)
         (by unfold arg cdl; line_inv)
         (by unfold arg cdl; line_inv)
-        hwfCallback hreadsCallback hcallback with
+        hwfCallback hreadsCallback hcallback hfork with
       ⟨inputSize, input, hboundary⟩
     exact Or.inr ⟨hargNonzero, recipient, callbackPre, inputSize,
       input, hrecipient, htransfer, hflash, hlogs, hbal, hcode,
@@ -2709,10 +2722,11 @@ theorem transferAndCall_rawSuccessEffect (dp : DeployParams)
     (h_wf : Mem.Wf pre.memory)
     (h_fresh : Mem.Reads pre.memory [])
     (run : Func.Run ((weth10 dp).main :: weth10Aux) e pre
-      transferAndCall post) :
+      transferAndCall post)
+    (hfork : CoveredFork e.benvStat.fork) :
     TransferAndCallRawSuccessEffect dp e pre post := by
   simp only [transferAndCall] at run
-  rcases transferThen_callbackPrefix_effect dp h_wf h_fresh run with
+  rcases transferThen_callbackPrefix_effect dp h_wf h_fresh run hfork with
       hzero | hnonzero
   · rcases hzero with
       ⟨hargZero, callPre, callbackPre, img, hprefix, _hlen,
@@ -2728,7 +2742,7 @@ theorem transferAndCall_rawSuccessEffect (dp : DeployParams)
         (by unfold arg cdl; line_inv)
         (by unfold arg cdl; line_inv)
         (by unfold arg cdl; line_inv)
-        hwfCallback hreadsCallback hcallback with
+        hwfCallback hreadsCallback hcallback hfork with
       ⟨inputSize, input, hboundary⟩
     exact Or.inl ⟨hargZero, callPre, callbackPre, inputSize, input,
       hprefix, hboundary⟩
@@ -2747,7 +2761,7 @@ theorem transferAndCall_rawSuccessEffect (dp : DeployParams)
         (by unfold arg cdl; line_inv)
         (by unfold arg cdl; line_inv)
         (by unfold arg cdl; line_inv)
-        hwfCallback hreadsCallback hcallback with
+        hwfCallback hreadsCallback hcallback hfork with
       ⟨inputSize, input, hboundary⟩
     exact Or.inr ⟨hargNonzero, recipient, callbackPre, inputSize,
       input, hrecipient, htransfer, hflash, hlogs, hbal, hcode,
@@ -2762,7 +2776,8 @@ theorem weth10_transferAndCall_rawSuccessEffect (dp : DeployParams)
     (h_nonempty : e.data.length.toB256 ≠ 0)
     (h_wf : Mem.Wf pre.memory)
     (h_fresh : Mem.Reads pre.memory [])
-    (exc : Exec 0 e pre (.ok post)) :
+    (exc : Exec 0 e pre (.ok post))
+    (hfork : CoveredFork e.benvStat.fork) :
     e.value = 0 ∧ TransferAndCallRawSuccessEffect dp e pre post := by
   have h_mem :
       (transferAndCallSelector, nonpayable transferAndCall) ∈
@@ -2779,7 +2794,7 @@ theorem weth10_transferAndCall_rawSuccessEffect (dp : DeployParams)
     rw [hmemory]
     exact h_fresh
   have heffect := transferAndCall_rawSuccessEffect dp
-    hwfBody hfreshBody hbody
+    hwfBody hfreshBody hbody hfork
   refine ⟨hvalue, ?_⟩
   rcases heffect with hzero | hnonzero
   · rcases hzero with
@@ -2801,7 +2816,8 @@ theorem weth10_transferAndCall_rawStepSuccessEffect (dp : DeployParams)
     (h_nonempty : e.data.length.toB256 ≠ 0)
     (h_wf : Mem.Wf pre.memory)
     (h_fresh : Mem.Reads pre.memory [])
-    (exc : Exec 0 e pre (.ok post)) :
+    (exc : Exec 0 e pre (.ok post))
+    (hfork : CoveredFork e.benvStat.fork) :
     e.value = 0 ∧ TransferAndCallRawStepSuccessEffect dp e pre post := by
   have h_mem :
       (transferAndCallSelector, nonpayable transferAndCall) ∈
@@ -2818,7 +2834,7 @@ theorem weth10_transferAndCall_rawStepSuccessEffect (dp : DeployParams)
     rw [hmemory]
     exact h_fresh
   have heffect := transferAndCall_rawStepSuccessEffect dp
-    hwfBody hfreshBody hbody
+    hwfBody hfreshBody hbody hfork
   refine ⟨hvalue, ?_⟩
   rcases heffect with hzero | hnonzero
   · rcases hzero with
@@ -2873,7 +2889,8 @@ theorem transferAndCall_successEffect (dp : DeployParams)
     (h_wf : Mem.Wf pre.memory)
     (h_fresh : Mem.Reads pre.memory [])
     (run : Func.Run ((weth10 dp).main :: weth10Aux) e pre
-      transferAndCall post) :
+      transferAndCall post)
+    (hfork : CoveredFork e.benvStat.fork) :
     TransferAndCallSuccessEffect e pre post recipient amount data := by
   have h_data_len : data.length < 2 ^ 256 := by
     have hceil := Nat.le_ceil32 data.length
@@ -2886,7 +2903,7 @@ theorem transferAndCall_successEffect (dp : DeployParams)
     unfold normalizedAddressArg
     rw [h0, normalize_adr_toB256]
   simp only [transferAndCall] at run
-  rcases transferThen_callbackPrefix_effect dp h_wf h_fresh run with
+  rcases transferThen_callbackPrefix_effect dp h_wf h_fresh run hfork with
       hzero | hnonzero
   · rcases hzero with
       ⟨hargZero, callPre, callbackPre, img, hprefix, hlen,
@@ -2906,7 +2923,7 @@ theorem transferAndCall_successEffect (dp : DeployParams)
         (by unfold arg cdl; line_inv)
         (by unfold arg cdl; line_inv)
         (by unfold arg cdl; line_inv)
-        h0.symm htl htb h_size hlen hwfCallback hreadsCallback hcallback
+        h0.symm htl htb h_size hlen hwfCallback hreadsCallback hcallback hfork
     exact Or.inl ⟨hargZero, callPre, callbackPre,
       by simpa only [h1] using hprefix, hboundary⟩
   · rcases hnonzero with
@@ -2931,7 +2948,7 @@ theorem transferAndCall_successEffect (dp : DeployParams)
         (by unfold arg cdl; line_inv)
         (by unfold arg cdl; line_inv)
         (by unfold arg cdl; line_inv)
-        h0.symm htl htb h_size hlen hwfCallback hreadsCallback hcallback
+        h0.symm htl htb h_size hlen hwfCallback hreadsCallback hcallback hfork
     exact Or.inr ⟨hargNonzero, callbackPre, hrecipient,
       by simpa only [h1] using htransfer, hflash,
       by simpa only [h1] using hlogs, hbal, hcode, houtput, hboundary⟩
@@ -2948,7 +2965,8 @@ theorem weth10_transferAndCall_successEffect (dp : DeployParams)
     (h_size : 132 + ceil32 data.length < 2 ^ 256)
     (h_wf : Mem.Wf pre.memory)
     (h_fresh : Mem.Reads pre.memory [])
-    (exc : Exec 0 e pre (.ok post)) :
+    (exc : Exec 0 e pre (.ok post))
+    (hfork : CoveredFork e.benvStat.fork) :
     e.value = 0 ∧
       TransferAndCallSuccessEffect e pre post recipient amount data := by
   have h_mem :
@@ -2966,7 +2984,7 @@ theorem weth10_transferAndCall_successEffect (dp : DeployParams)
     rw [hmemory]
     exact h_fresh
   have heffect := transferAndCall_successEffect dp h_dec h_size
-    hwfBody hfreshBody hbody
+    hwfBody hfreshBody hbody hfork
   refine ⟨hvalue, ?_⟩
   rcases heffect with hzero | hnonzero
   · rcases hzero with
@@ -2988,7 +3006,7 @@ theorem erc677_codelessCallback_runCompiledTo
     (h_room : stack.length < 1022) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) e
       (base.setMach ⟨0 :: stack, base.memory,
-        G + codelessCallbackCost⟩)
+        G + codelessCallbackCost, base.stateGas⟩)
       (iszero ::: Func.revert <?>
         (pop ::: value +++ storeTokenCallbackHead sel +++
           pushList [0, 0] +++ forwardArgTail dataArg 4 +++
@@ -2996,7 +3014,7 @@ theorem erc677_codelessCallback_runCompiledTo
           pushB256 callbackArgsOffset ::: pushB256 0 :::
           arg targetArg +++ gas ::: call ::: .call boolReturnSlot))
       (.error (.revert,
-        (base.setMach ⟨stack, base.memory, G⟩).withOutput [])) := by
+        (base.setMach ⟨stack, base.memory, G, base.stateGas⟩).withOutput [])) := by
   exact codelessCallback_runCompiledTo h_room
 
 /-- All three ERC-677 endpoints use the same Boolean auxiliary, so a failed
@@ -3010,11 +3028,11 @@ theorem erc677_childRevert_runCompiledTo
     (h_room : stack.length < 1021) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) e
       (base.setMach
-        ⟨0 :: stack, base.memory, G + bubbleContinuationCost base⟩)
+        ⟨0 :: stack, base.memory, G + bubbleContinuationCost base, base.stateGas⟩)
       boolReturn
       (.error (.revert,
         (base.setMach
-          ⟨stack, base.memory.write 0 base.returnData, G⟩).withOutput
+          ⟨stack, base.memory.write 0 base.returnData, G, base.stateGas⟩).withOutput
             base.returnData)) := by
   exact boolReturn_childRevert_runCompiledTo
     h_wf h_reads h_align h_len h_room
@@ -3027,10 +3045,10 @@ theorem erc677_shortReturn_runCompiledTo
     (h_short : base.returnData.length < 32)
     (h_room : stack.length < 1020) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) e
-      (base.setMach ⟨1 :: stack, base.memory, G + shortReturnCost⟩)
+      (base.setMach ⟨1 :: stack, base.memory, G + shortReturnCost, base.stateGas⟩)
       boolReturn
       (.error (.revert,
-        (base.setMach ⟨stack, base.memory, G⟩).withOutput [])) := by
+        (base.setMach ⟨stack, base.memory, G, base.stateGas⟩).withOutput [])) := by
   exact boolReturn_short_runCompiledTo h_short h_room
 
 end Weth10

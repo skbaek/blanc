@@ -29,6 +29,7 @@ These apply to every row below and to any sentence quoted from this map.
   at configured distinct accounts (`PairRoot`). None of them is about WETH9, the
   OpenZeppelin reference, or any deployed code, and no CREATE transaction is
   covered.
+- **Covered forks only.** Since 2026-09-23 every frame-level theorem below takes `CoveredFork sevm.benvStat.fork` (message-level ones take `CoveredFork msg.benv.stat.fork`). Every configured-chain headline (`pair_reachable_*`, `pair_history_*`) takes `∀ t f, cfg.forkAt t = .ok f → CoveredFork f`. `TargetPreservesConserved` and `ConfiguredMessages.step` carry the same premise, so `vault_message_preserves_conserved` "all twenty-five targets" is stated for covered frames. The covered forks are exactly Prague, Osaka, BPO1 and BPO2. Mainnet's schedule satisfies the chain premise (`mainnetChainConfig_covered`). Amsterdam is not covered.
 - **Partial correctness.** A compiled-effect theorem describes every
   *successful* run: it takes the run as a hypothesis. It does not say that a
   call succeeds.

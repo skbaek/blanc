@@ -21,7 +21,9 @@ entered target-frame root. The condition is about entry state only; the
 execution result and poststate remain conclusions. -/
 def SoundAdmitted (c : ContractSpec) (ca : Adr)
     (entry : Sevm → Devm → Prop) : Prop :=
-  ∀ {sevm pre post} (execution : Exec 0 sevm pre (.ok post)),
+  ∀ {sevm pre post},
+    CoveredFork sevm.benvStat.fork →
+    (execution : Exec 0 sevm pre (.ok post)) →
     Prog.Run sevm pre c.prog post →
     sevm.currentTarget = ca →
     Exec.FrameAdmitted ca entry execution →
@@ -29,6 +31,7 @@ def SoundAdmitted (c : ContractSpec) (ca : Adr)
         (child : Exec pc' sevm' pre' (.ok post')),
       sevm'.depth < sevm.depth →
       Prog.At c.prog ca pc' sevm' pre' →
+      CoveredFork sevm'.benvStat.fork →
       Exec.FrameAdmitted ca entry child →
       c.PreWf ca sevm' pre' →
       c.Post ca sevm' post') →
@@ -41,7 +44,9 @@ actual target-frame roots. This is the trace-admitted analogue of
 `ContractSpec.Preserves`. -/
 def PreservesAdmitted (c : ContractSpec) (ca : Adr)
     (entry : Sevm → Devm → Prop) : Prop :=
-  ∀ sevm pre post (execution : Exec 0 sevm pre (.ok post)),
+  ∀ sevm pre post,
+    CoveredFork sevm.benvStat.fork →
+    (execution : Exec 0 sevm pre (.ok post)) →
     Exec.FrameAdmitted ca entry execution →
     (sevm.currentTarget = ca → some sevm.code.toList = Prog.compile c.prog) →
     (sevm.currentTarget = ca → Mem.Wf pre.memory) →
@@ -60,7 +65,9 @@ theorem preserves_lift_admitted (c : ContractSpec) (ca : Adr)
     (σ_of_wf : ∀ {e : Sevm} {d : Devm},
       Mem.Wf d.memory → c.Pre ca e d → σ e d)
     (body :
-      ∀ {sevm pre post} (execution : Exec 0 sevm pre (.ok post)),
+      ∀ {sevm pre post},
+        CoveredFork sevm.benvStat.fork →
+        (execution : Exec 0 sevm pre (.ok post)) →
         Prog.Run sevm pre c.prog post →
         sevm.currentTarget = ca →
         Exec.FrameAdmitted ca entry execution →
@@ -68,32 +75,54 @@ theorem preserves_lift_admitted (c : ContractSpec) (ca : Adr)
             (child : Exec pc' sevm' pre' (.ok post')),
           sevm'.depth < sevm.depth →
           Prog.At c.prog ca pc' sevm' pre' →
+          CoveredFork sevm'.benvStat.fork →
           Exec.FrameAdmitted ca entry child →
           σ sevm' pre' →
           c.Post ca sevm' post') →
         σ sevm pre →
         c.Post ca sevm post) :
-    ∀ sevm pre post (execution : Exec 0 sevm pre (.ok post)),
+    ∀ sevm pre post,
+      CoveredFork sevm.benvStat.fork →
+      (execution : Exec 0 sevm pre (.ok post)) →
       Exec.FrameAdmitted ca entry execution →
       (sevm.currentTarget = ca → some sevm.code.toList = Prog.compile c.prog) →
       σ sevm pre →
       c.Post ca sevm post := by
-  intro sevm pre post execution admitted h_code hσ
-  refine lift_inv_admitted entry ca c.prog σ (c.Post ca) body
-    ?_ ?_ ?_ ?_ 0 sevm pre post execution ?_ admitted hσ
-  · intro pc' sevm' pre' n' inter' h_at' h_run' h_ne' hσ'
-    refine σ_of_ne h_ne' ?_
+  intro sevm devm post hfork execution admitted h_code hσ
+  refine lift_inv_admitted entry ca c.prog
+    (fun e d => σ e d ∧ CoveredFork e.benvStat.fork) (c.Post ca) ?_
+    ?_ ?_ ?_ ?_ 0 sevm devm post execution ?_ admitted ⟨hσ, hfork⟩
+  · intro sevm' pre' post' run hprog target admitted ih hσ'
+    exact body hσ'.2 run hprog target admitted
+      (fun pc'' sevm'' pre'' post'' child depth childAt hfork' childAdmitted hpre' =>
+        ih pc'' sevm'' pre'' post'' child depth childAt childAdmitted ⟨hpre', hfork'⟩)
+      hσ'.1
+  · intro pc' sevm' pre' n' inter' h_at' h_run' h_ne' h_pc'
+    obtain ⟨hσ', hfork'⟩ := h_pc'
+    refine ⟨σ_of_ne h_ne' ?_, hfork'⟩
     replace hσ' := σ_pre hσ'
     cases n' with
     | push xs le =>
-      rcases Except.bind_eq_ok (Step.run_ofExecution.mp h_run').2.symm with
-        ⟨devm1, h_charge, h_push⟩
+      have hrun := (Step.run_ofExecution (xl := (.none : Xlot))).mp h_run'
+      rcases Except.bind_eq_ok hrun.2.symm with ⟨devm1, h_charge, h_push⟩
       exact hσ'.state_eq
         (((Devm.burn_of_chargeGas h_charge).state).trans
           ((Devm.push_of_push h_push).state)).symm
+    | dupn imm =>
+      have frame := Ninst.dupn_instructionFrame_effectRec
+        (xl := .none) trivial h_run'
+      exact hσ'.state_eq frame.state.symm
+    | swapn imm =>
+      have frame := Ninst.swapn_instructionFrame_effectRec
+        (xl := .none) trivial h_run'
+      exact hσ'.state_eq frame.state.symm
+    | exchange imm =>
+      have frame := Ninst.exchange_instructionFrame_effectRec
+        (xl := .none) trivial h_run'
+      exact hσ'.state_eq frame.state.symm
     | reg r =>
       have h_reg : Rinst.run ⟨pc', sevm', pre'⟩ r = .ok inter' := by
-        exact (Step.run_ofExecution.mp h_run').2.symm
+        exact ((Step.run_ofExecution (xl := (.none : Xlot))).mp h_run').2.symm
       by_cases h_ss : r = Rinst.sstore
       · subst h_ss
         have h_frame := Rinst.sstore_run_stateWriteFrame pc' pre' sevm'
@@ -106,26 +135,46 @@ theorem preserves_lift_admitted (c : ContractSpec) (ca : Adr)
           (Rinst.preserves_bal h_reg).symm
           (congr_fun (Rinst.preserves_stor h_ss h_reg) ca).symm
     | exec x =>
-      refine Xinst.none_preserves_precond (x := x) ?_ h_ne' hσ'
+      refine Xinst.none_preserves_precond (x := x) hfork' ?_ h_ne' hσ'
       exact XStep.run_toStep.mp h_run'
-  · intro pc' sevm' pre' n' evm'' out'' inter' h_at' h_run' child h_ne' hσ'
+  · intro pc' sevm' pre' n' evm'' exn'' inter' h_at' h_run' ex_sub' h_ne' h_pc'
+    obtain ⟨hσ', hfork'⟩ := h_pc'
     cases n' with
     | push xs le =>
-      cases (Step.run_ofExecution.mp h_run').1
+      have hrun := (Step.run_ofExecution
+        (xl := (.some ⟨evm'', exn''⟩ : Xlot))).mp h_run'
+      cases hrun.1
+    | dupn imm =>
+      have hrun := (Step.run_ofExecution
+        (xl := (.some ⟨evm'', exn''⟩ : Xlot))).mp h_run'
+      cases hrun.1
+    | swapn imm =>
+      have hrun := (Step.run_ofExecution
+        (xl := (.some ⟨evm'', exn''⟩ : Xlot))).mp h_run'
+      cases hrun.1
+    | exchange imm =>
+      have hrun := (Step.run_ofExecution
+        (xl := (.some ⟨evm'', exn''⟩ : Xlot))).mp h_run'
+      cases hrun.1
     | reg r =>
-      cases (Step.run_ofExecution.mp h_run').1
+      have hrun := (Step.run_ofExecution
+        (xl := (.some ⟨evm'', exn''⟩ : Xlot))).mp h_run'
+      cases hrun.1
     | exec x =>
-      have hx : Xinst.Run sevm' pre' x (.some ⟨evm'', out''⟩) (.ok inter') :=
-        XStep.run_toStep.mp h_run'
+      have hx : Xinst.Run sevm' pre' x (.some ⟨evm'', exn''⟩) (.ok inter') := by
+        exact XStep.run_toStep.mp h_run'
+      have hfork_c := Xinst.Run.some_child_fork hx hfork'
       obtain ⟨h_child, h_back⟩ :=
-        Xinst.some_preserves_precond (x := x) hx child h_ne' (σ_pre hσ')
-      exact ⟨σ_of_wf (Xinst.some_child_wf hx) h_child,
-        fun h_if => σ_of_ne h_ne' (h_back h_if)⟩
-  · intro pc' sevm' pre' j' pc'' inter' h_at' h_run' h_ne' hσ'
-    exact σ_of_ne h_ne'
-      (Pre.state_eq (σ_pre hσ') (Jinst.preserves_state h_run'))
-  · intro pc' sevm' pre' l' post' h_at' h_run' h_ne' hσ'
-    exact Linst.inv_postcond h_run' h_ne' (σ_pre hσ')
+        Xinst.some_preserves_precond (x := x) hfork' hx ex_sub' h_ne' (σ_pre hσ')
+      exact ⟨⟨σ_of_wf (Xinst.some_child_wf hx) h_child, hfork_c⟩,
+        fun h_if => ⟨σ_of_ne h_ne' (h_back h_if), hfork'⟩⟩
+  · intro pc' sevm' pre' j' pc'' inter' h_at' h_run' h_ne' h_pc'
+    obtain ⟨hσ', hfork'⟩ := h_pc'
+    exact ⟨σ_of_ne h_ne'
+      (Pre.state_eq (σ_pre hσ') (Jinst.preserves_state h_run')), hfork'⟩
+  · intro pc' sevm' pre' l' post' h_at' h_run' h_ne' h_pc'
+    obtain ⟨hσ', hfork'⟩ := h_pc'
+    exact Linst.inv_postcond hfork' h_run' h_ne' (σ_pre hσ')
   · exact ⟨(σ_pre hσ).1, fun target => ⟨h_code target, rfl⟩⟩
 
 /-- The memory-carrying trace-admitted frame theorem. -/
@@ -133,16 +182,16 @@ theorem preserves_inv_admitted (c : ContractSpec) (ca : Adr)
     (entry : Sevm → Devm → Prop)
     (body : c.SoundAdmitted ca entry) :
     c.PreservesAdmitted ca entry := by
-  intro sevm pre post execution admitted h_code h_wf h_pre
+  intro sevm pre post hfork execution admitted h_code h_wf h_pre
   refine preserves_lift_admitted c ca entry (c.PreWf ca)
     (fun h => h.pre)
     (fun h_ne h => ⟨h, fun target => (h_ne target).elim⟩)
     (fun h_wf' h => ⟨h, fun _ => h_wf'⟩) ?_
-    sevm pre post execution admitted h_code ⟨h_pre, h_wf⟩
-  intro sevm' pre' post' run h_prog h_target h_admitted ih h_pre'
-  exact body run h_prog h_target h_admitted
-    (fun pc'' sevm'' pre'' post'' child depth childAt childAdmitted h_childPre =>
-      ih pc'' sevm'' pre'' post'' child depth childAt childAdmitted h_childPre)
+    sevm pre post hfork execution admitted h_code ⟨h_pre, h_wf⟩
+  intro sevm' pre' post' hfork' run h_prog h_target h_admitted ih h_pre'
+  exact body hfork' run h_prog h_target h_admitted
+    (fun pc'' sevm'' pre'' post'' child depth childAt hfork'' childAdmitted h_childPre =>
+      ih pc'' sevm'' pre'' post'' child depth childAt hfork'' childAdmitted h_childPre)
     (h_pre'.wf h_target) h_pre'.pre
 
 end ContractSpec

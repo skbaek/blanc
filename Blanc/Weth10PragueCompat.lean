@@ -19,6 +19,14 @@ abbrev PragueDeploymentRoot
     (dp : DeployParams) (ca : Adr) : Prop :=
   DeploymentRoot (ChainConfig.pragueOnly chainId) base deployed dp ca
 
+/-- A Prague-only schedule selects only the covered Prague fork. -/
+private theorem pragueOnly_covered (chainId : UInt64) :
+    ∀ t f, (ChainConfig.pragueOnly chainId).forkAt t = .ok f → CoveredFork f := by
+  intro t f h
+  rw [ChainConfig.pragueOnly_forkAt] at h
+  cases h
+  exact CoveredFork.prague
+
 /-! ## Legacy fixed-Prague entry points -/
 
 theorem stateTransition_preserves_stable
@@ -28,8 +36,8 @@ theorem stateTransition_preserves_stable
     (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (hstable : Stable dp ca ch.state) :
     Stable dp ca ch'.state :=
-  stateTransitionWith_preserves_stable
-    dp ca pragueRules ch ch' block h_run h_wds hstable
+  stateTransitionAt_preserves_stable
+    dp ca .prague ch ch' block h_run h_wds hstable CoveredFork.prague
 
 theorem chain_preserves_stable
     (dp : DeployParams) (ca : Adr) (ch ch' : BlockChain)
@@ -54,8 +62,8 @@ theorem addBlockToChain_preserves_stable
       sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (hstable : Stable dp ca ch.state) :
     Stable dp ca ch'.state :=
-  addBlockToChainWith_preserves_stable
-    dp ca pragueRules ch ch' rlp h_run h_wds hstable
+  addBlockToChainAt_preserves_stable
+    dp ca .prague ch ch' rlp h_run h_wds hstable CoveredFork.prague
 
 /-! ## Named Prague-only corollaries -/
 
@@ -67,6 +75,7 @@ theorem chainUsing_preserves_stable_prague
     Stable dp ca ch'.state :=
   chainUsing_preserves_stable
     dp ca (ChainConfig.pragueOnly chainId) ch ch' hreach hstable
+    (pragueOnly_covered chainId)
 
 theorem chain_reachable_backed_and_flash_zero_prague
     {chainId : UInt64} (dp : DeployParams) (ca : Adr)
@@ -77,6 +86,7 @@ theorem chain_reachable_backed_and_flash_zero_prague
       balSum (ch'.state.getStor ca) ≤ (ch'.state.bal ca).toNat :=
   chain_reachable_backed_and_flash_zero
     dp ca (ChainConfig.pragueOnly chainId) ch ch' hreach hstable
+    (pragueOnly_covered chainId)
 
 theorem deployment_reachable_residual_messageRedemption_enabled_prague
     {chainId : UInt64} {rules : ForkRules}
@@ -94,7 +104,7 @@ theorem deployment_reachable_residual_messageRedemption_enabled_prague
       rules dp ca u recipient q future.state msg) :
     MessageRedemptionEnabled dp ca u recipient q future.state msg :=
   deployment_reachable_residual_messageRedemption_enabled
-    hroot hcheckpoint hq henv
+    hroot (pragueOnly_covered chainId) hcheckpoint hq henv
 
 theorem deployment_reachable_residual_transactionRedemption_enabled_prague
     {chainId : UInt64} {rules : ForkRules}
@@ -114,7 +124,7 @@ theorem deployment_reachable_residual_transactionRedemption_enabled_prague
       rules dp ca u recipient q benv bout tx index) :
     TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
   deployment_reachable_residual_transactionRedemption_enabled
-    hroot hcheckpoint hq hentry henv
+    hroot (pragueOnly_covered chainId) hcheckpoint hq hentry henv
 
 theorem deployment_reachable_residual_selfMessageRedemption_enabled_prague
     {chainId : UInt64} {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
@@ -130,7 +140,7 @@ theorem deployment_reachable_residual_selfMessageRedemption_enabled_prague
     (henv : AdmissibleSelfRedemptionMessage rules dp ca u q future.state msg) :
     MessageRedemptionEnabled dp ca u u q future.state msg :=
   deployment_reachable_residual_selfMessageRedemption_enabled
-    hroot hcheckpoint hq henv
+    hroot (pragueOnly_covered chainId) hcheckpoint hq henv
 
 theorem deployment_reachable_residual_selfTransactionRedemption_enabled_prague
     {chainId : UInt64} {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
@@ -148,7 +158,7 @@ theorem deployment_reachable_residual_selfTransactionRedemption_enabled_prague
     (henv : AdmissibleSelfRedemptionTx rules dp ca u q benv bout tx index) :
     TransactionRedemptionEnabled dp ca u u q benv bout tx index :=
   deployment_reachable_residual_selfTransactionRedemption_enabled
-    hroot hcheckpoint hq hentry henv
+    hroot (pragueOnly_covered chainId) hcheckpoint hq hentry henv
 
 theorem deployment_reachable_booked_messageRedemption_enabled_prague
     {chainId : UInt64} {rules : ForkRules}
@@ -162,7 +172,7 @@ theorem deployment_reachable_booked_messageRedemption_enabled_prague
       rules dp ca u recipient q future.state msg) :
     MessageRedemptionEnabled dp ca u recipient q future.state msg :=
   deployment_reachable_booked_messageRedemption_enabled
-    hroot hfuture hq henv
+    hroot (pragueOnly_covered chainId) hfuture hq henv
 
 theorem deployment_reachable_booked_transactionRedemption_enabled_prague
     {chainId : UInt64} {rules : ForkRules}
@@ -178,7 +188,7 @@ theorem deployment_reachable_booked_transactionRedemption_enabled_prague
       rules dp ca u recipient q benv bout tx index) :
     TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
   deployment_reachable_booked_transactionRedemption_enabled
-    hroot hfuture hentry hq henv
+    hroot (pragueOnly_covered chainId) hfuture hentry hq henv
 
 theorem deployment_reachable_booked_selfTransactionRedemption_enabled_prague
     {chainId : UInt64} {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
@@ -192,7 +202,7 @@ theorem deployment_reachable_booked_selfTransactionRedemption_enabled_prague
     (henv : AdmissibleSelfRedemptionTx rules dp ca u q benv bout tx index) :
     TransactionRedemptionEnabled dp ca u u q benv bout tx index :=
   deployment_reachable_booked_selfTransactionRedemption_enabled
-    hroot hfuture hentry hq henv
+    hroot (pragueOnly_covered chainId) hfuture hentry hq henv
 
 theorem
     deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSender_prague
@@ -211,7 +221,7 @@ theorem
     (hrecovered : recoverSender benv.stat.chainId tx = .ok u) :
     TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
   deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSender
-    hroot hfuture hentry hq henv hrecovered
+    hroot (pragueOnly_covered chainId) hfuture hentry hq henv hrecovered
 
 theorem deployment_reachable_future_redeemable_prague
     {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
@@ -223,7 +233,7 @@ theorem deployment_reachable_future_redeemable_prague
       (ChainConfig.pragueOnly chainId) checkpoint future) :
     ∃ history, FutureRedemptionGuarantee
       (ChainConfig.pragueOnly chainId) dp ca u checkpoint future history :=
-  deployment_reachable_future_redeemable hroot hcheckpoint hfuture
+  deployment_reachable_future_redeemable hroot (pragueOnly_covered chainId) hcheckpoint hfuture
 
 theorem deployment_reachable_future_dualSelector_redeemable_prague
     {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
@@ -236,7 +246,7 @@ theorem deployment_reachable_future_dualSelector_redeemable_prague
     ∃ history, FutureDualSelectorRedemptionGuarantee
       (ChainConfig.pragueOnly chainId) dp ca u checkpoint future history :=
   deployment_reachable_future_dualSelector_redeemable
-    hroot hcheckpoint hfuture
+    hroot (pragueOnly_covered chainId) hcheckpoint hfuture
 
 theorem deployment_reachable_future_redeemable_allHolders_prague
     {chainId : UInt64} {dp : DeployParams} {ca : Adr}
@@ -249,7 +259,7 @@ theorem deployment_reachable_future_redeemable_allHolders_prague
     ∃ history, ∀ u : Adr, FutureRedemptionGuarantee
       (ChainConfig.pragueOnly chainId) dp ca u checkpoint future history :=
   deployment_reachable_future_redeemable_allHolders
-    hroot hcheckpoint hfuture
+    hroot (pragueOnly_covered chainId) hcheckpoint hfuture
 
 theorem deploymentRoot_allowanceQuiescent_prague
     {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
@@ -267,7 +277,7 @@ theorem deployment_fullWindow_future_redeemable_prague
     AllowanceQuiescent ca u deployed.state ∧
       ∃ history, FutureRedemptionGuarantee
         (ChainConfig.pragueOnly chainId) dp ca u deployed future history :=
-  deployment_fullWindow_future_redeemable hroot hfuture
+  deployment_fullWindow_future_redeemable hroot (pragueOnly_covered chainId) hfuture
 
 theorem deployment_fullWindow_attributionRootAt_ne_checkpoint_prague
     {chainId : UInt64} {dp : DeployParams} {ca u : Adr}
@@ -343,7 +353,7 @@ theorem deployment_reachable_dormant_holder_balance_monotone_prague
       NoAuthorizingActBy u history →
       bookedBalanceNat deployed.state ca u ≤
         bookedBalanceNat future.state ca u :=
-  deployment_reachable_dormant_holder_balance_monotone hroot hfuture
+  deployment_reachable_dormant_holder_balance_monotone hroot (pragueOnly_covered chainId) hfuture
 
 theorem deployment_reachable_redeemClaims_anyOrder_prague
     {chainId : UInt64} {rules : ForkRules} {timestamp : Nat}
@@ -357,7 +367,7 @@ theorem deployment_reachable_redeemClaims_anyOrder_prague
     (hperm : cs.Perm ds) :
     ∃ post, RedemptionOutcome rules dp ca ds future.state post :=
   deployment_reachable_redeemClaims_anyOrder
-    hroot hfuture hrules hadm hperm
+    hroot hfuture (pragueOnly_covered chainId) hrules hadm hperm
 
 theorem deployment_reachable_redeemEveryoneList_anyOrder_prague
     {chainId : UInt64} {rules : ForkRules} {timestamp : Nat}
@@ -376,7 +386,7 @@ theorem deployment_reachable_redeemEveryoneList_anyOrder_prague
       (fullBalanceClaims ca future.state holders recipient).Perm claims) :
     ∃ post, RedemptionOutcome rules dp ca claims future.state post :=
   deployment_reachable_redeemEveryoneList_anyOrder
-    hroot hfuture hrules hnodup hrecipients hperm
+    hroot hfuture (pragueOnly_covered chainId) hrules hnodup hrecipients hperm
 
 theorem AccountedHistory.flash_pair_totals_eq_prague
     {chainId : UInt64} {dp : DeployParams} {ca u : Adr}

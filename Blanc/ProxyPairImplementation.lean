@@ -120,14 +120,14 @@ contract-specific execution theorem.
 -/
 
 theorem implSuccess_runCompiledTo (fs : List Func) (sevm : Sevm) (base : Devm)
-    (G : Nat) (h_static : sevm.isStatic = false)
+    (G : Nat) (hfork : CoveredFork sevm.benvStat.fork) (h_static : sevm.isStatic = false)
     (h_cold : (⟨sevm.currentTarget, implSlot⟩ : Adr × B256) ∉
       base.accessedStorageKeys)
     (h_orig : getOrigStorVal sevm sevm.currentTarget implSlot = 0)
     (h_cur : Devm.getStorVal base sevm.currentTarget implSlot = 0) :
     ∃ post,
       Func.RunCompiledTo fs sevm
-          (base.setMach ⟨[], Mem.empty, G + implBodyGas⟩)
+          (base.setMach ⟨[], Mem.empty, G + implBodyGas, base.stateGas⟩)
           implSuccess (.ok post) ∧
       post.error = base.error ∧
       post.output = implReturnWord.toBytes ∧
@@ -140,6 +140,7 @@ theorem implSuccess_runCompiledTo (fs : List Func) (sevm : Sevm) (base : Devm)
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · unfold implSuccess mstoreAt
     func_run [22100, 3]
+    case h_legacy => exact hfork.rules_stateGas_none
     case h_cost =>
       rw [Devm.getStorVal_setMach, h_orig, h_cur]
       decide
@@ -193,6 +194,7 @@ jumped empty-revert arm.
 
 theorem implGuarded_runCompiledTo_nonzero
     (fs : List Func) (sevm : Sevm) (base : Devm) (G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_static : sevm.isStatic = false)
     (h_cold : (⟨sevm.currentTarget, implSlot⟩ : Adr × B256) ∉
       base.accessedStorageKeys)
@@ -201,7 +203,7 @@ theorem implGuarded_runCompiledTo_nonzero
     (h_data : Sevm.dataWord sevm 0 ≠ 0) :
     ∃ post,
       Func.RunCompiledTo fs sevm
-          (base.setMach ⟨[], Mem.empty, G + implGuardedSuccessGas⟩)
+          (base.setMach ⟨[], Mem.empty, G + implGuardedSuccessGas, base.stateGas⟩)
           implGuarded (.ok post) ∧
       post.error = base.error ∧
       post.output = implReturnWord.toBytes ∧
@@ -214,6 +216,7 @@ theorem implGuarded_runCompiledTo_nonzero
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · unfold implGuarded cdl
     func_run [0, 22100, 3]
+    case h_legacy => exact hfork.rules_stateGas_none
     all_goals try {simp [B256.eqCheck, h_data]}
     all_goals try {rw [Devm.getStorVal_setMach, h_orig, h_cur]; decide}
     case h_ext =>
@@ -261,7 +264,7 @@ theorem implGuarded_runCompiledTo_zero
     (h_data : Sevm.dataWord sevm 0 = 0) :
     ∃ post,
       Func.RunCompiledTo fs sevm
-          (base.setMach ⟨[], Mem.empty, G + implGuardedRevertGas⟩)
+          (base.setMach ⟨[], Mem.empty, G + implGuardedRevertGas, base.stateGas⟩)
           implGuarded (.error (.revert, post)) ∧
       post.error = base.error ∧
       post.output = [] ∧
@@ -269,7 +272,7 @@ theorem implGuarded_runCompiledTo_zero
       post.state = base.state ∧
       post.transientStorage = base.transientStorage ∧
       post.logs = base.logs := by
-  let post := (base.setMach ⟨[], Mem.empty, G⟩).withOutput []
+  let post := (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput []
   refine ⟨post, ?_, ?_, rfl, ?_, ?_, ?_, ?_⟩
   · unfold implGuarded cdl implRevert post
     rw [implGuardedRevertGas_eq]
@@ -283,13 +286,14 @@ theorem implGuarded_runCompiledTo_zero
       simp only [Devm.gasLeft_setMach, Nat.add_zero]
     · exact Devm.memRead_zero
   · rw [Devm.withOutput_error, Devm.setMach_error]
-  · rw [Devm.withOutput_gasLeft, Devm.gasLeft_setMach]
+  · rfl
   · rw [Devm.withOutput_state, Devm.setMach_state]
   · rw [Devm.withOutput_transientStorage, Devm.setMach_transientStorage]
   · rw [Devm.withOutput_logs, Devm.setMach_logs]
 
 private lemma static_sstore_run
     (pc : Nat) (sevm : Sevm) (d : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_static : sevm.isStatic = true)
     (h_stack : d.stack = implSlot :: 1 :: [])
     (h_stipend : gCallStipend < d.gasLeft)
@@ -303,7 +307,10 @@ private lemma static_sstore_run
         .error ⟨.halt (.writeInStaticContext .none), post⟩ ∧
       post.state = d.state ∧ post.transientStorage = d.transientStorage ∧
       post.logs = d.logs := by
-  show ∃ post,
+  have h_legacy : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
+  have h_bal := BenvStat.bal_none_of_stateGas_none h_legacy
+  have h_gas := BenvStat.gas_eq_prague_of_stateGas_none h_legacy
+  rw [show Rinst.run ⟨pc, sevm, d⟩ .sstore =
     (do
       let ⟨key, d⟩ ← d.pop
       let ⟨new_value, d⟩ ← d.pop
@@ -321,25 +328,24 @@ private lemma static_sstore_run
           else gasCost2 + (gasStorageUpdate - gasColdSload)
         else gasCost2 + gasWarmAccess
       let d ← .ok <| d.withRefundCounter
-        (sstoreNewRefundCounter new_value original_value current_value d.refundCounter)
+        (sstoreNewRefundCounter pragueRules.gas new_value original_value current_value d.refundCounter)
       let d ← chargeGas gasCost3 d
       assertDynamic sevm d
-      .ok (d.setStorVal sevm.currentTarget key new_value)) =
-      .error ⟨.halt (.writeInStaticContext .none), post⟩ ∧
-      post.state = d.state ∧ post.transientStorage = d.transientStorage ∧
-      post.logs = d.logs
-  have h_pop : (d.setMach ⟨[1], d.memory, d.gasLeft⟩).pop =
-      .ok ⟨1, d.setMach ⟨[], d.memory, d.gasLeft⟩⟩ := by rfl
+      .ok (d.setStorVal sevm.currentTarget key new_value)) from by
+    simp [Rinst.run, Rinst.runCore, h_legacy, h_bal, h_gas,
+      Devm.balReadAccount_of_bal_none, Devm.balReadStorage_of_bal_none]]
+  have h_pop : (d.setMach ⟨[1], d.memory, d.gasLeft, d.stateGas⟩).pop =
+      .ok ⟨1, d.setMach ⟨[], d.memory, d.gasLeft, d.stateGas⟩⟩ := by rfl
   have h_if : (if (0 : B256) = 1 then gasColdSload + gasWarmAccess
       else gasColdSload + gasStorageSet) = gasColdSload + gasStorageSet := by
     decide
-  let d0 := d.setMach ⟨[], d.memory, d.gasLeft⟩
+  let d0 := d.setMach ⟨[], d.memory, d.gasLeft, d.stateGas⟩
   let d1 := addAccessedStorageKey d0 sevm.currentTarget implSlot
   let d2 := d1.withRefundCounter
-    (sstoreNewRefundCounter 1 0 0 d1.refundCounter)
+    (sstoreNewRefundCounter pragueRules.gas 1 0 0 d1.refundCounter)
   have h_charge : chargeGas (gasColdSload + gasStorageSet) d2 =
       .ok (d2.setMach ⟨d2.stack, d2.memory,
-        d.gasLeft - (gasColdSload + gasStorageSet)⟩) := by
+        d.gasLeft - (gasColdSload + gasStorageSet), d2.stateGas⟩) := by
     exact chargeGas_eq_ok h_cost
   have hd0 : Devm.WorldEq d d0 := Devm.worldEq_setMach d _
   have hd1 : Devm.WorldEq d0 d1 :=
@@ -352,7 +358,7 @@ private lemma static_sstore_run
   have hlogs1 : d1.logs = d0.logs := by rfl
   have hlogs2 : d2.logs = d1.logs := by rfl
   let post := d2.setMach ⟨d2.stack, d2.memory,
-    d.gasLeft - (gasColdSload + gasStorageSet)⟩
+    d.gasLeft - (gasColdSload + gasStorageSet), d2.stateGas⟩
   refine ⟨post, ?_, ?_, ?_, ?_⟩
   rw [Devm.pop_eq_ok h_stack]
   simp [h_pop, h_if, assertDynamic, Except.assert,
@@ -367,6 +373,7 @@ private lemma static_sstore_run
 
 private lemma static_sstore_step
     (pc : Nat) (sevm : Sevm) (d : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_static : sevm.isStatic = true)
     (h_stack : d.stack = implSlot :: 1 :: [])
     (h_stipend : gCallStipend < d.gasLeft)
@@ -381,13 +388,14 @@ private lemma static_sstore_step
       post.state = d.state ∧ post.transientStorage = d.transientStorage ∧
       post.logs = d.logs := by
   obtain ⟨post, hrun, hstate, htrans, hlogs⟩ :=
-    static_sstore_run pc sevm d h_static h_stack h_stipend h_cost h_cold h_orig h_cur
+    static_sstore_run pc sevm d hfork h_static h_stack h_stipend h_cost h_cold h_orig h_cur
   refine ⟨post, ?_, hstate, htrans, hlogs⟩
   exact Step.run_ofExecution.mpr ⟨rfl, hrun.symm⟩
 
 theorem implGuarded_static_sstore_halt
     (pc : Nat) (sevm : Sevm) (d : Devm)
     (h_at : Ninst.At sevm.code pc (.reg .sstore))
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_static : sevm.isStatic = true)
     (h_stack : d.stack = implSlot :: 1 :: [])
     (h_stipend : gCallStipend < d.gasLeft)
@@ -404,7 +412,7 @@ theorem implGuarded_static_sstore_halt
       post.state = d.state ∧ post.transientStorage = d.transientStorage ∧
       post.logs = d.logs := by
   obtain ⟨post, hstep, hstate, htrans, hlogs⟩ :=
-    static_sstore_step pc sevm d h_static h_stack h_stipend h_cost h_cold h_orig h_cur
+    static_sstore_step pc sevm d hfork h_static h_stack h_stipend h_cost h_cold h_orig h_cur
   have hexec : Nonempty (Exec pc sevm d
       (.error ⟨.halt (.writeInStaticContext .none), post⟩)) :=
     Ninst.exec_of_stepRun_error h_at (show Xlot.Filled .none from trivial) hstep
@@ -414,6 +422,7 @@ theorem implGuarded_static_sstore_halt
 
 theorem implGuarded_static_halt_exec
     (sevm : Sevm) (base : Devm) (G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_code : sevm.code = implGuardedCode)
     (h_static : sevm.isStatic = true)
     (h_cold :
@@ -427,32 +436,32 @@ theorem implGuarded_static_halt_exec
     ∃ post,
       Nonempty (Exec 0 sevm
         (base.setMach ⟨[], Mem.empty,
-          G + implGuardedSuccessEntryGas⟩)
+          G + implGuardedSuccessEntryGas, base.stateGas⟩)
         (.error ⟨.halt (.writeInStaticContext .none), post⟩)) ∧
       exec ⟨0, sevm,
         (base.setMach ⟨[], Mem.empty,
-          G + implGuardedSuccessEntryGas⟩)⟩ =
+          G + implGuardedSuccessEntryGas, base.stateGas⟩)⟩ =
         .error ⟨.halt (.writeInStaticContext .none), post⟩ ∧
       post.state = base.state ∧
       post.transientStorage = base.transientStorage ∧
       post.logs = base.logs := by
   let dEntry := base.setMach
-    ⟨[], Mem.empty, G + implGuardedSuccessEntryGas⟩
+    ⟨[], Mem.empty, G + implGuardedSuccessEntryGas, base.stateGas⟩
   let d0 := dEntry.setMach
     {dEntry.mach with gasLeft := dEntry.gasLeft - gJumpdest}
   let d1 := d0.setMach
-    ⟨[0], Mem.empty, G + 22141⟩
+    ⟨[0], Mem.empty, G + 22141, d0.stateGas⟩
   let d2 := d1.setMach
-    ⟨[Sevm.dataWord sevm 0], Mem.empty, G + 22138⟩
+    ⟨[Sevm.dataWord sevm 0], Mem.empty, G + 22138, d1.stateGas⟩
   let d3 := d2.setMach
-    ⟨[0], Mem.empty, G + 22135⟩
+    ⟨[0], Mem.empty, G + 22135, d2.stateGas⟩
   let d4 := d3
   let d8 := d4.setMach
-    ⟨[], Mem.empty, G + implBodyGas⟩
+    ⟨[], Mem.empty, G + implBodyGas, d4.stateGas⟩
   let d10 := d8.setMach
-    ⟨[1], Mem.empty, G + 22119⟩
+    ⟨[1], Mem.empty, G + 22119, d8.stateGas⟩
   let d12 := d10.setMach
-    ⟨[implSlot, 1], Mem.empty, G + 22116⟩
+    ⟨[implSlot, 1], Mem.empty, G + 22116, d10.stateGas⟩
   have hentry : Jinst.At sevm.code 0 .jumpdest := by
     rw [h_code]
     exact Jinst.at_of_slice (show List.Slice implGuardedCode.toList 0
@@ -585,7 +594,7 @@ theorem implGuarded_static_halt_exec
   rcases rpushSlot with ⟨xl4, hfill4, hstep4⟩
   obtain ⟨post, h12, h12exec, hstate, htrans, hlogs⟩ :=
     implGuarded_static_sstore_halt
-      12 sevm d12 hsstore h_static
+      12 sevm d12 hsstore hfork h_static
       (by rfl)
       (by simp [d12, gCallStipend])
       (by

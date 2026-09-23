@@ -248,6 +248,7 @@ No premise constrains either child; the enclosing depth and dynamic facts are
 the two frame facts required by the boundary satisfaction theorems. -/
 theorem pauseAfterSet_boundary_committed_outcomes
     {fs : List Func} {sevm : Sevm} {entry : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {target : Adr} {duration : B256} {ex : Execution}
     (h_empty : fs[emptyRevertSlot]? = some Func.revert)
     (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
@@ -277,7 +278,7 @@ theorem pauseAfterSet_boundary_committed_outcomes
       pauseCallStaging_boundary_operands targetGuard callStaging
     have callBoundary :
         PauseCallBoundary sevm target duration callPre callPost :=
-      pauseCall_boundary callStack
+      pauseCall_boundary (hfork := hfork) callStack
         (pauseCallStaging_calldata durationGuard callStaging)
         hDepth hDynamic callRun
     have targetCallPost :=
@@ -304,7 +305,7 @@ theorem pauseAfterSet_boundary_committed_outcomes
       obtain ⟨_statGas, _statRest, statStack, targetStatPre⟩ :=
         pauseStatStaging_boundary_operands targetArm statStaging
       have statBoundary : PauseStatBoundary sevm target statPre statPost :=
-        pauseStat_boundary statStack
+        pauseStat_boundary (hfork := hfork) statStack
           (pauseStatStaging_boundary_calldata targetArm.memImage statStaging)
           hDepth statCall
       exact Or.inr ⟨armPre, statPre, statPost, statStaging, statCall,
@@ -338,6 +339,7 @@ observation about returndata, never enforcement that arbitrary target code
 really paused. -/
 theorem publicPause_committed_outcomes
     {sevm : Sevm} {pre : Devm} {owner : Adr}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {target duration idx0 len0 last0 : B256}
     {img : Bytes} {targetCode : ByteArray} {ex : Execution}
     (premises : PublicPauseEntryPremises sevm pre owner target duration
@@ -367,7 +369,7 @@ theorem publicPause_committed_outcomes
     rw [canonicalTarget]
     exact targetWindow
   refine ⟨entry, reachedAt, ?_⟩
-  exact pauseAfterSet_boundary_committed_outcomes
+  exact pauseAfterSet_boundary_committed_outcomes (hfork := hfork)
     (by rfl) (by rfl) (by rfl) (by rfl)
     targetAdrWindow durationWindow premises.entered premises.dynamic
     (noninterference entry reachedAt) afterSetRun

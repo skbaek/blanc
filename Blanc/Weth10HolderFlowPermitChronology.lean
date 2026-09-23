@@ -108,6 +108,7 @@ structure PermitStaticcallMessageTrace
   process : ProcessMessage msg slot (.ok childPost)
   resume : (Resume.call parent outputIndex outputSize).run
     (.ok childPost) = .ok callPost
+  benvStat : msg.benv.stat = sevm.benvStat
 
 /-- The literal ECRECOVER operand order at permit's call boundary: address
 `1`, input `[0,128)`, and output `[128,160)`. -/
@@ -177,9 +178,10 @@ private theorem Xinst.step_staticcall_spawn_data
     (operands : gasWord :: (1 : B256) :: (0 : B256) ::
       (128 : B256) :: (128 : B256) :: (32 : B256) :: tail <<+
         devm.stack)
-    (hspawn : Xinst.step sevm devm .staticcall = .spawn frame resume) :
+    (hspawn : Xinst.step sevm devm .staticcall = .spawn frame resume)
+    (hsg : sevm.benvStat.rules.stateGas = none) :
     StaticcallSpawnData sevm devm frame resume := by
-  simp only [Xinst.step, Bind.bind, Except.bind] at hspawn
+  simp only [Xinst.step, hsg, Bind.bind, Except.bind] at hspawn
   rcases eq1 : Devm.pop devm with err | ⟨actualGasWord, d1⟩ <;>
     simp only [eq1] at hspawn
   · cases hspawn
@@ -224,13 +226,14 @@ private theorem Xinst.step_staticcall_spawn_data
     f1.state.trans (f2.state.trans (f3.1.trans
       (f4.1.trans (f5.1.trans f6.1))))
   rcases hdelegation :
-      accessDelegation (addAccessedAddress d6 (1 : B256).toAdr)
-        (1 : B256).toAdr with
+      sevm.benvStat.rules.gas.accessDelegation
+        (addAccessedAddress d6 (1 : B256).toAdr) (1 : B256).toAdr with
     ⟨delegated, delegatedAddress, code, delegationGas, d8⟩
   simp only [hdelegation] at hspawn
   have f8 : Devm.WorldEq d6 d8 := by
     have haccess := addAccessedAddress_worldEq d6 (1 : B256).toAdr
-    have hdelegationFrame := accessDelegation_instructionFrame
+    have hdelegationFrame := GasSchedule.accessDelegation_instructionFrame
+      sevm.benvStat.rules.gas
       (addAccessedAddress d6 (1 : B256).toAdr) (1 : B256).toAdr
     rw [hdelegation] at hdelegationFrame
     exact ⟨haccess.1.trans hdelegationFrame.state,
@@ -249,7 +252,7 @@ private theorem Xinst.step_staticcall_spawn_data
             some delegatedTarget ∧
           code = devm.getCode delegatedTarget ∧ delegated = true) := by
     have haccess := hdelegation
-    dsimp only [accessDelegation] at haccess
+    dsimp only [GasSchedule.accessDelegation] at haccess
     rw [hcodeAt] at haccess
     rcases hdelegate :
         getDelegatedCodeAddress (devm.getCode (1 : B256).toAdr) with
@@ -268,7 +271,7 @@ private theorem Xinst.step_staticcall_spawn_data
         (getDelegatedCodeAddress
           (devm.getCode (1 : B256).toAdr)).getD (1 : B256).toAdr := by
     have haccess := hdelegation
-    dsimp only [accessDelegation] at haccess
+    dsimp only [GasSchedule.accessDelegation] at haccess
     rw [hcodeAt] at haccess
     rcases hdelegate :
         getDelegatedCodeAddress (devm.getCode (1 : B256).toAdr) with
@@ -302,18 +305,20 @@ private theorem Ninst.step_staticcall_spawn_data
       (128 : B256) :: (128 : B256) :: (32 : B256) :: tail <<+
         pre.stack)
     (hspawn : Ninst.step ⟨pc, sevm, pre⟩ Ninst.staticcall =
-      .spawn frame resume pc') :
+      .spawn frame resume pc')
+    (hsg : sevm.benvStat.rules.stateGas = none) :
     StaticcallSpawnData sevm pre frame resume := by
   have hx : Xinst.step sevm pre .staticcall = .spawn frame resume := by
     exact XStep.toStep_spawn (by
       simpa only [Ninst.staticcall, Ninst.step_exec] using hspawn)
-  exact Xinst.step_staticcall_spawn_data gasWord tail operands hx
+  exact Xinst.step_staticcall_spawn_data gasWord tail operands hx hsg
 
 private theorem Xinst.step_staticcall_done_state
     {sevm : Sevm} {pre post : Devm}
-    (hdone : Xinst.step sevm pre .staticcall = .done (.ok post)) :
+    (hdone : Xinst.step sevm pre .staticcall = .done (.ok post))
+    (hsg : sevm.benvStat.rules.stateGas = none) :
     pre.state = post.state := by
-  simp only [Xinst.step, Bind.bind, Except.bind] at hdone
+  simp only [Xinst.step, hsg, Bind.bind, Except.bind] at hdone
   rcases eq1 : Devm.pop pre with err | ⟨gasWord, d1⟩ <;>
     simp only [eq1] at hdone
   · cases hdone
@@ -339,13 +344,14 @@ private theorem Xinst.step_staticcall_done_state
   · cases hdone
   have f6 := Devm.popToNat_worldEq_of_ok eq6
   rcases hdelegation :
-      accessDelegation (addAccessedAddress d6 target) target with
+      sevm.benvStat.rules.gas.accessDelegation
+        (addAccessedAddress d6 target) target with
     ⟨delegated, delegatedAddress, code, delegationGas, d8⟩
   simp only [hdelegation] at hdone
   have f8 : Devm.WorldEq d6 d8 := by
     have haccess := addAccessedAddress_worldEq d6 target
-    have hdelegationFrame := accessDelegation_instructionFrame
-      (addAccessedAddress d6 target) target
+    have hdelegationFrame := GasSchedule.accessDelegation_instructionFrame
+      sevm.benvStat.rules.gas (addAccessedAddress d6 target) target
     rw [hdelegation] at hdelegationFrame
     exact ⟨haccess.1.trans hdelegationFrame.state,
       haccess.2.trans hdelegationFrame.transientStorage⟩
@@ -534,7 +540,8 @@ theorem Exec.Deriv.ParentStepActions.permitStaticcallOutcome
     (step : Ninst.StepRun pc sevm pre Ninst.staticcall slot (.ok post))
     (edge : Exec.Deriv.ParentStepActions dp ca
       ⟨nextPc, sevm, post, out, continuation⟩
-      ⟨pc, sevm, pre, out, current⟩ selected) :
+      ⟨pc, sevm, pre, out, current⟩ selected)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     PermitStaticcallOutcome dp ca sevm pre post slot selected := by
   cases edge with
   | cont hstep next =>
@@ -555,7 +562,7 @@ theorem Exec.Deriv.ParentStepActions.permitStaticcallOutcome
           have hout : ex = .ok post := (Step.ofExecution_cont hcont).2
           subst ex
           exact .none (PermitOwnObservations.of_state_eq
-            (Xinst.step_staticcall_done_state hxs))
+            (Xinst.step_staticcall_done_state hxs hfork.rules_stateGas_none))
       | spawn frame resume =>
           rw [Ninst.step_exec, hxs] at hs
           cases hs
@@ -569,7 +576,8 @@ theorem Exec.Deriv.ParentStepActions.permitStaticcallOutcome
       have hslot := (Ninst.StepRun.unique_exec_of_filled
         filled (show Xlot.Filled .none from trivial) step actual).1
       subst slot
-      rcases Ninst.step_staticcall_spawn_data gasWord tail operands hs with
+      rcases Ninst.step_staticcall_spawn_data gasWord tail operands hs
+          hfork.rules_stateGas_none with
         ⟨msg, parent, outputIndex, outputSize, hframe, hresumeShape,
           hparentState, hbenvState, _hdepth, _htarget, _hcodeAddress,
           _hresolution, hvalue, _htransfer, _hstatic⟩
@@ -587,6 +595,9 @@ theorem Exec.Deriv.ParentStepActions.permitStaticcallOutcome
       rename_i frame resume childEvm raw
       rcases childEvm with ⟨childPc, childSevm, childPre⟩
       have hs := (Evm.step_next hat).symm.trans hstep
+      have hframeStat : frame.inner.benv.stat = sevm.benvStat := by
+        obtain ⟨_, _, hspawn, _⟩ := Evm.step_spawn_inv hstep
+        exact Xinst.step_spawn_benvStat hspawn
       have actual : Ninst.StepRun pc sevm pre Ninst.staticcall
           (.some ⟨⟨childPc, childSevm, childPre⟩, raw⟩) (.ok post) := by
         simp only [Ninst.StepRun, hs, Step.Run]
@@ -597,7 +608,8 @@ theorem Exec.Deriv.ParentStepActions.permitStaticcallOutcome
       have hslot := (Ninst.StepRun.unique_exec_of_filled
         filled actualFilled step actual).1
       subst slot
-      rcases Ninst.step_staticcall_spawn_data gasWord tail operands hs with
+      rcases Ninst.step_staticcall_spawn_data gasWord tail operands hs
+          hfork.rules_stateGas_none with
         ⟨msg, parent, outputIndex, outputSize, hframe, hresumeShape,
           hparentState, hbenvState, hdepth, htarget, hcodeAddress,
           hresolution, hvalue, htransfer, hstatic⟩
@@ -619,7 +631,8 @@ theorem Exec.Deriv.ParentStepActions.permitStaticcallOutcome
               (.some ⟨⟨childPc, childSevm, childPre⟩, raw⟩) post :=
             ⟨msg, parent, childPost, outputIndex, outputSize,
               hparentState, hbenvState, hdepth, htarget, hcodeAddress,
-              hresolution, hvalue, htransfer, hstatic, hprocess, hresume⟩
+              hresolution, hvalue, htransfer, hstatic, hprocess, hresume,
+              by simpa only [Frame.ofCall] using hframeStat⟩
           by_cases hcommits : Execution.commits raw = true
           · have hsettles : Frame.settlementCommits
                 (Frame.ofCall msg) raw = true :=
@@ -1305,7 +1318,7 @@ theorem Exec.Frame.compiledPermitChronology
         (by simp [Ninst.pcFree]) rawStep
     simpa only [htailPre] using transported
   have outcome := edge.permitStaticcallOutcome
-    gasWord tail hoperands hat rawFilled exactStep
+    gasWord tail hoperands hat rawFilled exactStep context.covered
   rcases tailCursor.finishPermitAfterStaticcall with
     ⟨hsuffixObs, hdescendant⟩
   have hcallActions : callCursor.actions = [] :=

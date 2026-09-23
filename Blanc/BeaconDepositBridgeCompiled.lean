@@ -20,6 +20,7 @@ artifact-invariant storage state executes the compiled runtime and preserves
 that invariant for the history extended by the deposited data node. -/
 theorem deposit_success_artifactInv
     (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (pubkey withdrawalCredentials signature : Bytes)
     (depositDataRoot : B256) (s' : Acc) (ev : DepositEvent)
     (stor : Stor) (keys : KeySet) (countCost n G : Nat)
@@ -95,7 +96,7 @@ theorem deposit_success_artifactInv
             depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
               ((accOfStor
                 (Devm.getStor base sevm.currentTarget)).count + 1)
-              countCost G⟩)
+              countCost G, base.stateGas⟩)
         runtime post ∧
       ArtifactInv (Devm.getStor post sevm.currentTarget)
         (history ++ [depositDataNode Bytes.sha256 pubkey
@@ -103,7 +104,7 @@ theorem deposit_success_artifactInv
           (le64 (sevm.value.toNat / oneGwei))]) := by
   obtain ⟨post, run, _stack, _gas, _logs, countStorage, postStorage,
       _code, _addresses, _output, _error, _compile⟩ :=
-    deposit_success_runCompiled sevm base pubkey withdrawalCredentials
+    deposit_success_runCompiled (hfork := hfork) sevm base pubkey withdrawalCredentials
       signature depositDataRoot s' ev stor keys countCost n G hdataBound hdec
       hOk hstor hkeys hcount hheight hfirst hselector hnodeleg hwarm hpre
       hdepth hstatic hbranchSentry hbound hcountSentry hreconstructBound hcode

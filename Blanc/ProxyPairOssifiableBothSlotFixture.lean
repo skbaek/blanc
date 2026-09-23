@@ -97,6 +97,7 @@ private theorem getStorVal_sstoreBase_ne
 
 theorem setupMain_runCompiledTo
     (fs : List Func) (sevm : Sevm) (base : Devm) (G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false)
     (himplementationWarm :
       (sevm.currentTarget, implementationSlotLit) ∈
@@ -114,7 +115,7 @@ theorem setupMain_runCompiledTo
       base.getStorVal sevm.currentTarget adminSlotLit = 0) :
     ∃ post,
       Func.RunCompiledTo fs sevm
-        (base.setMach ⟨[], Mem.empty, G + setupBodyGas⟩)
+        (base.setMach ⟨[], Mem.empty, G + setupBodyGas, base.stateGas⟩)
         setupMain (.ok post) ∧
       post.error = base.error ∧
       post.output = [] ∧
@@ -131,6 +132,7 @@ theorem setupMain_runCompiledTo
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · unfold setupMain push1Zero
     func_run [100, 22100]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try
       (rw [Devm.gasLeft_setMach]
        dsimp only [setupBodyGas, gCallStipend]
@@ -192,7 +194,7 @@ def benv : Benv :=
     state := currentState
     stat :=
       { (default : BenvStat) with
-        rules := pragueRules
+        fork := .prague
         origState := originalState } }
 
 def message : Msg :=
@@ -256,7 +258,8 @@ theorem message_success :
       post.logs = [] := by
   obtain ⟨post, walk, error, output, gas, implementationSlot,
       adminSlot, logs, _keys⟩ :=
-    setupMain_runCompiledTo [] (initSevm message) (initDevm message) 1000
+    setupMain_runCompiledTo (hfork := by change CoveredFork .prague; exact CoveredFork.prague)
+      [] (initSevm message) (initDevm message) 1000
       (by rfl)
       (by
         change (target, implementationSlotLit) ∈ warmKeys
@@ -296,8 +299,9 @@ theorem message_success :
     · rfl
     · exact raw
     · simpa [initDevm, Devm.error] using error
+  have hsg : message.benv.stat.rules.stateGas = none := rfl
   exact ⟨post, settled, by simpa [initDevm, Devm.error] using error, output,
     implementationSlot, adminSlot,
-      by simpa [initDevm, Devm.logs] using logs⟩
+      by simpa [initDevm, Devm.logs, hsg] using logs⟩
 
 end Blanc.ProxyPair.OssifiableBothSlotFixture

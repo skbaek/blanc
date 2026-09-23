@@ -33,17 +33,17 @@ theorem DeploymentRoot.monoStateInv
     additional field is needed on `DeploymentRoot`. -/
 theorem DeploymentRoot.rho
     (root : DeploymentRoot cfg base deployed ca) :
-    ∃ (rules : ForkRules) (cb : CanonicalBlock)
+    ∃ (fork : Fork) (cb : CanonicalBlock)
         (deploymentTx : Tx) (sender : Adr)
-        (ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca)
+        (ctx : PreparedDeploymentContext cfg fork base cb deploymentTx sender ca)
         (post : State) (bout : BlockOutput),
-      CanonicalDeploymentTransactionResult cfg rules ca ctx post bout ∧
+      CanonicalDeploymentTransactionResult cfg fork ca ctx post bout ∧
         post = deployed.state ∧
         (post.getStor ca).get rhoSlot = cb.block.header.timestamp.toB256 := by
   rcases root.execution with
-    ⟨rules, cb, _, deploymentTx, sender, ctx, post, bout,
-      _, _, htx, _, _, _, hpost, _⟩
-  refine ⟨rules, cb, deploymentTx, sender, ctx, post, bout,
+    ⟨fork, cb, _, deploymentTx, sender, ctx, post, bout,
+      _, _, _, htx, _, _, _, hpost, _⟩
+  refine ⟨fork, cb, deploymentTx, sender, ctx, post, bout,
     htx, hpost, ?_⟩
   exact htx.rho.trans ctx.msg_time_eq
 
@@ -58,44 +58,50 @@ private theorem monoStateInv_of_stateInv
 /-- The index is monotone along every configured continuation from deployment. -/
 theorem DeploymentRoot.reachable_chi_mono
     (root : DeploymentRoot cfg base deployed ca)
-    (reach : BlockChain.ReachUsing cfg deployed future) :
+    (reach : BlockChain.ReachUsing cfg deployed future)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     chiN (deployed.state.getStor ca) ≤ chiN (future.state.getStor ca) := by
   have hpost := ContractSpec.chainUsing_preserves_inv
     (c := dripMonoSpec (chiN (deployed.state.getStor ca))
       (rhoN (deployed.state.getStor ca))) ca
     (dripMonoSpec_preserves (chiN (deployed.state.getStor ca))
       (rhoN (deployed.state.getStor ca)) ca)
-    cfg deployed future reach root.monoStateInv
+    cfg deployed future reach root.monoStateInv hcov
   exact hpost.inv.2.1
 
 /-- The accrual clock is monotone along every configured continuation from deployment. -/
 theorem DeploymentRoot.reachable_rho_mono
     (root : DeploymentRoot cfg base deployed ca)
-    (reach : BlockChain.ReachUsing cfg deployed future) :
+    (reach : BlockChain.ReachUsing cfg deployed future)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     rhoN (deployed.state.getStor ca) ≤ rhoN (future.state.getStor ca) := by
   have hpost := ContractSpec.chainUsing_preserves_inv
     (c := dripMonoSpec (chiN (deployed.state.getStor ca))
       (rhoN (deployed.state.getStor ca))) ca
     (dripMonoSpec_preserves (chiN (deployed.state.getStor ca))
       (rhoN (deployed.state.getStor ca)) ca)
-    cfg deployed future reach root.monoStateInv
+    cfg deployed future reach root.monoStateInv hcov
   exact hpost.inv.2.2
 
 /-- Two adjacent configured reaches compose to both scalar monotonicity facts. -/
 theorem reach_chi_rho_mono
     (root : DeploymentRoot cfg base deployed ca)
     (r₁ : BlockChain.ReachUsing cfg deployed ch)
-    (r₂ : BlockChain.ReachUsing cfg ch ch') :
+    (r₂ : BlockChain.ReachUsing cfg ch ch')
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     chiN (ch.state.getStor ca) ≤ chiN (ch'.state.getStor ca) ∧
       rhoN (ch.state.getStor ca) ≤ rhoN (ch'.state.getStor ca) := by
-  have hch := root.reachable_stateInv r₁
+  have hch := root.reachable_stateInv r₁ hcov
   have hchMono := monoStateInv_of_stateInv hch le_rfl le_rfl
   have hpost := ContractSpec.chainUsing_preserves_inv
     (c := dripMonoSpec (chiN (ch.state.getStor ca))
       (rhoN (ch.state.getStor ca))) ca
     (dripMonoSpec_preserves (chiN (ch.state.getStor ca))
       (rhoN (ch.state.getStor ca)) ca)
-    cfg ch ch' r₂ hchMono
+    cfg ch ch' r₂ hchMono hcov
   exact ⟨hpost.inv.2.1, hpost.inv.2.2⟩
 
 /-- At a successful compiled DRIP endpoint boundary, the rho write is exactly
@@ -125,6 +131,7 @@ theorem bodyOccurrence_mono (chi0 rho0 : Nat) (ca : Adr) :
 theorem exec_monoInv
     {ca : Adr} {sevm : Sevm} {pre post : Devm}
     (h_run : exec ⟨0, sevm, pre⟩ = .ok post)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_code : sevm.currentTarget = ca →
       some sevm.code.toList = Prog.compile runtime)
     (h_wf : sevm.currentTarget = ca → Mem.Wf pre.memory)
@@ -139,13 +146,14 @@ theorem exec_monoInv
     (wa := ca)
     (dripMonoSpec_preserves (chiN (pre.state.getStor ca))
       (rhoN (pre.state.getStor ca)) ca)
-    h_pc h_code h_wf exc
+    hfork h_pc h_code h_wf exc
   exact ⟨hpost.inv.2.1, hpost.inv.2.2⟩
 
 /-- Rung 3: a successful message preserves both scalar lower bounds. -/
 theorem processMessage_mono
     {chi0 rho0 : Nat} {ca : Adr} {msg : Msg} {evm : Devm}
     (h_run : processMessage msg = .ok evm)
+    (hfork : CoveredFork msg.benv.stat.fork)
     (h_code : msg.currentTarget = ca →
       some msg.code.toList = Prog.compile runtime)
     (h_ne : msg.shouldTransferValue = true → msg.caller ≠ ca)
@@ -155,7 +163,7 @@ theorem processMessage_mono
     chi0 ≤ chiN (evm.state.getStor ca) ∧
       rho0 ≤ rhoN (evm.state.getStor ca) := by
   have hpost := ContractSpec.processMessage_preserves_inv
-    (c := dripMonoSpec chi0 rho0) (wa := ca)
+    (c := dripMonoSpec chi0 rho0) (wa := ca) hfork
     (dripMonoSpec_preserves chi0 rho0 ca)
     h_run h_code h_ne h_val0 h_inv
   exact ⟨hpost.inv.2.1, hpost.inv.2.2⟩
@@ -179,10 +187,11 @@ theorem transaction_mono
     {tx : Tx} {index : Nat} {state : State}
     (trace : TransactionTrace benv bout tx index state bout')
     (h_sum : sum benv.state.bal < 2 ^ 256)
-    (h_inv : (dripMonoSpec chi0 rho0).BenvInv ca benv) :
+    (h_inv : (dripMonoSpec chi0 rho0).BenvInv ca benv)
+    (hfork : CoveredFork benv.stat.fork) :
     chi0 ≤ chiN (state.getStor ca) ∧ rho0 ≤ rhoN (state.getStor ca) := by
   have hpost := trace.benvInv (dripMonoSpec_preserves chi0 rho0 ca)
-    h_sum h_inv
+    h_sum h_inv hfork
   exact ⟨hpost.state.inv.2.1, hpost.state.inv.2.2⟩
 
 /-- Rung 5: a retained transaction list preserves both scalar lower bounds. -/
@@ -191,11 +200,12 @@ theorem transactionList_mono
     {benv finalBenv : Benv} {bout finalBout : BlockOutput}
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
     (h_sum : sum benv.state.bal < 2 ^ 256)
-    (h_inv : (dripMonoSpec chi0 rho0).BenvInv ca benv) :
+    (h_inv : (dripMonoSpec chi0 rho0).BenvInv ca benv)
+    (hfork : CoveredFork benv.stat.fork) :
     chi0 ≤ chiN (finalBenv.state.getStor ca) ∧
       rho0 ≤ rhoN (finalBenv.state.getStor ca) := by
   have hpost := trace.benvInv (dripMonoSpec_preserves chi0 rho0 ca)
-    h_sum h_inv
+    h_sum h_inv hfork
   exact ⟨hpost.state.inv.2.1, hpost.state.inv.2.2⟩
 
 /-- Rung 6: a retained system message preserves both scalar lower bounds. -/
@@ -203,9 +213,10 @@ theorem systemMessage_mono
     {chi0 rho0 : Nat} {ca : Adr} {benv : Benv} {target : Adr}
     {data : Bytes} {state : State} {out : MsgCallOutput}
     (trace : SystemMessageTrace benv target data state out)
-    (h_inv : (dripMonoSpec chi0 rho0).BenvInv ca benv) :
+    (h_inv : (dripMonoSpec chi0 rho0).BenvInv ca benv)
+    (hfork : CoveredFork benv.stat.fork) :
     chi0 ≤ chiN (state.getStor ca) ∧ rho0 ≤ rhoN (state.getStor ca) := by
-  have hpost := trace.benvInv (dripMonoSpec_preserves chi0 rho0 ca) h_inv
+  have hpost := trace.benvInv (dripMonoSpec_preserves chi0 rho0 ca) h_inv hfork
   exact ⟨hpost.state.inv.2.1, hpost.state.inv.2.2⟩
 
 /-- Rung 7: request processing preserves both scalar lower bounds. -/
@@ -213,10 +224,11 @@ theorem requests_mono
     {chi0 rho0 : Nat} {ca : Adr} {benv : Benv} {bout : BlockOutput}
     {state : State} {bout' : BlockOutput}
     (trace : RequestsTrace benv bout state bout')
-    (h_inv : (dripMonoSpec chi0 rho0).BenvInv ca benv) :
+    (h_inv : (dripMonoSpec chi0 rho0).BenvInv ca benv)
+    (hfork : CoveredFork benv.stat.fork) :
     chi0 ≤ chiN (state.getStor ca) ∧ rho0 ≤ rhoN (state.getStor ca) := by
   have hpost := trace.stateInv_and_sum_le
-    (dripMonoSpec_preserves chi0 rho0 ca) h_inv
+    (dripMonoSpec_preserves chi0 rho0 ca) h_inv hfork
   exact ⟨hpost.1.inv.2.1, hpost.1.inv.2.2⟩
 
 /-- Rung 8: direct withdrawals preserve both scalar lower bounds. -/
@@ -237,12 +249,13 @@ theorem body_mono
     {state : State} {bout : BlockOutput}
     (h_run : applyBody benv txs wds = .ok (state, bout))
     (h_wds : sum benv.state.bal + wdsum wds < 2 ^ 256)
-    (h_inv : (dripMonoSpec chi0 rho0).BenvInv ca benv) :
+    (h_inv : (dripMonoSpec chi0 rho0).BenvInv ca benv)
+    (hfork : CoveredFork benv.stat.fork) :
     chi0 ≤ chiN (state.getStor ca) ∧ rho0 ≤ rhoN (state.getStor ca) := by
   have hpost := ContractSpec.applyBody_preserves_inv
     (c := dripMonoSpec chi0 rho0) ca
     (dripMonoSpec_preserves chi0 rho0 ca)
-    benv txs wds state bout h_run h_wds h_inv
+    benv txs wds state bout h_run h_wds h_inv hfork
   exact ⟨hpost.inv.2.1, hpost.inv.2.2⟩
 
 /-- Rung 10: a configured block preserves both scalar lower bounds. -/
@@ -250,13 +263,15 @@ theorem configuredBlock_mono
     {chi0 rho0 : Nat} {ca : Adr} {cfg : ChainConfig}
     {pre post : BlockChain}
     (trace : ConfiguredBlockTrace cfg pre post)
-    (h_inv : (dripMonoSpec chi0 rho0).StateInv ca pre.state) :
+    (h_inv : (dripMonoSpec chi0 rho0).StateInv ca pre.state)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     chi0 ≤ chiN (post.state.getStor ca) ∧
       rho0 ≤ rhoN (post.state.getStor ca) := by
   have hpost := ContractSpec.stateTransitionUsing_preserves_inv
     (c := dripMonoSpec chi0 rho0) ca
     (dripMonoSpec_preserves chi0 rho0 ca) cfg pre post trace.block
-    trace.transition trace.bound h_inv
+    trace.transition trace.bound h_inv hcov
   exact ⟨hpost.inv.2.1, hpost.inv.2.2⟩
 
 /-- Rung 11: a configured history preserves both scalar lower bounds. -/
@@ -264,11 +279,13 @@ theorem configuredHistory_mono
     {chi0 rho0 : Nat} {ca : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTrace cfg checkpoint future)
-    (h_inv : (dripMonoSpec chi0 rho0).StateInv ca checkpoint.state) :
+    (h_inv : (dripMonoSpec chi0 rho0).StateInv ca checkpoint.state)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     chi0 ≤ chiN (future.state.getStor ca) ∧
       rho0 ≤ rhoN (future.state.getStor ca) := by
   have hpost := history.stateInv
-    (dripMonoSpec_preserves chi0 rho0 ca) h_inv
+    (dripMonoSpec_preserves chi0 rho0 ca) h_inv hcov
   exact ⟨hpost.inv.2.1, hpost.inv.2.2⟩
 
 end Drip

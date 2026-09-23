@@ -2290,6 +2290,7 @@ configuration cell is read for the event and then set, and the whole body costs
 is the same number because the two functions are structurally identical. -/
 theorem setPauseDuration_body_runCompiledTo
     (fs : List Func) (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (duration : B256) (G : Nat)
     (hdata : sevm.data.length.toB256 <? 36 = 0)
     (hadmin : sevm.caller.toB256 = dp.admin)
@@ -2304,7 +2305,7 @@ theorem setPauseDuration_body_runCompiledTo
     (hstatic : sevm.isStatic = false) :
     ∃ post,
       Func.RunCompiledTo fs sevm
-        (base.setMach ⟨[], Mem.empty, G + 21498⟩)
+        (base.setMach ⟨[], Mem.empty, G + 21498, base.stateGas⟩)
         (setPauseDuration dp) (.ok post) := by
   have hsstoreCost : sstoreValueCost 0 0 duration = 20000 := by
     rw [sstoreValueCost, if_pos ⟨rfl, hnonzero.symm⟩, if_pos rfl]
@@ -2313,6 +2314,7 @@ theorem setPauseDuration_body_runCompiledTo
   unfold setPauseDuration requireStaticArgs onlyAdmin arg cdl pushDeployWord
     mstoreAt logWith
   func_run [0, 1, 0, 0, 3, 3, 1262, 20000]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_val => simp [B256.eqCheck, hadmin]
   case h_val => rw [harg]; simp [B256.ltCheck, B256.not_lt.mpr hmin]
   case h_val => rw [harg]; simp [B256.gtCheck, B256.not_lt.mpr hmax]
@@ -2351,16 +2353,16 @@ theorem setPauseDuration_dispatch_runCompiledTo
     (hselector : Sevm.selector sevm = selector "setPauseDuration" [.uint256])
     (hcode : sevm.code.toList = lidoCircuitBreakerCode dp)
     (hbody : Func.RunCompiledTo (runtimeMain dp :: aux) sevm
-      (base.setMach ⟨[], Mem.empty, G + bodyGas⟩)
+      (base.setMach ⟨[], Mem.empty, G + bodyGas, base.stateGas⟩)
       (setPauseDuration dp) out) :
     Prog.RunCompiledTo sevm
       (base.setMach ⟨[], Mem.empty,
-        G + setPauseDurationDispatchGas + bodyGas⟩)
+        G + setPauseDurationDispatchGas + bodyGas, base.stateGas⟩)
       (runtime dp) out ∧
       some sevm.code.toList = Prog.compile (runtime dp) := by
   refine ⟨?_, ?_⟩
   · refine Prog.runCompiledTo_intro
-      (mid := base.setMach ⟨[], Mem.empty, G + 150 + bodyGas⟩)
+      (mid := base.setMach ⟨[], Mem.empty, G + 150 + bodyGas, base.stateGas⟩)
       (G := G + 150 + bodyGas) ?_ ?_ ?_
     · simp only [Devm.gasLeft_setMach, setPauseDurationDispatchGas, gJumpdest]
       omega
@@ -2382,7 +2384,7 @@ theorem setPauseDuration_dispatch_runCompiledTo
         0, 0, 0, 0, 1]
       have hboundary : G + 150 + bodyGas - 150 = G + bodyGas := by
         omega
-      simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+      simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
         Devm.memory_setMach, Devm.gasLeft_setMach, hboundary,
         runtimeMain, hybridDispatchWith, splitDispatch, firstSelector, funcs,
         List.take, List.drop, List.head?, Option.map, Option.getD,
@@ -2397,8 +2399,11 @@ theorem configWorld_run :
         (runtime officialParams) (.ok post) ∧
       some configWorldSevm.code.toList =
         Prog.compile (runtime officialParams) := by
+  have hfork : CoveredFork configWorldSevm.benvStat.fork := by
+    change CoveredFork .prague
+    exact CoveredFork.prague
   obtain ⟨post, hbody⟩ :=
-    setPauseDuration_body_runCompiledTo (runtimeMain officialParams :: aux)
+    setPauseDuration_body_runCompiledTo (hfork := hfork) (runtimeMain officialParams :: aux)
       officialParams configWorldSevm configWorldPre configWorldDuration 0
       (by rw [configWorld_dataLength]; decide) configWorld_admin configWorld_arg
       configWorld_bounds.1 configWorld_bounds.2.1 configWorld_bounds.2.2
@@ -2409,7 +2414,7 @@ theorem configWorld_run :
       configWorld_selector configWorld_codeBytes hbody
   have hentry :
       configWorldPre.setMach ⟨[], Mem.empty,
-        0 + setPauseDurationDispatchGas + 21498⟩ = configWorldPre := rfl
+        0 + setPauseDurationDispatchGas + 21498, configWorldPre.stateGas⟩ = configWorldPre := rfl
   rw [hentry] at hrun
   exact ⟨post, hrun, hcompile⟩
 
@@ -2709,8 +2714,11 @@ theorem intervalWorld_run :
         (runtime officialParams) (.ok post) ∧
       some intervalWorldSevm.code.toList =
         Prog.compile (runtime officialParams) := by
+  have hfork : CoveredFork intervalWorldSevm.benvStat.fork := by
+    change CoveredFork .prague
+    exact CoveredFork.prague
   obtain ⟨post, hrun, _hgas, _hstore, _hlogs, _hexpiries, hcompile⟩ :=
-    setHeartbeatInterval_runCompiledTo_zero_of_inclusive officialParams
+    setHeartbeatInterval_runCompiledTo_zero_of_inclusive (hfork := hfork) officialParams
       intervalWorldSevm intervalWorldPre intervalWorldInterval 0
       intervalWorld_dataLength intervalWorld_value intervalWorld_selector
       intervalWorld_codeAddress intervalWorld_codeBytes intervalWorld_admin
@@ -2720,7 +2728,7 @@ theorem intervalWorld_run :
   have hentry :
       intervalWorldPre.setMach ⟨[], Mem.empty,
         0 + setHeartbeatIntervalDispatchGas +
-          setHeartbeatIntervalBodyGasWarmSet⟩ = intervalWorldPre := rfl
+          setHeartbeatIntervalBodyGasWarmSet, intervalWorldPre.stateGas⟩ = intervalWorldPre := rfl
   rw [hentry] at hrun
   exact ⟨post, hrun, hcompile⟩
 
@@ -3133,8 +3141,11 @@ theorem heartbeatWorld_run :
         (runtime officialParams) (.ok post) ∧
       some heartbeatWorldSevm.code.toList =
         Prog.compile (runtime officialParams) := by
+  have hfork : CoveredFork heartbeatWorldSevm.benvStat.fork := by
+    change CoveredFork .prague
+    exact CoveredFork.prague
   obtain ⟨post, hrun, _hgas, _hstore, _hlogs, hcompile⟩ :=
-    heartbeat_runCompiledTo_of_checkedExtension officialParams
+    heartbeat_runCompiledTo_of_checkedExtension (hfork := hfork) officialParams
       heartbeatWorldSevm heartbeatWorldPre heartbeatWorldCount
       heartbeatWorldOldExpiry heartbeatWorldTime heartbeatWorldInterval
       heartbeatWorldExpiry 0
@@ -3148,7 +3159,8 @@ theorem heartbeatWorld_run :
       heartbeatWorld_extension
   have hentry :
       heartbeatWorldPre.setMach ⟨[], Mem.empty,
-        0 + heartbeatDispatchGas + heartbeatBodySuccessGasWarmUpdate⟩ =
+        0 + heartbeatDispatchGas + heartbeatBodySuccessGasWarmUpdate,
+        heartbeatWorldPre.stateGas⟩ =
         heartbeatWorldPre := rfl
   rw [hentry] at hrun
   exact ⟨post, hrun, hcompile⟩

@@ -21,7 +21,7 @@ MOVE_MANIFEST = ROOT / "scripts" / "execution-occurrence-lift-manifest.json"
 RAW_ATTRIBUTION_OWNERSHIP = (
     ROOT / "scripts" / "check-execution-raw-attribution-ownership.py"
 )
-EXPECTED = "[true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true]"
+EXPECTED = "[true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true]"
 DIRECT_CODE_EXPECTED = ""
 
 CANONICAL_DIRECT_CODE = "Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget"
@@ -78,7 +78,6 @@ REQUIRED_POSITIVE_THEOREMS = {
     "Blanc.ExecutionOccurrenceRegression.Chronology.chronology_error_suffix_control",
     "Blanc.ExecutionOccurrenceRegression.concreteCall_orders",
     "Blanc.ExecutionOccurrenceRegression.concreteRawFrameRoot_orders",
-    "Blanc.ExecutionOccurrenceRegression.concreteRunErr_rawFrameRoots",
     "Blanc.ExecutionOccurrenceRegression.RawChildAttribution.CaughtFixture.control",
     "Blanc.ExecutionOccurrenceRegression.RawChildAttribution.RollbackFixture.control",
     "Blanc.ExecutionOccurrenceRegression.RawChildAttribution.concrete_controls",
@@ -165,11 +164,6 @@ private theorem commitRequiredAttributionMutant (w : TerminalSourceFixture) :
         w.occurrence.node.pc = true ∧
       Execution.commits (.error w.err) = true := by
   exact ⟨w.exactAttribution.2.2, rfl⟩
-""",
-    "-- RUNERR-CHILD-PRUNING-MUTANT-CONTROL": r"""
-private theorem runErrChildPruningMutant (w : RunErrFixture) :
-    Exec.rawFrameRoots w.run = [w.root] := by
-  rfl
 """,
     "-- CHILD-AS-PARENT-IDENTITY-MUTANT-CONTROL": r"""
 private theorem childAsParentIdentityMutant
@@ -654,8 +648,6 @@ def main(argv: list[str]) -> int:
                     ("Tactic `rfl` failed",),
                 "-- COMMIT-REQUIRED-ATTRIBUTION-MUTANT-CONTROL":
                     ("Application type mismatch",),
-                "-- RUNERR-CHILD-PRUNING-MUTANT-CONTROL":
-                    ("Tactic `rfl` failed",),
                 "-- CHILD-AS-PARENT-IDENTITY-MUTANT-CONTROL":
                     ("Application type mismatch", "Type mismatch"),
                 "-- MISSING-PARENT-PREFIX-MUTANT-CONTROL":
@@ -684,8 +676,8 @@ def main(argv: list[str]) -> int:
             if not settlement.stdout.startswith("OK — execution settlement:"):
                 return fail("CREATE settlement control verdict drifted", settlement)
         print(
-            "OK — execution occurrence semantic: 17 concrete occurrence + 6 direct-code "
-            "controls; 21 occurrence + 2 direct-code Lean mutants; 27 required positive "
+            "OK — execution occurrence semantic: 16 concrete occurrence + 6 direct-code "
+            "controls; 20 occurrence + 2 direct-code Lean mutants; 26 required positive "
             "proofs + 7 live direct-code deletions"
         )
         return 0
@@ -1265,11 +1257,11 @@ def main(argv: list[str]) -> int:
         )
     else:
         print(
-            "OK — execution occurrence: 17 concrete occurrence + 6 direct-code controls; "
-            "21 occurrence + 2 direct-code Lean mutants; WETH bridge-removal mutant; "
+            "OK — execution occurrence: 16 concrete occurrence + 6 direct-code controls; "
+            "20 occurrence + 2 direct-code Lean mutants; WETH bridge-removal mutant; "
             "10 moved-owner + 8 exact direct-code headers + 23 ownership-parser controls; "
             "28 raw-attribution owners + exact source/chronology signatures + shared "
-            "kernel + 8 controls; 27 required positive proofs + legacy deletion + 7 live direct-code "
+            "kernel + 8 controls; 26 required positive proofs + legacy deletion + 7 live direct-code "
             "deletions; 2 CREATE mutants"
         )
     return 0

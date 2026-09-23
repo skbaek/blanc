@@ -428,7 +428,7 @@ theorem enumPrefixMemory_read_length_snd (entries done : List Entry) :
 
 theorem enumPrefixMemory_extCost_length (base : Devm) (stack : List B256)
     (entries done : List Entry) (G : Nat) :
-    (base.setMach ⟨stack, enumPrefixMemory entries done, G⟩).extCost
+    (base.setMach ⟨stack, enumPrefixMemory entries done, G, base.stateGas⟩).extCost
       [⟨32, 32⟩] = 0 := by
   apply Devm.extCost_zero_of_le
   · rw [(enumPrefixMemory_invariant entries done).2.1]
@@ -438,7 +438,7 @@ theorem enumPrefixMemory_extCost_length (base : Devm) (stack : List B256)
 
 theorem enumPrefixMemory_extCost_full (base : Devm) (stack : List B256)
     (entries : List Entry) (G : Nat) :
-    (base.setMach ⟨stack, enumPrefixMemory entries entries, G⟩).extCost
+    (base.setMach ⟨stack, enumPrefixMemory entries entries, G, base.stateGas⟩).extCost
       [⟨0, 64 + 32 * entries.length⟩] = 0 := by
   apply Devm.extCost_zero_of_le
   · rw [(enumPrefixMemory_invariant entries entries).2.1]
@@ -458,7 +458,7 @@ theorem memExtSize_enum_next (done : List Entry) :
 
 theorem enumPrefixMemory_extCost_next (base : Devm) (stack : List B256)
     (entries done : List Entry) (G : Nat) :
-    (base.setMach ⟨stack, enumPrefixMemory entries done, G⟩).extCost
+    (base.setMach ⟨stack, enumPrefixMemory entries done, G, base.stateGas⟩).extCost
       [⟨64 + 32 * done.length, 32⟩] =
       calculateMemoryGasCost (64 + 32 * (done.length + 1)) -
         calculateMemoryGasCost (64 + 32 * done.length) := by
@@ -467,10 +467,10 @@ theorem enumPrefixMemory_extCost_next (base : Devm) (stack : List B256)
 
 theorem enumPrefixDevm_memRead_full (base : Devm) (entries : List Entry)
     (G : Nat) :
-    (base.setMach ⟨[], enumPrefixMemory entries entries, G⟩).memRead
+    (base.setMach ⟨[], enumPrefixMemory entries entries, G, base.stateGas⟩).memRead
       0 (64 + 32 * entries.length) =
       ⟨abiAddressArray entries,
-        base.setMach ⟨[], enumPrefixMemory entries entries, G⟩⟩ := by
+        base.setMach ⟨[], enumPrefixMemory entries entries, G, base.stateGas⟩⟩ := by
   have hread : (enumPrefixMemory entries entries).read 0
       (64 + 32 * entries.length) =
       ⟨abiAddressArray entries, enumPrefixMemory entries entries⟩ := by
@@ -481,7 +481,7 @@ theorem enumPrefixDevm_memRead_full (base : Devm) (entries : List Entry)
         (by rw [(enumPrefixMemory_invariant entries entries).2.1]; omega))
   unfold Devm.memRead
   rw [show (base.setMach
-    ⟨[], enumPrefixMemory entries entries, G⟩).memory =
+    ⟨[], enumPrefixMemory entries entries, G, base.stateGas⟩).memory =
       enumPrefixMemory entries entries by rfl, hread]
   rfl
 
@@ -722,7 +722,7 @@ structure EnumerationResources (sevm : Sevm) (pre : Devm)
 def preparedEnumerationState (sevm : Sevm) (base : Devm)
     (entries : List Entry) : Devm :=
   (prepareEnumerationStorage sevm base entries).setMach
-    ⟨[], Mem.empty, getPausablesGasWarm entries⟩
+    ⟨[], Mem.empty, getPausablesGasWarm entries, (prepareEnumerationStorage sevm base entries).stateGas⟩
 
 theorem enumerationResources_prepared (sevm : Sevm) (base : Devm)
     (entries : List Entry) :
@@ -774,12 +774,12 @@ theorem preparedEnumerationState_getStor (sevm : Sevm) (base : Devm)
 theorem enumLoop_pre_stack_height (base : Devm) (entries done rest : List Entry)
     (G : Nat) :
     ((base.setMach ⟨[Nat.toB256 done.length], enumPrefixMemory entries done,
-      G + enumLoopGasWarmFrom done.length rest⟩).stack).length = 1 := rfl
+      G + enumLoopGasWarmFrom done.length rest, base.stateGas⟩).stack).length = 1 := rfl
 
 theorem enumLoop_pre_memory_independent_of_cursor (base : Devm)
     (entries done : List Entry) (cursor cursor' G : Nat) :
-    (base.setMach ⟨[Nat.toB256 cursor], enumPrefixMemory entries done, G⟩).memory =
-      (base.setMach ⟨[Nat.toB256 cursor'], enumPrefixMemory entries done, G⟩).memory := by
+    (base.setMach ⟨[Nat.toB256 cursor], enumPrefixMemory entries done, G, base.stateGas⟩).memory =
+      (base.setMach ⟨[Nat.toB256 cursor'], enumPrefixMemory entries done, G, base.stateGas⟩).memory := by
   rw [Devm.setMach_memory, Devm.setMach_memory]
 
 private theorem enumLoop_done_runCompiled
@@ -788,14 +788,15 @@ private theorem enumLoop_done_runCompiled
       (logicalStorageOfStor (Devm.getStor base sevm.currentTarget)) entries) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[Nat.toB256 entries.length],
-        enumPrefixMemory entries entries, G + 49⟩)
+        enumPrefixMemory entries entries, G + 49, base.stateGas⟩)
       enumLoop
-      ((base.setMach ⟨[], enumPrefixMemory entries entries, G⟩).withOutput
+      ((base.setMach ⟨[], enumPrefixMemory entries entries, G, base.stateGas⟩).withOutput
         (abiAddressArray entries)) := by
   unfold enumLoop
   have h32 : (32 : B256).toNat = 32 :=
     B256.toNat_toB256_of_lt (by norm_num)
   func_run [3, 0, 3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · rw [h32, enumPrefixMemory_extCost_length]
     rfl
   · rw [h32, enumPrefixMemory_read_length_fst, B256.toB256_toBytes]
@@ -813,7 +814,7 @@ private theorem enumLoop_done_runCompiled
     · change G + 49 - 49 = G + 0
       omega
     · rw [hw.enumeration_total_toB256_toNat]
-      simpa only [Devm.setMach_setMach, Devm.memory_setMach,
+      simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
         B256.toNat_zero] using
         (enumPrefixDevm_memRead_full base entries G)
 
@@ -822,6 +823,7 @@ the sole stack word at every recursive call; the full ordered ABI image is the
 eventual return, for every finite witness-valid suffix. -/
 theorem enumLoop_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm) (entries done rest : List Entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (G : Nat)
     (hsplit : entries = done ++ rest)
     (hw : RegistryWitness
@@ -832,9 +834,9 @@ theorem enumLoop_runCompiled
     Func.RunCompiled fs sevm
       (base.setMach ⟨[Nat.toB256 done.length],
         enumPrefixMemory entries done,
-        G + enumLoopGasWarmFrom done.length rest⟩)
+        G + enumLoopGasWarmFrom done.length rest, base.stateGas⟩)
       enumLoop
-      ((base.setMach ⟨[], enumPrefixMemory entries entries, G⟩).withOutput
+      ((base.setMach ⟨[], enumPrefixMemory entries entries, G, base.stateGas⟩).withOutput
         (abiAddressArray entries)) := by
   induction rest generalizing done with
   | nil =>
@@ -895,6 +897,7 @@ theorem enumLoop_runCompiled
         simp [B256.ltCheck, hltWord]
       have hrestGas := enumLoopGasWarmFrom_ge (done.length + 1) rest
       func_run (16) [3, 1]
+      repeat (case h_legacy => exact hfork.rules_stateGas_none)
       all_goals try {
         simp only [Devm.gasLeft_setMach, enumLoopGasWarmFrom_cons]
         norm_num [gVerylow, gLow, gHigh, gJumpdest, gasWarmAccess]
@@ -936,12 +939,12 @@ theorem enumLoop_runCompiled
             ⟨[Nat.toB256 (64 + 32 * done.length), entry.1,
                 Nat.toB256 done.length],
               enumPrefixMemory entries done,
-              G + enumLoopGasWarmFrom done.length (entry :: rest) - 158⟩)
+              G + enumLoopGasWarmFrom done.length (entry :: rest) - 158, base.stateGas⟩)
           Ninst.mstore
           (base.setMach
             ⟨[Nat.toB256 done.length],
               enumPrefixMemory entries (done ++ [entry]),
-              G + enumLoopGasWarmFrom (done.length + 1) rest + 18⟩) := by
+              G + enumLoopGasWarmFrom (done.length + 1) rest + 18, base.stateGas⟩) := by
         refine Ninst.runCompiled_mstore_of (e := delta) rfl ?_ ?_ ?_
         · rw [hoffsetNat]
           exact enumPrefixMemory_extCost_next base
@@ -956,6 +959,7 @@ theorem enumLoop_runCompiled
           exact (enumPrefixMemory_append entries done entry).symm
       refine Func.RunCompiled.next hmstore ?_
       func_run (2) [Nat.toB256 (done.length + 1)]
+      repeat (case h_legacy => exact hfork.rules_stateGas_none)
       refine Func.runCompiled_call'
         (G := G + enumLoopGasWarmFrom (done.length + 1) rest)
         hfs (by simp only [Devm.stack_setMach, List.length_singleton]; omega)
@@ -964,14 +968,14 @@ theorem enumLoop_runCompiled
         norm_num [gVerylow, gMid, gJumpdest]
       · have hsplit' : entries = (done ++ [entry]) ++ rest := by
           simpa [List.append_assoc] using hsplit
-        simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+        simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
           Devm.memory_setMach, List.length_append, List.length_singleton,
           Nat.add_one] using ih (done ++ [entry]) hsplit'
 
 private theorem enumFirstHeaderMemory_extCost_second
     (base : Devm) (stack : List B256) (G : Nat) :
     (base.setMach
-      ⟨stack, Mem.empty.write 0 (Nat.toB256 32).toBytes, G⟩).extCost
+      ⟨stack, Mem.empty.write 0 (Nat.toB256 32).toBytes, G, base.stateGas⟩).extCost
       [⟨32, 32⟩] = 3 := by
   apply Devm.extCost_of_size
   · rw [Mem.size_write_word_at, if_neg (by simp [Mem.empty])]
@@ -981,6 +985,7 @@ private theorem enumFirstHeaderMemory_extCost_second
 recursive loop with exactly the finite warm budget derived above. -/
 theorem getPausables_body_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm) (entries : List Entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (G : Nat)
     (hw : RegistryWitness
       (logicalStorageOfStor (Devm.getStor base sevm.currentTarget)) entries)
@@ -988,20 +993,21 @@ theorem getPausables_body_runCompiled
       (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈ base.accessedStorageKeys)
     (hfs : fs[enumLoopSlot]? = some enumLoop) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], Mem.empty, G + getPausablesGasWarm entries⟩)
+      (base.setMach ⟨[], Mem.empty, G + getPausablesGasWarm entries, base.stateGas⟩)
       getPausables
-      ((base.setMach ⟨[], enumPrefixMemory entries entries, G⟩).withOutput
+      ((base.setMach ⟨[], enumPrefixMemory entries entries, G, base.stateGas⟩).withOutput
         (abiAddressArray entries)) := by
   unfold getPausables
   have hloopGas := enumLoopGasWarmFrom_ge 0 entries
   func_run (4) [3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try {
     simp only [Devm.gasLeft_setMach]
     norm_num [getPausablesGasWarm, gVerylow, gBase]
     omega }
   all_goals try { exact Devm.extCost_empty_word }
   refine Func.RunCompiled.next
-    (Ninst.runCompiled_sload_warm
+    (Ninst.runCompiled_sload_warm hfork.rules_stateGas_none
       (v := Nat.toB256 entries.length)
       (G := G + getPausablesGasWarm entries - 114)
       rfl ?_ ?_ ?_ (by simp)) ?_
@@ -1016,12 +1022,13 @@ theorem getPausables_body_runCompiled
     norm_num [gasWarmAccess, getPausablesGasWarm]
     omega
   func_run (3) [3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try {
     simp only [Devm.gasLeft_setMach]
     norm_num [getPausablesGasWarm, gVerylow, gBase]
     omega }
   all_goals try {
-    simp only [Devm.setMach_setMach, Devm.memory_setMach]
+    simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
     exact enumFirstHeaderMemory_extCost_second _ _ _ }
   refine Func.runCompiled_call'
     (G := G + enumLoopGasWarmFrom 0 entries)
@@ -1036,10 +1043,10 @@ theorem getPausables_body_runCompiled
     have honeOffset : ((1 : B256) * 32).toNat = 32 := by decide
     have hzeroWord : Nat.toB256 0 = (0 : B256) := by decide
     have h32Word : Nat.toB256 32 = (32 : B256) := by decide
-    simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+    simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
       Devm.memory_setMach, enumPrefixMemory, hzeroOffset, honeOffset,
       hzeroWord, h32Word, List.length_nil, List.foldl_nil] using
-      enumLoop_runCompiled fs sevm base entries [] entries G
+      enumLoop_runCompiled (hfork := hfork) fs sevm base entries [] entries G
         (by simp) hw hwarm hfs
 
 /-- Exact cost of the emitted runtime entry and well-formed selector path from
@@ -1062,7 +1069,7 @@ structure EnumerationRuntimeResources (sevm : Sevm) (pre : Devm)
 def preparedEnumerationRuntimeState (sevm : Sevm) (base : Devm)
     (entries : List Entry) : Devm :=
   (prepareEnumerationStorage sevm base entries).setMach
-    ⟨[], Mem.empty, getPausablesRuntimeGas entries⟩
+    ⟨[], Mem.empty, getPausablesRuntimeGas entries, (prepareEnumerationStorage sevm base entries).stateGas⟩
 
 theorem enumerationRuntimeResources_prepared (sevm : Sevm) (base : Devm)
     (entries : List Entry) :
@@ -1079,7 +1086,7 @@ uses the concrete current target as both code and storage owner.  The code
 hypothesis and compiler equality make the emitted-code boundary explicit. -/
 theorem getPausables_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm) (entries : List Entry)
-    (G : Nat)
+    (G : Nat) (hfork : CoveredFork sevm.benvStat.fork)
     (hdata : sevm.data.length.toB256 = 4)
     (hvalue : sevm.value = 0)
     (hselector : Sevm.selector sevm = selector "getPausables" [])
@@ -1091,15 +1098,15 @@ theorem getPausables_runCompiled
       (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈ base.accessedStorageKeys) :
     Prog.RunCompiled sevm
         (base.setMach ⟨[], Mem.empty,
-          G + getPausablesDispatchGas + getPausablesGasWarm entries⟩)
+          G + getPausablesDispatchGas + getPausablesGasWarm entries, base.stateGas⟩)
         (runtime dp)
-        ((base.setMach ⟨[], enumPrefixMemory entries entries, G⟩).withOutput
+        ((base.setMach ⟨[], enumPrefixMemory entries entries, G, base.stateGas⟩).withOutput
           (abiAddressArray entries)) ∧
       some sevm.code.toList = Prog.compile (runtime dp) := by
   constructor
   · refine Prog.runCompiled_intro
       (mid := base.setMach ⟨[], Mem.empty,
-        G + 129 + getPausablesGasWarm entries⟩)
+        G + 129 + getPausablesGasWarm entries, base.stateGas⟩)
       (G := G + 129 + getPausablesGasWarm entries) ?_ ?_ ?_
     · simp only [Devm.gasLeft_setMach, getPausablesDispatchGas, gJumpdest]
       omega
@@ -1130,15 +1137,16 @@ theorem getPausables_runCompiled
         linearDispatchWith firstSelector funcs
       simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
       func_run (27) [0, 0, selector "getPausables" [], 1, 0, 0, 1]
+      repeat (case h_legacy => exact hfork.rules_stateGas_none)
       have hboundary :
           G + 129 + getPausablesGasWarm entries - 129 =
             G + getPausablesGasWarm entries := by omega
-      simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+      simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
         Devm.memory_setMach, Devm.gasLeft_setMach, hboundary,
         runtimeMain, hybridDispatchWith, splitDispatch, firstSelector, funcs,
         List.take, List.drop, List.head?, Option.map, Option.getD,
         linearDispatchWith] using
-        getPausables_body_runCompiled
+        getPausables_body_runCompiled (hfork := hfork)
           (runtimeMain dp :: aux) sevm base entries G
             hw hwarm (by rfl)
   · rw [hcode, lidoCircuitBreakerCode_compile]
@@ -1148,6 +1156,7 @@ the residual gas is the supplied gas minus the finite per-list cost. -/
 theorem EnumerationRuntimeResources.getPausables_runCompiled
     {dp : DeployParams} {sevm : Sevm} {pre : Devm} {entries : List Entry}
     (resources : EnumerationRuntimeResources sevm pre entries)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hdata : sevm.data.length.toB256 = 4)
     (hvalue : sevm.value = 0)
     (hselector : Sevm.selector sevm = selector "getPausables" [])
@@ -1157,7 +1166,7 @@ theorem EnumerationRuntimeResources.getPausables_runCompiled
       (logicalStorageOfStor (Devm.getStor pre sevm.currentTarget)) entries) :
     Prog.RunCompiled sevm pre (runtime dp)
         ((pre.setMach ⟨[], enumPrefixMemory entries entries,
-          pre.gasLeft - getPausablesRuntimeGas entries⟩).withOutput
+          pre.gasLeft - getPausablesRuntimeGas entries, pre.stateGas⟩).withOutput
             (abiAddressArray entries)) ∧
       some sevm.code.toList = Prog.compile (runtime dp) := by
   have hgas :
@@ -1166,25 +1175,25 @@ theorem EnumerationRuntimeResources.getPausables_runCompiled
         pre.gasLeft := by
     rw [Nat.add_assoc, ← getPausablesRuntimeGas]
     exact Nat.sub_add_cancel resources.gas_sufficient
-  have hpre : pre.setMach ⟨[], Mem.empty, pre.gasLeft⟩ = pre := by
+  have hpre : pre.setMach ⟨[], Mem.empty, pre.gasLeft, pre.stateGas⟩ = pre := by
     rw [← resources.stack_empty, ← resources.memory_empty]
     cases pre
     rfl
   simpa only [hgas, hpre] using
-    Blanc.LidoCircuitBreaker.getPausables_runCompiled dp sevm pre entries
+    Blanc.LidoCircuitBreaker.getPausables_runCompiled (hfork := hfork) dp sevm pre entries
       (pre.gasLeft - getPausablesRuntimeGas entries)
       hdata hvalue hselector hcodeAddress hcode hw resources.warm
 
 theorem getPausables_post_worldEq (base : Devm) (entries : List Entry)
     (G : Nat) :
     Devm.WorldEq base
-      ((base.setMach ⟨[], enumPrefixMemory entries entries, G⟩).withOutput
+      ((base.setMach ⟨[], enumPrefixMemory entries entries, G, base.stateGas⟩).withOutput
         (abiAddressArray entries)) := by
   exact ⟨rfl, rfl⟩
 
 theorem getPausables_post_logs (base : Devm) (entries : List Entry)
     (G : Nat) :
-    ((base.setMach ⟨[], enumPrefixMemory entries entries, G⟩).withOutput
+    ((base.setMach ⟨[], enumPrefixMemory entries entries, G, base.stateGas⟩).withOutput
       (abiAddressArray entries)).logs = base.logs := rfl
 
 /-- The landed finite component certificate excludes every owned same-frame
@@ -1244,18 +1253,18 @@ theorem registryScalarReturn_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm) (word : B256) (G : Nat) :
     ∃ post,
       Func.RunCompiled fs sevm
-        (base.setMach ⟨[0, 32], Mem.empty.write 0 word.toBytes, G⟩)
+        (base.setMach ⟨[0, 32], Mem.empty.write 0 word.toBytes, G, base.stateGas⟩)
         Func.return_ post ∧
       Devm.output post = word.toBytes ∧
       Devm.WorldEq base post ∧
       post.logs = base.logs := by
   let returnPre := base.setMach
-    ⟨[0, 32], Mem.empty.write 0 word.toBytes, G⟩
-  let d := (returnPre.setMach ⟨[], returnPre.memory, G⟩).memRead 0 32
+    ⟨[0, 32], Mem.empty.write 0 word.toBytes, G, base.stateGas⟩
+  let d := (returnPre.setMach ⟨[], returnPre.memory, G, returnPre.stateGas⟩).memRead 0 32
   let post := d.2.withOutput word.toBytes
   refine ⟨post, ?_, rfl, ?_, rfl⟩
   have hread :
-      (returnPre.setMach ⟨[], returnPre.memory, G⟩).memRead 0 32 =
+      (returnPre.setMach ⟨[], returnPre.memory, G, returnPre.stateGas⟩).memRead 0 32 =
         ⟨word.toBytes, d.2⟩ := by
     exact Prod.ext
       (Devm.memRead_word_fst
@@ -1271,6 +1280,7 @@ set_option maxRecDepth 742 in
 address word and the same concrete Registry owner used by enumeration. -/
 theorem getPauser_body_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm) (entries : List Entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (target : B256) (G : Nat)
     (hdata : sevm.data.length.toB256 <? 36 = 0)
     (hword : Sevm.dataWord sevm 4 = target)
@@ -1281,7 +1291,7 @@ theorem getPauser_body_runCompiled
       base.accessedStorageKeys) :
     ∃ post,
       Func.RunCompiled fs sevm
-        (base.setMach ⟨[], Mem.empty, G + registryScalarBodyGasWarm⟩)
+        (base.setMach ⟨[], Mem.empty, G + registryScalarBodyGasWarm, base.stateGas⟩)
         getPauser post ∧
       Devm.output post = (assignmentAt entries target).toBytes ∧
       Devm.WorldEq base post ∧
@@ -1304,6 +1314,7 @@ theorem getPauser_body_runCompiled
       (assignmentAt entries target) G with ⟨post, hreturn, houtput⟩
   refine ⟨post, ?_, houtput⟩
   func_run [0, ~~~(0 : B256), addressMask, 0, assignmentSlot target, 3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try { rw [hword0]; exact hcanonical }
   all_goals try { rw [hword0]; rfl }
   all_goals try {
@@ -1319,6 +1330,7 @@ set_option maxRecDepth 742 in
 canonical ABI address word and the same concrete Registry owner. -/
 theorem getPausableCount_body_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm) (entries : List Entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (pauser : B256) (G : Nat)
     (hdata : sevm.data.length.toB256 <? 36 = 0)
     (hword : Sevm.dataWord sevm 4 = pauser)
@@ -1329,7 +1341,7 @@ theorem getPausableCount_body_runCompiled
       base.accessedStorageKeys) :
     ∃ post,
       Func.RunCompiled fs sevm
-        (base.setMach ⟨[], Mem.empty, G + registryScalarBodyGasWarm⟩)
+        (base.setMach ⟨[], Mem.empty, G + registryScalarBodyGasWarm, base.stateGas⟩)
         getPausableCount post ∧
       Devm.output post =
         (Nat.toB256 (assignmentCount entries pauser)).toBytes ∧
@@ -1354,6 +1366,7 @@ theorem getPausableCount_body_runCompiled
     ⟨post, hreturn, houtput⟩
   refine ⟨post, ?_, houtput⟩
   func_run [0, ~~~(0 : B256), addressMask, 0, countSlot pauser, 3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try { rw [hword0]; exact hcanonical }
   all_goals try { rw [hword0]; rfl }
   all_goals try {
@@ -1429,20 +1442,20 @@ def RegistryViewsRun (fs : List Func)
   ∃ pauserPost countPost,
     Func.RunCompiled fs enumSevm
       (base.setMach ⟨[], Mem.empty,
-        enumG + getPausablesGasWarm entries⟩)
+        enumG + getPausablesGasWarm entries, base.stateGas⟩)
       getPausables
-      ((base.setMach ⟨[], enumPrefixMemory entries entries, enumG⟩).withOutput
+      ((base.setMach ⟨[], enumPrefixMemory entries entries, enumG, base.stateGas⟩).withOutput
         (abiAddressArray entries)) ∧
     Func.RunCompiled fs pauserSevm
       (base.setMach ⟨[], Mem.empty,
-        pauserG + registryScalarBodyGasWarm⟩)
+        pauserG + registryScalarBodyGasWarm, base.stateGas⟩)
       getPauser pauserPost ∧
     Devm.output pauserPost = (assignmentAt entries target).toBytes ∧
     Devm.WorldEq base pauserPost ∧
     pauserPost.logs = base.logs ∧
     Func.RunCompiled fs countSevm
       (base.setMach ⟨[], Mem.empty,
-        countG + registryScalarBodyGasWarm⟩)
+        countG + registryScalarBodyGasWarm, base.stateGas⟩)
       getPausableCount countPost ∧
     Devm.output countPost =
       (Nat.toB256 (assignmentCount entries pauser)).toBytes ∧
@@ -1457,6 +1470,9 @@ theorem registryViews_coherent
     (fs : List Func) (enumSevm pauserSevm countSevm : Sevm)
     (base : Devm) (entries : List Entry) (target pauser : B256)
     (enumG pauserG countG : Nat)
+    (hforkEnum : CoveredFork enumSevm.benvStat.fork)
+    (hforkPauser : CoveredFork pauserSevm.benvStat.fork)
+    (hforkCount : CoveredFork countSevm.benvStat.fork)
     (hpauserOwner : pauserSevm.currentTarget = enumSevm.currentTarget)
     (hcountOwner : countSevm.currentTarget = enumSevm.currentTarget)
     (hpauserData : pauserSevm.data.length.toB256 <? 36 = 0)
@@ -1489,14 +1505,14 @@ theorem registryViews_coherent
       (logicalStorageOfStor
         (Devm.getStor base countSevm.currentTarget)) entries := by
     simpa only [hcountOwner] using hw
-  rcases getPauser_body_runCompiled fs pauserSevm base entries target pauserG
+  rcases getPauser_body_runCompiled (hfork := hforkPauser) fs pauserSevm base entries target pauserG
       hpauserData hpauserWord htarget hwPauser hpauserWarm with
     ⟨pauserPost, hpauserRun, hpauserOutput, hpauserWorld, hpauserLogs⟩
-  rcases getPausableCount_body_runCompiled fs countSevm base entries
+  rcases getPausableCount_body_runCompiled (hfork := hforkCount) fs countSevm base entries
       pauser countG hcountData hcountWord hpauser hwCount hcountWarm with
     ⟨countPost, hcountRun, hcountOutput, hcountWorld, hcountLogs⟩
   refine ⟨pauserPost, countPost,
-    getPausables_body_runCompiled fs enumSevm base entries enumG
+    getPausables_body_runCompiled (hfork := hforkEnum) fs enumSevm base entries enumG
       hw henumWarm hfs,
     hpauserRun, hpauserOutput, hpauserWorld, hpauserLogs,
     hcountRun, hcountOutput, hcountWorld, hcountLogs, ?_⟩
@@ -2214,6 +2230,7 @@ theorem pauserSet_register_success_committed
           []⟩] ++ suffix := by
   have hsettle := (RunFrame.some_inv hprocess).2
   simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
+    executeCode.handleErrorWith_ok,
     executeCode.handleError, processMessage.settle] at hsettle
   have hnotError : final.error.isSome ≠ true := by
     cases herror : final.error <;> simp_all
@@ -2294,13 +2311,13 @@ theorem pauserSet_target_zero_error_logs_unchanged
         gVerylow + (gVerylow + gHigh + gJumpdest) +
         (gVerylow + gMid + gJumpdest) +
         revertSelectorCost (pre.setMach ⟨pre.stack,
-          (pre.memory.read (targetWord * 32).toNat 32).2, 0⟩)))
+          (pre.memory.read (targetWord * 32).toNat 32).2, 0, pre.stateGas⟩)))
     (hroom : pre.stack.length < 1023) :
     let fs := (runtime dp).main :: (runtime dp).aux
     let data := customErrorData "PausableZero"
     let post := (pre.setMach ⟨stack,
       (pre.memory.read (targetWord * 32).toNat 32).2.write 0
-        data.toB256.toBytes, G⟩).withOutput data
+        data.toB256.toBytes, G, pre.stateGas⟩).withOutput data
     (Func.RunCompiledTo fs sevm pre setPauserKernel
         (.error (.revert, post)) ∧
       ∃ execution : Exec (loc + 1) sevm pre (.error (.revert, post)),
@@ -2357,9 +2374,13 @@ theorem registryObservation_raw_sound
     (dp : DeployParams) (fs : List Func)
     (enumSevm pauserSevm countSevm : Sevm)
     {ca : Adr} {sevm : Sevm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {pre final : Devm} {loc : Nat} {img : Bytes}
     {entries : List Entry} {target newPauser continuation : B256}
     (enumG pauserG countG : Nat)
+    (hforkEnum : CoveredFork enumSevm.benvStat.fork)
+    (hforkPauser : CoveredFork pauserSevm.benvStat.fork)
+    (hforkCount : CoveredFork countSevm.benvStat.fork)
     (howner : sevm.currentTarget = ca)
     (hcodeAddress : sevm.codeAddress = some ca)
     (hbytes : sevm.code.toList = lidoCircuitBreakerCode dp)
@@ -2435,7 +2456,8 @@ theorem registryObservation_raw_sound
     dsimp only [viewBase]
     exact prepareRegistryViewsStorage_countWarm enumSevm postRegistry
       trace.postEntries target newPauser
-  have hviews := registryViews_coherent fs enumSevm pauserSevm countSevm
+  have hviews := registryViews_coherent (hforkEnum := hforkEnum) (hforkPauser := hforkPauser)
+      (hforkCount := hforkCount) fs enumSevm pauserSevm countSevm
     viewBase trace.postEntries target newPauser enumG pauserG countG
     hpauserOwner hcountOwner hpauserData hpauserWord hcountData hcountWord
     htarget hnew hwView
@@ -2456,6 +2478,9 @@ theorem registryObservation_sound
     {loc : Nat} {img : Bytes} {entries : List Entry}
     {target newPauser continuation : B256}
     (enumG pauserG countG : Nat)
+    (hforkEnum : CoveredFork enumSevm.benvStat.fork)
+    (hforkPauser : CoveredFork pauserSevm.benvStat.fork)
+    (hforkCount : CoveredFork countSevm.benvStat.fork)
     (htargetOwner : msg.target = some ca)
     (howner : msg.currentTarget = ca)
     (hcodeAddress : msg.codeAddress = some ca)
@@ -2537,7 +2562,8 @@ theorem registryObservation_sound
     dsimp only [viewBase]
     exact prepareRegistryViewsStorage_countWarm enumSevm settled
       trace.postEntries target newPauser
-  have hviews := registryViews_coherent fs enumSevm pauserSevm countSevm
+  have hviews := registryViews_coherent (hforkEnum := hforkEnum) (hforkPauser := hforkPauser)
+      (hforkCount := hforkCount) fs enumSevm pauserSevm countSevm
     viewBase trace.postEntries target newPauser enumG pauserG countG
     hpauserOwner hcountOwner hpauserData hpauserWord hcountData hcountWord
     htarget hnew hwView

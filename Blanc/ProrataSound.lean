@@ -80,6 +80,7 @@ private theorem withdraw_post
     {fs : List Func} {sevm : Sevm} {pre post : Devm} {ca : Adr}
     (hca : sevm.currentTarget = ca)
     (hpre : prorataSpec.Pre ca sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (ih : Exec.InvDepth sevm.depth ca prorataSpec.prog
       (prorataSpec.PreWf ca) (prorataSpec.Post ca))
     (hrun : Func.Run fs sevm pre withdraw post) :
@@ -87,7 +88,7 @@ private theorem withdraw_post
   let p := Sevm.argWord sevm 0 *
     (Devm.getBal pre sevm.currentTarget + 1) /
       ((Devm.getStor pre sevm.currentTarget).get supplySlot + offset)
-  have hpays := withdraw_pays_exactly hrun
+  have hpays := withdraw_pays_exactly hrun hfork
   change ∃ callPre callPost guardPost returnPre,
     WithdrawPreCallEffect sevm pre callPre ∧
     AcceptedPayout sevm p callPre callPost guardPost returnPre ∧
@@ -218,10 +219,16 @@ private theorem withdraw_post
           (initSevm (childMsg.withBenv benv)).depth < sevm.depth := by
         change sevm.depth - 1 < sevm.depth
         omega
+      have hchildFork :
+          CoveredFork (initSevm (childMsg.withBenv benv)).benvStat.fork := by
+        rw [initSevm_benvStat, Msg.withBenv_benvStat,
+          benvAfterTransfer_stat hbt, callMsg_stat]
+        exact hfork
       exact ih 0
         (initSevm (childMsg.withBenv benv))
         (initDevm (childMsg.withBenv benv))
         (.ok child) hchildExec hdepthLt hat
+        hchildFork
         ⟨hchildPre, fun _ => Mem.wf_empty⟩
   have hcallPost : prorataSpec.Post ca sevm callPost :=
     ContractSpec.Post.of_state_eq hchildPost hcallPostState
@@ -236,7 +243,7 @@ private theorem withdraw_post
 the open-contract invariant, without an entry-memory premise. -/
 theorem prorataSpec_soundNoMem (ca : Adr) :
     prorataSpec.SoundNoMem ca := by
-  intro sevm pre post hrun hca ih hpre
+  intro sevm pre post hfork hrun hca ih hpre
   have ihDepth : Exec.InvDepth sevm.depth ca prorataSpec.prog
       (prorataSpec.PreWf ca) (prorataSpec.Post ca) := by
     intro pc' sevm' devm' exn'
@@ -260,7 +267,7 @@ theorem prorataSpec_soundNoMem (ca : Adr) :
     exact deposit_post hca hbodyPre hbodyRun
   · rcases BodyEntry.with_pre hwithdraw hpreEntry with
       ⟨bodyPre, hbodyPre, hbodyRun⟩
-    exact withdraw_post hca hbodyPre ihDepth hbodyRun
+    exact withdraw_post hca hbodyPre hfork ihDepth hbodyRun
   · rcases BodyEntry.with_pre hshares hpreEntry with
       ⟨bodyPre, hbodyPre, hbodyRun⟩
     exact convertToShares_post hbodyPre hbodyRun

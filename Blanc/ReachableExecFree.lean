@@ -65,6 +65,12 @@ theorem Func.localExecFree_iff {body : Func} :
           simp [Func.localExecFree, Func.LocalExecFree]
       | push bytes size =>
           simp [Func.localExecFree, Func.LocalExecFree, tail_ih]
+      | dupn immediate =>
+          simp [Func.localExecFree, Func.LocalExecFree, tail_ih]
+      | swapn immediate =>
+          simp [Func.localExecFree, Func.LocalExecFree, tail_ih]
+      | exchange immediate =>
+          simp [Func.localExecFree, Func.LocalExecFree, tail_ih]
 
 /-- Logical finite closed-component specification. Every selected index
 resolves through the compiler function table, its body is locally exec-free,

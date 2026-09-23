@@ -43,18 +43,22 @@ theorem DripTraceRealizes.toRealizedChain
 theorem dripTraceRealizes_of_configuredHistoryTrace
     {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
     (root : DeploymentRoot cfg base deployed ca) (coalition : Finset Adr)
-    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future) :
+    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, DripTraceRealizes root coalition steps future :=
   AccountingLadder.TraceRealizes.of_configuredHistoryTrace (ladder coalition ca)
-    root.stateInv history
+    root.stateInv history hcov
 
 theorem dripTraceRealizes_exists_of_reachUsing
     {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
     (root : DeploymentRoot cfg base deployed ca) (coalition : Finset Adr)
-    (reach : BlockChain.ReachUsing cfg deployed future) :
+    (reach : BlockChain.ReachUsing cfg deployed future)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, DripTraceRealizes root coalition steps future :=
   AccountingLadder.TraceRealizes.exists_of_reachUsing (ladder coalition ca)
-    root.stateInv reach
+    root.stateInv reach hcov
 
 /-! ## T13 — root snapshot and the actual-history telescopes -/
 

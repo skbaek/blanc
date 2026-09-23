@@ -25,10 +25,10 @@ theorem byteAt_prepend_eq_prefix
   | cons inst rest ih =>
       change
         Func.byteAtByShape locations n
-            (.next inst.size (rest +++ p0).compileShape)
+            (.next inst.size (Ninst.immAccepted inst) (rest +++ p0).compileShape)
             (inst ::: (rest +++ p)) i d =
           Func.byteAtByShape locations n
-            (.next inst.size (rest +++ p0).compileShape)
+            (.next inst.size (Ninst.immAccepted inst) (rest +++ p0).compileShape)
             (inst ::: (rest +++ p0)) i d
       by_cases hinst : i < inst.size
       · conv_lhs => rw [Func.byteAtByShape, if_pos hinst]
@@ -54,7 +54,7 @@ theorem byteAt_prepend_to_tail
         omega
       change
         Func.byteAtByShape locations n
-            (.next inst.size (rest +++ p0).compileShape)
+            (.next inst.size (Ninst.immAccepted inst) (rest +++ p0).compileShape)
             (inst ::: (rest +++ p)) i d = _
       conv_lhs => rw [Func.byteAtByShape, if_neg (Nat.not_lt_of_ge hinst)]
       rw [ih (n := n + inst.size) (i := i - inst.size) (by
@@ -228,9 +228,10 @@ lemma dispatchNodeByteAt_to_onPath
   have hiEq : i - 1 - 5 - 1 - 4 = i - 11 := by omega
   change
     Func.byteAtByShape locations n
-      (.next (Ninst.dup 0).size
+      (.next (Ninst.dup 0).size (Ninst.immAccepted (Ninst.dup 0))
         (.next (Ninst.pushB256 selector).size
-          (.next Ninst.gt.size
+          (Ninst.immAccepted (Ninst.pushB256 selector))
+          (.next Ninst.gt.size (Ninst.immAccepted Ninst.gt)
             (.branch on0.compileShape off0.compileShape))))
       (Ninst.dup 0 ::: Ninst.pushB256 selector ::: Ninst.gt :::
         (off <?> on)) i d = _
@@ -262,9 +263,10 @@ lemma dispatchNodeByteAt_to_offPath
   have hgt : Ninst.gt.size = 1 := by decide +kernel
   change
     Func.byteAtByShape locations n
-      (.next (Ninst.dup 0).size
+      (.next (Ninst.dup 0).size (Ninst.immAccepted (Ninst.dup 0))
         (.next (Ninst.pushB256 selector).size
-          (.next Ninst.gt.size
+          (Ninst.immAccepted (Ninst.pushB256 selector))
+          (.next Ninst.gt.size (Ninst.immAccepted Ninst.gt)
             (.branch on0.compileShape off0.compileShape))))
       (Ninst.dup 0 ::: Ninst.pushB256 selector ::: Ninst.gt :::
         (off <?> on)) i d = _
@@ -327,9 +329,10 @@ lemma dispatchNodeByteAt_jumpdest
   have hgt : Ninst.gt.size = 1 := by decide +kernel
   change
     Func.byteAtByShape locations n
-      (.next (Ninst.dup 0).size
+      (.next (Ninst.dup 0).size (Ninst.immAccepted (Ninst.dup 0))
         (.next (Ninst.pushB256 selector).size
-          (.next Ninst.gt.size
+          (Ninst.immAccepted (Ninst.pushB256 selector))
+          (.next Ninst.gt.size (Ninst.immAccepted Ninst.gt)
             (.branch on0.compileShape off0.compileShape))))
       (Ninst.dup 0 ::: Ninst.pushB256 selector ::: Ninst.gt :::
         (off <?> on)) (11 + on0.compileShape.byteSize) d = _
@@ -377,9 +380,12 @@ theorem dispatchNodeByteAt_eq_jumpdest
   rw [dispatchNodeByteAt_jumpdest locations n selector off0 on0 off on hpush,
     dispatchNodeByteAt_jumpdest locations n selector off0 on0 off0 on0 hpush]
 
-/-- Compile one instruction prefix while keeping its continuation separate. -/
+/-- Compile one instruction prefix while keeping its continuation separate.
+Every prefixed instruction must pass the immediate check, or the left side
+fails where the right side succeeds. -/
 theorem compile_prepend
-    (l : List (Nat × Func)) (n : Nat) (xs : Line) (p : Func) :
+    (l : List (Nat × Func)) (n : Nat) (xs : Line) (p : Func)
+    (hacc : ∀ i ∈ xs, Ninst.immAccepted i = true) :
     Func.compile l n (xs +++ p) =
       (do
         let bs ← Func.compile l (n + CompiledShape.prefixByteSize xs) p
@@ -387,18 +393,22 @@ theorem compile_prepend
   induction xs generalizing n with
   | nil => simp [prepend, CompiledShape.prefixByteSize]
   | cons i xs ih =>
-      simp only [prepend, Func.compile, ih, CompiledShape.prefixByteSize,
-        List.flatMap_cons, Nat.add_assoc]
+      have hi : Ninst.immAccepted i = true := hacc i (by simp)
+      have hxs : ∀ j ∈ xs, Ninst.immAccepted j = true :=
+        fun j hj => hacc j (by simp [hj])
+      simp only [prepend, Func.compile, ih _ hxs, CompiledShape.prefixByteSize,
+        List.flatMap_cons, Nat.add_assoc, hi, guard, eq_self_iff_true, ite_true]
       cases Func.compile l (n + (i.size + CompiledShape.prefixByteSize xs)) p <;>
         simp [List.append_assoc]
 
-/-- A successful continuation compiles after any instruction prefix. -/
+/-- A successful continuation compiles after any accepted instruction prefix. -/
 theorem compile_prepend_of {entries : List (Nat × Func)}
     {n : Nat} {xs : Line} {f : Func} {bs : Bytes}
-    (h : Func.compile entries (n + prefixByteSize xs) f = some bs) :
+    (h : Func.compile entries (n + prefixByteSize xs) f = some bs)
+    (hacc : ∀ i ∈ xs, Ninst.immAccepted i = true) :
     Func.compile entries n (xs +++ f) =
       some (xs.flatMap Ninst.toBytes ++ bs) := by
-  rw [compile_prepend, h]
+  rw [compile_prepend _ _ _ _ hacc, h]
   rfl
 
 /-- Assemble a branch from checked child bytes and its bounded jump target. -/

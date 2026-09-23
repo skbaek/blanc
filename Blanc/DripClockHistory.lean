@@ -117,46 +117,14 @@ private theorem body_clock_admitted
     (trace : AppliedBodyTrace benv txs wds state bout)
     (htime : benv.stat.time.toNat ≤ T) :
     trace.FrameAdmitted ca (ClockEntry T) := by
-  rcases trace with
-    ⟨run, beaconState, beaconOut, beacon, lastHash, lastHashRun,
-      historyState, historyOut, history, decodedTxs, decodeRun,
-      transactionBenv, transactionBout, transactions, requests⟩
-  rcases beacon with ⟨beaconMessage, beaconRun⟩
-  rcases history with ⟨historyMessage, historyRun⟩
-  rcases requests with
-    ⟨depositRequests, parsed, withdrawalState, withdrawalOut,
-      withdrawalRun, withdrawal, consolidationState, consolidationOut,
-      consolidationRun, consolidation, requestsRun⟩
-  rcases withdrawal with ⟨withdrawalMessage, withdrawalTraceRun⟩
-  rcases consolidation with ⟨consolidationMessage, consolidationTraceRun⟩
-  have htransactionTime : transactionBenv.stat.time.toNat ≤ T := by
-    rw [transactions.stat_eq]
+  have htransactionTime : trace.transactionBenv.stat.time.toNat ≤ T := by
+    rw [trace.transactions.stat_eq]
     exact htime
   refine ⟨?_, ?_, ?_, ?_⟩
-  · have hbeaconTime : benv.beginTransaction.stat.time.toNat ≤ T := by
-      change benv.stat.time.toNat ≤ T
-      exact htime
-    exact messageCall_clock_admitted beaconMessage hbeaconTime
-  · have hhistoryTime :
-        (benv.withState beaconState).beginTransaction.stat.time.toNat ≤ T := by
-      change benv.stat.time.toNat ≤ T
-      exact htime
-    exact messageCall_clock_admitted historyMessage hhistoryTime
-  · exact transactionList_clock_admitted transactions htime
-  · refine ⟨?_, ?_⟩
-    · have hwithdrawalTime :
-          (transactionBenv.withState
-            (processWithdrawalsState transactionBenv.state wds)).beginTransaction.stat.time.toNat ≤ T := by
-        change transactionBenv.stat.time.toNat ≤ T
-        exact htransactionTime
-      exact messageCall_clock_admitted withdrawalMessage hwithdrawalTime
-    · have hconsolidationTime :
-          ((transactionBenv.withState
-            (processWithdrawalsState transactionBenv.state wds)).withState
-              consolidationState).beginTransaction.stat.time.toNat ≤ T := by
-        change transactionBenv.stat.time.toNat ≤ T
-        exact htransactionTime
-      exact messageCall_clock_admitted consolidationMessage hconsolidationTime
+  · exact systemMessage_clock_admitted trace.beacon htime
+  · exact systemMessage_clock_admitted trace.history htime
+  · exact transactionList_clock_admitted trace.transactions htime
+  · exact requests_clock_admitted trace.requests htransactionTime
 
 theorem bodyOccurrence_clock (chi0 rho0 T : Nat) (ca : Adr) :
     (dripClockSpec chi0 rho0 T).SoundAdmitted ca (ClockEntry T) :=
@@ -169,22 +137,24 @@ theorem exec_clockInv
       some sevm.code.toList = Prog.compile runtime)
     (h_wf : sevm.currentTarget = ca → Mem.Wf pre.memory)
     (h_pc : (dripClockSpec chi0 rho0 T).Pre ca sevm pre)
-    (htime : sevm.benvStat.time.toNat ≤ T) :
+    (htime : sevm.benvStat.time.toNat ≤ T)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     (dripClockSpec chi0 rho0 T).StateInv ca post.state := by
   obtain ⟨exc⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr h_run
   exact ContractSpec.StateInv.of_exec_precond_admitted
     (dripClockSpec_preservesAdmitted chi0 rho0 T ca)
-    h_pc h_code h_wf exc (exec_clock_admitted (ca := ca) exc htime)
+    hfork h_pc h_code h_wf exc (exec_clock_admitted (ca := ca) exc htime)
 
 theorem processMessage_clock
     {chi0 rho0 T : Nat} {ca : Adr} {msg : Msg} {post : Devm}
     (trace : ProcessMessageTrace msg (.ok post))
     (ready : (dripClockSpec chi0 rho0 T).MessageRunReady ca msg)
-    (htime : msg.benv.stat.time.toNat ≤ T) :
+    (htime : msg.benv.stat.time.toNat ≤ T)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     (dripClockSpec chi0 rho0 T).StateInv ca post.state :=
   trace.stateInv_admitted
     (dripClockSpec_preservesAdmitted chi0 rho0 T ca)
-    (processMessage_clock_admitted trace htime) ready
+    hfork (processMessage_clock_admitted trace htime) ready
 
 theorem processCreateMessage_clock
     {chi0 rho0 T : Nat} {ca : Adr} {msg : Msg} {post : Devm}
@@ -192,11 +162,12 @@ theorem processCreateMessage_clock
     (targetNone : msg.target.isNone = true)
     (targetNe : msg.currentTarget ≠ ca)
     (ready : (dripClockSpec chi0 rho0 T).MsgInv ca msg)
-    (htime : msg.benv.stat.time.toNat ≤ T) :
+    (htime : msg.benv.stat.time.toNat ≤ T)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     (dripClockSpec chi0 rho0 T).StateInv ca post.state :=
   trace.stateInv_admitted
     (dripClockSpec_preservesAdmitted chi0 rho0 T ca)
-    (processCreateMessage_clock_admitted trace htime)
+    hfork (processCreateMessage_clock_admitted trace htime)
     targetNone targetNe ready
 
 theorem messageCall_clock
@@ -204,11 +175,12 @@ theorem messageCall_clock
     {out : MsgCallOutput}
     (trace : MessageCallTrace msg state out)
     (inv : (dripClockSpec chi0 rho0 T).MsgInv ca msg)
-    (htime : msg.benv.stat.time.toNat ≤ T) :
+    (htime : msg.benv.stat.time.toNat ≤ T)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     (dripClockSpec chi0 rho0 T).StateInv ca state :=
   (trace.stateInv_admitted
     (dripClockSpec_preservesAdmitted chi0 rho0 T ca)
-    (messageCall_clock_admitted trace htime) inv).1
+    hfork (messageCall_clock_admitted trace htime) inv).1
 
 theorem transaction_clock
     {chi0 rho0 T : Nat} {ca : Adr} {benv : Benv} {bout bout' : BlockOutput}
@@ -216,11 +188,12 @@ theorem transaction_clock
     (trace : TransactionTrace benv bout tx index state bout')
     (sumNof : sum benv.state.bal < 2 ^ 256)
     (inv : (dripClockSpec chi0 rho0 T).BenvInv ca benv)
-    (htime : benv.stat.time.toNat ≤ T) :
+    (htime : benv.stat.time.toNat ≤ T)
+    (hfork : CoveredFork benv.stat.fork) :
     (dripClockSpec chi0 rho0 T).BenvInv ca (benv.withState state) :=
   trace.benvInv_admitted
     (dripClockSpec_preservesAdmitted chi0 rho0 T ca)
-    (transaction_clock_admitted trace htime) sumNof inv
+    hfork (transaction_clock_admitted trace htime) sumNof inv
 
 theorem transactionList_clock
     {chi0 rho0 T : Nat} {ca : Adr} {txs : List (Nat × Tx)}
@@ -228,33 +201,36 @@ theorem transactionList_clock
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
     (sumNof : sum benv.state.bal < 2 ^ 256)
     (inv : (dripClockSpec chi0 rho0 T).BenvInv ca benv)
-    (htime : benv.stat.time.toNat ≤ T) :
+    (htime : benv.stat.time.toNat ≤ T)
+    (hfork : CoveredFork benv.stat.fork) :
     (dripClockSpec chi0 rho0 T).BenvInv ca finalBenv :=
   trace.benvInv_admitted
     (dripClockSpec_preservesAdmitted chi0 rho0 T ca)
-    (transactionList_clock_admitted trace htime) sumNof inv
+    hfork (transactionList_clock_admitted trace htime) sumNof inv
 
 theorem systemMessage_clock
     {chi0 rho0 T : Nat} {ca : Adr} {benv : Benv} {target : Adr}
     {data : Bytes} {state : State} {out : MsgCallOutput}
     (trace : SystemMessageTrace benv target data state out)
     (inv : (dripClockSpec chi0 rho0 T).BenvInv ca benv)
-    (htime : benv.stat.time.toNat ≤ T) :
+    (htime : benv.stat.time.toNat ≤ T)
+    (hfork : CoveredFork benv.stat.fork) :
     (dripClockSpec chi0 rho0 T).BenvInv ca (benv.withState state) :=
   trace.benvInv_admitted
     (dripClockSpec_preservesAdmitted chi0 rho0 T ca)
-    (systemMessage_clock_admitted trace htime) inv
+    hfork (systemMessage_clock_admitted trace htime) inv
 
 theorem requests_clock
     {chi0 rho0 T : Nat} {ca : Adr} {benv : Benv} {bout : BlockOutput}
     {state : State} {bout' : BlockOutput}
     (trace : RequestsTrace benv bout state bout')
     (inv : (dripClockSpec chi0 rho0 T).BenvInv ca benv)
-    (htime : benv.stat.time.toNat ≤ T) :
+    (htime : benv.stat.time.toNat ≤ T)
+    (hfork : CoveredFork benv.stat.fork) :
     (dripClockSpec chi0 rho0 T).StateInv ca state :=
   (trace.stateInv_and_sum_le_admitted
     (dripClockSpec_preservesAdmitted chi0 rho0 T ca)
-    (requests_clock_admitted trace htime) inv).1
+    hfork (requests_clock_admitted trace htime) inv).1
 
 theorem directWithdrawal_clock
     {chi0 rho0 T : Nat} {ca : Adr} {benv : Benv} {wds : List Withdrawal}
@@ -275,11 +251,12 @@ theorem body_clock
     (trace : AppliedBodyTrace benv txs wds state bout)
     (bound : sum benv.state.bal + wdsum wds < 2 ^ 256)
     (inv : (dripClockSpec chi0 rho0 T).BenvInv ca benv)
-    (htime : benv.stat.time.toNat ≤ T) :
+    (htime : benv.stat.time.toNat ≤ T)
+    (hfork : CoveredFork benv.stat.fork) :
     (dripClockSpec chi0 rho0 T).StateInv ca state :=
   trace.stateInv_admitted
     (dripClockSpec_preservesAdmitted chi0 rho0 T ca)
-    (body_clock_admitted trace htime) bound inv
+    hfork (body_clock_admitted trace htime) bound inv
 
 theorem configuredBlock_clock
     {chi0 rho0 T : Nat} {ca : Adr} {cfg : ChainConfig}
@@ -296,19 +273,16 @@ theorem configuredBlock_clock
     (dripClockSpec_preservesAdmitted chi0 rho0 T ca) admitted inv
 
 private theorem deployed_blocks_getLast_of_transition
-    {cfg : ChainConfig} {base deployed : BlockChain} {block : Block}
-    (h : stateTransitionUsing cfg base block = .ok deployed) :
+    {fork : Fork} {base deployed : BlockChain} {block : Block}
+    (core : stateTransitionAt fork base block = .ok deployed) :
     deployed.blocks.getLast? = some block := by
-  have hId := stateTransitionUsing_success_chainId_eq h
-  have selected := h
-  rw [stateTransitionUsing_eq_of_chainId_eq hId] at selected
-  obtain ⟨rules, _, core⟩ := Except.bind_eq_ok selected
-  rw [stateTransitionWith_eq_ok_iff, stateTransitionE] at core
+  rw [stateTransitionAt_eq_ok_iff, stateTransitionE] at core
   obtain ⟨_, _, core⟩ := Except.bind_eq_ok core
   obtain ⟨_, _, core⟩ := Except.bind_eq_ok core
   dsimp only at core
   obtain ⟨⟨bodyState, blockOutput⟩, _, core⟩ := Except.bind_eq_ok core
   dsimp only at core
+  obtain ⟨_, _, core⟩ := Except.bind_eq_ok core
   obtain ⟨_, _, final⟩ := Except.bind_eq_ok core
   have blocks := congrArg (fun chain : BlockChain => chain.blocks.getLast?)
     (Except.ok.inj final)
@@ -322,7 +296,7 @@ theorem DeploymentRoot.rho_le_head_timestamp
   intro t hlast
   rcases root.execution with
     ⟨rules, cb, deploymentTxBytes, deploymentTx, sender, ctx, post, bout,
-      hbase, hblock, htx, hsuffix, htransition, hbody, hpost, hreceipt⟩
+      hbase, hblock, hcovered, htx, hsuffix, htransition, hbody, hpost, hreceipt⟩
   have hcb := deployed_blocks_getLast_of_transition htransition
   rw [hcb] at hlast
   have htime : cb.block.header.timestamp = t := Option.some.inj hlast
@@ -346,7 +320,7 @@ theorem configuredHistory_has_head_timestamp
   | refl hcfg hctx hid =>
       rcases root.execution with
         ⟨rules, cb, deploymentTxBytes, deploymentTx, sender, ctx, post, bout,
-          hbase, hblock, htx, hsuffix, htransition, hbody, hpost, hreceipt⟩
+          hbase, hblock, hcovered, htx, hsuffix, htransition, hbody, hpost, hreceipt⟩
       have hcb := deployed_blocks_getLast_of_transition htransition
       exact ⟨cb.block.header.timestamp, by simp [hcb]⟩
   | @step current future prior block ih =>
@@ -357,7 +331,9 @@ theorem configuredHistory_has_head_timestamp
 theorem history_clockInv
     {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
     (root : DeploymentRoot cfg base deployed ca)
-    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future) :
+    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     ∀ t, future.blocks.getLast?.map (·.header.timestamp) = some t →
       ClockInv (chiN (deployed.state.getStor ca)) (rhoN (deployed.state.getStor ca))
         t (future.state.getStor ca) := by
@@ -385,11 +361,11 @@ theorem history_clockInv
       have htime : block.block.header.timestamp = t := by
         rw [block.post_blocks_getLast] at hlast
         exact Option.some.inj hlast
-      have hbaseInv := root.reachable_stateInv prior.toReachUsing
+      have hbaseInv := root.reachable_stateInv prior.toReachUsing hcov
       have hmonoBounds := configuredHistory_mono
         (chi0 := chiN (deployed.state.getStor ca))
         (rho0 := rhoN (deployed.state.getStor ca))
-        prior root.monoStateInv
+        prior root.monoStateInv hcov
       have hprevAtT :
           (dripClockSpec (chiN (deployed.state.getStor ca))
             (rhoN (deployed.state.getStor ca)) t).StateInv

@@ -146,7 +146,7 @@ theorem weth10RuntimeTemplate_length : weth10RuntimeTemplate.length = 6313 := by
 
 private def compileShapeByteSize : Func.CompileShape → Nat
   | .last => 1
-  | .next size rest => compileShapeByteSize rest + size
+  | .next size _ rest => compileShapeByteSize rest + size
   | .branch left right =>
       compileShapeByteSize left + compileShapeByteSize right + 5
   | .call _ => 4
@@ -610,8 +610,8 @@ private lemma byteAt_main_to_dispatch
   have hshr : Ninst.shr.size = 1 := by decide +kernel
   change
     Func.byteAtByShape locations n
-      (.next Ninst.calldatasize.size
-        (.next Ninst.iszero.size
+      (.next Ninst.calldatasize.size (Ninst.immAccepted Ninst.calldatasize)
+        (.next Ninst.iszero.size (Ninst.immAccepted Ninst.iszero)
           (.branch (fsig +++ p).compileShape receiveEther.compileShape)))
       (Ninst.calldatasize ::: Ninst.iszero :::
         (receiveEther <?> (fsig +++ q))) i d = _
@@ -629,10 +629,12 @@ private lemma byteAt_main_to_dispatch
   change
     Func.byteAtByShape locations
       (n + Ninst.calldatasize.size + Ninst.iszero.size + 4)
-      (.next (Ninst.pushB256 0).size
-        (.next Ninst.calldataload.size
+      (.next (Ninst.pushB256 0).size (Ninst.immAccepted (Ninst.pushB256 0))
+        (.next Ninst.calldataload.size (Ninst.immAccepted Ninst.calldataload)
           (.next (Ninst.pushB256 224).size
-            (.next Ninst.shr.size p.compileShape))))
+              (Ninst.immAccepted (Ninst.pushB256 224))
+            (.next Ninst.shr.size (Ninst.immAccepted Ninst.shr)
+              p.compileShape))))
       (Ninst.pushB256 0 ::: Ninst.calldataload :::
         Ninst.pushB256 224 ::: Ninst.shr ::: q)
       (i - Ninst.calldatasize.size - Ninst.iszero.size - 4) d = _
@@ -2438,10 +2440,10 @@ private theorem weth10Code_slice_0_372
   exact weth10MainEmitTake_eq_zero_371 _ _ chainId domainSeparator
 
 private theorem emitByShape_next_drop_rest
-    (locations : List Nat) (n size : Nat)
+    (locations : List Nat) (n size : Nat) (acc : Bool)
     (restShape : Func.CompileShape)
     (inst : Ninst) (rest : Func) :
-    (Func.emitByShape locations n (.next size restShape)
+    (Func.emitByShape locations n (.next size acc restShape)
       (.next inst rest)).drop size =
       Func.emitByShape locations (n + size) restShape rest := by
   conv_lhs => rw [Func.emitByShape]
@@ -2508,8 +2510,8 @@ private theorem weth10MainEmit_drop_3950
           receiveEther.compileShape receiveEther := by
     change
       (Func.emitByShape locations n
-        (.next Ninst.calldatasize.size
-          (.next Ninst.iszero.size
+        (.next Ninst.calldatasize.size (Ninst.immAccepted Ninst.calldatasize)
+          (.next Ninst.iszero.size (Ninst.immAccepted Ninst.iszero)
             (.branch
               (fsig +++ dispatchWith fallbackSlot
                 (weth10Tree (⟨0, 0⟩ : DeployParams))).compileShape
@@ -2983,7 +2985,13 @@ private lemma deploymentSuccess_compile
         [Linst.toUInt8 .return_]) := by
   unfold weth10InitSuccess
   apply CompiledShape.compile_prepend_of
-  rfl
+  · rfl
+  · intro i hi
+    cases i <;> first
+      | rfl
+      | simp [deploymentSuccessLine, weth10InitCopyLine, weth10InitChainLine,
+          weth10InitPreHashLine, weth10InitHashLine, weth10InitSeparatorLine,
+          weth10InitReturnLine, Ninst.pushB256] at hi
 
 private lemma deploymentReject_compile
     (entries : List (Nat × Func)) (n : Nat) :
@@ -3022,7 +3030,9 @@ theorem weth10InitFunc_compile :
   rw [CompiledShape.compile_prepend_of
     (xs := [Ninst.callvalue, Ninst.iszero])
     (f := weth10InitSuccess 6313 177 <?> Func.revert)
-    (deploymentBranch_compile _)]
+    (deploymentBranch_compile _)
+    (by simp only [List.mem_cons, List.not_mem_nil, or_false,
+      forall_eq_or_imp, forall_eq, Ninst.immAccepted, and_self])]
   have hprefix : weth10InitPrefix = deploymentPrefix 6313 177 := by
     unfold weth10InitPrefix
     rw [weth10RuntimeTemplate_length]

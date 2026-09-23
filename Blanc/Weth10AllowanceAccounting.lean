@@ -472,6 +472,7 @@ def Exec.CoreAllowanceSound (dp : DeployParams) (ca : Adr)
     (sevm.currentTarget = ca →
       Exec.Frame.IsRoot (Exec.Frame.ofRun run committed) ∧
         sevm.codeAddress = some ca) →
+    CoveredFork sevm.benvStat.fork →
     AllowanceRegionEffect ca pre
       (Execution.committedPost out committed)
       (Exec.attributionStream dp ca run)
@@ -490,6 +491,7 @@ def CompiledBodyAllowanceHandler (dp : DeployParams) (ca : Adr) : Prop :=
       (sevm.currentTarget = ca →
         Exec.Frame.IsRoot (Exec.Frame.ofRun run committed) ∧
           sevm.codeAddress = some ca) →
+      CoveredFork sevm.benvStat.fork →
       AllowanceRegionEffect ca pre post
         (Exec.attributionStream dp ca run)
 
@@ -511,10 +513,11 @@ theorem CompiledFrameAllowanceHandler.compiledBodyAllowanceHandler
     (handler : CompiledFrameAllowanceHandler dp ca) :
     CompiledBodyAllowanceHandler dp ca := by
   intro sevm pre post hrun htarget hdeeper run committed installed rootDirect
+    hcovered
   let frame := Exec.Frame.ofRun run committed
   have hrootDirect := rootDirect htarget
   have context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame := by
-    refine ⟨hrootDirect.1, ?_, installed⟩
+    refine ⟨hrootDirect.1, ?_, installed, hcovered⟩
     refine ⟨rfl, htarget, hrootDirect.2, ?_⟩
     exact (installed.2 htarget).1
   exact handler frame context hdeeper
@@ -536,6 +539,7 @@ def Exec.CoreAllowanceReadSound (dp : DeployParams) (ca : Adr)
     (sevm.currentTarget = ca →
       Exec.Frame.IsRoot (Exec.Frame.ofRun run committed) ∧
         sevm.codeAddress = some ca) →
+    CoveredFork sevm.benvStat.fork →
     AllowanceRegionEffectSound ca pre
       (Execution.committedPost out committed)
       (Exec.attributionStream dp ca run)
@@ -546,8 +550,8 @@ theorem Exec.CoreAllowanceReadSound.coreAllowanceSound
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (h : Exec.CoreAllowanceReadSound dp ca pc sevm pre out) :
     Exec.CoreAllowanceSound dp ca pc sevm pre out :=
-  fun run committed installed rootDirect =>
-    (h run committed installed rootDirect).toAllowanceRegionEffect
+  fun run committed installed rootDirect hcovered =>
+    (h run committed installed rootDirect hcovered).toAllowanceRegionEffect
 
 /-- Read-sound sibling of `CompiledBodyAllowanceHandler`. -/
 def CompiledBodyAllowanceReadHandler (dp : DeployParams) (ca : Adr) : Prop :=
@@ -562,6 +566,7 @@ def CompiledBodyAllowanceReadHandler (dp : DeployParams) (ca : Adr) : Prop :=
       (sevm.currentTarget = ca →
         Exec.Frame.IsRoot (Exec.Frame.ofRun run committed) ∧
           sevm.codeAddress = some ca) →
+      CoveredFork sevm.benvStat.fork →
       AllowanceRegionEffectSound ca pre post
         (Exec.attributionStream dp ca run)
 
@@ -582,10 +587,11 @@ theorem CompiledFrameAllowanceReadHandler.compiledBodyAllowanceReadHandler
     (handler : CompiledFrameAllowanceReadHandler dp ca) :
     CompiledBodyAllowanceReadHandler dp ca := by
   intro sevm pre post hrun htarget hdeeper run committed installed rootDirect
+    hcovered
   let frame := Exec.Frame.ofRun run committed
   have hrootDirect := rootDirect htarget
   have context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame := by
-    refine ⟨hrootDirect.1, ?_, installed⟩
+    refine ⟨hrootDirect.1, ?_, installed, hcovered⟩
     refine ⟨rfl, htarget, hrootDirect.2, ?_⟩
     exact (installed.2 htarget).1
   exact handler frame context hdeeper

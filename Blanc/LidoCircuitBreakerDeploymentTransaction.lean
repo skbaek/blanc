@@ -30,6 +30,7 @@ structure OfficialDeploymentTransactionResult
   stable : RegistryStable officialParams ca post
   blockLogs : bout.blockLogs = officialConstructorLogs ca
   requests : bout.requests = []
+  blockAccessList : bout.blockAccessList = []
   depositRequests : parseDepositRequests bout = .ok []
   receiptKeys : bout.receiptKeys = [deploymentReceiptKey 0]
   receiptEntry : ∃ entry,
@@ -56,21 +57,30 @@ transaction result. -/
 theorem canonicalDeploymentTransaction_succeeds
     (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
     (tx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca)
+    (hbase : CanonicalDeploymentBase .prague chainId base sender ca)
     (henv : CanonicalOfficialDeploymentBlock chainId base cb
       txBytes tx sender ca)
     (ctx : PreparedDeploymentContext chainId base cb tx sender ca) :
     ∃ post bout,
       OfficialDeploymentTransactionResult chainId ca ctx post bout := by
-  have htotal : deploymentIntrinsicGas tx +
-      officialCreateMessageGasAccounting ≤ tx.gas :=
-    (le_max_right _ _).trans henv.gas_bound
+  have hintrinsicEq : deploymentIntrinsicGas ctx.msg.benv tx sender =
+      deploymentIntrinsicGas (initBenv .prague base cb.block.header) tx sender := by
+    unfold deploymentIntrinsicGas
+    rw [ctx.msg_rules_eq]
+    rfl
+  have htotal : deploymentIntrinsicGas ctx.msg.benv tx sender +
+      officialCreateMessageGasAccounting ≤ tx.gas := by
+    rw [hintrinsicEq]
+    exact (le_max_right _ _).trans henv.gas_bound
   have hgas : officialCreateMessageGasAccounting ≤ ctx.msg.gas := by
     rw [ctx.msg_gas_eq]
     omega
   have hmax : 4282 ≤ ctx.msg.benv.stat.rules.code.maxCodeSize := by
     rw [ctx.msg_rules_eq]
     decide
+  have hfork : CoveredFork ctx.msg.benv.stat.fork := by
+    rw [ctx.msg_benv_eq, ctx.begun_eq, ctx.systemPrefix.environment_eq]
+    exact CoveredFork.prague
   obtain ⟨messagePost, messageOut, hmessage⟩ :=
     processMessageCall_establishes_officialRegistryStable ca ctx.msg
       ctx.target_eq ctx.msg_target_eq ctx.noCodeOrNonce ctx.noStorage
@@ -79,10 +89,10 @@ theorem canonicalDeploymentTransaction_succeeds
       (by simpa [ctx.target_eq] using ctx.pauseOriginal)
       (by simpa [ctx.target_eq] using ctx.heartbeatCold)
       (by simpa [ctx.target_eq] using ctx.heartbeatOriginal)
-      ctx.msg_static_eq
+      ctx.msg_static_eq hfork
   obtain ⟨createPost, hcreate, hmessagePost, hmessageOut⟩ :=
     hmessage.creation
-  let usedGas := deploymentUsedGasFromMessage tx messageOut
+  let usedGas := deploymentUsedGasFromMessage ctx.txInput tx sender messageOut
   let post := deploymentFinalState ctx.txInput tx sender messagePost usedGas
   let bout := deploymentFinalBout .init tx 0 messageOut usedGas
   have hrefundZero : messageOut.refundCounter = 0 := by
@@ -100,8 +110,11 @@ theorem canonicalDeploymentTransaction_succeeds
   have hrules : ctx.txInput.beginTransaction.stat.rules = pragueRules := by
     rw [ctx.systemPrefix.environment_eq]
     rfl
+  have htxRules : ctx.txInput.stat.rules = pragueRules := by
+    rw [ctx.systemPrefix.environment_eq]
+    rfl
   have hprice : deploymentEffectiveGasPrice
-      (initBenv pragueRules base cb.block.header) tx =
+      (initBenv .prague base cb.block.header) tx =
       deploymentEffectiveGasPrice ctx.txInput tx := by
     rw [ctx.systemPrefix.environment_eq]
   have hchecked :
@@ -112,11 +125,35 @@ theorem canonicalDeploymentTransaction_succeeds
   have hdebit := ctx.debit_eq
   rw [ctx.begun_eq] at hdebit
   simp only [Benv.beginTransaction] at hdebit
+  have hvalidationStateGas :
+      ctx.txInput.beginTransaction.stat.rules.stateGas = none := by
+    change ctx.txInput.stat.rules.stateGas = none
+    rw [ctx.systemPrefix.environment_eq]
+    rfl
+  have hforkStateGas : pragueRules.stateGas = none :=
+    CoveredFork.prague.stateGas_none
+  have hintrinsic :
+      calculateIntrinsicCost pragueRules tx 0 =
+        calculateIntrinsicCost pragueRules tx sender := by
+    simp [calculateIntrinsicCost, htype]
   have hprepare := ctx.prepare_eq
   rw [ctx.begun_eq, ctx.tenv_eq] at hprepare
   have hrun : processTransaction ctx.txInput .init tx 0 =
       .ok (post, bout) := by
     unfold processTransaction
+    simp only [bind, Except.bind]
+    change (do
+      let validationSender ←
+        ((match ctx.txInput.beginTransaction.stat.rules.stateGas with
+          | none => Except.ok 0
+          | some _ => do
+            Except.mapError TransitionError.transaction
+              (checkTransactionChainId ctx.txInput.beginTransaction tx)
+            Except.mapError (fun e => TransitionError.senderRecovery e)
+              (recoverSender ctx.txInput.beginTransaction.stat.chainId tx)) :
+          Except TransitionError Adr)
+      (fun _ => _) validationSender) = .ok (post, bout) <;>
+      rw [hvalidationStateGas]
     simp only [bind, Except.bind]
     rw [hrules, henv.validated]
     simp only [Except.mapError]
@@ -130,11 +167,33 @@ theorem canonicalDeploymentTransaction_succeeds
     simp only [Option.toExcept]
     simp only [deploymentTenv, deploymentIntrinsicGas,
       Benv.beginTransaction] at hprepare
+    rw [htxRules] at hprepare
     simp only [List.map_nil, List.flatten_nil]
+    rw [hintrinsic]
+    simp only [allocateEvmGas, hforkStateGas]
+    simp only [deploymentEffectiveGasPrice] at hprepare ⊢
     rw [hprepare]
     simp only [hmessage.run]
     rw [hrefund]
-    simp only [hdelete, List.foldl_nil]
+    simp only [hdelete]
+    have hsettlement :
+        settleTransactionGas pragueRules tx.gas
+          (calculateIntrinsicCost pragueRules tx sender).2
+          messageOut.gasLeft messageOut.stateGasLeft messageOut.refundCounter.toNat
+          messageOut.stateGasUsed =
+          ⟨usedGas, tx.gas - usedGas, usedGas, 0⟩ := by
+      simp [settleTransactionGas, usedGas,
+        deploymentUsedGasFromMessage, deploymentCalldataFloorGas]
+      rw [htxRules]
+      simp
+    rw [hsettlement]
+    have hforkBalNone : pragueRules.bal = none := by
+      rfl
+    simp only [BlockOutput.withGasSettlement, hforkBalNone,
+      Nat.add_zero]
+    simp only [post, bout, deploymentFinalState, deploymentFinalBout,
+      deploymentEffectiveGasPrice, deploymentTxPreludeBout,
+      ExecutionTrace.transactionPreludeBout, BlockOutput.init, deploymentReceiptKey]
     rfl
   have hinstalled : some (post.getCode ca).toList =
       Prog.compile (runtime officialParams) := by
@@ -164,6 +223,10 @@ theorem canonicalDeploymentTransaction_succeeds
     simp [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout,
       hmessage.logs, BlockOutput.init]
   have hrequests : bout.requests = [] := by
+    dsimp only [bout, deploymentFinalBout]
+    simp [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout,
+      BlockOutput.init]
+  have hblockAccessList : bout.blockAccessList = [] := by
     dsimp only [bout, deploymentFinalBout]
     simp [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout,
       BlockOutput.init]
@@ -300,6 +363,7 @@ theorem canonicalDeploymentTransaction_succeeds
     stable := hstable
     blockLogs := hblockLogs
     requests := hrequests
+    blockAccessList := hblockAccessList
     depositRequests := hdeposit
     receiptKeys := hreceiptKeys
     receiptEntry := hreceiptEntry

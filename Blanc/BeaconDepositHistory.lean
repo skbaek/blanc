@@ -98,6 +98,9 @@ required: it changes gas cost, not the successful call's digest. -/
 structure NativeShaEntry (sevm : Sevm) (pre : Devm) : Prop where
   nondelegated : getDelegatedCodeAddress (pre.getCode 2) = none
   precompile : decide (sevm.benvStat.rules.isPrecomp 2) = true
+  /-- The frame runs on a covered (pre-Amsterdam) fork, whose legacy SHA-256
+  call lane the source-level walks model. -/
+  covered : CoveredFork sevm.benvStat.fork
 
 /-- Entry facts used by the source-level Beacon frame proof.  Native SHA is
 the contract-specific external-execution boundary; fresh stack and memory are

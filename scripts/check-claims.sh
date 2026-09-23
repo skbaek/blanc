@@ -18,6 +18,15 @@ if ! (cd "$ROOT" && lake env lean scripts/ClaimCheck.lean); then
   exit 1
 fi
 
+# Fork-coverage controls (2026-09-23): the four covered forks keep positive
+# witnesses, mainnet's schedule discharges the schedule premise, Amsterdam is
+# refused, and the covered list is pinned exactly.  Kept out of the audited
+# theorem set, so neither published count moves.
+if ! (cd "$ROOT" && lake env lean scripts/CoveredForkControls.lean); then
+  echo "REGRESSION — claim statements: the fork-coverage controls changed"
+  exit 1
+fi
+
 claim_count="$(grep -Ec '^[[:space:]]*(example|#check)([[:space:]]|$)' \
   "$ROOT/scripts/ClaimCheck.lean")"
 if [[ "$claim_count" -ne 460 ]]; then

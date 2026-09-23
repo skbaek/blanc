@@ -39,98 +39,186 @@ private theorem directExternalStep_codeAddress
       ¬ isValidDelegation (devm.getCode f.inner.currentTarget)) :
     f.inner.codeAddress = some f.inner.currentTarget := by
   rcases direct with rfl | rfl
-  · rcases h1 : devm.pop with err | ⟨gas, d1⟩
-    · simp [Jaune.Xinst.step, h1, Jaune.XStep.ofExcept] at spawn
-    rcases h2 : d1.popToAdr with err | ⟨callee, d2⟩
-    · simp [Jaune.Xinst.step, h1, h2, Jaune.XStep.ofExcept] at spawn
-    rcases h3 : d2.pop with err | ⟨value, d3⟩
-    · simp [Jaune.Xinst.step, h1, h2, h3, Jaune.XStep.ofExcept] at spawn
-    rcases h4 : d3.popToNat with err | ⟨ii, d4⟩
-    · simp [Jaune.Xinst.step, h1, h2, h3, h4, Jaune.XStep.ofExcept] at spawn
-    rcases h5 : d4.popToNat with err | ⟨isz, d5⟩
-    · simp [Jaune.Xinst.step, h1, h2, h3, h4, h5,
-        Jaune.XStep.ofExcept] at spawn
-    rcases h6 : d5.popToNat with err | ⟨oi, d6⟩
-    · simp [Jaune.Xinst.step, h1, h2, h3, h4, h5, h6,
-        Jaune.XStep.ofExcept] at spawn
-    rcases h7 : d6.popToNat with err | ⟨osz, d7⟩
-    · simp [Jaune.Xinst.step, h1, h2, h3, h4, h5, h6, h7,
-        Jaune.XStep.ofExcept] at spawn
-    have hcode : (addAccessedAddress d7 callee).getCode callee =
-        devm.getCode callee := by
-      rw [addAccessedAddress_getCode]
-      exact (Devm.popToNat_getCode h7).trans
-        ((Devm.popToNat_getCode h6).trans
-        ((Devm.popToNat_getCode h5).trans
-        ((Devm.popToNat_getCode h4).trans
-        ((Devm.pop_getCode h3).trans
-        ((Devm.popToAdr_getCode h2).trans
-          (Devm.pop_getCode h1))))))
-    simp only [Jaune.Xinst.step, h1, h2, h3, h4, h5, h6, h7,
-      Bind.bind, Except.bind, Except.assert] at spawn
-    repeat' split at spawn
-    all_goals simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
-    all_goals first
-      | cases spawn
-      | have hf := genericCall.step_spawn_frame spawn
-        have hnd : ¬ isValidDelegation
-            ((addAccessedAddress d7 callee).getCode callee) := by
-          rw [hcode, ← hf.2.1]
-          exact notDelegation
-        simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure,
-          Except.pure] at spawn
-        repeat' split at spawn
-        all_goals
-          simp only [Jaune.XStep.ofExcept, Jaune.XStep.spawn.injEq,
-            reduceCtorEq] at spawn
-        all_goals obtain ⟨rfl, rfl⟩ := spawn
-        all_goals
-          exact congrArg some (congrArg (fun t => t.2.1)
-            (accessDelegation_of_not_delegation hnd))
-  · rcases h1 : devm.pop with err | ⟨gas, d1⟩
-    · simp [Jaune.Xinst.step, h1, Jaune.XStep.ofExcept] at spawn
-    rcases h2 : d1.popToAdr with err | ⟨callee, d2⟩
-    · simp [Jaune.Xinst.step, h1, h2, Jaune.XStep.ofExcept] at spawn
-    rcases h3 : d2.popToNat with err | ⟨ii, d3⟩
-    · simp [Jaune.Xinst.step, h1, h2, h3, Jaune.XStep.ofExcept] at spawn
-    rcases h4 : d3.popToNat with err | ⟨isz, d4⟩
-    · simp [Jaune.Xinst.step, h1, h2, h3, h4, Jaune.XStep.ofExcept] at spawn
-    rcases h5 : d4.popToNat with err | ⟨oi, d5⟩
-    · simp [Jaune.Xinst.step, h1, h2, h3, h4, h5,
-        Jaune.XStep.ofExcept] at spawn
-    rcases h6 : d5.popToNat with err | ⟨osz, d6⟩
-    · simp [Jaune.Xinst.step, h1, h2, h3, h4, h5, h6,
-        Jaune.XStep.ofExcept] at spawn
-    have hcode : (addAccessedAddress d6 callee).getCode callee =
-        devm.getCode callee := by
-      rw [addAccessedAddress_getCode]
-      exact (Devm.popToNat_getCode h6).trans
-        ((Devm.popToNat_getCode h5).trans
-        ((Devm.popToNat_getCode h4).trans
-        ((Devm.popToNat_getCode h3).trans
-        ((Devm.popToAdr_getCode h2).trans
-          (Devm.pop_getCode h1)))))
-    simp only [Jaune.Xinst.step, h1, h2, h3, h4, h5, h6,
-      Bind.bind, Except.bind] at spawn
-    repeat' split at spawn
-    all_goals simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
-    all_goals first
-      | cases spawn
-      | have hf := genericCall.step_spawn_frame spawn
-        have hnd : ¬ isValidDelegation
-            ((addAccessedAddress d6 callee).getCode callee) := by
-          rw [hcode, ← hf.2.1]
-          exact notDelegation
-        simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure,
-          Except.pure] at spawn
-        repeat' split at spawn
-        all_goals
-          simp only [Jaune.XStep.ofExcept, Jaune.XStep.spawn.injEq,
-            reduceCtorEq] at spawn
-        all_goals obtain ⟨rfl, rfl⟩ := spawn
-        all_goals
-          exact congrArg some (congrArg (fun t => t.2.1)
-            (accessDelegation_of_not_delegation hnd))
+  · simp only [Jaune.Xinst.step, Bind.bind, Except.bind, Except.assert] at spawn
+    split at spawn
+    · -- Legacy: no state gas.
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ vgas hgas
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ vcallee hcallee
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ vval hval
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ vii hii
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ vis his
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ voi hoi
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ vos hos
+      -- The delegation lookup runs on the popped-and-recorded machine, so the
+      -- premise's code fact has to travel down the operand pops first.
+      have hgc : ∀ a : Adr,
+          (addAccessedAddress vos.2 vcallee.1).getCode a = devm.getCode a := by
+        intro a
+        rw [addAccessedAddress_getCode, Devm.popToNat_getCode hos,
+          Devm.popToNat_getCode hoi, Devm.popToNat_getCode his,
+          Devm.popToNat_getCode hii, Devm.pop_getCode hval,
+          Devm.popToAdr_getCode hcallee, Devm.pop_getCode hgas]
+      repeat' split at spawn
+      all_goals simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      all_goals first
+        | cases spawn
+        | simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure,
+            Except.pure] at spawn
+          repeat' split at spawn
+          all_goals
+            simp only [Jaune.XStep.ofExcept, Jaune.XStep.spawn.injEq, reduceCtorEq] at spawn
+          all_goals obtain ⟨rfl, rfl⟩ := spawn
+          all_goals
+            refine congrArg some ((congrArg (fun t => t.2.1)
+              (Blanc.GasSchedule.accessDelegation_of_not_delegation
+                (gas := sevm.benvStat.rules.gas) ?_)).trans rfl)
+            rw [hgc]
+            exact notDelegation
+    · -- Amsterdam: delegation priced without warming.
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ vgas hgas
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ vcallee hcallee
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ vval hval
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ vii hii
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ vis his
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ voi hoi
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ vos hos
+      have hgc : ∀ a : Adr,
+          (addAccessedAddress vos.2 vcallee.1).getCode a = devm.getCode a := by
+        intro a
+        rw [addAccessedAddress_getCode, Devm.popToNat_getCode hos,
+          Devm.popToNat_getCode hoi, Devm.popToNat_getCode his,
+          Devm.popToNat_getCode hii, Devm.pop_getCode hval,
+          Devm.popToAdr_getCode hcallee, Devm.pop_getCode hgas]
+      repeat' split at spawn
+      all_goals simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      all_goals first
+        | cases spawn
+        | simp only [genericCallAmsterdam.step, Bind.bind, Except.bind,
+            Pure.pure, Except.pure] at spawn
+          repeat' split at spawn
+          all_goals
+            simp only [Jaune.XStep.ofExcept, Jaune.XStep.spawn.injEq, reduceCtorEq] at spawn
+          all_goals obtain ⟨rfl, rfl⟩ := spawn
+          all_goals
+            refine congrArg some ((congrArg (fun t => t.2.1)
+              (Blanc.GasSchedule.delegationCost_of_not_delegation
+                (gas := sevm.benvStat.rules.gas) ?_)).trans rfl)
+            rw [hgc]
+            exact notDelegation
+  · simp only [Jaune.Xinst.step, Bind.bind, Except.bind] at spawn
+    split at spawn
+    · -- Legacy: no state gas.
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ vgas hgas
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ vtgt htgt
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ vii hii
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ vis his
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ voi hoi
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ vos hos
+      have hgc : ∀ a : Adr,
+          (addAccessedAddress vos.2 vtgt.1).getCode a = devm.getCode a := by
+        intro a
+        rw [addAccessedAddress_getCode, Devm.popToNat_getCode hos,
+          Devm.popToNat_getCode hoi, Devm.popToNat_getCode his,
+          Devm.popToNat_getCode hii, Devm.popToAdr_getCode htgt,
+          Devm.pop_getCode hgas]
+      repeat' split at spawn
+      all_goals simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      all_goals first
+        | cases spawn
+        | simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure,
+            Except.pure] at spawn
+          repeat' split at spawn
+          all_goals
+            simp only [Jaune.XStep.ofExcept, Jaune.XStep.spawn.injEq, reduceCtorEq] at spawn
+          all_goals obtain ⟨rfl, rfl⟩ := spawn
+          all_goals
+            refine congrArg some ((congrArg (fun t => t.2.1)
+              (Blanc.GasSchedule.accessDelegation_of_not_delegation
+                (gas := sevm.benvStat.rules.gas) ?_)).trans rfl)
+            rw [hgc]
+            exact notDelegation
+    · -- Amsterdam: delegation priced without warming.
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ vgas hgas
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ vtgt htgt
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ vii hii
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ vis his
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ voi hoi
+      split at spawn
+      · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      rename_i _ vos hos
+      have hgc : ∀ a : Adr,
+          (addAccessedAddress vos.2 vtgt.1).getCode a = devm.getCode a := by
+        intro a
+        rw [addAccessedAddress_getCode, Devm.popToNat_getCode hos,
+          Devm.popToNat_getCode hoi, Devm.popToNat_getCode his,
+          Devm.popToNat_getCode hii, Devm.popToAdr_getCode htgt,
+          Devm.pop_getCode hgas]
+      repeat' split at spawn
+      all_goals simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
+      all_goals first
+        | cases spawn
+        | simp only [genericCallAmsterdam.step, Bind.bind, Except.bind,
+            Pure.pure, Except.pure] at spawn
+          repeat' split at spawn
+          all_goals
+            simp only [Jaune.XStep.ofExcept, Jaune.XStep.spawn.injEq, reduceCtorEq] at spawn
+          all_goals obtain ⟨rfl, rfl⟩ := spawn
+          all_goals
+            refine congrArg some ((congrArg (fun t => t.2.1)
+              (Blanc.GasSchedule.delegationCost_of_not_delegation
+                (gas := sevm.benvStat.rules.gas) ?_)).trans rfl)
+            rw [hgc]
+            exact notDelegation
 
 /-- A direct CALL back into the current target loads that target's own code
 when the installed account is not an EOA delegation designator. -/
@@ -142,22 +230,26 @@ private theorem callStep_sameTarget_code
       ¬ isValidDelegation (devm.getCode f.inner.currentTarget)) :
     f.inner.code = devm.getCode f.inner.currentTarget := by
   rcases h1 : devm.pop with err | ⟨gas, d1⟩
-  · simp [Jaune.Xinst.step, h1, Jaune.XStep.ofExcept] at spawn
+  · cases hsg : sevm.benvStat.rules.stateGas <;>
+      simp [Jaune.Xinst.step, hsg, h1, Jaune.XStep.ofExcept] at spawn
   rcases h2 : d1.popToAdr with err | ⟨callee, d2⟩
-  · simp [Jaune.Xinst.step, h1, h2, Jaune.XStep.ofExcept] at spawn
+  · cases hsg : sevm.benvStat.rules.stateGas <;>
+      simp [Jaune.Xinst.step, hsg, h1, h2, Jaune.XStep.ofExcept] at spawn
   rcases h3 : d2.pop with err | ⟨value, d3⟩
-  · simp [Jaune.Xinst.step, h1, h2, h3, Jaune.XStep.ofExcept] at spawn
+  · cases hsg : sevm.benvStat.rules.stateGas <;>
+      simp [Jaune.Xinst.step, hsg, h1, h2, h3, Jaune.XStep.ofExcept] at spawn
   rcases h4 : d3.popToNat with err | ⟨ii, d4⟩
-  · simp [Jaune.Xinst.step, h1, h2, h3, h4, Jaune.XStep.ofExcept] at spawn
+  · cases hsg : sevm.benvStat.rules.stateGas <;>
+      simp [Jaune.Xinst.step, hsg, h1, h2, h3, h4, Jaune.XStep.ofExcept] at spawn
   rcases h5 : d4.popToNat with err | ⟨isz, d5⟩
-  · simp [Jaune.Xinst.step, h1, h2, h3, h4, h5,
-      Jaune.XStep.ofExcept] at spawn
+  · cases hsg : sevm.benvStat.rules.stateGas <;>
+      simp [Jaune.Xinst.step, hsg, h1, h2, h3, h4, h5, Jaune.XStep.ofExcept] at spawn
   rcases h6 : d5.popToNat with err | ⟨oi, d6⟩
-  · simp [Jaune.Xinst.step, h1, h2, h3, h4, h5, h6,
-      Jaune.XStep.ofExcept] at spawn
+  · cases hsg : sevm.benvStat.rules.stateGas <;>
+      simp [Jaune.Xinst.step, hsg, h1, h2, h3, h4, h5, h6, Jaune.XStep.ofExcept] at spawn
   rcases h7 : d6.popToNat with err | ⟨osz, d7⟩
-  · simp [Jaune.Xinst.step, h1, h2, h3, h4, h5, h6, h7,
-      Jaune.XStep.ofExcept] at spawn
+  · cases hsg : sevm.benvStat.rules.stateGas <;>
+      simp [Jaune.Xinst.step, hsg, h1, h2, h3, h4, h5, h6, h7, Jaune.XStep.ofExcept] at spawn
   have hcode : (addAccessedAddress d7 callee).getCode callee =
       devm.getCode callee := by
     rw [addAccessedAddress_getCode]
@@ -181,8 +273,18 @@ private theorem callStep_sameTarget_code
           ((addAccessedAddress d7 callee).getCode callee) := by
         rw [hcode, hcallee, ← sameTarget]
         exact notDelegation
-      have hdel := accessDelegation_of_not_delegation hnd
+      have hdel := Blanc.GasSchedule.accessDelegation_of_not_delegation
+        (gas := sevm.benvStat.rules.gas) hnd
       rw [hf.2.2, congrArg (fun t => t.2.2.1) hdel, hcode]
+      exact congrArg devm.getCode hf.2.1.symm
+    | have hf := genericCallAmsterdam.step_spawn_frame spawn
+      have hcallee : callee = sevm.currentTarget :=
+        hf.2.1.symm.trans sameTarget
+      have hnd : ¬ isValidDelegation
+          ((addAccessedAddress d7 callee).getCode callee) := by
+        rw [hcode, hcallee, ← sameTarget]
+        exact notDelegation
+      rw [hf.2.2, Blanc.amsterdamCallCode_of_not_delegation hnd, hcode]
       exact congrArg devm.getCode hf.2.1.symm
 
 /-- STATICCALL has the same direct-code property as CALL. -/
@@ -195,19 +297,23 @@ private theorem staticcallStep_sameTarget_code
       ¬ isValidDelegation (devm.getCode f.inner.currentTarget)) :
     f.inner.code = devm.getCode f.inner.currentTarget := by
   rcases h1 : devm.pop with err | ⟨gas, d1⟩
-  · simp [Jaune.Xinst.step, h1, Jaune.XStep.ofExcept] at spawn
+  · cases hsg : sevm.benvStat.rules.stateGas <;>
+      simp [Jaune.Xinst.step, hsg, h1, Jaune.XStep.ofExcept] at spawn
   rcases h2 : d1.popToAdr with err | ⟨callee, d2⟩
-  · simp [Jaune.Xinst.step, h1, h2, Jaune.XStep.ofExcept] at spawn
+  · cases hsg : sevm.benvStat.rules.stateGas <;>
+      simp [Jaune.Xinst.step, hsg, h1, h2, Jaune.XStep.ofExcept] at spawn
   rcases h3 : d2.popToNat with err | ⟨ii, d3⟩
-  · simp [Jaune.Xinst.step, h1, h2, h3, Jaune.XStep.ofExcept] at spawn
+  · cases hsg : sevm.benvStat.rules.stateGas <;>
+      simp [Jaune.Xinst.step, hsg, h1, h2, h3, Jaune.XStep.ofExcept] at spawn
   rcases h4 : d3.popToNat with err | ⟨isz, d4⟩
-  · simp [Jaune.Xinst.step, h1, h2, h3, h4, Jaune.XStep.ofExcept] at spawn
+  · cases hsg : sevm.benvStat.rules.stateGas <;>
+      simp [Jaune.Xinst.step, hsg, h1, h2, h3, h4, Jaune.XStep.ofExcept] at spawn
   rcases h5 : d4.popToNat with err | ⟨oi, d5⟩
-  · simp [Jaune.Xinst.step, h1, h2, h3, h4, h5,
-      Jaune.XStep.ofExcept] at spawn
+  · cases hsg : sevm.benvStat.rules.stateGas <;>
+      simp [Jaune.Xinst.step, hsg, h1, h2, h3, h4, h5, Jaune.XStep.ofExcept] at spawn
   rcases h6 : d5.popToNat with err | ⟨osz, d6⟩
-  · simp [Jaune.Xinst.step, h1, h2, h3, h4, h5, h6,
-      Jaune.XStep.ofExcept] at spawn
+  · cases hsg : sevm.benvStat.rules.stateGas <;>
+      simp [Jaune.Xinst.step, hsg, h1, h2, h3, h4, h5, h6, Jaune.XStep.ofExcept] at spawn
   have hcode : (addAccessedAddress d6 callee).getCode callee =
       devm.getCode callee := by
     rw [addAccessedAddress_getCode]
@@ -230,8 +336,18 @@ private theorem staticcallStep_sameTarget_code
           ((addAccessedAddress d6 callee).getCode callee) := by
         rw [hcode, hcallee, ← sameTarget]
         exact notDelegation
-      have hdel := accessDelegation_of_not_delegation hnd
+      have hdel := Blanc.GasSchedule.accessDelegation_of_not_delegation
+        (gas := sevm.benvStat.rules.gas) hnd
       rw [hf.2.2, congrArg (fun t => t.2.2.1) hdel, hcode]
+      exact congrArg devm.getCode hf.2.1.symm
+    | have hf := genericCallAmsterdam.step_spawn_frame spawn
+      have hcallee : callee = sevm.currentTarget :=
+        hf.2.1.symm.trans sameTarget
+      have hnd : ¬ isValidDelegation
+          ((addAccessedAddress d6 callee).getCode callee) := by
+        rw [hcode, hcallee, ← sameTarget]
+        exact notDelegation
+      rw [hf.2.2, Blanc.amsterdamCallCode_of_not_delegation hnd, hcode]
       exact congrArg devm.getCode hf.2.1.symm
 
 /-- The reviewed direct external edges load the current target's own code in
@@ -452,6 +568,12 @@ theorem Exec.CoreRuntimeOwnerClosed.nextSome
       simp [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at hstep
   | push xs hxs =>
       simp [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hstep
+  | dupn imm =>
+      simp [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at hstep
+  | swapn imm =>
+      simp [Ninst.StepRun, Ninst.step_swapn, Step.run_ofExecution] at hstep
+  | exchange imm =>
+      simp [Ninst.StepRun, Ninst.step_exchange, Step.run_ofExecution] at hstep
   | exec x =>
       intro run committed installed direct frame member owner
       have hxrun := XStep.run_toStep.mp hstep

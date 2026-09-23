@@ -23,6 +23,7 @@ theorem stageDepositEvent_storageEffectRun
     (hdec0 : DynamicTailDecodable sevm.data 0)
     (hdec1 : DynamicTailDecodable sevm.data 1)
     (hdec2 : DynamicTailDecodable sevm.data 2)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hvalue : base.getStorVal sevm.currentTarget depositCountSlot = oldCount)
     (hstatic : sevm.isStatic = false) :
     ∃ logged : Devm,
@@ -50,16 +51,16 @@ theorem stageDepositEvent_storageEffectRun
       ∀ {ex : Execution},
         Func.StorageEffectRun fs sevm
           (logged.setMach
-            ⟨[], depositEventMemory sevm.data amount oldCount, G⟩)
+            ⟨[], depositEventMemory sevm.data amount oldCount, G, logged.stateGas⟩)
           body ex effects →
         Func.StorageEffectRun fs sevm
           (base.setMach
             ⟨[], depositEventInputMemory sevm.data amount,
-              G + 5799 + sloadCost sevm base depositCountSlot⟩)
+              G + 5799 + sloadCost sevm base depositCountSlot, base.stateGas⟩)
           (stageDepositEvent +++ body) ex effects := by
   obtain ⟨logged, hlogs, hstor, hstorMap, hbal, hcode, haccess, haddresses,
       houtput, herror, hlift⟩ :=
-    stageDepositEvent_runCompiledTo
+    stageDepositEvent_runCompiledTo (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := base)
       (amount := amount) (oldCount := oldCount) (G := G)
       (body := .last .stop)
@@ -68,14 +69,14 @@ theorem stageDepositEvent_storageEffectRun
     houtput, herror, ?_⟩
   intro ex htail
   let stopPost := logged.setMach
-    ⟨[], depositEventMemory sevm.data amount oldCount, G⟩
+    ⟨[], depositEventMemory sevm.data amount oldCount, G, logged.stateGas⟩
   have hstop : Func.RunCompiledTo fs sevm stopPost (.last .stop)
       (.ok stopPost) :=
     Func.RunCompiledTo.last rfl
   have hrun : Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[], depositEventInputMemory sevm.data amount,
-          G + 5799 + sloadCost sevm base depositCountSlot⟩)
+          G + 5799 + sloadCost sevm base depositCountSlot, base.stateGas⟩)
       (stageDepositEvent +++ (.last .stop)) (.ok stopPost) := by
     simpa only [stopPost] using hlift hstop
   have hprefix : Func.RunCompiledTo.SuccessfulStopPrefix hrun := by

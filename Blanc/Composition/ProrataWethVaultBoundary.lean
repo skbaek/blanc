@@ -401,6 +401,7 @@ theorem exactWethCallOccurrence_of_runCompiled_anyStatic
     {gasWord inputOffset inputSize outputOffset outputSize : B256}
     {rest : List B256} {calldata : Bytes}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_stk : pre.stack =
       gasWord :: wethAccount.toB256 :: 0 :: inputOffset :: inputSize ::
         outputOffset :: outputSize :: rest)
@@ -409,12 +410,12 @@ theorem exactWethCallOccurrence_of_runCompiled_anyStatic
     (h_depth : sevm.depth ≠ 0)
     (h_gas :
       let base := addAccessedAddress
-        (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩) wethAccount
-      let ext := (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩).extCost
+        (pre.setMach ⟨rest, pre.memory, pre.gasLeft, pre.stateGas⟩) wethAccount
+      let ext := (pre.setMach ⟨rest, pre.memory, pre.gasLeft, pre.stateGas⟩).extCost
         [⟨inputOffset.toNat, inputSize.toNat⟩,
           ⟨outputOffset.toNat, outputSize.toNat⟩]
       let acc := accessCost wethAccount
-        (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩).accessedAddresses
+        (pre.setMach ⟨rest, pre.memory, pre.gasLeft, pre.stateGas⟩).accessedAddresses
       (calculateMsgCallGas 0 gasWord.toNat base.gasLeft ext acc).1 + ext ≤
         base.gasLeft)
     (run : Ninst.RunCompiled sevm pre Ninst.call post) :
@@ -424,7 +425,7 @@ theorem exactWethCallOccurrence_of_runCompiled_anyStatic
   have hx := hrun 0
   rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at hx
   have hta : wethAccount.toB256.toAdr = wethAccount := toAdr_toB256 wethAccount
-  let popped := pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩
+  let popped := pre.setMach ⟨rest, pre.memory, pre.gasLeft, pre.stateGas⟩
   let base := addAccessedAddress popped wethAccount
   have hcode : base.state.getCode wethAccount = pre.getCode wethAccount := by
     rfl
@@ -444,12 +445,12 @@ theorem exactWethCallOccurrence_of_runCompiled_anyStatic
     simpa only [popped, base, ext, acc, hsplit] using h_gas
   have hdel' : accessDelegation
       (addAccessedAddress
-        (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩)
+        (pre.setMach ⟨rest, pre.memory, pre.gasLeft, pre.stateGas⟩)
           wethAccount.toB256.toAdr) wethAccount.toB256.toAdr =
       ⟨false, wethAccount, pre.getCode wethAccount, 0, base⟩ := by
     simpa only [hta, popped, base] using hdel
   obtain ⟨hstep, -, -, -, -, -, -, -⟩ :=
-    directCall_zero_spawn h_stk (ext := ext) (acc := acc) (mcc := mcc)
+    directCall_zero_spawn hfork h_stk (ext := ext) (acc := acc) (mcc := mcc)
       (mcs := mcs) (d1 := base) (dp := false) (dadr := wethAccount)
       (code := pre.getCode wethAccount) (dgc := 0)
       (by rfl) hdel' (by rfl) hsplit hga h_depth
@@ -529,6 +530,7 @@ theorem exactWethCallOccurrence_of_runCompiled
     {gasWord inputOffset inputSize outputOffset outputSize : B256}
     {rest : List B256} {calldata : Bytes}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_stk : pre.stack =
       gasWord :: wethAccount.toB256 :: 0 :: inputOffset :: inputSize ::
         outputOffset :: outputSize :: rest)
@@ -538,18 +540,18 @@ theorem exactWethCallOccurrence_of_runCompiled
     (h_dynamic : sevm.isStatic = false)
     (h_gas :
       let base := addAccessedAddress
-        (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩) wethAccount
-      let ext := (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩).extCost
+        (pre.setMach ⟨rest, pre.memory, pre.gasLeft, pre.stateGas⟩) wethAccount
+      let ext := (pre.setMach ⟨rest, pre.memory, pre.gasLeft, pre.stateGas⟩).extCost
         [⟨inputOffset.toNat, inputSize.toNat⟩,
           ⟨outputOffset.toNat, outputSize.toNat⟩]
       let acc := accessCost wethAccount
-        (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩).accessedAddresses
+        (pre.setMach ⟨rest, pre.memory, pre.gasLeft, pre.stateGas⟩).accessedAddresses
       (calculateMsgCallGas 0 gasWord.toNat base.gasLeft ext acc).1 + ext ≤
         base.gasLeft)
     (run : Ninst.RunCompiled sevm pre Ninst.call post) :
     ExactWethChildOccurrence sevm pre post Ninst.call calldata false := by
   have occurrence := exactWethCallOccurrence_of_runCompiled_anyStatic
-    config h_stk h_window h_depth h_gas run
+    config hfork h_stk h_window h_depth h_gas run
   rwa [h_dynamic] at occurrence
 
 /-- The STATICCALL sibling used by `totalAssets`: the exact input window is
@@ -559,6 +561,7 @@ theorem exactWethStatcallOccurrence_of_runCompiled
     {gasWord inputOffset inputSize outputOffset outputSize : B256}
     {rest : List B256} {calldata : Bytes}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_stk : pre.stack =
       gasWord :: wethAccount.toB256 :: inputOffset :: inputSize ::
         outputOffset :: outputSize :: rest)
@@ -567,12 +570,12 @@ theorem exactWethStatcallOccurrence_of_runCompiled
     (h_depth : sevm.depth ≠ 0)
     (h_gas :
       let base := addAccessedAddress
-        (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩) wethAccount
-      let ext := (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩).extCost
+        (pre.setMach ⟨rest, pre.memory, pre.gasLeft, pre.stateGas⟩) wethAccount
+      let ext := (pre.setMach ⟨rest, pre.memory, pre.gasLeft, pre.stateGas⟩).extCost
         [⟨inputOffset.toNat, inputSize.toNat⟩,
           ⟨outputOffset.toNat, outputSize.toNat⟩]
       let acc := accessCost wethAccount
-        (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩).accessedAddresses
+        (pre.setMach ⟨rest, pre.memory, pre.gasLeft, pre.stateGas⟩).accessedAddresses
       (calculateMsgCallGas 0 gasWord.toNat base.gasLeft ext acc).1 + ext ≤
         base.gasLeft)
     (run : Ninst.RunCompiled sevm pre Ninst.staticcall post) :
@@ -581,7 +584,7 @@ theorem exactWethStatcallOccurrence_of_runCompiled
   have hx := hrun 0
   rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at hx
   have hta : wethAccount.toB256.toAdr = wethAccount := toAdr_toB256 wethAccount
-  let popped := pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩
+  let popped := pre.setMach ⟨rest, pre.memory, pre.gasLeft, pre.stateGas⟩
   let base := addAccessedAddress popped wethAccount
   have hcode : base.state.getCode wethAccount = pre.getCode wethAccount := by
     rfl
@@ -601,12 +604,12 @@ theorem exactWethStatcallOccurrence_of_runCompiled
     simpa only [popped, base, ext, acc, hsplit] using h_gas
   have hdel' : accessDelegation
       (addAccessedAddress
-        (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩)
+        (pre.setMach ⟨rest, pre.memory, pre.gasLeft, pre.stateGas⟩)
           wethAccount.toB256.toAdr) wethAccount.toB256.toAdr =
       ⟨false, wethAccount, pre.getCode wethAccount, 0, base⟩ := by
     simpa only [hta, popped, base] using hdel
   obtain ⟨hstep, -, -, -, -, -, -, -⟩ :=
-    directStatcall_spawn h_stk (ext := ext) (acc := acc) (mcc := mcc)
+    directStatcall_spawn hfork h_stk (ext := ext) (acc := acc) (mcc := mcc)
       (mcs := mcs) (d1 := base) (dp := false) (dadr := wethAccount)
       (code := pre.getCode wethAccount) (dgc := 0)
       (by rfl) hdel' (by rfl) hsplit hga h_depth

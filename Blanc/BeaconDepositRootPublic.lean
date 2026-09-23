@@ -16,6 +16,7 @@ open Jaune.Ninst Blanc.Ninst
 /-- The exact compiled public root query at zero value. -/
 theorem getDepositRoot_zero_runCompiled
     (sevm : Sevm) (base : Devm) (stor : Stor) (count G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hdataLength : 4 ≤ sevm.data.length)
     (hdataBound : sevm.data.length < 2 ^ 256)
     (hvalue : sevm.value = 0)
@@ -42,7 +43,7 @@ theorem getDepositRoot_zero_runCompiled
       Prog.RunCompiled sevm
         (base.setMach
           ⟨[], Mem.empty,
-            G + getDepositRootRuntimeGas sevm base stor count⟩)
+            G + getDepositRootRuntimeGas sevm base stor count, base.stateGas⟩)
         runtime post ∧
       post.stack = [] ∧
       post.gasLeft = G ∧
@@ -63,11 +64,11 @@ theorem getDepositRoot_zero_runCompiled
       post.logs = base.logs ∧
       post.error = base.error ∧
       some sevm.code.toList = Prog.compile runtime := by
-  let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft⟩
+  let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft, base.stateGas⟩
   obtain ⟨post, hendpoint, hstack, hgas, houtput, houtputWord,
       hreturnData, hpostStor, hpostCode, hpostAddresses,
       hpostKeys, hpostLogs, hpostError⟩ :=
-    getDepositRootEndpoint_runCompiled
+    getDepositRootEndpoint_runCompiled (hfork := hfork)
       (fs := runtime.main :: runtime.aux)
       (sevm := sevm) (base := base) (stor := stor)
       (count := count) (G := G)
@@ -83,7 +84,7 @@ theorem getDepositRoot_zero_runCompiled
   have hendpoint' :
       Func.RunCompiled (runtime.main :: runtime.aux) sevm
         (routeBase.setMach
-          ⟨routeBase.stack, routeBase.memory, G + endpointGas⟩)
+          ⟨routeBase.stack, routeBase.memory, G + endpointGas, routeBase.stateGas⟩)
         getDepositRootEndpoint post := by
     have hgasEntry :
         G + endpointGas =
@@ -104,7 +105,7 @@ theorem getDepositRoot_zero_runCompiled
                 (rootInitialLoopState
                   (afterSload sevm base depositCountSlot)
                   (Nat.toB256 count)) +
-            getDepositRootPrefixGas sevm base⟩)
+            getDepositRootPrefixGas sevm base, base.stateGas⟩)
       getDepositRootEndpoint post
     exact hendpoint
   have hwrapped :=
@@ -126,7 +127,7 @@ theorem getDepositRoot_zero_runCompiled
       (K := G + endpointGas + nonpayableEndpointZeroGas)
       hlengthWordNe hselector
       (by
-        simpa only [routeBase, Devm.setMach_setMach,
+        simpa only [routeBase, Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas,
           Devm.stack_setMach, Devm.memory_setMach] using hwrapped)
   have hboundary :
       G + endpointGas + nonpayableEndpointZeroGas +
@@ -137,7 +138,7 @@ theorem getDepositRoot_zero_runCompiled
   have hroute : Prog.RunCompiled sevm
       (base.setMach
         ⟨[], Mem.empty,
-          G + getDepositRootRuntimeGas sevm base stor count⟩)
+          G + getDepositRootRuntimeGas sevm base stor count, base.stateGas⟩)
       runtime post := by
     simpa only [hboundary] using hroute0
   have hcountWord : stor.get depositCountSlot = Nat.toB256 count := by
@@ -166,6 +167,7 @@ storage write/effect, and returns the same model root as the compiled-view
 theorem above. -/
 theorem getDepositRoot_zero_runCompiled_noRawSstore
     (sevm : Sevm) (base : Devm) (stor : Stor) (count G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hdataLength : 4 ≤ sevm.data.length)
     (hdataBound : sevm.data.length < 2 ^ 256)
     (hvalue : sevm.value = 0)
@@ -192,12 +194,12 @@ theorem getDepositRoot_zero_runCompiled_noRawSstore
       ∃ execution : Exec 0 sevm
           (base.setMach
             ⟨[], Mem.empty,
-              G + getDepositRootRuntimeGas sevm base stor count⟩)
+              G + getDepositRootRuntimeGas sevm base stor count, base.stateGas⟩)
           (.ok post),
         Prog.RunCompiledTo sevm
             (base.setMach
               ⟨[], Mem.empty,
-                G + getDepositRootRuntimeGas sevm base stor count⟩)
+                G + getDepositRootRuntimeGas sevm base stor count, base.stateGas⟩)
             runtime (.ok post) ∧
         post.stack = [] ∧
         post.gasLeft = G ∧
@@ -221,11 +223,11 @@ theorem getDepositRoot_zero_runCompiled_noRawSstore
         Exec.retainedStorageWrites execution = [] ∧
         Exec.retainedStorageEffectTriples execution = [] ∧
         some sevm.code.toList = Prog.compile runtime := by
-  let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft⟩
+  let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft, base.stateGas⟩
   obtain ⟨post, hendpoint, hstack, hgas, houtput, houtputWord,
       hreturnData, hpostStor, hpostCode, hpostAddresses,
       hpostKeys, hpostLogs, hpostError⟩ :=
-    getDepositRootEndpoint_storageEffectRun
+    getDepositRootEndpoint_storageEffectRun (hfork := hfork)
       (sevm := sevm) (base := base) (stor := stor)
       (count := count) (G := G)
       hstor hcountValue hcount hzero hnodeleg hwarm hpre hdepth hbound
@@ -239,7 +241,7 @@ theorem getDepositRoot_zero_runCompiled_noRawSstore
   have hendpoint' : Func.StorageEffectRun
       (runtime.main :: runtime.aux) sevm
       (routeBase.setMach
-        ⟨routeBase.stack, routeBase.memory, G + endpointGas⟩)
+        ⟨routeBase.stack, routeBase.memory, G + endpointGas, routeBase.stateGas⟩)
       getDepositRootEndpoint (.ok post) [] := by
     have hgasEntry :
         G + endpointGas =
@@ -260,7 +262,7 @@ theorem getDepositRoot_zero_runCompiled_noRawSstore
                 (rootInitialLoopState
                   (afterSload sevm base depositCountSlot)
                   (Nat.toB256 count)) +
-            getDepositRootPrefixGas sevm base⟩)
+            getDepositRootPrefixGas sevm base, base.stateGas⟩)
       getDepositRootEndpoint (.ok post) []
     exact hendpoint
   have hwrapped :=
@@ -282,7 +284,7 @@ theorem getDepositRoot_zero_runCompiled_noRawSstore
       (base := base)
       (K := G + endpointGas + nonpayableEndpointZeroGas)
       hlengthWordNe hselector hcode (by
-        simpa only [routeBase, Devm.setMach_setMach,
+        simpa only [routeBase, Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas,
             Devm.stack_setMach, Devm.memory_setMach] using hwrapped)
   have hboundary :
       G + endpointGas + nonpayableEndpointZeroGas +

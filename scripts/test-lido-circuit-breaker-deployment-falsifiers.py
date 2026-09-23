@@ -37,7 +37,7 @@ ROOT_LEAN_CONTROL = r'''example
     (chainId : UInt64) (base deployed : BlockChain)
     (cb : CanonicalBlock) (txBytes : Bytes) (tx : Tx)
     (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca)
+    (hbase : CanonicalDeploymentBase .prague chainId base sender ca)
     (henv : CanonicalOfficialDeploymentBlock chainId base cb
       txBytes tx sender ca)
     (hstep : stateTransitionUsing (ChainConfig.pragueOnly chainId)

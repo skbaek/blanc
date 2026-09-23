@@ -35,9 +35,9 @@ theorem depositLengthGuard_runCompiledTo
     (hwordPush : pushCost (word * 32).toBytes.sig = 3)
     (hexpectedPush : pushCost expected.toBytes.sig = 3)
     (htail : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G⟩) rest ex) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G + 28⟩)
+      (base.setMach ⟨[], memory, G + 28, base.stateGas⟩)
       (loadWord word +++ pushB256 expected ::: eq ::: iszero :::
         ((.call slot) <?> rest)) ex := by
   have hmod : memory.size % 32 = 0 := by
@@ -49,7 +49,7 @@ theorem depositLengthGuard_runCompiledTo
     (Ninst.runCompiled_pushB256 (G := G + 25) hwordPush
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mload_of
@@ -62,18 +62,18 @@ theorem depositLengthGuard_runCompiledTo
       (by rw [Devm.memory_setMach, hindex, hmemory])
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (G := G + 19) hexpectedPush
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   func_run (3) [1, 0]
   case h_val => simp [B256.eqCheck]
   case h_arm =>
-    simpa only [Devm.setMach_setMach, Nat.add_sub_cancel] using htail
+    simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Nat.add_sub_cancel] using htail
 
 /-- The three successful decoded-length guards, with an arbitrary
 continuation after the signature check. -/
@@ -89,9 +89,9 @@ theorem depositLengthGuards_runCompiledTo
     (hwithdrawal : withdrawalCredentials.length = 32)
     (hsignature : signature.length = 96)
     (htail : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G⟩) rest ex) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G + 84⟩)
+      (base.setMach ⟨[], memory, G + 84, base.stateGas⟩)
       (loadWord 3 +++ pushB256 48 ::: eq ::: iszero :::
         ((.call pubkeyLengthErrorSlot) <?>
           (loadWord 4 +++ pushB256 32 ::: eq ::: iszero :::
@@ -134,15 +134,15 @@ theorem depositValueLowerGuard_runCompiledTo
     {G slot : Nat} {rest : Func} {ex : Execution}
     (hlower : Nat.toB256 oneEther ≤ sevm.value)
     (htail : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G⟩) rest ex) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G + 21⟩)
+      (base.setMach ⟨[], memory, G + 21, base.stateGas⟩)
       (pushB256 (Nat.toB256 oneEther) ::: callvalue ::: lt :::
         ((.call slot) <?> rest)) ex := by
   func_run (4) [0]
   case h_val => simp [B256.ltCheck, not_lt_of_ge hlower]
   case h_arm =>
-    simpa only [Devm.setMach_setMach, Nat.add_sub_cancel] using htail
+    simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Nat.add_sub_cancel] using htail
 
 /-- The exact-gwei-multiple guard passes in exactly 23 gas. -/
 theorem depositGweiMultipleGuard_runCompiledTo
@@ -150,15 +150,15 @@ theorem depositGweiMultipleGuard_runCompiledTo
     {G slot : Nat} {rest : Func} {ex : Execution}
     (hgwei : sevm.value % Nat.toB256 oneGwei = 0)
     (htail : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G⟩) rest ex) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G + 23⟩)
+      (base.setMach ⟨[], memory, G + 23, base.stateGas⟩)
       (pushB256 (Nat.toB256 oneGwei) ::: callvalue ::: mod :::
         ((.call slot) <?> rest)) ex := by
   func_run (4) [0]
   case h_gas => simp only [Devm.gasLeft_setMach, gLow]; omega
   case h_arm =>
-    simpa only [Devm.setMach_setMach, Nat.add_sub_cancel] using htail
+    simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Nat.add_sub_cancel] using htail
 
 /-- The upper-value guard retains the amount and passes in exactly 86 gas. -/
 theorem depositAmountUpperGuard_runCompiledTo
@@ -170,9 +170,9 @@ theorem depositAmountUpperGuard_runCompiledTo
     (hupper : amount ≤ Nat.toB256 (2 ^ 64 - 1))
     (htail : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[], memory.write 672 amount.toBytes, G⟩) rest ex) :
+        ⟨[], memory.write 672 amount.toBytes, G, base.stateGas⟩) rest ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G + 86⟩)
+      (base.setMach ⟨[], memory, G + 86, base.stateGas⟩)
       (pushB256 (Nat.toB256 oneGwei) ::: callvalue ::: div ::: dup 0 :::
         mstoreAt amountWord +++
         pushB256 (Nat.toB256 (2 ^ 64 - 1)) ::: lt :::
@@ -186,7 +186,7 @@ theorem depositAmountUpperGuard_runCompiledTo
     rw [B256.ltCheck, if_neg (B256.not_lt.mpr hupper)]
   case h_arm =>
     rw [show (amountWord * 32 : B256).toNat = 672 by decide +kernel]
-    simpa only [Devm.setMach_setMach, Nat.add_sub_cancel] using htail
+    simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Nat.add_sub_cancel] using htail
 
 /-- The complete successful traversal of the three decoded-length guards and
 the three value guards. -/
@@ -204,17 +204,17 @@ theorem depositGuards_runCompiledTo
     (hgwei : sevm.value % Nat.toB256 oneGwei = 0)
     (hupper : amount ≤ Nat.toB256 (2 ^ 64 - 1))
     (hbody : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], depositEventInputMemory sevm.data amount, G⟩)
+      (base.setMach ⟨[], depositEventInputMemory sevm.data amount, G, base.stateGas⟩)
       (stageDepositEvent +++ depositAfterEvent) ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[], depositDecodedMemory sevm.data, G + depositGuardsGas⟩)
+        ⟨[], depositDecodedMemory sevm.data, G + depositGuardsGas, base.stateGas⟩)
       depositBody ex := by
   let memory := depositDecodedMemory sevm.data
   have hcarrier : DepositDecodedMemoryCarrier memory sevm.data := by
     exact depositDecodedMemory_carrier sevm.data
   have hbody' : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory.write 672 amount.toBytes, G⟩)
+      (base.setMach ⟨[], memory.write 672 amount.toBytes, G, base.stateGas⟩)
       (stageDepositEvent +++ depositAfterEvent) ex := by
     simpa only [memory, depositEventInputMemory] using hbody
   have hupperRun := depositAmountUpperGuard_runCompiledTo

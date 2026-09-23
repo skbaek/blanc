@@ -646,7 +646,8 @@ theorem of_recoverPermitSigner_raw
     (hpre : decide (sevm.benvStat.rules.isPrecomp 1) = true)
     (hnodeleg : getDelegatedCodeAddress (s.getCode 1) = none)
     (hp : digest :: xs <<+ s.stack)
-    (run : Line.Run sevm s recoverPermitSigner t) :
+    (run : Line.Run sevm s recoverPermitSigner t)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     (∃ signer : B256, signer :: xs <<+ t.stack) ∧
       Devm.getStor t = Devm.getStor s := by
   rw [recoverPermitSigner_eq_prepare] at run
@@ -660,7 +661,7 @@ theorem of_recoverPermitSigner_raw
   rcases Line.of_run_cons run with ⟨u, qstat, htail⟩
   have hcross : (∃ w : B256, w :: xs <<+ u.stack) ∧
       Devm.getStor u = Devm.getStor q := by
-    rcases of_run_staticcall_val_with_depth_cause hpq qstat with
+    rcases of_run_staticcall_val_with_depth_cause hpq qstat hfork with
         hfail | hsuccess
     · rcases hfail with ⟨hpU, hworld, _⟩
       refine ⟨⟨0, hpU⟩, ?_⟩
@@ -766,7 +767,8 @@ theorem permit_selected_raw_effect (dp : DeployParams)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 1) = true)
     (hnodeleg : getDelegatedCodeAddress (s.getCode 1) = none)
     (hp : xs <<+ s.stack) (hwf : Mem.Wf s.memory)
-    (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s (permit dp) r) :
+    (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s (permit dp) r)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     let nonce :=
       Devm.getStorVal s sevm.currentTarget (permitRuntimeNonceKey sevm)
     Devm.getStor r sevm.currentTarget =
@@ -794,7 +796,7 @@ theorem permit_selected_raw_effect (dp : DeployParams)
       line_inv) digestRun
   rcases of_run_prepend recoverPermitSigner _ recoverRun with
     ⟨signerState, signerRun, guardsRun⟩
-  rcases of_recoverPermitSigner_raw hpre hnodelegDigest hpDigest signerRun with
+  rcases of_recoverPermitSigner_raw hpre hnodelegDigest hpDigest signerRun hfork with
     ⟨⟨signer, hpSigner⟩, hstorSigner⟩
   rcases of_permitSignerGuards_raw_frame dp hpSigner guardsRun with
     ⟨_, _, approveState, hpApprove, hstorGuards, _, _, _, approveRun⟩
@@ -839,7 +841,8 @@ theorem permit_exec_raw_effect (dp : DeployParams)
     (exc : Exec 0 sevm pre (.ok post))
     (hcode : some sevm.code.toList = Prog.compile (weth10 dp))
     (hsel : Sevm.selector sevm = permitSelector)
-    (hnonempty : sevm.data.length.toB256 ≠ 0) :
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     let nonce :=
       Devm.getStorVal pre sevm.currentTarget (permitRuntimeNonceKey sevm)
     sevm.value = 0 ∧
@@ -858,7 +861,7 @@ theorem permit_exec_raw_effect (dp : DeployParams)
     rw [hmemoryEntry]
     exact hwf
   have heffect := permit_selected_raw_effect dp hprecomp hnodelegMid
-    nil_pref hwfMid run
+    nil_pref hwfMid run hfork
   dsimp only at heffect
   have hnonce :
       Devm.getStorVal mid sevm.currentTarget (permitRuntimeNonceKey sevm) =
@@ -913,7 +916,8 @@ theorem of_recoverPermitSigner_raw_region
     {sevm : Sevm} {s t : Devm} {digest : B256} {xs : Stack}
     (hsilent : PermitStatcallRegionSilent sevm (Devm.getCode s))
     (hp : digest :: xs <<+ s.stack)
-    (run : Line.Run sevm s recoverPermitSigner t) :
+    (run : Line.Run sevm s recoverPermitSigner t)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     (∃ signer : B256, signer :: xs <<+ t.stack) ∧
       ∀ key, InRegion .allowance key →
         (Devm.getStor t sevm.currentTarget).get key =
@@ -929,7 +933,7 @@ theorem of_recoverPermitSigner_raw_region
         (Devm.getStor q sevm.currentTarget).get key :=
     hsilent hcodePrep.symm hpq qstat
   have hpU : ∃ w : B256, w :: xs <<+ u.stack := by
-    rcases of_run_staticcall_val_with_depth hpq qstat with hfail | hsuccess
+    rcases of_run_staticcall_val_with_depth hpq qstat hfork with hfail | hsuccess
     · exact ⟨0, hfail.1⟩
     · rcases hsuccess with
         ⟨parent, _child, _xl, _dpFlag, _na, _code, _avail,
@@ -970,7 +974,8 @@ theorem permit_selected_raw_effect_region (dp : DeployParams)
     {sevm : Sevm} {s r : Devm} {xs : Stack}
     (hsilent : PermitStatcallRegionSilent sevm (Devm.getCode s))
     (hp : xs <<+ s.stack) (hwf : Mem.Wf s.memory)
-    (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s (permit dp) r) :
+    (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s (permit dp) r)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     let nonce :=
       Devm.getStorVal s sevm.currentTarget (permitRuntimeNonceKey sevm)
     ∀ key, InRegion .allowance key →
@@ -994,7 +999,7 @@ theorem permit_selected_raw_effect_region (dp : DeployParams)
   rcases of_run_prepend recoverPermitSigner _ recoverRun with
     ⟨signerState, signerRun, guardsRun⟩
   rcases of_recoverPermitSigner_raw_region
-      (hsilent.mono (hcodeDigest.trans hcodeMid)) hpDigest signerRun with
+      (hsilent.mono (hcodeDigest.trans hcodeMid)) hpDigest signerRun hfork with
     ⟨⟨signer, hpSigner⟩, hstorSigner⟩
   rcases of_permitSignerGuards_raw_frame dp hpSigner guardsRun with
     ⟨_, _, approveState, hpApprove, hstorGuards, _, _, _, approveRun⟩
@@ -1036,7 +1041,8 @@ theorem permit_exec_raw_effect_region (dp : DeployParams)
     (exc : Exec 0 sevm pre (.ok post))
     (hcode : some sevm.code.toList = Prog.compile (weth10 dp))
     (hsel : Sevm.selector sevm = permitSelector)
-    (hnonempty : sevm.data.length.toB256 ≠ 0) :
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     let nonce :=
       Devm.getStorVal pre sevm.currentTarget (permitRuntimeNonceKey sevm)
     sevm.value = 0 ∧
@@ -1054,7 +1060,7 @@ theorem permit_exec_raw_effect_region (dp : DeployParams)
     rw [hmemoryEntry]
     exact hwf
   have heffect := permit_selected_raw_effect_region dp (hsilent.mono hcodeEntry)
-    nil_pref hwfMid run
+    nil_pref hwfMid run hfork
   dsimp only at heffect
   have hnonce :
       Devm.getStorVal mid sevm.currentTarget (permitRuntimeNonceKey sevm) =

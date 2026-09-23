@@ -19,16 +19,16 @@
     "exists_transactionTrace"
   ],
   "frozenAssuranceFiles": {
-    "Blanc/CycleWriteFree.lean": "6df69e846e5c165acb8ad12bedd7cb97503e9ee3eda8bee9553e3a8c8c706dac",
+    "Blanc/CycleWriteFree.lean": "9a686f1e72c3a9eca9926cdfbd0764fbdbe95dd2f2b51bd49f8399a8d8d23d98",
     "Blanc/ExecutionFrames.lean": "29dabf3fb82dae7eeba47875e4b0a17ec28e12ef678c6a0b863a213d6b834afc",
-    "Blanc/ExecutionOccurrence.lean": "651f638f3306388726c797e0e48a560e690b39750b0f8adac567425a95e20056",
-    "Blanc/ExecutionSettlement.lean": "0e01d0a0ce1a571af2af61bc2af4bf5405bbade4b792879fb199ce468e7a5582",
+    "Blanc/ExecutionOccurrence.lean": "45faa5bddad3d945e8d878f23f6becabac7eb890e6be3c9585ab376c60b9c3b1",
+    "Blanc/ExecutionSettlement.lean": "828156260e9ae76ff413f02759fc400f9dc6aae8e6d65b4c4b5f8b1b80019f96",
     "scripts/CycleWriteFreeRegression.lean": "4022d12d48c507273d8f6eef6b7f522a33db3c631d39904669122ab197779ffe",
-    "scripts/ExecutionOccurrenceControls.lean": "5e07b4c9ac517040727bd6a7ea7159a7d2ade66789c3f8300e1a78333d476410",
-    "scripts/ExecutionOccurrenceRegression.lean": "50ccc74786a246722c05386d10887e9e6a0a3ea429e8fb1284f334c7a9349766",
+    "scripts/ExecutionOccurrenceControls.lean": "2d58ede6ca1a973d25e56ec1f97c24db3eb52a5068e9557a31ecf834c11b7ab6",
+    "scripts/ExecutionOccurrenceRegression.lean": "b30549b881333778ca163e2043d6c9a6eff0252b97cdd3e49f0a267265c1a512",
     "scripts/ExecutionSettlementRegression.lean": "d1e4fc1aeb4e31a9188af49a9df1ce2bf23b87571544f7f31e0af1abcea74c2f",
-    "scripts/check-cycle-write-free.py": "c03c04e107b0e9c5bf409458458dfc6df5415bcdce8e7fa35e3bfe1d37cbf63f",
-    "scripts/check-execution-occurrence.py": "6700cd5ddddc08e4f7d2b16ee2a1871042069b871e849cce349146acd440c71c",
+    "scripts/check-cycle-write-free.py": "8d7666ef23e0cd4c6563a4608d2e8c63c24d968bae0315b909ad8142e0ba2d5c",
+    "scripts/check-execution-occurrence.py": "ecdc5941733deed440e6e03ffb289dda66a8c4fb2c91ea440794a333b7aa8251",
     "scripts/check-execution-raw-attribution-ownership.py": "53772995c44874b8d92bf2aab2cfd6e171ed042297b5a13da4b292ab2c6cc01b",
     "scripts/check-execution-settlement.py": "b43f5b3cdc2de74332d16be957553bd23014b59b346ce8450e133cf70c7d308b",
     "scripts/cycle-write-free-owner-manifest.json": "1436cc0ae9adf2d41cbf8b7966715174d518378ed8a2713e07420040d7c77e8b",
@@ -37,8 +37,8 @@
     "scripts/execution-settlement-lift-manifest.json": "6d388528be7cfb64a324a8a3d1b9aaf9bf19d4f4525b02cd7f899f1a1bbcc9d7"
   },
   "jaunePinFiles": {
-    "lake-manifest.json": "68349fd50126226cef04aeb3686e029ae790a32e88bdc6cd954eb037eeabeab0",
-    "lakefile.lean": "7260967a27aae8a869efc3bf6c0b4a2bfa543eed7fe20029cacaf5831126afb8"
+    "lake-manifest.json": "4256c0dac60052d7c457d103162d6072e5a552acecdb07de820a5c951260e01a",
+    "lakefile.lean": "1dd34ffffc6bb1940bdcbb45faad37e0288be75094e49bd406295641469426f9"
   },
   "movedDonors": [
     [
@@ -183,15 +183,15 @@
   "rootModule": "Blanc.lean",
   "schema": 1,
   "signatureHashes": {
-    "PreparedTransactionMessage": "21d9776a54ebd7e58eb92f43f85f124401f6e1c120b3f816ec1898440f88786c",
+    "PreparedTransactionMessage": "d92806014cf4eaa06f9da3e8f9f3573dbde610b8e037c5438f1ed58ba376e471",
     "PreparedTransactionMessage.error_logs_eq_nil": "ed63197f8695d4de8f3915898808d5ac18bdb36da22dc6c737fd376039b5feff",
     "PreparedTransactionMessage.transientStorage_eq_empty": "2a6c809bb75a4c04a4667efbab003cf5c6084676cf8e2a70be500aea8bd27cd3",
     "caughtCall_childSettlement": "0e3051d226a55f24b232086be865c0abea4b561037cbebf181843465e7709738",
     "cleanCall_childSettlement": "6fad9951db50be664cf79858c4c8a5d8a2dfe7096bcc7a054de6dcf9f6c5f1b7",
-    "directCall_nonzero_spawn": "3145ede57457c8416943c29d2e46b1608818ee761e3986a141a692b8b919ba5a",
-    "directCall_zero_spawn": "06c51ce00f630b75244b9b8e09cfadeb63f93ee363f265d30a420927b90405a1",
-    "directDelcall_spawn": "b6e719e055f401e70f66b4346bfa2e17c0c79c20b4781e9e27236afe27143d94",
-    "directStatcall_spawn": "9cff6ed2010dd875b747270d9d939e74e117fa2abed77fbf31c65f31e17216ed",
+    "directCall_nonzero_spawn": "b742b842cba9be50657f76fece9c1edcf7551eb7c177ce0d861f081e2e71993f",
+    "directCall_zero_spawn": "9bc29dd73d8af5f2f8cbcd0309be7540f038baf07249de98fed2a0b9d1b26762",
+    "directDelcall_spawn": "7142a33785798d57c98540e5b205b3d0cfb361263a7e94ec6d9dda8db516df79",
+    "directStatcall_spawn": "5cf6df2782d376d553eb9cf98c0a14a6a7604a64bf3f6862633c1d788c76c8a1",
     "preparedTransactionMessage_exists": "466320301a1e39053c7be80b5e56b7b387d840cf4c4d9d4edd4dfd05d96d6b59",
     "processMessageCall_error_logs_eq_nil": "1721d1a3eb0d897da612cc3d3115fe0e4f7916c7d8103e9991d4554b3d6ffab6",
     "tload_run_cell": "74852521f83dbb2f0fff4fa5bdcd0d39d637a9d5f56a3f2d50090f1acf0d43fc",
@@ -199,12 +199,12 @@
     "tstore_run_zero": "1089beb9e6cdbef48a63c5bae7447b1638e40411969686992ea8fb4ec8fb673b"
   },
   "touchedConsumerHashes": {
-    "Blanc/Weth10AllowanceArmsPermit.lean": "d7890a922842120b218a81c15e714cfc7e227b7abd02760b4a2fef18b97bbc35",
+    "Blanc/Weth10AllowanceArmsPermit.lean": "7eb10689c547fe601fdc0d630a93f888b4a9230872d54959c7b82d9d9bacacaf",
     "Blanc/Weth10StaticSilence.lean": "33baaeb9b942d9c813deff2cab4c1f7e6b2fc66bd09c761582eefbaf3494de22"
   },
   "touchedConsumers": [
     "Blanc/Weth10StaticSilence.lean",
     "Blanc/Weth10AllowanceArmsPermit.lean"
   ],
-  "wethPublicHeaderAggregate": "71546001a56140e1577d33ad3958d94560373e14f16eda49f526acc13b4be394"
+  "wethPublicHeaderAggregate": "24883a0ca9a9db826416f834c8e0a318940c2ce7bc30e52c362c1d5bf243a572"
 }

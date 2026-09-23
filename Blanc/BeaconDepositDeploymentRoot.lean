@@ -22,14 +22,14 @@ structure DeploymentRoot
       (sender : Adr)
       (ctx : PreparedDeploymentContext chainId base cb tx sender ca)
       (post : State) (bout : BlockOutput),
-    CanonicalDeploymentBase chainId base sender ca ∧
+    CanonicalDeploymentBase .prague chainId base sender ca ∧
     CanonicalBeaconDepositDeploymentBlock chainId base cb
       txBytes tx sender ca ∧
     DeploymentTransactionResult chainId ca ctx post bout ∧
     Nonempty (DeploymentSuffixResult chainId ca ctx post bout) ∧
     stateTransitionUsing (ChainConfig.pragueOnly chainId)
       base cb.block = .ok deployed ∧
-    applyBody (initBenv pragueRules base cb.block.header)
+    applyBody (initBenv .prague base cb.block.header)
       cb.block.txs cb.block.wds = .ok (post, bout) ∧
     post = deployed.state ∧
     bout.blockLogs = [] ∧
@@ -56,7 +56,7 @@ theorem canonicalDeploymentStep_establishes_root
     (chainId : UInt64) (base deployed : BlockChain)
     (cb : CanonicalBlock) (txBytes : Bytes)
     (tx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca)
+    (hbase : CanonicalDeploymentBase .prague chainId base sender ca)
     (henv : CanonicalBeaconDepositDeploymentBlock chainId base cb
       txBytes tx sender ca)
     (hstep : stateTransitionUsing (ChainConfig.pragueOnly chainId)
@@ -70,20 +70,20 @@ theorem canonicalDeploymentStep_establishes_root
   obtain ⟨suffix⟩ :=
     canonicalDeploymentSuffix_succeeds chainId base cb tx sender ca
       ctx post bout htx
-  have happly : applyBody (initBenv pragueRules base cb.block.header)
+  have happly : applyBody (initBenv .prague base cb.block.header)
       cb.block.txs cb.block.wds = .ok (post, bout) :=
     canonicalDeploymentApplyBody_succeeds chainId base cb txBytes tx sender ca
       henv ctx post bout htx suffix
-  have hwith : stateTransitionWith pragueRules base cb.block = .ok deployed := by
+  have hwith : stateTransitionAt .prague base cb.block = .ok deployed := by
     have h := hstep
     rw [stateTransitionUsing_eq_of_chainId_eq
       (cfg := ChainConfig.pragueOnly chainId) (ch := base)
       (show chainId = base.chainId from hbase.chainId_eq)] at h
-    simpa [ChainConfig.pragueOnly_rulesAt, Except.mapError, Bind.bind,
+    simpa [ChainConfig.pragueOnly_forkAt, Except.mapError, Bind.bind,
       Except.bind] using h
   have hstate : post = deployed.state := by
     have hinvert := hwith
-    rw [stateTransitionWith_eq_ok_iff, stateTransitionE] at hinvert
+    rw [stateTransitionAt_eq_ok_iff, stateTransitionE] at hinvert
     obtain ⟨_, _, hinvert⟩ := Except.bind_eq_ok hinvert
     obtain ⟨_, _, hinvert⟩ := Except.bind_eq_ok hinvert
     dsimp only at hinvert
@@ -97,8 +97,8 @@ theorem canonicalDeploymentStep_establishes_root
     rw [← Except.ok.inj hinvert]
   let checkedBase := CheckedBlockChain.ofValidContext hbase.validContext
   have hwithChecked :
-      stateTransitionWith pragueRules checkedBase.val cb.block = .ok deployed := by
-    change stateTransitionWith pragueRules base cb.block = .ok deployed
+      stateTransitionAt .prague checkedBase.val cb.block = .ok deployed := by
+    change stateTransitionAt .prague base cb.block = .ok deployed
     exact hwith
   have hcontext := BlockChain.validContext_of_transition
     (cc := checkedBase) (cb := cb) hwithChecked
@@ -107,7 +107,7 @@ theorem canonicalDeploymentStep_establishes_root
       hcontext.1 hcontext.2.1 hcontext.2.2.1 hcontext.2.2.2
     exact checkedDeployed.validContext
   have hchain : chainId = deployed.chainId :=
-    hbase.chainId_eq.trans (stateTransitionWith_preserves_chainId hwith).symm
+    hbase.chainId_eq.trans (stateTransitionAt_preserves_chainId hwith).symm
   refine ⟨?_, hbase.target_ne_zero, hbase.target_not_precompile,
     ?_, ?_, ?_, ?_, ?_, hvalid, hchain⟩
   · exact ⟨cb, txBytes, tx, sender, ctx, post, bout, hbase, henv, htx,

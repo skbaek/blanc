@@ -61,14 +61,23 @@ intermediate state, and the final `setTransVal`, leaves memory alone. -/
 instance : Rinst.Hinv Devm.memory Rinst.tstore := ⟨by
   intro pc sevm pre post run
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨⟨_key, _s₁⟩, h1, run₁⟩
-  rcases Except.bind_eq_ok run₁ with ⟨⟨_v, _s₂⟩, h2, run₂⟩
-  rcases Except.bind_eq_ok run₂ with ⟨_s₃, h3, run₃⟩
-  rcases Except.bind_eq_ok run₃ with ⟨_, _h4, h5⟩
-  injection h5 with eq
-  rw [← eq]
-  exact ((Devm.pop_of_pop h1).memory.trans (Devm.pop_of_pop h2).memory).trans
-    (Devm.burn_of_chargeGas h3).memory⟩
+  split at run
+  · rcases Except.bind_eq_ok run with ⟨⟨_key, _s₁⟩, h1, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨_v, _s₂⟩, h2, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨_s₃, h3, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨_, _h4, h5⟩
+    injection h5 with eq
+    rw [← eq]
+    exact ((Devm.pop_of_pop h1).memory.trans (Devm.pop_of_pop h2).memory).trans
+      (Devm.burn_of_chargeGas h3).memory
+  · rcases Except.bind_eq_ok run with ⟨_, _h0, run₀⟩
+    rcases Except.bind_eq_ok run₀ with ⟨⟨_key, _s₁⟩, h1, run₁⟩
+    rcases Except.bind_eq_ok run₁ with ⟨⟨_v, _s₂⟩, h2, run₂⟩
+    rcases Except.bind_eq_ok run₂ with ⟨_s₃, h3, h5⟩
+    injection h5 with eq
+    rw [← eq]
+    exact ((Devm.pop_of_pop h1).memory.trans (Devm.pop_of_pop h2).memory).trans
+      (Devm.burn_of_chargeGas h3).memory⟩
 
 /-! ## Inverting a compiled walk one step at a time -/
 
@@ -109,7 +118,7 @@ theorem output_ne_nil_of_run_revert {sevm : Sevm} {devm raw : Devm}
   rw [Devm.popToNat_eq_ok hstack] at run
   simp only [bind, Except.bind] at run
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft⟩) rfl] at run
+    (devm := devm.setMach ⟨sz :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl] at run
   dsimp only [bind, Except.bind] at run
   split at run
   · rename_i err heq

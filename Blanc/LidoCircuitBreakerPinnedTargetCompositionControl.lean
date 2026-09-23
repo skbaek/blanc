@@ -2144,11 +2144,14 @@ private theorem stubPauseWorld_afterSetStubSeam :
             ((runtime officialParams).main :: (runtime officialParams).aux)
             stubPauseWorldSevm
             (stubRunAfterSetBase.setMach
-              ⟨[], stubRunMemoryLast, 67693⟩)
+              ⟨[], stubRunMemoryLast, 67693, stubRunAfterSetBase.stateGas⟩)
             pauseAfterSet final := by
+  have hfork : CoveredFork stubPauseWorldSevm.benvStat.fork := by
+    change CoveredFork .prague
+    exact CoveredFork.prague
   obtain ⟨mid, hstk, hmem, hgas, _herr, _hout, _hret, _hlogs,
       _hrefund, _hatd, _htrans, hask, _haddrs, _hpaused, hchain, hclose⟩ :=
-    PinnedTargetStubWalk.pauseAfterSet_stub_toSuccess_runCompiled
+    PinnedTargetStubWalk.pauseAfterSet_stub_toSuccess_runCompiled (hfork := hfork)
       ((runtime officialParams).main :: (runtime officialParams).aux)
       stubPauseWorldSevm stubRunAfterSetBase pauseWorldCallee.toB256
       pauseWorldDuration stubRunMemoryLast stubRunImageLast 2600 42362
@@ -2269,7 +2272,7 @@ private theorem stubPauseWorld_successSuffix :
           ((runtime officialParams).main :: (runtime officialParams).aux)
           stubPauseWorldSevm
           (stubRunAfterSetBase.setMach
-            ⟨[], stubRunMemoryLast, 67693⟩)
+            ⟨[], stubRunMemoryLast, 67693, stubRunAfterSetBase.stateGas⟩)
           pauseAfterSet final ∧
       Func.RunCompiledTo
           ((runtime officialParams).main :: (runtime officialParams).aux)
@@ -2278,11 +2281,14 @@ private theorem stubPauseWorld_successSuffix :
           ((runtime officialParams).main :: (runtime officialParams).aux)
           stubPauseWorldSevm
           (stubRunAfterSetBase.setMach
-            ⟨[], stubRunMemoryLast, 67693⟩)
+            ⟨[], stubRunMemoryLast, 67693, stubRunAfterSetBase.stateGas⟩)
           pauseAfterSet (.ok final) ∧
       PauseSuccessNoninterference stubPauseWorldSevm
         (stubRunAfterSetBase.setMach
-          ⟨[], stubRunMemoryLast, 67693⟩) successPre := by
+          ⟨[], stubRunMemoryLast, 67693, stubRunAfterSetBase.stateGas⟩) successPre := by
+  have hfork : CoveredFork stubPauseWorldSevm.benvStat.fork := by
+    change CoveredFork .prague
+    exact CoveredFork.prague
   obtain ⟨mid, hstk, hmem, hgas, hstor, hwarmCount, hwarmExpiry, hclose⟩ :=
     stubPauseWorld_afterSetStubSeam
   have hmidCount : mid.getStorVal stubPauseWorldSevm.currentTarget
@@ -2293,7 +2299,7 @@ private theorem stubPauseWorld_successSuffix :
       (expirySlot pauseWorldPauser) = pauseWorldExpiry := by
     rw [stubPauseWorld_currentTarget, hstor]
     exact stubRunAfterSetBase_expiry
-  have hW8 := pauseSuccess_zeroCount_ok_runCompiled
+  have hW8 := pauseSuccess_zeroCount_ok_runCompiled (hfork := hfork)
     ((runtime officialParams).main :: (runtime officialParams).aux)
     stubPauseWorldSevm mid stubRunDecodedMemory stubRunImage8
     pauseWorldCallee.toB256 pauseWorldDuration pauseWorldPauser
@@ -2331,7 +2337,7 @@ private theorem stubPauseWorld_successSuffix :
     (by norm_num [gCallStipend])
     rfl
   have hmidEta : mid.setMach
-      ⟨[], stubRunDecodedMemory, 36021 + 3322 + 100 + 2900⟩ = mid := by
+      ⟨[], stubRunDecodedMemory, 36021 + 3322 + 100 + 2900, mid.stateGas⟩ = mid := by
     rw [show (36021 + 3322 + 100 + 2900 : Nat) = 42343 from by norm_num,
       stubRunDecodedMemory, ← hgas, ← hmem, ← hstk]
     rfl
@@ -2357,11 +2363,14 @@ private theorem stubPauseWorld_productionRun :
           ((runtime officialParams).main :: (runtime officialParams).aux)
           stubPauseWorldSevm
           (stubRunAfterSetBase.setMach
-            ⟨[], stubRunMemoryLast, 67693⟩)
+            ⟨[], stubRunMemoryLast, 67693, stubRunAfterSetBase.stateGas⟩)
           pauseAfterSet (.ok final) ∧
       PauseSuccessNoninterference stubPauseWorldSevm
         (stubRunAfterSetBase.setMach
-          ⟨[], stubRunMemoryLast, 67693⟩) successPre := by
+          ⟨[], stubRunMemoryLast, 67693, stubRunAfterSetBase.stateGas⟩) successPre := by
+  have hfork : CoveredFork stubPauseWorldSevm.benvStat.fork := by
+    change CoveredFork .prague
+    exact CoveredFork.prague
   obtain ⟨successPre, final, hsuccess, hafter, hsuccessTo, hafterTo, hni⟩ :=
     stubPauseWorld_successSuffix
   have hfin := finishSetPauser_pauseAfterSet_runCompiled officialParams
@@ -2380,7 +2389,7 @@ private theorem stubPauseWorld_productionRun :
       simpa only [stubRunAfterSetNoLog, stubRunAfterSetBase,
         stubRunRemoveBase3, stubRunCountPost, stubRunKernelBase] using hafter)
   rw [show (67693 + 1934 : Nat) = 69627 from by norm_num] at hfin
-  have hrem := removeTarget_toFinish_coldEntry_runCompiled officialParams
+  have hrem := removeTarget_toFinish_coldEntry_runCompiled (hfork := hfork) officialParams
     stubPauseWorldSevm stubRunCountPost stubRunMemory1 stubRunImage1
     pauseWorldCallee.toB256 0 1 [] (by decide)
     pauseWorldCallee.toB256 1 1
@@ -2421,7 +2430,7 @@ private theorem stubPauseWorld_productionRun :
     (by rw [stubRunMemory1, stubRunMem_size1])
     hrem
   rw [show (84966 + 35 : Nat) = 85001 from by norm_num] at hglue
-  have hker := setPauserKernel_found_runCompiled officialParams
+  have hker := setPauserKernel_found_runCompiled (hfork := hfork) officialParams
     stubPauseWorldSevm stubRunKernelBase
     (pauseMemory pauseWorldCallee.toB256 pauseWorldDuration)
     (pauseImage pauseWorldCallee.toB256 pauseWorldDuration) _
@@ -2458,7 +2467,7 @@ private theorem stubPauseWorld_productionRun :
     show (0 + 85001 + 8122 : Nat) = 93123 from by norm_num] at hker
   have hcalldata := pauseCalldata_facts
     stubPauseWorld_publicPausePremises.calldata
-  have hbody := pause_body_runCompiled officialParams stubPauseWorldSevm
+  have hbody := pause_body_runCompiled (hfork := hfork) officialParams stubPauseWorldSevm
     stubPauseWorldPre pauseWorldCallee.toB256 pauseWorldPauser
     pauseWorldExpiry pauseWorldDuration 2100 2100 2100 93123 _
     hcalldata.1
@@ -2491,7 +2500,7 @@ private theorem stubPauseWorld_productionRun :
       exact stubPauseWorld_publicPausePremises.codeAddress)
     stubPauseWorld_publicPausePremises.productionBytes hbodyTo
   have hentry : stubPauseWorldPre.setMach
-      ⟨[], Mem.empty, 0 + pauseDispatchGas + 99892⟩ =
+      ⟨[], Mem.empty, 0 + pauseDispatchGas + 99892, stubPauseWorldPre.stateGas⟩ =
       stubPauseWorldPre := by
     rw [show (0 + pauseDispatchGas + 99892 : Nat) = stubPauseWorldGas from by
       norm_num [pauseDispatchGas, stubPauseWorldGas]]
@@ -2500,7 +2509,7 @@ private theorem stubPauseWorld_productionRun :
   exact ⟨successPre, final, hprog, hsuccessTo, hafterTo, hni⟩
 
 private def stubPauseWorldAfterSetEntry : Devm :=
-  stubRunAfterSetBase.setMach ⟨[], stubRunMemoryLast, 67693⟩
+  stubRunAfterSetBase.setMach ⟨[], stubRunMemoryLast, 67693, stubRunAfterSetBase.stateGas⟩
 
 private theorem stubPauseWorldAfterSetEntry_memory :
     stubPauseWorldAfterSetEntry.memory = stubRunMemoryLast := by
@@ -2606,6 +2615,9 @@ theorem stubPauseWorld_closedPublicPause :
           stubPauseWorldPre pauseWorldCallee.toB256 pauseWorldDuration
           PinnedTargetControl.stubCode PinnedTargetControl.stubProgram
           PinnedTargetControl.pausedUntil (.ok final) final := by
+  have hfork : CoveredFork stubPauseWorldSevm.benvStat.fork := by
+    change CoveredFork .prague
+    exact CoveredFork.prague
   obtain ⟨successPre, final, hprog, hsuccess, hafter, hni⟩ :=
     stubPauseWorld_productionRun
   have hafter' : Func.RunCompiledTo
@@ -2614,7 +2626,7 @@ theorem stubPauseWorld_closedPublicPause :
       (.ok final) := by
     simpa only [stubPauseWorldAfterSetEntry] using hafter
   have reached := stubPauseWorld_afterSetAt hafter'
-  have hook := stubBoundaryExecutions_of_afterSet_ok
+  have hook := stubBoundaryExecutions_of_afterSet_ok (hfork := hfork)
     (fs := (runtime officialParams).main :: (runtime officialParams).aux)
     (sevm := stubPauseWorldSevm) (entry := stubPauseWorldAfterSetEntry)
     (final := final) (target := pauseWorldCallee)
@@ -2629,7 +2641,7 @@ theorem stubPauseWorld_closedPublicPause :
       exact stubRunAfterSetBase_code)
     reached.1 reached.2.1 stubPauseWorld_publicPausePremises.entered
     stubPauseWorld_publicPausePremises.dynamic hafter'
-  have conclusion := publicPause_stubPinnedTarget
+  have conclusion := publicPause_stubPinnedTarget (hfork := hfork)
     stubPauseWorld_publicPausePremises stubPauseWorld_target_ne_owner hprog
     stubPauseWorldAfterSetEntry reached hook final rfl
   refine ⟨stubPauseWorldAfterSetEntry, successPre, final, hprog, reached,

@@ -109,45 +109,21 @@ The vault half discharges the four foreign-frame obligations that
 
 /-- A childless step of a frame foreign to the vault keeps the vault's frame invariant. -/
 theorem VaultFrameInv.ninst_none {vault : Adr} {pc : Nat} {sevm : Sevm} {pre inter : Devm}
-    {n : Ninst} (h_run : Ninst.StepRun pc sevm pre n .none (.ok inter))
+    {n : Ninst} (hfork : CoveredFork sevm.benvStat.fork)
+    (h_run : Ninst.StepRun pc sevm pre n .none (.ok inter))
     (h_ne : sevm.currentTarget ≠ vault) (inv : VaultFrameInv vault sevm pre) :
-    VaultFrameInv vault sevm inter := by
-  refine ⟨⟨?_, fun h => absurd h h_ne⟩,
+    VaultFrameInv vault sevm inter :=
+  ⟨⟨ContractSpec.Ninst.none_preserves_precond hfork h_run h_ne inv.preWf.pre,
+      fun h => absurd h h_ne⟩,
     inv.config.of_codePreserve rfl
       (Ninst.stepRun_codePreserve (xl := .none) trivial h_run),
     inv.code⟩
-  have hσ' := inv.preWf.pre
-  cases n with
-  | push xs le =>
-    simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at h_run
-    rcases Except.bind_eq_ok h_run.2.symm with ⟨devm1, h_charge, h_push⟩
-    exact hσ'.state_eq
-      (((Devm.burn_of_chargeGas h_charge).state).trans
-        ((Devm.push_of_push h_push).state)).symm
-  | reg r =>
-    have h_reg : Rinst.run ⟨pc, sevm, pre⟩ r = .ok inter := by
-      simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at h_run
-      exact h_run.2.symm
-    by_cases h_ss : r = Rinst.sstore
-    · subst h_ss
-      have h_frame := Rinst.sstore_run_stateWriteFrame pc pre sevm
-      rw [h_reg] at h_frame
-      refine ContractSpec.Pre.of_eqs hσ' (h_frame.getCode_eq vault).symm ?_
-        (sstore_preserves_getStor_ne h_reg h_ne)
-      funext b
-      exact (h_frame.getBal_eq b).symm
-    · exact ContractSpec.Pre.of_eqs hσ' (Rinst.preserves_getCode h_reg vault)
-        (Rinst.preserves_bal h_reg).symm
-        (congr_fun (Rinst.preserves_stor h_ss h_reg) vault).symm
-  | exec x =>
-    refine ContractSpec.Xinst.none_preserves_precond (x := x) ?_ h_ne hσ'
-    simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.Run]
-      using h_run
 
 /-- A spawning step of a frame foreign to the vault hands the vault's frame invariant to the
 child, and gets it back once the child's outcome satisfies the vault postcondition. -/
 theorem VaultFrameInv.xinst_some {vault : Adr} {pc : Nat} {sevm : Sevm} {pre inter : Devm}
     {x : Xinst} {evm' : Evm} {out' : Execution}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_run : Ninst.StepRun pc sevm pre (.exec x) (.some ⟨evm', out'⟩) (.ok inter))
     (child : Exec evm'.pc evm'.sta evm'.dyna out')
     (h_ne : sevm.currentTarget ≠ vault) (inv : VaultFrameInv vault sevm pre) :
@@ -158,7 +134,7 @@ theorem VaultFrameInv.xinst_some {vault : Adr} {pc : Nat} {sevm : Sevm} {pre int
     simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.Run]
       using h_run
   obtain ⟨h_child, h_back⟩ :=
-    ContractSpec.Xinst.some_preserves_precond (x := x) hx child h_ne inv.preWf.pre
+    ContractSpec.Xinst.some_preserves_precond (x := x) hfork hx child h_ne inv.preWf.pre
   obtain ⟨f, rsm, hstep, henter, -⟩ := XStep.Run.some_inv hx
   have childCode : Devm.CodePreserve pre evm'.dyna := by
     intro a _
@@ -210,21 +186,26 @@ program counter — that starts with the vault program installed at `vault`, the
 configuration in force and the ledger conserved ends with the ledger conserved
 at the vault.  A message to some *other* account is the case `sevm.currentTarget ≠
 vault`; the execution's vault frames, however deep and however re-entered, are
-covered by the same induction. -/
+covered by the same induction.  The root frame's fork is covered
+(`CoveredFork`); every spawned child inherits the block statics, so the
+induction carries coverage beside `VaultFrameInv` (`Xinst.Run.some_child_fork`). -/
 theorem vault_rely_preserves_conserved (vault : Adr) :
     ∀ pc sevm pre post (_run : Exec pc sevm pre (.ok post)),
+      CoveredFork sevm.benvStat.fork →
       Prog.At Blanc.ProrataWethVault.vault vault pc sevm pre →
       VaultFrameInv vault sevm pre →
       Blanc.ProrataWethVault.vaultSpec.Post vault sevm post := by
-  intro pc sevm pre post run programAt inv
+  intro pc sevm pre post run hfork programAt inv
   have admitted : Exec.FrameAdmitted vault (fun _ _ => True) run := by
     intro _ _ _
     trivial
   refine lift_inv_admitted (fun _ _ => True) vault Blanc.ProrataWethVault.vault
-    (VaultFrameInv vault) (Blanc.ProrataWethVault.vaultSpec.Post vault)
-    ?_ ?_ ?_ ?_ ?_ pc sevm pre post run programAt admitted inv
+    (fun e d => VaultFrameInv vault e d ∧ CoveredFork e.benvStat.fork)
+    (Blanc.ProrataWethVault.vaultSpec.Post vault)
+    ?_ ?_ ?_ ?_ ?_ pc sevm pre post run programAt admitted ⟨inv, hfork⟩
   -- the vault's own frame
   · intro sevm pre post run _ target admitted _ inv
+    obtain ⟨inv, hfork⟩ := inv
     subst target
     have compiled : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post :=
       Prog.runCompiled_of_exec sevm pre _ post vault_pcFree run (inv.code rfl)
@@ -233,28 +214,32 @@ theorem vault_rely_preserves_conserved (vault : Adr) :
       (ContractSpec.ofStorageOnly_preInv_iff).mp inv.preWf.pre.inv
     refine ⟨trivial, ?_⟩
     exact (ContractSpec.ofStorageOnly_postInv_iff).mpr
-      (vault_message_preserves_conserved inv.config (inv.preWf.wf rfl)
+      (vault_message_preserves_conserved inv.config hfork (inv.preWf.wf rfl)
         compiled conserved)
   -- a childless step at a foreign frame
   · intro pc sevm pre n inter h_at h_run h_ne inv
-    exact VaultFrameInv.ninst_none h_run h_ne inv
+    exact ⟨VaultFrameInv.ninst_none inv.2 h_run h_ne inv.1, inv.2⟩
   -- a spawning step at a foreign frame
   · intro pc sevm pre n evm' out' inter h_at h_run child h_ne inv
+    obtain ⟨inv, hfork⟩ := inv
     cases n with
-    | push xs le =>
-      simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at h_run
-      cases h_run.1
-    | reg r =>
-      simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at h_run
-      cases h_run.1
     | exec x =>
-      exact VaultFrameInv.xinst_some h_run child h_ne inv
+      have hx : Xinst.Run sevm pre x (.some ⟨evm', out'⟩) (.ok inter) := by
+        simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.Run]
+          using h_run
+      obtain ⟨childInv, back⟩ := VaultFrameInv.xinst_some hfork h_run child h_ne inv
+      exact ⟨⟨childInv, Xinst.Run.some_child_fork hx hfork⟩,
+        fun h_if => ⟨back h_if, hfork⟩⟩
+    | _ =>
+      have hrun := (Step.run_ofExecution
+        (xl := (.some ⟨evm', out'⟩ : Xlot))).mp h_run
+      cases hrun.1
   -- a jump at a foreign frame
   · intro pc sevm pre j pc' inter h_at h_run h_ne inv
-    exact VaultFrameInv.jinst h_run h_ne inv
+    exact ⟨VaultFrameInv.jinst h_run h_ne inv.1, inv.2⟩
   -- a terminal instruction at a foreign frame
   · intro pc sevm pre l post h_at h_run h_ne inv
-    exact ContractSpec.Linst.inv_postcond h_run h_ne inv.preWf.pre
+    exact ContractSpec.Linst.inv_postcond inv.2 h_run h_ne inv.1.preWf.pre
 
 /-- The rung at a message boundary, in the form `Blanc/Ladder.lean`'s
 `ContractSpec.Preserves` states it: the execution starts at pc `0` in a frame
@@ -262,6 +247,7 @@ whose code is the vault's whenever the frame is the vault's, the vault's own
 frame has well-formed memory, and the storage-only precondition and the
 configuration hold. -/
 theorem vault_rely_preserves {vault : Adr} {sevm : Sevm} {pre post : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (run : Exec 0 sevm pre (.ok post))
     (code : sevm.currentTarget = vault →
       some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
@@ -270,7 +256,7 @@ theorem vault_rely_preserves {vault : Adr} {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration vault sevm pre) :
     LedgerConserved Blanc.ProrataWethVault.supplySlot (Devm.getStor post vault) :=
   (ContractSpec.ofStorageOnly_postInv_iff).mp
-    (vault_rely_preserves_conserved vault 0 sevm pre post run
+    (vault_rely_preserves_conserved vault 0 sevm pre post run hfork
       ⟨pre_.code, fun target => ⟨code target, rfl⟩⟩
       ⟨⟨pre_, memoryWf⟩, config, code⟩).inv
 
@@ -764,6 +750,7 @@ theorem VaultFrameConfiguration.exactWethChild_of_enteringOccurrence
     (entering : Exec.LocatedFrame.EnteringOccurrence run child)
     (invocation : entering.parent.frame.rootDeriv.exactInvocation
       Blanc.ProrataWethVault.vault vault codeAddress)
+    (hfork : CoveredFork entering.parent.frame.rootDeriv.sevm.benvStat.fork)
     (configuration : VaultFrameConfiguration vault
       entering.parent.frame.sevm entering.parent.frame.pre)
     (source : Source.StagedSourceFrame entering.occurrence.node.sevm
@@ -786,7 +773,7 @@ theorem VaultFrameConfiguration.exactWethChild_of_enteringOccurrence
     Ninst.at_unique entering.occurrence.decoded instructionAt
   obtain ⟨calldata, static, occurrence, staged⟩ :=
     Source.vault_exactWethChild_of_occurrence invocation entering.occurrence
-      entering.sameFrame decoded nodeConfiguration.config source
+      entering.sameFrame decoded hfork nodeConfiguration.config source
       (fun h => dynamic (decoded.trans h)) spawn entered child.frame.run resumed
   have childTarget : child.frame.sevm.currentTarget = wethAccount := by
     obtain ⟨msg, xl, childDevm, spawnPc, spawnNextPc, spawnResume, target, -, -,
@@ -816,6 +803,7 @@ theorem processMessage_weth_storageReplay
       (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
     (parentState : parent.state = msg.benv.state)
     (committed : Execution.commits out = true)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (key : B256) :
     (Devm.getStor post wethAccount).get key =
       Exec.StorageWrite.replayCell wethAccount key
@@ -828,7 +816,7 @@ theorem processMessage_weth_storageReplay
     simpa only [if_pos settles] using
       ProcessMessage.storageReplay_of_body process parentState
         (fun rawCommitted =>
-          Exec.storageReplay_committedPost run rawCommitted)
+          Exec.storageReplay_committedPost run rawCommitted hfork)
   exact replay wethAccount key
 
 /-- A rooted allowance history over the full invocation list, processing `done`
@@ -1117,6 +1105,7 @@ theorem weth_static_processMessage_some_preserves_cell
     (run : Exec pc sevm pre out)
     (process : ProcessMessage msg (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
     (static : msg.isStatic = true)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (owner : Adr) (key : B256) :
     (post.state.getStor owner).get key =
       (msg.benv.state.getStor owner).get key := by
@@ -1134,7 +1123,7 @@ theorem weth_static_processMessage_some_preserves_cell
       show msg.isStatic = true
       exact static
     have viewEq :=
-      Exec.storageView_committedPost_eq_of_static run childStatic committed
+      Exec.storageView_committedPost_eq_of_static run childStatic committed hfork
     have cellEq : ((Execution.committedPost out committed).state.getStor owner).get key
         = (pre.state.getStor owner).get key := by
       have h := congrFun (congrFun viewEq owner) key

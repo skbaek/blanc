@@ -653,11 +653,12 @@ structure AcceptedValueCallTrace
 
 theorem exists_acceptedValueCallTrace
     {e : Sevm} {target value : B256} {callPre guardPost : Devm}
-    (accepted : AcceptedValueCall e target value callPre guardPost) :
+    (accepted : AcceptedValueCall e target value callPre guardPost)
+    (hfork : CoveredFork e.benvStat.fork) :
     Nonempty (AcceptedValueCallTrace e target value callPre guardPost) := by
   rcases accepted with
     ⟨g, callPost, testPost, hstack, hcall, hiszero, hpop⟩
-  rcases of_run_call_val_with_depth_frame hstack hcall with
+  rcases of_run_call_val_with_depth_frame hstack hcall hfork with
       hfailed | hsuccess
   · exfalso
     have htest := prefix_of_iszero hiszero hfailed.1
@@ -719,9 +720,10 @@ theorem exists_acceptedValueCallTrace
 theorem exists_burnCallPrefixTrace
     {e : Sevm} {pre callPre guardPost : Devm}
     {owner : Adr} {amount target : B256}
-    (burn : BurnCallPrefix e pre callPre guardPost owner amount target) :
+    (burn : BurnCallPrefix e pre callPre guardPost owner amount target)
+    (hfork : CoveredFork e.benvStat.fork) :
     Nonempty (AcceptedValueCallTrace e target amount callPre guardPost) :=
-  exists_acceptedValueCallTrace burn.2.2.2.2.2.2.2
+  exists_acceptedValueCallTrace burn.2.2.2.2.2.2.2 hfork
 
 /-! ## Withdrawal credits -/
 
@@ -794,12 +796,13 @@ theorem TransactionTrace.accountsToDelete_ne_ca
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
     (hstable : Stable dp ca benv.state)
-    (hnotCreated : ca ∉ benv.createdAccounts) :
+    (hnotCreated : ca ∉ benv.createdAccounts)
+    (hfork : CoveredFork benv.stat.fork) :
     ∀ address ∈ trace.messageOut.accountsToDelete.toList,
       address ≠ ca :=
   ExecutionTrace.TransactionTrace.accountsToDelete_ne trace
     (backedSpec_preserves dp ca)
-    ⟨hstable.code, hstable.sumNof, hstable.backed⟩ hnotCreated
+    ⟨hstable.code, hstable.sumNof, hstable.backed⟩ hnotCreated hfork
 
 theorem foldl_destroyAccount_bal_eq
     {ca : Adr} {state : State} {addresses : List Adr}
@@ -817,13 +820,14 @@ theorem TransactionTrace.postMessage_ethBound
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
     (hstable : Stable dp ca benv.state)
-    (hnotCreated : ca ∉ benv.createdAccounts) :
+    (hnotCreated : ca ∉ benv.createdAccounts)
+    (hfork : CoveredFork benv.stat.fork) :
     EthBound ca trace.messageState state [] := by
-  rcases ExecutionTrace.TransactionTrace.exists_stateChronology trace with
+  rcases ExecutionTrace.TransactionTrace.exists_stateChronology trace hfork with
     ⟨chronology⟩
   obtain ⟨hrefundBound, htipBound⟩ :=
     ExecutionTrace.TransactionTrace.settlement_sum_bounds trace
-      chronology.refundCounter hstable.sumNof
+      chronology.refundCounter hstable.sumNof hfork
   have hrefundStep :
       EthBound ca trace.messageState
         (trace.refundedState chronology.refundCounter) [] :=
@@ -846,7 +850,7 @@ theorem TransactionTrace.postMessage_ethBound
         (trace.coinbaseState chronology.refundCounter) [] := by
     simpa using hrefundStep.trans htipStep
   have hdelete := TransactionTrace.accountsToDelete_ne_ca trace
-    hstable hnotCreated
+    hstable hnotCreated hfork
   have hdeleteBal :
       (trace.messageOut.accountsToDelete.toList.foldl destroyAccount
         (trace.coinbaseState chronology.refundCounter)).bal ca =
@@ -916,6 +920,7 @@ def ExecBodyEthSound (dp : DeployParams) (ca : Adr) : Prop :=
     Exec.Frame.IsRoot (Exec.Frame.ofRun run hcommit) →
     (sevm.currentTarget = ca → sevm.codeAddress = some ca) →
     (backedSpec weth10 dp).Pre ca sevm pre →
+    CoveredFork sevm.benvStat.fork →
     EthBound ca pre.state
       (Execution.committedPost out hcommit).state
       (Exec.bodyEthActions dp ca run hcommit)
@@ -932,6 +937,7 @@ def CommittedExecEthSound (dp : DeployParams) (ca : Adr) : Prop :=
       initEvm (msg.withBenv benv))
     (hcommit : Execution.commits out = true),
     MessageRunReady dp ca msg →
+    CoveredFork msg.benv.stat.fork →
     EthBound ca msg.benv.state
       (Execution.committedPost out hcommit).state
       (Exec.flowActions dp ca run)
@@ -942,7 +948,10 @@ theorem ExecBodyEthSound.committedExecEthSound
     {dp : DeployParams} {ca : Adr}
     (sound : ExecBodyEthSound dp ca) :
     CommittedExecEthSound dp ca := by
-  intro msg benv pc sevm pre out run htransfer hinit hcommit runReady
+  intro msg benv pc sevm pre out run htransfer hinit hcommit runReady hfork
+  have hinitFork : CoveredFork (initSevm (msg.withBenv benv)).benvStat.fork := by
+    rw [initSevm_benvStat, Msg.withBenv_benvStat, benvAfterTransfer_stat htransfer]
+    exact hfork
   have hentry := Exec.entryEthBound (dp := dp) (ca := ca)
     run htransfer hinit hcommit
     runReady.ready.backed.ne runReady.ready.backed.val0
@@ -980,7 +989,7 @@ theorem ExecBodyEthSound.committedExecEthSound
         (by simpa [initSevm, Msg.withBenv] using htarget)
     · exact False.elim (hforeign
         (by simpa [initSevm, Msg.withBenv] using htarget))
-  have hbody := sound run hcommit hat hroot hdirect hprecond
+  have hbody := sound run hcommit hat hroot hdirect hprecond hinitFork
   simpa only [Exec.flowActions_eq_entry_append_body
       (dp := dp) (ca := ca) run hcommit] using
     hentry.trans hbody
@@ -1100,13 +1109,14 @@ theorem ProcessMessage.ethBound_of_committedExecSound
     (hprocess :
       ProcessMessage msg (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
     (hsound : CommittedExecEthSound dp ca)
-    (runReady : MessageRunReady dp ca msg) :
+    (runReady : MessageRunReady dp ca msg)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     EthBound ca msg.benv.state post.state
       (Exec.flowActions dp ca run) := by
   have henter := (RunFrame.some_inv hprocess).1
   rcases Frame.enter_run_inv henter with ⟨benv, htransfer, hinit⟩
   by_cases hcommit : Execution.commits out = true
-  · have hbound := hsound run htransfer hinit hcommit runReady
+  · have hbound := hsound run htransfer hinit hcommit runReady hfork
     rw [ProcessMessage.ok_state_eq_committedPost hprocess hcommit]
     exact hbound
   · have hstate :=
@@ -1121,7 +1131,8 @@ theorem ProcessMessageTrace.ethBound_of_committedExecSound
     {dp : DeployParams} {ca : Adr} {msg : Msg} {post : Devm}
     (trace : ProcessMessageTrace msg (.ok post))
     (hsound : CommittedExecEthSound dp ca)
-    (runReady : MessageRunReady dp ca msg) :
+    (runReady : MessageRunReady dp ca msg)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     EthBound ca msg.benv.state post.state
       (Blanc.Weth10.RetainedXlot.flowActions dp ca trace.retained) := by
   rcases trace with ⟨slot, retained, hprocess⟩
@@ -1130,7 +1141,7 @@ theorem ProcessMessageTrace.ethBound_of_committedExecSound
       exact ProcessMessage.ethBound_of_none hprocess runReady.ready
   | some run =>
       exact ProcessMessage.ethBound_of_committedExecSound
-        run hprocess hsound runReady
+        run hprocess hsound runReady hfork
 
 theorem processCreateMessage_msg_bal_eq (msg : Msg) :
     (processCreateMessage.msg msg).benv.state.bal =
@@ -1219,7 +1230,8 @@ theorem ProcessCreateMessageTrace.ethBound_of_committedExecSound
     (hsound : CommittedExecEthSound dp ca)
     (ready : MessageReady dp ca msg)
     (htargetNone : msg.target.isNone = true)
-    (htargetNe : msg.currentTarget ≠ ca) :
+    (htargetNe : msg.currentTarget ≠ ca)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     EthBound ca msg.benv.state post.state
       (if post.error.isSome then []
        else Blanc.Weth10.RetainedXlot.flowActions dp ca
@@ -1241,6 +1253,7 @@ theorem ProcessCreateMessageTrace.ethBound_of_committedExecSound
       have hrunPrepared := hprepared.runReady_of_foreign htargetNe
       have hbound := innerTrace.ethBound_of_committedExecSound
         hsound hrunPrepared
+        (by rw [processCreateMessage.msg_benvStat]; exact hfork)
       unfold EthBound at hbound ⊢
       rw [hpost, ← congrFun (processCreateMessage_msg_bal_eq msg) ca]
       simpa only [Bool.true_eq_false, if_false] using hbound
@@ -1325,13 +1338,14 @@ theorem processMessageCall_createCollision_state_eq
     {msg : Msg} {state : State} {out : MsgCallOutput}
     (htarget : msg.target.isNone = true)
     (hcollision : messageCreateCollision msg = true)
-    (hresult : processMessageCall msg = .ok ⟨state, out⟩) :
+    (hresult : processMessageCall msg = .ok ⟨state, out⟩)
+    (hsg : msg.benv.stat.rules.stateGas = none) :
     state = msg.benv.state := by
   unfold processMessageCall at hresult
   simp only [htarget, ↓reduceIte] at hresult
   unfold processMessageCall.create at hresult
   unfold messageCreateCollision at hcollision
-  simp only [hcollision, ↓reduceIte, pure] at hresult
+  simp only [hcollision, ↓reduceIte, pure, hsg] at hresult
   exact (Prod.mk.inj (Except.ok.inj hresult)).1.symm
 
 theorem processMessageCall_createRun_state_eq
@@ -1339,14 +1353,15 @@ theorem processMessageCall_createRun_state_eq
     (htarget : msg.target.isNone = true)
     (hcollision : messageCreateCollision msg = false)
     (hcore : processCreateMessage msg = .ok evm)
-    (hresult : processMessageCall msg = .ok ⟨state, out⟩) :
+    (hresult : processMessageCall msg = .ok ⟨state, out⟩)
+    (hsg : msg.benv.stat.rules.stateGas = none) :
     state = evm.state := by
   unfold processMessageCall at hresult
   simp only [htarget, ↓reduceIte] at hresult
   unfold processMessageCall.create at hresult
   unfold messageCreateCollision at hcollision
   simp only [hcollision, Bool.false_eq_true, ↓reduceIte,
-    bind, Except.bind] at hresult
+    bind, Except.bind, hsg] at hresult
   rcases Except.bind_eq_ok hresult with
     ⟨actual, hactualMap, htail⟩
   have hactualCore := Except.bimap_id_eq_ok hactualMap
@@ -1367,7 +1382,8 @@ theorem processMessageCall_callRun_state_eq
       messageCallDelegation msg = .ok ⟨delegated, refund⟩)
     (hexecMsg : execMsg = messageCallExecutionMessage delegated)
     (hcore : processMessage execMsg = .ok evm)
-    (hresult : processMessageCall msg = .ok ⟨state, out⟩) :
+    (hresult : processMessageCall msg = .ok ⟨state, out⟩)
+    (hsg : msg.benv.stat.rules.stateGas = none) :
     state = evm.state := by
   unfold processMessageCall at hresult
   simp only [htarget, Bool.false_eq_true, ↓reduceIte] at hresult
@@ -1381,7 +1397,7 @@ theorem processMessageCall_callRun_state_eq
       rcases hrest with ⟨rfl, rfl⟩
       unfold processMessageCall.call at hresult
       simp only [hauth, Bool.false_eq_true, ↓reduceIte,
-        hset, bind, Except.bind] at hresult
+        hset, bind, Except.bind, hsg] at hresult
       have hcoreExec :
           processMessage (messageCallExecutionMessage delegated') =
             .ok evm :=
@@ -1404,7 +1420,7 @@ theorem processMessageCall_callRun_state_eq
       rcases hdelegation with ⟨rfl, rfl⟩
       unfold processMessageCall.call at hresult
       simp only [hauth, ↓reduceIte,
-        bind, Except.bind] at hresult
+        bind, Except.bind, hsg] at hresult
       have hcoreExec :
           processMessage (messageCallExecutionMessage msg) = .ok evm :=
         (congrArg processMessage hexecMsg).symm.trans hcore
@@ -1435,6 +1451,7 @@ def MessageEthSound (dp : DeployParams) (ca : Adr) : Prop :=
   ∀ {msg : Msg} {state : State} {out : MsgCallOutput}
     (trace : MessageCallTrace msg state out),
     MessageReady dp ca msg →
+    CoveredFork msg.benv.stat.fork →
     trace.EthAccounted dp ca
 
 /-- The exact raw committed-execution theorem discharges every settled
@@ -1444,13 +1461,14 @@ theorem CommittedExecEthSound.messageEthSound
     {dp : DeployParams} {ca : Adr}
     (hsound : CommittedExecEthSound dp ca) :
     MessageEthSound dp ca := by
-  intro msg state out trace ready
+  intro msg state out trace ready hfork
+  have hsg : msg.benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
   cases trace with
   | createCollision htarget hcollision hresult =>
       unfold MessageCallTrace.EthAccounted
       change EthBound ca msg.benv.state state []
       have hstate := processMessageCall_createCollision_state_eq
-        htarget hcollision hresult
+        htarget hcollision hresult hsg
       simpa only [hstate] using EthBound.refl ca msg.benv.state
   | createRun htarget hcollision evm hcore trace hresult =>
       unfold MessageCallTrace.EthAccounted
@@ -1458,9 +1476,9 @@ theorem CommittedExecEthSound.messageEthSound
         ready hcollision
       have hbound :=
         ProcessCreateMessageTrace.ethBound_of_committedExecSound trace
-          hsound ready htarget htargetNe
+          hsound ready htarget htargetNe hfork
       have hstate := processMessageCall_createRun_state_eq
-        htarget hcollision hcore hresult
+        htarget hcollision hcore hresult hsg
       change EthBound ca msg.benv.state state
         (if evm.error.isSome then []
          else Blanc.Weth10.RetainedXlot.flowActions dp ca trace.retained)
@@ -1483,8 +1501,11 @@ theorem CommittedExecEthSound.messageEthSound
           (Blanc.Weth10.RetainedXlot.flowActions dp ca trace.retained) :=
         ProcessMessageTrace.ethBound_of_committedExecSound trace hsound
           runReadyExec
+          (by rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_benv_stat,
+                ExecutionTrace.messageCallDelegation_benv_stat hdelegation]
+              exact hfork)
       have hstate := processMessageCall_callRun_state_eq
-        htarget hdelegation hexecMsg hcore hresult
+        htarget hdelegation hexecMsg hcore hresult hsg
       have hpre : execMsg.benv.state.bal = msg.benv.state.bal := by
         rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_bal_eq,
           messageCallDelegation_bal_eq hdelegation]
@@ -1530,20 +1551,24 @@ theorem TransactionTrace.ethBound
     (trace : TransactionTrace benv bout tx index state bout')
     (hmessage : MessageEthSound dp ca)
     (hstable : Stable dp ca benv.state)
-    (hnotCreated : ca ∉ benv.createdAccounts) :
+    (hnotCreated : ca ∉ benv.createdAccounts)
+    (hfork : CoveredFork benv.stat.fork) :
     EthBound ca benv.state state
       (Blanc.Weth10.TransactionTrace.flowActions dp ca trace) := by
   have hdebit : EthBound ca benv.state trace.debitState [] :=
     (EthStep.silent (ca := ca)
       (TransactionTrace.debitState_bal_ca trace hstable hnotCreated)).bound
   have hready := TransactionTrace.messageReady trace hstable hnotCreated
-  have hmsg := hmessage trace.message hready
+  have hmsgFork : CoveredFork trace.msg.benv.stat.fork := by
+    rw [prepareMessage_benv trace.prepared]
+    exact hfork
+  have hmsg := hmessage trace.message hready hmsgFork
   unfold MessageCallTrace.EthAccounted at hmsg
   rw [prepareMessage_benv trace.prepared] at hmsg
   change EthBound ca trace.debitState trace.messageState
     (Blanc.Weth10.MessageCallTrace.flowActions dp ca trace.message) at hmsg
   have hsettled :=
-    TransactionTrace.postMessage_ethBound trace hstable hnotCreated
+    TransactionTrace.postMessage_ethBound trace hstable hnotCreated hfork
   have htotal := (hdebit.trans hmsg).trans hsettled
   simpa [TransactionTrace.flowActions] using htotal
 
@@ -1567,11 +1592,12 @@ theorem SystemMessageTrace.ethBound
     (trace : SystemMessageTrace benv target data state out)
     (hmessage : MessageEthSound dp ca)
     (hstable : Stable dp ca benv.state)
-    (hnotCreated : ca ∉ benv.createdAccounts) :
+    (hnotCreated : ca ∉ benv.createdAccounts)
+    (hfork : CoveredFork benv.stat.fork) :
     EthBound ca benv.state state
       (Blanc.Weth10.SystemMessageTrace.flowActions dp ca trace) := by
   have hready := SystemMessageTrace.messageReady trace hstable hnotCreated
-  have hmsg := hmessage trace.message hready
+  have hmsg := hmessage trace.message hready hfork
   unfold MessageCallTrace.EthAccounted at hmsg
   simpa [SystemMessageTrace.flowActions, systemTransactionMessage,
     processSystemTransactionMsg, Benv.beginTransaction] using hmsg
@@ -1584,12 +1610,13 @@ theorem SystemMessageTrace.stable_and_sum_le
     {state : State} {out : MsgCallOutput}
     (trace : SystemMessageTrace benv target data state out)
     (hstable : Stable dp ca benv.state)
-    (hnotCreated : ca ∉ benv.createdAccounts) :
+    (hnotCreated : ca ∉ benv.createdAccounts)
+    (hfork : CoveredFork benv.stat.fork) :
     Stable dp ca state ∧ sum state.bal ≤ sum benv.state.bal := by
   have hbacked := trace.stateInv_and_sum_le (backedSpec_preserves dp ca)
-    ⟨⟨hstable.code, hstable.sumNof, hstable.backed⟩, hnotCreated⟩
+    ⟨⟨hstable.code, hstable.sumNof, hstable.backed⟩, hnotCreated⟩ hfork
   have hflash := trace.stateInv_and_sum_le (flashExactSpec_preserves dp ca 0)
-    ⟨⟨hstable.code, trivial, hstable.flashZero⟩, hnotCreated⟩
+    ⟨⟨hstable.code, trivial, hstable.flashZero⟩, hnotCreated⟩ hfork
   exact ⟨⟨hbacked.1.code, hbacked.1.side, hbacked.1.inv,
     hflash.1.inv⟩, hbacked.2⟩
 
@@ -1599,17 +1626,19 @@ theorem TransactionTrace.stable
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
     (hstable : Stable dp ca benv.state)
-    (hnotCreated : ca ∉ benv.createdAccounts) :
+    (hnotCreated : ca ∉ benv.createdAccounts)
+    (hfork : CoveredFork benv.stat.fork) :
     Stable dp ca state :=
   processTransaction_preserves_stable dp ca benv bout bout' tx index state
-    trace.result hstable.sumNof hnotCreated hstable
+    trace.result hstable.sumNof hnotCreated hstable hfork
 
 theorem ApplyTransactionsTrace.sum_le
     {txs : List (Nat × Tx)} {benv finalBenv : Benv}
     {bout finalBout : BlockOutput}
-    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) :
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
+    (hfork : CoveredFork benv.stat.fork) :
     sum finalBenv.state.bal ≤ sum benv.state.bal :=
-  ExecutionTrace.ApplyTransactionsTrace.sum_le trace
+  ExecutionTrace.ApplyTransactionsTrace.sum_le trace hfork
 
 theorem ApplyTransactionsTrace.createdAccounts_eq
     {txs : List (Nat × Tx)} {benv finalBenv : Benv}
@@ -1624,12 +1653,14 @@ theorem ApplyTransactionsTrace.stable
     {bout finalBout : BlockOutput}
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
     (hstable : Stable dp ca benv.state)
-    (hnotCreated : ca ∉ benv.createdAccounts) :
+    (hnotCreated : ca ∉ benv.createdAccounts)
+    (hfork : CoveredFork benv.stat.fork) :
     Stable dp ca finalBenv.state := by
   have hbacked := trace.benvInv (backedSpec_preserves dp ca) hstable.sumNof
-    ⟨⟨hstable.code, hstable.sumNof, hstable.backed⟩, hnotCreated⟩
+    ⟨⟨hstable.code, hstable.sumNof, hstable.backed⟩, hnotCreated⟩ hfork
   have hflash := trace.benvInv (flashExactSpec_preserves dp ca 0)
     hstable.sumNof ⟨⟨hstable.code, trivial, hstable.flashZero⟩, hnotCreated⟩
+    hfork
   exact ⟨hbacked.state.code, hbacked.state.side, hbacked.state.inv,
     hflash.state.inv⟩
 
@@ -1641,16 +1672,18 @@ theorem ApplyTransactionsTrace.ethBound
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) →
     Stable dp ca benv.state →
     ca ∉ benv.createdAccounts →
+    CoveredFork benv.stat.fork →
     EthBound ca benv.state finalBenv.state
       (Blanc.Weth10.ApplyTransactionsTrace.flowActions dp ca trace)
-  | _, _, _, _, _, .nil benv _bout, _, _ =>
+  | _, _, _, _, _, .nil benv _bout, _, _, _ =>
       EthBound.refl ca benv.state
-  | _, _, _, _, _, .cons head tail, hstable, hnotCreated =>
+  | _, _, _, _, _, .cons head tail, hstable, hnotCreated, hfork =>
       EthBound.trans
-        (TransactionTrace.ethBound head hmessage hstable hnotCreated)
+        (TransactionTrace.ethBound head hmessage hstable hnotCreated hfork)
         (ApplyTransactionsTrace.ethBound dp ca hmessage tail
-          (TransactionTrace.stable head hstable hnotCreated)
-          (by simpa [Benv.withState] using hnotCreated))
+          (TransactionTrace.stable head hstable hnotCreated hfork)
+          (by simpa [Benv.withState] using hnotCreated)
+          (by simpa [Benv.withState] using hfork))
 
 theorem RequestsTrace.ethBound
     {dp : DeployParams} {ca : Adr}
@@ -1659,17 +1692,21 @@ theorem RequestsTrace.ethBound
     (trace : RequestsTrace benv bout state bout')
     (hmessage : MessageEthSound dp ca)
     (hstable : Stable dp ca benv.state)
-    (hnotCreated : ca ∉ benv.createdAccounts) :
+    (hnotCreated : ca ∉ benv.createdAccounts)
+    (hfork : CoveredFork benv.stat.fork) :
     EthBound ca benv.state state
       (Blanc.Weth10.RequestsTrace.flowActions dp ca trace) := by
   have hwithdrawal :=
     SystemMessageTrace.ethBound trace.withdrawal hmessage hstable hnotCreated
+      hfork
   have hwithdrawalMeta :=
     SystemMessageTrace.stable_and_sum_le trace.withdrawal hstable hnotCreated
+      hfork
   have hconsolidation :=
     SystemMessageTrace.ethBound trace.consolidation hmessage
       hwithdrawalMeta.1
       (by simpa [Benv.withState] using hnotCreated)
+      (by simpa [Benv.withState] using hfork)
   have hboth := hwithdrawal.trans hconsolidation
   simpa [RequestsTrace.flowActions, Benv.withState,
     ExecutionTrace.RequestsTrace.state_eq_consolidationState trace] using hboth
@@ -1680,12 +1717,13 @@ theorem RequestsTrace.stable_and_sum_le
     {state : State} {bout' : BlockOutput}
     (trace : RequestsTrace benv bout state bout')
     (hstable : Stable dp ca benv.state)
-    (hnotCreated : ca ∉ benv.createdAccounts) :
+    (hnotCreated : ca ∉ benv.createdAccounts)
+    (hfork : CoveredFork benv.stat.fork) :
     Stable dp ca state ∧ sum state.bal ≤ sum benv.state.bal := by
   have hbacked := trace.stateInv_and_sum_le (backedSpec_preserves dp ca)
-    ⟨⟨hstable.code, hstable.sumNof, hstable.backed⟩, hnotCreated⟩
+    ⟨⟨hstable.code, hstable.sumNof, hstable.backed⟩, hnotCreated⟩ hfork
   have hflash := trace.stateInv_and_sum_le (flashExactSpec_preserves dp ca 0)
-    ⟨⟨hstable.code, trivial, hstable.flashZero⟩, hnotCreated⟩
+    ⟨⟨hstable.code, trivial, hstable.flashZero⟩, hnotCreated⟩ hfork
   exact ⟨⟨hbacked.1.code, hbacked.1.side, hbacked.1.inv,
     hflash.1.inv⟩, hbacked.2⟩
 
@@ -1703,24 +1741,27 @@ theorem AppliedBodyTrace.ethBound
     (hmessage : MessageEthSound dp ca)
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts)
-    (hbound : sum benv.state.bal + wdsum wds < 2 ^ 256) :
+    (hbound : sum benv.state.bal + wdsum wds < 2 ^ 256)
+    (hfork : CoveredFork benv.stat.fork) :
     EthBound ca benv.state state
       (Blanc.Weth10.AppliedBodyTrace.flowActions dp ca trace) := by
   have hbeacon :=
     SystemMessageTrace.ethBound trace.beacon hmessage hstable hnotCreated
+      hfork
   have hbeaconMeta :=
     SystemMessageTrace.stable_and_sum_le trace.beacon hstable hnotCreated
+      hfork
   have hhistoryMeta :=
     SystemMessageTrace.stable_and_sum_le trace.history hbeaconMeta.1
-      (by simpa [Benv.withState] using hnotCreated)
+      (by simpa [Benv.withState] using hnotCreated) hfork
   have hhistory :=
     SystemMessageTrace.ethBound trace.history hmessage hbeaconMeta.1
-      (by simpa [Benv.withState] using hnotCreated)
+      (by simpa [Benv.withState] using hnotCreated) hfork
   have htransactions :=
     ApplyTransactionsTrace.ethBound dp ca hmessage trace.transactions
       hhistoryMeta.1
-      (by simpa [Benv.withState] using hnotCreated)
-  have htxSum := ApplyTransactionsTrace.sum_le trace.transactions
+      (by simpa [Benv.withState] using hnotCreated) hfork
+  have htxSum := ApplyTransactionsTrace.sum_le trace.transactions hfork
   have htxSum' :
       sum trace.transactionBenv.state.bal ≤
         sum trace.historyState.bal := by
@@ -1737,7 +1778,7 @@ theorem AppliedBodyTrace.ethBound
       hwithdrawalBound
   have htransactionsStable :=
     ApplyTransactionsTrace.stable trace.transactions hhistoryMeta.1
-      (by simpa [Benv.withState] using hnotCreated)
+      (by simpa [Benv.withState] using hnotCreated) hfork
   have hwithdrawalsStable :=
     processWithdrawalsState_stable trace.transactionBenv.state wds
       hwithdrawalBound htransactionsStable
@@ -1745,14 +1786,18 @@ theorem AppliedBodyTrace.ethBound
       ca ∉ trace.transactionBenv.createdAccounts := by
     rw [ApplyTransactionsTrace.createdAccounts_eq trace.transactions]
     simpa [Benv.withState] using hnotCreated
+  have htransactionFork : CoveredFork trace.transactionBenv.stat.fork := by
+    rw [ExecutionTrace.ApplyTransactionsTrace.stat_eq trace.transactions]
+    exact hfork
   have hrequests := RequestsTrace.ethBound trace.requests hmessage
     hwithdrawalsStable
     (by simpa [Benv.withState] using htransactionNotCreated)
+    htransactionFork
   have htotal :=
     (((hbeacon.trans hhistory).trans htransactions).trans hwithdrawals).trans
       hrequests
   simpa [AppliedBodyTrace.flowActions, Benv.withState,
-    List.append_assoc] using htotal
+    trace.requestState_eq, List.append_assoc] using htotal
 
 theorem AccountedBlock.ethBound
     {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
@@ -1763,7 +1808,7 @@ theorem AccountedBlock.ethBound
     EthBound ca pre.state post.state accounted.actions := by
   have hbody :=
     AppliedBodyTrace.ethBound accounted.bodyTrace hmessage hstable
-      (by simp [initBenv]) accounted.bound
+      (by simp [initBenv]) accounted.bound accounted.covered
   have hpost := congrArg (fun chain : BlockChain => chain.state)
     accounted.postEq
   simpa [initBenv, accounted.actions_eq, hpost] using hbody

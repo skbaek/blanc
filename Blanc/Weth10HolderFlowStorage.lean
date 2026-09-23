@@ -237,7 +237,8 @@ theorem Exec.exists_authentic_committedFrame_of_mem_flowActions
     {run : Exec pc sevm pre out} {action : FlowAction}
     (hcode : some (pre.getCode ca).toList = Prog.compile (weth10 dp))
     (hpc : pc = 0) (hmemory : pre.memory = Mem.empty)
-    (h : action ∈ Blanc.Weth10.Exec.flowActions dp ca run) :
+    (h : action ∈ Blanc.Weth10.Exec.flowActions dp ca run)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ frame ∈ Blanc.Exec.committedFrames run,
       Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action ∧
         Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame := by
@@ -245,7 +246,7 @@ theorem Exec.exists_authentic_committedFrame_of_mem_flowActions
     ⟨frame, hframe, haction⟩
   exact ⟨frame, hframe, haction,
     Blanc.Weth10.Exec.Frame.authenticContext_of_mem_committedFrames
-      run hcode hpc hmemory hframe haction⟩
+      run hcode hpc hmemory hfork hframe haction⟩
 
 /-- The executable action ledger is storage-authentic: every retained action
 comes from an actual committed frame of the compiled WETH10 program, whose
@@ -258,7 +259,8 @@ theorem Exec.exists_authenticLocalStorage_of_mem_flowActions
     {run : Exec pc sevm pre out} {action : FlowAction}
     (hcode : some (pre.getCode ca).toList = Prog.compile (weth10 dp))
     (hpc : pc = 0) (hmemory : pre.memory = Mem.empty)
-    (h : action ∈ Blanc.Weth10.Exec.flowActions dp ca run) :
+    (h : action ∈ Blanc.Weth10.Exec.flowActions dp ca run)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ frame ∈ Blanc.Exec.committedFrames run,
       Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action ∧
         Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame ∧
@@ -270,7 +272,7 @@ theorem Exec.exists_authenticLocalStorage_of_mem_flowActions
               LocalOwnBookedEquations action
                 (Stor.rest (Devm.getStor frame.pre ca)) ownPost := by
   rcases Exec.exists_authentic_committedFrame_of_mem_flowActions
-    (run := run) hcode hpc hmemory h with
+    (run := run) hcode hpc hmemory h hfork with
     ⟨frame, hframe, haction, context⟩
   rcases Blanc.Weth10.Exec.Frame.hasLocalOwnEffect_of_flowAction?_eq_some context haction with
     ⟨ownPost, effect⟩
@@ -372,7 +374,8 @@ theorem ProcessMessageTrace.exists_authenticFrame_of_mem_flowActions
       Prog.compile (weth10 dp))
     {action : FlowAction}
     (h : action ∈ Blanc.Weth10.RetainedXlot.flowActions dp ca
-      trace.retained) :
+      trace.retained)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     ∃ frame : Exec.Frame, Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action ∧
       Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame := by
   rcases trace with ⟨slot, retained, hrun⟩
@@ -387,7 +390,12 @@ theorem ProcessMessageTrace.exists_authenticFrame_of_mem_flowActions
         exact hcode
       rcases Exec.exists_authentic_committedFrame_of_mem_flowActions
         (run := run) hpreCode (Frame.enter_run_pc henter)
-        (frame_enter_run_memory_empty henter) h with
+        (frame_enter_run_memory_empty henter) h
+        (by
+          have hstat := Frame.enter_run_benvStat henter
+          simp only at hstat
+          rw [hstat]
+          exact hfork) with
         ⟨frame, _, haction, hcontext⟩
       exact ⟨frame, haction, hcontext⟩
 
@@ -399,7 +407,8 @@ theorem ProcessCreateMessageTrace.exists_authenticFrame_of_mem_flowActions
       Prog.compile (weth10 dp))
     {action : FlowAction}
     (h : action ∈ Blanc.Weth10.RetainedXlot.flowActions dp ca
-      trace.retained) :
+      trace.retained)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     ∃ frame : Exec.Frame, Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action ∧
       Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame := by
   rcases trace with ⟨slot, retained, hrun⟩
@@ -414,7 +423,12 @@ theorem ProcessCreateMessageTrace.exists_authenticFrame_of_mem_flowActions
         simpa only [Frame.ofCreate, processCreateMessage.msg_getCode] using hcode
       rcases Exec.exists_authentic_committedFrame_of_mem_flowActions
         (run := run) hpreCode (Frame.enter_run_pc henter)
-        (frame_enter_run_memory_empty henter) h with
+        (frame_enter_run_memory_empty henter) h
+        (by
+          have hstat := Frame.enter_run_benvStat henter
+          simp only at hstat
+          rw [hstat]
+          exact hfork) with
         ⟨frame, _, haction, hcontext⟩
       exact ⟨frame, haction, hcontext⟩
 

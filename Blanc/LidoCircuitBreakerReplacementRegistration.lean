@@ -135,6 +135,7 @@ expiry slot and the interval slot, is assumed anywhere: the same-pauser
 replacement instantiates this as readily as the distinct one. -/
 theorem registerAfterSet_oldLastNonzero_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (oldPauser oldExpiry oldExpiryOriginal newPauser timestamp interval
       expiry currentExpiry expiryOriginal : B256)
@@ -178,7 +179,7 @@ theorem registerAfterSet_oldLastNonzero_runCompiled
     (hsize : 640 ≤ M.size) (halign : M.size % 32 = 0)
     (hextension : CheckedHeartbeatExtension timestamp interval expiry) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨stack, M, G + 5136 + clearCost + storeCost⟩)
+      (base.setMach ⟨stack, M, G + 5136 + clearCost + storeCost, base.stateGas⟩)
       registerAfterSet
       (((temporalSstorePost sevm
           (temporalSloadBase sevm
@@ -189,7 +190,7 @@ theorem registerAfterSet_oldLastNonzero_runCompiled
           (expirySlot newPauser) expiry).addLog
         ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser],
           expiry.toBytes⟩).setMach
-        ⟨stack, (M.write 0 (0 : B256).toBytes).write 0 expiry.toBytes, G⟩) := by
+        ⟨stack, (M.write 0 (0 : B256).toBytes).write 0 expiry.toBytes, G, ((temporalSstorePost sevm (temporalSloadBase sevm ((temporalSstorePost sevm base (expirySlot oldPauser) 0).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, oldPauser], (0 : B256).toBytes⟩) heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
   have getStorVal_addLog (d : Devm) (l : Log) (a : Adr) (k : B256) :
       (d.addLog l).getStorVal a k = d.getStorVal a k := rfl
   have accessedStorageKeys_addLog (d : Devm) (l : Log) :
@@ -216,7 +217,7 @@ theorem registerAfterSet_oldLastNonzero_runCompiled
           (0 : B256).toBytes⟩).accessedStorageKeys := by
     rw [accessedStorageKeys_addLog, temporalSstorePost_accessedStorageKeys]
     exact hwarmNewExpiry
-  have htail := registerAfterSet_nonzeroNewPauserTail_runCompiled fs sevm
+  have htail := registerAfterSet_nonzeroNewPauserTail_runCompiled (hfork := hfork) fs sevm
     ((temporalSstorePost sevm base (expirySlot oldPauser) 0).addLog
       ⟨sevm.currentTarget, [heartbeatUpdatedEvent, oldPauser],
         (0 : B256).toBytes⟩)
@@ -227,7 +228,7 @@ theorem registerAfterSet_oldLastNonzero_runCompiled
     (by rw [getStorVal_addLog]; exact hinterval) hintervalCold0
     (by rw [getStorVal_addLog]; exact hexpiry) hexpiryOrig hwarmNewExpiry0
     hstoreCost hgasStipend hstatic hextension
-  have h := registerAfterSet_oldLast_newPauserTail_runCompiled fs sevm base M
+  have h := registerAfterSet_oldLast_newPauserTail_runCompiled (hfork := hfork) fs sevm base M
     img oldPauser oldExpiry oldExpiryOriginal stack clearCost
     (G + 3569 + storeCost) _ hstack hwf hreads hprevious holdNonzero hcount
     hwarmCount holdExpiry holdExpiryOrig hwarmOldExpiry hclearCost (by omega)
@@ -249,6 +250,7 @@ accessed-key-neutral, so every entry-state premise is still stated against
 `base`. -/
 theorem finishSetPauser_oldLastNonzero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target oldPauser oldExpiry oldExpiryOriginal newPauser timestamp interval
       expiry currentExpiry expiryOriginal : B256)
@@ -296,7 +298,7 @@ theorem finishSetPauser_oldLastNonzero_runCompiled
     (hsize : 640 ≤ M.size) (halign : M.size % 32 = 0)
     (hextension : CheckedHeartbeatExtension timestamp interval expiry) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨stack, M, G + 7071 + clearCost + storeCost⟩)
+      (base.setMach ⟨stack, M, G + 7071 + clearCost + storeCost, base.stateGas⟩)
       finishSetPauser
       (((temporalSstorePost sevm
           (temporalSloadBase sevm
@@ -310,7 +312,7 @@ theorem finishSetPauser_oldLastNonzero_runCompiled
           (expirySlot newPauser) expiry).addLog
         ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser],
           expiry.toBytes⟩).setMach
-        ⟨stack, (M.write 0 (0 : B256).toBytes).write 0 expiry.toBytes, G⟩) := by
+        ⟨stack, (M.write 0 (0 : B256).toBytes).write 0 expiry.toBytes, G, ((temporalSstorePost sevm (temporalSloadBase sevm ((temporalSstorePost sevm (base.addLog ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, newPauser], []⟩) (expirySlot oldPauser) 0).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, oldPauser], (0 : B256).toBytes⟩) heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
   have getStorVal_addLog (d : Devm) (l : Log) (a : Adr) (k : B256) :
       (d.addLog l).getStorVal a k = d.getStorVal a k := rfl
   have accessedStorageKeys_addLog (d : Devm) (l : Log) :
@@ -319,7 +321,7 @@ theorem finishSetPauser_oldLastNonzero_runCompiled
       (a : Adr) (k' : B256) :
       (temporalSstorePost sevm (d.addLog l) k v).getStorVal a k' =
         (temporalSstorePost sevm d k v).getStorVal a k' := rfl
-  have hregister := registerAfterSet_oldLastNonzero_runCompiled
+  have hregister := registerAfterSet_oldLastNonzero_runCompiled (hfork := hfork)
     ((runtime dp).main :: (runtime dp).aux) sevm
     (base.addLog ⟨sevm.currentTarget,
       [pauserSetEvent, target, oldPauser, newPauser], []⟩)
@@ -362,6 +364,7 @@ count `SLOAD` is charged warm, which `hwarmCount` states as a premise exactly as
 the old-last sibling does. -/
 private theorem registerAfterSet_retained_newPauserTail_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes) (oldPauser remaining : B256)
     (stack : List B256) (G : Nat) (post : Devm)
     (hstack : stack.length ≤ 1)
@@ -376,7 +379,7 @@ private theorem registerAfterSet_retained_newPauserTail_runCompiled
       base.accessedStorageKeys)
     (hsize : 640 ≤ M.size) (halign : M.size % 32 = 0)
     (htail : Func.RunCompiled fs sevm
-      (base.setMach ⟨stack, M, G⟩)
+      (base.setMach ⟨stack, M, G, base.stateGas⟩)
       (loadWord newPauserWord +++ Ninst.iszero :::
         (Func.stop <?>
           (checkedHeartbeatExpiry <|
@@ -386,7 +389,7 @@ private theorem registerAfterSet_retained_newPauserTail_runCompiled
             loadWord newPauserWord +++ pushB256 heartbeatUpdatedEvent :::
             logWith 1 0 1 +++ Func.stop))) post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨stack, M, G + 150⟩)
+      (base.setMach ⟨stack, M, G + 150, base.stateGas⟩)
       registerAfterSet post := by
   have hpreviousCovered :
       (previousPauserWord * 32).toNat + 32 ≤ M.size := by
@@ -418,7 +421,7 @@ private theorem registerAfterSet_retained_newPauserTail_runCompiled
             loadWord newPauserWord +++ pushB256 heartbeatUpdatedEvent :::
             logWith 1 0 1 +++ Func.stop))))
   have hcountTail : Func.RunCompiled fs sevm
-      (base.setMach ⟨countSlot oldPauser :: stack, M, G + 116⟩)
+      (base.setMach ⟨countSlot oldPauser :: stack, M, G + 116, base.stateGas⟩)
       (Ninst.sload ::: Ninst.iszero :::
         ((pushB256 0 ::: loadWord previousPauserWord +++
           tagTop expiryRegion +++ Ninst.sstore ::: pushB256 0 :::
@@ -438,13 +441,14 @@ private theorem registerAfterSet_retained_newPauserTail_runCompiled
               logWith 1 0 1 +++ Func.stop)))))
       post := by
     func_run (3) [0]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_val =>
       rw [Devm.getStorVal_setMach, hcount]
       simp [B256.eqCheck, hremaining]
     case h_arm => exact htail
   have holdTail : Func.RunCompiled fs sevm
-      (base.setMach ⟨stack, M, G + 128⟩) oldBranch post :=
+      (base.setMach ⟨stack, M, G + 128, base.stateGas⟩) oldBranch post :=
     previousCountKey_prepend_runCompiled hpreviousValue
       hpreviousMemory halign hpreviousCovered (by omega) hcountTail
   unfold registerAfterSet
@@ -459,7 +463,7 @@ private theorem registerAfterSet_retained_newPauserTail_runCompiled
     have hg : G + 150 - 22 = G + 128 := by omega
     rw [hg]
     change Func.RunCompiled fs sevm
-      (base.setMach ⟨stack, M, G + 128⟩) oldBranch post
+      (base.setMach ⟨stack, M, G + 128, base.stateGas⟩) oldBranch post
     exact holdTail
 
 /-- Exact `registerAfterSet` walk for a replacement that leaves the previous
@@ -484,6 +488,7 @@ disjoint from any other, so the same-pauser replacement instantiates this as
 readily as the distinct one. -/
 theorem registerAfterSet_retainedNonzero_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (oldPauser remaining newPauser timestamp interval expiry currentExpiry
       expiryOriginal : B256)
@@ -520,20 +525,20 @@ theorem registerAfterSet_retainedNonzero_runCompiled
     (hsize : 640 ≤ M.size) (halign : M.size % 32 = 0)
     (hextension : CheckedHeartbeatExtension timestamp interval expiry) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨stack, M, G + 3719 + storeCost⟩)
+      (base.setMach ⟨stack, M, G + 3719 + storeCost, base.stateGas⟩)
       registerAfterSet
       (((temporalSstorePost sevm
           (temporalSloadBase sevm base heartbeatIntervalSlot)
           (expirySlot newPauser) expiry).addLog
         ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser],
           expiry.toBytes⟩).setMach
-        ⟨stack, M.write 0 expiry.toBytes, G⟩) := by
-  have htail := registerAfterSet_nonzeroNewPauserTail_runCompiled fs sevm base
+        ⟨stack, M.write 0 expiry.toBytes, G, ((temporalSstorePost sevm (temporalSloadBase sevm base heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
+  have htail := registerAfterSet_nonzeroNewPauserTail_runCompiled (hfork := hfork) fs sevm base
     M img newPauser timestamp interval expiry currentExpiry expiryOriginal
     stack storeCost G hstack hwf hreads hnew hnewNonzero hsize halign htime
     hinterval hintervalCold hexpiry hexpiryOrig hwarmNewExpiry hstoreCost
     hgasStipend hstatic hextension
-  have h := registerAfterSet_retained_newPauserTail_runCompiled fs sevm base M
+  have h := registerAfterSet_retained_newPauserTail_runCompiled (hfork := hfork) fs sevm base M
     img oldPauser remaining stack (G + 3569 + storeCost) _ hstack hreads
     hprevious holdNonzero hremaining hcount hwarmCount hsize halign htail
   have hg : G + 3569 + storeCost + 150 = G + 3719 + storeCost := by omega
@@ -552,6 +557,7 @@ accessed-key-neutral, so every entry-state premise is still stated against
 `base`. -/
 theorem finishSetPauser_retainedNonzero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target oldPauser remaining newPauser timestamp interval expiry
       currentExpiry expiryOriginal : B256)
@@ -592,7 +598,7 @@ theorem finishSetPauser_retainedNonzero_runCompiled
     (hsize : 640 ≤ M.size) (halign : M.size % 32 = 0)
     (hextension : CheckedHeartbeatExtension timestamp interval expiry) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨stack, M, G + 5654 + storeCost⟩)
+      (base.setMach ⟨stack, M, G + 5654 + storeCost, base.stateGas⟩)
       finishSetPauser
       (((temporalSstorePost sevm
           (temporalSloadBase sevm
@@ -602,12 +608,12 @@ theorem finishSetPauser_retainedNonzero_runCompiled
           (expirySlot newPauser) expiry).addLog
         ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser],
           expiry.toBytes⟩).setMach
-        ⟨stack, M.write 0 expiry.toBytes, G⟩) := by
+        ⟨stack, M.write 0 expiry.toBytes, G, ((temporalSstorePost sevm (temporalSloadBase sevm (base.addLog ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, newPauser], []⟩) heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
   have getStorVal_addLog (d : Devm) (l : Log) (a : Adr) (k : B256) :
       (d.addLog l).getStorVal a k = d.getStorVal a k := rfl
   have accessedStorageKeys_addLog (d : Devm) (l : Log) :
       (d.addLog l).accessedStorageKeys = d.accessedStorageKeys := rfl
-  have hregister := registerAfterSet_retainedNonzero_runCompiled
+  have hregister := registerAfterSet_retainedNonzero_runCompiled (hfork := hfork)
     ((runtime dp).main :: (runtime dp).aux) sevm
     (base.addLog ⟨sevm.currentTarget,
       [pauserSetEvent, target, oldPauser, newPauser], []⟩)
@@ -679,6 +685,7 @@ slot named by `hremainingCount` is the slot the increment just wrote, and
 count slot and the expiry or interval slots, is assumed anywhere. -/
 theorem setPauserKernel_retainedNonzero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target newPauser oldPauser oldCount newCount nextCount remaining
       timestamp interval expiry currentExpiry expiryOriginal : B256)
@@ -743,7 +750,7 @@ theorem setPauserKernel_retainedNonzero_runCompiled
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach ⟨[], M,
         G + replacementRetainedSetPauserKernelGas sevm base target newPauser
-          oldPauser oldCount assignmentCost countCost newCountCost storeCost⟩)
+          oldPauser oldCount assignmentCost countCost newCountCost storeCost, base.stateGas⟩)
       setPauserKernel
       (((temporalSstorePost sevm
           (temporalSloadBase sevm
@@ -756,7 +763,7 @@ theorem setPauserKernel_retainedNonzero_runCompiled
         ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser],
           expiry.toBytes⟩).setMach
         ⟨[], (M.write (previousPauserWord * 32).toNat oldPauser.toBytes).write
-          0 expiry.toBytes, G⟩) := by
+          0 expiry.toBytes, G, ((temporalSstorePost sevm (temporalSloadBase sevm ((foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount nextCount).addLog ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, newPauser], []⟩) heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
   have hcovered : (previousPauserWord * 32).toNat + 32 ≤ M.size := by
     rw [hsize]
     decide
@@ -801,7 +808,7 @@ theorem setPauserKernel_retainedNonzero_runCompiled
     refine temporalSloadBase_preserves_warm _ _ _ _ ?_
     simp only [foundKernelPost, temporalSstorePost_accessedStorageKeys]
     exact temporalSloadBase_warm _ _ _
-  have hfinish := finishSetPauser_retainedNonzero_runCompiled dp sevm
+  have hfinish := finishSetPauser_retainedNonzero_runCompiled (hfork := hfork) dp sevm
     (foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount
       nextCount)
     (M.write (previousPauserWord * 32).toNat oldPauser.toBytes)
@@ -814,7 +821,7 @@ theorem setPauserKernel_retainedNonzero_runCompiled
     hexpiryOrig hwarmNewExpiry hstoreCost hgasStipend hstatic
     (by omega) (by rw [hsize']) hextension
   dsimp only [foundNonzeroKernelPost] at hfinish
-  have hkernel := setPauserKernel_foundNonzero_finishSetPauser_runCompiled dp
+  have hkernel := setPauserKernel_foundNonzero_finishSetPauser_runCompiled (hfork := hfork) dp
     sevm base M img _ target newPauser oldPauser oldCount newCount nextCount
     assignmentOriginal countOriginal newCountOriginal assignmentCost countCost
     newCountCost (G + 5654 + storeCost) hwf hreads htarget hnew htargetValid
@@ -841,9 +848,9 @@ private theorem replacementPushNotZero_prepend_runCompiled
     {dp : DeployParams} {sevm : Sevm} {base : Devm}
     {G : Nat} {tail : Func} {post : Devm} {target : B256}
     (htail : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨~~~(0 : B256) :: target :: [], Mem.empty, G⟩) tail post) :
+      (base.setMach ⟨~~~(0 : B256) :: target :: [], Mem.empty, G, base.stateGas⟩) tail post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨target :: [], Mem.empty, G + 5⟩)
+      (base.setMach ⟨target :: [], Mem.empty, G + 5, base.stateGas⟩)
       ([pushB256 0, not] +++ tail) post := by
   func_run (2) [~~~(0 : B256)]
   case a => exact htail
@@ -854,9 +861,9 @@ private theorem replacementShiftAddressMask_prepend_runCompiled
     (htail : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach
         ⟨((~~~(0 : B256)) <<< (Nat.toB256 160).toNat) :: target :: [],
-          Mem.empty, G⟩) tail post) :
+          Mem.empty, G, base.stateGas⟩) tail post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨~~~(0 : B256) :: target :: [], Mem.empty, G + 6⟩)
+      (base.setMach ⟨~~~(0 : B256) :: target :: [], Mem.empty, G + 6, base.stateGas⟩)
       ([pushB256 (Nat.toB256 160), shl] +++ tail) post := by
   func_run (2)
     [((~~~(0 : B256)) <<< (Nat.toB256 160).toNat)]
@@ -867,9 +874,9 @@ private theorem replacementCanonicalBranch_success_runCompiled
     {G : Nat} {body : Func} {post : Devm} {target : B256}
     (hmask : addressMask &&& target = 0)
     (hbody : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, G⟩) body post) :
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩) body post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨addressMask :: target :: [], Mem.empty, G + 16⟩)
+      (base.setMach ⟨addressMask :: target :: [], Mem.empty, G + 16, base.stateGas⟩)
       ([Ninst.and] +++ ((.call emptyRevertSlot) <?> body)) post := by
   func_run (2) [0]
   case h_arm =>
@@ -882,16 +889,16 @@ private theorem replacementCheckNonAddress_success_runCompiled
     {G : Nat} {body : Func} {post : Devm} {target : B256}
     (hmask : addressMask &&& target = 0)
     (hbody : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, G⟩) body post) :
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩) body post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨target :: [], Mem.empty, G + 27⟩)
+      (base.setMach ⟨target :: [], Mem.empty, G + 27, base.stateGas⟩)
       (checkNonAddress +++ ((.call emptyRevertSlot) <?> body)) post := by
   have hbranch := replacementCanonicalBranch_success_runCompiled hmask hbody
   have hshiftRaw :
       Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
         (base.setMach
           ⟨((~~~(0 : B256)) <<< (Nat.toB256 160).toNat) :: target :: [],
-            Mem.empty, G + 16⟩)
+            Mem.empty, G + 16, base.stateGas⟩)
         ([Ninst.and] +++ ((.call emptyRevertSlot) <?> body)) post := by
     rw [← addressMask_eq_shl]
     exact hbranch
@@ -913,13 +920,13 @@ private theorem replacementCanonicalAddressArg0_success_runCompiled
     (harg : Sevm.dataWord sevm (32 * 0 + 4) = target)
     (hmask : addressMask &&& target = 0)
     (hbody : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, G⟩) body post) :
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩) body post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, G + 33⟩)
+      (base.setMach ⟨[], Mem.empty, G + 33, base.stateGas⟩)
       (canonicalAddressArg 0 body) post := by
   have hcheck := replacementCheckNonAddress_success_runCompiled hmask hbody
   have hargRun : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, G + 27 + 6⟩)
+      (base.setMach ⟨[], Mem.empty, G + 27 + 6, base.stateGas⟩)
       (arg 0 +++ checkNonAddress +++
         ((.call emptyRevertSlot) <?> body)) post := by
     unfold arg cdl
@@ -940,13 +947,13 @@ private theorem replacementCanonicalAddressArg1_success_runCompiled
     (harg : Sevm.dataWord sevm (32 * 1 + 4) = target)
     (hmask : addressMask &&& target = 0)
     (hbody : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, G⟩) body post) :
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩) body post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, G + 33⟩)
+      (base.setMach ⟨[], Mem.empty, G + 33, base.stateGas⟩)
       (canonicalAddressArg 1 body) post := by
   have hcheck := replacementCheckNonAddress_success_runCompiled hmask hbody
   have hargRun : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, G + 27 + 6⟩)
+      (base.setMach ⟨[], Mem.empty, G + 27 + 6, base.stateGas⟩)
       (arg 1 +++ checkNonAddress +++
         ((.call emptyRevertSlot) <?> body)) post := by
     unfold arg cdl
@@ -966,9 +973,9 @@ private theorem replacementRequireStaticArgs_success_runCompiled
     {G : Nat} {body : Func} {post : Devm}
     (hdata : sevm.data.length.toB256 <? 68 = 0)
     (hbody : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, G⟩) body post) :
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩) body post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, G + 21⟩)
+      (base.setMach ⟨[], Mem.empty, G + 21, base.stateGas⟩)
       (requireStaticArgs 2 body) post := by
   unfold requireStaticArgs
   func_run (4) [0]
@@ -982,9 +989,9 @@ private theorem replacementOnlyAdmin_success_runCompiled
     {G : Nat} {body : Func} {post : Devm}
     (hadmin : sevm.caller.toB256 = dp.admin)
     (hbody : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, G⟩) body post) :
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩) body post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, G + 22⟩)
+      (base.setMach ⟨[], Mem.empty, G + 22, base.stateGas⟩)
       (onlyAdmin dp body) post := by
   unfold onlyAdmin pushDeployWord
   func_run (4) [1]
@@ -1002,14 +1009,14 @@ private theorem replacementRegisterPauserBody_fromStage_runCompiled
     (hnewMask : addressMask &&& newPauser = 0)
     (hgas : bodyGas = stageGas + 109)
     (hstage : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, stageGas⟩)
+      (base.setMach ⟨[], Mem.empty, stageGas, base.stateGas⟩)
       (arg 0 +++ mstoreAt targetWord +++
         arg 1 +++ mstoreAt newPauserWord +++
         pushB256 0 ::: mstoreAt previousPauserWord +++
         pushB256 0 ::: mstoreAt continuationWord +++
         .call setPauserSlot) post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, bodyGas⟩)
+      (base.setMach ⟨[], Mem.empty, bodyGas, base.stateGas⟩)
       (registerPauser dp) post := by
   have hadminRun := replacementOnlyAdmin_success_runCompiled hadmin hstage
   have hnewRun :=
@@ -1044,6 +1051,7 @@ the old-last one.  The last conjunct is the storage-side counterpart: no
 canonical pauser's expiry cell but the new pauser's moves at all. -/
 theorem registerPauser_body_retainedNonzero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (target newPauser oldPauser oldCount newCount nextCount remaining
       timestamp interval expiry currentExpiry expiryOriginal : B256)
     (assignmentOriginal countOriginal newCountOriginal : B256)
@@ -1105,7 +1113,7 @@ theorem registerPauser_body_retainedNonzero_runCompiled
         (base.setMach ⟨[], Mem.empty,
           G + replacementRetainedRegisterBodyGas sevm base target newPauser
             oldPauser oldCount assignmentCost countCost newCountCost
-            storeCost⟩)
+            storeCost, base.stateGas⟩)
         (registerPauser dp) post ∧
       post.gasLeft = G ∧
       post.getStorVal sevm.currentTarget (expirySlot newPauser) = expiry ∧
@@ -1120,7 +1128,7 @@ theorem registerPauser_body_retainedNonzero_runCompiled
   rcases registerMemory_spec target newPauser with
     ⟨hwf, hreads, hsize, htargetRead, hnewRead,
       _hpreviousRead, hcontinuationRead⟩
-  have hkernel := setPauserKernel_retainedNonzero_runCompiled dp sevm base
+  have hkernel := setPauserKernel_retainedNonzero_runCompiled (hfork := hfork) dp sevm base
     (registerMemory target newPauser) (registerImage target newPauser)
     target newPauser oldPauser oldCount newCount nextCount remaining timestamp
     interval expiry currentExpiry expiryOriginal assignmentOriginal
@@ -1139,7 +1147,7 @@ theorem registerPauser_body_retainedNonzero_runCompiled
   have hbody : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach ⟨[], Mem.empty,
         G + replacementRetainedRegisterBodyGas sevm base target newPauser
-          oldPauser oldCount assignmentCost countCost newCountCost storeCost⟩)
+          oldPauser oldCount assignmentCost countCost newCountCost storeCost, base.stateGas⟩)
       (registerPauser dp)
       (((temporalSstorePost sevm
           (temporalSloadBase sevm
@@ -1153,7 +1161,7 @@ theorem registerPauser_body_retainedNonzero_runCompiled
           expiry.toBytes⟩).setMach
         ⟨[], ((registerMemory target newPauser).write
           (previousPauserWord * 32).toNat oldPauser.toBytes).write
-          0 expiry.toBytes, G⟩) := by
+          0 expiry.toBytes, G, ((temporalSstorePost sevm (temporalSloadBase sevm ((foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount nextCount).addLog ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, newPauser], []⟩) heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
     have htargetMask := canonicalAddress_mask_zero htargetValid.2
     have hnewMask := canonicalAddress_mask_zero hnewValid.2
     apply replacementRegisterPauserBody_fromStage_runCompiled dp sevm base _
@@ -1228,6 +1236,7 @@ dispatcher's own reserve above `registerPauser_body_retainedNonzero_runCompiled`
 with the same effects, the expiry noninterference clause included. -/
 theorem registerPauser_runCompiledTo_retainedNonzero
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (target newPauser oldPauser oldCount newCount nextCount remaining
       timestamp interval expiry currentExpiry expiryOriginal : B256)
     (assignmentOriginal countOriginal newCountOriginal : B256)
@@ -1295,7 +1304,7 @@ theorem registerPauser_runCompiledTo_retainedNonzero
           G + registerPauserDispatchGas +
             replacementRetainedRegisterBodyGas sevm base target newPauser
               oldPauser oldCount assignmentCost countCost newCountCost
-              storeCost⟩)
+              storeCost, base.stateGas⟩)
         (runtime dp) (.ok post) ∧
       post.gasLeft = G ∧
       post.getStorVal sevm.currentTarget (expirySlot newPauser) = expiry ∧
@@ -1311,7 +1320,7 @@ theorem registerPauser_runCompiledTo_retainedNonzero
   have hbodyData : sevm.data.length.toB256 <? 68 = 0 := by
     rw [hdata]
     decide +kernel
-  rcases registerPauser_body_retainedNonzero_runCompiled dp sevm base target
+  rcases registerPauser_body_retainedNonzero_runCompiled (hfork := hfork) dp sevm base target
       newPauser oldPauser oldCount newCount nextCount remaining timestamp
       interval expiry currentExpiry expiryOriginal assignmentOriginal
       countOriginal newCountOriginal assignmentCost countCost newCountCost
@@ -1357,6 +1366,7 @@ wrote nothing; nothing here equates the storage this execution reaches with
 rather than a premise, none of the execution conclusions above depend on it. -/
 theorem registerPauser_retainedNonzero_success_settled_effects
     (dp : DeployParams) {msg : Msg} {ca : Adr} {final settled : Devm}
+    (hfork : CoveredFork (initSevm msg).benvStat.fork)
     (target newPauser oldPauser oldCount newCount nextCount remaining
       timestamp interval expiry currentExpiry expiryOriginal : B256)
     (assignmentOriginal countOriginal newCountOriginal : B256)
@@ -1469,7 +1479,7 @@ theorem registerPauser_retainedNonzero_success_settled_effects
     simpa [initSevm] using hcode
   have hadminInit : (initSevm msg).caller.toB256 = dp.admin := by
     simpa [initSevm] using hadmin
-  rcases registerPauser_runCompiledTo_retainedNonzero dp (initSevm msg)
+  rcases registerPauser_runCompiledTo_retainedNonzero (hfork := hfork) dp (initSevm msg)
       (initDevm msg) target newPauser oldPauser oldCount newCount nextCount
       remaining timestamp interval expiry currentExpiry expiryOriginal
       assignmentOriginal countOriginal newCountOriginal assignmentCost
@@ -1494,7 +1504,7 @@ theorem registerPauser_retainedNonzero_success_settled_effects
         G + registerPauserDispatchGas +
           replacementRetainedRegisterBodyGas (initSevm msg) (initDevm msg)
             target newPauser oldPauser oldCount assignmentCost countCost
-            newCountCost storeCost⟩ =
+            newCountCost storeCost, (initDevm msg).stateGas⟩ =
         initDevm msg := by
     rw [← hgasEntry]
     rfl
@@ -1556,6 +1566,7 @@ same-pauser call does not: with `oldPauser = newPauser` the count read back is
 the retained arm. -/
 theorem setPauserKernel_oldLastNonzero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target newPauser oldPauser oldCount newCount nextCount oldExpiry
       oldExpiryOriginal timestamp interval expiry currentExpiry
@@ -1632,7 +1643,7 @@ theorem setPauserKernel_oldLastNonzero_runCompiled
       (base.setMach ⟨[], M,
         G + replacementOldLastSetPauserKernelGas sevm base target newPauser
           oldPauser oldCount assignmentCost countCost newCountCost clearCost
-          storeCost⟩)
+          storeCost, base.stateGas⟩)
       setPauserKernel
       (((temporalSstorePost sevm
           (temporalSloadBase sevm
@@ -1649,7 +1660,7 @@ theorem setPauserKernel_oldLastNonzero_runCompiled
         ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser],
           expiry.toBytes⟩).setMach
         ⟨[], ((M.write (previousPauserWord * 32).toNat oldPauser.toBytes).write
-          0 (0 : B256).toBytes).write 0 expiry.toBytes, G⟩) := by
+          0 (0 : B256).toBytes).write 0 expiry.toBytes, G, ((temporalSstorePost sevm (temporalSloadBase sevm ((temporalSstorePost sevm ((foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount nextCount).addLog ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, newPauser], []⟩) (expirySlot oldPauser) 0).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, oldPauser], (0 : B256).toBytes⟩) heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
   have hcovered : (previousPauserWord * 32).toNat + 32 ≤ M.size := by
     rw [hsize]
     decide
@@ -1694,7 +1705,7 @@ theorem setPauserKernel_oldLastNonzero_runCompiled
     refine temporalSloadBase_preserves_warm _ _ _ _ ?_
     simp only [foundKernelPost, temporalSstorePost_accessedStorageKeys]
     exact temporalSloadBase_warm _ _ _
-  have hfinish := finishSetPauser_oldLastNonzero_runCompiled dp sevm
+  have hfinish := finishSetPauser_oldLastNonzero_runCompiled (hfork := hfork) dp sevm
     (foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount
       nextCount)
     (M.write (previousPauserWord * 32).toNat oldPauser.toBytes)
@@ -1708,7 +1719,7 @@ theorem setPauserKernel_oldLastNonzero_runCompiled
     hgasStipend hstatic (by omega) (by rw [hsize'])
     hextension
   dsimp only [foundNonzeroKernelPost] at hfinish
-  have hkernel := setPauserKernel_foundNonzero_finishSetPauser_runCompiled dp
+  have hkernel := setPauserKernel_foundNonzero_finishSetPauser_runCompiled (hfork := hfork) dp
     sevm base M img _ target newPauser oldPauser oldCount newCount nextCount
     assignmentOriginal countOriginal newCountOriginal assignmentCost countCost
     newCountCost (G + 7071 + clearCost + storeCost) hwf hreads htarget hnew
@@ -1753,6 +1764,7 @@ pausers are unrelated binders here: when they coincide both writes land on one
 cell and the checked store, which runs last, is what survives. -/
 theorem registerPauser_body_oldLastNonzero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (target newPauser oldPauser oldCount newCount nextCount oldExpiry
       oldExpiryOriginal timestamp interval expiry currentExpiry
       expiryOriginal : B256)
@@ -1825,7 +1837,7 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
         (base.setMach ⟨[], Mem.empty,
           G + replacementOldLastRegisterBodyGas sevm base target newPauser
             oldPauser oldCount assignmentCost countCost newCountCost clearCost
-            storeCost⟩)
+            storeCost, base.stateGas⟩)
         (registerPauser dp) post ∧
       post.gasLeft = G ∧
       post.getStorVal sevm.currentTarget (expirySlot newPauser) = expiry ∧
@@ -1845,7 +1857,7 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
   rcases registerMemory_spec target newPauser with
     ⟨hwf, hreads, hsize, htargetRead, hnewRead,
       _hpreviousRead, hcontinuationRead⟩
-  have hkernel := setPauserKernel_oldLastNonzero_runCompiled dp sevm base
+  have hkernel := setPauserKernel_oldLastNonzero_runCompiled (hfork := hfork) dp sevm base
     (registerMemory target newPauser) (registerImage target newPauser)
     target newPauser oldPauser oldCount newCount nextCount oldExpiry
     oldExpiryOriginal timestamp interval expiry currentExpiry expiryOriginal
@@ -1867,7 +1879,7 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
       (base.setMach ⟨[], Mem.empty,
         G + replacementOldLastRegisterBodyGas sevm base target newPauser
           oldPauser oldCount assignmentCost countCost newCountCost clearCost
-          storeCost⟩)
+          storeCost, base.stateGas⟩)
       (registerPauser dp)
       (((temporalSstorePost sevm
           (temporalSloadBase sevm
@@ -1885,7 +1897,7 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
           expiry.toBytes⟩).setMach
         ⟨[], (((registerMemory target newPauser).write
           (previousPauserWord * 32).toNat oldPauser.toBytes).write
-          0 (0 : B256).toBytes).write 0 expiry.toBytes, G⟩) := by
+          0 (0 : B256).toBytes).write 0 expiry.toBytes, G, ((temporalSstorePost sevm (temporalSloadBase sevm ((temporalSstorePost sevm ((foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount nextCount).addLog ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, newPauser], []⟩) (expirySlot oldPauser) 0).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, oldPauser], (0 : B256).toBytes⟩) heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
     have htargetMask := canonicalAddress_mask_zero htargetValid.2
     have hnewMask := canonicalAddress_mask_zero hnewValid.2
     apply replacementRegisterPauserBody_fromStage_runCompiled dp sevm base _
@@ -1991,6 +2003,7 @@ with the same effects, the retired pauser's expiry cell and the expiry
 noninterference clause included. -/
 theorem registerPauser_runCompiledTo_oldLastNonzero
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (target newPauser oldPauser oldCount newCount nextCount oldExpiry
       oldExpiryOriginal timestamp interval expiry currentExpiry
       expiryOriginal : B256)
@@ -2069,7 +2082,7 @@ theorem registerPauser_runCompiledTo_oldLastNonzero
           G + registerPauserDispatchGas +
             replacementOldLastRegisterBodyGas sevm base target newPauser
               oldPauser oldCount assignmentCost countCost newCountCost
-              clearCost storeCost⟩)
+              clearCost storeCost, base.stateGas⟩)
         (runtime dp) (.ok post) ∧
       post.gasLeft = G ∧
       post.getStorVal sevm.currentTarget (expirySlot newPauser) = expiry ∧
@@ -2090,7 +2103,7 @@ theorem registerPauser_runCompiledTo_oldLastNonzero
   have hbodyData : sevm.data.length.toB256 <? 68 = 0 := by
     rw [hdata]
     decide +kernel
-  rcases registerPauser_body_oldLastNonzero_runCompiled dp sevm base target
+  rcases registerPauser_body_oldLastNonzero_runCompiled (hfork := hfork) dp sevm base target
       newPauser oldPauser oldCount newCount nextCount oldExpiry
       oldExpiryOriginal timestamp interval expiry currentExpiry expiryOriginal
       assignmentOriginal countOriginal newCountOriginal assignmentCost
@@ -2142,6 +2155,7 @@ wrote nothing; nothing here equates the storage this execution reaches with
 rather than a premise, none of the execution conclusions above depend on it. -/
 theorem registerPauser_oldLastNonzero_success_settled_effects
     (dp : DeployParams) {msg : Msg} {ca : Adr} {final settled : Devm}
+    (hfork : CoveredFork (initSevm msg).benvStat.fork)
     (target newPauser oldPauser oldCount newCount nextCount oldExpiry
       oldExpiryOriginal timestamp interval expiry currentExpiry
       expiryOriginal : B256)
@@ -2269,7 +2283,7 @@ theorem registerPauser_oldLastNonzero_success_settled_effects
     simpa [initSevm] using hcode
   have hadminInit : (initSevm msg).caller.toB256 = dp.admin := by
     simpa [initSevm] using hadmin
-  rcases registerPauser_runCompiledTo_oldLastNonzero dp (initSevm msg)
+  rcases registerPauser_runCompiledTo_oldLastNonzero (hfork := hfork) dp (initSevm msg)
       (initDevm msg) target newPauser oldPauser oldCount newCount nextCount
       oldExpiry oldExpiryOriginal timestamp interval expiry currentExpiry
       expiryOriginal assignmentOriginal countOriginal newCountOriginal
@@ -2298,7 +2312,7 @@ theorem registerPauser_oldLastNonzero_success_settled_effects
         G + registerPauserDispatchGas +
           replacementOldLastRegisterBodyGas (initSevm msg) (initDevm msg)
             target newPauser oldPauser oldCount assignmentCost countCost
-            newCountCost clearCost storeCost⟩ =
+            newCountCost clearCost storeCost, (initDevm msg).stateGas⟩ =
         initDevm msg := by
     rw [← hgasEntry]
     rfl

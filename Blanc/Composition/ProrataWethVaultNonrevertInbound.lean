@@ -195,6 +195,7 @@ theorem inboundGuardedTail_revert {fs : List Func} {sevm : Sevm}
     {entry d : Devm} {sharesWord assetsSourceWord : B256}
     {receiver supply shares assets : B256} {tail : Stack}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (receiverWindow : MemWordAt entry
       (Blanc.ProrataWethVault.receiverWord * 32).toNat receiver)
@@ -250,7 +251,7 @@ theorem inboundGuardedTail_revert {fs : List Func} {sevm : Sevm}
     MemWordAt.of_selfReads (move2 window) wf3 reads3
   have state13 : entry.state = s3.state := state1.trans (state2.trans state3)
   obtain ⟨s4, -, carry4, storage4, -, run⟩ :=
-    callWethTransferFrom_avoiding (config.of_state_eq' state13) ⟨wf3, reads3⟩
+    callWethTransferFrom_avoiding (hfork := hfork) (config.of_state_eq' state13) ⟨wf3, reads3⟩
       ((move2 assetsWindow).slice_eq (selfReads s2)) assetsAbove run
   have receiverAbove : 128 ≤ (Blanc.ProrataWethVault.receiverWord * 32).toNat :=
     by decide +kernel
@@ -318,6 +319,7 @@ the booked WETH balance and the share supply are read at their pre-state
 values, and the stable-supply guard passes. -/
 theorem inboundEntry_avoiding {fs : List Func} {sevm : Sevm}
     {pre bodyPre : Devm} {out : Execution} {arithmetic : Func}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (stable : PairStable sevm.currentTarget sevm.benvStat.rules pre.state)
     (memoryWf : Mem.Wf pre.memory)
     (entryState : pre.state = bodyPre.state)
@@ -379,7 +381,7 @@ theorem inboundEntry_avoiding {fs : List Func} {sevm : Sevm}
     exact stable.backed.2.1
   obtain ⟨quotePre, quoteWf, assetsWindow, supplyWindow, carry, quoteStorage,
       quoteConfig, run⟩ :=
-    snapshotQuoteState_avoiding (config.of_state_eq' readState) readWf
+    snapshotQuoteState_avoiding (hfork := hfork) (config.of_state_eq' readState) readWf
       supplyStable run
   refine ⟨quotePre, quoteWf,
     carry (by decide +kernel) (by decide +kernel) amountWindow,
@@ -409,6 +411,7 @@ static ABI head, a nonzero caller, a canonical nonzero receiver and
 out-of-gas halts and the call-depth limit are what remain. -/
 theorem deposit_revert_visits_refused_weth_child
     {sevm : Sevm} {pre d : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (stable : PairStable sevm.currentTarget sevm.benvStat.rules pre.state)
     (memoryWf : Mem.Wf pre.memory)
     (selectorEq :
@@ -451,7 +454,7 @@ theorem deposit_revert_visits_refused_weth_child
   unfold Blanc.ProrataWethVault.deposit at run
   obtain ⟨quotePre, quoteWf, amountWindow, receiverWindow, assetsWindow,
       supplyWindow, quoteStorage, quoteConfig, run⟩ :=
-    inboundEntry_avoiding stable memoryWf entryState entryMemory run
+    inboundEntry_avoiding (hfork := hfork) stable memoryWf entryState entryMemory run
   obtain ⟨afterPre, afterImage, afterStack, afterMemImage, afterFrame,
       afterQuiet, run⟩ :=
     Blanc.ProrataWethVault.depositQuote_avoiding quoteWf (selfReads quotePre)
@@ -474,7 +477,7 @@ theorem deposit_revert_visits_refused_weth_child
   have guardStorage : Devm.getStor guardPre = Devm.getStor pre :=
     (funext (getStor_eq_of_state_eq (afterQuiet.1.trans storeState))).symm.trans
       quoteStorage
-  refine inboundGuardedTail_revert
+  refine inboundGuardedTail_revert (hfork := hfork)
     (quoteConfig.of_state_eq' (afterQuiet.1.trans storeState)) guardWf
     (move (by decide +kernel) (Or.inl (by decide +kernel)) receiverWindow)
     (move (by decide +kernel) (Or.inr (by decide +kernel)) supplyWindow)
@@ -495,6 +498,7 @@ theorem deposit_revert_visits_refused_weth_child
 `deposit`, with `shares ≤ maxMint(receiver)`. -/
 theorem mint_revert_visits_refused_weth_child
     {sevm : Sevm} {pre d : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (stable : PairStable sevm.currentTarget sevm.benvStat.rules pre.state)
     (memoryWf : Mem.Wf pre.memory)
     (selectorEq :
@@ -539,7 +543,7 @@ theorem mint_revert_visits_refused_weth_child
   unfold Blanc.ProrataWethVault.mint at run
   obtain ⟨quotePre, quoteWf, amountWindow, receiverWindow, assetsWindow,
       supplyWindow, quoteStorage, quoteConfig, run⟩ :=
-    inboundEntry_avoiding stable memoryWf entryState entryMemory run
+    inboundEntry_avoiding (hfork := hfork) stable memoryWf entryState entryMemory run
   obtain ⟨afterPre, afterImage, afterStack, afterMemImage, afterFrame,
       afterQuiet, run⟩ :=
     Blanc.ProrataWethVault.mintQuote_avoiding quoteWf (selfReads quotePre)
@@ -562,7 +566,7 @@ theorem mint_revert_visits_refused_weth_child
   have guardStorage : Devm.getStor guardPre = Devm.getStor pre :=
     (funext (getStor_eq_of_state_eq (afterQuiet.1.trans storeState))).symm.trans
       quoteStorage
-  refine inboundGuardedTail_revert
+  refine inboundGuardedTail_revert (hfork := hfork)
     (quoteConfig.of_state_eq' (afterQuiet.1.trans storeState)) guardWf
     (move (by decide +kernel) (Or.inl (by decide +kernel)) receiverWindow)
     (move (by decide +kernel) (Or.inr (by decide +kernel)) supplyWindow)

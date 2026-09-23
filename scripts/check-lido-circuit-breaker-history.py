@@ -168,7 +168,7 @@ class ChainActivation:
         "processMessageCall_preserves_registryStable",
         "processTransaction_preserves_registryStable",
         "applyTransactions_preserves_registryStable",
-        "stateTransitionWith_preserves_registryStable",
+        "stateTransitionAt_preserves_registryStable",
         "stateTransitionUsing_preserves_registryStable",
         "stateTransition_preserves_registryStable",
         "chainUsing_preserves_registryStable",
@@ -471,16 +471,16 @@ HEADER_PINS = {
         "RegistryStable.installedCode": "41a7a10fa90009b7ceb0e682eaae597c888428f439cd6b108a02a6293201630b",
         "RegistryStable.membership": "d231f193d9c11dc6e5110e827efc4677d2bdeebbf2b359cf9db98760761b3f88",
         "RegistryStable.witness": "8223252dc9bcc9444e013cf099698c1d1282532a53b5198ec106d5777f413494",
-        "applyTransactions_preserves_registryStable": "216b5d62d37262ac4a8283537f335721f10982be48ad92e45921ff6f92c49289",
-        "arbitraryExec_post_registryFields": "0a56502f3a3ef61956b59321465e5e6a4a2f6c4369239b0a677cc42ea250110c",
-        "arbitraryFuture_registryFields": "622966ab492e4424080b6be75b2db09e86a883be32a3dacdce687bcec0054f36",
+        "applyTransactions_preserves_registryStable": "d235cf081de8c2f136258ab998ecf89b58036addf71cbc7c85a23020ae3b3046",
+        "arbitraryExec_post_registryFields": "fdc120b813926a84b753ebc33acecbf552183d53b35fc6aceacd337221877d11",
+        "arbitraryFuture_registryFields": "d141cd53f31b59a33adba55a16b9465d7a4c13c4ffa3d19366cfabd4966a963c",
         "byteArray_mk_toArray_toList": "833da9eb2aec073dbae18ba4a12124b84186c8c8f7855d5c38f89390dcc8d6ff",
         "canonicalAddress_of_validAdr": "ab44120194f37987906fcff8a601470e5d6915bdd1e86773eb4be3006b3c470c",
-        "chainUsing_future_countConservation": "faa418e40238422f55ce6ff55b056985a6b18b6ca3dd736f735d4d4ff970bb01",
-        "chainUsing_future_installedCode": "db5ccd573daf4a1378370723f4c68c9302d621c25ae91356616c45b88706ab35",
-        "chainUsing_future_membership": "aaad5e70bbf514d0f76c6a05df6dbc65ae05927d5fc8752fa01e007734aeea50",
-        "chainUsing_future_witness": "a781e8139ad4980b25abf0164c9002dc670911c29c794c704e88088ee9a7edb4",
-        "chainUsing_preserves_registryStable": "5a7616fb3453eb6237cc0f02587269c9dfcea53cb96bef2fee89e10f6a325d9b",
+        "chainUsing_future_countConservation": "6c6d198af42a70c13430dabe70d33a5a4c48df9c0b89ee84a3784804b56ad30e",
+        "chainUsing_future_installedCode": "52087c94339c200cf10220ae93736da753fb95a25520c7ddae3492eba2e1d3c1",
+        "chainUsing_future_membership": "d283340a750997eed2eff302d781feabe907fb5d6eb05ed77639bd472120622c",
+        "chainUsing_future_witness": "0c3a658c59f2b7aefb779be2066c72af4e0465b5b6b8ed1d006bdce70e336feb",
+        "chainUsing_preserves_registryStable": "08c035754796225cf815f1dfb9fdb02186f67859fde43006444c70e112f6e884",
         "chain_future_countConservation": "126adfae446c60cea2733475117b9d5ea131c98a04efbd71446430f54a6bf95d",
         "chain_future_installedCode": "b85f35e640916c95b7bfe327f900c90690428f1a5503c883749eabc03a07465d",
         "chain_future_membership": "fd31c5dcdfbc15de120d9fdb13e8b9239e6a8e07678ea1348a1d3d6cd84d8171",
@@ -489,13 +489,13 @@ HEADER_PINS = {
         "code_of_getCode_eq": "9eceb2c4927697718444e48be5ac7244f1bd22b36817c610aab53e3625b5a31b",
         "code_of_ninst": "d2223c28b97a7c0065ded9a7199503aed5682db64f31b588ed9aa2c451e48f97",
         "coherent_decodePausedResult": "a86b5eae04d4ea1ee7fa2f9248cff86e2ff2e50e022bd34cf212ec7aba1b6b96",
-        "coherent_of_call": "65c1bb0a008188b7f6ca7530bab5fd7034ec587b3847a061151a750555e49c77",
-        "coherent_of_childFrame": "10e33b5e8f7b139c1537ce7df69d07c144e4f42b9015375b78834a4a7fa8aa98",
-        "coherent_of_pauseKernelRun": "05586b650f7988578c3a7a6300ac20e7c08bb6b8aa6117af516dfb82733015e2",
-        "coherent_of_staticcall": "82247cf1ab773960312adde37a689acfc75b6c5e26ed3d2c1d413d5fddd627e8",
+        "coherent_of_call": "fff763d833668120c309bf8c3360bded4a112f18c71e016a2673f1cdd76d5698",
+        "coherent_of_childFrame": "99baa8b5540997c2f7e5b7dbdf85d86c5a0562211b680f2cd6d47d10d91c5813",
+        "coherent_of_pauseKernelRun": "7d6c1f77e9fe9681b0470e67b7ed894098c6dd384eeb91bfe53e2d1cb96b214f",
+        "coherent_of_staticcall": "4fa5eb4379623a94dd4b125cb549abd275a07eb674ac6aa2bd14452d7df42419",
         "coherent_of_stor_eq": "551252a0eb60d8b475dfcac896f1925944c673ae5727e4b27de9e18f8ed81747",
-        "coherent_pause": "f93b9cf653e402f26d5a42959706485877fdc0c78deeafbb97ec6c58afca65df",
-        "coherent_pauseAfterSet": "a7011633d88b410cdf8c2553861abbcb4b399a3469cf01998ebaea27ec08db30",
+        "coherent_pause": "f1aaad597538a883e7ffbcdc028aa804085945fc0cae8b4ac3e57cd9c73b975a",
+        "coherent_pauseAfterSet": "49da5906989b9203a884d5bafac7c1e4d1f66ac804d919184b30b52319550b11",
         "coherent_pauseExpiryFinish": "0c60bd470c5dfdf553e744892d43bdbc366c0a10a935fe7ae9675997bd7484f5",
         "coherent_pauseSuccess": "1eb7968c6719dbd66f9595d0f235876bb76794e990e7db3d41eefc5d10087118",
         "coherent_registerPauser": "073d49d054131384f0ea0bc0e1264ccef3451288386883a70a915eeb0626225e",
@@ -517,8 +517,8 @@ HEADER_PINS = {
         "ninst_codePreserve": "48005abd46b387de3f3e07e7b67984d54094f05aa763c8dd608b3667b4992632",
         "pause_funcSound": "0f8f4f627e60c022bcc8067fed1a0f3eb41e294158283ae53ce11b9972c60a57",
         "prefix_of_loadWord": "928ce57c0b0c886947c16d463eb5845d9325fd6c76ca161aa182a49bd5e8893d",
-        "processMessageCall_preserves_registryStable": "3ef951b8bc65c64427d44f69d865aacf7c0249ad03e55af41b7133998331197e",
-        "processTransaction_preserves_registryStable": "3bf66acf5d10535ef86e3322c3853939a12b1e1c296a1bdd334fcc5ccc942ade",
+        "processMessageCall_preserves_registryStable": "d2260492d032b570eacb05ee8930ba7b4fd46246b33f4648b53449411c1751f6",
+        "processTransaction_preserves_registryStable": "4a0cf7205111438a702b08d11f94892b9a9c09c7597e0de2326bd33896ac954d",
         "reachUsing_extends_by_arbitrary_block": "f6d606bca9238ea699cf4beba93309ba5540ae2c282846bc689d592bc24bd95e",
         "reach_extends_by_arbitrary_block": "9889bb79e3291be8eaf434079e0e6e90fc3c03a73bca9d8af576ba0281183048",
         "read_writeAt_before": "85c845d584c9b9bb05ab3773af90d3caacda6169bf1d8cab4fbbd51042c52873",
@@ -527,8 +527,8 @@ HEADER_PINS = {
         "registrySpec_preserves": "8c9fd57bcd6db635dcbeeb49151d882c7eed51fd7f14429b61fce9721c6658d3",
         "registrySpec_sound": "9d734939dbef20c5d9ebc23eafbbba573f40928d8d1ddb44c61d874490d3f09b",
         "registryView_getStor": "b1027f30a809194c720b520851cf8c637bfd095562da5a430adacb00110b19ec",
-        "stateTransitionUsing_preserves_registryStable": "3bcf31c79ca247a7e1da8257b102850a525da4fbd987bb33dc112f274ea88bfe",
-        "stateTransitionWith_preserves_registryStable": "66bad9dce69cb11405add9c6dd4a20b0c1fe65d0478dfa4467c8baaffda9b9b3",
+        "stateTransitionAt_preserves_registryStable": "699394466f15101eef7ee7d2e9252306c719841b397783a96ababe45c931fd16",
+        "stateTransitionUsing_preserves_registryStable": "1cf9284e57ccc25821168855d41ae83edd8f35a962de0b9dc5e19c233e9f973c",
         "stateTransition_preserves_registryStable": "6b35ef2155acbddf9deb5fa585e78e584518a9b2907cb0adc1e8eecda5b5d4ed",
         "storFixed_panicData": "c2c3b61368404ec9a2bdd0d57b0290ce1809d6db72c6e22317dc832a6fddb6cc",
         "storFixed_pauseFailedError": "33afc0df5c18a96f633763a2ece5f6d0a759abdbbb3dcf2acbcff00b24070a0e",
@@ -639,7 +639,7 @@ DEFINITION_PINS = {
         "Coherent": "71e0b8a9297e1779023ccf8d81524e81b2b484acc2c674e6f746e5b3fcdc019a"
     },
     "history": {
-        "DispatchInv": "574528abf00a3e3d21cf448fbc6410b106d0987add183df57a88b977ff6b1e2d",
+        "DispatchInv": "373194868a296ed162cf37d1afd2da986212240ab47b451b650d7df29f0b7100",
         "RegistryCoherent": "e89b4dcf96254b323d874f57fc07f0c22e642c46297152a325de097ed875fa00",
         "RegistryStable": "099ddbc2833ee8e3ea9bee46492656e357496f545563ee5c63cf3508f4613eba",
         "StorFixed": "1803c987cdacc7b80b0c59518a9878f11bf1803b40f0c27c70c858493da7b123",
@@ -765,15 +765,15 @@ VOCABULARY_PINS = {
         "Blanc.BlockChain.Reach": "f65d2cfb2dd0fa916d35deac841a6eeebd45676aec48c7b5e76c2898807f6244",
         "Blanc.BlockChain.ReachUsing": "cf3e4d62373f92180b65f6a0458426517e58e8ba501c0cf31ec744dd33ce386c",
         "Blanc.ContractSpec": "74cb032721b7e1cdff473d3da8860eda24ad0e2521b806386e659c5201ca116c",
-        "Blanc.ContractSpec.FuncSound": "2d6e17d10b936922813c6ed7c44521c2c2771728a130abdb9ab1f8b9f4c09346",
+        "Blanc.ContractSpec.FuncSound": "7a905dcb38bdc25ca1f166a0c46076c80fd2eff0827f0078d8048d8379356400",
         "Blanc.ContractSpec.MsgInv": "3ef6dcf39e3da7573446e9726f2d8524c4cc58aaef8e682c0f404134a6a527b2",
         "Blanc.ContractSpec.Post": "9f679f2df84d0d895c840ecac3adace6100217e20e096ddb7afb63a6ab369128",
         "Blanc.ContractSpec.Pre": "4bb25d71b8813e4ddb95628f959896908e5e7b6a19bfcbd4fa8f7b27e6859281",
         "Blanc.ContractSpec.PreWf": "3d7d6e012e6ab6371fc1a760edfd3bde1b0b9784ddd6c137172b9c6d062d9955",
-        "Blanc.ContractSpec.Preserves": "ab90b4aa2e5f5959592f8fb423c98d56bc572cc2740ab0aabc839c8f071dc4e3",
-        "Blanc.ContractSpec.Sound": "e16750a15964eaa6797c0f04c9d06a3a66e07346b1f09c1892b66dfcc7060a38",
+        "Blanc.ContractSpec.Preserves": "c3d6bb8c7b9a327ceb7932c23e42dd868f2bc21f5d1b613816cf817dffc9dd6b",
+        "Blanc.ContractSpec.Sound": "eddb47a53d750faea42200607893492a9f4139587f7d6a6022d67209182c3cb6",
         "Blanc.ContractSpec.StateInv": "e934052b2170660338713cb8b3adb45902fd7b1783ad709e4d0ac4947b7dd322",
-        "Blanc.Exec.InvDepth": "59fc3b3886be2ff06afcbb5d211e3e6928d37c592221353c4c686f4fdb67e82a"
+        "Blanc.Exec.InvDepth": "35b8af0f976566c3e09c8b48c2fda26de372b47ae6601c5d3a01f3616445b47f"
     },
     "Blanc/LidoCircuitBreakerRegistryModel.lean": {
         "Blanc.LidoCircuitBreaker.RegistryWitness": "56689ed4cf8d2222dfdb372dc7886763d21cb6c5f7b3f62211533861fec8ea0a"
@@ -921,7 +921,7 @@ def vocabulary_pins(root: Path) -> None:
 DATA_TYPES = frozenset({
     "Adr", "B256", "B256 × Func", "Benv", "Block", "BlockChain",
     "BlockOutput", "Bool", "ByteArray", "Bytes", "ChainConfig",
-    "ContractSpec", "DeployParams", "Devm", "ForkRules", "Func",
+    "ContractSpec", "DeployParams", "Devm", "Fork", "ForkRules", "Func",
     "Jaune.State", "Line", "Linst", "List (B256 × Func)", "List (Nat × Tx)",
     "List Entry", "List Func", "Mem", "Msg", "MsgCallOutput", "Nat",
     "Nat → Prop",
@@ -933,6 +933,21 @@ _ID = r"[A-Za-z_][A-Za-z0-9_'!?]*"
 # (label, pattern, public_ok).  Patterns are full-matched against the
 # whitespace-normalized binder type.
 ADMISSIBLE_HYPOTHESES = (
+    # ---- fork coverage (user decision consumability-historical-forks-20260922,
+    # 2026-09-23) ----
+    #
+    # Blanc consumes a Jaune pin whose `Fork` adds Amsterdam.  `CoveredFork f`
+    # is `f ∈ [prague, osaka, bpo1, bpo2]`: exactly the fork index these
+    # statements quantified over before that pin, so it restricts no world they
+    # historically covered and names no callee, code or depth.  Only the frame
+    # form at the frame, message or block environment the statement already
+    # quantifies over, and the schedule form over the statement's own `cfg`,
+    # are admitted; `scripts/CoveredForkControls.lean` pins the covered list.
+    ("covered fork of the quantified frame or environment",
+     r"CoveredFork (sevm\.benvStat|msg\.benv\.stat|benv\.stat)\.fork", True),
+    ("covered fork of the named block fork", r"CoveredFork f", True),
+    ("covered forks along the quantified schedule",
+     r"∀ t f, cfg\.forkAt t = \.ok f → CoveredFork f", True),
     # ---- the two assembly disciplines, and their syntactic guard ----
     ("storage-silence of a body", rf"StorFixed dp {_ID}", True),
     ("coherence transport of a body", rf"Coherent dp {_ID}", True),
@@ -1049,7 +1064,7 @@ ADMISSIBLE_HYPOTHESES = (
     ("transaction-list run",
      r"applyTransactions txis benv bout = \.ok ⟨benv', bout'⟩", True),
     ("block run",
-     r"stateTransition(With rules|Using cfg)? ch block = \.ok ch'", True),
+     r"stateTransition(At f|Using cfg)? ch block = \.ok ch'", True),
     ("message-level invariant", r"\(registrySpec dp\)\.MsgInv ca msg", True),
     ("balance-sum bound", r"sum benv\.state\.bal < 2 \^ 256", True),
     ("balance-sum bound with withdrawals",

@@ -19,7 +19,9 @@ private instance : Rinst.Hinv Devm.logs Rinst.callvalue := ⟨by
 private instance : Rinst.Hinv Devm.logs Rinst.selfbalance := ⟨by
   intro pc sevm pre post run
   simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.pushBurn_of_pushItem run).logs⟩
+  rcases Except.bind_eq_ok run with ⟨devm, hcharge, hpush⟩
+  exact (Devm.burn_of_chargeGas hcharge).logs.trans
+    ((Devm.balReadAccount_logs _ _ _).symm.trans (Devm.push_of_push hpush).logs)⟩
 
 private instance : Rinst.Hinv Devm.logs Rinst.shr := by
   refine ⟨?_⟩
@@ -168,7 +170,7 @@ private theorem deposit_guard_prefix
       (B256.shiftRight (B256.shiftRight B256.max 130) 30 <? sevm.value) ::
       B256.shiftRight B256.max 130 :: B256.max :: [] <<+ d7.stack := by
     rw [← hbal6]
-    exact prefix_of_push (of_run_selfbalance qbalance) p6
+    exact prefix_of_push_stack (of_run_selfbalance_stack qbalance) p6
   have p8 : (Devm.getBal pre sevm.currentTarget - sevm.value) ::
       (B256.shiftRight (B256.shiftRight B256.max 130) 30 <? sevm.value) ::
       B256.shiftRight B256.max 130 :: B256.max :: [] <<+ d8.stack :=

@@ -37,9 +37,9 @@ theorem officialCreateMessageGasAccounting_eq :
 
 /-- The strict transaction budget crosses both EIP-7623's calldata floor and
 the independently proved constructor-execution/code-deposit charge. -/
-def deploymentTransactionGasBound (tx : Tx) : Nat :=
-  max (deploymentCalldataFloorGas tx)
-    (deploymentIntrinsicGas tx + officialCreateMessageGasAccounting)
+def deploymentTransactionGasBound (benv : Benv) (tx : Tx) (sender : Adr) : Nat :=
+  max (deploymentCalldataFloorGas benv tx sender)
+    (deploymentIntrinsicGas benv tx sender + officialCreateMessageGasAccounting)
 
 /-! ## Strict pre-execution inputs -/
 
@@ -60,22 +60,24 @@ structure CanonicalOfficialDeploymentBlock
   nonce_eq : tx.nonce = base.state.getNonce sender
   nonce_not_max : tx.nonce ≠ UInt64.max
   recoveredSender : recoverSender chainId tx = .ok sender
-  validated : validateTransaction pragueRules tx =
-    .ok (calculateIntrinsicCost tx)
+  validated : validateTransaction pragueRules tx 0 =
+    .ok (calculateIntrinsicCost pragueRules tx 0)
   checked :
-    let benv := initBenv pragueRules base cb.block.header
+    let benv := initBenv .prague base cb.block.header
     checkTransaction benv.beginTransaction
       (deploymentTxPreludeBout .init tx 0) tx =
       .ok (sender, deploymentEffectiveGasPrice benv tx, [], 0)
   base_fee_le_effective :
     cb.block.header.baseFeePerGas ≤
       deploymentEffectiveGasPrice
-        (initBenv pragueRules base cb.block.header) tx
+        (initBenv .prague base cb.block.header) tx
   upfront_funded :
     tx.gas * deploymentEffectiveGasPrice
-        (initBenv pragueRules base cb.block.header) tx ≤
+        (initBenv .prague base cb.block.header) tx ≤
       (base.state.bal sender).toNat
-  gas_bound : deploymentTransactionGasBound tx ≤ tx.gas
+  gas_bound :
+    deploymentTransactionGasBound (initBenv .prague base cb.block.header) tx sender ≤
+      tx.gas
   block_gas_room : tx.gas ≤ cb.block.header.gasLimit
   target_eq : ca = computeContractAddress sender tx.nonce
 
@@ -90,7 +92,7 @@ structure PreparedDeploymentContext
   debit : State
   tenv : Tenv
   msg : Msg
-  systemPrefix : DeploymentSystemPrefix base cb.block txInput
+  systemPrefix : DeploymentSystemPrefix .prague base cb.block txInput
   begun_eq : begun = txInput.beginTransaction
   debit_eq :
     (begun.state.incrNonce sender).subBal sender
@@ -100,7 +102,7 @@ structure PreparedDeploymentContext
   msg_benv_eq : msg.benv = {begun with state := debit}
   msg_caller_eq : msg.caller = sender
   msg_target_eq : msg.target = none
-  msg_gas_eq : msg.gas = tx.gas - deploymentIntrinsicGas tx
+  msg_gas_eq : msg.gas = tx.gas - deploymentIntrinsicGas msg.benv tx sender
   msg_value_eq : msg.value = 0
   msg_data_eq : msg.data = []
   msg_code_eq : msg.code.toList = officialFullCreateInput
@@ -127,12 +129,13 @@ boundary, upfront nonce/fee debit, and the message returned by
 theorem prepareCanonicalDeploymentContext
     (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
     (tx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca)
+    (hbase : CanonicalDeploymentBase .prague chainId base sender ca)
     (henv : CanonicalOfficialDeploymentBlock chainId base cb
       txBytes tx sender ca) :
     Nonempty (PreparedDeploymentContext chainId base cb tx sender ca) := by
   obtain ⟨⟨txInput, hprefix⟩⟩ :=
-    canonicalDeploymentSystemPrefix chainId base cb sender ca hbase
+    canonicalDeploymentSystemPrefix .prague chainId base cb sender ca hbase
+      CoveredFork.prague
   let begun := txInput.beginTransaction
   let fee := tx.gas * deploymentEffectiveGasPrice txInput tx
   have hbegunState : begun.state = base.state := by
@@ -141,7 +144,7 @@ theorem prepareCanonicalDeploymentContext
     rw [hbegunState]
     have hprice : deploymentEffectiveGasPrice txInput tx =
         deploymentEffectiveGasPrice
-          (initBenv pragueRules base cb.block.header) tx := by
+          (initBenv .prague base cb.block.header) tx := by
       rw [hprefix.txInput_eq]
       rfl
     simpa [fee, hprice] using henv.upfront_funded
@@ -189,10 +192,11 @@ theorem prepareCanonicalDeploymentContext
   have hreceiver : tx.type.receiver? = none := by
     rw [htype]
     rfl
+  have htenvStateGas : tenv.stat.stateGasReservoir = 0 := by rfl
   have hprepare : prepareMessage msgBenv tenv tx = .ok msg := by
     unfold prepareMessage
     rw [hreceiver]
-    simp [msg, msgBenv, currentTarget, hreceiver]
+    simp [msg, msgBenv, currentTarget, hreceiver, htenvStateGas]
   have hdebitNonce :
       debit.getNonce sender = base.state.getNonce sender + 1 := by
     dsimp only [debit]
@@ -215,7 +219,7 @@ theorem prepareCanonicalDeploymentContext
     rw [hprefix.txInput_eq]
     rfl
   have htxRules : txInput.stat.rules = pragueRules := by
-    rw [hprefix.txInput_eq]
+    rw [hprefix.environment_eq]
     rfl
   have hmsgChain : msg.benv.stat.chainId = chainId := by
     dsimp only [msg, msgBenv, begun]
@@ -223,7 +227,8 @@ theorem prepareCanonicalDeploymentContext
       htxChain.trans hbase.chainId_eq.symm
   have hmsgRules : msg.benv.stat.rules = pragueRules := by
     dsimp only [msg, msgBenv, begun]
-    simpa [Benv.beginTransaction] using htxRules
+    rw [hprefix.environment_eq]
+    rfl
   have hdebitTarget : debit.get ca = base.state.get ca := by
     dsimp only [debit]
     rw [State.setBal_get_ne hbase.sender_ne_target]

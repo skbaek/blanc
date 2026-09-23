@@ -90,6 +90,7 @@ and `isStatic := false`, `STATICCALL` with `value := 0` and
 private lemma coherent_of_childFrame {dp : DeployParams} {sevm : Sevm}
     {s parent child : Devm} {xl : Xlot} {gas : Nat} {value : B256}
     {target cadr : Adr} {del isStatic : Bool} {code : ByteArray} {cd : Bytes}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget (runtime dp)
       ((registrySpec dp).PreWf sevm.currentTarget)
       ((registrySpec dp).Post sevm.currentTarget))
@@ -109,7 +110,7 @@ private lemma coherent_of_childFrame {dp : DeployParams} {sevm : Sevm}
     RegistryCoherent (Devm.getStor child sevm.currentTarget) := by
   -- name the child message and keep only the projections the walk needs
   obtain ⟨childMsg, h_pm, hc_state, hc_caller, hc_value, hc_ct, hc_ca, hc_code,
-      hc_depth, hc_stv⟩ :
+      hc_depth, hc_stv, hc_stat⟩ :
       ∃ m : Msg, ProcessMessage m xl (.ok child) ∧
         m.benv.state = s.state ∧
         m.caller = sevm.currentTarget ∧
@@ -118,8 +119,9 @@ private lemma coherent_of_childFrame {dp : DeployParams} {sevm : Sevm}
         m.codeAddress = some cadr ∧
         m.code = code ∧
         m.depth = sevm.depth - 1 ∧
-        m.shouldTransferValue = true :=
-    ⟨_, h_pm, h_pstate, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+        m.shouldTransferValue = true ∧
+        m.benv.stat = sevm.benvStat :=
+    ⟨_, h_pm, h_pstate, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
   -- unpack the frame into transfer, code execution and settlement
   obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp h_pm
   unfold FrameBody at hbody
@@ -170,7 +172,7 @@ private lemma coherent_of_childFrame {dp : DeployParams} {sevm : Sevm}
           rw [← h_ok4] at h_some4
           exact absurd h_some4 h_err2
         · cases h_err4
-      simp only [executeCode.handleError] at h_he
+      simp only [executeCode.handleErrorWith_ok] at h_he
       have h_he := (Except.ok.inj h_he).symm
       subst h_he
       obtain ⟨ex_sub⟩ := h_fill
@@ -221,7 +223,14 @@ private lemma coherent_of_childFrame {dp : DeployParams} {sevm : Sevm}
       have hpost : (registrySpec dp).Post sevm.currentTarget
           (initSevm (childMsg.withBenv benv')) child :=
         ih 0 (initSevm (childMsg.withBenv benv')) (initDevm (childMsg.withBenv benv'))
-          (.ok child) ex_sub h_depth_lt h_at ⟨h_precond, fun _ => Mem.wf_empty⟩
+          (.ok child) ex_sub h_depth_lt h_at
+          (by
+            change CoveredFork benv'.stat.fork
+            rw [hB]
+            change CoveredFork childMsg.benv.stat.fork
+            rw [hc_stat]
+            exact hfork)
+          ⟨h_precond, fun _ => Mem.wf_empty⟩
       exact hpost.inv
 
 /-- **The `CALL` transport lemma.**  One arbitrary `CALL` issued from the
@@ -243,10 +252,11 @@ theorem coherent_of_call {dp : DeployParams} {sevm : Sevm} {s sf : Devm}
     (hp : (g :: w :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_code : some (s.getCode sevm.currentTarget).toList = Prog.compile (runtime dp))
     (h_coh : RegistryCoherent (Devm.getStor s sevm.currentTarget))
-    (h_run : Ninst.Run sevm s call sf) :
+    (h_run : Ninst.Run sevm s call sf)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     RegistryCoherent (Devm.getStor sf sevm.currentTarget) ∧
       ∃ b, ((b :: xs) <<+ sf.stack) := by
-  rcases of_run_call_val_with_depth_frame hp h_run with ⟨h_stk, h_world⟩ | h_enter
+  rcases of_run_call_val_with_depth_frame hp h_run hfork with ⟨h_stk, h_world⟩ | h_enter
   · -- no frame opened : the caller's world is the one it entered the CALL with
     refine ⟨?_, 0, h_stk⟩
     rw [← h_world.getStor sevm.currentTarget]
@@ -259,7 +269,7 @@ theorem coherent_of_call {dp : DeployParams} {sevm : Sevm} {s sf : Devm}
         (cons_pref_cons_inv hp))))))
     refine ⟨?_, 1, ?_⟩
     · rw [getStor_eq_of_state_eq h_sfst sevm.currentTarget]
-      exact coherent_of_childFrame ih h_dep h_pst h_code h_coh h_sel h_fill h_pm
+      exact coherent_of_childFrame hfork ih h_dep h_pst h_code h_coh h_sel h_fill h_pm
     · rw [h_sfstk]
       exact pref_cons hp
 
@@ -276,10 +286,11 @@ theorem coherent_of_staticcall {dp : DeployParams} {sevm : Sevm} {s sf : Devm}
     (hp : (g :: t :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (h_code : some (s.getCode sevm.currentTarget).toList = Prog.compile (runtime dp))
     (h_coh : RegistryCoherent (Devm.getStor s sevm.currentTarget))
-    (h_run : Ninst.Run sevm s staticcall sf) :
+    (h_run : Ninst.Run sevm s staticcall sf)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     RegistryCoherent (Devm.getStor sf sevm.currentTarget) ∧
       ∃ b, ((b :: xs) <<+ sf.stack) := by
-  rcases of_run_staticcall_val_with_depth hp h_run with ⟨h_stk, h_world, -⟩ | h_enter
+  rcases of_run_staticcall_val_with_depth hp h_run hfork with ⟨h_stk, h_world, -⟩ | h_enter
   · refine ⟨?_, 0, h_stk⟩
     rw [← h_world.getStor sevm.currentTarget]
     exact h_coh
@@ -290,7 +301,7 @@ theorem coherent_of_staticcall {dp : DeployParams} {sevm : Sevm} {s sf : Devm}
       (cons_pref_cons_inv (cons_pref_cons_inv (cons_pref_cons_inv hp)))))
     refine ⟨?_, 1, ?_⟩
     · rw [getStor_eq_of_state_eq h_sfst sevm.currentTarget]
-      exact coherent_of_childFrame ih h_dep h_pst h_code h_coh h_sel h_fill h_pm
+      exact coherent_of_childFrame hfork ih h_dep h_pst h_code h_coh h_sel h_fill h_pm
     · rw [h_sfstk]
       exact pref_cons hp
 
@@ -602,7 +613,7 @@ foreign code, so the deeper-frame hypothesis is unused; what it does need, and
 what the ladder now supplies, is the memory invariant at the body's entry. -/
 theorem registerPauser_funcSound (dp : DeployParams) (ca : Adr) :
     (registrySpec dp).FuncSound ca aux (registerPauser dp) := by
-  intro sevm s r h_ct h_pre h_wf _ h_run
+  intro sevm s r _hfork h_ct h_pre h_wf _ h_run
   subst h_ct
   exact ⟨trivial, coherent_registerPauser dp h_wf (h_pre.inv.1 rfl) h_run⟩
 
@@ -727,6 +738,7 @@ caller's own expiry cell, whose key comes from `CALLER` and is therefore
 canonical by construction, and the transient lock, which `Devm.getStor` does
 not see. -/
 theorem coherent_pauseAfterSet {dp : DeployParams} {sevm : Sevm} {s r : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget (runtime dp)
       ((registrySpec dp).PreWf sevm.currentTarget)
       ((registrySpec dp).Post sevm.currentTarget))
@@ -810,7 +822,7 @@ theorem coherent_pauseAfterSet {dp : DeployParams} {sevm : Sevm} {s r : Devm}
   have hpcall : gw :: tw :: (0 : B256) :: (0x11c : B256) :: (36 : B256) ::
       (0 : B256) :: (0 : B256) :: ([] : Stack) <<+ d₈.stack := by
     simpa using prefix_of_push hgw hptw
-  obtain ⟨hC, -⟩ := coherent_of_call ih hpcall hK hC qcall
+  obtain ⟨hC, -⟩ := coherent_of_call ih hpcall hK hC qcall hfork
   have hK := code_of_ninst hK qcall
   rcases of_run_next hrun with ⟨d₁₀, qiz, hrun⟩
   have hC := coherent_of_stor_eq (Ninst.Hinv.inv (f := Devm.getStor) qiz) hC
@@ -858,7 +870,7 @@ theorem coherent_pauseAfterSet {dp : DeployParams} {sevm : Sevm} {s r : Devm}
   have hpstat : gw2 :: tw2 :: (0x11c : B256) :: (4 : B256) :: (0 : B256) ::
       (32 : B256) :: ([] : Stack) <<+ g₅.stack := by
     simpa using prefix_of_push hgw2 hptw2
-  obtain ⟨hC, -⟩ := coherent_of_staticcall ih hpstat hK hC qstat
+  obtain ⟨hC, -⟩ := coherent_of_staticcall ih hpstat hK hC qstat hfork
   rcases of_run_next hrun with ⟨g₇, qiz2, hrun⟩
   have hC := coherent_of_stor_eq (Ninst.Hinv.inv (f := Devm.getStor) qiz2) hC
   rcases of_run_branch hrun with ⟨h₀, ph₀, hrun⟩ | ⟨wb2, bb2, cb2, hwb2, pbb2, bbb2, hrun⟩
@@ -879,6 +891,7 @@ The event suffix is taken whole from
 contract's own compiled program across the suffix alongside its storage. -/
 private theorem coherent_of_pauseKernelRun (dp : DeployParams)
     {sevm : Sevm} {k r : Devm} {img : Bytes} {target : B256}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget (runtime dp)
       ((registrySpec dp).PreWf sevm.currentTarget)
       ((registrySpec dp).Post sevm.currentTarget))
@@ -933,7 +946,7 @@ private theorem coherent_of_pauseKernelRun (dp : DeployParams)
   · exact absurd hregister.1 flag_one_ne_zero
   rcases hpause with
     ⟨-, pausePre, -, -, -, hstorPause, hcodePause, hpauseRun⟩
-  refine coherent_pauseAfterSet ih
+  refine coherent_pauseAfterSet (hfork := hfork) ih
     (code_of_getCode_eq (hcodePost.trans hcodePause) hcode)
     ⟨trace.postEntries, ?_⟩ hpauseRun
   rw [hstorPause]
@@ -952,6 +965,7 @@ compiled program at the state that issues the first `CALL`: that state sits
 behind `setPauser_run_extracts_sourceTrace`'s existential, and it is the
 extraction's code conclusion that carries it across. -/
 theorem coherent_pause (dp : DeployParams) {sevm : Sevm} {s r : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget (runtime dp)
       ((registrySpec dp).PreWf sevm.currentTarget)
       ((registrySpec dp).Post sevm.currentTarget))
@@ -1229,7 +1243,7 @@ theorem coherent_pause (dp : DeployParams) {sevm : Sevm} {s r : Devm}
       (previousPauserWord * 32).toNat (B256.toBytes 0))
     continuationWord 1
   -- (9) the landed kernel chain
-  exact coherent_of_pauseKernelRun dp ih hwfk hrk hreadTarget hreadNew
+  exact coherent_of_pauseKernelRun (hfork := hfork) dp ih hwfk hrk hreadTarget hreadNew
     hreadCont (canonicalAddress_of_validAdr hvalid₀) hcodek
     (coherent_of_stor_eq hS hcoh) hrun
 
@@ -1239,10 +1253,10 @@ hypothesis; what it needs beside it is the memory invariant at the body's
 entry and the contract's own compiled program. -/
 theorem pause_funcSound (dp : DeployParams) (ca : Adr) :
     (registrySpec dp).FuncSound ca aux pause := by
-  intro sevm s r h_ct h_pre h_wf h_ih h_run
+  intro sevm s r hfork h_ct h_pre h_wf h_ih h_run
   subst h_ct
   exact ⟨trivial,
-    coherent_pause dp h_ih h_wf h_pre.code (h_pre.inv.1 rfl) h_run⟩
+    coherent_pause (hfork := hfork) dp h_ih h_wf h_pre.code (h_pre.inv.1 rfl) h_run⟩
 
 theorem registrySpec_sound (dp : DeployParams) (ca : Adr) :
     (registrySpec dp).Sound ca :=
@@ -1259,10 +1273,12 @@ theorem registrySpec_preserves (dp : DeployParams) (ca : Adr) :
 theorem processMessageCall_preserves_registryStable (dp : DeployParams)
     {ca : Adr} {msg : Msg} {st' : Jaune.State} {out : MsgCallOutput}
     (h_run : processMessageCall msg = .ok ⟨st', out⟩)
-    (h_inv : (registrySpec dp).MsgInv ca msg) :
+    (h_inv : (registrySpec dp).MsgInv ca msg)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     RegistryStable dp ca st' :=
   (registryStable_iff_stateInv dp ca st').mpr
-    (ContractSpec.processMessageCall_preserves_inv (registrySpec_preserves dp ca) h_run h_inv).1
+    (ContractSpec.processMessageCall_preserves_inv hfork (registrySpec_preserves dp ca)
+      h_run h_inv).1
 
 theorem processTransaction_preserves_registryStable (dp : DeployParams)
     (ca : Adr) (benv : Benv) (bout bout' : BlockOutput) (tx : Tx) (i : Nat)
@@ -1270,12 +1286,13 @@ theorem processTransaction_preserves_registryStable (dp : DeployParams)
     (h_run : processTransaction benv bout tx i = .ok ⟨st, bout'⟩)
     (h_sum : sum benv.state.bal < 2 ^ 256)
     (h_fresh : ca ∉ benv.createdAccounts)
-    (h_stable : RegistryStable dp ca benv.state) :
+    (h_stable : RegistryStable dp ca benv.state)
+    (hfork : CoveredFork benv.stat.fork) :
     RegistryStable dp ca st :=
   (registryStable_iff_stateInv dp ca st).mpr
     (ContractSpec.processTransaction_preserves_inv ca (registrySpec_preserves dp ca) benv bout
       bout' tx i st h_run h_sum
-      ⟨(registryStable_iff_stateInv dp ca benv.state).mp h_stable, h_fresh⟩).state
+      ⟨(registryStable_iff_stateInv dp ca benv.state).mp h_stable, h_fresh⟩ hfork).state
 
 theorem applyTransactions_preserves_registryStable (dp : DeployParams)
     (ca : Adr) (txis : List (Nat × Tx)) (benv benv' : Benv)
@@ -1283,32 +1300,35 @@ theorem applyTransactions_preserves_registryStable (dp : DeployParams)
     (h_run : applyTransactions txis benv bout = .ok ⟨benv', bout'⟩)
     (h_sum : sum benv.state.bal < 2 ^ 256)
     (h_fresh : ca ∉ benv.createdAccounts)
-    (h_stable : RegistryStable dp ca benv.state) :
+    (h_stable : RegistryStable dp ca benv.state)
+    (hfork : CoveredFork benv.stat.fork) :
     RegistryStable dp ca benv'.state :=
   (registryStable_iff_stateInv dp ca benv'.state).mpr
     (ContractSpec.applyTransactions_preserves_inv ca (registrySpec_preserves dp ca) txis benv
       benv' bout bout' h_run h_sum
-      ⟨(registryStable_iff_stateInv dp ca benv.state).mp h_stable, h_fresh⟩).state
+      ⟨(registryStable_iff_stateInv dp ca benv.state).mp h_stable, h_fresh⟩ hfork).state
 
-theorem stateTransitionWith_preserves_registryStable (dp : DeployParams)
-    (ca : Adr) (rules : ForkRules) (ch ch' : BlockChain) (block : Block)
-    (h_run : stateTransitionWith rules ch block = .ok ch')
+theorem stateTransitionAt_preserves_registryStable (dp : DeployParams)
+    (ca : Adr) (f : Fork) (ch ch' : BlockChain) (block : Block)
+    (h_run : stateTransitionAt f ch block = .ok ch')
     (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (h_stable : RegistryStable dp ca ch.state) :
+    (h_stable : RegistryStable dp ca ch.state)
+    (hfork : CoveredFork f) :
     RegistryStable dp ca ch'.state :=
   (registryStable_iff_stateInv dp ca ch'.state).mpr
-    (ContractSpec.stateTransitionWith_preserves_inv ca (registrySpec_preserves dp ca) rules ch
-      ch' block h_run h_wds ((registryStable_iff_stateInv dp ca ch.state).mp h_stable))
+    (ContractSpec.stateTransitionAt_preserves_inv ca (registrySpec_preserves dp ca) f ch
+      ch' block h_run h_wds ((registryStable_iff_stateInv dp ca ch.state).mp h_stable) hfork)
 
 theorem stateTransitionUsing_preserves_registryStable (dp : DeployParams)
     (ca : Adr) (cfg : ChainConfig) (ch ch' : BlockChain) (block : Block)
     (h_run : stateTransitionUsing cfg ch block = .ok ch')
     (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (h_stable : RegistryStable dp ca ch.state) :
+    (h_stable : RegistryStable dp ca ch.state)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
     RegistryStable dp ca ch'.state :=
   (registryStable_iff_stateInv dp ca ch'.state).mpr
     (ContractSpec.stateTransitionUsing_preserves_inv ca (registrySpec_preserves dp ca) cfg ch
-      ch' block h_run h_wds ((registryStable_iff_stateInv dp ca ch.state).mp h_stable))
+      ch' block h_run h_wds ((registryStable_iff_stateInv dp ca ch.state).mp h_stable) hcov)
 
 theorem stateTransition_preserves_registryStable (dp : DeployParams)
     (ca : Adr) (ch ch' : BlockChain) (block : Block)
@@ -1326,11 +1346,12 @@ still stable. -/
 theorem chainUsing_preserves_registryStable (dp : DeployParams) (ca : Adr)
     (cfg : ChainConfig) (checkpoint future : BlockChain)
     (reach : BlockChain.ReachUsing cfg checkpoint future)
-    (stable : RegistryStable dp ca checkpoint.state) :
+    (stable : RegistryStable dp ca checkpoint.state)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
     RegistryStable dp ca future.state :=
   (registryStable_iff_stateInv dp ca future.state).mpr
     (ContractSpec.chainUsing_preserves_inv ca (registrySpec_preserves dp ca) cfg checkpoint
-      future reach ((registryStable_iff_stateInv dp ca checkpoint.state).mp stable))
+      future reach ((registryStable_iff_stateInv dp ca checkpoint.state).mp stable) hcov)
 
 theorem chain_preserves_registryStable (dp : DeployParams) (ca : Adr)
     (checkpoint future : BlockChain)
@@ -1470,10 +1491,11 @@ configured valid-chain relation reaches. -/
 theorem chainUsing_future_installedCode (dp : DeployParams) (ca : Adr)
     (cfg : ChainConfig) (checkpoint future : BlockChain)
     (reach : BlockChain.ReachUsing cfg checkpoint future)
-    (stable : RegistryStable dp ca checkpoint.state) :
+    (stable : RegistryStable dp ca checkpoint.state)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
     (future.state.getCode ca).toList = lidoCircuitBreakerCode dp :=
   (chainUsing_preserves_registryStable dp ca cfg checkpoint future reach
-    stable).installedCode
+    stable hcov).installedCode
 
 /-- Some ordered entry list witnesses every projected Registry region of `ca`'s
 storage at the reached future.  The list is existential: a callback that
@@ -1482,11 +1504,12 @@ and no same-list claim is made. -/
 theorem chainUsing_future_witness (dp : DeployParams) (ca : Adr)
     (cfg : ChainConfig) (checkpoint future : BlockChain)
     (reach : BlockChain.ReachUsing cfg checkpoint future)
-    (stable : RegistryStable dp ca checkpoint.state) :
+    (stable : RegistryStable dp ca checkpoint.state)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
     ∃ entries,
       RegistryWitness (logicalStorageOfStor (future.state.getStor ca)) entries :=
   (chainUsing_preserves_registryStable dp ca cfg checkpoint future reach
-    stable).witness
+    stable hcov).witness
 
 /-- Membership and index equivalence at an arbitrary canonical target, at the
 reached future. -/
@@ -1494,6 +1517,7 @@ theorem chainUsing_future_membership (dp : DeployParams) (ca : Adr)
     (cfg : ChainConfig) (checkpoint future : BlockChain)
     (reach : BlockChain.ReachUsing cfg checkpoint future)
     (stable : RegistryStable dp ca checkpoint.state)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
     {target : B256} (htarget : canonicalAddress target) :
     ∃ entries,
       RegistryWitness (logicalStorageOfStor (future.state.getStor ca)) entries ∧
@@ -1509,13 +1533,14 @@ theorem chainUsing_future_membership (dp : DeployParams) (ca : Adr)
         ∀ otherIndex, otherIndex < entries.length →
           targetAt entries otherIndex = target → otherIndex = index :=
   (chainUsing_preserves_registryStable dp ca cfg checkpoint future reach
-    stable).membership htarget
+    stable hcov).membership htarget
 
 /-- Global count conservation at the reached future. -/
 theorem chainUsing_future_countConservation (dp : DeployParams) (ca : Adr)
     (cfg : ChainConfig) (checkpoint future : BlockChain)
     (reach : BlockChain.ReachUsing cfg checkpoint future)
-    (stable : RegistryStable dp ca checkpoint.state) :
+    (stable : RegistryStable dp ca checkpoint.state)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
     ∃ entries,
       RegistryWitness (logicalStorageOfStor (future.state.getStor ca)) entries ∧
       (∀ pauser, canonicalAddress pauser →
@@ -1526,7 +1551,7 @@ theorem chainUsing_future_countConservation (dp : DeployParams) (ca : Adr)
         ((future.state.getStor ca).get (countSlot pauser)).toNat) =
           entries.length :=
   (chainUsing_preserves_registryStable dp ca cfg checkpoint future reach
-    stable).countConservation
+    stable hcov).countConservation
 
 /-- The Prague instance of `chainUsing_future_installedCode`. -/
 theorem chain_future_installedCode (dp : DeployParams) (ca : Adr)
@@ -1735,6 +1760,7 @@ witness whose `lengthWord`, `arrayWords` or `zeroCount` field had been gutted
 could not supply them. -/
 theorem arbitraryExec_post_registryFields (dp : DeployParams) (ca : Adr)
     (sevm : Sevm) (pre post : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hexec : Exec 0 sevm pre (.ok post))
     (hcode : sevm.currentTarget = ca →
       some sevm.code.toList = Prog.compile (runtime dp))
@@ -1748,7 +1774,7 @@ theorem arbitraryExec_post_registryFields (dp : DeployParams) (ca : Adr)
           targetAt entries index) ∧
       (Devm.getStor post ca).get (countSlot 0) = 0 := by
   obtain ⟨entries, hw⟩ :=
-    (registrySpec_preserves dp ca sevm pre post hexec hcode hwf hpre).inv
+    (registrySpec_preserves dp ca sevm pre post hfork hexec hcode hwf hpre).inv
   refine ⟨entries, hw, ?_, ?_, ?_⟩
   · simpa [logicalStorageOfStor] using hw.lengthWord
   · intro index bound
@@ -1768,6 +1794,7 @@ theorem arbitraryFuture_registryFields (dp : DeployParams) (ca : Adr)
     (cfg : ChainConfig) (checkpoint future : BlockChain)
     (reach : BlockChain.ReachUsing cfg checkpoint future)
     (stable : RegistryStable dp ca checkpoint.state)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
     (target : B256) (htarget : canonicalAddress target) :
     ∃ entries,
       (entries.map Prod.fst).Nodup ∧
@@ -1785,7 +1812,7 @@ theorem arbitraryFuture_registryFields (dp : DeployParams) (ca : Adr)
       (future.state.getStor ca).get (countSlot 0) = 0 := by
   obtain ⟨entries, hw⟩ :=
     (chainUsing_preserves_registryStable dp ca cfg checkpoint future reach
-      stable).coherent
+      stable hcov).coherent
   refine ⟨entries, hw.targetsNodup, hw.pausersValid, ?_, ?_, ?_, ?_, ?_⟩
   · simpa [logicalStorageOfStor] using hw.lengthWord
   · intro index bound

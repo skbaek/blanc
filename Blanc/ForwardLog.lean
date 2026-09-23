@@ -38,7 +38,7 @@ lemma Func.runCompiledTo_log_step_ext {fs : List Func} {sevm : Sevm}
       base.output = devm.output →
       base.error = devm.error →
       devm.gasLeft = G + c →
-      Func.RunCompiledTo fs sevm (base.setMach ⟨s, M', G⟩) rest ex) :
+      Func.RunCompiledTo fs sevm (base.setMach ⟨s, M', G, base.stateGas⟩) rest ex) :
     Func.RunCompiledTo fs sevm devm (Func.next (.reg (.log n)) rest) ex := by
   subst h_mem
   refine Func.RunCompiledTo.next
@@ -74,7 +74,7 @@ lemma Func.runCompiledTo_log_step_exists {fs : List Func} {sevm : Sevm}
       logged.output = devm.output ∧
       logged.error = devm.error ∧
       ∀ {ex : Execution},
-        Func.RunCompiledTo fs sevm (logged.setMach ⟨s, M', G⟩) rest ex →
+        Func.RunCompiledTo fs sevm (logged.setMach ⟨s, M', G, logged.stateGas⟩) rest ex →
         Func.RunCompiledTo fs sevm devm (Func.next (.reg (.log n)) rest) ex := by
   refine ⟨devm.addLog ⟨sevm.currentTarget, topics, payload⟩, rfl,
     fun _ _ => rfl, fun _ => rfl, fun _ => rfl, fun _ => rfl, rfl, rfl,

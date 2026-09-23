@@ -93,13 +93,14 @@ theorem prorata_withdraw_exec_effect
     (exc : Exec 0 sevm pre (.ok post))
     (h_code : sevm.code.toList = prorataCode)
     (h_sel : Sevm.selector sevm = selector "withdraw" [.uint256])
-    (h_nonempty : sevm.data.length.toB256 ≠ 0) :
+    (h_nonempty : sevm.data.length.toB256 ≠ 0)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     WithdrawPaysExactly sevm pre post := by
   rcases exec_enters_prorataSelector_logs exc (installed_prorata_compile h_code)
     h_sel h_nonempty (show (selector "withdraw" [.uint256], withdraw) ∈ prorataFuncs by
       simp [prorataFuncs]) with
     ⟨entry, hstor, hbal, hcodeEntry, hmem, hlogs, hout, run⟩
-  have heffect := withdraw_pays_exactly run
+  have heffect := withdraw_pays_exactly run hfork
   unfold WithdrawPaysExactly at heffect ⊢
   dsimp at heffect ⊢
   unfold WithdrawPreCallEffect at heffect ⊢
@@ -190,6 +191,7 @@ theorem prorata_convertToAssets_eq_withdraw_pay
     (hwithdrawSel : Sevm.selector withdrawal = selector "withdraw" [.uint256])
     (hviewNonempty : view.data.length.toB256 ≠ 0)
     (hwithdrawNonempty : withdrawal.data.length.toB256 ≠ 0)
+    (hfork : CoveredFork withdrawal.benvStat.fork)
     (hTarget : view.currentTarget = withdrawal.currentTarget)
     (hStor : Devm.getStor viewPre = Devm.getStor withdrawPre)
     (hBal : Devm.getBal viewPre view.currentTarget =
@@ -203,7 +205,7 @@ theorem prorata_convertToAssets_eq_withdraw_pay
   have hview := prorata_convertToAssets_exec_effect viewExec hviewCode
     hviewSel hviewNonempty
   have hpay := prorata_withdraw_exec_effect withdrawExec hwithdrawCode
-    hwithdrawSel hwithdrawNonempty
+    hwithdrawSel hwithdrawNonempty hfork
   unfold AssetsViewEffect at hview
   unfold WithdrawPaysExactly at hpay
   dsimp at hview hpay

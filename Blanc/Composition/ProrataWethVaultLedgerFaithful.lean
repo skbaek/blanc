@@ -20,7 +20,9 @@ def PairLedgerFaithful {cfg : ChainConfig} {deployed future : BlockChain} (vault
 /-- **Faithful existence** (review F1(a)). -/
 theorem pairTraceRealizes_faithful_of_configuredHistoryTrace {cfg : ChainConfig}
     {deployed future : BlockChain} {vault : Adr} (root : PairRoot cfg deployed vault)
-    (history : ConfiguredHistoryTrace cfg deployed future) :
+    (history : ConfiguredHistoryTrace cfg deployed future)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, PairTraceRealizes root steps future ∧ PairLedgerFaithful vault history steps := by
   induction history with
   | refl hcfg hctx hid =>
@@ -30,7 +32,8 @@ theorem pairTraceRealizes_faithful_of_configuredHistoryTrace {cfg : ChainConfig}
   | step prior block ih =>
       obtain ⟨priorSteps, priorRealizes, priorFaithful⟩ := ih
       obtain ⟨blockSteps, blockReplay, blockOk⟩ :=
-        retainedConfiguredBlockPairReplayFaithful block (PairWorldInv.of_history root prior)
+        retainedConfiguredBlockPairReplayFaithful block
+          (PairWorldInv.of_history root prior hcov)
           (root.notPrecompile block.rulesAt).2 block.block.header.number
       refine ⟨priorSteps ++ blockSteps,
         .step priorRealizes block blockReplay (fun r member => (blockOk r member).1), ?_⟩
@@ -60,29 +63,35 @@ theorem PairLedgerFaithful.collision {cfg : ChainConfig} {deployed future : Bloc
 theorem pair_history_backed {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
     (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
-    (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault) :
+    (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     PairBacked vault (future.state.getStor vault) (future.state.getStor wethAccount) ∧
       State.Inv wethAccount future.state := by
   obtain ⟨steps, realizes, faithful⟩ :=
-    pairTraceRealizes_faithful_of_configuredHistoryTrace root history
-  exact pair_reachable_backed root realizes (faithful.collision collision)
+    pairTraceRealizes_faithful_of_configuredHistoryTrace root history hcov
+  exact pair_reachable_backed root realizes (faithful.collision collision) hcov
 
 /-- **`PairStable` from real-chain D9.** -/
 theorem pair_history_stable {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
     (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
     (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork)
     {timestamp : Nat} {rules : ForkRules} (rulesAt : cfg.rulesAt timestamp = .ok rules) :
     PairStable vault rules future.state := by
   obtain ⟨steps, realizes, faithful⟩ :=
-    pairTraceRealizes_faithful_of_configuredHistoryTrace root history
-  exact pair_reachable_stable root realizes (faithful.collision collision) rulesAt
+    pairTraceRealizes_faithful_of_configuredHistoryTrace root history hcov
+  exact pair_reachable_stable root realizes (faithful.collision collision) hcov rulesAt
 
 /-- **P3 from real-chain D9.** -/
 theorem pair_history_realized_dust_trace_exact {cfg : ChainConfig} {deployed future : BlockChain}
     {vault : Adr} (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
-    (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault) :
+    (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, PairTraceRealizes root steps future ∧ PairLedgerFaithful vault history steps ∧
     ∃ path : FourQuote.RealizedPath vault,
       path.steps = PairStepRecord.fourQuoteSteps steps ∧
@@ -102,7 +111,7 @@ theorem pair_history_realized_dust_trace_exact {cfg : ChainConfig} {deployed fut
             path.creditAt i * (∏ j ∈ Finset.range i, path.dAt j) *
               (∏ j ∈ Finset.Icc (i + 2) path.steps.length, path.dAt j) := by
   obtain ⟨steps, realizes, faithful⟩ :=
-    pairTraceRealizes_faithful_of_configuredHistoryTrace root history
+    pairTraceRealizes_faithful_of_configuredHistoryTrace root history hcov
   exact ⟨steps, realizes, faithful,
     pair_realized_dust_trace_exact root realizes (faithful.collision collision)⟩
 
@@ -127,7 +136,9 @@ theorem PairOpenAttackTrace.of_visits {cfg : ChainConfig} {deployed : BlockChain
 theorem pair_history_attacker_open_context {cfg : ChainConfig} {deployed future : BlockChain}
     {vault : Adr} (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
-    (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault) :
+    (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, PairTraceRealizes root steps future ∧ PairLedgerFaithful vault history steps ∧
       ∀ (coalition : Finset Adr) (victim : Adr)
         (charge : PairStepRecord vault → Blanc.Prorata.AttackAttribution),
@@ -137,7 +148,7 @@ theorem pair_history_attacker_open_context {cfg : ChainConfig} {deployed future 
         outA victim charge steps + sharesOut victim steps ≤
           inA victim charge steps + outsideSubsidy victim charge steps + sharesIn victim steps := by
   obtain ⟨steps, realizes, faithful⟩ :=
-    pairTraceRealizes_faithful_of_configuredHistoryTrace root history
+    pairTraceRealizes_faithful_of_configuredHistoryTrace root history hcov
   refine ⟨steps, realizes, faithful, fun coalition victim charge notMem covers schedule => ?_⟩
   exact pair_attacker_open_context
     (PairOpenAttackTrace.of_visits (charge := charge) realizes faithful collision notMem covers schedule)
@@ -146,7 +157,9 @@ theorem pair_history_attacker_open_context {cfg : ChainConfig} {deployed future 
 theorem pair_history_victim_loss_bound {cfg : ChainConfig} {deployed future : BlockChain}
     {vault : Adr} (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
-    (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault) :
+    (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, PairTraceRealizes root steps future ∧ PairLedgerFaithful vault history steps ∧
       ∀ (victim : Adr) (deposit exit : PairStepRecord vault) (v m p : Nat),
         victimMoves victim steps = [deposit, exit] →
@@ -154,7 +167,7 @@ theorem pair_history_victim_loss_bound {cfg : ChainConfig} {deployed future : Bl
         exit.flow = .outbound victim victim m p true false →
         v - p ≤ Nat.div (deposit.pre.balance + 1) (deposit.pre.supply + offsetN) + 1 := by
   obtain ⟨steps, realizes, faithful⟩ :=
-    pairTraceRealizes_faithful_of_configuredHistoryTrace root history
+    pairTraceRealizes_faithful_of_configuredHistoryTrace root history hcov
   exact ⟨steps, realizes, faithful, fun victim deposit exit v m p hmoves hdeposit hexit =>
     pair_victim_loss_bound realizes (faithful.collision collision) hmoves hdeposit hexit⟩
 

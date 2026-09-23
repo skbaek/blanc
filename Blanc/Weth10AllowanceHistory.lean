@@ -81,6 +81,7 @@ def CommittedExecAllowanceSound (dp : DeployParams) (ca : Adr) : Prop :=
       initEvm (msg.withBenv benv))
     (hcommit : Execution.commits out = true),
     MessageRunReady dp ca msg →
+    CoveredFork msg.benv.stat.fork →
     AllowanceTransported ca msg.benv.state
       (Execution.committedPost out hcommit).state
       (Exec.attributionStream dp ca run)
@@ -91,7 +92,10 @@ theorem CompiledBodyAllowanceHandler.committedExecAllowanceSound
     {dp : DeployParams} {ca : Adr}
     (handler : CompiledBodyAllowanceHandler dp ca) :
     CommittedExecAllowanceSound dp ca := by
-  intro msg benv pc sevm pre out run htransfer hinit hcommit runReady
+  intro msg benv pc sevm pre out run htransfer hinit hcommit runReady hfork
+  have hinitFork : CoveredFork (initSevm (msg.withBenv benv)).benvStat.fork := by
+    rw [initSevm_benvStat, Msg.withBenv_benvStat, benvAfterTransfer_stat htransfer]
+    exact hfork
   have hprecond :=
     ContractSpec.Pre.of_inv_benvAfterTransfer
       runReady.ready.backed.ne runReady.ready.backed.val0
@@ -129,7 +133,7 @@ theorem CompiledBodyAllowanceHandler.committedExecAllowanceSound
   have hcore := hfa 0 (initSevm (msg.withBenv benv))
     (initDevm (msg.withBenv benv)) out run hat
   have effect := hcore run hcommit hat
-    (fun htarget => ⟨hroot, hdirect htarget⟩)
+    (fun htarget => ⟨hroot, hdirect htarget⟩) hinitFork
   have hbody := effect.toState
   have hentryStor :
       msg.benv.state.getStor ca =
@@ -150,6 +154,7 @@ def MessageAllowanceSound (dp : DeployParams) (ca : Adr) : Prop :=
   ∀ {msg : Msg} {state : State} {out : MsgCallOutput}
     (trace : MessageCallTrace msg state out),
     MessageReady dp ca msg →
+    CoveredFork msg.benv.stat.fork →
     trace.AllowanceAccounted dp ca
 
 theorem ProcessMessage.allowanceTransported_of_none
@@ -173,13 +178,14 @@ theorem ProcessMessage.allowanceTransported_of_committedExecSound
     (hprocess :
       ProcessMessage msg (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
     (hsound : CommittedExecAllowanceSound dp ca)
-    (runReady : MessageRunReady dp ca msg) :
+    (runReady : MessageRunReady dp ca msg)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     AllowanceTransported ca msg.benv.state post.state
       (Exec.attributionStream dp ca run) := by
   have henter := (RunFrame.some_inv hprocess).1
   rcases Frame.enter_run_inv henter with ⟨benv, htransfer, hinit⟩
   by_cases hcommit : Execution.commits out = true
-  · have htransport := hsound run htransfer hinit hcommit runReady
+  · have htransport := hsound run htransfer hinit hcommit runReady hfork
     rw [ProcessMessage.ok_state_eq_committedPost hprocess hcommit]
     exact htransport
   · have hstate :=
@@ -191,7 +197,8 @@ theorem ProcessMessageTrace.allowanceTransported_of_committedExecSound
     {dp : DeployParams} {ca : Adr} {msg : Msg} {post : Devm}
     (trace : ProcessMessageTrace msg (.ok post))
     (hsound : CommittedExecAllowanceSound dp ca)
-    (runReady : MessageRunReady dp ca msg) :
+    (runReady : MessageRunReady dp ca msg)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     AllowanceTransported ca msg.benv.state post.state
       (trace.retained.attributionStream dp ca) := by
   rcases trace with ⟨slot, retained, hprocess⟩
@@ -200,7 +207,7 @@ theorem ProcessMessageTrace.allowanceTransported_of_committedExecSound
       exact ProcessMessage.allowanceTransported_of_none hprocess runReady.ready
   | some run =>
       exact ProcessMessage.allowanceTransported_of_committedExecSound
-        run hprocess hsound runReady
+        run hprocess hsound runReady hfork
 
 theorem ProcessCreateMessageTrace.allowanceTransported_of_committedExecSound
     {dp : DeployParams} {ca : Adr} {msg : Msg} {post : Devm}
@@ -208,7 +215,8 @@ theorem ProcessCreateMessageTrace.allowanceTransported_of_committedExecSound
     (hsound : CommittedExecAllowanceSound dp ca)
     (ready : MessageReady dp ca msg)
     (htargetNone : msg.target.isNone = true)
-    (htargetNe : msg.currentTarget ≠ ca) :
+    (htargetNe : msg.currentTarget ≠ ca)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     AllowanceTransported ca msg.benv.state post.state
       (if post.error.isSome then []
        else trace.retained.attributionStream dp ca) := by
@@ -233,6 +241,7 @@ theorem ProcessCreateMessageTrace.allowanceTransported_of_committedExecSound
             simpa [processCreateMessage.msg, Msg.withBenv] using h))
       have htransport :=
         innerTrace.allowanceTransported_of_committedExecSound hsound hrunReady
+          (by rw [processCreateMessage.msg_benvStat]; exact hfork)
       have hpre := processCreateMessage_msg_getStor_eq
         (msg := msg) (ca := ca) htargetNe
       intro key hregion
@@ -247,13 +256,14 @@ theorem CommittedExecAllowanceSound.messageAllowanceSound
     {dp : DeployParams} {ca : Adr}
     (hsound : CommittedExecAllowanceSound dp ca) :
     MessageAllowanceSound dp ca := by
-  intro msg state out trace ready
+  intro msg state out trace ready hfork
+  have hsg : msg.benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
   cases trace with
   | createCollision htarget hcollision hresult =>
       unfold MessageCallTrace.AllowanceAccounted
       change AllowanceTransported ca msg.benv.state state []
       have hstate := processMessageCall_createCollision_state_eq
-        htarget hcollision hresult
+        htarget hcollision hresult hsg
       subst state
       exact AllowanceTransported.refl ca msg.benv.state
   | createRun htarget hcollision evm hcore trace hresult =>
@@ -262,9 +272,9 @@ theorem CommittedExecAllowanceSound.messageAllowanceSound
         ready hcollision
       have htransport :=
         ProcessCreateMessageTrace.allowanceTransported_of_committedExecSound trace
-          hsound ready htarget htargetNe
+          hsound ready htarget htargetNe hfork
       have hstate := processMessageCall_createRun_state_eq
-        htarget hcollision hcore hresult
+        htarget hcollision hcore hresult hsg
       change AllowanceTransported ca msg.benv.state state
         (if evm.error.isSome then []
          else trace.retained.attributionStream dp ca)
@@ -287,8 +297,11 @@ theorem CommittedExecAllowanceSound.messageAllowanceSound
             (trace.retained.attributionStream dp ca) :=
         ProcessMessageTrace.allowanceTransported_of_committedExecSound trace
           hsound runReadyExec
+          (by rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_benv_stat,
+                ExecutionTrace.messageCallDelegation_benv_stat hdelegation]
+              exact hfork)
       have hstate := processMessageCall_callRun_state_eq
-        htarget hdelegation hexecMsg hcore hresult
+        htarget hdelegation hexecMsg hcore hresult hsg
       have hpre :
           execMsg.benv.state.getStor = msg.benv.state.getStor := by
         rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_getStor_eq,
@@ -310,14 +323,18 @@ theorem TransactionTrace.allowanceTransported
     (trace : TransactionTrace benv bout tx index state bout')
     (hmessage : MessageAllowanceSound dp ca)
     (hstable : Stable dp ca benv.state)
-    (hnotCreated : ca ∉ benv.createdAccounts) :
+    (hnotCreated : ca ∉ benv.createdAccounts)
+    (hfork : CoveredFork benv.stat.fork) :
     AllowanceTransported ca benv.state state
       (trace.attributionStream dp ca) := by
+  have hmsgFork : CoveredFork trace.msg.benv.stat.fork := by
+    rw [prepareMessage_benv trace.prepared]
+    exact hfork
   have hmsg := hmessage trace.message
-    (trace.message_ready hstable hnotCreated)
+    (trace.message_ready hstable hnotCreated) hmsgFork
   unfold MessageCallTrace.AllowanceAccounted at hmsg
   have hpre := trace.messagePre_getStor_eq (ca := ca)
-  have hpost := trace.postMessage_getStor_eq hstable hnotCreated
+  have hpost := trace.postMessage_getStor_eq hstable hnotCreated hfork
   intro key hregion
   have h := hmsg key hregion
   rw [hpre] at h
@@ -332,17 +349,19 @@ theorem ApplyTransactionsTrace.allowanceTransported
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) →
     Stable dp ca benv.state →
     ca ∉ benv.createdAccounts →
+    CoveredFork benv.stat.fork →
     AllowanceTransported ca benv.state finalBenv.state
       (trace.attributionStream dp ca)
-  | _, _, _, _, _, .nil benv _bout, _, _ =>
+  | _, _, _, _, _, .nil benv _bout, _, _, _ =>
       AllowanceTransported.refl ca benv.state
-  | _, _, _, _, _, .cons head tail, hstable, hnotCreated =>
+  | _, _, _, _, _, .cons head tail, hstable, hnotCreated, hfork =>
       AllowanceTransported.append
         (TransactionTrace.allowanceTransported head hmessage hstable
-          hnotCreated)
+          hnotCreated hfork)
         (ApplyTransactionsTrace.allowanceTransported dp ca hmessage tail
-          (TransactionTrace.stable head hstable hnotCreated)
-          (by simpa [Benv.withState] using hnotCreated))
+          (TransactionTrace.stable head hstable hnotCreated hfork)
+          (by simpa [Benv.withState] using hnotCreated)
+          (by simpa [Benv.withState] using hfork))
 
 theorem SystemMessageTrace.allowanceTransported
     {dp : DeployParams} {ca : Adr}
@@ -351,11 +370,12 @@ theorem SystemMessageTrace.allowanceTransported
     (trace : SystemMessageTrace benv target data state out)
     (hmessage : MessageAllowanceSound dp ca)
     (hstable : Stable dp ca benv.state)
-    (hnotCreated : ca ∉ benv.createdAccounts) :
+    (hnotCreated : ca ∉ benv.createdAccounts)
+    (hfork : CoveredFork benv.stat.fork) :
     AllowanceTransported ca benv.state state
       (trace.attributionStream dp ca) := by
   have hmsg := hmessage trace.message
-    (trace.messageReady hstable hnotCreated)
+    (trace.messageReady hstable hnotCreated) hfork
   unfold MessageCallTrace.AllowanceAccounted at hmsg
   simpa [SystemMessageTrace.attributionStream, systemTransactionMessage,
     processSystemTransactionMsg, Benv.beginTransaction] using hmsg
@@ -367,18 +387,21 @@ theorem RequestsTrace.allowanceTransported
     (trace : RequestsTrace benv bout state bout')
     (hmessage : MessageAllowanceSound dp ca)
     (hstable : Stable dp ca benv.state)
-    (hnotCreated : ca ∉ benv.createdAccounts) :
+    (hnotCreated : ca ∉ benv.createdAccounts)
+    (hfork : CoveredFork benv.stat.fork) :
     AllowanceTransported ca benv.state state
       (trace.attributionStream dp ca) := by
   have hwithdrawal :=
     SystemMessageTrace.allowanceTransported trace.withdrawal hmessage hstable
-      hnotCreated
+      hnotCreated hfork
   have hwithdrawalMeta :=
     SystemMessageTrace.stable_and_sum_le trace.withdrawal hstable hnotCreated
+      hfork
   have hconsolidation :=
     SystemMessageTrace.allowanceTransported trace.consolidation hmessage
       hwithdrawalMeta.1
       (by simpa [Benv.withState] using hnotCreated)
+      (by simpa [Benv.withState] using hfork)
   have hboth := hwithdrawal.append hconsolidation
   have hstate :=
     ExecutionTrace.RequestsTrace.state_eq_consolidationState trace
@@ -392,25 +415,26 @@ theorem AppliedBodyTrace.allowanceTransported
     (hmessage : MessageAllowanceSound dp ca)
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts)
-    (hbound : sum benv.state.bal + wdsum wds < 2 ^ 256) :
+    (hbound : sum benv.state.bal + wdsum wds < 2 ^ 256)
+    (hfork : CoveredFork benv.stat.fork) :
     AllowanceTransported ca benv.state state
       (trace.attributionStream dp ca) := by
   have hbeacon :=
     SystemMessageTrace.allowanceTransported trace.beacon hmessage hstable
-      hnotCreated
+      hnotCreated hfork
   have hbeaconMeta :=
-    SystemMessageTrace.stable_and_sum_le trace.beacon hstable hnotCreated
+    SystemMessageTrace.stable_and_sum_le trace.beacon hstable hnotCreated hfork
   have hhistory :=
     SystemMessageTrace.allowanceTransported trace.history hmessage hbeaconMeta.1
-      (by simpa [Benv.withState] using hnotCreated)
+      (by simpa [Benv.withState] using hnotCreated) hfork
   have hhistoryMeta :=
     SystemMessageTrace.stable_and_sum_le trace.history hbeaconMeta.1
-      (by simpa [Benv.withState] using hnotCreated)
+      (by simpa [Benv.withState] using hnotCreated) hfork
   have htransactions :=
     ApplyTransactionsTrace.allowanceTransported dp ca hmessage
       trace.transactions hhistoryMeta.1
-      (by simpa [Benv.withState] using hnotCreated)
-  have htxSum := ApplyTransactionsTrace.sum_le trace.transactions
+      (by simpa [Benv.withState] using hnotCreated) hfork
+  have htxSum := ApplyTransactionsTrace.sum_le trace.transactions hfork
   have htxSum' :
       sum trace.transactionBenv.state.bal ≤
         sum trace.historyState.bal := by
@@ -424,7 +448,7 @@ theorem AppliedBodyTrace.allowanceTransported
     omega
   have htransactionsStable :=
     ApplyTransactionsTrace.stable trace.transactions hhistoryMeta.1
-      (by simpa [Benv.withState] using hnotCreated)
+      (by simpa [Benv.withState] using hnotCreated) hfork
   have hwithdrawalsStable :=
     processWithdrawalsState_stable trace.transactionBenv.state wds
       hwithdrawalBound htransactionsStable
@@ -437,14 +461,18 @@ theorem AppliedBodyTrace.allowanceTransported
         (processWithdrawalsState trace.transactionBenv.state wds) [] :=
     AllowanceTransported.of_getStor_eq
       (processWithdrawalsState_getStor_eq ca _ _).symm
+  have htransactionFork : CoveredFork trace.transactionBenv.stat.fork := by
+    rw [ExecutionTrace.ApplyTransactionsTrace.stat_eq trace.transactions]
+    exact hfork
   have hrequests := RequestsTrace.allowanceTransported trace.requests hmessage
     hwithdrawalsStable
     (by simpa [Benv.withState] using htransactionNotCreated)
+    htransactionFork
   have htotal :=
     (((hbeacon.append hhistory).append htransactions).append
       hwithdrawals).append hrequests
   simpa [AppliedBodyTrace.attributionStream, Benv.withState,
-    List.append_assoc] using htotal
+    trace.requestState_eq, List.append_assoc] using htotal
 
 theorem AccountedBlock.allowanceTransported
     {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
@@ -455,7 +483,7 @@ theorem AccountedBlock.allowanceTransported
     AllowanceTransported ca pre.state post.state
       (accounted.attributionStream dp ca) := by
   have hbody := AppliedBodyTrace.allowanceTransported accounted.bodyTrace
-    hmessage hstable (by simp [initBenv]) accounted.bound
+    hmessage hstable (by simp [initBenv]) accounted.bound accounted.covered
   have hpost := congrArg (fun chain : BlockChain => chain.state)
     accounted.postEq
   simpa [initBenv, AccountedBlock.attributionStream, hpost] using hbody
@@ -553,6 +581,7 @@ def CommittedExecAllowanceReadSound (dp : DeployParams) (ca : Adr) : Prop :=
       initEvm (msg.withBenv benv))
     (hcommit : Execution.commits out = true),
     MessageRunReady dp ca msg →
+    CoveredFork msg.benv.stat.fork →
     AllowanceTransportedSound ca msg.benv.state
       (Execution.committedPost out hcommit).state
       (Exec.attributionStream dp ca run)
@@ -564,8 +593,8 @@ theorem CommittedExecAllowanceReadSound.committedExecAllowanceSound
     {dp : DeployParams} {ca : Adr}
     (h : CommittedExecAllowanceReadSound dp ca) :
     CommittedExecAllowanceSound dp ca :=
-  fun run htransfer hinit hcommit ready =>
-    (h run htransfer hinit hcommit ready).1
+  fun run htransfer hinit hcommit ready hfork =>
+    (h run htransfer hinit hcommit ready hfork).1
 
 /-- The generic interpreter lift reduces raw message allowance transport to
 the exact compiled WETH10 body handler. -/
@@ -573,7 +602,10 @@ theorem CompiledBodyAllowanceReadHandler.committedExecAllowanceReadSound
     {dp : DeployParams} {ca : Adr}
     (handler : CompiledBodyAllowanceReadHandler dp ca) :
     CommittedExecAllowanceReadSound dp ca := by
-  intro msg benv pc sevm pre out run htransfer hinit hcommit runReady
+  intro msg benv pc sevm pre out run htransfer hinit hcommit runReady hfork
+  have hinitFork : CoveredFork (initSevm (msg.withBenv benv)).benvStat.fork := by
+    rw [initSevm_benvStat, Msg.withBenv_benvStat, benvAfterTransfer_stat htransfer]
+    exact hfork
   have hprecond :=
     ContractSpec.Pre.of_inv_benvAfterTransfer
       runReady.ready.backed.ne runReady.ready.backed.val0
@@ -612,7 +644,7 @@ theorem CompiledBodyAllowanceReadHandler.committedExecAllowanceReadSound
   have hcore := hfa 0 (initSevm (msg.withBenv benv))
     (initDevm (msg.withBenv benv)) out run hat
   have effect := hcore run hcommit hat
-    (fun htarget => ⟨hroot, hdirect htarget⟩)
+    (fun htarget => ⟨hroot, hdirect htarget⟩) hinitFork
   have hbody := effect.toState
   have hentryStor :
       msg.benv.state.getStor ca =
@@ -633,6 +665,7 @@ def MessageAllowanceReadSound (dp : DeployParams) (ca : Adr) : Prop :=
   ∀ {msg : Msg} {state : State} {out : MsgCallOutput}
     (trace : MessageCallTrace msg state out),
     MessageReady dp ca msg →
+    CoveredFork msg.benv.stat.fork →
     trace.AllowanceAccountedSound dp ca
 
 theorem ProcessMessage.allowanceTransportedSound_of_none
@@ -656,13 +689,14 @@ theorem ProcessMessage.allowanceTransportedSound_of_committedExecSound
     (hprocess :
       ProcessMessage msg (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
     (hsound : CommittedExecAllowanceReadSound dp ca)
-    (runReady : MessageRunReady dp ca msg) :
+    (runReady : MessageRunReady dp ca msg)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     AllowanceTransportedSound ca msg.benv.state post.state
       (Exec.attributionStream dp ca run) := by
   have henter := (RunFrame.some_inv hprocess).1
   rcases Frame.enter_run_inv henter with ⟨benv, htransfer, hinit⟩
   by_cases hcommit : Execution.commits out = true
-  · have htransport := hsound run htransfer hinit hcommit runReady
+  · have htransport := hsound run htransfer hinit hcommit runReady hfork
     rw [ProcessMessage.ok_state_eq_committedPost hprocess hcommit]
     exact htransport
   · have hstate :=
@@ -674,7 +708,8 @@ theorem ProcessMessageTrace.allowanceTransportedSound_of_committedExecSound
     {dp : DeployParams} {ca : Adr} {msg : Msg} {post : Devm}
     (trace : ProcessMessageTrace msg (.ok post))
     (hsound : CommittedExecAllowanceReadSound dp ca)
-    (runReady : MessageRunReady dp ca msg) :
+    (runReady : MessageRunReady dp ca msg)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     AllowanceTransportedSound ca msg.benv.state post.state
       (trace.retained.attributionStream dp ca) := by
   rcases trace with ⟨slot, retained, hprocess⟩
@@ -684,7 +719,7 @@ theorem ProcessMessageTrace.allowanceTransportedSound_of_committedExecSound
         runReady.ready
   | some run =>
       exact ProcessMessage.allowanceTransportedSound_of_committedExecSound
-        run hprocess hsound runReady
+        run hprocess hsound runReady hfork
 
 theorem
     ProcessCreateMessageTrace.allowanceTransportedSound_of_committedExecSound
@@ -693,7 +728,8 @@ theorem
     (hsound : CommittedExecAllowanceReadSound dp ca)
     (ready : MessageReady dp ca msg)
     (htargetNone : msg.target.isNone = true)
-    (htargetNe : msg.currentTarget ≠ ca) :
+    (htargetNe : msg.currentTarget ≠ ca)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     AllowanceTransportedSound ca msg.benv.state post.state
       (if post.error.isSome then []
        else trace.retained.attributionStream dp ca) := by
@@ -718,7 +754,7 @@ theorem
             simpa [processCreateMessage.msg, Msg.withBenv] using h))
       have htransport :=
         innerTrace.allowanceTransportedSound_of_committedExecSound hsound
-          hrunReady
+          hrunReady (by rw [processCreateMessage.msg_benvStat]; exact hfork)
       have hpre := processCreateMessage_msg_getStor_eq
         (msg := msg) (ca := ca) htargetNe
       refine ⟨fun key hregion => ?_, ?_⟩
@@ -736,13 +772,14 @@ theorem CommittedExecAllowanceReadSound.messageAllowanceReadSound
     {dp : DeployParams} {ca : Adr}
     (hsound : CommittedExecAllowanceReadSound dp ca) :
     MessageAllowanceReadSound dp ca := by
-  intro msg state out trace ready
+  intro msg state out trace ready hfork
+  have hsg : msg.benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
   cases trace with
   | createCollision htarget hcollision hresult =>
       unfold MessageCallTrace.AllowanceAccountedSound
       change AllowanceTransportedSound ca msg.benv.state state []
       have hstate := processMessageCall_createCollision_state_eq
-        htarget hcollision hresult
+        htarget hcollision hresult hsg
       subst state
       exact AllowanceTransportedSound.refl ca msg.benv.state
   | createRun htarget hcollision evm hcore trace hresult =>
@@ -752,9 +789,9 @@ theorem CommittedExecAllowanceReadSound.messageAllowanceReadSound
       have htransport :=
         ProcessCreateMessageTrace.allowanceTransportedSound_of_committedExecSound
           trace
-          hsound ready htarget htargetNe
+          hsound ready htarget htargetNe hfork
       have hstate := processMessageCall_createRun_state_eq
-        htarget hcollision hcore hresult
+        htarget hcollision hcore hresult hsg
       change AllowanceTransportedSound ca msg.benv.state state
         (if evm.error.isSome then []
          else trace.retained.attributionStream dp ca)
@@ -777,8 +814,11 @@ theorem CommittedExecAllowanceReadSound.messageAllowanceReadSound
             (trace.retained.attributionStream dp ca) :=
         ProcessMessageTrace.allowanceTransportedSound_of_committedExecSound trace
           hsound runReadyExec
+          (by rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_benv_stat,
+                ExecutionTrace.messageCallDelegation_benv_stat hdelegation]
+              exact hfork)
       have hstate := processMessageCall_callRun_state_eq
-        htarget hdelegation hexecMsg hcore hresult
+        htarget hdelegation hexecMsg hcore hresult hsg
       have hpre :
           execMsg.benv.state.getStor = msg.benv.state.getStor := by
         rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_getStor_eq,
@@ -803,14 +843,18 @@ theorem TransactionTrace.allowanceTransportedSound
     (trace : TransactionTrace benv bout tx index state bout')
     (hmessage : MessageAllowanceReadSound dp ca)
     (hstable : Stable dp ca benv.state)
-    (hnotCreated : ca ∉ benv.createdAccounts) :
+    (hnotCreated : ca ∉ benv.createdAccounts)
+    (hfork : CoveredFork benv.stat.fork) :
     AllowanceTransportedSound ca benv.state state
       (trace.attributionStream dp ca) := by
+  have hmsgFork : CoveredFork trace.msg.benv.stat.fork := by
+    rw [prepareMessage_benv trace.prepared]
+    exact hfork
   have hmsg := hmessage trace.message
-    (trace.message_ready hstable hnotCreated)
+    (trace.message_ready hstable hnotCreated) hmsgFork
   unfold MessageCallTrace.AllowanceAccountedSound at hmsg
   have hpre := trace.messagePre_getStor_eq (ca := ca)
-  have hpost := trace.postMessage_getStor_eq hstable hnotCreated
+  have hpost := trace.postMessage_getStor_eq hstable hnotCreated hfork
   refine ⟨fun key hregion => ?_, ?_⟩
   · have h := hmsg.1 key hregion
     rw [hpre] at h
@@ -828,17 +872,19 @@ theorem ApplyTransactionsTrace.allowanceTransportedSound
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) →
     Stable dp ca benv.state →
     ca ∉ benv.createdAccounts →
+    CoveredFork benv.stat.fork →
     AllowanceTransportedSound ca benv.state finalBenv.state
       (trace.attributionStream dp ca)
-  | _, _, _, _, _, .nil benv _bout, _, _ =>
+  | _, _, _, _, _, .nil benv _bout, _, _, _ =>
       AllowanceTransportedSound.refl ca benv.state
-  | _, _, _, _, _, .cons head tail, hstable, hnotCreated =>
+  | _, _, _, _, _, .cons head tail, hstable, hnotCreated, hfork =>
       AllowanceTransportedSound.append
         (TransactionTrace.allowanceTransportedSound head hmessage hstable
-          hnotCreated)
+          hnotCreated hfork)
         (ApplyTransactionsTrace.allowanceTransportedSound dp ca hmessage tail
-          (TransactionTrace.stable head hstable hnotCreated)
-          (by simpa [Benv.withState] using hnotCreated))
+          (TransactionTrace.stable head hstable hnotCreated hfork)
+          (by simpa [Benv.withState] using hnotCreated)
+          (by simpa [Benv.withState] using hfork))
 
 theorem SystemMessageTrace.allowanceTransportedSound
     {dp : DeployParams} {ca : Adr}
@@ -847,11 +893,12 @@ theorem SystemMessageTrace.allowanceTransportedSound
     (trace : SystemMessageTrace benv target data state out)
     (hmessage : MessageAllowanceReadSound dp ca)
     (hstable : Stable dp ca benv.state)
-    (hnotCreated : ca ∉ benv.createdAccounts) :
+    (hnotCreated : ca ∉ benv.createdAccounts)
+    (hfork : CoveredFork benv.stat.fork) :
     AllowanceTransportedSound ca benv.state state
       (trace.attributionStream dp ca) := by
   have hmsg := hmessage trace.message
-    (trace.messageReady hstable hnotCreated)
+    (trace.messageReady hstable hnotCreated) hfork
   unfold MessageCallTrace.AllowanceAccountedSound at hmsg
   simpa [SystemMessageTrace.attributionStream, systemTransactionMessage,
     processSystemTransactionMsg, Benv.beginTransaction] using hmsg
@@ -863,18 +910,21 @@ theorem RequestsTrace.allowanceTransportedSound
     (trace : RequestsTrace benv bout state bout')
     (hmessage : MessageAllowanceReadSound dp ca)
     (hstable : Stable dp ca benv.state)
-    (hnotCreated : ca ∉ benv.createdAccounts) :
+    (hnotCreated : ca ∉ benv.createdAccounts)
+    (hfork : CoveredFork benv.stat.fork) :
     AllowanceTransportedSound ca benv.state state
       (trace.attributionStream dp ca) := by
   have hwithdrawal :=
     SystemMessageTrace.allowanceTransportedSound trace.withdrawal hmessage hstable
-      hnotCreated
+      hnotCreated hfork
   have hwithdrawalMeta :=
     SystemMessageTrace.stable_and_sum_le trace.withdrawal hstable hnotCreated
+      hfork
   have hconsolidation :=
     SystemMessageTrace.allowanceTransportedSound trace.consolidation hmessage
       hwithdrawalMeta.1
       (by simpa [Benv.withState] using hnotCreated)
+      (by simpa [Benv.withState] using hfork)
   have hboth := hwithdrawal.append hconsolidation
   have hstate :=
     ExecutionTrace.RequestsTrace.state_eq_consolidationState trace
@@ -888,26 +938,27 @@ theorem AppliedBodyTrace.allowanceTransportedSound
     (hmessage : MessageAllowanceReadSound dp ca)
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts)
-    (hbound : sum benv.state.bal + wdsum wds < 2 ^ 256) :
+    (hbound : sum benv.state.bal + wdsum wds < 2 ^ 256)
+    (hfork : CoveredFork benv.stat.fork) :
     AllowanceTransportedSound ca benv.state state
       (trace.attributionStream dp ca) := by
   have hbeacon :=
     SystemMessageTrace.allowanceTransportedSound trace.beacon hmessage hstable
-      hnotCreated
+      hnotCreated hfork
   have hbeaconMeta :=
-    SystemMessageTrace.stable_and_sum_le trace.beacon hstable hnotCreated
+    SystemMessageTrace.stable_and_sum_le trace.beacon hstable hnotCreated hfork
   have hhistory :=
     SystemMessageTrace.allowanceTransportedSound trace.history hmessage
       hbeaconMeta.1
-      (by simpa [Benv.withState] using hnotCreated)
+      (by simpa [Benv.withState] using hnotCreated) hfork
   have hhistoryMeta :=
     SystemMessageTrace.stable_and_sum_le trace.history hbeaconMeta.1
-      (by simpa [Benv.withState] using hnotCreated)
+      (by simpa [Benv.withState] using hnotCreated) hfork
   have htransactions :=
     ApplyTransactionsTrace.allowanceTransportedSound dp ca hmessage
       trace.transactions hhistoryMeta.1
-      (by simpa [Benv.withState] using hnotCreated)
-  have htxSum := ApplyTransactionsTrace.sum_le trace.transactions
+      (by simpa [Benv.withState] using hnotCreated) hfork
+  have htxSum := ApplyTransactionsTrace.sum_le trace.transactions hfork
   have htxSum' :
       sum trace.transactionBenv.state.bal ≤
         sum trace.historyState.bal := by
@@ -921,7 +972,7 @@ theorem AppliedBodyTrace.allowanceTransportedSound
     omega
   have htransactionsStable :=
     ApplyTransactionsTrace.stable trace.transactions hhistoryMeta.1
-      (by simpa [Benv.withState] using hnotCreated)
+      (by simpa [Benv.withState] using hnotCreated) hfork
   have hwithdrawalsStable :=
     processWithdrawalsState_stable trace.transactionBenv.state wds
       hwithdrawalBound htransactionsStable
@@ -934,14 +985,18 @@ theorem AppliedBodyTrace.allowanceTransportedSound
         (processWithdrawalsState trace.transactionBenv.state wds) [] :=
     AllowanceTransportedSound.of_getStor_eq
       (processWithdrawalsState_getStor_eq ca _ _).symm
+  have htransactionFork : CoveredFork trace.transactionBenv.stat.fork := by
+    rw [ExecutionTrace.ApplyTransactionsTrace.stat_eq trace.transactions]
+    exact hfork
   have hrequests := RequestsTrace.allowanceTransportedSound trace.requests
     hmessage hwithdrawalsStable
     (by simpa [Benv.withState] using htransactionNotCreated)
+    htransactionFork
   have htotal :=
     (((hbeacon.append hhistory).append htransactions).append
       hwithdrawals).append hrequests
   simpa [AppliedBodyTrace.attributionStream, Benv.withState,
-    List.append_assoc] using htotal
+    trace.requestState_eq, List.append_assoc] using htotal
 
 theorem AccountedBlock.allowanceTransportedSound
     {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
@@ -952,7 +1007,7 @@ theorem AccountedBlock.allowanceTransportedSound
     AllowanceTransportedSound ca pre.state post.state
       (accounted.attributionStream dp ca) := by
   have hbody := AppliedBodyTrace.allowanceTransportedSound accounted.bodyTrace
-    hmessage hstable (by simp [initBenv]) accounted.bound
+    hmessage hstable (by simp [initBenv]) accounted.bound accounted.covered
   have hpost := congrArg (fun chain : BlockChain => chain.state)
     accounted.postEq
   simpa [initBenv, AccountedBlock.attributionStream, hpost] using hbody

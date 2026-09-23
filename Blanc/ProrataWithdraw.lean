@@ -14,7 +14,9 @@ namespace Prorata
 private instance : Rinst.Hinv Devm.logs Rinst.selfbalance := ⟨by
   intro pc sevm pre post run
   simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.pushBurn_of_pushItem run).logs⟩
+  rcases Except.bind_eq_ok run with ⟨devm, hcharge, hpush⟩
+  exact (Devm.burn_of_chargeGas hcharge).logs.trans
+    ((Devm.balReadAccount_logs _ _ _).symm.trans (Devm.push_of_push hpush).logs)⟩
 
 private instance : Rinst.Hinv Devm.logs Rinst.sub := by
   refine ⟨?_⟩
@@ -43,7 +45,9 @@ private instance : Rinst.Hinv Devm.logs Rinst.shr := by
 private instance : Rinst.Hinv Devm.output Rinst.selfbalance := ⟨by
   intro pc sevm pre post run
   simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.pushBurn_of_pushItem run).output⟩
+  rcases Except.bind_eq_ok run with ⟨devm, hcharge, hpush⟩
+  exact (Devm.burn_of_chargeGas hcharge).output.trans
+    (Devm.balReadAccount_output.symm.trans (Devm.push_of_push hpush).output)⟩
 
 private instance : Rinst.Hinv Devm.output Rinst.sub := by
   refine ⟨?_⟩
@@ -292,7 +296,7 @@ theorem withdraw_settles_before_call
       _ = Devm.getBal u11 := Line.of_inv Devm.getBal (by line_inv) hcallerStoreInv
   have r1 : Devm.getBal pre sevm.currentTarget :: Sevm.argWord sevm 0 :: supplySlot :: [] <<+
       v1.stack := by
-    have hpush := prefix_of_push (of_run_selfbalance qbalance) p11
+    have hpush := prefix_of_push_stack (of_run_selfbalance_stack qbalance) p11
     rw [← congrFun hbal11 sevm.currentTarget] at hpush
     exact hpush
   have r2 : Devm.getBal pre sevm.currentTarget :: Devm.getBal pre sevm.currentTarget ::
@@ -575,7 +579,8 @@ def WithdrawPaysExactly (sevm : Sevm) (pre post : Devm) : Prop :=
 
 theorem withdraw_pays_exactly
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
-    (run : Func.Run fs sevm pre withdraw post) :
+    (run : Func.Run fs sevm pre withdraw post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     WithdrawPaysExactly sevm pre post := by
   unfold WithdrawPaysExactly
   dsimp
@@ -608,7 +613,7 @@ theorem withdraw_pays_exactly
         p :: S :: (S + offset) :: Sevm.argWord sevm 0 :: supplySlot :: []) <<+
         callPre.stack := by
     simpa only [p, B, S] using hstack
-  rcases of_run_call_val_with_depth_frame hstack' hcall with hfailed | hentered
+  rcases of_run_call_val_with_depth_frame hstack' hcall hfork with hfailed | hentered
   · exact (hw (popBurn_pref hpop hfailed.1).1).elim
   rcases hentered with
     ⟨parent, child, xl, delegated, nextAddress, code, avail, pc, hstep, hdepth,

@@ -50,7 +50,7 @@ structure DelegatecallSpawnDescriptor
 
   extensionEq :
     (callPre.setMach
-      ⟨stackTail, callPre.memory, callPre.gasLeft⟩).extCost
+      ⟨stackTail, callPre.memory, callPre.gasLeft, callPre.stateGas⟩).extCost
         [⟨inputOffsetWord.toNat, inputSizeWord.toNat⟩,
          ⟨outputOffsetWord.toNat, outputSizeWord.toNat⟩] =
       extensionCost
@@ -59,7 +59,7 @@ structure DelegatecallSpawnDescriptor
     accessDelegation
       (addAccessedAddress
         (callPre.setMach
-          ⟨stackTail, callPre.memory, callPre.gasLeft⟩)
+          ⟨stackTail, callPre.memory, callPre.gasLeft, callPre.stateGas⟩)
         codeWord.toAdr)
       codeWord.toAdr =
       ⟨delegated, resolvedCodeAddress, code, delegationGas, afterAccess⟩
@@ -68,7 +68,7 @@ structure DelegatecallSpawnDescriptor
     accessCost codeWord.toAdr
         (callPre.setMach
           ⟨stackTail, callPre.memory,
-            callPre.gasLeft⟩).accessedAddresses +
+            callPre.gasLeft, callPre.stateGas⟩).accessedAddresses +
       delegationGas = accessCharge
 
   splitEq :
@@ -79,6 +79,9 @@ structure DelegatecallSpawnDescriptor
   depthHeadroom : sevm.depth ≠ 0
   resolvedNotPrecompile :
     sevm.benvStat.rules.isPrecomp resolvedCodeAddress = false
+  /-- The call executes under a covered pre-Amsterdam fork (the no-state-gas
+  lane every descriptor equation above is stated in). -/
+  covered : CoveredFork sevm.benvStat.fork
 
 /-- Charged and memory-extended parent suspended by this call. -/
 def DelegatecallSpawnDescriptor.parent
@@ -98,14 +101,14 @@ theorem DelegatecallSpawnDescriptor.afterAccess_memory
       (accessDelegation
         (addAccessedAddress
           (callPre.setMach
-            ⟨d.stackTail, callPre.memory, callPre.gasLeft⟩)
+            ⟨d.stackTail, callPre.memory, callPre.gasLeft, callPre.stateGas⟩)
           d.codeWord.toAdr)
         d.codeWord.toAdr).2.2.2.2.memory = callPre.memory := by
     dsimp only [accessDelegation]
     cases getDelegatedCodeAddress
       ((addAccessedAddress
         (callPre.setMach
-          ⟨d.stackTail, callPre.memory, callPre.gasLeft⟩)
+          ⟨d.stackTail, callPre.memory, callPre.gasLeft, callPre.stateGas⟩)
         d.codeWord.toAdr).state.getCode d.codeWord.toAdr) <;> rfl
   have resolvedMemory := congrArg
     (fun result : Bool × Adr × ByteArray × Nat × Devm =>
@@ -192,7 +195,7 @@ theorem DelegatecallSpawnDescriptor.step
   simpa [DelegatecallSpawnDescriptor.parent,
     DelegatecallSpawnDescriptor.child,
     DelegatecallSpawnDescriptor.resume] using
-    (Xinst.step_delegatecall_spawn d.stackEq d.extensionEq d.delegationEq
+    (Xinst.step_delegatecall_spawn d.covered d.stackEq d.extensionEq d.delegationEq
       d.accessEq d.splitEq d.affordable d.depthHeadroom)
 
 /-- The shared crossing theorem specialized to the named descriptor. -/
@@ -213,7 +216,7 @@ theorem DelegatecallSpawnDescriptor.crossing
     DelegatecallSpawnDescriptor.child,
     DelegatecallSpawnDescriptor.resume] using
     (delegatecall_enters_with_parent_as_storage_owner
-      d.stackEq d.extensionEq d.delegationEq d.accessEq d.splitEq
+      d.covered d.stackEq d.extensionEq d.delegationEq d.accessEq d.splitEq
       d.affordable d.depthHeadroom d.resolvedNotPrecompile)
 
 /-- An explicit retained message-execution certificate.  Instantiate `msg`
@@ -293,7 +296,7 @@ theorem DelegatecallSpawnDescriptor.settled_of_runCompiled
           have expected' : d.resume.run (.ok child) =
               .ok (((incorporateChildOnSuccess d.parent child child.output).setMach
                 ⟨1 :: d.parent.stack, d.parent.memory,
-                  d.parent.gasLeft + child.gasLeft⟩).memWrite
+                  d.parent.gasLeft + child.gasLeft, (incorporateChildOnSuccess d.parent child child.output).stateGas⟩).memWrite
                     d.outputOffsetWord.toNat
                     (child.output.take d.outputSizeWord.toNat)) := by
             simpa [DelegatecallSpawnDescriptor.resume] using expected
@@ -318,7 +321,7 @@ theorem DelegatecallSpawnDescriptor.settled_of_runCompiled
           have expected' : d.resume.run (.ok child) =
               .ok (((incorporateChildOnError d.parent child child.output).setMach
                 ⟨0 :: d.parent.stack, d.parent.memory,
-                  d.parent.gasLeft + child.gasLeft⟩).memWrite
+                  d.parent.gasLeft + child.gasLeft, (incorporateChildOnError d.parent child child.output).stateGas⟩).memWrite
                     d.outputOffsetWord.toNat
                     (child.output.take d.outputSizeWord.toNat)) := by
             simpa [DelegatecallSpawnDescriptor.resume] using expected

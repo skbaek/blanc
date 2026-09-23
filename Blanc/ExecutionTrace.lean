@@ -173,13 +173,16 @@ inductive MessageCallTrace (msg : Msg) (state : State)
 the exact raw execution core it ran. -/
 theorem exists_messageCallTrace {msg : Msg} {state : State}
     {out : MsgCallOutput}
-    (h : processMessageCall msg = .ok ⟨state, out⟩) :
+    (h : processMessageCall msg = .ok ⟨state, out⟩)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     Nonempty (MessageCallTrace msg state out) := by
   have h_result := h
+  have hsg : msg.benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
   unfold processMessageCall at h
   split at h
   · rename_i htarget
     unfold processMessageCall.create at h
+    rw [hsg] at h
     dsimp only at h
     split at h
     · rename_i hcollision
@@ -197,6 +200,8 @@ theorem exists_messageCallTrace {msg : Msg} {state : State}
     have htargetFalse : msg.target.isNone = false := by
       cases ht : msg.target.isNone <;> simp_all
     unfold processMessageCall.call at h
+    rw [hsg] at h
+    dsimp only at h
     split at h
     · rename_i hauth
       obtain ⟨x0, hx0, h⟩ := Except.bind_eq_ok h
@@ -294,12 +299,47 @@ def transactionTenv (benv : Benv) (tx : Tx) (index : Nat)
         indexInBlock := index
         txHash := getTxHash tx } }
 
+/-- Intrinsic-cost sender independence in the none lane: the only `sender`
+use in `calculateIntrinsicCost` is the some-lane recipient check, so
+covered-fork validation results agree for any recovery address. This is what
+lets transaction traces record the opaque `validationSender` without
+replaying Jaune-private sender recovery. -/
+private lemma calculateIntrinsicCost_sender_congr_none {rules : ForkRules}
+    {tx : Tx} {s1 s2 : Adr} (hsg : rules.stateGas = none) :
+    calculateIntrinsicCost rules tx s1 = calculateIntrinsicCost rules tx s2 := by
+  unfold calculateIntrinsicCost
+  rw [hsg]
+
+/-- None-lane validation agrees for any recovery address. -/
+private lemma validateTransaction_sender_congr_none {rules : ForkRules}
+    {tx : Tx} {s1 s2 : Adr} (hsg : rules.stateGas = none) :
+    validateTransaction rules tx s1 = validateTransaction rules tx s2 := by
+  unfold validateTransaction
+  rw [hsg]
+  rw [calculateIntrinsicCost_sender_congr_none hsg]
+
+/-- Prepared messages keep their builder's fork: `prepareMessage` fixes
+`benv` into the message untouched. -/
+private lemma prepareMessage_benv_stat_fork {benv : Benv} {tenv : Tenv}
+    {tx : Tx} {msg : Msg}
+    (h : prepareMessage benv tenv tx = .ok msg) :
+    msg.benv.stat.fork = benv.stat.fork := by
+  unfold prepareMessage at h
+  split at h <;> dsimp only at h <;>
+    (obtain rfl := Except.ok.inj h; rfl)
+
 /-- A successful transaction together with the exact prepared message and its
 retained recursive execution.  Validation, sender recovery/fee checking,
 up-front debit, and message preparation are all replay equations, so an
-unrelated or forged message trace cannot inhabit this type. -/
+unrelated or forged message trace cannot inhabit this type.
+
+`validationSender` is recorded opaquely: Jaune-private sender recovery cannot
+be named from Blanc, but none-lane validation is sender-independent
+(`validateTransaction_sender_congr_none`), so the equation still pins the gas
+pair at covered forks. -/
 structure TransactionTrace (benv : Benv) (bout : BlockOutput)
     (tx : Tx) (index : Nat) (state : State) (bout' : BlockOutput) where
+  validationSender : Adr
   intrinsicGas : Nat
   calldataFloorGasCost : Nat
   sender : Adr
@@ -310,7 +350,7 @@ structure TransactionTrace (benv : Benv) (bout : BlockOutput)
   msg : Msg
   messageState : State
   messageOut : MsgCallOutput
-  validation : validateTransaction benv.stat.rules tx =
+  validation : validateTransaction benv.stat.rules tx validationSender =
     .ok (intrinsicGas, calldataFloorGasCost)
   checked : checkTransaction benv.beginTransaction
     (transactionPreludeBout bout tx index) tx =
@@ -324,18 +364,35 @@ structure TransactionTrace (benv : Benv) (bout : BlockOutput)
       effectiveGasPrice intrinsicGas blobVersionedHashes) tx = .ok msg
   message : MessageCallTrace msg messageState messageOut
   result : processTransaction benv bout tx index = .ok (state, bout')
+  /-- The validation sender is the one Jaune's `processTransaction` recovers:
+  `0` on the no-state-gas lane, otherwise the chain-id-checked recovered
+  signer.  Stated with the public components of Jaune's private
+  `recoverValidationSender`, so the trace is determined by its inputs. -/
+  validationSender_run :
+    (match benv.beginTransaction.stat.rules.stateGas with
+      | none => Except.ok 0
+      | some _ => do
+        Except.mapError TransitionError.transaction
+          (checkTransactionChainId benv.beginTransaction tx)
+        Except.mapError (fun e => TransitionError.senderRecovery e)
+          (recoverSender benv.beginTransaction.stat.chainId tx) :
+      Except TransitionError Adr) = .ok validationSender
 
 /-- Every successful transaction admits an exact retained message trace. -/
 theorem exists_transactionTrace
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
-    (h : processTransaction benv bout tx index = .ok (state, bout')) :
+    (h : processTransaction benv bout tx index = .ok (state, bout'))
+    (hfork : CoveredFork benv.stat.fork) :
     Nonempty (TransactionTrace benv bout tx index state bout') := by
   have h_result := h
+  have hsg : benv.stat.fork.ruleSet.stateGas = none := by
+    simpa [BenvStat.rules] using hfork.rules_stateGas_none
   unfold processTransaction at h
   dsimp only at h
   obtain ⟨prelude, hprelude, h⟩ := Except.bind_eq_ok h
   cases hprelude
+  obtain ⟨validationSender, hrec, h⟩ := Except.bind_eq_ok h
   obtain ⟨validated, hvalidated, h⟩ := Except.bind_eq_ok h
   obtain ⟨intrinsicGas, calldataFloorGasCost⟩ := validated
   rw [Except.mapError_eq_ok_iff] at hvalidated
@@ -348,15 +405,20 @@ theorem exists_transactionTrace
   obtain ⟨messageResult, hmessage, _⟩ := Except.bind_eq_ok h
   obtain ⟨messageState, messageOut⟩ := messageResult
   rw [Except.mapError_eq_ok_iff] at hmessage
-  rcases exists_messageCallTrace hmessage with ⟨messageTrace⟩
-  exact ⟨⟨intrinsicGas, calldataFloorGasCost, sender,
+  have hfork_msg : CoveredFork msg.benv.stat.fork := by
+    rw [prepareMessage_benv_stat_fork hprepared]
+    exact hfork
+  rcases exists_messageCallTrace hmessage hfork_msg with ⟨messageTrace⟩
+  exact ⟨⟨validationSender, intrinsicGas, calldataFloorGasCost, sender,
     effectiveGasPrice, blobVersionedHashes, txBlobGasUsed, debitState,
     msg, messageState, messageOut,
-    by simpa [Benv.beginTransaction] using hvalidated,
+    by simpa [Benv.beginTransaction, BenvStat.rules] using hvalidated,
     by simpa [transactionPreludeBout] using hchecked,
-    by simpa [transactionBlobGasFee, Benv.beginTransaction] using hdebit',
-    by simpa [transactionTenv, Benv.beginTransaction] using hprepared,
-    messageTrace, h_result⟩⟩
+    by simpa [transactionBlobGasFee, Benv.beginTransaction, BenvStat.rules] using hdebit',
+    by
+      simpa [transactionTenv, Benv.beginTransaction, BenvStat.rules,
+        allocateEvmGas, hsg] using hprepared,
+    messageTrace, h_result, hrec⟩⟩
 
 /-- Exact post-message transaction settlement form.  This exposes the two
 gas credits and the final account-deletion fold without re-executing or
@@ -364,7 +426,8 @@ approximating the transaction. -/
 theorem TransactionTrace.exists_finalStateForm
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
-    (trace : TransactionTrace benv bout tx index state bout') :
+    (trace : TransactionTrace benv bout tx index state bout')
+    (hfork : CoveredFork benv.stat.fork) :
     ∃ refundCounter : Nat,
       Int.toNat? trace.messageOut.refundCounter = some refundCounter ∧
       state =
@@ -383,18 +446,29 @@ theorem TransactionTrace.exists_finalStateForm
                   trace.calldataFloorGasCost *
                 (trace.effectiveGasPrice -
                   benv.stat.baseFeePerGas)).toB256) := by
+  have hsg : benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
+  simp only [BenvStat.rules] at hsg
   have hrun := trace.result
   unfold processTransaction at hrun
-  simp only [Benv.beginTransaction] at hrun
+  simp only [Benv.beginTransaction, BenvStat.rules] at hrun
   rcases Except.bind_eq_ok hrun with ⟨prelude, hprelude, hrun⟩
   have hpreludeEq := Except.ok.inj hprelude
   subst prelude
+  rcases Except.bind_eq_ok hrun with ⟨validationSender, hrec, hrun⟩
   rcases Except.bind_eq_ok hrun with ⟨validated, hvalidated, hrun⟩
   rcases validated with ⟨intrinsicGas, calldataFloorGasCost⟩
   rw [Except.mapError_eq_ok_iff] at hvalidated
   have hvalidatedEq : intrinsicGas = trace.intrinsicGas ∧
       calldataFloorGasCost = trace.calldataFloorGasCost := by
-    exact Prod.mk.inj (Except.ok.inj (hvalidated.symm.trans trace.validation))
+    have hsg : benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
+    have hcong : validateTransaction benv.stat.rules tx validationSender =
+        validateTransaction benv.stat.rules tx trace.validationSender :=
+      validateTransaction_sender_congr_none hsg
+    have hvalidated' : validateTransaction benv.stat.rules tx validationSender =
+        .ok ⟨intrinsicGas, calldataFloorGasCost⟩ := by
+      simpa [BenvStat.rules] using hvalidated
+    rw [hcong] at hvalidated'
+    exact Prod.mk.inj (Except.ok.inj (hvalidated'.symm.trans trace.validation))
   rcases hvalidatedEq with ⟨rfl, rfl⟩
   rcases Except.bind_eq_ok hrun with ⟨checked, hchecked, hrun⟩
   rcases checked with
@@ -405,14 +479,15 @@ theorem TransactionTrace.exists_finalStateForm
   rcases Except.bind_eq_ok hrun with ⟨debitState, hdebit, hrun⟩
   have hdebitSome := Option.toExcept_eq_ok hdebit
   have hdebitEq : debitState = trace.debitState := by
-    have htraceDebit := trace.debit
-    simp only [transactionBlobGasFee] at htraceDebit
-    rw [htraceDebit] at hdebitSome
-    exact Option.some.inj hdebitSome.symm
+    exact Option.some.inj (hdebitSome.symm.trans
+      (by simpa [transactionBlobGasFee, BenvStat.rules] using trace.debit))
   subst debitState
   rcases Except.bind_eq_ok hrun with ⟨msg, hprepared, hrun⟩
+  simp only [allocateEvmGas, hsg] at hprepared
+  have htracePrepared := trace.prepared
+  simp only [transactionTenv, Benv.beginTransaction] at htracePrepared
   have hmsgEq : msg = trace.msg := Except.ok.inj
-    (hprepared.symm.trans trace.prepared)
+    (hprepared.symm.trans htracePrepared)
   subst msg
   rcases Except.bind_eq_ok hrun with ⟨messageResult, hmessage, hrun⟩
   rcases messageResult with ⟨messageState, messageOut⟩
@@ -427,7 +502,7 @@ theorem TransactionTrace.exists_finalStateForm
   rcases hmessageEq with ⟨rfl, rfl⟩
   rcases Except.bind_eq_ok hrun with ⟨refundCounter, hrefund, hrun⟩
   have hrefundSome := Option.toExcept_eq_ok hrefund
-  simp only at hrun
+  simp only [settleTransactionGas, settleSelfdestructs, hsg] at hrun
   have hfinal := Except.ok.inj hrun
   exact ⟨refundCounter, hrefundSome, (Prod.mk.inj hfinal).1.symm⟩
 
@@ -445,10 +520,24 @@ inductive ApplyTransactionsTrace :
         finalBenv finalBout) :
       ApplyTransactionsTrace ((index, tx) :: txs) benv bout
         finalBenv finalBout
+
+/-- A transaction fold changes only its state component of `Benv`.  This
+local form is kept beside the carrier so compatibility construction can carry
+fork evidence through the fold without importing downstream accounting APIs. -/
+theorem ApplyTransactionsTrace.stat_eq
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) :
+    finalBenv.stat = benv.stat := by
+  induction trace with
+  | nil => rfl
+  | cons _ tail ih => simpa [Benv.withState] using ih
+
 theorem exists_applyTransactionsTrace
     {txs : List (Nat × Tx)} {benv finalBenv : Benv}
     {bout finalBout : BlockOutput}
-    (h : applyTransactions txs benv bout = .ok (finalBenv, finalBout)) :
+    (h : applyTransactions txs benv bout = .ok (finalBenv, finalBout))
+    (hfork : CoveredFork benv.stat.fork) :
     Nonempty (ApplyTransactionsTrace txs benv bout finalBenv finalBout) := by
   induction txs generalizing benv bout with
   | nil =>
@@ -460,8 +549,10 @@ theorem exists_applyTransactionsTrace
       simp only [applyTransactions] at h
       obtain ⟨txResult, htx, htail⟩ := Except.bind_eq_ok h
       obtain ⟨txState, txBout⟩ := txResult
-      rcases exists_transactionTrace htx with ⟨headTrace⟩
-      rcases ih htail with ⟨tailTrace⟩
+      rcases exists_transactionTrace htx hfork with ⟨headTrace⟩
+      have hfork_tail : CoveredFork (benv.withState txState).stat.fork :=
+        hfork
+      rcases ih htail hfork_tail with ⟨tailTrace⟩
       exact ⟨.cons headTrace tailTrace⟩
 
 /-! ## System-message and body traces -/
@@ -483,21 +574,30 @@ theorem exists_systemMessageTrace
     {benv : Benv} {target : Adr} {data : Bytes}
     {state : State} {out : MsgCallOutput}
     (h : processUncheckedSystemTransaction benv target data =
-      .ok (state, out)) :
+      .ok (state, out))
+    (hfork : CoveredFork benv.stat.fork) :
     Nonempty (SystemMessageTrace benv target data state out) := by
   have hmessage : processMessageCall
       (systemTransactionMessage benv target data) = .ok (state, out) := by
     simpa [processUncheckedSystemTransaction, processSystemTransaction,
       systemTransactionMessage] using h
-  rcases exists_messageCallTrace hmessage with ⟨trace⟩
+  have hfork_msg :
+      CoveredFork (systemTransactionMessage benv target data).benv.stat.fork := by
+    unfold systemTransactionMessage processSystemTransactionMsg
+      Benv.beginTransaction
+    exact hfork
+  rcases exists_messageCallTrace hmessage hfork_msg with ⟨trace⟩
   exact ⟨⟨trace, h⟩⟩
 
 /-- Retained execution evidence for the two checked request-system calls at
-the tail of `applyBody`. -/
+the tail of `applyBody` on the covered legacy-request lane. -/
 structure RequestsTrace (benv : Benv) (bout : BlockOutput)
     (state : State) (bout' : BlockOutput) where
   depositRequests : Bytes
   parsed : parseDepositRequests bout = .ok depositRequests
+  requestShape : benv.stat.rules.requests =
+    [(1, withdrawalRequestPredeployAddress),
+     (2, consolidationRequestPredeployAddress)]
   withdrawalState : State
   withdrawalOut : MsgCallOutput
   withdrawalRun : processCheckedSystemTransaction benv
@@ -517,30 +617,48 @@ structure RequestsTrace (benv : Benv) (bout : BlockOutput)
   run : processGeneralPurposeRequests benv bout = .ok (state, bout')
 theorem exists_requestsTrace
     {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
-    (h : processGeneralPurposeRequests benv bout = .ok (state, bout')) :
+    (h : processGeneralPurposeRequests benv bout = .ok (state, bout'))
+    (hfork : CoveredFork benv.stat.fork) :
     Nonempty (RequestsTrace benv bout state bout') := by
   have h_result := h
-  unfold processGeneralPurposeRequests at h
+  have hrequests : benv.stat.rules.requests =
+      [(1, withdrawalRequestPredeployAddress),
+       (2, consolidationRequestPredeployAddress)] := by
+    change (Fork.ruleSet benv.stat.fork).requests = _
+    exact hfork.requests_eq
+  unfold processGeneralPurposeRequests processGeneralPurposeRequestsAt at h
   obtain ⟨deposits, hdeposits, h⟩ := Except.bind_eq_ok h
-  dsimp only at h
-  split at h <;>
-    (obtain ⟨⟨withdrawalState, withdrawalOut⟩, hwithdrawal, h⟩ :=
-      Except.bind_eq_ok h
-     have hwithdrawal' :=
-       processCheckedSystemTransaction_to_unchecked hwithdrawal
-     rcases exists_systemMessageTrace hwithdrawal' with ⟨withdrawalTrace⟩
-     dsimp only at h
-     split at h <;>
-       (obtain ⟨⟨consolidationState, consolidationOut⟩,
-          hconsolidation, _⟩ := Except.bind_eq_ok h
-        have hconsolidation' :=
-          processCheckedSystemTransaction_to_unchecked hconsolidation
-        rcases exists_systemMessageTrace hconsolidation' with
-          ⟨consolidationTrace⟩
-        exact ⟨⟨deposits, hdeposits,
-          withdrawalState, withdrawalOut, hwithdrawal, withdrawalTrace,
-          consolidationState, consolidationOut,
-          hconsolidation, consolidationTrace, h_result⟩⟩))
+  rw [hrequests] at h
+  cases hwithdrawal : processCheckedSystemTransaction benv
+      withdrawalRequestPredeployAddress [] with
+  | error err =>
+      have impossible : False := by
+        simp [runRequestContracts, Except.bind, bind, hwithdrawal] at h
+      exact impossible.elim
+  | ok withdrawal =>
+      cases hconsolidation : processCheckedSystemTransaction
+          (benv.withState withdrawal.1)
+          consolidationRequestPredeployAddress [] with
+      | error err =>
+          have impossible : False := by
+            simp [runRequestContracts, Except.bind, bind, hwithdrawal,
+              hconsolidation] at h
+          exact impossible.elim
+      | ok consolidation =>
+          obtain ⟨withdrawalState, withdrawalOut⟩ := withdrawal
+          obtain ⟨consolidationState, consolidationOut⟩ := consolidation
+          have hwithdrawal' :=
+            processCheckedSystemTransaction_to_unchecked hwithdrawal
+          rcases exists_systemMessageTrace hwithdrawal' hfork with
+            ⟨withdrawalTrace⟩
+          have hconsolidation' :=
+            processCheckedSystemTransaction_to_unchecked hconsolidation
+          rcases exists_systemMessageTrace hconsolidation' hfork with
+            ⟨consolidationTrace⟩
+          exact ⟨⟨deposits, hdeposits, hrequests,
+            withdrawalState, withdrawalOut, hwithdrawal, withdrawalTrace,
+            consolidationState, consolidationOut,
+            hconsolidation, consolidationTrace, h_result⟩⟩
 
 /-- The final request-processing state is the state returned by the second
 checked system message. -/
@@ -558,17 +676,13 @@ theorem RequestsTrace.state_eq_consolidationState
           .ok (trace.consolidationState, trace.consolidationOut) := by
     simpa only [Benv.withState] using trace.consolidationRun
   have hrun := trace.run
-  unfold processGeneralPurposeRequests at hrun
+  have hconsolidation' := trace.consolidationRun
+  unfold processGeneralPurposeRequests processGeneralPurposeRequestsAt at hrun
   rw [trace.parsed] at hrun
-  simp only [bind, Except.bind] at hrun
-  split at hrun <;>
-    (rw [trace.withdrawalRun] at hrun
-     dsimp only at hrun
-     split at hrun <;>
-       (rw [hconsolidation] at hrun
-        dsimp only at hrun
-        split at hrun <;>
-          exact (Prod.mk.inj (Except.ok.inj hrun)).1.symm))
+  rw [trace.requestShape] at hrun
+  simp [runRequestContracts, Except.bind, bind, trace.withdrawalRun,
+    hconsolidation'] at hrun
+  simpa [Benv.withState] using hrun.1.symm
 
 /-- Complete retained execution evidence for a successful body under Jaune's
 currently modelled body semantics.  This includes the two pre-transaction
@@ -597,20 +711,41 @@ structure AppliedBodyTrace (benv : Benv) (txs : List (Bytes ⊕ Tx))
   transactions : ApplyTransactionsTrace decodedTxs.putIndex
     ((benv.withState beaconState).withState historyState) .init
     transactionBenv transactionBout
+  /-- The request pass itself precedes `applyBody`'s final, legacy-empty
+  block-access-list assignment.  Keep both endpoints rather than identifying
+  the two `BlockOutput` records by an unproved structural equality. -/
+  requestState : State
+  requestBout : BlockOutput
   requests : RequestsTrace
     (transactionBenv.withState
       (processWithdrawalsState transactionBenv.state wds))
     (transactionBout.withWithdrawalsTrie
       (processWithdrawalsTrie transactionBout.withdrawalsTrie wds))
-    state bout
+    requestState requestBout
+  requestState_eq : requestState = state
+  requestBout_eq : {requestBout with blockAccessList := []} = bout
+
+/-- The final body state is the second checked request message's state; the
+only post-request body operation in the covered legacy lane normalizes the
+block access-list output. -/
+theorem AppliedBodyTrace.state_eq_consolidationState
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs wds state bout) :
+    state = trace.requests.consolidationState :=
+  trace.requestState_eq.symm.trans
+    trace.requests.state_eq_consolidationState
 theorem exists_appliedBodyTrace
     {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (h : applyBody benv txs wds = .ok (state, bout)) :
+    (h : applyBody benv txs wds = .ok (state, bout))
+    (hfork : CoveredFork benv.stat.fork) :
     Nonempty (AppliedBodyTrace benv txs wds state bout) := by
   have h_result := h
+  have hbal : benv.stat.rules.bal = none := hfork.rules_bal_none
   rw [applyBody] at h
-  simp only at h
+  simp only [BalBuilder.incorporateSystem, hbal,
+    checkBlockAccessListGasLimit] at h
   rcases Except.bind_eq_ok h with
     ⟨⟨beaconState, beaconOut⟩, hbeacon, h⟩
   rcases Except.bind_eq_ok h with ⟨lastHash, hlastHash, h⟩
@@ -621,16 +756,29 @@ theorem exists_appliedBodyTrace
     ⟨⟨transactionBenv, transactionBout⟩, htransactions, hrequests⟩
   dsimp only at hhistory htransactions hrequests
   rw [Except.mapError_eq_ok_iff] at hbeacon hhistory
-  rcases exists_systemMessageTrace hbeacon with ⟨beaconTrace⟩
-  rcases exists_systemMessageTrace hhistory with ⟨historyTrace⟩
-  rcases exists_applyTransactionsTrace htransactions with
+  rcases exists_systemMessageTrace hbeacon hfork with ⟨beaconTrace⟩
+  rcases exists_systemMessageTrace hhistory hfork with ⟨historyTrace⟩
+  rcases exists_applyTransactionsTrace htransactions hfork with
     ⟨transactionsTrace⟩
   dsimp [processWithdrawals] at hrequests
-  rcases exists_requestsTrace hrequests with ⟨requestsTrace⟩
+  rcases Except.bind_eq_ok hrequests with
+    ⟨⟨requestState, requestBout⟩, hrequests, hfinal⟩
+  have hfork_requests : CoveredFork
+      (transactionBenv.withState
+        (processWithdrawalsState transactionBenv.state wds)).stat.fork := by
+    have hfork_transactions : CoveredFork transactionBenv.stat.fork := by
+      rw [transactionsTrace.stat_eq]
+      exact hfork
+    simpa [Benv.withState] using hfork_transactions
+  rcases exists_requestsTrace hrequests hfork_requests with ⟨requestsTrace⟩
+  have hfinal' : requestState = state ∧
+      {requestBout with blockAccessList := []} = bout := by
+    simpa [Except.bind, bind] using hfinal
   exact ⟨⟨h_result, beaconState, beaconOut, beaconTrace,
     lastHash, hlastHash, historyState, historyOut, historyTrace,
     decodedTxs, hdecoded, transactionBenv, transactionBout,
-    transactionsTrace, requestsTrace⟩⟩
+    transactionsTrace, requestState, requestBout, requestsTrace,
+    hfinal'.1, hfinal'.2⟩⟩
 
 end ExecutionTrace
 

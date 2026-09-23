@@ -382,12 +382,12 @@ open _root_.Blanc.ExecutionTrace
 /-! ## 6. The raw allowance ledger is a rooted chronology -/
 
 /-- The machine the rooted chronology's root constructor is stated at, for a pair root: WETH is no
-precompile because this rule set activates none.  Only its inhabitation is used; the chronology's own root
-indices are `Stor.empty`, and `PairRoot.wethEmpty` supplies the continuity. -/
+precompile under Prague's rule set, whose precompiles all sit at low addresses.  Only its inhabitation is
+used; the chronology's own root indices are `Stor.empty`, and `PairRoot.wethEmpty` supplies the
+continuity. -/
 def pairRootSevm : Sevm :=
   { (default : Sevm) with
-    benvStat := { (default : Sevm).benvStat with
-      rules := { (default : ForkRules) with precompiles := [] } } }
+    benvStat := { (default : Sevm).benvStat with fork := .prague } }
 
 /-- The machine state at a world: the world, and defaults elsewhere. -/
 def pairRootDevm (w : State) : Devm :=
@@ -400,7 +400,7 @@ theorem AllowanceRoot.of_pairRoot {cfg : ChainConfig} {deployed : BlockChain} {v
   configured :=
     { configured :=
         { distinct := root.distinct
-          nonprecompile := by simp [pairRootSevm, ForkRules.isPrecomp]
+          nonprecompile := by decide
           code := by
             show (deployed.state.getCode wethAccount).toList = Blanc.wethCode
             exact root.wethInstalled }
@@ -500,9 +500,13 @@ theorem toReplay {steps : List (PairStepRecord vault)} {future : BlockChain}
 
 /-- Every realized continuation carries the pair's unconditional invariant. -/
 theorem worldInv {steps : List (PairStepRecord vault)} {future : BlockChain}
-    (realizes : PairTraceRealizes root steps future) : PairWorldInv vault future.state := by
-  rcases exists_configuredHistoryTrace_of_reachUsing realizes.toReachUsing with ⟨history⟩
-  exact PairWorldInv.of_history root history
+    (realizes : PairTraceRealizes root steps future)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    PairWorldInv vault future.state := by
+  rcases exists_configuredHistoryTrace_of_reachUsing realizes.toReachUsing
+    (fun _ _ hfork => hcov _ _ hfork) with ⟨history⟩
+  exact PairWorldInv.of_history root history hcov
 
 /-- The supply cap holds at every realized continuation, unconditionally. -/
 theorem capped {steps : List (PairStepRecord vault)} {future : BlockChain}
@@ -610,14 +614,16 @@ end PairTraceRealizes
 /-- Every retained configured history from the pair root is realized. -/
 theorem pairTraceRealizes_of_configuredHistoryTrace {cfg : ChainConfig}
     {deployed future : BlockChain} {vault : Adr} (root : PairRoot cfg deployed vault)
-    (history : ConfiguredHistoryTrace cfg deployed future) :
+    (history : ConfiguredHistoryTrace cfg deployed future)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, PairTraceRealizes root steps future := by
   induction history with
   | refl hcfg hctx hid => exact ⟨[], .refl⟩
   | step prior block ih =>
       obtain ⟨priorSteps, priorRealizes⟩ := ih
       obtain ⟨blockSteps, blockReplay, blockTagged⟩ :=
-        retainedConfiguredBlockPairReplay block (PairWorldInv.of_history root prior)
+        retainedConfiguredBlockPairReplay block (PairWorldInv.of_history root prior hcov)
           (root.notPrecompile block.rulesAt).2 block.block.header.number
       exact ⟨priorSteps ++ blockSteps, .step priorRealizes block blockReplay blockTagged⟩
 -- PH:146–159 / G:664–677; `root.reachable_stateInv prior.toReachUsing` → `PairWorldInv.of_history root
@@ -627,10 +633,13 @@ theorem pairTraceRealizes_of_configuredHistoryTrace {cfg : ChainConfig}
 carrier; with `PairTraceRealizes.toReachUsing` the carrier is pinned exactly onto chain reachability. -/
 theorem pairTraceRealizes_exists_of_reachUsing {cfg : ChainConfig}
     {deployed future : BlockChain} {vault : Adr} (root : PairRoot cfg deployed vault)
-    (reach : BlockChain.ReachUsing cfg deployed future) :
+    (reach : BlockChain.ReachUsing cfg deployed future)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, PairTraceRealizes root steps future := by
-  rcases exists_configuredHistoryTrace_of_reachUsing reach with ⟨history⟩
-  exact pairTraceRealizes_of_configuredHistoryTrace root history
+  rcases exists_configuredHistoryTrace_of_reachUsing reach
+    (fun _ _ hfork => hcov _ _ hfork) with ⟨history⟩
+  exact pairTraceRealizes_of_configuredHistoryTrace root history hcov
 -- PH:167–173 / G:682–690.
 
 /-! ## 8. The headlines -/
@@ -639,16 +648,18 @@ theorem pairTraceRealizes_exists_of_reachUsing {cfg : ChainConfig}
 backed, or its realized trace retains a runtime-authorized debit of positive amount. -/
 theorem pair_reachable_backed_or_debit {cfg : ChainConfig} {deployed future : BlockChain}
     {vault : Adr} (root : PairRoot cfg deployed vault)
-    (reach : BlockChain.ReachUsing cfg deployed future) :
+    (reach : BlockChain.ReachUsing cfg deployed future)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, PairTraceRealizes root steps future ∧
       (PairBacked vault (future.state.getStor vault) (future.state.getStor wethAccount) ∨
         ∃ r ∈ steps, 0 < r.step.debitAmount) := by
-  obtain ⟨steps, realizes⟩ := pairTraceRealizes_exists_of_reachUsing root reach
+  obtain ⟨steps, realizes⟩ := pairTraceRealizes_exists_of_reachUsing root reach hcov
   refine ⟨steps, realizes, ?_⟩
   rcases realizes.toReplay.priceLe_or_debit with price | debit
   · rw [PairBoundary.snapshot_ofState, PairBoundary.snapshot_ofState,
       root.genesisSnapshot] at price
-    exact .inl ⟨realizes.worldInv.conserved, realizes.capped,
+    exact .inl ⟨(realizes.worldInv hcov).conserved, realizes.capped,
       Blanc.Prorata.backed_of_priceLe_genesis price⟩
   · exact .inr debit
 
@@ -658,10 +669,13 @@ theorem pair_reachable_stable {cfg : ChainConfig} {deployed : BlockChain} {vault
     {steps : List (PairStepRecord vault)} {future : BlockChain}
     (realizes : PairTraceRealizes root steps future)
     (collision : NoVaultAllowanceKeyCollision (PairStepRecord.ledger steps) vault)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork)
     {timestamp : Nat} {rules : ForkRules} (rulesAt : cfg.rulesAt timestamp = .ok rules) :
     PairStable vault rules future.state := by
-  rcases exists_configuredHistoryTrace_of_reachUsing realizes.toReachUsing with ⟨history⟩
-  exact PairStable.of_history root history rulesAt realizes.capped
+  rcases exists_configuredHistoryTrace_of_reachUsing realizes.toReachUsing
+    (fun _ _ hfork => hcov _ _ hfork) with ⟨history⟩
+  exact PairStable.of_history root history hcov rulesAt realizes.capped
     (realizes.backing collision)
 
 /-- The backing corollary's two halves: the joint invariant and WETH's own state invariant. -/
@@ -669,10 +683,12 @@ theorem pair_reachable_backed {cfg : ChainConfig} {deployed : BlockChain} {vault
     (root : PairRoot cfg deployed vault)
     {steps : List (PairStepRecord vault)} {future : BlockChain}
     (realizes : PairTraceRealizes root steps future)
-    (collision : NoVaultAllowanceKeyCollision (PairStepRecord.ledger steps) vault) :
+    (collision : NoVaultAllowanceKeyCollision (PairStepRecord.ledger steps) vault)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     PairBacked vault (future.state.getStor vault) (future.state.getStor wethAccount) ∧
       State.Inv wethAccount future.state := by
-  obtain ⟨vaultInv, wethInv, -, -, -⟩ := realizes.worldInv
+  obtain ⟨vaultInv, wethInv, -, -, -⟩ := realizes.worldInv hcov
   exact ⟨⟨vaultInv.inv, realizes.capped, realizes.backing collision⟩,
     wethSpec_stateInv_iff.mp wethInv⟩
 -- rules-free projection: no `rulesAt` is needed for these two conjuncts (PairStable.wethInv,

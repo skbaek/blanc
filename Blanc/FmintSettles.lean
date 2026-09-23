@@ -231,6 +231,7 @@ What it does **not** say: nothing about the callee, nothing about what the
 frame settles at — the outcome `out` is whatever the continuation produces —
 and nothing about exhaustiveness. -/
 theorem flashLoan_runCompiledTo_mint {sevm : Sevm} {pre : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {receiver token amount : B256} {data : Bytes} {out : Execution}
     (h_sel : Sevm.selector sevm = flashLoanSelector)
     (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
@@ -257,7 +258,7 @@ theorem flashLoan_runCompiledTo_mint {sevm : Sevm} {pre : Devm}
       b.logs = pre.logs →
       pre.gasLeft - flashLoanMintGas ≤ G → G ≤ pre.gasLeft →
       Func.RunCompiledTo (fmint.main :: fmint.aux) sevm
-        (b.setMach ⟨[amount, receiver], Mem.empty, G⟩) flashLoanFromMintLog out) :
+        (b.setMach ⟨[amount, receiver], Mem.empty, G, b.stateGas⟩) flashLoanFromMintLog out) :
     Prog.RunCompiledTo sevm pre fmint out := by
   have h_arg0 : Sevm.argWord sevm 0 = receiver := argWord_zero_of_decodes h_dec
   have h_arg2 : Sevm.argWord sevm 2 = amount := argWord_two_of_decodes h_dec
@@ -268,13 +269,14 @@ theorem flashLoan_runCompiledTo_mint {sevm : Sevm} {pre : Devm}
   set g := pre.gasLeft with hg
   refine
     Prog.runCompiledTo_intro (G := g - 1)
-      (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+      (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
       (by simp only [gJumpdest]; omega)
       (by rw [h_stack, h_mem])
       ?_
   -- the dispatcher, guard (0) and guard (1)
   func_run (39) [flashLoanSelector, 1, 0, 0, 1, 1, 0,
     ~~~ (0 : B256), (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat, 0, supplySlot]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · show sevm.currentTarget.toB256 =? Sevm.argWord sevm 1 = 1
     rw [argWord_one_of_decodes h_dec, h_token]
     show (if sevm.currentTarget.toB256 = sevm.currentTarget.toB256
@@ -285,13 +287,14 @@ theorem flashLoan_runCompiledTo_mint {sevm : Sevm} {pre : Devm}
     rw [h_arg0, ← addressMask_eq_shl]
     exact validAdr_iff.mp h_addr
   -- guard (2): the supply read, priced without deciding warmth
-  refine Func.runCompiledTo_sload_step rfl (by simp)
+  refine Func.runCompiledTo_sload_step hfork rfl (by simp)
     (v := Devm.getStorVal pre sevm.currentTarget supplySlot) rfl
     (M := Mem.empty) rfl
     (by simp only [Devm.gasLeft_setMach, gasColdSload]; omega) ?_
   intro b₁ c₁ G₁ hw₁ hacc₁ hstor₁ _hbal₁ _hcode₁ hrc₁ hlog₁ hlo₁ hhi₁ hG₁
   simp only [Devm.gasLeft_setMach, gasWarmAccess, gasColdSload] at hG₁ hlo₁ hhi₁
   func_run (4) [~~~ (Devm.getStorVal pre sevm.currentTarget supplySlot), 0]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · show ~~~ (Devm.getStorVal pre sevm.currentTarget supplySlot) <?
       Sevm.argWord sevm 2 = 0
     rw [h_arg2]
@@ -299,14 +302,15 @@ theorem flashLoan_runCompiledTo_mint {sevm : Sevm} {pre : Devm}
       then (1 : B256) else 0) = 0
     rw [if_neg (not_lt_of_ge (B256.le_not_of_nof h_nof))]
   -- (3) the mint: the receiver's balance, read then written
-  refine Func.runCompiledTo_sload_step rfl (by simp)
+  refine Func.runCompiledTo_sload_step hfork rfl (by simp)
     (v := Devm.getStorVal b₁ sevm.currentTarget (Sevm.argWord sevm 0)) rfl
     (M := Mem.empty) rfl
     (by simp only [Devm.gasLeft_setMach, gasColdSload]; omega) ?_
   intro b₂ c₂ G₂ hw₂ hacc₂ hstor₂ _hbal₂ _hcode₂ hrc₂ hlog₂ hlo₂ hhi₂ hG₂
   simp only [Devm.gasLeft_setMach, gasWarmAccess, gasColdSload] at hG₂ hlo₂ hhi₂
   func_run (3)
-  refine Func.runCompiledTo_sstore_warm_step rfl hw₂ h_static
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
+  refine Func.runCompiledTo_sstore_warm_step hfork rfl hw₂ h_static
     (M := Mem.empty) rfl
     (by simp only [Devm.gasLeft_setMach, gasStorageSet]; omega) ?_
   intro b₃ c₃ G₃ hkey₃ hoth₃ _hbal₃ _hcode₃ hacc₃ hlog₃ hc₃ hG₃
@@ -318,7 +322,8 @@ theorem flashLoan_runCompiledTo_mint {sevm : Sevm} {pre : Devm}
   func_run (7) [supplySlot,
     Sevm.argWord sevm 2 + Devm.getStorVal b₃ sevm.currentTarget supplySlot,
     supplySlot]
-  refine Func.runCompiledTo_sstore_warm_step (k := supplySlot)
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
+  refine Func.runCompiledTo_sstore_warm_step hfork (k := supplySlot)
     (v := Sevm.argWord sevm 2 + Devm.getStorVal b₃ sevm.currentTarget supplySlot)
     (s := [Sevm.argWord sevm 2, Sevm.argWord sevm 0]) ?_ ?_ h_static
     (M := Mem.empty) ?_ ?_ ?_
@@ -467,6 +472,7 @@ any of the borrower's code runs.
 account, so the amount offered to the callback is pinned by the same arithmetic
 that bounds `G`. No premise about the borrower appears anywhere. -/
 theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {receiver token amount : B256} {data : Bytes} {out : Execution}
     (h_sel : Sevm.selector sevm = flashLoanSelector)
     (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
@@ -496,13 +502,13 @@ theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
       Func.RunCompiledTo (fmint.main :: fmint.aux) sevm
         (b.setMach ⟨[Nat.toB256 G, receiver, 0, callbackArgsOffset,
             flashLoanArgsSize data.length, 0, 0, amount, receiver],
-          flashLoanCallMem sevm amount data, G⟩) flashLoanFromCall out) :
+          flashLoanCallMem sevm amount data, G, b.stateGas⟩) flashLoanFromCall out) :
     Prog.RunCompiledTo sevm pre fmint out := by
   have h_len_lt : data.length < 2 ^ 256 := by
     have := Nat.le_ceil32 data.length; omega
   have h_pre : flashLoanMintGas + flashLoanLogGas + flashLoanCallbackGas data.length
       ≤ pre.gasLeft := h_gas
-  refine flashLoan_runCompiledTo_mint h_sel h_dec h_token h_addr h_nof h_static
+  refine flashLoan_runCompiledTo_mint (hfork := hfork) h_sel h_dec h_token h_addr h_nof h_static
     h_stack h_mem (by
       simp only [flashLoanLogGas, flashLoanCallbackGas, flashLoanCopyGas,
         gVerylow, gBase, gMemory, gLog, gLogdata, gLogtopic] at h_pre; omega) ?_
@@ -516,6 +522,7 @@ theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
       gBase, gMemory, gLog, gLogdata, gLogtopic] at hG₀ ⊢
     omega
   func_run (8) [gMemory]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · exact Devm.extCost_empty_word
   refine Func.runCompiledTo_log_step (topics := [transferEvent, 0, receiver])
     (s := [amount, receiver]) rfl rfl h_static
@@ -545,6 +552,7 @@ theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
       ← tailPtr_three_of_decodes h_dec]
     exact tailLen_three_of_decodes h_dec
   func_run (3)
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   refine Func.runCompiledTo_mstore_step
     (M := Mem.empty.write 0 amount.toBytes) (c := 3) rfl rfl ?_ ?_ ?_
   · exact Devm.extCost_add_of_size Mem.size_write_word (by decide)
@@ -554,6 +562,7 @@ theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
   have s₁ : M₁.size = 32 := by
     rw [← hM₁, Mem.size_write_word_at, Mem.size_write_word]; decide
   func_run (2)
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   refine Func.runCompiledTo_mstore_step (M := M₁) (c := 6) rfl rfl ?_ ?_ ?_
   · exact Devm.extCost_add_of_size s₁ (by decide)
   · simp only [Devm.gasLeft_setMach]; omega
@@ -562,6 +571,7 @@ theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
   have s₂ : M₂.size = 64 := by
     rw [← hM₂, Mem.size_write_word_at, s₁]; decide
   func_run (2)
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   refine Func.runCompiledTo_mstore_step (M := M₂) (c := 6) rfl rfl ?_ ?_ ?_
   · exact Devm.extCost_add_of_size s₂ (by decide)
   · simp only [Devm.gasLeft_setMach]; omega
@@ -570,6 +580,7 @@ theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
   have s₃ : M₃.size = 96 := by
     rw [← hM₃, Mem.size_write_word_at, s₂]; decide
   func_run (1)
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   refine Func.runCompiledTo_mstore_step (M := M₃) (c := 6) rfl rfl ?_ ?_ ?_
   · exact Devm.extCost_add_of_size s₃ (by decide)
   · simp only [Devm.gasLeft_setMach]; omega
@@ -578,6 +589,7 @@ theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
   have s₄ : M₄.size = 128 := by
     rw [← hM₄, Mem.size_write_word_at, s₃]; decide
   func_run (2)
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   refine Func.runCompiledTo_mstore_step (M := M₄) (c := 6) rfl rfl ?_ ?_ ?_
   · exact Devm.extCost_add_of_size s₄ (by decide)
   · simp only [Devm.gasLeft_setMach]; omega
@@ -586,6 +598,7 @@ theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
   have s₅ : M₅.size = 160 := by
     rw [← hM₅, Mem.size_write_word_at, s₄]; decide
   func_run (2)
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   refine Func.runCompiledTo_mstore_step (M := M₅) (c := 6) rfl rfl ?_ ?_ ?_
   · exact Devm.extCost_add_of_size s₅ (by decide)
   · simp only [Devm.gasLeft_setMach]; omega
@@ -594,6 +607,7 @@ theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
   have s₆ : M₆.size = 192 := by
     rw [← hM₆, Mem.size_write_word_at, s₅]; decide
   func_run (10) [(132 : B256)]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   rw [h_len]
   refine Func.runCompiledTo_mstore_step (M := M₆) (c := 6) rfl rfl ?_ ?_ ?_
   · exact Devm.extCost_add_of_size s₆ (by decide)
@@ -603,6 +617,7 @@ theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
   have s₇ : M₇.size = 224 := by
     rw [← hM₇, Mem.size_write_word_at, s₆]; decide
   func_run (5) [(164 : B256)]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   have h_dl : (Nat.toB256 data.length).toNat = data.length := by
     rw [B256.toNat_toB256]; exact Nat.mod_eq_of_lt h_len_lt
   have h164 : (Nat.toB256 132 + 32 : B256).toNat = (164 : B256).toNat := by decide
@@ -627,6 +642,7 @@ theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
     simp only [flashLoanCallbackGas, gVerylow, gBase, gMemory] at h_gas'
     omega
   func_run (11)
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   -- the state at the `CALL`, read off the eight named images
   have i0 : ((0 : B256) * 32).toNat = 0 := rfl
   have i1 : ((1 : B256) * 32).toNat = 32 := rfl
@@ -677,6 +693,7 @@ outcome composes against. -/
 set_option maxRecDepth 736 in
 /-- `flashLoan_runCompiledTo_mint`, existential in the outcome. -/
 theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {receiver token amount : B256} {data : Bytes} {P : Execution → Prop}
     (h_sel : Sevm.selector sevm = flashLoanSelector)
     (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
@@ -704,7 +721,7 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
       b.error = pre.error →
       pre.gasLeft - flashLoanMintGas ≤ G → G ≤ pre.gasLeft →
       Func.ExecSat (fmint.main :: fmint.aux) sevm
-        (b.setMach ⟨[amount, receiver], Mem.empty, G⟩) flashLoanFromMintLog P) :
+        (b.setMach ⟨[amount, receiver], Mem.empty, G, b.stateGas⟩) flashLoanFromMintLog P) :
     Prog.ExecSat sevm pre fmint P := by
   have h_arg0 : Sevm.argWord sevm 0 = receiver := argWord_zero_of_decodes h_dec
   have h_arg2 : Sevm.argWord sevm 2 = amount := argWord_two_of_decodes h_dec
@@ -714,7 +731,7 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
   rw [flashLoanMintGas_eq] at h_gas h_cont
   set g := pre.gasLeft with hg
   refine Prog.execSat_intro (G := g - 1)
-    (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+    (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
     (by simp only [gJumpdest]; omega)
     (by rw [h_stack, h_mem])
     ?_
@@ -722,6 +739,7 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
   · intro ex hex
     func_run (39) [flashLoanSelector, 1, 0, 0, 1, 1, 0,
       ~~~ (0 : B256), (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat, 0, supplySlot]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     · show sevm.currentTarget.toB256 =? Sevm.argWord sevm 1 = 1
       rw [argWord_one_of_decodes h_dec, h_token]
       show (if sevm.currentTarget.toB256 = sevm.currentTarget.toB256
@@ -732,7 +750,7 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
       rw [h_arg0, ← addressMask_eq_shl]
       exact validAdr_iff.mp h_addr
     exact hex
-  refine Func.execSat_sload_step rfl (by simp)
+  refine Func.execSat_sload_step hfork rfl (by simp)
     (v := Devm.getStorVal pre sevm.currentTarget supplySlot) rfl
     (M := Mem.empty) rfl
     (by simp only [Devm.gasLeft_setMach, gasColdSload]; omega) ?_
@@ -742,6 +760,7 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
   apply Func.execSat_segment
   · intro ex hex
     func_run (4) [~~~ (Devm.getStorVal pre sevm.currentTarget supplySlot), 0]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     · show ~~~ (Devm.getStorVal pre sevm.currentTarget supplySlot) <?
         Sevm.argWord sevm 2 = 0
       rw [h_arg2]
@@ -749,7 +768,7 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
         then (1 : B256) else 0) = 0
       rw [if_neg (not_lt_of_ge (B256.le_not_of_nof h_nof))]
     exact hex
-  refine Func.execSat_sload_step rfl (by simp)
+  refine Func.execSat_sload_step hfork rfl (by simp)
     (v := Devm.getStorVal b₁ sevm.currentTarget (Sevm.argWord sevm 0)) rfl
     (M := Mem.empty) rfl
     (by simp only [Devm.gasLeft_setMach, gasColdSload]; omega) ?_
@@ -759,8 +778,9 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
   apply Func.execSat_segment
   · intro ex hex
     func_run (3)
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     exact hex
-  refine Func.execSat_sstore_warm_step rfl hw₂ h_static
+  refine Func.execSat_sstore_warm_step hfork rfl hw₂ h_static
     (M := Mem.empty) rfl
     (by simp only [Devm.gasLeft_setMach, gasStorageSet]; omega) ?_
   intro b₃ c₃ G₃ hkey₃ hoth₃ _hbal₃ _hcode₃ hacc₃ hlog₃ _hout₃ herr₃
@@ -774,8 +794,9 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
     func_run (7) [supplySlot,
       Sevm.argWord sevm 2 + Devm.getStorVal b₃ sevm.currentTarget supplySlot,
       supplySlot]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     exact hex
-  refine Func.execSat_sstore_warm_step (k := supplySlot)
+  refine Func.execSat_sstore_warm_step hfork (k := supplySlot)
     (v := Sevm.argWord sevm 2 + Devm.getStorVal b₃ sevm.currentTarget supplySlot)
     (s := [Sevm.argWord sevm 2, Sevm.argWord sevm 0]) ?_ ?_ h_static
     (M := Mem.empty) ?_ ?_ ?_
@@ -830,6 +851,7 @@ set_option maxRecDepth 799 in
 at the `CALL`, handed to a continuation that will decide the outcome by case
 analysis on the callback's settle. -/
 theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {receiver token amount : B256} {data : Bytes} {P : Execution → Prop}
     (h_sel : Sevm.selector sevm = flashLoanSelector)
     (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
@@ -860,13 +882,13 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
       Func.ExecSat (fmint.main :: fmint.aux) sevm
         (b.setMach ⟨[Nat.toB256 G, receiver, 0, callbackArgsOffset,
             flashLoanArgsSize data.length, 0, 0, amount, receiver],
-          flashLoanCallMem sevm amount data, G⟩) flashLoanFromCall P) :
+          flashLoanCallMem sevm amount data, G, b.stateGas⟩) flashLoanFromCall P) :
     Prog.ExecSat sevm pre fmint P := by
   have h_len_lt : data.length < 2 ^ 256 := by
     have := Nat.le_ceil32 data.length; omega
   have h_pre : flashLoanMintGas + flashLoanLogGas + flashLoanCallbackGas data.length
       ≤ pre.gasLeft := h_gas
-  refine flashLoan_execSat_mint h_sel h_dec h_token h_addr h_nof h_static
+  refine flashLoan_execSat_mint (hfork := hfork) h_sel h_dec h_token h_addr h_nof h_static
     h_stack h_mem (by
       simp only [flashLoanLogGas, flashLoanCallbackGas, flashLoanCopyGas,
         gVerylow, gBase, gMemory, gLog, gLogdata, gLogtopic] at h_pre; omega) ?_
@@ -882,6 +904,7 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
   apply Func.execSat_segment
   · intro ex hex
     func_run (8) [gMemory]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     · exact Devm.extCost_empty_word
     exact hex
   refine Func.execSat_log_step (topics := [transferEvent, 0, receiver])
@@ -915,6 +938,7 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
   apply Func.execSat_segment
   · intro ex hex
     func_run (3)
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     exact hex
   refine Func.execSat_mstore_step
     (M := Mem.empty.write 0 amount.toBytes) (c := 3) rfl rfl ?_ ?_ ?_
@@ -927,6 +951,7 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
   apply Func.execSat_segment
   · intro ex hex
     func_run (2)
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     exact hex
   refine Func.execSat_mstore_step (M := M₁) (c := 6) rfl rfl ?_ ?_ ?_
   · exact Devm.extCost_add_of_size s₁ (by decide)
@@ -938,6 +963,7 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
   apply Func.execSat_segment
   · intro ex hex
     func_run (2)
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     exact hex
   refine Func.execSat_mstore_step (M := M₂) (c := 6) rfl rfl ?_ ?_ ?_
   · exact Devm.extCost_add_of_size s₂ (by decide)
@@ -949,6 +975,7 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
   apply Func.execSat_segment
   · intro ex hex
     func_run (1)
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     exact hex
   refine Func.execSat_mstore_step (M := M₃) (c := 6) rfl rfl ?_ ?_ ?_
   · exact Devm.extCost_add_of_size s₃ (by decide)
@@ -960,6 +987,7 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
   apply Func.execSat_segment
   · intro ex hex
     func_run (2)
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     exact hex
   refine Func.execSat_mstore_step (M := M₄) (c := 6) rfl rfl ?_ ?_ ?_
   · exact Devm.extCost_add_of_size s₄ (by decide)
@@ -971,6 +999,7 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
   apply Func.execSat_segment
   · intro ex hex
     func_run (2)
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     exact hex
   refine Func.execSat_mstore_step (M := M₅) (c := 6) rfl rfl ?_ ?_ ?_
   · exact Devm.extCost_add_of_size s₅ (by decide)
@@ -982,6 +1011,7 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
   apply Func.execSat_segment
   · intro ex hex
     func_run (10) [(132 : B256)]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     exact hex
   rw [h_len]
   refine Func.execSat_mstore_step (M := M₆) (c := 6) rfl rfl ?_ ?_ ?_
@@ -994,6 +1024,7 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
   apply Func.execSat_segment
   · intro ex hex
     func_run (5) [(164 : B256)]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     exact hex
   have h_dl : (Nat.toB256 data.length).toNat = data.length := by
     rw [B256.toNat_toB256]; exact Nat.mod_eq_of_lt h_len_lt
@@ -1021,6 +1052,7 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
   apply Func.execSat_segment
   · intro ex hex
     func_run (11)
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     exact hex
   -- the state at the `CALL`, read off the eight named images
   have i0 : ((0 : B256) * 32).toNat = 0 := rfl
@@ -1143,6 +1175,7 @@ continuations: the frame retains at least a sixty-fourth of what it had after
 the call's own access charges, and `2 * gasColdAccountAccess` bounds those
 (the account access plus EIP-7702's delegation resolution, at `value = 0`). -/
 theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {receiver token amount : B256} {data : Bytes} {K : Nat}
     {P : Execution → Prop}
     (h_sel : Sevm.selector sevm = flashLoanSelector)
@@ -1161,13 +1194,13 @@ theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
     (h_flag0 : ∀ (d : Devm) (Gc : Nat), K ≤ Gc →
       Func.ExecSat (fmint.main :: fmint.aux) sevm
         (d.setMach ⟨0 :: [amount, receiver],
-          flashLoanCallMem sevm amount data, Gc⟩) flashLoanFromFlag P)
+          flashLoanCallMem sevm amount data, Gc, d.stateGas⟩) flashLoanFromFlag P)
     (h_flag1 : ∀ (d : Devm) (Gc : Nat), K ≤ Gc → d.error = pre.error →
       Func.ExecSat (fmint.main :: fmint.aux) sevm
         (d.setMach ⟨1 :: [amount, receiver],
-          flashLoanCallMem sevm amount data, Gc⟩) flashLoanFromFlag P) :
+          flashLoanCallMem sevm amount data, Gc, d.stateGas⟩) flashLoanFromFlag P) :
     Prog.ExecSat sevm pre fmint P := by
-  refine flashLoan_execSat_call h_sel h_dec h_size h_token h_addr h_nof h_static
+  refine flashLoan_execSat_call (hfork := hfork) h_sel h_dec h_size h_token h_addr h_nof h_static
     h_stack h_mem (by omega) ?_
   intro b G h_rcv h_sup h_oth hw_r hw_s hw_mono h_log h_err h_lo h_hi
   have hKG : 2 * gasColdAccountAccess + 64 * K ≤ G := by omega
@@ -1176,9 +1209,9 @@ theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
     (data := data) h_size
   set st := b.setMach ⟨[Nat.toB256 G, receiver, 0, callbackArgsOffset,
     flashLoanArgsSize data.length, 0, 0, amount, receiver],
-    flashLoanCallMem sevm amount data, G⟩ with hst
+    flashLoanCallMem sevm amount data, G, b.stateGas⟩ with hst
   rcases hdel : accessDelegation (addAccessedAddress
-      (st.setMach ⟨[amount, receiver], st.memory, st.gasLeft⟩) receiver.toAdr)
+      (st.setMach ⟨[amount, receiver], st.memory, st.gasLeft, st.stateGas⟩) receiver.toAdr)
       receiver.toAdr with ⟨dp, dadr, dcode, dgc, d1⟩
   obtain ⟨hd1s, hd1m, hd1g, hdgc⟩ := accessDelegation_inv hdel
   have hd1e : d1.error = pre.error := by
@@ -1189,17 +1222,17 @@ theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
   have hd1s' : d1.stack = [amount, receiver] := hd1s
   have hd1m' : d1.memory = flashLoanCallMem sevm amount data := hd1m
   have hd1g' : d1.gasLeft = G := hd1g
-  have h_ext : (st.setMach ⟨[amount, receiver], st.memory, st.gasLeft⟩).extCost
+  have h_ext : (st.setMach ⟨[amount, receiver], st.memory, st.gasLeft, st.stateGas⟩).extCost
       [⟨callbackArgsOffset.toNat, (flashLoanArgsSize data.length).toNat⟩,
         ⟨(0 : B256).toNat, (0 : B256).toNat⟩] = 0 :=
     Devm.extCost_covered h_cov
   set acc := accessCost receiver.toAdr
-    (st.setMach ⟨[amount, receiver], st.memory, st.gasLeft⟩).accessedAddresses
+    (st.setMach ⟨[amount, receiver], st.memory, st.gasLeft, st.stateGas⟩).accessedAddresses
     + dgc with hacc
   have h_acc_le : acc ≤ 2 * gasColdAccountAccess := by
     have h1 := accessCost_le (x := receiver.toAdr)
       (a := (st.setMach
-        ⟨[amount, receiver], st.memory, st.gasLeft⟩).accessedAddresses)
+        ⟨[amount, receiver], st.memory, st.gasLeft, st.stateGas⟩).accessedAddresses)
     omega
   have h_afford : acc + 0 ≤ d1.gasLeft := by rw [hd1g']; omega
   have h_split := calculateMsgCallGas_zero (gas := (Nat.toB256 G).toNat) h_afford
@@ -1219,12 +1252,12 @@ theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
   by_cases hd : sevm.depth = 0
   · -- the depth-limit arm: no child is spawned, the flag is `0`
     refine Func.execSat_next
-      (Ninst.runCompiled_call_zero_value_zero_depth rfl h_ext hdel hacc.symm
+      (Ninst.runCompiled_call_zero_value_zero_depth hfork rfl h_ext hdel hacc.symm
         h_split h_gcross hd (by simp [hd1s'])) ?_
     rw [hd1s', hd1m', Mem.extends_covered h_cov]
     exact h_flag0 _ _ (by omega)
   · -- the spawn
-    have h_step := Xinst.step_call_zero_value_spawn (sevm := sevm) rfl h_ext hdel
+    have h_step := Xinst.step_call_zero_value_spawn hfork (sevm := sevm) rfl h_ext hdel
       hacc.symm h_split h_gcross hd
     set P' := callSpawnParent d1 (mcs + acc + 0) callbackArgsOffset.toNat
       (flashLoanArgsSize data.length).toNat (0 : B256).toNat (0 : B256).toNat
@@ -1252,7 +1285,7 @@ theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
               (.ok child)
               = .ok ((incorporateChildOnError P' child child.output).setMach
                   ⟨0 :: [amount, receiver], flashLoanCallMem sevm amount data,
-                    P'.gasLeft + child.gasLeft⟩) := by
+                    P'.gasLeft + child.gasLeft, (incorporateChildOnError P' child child.output).stateGas⟩) := by
             rw [Resume.run_call_err hce hroom]
             simp only [show ((0 : B256)).toNat = 0 from rfl, List.take_zero]
             rw [Devm.memWrite_nil, hP's, hP'm]
@@ -1266,7 +1299,7 @@ theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
               (.ok child)
               = .ok ((incorporateChildOnSuccess P' child child.output).setMach
                   ⟨1 :: [amount, receiver], flashLoanCallMem sevm amount data,
-                    P'.gasLeft + child.gasLeft⟩) := by
+                    P'.gasLeft + child.gasLeft, (incorporateChildOnSuccess P' child child.output).stateGas⟩) := by
             rw [Resume.run_call_ok hce' hroom]
             simp only [show ((0 : B256)).toNat = 0 from rfl, List.take_zero]
             rw [Devm.memWrite_nil, hP's, hP'm]
@@ -1291,12 +1324,12 @@ theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
               ((Frame.ofCall msg').settle (exec cevm))
               = .ok ((incorporateChildOnError P' child child.output).setMach
                   ⟨0 :: [amount, receiver], flashLoanCallMem sevm amount data,
-                    P'.gasLeft + child.gasLeft⟩) := by
+                    P'.gasLeft + child.gasLeft, (incorporateChildOnError P' child child.output).stateGas⟩) := by
             rw [hsettle, Resume.run_call_err hce hroom]
             simp only [show ((0 : B256)).toNat = 0 from rfl, List.take_zero]
             rw [Devm.memWrite_nil, hP's, hP'm]
           exact Func.execSat_next
-            (Ninst.runCompiled_call_zero_value rfl h_ext hdel hacc.symm h_split
+            (Ninst.runCompiled_call_zero_value hfork rfl h_ext hdel hacc.symm h_split
               h_gcross hd henter hres)
             (h_flag0 (incorporateChildOnError P' child child.output)
               (P'.gasLeft + child.gasLeft) (by omega))
@@ -1307,12 +1340,12 @@ theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
               ((Frame.ofCall msg').settle (exec cevm))
               = .ok ((incorporateChildOnSuccess P' child child.output).setMach
                   ⟨1 :: [amount, receiver], flashLoanCallMem sevm amount data,
-                    P'.gasLeft + child.gasLeft⟩) := by
+                    P'.gasLeft + child.gasLeft, (incorporateChildOnSuccess P' child child.output).stateGas⟩) := by
             rw [hsettle, Resume.run_call_ok hce' hroom]
             simp only [show ((0 : B256)).toNat = 0 from rfl, List.take_zero]
             rw [Devm.memWrite_nil, hP's, hP'm]
           exact Func.execSat_next
-            (Ninst.runCompiled_call_zero_value rfl h_ext hdel hacc.symm h_split
+            (Ninst.runCompiled_call_zero_value hfork rfl h_ext hdel hacc.symm h_split
               h_gcross hd henter hres)
             (h_flag1 (incorporateChildOnSuccess P' child child.output)
               (P'.gasLeft + child.gasLeft) (by omega)
@@ -1329,7 +1362,7 @@ lemma execSat_flagZero_leaf {sevm : Sevm} {d : Devm} {amount receiver : B256}
     (h_gas : 21 ≤ Gc)
     (hP : ∀ post : Devm, P (.error (.revert, post))) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (d.setMach ⟨0 :: [amount, receiver], M, Gc⟩) flashLoanFromFlag P := by
+      (d.setMach ⟨0 :: [amount, receiver], M, Gc, d.stateGas⟩) flashLoanFromFlag P := by
   apply Func.execSat_of_runCompiledTo
   · func_run (2) [1]
     exact Func.runCompiledTo_revert_func (G := Gc - 21)
@@ -1347,7 +1380,7 @@ lemma execSat_returnDataShort_leaf {sevm : Sevm} {d : Devm}
     (h_gas : 42 ≤ Gc)
     (hP : ∀ post : Devm, P (.error (.revert, post))) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (d.setMach ⟨1 :: [amount, receiver], M, Gc⟩) flashLoanFromFlag P := by
+      (d.setMach ⟨1 :: [amount, receiver], M, Gc, d.stateGas⟩) flashLoanFromFlag P := by
   have h_lt : (Nat.toB256 d.returnData.length <? (32 : B256)) = 1 := by
     show (if Nat.toB256 d.returnData.length < 32 then (1 : B256) else 0) = 1
     refine if_pos ?_
@@ -1385,7 +1418,7 @@ lemma execSat_magicMismatch_leaf {sevm : Sevm} {d : Devm}
     (h_gas : 82 ≤ Gc)
     (hP : ∀ post : Devm, P (.error (.revert, post))) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (d.setMach ⟨1 :: [amount, receiver], M, Gc⟩) flashLoanFromFlag P := by
+      (d.setMach ⟨1 :: [amount, receiver], M, Gc, d.stateGas⟩) flashLoanFromFlag P := by
   have h_len : B256.toNat 0 + B256.toNat 32 ≤ d.returnData.length := by
     have h1 : ¬ Nat.toB256 d.returnData.length < (32 : B256) := by
       intro hc
@@ -1471,10 +1504,10 @@ lemma execSat_spend_step {sevm : Sevm} {d : Devm}
     (h_gas : 77 ≤ Gc)
     (h_next : ∀ M' : Mem, M'.size = M.size →
       Func.ExecSat (fmint.main :: fmint.aux) sevm
-        (d.setMach ⟨[amount, receiver], M', Gc - 77⟩)
+        (d.setMach ⟨[amount, receiver], M', Gc - 77, d.stateGas⟩)
           spendAllowanceThenBurn P) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (d.setMach ⟨1 :: [amount, receiver], M, Gc⟩) flashLoanFromFlag P := by
+      (d.setMach ⟨1 :: [amount, receiver], M, Gc, d.stateGas⟩) flashLoanFromFlag P := by
   have h_len := returnData_bound_of_not_short h_ge
   have h_eq' : (erc3156Magic =?
       ((M.write ((0 * 32 : B256)).toNat
@@ -1491,6 +1524,7 @@ lemma execSat_spend_step {sevm : Sevm} {d : Devm}
   refine Func.execSat_segment ?_ (h_next _ hs')
   intro ex hex
   func_run (16) [0, 0, 6, 3, 1, 0]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · rw [Devm.extCost_zero_of_le h32 (by
       rw [show ((0 * 32 : B256)).toNat + B256.toNat 32 = 32 from by decide]
       omega)]
@@ -1545,9 +1579,9 @@ lemma execSat_spendGuard_step {sevm : Sevm} {d : Devm}
     (h_gas : 108 ≤ Gc)
     (h_next : ∀ M'' : Mem, M''.size = M.size →
       Func.ExecSat (fmint.main :: fmint.aux) sevm
-        (d.setMach ⟨[h, wad, receiver], M'', Gc - 108⟩) spendFromHash P) :
+        (d.setMach ⟨[h, wad, receiver], M'', Gc - 108, d.stateGas⟩) spendFromHash P) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (d.setMach ⟨[wad, receiver], M, Gc⟩) spendAllowanceThenBurn P := by
+      (d.setMach ⟨[wad, receiver], M, Gc, d.stateGas⟩) spendAllowanceThenBurn P := by
   have hw1 : (M.write ((0 * 32 : B256)).toNat receiver.toBytes).size
       = M.size := by
     apply Mem.size_write_of_le
@@ -1573,6 +1607,7 @@ lemma execSat_spendGuard_step {sevm : Sevm} {d : Devm}
   func_run (21) [0, 0, 42, h, ~~~ (0 : B256),
     (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat,
     ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& h, 0, ~~~ h, 0, 0]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · exact Devm.extCost_zero_of_le h32 (by
       rw [show ((0 * 32 : B256)).toNat + 32 = 32 from by decide]
       omega)
@@ -1605,7 +1640,7 @@ lemma execSat_slotCollision_leaf {sevm : Sevm} {d : Devm}
     (h_gas : 113 ≤ Gc)
     (hP : ∀ post : Devm, P (.error (.revert, post))) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (d.setMach ⟨[wad, receiver], M, Gc⟩) spendAllowanceThenBurn P := by
+      (d.setMach ⟨[wad, receiver], M, Gc, d.stateGas⟩) spendAllowanceThenBurn P := by
   have hw1 : (M.write ((0 * 32 : B256)).toNat receiver.toBytes).size
       = M.size := by
     apply Mem.size_write_of_le
@@ -1644,6 +1679,7 @@ finite and below the amount owed: `flashLoan` deliberately reverts.  The
 allowance value is read through the warmth-open `SLOAD` step, so the statement
 needs no warm-set premise (F28). -/
 lemma execSat_allowanceLow_leaf {sevm : Sevm} {d : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {wad receiver h amnt : B256} {M : Mem} {Gc : Nat} {P : Execution → Prop}
     (h_amnt : d.getStorVal sevm.currentTarget h = amnt)
     (h_nmax : B256.eqCheck (~~~ amnt) 0 = 0)
@@ -1651,13 +1687,13 @@ lemma execSat_allowanceLow_leaf {sevm : Sevm} {d : Devm}
     (h_gas : 2152 ≤ Gc)
     (hP : ∀ post : Devm, P (.error (.revert, post))) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (d.setMach ⟨[h, wad, receiver], M, Gc⟩) spendFromHash P := by
+      (d.setMach ⟨[h, wad, receiver], M, Gc, d.stateGas⟩) spendFromHash P := by
   refine Func.execSat_next
     (Ninst.runCompiled_dup (n := 0) (G := Gc - gVerylow) rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
           omega)) ?_
-  apply Func.execSat_sload_step (k := h) (v := amnt)
+  apply Func.execSat_sload_step hfork (k := h) (v := amnt)
     (s := [h, wad, receiver]) (M := M)
   · rfl
   · simp only [List.length_cons, List.length_nil]; omega
@@ -1683,6 +1719,7 @@ it is preserved rather than decremented: nothing is written, and the walk
 hands the continuation the state entering `burnAndReturn` with storage exactly
 `d`'s. -/
 lemma execSat_spendInf_step {sevm : Sevm} {d : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {wad receiver h amnt : B256} {M : Mem} {Gc : Nat} {P : Execution → Prop}
     (h_amnt : d.getStorVal sevm.currentTarget h = amnt)
     (h_max : B256.eqCheck (~~~ amnt) 0 = 1)
@@ -1692,15 +1729,15 @@ lemma execSat_spendInf_step {sevm : Sevm} {d : Devm}
       b.error = d.error →
       Gc - 2142 ≤ G →
       Func.ExecSat (fmint.main :: fmint.aux) sevm
-        (b.setMach ⟨[wad, receiver], M, G⟩) burnAndReturn P) :
+        (b.setMach ⟨[wad, receiver], M, G, b.stateGas⟩) burnAndReturn P) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (d.setMach ⟨[h, wad, receiver], M, Gc⟩) spendFromHash P := by
+      (d.setMach ⟨[h, wad, receiver], M, Gc, d.stateGas⟩) spendFromHash P := by
   refine Func.execSat_next
     (Ninst.runCompiled_dup (n := 0) (G := Gc - gVerylow) rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
           omega)) ?_
-  apply Func.execSat_sload_step (k := h) (v := amnt)
+  apply Func.execSat_sload_step hfork (k := h) (v := amnt)
     (s := [h, wad, receiver]) (M := M)
   · rfl
   · simp only [List.length_cons, List.length_nil]; omega
@@ -1715,6 +1752,7 @@ lemma execSat_spendInf_step {sevm : Sevm} {d : Devm}
     refine Func.execSat_segment ?_ (h_next base (G - 39) ?_ ?_ (by omega))
     · intro ex hex
       func_run (7) [~~~ amnt, 1]
+      repeat (case h_legacy => exact hfork.rules_stateGas_none)
       exact hex
     · intro a k
       exact h_stor a k
@@ -1726,6 +1764,7 @@ because the walk read the same key three instructions earlier (F28) — and the
 walk hands the continuation the state entering `burnAndReturn`, with exactly
 one storage cell moved against `d`. -/
 lemma execSat_spendFin_step {sevm : Sevm} {d : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {wad receiver h amnt : B256} {M : Mem} {Gc : Nat} {P : Execution → Prop}
     (h_amnt : d.getStorVal sevm.currentTarget h = amnt)
     (h_nmax : B256.eqCheck (~~~ amnt) 0 = 0)
@@ -1739,15 +1778,15 @@ lemma execSat_spendFin_step {sevm : Sevm} {d : Devm}
       b.error = d.error →
       Gc - 22171 ≤ G →
       Func.ExecSat (fmint.main :: fmint.aux) sevm
-        (b.setMach ⟨[wad, receiver], M, G⟩) burnAndReturn P) :
+        (b.setMach ⟨[wad, receiver], M, G, b.stateGas⟩) burnAndReturn P) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (d.setMach ⟨[h, wad, receiver], M, Gc⟩) spendFromHash P := by
+      (d.setMach ⟨[h, wad, receiver], M, Gc, d.stateGas⟩) spendFromHash P := by
   refine Func.execSat_next
     (Ninst.runCompiled_dup (n := 0) (G := Gc - gVerylow) rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
           omega)) ?_
-  apply Func.execSat_sload_step (k := h) (v := amnt)
+  apply Func.execSat_sload_step hfork (k := h) (v := amnt)
     (s := [h, wad, receiver]) (M := M)
   · rfl
   · simp only [List.length_cons, List.length_nil]; omega
@@ -1762,8 +1801,9 @@ lemma execSat_spendFin_step {sevm : Sevm} {d : Devm}
     apply Func.execSat_segment
     · intro ex hex
       func_run (12) [~~~ amnt, 0, 0, amnt - wad]
+      repeat (case h_legacy => exact hfork.rules_stateGas_none)
       exact hex
-    · apply Func.execSat_sstore_warm_step (k := h) (v := amnt - wad)
+    · apply Func.execSat_sstore_warm_step hfork (k := h) (v := amnt - wad)
         (s := [wad, receiver]) (M := M)
       · rfl
       · exact h_in
@@ -1778,6 +1818,7 @@ lemma execSat_spendFin_step {sevm : Sevm} {d : Devm}
           (h_next base2 (G2 - 12) hkey ?_ ?_ (by omega))
         · intro ex hex
           func_run (1) []
+          repeat (case h_legacy => exact hfork.rules_stateGas_none)
           exact hex
         · intro a k hne
           rw [hoth a k hne]
@@ -1788,19 +1829,20 @@ lemma execSat_spendFin_step {sevm : Sevm} {d : Devm}
 /-- **The balance-low leaf.**  The receiver's balance cannot cover the burn:
 `burnAndReturn` deliberately reverts before writing anything. -/
 lemma execSat_burnLow_leaf {sevm : Sevm} {b : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {wad receiver rbal : B256} {M : Mem} {G : Nat} {P : Execution → Prop}
     (h_rbal : b.getStorVal sevm.currentTarget receiver = rbal)
     (h_low : (rbal <? wad) = 1)
     (h_gas : 2130 ≤ G)
     (hP : ∀ post : Devm, P (.error (.revert, post))) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (b.setMach ⟨[wad, receiver], M, G⟩) burnAndReturn P := by
+      (b.setMach ⟨[wad, receiver], M, G, b.stateGas⟩) burnAndReturn P := by
   refine Func.execSat_next
     (Ninst.runCompiled_dup (n := 1) (G := G - gVerylow) rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
           omega)) ?_
-  apply Func.execSat_sload_step (k := receiver) (v := rbal)
+  apply Func.execSat_sload_step hfork (k := receiver) (v := rbal)
     (s := [wad, receiver]) (M := M)
   · rfl
   · simp only [List.length_cons, List.length_nil]; omega
@@ -1826,6 +1868,7 @@ each `SSTORE` warm behind its own `SLOAD` (F28), each clearing the EIP-2200
 sentry because `gasStorageSet ≤ gasLeft` subsumes it — the burn `Transfer` is
 logged, and the frame returns `true`.  The `.ok` arm of the trichotomy. -/
 lemma execSat_burnOk_leaf {sevm : Sevm} {b : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {wad receiver rbal : B256} {M : Mem} {G : Nat} {P : Execution → Prop}
     (h_rbal : b.getStorVal sevm.currentTarget receiver = rbal)
     (h_ge : (rbal <? wad) = 0)
@@ -1835,7 +1878,7 @@ lemma execSat_burnOk_leaf {sevm : Sevm} {b : Devm}
     (h_gas : 46046 ≤ G)
     (hP : ∀ post : Devm, post.error = b.error → P (.ok post)) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (b.setMach ⟨[wad, receiver], M, G⟩) burnAndReturn P := by
+      (b.setMach ⟨[wad, receiver], M, G, b.stateGas⟩) burnAndReturn P := by
   have hs1 : (M.write ((0 * 32 : B256)).toNat wad.toBytes).size = M.size := by
     apply Mem.size_write_of_le
     rw [B256.length_toBytes,
@@ -1861,7 +1904,7 @@ lemma execSat_burnOk_leaf {sevm : Sevm} {b : Devm}
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
           omega)) ?_
-  apply Func.execSat_sload_step (k := receiver) (v := rbal)
+  apply Func.execSat_sload_step hfork (k := receiver) (v := rbal)
     (s := [wad, receiver]) (M := M)
   · rfl
   · simp only [List.length_cons, List.length_nil]; omega
@@ -1876,8 +1919,9 @@ lemma execSat_burnOk_leaf {sevm : Sevm} {b : Devm}
     apply Func.execSat_segment
     · intro ex hex
       func_run (8) [0, rbal - wad]
+      repeat (case h_legacy => exact hfork.rules_stateGas_none)
       exact hex
-    · apply Func.execSat_sstore_warm_step (k := receiver) (v := rbal - wad)
+    · apply Func.execSat_sstore_warm_step hfork (k := receiver) (v := rbal - wad)
         (s := [wad, receiver]) (M := M)
       · rfl
       · exact h_in
@@ -1892,8 +1936,9 @@ lemma execSat_burnOk_leaf {sevm : Sevm} {b : Devm}
         apply Func.execSat_segment
         · intro ex hex
           func_run (2) [supplySlot]
+          repeat (case h_legacy => exact hfork.rules_stateGas_none)
           exact hex
-        · apply Func.execSat_sload_step (k := supplySlot)
+        · apply Func.execSat_sload_step hfork (k := supplySlot)
             (v := base2.getStorVal sevm.currentTarget supplySlot)
             (s := [wad, receiver]) (M := M)
           · rfl
@@ -1911,8 +1956,9 @@ lemma execSat_burnOk_leaf {sevm : Sevm} {b : Devm}
               func_run (5)
                 [base2.getStorVal sevm.currentTarget supplySlot - wad,
                   supplySlot]
+              repeat (case h_legacy => exact hfork.rules_stateGas_none)
               exact hex
-            · apply Func.execSat_sstore_warm_step (k := supplySlot)
+            · apply Func.execSat_sstore_warm_step hfork (k := supplySlot)
                 (v := base2.getStorVal sevm.currentTarget supplySlot - wad)
                 (s := [wad, receiver]) (M := M)
               · rfl
@@ -2031,7 +2077,7 @@ lemma execSat_returnDataShort_leaf' {sevm : Sevm} {d : Devm}
     (h_gas : 42 ≤ Gc)
     (hP : ∀ post : Devm, P (.error (.revert, post))) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
-      (d.setMach ⟨1 :: [amount, receiver], M, Gc⟩) flashLoanFromFlag P := by
+      (d.setMach ⟨1 :: [amount, receiver], M, Gc, d.stateGas⟩) flashLoanFromFlag P := by
   apply Func.execSat_of_runCompiledTo
   · func_run (6) [0, 1]
     exact Func.runCompiledTo_revert_func (G := Gc - 42)
@@ -2071,6 +2117,7 @@ projection lemmas.
 It says nothing new about the borrower: the field is untouched by
 `incorporateChildOnSuccess`/`OnError`, so a callback cannot write it. -/
 theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {receiver token amount : B256} {data : Bytes}
     (h_code : some sevm.code.toList = Prog.compile fmint)
     (h_sel : Sevm.selector sevm = flashLoanSelector)
@@ -2092,7 +2139,7 @@ theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
       (∃ post, ex = .ok post ∧ post.error = pre.error) ∨
       (∃ post, ex = .error (.revert, post)) ∨
       (∃ e post, ex = .error (e, post) ∧ NonConsensus e)) ?_ h_code
-  refine flashLoan_execSat_flag (K := flashLoanContGasMax) h_sel h_dec h_size
+  refine flashLoan_execSat_flag (hfork := hfork) (K := flashLoanContGasMax) h_sel h_dec h_size
     h_token h_addr h_nof h_static h_stack h_mem h_gas ?_ ?_ ?_
   · intro e dd hnc
     exact Or.inr (Or.inr ⟨e, dd, rfl, hnc⟩)
@@ -2184,7 +2231,7 @@ theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
             have h32'' : M''.size % 32 = 0 := by rw [hsM'']; exact h32'
             have hmsz'' : 64 ≤ M''.size := by rw [hsM'']; exact hmsz'
             by_cases hMax : ~~~ (dd.getStorVal sevm.currentTarget hh) = 0
-            · refine execSat_spendInf_step rfl
+            · refine execSat_spendInf_step (hfork := hfork) rfl
                 (by rw [show B256.eqCheck
                       (~~~ dd.getStorVal sevm.currentTarget hh) 0
                     = if ~~~ dd.getStorVal sevm.currentTarget hh = 0
@@ -2192,13 +2239,13 @@ theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
                 (by omega) ?_
               intro b G hstor hEb hG
               by_cases hBal : b.getStorVal sevm.currentTarget receiver < amount
-              · exact execSat_burnLow_leaf rfl
+              · exact execSat_burnLow_leaf (hfork := hfork) rfl
                   (by rw [show (b.getStorVal sevm.currentTarget receiver
                       <? amount)
                     = if b.getStorVal sevm.currentTarget receiver < amount
                       then (1 : B256) else 0 from rfl, if_pos hBal])
                   (by omega) (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
-              · exact execSat_burnOk_leaf rfl
+              · exact execSat_burnOk_leaf (hfork := hfork) rfl
                   (by rw [show (b.getStorVal sevm.currentTarget receiver
                       <? amount)
                     = if b.getStorVal sevm.currentTarget receiver < amount
@@ -2206,7 +2253,7 @@ theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
                   h_static h32'' hmsz'' (by omega)
                   (fun post hp => Or.inl ⟨post, rfl, hp.trans (hEb.trans hEr)⟩)
             · by_cases hAlw : dd.getStorVal sevm.currentTarget hh < amount
-              · exact execSat_allowanceLow_leaf rfl
+              · exact execSat_allowanceLow_leaf (hfork := hfork) rfl
                   (by rw [show B256.eqCheck
                         (~~~ dd.getStorVal sevm.currentTarget hh) 0
                       = if ~~~ dd.getStorVal sevm.currentTarget hh = 0
@@ -2215,7 +2262,7 @@ theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
                     = if dd.getStorVal sevm.currentTarget hh < amount
                       then (1 : B256) else 0 from rfl, if_pos hAlw])
                   (by omega) (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
-              · refine execSat_spendFin_step rfl
+              · refine execSat_spendFin_step (hfork := hfork) rfl
                   (by rw [show B256.eqCheck
                         (~~~ dd.getStorVal sevm.currentTarget hh) 0
                       = if ~~~ dd.getStorVal sevm.currentTarget hh = 0
@@ -2227,13 +2274,13 @@ theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
                 intro b G hkey hoth hEb hG
                 by_cases hBal :
                     b.getStorVal sevm.currentTarget receiver < amount
-                · exact execSat_burnLow_leaf rfl
+                · exact execSat_burnLow_leaf (hfork := hfork) rfl
                     (by rw [show (b.getStorVal sevm.currentTarget receiver
                         <? amount)
                       = if b.getStorVal sevm.currentTarget receiver < amount
                         then (1 : B256) else 0 from rfl, if_pos hBal])
                     (by omega) (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
-                · exact execSat_burnOk_leaf rfl
+                · exact execSat_burnOk_leaf (hfork := hfork) rfl
                     (by rw [show (b.getStorVal sevm.currentTarget receiver
                         <? amount)
                       = if b.getStorVal sevm.currentTarget receiver < amount
@@ -2256,6 +2303,7 @@ because `h_gas` funds the worst leaf through EIP-150's retained sixty-fourth.
 caller who `STATICCALL`s `flashLoan` halts at the mint's first `SSTORE` by
 its own doing (the F21 amendment, user-adjudicated 2026-08-07). -/
 theorem fmint_flashLoan_settles {sevm : Sevm} {pre : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {receiver token amount : B256} {data : Bytes}
     (h_code : some sevm.code.toList = Prog.compile fmint)
     (h_sel : Sevm.selector sevm = flashLoanSelector)
@@ -2273,7 +2321,7 @@ theorem fmint_flashLoan_settles {sevm : Sevm} {pre : Devm}
     (∃ post, exec ⟨0, sevm, pre⟩ = .ok post) ∨
     (∃ post, exec ⟨0, sevm, pre⟩ = .error (.revert, post)) ∨
     (∃ e post, exec ⟨0, sevm, pre⟩ = .error (e, post) ∧ NonConsensus e) := by
-  rcases flashLoan_settles_error h_code h_sel h_static h_dec h_size h_token
+  rcases flashLoan_settles_error (hfork := hfork) h_code h_sel h_static h_dec h_size h_token
     h_addr h_nof h_stack h_mem h_gas with
     ⟨post, h_ok, -⟩ | h | h
   · exact Or.inl ⟨post, h_ok⟩
@@ -2329,12 +2377,13 @@ theorem receiverNotAddress_runCompiledTo {sevm : Sevm} {pre : Devm}
   exact
     ⟨_,
       Prog.runCompiledTo_intro (G := g - 1)
-        (mid := pre.setMach ⟨[], pre.memory, g - 1⟩)
+        (mid := pre.setMach ⟨[], pre.memory, g - 1, pre.stateGas⟩)
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack])
         (by
           func_run (33) [flashLoanSelector, 1, 0, 0, 1, 1, 0,
             ~~~ (0 : B256), (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat, w]
+          repeat (case h_legacy => exact hfork.rules_stateGas_none)
           · show sevm.currentTarget.toB256 =? Sevm.argWord sevm 1 = 1
             rw [argWord_one_of_decodes h_dec, h_token]
             show (if sevm.currentTarget.toB256 = sevm.currentTarget.toB256
@@ -2410,6 +2459,7 @@ set_option maxRecDepth 672 in
 /-- A `flashLoan` call past the first two guards whose `amount` exceeds
 `maxFlashLoan = 2^256 - 1 - totalSupply` reverts, with empty revert data. -/
 theorem fmint_amount_over_bound_reverts {sevm : Sevm} {pre : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {receiver token amount : B256} {data : Bytes}
     (h_code : some sevm.code.toList = Prog.compile fmint)
     (h_sel : Sevm.selector sevm = flashLoanSelector)
@@ -2431,12 +2481,13 @@ theorem fmint_amount_over_bound_reverts {sevm : Sevm} {pre : Devm}
   refine Prog.execSat_out (P := fun ex => ∃ post, ex = .error (.revert, post))
     ?_ h_code
   refine Prog.execSat_intro (G := g - 1)
-    (mid := pre.setMach ⟨[], pre.memory, g - 1⟩)
+    (mid := pre.setMach ⟨[], pre.memory, g - 1, pre.stateGas⟩)
     (by simp only [gJumpdest]; omega) (by rw [h_stack]) ?_
   apply Func.execSat_segment
   · intro ex hex
     func_run (39) [flashLoanSelector, 1, 0, 0, 1, 1, 0,
       ~~~ (0 : B256), (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat, 0, supplySlot]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     · show sevm.currentTarget.toB256 =? Sevm.argWord sevm 1 = 1
       rw [argWord_one_of_decodes h_dec, h_token]
       show (if sevm.currentTarget.toB256 = sevm.currentTarget.toB256
@@ -2447,7 +2498,7 @@ theorem fmint_amount_over_bound_reverts {sevm : Sevm} {pre : Devm}
       rw [h_arg0, ← addressMask_eq_shl]
       exact validAdr_iff.mp h_addr
     exact hex
-  refine Func.execSat_sload_step
+  refine Func.execSat_sload_step hfork
     (v := Devm.getStorVal pre sevm.currentTarget supplySlot) rfl (by simp)
     rfl (M := pre.memory) rfl
     (by simp only [Devm.gasLeft_setMach, gasColdSload]; omega) ?_
@@ -2463,6 +2514,7 @@ theorem fmint_amount_over_bound_reverts {sevm : Sevm} {pre : Devm}
         then (1 : B256) else 0) = 1
       rw [if_pos h_lt]
     func_run (3) [~~~ (Devm.getStorVal pre sevm.currentTarget supplySlot), 1]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     exact Func.runCompiledTo_revert_func (G := G - 24)
       (by simp only [Devm.gasLeft_setMach, gBase]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
@@ -2488,6 +2540,7 @@ bounds is what `fmint_token_ne_self_reverts`,
 `receiverNotAddress_runCompiledTo` and `fmint_amount_over_bound_reverts` do.
 As everywhere in the family, this is construction and not exhaustiveness. -/
 theorem fmint_flashLoan_settles_of_call {sevm : Sevm} {pre : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {receiver token amount : B256} {data : Bytes}
     (h_code : some sevm.code.toList = Prog.compile fmint)
     (h_sel : Sevm.selector sevm = flashLoanSelector)
@@ -2507,9 +2560,9 @@ theorem fmint_flashLoan_settles_of_call {sevm : Sevm} {pre : Devm}
   · by_cases h_adr : ValidAdr receiver
     · by_cases h_nof : B256.Nof
           ((Devm.getStor pre sevm.currentTarget).get supplySlot) amount
-      · exact fmint_flashLoan_settles h_code h_sel h_static h_dec h_size h_tok
+      · exact fmint_flashLoan_settles (hfork := hfork) h_code h_sel h_static h_dec h_size h_tok
           h_adr h_nof h_stack h_mem h_gas
-      · exact Or.inr (Or.inl (fmint_amount_over_bound_reverts h_code h_sel
+      · exact Or.inr (Or.inl (fmint_amount_over_bound_reverts (hfork := hfork) h_code h_sel
           h_dec h_tok h_adr h_nof h_stack
           (by rw [amountOverBoundGas_eq]; omega)))
     · refine Or.inr (Or.inl ?_)
@@ -2559,6 +2612,7 @@ theorem frame_settles_of_exec_settles {msg : Msg} {benv : Benv} {xl : Xlot}
     (h_bt : msg.benvAfterTransfer = .ok benv)
     (h_prec : ∀ adr, msg.codeAddress = some adr →
       ¬ (!msg.disablePrecompiles && decide (benv.stat.rules.isPrecomp adr)) = true)
+    (hfork : CoveredFork (initSevm (msg.withBenv benv)).benvStat.fork)
     (h_exec :
       (∃ post, exec ⟨0, initSevm (msg.withBenv benv),
           initDevm (msg.withBenv benv)⟩ = .ok post ∧ post.error = none) ∨
@@ -2570,6 +2624,8 @@ theorem frame_settles_of_exec_settles {msg : Msg} {benv : Benv} {xl : Xlot}
   obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp h_pm
   unfold FrameBody at hbody
   rw [h_bt] at hbody
+  have hsg : (msg.withBenv benv).benv.stat.rules.stateGas = none :=
+    hfork.rules_stateGas_none
   have key : executeCode.handleError
       (exec ⟨0, initSevm (msg.withBenv benv),
         initDevm (msg.withBenv benv)⟩) = r0 := by
@@ -2581,6 +2637,7 @@ theorem frame_settles_of_exec_settles {msg : Msg} {benv : Benv} {xl : Xlot}
           initDevm (msg.withBenv benv)⟩ = ex' :=
         (exec_iff_exec_eq _ _ _ _).mp ⟨exc⟩
       rw [h_eq]
+      rw [hsg] at h_he
       exact h_he
     · rcases of_executeCode_someCode h_ca hbody with
         ⟨h_pre, -, -⟩ | ⟨-, ex', h_xl, h_he⟩
@@ -2591,6 +2648,7 @@ theorem frame_settles_of_exec_settles {msg : Msg} {benv : Benv} {xl : Xlot}
             initDevm (msg.withBenv benv)⟩ = ex' :=
           (exec_iff_exec_eq _ _ _ _).mp ⟨exc⟩
         rw [h_eq]
+        rw [hsg] at h_he
         exact h_he
   rcases hr0 : r0 with p | evm
   · rw [hr0, processMessage.settle_error] at hset; cases hset
@@ -2646,6 +2704,7 @@ theorem fmint_flashLoan_frame_settles {msg : Msg} {benv : Benv} {xl : Xlot}
     (h_code : some (initSevm (msg.withBenv benv)).code.toList = Prog.compile fmint)
     (h_sel : Sevm.selector (initSevm (msg.withBenv benv)) = flashLoanSelector)
     (h_static : msg.isStatic = false)
+    (hfork : CoveredFork (initSevm (msg.withBenv benv)).benvStat.fork)
     (h_dec : Sevm.DecodesCallWithTail (initSevm (msg.withBenv benv))
       flashLoanSelector [receiver, token, amount] data)
     (h_size : 196 + ceil32 data.length < 2 ^ 256)
@@ -2656,8 +2715,8 @@ theorem fmint_flashLoan_frame_settles {msg : Msg} {benv : Benv} {xl : Xlot}
     (h_gas : flashLoanGas data.length
       ≤ (initDevm (msg.withBenv benv)).gasLeft) :
     out.error = none ∨ out.error = some .revert := by
-  refine frame_settles_of_exec_settles h_pm h_fill h_bt h_prec ?_
-  rcases flashLoan_settles_error h_code h_sel h_static h_dec h_size h_token
+  refine frame_settles_of_exec_settles h_pm h_fill h_bt h_prec hfork ?_
+  rcases flashLoan_settles_error (hfork := hfork) h_code h_sel h_static h_dec h_size h_token
     h_addr h_nof rfl rfl h_gas with
     ⟨post, h_ok, h_err⟩ | h | h
   · exact Or.inl ⟨post, h_ok, h_err⟩

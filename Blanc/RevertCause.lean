@@ -107,6 +107,98 @@ lemmas below discharge that fact, by tag, for every other way an `Exec`
 derivation can end in an error: an `Rinst`, a `PUSH`, a jump, an `Xinst`
 step, and a child frame's resumption. -/
 
+/-! #### The tag predicate and its primitive facts
+
+The pinned Jaune states the halt obligation as `HaltOut`/`MachHaltOut`, which
+also tracks the state-gas meter.  The walk below needs only the tag half, so it
+keeps the tag-only predicates and derives each primitive fact from Jaune's
+`HaltOut` form. -/
+
+/-- No branch of this outcome reports the `"Revert"` tag. -/
+def NoRevertOut {α : Type} : Except (EvmError × Devm) α → Prop
+  | .error p => p.1 ≠ .revert
+  | .ok _ => True
+
+/-- The `Mach`-level analogue, for the footprint-lifted primitives. -/
+def MachNoRevert {α : Type} : Footprint.Outcome Mach α → Prop
+  | .error q => q.1 ≠ .revert
+  | .ok _ => True
+
+theorem HaltOut.noRevertOut {α : Type} {proj : α → Devm} {s : StateGasMeter}
+    {e : Except (EvmError × Devm) α} (h : HaltOut proj s e) : NoRevertOut e := by
+  cases e with
+  | error p => exact h.1
+  | ok _ => trivial
+
+theorem MachHaltOut.machNoRevert {α : Type} {s : StateGasMeter}
+    {o : Footprint.Outcome Mach α} (h : MachHaltOut s o) : MachNoRevert o := by
+  cases o with
+  | error q => exact h.1
+  | ok _ => trivial
+
+theorem liftMach_noRevert {α : Type} {core : Mach → Footprint.Outcome Mach α}
+    {devm : Devm} (h : MachNoRevert (core devm.mach)) :
+    NoRevertOut (liftMach core devm) := by
+  unfold liftMach Footprint.liftOutcome
+  rcases hc : core devm.mach with ⟨err, m⟩ | ⟨v, m⟩ <;> rw [hc] at h
+  · exact h
+  · trivial
+
+theorem liftMachExecution_noRevert {core : Mach → Footprint.Outcome Mach Unit}
+    {devm : Devm} (h : MachNoRevert (core devm.mach)) :
+    NoRevertOut (liftMachExecution core devm) := by
+  unfold liftMachExecution Footprint.toExecution liftMach Footprint.liftOutcome
+  rcases hc : core devm.mach with ⟨err, m⟩ | ⟨v, m⟩ <;> rw [hc] at h
+  · exact h
+  · trivial
+
+theorem Mach.pop_noRevert (mach : Mach) : MachNoRevert mach.pop :=
+  MachHaltOut.machNoRevert (Mach.pop_haltOut rfl)
+
+theorem Mach.push_noRevert (x : B256) (mach : Mach) :
+    MachNoRevert (Mach.push x mach) :=
+  MachHaltOut.machNoRevert (Mach.push_haltOut rfl)
+
+theorem Mach.chargeGas_noRevert (c : Nat) (mach : Mach) :
+    MachNoRevert (Mach.chargeGas c mach) :=
+  MachHaltOut.machNoRevert (Mach.chargeGas_haltOut rfl)
+
+theorem Devm.pop_noRevert (devm : Devm) : NoRevertOut devm.pop :=
+  HaltOut.noRevertOut (Devm.pop_haltOut rfl)
+
+theorem Devm.popToNat_noRevert (devm : Devm) : NoRevertOut devm.popToNat :=
+  HaltOut.noRevertOut (Devm.popToNat_haltOut rfl)
+
+theorem Devm.popToAdr_noRevert (devm : Devm) : NoRevertOut devm.popToAdr :=
+  HaltOut.noRevertOut (Devm.popToAdr_haltOut rfl)
+
+theorem Devm.push_noRevert (x : B256) (devm : Devm) : NoRevertOut (devm.push x) :=
+  HaltOut.noRevertOut (Devm.push_haltOut rfl)
+
+theorem chargeGas_noRevert (c : Nat) (devm : Devm) :
+    NoRevertOut (chargeGas c devm) :=
+  HaltOut.noRevertOut (chargeGas_haltOut rfl)
+
+theorem assert_noRevert {p : Prop} [Decidable p] {msg : EvmError} {devm : Devm}
+    (h : msg ≠ .revert) :
+    NoRevertOut (Except.assert p (⟨msg, devm⟩ : EvmError × Devm)) :=
+  HaltOut.noRevertOut (assert_haltOut h rfl)
+
+theorem assertDynamic_noRevert (sevm : Sevm) (devm : Devm) :
+    NoRevertOut (assertDynamic sevm devm) :=
+  HaltOut.noRevertOut (assertDynamic_haltOut sevm rfl)
+
+/-- A finished `Xinst` step never reports the `"Revert"` tag: the tag half of
+Jaune's `Xinst.step_halt`, taken at the step's own meter and measure. -/
+theorem Xinst.step_done_noRevert (sevm : Sevm) (devm : Devm) (x : Xinst)
+    (y : Execution) (h : Xinst.step sevm devm x = .done y) : NoRevertOut y := by
+  have hh := Xinst.step_halt sevm devm x (s := devm.mach.stateGas)
+    (n := devm.gasMeasure) rfl (Devm.spill_le_gasMeasure devm) (Nat.le_refl _)
+  rw [h] at hh
+  cases y with
+  | error p => exact (hh p rfl).1
+  | ok _ => trivial
+
 theorem noRevertOut_bind {α β : Type} {e : Except (EvmError × Devm) α}
     {f : α → Except (EvmError × Devm) β}
     (he : NoRevertOut e) (hf : ∀ a, NoRevertOut (f a)) :
@@ -231,14 +323,15 @@ theorem Devm.popN_noRevert (devm : Devm) (n : Nat) :
     NoRevertOut (devm.popN n) :=
   liftMach_noRevert (Mach.popN_noRevert devm.mach n)
 
-theorem Rinst.balanceCore_noRevert (world : World) (mach : Mach) (view : Meta) :
-    OutcomeNoRevert (Rinst.balanceCore world mach view) := by
+theorem Rinst.balanceCore_noRevert (rules : ForkRules) (world : World)
+    (mach : Mach) (view : Meta) :
+    OutcomeNoRevert (Rinst.balanceCore rules world mach view) := by
   unfold Rinst.balanceCore
   have h := Mach.pop_noRevert mach
   rcases hc : mach.pop with ⟨e, m⟩ | ⟨x, m⟩ <;> rw [hc] at h <;> try dsimp only
   · exact h
   generalize (if x.toAdr ∈ view.accessedAddresses then gasWarmAccess
-    else gasColdAccountAccess) = cost
+    else rules.gas.coldAccountAccess) = cost
   have h' := Mach.chargeGas_noRevert cost m
   rcases hc' : Mach.chargeGas cost m with ⟨e', m'⟩ | ⟨a', m'⟩ <;> rw [hc'] at h' <;> try dsimp only
   · exact h'
@@ -248,9 +341,20 @@ theorem Rinst.balanceCore_noRevert (world : World) (mach : Mach) (view : Meta) :
   · exact h''
   · trivial
 
-theorem balance_noRevert (devm : Devm) :
-    NoRevertOut (liftMachMetaWorldExecution Rinst.balanceCore devm) :=
-  toExecution_noRevert (liftOutcome_noRevert (Rinst.balanceCore_noRevert _ _ _))
+theorem balance_noRevert (rules : ForkRules) (devm : Devm) :
+    NoRevertOut (liftMachMetaWorldExecution (Rinst.balanceCore rules) devm) :=
+  toExecution_noRevert (liftOutcome_noRevert (Rinst.balanceCore_noRevert _ _ _ _))
+
+theorem HaltLe.noRevertOut {α : Type} {n : Nat} {P : α → Prop}
+    {e : Except (EvmError × Devm) α} (h : HaltLe n P e) : NoRevertOut e := by
+  cases e with
+  | error p => exact h.1
+  | ok _ => trivial
+
+/-- A state-gas charge halts only out of gas, never with the revert tag. -/
+theorem chargeStateGas_noRevert (amount : Nat) (devm : Devm) :
+    NoRevertOut (chargeStateGas amount devm) :=
+  HaltLe.noRevertOut (chargeStateGas_haltLe amount (Nat.le_refl devm.gasMeasure))
 
 theorem Rinst.runCore_noRevert (pc : Nat) (devm : Devm) (sevm : Sevm)
     (r : Rinst) : NoRevertOut (Rinst.runCore pc devm sevm r) := by
@@ -261,7 +365,8 @@ theorem Rinst.runCore_noRevert (pc : Nat) (devm : Devm) (sevm : Sevm)
       | with_reducible exact applyUnary_noRevert _ _ _
       | with_reducible exact applyBinary_noRevert _ _ _
       | with_reducible exact applyTernary_noRevert _ _ _
-      | with_reducible exact balance_noRevert _
+      | with_reducible exact balance_noRevert _ _
+      | with_reducible exact chargeStateGas_noRevert _ _
       | with_reducible exact chargeGas_noRevert _ _
       | with_reducible exact Devm.push_noRevert _ _
       | with_reducible exact Devm.pop_noRevert _
@@ -304,6 +409,19 @@ theorem handleError_noRevert (raw : Execution) :
   · cases e <;> simp [executeCode.handleError, SettledNoRevert]
   · trivial
 
+theorem handleErrorAmsterdam_noRevert (raw : Execution) :
+    SettledNoRevert (executeCode.handleErrorAmsterdam raw) := by
+  rcases raw with ⟨e, d⟩ | d
+  · cases e <;> simp [executeCode.handleErrorAmsterdam, SettledNoRevert]
+  · trivial
+
+theorem handleErrorWith_noRevert (stateGas : Option StateGasRules)
+    (raw : Execution) :
+    SettledNoRevert (executeCode.handleErrorWith stateGas raw) := by
+  cases stateGas
+  · exact handleError_noRevert raw
+  · exact handleErrorAmsterdam_noRevert raw
+
 theorem processMessage.settle_noRevert (msg : Msg)
     {r : Except (EvmError × State × AdrSet × Tra) Devm}
     (h : SettledNoRevert r) : SettledNoRevert (processMessage.settle msg r) := by
@@ -319,11 +437,18 @@ theorem processCreateMessage.chargeCodeGas_noRevert (rules : ForkRules)
   unfold processCreateMessage.chargeCodeGas
   dsimp only
   split
-  · exact noRevertOut_halt _ _
-  · refine noRevertOut_bind (chargeGas_noRevert _ _) fun _ => ?_
-    split
+  · split
     · exact noRevertOut_halt _ _
-    · trivial
+    · refine noRevertOut_bind (chargeGas_noRevert _ _) fun _ => ?_
+      split
+      · exact noRevertOut_halt _ _
+      · trivial
+  · split
+    · exact noRevertOut_halt _ _
+    · split
+      · exact noRevertOut_halt _ _
+      · exact noRevertOut_bind (chargeGas_noRevert _ _) fun _ =>
+          chargeStateGas_noRevert _ _
 
 theorem processCreateMessage.settle_noRevert (msg : Msg)
     {r : Except (EvmError × State × AdrSet × Tra) Devm}
@@ -351,7 +476,7 @@ theorem Frame.settleMsg_noRevert (f : Frame)
 
 theorem Frame.settle_noRevert (f : Frame) (raw : Execution) :
     SettledNoRevert (f.settle raw) :=
-  Frame.settleMsg_noRevert f (handleError_noRevert raw)
+  Frame.settleMsg_noRevert f (handleErrorWith_noRevert _ raw)
 
 theorem Msg.benvAfterTransfer_noRevert (msg : Msg) {e}
     (h : msg.benvAfterTransfer = .error e) : e.1 ≠ .revert := by
@@ -400,6 +525,20 @@ theorem Resume.run_noRevert (rsm : Resume)
     split
     · exact noRevertOut_bind (Devm.push_noRevert _ _) fun _ => trivial
     · exact noRevertOut_bind (Devm.push_noRevert _ _) fun _ => trivial
+  | createAmsterdam state parent newAddress charged =>
+    refine noRevertOut_bind (liftToExecution_noRevert parent h) fun child => ?_
+    split
+    · refine noRevertOut_bind (assert_noRevert (fun h => nomatch h)) fun _ => ?_
+      exact Devm.push_noRevert _ _
+    · refine noRevertOut_bind (assert_noRevert (fun h => nomatch h)) fun _ => ?_
+      exact Devm.push_noRevert _ _
+  | callAmsterdam state parent outputIndex outputSize charged =>
+    refine noRevertOut_bind (liftToExecution_noRevert parent h) fun child => ?_
+    split
+    · refine noRevertOut_bind (assert_noRevert (fun h => nomatch h)) fun _ => ?_
+      exact noRevertOut_bind (Devm.push_noRevert _ _) fun _ => trivial
+    · refine noRevertOut_bind (assert_noRevert (fun h => nomatch h)) fun _ => ?_
+      exact noRevertOut_bind (Devm.push_noRevert _ _) fun _ => trivial
 
 theorem Resume.run_error_noRevert {rsm : Resume}
     {r : Except (EvmError × State × AdrSet × Tra) Devm} {e : EvmError × Devm}
@@ -425,6 +564,12 @@ theorem Step.ofExecution_halt {pc : Nat} {x ex : Execution}
   | error p => cases h; exact ⟨p, rfl, rfl⟩
   | ok d => cases h
 
+theorem NoRevertOut.error_ne {α : Type} {x : Except (EvmError × Devm) α}
+    {p : EvmError × Devm} (hn : NoRevertOut x) (hx : x = .error p) :
+    p.1 ≠ .revert := by
+  subst hx
+  exact hn
+
 /-- Every halting step of an ordinary instruction halts with an error that is
 not a revert. -/
 theorem Ninst.step_halt_noRevert {evm : Evm} {n : Ninst} {ex : Execution}
@@ -437,7 +582,7 @@ theorem Ninst.step_halt_noRevert {evm : Evm} {n : Ninst} {ex : Execution}
       have : NoRevertOut (Rinst.run evm r) := hn
       rw [hx] at this; exact this⟩
   · rw [Ninst.step_exec] at h
-    have hn := Xinst.step_noRevert evm.sta evm.dyna x
+    have hn := Xinst.step_done_noRevert evm.sta evm.dyna x
     revert hn h
     generalize Xinst.step evm.sta evm.dyna x = s
     intro h hn
@@ -445,7 +590,7 @@ theorem Ninst.step_halt_noRevert {evm : Evm} {n : Ninst} {ex : Execution}
     | done y =>
       obtain ⟨p, hx, rfl⟩ := Step.ofExecution_halt h
       refine ⟨p, rfl, ?_⟩
-      have : NoRevertOut y := hn
+      have : NoRevertOut y := hn y rfl
       rw [hx] at this; exact this
     | spawn f rsm => cases h
   · rw [Ninst.step_push] at h
@@ -455,6 +600,20 @@ theorem Ninst.step_halt_noRevert {evm : Evm} {n : Ninst} {ex : Execution}
       (if xs = [] then gBase else gVerylow) evm.dyna)
       (fun d => Devm.push_noRevert xs.toB256 d)
     rw [hx] at this; exact this
+  -- EIP-8024 `DUPN`/`SWAPN`/`EXCHANGE`: every halt is a charge, decode, stack,
+  -- or availability fault.
+  all_goals
+    simp only [Ninst.step] at h
+    obtain ⟨p, hx, rfl⟩ := Step.ofExecution_halt h
+    refine ⟨p, rfl, NoRevertOut.error_ne ?_ hx⟩
+    repeat' (first
+      | with_reducible exact chargeGas_noRevert _ _
+      | with_reducible exact Devm.push_noRevert _ _
+      | with_reducible exact noRevertOut_ok _
+      | with_reducible exact noRevertOut_halt _ _
+      | (with_reducible refine noRevertOut_bind ?_ ?_)
+      | intro _
+      | split)
 
 /-! ### The `Exec` inversion steps, for a revert-or-success outcome
 
@@ -648,9 +807,9 @@ theorem Func.runCompiledTo_of_exec_core (f : Func) (fs : List Func) :
   | .next n p =>
     rcases of_subcode sub with ⟨cd, h_eq', h_slice⟩
     rcases of_bind_eq_some h_eq' with ⟨cd', h_eq'', h_rw⟩; clear h_eq'
-    simp [pure] at h_rw
-    rw [← h_rw] at h_slice
-    clear h_rw cd
+    rcases of_bind_eq_some h_rw with ⟨pbs, h_pbs, h⟩; clear h_rw
+    rw [← of_pure_eq_some h] at h_slice
+    clear h cd
     have h_at : Ninst.At sevm.code pc n := by
       apply Ninst.at_of_slice
       apply List.slice_prefix h_slice
@@ -661,7 +820,7 @@ theorem Func.runCompiledTo_of_exec_core (f : Func) (fs : List Func) :
     have quz :
       subcode sevm.code.toList (pc + n.size)
         (Func.compile (table 0 (f :: fs)) (pc + n.size) p) := by
-      rw [h_eq'']
+      rw [h_pbs]
       simp only [subcode]
       rw [Ninst.size_eq_length_toBytes]
       apply List.slice_suffix h_slice
@@ -1025,6 +1184,8 @@ theorem Linst.run_noRevert_of_ne {sevm : Sevm} {devm : Devm} {l : Linst}
       | with_reducible exact chargeGas_noRevert _ _
       | with_reducible exact Devm.popToAdr_noRevert _
       | with_reducible exact assertDynamic_noRevert _ _
+      | with_reducible exact chargeStateGas_noRevert _ _
+      | with_reducible exact assert_noRevert (fun h => nomatch h)
       | with_reducible exact noRevertOut_ok _
       | with_reducible exact noRevertOut_halt _ _
       | with_reducible exact noRevertOut_toExcept (fun h => nomatch h) _

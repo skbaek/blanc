@@ -90,13 +90,14 @@ def ApplyTransactionsStateChronology.stateBoundaries
 theorem ApplyTransactionsTrace.exists_stateChronology
     {txs : List (Nat × Tx)} {benv : Benv} {bout : BlockOutput}
     {finalBenv : Benv} {finalBout : BlockOutput}
-    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) :
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
+    (hfork : CoveredFork benv.stat.fork) :
     Nonempty (ApplyTransactionsStateChronology trace) := by
   induction trace with
   | nil benv bout => exact ⟨.nil benv bout⟩
   | cons head tail ih =>
-      rcases head.exists_stateChronology with ⟨headChronology⟩
-      rcases ih with ⟨tailChronology⟩
+      rcases head.exists_stateChronology hfork with ⟨headChronology⟩
+      rcases ih (by simpa [Benv.withState] using hfork) with ⟨tailChronology⟩
       exact ⟨.cons headChronology tailChronology⟩
 
 theorem ApplyTransactionsStateChronology.stateReplay
@@ -295,9 +296,11 @@ def AppliedBodyStateChronology.stateBoundaries
 theorem AppliedBodyTrace.exists_stateChronology
     {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) :
+    (trace : AppliedBodyTrace benv txs wds state bout)
+    (hfork : CoveredFork benv.stat.fork) :
     Nonempty (AppliedBodyStateChronology trace) := by
-  rcases trace.transactions.exists_stateChronology with
+  rcases trace.transactions.exists_stateChronology
+    (by simpa [Benv.withState] using hfork) with
     ⟨transactions⟩
   exact ⟨⟨transactions⟩⟩
 
@@ -328,7 +331,7 @@ theorem AppliedBodyStateChronology.stateReplay
       (transactionReplay.append
         (withdrawalReplay.append requestReplay)))
   simpa only [AppliedBodyStateChronology.stateBoundaries,
-    List.append_assoc] using replay
+    List.append_assoc] using replay.castPost trace.requestState_eq
 
 end ExecutionTrace
 

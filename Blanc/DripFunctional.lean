@@ -875,12 +875,13 @@ theorem exit_exec_effect_full {sevm : Sevm} {pre post : Devm}
     (hcode : sevm.code.toList = code)
     (hsel : Sevm.selector sevm = exitSelector)
     (hnonempty : sevm.data.length.toB256 ≠ 0)
-    (hcanon : pre.memory = Mem.empty) :
+    (hcanon : pre.memory = Mem.empty)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ExitPaysExactlyFull sevm pre post := by
   rcases exec_enters_exit exc hcode hsel hnonempty with
     ⟨-, -, entry, hst, hmm, -, -, hbody⟩
   have hframe := entryFrame_of_canonical hmm hcanon
-  have heffect := exit_pays_exactly_full auxLookup_runtime hframe nil_pref hbody
+  have heffect := exit_pays_exactly_full auxLookup_runtime hframe nil_pref hbody hfork
   have hgv : ∀ k, Devm.getStorVal entry sevm.currentTarget k =
       Devm.getStorVal pre sevm.currentTarget k :=
     getStorVal_entry_of_pre hst
@@ -905,12 +906,13 @@ theorem exit_exec_effect {sevm : Sevm} {pre post : Devm}
     (hcode : sevm.code.toList = code)
     (hsel : Sevm.selector sevm = exitSelector)
     (hnonempty : sevm.data.length.toB256 ≠ 0)
-    (hcanon : pre.memory = Mem.empty) :
+    (hcanon : pre.memory = Mem.empty)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ExitPaysExactly sevm pre post := by
   rcases exec_enters_exit exc hcode hsel hnonempty with
     ⟨-, -, entry, hst, hmm, -, -, hbody⟩
   have hframe := entryFrame_of_canonical hmm hcanon
-  have heffect := exit_pays_exactly auxLookup_runtime hframe nil_pref hbody
+  have heffect := exit_pays_exactly auxLookup_runtime hframe nil_pref hbody hfork
   have hgv : ∀ k, Devm.getStorVal entry sevm.currentTarget k =
       Devm.getStorVal pre sevm.currentTarget k :=
     getStorVal_entry_of_pre hst

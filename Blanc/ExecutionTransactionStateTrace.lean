@@ -146,9 +146,10 @@ def TransactionStateChronology.stateBoundaries
 theorem TransactionTrace.exists_stateChronology
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
-    (trace : TransactionTrace benv bout tx index state bout') :
+    (trace : TransactionTrace benv bout tx index state bout')
+    (hfork : CoveredFork benv.stat.fork) :
     Nonempty (TransactionStateChronology trace) := by
-  rcases trace.exists_finalStateForm with
+  rcases trace.exists_finalStateForm hfork with
     ⟨refundCounter, refundCounterEq, finalStateEq⟩
   refine ⟨⟨refundCounter, refundCounterEq, ?_⟩⟩
   simpa [TransactionTrace.coinbaseState,

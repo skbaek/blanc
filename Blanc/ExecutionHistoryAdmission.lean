@@ -48,7 +48,7 @@ theorem ConfiguredBlockTrace.stateInv_admitted
     (inv : c.StateInv ca pre.state) :
     c.StateInv ca post.state := by
   rw [trace.postState]
-  exact trace.bodyTrace.stateInv_admitted preserves admitted
+  exact trace.bodyTrace.stateInv_admitted preserves trace.covered admitted
     trace.openingBound (trace.openingBenvInv inv)
 
 /-- A retained configured history transports an arbitrary contract invariant

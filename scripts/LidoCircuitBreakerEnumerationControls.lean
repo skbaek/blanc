@@ -134,7 +134,9 @@ def ExactCodeEnumerationControl (n : Nat) : Prop :=
           ⟨[], enumPrefixMemory (controlEntries n) (controlEntries n),
             (preparedEnumerationRuntimeState exactCodeSevm
               (exactCodeBase n) (controlEntries n)).gasLeft -
-                getPausablesRuntimeGas (controlEntries n)⟩).withOutput
+                getPausablesRuntimeGas (controlEntries n),
+            (preparedEnumerationRuntimeState exactCodeSevm
+              (exactCodeBase n) (controlEntries n)).stateGas⟩).withOutput
                   (abiAddressArray (controlEntries n))) ∧
     some exactCodeSevm.code.toList = Prog.compile (runtime officialParams)
 
@@ -144,6 +146,7 @@ theorem exactCodeEnumerationRun (n : Nat) (hn : n ≤ 64) :
   apply EnumerationRuntimeResources.getPausables_runCompiled
     (enumerationRuntimeResources_prepared exactCodeSevm
       (exactCodeBase n) (controlEntries n))
+  · decide
   · decide
   · rfl
   · decide
@@ -206,8 +209,8 @@ theorem full_prefix_image_control :
 
 theorem cursor_not_memory_resident_control
     (base : Devm) (done : List Entry) (cursor cursor' G : Nat) :
-    (base.setMach ⟨[Nat.toB256 cursor], enumPrefixMemory sixtyFour done, G⟩).memory =
-      (base.setMach ⟨[Nat.toB256 cursor'], enumPrefixMemory sixtyFour done, G⟩).memory :=
+    (base.setMach ⟨[Nat.toB256 cursor], enumPrefixMemory sixtyFour done, G, base.stateGas⟩).memory =
+      (base.setMach ⟨[Nat.toB256 cursor'], enumPrefixMemory sixtyFour done, G, base.stateGas⟩).memory :=
   enumLoop_pre_memory_independent_of_cursor base sixtyFour done cursor cursor' G
 
 def cursorAliasedSingletonMemory : Mem :=

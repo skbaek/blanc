@@ -682,7 +682,7 @@ theorem totalSupply_output
   simp only [totalSupply] at run
   rcases of_run_next run with ⟨s1, hself, run1⟩
   have hp1 : s.getBal sevm.currentTarget :: xs <<+ s1.stack :=
-    prefix_of_push (of_run_selfbalance hself) hp
+    prefix_of_push_stack (of_run_selfbalance_stack hself) hp
   rcases of_run_prepend pushFlashMintedSlot _ run1 with
     ⟨s2, hslot, run2⟩
   have hp2 : flashMintedSlot :: s.getBal sevm.currentTarget :: xs <<+

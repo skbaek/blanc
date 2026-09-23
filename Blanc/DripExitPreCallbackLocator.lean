@@ -133,7 +133,8 @@ theorem exit_callNode_spine_of_exec {sevm : Sevm} {pre post : Devm}
     (hcode : sevm.code.toList = code)
     (hsel : Sevm.selector sevm = exitSelector)
     (hnonempty : sevm.data.length.toB256 ≠ 0)
-    (hcanon : pre.memory = Mem.empty) :
+    (hcanon : pre.memory = Mem.empty)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     let units := Sevm.dataWord sevm (32 * 0 + 4)
     let freshChi := (B256.rpow scale half rate
       (sevm.benvStat.time - Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat *
@@ -176,7 +177,8 @@ theorem exit_callNode_spine_of_exec {sevm : Sevm} {pre post : Devm}
     ⟨mainCursor, mainFree, actualBurn⟩
   have seed : Devm.EqModGas entry mainCursor.pre :=
     (Devm.EqModGas.refl pre).of_burn burn actualBurn
-  rcases mainCursor.ofRunPrefix_sameFrame_gasFree compiled rfl walk seed with
+  rcases mainCursor.ofRunPrefix_sameFrame_gasFree compiled rfl walk seed
+      hfork.rules_stateGas_none with
     ⟨gasCursor, agree, gasFree⟩
   unfold exitCallSuffix at gasCursor
   rcases gasCursor.nextForward rfl with ⟨callCursor, gasEdge, gasRun⟩
@@ -223,7 +225,7 @@ theorem exit_callNode_spine_of_exec {sevm : Sevm} {pre post : Devm}
   rcases of_run_branch restRun with
     ⟨_, -, hrev⟩ | ⟨w, guardPost, returnPre, hw, hpop, hburn, -⟩
   · exact (not_run_revert hrev).elim
-  rcases of_run_call_val_with_depth_frame hstack callRun' with
+  rcases of_run_call_val_with_depth_frame hstack callRun' hfork with
     hfailed | hentered
   · exact (hw (popBurn_pref hpop hfailed.1).1).elim
   rcases hentered with
@@ -245,7 +247,7 @@ theorem exit_callNode_spine_of_exec {sevm : Sevm} {pre post : Devm}
       (path := ⟨target.functionIndex, (target.steps ++ [.rest]) ++ [.rest]⟩)
       restFree restRun with ⟨endTarget, endPre, endInstruction, restWalk⟩
   rcases afterCursor.ofRunPrefix_sameFrame_gasFree compiled rfl restWalk
-      (Devm.EqModGas.refl _) with ⟨endCursor, -, endFree⟩
+      (Devm.EqModGas.refl _) hfork.rules_stateGas_none with ⟨endCursor, -, endFree⟩
   have afterClean := endFree.noExec_of_linstAt
     (Linst.at_of_slice endCursor.codeSlice)
   have storTail : Devm.getStor afterCursor.pre = Devm.getStor post :=
@@ -283,7 +285,8 @@ theorem exit_callNode_identity_of_exec {sevm : Sevm} {pre post : Devm}
     (hcode : sevm.code.toList = code)
     (hsel : Sevm.selector sevm = exitSelector)
     (hnonempty : sevm.data.length.toB256 ≠ 0)
-    (hcanon : pre.memory = Mem.empty) :
+    (hcanon : pre.memory = Mem.empty)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     let units := Sevm.dataWord sevm (32 * 0 + 4)
     let freshChi := (B256.rpow scale half rate
       (sevm.benvStat.time - Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat *
@@ -307,7 +310,7 @@ theorem exit_callNode_identity_of_exec {sevm : Sevm} {pre post : Devm}
       ∃ callPost guardPost returnPre, node.stepResult = .ok callPost ∧
         AcceptedPayout sevm payout node.node.devm callPost guardPost
           returnPre := by
-  rcases exit_callNode_spine_of_exec exc hcode hsel hnonempty hcanon with
+  rcases exit_callNode_spine_of_exec exc hcode hsel hnonempty hcanon hfork with
     ⟨node, gasWord, isCall, sitePc, sameFrame, storEq, codeEq, stackPref,
       memWf, -, -, callPost, guardPost, returnPre, stepEq, accepted, -⟩
   exact ⟨node, gasWord, isCall, sitePc, sameFrame, storEq, codeEq, stackPref,
@@ -325,7 +328,8 @@ theorem BodyExecutionOccurrence.exit_callNode_identity
     (codeEq : occurrence.execution.sevm.code.toList = code)
     (selector : Sevm.selector occurrence.execution.sevm = exitSelector)
     (nonempty : occurrence.execution.sevm.data.length.toB256 ≠ 0)
-    (canonicalEntry : occurrence.execution.entryState.memory = Mem.empty) :
+    (canonicalEntry : occurrence.execution.entryState.memory = Mem.empty)
+    (hfork : CoveredFork occurrence.execution.sevm.benvStat.fork) :
     let sevm := occurrence.execution.sevm
     let initial := occurrence.execution.entryState
     let units := Sevm.dataWord sevm (32 * 0 + 4)
@@ -356,18 +360,20 @@ theorem BodyExecutionOccurrence.exit_callNode_identity
         AcceptedPayout sevm payout node.node.devm callPost guardPost
           returnPre :=
   exit_callNode_identity_of_exec occurrence.execution.run codeEq selector
-    nonempty canonicalEntry
+    nonempty canonicalEntry hfork
 
 /-- Public twin of the private clean-settlement lemma below: a clean call-frame
 settlement does not read the message. -/
 theorem ofCall_settle_of_clean {raw : Execution} {child : Devm}
     (left right : Msg)
     (settled : (Frame.ofCall left).settle raw = .ok child)
-    (clean : child.error.isSome = false) :
+    (clean : child.error.isSome = false)
+    (stateGasEq : left.benv.stat.rules.stateGas = right.benv.stat.rules.stateGas) :
     (Frame.ofCall right).settle raw = .ok child := by
   simp only [Frame.ofCall, Frame.settle, Frame.settleMsg, processMessage.settle,
     Bool.false_eq_true, if_false] at settled ⊢
-  cases handled : executeCode.handleError raw with
+  rw [← stateGasEq]
+  cases handled : executeCode.handleErrorWith left.benv.stat.rules.stateGas raw with
   | error e =>
       rw [handled] at settled
       cases settled
@@ -387,9 +393,10 @@ without an error flag is the handled raw machine itself. -/
 private theorem ofCall_settle_clean {raw : Execution} {child : Devm}
     (left right : Msg)
     (settled : (Frame.ofCall left).settle raw = .ok child)
-    (clean : child.error.isSome = false) :
+    (clean : child.error.isSome = false)
+    (stateGasEq : left.benv.stat.rules.stateGas = right.benv.stat.rules.stateGas) :
     (Frame.ofCall right).settle raw = .ok child :=
-  ofCall_settle_of_clean left right settled clean
+  ofCall_settle_of_clean left right settled clean stateGasEq
 
 /-- **Exit payout child, located.** The exit `CALL` node of
 `exit_callNode_identity`, with every conjunct kept, whose filled child slot is
@@ -406,7 +413,8 @@ theorem BodyExecutionOccurrence.exit_callChild_frameOccurrence
     (selector : Sevm.selector occurrence.execution.sevm = exitSelector)
     (nonempty : occurrence.execution.sevm.data.length.toB256 ≠ 0)
     (canonicalEntry : occurrence.execution.entryState.memory = Mem.empty)
-    (postClean : occurrence.execution.postState.error = none) :
+    (postClean : occurrence.execution.postState.error = none)
+    (hfork : CoveredFork occurrence.execution.sevm.benvStat.fork) :
     let sevm := occurrence.execution.sevm
     let initial := occurrence.execution.entryState
     let units := Sevm.dataWord sevm (32 * 0 + 4)
@@ -447,7 +455,7 @@ theorem BodyExecutionOccurrence.exit_callChild_frameOccurrence
               frameOccurrence.frame.frame.out⟩ := by
   dsimp only
   rcases occurrence.exit_callNode_identity codeEq selector nonempty
-      canonicalEntry with
+      canonicalEntry hfork with
     ⟨node, gasWord, isCall, sitePc, sameFrame, storEq, codeEqNode, stackPref,
       memWf, callPost, guardPost, returnPre, stepEq, accepted⟩
   refine ⟨node, gasWord, isCall, sitePc, sameFrame, storEq, codeEqNode,
@@ -479,17 +487,19 @@ theorem BodyExecutionOccurrence.exit_callChild_frameOccurrence
     cases nodeRun.1
   · rw [slotEq] at nodeRun
     cases nodeRun.1
-  rcases Ninst.step_call_spawn_exact stepEq' acceptedStack with
+  rcases Ninst.step_call_spawn_exact stepEq' acceptedStack hfork with
     ⟨spawnParent, spawnDelegated, spawnAddress, spawnCode, spawnAvail,
       spawnDepth, spawnStack, spawnState, spawnMemory, spawnDelegation,
       frameEq, resumeEq⟩
   rcases nodeRun with ⟨r, frameRun, resultEq⟩
   rw [slotEq] at frameRun
-  obtain ⟨msg, frameMsg⟩ : ∃ msg, f = Frame.ofCall msg := ⟨_, frameEq⟩
+  obtain ⟨msg, frameMsg, msgStat⟩ : ∃ msg, f = Frame.ofCall msg ∧
+      msg.benv.stat = occurrence.execution.sevm.benvStat := ⟨_, frameEq, rfl⟩
   subst frameMsg
   obtain ⟨entered, settledEq⟩ := RunFrame.some_inv frameRun
   obtain ⟨-, acceptedSettled⟩ := RunFrame.some_inv acceptedProcess
   have settled := ofCall_settle_clean _ msg acceptedSettled.symm acceptedClean
+    (by rw [msgStat]; rfl)
   rw [settled] at settledEq
   subst settledEq
   have process : ProcessMessage msg (.some ⟨childEvm, raw⟩) (.ok child) := by

@@ -614,11 +614,13 @@ theorem silent_accountingStep_of_view
 
 /-- A read-only endpoint is a `silent` accounting step.
 
-The certificate is `Func.SilentIn` at `Devm.storageView`, which is what the
+The certificate is `Func.SilentAt` at `Devm.storageView` in the covered
+execution context, which is what the
 live-quoting views admit: they reach WETH through a `STATICCALL`, so what they
 preserve is the observation. -/
 theorem readOnlyEffect_accountingStep
     {sevm : Sevm} {pre post : Devm} {sig : B256} {words : Nat} {body : Func}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm = sig)
     (memberAll : (sig, Blanc.ProrataWethVault.routed words body) ∈
@@ -635,10 +637,12 @@ theorem readOnlyEffect_accountingStep
         (Devm.getStor pre account).get key := by
     intro account key
     rw [getStor_eq_of_state_eq entryState account]
-  have walk := Func.observe_eq_of_run_silentIn
-    Blanc.ProrataWethVault.readOnlySilentSlot_closed
+  have walk := Func.observe_eq_of_run_silentAt
+    (fun k g permitted lookup =>
+      (Blanc.ProrataWethVault.readOnlySilentSlot_closed k g permitted
+        lookup).toSilentAt)
     (Func.WalkInv.toRun (R := Func.RunOk) endpointRun)
-    (Blanc.ProrataWethVault.readOnly_silent _ memberRO)
+    (Blanc.ProrataWethVault.readOnly_silent hfork _ memberRO)
   refine silent_accountingStep_of_view (fun account key => ?_)
   exact (congrFun (congrFun walk account) key).trans (entry account key)
 
@@ -679,6 +683,7 @@ vault's two distinct summands of that sum. -/
 theorem deposit_message_accountingStep
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (depositorNotVault : sevm.caller ≠ sevm.currentTarget)
     (wethSumNof : SumNof (Stor.rest (Devm.getStor pre wethAccount)))
@@ -691,7 +696,7 @@ theorem deposit_message_accountingStep
         (.deposit (Sevm.argWord sevm 0).toNat shares.toNat)
         (snapshotAt sevm post) := by
   obtain ⟨supply, shares, supplyEq, quoteEq, stable, roomFits, effect⟩ :=
-    deposit_compiled_effect_named config memoryWf run selectorEq
+    deposit_compiled_effect_named (hfork := hfork) config memoryWf run selectorEq
   have effectWhole := effect
   obtain ⟨-, movement, -, -, -⟩ := effect
   have supplyNof : B256.Nof supply shares := by
@@ -733,6 +738,7 @@ needs is the debit side of the effect's own WETH transfer. -/
 theorem redeem_message_accountingStep
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (receiverNotVault :
       sevm.currentTarget ≠ (Sevm.argWord sevm 1).toAdr)
@@ -745,7 +751,7 @@ theorem redeem_message_accountingStep
         (.withdraw (Sevm.argWord sevm 0).toNat assets.toNat)
         (snapshotAt sevm post) := by
   obtain ⟨supply, assets, supplyEq, quoteEq, burnable, effect⟩ :=
-    redeem_compiled_effect_named config memoryWf run selectorEq
+    redeem_compiled_effect_named (hfork := hfork) config memoryWf run selectorEq
   have effectWhole := effect
   obtain ⟨-, movement, -, -, -, -, -, -⟩ := effect
   refine ⟨assets, outboundEffect_accountingStep receiverNotVault ?_ ?_
@@ -793,6 +799,7 @@ an execution history need not case on the selector itself. -/
 theorem nonflow_message_accountingStep
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (notDeposit :
@@ -809,82 +816,82 @@ theorem nonflow_message_accountingStep
   simp only [Blanc.ProrataWethVault.vaultFuncs, List.mem_cons,
     List.not_mem_nil, or_false, Prod.mk.injEq] at member
   rcases member with ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩
-  · exact readOnlyEffect_accountingStep (words := 0)
+  · exact readOnlyEffect_accountingStep (hfork := hfork) (words := 0)
       (body := Blanc.ProrataWethVault.totalAssets) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
-  · exact readOnlyEffect_accountingStep (words := 0)
+  · exact readOnlyEffect_accountingStep (hfork := hfork) (words := 0)
       (body := Blanc.ProrataWethVault.name) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
-  · exact readOnlyEffect_accountingStep (words := 1)
+  · exact readOnlyEffect_accountingStep (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.convertToAssets) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
   · exact approveEffect_accountingStep config memoryWf run sel
-  · exact readOnlyEffect_accountingStep (words := 1)
+  · exact readOnlyEffect_accountingStep (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.previewWithdraw) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
-  · exact readOnlyEffect_accountingStep (words := 0)
+  · exact readOnlyEffect_accountingStep (hfork := hfork) (words := 0)
       (body := Blanc.ProrataWethVault.totalSupply) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
   · exact transferFromEffect_accountingStep config memoryWf run sel
-  · exact readOnlyEffect_accountingStep (words := 0)
+  · exact readOnlyEffect_accountingStep (hfork := hfork) (words := 0)
       (body := Blanc.ProrataWethVault.decimals) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
-  · exact readOnlyEffect_accountingStep (words := 0)
+  · exact readOnlyEffect_accountingStep (hfork := hfork) (words := 0)
       (body := Blanc.ProrataWethVault.asset) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
-  · exact readOnlyEffect_accountingStep (words := 1)
+  · exact readOnlyEffect_accountingStep (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.maxDeposit) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
-  · exact readOnlyEffect_accountingStep (words := 1)
+  · exact readOnlyEffect_accountingStep (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.previewRedeem) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
   · exact absurd sel notDeposit
-  · exact readOnlyEffect_accountingStep (words := 1)
+  · exact readOnlyEffect_accountingStep (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.balanceOf) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
   · exact absurd sel notMint
-  · exact readOnlyEffect_accountingStep (words := 0)
+  · exact readOnlyEffect_accountingStep (hfork := hfork) (words := 0)
       (body := Blanc.ProrataWethVault.symbol) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
   · exact transferEffect_accountingStep config memoryWf run sel
-  · exact readOnlyEffect_accountingStep (words := 1)
+  · exact readOnlyEffect_accountingStep (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.previewMint) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
   · exact absurd sel notWithdraw
   · exact absurd sel notRedeem
-  · exact readOnlyEffect_accountingStep (words := 1)
+  · exact readOnlyEffect_accountingStep (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.maxMint) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
-  · exact readOnlyEffect_accountingStep (words := 1)
+  · exact readOnlyEffect_accountingStep (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.convertToShares) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
-  · exact readOnlyEffect_accountingStep (words := 1)
+  · exact readOnlyEffect_accountingStep (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.maxWithdraw) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
-  · exact readOnlyEffect_accountingStep (words := 1)
+  · exact readOnlyEffect_accountingStep (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.maxRedeem) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
-  · exact readOnlyEffect_accountingStep (words := 2)
+  · exact readOnlyEffect_accountingStep (hfork := hfork) (words := 2)
       (body := Blanc.ProrataWethVault.allowance) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
-  · exact readOnlyEffect_accountingStep (words := 1)
+  · exact readOnlyEffect_accountingStep (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.previewDeposit) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])

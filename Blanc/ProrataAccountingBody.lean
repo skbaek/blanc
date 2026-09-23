@@ -24,12 +24,13 @@ theorem retainedTransactionListAccountingReplay
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
     (inv : prorataSpec.StateInv ca benv.state)
     (notCreated : ca ∉ benv.createdAccounts)
+    (hfork : CoveredFork benv.stat.fork)
     (blockIndex : Nat) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca benv.state) steps
         (RealizedSnapshot.ofState ca finalBenv.state) :=
-  (accountingLadder ca).transactionList trace inv notCreated inv.side blockIndex
+  (accountingLadder ca).transactionList trace inv notCreated inv.side hfork blockIndex
 
 /-- Rung R4: a retained Jaune system message realizes one PRORATA accounting
 replay.
@@ -52,12 +53,13 @@ theorem retainedSystemMessageAccountingReplay
     (inv : prorataSpec.StateInv ca benv.state)
     (notCreated : ca ∉ benv.createdAccounts)
     (systemNe : target ≠ systemAddress)
+    (hfork : CoveredFork benv.stat.fork)
     (blockIndex : Nat) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca benv.state) steps
         (RealizedSnapshot.ofState ca state) :=
-  (accountingLadder ca).systemMessage trace inv notCreated systemNe inv.side
+  (accountingLadder ca).systemMessage trace inv notCreated systemNe inv.side hfork
     blockIndex
 
 /-- Rung R5: the two checked request-system calls at the tail of `applyBody`
@@ -70,12 +72,13 @@ theorem retainedRequestsAccountingReplay
     (trace : RequestsTrace benv bout state bout')
     (inv : prorataSpec.StateInv ca benv.state)
     (notCreated : ca ∉ benv.createdAccounts)
+    (hfork : CoveredFork benv.stat.fork)
     (blockIndex : Nat) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca benv.state) steps
         (RealizedSnapshot.ofState ca state) :=
-  (accountingLadder ca).requests trace inv notCreated inv.side blockIndex
+  (accountingLadder ca).requests trace inv notCreated inv.side hfork blockIndex
 
 /-- Rung R6: the block's direct consensus withdrawals realize one PRORATA
 accounting replay -- one `externalCredit` step per *positive* credit to
@@ -119,12 +122,13 @@ theorem retainedBodyAccountingReplay
     (inv : prorataSpec.StateInv ca benv.state)
     (notCreated : ca ∉ benv.createdAccounts)
     (bound : sum benv.state.bal + wdsum wds < 2 ^ 256)
+    (hfork : CoveredFork benv.stat.fork)
     (blockIndex : Nat) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca benv.state) steps
         (RealizedSnapshot.ofState ca state) :=
-  (accountingLadder ca).body trace inv notCreated bound blockIndex
+  (accountingLadder ca).body trace inv notCreated bound hfork blockIndex
 
 end Prorata
 

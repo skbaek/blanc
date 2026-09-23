@@ -153,6 +153,7 @@ def CommittedExecStorageSound (dp : DeployParams) (ca : Adr) : Prop :=
       initEvm (msg.withBenv benv))
     (hcommit : Execution.commits out = true),
     MessageRunReady dp ca msg →
+    CoveredFork msg.benv.stat.fork →
     StateStorageFlowAccounting ca msg.benv.state
       (Execution.committedPost out hcommit).state
       (Exec.flowActions dp ca run)
@@ -163,7 +164,7 @@ theorem CompiledBodyStorageHandler.committedExecStorageSound
     {dp : DeployParams} {ca : Adr}
     (handler : CompiledBodyStorageHandler dp ca) :
     CommittedExecStorageSound dp ca := by
-  intro msg benv pc sevm pre out run htransfer hinit hcommit runReady
+  intro msg benv pc sevm pre out run htransfer hinit hcommit runReady hfork
   have hprecond :=
     ContractSpec.Pre.of_inv_benvAfterTransfer
       runReady.ready.backed.ne runReady.ready.backed.val0
@@ -200,8 +201,11 @@ theorem CompiledBodyStorageHandler.committedExecStorageSound
   have hfa := Exec.coreStorageSound_of_compiledBodyStorageHandler handler
   have hcore := hfa 0 (initSevm (msg.withBenv benv))
     (initDevm (msg.withBenv benv)) out run hat
+  have hinitFork : CoveredFork (initSevm (msg.withBenv benv)).benvStat.fork := by
+    rw [initSevm_benvStat, Msg.withBenv_benvStat, benvAfterTransfer_stat htransfer]
+    exact hfork
   rcases hcore run hcommit hat
-      (fun htarget => ⟨hroot, hdirect htarget⟩) with ⟨effect⟩
+      (fun htarget => ⟨hroot, hdirect htarget⟩) hinitFork with ⟨effect⟩
   have hbody := effect.delta.storageFlowAccounting.toState
   have hentryStor :
       msg.benv.state.getStor ca =
@@ -222,6 +226,7 @@ def MessageStorageSound (dp : DeployParams) (ca : Adr) : Prop :=
   ∀ {msg : Msg} {state : State} {out : MsgCallOutput}
     (trace : MessageCallTrace msg state out),
     MessageReady dp ca msg →
+    CoveredFork msg.benv.stat.fork →
     trace.StorageAccounted dp ca
 
 theorem ProcessMessage.storageAccounting_of_none
@@ -245,13 +250,14 @@ theorem ProcessMessage.storageAccounting_of_committedExecSound
     (hprocess :
       ProcessMessage msg (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
     (hsound : CommittedExecStorageSound dp ca)
-    (runReady : MessageRunReady dp ca msg) :
+    (runReady : MessageRunReady dp ca msg)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     StateStorageFlowAccounting ca msg.benv.state post.state
       (Exec.flowActions dp ca run) := by
   have henter := (RunFrame.some_inv hprocess).1
   rcases Frame.enter_run_inv henter with ⟨benv, htransfer, hinit⟩
   by_cases hcommit : Execution.commits out = true
-  · have haccounting := hsound run htransfer hinit hcommit runReady
+  · have haccounting := hsound run htransfer hinit hcommit runReady hfork
     rw [ProcessMessage.ok_state_eq_committedPost hprocess hcommit]
     exact haccounting
   · have hstate :=
@@ -263,7 +269,8 @@ theorem ProcessMessageTrace.storageAccounting_of_committedExecSound
     {dp : DeployParams} {ca : Adr} {msg : Msg} {post : Devm}
     (trace : ProcessMessageTrace msg (.ok post))
     (hsound : CommittedExecStorageSound dp ca)
-    (runReady : MessageRunReady dp ca msg) :
+    (runReady : MessageRunReady dp ca msg)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     StateStorageFlowAccounting ca msg.benv.state post.state
       (trace.retained.flowActions dp ca) := by
   rcases trace with ⟨slot, retained, hprocess⟩
@@ -272,7 +279,7 @@ theorem ProcessMessageTrace.storageAccounting_of_committedExecSound
       exact ProcessMessage.storageAccounting_of_none hprocess runReady.ready
   | some run =>
       exact ProcessMessage.storageAccounting_of_committedExecSound
-        run hprocess hsound runReady
+        run hprocess hsound runReady hfork
 
 theorem ProcessCreateMessage.ok_getStor_eq_inner_of_no_error
     {msg : Msg} {slot : Xlot} {post : Devm} {ca : Adr}
@@ -302,8 +309,10 @@ theorem ProcessCreateMessage.ok_getStor_eq_inner_of_no_error
             | halt reason =>
                 have heq := Except.ok.inj hsettle
                 rw [heq] at herror
-                simp [processCreateMessage.exceptionalHalt,
-                  Devm.error, Devm.setMeta] at herror
+                split at herror <;>
+                  simp [processCreateMessage.exceptionalHalt,
+                    processCreateMessage.exceptionalHaltAmsterdam,
+                    Devm.error, Devm.setMeta] at herror
             | revert => cases hsettle
             | crypto reason => cases hsettle
             | internal reason => cases hsettle
@@ -338,7 +347,8 @@ theorem ProcessCreateMessageTrace.storageAccounting_of_committedExecSound
     (hsound : CommittedExecStorageSound dp ca)
     (ready : MessageReady dp ca msg)
     (htargetNone : msg.target.isNone = true)
-    (htargetNe : msg.currentTarget ≠ ca) :
+    (htargetNe : msg.currentTarget ≠ ca)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     StateStorageFlowAccounting ca msg.benv.state post.state
       (if post.error.isSome then []
        else trace.retained.flowActions dp ca) := by
@@ -364,6 +374,7 @@ theorem ProcessCreateMessageTrace.storageAccounting_of_committedExecSound
       have haccounting :=
         ProcessMessageTrace.storageAccounting_of_committedExecSound
           innerTrace hsound hrunReady
+          (by rw [processCreateMessage.msg_benvStat]; exact hfork)
       have hpre := processCreateMessage_msg_getStor_eq
         (msg := msg) (ca := ca) htargetNe
       constructor
@@ -459,13 +470,14 @@ theorem CommittedExecStorageSound.messageStorageSound
     {dp : DeployParams} {ca : Adr}
     (hsound : CommittedExecStorageSound dp ca) :
     MessageStorageSound dp ca := by
-  intro msg state out trace ready
+  intro msg state out trace ready hfork
+  have hsg : msg.benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
   cases trace with
   | createCollision htarget hcollision hresult =>
       unfold MessageCallTrace.StorageAccounted
       change StateStorageFlowAccounting ca msg.benv.state state []
       have hstate := processMessageCall_createCollision_state_eq
-        htarget hcollision hresult
+        htarget hcollision hresult hsg
       subst state
       exact StateStorageFlowAccounting.refl ca msg.benv.state
   | createRun htarget hcollision evm hcore trace hresult =>
@@ -474,9 +486,9 @@ theorem CommittedExecStorageSound.messageStorageSound
         ready hcollision
       have haccounting :=
         ProcessCreateMessageTrace.storageAccounting_of_committedExecSound
-          trace hsound ready htarget htargetNe
+          trace hsound ready htarget htargetNe hfork
       have hstate := processMessageCall_createRun_state_eq
-        htarget hcollision hcore hresult
+        htarget hcollision hcore hresult hsg
       change StateStorageFlowAccounting ca msg.benv.state state
         (if evm.error.isSome then []
          else trace.retained.flowActions dp ca)
@@ -499,8 +511,11 @@ theorem CommittedExecStorageSound.messageStorageSound
             (trace.retained.flowActions dp ca) :=
         ProcessMessageTrace.storageAccounting_of_committedExecSound
           trace hsound runReadyExec
+          (by rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_benv_stat,
+                ExecutionTrace.messageCallDelegation_benv_stat hdelegation]
+              exact hfork)
       have hstate := processMessageCall_callRun_state_eq
-        htarget hdelegation hexecMsg hcore hresult
+        htarget hdelegation hexecMsg hcore hresult hsg
       have hpre :
           execMsg.benv.state.getStor = msg.benv.state.getStor := by
         rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_getStor_eq,
@@ -598,11 +613,12 @@ theorem TransactionTrace.postMessage_getStor_eq
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
     (hstable : Stable dp ca benv.state)
-  (hnotCreated : ca ∉ benv.createdAccounts) :
+  (hnotCreated : ca ∉ benv.createdAccounts)
+    (hfork : CoveredFork benv.stat.fork) :
     state.getStor ca = trace.messageState.getStor ca := by
-  rcases trace.exists_finalStateForm with
+  rcases trace.exists_finalStateForm hfork with
     ⟨refundCounter, _hrefund, hstate⟩
-  have hdelete := trace.accountsToDelete_ne_ca hstable hnotCreated
+  have hdelete := trace.accountsToDelete_ne_ca hstable hnotCreated hfork
   have hstateStor := congrArg (fun world : State => world.getStor ca) hstate
   rw [foldl_destroyAccount_getStor_eq hdelete] at hstateStor
   exact hstateStor.trans
@@ -616,14 +632,18 @@ theorem TransactionTrace.storageAccounting
     (trace : TransactionTrace benv bout tx index state bout')
     (hmessage : MessageStorageSound dp ca)
     (hstable : Stable dp ca benv.state)
-    (hnotCreated : ca ∉ benv.createdAccounts) :
+    (hnotCreated : ca ∉ benv.createdAccounts)
+    (hfork : CoveredFork benv.stat.fork) :
     StateStorageFlowAccounting ca benv.state state
       (trace.flowActions dp ca) := by
+  have hmsgFork : CoveredFork trace.msg.benv.stat.fork := by
+    rw [prepareMessage_benv trace.prepared]
+    exact hfork
   have hmsg := hmessage trace.message
-    (trace.message_ready hstable hnotCreated)
+    (trace.message_ready hstable hnotCreated) hmsgFork
   unfold MessageCallTrace.StorageAccounted at hmsg
   have hpre := trace.messagePre_getStor_eq (ca := ca)
-  have hpost := trace.postMessage_getStor_eq hstable hnotCreated
+  have hpost := trace.postMessage_getStor_eq hstable hnotCreated hfork
   constructor
   · intro u
     simpa [TransactionTrace.flowActions, hpre, hpost] using
@@ -639,16 +659,19 @@ theorem ApplyTransactionsTrace.storageAccounting
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) →
     Stable dp ca benv.state →
     ca ∉ benv.createdAccounts →
+    CoveredFork benv.stat.fork →
     StateStorageFlowAccounting ca benv.state finalBenv.state
       (trace.flowActions dp ca)
-  | _, _, _, _, _, .nil benv _bout, _, _ =>
+  | _, _, _, _, _, .nil benv _bout, _, _, _ =>
       StateStorageFlowAccounting.refl ca benv.state
-  | _, _, _, _, _, .cons head tail, hstable, hnotCreated =>
+  | _, _, _, _, _, .cons head tail, hstable, hnotCreated, hfork =>
       StateStorageFlowAccounting.append
-        (TransactionTrace.storageAccounting head hmessage hstable hnotCreated)
+        (TransactionTrace.storageAccounting head hmessage hstable hnotCreated
+          hfork)
         (ApplyTransactionsTrace.storageAccounting dp ca hmessage tail
-          (TransactionTrace.stable head hstable hnotCreated)
-          (by simpa [Benv.withState] using hnotCreated))
+          (TransactionTrace.stable head hstable hnotCreated hfork)
+          (by simpa [Benv.withState] using hnotCreated)
+          (by simpa [Benv.withState] using hfork))
 
 theorem SystemMessageTrace.storageAccounting
     {dp : DeployParams} {ca : Adr}
@@ -657,11 +680,12 @@ theorem SystemMessageTrace.storageAccounting
     (trace : SystemMessageTrace benv target data state out)
     (hmessage : MessageStorageSound dp ca)
     (hstable : Stable dp ca benv.state)
-    (hnotCreated : ca ∉ benv.createdAccounts) :
+    (hnotCreated : ca ∉ benv.createdAccounts)
+    (hfork : CoveredFork benv.stat.fork) :
     StateStorageFlowAccounting ca benv.state state
       (trace.flowActions dp ca) := by
   have hmsg := hmessage trace.message
-    (trace.messageReady hstable hnotCreated)
+    (trace.messageReady hstable hnotCreated) hfork
   unfold MessageCallTrace.StorageAccounted at hmsg
   simpa [SystemMessageTrace.flowActions, systemTransactionMessage,
     processSystemTransactionMsg, Benv.beginTransaction] using hmsg
@@ -688,19 +712,21 @@ theorem RequestsTrace.storageAccounting
     (trace : RequestsTrace benv bout state bout')
     (hmessage : MessageStorageSound dp ca)
     (hstable : Stable dp ca benv.state)
-    (hnotCreated : ca ∉ benv.createdAccounts) :
+    (hnotCreated : ca ∉ benv.createdAccounts)
+    (hfork : CoveredFork benv.stat.fork) :
     StateStorageFlowAccounting ca benv.state state
       (trace.flowActions dp ca) := by
   have hwithdrawal :=
     SystemMessageTrace.storageAccounting trace.withdrawal
-      hmessage hstable hnotCreated
+      hmessage hstable hnotCreated hfork
   have hwithdrawalMeta :=
     SystemMessageTrace.stable_and_sum_le trace.withdrawal
-      hstable hnotCreated
+      hstable hnotCreated hfork
   have hconsolidation :=
     SystemMessageTrace.storageAccounting trace.consolidation
       hmessage hwithdrawalMeta.1
       (by simpa [Benv.withState] using hnotCreated)
+      (by simpa [Benv.withState] using hfork)
   have hboth := hwithdrawal.append hconsolidation
   have hstate :=
     ExecutionTrace.RequestsTrace.state_eq_consolidationState trace
@@ -714,27 +740,28 @@ theorem AppliedBodyTrace.storageAccounting
     (hmessage : MessageStorageSound dp ca)
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts)
-    (hbound : sum benv.state.bal + wdsum wds < 2 ^ 256) :
+    (hbound : sum benv.state.bal + wdsum wds < 2 ^ 256)
+    (hfork : CoveredFork benv.stat.fork) :
     StateStorageFlowAccounting ca benv.state state
       (trace.flowActions dp ca) := by
   have hbeacon :=
     SystemMessageTrace.storageAccounting trace.beacon
-      hmessage hstable hnotCreated
+      hmessage hstable hnotCreated hfork
   have hbeaconMeta :=
     SystemMessageTrace.stable_and_sum_le trace.beacon
-      hstable hnotCreated
+      hstable hnotCreated hfork
   have hhistory :=
     SystemMessageTrace.storageAccounting trace.history
       hmessage hbeaconMeta.1
-      (by simpa [Benv.withState] using hnotCreated)
+      (by simpa [Benv.withState] using hnotCreated) hfork
   have hhistoryMeta :=
     SystemMessageTrace.stable_and_sum_le trace.history hbeaconMeta.1
-      (by simpa [Benv.withState] using hnotCreated)
+      (by simpa [Benv.withState] using hnotCreated) hfork
   have htransactions :=
     ApplyTransactionsTrace.storageAccounting dp ca hmessage
       trace.transactions hhistoryMeta.1
-      (by simpa [Benv.withState] using hnotCreated)
-  have htxSum := ApplyTransactionsTrace.sum_le trace.transactions
+      (by simpa [Benv.withState] using hnotCreated) hfork
+  have htxSum := ApplyTransactionsTrace.sum_le trace.transactions hfork
   have htxSum' :
       sum trace.transactionBenv.state.bal ≤
         sum trace.historyState.bal := by
@@ -748,7 +775,7 @@ theorem AppliedBodyTrace.storageAccounting
     omega
   have htransactionsStable :=
     ApplyTransactionsTrace.stable trace.transactions hhistoryMeta.1
-      (by simpa [Benv.withState] using hnotCreated)
+      (by simpa [Benv.withState] using hnotCreated) hfork
   have hwithdrawalsStable :=
     processWithdrawalsState_stable trace.transactionBenv.state wds
       hwithdrawalBound htransactionsStable
@@ -761,14 +788,18 @@ theorem AppliedBodyTrace.storageAccounting
         (processWithdrawalsState trace.transactionBenv.state wds) [] :=
     StateStorageFlowAccounting.of_getStor_eq
       (processWithdrawalsState_getStor_eq ca _ _).symm
+  have htransactionFork : CoveredFork trace.transactionBenv.stat.fork := by
+    rw [ExecutionTrace.ApplyTransactionsTrace.stat_eq trace.transactions]
+    exact hfork
   have hrequests := RequestsTrace.storageAccounting trace.requests
     hmessage hwithdrawalsStable
       (by simpa [Benv.withState] using htransactionNotCreated)
+      htransactionFork
   have htotal :=
     (((hbeacon.append hhistory).append htransactions).append
       hwithdrawals).append hrequests
   simpa [AppliedBodyTrace.flowActions, Benv.withState,
-    List.append_assoc] using htotal
+    trace.requestState_eq, List.append_assoc] using htotal
 
 theorem AccountedBlock.storageAccounting
     {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
@@ -778,7 +809,7 @@ theorem AccountedBlock.storageAccounting
     (hstable : Stable dp ca pre.state) :
     StateStorageFlowAccounting ca pre.state post.state accounted.actions := by
   have hbody := AppliedBodyTrace.storageAccounting accounted.bodyTrace
-    hmessage hstable (by simp [initBenv]) accounted.bound
+    hmessage hstable (by simp [initBenv]) accounted.bound accounted.covered
   have hpost := congrArg (fun chain : BlockChain => chain.state)
     accounted.postEq
   simpa [initBenv, accounted.actions_eq, hpost] using hbody

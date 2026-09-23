@@ -130,16 +130,22 @@ The flagship obligations are the `NoMem` ones: no WETH10 selector reads the
 machine's memory, so neither the obligation nor the frame theorem is entitled
 to a `Mem.Wf` premise.  The memory-carrying pair is pinned too, because the
 message-, transaction- and block-level rungs consume it.
+
+Since the 2026-09-23 coverage restriction each obligation, and the
+deeper-frame hypothesis inside it, is stated only for frames whose fork is
+`CoveredFork` (Prague, Osaka, BPO1, BPO2); Amsterdam frames are not covered.
 -/
 
 example (dp : DeployParams) (ca : Adr) :
     ∀ {sevm : Sevm} {pre post : Devm},
+      CoveredFork sevm.benvStat.fork →
       Prog.Run sevm pre (backedSpec weth10 dp).prog post →
       sevm.currentTarget = ca →
       ( ∀ pc' sevm' pre' post',
           Exec pc' sevm' pre' (.ok post') →
           sevm'.depth < sevm.depth →
           Prog.At (backedSpec weth10 dp).prog ca pc' sevm' pre' →
+          CoveredFork sevm'.benvStat.fork →
           (backedSpec weth10 dp).PreWf ca sevm' pre' →
           (backedSpec weth10 dp).Post ca sevm' post' ) →
       (backedSpec weth10 dp).Pre ca sevm pre →
@@ -148,6 +154,7 @@ example (dp : DeployParams) (ca : Adr) :
 
 example (dp : DeployParams) (ca : Adr) :
     ∀ sevm pre post,
+      CoveredFork sevm.benvStat.fork →
       Exec 0 sevm pre (.ok post) →
       (sevm.currentTarget = ca →
         some sevm.code.toList = Prog.compile (backedSpec weth10 dp).prog) →
@@ -157,12 +164,14 @@ example (dp : DeployParams) (ca : Adr) :
 
 example (dp : DeployParams) (ca : Adr) :
     ∀ {sevm : Sevm} {pre post : Devm},
+      CoveredFork sevm.benvStat.fork →
       Prog.Run sevm pre (backedSpec weth10 dp).prog post →
       sevm.currentTarget = ca →
       ( ∀ pc' sevm' pre' post',
           Exec pc' sevm' pre' (.ok post') →
           sevm'.depth < sevm.depth →
           Prog.At (backedSpec weth10 dp).prog ca pc' sevm' pre' →
+          CoveredFork sevm'.benvStat.fork →
           (backedSpec weth10 dp).PreWf ca sevm' pre' →
           (backedSpec weth10 dp).Post ca sevm' post' ) →
       Mem.Wf pre.memory →
@@ -172,6 +181,7 @@ example (dp : DeployParams) (ca : Adr) :
 
 example (dp : DeployParams) (ca : Adr) :
     ∀ sevm pre post,
+      CoveredFork sevm.benvStat.fork →
       Exec 0 sevm pre (.ok post) →
       (sevm.currentTarget = ca →
         some sevm.code.toList = Prog.compile (backedSpec weth10 dp).prog) →
@@ -185,7 +195,8 @@ example (msg : Msg)
     (h_codeAddress : msg.codeAddress = .none)
     (h_code : msg.code.toList = weth10InitCode)
     (h_gas : weth10CreateMessageGasAccounting ≤ msg.gas)
-    (h_max : 6313 ≤ msg.benv.stat.rules.code.maxCodeSize) :
+    (h_max : 6313 ≤ msg.benv.stat.rules.code.maxCodeSize)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     ∃ post,
       processCreateMessage msg = .ok post ∧
       post.getCode msg.currentTarget =
@@ -198,7 +209,7 @@ example (msg : Msg)
         weth10Code (freshDeployParams
           msg.benv.stat.chainId.toB256 msg.currentTarget) ∧
       post.gasLeft = msg.gas - weth10CreateMessageGasAccounting :=
-  processCreateMessage_weth10_success msg h_value h_codeAddress h_code h_gas h_max
+  processCreateMessage_weth10_success msg h_value h_codeAddress h_code h_gas h_max hfork
 
 example (chainId : B256) (contractAddress : Adr) :
     (freshDeployParams chainId contractAddress).deploymentChainId = chainId ∧
@@ -225,10 +236,11 @@ example (chainId : B256) (contractAddress : Adr) :
 example (dp : DeployParams) (ca : Adr) (cfg : ChainConfig)
     (ch ch' : BlockChain)
     (h_reach : BlockChain.ReachUsing cfg ch ch')
-    (h_inv : Stable dp ca ch.state) :
+    (h_inv : Stable dp ca ch.state)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
     (ch'.state.getStor ca).get flashMintedSlot = 0 ∧
       balSum (ch'.state.getStor ca) ≤ (ch'.state.bal ca).toNat :=
-  chain_reachable_backed_and_flash_zero dp ca cfg ch ch' h_reach h_inv
+  chain_reachable_backed_and_flash_zero dp ca cfg ch ch' h_reach h_inv hcov
 
 example (msg : Msg)
     (h_value : msg.value = 0)
@@ -236,14 +248,14 @@ example (msg : Msg)
     (h_code : msg.code.toList = weth10InitCode)
     (h_gas : weth10CreateMessageGasAccounting ≤ msg.gas)
     (h_max : 6313 ≤ msg.benv.stat.rules.code.maxCodeSize)
-    (h_sum : SumNof msg.benv.state.bal) :
+    (h_sum : SumNof msg.benv.state.bal)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     ∃ post,
       processCreateMessage msg = .ok post ∧
       Stable
         (freshDeployParams msg.benv.stat.chainId.toB256 msg.currentTarget)
         msg.currentTarget post.state :=
-  processCreateMessage_establishes_stable msg h_value h_codeAddress h_code
-    h_gas h_max h_sum
+  processCreateMessage_establishes_stable msg h_value h_codeAddress h_code h_gas h_max h_sum hfork
 
 example (s : Stor) (v b : B256) :
     Stor.Weth10Inv s v b ↔
@@ -310,6 +322,7 @@ example {rules : ForkRules} {dp : DeployParams}
     {w : State} {msg : Msg}
     (state_eq : msg.benv.state = w)
     (rules_eq : msg.benv.stat.rules = rules)
+    (fork_covered : CoveredFork msg.benv.stat.fork)
     (target_eq : msg.target = some ca)
     (currentTarget_eq : msg.currentTarget = ca)
     (codeAddress_eq : msg.codeAddress = some ca)
@@ -336,6 +349,7 @@ example {rules : ForkRules} {dp : DeployParams}
     AdmissibleRedemptionMessageCore rules dp ca owner recipient q w msg :=
   { state_eq := state_eq
     rules_eq := rules_eq
+    fork_covered := fork_covered
     target_eq := target_eq
     currentTarget_eq := currentTarget_eq
     codeAddress_eq := codeAddress_eq
@@ -417,6 +431,7 @@ example {rules : ForkRules} {dp : DeployParams}
 example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (rules_eq : benv.stat.rules = rules)
+    (fork_covered : CoveredFork benv.stat.fork)
     (type_eq : ∃ maxPriorityFee maxFee,
       tx.type = .two benv.stat.chainId maxPriorityFee maxFee (some ca) [])
     (data_eq : tx.data = withdrawToCalldata recipient q)
@@ -429,7 +444,7 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     (owner_ne_zero : owner ≠ 0)
     (owner_sender_admissible : TransactionSenderAdmissible benv.state owner)
     (validated :
-      validateTransaction rules tx = .ok (calculateIntrinsicCost tx))
+      validateTransaction rules tx 0 = .ok (calculateIntrinsicCost rules tx 0))
     (checked :
       checkTransaction benv.beginTransaction
         (redemptionTxPreludeBout bout tx index) tx =
@@ -439,7 +454,7 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     (upfront_funded : tx.gas * redemptionEffectiveGasPrice benv tx ≤
       (benv.state.bal owner).toNat)
     (gas_cap : checkTransactionGasCap rules.tx tx.gas = .ok ())
-    (gas_bound : redemptionTransactionGasBound q tx ≤ tx.gas)
+    (gas_bound : redemptionTransactionGasBound q benv tx owner ≤ tx.gas)
     (block_gas_room : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
     (target_code :
       some (benv.state.getCode ca).toList = Prog.compile (weth10 dp))
@@ -452,6 +467,7 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     AdmissibleRedemptionTx
       rules dp ca owner recipient q benv bout tx index :=
   { rules_eq := rules_eq
+    fork_covered := fork_covered
     type_eq := type_eq
     data_eq := data_eq
     selector_eq := selector_eq
@@ -479,6 +495,7 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
 example {rules : ForkRules} {dp : DeployParams} {ca owner : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (rules_eq : benv.stat.rules = rules)
+    (fork_covered : CoveredFork benv.stat.fork)
     (type_eq : ∃ maxPriorityFee maxFee,
       tx.type = .two benv.stat.chainId maxPriorityFee maxFee (some ca) [])
     (data_eq : tx.data = withdrawCalldata q)
@@ -492,7 +509,7 @@ example {rules : ForkRules} {dp : DeployParams} {ca owner : Adr} {q : Nat}
     (owner_not_precompile : rules.isPrecomp owner = false)
     (owner_code_free : (benv.state.getCode owner).toList = [])
     (validated :
-      validateTransaction rules tx = .ok (calculateIntrinsicCost tx))
+      validateTransaction rules tx 0 = .ok (calculateIntrinsicCost rules tx 0))
     (checked :
       checkTransaction benv.beginTransaction
         (redemptionTxPreludeBout bout tx index) tx =
@@ -502,7 +519,7 @@ example {rules : ForkRules} {dp : DeployParams} {ca owner : Adr} {q : Nat}
     (upfront_funded : tx.gas * redemptionEffectiveGasPrice benv tx ≤
       (benv.state.bal owner).toNat)
     (gas_cap : checkTransactionGasCap rules.tx tx.gas = .ok ())
-    (gas_bound : redemptionTransactionGasBound q tx ≤ tx.gas)
+    (gas_bound : redemptionTransactionGasBound q benv tx owner ≤ tx.gas)
     (block_gas_room : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
     (target_code :
       some (benv.state.getCode ca).toList = Prog.compile (weth10 dp))
@@ -511,6 +528,7 @@ example {rules : ForkRules} {dp : DeployParams} {ca owner : Adr} {q : Nat}
     (owner_account : RecipientAccountCase benv.state owner) :
     AdmissibleSelfRedemptionTx rules dp ca owner q benv bout tx index :=
   { rules_eq := rules_eq
+    fork_covered := fork_covered
     type_eq := type_eq
     data_eq := data_eq
     selector_eq := selector_eq
@@ -538,6 +556,7 @@ example {rules : ForkRules} {dp : DeployParams}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {maxPriorityFee maxFee : Nat}
     (rules_eq : benv.stat.rules = rules)
+    (fork_covered : CoveredFork benv.stat.fork)
     (type_eq : tx.type =
       .two benv.stat.chainId maxPriorityFee maxFee (some ca) [])
     (data_eq : tx.data = withdrawToCalldata recipient q)
@@ -551,7 +570,7 @@ example {rules : ForkRules} {dp : DeployParams}
     (max_fee_fits : tx.gas * maxFee ≤ B256.max.toNat)
     (max_fee_funded : tx.gas * maxFee ≤ (benv.state.bal owner).toNat)
     (gas_cap : checkTransactionGasCap rules.tx tx.gas = .ok ())
-    (gas_bound : redemptionTransactionGasBound q tx ≤ tx.gas)
+    (gas_bound : redemptionTransactionGasBound q benv tx owner ≤ tx.gas)
     (block_gas_room : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
     (target_code :
       some (benv.state.getCode ca).toList = Prog.compile (weth10 dp))
@@ -564,6 +583,7 @@ example {rules : ForkRules} {dp : DeployParams}
     NonSignatureRedemptionTxEnvelope rules dp ca owner recipient q benv bout tx
       index maxPriorityFee maxFee :=
   { rules_eq := rules_eq
+    fork_covered := fork_covered
     type_eq := type_eq
     data_eq := data_eq
     value_eq := value_eq
@@ -703,7 +723,7 @@ example {rules : ForkRules} {dp : DeployParams} {ca owner : Adr} {q : Nat}
         (redemptionTenv benv tx owner index) tx = .ok msg)
     (hframe : MessageFrameRedemptionOutcome
       dp ca owner owner q debit msg entry messagePost messageOut) :
-    let usedGas := redemptionUsedGasFromMessage tx messageOut
+    let usedGas := redemptionUsedGasFromMessage benv tx owner messageOut
       messagePost.refundCounter.toNat
     processTransaction benv bout tx index = .ok
       (redemptionFinalState benv tx owner messagePost.state usedGas,
@@ -713,7 +733,7 @@ example {rules : ForkRules} {dp : DeployParams} {ca owner : Adr} {q : Nat}
 /-! Deployment constructor pins make the pre-execution/result boundary fail
 closed on record-field additions, removals, or type changes. -/
 
-example {cfg : ChainConfig} {rules : ForkRules}
+example {cfg : ChainConfig} {fork : Fork}
     {base : BlockChain} {sender ca : Adr}
     (configValid : cfg.Valid)
     (chainId_eq : cfg.chainId = base.chainId)
@@ -723,12 +743,12 @@ example {cfg : ChainConfig} {rules : ForkRules}
     (target_ne_zero : ca ≠ 0)
     (target_not_precompile : ∀ {timestamp selected},
       cfg.rulesAt timestamp = .ok selected → ¬ selected.isPrecomp ca)
-    (beacon_not_precompile : ¬ rules.isPrecomp beaconRootsAddress)
-    (history_not_precompile : ¬ rules.isPrecomp historyStorageAddress)
+    (beacon_not_precompile : ¬ (Fork.ruleSet fork).isPrecomp beaconRootsAddress)
+    (history_not_precompile : ¬ (Fork.ruleSet fork).isPrecomp historyStorageAddress)
     (withdrawalRequest_not_precompile :
-      ¬ rules.isPrecomp withdrawalRequestPredeployAddress)
+      ¬ (Fork.ruleSet fork).isPrecomp withdrawalRequestPredeployAddress)
     (consolidationRequest_not_precompile :
-      ¬ rules.isPrecomp consolidationRequestPredeployAddress)
+      ¬ (Fork.ruleSet fork).isPrecomp consolidationRequestPredeployAddress)
     (sender_ne_target : sender ≠ ca)
     (withdrawalRequest_ne_target : withdrawalRequestPredeployAddress ≠ ca)
     (consolidationRequest_ne_target : consolidationRequestPredeployAddress ≠ ca)
@@ -746,7 +766,7 @@ example {cfg : ChainConfig} {rules : ForkRules}
     (consolidationRequestCode :
       some (base.state.getCode consolidationRequestPredeployAddress).toList =
         Prog.compile deploymentSystemProgram) :
-    CanonicalDeploymentBase cfg rules base sender ca :=
+    CanonicalDeploymentBase cfg fork base sender ca :=
   { configValid := configValid
     chainId_eq := chainId_eq
     validContext := validContext
@@ -769,14 +789,14 @@ example {cfg : ChainConfig} {rules : ForkRules}
     withdrawalRequestCode := withdrawalRequestCode
     consolidationRequestCode := consolidationRequestCode }
 
-example {cfg : ChainConfig} {rules : ForkRules}
+example {cfg : ChainConfig} {fork : Fork}
     {base : BlockChain} {cb : CanonicalBlock}
     {deploymentTxBytes : Bytes} {deploymentTx : Tx} {sender ca : Adr}
     (txs_eq : cb.block.txs = [.inl deploymentTxBytes])
     (decode_eq : decodeTx (.inl deploymentTxBytes) = .ok deploymentTx)
     (ommers_eq : cb.block.ommers = [])
     (withdrawals_eq : cb.block.wds = [])
-    (rulesAt : cfg.rulesAt cb.block.header.timestamp = .ok rules)
+    (forkAt : cfg.forkAt cb.block.header.timestamp = .ok fork)
     (type_eq : ∃ maxPriorityFee maxFee,
       deploymentTx.type = .two cfg.chainId maxPriorityFee maxFee none [])
     (value_eq : deploymentTx.value = 0)
@@ -784,31 +804,32 @@ example {cfg : ChainConfig} {rules : ForkRules}
     (nonce_eq : deploymentTx.nonce = base.state.getNonce sender)
     (nonce_not_max : deploymentTx.nonce ≠ UInt64.max)
     (recoveredSender : recoverSender cfg.chainId deploymentTx = .ok sender)
-    (validated : validateTransaction rules deploymentTx =
-      .ok (calculateIntrinsicCost deploymentTx))
+    (validated : validateTransaction (Fork.ruleSet fork) deploymentTx 0 =
+      .ok (calculateIntrinsicCost (Fork.ruleSet fork) deploymentTx 0))
     (checked :
-      let benv := initBenv rules base cb.block.header
+      let benv := initBenv fork base cb.block.header
       checkTransaction benv.beginTransaction
         (deploymentTxPreludeBout .init deploymentTx 0) deploymentTx =
         .ok (sender, deploymentEffectiveGasPrice benv deploymentTx, [], 0))
     (base_fee_le_effective : cb.block.header.baseFeePerGas ≤
       deploymentEffectiveGasPrice
-        (initBenv rules base cb.block.header) deploymentTx)
+        (initBenv fork base cb.block.header) deploymentTx)
     (upfront_funded :
       deploymentTx.gas * deploymentEffectiveGasPrice
-        (initBenv rules base cb.block.header) deploymentTx ≤
+        (initBenv fork base cb.block.header) deploymentTx ≤
       (base.state.bal sender).toNat)
-    (gas_bound : deploymentTransactionGasBound deploymentTx ≤ deploymentTx.gas)
-    (runtime_code_fits : 6313 ≤ rules.code.maxCodeSize)
+    (gas_bound : deploymentTransactionGasBound
+      (initBenv fork base cb.block.header) deploymentTx sender ≤ deploymentTx.gas)
+    (runtime_code_fits : 6313 ≤ (Fork.ruleSet fork).code.maxCodeSize)
     (block_gas_room : deploymentTx.gas ≤ cb.block.header.gasLimit)
     (target_eq : ca = computeContractAddress sender deploymentTx.nonce) :
-    CanonicalWeth10DeploymentBlock cfg rules base cb deploymentTxBytes
+    CanonicalWeth10DeploymentBlock cfg fork base cb deploymentTxBytes
       deploymentTx sender ca :=
   { txs_eq := txs_eq
     decode_eq := decode_eq
     ommers_eq := ommers_eq
     withdrawals_eq := withdrawals_eq
-    rulesAt := rulesAt
+    forkAt := forkAt
     type_eq := type_eq
     value_eq := value_eq
     data_eq := data_eq
@@ -824,11 +845,11 @@ example {cfg : ChainConfig} {rules : ForkRules}
     block_gas_room := block_gas_room
     target_eq := target_eq }
 
-example {cfg : ChainConfig} {rules : ForkRules}
+example {cfg : ChainConfig} {fork : Fork}
     {base : BlockChain} {cb : CanonicalBlock}
     {deploymentTx : Tx} {sender ca : Adr}
     (txInput : Benv) (begun : Benv) (debit : State) (tenv : Tenv) (msg : Msg)
-    (systemPrefix : DeploymentSystemPrefix rules base cb.block txInput)
+    (systemPrefix : DeploymentSystemPrefix fork base cb.block txInput)
     (begun_eq : begun = txInput.beginTransaction)
     (debit_eq :
       (begun.state.incrNonce sender).subBal sender
@@ -840,14 +861,16 @@ example {cfg : ChainConfig} {rules : ForkRules}
     (msg_benv_eq : msg.benv = {begun with state := debit})
     (msg_caller_eq : msg.caller = sender)
     (msg_target_eq : msg.target = none)
-    (msg_gas_eq : msg.gas = deploymentTx.gas - deploymentIntrinsicGas deploymentTx)
+    (msg_gas_eq : msg.gas = deploymentTx.gas -
+      deploymentIntrinsicGas txInput deploymentTx sender)
     (msg_value_eq : msg.value = 0)
     (msg_data_eq : msg.data = [])
     (msg_code_eq : msg.code.toList = weth10InitCode)
     (msg_codeAddress_eq : msg.codeAddress = none)
     (msg_shouldTransferValue_eq : msg.shouldTransferValue = true)
     (msg_auths_eq : msg.tenv.stat.auths = [])
-    (msg_rules_eq : msg.benv.stat.rules = rules)
+    (msg_rules_eq : msg.benv.stat.rules = Fork.ruleSet fork)
+    (msg_fork_eq : msg.benv.stat.fork = fork)
     (msg_chainId_eq : msg.benv.stat.chainId = cfg.chainId)
     (target_eq : msg.currentTarget = ca)
     (params_eq :
@@ -855,7 +878,7 @@ example {cfg : ChainConfig} {rules : ForkRules}
         freshDeployParams cfg.chainId.toB256 ca)
     (noCodeOrNonce : accountHasCodeOrNonce msg.benv.state ca = false)
     (noStorage : accountHasStorage msg.benv.state ca = false) :
-    PreparedDeploymentContext cfg rules base cb deploymentTx sender ca :=
+    PreparedDeploymentContext cfg fork base cb deploymentTx sender ca :=
   { txInput := txInput
     begun := begun
     debit := debit
@@ -877,14 +900,15 @@ example {cfg : ChainConfig} {rules : ForkRules}
     msg_shouldTransferValue_eq := msg_shouldTransferValue_eq
     msg_auths_eq := msg_auths_eq
     msg_rules_eq := msg_rules_eq
+    msg_fork_eq := msg_fork_eq
     msg_chainId_eq := msg_chainId_eq
     target_eq := target_eq
     params_eq := params_eq
     noCodeOrNonce := noCodeOrNonce
     noStorage := noStorage }
 
-example {cfg : ChainConfig} {rules : ForkRules} {ca : Adr}
-    {ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca}
+example {cfg : ChainConfig} {fork : Fork} {ca : Adr}
+    {ctx : PreparedDeploymentContext cfg fork base cb deploymentTx sender ca}
     {post : State} {out : MsgCallOutput}
     (run : processMessageCall ctx.msg = .ok (post, out))
     (stable : Stable (freshDeployParams cfg.chainId.toB256 ca) ca post)
@@ -905,7 +929,7 @@ example {cfg : ChainConfig} {rules : ForkRules} {ca : Adr}
     (consolidationRequestCode :
       some (post.getCode consolidationRequestPredeployAddress).toList =
         Prog.compile deploymentSystemProgram) :
-    CanonicalDeploymentMessageResult cfg rules ca ctx post out :=
+    CanonicalDeploymentMessageResult cfg fork ca ctx post out :=
   { run := run
     stable := stable
     installed := installed
@@ -920,8 +944,8 @@ example {cfg : ChainConfig} {rules : ForkRules} {ca : Adr}
     withdrawalRequestCode := withdrawalRequestCode
     consolidationRequestCode := consolidationRequestCode }
 
-example {cfg : ChainConfig} {rules : ForkRules} {ca : Adr}
-    {ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca}
+example {cfg : ChainConfig} {fork : Fork} {ca : Adr}
+    {ctx : PreparedDeploymentContext cfg fork base cb deploymentTx sender ca}
     {post : State} {bout : BlockOutput}
     (run : processTransaction ctx.txInput .init deploymentTx 0 = .ok (post, bout))
     (stable : Stable (freshDeployParams cfg.chainId.toB256 ca) ca post)
@@ -930,6 +954,7 @@ example {cfg : ChainConfig} {rules : ForkRules} {ca : Adr}
     (emptyStorage : post.getStor ca = Stor.empty)
     (blockLogs : bout.blockLogs = [])
     (requests : bout.requests = [])
+    (blockAccessList : bout.blockAccessList = [])
     (depositRequests : parseDepositRequests bout = .ok [])
     (withdrawalRequestCode :
       some (post.getCode withdrawalRequestPredeployAddress).toList =
@@ -940,20 +965,21 @@ example {cfg : ChainConfig} {rules : ForkRules} {ca : Adr}
     (receiptSucceeded :
       (Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0)).map
         (fun entry => entry.2.succeeded) = some true) :
-    CanonicalDeploymentTransactionResult cfg rules ca ctx post bout :=
+    CanonicalDeploymentTransactionResult cfg fork ca ctx post bout :=
   { run := run
     stable := stable
     installed := installed
     emptyStorage := emptyStorage
     blockLogs := blockLogs
     requests := requests
+    blockAccessList := blockAccessList
     depositRequests := depositRequests
     withdrawalRequestCode := withdrawalRequestCode
     consolidationRequestCode := consolidationRequestCode
     receiptSucceeded := receiptSucceeded }
 
-example {cfg : ChainConfig} {rules : ForkRules} {ca : Adr}
-    {ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca}
+example {cfg : ChainConfig} {fork : Fork} {ca : Adr}
+    {ctx : PreparedDeploymentContext cfg fork base cb deploymentTx sender ca}
     {post : State} {bout : BlockOutput}
     (withdrawalOut : MsgCallOutput) (consolidationOut : MsgCallOutput)
     (withdrawalRun :
@@ -974,7 +1000,7 @@ example {cfg : ChainConfig} {rules : ForkRules} {ca : Adr}
       (flashExactSpec
         (freshDeployParams cfg.chainId.toB256 ca) 0).StateInv ca post)
     (stable : Stable (freshDeployParams cfg.chainId.toB256 ca) ca post) :
-    CanonicalDeploymentSuffixResult cfg rules ca ctx post bout :=
+    CanonicalDeploymentSuffixResult cfg fork ca ctx post bout :=
   { withdrawalOut := withdrawalOut
     consolidationOut := consolidationOut
     withdrawalRun := withdrawalRun
@@ -988,18 +1014,19 @@ example {cfg : ChainConfig} {rules : ForkRules} {ca : Adr}
 
 example {cfg : ChainConfig} {base deployed : BlockChain}
     {dp : DeployParams} {ca : Adr}
-    (execution : ∃ (rules : ForkRules) (cb : CanonicalBlock)
+    (execution : ∃ (fork : Fork) (cb : CanonicalBlock)
         (deploymentTxBytes : Bytes) (deploymentTx : Tx) (sender : Adr)
-        (ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca)
+        (ctx : PreparedDeploymentContext cfg fork base cb deploymentTx sender ca)
         (post : State) (bout : BlockOutput),
-      CanonicalDeploymentBase cfg rules base sender ca ∧
-      CanonicalWeth10DeploymentBlock cfg rules base cb deploymentTxBytes
+      CanonicalDeploymentBase cfg fork base sender ca ∧
+      CanonicalWeth10DeploymentBlock cfg fork base cb deploymentTxBytes
         deploymentTx sender ca ∧
-      CanonicalDeploymentTransactionResult cfg rules ca ctx post bout ∧
-      Nonempty (CanonicalDeploymentSuffixResult cfg rules ca ctx post bout) ∧
-      stateTransitionUsing cfg
+      CoveredFork fork ∧
+      CanonicalDeploymentTransactionResult cfg fork ca ctx post bout ∧
+      Nonempty (CanonicalDeploymentSuffixResult cfg fork ca ctx post bout) ∧
+      stateTransitionAt fork
           base cb.block = .ok deployed ∧
-      applyBody (initBenv rules base cb.block.header)
+      applyBody (initBenv fork base cb.block.header)
           cb.block.txs cb.block.wds = .ok (post, bout) ∧
       post = deployed.state ∧
       (Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0)).map
@@ -1024,53 +1051,57 @@ example {cfg : ChainConfig} {base deployed : BlockChain}
     deployed_validContext := deployed_validContext
     deployed_chainId := deployed_chainId }
 
-example (cfg : ChainConfig) (rules : ForkRules)
+example (cfg : ChainConfig) (fork : Fork)
     (base : BlockChain) (cb : CanonicalBlock)
     (deploymentTxBytes : Bytes) (deploymentTx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase cfg rules base sender ca)
-    (henv : CanonicalWeth10DeploymentBlock cfg rules base cb
-      deploymentTxBytes deploymentTx sender ca) :
+    (hbase : CanonicalDeploymentBase cfg fork base sender ca)
+    (henv : CanonicalWeth10DeploymentBlock cfg fork base cb
+      deploymentTxBytes deploymentTx sender ca)
+    (hfork : CoveredFork fork) :
     Nonempty
-      (PreparedDeploymentContext cfg rules base cb deploymentTx sender ca) :=
-  prepareCanonicalDeploymentContext cfg rules base cb deploymentTx sender ca
-    hbase henv
+      (PreparedDeploymentContext cfg fork base cb deploymentTx sender ca) :=
+  prepareCanonicalDeploymentContext cfg fork base cb deploymentTx sender ca
+    hbase henv hfork
 
-example (cfg : ChainConfig) (rules : ForkRules)
+example (cfg : ChainConfig) (fork : Fork)
     (base : BlockChain) (cb : CanonicalBlock)
     (deploymentTxBytes : Bytes) (deploymentTx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase cfg rules base sender ca)
-    (henv : CanonicalWeth10DeploymentBlock cfg rules base cb
+    (hbase : CanonicalDeploymentBase cfg fork base sender ca)
+    (henv : CanonicalWeth10DeploymentBlock cfg fork base cb
       deploymentTxBytes deploymentTx sender ca)
-    (ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca) :
-    ∃ post out, CanonicalDeploymentMessageResult cfg rules ca ctx post out :=
-  canonicalDeploymentMessage_succeeds cfg rules base cb deploymentTx sender ca
-    hbase henv ctx
+    (ctx : PreparedDeploymentContext cfg fork base cb deploymentTx sender ca)
+    (hfork : CoveredFork fork) :
+    ∃ post out, CanonicalDeploymentMessageResult cfg fork ca ctx post out :=
+  canonicalDeploymentMessage_succeeds cfg fork base cb deploymentTx sender ca
+    hbase henv ctx hfork
 
-example (cfg : ChainConfig) (rules : ForkRules)
+example (cfg : ChainConfig) (fork : Fork)
     (base : BlockChain) (cb : CanonicalBlock)
     (deploymentTxBytes : Bytes) (deploymentTx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase cfg rules base sender ca)
-    (henv : CanonicalWeth10DeploymentBlock cfg rules base cb
+    (hbase : CanonicalDeploymentBase cfg fork base sender ca)
+    (henv : CanonicalWeth10DeploymentBlock cfg fork base cb
       deploymentTxBytes deploymentTx sender ca)
-    (ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca) :
+    (ctx : PreparedDeploymentContext cfg fork base cb deploymentTx sender ca)
+    (hfork : CoveredFork fork) :
     ∃ post bout,
-      CanonicalDeploymentTransactionResult cfg rules ca ctx post bout :=
-  canonicalDeploymentTransaction_succeeds cfg rules base cb deploymentTx
-    sender ca hbase henv ctx
+      CanonicalDeploymentTransactionResult cfg fork ca ctx post bout :=
+  canonicalDeploymentTransaction_succeeds cfg fork base cb deploymentTx
+    sender ca hbase henv ctx hfork
 
-example (cfg : ChainConfig) (rules : ForkRules)
+example (cfg : ChainConfig) (fork : Fork)
     (base deployed : BlockChain)
     (cb : CanonicalBlock) (deploymentTxBytes : Bytes)
     (deploymentTx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase cfg rules base sender ca)
-    (henv : CanonicalWeth10DeploymentBlock cfg rules base cb
+    (hbase : CanonicalDeploymentBase cfg fork base sender ca)
+    (henv : CanonicalWeth10DeploymentBlock cfg fork base cb
       deploymentTxBytes deploymentTx sender ca)
+    (hfork : CoveredFork fork)
     (hstep : stateTransitionUsing cfg
       base cb.block = .ok deployed) :
     DeploymentRoot cfg base deployed
       (freshDeployParams cfg.chainId.toB256 ca) ca :=
-  canonicalDeploymentStep_establishes_root cfg rules base deployed cb
-    deploymentTxBytes deploymentTx sender ca hbase henv hstep
+  canonicalDeploymentStep_establishes_root cfg fork base deployed cb
+    deploymentTxBytes deploymentTx sender ca hbase henv hfork hstep
 
 example (hroot : DeploymentRoot cfg base deployed dp ca) :
     BlockChain.ReachUsing cfg
@@ -1079,27 +1110,31 @@ example (hroot : DeploymentRoot cfg base deployed dp ca) :
 
 example (hroot : DeploymentRoot cfg base deployed dp ca)
     (hreach : BlockChain.ReachUsing cfg
-      deployed future) :
+      deployed future)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
     Stable dp ca future.state :=
-  hroot.reachable_stable hreach
+  hroot.reachable_stable hreach hcov
 
 example (hroot : DeploymentRoot cfg base deployed dp ca)
     (hreach : BlockChain.ReachUsing cfg
-      deployed future) :
+      deployed future)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
     some (future.state.getCode ca).toList = Prog.compile (weth10 dp) :=
-  hroot.reachable_code hreach
+  hroot.reachable_code hreach hcov
 
 example (hroot : DeploymentRoot cfg base deployed dp ca)
     (hreach : BlockChain.ReachUsing cfg
-      deployed future) :
+      deployed future)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
     (future.state.getStor ca).get flashMintedSlot = 0 :=
-  hroot.reachable_flashZero hreach
+  hroot.reachable_flashZero hreach hcov
 
 example (hroot : DeploymentRoot cfg base deployed dp ca)
     (hreach : BlockChain.ReachUsing cfg
-      deployed future) :
+      deployed future)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
     balSum (future.state.getStor ca) ≤ (future.state.bal ca).toNat :=
-  hroot.reachable_solvent hreach
+  hroot.reachable_solvent hreach hcov
 
 /-! The holder-flow history pins are intentionally proof-carrying and retain
 the complete applied-block sequence.  These examples make weakening the
@@ -1211,9 +1246,11 @@ example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
     (hstable : Stable dp ca checkpoint.state)
     (hreach : BlockChain.ReachUsing cfg
-      checkpoint future) :
+      checkpoint future)
+    (hcovered : ∀ {pre post block}, stateTransitionUsing cfg pre block = .ok post → ∀ {fork},
+      cfg.forkAt block.header.timestamp = .ok fork → CoveredFork fork) :
     Nonempty (AccountedHistory cfg dp ca checkpoint future) :=
-  exists_accountedHistory_of_reachUsing hstable hreach
+  exists_accountedHistory_of_reachUsing hstable hreach hcovered
 
 example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {checkpoint future : BlockChain}
@@ -1361,7 +1398,8 @@ example {dp : DeployParams} {ca : Adr} {f : Jaune.Frame}
     (rawCommits : Execution.commits raw = true)
     (hcreate : f.isCreate = true)
     (hsettled : processCreateMessage.settle f.outer
-      (processMessage.settle f.inner (executeCode.handleError raw)) =
+      (processMessage.settle f.inner
+        (executeCode.handleErrorWith f.inner.benv.stat.rules.stateGas raw)) =
         .ok settled)
     (herror : settled.error.isSome = true) :
     (if Blanc.Frame.settlementCommits f raw = true then
@@ -1404,6 +1442,7 @@ example {dp : DeployParams} {ca : Adr}
     (run : Exec pc sevm pre out)
     (installed : some (pre.getCode ca).toList = Prog.compile (weth10 dp))
     (rootPc : pc = 0) (rootMemory : pre.memory = Mem.empty)
+    (rootFork : CoveredFork sevm.benvStat.fork)
     {frame : Exec.Frame}
     (retained : frame ∈ Exec.committedFrames run)
     (invocation : Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame)
@@ -1414,8 +1453,8 @@ example {dp : DeployParams} {ca : Adr}
     ∃ action : FlowAction,
       Blanc.Weth10.Exec.Frame.BalanceSstoreClassification dp ca frame stepPre stepPost slot
         key value holder action :=
-  Exec.weth10BalanceSstoreClassification_of_mem_committedFrames
-    run installed rootPc rootMemory retained invocation occurrence
+  Exec.weth10BalanceSstoreClassification_of_mem_committedFrames run installed rootPc rootMemory
+    rootFork retained invocation occurrence
 
 /-! C3-C6 public theorem pins.  The committed interpreter cores are concrete;
 the frozen equations carry only the stable checkpoint and authentic retained
@@ -1936,6 +1975,7 @@ example (dp : DeployParams) (ca : Adr) :
         (_hinit : (⟨pc, sevm, pre⟩ : Evm) = initEvm (msg.withBenv benv))
         (hcommit : Execution.commits out = true),
         MessageRunReady dp ca msg →
+        CoveredFork msg.benv.stat.fork →
         AllowanceTransportedSound ca msg.benv.state
           (Execution.committedPost out hcommit).state
           (Exec.attributionStream dp ca run) :=
@@ -2056,6 +2096,7 @@ example {cfg : ChainConfig} {rules : ForkRules}
     {q : Nat} {base deployed checkpoint future : BlockChain}
     {history : AccountedHistory cfg dp ca checkpoint future} {msg : Msg}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
     (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hq : q ≤ bookedBalanceNat checkpoint.state ca u -
       ((history.weth10Flow u).redeemed +
@@ -2063,8 +2104,7 @@ example {cfg : ChainConfig} {rules : ForkRules}
     (henv : AdmissibleRedemptionMessage
       rules dp ca u recipient q future.state msg) :
     MessageRedemptionEnabled dp ca u recipient q future.state msg :=
-  deployment_reachable_residual_messageRedemption_enabled
-    hroot hcheckpoint hq henv
+  deployment_reachable_residual_messageRedemption_enabled hroot hcov hcheckpoint hq henv
 
 example {cfg : ChainConfig} {rules : ForkRules}
     {dp : DeployParams} {ca u recipient : Adr}
@@ -2072,6 +2112,7 @@ example {cfg : ChainConfig} {rules : ForkRules}
     {history : AccountedHistory cfg dp ca checkpoint future}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
     (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hq : q ≤ bookedBalanceNat checkpoint.state ca u -
       ((history.weth10Flow u).redeemed +
@@ -2080,27 +2121,27 @@ example {cfg : ChainConfig} {rules : ForkRules}
     (henv : AdmissibleRedemptionTx
       rules dp ca u recipient q benv bout tx index) :
     TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
-  deployment_reachable_residual_transactionRedemption_enabled
-    hroot hcheckpoint hq hentry henv
+  deployment_reachable_residual_transactionRedemption_enabled hroot hcov hcheckpoint hq hentry henv
 
 example {cfg : ChainConfig} {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
     {q : Nat} {base deployed checkpoint future : BlockChain}
     {history : AccountedHistory cfg dp ca checkpoint future} {msg : Msg}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
     (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hq : q ≤ bookedBalanceNat checkpoint.state ca u -
       ((history.weth10Flow u).redeemed +
         (history.weth10Flow u).externalTransferredOut))
     (henv : AdmissibleSelfRedemptionMessage rules dp ca u q future.state msg) :
     MessageRedemptionEnabled dp ca u u q future.state msg :=
-  deployment_reachable_residual_selfMessageRedemption_enabled
-    hroot hcheckpoint hq henv
+  deployment_reachable_residual_selfMessageRedemption_enabled hroot hcov hcheckpoint hq henv
 
 example {cfg : ChainConfig} {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
     {q : Nat} {base deployed checkpoint future : BlockChain}
     {history : AccountedHistory cfg dp ca checkpoint future}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
     (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hq : q ≤ bookedBalanceNat checkpoint.state ca u -
       ((history.weth10Flow u).redeemed +
@@ -2108,8 +2149,8 @@ example {cfg : ChainConfig} {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
     (hentry : benv.state = future.state)
     (henv : AdmissibleSelfRedemptionTx rules dp ca u q benv bout tx index) :
     TransactionRedemptionEnabled dp ca u u q benv bout tx index :=
-  deployment_reachable_residual_selfTransactionRedemption_enabled
-    hroot hcheckpoint hq hentry henv
+  deployment_reachable_residual_selfTransactionRedemption_enabled hroot hcov hcheckpoint hq hentry
+    henv
 
 /-! The rebased pair states its bound against the *full booked balance at the
 future snapshot itself*: rebasing the window at the future collapses the
@@ -2119,36 +2160,37 @@ example {cfg : ChainConfig} {rules : ForkRules}
     {dp : DeployParams} {ca u recipient : Adr}
     {q : Nat} {base deployed future : BlockChain} {msg : Msg}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
     (hfuture : BlockChain.ReachUsing cfg deployed future)
     (hq : q ≤ bookedBalanceNat future.state ca u)
     (henv : AdmissibleRedemptionMessage rules dp ca u recipient q future.state msg) :
     MessageRedemptionEnabled dp ca u recipient q future.state msg :=
-  deployment_reachable_booked_messageRedemption_enabled hroot hfuture hq henv
+  deployment_reachable_booked_messageRedemption_enabled hroot hcov hfuture hq henv
 
 example {cfg : ChainConfig} {rules : ForkRules}
     {dp : DeployParams} {ca u recipient : Adr}
     {q : Nat} {base deployed future : BlockChain}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
     (hfuture : BlockChain.ReachUsing cfg deployed future)
     (hentry : benv.state = future.state)
     (hq : q ≤ bookedBalanceNat future.state ca u)
     (henv : AdmissibleRedemptionTx rules dp ca u recipient q benv bout tx index) :
     TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
-  deployment_reachable_booked_transactionRedemption_enabled
-    hroot hfuture hentry hq henv
+  deployment_reachable_booked_transactionRedemption_enabled hroot hcov hfuture hentry hq henv
 
 example {cfg : ChainConfig} {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
     {q : Nat} {base deployed future : BlockChain}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
     (hfuture : BlockChain.ReachUsing cfg deployed future)
     (hentry : benv.state = future.state)
     (hq : q ≤ bookedBalanceNat future.state ca u)
     (henv : AdmissibleSelfRedemptionTx rules dp ca u q benv bout tx index) :
     TransactionRedemptionEnabled dp ca u u q benv bout tx index :=
-  deployment_reachable_booked_selfTransactionRedemption_enabled
-    hroot hfuture hentry hq henv
+  deployment_reachable_booked_selfTransactionRedemption_enabled hroot hcov hfuture hentry hq henv
 
 example {cfg : ChainConfig} {rules : ForkRules}
     {dp : DeployParams} {ca u recipient : Adr}
@@ -2156,6 +2198,7 @@ example {cfg : ChainConfig} {rules : ForkRules}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {maxPriorityFee maxFee : Nat}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
     (hfuture : BlockChain.ReachUsing cfg deployed future)
     (hentry : benv.state = future.state)
     (hq : q ≤ bookedBalanceNat future.state ca u)
@@ -2163,8 +2206,8 @@ example {cfg : ChainConfig} {rules : ForkRules}
       rules dp ca u recipient q benv bout tx index maxPriorityFee maxFee)
     (hrecovered : recoverSender benv.stat.chainId tx = .ok u) :
     TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
-  deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSender
-    hroot hfuture hentry hq henv hrecovered
+  deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSender hroot hcov hfuture
+    hentry hq henv hrecovered
 
 /-! The flagship record, pinned field by field. This is the pin that protects
 the goal's central invariant: `hardenedDescription` carries
@@ -2245,30 +2288,32 @@ example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
 example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed checkpoint future : BlockChain}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
     (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hfuture : BlockChain.ReachUsing cfg checkpoint future) :
     ∃ history, FutureRedemptionGuarantee
       cfg dp ca u checkpoint future history :=
-  deployment_reachable_future_redeemable hroot hcheckpoint hfuture
+  deployment_reachable_future_redeemable hroot hcov hcheckpoint hfuture
 
 example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed checkpoint future : BlockChain}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
     (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hfuture : BlockChain.ReachUsing cfg checkpoint future) :
     ∃ history, FutureDualSelectorRedemptionGuarantee
       cfg dp ca u checkpoint future history :=
-  deployment_reachable_future_dualSelector_redeemable
-    hroot hcheckpoint hfuture
+  deployment_reachable_future_dualSelector_redeemable hroot hcov hcheckpoint hfuture
 
 example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {base deployed checkpoint future : BlockChain}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
     (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hfuture : BlockChain.ReachUsing cfg checkpoint future) :
     ∃ history, ∀ u : Adr, FutureRedemptionGuarantee
       cfg dp ca u checkpoint future history :=
-  deployment_reachable_future_redeemable_allHolders hroot hcheckpoint hfuture
+  deployment_reachable_future_redeemable_allHolders hroot hcov hcheckpoint hfuture
 
 example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed : BlockChain}
@@ -2279,11 +2324,12 @@ example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
 example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed future : BlockChain}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
     (hfuture : BlockChain.ReachUsing cfg deployed future) :
     AllowanceQuiescent ca u deployed.state ∧
       ∃ history, FutureRedemptionGuarantee
         cfg dp ca u deployed future history :=
-  deployment_fullWindow_future_redeemable hroot hfuture
+  deployment_fullWindow_future_redeemable hroot hcov hfuture
 
 example : CountedFrame → List CountedFrame → Adr → Prop :=
   PermanentOutflowAuthorization
@@ -2346,13 +2392,14 @@ example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
 example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed future : BlockChain}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
     (hfuture : BlockChain.ReachUsing cfg deployed future) :
     ∃ history : AccountedHistory cfg dp ca deployed future,
       NoAllowanceKeyCollision history →
       NoAuthorizingActBy u history →
       bookedBalanceNat deployed.state ca u ≤
         bookedBalanceNat future.state ca u :=
-  deployment_reachable_dormant_holder_balance_monotone hroot hfuture
+  deployment_reachable_dormant_holder_balance_monotone hroot hcov hfuture
 
 /-! The any-order records are constructor-pinned for the same reason. A
 `budget` field weakened from the per-owner **aggregate** to a per-claim bound
@@ -2416,16 +2463,18 @@ example {rules : ForkRules} {dp : DeployParams} {ca : Adr}
 example {rules : ForkRules} {dp : DeployParams} {ca : Adr} {w : State}
     {cs ds : List RedemptionClaim}
     (hca : ¬ rules.isPrecomp ca)
+    (hsel : ∃ f, CoveredFork f ∧ Fork.ruleSet f = rules)
     (hstable : Stable dp ca w)
     (hadm : ClaimsAdmissible rules ca w cs)
     (hperm : cs.Perm ds) :
     ∃ post, RedemptionOutcome rules dp ca ds w post :=
-  redeemClaims_anyOrder hca hstable hadm hperm
+  redeemClaims_anyOrder hca hsel hstable hadm hperm
 
 example {rules : ForkRules} {dp : DeployParams} {ca : Adr} {w : State}
     {holders : List Adr} {recipient : Adr → Adr}
     {claims : List RedemptionClaim}
     (hca : ¬ rules.isPrecomp ca)
+    (hsel : ∃ f, CoveredFork f ∧ Fork.ruleSet f = rules)
     (hstable : Stable dp ca w)
     (hnodup : holders.Nodup)
     (hrecipients : ∀ u ∈ holders,
@@ -2433,18 +2482,19 @@ example {rules : ForkRules} {dp : DeployParams} {ca : Adr} {w : State}
         ⟨u, bookedBalanceNat w ca u, recipient u⟩)
     (hperm : (fullBalanceClaims ca w holders recipient).Perm claims) :
     ∃ post, RedemptionOutcome rules dp ca claims w post :=
-  redeemEveryoneList_anyOrder hca hstable hnodup hrecipients hperm
+  redeemEveryoneList_anyOrder hca hsel hstable hnodup hrecipients hperm
 
 example {cfg : ChainConfig} {rules : ForkRules} {timestamp : Nat}
     {dp : DeployParams} {ca : Adr}
     {base deployed future : BlockChain} {cs ds : List RedemptionClaim}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
     (hfuture : BlockChain.ReachUsing cfg deployed future)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
     (hrules : cfg.rulesAt timestamp = .ok rules)
     (hadm : ClaimsAdmissible rules ca future.state cs)
     (hperm : cs.Perm ds) :
     ∃ post, RedemptionOutcome rules dp ca ds future.state post :=
-  deployment_reachable_redeemClaims_anyOrder hroot hfuture hrules hadm hperm
+  deployment_reachable_redeemClaims_anyOrder hroot hfuture hcov hrules hadm hperm
 
 example {cfg : ChainConfig} {rules : ForkRules} {timestamp : Nat}
     {dp : DeployParams} {ca : Adr}
@@ -2452,6 +2502,7 @@ example {cfg : ChainConfig} {rules : ForkRules} {timestamp : Nat}
     {recipient : Adr → Adr} {claims : List RedemptionClaim}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
     (hfuture : BlockChain.ReachUsing cfg deployed future)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
     (hrules : cfg.rulesAt timestamp = .ok rules)
     (hnodup : holders.Nodup)
     (hrecipients : ∀ u ∈ holders,
@@ -2460,8 +2511,8 @@ example {cfg : ChainConfig} {rules : ForkRules} {timestamp : Nat}
     (hperm :
       (fullBalanceClaims ca future.state holders recipient).Perm claims) :
     ∃ post, RedemptionOutcome rules dp ca claims future.state post :=
-  deployment_reachable_redeemEveryoneList_anyOrder
-    hroot hfuture hrules hnodup hrecipients hperm
+  deployment_reachable_redeemEveryoneList_anyOrder hroot hfuture hcov hrules hnodup hrecipients
+    hperm
 
 
 /-! ## Current-mainnet and Prague specialization pins -/
@@ -2527,9 +2578,9 @@ example
     (base deployed : BlockChain) (cb : CanonicalBlock)
     (deploymentTxBytes : Bytes) (deploymentTx : Tx) (sender ca : Adr)
     (htimestamp : mainnetBpo2Timestamp ≤ cb.block.header.timestamp)
-    (hbase : CanonicalDeploymentBase mainnetChainConfig bpo2Rules
+    (hbase : CanonicalDeploymentBase mainnetChainConfig .bpo2
       base sender ca)
-    (henv : CanonicalWeth10DeploymentBlock mainnetChainConfig bpo2Rules
+    (henv : CanonicalWeth10DeploymentBlock mainnetChainConfig .bpo2
       base cb deploymentTxBytes deploymentTx sender ca)
     (hstep : stateTransitionUsing mainnetChainConfig
       base cb.block = .ok deployed) :
@@ -3589,13 +3640,13 @@ example (dp : DeployParams) {ca : Adr} {sevm : Sevm} {pre : Devm}
         gVerylow + (gVerylow + gHigh + gJumpdest) +
         (gVerylow + gMid + gJumpdest) +
         revertSelectorCost (pre.setMach ⟨pre.stack,
-          (pre.memory.read (targetWord * 32).toNat 32).2, 0⟩)))
+          (pre.memory.read (targetWord * 32).toNat 32).2, 0, pre.stateGas⟩)))
     (hroom : pre.stack.length < 1023) :
     let fs := (runtime dp).main :: (runtime dp).aux
     let data := customErrorData "PausableZero"
     let post := (pre.setMach ⟨stack,
       (pre.memory.read (targetWord * 32).toNat 32).2.write 0
-        data.toB256.toBytes, G⟩).withOutput data
+        data.toB256.toBytes, G, pre.stateGas⟩).withOutput data
     Func.RunCompiledTo fs sevm pre setPauserKernel
         (.error (.revert, post)) ∧
       ∃ execution : Exec (loc + 1) sevm pre (.error (.revert, post)),
@@ -3905,6 +3956,7 @@ example {fs : List Func} {sevm : Sevm} {pre : Devm}
 
 example (dp : DeployParams)
     {msg : Msg} {sevm : Sevm} {pre : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {ca : Adr} {entries : List Entry}
     {img : Bytes} {stack : List B256}
     {selectorWord pauser expiry duration previousPauser countValue
@@ -3994,7 +4046,8 @@ example (dp : DeployParams)
       ((runtime dp).main :: (runtime dp).aux)[setPauserSlot]? =
         some setPauserKernel)
     (hgas : pre.gasLeft = G + runtimePauseCost dp pre duration target
-      previousPauser removedIndex arrayLength lastTarget) :
+      previousPauser removedIndex arrayLength lastTarget)
+    (hmsgFork : CoveredFork msg.benv.stat.fork) :
     ∃ raw,
       Prog.RunCompiledTo sevm pre (runtime dp) (.error (.revert, raw)) ∧
       ∃ rootExec : Exec 0 sevm pre (.error (.revert, raw)),
@@ -4024,17 +4077,14 @@ example (dp : DeployParams)
           post.error.isSome ∧
           RegistryWitness
             (logicalStorageOfStor (Devm.getStor post ca)) entries :=
-  pause_direct_postWrite_revert_settles_and_restores_registry dp
-    hmsgTarget hmsgOwner hmsgCodeAddress hmsgCode hmsgValue hmsgData howner
-    hbytes hframeEntry hentry hstack hvalue hselectorData hselectorShift hwf
-    hr hdataLength hmask hlock hdataTarget hcaller hpauserNonzero
-    hpauserCanonical hauthorizationStorage hexpiryStorage hlive
-    hdurationStorage htargetNonzero htargetCanonical hassignmentStorage
-    hpreviousNonzero hpreviousCanonical hcountStorage hcountSub
-    harrayLengthBound hindexStorage hlengthStorage hdecrement hlastStorage
-    hlastCanonical hcodeSize haccess hwarmHole hwarmMovedIndex hroom hstatic
-    hemptyLookup hpauseLookup hfinishLookup hremoveLookup hafterLookup
-    hsetPauserLookup hgas
+  pause_direct_postWrite_revert_settles_and_restores_registry dp hfork hmsgFork hmsgTarget hmsgOwner
+    hmsgCodeAddress hmsgCode hmsgValue hmsgData howner hbytes hframeEntry hentry hstack hvalue
+    hselectorData hselectorShift hwf hr hdataLength hmask hlock hdataTarget hcaller hpauserNonzero
+    hpauserCanonical hauthorizationStorage hexpiryStorage hlive hdurationStorage htargetNonzero
+    htargetCanonical hassignmentStorage hpreviousNonzero hpreviousCanonical hcountStorage hcountSub
+    harrayLengthBound hindexStorage hlengthStorage hdecrement hlastStorage hlastCanonical hcodeSize
+    haccess hwarmHole hwarmMovedIndex hroom hstatic hemptyLookup hpauseLookup hfinishLookup
+    hremoveLookup hafterLookup hsetPauserLookup hgas
 
 example :
     ∃ (msg : Msg) (sevm : Sevm) (pre : Devm) (raw : Devm),
@@ -4098,7 +4148,7 @@ record bodies; these Lean wrappers independently pin each public field's type. -
 example {sevm : Sevm} {base post : Devm} {G : Nat}
     (h : OfficialValidationCheckpoints sevm base post G) :
     Prog.RunCompiled sevm
-        (base.setMach ⟨[], Mem.empty, G + officialConstructorRequiredGas⟩)
+        (base.setMach ⟨[], Mem.empty, G + officialConstructorRequiredGas, base.stateGas⟩)
         lidoCircuitBreakerConstructorProgram post ∧
       Func.RunCompiled
         (lidoCircuitBreakerConstructorProgram.main ::
@@ -4106,7 +4156,7 @@ example {sevm : Sevm} {base post : Devm} {G : Nat}
         sevm
         (base.setMach
           ⟨[(224 : B256), (616 : B256), (4282 : B256)],
-            officialConstructorDecodedMemory, G + 49961⟩)
+            officialConstructorDecodedMemory, G + 49961, base.stateGas⟩)
         officialConstructorEffectBody post ∧
       sevm.code.size = 5122 ∧
       (∀ i : Fin 7,
@@ -4230,13 +4280,13 @@ example {ca : Adr} {sevm : Sevm} {base post : Devm} {G : Nat}
       OfficialConstructorEffectCheckpoints sevm base post G ∧
       Jaune.exec ⟨0, sevm,
           base.setMach
-            ⟨[], Mem.empty, G + officialConstructorRequiredGas⟩⟩ =
+            ⟨[], Mem.empty, G + officialConstructorRequiredGas, base.stateGas⟩⟩ =
         .ok post :=
   ⟨h.target_eq, h.fullInput, h.prefixCompile, h.validationCheckpoints,
     h.errorArmLayout, h.effectCheckpoints, h.exec⟩
 
 example {chainId : UInt64} {base : BlockChain} {sender ca : Adr}
-    (h : CanonicalDeploymentBase chainId base sender ca) :
+    (h : CanonicalDeploymentBase .prague chainId base sender ca) :
     base.ValidContext ∧
       chainId = base.chainId ∧
       SumNof base.state.bal ∧
@@ -4279,19 +4329,20 @@ example {chainId : UInt64} {base : BlockChain} {cb : CanonicalBlock}
       tx.nonce = base.state.getNonce sender ∧
       tx.nonce ≠ UInt64.max ∧
       recoverSender chainId tx = .ok sender ∧
-      validateTransaction pragueRules tx =
-        .ok (calculateIntrinsicCost tx) ∧
-      (let benv := initBenv pragueRules base cb.block.header
+      validateTransaction pragueRules tx 0 =
+        .ok (calculateIntrinsicCost pragueRules tx 0) ∧
+      (let benv := initBenv .prague base cb.block.header
        checkTransaction benv.beginTransaction
           (deploymentTxPreludeBout .init tx 0) tx =
         .ok (sender, deploymentEffectiveGasPrice benv tx, [], 0)) ∧
       cb.block.header.baseFeePerGas ≤
         deploymentEffectiveGasPrice
-          (initBenv pragueRules base cb.block.header) tx ∧
+          (initBenv .prague base cb.block.header) tx ∧
       tx.gas * deploymentEffectiveGasPrice
-          (initBenv pragueRules base cb.block.header) tx ≤
+          (initBenv .prague base cb.block.header) tx ≤
         (base.state.bal sender).toNat ∧
-      deploymentTransactionGasBound tx ≤ tx.gas ∧
+      deploymentTransactionGasBound (initBenv .prague base cb.block.header) tx sender ≤
+        tx.gas ∧
       tx.gas ≤ cb.block.header.gasLimit ∧
       ca = computeContractAddress sender tx.nonce :=
   ⟨h.txs_eq, h.decode_eq, h.ommers_eq, h.withdrawals_eq, h.type_eq,
@@ -4303,7 +4354,7 @@ example {chainId : UInt64} {base : BlockChain} {cb : CanonicalBlock}
     {tx : Tx} {sender ca : Adr}
     (ctx : PreparedDeploymentContext chainId base cb tx sender ca) :
     ctx.txInput =
-        ((initBenv pragueRules base cb.block.header).withState
+        ((initBenv .prague base cb.block.header).withState
           ctx.systemPrefix.stBeacon).withState ctx.systemPrefix.stHistory ∧
       ctx.begun = ctx.txInput.beginTransaction ∧
       (ctx.begun.state.incrNonce sender).subBal sender
@@ -4315,7 +4366,7 @@ example {chainId : UInt64} {base : BlockChain} {cb : CanonicalBlock}
       ctx.msg.benv = {ctx.begun with state := ctx.debit} ∧
       ctx.msg.caller = sender ∧
       ctx.msg.target = none ∧
-      ctx.msg.gas = tx.gas - deploymentIntrinsicGas tx ∧
+      ctx.msg.gas = tx.gas - deploymentIntrinsicGas ctx.msg.benv tx sender ∧
       ctx.msg.value = 0 ∧
       ctx.msg.data = [] ∧
       ctx.msg.code.toList = officialFullCreateInput ∧
@@ -4476,11 +4527,11 @@ example (msg : Msg)
     (hheartbeatOriginal :
       (msg.benv.stat.origState.get msg.currentTarget).stor.get
         heartbeatIntervalSlot = 0)
-    (hstatic : msg.isStatic = false) :
+    (hstatic : msg.isStatic = false)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     ∃ post, OfficialCreateMessageResult msg.currentTarget msg post :=
-  processCreateMessage_establishes_officialRegistryStable msg hvalue
-    hcodeAddress hcode hgas hmax hpauseCold hpauseOriginal hheartbeatCold
-    hheartbeatOriginal hstatic
+  processCreateMessage_establishes_officialRegistryStable msg hvalue hcodeAddress hcode hgas hmax
+    hpauseCold hpauseOriginal hheartbeatCold hheartbeatOriginal hstatic hfork
 
 example (ca : Adr) (msg : Msg)
     (htarget : msg.currentTarget = ca)
@@ -4502,15 +4553,16 @@ example (ca : Adr) (msg : Msg)
     (hheartbeatOriginal :
       (msg.benv.stat.origState.get msg.currentTarget).stor.get
         heartbeatIntervalSlot = 0)
-    (hstatic : msg.isStatic = false) :
+    (hstatic : msg.isStatic = false)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     ∃ post out, OfficialConstructorMessageResult ca msg post out :=
-  processMessageCall_establishes_officialRegistryStable ca msg htarget
-    htargetNone hnoCodeOrNonce hnoStorage hvalue hcodeAddress hcode hgas hmax
-    hpauseCold hpauseOriginal hheartbeatCold hheartbeatOriginal hstatic
+  processMessageCall_establishes_officialRegistryStable ca msg htarget htargetNone hnoCodeOrNonce
+    hnoStorage hvalue hcodeAddress hcode hgas hmax hpauseCold hpauseOriginal hheartbeatCold
+    hheartbeatOriginal hstatic hfork
 
 example (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
     (tx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca)
+    (hbase : CanonicalDeploymentBase .prague chainId base sender ca)
     (henv : CanonicalOfficialDeploymentBlock chainId base cb
       txBytes tx sender ca)
     (ctx : PreparedDeploymentContext chainId base cb tx sender ca) :
@@ -4536,7 +4588,7 @@ example (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
     (post : State) (bout : BlockOutput)
     (htx : OfficialDeploymentTransactionResult chainId ca ctx post bout)
     (hsuffix : OfficialDeploymentSuffixResult chainId ca ctx post bout) :
-    applyBody (initBenv pragueRules base cb.block.header)
+    applyBody (initBenv .prague base cb.block.header)
       cb.block.txs cb.block.wds = .ok (post, bout) :=
   canonicalDeploymentApplyBody_succeeds chainId base cb txBytes tx sender ca
     henv ctx post bout htx hsuffix
@@ -4551,13 +4603,13 @@ example {chainId : UInt64} {base deployed : BlockChain} {ca : Adr}
         (sender : Adr)
         (ctx : PreparedDeploymentContext chainId base cb tx sender ca)
         (post : State) (bout : BlockOutput),
-      CanonicalDeploymentBase chainId base sender ca ∧
+      CanonicalDeploymentBase .prague chainId base sender ca ∧
       CanonicalOfficialDeploymentBlock chainId base cb txBytes tx sender ca ∧
       OfficialDeploymentTransactionResult chainId ca ctx post bout ∧
       Nonempty (OfficialDeploymentSuffixResult chainId ca ctx post bout) ∧
       stateTransitionUsing (ChainConfig.pragueOnly chainId)
         base cb.block = .ok deployed ∧
-      applyBody (initBenv pragueRules base cb.block.header)
+      applyBody (initBenv .prague base cb.block.header)
         cb.block.txs cb.block.wds = .ok (post, bout) ∧
       post = deployed.state)
     (target_ne_zero : ca ≠ 0)
@@ -4589,7 +4641,7 @@ example {chainId : UInt64} {base deployed : BlockChain} {ca : Adr}
 example (chainId : UInt64) (base deployed : BlockChain)
     (cb : CanonicalBlock) (txBytes : Bytes)
     (tx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca)
+    (hbase : CanonicalDeploymentBase .prague chainId base sender ca)
     (henv : CanonicalOfficialDeploymentBlock chainId base cb
       txBytes tx sender ca)
     (hstep : stateTransitionUsing (ChainConfig.pragueOnly chainId)
@@ -4678,6 +4730,7 @@ end LidoCircuitBreaker
 namespace ProxyPair
 
 example {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {implementation requestedAdmin : Adr} {G : Nat}
     (hvalue : sevm.value = 0)
     (hinput : sevm.code.toList =
@@ -4700,7 +4753,7 @@ example {sevm : Sevm} {base : Devm}
     (hstatic : sevm.isStatic = false)
     (hgas : 200000 ≤ G) :
     ∃ post,
-      Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, G + 320⟩)
+      Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, G + 320, base.stateGas⟩)
         (ossifiableConstructorProgram 1249 3437 2188) post ∧
       Devm.getStor post sevm.currentTarget =
         ((Devm.getStor base sevm.currentTarget).set implementationSlotLit
@@ -4713,11 +4766,12 @@ example {sevm : Sevm} {base : Devm}
       post.gasLeft = G - 49894 ∧
       post.error = base.error :=
   ossifiableConstructorProgram_canonicalEmptyInput_forward_exact
-    hvalue hinput himplementationNonzero hrequestedNonzero hcodeSizeNonzero
+    hfork hvalue hinput himplementationNonzero hrequestedNonzero hcodeSizeNonzero
     haddressCold himplementationRaw himplementationOriginal
     himplementationCold hadminRaw hadminOriginal hadminCold hstatic hgas
 
 example (msg : Msg) (implementation requestedAdmin : Adr)
+    (hfork : CoveredFork msg.benv.stat.fork)
     (hvalue : msg.value = 0)
     (hcodeAddress : msg.codeAddress = .none)
     (hcode : msg.code.toList =
@@ -4741,11 +4795,9 @@ example (msg : Msg) (implementation requestedAdmin : Adr)
     (hmax : 2188 ≤ msg.benv.stat.rules.code.maxCodeSize) :
     ∃ post,
       OssifiableEmptySetupCreateResult msg implementation requestedAdmin post :=
-  processCreateMessage_ossifiable_emptySetup_success msg implementation
-    requestedAdmin hvalue hcodeAddress hcode himplementationNonzero
-    hrequestedNonzero himplementationCode haddressCold
-    himplementationOriginal himplementationCold hadminOriginal hadminCold
-    hstatic hgas hmax
+  processCreateMessage_ossifiable_emptySetup_success msg implementation requestedAdmin hfork hvalue
+    hcodeAddress hcode himplementationNonzero hrequestedNonzero himplementationCode haddressCold
+    himplementationOriginal himplementationCold hadminOriginal hadminCold hstatic hgas hmax
 
 example {runtimeOffset runtimeLength : Nat}
     {sevm : Sevm} {entry post : Devm} {tail : Stack}
@@ -4813,6 +4865,7 @@ example :
   OssifiableBothSlotFixture.message_success
 
 example {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hvalue : sevm.value = 0)
     (hinput : sevm.code.toList = ossifiableFullCreateInput
       OssifiableBothSlotFixture.implementation
@@ -4843,7 +4896,7 @@ example {sevm : Sevm} {base : Devm}
     (hprecompile : sevm.benvStat.rules.isPrecomp
       OssifiableBothSlotFixture.implementation = false) :
     ∃ post,
-      Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, 526248⟩)
+      Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, 526248, base.stateGas⟩)
         (ossifiableConstructorProgram 1249 3437 2188) post ∧
       post.getStorVal sevm.currentTarget implementationSlotLit =
         OssifiableBothSlotFixture.postSetupImplementation.toB256 ∧
@@ -4858,7 +4911,7 @@ example {sevm : Sevm} {base : Devm}
       post.output = runtimeBaselineBytes ∧
       post.gasLeft = 475566 ∧
       post.error = base.error :=
-  OssifiableBothSlotCreateFixture.program_success hvalue hinput
+  OssifiableBothSlotCreateFixture.program_success hfork hvalue hinput
     himplementationNonzero himplementationCode hcodeSizeNonzero
     haddressCold himplementationRaw himplementationOriginal
     himplementationCold hadminRaw hadminOriginal hadminCold hstatic hdepth
@@ -4911,13 +4964,14 @@ proof-only refactor does not. -/
 -- price never falls below genesis.
 example {cfg : ChainConfig} {deployed future : BlockChain} {ca : Adr}
     (root : DeploymentRoot cfg deployed ca)
-    (reach : BlockChain.ReachUsing cfg deployed future) :
+    (reach : BlockChain.ReachUsing cfg deployed future)
+    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     balSum (future.state.getStor ca) =
         supplyN (future.state.getStor ca) ∧
       supplyN (future.state.getStor ca) ≤ maxSupply.toNat ∧
       supplyN (future.state.getStor ca) ≤
         offset.toNat * (future.state.bal ca).toNat :=
-  DeploymentRoot.reachable_accountingInvariant root reach
+  DeploymentRoot.reachable_accountingInvariant root reach hcov
 
 -- P3: the pure finite-range cumulative-dust identity over a connected
 -- accounting path.  Exact equality, no tolerance parameter.
@@ -4966,9 +5020,10 @@ example {cfg : ChainConfig} {deployed future : BlockChain}
 -- this fixes the carrier exactly onto chain reachability.
 example {cfg : ChainConfig} {deployed future : BlockChain} {ca : Adr}
     (root : DeploymentRoot cfg deployed ca)
-    (reach : BlockChain.ReachUsing cfg deployed future) :
+    (reach : BlockChain.ReachUsing cfg deployed future)
+    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, ProrataTraceRealizes root steps future :=
-  prorataTraceRealizes_exists_of_reachUsing root reach
+  prorataTraceRealizes_exists_of_reachUsing root reach hcov
 
 -- P4: the open-context bound.  The coalition's settled take is bounded by its
 -- own settled input plus the outside subsidy it was handed.
@@ -5277,6 +5332,7 @@ example :
 example
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq :
@@ -5307,11 +5363,12 @@ example
             ((pre.state.getStor wethAccount).get
               sevm.currentTarget.toB256).toNat supply.toNat))
           pre post :=
-  deposit_compiled_effect config memoryWf run selectorEq
+  deposit_compiled_effect config hfork memoryWf run selectorEq
 
 example
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq :
@@ -5340,11 +5397,12 @@ example
             ((pre.state.getStor wethAccount).get
               sevm.currentTarget.toB256).toNat supply.toNat))
           pre post :=
-  mint_compiled_effect config memoryWf run selectorEq
+  mint_compiled_effect config hfork memoryWf run selectorEq
 
 example
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -5383,11 +5441,12 @@ example
           ((pre.state.getStor wethAccount).get
             sevm.currentTarget.toB256).toNat supply.toNat))
           pre post :=
-  withdraw_compiled_effect config memoryWf run selectorEq
+  withdraw_compiled_effect config hfork memoryWf run selectorEq
 
 example
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -5420,11 +5479,12 @@ example
           ((pre.state.getStor wethAccount).get
             sevm.currentTarget.toB256).toNat supply.toNat))
           pre post :=
-  redeem_compiled_effect config memoryWf run selectorEq
+  redeem_compiled_effect config hfork memoryWf run selectorEq
 
 example
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -5443,11 +5503,12 @@ example
             sevm.currentTarget.toB256).toNat
           (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat))
         pre post :=
-  convertToShares_compiled_effect config memoryWf run selectorEq
+  convertToShares_compiled_effect config hfork memoryWf run selectorEq
 
 example
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -5466,11 +5527,12 @@ example
             sevm.currentTarget.toB256).toNat
           (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat))
         pre post :=
-  convertToAssets_compiled_effect config memoryWf run selectorEq
+  convertToAssets_compiled_effect config hfork memoryWf run selectorEq
 
 example
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -5489,11 +5551,12 @@ example
             sevm.currentTarget.toB256).toNat
           (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat))
         pre post :=
-  previewDeposit_compiled_effect config memoryWf run selectorEq
+  previewDeposit_compiled_effect config hfork memoryWf run selectorEq
 
 example
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -5512,11 +5575,12 @@ example
             sevm.currentTarget.toB256).toNat
           (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat))
         pre post :=
-  previewRedeem_compiled_effect config memoryWf run selectorEq
+  previewRedeem_compiled_effect config hfork memoryWf run selectorEq
 
 example
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm = selector "previewMint" [.uint256]) :
@@ -5534,11 +5598,12 @@ example
             sevm.currentTarget.toB256).toNat
           (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat))
         pre post :=
-  previewMint_compiled_effect config memoryWf run selectorEq
+  previewMint_compiled_effect config hfork memoryWf run selectorEq
 
 example
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -5557,11 +5622,12 @@ example
             sevm.currentTarget.toB256).toNat
           (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat))
         pre post :=
-  previewWithdraw_compiled_effect config memoryWf run selectorEq
+  previewWithdraw_compiled_effect config hfork memoryWf run selectorEq
 
 example
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (receiverNonzero : (Sevm.argWord sevm 0).toNat ≠ 0)
     (stable :
@@ -5583,11 +5649,12 @@ example
             sevm.currentTarget.toB256).toNat
           (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat))
         pre post :=
-  maxDeposit_compiled_effect_stable config memoryWf receiverNonzero stable run selectorEq
+  maxDeposit_compiled_effect_stable config hfork memoryWf receiverNonzero stable run selectorEq
 
 example
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (receiverNonzero : (Sevm.argWord sevm 0).toNat ≠ 0)
     (stable :
@@ -5609,11 +5676,12 @@ example
             sevm.currentTarget.toB256).toNat
           (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat))
         pre post :=
-  maxMint_compiled_effect_stable config memoryWf receiverNonzero stable run selectorEq
+  maxMint_compiled_effect_stable config hfork memoryWf receiverNonzero stable run selectorEq
 
 example
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (stable :
       (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat ≤
@@ -5642,10 +5710,11 @@ example
             sevm.currentTarget.toB256).toNat
           (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat))
         pre post :=
-  maxWithdraw_compiled_effect_exact config memoryWf stable balanceLe run selectorEq
+  maxWithdraw_compiled_effect_exact config hfork memoryWf stable balanceLe run selectorEq
 
 example
     {sevm : Sevm} {pre d : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (stable : PairStable sevm.currentTarget sevm.benvStat.rules pre.state)
     (memoryWf : Mem.Wf pre.memory)
     (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
@@ -5667,10 +5736,12 @@ example
     (reverted : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
     Prog.RunCompiledToVisiting WethChildRefused sevm pre
       Blanc.ProrataWethVault.vault (.error (.revert, d)) :=
-  deposit_exec_revert_visits_refused_weth_child stable memoryWf codeEq selectorEq valueZero argsPresent callerNonzero receiverValid receiverNonzero withinMax reverted
+  deposit_exec_revert_visits_refused_weth_child hfork stable memoryWf codeEq selectorEq valueZero
+    argsPresent callerNonzero receiverValid receiverNonzero withinMax reverted
 
 example
     {sevm : Sevm} {pre d : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (stable : PairStable sevm.currentTarget sevm.benvStat.rules pre.state)
     (memoryWf : Mem.Wf pre.memory)
     (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
@@ -5692,10 +5763,12 @@ example
     (reverted : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
     Prog.RunCompiledToVisiting WethChildRefused sevm pre
       Blanc.ProrataWethVault.vault (.error (.revert, d)) :=
-  mint_exec_revert_visits_refused_weth_child stable memoryWf codeEq selectorEq valueZero argsPresent callerNonzero receiverValid receiverNonzero withinMax reverted
+  mint_exec_revert_visits_refused_weth_child hfork stable memoryWf codeEq selectorEq valueZero
+    argsPresent callerNonzero receiverValid receiverNonzero withinMax reverted
 
 example
     {sevm : Sevm} {pre d : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (stable : PairStable sevm.currentTarget sevm.benvStat.rules pre.state)
     (memoryWf : Mem.Wf pre.memory)
     (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
@@ -5734,10 +5807,13 @@ example
     (reverted : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
     Prog.RunCompiledToVisiting WethChildRefused sevm pre
       Blanc.ProrataWethVault.vault (.error (.revert, d)) :=
-  withdraw_exec_revert_visits_refused_weth_child stable memoryWf codeEq selectorEq valueZero argsPresent callerNonzero receiverValid receiverNonzero ownerValid ownerNonzero withinMax authorized reverted
+  withdraw_exec_revert_visits_refused_weth_child hfork stable memoryWf codeEq selectorEq valueZero
+    argsPresent callerNonzero receiverValid receiverNonzero ownerValid ownerNonzero withinMax
+    authorized reverted
 
 example
     {sevm : Sevm} {pre d : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (stable : PairStable sevm.currentTarget sevm.benvStat.rules pre.state)
     (memoryWf : Mem.Wf pre.memory)
     (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
@@ -5768,11 +5844,14 @@ example
     (reverted : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
     Prog.RunCompiledToVisiting WethChildRefused sevm pre
       Blanc.ProrataWethVault.vault (.error (.revert, d)) :=
-  redeem_exec_revert_visits_refused_weth_child stable memoryWf codeEq selectorEq valueZero argsPresent callerNonzero receiverValid receiverNonzero ownerValid ownerNonzero withinMax authorized reverted
+  redeem_exec_revert_visits_refused_weth_child hfork stable memoryWf codeEq selectorEq valueZero
+    argsPresent callerNonzero receiverValid receiverNonzero ownerValid ownerNonzero withinMax
+    authorized reverted
 
 example
     {sevm : Sevm} {pre d : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
     (selectorEq : Sevm.selector sevm = selector "maxDeposit" [.address])
@@ -5783,11 +5862,13 @@ example
     (reverted : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
     Prog.RunCompiledToVisiting WethChildRefused sevm pre
       Blanc.ProrataWethVault.vault (.error (.revert, d)) :=
-  maxDeposit_exec_revert_visits_refused_weth_child config memoryWf codeEq selectorEq valueZero argsPresent argValid reverted
+  maxDeposit_exec_revert_visits_refused_weth_child config hfork memoryWf codeEq selectorEq valueZero
+    argsPresent argValid reverted
 
 example
     {sevm : Sevm} {pre d : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
     (selectorEq : Sevm.selector sevm = selector "maxMint" [.address])
@@ -5798,11 +5879,13 @@ example
     (reverted : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
     Prog.RunCompiledToVisiting WethChildRefused sevm pre
       Blanc.ProrataWethVault.vault (.error (.revert, d)) :=
-  maxMint_exec_revert_visits_refused_weth_child config memoryWf codeEq selectorEq valueZero argsPresent argValid reverted
+  maxMint_exec_revert_visits_refused_weth_child config hfork memoryWf codeEq selectorEq valueZero
+    argsPresent argValid reverted
 
 example
     {sevm : Sevm} {pre d : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
     (selectorEq : Sevm.selector sevm = selector "maxWithdraw" [.address])
@@ -5813,7 +5896,8 @@ example
     (reverted : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
     Prog.RunCompiledToVisiting WethChildRefused sevm pre
       Blanc.ProrataWethVault.vault (.error (.revert, d)) :=
-  maxWithdraw_exec_revert_visits_refused_weth_child config memoryWf codeEq selectorEq valueZero argsPresent argValid reverted
+  maxWithdraw_exec_revert_visits_refused_weth_child config hfork memoryWf codeEq selectorEq
+    valueZero argsPresent argValid reverted
 
 example
     {sevm : Sevm} {pre : Devm}
@@ -5830,6 +5914,7 @@ example
 example
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq :
@@ -5840,11 +5925,12 @@ example
           sevm.currentTarget.toB256).toNat
         (Devm.getStorVal pre sevm.currentTarget
           Blanc.ProrataWethVault.supplySlot).toNat :=
-  deposit_success_within_maxDeposit config memoryWf run selectorEq
+  deposit_success_within_maxDeposit config hfork memoryWf run selectorEq
 
 example
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq :
@@ -5855,11 +5941,12 @@ example
           sevm.currentTarget.toB256).toNat
         (Devm.getStorVal pre sevm.currentTarget
           Blanc.ProrataWethVault.supplySlot).toNat :=
-  mint_success_within_maxMint config memoryWf run selectorEq
+  mint_success_within_maxMint config hfork memoryWf run selectorEq
 
 example
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -5871,11 +5958,12 @@ example
           sevm.currentTarget.toB256).toNat
         (Devm.getStorVal pre sevm.currentTarget
           Blanc.ProrataWethVault.supplySlot).toNat :=
-  withdraw_success_within_maxWithdraw config memoryWf run selectorEq
+  withdraw_success_within_maxWithdraw config hfork memoryWf run selectorEq
 
 example
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -5883,59 +5971,65 @@ example
     (Sevm.argWord sevm 0).toNat ≤
       Blanc.ProrataWethVault.maxRedeemN
         (Devm.getStorVal pre sevm.currentTarget (Sevm.argWord sevm 2)).toNat :=
-  redeem_success_within_maxRedeem config memoryWf run selectorEq
+  redeem_success_within_maxRedeem config hfork memoryWf run selectorEq
 
 example
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
       (Devm.getStor pre sevm.currentTarget)) :
     LedgerConserved Blanc.ProrataWethVault.supplySlot (Devm.getStor post sevm.currentTarget) :=
-  vault_message_preserves_conserved config memoryWf run conserved
+  vault_message_preserves_conserved config hfork memoryWf run conserved
 
 example {cfg : ChainConfig} {deployed future : BlockChain}
     {vault : Adr} (root : PairRoot cfg deployed vault)
-    (reach : BlockChain.ReachUsing cfg deployed future) :
+    (reach : BlockChain.ReachUsing cfg deployed future)
+    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, PairTraceRealizes root steps future ∧
       (PairBacked vault (future.state.getStor vault) (future.state.getStor wethAccount) ∨
         ∃ r ∈ steps, 0 < r.step.debitAmount) :=
-  pair_reachable_backed_or_debit root reach
+  pair_reachable_backed_or_debit root reach hcov
 
 example {cfg : ChainConfig} {deployed : BlockChain} {vault : Adr}
     (root : PairRoot cfg deployed vault)
     {steps : List (PairStepRecord vault)} {future : BlockChain}
     (realizes : PairTraceRealizes root steps future)
     (collision : NoVaultAllowanceKeyCollision (PairStepRecord.ledger steps) vault)
+    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork)
     {timestamp : Nat} {rules : ForkRules} (rulesAt : cfg.rulesAt timestamp = .ok rules) :
     PairStable vault rules future.state :=
-  pair_reachable_stable root realizes collision rulesAt
+  pair_reachable_stable root realizes collision hcov rulesAt
 
 example {cfg : ChainConfig} {deployed : BlockChain} {vault : Adr}
     (root : PairRoot cfg deployed vault)
     {steps : List (PairStepRecord vault)} {future : BlockChain}
     (realizes : PairTraceRealizes root steps future)
-    (collision : NoVaultAllowanceKeyCollision (PairStepRecord.ledger steps) vault) :
+    (collision : NoVaultAllowanceKeyCollision (PairStepRecord.ledger steps) vault)
+    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     PairBacked vault (future.state.getStor vault) (future.state.getStor wethAccount) ∧
       State.Inv wethAccount future.state :=
-  pair_reachable_backed root realizes collision
-
-example {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
-    (root : PairRoot cfg deployed vault)
-    (history : ConfiguredHistoryTrace cfg deployed future)
-    (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault) :
-    PairBacked vault (future.state.getStor vault) (future.state.getStor wethAccount) ∧
-      State.Inv wethAccount future.state :=
-  pair_history_backed root history collision
+  pair_reachable_backed root realizes collision hcov
 
 example {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
     (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
     (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault)
+    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    PairBacked vault (future.state.getStor vault) (future.state.getStor wethAccount) ∧
+      State.Inv wethAccount future.state :=
+  pair_history_backed root history collision hcov
+
+example {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
+    (root : PairRoot cfg deployed vault)
+    (history : ConfiguredHistoryTrace cfg deployed future)
+    (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault)
+    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork)
     {timestamp : Nat} {rules : ForkRules} (rulesAt : cfg.rulesAt timestamp = .ok rules) :
     PairStable vault rules future.state :=
-  pair_history_stable root history collision rulesAt
+  pair_history_stable root history collision hcov rulesAt
 
 example (vault : Adr) (frame : Exec.Frame)
     (weth : frame.exactInvocation Blanc.weth wethAccount wethAccount)
@@ -5984,7 +6078,8 @@ example {cfg : ChainConfig} {deployed future : BlockChain}
 example {cfg : ChainConfig} {deployed future : BlockChain}
     {vault : Adr} (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
-    (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault) :
+    (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault)
+    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, PairTraceRealizes root steps future ∧ PairLedgerFaithful vault history steps ∧
     ∃ path : FourQuote.RealizedPath vault,
       path.steps = PairStepRecord.fourQuoteSteps steps ∧
@@ -6003,7 +6098,7 @@ example {cfg : ChainConfig} {deployed future : BlockChain}
           ∑ i ∈ Finset.range path.steps.length,
             path.creditAt i * (∏ j ∈ Finset.range i, path.dAt j) *
               (∏ j ∈ Finset.Icc (i + 2) path.steps.length, path.dAt j) :=
-  pair_history_realized_dust_trace_exact root history collision
+  pair_history_realized_dust_trace_exact root history collision hcov
 
 example {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
     {root : PairRoot cfg deployed vault} {coalition : Finset Adr} {victim : Adr}
@@ -6037,7 +6132,8 @@ example {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
 example {cfg : ChainConfig} {deployed future : BlockChain}
     {vault : Adr} (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
-    (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault) :
+    (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault)
+    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, PairTraceRealizes root steps future ∧ PairLedgerFaithful vault history steps ∧
       ∀ (coalition : Finset Adr) (victim : Adr)
         (charge : PairStepRecord vault → Blanc.Prorata.AttackAttribution),
@@ -6046,19 +6142,20 @@ example {cfg : ChainConfig} {deployed future : BlockChain}
         VictimSchedule victim steps →
         outA victim charge steps + sharesOut victim steps ≤
           inA victim charge steps + outsideSubsidy victim charge steps + sharesIn victim steps :=
-  pair_history_attacker_open_context root history collision
+  pair_history_attacker_open_context root history collision hcov
 
 example {cfg : ChainConfig} {deployed future : BlockChain}
     {vault : Adr} (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
-    (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault) :
+    (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault)
+    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, PairTraceRealizes root steps future ∧ PairLedgerFaithful vault history steps ∧
       ∀ (victim : Adr) (deposit exit : PairStepRecord vault) (v m p : Nat),
         victimMoves victim steps = [deposit, exit] →
         deposit.flow = .inbound victim victim v m true →
         exit.flow = .outbound victim victim m p true false →
         v - p ≤ Nat.div (deposit.pre.balance + 1) (deposit.pre.supply + Blanc.ProrataWethVault.offsetN) + 1 :=
-  pair_history_victim_loss_bound root history collision
+  pair_history_victim_loss_bound root history collision hcov
 
 example :
     ∃ state : PairAttackState Blanc.ProrataWethVault.offsetN,
@@ -6083,6 +6180,7 @@ example : Prog.compile constructorProgram = some constructorInitPrefix :=
   constructorInitPrefix_compile
 example {msg : Msg} {benv : Benv} {codeAddress : Adr}
     (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (pubkey withdrawalCredentials signature : Bytes)
     (depositDataRoot : B256) (s' : Acc) (ev : DepositEvent)
     (stor : Stor) (keys : KeySet) (countCost n G : Nat)
@@ -6182,13 +6280,13 @@ example {msg : Msg} {benv : Benv} {codeAddress : Adr}
         settled.output = base.output ∧
         settled.error = base.error ∧
         some sevm.code.toList = Prog.compile runtime :=
-  deposit_success_settled_effects sevm base pubkey withdrawalCredentials
-    signature depositDataRoot s' ev stor keys countCost n G htransfer
-    hcodeAddress hnotPrecompile hsevm hbase hdataBound hdec hOk hstor hkeys
-    hcount hheight hfirst hselector hnodeleg hwarm hpre hdepth hstatic
-    hbranchSentry hbound hcountSentry hreconstructBound hcode hgasEntry
+  deposit_success_settled_effects sevm base hfork pubkey withdrawalCredentials signature
+    depositDataRoot s' ev stor keys countCost n G htransfer hcodeAddress hnotPrecompile hsevm hbase
+    hdataBound hdec hOk hstor hkeys hcount hheight hfirst hselector hnodeleg hwarm hpre hdepth
+    hstatic hbranchSentry hbound hcountSentry hreconstructBound hcode hgasEntry
 
 example {sevm : Sevm} {base : Devm} {state : Acc}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {pubkey withdrawalCredentials signature : Bytes}
     {depositDataRoot : B256} {G : Nat} {reason : Reason}
     (hnonempty : sevm.data.length.toB256 ≠ 0)
@@ -6215,10 +6313,10 @@ example {sevm : Sevm} {base : Devm} {state : Acc}
     (hcode : sevm.code.toList = code) :
     ∃ runtimeCost post,
       ∃ execution : Exec 0 sevm
-          (base.setMach ⟨[], Mem.empty, G + runtimeCost⟩)
+          (base.setMach ⟨[], Mem.empty, G + runtimeCost, base.stateGas⟩)
           (.error (.revert, post)),
         Prog.RunCompiledTo sevm
-            (base.setMach ⟨[], Mem.empty, G + runtimeCost⟩)
+            (base.setMach ⟨[], Mem.empty, G + runtimeCost, base.stateGas⟩)
             runtime (.error (.revert, post)) ∧
           post.output = errorData (reasonString reason) ∧
           Exec.NoRawSstore execution ∧
@@ -6226,7 +6324,7 @@ example {sevm : Sevm} {base : Devm} {state : Acc}
           Exec.retainedStorageEffectTriples execution = [] ∧
           some sevm.code.toList = Prog.compile runtime := by
   simpa only [DepositPublicErrorWitness] using
-    deposit_error_runCompiledTo hnonempty hdataBound hcountBound hselector hdec
+    deposit_error_runCompiledTo hfork hnonempty hdataBound hcountBound hselector hdec
       hcountValue hnodeleg hwarm hpre hdepth hstatic hrootBound hcapBound herror
       hcode
 
@@ -6240,19 +6338,19 @@ example (sevm : Sevm) (base : Devm) (G : Nat)
       DepositAbiFailure.Holds sevm.data failure ∧
       ∃ execution : Exec 0 sevm
           (base.setMach
-            ⟨[], Mem.empty, G + depositMalformedRuntimeGas failure⟩)
+            ⟨[], Mem.empty, G + depositMalformedRuntimeGas failure, base.stateGas⟩)
           (.error (.revert,
             (base.setMach
               ⟨failure.finalStack sevm.data,
-                failure.finalMemory sevm.data, G⟩).withOutput [])),
+                failure.finalMemory sevm.data, G, base.stateGas⟩).withOutput [])),
         Prog.RunCompiledTo sevm
             (base.setMach
-              ⟨[], Mem.empty, G + depositMalformedRuntimeGas failure⟩)
+              ⟨[], Mem.empty, G + depositMalformedRuntimeGas failure, base.stateGas⟩)
             runtime
             (.error (.revert,
               (base.setMach
                 ⟨failure.finalStack sevm.data,
-                  failure.finalMemory sevm.data, G⟩).withOutput [])) ∧
+                  failure.finalMemory sevm.data, G, base.stateGas⟩).withOutput [])) ∧
           Exec.NoRawSstore execution ∧
           Exec.retainedStorageWrites execution = [] ∧
           Exec.retainedStorageEffectTriples execution = [] ∧
@@ -6266,15 +6364,15 @@ example (sevm : Sevm) (base : Devm) (G : Nat) (selector : B256)
     (hcode : sevm.code.toList = code) :
     ∃ execution : Exec 0 sevm
         (base.setMach
-          ⟨[], Mem.empty, G + unmatchedSelectorRuntimeGas selector⟩)
+          ⟨[], Mem.empty, G + unmatchedSelectorRuntimeGas selector, base.stateGas⟩)
         (.error (.revert,
-          (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])),
+          (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])),
       Prog.RunCompiledTo sevm
         (base.setMach
-          ⟨[], Mem.empty, G + unmatchedSelectorRuntimeGas selector⟩)
+          ⟨[], Mem.empty, G + unmatchedSelectorRuntimeGas selector, base.stateGas⟩)
         runtime
         (.error (.revert,
-          (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])) ∧
+          (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) ∧
       Exec.NoRawSstore execution ∧
       Exec.retainedStorageWrites execution = [] ∧
       Exec.retainedStorageEffectTriples execution = [] ∧
@@ -6291,11 +6389,11 @@ example (sevm : Sevm) (base : Devm) (G : Nat)
     ∃ post,
       ∃ execution : Exec 0 sevm
           (base.setMach
-            ⟨[], Mem.empty, G + supportsInterfaceRuntimeGas⟩)
+            ⟨[], Mem.empty, G + supportsInterfaceRuntimeGas, base.stateGas⟩)
           (.ok post),
         Prog.RunCompiledTo sevm
             (base.setMach
-              ⟨[], Mem.empty, G + supportsInterfaceRuntimeGas⟩)
+              ⟨[], Mem.empty, G + supportsInterfaceRuntimeGas, base.stateGas⟩)
             runtime (.ok post) ∧
         post.gasLeft = G ∧
         Devm.output post = abiBoolReturn (supportsInterfaceArg sevm) ∧
@@ -6308,6 +6406,7 @@ example (sevm : Sevm) (base : Devm) (G : Nat)
   supportsInterface_runCompiled_noRawSstore sevm base G hdataLength
     hdataBound hvalue hselector hcode
 example (sevm : Sevm) (base : Devm) (stor : Stor) (count G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hdataLength : 4 ≤ sevm.data.length)
     (hdataBound : sevm.data.length < 2 ^ 256)
     (hvalue : sevm.value = 0)
@@ -6334,12 +6433,12 @@ example (sevm : Sevm) (base : Devm) (stor : Stor) (count G : Nat)
       ∃ execution : Exec 0 sevm
           (base.setMach
             ⟨[], Mem.empty,
-              G + getDepositRootRuntimeGas sevm base stor count⟩)
+              G + getDepositRootRuntimeGas sevm base stor count, base.stateGas⟩)
           (.ok post),
         Prog.RunCompiledTo sevm
             (base.setMach
               ⟨[], Mem.empty,
-                G + getDepositRootRuntimeGas sevm base stor count⟩)
+                G + getDepositRootRuntimeGas sevm base stor count, base.stateGas⟩)
             runtime (.ok post) ∧
         post.stack = [] ∧
         post.gasLeft = G ∧
@@ -6363,7 +6462,7 @@ example (sevm : Sevm) (base : Devm) (stor : Stor) (count G : Nat)
         Exec.retainedStorageWrites execution = [] ∧
         Exec.retainedStorageEffectTriples execution = [] ∧
         some sevm.code.toList = Prog.compile runtime :=
-  getDepositRoot_zero_runCompiled_noRawSstore sevm base stor count G
+  getDepositRoot_zero_runCompiled_noRawSstore sevm base stor count G hfork
     hdataLength hdataBound hvalue hselector hstor hcountValue hcount hzero
     hnodeleg hwarm hpre hdepth hbound hcode
 example (sevm : Sevm) (base : Devm) (G : Nat)
@@ -6373,15 +6472,15 @@ example (sevm : Sevm) (base : Devm) (G : Nat)
     (hcode : sevm.code.toList = code) :
     ∃ execution : Exec 0 sevm
         (base.setMach
-          ⟨[], Mem.empty, G + getDepositRootNonzeroValueRuntimeGas⟩)
+          ⟨[], Mem.empty, G + getDepositRootNonzeroValueRuntimeGas, base.stateGas⟩)
         (.error (.revert,
-          (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])),
+          (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])),
       Prog.RunCompiledTo sevm
           (base.setMach
-            ⟨[], Mem.empty, G + getDepositRootNonzeroValueRuntimeGas⟩)
+            ⟨[], Mem.empty, G + getDepositRootNonzeroValueRuntimeGas, base.stateGas⟩)
           runtime
           (.error (.revert,
-            (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])) ∧
+            (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) ∧
       Exec.NoRawSstore execution ∧
       Exec.retainedStorageWrites execution = [] ∧
       Exec.retainedStorageEffectTriples execution = [] ∧
@@ -6393,6 +6492,7 @@ example (sevm : Sevm) (base : Devm) (word : B256) (G : Nat)
     (hdataBound : sevm.data.length < 2 ^ 256)
     (hvalue : sevm.value = 0)
     (hselector : Sevm.selector sevm = getDepositCountSelector)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hwarm :
       ⟨sevm.currentTarget, depositCountSlot⟩ ∈ base.accessedStorageKeys)
     (hstorage :
@@ -6400,24 +6500,25 @@ example (sevm : Sevm) (base : Devm) (word : B256) (G : Nat)
     (hcode : sevm.code.toList = code) :
     ∃ execution : Exec 0 sevm
         (base.setMach
-          ⟨[], Mem.empty, G + getDepositCountWarmRuntimeGas⟩)
+          ⟨[], Mem.empty, G + getDepositCountWarmRuntimeGas, base.stateGas⟩)
         (.ok ((base.setMach
-          ⟨[], getDepositCountResultMemory word, G⟩).withOutput
+          ⟨[], getDepositCountResultMemory word, G, base.stateGas⟩).withOutput
             (abiDynamicBytesReturn (le64 word.toNat)))),
       Prog.RunCompiledTo sevm
           (base.setMach
-            ⟨[], Mem.empty, G + getDepositCountWarmRuntimeGas⟩)
+            ⟨[], Mem.empty, G + getDepositCountWarmRuntimeGas, base.stateGas⟩)
           runtime
           (.ok ((base.setMach
-            ⟨[], getDepositCountResultMemory word, G⟩).withOutput
+            ⟨[], getDepositCountResultMemory word, G, base.stateGas⟩).withOutput
               (abiDynamicBytesReturn (le64 word.toNat)))) ∧
       Exec.NoRawSstore execution ∧
       Exec.retainedStorageWrites execution = [] ∧
       Exec.retainedStorageEffectTriples execution = [] ∧
       some sevm.code.toList = Prog.compile runtime :=
   getDepositCount_warm_runCompiled_noRawSstore sevm base word G hdataLength
-    hdataBound hvalue hselector hwarm hstorage hcode
+    hdataBound hvalue hselector hfork hwarm hstorage hcode
 example (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (pubkey withdrawalCredentials signature : Bytes)
     (depositDataRoot : B256) (s' : Acc) (ev : DepositEvent)
     (stor : Stor) (keys : KeySet) (countCost n G : Nat)
@@ -6491,7 +6592,7 @@ example (sevm : Sevm) (base : Devm)
               depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
                 ((accOfStor
                   (Devm.getStor base sevm.currentTarget)).count + 1)
-                countCost G⟩)
+                countCost G, base.stateGas⟩)
           (.ok post),
         Prog.RunCompiledTo sevm
             (base.setMach
@@ -6499,7 +6600,7 @@ example (sevm : Sevm) (base : Devm)
                 depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
                   ((accOfStor
                     (Devm.getStor base sevm.currentTarget)).count + 1)
-                  countCost G⟩)
+                  countCost G, base.stateGas⟩)
             runtime (.ok post) ∧
           Exec.retainedStorageEffectTriples execution =
             [(sevm.currentTarget, depositCountSlot,
@@ -6510,7 +6611,7 @@ example (sevm : Sevm) (base : Devm)
                 accumulatedNode Bytes.sha256 (accOfStor stor).branch
                   0 n depositDataRoot)] ∧
           some sevm.code.toList = Prog.compile runtime :=
-  deposit_success_retainedStorageEffectTriples sevm base pubkey
+  deposit_success_retainedStorageEffectTriples sevm base hfork pubkey
     withdrawalCredentials signature depositDataRoot s' ev stor keys countCost
     n G hdataBound hdec hOk hstor hkeys hcount hheight hfirst hselector
     hnodeleg hwarm hpre hdepth hstatic hbaseError hbranchSentry hbound
@@ -6524,22 +6625,24 @@ example {sevm : Sevm} {base : Devm}
     (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hcode : sevm.code.toList = creationCode) :
     ∃ post,
     ∃ execution : Exec 0 sevm
-        (base.setMach ⟨[], Mem.empty, constructorProgramGas⟩) (.ok post),
+        (base.setMach ⟨[], Mem.empty, constructorProgramGas, base.stateGas⟩) (.ok post),
       post.output = code ∧
       post.error = none ∧
       Devm.getStor post sevm.currentTarget = constructorFinalStorage ∧
       ArtifactInv (Devm.getStor post sevm.currentTarget) [] ∧
       Prog.RunCompiledTo sevm
-        (base.setMach ⟨[], Mem.empty, constructorProgramGas⟩)
+        (base.setMach ⟨[], Mem.empty, constructorProgramGas, base.stateGas⟩)
         constructorProgram (.ok post) ∧
       Exec.retainedStorageEffectTriples execution =
         constructorStorageEffectTriples sevm.currentTarget :=
   constructor_success_retainedStorageEffectTriples hvalue hstorage hshaCode
-    hshaWarm herror hstatic hdepth hpre hcode
+    hshaWarm herror hstatic hdepth hpre hfork hcode
 example (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (pubkey withdrawalCredentials signature : Bytes)
     (depositDataRoot : B256) (s' : Acc) (ev : DepositEvent)
     (stor : Stor) (keys : KeySet) (countCost n G : Nat)
@@ -6615,13 +6718,13 @@ example (sevm : Sevm) (base : Devm)
               depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
                 ((accOfStor
                   (Devm.getStor base sevm.currentTarget)).count + 1)
-                countCost G⟩)
+                countCost G, base.stateGas⟩)
           runtime post ∧
         ArtifactInv (Devm.getStor post sevm.currentTarget)
           (history ++ [depositDataNode Bytes.sha256 pubkey
             withdrawalCredentials signature
             (le64 (sevm.value.toNat / oneGwei))]) :=
-  deposit_success_artifactInv sevm base pubkey withdrawalCredentials signature
+  deposit_success_artifactInv sevm base hfork pubkey withdrawalCredentials signature
     depositDataRoot s' ev stor keys countCost n G history hinvariant hdataBound
     hdec hOk hstor hkeys hcount hheight hfirst hselector hnodeleg hwarm hpre
     hdepth hstatic hbranchSentry hbound hcountSentry hreconstructBound hcode
@@ -6632,7 +6735,7 @@ example
     (chainId : UInt64) (base deployed : BlockChain)
     (cb : CanonicalBlock) (txBytes : Bytes)
     (tx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase chainId base sender ca)
+    (hbase : CanonicalDeploymentBase .prague chainId base sender ca)
     (henv : CanonicalBeaconDepositDeploymentBlock chainId base cb
       txBytes tx sender ca)
     (hstep : stateTransitionUsing (ChainConfig.pragueOnly chainId)
@@ -6738,6 +6841,7 @@ example
 
 example
     {fs : List Func} {sevm : Sevm} {entry final : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {target : Adr} {duration : B256}
     {dp : LidoTriggerableWithdrawalsGateway.DeployParams}
     (h_empty : fs[emptyRevertSlot]? = some Func.revert)
@@ -6752,12 +6856,12 @@ example
     (run : Func.RunCompiledTo fs sevm entry pauseAfterSet (.ok final)) :
     LidoPinnedBoundaryExecutions fs sevm entry target
       (LidoTriggerableWithdrawalsGateway.runtime dp) duration (.ok final) :=
-  Blanc.Composition.LidoCircuitBreakerTwg.gatewayBoundaryExecutions_of_afterSet_ok
-    h_empty h_bubble targetNe nonprecompile installed
-    targetWindow durationWindow dynamic run
+  Blanc.Composition.LidoCircuitBreakerTwg.gatewayBoundaryExecutions_of_afterSet_ok hfork h_empty
+    h_bubble targetNe nonprecompile installed targetWindow durationWindow dynamic run
 
 example
     {sevm : Sevm} {pre final : Devm} {owner : Adr}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {target duration idx0 len0 last0 : B256} {img : Bytes}
     {dp : LidoTriggerableWithdrawalsGateway.DeployParams}
     {ex : Execution}
@@ -6772,8 +6876,8 @@ example
       (Blanc.Composition.LidoCircuitBreakerTwg.gatewayCode dp)
       (LidoTriggerableWithdrawalsGateway.runtime dp)
       LidoTriggerableWithdrawalsGateway.pausedUntil ex final :=
-  Blanc.Composition.LidoCircuitBreakerTwg.publicPause_gatewayPinnedTarget
-    premises targetNe nonprecompile publicRun success
+  Blanc.Composition.LidoCircuitBreakerTwg.publicPause_gatewayPinnedTarget hfork premises targetNe
+    nonprecompile publicRun success
 
 /-! Reachability closure: the finite concrete world now supplies the production
 run, exact after-set cut, boundary executions, noninterference and headline
@@ -6909,16 +7013,18 @@ example (k : Nat) :
 -- accounting trace whose call projection is the history's own DRIP calls.
 example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
     (root : DeploymentRoot cfg base deployed ca) (coalition : Finset Adr)
-    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future) :
+    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future)
+    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, DripTraceRealizes root coalition steps future ∧
       callKinds steps = history.dripCalls coalition ca :=
-  dripTraceRealizes_transcript root coalition history
+  dripTraceRealizes_transcript root coalition history hcov
 
 -- R2: the executed-flow accounting identity, every term a function of the
 -- actual history's DRIP calls.
 example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
     (root : DeploymentRoot cfg base deployed ca) (coalition : Finset Adr)
-    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future) :
+    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future)
+    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     coalitionUnits coalition ca future.state * chiN (future.state.getStor ca) +
         (transcriptTally scale.toNat freshNat scale.toNat 0
           (history.dripCalls coalition ca)).joinResidue +
@@ -6930,7 +7036,7 @@ example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
           (history.dripCalls coalition ca)).accrual +
         scale.toNat * (transcriptTally scale.toNat freshNat scale.toNat 0
           (history.dripCalls coalition ca)).joined :=
-  history_transcript_accounting_exact root coalition history
+  history_transcript_accounting_exact root coalition history hcov
 
 -- R2: the executed-flow balance identity.
 example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
@@ -6970,7 +7076,8 @@ example {sevm : Sevm} {pre post : Devm}
     (hcode : sevm.code.toList = code)
     (hsel : Sevm.selector sevm = exitSelector)
     (hnonempty : sevm.data.length.toB256 ≠ 0)
-    (hcanon : pre.memory = Mem.empty) :
+    (hcanon : pre.memory = Mem.empty)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Devm.getStorVal pre sevm.currentTarget rhoSlot ≤ sevm.benvStat.time ∧
       ∃ callPre callPost guardPost returnPre,
         (Devm.getStor callPre sevm.currentTarget).get rhoSlot =
@@ -6987,19 +7094,20 @@ example {sevm : Sevm} {pre post : Devm}
               Sevm.dataWord sevm (32 * 0 + 4) / scale)
             callPre callPost guardPost returnPre ∧
           Devm.getStor post = Devm.getStor callPost :=
-  no_stale_index_settlement_exit exc hcode hsel hnonempty hcanon
+  no_stale_index_settlement_exit exc hcode hsel hnonempty hcanon hfork
 
 -- R3: the executed-flow entitlement bound.
 example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
     (root : DeploymentRoot cfg base deployed ca) (coalition : Finset Adr)
-    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future) :
+    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future)
+    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     (transcriptTally scale.toNat freshNat scale.toNat 0
         (history.dripCalls coalition ca)).paid ≤
       (transcriptTally scale.toNat freshNat scale.toNat 0
           (history.dripCalls coalition ca)).joined +
         (transcriptTally scale.toNat freshNat scale.toNat 0
           (history.dripCalls coalition ca)).accrual / scale.toNat :=
-  history_transcript_entitlement root coalition history
+  history_transcript_entitlement root coalition history hcov
 
 -- R3: two realized histories of pure `drip()` segments with the same total
 -- elapsed time end with indices within the certified segment drift.
@@ -7011,21 +7119,23 @@ example {cfg : ChainConfig} {base deployed : BlockChain} {ca : Adr}
     {left right : List Nat}
     (callsL : historyL.dripCalls coalition ca = left.map Kind.drip)
     (callsR : historyR.dripCalls coalition ca = right.map Kind.drip)
-    (sameElapsed : left.sum = right.sum) :
+    (sameElapsed : left.sum = right.sum)
+    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     natDistance (chiN (futureL.state.getStor ca)) (chiN (futureR.state.getStor ca)) ≤
       max (segmentDriftForward scale.toNat half.toNat rate.toNat scale.toNat left right)
           (segmentDriftForward scale.toNat half.toNat rate.toNat scale.toNat right left) :=
-  realized_segment_certified root coalition historyL historyR callsL callsR sameElapsed
+  realized_segment_certified root coalition historyL historyR callsL callsR sameElapsed hcov
 
 -- R4: every configured history keeps the clock-paired invariant at its last
 -- block's timestamp.
 example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
     (root : DeploymentRoot cfg base deployed ca)
-    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future) :
+    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future)
+    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     ∀ t, future.blocks.getLast?.map (·.header.timestamp) = some t →
       ClockInv (chiN (deployed.state.getStor ca)) (rhoN (deployed.state.getStor ca))
         t (future.state.getStor ca) :=
-  history_clockInv root history
+  history_clockInv root history hcov
 
 -- R4: the index and the clock never fall along a realized trace.
 example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}

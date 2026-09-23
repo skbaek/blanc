@@ -1008,6 +1008,7 @@ lemma solvent_of_state_eq {sf s₁ : Devm} {ct : Adr} {wad : B256}
 lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget weth
       (wethSpec.PreWf sevm.currentTarget) (Postcond sevm.currentTarget))
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hp : [wad] <<+ s.stack)
     (h_code : some (s.getCode sevm.currentTarget).toList = Prog.compile weth)
     (h_nof : sum s.getBal < 2 ^ 256)
@@ -1032,6 +1033,7 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
   rcases of_run_singleton h₂ with ⟨xl, h_fill, pc, h_run⟩
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
     Bind.bind, Except.bind, Except.assert] at h_run
+  rw [hfork.rules_stateGas_none] at h_run
   -- pop gas
   rcases eq1 : Devm.pop s₁ with _ | ⟨gas, devm1⟩ <;> simp only [eq1] at h_run
   · cases XStep.run_ofExcept_error h_run
@@ -1085,16 +1087,18 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
   clear e1 e2 e3 hs₁ hs₂ hs₃ eq1 eq2 eq3 eq4 eq5 eq6 eq7
   clear h_pop2 h_pop4 h_pop5 h_pop6 h_pop7 h₂
   -- delegation resolution
-  rcases hp11 : accessDelegation (addAccessedAddress devm7 sevm.caller) sevm.caller with
+  rcases hp11 : sevm.benvStat.rules.gas.accessDelegation
+      (addAccessedAddress devm7 sevm.caller) sevm.caller with
     ⟨dp, na, code0, dagc, devm9⟩
   simp only [hp11] at h_run
   have h_code0 :
-      code0 = (accessDelegation (addAccessedAddress devm7 sevm.caller) sevm.caller).2.2.1 := by
+      code0 = (sevm.benvStat.rules.gas.accessDelegation
+        (addAccessedAddress devm7 sevm.caller) sevm.caller).2.2.1 := by
     rw [hp11]
   have h_st9 : devm9.state = devm7.state := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).state) hp11
     dsimp at h
-    rw [← h, accessDelegation_state]
+    rw [← h, GasSchedule.accessDelegation_state]
     rfl
   -- charge the call gas
   split at h_run
@@ -1143,14 +1147,14 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
       simp only [XStep.Run] at h_run
       rcases h_run with ⟨ex', run_pm₀, h_split⟩
       -- name the child message and keep only the projections we need
-      obtain ⟨childMsg, run_pm, hc_stv, hc_state, hc_caller, hc_value, hc_ct,
+      obtain ⟨childMsg, run_pm, hc_stv, hc_state, hc_stat, hc_caller, hc_value, hc_ct,
           hc_ca, hc_code, hc_depth⟩ :
           ∃ m : Msg, ProcessMessage m xl ex' ∧
-            m.shouldTransferValue = true ∧ m.benv.state = s₁.state ∧
+            m.shouldTransferValue = true ∧ m.benv.state = s₁.state ∧ m.benv.stat = sevm.benvStat ∧
             m.caller = sevm.currentTarget ∧ m.value = wad ∧
             m.currentTarget = sevm.caller ∧ m.codeAddress = some na ∧
             m.code = code0 ∧ m.depth = sevm.depth - 1 :=
-        ⟨_, run_pm₀, rfl, h_st11, rfl, rfl, rfl, rfl, rfl, rfl⟩
+        ⟨_, run_pm₀, rfl, h_st11, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
       clear run_pm₀
       -- resolve the outer split : the sub-message result must be ok
       rcases ex' with err' | child
@@ -1211,6 +1215,13 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
       · -- callee is a regular account : a sub-execution takes place
         rw [h_xl_some] at h_fill
         dsimp only [Xlot.Filled] at h_fill
+        have hstat : (childMsg.withBenv benv').benv.stat = sevm.benvStat := by
+          show benv'.stat = sevm.benvStat
+          rw [benvAfterTransfer_stat eq_bt, hc_stat]
+        have hstateGas : (childMsg.withBenv benv').benv.stat.rules.stateGas = none := by
+          rw [hstat]
+          exact hfork.rules_stateGas_none
+        rw [hstateGas] at h_he
         rcases ex''' with ⟨err3, d3⟩ | child3
         · -- sub-execution error : contradicts the clean sub-message result
           rcases of_handleError_err h_he with ⟨evm4, h_ok4, h_some4, _⟩ | ⟨e, h_err4⟩
@@ -1219,7 +1230,7 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
             exact absurd h_some4 h_err2
           · cases h_err4
         -- clean sub-execution : apply the induction hypothesis
-        simp only [executeCode.handleError] at h_he
+        rw [executeCode.handleErrorWith_ok] at h_he
         have h_he := (Except.ok.inj h_he).symm
         subst h_he
         obtain ⟨ex_sub⟩ := h_fill
@@ -1251,7 +1262,18 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
           have h_notdel : ¬ isValidDelegation
               ((addAccessedAddress devm7 sevm.caller).state.getCode sevm.caller) := by
             rw [h_ad]; exact not_delegation_of_compile h_code
-          rw [accessDelegation_code_of_not h_notdel, h_ad]
+          have h_none : getDelegatedCodeAddress
+              ((addAccessedAddress devm7 sevm.caller).state.getCode sevm.caller) = none := by
+            dsimp only [getDelegatedCodeAddress]
+            rw [if_neg h_notdel]
+          have h_gas_code :
+              (sevm.benvStat.rules.gas.accessDelegation
+                (addAccessedAddress devm7 sevm.caller) sevm.caller).2.2.1 =
+                (addAccessedAddress devm7 sevm.caller).state.getCode sevm.caller := by
+            unfold GasSchedule.accessDelegation
+            dsimp only
+            rw [h_none]
+          rw [h_gas_code, h_ad]
           exact h_code
         -- the depth of the sub-execution is strictly smaller
         have h_depth_lt : (initSevm (childMsg.withBenv benv')).depth < sevm.depth := by
@@ -1305,9 +1327,13 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
                 rw [h_t_ne h_ne]; rfl
               rw [h_gb]; exact h_sv
         -- apply the induction hypothesis
+        have hchildFork : CoveredFork (initSevm (childMsg.withBenv benv')).benvStat.fork := by
+          change CoveredFork (childMsg.withBenv benv').benv.stat.fork
+          rw [hstat]
+          exact hfork
         have hpost : Postcond sevm.currentTarget (initSevm (childMsg.withBenv benv')) child :=
           ih 0 (initSevm (childMsg.withBenv benv')) (initDevm (childMsg.withBenv benv'))
-            (.ok child) ex_sub h_depth_lt h_at
+            (.ok child) ex_sub h_depth_lt h_at hchildFork
             ⟨wethSpec_pre_iff.mpr h_precond, fun _ => Mem.wf_empty⟩
         rw [getStor_eq_of_state_eq h_sf_state sevm.currentTarget,
             getBal_eq_of_state_eq h_sf_state sevm.currentTarget]
@@ -1315,6 +1341,7 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
 
 lemma withdraw_preserves_solvent {sevm : Sevm} {s r : Devm}
     (cond : Precond sevm.currentTarget sevm s)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (ih : Exec.InvDepth sevm.depth sevm.currentTarget weth
       (wethSpec.PreWf sevm.currentTarget) (Postcond sevm.currentTarget))
     (run : Func.Run (weth.main :: weth.aux) sevm s withdraw r) :
@@ -1363,7 +1390,7 @@ lemma withdraw_preserves_solvent {sevm : Sevm} {s r : Devm}
   unfold Devm.PostSolvent
   rw [← congr_fun (Func.of_inv Devm.getStor Devm.getStor (by func_inv) h₅) sevm.currentTarget]
   rw [← congr_fun (Func.of_inv Devm.getBal Devm.getBal (by func_inv) h₅) sevm.currentTarget]
-  exact of_send_to_caller ih hp₃ h_code₃ h_nof₃ h_le h_sv h₄
+  exact of_send_to_caller ih hfork hp₃ h_code₃ h_nof₃ h_le h_sv h₄
 
 lemma decimals_preserves_solvent {sevm : Sevm} {s r : Devm}
     (run : Func.Run (weth.main :: weth.aux) sevm s decimals r)
@@ -1425,7 +1452,7 @@ lemma wethSpec_funcSound {wa : Adr} (f : Func)
         Devm.PreSolvent s sevm.currentTarget sevm →
         Devm.PostSolvent r sevm.currentTarget ) :
     wethSpec.FuncSoundNoMem wa weth.aux f := by
-  intro sevm s r h_ct h_pre _ h_run
+  intro sevm s r hfork h_ct h_pre _ h_run
   subst h_ct
   exact wethSpec_post_iff.mpr
     (run_preserves_cond f h_solv h_run (wethSpec_pre_iff.mp h_pre))
@@ -1434,11 +1461,11 @@ lemma wethSpec_funcSound {wa : Adr} (f : Func)
 target that consumes `FuncSoundNoMem`'s deeper-frame induction hypothesis. -/
 lemma wethSpec_funcSound_withdraw {wa : Adr} :
     wethSpec.FuncSoundNoMem wa weth.aux withdraw := by
-  intro sevm s r h_ct h_pre ih h_run
+  intro sevm s r hfork h_ct h_pre ih h_run
   subst h_ct
   simp only [wethSpec_prog_eq, wethSpec_post_eq] at ih
   refine wethSpec_post_iff.mpr ⟨Func.preserves_nof h_run (wethSpec_pre_iff.mp h_pre).nof, ?_⟩
-  exact withdraw_preserves_solvent (wethSpec_pre_iff.mp h_pre) ih h_run
+  exact withdraw_preserves_solvent (wethSpec_pre_iff.mp h_pre) hfork ih h_run
 
 /-- `FuncSoundNoMem` transports through the shared `nonpayable` wrapper
 (`Blanc/CommonCore.lean`): a successful run of the guarded endpoint factors
@@ -1448,9 +1475,9 @@ precondition rides across that state equality. -/
 lemma wethSpec_funcSound_nonpayable {wa : Adr} {f : Func}
     (h : wethSpec.FuncSoundNoMem wa weth.aux f) :
     wethSpec.FuncSoundNoMem wa weth.aux (nonpayable f) := by
-  intro sevm s r h_ct h_pre ih h_run
+  intro sevm s r hfork h_ct h_pre ih h_run
   rcases run_body_of_run_nonpayable h_run with ⟨mid, -, hstate, hbody⟩
-  exact h h_ct (h_pre.state_eq hstate.symm) ih hbody
+  exact h hfork h_ct (h_pre.state_eq hstate.symm) ih hbody
 
 
 -- started after a balance transfer from a non-WETH sender
@@ -1508,6 +1535,7 @@ theorem wethSpec_preserves (wa : Adr) : wethSpec.Preserves wa :=
 
 theorem weth_preserves_solvent (wa : Adr) :
     ∀ sevm pre post,
+      CoveredFork sevm.benvStat.fork →
       Exec 0 sevm pre (.ok post)  →
       (sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth) →
       Precond wa sevm pre →
@@ -1519,11 +1547,12 @@ theorem weth_preserves_solvent (wa : Adr) :
 -- hypothesis is a plain equation about the interpreter.
 theorem exec_preserves_solvent (wa : Adr)
     (sevm : Sevm) (pre post : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_run : exec ⟨0, sevm, pre⟩ = .ok post)
     (h_code : sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth)
     (h_pc : Precond wa sevm pre) : Postcond wa sevm post := by
   exact wethSpec_post_iff.mp
-    (wethSpec.exec_preserves_noMem wa (wethSpec_preservesNoMem wa) sevm pre post h_run h_code
+    (wethSpec.exec_preserves_noMem wa (wethSpec_preservesNoMem wa) sevm pre post hfork h_run h_code
       (wethSpec_pre_iff.mpr h_pc))
 
 /-! ### Bridge to the frame-level invariant
@@ -1536,39 +1565,33 @@ block-level rungs above it).  Each of those rungs consumes the frame-level
 result as a `c.Preserves ca` hypothesis; for WETH that hypothesis is
 `wethSpec_preserves`, and the instances below are what feed it in. -/
 
-/-- The block-level state transition, at WETH.  The generic parent
-(`ContractSpec.stateTransitionWith_preserves_inv`) never asks which rules it is
-running, because solvency is a statement about how value moves and no fork rule
-moves value; every named-fork and configured-chain theorem below is an instance
-of it. -/
-theorem stateTransitionWith_preserves_solvent (wa : Adr) (rules : ForkRules)
+/-- The block-level state transition at WETH, for an explicitly covered fork.
+The generic parent receives `CoveredFork f`; the configured-chain theorems
+below retain that coverage condition for every fork selected by their schedule. -/
+theorem stateTransitionAt_preserves_solvent (wa : Adr) (f : Fork)
     (ch ch' : BlockChain) (block : Block)
-    (h_run : stateTransitionWith rules ch block = .ok ch')
+    (h_run : stateTransitionAt f ch block = .ok ch')
     (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state :=
+    (h_inv : State.Inv wa ch.state)
+    (hfork : CoveredFork f) : State.Inv wa ch'.state :=
   wethSpec_stateInv_iff.mp
-    (ContractSpec.stateTransitionWith_preserves_inv wa (wethSpec_preserves wa)
-      rules ch ch' block h_run h_wds (wethSpec_stateInv_iff.mpr h_inv))
--- At an explicitly named fork: resolving the rules is the only extra step, and
--- a fork whose rules this build does not implement never reaches the
--- transition at all.
+    (ContractSpec.stateTransitionAt_preserves_inv wa (wethSpec_preserves wa)
+      f ch ch' block h_run h_wds (wethSpec_stateInv_iff.mpr h_inv) hfork)
+-- The explicit-fork theorem keeps its `CoveredFork` witness in the statement.
 
--- On a configured chain the block's own timestamp picks the rules. The result
--- holds whichever ones it picks, so a chain that crosses an activation is not
--- a new case: no fork in the schedule can break solvency, and neither can the
--- boundary between two of them.
+-- On a configured chain the block's timestamp selects the fork. The caller
+-- supplies coverage for each fork the schedule can select.
 theorem stateTransitionUsing_preserves_solvent (wa : Adr) (cfg : ChainConfig)
     (ch ch' : BlockChain) (block : Block)
     (h_run : stateTransitionUsing cfg ch block = .ok ch')
     (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (hfork : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state :=
   wethSpec_stateInv_iff.mp
     (ContractSpec.stateTransitionUsing_preserves_inv wa (wethSpec_preserves wa)
-      cfg ch ch' block h_run h_wds (wethSpec_stateInv_iff.mpr h_inv))
+      cfg ch ch' block h_run h_wds (wethSpec_stateInv_iff.mpr h_inv) hfork)
 
--- Prague is the `rules := pragueRules` instance. The statement is unchanged,
--- and `stateTransition` is *definitionally* `stateTransitionWith pragueRules`,
--- so the instance is the whole proof.
+-- Prague specializes the transition to its fixed covered fork.
 theorem stateTransition_preserves_solvent (wa : Adr)
     (ch ch' : BlockChain) (block : Block)
     (h_run : stateTransition ch block = .ok ch')
@@ -1578,19 +1601,17 @@ theorem stateTransition_preserves_solvent (wa : Adr)
     (ContractSpec.stateTransition_preserves_inv wa (wethSpec_preserves wa)
       ch ch' block h_run h_wds (wethSpec_stateInv_iff.mpr h_inv))
 
--- Chain-level induction over a configured chain : no sequence of valid blocks
--- can break WETH solvency, whatever schedule the chain follows and whichever
--- activations that sequence crosses.  `BlockChain.ReachUsing` is unchanged and
--- now lives in `Blanc/Ladder.lean`.
+-- Chain-level induction over a configured chain whose scheduled forks are
+-- covered. `BlockChain.ReachUsing` is unchanged and lives in `Blanc/Ladder.lean`.
 theorem chainUsing_preserves_solvent (wa : Adr) (cfg : ChainConfig)
     (ch ch' : BlockChain) (h_reach : BlockChain.ReachUsing cfg ch ch')
+    (hfork : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state :=
   wethSpec_stateInv_iff.mp
     (ContractSpec.chainUsing_preserves_inv wa (wethSpec_preserves wa)
-      cfg ch ch' h_reach (wethSpec_stateInv_iff.mpr h_inv))
+      cfg ch ch' h_reach (wethSpec_stateInv_iff.mpr h_inv) hfork)
 
--- Chain-level induction corollary : no sequence of valid blocks can break
--- WETH solvency.
+-- Chain-level induction corollary for Prague's fixed covered fork.
 theorem chain_preserves_solvent (wa : Adr) (ch ch' : BlockChain)
     (h_reach : BlockChain.Reach ch ch')
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state :=
@@ -1598,42 +1619,45 @@ theorem chain_preserves_solvent (wa : Adr) (ch ch' : BlockChain)
     (ContractSpec.chain_preserves_inv wa (wethSpec_preserves wa)
       ch ch' h_reach (wethSpec_stateInv_iff.mpr h_inv))
 
--- Bonus level : preservation through RLP decoding and block hash checks,
--- again under any fork's rules.
-theorem addBlockToChainWith_preserves_solvent (wa : Adr) (rules : ForkRules)
+-- Preservation through RLP decoding and block hash checks at an explicitly
+-- covered fork.
+theorem addBlockToChainAt_preserves_solvent (wa : Adr) (f : Fork)
     (ch ch' : BlockChain) (rlp : Bytes)
-    (h_run : addBlockToChainWith rules ch rlp = .ok (.inl ch'))
+    (h_run : addBlockToChainAt f ch rlp = .ok (.inl ch'))
     (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
       sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state :=
+    (h_inv : State.Inv wa ch.state)
+    (hfork : CoveredFork f) : State.Inv wa ch'.state :=
   wethSpec_stateInv_iff.mp
-    (ContractSpec.addBlockToChainWith_preserves_inv wa (wethSpec_preserves wa)
-      rules ch ch' rlp h_run h_wds (wethSpec_stateInv_iff.mpr h_inv))
+    (ContractSpec.addBlockToChainAt_preserves_inv wa (wethSpec_preserves wa)
+      f ch ch' rlp h_run h_wds (wethSpec_stateInv_iff.mpr h_inv) hfork)
 
--- Block import at an explicitly named fork.
+-- Block import at an explicitly covered named fork.
 
 -- Block import on a configured chain validates the schedule and chain identity
 -- before decoding. Once decoding supplies the timestamp, the configured core
--- selects the rules and delegates to the same canonical import used above, so
--- the general rules-explicit theorem applies whichever activation is current.
+-- selects the fork and delegates to the same canonical import used above. The
+-- coverage witness applies to each fork the schedule can select.
 theorem addBlockToChainUsing_preserves_solvent (wa : Adr) (cfg : ChainConfig)
     (ch ch' : BlockChain) (rlp : Bytes)
     (h_run : addBlockToChainUsing cfg ch rlp = .ok (.inl ch'))
     (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
       sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (hfork : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state :=
   wethSpec_stateInv_iff.mp
     (ContractSpec.addBlockToChainUsing_preserves_inv wa (wethSpec_preserves wa)
-      cfg ch ch' rlp h_run h_wds (wethSpec_stateInv_iff.mpr h_inv))
+      cfg ch ch' rlp h_run h_wds (wethSpec_stateInv_iff.mpr h_inv) hfork)
 
--- Prague is the `rules := pragueRules` instance here too; the statement is
--- unchanged.
+-- Prague specializes block import to its fixed covered fork.
 theorem addBlockToChain_preserves_solvent (wa : Adr)
     (ch ch' : BlockChain) (rlp : Bytes)
     (h_run : addBlockToChain ch rlp = .ok (.inl ch'))
     (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
       sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state :=
-  addBlockToChainWith_preserves_solvent wa pragueRules ch ch' rlp h_run h_wds h_inv
+  wethSpec_stateInv_iff.mp
+    (ContractSpec.addBlockToChain_preserves_inv wa (wethSpec_preserves wa)
+      ch ch' rlp h_run h_wds (wethSpec_stateInv_iff.mpr h_inv))
 
 end Blanc
