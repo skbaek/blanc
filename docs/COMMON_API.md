@@ -1069,10 +1069,10 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   entries, child outcomes, commitment, gas, or liveness.
 - Persistent-storage silence of static execution:
   [`Blanc/StaticStorage.lean`](../Blanc/StaticStorage.lean).  `Devm.storageView`
-  is the extensional `Stor.get` observation the contract invariants use, and
-  the module already supplies its `PopBurn.Inv`, `Burn.Inv`, `Linst.Hinv`,
-  `Ninst.Hinv` and `Ninst.staticcall` instances, so a read-only contract
-  consumes them rather than restating static propagation.
+  is the extensional `Stor.get` observation the contract invariants use.  The
+  module supplies its `PopBurn.Inv`, `Burn.Inv`, and lifts the existing generic
+  `Linst.Hinv` / `Ninst.Hinv` facts to that observation; it deliberately does
+  not manufacture a universal `STATICCALL` `Hinv`.
   `Exec.rawNodes_isStatic_of_static`, `Exec.retainedStorageWrites_eq_nil_of_static`
   and `Exec.storageView_committedPost_eq_of_static` are the execution-level
   facts underneath: the static flag reaches every entered child frame and no
@@ -1084,10 +1084,15 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   *equal* storages) rather than the extensional `Devm.storageView`.
   `Exec.getStor_committedPost_eq_of_static` says a committing execution of a
   static frame ends with exactly its entry storage map at every account,
-  children included; `Ninst.staticcall_inv_getStor_exact` lifts that to every
-  successful `STATICCALL`, entering arbitrary code or not; and the instance
-  `staticcall_getStor_hinv : Ninst.Hinv Devm.getStor Ninst.staticcall` is what
-  `Func.SilentIn Devm.getStor` certificates consume.  Worked use:
+  children included on a fork named by the `CoveredFork` predicate (the four
+  pre-Amsterdam forks Prague, Osaka, BPO1 and BPO2; Amsterdam is excluded);
+  `Ninst.staticcall_inv_getStor_exact` lifts that to one successful
+  `STATICCALL` under the same explicit premise.
+  For a recursive source walk at one covered `Sevm`, use
+  `Func.SilentAt`, `Func.SilentIn.toSilentAt`, and
+  `Func.observe_eq_of_run_silentAt`: ordinary instruction leaves still use
+  their generic invariants, while the `STATICCALL` leaf consumes the covered
+  theorem directly.  Worked use:
   `Blanc/Composition/ProrataWethVaultPairVaultSegment.lean` discharges the
   vault's live-quoting read-only paths through it.  Import
   `Blanc.StaticCallStorage` (it imports only `Blanc.StaticStorage`).  Like its
@@ -2539,11 +2544,12 @@ reduce the frame invariants to the storage predicate, and
 storage walk, declining the `nof`-class side condition a storage-determined
 invariant never needs.  The module's no-write and `STATICCALL` sections
 discharge targets that never write storage, and `ofStorageOnly_of_call`
-carries the invariant across a child `call` under the deeper-frame
-hypothesis.  `ofStorageOnly_of_call_sameBenv` is its general form: the
-deeper-frame hypothesis need only cover frames at the caller's `benvStat`,
-which is what a trace-admitted consumer whose entry condition reads the block
-environment can discharge (DRIP's `soundAdmitted_of_stepClosedAt`).
+carries the invariant across a child `call` under the deeper-frame hypothesis
+and an explicit `CoveredFork` premise.  `ofStorageOnly_of_call_sameBenv` is
+its general form: the deeper-frame hypothesis need only cover frames at the
+caller's `benvStat`, which is what a trace-admitted consumer whose entry
+condition reads the block environment can discharge (DRIP's
+`soundAdmitted_of_stepClosedAt`).
 
 ### C8. A `decide +kernel` over a committed artifact reports kernel deep recursion
 

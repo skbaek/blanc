@@ -195,10 +195,12 @@ def PairReplayBetween (vault : Adr) (blockIndex : Nat) (transactionIndex : Optio
 
 /-- Proof-indexed committed pair replay for one interpreter suffix.  Every record carries
 admissible provenance, and every allowance invocation it owns is the visit of a raw frame root of
-the suffix's own derivation. -/
+the suffix's own derivation.  The frame's fork is covered (`CoveredFork`); every spawned child
+inherits the block statics, so the recursion hands the same certificate to each child. -/
 def Exec.CorePairReplay (vault : Adr) (pc : Nat) (sevm : Sevm) (pre : Devm)
     (out : Execution) : Prop :=
   ∀ (run : Exec pc sevm pre out) (committed : Execution.commits out = true),
+    CoveredFork sevm.benvStat.fork →
     Prog.At Blanc.ProrataWethVault.vault vault pc sevm pre →
     Prog.At Blanc.weth wethAccount pc sevm pre →
     PairFrameInv vault sevm pre →
@@ -237,6 +239,7 @@ frame's entry. -/
 def VaultFramePairSegment (vault : Adr) : Prop :=
   ∀ {sevm : Sevm} {pre post : Devm},
     Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post →
+    CoveredFork sevm.benvStat.fork →
     sevm.currentTarget = vault → sevm.codeAddress = some vault → sevm.caller ≠ vault →
     PairFrameInv vault sevm pre →
     ∀ provenance : Blanc.Prorata.ProrataAccountingProvenance,
@@ -322,7 +325,7 @@ theorem Exec.CorePairReplay.vaultFrame {vault : Adr} {pc : Nat} {sevm : Sevm} {p
     {out : Execution} (vaultSeg : VaultFramePairSegment vault)
     (target : sevm.currentTarget = vault) :
     Exec.CorePairReplay vault pc sevm pre out := by
-  intro run committed vaultAt _ inv vaultDirect _ blockIndex transactionIndex framePath _
+  intro run committed hfork vaultAt _ inv vaultDirect _ blockIndex transactionIndex framePath _
   cases out with
   | error error => simp [Execution.commits] at committed
   | ok post =>
@@ -330,7 +333,7 @@ theorem Exec.CorePairReplay.vaultFrame {vault : Adr} {pc : Nat} {sevm : Sevm} {p
       subst pcZero
       have compiled := Prog.runCompiled_of_exec sevm pre _ post vault_pcFree' run code
       obtain ⟨direct, callerNe⟩ := vaultDirect target
-      rcases vaultSeg compiled target direct callerNe inv
+      rcases vaultSeg compiled hfork target direct callerNe inv
           ⟨blockIndex, transactionIndex, framePath, some sevm.caller⟩ rfl with
         ⟨steps, replay, tagged⟩
       refine ⟨steps, replay, fun r member => ?_⟩
@@ -493,6 +496,7 @@ theorem WethWithdrawSplit.ofCallFacts_pinned {sevm : Sevm} {pre post : Devm}
       trace := ⟨xl, retained, processed⟩
       childClean := clean
       messageState := parentState
+      benvStat := rfl
       shouldTransferValue := rfl
       caller := rfl
       value := rfl
@@ -633,6 +637,7 @@ freshly under WETH's precondition by a caller other than WETH splits at its acce
 def WethWithdrawAcceptedPayout : Prop :=
   ∀ {sevm : Sevm} {pre post : Devm},
     Prog.RunCompiled sevm pre Blanc.weth post →
+    CoveredFork sevm.benvStat.fork →
     sevm.currentTarget = wethAccount → sevm.codeAddress = some wethAccount →
     sevm.caller ≠ wethAccount →
     Sevm.selector sevm = selector "withdraw" [.uint256] →
@@ -644,6 +649,7 @@ def WethWithdrawAcceptedPayout : Prop :=
 split whose retained callback is a raw subtree of that derivation. -/
 def WethWithdrawAcceptedPayoutAt : Prop :=
   ∀ {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post)),
+    CoveredFork sevm.benvStat.fork →
     some sevm.code.toList = Blanc.weth.compile →
     sevm.currentTarget = wethAccount → sevm.codeAddress = some wethAccount →
     sevm.caller ≠ wethAccount → Sevm.selector sevm = selector "withdraw" [.uint256] →
@@ -757,7 +763,7 @@ theorem PairFrameInv.programsAt {vault : Adr} {sevm : Sevm} {pre : Devm} (pc : N
 theorem Exec.CorePairReplay.error {vault : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm}
     {error : EvmError × Devm} :
     Exec.CorePairReplay vault pc sevm pre (.error error) := by
-  intro _ committed
+  intro _ committed _
   simp [Execution.commits] at committed
 
 /-- The continuation of a genuinely foreign frame, re-entered at the transported invariant. -/
@@ -765,6 +771,7 @@ private theorem Exec.CorePairReplay.resume {vault : Adr} {pc : Nat} {sevm : Sevm
     {inter : Devm} {out : Execution}
     (ih : Exec.CorePairReplay vault pc sevm inter out)
     (next : Exec pc sevm inter out) (committed : Execution.commits out = true)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (inv : PairFrameInv vault sevm inter)
     (vaultNe : sevm.currentTarget ≠ vault) (wethNe : sevm.currentTarget ≠ wethAccount)
     (blockIndex : Nat) (transactionIndex : Option Nat) (framePath : List Nat)
@@ -774,7 +781,7 @@ private theorem Exec.CorePairReplay.resume {vault : Adr} {pc : Nat} {sevm : Sevm
         PairStepRecord.OwnIn vault (Exec.rawFrameRoots next) r)
       (PairBoundary.ofState vault inter.state)
       (PairBoundary.ofState vault (Execution.committedPost out committed).state) :=
-  ih next committed (inv.programsAt pc vaultNe wethNe).1 (inv.programsAt pc vaultNe wethNe).2
+  ih next committed hfork (inv.programsAt pc vaultNe wethNe).1 (inv.programsAt pc vaultNe wethNe).2
     inv (fun target => (vaultNe target).elim) (fun target => (wethNe target).elim)
     blockIndex transactionIndex framePath nextChild
 
@@ -790,7 +797,7 @@ theorem Exec.CorePairReplay.nextNone {vault : Adr} {pc : Nat} {sevm : Sevm} {pre
     Exec.CorePairReplay vault pc sevm pre out := by
   by_cases vaultEq : sevm.currentTarget = vault
   · exact Exec.CorePairReplay.vaultFrame vaultSeg vaultEq
-  intro run committed _ _ inv _ _ blockIndex transactionIndex framePath nextChild
+  intro run committed hfork _ _ inv _ _ blockIndex transactionIndex framePath nextChild
   cases out with
   | error error => simp [Execution.commits] at committed
   | ok post =>
@@ -802,14 +809,14 @@ theorem Exec.CorePairReplay.nextNone {vault : Adr} {pc : Nat} {sevm : Sevm} {pre
       PairStepRecord.OwnIn vault (Exec.rawFrameRoots next) r)
     (fun r h => ⟨h.1, h.2.of_foreignRoot vaultEq wethNe sub⟩) ?_
   have interInv : PairFrameInv vault sevm inter :=
-    ⟨inv.vault.ninst_none step vaultEq,
-      _root_.Blanc.ContractSpec.Ninst.none_preserves_precond (c := wethSpec) step wethNe
-        inv.weth,
+    ⟨inv.vault.ninst_none hfork step vaultEq,
+      _root_.Blanc.ContractSpec.Ninst.none_preserves_precond (c := wethSpec) hfork step
+        wethNe inv.weth,
       fun target => (wethNe target).elim⟩
   have boundary : PairBoundary.ofState vault inter.state =
       PairBoundary.ofState vault pre.state :=
-    PairBoundary.ofState_eq (_root_.Blanc.Ninst.foreignNone_getStor_eq step vaultEq)
-      (_root_.Blanc.Ninst.foreignNone_getStor_eq step wethNe)
+    PairBoundary.ofState_eq (_root_.Blanc.Ninst.foreignNone_getStor_eq hfork step vaultEq)
+      (_root_.Blanc.Ninst.foreignNone_getStor_eq hfork step wethNe)
   rw [← boundary]
   cases stepShape : Ninst.step ⟨pc, sevm, pre⟩ n with
   | halt execution =>
@@ -818,10 +825,10 @@ theorem Exec.CorePairReplay.nextNone {vault : Adr} {pc : Nat} {sevm : Sevm} {pre
       cases impossible
       exact False.elim (Ninst.step_ne_halt_ok stepShape)
   | cont pc' actual =>
-      exact ih.resume next committed interInv vaultEq wethNe
+      exact ih.resume next committed hfork interInv vaultEq wethNe
         blockIndex transactionIndex framePath nextChild
   | spawn frame resume pc' =>
-      exact ih.resume next committed interInv vaultEq wethNe
+      exact ih.resume next committed hfork interInv vaultEq wethNe
         blockIndex transactionIndex framePath (nextChild + 1)
 
 /-- A terminal instruction of a genuinely foreign frame moves no storage at all. -/
@@ -833,7 +840,7 @@ theorem Exec.CorePairReplay.last {vault : Adr} {pc : Nat} {sevm : Sevm} {pre : D
     Exec.CorePairReplay vault pc sevm pre out := by
   by_cases vaultEq : sevm.currentTarget = vault
   · exact Exec.CorePairReplay.vaultFrame vaultSeg vaultEq
-  intro _ committed _ _ _ _ _ blockIndex transactionIndex framePath _
+  intro _ committed _ _ _ _ _ _ blockIndex transactionIndex framePath _
   cases out with
   | error error => simp [Execution.commits] at committed
   | ok post =>
@@ -853,7 +860,7 @@ theorem Exec.CorePairReplay.jump {vault : Adr} {pc : Nat} {sevm : Sevm} {pre : D
     Exec.CorePairReplay vault pc sevm pre out := by
   by_cases vaultEq : sevm.currentTarget = vault
   · exact Exec.CorePairReplay.vaultFrame vaultSeg vaultEq
-  intro run committed _ _ inv _ _ blockIndex transactionIndex framePath nextChild
+  intro run committed hfork _ _ inv _ _ blockIndex transactionIndex framePath nextChild
   cases out with
   | error error => simp [Execution.commits] at committed
   | ok post =>
@@ -869,7 +876,7 @@ theorem Exec.CorePairReplay.jump {vault : Adr} {pc : Nat} {sevm : Sevm} {pre : D
     ⟨inv.vault.jinst step vaultEq, inv.weth.state_eq stateEq,
       fun target => (wethNe target).elim⟩
   rw [← stateEq]
-  exact ih.resume next committed interInv vaultEq wethNe
+  exact ih.resume next committed hfork interInv vaultEq wethNe
     blockIndex transactionIndex framePath nextChild
 
 
@@ -895,8 +902,10 @@ theorem Exec.CorePairReplay.nextSome {vault : Adr} {pc : Nat} {sevm : Sevm} {pre
       simp [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at step
   | push xs length =>
       simp [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at step
+  | dupn _ | swapn _ | exchange _ =>
+      cases ((Step.run_ofExecution (xl := (.some ⟨cevm, raw⟩ : Xlot))).mp step).1
   | exec x =>
-      intro run committed vaultAt wethAt inv _ _
+      intro run committed hfork vaultAt wethAt inv _ _
         blockIndex transactionIndex framePath nextChild
       cases out with
       | error error => simp [Execution.commits] at committed
@@ -906,6 +915,8 @@ theorem Exec.CorePairReplay.nextSome {vault : Adr} {pc : Nat} {sevm : Sevm} {pre
       have xrun : Xinst.Run sevm pre x (.some ⟨cevm, raw⟩) (.ok inter) := by
         simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep,
           Xinst.Run] using step
+      have childFork : CoveredFork cevm.sta.benvStat.fork :=
+        Xinst.Run.some_child_fork xrun hfork
       have hxrun := XStep.run_toStep.mp step
       cases spawnEq : Xinst.step sevm pre x with
       | done execution =>
@@ -1010,10 +1021,10 @@ theorem Exec.CorePairReplay.nextSome {vault : Adr} {pc : Nat} {sevm : Sevm} {pre
                     spawnEq wethNe (innerTargetOf childTarget)
               -- σ: handed to the child, recovered from its outcome
               obtain ⟨childVaultInv, vaultOfPost⟩ :=
-                inv.vault.xinst_some step child vaultEq
+                inv.vault.xinst_some hfork step child vaultEq
               obtain ⟨childWethPre, wethOfPost⟩ :=
                 _root_.Blanc.ContractSpec.Xinst.some_preserves_precond
-                  (c := wethSpec) xrun child wethNe inv.weth
+                  (c := wethSpec) hfork xrun child wethNe inv.weth
               have childInv : PairFrameInv vault cevm.sta cevm.dyna :=
                 ⟨childVaultInv, childWethPre, fun _ => Frame.enter_run_fresh enter⟩
               have childVaultPost :
@@ -1022,7 +1033,7 @@ theorem Exec.CorePairReplay.nextSome {vault : Adr} {pc : Nat} {sevm : Sevm} {pre
                 | error error => trivial
                 | ok rawPost =>
                     exact vault_rely_preserves_conserved vault cevm.pc cevm.sta
-                      cevm.dyna rawPost child childVaultAt childVaultInv
+                      cevm.dyna rawPost child childFork childVaultAt childVaultInv
               have childWethPost : ifOk (wethSpec.Post wethAccount cevm.sta) raw := by
                 cases raw with
                 | error error => trivial
@@ -1032,7 +1043,7 @@ theorem Exec.CorePairReplay.nextSome {vault : Adr} {pc : Nat} {sevm : Sevm} {pre
                       rw [← childPcZero]
                       exact child
                     exact wethSpec_preservesNoMem wethAccount cevm.sta cevm.dyna
-                      rawPost childAtZero
+                      rawPost childFork childAtZero
                       (fun childTarget => (childWethAt.2 childTarget).1)
                       childWethPre
               have interInv : PairFrameInv vault sevm inter :=
@@ -1049,7 +1060,7 @@ theorem Exec.CorePairReplay.nextSome {vault : Adr} {pc : Nat} {sevm : Sevm} {pre
                       (PairBoundary.ofState vault
                         (Execution.committedPost raw childCommitted).state) := by
                 intro childCommitted
-                exact (ihChild child childCommitted childVaultAt childWethAt childInv
+                exact (ihChild child childCommitted childFork childVaultAt childWethAt childInv
                   childVaultFacts childWethFacts blockIndex transactionIndex
                   (framePath ++ [nextChild]) 0).mono fun r h =>
                     ⟨h.1.of_child, h.2.mono fun d member =>
@@ -1059,9 +1070,9 @@ theorem Exec.CorePairReplay.nextSome {vault : Adr} {pc : Nat} {sevm : Sevm} {pre
                     (PairBoundary.ofState vault pre.state)
                     (PairBoundary.ofState vault inter.state) :=
                 (pairCarrierWith vault okParent).xinstForeignSome
-                  spawnEq frameRun resumeRun.symm wethNe sumNof childBody
+                  spawnEq frameRun resumeRun.symm wethNe hfork sumNof childBody
               exact headReplay.append
-                ((ihNext.resume next committed interInv vaultEq wethNe
+                ((ihNext.resume next committed hfork interInv vaultEq wethNe
                   blockIndex transactionIndex framePath (nextChild + 1)).mono fun r h =>
                     ⟨h.1, h.2.of_foreignRoot vaultEq wethNe fun d member =>
                       List.mem_cons.mpr (Or.inr (nextSub d member))⟩)
@@ -1099,7 +1110,7 @@ theorem Exec.CorePairReplay.atTarget {vault : Adr} {sevm : Sevm} {pre post : Dev
       (fun pc childSevm childPre childOut _ =>
         Exec.CorePairReplay vault pc childSevm childPre childOut)) :
     Exec.CorePairReplay vault 0 sevm pre (.ok post) := by
-  intro run committed _ wethAt inv _ wethFacts
+  intro run committed hfork _ wethAt inv _ wethFacts
     blockIndex transactionIndex framePath nextChild
   obtain ⟨direct, callerNotVault, callerNotWeth⟩ := wethFacts target
   have compiled : Prog.RunCompiled sevm pre Blanc.weth post :=
@@ -1111,7 +1122,8 @@ theorem Exec.CorePairReplay.atTarget {vault : Adr} {sevm : Sevm} {pre post : Dev
       framePath := framePath
       actor := some sevm.caller }
   by_cases selected : Sevm.selector sevm = selector "withdraw" [.uint256]
-  · obtain ⟨split, located⟩ := withdrawAt run (wethAt.2 target).1 target direct callerNotWeth
+  · obtain ⟨split, located⟩ := withdrawAt run hfork (wethAt.2 target).1 target direct
+      callerNotWeth
       selected inv.weth (inv.wethFresh target)
     have distinct : wethAccount ≠ vault := inv.vault.config.distinct
     -- the callback is aimed at the caller, which is neither account
@@ -1204,6 +1216,9 @@ theorem Exec.CorePairReplay.atTarget {vault : Adr} {sevm : Sevm} {pre post : Dev
         have childPreEq : childPre =
             initDevm (split.payout.childMsg.withBenv split.payout.entry) :=
           congrArg (fun evm : Evm => evm.dyna) childEvmEq
+        have childFork : CoveredFork childSevm.benvStat.fork := by
+          rw [childSevmEq, split.childStat]
+          exact hfork
         have childTarget : childSevm.currentTarget = sevm.caller := by
           rw [childSevmEq]
           exact childTargetEq
@@ -1243,7 +1258,7 @@ theorem Exec.CorePairReplay.atTarget {vault : Adr} {sevm : Sevm} {pre post : Dev
           exact split.payout.depth
         have childCore : Exec.CorePairReplay vault childPc childSevm childPre childOut :=
           deeper childPc childSevm childPre childOut childRun childDepth childAts.2
-        have childReplay := (childCore childRun childCommitted childAts.1 childAts.2
+        have childReplay := (childCore childRun childCommitted childFork childAts.1 childAts.2
           childInv (fun atVault => (childNotVault atVault).elim)
           (fun atWeth => (childNotWeth atWeth).elim)
           blockIndex transactionIndex (framePath ++ [nextChild]) 0).mono
