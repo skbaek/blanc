@@ -831,7 +831,7 @@ theorem retainedConfiguredBlockPairReplayFaithful {vault : Adr} {cfg : ChainConf
     PairReplayWith vault
       (fun r => PairInBlock blockIndex r ∧ PairStepRecord.OwnIn vault trace.rawFrames r)
       (PairBoundary.ofState vault pre.state) (PairBoundary.ofState vault post.state) := by
-  have benvInv : PairBenvInv vault (initBenv trace.rules pre trace.block.header) :=
+  have benvInv : PairBenvInv vault (initBenv trace.fork pre trace.block.header) :=
     ⟨trace.openingState ▸ inv, trace.not_mem_openingCreatedAccounts vault,
       trace.not_mem_openingCreatedAccounts wethAccount, wethNonprecompile⟩
   have replay :=

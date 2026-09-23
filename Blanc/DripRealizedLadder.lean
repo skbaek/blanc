@@ -27,7 +27,8 @@ theorem retainedProcessMessageReplay (coalition : Finset Adr)
     (trace : ExecutionTrace.ProcessMessageTrace msg (.ok post))
     (ready : dripSpec.MessageRunReady ca msg)
     (callerNe : msg.currentTarget = ca → msg.caller ≠ ca)
-    (sumNof : sum msg.benv.state.bal < 2 ^ 256) :
+    (sumNof : sum msg.benv.state.bal < 2 ^ 256)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     ∃ steps, RealizedChain (snapshot coalition ca msg.benv.state) steps
       (snapshot coalition ca post.state) :=
   (ladder coalition ca).processMessage trace ready callerNe sumNof 0 none
@@ -54,7 +55,7 @@ theorem retainedMessageCallReplay (coalition : Finset Adr)
     (sumNof : sum msg.benv.state.bal < 2 ^ 256) :
     ∃ steps, RealizedChain (snapshot coalition ca msg.benv.state) steps
       (snapshot coalition ca state) :=
-  (ladder coalition ca).messageCall trace ready callerNe sumNof 0 none
+  (ladder coalition ca).messageCall trace ready callerNe sumNof hfork 0 none
 
 /-- T5. -/
 theorem retainedTransactionReplay (coalition : Finset Adr)
@@ -63,10 +64,11 @@ theorem retainedTransactionReplay (coalition : Finset Adr)
     (trace : ExecutionTrace.TransactionTrace benv bout tx index state bout')
     (inv : dripSpec.StateInv ca benv.state)
     (notCreated : ca ∉ benv.createdAccounts)
-    (sumNof : sum benv.state.bal < 2 ^ 256) :
+    (sumNof : sum benv.state.bal < 2 ^ 256)
+    (hfork : CoveredFork benv.stat.fork) :
     ∃ steps, RealizedChain (snapshot coalition ca benv.state) steps
       (snapshot coalition ca state) :=
-  (ladder coalition ca).transaction trace inv notCreated sumNof 0 none
+  (ladder coalition ca).transaction trace inv notCreated sumNof hfork 0 none
 
 /-- T6. -/
 theorem retainedTransactionListReplay (coalition : Finset Adr)
@@ -75,10 +77,11 @@ theorem retainedTransactionListReplay (coalition : Finset Adr)
     (trace : ExecutionTrace.ApplyTransactionsTrace txs benv bout finalBenv finalBout)
     (inv : dripSpec.StateInv ca benv.state)
     (notCreated : ca ∉ benv.createdAccounts)
-    (sumNof : sum benv.state.bal < 2 ^ 256) :
+    (sumNof : sum benv.state.bal < 2 ^ 256)
+    (hfork : CoveredFork benv.stat.fork) :
     ∃ steps, RealizedChain (snapshot coalition ca benv.state) steps
       (snapshot coalition ca finalBenv.state) :=
-  (ladder coalition ca).transactionList trace inv notCreated sumNof 0
+  (ladder coalition ca).transactionList trace inv notCreated sumNof hfork 0
 
 /-- T7a. -/
 theorem retainedSystemMessageReplay (coalition : Finset Adr)
@@ -88,10 +91,11 @@ theorem retainedSystemMessageReplay (coalition : Finset Adr)
     (inv : dripSpec.StateInv ca benv.state)
     (notCreated : ca ∉ benv.createdAccounts)
     (systemNe : target ≠ systemAddress)
-    (sumNof : sum benv.state.bal < 2 ^ 256) :
+    (sumNof : sum benv.state.bal < 2 ^ 256)
+    (hfork : CoveredFork benv.stat.fork) :
     ∃ steps, RealizedChain (snapshot coalition ca benv.state) steps
       (snapshot coalition ca state) :=
-  (ladder coalition ca).systemMessage trace inv notCreated systemNe sumNof 0
+  (ladder coalition ca).systemMessage trace inv notCreated systemNe sumNof hfork 0
 
 /-- T7b. -/
 theorem retainedRequestsReplay (coalition : Finset Adr)
@@ -100,10 +104,11 @@ theorem retainedRequestsReplay (coalition : Finset Adr)
     (trace : ExecutionTrace.RequestsTrace benv bout state bout')
     (inv : dripSpec.StateInv ca benv.state)
     (notCreated : ca ∉ benv.createdAccounts)
-    (sumNof : sum benv.state.bal < 2 ^ 256) :
+    (sumNof : sum benv.state.bal < 2 ^ 256)
+    (hfork : CoveredFork benv.stat.fork) :
     ∃ steps, RealizedChain (snapshot coalition ca benv.state) steps
       (snapshot coalition ca state) :=
-  (ladder coalition ca).requests trace inv notCreated sumNof 0
+  (ladder coalition ca).requests trace inv notCreated sumNof hfork 0
 
 /-- T8. -/
 theorem retainedDirectWithdrawalReplay (coalition : Finset Adr) {ca : Adr}
@@ -120,10 +125,11 @@ theorem retainedBodyReplay (coalition : Finset Adr)
     (trace : ExecutionTrace.AppliedBodyTrace benv txs wds state bout)
     (inv : dripSpec.StateInv ca benv.state)
     (notCreated : ca ∉ benv.createdAccounts)
-    (bound : sum benv.state.bal + wdsum wds < 2 ^ 256) :
+    (bound : sum benv.state.bal + wdsum wds < 2 ^ 256)
+    (hfork : CoveredFork benv.stat.fork) :
     ∃ steps, RealizedChain (snapshot coalition ca benv.state) steps
       (snapshot coalition ca state) :=
-  (ladder coalition ca).body trace inv notCreated bound 0
+  (ladder coalition ca).body trace inv notCreated bound hfork 0
 
 /-- T10. -/
 theorem retainedConfiguredBlockReplay (coalition : Finset Adr)
@@ -138,10 +144,11 @@ theorem retainedConfiguredBlockReplay (coalition : Finset Adr)
 theorem retainedConfiguredHistoryReplay (coalition : Finset Adr)
     {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (history : ExecutionTrace.ConfiguredHistoryTrace cfg checkpoint future)
-    (inv : dripSpec.StateInv ca checkpoint.state) :
+    (inv : dripSpec.StateInv ca checkpoint.state)
+    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, RealizedChain (snapshot coalition ca checkpoint.state) steps
       (snapshot coalition ca future.state) :=
-  (ladder coalition ca).configuredHistory history inv
+  (ladder coalition ca).configuredHistory history inv hcov
 
 /-- Occurrence form of T4c: the word bound supplied by the retained chronology,
 not by the caller. -/
@@ -157,7 +164,10 @@ theorem TransactionMessageOccurrence.messageCallReplay_of_configuredBlock
     ∃ steps, RealizedChain (snapshot coalition ca msg.benv.state) steps
       (snapshot coalition ca messageState) :=
   retainedMessageCallReplay coalition message ready callerNe
-    (occurrence.msg_sum_nof_of_configuredBlock block)
+    (occurrence.msg_sum_nof_of_configuredBlock block) (by
+      rw [occurrence.message_benv_stat_fork_eq]
+      rw [block.bodyTrace.transactions.stat_eq]
+      simpa [Benv.withState, initBenv] using block.covered)
 
 end Drip
 end Blanc

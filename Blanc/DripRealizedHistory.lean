@@ -103,6 +103,23 @@ theorem TransactionMessageOccurrence.message_benv_rules_eq
   | tail head tail occurrence ih =>
       simpa [Benv.withState] using ih
 
+/-- A selected transaction message keeps the exact fork of the transaction
+list environment that prepared it. -/
+theorem TransactionMessageOccurrence.message_benv_stat_fork_eq
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    {trace : ExecutionTrace.ApplyTransactionsTrace txs benv bout finalBenv finalBout}
+    {msg : Msg} {state : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg state out}
+    (occurrence : TransactionMessageOccurrence trace message) :
+    msg.benv.stat.fork = benv.stat.fork := by
+  induction occurrence with
+  | head head tail =>
+      rw [prepareMessage_benv head.prepared]
+      rfl
+  | tail head tail occurrence ih =>
+      simpa [Benv.withState] using ih
+
 /-- Every message selected through the transaction-list occurrence comes from
 a prepared transaction and therefore takes the value-transfer branch.  The
 induction retains the selected transaction position instead of asserting this
@@ -188,23 +205,25 @@ theorem TransactionMessageOccurrence.msgInv
     {message : ExecutionTrace.MessageCallTrace msg state out}
     (occurrence : TransactionMessageOccurrence trace message)
     (sumNof : sum benv.state.bal < 2 ^ 256)
-    (inv : dripSpec.BenvInv ca benv) :
+    (inv : dripSpec.BenvInv ca benv)
+    (hfork : CoveredFork benv.stat.fork) :
     dripSpec.MsgInv ca msg := by
-  revert sumNof inv
+  revert sumNof inv hfork
   induction occurrence with
   | head head tail =>
-      intro sumNof inv
+      intro sumNof inv hfork
       exact head.msgInv inv.state inv.ca
   | @tail index tx txs benv bout txState txBout finalBenv finalBout
       head tail msg state out message occurrence ih =>
-      intro sumNof inv
+      intro sumNof inv hfork
       have headInv : dripSpec.BenvInv ca (benv.withState txState) :=
-        head.benvInv (dripSpec_preserves ca) sumNof inv
+        head.benvInv (dripSpec_preserves ca) sumNof inv hfork
       have nextSum : sum (benv.withState txState).state.bal < 2 ^ 256 := by
         exact Nat.lt_of_le_of_lt
-          (by simpa [Benv.withState] using processTransaction_sum_le head.result)
+          (by simpa [Benv.withState] using
+            processTransaction_sum_le head.result hfork.rules_stateGas_none)
           sumNof
-      exact ih nextSum headInv
+      exact ih nextSum headInv (by simpa [Benv.withState] using hfork)
 
 /-- A transaction message selected from a concrete body inherits DRIP's
 invariant from the body entry.  The two system-message traces are traversed in
@@ -218,15 +237,19 @@ theorem TransactionMessageOccurrence.msgInv_of_body
     {message : ExecutionTrace.MessageCallTrace msg messageState out}
     (occurrence : TransactionMessageOccurrence body.transactions message)
     (bound : sum benv.state.bal + wdsum wds < 2 ^ 256)
-    (inv : dripSpec.BenvInv ca benv) :
+    (inv : dripSpec.BenvInv ca benv)
+    (hfork : CoveredFork benv.stat.fork) :
     dripSpec.MsgInv ca msg := by
-  have beacon := body.beacon.stateInv_and_sum_le (dripSpec_preserves ca) inv
+  have beacon := body.beacon.stateInv_and_sum_le (dripSpec_preserves ca) inv hfork
   have beaconInv : dripSpec.BenvInv ca (benv.withState body.beaconState) :=
-    body.beacon.benvInv (dripSpec_preserves ca) inv
-  have history := body.history.stateInv_and_sum_le (dripSpec_preserves ca) beaconInv
+    body.beacon.benvInv (dripSpec_preserves ca) inv hfork
+  have hforkHistory : CoveredFork (benv.withState body.beaconState).stat.fork := by
+    simpa [Benv.withState] using hfork
+  have history := body.history.stateInv_and_sum_le
+    (dripSpec_preserves ca) beaconInv hforkHistory
   have historyInv : dripSpec.BenvInv ca
       ((benv.withState body.beaconState).withState body.historyState) :=
-    body.history.benvInv (dripSpec_preserves ca) beaconInv
+    body.history.benvInv (dripSpec_preserves ca) beaconInv hforkHistory
   have startSum : sum benv.state.bal < 2 ^ 256 := by
     omega
   have historyLe : sum body.historyState.bal ≤ sum benv.state.bal := by
@@ -234,7 +257,8 @@ theorem TransactionMessageOccurrence.msgInv_of_body
   have historySum : sum ((benv.withState body.beaconState).withState
       body.historyState).state.bal < 2 ^ 256 := by
     simpa [Benv.withState] using Nat.lt_of_le_of_lt historyLe startSum
-  exact occurrence.msgInv historySum historyInv
+  exact occurrence.msgInv historySum historyInv (by
+    simpa [Benv.withState] using hfork)
 
 /-- A transaction occurrence in an arbitrary actual configured block receives
 the DRIP message invariant from the deployment root and the exact retained
@@ -249,9 +273,9 @@ theorem TransactionMessageOccurrence.msgInv_of_configuredBlock
     (occurrence : TransactionMessageOccurrence block.bodyTrace.transactions message) :
     dripSpec.MsgInv ca msg := by
   have entryInv : dripSpec.BenvInv ca
-      (initBenv block.rules pre block.block.header) :=
+      (initBenv block.fork pre block.block.header) :=
     block.openingBenvInv (root.reachable_stateInv reach)
-  exact occurrence.msgInv_of_body block.openingBound entryInv
+  exact occurrence.msgInv_of_body block.openingBound entryInv block.covered
 
 /-- The exhaustive classification of an actual prepared transaction message.
 The two present-target cases are deliberately separated by `currentTarget`:
@@ -319,14 +343,15 @@ theorem TransactionMessageOccurrence.exists_selectedTransaction
     {trace : ExecutionTrace.ApplyTransactionsTrace txs benv bout finalBenv finalBout}
     {msg : Msg} {state : State} {out : MsgCallOutput}
     {message : ExecutionTrace.MessageCallTrace msg state out}
-    (occurrence : TransactionMessageOccurrence trace message) :
+    (occurrence : TransactionMessageOccurrence trace message)
+    (hfork : CoveredFork benv.stat.fork) :
     Nonempty (TransactionMessageOccurrence.SelectedTransaction occurrence) := by
   induction occurrence with
   | head head tail =>
-      rcases head.exists_stateChronology with ⟨chronology⟩
+      rcases head.exists_stateChronology hfork with ⟨chronology⟩
       exact ⟨.head head tail chronology⟩
   | tail head tail occurrence ih =>
-      rcases ih with ⟨selected⟩
+      rcases ih (by simpa [Benv.withState] using hfork) with ⟨selected⟩
       exact ⟨.tail head tail occurrence selected⟩
 
 /-- A selected transaction message in an arbitrary configured block, coupled
@@ -364,7 +389,7 @@ def TransactionMessageOccurrence.configuredEnvelope
     { occurrence := occurrence
       ready
       targetCase := TransactionTargetClass.classify ca msg
-      selectedTransaction := occurrence.exists_selectedTransaction }
+      selectedTransaction := occurrence.exists_selectedTransaction block.covered }
 
 /-- The `target = none` transaction branch is still split by the actual CREATE
 wrapper.  A collision has its one recorded no-op message boundary; a non-
@@ -617,7 +642,7 @@ theorem ConfiguredDirectCall.exec_benv_rules_eq_block
     _ = msg.benv.stat.rules :=
       congrArg BenvStat.rules
         (ExecutionTrace.messageCallDelegation_benv_stat call.delegation)
-    _ = (((initBenv block.rules pre block.block.header).withState
+    _ = (((initBenv block.fork pre block.block.header).withState
           block.bodyTrace.beaconState).withState block.bodyTrace.historyState).stat.rules :=
       messageRules
     _ = block.rules := rfl
