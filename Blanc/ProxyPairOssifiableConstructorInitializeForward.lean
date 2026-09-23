@@ -120,6 +120,7 @@ def ossifiableConstructorInitializedBase
 private theorem
     ossifiableConstructorInitializeImplementation_prefix_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {memory : Mem} {image : Bytes} {implementation : Adr} {G : Nat}
     (hreads : Mem.Reads memory image)
     (himplementation : Bytes.toB256 (image.sliceD 0 32 0) =
@@ -159,7 +160,7 @@ private theorem
   have hzeroImplementation : (0 : B256) ≠ implementation.toB256 :=
     Ne.symm himplementationWordNonzero
   have hrefund (rc : Int) :
-      sstoreNewRefundCounter implementation.toB256 0 0 rc = rc := by
+      sstoreNewRefundCounter sevm.benvStat.rules.gas implementation.toB256 0 0 rc = rc := by
     simp [sstoreNewRefundCounter, hzeroImplementation,
       himplementationWordNonzero]
   have hnew :
@@ -169,6 +170,7 @@ private theorem
     exact b256_and_zero_or _ _
   rw [ossifiableConstructorInitializeImplementation_shape]
   func_run (2) [3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · rw [Devm.extCost_zero_of_le halign (by
       simp only [show (0 : B256).toNat = 0 by rfl]
       omega)]
@@ -176,6 +178,7 @@ private theorem
   simp only [show (0 : B256).toNat = 0 by rfl]
   rw [Mem.Reads.read hreads, himplementation, hmemory0]
   func_run (4) [0]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · simpa only [Devm.setMach_accessedAddresses, toAdr_toB256]
       using haddressCold
   · simp only [Devm.getCode_setMach, toAdr_toB256, B256.eqCheck,
@@ -184,6 +187,7 @@ private theorem
   change Func.RunCompiled fs sevm _ initializeAccepted _
   unfold initializeAccepted
   func_run (1)
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   unfold initializePackedStore
   apply Func.RunCompiled.next
   · apply Ninst.runCompiled_pushB256 (c := 3) (G := G + 23252)
@@ -193,14 +197,18 @@ private theorem
     · simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
       omega
   func_run (1)
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   simp only [Devm.addAccessedStorageKey_setMach_setMach,
     Devm.getStorVal_setMach, initialize_addAccessedAddress_getStorVal,
     Devm.memory_setMach, Devm.stack_setMach]
   rw [himplementationRaw]
   unfold initializeHighMask
   func_run (4)
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   unfold initializeMerge
+  simp only [Devm.stateGas_setMach]
   func_run (2)
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   unfold initializeSstore
   have hwarmImplementation :
       (sevm.currentTarget, implementationSlotLit) ∈
@@ -208,6 +216,7 @@ private theorem
           sevm.currentTarget implementationSlotLit).accessedStorageKeys :=
     Std.HashSet.mem_insert_self
   func_run (2) [20000]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · simp only [Devm.getStorVal_setMach,
       initialize_addAccessedStorageKey_getStorVal,
       initialize_addAccessedAddress_getStorVal, himplementationRaw,
@@ -223,8 +232,9 @@ private theorem
   rw [show G + 23252 - 22120 = G + 1132 from by omega]
   unfold initializeLog
   func_run (4) [1125]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · simp only [show ((0 : B256) * 32).toNat = 0 by decide]
-    rw [Devm.extCost_zero_of_le halign hzeroWindow]
+    erw [Devm.extCost_zero_of_le halign hzeroWindow]
     norm_num [gLog, gLogdata, gLogtopic]
   simp only [show ((0 : B256) * 32).toNat = 0 by decide]
   rw [hreadZero, hrefund]
@@ -240,6 +250,7 @@ delegate-setup body begins. -/
 theorem
     ossifiableConstructorInitializeImplementation_nonempty_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {memory : Mem} {image : Bytes} {implementation : Adr}
     {length : B256} {G : Nat}
     (hreads : Mem.Reads memory image)
@@ -276,6 +287,7 @@ theorem
       initializeLoadLength post := by
     unfold initializeLoadLength
     func_run (2) [3]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     · exact Devm.extCost_add_of_size hsize (by decide)
     simp only [show (128 : B256).toNat = 128 by decide]
     rw [Mem.Reads.read hreads, hlength, hmemory128]
@@ -297,7 +309,7 @@ theorem
     ossifiableConstructorInitializeImplementation_prefix_runCompiled
       (fs := fs) (sevm := sevm) (base := base) (post := post)
       (memory := memory) (image := image) (implementation := implementation)
-      (G := G + 32) hreads himplementation himplementationNonzero
+      (G := G + 32) hfork hreads himplementation himplementationNonzero
       hcodeSizeNonzero haddressCold himplementationRaw
       himplementationOriginal himplementationCold
       (by omega) (by omega) hstatic hload
@@ -310,6 +322,7 @@ guard, the exact warm `SSTORE`, the `Upgraded` log, and the complete post-setup
 admin/runtime walk. -/
 theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
     {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {memory : Mem} {image runtimeBytes : Bytes}
     {implementation requestedAdmin : Adr} {G : Nat}
     (hwf : Mem.Wf memory)
@@ -379,7 +392,7 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
   have hzeroImplementation : (0 : B256) ≠ implementation.toB256 :=
     Ne.symm himplementationWordNonzero
   have hrefund (rc : Int) :
-      sstoreNewRefundCounter implementation.toB256 0 0 rc = rc := by
+      sstoreNewRefundCounter sevm.benvStat.rules.gas implementation.toB256 0 0 rc = rc := by
     simp [sstoreNewRefundCounter, hzeroImplementation,
       himplementationWordNonzero]
   have hnew :
@@ -416,7 +429,7 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
     intro hp
     have hk := congrArg Prod.snd hp
     exact (by decide : implementationSlotLit ≠ adminSlotLit) hk
-  have htail := ossifiableConstructorAfterSetup_zeroAdmin_forward_exact
+  have htail := ossifiableConstructorAfterSetup_zeroAdmin_forward_exact (hfork := hfork)
     (fs := ossifiableConstructorFunctions 1249 2188)
     (sevm := sevm) (base := initializedBase) (memory := memory)
     (image := image) (runtimeBytes := runtimeBytes)
@@ -431,10 +444,12 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
   refine ⟨post, ?_, ?_, ?_, htailOutput, ?_, ?_⟩
   · rw [ossifiableConstructorInitializeImplementation_shape]
     func_run (2) [3]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     · exact Devm.extCost_add_of_size (a := gVerylow) hsize (by decide)
     simp only [show (0 : B256).toNat = 0 by rfl]
     rw [Mem.Reads.read hreads, himplementation, hmemory0]
     func_run (4) [0]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     · simpa only [Devm.setMach_accessedAddresses, toAdr_toB256]
         using haddressCold
     · simp only [Devm.getCode_setMach, toAdr_toB256, B256.eqCheck,
@@ -444,6 +459,7 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
       initializeAccepted _
     unfold initializeAccepted
     func_run (1)
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     unfold initializePackedStore
     apply Func.RunCompiled.next
     · apply Ninst.runCompiled_pushB256 (c := 3) (G := G - 2630)
@@ -453,14 +469,18 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
       · simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
         omega
     func_run (1)
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     simp only [Devm.addAccessedStorageKey_setMach_setMach,
       Devm.getStorVal_setMach, initialize_addAccessedAddress_getStorVal,
       Devm.memory_setMach, Devm.stack_setMach]
     rw [himplementationRaw]
     unfold initializeHighMask
     func_run (4)
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     unfold initializeMerge
+    simp only [Devm.stateGas_setMach]
     func_run (2)
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     unfold initializeSstore
     have hwarmImplementation :
         (sevm.currentTarget, implementationSlotLit) ∈
@@ -468,6 +488,7 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
             sevm.currentTarget implementationSlotLit).accessedStorageKeys :=
       Std.HashSet.mem_insert_self
     func_run (2) [20000]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     · simp only [Devm.getStorVal_setMach,
         initialize_addAccessedStorageKey_getStorVal,
         initialize_addAccessedAddress_getStorVal, himplementationRaw,
@@ -484,8 +505,9 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
     rw [hk]
     unfold initializeLog
     func_run (4) [1125]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     · simp only [show ((0 : B256) * 32).toNat = 0 by decide]
-      rw [Devm.extCost_zero_of_le halign hzeroWindow]
+      erw [Devm.extCost_zero_of_le halign hzeroWindow]
       norm_num [gLog, gLogdata, gLogtopic]
     simp only [show ((0 : B256) * 32).toNat = 0 by decide]
     rw [hreadZero]
@@ -493,13 +515,16 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
       initializeLoadLength _
     unfold initializeLoadLength
     func_run (2) [3]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     · exact Devm.extCost_add_of_size hsize (by decide)
     simp only [show (128 : B256).toNat = 128 by decide]
     rw [Mem.Reads.read hreads, hlength, hmemory128]
     unfold initializeSetupBranch
     func_run (1)
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     unfold initializeAfterSetupCall
     func_run (1)
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     rw [hrefund]
     rw [show G - k - 1163 = G - 25913 from by omega]
     change Func.RunCompiled (ossifiableConstructorFunctions 1249 2188) sevm
