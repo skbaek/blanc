@@ -71,6 +71,7 @@ theorem outboundAfterQuote_effect_quiet
     {sharesSel assetsSel returnedSel : B256} {burnSlot : Nat}
     {receiver owner quote shares assets returned : B256}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (memoryReads : Mem.Reads entry.memory image)
     (receiverAt : Bytes.toB256
@@ -325,7 +326,7 @@ theorem outboundAfterQuote_effect_quiet
     exact config.code
   obtain ⟨tailPre, movement, childForeign, childLogged, -, tailWf,
       tailWindow, tailRun, quiet⟩ :=
-    callWethTransfer_worldEffect_quiet callConfig ⟨childWf, childReads⟩
+    callWethTransfer_worldEffect_quiet (hfork := hfork) callConfig ⟨childWf, childReads⟩
       (sliceBytes_of_toB256 receiverAtChild)
       (sliceBytes_of_toB256 assetsAtChild)
       (by decide +kernel) (by omega) staging dynamic crossing suffix
@@ -492,6 +493,7 @@ theorem outboundAfterQuote_effect
     {sharesSel assetsSel returnedSel : B256} {burnSlot : Nat}
     {receiver owner quote shares assets returned : B256}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (memoryReads : Mem.Reads entry.memory image)
     (receiverAt : Bytes.toB256
@@ -570,7 +572,7 @@ theorem outboundAfterQuote_effect
           (.ok post) := by
   obtain ⟨callerNonzero, receiverValid, receiverNonzero, ownerValid,
     ownerNonzero, covered, burnable, effect, -, finish⟩ :=
-    outboundAfterQuote_effect_quiet config memoryWf memoryReads receiverAt
+    outboundAfterQuote_effect_quiet (hfork := hfork) config memoryWf memoryReads receiverAt
       ownerAt supplyAt sharesAt assetsAt returnedAt sharesAbove sharesBelow
       assetsAbove assetsBelow returnedAbove returnedBelow stack lookup run
   exact ⟨callerNonzero, receiverValid, receiverNonzero, ownerValid,
@@ -587,6 +589,7 @@ arguments rather than two because the owner may not be the caller. -/
 theorem outboundQuoteStaging_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm} {arithmetic : Func}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (stack : [] <<+ entry.stack)
     (run : Func.RunCompiledTo fs sevm entry
@@ -646,7 +649,7 @@ theorem outboundQuoteStaging_effect
   obtain ⟨quotePre, image, supply, supplyEq, stable, quoteWf, quoteReads,
       carry, assetsAt, supplyAt, quoteStack, snapStorage, snapLogs, snapCode,
       quoteRun⟩ :=
-    quoteSnapshot_effect readConfig readWf readReads readRun
+    quoteSnapshot_effect (hfork := hfork) readConfig readWf readReads readRun
   have entryStorage : Devm.getStor entry = Devm.getStor quotePre :=
     argStorage.trans snapStorage
   refine ⟨quotePre, image, supply, ?_, stable, quoteWf, quoteReads,
@@ -759,6 +762,7 @@ theorem outboundBody_effect_quiet
     {sharesSel assetsSel returnedSel : B256} {burnSlot : Nat}
     {receiver owner quote shares assets returned : B256}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (entryStorage : Devm.getStor entry = Devm.getStor quotePre)
     (entryLogs : entry.logs = quotePre.logs)
     (entryCode : quotePre.getCode wethAccount = entry.getCode wethAccount)
@@ -874,7 +878,7 @@ theorem outboundBody_effect_quiet
       congrFun quoteStorage sevm.currentTarget]
   obtain ⟨callerNonzero, receiverValid, receiverNonzero, ownerValid,
       ownerNonzero, covered, roomFits, effect, quiet, -⟩ :=
-    outboundAfterQuote_effect_quiet afterConfig afterMemImage.1 afterMemImage.2
+    outboundAfterQuote_effect_quiet (hfork := hfork) afterConfig afterMemImage.1 afterMemImage.2
       (carry (by decide +kernel) receiverAt)
       (carry (by decide +kernel) ownerAt)
       (by
@@ -899,6 +903,7 @@ theorem outboundBody_effect
     {sharesSel assetsSel returnedSel : B256} {burnSlot : Nat}
     {receiver owner quote shares assets returned : B256}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (entryStorage : Devm.getStor entry = Devm.getStor quotePre)
     (entryLogs : entry.logs = quotePre.logs)
     (entryCode : quotePre.getCode wethAccount = entry.getCode wethAccount)
@@ -980,7 +985,7 @@ theorem outboundBody_effect
       OutboundEffect sevm receiver owner assets shares returned entry post := by
   obtain ⟨callerNonzero, receiverValid, receiverNonzero, ownerValid,
     ownerNonzero, covered, burnable, effect, -⟩ :=
-    outboundBody_effect_quiet config entryStorage entryLogs entryCode
+    outboundBody_effect_quiet (hfork := hfork) config entryStorage entryLogs entryCode
       supplyProjection receiverAt ownerAt supplyAt afterMemImage afterFrame
       quoteFrame afterStack sharesAt assetsAt returnedAt sharesAbove sharesBelow
       assetsAbove assetsBelow returnedAbove returnedBelow lookup afterRun
@@ -991,6 +996,7 @@ theorem outboundBody_effect
 theorem withdraw_body_effect_quiet
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (afterLookup : fs[Blanc.ProrataWethVault.withdrawAfterQuoteSlot]? =
       some Blanc.ProrataWethVault.withdrawAfterQuote)
@@ -1039,7 +1045,7 @@ theorem withdraw_body_effect_quiet
   obtain ⟨quotePre, image, supply, supplyEq, stable, quoteWf, quoteReads,
       amountAt, receiverAt, ownerAt, assetsAt, supplyAt, quoteStack,
       quoteStorage, quoteLogs, quoteCode, supplyProjection, quoteRun⟩ :=
-    outboundQuoteStaging_effect config memoryWf stack run
+    outboundQuoteStaging_effect (hfork := hfork) config memoryWf stack run
   obtain ⟨quoteFits, afterPre, afterImage, afterStack, afterMemImage,
       afterFrame, quoteFrame, afterRun⟩ :=
     Blanc.ProrataWethVault.withdrawQuote_arithmetic_trace (R := Func.RunOk) quoteWf quoteReads
@@ -1059,7 +1065,7 @@ theorem withdraw_body_effect_quiet
     rw [supplyAt, supplyEq]
   obtain ⟨callerNonzero, receiverValid, receiverNonzero, ownerValid,
       ownerNonzero, covered, roomFits, effect, quiet⟩ :=
-    outboundBody_effect_quiet config quoteStorage quoteLogs quoteCode
+    outboundBody_effect_quiet (hfork := hfork) config quoteStorage quoteLogs quoteCode
       supplyProjection receiverAt ownerAt supplyAtEntry afterMemImage
       afterFrame quoteFrame afterStack
       (sharesSel := Blanc.ProrataWethVault.quoteWord)
@@ -1099,6 +1105,7 @@ theorem withdraw_body_effect_quiet
 theorem withdraw_body_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (afterLookup : fs[Blanc.ProrataWethVault.withdrawAfterQuoteSlot]? =
       some Blanc.ProrataWethVault.withdrawAfterQuote)
@@ -1143,7 +1150,7 @@ theorem withdraw_body_effect
         entry post := by
   obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
       receiverNonzero, ownerValid, ownerNonzero, covered, burnable, effect,
-      -⟩ := withdraw_body_effect_quiet config memoryWf afterLookup burnLookup stack run
+      -⟩ := withdraw_body_effect_quiet (hfork := hfork) config memoryWf afterLookup burnLookup stack run
   exact ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
     receiverNonzero, ownerValid, ownerNonzero, covered, burnable, effect⟩
 
@@ -1151,6 +1158,7 @@ theorem withdraw_body_effect
 theorem redeem_body_effect_quiet
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (afterLookup : fs[Blanc.ProrataWethVault.redeemAfterQuoteSlot]? =
       some Blanc.ProrataWethVault.redeemAfterQuote)
@@ -1192,7 +1200,7 @@ theorem redeem_body_effect_quiet
   obtain ⟨quotePre, image, supply, supplyEq, stable, quoteWf, quoteReads,
       amountAt, receiverAt, ownerAt, assetsAt, supplyAt, quoteStack,
       quoteStorage, quoteLogs, quoteCode, supplyProjection, quoteRun⟩ :=
-    outboundQuoteStaging_effect config memoryWf stack run
+    outboundQuoteStaging_effect (hfork := hfork) config memoryWf stack run
   obtain ⟨quoteFits, afterPre, afterImage, afterStack, afterMemImage,
       afterFrame, quoteFrame, afterRun⟩ :=
     Blanc.ProrataWethVault.redeemQuote_arithmetic_trace (R := Func.RunOk) quoteWf quoteReads
@@ -1212,7 +1220,7 @@ theorem redeem_body_effect_quiet
     rw [supplyAt, supplyEq]
   obtain ⟨callerNonzero, receiverValid, receiverNonzero, ownerValid,
       ownerNonzero, covered, roomFits, effect, quiet⟩ :=
-    outboundBody_effect_quiet config quoteStorage quoteLogs quoteCode
+    outboundBody_effect_quiet (hfork := hfork) config quoteStorage quoteLogs quoteCode
       supplyProjection receiverAt ownerAt supplyAtEntry afterMemImage
       afterFrame quoteFrame afterStack
       (sharesSel := Blanc.ProrataWethVault.amountWord)
@@ -1248,6 +1256,7 @@ theorem redeem_body_effect_quiet
 theorem redeem_body_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (afterLookup : fs[Blanc.ProrataWethVault.redeemAfterQuoteSlot]? =
       some Blanc.ProrataWethVault.redeemAfterQuote)
@@ -1285,7 +1294,7 @@ theorem redeem_body_effect
         entry post := by
   obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
       receiverNonzero, ownerValid, ownerNonzero, covered, burnable, effect,
-      -⟩ := redeem_body_effect_quiet config memoryWf afterLookup burnLookup stack run
+      -⟩ := redeem_body_effect_quiet (hfork := hfork) config memoryWf afterLookup burnLookup stack run
   exact ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
     receiverNonzero, ownerValid, ownerNonzero, covered, burnable, effect⟩
 
@@ -1337,6 +1346,7 @@ private theorem redeem_mem_vaultFuncs :
 theorem withdraw_compiled_effect_quiet
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -1391,7 +1401,7 @@ theorem withdraw_compiled_effect_quiet
   obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
       receiverNonzero, ownerValid, ownerNonzero, covered, roomFits, effect,
       quiet⟩ :=
-    withdraw_body_effect_quiet bodyConfig bodyWf
+    withdraw_body_effect_quiet (hfork := hfork) bodyConfig bodyWf
       withdrawAfterQuote_lookup withdrawBurn_lookup nil_pref bodyRun
   have storEq : Devm.getStor pre = Devm.getStor bodyPre :=
     funext (getStor_eq_of_state_eq entryState)
@@ -1431,6 +1441,7 @@ account's storage moves. -/
 theorem withdraw_compiled_effect
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -1471,7 +1482,7 @@ theorem withdraw_compiled_effect
           pre post := by
   obtain ⟨valueZero, supply, supplyEq, stable, quoteFits, callerNonzero,
       receiverValid, receiverNonzero, ownerValid, ownerNonzero, covered,
-      burnable, effect, -⟩ := withdraw_compiled_effect_quiet config memoryWf run selectorEq
+      burnable, effect, -⟩ := withdraw_compiled_effect_quiet (hfork := hfork) config memoryWf run selectorEq
   exact ⟨valueZero, supply, supplyEq, stable, quoteFits, callerNonzero,
     receiverValid, receiverNonzero, ownerValid, ownerNonzero, covered,
     burnable, effect⟩
@@ -1480,6 +1491,7 @@ theorem withdraw_compiled_effect
 theorem redeem_compiled_effect_quiet
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -1528,7 +1540,7 @@ theorem redeem_compiled_effect_quiet
   obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
       receiverNonzero, ownerValid, ownerNonzero, covered, roomFits, effect,
       quiet⟩ :=
-    redeem_body_effect_quiet bodyConfig bodyWf
+    redeem_body_effect_quiet (hfork := hfork) bodyConfig bodyWf
       redeemAfterQuote_lookup redeemBurn_lookup nil_pref bodyRun
   have storEq : Devm.getStor pre = Devm.getStor bodyPre :=
     funext (getStor_eq_of_state_eq entryState)
@@ -1567,6 +1579,7 @@ account's storage moves. -/
 theorem redeem_compiled_effect
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -1601,7 +1614,7 @@ theorem redeem_compiled_effect
           pre post := by
   obtain ⟨valueZero, supply, supplyEq, stable, quoteFits, callerNonzero,
       receiverValid, receiverNonzero, ownerValid, ownerNonzero, covered,
-      burnable, effect, -⟩ := redeem_compiled_effect_quiet config memoryWf run selectorEq
+      burnable, effect, -⟩ := redeem_compiled_effect_quiet (hfork := hfork) config memoryWf run selectorEq
   exact ⟨valueZero, supply, supplyEq, stable, quoteFits, callerNonzero,
     receiverValid, receiverNonzero, ownerValid, ownerNonzero, covered,
     burnable, effect⟩
@@ -1615,6 +1628,7 @@ writes the supply from a pre-child snapshot. -/
 theorem withdraw_preserves_conserved
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -1624,12 +1638,13 @@ theorem withdraw_preserves_conserved
     LedgerConserved Blanc.ProrataWethVault.supplySlot
       (Devm.getStor post sevm.currentTarget) := by
   obtain ⟨-, supply, -, -, -, -, -, -, ownerValid, -, covered, -, effect⟩ :=
-    withdraw_compiled_effect config memoryWf run selectorEq
+    withdraw_compiled_effect (hfork := hfork) config memoryWf run selectorEq
   exact outboundEffect_preserves_conserved ownerValid covered effect conserved
 
 theorem redeem_preserves_conserved
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -1639,7 +1654,7 @@ theorem redeem_preserves_conserved
     LedgerConserved Blanc.ProrataWethVault.supplySlot
       (Devm.getStor post sevm.currentTarget) := by
   obtain ⟨-, supply, -, -, -, -, -, -, ownerValid, -, covered, -, effect⟩ :=
-    redeem_compiled_effect config memoryWf run selectorEq
+    redeem_compiled_effect (hfork := hfork) config memoryWf run selectorEq
   exact outboundEffect_preserves_conserved ownerValid covered effect conserved
 
 /-- `redeem_compiled_effect` with the quoted asset amount *named*, for the same
@@ -1648,6 +1663,7 @@ supply equation cannot afford to see through the quote term. -/
 theorem redeem_compiled_effect_named
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -1663,7 +1679,7 @@ theorem redeem_compiled_effect_named
       OutboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 2)
         assets (Sevm.argWord sevm 0) assets pre post := by
   obtain ⟨-, supply, supplyEq, -, fits, -, -, -, -, -, -, burnable, effect⟩ :=
-    redeem_compiled_effect config memoryWf run selectorEq
+    redeem_compiled_effect (hfork := hfork) config memoryWf run selectorEq
   exact ⟨supply, _, supplyEq, B256.toNat_toB256_of_lt fits, burnable, effect⟩
 
 end Blanc.Composition.ProrataWethVault

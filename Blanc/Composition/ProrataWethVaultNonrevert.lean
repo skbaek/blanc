@@ -20,6 +20,7 @@ exactly the largest amount the vault's own guards accept. -/
 theorem deposit_success_within_maxDeposit
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq :
@@ -31,7 +32,7 @@ theorem deposit_success_within_maxDeposit
         (Devm.getStorVal pre sevm.currentTarget
           Blanc.ProrataWethVault.supplySlot).toNat := by
   obtain ⟨-, supply, supplyEq, stable, quoteFits, -, -, receiverNonzero,
-      roomFits, -⟩ := deposit_compiled_effect config memoryWf run selectorEq
+      roomFits, -⟩ := deposit_compiled_effect (hfork := hfork) config memoryWf run selectorEq
   have supplyNat : supply.toNat =
       (Devm.getStorVal pre sevm.currentTarget
         Blanc.ProrataWethVault.supplySlot).toNat :=
@@ -54,6 +55,7 @@ theorem deposit_success_within_maxDeposit
 theorem mint_success_within_maxMint
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq :
@@ -65,7 +67,7 @@ theorem mint_success_within_maxMint
         (Devm.getStorVal pre sevm.currentTarget
           Blanc.ProrataWethVault.supplySlot).toNat := by
   obtain ⟨-, supply, supplyEq, stable, quoteFits, -, -, receiverNonzero,
-      roomFits, -⟩ := mint_compiled_effect config memoryWf run selectorEq
+      roomFits, -⟩ := mint_compiled_effect (hfork := hfork) config memoryWf run selectorEq
   have supplyNat : supply.toNat =
       (Devm.getStorVal pre sevm.currentTarget
         Blanc.ProrataWethVault.supplySlot).toNat :=
@@ -83,6 +85,7 @@ theorem mint_success_within_maxMint
 theorem withdraw_success_within_maxWithdraw
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -95,7 +98,7 @@ theorem withdraw_success_within_maxWithdraw
         (Devm.getStorVal pre sevm.currentTarget
           Blanc.ProrataWethVault.supplySlot).toNat := by
   obtain ⟨-, supply, supplyEq, stable, quoteFits, -, -, -, -, -, covered, -, -⟩ :=
-    withdraw_compiled_effect config memoryWf run selectorEq
+    withdraw_compiled_effect (hfork := hfork) config memoryWf run selectorEq
   have supplyNat : supply.toNat =
       (Devm.getStorVal pre sevm.currentTarget
         Blanc.ProrataWethVault.supplySlot).toNat :=
@@ -119,6 +122,7 @@ theorem withdraw_success_within_maxWithdraw
 theorem redeem_success_within_maxRedeem
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -127,7 +131,7 @@ theorem redeem_success_within_maxRedeem
       Blanc.ProrataWethVault.maxRedeemN
         (Devm.getStorVal pre sevm.currentTarget (Sevm.argWord sevm 2)).toNat := by
   obtain ⟨-, -, -, -, -, -, -, -, -, -, burnable, -⟩ :=
-    redeem_compiled_effect config memoryWf run selectorEq
+    redeem_compiled_effect (hfork := hfork) config memoryWf run selectorEq
   simpa [Blanc.ProrataWethVault.maxRedeemN] using burnable
 
 /-! ## Exec-level revert cause of the capacity views
@@ -139,6 +143,7 @@ are statements about the total interpreter's actual outcome. -/
 theorem maxDeposit_exec_revert_visits_refused_weth_child
     {sevm : Sevm} {pre d : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
     (selectorEq : Sevm.selector sevm = selector "maxDeposit" [.address])
@@ -149,13 +154,14 @@ theorem maxDeposit_exec_revert_visits_refused_weth_child
     (reverted : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
     Prog.RunCompiledToVisiting WethChildRefused sevm pre
       Blanc.ProrataWethVault.vault (.error (.revert, d)) := by
-  exact maxDeposit_revert_visits_refused_weth_child config memoryWf selectorEq
+  exact maxDeposit_revert_visits_refused_weth_child (hfork := hfork) config memoryWf selectorEq
     valueZero argsPresent argValid
     (Prog.runCompiledTo_of_exec_revert vault_prog_pcFree codeEq reverted)
 
 theorem maxMint_exec_revert_visits_refused_weth_child
     {sevm : Sevm} {pre d : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
     (selectorEq : Sevm.selector sevm = selector "maxMint" [.address])
@@ -166,13 +172,14 @@ theorem maxMint_exec_revert_visits_refused_weth_child
     (reverted : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
     Prog.RunCompiledToVisiting WethChildRefused sevm pre
       Blanc.ProrataWethVault.vault (.error (.revert, d)) := by
-  exact maxMint_revert_visits_refused_weth_child config memoryWf selectorEq
+  exact maxMint_revert_visits_refused_weth_child (hfork := hfork) config memoryWf selectorEq
     valueZero argsPresent argValid
     (Prog.runCompiledTo_of_exec_revert vault_prog_pcFree codeEq reverted)
 
 theorem maxWithdraw_exec_revert_visits_refused_weth_child
     {sevm : Sevm} {pre d : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
     (selectorEq : Sevm.selector sevm = selector "maxWithdraw" [.address])
@@ -183,7 +190,7 @@ theorem maxWithdraw_exec_revert_visits_refused_weth_child
     (reverted : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
     Prog.RunCompiledToVisiting WethChildRefused sevm pre
       Blanc.ProrataWethVault.vault (.error (.revert, d)) := by
-  exact maxWithdraw_revert_visits_refused_weth_child config memoryWf
+  exact maxWithdraw_revert_visits_refused_weth_child (hfork := hfork) config memoryWf
     selectorEq valueZero argsPresent argValid
     (Prog.runCompiledTo_of_exec_revert vault_prog_pcFree codeEq reverted)
 
@@ -217,6 +224,7 @@ reverting walk runs a refused WETH child.  What remains possible: that, an
 exceptional halt (out of gas, static-context write), and nothing else. -/
 theorem deposit_exec_revert_visits_refused_weth_child
     {sevm : Sevm} {pre d : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (stable : PairStable sevm.currentTarget sevm.benvStat.rules pre.state)
     (memoryWf : Mem.Wf pre.memory)
     (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
@@ -238,7 +246,7 @@ theorem deposit_exec_revert_visits_refused_weth_child
     (reverted : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
     Prog.RunCompiledToVisiting WethChildRefused sevm pre
       Blanc.ProrataWethVault.vault (.error (.revert, d)) := by
-  exact deposit_revert_visits_refused_weth_child stable memoryWf selectorEq
+  exact deposit_revert_visits_refused_weth_child (hfork := hfork) stable memoryWf selectorEq
     valueZero argsPresent callerNonzero receiverValid receiverNonzero
     (by omega)
     (Prog.runCompiledTo_of_exec_revert vault_prog_pcFree codeEq reverted)
@@ -250,6 +258,7 @@ possible: that, an exceptional halt (out of gas, static-context write), and
 nothing else. -/
 theorem mint_exec_revert_visits_refused_weth_child
     {sevm : Sevm} {pre d : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (stable : PairStable sevm.currentTarget sevm.benvStat.rules pre.state)
     (memoryWf : Mem.Wf pre.memory)
     (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
@@ -271,7 +280,7 @@ theorem mint_exec_revert_visits_refused_weth_child
     (reverted : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
     Prog.RunCompiledToVisiting WethChildRefused sevm pre
       Blanc.ProrataWethVault.vault (.error (.revert, d)) := by
-  exact mint_revert_visits_refused_weth_child stable memoryWf selectorEq
+  exact mint_revert_visits_refused_weth_child (hfork := hfork) stable memoryWf selectorEq
     valueZero argsPresent callerNonzero receiverValid receiverNonzero
     (by omega)
     (Prog.runCompiledTo_of_exec_revert vault_prog_pcFree codeEq reverted)
@@ -287,6 +296,7 @@ the WETH program.  What else remains: an exceptional halt (out of gas,
 static-context write), and nothing else. -/
 theorem withdraw_exec_revert_visits_refused_weth_child
     {sevm : Sevm} {pre d : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (stable : PairStable sevm.currentTarget sevm.benvStat.rules pre.state)
     (memoryWf : Mem.Wf pre.memory)
     (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
@@ -325,7 +335,7 @@ theorem withdraw_exec_revert_visits_refused_weth_child
     (reverted : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
     Prog.RunCompiledToVisiting WethChildRefused sevm pre
       Blanc.ProrataWethVault.vault (.error (.revert, d)) := by
-  exact withdraw_revert_visits_refused_weth_child stable memoryWf selectorEq
+  exact withdraw_revert_visits_refused_weth_child (hfork := hfork) stable memoryWf selectorEq
     valueZero argsPresent callerNonzero receiverValid receiverNonzero
     ownerValid ownerNonzero (by omega) authorized
     (Prog.runCompiledTo_of_exec_revert vault_prog_pcFree codeEq reverted)
@@ -339,6 +349,7 @@ remains: an exceptional halt (out of gas, static-context write), and nothing
 else. -/
 theorem redeem_exec_revert_visits_refused_weth_child
     {sevm : Sevm} {pre d : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (stable : PairStable sevm.currentTarget sevm.benvStat.rules pre.state)
     (memoryWf : Mem.Wf pre.memory)
     (codeEq : some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
@@ -369,7 +380,7 @@ theorem redeem_exec_revert_visits_refused_weth_child
     (reverted : exec ⟨0, sevm, pre⟩ = .error (.revert, d)) :
     Prog.RunCompiledToVisiting WethChildRefused sevm pre
       Blanc.ProrataWethVault.vault (.error (.revert, d)) := by
-  exact redeem_revert_visits_refused_weth_child stable memoryWf selectorEq
+  exact redeem_revert_visits_refused_weth_child (hfork := hfork) stable memoryWf selectorEq
     valueZero argsPresent callerNonzero receiverValid receiverNonzero
     ownerValid ownerNonzero (by omega) authorized
     (Prog.runCompiledTo_of_exec_revert vault_prog_pcFree codeEq reverted)

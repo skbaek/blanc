@@ -510,6 +510,7 @@ structure AcceptedPayoutTrace
   trace : ExecutionTrace.ProcessMessageTrace childMsg (.ok child)
   childClean : child.error.isSome = false
   messageState : childMsg.benv.state = callPre.state
+  benvStat : childMsg.benv.stat = sevm.benvStat
   shouldTransferValue : childMsg.shouldTransferValue = true
   caller : childMsg.caller = sevm.currentTarget
   value : childMsg.value = paid
@@ -550,6 +551,8 @@ theorem AcceptedPayout.exists_trace
   have hmessageState : childMsg.benv.state = callPre.state := by
     change parent.state = callPre.state
     exact hparentState
+  have hbenvStat : childMsg.benv.stat = sevm.benvStat := by
+    rw [callMsg_stat]
   have hshouldTransfer : childMsg.shouldTransferValue = true := rfl
   have hcaller : childMsg.caller = sevm.currentTarget := rfl
   have hvalue : childMsg.value = paid := rfl
@@ -587,7 +590,7 @@ theorem AcceptedPayout.exists_trace
           callPre.state.bal sevm.currentTarget - paid := by
       rw [hentryState]
       exact fields.2.2.2.2 recipient_ne
-    exact ⟨⟨childMsg, entry, child, trace, hclean, hmessageState,
+    exact ⟨⟨childMsg, entry, child, trace, hclean, hmessageState, hbenvStat,
       hshouldTransfer, hcaller, hvalue, htarget, htargetNe, hchildDepth, htransfer,
       hentryStor, hentryBalance, hcallPostState⟩⟩
 

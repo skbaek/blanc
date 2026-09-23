@@ -179,7 +179,8 @@ end ReplayCarrier
 * `root` — a committed retained execution at the EVM root of a successful
   message entry replays from the frame's entry boundary to its committed
   post-state, for every message that is run-ready for `S`, is not a direct
-  self-call, and opens below the word bound.  This is exactly the shape of a
+  self-call, opens below the word bound, and enters a covered runtime fork.
+  This is exactly the shape of a
   contract's `lift_core` instance at `initEvm`;
 * `preserves` — the contract's `ContractSpec` preservation, which the generic
   ladder lemmas consume to carry `S.StateInv` along the history. -/
@@ -198,6 +199,7 @@ structure AccountingLadder (S : ContractSpec) (ca : Adr) where
     ∀ committed : Execution.commits out = true,
     S.MessageRunReady ca msg →
     (msg.currentTarget = ca → msg.caller ≠ ca) →
+    CoveredFork sevm.benvStat.fork →
     sum msg.benv.state.bal < 2 ^ 256 →
     ∃ steps, carrier.Replay (carrier.frameEntry sevm pre.state) steps
       (carrier.ofState (Execution.committedPost out committed).state)
@@ -206,7 +208,7 @@ structure AccountingLadder (S : ContractSpec) (ca : Adr) where
 /-! ## 2.3' The observed ladder
 
 An `Observed` ladder is a ladder together with an observation of its carrier's
-step lists and a root law that observes exactly the root's committed frames.
+step lists and a root law that observes exactly each covered root's committed frames.
 Every rung below is proved once, observed; the unobserved rungs of §2.4 are the
 observed ones read through `Observed.trivial`, which observes nothing. -/
 
@@ -237,6 +239,7 @@ structure Observed {S : ContractSpec} {ca : Adr} (L : AccountingLadder S ca) whe
     ∀ committed : Execution.commits out = true,
     S.MessageRunReady ca msg →
     (msg.currentTarget = ca → msg.caller ≠ ca) →
+    CoveredFork sevm.benvStat.fork →
     sum msg.benv.state.bal < 2 ^ 256 →
     ∃ steps, L.carrier.Replay (L.carrier.frameEntry sevm pre.state) steps
       (L.carrier.ofState (Execution.committedPost out committed).state) ∧
@@ -251,9 +254,9 @@ def trivial (L : AccountingLadder S ca) : L.Observed where
   view := ReplayObservation.trivial L.carrier
   root := by
     intro blockIndex transactionIndex msg entry pc sevm pre out run transfer
-      evmEq committed runReady callerNe sumNof
+      evmEq committed runReady callerNe hfork sumNof
     exact (L.root blockIndex transactionIndex run transfer evmEq committed
-      runReady callerNe sumNof).imp fun _ replay =>
+      runReady callerNe hfork sumNof).imp fun _ replay =>
         ⟨replay, by simp [ReplayObservation.trivial]⟩
 
 private theorem ite_flatMap {α β : Type} (c : Prop) [Decidable c]
@@ -267,6 +270,7 @@ theorem processMessage (O : L.Observed)
     (trace : ExecutionTrace.ProcessMessageTrace msg (.ok post))
     (runReady : S.MessageRunReady ca msg)
     (callerNe : msg.currentTarget = ca → msg.caller ≠ ca)
+    (hfork : CoveredFork msg.benv.stat.fork)
     (sumNof : sum msg.benv.state.bal < 2 ^ 256)
     (blockIndex : Nat) (transactionIndex : Option Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState msg.benv.state) steps
@@ -287,12 +291,19 @@ theorem processMessage (O : L.Observed)
   | @some pc sevm pre out run =>
       have enter := (RunFrame.some_inv process).1
       rcases Frame.enter_run_inv enter with ⟨entry, transfer, evmEq⟩
+      simp only [Frame.ofCall] at transfer evmEq
+      have rootFork : CoveredFork sevm.benvStat.fork := by
+        have sevmEq : sevm = initSevm (msg.withBenv entry) :=
+          congrArg Evm.sta evmEq
+        rw [sevmEq, initSevm_benvStat, Msg.withBenv_benvStat,
+          benvAfterTransfer_stat transfer]
+        exact hfork
       obtain ⟨steps, replay, observed⟩ :=
         L.carrier.toSettlementCarrier.processMessage_of_body_observed
           O.view.obs O.view.obs_nil process runReady.ready.ne
           runReady.ready.val0 sumNof fun committed =>
             O.root blockIndex transactionIndex run transfer evmEq committed
-              runReady callerNe sumNof
+              runReady callerNe rootFork sumNof
       refine ⟨steps, replay, ?_⟩
       rw [observed]
       simp only [ExecutionTrace.ProcessMessageTrace.settledFrames, ite_flatMap]
@@ -303,6 +314,7 @@ theorem processCreateMessage (O : L.Observed)
     {msg : Msg} {post : Devm}
     (trace : ExecutionTrace.ProcessCreateMessageTrace msg (.ok post))
     (runReady : S.MessageRunReady ca msg)
+    (hfork : CoveredFork msg.benv.stat.fork)
     (sumNof : sum msg.benv.state.bal < 2 ^ 256)
     (targetNone : msg.target.isNone = true)
     (targetNe : msg.currentTarget ≠ ca)
@@ -335,15 +347,27 @@ theorem processCreateMessage (O : L.Observed)
           sum (processCreateMessage.msg msg).benv.state.bal < 2 ^ 256 := by
         rw [_root_.Blanc.processCreateMessage_msg_bal_eq]
         exact sumNof
+      have preparedFork :
+          CoveredFork (processCreateMessage.msg msg).benv.stat.fork := by
+        rw [processCreateMessage.msg_benvStat]
+        exact hfork
       have enter := (RunFrame.some_inv process).1
       rcases Frame.enter_run_inv enter with ⟨entry, transfer, evmEq⟩
+      simp only [Frame.ofCreate] at transfer evmEq
+      have rootFork : CoveredFork sevm.benvStat.fork := by
+        have sevmEq :
+            sevm = initSevm ((processCreateMessage.msg msg).withBenv entry) :=
+          congrArg Evm.sta evmEq
+        rw [sevmEq, initSevm_benvStat, Msg.withBenv_benvStat,
+          benvAfterTransfer_stat transfer]
+        exact preparedFork
       obtain ⟨steps, replay, observed⟩ :=
         L.carrier.toSettlementCarrier.processCreateMessage_of_body_observed
           O.view.obs O.view.obs_nil process runReady.ready.ne
           runReady.ready.val0 fresh sumNof fun committed =>
             O.root blockIndex transactionIndex run transfer evmEq committed
               (preparedInv.runReady_of_foreign preparedTargetNe)
-              (fun target => absurd target preparedTargetNe) preparedSum
+              (fun target => absurd target preparedTargetNe) rootFork preparedSum
       refine ⟨steps, replay, ?_⟩
       rw [observed]
       simp only [ExecutionTrace.ProcessCreateMessageTrace.settledFrames,
@@ -381,7 +405,7 @@ theorem messageCall (O : L.Observed)
         · exact foreign
       have fresh := messageCreateCollision_false_getStor_eq_empty collision
       obtain ⟨steps, replay, observed⟩ :=
-        O.processCreateMessage inner runReady sumNof targetNone targetNe
+        O.processCreateMessage inner runReady hfork sumNof targetNone targetNe
           fresh blockIndex transactionIndex
       refine ⟨steps, ?_, by simpa using observed⟩
       rw [processMessageCall_createRun_state_eq targetNone collision core result hfork]
@@ -428,8 +452,13 @@ theorem messageCall (O : L.Observed)
             2 ^ 256 := by
         rw [balEq]
         exact sumNof
+      have execFork :
+          CoveredFork (messageCallExecutionMessage delegated).benv.stat.fork := by
+        rw [messageCallExecutionMessage_benv_stat,
+          messageCallDelegation_benv_stat delegation]
+        exact hfork
       obtain ⟨steps, replay, observed⟩ :=
-        O.processMessage inner execReady execCallerNe execSum
+        O.processMessage inner execReady execCallerNe execFork execSum
           blockIndex transactionIndex
       refine ⟨steps, ?_, by simpa using observed⟩
       rw [stateEq, ← snapshotEq]
@@ -813,11 +842,12 @@ theorem processMessage (L : AccountingLadder S ca)
     (trace : ExecutionTrace.ProcessMessageTrace msg (.ok post))
     (runReady : S.MessageRunReady ca msg)
     (callerNe : msg.currentTarget = ca → msg.caller ≠ ca)
+    (hfork : CoveredFork msg.benv.stat.fork)
     (sumNof : sum msg.benv.state.bal < 2 ^ 256)
     (blockIndex : Nat) (transactionIndex : Option Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState msg.benv.state) steps
       (L.carrier.ofState post.state) := by
-  exact ((Observed.trivial L).processMessage trace runReady callerNe sumNof blockIndex transactionIndex).imp
+  exact ((Observed.trivial L).processMessage trace runReady callerNe hfork sumNof blockIndex transactionIndex).imp
     fun _ replay => replay.1
 
 /-- G2.  One retained CREATE constructor at a fresh foreign address. -/
@@ -825,6 +855,7 @@ theorem processCreateMessage (L : AccountingLadder S ca)
     {msg : Msg} {post : Devm}
     (trace : ExecutionTrace.ProcessCreateMessageTrace msg (.ok post))
     (runReady : S.MessageRunReady ca msg)
+    (hfork : CoveredFork msg.benv.stat.fork)
     (sumNof : sum msg.benv.state.bal < 2 ^ 256)
     (targetNone : msg.target.isNone = true)
     (targetNe : msg.currentTarget ≠ ca)
@@ -832,7 +863,7 @@ theorem processCreateMessage (L : AccountingLadder S ca)
     (blockIndex : Nat) (transactionIndex : Option Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState msg.benv.state) steps
       (L.carrier.ofState post.state) := by
-  exact ((Observed.trivial L).processCreateMessage trace runReady sumNof targetNone targetNe fresh blockIndex transactionIndex).imp
+  exact ((Observed.trivial L).processCreateMessage trace runReady hfork sumNof targetNone targetNe fresh blockIndex transactionIndex).imp
     fun _ replay => replay.1
 
 open _root_.Blanc.ExecutionTrace in

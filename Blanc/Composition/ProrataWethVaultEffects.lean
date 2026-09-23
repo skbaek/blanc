@@ -745,13 +745,14 @@ retained SSTORE replay. This is the execution chronology used by the history
 adapter: a nested callback's writes occur before the resumed parent suffix,
 not merely after the parent frame in an invocation-root projection. -/
 theorem WethAllowanceEvent.storageReplay
-    (event : WethAllowanceEvent) (key : B256) :
+    (event : WethAllowanceEvent)
+    (hfork : CoveredFork event.frame.sevm.benvStat.fork) (key : B256) :
     (Devm.getStor event.frame.post wethAccount).get key =
       Exec.StorageWrite.replayCell wethAccount key
         ((Devm.getStor event.frame.pre wethAccount).get key)
         (Exec.retainedStorageWrites event.frame.run) := by
   exact Exec.storageReplay_committedPost event.frame.run event.frame.committed
-    wethAccount key
+    hfork wethAccount key
 
 /-- Every extracted event has well-formed entry memory when its concrete
 execution is admitted as freshly entered.  This derives the side condition
@@ -1844,6 +1845,7 @@ by composed read-only endpoints. -/
 theorem ExactWethChildSuccess.worldProgramRun
     {parentSevm : Sevm} {parentPre parentPost : Devm}
     {instruction : Ninst} {calldata output : Bytes} {static : Bool}
+    (hfork : CoveredFork parentSevm.benvStat.fork)
     (success : ExactWethChildSuccess parentSevm parentPre parentPost
       instruction calldata output static) :
     SuccessfulWethWorldProgramRun parentSevm.currentTarget calldata output
@@ -1861,11 +1863,16 @@ theorem ExactWethChildSuccess.worldProgramRun
   obtain ⟨rawPost, rawEq, rawError, settledState, settledOutput⟩ :=
     Blanc.MessageExecution.processMessage_clean_rawPost process clean
   subst raw
+  have stateGasNone : msg.benv.stat.rules.stateGas = none := by
+    rw [childRules]
+    exact hfork.rules_stateGas_none
   have settleEq := (RunFrame.some_inv process).2
   have settledLogs : child.logs = rawPost.logs := by
     simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-      executeCode.handleError, processMessage.settle, rawError] at settleEq
-    exact congrArg Devm.logs settleEq
+      executeCode.handleErrorWith_ok, processMessage.settle, stateGasNone] at settleEq
+    have childEq : child = rawPost := by
+      simpa [rawError] using settleEq
+    exact congrArg Devm.logs childEq
   obtain ⟨pcZero, codeEq, currentTarget, codeAddress, dataEq, -, storageEq,
     -⟩ := Blanc.MessageExecution.processMessage_entry_facts
       wethAccount process
@@ -1873,11 +1880,16 @@ theorem ExactWethChildSuccess.worldProgramRun
   have memoryEq := Blanc.MessageExecution.processMessage_entry_memory process
   have enter := (RunFrame.some_inv process).1
   rcases Frame.enter_run_inv enter with ⟨benv, transfer, evmEq⟩
+  have benvStateGasNone : benv.stat.rules.stateGas = none := by
+    rw [benvAfterTransfer_stat transfer]
+    change msg.benv.stat.rules.stateGas = none
+    exact stateGasNone
   have callerEq := congrArg (fun evm : Evm => evm.sta.caller) evmEq
   have valueEq := congrArg (fun evm : Evm => evm.sta.value) evmEq
   have logsEq := congrArg (fun evm : Evm => evm.dyna.logs) evmEq
   dsimp [Jaune.Frame.ofCall, initEvm, initSevm, initDevm, Msg.withBenv]
     at callerEq valueEq logsEq
+  simp [benvStateGasNone] at logsEq
   have storageWorld : Devm.getStor childEvm.dyna =
       Devm.getStor parentPre := by
     funext owner
@@ -1916,12 +1928,13 @@ the mutating call effects. -/
 theorem ExactWethChildSuccess.programRun
     {parentSevm : Sevm} {parentPre parentPost : Devm}
     {instruction : Ninst} {calldata output : Bytes} {static : Bool}
+    (hfork : CoveredFork parentSevm.benvStat.fork)
     (success : ExactWethChildSuccess parentSevm parentPre parentPost
       instruction calldata output static) :
     SuccessfulWethProgramRun parentSevm.currentTarget calldata output
       (parentPre.state.getStor wethAccount)
       (parentPost.state.getStor wethAccount) := by
-  rcases ExactWethChildSuccess.worldProgramRun success with
+  rcases ExactWethChildSuccess.worldProgramRun hfork success with
     ⟨childSevm, childPre, rawPost, currentTarget, codeAddress, caller,
       valueZero, dataEq, stackEmpty, memoryEmpty, logsEmpty, initialEq,
       compiled, rawError, finalEq, finalLogs, outputEq⟩

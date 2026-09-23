@@ -2183,11 +2183,7 @@ theorem canonicalDeploymentSuffix_succeeds
       [(1, withdrawalRequestPredeployAddress),
        (2, consolidationRequestPredeployAddress)] := by
     change (Fork.ruleSet (ctx.txInput.withState post).stat.fork).requests = _
-    rcases hpostFork with hfork | hfork
-    · rw [hfork]
-      exact pragueRules_requests
-    · rw [hfork]
-      rfl
+    exact hpostFork.requests_eq
   obtain ⟨withdrawalOut, hwithdrawal, _, _, _, _,
       hwithdrawalReturn⟩ :=
     processCheckedSystemTransaction_deploymentSystemProgram
