@@ -369,49 +369,13 @@ private theorem sstore_getStor_all
           (Devm.getStor pre owner).set key value
         else Devm.getStor pre owner := by
   intro owner
-  rcases of_run_reg run with ⟨pc, hr⟩
-  simp only [Rinst.run, Rinst.runCore] at hr
-  rcases Except.bind_eq_ok hr with ⟨⟨poppedKey, s1⟩, h1, hr1⟩
-  rcases Except.bind_eq_ok hr1 with ⟨⟨poppedValue, s2⟩, h2, hr2⟩
-  rcases Except.bind_eq_ok hr2 with ⟨_, h3, hr3⟩
-  rcases Except.bind_eq_ok hr3 with ⟨⟨s3, gas2⟩, h4, hr4⟩
-  rcases Except.bind_eq_ok hr4 with ⟨gas3, h5, hr5⟩
-  rcases Except.bind_eq_ok hr5 with ⟨s4, h6, hr6⟩
-  rcases Except.bind_eq_ok hr6 with ⟨s5, h7, hr7⟩
-  rcases Except.bind_eq_ok hr7 with ⟨_, h8, h9⟩
-  have hs1 : pre.stack = poppedKey :: s1.stack :=
-    (Devm.pop_of_pop h1).stack
-  have hs2 : s1.stack = poppedValue :: s2.stack :=
-    (Devm.pop_of_pop h2).stack
-  have hkeys : key = poppedKey ∧ value = poppedValue := by
-    rw [hs1, hs2] at stack
-    rcases stack with ⟨suffix, hstack⟩
-    injection hstack with hk hrest
-    injection hrest with hv _
-    exact ⟨hk.symm, hv.symm⟩
-  have e1 : Devm.getStor pre = Devm.getStor s1 := Devm.pop_getStor_eq h1
-  have e2 : Devm.getStor s1 = Devm.getStor s2 := Devm.pop_getStor_eq h2
-  have e4 : Devm.getStor s2 = Devm.getStor s3 := by
-    split at h4 <;> (injection h4 with eq; injection eq with eq _; subst eq)
-    · exact addAccessedStorageKey_getStor.symm
-    · rfl
-  have e6 : Devm.getStor s3 = Devm.getStor s4 := by
-    injection h6 with eq
-    rw [← eq]
-    rfl
-  have e7 : Devm.getStor s4 = Devm.getStor s5 :=
-    chargeGas_getStor_eq h7
-  have E : Devm.getStor pre = Devm.getStor s5 :=
-    e1.trans (e2.trans (e4.trans (e6.trans e7)))
-  injection h9 with eq
-  rw [← eq]
   by_cases howner : owner = sevm.currentTarget
   · subst owner
-    rw [if_pos rfl, setStorVal_getStor_self, hkeys.1, hkeys.2,
-      ← congrFun E sevm.currentTarget]
+    rw [if_pos rfl]
+    exact sstore_getStor_set run stack
   · rw [if_neg howner]
-    exact (setStorVal_getStor_ne (fun h => howner h.symm)).trans
-      (congrFun E owner).symm
+    rcases of_run_reg run with ⟨pc, hr⟩
+    exact sstore_preserves_getStor_ne hr (fun h => howner h.symm)
 
 /-- Exact effects of the expiry-write/heartbeat-log line, before the two lock
 pushes.  The single `value` binder feeds both the `SSTORE` and the log data. -/
@@ -556,17 +520,29 @@ private theorem tstore_logs_output
     post.logs = pre.logs ∧ post.output = pre.output := by
   rcases of_run_reg run with ⟨pc, hr⟩
   simp only [Rinst.run, Rinst.runCore] at hr
-  rcases Except.bind_eq_ok hr with ⟨⟨key, s1⟩, h1, hr1⟩
-  rcases Except.bind_eq_ok hr1 with ⟨⟨value, s2⟩, h2, hr2⟩
-  rcases Except.bind_eq_ok hr2 with ⟨charged, h3, hr3⟩
-  rcases Except.bind_eq_ok hr3 with ⟨_, h4, h5⟩
-  have p1 := Devm.pop_of_pop h1
-  have p2 := Devm.pop_of_pop h2
-  have burn := Devm.burn_of_chargeGas h3
-  injection h5 with eq
-  rw [← eq]
-  exact ⟨(p1.logs.trans (p2.logs.trans burn.logs)).symm,
-    (p1.output.trans (p2.output.trans burn.output)).symm⟩
+  split at hr
+  · rcases Except.bind_eq_ok hr with ⟨⟨key, s1⟩, h1, hr1⟩
+    rcases Except.bind_eq_ok hr1 with ⟨⟨value, s2⟩, h2, hr2⟩
+    rcases Except.bind_eq_ok hr2 with ⟨charged, h3, hr3⟩
+    rcases Except.bind_eq_ok hr3 with ⟨_, h4, h5⟩
+    have p1 := Devm.pop_of_pop h1
+    have p2 := Devm.pop_of_pop h2
+    have burn := Devm.burn_of_chargeGas h3
+    injection h5 with eq
+    rw [← eq]
+    exact ⟨(p1.logs.trans (p2.logs.trans burn.logs)).symm,
+      (p1.output.trans (p2.output.trans burn.output)).symm⟩
+  · rcases Except.bind_eq_ok hr with ⟨_, _h0, hr0⟩
+    rcases Except.bind_eq_ok hr0 with ⟨⟨key, s1⟩, h1, hr1⟩
+    rcases Except.bind_eq_ok hr1 with ⟨⟨value, s2⟩, h2, hr2⟩
+    rcases Except.bind_eq_ok hr2 with ⟨charged, h3, h5⟩
+    have p1 := Devm.pop_of_pop h1
+    have p2 := Devm.pop_of_pop h2
+    have burn := Devm.burn_of_chargeGas h3
+    injection h5 with eq
+    rw [← eq]
+    exact ⟨(p1.logs.trans (p2.logs.trans burn.logs)).symm,
+      (p1.output.trans (p2.output.trans burn.output)).symm⟩
 
 /-- **D2/D4/D5 at the common finish:** the heartbeat log uses the expiry
 write's own binder, the literal lock operands clear exactly one transient
@@ -1510,7 +1486,7 @@ private lemma success_of_extcodesize_val
     refine ⟨?_, ?_⟩
     · rw [← hcode]
       exact append_pref (Devm.push_of_push hpush).stack
-        (by rw [← (Devm.burn_of_chargeGas hgas).stack]; exact htail)
+        (by show xs <<+ d2.stack; rw [← (Devm.burn_of_chargeGas hgas).stack]; exact htail)
     · exact hpop'.memory.trans
         ((Devm.burn_of_chargeGas hgas).memory.trans
           (Devm.push_of_push hpush).memory)
@@ -1525,7 +1501,7 @@ private lemma success_of_extcodesize_val
     refine ⟨?_, ?_⟩
     · rw [← hcode]
       exact append_pref (Devm.push_of_push hpush).stack
-        (by rw [← (Devm.burn_of_chargeGas hgas).stack]; exact htail)
+        (by show xs <<+ d2.stack; rw [← (Devm.burn_of_chargeGas hgas).stack]; exact htail)
     · exact hpop'.memory.trans
         ((show d0.memory = (addAccessedAddress d0 x.toAdr).memory from rfl).trans
           ((Devm.burn_of_chargeGas hgas).memory.trans
