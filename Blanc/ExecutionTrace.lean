@@ -364,6 +364,19 @@ structure TransactionTrace (benv : Benv) (bout : BlockOutput)
       effectiveGasPrice intrinsicGas blobVersionedHashes) tx = .ok msg
   message : MessageCallTrace msg messageState messageOut
   result : processTransaction benv bout tx index = .ok (state, bout')
+  /-- The validation sender is the one Jaune's `processTransaction` recovers:
+  `0` on the no-state-gas lane, otherwise the chain-id-checked recovered
+  signer.  Stated with the public components of Jaune's private
+  `recoverValidationSender`, so the trace is determined by its inputs. -/
+  validationSender_run :
+    (match benv.beginTransaction.stat.rules.stateGas with
+      | none => Except.ok 0
+      | some _ => do
+        Except.mapError TransitionError.transaction
+          (checkTransactionChainId benv.beginTransaction tx)
+        Except.mapError (fun e => TransitionError.senderRecovery e)
+          (recoverSender benv.beginTransaction.stat.chainId tx) :
+      Except TransitionError Adr) = .ok validationSender
 
 /-- Every successful transaction admits an exact retained message trace. -/
 theorem exists_transactionTrace
@@ -405,7 +418,7 @@ theorem exists_transactionTrace
     by
       simpa [transactionTenv, Benv.beginTransaction, BenvStat.rules,
         allocateEvmGas, hsg] using hprepared,
-    messageTrace, h_result⟩⟩
+    messageTrace, h_result, hrec⟩⟩
 
 /-- Exact post-message transaction settlement form.  This exposes the two
 gas credits and the final account-deletion fold without re-executing or
