@@ -108,6 +108,7 @@ structure PermitStaticcallMessageTrace
   process : ProcessMessage msg slot (.ok childPost)
   resume : (Resume.call parent outputIndex outputSize).run
     (.ok childPost) = .ok callPost
+  benvStat : msg.benv.stat = sevm.benvStat
 
 /-- The literal ECRECOVER operand order at permit's call boundary: address
 `1`, input `[0,128)`, and output `[128,160)`. -/
@@ -594,6 +595,9 @@ theorem Exec.Deriv.ParentStepActions.permitStaticcallOutcome
       rename_i frame resume childEvm raw
       rcases childEvm with ⟨childPc, childSevm, childPre⟩
       have hs := (Evm.step_next hat).symm.trans hstep
+      have hframeStat : frame.inner.benv.stat = sevm.benvStat := by
+        obtain ⟨_, _, hspawn, _⟩ := Evm.step_spawn_inv hstep
+        exact Xinst.step_spawn_benvStat hspawn
       have actual : Ninst.StepRun pc sevm pre Ninst.staticcall
           (.some ⟨⟨childPc, childSevm, childPre⟩, raw⟩) (.ok post) := by
         simp only [Ninst.StepRun, hs, Step.Run]
@@ -627,7 +631,8 @@ theorem Exec.Deriv.ParentStepActions.permitStaticcallOutcome
               (.some ⟨⟨childPc, childSevm, childPre⟩, raw⟩) post :=
             ⟨msg, parent, childPost, outputIndex, outputSize,
               hparentState, hbenvState, hdepth, htarget, hcodeAddress,
-              hresolution, hvalue, htransfer, hstatic, hprocess, hresume⟩
+              hresolution, hvalue, htransfer, hstatic, hprocess, hresume,
+              by simpa only [Frame.ofCall] using hframeStat⟩
           by_cases hcommits : Execution.commits raw = true
           · have hsettles : Frame.settlementCommits
                 (Frame.ofCall msg) raw = true :=

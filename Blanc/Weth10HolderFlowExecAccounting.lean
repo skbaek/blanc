@@ -1002,8 +1002,10 @@ theorem ProcessCreateMessage.ok_getStorCode_eq_inner_of_clean
             | halt reason =>
                 have heq := Except.ok.inj hsettle
                 rw [heq] at herror
-                simp [processCreateMessage.exceptionalHalt,
-                  Devm.error, Devm.setMeta] at herror
+                split at herror <;>
+                  simp [processCreateMessage.exceptionalHalt,
+                    processCreateMessage.exceptionalHaltAmsterdam,
+                    Devm.error, Devm.setMeta] at herror
             | revert => cases hsettle
             | crypto reason => cases hsettle
             | internal reason => cases hsettle
@@ -2009,11 +2011,12 @@ theorem Xinst.storageSegmentEffect_some
       Prog.compile (weth10 dp))
     (htargetCode : frame.inner.currentTarget = ca →
       some frame.inner.code.toList = Prog.compile (weth10 dp))
-    (hbelow : StorageSegmentTraceBelow dp ca depth) :
+    (hbelow : StorageSegmentTraceBelow dp ca depth)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Nonempty (StorageSegmentEffect ca pre post
       (if Blanc.Frame.settlementCommits frame raw = true
        then Exec.flowActions dp ca child else [])) := by
-  rcases Xinst.step_shape sevm pre x with
+  rcases Xinst.step_shapeCovered sevm pre x hfork with
     ⟨ex, hs, hprefix⟩ |
     ⟨d, endowment, newAddress, mi, ms, hprefix, hs⟩ |
     ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
@@ -2075,11 +2078,12 @@ theorem Xinst.storageSegmentEffect_some_of_bodyEffect
     (hbody : ∀ (committed : Execution.commits raw = true),
       Nonempty (StorageSegmentEffect ca cevm.dyna
         (Execution.committedPost raw committed)
-        (Exec.flowActions dp ca child))) :
+        (Exec.flowActions dp ca child)))
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Nonempty (StorageSegmentEffect ca pre post
       (if Blanc.Frame.settlementCommits frame raw = true
        then Exec.flowActions dp ca child else [])) := by
-  rcases Xinst.step_shape sevm pre x with
+  rcases Xinst.step_shapeCovered sevm pre x hfork with
     ⟨ex, hs, hprefix⟩ |
     ⟨d, endowment, newAddress, mi, ms, hprefix, hs⟩ |
     ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
@@ -2121,10 +2125,11 @@ theorem Xinst.storageSegmentEffect_some_of_bodyEffect
 /-- Contract-neutral childless interpreter transport. -/
 theorem Xinst.storageSegmentEffect_none
     {ca : Adr} {sevm : Sevm} {pre post : Devm} {x : Xinst}
-    (hrun : Xinst.Run sevm pre x .none (.ok post)) :
+    (hrun : Xinst.Run sevm pre x .none (.ok post))
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Nonempty (StorageSegmentEffect ca pre post []) := by
   unfold Xinst.Run at hrun
-  rcases Xinst.step_shape sevm pre x with
+  rcases Xinst.step_shapeCovered sevm pre x hfork with
     ⟨execution, hs, hframe⟩ |
     ⟨d, endowment, newAddress, mi, ms, hprefix, hs⟩ |
     ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
@@ -2205,6 +2210,7 @@ def Exec.CoreStorageSound (dp : DeployParams) (ca : Adr)
     (sevm.currentTarget = ca →
       Exec.Frame.IsRoot (Exec.Frame.ofRun run committed) ∧
         sevm.codeAddress = some ca) →
+    CoveredFork sevm.benvStat.fork →
     Nonempty (StorageSegmentEffect ca pre
       (Execution.committedPost out committed)
       (Exec.flowActions dp ca run))
@@ -2224,6 +2230,7 @@ def CompiledBodyStorageHandler (dp : DeployParams) (ca : Adr) : Prop :=
       (sevm.currentTarget = ca →
         Exec.Frame.IsRoot (Exec.Frame.ofRun run committed) ∧
           sevm.codeAddress = some ca) →
+      CoveredFork sevm.benvStat.fork →
       Nonempty (StorageSegmentEffect ca pre post
         (Exec.flowActions dp ca run))
 
@@ -2246,10 +2253,11 @@ theorem CompiledFrameStorageHandler.compiledBodyStorageHandler
     (handler : CompiledFrameStorageHandler dp ca) :
     CompiledBodyStorageHandler dp ca := by
   intro sevm pre post hrun htarget hdeeper run committed installed rootDirect
+    hcovered
   let frame := Exec.Frame.ofRun run committed
   have hrootDirect := rootDirect htarget
   have context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame := by
-    refine ⟨hrootDirect.1, ?_, installed⟩
+    refine ⟨hrootDirect.1, ?_, installed, hcovered⟩
     refine ⟨rfl, htarget, hrootDirect.2, ?_⟩
     exact (installed.2 htarget).1
   exact handler frame context hdeeper
@@ -2272,7 +2280,8 @@ theorem ProcessMessageTrace.storageSegmentDelta_of_forallDeeperAt
       msg.codeAddress = some ca)
     (hdeeper : ForallDeeperAt depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
-        Exec.CoreStorageSound dp ca pc sevm pre out)) :
+        Exec.CoreStorageSound dp ca pc sevm pre out))
+    (hfork : CoveredFork msg.benv.stat.fork) :
     Nonempty (StorageSegmentEffect ca parent post
       (Blanc.Weth10.RetainedXlot.flowActions dp ca trace.retained)) := by
   rcases trace with ⟨slot, retained, hprocess⟩
@@ -2345,9 +2354,14 @@ theorem ProcessMessageTrace.storageSegmentDelta_of_forallDeeperAt
               simpa [initSevm, Msg.withBenv] using hdepth
             have hcore := hdeeper pc sevm pre (.ok raw) run
               hchildDepth hat
+            have hchildFork : CoveredFork sevm.benvStat.fork := by
+              have hstat := Frame.enter_run_benvStat henter
+              simp only at hstat
+              rw [hstat]
+              exact hfork
             rcases hcore run hcommit hat
                 (fun htarget =>
-                  ⟨⟨hpc, hmemory⟩, hdirect htarget⟩) with
+                  ⟨⟨hpc, hmemory⟩, hdirect htarget⟩) hchildFork with
               ⟨childEffect⟩
             have hpostState : post.state = raw.state :=
               ProcessMessage.ok_state_eq_committedPost hprocess hcommit
@@ -2427,7 +2441,8 @@ theorem RawTokenCallbackStepBoundary.storageSegmentEffect
       Prog.compile (weth10 dp))
     (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
       (fun pc sevm childPre out _ =>
-        Exec.CoreStorageSound dp ca pc sevm childPre out)) :
+        Exec.CoreStorageSound dp ca pc sevm childPre out))
+    (hfork : CoveredFork e.benvStat.fork) :
     ∃ (pc : Nat) (callPre callPost : Devm) (xl : Xlot)
         (retained : RetainedXlot xl),
       Ninst.StepRun pc e callPre Ninst.call xl (.ok callPost) ∧
@@ -2474,7 +2489,7 @@ theorem RawTokenCallbackStepBoundary.storageSegmentEffect
       rw [if_neg (not_delegation_of_compile hcallPreCode)]
     simp [msg, callMsg, htargetCa, hnodel]
   rcases trace.storageSegmentDelta_of_forallDeeperAt hparent hmsgDepth
-      hcallPreCode htargetCode htargetDirect hdeeper with ⟨childEffect⟩
+      hcallPreCode htargetCode htargetDirect hdeeper hfork with ⟨childEffect⟩
   have hprefix := StorageSegmentEffect.of_getStorCode_eq
     (congrFun hstorPre ca) (congrFun hcodePre ca)
   have hchildToCallPost := StorageSegmentEffect.of_getStorCode_eq
@@ -2509,7 +2524,8 @@ theorem RawTokenCallbackIndexedStepBoundary.storageSegmentEffect
       Prog.compile (weth10 dp))
     (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
       (fun pc sevm childPre out _ =>
-        Exec.CoreStorageSound dp ca pc sevm childPre out)) :
+        Exec.CoreStorageSound dp ca pc sevm childPre out))
+    (hfork : CoveredFork e.benvStat.fork) :
     Nonempty (StorageSegmentEffect ca pre post
       (retained.flowActions dp ca)) := by
   rcases callback with
@@ -2551,7 +2567,7 @@ theorem RawTokenCallbackIndexedStepBoundary.storageSegmentEffect
       rw [if_neg (not_delegation_of_compile hcallPreCode)]
     simp [msg, callMsg, htargetCa, hnodel]
   rcases trace.storageSegmentDelta_of_forallDeeperAt hparent hmsgDepth
-      hcallPreCode htargetCode htargetDirect hdeeper with ⟨childEffect⟩
+      hcallPreCode htargetCode htargetDirect hdeeper hfork with ⟨childEffect⟩
   have hprefix := StorageSegmentEffect.of_getStorCode_eq
     (congrFun hstorPre ca) (congrFun hcodePre ca)
   have hchildToCallPost := StorageSegmentEffect.of_getStorCode_eq
@@ -2581,7 +2597,8 @@ theorem RawFlashCallbackStepBoundary.storageSegmentEffect
       Prog.compile (weth10 dp))
     (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
       (fun pc sevm childPre out _ =>
-        Exec.CoreStorageSound dp ca pc sevm childPre out)) :
+        Exec.CoreStorageSound dp ca pc sevm childPre out))
+    (hfork : CoveredFork e.benvStat.fork) :
     ∃ (pc : Nat) (xl : Xlot) (retained : RetainedXlot xl),
       Ninst.StepRun pc e pre Ninst.call xl (.ok mid) ∧
       Nonempty (StorageSegmentEffect ca pre mid
@@ -2636,7 +2653,7 @@ theorem RawFlashCallbackStepBoundary.storageSegmentEffect
       simpa only [msg, callMsg] using htarget
     simp [msg, callMsg, hresolved hreceiver]
   rcases trace.storageSegmentDelta_of_forallDeeperAt hparent hmsgDepth
-      installed htargetCode htargetDirect hdeeper with ⟨childEffect⟩
+      installed htargetCode htargetDirect hdeeper hfork with ⟨childEffect⟩
   have hchildToMid := StorageSegmentEffect.of_getStorCode_eq
     (congrArg (fun state : State => state.getStor ca) hmidState.symm)
     (congrArg (fun state : State => state.getCode ca) hmidState.symm)
@@ -2659,7 +2676,8 @@ theorem RawFlashCallbackIndexedStepBoundary.storageSegmentEffect
       Prog.compile (weth10 dp))
     (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
       (fun pc sevm childPre out _ =>
-        Exec.CoreStorageSound dp ca pc sevm childPre out)) :
+        Exec.CoreStorageSound dp ca pc sevm childPre out))
+    (hfork : CoveredFork e.benvStat.fork) :
     Nonempty (StorageSegmentEffect ca pre mid
       (retained.flowActions dp ca)) := by
   rcases callback with
@@ -2696,7 +2714,7 @@ theorem RawFlashCallbackIndexedStepBoundary.storageSegmentEffect
       rw [if_neg (not_delegation_of_compile installed)]
     simp [msg, callMsg, hreceiver, hnodel]
   rcases trace.storageSegmentDelta_of_forallDeeperAt hparent hmsgDepth
-      installed htargetCode htargetDirect hdeeper with ⟨childEffect⟩
+      installed htargetCode htargetDirect hdeeper hfork with ⟨childEffect⟩
   have hchildToMid := StorageSegmentEffect.of_getStorCode_eq
     (congrArg (fun state : State => state.getStor ca) hmidState.symm)
     (congrArg (fun state : State => state.getCode ca) hmidState.symm)
@@ -2716,7 +2734,8 @@ theorem BurnCallPrefix.storageSegmentEffect
       Prog.compile (weth10 dp))
     (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
       (fun pc sevm childPre out _ =>
-        Exec.CoreStorageSound dp ca pc sevm childPre out)) :
+        Exec.CoreStorageSound dp ca pc sevm childPre out))
+    (hfork : CoveredFork e.benvStat.fork) :
     ∃ (pc : Nat) (callPost : Devm) (xl : Xlot)
         (retained : RetainedXlot xl),
       Ninst.StepRun pc e callPre Ninst.call xl (.ok callPost) ∧
@@ -2724,7 +2743,7 @@ theorem BurnCallPrefix.storageSegmentEffect
         (retained.flowActions dp ca)) := by
   rcases burn.2.2.2.2.2.2.2 with
     ⟨gasWord, callPost, testPost, hstack, hcall, hiszero, hpop⟩
-  rcases of_run_call_val_with_depth_frame hstack hcall with
+  rcases of_run_call_val_with_depth_frame hstack hcall hfork with
       hfailed | hsuccess
   · exfalso
     have htest := prefix_of_iszero hiszero hfailed.1
@@ -2792,7 +2811,7 @@ theorem BurnCallPrefix.storageSegmentEffect
         simpa only [msg, callMsg] using htarget
       simp [msg, callMsg, hresolved htargetCa]
     rcases trace.storageSegmentDelta_of_forallDeeperAt hparent hmsgDepth
-        installed htargetCode htargetDirect hdeeper with ⟨childEffect⟩
+        installed htargetCode htargetDirect hdeeper hfork with ⟨childEffect⟩
     have hguardState : guardPost.state = child.state := by
       calc
         guardPost.state = testPost.state := hpop.state.symm
@@ -2821,7 +2840,8 @@ theorem AcceptedValueCallTrace.storageSegmentEffect
       Prog.compile (weth10 dp))
     (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
       (fun pc sevm childPre out _ =>
-        Exec.CoreStorageSound dp ca pc sevm childPre out)) :
+        Exec.CoreStorageSound dp ca pc sevm childPre out))
+    (hfork : CoveredFork e.benvStat.fork) :
     Nonempty (StorageSegmentEffect ca callPre guardPost
       (Blanc.Weth10.RetainedXlot.flowActions dp ca
         trace.retained.retained)) := by
@@ -2850,8 +2870,11 @@ theorem AcceptedValueCallTrace.storageSegmentEffect
       dsimp only [getDelegatedCodeAddress]
       rw [if_neg (not_delegation_of_compile installed)]
     simp only [callMsg, htarget', hnodel, Option.getD_none]
+  have hchildFork : CoveredFork trace.childMessage.benv.stat.fork := by
+    rw [trace.childMessage_eq]
+    exact hfork
   rcases trace.retained.storageSegmentDelta_of_forallDeeperAt hparent
-      hmsgDepth installed htargetCode htargetDirect hdeeper with
+      hmsgDepth installed htargetCode htargetDirect hdeeper hchildFork with
     ⟨childEffect⟩
   have hchildToGuard := StorageSegmentEffect.of_getStorCode_eq
     (congrArg (fun state : State => state.getStor ca)
@@ -4360,7 +4383,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_depositToAndCall
     rw [hcode]
     exact context.installed.1
   rcases callback.storageSegmentEffect retained context.invocation.2.1
-      installedCallback hdeeper with ⟨callbackEffect⟩
+      installedCallback hdeeper context.covered with ⟨callbackEffect⟩
   have htarget : frame.sevm.currentTarget = ca :=
     context.invocation.2.1
   rw [htarget, normalizedAddressArg_eq_toAdr_toB256] at hstorage
@@ -4430,7 +4453,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_approveAndCall
     rw [hcode]
     exact context.installed.1
   rcases callback.storageSegmentEffect retained context.invocation.2.1
-      installedCallback hdeeper with ⟨callbackEffect⟩
+      installedCallback hdeeper context.covered with ⟨callbackEffect⟩
   have htarget : frame.sevm.currentTarget = ca :=
     context.invocation.2.1
   rw [htarget] at hsilent
@@ -4471,7 +4494,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_flashLoan
     rw [← congrFun hprefixCode ca]
     exact context.installed.1
   rcases callback.storageSegmentEffect retained context.invocation.2.1
-      installedCallback hdeeper with ⟨callbackEffect⟩
+      installedCallback hdeeper context.covered with ⟨callbackEffect⟩
   have hreceiverNorm : (normalizedAddressArg frame.sevm 0).toAdr =
       (Sevm.argWord frame.sevm 0).toAdr := by
     rw [normalizedAddressArg_eq_toAdr_toB256, toAdr_toB256]
@@ -4577,7 +4600,7 @@ private theorem Exec.Frame.hasProofIndexedStorageAccounting_of_valueRedemption
     rw [burn.2.2.2.2.2.1]
     exact context.installed.1
   rcases trace.storageSegmentEffect context.invocation.2.1 installedCall
-      hdeeper with ⟨childEffect⟩
+      hdeeper context.covered with ⟨childEffect⟩
   have hdecrease := burn.1
   have hamountLe := burn.2.1
   rw [context.invocation.2.1] at hdecrease hamountLe
@@ -4624,7 +4647,7 @@ private theorem Exec.Frame.hasProofIndexedStorageAccounting_of_allowanceValueRed
     rw [burn.2.2.2.2.2.1, ← entry.code]
     exact context.installed.1
   rcases trace.storageSegmentEffect context.invocation.2.1 installedCall
-      hdeeper with ⟨childEffect⟩
+      hdeeper context.covered with ⟨childEffect⟩
   have hdecrease := burn.1
   have hamountLe := burn.2.1
   have hentryRest := entry.storage.1
@@ -4925,13 +4948,13 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferAndCall
       rw [burn.2.2.2.2.2.1]
       exact context.installed.1
     rcases trace.storageSegmentEffect context.invocation.2.1 installedCall
-        hdeeper with ⟨valueEffect⟩
+        hdeeper context.covered with ⟨valueEffect⟩
     have installedCallback : some (callbackPre.getCode ca).toList =
         Prog.compile (weth10 dp) := by
       rw [← valueEffect.codeEq]
       exact installedCall
     rcases callback.storageSegmentEffect retained context.invocation.2.1
-        installedCallback hdeeper with ⟨callbackEffect⟩
+        installedCallback hdeeper context.covered with ⟨callbackEffect⟩
     have hprimary : primaryFlowAtom frame.sevm = some
         (.redemption frame.sevm.caller.toB256 frame.sevm.caller
           frame.sevm.caller (Sevm.argWord frame.sevm 1).toNat) := by
@@ -4993,7 +5016,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferAndCall
       rw [hcode]
       exact context.installed.1
     rcases callback.storageSegmentEffect retained context.invocation.2.1
-        installedCallback hdeeper with ⟨callbackEffect⟩
+        installedCallback hdeeper context.covered with ⟨callbackEffect⟩
     have htarget : frame.sevm.currentTarget = ca :=
       context.invocation.2.1
     rw [htarget] at htransfer
@@ -5136,8 +5159,12 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_permit
           dsimp only [getDelegatedCodeAddress]
           rw [if_neg (not_delegation_of_compile installedCall)]
         simp only [trace.codeAddress, htargetCa, hnodel, Option.getD_none]
+      have hmsgFork : CoveredFork trace.msg.benv.stat.fork := by
+        rw [trace.benvStat]
+        exact context.covered
       rcases childTrace.storageSegmentDelta_of_forallDeeperAt hparent
-          trace.depth installedCall htargetCode htargetDirect hdeeper with
+          trace.depth installedCall htargetCode htargetDirect hdeeper
+          hmsgFork with
         ⟨childEffect⟩
       have hresumeState : callPost.state = trace.childPost.state :=
         Resume.call_state trace.resume
@@ -5196,7 +5223,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferNonzero
             context.memory_wf context.memory_reads_empty run
             context.invocation.2.2.2
             (by simpa only [transferSelector] using hselector)
-            hnonempty).2
+            hnonempty context.covered).2
           have htarget : e.currentTarget = ca :=
             context.invocation.2.1
           rcases heffect with hzero | hnonzero
@@ -5805,7 +5832,8 @@ interpreter transport above. -/
 theorem Ninst.foreignNoneStorageSegmentEffect
     {ca : Adr} {pc : Nat} {sevm : Sevm} {pre post : Devm} {n : Ninst}
     (run : Ninst.StepRun pc sevm pre n .none (.ok post))
-    (hforeign : sevm.currentTarget ≠ ca) :
+    (hforeign : sevm.currentTarget ≠ ca)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Nonempty (StorageSegmentEffect ca pre post []) := by
   cases n with
   | reg r =>
@@ -5825,10 +5853,25 @@ theorem Ninst.foreignNoneStorageSegmentEffect
           (Rinst.preserves_getCode hreg ca).symm⟩
   | exec x =>
       simp only [Ninst.StepRun, Ninst.step_exec] at run
-      exact Xinst.storageSegmentEffect_none (XStep.run_toStep.mp run)
+      exact Xinst.storageSegmentEffect_none (XStep.run_toStep.mp run) hfork
   | push xs hxs =>
       have hframe := Ninst.push_instructionFrame_effectRec
         (hxs := hxs) (xl := .none) trivial run
+      exact ⟨StorageSegmentEffect.of_getStorCode_eq
+        (hframe.getStor ca) (hframe.getCode ca)⟩
+  | dupn imm =>
+      have hframe := Ninst.dupn_instructionFrame_effectRec
+        (imm := imm) (xl := .none) trivial run
+      exact ⟨StorageSegmentEffect.of_getStorCode_eq
+        (hframe.getStor ca) (hframe.getCode ca)⟩
+  | swapn imm =>
+      have hframe := Ninst.swapn_instructionFrame_effectRec
+        (imm := imm) (xl := .none) trivial run
+      exact ⟨StorageSegmentEffect.of_getStorCode_eq
+        (hframe.getStor ca) (hframe.getCode ca)⟩
+  | exchange imm =>
+      have hframe := Ninst.exchange_instructionFrame_effectRec
+        (imm := imm) (xl := .none) trivial run
       exact ⟨StorageSegmentEffect.of_getStorCode_eq
         (hframe.getStor ca) (hframe.getCode ca)⟩
 
@@ -5854,81 +5897,8 @@ theorem Linst.foreignStorageSegmentEffect
   have hcodeFrame := Linst.run_codeFrame run
   have hcode : pre.getCode ca = post.getCode ca :=
     (hcodeFrame ca).symm
-  cases l with
-  | stop =>
-      simp [Linst.Run, Linst.run] at run
-      subst post
-      exact ⟨StorageSegmentEffect.refl ca pre⟩
-  | return_ =>
-      have hframe := Linst.run_instructionFrame sevm pre .return_ (by decide)
-      rw [run] at hframe
-      exact ⟨StorageSegmentEffect.of_getStorCode_eq
-        (hframe.getStor ca) hcode⟩
-  | revert =>
-      dsimp [Linst.Run, Linst.run] at run
-      rcases Except.bind_eq_ok run with ⟨first, hfirst, hrest⟩
-      rcases Except.bind_eq_ok hrest with ⟨second, hsecond, hrest⟩
-      rcases Except.bind_eq_ok hrest with ⟨third, hthird, hrest⟩
-      contradiction
-  | selfdestruct =>
-      dsimp [Linst.Run, Linst.run] at run
-      rcases Except.bind_eq_ok run with
-        ⟨⟨donee, devm1⟩, hpop, hrun1⟩
-      rcases Except.bind_eq_ok hrun1 with
-        ⟨devm2, hcharge, hrun2⟩
-      rcases Except.bind_eq_ok hrun2 with
-        ⟨_, hassert, hrun3⟩
-      rcases Except.bind_eq_ok hrun3 with
-        ⟨devm3, hsub, hrun4⟩
-      have hsubSome : devm2.subBal sevm.currentTarget
-          (devm1.getAcct sevm.currentTarget).bal = some devm3 := by
-        cases heq : devm2.subBal sevm.currentTarget
-            (devm1.getAcct sevm.currentTarget).bal
-        · rw [heq] at hsub
-          contradiction
-        · rw [heq] at hsub
-          injection hsub with h
-          subst h
-          rfl
-      have hsubState : devm2.state.subBal sevm.currentTarget
-          (devm1.getAcct sevm.currentTarget).bal = some devm3.state := by
-        dsimp [Devm.subBal, Option.bind] at hsubSome
-        cases heq : devm2.state.subBal sevm.currentTarget
-            (devm1.getAcct sevm.currentTarget).bal
-        · rw [heq] at hsubSome
-          contradiction
-        · rw [heq] at hsubSome
-          injection hsubSome with h
-          subst h
-          rfl
-      let transferred := devm3.addBal donee
-        (devm1.getAcct sevm.currentTarget).bal
-      have hpreToOne : Devm.getStor pre ca = Devm.getStor devm1 ca :=
-        congrFun (Devm.popToAdr_getStor_eq hpop) ca
-      have hchargeStor : Devm.getStor devm1 ca = Devm.getStor devm2 ca := by
-        have hcharged := chargeGas_getStor_eq hcharge
-        have hprefix : Devm.getStor
-            (if donee ∉ devm1.accessedAddresses then
-              (addAccessedAddress devm1 donee,
-                gasSelfDestruct + gasColdAccountAccess)
-            else (devm1, gasSelfDestruct)).1 ca =
-              Devm.getStor devm1 ca := by
-          split <;> rfl
-        exact hprefix.symm.trans (congrFun hcharged ca)
-      have htransferStor : Devm.getStor devm2 ca =
-          Devm.getStor transferred ca := by
-        exact (of_state_transfer_fields hsubState).1 ca |>.symm
-      have hpostStor : Devm.getStor transferred ca = Devm.getStor post ca := by
-        dsimp only [transferred] at hrun4 ⊢
-        split at hrun4
-        · have heq := Except.ok.inj hrun4
-          rw [← heq]
-          exact State.setBal_get_stor.symm
-        · have heq := Except.ok.inj hrun4
-          rw [← heq]
-      exact ⟨StorageSegmentEffect.of_getStorCode_eq
-        (hpreToOne.trans (hchargeStor.trans
-          (htransferStor.trans hpostStor))) hcode⟩
+  exact ⟨StorageSegmentEffect.of_getStorCode_eq
+    (congrFun (Linst.getStor_eq run) ca).symm hcode⟩
 
 /-- Foreign nonrecursive handler for `lift_core`. -/
 theorem Exec.CoreStorageSound.nextNone
@@ -5942,15 +5912,15 @@ theorem Exec.CoreStorageSound.nextNone
     (ih : Exec.CoreStorageSound dp ca
       (pc + n.size) sevm inter out) :
     Exec.CoreStorageSound dp ca pc sevm pre out := by
-  intro run committed hatp _
-  rcases Ninst.foreignNoneStorageSegmentEffect hstep hforeign with ⟨head⟩
+  intro run committed hatp _ hcov
+  rcases Ninst.foreignNoneStorageSegmentEffect hstep hforeign hcov with ⟨head⟩
   have hatpInter : Prog.At (weth10 dp) ca
       (pc + n.size) sevm inter := by
     refine ⟨?_, fun htarget => (hforeign htarget).elim⟩
     rw [← head.codeEq]
     exact hatp.1
   rcases ih next committed hatpInter
-      (fun htarget => (hforeign htarget).elim) with ⟨tail⟩
+      (fun htarget => (hforeign htarget).elim) hcov with ⟨tail⟩
   have combined : StorageSegmentEffect ca pre
       (Execution.committedPost out committed)
       (Exec.flowActions dp ca next) := by
@@ -6036,8 +6006,14 @@ theorem Exec.CoreStorageSound.nextSome
       simp [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at hstep
   | push xs hxs =>
       simp [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hstep
+  | dupn imm =>
+      simp [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at hstep
+  | swapn imm =>
+      simp [Ninst.StepRun, Ninst.step_swapn, Step.run_ofExecution] at hstep
+  | exchange imm =>
+      simp [Ninst.StepRun, Ninst.step_exchange, Step.run_ofExecution] at hstep
   | exec x =>
-      intro run committed hatp _
+      intro run committed hatp _ hcov
       have hxrun := XStep.run_toStep.mp hstep
       cases hs : Xinst.step sevm pre x with
       | done execution =>
@@ -6120,15 +6096,16 @@ theorem Exec.CoreStorageSound.nextSome
                 exact ihChild child rawCommitted hchildAt
                   (fun htarget =>
                     ⟨⟨hpc0, hchildMemory⟩, hchildDirect htarget⟩)
+                  (Evm.step_spawn_child_fork hevm henter hcov)
               rcases Xinst.storageSegmentEffect_some_of_bodyEffect
-                  hs hframe hresume.symm child hatp.1 hbody with ⟨head⟩
+                  hs hframe hresume.symm child hatp.1 hbody hcov with ⟨head⟩
               have hatpInter : Prog.At (weth10 dp) ca
                   (pc + 1) sevm inter := by
                 refine ⟨?_, fun htarget => (hforeign htarget).elim⟩
                 rw [← head.codeEq]
                 exact hatp.1
               rcases ihNext next committed hatpInter
-                  (fun htarget => (hforeign htarget).elim) with ⟨tail⟩
+                  (fun htarget => (hforeign htarget).elim) hcov with ⟨tail⟩
               have combined := head.append tail
               rw [Exec.flowActions_eq_descendantActions_of_currentTarget_ne
                   next committed hforeign] at combined
@@ -6149,7 +6126,7 @@ theorem Exec.CoreStorageSound.jump
     (hforeign : sevm.currentTarget ≠ ca)
     (ih : Exec.CoreStorageSound dp ca pc' sevm inter out) :
     Exec.CoreStorageSound dp ca pc sevm pre out := by
-  intro run committed hatp _
+  intro run committed hatp _ hcov
   have hevm : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' inter := by
     rw [Evm.step_jump hat]
     exact congrArg Step.ofJump hstep
@@ -6162,7 +6139,7 @@ theorem Exec.CoreStorageSound.jump
     rw [← head.codeEq]
     exact hatp.1
   rcases ih next committed hatpInter
-      (fun htarget => (hforeign htarget).elim) with ⟨tail⟩
+      (fun htarget => (hforeign htarget).elim) hcov with ⟨tail⟩
   have combined : StorageSegmentEffect ca pre
       (Execution.committedPost out committed)
       (Exec.flowActions dp ca next) := by
@@ -6185,7 +6162,7 @@ theorem Exec.CoreStorageSound.last
     (hstep : Linst.Run sevm pre l out)
     (hforeign : sevm.currentTarget ≠ ca) :
     Exec.CoreStorageSound dp ca pc sevm pre out := by
-  intro run committed _ _
+  intro run committed _ _ _
   have hevm : Evm.step ⟨pc, sevm, pre⟩ = .halt out := by
     rw [Evm.step_last hat]
     exact congrArg Step.halt hstep
@@ -6262,6 +6239,7 @@ def InstalledStorageSegmentTraceSound
     Prog.At (weth10 dp) ca pc sevm pre →
       Exec.Frame.IsRoot (Exec.Frame.ofRun run committed) →
       sevm.codeAddress = some ca →
+      CoveredFork sevm.benvStat.fork →
       Nonempty (Blanc.Weth10.Exec.StorageSegmentTrace dp ca run)
 
 /-- The generic recursive lift turns a concrete compiled-body handler into the
@@ -6270,10 +6248,10 @@ theorem CompiledBodyStorageHandler.installedStorageSegmentTraceSound
     {dp : DeployParams} {ca : Adr}
     (handler : CompiledBodyStorageHandler dp ca) :
     InstalledStorageSegmentTraceSound dp ca := by
-  intro pc sevm pre post run committed installed root direct
+  intro pc sevm pre post run committed installed root direct hcovered
   have hfa := Exec.coreStorageSound_of_compiledBodyStorageHandler handler
   have hcore := hfa pc sevm pre (.ok post) run installed
-  exact hcore run committed installed (fun _ => ⟨root, direct⟩)
+  exact hcore run committed installed (fun _ => ⟨root, direct⟩) hcovered
 
 /-- Discharging the exact operational trace seam yields the requested full
 per-holder and aggregate accounting statement immediately. -/
@@ -6285,9 +6263,10 @@ theorem Exec.storageFlowAccounting_of_installedTraceSound
     (installed : Prog.At (weth10 dp) ca pc sevm pre)
     (committed : Execution.commits (.ok post) = true)
     (root : Exec.Frame.IsRoot (Exec.Frame.ofRun run committed))
-    (direct : sevm.codeAddress = some ca) :
+    (direct : sevm.codeAddress = some ca)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     StorageFlowAccounting ca pre post (Exec.flowActions dp ca run) := by
-  rcases sound run committed installed root direct with ⟨trace⟩
+  rcases sound run committed installed root direct hfork with ⟨trace⟩
   exact trace.storageFlowAccounting
 
 /-- Empty action segments account for an unchanged WETH10 storage map. -/
