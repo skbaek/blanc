@@ -809,54 +809,31 @@
    ],
    "id": "prorata-weth-vault-differential",
    "inputs": {
-    "env": [
-     "EELS_ROOT",
-     "HOME"
-    ],
-    "external": [
-     {
-      "id": "eels",
-      "path": "~/execution-specs",
-      "path_env": "EELS_ROOT",
-      "pin": "4198b9c5996713b268aed602739d5aa40e277694"
-     }
-    ],
     "files": [
      "scripts/check-prorata-weth-vault-differential.sh",
      "scripts/check-prorata-weth-vault-differential.py",
      "scripts/prorata_weth_vault_differential_matrix.py",
-     "scripts/prorata-weth-vault-differential-manifest.json",
-     "scripts/evm_return_capture.py",
      "scripts/prorata_weth_vault_oracle.py",
+     "scripts/evm_return_capture.py",
      "scripts/evm_tx.py",
      "scripts/keccak.py",
      "scripts/check-runtime-bytes.py",
+     "scripts/gen-prorata-weth-wrap-proof.py",
+     "scripts/prorata-weth-wrap-proof.json",
      "Blanc/ProrataWethVaultCode.lean",
      "Blanc/WethCode.lean",
      ".lake/packages/jaune/.lake/build/bin/jaune",
      ".lake/packages/jaune/scripts/sources.json",
      "scripts/prorata-weth-vault-reference.json",
      "scripts/prorata-weth-vault-reference-measurements.json",
-     "scripts/reference/prorata-weth-vault/inputs/standard-json-output.json",
-     "@eels/venv/pyvenv.cfg",
-     "@eels/venv/bin/python",
-     "scripts/eels_differential_common.py"
-    ],
-    "populations": [
-     {
-      "exclude": [
-       "*/__pycache__/*"
-      ],
-      "pattern": "python*/site-packages/**/*",
-      "root": "@eels/venv/lib"
-     }
+     "scripts/reference/prorata-weth-vault/inputs/standard-json-output.json"
     ],
     "tools": [
-     "git"
+     "python3"
     ]
    },
    "kind": "cacheable",
-   "note": "Executes both compiled sides through Jaune against the independent oracle over the registered finite matrix; pinned EELS is a separate replay, never an observation of Jaune. The matrix producer, manifest and neutral returndata recorder are exact inputs alongside the runner, frozen literals, lock and committed measurements. Converter overflow requires source-derived exact Blanc-empty/reference-Panic(0x11) returndata on both engines. The executed-ID ledger credits only completed declared case/channel/side checks; it does not credit remaining SF rows. Foreign-child rows are canonical-return probes outside exact-pair admission; they retain Jaune rollback evidence and EELS outcome replay only.",
+   "note": "Executes the boundary matrix (removal ledger K1-K23) on both compiled sides through Jaune against the independent oracle: every selector on both sides, rounding directions, guards, a representative failure and rollback per mutation, events, malformed calldata, registered deviations 2/3/5/6, max* attainability, the A2 wrap cases, the D9 finite evaluation and the frozen attack transcript; identity-checks the reference, regenerates the F14 wrap proof and byte-compares the committed measurements. Families a PRORATA theorem covers, and EVM conformance (Jaune's concern), are retired under the evidence-economy directive; the ledger names each cover.",
    "verdict": {
     "expect_exit": 0,
     "summary_patterns": [
@@ -901,61 +878,32 @@
    ],
    "id": "prorata-weth-vault-differential-self-test",
    "inputs": {
-    "env": [
-     "EELS_ROOT",
-     "HOME"
-    ],
-    "external": [
-     {
-      "id": "eels",
-      "path": "~/execution-specs",
-      "path_env": "EELS_ROOT",
-      "pin": "4198b9c5996713b268aed602739d5aa40e277694"
-     }
-    ],
     "files": [
      "scripts/check-prorata-weth-vault-differential.sh",
      "scripts/check-prorata-weth-vault-differential.py",
      "scripts/prorata_weth_vault_differential_matrix.py",
-     "scripts/prorata-weth-vault-differential-manifest.json",
-     "scripts/evm_return_capture.py",
      "scripts/prorata_weth_vault_oracle.py",
+     "scripts/evm_return_capture.py",
      "scripts/evm_tx.py",
      "scripts/keccak.py",
-     "scripts/check-runtime-bytes.py",
-     "Blanc/ProrataWethVaultCode.lean",
-     "Blanc/WethCode.lean",
-     ".lake/packages/jaune/.lake/build/bin/jaune",
-     ".lake/packages/jaune/scripts/sources.json",
-     "scripts/prorata-weth-vault-reference.json",
-     "scripts/prorata-weth-vault-reference-measurements.json",
-     "scripts/reference/prorata-weth-vault/inputs/standard-json-output.json",
-     "@eels/venv/pyvenv.cfg",
-     "@eels/venv/bin/python",
-     "scripts/eels_differential_common.py"
-    ],
-    "populations": [
-     {
-      "exclude": [
-       "*/__pycache__/*"
-      ],
-      "pattern": "python*/site-packages/**/*",
-      "root": "@eels/venv/lib"
-     }
+     "scripts/check-runtime-bytes.py"
     ],
     "tools": [
-     "git"
+     "python3"
     ]
    },
    "kind": "cacheable",
-   "note": "Harness self-test in disposable copies: five semantic oracle perturbations regenerate the registered matrix identity and require their named diagnostic. Jaune and EELS arithmetic-capacity invocations are each removed while the declaration remains, and the matching executed-ID coverage audit must fail. Receipt/rollback and returndata controls exercise false-positive paths. The valid-call-as-revert record currently requires emitted rejection diagnostics, without attributing a named status diagnostic. Measurement and locked-reference identity corruptions remain isolated and must fail.",
+   "note": "Harness self-test (evidence economy rule 3): 11 mutants of the kept controls -- the oracle offset and its four rounding directions, the locked reference identity, the committed measurements, the rollback projection, the deposit event order, the zero-receiver guard and selector coverage -- each run the narrowest --only/--side mode and must reach their named diagnostic; restore is byte identity to the committed file, whose green verdict is the prerequisite main row. Inputs are the harness's own files only: the committed Lean literals, Jaune binary, reference and measurement data it reads as subjects or mutation carriers are deliberately not fingerprinted, so the self-test reruns when a control changes, not when the subject does.",
    "verdict": {
     "expect_exit": 0,
     "summary_patterns": [
      "^OK \u2014 vault differential self-test: "
     ]
    },
-   "order": 23
+   "order": 23,
+   "depends_on": [
+    "prorata-weth-vault-differential"
+   ]
   },
   {
    "command": [
