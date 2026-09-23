@@ -220,6 +220,7 @@ theorem runCompiled_tload_of
 theorem runCompiled_tstore_of
     {sevm : Sevm} {pre : Devm} {key value : B256}
     {stack : List B256} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hstack : pre.stack = key :: value :: stack)
     (hstatic : sevm.isStatic = false)
     (hgas : pre.gasLeft = G + gasWarmAccess) :
@@ -227,6 +228,7 @@ theorem runCompiled_tstore_of
       ((pre.setMach ⟨stack, pre.memory, G, pre.stateGas⟩).setTransVal
         sevm.currentTarget key value) := by
   refine Ninst.runCompiled_reg (by rintro ⟨⟩) ?_
+  simp only [Rinst.runCore, hfork.rules_stateGas_none]
   show (do
     let ⟨k, d⟩ ← pre.pop
     let ⟨v, d⟩ ← d.pop
@@ -718,6 +720,7 @@ three `gasColdSload` occurrences are the worst case of the three costs this
 statement leaves open. -/
 theorem pause_body_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (target pauser expiry duration : B256)
     (assignmentCost expiryCost durationCost kernelGas : Nat) (post : Devm)
     (hdataLength : sevm.data.length = 36)
@@ -786,13 +789,15 @@ theorem pause_body_runCompiled
       Ninst.tstore
       ((pauseLockPost sevm base).setMach
         ⟨[], Mem.empty, total - 57 - 223, (pauseLockPost sevm base).stateGas⟩) := by
-    have h := runCompiled_tstore_of (sevm := sevm)
+    have h := runCompiled_tstore_of (hfork := hfork) (sevm := sevm)
       (pre := base.setMach ⟨[lockKey, 1], Mem.empty, total - 57 - 123, base.stateGas⟩)
       (key := lockKey) (value := 1) (stack := [])
       (G := total - 57 - 223) rfl hstatic
       (by simp only [Devm.gasLeft_setMach, gasWarmAccess]; omega)
+    have hsg : (base.setTransVal sevm.currentTarget lockKey 1).stateGas =
+        base.stateGas := rfl
     simpa only [Devm.memory_setMach, Devm.setMach_setMach, Devm.stateGas_setMach,
-      setTransVal_setMach, pauseLockPost] using h
+      setTransVal_setMach, pauseLockPost, hsg] using h
   refine Func.RunCompiled.next htstore ?_
   have hassignmentGas : total - 57 - 223 = total - 57 - 235 + 12 := by
     dsimp only [total]
@@ -806,7 +811,7 @@ theorem pause_body_runCompiled
       Ninst.sload
       ((pauseExpiryBase sevm base target).setMach
         ⟨[pauser], Mem.empty, total - 57 - 235 - assignmentCost, (pauseExpiryBase sevm base target).stateGas⟩) := by
-    have h := temporal_sload_runCompiled (sevm := sevm)
+    have h := temporal_sload_runCompiled (hfork := hfork) (sevm := sevm)
       (base := pauseLockPost sevm base) (key := assignmentSlot target)
       (value := pauser) (stack := []) (M := Mem.empty)
       (G := total - 57 - 235 - assignmentCost)
@@ -834,7 +839,7 @@ theorem pause_body_runCompiled
       ((pauseDurationBase sevm base target pauser).setMach
         ⟨[expiry], Mem.empty,
           total - 57 - 235 - assignmentCost - 27 - expiryCost, (pauseDurationBase sevm base target pauser).stateGas⟩) := by
-    have h := temporal_sload_runCompiled (sevm := sevm)
+    have h := temporal_sload_runCompiled (hfork := hfork) (sevm := sevm)
       (base := pauseExpiryBase sevm base target) (key := expirySlot pauser)
       (value := expiry) (stack := []) (M := Mem.empty)
       (G := total - 57 - 235 - assignmentCost - 27 - expiryCost)
@@ -855,7 +860,7 @@ theorem pause_body_runCompiled
       Ninst.sload
       ((pauseKernelBase sevm base target pauser).setMach
         ⟨[duration], Mem.empty, kernelGas + 128, (pauseKernelBase sevm base target pauser).stateGas⟩) := by
-    have h := temporal_sload_runCompiled (sevm := sevm)
+    have h := temporal_sload_runCompiled (hfork := hfork) (sevm := sevm)
       (base := pauseDurationBase sevm base target pauser)
       (key := pauseDurationSlot) (value := duration) (stack := [])
       (M := Mem.empty) (G := kernelGas + 128) hdurationStorage (by simp)

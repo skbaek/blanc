@@ -104,7 +104,7 @@ theorem commitDeposit_firstLive_exists_storageEffectRun
           (G + 46 +
               insertionFirstLiveStoreCost sevm stor keys 0 n node) +
             insertionDeadGas sevm.currentTarget stor n
-              (insertionNatState 0 size node keys), countPost.stateGas⟩)
+              (insertionNatState 0 size node keys), base.stateGas⟩)
       insertionLoop
       (.ok ((afterSstore sevm finalBase (branchSlot n)
         (accumulatedNode Bytes.sha256 (accOfStor stor).branch
@@ -112,7 +112,8 @@ theorem commitDeposit_firstLive_exists_storageEffectRun
       [(sevm.currentTarget, branchSlot n,
         accumulatedNode Bytes.sha256 (accOfStor stor).branch
           0 n node)] := by
-    simpa only [countPost, nextMemory, Nat.zero_add, hzero] using run
+    simpa only [countPost, nextMemory, Nat.zero_add, hzero,
+      afterSstore_stateGas] using run
   have commit := commitDeposit_storageEffectRun (hfork := hfork)
     (K :=
       (G + 46 +

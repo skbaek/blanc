@@ -111,6 +111,7 @@ theorem foundZeroRetainedRegistration_sourceTrace_witness
 set_option maxRecDepth 601 in
 private theorem registerAfterSet_retainedOldZero_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes) (oldPauser remaining : B256)
     (stack : List B256) (G : Nat)
     (hstack : stack.length ≤ 1)
@@ -190,6 +191,7 @@ private theorem registerAfterSet_retainedOldZero_runCompiled
               logWith 1 0 1 +++ Func.stop)))))
       (base.setMach ⟨stack, M, G, base.stateGas⟩) := by
     func_run (10) [0, 3, 1]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     all_goals try { simp [hnewValue, B256.eqCheck] }
     all_goals try {
@@ -235,6 +237,7 @@ shared prefix it composes with lives in the substrate, because the replacement
 chronology reaches the same prefix with a nonzero new pauser. -/
 theorem registerAfterSet_oldLastZero_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (oldPauser oldExpiry oldExpiryOriginal : B256)
     (stack : List B256) (clearCost G : Nat)
@@ -314,7 +317,7 @@ theorem registerAfterSet_oldLastZero_runCompiled
     case h_arm =>
       rw [hnewMemory']
       exact Func.RunCompiled.last rfl
-  have h := registerAfterSet_oldLast_newPauserTail_runCompiled fs sevm base M
+  have h := registerAfterSet_oldLast_newPauserTail_runCompiled (hfork := hfork) fs sevm base M
     img oldPauser oldExpiry oldExpiryOriginal stack clearCost (G + 23)
     (((temporalSstorePost sevm base (expirySlot oldPauser) 0).addLog
       ⟨sevm.currentTarget, [heartbeatUpdatedEvent, oldPauser],
@@ -327,6 +330,7 @@ theorem registerAfterSet_oldLastZero_runCompiled
 
 private theorem finishSetPauser_retainedOldZero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target oldPauser remaining : B256) (stack : List B256) (G : Nat)
     (hstack : stack.length ≤ 1)
@@ -360,7 +364,7 @@ private theorem finishSetPauser_retainedOldZero_runCompiled
       ((base.addLog ⟨sevm.currentTarget,
         [pauserSetEvent, target, oldPauser, 0], []⟩).setMach
         ⟨stack, M, G, (base.addLog ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, 0], []⟩).stateGas⟩) := by
-    apply registerAfterSet_retainedOldZero_runCompiled _ sevm _
+    apply registerAfterSet_retainedOldZero_runCompiled (hfork := hfork) _ sevm _
       M img oldPauser remaining stack G hstack hreads hprevious hnew
       holdNonzero hremaining
     · exact hcount
@@ -379,6 +383,7 @@ private theorem finishSetPauser_retainedOldZero_runCompiled
 
 private theorem removeTarget_foundZeroRetained_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target oldLength next oldPauser remaining : B256)
     (stack : List B256)
@@ -565,13 +570,13 @@ private theorem removeTarget_foundZeroRetained_runCompiled
       indexWritePost, entryWritePost,
       temporalSstorePost_accessedStorageKeys]
     exact hwarmCount
-  have hfinish := finishSetPauser_retainedOldZero_runCompiled dp sevm
+  have hfinish := finishSetPauser_retainedOldZero_runCompiled (hfork := hfork) dp sevm
     removePost MLast imgLast target oldPauser remaining stack G hstack hreadsLast
     htargetLast hpreviousLast hnewLast hcontinuationLast holdValid.1
     hremaining (by simpa only [countKey] using hcountRemove)
     (by simpa only [countKey] using hwarmCountRemove)
     (by rw [hsizeLast]; decide) halignLast hstatic
-  have hrun := removeTarget_runCompiled dp sevm base M img
+  have hrun := removeTarget_runCompiled (hfork := hfork) dp sevm base M img
     target oldLength next oldPauser stack hstack arrayOriginal indexOriginal
     lengthOriginal holeCost movedIndexCost tailClearCost lengthRestoreCost
     indexClearCost 2108 G hwf hreads htarget htargetValid hnextNonzero
@@ -593,6 +598,7 @@ private theorem removeTarget_foundZeroRetained_runCompiled
 
 private theorem afterOldPauser_foundZeroRetained_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target oldLength next oldPauser remaining : B256)
     (stack : List B256)
@@ -675,7 +681,7 @@ private theorem afterOldPauser_foundZeroRetained_runCompiled
   let MLast := MLength.write (lastTargetWord * 32).toNat target.toBytes
   let eventLog : Log :=
     ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, 0], []⟩
-  have hremove := removeTarget_foundZeroRetained_runCompiled dp sevm base M
+  have hremove := removeTarget_foundZeroRetained_runCompiled (hfork := hfork) dp sevm base M
     img target oldLength next oldPauser remaining stack hstack arrayOriginal
     indexOriginal lengthOriginal holeCost movedIndexCost tailClearCost
     lengthRestoreCost indexClearCost G hwf hreads htarget hprevious hnew
@@ -728,6 +734,7 @@ chronology derives the `swapPop` Registry trace and witness, the lone
 `PauserSet` log, and preservation of every canonical expiry slot. -/
 theorem setPauserKernel_foundZeroRetainedLast_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes) (entries : List Entry) (target : B256)
     (index : Nat) (oldPauser oldCount : B256)
     (assignmentOriginal countOriginal arrayOriginal indexOriginal
@@ -944,7 +951,7 @@ theorem setPauserKernel_foundZeroRetainedLast_runCompiled
   let post := ((indexClearPost sevm
       (entryClearPost sevm countPost target next)
       target oldLength).addLog eventLog).setMach ⟨[], MLast, G, ((indexClearPost sevm (entryClearPost sevm countPost target next) target oldLength).addLog eventLog).stateGas⟩
-  have hafterRun := afterOldPauser_foundZeroRetained_runCompiled dp sevm
+  have hafterRun := afterOldPauser_foundZeroRetained_runCompiled (hfork := hfork) dp sevm
     countPost M' img' target oldLength next oldPauser (oldCount - 1) []
     (by simp) arrayOriginal indexOriginal lengthOriginal holeCost
     movedIndexCost tailClearCost lengthRestoreCost indexClearCost G
@@ -961,7 +968,7 @@ theorem setPauserKernel_foundZeroRetainedLast_runCompiled
       G + (2592 + holeCost + movedIndexCost + tailClearCost +
         lengthRestoreCost + indexClearCost) := by omega
   rw [hgAfter] at hafterRun
-  have hkernel := setPauserKernel_found_runCompiled dp sevm base M img post
+  have hkernel := setPauserKernel_found_runCompiled (hfork := hfork) dp sevm base M img post
     target 0 oldPauser oldCount assignmentOriginal countOriginal
     assignmentCost countCost
     (2592 + holeCost + movedIndexCost + tailClearCost + lengthRestoreCost +
@@ -1267,6 +1274,7 @@ pauser is retained (`oldCount - 1 ≠ 0`), so `registerAfterSet` stops without
 touching any expiry slot. -/
 theorem registerPauser_body_foundZeroRetainedLast_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (entries : List Entry) (target : B256) (index : Nat)
     (oldPauser oldCount : B256)
     (assignmentOriginal countOriginal arrayOriginal indexOriginal
@@ -1340,7 +1348,7 @@ theorem registerPauser_body_foundZeroRetainedLast_runCompiled
   rcases registerMemory_spec target 0 with
     ⟨hwf, hreads, hsize, htargetRead, hnewRead,
       _hpreviousRead, hcontinuationRead⟩
-  rcases setPauserKernel_foundZeroRetainedLast_runCompiled dp sevm base
+  rcases setPauserKernel_foundZeroRetainedLast_runCompiled (hfork := hfork) dp sevm base
       (registerMemory target 0) (registerImage target 0)
       entries target index oldPauser oldCount assignmentOriginal countOriginal
       arrayOriginal indexOriginal lengthOriginal assignmentCost countCost
@@ -1380,6 +1388,7 @@ pauser is retained (`oldCount - 1 ≠ 0`), so `registerAfterSet` stops without
 touching any expiry slot. -/
 theorem registerPauser_runCompiledTo_foundZeroRetainedLast
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (entries : List Entry) (target : B256) (index : Nat)
     (oldPauser oldCount : B256)
     (assignmentOriginal countOriginal arrayOriginal indexOriginal
@@ -1460,7 +1469,7 @@ theorem registerPauser_runCompiledTo_foundZeroRetainedLast
   have hbodyData : sevm.data.length.toB256 <? 68 = 0 := by
     rw [hdata]
     decide +kernel
-  rcases registerPauser_body_foundZeroRetainedLast_runCompiled dp sevm base
+  rcases registerPauser_body_foundZeroRetainedLast_runCompiled (hfork := hfork) dp sevm base
       entries target index oldPauser oldCount assignmentOriginal countOriginal
       arrayOriginal indexOriginal lengthOriginal assignmentCost countCost
       holeCost movedIndexCost tailClearCost lengthRestoreCost indexClearCost G
@@ -1488,6 +1497,7 @@ last entry (`index + 1 = entries.length`), and the old pauser is retained
 (`oldCount - 1 ≠ 0`), so no expiry slot moves. -/
 theorem registerPauser_foundZeroRetainedLast_success_settled_effects
     (dp : DeployParams) {msg : Msg} {ca : Adr} {final settled : Devm}
+    (hfork : CoveredFork (initSevm msg).benvStat.fork)
     (entries : List Entry) (target : B256) (index : Nat)
     (oldPauser oldCount : B256)
     (assignmentOriginal countOriginal arrayOriginal indexOriginal
@@ -1582,7 +1592,7 @@ theorem registerPauser_foundZeroRetainedLast_success_settled_effects
     simpa [initSevm] using hcode
   have hadminInit : (initSevm msg).caller.toB256 = dp.admin := by
     simpa [initSevm] using hadmin
-  rcases registerPauser_runCompiledTo_foundZeroRetainedLast dp (initSevm msg)
+  rcases registerPauser_runCompiledTo_foundZeroRetainedLast (hfork := hfork) dp (initSevm msg)
       (initDevm msg) entries target index oldPauser oldCount
       assignmentOriginal countOriginal arrayOriginal indexOriginal
       lengthOriginal assignmentCost countCost holeCost movedIndexCost
@@ -1647,6 +1657,7 @@ and the old pauser is retained, so `finishSetPauser` stops without touching any
 expiry slot.  The old pauser's count survives all five array-region writes. -/
 private theorem removeTarget_foundZeroRetainedSwapPop_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target lastTarget idx len oldLength oldPauser remaining : B256)
     (stack : List B256)
@@ -1850,13 +1861,13 @@ private theorem removeTarget_foundZeroRetainedSwapPop_runCompiled
       swapPopClearPost, indexWritePost, entryWritePost,
       temporalSstorePost_accessedStorageKeys]
     exact hwarmCount
-  have hfinish := finishSetPauser_retainedOldZero_runCompiled dp sevm
+  have hfinish := finishSetPauser_retainedOldZero_runCompiled (hfork := hfork) dp sevm
     removePost MLast imgLast target oldPauser remaining stack G hstack
     hreadsLast htargetLast hpreviousLast hnewLast hcontinuationLast
     holdValid.1 hremaining (by simpa only [countKey] using hcountRemove)
     (by simpa only [countKey] using hwarmCountRemove)
     (by rw [hsizeLast]; decide) halignLast hstatic
-  have hrun := removeTarget_swapPop_runCompiled dp sevm base M img
+  have hrun := removeTarget_swapPop_runCompiled (hfork := hfork) dp sevm base M img
     target lastTarget idx len oldLength oldPauser stack hstack
     holeCurrent movedCurrent holeOriginal movedOriginal tailOriginal
     lengthOriginal indexOriginal holeCost movedIndexCost tailClearCost
@@ -1885,6 +1896,7 @@ new-pauser scratch word is zero, so the walk branches straight to
 `removeTarget` for 35 gas. -/
 private theorem afterOldPauser_foundZeroRetainedSwapPop_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target lastTarget idx len oldLength oldPauser remaining : B256)
     (stack : List B256)
@@ -1985,7 +1997,7 @@ private theorem afterOldPauser_foundZeroRetainedSwapPop_runCompiled
   let MLast := MLength.write (lastTargetWord * 32).toNat lastTarget.toBytes
   let eventLog : Log :=
     ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, 0], []⟩
-  have hremove := removeTarget_foundZeroRetainedSwapPop_runCompiled dp sevm
+  have hremove := removeTarget_foundZeroRetainedSwapPop_runCompiled (hfork := hfork) dp sevm
     base M img target lastTarget idx len oldLength oldPauser remaining stack
     hstack holeCurrent movedCurrent holeOriginal movedOriginal tailOriginal
     lengthOriginal indexOriginal holeCost movedIndexCost tailClearCost
@@ -2046,6 +2058,7 @@ the else arm and, seeing a zero new pauser, stops without touching any expiry
 slot. -/
 theorem setPauserKernel_foundZeroRetainedSwapPop_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes) (entries : List Entry) (target : B256)
     (index : Nat) (oldPauser oldCount : B256)
     (assignmentOriginal countOriginal holeOriginal movedOriginal
@@ -2338,7 +2351,7 @@ theorem setPauserKernel_foundZeroRetainedSwapPop_runCompiled
   let post := ((indexClearPost sevm
       (swapPopClearPost sevm countPost lastTarget idx len)
       target oldLength).addLog eventLog).setMach ⟨[], MLast, G, ((indexClearPost sevm (swapPopClearPost sevm countPost lastTarget idx len) target oldLength).addLog eventLog).stateGas⟩
-  have hafterRun := afterOldPauser_foundZeroRetainedSwapPop_runCompiled dp sevm
+  have hafterRun := afterOldPauser_foundZeroRetainedSwapPop_runCompiled (hfork := hfork) dp sevm
     countPost M' img' target lastTarget idx len oldLength oldPauser
     (oldCount - 1) [] (by simp) target len holeOriginal movedOriginal
     tailOriginal lengthOriginal indexOriginal holeCost movedIndexCost
@@ -2358,7 +2371,7 @@ theorem setPauserKernel_foundZeroRetainedSwapPop_runCompiled
       G + (2592 + holeCost + movedIndexCost + tailClearCost +
         lengthRestoreCost + indexClearCost) := by omega
   rw [hgAfter] at hafterRun
-  have hkernel := setPauserKernel_found_runCompiled dp sevm base M img post
+  have hkernel := setPauserKernel_found_runCompiled (hfork := hfork) dp sevm base M img post
     target 0 oldPauser oldCount assignmentOriginal countOriginal
     assignmentCost countCost
     (2592 + holeCost + movedIndexCost + tailClearCost + lengthRestoreCost +
@@ -2457,6 +2470,7 @@ pauser retained (`oldCount - 1 ≠ 0`), so `registerAfterSet` stops without
 touching any expiry slot. -/
 theorem registerPauser_body_foundZeroRetainedSwapPop_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (entries : List Entry) (target : B256) (index : Nat)
     (oldPauser oldCount : B256)
     (assignmentOriginal countOriginal holeOriginal movedOriginal
@@ -2539,7 +2553,7 @@ theorem registerPauser_body_foundZeroRetainedSwapPop_runCompiled
   rcases registerMemory_spec target 0 with
     ⟨hwf, hreads, hsize, htargetRead, hnewRead,
       _hpreviousRead, hcontinuationRead⟩
-  rcases setPauserKernel_foundZeroRetainedSwapPop_runCompiled dp sevm base
+  rcases setPauserKernel_foundZeroRetainedSwapPop_runCompiled (hfork := hfork) dp sevm base
       (registerMemory target 0) (registerImage target 0)
       entries target index oldPauser oldCount assignmentOriginal countOriginal
       holeOriginal movedOriginal tailOriginal lengthOriginal indexOriginal
@@ -2578,6 +2592,7 @@ theorem registerPauser_body_foundZeroRetainedSwapPop_runCompiled
 **not** the array's last entry, with the old pauser retained. -/
 theorem registerPauser_runCompiledTo_foundZeroRetainedSwapPop
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (entries : List Entry) (target : B256) (index : Nat)
     (oldPauser oldCount : B256)
     (assignmentOriginal countOriginal holeOriginal movedOriginal
@@ -2667,7 +2682,7 @@ theorem registerPauser_runCompiledTo_foundZeroRetainedSwapPop
   have hbodyData : sevm.data.length.toB256 <? 68 = 0 := by
     rw [hdata]
     decide +kernel
-  rcases registerPauser_body_foundZeroRetainedSwapPop_runCompiled dp sevm base
+  rcases registerPauser_body_foundZeroRetainedSwapPop_runCompiled (hfork := hfork) dp sevm base
       entries target index oldPauser oldCount assignmentOriginal countOriginal
       holeOriginal movedOriginal tailOriginal lengthOriginal indexOriginal
       assignmentCost countCost holeCost movedIndexCost tailClearCost
@@ -2698,6 +2713,7 @@ boundary: the last array entry is moved into the removed target's hole and its
 reverse index repaired, and no expiry slot moves. -/
 theorem registerPauser_foundZeroRetainedSwapPop_success_settled_effects
     (dp : DeployParams) {msg : Msg} {ca : Adr} {final settled : Devm}
+    (hfork : CoveredFork (initSevm msg).benvStat.fork)
     (entries : List Entry) (target : B256) (index : Nat)
     (oldPauser oldCount : B256)
     (assignmentOriginal countOriginal holeOriginal movedOriginal
@@ -2801,7 +2817,7 @@ theorem registerPauser_foundZeroRetainedSwapPop_success_settled_effects
     simpa [initSevm] using hcode
   have hadminInit : (initSevm msg).caller.toB256 = dp.admin := by
     simpa [initSevm] using hadmin
-  rcases registerPauser_runCompiledTo_foundZeroRetainedSwapPop dp (initSevm msg)
+  rcases registerPauser_runCompiledTo_foundZeroRetainedSwapPop (hfork := hfork) dp (initSevm msg)
       (initDevm msg) entries target index oldPauser oldCount
       assignmentOriginal countOriginal holeOriginal movedOriginal tailOriginal
       lengthOriginal indexOriginal assignmentCost countCost holeCost
@@ -2873,6 +2889,7 @@ its zero-payload `HeartbeatUpdated`.  1935 gas of `finishSetPauser` glue above
 the 1590 + `clearCost` of `registerAfterSet_oldLastZero_runCompiled`. -/
 private theorem finishSetPauser_oldLastZero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target oldPauser oldExpiry oldExpiryOriginal : B256)
     (stack : List B256) (clearCost G : Nat)
@@ -2915,7 +2932,7 @@ private theorem finishSetPauser_oldLastZero_runCompiled
       (d.addLog l).getStorVal a k = d.getStorVal a k := rfl
   have accessedStorageKeys_addLog (d : Devm) (l : Log) :
       (d.addLog l).accessedStorageKeys = d.accessedStorageKeys := rfl
-  have hregister := registerAfterSet_oldLastZero_runCompiled
+  have hregister := registerAfterSet_oldLastZero_runCompiled (hfork := hfork)
     ((runtime dp).main :: (runtime dp).aux) sevm
     (base.addLog ⟨sevm.currentTarget,
       [pauserSetEvent, target, oldPauser, 0], []⟩)
@@ -2940,6 +2957,7 @@ the second record.  Both the retired pauser's count and its expiry cell are
 carried past all five array-region writes. -/
 private theorem removeTarget_foundZeroOldLast_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target oldLength next oldPauser oldExpiry oldExpiryOriginal : B256)
     (stack : List B256)
@@ -3151,7 +3169,7 @@ private theorem removeTarget_foundZeroOldLast_runCompiled
       lengthWritePost, entryClearPost, indexWritePost, entryWritePost,
       temporalSstorePost_accessedStorageKeys]
     exact hkey
-  have hfinish := finishSetPauser_oldLastZero_runCompiled dp sevm removePost
+  have hfinish := finishSetPauser_oldLastZero_runCompiled (hfork := hfork) dp sevm removePost
     MLast imgLast target oldPauser oldExpiry oldExpiryOriginal stack clearCost G
     hstack hwfLast hreadsLast htargetLast hpreviousLast hnewLast
     hcontinuationLast holdValid.1
@@ -3160,7 +3178,7 @@ private theorem removeTarget_foundZeroOldLast_runCompiled
     (by simpa only [expiryKey] using hexpiryRemove) hexpiryOrig
     (hwarmRemove _ hwarmExpiry) hclearCost hgasStipend
     (by rw [hsizeLast]; decide) halignLast hstatic
-  have hrun := removeTarget_toFinish_runCompiled dp sevm base M img
+  have hrun := removeTarget_toFinish_runCompiled (hfork := hfork) dp sevm base M img
     target oldLength next stack hstack arrayOriginal indexOriginal
     lengthOriginal holeCost movedIndexCost tailClearCost lengthRestoreCost
     indexClearCost (3525 + clearCost) G hwf hreads htarget htargetValid
@@ -3194,6 +3212,7 @@ scratch word is zero, so the walk branches straight to `removeTarget` for 35
 gas. -/
 private theorem afterOldPauser_foundZeroOldLast_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target oldLength next oldPauser oldExpiry oldExpiryOriginal : B256)
     (stack : List B256)
@@ -3292,7 +3311,7 @@ private theorem afterOldPauser_foundZeroOldLast_runCompiled
   let heartbeatLog : Log :=
     ⟨sevm.currentTarget, [heartbeatUpdatedEvent, oldPauser],
       (0 : B256).toBytes⟩
-  have hremove := removeTarget_foundZeroOldLast_runCompiled dp sevm base M
+  have hremove := removeTarget_foundZeroOldLast_runCompiled (hfork := hfork) dp sevm base M
     img target oldLength next oldPauser oldExpiry oldExpiryOriginal stack
     hstack arrayOriginal indexOriginal lengthOriginal holeCost movedIndexCost
     tailClearCost lengthRestoreCost indexClearCost clearCost G hwf hreads
@@ -3346,6 +3365,7 @@ Two records are emitted, in order, and exactly one expiry cell moves — the
 retired pauser's, to `0`.  Every other canonical pauser's expiry is preserved. -/
 theorem setPauserKernel_foundZeroOldLast_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes) (entries : List Entry) (target : B256)
     (index : Nat) (oldPauser oldCount oldExpiry oldExpiryOriginal : B256)
     (assignmentOriginal countOriginal arrayOriginal indexOriginal
@@ -3594,7 +3614,7 @@ theorem setPauserKernel_foundZeroOldLast_runCompiled
   let post := ((temporalSstorePost sevm (removePost.addLog eventLog)
     (expirySlot oldPauser) 0).addLog heartbeatLog).setMach
       ⟨[], MLast.write 0 (0 : B256).toBytes, G, ((temporalSstorePost sevm (removePost.addLog eventLog) (expirySlot oldPauser) 0).addLog heartbeatLog).stateGas⟩
-  have hafterRun := afterOldPauser_foundZeroOldLast_runCompiled dp sevm
+  have hafterRun := afterOldPauser_foundZeroOldLast_runCompiled (hfork := hfork) dp sevm
     countPost M' img' target oldLength next oldPauser oldExpiry
     oldExpiryOriginal [] (by simp) arrayOriginal indexOriginal lengthOriginal
     holeCost movedIndexCost tailClearCost lengthRestoreCost indexClearCost
@@ -3613,7 +3633,7 @@ theorem setPauserKernel_foundZeroOldLast_runCompiled
       G + (4009 + clearCost + holeCost + movedIndexCost + tailClearCost +
         lengthRestoreCost + indexClearCost) := by omega
   rw [hgAfter] at hafterRun
-  have hkernel := setPauserKernel_found_runCompiled dp sevm base M img post
+  have hkernel := setPauserKernel_found_runCompiled (hfork := hfork) dp sevm base M img post
     target 0 oldPauser oldCount assignmentOriginal countOriginal
     assignmentCost countCost
     (4009 + clearCost + holeCost + movedIndexCost + tailClearCost +
@@ -3717,6 +3737,7 @@ already the array's last entry (`index + 1 = entries.length`) and retires the ol
 pauser (`oldCount - 1 = 0`). -/
 theorem registerPauser_body_foundZeroOldLast_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (entries : List Entry) (target : B256) (index : Nat)
     (oldPauser oldCount oldExpiry oldExpiryOriginal : B256)
     (assignmentOriginal countOriginal arrayOriginal indexOriginal
@@ -3800,7 +3821,7 @@ theorem registerPauser_body_foundZeroOldLast_runCompiled
   rcases registerMemory_spec target 0 with
     ⟨hwf, hreads, hsize, htargetRead, hnewRead,
       _hpreviousRead, hcontinuationRead⟩
-  rcases setPauserKernel_foundZeroOldLast_runCompiled dp sevm base
+  rcases setPauserKernel_foundZeroOldLast_runCompiled (hfork := hfork) dp sevm base
       (registerMemory target 0) (registerImage target 0)
       entries target index oldPauser oldCount oldExpiry oldExpiryOriginal
       assignmentOriginal countOriginal arrayOriginal indexOriginal
@@ -3839,6 +3860,7 @@ theorem registerPauser_body_foundZeroOldLast_runCompiled
 already the array's last entry, retiring the old pauser. -/
 theorem registerPauser_runCompiledTo_foundZeroOldLast
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (entries : List Entry) (target : B256) (index : Nat)
     (oldPauser oldCount oldExpiry oldExpiryOriginal : B256)
     (assignmentOriginal countOriginal arrayOriginal indexOriginal
@@ -3929,7 +3951,7 @@ theorem registerPauser_runCompiledTo_foundZeroOldLast
   have hbodyData : sevm.data.length.toB256 <? 68 = 0 := by
     rw [hdata]
     decide +kernel
-  rcases registerPauser_body_foundZeroOldLast_runCompiled dp sevm base
+  rcases registerPauser_body_foundZeroOldLast_runCompiled (hfork := hfork) dp sevm base
       entries target index oldPauser oldCount oldExpiry oldExpiryOriginal
       assignmentOriginal countOriginal arrayOriginal indexOriginal
       lengthOriginal assignmentCost countCost holeCost movedIndexCost
@@ -3962,6 +3984,7 @@ zero-payload `HeartbeatUpdated(oldPauser)`.  The retired pauser's expiry cell is
 unchanged — the observable difference from the retained partition. -/
 theorem registerPauser_foundZeroOldLast_success_settled_effects
     (dp : DeployParams) {msg : Msg} {ca : Adr} {final settled : Devm}
+    (hfork : CoveredFork (initSevm msg).benvStat.fork)
     (entries : List Entry) (target : B256) (index : Nat)
     (oldPauser oldCount oldExpiry oldExpiryOriginal : B256)
     (assignmentOriginal countOriginal arrayOriginal indexOriginal
@@ -4065,7 +4088,7 @@ theorem registerPauser_foundZeroOldLast_success_settled_effects
     simpa [initSevm] using hcode
   have hadminInit : (initSevm msg).caller.toB256 = dp.admin := by
     simpa [initSevm] using hadmin
-  rcases registerPauser_runCompiledTo_foundZeroOldLast dp (initSevm msg)
+  rcases registerPauser_runCompiledTo_foundZeroOldLast (hfork := hfork) dp (initSevm msg)
       (initDevm msg) entries target index oldPauser oldCount oldExpiry
       oldExpiryOriginal assignmentOriginal countOriginal arrayOriginal
       indexOriginal lengthOriginal assignmentCost countCost holeCost
@@ -4136,6 +4159,7 @@ array-region writes, and the removal walk's `finishSetPauser` continuation
 clears the expiry and emits the second record. -/
 private theorem removeTarget_swapPop_foundZeroOldLast_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target lastTarget idx len oldLength oldPauser oldExpiry
       oldExpiryOriginal : B256)
@@ -4378,7 +4402,7 @@ private theorem removeTarget_swapPop_foundZeroOldLast_runCompiled
       swapPopClearPost, indexWritePost, entryWritePost,
       temporalSstorePost_accessedStorageKeys]
     exact hkey
-  have hfinish := finishSetPauser_oldLastZero_runCompiled dp sevm removePost
+  have hfinish := finishSetPauser_oldLastZero_runCompiled (hfork := hfork) dp sevm removePost
     MLast imgLast target oldPauser oldExpiry oldExpiryOriginal stack clearCost G
     hstack hwfLast hreadsLast htargetLast hpreviousLast hnewLast
     hcontinuationLast holdValid.1
@@ -4387,7 +4411,7 @@ private theorem removeTarget_swapPop_foundZeroOldLast_runCompiled
     (by simpa only [expiryKey] using hexpiryRemove) hexpiryOrig
     (hwarmRemove _ hwarmExpiry) hclearCost hgasStipend
     (by rw [hsizeLast]; decide) halignLast hstatic
-  have hrun := removeTarget_swapPop_toFinish_runCompiled dp sevm base M img
+  have hrun := removeTarget_swapPop_toFinish_runCompiled (hfork := hfork) dp sevm base M img
     target lastTarget idx len oldLength stack hstack holeCurrent movedCurrent
     holeOriginal movedOriginal tailOriginal lengthOriginal indexOriginal
     holeCost movedIndexCost tailClearCost lengthRestoreCost indexClearCost
@@ -4422,6 +4446,7 @@ private theorem removeTarget_swapPop_foundZeroOldLast_runCompiled
 retires the old pauser: 35 gas for the zero new-pauser branch. -/
 private theorem afterOldPauser_swapPop_foundZeroOldLast_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target lastTarget idx len oldLength oldPauser oldExpiry
       oldExpiryOriginal : B256)
@@ -4539,7 +4564,7 @@ private theorem afterOldPauser_swapPop_foundZeroOldLast_runCompiled
   let heartbeatLog : Log :=
     ⟨sevm.currentTarget, [heartbeatUpdatedEvent, oldPauser],
       (0 : B256).toBytes⟩
-  have hremove := removeTarget_swapPop_foundZeroOldLast_runCompiled dp sevm
+  have hremove := removeTarget_swapPop_foundZeroOldLast_runCompiled (hfork := hfork) dp sevm
     base M img target lastTarget idx len oldLength oldPauser oldExpiry
     oldExpiryOriginal stack hstack holeCurrent movedCurrent holeOriginal
     movedOriginal tailOriginal lengthOriginal indexOriginal holeCost
@@ -4593,6 +4618,7 @@ and repairs its reverse index, and the old pauser is **retired**, so
 `HeartbeatUpdated(oldPauser)` after the `PauserSet` record. -/
 theorem setPauserKernel_foundZeroOldLastSwapPop_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes) (entries : List Entry) (target : B256)
     (index : Nat) (oldPauser oldCount oldExpiry oldExpiryOriginal : B256)
     (assignmentOriginal countOriginal holeOriginal movedOriginal
@@ -4920,7 +4946,7 @@ theorem setPauserKernel_foundZeroOldLastSwapPop_runCompiled
   let post := ((temporalSstorePost sevm (removePost.addLog eventLog)
     (expirySlot oldPauser) 0).addLog heartbeatLog).setMach
       ⟨[], MLast.write 0 (0 : B256).toBytes, G, ((temporalSstorePost sevm (removePost.addLog eventLog) (expirySlot oldPauser) 0).addLog heartbeatLog).stateGas⟩
-  have hafterRun := afterOldPauser_swapPop_foundZeroOldLast_runCompiled dp sevm
+  have hafterRun := afterOldPauser_swapPop_foundZeroOldLast_runCompiled (hfork := hfork) dp sevm
     countPost M' img' target lastTarget idx len oldLength oldPauser oldExpiry
     oldExpiryOriginal [] (by simp) target len holeOriginal movedOriginal
     tailOriginal lengthOriginal indexOriginal holeCost movedIndexCost
@@ -4941,7 +4967,7 @@ theorem setPauserKernel_foundZeroOldLastSwapPop_runCompiled
       G + (4009 + clearCost + holeCost + movedIndexCost + tailClearCost +
         lengthRestoreCost + indexClearCost) := by omega
   rw [hgAfter] at hafterRun
-  have hkernel := setPauserKernel_found_runCompiled dp sevm base M img post
+  have hkernel := setPauserKernel_found_runCompiled (hfork := hfork) dp sevm base M img post
     target 0 oldPauser oldCount assignmentOriginal countOriginal
     assignmentCost countCost
     (4009 + clearCost + holeCost + movedIndexCost + tailClearCost +
@@ -5048,6 +5074,7 @@ target is not the array's last entry (`index + 1 < entries.length`) and the old
 pauser is retired (`oldCount - 1 = 0`). -/
 theorem registerPauser_body_foundZeroOldLastSwapPop_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (entries : List Entry) (target : B256) (index : Nat)
     (oldPauser oldCount oldExpiry oldExpiryOriginal : B256)
     (assignmentOriginal countOriginal holeOriginal movedOriginal
@@ -5140,7 +5167,7 @@ theorem registerPauser_body_foundZeroOldLastSwapPop_runCompiled
   rcases registerMemory_spec target 0 with
     ⟨hwf, hreads, hsize, htargetRead, hnewRead,
       _hpreviousRead, hcontinuationRead⟩
-  rcases setPauserKernel_foundZeroOldLastSwapPop_runCompiled dp sevm base
+  rcases setPauserKernel_foundZeroOldLastSwapPop_runCompiled (hfork := hfork) dp sevm base
       (registerMemory target 0) (registerImage target 0)
       entries target index oldPauser oldCount oldExpiry oldExpiryOriginal
       assignmentOriginal countOriginal holeOriginal movedOriginal tailOriginal
@@ -5179,6 +5206,7 @@ theorem registerPauser_body_foundZeroOldLastSwapPop_runCompiled
 removal that retires the old pauser. -/
 theorem registerPauser_runCompiledTo_foundZeroOldLastSwapPop
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (entries : List Entry) (target : B256) (index : Nat)
     (oldPauser oldCount oldExpiry oldExpiryOriginal : B256)
     (assignmentOriginal countOriginal holeOriginal movedOriginal
@@ -5278,7 +5306,7 @@ theorem registerPauser_runCompiledTo_foundZeroOldLastSwapPop
   have hbodyData : sevm.data.length.toB256 <? 68 = 0 := by
     rw [hdata]
     decide +kernel
-  rcases registerPauser_body_foundZeroOldLastSwapPop_runCompiled dp sevm base
+  rcases registerPauser_body_foundZeroOldLastSwapPop_runCompiled (hfork := hfork) dp sevm base
       entries target index oldPauser oldCount oldExpiry oldExpiryOriginal
       assignmentOriginal countOriginal holeOriginal movedOriginal tailOriginal
       lengthOriginal indexOriginal assignmentCost countCost holeCost
@@ -5309,6 +5337,7 @@ its reverse index repaired, two records are emitted in order, and exactly one
 expiry cell moves — the retired pauser's, to `0`. -/
 theorem registerPauser_foundZeroOldLastSwapPop_success_settled_effects
     (dp : DeployParams) {msg : Msg} {ca : Adr} {final settled : Devm}
+    (hfork : CoveredFork (initSevm msg).benvStat.fork)
     (entries : List Entry) (target : B256) (index : Nat)
     (oldPauser oldCount oldExpiry oldExpiryOriginal : B256)
     (assignmentOriginal countOriginal holeOriginal movedOriginal
@@ -5421,7 +5450,7 @@ theorem registerPauser_foundZeroOldLastSwapPop_success_settled_effects
     simpa [initSevm] using hcode
   have hadminInit : (initSevm msg).caller.toB256 = dp.admin := by
     simpa [initSevm] using hadmin
-  rcases registerPauser_runCompiledTo_foundZeroOldLastSwapPop dp (initSevm msg)
+  rcases registerPauser_runCompiledTo_foundZeroOldLastSwapPop (hfork := hfork) dp (initSevm msg)
       (initDevm msg) entries target index oldPauser oldCount oldExpiry
       oldExpiryOriginal assignmentOriginal countOriginal holeOriginal
       movedOriginal tailOriginal lengthOriginal indexOriginal assignmentCost
