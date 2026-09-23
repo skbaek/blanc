@@ -105,7 +105,8 @@ the contract, the precondition holds, and the deeper-frame hypothesis is in
 hand. -/
 private def DispatchInv (c : ContractSpec) (ca : Adr) (e : Sevm) (s : Devm) : Prop :=
   e.currentTarget = ca ∧ c.Pre ca e s ∧ Mem.Wf s.memory ∧
-    Exec.InvDepth e.depth ca c.prog (c.PreWf ca) (c.Post ca)
+    Exec.InvDepth e.depth ca c.prog (c.PreWf ca) (c.Post ca) ∧
+    CoveredFork e.benvStat.fork
 
 /-- Every selector-comparison line in the dispatcher leaves `Devm.state`
 untouched, so the carried invariant survives the line and the branch's pop. -/
@@ -129,10 +130,10 @@ private theorem popStateInv : Ninst.Inv Devm.state pop := by
 own obligation is enough. -/
 private theorem funcSound_pop {f : Func} (h : c.FuncSound ca aux f) :
     c.FuncSound ca aux (pop ::: f) := by
-  intro sevm s r h_ct h_pre h_wf h_ih h_run
+  intro sevm s r hfork h_ct h_pre h_wf h_ih h_run
   cases h_run with
   | next h_inst h_rest =>
-    refine h h_ct (h_pre.state_eq ?_) ?_ h_ih h_rest
+    refine h hfork h_ct (h_pre.state_eq ?_) ?_ h_ih h_rest
     · exact (popStateInv h_inst).symm
     · rw [← Ninst.Hinv.inv (f := Devm.memory) h_inst]; exact h_wf
 
@@ -147,8 +148,8 @@ private theorem post_of_run_call {fallback : Func}
   | call h_eq h_burn h_body =>
     have hf := Option.some.inj (h_fb.symm.trans h_eq)
     subst hf
-    exact h_fall h.1 (h.2.1.state_eq h_burn.state.symm)
-      (h_burn.memory ▸ h.2.2.1) h.2.2.2 h_body
+    exact h_fall h.2.2.2.2 h.1 (h.2.1.state_eq h_burn.state.symm)
+      (h_burn.memory ▸ h.2.2.1) h.2.2.2.1 h_body
 
 /-- One linear equality chain: a successful walk reaches one of its listed
 targets or the indexed fallback. -/
@@ -179,7 +180,8 @@ private theorem post_of_run_linearDispatch {fallback : Func}
           h_run
       · have hs := DispatchInv.line (by line_inv) (by line_inv) h h₁
           (Devm.popBurn_of_popBurn_of_pop h_pop h_burn)
-        exact h_all (word, body) (by simp) hs.1 hs.2.1 hs.2.2.1 hs.2.2.2 h_run
+        exact h_all (word, body) (by simp) hs.2.2.2.2 hs.1 hs.2.1 hs.2.2.1
+          hs.2.2.2.1 h_run
     | hd' :: tl' =>
       intro h_all e s r h
       func_execute 3
@@ -191,7 +193,7 @@ private theorem post_of_run_linearDispatch {fallback : Func}
       · have hs := DispatchInv.line (by line_inv) (by line_inv) h h₁
           (Devm.popBurn_of_popBurn_of_pop h_pop h_burn)
         exact funcSound_pop (h_all (word, body) (by simp))
-          hs.1 hs.2.1 hs.2.2.1 hs.2.2.2 h_run
+          hs.2.2.2.2 hs.1 hs.2.1 hs.2.2.1 hs.2.2.2.1 h_run
 
 /-- One balanced pivot. -/
 private theorem post_of_run_splitDispatch {left right : Func} {pivot : B256}
@@ -316,7 +318,7 @@ invariant is a predicate on the contract's storage, the side condition is
 trivial, and the deeper-frame hypothesis is not needed. -/
 theorem funcSound_of_storFixed {dp : DeployParams} {ca : Adr} {f : Func}
     (h : StorFixed dp f) : (registrySpec dp).FuncSound ca aux f := by
-  intro sevm s r h_ct h_pre _ _ h_run
+  intro sevm s r _ h_ct h_pre _ _ h_run
   subst h_ct
   refine ⟨trivial, ?_⟩
   show RegistryCoherent (Devm.getStor r sevm.currentTarget)
@@ -342,7 +344,7 @@ post-callback entry list with the entry list. -/
 successful run at all, so their obligation is vacuous. -/
 private theorem funcSound_revert (dp : DeployParams) (ca : Adr) :
     (registrySpec dp).FuncSound ca aux Func.revert := by
-  intro _ _ _ _ _ _ _ h_run
+  intro _ _ _ _ _ _ _ _ h_run
   exact absurd h_run not_run_revert
 
 /-- `Sound` for the exact runtime, reduced to one obligation per dispatch
@@ -351,7 +353,7 @@ extraction and the three-pivot hybrid tree are all peeled here. -/
 theorem registrySpec_sound_of_funcSound (dp : DeployParams) (ca : Adr)
     (h_all : ∀ p ∈ funcs dp, (registrySpec dp).FuncSound ca aux p.2) :
     (registrySpec dp).Sound ca := by
-  intro sevm pre post run h_ca ih h_wf h_pre
+  intro sevm pre post hfork run h_ca ih h_wf h_pre
   have ih' : Exec.InvDepth sevm.depth ca (registrySpec dp).prog
       ((registrySpec dp).PreWf ca) ((registrySpec dp).Post ca) := by
     intro pc' sevm' devm' exn'
@@ -395,7 +397,7 @@ theorem registrySpec_sound_of_funcSound (dp : DeployParams) (ca : Adr)
   have h_wf₃ : Mem.Wf s₃.memory := by
     rw [← Line.of_inv Devm.memory (by line_inv) h₃]; exact h_wf₂
   exact post_of_run_hybridDispatch (k := fallbackSlot) (fallback := Func.revert)
-    rfl (funcSound_revert dp ca) (funcs dp) h_all ⟨h_ca, h_pre₃, h_wf₃, ih'⟩ run₃
+    rfl (funcSound_revert dp ca) (funcs dp) h_all ⟨h_ca, h_pre₃, h_wf₃, ih', hfork⟩ run₃
 
 end LidoCircuitBreaker
 
