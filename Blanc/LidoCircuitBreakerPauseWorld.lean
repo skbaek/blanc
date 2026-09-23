@@ -116,6 +116,7 @@ world untouched and the child-incorporated meta fields at their message-entry
 values.  This is the fact the parent's CALL/STATICCALL crossings consume at
 `exec cevm`. -/
 theorem callee_exec (m : Msg) (G : Nat)
+    (hfork : CoveredFork m.benv.stat.fork)
     (hcode : m.code = calleeCode)
     (hgas : m.gas = G + 17) :
     ∃ post,
@@ -132,7 +133,12 @@ theorem callee_exec (m : Msg) (G : Nat)
   obtain ⟨post, walk, herr, hout, hgasPost, hworld, hlogs, hrefund, hatd,
     haa, hask⟩ :=
     calleeMain_runCompiledTo [calleeMain] (initSevm m) (initDevm m) G
-  refine ⟨post, ?_, herr, hout, hgasPost, hworld, by rw [hlogs]; rfl,
+  have hlogs0 : (initDevm m).logs = [] := by
+    change (match m.benv.stat.rules.stateGas with
+      | none => []
+      | some _ => _) = []
+    rw [hfork.rules_stateGas_none]
+  refine ⟨post, ?_, herr, hout, hgasPost, hworld, by rw [hlogs, hlogs0],
     by rw [hrefund]; rfl, by rw [hatd]; rfl, by rw [haa]; rfl,
     by rw [hask]; rfl⟩
   have hrun : Prog.RunCompiledTo (initSevm m) (initDevm m) calleeProg
@@ -179,6 +185,7 @@ the parent resumes with flag `1`, the child's word as returndata, its own
 output window written with that word's `osw`-truncation, and every other
 projection its trunk established. -/
 lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {gw cw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
@@ -236,10 +243,12 @@ lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
   obtain ⟨out, hexec, herr, hout, hgasOut, hworld, hlogsOut, hrefundOut,
     hatdOut, haaOut, haskOut⟩ :=
     callee_exec (msg.withBenv benv') (mcs - 17)
+      (by change CoveredFork sevm.benvStat.fork; exact hfork)
       (by change code = calleeCode; exact h_code)
       (by change mcs = mcs - 17 + 17; omega)
   have hsettle : (Frame.ofCall msg).settle (exec child) = .ok out := by
-    rw [show exec child = .ok out from hexec]
+    rw [show exec child = .ok out from hexec,
+      Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
     show processMessage.settle _ (.ok out) = .ok out
     simp [processMessage.settle, herr]
   have hdi := accessDelegation_inv h_del
@@ -272,7 +281,7 @@ lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
       ((Frame.ofCall msg).settle (exec child)) = .ok post := by
     rw [hsettle, Resume.run_call_ok (by rw [herr]; rfl) hpstack]
   have hrun : Ninst.RunCompiled sevm devm (.exec .call) post :=
-    Ninst.runCompiled_call_zero_value h_stk h_ext h_del h_acc h_split h_gas
+    Ninst.runCompiled_call_zero_value hfork h_stk h_ext h_del h_acc h_split h_gas
       h_depth (by simpa [p, msg]) (by simpa [p, msg] using hres)
   have hpask : p.accessedStorageKeys = devm.accessedStorageKeys := hd1wm.2
   have haskOut' : out.accessedStorageKeys = devm.accessedStorageKeys :=
@@ -350,6 +359,7 @@ of `CALL` minus the value word, same `callSpawnParent`, same `.call` resume
 tag, and the same responder child — entered static, which costs it nothing
 because `calleeMain` performs no state-changing operation. -/
 lemma runCompiled_staticcall_responder {sevm : Sevm} {devm : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {gw tw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
@@ -407,10 +417,12 @@ lemma runCompiled_staticcall_responder {sevm : Sevm} {devm : Devm}
   obtain ⟨out, hexec, herr, hout, hgasOut, hworld, hlogsOut, hrefundOut,
     hatdOut, haaOut, haskOut⟩ :=
     callee_exec (msg.withBenv benv') (mcs - 17)
+      (by change CoveredFork sevm.benvStat.fork; exact hfork)
       (by change code = calleeCode; exact h_code)
       (by change mcs = mcs - 17 + 17; omega)
   have hsettle : (Frame.ofCall msg).settle (exec child) = .ok out := by
-    rw [show exec child = .ok out from hexec]
+    rw [show exec child = .ok out from hexec,
+      Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
     show processMessage.settle _ (.ok out) = .ok out
     simp [processMessage.settle, herr]
   have hdi := accessDelegation_inv h_del
@@ -444,7 +456,7 @@ lemma runCompiled_staticcall_responder {sevm : Sevm} {devm : Devm}
     rw [hsettle, Resume.run_call_ok (by rw [herr]; rfl) hpstack]
   have hrun : Ninst.RunCompiled sevm devm (.exec .staticcall) post :=
     Ninst.runCompiled_exec_run
-      (Xinst.step_staticcall_spawn h_stk h_ext h_del h_acc h_split h_gas
+      (Xinst.step_staticcall_spawn hfork h_stk h_ext h_del h_acc h_split h_gas
         h_depth)
       (by simpa [p, msg] using henter) (by simpa [p, msg] using hres)
   have hpask : p.accessedStorageKeys = devm.accessedStorageKeys := hd1wm.2

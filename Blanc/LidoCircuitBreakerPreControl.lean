@@ -321,6 +321,7 @@ own body's cost at `1934` against an arbitrary entry gas, so `hpauseGas`
 is the bridge that lets `finishGas` absorb it. -/
 theorem removeTarget_pauseAfterSet_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target lastTarget idx len oldLength : B256)
     (stack : List B256)
@@ -426,7 +427,7 @@ theorem removeTarget_pauseAfterSet_runCompiled
           holeCost + movedIndexCost + tailClearCost + lengthRestoreCost +
           indexClearCost, base.stateGas⟩)
       removeTarget post := by
-  refine removeTarget_swapPop_toFinish_runCompiled dp sevm base M img target
+  refine removeTarget_swapPop_toFinish_runCompiled (hfork := hfork) dp sevm base M img target
     lastTarget idx len oldLength stack hstack holeCurrent movedCurrent
     holeOriginal movedOriginal tailOriginal lengthOriginal indexOriginal
     holeCost movedIndexCost tailClearCost lengthRestoreCost indexClearCost
