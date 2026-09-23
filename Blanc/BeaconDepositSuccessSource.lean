@@ -438,6 +438,7 @@ The continuation state contains the exact pair digest and preserves the
 entry storage and code maps. -/
 theorem reconstructPairSha_success_of_run
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount node intermediate second : B256}
     {leftWord rightWord outputWord left right : B256}
@@ -534,7 +535,7 @@ theorem reconstructPairSha_success_of_run
     rw [← getCode_eq_of_state_eq stageState 2]
     exact hnodeleg
   obtain ⟨q, hpQ, runQ, memoryQ, _returnQ, storageQ, codeQ⟩ :=
-    sha64_success_of_run hbubble hrev hpre hnodelegRight hpRight shaRun
+    sha64_success_of_run (hfork := hfork) hbubble hrev hpre hnodelegRight hpRight shaRun
   have shaCovered :
       afterRight.memory.extends
         (reconstructionShaWindows 0 outputWord) = afterRight.memory := by
@@ -571,6 +572,7 @@ theorem reconstructPairSha_success_of_run
 establishing all three reconstruction digest registers. -/
 theorem reconstructSignatureSecondSha_success_of_run
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount node intermediate : B256}
     {tail : Stack} {success : Func}
@@ -634,7 +636,7 @@ theorem reconstructSignatureSecondSha_success_of_run
     rw [← getCode_eq_of_state_eq stageState 2]
     exact hnodeleg
   obtain ⟨q, hpQ, runQ, memoryQ, _returnQ, storageQ, codeQ⟩ :=
-    sha64_success_of_run hbubble hrev hpre hnodelegZero hpZero shaRun
+    sha64_success_of_run (hfork := hfork) hbubble hrev hpre hnodelegZero hpZero shaRun
   have shaInput : (afterZero.memory.read 0 64).1 =
       tailWord.toBytes ++ (0 : B256).toBytes := by
     change afterZero.memory.data.sliceD 0 64 0 =
@@ -684,6 +686,7 @@ theorem reconstructSignatureSecondSha_success_of_run
 /-- Invert the direct pubkey SHA site and establish the node register. -/
 theorem reconstructPubkeySha_success_of_run
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount : B256} {tail : Stack} {success : Func}
     (hbubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
@@ -704,7 +707,7 @@ theorem reconstructPubkeySha_success_of_run
       Devm.getStor q = Devm.getStor pre ∧
       Devm.getCode q = Devm.getCode pre := by
   obtain ⟨q, hpQ, runQ, memoryQ, _returnQ, storageQ, codeQ⟩ :=
-    sha64_success_of_run hbubble hrev hpre hnodeleg hp run
+    sha64_success_of_run (hfork := hfork) hbubble hrev hpre hnodeleg hp run
   have shaInput : (pre.memory.read 192 64).1 = pubkeyInput := by
     change pre.memory.data.sliceD 192 64 0 = pubkeyInput
     exact source.shaPubkeyInput
@@ -736,6 +739,7 @@ theorem reconstructPubkeySha_success_of_run
 digest register after the exact 704-to-736-byte expansion. -/
 theorem reconstructSignatureFirstSha_success_of_run
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount node : B256} {tail : Stack} {success : Func}
     (hbubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
@@ -757,7 +761,7 @@ theorem reconstructSignatureFirstSha_success_of_run
       Devm.getStor q = Devm.getStor pre ∧
       Devm.getCode q = Devm.getCode pre := by
   obtain ⟨q, hpQ, runQ, memoryQ, _returnQ, storageQ, codeQ⟩ :=
-    sha64_success_of_run hbubble hrev hpre hnodeleg hp run
+    sha64_success_of_run (hfork := hfork) hbubble hrev hpre hnodeleg hp run
   have shaInput : (pre.memory.read 416 64).1 = signatureFirst := by
     change pre.memory.data.sliceD 416 64 0 = signatureFirst
     exact hnode.source.shaSignatureFirstInput
@@ -795,6 +799,7 @@ identified with the model deposit-data node, while the caller receives the
 actual continuation state and the exact storage/code frame equalities. -/
 theorem reconstructDepositDataNode_success_of_run
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {pubkey withdrawal signature : Bytes}
     {oldCount amount : B256} {tail : Stack} {success : Func}
     (hbubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
@@ -863,21 +868,21 @@ theorem reconstructDepositDataNode_success_of_run
     simpa only [reconstructDepositDataNode, finish, amountAndSignature,
       pubkeyAndWithdrawal, signatureRoot, signatureSecondHalf] using run
   obtain ⟨q1, hp1, run1, hnode1, storage1, code1⟩ :=
-    reconstructPubkeySha_success_of_run
+    reconstructPubkeySha_success_of_run (hfork := hfork)
       hbubble hrev hpre hnodeleg source hp run0
   obtain ⟨hnode1⟩ := hnode1
   have hnodeleg1 : getDelegatedCodeAddress (q1.getCode 2) = none := by
     rw [code1]
     exact hnodeleg
   obtain ⟨q2, hp2, run2, hintermediate2, storage2, code2⟩ :=
-    reconstructSignatureFirstSha_success_of_run
+    reconstructSignatureFirstSha_success_of_run (hfork := hfork)
       hbubble hrev hpre hnodeleg1 hnode1 hp1 run1
   obtain ⟨hintermediate2⟩ := hintermediate2
   have hnodeleg2 : getDelegatedCodeAddress (q2.getCode 2) = none := by
     rw [code2]
     exact hnodeleg1
   obtain ⟨q3, hp3, run3, hregisters3, storage3, code3⟩ :=
-    reconstructSignatureSecondSha_success_of_run
+    reconstructSignatureSecondSha_success_of_run (hfork := hfork)
       hbubble hrev hpre hnodeleg2 hintermediate2 hp2
       (by simpa only [signatureSecondHalf] using run2)
   obtain ⟨hregisters3⟩ := hregisters3
@@ -893,7 +898,7 @@ theorem reconstructDepositDataNode_success_of_run
         (by rw [B256.length_toBytes]; omega)
         (by rw [B256.length_toBytes]; omega)
   obtain ⟨q4, hp4, run4, memory4, storage4, code4⟩ :=
-    reconstructPairSha_success_of_run
+    reconstructPairSha_success_of_run (hfork := hfork)
       (leftWord := intermediateWord)
       (rightWord := secondIntermediateWord)
       (outputWord := intermediateWord)
@@ -927,7 +932,7 @@ theorem reconstructDepositDataNode_success_of_run
         (by rw [B256.length_toBytes]; omega)
         (by rw [B256.length_toBytes]; omega)
   obtain ⟨q5, hp5, run5, memory5, storage5, code5⟩ :=
-    reconstructPairSha_success_of_run
+    reconstructPairSha_success_of_run (hfork := hfork)
       (leftWord := nodeWord) (rightWord := 9)
       (outputWord := nodeWord)
       (left := pubkeyNode) (right := Bytes.toB256 withdrawal)
@@ -963,7 +968,7 @@ theorem reconstructDepositDataNode_success_of_run
         (by rw [B256.length_toBytes]; omega)
         (by rw [B256.length_toBytes]; omega)
   obtain ⟨q6, hp6, run6, memory6, storage6, code6⟩ :=
-    reconstructPairSha_success_of_run
+    reconstructPairSha_success_of_run (hfork := hfork)
       (leftWord := 11) (rightWord := intermediateWord)
       (outputWord := intermediateWord)
       (left := amountWord) (right := signatureNode)
@@ -1000,7 +1005,7 @@ theorem reconstructDepositDataNode_success_of_run
         (by rw [B256.length_toBytes]; omega)
         (by rw [B256.length_toBytes]; omega)
   obtain ⟨q7, hp7, run7, memory7, storage7, code7⟩ :=
-    reconstructPairSha_success_of_run
+    reconstructPairSha_success_of_run (hfork := hfork)
       (leftWord := nodeWord) (rightWord := intermediateWord)
       (outputWord := nodeWord)
       (left := pubkeyWithdrawalNode) (right := amountSignatureNode)
@@ -1735,6 +1740,7 @@ theorem insertionDeadStage_success_of_run
         (hashPair Bytes.sha256 (stor.get s.key) s.node)) ∧
       NativeShaEntry sevm q ∧
       Devm.getStor q sevm.currentTarget = stor := by
+  have hfork : CoveredFork sevm.benvStat.fork := native.covered
   unfold insertionDead at run
   rcases of_run_prepend [dup 0, pushB256 branchBase, add, sload] _ run with
     ⟨afterLoad, loadLine, run⟩
@@ -1816,7 +1822,7 @@ theorem insertionDeadStage_success_of_run
     rw [← congrFun stageCode 2]
     exact native.nondelegated
   obtain ⟨q, hpQ, callRun, memoryQ, _returnQ, storageQ, codeQ⟩ :=
-    sha64_success_of_run hbubble hrev native.precompile nodelegPair hpPair
+    sha64_success_of_run (hfork := hfork) hbubble hrev native.precompile nodelegPair hpPair
       shaRun
   have shaCovered : afterPair.memory.extends
       [⟨0, 64⟩, ⟨640, 32⟩] = afterPair.memory := by
@@ -1839,7 +1845,7 @@ theorem insertionDeadStage_success_of_run
     rw [qMemory]
     exact pairCarrier.finishHash
   have nativeQ : NativeShaEntry sevm q := by
-    refine ⟨?_, native.precompile⟩
+    refine ⟨?_, native.precompile, native.covered⟩
     rw [congrFun codeQ 2, ← congrFun stageCode 2]
     exact native.nondelegated
   have storageQ' : Devm.getStor q sevm.currentTarget = stor := by
@@ -1966,7 +1972,7 @@ theorem insertionContinuation_success_of_run
               funext address
               exact getCode_eq_of_state_eq burn.state address))))
   have nativeQ : NativeShaEntry sevm q := by
-    refine ⟨?_, native.precompile⟩
+    refine ⟨?_, native.precompile, native.covered⟩
     rw [← congrFun prefixCode 2]
     exact native.nondelegated
   have storageQ : Devm.getStor q sevm.currentTarget = stor := by
@@ -2061,7 +2067,7 @@ theorem insertionLoop_dispatch_success_of_run
         funext address
         exact getCode_eq_of_state_eq pop.state address)
     have nativeQ : NativeShaEntry sevm q := by
-      refine ⟨?_, native.precompile⟩
+      refine ⟨?_, native.precompile, native.covered⟩
       rw [← congrFun qCode 2]
       exact native.nondelegated
     have qStorage : Devm.getStor q sevm.currentTarget = stor := by
@@ -2092,7 +2098,7 @@ theorem insertionLoop_dispatch_success_of_run
         funext address
         exact getCode_eq_of_state_eq combined.state address)
     have nativeQ : NativeShaEntry sevm q := by
-      refine ⟨?_, native.precompile⟩
+      refine ⟨?_, native.precompile, native.covered⟩
       rw [← congrFun qCode 2]
       exact native.nondelegated
     have qStorage : Devm.getStor q sevm.currentTarget = stor := by
@@ -2128,6 +2134,7 @@ theorem insertionLoop_deadLive_success_of_run
       stor.set
         (insertionLoopIter sevm.currentTarget stor n s).key
         (insertionLoopIter sevm.currentTarget stor n s).node := by
+  have hfork : CoveredFork sevm.benvStat.fork := native.covered
   induction n generalizing pre s with
   | zero =>
       have liveS : s.live := by
@@ -2171,7 +2178,7 @@ theorem insertionLoop_deadLive_success_of_run
           rw [← burn.memory]
           simpa only [InsertionLoopState.step] using shaMem
         have nativeContinuation : NativeShaEntry sevm continuationPre := by
-          refine ⟨?_, shaNative.precompile⟩
+          refine ⟨?_, shaNative.precompile, shaNative.covered⟩
           rw [← getCode_eq_of_state_eq burn.state 2]
           exact shaNative.nondelegated
         have storageContinuation :
@@ -2216,6 +2223,7 @@ theorem commitDeposit_firstLive_success_of_run
               ((Devm.getStor pre sevm.currentTarget).set depositCountSlot
                 (oldCount + 1))).branch
             0 n node) := by
+  have hfork : CoveredFork sevm.benvStat.fork := native.covered
   unfold commitDeposit at run
   rcases of_run_prepend (loadWord oldCountWord) _ run with
     ⟨afterLoad, loadRun, run⟩
@@ -2332,7 +2340,7 @@ theorem commitDeposit_firstLive_success_of_run
               funext address
               exact getCode_eq_of_state_eq burn.state address))))
   have loopNative : NativeShaEntry sevm loopPre := by
-    refine ⟨?_, native.precompile⟩
+    refine ⟨?_, native.precompile, native.covered⟩
     rw [← congrFun prefixCode 2]
     exact native.nondelegated
   let keys := loopPre.accessedStorageKeys
@@ -2628,6 +2636,7 @@ theorem depositEndpoint_history_success_of_run
       (Devm.getStor pre sevm.currentTarget))
     (run : Func.Run (runtime.main :: aux) sevm pre depositEndpoint post) :
     HistoryExtends baseline (Devm.getStor post sevm.currentTarget) := by
+  have hfork : CoveredFork sevm.benvStat.fork := native.covered
   have hp : ([] : Stack) <<+ pre.stack := by
     simpa only [List.nil_append] using
       (pref_append ([] : Stack) pre.stack)
@@ -2792,13 +2801,13 @@ theorem depositEndpoint_history_success_of_run
         exact (getCode_eq_of_state_eq stateLen0 a).symm
       _ = Devm.getCode pre := decodedCode
   have stagedNative : NativeShaEntry sevm staged := by
-    refine ⟨?_, native.precompile⟩
+    refine ⟨?_, native.precompile, native.covered⟩
     rw [congrFun stagedCodePre 2]
     exact native.nondelegated
   obtain ⟨afterReconstruct, depositNode, amountSignatureNode,
       signatureSecondNode, hpReconstruct, guardsRun, registers, nodeEq,
       reconstructStorage, reconstructCode⟩ :=
-    reconstructDepositDataNode_success_of_run
+    reconstructDepositDataNode_success_of_run (hfork := hfork)
       (fs := runtime.main :: aux) (by rfl) (by rfl)
       stagedNative.precompile stagedNative.nondelegated
       hwithdrawal hsignature source hpStaged reconstructRun
@@ -2825,7 +2834,7 @@ theorem depositEndpoint_history_success_of_run
       _ = Devm.getCode staged := reconstructCode
       _ = Devm.getCode pre := stagedCodePre
   have commitNative : NativeShaEntry sevm commitPre := by
-    refine ⟨?_, native.precompile⟩
+    refine ⟨?_, native.precompile, native.covered⟩
     rw [congrFun commitCodePre 2]
     exact native.nondelegated
   have oldCountPre :
