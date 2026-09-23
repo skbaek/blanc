@@ -378,17 +378,19 @@ delegated-debit consumer below does not need it. -/
 
 /-- A counted record together with the whole-frame altitude of the committed
 frame that produced it: `HasFrameOrigin` strengthened by the producing frame's
-root context (`pc = 0`, fresh entry memory) and its exact-invocation
-witness. -/
+root context (`pc = 0`, fresh entry memory), its exact-invocation witness,
+and the fork coverage of the block that executed it. -/
 def CountedFrame.HasRootedOrigin (dp : DeployParams) (ca : Adr)
     (record : CountedFrame) : Prop :=
   ∃ frame : Exec.Frame, record = CountedFrame.ofFrame dp ca frame ∧
-    Blanc.Weth10.Exec.Frame.IsRoot frame ∧ Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame
+    Blanc.Weth10.Exec.Frame.IsRoot frame ∧
+    Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame ∧
+    CoveredFork frame.sevm.benvStat.fork
 
 theorem CountedFrame.HasRootedOrigin.hasFrameOrigin
     {dp : DeployParams} {ca : Adr} {record : CountedFrame}
     (h : record.HasRootedOrigin dp ca) : record.HasFrameOrigin dp ca := by
-  obtain ⟨frame, hrecord, -, -⟩ := h
+  obtain ⟨frame, hrecord, -, -, -⟩ := h
   exact ⟨frame, hrecord⟩
 
 /-- Every record of a counted ledger carries its producing frame's root
@@ -510,9 +512,49 @@ theorem Exec.exists_committedFrame_of_mem_attributionStream
         hrecord, hexact⟩
   · cases hmem
 
+/-- Every committed frame retained by one raw execution slot runs at a covered
+fork. -/
+def RetainedXlot.AllFramesCovered :
+    {xl : Xlot} → RetainedXlot xl → Prop
+  | _, .none => True
+  | _, .some run =>
+      ∀ frame ∈ Blanc.Exec.committedFrames run,
+        CoveredFork frame.sevm.benvStat.fork
+
+theorem ProcessMessageTrace.allFramesCovered
+    {msg : Msg} {out : Except (EvmError × State × AdrSet × Tra) Devm}
+    (trace : ProcessMessageTrace msg out)
+    (hfork : CoveredFork msg.benv.stat.fork) :
+    RetainedXlot.AllFramesCovered trace.retained := by
+  rcases trace with ⟨slot, retained, hrun⟩
+  cases retained with
+  | none => simp [RetainedXlot.AllFramesCovered]
+  | @some pc sevm pre execution run =>
+      have henter : (Frame.ofCall msg).enter =
+          .run ⟨pc, sevm, pre⟩ :=
+        (RunFrame.some_inv hrun).1
+      exact Blanc.Weth10.Exec.committedFrames_covered run
+        (by rw [Frame.enter_run_benvStat henter]; exact hfork)
+
+theorem ProcessCreateMessageTrace.allFramesCovered
+    {msg : Msg} {out : Except (EvmError × State × AdrSet × Tra) Devm}
+    (trace : ProcessCreateMessageTrace msg out)
+    (hfork : CoveredFork msg.benv.stat.fork) :
+    RetainedXlot.AllFramesCovered trace.retained := by
+  rcases trace with ⟨slot, retained, hrun⟩
+  cases retained with
+  | none => simp [RetainedXlot.AllFramesCovered]
+  | @some pc sevm pre execution run =>
+      have henter : (Frame.ofCreate msg).enter =
+          .run ⟨pc, sevm, pre⟩ :=
+        (RunFrame.some_inv hrun).1
+      exact Blanc.Weth10.Exec.committedFrames_covered run
+        (by rw [Frame.enter_run_benvStat henter]; exact hfork)
+
 theorem RetainedXlot.rootedLedger (dp : DeployParams) (ca : Adr)
     {xl : Xlot} (retained : RetainedXlot xl)
-    (roots : retained.AllFramesRoot) :
+    (roots : retained.AllFramesRoot)
+    (covs : retained.AllFramesCovered) :
     RootedLedger dp ca (retained.attributionStream dp ca) := by
   cases retained with
   | none => exact .nil dp ca
@@ -521,11 +563,12 @@ theorem RetainedXlot.rootedLedger (dp : DeployParams) (ca : Adr)
       obtain ⟨frame, hframe, hrecord, hexact⟩ :=
         Exec.exists_committedFrame_of_mem_attributionStream dp ca run
           record hmem
-      exact ⟨frame, hrecord, roots frame hframe, hexact⟩
+      exact ⟨frame, hrecord, roots frame hframe, hexact, covs frame hframe⟩
 
 theorem MessageCallTrace.rootedLedger (dp : DeployParams) (ca : Adr)
     {msg : Msg} {state : State} {out : MsgCallOutput}
-    (trace : MessageCallTrace msg state out) :
+    (trace : MessageCallTrace msg state out)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     RootedLedger dp ca (trace.attributionStream dp ca) := by
   cases trace with
   | createCollision htarget hcollision hresult => exact .nil dp ca
@@ -535,58 +578,76 @@ theorem MessageCallTrace.rootedLedger (dp : DeployParams) (ca : Adr)
       · exact .nil dp ca
       · exact RetainedXlot.rootedLedger dp ca trace.retained
           (ProcessCreateMessageTrace.allFramesRoot trace)
+          (ProcessCreateMessageTrace.allFramesCovered trace hfork)
   | callRun htarget delegated refund hdelegation execMsg hexecMsg evm
       hcore trace hresult =>
       exact RetainedXlot.rootedLedger dp ca trace.retained
         (ProcessMessageTrace.allFramesRoot trace)
+        (ProcessMessageTrace.allFramesCovered trace
+          (by rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_benv_stat,
+                ExecutionTrace.messageCallDelegation_benv_stat hdelegation]
+              exact hfork))
 
 theorem TransactionTrace.rootedLedger (dp : DeployParams) (ca : Adr)
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
-    (trace : TransactionTrace benv bout tx index state bout') :
+    (trace : TransactionTrace benv bout tx index state bout')
+    (hfork : CoveredFork benv.stat.fork) :
     RootedLedger dp ca (trace.attributionStream dp ca) :=
   MessageCallTrace.rootedLedger dp ca trace.message
+    (by rw [prepareMessage_benv trace.prepared]; exact hfork)
 
 theorem ApplyTransactionsTrace.rootedLedger (dp : DeployParams) (ca : Adr) :
     {txs : List (Nat × Tx)} → {benv : Benv} → {bout : BlockOutput} →
     {finalBenv : Benv} → {finalBout : BlockOutput} →
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) →
+    CoveredFork benv.stat.fork →
     RootedLedger dp ca (trace.attributionStream dp ca)
-  | _, _, _, _, _, .nil _ _ => .nil dp ca
-  | _, _, _, _, _, .cons head tail =>
-      (TransactionTrace.rootedLedger dp ca head).append
-        (ApplyTransactionsTrace.rootedLedger dp ca tail)
+  | _, _, _, _, _, .nil _ _, _ => .nil dp ca
+  | _, _, _, _, _, .cons head tail, hfork =>
+      (TransactionTrace.rootedLedger dp ca head hfork).append
+        (ApplyTransactionsTrace.rootedLedger dp ca tail
+          (by simpa [Benv.withState] using hfork))
 
 theorem SystemMessageTrace.rootedLedger (dp : DeployParams) (ca : Adr)
     {benv : Benv} {target : Adr} {data : Bytes}
     {state : State} {out : MsgCallOutput}
-    (trace : SystemMessageTrace benv target data state out) :
+    (trace : SystemMessageTrace benv target data state out)
+    (hfork : CoveredFork benv.stat.fork) :
     RootedLedger dp ca (trace.attributionStream dp ca) :=
-  MessageCallTrace.rootedLedger dp ca trace.message
+  MessageCallTrace.rootedLedger dp ca trace.message hfork
 
 theorem RequestsTrace.rootedLedger (dp : DeployParams) (ca : Adr)
     {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
-    (trace : RequestsTrace benv bout state bout') :
+    (trace : RequestsTrace benv bout state bout')
+    (hfork : CoveredFork benv.stat.fork) :
     RootedLedger dp ca (trace.attributionStream dp ca) :=
-  (SystemMessageTrace.rootedLedger dp ca trace.withdrawal).append
-    (SystemMessageTrace.rootedLedger dp ca trace.consolidation)
+  (SystemMessageTrace.rootedLedger dp ca trace.withdrawal hfork).append
+    (SystemMessageTrace.rootedLedger dp ca trace.consolidation
+      (by simpa [Benv.withState] using hfork))
 
 theorem AppliedBodyTrace.rootedLedger (dp : DeployParams) (ca : Adr)
     {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) :
+    (trace : AppliedBodyTrace benv txs wds state bout)
+    (hfork : CoveredFork benv.stat.fork) :
     RootedLedger dp ca (trace.attributionStream dp ca) :=
-  (((SystemMessageTrace.rootedLedger dp ca trace.beacon).append
-    (SystemMessageTrace.rootedLedger dp ca trace.history)).append
-      (ApplyTransactionsTrace.rootedLedger dp ca trace.transactions)).append
-        (RequestsTrace.rootedLedger dp ca trace.requests)
+  (((SystemMessageTrace.rootedLedger dp ca trace.beacon hfork).append
+    (SystemMessageTrace.rootedLedger dp ca trace.history hfork)).append
+      (ApplyTransactionsTrace.rootedLedger dp ca trace.transactions
+        hfork)).append
+        (RequestsTrace.rootedLedger dp ca trace.requests
+          (by simp only [Benv.withState]
+              rw [ExecutionTrace.ApplyTransactionsTrace.stat_eq
+                trace.transactions]
+              exact hfork))
 
 theorem AccountedBlock.rootedLedger
     {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {pre post : BlockChain}
     (accounted : AccountedBlock cfg dp ca pre post) :
     RootedLedger dp ca (accounted.attributionStream dp ca) :=
-  AppliedBodyTrace.rootedLedger dp ca accounted.bodyTrace
+  AppliedBodyTrace.rootedLedger dp ca accounted.bodyTrace accounted.covered
 
 /-- Every record of a history's chronological attribution ledger carries the
 root context of the committed frame that produced it. -/

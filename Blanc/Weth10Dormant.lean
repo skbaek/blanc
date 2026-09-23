@@ -292,7 +292,7 @@ theorem CountedFrame.permanentOutflow_eq_zero_of_read_zero
     (hread : ∀ value, event.visit.read? = some value → value = 0) :
     record.permanentOutflow u = 0 := by
   by_contra hout
-  obtain ⟨frame, rfl, hroot, hexact⟩ := horigin
+  obtain ⟨frame, rfl, hroot, hexact, _hcov⟩ := horigin
   obtain ⟨action, haction⟩ :
       ∃ action, (CountedFrame.ofFrame dp ca frame).action = some action := by
     cases haction : (CountedFrame.ofFrame dp ca frame).action with
@@ -673,7 +673,8 @@ private theorem exists_flashAllowanceOutcome
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
     (hroot : Blanc.Weth10.Exec.Frame.IsRoot frame) (hexact : Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
-    (hsel : Sevm.selector frame.sevm = flashLoanSelector) :
+    (hsel : Sevm.selector frame.sevm = flashLoanSelector)
+    (hfork : CoveredFork frame.sevm.benvStat.fork) :
     ∃ settle burn : Devm,
       FlashAllowanceOutcome frame.sevm settle burn ∧
       Func.Run ((weth10 dp).main :: weth10Aux) frame.sevm burn flashBurn
@@ -701,7 +702,7 @@ private theorem exists_flashAllowanceOutcome
         simpa only [flashLoanSuccessTail, flashLoanFromCall] using htail
       obtain ⟨mid, settle, -, -, -, -, -, -, hwfSettle,
         ⟨settleImg, hreadsSettle⟩, hsettle⟩ :=
-        of_rawFlashLoanSuccessTail dp hstack hwfSc hreadsSc rfl htail'
+        of_rawFlashLoanSuccessTail dp hstack hwfSc hreadsSc rfl htail' hfork
       obtain ⟨burn, hburn, hallowance, -, -⟩ :=
         of_flashSettle_allowance dp hwfSettle hreadsSettle hsettle
       exact ⟨settle, burn, hallowance, hburn⟩
@@ -730,7 +731,7 @@ private theorem written_eq_zero_of_read_zero
     (hread : ∀ v, event.visit.read? = some v → v = 0)
     (hwritten : event.visit.written? = some value) :
     value = 0 := by
-  obtain ⟨frame, rfl, hroot, hexact⟩ := horigin
+  obtain ⟨frame, rfl, hroot, hexact, hcov⟩ := horigin
   have hev : frameAllowanceEvent frame.sevm frame.pre frame.post =
     some event := hevent
   cases hvisit : event.visit with
@@ -780,7 +781,7 @@ private theorem written_eq_zero_of_read_zero
       simp only [AllowanceVisit.written?, Option.some.injEq] at hwritten
       have hzero : before = 0 := hread before rfl
       obtain ⟨settle, burn, houtcome, hburn⟩ :=
-        exists_flashAllowanceOutcome hroot hexact hne0 hsel
+        exists_flashAllowanceOutcome hroot hexact hne0 hsel hcov
       have hbranch : flashAllowanceBranchFromPost frame.sevm frame.post =
           .finite (flashAllowanceRuntimeKey frame.sevm)
             (after + Sevm.argWord frame.sevm 2) after := by
@@ -813,7 +814,7 @@ private theorem written_eq_zero_of_checkpointRoot
     (hread : ∀ v, event.visit.read? = some v → v = 0)
     (hwritten : event.visit.written? = some value) :
     value = 0 := by
-  obtain ⟨frame, rfl, hroot, hexact⟩ := horigin
+  obtain ⟨frame, rfl, hroot, hexact, hcov⟩ := horigin
   have hev : frameAllowanceEvent frame.sevm frame.pre frame.post =
       some event := hevent
   cases hvisit : event.visit with
@@ -851,7 +852,7 @@ private theorem written_eq_zero_of_checkpointRoot
       simp only [AllowanceVisit.written?, Option.some.injEq] at hwritten
       have hzero : before = 0 := hread before rfl
       obtain ⟨settle, burn, houtcome, hburn⟩ :=
-        exists_flashAllowanceOutcome hroot hexact hne0 hsel
+        exists_flashAllowanceOutcome hroot hexact hne0 hsel hcov
       have hbranch : flashAllowanceBranchFromPost frame.sevm frame.post =
           .finite (flashAllowanceRuntimeKey frame.sevm)
             (after + Sevm.argWord frame.sevm 2) after := by
@@ -966,7 +967,7 @@ private theorem CountedFrame.permanentOutflow_eq_zero_of_delegated_read_zero
     (hevent : record.allowance = some event)
     (hread : ∀ value, event.visit.read? = some value → value = 0) :
     record.permanentOutflow u = 0 := by
-  obtain ⟨frame, rfl, hroot, hexact⟩ := horigin
+  obtain ⟨frame, rfl, hroot, hexact, hcov⟩ := horigin
   have hev : frameAllowanceEvent frame.sevm frame.pre frame.post =
       some event := hevent
   obtain ⟨hprimary, hdebitEq⟩ :=
@@ -1059,7 +1060,7 @@ theorem AccountedHistory.permanentOutflowAuthorization_of_emptyStorage
     (hsplit : history.attributionLedger = earlier ++ record :: later)
     (hout : record.permanentOutflow u ≠ 0) :
     PermanentOutflowAuthorization record earlier.reverse u := by
-  obtain ⟨frame, rfl, hrooted, hexact⟩ :=
+  obtain ⟨frame, rfl, hrooted, hexact, -⟩ :=
     history.rootedLedger record (by
       rw [hsplit]
       exact List.mem_append_right _ List.mem_cons_self)
