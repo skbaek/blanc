@@ -199,6 +199,13 @@ INPUT_KINDS = (
     "tools",
     "clock",
     "material_output",
+    # Declared exclusions: paths the gate reads but deliberately does not
+    # fingerprint, each with the reason.  A harness self-test reads the
+    # committed subject it cuts mutants from, yet its cache inputs are the
+    # harness's own files (evidence-economy rule 3).  This kind contributes no
+    # digest; it exists so the read audit can tell a declared subject read
+    # from an undeclared hole, and so the inventory says the read is deliberate.
+    "untracked_reads",
 )
 
 GATE_KINDS = ("cacheable", "composition", "always-fresh")
@@ -434,6 +441,36 @@ def load_registry(path: Path) -> dict[str, Any]:
             ):
                 raise GateCacheError(
                     f"gate {identifier} has a malformed material-output certificate"
+                )
+        untracked = inputs.get("untracked_reads", [])
+        if not isinstance(untracked, list) or not untracked and "untracked_reads" in inputs:
+            raise GateCacheError(f"gate {identifier} has malformed untracked reads")
+        declared_files = set(inputs.get("files", [])) if isinstance(
+            inputs.get("files", []), list
+        ) else set()
+        seen_untracked: set[str] = set()
+        for spec in untracked:
+            if (
+                not isinstance(spec, dict)
+                or set(spec) != {"path", "reason"}
+                or not isinstance(spec.get("path"), str)
+                or not spec["path"]
+                or not isinstance(spec.get("reason"), str)
+                or not spec["reason"].strip()
+            ):
+                raise GateCacheError(
+                    f"gate {identifier} untracked read needs exactly a path and a reason"
+                )
+            if spec["path"] in seen_untracked:
+                raise GateCacheError(
+                    f"gate {identifier} declares untracked read {spec['path']} twice"
+                )
+            seen_untracked.add(spec["path"])
+            if spec["path"] in declared_files:
+                # A path cannot be both fingerprinted and declared unfingerprinted.
+                raise GateCacheError(
+                    f"gate {identifier} declares {spec['path']} both as a fingerprinted "
+                    "file and as an untracked read"
                 )
         external = inputs.get("external", [])
         if not isinstance(external, list):
@@ -2446,6 +2483,12 @@ def render_inventory(root: Path) -> str:
                     f"- clock: {value['kind']} from "
                     + ", ".join(f"`{item}`" for item in value["files"])
                 )
+            elif kind == "untracked_reads":
+                for spec in value:
+                    lines.append(
+                        f"- untracked read (declared, contributes no digest): "
+                        f"`{spec['path']}` — {spec['reason']}"
+                    )
             else:
                 lines.append(f"- {kind}: " + ", ".join(f"`{item}`" for item in value))
         lines.append("")

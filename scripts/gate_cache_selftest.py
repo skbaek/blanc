@@ -714,6 +714,76 @@ def control_unrelated_change_still_reuses() -> None:
         require(s.disposition("g") == "reused", "an undeclared, unread file must not invalidate")
 
 
+def control_declared_untracked_read_contributes_no_digest() -> None:
+    """`inputs.untracked_reads` is a declaration, never a fingerprint component.
+
+    A harness self-test reads the committed subject it cuts mutants from; the
+    directive fixes its cache inputs at the harness files.  Editing the
+    declared subject must therefore leave the row reused, while editing a
+    fingerprinted harness file still invalidates it, and the inventory must
+    print the declaration with its reason.
+    """
+
+    with scratch() as s:
+        s.write("scripts/harness.txt", "harness\n")
+        s.write("Blanc/Subject.lean", "subject one\n")
+        command = s.passing_gate("g.sh", "ran.txt")
+        s.registry([simple_gate(
+            "g", [command],
+            {
+                "files": ["scripts/harness.txt"],
+                "untracked_reads": [
+                    {"path": "Blanc/Subject.lean",
+                     "reason": "mutation subject; harness-only cache inputs"},
+                ],
+            },
+            "^OK — g.sh: ")])
+        require(s.run() == 0 and s.ran("ran.txt") == 1, "the first run must execute")
+        s.write("Blanc/Subject.lean", "subject two\n")
+        require(s.disposition("g") == "reused",
+                "a declared untracked read must not invalidate the row")
+        _, components = gc.fingerprint(s.root, s.load()["gates"][0])
+        require("untracked_reads" not in components,
+                "an untracked read must contribute no fingerprint component")
+        s.write("scripts/harness.txt", "harness changed\n")
+        require(s.disposition("g") == "fresh",
+                "a fingerprinted harness file must still invalidate")
+        inventory = gc.render_inventory(s.root)
+        require(
+            "- untracked read (declared, contributes no digest): `Blanc/Subject.lean` — "
+            "mutation subject; harness-only cache inputs" in inventory,
+            "the inventory must print the declaration and its reason",
+        )
+
+
+def control_malformed_untracked_reads_are_refused() -> None:
+    """A declaration the runner only half understands is a registry fault."""
+
+    base = {"id": "g", "order": 1, "command": ["x"], "kind": "cacheable",
+            "verdict": {"summary_patterns": ["^OK"]}}
+    cases: list[tuple[str, dict[str, Any]]] = [
+        ("no reason", {"files": ["a"], "untracked_reads": [{"path": "b"}]}),
+        ("blank reason", {"files": ["a"], "untracked_reads": [{"path": "b", "reason": " "}]}),
+        ("extra key", {"files": ["a"],
+                       "untracked_reads": [{"path": "b", "reason": "r", "digest": "x"}]}),
+        ("not a list", {"files": ["a"], "untracked_reads": {"path": "b", "reason": "r"}}),
+        ("empty list", {"files": ["a"], "untracked_reads": []}),
+        ("duplicate path", {"files": ["a"],
+                            "untracked_reads": [{"path": "b", "reason": "r"},
+                                                {"path": "b", "reason": "s"}]}),
+        ("also fingerprinted", {"files": ["a"],
+                                "untracked_reads": [{"path": "a", "reason": "r"}]}),
+    ]
+    for label, inputs in cases:
+        with scratch() as s:
+            s.registry([dict(base, inputs=inputs)])
+            try:
+                s.load()
+            except gc.GateCacheError:
+                continue
+            raise ControlFailure(f"malformed untracked read accepted: {label}")
+
+
 def control_membership_mode_ignores_content() -> None:
     with scratch() as s:
         s.write("tree/x.txt", "one\n")
@@ -3988,6 +4058,8 @@ CONTROLS = (
     control_content_change_invalidates,
     control_population_membership_invalidates,
     control_unrelated_change_still_reuses,
+    control_declared_untracked_read_contributes_no_digest,
+    control_malformed_untracked_reads_are_refused,
     control_membership_mode_ignores_content,
     control_implementation_change_invalidates,
     control_command_arguments_invalidate,

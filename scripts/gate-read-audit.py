@@ -32,8 +32,12 @@ actually took under a cold bytecode cache", which is a much stronger
 statement than "nobody spotted one", and a weaker one than "there is
 none".  Reads through the runner-identity channel -- a source the runner
 fingerprints for that gate, or a sibling module bound at the runner's
-module scope -- are reported as runner-channel reads, not holes.  The
-instrument establishes the cold cache itself: it removes
+module scope -- are reported as runner-channel reads, not holes.  A read
+the registry declares under `inputs.untracked_reads` -- a subject the gate
+reads on purpose without fingerprinting it, with the reason on record --
+is reported as a declared untracked read, not a hole: the declaration is
+what makes the read reviewable, and an undeclared subject still fails.
+The instrument establishes the cold cache itself: it removes
 `scripts/__pycache__` and sets `PYTHONDONTWRITEBYTECODE=1` through the
 whole process tree it measures, so a warm caller cache cannot hide a read.
 
@@ -116,17 +120,29 @@ def classify(path: Path, roots: list[Path]) -> tuple[str, str] | None:
     return None
 
 
-def declared_coverage(gate: dict) -> tuple[set[Path], list[tuple[Path, str]]]:
+def declared_coverage(
+    gate: dict,
+) -> tuple[set[Path], list[tuple[Path, str]], dict[Path, str]]:
     """Every path this gate's fingerprint would notice a change to.
 
     Returns exact paths plus (root, pattern-ish) subtrees that count as
     covered: a declared population's whole matched set, a pinned external
-    checkout, and Lake's artifact tree.
+    checkout, and Lake's artifact tree.  The third value maps each declared
+    *untracked* read -- a path the registry says the gate reads on purpose
+    without fingerprinting it -- to its stated reason.  Such a read is not a
+    hole, because the declaration is on the record and the inventory prints
+    it; it is reported under its own label so a reviewer can still see it.
     """
 
     inputs = gate.get("inputs", {})
     exact: set[Path] = set()
     subtrees: list[tuple[Path, str]] = []
+    untracked: dict[Path, str] = {}
+    for spec in inputs.get("untracked_reads", []):
+        try:
+            untracked[gc.resolve_path(ROOT, spec["path"]).resolve()] = spec["reason"]
+        except Exception:
+            pass
 
     for given in inputs.get("files", []):
         try:
@@ -165,7 +181,7 @@ def declared_coverage(gate: dict) -> tuple[set[Path], list[tuple[Path, str]]]:
                 directory = ROOT / directory
             subtrees.append((directory.resolve(), "external"))
 
-    return exact, subtrees
+    return exact, subtrees, untracked
 
 
 def runner_content_files(gate: dict) -> set[Path]:
@@ -323,10 +339,11 @@ def audit_gate(gate: dict, roots: list[Path], runner_bindings: set[Path]) -> dic
     # Neither can carry content into a verdict.
     reads = {raw for raw in reads if Path(raw).is_file()}
 
-    exact, subtrees = declared_coverage(gate)
+    exact, subtrees, untracked = declared_coverage(gate)
     runner_content = runner_content_files(gate)
     covered, lake, external, undeclared = 0, set(), set(), set()
     runner_identity, runner_binding_reads = set(), set()
+    declared_untracked: dict[str, str] = {}
     for raw in reads:
         seen = classify(Path(raw), roots)
         if seen is None:
@@ -335,6 +352,11 @@ def audit_gate(gate: dict, roots: list[Path], runner_bindings: set[Path]) -> dic
         resolved = Path(raw).resolve()
         if resolved in exact:
             covered += 1
+            continue
+        if resolved in untracked:
+            declared_untracked[name if label == "repo" else f"{label}::{name}"] = (
+                untracked[resolved]
+            )
             continue
         if resolved in runner_content:
             runner_identity.add(name if label == "repo" else f"{label}::{name}")
@@ -376,6 +398,10 @@ def audit_gate(gate: dict, roots: list[Path], runner_bindings: set[Path]) -> dic
         "runner_bindings": sorted(runner_binding_reads),
         "lake_artifacts": sorted(lake),
         "in_declared_subtree": sorted(external),
+        "declared_untracked": [
+            {"path": name, "reason": declared_untracked[name]}
+            for name in sorted(declared_untracked)
+        ],
         "undeclared": sorted(undeclared),
         "enumerated_undeclared": sorted(enumerated),
     }
@@ -428,6 +454,8 @@ def main(argv: list[str]) -> int:
               f"({outcome['elapsed_s']}s)")
         for name in outcome["undeclared"]:
             print(f"       UNDECLARED READ: {name}")
+        for item in outcome["declared_untracked"]:
+            print(f"       declared untracked read: {item['path']} — {item['reason']}")
         for name in outcome["runner_identity"]:
             print(f"       runner-identity read: {name}")
         for name in outcome["runner_bindings"]:

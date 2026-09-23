@@ -6,6 +6,7 @@ import contextlib
 import importlib.util
 import io
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -43,7 +44,7 @@ def exercise(arguments: list[str]) -> tuple[int, list[str], list[str], str, str]
             "id": gate["id"], "command": gate["id"], "exit": 0,
             "elapsed_s": 0.0, "reads_observed": 0, "covered": 0,
             "runner_identity": [], "runner_bindings": [], "lake_artifacts": [],
-            "in_declared_subtree": [], "undeclared": [],
+            "in_declared_subtree": [], "declared_untracked": [], "undeclared": [],
             "enumerated_undeclared": [],
         }
 
@@ -57,7 +58,52 @@ def exercise(arguments: list[str]) -> tuple[int, list[str], list[str], str, str]
     return code, cache_calls, audited, stdout.getvalue(), stderr.getvalue()
 
 
+def declared_untracked_control() -> None:
+    """A declared untracked read is reported, not flagged; an undeclared one is.
+
+    Runs the real `audit_gate` against a synthetic root: the gate is a Python
+    one-liner that reads two files.  With `subject.txt` declared under
+    `inputs.untracked_reads`, only `other.txt` is a hole.  Without the
+    declaration both are holes, so the allowance provably does the work.
+    """
+
+    module = load_audit()
+    with tempfile.TemporaryDirectory(prefix="gate-read-audit-control-") as directory:
+        root = Path(directory)
+        (root / "subject.txt").write_text("subject\n", encoding="utf-8")
+        (root / "other.txt").write_text("other\n", encoding="utf-8")
+        module.ROOT = root
+        module.OUT_DIR = root / ".lake/read-audit"
+        module.gc.ROOT = root
+        command = [
+            sys.executable, "-c",
+            "open('subject.txt').read(); open('other.txt').read()",
+        ]
+        gate = {
+            "id": "synthetic", "kind": "cacheable", "command": command,
+            "inputs": {
+                "files": ["gate.py"],
+                "untracked_reads": [
+                    {"path": "subject.txt", "reason": "mutation subject"}
+                ],
+            },
+        }
+        (root / "gate.py").write_text("# stand-in harness file\n", encoding="utf-8")
+        result = module.audit_gate(gate, [root], set())
+        assert result["exit"] == 0, result
+        assert result["undeclared"] == ["other.txt"], result
+        assert result["declared_untracked"] == [
+            {"path": "subject.txt", "reason": "mutation subject"}
+        ], result
+
+        undeclared_gate = dict(gate, inputs={"files": ["gate.py"]})
+        result = module.audit_gate(undeclared_gate, [root], set())
+        assert result["undeclared"] == ["other.txt", "subject.txt"], result
+        assert result["declared_untracked"] == [], result
+
+
 def main() -> int:
+    declared_untracked_control()
     code, cold, audited, output, _ = exercise([])
     assert code == 0 and cold == ["cold"] and audited == ["alpha", "beta"]
     assert "2 gates executed" in output
@@ -75,7 +121,8 @@ def main() -> int:
         assert code == 2 and not cold and not audited and not output
         assert diagnostic in error
 
-    print("OK — gate read audit CLI controls: default/all, explicit selection, empty and unknown refusal")
+    print("OK — gate read audit controls: declared untracked read honoured and its absence flagged; "
+          "CLI default/all, explicit selection, empty and unknown refusal")
     return 0
 
 

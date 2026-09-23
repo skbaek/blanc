@@ -494,6 +494,16 @@ instead. A clean result means "no undeclared read on the path this gate
 actually took", which is stronger than "nobody spotted one" and weaker than
 "there is none".
 
+A row may read data it deliberately does not fingerprint: a harness self-test
+cuts its mutants from the committed subject, but its cache inputs are the
+harness's own files (evidence economy rule 3). Such a read is declared in the
+registry under `inputs.untracked_reads`, one `{path, reason}` per file. The
+declaration contributes no digest — editing the subject never reruns the
+self-test — and the audit reports the read as *declared untracked* with its
+reason instead of as a hole; the inventory prints it. A path cannot be both a
+fingerprinted `files` entry and an untracked read, and an undeclared subject
+read still fails the audit.
+
 **There is no `--force`.** `--fresh` adds execution; nothing removes it. Direct
 gate commands remain exactly as documented above and never consult verdict
 evidence, so running one is always a fresh run.
