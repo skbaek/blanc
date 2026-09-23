@@ -845,7 +845,7 @@ private lemma of_extcodesize_val {e : Sevm} {s r : Devm} {x : B256} {xs : Stack}
     refine ⟨?_, ?_⟩
     · rw [← hcode]
       exact append_pref (Devm.push_of_push hpush).stack
-        (by rw [← (Devm.burn_of_chargeGas hgas).stack]; exact htail)
+        (by show xs <<+ d2.stack; rw [← (Devm.burn_of_chargeGas hgas).stack]; exact htail)
     · exact hpop'.memory.trans
         ((Devm.burn_of_chargeGas hgas).memory.trans
           (Devm.push_of_push hpush).memory)
@@ -859,7 +859,7 @@ private lemma of_extcodesize_val {e : Sevm} {s r : Devm} {x : B256} {xs : Stack}
     refine ⟨?_, ?_⟩
     · rw [← hcode]
       exact append_pref (Devm.push_of_push hpush).stack
-        (by rw [← (Devm.burn_of_chargeGas hgas).stack]; exact htail)
+        (by show xs <<+ d2.stack; rw [← (Devm.burn_of_chargeGas hgas).stack]; exact htail)
     · exact hpop'.memory.trans
         ((show d0.memory = (addAccessedAddress d0 x.toAdr).memory from rfl).trans
           ((Devm.burn_of_chargeGas hgas).memory.trans
