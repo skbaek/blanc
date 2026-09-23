@@ -2107,10 +2107,8 @@ private theorem concreteExit_beforeCall (sevm : Sevm) (base C R U T post : Devm)
     Func.RunCompiled (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[concreteExitChi], M, G + 11675, base.stateGas⟩) afterExit post := by
   have hkeep : ∀ (D : Devm) (key value : B256),
-      (afterSstore sevm D key value).stateGas = D.stateGas := by
-    intro D key value
-    unfold afterSstore
-    split <;> rfl
+      (afterSstore sevm D key value).stateGas = D.stateGas :=
+    fun _ _ _ => afterSstore_stateGas
   have hCStateGas : C.stateGas = base.stateGas := hchi ▸ hkeep base chiSlot concreteExitChi
   have hRStateGas : R.stateGas = C.stateGas := hrho ▸ hkeep C rhoSlot 6
   have hUStateGas : U.stateGas = R.stateGas := hrowStore ▸ hkeep R sevm.caller.toB256 59

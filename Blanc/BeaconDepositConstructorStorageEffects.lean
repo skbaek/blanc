@@ -998,9 +998,8 @@ theorem constructorZeroHashLoop_succ_storageEffectRun
         hheight nextMemory hfork sentryPost hstatic hcontinuation hloop
         (by
           have hstateGas :
-              (afterSstore sevm shaPost key node).stateGas = shaPost.stateGas := by
-            unfold afterSstore
-            split <;> rfl
+              (afterSstore sevm shaPost key node).stateGas = shaPost.stateGas :=
+            afterSstore_stateGas
           simpa only [key, node, hstateGas] using tail)
       rw [show sstoreCost sevm shaPost
         (zeroHashSlot (height + 1))

@@ -12,12 +12,6 @@ namespace Blanc.BeaconDeposit
 open Jaune
 open Jaune.Ninst Blanc.Ninst
 
-private lemma insert_afterSload_stateGas
-    {sevm : Sevm} {base : Devm} {key : B256} :
-    (afterSload sevm base key).stateGas = base.stateGas := by
-  unfold afterSload
-  split <;> rfl
-
 private theorem insertionLoopBit_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {memory : Mem} {oldCount shiftedSize node height : B256}
@@ -304,7 +298,7 @@ theorem insertionDeadStage_runCompiledTo
           K + 26 + sloadCost sevm base (branchBase + height), base.stateGas⟩)
       insertionDead ex := by
   apply insertionDeadLoad_runCompiledTo (hfork := hfork) hval hroom
-  rw [← insert_afterSload_stateGas (key := branchBase + height)] at htail ⊢
+  rw [← afterSload_stateGas (key := branchBase + height)] at htail ⊢
   apply insertionStageLoadedLeft_runCompiledTo hmem hroom
   exact htail
 

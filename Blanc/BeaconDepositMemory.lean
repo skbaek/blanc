@@ -18,23 +18,6 @@ namespace Blanc.BeaconDeposit
 open Jaune
 open Jaune.Ninst Blanc.Ninst
 
-/-! ## After-state meters
-
-A selected `SLOAD`/`SSTORE` changes only access sets, refunds, and storage:
-the state-gas meter of the after-state is the pre-state's.  The shared
-`Ninst.runCompiled_*_selected` rules state their successors with the pre-state
-meter; these bridge that to after-state-receiver literals. -/
-
-theorem afterSload_stateGas {sevm : Sevm} {base : Devm} {key : B256} :
-    (afterSload sevm base key).stateGas = base.stateGas := by
-  unfold afterSload
-  split <;> rfl
-
-theorem afterSstore_stateGas {sevm : Sevm} {devm : Devm} {key value : B256} :
-    (afterSstore sevm devm key value).stateGas = devm.stateGas := by
-  unfold afterSstore
-  split <;> rfl
-
 private def lowBytes : Nat → B256 → Bytes
   | 0, _ => []
   | n + 1, w => w.2.2.toUInt8 :: lowBytes n (w >>> 8)

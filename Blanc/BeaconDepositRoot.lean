@@ -20,12 +20,6 @@ private lemma root_stateGas_addAccessedStorageKey
     {base : Devm} {target : Adr} {key : B256} :
     (addAccessedStorageKey base target key).stateGas = base.stateGas := rfl
 
-private lemma root_afterSload_stateGas
-    {sevm : Sevm} {base : Devm} {key : B256} :
-    (afterSload sevm base key).stateGas = base.stateGas := by
-  unfold afterSload
-  split <;> rfl
-
 private lemma root_addAccessedStorageKey_setMach_setMach
     {base : Devm} {target : Adr} {key : B256} {mach mach' : Mach} :
     (addAccessedStorageKey (base.setMach mach) target key).setMach mach' =
@@ -245,7 +239,7 @@ theorem rootLiveStage_runCompiledTo
           K + 26 + sloadCost sevm base (branchBase + height), base.stateGas⟩)
       rootLiveStep ex := by
   apply rootLiveLoad_runCompiledTo (hfork := hfork) hval hroom
-  rw [← root_afterSload_stateGas (key := branchBase + height)] at htail ⊢
+  rw [← afterSload_stateGas (key := branchBase + height)] at htail ⊢
   apply rootStageLoadedLeft_runCompiledTo hmem hroom
   exact htail
 

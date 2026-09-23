@@ -1183,7 +1183,7 @@ private theorem pauseFiniteWrite_runCompiledTo
       (G := G + 1025) hresume horiginal hwarm hstatic hvalueNonzero
   rw [← hstaged3]
   have hsg : (afterSstore sevm base resumeSinceSlot value).stateGas =
-      base.stateGas := by unfold afterSstore; split <;> rfl
+      base.stateGas := afterSstore_stateGas
   rw [hsg] at tailRun
   exact tailRun
 
@@ -1230,7 +1230,7 @@ private theorem pauseFiniteWrite_exact_runCompiledTo
       (G := G + 1025) hresume horiginal hwarm hstatic hvalueNonzero
   rw [← hstaged3]
   have hsg : (afterSstore sevm base resumeSinceSlot value).stateGas =
-      base.stateGas := by unfold afterSstore; split <;> rfl
+      base.stateGas := afterSstore_stateGas
   rw [hsg] at tailRun
   exact tailRun
 
@@ -2040,7 +2040,7 @@ private theorem pauseForSentinel_runCompiledTo
   -- image the defeq would otherwise unfold past `maxRecDepth`.
   simp only [Devm.stack_setMach, Devm.memory_setMach]
   have hsg : (afterSstore sevm base resumeSinceSlot pauseInfinitely).stateGas =
-      base.stateGas := by unfold afterSstore; split <;> rfl
+      base.stateGas := afterSstore_stateGas
   rw [hsg] at eventRun
   exact eventRun
 
@@ -2088,7 +2088,7 @@ private theorem pauseForSentinel_exact_runCompiledTo
   -- image the defeq would otherwise unfold past `maxRecDepth`.
   simp only [Devm.stack_setMach, Devm.memory_setMach]
   have hsg : (afterSstore sevm base resumeSinceSlot pauseInfinitely).stateGas =
-      base.stateGas := by unfold afterSstore; split <;> rfl
+      base.stateGas := afterSstore_stateGas
   rw [hsg] at eventRun
   exact eventRun
 

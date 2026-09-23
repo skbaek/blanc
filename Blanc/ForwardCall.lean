@@ -335,6 +335,12 @@ def afterSload (sevm : Sevm) (base : Devm) (key : B256) : Devm :=
   else
     addAccessedStorageKey base sevm.currentTarget key
 
+/-- A selected `SLOAD` leaves the state-gas meter unchanged. -/
+theorem afterSload_stateGas {sevm : Sevm} {base : Devm} {key : B256} :
+    (afterSload sevm base key).stateGas = base.stateGas := by
+  unfold afterSload
+  split <;> rfl
+
 private lemma addAccessedStorageKey_setMach_setMach_selected
     {base : Devm} {target : Adr} {key : B256} {mach mach' : Mach} :
     (addAccessedStorageKey (base.setMach mach) target key).setMach mach' =
@@ -396,6 +402,13 @@ def afterSstore (sevm : Sevm) (devm : Devm)
         (getOrigStorVal sevm sevm.currentTarget key)
         (devm.getStorVal sevm.currentTarget key) devm.refundCounter)).setStorVal
     sevm.currentTarget key value
+
+/-- A selected `SSTORE` changes access sets, refunds, and storage only: the
+state-gas meter of the after-state is the pre-state's. -/
+theorem afterSstore_stateGas {sevm : Sevm} {devm : Devm} {key value : B256} :
+    (afterSstore sevm devm key value).stateGas = devm.stateGas := by
+  unfold afterSstore
+  split <;> rfl
 
 /-- One exact `SSTORE` whose warm/cold choice stays inside neutral carrier
 definitions. The caller supplies the real EIP-2200 sentry and static-context
