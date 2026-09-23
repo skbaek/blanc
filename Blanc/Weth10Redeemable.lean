@@ -361,6 +361,7 @@ structure AdmissibleRedemptionMessageCore
     (w : State) (msg : Msg) : Prop where
   state_eq : msg.benv.state = w
   rules_eq : msg.benv.stat.rules = rules
+  fork_covered : CoveredFork msg.benv.stat.fork
   target_eq : msg.target = some ca
   currentTarget_eq : msg.currentTarget = ca
   codeAddress_eq : msg.codeAddress = some ca
@@ -441,17 +442,26 @@ def redemptionTxPreludeBout
 def redemptionReceiptKey (index : Nat) : Bytes :=
   Blanc.deploymentReceiptKey index
 
-def redemptionIntrinsicGas (tx : Tx) : Nat :=
-  Blanc.deploymentIntrinsicGas tx
+def redemptionIntrinsicGas (benv : Benv) (tx : Tx) (sender : Adr) : Nat :=
+  Blanc.deploymentIntrinsicGas benv tx sender
 
-def redemptionCalldataFloorGas (tx : Tx) : Nat :=
-  Blanc.deploymentCalldataFloorGas tx
+def redemptionCalldataFloorGas (benv : Benv) (tx : Tx) (sender : Adr) : Nat :=
+  Blanc.deploymentCalldataFloorGas benv tx sender
 
 /-- The mandatory transaction budget: calldata-floor gas versus intrinsic gas
 plus the complete caller-paid runtime ceiling. -/
-def redemptionTransactionGasBound (q : Nat) (tx : Tx) : Nat :=
-  max (redemptionCalldataFloorGas tx)
-    (redemptionIntrinsicGas tx + redemptionRuntimeCeiling q)
+def redemptionTransactionGasBound
+    (q : Nat) (benv : Benv) (tx : Tx) (sender : Adr) : Nat :=
+  max (redemptionCalldataFloorGas benv tx sender)
+    (redemptionIntrinsicGas benv tx sender + redemptionRuntimeCeiling q)
+
+/-- In the no-state-gas lane intrinsic cost ignores the sender: its only
+sender use is the state-gas recipient surcharge. -/
+private theorem calculateIntrinsicCost_sender_congr_none {rules : ForkRules}
+    {tx : Tx} {s1 s2 : Adr} (hsg : rules.stateGas = none) :
+    calculateIntrinsicCost rules tx s1 = calculateIntrinsicCost rules tx s2 := by
+  unfold calculateIntrinsicCost
+  rw [hsg]
 
 def redemptionEffectiveGasPrice (benv : Benv) (tx : Tx) : Nat :=
   Blanc.deploymentEffectiveGasPrice benv tx
@@ -474,11 +484,12 @@ def redemptionBaseFeeBurn
   redemptionTxGasUsed bout bout' * benv.stat.baseFeePerGas
 
 def redemptionUsedGasFromMessage
-    (tx : Tx) (out : MsgCallOutput) (refundCounter : Nat) : Nat :=
+    (benv : Benv) (tx : Tx) (sender : Adr)
+    (out : MsgCallOutput) (refundCounter : Nat) : Nat :=
   max
     (tx.gas - out.gasLeft -
       min ((tx.gas - out.gasLeft) / 5) refundCounter)
-    (redemptionCalldataFloorGas tx)
+    (redemptionCalldataFloorGas benv tx sender)
 
 def redemptionFinalState
     (benv : Benv) (tx : Tx) (owner : Adr)
@@ -498,8 +509,9 @@ def redemptionFinalBout
   let charged :=
     {prelude with
       blockGasUsed := prelude.blockGasUsed + usedGas
+      cumulativeGasUsed := prelude.cumulativeGasUsed + usedGas
       blobGasUsed := prelude.blobGasUsed}
-  let receipt := makeReceipt tx out.error charged.blockGasUsed out.logs
+  let receipt := makeReceipt tx out.error charged.cumulativeGasUsed out.logs
   {charged with
     receiptKeys := charged.receiptKeys ++ [redemptionReceiptKey index]
     receiptsTrie := charged.receiptsTrie.insert
@@ -512,7 +524,7 @@ def redemptionTenv
     stat :=
       { origin := owner
         gasPrice := redemptionEffectiveGasPrice benv tx
-        gas := tx.gas - redemptionIntrinsicGas tx
+        gas := tx.gas - redemptionIntrinsicGas benv tx owner
         accessListAddresses := .ofList [benv.stat.coinbase]
         accessListStorageKeys := .ofList []
         blobVersionedHashes := []
@@ -584,6 +596,7 @@ structure AdmissibleRedemptionTx
     (rules : ForkRules) (dp : DeployParams) (ca owner recipient : Adr) (q : Nat)
     (benv : Benv) (bout : BlockOutput) (tx : Tx) (index : Nat) : Prop where
   rules_eq : benv.stat.rules = rules
+  fork_covered : CoveredFork benv.stat.fork
   type_eq : ∃ maxPriorityFee maxFee,
     tx.type = .two benv.stat.chainId maxPriorityFee maxFee (some ca) []
   data_eq : tx.data = withdrawToCalldata recipient q
@@ -596,7 +609,7 @@ structure AdmissibleRedemptionTx
   owner_ne_zero : owner ≠ 0
   owner_sender_admissible : TransactionSenderAdmissible benv.state owner
   validated :
-    validateTransaction rules tx = .ok (calculateIntrinsicCost tx)
+    validateTransaction rules tx 0 = .ok (calculateIntrinsicCost rules tx 0)
   gas_cap : checkTransactionGasCap rules.tx tx.gas = .ok ()
   checked :
     checkTransaction benv.beginTransaction
@@ -607,7 +620,7 @@ structure AdmissibleRedemptionTx
   upfront_funded :
     tx.gas * redemptionEffectiveGasPrice benv tx ≤
       (benv.state.bal owner).toNat
-  gas_bound : redemptionTransactionGasBound q tx ≤ tx.gas
+  gas_bound : redemptionTransactionGasBound q benv tx owner ≤ tx.gas
   block_gas_room :
     tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed
   target_code :
@@ -626,6 +639,7 @@ structure AdmissibleSelfRedemptionTx
     (rules : ForkRules) (dp : DeployParams) (ca owner : Adr) (q : Nat)
     (benv : Benv) (bout : BlockOutput) (tx : Tx) (index : Nat) : Prop where
   rules_eq : benv.stat.rules = rules
+  fork_covered : CoveredFork benv.stat.fork
   type_eq : ∃ maxPriorityFee maxFee,
     tx.type = .two benv.stat.chainId maxPriorityFee maxFee (some ca) []
   data_eq : tx.data = withdrawCalldata q
@@ -639,7 +653,7 @@ structure AdmissibleSelfRedemptionTx
   owner_not_precompile : rules.isPrecomp owner = false
   owner_code_free : (benv.state.getCode owner).toList = []
   validated :
-    validateTransaction rules tx = .ok (calculateIntrinsicCost tx)
+    validateTransaction rules tx 0 = .ok (calculateIntrinsicCost rules tx 0)
   gas_cap : checkTransactionGasCap rules.tx tx.gas = .ok ()
   checked :
     checkTransaction benv.beginTransaction
@@ -650,7 +664,7 @@ structure AdmissibleSelfRedemptionTx
   upfront_funded :
     tx.gas * redemptionEffectiveGasPrice benv tx ≤
       (benv.state.bal owner).toNat
-  gas_bound : redemptionTransactionGasBound q tx ≤ tx.gas
+  gas_bound : redemptionTransactionGasBound q benv tx owner ≤ tx.gas
   block_gas_room :
     tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed
   target_code :
@@ -668,6 +682,7 @@ structure NonSignatureRedemptionTxEnvelope
     (benv : Benv) (bout : BlockOutput) (tx : Tx) (index : Nat)
     (maxPriorityFee maxFee : Nat) : Prop where
   rules_eq : benv.stat.rules = rules
+  fork_covered : CoveredFork benv.stat.fork
   type_eq : tx.type =
     .two benv.stat.chainId maxPriorityFee maxFee (some ca) []
   data_eq : tx.data = withdrawToCalldata recipient q
@@ -682,7 +697,7 @@ structure NonSignatureRedemptionTxEnvelope
   max_fee_funded :
     tx.gas * maxFee ≤ (benv.state.bal owner).toNat
   gas_cap : checkTransactionGasCap rules.tx tx.gas = .ok ()
-  gas_bound : redemptionTransactionGasBound q tx ≤ tx.gas
+  gas_bound : redemptionTransactionGasBound q benv tx owner ≤ tx.gas
   block_gas_room :
     tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed
   target_code :
@@ -705,20 +720,34 @@ theorem NonSignatureRedemptionTxEnvelope.admissible_of_recoveredSender
     (hrecovered : recoverSender benv.stat.chainId tx = .ok owner) :
     AdmissibleRedemptionTx
       rules dp ca owner recipient q benv bout tx index := by
+  have hsg : rules.stateGas = none := by
+    rw [← henv.rules_eq]
+    exact henv.fork_covered.rules_stateGas_none
+  have hbsg : benv.beginTransaction.stat.rules.stateGas = none := by
+    change benv.stat.rules.stateGas = none
+    rw [henv.rules_eq]
+    exact hsg
   have hvalidated :
-      validateTransaction rules tx = .ok (calculateIntrinsicCost tx) := by
-    rcases hcost : calculateIntrinsicCost tx with ⟨intrinsic, floor⟩
+      validateTransaction rules tx 0 =
+        .ok (calculateIntrinsicCost rules tx 0) := by
+    rcases hcost : calculateIntrinsicCost rules tx 0 with ⟨intrinsic, floor⟩
+    have hcost' : calculateIntrinsicCost benv.stat.rules tx owner =
+        (intrinsic, floor) := by
+      rw [henv.rules_eq, calculateIntrinsicCost_sender_congr_none hsg]
+      exact hcost
     have hgas :
         max floor (intrinsic + redemptionRuntimeCeiling q) ≤ tx.gas := by
       simpa [redemptionTransactionGasBound, redemptionCalldataFloorGas,
         redemptionIntrinsicGas, Blanc.deploymentCalldataFloorGas,
-        Blanc.deploymentIntrinsicGas, hcost] using henv.gas_bound
+        Blanc.deploymentIntrinsicGas, hcost'] using henv.gas_bound
     have hfloor : floor ≤ tx.gas :=
       (Nat.le_max_left _ _).trans hgas
     have hintrinsic : intrinsic ≤ tx.gas := by
       have := (Nat.le_max_right _ _).trans hgas
       omega
     unfold validateTransaction
+    rw [hsg]
+    simp only
     rw [hcost]
     simp only
     rw [if_neg (by omega)]
@@ -746,6 +775,7 @@ theorem NonSignatureRedemptionTxEnvelope.admissible_of_recoveredSender
           ExecutionTrace.transactionPreludeBout, Benv.beginTransaction] using
           henv.block_gas_room
       unfold checkTransactionGasLimits
+      simp only [hbsg]
       rw [if_neg (Nat.not_lt_of_ge hgasAvailable), hblobGas]
       simp
     have hchain : checkTransactionChainId benv.beginTransaction tx =
@@ -805,6 +835,7 @@ theorem NonSignatureRedemptionTxEnvelope.admissible_of_recoveredSender
     omega
   refine {
     rules_eq := henv.rules_eq
+    fork_covered := henv.fork_covered
     type_eq := ⟨maxPriorityFee, maxFee, henv.type_eq⟩
     data_eq := henv.data_eq
     selector_eq := fun e he =>
@@ -846,7 +877,7 @@ structure TransactionRedemptionTrace
   execution :
     ∃ intrinsicGas calldataFloorGasCost effectiveGasPrice
         debitState msg messagePost messageOut,
-      validateTransaction benv.stat.rules tx =
+      validateTransaction benv.stat.rules tx 0 =
           .ok (intrinsicGas, calldataFloorGasCost) ∧
       checkTransaction benv.beginTransaction
           (redemptionTxPreludeBout bout tx index) tx =
@@ -1183,12 +1214,12 @@ lemma RedemptionCodeOutcome.of_setMach {e : Sevm} {pre post : Devm}
 /-- An `SSTORE` starting from the original value and a zero refund counter
 cannot make that counter negative, regardless of the new value. -/
 lemma sstoreNewRefundCounter_nonnegative_of_original_eq_current
-    {original current new : B256} (h : original = current) :
-    0 ≤ sstoreNewRefundCounter new original current 0 := by
+    {gas : GasSchedule} {original current new : B256} (h : original = current) :
+    0 ≤ sstoreNewRefundCounter gas new original current 0 := by
   subst original
   unfold sstoreNewRefundCounter
-  split_ifs <;> norm_num [rSClear, gasStorageSet, gasWarmAccess,
-    gasStorageUpdate, gasColdSload] at *
+  split_ifs <;> simp_all [gasStorageSet, gasWarmAccess,
+    gasStorageUpdate, gasColdSload]
 
 /-! ## Constructive withdrawal body up to the value call -/
 
@@ -1218,14 +1249,15 @@ theorem withdrawTo_runCompiledTo_callPrefix
         (b.setMach ⟨[
           Nat.toB256 G, Sevm.argWord e 0, Sevm.argWord e 1,
           0, 0, 0, 0],
-          Mem.empty.write 0 (Sevm.argWord e 1).toBytes, G⟩)
+          Mem.empty.write 0 (Sevm.argWord e 1).toBytes, G, b.stateGas⟩)
         (Ninst.call ::: (Ninst.iszero :::
-          (.call ethTransferErrorSlot) <?> Func.stop)) out) :
+          (.call ethTransferErrorSlot) <?> Func.stop)) out)
+    (h_fork : CoveredFork e.benvStat.fork) :
     Func.RunCompiledTo fs e
-      (pre.setMach ⟨[], Mem.empty, pre.gasLeft⟩) withdrawTo out := by
+      (pre.setMach ⟨[], Mem.empty, pre.gasLeft, pre.stateGas⟩) withdrawTo out := by
   simp only [withdrawTo]
   func_run (2)
-  refine Func.runCompiledTo_sload_step rfl (by simp)
+  refine Func.runCompiledTo_sload_step h_fork rfl (by simp)
     (v := pre.getStorVal e.currentTarget e.caller.toB256) rfl
     (M := Mem.empty) ?_ ?_ ?_
   · rfl
@@ -1238,7 +1270,7 @@ theorem withdrawTo_runCompiledTo_callPrefix
     · show (if pre.getStorVal e.currentTarget e.caller.toB256 <
           Sevm.argWord e 1 then (1 : B256) else 0) = 0
       rw [if_neg (not_lt_of_ge h_amount)]
-    refine Func.runCompiledTo_sstore_warm_step rfl hw₁ h_static
+    refine Func.runCompiledTo_sstore_warm_step h_fork rfl hw₁ h_static
       (M := Mem.empty) rfl
       (by simp only [Devm.gasLeft_setMach, gasStorageSet]; omega) ?_
     intro b₂ c₂ G₂ hkey₂ hoth₂ hbal₂ hcode₂ hacc₂ hlog₂ hc₂ hG₂
@@ -1291,12 +1323,12 @@ lemma callSuccessTail_runCompiled {fs : List Func} {e : Sevm} {d : Devm}
       out.refundCounter = d.refundCounter ∧
       out.accountsToDelete = d.accountsToDelete ∧
       out.state = d.state := by
-  have hd : d = d.setMach ⟨[1], d.memory, d.gasLeft⟩ := by
+  have hd : d = d.setMach ⟨[1], d.memory, d.gasLeft, d.stateGas⟩ := by
     apply Devm.eq_of_proj
     · exact hstack
     all_goals rfl
   rw [hd]
-  let out := d.setMach ⟨[], d.memory, d.gasLeft - 16⟩
+  let out := d.setMach ⟨[], d.memory, d.gasLeft - 16, d.stateGas⟩
   refine ⟨out, ?_, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
   func_run [0]
   · simp [out]
@@ -1314,19 +1346,20 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
     (h_nonprecompile : e.benvStat.rules.isPrecomp recipient = false)
     (h_code : (b.getCode recipient).size = 0)
     (h_sender : ¬ b.getBal e.currentTarget < value)
-    (h_gas : 50000 ≤ G) :
+    (h_gas : 50000 ≤ G)
+    (h_fork : CoveredFork e.benvStat.fork) :
     ∃ post,
       Ninst.RunCompiled e
         (b.setMach ⟨[
           Nat.toB256 G, recipient.toB256, value, 0, 0, 0, 0],
-          Mem.empty.write 0 value.toBytes, G⟩)
+          Mem.empty.write 0 value.toBytes, G, b.stateGas⟩)
         (.exec .call) post ∧ post.stack = [1] ∧ 16 ≤ post.gasLeft ∧
         RedemptionCallEffect e b post recipient value := by
   let d := b.setMach ⟨[
     Nat.toB256 G, recipient.toB256, value, 0, 0, 0, 0],
-    Mem.empty.write 0 value.toBytes, G⟩
+    Mem.empty.write 0 value.toBytes, G, b.stateGas⟩
   let d0 := addAccessedAddress
-    (d.setMach ⟨[], d.memory, d.gasLeft⟩) recipient
+    (d.setMach ⟨[], d.memory, d.gasLeft, d.stateGas⟩) recipient
   rcases hdel : accessDelegation d0 recipient with ⟨dp, dadr, code, dgc, d1⟩
   obtain ⟨_hd1s, _hd1m, hd1g, hdgc⟩ := accessDelegation_inv hdel
   have hd1g' : d1.gasLeft = G := by
@@ -1367,7 +1400,7 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
     rw [hdel] at hd
     exact hd
   have hext :
-      (d.setMach ⟨[], d.memory, d.gasLeft⟩).extCost
+      (d.setMach ⟨[], d.memory, d.gasLeft, d.stateGas⟩).extCost
         [⟨(0 : B256).toNat, (0 : B256).toNat⟩,
           ⟨(0 : B256).toNat, (0 : B256).toNat⟩] = 0 := by
     rw [show (0 : B256).toNat = 0 from by decide]
@@ -1376,14 +1409,14 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
       calculateMemoryGasCost d.memory.size = 0
     simp [memExtsSize, memExtSize]
   let acc := accessCost recipient
-    (d.setMach ⟨[], d.memory, d.gasLeft⟩).accessedAddresses + dgc
+    (d.setMach ⟨[], d.memory, d.gasLeft, d.stateGas⟩).accessedAddresses + dgc
   have hacc :
       accessCost recipient
-        (d.setMach ⟨[], d.memory, d.gasLeft⟩).accessedAddresses + dgc = acc := rfl
+        (d.setMach ⟨[], d.memory, d.gasLeft, d.stateGas⟩).accessedAddresses + dgc = acc := rfl
   have hacc_le : acc ≤ 5200 := by
     have ha := accessCost_le
       (x := recipient)
-      (a := (d.setMach ⟨[], d.memory, d.gasLeft⟩).accessedAddresses)
+      (a := (d.setMach ⟨[], d.memory, d.gasLeft, d.stateGas⟩).accessedAddresses)
     have hsum : acc ≤ gasColdAccountAccess + gasColdAccountAccess := by
       exact Nat.add_le_add ha hdgc
     norm_num [gasColdAccountAccess] at hsum
@@ -1404,14 +1437,14 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
     have hret := le_retained_of_calculateMsgCallGas_zero hafford hsplit
     have hdel' : accessDelegation
         (addAccessedAddress
-          (d.setMach ⟨[], d.memory, d.gasLeft⟩) recipient.toB256.toAdr)
+          (d.setMach ⟨[], d.memory, d.gasLeft, d.stateGas⟩) recipient.toB256.toAdr)
           recipient.toB256.toAdr = ⟨dp, dadr, code, dgc, d1⟩ := by
       simpa only [toAdr_toB256] using hdel
     rcases Ninst.runCompiled_call_zero_value_codeFree
         (sevm := e) (devm := d)
         (dp := dp) (dadr := dadr) (code := code) (dgc := dgc) (d1 := d1)
         (ext := 0) (acc := acc) (mcc := mcc) (mcs := mcs)
-        rfl hext hdel' (by simpa only [toAdr_toB256] using hacc.symm)
+        h_fork rfl hext hdel' (by simpa only [toAdr_toB256] using hacc.symm)
         hsplit hcost h_depth
         (by rw [hdadr]; exact h_nonprecompile) hcode0
         (by decide) with
@@ -1474,7 +1507,7 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
       norm_num [gCallStipend]
     have hdel' : accessDelegation
         (addAccessedAddress
-          (d.setMach ⟨[], d.memory, d.gasLeft⟩) recipient.toB256.toAdr)
+          (d.setMach ⟨[], d.memory, d.gasLeft, d.stateGas⟩) recipient.toB256.toAdr)
           recipient.toB256.toAdr = ⟨dp, dadr, code, dgc, d1⟩ := by
       simpa only [toAdr_toB256] using hdel
     rcases Ninst.runCompiled_call_nonzero_codeFree
@@ -1482,7 +1515,7 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
         (dp := dp) (dadr := dadr) (code := code) (dgc := dgc) (d1 := d1)
         (ext := 0) (acc := acc) (create := create)
         (mcc := mcc) (mcs := mcs)
-        rfl hv hext hdel' (by simpa only [toAdr_toB256] using hacc.symm)
+        h_fork rfl hv hext hdel' (by simpa only [toAdr_toB256] using hacc.symm)
         (by simpa only [toAdr_toB256] using hcreate) hsplit hcost
         h_static h_sender' h_depth
         (by rw [hdadr]; exact h_nonprecompile) hcode0 (by decide)
@@ -1525,15 +1558,16 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
     (h_gas : 100000 ≤ pre.gasLeft)
     (hP : ∀ post : Devm,
       RedemptionCodeOutcome e pre post e.caller recipient
-        (Sevm.argWord e 1) → P (.ok post)) :
+        (Sevm.argWord e 1) → P (.ok post))
+    (h_fork : CoveredFork e.benvStat.fork) :
     Func.ExecSat fs e
-      (pre.setMach ⟨[], Mem.empty, pre.gasLeft⟩) withdrawTo P := by
+      (pre.setMach ⟨[], Mem.empty, pre.gasLeft, pre.stateGas⟩) withdrawTo P := by
   simp only [withdrawTo]
   apply Func.execSat_segment
   · intro ex hex
     cases ex <;> simp only [Func.ExecWitness] at hex ⊢ <;>
       func_run (2) <;> exact hex
-  refine Func.execSat_sload_step rfl (by simp)
+  refine Func.execSat_sload_step h_fork rfl (by simp)
     (v := pre.getStorVal e.currentTarget e.caller.toB256) rfl
     (M := Mem.empty) ?_ ?_ ?_
   · rfl
@@ -1551,7 +1585,7 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
         | show (if pre.getStorVal e.currentTarget e.caller.toB256 <
               Sevm.argWord e 1 then (1 : B256) else 0) = 0
           rw [if_neg (not_lt_of_ge h_amount)]
-    refine Func.execSat_sstore_warm_step rfl hw₁ h_static
+    refine Func.execSat_sstore_warm_step h_fork rfl hw₁ h_static
       (M := Mem.empty) rfl
       (by simp only [Devm.gasLeft_setMach, gasStorageSet]; omega) ?_
     intro b₂ c₂ G₂ hkey₂ hoth₂ hbal₂ hcode₂ _hacc₂ hlog₂ hout₂
@@ -1595,13 +1629,13 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
       rcases redemptionCall_runCompiled
           (e := e) (b := b₃) (G := G₃ - 24) (recipient := recipient)
           (value := Sevm.argWord e 1) h_static h_depth h_nonprecompile hbcode
-          hbsender (by omega) with
+          hbsender (by omega) h_fork with
             ⟨callPost, hcall, hstack, hpostgas, hcallEffect⟩
       have hcall' : Ninst.RunCompiled e
           (b₃.setMach ⟨[
             Nat.toB256 (G₃ - 24), Sevm.argWord e 0, Sevm.argWord e 1,
             0, 0, 0, 0],
-            Mem.empty.write 0 (Sevm.argWord e 1).toBytes, G₃ - 24⟩)
+            Mem.empty.write 0 (Sevm.argWord e 1).toBytes, G₃ - 24, b₃.stateGas⟩)
           (.exec .call) callPost := by
         simpa only [h_recipient] using hcall
       refine Func.execSat_next hcall' ?_
@@ -1651,7 +1685,7 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
             (b₁.setMach ⟨[
               e.caller.toB256,
               pre.getStorVal e.currentTarget e.caller.toB256 -
-                Sevm.argWord e 1], Mem.empty, G₁ - 37⟩).getStorVal
+                Sevm.argWord e 1], Mem.empty, G₁ - 37, b₁.stateGas⟩).getStorVal
                 e.currentTarget e.caller.toB256 =
               pre.getStorVal e.currentTarget e.caller.toB256 := by
           change b₁.getStorVal e.currentTarget e.caller.toB256 =
@@ -1662,7 +1696,7 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
             (b₁.setMach ⟨[
               e.caller.toB256,
               pre.getStorVal e.currentTarget e.caller.toB256 -
-                Sevm.argWord e 1], Mem.empty, G₁ - 37⟩).refundCounter = 0 := by
+                Sevm.argWord e 1], Mem.empty, G₁ - 37, b₁.stateGas⟩).refundCounter = 0 := by
           change b₁.refundCounter = 0
           exact hrc₁.trans h_refund
         have hb₂Refund : 0 ≤ b₂.refundCounter := by
@@ -1727,15 +1761,16 @@ theorem withdraw_execSat {fs : List Func} {e : Sevm} {pre : Devm}
     (h_gas : 100000 ≤ pre.gasLeft)
     (hP : ∀ post : Devm,
       RedemptionCodeOutcome e pre post e.caller e.caller
-        (Sevm.argWord e 0) → P (.ok post)) :
+        (Sevm.argWord e 0) → P (.ok post))
+    (h_fork : CoveredFork e.benvStat.fork) :
     Func.ExecSat fs e
-      (pre.setMach ⟨[], Mem.empty, pre.gasLeft⟩) withdraw P := by
+      (pre.setMach ⟨[], Mem.empty, pre.gasLeft, pre.stateGas⟩) withdraw P := by
   simp only [withdraw]
   apply Func.execSat_segment
   · intro ex hex
     cases ex <;> simp only [Func.ExecWitness] at hex ⊢ <;>
       func_run (2) <;> exact hex
-  refine Func.execSat_sload_step rfl (by simp)
+  refine Func.execSat_sload_step h_fork rfl (by simp)
     (v := pre.getStorVal e.currentTarget e.caller.toB256) rfl
     (M := Mem.empty) ?_ ?_ ?_
   · rfl
@@ -1753,7 +1788,7 @@ theorem withdraw_execSat {fs : List Func} {e : Sevm} {pre : Devm}
         | show (if pre.getStorVal e.currentTarget e.caller.toB256 <
               Sevm.argWord e 0 then (1 : B256) else 0) = 0
           rw [if_neg (not_lt_of_ge h_amount)]
-    refine Func.execSat_sstore_warm_step rfl hw₁ h_static
+    refine Func.execSat_sstore_warm_step h_fork rfl hw₁ h_static
       (M := Mem.empty) rfl
       (by simp only [Devm.gasLeft_setMach, gasStorageSet]; omega) ?_
     intro b₂ c₂ G₂ hkey₂ hoth₂ hbal₂ hcode₂ _hacc₂ hlog₂ hout₂
@@ -1795,7 +1830,7 @@ theorem withdraw_execSat {fs : List Func} {e : Sevm} {pre : Devm}
       rcases redemptionCall_runCompiled
           (e := e) (b := b₃) (G := G₃ - 20) (recipient := e.caller)
           (value := Sevm.argWord e 0) h_static h_depth h_nonprecompile hbcode
-          hbsender (by omega) with
+          hbsender (by omega) h_fork with
             ⟨callPost, hcall, hstack, hpostgas, hcallEffect⟩
       refine Func.execSat_next hcall ?_
       rcases callSuccessTail_runCompiled
@@ -1844,7 +1879,7 @@ theorem withdraw_execSat {fs : List Func} {e : Sevm} {pre : Devm}
             (b₁.setMach ⟨[
               e.caller.toB256,
               pre.getStorVal e.currentTarget e.caller.toB256 -
-                Sevm.argWord e 0], Mem.empty, G₁ - 37⟩).getStorVal
+                Sevm.argWord e 0], Mem.empty, G₁ - 37, b₁.stateGas⟩).getStorVal
                 e.currentTarget e.caller.toB256 =
               pre.getStorVal e.currentTarget e.caller.toB256 := by
           change b₁.getStorVal e.currentTarget e.caller.toB256 =
@@ -1855,7 +1890,7 @@ theorem withdraw_execSat {fs : List Func} {e : Sevm} {pre : Devm}
             (b₁.setMach ⟨[
               e.caller.toB256,
               pre.getStorVal e.currentTarget e.caller.toB256 -
-                Sevm.argWord e 0], Mem.empty, G₁ - 37⟩).refundCounter = 0 := by
+                Sevm.argWord e 0], Mem.empty, G₁ - 37, b₁.stateGas⟩).refundCounter = 0 := by
           change b₁.refundCounter = 0
           exact hrc₁.trans h_refund
         have hb₂Refund : 0 ≤ b₂.refundCounter := by
@@ -2040,14 +2075,15 @@ theorem withdrawTo_progExecSat (dp : DeployParams)
     (h_gas : redemptionExecutionGasFloor ≤ pre.gasLeft)
     (hP : ∀ post : Devm,
       RedemptionCodeOutcome e pre post e.caller recipient
-        (Sevm.argWord e 1) → P (.ok post)) :
+        (Sevm.argWord e 1) → P (.ok post))
+    (h_fork : CoveredFork e.benvStat.fork) :
     Prog.ExecSat e pre (weth10 dp) P := by
   rw [withdrawToSelector, withdrawToSelector_eq] at h_sel
   set g := pre.gasLeft with hg
   simp only [redemptionExecutionGasFloor, redemptionSelectorDispatchGas,
     redemptionMechanizedBodyGas] at h_gas
   refine Prog.execSat_intro (G := g - 1)
-    (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+    (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
     (by simp only [gJumpdest]; omega)
     (by rw [h_stack, h_mem]) ?_
   apply Func.execSat_segment
@@ -2074,7 +2110,7 @@ theorem withdrawTo_progExecSat (dp : DeployParams)
       simpa only [weth10Main_eq_withdrawTo] using hex
   have hbody := withdrawTo_execSat
     (fs := withdrawToMain dp :: (weth10 dp).aux) (e := e)
-    (pre := pre.setMach ⟨[], Mem.empty, g - 182⟩)
+    (pre := pre.setMach ⟨[], Mem.empty, g - 182, pre.stateGas⟩)
     (recipient := recipient) (P := P) h_recipient
     (by simpa only [Devm.getStorVal_setMach] using h_amount)
     h_static h_depth h_nonprecompile
@@ -2085,8 +2121,8 @@ theorem withdrawTo_progExecSat (dp : DeployParams)
     (by
       simp only [Devm.gasLeft_setMach]
       omega)
-    (fun post heffect => hP post heffect.of_setMach)
-  simpa only [Devm.setMach_setMach, Devm.gasLeft_setMach,
+    (fun post heffect => hP post heffect.of_setMach) h_fork
+  simpa only [Devm.setMach_setMach, Devm.gasLeft_setMach, Devm.stateGas_setMach,
     weth10Main_eq_withdrawTo] using hbody
 
 set_option maxRecDepth 568 in
@@ -2112,14 +2148,15 @@ theorem withdraw_progExecSat (dp : DeployParams)
     (h_gas : redemptionExecutionGasFloor ≤ pre.gasLeft)
     (hP : ∀ post : Devm,
       RedemptionCodeOutcome e pre post e.caller e.caller
-        (Sevm.argWord e 0) → P (.ok post)) :
+        (Sevm.argWord e 0) → P (.ok post))
+    (h_fork : CoveredFork e.benvStat.fork) :
     Prog.ExecSat e pre (weth10 dp) P := by
   rw [withdrawSelector, withdrawSelector_eq] at h_sel
   set g := pre.gasLeft with hg
   simp only [redemptionExecutionGasFloor, redemptionSelectorDispatchGas,
     redemptionMechanizedBodyGas] at h_gas
   refine Prog.execSat_intro (G := g - 1)
-    (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+    (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
     (by simp only [gJumpdest]; omega)
     (by rw [h_stack, h_mem]) ?_
   apply Func.execSat_segment
@@ -2146,7 +2183,7 @@ theorem withdraw_progExecSat (dp : DeployParams)
       simpa only [weth10Main_eq_withdraw] using hex
   have hbody := withdraw_execSat
     (fs := withdrawMain dp :: (weth10 dp).aux) (e := e)
-    (pre := pre.setMach ⟨[], Mem.empty, g - 182⟩) (P := P)
+    (pre := pre.setMach ⟨[], Mem.empty, g - 182, pre.stateGas⟩) (P := P)
     (by simpa only [Devm.getStorVal_setMach] using h_amount)
     h_static h_depth h_nonprecompile
     (by simpa only [Devm.getCode_setMach] using h_code)
@@ -2156,8 +2193,8 @@ theorem withdraw_progExecSat (dp : DeployParams)
     (by
       simp only [Devm.gasLeft_setMach]
       omega)
-    (fun post heffect => hP post heffect.of_setMach)
-  simpa only [Devm.setMach_setMach, Devm.gasLeft_setMach,
+    (fun post heffect => hP post heffect.of_setMach) h_fork
+  simpa only [Devm.setMach_setMach, Devm.gasLeft_setMach, Devm.stateGas_setMach,
     weth10Main_eq_withdraw] using hbody
 
 /-! ## Exact code execution adapters -/
@@ -2181,7 +2218,8 @@ theorem withdrawTo_exec (dp : DeployParams)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
     (h_gas : redemptionExecutionGasFloor ≤ pre.gasLeft)
-    (h_compile : some e.code.toList = Prog.compile (weth10 dp)) :
+    (h_compile : some e.code.toList = Prog.compile (weth10 dp))
+    (h_fork : CoveredFork e.benvStat.fork) :
     ∃ post,
       exec ⟨0, e, pre⟩ = .ok post ∧
       RedemptionCodeOutcome e pre post e.caller recipient
@@ -2190,7 +2228,7 @@ theorem withdrawTo_exec (dp : DeployParams)
     ex = .ok post ∧ RedemptionCodeOutcome e pre post e.caller recipient
       (Sevm.argWord e 1)) h_data h_value h_sel h_recipient h_amount
     h_static h_depth h_nonprecompile h_code h_sender h_original h_refund
-    h_stack h_mem h_gas (fun post hpost => ⟨post, rfl, hpost⟩)
+    h_stack h_mem h_gas (fun post hpost => ⟨post, rfl, hpost⟩) h_fork
   rcases hsat with ⟨ex, hw, post, hex, hpost⟩
   subst ex
   exact ⟨post, Prog.exec_of_runCompiled hw h_compile, hpost⟩
@@ -2213,7 +2251,8 @@ theorem withdraw_exec (dp : DeployParams)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
     (h_gas : redemptionExecutionGasFloor ≤ pre.gasLeft)
-    (h_compile : some e.code.toList = Prog.compile (weth10 dp)) :
+    (h_compile : some e.code.toList = Prog.compile (weth10 dp))
+    (h_fork : CoveredFork e.benvStat.fork) :
     ∃ post,
       exec ⟨0, e, pre⟩ = .ok post ∧
       RedemptionCodeOutcome e pre post e.caller e.caller
@@ -2222,7 +2261,7 @@ theorem withdraw_exec (dp : DeployParams)
     ex = .ok post ∧ RedemptionCodeOutcome e pre post e.caller e.caller
       (Sevm.argWord e 0)) h_data h_value h_sel h_amount h_static h_depth
     h_nonprecompile h_code h_sender h_original h_refund h_stack h_mem h_gas
-    (fun post hpost => ⟨post, rfl, hpost⟩)
+    (fun post hpost => ⟨post, rfl, hpost⟩) h_fork
   rcases hsat with ⟨ex, hw, post, hex, hpost⟩
   subst ex
   exact ⟨post, Prog.exec_of_runCompiled hw h_compile, hpost⟩
@@ -2238,7 +2277,8 @@ theorem processMessageCall_eq_of_exec
     (henter : (Frame.ofCall msg).enter = .run child)
     (hexec : exec child = .ok post)
     (herror : post.error = none)
-    (hrefund : 0 ≤ post.refundCounter) :
+    (hrefund : 0 ≤ post.refundCounter)
+    (hsg : msg.benv.stat.rules.stateGas = none) :
     processMessageCall msg = .ok
       (post.state,
         { gasLeft := post.gasLeft
@@ -2250,8 +2290,10 @@ theorem processMessageCall_eq_of_exec
   have hprocess : processMessage msg = .ok post := by
     unfold processMessage runFrame
     rw [henter]
+    have hsg' : (Frame.ofCall msg).inner.benv.stat.rules.stateGas = none := hsg
     unfold Frame.settle Frame.settleMsg processMessage.settle
-      executeCode.handleError
+    simp only [executeCode.handleErrorWith, hsg']
+    unfold executeCode.handleError
     simp only [hexec, herror, Frame.ofCall, Option.isSome,
       Bool.false_eq_true, if_false, bind, Except.bind]
   have hdelegation : getDelegatedCodeAddress msg.code = none := by
@@ -2265,7 +2307,7 @@ theorem processMessageCall_eq_of_exec
   unfold processMessageCall.call
   simp only [hauths, List.isEmpty, if_true, bind, Except.bind,
     hdelegation, hprocess, Except.bimap, id_eq, herror, Option.isNone,
-    htoNat, Option.toExcept, Nat.cast_zero, zero_add]
+    htoNat, Option.toExcept, Nat.cast_zero, zero_add, hsg]
   rfl
 
 lemma B256.sub_zero_exact (x : B256) : x - 0 = x := by
@@ -2457,7 +2499,7 @@ theorem Stable.withdrawTo_messageFrame_of_le
       (by
         exact (redemptionExecutionGasFloor_le_runtimeCeiling q).trans
           henv.gas_bound)
-      hcompile with ⟨post, hexec, houtcome⟩
+      hcompile henv.fork_covered with ⟨post, hexec, houtcome⟩
   have hpostError : post.error = none := by
     exact houtcome.error.trans rfl
   let out : MsgCallOutput :=
@@ -2480,9 +2522,18 @@ theorem Stable.withdrawTo_messageFrame_of_le
           · rfl
         rw [hchildEq]
         exact hexec)
-      hpostError houtcome.refundNonnegative
+      hpostError houtcome.refundNonnegative henv.fork_covered.rules_stateGas_none
+  have hchildLogs : child.dyna.logs = [] := by
+    have hstat : (msg.withBenv benv').benv.stat.rules.stateGas = none := by
+      change benv'.stat.rules.stateGas = none
+      rw [benvAfterTransfer_stat hbt]
+      exact henv.fork_covered.rules_stateGas_none
+    change (match (msg.withBenv benv').benv.stat.rules.stateGas with
+      | none => []
+      | some _ => _) = []
+    rw [hstat]
   refine ⟨child.dyna, post, out, ?_⟩
-  refine ⟨hprocess, hentryStor, hentryBal, hentryCode, rfl, rfl,
+  refine ⟨hprocess, hentryStor, hentryBal, hentryCode, hchildLogs, rfl,
     ?_, ?_, rfl, rfl, rfl, rfl, ?_⟩
   · rw [show (initSevm msg).caller = owner from henv.caller_eq,
       hargs.2] at houtcome
@@ -2602,7 +2653,7 @@ theorem Stable.withdraw_messageFrame_of_le
       (by
         exact (redemptionExecutionGasFloor_le_runtimeCeiling q).trans
           henv.gas_bound)
-      hcompile with ⟨post, hexec, houtcome⟩
+      hcompile henv.fork_covered with ⟨post, hexec, houtcome⟩
   have hpostError : post.error = none := houtcome.error.trans rfl
   let out : MsgCallOutput :=
     { gasLeft := post.gasLeft
@@ -2624,9 +2675,18 @@ theorem Stable.withdraw_messageFrame_of_le
           · rfl
         rw [hchildEq]
         exact hexec)
-      hpostError houtcome.refundNonnegative
+      hpostError houtcome.refundNonnegative henv.fork_covered.rules_stateGas_none
+  have hchildLogs : child.dyna.logs = [] := by
+    have hstat : (msg.withBenv benv').benv.stat.rules.stateGas = none := by
+      change benv'.stat.rules.stateGas = none
+      rw [benvAfterTransfer_stat hbt]
+      exact henv.fork_covered.rules_stateGas_none
+    change (match (msg.withBenv benv').benv.stat.rules.stateGas with
+      | none => []
+      | some _ => _) = []
+    rw [hstat]
   refine ⟨child.dyna, post, out, ?_⟩
-  refine ⟨hprocess, hentryStor, hentryBal, hentryCode, rfl, rfl,
+  refine ⟨hprocess, hentryStor, hentryBal, hentryCode, hchildLogs, rfl,
     ?_, ?_, rfl, rfl, rfl, rfl, ?_⟩
   · rw [show (initSevm msg).caller = owner from henv.caller_eq,
       harg] at houtcome
@@ -2886,7 +2946,8 @@ theorem Stable.preparedRedemptionMessage_exists
       rules dp ca owner recipient q debit msg := by
     refine {
       state_eq := ?_
-      rules_eq := ?_
+      rules_eq := henv.rules_eq
+      fork_covered := henv.fork_covered
       target_eq := ?_
       currentTarget_eq := ?_
       codeAddress_eq := ?_
@@ -2912,8 +2973,6 @@ theorem Stable.preparedRedemptionMessage_exists
       data_eq := ?_
       selector_eq := ?_ }
     · rfl
-    · simpa only [msg, redemptionPreparedMessage,
-        Benv.beginTransaction] using henv.rules_eq
     · rfl
     · rfl
     · rfl
@@ -2946,8 +3005,8 @@ theorem Stable.preparedRedemptionMessage_exists
       · exact .empty h
       · exact .existing h
     · change redemptionRuntimeCeiling q ≤
-        tx.gas - redemptionIntrinsicGas tx
-      have hbudget : redemptionIntrinsicGas tx +
+        tx.gas - redemptionIntrinsicGas benv tx owner
+      have hbudget : redemptionIntrinsicGas benv tx owner +
           redemptionRuntimeCeiling q ≤ tx.gas := by
         exact (Nat.le_max_right _ _).trans henv.gas_bound
       omega
@@ -3020,7 +3079,8 @@ theorem Stable.preparedSelfRedemptionMessage_exists
       rules dp ca owner q debit msg := by
     refine {
       state_eq := ?_
-      rules_eq := ?_
+      rules_eq := henv.rules_eq
+      fork_covered := henv.fork_covered
       target_eq := ?_
       currentTarget_eq := ?_
       codeAddress_eq := ?_
@@ -3046,8 +3106,6 @@ theorem Stable.preparedSelfRedemptionMessage_exists
       data_eq := ?_
       selector_eq := ?_ }
     · rfl
-    · simpa only [msg, redemptionPreparedMessage,
-        Benv.beginTransaction] using henv.rules_eq
     · rfl
     · rfl
     · rfl
@@ -3080,8 +3138,8 @@ theorem Stable.preparedSelfRedemptionMessage_exists
       · exact .empty h
       · exact .existing h
     · change redemptionRuntimeCeiling q ≤
-        tx.gas - redemptionIntrinsicGas tx
-      have hbudget : redemptionIntrinsicGas tx +
+        tx.gas - redemptionIntrinsicGas benv tx owner
+      have hbudget : redemptionIntrinsicGas benv tx owner +
           redemptionRuntimeCeiling q ≤ tx.gas := by
         exact (Nat.le_max_right _ _).trans henv.gas_bound
       omega
@@ -3121,7 +3179,7 @@ theorem AdmissibleRedemptionTx.processTransaction_eq_of_message
         (redemptionTenv benv tx owner index) tx = .ok msg)
     (hframe : MessageFrameRedemptionOutcome
       dp ca owner recipient q debit msg entry messagePost messageOut) :
-    let usedGas := redemptionUsedGasFromMessage tx messageOut
+    let usedGas := redemptionUsedGasFromMessage benv tx owner messageOut
       messagePost.refundCounter.toNat
     processTransaction benv bout tx index = .ok
       (redemptionFinalState benv tx owner messagePost.state usedGas,
@@ -3137,8 +3195,34 @@ theorem AdmissibleRedemptionTx.processTransaction_eq_of_message
   rcases henv.type_eq with ⟨maxPriorityFee, maxFee, htype⟩
   unfold processTransaction
   simp only [bind, Except.bind]
-  have hrules : benv.beginTransaction.stat.rules = rules := by
-    simpa only [Benv.beginTransaction] using henv.rules_eq
+  have hrules : benv.beginTransaction.stat.rules = rules := henv.rules_eq
+  have hsg : rules.stateGas = none := by
+    rw [← henv.rules_eq]
+    exact henv.fork_covered.rules_stateGas_none
+  have hvalidationStateGas :
+      benv.beginTransaction.stat.rules.stateGas = none := by
+    rw [hrules]
+    exact hsg
+  have hbalNone : rules.bal = none := by
+    rw [← henv.rules_eq]
+    exact henv.fork_covered.rules_bal_none
+  have hintrinsic :
+      calculateIntrinsicCost rules tx 0 =
+        calculateIntrinsicCost rules tx owner :=
+    calculateIntrinsicCost_sender_congr_none hsg
+  change (do
+    let validationSender ←
+      ((match benv.beginTransaction.stat.rules.stateGas with
+        | none => Except.ok 0
+        | some _ => do
+          Except.mapError TransitionError.transaction
+            (checkTransactionChainId benv.beginTransaction tx)
+          Except.mapError (fun e => TransitionError.senderRecovery e)
+            (recoverSender benv.beginTransaction.stat.chainId tx)) :
+        Except TransitionError Adr)
+    (fun _ => _) validationSender) = _ <;>
+    rw [hvalidationStateGas]
+  simp only [bind, Except.bind]
   rw [hrules, henv.validated]
   simp only [Except.mapError]
   have hchecked := henv.checked
@@ -3153,14 +3237,39 @@ theorem AdmissibleRedemptionTx.processTransaction_eq_of_message
   have hprepare' := hprepare
   simp only [redemptionTenv, redemptionIntrinsicGas,
     Blanc.deploymentIntrinsicGas, Benv.beginTransaction] at hprepare'
+  rw [henv.rules_eq] at hprepare'
   simp only [List.map_nil, List.flatten_nil]
+  rw [hintrinsic]
+  simp only [allocateEvmGas, hsg]
   rw [hprepare']
   simp only [Except.bind]
   rw [hframe.process]
   simp only [Except.mapError, Except.bind]
   rw [hrefund]
   simp only [Option.toExcept, hdelete, List.foldl_nil]
-  rfl
+  simp only [settleSelfdestructs, hsg]
+  have hsettlement :
+      settleTransactionGas rules tx.gas
+        (calculateIntrinsicCost rules tx owner).2
+        messageOut.gasLeft messageOut.stateGasLeft
+        messagePost.refundCounter.toNat messageOut.stateGasUsed =
+        ⟨redemptionUsedGasFromMessage benv tx owner messageOut
+            messagePost.refundCounter.toNat,
+          tx.gas - redemptionUsedGasFromMessage benv tx owner messageOut
+            messagePost.refundCounter.toNat,
+          redemptionUsedGasFromMessage benv tx owner messageOut
+            messagePost.refundCounter.toNat, 0⟩ := by
+    simp [settleTransactionGas, hsg, redemptionUsedGasFromMessage,
+      redemptionCalldataFloorGas, Blanc.deploymentCalldataFloorGas,
+      henv.rules_eq]
+  rw [hsettlement]
+  simp only [BlockOutput.withGasSettlement, hbalNone, List.foldl_nil,
+    Nat.add_zero]
+  simp only [redemptionFinalState, redemptionFinalBout,
+    redemptionEffectiveGasPrice, Blanc.deploymentEffectiveGasPrice,
+    redemptionTxPreludeBout, Blanc.deploymentTxPreludeBout,
+    ExecutionTrace.transactionPreludeBout, redemptionReceiptKey,
+    Blanc.deploymentReceiptKey]
 
 theorem AdmissibleSelfRedemptionTx.processTransaction_eq_of_message
     {rules : ForkRules} {dp : DeployParams} {ca owner : Adr} {q : Nat}
@@ -3177,7 +3286,7 @@ theorem AdmissibleSelfRedemptionTx.processTransaction_eq_of_message
         (redemptionTenv benv tx owner index) tx = .ok msg)
     (hframe : MessageFrameRedemptionOutcome
       dp ca owner owner q debit msg entry messagePost messageOut) :
-    let usedGas := redemptionUsedGasFromMessage tx messageOut
+    let usedGas := redemptionUsedGasFromMessage benv tx owner messageOut
       messagePost.refundCounter.toNat
     processTransaction benv bout tx index = .ok
       (redemptionFinalState benv tx owner messagePost.state usedGas,
@@ -3193,8 +3302,34 @@ theorem AdmissibleSelfRedemptionTx.processTransaction_eq_of_message
   rcases henv.type_eq with ⟨maxPriorityFee, maxFee, htype⟩
   unfold processTransaction
   simp only [bind, Except.bind]
-  have hrules : benv.beginTransaction.stat.rules = rules := by
-    simpa only [Benv.beginTransaction] using henv.rules_eq
+  have hrules : benv.beginTransaction.stat.rules = rules := henv.rules_eq
+  have hsg : rules.stateGas = none := by
+    rw [← henv.rules_eq]
+    exact henv.fork_covered.rules_stateGas_none
+  have hvalidationStateGas :
+      benv.beginTransaction.stat.rules.stateGas = none := by
+    rw [hrules]
+    exact hsg
+  have hbalNone : rules.bal = none := by
+    rw [← henv.rules_eq]
+    exact henv.fork_covered.rules_bal_none
+  have hintrinsic :
+      calculateIntrinsicCost rules tx 0 =
+        calculateIntrinsicCost rules tx owner :=
+    calculateIntrinsicCost_sender_congr_none hsg
+  change (do
+    let validationSender ←
+      ((match benv.beginTransaction.stat.rules.stateGas with
+        | none => Except.ok 0
+        | some _ => do
+          Except.mapError TransitionError.transaction
+            (checkTransactionChainId benv.beginTransaction tx)
+          Except.mapError (fun e => TransitionError.senderRecovery e)
+            (recoverSender benv.beginTransaction.stat.chainId tx)) :
+        Except TransitionError Adr)
+    (fun _ => _) validationSender) = _ <;>
+    rw [hvalidationStateGas]
+  simp only [bind, Except.bind]
   rw [hrules, henv.validated]
   simp only [Except.mapError]
   have hchecked := henv.checked
@@ -3209,14 +3344,39 @@ theorem AdmissibleSelfRedemptionTx.processTransaction_eq_of_message
   have hprepare' := hprepare
   simp only [redemptionTenv, redemptionIntrinsicGas,
     Blanc.deploymentIntrinsicGas, Benv.beginTransaction] at hprepare'
+  rw [henv.rules_eq] at hprepare'
   simp only [List.map_nil, List.flatten_nil]
+  rw [hintrinsic]
+  simp only [allocateEvmGas, hsg]
   rw [hprepare']
   simp only [Except.bind]
   rw [hframe.process]
   simp only [Except.mapError, Except.bind]
   rw [hrefund]
   simp only [Option.toExcept, hdelete, List.foldl_nil]
-  rfl
+  simp only [settleSelfdestructs, hsg]
+  have hsettlement :
+      settleTransactionGas rules tx.gas
+        (calculateIntrinsicCost rules tx owner).2
+        messageOut.gasLeft messageOut.stateGasLeft
+        messagePost.refundCounter.toNat messageOut.stateGasUsed =
+        ⟨redemptionUsedGasFromMessage benv tx owner messageOut
+            messagePost.refundCounter.toNat,
+          tx.gas - redemptionUsedGasFromMessage benv tx owner messageOut
+            messagePost.refundCounter.toNat,
+          redemptionUsedGasFromMessage benv tx owner messageOut
+            messagePost.refundCounter.toNat, 0⟩ := by
+    simp [settleTransactionGas, hsg, redemptionUsedGasFromMessage,
+      redemptionCalldataFloorGas, Blanc.deploymentCalldataFloorGas,
+      henv.rules_eq]
+  rw [hsettlement]
+  simp only [BlockOutput.withGasSettlement, hbalNone, List.foldl_nil,
+    Nat.add_zero]
+  simp only [redemptionFinalState, redemptionFinalBout,
+    redemptionEffectiveGasPrice, Blanc.deploymentEffectiveGasPrice,
+    redemptionTxPreludeBout, Blanc.deploymentTxPreludeBout,
+    ExecutionTrace.transactionPreludeBout, redemptionReceiptKey,
+    Blanc.deploymentReceiptKey]
 
 
 lemma addBal_toNat_eq_add_if
@@ -3247,10 +3407,15 @@ theorem AdmissibleRedemptionTx.usedGas_le
     (henv : AdmissibleRedemptionTx
       rules dp ca owner recipient q benv bout tx index)
     (out : MsgCallOutput) (refundCounter : Nat) :
-    redemptionUsedGasFromMessage tx out refundCounter ≤ tx.gas := by
+    redemptionUsedGasFromMessage benv tx owner out refundCounter ≤ tx.gas := by
   have hfloor :=
     validateTransaction_calldataFloorGasCost_le_gas henv.validated
+  have hsg : rules.stateGas = none := by
+    rw [← henv.rules_eq]
+    exact henv.fork_covered.rules_stateGas_none
   unfold redemptionUsedGasFromMessage redemptionCalldataFloorGas
+    Blanc.deploymentCalldataFloorGas
+  rw [henv.rules_eq, calculateIntrinsicCost_sender_congr_none (s2 := 0) hsg]
   apply max_le
   · omega
   · exact hfloor
@@ -3261,10 +3426,15 @@ theorem AdmissibleSelfRedemptionTx.usedGas_le
     (henv : AdmissibleSelfRedemptionTx
       rules dp ca owner q benv bout tx index)
     (out : MsgCallOutput) (refundCounter : Nat) :
-    redemptionUsedGasFromMessage tx out refundCounter ≤ tx.gas := by
+    redemptionUsedGasFromMessage benv tx owner out refundCounter ≤ tx.gas := by
   have hfloor :=
     validateTransaction_calldataFloorGasCost_le_gas henv.validated
+  have hsg : rules.stateGas = none := by
+    rw [← henv.rules_eq]
+    exact henv.fork_covered.rules_stateGas_none
   unfold redemptionUsedGasFromMessage redemptionCalldataFloorGas
+    Blanc.deploymentCalldataFloorGas
+  rw [henv.rules_eq, calculateIntrinsicCost_sender_congr_none (s2 := 0) hsg]
   apply max_le
   · omega
   · exact hfloor
@@ -3292,7 +3462,7 @@ theorem Stable.transactionRedemption_enabled_of_le
   rcases hstable.preparedRedemptionMessage_exists hq henv with
     ⟨debit, msg, entry, messagePost, messageOut,
       hdebit, hprepare, hframe, heffect⟩
-  let usedGas := redemptionUsedGasFromMessage tx messageOut
+  let usedGas := redemptionUsedGasFromMessage benv tx owner messageOut
     messagePost.refundCounter.toNat
   let post := redemptionFinalState benv tx owner messagePost.state usedGas
   let bout' := redemptionFinalBout bout tx index messageOut usedGas
@@ -3331,7 +3501,7 @@ theorem Stable.transactionRedemption_enabled_of_le
     rfl
   have hpostStable : Stable dp ca post :=
     processTransaction_preserves_stable dp ca benv bout bout' tx index post
-      hrun hstable.sumNof henv.target_not_created hstable
+      hrun hstable.sumNof henv.target_not_created hstable henv.fork_covered
   let effective := redemptionEffectiveGasPrice benv tx
   let refundAmount := (tx.gas - usedGas) * effective
   let tipAmount := usedGas * (effective - benv.stat.baseFeePerGas)
@@ -3451,13 +3621,13 @@ theorem Stable.transactionRedemption_enabled_of_le
   have hreceiptEntry :
       Std.TreeMap.get? bout'.receiptsTrie (redemptionReceiptKey index) =
         some (makeReceipt tx messageOut.error
-          (bout.blockGasUsed + usedGas) messageOut.logs) := by
+          (bout.cumulativeGasUsed + usedGas) messageOut.logs) := by
     dsimp only [bout', redemptionFinalBout]
     simp only [redemptionTxPreludeBout]
     change
       (bout.receiptsTrie.insert (redemptionReceiptKey index)
         (makeReceipt tx messageOut.error
-          (bout.blockGasUsed + usedGas) messageOut.logs))[redemptionReceiptKey index]? = _
+          (bout.cumulativeGasUsed + usedGas) messageOut.logs))[redemptionReceiptKey index]? = _
     rw [Std.TreeMap.getElem?_insert_self]
   refine ⟨post, bout', hrun, ?_⟩
   refine {
@@ -3471,18 +3641,23 @@ theorem Stable.transactionRedemption_enabled_of_le
     flashZero := ?_
     postStable := hpostStable
     ethAccounting := heth }
-  · refine ⟨redemptionIntrinsicGas tx, redemptionCalldataFloorGas tx,
+  · refine ⟨redemptionIntrinsicGas benv tx owner,
+      redemptionCalldataFloorGas benv tx owner,
       redemptionEffectiveGasPrice benv tx, debit, msg, messagePost.state,
       messageOut, ?_, henv.checked, hdebit.subBal, ?_, hframe.process,
       heffect⟩
-    · rw [henv.rules_eq]
-      simpa [redemptionIntrinsicGas, redemptionCalldataFloorGas,
-        Blanc.deploymentIntrinsicGas, Blanc.deploymentCalldataFloorGas] using
-        henv.validated
+    · have hsg : rules.stateGas = none := by
+        rw [← henv.rules_eq]
+        exact henv.fork_covered.rules_stateGas_none
+      rw [henv.rules_eq, henv.validated,
+        calculateIntrinsicCost_sender_congr_none (s2 := owner) hsg]
+      simp [redemptionIntrinsicGas, redemptionCalldataFloorGas,
+        Blanc.deploymentIntrinsicGas, Blanc.deploymentCalldataFloorGas,
+        henv.rules_eq]
     · simpa [redemptionTenv] using hprepare
   · rcases henv.type_eq with ⟨maxPriorityFee, maxFee, htype⟩
     refine ⟨(makeReceipt tx messageOut.error
-      (bout.blockGasUsed + usedGas) messageOut.logs).2, ?_⟩
+      (bout.cumulativeGasUsed + usedGas) messageOut.logs).2, ?_⟩
     rw [hreceiptEntry]
     simp [makeReceipt, htype]
   · rw [hreceiptEntry]
@@ -3526,7 +3701,7 @@ theorem Stable.selfTransactionRedemption_enabled_of_le
   rcases hstable.preparedSelfRedemptionMessage_exists hq henv with
     ⟨debit, msg, entry, messagePost, messageOut,
       hdebit, hprepare, hframe, heffect⟩
-  let usedGas := redemptionUsedGasFromMessage tx messageOut
+  let usedGas := redemptionUsedGasFromMessage benv tx owner messageOut
     messagePost.refundCounter.toNat
   let post := redemptionFinalState benv tx owner messagePost.state usedGas
   let bout' := redemptionFinalBout bout tx index messageOut usedGas
@@ -3565,7 +3740,7 @@ theorem Stable.selfTransactionRedemption_enabled_of_le
     rfl
   have hpostStable : Stable dp ca post :=
     processTransaction_preserves_stable dp ca benv bout bout' tx index post
-      hrun hstable.sumNof henv.target_not_created hstable
+      hrun hstable.sumNof henv.target_not_created hstable henv.fork_covered
   let effective := redemptionEffectiveGasPrice benv tx
   let refundAmount := (tx.gas - usedGas) * effective
   let tipAmount := usedGas * (effective - benv.stat.baseFeePerGas)
@@ -3685,13 +3860,13 @@ theorem Stable.selfTransactionRedemption_enabled_of_le
   have hreceiptEntry :
       Std.TreeMap.get? bout'.receiptsTrie (redemptionReceiptKey index) =
         some (makeReceipt tx messageOut.error
-          (bout.blockGasUsed + usedGas) messageOut.logs) := by
+          (bout.cumulativeGasUsed + usedGas) messageOut.logs) := by
     dsimp only [bout', redemptionFinalBout]
     simp only [redemptionTxPreludeBout]
     change
       (bout.receiptsTrie.insert (redemptionReceiptKey index)
         (makeReceipt tx messageOut.error
-          (bout.blockGasUsed + usedGas) messageOut.logs))[redemptionReceiptKey index]? = _
+          (bout.cumulativeGasUsed + usedGas) messageOut.logs))[redemptionReceiptKey index]? = _
     rw [Std.TreeMap.getElem?_insert_self]
   refine ⟨post, bout', hrun, ?_⟩
   refine {
@@ -3705,18 +3880,23 @@ theorem Stable.selfTransactionRedemption_enabled_of_le
     flashZero := ?_
     postStable := hpostStable
     ethAccounting := heth }
-  · refine ⟨redemptionIntrinsicGas tx, redemptionCalldataFloorGas tx,
+  · refine ⟨redemptionIntrinsicGas benv tx owner,
+      redemptionCalldataFloorGas benv tx owner,
       redemptionEffectiveGasPrice benv tx, debit, msg, messagePost.state,
       messageOut, ?_, henv.checked, hdebit.subBal, ?_, hframe.process,
       heffect⟩
-    · rw [henv.rules_eq]
-      simpa [redemptionIntrinsicGas, redemptionCalldataFloorGas,
-        Blanc.deploymentIntrinsicGas, Blanc.deploymentCalldataFloorGas] using
-        henv.validated
+    · have hsg : rules.stateGas = none := by
+        rw [← henv.rules_eq]
+        exact henv.fork_covered.rules_stateGas_none
+      rw [henv.rules_eq, henv.validated,
+        calculateIntrinsicCost_sender_congr_none (s2 := owner) hsg]
+      simp [redemptionIntrinsicGas, redemptionCalldataFloorGas,
+        Blanc.deploymentIntrinsicGas, Blanc.deploymentCalldataFloorGas,
+        henv.rules_eq]
     · simpa [redemptionTenv] using hprepare
   · rcases henv.type_eq with ⟨maxPriorityFee, maxFee, htype⟩
     refine ⟨(makeReceipt tx messageOut.error
-      (bout.blockGasUsed + usedGas) messageOut.logs).2, ?_⟩
+      (bout.cumulativeGasUsed + usedGas) messageOut.logs).2, ?_⟩
     rw [hreceiptEntry]
     simp [makeReceipt, htype]
   · rw [hreceiptEntry]
@@ -3851,7 +4031,7 @@ theorem noncanonicalCalldataMessage_not_admissible
 theorem lowGasTransaction_not_admissible
     {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    (hlow : tx.gas < redemptionTransactionGasBound q tx) :
+    (hlow : tx.gas < redemptionTransactionGasBound q benv tx owner) :
     ¬ AdmissibleRedemptionTx
       rules dp ca owner recipient q benv bout tx index := by
   intro henv
