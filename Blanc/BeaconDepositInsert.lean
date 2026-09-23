@@ -50,7 +50,7 @@ private theorem insertionLoopBit_runCompiledTo
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mload_of
@@ -70,13 +70,13 @@ private theorem insertionLoopBit_runCompiledTo
         exact hreadMem)
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [List.length_cons]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := 1) (c := 3) (G := K + 3)
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_binary (r := .and) (f := B256.and)
@@ -86,7 +86,7 @@ private theorem insertionLoopBit_runCompiledTo
       (by rintro ⟨⟩) rfl rfl rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [List.length_cons]; omega)) ?_
-  simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using hinner
+  simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach] using hinner
 
 /-- Select the live insertion arm in exactly 26 gas. -/
 theorem insertionLoopLive_dispatch_runCompiledTo
@@ -110,7 +110,7 @@ theorem insertionLoopLive_dispatch_runCompiledTo
     (by simp only [Devm.stack_setMach, List.length_cons]; omega)
     (by simp only [Devm.gasLeft_setMach, gVerylow, gHigh, gJumpdest])
     (by
-      simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using harm)
+      simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach] using harm)
 
 /-- Select the dead insertion arm in exactly 25 gas. -/
 theorem insertionLoopDead_dispatch_runCompiledTo
@@ -133,7 +133,7 @@ theorem insertionLoopDead_dispatch_runCompiledTo
     (by simp only [Devm.stack_setMach, List.length_cons]; omega)
     (by simp only [Devm.gasLeft_setMach, gVerylow, gHigh])
     (by
-      simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using harm)
+      simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach] using harm)
 
 private theorem insertionStageLoadedLeft_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
@@ -174,7 +174,7 @@ private theorem insertionStageLoadedLeft_runCompiledTo
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mstore_of
@@ -186,7 +186,7 @@ private theorem insertionStageLoadedLeft_runCompiledTo
         decide +kernel))
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       rfl) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach]
   change Func.RunCompiledTo fs sevm
     (base.setMach ⟨height :: stack, M1, K + 12, base.stateGas⟩) _ ex
   refine Func.RunCompiledTo.next
@@ -194,7 +194,7 @@ private theorem insertionStageLoadedLeft_runCompiledTo
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mload_of
@@ -215,13 +215,13 @@ private theorem insertionStageLoadedLeft_runCompiledTo
       hnodeRead hnodeMem
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [List.length_cons]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := 32) (c := 3) (G := K + 3)
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mstore_of
       (i := 32) (v := node) (s := height :: stack)
@@ -232,7 +232,7 @@ private theorem insertionStageLoadedLeft_runCompiledTo
         (by rw [hmem1.size_eq]; decide +kernel))
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       rfl) ?_
-  simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach, M1,
+  simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach, M1,
     show (32 : B256).toNat = 32 by decide +kernel] using htail
 
 private theorem insertionDeadLoad_runCompiledTo
@@ -258,7 +258,7 @@ private theorem insertionDeadLoad_runCompiledTo
       rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := branchBase) (c := 3)
@@ -266,7 +266,7 @@ private theorem insertionDeadLoad_runCompiledTo
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_binary (r := .add) (f := (· + ·))
@@ -276,7 +276,7 @@ private theorem insertionDeadLoad_runCompiledTo
       (by rintro ⟨⟩) rfl rfl rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       (by simp only [List.length_cons]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach]
   exact Func.RunCompiledTo.next
     (Ninst.runCompiled_sload_selected hfork hval
       (by simp only [List.length_cons]; omega))
@@ -377,7 +377,7 @@ theorem insertionContinuation_runCompiledTo
       (by
         simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
         omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mload_of
@@ -395,7 +395,7 @@ theorem insertionContinuation_runCompiledTo
           Mem.read_snd_eq_self (memExtSize_of_le hmod (by omega))])
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [List.length_cons, List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
       (w := (1 : B256)) (c := gVerylow) (G := K + 27)
@@ -404,7 +404,7 @@ theorem insertionContinuation_runCompiledTo
       (by
         simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
         omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_binary
@@ -416,7 +416,7 @@ theorem insertionContinuation_runCompiledTo
       (by simp only [show (1 : B256).toNat = 1 by decide +kernel])
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [List.length_cons, List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
       (w := shiftedSizeWord * 32) (c := gVerylow) (G := K + 21)
@@ -425,7 +425,7 @@ theorem insertionContinuation_runCompiledTo
       (by
         simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
         omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mstore_of
@@ -435,7 +435,7 @@ theorem insertionContinuation_runCompiledTo
       (Devm.extCost_zero_of_le hmod (by rw [hoff]; omega))
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       rfl) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, hoff]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, hoff]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
       (w := (1 : B256)) (c := gVerylow) (G := K + 15)
@@ -444,7 +444,7 @@ theorem insertionContinuation_runCompiledTo
       (by
         simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
         omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_binary
@@ -456,14 +456,14 @@ theorem insertionContinuation_runCompiledTo
       (B256.add_comm (xs := (1 : B256)) (ys := height))
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
   exact Func.runCompiledTo_call' (G := K) hloop
     (by
       simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
       omega)
     (by simp only [Devm.gasLeft_setMach, gVerylow, gMid, gJumpdest])
     (by
-      simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
+      simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
         Devm.memory_setMach] using htail)
 
 /-- Run the shared SHA-256 and insertion-continuation tail from a staged pair.
@@ -562,7 +562,7 @@ theorem insertionShaTail_runCompiledTo
         omega)
       (by simp only [Devm.gasLeft_setMach, gVerylow, gMid, gJumpdest])
       (by
-        simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
+        simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
           Devm.memory_setMach] using hinsertion)
   have hwhole := hlift hsuccess
   simpa only [sha64SuccessCost_zero_node] using hwhole
@@ -604,7 +604,7 @@ theorem insertionLive_runCompiledTo
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := branchBase) (c := 3)
@@ -613,7 +613,7 @@ theorem insertionLive_runCompiledTo
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_binary (r := .add) (f := (· + ·))
@@ -623,7 +623,7 @@ theorem insertionLive_runCompiledTo
       (by rintro ⟨⟩) rfl rfl rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       (by simp only [List.length_cons, List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := 640) (c := 3)
       (G := K + 8 + sstoreCost sevm base (branchBase + height) node)
@@ -631,7 +631,7 @@ theorem insertionLive_runCompiledTo
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mload_of
@@ -648,14 +648,14 @@ theorem insertionLive_runCompiledTo
       hnodeRead hnodeMem
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [List.length_cons, List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_swap (n := 0)
       (S := (branchBase + height) :: node :: [height])
       (G := K + 2 + sstoreCost sevm base (branchBase + height) node)
       rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_sstore_selected_setMach hfork
       (base := base) (key := branchBase + height) (value := node)
@@ -664,7 +664,7 @@ theorem insertionLive_runCompiledTo
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pop (G := K) rfl
       (by simp only [Devm.gasLeft_setMach, gBase])) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach]
   exact Func.RunCompiledTo.last rfl
 
 /-- Dispatch to the first live branch, store the accumulated node, and stop.
@@ -744,7 +744,7 @@ theorem commitDeposit_runCompiledTo
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mload_of
@@ -761,7 +761,7 @@ theorem commitDeposit_runCompiledTo
       holdRead holdMem
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := 1) (c := 3)
       (G := K + 29 +
@@ -770,7 +770,7 @@ theorem commitDeposit_runCompiledTo
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_binary (r := .add) (f := (· + ·))
@@ -782,7 +782,7 @@ theorem commitDeposit_runCompiledTo
       (B256.add_comm (xs := (1 : B256)) (ys := oldCount))
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       (by simp only [List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_dup (n := 0) (w := oldCount + 1)
       (G := K + 23 +
@@ -791,7 +791,7 @@ theorem commitDeposit_runCompiledTo
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := 608) (c := 3)
@@ -801,7 +801,7 @@ theorem commitDeposit_runCompiledTo
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mstore_of
@@ -815,7 +815,7 @@ theorem commitDeposit_runCompiledTo
         decide +kernel))
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       rfl) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas,
     show (608 : B256).toNat = 608 by decide +kernel]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := depositCountSlot) (c := 3)
@@ -825,7 +825,7 @@ theorem commitDeposit_runCompiledTo
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_sstore_selected_setMach hfork
@@ -838,14 +838,14 @@ theorem commitDeposit_runCompiledTo
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
     Devm.memory_setMach]
   exact Func.runCompiledTo_call' (G := K) hloop
     (by simp only [Devm.stack_setMach, List.length_cons,
       List.length_nil]; omega)
     (by simp only [Devm.gasLeft_setMach, gVerylow, gMid, gJumpdest])
     (by
-      simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
+      simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
         Devm.memory_setMach] using htail)
 
 end Blanc.BeaconDeposit
