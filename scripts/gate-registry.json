@@ -72,7 +72,8 @@
      "Blanc/LidoCircuitBreakerHistoryChain.lean",
      "Blanc/LidoCircuitBreakerHistoryEndpoints.lean",
      "scripts/GATES.md",
-     "scripts/gate_semaphore.py"
+     "scripts/gate_semaphore.py",
+     "scripts/axiom_audit.py"
     ],
     "populations": [
      {
@@ -1119,7 +1120,8 @@
     "files": [
      "scripts/check-lido-circuit-breaker-registry.sh",
      "scripts/check-lido-circuit-breaker-registry.py",
-     "scripts/gate_semaphore.py"
+     "scripts/gate_semaphore.py",
+     "scripts/axiom_audit.py"
     ],
     "populations": [
      {
@@ -1156,7 +1158,9 @@
      "scripts/check-lido-circuit-breaker-enumeration.py",
      "Blanc/LidoCircuitBreakerEnumeration.lean",
      "scripts/lean_header.py",
-     "scripts/gate_semaphore.py"
+     "scripts/gate_semaphore.py",
+     "scripts/axiom_audit.py",
+     "scripts/AxiomAudit.lean"
     ],
     "lean_entries": [
      "scripts/LidoCircuitBreakerEnumerationControls.lean"
@@ -1220,7 +1224,9 @@
      "Blanc/LidoCircuitBreakerPublicPause.lean",
      "Blanc/LidoCircuitBreakerPublicPauseControl.lean",
      "scripts/lean_header.py",
-     "scripts/gate_semaphore.py"
+     "scripts/gate_semaphore.py",
+     "scripts/axiom_audit.py",
+     "scripts/AxiomAudit.lean"
     ],
     "lean_entries": [
      "scripts/LidoCircuitBreakerAccessControls.lean"
@@ -1289,7 +1295,9 @@
      "Blanc/LidoCircuitBreakerRegistryModel.lean",
      "Blanc/CommonProofs.lean",
      "Blanc/Ladder.lean",
-     "scripts/gate_semaphore.py"
+     "scripts/gate_semaphore.py",
+     "scripts/axiom_audit.py",
+     "scripts/AxiomAudit.lean"
     ],
     "lean_modules": [
      "Blanc.LidoCircuitBreakerHistory",
@@ -2653,7 +2661,9 @@
    "inputs": {
     "files": [
      "scripts/check.sh",
-     "scripts/gate-semaphore.sh"
+     "scripts/gate-semaphore.sh",
+     "scripts/axiom_audit.py",
+     "scripts/AxiomAudit.lean"
     ],
     "lean_entries": [
      "scripts/AxiomCheck.lean",
@@ -2661,7 +2671,8 @@
     ],
     "tools": [
      "lean",
-     "bash"
+     "bash",
+     "python3"
     ]
    },
    "kind": "cacheable",
@@ -2961,7 +2972,8 @@
      "scripts/test-stack-certificate.py",
      "scripts/check-stack-certificate-producer.sh",
      "docs/PROXY_PAIR_UPGRADE.md",
-     "scripts/gate_semaphore.py"
+     "scripts/gate_semaphore.py",
+     "scripts/axiom_audit.py"
     ],
     "populations": [
      {
@@ -2993,7 +3005,9 @@
     "files": [
      "scripts/check-lido-circuit-breaker-registry.sh",
      "scripts/check-lido-circuit-breaker-registry.py",
-     "scripts/gate_semaphore.py"
+     "scripts/gate_semaphore.py",
+     "scripts/axiom_audit.py",
+     "scripts/AxiomAudit.lean"
     ],
     "lean_entries": [
      "scripts/LidoCircuitBreakerRegistrySuccess.lean",
@@ -3136,7 +3150,9 @@
      "scripts/gen-proxy-pair-stack-certificate.py",
      "scripts/test-stack-certificate.py",
      "scripts/check-stack-certificate-producer.sh",
-     "Blanc/ProxyPairUpgradeStackSafetyData.lean"
+     "Blanc/ProxyPairUpgradeStackSafetyData.lean",
+     "scripts/axiom_audit.py",
+     "scripts/AxiomAudit.lean"
     ],
     "lean_entries": [
      "scripts/ProxyPairUpgradeAxiomCheck.lean",

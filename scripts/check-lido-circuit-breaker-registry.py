@@ -12,13 +12,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import re
-import subprocess
 import sys
-import tempfile
 from functools import lru_cache
 from pathlib import Path
 from typing import Mapping
 
+import axiom_audit
 import gate_semaphore
 
 
@@ -486,55 +485,35 @@ def assert_falsifiers(all_sources: Mapping[str, str]) -> int:
     return count
 
 
-def run(command: list[str]) -> str:
-    completed = subprocess.run(
-        command, cwd=ROOT, text=True, stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT, check=False,
-    )
-    if completed.returncode:
-        fail(f"command failed ({' '.join(command)}):\n{completed.stdout.rstrip()}")
-    return completed.stdout
-
-
 def compile_fixture(relative: str) -> None:
     """Elaborate one fixture once, with its axiom probes appended.
 
-    The elaborated copy is the committed fixture byte for byte followed only
-    by `#print axioms` commands, which cannot make a failing file elaborate,
-    so one run is both the fixture's positive compile and the evidence for
-    every axiom pin it owns.  (Each probe used to elaborate the whole fixture
-    again: six elaborations of two files.)
+    The elaborated source is the committed fixture byte for byte followed only
+    by the shared from-scratch walker and its `#full_axioms` rows, which cannot
+    make a failing file elaborate, so one run is both the fixture's positive
+    compile and the evidence for every axiom pin it owns.  (Each probe used to
+    elaborate the whole fixture again: six elaborations of two files.)  The
+    source goes to `lake env lean --stdin`, so no copy is written into the
+    tree.
     """
     gate_semaphore.guard("the Lido registry fixtures")
     probes = [qualified for owner, qualified in AXIOM_CONTROLS if owner == relative]
-    source = (ROOT / relative).read_text()
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".lean", prefix="registry-fixture-", dir=ROOT,
-        encoding="utf-8", delete=False,
-    ) as handle:
-        temporary = Path(handle.name)
-        handle.write(source)
-        for qualified in probes:
-            handle.write(f"\n#print axioms {qualified}\n")
     try:
-        output = run(["lake", "env", "lean", str(temporary.relative_to(ROOT))])
-    finally:
-        temporary.unlink(missing_ok=True)
+        source = (ROOT / relative).read_text() + axiom_audit.appendix(ROOT, probes)
+        status, output = axiom_audit.elaborate(ROOT, source)
+    except axiom_audit.AuditError as error:
+        fail(f"{relative}: from-scratch axiom probe could not run: {error}")
+    if status:
+        fail(f"command failed (lake env lean --stdin < {relative} + axiom probes):\n"
+             f"{output.rstrip()}")
+    try:
+        reports = axiom_audit.parse(output, probes)
+    except axiom_audit.AuditError as error:
+        fail(f"{relative}: unrecognised from-scratch axiom output: {error}")
     for qualified in probes:
-        axiom_check(qualified, output)
-
-
-def axiom_check(qualified: str, output: str) -> None:
-    matches = re.findall(
-        r"'" + re.escape(qualified) + r"' depends on axioms: \[([^\]]*)\]",
-        output,
-        re.DOTALL,
-    )
-    if len(matches) != 1:
-        fail(f"{qualified}: unrecognised #print axioms output: {output.rstrip()}")
-    actual = {item.strip() for item in matches[0].split(",") if item.strip()}
-    if actual != EXPECTED_AXIOMS:
-        fail(f"{qualified}: axioms {sorted(actual)}, expected {sorted(EXPECTED_AXIOMS)}")
+        actual = set(reports[qualified])
+        if actual != EXPECTED_AXIOMS:
+            fail(f"{qualified}: axioms {sorted(actual)}, expected {sorted(EXPECTED_AXIOMS)}")
 
 
 def main(argv: list[str]) -> None:

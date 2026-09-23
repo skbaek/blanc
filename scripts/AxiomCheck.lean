@@ -133,1409 +133,127 @@ import Blanc.RevertCause
 import Blanc.ProrataWethVaultMaxArithmetic
 import Blanc.Composition.ProrataWethVaultNonrevert
 
-#print axioms Blanc.weth_preserves_solvent
-#print axioms Blanc.stateTransition_preserves_solvent
-#print axioms Blanc.chain_preserves_solvent
-#print axioms Blanc.addBlockToChain_preserves_solvent
-#print axioms Blanc.stateTransitionUsing_preserves_solvent
-#print axioms Blanc.chainUsing_preserves_solvent
-#print axioms Blanc.addBlockToChainUsing_preserves_solvent
-#print axioms Blanc.fmint_preserves_conserved
-#print axioms Blanc.stateTransition_preserves_conserved
-#print axioms Blanc.chain_preserves_conserved
-#print axioms Blanc.addBlockToChain_preserves_conserved
-#print axioms Blanc.stateTransitionUsing_preserves_conserved
-#print axioms Blanc.chainUsing_preserves_conserved
-#print axioms Blanc.addBlockToChainUsing_preserves_conserved
-#print axioms Blanc.Fmint.fmint_flashLoan_spec
-#print axioms Blanc.Fmint.no_success_of_callback_never_magic
-#print axioms Blanc.Fmint.no_success_of_callback_never_returns_word
-#print axioms Blanc.Fmint.no_success_of_token_ne_self
-#print axioms Blanc.Fmint.no_success_of_receiver_not_address
-#print axioms Blanc.Fmint.no_success_of_amount_over_maxFlashLoan
-#print axioms Blanc.Fmint.no_success_of_allowance_below_amount
-#print axioms Blanc.Fmint.no_success_of_balance_below_amount
-#print axioms Blanc.Fmint.settles_with_error_of_callback_never_magic
-#print axioms Blanc.Fmint.settles_with_error_of_callback_never_returns_word
-#print axioms Blanc.Fmint.settles_with_error_of_token_ne_self
-#print axioms Blanc.Fmint.settles_with_error_of_receiver_not_address
-#print axioms Blanc.Fmint.settles_with_error_of_amount_over_maxFlashLoan
-#print axioms Blanc.Fmint.settles_with_error_of_allowance_below_amount
-#print axioms Blanc.Fmint.settles_with_error_of_balance_below_amount
-#print axioms Blanc.wethCode_compile
-#print axioms Blanc.fmintCode_compile
-#print axioms Blanc.Weth10.weth10_compiles
-#print axioms Blanc.Weth10.weth10Code_compile
-#print axioms Blanc.Weth10.weth10MainnetCode_eq
-#print axioms Blanc.Func.compile_eq_emitUnchecked
-#print axioms Blanc.Table.compile_eq_emitUnchecked
-#print axioms Blanc.Prog.compile_eq_emitUnchecked
-#print axioms Blanc.Frame.raw_commits_of_settlementCommits
-#print axioms Blanc.Exec.descendantFrames_runOk_of_settlementCommits
-#print axioms Blanc.Exec.descendantFrames_runOk_of_not_settlementCommits
-#print axioms Blanc.Exec.descendantFrames_runOk_create_codeDepositRollback
-#print axioms Blanc.Exec.committedFrames_eq_nil_of_not_commits
-#print axioms Blanc.ProcessMessage.settlementCommits_of_some_ok_clean
-#print axioms Blanc.Frame.settlementCommits_ofCall_of_raw_commits
-#print axioms Blanc.Exec.ninstOccurrence_iff_mem_rawNodes
-#print axioms Blanc.Exec.SuccessfulSstoreOccurrence.storage_update
-#print axioms Blanc.Exec.Deriv.ParentPrefix.linear
-#print axioms Blanc.Exec.Deriv.SourceCursor.Chronology.strictBefore
-#print axioms Blanc.Exec.Deriv.SourceCursor.toward
-#print axioms Blanc.Prog.sourceSiteAt_sound
-#print axioms Blanc.Exec.Frame.successfulSstore_sourceSite
-#print axioms Blanc.Exec.retainedNodes_sublist_rawNodes
-#print axioms Blanc.Exec.committedFrameRoots_sublist_retainedNodes
-#print axioms Blanc.Exec.mem_retainedNodes_iff_committedFrame_parentPrefix
-#print axioms Blanc.Exec.retainedNodes_runOk_of_settlementCommits
-#print axioms Blanc.Exec.retainedNodes_runOk_of_not_settlementCommits
-#print axioms Blanc.Exec.storageReplay_committedPost
-#print axioms Blanc.Exec.exists_lastRetainedSstore_of_getStor_ne
-#print axioms Blanc.Prog.acceptsSstoreSite_sound
-#print axioms Blanc.Exec.Frame.successfulSstore_acceptsSource
-#print axioms Blanc.Weth10.Exec.Frame.NinstOccurrence.toCommon
-#print axioms Blanc.Exec.mem_rawNodes_iff_rawFrameRoot_parentPrefix
-#print axioms Blanc.Exec.Deriv.sstore_sourceSite
-#print axioms Blanc.Exec.Deriv.successfulSstore_sourceSite
-#print axioms Blanc.Exec.NinstOccurrence.exists_rawFrameRoot_parentPrefix
-#print axioms Blanc.Exec.NinstOccurrence.sourceSite_of_rawFrameRoot
-#print axioms Blanc.Exec.Deriv.sstore_acceptsSource
-#print axioms Blanc.Exec.NinstOccurrence.acceptsSource_of_rawFrameRoot
-#print axioms Blanc.Func.localSstoreFree_iff
-#print axioms Blanc.Prog.componentSstoreFree_iff
-#print axioms Blanc.Prog.entrySstoreFree_iff
-#print axioms Blanc.Prog.entrySstoreFree_sound
-#print axioms Blanc.Exec.Deriv.SourceCursor.noSstore_of_entrySstoreFree
-#print axioms Blanc.Exec.NinstOccurrence.instruction_ne_sstore_of_entrySstoreFree
-#print axioms Blanc.Exec.Deriv.noSstore_of_exactMain_entrySstoreFree
-#print axioms Blanc.tstore_run_cell
-#print axioms Blanc.tstore_run_zero
-#print axioms Blanc.tload_run_cell
-#print axioms Blanc.directCall_nonzero_spawn
-#print axioms Blanc.directCall_zero_spawn
-#print axioms Blanc.directStatcall_spawn
-#print axioms Blanc.directDelcall_spawn
-#print axioms Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget
-#print axioms Blanc.delegatecall_enters_with_parent_as_storage_owner
-#print axioms Blanc.control_delegatecall_separates_call_fuses
-#print axioms Blanc.control_delegatecall_inherits_caller_and_value
-#print axioms Blanc.delegatecall_child_observes_outer_caller_and_value
-#print axioms Blanc.control_two_window_memory_premise_derivable
-#print axioms Blanc.control_sliceD_payload_size
-#print axioms Blanc.caughtCall_childSettlement
-#print axioms Blanc.cleanCall_childSettlement
-#print axioms Blanc.preparedTransactionMessage_exists
-#print axioms Blanc.PreparedTransactionMessage.transientStorage_eq_empty
-#print axioms Blanc.processMessageCall_error_logs_eq_nil
-#print axioms Blanc.PreparedTransactionMessage.error_logs_eq_nil
-#print axioms Blanc.of_run_sstore_not_static
-#print axioms Blanc.genericCall.step_spawn_isStatic
-#print axioms Blanc.genericCreate.step_spawn_not_static
-#print axioms Blanc.Xinst.step_spawn_isStatic
-#print axioms Blanc.Evm.step_spawn_isStatic
-#print axioms Blanc.executeCode.enter_inl_isStatic
-#print axioms Blanc.Frame.enter_run_isStatic
-#print axioms Blanc.Evm.step_run_isStatic
-#print axioms Blanc.genericCall.step_spawn_isStatic_of_staticcall
-#print axioms Blanc.Xinst.step_staticcall_spawn_isStatic
-#print axioms Blanc.Ninst.step_staticcall_spawn_isStatic
-#print axioms Blanc.Ninst.step_staticcall_run_isStatic
-#print axioms Blanc.Func.CompileShape.byteSize_compileShape
-#print axioms Blanc.Func.length_emitByShape
-#print axioms Blanc.Func.getD_emitByShape
-#print axioms Blanc.Func.emitByShape_compileShape
-#print axioms Blanc.Func.CompileShape.locations_compileShapes
-#print axioms Blanc.Table.emitByShape_compileShapes
-#print axioms Blanc.Prog.emitByShape_compileShape
-#print axioms Blanc.Func.exec_of_runCompiled_subcode
-#print axioms Blanc.Func.exec_of_runCompiled_prefix
-#print axioms Blanc.Func.exec_of_runCompiledTo_subcode
-#print axioms Blanc.Func.exec_of_runCompiledTo_prefix
-#print axioms Blanc.Rinst.runCore_extcodesize_cold_eq_ok
-#print axioms Blanc.Rinst.runCore_extcodesize_warm_eq_ok
-#print axioms Blanc.Ninst.runCompiled_extcodesize_cold
-#print axioms Blanc.Ninst.runCompiled_extcodesize_warm
-#print axioms Blanc.Func.runCompiledTo_revertReturnData
-#print axioms Blanc.Frame.enter_eq_done_executePrecomp
-#print axioms Blanc.Xinst.step_staticcall
-#print axioms Blanc.Xinst.step_staticcall_spawn
-#print axioms Blanc.Ninst.runCompiled_staticcall_doneFrame
-#print axioms Blanc.of_run_call_val_with_depth
-#print axioms Blanc.of_run_staticcall_val_with_depth_cause
-#print axioms Blanc.of_run_staticcall_val_with_depth
-#print axioms Blanc.Weth10.flashFee_runCompiled
-#print axioms Blanc.Weth10.balanceOf_cold_runCompiled
-#print axioms Blanc.Weth10.balanceOf_warm_runCompiled
-#print axioms Blanc.Weth10.totalSupply_cold_runCompiled
-#print axioms Blanc.Weth10.totalSupply_warm_runCompiled
-#print axioms Blanc.Weth10.maxFlashLoan_cold_runCompiled
-#print axioms Blanc.Weth10.maxFlashLoan_warm_runCompiled
-#print axioms Blanc.Weth10.maxFlashLoan_other_runCompiled
-#print axioms Blanc.Weth10.name_exec_output
-#print axioms Blanc.Weth10.symbol_exec_output
-#print axioms Blanc.Weth10.callbackSuccess_exec_output
-#print axioms Blanc.Weth10.permitTypehash_exec_output
-#print axioms Blanc.Weth10.decimals_exec_output
-#print axioms Blanc.Weth10.deploymentChainId_exec_output
-#print axioms Blanc.Weth10.domainSeparator_output
-#print axioms Blanc.Weth10.domainSeparator_exec_output
-#print axioms Blanc.Weth10.balanceOf_exec_output
-#print axioms Blanc.Weth10.allowance_exec_output
-#print axioms Blanc.Weth10.nonces_exec_output
-#print axioms Blanc.Weth10.flashMinted_exec_output
-#print axioms Blanc.Weth10.totalSupply_exec_output
-#print axioms Blanc.Weth10.maxFlashLoan_exec_output
-#print axioms Blanc.Weth10.flashFee_exec_output
-#print axioms Blanc.Weth10.approve_exec_effect
-#print axioms Blanc.Weth10.depositTo_exec_effect
-#print axioms Blanc.Weth10.deposit_exec_effect
-#print axioms Blanc.Weth10.receive_exec_effect
-#print axioms Blanc.Weth10.permit_exec_success_effect
-#print axioms Blanc.Weth10.permit_exec_expired_no_success
-#print axioms Blanc.Weth10.permit_exec_invalid_no_success
-#print axioms Blanc.Weth10.of_flashLoanSuccessTail
-#print axioms Blanc.Weth10.of_flashSettle_allowance
-#print axioms Blanc.Weth10.flashBurn_effect
-#print axioms Blanc.Weth10.flashLoan_successEffect
-#print axioms Blanc.Weth10.weth10_flashLoan_successEffect
-#print axioms Blanc.Weth10.weth10_transfer_successEffect
-#print axioms Blanc.Weth10.weth10_withdraw_successEffect
-#print axioms Blanc.Weth10.weth10_withdrawTo_successEffect
-#print axioms Blanc.Weth10.weth10_transferFrom_successEffect
-#print axioms Blanc.Weth10.weth10_withdrawFrom_successEffect
-#print axioms Blanc.Weth10.of_spendCallerAllowanceThen_effect
-#print axioms Blanc.Weth10.transfer_effect_failureOrder
-#print axioms Blanc.Weth10.transferFrom_effect_failureOrder
-#print axioms Blanc.Weth10.withdrawal_effect_failureOrder
-#print axioms Blanc.Weth10.delegatedAllowance_effect_precedence
-#print axioms Blanc.Weth10.transferThen_callbackPrefix_effect
-#print axioms Blanc.Weth10.callBoolCallback_successEffect
-#print axioms Blanc.Weth10.approveAndCall_successEffect
-#print axioms Blanc.Weth10.weth10_approveAndCall_successEffect
-#print axioms Blanc.Weth10.depositToAndCall_successEffect
-#print axioms Blanc.Weth10.weth10_depositToAndCall_successEffect
-#print axioms Blanc.Weth10.transferAndCall_successEffect
-#print axioms Blanc.Weth10.weth10_transferAndCall_successEffect
-#print axioms Blanc.Weth10.erc677_codelessCallback_runCompiledTo
-#print axioms Blanc.Weth10.erc677_childRevert_runCompiledTo
-#print axioms Blanc.Weth10.erc677_shortReturn_runCompiledTo
-#print axioms Blanc.Weth10.lockedErrorGuard_runCompiledTo
-#print axioms Blanc.Weth10.codelessCallback_runCompiledTo
-#print axioms Blanc.Weth10.callbackBubble_runCompiledTo
-#print axioms Blanc.Weth10.callbackShort_runCompiledTo
-#print axioms Blanc.Weth10.flashCallback_wrongMagic_runCompiledTo
-#print axioms Blanc.Weth10.nonpayable_runCompiledTo
-#print axioms Blanc.Weth10.flashFee_wrongToken_runCompiledTo
-#print axioms Blanc.Weth10.flashLoan_lockedGuardOrder
-#print axioms Blanc.Weth10.permit_expiredBeforeNonceUpdate
-#print axioms Blanc.Weth10.transfer_lockedGuardOrder
-#print axioms Blanc.Weth10.transferFromCore_lockedGuardOrder
-#print axioms Blanc.Weth10.withdraw_lockedGuardOrder
-#print axioms Blanc.Weth10.spendCallerAllowanceThen_finitePrecedence
-#print axioms Blanc.Weth10.flashSettle_finitePrecedence
-#print axioms Blanc.Weth10.flashCallback_errorPrecedence
-#print axioms Blanc.Weth10.rollback_revert_of_weth10_runCompiledTo
-#print axioms Blanc.Weth10.rollback_empty_of_weth10_runCompiledTo
-#print axioms Blanc.Weth10.rollback_errorData_of_weth10_runCompiledTo
-#print axioms Blanc.Weth10.rollback_bubbledChild_of_weth10_runCompiledTo
-#print axioms Blanc.ProcessMessage.rollback_of_error
-#print axioms Blanc.Fmint.rollback_of_callback_failure
-#print axioms Blanc.rollback_of_no_success
-#print axioms Blanc.rollback_of_no_success_total
-#print axioms Blanc.Fmint.rollback_of_no_success
-#print axioms Blanc.Fmint.rollback_of_no_success_total
-#print axioms Blanc.Fmint.rollback_of_callback_never_magic
-#print axioms Blanc.Fmint.rollback_of_callback_never_returns_word
-#print axioms Blanc.Fmint.rollback_of_token_ne_self
-#print axioms Blanc.Fmint.rollback_of_receiver_not_address
-#print axioms Blanc.Fmint.rollback_of_amount_over_maxFlashLoan
-#print axioms Blanc.Fmint.rollback_of_allowance_below_amount
-#print axioms Blanc.Fmint.rollback_of_balance_below_amount
-#print axioms Blanc.Prog.exec_of_runCompiled
-#print axioms Blanc.Prog.runCompiled_iff_exec
-#print axioms Blanc.Prog.exec_of_runCompiledTo
-#print axioms Blanc.Fmint.totalSupply_runCompiled
-#print axioms Blanc.Fmint.fmint_totalSupply_succeeds
-#print axioms Blanc.weth_balanceOf_runCompiled
-#print axioms Blanc.weth_balanceOf_succeeds
-#print axioms Blanc.weth_balanceOf_gas_exact
-#print axioms Blanc.weth_balanceOf_gas_of_runCompiled
-#print axioms Blanc.Fmint.totalSupply_gas_exact
-#print axioms Blanc.Fmint.totalSupply_gas_of_runCompiled
-#print axioms Blanc.weth_decimals_runCompiled
-#print axioms Blanc.weth_decimals_gas_exact
-#print axioms Blanc.weth_decimals_succeeds
-#print axioms Blanc.weth_decimals_gas_of_runCompiled
-#print axioms Blanc.wethGas_eq_with
-#print axioms Blanc.weth_balanceOf_gas_exact_wethGas
-#print axioms Blanc.weth_decimals_gas_exact_wethGas
-#print axioms Blanc.Fmint.decimals_runCompiled
-#print axioms Blanc.Fmint.decimals_gas_exact
-#print axioms Blanc.Fmint.fmint_decimals_succeeds
-#print axioms Blanc.Fmint.decimals_gas_of_runCompiled
-#print axioms Blanc.Fmint.fmintGas_eq_with
-#print axioms Blanc.Fmint.totalSupply_gas_exact_fmintGas
-#print axioms Blanc.Fmint.decimals_gas_exact_fmintGas
-#print axioms Blanc.weth_balanceOf_gas_of_runCompiled_wethGas
-#print axioms Blanc.weth_decimals_gas_of_runCompiled_wethGas
-#print axioms Blanc.Fmint.totalSupply_gas_of_runCompiled_fmintGas
-#print axioms Blanc.Fmint.decimals_gas_of_runCompiled_fmintGas
-#print axioms Blanc.weth_balanceOf_warm_runCompiled
-#print axioms Blanc.weth_balanceOf_warm_gas_exact
-#print axioms Blanc.wethGasMax_eq_with
-#print axioms Blanc.wethGas_le_max
-#print axioms Blanc.Fmint.totalSupply_warm_runCompiled
-#print axioms Blanc.Fmint.totalSupply_warm_gas_exact
-#print axioms Blanc.Fmint.fmintGasMax_eq_with
-#print axioms Blanc.Fmint.fmintGas_le_max
-#print axioms Blanc.Fmint.unknownSelector_runCompiledTo
-#print axioms Blanc.Fmint.fmint_unknown_selector_reverts
-#print axioms Blanc.Fmint.tokenNeSelf_runCompiledTo
-#print axioms Blanc.Fmint.fmint_token_ne_self_reverts
-#print axioms Blanc.rollback_revert_of_exec_revert
-#print axioms Blanc.rollback_revert_of_runCompiledTo
-#print axioms Blanc.Fmint.rollback_revert_of_token_ne_self
-#print axioms Blanc.Fmint.fmint_flashLoan_settles
-#print axioms Blanc.Fmint.fmint_flashLoan_frame_settles
-#print axioms Blanc.Fmint.receiverNotAddress_runCompiledTo
-#print axioms Blanc.Fmint.fmint_receiver_not_address_reverts
-#print axioms Blanc.Fmint.fmint_amount_over_bound_reverts
-#print axioms Blanc.Fmint.fmint_flashLoan_settles_of_call
-#print axioms Blanc.Stor.Weth10Inv.silent
-#print axioms Blanc.Stor.Weth10Inv.deposit
-#print axioms Blanc.Stor.Weth10Inv.transfer
-#print axioms Blanc.Stor.Weth10Inv.flashMint
-#print axioms Blanc.Stor.Weth10Inv.flashBurn
-#print axioms Blanc.Stor.Weth10Inv.withdraw
-#print axioms Blanc.Stor.Weth10Inv.of_empty
-#print axioms Blanc.Weth10.backedSpec
-#print axioms Blanc.ContractSpec.post_of_run_dispatch
-#print axioms Blanc.ContractSpec.sound_of_receive_dispatch
-#print axioms Blanc.ContractSpec.preserves_of_receive_dispatch
-#print axioms Blanc.Weth10.mintCaller_storage
-#print axioms Blanc.Weth10.backedSpec_receiveEther_funcSound
-#print axioms Blanc.Weth10.backedSpec_deposit_funcSound
-#print axioms Blanc.Weth10.backedSpec_name_funcSound
-#print axioms Blanc.Weth10.backedSpec_totalSupply_funcSound
-#print axioms Blanc.Weth10.backedSpec_permitTypehash_funcSound
-#print axioms Blanc.Weth10.backedSpec_decimals_funcSound
-#print axioms Blanc.Weth10.backedSpec_domainSeparator_funcSound
-#print axioms Blanc.Weth10.backedSpec_maxFlashLoan_funcSound
-#print axioms Blanc.Weth10.backedSpec_balanceOf_funcSound
-#print axioms Blanc.Weth10.backedSpec_nonces_funcSound
-#print axioms Blanc.Weth10.backedSpec_callbackSuccess_funcSound
-#print axioms Blanc.Weth10.backedSpec_flashMinted_funcSound
-#print axioms Blanc.Weth10.backedSpec_symbol_funcSound
-#print axioms Blanc.Weth10.backedSpec_deploymentChainId_funcSound
-#print axioms Blanc.Weth10.backedSpec_allowance_funcSound
-#print axioms Blanc.Weth10.backedSpec_flashFee_funcSound
-#print axioms Blanc.Weth10.backedSpec_approve_funcSound
-#print axioms Blanc.Weth10.backedSpec_depositTo_funcSound
-#print axioms Blanc.Weth10.backedSpec_withdraw_funcSound
-#print axioms Blanc.Weth10.backedSpec_transfer_funcSound
-#print axioms Blanc.Weth10.backedSpec_withdrawTo_funcSound
-#print axioms Blanc.Weth10.backedSpec_transferFrom_funcSound
-#print axioms Blanc.Weth10.backedSpec_withdrawFrom_funcSound
-#print axioms Blanc.Weth10.backedSpec_depositToAndCall_funcSound
-#print axioms Blanc.Weth10.backedSpec_approveAndCall_funcSound
-#print axioms Blanc.Weth10.backedSpec_transferAndCall_funcSound
-#print axioms Blanc.Weth10.backedSpec_flashLoan_funcSound
-#print axioms Blanc.Weth10.backedSpec_permit_funcSound
-#print axioms Blanc.Weth10.weth10Funcs_exactRelFuncSound
-#print axioms Blanc.Weth10.flashExactDepth
-#print axioms Blanc.Weth10.weth10Funcs_backed_funcSound
-#print axioms Blanc.Weth10.backedSpec_sound_of_funcSound_all
-#print axioms Blanc.Weth10.backedSpec_preserves_of_funcSound_all
-#print axioms Blanc.Weth10.backedSpec_sound
-#print axioms Blanc.Weth10.backedSpec_preserves
-#print axioms Blanc.Weth10.weth10InitFunc_runCompiled_zero
-#print axioms Blanc.Weth10.weth10Init_exec_zero
-#print axioms Blanc.Weth10.weth10Init_exec_nonzero
-#print axioms Blanc.Weth10.processCreateMessage_weth10_success
-#print axioms Blanc.Weth10.freshDeployment_staticCertificate
-#print axioms Blanc.Weth10.flashExactSpec_preserves
-#print axioms Blanc.Weth10.processTransaction_preserves_stable
-#print axioms Blanc.Weth10.stateTransitionAt_preserves_stable
-#print axioms Blanc.Weth10.stateTransitionUsing_preserves_stable
-#print axioms Blanc.Weth10.stateTransition_preserves_stable
-#print axioms Blanc.Weth10.chainUsing_preserves_stable
-#print axioms Blanc.Weth10.chain_preserves_stable
-#print axioms Blanc.Weth10.addBlockToChainAt_preserves_stable
-#print axioms Blanc.Weth10.addBlockToChainUsing_preserves_stable
-#print axioms Blanc.Weth10.addBlockToChain_preserves_stable
-#print axioms Blanc.Weth10.Stable.solvent
-#print axioms Blanc.Weth10.chain_reachable_backed_and_flash_zero
-#print axioms Blanc.Weth10.processCreateMessage_establishes_stable
-#print axioms Blanc.Weth10.prepareCanonicalDeploymentContext
-#print axioms Blanc.Weth10.canonicalDeploymentMessage_succeeds
-#print axioms Blanc.Weth10.canonicalDeploymentTransaction_succeeds
-#print axioms Blanc.Weth10.canonicalDeploymentStep_establishes_root
-#print axioms Blanc.Weth10.DeploymentRoot.reflReach
-#print axioms Blanc.Weth10.DeploymentRoot.reachable_stable
-#print axioms Blanc.Weth10.DeploymentRoot.reachable_code
-#print axioms Blanc.Weth10.DeploymentRoot.reachable_flashZero
-#print axioms Blanc.Weth10.DeploymentRoot.reachable_solvent
-#print axioms Blanc.Xinst.step_call_nonzero_insufficient
-#print axioms Blanc.Xinst.step_call_nonzero_spawn
-#print axioms Blanc.Ninst.runCompiled_call_nonzero_codeFree
-#print axioms Blanc.Weth10.redemptionRuntimeCeiling_eq
-#print axioms Blanc.Weth10.NonSignatureRedemptionTxEnvelope.admissible_of_recoveredSender
-#print axioms Blanc.Weth10.Stable.bookedBalanceNat_le_contractEth
-#print axioms Blanc.Weth10.withdrawTo_exec
-#print axioms Blanc.Weth10.withdraw_exec
-#print axioms Blanc.Weth10.processMessageCall_eq_of_exec
-#print axioms Blanc.Weth10.Stable.messageRedemption_enabled_of_le
-#print axioms Blanc.Weth10.Stable.selfRedemption_enabled_of_le
-#print axioms Blanc.Weth10.AdmissibleRedemptionTx.processTransaction_eq_of_message
-#print axioms Blanc.Weth10.AdmissibleSelfRedemptionTx.processTransaction_eq_of_message
-#print axioms Blanc.Weth10.Stable.transactionRedemption_enabled_of_le
-#print axioms Blanc.Weth10.Stable.selfTransactionRedemption_enabled_of_le
-#print axioms Blanc.Weth10.outerOkWithFailedReceipt_not_redemptionEnabled
-#print axioms Blanc.Weth10.compiledBalanceSstoreReverseComplete
-#print axioms Blanc.Weth10.Exec.weth10BalanceSstoreClassification_of_mem_committedFrames
-#print axioms Blanc.Weth10.AccountedHistory.flash_pair_totals_eq
-#print axioms Blanc.Weth10.AccountedHistory.toReachUsing
-#print axioms Blanc.Weth10.exists_accountedHistory_of_reachUsing
-#print axioms Blanc.Weth10.AccountedHistory.weth10Flow_eq_of_appliedBlocks_eq
-#print axioms Blanc.Weth10.committedExecStorageSound
-#print axioms Blanc.Weth10.committedExecEthSound
-#print axioms Blanc.Weth10.AccountedHistory.noCommittedCreditWrap
-#print axioms Blanc.Weth10.AccountedHistory.holderCreditLoss_eq_zero
-#print axioms Blanc.Weth10.holderFlow_conserved
-#print axioms Blanc.Weth10.holderFlow_flash_cancelled
-#print axioms Blanc.Weth10.holderFlow_residual_floor
-#print axioms Blanc.Weth10.holderFlow_truncated_floor
-#print axioms Blanc.Weth10.holderFlow_withdrawal_floor
-#print axioms Blanc.Weth10.committedExecAllowanceSound
-#print axioms Blanc.Weth10.AccountedHistory.allowanceTransported_of_compiled
-#print axioms Blanc.Weth10.flashSettlement_allowanceEntryRead
-#print axioms Blanc.Weth10.committedExecAllowanceReadSound
-#print axioms Blanc.Weth10.AccountedHistory.allowanceTransportedSound_of_compiled
-#print axioms Blanc.Weth10.viewReadFrame_sameCaller_not_authorizing
-#print axioms Blanc.Weth10.hardenedOutflow_le_permanentOutflow
-#print axioms Blanc.Weth10.permanentOutflow_eq_hardenedOutflow_of_noCollision
-#print axioms Blanc.Weth10.holderFlow_hardened_floor
-#print axioms Blanc.Weth10.dormant_holder_balance_monotone
-#print axioms Blanc.Weth10.deployment_reachable_residual_messageRedemption_enabled
-#print axioms Blanc.Weth10.deployment_reachable_residual_transactionRedemption_enabled
-#print axioms Blanc.Weth10.deployment_reachable_residual_selfMessageRedemption_enabled
-#print axioms Blanc.Weth10.deployment_reachable_residual_selfTransactionRedemption_enabled
-#print axioms Blanc.Weth10.deployment_reachable_booked_messageRedemption_enabled
-#print axioms Blanc.Weth10.deployment_reachable_booked_transactionRedemption_enabled
-#print axioms Blanc.Weth10.deployment_reachable_booked_selfTransactionRedemption_enabled
-#print axioms Blanc.Weth10.deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSender
-#print axioms Blanc.Weth10.deployment_reachable_future_redeemable
-#print axioms Blanc.Weth10.deployment_reachable_future_dualSelector_redeemable
-#print axioms Blanc.Weth10.deployment_reachable_future_redeemable_allHolders
-#print axioms Blanc.Weth10.deploymentRoot_allowanceQuiescent
-#print axioms Blanc.Weth10.deployment_fullWindow_future_redeemable
-#print axioms Blanc.Weth10.deployment_fullWindow_attributionRootAt_ne_checkpoint
-#print axioms Blanc.Weth10.deployment_fullWindow_permanentOutflowAuthorization
-#print axioms Blanc.Weth10.deployment_fullWindow_hardenedOutflow_only_authorizingRoots
-#print axioms Blanc.Weth10.deployment_fullWindow_dormant_holder_balance_monotone
-#print axioms Blanc.Weth10.deployment_reachable_dormant_holder_balance_monotone
-#print axioms Blanc.Weth10.redeemClaims_anyOrder
-#print axioms Blanc.Weth10.redeemEveryoneList_anyOrder
-#print axioms Blanc.Weth10.deployment_reachable_redeemClaims_anyOrder
-#print axioms Blanc.Weth10.deployment_reachable_redeemEveryoneList_anyOrder
-#print axioms Blanc.Weth10.mainnet_rulesAt_eq_named
-#print axioms Blanc.Weth10.mainnet_rulesAt_eq_bpo2_of_ge
-#print axioms Blanc.Weth10.pragueRules_redemptionRuntimeCeiling_gasCap
-#print axioms Blanc.Weth10.osakaRules_redemptionRuntimeCeiling_gasCap
-#print axioms Blanc.Weth10.bpo1Rules_redemptionRuntimeCeiling_gasCap
-#print axioms Blanc.Weth10.bpo2Rules_redemptionRuntimeCeiling_gasCap
-#print axioms Blanc.Weth10.mainnet_checkTransactionGasCap_of_le
-#print axioms Blanc.Weth10.weth10CurrentMainnetCreation_rulesAt
-#print axioms Blanc.Weth10.canonicalMainnetBpo2DeploymentStep_establishes_root
-#print axioms Blanc.Weth10.chainUsing_preserves_stable_mainnet
-#print axioms Blanc.Weth10.chain_reachable_backed_and_flash_zero_mainnet
-#print axioms Blanc.Weth10.deployment_reachable_residual_messageRedemption_enabled_mainnet
-#print axioms Blanc.Weth10.deployment_reachable_residual_transactionRedemption_enabled_mainnet
-#print axioms Blanc.Weth10.deployment_reachable_residual_selfMessageRedemption_enabled_mainnet
-#print axioms Blanc.Weth10.deployment_reachable_residual_selfTransactionRedemption_enabled_mainnet
-#print axioms Blanc.Weth10.deployment_reachable_booked_messageRedemption_enabled_mainnet
-#print axioms Blanc.Weth10.deployment_reachable_booked_transactionRedemption_enabled_mainnet
-#print axioms Blanc.Weth10.deployment_reachable_booked_selfTransactionRedemption_enabled_mainnet
-#print axioms Blanc.Weth10.deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSender_mainnet
-#print axioms Blanc.Weth10.deployment_reachable_future_redeemable_mainnet
-#print axioms Blanc.Weth10.deployment_reachable_future_dualSelector_redeemable_mainnet
-#print axioms Blanc.Weth10.deployment_reachable_future_redeemable_allHolders_mainnet
-#print axioms Blanc.Weth10.deploymentRoot_allowanceQuiescent_mainnet
-#print axioms Blanc.Weth10.deployment_fullWindow_future_redeemable_mainnet
-#print axioms Blanc.Weth10.deployment_fullWindow_attributionRootAt_ne_checkpoint_mainnet
-#print axioms Blanc.Weth10.deployment_fullWindow_permanentOutflowAuthorization_mainnet
-#print axioms Blanc.Weth10.deployment_fullWindow_hardenedOutflow_only_authorizingRoots_mainnet
-#print axioms Blanc.Weth10.deployment_fullWindow_dormant_holder_balance_monotone_mainnet
-#print axioms Blanc.Weth10.deployment_reachable_dormant_holder_balance_monotone_mainnet
-#print axioms Blanc.Weth10.deployment_reachable_redeemClaims_anyOrder_mainnet
-#print axioms Blanc.Weth10.deployment_reachable_redeemEveryoneList_anyOrder_mainnet
-#print axioms Blanc.Weth10.AccountedHistory.flash_pair_totals_eq_mainnet
-#print axioms Blanc.Weth10.AccountedHistory.weth10Flow_eq_of_appliedBlocks_eq_mainnet
-#print axioms Blanc.Weth10.AccountedHistory.noCommittedCreditWrap_mainnet
-#print axioms Blanc.Weth10.AccountedHistory.holderCreditLoss_eq_zero_mainnet
-#print axioms Blanc.Weth10.holderFlow_conserved_mainnet
-#print axioms Blanc.Weth10.holderFlow_flash_cancelled_mainnet
-#print axioms Blanc.Weth10.holderFlow_residual_floor_mainnet
-#print axioms Blanc.Weth10.holderFlow_truncated_floor_mainnet
-#print axioms Blanc.Weth10.holderFlow_withdrawal_floor_mainnet
-#print axioms Blanc.Weth10.chainUsing_preserves_stable_prague
-#print axioms Blanc.Weth10.chain_reachable_backed_and_flash_zero_prague
-#print axioms Blanc.Weth10.deployment_reachable_residual_messageRedemption_enabled_prague
-#print axioms Blanc.Weth10.deployment_reachable_residual_transactionRedemption_enabled_prague
-#print axioms Blanc.Weth10.deployment_reachable_residual_selfMessageRedemption_enabled_prague
-#print axioms Blanc.Weth10.deployment_reachable_residual_selfTransactionRedemption_enabled_prague
-#print axioms Blanc.Weth10.deployment_reachable_booked_messageRedemption_enabled_prague
-#print axioms Blanc.Weth10.deployment_reachable_booked_transactionRedemption_enabled_prague
-#print axioms Blanc.Weth10.deployment_reachable_booked_selfTransactionRedemption_enabled_prague
-#print axioms Blanc.Weth10.deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSender_prague
-#print axioms Blanc.Weth10.deployment_reachable_future_redeemable_prague
-#print axioms Blanc.Weth10.deployment_reachable_future_dualSelector_redeemable_prague
-#print axioms Blanc.Weth10.deployment_reachable_future_redeemable_allHolders_prague
-#print axioms Blanc.Weth10.deploymentRoot_allowanceQuiescent_prague
-#print axioms Blanc.Weth10.deployment_fullWindow_future_redeemable_prague
-#print axioms Blanc.Weth10.deployment_fullWindow_attributionRootAt_ne_checkpoint_prague
-#print axioms Blanc.Weth10.deployment_fullWindow_permanentOutflowAuthorization_prague
-#print axioms Blanc.Weth10.deployment_fullWindow_hardenedOutflow_only_authorizingRoots_prague
-#print axioms Blanc.Weth10.deployment_fullWindow_dormant_holder_balance_monotone_prague
-#print axioms Blanc.Weth10.deployment_reachable_dormant_holder_balance_monotone_prague
-#print axioms Blanc.Weth10.deployment_reachable_redeemClaims_anyOrder_prague
-#print axioms Blanc.Weth10.deployment_reachable_redeemEveryoneList_anyOrder_prague
-#print axioms Blanc.Weth10.AccountedHistory.flash_pair_totals_eq_prague
-#print axioms Blanc.Weth10.AccountedHistory.weth10Flow_eq_of_appliedBlocks_eq_prague
-#print axioms Blanc.Weth10.AccountedHistory.noCommittedCreditWrap_prague
-#print axioms Blanc.Weth10.AccountedHistory.holderCreditLoss_eq_zero_prague
-#print axioms Blanc.Weth10.holderFlow_conserved_prague
-#print axioms Blanc.Weth10.holderFlow_flash_cancelled_prague
-#print axioms Blanc.Weth10.holderFlow_residual_floor_prague
-#print axioms Blanc.Weth10.holderFlow_truncated_floor_prague
-#print axioms Blanc.Weth10.holderFlow_withdrawal_floor_prague
-#print axioms Blanc.LidoCircuitBreaker.emptyWitness
-#print axioms Blanc.LidoCircuitBreaker.lidoCircuitBreakerCode_compile
-#print axioms Blanc.LidoCircuitBreaker.funcs_selectors_eq_runtimeEndpoints
-#print axioms Blanc.LidoCircuitBreaker.runtime_source_sstore_site_count
-#print axioms Blanc.LidoCircuitBreaker.runtime_source_tstore_site_count
-#print axioms Blanc.LidoCircuitBreaker.runtime_source_external_call_site_count
-#print axioms Blanc.LidoCircuitBreaker.sourceInventory_cardinalities
-#print axioms Blanc.LidoCircuitBreaker.enumeration_entry_sstore_free
-#print axioms Blanc.LidoCircuitBreaker.enumeration_writing_mutant_rejected
-#print axioms Blanc.LidoCircuitBreaker.abiEncodeConstructorArgs_length
-#print axioms Blanc.LidoCircuitBreaker.constructor_inventory_cardinalities
-#print axioms Blanc.LidoCircuitBreaker.creation_template_runtime_suffix
-#print axioms Blanc.LidoCircuitBreaker.full_create_input_length
-#print axioms Blanc.LidoCircuitBreaker.slot_toNat_of_region_payload_lt
-#print axioms Blanc.LidoCircuitBreaker.slot_injective_payload
-#print axioms Blanc.LidoCircuitBreaker.slot_ne_of_region_ne
-#print axioms Blanc.LidoCircuitBreaker.RegistryWitness.entries_length_le
-#print axioms Blanc.LidoCircuitBreaker.setPauser_sourceTrace_refines_model
-#print axioms Blanc.LidoCircuitBreaker.RegistryWitness.applySetPauserSourceTrace
-#print axioms Blanc.LidoCircuitBreaker.setPauser_zero_runCompiledTo_pausableZero_noRegistryWrite
-#print axioms Blanc.LidoCircuitBreaker.setPauser_run_extracts_sourceTrace
-#print axioms Blanc.LidoCircuitBreaker.setPauserKernel_run_of_exec
-#print axioms Blanc.LidoCircuitBreaker.setPauserKernel_exec_extracts_sourceTrace
-#print axioms Blanc.LidoCircuitBreaker.registerPauser_kernel_exec_preserves_registry
-#print axioms Blanc.LidoCircuitBreaker.registerAfterSet_runCompiledTo_preserves_registry
-#print axioms Blanc.LidoCircuitBreaker.pause_kernel_exec_reaches_pauseAfterSet
-#print axioms Blanc.LidoCircuitBreaker.registerPauser_settled_error_restores_registry
-#print axioms Blanc.LidoCircuitBreaker.pause_settled_error_restores_registry
-#print axioms Blanc.LidoCircuitBreaker.membershipEquivalence_registerPauser
-#print axioms Blanc.LidoCircuitBreaker.cleanStateAfterRemoval_registerPauser
-#print axioms Blanc.LidoCircuitBreaker.globalCountConservation_registerPauser
-#print axioms Blanc.LidoCircuitBreaker.pause_direct_postWrite_revert_settles_and_restores_registry
-#print axioms Blanc.LidoCircuitBreaker.directPause_zeroCode_postWrite_error_control
-#print axioms Blanc.LidoCircuitBreaker.getPausables_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.getPausables_noSstore_occurrence
-#print axioms Blanc.LidoCircuitBreaker.registryViews_coherent
-#print axioms Blanc.LidoCircuitBreaker.pauserSet_local_transition
-#print axioms Blanc.LidoCircuitBreaker.pauserSet_target_zero_no_success
-#print axioms Blanc.LidoCircuitBreaker.pauserSet_target_zero_error_logs_unchanged
-#print axioms Blanc.LidoCircuitBreaker.pauserSet_register_success
-#print axioms Blanc.LidoCircuitBreaker.pauserSet_register_success_committed
-#print axioms Blanc.LidoCircuitBreaker.pauserSet_settled_error_not_observable
-#print axioms Blanc.LidoCircuitBreaker.registryObservation_sound
-#print axioms Blanc.LidoCircuitBreaker.registryStable_iff_stateInv
-#print axioms Blanc.LidoCircuitBreaker.funcSound_of_storFixed
-#print axioms Blanc.LidoCircuitBreaker.funcSound_of_registryCore
-#print axioms Blanc.LidoCircuitBreaker.registrySpec_sound_of_funcSound
-#print axioms Blanc.LidoCircuitBreaker.funcSound_of_mem_funcs
-#print axioms Blanc.LidoCircuitBreaker.funcSound_of_mem_nonRegistry
-#print axioms Blanc.subcode_of_get?_eq_some_appended
-#print axioms Blanc.Prog.jumpable_of_get?_table_appended
-#print axioms Blanc.Func.exec_of_runCompiled_appended_core
-#print axioms Blanc.Prog.exec_of_runCompiled_appended
-#print axioms Blanc.Func.exec_of_runCompiledTo_appended_core
-#print axioms Blanc.Prog.exec_of_runCompiledTo_appended
-#print axioms Blanc.processCreateMessage_msg_getStor_currentTarget
-#print axioms Blanc.benvAfterTransfer_exists_zero
-#print axioms Blanc.benvAfterTransfer_stat
-#print axioms Blanc.processMessage_ok_of_exec
-#print axioms Blanc.processCreateMessage_ok_of_processMessage_and_charge
-#print axioms Blanc.processCreateMessage_ok_of_processMessage_error
-#print axioms Blanc.jauneListCompare_eq_compareLex
-#print axioms Blanc.processUncheckedSystemTransaction_deploymentSystemProgram
-#print axioms Blanc.processCheckedSystemTransaction_deploymentSystemProgram
-#print axioms Blanc.canonicalDeploymentSystemPrefix
-#print axioms Blanc.LidoCircuitBreaker.runtimeTemplateCode_length_exact
-#print axioms Blanc.LidoCircuitBreaker.constructor_immutable_word_offsets_exact
-#print axioms Blanc.LidoCircuitBreaker.provisionalConstructorPrefix_length_exact
-#print axioms Blanc.LidoCircuitBreaker.lidoCircuitBreakerConstructorProgram_compile
-#print axioms Blanc.LidoCircuitBreaker.lidoCircuitBreakerInitPrefix_length_exact
-#print axioms Blanc.LidoCircuitBreaker.patchRuntimeTemplate_official
-#print axioms Blanc.LidoCircuitBreaker.lidoCircuitBreakerCreationTemplate_length_exact
-#print axioms Blanc.LidoCircuitBreaker.officialFullCreateInput_eq_layout
-#print axioms Blanc.LidoCircuitBreaker.officialFullCreateInput_length_exact
-#print axioms Blanc.LidoCircuitBreaker.officialFullCreateInput_slice_constructorArgs
-#print axioms Blanc.LidoCircuitBreaker.officialFullCreateInput_slice_runtimeTemplate
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorEventScratch_eq
-#print axioms Blanc.LidoCircuitBreaker.constructorBody_official_eq
-#print axioms Blanc.LidoCircuitBreaker.lidoCircuitBreakerConstructorProgram_main_official
-#print axioms Blanc.LidoCircuitBreaker.lidoCircuitBreakerConstructorProgram_aux_official
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorTableCallIndices_exact
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorDecodedMemory_read_argument
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorDecodedMemory_size
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorDecodedMemory_read_memory
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorCopiedMemory_size
-#print axioms Blanc.LidoCircuitBreaker.ConstructorPatchInvariant.read_argument
-#print axioms Blanc.LidoCircuitBreaker.ConstructorPatchInvariant.read_memory
-#print axioms Blanc.LidoCircuitBreaker.constructorPatchPair_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.ConstructorPatchInvariant.runCompiled_write
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPatchLine1_4_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPatchLine5_8_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPatchLine9_12_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPatchMemory12_eq_patched
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPatchedMemory_size
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPatchedMemory_wf
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPatchedMemory_reads
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPatchedMemory_read_argument
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPauseZeroMemory_wf
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPauseZeroMemory_reads
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPauseZeroMemory_size
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPauseZeroMemory_read_argument
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPauseZeroMemory_read_argument_memory
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPauseMemory_wf
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPauseMemory_reads
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPauseMemory_size
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPauseMemory_read_argument
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPauseMemory_read_argument_memory
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatZeroMemory_wf
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatZeroMemory_reads
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatZeroMemory_size
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatZeroMemory_read_argument
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatZeroMemory_read_argument_memory
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatMemory_wf
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatMemory_reads
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatMemory_size
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatMemory_read_argument
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatMemory_read_argument_memory
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatMemory_eq_final
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorFinalMemory_size
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorFinalMemory_reads
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorFinalMemory_read_runtime
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorFinalMemory_read
-#print axioms Blanc.LidoCircuitBreaker.Bytes.sliceD_writeAt_pair
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPatchedMemory_read_initializedData
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPatchedMemory_read_initializedMemory
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorColdStore_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatLoggedBase_getStor
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPauseLoggedBase_accessedStorageKeys
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPauseLoggedBase_getStorVal
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatLoggedBase_accessedStorageKeys
-#print axioms Blanc.LidoCircuitBreaker.not_mem_hashSet_insert
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorEffectBase_getStor
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorEffectBase_logs
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorEffectBase_state
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorEffectBase_refundCounter
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorEffectBase_returnData
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorEffectBase_error
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorEffectBase_accountsToDelete
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorEffectBase_createdAccounts
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorEffectBase_accessedAddresses
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorEffectBase_transientStorage
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorEffectBase_accessedStorageKeys
-#print axioms Blanc.LidoCircuitBreaker.constructorArgumentSstorePrefix_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.constructorEventLog1Opcode_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.constructorEventLog1Prefix_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.constructorArgumentMstorePrefix_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.constructorZeroMstorePrefix_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.constructorEventLog2Opcode_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.constructorArgumentLog2Prefix_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPost_eq
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorReturnLine_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorReturn_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPost_getStor
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPost_pauseDuration
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPost_heartbeatInterval
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPost_logs
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPost_stack
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPost_memory
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPost_gasLeft
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPost_output
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatSstore_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatStoreLine_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatLogOpcode_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatLogLine_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatScratchValue_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatScratchZero_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatScratchLine_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatSuffix_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPauseStoreLine_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPauseLogLine_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPauseScratchValue_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPauseScratchZero_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPauseScratchLine_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorConfigurationSuffix_eq_prefix
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorConfigurationSuffix_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorInitializedLogOpcode_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorInitializedLogLine_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorCopyPatch_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorEffectBody_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorValidationPrefix_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorProgram_runCompiled_fresh
-#print axioms Blanc.LidoCircuitBreaker.officialConstructor_exec_fresh
-#print axioms Blanc.LidoCircuitBreaker.officialCodeDepositGas_eq
-#print axioms Blanc.LidoCircuitBreaker.officialCreateMessageGasAccounting_eq
-#print axioms Blanc.LidoCircuitBreaker.prepareCanonicalDeploymentContext
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPost_state
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPost_refundCounter
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPost_returnData
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPost_error
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPost_accountsToDelete
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPost_createdAccounts
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPost_accessedAddresses
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPost_accessedStorageKeys
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPost_transientStorage
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPost_effectCheckpoints
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorErrorArmLayout
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorExecutionTrace_fresh
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPost_emptyRegistryWitness
-#print axioms Blanc.LidoCircuitBreaker.officialConstructorPost_registryCoherent
-#print axioms Blanc.LidoCircuitBreaker.lidoCircuitBreakerCode_official_length
-#print axioms Blanc.LidoCircuitBreaker.lidoCircuitBreakerCode_official_cons
-#print axioms Blanc.LidoCircuitBreaker.processCreateMessage_establishes_officialRegistryStable
-#print axioms Blanc.LidoCircuitBreaker.processMessageCall_establishes_officialRegistryStable
-#print axioms Blanc.LidoCircuitBreaker.canonicalDeploymentTransaction_succeeds
-#print axioms Blanc.LidoCircuitBreaker.canonicalDeploymentSuffix_succeeds
-#print axioms Blanc.LidoCircuitBreaker.canonicalDeploymentApplyBody_succeeds
-#print axioms Blanc.LidoCircuitBreaker.canonicalDeploymentStep_establishes_root
-#print axioms Blanc.LidoCircuitBreaker.DeploymentRoot.reflReach
-#print axioms Blanc.LidoCircuitBreaker.DeploymentRoot.reachable_registryStable
-#print axioms Blanc.LidoCircuitBreaker.DeploymentRoot.reachable_code
-#print axioms Blanc.LidoCircuitBreaker.DeploymentRoot.reachable_installedCode
-#print axioms Blanc.LidoCircuitBreaker.DeploymentRoot.reachable_witness
-#print axioms Blanc.LidoCircuitBreaker.DeploymentRoot.reachable_membership
-#print axioms Blanc.LidoCircuitBreaker.DeploymentRoot.reachable_countConservation
-#print axioms Blanc.Exec.committedCell_eq_of_noRetainedWriteTo
-#print axioms Blanc.Exec.Deriv.ParentStep.sevm_eq
-#print axioms Blanc.Exec.Deriv.ParentPrefix.sevm_eq
-#print axioms Blanc.Exec.noRetainedWriteTo_of_no_execOccurrence
-#print axioms Blanc.Exec.noRetainedWriteTo_of_frame_owners_ne
-#print axioms Blanc.Exec.noRetainedWriteTo_of_sourceSites_no_exec
-#print axioms Blanc.Func.RunCompiledTo.RouteTo.enteredFunction_of_ne
-#print axioms Blanc.runCompiledTo_next_elim
-#print axioms Blanc.runCompiledTo_line_elim
-#print axioms Blanc.runCompiledTo_call_elim
-#print axioms Blanc.runCompiledTo_branchLeft_frame_elim
-#print axioms Blanc.runCompiledTo_branchRight_frame_elim
-#print axioms Blanc.LidoCircuitBreaker.pauseCall_boundary_with_execution
-#print axioms Blanc.LidoCircuitBreaker.pauseStat_boundary_with_execution
-#print axioms Blanc.LidoCircuitBreaker.pauseCallStaging_boundary_operands
-#print axioms Blanc.LidoCircuitBreaker.pauseStatStaging_boundary_operands
-#print axioms Blanc.LidoCircuitBreaker.pauseStatStaging_boundary_calldata
-#print axioms Blanc.LidoCircuitBreaker.pauseLockTest_word
-#print axioms Blanc.LidoCircuitBreaker.pauseAssignedTest_word
-#print axioms Blanc.LidoCircuitBreaker.pauseLiveTest_word
-#print axioms Blanc.LidoCircuitBreaker.pause_to_setPauserCall_any
-#print axioms Blanc.LidoCircuitBreaker.pause_routeTo_setPauserCall_any
-#print axioms Blanc.LidoCircuitBreaker.dispatch_to_pause_transient
-#print axioms Blanc.LidoCircuitBreaker.dispatch_routeTo_pause_transient
-#print axioms Blanc.LidoCircuitBreaker.runtimeMain_to_pauseKernel_any
-#print axioms Blanc.LidoCircuitBreaker.runtimeMain_routeTo_pauseKernel_any
-#print axioms Blanc.LidoCircuitBreaker.setPauserKernel_to_pauseAfterSet_any
-#print axioms Blanc.LidoCircuitBreaker.setPauserKernel_routeTo_pauseAfterSetCall_any
-#print axioms Blanc.LidoCircuitBreaker.pauseSuccess_ok_getStorVal_eq_of_ne
-#print axioms Blanc.LidoCircuitBreaker.pauseSuccess_ok_getStor_eq_of_owner_ne
-#print axioms Blanc.LidoCircuitBreaker.MemWordAt.acrossPauseCallStagingBoundary
-#print axioms Blanc.LidoCircuitBreaker.MemWordAt.acrossPauseStatStagingBoundary
-#print axioms Blanc.LidoCircuitBreaker.pauseAfterSet_codeGuard_arms_windows
-#print axioms Blanc.LidoCircuitBreaker.pauseAfterCall_arms_windows
-#print axioms Blanc.LidoCircuitBreaker.pauseAfterCall_ok_depth_ne_zero
-#print axioms Blanc.LidoCircuitBreaker.PublicPauseEntryPremises.removePreservesCount
-#print axioms Blanc.LidoCircuitBreaker.publicPause_reaches_pauseAfterSet
-#print axioms Blanc.LidoCircuitBreaker.pauseAfterSet_boundary_committed_outcomes
-#print axioms Blanc.LidoCircuitBreaker.publicPause_committed_outcomes
-#print axioms Blanc.LidoCircuitBreaker.pauseLastWorld_publicPausePremises
-#print axioms Blanc.LidoCircuitBreaker.pauseLastWorld_publicPauseReach
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.stubProgram_compiles
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.stubProgram_compile
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.stubProgram_pcFree
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.stubProgram_sourceSites_no_exec
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.stub_pauseFor_effect
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.stub_isPaused_truthful
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.stub_lidoPinnedPauseTarget
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.stub_successful_pause_composition
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.benignCallProgram_compiles
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.benignCallProgram_compile
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.benignCall_nonchildless_noninterference
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.wrongBoolProgram_compiles
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.wrongBoolProgram_compile
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.wrongBoolProgram_pcFree
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.wrongBool_paused_query_execution
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.wrongBoolProgram_truthfulness_falsifier
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.wrongBoolReturnShape_falsifier
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.retainedWriteChildProgram_compiles
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.retainedWriteProgram_compiles
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.retainedWriteChildProgram_compile
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.retainedWriteProgram_compile
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.retainedWrite_distinctTarget_descendant_falsifier
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.retainedWriteProgram_noninterference_falsifier
-#print axioms Blanc.LidoCircuitBreaker.observation_ok_getStorVal_eq_of_ne
-#print axioms Blanc.LidoCircuitBreaker.observation_ok_getStor_eq_of_owner_ne
-#print axioms Blanc.LidoCircuitBreaker.stubBoundaryExecutions_of_afterSet_ok
-#print axioms Blanc.LidoCircuitBreaker.publicPause_pinnedTarget
-#print axioms Blanc.LidoCircuitBreaker.publicPause_stubPinnedTarget
-#print axioms Blanc.LidoCircuitBreaker.publicPause_stub_committed_outcomes
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.wrongBoolFixture_nonempty
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPausePost_logs
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPausePost_refundCounter
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPausePost_accountsToDelete
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPausePost_accessedAddresses
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPausePost_accessedStorageKeys
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPausePost_transientStorage
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPausePost_state
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPause_cold_runCompiledTo
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubQuery_true_warm_runCompiledTo
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubMain_pause_cold_runCompiledTo
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubMain_query_true_warm_runCompiledTo
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubProgram_pause_cold_runCompiledTo
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubProgram_query_true_warm_runCompiledTo
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.sliceD_stagedCalldata
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.sliceD_stagedSelector
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPause_exec
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubQuery_exec
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.pauseAfterSet_stub_toSuccess_runCompiled
-#print axioms Blanc.LidoCircuitBreaker.stubPauseWorldState_get_breaker
-#print axioms Blanc.LidoCircuitBreaker.stubPauseWorldState_get_target
-#print axioms Blanc.LidoCircuitBreaker.stubPauseWorld_targetCode
-#print axioms Blanc.LidoCircuitBreaker.stubPauseWorld_codeBytes
-#print axioms Blanc.LidoCircuitBreaker.stubPauseWorld_currentTarget
-#print axioms Blanc.LidoCircuitBreaker.stubPauseWorld_callerWord
-#print axioms Blanc.LidoCircuitBreaker.stubPauseWorld_getStorVal
-#print axioms Blanc.LidoCircuitBreaker.stubPauseWorld_targetCodeAt
-#print axioms Blanc.LidoCircuitBreaker.stubPauseWorld_publicPausePremises
-#print axioms Blanc.LidoCircuitBreaker.stubPauseWorld_target_ne_owner
-#print axioms Blanc.LidoCircuitBreaker.stubPauseWorld_closedPublicPause
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.benignCallFixture_nonempty
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.benignCall_nonchildless_noninterference_closed
-#print axioms Blanc.ProxyPair.implementationSlotLit_eq_slot
-#print axioms Blanc.ProxyPair.proxyProg_compiles
-#print axioms Blanc.ProxyPair.proxyProg_compile
-#print axioms Blanc.ProxyPair.proxyBytes_length
-#print axioms Blanc.ProxyPair.proxyCode_notDelegation
-#print axioms Blanc.ProxyPair.implGuardedProg_compiles
-#print axioms Blanc.ProxyPair.implGuardedProg_compile
-#print axioms Blanc.ProxyPair.implGuardedBytes_length
-#print axioms Blanc.ProxyPair.implGuardedCode_notDelegation
-#print axioms Blanc.ProxyPair.implSlot_ne_implementationSlot
-#print axioms Blanc.ProxyPair.implSlot_ne_adminSlot
-#print axioms Blanc.ProxyPair.implSlot_ne_beaconSlot
-#print axioms Blanc.ProxyPair.implementationSlot_ne_implSlot
-#print axioms Blanc.ProxyPair.adminSlot_ne_implSlot
-#print axioms Blanc.ProxyPair.beaconSlot_ne_implSlot
-#print axioms Blanc.ProxyPair.implBodyGas_eq
-#print axioms Blanc.ProxyPair.implGuardedSuccessGas_eq
-#print axioms Blanc.ProxyPair.implGuardedRevertGas_eq
-#print axioms Blanc.ProxyPair.implGuardedSuccessEntryGas_eq
-#print axioms Blanc.ProxyPair.implGuardedRevertEntryGas_eq
-#print axioms Blanc.ProxyPair.implSuccess_runCompiledTo
-#print axioms Blanc.ProxyPair.implGuarded_runCompiledTo_nonzero
-#print axioms Blanc.ProxyPair.implGuarded_runCompiledTo_zero
-#print axioms Blanc.ProxyPair.implGuarded_static_sstore_halt
-#print axioms Blanc.ProxyPair.implGuarded_static_halt_exec
-#print axioms Blanc.ProxyPair.proxyAdr_ne_implAdr
-#print axioms Blanc.ProxyPair.pairState_proxyAcct
-#print axioms Blanc.ProxyPair.pairState_implAcct
-#print axioms Blanc.ProxyPair.pairState_proxyCode
-#print axioms Blanc.ProxyPair.pairState_implCode
-#print axioms Blanc.ProxyPair.pairState_proxySlot
-#print axioms Blanc.ProxyPair.pairState_implSlot_zero
-#print axioms Blanc.ProxyPair.pairState_proxyImplSlot_zero
-#print axioms Blanc.ProxyPair.successData_length
-#print axioms Blanc.ProxyPair.revertData_length
-#print axioms Blanc.ProxyPair.proxy_call_gas_split
-#print axioms Blanc.ProxyPair.pairBenv_impl_not_precompile
-#print axioms Blanc.ProxyPair.proxyMsgSuccess_code
-#print axioms Blanc.ProxyPair.proxyMsgRevert_code
-#print axioms Blanc.ProxyPair.proxyMsgSuccess_data
-#print axioms Blanc.ProxyPair.proxyMsgRevert_data
-#print axioms Blanc.ProxyPair.proxyMsgSuccess_gas
-#print axioms Blanc.ProxyPair.proxyMsgRevert_gas
-#print axioms Blanc.ProxyPair.proxyMsgSuccess_target
-#print axioms Blanc.ProxyPair.proxyMsgRevert_target
-#print axioms Blanc.ProxyPair.proxyMsgSuccess_caller
-#print axioms Blanc.ProxyPair.proxyMsgRevert_caller
-#print axioms Blanc.ProxyPair.proxyFallback_eq_prefix
-#print axioms Blanc.ProxyPair.proxySuccessChildMsg_exec
-#print axioms Blanc.ProxyPair.proxyProg_success_runCompiledTo
-#print axioms Blanc.ProxyPair.proxyRevertChildMsg_exec
-#print axioms Blanc.ProxyPair.proxyProg_revert_runCompiledTo
-#print axioms Blanc.ProxyPair.forwardBudgetWitness_27224
-#print axioms Blanc.ProxyPair.forwardBudget_27224
-#print axioms Blanc.ProxyPair.proxyCorrespondenceMsg_premises
-#print axioms Blanc.ProxyPair.processMessage_correspondence_premises_satisfiable
-#print axioms Blanc.ProxyPair.processMessage_correspondence
-#print axioms Blanc.ProxyPair.processMessage_static_halt_to_revert
-#print axioms Blanc.ProxyPair.processMessage_property_transport
-#print axioms Blanc.ProxyPair.settledObservable_rejects_direct_clean_proxy_error
-#print axioms Blanc.ProxyPair.settledObservable_rejects_direct_error_proxy_clean
-#print axioms Blanc.ProxyPair.settledObservable_rejects_output_mismatch
-#print axioms Blanc.ProxyPair.settledObservable_rejects_outer_ok_error
-#print axioms Blanc.ProxyPair.settledObservable_rejects_outer_error_ok
-#print axioms Blanc.ProxyPair.settledObservable_rejects_reverse_revert_halt
-#print axioms Blanc.ProxyPair.proxy_entrySstoreFree
-#print axioms Blanc.ProxyPair.implGuarded_entrySstoreFree_rejected
-#print axioms Blanc.ProxyPair.proxyProg_success_successfulSstore_sourceSite
-#print axioms Blanc.ProxyPair.proxyProg_revert_successfulSstore_sourceSite
-#print axioms Blanc.ProxyPair.ossifiableCreateMessageGas_eq
-#print axioms Blanc.ProxyPair.ossifiableConstructorProgram_canonicalEmptyInput_runCompiled
-#print axioms Blanc.ProxyPair.ossifiableConstructorProgram_canonicalEmptyInput_forward_exact
-#print axioms Blanc.ProxyPair.processCreateMessage_ossifiable_emptySetup_success
-#print axioms Blanc.ProxyPair.ossifiableConstructorProgram_nonempty_success
-#print axioms Blanc.ProxyPair.processCreateMessage_ossifiable_failure_rollback
-#print axioms Blanc.ProxyPair.OssifiableCreateFixture.message_code
-#print axioms Blanc.ProxyPair.OssifiableCreateFixture.implementation_code
-#print axioms Blanc.ProxyPair.OssifiableCreateFixture.message_success
-#print axioms Blanc.ProxyPair.OssifiableBothSlotFixture.setupMain_compile
-#print axioms Blanc.ProxyPair.OssifiableBothSlotFixture.setupMain_runCompiledTo
-#print axioms Blanc.ProxyPair.OssifiableBothSlotFixture.message_success
-#print axioms Blanc.ProxyPair.OssifiableBothSlotCreateFixture.program_success
-#print axioms Blanc.ProxyPair.OssifiableBothSlotCreateFixture.bothSlotCreateMessageGas_eq
-#print axioms Blanc.ProxyPair.OssifiableBothSlotCreateFixture.creationMessage_code
-#print axioms Blanc.ProxyPair.OssifiableBothSlotCreateFixture.creationMessage_success
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.lidoTwgCode_compile
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.abiEncodeConstructorArgs_length
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.creation_template_runtime_suffix
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.full_create_input_length
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.pauseFor_absent_role_reverts
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.pauseUntil_absent_role_reverts
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.resume_absent_role_reverts
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.setExitRequestLimit_absent_role_reverts
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.grantRole_absent_role_reverts
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.revokeRole_absent_role_reverts
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.triggerFullWithdrawals_absent_role_reverts
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.triggerFullWithdrawals_authorized_paused_reverts
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.triggerFullWithdrawals_reaches_afterValidation
-#print axioms Blanc.prorataCode_compile
-#print axioms Blanc.Prorata.classify_prorata_exec_route
-#print axioms Blanc.Prorata.classify_prorata_exec_success
-#print axioms Blanc.Prorata.prorata_deposit_exec_effect
-#print axioms Blanc.Prorata.prorata_withdraw_exec_effect
-#print axioms Blanc.Prorata.prorata_convertToShares_exec_effect
-#print axioms Blanc.Prorata.prorata_convertToAssets_exec_effect
-#print axioms Blanc.Prorata.prorata_convertToShares_eq_deposit_mint
-#print axioms Blanc.Prorata.prorata_convertToAssets_eq_withdraw_pay
-#print axioms Blanc.Prorata.deposit_effect
-#print axioms Blanc.Prorata.withdraw_settles_before_call
-#print axioms Blanc.Prorata.withdraw_pays_exactly
-#print axioms Blanc.Prorata.convertToShares_effect
-#print axioms Blanc.Prorata.convertToAssets_effect
-#print axioms Blanc.Prorata.convertToShares_eq_deposit_mint
-#print axioms Blanc.Prorata.convertToAssets_eq_withdraw_pay
-#print axioms Blanc.Prorata.deposit_quote_toNat
-#print axioms Blanc.Prorata.withdraw_quote_toNat
-#print axioms Blanc.Prorata.mintN_never_overmints
-#print axioms Blanc.Prorata.payN_never_overpays
-#print axioms Blanc.Prorata.payN_le_balance
-#print axioms Blanc.Prorata.Inv.withdraw_pay_word_le_balance
-#print axioms Blanc.Prorata.deposit_price_nondecreasing
-#print axioms Blanc.Prorata.withdraw_price_nondecreasing
-#print axioms Blanc.Prorata.withdraw_ceil_shares_covers_assets
-#print axioms Blanc.Prorata.deposit_floor_shares_ceil_assets_le
-#print axioms Blanc.Prorata.mintN_residue_eq
-#print axioms Blanc.Prorata.payN_residue_eq
-#print axioms Blanc.Prorata.roundtrip_dust_eq
-#print axioms Blanc.Prorata.immediate_roundtrip_loss_le
-#print axioms Blanc.Prorata.prorataSpec_sound
-#print axioms Blanc.Prorata.prorataSpec_preserves
-#print axioms Blanc.Prorata.DeploymentRoot.reachable_stateInv
-#print axioms Blanc.Prorata.DeploymentRoot.reachable_accountingInvariant
-#print axioms Blanc.Prorata.ProrataAccountingPath.prorata_dust_trace_exact
-#print axioms Blanc.Prorata.retainedMessageCallAccountingReplay
-#print axioms Blanc.Prorata.retainedTransactionAccountingReplay
-#print axioms Blanc.Prorata.retainedTransactionListAccountingReplay
-#print axioms Blanc.Prorata.retainedSystemMessageAccountingReplay
-#print axioms Blanc.Prorata.retainedRequestsAccountingReplay
-#print axioms Blanc.Prorata.retainedDirectWithdrawalAccountingReplay
-#print axioms Blanc.Prorata.retainedBodyAccountingReplay
-#print axioms Blanc.Prorata.retainedConfiguredBlockAccountingReplay
-#print axioms Blanc.Prorata.retainedConfiguredHistoryAccountingReplay
-#print axioms Blanc.Prorata.ProrataTraceRealizes.toReachUsing
-#print axioms Blanc.Prorata.ProrataTraceRealizes.toAccountingReplay
-#print axioms Blanc.Prorata.prorataTraceRealizes_exists_of_reachUsing
-#print axioms Blanc.Prorata.prorata_realized_dust_trace_exact
-#print axioms Blanc.Prorata.attacker_open_context
-#print axioms Blanc.Prorata.attacker_no_profit
-#print axioms Blanc.Prorata.victim_loss_bound
-#print axioms Blanc.Composition.ProrataWethVault.weth_approve_compiled_raw_effect
-#print axioms Blanc.Composition.ProrataWethVault.foreign_approve_preserves_vault_allowance
-#print axioms Blanc.Composition.ProrataWethVault.Source.totalAssetsResources_of_run
-#print axioms Blanc.Composition.ProrataWethVault.readTotalAssets_capacity_body_effect
-#print axioms Blanc.Composition.ProrataWethVault.maxMint_body_effect
-#print axioms Blanc.Composition.ProrataWethVault.maxDeposit_body_effect
-#print axioms Blanc.Composition.ProrataWethVault.maxWithdraw_body_effect
-#print axioms Blanc.Composition.ProrataWethVault.maxMint_compiled_effect
-#print axioms Blanc.Composition.ProrataWethVault.maxDeposit_compiled_effect
-#print axioms Blanc.Composition.ProrataWethVault.maxWithdraw_compiled_effect
-#print axioms Blanc.Composition.ProrataWethVault.maxMint_compiled_effect_stable
-#print axioms Blanc.Composition.ProrataWethVault.maxDeposit_compiled_effect_stable
-#print axioms Blanc.Composition.ProrataWethVault.maxWithdraw_compiled_effect_exact
-#print axioms Blanc.Composition.ProrataWethVault.deposit_compiled_effect
-#print axioms Blanc.Composition.ProrataWethVault.mint_compiled_effect
-#print axioms Blanc.Composition.ProrataWethVault.withdraw_compiled_effect
-#print axioms Blanc.Composition.ProrataWethVault.redeem_compiled_effect
-#print axioms Blanc.ProrataWethVault.approve_compiled_effect
-#print axioms Blanc.ProrataWethVault.transfer_compiled_effect
-#print axioms Blanc.ProrataWethVault.transferFrom_compiled_effect
-#print axioms Blanc.ProrataWethVault.roundtrip_loss_le
-#print axioms Blanc.ProrataWethVault.redemption_le_assets
-#print axioms Blanc.ProrataWethVault.victim_loss_le
-#print axioms Blanc.ProrataWethVault.victim_loss_le_over_history
-#print axioms Blanc.ProrataWethVault.dust_trace_exact
-#print axioms Blanc.ProrataWethVault.depositStep
-#print axioms Blanc.ProrataWethVault.redeemStep
-#print axioms Blanc.ProrataWethVault.donationStep
-#print axioms Blanc.ProrataWethVault.two_le_offsetN
-#print axioms Blanc.ProrataWethVault.attacker_open_context
-#print axioms Blanc.ProrataWethVault.attacker_no_profit
-#print axioms Blanc.ProrataWethVault.victim_loss_bound
-#print axioms Blanc.ProrataWethVault.attack_carrier_inhabited
-#print axioms Blanc.ProrataWethVault.transferStaged_storesOrHalts
-#print axioms Blanc.ProrataWethVault.withdrawBurn_storesOrHalts
-#print axioms Blanc.ProrataWethVault.redeemBurn_storesOrHalts
-#print axioms Blanc.ProrataWethVault.callWethTransferFrom_storesOrHalts
-#print axioms Blanc.ProrataWethVault.finishInbound_storesOrHalts
-#print axioms Blanc.ProrataWethVault.inboundAfterQuote_storesOrHalts
-#print axioms Blanc.ProrataWethVault.depositAfterQuote_storesOrHalts
-#print axioms Blanc.ProrataWethVault.mintAfterQuote_storesOrHalts
-#print axioms Blanc.ProrataWethVault.depositAfterQuote_not_static
-#print axioms Blanc.ProrataWethVault.mintAfterQuote_not_static
-#print axioms Blanc.ProrataWethVault.mint_never_overmints
-#print axioms Blanc.ProrataWethVault.withdraw_never_overpays
-#print axioms Blanc.Frame.enter_run_benvStat
-#print axioms Blanc.RunFrame.benvStat_eq
-#print axioms Blanc.genericCall.step_spawn_benvStat
-#print axioms Blanc.genericCreate.step_spawn_benvStat
-#print axioms Blanc.Xinst.step_spawn_benvStat
-#print axioms Blanc.Composition.ProrataWethVault.vault_rely_preserves_conserved
-#print axioms Blanc.Composition.ProrataWethVault.vault_rely_preserves
-#print axioms Blanc.Composition.ProrataWethVault.inboundEffect_accountingStep
-#print axioms Blanc.Composition.ProrataWethVault.outboundEffect_accountingStep
-#print axioms Blanc.Composition.ProrataWethVault.silent_accountingStep
-#print axioms Blanc.Composition.ProrataWethVault.transferEffect_accountingStep
-#print axioms Blanc.Composition.ProrataWethVault.approveEffect_accountingStep
-#print axioms Blanc.Composition.ProrataWethVault.silent_accountingStep_of_view
-#print axioms Blanc.Composition.ProrataWethVault.readOnlyEffect_accountingStep
-#print axioms Blanc.Composition.ProrataWethVault.transferFromEffect_accountingStep
-#print axioms Blanc.Composition.ProrataWethVault.nonflow_message_accountingStep
-#print axioms Blanc.Composition.ProrataWethVault.deposit_compiled_effect_named
-#print axioms Blanc.Composition.ProrataWethVault.deposit_message_accountingStep
-#print axioms Blanc.Composition.ProrataWethVault.redeem_compiled_effect_named
-#print axioms Blanc.Composition.ProrataWethVault.redeem_message_accountingStep
-#print axioms Blanc.Composition.ProrataWethVault.SteppedMessages.toPath
-#print axioms Blanc.Composition.ProrataWethVault.SteppedMessages.victim_loss_le
-#print axioms Blanc.Composition.ProrataWethVault.PairBacked.donation
-#print axioms Blanc.Prorata.ProrataAccountingPath.priceLe_first_last
-#print axioms Blanc.Composition.ProrataWethVault.vault_message_preserves_conserved
-#print axioms Blanc.Composition.ProrataWethVault.vault_nonflow_message_preserves_conserved
-#print axioms Blanc.Composition.ProrataWethVault.ConfiguredRoot.conserved
-#print axioms Blanc.Composition.ProrataWethVault.ConfiguredRoot.backed
-#print axioms Blanc.Composition.ProrataWethVault.ConfiguredMessages.preserves_conserved
-#print axioms Blanc.Composition.ProrataWethVault.ConfiguredRoot.chain_conserved
-#print axioms Blanc.Composition.ProrataWethVault.wethFrame_vaultRow_classified
-#print axioms Blanc.Composition.ProrataWethVault.WethFrameClass.classification_sound
-#print axioms Blanc.Composition.ProrataWethVault.WethFrameClass.classification_complete
-#print axioms Blanc.Composition.ProrataWethVault.WethFrameClass.classification_total
-#print axioms Blanc.Drip.history_accounting_exact
-#print axioms Blanc.Drip.history_balance_exact
-#print axioms Blanc.Drip.history_entitlement
-#print axioms Blanc.Drip.history_chi_rho_mono
-#print axioms Blanc.Drip.concreteHistory_realizes
-#print axioms Blanc.Composition.ProrataWethVault.pair_reachable_backed_or_debit
-#print axioms Blanc.Composition.ProrataWethVault.pair_reachable_stable
-#print axioms Blanc.Composition.ProrataWethVault.pair_reachable_backed
-#print axioms Blanc.Composition.ProrataWethVault.PairTraceRealizes.authorizedDebit_zero
-#print axioms Blanc.Composition.ProrataWethVault.pair_realized_dust_trace_exact
-#print axioms Blanc.Composition.ProrataWethVault.pair_attacker_open_context
-#print axioms Blanc.Composition.ProrataWethVault.pair_attacker_no_profit
-#print axioms Blanc.Composition.ProrataWethVault.pair_attacker_no_profit_of_no_share_gifts
-#print axioms Blanc.Composition.ProrataWethVault.pair_victim_loss_bound
-#print axioms Blanc.Composition.ProrataWethVault.pair_victim_loss_bound_of_trace
-#print axioms Blanc.Composition.ProrataWethVault.pair_history_backed
-#print axioms Blanc.Composition.ProrataWethVault.pair_history_stable
-#print axioms Blanc.Composition.ProrataWethVault.pair_history_realized_dust_trace_exact
-#print axioms Blanc.Composition.ProrataWethVault.pair_history_attacker_open_context
-#print axioms Blanc.Composition.ProrataWethVault.pair_history_victim_loss_bound
-#print axioms Blanc.Drip.dripTraceRealizes_exists_of_reachUsing
-#print axioms Blanc.Drip.DripTraceRealizes.toReachUsing
-#print axioms Blanc.Drip.concreteHistory_not_draftedKinds
-#print axioms Blanc.Composition.ProrataWethVault.pair_attack_carrier_inhabited
-#print axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.nilOfEq
-#print axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.silentReplay
-#print axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.ofStorageEqBalanceMono
-#print axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.processMessage_of_body
-#print axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.processCreateMessage_of_body
-#print axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.xinstForeignSome
-#print axioms Blanc.ExecutionAccountingReplay.balanceEntry_eq_ofState
-#print axioms Blanc.ExecutionAccountingReplay.ProcessMessage.targetBalanceCredits_of_body
-#print axioms Blanc.ExecutionAccountingReplay.targetBalanceCredits_of_balance_mono
-#print axioms Blanc.Exec.Deriv.SourceCursor.branchFlagToward
-#print axioms Blanc.Exec.Deriv.SourceCursor.Toward.selectBranchZero
-#print axioms Blanc.Func.localExecFree_iff
-#print axioms Blanc.Prog.componentExecFree_iff
-#print axioms Blanc.Prog.reachableExecFree_iff
-#print axioms Blanc.Exec.Deriv.SourceCursor.Toward.linearDispatchWith_selectedBody
-#print axioms Blanc.Exec.Deriv.SourceCursor.noExec_of_reachableExecFree
-#print axioms Blanc.Exec.noExecOccurrence_of_no_sameFrame_execAt
-#print axioms Blanc.Exec.noRetainedWriteTo_of_no_sameFrame_execAt
-#print axioms Blanc.Exec.noExecOccurrence_of_exactMain_reachableExecFree
-#print axioms Blanc.Exec.noRetainedWriteTo_of_exactMain_reachableExecFree
-#print axioms Blanc.ReachableExecFreeControl.routeControlProgram_not_reachableExecFree
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.pinnedPauseTarget_circuitBreaker_noninterference
-#print axioms Blanc.BeaconDeposit.div_mul_eq_sub_mod
-#print axioms Blanc.BeaconDeposit.pred_div_eq
-#print axioms Blanc.BeaconDeposit.pred_mod_of_pos
-#print axioms Blanc.BeaconDeposit.pred_mod_eq
-#print axioms Blanc.BeaconDeposit.pred_div_pow_eq
-#print axioms Blanc.BeaconDeposit.mod_two_pow_eq_zero_iff
-#print axioms Blanc.BeaconDeposit.rootAt_nil
-#print axioms Blanc.BeaconDeposit.rootAt_short
-#print axioms Blanc.BeaconDeposit.rootAtE_eq
-#print axioms Blanc.BeaconDeposit.rootAt_append
-#print axioms Blanc.BeaconDeposit.empty_inv
-#print axioms Blanc.BeaconDeposit.pending_step_even
-#print axioms Blanc.BeaconDeposit.pending_step_odd
-#print axioms Blanc.BeaconDeposit.rootAt_pending_even
-#print axioms Blanc.BeaconDeposit.rootAt_pending_odd
-#print axioms Blanc.BeaconDeposit.climb_spec
-#print axioms Blanc.BeaconDeposit.root_correct
-#print axioms Blanc.BeaconDeposit.empty_root
-#print axioms Blanc.BeaconDeposit.div_two_div_pow
-#print axioms Blanc.BeaconDeposit.div_pow_div_two
-#print axioms Blanc.BeaconDeposit.walk_eq_none_iff
-#print axioms Blanc.BeaconDeposit.walk_isSome_iff
-#print axioms Blanc.BeaconDeposit.walk_none_at_cap
-#print axioms Blanc.BeaconDeposit.insert_isSome_iff
-#print axioms Blanc.BeaconDeposit.take_drop_append
-#print axioms Blanc.BeaconDeposit.mod_pow_ge_of_bit
-#print axioms Blanc.BeaconDeposit.mod_pow_ge_of_two_bits
-#print axioms Blanc.BeaconDeposit.bit_zero_of_mod_zero
-#print axioms Blanc.BeaconDeposit.completedBlock_pred
-#print axioms Blanc.BeaconDeposit.walk_insert_spec
-#print axioms Blanc.BeaconDeposit.insert_spec
-#print axioms Blanc.BeaconDeposit.deposit_ne_assert_false
-#print axioms Blanc.BeaconDeposit.deposit_ok_spec
-#print axioms Blanc.BeaconDeposit.deposit_inv
-#print axioms Blanc.BeaconDeposit.le64_length
-#print axioms Blanc.BeaconDeposit.zeros_length
-#print axioms Blanc.BeaconDeposit.le64_zero
-#print axioms Blanc.BeaconDeposit.hashPair_input_length
-#print axioms Blanc.BeaconDeposit.mixIn_input_length
-#print axioms Blanc.BeaconDeposit.pubkeyRoot_input_length
-#print axioms Blanc.BeaconDeposit.signatureRoot_input_lengths
-#print axioms Blanc.BeaconDeposit.depositDataNode_input_lengths
-#print axioms Blanc.BeaconDeposit.code_compile
-#print axioms Blanc.BeaconDeposit.code_eip170
-#print axioms Blanc.BeaconDeposit.constructorInitPrefix_compile
-#print axioms Blanc.BeaconDeposit.creationCode_eip3860
-#print axioms Blanc.BeaconDeposit.deposit_success_settled_effects
-#print axioms Blanc.BeaconDeposit.deposit_success_retainedStorageEffectTriples
-#print axioms Blanc.BeaconDeposit.deposit_pubkeyLength_error_runCompiledTo
-#print axioms Blanc.BeaconDeposit.deposit_withdrawalCredentialsLength_error_runCompiledTo
-#print axioms Blanc.BeaconDeposit.deposit_signatureLength_error_runCompiledTo
-#print axioms Blanc.BeaconDeposit.deposit_valueTooLow_error_runCompiledTo
-#print axioms Blanc.BeaconDeposit.deposit_valueNotGweiMultiple_error_runCompiledTo
-#print axioms Blanc.BeaconDeposit.deposit_valueTooHigh_error_runCompiledTo
-#print axioms Blanc.BeaconDeposit.deposit_depositDataRootMismatch_error_runCompiledTo
-#print axioms Blanc.BeaconDeposit.deposit_merkleTreeFull_error_runCompiledTo
-#print axioms Blanc.BeaconDeposit.deposit_error_runCompiledTo
-#print axioms Blanc.BeaconDeposit.deposit_malformed_noRawSstore
-#print axioms Blanc.BeaconDeposit.noMatchSelector_runCompiledTo
-#print axioms Blanc.BeaconDeposit.unmatched_selector_noRawSstore
-#print axioms Blanc.BeaconDeposit.supportsInterface_runCompiled
-#print axioms Blanc.BeaconDeposit.supportsInterface_nonzero_value_runCompiledTo
-#print axioms Blanc.BeaconDeposit.supportsInterface_runCompiled_noRawSstore
-#print axioms Blanc.BeaconDeposit.supportsInterface_nonzero_value_runCompiledTo_noRawSstore
-#print axioms Blanc.BeaconDeposit.supportsInterface_short_calldata_runCompiledTo_noRawSstore
-#print axioms Blanc.BeaconDeposit.getDepositRoot_zero_runCompiled
-#print axioms Blanc.BeaconDeposit.getDepositRoot_nonzero_value_runCompiledTo
-#print axioms Blanc.BeaconDeposit.getDepositRoot_zero_runCompiled_noRawSstore
-#print axioms Blanc.BeaconDeposit.getDepositRoot_nonzero_value_runCompiledTo_noRawSstore
-#print axioms Blanc.BeaconDeposit.getDepositCount_warm_runCompiled
-#print axioms Blanc.BeaconDeposit.getDepositCount_cold_runCompiled
-#print axioms Blanc.BeaconDeposit.getDepositCount_nonzero_value_runCompiledTo
-#print axioms Blanc.BeaconDeposit.getDepositCount_warm_runCompiled_noRawSstore
-#print axioms Blanc.BeaconDeposit.getDepositCount_cold_runCompiled_noRawSstore
-#print axioms Blanc.BeaconDeposit.getDepositCount_nonzero_value_runCompiledTo_noRawSstore
-#print axioms Blanc.BeaconDeposit.Exec.NinstOccurrence.beaconRuntime_sstore_pc_of_rawFrameRoot
-#print axioms Blanc.BeaconDeposit.Exec.Deriv.beaconConstructor_sstore_coordinate
-#print axioms Blanc.BeaconDeposit.constructor_success_retainedStorageEffectTriples
-#print axioms Blanc.BeaconDeposit.ArtifactInv.root_eq_mixedRootOf
-#print axioms Blanc.BeaconDeposit.ArtifactInv.count_eq_history_length
-#print axioms Blanc.BeaconDeposit.constructorFinalStorage_artifactInv
-#print axioms Blanc.BeaconDeposit.deposit_success_artifactInv
-#print axioms Blanc.BeaconDeposit.canonicalDeploymentStep_establishes_root
-#print axioms Blanc.BeaconDeposit.DeploymentRoot.constructorOccurrence
-#print axioms Blanc.BeaconDeposit.historySpec_sound
-#print axioms Blanc.BeaconDeposit.historySpec_preserves
-#print axioms Blanc.BeaconDeposit.pragueOnly_history_extends
-#print axioms Blanc.BeaconDeposit.DeploymentRoot.future_history_extends
-#print axioms Blanc.BeaconDeposit.DeploymentRoot.future_count_root
-#print axioms Blanc.compact_pause_word_eq_projection
-#print axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPause_sentinel_execution
-#print axioms Blanc.Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok
-#print axioms Blanc.Func.RunCompiledTo.zero_branch_of_ok_call_revert
-#print axioms Blanc.Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok_of_prefix
-#print axioms Blanc.Func.RunCompiledTo.zero_branch_of_ok_call_revert_of_prefix
-#print axioms Blanc.acceptedBoolWord_iff_of_output
-#print axioms Blanc.acceptedBoolExecution_ok_iff
-#print axioms Blanc.boolQueryExecutionFailure_ok_iff
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.Trigger.rebaseLocalCalls_prependStoresRev
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.Trigger.rebaseLocalCalls_revertData
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.runtime_guard_zero_of_prog_run_ok
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.runtime_rebasedTriggerMalformedAbi_get
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.triggerFullWithdrawals_ok_reaches_afterValidation
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.triggerFullWithdrawals_selected_paused_not_ok
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.pinnedPauseTarget_pauseFor_effect
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.pinnedPauseTarget_isPaused_truthful
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.pinnedPauseTarget_protectedSurface_reverts
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.pinnedPauseTarget
-#print axioms Blanc.LidoCircuitBreaker.directBoundaryExecutions_of_afterSet_ok
-#print axioms Blanc.Composition.LidoCircuitBreakerTwg.pauseForCalldata_eq
-#print axioms Blanc.Composition.LidoCircuitBreakerTwg.isPausedCalldata_eq
-#print axioms Blanc.Composition.LidoCircuitBreakerTwg.gateway_lidoPinnedPauseTarget
-#print axioms Blanc.Composition.LidoCircuitBreakerTwg.gatewayCode_compile
-#print axioms Blanc.Composition.LidoCircuitBreakerTwg.gatewayBoundaryExecutions_of_afterSet_ok
-#print axioms Blanc.Composition.LidoCircuitBreakerTwg.publicPause_gatewayPinnedTarget
-#print axioms Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_publicPausePremises
-#print axioms Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_closedPremises
-#print axioms Blanc.CompiledStackSafety.Certificate.parentStep
-#print axioms Blanc.CompiledStackSafety.Certificate.parentPrefix
-#print axioms Blanc.CompiledStackSafety.Certificate.at_parentPrefix
-#print axioms Blanc.AbstractStackSafety.checkTable_certificate
-#print axioms Blanc.AbstractStackSafety.exampleTable_certificate
-#print axioms Blanc.ProxyPair.Upgrade.v1_stack_safe_from_entry
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.pauseForFinite_runtime_runCompiledTo
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.pauseForFinite_exec
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.pauseForSentinel_runtime_exact_runCompiledTo
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.pauseForSentinel_exec
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.isPaused_true_warm_runtime_runCompiledTo
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.isPaused_true_warm_exec
-#print axioms Blanc.LidoTriggerableWithdrawalsGateway.isPaused_true_cold_runtime_runCompiledTo
-#print axioms Blanc.Composition.LidoCircuitBreakerTwg.pauseAfterSet_gateway_toSuccess_runCompiled
-#print axioms Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_closedPublicPause
-#print axioms Blanc.Composition.LidoCircuitBreakerTwgSentinel.sentinelGatewayPauseWorld_closedPublicPause
-#print axioms Blanc.Composition.LidoCircuitBreakerTwgSentinel.sentinelGatewayPauseWorld_storesInfiniteSentinel
-#print axioms Blanc.Drip.sound_of_stepClosed
-#print axioms Blanc.Drip.accountingInv_stepClosed
-#print axioms Blanc.Drip.dripSpec_sound
-#print axioms Blanc.Drip.dripSpec_preserves
-#print axioms Blanc.Drip.monoInv_stepClosed
-#print axioms Blanc.Drip.dripMonoSpec_sound
-#print axioms Blanc.Drip.dripMonoSpec_preserves
-#print axioms Blanc.Drip.DeploymentRoot.monoStateInv
-#print axioms Blanc.Drip.DeploymentRoot.rho
-#print axioms Blanc.Drip.DeploymentRoot.reachable_chi_mono
-#print axioms Blanc.Drip.DeploymentRoot.reachable_rho_mono
-#print axioms Blanc.Drip.reach_chi_rho_mono
-#print axioms Blanc.Drip.rho_le_timestamp_at_boundary
-#print axioms Blanc.Drip.bodyOccurrence_mono
-#print axioms Blanc.Drip.exec_monoInv
-#print axioms Blanc.Drip.processMessage_mono
-#print axioms Blanc.Drip.message_error_mono
-#print axioms Blanc.Drip.transaction_mono
-#print axioms Blanc.Drip.transactionList_mono
-#print axioms Blanc.Drip.systemMessage_mono
-#print axioms Blanc.Drip.requests_mono
-#print axioms Blanc.Drip.withdrawals_mono
-#print axioms Blanc.Drip.body_mono
-#print axioms Blanc.Drip.configuredBlock_mono
-#print axioms Blanc.Drip.configuredHistory_mono
-#print axioms Blanc.Drip.drip_compiled_join
-#print axioms Blanc.Drip.drip_compiled_exit
-#print axioms Blanc.Drip.no_stale_index_success_callback_free
-#print axioms Blanc.Drip.no_stale_index_settlement_exit
-#print axioms Blanc.Drip.view_eq_same_timestamp_join
-#print axioms Blanc.Drip.chain_drips_eq_segmentIndex
-#print axioms Blanc.Drip.drip_compiled_drip
-#print axioms Blanc.Drip.drip_compiled_factorNat
-#print axioms Blanc.Drip.drip_rpow_certified_band
-#print axioms Blanc.Drip.drip_rpow_exact_telescope
-#print axioms Blanc.Drip.drip_segment_certified
-#print axioms Blanc.Drip.segment_spread_witness
-#print axioms Blanc.Drip.rpow_under_witness
-#print axioms Blanc.Drip.rpow_over_witness
-#print axioms Blanc.Drip.drip_rpow_runtime_ops_exact
-#print axioms Blanc.Drip.exit_pays_exactly_full
-#print axioms Blanc.Drip.DeploymentRoot.accountingInv
-#print axioms Blanc.Drip.canonicalDeploymentStep_establishes_root
-#print axioms Blanc.Drip.StackSafety.actual_entry_safe
-#print axioms Blanc.Drip.Chain.transcriptTally_eq
-#print axioms Blanc.Drip.dripTraceRealizes_transcript
-#print axioms Blanc.Drip.history_transcript_accounting_exact
-#print axioms Blanc.Drip.history_transcript_balance_exact
-#print axioms Blanc.Drip.history_transcript_entitlement
-#print axioms Blanc.Drip.realized_segment_certified
-#print axioms Blanc.Drip.dripCalls_ne_nil_of_totalUnits
-#print axioms Blanc.Drip.concreteHistory_dripCalls_ne_nil
-#print axioms Blanc.Drip.dripClockSpec_preservesAdmitted
-#print axioms Blanc.Drip.history_clockInv
-#print axioms Blanc.Drip.configuredHistory_has_head_timestamp
-#print axioms Blanc.ExecutionAccountingReplay.AccountingLadder.Observed.traceRealizes_of_configuredHistoryTrace
-#print axioms Blanc.ExecutionTrace.ConfiguredBlockTrace.frameAdmitted_time
-#print axioms Blanc.Exec.frameAdmitted_benvStat
-#print axioms Blanc.ExecutionTrace.ConfiguredBlockTrace.parent_timestamp_lt
-#print axioms Blanc.Composition.ProrataWethVault.convertToShares_compiled_effect
-#print axioms Blanc.Composition.ProrataWethVault.convertToAssets_compiled_effect
-#print axioms Blanc.Composition.ProrataWethVault.previewDeposit_compiled_effect
-#print axioms Blanc.Composition.ProrataWethVault.previewRedeem_compiled_effect
-#print axioms Blanc.Composition.ProrataWethVault.previewMint_compiled_effect
-#print axioms Blanc.Composition.ProrataWethVault.previewWithdraw_compiled_effect
-#print axioms Blanc.Composition.ProrataWethVault.totalAssets_compiled_effect
-#print axioms Blanc.ProrataWethVault.asset_compiled_effect
-#print axioms Blanc.ProrataWethVault.maxRedeem_compiled_effect
-#print axioms Blanc.ProrataWethVault.name_compiled_effect
-#print axioms Blanc.ProrataWethVault.symbol_compiled_effect
-#print axioms Blanc.ProrataWethVault.decimals_compiled_effect
-#print axioms Blanc.ProrataWethVault.totalSupply_compiled_effect
-#print axioms Blanc.ProrataWethVault.balanceOf_compiled_effect
-#print axioms Blanc.ProrataWethVault.allowance_compiled_effect
-#print axioms Blanc.Composition.ProrataWethVault.PairStable.of_root
-#print axioms Blanc.Composition.ProrataWethVault.PairStable.totalAssets
-#print axioms Blanc.Composition.ProrataWethVault.PairStable.redeemable_and_solvent
-#print axioms Blanc.Composition.ProrataWethVault.vault_message_preserves_backed
-#print axioms Blanc.Composition.ProrataWethVault.vault_processMessage_preserves_stable
-#print axioms Blanc.Composition.ProrataWethVault.PairInFlight.stable_of_mint
-#print axioms Blanc.Composition.ProrataWethVault.PairInFlight.stable_of_outboundSettled
-#print axioms Blanc.Composition.ProrataWethVault.PairInFlight.reverting_of_failed_child
-#print axioms Blanc.Composition.ProrataWethVault.PairInFlight.reverting_of_failed_inbound_child
-#print axioms Blanc.Composition.ProrataWethVault.PairInFlight.reverting_of_failed_outbound_child
-#print axioms Blanc.Composition.ProrataWethVault.inbound_stage_witnesses
-#print axioms Blanc.Composition.ProrataWethVault.outbound_stage_witnesses
-#print axioms Blanc.Composition.ProrataWethVault.DirectWethConfiguration.installed
-#print axioms Blanc.Composition.ProrataWethVault.exactWethCallOccurrence_of_runCompiled
-#print axioms Blanc.Composition.ProrataWethVault.exactWethStatcallOccurrence_of_runCompiled
-#print axioms Blanc.Composition.ProrataWethVault.ExactWethChildSuccess.worldProgramRun
-#print axioms Blanc.Composition.ProrataWethVault.ExactWethChildSuccess.programRun
-#print axioms Blanc.Composition.ProrataWethVault.SuccessfulWethWorldProgramRun.balanceOf_effect
-#print axioms Blanc.Composition.ProrataWethVault.SuccessfulWethProgramRun.balanceOf_effect
-#print axioms Blanc.Composition.ProrataWethVault.SuccessfulWethProgramRun.transfer_effect
-#print axioms Blanc.Composition.ProrataWethVault.SuccessfulWethProgramRun.transferFrom_effect
-#print axioms Blanc.Composition.ProrataWethVault.Source.vault_externalWethCallSites_complete
-#print axioms Blanc.Composition.ProrataWethVault.Source.readTotalAssets_exactEffect
-#print axioms Blanc.Composition.ProrataWethVault.Source.callWethTransferFrom_exactEffect
-#print axioms Blanc.Composition.ProrataWethVault.Source.callWethTransfer_exactEffect
-#print axioms Blanc.Composition.ProrataWethVault.Source.balanceOfStaging_rollback
-#print axioms Blanc.Composition.ProrataWethVault.Source.transferFromStaging_rollback
-#print axioms Blanc.Composition.ProrataWethVault.Source.transferStaging_rollback
-#print axioms Blanc.ProrataWethVault.convertToSharesN_floor_le
-#print axioms Blanc.ProrataWethVault.convertToSharesN_lt_floor_add_one
-#print axioms Blanc.ProrataWethVault.convertToAssetsN_floor_le
-#print axioms Blanc.ProrataWethVault.convertToAssetsN_lt_floor_add_one
-#print axioms Blanc.ProrataWethVault.previewMintN_covers
-#print axioms Blanc.ProrataWethVault.previewMintN_lt_add_denominator
-#print axioms Blanc.ProrataWethVault.previewWithdrawN_covers
-#print axioms Blanc.ProrataWethVault.previewWithdrawN_lt_add_assetFactor
-#print axioms Blanc.ProrataWethVault.le_maxMintN_iff
-#print axioms Blanc.ProrataWethVault.le_maxDepositN_iff
-#print axioms Blanc.ProrataWethVault.convertToSharesN_maxDepositN_le_shareRoom
-#print axioms Blanc.ProrataWethVault.maxWithdrawN_le_assets
-#print axioms Blanc.Func.RunCompiledToVisiting.toRunCompiledTo
-#print axioms Blanc.Func.RunCompiledToVisiting.exists_step
-#print axioms Blanc.Prog.RunCompiledToVisiting.toRunCompiledTo
-#print axioms Blanc.Prog.RunCompiledToVisiting.exec_eq
-#print axioms Blanc.Prog.runCompiledTo_of_exec_revert
-#print axioms Blanc.ProrataWethVault.le_maxWithdrawN_iff
-#print axioms Blanc.ProrataWethVault.previewWithdrawN_maxWithdrawN_le
-#print axioms Blanc.ProrataWethVault.maxDepositViewN_eq_of_stable
-#print axioms Blanc.ProrataWethVault.maxMintViewN_eq_of_stable
-#print axioms Blanc.ProrataWethVault.maxWithdrawViewN_eq_of_stable
-#print axioms Blanc.ProrataWethVault.roundtrip_no_profit
-#print axioms Blanc.Composition.ProrataWethVault.deposit_revert_visits_refused_weth_child
-#print axioms Blanc.Composition.ProrataWethVault.mint_revert_visits_refused_weth_child
-#print axioms Blanc.Composition.ProrataWethVault.withdraw_revert_visits_refused_weth_child
-#print axioms Blanc.Composition.ProrataWethVault.redeem_revert_visits_refused_weth_child
-#print axioms Blanc.Composition.ProrataWethVault.maxDeposit_revert_visits_refused_weth_child
-#print axioms Blanc.Composition.ProrataWethVault.maxMint_revert_visits_refused_weth_child
-#print axioms Blanc.Composition.ProrataWethVault.maxWithdraw_revert_visits_refused_weth_child
-#print axioms Blanc.Composition.ProrataWethVault.maxRedeem_no_reverting_walk
-#print axioms Blanc.Composition.ProrataWethVault.deposit_exec_revert_visits_refused_weth_child
-#print axioms Blanc.Composition.ProrataWethVault.mint_exec_revert_visits_refused_weth_child
-#print axioms Blanc.Composition.ProrataWethVault.withdraw_exec_revert_visits_refused_weth_child
-#print axioms Blanc.Composition.ProrataWethVault.redeem_exec_revert_visits_refused_weth_child
-#print axioms Blanc.Composition.ProrataWethVault.maxDeposit_exec_revert_visits_refused_weth_child
-#print axioms Blanc.Composition.ProrataWethVault.maxMint_exec_revert_visits_refused_weth_child
-#print axioms Blanc.Composition.ProrataWethVault.maxWithdraw_exec_revert_visits_refused_weth_child
-#print axioms Blanc.Composition.ProrataWethVault.maxRedeem_exec_never_reverts
-#print axioms Blanc.Composition.ProrataWethVault.deposit_success_within_maxDeposit
-#print axioms Blanc.Composition.ProrataWethVault.mint_success_within_maxMint
-#print axioms Blanc.Composition.ProrataWethVault.withdraw_success_within_maxWithdraw
-#print axioms Blanc.Composition.ProrataWethVault.redeem_success_within_maxRedeem
-#print axioms Blanc.Composition.ProrataWethVault.vault_terminals_return_or_revert
+/-! # Repository axiom audit rows
 
-/-! ## From-scratch cross-check of the rows pinned below the standard set
+One `#full_axioms NAME` line per audited theorem; `scripts/check.sh` pins each
+row's exact expected axiom set and requires this list and its own to be the
+same population. The count of these lines is the published audited-theorem
+count (`scripts/check-doc-counts.py`).
 
-Lean v4.32.1's `#print axioms` on an imported constant reads the per-module
-result that `exportedAxiomsExt` precomputed when the olean was written. That
-precomputation shares one cache across the module and breaks the
-inductive/constructor cycle with an empty sentinel entry, so an inductive
-reached first through its own constructor can be recorded as axiom-free, and
-every constant that reaches the constructor only through that inductive inherits
-the empty set. The result depends on hash iteration order; it under-reported
-`ReplayCarrier.nilOfEq` as axiom-free until an unrelated declaration reordered
-its module.
+`#full_axioms` is defined once, in `scripts/AxiomAudit.lean`, and
+`scripts/axiom_audit.py` splices it in after the imports above when the gate
+elaborates this file, so this file does not elaborate on its own. It walks each
+name from scratch over the environment's declarations; Lean's `#print axioms`
+is not used as a verdict source (lean4#15226, see that file's header), and
+`scripts/axiom_audit.py` refuses an audit file that contains it. -/
 
-`#full_axioms` recomputes a constant's axiom closure from the environment's
-declarations alone, with a fresh visited set per constant and no precomputed
-entries. `scripts/check.sh` runs it for every row whose pin is a strict subset
-of `propext, Classical.choice, Quot.sound` (an under-report can make such a pin
-pass while a standard axiom is really used) and fails a row whose recomputed set
-differs from its pin. The list below must equal exactly those rows. -/
-
-open Lean Elab Command in
-/-- Every axiom reachable from `c` through declaration types, values and the
-constructors of inductives, walked without any cached per-module result. -/
-private partial def auditFullAxioms (env : Environment) (c : Name) :
-    StateM (NameSet × NameSet) Unit := do
-  let (seen, axs) ← get
-  if seen.contains c then return
-  set (seen.insert c, axs)
-  let walk (e : Expr) : StateM (NameSet × NameSet) Unit :=
-    e.getUsedConstants.forM (auditFullAxioms env)
-  match env.find? c with
-  | some (.axiomInfo v) =>
-      modify fun (seen, axs) => (seen, axs.insert c)
-      walk v.type
-  | some (.defnInfo v) => walk v.type *> walk v.value
-  | some (.thmInfo v) => walk v.type *> walk v.value
-  | some (.opaqueInfo v) => walk v.type *> walk v.value
-  | some (.ctorInfo v) => walk v.type
-  | some (.recInfo v) => walk v.type
-  | some (.inductInfo v) => walk v.type *> v.ctors.forM (auditFullAxioms env)
-  | _ => pure ()
-
-open Lean Elab Command in
-elab "#full_axioms " id:ident : command => do
-  let env ← getEnv
-  let c := id.getId
-  unless env.contains c do
-    throwError "#full_axioms: unknown constant {c}"
-  let (_, (_, axs)) := (auditFullAxioms env c).run ({}, {})
-  let names := (axs.toList.map toString).toArray.qsort (· < ·)
-  logInfo (MessageData.ofFormat (.text
-    s!"FULL-AXIOMS '{c}': [{", ".intercalate names.toList}]"))
-
+#full_axioms Blanc.weth_preserves_solvent
+#full_axioms Blanc.stateTransition_preserves_solvent
+#full_axioms Blanc.chain_preserves_solvent
+#full_axioms Blanc.addBlockToChain_preserves_solvent
+#full_axioms Blanc.stateTransitionUsing_preserves_solvent
+#full_axioms Blanc.chainUsing_preserves_solvent
+#full_axioms Blanc.addBlockToChainUsing_preserves_solvent
+#full_axioms Blanc.fmint_preserves_conserved
+#full_axioms Blanc.stateTransition_preserves_conserved
+#full_axioms Blanc.chain_preserves_conserved
+#full_axioms Blanc.addBlockToChain_preserves_conserved
+#full_axioms Blanc.stateTransitionUsing_preserves_conserved
+#full_axioms Blanc.chainUsing_preserves_conserved
+#full_axioms Blanc.addBlockToChainUsing_preserves_conserved
+#full_axioms Blanc.Fmint.fmint_flashLoan_spec
+#full_axioms Blanc.Fmint.no_success_of_callback_never_magic
+#full_axioms Blanc.Fmint.no_success_of_callback_never_returns_word
+#full_axioms Blanc.Fmint.no_success_of_token_ne_self
+#full_axioms Blanc.Fmint.no_success_of_receiver_not_address
+#full_axioms Blanc.Fmint.no_success_of_amount_over_maxFlashLoan
+#full_axioms Blanc.Fmint.no_success_of_allowance_below_amount
+#full_axioms Blanc.Fmint.no_success_of_balance_below_amount
+#full_axioms Blanc.Fmint.settles_with_error_of_callback_never_magic
+#full_axioms Blanc.Fmint.settles_with_error_of_callback_never_returns_word
+#full_axioms Blanc.Fmint.settles_with_error_of_token_ne_self
+#full_axioms Blanc.Fmint.settles_with_error_of_receiver_not_address
+#full_axioms Blanc.Fmint.settles_with_error_of_amount_over_maxFlashLoan
+#full_axioms Blanc.Fmint.settles_with_error_of_allowance_below_amount
+#full_axioms Blanc.Fmint.settles_with_error_of_balance_below_amount
+#full_axioms Blanc.wethCode_compile
+#full_axioms Blanc.fmintCode_compile
+#full_axioms Blanc.Weth10.weth10_compiles
+#full_axioms Blanc.Weth10.weth10Code_compile
+#full_axioms Blanc.Weth10.weth10MainnetCode_eq
+#full_axioms Blanc.Func.compile_eq_emitUnchecked
+#full_axioms Blanc.Table.compile_eq_emitUnchecked
+#full_axioms Blanc.Prog.compile_eq_emitUnchecked
+#full_axioms Blanc.Frame.raw_commits_of_settlementCommits
+#full_axioms Blanc.Exec.descendantFrames_runOk_of_settlementCommits
+#full_axioms Blanc.Exec.descendantFrames_runOk_of_not_settlementCommits
+#full_axioms Blanc.Exec.descendantFrames_runOk_create_codeDepositRollback
+#full_axioms Blanc.Exec.committedFrames_eq_nil_of_not_commits
+#full_axioms Blanc.ProcessMessage.settlementCommits_of_some_ok_clean
+#full_axioms Blanc.Frame.settlementCommits_ofCall_of_raw_commits
+#full_axioms Blanc.Exec.ninstOccurrence_iff_mem_rawNodes
+#full_axioms Blanc.Exec.SuccessfulSstoreOccurrence.storage_update
+#full_axioms Blanc.Exec.Deriv.ParentPrefix.linear
+#full_axioms Blanc.Exec.Deriv.SourceCursor.Chronology.strictBefore
+#full_axioms Blanc.Exec.Deriv.SourceCursor.toward
+#full_axioms Blanc.Prog.sourceSiteAt_sound
+#full_axioms Blanc.Exec.Frame.successfulSstore_sourceSite
+#full_axioms Blanc.Exec.retainedNodes_sublist_rawNodes
+#full_axioms Blanc.Exec.committedFrameRoots_sublist_retainedNodes
+#full_axioms Blanc.Exec.mem_retainedNodes_iff_committedFrame_parentPrefix
+#full_axioms Blanc.Exec.retainedNodes_runOk_of_settlementCommits
+#full_axioms Blanc.Exec.retainedNodes_runOk_of_not_settlementCommits
+#full_axioms Blanc.Exec.storageReplay_committedPost
+#full_axioms Blanc.Exec.exists_lastRetainedSstore_of_getStor_ne
+#full_axioms Blanc.Prog.acceptsSstoreSite_sound
+#full_axioms Blanc.Exec.Frame.successfulSstore_acceptsSource
+#full_axioms Blanc.Weth10.Exec.Frame.NinstOccurrence.toCommon
+#full_axioms Blanc.Exec.mem_rawNodes_iff_rawFrameRoot_parentPrefix
+#full_axioms Blanc.Exec.Deriv.sstore_sourceSite
+#full_axioms Blanc.Exec.Deriv.successfulSstore_sourceSite
+#full_axioms Blanc.Exec.NinstOccurrence.exists_rawFrameRoot_parentPrefix
+#full_axioms Blanc.Exec.NinstOccurrence.sourceSite_of_rawFrameRoot
+#full_axioms Blanc.Exec.Deriv.sstore_acceptsSource
+#full_axioms Blanc.Exec.NinstOccurrence.acceptsSource_of_rawFrameRoot
 #full_axioms Blanc.Func.localSstoreFree_iff
 #full_axioms Blanc.Prog.componentSstoreFree_iff
 #full_axioms Blanc.Prog.entrySstoreFree_iff
 #full_axioms Blanc.Prog.entrySstoreFree_sound
+#full_axioms Blanc.Exec.Deriv.SourceCursor.noSstore_of_entrySstoreFree
+#full_axioms Blanc.Exec.NinstOccurrence.instruction_ne_sstore_of_entrySstoreFree
+#full_axioms Blanc.Exec.Deriv.noSstore_of_exactMain_entrySstoreFree
+#full_axioms Blanc.tstore_run_cell
+#full_axioms Blanc.tstore_run_zero
+#full_axioms Blanc.tload_run_cell
+#full_axioms Blanc.directCall_nonzero_spawn
+#full_axioms Blanc.directCall_zero_spawn
+#full_axioms Blanc.directStatcall_spawn
+#full_axioms Blanc.directDelcall_spawn
+#full_axioms Blanc.Xinst.step_spawn_codeAddress_eq_currentTarget
+#full_axioms Blanc.delegatecall_enters_with_parent_as_storage_owner
+#full_axioms Blanc.control_delegatecall_separates_call_fuses
+#full_axioms Blanc.control_delegatecall_inherits_caller_and_value
+#full_axioms Blanc.delegatecall_child_observes_outer_caller_and_value
+#full_axioms Blanc.control_two_window_memory_premise_derivable
+#full_axioms Blanc.control_sliceD_payload_size
+#full_axioms Blanc.caughtCall_childSettlement
+#full_axioms Blanc.cleanCall_childSettlement
+#full_axioms Blanc.preparedTransactionMessage_exists
+#full_axioms Blanc.PreparedTransactionMessage.transientStorage_eq_empty
+#full_axioms Blanc.processMessageCall_error_logs_eq_nil
+#full_axioms Blanc.PreparedTransactionMessage.error_logs_eq_nil
+#full_axioms Blanc.of_run_sstore_not_static
+#full_axioms Blanc.genericCall.step_spawn_isStatic
+#full_axioms Blanc.genericCreate.step_spawn_not_static
+#full_axioms Blanc.Xinst.step_spawn_isStatic
+#full_axioms Blanc.Evm.step_spawn_isStatic
+#full_axioms Blanc.executeCode.enter_inl_isStatic
+#full_axioms Blanc.Frame.enter_run_isStatic
+#full_axioms Blanc.Evm.step_run_isStatic
+#full_axioms Blanc.genericCall.step_spawn_isStatic_of_staticcall
+#full_axioms Blanc.Xinst.step_staticcall_spawn_isStatic
+#full_axioms Blanc.Ninst.step_staticcall_spawn_isStatic
+#full_axioms Blanc.Ninst.step_staticcall_run_isStatic
 #full_axioms Blanc.Func.CompileShape.byteSize_compileShape
 #full_axioms Blanc.Func.length_emitByShape
 #full_axioms Blanc.Func.getD_emitByShape
@@ -1543,8 +261,297 @@ elab "#full_axioms " id:ident : command => do
 #full_axioms Blanc.Func.CompileShape.locations_compileShapes
 #full_axioms Blanc.Table.emitByShape_compileShapes
 #full_axioms Blanc.Prog.emitByShape_compileShape
+#full_axioms Blanc.Func.exec_of_runCompiled_subcode
+#full_axioms Blanc.Func.exec_of_runCompiled_prefix
+#full_axioms Blanc.Func.exec_of_runCompiledTo_subcode
+#full_axioms Blanc.Func.exec_of_runCompiledTo_prefix
+#full_axioms Blanc.Rinst.runCore_extcodesize_cold_eq_ok
+#full_axioms Blanc.Rinst.runCore_extcodesize_warm_eq_ok
+#full_axioms Blanc.Ninst.runCompiled_extcodesize_cold
+#full_axioms Blanc.Ninst.runCompiled_extcodesize_warm
+#full_axioms Blanc.Func.runCompiledTo_revertReturnData
+#full_axioms Blanc.Frame.enter_eq_done_executePrecomp
+#full_axioms Blanc.Xinst.step_staticcall
+#full_axioms Blanc.Xinst.step_staticcall_spawn
+#full_axioms Blanc.Ninst.runCompiled_staticcall_doneFrame
+#full_axioms Blanc.of_run_call_val_with_depth
+#full_axioms Blanc.of_run_staticcall_val_with_depth_cause
+#full_axioms Blanc.of_run_staticcall_val_with_depth
+#full_axioms Blanc.Weth10.flashFee_runCompiled
+#full_axioms Blanc.Weth10.balanceOf_cold_runCompiled
+#full_axioms Blanc.Weth10.balanceOf_warm_runCompiled
+#full_axioms Blanc.Weth10.totalSupply_cold_runCompiled
+#full_axioms Blanc.Weth10.totalSupply_warm_runCompiled
+#full_axioms Blanc.Weth10.maxFlashLoan_cold_runCompiled
+#full_axioms Blanc.Weth10.maxFlashLoan_warm_runCompiled
+#full_axioms Blanc.Weth10.maxFlashLoan_other_runCompiled
+#full_axioms Blanc.Weth10.name_exec_output
+#full_axioms Blanc.Weth10.symbol_exec_output
+#full_axioms Blanc.Weth10.callbackSuccess_exec_output
+#full_axioms Blanc.Weth10.permitTypehash_exec_output
+#full_axioms Blanc.Weth10.decimals_exec_output
+#full_axioms Blanc.Weth10.deploymentChainId_exec_output
+#full_axioms Blanc.Weth10.domainSeparator_output
+#full_axioms Blanc.Weth10.domainSeparator_exec_output
+#full_axioms Blanc.Weth10.balanceOf_exec_output
+#full_axioms Blanc.Weth10.allowance_exec_output
+#full_axioms Blanc.Weth10.nonces_exec_output
+#full_axioms Blanc.Weth10.flashMinted_exec_output
+#full_axioms Blanc.Weth10.totalSupply_exec_output
+#full_axioms Blanc.Weth10.maxFlashLoan_exec_output
+#full_axioms Blanc.Weth10.flashFee_exec_output
+#full_axioms Blanc.Weth10.approve_exec_effect
+#full_axioms Blanc.Weth10.depositTo_exec_effect
+#full_axioms Blanc.Weth10.deposit_exec_effect
+#full_axioms Blanc.Weth10.receive_exec_effect
+#full_axioms Blanc.Weth10.permit_exec_success_effect
+#full_axioms Blanc.Weth10.permit_exec_expired_no_success
+#full_axioms Blanc.Weth10.permit_exec_invalid_no_success
+#full_axioms Blanc.Weth10.of_flashLoanSuccessTail
+#full_axioms Blanc.Weth10.of_flashSettle_allowance
+#full_axioms Blanc.Weth10.flashBurn_effect
+#full_axioms Blanc.Weth10.flashLoan_successEffect
+#full_axioms Blanc.Weth10.weth10_flashLoan_successEffect
+#full_axioms Blanc.Weth10.weth10_transfer_successEffect
+#full_axioms Blanc.Weth10.weth10_withdraw_successEffect
+#full_axioms Blanc.Weth10.weth10_withdrawTo_successEffect
+#full_axioms Blanc.Weth10.weth10_transferFrom_successEffect
+#full_axioms Blanc.Weth10.weth10_withdrawFrom_successEffect
+#full_axioms Blanc.Weth10.of_spendCallerAllowanceThen_effect
+#full_axioms Blanc.Weth10.transfer_effect_failureOrder
+#full_axioms Blanc.Weth10.transferFrom_effect_failureOrder
+#full_axioms Blanc.Weth10.withdrawal_effect_failureOrder
+#full_axioms Blanc.Weth10.delegatedAllowance_effect_precedence
+#full_axioms Blanc.Weth10.transferThen_callbackPrefix_effect
+#full_axioms Blanc.Weth10.callBoolCallback_successEffect
+#full_axioms Blanc.Weth10.approveAndCall_successEffect
+#full_axioms Blanc.Weth10.weth10_approveAndCall_successEffect
+#full_axioms Blanc.Weth10.depositToAndCall_successEffect
+#full_axioms Blanc.Weth10.weth10_depositToAndCall_successEffect
+#full_axioms Blanc.Weth10.transferAndCall_successEffect
+#full_axioms Blanc.Weth10.weth10_transferAndCall_successEffect
+#full_axioms Blanc.Weth10.erc677_codelessCallback_runCompiledTo
+#full_axioms Blanc.Weth10.erc677_childRevert_runCompiledTo
+#full_axioms Blanc.Weth10.erc677_shortReturn_runCompiledTo
+#full_axioms Blanc.Weth10.lockedErrorGuard_runCompiledTo
+#full_axioms Blanc.Weth10.codelessCallback_runCompiledTo
+#full_axioms Blanc.Weth10.callbackBubble_runCompiledTo
+#full_axioms Blanc.Weth10.callbackShort_runCompiledTo
+#full_axioms Blanc.Weth10.flashCallback_wrongMagic_runCompiledTo
+#full_axioms Blanc.Weth10.nonpayable_runCompiledTo
+#full_axioms Blanc.Weth10.flashFee_wrongToken_runCompiledTo
+#full_axioms Blanc.Weth10.flashLoan_lockedGuardOrder
+#full_axioms Blanc.Weth10.permit_expiredBeforeNonceUpdate
+#full_axioms Blanc.Weth10.transfer_lockedGuardOrder
+#full_axioms Blanc.Weth10.transferFromCore_lockedGuardOrder
+#full_axioms Blanc.Weth10.withdraw_lockedGuardOrder
+#full_axioms Blanc.Weth10.spendCallerAllowanceThen_finitePrecedence
+#full_axioms Blanc.Weth10.flashSettle_finitePrecedence
+#full_axioms Blanc.Weth10.flashCallback_errorPrecedence
+#full_axioms Blanc.Weth10.rollback_revert_of_weth10_runCompiledTo
+#full_axioms Blanc.Weth10.rollback_empty_of_weth10_runCompiledTo
+#full_axioms Blanc.Weth10.rollback_errorData_of_weth10_runCompiledTo
+#full_axioms Blanc.Weth10.rollback_bubbledChild_of_weth10_runCompiledTo
+#full_axioms Blanc.ProcessMessage.rollback_of_error
+#full_axioms Blanc.Fmint.rollback_of_callback_failure
+#full_axioms Blanc.rollback_of_no_success
+#full_axioms Blanc.rollback_of_no_success_total
+#full_axioms Blanc.Fmint.rollback_of_no_success
+#full_axioms Blanc.Fmint.rollback_of_no_success_total
+#full_axioms Blanc.Fmint.rollback_of_callback_never_magic
+#full_axioms Blanc.Fmint.rollback_of_callback_never_returns_word
+#full_axioms Blanc.Fmint.rollback_of_token_ne_self
+#full_axioms Blanc.Fmint.rollback_of_receiver_not_address
+#full_axioms Blanc.Fmint.rollback_of_amount_over_maxFlashLoan
+#full_axioms Blanc.Fmint.rollback_of_allowance_below_amount
+#full_axioms Blanc.Fmint.rollback_of_balance_below_amount
+#full_axioms Blanc.Prog.exec_of_runCompiled
+#full_axioms Blanc.Prog.runCompiled_iff_exec
+#full_axioms Blanc.Prog.exec_of_runCompiledTo
+#full_axioms Blanc.Fmint.totalSupply_runCompiled
+#full_axioms Blanc.Fmint.fmint_totalSupply_succeeds
+#full_axioms Blanc.weth_balanceOf_runCompiled
+#full_axioms Blanc.weth_balanceOf_succeeds
+#full_axioms Blanc.weth_balanceOf_gas_exact
+#full_axioms Blanc.weth_balanceOf_gas_of_runCompiled
+#full_axioms Blanc.Fmint.totalSupply_gas_exact
+#full_axioms Blanc.Fmint.totalSupply_gas_of_runCompiled
+#full_axioms Blanc.weth_decimals_runCompiled
+#full_axioms Blanc.weth_decimals_gas_exact
+#full_axioms Blanc.weth_decimals_succeeds
+#full_axioms Blanc.weth_decimals_gas_of_runCompiled
+#full_axioms Blanc.wethGas_eq_with
+#full_axioms Blanc.weth_balanceOf_gas_exact_wethGas
+#full_axioms Blanc.weth_decimals_gas_exact_wethGas
+#full_axioms Blanc.Fmint.decimals_runCompiled
+#full_axioms Blanc.Fmint.decimals_gas_exact
+#full_axioms Blanc.Fmint.fmint_decimals_succeeds
+#full_axioms Blanc.Fmint.decimals_gas_of_runCompiled
+#full_axioms Blanc.Fmint.fmintGas_eq_with
+#full_axioms Blanc.Fmint.totalSupply_gas_exact_fmintGas
+#full_axioms Blanc.Fmint.decimals_gas_exact_fmintGas
+#full_axioms Blanc.weth_balanceOf_gas_of_runCompiled_wethGas
+#full_axioms Blanc.weth_decimals_gas_of_runCompiled_wethGas
+#full_axioms Blanc.Fmint.totalSupply_gas_of_runCompiled_fmintGas
+#full_axioms Blanc.Fmint.decimals_gas_of_runCompiled_fmintGas
+#full_axioms Blanc.weth_balanceOf_warm_runCompiled
+#full_axioms Blanc.weth_balanceOf_warm_gas_exact
+#full_axioms Blanc.wethGasMax_eq_with
+#full_axioms Blanc.wethGas_le_max
+#full_axioms Blanc.Fmint.totalSupply_warm_runCompiled
+#full_axioms Blanc.Fmint.totalSupply_warm_gas_exact
+#full_axioms Blanc.Fmint.fmintGasMax_eq_with
+#full_axioms Blanc.Fmint.fmintGas_le_max
+#full_axioms Blanc.Fmint.unknownSelector_runCompiledTo
+#full_axioms Blanc.Fmint.fmint_unknown_selector_reverts
+#full_axioms Blanc.Fmint.tokenNeSelf_runCompiledTo
+#full_axioms Blanc.Fmint.fmint_token_ne_self_reverts
+#full_axioms Blanc.rollback_revert_of_exec_revert
+#full_axioms Blanc.rollback_revert_of_runCompiledTo
+#full_axioms Blanc.Fmint.rollback_revert_of_token_ne_self
+#full_axioms Blanc.Fmint.fmint_flashLoan_settles
+#full_axioms Blanc.Fmint.fmint_flashLoan_frame_settles
+#full_axioms Blanc.Fmint.receiverNotAddress_runCompiledTo
+#full_axioms Blanc.Fmint.fmint_receiver_not_address_reverts
+#full_axioms Blanc.Fmint.fmint_amount_over_bound_reverts
+#full_axioms Blanc.Fmint.fmint_flashLoan_settles_of_call
+#full_axioms Blanc.Stor.Weth10Inv.silent
+#full_axioms Blanc.Stor.Weth10Inv.deposit
+#full_axioms Blanc.Stor.Weth10Inv.transfer
+#full_axioms Blanc.Stor.Weth10Inv.flashMint
+#full_axioms Blanc.Stor.Weth10Inv.flashBurn
+#full_axioms Blanc.Stor.Weth10Inv.withdraw
+#full_axioms Blanc.Stor.Weth10Inv.of_empty
+#full_axioms Blanc.Weth10.backedSpec
+#full_axioms Blanc.ContractSpec.post_of_run_dispatch
+#full_axioms Blanc.ContractSpec.sound_of_receive_dispatch
+#full_axioms Blanc.ContractSpec.preserves_of_receive_dispatch
+#full_axioms Blanc.Weth10.mintCaller_storage
+#full_axioms Blanc.Weth10.backedSpec_receiveEther_funcSound
+#full_axioms Blanc.Weth10.backedSpec_deposit_funcSound
+#full_axioms Blanc.Weth10.backedSpec_name_funcSound
+#full_axioms Blanc.Weth10.backedSpec_totalSupply_funcSound
+#full_axioms Blanc.Weth10.backedSpec_permitTypehash_funcSound
+#full_axioms Blanc.Weth10.backedSpec_decimals_funcSound
+#full_axioms Blanc.Weth10.backedSpec_domainSeparator_funcSound
+#full_axioms Blanc.Weth10.backedSpec_maxFlashLoan_funcSound
+#full_axioms Blanc.Weth10.backedSpec_balanceOf_funcSound
+#full_axioms Blanc.Weth10.backedSpec_nonces_funcSound
+#full_axioms Blanc.Weth10.backedSpec_callbackSuccess_funcSound
+#full_axioms Blanc.Weth10.backedSpec_flashMinted_funcSound
+#full_axioms Blanc.Weth10.backedSpec_symbol_funcSound
+#full_axioms Blanc.Weth10.backedSpec_deploymentChainId_funcSound
+#full_axioms Blanc.Weth10.backedSpec_allowance_funcSound
+#full_axioms Blanc.Weth10.backedSpec_flashFee_funcSound
+#full_axioms Blanc.Weth10.backedSpec_approve_funcSound
+#full_axioms Blanc.Weth10.backedSpec_depositTo_funcSound
+#full_axioms Blanc.Weth10.backedSpec_withdraw_funcSound
+#full_axioms Blanc.Weth10.backedSpec_transfer_funcSound
+#full_axioms Blanc.Weth10.backedSpec_withdrawTo_funcSound
+#full_axioms Blanc.Weth10.backedSpec_transferFrom_funcSound
+#full_axioms Blanc.Weth10.backedSpec_withdrawFrom_funcSound
+#full_axioms Blanc.Weth10.backedSpec_depositToAndCall_funcSound
+#full_axioms Blanc.Weth10.backedSpec_approveAndCall_funcSound
+#full_axioms Blanc.Weth10.backedSpec_transferAndCall_funcSound
+#full_axioms Blanc.Weth10.backedSpec_flashLoan_funcSound
+#full_axioms Blanc.Weth10.backedSpec_permit_funcSound
+#full_axioms Blanc.Weth10.weth10Funcs_exactRelFuncSound
+#full_axioms Blanc.Weth10.flashExactDepth
+#full_axioms Blanc.Weth10.weth10Funcs_backed_funcSound
+#full_axioms Blanc.Weth10.backedSpec_sound_of_funcSound_all
+#full_axioms Blanc.Weth10.backedSpec_preserves_of_funcSound_all
+#full_axioms Blanc.Weth10.backedSpec_sound
+#full_axioms Blanc.Weth10.backedSpec_preserves
+#full_axioms Blanc.Weth10.weth10InitFunc_runCompiled_zero
+#full_axioms Blanc.Weth10.weth10Init_exec_zero
+#full_axioms Blanc.Weth10.weth10Init_exec_nonzero
+#full_axioms Blanc.Weth10.processCreateMessage_weth10_success
+#full_axioms Blanc.Weth10.freshDeployment_staticCertificate
+#full_axioms Blanc.Weth10.flashExactSpec_preserves
+#full_axioms Blanc.Weth10.processTransaction_preserves_stable
+#full_axioms Blanc.Weth10.stateTransitionAt_preserves_stable
+#full_axioms Blanc.Weth10.stateTransitionUsing_preserves_stable
+#full_axioms Blanc.Weth10.stateTransition_preserves_stable
+#full_axioms Blanc.Weth10.chainUsing_preserves_stable
+#full_axioms Blanc.Weth10.chain_preserves_stable
+#full_axioms Blanc.Weth10.addBlockToChainAt_preserves_stable
+#full_axioms Blanc.Weth10.addBlockToChainUsing_preserves_stable
+#full_axioms Blanc.Weth10.addBlockToChain_preserves_stable
+#full_axioms Blanc.Weth10.Stable.solvent
+#full_axioms Blanc.Weth10.chain_reachable_backed_and_flash_zero
+#full_axioms Blanc.Weth10.processCreateMessage_establishes_stable
+#full_axioms Blanc.Weth10.prepareCanonicalDeploymentContext
+#full_axioms Blanc.Weth10.canonicalDeploymentMessage_succeeds
+#full_axioms Blanc.Weth10.canonicalDeploymentTransaction_succeeds
+#full_axioms Blanc.Weth10.canonicalDeploymentStep_establishes_root
+#full_axioms Blanc.Weth10.DeploymentRoot.reflReach
+#full_axioms Blanc.Weth10.DeploymentRoot.reachable_stable
+#full_axioms Blanc.Weth10.DeploymentRoot.reachable_code
+#full_axioms Blanc.Weth10.DeploymentRoot.reachable_flashZero
+#full_axioms Blanc.Weth10.DeploymentRoot.reachable_solvent
+#full_axioms Blanc.Xinst.step_call_nonzero_insufficient
+#full_axioms Blanc.Xinst.step_call_nonzero_spawn
+#full_axioms Blanc.Ninst.runCompiled_call_nonzero_codeFree
 #full_axioms Blanc.Weth10.redemptionRuntimeCeiling_eq
+#full_axioms Blanc.Weth10.NonSignatureRedemptionTxEnvelope.admissible_of_recoveredSender
+#full_axioms Blanc.Weth10.Stable.bookedBalanceNat_le_contractEth
+#full_axioms Blanc.Weth10.withdrawTo_exec
+#full_axioms Blanc.Weth10.withdraw_exec
+#full_axioms Blanc.Weth10.processMessageCall_eq_of_exec
+#full_axioms Blanc.Weth10.Stable.messageRedemption_enabled_of_le
+#full_axioms Blanc.Weth10.Stable.selfRedemption_enabled_of_le
+#full_axioms Blanc.Weth10.AdmissibleRedemptionTx.processTransaction_eq_of_message
+#full_axioms Blanc.Weth10.AdmissibleSelfRedemptionTx.processTransaction_eq_of_message
+#full_axioms Blanc.Weth10.Stable.transactionRedemption_enabled_of_le
+#full_axioms Blanc.Weth10.Stable.selfTransactionRedemption_enabled_of_le
+#full_axioms Blanc.Weth10.outerOkWithFailedReceipt_not_redemptionEnabled
+#full_axioms Blanc.Weth10.compiledBalanceSstoreReverseComplete
+#full_axioms Blanc.Weth10.Exec.weth10BalanceSstoreClassification_of_mem_committedFrames
+#full_axioms Blanc.Weth10.AccountedHistory.flash_pair_totals_eq
+#full_axioms Blanc.Weth10.AccountedHistory.toReachUsing
+#full_axioms Blanc.Weth10.exists_accountedHistory_of_reachUsing
+#full_axioms Blanc.Weth10.AccountedHistory.weth10Flow_eq_of_appliedBlocks_eq
+#full_axioms Blanc.Weth10.committedExecStorageSound
+#full_axioms Blanc.Weth10.committedExecEthSound
+#full_axioms Blanc.Weth10.AccountedHistory.noCommittedCreditWrap
+#full_axioms Blanc.Weth10.AccountedHistory.holderCreditLoss_eq_zero
+#full_axioms Blanc.Weth10.holderFlow_conserved
+#full_axioms Blanc.Weth10.holderFlow_flash_cancelled
+#full_axioms Blanc.Weth10.holderFlow_residual_floor
+#full_axioms Blanc.Weth10.holderFlow_truncated_floor
+#full_axioms Blanc.Weth10.holderFlow_withdrawal_floor
+#full_axioms Blanc.Weth10.committedExecAllowanceSound
+#full_axioms Blanc.Weth10.AccountedHistory.allowanceTransported_of_compiled
+#full_axioms Blanc.Weth10.flashSettlement_allowanceEntryRead
+#full_axioms Blanc.Weth10.committedExecAllowanceReadSound
+#full_axioms Blanc.Weth10.AccountedHistory.allowanceTransportedSound_of_compiled
 #full_axioms Blanc.Weth10.viewReadFrame_sameCaller_not_authorizing
+#full_axioms Blanc.Weth10.hardenedOutflow_le_permanentOutflow
+#full_axioms Blanc.Weth10.permanentOutflow_eq_hardenedOutflow_of_noCollision
+#full_axioms Blanc.Weth10.holderFlow_hardened_floor
+#full_axioms Blanc.Weth10.dormant_holder_balance_monotone
+#full_axioms Blanc.Weth10.deployment_reachable_residual_messageRedemption_enabled
+#full_axioms Blanc.Weth10.deployment_reachable_residual_transactionRedemption_enabled
+#full_axioms Blanc.Weth10.deployment_reachable_residual_selfMessageRedemption_enabled
+#full_axioms Blanc.Weth10.deployment_reachable_residual_selfTransactionRedemption_enabled
+#full_axioms Blanc.Weth10.deployment_reachable_booked_messageRedemption_enabled
+#full_axioms Blanc.Weth10.deployment_reachable_booked_transactionRedemption_enabled
+#full_axioms Blanc.Weth10.deployment_reachable_booked_selfTransactionRedemption_enabled
+#full_axioms Blanc.Weth10.deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSender
+#full_axioms Blanc.Weth10.deployment_reachable_future_redeemable
+#full_axioms Blanc.Weth10.deployment_reachable_future_dualSelector_redeemable
+#full_axioms Blanc.Weth10.deployment_reachable_future_redeemable_allHolders
+#full_axioms Blanc.Weth10.deploymentRoot_allowanceQuiescent
+#full_axioms Blanc.Weth10.deployment_fullWindow_future_redeemable
+#full_axioms Blanc.Weth10.deployment_fullWindow_attributionRootAt_ne_checkpoint
+#full_axioms Blanc.Weth10.deployment_fullWindow_permanentOutflowAuthorization
+#full_axioms Blanc.Weth10.deployment_fullWindow_hardenedOutflow_only_authorizingRoots
+#full_axioms Blanc.Weth10.deployment_fullWindow_dormant_holder_balance_monotone
+#full_axioms Blanc.Weth10.deployment_reachable_dormant_holder_balance_monotone
+#full_axioms Blanc.Weth10.redeemClaims_anyOrder
+#full_axioms Blanc.Weth10.redeemEveryoneList_anyOrder
+#full_axioms Blanc.Weth10.deployment_reachable_redeemClaims_anyOrder
+#full_axioms Blanc.Weth10.deployment_reachable_redeemEveryoneList_anyOrder
 #full_axioms Blanc.Weth10.mainnet_rulesAt_eq_named
 #full_axioms Blanc.Weth10.mainnet_rulesAt_eq_bpo2_of_ge
 #full_axioms Blanc.Weth10.pragueRules_redemptionRuntimeCeiling_gasCap
@@ -1553,63 +560,693 @@ elab "#full_axioms " id:ident : command => do
 #full_axioms Blanc.Weth10.bpo2Rules_redemptionRuntimeCeiling_gasCap
 #full_axioms Blanc.Weth10.mainnet_checkTransactionGasCap_of_le
 #full_axioms Blanc.Weth10.weth10CurrentMainnetCreation_rulesAt
+#full_axioms Blanc.Weth10.canonicalMainnetBpo2DeploymentStep_establishes_root
+#full_axioms Blanc.Weth10.chainUsing_preserves_stable_mainnet
+#full_axioms Blanc.Weth10.chain_reachable_backed_and_flash_zero_mainnet
+#full_axioms Blanc.Weth10.deployment_reachable_residual_messageRedemption_enabled_mainnet
+#full_axioms Blanc.Weth10.deployment_reachable_residual_transactionRedemption_enabled_mainnet
+#full_axioms Blanc.Weth10.deployment_reachable_residual_selfMessageRedemption_enabled_mainnet
+#full_axioms Blanc.Weth10.deployment_reachable_residual_selfTransactionRedemption_enabled_mainnet
+#full_axioms Blanc.Weth10.deployment_reachable_booked_messageRedemption_enabled_mainnet
+#full_axioms Blanc.Weth10.deployment_reachable_booked_transactionRedemption_enabled_mainnet
+#full_axioms Blanc.Weth10.deployment_reachable_booked_selfTransactionRedemption_enabled_mainnet
+#full_axioms Blanc.Weth10.deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSender_mainnet
+#full_axioms Blanc.Weth10.deployment_reachable_future_redeemable_mainnet
+#full_axioms Blanc.Weth10.deployment_reachable_future_dualSelector_redeemable_mainnet
+#full_axioms Blanc.Weth10.deployment_reachable_future_redeemable_allHolders_mainnet
+#full_axioms Blanc.Weth10.deploymentRoot_allowanceQuiescent_mainnet
+#full_axioms Blanc.Weth10.deployment_fullWindow_future_redeemable_mainnet
+#full_axioms Blanc.Weth10.deployment_fullWindow_attributionRootAt_ne_checkpoint_mainnet
+#full_axioms Blanc.Weth10.deployment_fullWindow_permanentOutflowAuthorization_mainnet
+#full_axioms Blanc.Weth10.deployment_fullWindow_hardenedOutflow_only_authorizingRoots_mainnet
+#full_axioms Blanc.Weth10.deployment_fullWindow_dormant_holder_balance_monotone_mainnet
+#full_axioms Blanc.Weth10.deployment_reachable_dormant_holder_balance_monotone_mainnet
+#full_axioms Blanc.Weth10.deployment_reachable_redeemClaims_anyOrder_mainnet
+#full_axioms Blanc.Weth10.deployment_reachable_redeemEveryoneList_anyOrder_mainnet
+#full_axioms Blanc.Weth10.AccountedHistory.flash_pair_totals_eq_mainnet
+#full_axioms Blanc.Weth10.AccountedHistory.weth10Flow_eq_of_appliedBlocks_eq_mainnet
+#full_axioms Blanc.Weth10.AccountedHistory.noCommittedCreditWrap_mainnet
+#full_axioms Blanc.Weth10.AccountedHistory.holderCreditLoss_eq_zero_mainnet
+#full_axioms Blanc.Weth10.holderFlow_conserved_mainnet
+#full_axioms Blanc.Weth10.holderFlow_flash_cancelled_mainnet
+#full_axioms Blanc.Weth10.holderFlow_residual_floor_mainnet
+#full_axioms Blanc.Weth10.holderFlow_truncated_floor_mainnet
+#full_axioms Blanc.Weth10.holderFlow_withdrawal_floor_mainnet
+#full_axioms Blanc.Weth10.chainUsing_preserves_stable_prague
+#full_axioms Blanc.Weth10.chain_reachable_backed_and_flash_zero_prague
+#full_axioms Blanc.Weth10.deployment_reachable_residual_messageRedemption_enabled_prague
+#full_axioms Blanc.Weth10.deployment_reachable_residual_transactionRedemption_enabled_prague
+#full_axioms Blanc.Weth10.deployment_reachable_residual_selfMessageRedemption_enabled_prague
+#full_axioms Blanc.Weth10.deployment_reachable_residual_selfTransactionRedemption_enabled_prague
+#full_axioms Blanc.Weth10.deployment_reachable_booked_messageRedemption_enabled_prague
+#full_axioms Blanc.Weth10.deployment_reachable_booked_transactionRedemption_enabled_prague
+#full_axioms Blanc.Weth10.deployment_reachable_booked_selfTransactionRedemption_enabled_prague
+#full_axioms Blanc.Weth10.deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSender_prague
+#full_axioms Blanc.Weth10.deployment_reachable_future_redeemable_prague
+#full_axioms Blanc.Weth10.deployment_reachable_future_dualSelector_redeemable_prague
+#full_axioms Blanc.Weth10.deployment_reachable_future_redeemable_allHolders_prague
+#full_axioms Blanc.Weth10.deploymentRoot_allowanceQuiescent_prague
+#full_axioms Blanc.Weth10.deployment_fullWindow_future_redeemable_prague
+#full_axioms Blanc.Weth10.deployment_fullWindow_attributionRootAt_ne_checkpoint_prague
+#full_axioms Blanc.Weth10.deployment_fullWindow_permanentOutflowAuthorization_prague
+#full_axioms Blanc.Weth10.deployment_fullWindow_hardenedOutflow_only_authorizingRoots_prague
+#full_axioms Blanc.Weth10.deployment_fullWindow_dormant_holder_balance_monotone_prague
+#full_axioms Blanc.Weth10.deployment_reachable_dormant_holder_balance_monotone_prague
+#full_axioms Blanc.Weth10.deployment_reachable_redeemClaims_anyOrder_prague
+#full_axioms Blanc.Weth10.deployment_reachable_redeemEveryoneList_anyOrder_prague
+#full_axioms Blanc.Weth10.AccountedHistory.flash_pair_totals_eq_prague
+#full_axioms Blanc.Weth10.AccountedHistory.weth10Flow_eq_of_appliedBlocks_eq_prague
+#full_axioms Blanc.Weth10.AccountedHistory.noCommittedCreditWrap_prague
+#full_axioms Blanc.Weth10.AccountedHistory.holderCreditLoss_eq_zero_prague
+#full_axioms Blanc.Weth10.holderFlow_conserved_prague
+#full_axioms Blanc.Weth10.holderFlow_flash_cancelled_prague
+#full_axioms Blanc.Weth10.holderFlow_residual_floor_prague
+#full_axioms Blanc.Weth10.holderFlow_truncated_floor_prague
+#full_axioms Blanc.Weth10.holderFlow_withdrawal_floor_prague
 #full_axioms Blanc.LidoCircuitBreaker.emptyWitness
+#full_axioms Blanc.LidoCircuitBreaker.lidoCircuitBreakerCode_compile
+#full_axioms Blanc.LidoCircuitBreaker.funcs_selectors_eq_runtimeEndpoints
+#full_axioms Blanc.LidoCircuitBreaker.runtime_source_sstore_site_count
+#full_axioms Blanc.LidoCircuitBreaker.runtime_source_tstore_site_count
+#full_axioms Blanc.LidoCircuitBreaker.runtime_source_external_call_site_count
+#full_axioms Blanc.LidoCircuitBreaker.sourceInventory_cardinalities
+#full_axioms Blanc.LidoCircuitBreaker.enumeration_entry_sstore_free
+#full_axioms Blanc.LidoCircuitBreaker.enumeration_writing_mutant_rejected
 #full_axioms Blanc.LidoCircuitBreaker.abiEncodeConstructorArgs_length
 #full_axioms Blanc.LidoCircuitBreaker.constructor_inventory_cardinalities
+#full_axioms Blanc.LidoCircuitBreaker.creation_template_runtime_suffix
+#full_axioms Blanc.LidoCircuitBreaker.full_create_input_length
+#full_axioms Blanc.LidoCircuitBreaker.slot_toNat_of_region_payload_lt
+#full_axioms Blanc.LidoCircuitBreaker.slot_injective_payload
+#full_axioms Blanc.LidoCircuitBreaker.slot_ne_of_region_ne
+#full_axioms Blanc.LidoCircuitBreaker.RegistryWitness.entries_length_le
 #full_axioms Blanc.LidoCircuitBreaker.setPauser_sourceTrace_refines_model
+#full_axioms Blanc.LidoCircuitBreaker.RegistryWitness.applySetPauserSourceTrace
+#full_axioms Blanc.LidoCircuitBreaker.setPauser_zero_runCompiledTo_pausableZero_noRegistryWrite
+#full_axioms Blanc.LidoCircuitBreaker.setPauser_run_extracts_sourceTrace
+#full_axioms Blanc.LidoCircuitBreaker.setPauserKernel_run_of_exec
+#full_axioms Blanc.LidoCircuitBreaker.setPauserKernel_exec_extracts_sourceTrace
+#full_axioms Blanc.LidoCircuitBreaker.registerPauser_kernel_exec_preserves_registry
+#full_axioms Blanc.LidoCircuitBreaker.registerAfterSet_runCompiledTo_preserves_registry
+#full_axioms Blanc.LidoCircuitBreaker.pause_kernel_exec_reaches_pauseAfterSet
+#full_axioms Blanc.LidoCircuitBreaker.registerPauser_settled_error_restores_registry
+#full_axioms Blanc.LidoCircuitBreaker.pause_settled_error_restores_registry
+#full_axioms Blanc.LidoCircuitBreaker.membershipEquivalence_registerPauser
+#full_axioms Blanc.LidoCircuitBreaker.cleanStateAfterRemoval_registerPauser
+#full_axioms Blanc.LidoCircuitBreaker.globalCountConservation_registerPauser
+#full_axioms Blanc.LidoCircuitBreaker.pause_direct_postWrite_revert_settles_and_restores_registry
+#full_axioms Blanc.LidoCircuitBreaker.directPause_zeroCode_postWrite_error_control
+#full_axioms Blanc.LidoCircuitBreaker.getPausables_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.getPausables_noSstore_occurrence
+#full_axioms Blanc.LidoCircuitBreaker.registryViews_coherent
+#full_axioms Blanc.LidoCircuitBreaker.pauserSet_local_transition
+#full_axioms Blanc.LidoCircuitBreaker.pauserSet_target_zero_no_success
+#full_axioms Blanc.LidoCircuitBreaker.pauserSet_target_zero_error_logs_unchanged
+#full_axioms Blanc.LidoCircuitBreaker.pauserSet_register_success
+#full_axioms Blanc.LidoCircuitBreaker.pauserSet_register_success_committed
+#full_axioms Blanc.LidoCircuitBreaker.pauserSet_settled_error_not_observable
+#full_axioms Blanc.LidoCircuitBreaker.registryObservation_sound
+#full_axioms Blanc.LidoCircuitBreaker.registryStable_iff_stateInv
+#full_axioms Blanc.LidoCircuitBreaker.funcSound_of_storFixed
+#full_axioms Blanc.LidoCircuitBreaker.funcSound_of_registryCore
+#full_axioms Blanc.LidoCircuitBreaker.registrySpec_sound_of_funcSound
+#full_axioms Blanc.LidoCircuitBreaker.funcSound_of_mem_funcs
+#full_axioms Blanc.LidoCircuitBreaker.funcSound_of_mem_nonRegistry
+#full_axioms Blanc.subcode_of_get?_eq_some_appended
+#full_axioms Blanc.Prog.jumpable_of_get?_table_appended
+#full_axioms Blanc.Func.exec_of_runCompiled_appended_core
+#full_axioms Blanc.Prog.exec_of_runCompiled_appended
+#full_axioms Blanc.Func.exec_of_runCompiledTo_appended_core
+#full_axioms Blanc.Prog.exec_of_runCompiledTo_appended
+#full_axioms Blanc.processCreateMessage_msg_getStor_currentTarget
+#full_axioms Blanc.benvAfterTransfer_exists_zero
+#full_axioms Blanc.benvAfterTransfer_stat
+#full_axioms Blanc.processMessage_ok_of_exec
+#full_axioms Blanc.processCreateMessage_ok_of_processMessage_and_charge
+#full_axioms Blanc.processCreateMessage_ok_of_processMessage_error
 #full_axioms Blanc.jauneListCompare_eq_compareLex
+#full_axioms Blanc.processUncheckedSystemTransaction_deploymentSystemProgram
+#full_axioms Blanc.processCheckedSystemTransaction_deploymentSystemProgram
+#full_axioms Blanc.canonicalDeploymentSystemPrefix
+#full_axioms Blanc.LidoCircuitBreaker.runtimeTemplateCode_length_exact
+#full_axioms Blanc.LidoCircuitBreaker.constructor_immutable_word_offsets_exact
+#full_axioms Blanc.LidoCircuitBreaker.provisionalConstructorPrefix_length_exact
+#full_axioms Blanc.LidoCircuitBreaker.lidoCircuitBreakerConstructorProgram_compile
+#full_axioms Blanc.LidoCircuitBreaker.lidoCircuitBreakerInitPrefix_length_exact
+#full_axioms Blanc.LidoCircuitBreaker.patchRuntimeTemplate_official
+#full_axioms Blanc.LidoCircuitBreaker.lidoCircuitBreakerCreationTemplate_length_exact
+#full_axioms Blanc.LidoCircuitBreaker.officialFullCreateInput_eq_layout
+#full_axioms Blanc.LidoCircuitBreaker.officialFullCreateInput_length_exact
+#full_axioms Blanc.LidoCircuitBreaker.officialFullCreateInput_slice_constructorArgs
+#full_axioms Blanc.LidoCircuitBreaker.officialFullCreateInput_slice_runtimeTemplate
 #full_axioms Blanc.LidoCircuitBreaker.officialConstructorEventScratch_eq
+#full_axioms Blanc.LidoCircuitBreaker.constructorBody_official_eq
+#full_axioms Blanc.LidoCircuitBreaker.lidoCircuitBreakerConstructorProgram_main_official
+#full_axioms Blanc.LidoCircuitBreaker.lidoCircuitBreakerConstructorProgram_aux_official
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorTableCallIndices_exact
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorDecodedMemory_read_argument
 #full_axioms Blanc.LidoCircuitBreaker.officialConstructorDecodedMemory_size
 #full_axioms Blanc.LidoCircuitBreaker.officialConstructorDecodedMemory_read_memory
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorCopiedMemory_size
+#full_axioms Blanc.LidoCircuitBreaker.ConstructorPatchInvariant.read_argument
 #full_axioms Blanc.LidoCircuitBreaker.ConstructorPatchInvariant.read_memory
+#full_axioms Blanc.LidoCircuitBreaker.constructorPatchPair_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.ConstructorPatchInvariant.runCompiled_write
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPatchLine1_4_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPatchLine5_8_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPatchLine9_12_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPatchMemory12_eq_patched
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPatchedMemory_size
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPatchedMemory_wf
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPatchedMemory_reads
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPatchedMemory_read_argument
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPauseZeroMemory_wf
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPauseZeroMemory_reads
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPauseZeroMemory_size
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPauseZeroMemory_read_argument
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPauseZeroMemory_read_argument_memory
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPauseMemory_wf
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPauseMemory_reads
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPauseMemory_size
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPauseMemory_read_argument
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPauseMemory_read_argument_memory
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatZeroMemory_wf
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatZeroMemory_reads
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatZeroMemory_size
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatZeroMemory_read_argument
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatZeroMemory_read_argument_memory
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatMemory_wf
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatMemory_reads
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatMemory_size
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatMemory_read_argument
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatMemory_read_argument_memory
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatMemory_eq_final
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorFinalMemory_size
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorFinalMemory_reads
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorFinalMemory_read_runtime
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorFinalMemory_read
+#full_axioms Blanc.LidoCircuitBreaker.Bytes.sliceD_writeAt_pair
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPatchedMemory_read_initializedData
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPatchedMemory_read_initializedMemory
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorColdStore_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatLoggedBase_getStor
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPauseLoggedBase_accessedStorageKeys
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPauseLoggedBase_getStorVal
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatLoggedBase_accessedStorageKeys
+#full_axioms Blanc.LidoCircuitBreaker.not_mem_hashSet_insert
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorEffectBase_getStor
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorEffectBase_logs
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorEffectBase_state
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorEffectBase_refundCounter
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorEffectBase_returnData
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorEffectBase_error
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorEffectBase_accountsToDelete
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorEffectBase_createdAccounts
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorEffectBase_accessedAddresses
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorEffectBase_transientStorage
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorEffectBase_accessedStorageKeys
+#full_axioms Blanc.LidoCircuitBreaker.constructorArgumentSstorePrefix_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.constructorEventLog1Opcode_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.constructorEventLog1Prefix_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.constructorArgumentMstorePrefix_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.constructorZeroMstorePrefix_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.constructorEventLog2Opcode_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.constructorArgumentLog2Prefix_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPost_eq
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorReturnLine_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorReturn_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPost_getStor
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPost_pauseDuration
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPost_heartbeatInterval
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPost_logs
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPost_stack
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPost_memory
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPost_gasLeft
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPost_output
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatSstore_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatStoreLine_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatLogOpcode_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatLogLine_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatScratchValue_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatScratchZero_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatScratchLine_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorHeartbeatSuffix_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPauseStoreLine_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPauseLogLine_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPauseScratchValue_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPauseScratchZero_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPauseScratchLine_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorConfigurationSuffix_eq_prefix
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorConfigurationSuffix_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorInitializedLogOpcode_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorInitializedLogLine_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorCopyPatch_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorEffectBody_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorValidationPrefix_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorProgram_runCompiled_fresh
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructor_exec_fresh
+#full_axioms Blanc.LidoCircuitBreaker.officialCodeDepositGas_eq
+#full_axioms Blanc.LidoCircuitBreaker.officialCreateMessageGasAccounting_eq
+#full_axioms Blanc.LidoCircuitBreaker.prepareCanonicalDeploymentContext
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPost_state
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPost_refundCounter
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPost_returnData
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPost_error
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPost_accountsToDelete
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPost_createdAccounts
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPost_accessedAddresses
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPost_accessedStorageKeys
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPost_transientStorage
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPost_effectCheckpoints
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorErrorArmLayout
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorExecutionTrace_fresh
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPost_emptyRegistryWitness
+#full_axioms Blanc.LidoCircuitBreaker.officialConstructorPost_registryCoherent
+#full_axioms Blanc.LidoCircuitBreaker.lidoCircuitBreakerCode_official_length
+#full_axioms Blanc.LidoCircuitBreaker.lidoCircuitBreakerCode_official_cons
+#full_axioms Blanc.LidoCircuitBreaker.processCreateMessage_establishes_officialRegistryStable
+#full_axioms Blanc.LidoCircuitBreaker.processMessageCall_establishes_officialRegistryStable
+#full_axioms Blanc.LidoCircuitBreaker.canonicalDeploymentTransaction_succeeds
+#full_axioms Blanc.LidoCircuitBreaker.canonicalDeploymentSuffix_succeeds
+#full_axioms Blanc.LidoCircuitBreaker.canonicalDeploymentApplyBody_succeeds
+#full_axioms Blanc.LidoCircuitBreaker.canonicalDeploymentStep_establishes_root
+#full_axioms Blanc.LidoCircuitBreaker.DeploymentRoot.reflReach
+#full_axioms Blanc.LidoCircuitBreaker.DeploymentRoot.reachable_registryStable
+#full_axioms Blanc.LidoCircuitBreaker.DeploymentRoot.reachable_code
+#full_axioms Blanc.LidoCircuitBreaker.DeploymentRoot.reachable_installedCode
+#full_axioms Blanc.LidoCircuitBreaker.DeploymentRoot.reachable_witness
+#full_axioms Blanc.LidoCircuitBreaker.DeploymentRoot.reachable_membership
+#full_axioms Blanc.LidoCircuitBreaker.DeploymentRoot.reachable_countConservation
+#full_axioms Blanc.Exec.committedCell_eq_of_noRetainedWriteTo
+#full_axioms Blanc.Exec.Deriv.ParentStep.sevm_eq
+#full_axioms Blanc.Exec.Deriv.ParentPrefix.sevm_eq
+#full_axioms Blanc.Exec.noRetainedWriteTo_of_no_execOccurrence
+#full_axioms Blanc.Exec.noRetainedWriteTo_of_frame_owners_ne
+#full_axioms Blanc.Exec.noRetainedWriteTo_of_sourceSites_no_exec
+#full_axioms Blanc.Func.RunCompiledTo.RouteTo.enteredFunction_of_ne
+#full_axioms Blanc.runCompiledTo_next_elim
+#full_axioms Blanc.runCompiledTo_line_elim
+#full_axioms Blanc.runCompiledTo_call_elim
+#full_axioms Blanc.runCompiledTo_branchLeft_frame_elim
+#full_axioms Blanc.runCompiledTo_branchRight_frame_elim
+#full_axioms Blanc.LidoCircuitBreaker.pauseCall_boundary_with_execution
+#full_axioms Blanc.LidoCircuitBreaker.pauseStat_boundary_with_execution
+#full_axioms Blanc.LidoCircuitBreaker.pauseCallStaging_boundary_operands
+#full_axioms Blanc.LidoCircuitBreaker.pauseStatStaging_boundary_operands
+#full_axioms Blanc.LidoCircuitBreaker.pauseStatStaging_boundary_calldata
+#full_axioms Blanc.LidoCircuitBreaker.pauseLockTest_word
+#full_axioms Blanc.LidoCircuitBreaker.pauseAssignedTest_word
+#full_axioms Blanc.LidoCircuitBreaker.pauseLiveTest_word
+#full_axioms Blanc.LidoCircuitBreaker.pause_to_setPauserCall_any
+#full_axioms Blanc.LidoCircuitBreaker.pause_routeTo_setPauserCall_any
+#full_axioms Blanc.LidoCircuitBreaker.dispatch_to_pause_transient
+#full_axioms Blanc.LidoCircuitBreaker.dispatch_routeTo_pause_transient
+#full_axioms Blanc.LidoCircuitBreaker.runtimeMain_to_pauseKernel_any
+#full_axioms Blanc.LidoCircuitBreaker.runtimeMain_routeTo_pauseKernel_any
+#full_axioms Blanc.LidoCircuitBreaker.setPauserKernel_to_pauseAfterSet_any
+#full_axioms Blanc.LidoCircuitBreaker.setPauserKernel_routeTo_pauseAfterSetCall_any
+#full_axioms Blanc.LidoCircuitBreaker.pauseSuccess_ok_getStorVal_eq_of_ne
+#full_axioms Blanc.LidoCircuitBreaker.pauseSuccess_ok_getStor_eq_of_owner_ne
+#full_axioms Blanc.LidoCircuitBreaker.MemWordAt.acrossPauseCallStagingBoundary
+#full_axioms Blanc.LidoCircuitBreaker.MemWordAt.acrossPauseStatStagingBoundary
+#full_axioms Blanc.LidoCircuitBreaker.pauseAfterSet_codeGuard_arms_windows
+#full_axioms Blanc.LidoCircuitBreaker.pauseAfterCall_arms_windows
+#full_axioms Blanc.LidoCircuitBreaker.pauseAfterCall_ok_depth_ne_zero
+#full_axioms Blanc.LidoCircuitBreaker.PublicPauseEntryPremises.removePreservesCount
+#full_axioms Blanc.LidoCircuitBreaker.publicPause_reaches_pauseAfterSet
+#full_axioms Blanc.LidoCircuitBreaker.pauseAfterSet_boundary_committed_outcomes
+#full_axioms Blanc.LidoCircuitBreaker.publicPause_committed_outcomes
+#full_axioms Blanc.LidoCircuitBreaker.pauseLastWorld_publicPausePremises
+#full_axioms Blanc.LidoCircuitBreaker.pauseLastWorld_publicPauseReach
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.stubProgram_compiles
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.stubProgram_compile
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.stubProgram_pcFree
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.stubProgram_sourceSites_no_exec
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.stub_pauseFor_effect
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.stub_isPaused_truthful
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.stub_lidoPinnedPauseTarget
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.stub_successful_pause_composition
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.benignCallProgram_compiles
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.benignCallProgram_compile
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.benignCall_nonchildless_noninterference
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.wrongBoolProgram_compiles
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.wrongBoolProgram_compile
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.wrongBoolProgram_pcFree
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.wrongBool_paused_query_execution
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.wrongBoolProgram_truthfulness_falsifier
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.wrongBoolReturnShape_falsifier
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.retainedWriteChildProgram_compiles
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.retainedWriteProgram_compiles
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.retainedWriteChildProgram_compile
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.retainedWriteProgram_compile
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.retainedWrite_distinctTarget_descendant_falsifier
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.retainedWriteProgram_noninterference_falsifier
+#full_axioms Blanc.LidoCircuitBreaker.observation_ok_getStorVal_eq_of_ne
+#full_axioms Blanc.LidoCircuitBreaker.observation_ok_getStor_eq_of_owner_ne
+#full_axioms Blanc.LidoCircuitBreaker.stubBoundaryExecutions_of_afterSet_ok
+#full_axioms Blanc.LidoCircuitBreaker.publicPause_pinnedTarget
+#full_axioms Blanc.LidoCircuitBreaker.publicPause_stubPinnedTarget
+#full_axioms Blanc.LidoCircuitBreaker.publicPause_stub_committed_outcomes
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.wrongBoolFixture_nonempty
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPausePost_logs
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPausePost_refundCounter
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPausePost_accountsToDelete
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPausePost_accessedAddresses
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPausePost_accessedStorageKeys
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPausePost_transientStorage
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPausePost_state
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPause_cold_runCompiledTo
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubQuery_true_warm_runCompiledTo
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubMain_pause_cold_runCompiledTo
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubMain_query_true_warm_runCompiledTo
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubProgram_pause_cold_runCompiledTo
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubProgram_query_true_warm_runCompiledTo
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.sliceD_stagedCalldata
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.sliceD_stagedSelector
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPause_exec
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubQuery_exec
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.pauseAfterSet_stub_toSuccess_runCompiled
+#full_axioms Blanc.LidoCircuitBreaker.stubPauseWorldState_get_breaker
+#full_axioms Blanc.LidoCircuitBreaker.stubPauseWorldState_get_target
+#full_axioms Blanc.LidoCircuitBreaker.stubPauseWorld_targetCode
+#full_axioms Blanc.LidoCircuitBreaker.stubPauseWorld_codeBytes
+#full_axioms Blanc.LidoCircuitBreaker.stubPauseWorld_currentTarget
+#full_axioms Blanc.LidoCircuitBreaker.stubPauseWorld_callerWord
+#full_axioms Blanc.LidoCircuitBreaker.stubPauseWorld_getStorVal
+#full_axioms Blanc.LidoCircuitBreaker.stubPauseWorld_targetCodeAt
+#full_axioms Blanc.LidoCircuitBreaker.stubPauseWorld_publicPausePremises
+#full_axioms Blanc.LidoCircuitBreaker.stubPauseWorld_target_ne_owner
+#full_axioms Blanc.LidoCircuitBreaker.stubPauseWorld_closedPublicPause
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.benignCallFixture_nonempty
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetControl.benignCall_nonchildless_noninterference_closed
+#full_axioms Blanc.ProxyPair.implementationSlotLit_eq_slot
+#full_axioms Blanc.ProxyPair.proxyProg_compiles
+#full_axioms Blanc.ProxyPair.proxyProg_compile
+#full_axioms Blanc.ProxyPair.proxyBytes_length
+#full_axioms Blanc.ProxyPair.proxyCode_notDelegation
+#full_axioms Blanc.ProxyPair.implGuardedProg_compiles
+#full_axioms Blanc.ProxyPair.implGuardedProg_compile
+#full_axioms Blanc.ProxyPair.implGuardedBytes_length
+#full_axioms Blanc.ProxyPair.implGuardedCode_notDelegation
+#full_axioms Blanc.ProxyPair.implSlot_ne_implementationSlot
+#full_axioms Blanc.ProxyPair.implSlot_ne_adminSlot
+#full_axioms Blanc.ProxyPair.implSlot_ne_beaconSlot
+#full_axioms Blanc.ProxyPair.implementationSlot_ne_implSlot
+#full_axioms Blanc.ProxyPair.adminSlot_ne_implSlot
+#full_axioms Blanc.ProxyPair.beaconSlot_ne_implSlot
 #full_axioms Blanc.ProxyPair.implBodyGas_eq
 #full_axioms Blanc.ProxyPair.implGuardedSuccessGas_eq
 #full_axioms Blanc.ProxyPair.implGuardedRevertGas_eq
 #full_axioms Blanc.ProxyPair.implGuardedSuccessEntryGas_eq
 #full_axioms Blanc.ProxyPair.implGuardedRevertEntryGas_eq
+#full_axioms Blanc.ProxyPair.implSuccess_runCompiledTo
+#full_axioms Blanc.ProxyPair.implGuarded_runCompiledTo_nonzero
+#full_axioms Blanc.ProxyPair.implGuarded_runCompiledTo_zero
+#full_axioms Blanc.ProxyPair.implGuarded_static_sstore_halt
+#full_axioms Blanc.ProxyPair.implGuarded_static_halt_exec
 #full_axioms Blanc.ProxyPair.proxyAdr_ne_implAdr
+#full_axioms Blanc.ProxyPair.pairState_proxyAcct
+#full_axioms Blanc.ProxyPair.pairState_implAcct
+#full_axioms Blanc.ProxyPair.pairState_proxyCode
+#full_axioms Blanc.ProxyPair.pairState_implCode
+#full_axioms Blanc.ProxyPair.pairState_proxySlot
+#full_axioms Blanc.ProxyPair.pairState_implSlot_zero
+#full_axioms Blanc.ProxyPair.pairState_proxyImplSlot_zero
 #full_axioms Blanc.ProxyPair.successData_length
 #full_axioms Blanc.ProxyPair.revertData_length
 #full_axioms Blanc.ProxyPair.proxy_call_gas_split
+#full_axioms Blanc.ProxyPair.pairBenv_impl_not_precompile
+#full_axioms Blanc.ProxyPair.proxyMsgSuccess_code
+#full_axioms Blanc.ProxyPair.proxyMsgRevert_code
+#full_axioms Blanc.ProxyPair.proxyMsgSuccess_data
+#full_axioms Blanc.ProxyPair.proxyMsgRevert_data
+#full_axioms Blanc.ProxyPair.proxyMsgSuccess_gas
+#full_axioms Blanc.ProxyPair.proxyMsgRevert_gas
+#full_axioms Blanc.ProxyPair.proxyMsgSuccess_target
+#full_axioms Blanc.ProxyPair.proxyMsgRevert_target
+#full_axioms Blanc.ProxyPair.proxyMsgSuccess_caller
+#full_axioms Blanc.ProxyPair.proxyMsgRevert_caller
+#full_axioms Blanc.ProxyPair.proxyFallback_eq_prefix
+#full_axioms Blanc.ProxyPair.proxySuccessChildMsg_exec
+#full_axioms Blanc.ProxyPair.proxyProg_success_runCompiledTo
+#full_axioms Blanc.ProxyPair.proxyRevertChildMsg_exec
+#full_axioms Blanc.ProxyPair.proxyProg_revert_runCompiledTo
 #full_axioms Blanc.ProxyPair.forwardBudgetWitness_27224
 #full_axioms Blanc.ProxyPair.forwardBudget_27224
+#full_axioms Blanc.ProxyPair.proxyCorrespondenceMsg_premises
+#full_axioms Blanc.ProxyPair.processMessage_correspondence_premises_satisfiable
+#full_axioms Blanc.ProxyPair.processMessage_correspondence
+#full_axioms Blanc.ProxyPair.processMessage_static_halt_to_revert
+#full_axioms Blanc.ProxyPair.processMessage_property_transport
+#full_axioms Blanc.ProxyPair.settledObservable_rejects_direct_clean_proxy_error
+#full_axioms Blanc.ProxyPair.settledObservable_rejects_direct_error_proxy_clean
+#full_axioms Blanc.ProxyPair.settledObservable_rejects_output_mismatch
+#full_axioms Blanc.ProxyPair.settledObservable_rejects_outer_ok_error
+#full_axioms Blanc.ProxyPair.settledObservable_rejects_outer_error_ok
+#full_axioms Blanc.ProxyPair.settledObservable_rejects_reverse_revert_halt
+#full_axioms Blanc.ProxyPair.proxy_entrySstoreFree
+#full_axioms Blanc.ProxyPair.implGuarded_entrySstoreFree_rejected
+#full_axioms Blanc.ProxyPair.proxyProg_success_successfulSstore_sourceSite
+#full_axioms Blanc.ProxyPair.proxyProg_revert_successfulSstore_sourceSite
 #full_axioms Blanc.ProxyPair.ossifiableCreateMessageGas_eq
+#full_axioms Blanc.ProxyPair.ossifiableConstructorProgram_canonicalEmptyInput_runCompiled
+#full_axioms Blanc.ProxyPair.ossifiableConstructorProgram_canonicalEmptyInput_forward_exact
+#full_axioms Blanc.ProxyPair.processCreateMessage_ossifiable_emptySetup_success
+#full_axioms Blanc.ProxyPair.ossifiableConstructorProgram_nonempty_success
+#full_axioms Blanc.ProxyPair.processCreateMessage_ossifiable_failure_rollback
+#full_axioms Blanc.ProxyPair.OssifiableCreateFixture.message_code
+#full_axioms Blanc.ProxyPair.OssifiableCreateFixture.implementation_code
+#full_axioms Blanc.ProxyPair.OssifiableCreateFixture.message_success
+#full_axioms Blanc.ProxyPair.OssifiableBothSlotFixture.setupMain_compile
+#full_axioms Blanc.ProxyPair.OssifiableBothSlotFixture.setupMain_runCompiledTo
+#full_axioms Blanc.ProxyPair.OssifiableBothSlotFixture.message_success
+#full_axioms Blanc.ProxyPair.OssifiableBothSlotCreateFixture.program_success
 #full_axioms Blanc.ProxyPair.OssifiableBothSlotCreateFixture.bothSlotCreateMessageGas_eq
+#full_axioms Blanc.ProxyPair.OssifiableBothSlotCreateFixture.creationMessage_code
+#full_axioms Blanc.ProxyPair.OssifiableBothSlotCreateFixture.creationMessage_success
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.lidoTwgCode_compile
 #full_axioms Blanc.LidoTriggerableWithdrawalsGateway.abiEncodeConstructorArgs_length
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.creation_template_runtime_suffix
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.full_create_input_length
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.pauseFor_absent_role_reverts
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.pauseUntil_absent_role_reverts
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.resume_absent_role_reverts
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.setExitRequestLimit_absent_role_reverts
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.grantRole_absent_role_reverts
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.revokeRole_absent_role_reverts
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.triggerFullWithdrawals_absent_role_reverts
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.triggerFullWithdrawals_authorized_paused_reverts
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.triggerFullWithdrawals_reaches_afterValidation
+#full_axioms Blanc.prorataCode_compile
+#full_axioms Blanc.Prorata.classify_prorata_exec_route
+#full_axioms Blanc.Prorata.classify_prorata_exec_success
+#full_axioms Blanc.Prorata.prorata_deposit_exec_effect
+#full_axioms Blanc.Prorata.prorata_withdraw_exec_effect
+#full_axioms Blanc.Prorata.prorata_convertToShares_exec_effect
+#full_axioms Blanc.Prorata.prorata_convertToAssets_exec_effect
+#full_axioms Blanc.Prorata.prorata_convertToShares_eq_deposit_mint
+#full_axioms Blanc.Prorata.prorata_convertToAssets_eq_withdraw_pay
+#full_axioms Blanc.Prorata.deposit_effect
+#full_axioms Blanc.Prorata.withdraw_settles_before_call
+#full_axioms Blanc.Prorata.withdraw_pays_exactly
+#full_axioms Blanc.Prorata.convertToShares_effect
+#full_axioms Blanc.Prorata.convertToAssets_effect
+#full_axioms Blanc.Prorata.convertToShares_eq_deposit_mint
+#full_axioms Blanc.Prorata.convertToAssets_eq_withdraw_pay
+#full_axioms Blanc.Prorata.deposit_quote_toNat
+#full_axioms Blanc.Prorata.withdraw_quote_toNat
 #full_axioms Blanc.Prorata.mintN_never_overmints
 #full_axioms Blanc.Prorata.payN_never_overpays
 #full_axioms Blanc.Prorata.payN_le_balance
+#full_axioms Blanc.Prorata.Inv.withdraw_pay_word_le_balance
 #full_axioms Blanc.Prorata.deposit_price_nondecreasing
 #full_axioms Blanc.Prorata.withdraw_price_nondecreasing
 #full_axioms Blanc.Prorata.withdraw_ceil_shares_covers_assets
+#full_axioms Blanc.Prorata.deposit_floor_shares_ceil_assets_le
 #full_axioms Blanc.Prorata.mintN_residue_eq
 #full_axioms Blanc.Prorata.payN_residue_eq
 #full_axioms Blanc.Prorata.roundtrip_dust_eq
+#full_axioms Blanc.Prorata.immediate_roundtrip_loss_le
+#full_axioms Blanc.Prorata.prorataSpec_sound
+#full_axioms Blanc.Prorata.prorataSpec_preserves
+#full_axioms Blanc.Prorata.DeploymentRoot.reachable_stateInv
+#full_axioms Blanc.Prorata.DeploymentRoot.reachable_accountingInvariant
+#full_axioms Blanc.Prorata.ProrataAccountingPath.prorata_dust_trace_exact
+#full_axioms Blanc.Prorata.retainedMessageCallAccountingReplay
+#full_axioms Blanc.Prorata.retainedTransactionAccountingReplay
+#full_axioms Blanc.Prorata.retainedTransactionListAccountingReplay
+#full_axioms Blanc.Prorata.retainedSystemMessageAccountingReplay
+#full_axioms Blanc.Prorata.retainedRequestsAccountingReplay
+#full_axioms Blanc.Prorata.retainedDirectWithdrawalAccountingReplay
+#full_axioms Blanc.Prorata.retainedBodyAccountingReplay
+#full_axioms Blanc.Prorata.retainedConfiguredBlockAccountingReplay
+#full_axioms Blanc.Prorata.retainedConfiguredHistoryAccountingReplay
+#full_axioms Blanc.Prorata.ProrataTraceRealizes.toReachUsing
+#full_axioms Blanc.Prorata.ProrataTraceRealizes.toAccountingReplay
+#full_axioms Blanc.Prorata.prorataTraceRealizes_exists_of_reachUsing
+#full_axioms Blanc.Prorata.prorata_realized_dust_trace_exact
+#full_axioms Blanc.Prorata.attacker_open_context
+#full_axioms Blanc.Prorata.attacker_no_profit
+#full_axioms Blanc.Prorata.victim_loss_bound
+#full_axioms Blanc.Composition.ProrataWethVault.weth_approve_compiled_raw_effect
+#full_axioms Blanc.Composition.ProrataWethVault.foreign_approve_preserves_vault_allowance
+#full_axioms Blanc.Composition.ProrataWethVault.Source.totalAssetsResources_of_run
+#full_axioms Blanc.Composition.ProrataWethVault.readTotalAssets_capacity_body_effect
+#full_axioms Blanc.Composition.ProrataWethVault.maxMint_body_effect
+#full_axioms Blanc.Composition.ProrataWethVault.maxDeposit_body_effect
+#full_axioms Blanc.Composition.ProrataWethVault.maxWithdraw_body_effect
+#full_axioms Blanc.Composition.ProrataWethVault.maxMint_compiled_effect
+#full_axioms Blanc.Composition.ProrataWethVault.maxDeposit_compiled_effect
+#full_axioms Blanc.Composition.ProrataWethVault.maxWithdraw_compiled_effect
+#full_axioms Blanc.Composition.ProrataWethVault.maxMint_compiled_effect_stable
+#full_axioms Blanc.Composition.ProrataWethVault.maxDeposit_compiled_effect_stable
+#full_axioms Blanc.Composition.ProrataWethVault.maxWithdraw_compiled_effect_exact
+#full_axioms Blanc.Composition.ProrataWethVault.deposit_compiled_effect
+#full_axioms Blanc.Composition.ProrataWethVault.mint_compiled_effect
+#full_axioms Blanc.Composition.ProrataWethVault.withdraw_compiled_effect
+#full_axioms Blanc.Composition.ProrataWethVault.redeem_compiled_effect
+#full_axioms Blanc.ProrataWethVault.approve_compiled_effect
+#full_axioms Blanc.ProrataWethVault.transfer_compiled_effect
+#full_axioms Blanc.ProrataWethVault.transferFrom_compiled_effect
+#full_axioms Blanc.ProrataWethVault.roundtrip_loss_le
 #full_axioms Blanc.ProrataWethVault.redemption_le_assets
+#full_axioms Blanc.ProrataWethVault.victim_loss_le
+#full_axioms Blanc.ProrataWethVault.victim_loss_le_over_history
+#full_axioms Blanc.ProrataWethVault.dust_trace_exact
 #full_axioms Blanc.ProrataWethVault.depositStep
 #full_axioms Blanc.ProrataWethVault.redeemStep
 #full_axioms Blanc.ProrataWethVault.donationStep
 #full_axioms Blanc.ProrataWethVault.two_le_offsetN
+#full_axioms Blanc.ProrataWethVault.attacker_open_context
+#full_axioms Blanc.ProrataWethVault.attacker_no_profit
+#full_axioms Blanc.ProrataWethVault.victim_loss_bound
+#full_axioms Blanc.ProrataWethVault.attack_carrier_inhabited
+#full_axioms Blanc.ProrataWethVault.transferStaged_storesOrHalts
+#full_axioms Blanc.ProrataWethVault.withdrawBurn_storesOrHalts
+#full_axioms Blanc.ProrataWethVault.redeemBurn_storesOrHalts
+#full_axioms Blanc.ProrataWethVault.callWethTransferFrom_storesOrHalts
+#full_axioms Blanc.ProrataWethVault.finishInbound_storesOrHalts
+#full_axioms Blanc.ProrataWethVault.inboundAfterQuote_storesOrHalts
+#full_axioms Blanc.ProrataWethVault.depositAfterQuote_storesOrHalts
+#full_axioms Blanc.ProrataWethVault.mintAfterQuote_storesOrHalts
+#full_axioms Blanc.ProrataWethVault.depositAfterQuote_not_static
+#full_axioms Blanc.ProrataWethVault.mintAfterQuote_not_static
 #full_axioms Blanc.ProrataWethVault.mint_never_overmints
 #full_axioms Blanc.ProrataWethVault.withdraw_never_overpays
+#full_axioms Blanc.Frame.enter_run_benvStat
+#full_axioms Blanc.RunFrame.benvStat_eq
+#full_axioms Blanc.genericCall.step_spawn_benvStat
+#full_axioms Blanc.genericCreate.step_spawn_benvStat
+#full_axioms Blanc.Xinst.step_spawn_benvStat
+#full_axioms Blanc.Composition.ProrataWethVault.vault_rely_preserves_conserved
+#full_axioms Blanc.Composition.ProrataWethVault.vault_rely_preserves
+#full_axioms Blanc.Composition.ProrataWethVault.inboundEffect_accountingStep
+#full_axioms Blanc.Composition.ProrataWethVault.outboundEffect_accountingStep
+#full_axioms Blanc.Composition.ProrataWethVault.silent_accountingStep
+#full_axioms Blanc.Composition.ProrataWethVault.transferEffect_accountingStep
+#full_axioms Blanc.Composition.ProrataWethVault.approveEffect_accountingStep
+#full_axioms Blanc.Composition.ProrataWethVault.silent_accountingStep_of_view
+#full_axioms Blanc.Composition.ProrataWethVault.readOnlyEffect_accountingStep
+#full_axioms Blanc.Composition.ProrataWethVault.transferFromEffect_accountingStep
+#full_axioms Blanc.Composition.ProrataWethVault.nonflow_message_accountingStep
+#full_axioms Blanc.Composition.ProrataWethVault.deposit_compiled_effect_named
+#full_axioms Blanc.Composition.ProrataWethVault.deposit_message_accountingStep
+#full_axioms Blanc.Composition.ProrataWethVault.redeem_compiled_effect_named
+#full_axioms Blanc.Composition.ProrataWethVault.redeem_message_accountingStep
+#full_axioms Blanc.Composition.ProrataWethVault.SteppedMessages.toPath
+#full_axioms Blanc.Composition.ProrataWethVault.SteppedMessages.victim_loss_le
+#full_axioms Blanc.Composition.ProrataWethVault.PairBacked.donation
 #full_axioms Blanc.Prorata.ProrataAccountingPath.priceLe_first_last
+#full_axioms Blanc.Composition.ProrataWethVault.vault_message_preserves_conserved
+#full_axioms Blanc.Composition.ProrataWethVault.vault_nonflow_message_preserves_conserved
+#full_axioms Blanc.Composition.ProrataWethVault.ConfiguredRoot.conserved
+#full_axioms Blanc.Composition.ProrataWethVault.ConfiguredRoot.backed
+#full_axioms Blanc.Composition.ProrataWethVault.ConfiguredMessages.preserves_conserved
+#full_axioms Blanc.Composition.ProrataWethVault.ConfiguredRoot.chain_conserved
+#full_axioms Blanc.Composition.ProrataWethVault.wethFrame_vaultRow_classified
+#full_axioms Blanc.Composition.ProrataWethVault.WethFrameClass.classification_sound
+#full_axioms Blanc.Composition.ProrataWethVault.WethFrameClass.classification_complete
+#full_axioms Blanc.Composition.ProrataWethVault.WethFrameClass.classification_total
+#full_axioms Blanc.Drip.history_accounting_exact
+#full_axioms Blanc.Drip.history_balance_exact
+#full_axioms Blanc.Drip.history_entitlement
+#full_axioms Blanc.Drip.history_chi_rho_mono
+#full_axioms Blanc.Drip.concreteHistory_realizes
+#full_axioms Blanc.Composition.ProrataWethVault.pair_reachable_backed_or_debit
+#full_axioms Blanc.Composition.ProrataWethVault.pair_reachable_stable
+#full_axioms Blanc.Composition.ProrataWethVault.pair_reachable_backed
+#full_axioms Blanc.Composition.ProrataWethVault.PairTraceRealizes.authorizedDebit_zero
+#full_axioms Blanc.Composition.ProrataWethVault.pair_realized_dust_trace_exact
+#full_axioms Blanc.Composition.ProrataWethVault.pair_attacker_open_context
+#full_axioms Blanc.Composition.ProrataWethVault.pair_attacker_no_profit
+#full_axioms Blanc.Composition.ProrataWethVault.pair_attacker_no_profit_of_no_share_gifts
+#full_axioms Blanc.Composition.ProrataWethVault.pair_victim_loss_bound
+#full_axioms Blanc.Composition.ProrataWethVault.pair_victim_loss_bound_of_trace
+#full_axioms Blanc.Composition.ProrataWethVault.pair_history_backed
+#full_axioms Blanc.Composition.ProrataWethVault.pair_history_stable
+#full_axioms Blanc.Composition.ProrataWethVault.pair_history_realized_dust_trace_exact
+#full_axioms Blanc.Composition.ProrataWethVault.pair_history_attacker_open_context
+#full_axioms Blanc.Composition.ProrataWethVault.pair_history_victim_loss_bound
+#full_axioms Blanc.Drip.dripTraceRealizes_exists_of_reachUsing
+#full_axioms Blanc.Drip.DripTraceRealizes.toReachUsing
+#full_axioms Blanc.Drip.concreteHistory_not_draftedKinds
+#full_axioms Blanc.Composition.ProrataWethVault.pair_attack_carrier_inhabited
+#full_axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.nilOfEq
+#full_axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.silentReplay
+#full_axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.ofStorageEqBalanceMono
+#full_axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.processMessage_of_body
+#full_axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.processCreateMessage_of_body
+#full_axioms Blanc.ExecutionAccountingReplay.ReplayCarrier.xinstForeignSome
+#full_axioms Blanc.ExecutionAccountingReplay.balanceEntry_eq_ofState
+#full_axioms Blanc.ExecutionAccountingReplay.ProcessMessage.targetBalanceCredits_of_body
+#full_axioms Blanc.ExecutionAccountingReplay.targetBalanceCredits_of_balance_mono
+#full_axioms Blanc.Exec.Deriv.SourceCursor.branchFlagToward
+#full_axioms Blanc.Exec.Deriv.SourceCursor.Toward.selectBranchZero
 #full_axioms Blanc.Func.localExecFree_iff
 #full_axioms Blanc.Prog.componentExecFree_iff
 #full_axioms Blanc.Prog.reachableExecFree_iff
+#full_axioms Blanc.Exec.Deriv.SourceCursor.Toward.linearDispatchWith_selectedBody
+#full_axioms Blanc.Exec.Deriv.SourceCursor.noExec_of_reachableExecFree
+#full_axioms Blanc.Exec.noExecOccurrence_of_no_sameFrame_execAt
+#full_axioms Blanc.Exec.noRetainedWriteTo_of_no_sameFrame_execAt
+#full_axioms Blanc.Exec.noExecOccurrence_of_exactMain_reachableExecFree
+#full_axioms Blanc.Exec.noRetainedWriteTo_of_exactMain_reachableExecFree
 #full_axioms Blanc.ReachableExecFreeControl.routeControlProgram_not_reachableExecFree
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.pinnedPauseTarget_circuitBreaker_noninterference
 #full_axioms Blanc.BeaconDeposit.div_mul_eq_sub_mod
 #full_axioms Blanc.BeaconDeposit.pred_div_eq
 #full_axioms Blanc.BeaconDeposit.pred_mod_of_pos
 #full_axioms Blanc.BeaconDeposit.pred_mod_eq
 #full_axioms Blanc.BeaconDeposit.pred_div_pow_eq
+#full_axioms Blanc.BeaconDeposit.mod_two_pow_eq_zero_iff
 #full_axioms Blanc.BeaconDeposit.rootAt_nil
 #full_axioms Blanc.BeaconDeposit.rootAt_short
 #full_axioms Blanc.BeaconDeposit.rootAtE_eq
 #full_axioms Blanc.BeaconDeposit.rootAt_append
+#full_axioms Blanc.BeaconDeposit.empty_inv
+#full_axioms Blanc.BeaconDeposit.pending_step_even
+#full_axioms Blanc.BeaconDeposit.pending_step_odd
+#full_axioms Blanc.BeaconDeposit.rootAt_pending_even
+#full_axioms Blanc.BeaconDeposit.rootAt_pending_odd
+#full_axioms Blanc.BeaconDeposit.climb_spec
+#full_axioms Blanc.BeaconDeposit.root_correct
+#full_axioms Blanc.BeaconDeposit.empty_root
 #full_axioms Blanc.BeaconDeposit.div_two_div_pow
 #full_axioms Blanc.BeaconDeposit.div_pow_div_two
 #full_axioms Blanc.BeaconDeposit.walk_eq_none_iff
+#full_axioms Blanc.BeaconDeposit.walk_isSome_iff
+#full_axioms Blanc.BeaconDeposit.walk_none_at_cap
+#full_axioms Blanc.BeaconDeposit.insert_isSome_iff
 #full_axioms Blanc.BeaconDeposit.take_drop_append
+#full_axioms Blanc.BeaconDeposit.mod_pow_ge_of_bit
+#full_axioms Blanc.BeaconDeposit.mod_pow_ge_of_two_bits
+#full_axioms Blanc.BeaconDeposit.bit_zero_of_mod_zero
+#full_axioms Blanc.BeaconDeposit.completedBlock_pred
+#full_axioms Blanc.BeaconDeposit.walk_insert_spec
+#full_axioms Blanc.BeaconDeposit.insert_spec
+#full_axioms Blanc.BeaconDeposit.deposit_ne_assert_false
+#full_axioms Blanc.BeaconDeposit.deposit_ok_spec
+#full_axioms Blanc.BeaconDeposit.deposit_inv
 #full_axioms Blanc.BeaconDeposit.le64_length
 #full_axioms Blanc.BeaconDeposit.zeros_length
 #full_axioms Blanc.BeaconDeposit.le64_zero
@@ -1618,7 +1255,131 @@ elab "#full_axioms " id:ident : command => do
 #full_axioms Blanc.BeaconDeposit.pubkeyRoot_input_length
 #full_axioms Blanc.BeaconDeposit.signatureRoot_input_lengths
 #full_axioms Blanc.BeaconDeposit.depositDataNode_input_lengths
+#full_axioms Blanc.BeaconDeposit.code_compile
+#full_axioms Blanc.BeaconDeposit.code_eip170
+#full_axioms Blanc.BeaconDeposit.constructorInitPrefix_compile
+#full_axioms Blanc.BeaconDeposit.creationCode_eip3860
+#full_axioms Blanc.BeaconDeposit.deposit_success_settled_effects
+#full_axioms Blanc.BeaconDeposit.deposit_success_retainedStorageEffectTriples
+#full_axioms Blanc.BeaconDeposit.deposit_pubkeyLength_error_runCompiledTo
+#full_axioms Blanc.BeaconDeposit.deposit_withdrawalCredentialsLength_error_runCompiledTo
+#full_axioms Blanc.BeaconDeposit.deposit_signatureLength_error_runCompiledTo
+#full_axioms Blanc.BeaconDeposit.deposit_valueTooLow_error_runCompiledTo
+#full_axioms Blanc.BeaconDeposit.deposit_valueNotGweiMultiple_error_runCompiledTo
+#full_axioms Blanc.BeaconDeposit.deposit_valueTooHigh_error_runCompiledTo
+#full_axioms Blanc.BeaconDeposit.deposit_depositDataRootMismatch_error_runCompiledTo
+#full_axioms Blanc.BeaconDeposit.deposit_merkleTreeFull_error_runCompiledTo
+#full_axioms Blanc.BeaconDeposit.deposit_error_runCompiledTo
+#full_axioms Blanc.BeaconDeposit.deposit_malformed_noRawSstore
+#full_axioms Blanc.BeaconDeposit.noMatchSelector_runCompiledTo
+#full_axioms Blanc.BeaconDeposit.unmatched_selector_noRawSstore
+#full_axioms Blanc.BeaconDeposit.supportsInterface_runCompiled
+#full_axioms Blanc.BeaconDeposit.supportsInterface_nonzero_value_runCompiledTo
+#full_axioms Blanc.BeaconDeposit.supportsInterface_runCompiled_noRawSstore
+#full_axioms Blanc.BeaconDeposit.supportsInterface_nonzero_value_runCompiledTo_noRawSstore
+#full_axioms Blanc.BeaconDeposit.supportsInterface_short_calldata_runCompiledTo_noRawSstore
+#full_axioms Blanc.BeaconDeposit.getDepositRoot_zero_runCompiled
+#full_axioms Blanc.BeaconDeposit.getDepositRoot_nonzero_value_runCompiledTo
+#full_axioms Blanc.BeaconDeposit.getDepositRoot_zero_runCompiled_noRawSstore
+#full_axioms Blanc.BeaconDeposit.getDepositRoot_nonzero_value_runCompiledTo_noRawSstore
+#full_axioms Blanc.BeaconDeposit.getDepositCount_warm_runCompiled
+#full_axioms Blanc.BeaconDeposit.getDepositCount_cold_runCompiled
+#full_axioms Blanc.BeaconDeposit.getDepositCount_nonzero_value_runCompiledTo
+#full_axioms Blanc.BeaconDeposit.getDepositCount_warm_runCompiled_noRawSstore
+#full_axioms Blanc.BeaconDeposit.getDepositCount_cold_runCompiled_noRawSstore
+#full_axioms Blanc.BeaconDeposit.getDepositCount_nonzero_value_runCompiledTo_noRawSstore
+#full_axioms Blanc.BeaconDeposit.Exec.NinstOccurrence.beaconRuntime_sstore_pc_of_rawFrameRoot
+#full_axioms Blanc.BeaconDeposit.Exec.Deriv.beaconConstructor_sstore_coordinate
+#full_axioms Blanc.BeaconDeposit.constructor_success_retainedStorageEffectTriples
+#full_axioms Blanc.BeaconDeposit.ArtifactInv.root_eq_mixedRootOf
+#full_axioms Blanc.BeaconDeposit.ArtifactInv.count_eq_history_length
+#full_axioms Blanc.BeaconDeposit.constructorFinalStorage_artifactInv
+#full_axioms Blanc.BeaconDeposit.deposit_success_artifactInv
+#full_axioms Blanc.BeaconDeposit.canonicalDeploymentStep_establishes_root
+#full_axioms Blanc.BeaconDeposit.DeploymentRoot.constructorOccurrence
+#full_axioms Blanc.BeaconDeposit.historySpec_sound
+#full_axioms Blanc.BeaconDeposit.historySpec_preserves
+#full_axioms Blanc.BeaconDeposit.pragueOnly_history_extends
+#full_axioms Blanc.BeaconDeposit.DeploymentRoot.future_history_extends
+#full_axioms Blanc.BeaconDeposit.DeploymentRoot.future_count_root
+#full_axioms Blanc.compact_pause_word_eq_projection
+#full_axioms Blanc.LidoCircuitBreaker.PinnedTargetStubWalk.stubPause_sentinel_execution
+#full_axioms Blanc.Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok
+#full_axioms Blanc.Func.RunCompiledTo.zero_branch_of_ok_call_revert
+#full_axioms Blanc.Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok_of_prefix
+#full_axioms Blanc.Func.RunCompiledTo.zero_branch_of_ok_call_revert_of_prefix
+#full_axioms Blanc.acceptedBoolWord_iff_of_output
+#full_axioms Blanc.acceptedBoolExecution_ok_iff
+#full_axioms Blanc.boolQueryExecutionFailure_ok_iff
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.Trigger.rebaseLocalCalls_prependStoresRev
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.Trigger.rebaseLocalCalls_revertData
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.runtime_guard_zero_of_prog_run_ok
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.runtime_rebasedTriggerMalformedAbi_get
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.triggerFullWithdrawals_ok_reaches_afterValidation
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.triggerFullWithdrawals_selected_paused_not_ok
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.pinnedPauseTarget_pauseFor_effect
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.pinnedPauseTarget_isPaused_truthful
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.pinnedPauseTarget_protectedSurface_reverts
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.pinnedPauseTarget
+#full_axioms Blanc.LidoCircuitBreaker.directBoundaryExecutions_of_afterSet_ok
+#full_axioms Blanc.Composition.LidoCircuitBreakerTwg.pauseForCalldata_eq
+#full_axioms Blanc.Composition.LidoCircuitBreakerTwg.isPausedCalldata_eq
+#full_axioms Blanc.Composition.LidoCircuitBreakerTwg.gateway_lidoPinnedPauseTarget
+#full_axioms Blanc.Composition.LidoCircuitBreakerTwg.gatewayCode_compile
+#full_axioms Blanc.Composition.LidoCircuitBreakerTwg.gatewayBoundaryExecutions_of_afterSet_ok
+#full_axioms Blanc.Composition.LidoCircuitBreakerTwg.publicPause_gatewayPinnedTarget
+#full_axioms Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_publicPausePremises
+#full_axioms Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_closedPremises
+#full_axioms Blanc.CompiledStackSafety.Certificate.parentStep
+#full_axioms Blanc.CompiledStackSafety.Certificate.parentPrefix
+#full_axioms Blanc.CompiledStackSafety.Certificate.at_parentPrefix
+#full_axioms Blanc.AbstractStackSafety.checkTable_certificate
+#full_axioms Blanc.AbstractStackSafety.exampleTable_certificate
+#full_axioms Blanc.ProxyPair.Upgrade.v1_stack_safe_from_entry
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.pauseForFinite_runtime_runCompiledTo
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.pauseForFinite_exec
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.pauseForSentinel_runtime_exact_runCompiledTo
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.pauseForSentinel_exec
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.isPaused_true_warm_runtime_runCompiledTo
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.isPaused_true_warm_exec
+#full_axioms Blanc.LidoTriggerableWithdrawalsGateway.isPaused_true_cold_runtime_runCompiledTo
+#full_axioms Blanc.Composition.LidoCircuitBreakerTwg.pauseAfterSet_gateway_toSuccess_runCompiled
+#full_axioms Blanc.Composition.LidoCircuitBreakerTwg.gatewayPauseWorld_closedPublicPause
+#full_axioms Blanc.Composition.LidoCircuitBreakerTwgSentinel.sentinelGatewayPauseWorld_closedPublicPause
+#full_axioms Blanc.Composition.LidoCircuitBreakerTwgSentinel.sentinelGatewayPauseWorld_storesInfiniteSentinel
+#full_axioms Blanc.Drip.sound_of_stepClosed
+#full_axioms Blanc.Drip.accountingInv_stepClosed
+#full_axioms Blanc.Drip.dripSpec_sound
+#full_axioms Blanc.Drip.dripSpec_preserves
+#full_axioms Blanc.Drip.monoInv_stepClosed
+#full_axioms Blanc.Drip.dripMonoSpec_sound
+#full_axioms Blanc.Drip.dripMonoSpec_preserves
+#full_axioms Blanc.Drip.DeploymentRoot.monoStateInv
+#full_axioms Blanc.Drip.DeploymentRoot.rho
+#full_axioms Blanc.Drip.DeploymentRoot.reachable_chi_mono
+#full_axioms Blanc.Drip.DeploymentRoot.reachable_rho_mono
+#full_axioms Blanc.Drip.reach_chi_rho_mono
+#full_axioms Blanc.Drip.rho_le_timestamp_at_boundary
+#full_axioms Blanc.Drip.bodyOccurrence_mono
+#full_axioms Blanc.Drip.exec_monoInv
+#full_axioms Blanc.Drip.processMessage_mono
+#full_axioms Blanc.Drip.message_error_mono
+#full_axioms Blanc.Drip.transaction_mono
+#full_axioms Blanc.Drip.transactionList_mono
+#full_axioms Blanc.Drip.systemMessage_mono
+#full_axioms Blanc.Drip.requests_mono
+#full_axioms Blanc.Drip.withdrawals_mono
+#full_axioms Blanc.Drip.body_mono
+#full_axioms Blanc.Drip.configuredBlock_mono
+#full_axioms Blanc.Drip.configuredHistory_mono
+#full_axioms Blanc.Drip.drip_compiled_join
+#full_axioms Blanc.Drip.drip_compiled_exit
+#full_axioms Blanc.Drip.no_stale_index_success_callback_free
+#full_axioms Blanc.Drip.no_stale_index_settlement_exit
+#full_axioms Blanc.Drip.view_eq_same_timestamp_join
 #full_axioms Blanc.Drip.chain_drips_eq_segmentIndex
+#full_axioms Blanc.Drip.drip_compiled_drip
+#full_axioms Blanc.Drip.drip_compiled_factorNat
 #full_axioms Blanc.Drip.drip_rpow_certified_band
 #full_axioms Blanc.Drip.drip_rpow_exact_telescope
 #full_axioms Blanc.Drip.drip_segment_certified
@@ -1626,7 +1387,68 @@ elab "#full_axioms " id:ident : command => do
 #full_axioms Blanc.Drip.rpow_under_witness
 #full_axioms Blanc.Drip.rpow_over_witness
 #full_axioms Blanc.Drip.drip_rpow_runtime_ops_exact
+#full_axioms Blanc.Drip.exit_pays_exactly_full
+#full_axioms Blanc.Drip.DeploymentRoot.accountingInv
+#full_axioms Blanc.Drip.canonicalDeploymentStep_establishes_root
+#full_axioms Blanc.Drip.StackSafety.actual_entry_safe
 #full_axioms Blanc.Drip.Chain.transcriptTally_eq
+#full_axioms Blanc.Drip.dripTraceRealizes_transcript
+#full_axioms Blanc.Drip.history_transcript_accounting_exact
+#full_axioms Blanc.Drip.history_transcript_balance_exact
+#full_axioms Blanc.Drip.history_transcript_entitlement
+#full_axioms Blanc.Drip.realized_segment_certified
+#full_axioms Blanc.Drip.dripCalls_ne_nil_of_totalUnits
+#full_axioms Blanc.Drip.concreteHistory_dripCalls_ne_nil
+#full_axioms Blanc.Drip.dripClockSpec_preservesAdmitted
+#full_axioms Blanc.Drip.history_clockInv
+#full_axioms Blanc.Drip.configuredHistory_has_head_timestamp
+#full_axioms Blanc.ExecutionAccountingReplay.AccountingLadder.Observed.traceRealizes_of_configuredHistoryTrace
+#full_axioms Blanc.ExecutionTrace.ConfiguredBlockTrace.frameAdmitted_time
+#full_axioms Blanc.Exec.frameAdmitted_benvStat
+#full_axioms Blanc.ExecutionTrace.ConfiguredBlockTrace.parent_timestamp_lt
+#full_axioms Blanc.Composition.ProrataWethVault.convertToShares_compiled_effect
+#full_axioms Blanc.Composition.ProrataWethVault.convertToAssets_compiled_effect
+#full_axioms Blanc.Composition.ProrataWethVault.previewDeposit_compiled_effect
+#full_axioms Blanc.Composition.ProrataWethVault.previewRedeem_compiled_effect
+#full_axioms Blanc.Composition.ProrataWethVault.previewMint_compiled_effect
+#full_axioms Blanc.Composition.ProrataWethVault.previewWithdraw_compiled_effect
+#full_axioms Blanc.Composition.ProrataWethVault.totalAssets_compiled_effect
+#full_axioms Blanc.ProrataWethVault.asset_compiled_effect
+#full_axioms Blanc.ProrataWethVault.maxRedeem_compiled_effect
+#full_axioms Blanc.ProrataWethVault.name_compiled_effect
+#full_axioms Blanc.ProrataWethVault.symbol_compiled_effect
+#full_axioms Blanc.ProrataWethVault.decimals_compiled_effect
+#full_axioms Blanc.ProrataWethVault.totalSupply_compiled_effect
+#full_axioms Blanc.ProrataWethVault.balanceOf_compiled_effect
+#full_axioms Blanc.ProrataWethVault.allowance_compiled_effect
+#full_axioms Blanc.Composition.ProrataWethVault.PairStable.of_root
+#full_axioms Blanc.Composition.ProrataWethVault.PairStable.totalAssets
+#full_axioms Blanc.Composition.ProrataWethVault.PairStable.redeemable_and_solvent
+#full_axioms Blanc.Composition.ProrataWethVault.vault_message_preserves_backed
+#full_axioms Blanc.Composition.ProrataWethVault.vault_processMessage_preserves_stable
+#full_axioms Blanc.Composition.ProrataWethVault.PairInFlight.stable_of_mint
+#full_axioms Blanc.Composition.ProrataWethVault.PairInFlight.stable_of_outboundSettled
+#full_axioms Blanc.Composition.ProrataWethVault.PairInFlight.reverting_of_failed_child
+#full_axioms Blanc.Composition.ProrataWethVault.PairInFlight.reverting_of_failed_inbound_child
+#full_axioms Blanc.Composition.ProrataWethVault.PairInFlight.reverting_of_failed_outbound_child
+#full_axioms Blanc.Composition.ProrataWethVault.inbound_stage_witnesses
+#full_axioms Blanc.Composition.ProrataWethVault.outbound_stage_witnesses
+#full_axioms Blanc.Composition.ProrataWethVault.DirectWethConfiguration.installed
+#full_axioms Blanc.Composition.ProrataWethVault.exactWethCallOccurrence_of_runCompiled
+#full_axioms Blanc.Composition.ProrataWethVault.exactWethStatcallOccurrence_of_runCompiled
+#full_axioms Blanc.Composition.ProrataWethVault.ExactWethChildSuccess.worldProgramRun
+#full_axioms Blanc.Composition.ProrataWethVault.ExactWethChildSuccess.programRun
+#full_axioms Blanc.Composition.ProrataWethVault.SuccessfulWethWorldProgramRun.balanceOf_effect
+#full_axioms Blanc.Composition.ProrataWethVault.SuccessfulWethProgramRun.balanceOf_effect
+#full_axioms Blanc.Composition.ProrataWethVault.SuccessfulWethProgramRun.transfer_effect
+#full_axioms Blanc.Composition.ProrataWethVault.SuccessfulWethProgramRun.transferFrom_effect
+#full_axioms Blanc.Composition.ProrataWethVault.Source.vault_externalWethCallSites_complete
+#full_axioms Blanc.Composition.ProrataWethVault.Source.readTotalAssets_exactEffect
+#full_axioms Blanc.Composition.ProrataWethVault.Source.callWethTransferFrom_exactEffect
+#full_axioms Blanc.Composition.ProrataWethVault.Source.callWethTransfer_exactEffect
+#full_axioms Blanc.Composition.ProrataWethVault.Source.balanceOfStaging_rollback
+#full_axioms Blanc.Composition.ProrataWethVault.Source.transferFromStaging_rollback
+#full_axioms Blanc.Composition.ProrataWethVault.Source.transferStaging_rollback
 #full_axioms Blanc.ProrataWethVault.convertToSharesN_floor_le
 #full_axioms Blanc.ProrataWethVault.convertToSharesN_lt_floor_add_one
 #full_axioms Blanc.ProrataWethVault.convertToAssetsN_floor_le
@@ -1635,10 +1457,39 @@ elab "#full_axioms " id:ident : command => do
 #full_axioms Blanc.ProrataWethVault.previewMintN_lt_add_denominator
 #full_axioms Blanc.ProrataWethVault.previewWithdrawN_covers
 #full_axioms Blanc.ProrataWethVault.previewWithdrawN_lt_add_assetFactor
+#full_axioms Blanc.ProrataWethVault.le_maxMintN_iff
+#full_axioms Blanc.ProrataWethVault.le_maxDepositN_iff
+#full_axioms Blanc.ProrataWethVault.convertToSharesN_maxDepositN_le_shareRoom
 #full_axioms Blanc.ProrataWethVault.maxWithdrawN_le_assets
+#full_axioms Blanc.Func.RunCompiledToVisiting.toRunCompiledTo
+#full_axioms Blanc.Func.RunCompiledToVisiting.exists_step
+#full_axioms Blanc.Prog.RunCompiledToVisiting.toRunCompiledTo
+#full_axioms Blanc.Prog.RunCompiledToVisiting.exec_eq
+#full_axioms Blanc.Prog.runCompiledTo_of_exec_revert
+#full_axioms Blanc.ProrataWethVault.le_maxWithdrawN_iff
+#full_axioms Blanc.ProrataWethVault.previewWithdrawN_maxWithdrawN_le
 #full_axioms Blanc.ProrataWethVault.maxDepositViewN_eq_of_stable
 #full_axioms Blanc.ProrataWethVault.maxMintViewN_eq_of_stable
 #full_axioms Blanc.ProrataWethVault.maxWithdrawViewN_eq_of_stable
 #full_axioms Blanc.ProrataWethVault.roundtrip_no_profit
-#full_axioms Blanc.ProrataWethVault.attack_carrier_inhabited
-#full_axioms Blanc.Composition.ProrataWethVault.pair_attack_carrier_inhabited
+#full_axioms Blanc.Composition.ProrataWethVault.deposit_revert_visits_refused_weth_child
+#full_axioms Blanc.Composition.ProrataWethVault.mint_revert_visits_refused_weth_child
+#full_axioms Blanc.Composition.ProrataWethVault.withdraw_revert_visits_refused_weth_child
+#full_axioms Blanc.Composition.ProrataWethVault.redeem_revert_visits_refused_weth_child
+#full_axioms Blanc.Composition.ProrataWethVault.maxDeposit_revert_visits_refused_weth_child
+#full_axioms Blanc.Composition.ProrataWethVault.maxMint_revert_visits_refused_weth_child
+#full_axioms Blanc.Composition.ProrataWethVault.maxWithdraw_revert_visits_refused_weth_child
+#full_axioms Blanc.Composition.ProrataWethVault.maxRedeem_no_reverting_walk
+#full_axioms Blanc.Composition.ProrataWethVault.deposit_exec_revert_visits_refused_weth_child
+#full_axioms Blanc.Composition.ProrataWethVault.mint_exec_revert_visits_refused_weth_child
+#full_axioms Blanc.Composition.ProrataWethVault.withdraw_exec_revert_visits_refused_weth_child
+#full_axioms Blanc.Composition.ProrataWethVault.redeem_exec_revert_visits_refused_weth_child
+#full_axioms Blanc.Composition.ProrataWethVault.maxDeposit_exec_revert_visits_refused_weth_child
+#full_axioms Blanc.Composition.ProrataWethVault.maxMint_exec_revert_visits_refused_weth_child
+#full_axioms Blanc.Composition.ProrataWethVault.maxWithdraw_exec_revert_visits_refused_weth_child
+#full_axioms Blanc.Composition.ProrataWethVault.maxRedeem_exec_never_reverts
+#full_axioms Blanc.Composition.ProrataWethVault.deposit_success_within_maxDeposit
+#full_axioms Blanc.Composition.ProrataWethVault.mint_success_within_maxMint
+#full_axioms Blanc.Composition.ProrataWethVault.withdraw_success_within_maxWithdraw
+#full_axioms Blanc.Composition.ProrataWethVault.redeem_success_within_maxRedeem
+#full_axioms Blanc.Composition.ProrataWethVault.vault_terminals_return_or_revert

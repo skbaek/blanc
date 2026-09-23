@@ -262,7 +262,7 @@ def load_axiom_authority(root: Path) -> tuple[dict[str, set[str]], list[str]]:
         return {}, [f"cannot read axiom authority: {exc}"]
 
     printed_list = re.findall(
-        r"^#print axioms\s+([A-Za-z0-9_.'?]+)\s*$", axiom_text, re.MULTILINE
+        r"^#full_axioms\s+([A-Za-z0-9_.'?]+)\s*$", axiom_text, re.MULTILINE
     )
     if len(printed_list) != len(set(printed_list)):
         errors.append("scripts/AxiomCheck.lean contains duplicate axiom probes")

@@ -291,6 +291,13 @@
 # Any extra axiom fails — sorryAx, ofReduceBool/ofReduceNat, and also
 # bv_decide's per-declaration `<decl>._native.bv_decide.ax_*` axioms, which add
 # the Lean compiler to the trusted code base — and so does any missing axiom.
+# The closure is computed from scratch for every row by `#full_axioms`, the one
+# walker in scripts/AxiomAudit.lean, which scripts/axiom_audit.py splices into
+# AxiomCheck.lean before elaborating it. Lean's own `#print axioms` report is
+# never the verdict source: since v4.30.0 it reads a per-module result
+# precomputed at olean export that can under-report an imported inductive
+# (lean4#15226; see that file's header), and it once let
+# `ReplayCarrier.nilOfEq` pass a "no axioms" pin.
 # A row is pinned to the set its proof honestly achieves; the pin moves only
 # when the proof does, and never in order to make a red gate green.
 #
@@ -383,7 +390,7 @@ if ! SUGGEST_OUT="$(cd "$ROOT" && lake env lean scripts/ProofRecipeSuggestions.l
   exit 1
 fi
 
-if ! OUT="$(cd "$ROOT" && lake env lean scripts/AxiomCheck.lean 2>&1)"; then
+if ! OUT="$(cd "$ROOT" && python3 scripts/axiom_audit.py run scripts/AxiomCheck.lean 2>&1)"; then
   printf '%s\n' "$OUT"
   echo "REGRESSION — axiom audit: AxiomCheck.lean failed to elaborate"
   exit 1
@@ -391,8 +398,8 @@ fi
 
 # Audited rows: `<fully qualified theorem>|<expected axioms, comma separated>`.
 # An empty expectation (nothing after the `|`) means the theorem must depend on
-# NO axioms at all; that row then passes on Lean's "does not depend on any
-# axioms" report and fails on any axiom whatsoever.
+# NO axioms at all; that row then passes on an empty from-scratch report and
+# fails on any axiom whatsoever.
 STANDARD="propext, Classical.choice, Quot.sound"
 ROWS="\
 Blanc.weth_preserves_solvent|$STANDARD
@@ -1754,29 +1761,25 @@ while IFS= read -r ROW; do
   EXPECTED_SORTED="$(printf '%s\n' "$EXPECTED_DISPLAY" | tr ',' '\n' \
     | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$' | LC_ALL=C sort)"
   NTOTAL=$((NTOTAL + 1))
-  AXIOMS="$(printf '%s\n' "$OUT" | awk -v marker="'$THM' depends on axioms:" '
-    index($0, marker) == 1 {
-      found = 1
-      axioms = substr($0, length(marker) + 2)
-      if ($0 ~ /]$/) { print axioms; exit }
-      next
-    }
-    found {
-      sub(/^[[:space:]]+/, "")
-      axioms = axioms " " $0
-      if ($0 ~ /]$/) { print axioms; exit }
-    }
-  ')"
-  if [ -z "$AXIOMS" ]; then
-    if printf '%s\n' "$OUT" | grep -qF "'$THM' does not depend on any axioms"; then
-      if [ -z "$EXPECTED_SORTED" ]; then
-        echo "OK — $THM: depends on no axioms"
-        NEXACT=$((NEXACT + 1))
-      else
-        echo "FAIL — $THM: depends on no axioms; expected exactly [$EXPECTED_DISPLAY]"
-      fi
+  # Exactly one from-scratch report per row; `#full_axioms` prints `[]` for
+  # a theorem that depends on no axiom at all.
+  REPORTS="$(printf '%s\n' "$OUT" | awk -v marker="FULL-AXIOMS '$THM': " '
+    index($0, marker) == 1 { print substr($0, length(marker) + 1) }')"
+  if [ -z "$REPORTS" ]; then
+    echo "FAIL — $THM: no from-scratch axiom report (#full_axioms) found in Lean output"
+    continue
+  fi
+  if [ "$(printf '%s\n' "$REPORTS" | wc -l | tr -d ' ')" -ne 1 ]; then
+    echo "FAIL — $THM: more than one from-scratch axiom report in Lean output"
+    continue
+  fi
+  AXIOMS="$REPORTS"
+  if [ "$AXIOMS" = "[]" ]; then
+    if [ -z "$EXPECTED_SORTED" ]; then
+      echo "OK — $THM: depends on no axioms"
+      NEXACT=$((NEXACT + 1))
     else
-      echo "FAIL — $THM: no axiom report found in Lean output"
+      echo "FAIL — $THM: depends on no axioms; expected exactly [$EXPECTED_DISPLAY]"
     fi
     continue
   fi
@@ -1799,64 +1802,6 @@ while IFS= read -r ROW; do
   fi
 done <<< "$ROWS"
 
-# From-scratch cross-check. Lean v4.32.1's `#print axioms` reads a per-module
-# result precomputed at olean export with a shared cache whose cycle sentinel
-# can record an inductive as axiom-free (see the note above `#full_axioms` in
-# AxiomCheck.lean); that under-report let `ReplayCarrier.nilOfEq` pass a "no
-# axioms" pin. A row pinned to a strict subset of $STANDARD is the one an
-# under-report can turn green, so every such row is recomputed by
-# `#full_axioms`, which ignores the precomputed entries, and must equal its pin.
-# The walked list in AxiomCheck.lean must be exactly those rows.
-STANDARD_SORTED="$(printf '%s\n' "$STANDARD" | tr ',' '\n' \
-  | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$' | LC_ALL=C sort)"
-NFULL=0
-NFULLOK=0
-SUBSET_ROWS=""
-while IFS= read -r ROW; do
-  [ -n "$ROW" ] || continue
-  THM="${ROW%%|*}"
-  EXPECTED_SORTED="$(printf '%s\n' "${ROW#*|}" | tr ',' '\n' \
-    | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$' | LC_ALL=C sort)"
-  [ "$EXPECTED_SORTED" = "$STANDARD_SORTED" ] && continue
-  if [ -n "$(LC_ALL=C comm -23 <(printf '%s\n' "$EXPECTED_SORTED" | grep -v '^$') \
-      <(printf '%s\n' "$STANDARD_SORTED"))" ]; then
-    continue
-  fi
-  SUBSET_ROWS="$SUBSET_ROWS$THM
-"
-  NFULL=$((NFULL + 1))
-  FULL="$(printf '%s\n' "$OUT" | awk -v marker="FULL-AXIOMS '$THM': " '
-    index($0, marker) == 1 { print substr($0, length(marker) + 1); exit }')"
-  if [ -z "$FULL" ]; then
-    echo "FAIL — $THM: no from-scratch axiom report (#full_axioms) found in Lean output"
-    continue
-  fi
-  FULL_SORTED="$(printf '%s\n' "$FULL" | tr -d '[]' | tr ',' '\n' \
-    | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$' | LC_ALL=C sort)"
-  if [ "$FULL_SORTED" = "$EXPECTED_SORTED" ]; then
-    NFULLOK=$((NFULLOK + 1))
-  else
-    echo "FAIL — $THM: from-scratch axioms $FULL differ from the pinned [${ROW#*|}]"
-  fi
-done <<< "$ROWS"
-WALKED="$(grep -oE '^#full_axioms[[:space:]]+[A-Za-z0-9_.?]+' \
-  "$SCRIPT_DIR/AxiomCheck.lean" | awk '{print $2}' | LC_ALL=C sort)"
-SUBSET_SORTED="$(printf '%s' "$SUBSET_ROWS" | grep -v '^$' | LC_ALL=C sort)"
-if [ "$WALKED" != "$SUBSET_SORTED" ]; then
-  UNWALKED="$(LC_ALL=C comm -13 <(printf '%s\n' "$WALKED") <(printf '%s\n' "$SUBSET_SORTED") | xargs)"
-  EXTRAWALK="$(LC_ALL=C comm -23 <(printf '%s\n' "$WALKED") <(printf '%s\n' "$SUBSET_SORTED") | xargs)"
-  LINE="REGRESSION — axiom audit: the #full_axioms list in scripts/AxiomCheck.lean is not exactly the rows pinned below the standard set"
-  [ -n "$UNWALKED" ] && LINE="$LINE; pinned below standard but not walked: $UNWALKED"
-  [ -n "$EXTRAWALK" ] && LINE="$LINE; walked but not pinned below standard: $EXTRAWALK"
-  echo "$LINE"
-  exit 1
-fi
-if [ "$NFULL" -eq 0 ] || [ "$NFULLOK" -ne "$NFULL" ]; then
-  echo "REGRESSION — axiom audit: only $NFULLOK/$NFULL rows pinned below the standard set match a from-scratch axiom walk"
-  exit 1
-fi
-echo "OK — axiom audit cross-check: $NFULLOK/$NFULL rows pinned below the standard set match a from-scratch axiom walk"
-
 # Belt and braces: AxiomCheck.lean prints nothing but the audited axiom sets,
 # so a forbidden name anywhere in the output is a failure even if the
 # per-line parse above missed it (e.g. an unexpectedly wrapped message).
@@ -1874,8 +1819,8 @@ fi
 # be pinned by a row here, and every pinned row must be printed there. Deleting
 # a row from EITHER file is then a gate failure rather than a smaller green
 # count — the point of auditing the compile witness at all.
-PRINTED="$(grep -oE '^#print axioms[[:space:]]+[A-Za-z0-9_.?]+' \
-  "$SCRIPT_DIR/AxiomCheck.lean" | awk '{print $3}' | LC_ALL=C sort)"
+PRINTED="$(grep -oE '^#full_axioms[[:space:]]+[A-Za-z0-9_.?]+' \
+  "$SCRIPT_DIR/AxiomCheck.lean" | awk '{print $2}' | LC_ALL=C sort)"
 PINNED="$(printf '%s\n' "$ROWS" | sed 's/|.*//' | grep -v '^$' | LC_ALL=C sort)"
 if [ "$PRINTED" != "$PINNED" ]; then
   UNPINNED="$(LC_ALL=C comm -23 <(printf '%s\n' "$PRINTED") <(printf '%s\n' "$PINNED") | xargs)"

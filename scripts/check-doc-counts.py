@@ -185,11 +185,13 @@ CLAIMS = [
         "name": "audited-theorem count",
         "producer": (
             "scripts/AxiomCheck.lean",
-            # One '#print axioms' line per audited theorem is the definition of
+            # One '#full_axioms' row per audited theorem is the definition of
             # the count, and scripts/check.sh's N/N summary is derived from the
-            # same file.
+            # same file. (The rows were '#print axioms' lines until 2026-09-24,
+            # when the audit stopped taking Lean's report as its verdict; the
+            # population and the count did not change.)
             lambda root: count_matches(
-                root, "scripts/AxiomCheck.lean", re.compile(r"^#print axioms\b", re.M)
+                root, "scripts/AxiomCheck.lean", re.compile(r"^#full_axioms\b", re.M)
             ),
         ),
         "consumers": [

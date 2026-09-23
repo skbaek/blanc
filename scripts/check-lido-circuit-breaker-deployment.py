@@ -445,7 +445,7 @@ def require_axiom_inventory(root: Path, sources: dict[str, str]) -> None:
     axiom_text, gate_text = axiom_path.read_text(), gate_path.read_text()
     if axiom_text.count("import Blanc.LidoCircuitBreakerDeploymentRoot") != 1:
         fail("axiom inventory must import the final deployment-root owner exactly once")
-    printed = re.findall(r"^#print axioms\s+([^\s]+)", axiom_text, re.M)
+    printed = re.findall(r"^#full_axioms\s+([^\s]+)", axiom_text, re.M)
     for name in names:
         if printed.count(name) != 1:
             fail(f"{name}: expected exactly one public axiom probe")

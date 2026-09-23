@@ -16,6 +16,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+import axiom_audit
 import gate_semaphore
 from lean_header import HeaderError, header_before_definition, parser_controls
 
@@ -1078,7 +1079,7 @@ ROLES = {
 
 # Per-pin axiom expectations, on the contract `scripts/check.sh` already uses
 # for its 439 audited rows: an EMPTY expectation means the theorem must depend
-# on NO axioms at all, passing on Lean's "does not depend on any axioms" report
+# on NO axioms at all, passing on an empty from-scratch `#full_axioms` report
 # and failing on any axiom whatsoever.
 #
 # A flat set cannot express that, and this gate probes every pin rather than a
@@ -1582,51 +1583,21 @@ def qualified_role_name(key: str, name: str) -> str:
 
 def axiom_checks() -> None:
     gate_semaphore.guard("the Lido access-control axiom probe")
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".lean", prefix="access-axioms-", dir=ROOT,
-        encoding="utf-8", delete=False,
-    ) as handle:
-        temporary = Path(handle.name)
-        for module in MODULES.values():
-            handle.write("import " + module + "\n")
-        for key, names in ROLES.items():
-            for name in names:
-                handle.write("#print axioms " + qualified_role_name(key, name) + "\n")
+    names = [
+        qualified_role_name(key, name)
+        for key, role_names in ROLES.items() for name in role_names
+    ]
     try:
-        run = subprocess.run(
-            ["lake", "env", "lean", str(temporary.relative_to(ROOT))],
-            cwd=ROOT, text=True, stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-        )
-    finally:
-        temporary.unlink(missing_ok=True)
-    if run.returncode:
-        fail("axiom probe failed:\n" + run.stdout)
-    for key, names in ROLES.items():
-        for name in names:
+        reports = axiom_audit.audit(ROOT, list(MODULES.values()), names)
+    except axiom_audit.AuditError as error:
+        fail(f"from-scratch axiom probe failed: {error}")
+    for key, role_names in ROLES.items():
+        for name in role_names:
             qualified = qualified_role_name(key, name)
             expected = AXIOM_EXCEPTIONS.get(name, STANDARD_AXIOMS)
-            match = re.search(
-                r"'" + re.escape(qualified) +
-                r"' depends on axioms: \[([^\]]*)\]",
-                run.stdout, re.DOTALL,
-            )
-            if match:
-                actual = {
-                    item.strip()
-                    for item in match.group(1).split(",") if item.strip()
-                }
-            elif re.search(
-                r"'" + re.escape(qualified) +
-                r"' does not depend on any axioms",
-                run.stdout,
-            ):
-                # Lean reports a wholly axiom-free result in a different shape.
-                # Reading it as the empty set is what lets an empty expectation
-                # mean "no axioms at all" rather than "unparseable".
-                actual = set()
-            else:
-                fail(f"{qualified}: unrecognised #print axioms output")
+            # `#full_axioms` reports an axiom-free theorem as `[]`, so an empty
+            # expectation means "no axioms at all" with no second output shape.
+            actual = set(reports[qualified])
             if actual != expected:
                 fail(
                     f"{qualified}: axioms {sorted(actual)}, "

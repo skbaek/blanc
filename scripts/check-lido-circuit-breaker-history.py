@@ -70,6 +70,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+import axiom_audit
 import gate_semaphore
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -1692,38 +1693,17 @@ def axiom_checks(root: Path, sources: dict) -> int:
     gate_semaphore.guard("the Lido history axiom probe")
     targets = probe_targets(sources)
     compiled_owners_present(root)
-    # The probe file lives in a real temporary DIRECTORY, not in the
-    # repository.  Written into `root` it was one hard kill away from leaving
-    # a stray `history-axioms-*.lean` behind in the tree -- which `lake` would
-    # then try to build, and which a `git add -A` would happily commit.
-    # `lake env` only sets the environment, so `lean` finds the owners through
-    # LEAN_PATH and the probe file itself need not sit inside the package.
-    with tempfile.TemporaryDirectory(prefix="s7-axioms-") as staging:
-        temporary = Path(staging) / "history-axioms.lean"
-        with temporary.open("w", encoding="utf-8") as handle:
-            for module in probe_imports():
-                handle.write("import " + module + "\n")
-            for name in targets:
-                handle.write("#print axioms " + name + "\n")
-        run = subprocess.run(
-            ["lake", "env", "lean", str(temporary)],
-            cwd=root, text=True, stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT)
-    if run.returncode:
-        fail("axiom probe failed:\n" + run.stdout)
+    # The probe is fed to `lake env lean --stdin` by the shared from-scratch
+    # audit driver, so no probe file is ever written into the repository (a
+    # stray `history-axioms-*.lean` there is what `lake` would then try to
+    # build, and what a `git add -A` would commit).
+    try:
+        reports = axiom_audit.audit(root, probe_imports(), targets)
+    except axiom_audit.AuditError as error:
+        fail(f"from-scratch axiom probe failed: {error}")
+        return 0
     for name in targets:
-        depends = re.search(
-            r"'" + re.escape(name) + r"' depends on axioms: \[([^\]]*)\]",
-            run.stdout, re.DOTALL)
-        if depends:
-            actual = {item.strip() for item in depends.group(1).split(",")
-                      if item.strip()}
-        elif re.search(r"'" + re.escape(name) +
-                       r"' does not depend on any axioms", run.stdout):
-            actual = set()
-        else:
-            fail(f"{name}: unrecognised #print axioms output")
-            actual = set()
+        actual = set(reports[name])
         if actual != set(STANDARD_AXIOMS):
             fail(f"{name}: axioms {sorted(actual)}, expected "
                  f"{sorted(STANDARD_AXIOMS)}")

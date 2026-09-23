@@ -13,6 +13,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+import axiom_audit
 import gate_semaphore
 from lean_header import HeaderError, header_before_definition, parser_controls
 
@@ -96,38 +97,15 @@ def compile_fixture() -> None:
 
 def axiom_checks() -> None:
     gate_semaphore.guard("the Lido enumeration axiom probe")
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".lean", prefix="enumeration-axioms-", dir=ROOT,
-        encoding="utf-8", delete=False,
-    ) as handle:
-        temporary = Path(handle.name)
-        handle.write("import Blanc.LidoCircuitBreakerEnumeration\n")
-        for name in ROLES:
-            handle.write(
-                "#print axioms Blanc.LidoCircuitBreaker." + name + "\n"
-            )
+    names = ["Blanc.LidoCircuitBreaker." + name for name in ROLES]
     try:
-        run = subprocess.run(
-            ["lake", "env", "lean", str(temporary.relative_to(ROOT))],
-            cwd=ROOT, text=True, stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
+        reports = axiom_audit.audit(
+            ROOT, ["Blanc.LidoCircuitBreakerEnumeration"], names
         )
-    finally:
-        temporary.unlink(missing_ok=True)
-    if run.returncode:
-        fail("axiom probe failed:\n" + run.stdout)
-    for name in ROLES:
-        qualified = "Blanc.LidoCircuitBreaker." + name
-        match = re.search(
-            r"'" + re.escape(qualified) +
-            r"' depends on axioms: \[([^\]]*)\]",
-            run.stdout, re.DOTALL,
-        )
-        if not match:
-            fail(f"{qualified}: unrecognised #print axioms output")
-        actual = {
-            item.strip() for item in match.group(1).split(",") if item.strip()
-        }
+    except axiom_audit.AuditError as error:
+        fail(f"from-scratch axiom probe failed: {error}")
+    for qualified in names:
+        actual = set(reports[qualified])
         if actual != EXPECTED_AXIOMS:
             fail(
                 f"{qualified}: axioms {sorted(actual)}, "

@@ -56,7 +56,7 @@
 # one.
 #
 # --probe is an OPTIONAL NON-DEFAULT mode that closes the axiom loop directly
-# rather than transitively: it regenerates a `#print axioms` file from the
+# rather than transitively: it regenerates a from-scratch `#full_axioms` probe from the
 # register's own citations and elaborates it with `lake env lean`. It REQUIRES
 # the Lean toolchain and a built dependency graph, is not what CI or the cheap
 # catalogue row runs, and must not be run beside a measurement that owns the

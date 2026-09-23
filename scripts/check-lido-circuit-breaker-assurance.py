@@ -32,7 +32,7 @@ each fail-closed:
      the row's declarations. Blanc has several axiom-expectation authorities,
      not one -- the repository audit pins one population, and the Lido access,
      enumeration, registry and history gates each pin their own family with
-     their own `#print axioms` probe -- so "is this name audited?" is only
+     their own `#full_axioms` probe -- so "is this name audited?" is only
      answerable relative to a gate. Names are matched FULLY QUALIFIED:
      `Blanc.Weth10.canonicalDeploymentStep_establishes_root` and
      `Blanc.LidoCircuitBreaker.canonicalDeploymentStep_establishes_root` are
@@ -63,7 +63,7 @@ It does not elaborate Lean and does not re-derive any axiom set. Its DEFAULT
 MODE IS STATIC: it checks that the register agrees with the pin tables of the
 authorities listed below, and its authority over the axiom column is exactly
 theirs -- `scripts/check.sh --no-build` for the repository audit, and each
-family gate's own `#print axioms` probe for the family it pins. Those gates
+family gate's own from-scratch `#full_axioms` probe for the family it pins. Those gates
 verify their expectations against Lean by elaborating; this gate makes the
 register faithful to them. Neither substitutes for the other, and this gate is
 not evidence that any theorem holds.
@@ -105,7 +105,7 @@ the point: when a gate's pin table moves, this gate's answer moves with it. The
 tables are read with `ast`, never imported or executed.
 
   * `scripts/check.sh` + `scripts/AxiomCheck.lean` -- the repository axiom
-    audit. Resolves every `#print axioms` name; expectation from the `ROWS`
+    audit. Resolves every `#full_axioms` name; expectation from the `ROWS`
     table, with an empty expectation meaning no axioms at all.
   * `scripts/check-lido-circuit-breaker-deployment.sh` -- that gate's axiom
     section verifies its public inventory against `scripts/AxiomCheck.lean` and
@@ -139,11 +139,11 @@ gate-owned row.
 ---------
 
 An optional, non-default mode that closes the loop directly instead of
-transitively: it regenerates a `#print axioms` file from the register's own
-citations, elaborates it with `lake env lean`, and compares the reported axiom
-sets against the register's fields. It REQUIRES the Lean toolchain and a built
-dependency graph, is not what CI or the cheap catalogue row runs, and must not
-be run beside a measurement that owns the host.
+transitively: it regenerates a from-scratch `#full_axioms` probe from the
+register's own citations, elaborates it with `lake env lean`, and compares the
+reported axiom sets against the register's fields. It REQUIRES the Lean
+toolchain and a built dependency graph, is not what CI or the cheap catalogue
+row runs, and must not be run beside a measurement that owns the host.
 
 The default mode needs no Lean toolchain, no build and no network -- it reads
 committed files only -- so it is instant, takes no report or heavy lock (it
@@ -159,10 +159,9 @@ import argparse
 import ast
 import pathlib
 import re
-import subprocess
 import sys
-import tempfile
 
+import axiom_audit
 import gate_semaphore
 
 VERDICT_SUBJECT = "lido-circuit-breaker-assurance"
@@ -314,7 +313,7 @@ FIELD_ITEM = re.compile(r"^\s*-\s+\*\*([^*]+?):\*\*\s*(.*)$")
 
 # Same character class scripts/check.sh uses to read the audit's own inventory,
 # so the two gates agree on what a name is.
-PRINT_AXIOMS = re.compile(r"^#print axioms[ \t]+([A-Za-z0-9_.?']+)", re.M)
+PRINT_AXIOMS = re.compile(r"^#full_axioms[ \t]+([A-Za-z0-9_.?']+)", re.M)
 
 # A cited name must be fully qualified; see the module docstring.
 DECL_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_.?'!]*$")
@@ -1020,16 +1019,16 @@ def probe_axioms(
 ) -> tuple[dict[str, list[str] | None], list[str]]:
     """`--probe`: ask Lean directly what the cited declarations depend on.
 
-    Writes a temporary Lean file carrying the import union above followed by one
-    `#print axioms` line per cited declaration, elaborates it with `lake env
-    lean` from the repository root, and reports the axiom set per name (None
-    where Lean reported none at all).
+    Builds a probe carrying the import union above, the shared from-scratch
+    walker (`scripts/AxiomAudit.lean`) and one `#full_axioms` row per cited
+    declaration, elaborates it with `lake env lean --stdin` from the repository
+    root through `scripts/axiom_audit.py`, and reports the axiom set per name
+    (None where the walk found no axiom at all). Lean's own `#print axioms` is
+    not asked: it can under-report an imported inductive (lean4#15226).
 
-    The probe file lives in a real temporary directory, not in the repository:
-    `lake env` only sets the environment, so `lean` finds the owners through
-    LEAN_PATH and the file need not sit inside the package. Writing it into the
-    tree would be one hard kill away from leaving a stray `.lean` behind that
-    `lake` would then try to build.
+    Nothing is written into the tree: the probe goes to Lean on standard
+    input, and `lake env` only sets the environment, so `lean` finds the owners
+    through LEAN_PATH.
 
     Requires the Lean toolchain and a built dependency graph. It is not the
     default mode and is not what CI runs.
@@ -1047,28 +1046,17 @@ def probe_axioms(
         return reports, problems
 
     gate_semaphore.guard("the Lido assurance axiom probe")
-    body = "\n".join(f"import {module}" for module in imports) + "\n\n"
-    body += "\n".join(f"#print axioms {name}" for name in names) + "\n"
+    try:
+        status, output = axiom_audit.elaborate(
+            root, axiom_audit.probe_source(root, imports, names)
+        )
+    except axiom_audit.AuditError as exc:
+        problems.append(f"--probe: {exc}")
+        return reports, problems
 
-    with tempfile.TemporaryDirectory() as tmp:
-        source = pathlib.Path(tmp) / "AssuranceProbe.lean"
-        source.write_text(body, encoding="utf-8")
-        try:
-            completed = subprocess.run(
-                ["lake", "env", "lean", str(source)],
-                cwd=str(root),
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-        except OSError as exc:
-            problems.append(f"--probe: could not run `lake env lean`: {exc}")
-            return reports, problems
-
-    output = (completed.stdout or "") + "\n" + (completed.stderr or "")
-    if completed.returncode != 0:
+    if status != 0:
         problems.append(
-            f"--probe: `lake env lean` exited {completed.returncode}; "
+            f"--probe: `lake env lean` exited {status}; "
             f"output follows:\n{output.strip()}"
         )
         return reports, problems
@@ -1078,27 +1066,18 @@ def probe_axioms(
             "(sorryAx / ofReduceBool / ofReduceNat / _native.)"
         )
 
-    flat = re.sub(r"\s+", " ", output)
-    for name in names:
-        depends = re.search(
-            re.escape(f"'{name}' depends on axioms:") + r"\s*\[(.*?)\]", flat
-        )
-        if depends is not None:
-            reports[name] = [
-                part.strip() for part in depends.group(1).split(",") if part.strip()
-            ]
-            continue
-        if re.search(
-            re.escape(f"'{name}' does not depend on any axioms"), flat
-        ):
-            reports[name] = None
-            continue
+    try:
+        parsed = axiom_audit.parse(output, names)
+    except axiom_audit.AuditError as exc:
         problems.append(
-            f"--probe: Lean printed no axiom report for {name}. The usual cause is "
-            "that the declaration's owner module is not in the probe's import union "
-            f"({len(names)} names over {len(imports)} imports); add it to the "
-            "authority's own module table, or to PROBE_EXTRA_IMPORTS here"
+            f"--probe: the from-scratch reports do not match the cited names ({exc}). "
+            "The usual cause is that a declaration's owner module is not in the "
+            f"probe's import union ({len(names)} names over {len(imports)} imports); "
+            "add it to the authority's own module table, or to PROBE_EXTRA_IMPORTS here"
         )
+        return reports, problems
+    for name in names:
+        reports[name] = sorted(parsed[name]) or None
     return reports, problems
 
 
@@ -1113,7 +1092,7 @@ def main() -> int:
     parser.add_argument(
         "--probe",
         action="store_true",
-        help="ALSO elaborate a generated `#print axioms` file for every cited "
+        help="ALSO elaborate a generated from-scratch `#full_axioms` probe for every cited "
         "declaration and compare Lean's answer against the register directly. "
         "Requires the Lean toolchain and a built dependency graph; not the "
         "default and not what CI runs.",
@@ -1142,7 +1121,7 @@ def main() -> int:
     audited = set(PRINT_AXIOMS.findall(axiom_check_text))
     if not audited:
         return regression(
-            f"{AXIOM_CHECK_RELATIVE} yielded zero `#print axioms` names; the "
+            f"{AXIOM_CHECK_RELATIVE} yielded zero `#full_axioms` names; the "
             "producer pattern no longer matches"
         )
 

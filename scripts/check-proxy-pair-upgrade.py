@@ -18,6 +18,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+import axiom_audit
 import gate_semaphore
 
 SUBJECT = "proxy-pair-upgrade"
@@ -424,8 +425,10 @@ def static_errors(root: Path) -> list[str]:
 
     probe = texts["scripts/ProxyPairUpgradeAxiomCheck.lean"]
     for full_name in FULL_AXIOM_PINS:
-        if probe.splitlines().count(f"#print axioms {full_name}") != 1:
+        if probe.splitlines().count(f"#full_axioms {full_name}") != 1:
             errors.append(f"AXIOM — expected one probe row for {full_name}")
+    if axiom_audit.PRINT_AXIOMS.search(probe):
+        errors.append("AXIOM — `#print axioms` is not an audit verdict source (lean4#15226)")
 
     witness = texts["scripts/ProxyPairUpgradeWitness.lean"]
     for label in ("PRIMARY", "UPGRADE_TO", "SKIPPED_EMPTY", "UNAUTHORIZED",
@@ -453,19 +456,25 @@ def run_lean(root: Path, relative: str) -> subprocess.CompletedProcess[str]:
 
 def parse_axioms(output: str) -> dict[str, set[str]]:
     rows: dict[str, set[str]] = {}
-    pattern = re.compile(r"'([^']+)' depends on axioms:\s*\[(.*?)\]", re.DOTALL)
-    for name, payload in pattern.findall(output):
-        rows[name] = {part.strip() for part in payload.replace("\n", " ").split(",") if part.strip()}
+    for name, payload in axiom_audit.REPORT.findall(output):
+        rows[name] = {part.strip() for part in payload.split(",") if part.strip()}
     return rows
 
 
 def dynamic_errors(root: Path) -> list[str]:
     errors: list[str] = []
-    axiom = run_lean(root, "scripts/ProxyPairUpgradeAxiomCheck.lean")
-    if axiom.returncode != 0:
-        errors.append(f"AXIOM — probe failed with exit {axiom.returncode}:\n{axiom.stdout.rstrip()}")
+    gate_semaphore.guard("the proxy-pair upgrade witnesses")
+    relative = "scripts/ProxyPairUpgradeAxiomCheck.lean"
+    try:
+        status, output = axiom_audit.elaborate(
+            root, axiom_audit.splice(root, (root / relative).read_text(encoding="utf-8"), relative)
+        )
+    except (axiom_audit.AuditError, OSError) as exc:
+        status, output = 2, f"from-scratch axiom probe could not run: {exc}"
+    if status != 0:
+        errors.append(f"AXIOM — probe failed with exit {status}:\n{output.rstrip()}")
     else:
-        rows = parse_axioms(axiom.stdout)
+        rows = parse_axioms(output)
         if set(rows) != set(FULL_AXIOM_PINS):
             errors.append("AXIOM — probe output does not contain exactly the 13 pinned rows")
         for name in FULL_AXIOM_PINS:
@@ -738,9 +747,9 @@ def self_test(root: Path) -> list[str]:
             failures.append("wrong-root: absent checkout did not fail closed")
 
         fake = "\n".join(
-            f"'{name}' depends on axioms: [propext, Classical.choice, Quot.sound]"
+            f"FULL-AXIOMS '{name}': [Classical.choice, Quot.sound, propext]"
             for name in FULL_AXIOM_PINS
-        ).replace("[propext, Classical.choice, Quot.sound]", "[propext]", 1)
+        ).replace("[Classical.choice, Quot.sound, propext]", "[propext]", 1)
         parsed = parse_axioms(fake)
         if all(parsed.get(name) == EXPECTED_AXIOMS for name in FULL_AXIOM_PINS):
             failures.append("wrong-axiom: reduced axiom set was not distinguished")
