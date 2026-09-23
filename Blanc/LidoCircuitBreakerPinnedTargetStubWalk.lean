@@ -44,7 +44,7 @@ lemma stubPausePost_logs (sevm : Sevm) (base : Devm)
 lemma stubPausePost_refundCounter (sevm : Sevm) (base : Devm)
     (duration : B256) :
     (stubPausePost sevm base duration).refundCounter =
-      sstoreNewRefundCounter (pauseForProjection sevm.benvStat.time duration)
+      sstoreNewRefundCounter sevm.benvStat.rules.gas (pauseForProjection sevm.benvStat.time duration)
         (getOrigStorVal sevm sevm.currentTarget pausedUntilSlot)
         (base.getStorVal sevm.currentTarget pausedUntilSlot)
         base.refundCounter := rfl
@@ -83,6 +83,7 @@ slot in the row-19 zero-to-nonzero price case.  The SSTORE costs `22100` and
 the surrounding source instructions cost `32`. -/
 theorem stubPause_cold_runCompiledTo
     (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (duration : B256) (G : Nat)
     (harg : Sevm.dataWord sevm 4 = duration)
     (hcold : (sevm.currentTarget, pausedUntilSlot) ∉
@@ -110,12 +111,14 @@ theorem stubPause_cold_runCompiledTo
       (pauseInfiniteSentinel =? duration) =? 0,
       sevm.benvStat.time * (((pauseInfiniteSentinel =? duration) =? 0)),
       sevm.benvStat.time * (((pauseInfiniteSentinel =? duration) =? 0)) + duration]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     case h_val =>
       rw [show (32 * (0 : B256) + 4) = 4 by decide, harg]
       rfl
     case a =>
       refine Func.RunCompiledTo.next
-        (Ninst.runCompiled_sstore_cold (G := G) (c := 22100) rfl hcold ?_
+        (Ninst.runCompiled_sstore_cold (G := G) (c := 22100)
+          hfork.rules_stateGas_none rfl hcold ?_
           hdynamic ?_ rfl ?_)
         (Func.RunCompiledTo.last rfl)
       · simp only [Devm.gasLeft_setMach, gCallStipend]
@@ -154,6 +157,7 @@ theorem stubPause_cold_runCompiledTo
 preserves the stored word. -/
 theorem stubQuery_true_warm_runCompiledTo
     (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (storedUntil : B256) (G : Nat)
     (hstored : base.getStorVal sevm.currentTarget pausedUntilSlot = storedUntil)
     (hwarm : (sevm.currentTarget, pausedUntilSlot) ∈
@@ -173,6 +177,7 @@ theorem stubQuery_true_warm_runCompiledTo
   apply Exists.intro
   constructor
   · func_run [1, 3]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     case h_val =>
       rw [Devm.getStorVal_setMach, hstored]
       simp [B256.ltCheck, hpaused]
@@ -203,6 +208,7 @@ theorem stubQuery_true_warm_runCompiledTo
 
 private theorem stubBaseMain_pause_cold_runCompiledTo
     (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (duration : B256) (G : Nat)
     (hsize : sevm.data.length.toB256 = 36)
     (harg : Sevm.dataWord sevm 4 = duration)
@@ -225,11 +231,12 @@ private theorem stubBaseMain_pause_cold_runCompiledTo
       post.meta = (stubPausePost sevm base duration).meta ∧
       post.world = (stubPausePost sevm base duration).world := by
   obtain ⟨post, body, effect, gas, error, output, hmeta, world⟩ :=
-    stubPause_cold_runCompiledTo fs sevm base duration G harg hcold hdynamic
+    stubPause_cold_runCompiledTo (hfork := hfork) fs sevm base duration G harg hcold hdynamic
       hcost
   refine ⟨post, ?_, effect, gas, error, output, hmeta, world⟩
   unfold stubBaseMain stubDispatchLine
   func_run (4) [1]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_val => simp [B256.eqCheck, hsize]
   case h_arm =>
     have hg : G + 22154 - 22 = G + 22132 := by omega
@@ -274,6 +281,7 @@ dispatchers.  The protected-selector guard takes its zero arm and the exact
 36-byte length guard takes its pause arm. -/
 theorem stubMain_pause_cold_runCompiledTo
     (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (duration : B256) (G : Nat)
     (hselector : Sevm.selector sevm = pauseForSelector)
     (hsize : sevm.data.length.toB256 = 36)
@@ -297,7 +305,7 @@ theorem stubMain_pause_cold_runCompiledTo
       post.meta = (stubPausePost sevm base duration).meta ∧
       post.world = (stubPausePost sevm base duration).world := by
   obtain ⟨post, body, effect, gas, error, output, hmeta, world⟩ :=
-    stubBaseMain_pause_cold_runCompiledTo fs sevm base duration G hsize harg
+    stubBaseMain_pause_cold_runCompiledTo (hfork := hfork) fs sevm base duration G hsize harg
       hcold hdynamic hcost
   refine ⟨post, ?_, effect, gas, error, output, hmeta, world⟩
   have protectedNe : stubProtectedSelector ≠ pauseForSelector := by
@@ -316,6 +324,7 @@ theorem stubMain_pause_cold_runCompiledTo
 
 private theorem stubBaseMain_query_true_warm_runCompiledTo
     (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (storedUntil : B256) (G : Nat)
     (hsize : sevm.data.length.toB256 = 4)
     (hstored : base.getStorVal sevm.currentTarget pausedUntilSlot = storedUntil)
@@ -333,7 +342,7 @@ private theorem stubBaseMain_query_true_warm_runCompiledTo
       post.meta = (base.withOutput (1 : B256).toBytes).meta ∧
       post.world = base.world := by
   obtain ⟨post, body, output, effect, gas, error, hmeta, world⟩ :=
-    stubQuery_true_warm_runCompiledTo fs sevm base storedUntil G hstored hwarm
+    stubQuery_true_warm_runCompiledTo (hfork := hfork) fs sevm base storedUntil G hstored hwarm
       hpaused
   refine ⟨post, ?_, output, effect, gas, error, hmeta, world⟩
   unfold stubBaseMain stubDispatchLine
@@ -349,6 +358,7 @@ private theorem stubBaseMain_query_true_warm_runCompiledTo
 /-- Lift the warm canonical-true query through both source dispatchers. -/
 theorem stubMain_query_true_warm_runCompiledTo
     (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (storedUntil : B256) (G : Nat)
     (hselector : Sevm.selector sevm = isPausedSelector)
     (hsize : sevm.data.length.toB256 = 4)
@@ -367,7 +377,7 @@ theorem stubMain_query_true_warm_runCompiledTo
       post.meta = (base.withOutput (1 : B256).toBytes).meta ∧
       post.world = base.world := by
   obtain ⟨post, body, output, effect, gas, error, hmeta, world⟩ :=
-    stubBaseMain_query_true_warm_runCompiledTo fs sevm base storedUntil G hsize
+    stubBaseMain_query_true_warm_runCompiledTo (hfork := hfork) fs sevm base storedUntil G hsize
       hstored hwarm hpaused
   refine ⟨post, ?_, output, effect, gas, error, hmeta, world⟩
   have protectedNe : stubProtectedSelector ≠ isPausedSelector := by
@@ -389,6 +399,7 @@ theorem stubMain_query_true_warm_runCompiledTo
 /-- The complete compiled stub program on the cold pause calldata route. -/
 theorem stubProgram_pause_cold_runCompiledTo
     (sevm : Sevm) (base : Devm) (duration : B256) (G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hselector : Sevm.selector sevm = pauseForSelector)
     (hsize : sevm.data.length.toB256 = 36)
     (harg : Sevm.dataWord sevm 4 = duration)
@@ -411,7 +422,7 @@ theorem stubProgram_pause_cold_runCompiledTo
       post.meta = (stubPausePost sevm base duration).meta ∧
       post.world = (stubPausePost sevm base duration).world := by
   obtain ⟨post, body, effect, gas, error, output, hmeta, world⟩ :=
-    stubMain_pause_cold_runCompiledTo [stubMain] sevm base duration G
+    stubMain_pause_cold_runCompiledTo (hfork := hfork) [stubMain] sevm base duration G
       hselector hsize harg hcold hdynamic hcost
   refine ⟨post, ?_, effect, gas, error, output, hmeta, world⟩
   apply Prog.runCompiledTo_intro (G := G + 22184)
@@ -424,6 +435,7 @@ theorem stubProgram_pause_cold_runCompiledTo
 route. -/
 theorem stubProgram_query_true_warm_runCompiledTo
     (sevm : Sevm) (base : Devm) (storedUntil : B256) (G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hselector : Sevm.selector sevm = isPausedSelector)
     (hsize : sevm.data.length.toB256 = 4)
     (hstored : base.getStorVal sevm.currentTarget pausedUntilSlot = storedUntil)
@@ -441,7 +453,7 @@ theorem stubProgram_query_true_warm_runCompiledTo
       post.meta = (base.withOutput (1 : B256).toBytes).meta ∧
       post.world = base.world := by
   obtain ⟨post, body, output, effect, gas, error, hmeta, world⟩ :=
-    stubMain_query_true_warm_runCompiledTo [stubMain] sevm base storedUntil G
+    stubMain_query_true_warm_runCompiledTo (hfork := hfork) [stubMain] sevm base storedUntil G
       hselector hsize hstored hwarm hpaused
   refine ⟨post, ?_, output, effect, gas, error, hmeta, world⟩
   apply Prog.runCompiledTo_intro (G := G + 171)
@@ -695,6 +707,7 @@ lemma sliceD_stagedSelector (img : Bytes) (sel : B256) :
 calldata executes the cold write route with the source-level charge exported
 above. -/
 theorem stubPause_exec (m : Msg) (duration : B256) (G : Nat)
+    (hfork : CoveredFork (initSevm m).benvStat.fork)
     (hcode : m.code = stubCode)
     (hdata : m.data = pauseForCalldata duration)
     (hgas : m.gas = G + 22185)
@@ -719,7 +732,7 @@ theorem stubPause_exec (m : Msg) (duration : B256) (G : Nat)
   have hdata' : (initSevm m).data = pauseForCalldata duration := hdata
   obtain ⟨hselector, hsize, harg⟩ := pauseForCalldata_facts hdata'
   obtain ⟨post, walk, effect, gas, error, output, hmeta, world⟩ :=
-    stubProgram_pause_cold_runCompiledTo (initSevm m) (initDevm m)
+    stubProgram_pause_cold_runCompiledTo (hfork := hfork) (initSevm m) (initDevm m)
       duration G hselector hsize harg hcold hdynamic hcost
   have hrun : Prog.RunCompiledTo (initSevm m) (initDevm m) stubProgram
       (.ok post) := by
@@ -781,7 +794,7 @@ theorem stubPause_sentinel_execution :
       post.getStorVal stubPauseSentinelTarget pausedUntilSlot ≠
         (7 : B256) + pauseInfiniteSentinel := by
   obtain ⟨post, hexec, herr, hout, hgas, hmeta, hworld, hstored⟩ :=
-    stubPause_exec stubPauseSentinelMsg pauseInfiniteSentinel 0
+    stubPause_exec stubPauseSentinelMsg pauseInfiniteSentinel 0 (by decide)
       rfl rfl rfl (by
         change (stubPauseSentinelTarget, pausedUntilSlot) ∉
           (Std.HashSet.emptyWithCapacity : KeySet)
@@ -817,6 +830,7 @@ theorem stubPause_sentinel_execution :
 /-- A message carrying the installed stub and exact `isPaused()` calldata
 executes the warm canonical-true query route. -/
 theorem stubQuery_exec (m : Msg) (storedUntil : B256) (G : Nat)
+    (hfork : CoveredFork (initSevm m).benvStat.fork)
     (hcode : m.code = stubCode)
     (hdata : m.data = isPausedCalldata)
     (hgas : m.gas = G + 172)
@@ -838,7 +852,7 @@ theorem stubQuery_exec (m : Msg) (storedUntil : B256) (G : Nat)
   have hdata' : (initSevm m).data = isPausedCalldata := hdata
   obtain ⟨hselector, hsize⟩ := isPausedCalldata_facts hdata'
   obtain ⟨post, walk, output, effect, gas, error, hmeta, world⟩ :=
-    stubProgram_query_true_warm_runCompiledTo (initSevm m) (initDevm m)
+    stubProgram_query_true_warm_runCompiledTo (hfork := hfork) (initSevm m) (initDevm m)
       storedUntil G hselector hsize hstored hwarm hpaused
   have hrun : Prog.RunCompiledTo (initSevm m) (initDevm m) stubProgram
       (.ok post) := by
