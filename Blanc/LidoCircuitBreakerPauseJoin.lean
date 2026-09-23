@@ -320,17 +320,20 @@ a clean child is the raw execution itself. -/
 /-- A settle that lands `.ok` with the error flag set rolled the state back:
 the child's world is the message's own entry state. -/
 private lemma settle_err_state {msg : Msg} {raw : Execution} {child : Devm}
+    (hmsgFork : CoveredFork msg.benv.stat.fork)
     (hsettle : (Frame.ofCall msg).settle raw = .ok child)
     (hce : child.error.isSome = true) :
     child.state = msg.benv.state := by
+  have hlegacy : (Frame.ofCall msg).settle raw
+      = processMessage.settle msg (executeCode.handleError raw) := by
+    rw [Frame.settle_eq_settleMsg_handleErrorWith]
+    change processMessage.settle msg
+        (executeCode.handleErrorWith msg.benv.stat.rules.stateGas raw) = _
+    rw [hmsgFork.rules_stateGas_none, executeCode.handleErrorWith_none]
   rcases hhe : executeCode.handleError raw with e | evm
-  · rw [show (Frame.ofCall msg).settle raw
-        = processMessage.settle msg (executeCode.handleError raw) from rfl,
-      hhe] at hsettle
+  · rw [hlegacy, hhe] at hsettle
     cases hsettle
-  · rw [show (Frame.ofCall msg).settle raw
-        = processMessage.settle msg (executeCode.handleError raw) from rfl,
-      hhe] at hsettle
+  · rw [hlegacy, hhe] at hsettle
     unfold processMessage.settle at hsettle
     simp only [bind, Except.bind] at hsettle
     by_cases he : evm.error.isSome
@@ -344,11 +347,16 @@ private lemma settle_err_state {msg : Msg} {raw : Execution} {child : Devm}
 /-- A settle that lands `.ok` with the error flag clear did not intervene:
 the raw execution already was that clean state. -/
 private lemma settle_ok_clean {msg : Msg} {raw : Execution} {child : Devm}
+    (hmsgFork : CoveredFork msg.benv.stat.fork)
     (hsettle : (Frame.ofCall msg).settle raw = .ok child)
     (hce : child.error.isSome = false) :
     raw = .ok child := by
   have hsettle' : processMessage.settle msg (executeCode.handleError raw)
-      = .ok child := hsettle
+      = .ok child := by
+    rw [← hsettle, Frame.settle_eq_settleMsg_handleErrorWith]
+    change _ = processMessage.settle msg
+        (executeCode.handleErrorWith msg.benv.stat.rules.stateGas raw)
+    rw [hmsgFork.rules_stateGas_none, executeCode.handleErrorWith_none]
   rcases raw with ⟨e, d⟩ | out
   · exfalso
     rcases e with reason | _ | reason | reason
@@ -433,6 +441,7 @@ and refuted by `callee_exec_low_gas` when it does not, and every other leg
 restores the parent's state outright. -/
 
 private lemma responder_crossing_tail {sevm : Sevm} {p : Devm} {mcs : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {callee : Adr} {data : Bytes} {dp isStat : Bool} {oi os : Nat}
     {postC : Devm} {xl : Xlot}
     {r : Except (EvmError × State × AdrSet × Tra) Devm}
@@ -496,7 +505,7 @@ private lemma responder_crossing_tail {sevm : Sevm} {p : Devm} {mcs : Nat}
           p.gasLeft + child2.gasLeft, (incorporateChildOnError p child2 child2.output).stateGas⟩).memWrite oi
             (child2.output.take os) :=
       Except.ok.inj hres
-    have hstate : child2.state = msg.benv.state := settle_err_state hsettle hce
+    have hstate : child2.state = msg.benv.state := settle_err_state (by exact hfork) hsettle hce
     subst hpost
     refine ⟨⟨child2.output.take os, List.length_take_le _ _, rfl⟩, ?_, ?_⟩
     · intro a key
@@ -517,7 +526,7 @@ private lemma responder_crossing_tail {sevm : Sevm} {p : Devm} {mcs : Nat}
           p.gasLeft + child2.gasLeft, (incorporateChildOnSuccess p child2 child2.output).stateGas⟩).memWrite oi
             (child2.output.take os) :=
       Except.ok.inj hres
-    have hraw : raw = .ok child2 := settle_ok_clean hsettle hce'
+    have hraw : raw = .ok child2 := settle_ok_clean (by exact hfork) hsettle hce'
     rcases Nat.lt_or_ge mcs 17 with hlow | hhigh
     · -- refuted: the responder cannot settle clean under its charge
       exfalso
@@ -530,7 +539,8 @@ private lemma responder_crossing_tail {sevm : Sevm} {p : Devm} {mcs : Nat}
     · obtain ⟨out, hexec, _herr, _hout, _hgas, hworld, _⟩ :=
         callee_exec (msg.withBenv
           ((msg.benv.withState stmid).addBal msg.currentTarget msg.value))
-          (mcs - 17) rfl (by show mcs = mcs - 17 + 17; omega)
+          (mcs - 17) (by change CoveredFork sevm.benvStat.fork; exact hfork)
+          rfl (by show mcs = mcs - 17 + 17; omega)
       rw [hexec, hraw] at hexecraw
       have hchild : child2 = out := (Except.ok.inj hexecraw).symm
       have hstate : child2.state =
@@ -569,6 +579,7 @@ moves only by the resume's own window write, and every account's storage and
 code survive. -/
 
 theorem responder_call_effects {sevm : Sevm} {preC postC : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {gw tw iiw isw oiw osw : B256} {rest : List B256}
     (h_stk : preC.stack = gw :: tw :: 0 :: iiw :: isw :: oiw :: osw :: rest)
     (h_code : CodeAt preC tw.toAdr calleeCode)
@@ -606,16 +617,16 @@ theorem responder_call_effects {sevm : Sevm} {preC postC : Devm}
       (addAccessedAddress (preC.setMach ⟨rest, preC.memory, preC.gasLeft, preC.stateGas⟩)
         tw.toAdr).gasLeft
   case neg =>
-    rw [Xinst.step_call_zero_value_outOfGas h_stk rfl h_del rfl hsplit
+    rw [Xinst.step_call_zero_value_outOfGas hfork h_stk rfl h_del rfl hsplit
       (by omega)] at hx
     obtain ⟨-, hcontra⟩ := hx
     cases hcontra
   case pos =>
-    rw [Xinst.step_call_zero_value_spawn h_stk rfl h_del rfl hsplit hga
+    rw [Xinst.step_call_zero_value_spawn hfork h_stk rfl h_del rfl hsplit hga
       h_depth] at hx
     obtain ⟨r, hframe, hres⟩ := hx
     obtain ⟨hmem, hstor, hcode'⟩ :=
-      responder_crossing_tail h_nonprecompile hfill hframe hres
+      responder_crossing_tail (hfork := hfork) h_nonprecompile hfill hframe hres
     refine ⟨?_, ?_, ?_⟩
     · obtain ⟨ys, hlen, heq⟩ := hmem
       exact ⟨ys, hlen, heq⟩
@@ -625,6 +636,7 @@ theorem responder_call_effects {sevm : Sevm} {preC postC : Devm}
       exact hcode' a
 
 theorem responder_staticcall_effects {sevm : Sevm} {preC postC : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {gw tw iiw isw oiw osw : B256} {rest : List B256}
     (h_stk : preC.stack = gw :: tw :: iiw :: isw :: oiw :: osw :: rest)
     (h_code : CodeAt preC tw.toAdr calleeCode)
@@ -662,15 +674,15 @@ theorem responder_staticcall_effects {sevm : Sevm} {preC postC : Devm}
       (addAccessedAddress (preC.setMach ⟨rest, preC.memory, preC.gasLeft, preC.stateGas⟩)
         tw.toAdr).gasLeft
   case neg =>
-    rw [Xinst.step_staticcall_outOfGas h_stk rfl h_del rfl hsplit (by omega)] at hx
+    rw [Xinst.step_staticcall_outOfGas hfork h_stk rfl h_del rfl hsplit (by omega)] at hx
     obtain ⟨-, hcontra⟩ := hx
     cases hcontra
   case pos =>
-    rw [Xinst.step_staticcall_spawn h_stk rfl h_del rfl hsplit hga
+    rw [Xinst.step_staticcall_spawn hfork h_stk rfl h_del rfl hsplit hga
       h_depth] at hx
     obtain ⟨r, hframe, hres⟩ := hx
     obtain ⟨hmem, hstor, hcode'⟩ :=
-      responder_crossing_tail h_nonprecompile hfill hframe hres
+      responder_crossing_tail (hfork := hfork) h_nonprecompile hfill hframe hres
     refine ⟨?_, ?_, ?_⟩
     · obtain ⟨ys, hlen, heq⟩ := hmem
       exact ⟨ys, hlen, heq⟩
@@ -682,6 +694,7 @@ theorem responder_staticcall_effects {sevm : Sevm} {preC postC : Devm}
 /-- The route finals' `hcall` premise, discharged for any frame whose depth
 is nonzero and whose fork rules do not treat the callee as a precompile. -/
 theorem responder_hcall {sevm : Sevm} {target : B256}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_depth : sevm.depth ≠ 0)
     (h_np : sevm.benvStat.rules.isPrecomp target.toAdr = false) :
     ∀ (preC postC : Devm) (gw : B256) (rest : Stack),
@@ -697,7 +710,7 @@ theorem responder_hcall {sevm : Sevm} {target : B256}
             (countSlot sevm.caller.toB256) := by
   intro preC postC gw rest hstk window codeAt run
   obtain ⟨⟨ys, hlen, hmem⟩, hstor, hcode⟩ :=
-    responder_call_effects hstk codeAt h_depth h_np run
+    responder_call_effects (hfork := hfork) hstk codeAt h_depth h_np run
   refine ⟨?_, ?_, hstor _ _⟩
   · refine MemWordAt.extendsWrite hmem (Or.inr ?_) window
     have h0 : ((0 : B256)).toNat = 0 := rfl
@@ -711,6 +724,7 @@ theorem responder_hcall {sevm : Sevm} {target : B256}
 `STATICCALL`'s 32-byte return window lands at offset zero, clear of the
 staged target at `targetWord * 32`. -/
 theorem responder_hstat {sevm : Sevm} {target : B256}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_depth : sevm.depth ≠ 0)
     (h_np : sevm.benvStat.rules.isPrecomp target.toAdr = false) :
     ∀ (preC postC : Devm) (gw : B256) (rest : Stack),
@@ -726,7 +740,7 @@ theorem responder_hstat {sevm : Sevm} {target : B256}
             (countSlot sevm.caller.toB256) := by
   intro preC postC gw rest hstk window codeAt run
   obtain ⟨⟨ys, hlen, hmem⟩, hstor, hcode⟩ :=
-    responder_staticcall_effects hstk codeAt h_depth h_np run
+    responder_staticcall_effects (hfork := hfork) hstk codeAt h_depth h_np run
   refine ⟨?_, ?_, hstor _ _⟩
   · refine MemWordAt.extendsWrite hmem (Or.inr ?_) window
     have h0 : ((0 : B256)).toNat = 0 := rfl
@@ -1260,9 +1274,9 @@ theorem attainable_pauseLastTargetExpiry_pauseExpiry :
     · rw [pauseWorld_callerWord]
       exact pauseWorld_indexCallee_ne_count
   · -- hcall
-    exact responder_hcall (show (1024 : Nat) ≠ 0 by decide) (by decide)
+    exact responder_hcall (hfork := by change CoveredFork .prague; exact CoveredFork.prague) (show (1024 : Nat) ≠ 0 by decide) (by decide)
   · -- hstat
-    exact responder_hstat (show (1024 : Nat) ≠ 0 by decide) (by decide)
+    exact responder_hstat (hfork := by change CoveredFork .prague; exact CoveredFork.prague) (show (1024 : Nat) ≠ 0 by decide) (by decide)
 
 /-! ## J2: row 18 attained with the `.pauseExpiry` role -/
 
@@ -1363,9 +1377,9 @@ theorem attainable_pauseRetainedTargetExpiry_pauseExpiry :
     · rw [pauseWorld_callerWord]
       exact pauseWorld_indexCallee_ne_count
   · -- hcall
-    exact responder_hcall (show (1024 : Nat) ≠ 0 by decide) (by decide)
+    exact responder_hcall (hfork := by change CoveredFork .prague; exact CoveredFork.prague) (show (1024 : Nat) ≠ 0 by decide) (by decide)
   · -- hstat
-    exact responder_hstat (show (1024 : Nat) ≠ 0 by decide) (by decide)
+    exact responder_hstat (hfork := by change CoveredFork .prague; exact CoveredFork.prague) (show (1024 : Nat) ≠ 0 by decide) (by decide)
 
 /-! ## J3: the joins -/
 
