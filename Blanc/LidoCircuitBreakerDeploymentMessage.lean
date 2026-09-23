@@ -419,7 +419,8 @@ private theorem chargeCodeGas_official_output
     {rules : ForkRules} {d : Devm}
     (houtput : d.output = lidoCircuitBreakerCode officialParams)
     (hgas : officialCodeDepositGas ≤ d.gasLeft)
-    (hmax : 4282 ≤ rules.code.maxCodeSize) :
+    (hmax : 4282 ≤ rules.code.maxCodeSize)
+    (hstateGas : rules.stateGas = none) :
     processCreateMessage.chargeCodeGas rules d =
       .ok (d.setMach
         ⟨d.stack, d.memory, d.gasLeft - officialCodeDepositGas, d.stateGas⟩) := by
@@ -427,6 +428,7 @@ private theorem chargeCodeGas_official_output
   obtain ⟨tail, hcons⟩ := lidoCircuitBreakerCode_official_cons
   have hlen := lidoCircuitBreakerCode_official_length
   unfold processCreateMessage.chargeCodeGas
+  rw [hstateGas]
   rw [houtput, hcons]
   rw [hcons] at hlen
   simp only [List.length_cons] at hlen
@@ -474,7 +476,8 @@ private theorem processMessage_official_constructor_checkpoint
     (hheartbeatOriginal :
       (msg.benv.stat.origState.get msg.currentTarget).stor.get
         heartbeatIntervalSlot = 0)
-    (hstatic : msg.isStatic = false) :
+    (hstatic : msg.isStatic = false)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     Nonempty (Σ raw, OfficialConstructorRawCheckpoint msg raw) := by
   let prepared := processCreateMessage.msg msg
   obtain ⟨benv, htransfer⟩ :=
@@ -492,6 +495,8 @@ private theorem processMessage_official_constructor_checkpoint
       _ = benv.stat := rfl
       _ = prepared.benv.stat := benvAfterTransfer_stat htransfer
       _ = msg.benv.stat := by rfl
+  have hseedFork : CoveredFork sevm.benvStat.fork := by
+    simpa only [hstat] using hfork
   have htarget : sevm.currentTarget = msg.currentTarget := by
     calc
       sevm.currentTarget = seeded.currentTarget := rfl
@@ -572,7 +577,7 @@ private theorem processMessage_official_constructor_checkpoint
   have htrace : OfficialConstructorExecutionTrace msg.currentTarget
       sevm base raw G := by
     dsimp only [raw]
-    exact officialConstructorExecutionTrace_fresh (hfork := hfork) htarget hseedValue
+    exact officialConstructorExecutionTrace_fresh (hfork := hseedFork) htarget hseedValue
       hseedCode hpauseCold' hpauseOriginal' hpauseCurrent
       hheartbeatCold' hheartbeatOriginal' hheartbeatCurrent hseedStatic
   have hstart :
@@ -829,7 +834,8 @@ theorem processCreateMessage_establishes_officialRegistryStable
     (hheartbeatOriginal :
       (msg.benv.stat.origState.get msg.currentTarget).stor.get
         heartbeatIntervalSlot = 0)
-    (hstatic : msg.isStatic = false) :
+    (hstatic : msg.isStatic = false)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     ∃ post, OfficialCreateMessageResult msg.currentTarget msg post := by
   have hconstructorGas : officialConstructorRequiredGas ≤ msg.gas := by
     have htotal := hgas
@@ -891,7 +897,15 @@ theorem processCreateMessage_establishes_officialRegistryStable
     rw [← htrace'.target_eq, hrawEq']
     exact officialConstructorPost_registryCoherent sevm base G
       hbaseStorageSevm
-  have hbaseLogs : base.logs = [] := by rfl
+  have hbaseLogs : base.logs = [] := by
+    change (match benv.stat.rules.stateGas with
+      | none => []
+      | some _ => _) = []
+    rw [benvAfterTransfer_stat htransfer]
+    change (match msg.benv.stat.rules.stateGas with
+      | none => []
+      | some _ => _) = []
+    rw [hfork.rules_stateGas_none]
   have hrawLogs : raw.logs = officialConstructorLogs msg.currentTarget := by
     calc
       raw.logs = base.logs ++ officialConstructorLogs sevm.currentTarget := by
@@ -936,13 +950,13 @@ theorem processCreateMessage_establishes_officialRegistryStable
     rw [hrawGas]
     exact hdepositAfterConstructor
   let chargedMach : Mach :=
-    ⟨raw.stack, raw.memory, raw.gasLeft - officialCodeDepositGas⟩
+    ⟨raw.stack, raw.memory, raw.gasLeft - officialCodeDepositGas, raw.stateGas⟩
   let charged := raw.setMach chargedMach
   have hcharge :
       processCreateMessage.chargeCodeGas msg.benv.stat.rules raw =
         .ok charged := by
     simpa only [charged, chargedMach] using
-      chargeCodeGas_official_output hrawOutput hdeposit hmax
+      chargeCodeGas_official_output hrawOutput hdeposit hmax hfork.rules_stateGas_none
   have hmach : Devm.MachFrame raw charged := by
     change Devm.MachFrame raw (raw.setMach chargedMach)
     exact Devm.machFrame_setMach raw chargedMach
@@ -1080,7 +1094,8 @@ theorem processMessageCall_establishes_officialRegistryStable
     (hheartbeatOriginal :
       (msg.benv.stat.origState.get msg.currentTarget).stor.get
         heartbeatIntervalSlot = 0)
-    (hstatic : msg.isStatic = false) :
+    (hstatic : msg.isStatic = false)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     ∃ post out, OfficialConstructorMessageResult ca msg post out := by
   obtain ⟨createPost, hcreate⟩ :=
     processCreateMessage_establishes_officialRegistryStable (hfork := hfork) msg hvalue
@@ -1101,7 +1116,7 @@ theorem processMessageCall_establishes_officialRegistryStable
     rw [htarget]
     simp [hnoCodeOrNonce, hnoStorage, Except.bimap, hcreate'.run,
       hcreate'.error, htoNat, out, officialMessageOutputOf,
-      directCreateMessageOutputOf]
+      directCreateMessageOutputOf, hfork.rules_stateGas_none]
     rfl
   refine ⟨createPost.state, out, {
     target_eq := htarget
