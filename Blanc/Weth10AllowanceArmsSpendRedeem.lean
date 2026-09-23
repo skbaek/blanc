@@ -562,7 +562,8 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceStorage
       (successLine +++ Func.last successLast))
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
-        Exec.CoreAllowanceSound dp ca pc sevm pre out)) :
+        Exec.CoreAllowanceSound dp ca pc sevm pre out))
+    (hfork : CoveredFork frame.sevm.benvStat.fork) :
     ∀ key, InRegion .allowance key →
       (Devm.getStor frame.post ca).get key =
         applyAllowanceLedger (Devm.getStor cursor.pre ca)
@@ -750,7 +751,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceStorage
           rcases sendEvidence.stack with ⟨gasWord, hcallStack⟩
           have hcall : Ninst.Run e callCursor.pre Ninst.call midD :=
             Ninst.Run.of_runCompiled hcompiled
-          rcases of_run_call_val_with_depth_frame hcallStack hcall with
+          rcases of_run_call_val_with_depth_frame hcallStack hcall hfork with
               hfailed | hsuccess
           · exfalso
             have htest := prefix_of_iszero hiszeroRun hfailed.1
@@ -854,7 +855,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceStorage
                   have htargetCa : target.toAdr = ca := by
                     simpa only [callMsg] using hct
                   simp only [callMsg, htargetCa, hresolved htargetCa])
-                hdeeper
+                hdeeper hfork
             -- the trailing guard is childless and storage neutral
             obtain ⟨htailNil, htailStor⟩ :=
               Exec.tailGuard_attributionInner_storage
@@ -960,7 +961,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdrawFrom
       exact redeemSendToArgPrefix_effect 1 hp hrun)
     (by simp)
     (by func_inv)
-    hdeeper
+    hdeeper context.covered
   have hnotlast : ownRecordLast frame.sevm = false := by
     simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
       withdrawFromSelector_ne_flashLoanSelector,
@@ -1151,7 +1152,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromZero
     (by simp [redeemReturnTrueLine, mstoreAt, pushList, NinstIsChildless,
       Ninst.pushB256])
     (by func_inv)
-    hdeeper
+    hdeeper context.covered
   have hnotlast : ownRecordLast frame.sevm = false := by
     simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
       transferFromSelector_ne_flashLoanSelector,
@@ -1286,7 +1287,8 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceSound
       (successLine +++ Func.last successLast))
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
-        Exec.CoreAllowanceReadSound dp ca pc sevm pre out)) :
+        Exec.CoreAllowanceReadSound dp ca pc sevm pre out))
+    (hfork : CoveredFork frame.sevm.benvStat.fork) :
     (∀ key, InRegion .allowance key →
         (Devm.getStor frame.post ca).get key =
           applyAllowanceLedger (Devm.getStor cursor.pre ca)
@@ -1479,7 +1481,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceSound
           rcases sendEvidence.stack with ⟨gasWord, hcallStack⟩
           have hcall : Ninst.Run e callCursor.pre Ninst.call midD :=
             Ninst.Run.of_runCompiled hcompiled
-          rcases of_run_call_val_with_depth_frame hcallStack hcall with
+          rcases of_run_call_val_with_depth_frame hcallStack hcall hfork with
               hfailed | hsuccess
           · exfalso
             have htest := prefix_of_iszero hiszeroRun hfailed.1
@@ -1583,7 +1585,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceSound
                   have htargetCa : target.toAdr = ca := by
                     simpa only [callMsg] using hct
                   simp only [callMsg, htargetCa, hresolved htargetCa])
-                hdeeper
+                hdeeper hfork
             -- the trailing guard is childless and storage neutral
             obtain ⟨htailNil, htailStor⟩ :=
               Exec.tailGuard_attributionInner_storage
@@ -1705,7 +1707,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_withdrawFrom
       exact redeemSendToArgPrefix_effect 1 hp hrun)
     (by simp)
     (by func_inv)
-    hdeeper
+    hdeeper context.covered
   have hnotlast : ownRecordLast frame.sevm = false := by
     simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
       withdrawFromSelector_ne_flashLoanSelector,
@@ -1900,7 +1902,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferFromZero
     (by simp [redeemReturnTrueLine, mstoreAt, pushList, NinstIsChildless,
       Ninst.pushB256])
     (by func_inv)
-    hdeeper
+    hdeeper context.covered
   have hnotlast : ownRecordLast frame.sevm = false := by
     simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
       transferFromSelector_ne_flashLoanSelector,

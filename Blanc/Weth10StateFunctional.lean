@@ -527,7 +527,11 @@ private lemma sload_logs {e : Sevm} {s s' : Devm}
   refine (Devm.pop_of_pop h1).logs.trans ?_
   suffices H : ∀ (d : Devm) (c : Nat), s1.logs = d.logs →
       (chargeGas c d >>=
-        fun y => Devm.push (Devm.getStorVal y e.currentTarget key) y) =
+        fun y =>
+          Devm.push
+            ((Devm.balReadStorage e.benvStat.rules e.currentTarget key y).getStorVal
+              e.currentTarget key)
+            (Devm.balReadStorage e.benvStat.rules e.currentTarget key y)) =
           .ok s' →
       s1.logs = s'.logs by
     split at run1
@@ -536,7 +540,8 @@ private lemma sload_logs {e : Sevm} {s s' : Devm}
         gasColdSload rfl run1
   intro d c hlogs run'
   rcases Except.bind_eq_ok run' with ⟨s2, h2, run2⟩
-  exact (hlogs.trans (Devm.burn_of_chargeGas h2).logs).trans
+  exact ((hlogs.trans (Devm.burn_of_chargeGas h2).logs).trans
+    Devm.balReadStorage_logs.symm).trans
     (Devm.push_of_push run2).logs
 
 private lemma sload_output {e : Sevm} {s s' : Devm}
@@ -547,7 +552,11 @@ private lemma sload_output {e : Sevm} {s s' : Devm}
   refine (Devm.pop_of_pop h1).output.trans ?_
   suffices H : ∀ (d : Devm) (c : Nat), s1.output = d.output →
       (chargeGas c d >>=
-        fun y => Devm.push (Devm.getStorVal y e.currentTarget key) y) =
+        fun y =>
+          Devm.push
+            ((Devm.balReadStorage e.benvStat.rules e.currentTarget key y).getStorVal
+              e.currentTarget key)
+            (Devm.balReadStorage e.benvStat.rules e.currentTarget key y)) =
           .ok s' →
       s1.output = s'.output by
     split at run1
@@ -556,7 +565,8 @@ private lemma sload_output {e : Sevm} {s s' : Devm}
         gasColdSload rfl run1
   intro d c houtput run'
   rcases Except.bind_eq_ok run' with ⟨s2, h2, run2⟩
-  exact (houtput.trans (Devm.burn_of_chargeGas h2).output).trans
+  exact ((houtput.trans (Devm.burn_of_chargeGas h2).output).trans
+    Devm.balReadStorage_output.symm).trans
     (Devm.push_of_push run2).output
 
 /-- Exact selected-body effect of the shared `depositTo` mint prefix: one

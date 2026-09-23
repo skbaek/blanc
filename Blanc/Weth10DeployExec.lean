@@ -634,12 +634,12 @@ private theorem memRead_fst_eq (d : Devm) (index size : Nat) :
 private def weth10InitReturnPre
     (base : Devm) (M : Mem) (g : Nat) : Devm :=
   base.setMach
-    ⟨[(0 : B256), (6313 : B256)], M, g - 1471⟩
+    ⟨[(0 : B256), (6313 : B256)], M, g - 1471, base.stateGas⟩
 
 private def weth10InitReturnRead
     (base : Devm) (M : Mem) (g : Nat) : Bytes × Devm :=
   let returnPre := weth10InitReturnPre base M g
-  (returnPre.setMach ⟨[], returnPre.memory, g - 1471⟩).memRead 0 6313
+  (returnPre.setMach ⟨[], returnPre.memory, g - 1471, returnPre.stateGas⟩).memRead 0 6313
 
 private theorem weth10InitReturnPre_stack
     (base : Devm) (M : Mem) (g : Nat) :
@@ -658,7 +658,7 @@ private theorem weth10InitReturnRead_eq
     (base : Devm) (M : Mem) (g : Nat) :
     ((weth10InitReturnPre base M g).setMach
       ⟨[], (weth10InitReturnPre base M g).memory,
-        g - 1471⟩).memRead 0 6313 =
+        g - 1471, (weth10InitReturnPre base M g).stateGas⟩).memRead 0 6313 =
       weth10InitReturnRead base M g := rfl
 
 private theorem weth10InitReturnRead_fst
@@ -707,10 +707,10 @@ private theorem weth10InitCopyLine_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {g : Nat}
     {rest : Func} (h_gas : 1275 ≤ g)
     (h_rest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], weth10InitCopyMemory sevm, g - 1275⟩)
+      (base.setMach ⟨[], weth10InitCopyMemory sevm, g - 1275, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], Mem.empty, g⟩)
+      (base.setMach ⟨[], Mem.empty, g, base.stateGas⟩)
       (weth10InitCopyLine 6313 177 +++ rest) post := by
   unfold weth10InitCopyLine
   func_run (4) [1267]
@@ -728,10 +728,10 @@ private theorem weth10InitChainLine_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {g : Nat}
     {rest : Func} (h_gas : 24 ≤ g)
     (h_rest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], weth10InitChainMemory sevm, g - 24⟩)
+      (base.setMach ⟨[], weth10InitChainMemory sevm, g - 24, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], weth10InitCopyMemory sevm, g⟩)
+      (base.setMach ⟨[], weth10InitCopyMemory sevm, g, base.stateGas⟩)
       (weth10InitChainLine +++ rest) post := by
   have h372 :
       (Bytes.toB256 [(372 >>> 8).toUInt8, (372 : Nat).toUInt8]).toNat =
@@ -808,9 +808,9 @@ private theorem weth10InitPreHashType_runCompiled
     {M : Mem} {rest : Func} (h_gas : 13 ≤ g) (h_size : M.size = 6336)
     (h_rest : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[], M.write 6336 DOMAIN_TYPEHASH.toBytes, g - 13⟩)
+        ⟨[], M.write 6336 DOMAIN_TYPEHASH.toBytes, g - 13, base.stateGas⟩)
       (weth10InitPreHashTail1 +++ rest) post) :
-    Func.RunCompiled fs sevm (base.setMach ⟨[], M, g⟩)
+    Func.RunCompiled fs sevm (base.setMach ⟨[], M, g, base.stateGas⟩)
       (weth10InitPreHashLine 6313 +++ rest) post := by
   unfold weth10InitPreHashLine
   func_run (3) [4]
@@ -821,9 +821,9 @@ private theorem weth10InitPreHashName_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {g : Nat}
     {M : Mem} {rest : Func} (h_gas : 13 ≤ g) (h_size : M.size = 6368)
     (h_rest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], M.write 6368 NAME_HASH.toBytes, g - 13⟩)
+      (base.setMach ⟨[], M.write 6368 NAME_HASH.toBytes, g - 13, base.stateGas⟩)
       (weth10InitPreHashTail2 +++ rest) post) :
-    Func.RunCompiled fs sevm (base.setMach ⟨[], M, g⟩)
+    Func.RunCompiled fs sevm (base.setMach ⟨[], M, g, base.stateGas⟩)
       (weth10InitPreHashTail1 +++ rest) post := by
   unfold weth10InitPreHashTail1 weth10InitPreHashLine
   func_run (3) [4]
@@ -834,9 +834,9 @@ private theorem weth10InitPreHashVersion_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {g : Nat}
     {M : Mem} {rest : Func} (h_gas : 12 ≤ g) (h_size : M.size = 6400)
     (h_rest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], M.write 6400 VERSION_HASH.toBytes, g - 12⟩)
+      (base.setMach ⟨[], M.write 6400 VERSION_HASH.toBytes, g - 12, base.stateGas⟩)
       (weth10InitPreHashTail3 +++ rest) post) :
-    Func.RunCompiled fs sevm (base.setMach ⟨[], M, g⟩)
+    Func.RunCompiled fs sevm (base.setMach ⟨[], M, g, base.stateGas⟩)
       (weth10InitPreHashTail2 +++ rest) post := by
   unfold weth10InitPreHashTail2 weth10InitPreHashLine
   func_run (3) [3]
@@ -848,9 +848,9 @@ private theorem weth10InitPreHashChain_runCompiled
     {M : Mem} {rest : Func} (h_gas : 12 ≤ g) (h_size : M.size = 6432)
     (h_rest : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[], M.write 6432 sevm.benvStat.chainId.toB256.toBytes, g - 12⟩)
+        ⟨[], M.write 6432 sevm.benvStat.chainId.toB256.toBytes, g - 12, base.stateGas⟩)
       (weth10InitPreHashTail4 +++ rest) post) :
-    Func.RunCompiled fs sevm (base.setMach ⟨[], M, g⟩)
+    Func.RunCompiled fs sevm (base.setMach ⟨[], M, g, base.stateGas⟩)
       (weth10InitPreHashTail3 +++ rest) post := by
   unfold weth10InitPreHashTail3 weth10InitPreHashLine
   func_run (3) [4]
@@ -862,9 +862,9 @@ private theorem weth10InitPreHashAddress_runCompiled
     {M : Mem} {rest : Func} (h_gas : 12 ≤ g) (h_size : M.size = 6464)
     (h_rest : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[], M.write 6464 sevm.currentTarget.toB256.toBytes, g - 12⟩)
+        ⟨[], M.write 6464 sevm.currentTarget.toB256.toBytes, g - 12, base.stateGas⟩)
       (weth10InitPreHashTail5 +++ rest) post) :
-    Func.RunCompiled fs sevm (base.setMach ⟨[], M, g⟩)
+    Func.RunCompiled fs sevm (base.setMach ⟨[], M, g, base.stateGas⟩)
       (weth10InitPreHashTail4 +++ rest) post := by
   unfold weth10InitPreHashTail4 weth10InitPreHashLine
   func_run (3) [4]
@@ -887,10 +887,10 @@ private theorem weth10InitPreHashLine_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {g : Nat}
     {rest : Func} (h_gas : 62 ≤ g)
     (h_rest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], weth10InitPreHashMemory sevm, g - 62⟩)
+      (base.setMach ⟨[], weth10InitPreHashMemory sevm, g - 62, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], weth10InitChainMemory sevm, g⟩)
+      (base.setMach ⟨[], weth10InitChainMemory sevm, g, base.stateGas⟩)
       (weth10InitPreHashLine 6313 +++ rest) post := by
   let M3 := weth10InitChainMemory sevm
   let chain := sevm.benvStat.chainId.toB256
@@ -965,9 +965,9 @@ private theorem weth10InitHashLine_runCompiled
     (h_hash : (M.read 6336 160).1.keccak = hash)
     (h_image : (M.read 6336 160).2 = M')
     (h_rest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[hash], M', g - 66⟩) rest post) :
+      (base.setMach ⟨[hash], M', g - 66, base.stateGas⟩) rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], M, g⟩)
+      (base.setMach ⟨[], M, g, base.stateGas⟩)
       (weth10InitHashLine 6313 +++ rest) post := by
   unfold weth10InitHashLine
   func_run (3) [60, hash]
@@ -982,16 +982,16 @@ private def weth10InitSeparatorMemory (M : Mem) (separator : B256) : Mem :=
 
 private def weth10InitBeforeSeparator (base : Devm) (M : Mem)
     (separator : B256) (g : Nat) : Devm :=
-  base.setMach ⟨[separator], M, g - 1446⟩
+  base.setMach ⟨[separator], M, g - 1446, base.stateGas⟩
 
 private def weth10InitAfterSeparator (base : Devm) (M : Mem)
     (separator : B256) (g : Nat) : Devm :=
   base.setMach
-    ⟨[], weth10InitSeparatorMemory M separator, g - 1466⟩
+    ⟨[], weth10InitSeparatorMemory M separator, g - 1466, base.stateGas⟩
 
 private def weth10InitAfterReturnArgs (base : Devm) (M : Mem)
     (g : Nat) : Devm :=
-  base.setMach ⟨[(0 : B256), (6313 : B256)], M, g - 1471⟩
+  base.setMach ⟨[(0 : B256), (6313 : B256)], M, g - 1471, base.stateGas⟩
 
 private theorem weth10InitAfterReturnArgs_eq
     (base : Devm) (M : Mem) (g : Nat) :
@@ -1037,7 +1037,7 @@ private theorem weth10InitReturnLine_runCompiled
     (h_rest : Func.RunCompiled fs sevm
       (weth10InitAfterReturnArgs base M g) rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], M, g - 1466⟩)
+      (base.setMach ⟨[], M, g - 1466, base.stateGas⟩)
       (weth10InitReturnLine 6313 +++ rest) post := by
   unfold weth10InitReturnLine
   func_run (2)
@@ -1047,10 +1047,10 @@ private theorem weth10InitGuard_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {g : Nat}
     (h_value : sevm.value = 0) (h_gas : 1471 ≤ g)
     (h_rest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], Mem.empty, g - 19⟩)
+      (base.setMach ⟨[], Mem.empty, g - 19, base.stateGas⟩)
       (weth10InitSuccess 6313 177) post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], Mem.empty, g⟩) weth10InitFunc post := by
+      (base.setMach ⟨[], Mem.empty, g, base.stateGas⟩) weth10InitFunc post := by
   unfold weth10InitFunc
   func_run (3) [1]
   · simp only [h_value]
@@ -1069,7 +1069,7 @@ private theorem weth10InitRet_runCompiled
     (h_size : returnPre.memory.size = 6496)
     (h_gas : returnPre.gasLeft = G)
     (h_read :
-      (returnPre.setMach ⟨[], returnPre.memory, G⟩).memRead 0 6313 = rd) :
+      (returnPre.setMach ⟨[], returnPre.memory, G, returnPre.stateGas⟩).memRead 0 6313 = rd) :
     Func.RunCompiled fs sevm returnPre Func.return_
       (rd.2.withOutput rd.1) := by
   have h_ext : returnPre.extCost [⟨(0 : Nat), (6313 : Nat)⟩] = 0 := by
@@ -1106,7 +1106,7 @@ private theorem initGas_copy {g : Nat} (h : 1471 ≤ g) :
 private theorem weth10InitSuccess_runCompiled_zero
     {sevm : Sevm} {base : Devm} {g : Nat} (h_gas : 1471 ≤ g) :
     Func.RunCompiled [weth10InitFunc] sevm
-      (base.setMach ⟨[], Mem.empty, g - 19⟩)
+      (base.setMach ⟨[], Mem.empty, g - 19, base.stateGas⟩)
       (weth10InitSuccess 6313 177) (weth10InitPost sevm base g) := by
   let Mpre := weth10InitPreHashMemory sevm
   let hash := (Mpre.read 6336 160).1.keccak
@@ -1132,13 +1132,13 @@ private theorem weth10InitSuccess_runCompiled_zero
     · exact weth10InitReturnRead_eq base (weth10InitMemory sevm) g
   have hreturn :
       Func.RunCompiled [weth10InitFunc] sevm
-        (base.setMach ⟨[], weth10InitMemory sevm, g - 1466⟩)
+        (base.setMach ⟨[], weth10InitMemory sevm, g - 1466, base.stateGas⟩)
         (weth10InitReturnLine 6313 +++ Func.return_)
         (weth10InitPost sevm base g) :=
     weth10InitReturnLine_runCompiled h_gas hret
   have hafter :
       weth10InitAfterSeparator base Mpre hash g =
-        base.setMach ⟨[], weth10InitMemory sevm, g - 1466⟩ := by
+        base.setMach ⟨[], weth10InitMemory sevm, g - 1466, base.stateGas⟩ := by
     rfl
   have hseparator :
       Func.RunCompiled [weth10InitFunc] sevm
@@ -1152,7 +1152,7 @@ private theorem weth10InitSuccess_runCompiled_zero
   have hg_hash := initGas_hash h_gas
   have hhash :
       Func.RunCompiled [weth10InitFunc] sevm
-        (base.setMach ⟨[], Mpre, g - 1380⟩)
+        (base.setMach ⟨[], Mpre, g - 1380, base.stateGas⟩)
         (weth10InitHashLine 6313 +++
           (weth10InitSeparatorLine +++
             (weth10InitReturnLine 6313 +++ Func.return_)))
@@ -1168,7 +1168,7 @@ private theorem weth10InitSuccess_runCompiled_zero
   have hg_pre := initGas_preHash h_gas
   have hprehash :
       Func.RunCompiled [weth10InitFunc] sevm
-        (base.setMach ⟨[], weth10InitChainMemory sevm, g - 1318⟩)
+        (base.setMach ⟨[], weth10InitChainMemory sevm, g - 1318, base.stateGas⟩)
         (weth10InitPreHashLine 6313 +++
           (weth10InitHashLine 6313 +++
             (weth10InitSeparatorLine +++
@@ -1180,7 +1180,7 @@ private theorem weth10InitSuccess_runCompiled_zero
   have hg_chain := initGas_chain h_gas
   have hchain :
       Func.RunCompiled [weth10InitFunc] sevm
-        (base.setMach ⟨[], weth10InitCopyMemory sevm, g - 1294⟩)
+        (base.setMach ⟨[], weth10InitCopyMemory sevm, g - 1294, base.stateGas⟩)
         (weth10InitChainLine +++
           (weth10InitPreHashLine 6313 +++
             (weth10InitHashLine 6313 +++
@@ -1193,7 +1193,7 @@ private theorem weth10InitSuccess_runCompiled_zero
   have hg_copy := initGas_copy h_gas
   have hcopy :
       Func.RunCompiled [weth10InitFunc] sevm
-        (base.setMach ⟨[], Mem.empty, g - 19⟩)
+        (base.setMach ⟨[], Mem.empty, g - 19, base.stateGas⟩)
         (weth10InitCopyLine 6313 177 +++
           (weth10InitChainLine +++
             (weth10InitPreHashLine 6313 +++
@@ -1214,7 +1214,7 @@ theorem weth10InitFunc_runCompiled_zero
     {sevm : Sevm} {base : Devm} {g : Nat}
     (h_value : sevm.value = 0) (h_gas : 1471 ≤ g) :
     Func.RunCompiled [weth10InitFunc] sevm
-      (base.setMach ⟨[], Mem.empty, g⟩) weth10InitFunc
+      (base.setMach ⟨[], Mem.empty, g, base.stateGas⟩) weth10InitFunc
       (weth10InitPost sevm base g) ∧
     (weth10InitPost sevm base g).gasLeft = g - 1471 := by
   constructor
@@ -1279,7 +1279,7 @@ theorem weth10Init_exec_zero
     {sevm : Sevm} {base : Devm} {g : Nat}
     (h_value : sevm.value = 0) (h_gas : 1471 ≤ g)
     (h_code : sevm.code.toList = weth10InitCode) :
-    exec ⟨0, sevm, base.setMach ⟨[], Mem.empty, g⟩⟩ =
+    exec ⟨0, sevm, base.setMach ⟨[], Mem.empty, g, base.stateGas⟩⟩ =
       .ok (weth10InitPost sevm base g) := by
   apply Func.exec_of_runCompiled_prefix
     (weth10InitFunc_runCompiled_zero h_value h_gas).1
@@ -1288,7 +1288,7 @@ theorem weth10Init_exec_zero
 
 /-- Exact pre-settlement state of the constructor's nonpayable rejection arm. -/
 def weth10InitRejectPost (base : Devm) (g : Nat) : Devm :=
-  (base.setMach ⟨[], Mem.empty, g - 22⟩).withOutput []
+  (base.setMach ⟨[], Mem.empty, g - 22, base.stateGas⟩).withOutput []
 
 /-- A nonzero endowment takes the constructor's short arm and empty-reverts
 after exactly 22 gas, before any runtime copy or persistent effect. -/
@@ -1296,13 +1296,13 @@ theorem weth10InitFunc_runCompiledTo_nonzero
     {sevm : Sevm} {base : Devm} {g : Nat}
     (h_value : sevm.value ≠ 0) (h_gas : 22 ≤ g) :
     Func.RunCompiledTo [weth10InitFunc] sevm
-      (base.setMach ⟨[], Mem.empty, g⟩) weth10InitFunc
+      (base.setMach ⟨[], Mem.empty, g, base.stateGas⟩) weth10InitFunc
       (.error (.revert, weth10InitRejectPost base g)) := by
   unfold weth10InitFunc weth10InitRejectPost
   func_run (3) [0]
   · simp [B256.eqCheck, h_value]
   · exact Func.runCompiledTo_revert_func
-      (devm := base.setMach ⟨[], Mem.empty, g - 18⟩) (G := g - 22)
+      (devm := base.setMach ⟨[], Mem.empty, g - 18, base.stateGas⟩) (G := g - 22)
       (by simp only [Devm.gasLeft_setMach, gBase]; omega)
       (by simp only [Devm.stack_setMach, List.length_nil]; omega)
 
@@ -1312,7 +1312,7 @@ theorem weth10Init_exec_nonzero
     {sevm : Sevm} {base : Devm} {g : Nat}
     (h_value : sevm.value ≠ 0) (h_gas : 22 ≤ g)
     (h_code : sevm.code.toList = weth10InitCode) :
-    exec ⟨0, sevm, base.setMach ⟨[], Mem.empty, g⟩⟩ =
+    exec ⟨0, sevm, base.setMach ⟨[], Mem.empty, g, base.stateGas⟩⟩ =
       .error (.revert, weth10InitRejectPost base g) := by
   apply Func.exec_of_runCompiledTo_prefix
     (weth10InitFunc_runCompiledTo_nonzero h_value h_gas)

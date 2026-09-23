@@ -90,6 +90,7 @@ def Exec.CoreEthSound (dp : DeployParams) (ca : Adr)
       Exec.Frame.IsRoot (Exec.Frame.ofRun run hcommit) ∧
       sevm.codeAddress = some ca) →
     sum pre.state.bal < 2 ^ 256 →
+    CoveredFork sevm.benvStat.fork →
     EthBound ca pre.state
       (Execution.committedPost out hcommit).state
       (Exec.bodyEthActions dp ca run hcommit)
@@ -303,7 +304,8 @@ theorem ProcessMessage.ethBound_of_zeroCoreSound
     (childSound : Exec.CoreEthSound dp ca pc sevm pre out)
     (hchildAt : Prog.At (weth10 dp) ca pc sevm pre)
     (hdirect : sevm.currentTarget = ca → sevm.codeAddress = some ca)
-    (hsum : sum msg.benv.state.bal < 2 ^ 256) :
+    (hsum : sum msg.benv.state.bal < 2 ^ 256)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     EthBound ca msg.benv.state post.state
       (Exec.flowActions dp ca run) := by
   have henter := (RunFrame.some_inv hprocess).1
@@ -324,8 +326,13 @@ theorem ProcessMessage.ethBound_of_zeroCoreSound
     dsimp [initEvm, initDevm, Msg.withBenv] at hpc hmem
     have hroot : Exec.Frame.IsRoot
         (Exec.Frame.ofRun run hcommit) := ⟨hpc, hmem⟩
+    have hchildFork : CoveredFork sevm.benvStat.fork := by
+      have hstat := Frame.enter_run_benvStat henter
+      simp only [Frame.ofCall] at hstat
+      rw [hstat]
+      exact hfork
     exact childSound run hcommit hchildAt
-      (fun htarget => ⟨hroot, hdirect htarget⟩) hsumChild
+      (fun htarget => ⟨hroot, hdirect htarget⟩) hsumChild hchildFork
   exact ProcessMessage.ethBound_of_zeroBodyBound
     run hprocess hzero hbody
 
@@ -349,7 +356,8 @@ theorem ProcessMessage.ethBound_of_redemptionCoreSound
     (childSound : Exec.CoreEthSound dp ca pc sevm pre out)
     (hchildAt : Prog.At (weth10 dp) ca pc sevm pre)
     (hdirect : sevm.currentTarget = ca → sevm.codeAddress = some ca)
-    (hsum : sum msg.benv.state.bal < 2 ^ 256) :
+    (hsum : sum msg.benv.state.bal < 2 ^ 256)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     EthBound ca msg.benv.state post.state
       (action :: Exec.flowActions dp ca run) := by
   have henter := (RunFrame.some_inv hprocess).1
@@ -370,8 +378,13 @@ theorem ProcessMessage.ethBound_of_redemptionCoreSound
     dsimp [initEvm, initDevm, Msg.withBenv] at hpc hmem
     have hroot : Exec.Frame.IsRoot
         (Exec.Frame.ofRun run hcommit) := ⟨hpc, hmem⟩
+    have hchildFork : CoveredFork sevm.benvStat.fork := by
+      have hstat := Frame.enter_run_benvStat henter
+      simp only [Frame.ofCall] at hstat
+      rw [hstat]
+      exact hfork
     exact childSound run hcommit hchildAt
-      (fun htarget => ⟨hroot, hdirect htarget⟩) hsumChild
+      (fun htarget => ⟨hroot, hdirect htarget⟩) hsumChild hchildFork
   exact ProcessMessage.ethBound_of_redemptionBodyBound
     run hprocess hclean hstv hcaller hatom hbody
 
@@ -424,7 +437,8 @@ theorem ProcessMessageTrace.ethBound_of_zeroDeeper
     (hdeeper : ForallDeeperAt depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreEthSound dp ca pc sevm pre out))
-    (hsum : sum parent.state.bal < 2 ^ 256) :
+    (hsum : sum parent.state.bal < 2 ^ 256)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     EthBound ca parent.state post.state
       (trace.retained.flowActions dp ca) := by
   have hsumMsg : sum msg.benv.state.bal < 2 ^ 256 := by
@@ -493,7 +507,7 @@ theorem ProcessMessageTrace.ethBound_of_zeroDeeper
       have childSound : Exec.CoreEthSound dp ca pc sevm pre out :=
         hdeeper pc sevm pre out run hdepthChild hat
       have hbound := ProcessMessage.ethBound_of_zeroCoreSound
-        run hprocess hzero childSound hat hdirect hsumMsg
+        run hprocess hzero childSound hat hdirect hsumMsg hfork
       unfold EthBound at hbound ⊢
       rw [hparent]
       exact hbound
@@ -524,7 +538,8 @@ theorem ProcessMessageTrace.ethBound_of_redemptionDeeper
     (hdeeper : ForallDeeperAt depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
         Exec.CoreEthSound dp ca pc sevm pre out))
-    (hsum : sum parent.state.bal < 2 ^ 256) :
+    (hsum : sum parent.state.bal < 2 ^ 256)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     EthBound ca parent.state post.state
       (action :: trace.retained.flowActions dp ca) := by
   have hsumMsg : sum msg.benv.state.bal < 2 ^ 256 := by
@@ -594,7 +609,7 @@ theorem ProcessMessageTrace.ethBound_of_redemptionDeeper
         hdeeper pc sevm pre out run hdepthChild hat
       have hbound := ProcessMessage.ethBound_of_redemptionCoreSound
         run hprocess hclean hstv hcaller hatom childSound hat hdirect
-          hsumMsg
+          hsumMsg hfork
       unfold EthBound at hbound ⊢
       rw [hparent]
       exact hbound
@@ -682,7 +697,8 @@ theorem RawFlashCallbackStepBoundary.zeroValueCallEthSegment
     (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
       (fun pc sevm childPre out _ =>
         Exec.CoreEthSound dp ca pc sevm childPre out))
-    (hsum : sum pre.state.bal < 2 ^ 256) :
+    (hsum : sum pre.state.bal < 2 ^ 256)
+    (hfork : CoveredFork e.benvStat.fork) :
     Nonempty (ZeroValueCallEthSegment dp ca e pre post) := by
   rcases callback with
     ⟨parent, child, xl, delegated, na, code, gasWord, avail, pc,
@@ -739,7 +755,7 @@ theorem RawFlashCallbackStepBoundary.zeroValueCallEthSegment
   have hzero : msg.value = 0 := by
     simp only [msg, callMsg]
   have hbound := trace.ethBound_of_zeroDeeper hparent hmsgDepth
-    hinstalled htargetCode htargetAddress hzero hdeeper hsum
+    hinstalled htargetCode htargetAddress hzero hdeeper hsum hfork
   have hboundPost : EthBound ca pre.state post.state
       (trace.retained.flowActions dp ca) := by
     unfold EthBound at hbound ⊢
@@ -760,9 +776,10 @@ theorem RawFlashCallbackStepBoundary.zeroValueCallbackEthSegment
     (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
       (fun pc sevm childPre out _ =>
         Exec.CoreEthSound dp ca pc sevm childPre out))
-    (hsum : sum pre.state.bal < 2 ^ 256) :
+    (hsum : sum pre.state.bal < 2 ^ 256)
+    (hfork : CoveredFork e.benvStat.fork) :
     Nonempty (ZeroValueCallbackEthSegment dp ca e pre post) := by
-  rcases callback.zeroValueCallEthSegment hinstalled hdeeper hsum with
+  rcases callback.zeroValueCallEthSegment hinstalled hdeeper hsum hfork with
     ⟨call⟩
   exact ⟨⟨pre, post, call, rfl, rfl⟩⟩
 
@@ -780,7 +797,8 @@ theorem RawFlashCallbackIndexedStepBoundary.zeroValueCallbackEthSegment
     (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
       (fun pc sevm childPre out _ =>
         Exec.CoreEthSound dp ca pc sevm childPre out))
-    (hsum : sum pre.state.bal < 2 ^ 256) :
+    (hsum : sum pre.state.bal < 2 ^ 256)
+    (hfork : CoveredFork e.benvStat.fork) :
     ∃ segment : ZeroValueCallbackEthSegment dp ca e pre post,
       segment.call.trace.retained.flowActions dp ca =
         retained.flowActions dp ca := by
@@ -822,7 +840,7 @@ theorem RawFlashCallbackIndexedStepBoundary.zeroValueCallbackEthSegment
   have hzero : msg.value = 0 := by
     simp only [msg, callMsg]
   have hbound := trace.ethBound_of_zeroDeeper hparent hmsgDepth
-    hinstalled htargetCode htargetAddress hzero hdeeper hsum
+    hinstalled htargetCode htargetAddress hzero hdeeper hsum hfork
   have hboundPost : EthBound ca pre.state post.state
       (trace.retained.flowActions dp ca) := by
     unfold EthBound at hbound ⊢
@@ -846,7 +864,8 @@ theorem RawTokenCallbackStepBoundary.zeroValueCallbackEthSegment
     (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
       (fun pc sevm childPre out _ =>
         Exec.CoreEthSound dp ca pc sevm childPre out))
-    (hsum : sum pre.state.bal < 2 ^ 256) :
+    (hsum : sum pre.state.bal < 2 ^ 256)
+    (hfork : CoveredFork e.benvStat.fork) :
     Nonempty (ZeroValueCallbackEthSegment dp ca e pre post) := by
   rcases callback with
     ⟨_htarget, _hsize, callPre, callPost, parent, child, xl,
@@ -897,7 +916,7 @@ theorem RawTokenCallbackStepBoundary.zeroValueCallbackEthSegment
     rw [← hpreBalance]
     exact hsum
   have hbound := trace.ethBound_of_zeroDeeper hparent hmsgDepth
-    hinstalledCall htargetCode htargetAddress hzero hdeeper hsumCall
+    hinstalledCall htargetCode htargetAddress hzero hdeeper hsumCall hfork
   have hboundCall : EthBound ca callPre.state callPost.state
       (trace.retained.flowActions dp ca) := by
     unfold EthBound at hbound ⊢
@@ -927,7 +946,8 @@ theorem RawTokenCallbackIndexedStepBoundary.zeroValueCallbackEthSegment
     (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
       (fun pc sevm childPre out _ =>
         Exec.CoreEthSound dp ca pc sevm childPre out))
-    (hsum : sum pre.state.bal < 2 ^ 256) :
+    (hsum : sum pre.state.bal < 2 ^ 256)
+    (hfork : CoveredFork e.benvStat.fork) :
     ∃ segment : ZeroValueCallbackEthSegment dp ca e pre post,
       segment.call.trace.retained.flowActions dp ca =
         retained.flowActions dp ca := by
@@ -978,7 +998,7 @@ theorem RawTokenCallbackIndexedStepBoundary.zeroValueCallbackEthSegment
     rw [← hpreBalance]
     exact hsum
   have hbound := trace.ethBound_of_zeroDeeper hparent hmsgDepth
-    hinstalledCall htargetCode htargetAddress hzero hdeeper hsumCall
+    hinstalledCall htargetCode htargetAddress hzero hdeeper hsumCall hfork
   have hboundCall : EthBound ca callPre.state callPost.state
       (trace.retained.flowActions dp ca) := by
     unfold EthBound at hbound ⊢
@@ -1017,12 +1037,13 @@ theorem ProcessMessageTrace.redemptionEthBound_to_guard
       (fun pc sevm pre out _ =>
         Exec.CoreEthSound dp ca pc sevm pre out))
     (hsum : sum parent.state.bal < 2 ^ 256)
-    (hguard : guardPost.state = child.state) :
+    (hguard : guardPost.state = child.state)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     EthBound ca parent.state guardPost.state
       (action :: trace.retained.flowActions dp ca) := by
   have bound := trace.ethBound_of_redemptionDeeper
     hparent hdepth hcode htargetCode htargetAddress hclean hstv hcaller
-      hatom hdeeper hsum
+      hatom hdeeper hsum hfork
   rw [hguard]
   exact bound
 
@@ -1106,7 +1127,8 @@ theorem AcceptedValueCallTrace.redemptionEthBound
     (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
       (fun pc sevm childPre out _ =>
         Exec.CoreEthSound dp ca pc sevm childPre out))
-    (hsum : sum callPre.state.bal < 2 ^ 256) :
+    (hsum : sum callPre.state.bal < 2 ^ 256)
+    (hfork : CoveredFork e.benvStat.fork) :
     trace.RedemptionEthWitness dp ca action := by
   rcases trace.redemptionMessageFacts hself hinstalled with
     ⟨hparent, hdepth, htargetCode, htargetAddress, hstv, hvalue,
@@ -1120,7 +1142,7 @@ theorem AcceptedValueCallTrace.redemptionEthBound
     (dp := dp) (ca := ca) (depth := e.depth) (parent := callPre)
     trace.retained hparent hdepth hinstalled htargetCode htargetAddress
       trace.child_clean hstv hcaller hatomMessage hdeeper hsum
-        trace.guard_state⟩
+        trace.guard_state (by rw [trace.childMessage_eq]; exact hfork)⟩
 
 /-- An exact accepted value-CALL trace paired with its recursively proved
 redemption-labelled ETH segment. -/
@@ -1151,11 +1173,13 @@ theorem BurnCallPrefix.acceptedRedemptionEthSegment
     (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
       (fun pc sevm childPre out _ =>
         Exec.CoreEthSound dp ca pc sevm childPre out))
-    (hsum : sum callPre.state.bal < 2 ^ 256) :
+    (hsum : sum callPre.state.bal < 2 ^ 256)
+    (hfork : CoveredFork e.benvStat.fork) :
     Nonempty (AcceptedRedemptionEthSegment dp ca e action
       callPre guardPost) := by
-  rcases exists_burnCallPrefixTrace burn with ⟨trace⟩
+  rcases exists_burnCallPrefixTrace burn hfork with ⟨trace⟩
   have witness := trace.redemptionEthBound hself hinstalled hatom hdeeper hsum
+    hfork
   exact ⟨⟨target, amount, trace,
     by simp [FlowAction.bodyEthActions, hatom],
     witness.bound⟩⟩
@@ -1442,7 +1466,8 @@ theorem GenericCall.foreignSomeEthBound
       cevm.sta.codeAddress = some ca)
     (hcaller : stv = true → caller ≠ ca)
     (hval0 : stv = false → target = ca → value = 0)
-    (hsum : sum pre.state.bal < 2 ^ 256) :
+    (hsum : sum pre.state.bal < 2 ^ 256)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     EthBound ca pre.state post.state
       (if Blanc.Frame.settlementCommits
           (Frame.ofCall
@@ -1516,6 +1541,7 @@ theorem GenericCall.foreignSomeEthBound
               (Exec.Frame.ofRun child hcommit) := ⟨hpc, hmem⟩
           exact childSound child hcommit hchildAt
             (fun htarget => ⟨hroot, hdirect htarget⟩) hsumChild
+            (by rw [Frame.enter_run_benvStat henter]; exact hfork)
         have hbound :=
           ProcessMessage.ethBound_of_settledBodyBound
             child hframe hcallerMsg hval0Msg
@@ -1545,7 +1571,8 @@ theorem GenericCreate.foreignSomeEthBound
     (hdirect : cevm.sta.currentTarget = ca →
       cevm.sta.codeAddress = some ca)
     (hforeign : sevm.currentTarget ≠ ca)
-    (hsum : sum pre.state.bal < 2 ^ 256) :
+    (hsum : sum pre.state.bal < 2 ^ 256)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     EthBound ca pre.state post.state
       (if Blanc.Frame.settlementCommits
           (Frame.ofCreate
@@ -1654,6 +1681,7 @@ theorem GenericCreate.foreignSomeEthBound
             (Exec.Frame.ofRun child hcommit) := ⟨hpc, hmem⟩
         exact childSound child hcommit hchildAt
           (fun htarget => ⟨hroot, hdirect htarget⟩) hsumChild
+          (by rw [Frame.enter_run_benvStat henter]; exact hfork)
       have hbound :=
         ProcessCreateMessage.ethBound_of_settledBodyBound
           child hframe hcallerMsg (by simp [createMsg])
@@ -1704,11 +1732,12 @@ theorem Xinst.foreignNoneEthBound
     {ca : Adr} {sevm : Sevm} {pre post : Devm} {x : Xinst}
     (run : Xinst.Run sevm pre x .none (.ok post))
     (hforeign : sevm.currentTarget ≠ ca)
-    (hsum : sum pre.state.bal < 2 ^ 256) :
+    (hsum : sum pre.state.bal < 2 ^ 256)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     EthBound ca pre.state post.state [] := by
   simpa [EthBound, flowActionsEthMint, flowActionsEthRedemption] using
     (_root_.Blanc.Xinst.targetBalanceMono_of_none
-      run hforeign hsum)
+      hfork run hforeign hsum)
 
 /-- Contract-neutral recursive transport for an actual filled `Xinst` slot.
 The shape theorem removes the instruction prefix, and the exact-spawn lemmas
@@ -1729,11 +1758,12 @@ theorem Xinst.foreignSomeEthBound
     (hdirect : cevm.sta.currentTarget = ca →
       cevm.sta.codeAddress = some ca)
     (hforeign : sevm.currentTarget ≠ ca)
-    (hsum : sum pre.state.bal < 2 ^ 256) :
+    (hsum : sum pre.state.bal < 2 ^ 256)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     EthBound ca pre.state post.state
       (if Blanc.Frame.settlementCommits frame raw = true
        then Exec.flowActions dp ca child else []) := by
-  rcases Xinst.step_shape sevm pre x with
+  rcases Xinst.step_shapeCovered sevm pre x hfork with
     ⟨ex, hs, hprefix⟩ |
     ⟨d, endowment, newAddress, mi, ms, hprefix, hs⟩ |
     ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isSt,
@@ -1748,7 +1778,7 @@ theorem Xinst.foreignSomeEthBound
       exact ⟨.ok settled, hframe, hresume.symm⟩
     have hbound := GenericCreate.foreignSomeEthBound
       grun child childSound hchildAt hdirect hforeign
-      (by rw [← hprefix.state]; exact hsum)
+      (by rw [← hprefix.state]; exact hsum) hfork
     unfold EthBound at hbound ⊢
     rw [hprefix.state]
     exact hbound
@@ -1775,7 +1805,7 @@ theorem Xinst.foreignSomeEthBound
           (hforeign (htargetParent.symm.trans htarget))
     have hbound := GenericCall.foreignSomeEthBound
       grun child childSound hchildAt hdirect hcaller hval0
-      (by rw [← hprefix.state]; exact hsum)
+      (by rw [← hprefix.state]; exact hsum) hfork
     unfold EthBound at hbound ⊢
     rw [hprefix.state]
     exact hbound
@@ -1786,11 +1816,12 @@ theorem Ninst.foreignNoneEthBound
     {ca : Adr} {pc : Nat} {sevm : Sevm} {pre post : Devm} {n : Ninst}
     (run : Ninst.StepRun pc sevm pre n .none (.ok post))
     (hforeign : sevm.currentTarget ≠ ca)
-    (hsum : sum pre.state.bal < 2 ^ 256) :
+    (hsum : sum pre.state.bal < 2 ^ 256)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     EthBound ca pre.state post.state [] := by
   simpa [EthBound, flowActionsEthMint, flowActionsEthRedemption] using
     (_root_.Blanc.Ninst.targetBalanceMono_of_none
-      run hforeign hsum)
+      hfork run hforeign hsum)
 
 /-- `SELFDESTRUCT` executed by a foreign account can only leave `ca`
 unchanged or credit it from the foreign source.  The latter is recorded as an
@@ -2410,7 +2441,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferNonzero
         context.memory_wf context.memory_reads_empty run
         context.invocation.2.2.2
         (by simpa only [transferSelector] using hselector)
-        hnonempty).2
+        hnonempty context.covered).2
       rcases heffect with hzero | hnonzero
       · exact (hto hzero.1).elim
       · rcases hnonzero with
@@ -2661,7 +2692,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_depositToAndCall
     rw [hbalance]
     exact hsum
   rcases callback.zeroValueCallbackEthSegment retained installedCallback
-      hdeeper hsumCallback with ⟨callbackSegment, retainedFlowEq⟩
+      hdeeper hsumCallback context.covered with ⟨callbackSegment, retainedFlowEq⟩
   rcases callbackSegment with
     ⟨innerCallPre, innerCallPost, call, hcallbackPreBalance,
       hpostBalance⟩
@@ -2723,7 +2754,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_approveAndCall
     rw [hbalance]
     exact hsum
   rcases callback.zeroValueCallbackEthSegment retained installedCallback
-      hdeeper hsumCallback with ⟨callbackSegment, retainedFlowEq⟩
+      hdeeper hsumCallback context.covered with ⟨callbackSegment, retainedFlowEq⟩
   rcases callbackSegment with
     ⟨innerCallPre, innerCallPost, call, hcallbackPreBalance,
       hpostBalance⟩
@@ -2775,7 +2806,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_flashLoan
     rw [← hprefixBal]
     exact hsum
   rcases callback.zeroValueCallbackEthSegment retained installedCallback
-      hdeeper hsumCallback with ⟨callbackSegment, retainedFlowEq⟩
+      hdeeper hsumCallback context.covered with ⟨callbackSegment, retainedFlowEq⟩
   rcases callbackSegment with
     ⟨innerCallPre, innerCallPost, call, hcallbackPreBalance,
       hcallbackPostBalance⟩
@@ -2857,7 +2888,7 @@ private theorem Exec.Frame.compiledBodyEthAccounting_of_valueRedemption
     rw [burn.2.2.2.2.1]
     exact hsum
   have witness := trace.redemptionEthBound context.invocation.2.1
-    installedCall hatom hdeeper hsumCall
+    installedCall hatom hdeeper hsumCall context.covered
   let accepted : AcceptedRedemptionEthSegment dp ca frame.sevm action
       callPre guardPost :=
     ⟨target, amount, trace,
@@ -2903,7 +2934,7 @@ private theorem Exec.Frame.compiledBodyEthAccounting_of_allowanceValueRedemption
     rw [burn.2.2.2.2.1, ← entry.balance]
     exact hsum
   have witness := trace.redemptionEthBound context.invocation.2.1
-    installedCall hatom hdeeper hsumCall
+    installedCall hatom hdeeper hsumCall context.covered
   let accepted : AcceptedRedemptionEthSegment dp ca frame.sevm action
       callPre guardPost :=
     ⟨target, amount, trace,
@@ -3238,6 +3269,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferAndCall
           exact congrArg FlowAction.atom (Option.some.inj haction).symm
         have valueWitness := trace.redemptionEthBound
           context.invocation.2.1 installedCall hactionAtom hdeeper hsumCall
+          context.covered
         let accepted : AcceptedRedemptionEthSegment dp ca frame.sevm
             action callPre callbackPre :=
           ⟨frame.sevm.caller.toB256, Sevm.argWord frame.sevm 1, trace,
@@ -3254,7 +3286,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferAndCall
         have hsumCallback : sum callbackPre.state.bal < 2 ^ 256 :=
           lt_of_le_of_lt trace.guard_sum_le hsumCall
         rcases callback.zeroValueCallbackEthSegment retained
-            installedCallback hdeeper hsumCallback with
+            installedCallback hdeeper hsumCallback context.covered with
           ⟨callbackSegment, retainedFlowEq⟩
         apply Exec.Frame.CompiledBodyEthAccounting.flow action haction
         apply RichBodyEthAccounting.redemptionThenCallback redemption
@@ -3284,7 +3316,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_transferAndCall
       rw [hbalance]
       exact hsum
     rcases callback.zeroValueCallbackEthSegment retained installedCallback
-        hdeeper hsumCallback with ⟨callbackSegment, retainedFlowEq⟩
+        hdeeper hsumCallback context.covered with ⟨callbackSegment, retainedFlowEq⟩
     rcases callbackSegment with
       ⟨innerCallPre, innerCallPost, call, hcallbackPreBalance,
         hpostBalance⟩
@@ -3396,7 +3428,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_permit
           Option.getD_none]
       have rawBound := childTrace.ethBound_of_zeroDeeper hparent
         trace.depth installedCall htargetCode htargetDirect trace.value
-          hdeeper hsumCall
+          hdeeper hsumCall (by rw [trace.benvStat]; exact context.covered)
       have hresumeState : callPost.state = trace.childPost.state :=
         Resume.call_state trace.resume
       have childBound : EthBound ca callPre.state callPost.state
@@ -3595,6 +3627,7 @@ def CompiledBodyEthHandler (dp : DeployParams) (ca : Adr) : Prop :=
         Exec.Frame.IsRoot (Exec.Frame.ofRun run hcommit) ∧
         sevm.codeAddress = some ca) →
       sum pre.state.bal < 2 ^ 256 →
+      CoveredFork sevm.benvStat.fork →
       EthBound ca pre.state post.state
         (Exec.bodyEthActions dp ca run hcommit)
 
@@ -3605,11 +3638,11 @@ theorem CompiledFrameBodyEthAccountingHandler.compiledBodyEthHandler
     (handler : CompiledFrameBodyEthAccountingHandler dp ca) :
     CompiledBodyEthHandler dp ca := by
   intro sevm pre post _hrun htarget hdeeper run hcommit installed rootDirect
-    hsum
+    hsum hcovered
   let frame := Exec.Frame.ofRun run hcommit
   have hrootDirect := rootDirect htarget
   have context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame := by
-    refine ⟨hrootDirect.1, ?_, installed⟩
+    refine ⟨hrootDirect.1, ?_, installed, hcovered⟩
     refine ⟨rfl, htarget, hrootDirect.2, ?_⟩
     exact (installed.2 htarget).1
   exact (handler frame context hdeeper hsum).bound
@@ -3644,8 +3677,8 @@ theorem Exec.CoreEthSound.nextNone
     (hne : sevm.currentTarget ≠ ca)
     (ih : Exec.CoreEthSound dp ca (pc + n.size) sevm inter out) :
     Exec.CoreEthSound dp ca pc sevm pre out := by
-  intro run hcommit hatp _ hsum
-  have hhead := Ninst.foreignNoneEthBound hstep hne hsum
+  intro run hcommit hatp _ hsum hcov
+  have hhead := Ninst.foreignNoneEthBound hstep hne hsum hcov
   have hsumInter : sum inter.state.bal < 2 ^ 256 := by
     have hnoninc := Ninst.balance_effect n
       ⟨.none, trivial, pc, hstep⟩
@@ -3663,7 +3696,7 @@ theorem Exec.CoreEthSound.nextNone
     rw [hcode]
     exact hatp.1
   have htail := ih next hcommit hatpInter
-    (fun htarget => (hne htarget).elim) hsumInter
+    (fun htarget => (hne htarget).elim) hsumInter hcov
   have hbound := hhead.trans htail
   rw [Exec.bodyEthActions_eq_descendantActions_of_currentTarget_ne
       next hcommit hne] at hbound
@@ -3743,8 +3776,14 @@ theorem Exec.CoreEthSound.nextSome
       simp [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at hstep
   | push xs hxs =>
       simp [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hstep
+  | dupn imm =>
+      simp [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at hstep
+  | swapn imm =>
+      simp [Ninst.StepRun, Ninst.step_swapn, Step.run_ofExecution] at hstep
+  | exchange imm =>
+      simp [Ninst.StepRun, Ninst.step_exchange, Step.run_ofExecution] at hstep
   | exec x =>
-      intro run hcommit hatp _ hsum
+      intro run hcommit hatp _ hsum hcov
       have hxrun := XStep.run_toStep.mp hstep
       cases hs : Xinst.step sevm pre x with
       | done ex =>
@@ -3817,7 +3856,7 @@ theorem Exec.CoreEthSound.nextSome
                 rw [hcadrInit, hcadr, hinnerTarget]
               have hhead := Xinst.foreignSomeEthBound
                 hs hframe hresume.symm child ihChild hchildAt
-                hdirect hne hsum
+                hdirect hne hsum hcov
               have hsumInter : sum inter.state.bal < 2 ^ 256 := by
                 have hnoninc := Ninst.balance_effect (.exec x)
                   ⟨.some ⟨cevm, raw⟩, ⟨child⟩, pc, hstep⟩
@@ -3845,7 +3884,7 @@ theorem Exec.CoreEthSound.nextSome
                 rw [hcodeCa]
                 exact hatp.1
               have htail := ihNext next hcommit hatpInter
-                (fun htarget => (hne htarget).elim) hsumInter
+                (fun htarget => (hne htarget).elim) hsumInter hcov
               have hbound := hhead.trans htail
               rw [Exec.bodyEthActions_eq_descendantActions_of_currentTarget_ne
                   next hcommit hne] at hbound
@@ -3877,7 +3916,7 @@ theorem Exec.CoreEthSound.last
     (hstep : Linst.Run sevm pre l out)
     (hne : sevm.currentTarget ≠ ca) :
     Exec.CoreEthSound dp ca pc sevm pre out := by
-  intro run hcommit _ _ hsum
+  intro run hcommit _ _ hsum _
   have hevm : Evm.step ⟨pc, sevm, pre⟩ = .halt out := by
     rw [Evm.step_last hat]
     exact congrArg Step.halt hstep
@@ -3907,7 +3946,7 @@ theorem Exec.CoreEthSound.jump
     (hne : sevm.currentTarget ≠ ca)
     (ih : Exec.CoreEthSound dp ca pc' sevm inter out) :
     Exec.CoreEthSound dp ca pc sevm pre out := by
-  intro run hcommit hatp _ hsum
+  intro run hcommit hatp _ hsum hcov
   have hevmStep : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' inter := by
     rw [Evm.step_jump hat]
     exact congrArg Step.ofJump hstep
@@ -3926,7 +3965,7 @@ theorem Exec.CoreEthSound.jump
       (hframe.getCode ca).symm]
     exact hatp.1
   have hbound := ih next hcommit hatpInter
-    (fun htarget => (hne htarget).elim) hsumInter
+    (fun htarget => (hne htarget).elim) hsumInter hcov
   rw [Exec.bodyEthActions_eq_descendantActions_of_currentTarget_ne
       next hcommit hne] at hbound
   rw [Exec.bodyEthActions_eq_descendantActions_of_currentTarget_ne
@@ -3986,11 +4025,11 @@ theorem CompiledBodyEthHandler.execBodyEthSound
     {dp : DeployParams} {ca : Adr}
     (handler : CompiledBodyEthHandler dp ca) :
     ExecBodyEthSound dp ca := by
-  intro pc sevm pre out run hcommit hat hroot hdirect hpre
+  intro pc sevm pre out run hcommit hat hroot hdirect hpre hcovered
   have hfa := Exec.coreEthSound_of_compiledBodyEthHandler handler
   have hcore := hfa pc sevm pre out run hat
   exact hcore run hcommit hat
-    (fun htarget => ⟨hroot, hdirect htarget⟩) hpre.side
+    (fun htarget => ⟨hroot, hdirect htarget⟩) hpre.side hcovered
 
 /-- Complete committed raw-message accounting from the sole compiled handler. -/
 theorem CompiledBodyEthHandler.committedExecEthSound

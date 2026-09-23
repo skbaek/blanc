@@ -563,7 +563,8 @@ private theorem RawFlashCallbackStepBoundary.allowanceRegionEffect
     (hstep : Ninst.StepRun pc sevm pre Ninst.call xl (.ok mid))
     (installed : some (pre.getCode ca).toList = Prog.compile (weth10 dp))
     (hdeeper : ForallDeeperAt sevm.depth ca (weth10 dp)
-      (fun p s d out _ => Exec.CoreAllowanceSound dp ca p s d out)) :
+      (fun p s d out _ => Exec.CoreAllowanceSound dp ca p s d out))
+    (hfork : CoveredFork sevm.benvStat.fork) :
     AllowanceRegionEffect ca pre mid
       (retained.attributionStream dp ca) := by
   rcases boundary with
@@ -622,7 +623,7 @@ private theorem RawFlashCallbackStepBoundary.allowanceRegionEffect
     ProcessMessageTrace.allowanceRegionDelta_of_forallDeeperAt
       (dp := dp) (ca := ca) (depth := sevm.depth) (parent := pre)
       ⟨xl, retained, by simpa only [msg] using hprocess⟩
-      hparent hmsgDepth installed htargetCode htargetDirect hdeeper
+      hparent hmsgDepth installed htargetCode htargetDirect hdeeper hfork
   have hresumeEffect : AllowanceRegionEffect ca child mid [] :=
     AllowanceRegionEffect.of_getStorCode_eq
       (congrArg (fun state : State => state.getStor ca) hmidState).symm
@@ -781,7 +782,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_flashLoan
       hcodeSettle, _hlogsSettle, _houtputSettle, hwfSettle,
       hreadsSettleEx, hsettle⟩ :=
     of_rawFlashLoanSuccessTail_step dp hstack hwfCall hreadsCall rfl
-      hcallRun
+      hcallRun context.covered
   -- the counted crossing at the same callback cursor
   obtain ⟨callPost', pcCross, xl, retained, _hat, hfilled, hstep, hinner⟩ :=
     callCursor.crossFlashCallback hcode
@@ -815,7 +816,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_flashLoan
       AllowanceRegionEffect ca callCursor.pre callPost
         (retained.attributionStream dp ca) :=
     hboundary.allowanceRegionEffect retained hfilled hstep hcallCodeAt
-      hdeeper
+      hdeeper context.covered
   have hhandoff : AllowanceRegionEffect ca callPost settlePre [] :=
     AllowanceRegionEffect.of_getStorCode_eq (congrFun hstorSettle ca)
       (congrFun hcodeSettle ca)
@@ -975,7 +976,8 @@ private theorem RawFlashCallbackStepBoundary.allowanceRegionEffectSound
     (hstep : Ninst.StepRun pc sevm pre Ninst.call xl (.ok mid))
     (installed : some (pre.getCode ca).toList = Prog.compile (weth10 dp))
     (hdeeper : ForallDeeperAt sevm.depth ca (weth10 dp)
-      (fun p s d out _ => Exec.CoreAllowanceReadSound dp ca p s d out)) :
+      (fun p s d out _ => Exec.CoreAllowanceReadSound dp ca p s d out))
+    (hfork : CoveredFork sevm.benvStat.fork) :
     AllowanceRegionEffectSound ca pre mid
       (retained.attributionStream dp ca) := by
   rcases boundary with
@@ -1034,7 +1036,7 @@ private theorem RawFlashCallbackStepBoundary.allowanceRegionEffectSound
     ProcessMessageTrace.allowanceRegionDeltaSound_of_forallDeeperAt
       (dp := dp) (ca := ca) (depth := sevm.depth) (parent := pre)
       ⟨xl, retained, by simpa only [msg] using hprocess⟩
-      hparent hmsgDepth installed htargetCode htargetDirect hdeeper
+      hparent hmsgDepth installed htargetCode htargetDirect hdeeper hfork
   have hresumeEffect : AllowanceRegionEffectSound ca child mid [] :=
     AllowanceRegionEffectSound.of_getStorCode_eq
       (congrArg (fun state : State => state.getStor ca) hmidState).symm
@@ -1087,7 +1089,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_flashLoan
       hcodeSettle, _hlogsSettle, _houtputSettle, hwfSettle,
       hreadsSettleEx, hsettle⟩ :=
     of_rawFlashLoanSuccessTail_step dp hstack hwfCall hreadsCall rfl
-      hcallRun
+      hcallRun context.covered
   -- the counted crossing at the same callback cursor
   obtain ⟨callPost', pcCross, xl, retained, _hat, hfilled, hstep, hinner⟩ :=
     callCursor.crossFlashCallback hcode
@@ -1121,7 +1123,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_flashLoan
       AllowanceRegionEffectSound ca callCursor.pre callPost
         (retained.attributionStream dp ca) :=
     hboundary.allowanceRegionEffectSound retained hfilled hstep hcallCodeAt
-      hdeeper
+      hdeeper context.covered
   have hhandoff : AllowanceRegionEffect ca callPost settlePre [] :=
     AllowanceRegionEffect.of_getStorCode_eq (congrFun hstorSettle ca)
       (congrFun hcodeSettle ca)

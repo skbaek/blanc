@@ -1510,7 +1510,8 @@ theorem Exec.Frame.CompiledCursor.compiledFlashLoanChronology
       (Stor.rest (Devm.getStor cursor.pre ca)))
     (hprefixBal : Devm.getBal frame.pre = Devm.getBal cursor.pre)
     (hprefixCode : Devm.getCode frame.pre = Devm.getCode cursor.pre)
-    (hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp)) :
+    (hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp))
+    (hfork : CoveredFork frame.sevm.benvStat.fork) :
     Blanc.Weth10.Exec.Frame.CompiledFlashLoanChronology dp ca frame receiver amount
       cursor.actions := by
   have hrun : Func.Run ((weth10 dp).main :: weth10Aux) frame.sevm
@@ -1518,7 +1519,7 @@ theorem Exec.Frame.CompiledCursor.compiledFlashLoanChronology
     Func.Run.of_runCompiled cursor.run
   obtain ⟨callbackPost, settlePre, hcallback, hstor, hbal, hcodeEq,
       hlogs, houtput, hwfSettle, hreadsSettleEx, hsettle⟩ :=
-    of_rawFlashLoanSuccessTail_step dp hstack hwf hreads hwindow hrun
+    of_rawFlashLoanSuccessTail_step dp hstack hwf hreads hwindow hrun hfork
   rcases hcallback with
     ⟨parent, child, xl, delegated, na, code, callbackGas, avail, pc,
       hstep, hdepth, hcallbackStack, hparentStack, hparentState,
@@ -1651,7 +1652,7 @@ theorem Exec.Frame.compiledFlashLoanChronology
   have chronology := callCursor.compiledFlashLoanChronology
     (gasWord := gasWord) hstack hwfCall hreadsCall (by rfl)
       context.invocation.2.1 rfl rfl hcredit hprefixBal hprefixCode
-      context.invocation.2.2.2
+      context.invocation.2.2.2 context.covered
   have hzero : callCursor.actions = [] :=
     hcallActions.trans (hbodyActions.trans hwrapperActions)
   simpa only [hzero] using chronology

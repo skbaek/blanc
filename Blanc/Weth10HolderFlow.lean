@@ -596,7 +596,8 @@ theorem Exec.retainedChildActions_eq_nil_of_create_codeDepositRollback
     (_rawCommits : Execution.commits raw = true)
     (hcreate : f.isCreate = true)
     (hsettled : processCreateMessage.settle f.outer
-      (processMessage.settle f.inner (executeCode.handleError raw)) =
+      (processMessage.settle f.inner
+        (executeCode.handleErrorWith f.inner.benv.stat.rules.stateGas raw)) =
         .ok settled)
     (herror : settled.error.isSome = true) :
     (if Blanc.Frame.settlementCommits f raw = true then
@@ -673,44 +674,50 @@ theorem exists_processCreateMessageTrace
 
 theorem exists_messageCallTrace {msg : Msg} {state : State}
     {out : MsgCallOutput}
-    (h : processMessageCall msg = .ok ⟨state, out⟩) :
+    (h : processMessageCall msg = .ok ⟨state, out⟩)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     Nonempty (MessageCallTrace msg state out) :=
-  ExecutionTrace.exists_messageCallTrace h
+  ExecutionTrace.exists_messageCallTrace h hfork
 
 theorem exists_transactionTrace
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
-    (h : processTransaction benv bout tx index = .ok (state, bout')) :
+    (h : processTransaction benv bout tx index = .ok (state, bout'))
+    (hfork : CoveredFork benv.stat.fork) :
     Nonempty (TransactionTrace benv bout tx index state bout') :=
-  ExecutionTrace.exists_transactionTrace h
+  ExecutionTrace.exists_transactionTrace h hfork
 
 theorem exists_applyTransactionsTrace
     {txs : List (Nat × Tx)} {benv finalBenv : Benv}
     {bout finalBout : BlockOutput}
-    (h : applyTransactions txs benv bout = .ok (finalBenv, finalBout)) :
+    (h : applyTransactions txs benv bout = .ok (finalBenv, finalBout))
+    (hfork : CoveredFork benv.stat.fork) :
     Nonempty (ApplyTransactionsTrace txs benv bout finalBenv finalBout) :=
-  ExecutionTrace.exists_applyTransactionsTrace h
+  ExecutionTrace.exists_applyTransactionsTrace h hfork
 
 theorem exists_systemMessageTrace
     {benv : Benv} {target : Adr} {data : Bytes}
     {state : State} {out : MsgCallOutput}
     (h : processUncheckedSystemTransaction benv target data =
-      .ok (state, out)) :
+      .ok (state, out))
+    (hfork : CoveredFork benv.stat.fork) :
     Nonempty (SystemMessageTrace benv target data state out) :=
-  ExecutionTrace.exists_systemMessageTrace h
+  ExecutionTrace.exists_systemMessageTrace h hfork
 
 theorem exists_requestsTrace
     {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
-    (h : processGeneralPurposeRequests benv bout = .ok (state, bout')) :
+    (h : processGeneralPurposeRequests benv bout = .ok (state, bout'))
+    (hfork : CoveredFork benv.stat.fork) :
     Nonempty (RequestsTrace benv bout state bout') :=
-  ExecutionTrace.exists_requestsTrace h
+  ExecutionTrace.exists_requestsTrace h hfork
 
 theorem exists_appliedBodyTrace
     {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (h : applyBody benv txs wds = .ok (state, bout)) :
+    (h : applyBody benv txs wds = .ok (state, bout))
+    (hfork : CoveredFork benv.stat.fork) :
     Nonempty (AppliedBodyTrace benv txs wds state bout) :=
-  ExecutionTrace.exists_appliedBodyTrace h
+  ExecutionTrace.exists_appliedBodyTrace h hfork
 
 def RetainedXlot.flowActions (dp : DeployParams) (ca : Adr)
     {xl : Xlot} : RetainedXlot xl → List FlowAction
@@ -833,15 +840,19 @@ structure AccountedBlock
     (pre post : BlockChain) : Type where
   block : Block
   bound : sum pre.state.bal + wdsum block.wds < 2 ^ 256
+  fork : Fork
+  forkAt : cfg.forkAt block.header.timestamp = .ok fork
   rules : ForkRules
+  rulesEq : fork.ruleSet = rules
   rulesAt : cfg.rulesAt block.header.timestamp = .ok rules
+  covered : CoveredFork fork
   transition : stateTransitionUsing cfg pre block = .ok post
   bodyState : State
   blockOutput : BlockOutput
-  bodyRun : applyBody (initBenv rules pre block.header)
+  bodyRun : applyBody (initBenv fork pre block.header)
     block.txs block.wds = .ok (bodyState, blockOutput)
   bodyTrace : AppliedBodyTrace
-    (initBenv rules pre block.header)
+    (initBenv fork pre block.header)
     block.txs block.wds bodyState blockOutput
   actions : List FlowAction
   actions_eq : actions =
@@ -860,8 +871,12 @@ def AccountedBlock.toConfiguredBlockTrace
     ExecutionTrace.ConfiguredBlockTrace cfg pre post := {
   block := accounted.block
   bound := accounted.bound
+  fork := accounted.fork
+  forkAt := accounted.forkAt
   rules := accounted.rules
+  rulesEq := accounted.rulesEq
   rulesAt := accounted.rulesAt
+  covered := accounted.covered
   transition := accounted.transition
   bodyState := accounted.bodyState
   blockOutput := accounted.blockOutput
@@ -879,8 +894,12 @@ def AccountedBlock.ofConfiguredBlockTrace
     AccountedBlock cfg dp ca pre post := {
   block := trace.block
   bound := trace.bound
+  fork := trace.fork
+  forkAt := trace.forkAt
   rules := trace.rules
+  rulesEq := trace.rulesEq
   rulesAt := trace.rulesAt
+  covered := trace.covered
   transition := trace.transition
   bodyState := trace.bodyState
   blockOutput := trace.blockOutput
@@ -907,9 +926,11 @@ theorem AccountedBlock.exists_of_transition
     {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {pre post : BlockChain} {block : Block}
     (bound : sum pre.state.bal + wdsum block.wds < 2 ^ 256)
-    (h : stateTransitionUsing cfg pre block = .ok post) :
+    (h : stateTransitionUsing cfg pre block = .ok post)
+    (hcovered : ∀ {fork}, cfg.forkAt block.header.timestamp = .ok fork →
+      CoveredFork fork) :
     Nonempty (AccountedBlock cfg dp ca pre post) := by
-  rcases ExecutionTrace.exists_configuredBlockTrace_of_transition bound h with
+  rcases ExecutionTrace.exists_configuredBlockTrace_of_transition bound h hcovered with
     ⟨trace⟩
   exact ⟨AccountedBlock.ofConfiguredBlockTrace
     (dp := dp) (ca := ca) trace⟩
@@ -1028,9 +1049,12 @@ theorem exists_accountedHistory_of_reachUsing
     {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
     (_hstable : Stable dp ca checkpoint.state)
-    (h : BlockChain.ReachUsing cfg checkpoint future) :
+    (h : BlockChain.ReachUsing cfg checkpoint future)
+    (hcovered : ∀ {pre post block},
+      stateTransitionUsing cfg pre block = .ok post →
+      ∀ {fork}, cfg.forkAt block.header.timestamp = .ok fork → CoveredFork fork) :
     Nonempty (AccountedHistory cfg dp ca checkpoint future) := by
-  rcases ExecutionTrace.exists_configuredHistoryTrace_of_reachUsing h with
+  rcases ExecutionTrace.exists_configuredHistoryTrace_of_reachUsing h hcovered with
     ⟨history⟩
   exact exists_accountedHistory_of_configuredHistoryTrace
     (dp := dp) (ca := ca) history
