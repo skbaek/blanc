@@ -254,8 +254,16 @@ theorem creationMessage_success : ∃ post, CreateResult post := by
       [rawUpgradedLog target implementation.toB256] ++
         [ossifiableConstructorAdminChangedLog target
           postSetupAdmin.toB256 requestedAdmin] := by
-    rw [hrawLogs, htarget]
-    change [] ++ _ ++ _ = _
+    have hbaseLogs : base.logs = [] := by
+      have hrules : sevm.benvStat.rules.stateGas = none := by
+        rw [hstat]
+        exact CoveredFork.rules_stateGas_none (s := creationMessage.benv.stat)
+          (by change CoveredFork .prague; exact CoveredFork.prague)
+      change (match sevm.benvStat.rules.stateGas with
+        | none => []
+        | some _ => _) = []
+      rw [hrules]
+    rw [hrawLogs, htarget, hbaseLogs]
     rfl
   have hdeposit : ossifiableRuntimeCodeDepositGas ≤ raw.gasLeft := by
     rw [hrawGas]
@@ -266,7 +274,9 @@ theorem creationMessage_success : ∃ post, CreateResult post := by
   have hcharge : processCreateMessage.chargeCodeGas
       creationMessage.benv.stat.rules raw = .ok charged := by
     apply chargeCodeGas_runtimeBaseline hrawOutput hdeposit
-    decide
+    · decide
+    · exact CoveredFork.rules_stateGas_none (s := creationMessage.benv.stat)
+        (by change CoveredFork .prague; exact CoveredFork.prague)
   have hchargedImplementation :
       charged.getStorVal target implementationSlotLit =
         postSetupImplementation.toB256 := by

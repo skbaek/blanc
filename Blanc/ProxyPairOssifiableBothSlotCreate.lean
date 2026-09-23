@@ -168,6 +168,7 @@ private def afterAccess (sevm : Sevm) (base : Devm) (memory : Mem) : Devm :=
 
 private theorem spawnDescriptor_exists
     {sevm : Sevm} {base : Devm} {memory : Mem}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hsize : memory.size = 288)
     (hcode : base.getCode implementation = implementationCode)
     (hwarm : implementation ∈
@@ -254,6 +255,7 @@ private theorem spawnDescriptor_exists
       decide
     depthHeadroom := hdepth
     resolvedNotPrecompile := hprecompile
+    covered := hfork
   }
   exact ⟨spawn, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl,
     rfl, rfl, rfl⟩
@@ -428,12 +430,19 @@ private theorem spawnChild_success
     rw [MessageExecution.processMessage_eq_settle_exec_of_enter
       spawn.child (initEvm spawn.child) spawn.crossing.1, raw]
     simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-      executeCode.handleErrorWith_ok, executeCode.handleError, processMessage.settle,
+      executeCode.handleErrorWith_ok, processMessage.settle,
       show child.error.isSome = false by rw [error]; rfl]
   obtain ⟨trace⟩ := ExecutionTrace.exists_processMessageTrace
     spawn.child (.ok child) process
   have initError : (initDevm spawn.child).error = .none := rfl
-  have initLogs : (initDevm spawn.child).logs = [] := rfl
+  have initLogs : (initDevm spawn.child).logs = [] := by
+    have hchildRules : spawn.child.benv.stat.rules.stateGas = none := by
+      change (initSevm spawn.child).benvStat.rules.stateGas = none
+      exact hfork.rules_stateGas_none
+    change (match spawn.child.benv.stat.rules.stateGas with
+      | none => []
+      | some _ => _) = []
+    rw [hchildRules]
   exact ⟨child, ⟨⟨trace⟩⟩,
     error.trans initError, output, gas,
     implementationSlot, adminSlot,
@@ -491,7 +500,7 @@ private theorem callAndTail_success
   obtain ⟨spawn, hgasWord, hcodeWord, hinputOffset, hinputSize,
       houtputOffset, houtputSize, hstackTail, hafter, hcallCost,
       hextensionCost, hchildGas, hspawnCode, hresolved⟩ :=
-    spawnDescriptor_exists hsize himplementationCode hwarm hdepth hprecompile
+    spawnDescriptor_exists hfork hsize himplementationCode hwarm hdepth hprecompile
   obtain ⟨child, ⟨certificate⟩, hchildError, hchildOutput,
       hchildGasLeft, hchildImplementation, hchildAdmin, hchildLogs,
       hchildKeys⟩ :=
@@ -699,11 +708,9 @@ private theorem delegateSetup_success
     houtputPost, hgasPost, herrorPost⟩
   rw [ossifiableConstructorDelegateSetup_split_shape]
   func_run (2)
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · norm_num
   · norm_num
   func_run (2) [3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · norm_num
   · exact Devm.extCost_add_of_size (i := 128) (sz := 32) (n := 288)
       (a := gVerylow) (e := 3) hsize (by decide)
@@ -711,10 +718,8 @@ private theorem delegateSetup_success
   simp only [show (128 : B256).toNat = 128 by decide]
   rw [Mem.Reads.read hreads, hlength, hmemory128]
   func_run (1)
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · norm_num
   func_run (2) [3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · norm_num
   · exact Devm.extCost_add_of_size (i := 0) (sz := 32) (n := 288)
       (a := gVerylow) (e := 3) hsize (by decide)
@@ -722,7 +727,6 @@ private theorem delegateSetup_success
   simp only [show (0 : B256).toNat = 0 by decide]
   rw [Mem.Reads.read hreads, himplementation, hmemory0]
   func_run (1)
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · norm_num [gBase]
   simpa only [callPre, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
     Devm.stack_setMach] using hrest
@@ -942,7 +946,6 @@ private theorem program_success_from_layout
       (ossifiableConstructorProgram 1249 3437 2188).main post := by
     rw [ossifiableConstructorProgram_main_shape]
     func_run (3) [1]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try norm_num [gBase, gVerylow, gHigh, gJumpdest]
     all_goals try simp [B256.eqCheck, hvalue]
     simpa using hdecode

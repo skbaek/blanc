@@ -68,7 +68,8 @@ theorem chargeCodeGas_runtimeBaseline
     {rules : ForkRules} {raw : Devm}
     (houtput : raw.output = runtimeBaselineBytes)
     (hgas : ossifiableRuntimeCodeDepositGas ≤ raw.gasLeft)
-    (hmax : 2188 ≤ rules.code.maxCodeSize) :
+    (hmax : 2188 ≤ rules.code.maxCodeSize)
+    (hstateGas : rules.stateGas = none) :
     processCreateMessage.chargeCodeGas rules raw =
       .ok (raw.setMach
         ⟨raw.stack, raw.memory,
@@ -77,6 +78,7 @@ theorem chargeCodeGas_runtimeBaseline
   obtain ⟨tail, hcons⟩ := runtimeBaselineBytes_cons
   have hlength := runtimeBaselineBytes_length_exact
   unfold processCreateMessage.chargeCodeGas
+  rw [hstateGas]
   rw [houtput, hcons]
   rw [hcons] at hlength
   simp only [List.length_cons] at hlength
@@ -294,8 +296,14 @@ theorem processCreateMessage_ossifiable_emptySetup_success
       [rawUpgradedLog msg.currentTarget implementation.toB256] ++
         [ossifiableConstructorAdminChangedLog msg.currentTarget 0
           requestedAdmin] := by
-    rw [hrawLogs, htarget]
-    change [] ++ _ ++ _ = _
+    have hbaseLogs : base.logs = [] := by
+      have hrules : sevm.benvStat.rules.stateGas = none := by
+        rw [hstat]; exact hfork.rules_stateGas_none
+      change (match sevm.benvStat.rules.stateGas with
+        | none => []
+        | some _ => _) = []
+      rw [hrules]
+    rw [hrawLogs, htarget, hbaseLogs]
     rfl
   have hrawGas' : raw.gasLeft =
       msg.gas - ossifiableConstructorExecutionGas := by
@@ -314,7 +322,7 @@ theorem processCreateMessage_ossifiable_emptySetup_success
   have hcharge : processCreateMessage.chargeCodeGas
       msg.benv.stat.rules raw = .ok charged := by
     simpa only [charged] using
-      chargeCodeGas_runtimeBaseline hrawOutput hdeposit hmax
+      chargeCodeGas_runtimeBaseline hrawOutput hdeposit hmax hfork.rules_stateGas_none
   have hchargedOutput : charged.output = runtimeBaselineBytes := by
     dsimp only [charged]
     rw [Devm.setMach_output]
