@@ -168,6 +168,50 @@ theorem Matches.setStorVal {words : Pattern} {pre : Devm}
     Matches words (pre.setStorVal address key value).stack := by
   exact matched.of_stack_eq rfl
 
+/-- Block-access-list recorders touch only frame metadata. -/
+theorem Matches.balReadStorage {words : Pattern} {pre : Devm}
+    (matched : Matches words pre.stack) (rules : ForkRules) (address : Adr)
+    (key : B256) :
+    Matches words (pre.balReadStorage rules address key).stack := by
+  exact matched.of_stack_eq rfl
+
+theorem Matches.balReadAccount {words : Pattern} {pre : Devm}
+    (matched : Matches words pre.stack) (rules : ForkRules) (address : Adr) :
+    Matches words (pre.balReadAccount rules address).stack := by
+  exact matched.of_stack_eq rfl
+
+/-- State-gas meter updates leave the operand stack unchanged. -/
+theorem Matches.creditStateGasRefund {words : Pattern} {pre : Devm}
+    (matched : Matches words pre.stack) (amount : Nat) :
+    Matches words (pre.creditStateGasRefund amount).stack := by
+  exact matched.of_stack_eq rfl
+
+theorem Matches.restoreChildGas {words : Pattern} {pre : Devm}
+    (matched : Matches words pre.stack) (gas reservoir : Nat) :
+    Matches words (pre.restoreChildGas gas reservoir).stack := by
+  exact matched.of_stack_eq rfl
+
+theorem Matches.drainStateGasReservoir {words : Pattern} {pre : Devm}
+    (matched : Matches words pre.stack) :
+    Matches words pre.drainStateGasReservoir.2.stack := by
+  exact matched.of_stack_eq rfl
+
+/-- A state-gas charge can fail only by running out of gas. -/
+theorem chargeStateGas_safe (amount : Nat) {pre : Devm} {words : Pattern}
+    (matched : Matches words pre.stack) :
+    SafeResult (fun post => Matches words post.stack)
+      (chargeStateGas amount pre) := by
+  rcases pre with ⟨⟨stack, memory, gasLeft, stateGas⟩, view, world⟩
+  simp only [chargeStateGas, Mach.chargeStateGas, liftMachExecution, liftMach,
+    Footprint.toExecution, Footprint.liftOutcome]
+  by_cases enough : amount ≤ stateGas.left
+  · simp only [enough, if_true, SafeResult, Devm.setMach]
+    exact matched.of_stack_eq rfl
+  · by_cases spill : amount - stateGas.left ≤ gasLeft
+    · simp only [enough, spill, if_true, if_false, SafeResult, Devm.setMach]
+      exact matched.of_stack_eq rfl
+    · simp [enough, spill, SafeResult, StackFault]
+
 theorem noStackFault_outOfGas :
     ¬ StackFault (.halt (.outOfGas .none)) := by
   simp [StackFault]
@@ -270,16 +314,18 @@ theorem sload_safe (pc : Nat) (sevm : Sevm)
   · simp only [warm, if_pos]
     apply (chargeGas_safe gasWarmAccess popped.2).bind
     intro charged chargedMatch
-    exact (push_safe
-      (charged.getStorVal sevm.currentTarget result.1) chargedMatch room).mono
+    exact (push_safe _
+      (chargedMatch.balReadStorage sevm.benvStat.rules sevm.currentTarget
+        result.1) room).mono
       (fun _ pushed => pushed.forget_head)
   · simp only [warm]
     have accessedMatch :=
       popped.2.addAccessedStorageKey sevm.currentTarget result.1
     apply (chargeGas_safe gasColdSload accessedMatch).bind
     intro charged chargedMatch
-    exact (push_safe
-      (charged.getStorVal sevm.currentTarget result.1) chargedMatch room).mono
+    exact (push_safe _
+      (chargedMatch.balReadStorage sevm.benvStat.rules sevm.currentTarget
+        result.1) room).mono
       (fun _ pushed => pushed.forget_head)
 
 theorem sstore_safe (pc : Nat) (sevm : Sevm)
@@ -288,29 +334,48 @@ theorem sstore_safe (pc : Nat) (sevm : Sevm)
     SafeResult (fun post => Matches words post.stack)
       (Rinst.runCore pc pre sevm .sstore) := by
   simp only [Rinst.runCore]
-  apply (pop_safe matched).bind
-  intro keyResult keyPop
-  apply (pop_safe keyPop.2).bind
-  intro valueResult valuePop
-  apply (assert_safe _ noStackFault_outOfGas).bind
-  intro _ _
-  apply SafeResult.pure_bind
-  apply SafeResult.pure_bind
-  apply SafeResult.pure_bind
-  have keyedMatch : Matches words
-      (if (sevm.currentTarget, keyResult.1) ∉
-          valueResult.2.accessedStorageKeys then
-        (addAccessedStorageKey valueResult.2 sevm.currentTarget keyResult.1,
-          gasColdSload)
-      else (valueResult.2, 0)).1.stack := by
-    split
-    · exact valuePop.2.addAccessedStorageKey sevm.currentTarget keyResult.1
-    · exact valuePop.2
-  apply (chargeGas_safe _ (keyedMatch.withRefundCounter _)).bind
-  intro charged chargedMatch
-  apply (assertDynamic_safe sevm charged).bind
-  intro _ _
-  exact chargedMatch.setStorVal sevm.currentTarget keyResult.1 valueResult.1
+  split
+  · apply (pop_safe matched).bind
+    intro keyResult keyPop
+    apply (pop_safe keyPop.2).bind
+    intro valueResult valuePop
+    apply (assert_safe _ noStackFault_outOfGas).bind
+    intro _ _
+    apply SafeResult.pure_bind
+    apply SafeResult.pure_bind
+    apply SafeResult.pure_bind
+    have readMatch := valuePop.2.balReadStorage sevm.benvStat.rules
+      sevm.currentTarget keyResult.1
+    apply (chargeGas_safe _ (Matches.withRefundCounter (by
+      split
+      · exact readMatch.addAccessedStorageKey sevm.currentTarget keyResult.1
+      · exact readMatch) _)).bind
+    intro charged chargedMatch
+    apply (assertDynamic_safe sevm charged).bind
+    intro _ _
+    exact (chargedMatch.balReadAccount _ _).setStorVal sevm.currentTarget
+      keyResult.1 valueResult.1
+  · apply (assertDynamic_safe sevm pre).bind
+    intro _ _
+    apply (pop_safe matched).bind
+    intro keyResult keyPop
+    apply (pop_safe keyPop.2).bind
+    intro valueResult valuePop
+    apply (assert_safe _ noStackFault_outOfGas).bind
+    intro _ _
+    have warmMatch : Matches words
+        (if (sevm.currentTarget, keyResult.1) ∉ valueResult.2.accessedStorageKeys then
+          addAccessedStorageKey valueResult.2 sevm.currentTarget keyResult.1
+        else valueResult.2).stack := by
+      split
+      · exact valuePop.2.addAccessedStorageKey sevm.currentTarget keyResult.1
+      · exact valuePop.2
+    apply (chargeGas_safe _ ((((warmMatch.balReadStorage _ _ _).withRefundCounter
+      _).creditStateGasRefund _))).bind
+    intro charged chargedMatch
+    apply (chargeStateGas_safe _ chargedMatch).bind
+    intro stateCharged stateChargedMatch
+    exact (stateChargedMatch.balReadAccount _ _).setStorVal _ _ _
 
 /-- Actual `POP`, including the initial operand check and later gas failure. -/
 theorem ninst_pop_safe {evm : Evm} {word : Option B256} {words : Pattern}
@@ -744,6 +809,141 @@ theorem linst_terminalTransfer_safe
       (.halt (Linst.run sevm pre instruction)) := by
   exact (terminalTransfer_safe matched checked).noStackFault
 
+/-- Schedule-indexed delegation resolution preserves the operand stack. -/
+theorem Matches.gasAccessDelegation {words : Pattern} {pre : Devm}
+    (matched : Matches words pre.stack) (gas : GasSchedule) (address : Adr) :
+    Matches words (gas.accessDelegation pre address).2.2.2.2.stack := by
+  unfold GasSchedule.accessDelegation
+  cases delegated : getDelegatedCodeAddress (pre.state.getCode address) with
+  | none =>
+      simp only [delegated]
+      exact matched
+  | some target =>
+      simp only [delegated]
+      exact matched.addAccessedAddress target
+
+theorem Matches.completeDelegationAccess {words : Pattern} {pre : Devm}
+    (matched : Matches words pre.stack) (delegated : Bool) (address : Adr) :
+    Matches words (Jaune.completeDelegationAccess pre delegated address).2.stack := by
+  unfold Jaune.completeDelegationAccess
+  cases delegated
+  · exact matched
+  · exact matched.addAccessedAddress address
+
+/-- The Amsterdam CALL resumer, like the legacy one, cannot generate a new
+operand-stack failure when the parent has headroom; its settlement guards
+raise internal (non-stack) errors, and fatal child errors retain provenance. -/
+theorem resume_callAmsterdam_safe
+    {invariant : Nat → Devm → Prop} {pc : Nat}
+    (state : StateGasRules) (parent : Devm) (oi os : Nat) (charged : Bool)
+    (room : parent.stack.length < 1024)
+    (continuation : ∀ post flag, (flag = 0 ∨ flag = 1) →
+      post.stack = flag :: parent.stack → invariant pc post) :
+    ResumeSafe invariant pc (.callAmsterdam state parent oi os charged) := by
+  intro settled
+  cases settled with
+  | error error =>
+      rcases error with ⟨err, st, addresses, transient⟩
+      constructor
+      · intro post run
+        simp [Resume.run, liftToExecution] at run
+      · intro otherErr post run fault
+        simp only [Resume.run, liftToExecution, bind, Except.bind] at run
+        cases run
+        exact ⟨st, addresses, transient, rfl⟩
+  | ok child =>
+      have hErr : ∀ output,
+          (incorporateChildAmsterdamOnError parent child output).stack = parent.stack :=
+        fun _ => rfl
+      have hSucc : ∀ output,
+          (incorporateChildAmsterdamOnSuccess parent child output).stack = parent.stack :=
+        fun _ => rfl
+      have hCredit : ∀ (devm : Devm) amount,
+          (devm.creditStateGasRefund amount).stack = devm.stack :=
+        fun _ _ => rfl
+      constructor
+      · intro post run
+        cases charged <;>
+          simp only [Resume.run, liftToExecution, bind, Except.bind, Devm.push_def,
+            Except.assert, hErr, hSucc, hCredit, if_pos room, Bool.false_eq_true,
+            if_false, if_true] at run
+        all_goals
+          by_cases failed : child.error.isSome = true
+          · by_cases settledChild : child.AmsterdamFailedChildSettled
+            · simp only [failed, settledChild, if_true] at run
+              cases run
+              exact continuation _ 0 (Or.inl rfl) rfl
+            · simp [failed, settledChild] at run
+          · by_cases uncommitted : child.AmsterdamChildUncommitted
+            · simp only [failed, uncommitted, if_true, if_false, Bool.false_eq_true] at run
+              cases run
+              exact continuation _ 1 (Or.inr rfl) rfl
+            · simp [failed, uncommitted] at run
+      · intro err post run fault
+        cases charged <;>
+          simp only [Resume.run, liftToExecution, bind, Except.bind, Devm.push_def,
+            Except.assert, hErr, hSucc, hCredit, if_pos room, Bool.false_eq_true,
+            if_false, if_true] at run
+        all_goals
+          by_cases failed : child.error.isSome = true
+          · by_cases settledChild : child.AmsterdamFailedChildSettled
+            · simp [failed, settledChild] at run
+            · simp only [failed, settledChild, if_true, if_false] at run
+              cases run
+              simp [StackFault] at fault
+          · by_cases uncommitted : child.AmsterdamChildUncommitted
+            · simp [failed, uncommitted] at run
+            · simp only [failed, uncommitted, if_true, if_false, Bool.false_eq_true] at run
+              cases run
+              simp [StackFault] at fault
+
+/-- Amsterdam CALL lifecycle: a low-depth or unaffordable call restores both
+grants and answers zero; otherwise the child spawns and the parent resumes
+with a status word. -/
+theorem genericCallAmsterdam_step_safe
+    (sevm : Sevm) (state : StateGasRules) (pre : Devm) (gas reservoir : Nat)
+    (value : B256) (caller target codeAddress : Adr)
+    (shouldTransferValue isStaticcall : Bool)
+    (inputIndex inputSize outputIndex outputSize : Nat)
+    (code : ByteArray)
+    (disablePrecompiles newAccountCharged insufficientBalance : Bool) (pc : Nat)
+    {words : Pattern} (matched : Matches words pre.stack)
+    (room : words.length < 1024) :
+    StepSafe (fun actualPc post =>
+      actualPc = pc ∧ Matches (none :: words) post.stack)
+      (XStep.toStep pc
+        (genericCallAmsterdam.step sevm state pre gas reservoir value caller
+          target codeAddress shouldTransferValue isStaticcall inputIndex
+          inputSize outputIndex outputSize code disablePrecompiles
+          newAccountCharged insufficientBalance)) := by
+  unfold genericCallAmsterdam.step
+  split
+  · apply xstep_ofExcept_safe
+    have restored : Matches words
+        ((pre.withReturnData []).restoreChildGas gas reservoir).stack :=
+      (matched.withReturnData []).restoreChildGas gas reservoir
+    have credited : Matches words
+        (if newAccountCharged then
+          ((pre.withReturnData []).restoreChildGas gas reservoir).creditStateGasRefund
+            state.newAccount
+        else (pre.withReturnData []).restoreChildGas gas reservoir).stack := by
+      split
+      · exact restored.creditStateGasRefund _
+      · exact restored
+    apply (push_safe 0 credited room).bind
+    intro pushedPost pushedMatch
+    exact ⟨rfl, pushedMatch.forget_head⟩
+  · change ResumeSafe
+      (fun actualPc post => actualPc = pc ∧ Matches (none :: words) post.stack)
+      pc (.callAmsterdam state (pre.withReturnData []) outputIndex outputSize
+        newAccountCharged)
+    apply resume_callAmsterdam_safe state (pre.withReturnData []) outputIndex
+      outputSize newAccountCharged (matched.length ▸ room)
+    intro post flag _ stack
+    exact ⟨rfl, by
+      rw [stack]
+      exact matched.push_any flag⟩
+
 /-- A low-depth CALL answers immediately with status zero; every other CALL
 spawns the actual child frame and resumes the original parent with status zero
 or one. This theorem covers the caller continuation only, not the arbitrary
@@ -822,62 +1022,103 @@ theorem callTransfer_safe (pc : Nat)
                                 simp only [List.length_cons] at bound
                                 omega
                               simp only [Xinst.step]
-                              apply xstep_ofExcept_safe
-                              apply (pop_safe matched).bind
-                              intro gasResult gasPopped
-                              apply (popToAdr_safe gasPopped.2).bind
-                              intro calleeResult calleePopped
-                              apply (pop_safe calleePopped).bind
-                              intro valueResult valuePopped
-                              apply (popToNat_safe valuePopped.2).bind
-                              intro inputIndexResult inputIndexPopped
-                              apply (popToNat_safe inputIndexPopped).bind
-                              intro inputSizeResult inputSizePopped
-                              apply (popToNat_safe inputSizePopped).bind
-                              intro outputIndexResult outputIndexPopped
-                              apply (popToNat_safe outputIndexPopped).bind
-                              intro outputSizeResult outputSizePopped
-                              let ranges :=
-                                [(inputIndexResult.1, inputSizeResult.1),
-                                  (outputIndexResult.1, outputSizeResult.1)]
-                              let accessed := addAccessedAddress
-                                outputSizeResult.2 calleeResult.1
-                              have accessedMatch : Matches words accessed.stack :=
-                                outputSizePopped.addAccessedAddress calleeResult.1
-                              rcases delegation :
-                                  accessDelegation accessed calleeResult.1 with
-                                ⟨disablePrecompiles, newCodeAddress, code,
-                                  delegatedAccessGasCost, delegated⟩
-                              have delegatedMatch : Matches words
-                                  delegated.stack := by
-                                have preserved :=
-                                  accessedMatch.accessDelegation calleeResult.1
-                                rw [delegation] at preserved
-                                exact preserved
-                              apply (chargeGas_safe _ delegatedMatch).bind
-                              intro charged chargedMatch
-                              apply (assert_safe _
-                                noStackFault_writeInStaticContext).bind
-                              intro _ _
-                              have extendedMatch : Matches words
-                                  (charged.memExtends ranges).stack :=
-                                chargedMatch.memExtends ranges
-                              by_cases insufficient :
-                                  ((charged.memExtends ranges).getAcct
-                                    evm.sta.currentTarget).bal < valueResult.1
-                              · rw [if_pos insufficient]
-                                apply (push_safe 0 extendedMatch room).bind
-                                intro pushed pushedMatch
-                                exact ⟨rfl,
-                                  ((pushedMatch.withReturnData []).withGasLeft _).forget_head⟩
-                              · rw [if_neg insufficient]
-                                exact genericCall_step_safe
-                                  evm.sta (charged.memExtends ranges) _
-                                  valueResult.1 evm.sta.currentTarget
-                                  calleeResult.1 newCodeAddress true false
-                                  inputIndexResult.1 inputSizeResult.1
-                                  outputIndexResult.1 outputSizeResult.1 code
-                                  disablePrecompiles pc extendedMatch room
+                              split
+                              · apply xstep_ofExcept_safe
+                                apply (pop_safe matched).bind
+                                intro gasResult gasPopped
+                                apply (popToAdr_safe gasPopped.2).bind
+                                intro calleeResult calleePopped
+                                apply (pop_safe calleePopped).bind
+                                intro valueResult valuePopped
+                                apply (popToNat_safe valuePopped.2).bind
+                                intro inputIndexResult inputIndexPopped
+                                apply (popToNat_safe inputIndexPopped).bind
+                                intro inputSizeResult inputSizePopped
+                                apply (popToNat_safe inputSizePopped).bind
+                                intro outputIndexResult outputIndexPopped
+                                apply (popToNat_safe outputIndexPopped).bind
+                                intro outputSizeResult outputSizePopped
+                                let ranges :=
+                                  [(inputIndexResult.1, inputSizeResult.1),
+                                    (outputIndexResult.1, outputSizeResult.1)]
+                                let accessed := addAccessedAddress
+                                  outputSizeResult.2 calleeResult.1
+                                have accessedMatch : Matches words accessed.stack :=
+                                  outputSizePopped.addAccessedAddress calleeResult.1
+                                rcases delegation :
+                                    evm.sta.benvStat.rules.gas.accessDelegation accessed calleeResult.1 with
+                                  ⟨disablePrecompiles, newCodeAddress, code,
+                                    delegatedAccessGasCost, delegated⟩
+                                have delegatedMatch : Matches words
+                                    delegated.stack := by
+                                  have preserved :=
+                                    accessedMatch.gasAccessDelegation evm.sta.benvStat.rules.gas
+                                      calleeResult.1
+                                  rw [delegation] at preserved
+                                  exact preserved
+                                apply (chargeGas_safe _ delegatedMatch).bind
+                                intro charged chargedMatch
+                                apply (assert_safe _
+                                  noStackFault_writeInStaticContext).bind
+                                intro _ _
+                                have extendedMatch : Matches words
+                                    (charged.memExtends ranges).stack :=
+                                  chargedMatch.memExtends ranges
+                                by_cases insufficient :
+                                    ((charged.memExtends ranges).getAcct
+                                      evm.sta.currentTarget).bal < valueResult.1
+                                · rw [if_pos insufficient]
+                                  apply (push_safe 0 extendedMatch room).bind
+                                  intro pushed pushedMatch
+                                  exact ⟨rfl,
+                                    ((pushedMatch.withReturnData []).withGasLeft _).forget_head⟩
+                                · rw [if_neg insufficient]
+                                  exact genericCall_step_safe
+                                    evm.sta (charged.memExtends ranges) _
+                                    valueResult.1 evm.sta.currentTarget
+                                    calleeResult.1 newCodeAddress true false
+                                    inputIndexResult.1 inputSizeResult.1
+                                    outputIndexResult.1 outputSizeResult.1 code
+                                    disablePrecompiles pc extendedMatch room
+                              · apply xstep_ofExcept_safe
+                                apply (pop_safe matched).bind
+                                intro gasResult gasPopped
+                                apply (popToAdr_safe gasPopped.2).bind
+                                intro calleeResult calleePopped
+                                apply (pop_safe calleePopped).bind
+                                intro valueResult valuePopped
+                                apply (popToNat_safe valuePopped.2).bind
+                                intro inputIndexResult inputIndexPopped
+                                apply (popToNat_safe inputIndexPopped).bind
+                                intro inputSizeResult inputSizePopped
+                                apply (popToNat_safe inputSizePopped).bind
+                                intro outputIndexResult outputIndexPopped
+                                apply (popToNat_safe outputIndexPopped).bind
+                                intro outputSizeResult outputSizePopped
+                                apply (assert_safe _ noStackFault_writeInStaticContext).bind
+                                intro _ _
+                                apply (assert_safe _ noStackFault_outOfGas).bind
+                                intro _ _
+                                apply (assert_safe _ noStackFault_outOfGas).bind
+                                intro _ _
+                                have readMatch :=
+                                  (outputSizePopped.addAccessedAddress calleeResult.1).balReadAccount
+                                    evm.sta.benvStat.rules calleeResult.1
+                                apply (chargeGas_safe _
+                                  (((readMatch.balReadAccount _ _).completeDelegationAccess _ _))).bind
+                                intro charged chargedMatch
+                                split
+                                · apply (chargeStateGas_safe _ chargedMatch).bind
+                                  intro stateCharged stateChargedMatch
+                                  apply (chargeGas_safe _ stateChargedMatch).bind
+                                  intro granted grantedMatch
+                                  exact genericCallAmsterdam_step_safe _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+                                    pc (grantedMatch.drainStateGasReservoir.memExtends _) room
+                                · apply SafeResult.pure_bind
+                                  apply (chargeGas_safe _ chargedMatch).bind
+                                  intro granted grantedMatch
+                                  exact genericCallAmsterdam_step_safe _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+                                    pc (grantedMatch.drainStateGasReservoir.memExtends _) room
 
 /-- The actual `Ninst.step` CALL wrapper has the checked eventual caller stack
 and exact one-byte continuation PC, whether the status is produced immediately

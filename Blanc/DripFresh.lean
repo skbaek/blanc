@@ -237,7 +237,8 @@ value-transfer call, and the payout is the exact fresh-index floor.  The
 theorem drip_compiled_exit {e : Sevm} {entry s r : Devm} {image : Bytes}
     {tail : Stack}
     (frame : Frame image entry s) (hp : tail <<+ s.stack)
-    (run : Func.Run (runtime.main :: runtime.aux) e s Drip.exit r) :
+    (run : Func.Run (runtime.main :: runtime.aux) e s Drip.exit r)
+    (hfork : CoveredFork e.benvStat.fork) :
     ∃ (postChi payout : B256),
       postChi.toNat =
         (Devm.getStorVal entry e.currentTarget chiSlot).toNat *
@@ -250,7 +251,7 @@ theorem drip_compiled_exit {e : Sevm} {entry s r : Devm} {image : Bytes}
           postChi.toNat ∧
       ExitPaysExactlyFull e entry r := by
   have hfull : ExitPaysExactlyFull e entry r :=
-    exit_pays_exactly_full auxLookup_runtime frame hp run
+    exit_pays_exactly_full auxLookup_runtime frame hp run hfork
   have hfullKeep := hfull
   unfold ExitPaysExactlyFull at hfull
   dsimp only at hfull
@@ -412,7 +413,8 @@ theorem no_stale_index_settlement_exit {sevm : Sevm} {pre post : Devm}
     (hcode : sevm.code.toList = code)
     (hsel : Sevm.selector sevm = exitSelector)
     (hnonempty : sevm.data.length.toB256 ≠ 0)
-    (hcanon : pre.memory = Mem.empty) :
+    (hcanon : pre.memory = Mem.empty)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Devm.getStorVal pre sevm.currentTarget rhoSlot ≤ sevm.benvStat.time ∧
       ∃ callPre callPost guardPost returnPre,
         (Devm.getStor callPre sevm.currentTarget).get rhoSlot =
@@ -429,7 +431,7 @@ theorem no_stale_index_settlement_exit {sevm : Sevm} {pre post : Devm}
               Sevm.dataWord sevm (32 * 0 + 4) / scale)
             callPre callPost guardPost returnPre ∧
           Devm.getStor post = Devm.getStor callPost := by
-  have hfull := exit_exec_effect_full exc hcode hsel hnonempty hcanon
+  have hfull := exit_exec_effect_full exc hcode hsel hnonempty hcanon hfork
   unfold ExitPaysExactlyFull at hfull
   dsimp only at hfull
   rcases hfull with
