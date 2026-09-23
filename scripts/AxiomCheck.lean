@@ -135,17 +135,18 @@ import Blanc.Composition.ProrataWethVaultNonrevert
 
 /-! # Repository axiom audit rows
 
-One `#full_axioms NAME` line per audited theorem; `scripts/check.sh` pins each
-row's exact expected axiom set and requires this list and its own to be the
-same population. The count of these lines is the published audited-theorem
-count (`scripts/check-doc-counts.py`).
+Each row below names one audited theorem; `scripts/check.sh` pins each row's
+exact expected axiom set and requires this list and its own to be the same
+population. The number of rows is the published audited-theorem count
+(`scripts/check-doc-counts.py`).
 
-`#full_axioms` is defined once, in `scripts/AxiomAudit.lean`, and
+The row command is defined once, in `scripts/AxiomAudit.lean`, and
 `scripts/axiom_audit.py` splices it in after the imports above when the gate
 elaborates this file, so this file does not elaborate on its own. It walks each
-name from scratch over the environment's declarations; Lean's `#print axioms`
-is not used as a verdict source (lean4#15226, see that file's header), and
-`scripts/axiom_audit.py` refuses an audit file that contains it. -/
+name from scratch over the environment's declarations; Lean's own axiom report
+is not used as a verdict source (lean4#15226, see that file's header). The
+driver refuses this file unless, comments aside, it holds only the imports and
+the rows, and it refuses the row command inside a comment. -/
 
 #full_axioms Blanc.weth_preserves_solvent
 #full_axioms Blanc.stateTransition_preserves_solvent

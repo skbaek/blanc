@@ -1078,7 +1078,7 @@ ROLES = {
 }
 
 # Per-pin axiom expectations, on the contract `scripts/check.sh` already uses
-# for its 439 audited rows: an EMPTY expectation means the theorem must depend
+# for its audited rows: an EMPTY expectation means the theorem must depend
 # on NO axioms at all, passing on an empty from-scratch `#full_axioms` report
 # and failing on any axiom whatsoever.
 #

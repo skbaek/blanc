@@ -499,7 +499,9 @@ def compile_fixture(relative: str) -> None:
     gate_semaphore.guard("the Lido registry fixtures")
     probes = [qualified for owner, qualified in AXIOM_CONTROLS if owner == relative]
     try:
-        source = (ROOT / relative).read_text() + axiom_audit.appendix(ROOT, probes)
+        source = axiom_audit.fixture_probe(
+            ROOT, (ROOT / relative).read_text(), relative, probes
+        )
         status, output = axiom_audit.elaborate(ROOT, source)
     except axiom_audit.AuditError as error:
         fail(f"{relative}: from-scratch axiom probe could not run: {error}")

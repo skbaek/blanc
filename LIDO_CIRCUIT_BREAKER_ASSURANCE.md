@@ -24,7 +24,7 @@ Every row is a `####` block carrying seven labelled fields:
 
 | Field | Meaning |
 |---|---|
-| **Declarations** | The exact declaration(s) the claim rests on. Every name here is inside the pin table of the authority this row's **Gate** field names — either the repository axiom audit (`scripts/AxiomCheck.lean`) or the family gate's own `#print axioms` probe — so every name is one the kernel has checked and one whose axiom set a gate pins. Blanc has several such authorities and they do not overlap; a name in one is usually not in the others. |
+| **Declarations** | The exact declaration(s) the claim rests on. Every name here is inside the pin table of the authority this row's **Gate** field names — either the repository axiom audit (`scripts/AxiomCheck.lean`) or the family gate's own from-scratch `#full_axioms` probe — so every name is one the kernel has checked and one whose axiom set a gate pins. Blanc has several such authorities and they do not overlap; a name in one is usually not in the others. |
 | **Premises** | The load-bearing hypotheses. A row whose premises are unstated is a row that overclaims, so "none beyond the statement" is written out rather than left blank. |
 | **Axioms** | The exact axiom set the declaration depends on. `propext`, `Classical.choice`, `Quot.sound` are the three standard logical axioms the rest of the repository uses; anything else would appear here. |
 | **Gate** | The gate that owns the row's evidence and would fail if it moved. |
@@ -56,11 +56,13 @@ The verifier is static and fail-closed. It reads this file and requires that:
 5. every load-bearing non-claim phrase still appears somewhere in this file.
 
 Channels 2 and 3 are static comparisons against expectations that the
-authorities themselves verify against Lean by elaborating a `#print axioms`
-probe — so this register's axiom column is Lean-checked transitively, through
-gates whose own verdicts are recorded on the completion candidate. Running this
-gate with `--probe` closes that loop directly: it regenerates a `#print axioms`
-file from this register's own citations and elaborates it.
+authorities themselves verify against Lean by elaborating a from-scratch
+`#full_axioms` probe (the shared walker in `scripts/AxiomAudit.lean`; Lean's
+own `#print axioms` report is not a verdict source, lean4#15226) — so this
+register's axiom column is Lean-checked transitively, through gates whose own
+verdicts are recorded on the completion candidate. Running this gate with
+`--probe` closes that loop directly: it regenerates a `#full_axioms` probe from
+this register's own citations and elaborates it.
 
 A row may legitimately have **no** audited declaration behind it — the emitted
 error table and the finite differential matrix are owned by gates, not by
@@ -459,7 +461,7 @@ register never lets the pillar's name imply otherwise.
 
 The axiom expectations for this pillar and the three that follow are pinned and
 probed by `scripts/check-lido-circuit-breaker-access.sh`, which runs its own
-`#print axioms` pass over its own pin set. Rows are **axiom-homogeneous**: where
+from-scratch `#full_axioms` pass over its own pin set. Rows are **axiom-homogeneous**: where
 a fact depends on no axioms at all it gets its own row rather than being averaged
 into a neighbour's.
 

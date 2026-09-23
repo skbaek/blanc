@@ -392,7 +392,7 @@ fi
 
 if ! OUT="$(cd "$ROOT" && python3 scripts/axiom_audit.py run scripts/AxiomCheck.lean 2>&1)"; then
   printf '%s\n' "$OUT"
-  echo "REGRESSION — axiom audit: AxiomCheck.lean failed to elaborate"
+  echo "REGRESSION — axiom audit: AxiomCheck.lean was refused by the audit driver or failed to elaborate"
   exit 1
 fi
 
@@ -1810,6 +1810,11 @@ if printf '%s\n' "$OUT" | grep -qE "$FORBIDDEN"; then
   exit 1
 fi
 
+if [ "$NTOTAL" -eq 0 ]; then
+  echo "REGRESSION — axiom audit: no audited theorems; an empty audit is not a pass"
+  exit 1
+fi
+
 if [ "$NEXACT" -ne "$NTOTAL" ]; then
   echo "REGRESSION — axiom audit: only $NEXACT/$NTOTAL audited theorems have their exact pinned axiom set"
   exit 1
@@ -1818,9 +1823,15 @@ fi
 # The audit's two halves must agree: every theorem AxiomCheck.lean prints must
 # be pinned by a row here, and every pinned row must be printed there. Deleting
 # a row from EITHER file is then a gate failure rather than a smaller green
-# count — the point of auditing the compile witness at all.
-PRINTED="$(grep -oE '^#full_axioms[[:space:]]+[A-Za-z0-9_.?]+' \
-  "$SCRIPT_DIR/AxiomCheck.lean" | awk '{print $2}' | LC_ALL=C sort)"
+# count — the point of auditing the compile witness at all. The inventory is
+# the driver's validated row list (live rows only; a row inside a comment is
+# refused there), not a grep that could count commented-out text.
+if ! PRINTED_RAW="$(cd "$ROOT" && python3 scripts/axiom_audit.py rows scripts/AxiomCheck.lean 2>&1)"; then
+  printf '%s\n' "$PRINTED_RAW"
+  echo "REGRESSION — axiom audit: scripts/AxiomCheck.lean is not a valid audit source"
+  exit 1
+fi
+PRINTED="$(printf '%s\n' "$PRINTED_RAW" | grep -v '^$' | LC_ALL=C sort)"
 PINNED="$(printf '%s\n' "$ROWS" | sed 's/|.*//' | grep -v '^$' | LC_ALL=C sort)"
 if [ "$PRINTED" != "$PINNED" ]; then
   UNPINNED="$(LC_ALL=C comm -23 <(printf '%s\n' "$PRINTED") <(printf '%s\n' "$PINNED") | xargs)"

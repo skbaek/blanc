@@ -455,10 +455,12 @@ def run_lean(root: Path, relative: str) -> subprocess.CompletedProcess[str]:
 
 
 def parse_axioms(output: str) -> dict[str, set[str]]:
-    rows: dict[str, set[str]] = {}
-    for name, payload in axiom_audit.REPORT.findall(output):
-        rows[name] = {part.strip() for part in payload.split(",") if part.strip()}
-    return rows
+    """Exactly one report per pinned row, and none for any other name."""
+    try:
+        parsed = axiom_audit.parse(output, FULL_AXIOM_PINS)
+    except axiom_audit.AuditError:
+        return {}
+    return {name: set(axioms) for name, axioms in parsed.items()}
 
 
 def dynamic_errors(root: Path) -> list[str]:
