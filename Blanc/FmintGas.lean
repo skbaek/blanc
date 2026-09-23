@@ -103,7 +103,7 @@ theorem decimals_runCompiled {sevm : Sevm} {pre : Devm}
   refine
     ⟨_,
       Prog.runCompiled_intro (G := g - 1)
-        (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+        (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack, h_mem])
         (by
@@ -182,6 +182,7 @@ existing `Devm.gasLeft_setMach` rather than by a blind `rfl` on the 21-step
 construction. -/
 theorem totalSupply_gas_exact {sevm : Sevm} {pre : Devm}
     (h_code : some sevm.code.toList = Prog.compile fmint)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_sel : Sevm.selector sevm = tsSel)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -194,11 +195,12 @@ theorem totalSupply_gas_exact {sevm : Sevm} {pre : Devm}
         (Devm.getStorVal pre sevm.currentTarget supplySlot).toBytes := by
   rw [totalSupplyGas_eq] at h_gas
   set g := pre.gasLeft with hg
+  have h_stateGas : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
   refine
     ⟨_,
       Prog.exec_of_runCompiled
         (Prog.runCompiled_intro (G := g - 1)
-          (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+          (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
           (by simp only [gJumpdest]; omega)
           (by rw [h_stack, h_mem])
           (by
@@ -221,6 +223,7 @@ The hypothesis-position shape, by determinism rather than inversion — same
 route as `weth_balanceOf_gas_of_runCompiled`; see that theorem's docstring. -/
 theorem totalSupply_gas_of_runCompiled {sevm : Sevm} {pre post : Devm}
     (h_code : some sevm.code.toList = Prog.compile fmint)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_sel : Sevm.selector sevm = tsSel)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -230,7 +233,7 @@ theorem totalSupply_gas_of_runCompiled {sevm : Sevm} {pre post : Devm}
     (h_run : Prog.RunCompiled sevm pre fmint post) :
     pre.gasLeft = post.gasLeft + totalSupplyGas := by
   obtain ⟨post', h_exec', h_gas_eq, _⟩ :=
-    totalSupply_gas_exact h_code h_sel h_stack h_mem h_cold h_gas
+    totalSupply_gas_exact h_code hfork h_sel h_stack h_mem h_cold h_gas
   have h_exec : exec ⟨0, sevm, pre⟩ = .ok post :=
     Prog.exec_of_runCompiled h_run h_code
   rw [h_exec] at h_exec'
@@ -279,6 +282,7 @@ a gas-exact run; it costs exactly `totalSupplyGasWarm` and returns the supply.
 The same walk as the cold derivation, same hint list, differing only where
 `func_run` meets the `SLOAD`. -/
 theorem totalSupply_warm_runCompiled {sevm : Sevm} {pre : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_sel : Sevm.selector sevm = tsSel)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -291,10 +295,11 @@ theorem totalSupply_warm_runCompiled {sevm : Sevm} {pre : Devm}
         (Devm.getStorVal pre sevm.currentTarget supplySlot).toBytes := by
   rw [totalSupplyGasWarm_eq] at h_gas
   set g := pre.gasLeft with hg
+  have h_stateGas : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
   refine
     ⟨_,
       Prog.runCompiled_intro (G := g - 1)
-        (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+        (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack, h_mem])
         (by
@@ -313,6 +318,7 @@ theorem totalSupply_warm_runCompiled {sevm : Sevm} {pre : Devm}
 `totalSupplyGasWarm`.** The exec altitude, from the walk above. -/
 theorem totalSupply_warm_gas_exact {sevm : Sevm} {pre : Devm}
     (h_code : some sevm.code.toList = Prog.compile fmint)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_sel : Sevm.selector sevm = tsSel)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -324,7 +330,7 @@ theorem totalSupply_warm_gas_exact {sevm : Sevm} {pre : Devm}
       Devm.output post =
         (Devm.getStorVal pre sevm.currentTarget supplySlot).toBytes := by
   obtain ⟨post, h_run, h_gas_eq, h_out⟩ :=
-    totalSupply_warm_runCompiled h_sel h_stack h_mem h_warm h_gas
+    totalSupply_warm_runCompiled hfork h_sel h_stack h_mem h_warm h_gas
   exact ⟨post, Prog.exec_of_runCompiled h_run h_code, h_gas_eq, h_out⟩
 
 /-! ## The closed form
@@ -461,6 +467,7 @@ precondition and the conclusion go through the function.
 is gone from the premise list. -/
 theorem totalSupply_gas_exact_fmintGas {sevm : Sevm} {pre : Devm} {cost : Nat}
     (h_code : some sevm.code.toList = Prog.compile fmint)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_sel : Sevm.selector sevm = tsSel)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -476,11 +483,11 @@ theorem totalSupply_gas_exact_fmintGas {sevm : Sevm} {pre : Devm} {cost : Nat}
   · rw [if_pos h] at h_cost
     injection h_cost with h_cost
     subst h_cost
-    exact totalSupply_warm_gas_exact h_code h_sel h_stack h_mem h h_gas
+    exact totalSupply_warm_gas_exact h_code hfork h_sel h_stack h_mem h h_gas
   · rw [if_neg h] at h_cost
     injection h_cost with h_cost
     subst h_cost
-    exact totalSupply_gas_exact h_code h_sel h_stack h_mem h h_gas
+    exact totalSupply_gas_exact h_code hfork h_sel h_stack h_mem h h_gas
 
 /-- **`decimals()` costs exactly what `fmintGas` says it does.** The same
 restatement, on the second target; the two new arguments are supplied and
@@ -508,6 +515,7 @@ and why this goes by determinism off the combined exec-altitude theorem. -/
 theorem totalSupply_gas_of_runCompiled_fmintGas {sevm : Sevm} {pre post : Devm}
     {cost : Nat}
     (h_code : some sevm.code.toList = Prog.compile fmint)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_sel : Sevm.selector sevm = tsSel)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -516,7 +524,7 @@ theorem totalSupply_gas_of_runCompiled_fmintGas {sevm : Sevm} {pre post : Devm}
     (h_run : Prog.RunCompiled sevm pre fmint post) :
     pre.gasLeft = post.gasLeft + cost := by
   obtain ⟨post', h_exec', h_gas_eq, _⟩ :=
-    totalSupply_gas_exact_fmintGas h_code h_sel h_stack h_mem h_cost h_gas
+    totalSupply_gas_exact_fmintGas h_code hfork h_sel h_stack h_mem h_cost h_gas
   have h_exec : exec ⟨0, sevm, pre⟩ = .ok post :=
     Prog.exec_of_runCompiled h_run h_code
   rw [h_exec] at h_exec'

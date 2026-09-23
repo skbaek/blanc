@@ -1355,7 +1355,8 @@ theorem flashLoan_performs_callback {sevm : Sevm} {s r : Devm}
       [receiver, token, amount] data)
     (h_size : 196 + ceil32 data.length < 2 ^ 256)
     (h_wf : Mem.Wf s.memory) (h_fresh : Mem.Reads s.memory [])
-    (h_run : Func.Run (fmint.main :: fmintAux) sevm s flashLoan r) :
+    (h_run : Func.Run (fmint.main :: fmintAux) sevm s flashLoan r)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     token = sevm.currentTarget.toB256 ∧
     B256.Nof ((Devm.getStor s sevm.currentTarget).get supplySlot) amount ∧
     ∃ (a : Adr) (sc mid sfin : Devm),
@@ -1403,7 +1404,7 @@ theorem flashLoan_performs_callback {sevm : Sevm} {s r : Devm}
     rw [show callbackArgsOffset.toNat = 28 from rfl]
     exact callbackWindow onFlashLoanSelector sevm.caller.toB256
       sevm.currentTarget.toB256 amount data
-  rcases of_flashLoanFromCall h_stack h_wf_sc h_reads_sc h_win h_size h_res with
+  rcases of_flashLoanFromCall h_stack h_wf_sc h_reads_sc h_win h_size h_res hfork with
     ⟨mid, sfin, h_cb, h_gs, h_gc2, h_pf, h_wf_fin, h_rd_fin, h_run5⟩
   exact ⟨h_token, h_nof, a, sc, mid, sfin, h_recv, h_code, h_stor, h_cb, h_gs,
     h_gc2, h_pf, h_wf_fin, ⟨_, h_rd_fin⟩, h_run5⟩
@@ -2523,6 +2524,7 @@ theorem fmint_flashLoan_spec {sevm : Sevm} {pre post : Devm}
       [receiver, token, amount] data)
     (h_size : 196 + ceil32 data.length < 2 ^ 256)
     (h_wf : Mem.Wf pre.memory) (h_fresh : Mem.Reads pre.memory [])
+    (hfork : CoveredFork sevm.benvStat.fork)
     (exc : Exec 0 sevm pre (.ok post)) :
     token = sevm.currentTarget.toB256 ∧
     B256.Nof ((Devm.getStor pre sevm.currentTarget).get supplySlot) amount ∧
@@ -2552,7 +2554,7 @@ theorem fmint_flashLoan_spec {sevm : Sevm} {pre post : Devm}
   obtain ⟨s, h_gs, h_gb, h_gc, h_mem, h_run⟩ := exec_enters_flashLoan exc h_code h_sel
   obtain ⟨h_token, h_nof, a, sc, mid, sfin, h_recv, h_code_sc, h_stor_sc, h_cb,
     h_gs_mid, h_gc_mid, h_stack, h_wf_fin, ⟨img, h_img⟩, h_run5⟩ :=
-    flashLoan_performs_callback h_dec h_size (h_mem ▸ h_wf) (h_mem ▸ h_fresh) h_run
+    flashLoan_performs_callback h_dec h_size (h_mem ▸ h_wf) (h_mem ▸ h_fresh) h_run hfork
   obtain ⟨h_nva, h_nsup, st, allow, h_allow, h_arms, h_bal, h_post, h_code_post,
     h_return⟩ := of_repayment h_stack h_wf_fin h_img h_run5
   -- restate the walk's facts at the states a reader can name: `pre`, the
@@ -2642,6 +2644,7 @@ theorem no_success_of_callback_never_magic {sevm : Sevm} {pre post : Devm}
     (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
       [receiver, token, amount] data)
     (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_wf : Mem.Wf pre.memory) (h_fresh : Mem.Reads pre.memory [])
     (h_never : ∀ (a : Adr) (sc mid : Devm),
       CallbackBoundary sevm sevm.currentTarget a amount data sc mid →
@@ -2649,7 +2652,7 @@ theorem no_success_of_callback_never_magic {sevm : Sevm} {pre post : Devm}
     Exec 0 sevm pre (.ok post) → False := by
   intro exc
   obtain ⟨-, -, -, a, sc, mid, _, _, -, -, -, h_cb, -⟩ :=
-    fmint_flashLoan_spec h_code h_sel h_dec h_size h_wf h_fresh exc
+    fmint_flashLoan_spec h_code h_sel h_dec h_size h_wf h_fresh hfork exc
   exact h_never a sc mid h_cb (CallbackBoundary.answer h_cb).right
 
 /-- **Returndata shorter than a word ⇒ no success.**  The other contrapositive
@@ -2663,6 +2666,7 @@ theorem no_success_of_callback_never_returns_word {sevm : Sevm} {pre post : Devm
     (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
       [receiver, token, amount] data)
     (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_wf : Mem.Wf pre.memory) (h_fresh : Mem.Reads pre.memory [])
     (h_short : ∀ (a : Adr) (sc mid : Devm),
       CallbackBoundary sevm sevm.currentTarget a amount data sc mid →
@@ -2670,7 +2674,7 @@ theorem no_success_of_callback_never_returns_word {sevm : Sevm} {pre post : Devm
     Exec 0 sevm pre (.ok post) → False := by
   intro exc
   obtain ⟨-, -, -, a, sc, mid, _, _, -, -, -, h_cb, -⟩ :=
-    fmint_flashLoan_spec h_code h_sel h_dec h_size h_wf h_fresh exc
+    fmint_flashLoan_spec h_code h_sel h_dec h_size h_wf h_fresh hfork exc
   exact absurd (CallbackBoundary.answer h_cb).left
     (Nat.not_le_of_lt (h_short a sc mid h_cb))
 
@@ -2741,6 +2745,7 @@ theorem no_success_of_allowance_below_amount {sevm : Sevm} {pre post : Devm}
     (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
       [receiver, token, amount] data)
     (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_wf : Mem.Wf pre.memory) (h_fresh : Mem.Reads pre.memory [])
     (h_low : ∀ (a : Adr) (sc mid : Devm),
       CallbackBoundary sevm sevm.currentTarget a amount data sc mid →
@@ -2749,7 +2754,7 @@ theorem no_success_of_allowance_below_amount {sevm : Sevm} {pre post : Devm}
     Exec 0 sevm pre (.ok post) → False := by
   intro exc
   obtain ⟨-, -, -, a, sc, mid, st, allow, -, -, -, h_cb, -, -, h_allow, h_arms, -⟩ :=
-    fmint_flashLoan_spec h_code h_sel h_dec h_size h_wf h_fresh exc
+    fmint_flashLoan_spec h_code h_sel h_dec h_size h_wf h_fresh hfork exc
   have h_lt : allow < amount := h_allow ▸ h_low a sc mid h_cb
   rcases h_arms with ⟨hmax, -⟩ | ⟨-, hle, -⟩
   · exact B256.not_lt.mpr (B256.le_max amount) (hmax ▸ h_lt)
@@ -2767,6 +2772,7 @@ theorem no_success_of_balance_below_amount {sevm : Sevm} {pre post : Devm}
     (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
       [receiver, token, amount] data)
     (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_wf : Mem.Wf pre.memory) (h_fresh : Mem.Reads pre.memory [])
     (h_low : ∀ (a : Adr) (sc mid : Devm),
       CallbackBoundary sevm sevm.currentTarget a amount data sc mid →
@@ -2774,7 +2780,7 @@ theorem no_success_of_balance_below_amount {sevm : Sevm} {pre post : Devm}
     Exec 0 sevm pre (.ok post) → False := by
   intro exc
   obtain ⟨-, -, -, a, sc, mid, st, allow, -, -, -, h_cb, -, -, -, -, h_bal, -⟩ :=
-    fmint_flashLoan_spec h_code h_sel h_dec h_size h_wf h_fresh exc
+    fmint_flashLoan_spec h_code h_sel h_dec h_size h_wf h_fresh hfork exc
   exact B256.not_lt.mpr h_bal (h_low a sc mid h_cb)
 
 /-! ### The error channel: the weak form of the no-success family
@@ -2821,13 +2827,14 @@ theorem settles_with_error_of_callback_never_magic {sevm : Sevm} {pre : Devm}
     (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
       [receiver, token, amount] data)
     (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_wf : Mem.Wf pre.memory) (h_fresh : Mem.Reads pre.memory [])
     (h_never : ∀ (a : Adr) (sc mid : Devm),
       CallbackBoundary sevm sevm.currentTarget a amount data sc mid →
       Bytes.toB256 (mid.returnData.sliceD 0 32 0) ≠ erc3156Magic) :
     ∃ e post, exec ⟨0, sevm, pre⟩ = .error (e, post) :=
   exec_error_of_no_success
-    (fun _post exc => no_success_of_callback_never_magic h_code h_sel h_dec
+    (fun _post exc => no_success_of_callback_never_magic (hfork := hfork) h_code h_sel h_dec
       h_size h_wf h_fresh h_never exc)
 
 /-- **Returndata shorter than a word ⇒ settles with some error.**  The weak
@@ -2845,13 +2852,14 @@ theorem settles_with_error_of_callback_never_returns_word {sevm : Sevm}
     (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
       [receiver, token, amount] data)
     (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_wf : Mem.Wf pre.memory) (h_fresh : Mem.Reads pre.memory [])
     (h_short : ∀ (a : Adr) (sc mid : Devm),
       CallbackBoundary sevm sevm.currentTarget a amount data sc mid →
       mid.returnData.length < 32) :
     ∃ e post, exec ⟨0, sevm, pre⟩ = .error (e, post) :=
   exec_error_of_no_success
-    (fun _post exc => no_success_of_callback_never_returns_word h_code h_sel
+    (fun _post exc => no_success_of_callback_never_returns_word (hfork := hfork) h_code h_sel
       h_dec h_size h_wf h_fresh h_short exc)
 
 /-- **`token ≠ self` ⇒ settles with some error.**  The weak form of
@@ -2906,6 +2914,7 @@ theorem settles_with_error_of_allowance_below_amount {sevm : Sevm} {pre : Devm}
     (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
       [receiver, token, amount] data)
     (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_wf : Mem.Wf pre.memory) (h_fresh : Mem.Reads pre.memory [])
     (h_low : ∀ (a : Adr) (sc mid : Devm),
       CallbackBoundary sevm sevm.currentTarget a amount data sc mid →
@@ -2913,7 +2922,7 @@ theorem settles_with_error_of_allowance_below_amount {sevm : Sevm} {pre : Devm}
         < amount) :
     ∃ e post, exec ⟨0, sevm, pre⟩ = .error (e, post) :=
   exec_error_of_no_success
-    (fun _post exc => no_success_of_allowance_below_amount h_code h_sel h_dec
+    (fun _post exc => no_success_of_allowance_below_amount (hfork := hfork) h_code h_sel h_dec
       h_size h_wf h_fresh h_low exc)
 
 /-- **A receiver balance below `amount` ⇒ settles with some error.**  The weak
@@ -2926,13 +2935,14 @@ theorem settles_with_error_of_balance_below_amount {sevm : Sevm} {pre : Devm}
     (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
       [receiver, token, amount] data)
     (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_wf : Mem.Wf pre.memory) (h_fresh : Mem.Reads pre.memory [])
     (h_low : ∀ (a : Adr) (sc mid : Devm),
       CallbackBoundary sevm sevm.currentTarget a amount data sc mid →
       (Devm.getStor mid sevm.currentTarget).get a.toB256 < amount) :
     ∃ e post, exec ⟨0, sevm, pre⟩ = .error (e, post) :=
   exec_error_of_no_success
-    (fun _post exc => no_success_of_balance_below_amount h_code h_sel h_dec
+    (fun _post exc => no_success_of_balance_below_amount (hfork := hfork) h_code h_sel h_dec
       h_size h_wf h_fresh h_low exc)
 
 /-! ### Frame-level restoration under a no-success premise
@@ -3063,6 +3073,7 @@ theorem rollback_of_callback_never_magic {msg : Msg} {benv : Benv} {xl : Xlot}
     (h_dec : Sevm.DecodesCallWithTail (initSevm (msg.withBenv benv))
       flashLoanSelector [receiver, token, amount] data)
     (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (hfork : CoveredFork (initSevm (msg.withBenv benv)).benvStat.fork)
     (h_wf : Mem.Wf (initDevm (msg.withBenv benv)).memory)
     (h_fresh : Mem.Reads (initDevm (msg.withBenv benv)).memory [])
     (h_never : ∀ (a : Adr) (sc mid : Devm),
@@ -3073,7 +3084,7 @@ theorem rollback_of_callback_never_magic {msg : Msg} {benv : Benv} {xl : Xlot}
       out.state = msg.benv.state ∧
       out.transientStorage = msg.tenv.transientStorage :=
   Blanc.rollback_of_no_success h_pm h_fill h_bt h_prec
-    (fun _ exc => no_success_of_callback_never_magic h_code h_sel h_dec h_size
+    (fun _ exc => no_success_of_callback_never_magic (hfork := hfork) h_code h_sel h_dec h_size
       h_wf h_fresh h_never exc)
 
 /-- **Returndata shorter than a word ⇒ the frame settled with an error, rolled
@@ -3100,6 +3111,7 @@ theorem rollback_of_callback_never_returns_word {msg : Msg} {benv : Benv}
     (h_dec : Sevm.DecodesCallWithTail (initSevm (msg.withBenv benv))
       flashLoanSelector [receiver, token, amount] data)
     (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (hfork : CoveredFork (initSevm (msg.withBenv benv)).benvStat.fork)
     (h_wf : Mem.Wf (initDevm (msg.withBenv benv)).memory)
     (h_fresh : Mem.Reads (initDevm (msg.withBenv benv)).memory [])
     (h_short : ∀ (a : Adr) (sc mid : Devm),
@@ -3110,7 +3122,7 @@ theorem rollback_of_callback_never_returns_word {msg : Msg} {benv : Benv}
       out.state = msg.benv.state ∧
       out.transientStorage = msg.tenv.transientStorage :=
   Blanc.rollback_of_no_success h_pm h_fill h_bt h_prec
-    (fun _ exc => no_success_of_callback_never_returns_word h_code h_sel h_dec
+    (fun _ exc => no_success_of_callback_never_returns_word (hfork := hfork) h_code h_sel h_dec
       h_size h_wf h_fresh h_short exc)
 
 /-- **`token ≠ self` ⇒ the frame settled with an error, rolled back.**  The
@@ -3228,6 +3240,7 @@ theorem rollback_of_allowance_below_amount {msg : Msg} {benv : Benv} {xl : Xlot}
     (h_dec : Sevm.DecodesCallWithTail (initSevm (msg.withBenv benv))
       flashLoanSelector [receiver, token, amount] data)
     (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (hfork : CoveredFork (initSevm (msg.withBenv benv)).benvStat.fork)
     (h_wf : Mem.Wf (initDevm (msg.withBenv benv)).memory)
     (h_fresh : Mem.Reads (initDevm (msg.withBenv benv)).memory [])
     (h_low : ∀ (a : Adr) (sc mid : Devm),
@@ -3239,7 +3252,7 @@ theorem rollback_of_allowance_below_amount {msg : Msg} {benv : Benv} {xl : Xlot}
       out.state = msg.benv.state ∧
       out.transientStorage = msg.tenv.transientStorage :=
   Blanc.rollback_of_no_success h_pm h_fill h_bt h_prec
-    (fun _ exc => no_success_of_allowance_below_amount h_code h_sel h_dec h_size
+    (fun _ exc => no_success_of_allowance_below_amount (hfork := hfork) h_code h_sel h_dec h_size
       h_wf h_fresh h_low exc)
 
 /-- **A receiver balance below `amount` ⇒ the frame settled with an error,
@@ -3265,6 +3278,7 @@ theorem rollback_of_balance_below_amount {msg : Msg} {benv : Benv} {xl : Xlot}
     (h_dec : Sevm.DecodesCallWithTail (initSevm (msg.withBenv benv))
       flashLoanSelector [receiver, token, amount] data)
     (h_size : 196 + ceil32 data.length < 2 ^ 256)
+    (hfork : CoveredFork (initSevm (msg.withBenv benv)).benvStat.fork)
     (h_wf : Mem.Wf (initDevm (msg.withBenv benv)).memory)
     (h_fresh : Mem.Reads (initDevm (msg.withBenv benv)).memory [])
     (h_low : ∀ (a : Adr) (sc mid : Devm),
@@ -3276,7 +3290,7 @@ theorem rollback_of_balance_below_amount {msg : Msg} {benv : Benv} {xl : Xlot}
       out.state = msg.benv.state ∧
       out.transientStorage = msg.tenv.transientStorage :=
   Blanc.rollback_of_no_success h_pm h_fill h_bt h_prec
-    (fun _ exc => no_success_of_balance_below_amount h_code h_sel h_dec h_size
+    (fun _ exc => no_success_of_balance_below_amount (hfork := hfork) h_code h_sel h_dec h_size
       h_wf h_fresh h_low exc)
 
 end Fmint
