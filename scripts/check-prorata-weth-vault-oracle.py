@@ -457,14 +457,17 @@ def self_test() -> int:
         sandbox = Path(tmp)
         copied_scripts = sandbox / "scripts"
         copied_scripts.mkdir()
-        for name in (
+        copied_names = (
             "check-prorata-weth-vault-oracle.py",
             "prorata_weth_vault_oracle.py",
             "gen-prorata-weth-vault-vectors.py",
             "prorata-weth-vault-oracle-vectors.json",
             "prorata-oracle-vectors.json",
-        ):
+        )
+        for name in copied_names:
             shutil.copy2(here / name, copied_scripts / name)
+        baseline_bytes = {name: (copied_scripts / name).read_bytes()
+                          for name in copied_names}
         (sandbox / "Blanc").symlink_to(root / "Blanc", target_is_directory=True)
         (sandbox / ".lake").symlink_to(root / ".lake", target_is_directory=True)
         model = sandbox / "scripts" / "prorata_weth_vault_oracle.py"
@@ -474,6 +477,16 @@ def self_test() -> int:
         def run_check() -> subprocess.CompletedProcess[str]:
             return subprocess.run([sys.executable, "-B", str(checker)], cwd=sandbox,
                                   capture_output=True, text=True, env=env)
+
+        baseline = run_check()
+        if baseline.returncode != 0 or not baseline.stdout.splitlines()[-1:] or \
+                not baseline.stdout.splitlines()[-1].startswith("OK — vault oracle: "):
+            print("REGRESSION — vault oracle self-test: disposable baseline is not green")
+            return 1
+        if any((copied_scripts / name).read_bytes() != data
+               for name, data in baseline_bytes.items()):
+            print("REGRESSION — vault oracle self-test: green baseline changed copied inputs")
+            return 1
 
         for label, needle, old, new in probes:
             if original.count(old) != 1:
@@ -488,22 +501,23 @@ def self_test() -> int:
                 missed.append(f"{label}: perturbed, and the batteries still passed")
             elif "REGRESSION — vault oracle:" not in output or needle not in output:
                 missed.append(f"{label}: did not reach its intended battery ({needle!r})")
-            model.write_text(original)
-            restored = run_check()
-            if restored.returncode != 0:
-                missed.append(f"{label}: removing only the mutation did not restore green")
+            model.write_bytes(baseline_bytes[model.name])
+            changed = [name for name, data in baseline_bytes.items()
+                       if (copied_scripts / name).read_bytes() != data]
+            if changed:
+                missed.append(f"{label}: removing only the mutation did not restore "
+                              f"green baseline bytes: {', '.join(changed)}")
             elif result.returncode != 0 and "REGRESSION — vault oracle:" in output and needle in output:
                 diagnostic = next(line for line in output.splitlines() if needle in line)
-                caught_controls.append(f"{label}: {diagnostic}; removal restored green")
+                caught_controls.append(f"{label}: {diagnostic}; removal restored green baseline bytes")
                 control_records.append({
                     "label": label,
                     "expectedDiagnostic": needle,
                     "mutant": {"argv": [sys.executable, "-B", str(checker)],
                                "cwd": str(sandbox), "returncode": result.returncode,
                                "stdout": result.stdout, "stderr": result.stderr},
-                    "restored": {"argv": [sys.executable, "-B", str(checker)],
-                                 "cwd": str(sandbox), "returncode": restored.returncode,
-                                 "stdout": restored.stdout, "stderr": restored.stderr},
+                    "restored": {"byteIdenticalToGreenBaseline": True,
+                                 "files": list(copied_names)},
                 })
     if missed:
         for message in missed:
