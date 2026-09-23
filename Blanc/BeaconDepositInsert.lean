@@ -12,6 +12,12 @@ namespace Blanc.BeaconDeposit
 open Jaune
 open Jaune.Ninst Blanc.Ninst
 
+private lemma insert_afterSload_stateGas
+    {sevm : Sevm} {base : Devm} {key : B256} :
+    (afterSload sevm base key).stateGas = base.stateGas := by
+  unfold afterSload
+  split <;> rfl
+
 private theorem insertionLoopBit_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {memory : Mem} {oldCount shiftedSize node height : B256}
@@ -20,10 +26,10 @@ private theorem insertionLoopBit_runCompiledTo
     (hroom : stack.length < 1022)
     (hinner : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨((1 : B256) &&& shiftedSize) :: height :: stack, memory, K⟩)
+        ⟨((1 : B256) &&& shiftedSize) :: height :: stack, memory, K, base.stateGas⟩)
       (insertionLive <?> insertionDead) ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨height :: stack, memory, K + 12⟩)
+      (base.setMach ⟨height :: stack, memory, K + 12, base.stateGas⟩)
       insertionLoop ex := by
   have hoff : (shiftedSizeWord * 32).toNat = 608 := by
     decide +kernel
@@ -44,7 +50,7 @@ private theorem insertionLoopBit_runCompiledTo
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mload_of
@@ -64,13 +70,13 @@ private theorem insertionLoopBit_runCompiledTo
         exact hreadMem)
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [List.length_cons]; omega)) ?_
-  simp only [Devm.setMach_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := 1) (c := 3) (G := K + 3)
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_binary (r := .and) (f := B256.and)
@@ -80,7 +86,7 @@ private theorem insertionLoopBit_runCompiledTo
       (by rintro ⟨⟩) rfl rfl rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [List.length_cons]; omega)) ?_
-  simpa only [Devm.setMach_setMach, Devm.memory_setMach] using hinner
+  simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using hinner
 
 /-- Select the live insertion arm in exactly 26 gas. -/
 theorem insertionLoopLive_dispatch_runCompiledTo
@@ -91,10 +97,10 @@ theorem insertionLoopLive_dispatch_runCompiledTo
     (hbit : ((1 : B256) &&& shiftedSize) ≠ 0)
     (hroom : stack.length < 1022)
     (harm : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨height :: stack, memory, K⟩)
+      (base.setMach ⟨height :: stack, memory, K, base.stateGas⟩)
       insertionLive ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨height :: stack, memory, K + 26⟩)
+      (base.setMach ⟨height :: stack, memory, K + 26, base.stateGas⟩)
       insertionLoop ex := by
   apply insertionLoopBit_runCompiledTo hmem hroom
   exact Func.runCompiledTo_branch_succ
@@ -104,7 +110,7 @@ theorem insertionLoopLive_dispatch_runCompiledTo
     (by simp only [Devm.stack_setMach, List.length_cons]; omega)
     (by simp only [Devm.gasLeft_setMach, gVerylow, gHigh, gJumpdest])
     (by
-      simpa only [Devm.setMach_setMach, Devm.memory_setMach] using harm)
+      simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using harm)
 
 /-- Select the dead insertion arm in exactly 25 gas. -/
 theorem insertionLoopDead_dispatch_runCompiledTo
@@ -115,10 +121,10 @@ theorem insertionLoopDead_dispatch_runCompiledTo
     (hbit : ((1 : B256) &&& shiftedSize) = 0)
     (hroom : stack.length < 1022)
     (harm : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨height :: stack, memory, K⟩)
+      (base.setMach ⟨height :: stack, memory, K, base.stateGas⟩)
       insertionDead ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨height :: stack, memory, K + 25⟩)
+      (base.setMach ⟨height :: stack, memory, K + 25, base.stateGas⟩)
       insertionLoop ex := by
   apply insertionLoopBit_runCompiledTo hmem hroom
   exact Func.runCompiledTo_branch_zero
@@ -127,7 +133,7 @@ theorem insertionLoopDead_dispatch_runCompiledTo
     (by simp only [Devm.stack_setMach, List.length_cons]; omega)
     (by simp only [Devm.gasLeft_setMach, gVerylow, gHigh])
     (by
-      simpa only [Devm.setMach_setMach, Devm.memory_setMach] using harm)
+      simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using harm)
 
 private theorem insertionStageLoadedLeft_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
@@ -138,10 +144,10 @@ private theorem insertionStageLoadedLeft_runCompiledTo
     (htail : Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨height :: stack,
-          (memory.write 0 left.toBytes).write 32 node.toBytes, K⟩)
+          (memory.write 0 left.toBytes).write 32 node.toBytes, K, base.stateGas⟩)
       rest ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨left :: height :: stack, memory, K + 17⟩)
+      (base.setMach ⟨left :: height :: stack, memory, K + 17, base.stateGas⟩)
       (mstoreAt 0 +++ loadWord nodeWord +++ mstoreAt 1 +++ rest) ex := by
   let M1 := memory.write 0 left.toBytes
   have hmem1 : InsertionMemoryCarrier M1 oldCount shiftedSize node := by
@@ -168,7 +174,7 @@ private theorem insertionStageLoadedLeft_runCompiledTo
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mstore_of
@@ -180,15 +186,15 @@ private theorem insertionStageLoadedLeft_runCompiledTo
         decide +kernel))
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       rfl) ?_
-  simp only [Devm.setMach_setMach, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
   change Func.RunCompiledTo fs sevm
-    (base.setMach ⟨height :: stack, M1, K + 12⟩) _ ex
+    (base.setMach ⟨height :: stack, M1, K + 12, base.stateGas⟩) _ ex
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := 640) (c := 3) (G := K + 9)
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mload_of
@@ -198,7 +204,7 @@ private theorem insertionStageLoadedLeft_runCompiledTo
       (by
         have hext :
             (base.setMach
-              ⟨(640 : B256) :: height :: stack, M1, K + 9⟩).extCost
+              ⟨(640 : B256) :: height :: stack, M1, K + 9, base.stateGas⟩).extCost
                 [⟨(640 : B256).toNat, 32⟩] = 0 := by
           apply Devm.extCost_zero_of_le
           · rw [hmem1.size_eq]
@@ -209,13 +215,13 @@ private theorem insertionStageLoadedLeft_runCompiledTo
       hnodeRead hnodeMem
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [List.length_cons]; omega)) ?_
-  simp only [Devm.setMach_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := 32) (c := 3) (G := K + 3)
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mstore_of
       (i := 32) (v := node) (s := height :: stack)
@@ -226,11 +232,12 @@ private theorem insertionStageLoadedLeft_runCompiledTo
         (by rw [hmem1.size_eq]; decide +kernel))
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       rfl) ?_
-  simpa only [Devm.setMach_setMach, Devm.memory_setMach, M1,
+  simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach, M1,
     show (32 : B256).toNat = 32 by decide +kernel] using htail
 
 private theorem insertionDeadLoad_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {memory : Mem} {height left : B256} {stack : List B256}
     {K : Nat} {rest : Func} {ex : Execution}
     (hval : base.getStorVal sevm.currentTarget
@@ -238,12 +245,12 @@ private theorem insertionDeadLoad_runCompiledTo
     (hroom : stack.length < 1022)
     (htail : Func.RunCompiledTo fs sevm
       ((afterSload sevm base (branchBase + height)).setMach
-        ⟨left :: height :: stack, memory, K + 17⟩)
+        ⟨left :: height :: stack, memory, K + 17, base.stateGas⟩)
       rest ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨height :: stack, memory,
-          K + 26 + sloadCost sevm base (branchBase + height)⟩)
+          K + 26 + sloadCost sevm base (branchBase + height), base.stateGas⟩)
       (dup 0 ::: pushB256 branchBase ::: add ::: sload ::: rest) ex := by
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_dup (n := 0) (w := height)
@@ -251,7 +258,7 @@ private theorem insertionDeadLoad_runCompiledTo
       rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := branchBase) (c := 3)
@@ -259,7 +266,7 @@ private theorem insertionDeadLoad_runCompiledTo
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_binary (r := .add) (f := (· + ·))
@@ -269,9 +276,9 @@ private theorem insertionDeadLoad_runCompiledTo
       (by rintro ⟨⟩) rfl rfl rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       (by simp only [List.length_cons]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
   exact Func.RunCompiledTo.next
-    (Ninst.runCompiled_sload_selected hval
+    (Ninst.runCompiled_sload_selected hfork hval
       (by simp only [List.length_cons]; omega))
     htail
 
@@ -279,6 +286,7 @@ private theorem insertionDeadLoad_runCompiledTo
 the state-dependent storage read. -/
 theorem insertionDeadStage_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {memory : Mem} {oldCount shiftedSize node height left : B256}
     {stack : List B256} {K : Nat} {ex : Execution}
     (hmem : InsertionMemoryCarrier memory oldCount shiftedSize node)
@@ -288,20 +296,22 @@ theorem insertionDeadStage_runCompiledTo
     (htail : Func.RunCompiledTo fs sevm
       ((afterSload sevm base (branchBase + height)).setMach
         ⟨height :: stack,
-          (memory.write 0 left.toBytes).write 32 node.toBytes, K⟩)
+          (memory.write 0 left.toBytes).write 32 node.toBytes, K, base.stateGas⟩)
       (sha64 0 nodeWord (.call insertionContinuationSlot)) ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨height :: stack, memory,
-          K + 26 + sloadCost sevm base (branchBase + height)⟩)
+          K + 26 + sloadCost sevm base (branchBase + height), base.stateGas⟩)
       insertionDead ex := by
-  apply insertionDeadLoad_runCompiledTo hval hroom
+  apply insertionDeadLoad_runCompiledTo (hfork := hfork) hval hroom
+  rw [← insert_afterSload_stateGas (key := branchBase + height)] at htail ⊢
   apply insertionStageLoadedLeft_runCompiledTo hmem hroom
   exact htail
 
 /-- Select and stage one dead insertion-loop iteration. -/
 theorem insertionLoopDead_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {memory : Mem} {oldCount shiftedSize node height left : B256}
     {stack : List B256} {K : Nat} {ex : Execution}
     (hmem : InsertionMemoryCarrier memory oldCount shiftedSize node)
@@ -312,18 +322,18 @@ theorem insertionLoopDead_runCompiledTo
     (htail : Func.RunCompiledTo fs sevm
       ((afterSload sevm base (branchBase + height)).setMach
         ⟨height :: stack,
-          (memory.write 0 left.toBytes).write 32 node.toBytes, K⟩)
+          (memory.write 0 left.toBytes).write 32 node.toBytes, K, base.stateGas⟩)
       (sha64 0 nodeWord (.call insertionContinuationSlot)) ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨height :: stack, memory,
-          K + 51 + sloadCost sevm base (branchBase + height)⟩)
+          K + 51 + sloadCost sevm base (branchBase + height), base.stateGas⟩)
       insertionLoop ex := by
   let C := sloadCost sevm base (branchBase + height)
   have harm : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨height :: stack, memory, K + 26 + C⟩)
+      (base.setMach ⟨height :: stack, memory, K + 26 + C, base.stateGas⟩)
       insertionDead ex :=
-    insertionDeadStage_runCompiledTo hmem hval hroom htail
+    insertionDeadStage_runCompiledTo (hfork := hfork) hmem hval hroom htail
   have hdispatch :=
     insertionLoopDead_dispatch_runCompiledTo
       (K := K + 26 + C) hmem hbit hroom harm
@@ -341,10 +351,10 @@ theorem insertionContinuation_runCompiledTo
     (hloop : fs[insertionLoopSlot]? = some insertionLoop)
     (htail : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨[height + 1], memory.write 608 (size >>> 1).toBytes, K⟩)
+        ⟨[height + 1], memory.write 608 (size >>> 1).toBytes, K, base.stateGas⟩)
       insertionLoop ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[height], memory, K + 36⟩)
+      (base.setMach ⟨[height], memory, K + 36, base.stateGas⟩)
       insertionContinuation ex := by
   have hoff : (shiftedSizeWord * 32).toNat = 608 := by
     decide +kernel
@@ -367,7 +377,7 @@ theorem insertionContinuation_runCompiledTo
       (by
         simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
         omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mload_of
@@ -385,7 +395,7 @@ theorem insertionContinuation_runCompiledTo
           Mem.read_snd_eq_self (memExtSize_of_le hmod (by omega))])
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [List.length_cons, List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
       (w := (1 : B256)) (c := gVerylow) (G := K + 27)
@@ -394,7 +404,7 @@ theorem insertionContinuation_runCompiledTo
       (by
         simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
         omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_binary
@@ -406,7 +416,7 @@ theorem insertionContinuation_runCompiledTo
       (by simp only [show (1 : B256).toNat = 1 by decide +kernel])
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [List.length_cons, List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
       (w := shiftedSizeWord * 32) (c := gVerylow) (G := K + 21)
@@ -415,7 +425,7 @@ theorem insertionContinuation_runCompiledTo
       (by
         simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
         omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mstore_of
@@ -425,7 +435,7 @@ theorem insertionContinuation_runCompiledTo
       (Devm.extCost_zero_of_le hmod (by rw [hoff]; omega))
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       rfl) ?_
-  simp only [Devm.setMach_setMach, hoff]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, hoff]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
       (w := (1 : B256)) (c := gVerylow) (G := K + 15)
@@ -434,7 +444,7 @@ theorem insertionContinuation_runCompiledTo
       (by
         simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
         omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_binary
@@ -446,14 +456,14 @@ theorem insertionContinuation_runCompiledTo
       (B256.add_comm (xs := (1 : B256)) (ys := height))
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   exact Func.runCompiledTo_call' (G := K) hloop
     (by
       simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
       omega)
     (by simp only [Devm.gasLeft_setMach, gVerylow, gMid, gJumpdest])
     (by
-      simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+      simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
         Devm.memory_setMach] using htail)
 
 /-- Run the shared SHA-256 and insertion-continuation tail from a staged pair.
@@ -463,6 +473,7 @@ exposed memory carrier records the digest in word 20 before word 19 is shifted.
 -/
 theorem insertionShaTail_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {oldCount size left right height : B256} {K : Nat}
     (pair : InsertionPairMemoryCarrier
       base.memory oldCount size left right)
@@ -493,10 +504,10 @@ theorem insertionShaTail_runCompiledTo
         Func.RunCompiledTo fs sevm
           (callPost.setMach
             ⟨[height + 1],
-              callPost.memory.write 608 (size >>> 1).toBytes, K⟩)
+              callPost.memory.write 608 (size >>> 1).toBytes, K, callPost.stateGas⟩)
           insertionLoop ex →
         Func.RunCompiledTo fs sevm
-          (base.setMach ⟨[height], base.memory, K + 285⟩)
+          (base.setMach ⟨[height], base.memory, K + 285, base.stateGas⟩)
           (sha64 0 nodeWord (.call insertionContinuationSlot)) ex := by
   have hzero : ((0 : B256) * 32).toNat = 0 := by
     decide +kernel
@@ -510,7 +521,7 @@ theorem insertionShaTail_runCompiledTo
   obtain ⟨callPost, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
       hlogs, houtput, herror, _htransfer, hlift⟩ :=
-    sha64_success_prefix_runCompiledTo
+    sha64_success_prefix_runCompiledTo (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := base)
       (inputWord := 0) (outputWord := nodeWord)
       (stack := [height]) (success := .call insertionContinuationSlot)
@@ -537,13 +548,13 @@ theorem insertionShaTail_runCompiledTo
   intro ex htail
   have hinsertion : Func.RunCompiledTo fs sevm
       (callPost.setMach
-        ⟨[height], callPost.memory, K + 36⟩)
+        ⟨[height], callPost.memory, K + 36, callPost.stateGas⟩)
       insertionContinuation ex :=
     insertionContinuation_runCompiledTo
       hcarrier hinsertionLoop htail
   have hsuccess : Func.RunCompiledTo fs sevm
       (callPost.setMach
-        ⟨[height], callPost.memory, K + 48⟩)
+        ⟨[height], callPost.memory, K + 48, callPost.stateGas⟩)
       (.call insertionContinuationSlot) ex := by
     exact Func.runCompiledTo_call' (G := K + 36) hinsertionContinuation
       (by
@@ -551,7 +562,7 @@ theorem insertionShaTail_runCompiledTo
         omega)
       (by simp only [Devm.gasLeft_setMach, gVerylow, gMid, gJumpdest])
       (by
-        simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+        simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
           Devm.memory_setMach] using hinsertion)
   have hwhole := hlift hsuccess
   simpa only [sha64SuccessCost_zero_node] using hwhole
@@ -560,6 +571,7 @@ theorem insertionShaTail_runCompiledTo
 work costs 20 gas in addition to the selected warm/cold `SSTORE` charge. -/
 theorem insertionLive_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {memory : Mem} {oldCount shiftedSize node height : B256}
     {K : Nat}
     (hmem : InsertionMemoryCarrier memory oldCount shiftedSize node)
@@ -569,10 +581,10 @@ theorem insertionLive_runCompiledTo
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[height], memory,
-          K + 20 + sstoreCost sevm base (branchBase + height) node⟩)
+          K + 20 + sstoreCost sevm base (branchBase + height) node, base.stateGas⟩)
       insertionLive
       (.ok ((afterSstore sevm base (branchBase + height) node).setMach
-        ⟨[], memory, K⟩)) := by
+        ⟨[], memory, K, base.stateGas⟩)) := by
   have hmod : memory.size % 32 = 0 := by
     rw [hmem.size_eq]
   have hnodeRead : Bytes.toB256 (memory.read 640 32).1 = node :=
@@ -592,7 +604,7 @@ theorem insertionLive_runCompiledTo
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := branchBase) (c := 3)
@@ -601,7 +613,7 @@ theorem insertionLive_runCompiledTo
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_binary (r := .add) (f := (· + ·))
@@ -611,7 +623,7 @@ theorem insertionLive_runCompiledTo
       (by rintro ⟨⟩) rfl rfl rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       (by simp only [List.length_cons, List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := 640) (c := 3)
       (G := K + 8 + sstoreCost sevm base (branchBase + height) node)
@@ -619,7 +631,7 @@ theorem insertionLive_runCompiledTo
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mload_of
@@ -636,29 +648,30 @@ theorem insertionLive_runCompiledTo
       hnodeRead hnodeMem
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [List.length_cons, List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_swap (n := 0)
       (S := (branchBase + height) :: node :: [height])
       (G := K + 2 + sstoreCost sevm base (branchBase + height) node)
       rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_sstore_selected_setMach
+    (Ninst.runCompiled_sstore_selected_setMach hfork
       (base := base) (key := branchBase + height) (value := node)
       (stack := [height]) (memory := memory) (G := K + 2)
       hsentry hstatic) ?_
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pop (G := K) rfl
       (by simp only [Devm.gasLeft_setMach, gBase])) ?_
-  simp only [Devm.setMach_setMach, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
   exact Func.RunCompiledTo.last rfl
 
 /-- Dispatch to the first live branch, store the accumulated node, and stop.
 The fixed work costs 46 gas in addition to the selected `SSTORE` charge. -/
 theorem insertionLoopLive_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {memory : Mem} {oldCount shiftedSize node height : B256}
     {K : Nat}
     (hmem : InsertionMemoryCarrier memory oldCount shiftedSize node)
@@ -669,17 +682,17 @@ theorem insertionLoopLive_runCompiledTo
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[height], memory,
-          K + 46 + sstoreCost sevm base (branchBase + height) node⟩)
+          K + 46 + sstoreCost sevm base (branchBase + height) node, base.stateGas⟩)
       insertionLoop
       (.ok ((afterSstore sevm base (branchBase + height) node).setMach
-        ⟨[], memory, K⟩)) := by
+        ⟨[], memory, K, base.stateGas⟩)) := by
   let C := sstoreCost sevm base (branchBase + height) node
   have harm : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[height], memory, K + 20 + C⟩)
+      (base.setMach ⟨[height], memory, K + 20 + C, base.stateGas⟩)
       insertionLive
       (.ok ((afterSstore sevm base (branchBase + height) node).setMach
-        ⟨[], memory, K⟩)) :=
-    insertionLive_runCompiledTo hmem hsentry hstatic
+        ⟨[], memory, K, base.stateGas⟩)) :=
+    insertionLive_runCompiledTo (hfork := hfork) hmem hsentry hstatic
   have hdispatch :=
     insertionLoopLive_dispatch_runCompiledTo
       (K := K + 20 + C) hmem hbit
@@ -693,6 +706,7 @@ and enter the insertion loop at height zero.  The fixed work costs 38 gas in
 addition to the selected count-slot `SSTORE` charge. -/
 theorem commitDeposit_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {memory : Mem} {oldCount node : B256}
     {K : Nat} {ex : Execution}
     (hmem : InsertionStartMemoryCarrier memory oldCount node)
@@ -702,13 +716,13 @@ theorem commitDeposit_runCompiledTo
     (hloop : fs[insertionLoopSlot]? = some insertionLoop)
     (htail : Func.RunCompiledTo fs sevm
       ((afterSstore sevm base depositCountSlot (oldCount + 1)).setMach
-        ⟨[0], memory.write 608 (oldCount + 1).toBytes, K⟩)
+        ⟨[0], memory.write 608 (oldCount + 1).toBytes, K, base.stateGas⟩)
       insertionLoop ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[], memory,
           K + 38 +
-            sstoreCost sevm base depositCountSlot (oldCount + 1)⟩)
+            sstoreCost sevm base depositCountSlot (oldCount + 1), base.stateGas⟩)
       commitDeposit ex := by
   have hmod : memory.size % 32 = 0 := by
     rw [hmem.size_eq]
@@ -730,7 +744,7 @@ theorem commitDeposit_runCompiledTo
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mload_of
@@ -747,7 +761,7 @@ theorem commitDeposit_runCompiledTo
       holdRead holdMem
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := 1) (c := 3)
       (G := K + 29 +
@@ -756,7 +770,7 @@ theorem commitDeposit_runCompiledTo
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_binary (r := .add) (f := (· + ·))
@@ -768,7 +782,7 @@ theorem commitDeposit_runCompiledTo
       (B256.add_comm (xs := (1 : B256)) (ys := oldCount))
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       (by simp only [List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_dup (n := 0) (w := oldCount + 1)
       (G := K + 23 +
@@ -777,7 +791,7 @@ theorem commitDeposit_runCompiledTo
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := 608) (c := 3)
@@ -787,7 +801,7 @@ theorem commitDeposit_runCompiledTo
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mstore_of
@@ -801,7 +815,7 @@ theorem commitDeposit_runCompiledTo
         decide +kernel))
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       rfl) ?_
-  simp only [Devm.setMach_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach,
     show (608 : B256).toNat = 608 by decide +kernel]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := depositCountSlot) (c := 3)
@@ -811,10 +825,10 @@ theorem commitDeposit_runCompiledTo
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_sstore_selected_setMach
+    (Ninst.runCompiled_sstore_selected_setMach hfork
       (base := base) (key := depositCountSlot) (value := oldCount + 1)
       (stack := [])
       (memory := memory.write 608 (oldCount + 1).toBytes)
@@ -824,14 +838,14 @@ theorem commitDeposit_runCompiledTo
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   exact Func.runCompiledTo_call' (G := K) hloop
     (by simp only [Devm.stack_setMach, List.length_cons,
       List.length_nil]; omega)
     (by simp only [Devm.gasLeft_setMach, gVerylow, gMid, gJumpdest])
     (by
-      simpa only [Devm.setMach_setMach, Devm.stack_setMach,
+      simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
         Devm.memory_setMach] using htail)
 
 end Blanc.BeaconDeposit

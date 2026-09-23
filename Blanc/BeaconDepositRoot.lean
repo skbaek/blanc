@@ -20,6 +20,12 @@ private lemma root_stateGas_addAccessedStorageKey
     {base : Devm} {target : Adr} {key : B256} :
     (addAccessedStorageKey base target key).stateGas = base.stateGas := rfl
 
+private lemma root_afterSload_stateGas
+    {sevm : Sevm} {base : Devm} {key : B256} :
+    (afterSload sevm base key).stateGas = base.stateGas := by
+  unfold afterSload
+  split <;> rfl
+
 private lemma root_addAccessedStorageKey_setMach_setMach
     {base : Devm} {target : Adr} {key : B256} {mach mach' : Mach} :
     (addAccessedStorageKey (base.setMach mach) target key).setMach mach' =
@@ -37,7 +43,7 @@ theorem rootSload_runCompiled
         ⟨key :: stack, memory, G + sloadCost sevm base key, base.stateGas⟩)
       sload
       ((afterSload sevm base key).setMach
-        ⟨value :: stack, memory, G, (afterSload sevm base key).stateGas⟩) := by
+        ⟨value :: stack, memory, G, base.stateGas⟩) := by
   by_cases hwarm :
       (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
         base.accessedStorageKeys
@@ -180,7 +186,7 @@ private theorem rootLiveLoad_runCompiledTo
     (hroom : stack.length < 1022)
     (htail : Func.RunCompiledTo fs sevm
       ((afterSload sevm base (branchBase + height)).setMach
-        ⟨left :: height :: stack, memory, K + 17, (afterSload sevm base (branchBase + height)).stateGas⟩)
+        ⟨left :: height :: stack, memory, K + 17, base.stateGas⟩)
       rest ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
@@ -231,7 +237,7 @@ theorem rootLiveStage_runCompiledTo
     (htail : Func.RunCompiledTo fs sevm
       ((afterSload sevm base (branchBase + height)).setMach
         ⟨height :: stack,
-          (memory.write 0 left.toBytes).write 32 node.toBytes, K, (afterSload sevm base (branchBase + height)).stateGas⟩)
+          (memory.write 0 left.toBytes).write 32 node.toBytes, K, base.stateGas⟩)
       (sha64 0 nodeWord (.call rootContinuationSlot)) ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
@@ -239,6 +245,7 @@ theorem rootLiveStage_runCompiledTo
           K + 26 + sloadCost sevm base (branchBase + height), base.stateGas⟩)
       rootLiveStep ex := by
   apply rootLiveLoad_runCompiledTo (hfork := hfork) hval hroom
+  rw [← root_afterSload_stateGas (key := branchBase + height)] at htail ⊢
   apply rootStageLoadedLeft_runCompiledTo hmem hroom
   exact htail
 
@@ -326,7 +333,7 @@ private theorem rootDeadLoadRight_runCompiledTo
     (htail : Func.RunCompiledTo fs sevm
       ((afterSload sevm base (zeroHashBase + height)).setMach
         ⟨height :: stack,
-          (memory.write 0 node.toBytes).write 32 right.toBytes, K, (afterSload sevm base (zeroHashBase + height)).stateGas⟩)
+          (memory.write 0 node.toBytes).write 32 right.toBytes, K, base.stateGas⟩)
       rest ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
@@ -373,7 +380,7 @@ private theorem rootDeadLoadRight_runCompiledTo
           M1, K + 6 + sloadCost sevm base (zeroHashBase + height), base.stateGas⟩)
       sload
       ((afterSload sevm base (zeroHashBase + height)).setMach
-        ⟨right :: height :: stack, M1, K + 6, (afterSload sevm base (zeroHashBase + height)).stateGas⟩) :=
+        ⟨right :: height :: stack, M1, K + 6, base.stateGas⟩) :=
     rootSload_runCompiled (hfork := hfork) hval
       (by simp only [List.length_cons]; omega)
   refine Func.RunCompiledTo.next hsload ?_
@@ -412,7 +419,7 @@ theorem rootDeadStage_runCompiledTo
     (htail : Func.RunCompiledTo fs sevm
       ((afterSload sevm base (zeroHashBase + height)).setMach
         ⟨height :: stack,
-          (memory.write 0 node.toBytes).write 32 right.toBytes, K, (afterSload sevm base (zeroHashBase + height)).stateGas⟩)
+          (memory.write 0 node.toBytes).write 32 right.toBytes, K, base.stateGas⟩)
       (sha64 0 nodeWord (.call rootContinuationSlot)) ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
@@ -607,7 +614,7 @@ theorem rootLoopLive_runCompiledTo
     (htail : Func.RunCompiledTo fs sevm
       ((afterSload sevm base (branchBase + height)).setMach
         ⟨height :: stack,
-          (memory.write 0 left.toBytes).write 32 node.toBytes, K, (afterSload sevm base (branchBase + height)).stateGas⟩)
+          (memory.write 0 left.toBytes).write 32 node.toBytes, K, base.stateGas⟩)
       (sha64 0 nodeWord (.call rootContinuationSlot)) ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
@@ -641,7 +648,7 @@ theorem rootLoopDead_runCompiledTo
     (htail : Func.RunCompiledTo fs sevm
       ((afterSload sevm base (zeroHashBase + height)).setMach
         ⟨height :: stack,
-          (memory.write 0 node.toBytes).write 32 right.toBytes, K, (afterSload sevm base (zeroHashBase + height)).stateGas⟩)
+          (memory.write 0 node.toBytes).write 32 right.toBytes, K, base.stateGas⟩)
       (sha64 0 nodeWord (.call rootContinuationSlot)) ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
