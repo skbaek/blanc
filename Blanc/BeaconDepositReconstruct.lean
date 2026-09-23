@@ -99,12 +99,12 @@ theorem reconstructLoadStore_runCompiledTo
     (htail : Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨stack,
-          memory.write (targetWord * 32).toNat value.toBytes, K⟩)
+          memory.write (targetWord * 32).toNat value.toBytes, K, base.stateGas⟩)
       rest ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨stack, memory,
-          K + reconstructLoadStoreCost sourceWord targetWord⟩)
+          K + reconstructLoadStoreCost sourceWord targetWord, base.stateGas⟩)
       (loadWord sourceWord +++ mstoreAt targetWord +++ rest) ex := by
   let csource := pushCost ((sourceWord * 32).toBytes.sig)
   let ctarget := pushCost ((targetWord * 32).toBytes.sig)
@@ -123,7 +123,7 @@ theorem reconstructLoadStore_runCompiledTo
           csource, ctarget]
         omega)
       (by simp only [Devm.stack_setMach]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mload_of
@@ -134,7 +134,7 @@ theorem reconstructLoadStore_runCompiledTo
         have hext :
             (base.setMach
               ⟨(sourceWord * 32) :: stack, memory,
-                K + 3 + ctarget + 3⟩).extCost
+                K + 3 + ctarget + 3, base.stateGas⟩).extCost
               [⟨(sourceWord * 32).toNat, 32⟩] = 0 :=
           Devm.extCost_zero_of_le hmod hsourceFit
         rw [hext]
@@ -144,7 +144,7 @@ theorem reconstructLoadStore_runCompiledTo
         simp only [Devm.gasLeft_setMach]
         omega)
       (by omega)) ?_
-  simp only [Devm.setMach_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
       (w := targetWord * 32) (c := ctarget) (G := K + 3)
@@ -155,7 +155,7 @@ theorem reconstructLoadStore_runCompiledTo
       (by
         simp only [Devm.stack_setMach, List.length_cons]
         omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mstore_of
@@ -165,7 +165,7 @@ theorem reconstructLoadStore_runCompiledTo
       (Devm.extCost_zero_of_le hmod htargetFit)
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       rfl) ?_
-  simpa only [Devm.setMach_setMach, Devm.memory_setMach] using htail
+  simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using htail
 
 /-- Exact cost of pushing one word and storing it at a memory word. -/
 def reconstructPushStoreCost (value targetWord : B256) : Nat :=
@@ -183,11 +183,11 @@ theorem reconstructPushStore_runCompiledTo
     (htail : Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨stack,
-          memory.write (targetWord * 32).toNat value.toBytes, K⟩)
+          memory.write (targetWord * 32).toNat value.toBytes, K, base.stateGas⟩)
       rest ex) :
     Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨stack, memory, K + reconstructPushStoreCost value targetWord⟩)
+        ⟨stack, memory, K + reconstructPushStoreCost value targetWord, base.stateGas⟩)
       (pushB256 value ::: mstoreAt targetWord +++ rest) ex := by
   let cvalue := pushCost value.toBytes.sig
   let ctarget := pushCost ((targetWord * 32).toBytes.sig)
@@ -201,7 +201,7 @@ theorem reconstructPushStore_runCompiledTo
           cvalue, ctarget]
         omega)
       (by simp only [Devm.stack_setMach]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
@@ -213,7 +213,7 @@ theorem reconstructPushStore_runCompiledTo
       (by
         simp only [Devm.stack_setMach, List.length_cons]
         omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mstore_of
@@ -223,7 +223,7 @@ theorem reconstructPushStore_runCompiledTo
       (Devm.extCost_zero_of_le hmod htargetFit)
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       rfl) ?_
-  simpa only [Devm.setMach_setMach, Devm.memory_setMach] using htail
+  simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using htail
 
 @[simp] theorem reconstructPushStoreCost_zero_one :
     reconstructPushStoreCost 0 1 = 8 := by
@@ -260,6 +260,7 @@ theorem reconstructPushStore_runCompiledTo
 /-- Run the direct pubkey SHA-256 site and establish the node register. -/
 theorem reconstructPubkeySha_runCompiledTo
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount : B256} {stack : List B256}
     {success : Func} {K : Nat}
@@ -284,9 +285,9 @@ theorem reconstructPubkeySha_runCompiledTo
       ReconstructMetaCarrier sevm origin callPost ∧
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩) success ex →
+          (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩) success ex →
         Func.RunCompiledTo fs sevm
-          (base.setMach ⟨stack, base.memory, K + 238⟩)
+          (base.setMach ⟨stack, base.memory, K + 238, base.stateGas⟩)
           (sha64 6 nodeWord success) ex := by
   have hinput : ((6 : B256) * 32).toNat = 192 := by
     decide +kernel
@@ -307,7 +308,7 @@ theorem reconstructPubkeySha_runCompiledTo
   obtain ⟨callPost, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
       hlogs, houtputMeta, herror, htransfer, hlift⟩ :=
-    sha64_success_prefix_runCompiledTo
+    sha64_success_prefix_runCompiledTo (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := base)
       (inputWord := 6) (outputWord := nodeWord)
       (stack := stack) (success := success) (K := K)
@@ -337,6 +338,7 @@ theorem reconstructPubkeySha_runCompiledTo
 memory expansion, and establish the intermediate register. -/
 theorem reconstructSignatureFirstSha_runCompiledTo
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount node : B256} {stack : List B256}
     {success : Func} {K : Nat}
@@ -363,9 +365,9 @@ theorem reconstructSignatureFirstSha_runCompiledTo
       ReconstructMetaCarrier sevm origin callPost ∧
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩) success ex →
+          (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩) success ex →
         Func.RunCompiledTo fs sevm
-          (base.setMach ⟨stack, base.memory, K + 242⟩)
+          (base.setMach ⟨stack, base.memory, K + 242, base.stateGas⟩)
           (sha64 13 intermediateWord success) ex := by
   have hinput : ((13 : B256) * 32).toNat = 416 := by
     decide +kernel
@@ -386,7 +388,7 @@ theorem reconstructSignatureFirstSha_runCompiledTo
   obtain ⟨callPost, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
       hlogs, houtputMeta, herror, htransfer, hlift⟩ :=
-    sha64_success_prefix_runCompiledTo_ext
+    sha64_success_prefix_runCompiledTo_ext (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := base)
       (inputWord := 13) (outputWord := intermediateWord)
       (stack := stack) (success := success) (K := K) (ext := 4)
@@ -476,6 +478,7 @@ theorem reconstructedDepositNode_eq_model
 memory expansion, and establish all three reconstruction registers. -/
 theorem reconstructSignatureSecondSha_runCompiledTo
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount node intermediate : B256} {stack : List B256}
     {success : Func} {K : Nat}
@@ -503,16 +506,16 @@ theorem reconstructSignatureSecondSha_runCompiledTo
       ReconstructMetaCarrier sevm origin callPost ∧
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩) success ex →
+          (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩) success ex →
         Func.RunCompiledTo fs sevm
-          (base.setMach ⟨stack, base.memory, K + 259⟩)
+          (base.setMach ⟨stack, base.memory, K + 259, base.stateGas⟩)
           (loadWord 15 +++ mstoreAt 0 +++
             pushB256 0 ::: mstoreAt 1 +++
             sha64 0 secondIntermediateWord success) ex := by
   let tailWord := Bytes.toB256 signatureTail
   let stagedMemory :=
     reconstructSignatureSecondStagedMemory base.memory signatureTail
-  let shaBase := base.setMach ⟨stack, stagedMemory, K⟩
+  let shaBase := base.setMach ⟨stack, stagedMemory, K, base.stateGas⟩
   have hpair : ReconstructIntermediatePairMemoryCarrier stagedMemory
       pubkeyInput signatureFirst signatureTail withdrawal amountPadded
       oldCount amount node intermediate tailWord 0 736 := by
@@ -529,7 +532,7 @@ theorem reconstructSignatureSecondSha_runCompiledTo
       hzero, houtput, hpair.intermediate.node.source.size_eq]
     decide +kernel
   have hmetaSha : ReconstructMetaCarrier sevm origin shaBase := by
-    exact hmetaBase.setMach ⟨stack, stagedMemory, K⟩
+    exact hmetaBase.setMach ⟨stack, stagedMemory, K, _⟩
   have hnodelegSha :
       getDelegatedCodeAddress (shaBase.getCode 2) = none := by
     rw [hmetaSha.code 2]
@@ -540,7 +543,7 @@ theorem reconstructSignatureSecondSha_runCompiledTo
   obtain ⟨callPost, _hstack, hmemory, _hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
       hlogs, houtputMeta, herror, htransfer, hlift⟩ :=
-    sha64_success_prefix_runCompiledTo_ext
+    sha64_success_prefix_runCompiledTo_ext (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := shaBase)
       (inputWord := 0) (outputWord := secondIntermediateWord)
       (stack := stack) (success := success) (K := K) (ext := 3)
@@ -584,9 +587,9 @@ theorem reconstructSignatureSecondSha_runCompiledTo
   intro ex htail
   have hshaBase := hlift htail
   have hsha : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨stack, stagedMemory, K + 240⟩)
+      (base.setMach ⟨stack, stagedMemory, K + 240, base.stateGas⟩)
       (sha64 0 secondIntermediateWord success) ex := by
-    simpa only [shaBase, Devm.setMach_setMach, Devm.memory_setMach,
+    simpa only [shaBase, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
       sha64SuccessCost_zero_secondIntermediate] using hshaBase
   let firstMemory :=
     base.memory.write 0 (Bytes.toB256 signatureTail).toBytes
@@ -599,7 +602,7 @@ theorem reconstructSignatureSecondSha_runCompiledTo
         (by rw [B256.length_toBytes]; omega)
         (by rw [B256.length_toBytes]; omega)
   have hzeroStage : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨stack, firstMemory, K + 248⟩)
+      (base.setMach ⟨stack, firstMemory, K + 248, base.stateGas⟩)
       (pushB256 0 ::: mstoreAt 1 +++
         sha64 0 secondIntermediateWord success) ex := by
     have h := reconstructPushStore_runCompiledTo
@@ -636,6 +639,7 @@ def reconstructPairStagedMemory
 /-- Execute any covered steady-state staged-pair SHA site. -/
 theorem reconstructPairSha_runCompiledTo
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount node intermediate second : B256}
     {leftWord rightWord outputWord left right : B256}
@@ -666,18 +670,18 @@ theorem reconstructPairSha_runCompiledTo
       ReconstructMetaCarrier sevm origin callPost ∧
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩) success ex →
+          (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩) success ex →
         Func.RunCompiledTo fs sevm
           (base.setMach
             ⟨stack, base.memory,
               K + sha64SuccessCost 0 outputWord +
                 reconstructLoadStoreCost rightWord 1 +
-                reconstructLoadStoreCost leftWord 0⟩)
+                reconstructLoadStoreCost leftWord 0, base.stateGas⟩)
           (loadWord leftWord +++ mstoreAt 0 +++
             loadWord rightWord +++ mstoreAt 1 +++
             sha64 0 outputWord success) ex := by
   let stagedMemory := reconstructPairStagedMemory base.memory left right
-  let shaBase := base.setMach ⟨stack, stagedMemory, K⟩
+  let shaBase := base.setMach ⟨stack, stagedMemory, K, base.stateGas⟩
   have hpair : ReconstructPairMemoryCarrier stagedMemory
       pubkeyInput signatureFirst signatureTail withdrawal amountPadded
       oldCount amount node intermediate second left right 768 := by
@@ -697,7 +701,7 @@ theorem reconstructPairSha_runCompiledTo
       hpair.registers.intermediate.node.source.size_eq, memExtsSize]
     rw [hinputCovered, houtputCovered]
   have hmetaSha : ReconstructMetaCarrier sevm origin shaBase := by
-    exact hmetaBase.setMach ⟨stack, stagedMemory, K⟩
+    exact hmetaBase.setMach ⟨stack, stagedMemory, K, _⟩
   have hnodelegSha :
       getDelegatedCodeAddress (shaBase.getCode 2) = none := by
     rw [hmetaSha.code 2]
@@ -708,7 +712,7 @@ theorem reconstructPairSha_runCompiledTo
   obtain ⟨callPost, _hstack, hmemory, _hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
       hlogs, houtputMeta, herror, htransfer, hlift⟩ :=
-    sha64_success_prefix_runCompiledTo
+    sha64_success_prefix_runCompiledTo (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := shaBase)
       (inputWord := 0) (outputWord := outputWord)
       (stack := stack) (success := success) (K := K)
@@ -732,9 +736,9 @@ theorem reconstructPairSha_runCompiledTo
   have hshaBase := hlift htail
   have hsha : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨stack, stagedMemory, K + sha64SuccessCost 0 outputWord⟩)
+        ⟨stack, stagedMemory, K + sha64SuccessCost 0 outputWord, base.stateGas⟩)
       (sha64 0 outputWord success) ex := by
-    simpa only [shaBase, Devm.setMach_setMach, Devm.memory_setMach] using
+    simpa only [shaBase, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using
       hshaBase
   let firstMemory := base.memory.write 0 left.toBytes
   have hfirstCarrier : ReconstructRegistersMemoryCarrier firstMemory
@@ -748,7 +752,7 @@ theorem reconstructPairSha_runCompiledTo
       (base.setMach
         ⟨stack, firstMemory,
           K + sha64SuccessCost 0 outputWord +
-            reconstructLoadStoreCost rightWord 1⟩)
+            reconstructLoadStoreCost rightWord 1, base.stateGas⟩)
       (loadWord rightWord +++ mstoreAt 1 +++
         sha64 0 outputWord success) ex := by
     apply reconstructLoadStore_runCompiledTo
@@ -782,6 +786,7 @@ theorem reconstructPairSha_runCompiledTo
 /-- Combine the two signature-half digests into the signature root. -/
 theorem reconstructSignatureRootSha_runCompiledTo
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount node intermediate second : B256}
     {stack : List B256} {success : Func} {K : Nat}
@@ -805,9 +810,9 @@ theorem reconstructSignatureRootSha_runCompiledTo
       ReconstructMetaCarrier sevm origin callPost ∧
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩) success ex →
+          (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩) success ex →
         Func.RunCompiledTo fs sevm
-          (base.setMach ⟨stack, base.memory, K + 260⟩)
+          (base.setMach ⟨stack, base.memory, K + 260, base.stateGas⟩)
           (loadWord intermediateWord +++ mstoreAt 0 +++
             loadWord secondIntermediateWord +++ mstoreAt 1 +++
             sha64 0 intermediateWord success) ex := by
@@ -820,7 +825,7 @@ theorem reconstructSignatureRootSha_runCompiledTo
         (by rw [B256.length_toBytes]; omega)
         (by rw [B256.length_toBytes]; omega)
   obtain ⟨callPost, hmemory, hreturn, hmeta, hlift⟩ :=
-    reconstructPairSha_runCompiledTo
+    reconstructPairSha_runCompiledTo (hfork := hfork)
       (fs := fs) (sevm := sevm) (origin := origin) (base := base)
       (hregisters := hregisters) (hmetaBase := hmetaBase)
       (leftWord := intermediateWord) (rightWord := secondIntermediateWord)
@@ -847,6 +852,7 @@ theorem reconstructSignatureRootSha_runCompiledTo
 /-- Combine the pubkey root with the withdrawal-credentials word. -/
 theorem reconstructPubkeyWithdrawalSha_runCompiledTo
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount node intermediate second : B256}
     {stack : List B256} {success : Func} {K : Nat}
@@ -871,9 +877,9 @@ theorem reconstructPubkeyWithdrawalSha_runCompiledTo
       ReconstructMetaCarrier sevm origin callPost ∧
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩) success ex →
+          (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩) success ex →
         Func.RunCompiledTo fs sevm
-          (base.setMach ⟨stack, base.memory, K + 260⟩)
+          (base.setMach ⟨stack, base.memory, K + 260, base.stateGas⟩)
           (loadWord nodeWord +++ mstoreAt 0 +++
             loadWord 9 +++ mstoreAt 1 +++
             sha64 0 nodeWord success) ex := by
@@ -886,7 +892,7 @@ theorem reconstructPubkeyWithdrawalSha_runCompiledTo
         (by rw [B256.length_toBytes]; omega)
         (by rw [B256.length_toBytes]; omega)
   obtain ⟨callPost, hmemory, hreturn, hmeta, hlift⟩ :=
-    reconstructPairSha_runCompiledTo
+    reconstructPairSha_runCompiledTo (hfork := hfork)
       (fs := fs) (sevm := sevm) (origin := origin) (base := base)
       (hregisters := hregisters) (hmetaBase := hmetaBase)
       (leftWord := nodeWord) (rightWord := 9)
@@ -915,6 +921,7 @@ theorem reconstructPubkeyWithdrawalSha_runCompiledTo
 /-- Combine the padded amount word with the signature root. -/
 theorem reconstructAmountSignatureSha_runCompiledTo
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount node intermediate second : B256}
     {stack : List B256} {success : Func} {K : Nat}
@@ -939,9 +946,9 @@ theorem reconstructAmountSignatureSha_runCompiledTo
       ReconstructMetaCarrier sevm origin callPost ∧
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩) success ex →
+          (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩) success ex →
         Func.RunCompiledTo fs sevm
-          (base.setMach ⟨stack, base.memory, K + 260⟩)
+          (base.setMach ⟨stack, base.memory, K + 260, base.stateGas⟩)
           (loadWord 11 +++ mstoreAt 0 +++
             loadWord intermediateWord +++ mstoreAt 1 +++
             sha64 0 intermediateWord success) ex := by
@@ -955,7 +962,7 @@ theorem reconstructAmountSignatureSha_runCompiledTo
         (by rw [B256.length_toBytes]; omega)
         (by rw [B256.length_toBytes]; omega)
   obtain ⟨callPost, hmemory, hreturn, hmeta, hlift⟩ :=
-    reconstructPairSha_runCompiledTo
+    reconstructPairSha_runCompiledTo (hfork := hfork)
       (fs := fs) (sevm := sevm) (origin := origin) (base := base)
       (hregisters := hregisters) (hmetaBase := hmetaBase)
       (leftWord := 11) (rightWord := intermediateWord)
@@ -987,6 +994,7 @@ theorem reconstructAmountSignatureSha_runCompiledTo
 deposit-data node. -/
 theorem reconstructFinishSha_runCompiledTo
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount node intermediate second : B256}
     {stack : List B256} {success : Func} {K : Nat}
@@ -1010,9 +1018,9 @@ theorem reconstructFinishSha_runCompiledTo
       ReconstructMetaCarrier sevm origin callPost ∧
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm
-          (callPost.setMach ⟨stack, callPost.memory, K⟩) success ex →
+          (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩) success ex →
         Func.RunCompiledTo fs sevm
-          (base.setMach ⟨stack, base.memory, K + 260⟩)
+          (base.setMach ⟨stack, base.memory, K + 260, base.stateGas⟩)
           (loadWord nodeWord +++ mstoreAt 0 +++
             loadWord intermediateWord +++ mstoreAt 1 +++
             sha64 0 nodeWord success) ex := by
@@ -1025,7 +1033,7 @@ theorem reconstructFinishSha_runCompiledTo
         (by rw [B256.length_toBytes]; omega)
         (by rw [B256.length_toBytes]; omega)
   obtain ⟨callPost, hmemory, hreturn, hmeta, hlift⟩ :=
-    reconstructPairSha_runCompiledTo
+    reconstructPairSha_runCompiledTo (hfork := hfork)
       (fs := fs) (sevm := sevm) (origin := origin) (base := base)
       (hregisters := hregisters) (hmetaBase := hmetaBase)
       (leftWord := nodeWord) (rightWord := intermediateWord)
@@ -1054,6 +1062,7 @@ theorem reconstructFinishSha_runCompiledTo
 final deposit-data node left in word 20. -/
 theorem reconstructDepositDataNode_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
     {oldCount amount : B256} {stack : List B256}
     {success : Func} {K : Nat}
@@ -1085,9 +1094,9 @@ theorem reconstructDepositDataNode_runCompiledTo
       ReconstructMetaCarrier sevm base finalPost ∧
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm
-          (finalPost.setMach ⟨stack, finalPost.memory, K⟩) success ex →
+          (finalPost.setMach ⟨stack, finalPost.memory, K, finalPost.stateGas⟩) success ex →
         Func.RunCompiledTo fs sevm
-          (base.setMach ⟨stack, base.memory, K + 1779⟩)
+          (base.setMach ⟨stack, base.memory, K + 1779, base.stateGas⟩)
           (reconstructDepositDataNode success) ex := by
   let pubkeyNode := Bytes.sha256 pubkeyInput
   let signatureFirstNode := Bytes.sha256 signatureFirst
@@ -1124,7 +1133,7 @@ theorem reconstructDepositDataNode_runCompiledTo
   have hmeta0 := ReconstructMetaCarrier.refl sevm base
   obtain ⟨post1, _hstack1, _hmemory1, hnode1, _hgas1, _hreturn1,
       hmeta1, hlift1⟩ :=
-    reconstructPubkeySha_runCompiledTo
+    reconstructPubkeySha_runCompiledTo (hfork := hfork)
       (fs := fs) (sevm := sevm) (origin := base) (base := base)
       (source := source) (hmetaBase := hmeta0)
       (stack := stack)
@@ -1134,7 +1143,7 @@ theorem reconstructDepositDataNode_runCompiledTo
   obtain ⟨hnode1⟩ := hnode1
   obtain ⟨post2, _hstack2, _hmemory2, hintermediate2,
       _hgas2, _hreturn2, hmeta2, hlift2⟩ :=
-    reconstructSignatureFirstSha_runCompiledTo
+    reconstructSignatureFirstSha_runCompiledTo (hfork := hfork)
       (fs := fs) (sevm := sevm) (origin := base) (base := post1)
       (hnode := hnode1) (hmetaBase := hmeta1)
       (stack := stack) (success := signatureSecondHalf)
@@ -1143,7 +1152,7 @@ theorem reconstructDepositDataNode_runCompiledTo
   obtain ⟨hintermediate2⟩ := hintermediate2
   obtain ⟨post3, _hmemory3, hregisters3, _hreturn3,
       hmeta3, hlift3⟩ :=
-    reconstructSignatureSecondSha_runCompiledTo
+    reconstructSignatureSecondSha_runCompiledTo (hfork := hfork)
       (fs := fs) (sevm := sevm) (origin := base) (base := post2)
       (hintermediate := hintermediate2) (hmetaBase := hmeta2)
       (stack := stack) (success := signatureRoot)
@@ -1151,7 +1160,7 @@ theorem reconstructDepositDataNode_runCompiledTo
       hnodeleg hwarm hpre hdepth (by omega) hroom
   obtain ⟨hregisters3⟩ := hregisters3
   obtain ⟨post4, hregisters4, _hreturn4, hmeta4, hlift4⟩ :=
-    reconstructSignatureRootSha_runCompiledTo
+    reconstructSignatureRootSha_runCompiledTo (hfork := hfork)
       (fs := fs) (sevm := sevm) (origin := base) (base := post3)
       (hregisters := hregisters3) (hmetaBase := hmeta3)
       (stack := stack) (success := pubkeyAndWithdrawal)
@@ -1159,7 +1168,7 @@ theorem reconstructDepositDataNode_runCompiledTo
       hnodeleg hwarm hpre hdepth (by omega) hroom
   obtain ⟨hregisters4⟩ := hregisters4
   obtain ⟨post5, hregisters5, _hreturn5, hmeta5, hlift5⟩ :=
-    reconstructPubkeyWithdrawalSha_runCompiledTo
+    reconstructPubkeyWithdrawalSha_runCompiledTo (hfork := hfork)
       (fs := fs) (sevm := sevm) (origin := base) (base := post4)
       (hregisters := hregisters4) (hmetaBase := hmeta4)
       (stack := stack) (success := amountAndSignature)
@@ -1167,14 +1176,14 @@ theorem reconstructDepositDataNode_runCompiledTo
       hnodeleg hwarm hpre hdepth (by omega) hroom
   obtain ⟨hregisters5⟩ := hregisters5
   obtain ⟨post6, hregisters6, _hreturn6, hmeta6, hlift6⟩ :=
-    reconstructAmountSignatureSha_runCompiledTo
+    reconstructAmountSignatureSha_runCompiledTo (hfork := hfork)
       (fs := fs) (sevm := sevm) (origin := base) (base := post5)
       (hregisters := hregisters5) (hmetaBase := hmeta5)
       (stack := stack) (success := finish) (K := K + 260)
       hnodeleg hwarm hpre hdepth (by omega) hroom
   obtain ⟨hregisters6⟩ := hregisters6
   obtain ⟨finalPost, hregisters7, hreturn7, hmeta7, hlift7⟩ :=
-    reconstructFinishSha_runCompiledTo
+    reconstructFinishSha_runCompiledTo (hfork := hfork)
       (fs := fs) (sevm := sevm) (origin := base) (base := post6)
       (hregisters := hregisters6) (hmetaBase := hmeta6)
       (stack := stack) (success := success) (K := K)

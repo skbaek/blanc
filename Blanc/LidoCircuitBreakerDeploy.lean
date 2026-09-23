@@ -421,6 +421,12 @@ private theorem constructorFuncEffectCounts_eq (body : Func) :
             ConstructorEffectCounts.add, Func.sourceSiteCount,
             sourceSstoreSiteCount,
             sourceTstoreSiteCount, sourceExternalCallSiteCount, ih]
+      | dupn imm | swapn imm | exchange imm =>
+          simp [constructorFuncEffectCounts,
+            constructorInstructionEffectCounts,
+            ConstructorEffectCounts.add, Func.sourceSiteCount,
+            sourceSstoreSiteCount,
+            sourceTstoreSiteCount, sourceExternalCallSiteCount, ih]
   | branch left right ihLeft ihRight =>
       simp [constructorFuncEffectCounts, ConstructorEffectCounts.add,
         Func.sourceSiteCount,
