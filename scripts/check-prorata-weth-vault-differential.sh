@@ -14,21 +14,21 @@
 # against the model.
 #
 # Every case is chosen so its divisions are inexact -- floor and ceil differ --
-# because a case that divides evenly cannot observe a rounding direction. The
-# gate was mutation-tested against five perturbations of the oracle (the offset
-# and each of the four rounding directions) and catches all five; the
-# revert and event-order checks were separately shown to reject a valid call
-# and a swapped event sequence.
+# because a case that divides evenly cannot observe a rounding direction.
 #
-# Gas is deliberately not compared. The oracle does not model it, so a gas row
-# here would be a golden value dressed up as a differential.
+# Evidence economy (scripts/GATES.md): the matrix covers only what no theorem
+# states -- the compiled runtime's fidelity to the frozen statement at its
+# boundaries, agreement with the compiled OpenZeppelin reference, the
+# reference's identity, and measurements. EVM conformance is Jaune's concern
+# and is not replayed here.
 #
 # Needs the Jaune fixture runner built; exits 2 if it is absent, rather than
 # passing vacuously.
 #
 # Finite evidence, never a theorem.
 #
-# Usage: scripts/check-prorata-weth-vault-differential.sh
+# Usage: scripts/check-prorata-weth-vault-differential.sh [--write-measurements]
+#        scripts/check-prorata-weth-vault-differential.sh --self-test
 #
 # CLI contract: exit 0 if and only if the gate passes; output ends with one
 # unambiguous verdict line.
@@ -37,13 +37,4 @@ set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
-export EELS_ROOT
-PY="${EELS_ROOT}/venv/bin/python"
-if [ ! -x "$PY" ]; then
-  echo "REGRESSION — vault differential: frozen EELS python missing at $PY" >&2
-  exit 2
-fi
-
-PYTHONPATH="${EELS_ROOT}/src${PYTHONPATH:+:$PYTHONPATH}" \
-  exec "$PY" "$SCRIPT_DIR/check-prorata-weth-vault-differential.py" "$@"
+exec python3 -B "$SCRIPT_DIR/check-prorata-weth-vault-differential.py" "$@"
