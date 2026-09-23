@@ -28,7 +28,17 @@ theorem mainnet_rulesAt_eq_named
   | error e => simp [hf] at h
   | ok f =>
     rw [hf] at h
-    cases f <;> simp [Fork.rules, Fork.rules?] at h <;> simp_all
+    have hcov := mainnetChainConfig_covered timestamp f hf
+    simp only [Fork.rules, bind, Except.bind, Except.mapError,
+      Except.ok.injEq] at h
+    subst h
+    cases f
+    all_goals first
+      | exact Or.inl rfl
+      | exact Or.inr (Or.inl rfl)
+      | exact Or.inr (Or.inr (Or.inl rfl))
+      | exact Or.inr (Or.inr (Or.inr rfl))
+      | exact absurd hcov (by decide)
 
 /-- At and after the final modeled mainnet activation, configured lookup
 selects BPO2. -/
@@ -167,7 +177,7 @@ theorem deployment_reachable_residual_messageRedemption_enabled_mainnet
       rules dp ca u recipient q future.state msg) :
     MessageRedemptionEnabled dp ca u recipient q future.state msg :=
   deployment_reachable_residual_messageRedemption_enabled
-    hroot hcheckpoint hq henv
+    hroot mainnetChainConfig_covered hcheckpoint hq henv
 
 theorem deployment_reachable_residual_transactionRedemption_enabled_mainnet
     {rules : ForkRules} {dp : DeployParams} {ca u recipient : Adr}
@@ -184,7 +194,7 @@ theorem deployment_reachable_residual_transactionRedemption_enabled_mainnet
       rules dp ca u recipient q benv bout tx index) :
     TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
   deployment_reachable_residual_transactionRedemption_enabled
-    hroot hcheckpoint hq hentry henv
+    hroot mainnetChainConfig_covered hcheckpoint hq hentry henv
 
 theorem deployment_reachable_residual_selfMessageRedemption_enabled_mainnet
     {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
@@ -199,7 +209,7 @@ theorem deployment_reachable_residual_selfMessageRedemption_enabled_mainnet
     (henv : AdmissibleSelfRedemptionMessage rules dp ca u q future.state msg) :
     MessageRedemptionEnabled dp ca u u q future.state msg :=
   deployment_reachable_residual_selfMessageRedemption_enabled
-    hroot hcheckpoint hq henv
+    hroot mainnetChainConfig_covered hcheckpoint hq henv
 
 theorem
     deployment_reachable_residual_selfTransactionRedemption_enabled_mainnet
@@ -216,7 +226,7 @@ theorem
     (henv : AdmissibleSelfRedemptionTx rules dp ca u q benv bout tx index) :
     TransactionRedemptionEnabled dp ca u u q benv bout tx index :=
   deployment_reachable_residual_selfTransactionRedemption_enabled
-    hroot hcheckpoint hq hentry henv
+    hroot mainnetChainConfig_covered hcheckpoint hq hentry henv
 
 theorem deployment_reachable_booked_messageRedemption_enabled_mainnet
     {rules : ForkRules} {dp : DeployParams} {ca u recipient : Adr}
@@ -228,7 +238,7 @@ theorem deployment_reachable_booked_messageRedemption_enabled_mainnet
       rules dp ca u recipient q future.state msg) :
     MessageRedemptionEnabled dp ca u recipient q future.state msg :=
   deployment_reachable_booked_messageRedemption_enabled
-    hroot hfuture hq henv
+    hroot mainnetChainConfig_covered hfuture hq henv
 
 theorem deployment_reachable_booked_transactionRedemption_enabled_mainnet
     {rules : ForkRules} {dp : DeployParams} {ca u recipient : Adr}
@@ -242,7 +252,7 @@ theorem deployment_reachable_booked_transactionRedemption_enabled_mainnet
       rules dp ca u recipient q benv bout tx index) :
     TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
   deployment_reachable_booked_transactionRedemption_enabled
-    hroot hfuture hentry hq henv
+    hroot mainnetChainConfig_covered hfuture hentry hq henv
 
 theorem deployment_reachable_booked_selfTransactionRedemption_enabled_mainnet
     {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
@@ -255,7 +265,7 @@ theorem deployment_reachable_booked_selfTransactionRedemption_enabled_mainnet
     (henv : AdmissibleSelfRedemptionTx rules dp ca u q benv bout tx index) :
     TransactionRedemptionEnabled dp ca u u q benv bout tx index :=
   deployment_reachable_booked_selfTransactionRedemption_enabled
-    hroot hfuture hentry hq henv
+    hroot mainnetChainConfig_covered hfuture hentry hq henv
 
 theorem
     deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSender_mainnet
@@ -272,7 +282,7 @@ theorem
     (hrecovered : recoverSender benv.stat.chainId tx = .ok u) :
     TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
   deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSender
-    hroot hfuture hentry hq henv hrecovered
+    hroot mainnetChainConfig_covered hfuture hentry hq henv hrecovered
 
 theorem deployment_reachable_future_redeemable_mainnet
     {dp : DeployParams} {ca u : Adr}
@@ -282,7 +292,7 @@ theorem deployment_reachable_future_redeemable_mainnet
     (hfuture : BlockChain.ReachUsing mainnetChainConfig checkpoint future) :
     ∃ history, FutureRedemptionGuarantee
       mainnetChainConfig dp ca u checkpoint future history :=
-  deployment_reachable_future_redeemable hroot hcheckpoint hfuture
+  deployment_reachable_future_redeemable hroot mainnetChainConfig_covered hcheckpoint hfuture
 
 theorem deployment_reachable_future_dualSelector_redeemable_mainnet
     {dp : DeployParams} {ca u : Adr}
@@ -293,7 +303,7 @@ theorem deployment_reachable_future_dualSelector_redeemable_mainnet
     ∃ history, FutureDualSelectorRedemptionGuarantee
       mainnetChainConfig dp ca u checkpoint future history :=
   deployment_reachable_future_dualSelector_redeemable
-    hroot hcheckpoint hfuture
+    hroot mainnetChainConfig_covered hcheckpoint hfuture
 
 theorem deployment_reachable_future_redeemable_allHolders_mainnet
     {dp : DeployParams} {ca : Adr}
@@ -304,7 +314,7 @@ theorem deployment_reachable_future_redeemable_allHolders_mainnet
     ∃ history, ∀ u : Adr, FutureRedemptionGuarantee
       mainnetChainConfig dp ca u checkpoint future history :=
   deployment_reachable_future_redeemable_allHolders
-    hroot hcheckpoint hfuture
+    hroot mainnetChainConfig_covered hcheckpoint hfuture
 
 theorem deploymentRoot_allowanceQuiescent_mainnet
     {dp : DeployParams} {ca u : Adr} {base deployed : BlockChain}
@@ -320,7 +330,7 @@ theorem deployment_fullWindow_future_redeemable_mainnet
     AllowanceQuiescent ca u deployed.state ∧
       ∃ history, FutureRedemptionGuarantee
         mainnetChainConfig dp ca u deployed future history :=
-  deployment_fullWindow_future_redeemable hroot hfuture
+  deployment_fullWindow_future_redeemable hroot mainnetChainConfig_covered hfuture
 
 theorem deployment_fullWindow_attributionRootAt_ne_checkpoint_mainnet
     {dp : DeployParams} {ca u : Adr} {base deployed future : BlockChain}
@@ -386,7 +396,7 @@ theorem deployment_reachable_dormant_holder_balance_monotone_mainnet
       NoAuthorizingActBy u history →
       bookedBalanceNat deployed.state ca u ≤
         bookedBalanceNat future.state ca u :=
-  deployment_reachable_dormant_holder_balance_monotone hroot hfuture
+  deployment_reachable_dormant_holder_balance_monotone hroot mainnetChainConfig_covered hfuture
 
 theorem deployment_reachable_redeemClaims_anyOrder_mainnet
     {rules : ForkRules} {timestamp : Nat} {dp : DeployParams} {ca : Adr}
