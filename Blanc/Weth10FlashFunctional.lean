@@ -573,7 +573,8 @@ theorem of_rawFlashLoanSuccessTail_step
         callbackInput)
     (h_run :
       Func.Run ((weth10 dp).main :: weth10Aux) sevm sc
-        flashLoanSuccessTail r) :
+        flashLoanSuccessTail r)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ mid settle,
       RawFlashCallbackStepBoundary sevm sevm.currentTarget receiver
         amount inputSize callbackInput sc mid ∧
@@ -588,7 +589,7 @@ theorem of_rawFlashLoanSuccessTail_step
         flashSettle r := by
   simp only [flashLoanSuccessTail] at h_run
   rcases of_run_next h_run with ⟨mid, r_call, h_run⟩
-  rcases of_run_call_val_with_depth_frame h_stack r_call with h_fail | h_ok
+  rcases of_run_call_val_with_depth_frame h_stack r_call hfork with h_fail | h_ok
   · exfalso
     rcases of_run_next h_run with ⟨s1, r_iz, h_run⟩
     have hp1 := prefix_of_iszero r_iz h_fail.1
@@ -795,7 +796,8 @@ theorem of_rawFlashLoanSuccessTail
         callbackInput)
     (h_run :
       Func.Run ((weth10 dp).main :: weth10Aux) sevm sc
-        flashLoanSuccessTail r) :
+        flashLoanSuccessTail r)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ mid settle,
       RawFlashCallbackBoundary sevm sevm.currentTarget receiver
         amount inputSize callbackInput sc mid ∧
@@ -809,7 +811,7 @@ theorem of_rawFlashLoanSuccessTail
       Func.Run ((weth10 dp).main :: weth10Aux) sevm settle
         flashSettle r := by
   rcases of_rawFlashLoanSuccessTail_step dp h_stack h_wf h_reads h_win
-      h_run with
+      h_run hfork with
     ⟨mid, settle, hcallback, hstor, hbal, hcode, hlogs, houtput,
       hwf, hreads', hsettle⟩
   exact ⟨mid, settle, hcallback.toRaw, hstor, hbal, hcode, hlogs,
@@ -835,7 +837,8 @@ theorem of_flashLoanSuccessTail
     (h_size : 196 + ceil32 data.length < 2 ^ 256)
     (h_run :
       Func.Run ((weth10 dp).main :: weth10Aux) sevm sc
-        flashLoanSuccessTail r) :
+        flashLoanSuccessTail r)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ mid settle,
       FlashCallbackBoundary sevm sevm.currentTarget receiver
         amount data sc mid ∧
@@ -857,7 +860,7 @@ theorem of_flashLoanSuccessTail
     exact h_win
   obtain ⟨mid, settle, hraw, hstor, hbal, hcode, hlogs, houtput,
       hwf, hreads, hsettle⟩ :=
-    of_rawFlashLoanSuccessTail dp h_stack h_wf h_reads h_win' h_run
+    of_rawFlashLoanSuccessTail dp h_stack h_wf h_reads h_win' h_run hfork
   refine ⟨mid, settle, ?_, hstor, hbal, hcode, hlogs, houtput,
     hwf, hreads, hsettle⟩
   unfold RawFlashCallbackBoundary at hraw
@@ -2124,7 +2127,8 @@ theorem flashLoan_rawSuccessEffect
     (h_code : some (pre.getCode e.currentTarget).toList =
       Prog.compile (weth10 dp))
     (run : Func.Run ((weth10 dp).main :: weth10Aux) e pre
-      flashLoan post) :
+      flashLoan post)
+    (hfork : CoveredFork e.benvStat.fork) :
     RawFlashLoanSuccessEffect dp e pre post
       (Sevm.argWord e 0) (Sevm.argWord e 1) (Sevm.argWord e 2) := by
   obtain ⟨recipient, sc, g, inputSize, base,
@@ -2155,7 +2159,7 @@ theorem flashLoan_rawSuccessEffect
       hsettleLogs, hsettleOutput, hwfSettle, hreadsSettleEx,
       hsettle⟩ :=
     of_rawFlashLoanSuccessTail dp hstack' hwfSc hreadsRuntime
-      (by rfl) htail'
+      (by rfl) htail' hfork
   obtain ⟨settleImg, hreadsSettle⟩ := hreadsSettleEx
   obtain ⟨callbackLogs, hcallbackLogs⟩ :=
     RawFlashCallbackBoundary.exists_log_segment hcallback
@@ -2182,7 +2186,7 @@ theorem flashLoan_rawSuccessEffect
   have hlogFork := repayment_log_fork (amount := Sevm.argWord e 2)
     rfl hmintLogs' hcallbackLogs hsettleLogs hallowance hburnLogs
   have hexact := flashLoan_exactRelFuncSound dp e.currentTarget
-    rfl h_code (flashExactDepth dp e.currentTarget e.depth) run
+    hfork rfl h_code (flashExactDepth dp e.currentTarget e.depth) run
   have hcounter :
       (Devm.getStor post e.currentTarget).get flashMintedSlot = base := by
     unfold FlashExactRel at hexact
@@ -2212,7 +2216,8 @@ theorem flashLoan_successEffect
     (h_code : some (pre.getCode e.currentTarget).toList =
       Prog.compile (weth10 dp))
     (run : Func.Run ((weth10 dp).main :: weth10Aux) e pre
-      flashLoan post) :
+      flashLoan post)
+    (hfork : CoveredFork e.benvStat.fork) :
     FlashLoanSuccessEffect e pre post receiver token amount data := by
   have h_data_len : data.length < 2 ^ 256 := by
     have hceil := Nat.le_ceil32 data.length
@@ -2281,7 +2286,7 @@ theorem flashLoan_successEffect
   obtain ⟨mid, settle, hcallback, hstorMid, hbalMid, hcodeMid,
       hsettleLogs, hsettleOutput, hwfSettle, hreadsSettleEx,
       hsettle⟩ :=
-    of_flashLoanSuccessTail dp hstack' hwfSc hreadsSc hwin h_size htail'
+    of_flashLoanSuccessTail dp hstack' hwfSc hreadsSc hwin h_size htail' hfork
   obtain ⟨settleImg, hreadsSettle⟩ := hreadsSettleEx
   obtain ⟨callbackLogs, hcallbackLogs⟩ :=
     FlashCallbackBoundary.exists_log_segment hcallback
@@ -2305,7 +2310,7 @@ theorem flashLoan_successEffect
   have hlogFork := repayment_log_fork h2 hmintLogs'
     hcallbackLogs hsettleLogs hallowance hburnLogs
   have hexact := flashLoan_exactRelFuncSound dp e.currentTarget
-    rfl h_code (flashExactDepth dp e.currentTarget e.depth) run
+    hfork rfl h_code (flashExactDepth dp e.currentTarget e.depth) run
   have hcounter :
       (Devm.getStor post e.currentTarget).get flashMintedSlot = base := by
     unfold FlashExactRel at hexact
@@ -2332,7 +2337,8 @@ theorem weth10_flashLoan_rawSuccessEffect
     (h_nonempty : e.data.length.toB256 ≠ 0)
     (h_wf : Mem.Wf pre.memory)
     (h_fresh : Mem.Reads pre.memory [])
-    (exc : Exec 0 e pre (.ok post)) :
+    (exc : Exec 0 e pre (.ok post))
+    (hfork : CoveredFork e.benvStat.fork) :
     e.value = 0 ∧
       RawFlashLoanSuccessEffect dp e pre post
         (Sevm.argWord e 0) (Sevm.argWord e 1) (Sevm.argWord e 2) := by
@@ -2351,7 +2357,7 @@ theorem weth10_flashLoan_rawSuccessEffect
     rw [hmemory]
     exact h_fresh
   have heffect := flashLoan_rawSuccessEffect dp hwfBody hfreshBody
-    hbodyCode hbody
+    hbodyCode hbody hfork
   refine ⟨hvalue, ?_⟩
   unfold RawFlashLoanSuccessEffect at heffect ⊢
   simpa only [hstor, hbal, hcodeFrame, hlogs, houtput] using heffect
@@ -2371,7 +2377,8 @@ theorem weth10_flashLoan_successEffect
     (h_size : 196 + ceil32 data.length < 2 ^ 256)
     (h_wf : Mem.Wf pre.memory)
     (h_fresh : Mem.Reads pre.memory [])
-    (exc : Exec 0 e pre (.ok post)) :
+    (exc : Exec 0 e pre (.ok post))
+    (hfork : CoveredFork e.benvStat.fork) :
     e.value = 0 ∧
       FlashLoanSuccessEffect e pre post receiver token amount data := by
   rcases exec_enters_weth10Nonpayable_logs exc h_code h_sel h_nonempty
@@ -2389,7 +2396,7 @@ theorem weth10_flashLoan_successEffect
     rw [hmemory]
     exact h_fresh
   have heffect := flashLoan_successEffect dp h_dec h_size
-    hwfBody hfreshBody hbodyCode hbody
+    hwfBody hfreshBody hbodyCode hbody hfork
   refine ⟨hvalue, ?_⟩
   unfold FlashLoanSuccessEffect at heffect ⊢
   simpa only [hstor, hbal, hcodeFrame, hlogs, houtput] using heffect
