@@ -262,6 +262,31 @@ class Scratch:
         except gc.GateCacheError:
             pass          # a deliberately malformed registry has no inventory
 
+    def economy(self, gates: list[dict[str, Any]], work: dict[str, list[str]]) -> None:
+        """A registry that names an economy inventory, plus that inventory.
+
+        `work` maps gate id to its work classes.  The runner's audit also
+        runs the economy and CI policy scripts by name when an inventory is
+        named, so stand-ins that exit 0 are written for both: their full
+        validation is not what these controls are about.
+        """
+
+        gc.atomic_json(
+            gc.registry_path(self.root),
+            {"schema": 1, "economy_inventory": "scripts/gate-economy.json", "gates": gates},
+        )
+        gc.atomic_json(
+            self.root / "scripts/gate-economy.json",
+            {"schema": 1, "rows": [{"id": key, "work": value} for key, value in work.items()]},
+        )
+        for stub in ("gate-economy.py", "ci_gate_policy.py"):
+            self.write(f"scripts/{stub}", "raise SystemExit(0)\n")
+        self.catalogue([" ".join(g["command"]) for g in gates], [])
+        try:
+            gc.atomic_write(self.root / gc.INVENTORY_RELATIVE, gc.render_inventory(self.root))
+        except gc.GateCacheError:
+            pass
+
     def catalogue(self, commands: list[str], ci: list[str]) -> None:
         block = "\n".join(commands)
         self.write(
@@ -712,6 +737,206 @@ def control_unrelated_change_still_reuses() -> None:
         s.run()
         s.write("docs/unrelated.md", "different prose\n")
         require(s.disposition("g") == "reused", "an undeclared, unread file must not invalidate")
+
+
+def control_declared_untracked_read_contributes_no_digest() -> None:
+    """`inputs.untracked_reads` is a declaration, never a fingerprint component.
+
+    A harness self-test reads the committed subject it cuts mutants from; the
+    directive fixes its cache inputs at the harness files.  Editing the
+    declared subject must therefore leave the row reused, while editing a
+    fingerprinted harness file still invalidates it, and the inventory must
+    print the declaration with its reason.
+    """
+
+    with scratch() as s:
+        s.write("scripts/harness.txt", "harness\n")
+        s.write("Blanc/Subject.lean", "subject one\n")
+        command = s.passing_gate("g.sh", "ran.txt")
+        s.economy([simple_gate(
+            "g", [command],
+            {
+                "files": ["scripts/harness.txt"],
+                "untracked_reads": [
+                    {"path": "Blanc/Subject.lean",
+                     "reason": "mutation subject; harness-only cache inputs"},
+                ],
+            },
+            "^OK — g.sh: ")], {"g": ["harness-self-test"]})
+        require(s.run() == 0 and s.ran("ran.txt") == 1, "the first run must execute")
+        s.write("Blanc/Subject.lean", "subject two\n")
+        require(s.disposition("g") == "reused",
+                "a declared untracked read must not invalidate the row")
+        _, components = gc.fingerprint(s.root, s.load()["gates"][0])
+        require("untracked_reads" not in components,
+                "an untracked read must contribute no fingerprint component")
+        s.write("scripts/harness.txt", "harness changed\n")
+        require(s.disposition("g") == "fresh",
+                "a fingerprinted harness file must still invalidate")
+        inventory = gc.render_inventory(s.root)
+        require(
+            "- untracked read (declared, contributes no digest): `Blanc/Subject.lean` — "
+            "mutation subject; harness-only cache inputs" in inventory,
+            "the inventory must print the declaration and its reason",
+        )
+
+
+def control_malformed_untracked_reads_are_refused() -> None:
+    """A declaration the runner only half understands is a registry fault."""
+
+    base = {"id": "g", "order": 1, "command": ["x"], "kind": "cacheable",
+            "verdict": {"summary_patterns": ["^OK"]}}
+    cases: list[tuple[str, dict[str, Any]]] = [
+        ("no reason", {"files": ["a"], "untracked_reads": [{"path": "b"}]}),
+        ("blank reason", {"files": ["a"], "untracked_reads": [{"path": "b", "reason": " "}]}),
+        ("extra key", {"files": ["a"],
+                       "untracked_reads": [{"path": "b", "reason": "r", "digest": "x"}]}),
+        ("not a list", {"files": ["a"], "untracked_reads": {"path": "b", "reason": "r"}}),
+        ("empty list", {"files": ["a"], "untracked_reads": []}),
+        ("duplicate path", {"files": ["a"],
+                            "untracked_reads": [{"path": "b", "reason": "r"},
+                                                {"path": "b", "reason": "s"}]}),
+        ("also fingerprinted", {"files": ["a"],
+                                "untracked_reads": [{"path": "a", "reason": "r"}]}),
+        ("code under scripts (.py)", {"files": ["a"],
+                                     "untracked_reads": [{"path": "scripts/helper.py", "reason": "r"}]}),
+        ("code under scripts (.sh)", {"files": ["a"],
+                                     "untracked_reads": [{"path": "scripts/run.sh", "reason": "r"}]}),
+        ("code under scripts (.lean)", {"files": ["a"],
+                                       "untracked_reads": [{"path": "scripts/Check.lean", "reason": "r"}]}),
+        ("code under a named scripts root", {"files": ["a"],
+                                             "untracked_reads": [{"path": "@eels/scripts/x.py", "reason": "r"}]}),
+    ]
+    for label, inputs in cases:
+        with scratch() as s:
+            # The row is a harness self-test, so only the malformation refuses.
+            s.economy([dict(base, inputs=inputs)], {"g": ["harness-self-test"]})
+            try:
+                s.load()
+            except gc.GateCacheError:
+                continue
+            raise ControlFailure(f"malformed untracked read accepted: {label}")
+    # And the well-formed data declaration those cases are variants of is accepted.
+    with scratch() as s:
+        s.economy(
+            [dict(base, inputs={"files": ["a"],
+                                "untracked_reads": [{"path": "scripts/data.json", "reason": "r"}]})],
+            {"g": ["harness-self-test"]},
+        )
+        s.load()
+
+
+def control_untracked_reads_need_a_harness_self_test_row() -> None:
+    """Only a row the economy inventory calls a harness self-test may declare
+    an untracked read; a registry naming no inventory cannot say so and is
+    refused too."""
+
+    base = {"id": "g", "order": 1, "command": ["x"], "kind": "cacheable",
+            "inputs": {"files": ["a"],
+                       "untracked_reads": [{"path": "Blanc/Subject.lean", "reason": "subject"}]},
+            "verdict": {"summary_patterns": ["^OK"]}}
+    with scratch() as s:
+        s.economy([dict(base)], {"g": ["candidate-positive", "static-corpus"]})
+        try:
+            s.load()
+            raise ControlFailure("an untracked read on a non-self-test row was accepted")
+        except gc.GateCacheError as error:
+            require("harness-self-test" in str(error), f"the refusal must name the work class: {error}")
+    with scratch() as s:
+        s.registry([dict(base)])            # no economy inventory named
+        try:
+            s.load()
+            raise ControlFailure("an untracked read with no economy inventory was accepted")
+        except gc.GateCacheError as error:
+            require("harness-self-test" in str(error), f"the refusal must name the work class: {error}")
+    with scratch() as s:
+        s.economy([dict(base)], {"g": ["harness-self-test", "static-corpus"]})
+        s.load()                             # the positive form is accepted
+
+
+def control_non_utf8_and_large_output_cannot_hang_or_drop() -> None:
+    """A stray byte followed by more than a pipe buffer of output must neither
+    kill the reader (which would deadlock the child on a full pipe) nor drop
+    the chunk; the row still passes and its output is fully captured."""
+
+    with scratch() as s:
+        s.write("scripts/x.txt", "one\n")
+        (s.root / "scripts/noisy.py").write_text(
+            "import sys\n"
+            "sys.stdout.buffer.write(b'\\xff not utf-8\\n')\n"
+            "for i in range(3000):\n"
+            "    sys.stdout.buffer.write(b'line %05d ' % i + b'x' * 40 + b'\\n')\n"
+            "sys.stdout.buffer.write(b'OK \\xe2\\x80\\x94 noisy.py: 1/1 fine\\n')\n"
+            "sys.stdout.flush()\n",
+            encoding="utf-8",
+        )
+        s.gate("g.sh", f"#!/bin/sh\nexec {sys.executable} \"$(dirname \"$0\")/noisy.py\"\n")
+        s.registry([simple_gate("g", ["scripts/g.sh"], {"files": ["scripts/x.txt"]},
+                                "^OK — noisy.py: ")])
+        started = time.monotonic()
+        require(s.run() == 0, f"a non-UTF-8 byte must not fail or hang the row:\n{s.output[-2000:]}")
+        require(time.monotonic() - started < 30, "the run must not stall on the pipe")
+        log = gc.run_log_path(s.root).read_text(encoding="utf-8")
+        require("\ufffd not utf-8" in log and "line 02999" in log,
+                "the stray byte is replaced and every later chunk is kept")
+
+
+def control_pump_failure_fails_the_verdict() -> None:
+    """Output that was not fully observed is not evidence: a broken --echo
+    sink or an unwritable run log records a failure and the verdict fails,
+    while the pipe is still drained to the end."""
+
+    class Broken(io.StringIO):
+        def write(self, text: str) -> int:  # type: ignore[override]
+            raise OSError("broken pipe (control)")
+
+    with scratch() as s:
+        (s.root / "scripts/big.py").write_text(
+            "import sys\n"
+            "for i in range(3000):\n"
+            "    sys.stdout.write('line %05d ' % i + 'x' * 40 + '\\n')\n"
+            "sys.stdout.write('OK \\u2014 big.py: 1/1 fine\\n')\n",
+            encoding="utf-8",
+        )
+        command = s.gate("g.sh", f"#!/bin/sh\nexec {sys.executable} \"$(dirname \"$0\")/big.py\"\n")
+        gate = simple_gate("g", [command], {"files": ["scripts/x.txt"]}, "^OK — big.py: ")
+        with contextlib.redirect_stdout(Broken()):
+            verdict, _ = gc.execute(s.root, gate, echo=True)
+        require(not verdict["passed"] and any("--echo sink failed" in p for p in verdict["problems"]),
+                f"a broken echo sink must fail the verdict: {verdict['problems']}")
+        require(verdict["summary"] == ["OK — big.py: 1/1 fine"],
+                "the pipe must still have been drained to its summary")
+        unwritable = s.root / ".lake" / "not-a-file"
+        unwritable.mkdir(parents=True, exist_ok=True)
+        verdict, _ = gc.execute(s.root, gate, echo=False, log_path=unwritable)
+        require(not verdict["passed"] and any("run log unwritable" in p for p in verdict["problems"]),
+                f"an unwritable run log must fail the verdict: {verdict['problems']}")
+
+
+def control_unobtainable_store_lock_costs_records_not_correctness() -> None:
+    """When the store lock cannot be taken within the wait, the run's verdicts
+    stand in its report but no record is claimed as cached, with the reason."""
+
+    with scratch() as s:
+        s.write("scripts/x.txt", "one\n")
+        command = s.passing_gate("g.sh", "ran.txt")
+        s.registry([simple_gate("g", [command], {"files": ["scripts/x.txt"]}, "^OK — g.sh: ")])
+        s.git_init()
+        require(gc.acquire_lock(gc.lock_path(s.root)), "another run holds the store lock")
+        try:
+            with environment({gc.SHARED_STORE_LOCK_WAIT_ENV: "0.3"}):
+                require(s.run() == 0, f"the verdicts must still stand:\n{s.output}")
+        finally:
+            gc.release_lock(gc.lock_path(s.root))
+        require("shared store not written: shared store lock not obtained" in s.output,
+                f"the run must state why nothing was recorded:\n{s.output}")
+        manifest = json.loads(gc.manifest_path(s.root).read_text(encoding="utf-8"))
+        row = next(item for item in manifest["rows"] if item["id"] == "g")
+        require(row["cached"] is False and row["cache_reason"]
+                == "shared store not written: shared store lock not obtained",
+                f"the manifest must say the record was not admitted: {row}")
+        cache, _ = s.cache()
+        require(not cache["gates"].get("g"), "no record may exist for the run")
 
 
 def control_membership_mode_ignores_content() -> None:
@@ -3049,6 +3274,214 @@ def control_stale_owner_metadata_does_not_block_an_unlocked_mutex() -> None:
                 "released diagnostic owner metadata must not persist")
 
 
+LOCK_PROBE = (
+    "import fcntl, sys\n"
+    "with open(sys.argv[1], 'a+') as handle:\n"
+    "    try:\n"
+    "        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)\n"
+    "        print('free')\n"
+    "    except BlockingIOError:\n"
+    "        print('held')\n"
+)
+
+
+def control_shared_store_lock_is_free_while_a_row_runs() -> None:
+    """The store lock spans the store transaction, not the gate bodies.
+
+    A gate body probes both locks from inside the run.  The shared lock must
+    be free -- a two-hour row in this worktree excludes no other worktree --
+    while this worktree's own run lock must be held, so a second run here
+    is still refused for the whole run.
+    """
+
+    with scratch() as s:
+        s.write("scripts/x.txt", "one\n")
+        shared = gc.lock_path(s.root) / "mutex"
+        local = gc.local_lock_path(s.root) / "mutex"
+        # The probe opens the mutex inodes; a run creates them only when it
+        # takes the locks, so make both openable before the run starts.
+        for mutex in (shared, local):
+            mutex.parent.mkdir(parents=True, exist_ok=True)
+            mutex.touch()
+        (s.root / "scripts/probe.py").write_text(LOCK_PROBE, encoding="utf-8")
+        s.gate(
+            "g.sh",
+            "#!/bin/sh\n"
+            f'SHARED="$({sys.executable} "$(dirname "$0")/probe.py" "{shared}")"\n'
+            f'LOCAL="$({sys.executable} "$(dirname "$0")/probe.py" "{local}")"\n'
+            'echo "OK — g.sh: shared=$SHARED local=$LOCAL"\n',
+        )
+        s.registry([simple_gate("g", ["scripts/g.sh"], {"files": ["scripts/x.txt"]},
+                                "^OK — g.sh: ")])
+        out, err = io.StringIO(), io.StringIO()
+        with patched(gc, "ROOT", s.root), declared_coordination(None), \
+                patched(gate_semaphore, "ENTRY", s.coordination.entry), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = gc.main(["run"])
+        printed = out.getvalue() + err.getvalue()
+        require(code == 0, f"the run should be green:\n{printed}")
+        require("shared=free local=held" in printed,
+                f"a body must see the shared lock free and the local lock held:\n{printed}")
+
+
+def control_concurrent_records_merge_into_the_shared_store() -> None:
+    """Another worktree's records, committed mid-run, survive this run's write.
+
+    The gate body plays the other worktree: it adds a record to the shared
+    store while this run is between its snapshot and its commit.  The commit
+    is a read-merge-write under the store lock, so both records are there
+    afterwards; a snapshot written back over the store would have lost one.
+    """
+
+    with scratch() as s:
+        s.write("scripts/x.txt", "one\n")
+        store_path = gc.cache_path(s.root)
+        gc.atomic_json(store_path, gc.empty_cache())
+        foreign = {
+            "fingerprint": "f" * 64,
+            "components": {},
+            "verdict": {"exit": 0, "summary": ["OK — foreign: 1/1"], "output_digest": "0"},
+            "provenance": {"commit": "other", "worktree": "clean",
+                           "recorded_utc": "2026-09-23T00:00:00Z", "duration_s": 1.0},
+        }
+        (s.root / "scripts/inject.py").write_text(
+            "import json, sys\n"
+            "path = sys.argv[1]\n"
+            "store = json.load(open(path))\n"
+            f"store['gates']['foreign'] = [{foreign!r}]\n"
+            "json.dump(store, open(path, 'w'))\n",
+            encoding="utf-8",
+        )
+        s.gate(
+            "g.sh",
+            "#!/bin/sh\n"
+            f'{sys.executable} "$(dirname "$0")/inject.py" "{store_path}"\n'
+            'echo "OK — g.sh: 1/1 fine"\n',
+        )
+        s.registry([simple_gate("g", ["scripts/g.sh"], {"files": ["scripts/x.txt"]},
+                                "^OK — g.sh: ")])
+        s.git_init()
+        require(s.run() == 0, f"the run should be green:\n{s.output}")
+        cache, reason = s.cache()
+        require(reason is None, f"the merged store must stay readable: {reason}")
+        require("foreign" in cache["gates"],
+                "a record committed by another run mid-run must survive")
+        require("g" in cache["gates"], "and this run's own record must be there too")
+
+
+def control_certification_is_not_blocked_by_another_worktree() -> None:
+    """Certification writes only this worktree's certificate; it needs no
+    shared lock, but the worktree's own run lock still refuses it."""
+
+    with scratch() as s:
+        s.write("scripts/x.txt", "one\n")
+        s.git_init()
+        certificate = {"identity": "a" * 64, "host": "darwin-arm64-v2-1111222233334444"}
+        require(gc.acquire_lock(gc.lock_path(s.root)), "another worktree holds the store lock")
+        try:
+            out = io.StringIO()
+            with patched(gc, "ROOT", s.root), \
+                    patched(gc, "write_build_certificate", lambda root: certificate), \
+                    contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                code = gc.main(["certify-build"])
+            require(code == 0, f"a held store lock must not block certification:\n{out.getvalue()}")
+        finally:
+            gc.release_lock(gc.lock_path(s.root))
+        require(gc.acquire_lock(gc.local_lock_path(s.root)), "this worktree's run is in progress")
+        try:
+            out = io.StringIO()
+            with patched(gc, "ROOT", s.root), \
+                    patched(gc, "write_build_certificate", lambda root: certificate), \
+                    contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                code = gc.main(["certify-build"])
+            require(code == 2 and "REFUSED" in out.getvalue(),
+                    "the worktree's own run lock must still refuse certification")
+        finally:
+            gc.release_lock(gc.local_lock_path(s.root))
+
+
+def control_progress_streams_while_a_row_runs() -> None:
+    """A running row shows bounded progress and its output reaches the run
+    log as it is produced, while the verdict is still judged on the whole
+    captured output."""
+
+    with scratch() as s:
+        s.write("scripts/x.txt", "one\n")
+        s.gate(
+            "g.sh",
+            "#!/bin/sh\n"
+            "echo progress-line-one\n"
+            "sleep 0.7\n"
+            "echo progress-line-two >&2\n"
+            "sleep 0.3\n"
+            'echo "OK — g.sh: 1/1 fine"\n',
+        )
+        s.registry([simple_gate("g", ["scripts/g.sh"], {"files": ["scripts/x.txt"]},
+                                "^OK — g.sh: ")])
+        with environment({gc.PROGRESS_INTERVAL_ENV: "0.2"}):
+            require(s.run() == 0, f"the run should be green:\n{s.output}")
+        require("… scripts/g.sh running" in s.output,
+                f"a progress line must appear while the row runs:\n{s.output}")
+        require("last: progress-line-one" in s.output,
+                "the progress line must carry the latest output line")
+        log = gc.run_log_path(s.root).read_text(encoding="utf-8")
+        require("=== [fresh] scripts/g.sh" in log and "progress-line-one" in log
+                and "progress-line-two" in log and "=== exit 0" in log,
+                f"the run log must hold the row's streamed output and exit:\n{log}")
+        report = gc.report_path(s.root).read_text(encoding="utf-8")
+        require(gc.RUN_LOG_RELATIVE in report, "the report must name the run log")
+
+
+def control_report_only_findings_are_advisory_not_verdict() -> None:
+    """A report-only row's findings appear under ADVISORY, apart from the
+    verdict, in the run, in the report, and again when the row is credited
+    from its record; an ordinary row's extra output earns no such heading."""
+
+    with scratch() as s:
+        s.write("scripts/x.txt", "one\n")
+        advisory = s.gate(
+            "advice.sh",
+            "#!/bin/sh\n"
+            "echo 'MODULE-SIZE — FINDING warning: Blanc/Big.lean: 1300 lines'\n"
+            "echo 'MODULE-SIZE — FINDING grandfathered-growth: Blanc/Old.lean: 9000 lines'\n"
+            "echo 'OK — advice.sh (report-only): 2 finding(s)'\n",
+        )
+        plain = s.gate(
+            "plain.sh",
+            "#!/bin/sh\n"
+            "echo 'some progress output'\n"
+            "echo 'OK — plain.sh: 1/1 fine'\n",
+        )
+        s.registry([
+            simple_gate("advice", [advisory], {"files": ["scripts/x.txt"]},
+                        "^OK — advice.sh \\(report-only\\): ", order=1),
+            simple_gate("plain", [plain], {"files": ["scripts/x.txt"]},
+                        "^OK — plain.sh: ", order=2),
+        ])
+        s.git_init()
+        require(s.run() == 0, f"report-only findings must not redden the run:\n{s.output}")
+        require("ADVISORY — scripts/advice.sh: 2 line(s)" in s.output,
+                f"the findings must print under an ADVISORY heading:\n{s.output}")
+        require("Blanc/Big.lean: 1300 lines" in s.output, "and carry the finding lines")
+        require("ADVISORY — scripts/plain.sh" not in s.output,
+                "an ordinary row's extra output must not be called advisory")
+        require("FAILED" not in s.output, "advisory findings must not use failure vocabulary")
+        report = gc.report_path(s.root).read_text(encoding="utf-8")
+        require("## Advisory findings" in report and "Blanc/Old.lean: 9000 lines" in report,
+                "the report must carry the findings in their own section")
+        cache, _ = s.cache()
+        require(cache["gates"]["advice"][0]["verdict"].get("advisory"),
+                "the record must retain the findings")
+
+        require(s.run() == 0 and s.disposition("advice") == "reused",
+                "the second run must credit the row")
+        require("ADVISORY — scripts/advice.sh: 2 line(s); from the credited record" in s.output,
+                f"a credited report-only row must still show its findings:\n{s.output}")
+        report = gc.report_path(s.root).read_text(encoding="utf-8")
+        require("(from the credited record):" in report,
+                "the report must say the findings come from the record")
+
+
 def control_same_repository_worktrees_share_records_and_lock() -> None:
     """The Git common directory, not a worktree-local `.lake`, is the trust root."""
 
@@ -3988,6 +4421,12 @@ CONTROLS = (
     control_content_change_invalidates,
     control_population_membership_invalidates,
     control_unrelated_change_still_reuses,
+    control_declared_untracked_read_contributes_no_digest,
+    control_malformed_untracked_reads_are_refused,
+    control_untracked_reads_need_a_harness_self_test_row,
+    control_non_utf8_and_large_output_cannot_hang_or_drop,
+    control_pump_failure_fails_the_verdict,
+    control_unobtainable_store_lock_costs_records_not_correctness,
     control_membership_mode_ignores_content,
     control_implementation_change_invalidates,
     control_command_arguments_invalidate,
@@ -4055,6 +4494,11 @@ CONTROLS = (
     control_lock_refuses_a_second_run,
     control_kernel_lock_refuses_another_process,
     control_stale_owner_metadata_does_not_block_an_unlocked_mutex,
+    control_shared_store_lock_is_free_while_a_row_runs,
+    control_concurrent_records_merge_into_the_shared_store,
+    control_certification_is_not_blocked_by_another_worktree,
+    control_progress_streams_while_a_row_runs,
+    control_report_only_findings_are_advisory_not_verdict,
     control_same_repository_worktrees_share_records_and_lock,
     control_other_physical_clone_never_inherits_shared_records,
     control_foreign_host_store_never_yields_reuse,

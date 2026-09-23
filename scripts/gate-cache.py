@@ -74,13 +74,14 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import Any, Iterable
 
 import gate_semaphore
 
-from gate_cache_lock import acquire_lock, read_lock_pid, release_lock
+from gate_cache_lock import acquire_lock, acquire_lock_wait, read_lock_pid, release_lock
 from gate_cache_t8n_root import (
     T8N_TARGET_ROOT,
     T8nPythonBaseError,
@@ -98,6 +99,35 @@ ROOT = Path(__file__).resolve().parent.parent
 REGISTRY_RELATIVE = "scripts/gate-registry.json"
 REPORT_RELATIVE = ".lake/gate-report.md"
 MANIFEST_RELATIVE = ".lake/gate-manifest.json"
+# Every executed row's complete stdout/stderr, streamed as it is produced, so
+# a two-hour row can be watched and a killed run still leaves its output.
+RUN_LOG_RELATIVE = ".lake/gate-run.log"
+# Terminal progress while a row runs: one bounded line per interval, never the
+# row's whole output (that is `--echo` and the run log).
+PROGRESS_INTERVAL_S = 60.0
+PROGRESS_INTERVAL_ENV = "BLANC_GATE_PROGRESS_SECS"
+# The shared-store transaction is a read-merge-write of one file; a contending
+# holder is done in under a second, so wait this long rather than refuse.
+# The environment may shorten it (a control exercises the refusal branch).
+SHARED_STORE_LOCK_WAIT_S = 60.0
+SHARED_STORE_LOCK_WAIT_ENV = "BLANC_GATE_STORE_LOCK_WAIT_SECS"
+
+
+def shared_store_lock_wait() -> float:
+    raw = os.environ.get(SHARED_STORE_LOCK_WAIT_ENV)
+    if raw is None:
+        return SHARED_STORE_LOCK_WAIT_S
+    try:
+        value = float(raw)
+    except ValueError:
+        return SHARED_STORE_LOCK_WAIT_S
+    return value if value >= 0 else SHARED_STORE_LOCK_WAIT_S
+# The catalogue's report-only verdict form (`OK — … (report-only)`): the row
+# passes as a process and its findings are review evidence.  The runner keeps
+# up to this many of those finding lines with the verdict and shows them under
+# an ADVISORY heading, never under the blocking verdict.
+REPORT_ONLY_MARK = "(report-only)"
+ADVISORY_LINES = 200
 SHARED_STATE_RELATIVE = "blanc-gate-evidence"
 EVIDENCE_FILENAME_PREFIX = "evidence-v3-"
 LEGACY_EVIDENCE_FILENAME = "evidence.json"
@@ -161,7 +191,31 @@ def build_certificate_path(root: Path, lake_root: Path | None = None) -> Path:
 
 
 def lock_path(root: Path) -> Path:
+    """The shared-store lock: held only across store transactions.
+
+    It protects the read-merge-write of the shared evidence file, which is
+    the one thing worktrees of a clone contend on.  It is not held while gate
+    bodies run, so a long row in one worktree no longer excludes every other
+    worktree's selective run or certification.
+    """
+
     return shared_state_path(root) / "run.lock"
+
+
+def local_lock_path(root: Path) -> Path:
+    """The whole-run lock of one worktree: report, manifest, certificate.
+
+    Two selective runs in the same worktree would interleave their gate
+    bodies and overwrite each other's candidate-local evidence, so the
+    second is refused for the whole run, as before.  Other worktrees are
+    not affected: each row coordinates with the host itself.
+    """
+
+    return root / ".lake" / "gate-run.lock"
+
+
+def run_log_path(root: Path) -> Path:
+    return root / RUN_LOG_RELATIVE
 
 # How many historical successful records to retain per gate.  Eviction is a
 # performance choice only: a pruned record simply causes a fresh run.
@@ -199,6 +253,13 @@ INPUT_KINDS = (
     "tools",
     "clock",
     "material_output",
+    # Declared exclusions: paths the gate reads but deliberately does not
+    # fingerprint, each with the reason.  A harness self-test reads the
+    # committed subject it cuts mutants from, yet its cache inputs are the
+    # harness's own files (evidence-economy rule 3).  This kind contributes no
+    # digest; it exists so the read audit can tell a declared subject read
+    # from an undeclared hole, and so the inventory says the read is deliberate.
+    "untracked_reads",
 )
 
 GATE_KINDS = ("cacheable", "composition", "always-fresh")
@@ -325,6 +386,39 @@ def atomic_json(path: Path, value: Any) -> None:
 # --- registry ---------------------------------------------------------------
 
 
+def is_code_under_scripts(given: str) -> bool:
+    """Code the gate could run: .py/.sh/.lean below scripts/ (any named root)."""
+
+    relative = given.split("/", 1)[1] if given.startswith("@") and "/" in given else given
+    return relative.startswith("scripts/") and relative.endswith((".py", ".sh", ".lean"))
+
+
+def economy_work_classes(registry_file: Path, registry: dict[str, Any]) -> dict[str, set[str]] | None:
+    """Gate id -> work classes from the economy inventory the registry names.
+
+    Returns None when the registry names no inventory or it cannot be read as
+    a row list; the caller then refuses what needs a work class.  This reads
+    the inventory only for that word; its full validation is
+    `gate-economy.py --check`, which the audit runs.
+    """
+
+    inventory = registry.get("economy_inventory")
+    if not isinstance(inventory, str) or not inventory:
+        return None
+    try:
+        economy = json.loads((registry_file.parent.parent / inventory).read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+    rows = economy.get("rows") if isinstance(economy, dict) else None
+    if not isinstance(rows, list):
+        return None
+    classes: dict[str, set[str]] = {}
+    for row in rows:
+        if isinstance(row, dict) and isinstance(row.get("id"), str) and isinstance(row.get("work"), list):
+            classes[row["id"]] = {item for item in row["work"] if isinstance(item, str)}
+    return classes
+
+
 def load_registry(path: Path) -> dict[str, Any]:
     """Read and fully validate the committed gate registry.
 
@@ -347,6 +441,7 @@ def load_registry(path: Path) -> dict[str, Any]:
     seen_ids: set[str] = set()
     seen_orders: set[int] = set()
     seen_commands: set[tuple[str, ...]] = set()
+    economy_work = economy_work_classes(path, registry)
     for gate in gates:
         if not isinstance(gate, dict):
             raise GateCacheError("gate registry entry is not an object")
@@ -434,6 +529,53 @@ def load_registry(path: Path) -> dict[str, Any]:
             ):
                 raise GateCacheError(
                     f"gate {identifier} has a malformed material-output certificate"
+                )
+        untracked = inputs.get("untracked_reads", [])
+        if not isinstance(untracked, list) or not untracked and "untracked_reads" in inputs:
+            raise GateCacheError(f"gate {identifier} has malformed untracked reads")
+        declared_files = set(inputs.get("files", [])) if isinstance(
+            inputs.get("files", []), list
+        ) else set()
+        seen_untracked: set[str] = set()
+        for spec in untracked:
+            if (
+                not isinstance(spec, dict)
+                or set(spec) != {"path", "reason"}
+                or not isinstance(spec.get("path"), str)
+                or not spec["path"]
+                or not isinstance(spec.get("reason"), str)
+                or not spec["reason"].strip()
+            ):
+                raise GateCacheError(
+                    f"gate {identifier} untracked read needs exactly a path and a reason"
+                )
+            if spec["path"] in seen_untracked:
+                raise GateCacheError(
+                    f"gate {identifier} declares untracked read {spec['path']} twice"
+                )
+            seen_untracked.add(spec["path"])
+            if spec["path"] in declared_files:
+                # A path cannot be both fingerprinted and declared unfingerprinted.
+                raise GateCacheError(
+                    f"gate {identifier} declares {spec['path']} both as a fingerprinted "
+                    "file and as an untracked read"
+                )
+            if is_code_under_scripts(spec["path"]):
+                # An exclusion may cover a subject or a data carrier, never code
+                # the gate could run: that would let a harness edit hide.
+                raise GateCacheError(
+                    f"gate {identifier} cannot declare code {spec['path']} as an "
+                    "untracked read"
+                )
+        if untracked:
+            # Only a harness self-test reads a subject it must not fingerprint
+            # (evidence economy rule 3); the work class is the economy
+            # inventory's word, so a registry that names no inventory, or a
+            # row the inventory does not call a harness self-test, is refused.
+            if economy_work is None or "harness-self-test" not in economy_work.get(identifier, set()):
+                raise GateCacheError(
+                    f"gate {identifier} declares untracked reads but its gate-economy "
+                    "work classes do not include harness-self-test"
                 )
         external = inputs.get("external", [])
         if not isinstance(external, list):
@@ -634,7 +776,8 @@ SOUNDNESS_AUTHORITY_NAMES = frozenset({
     "build_certificate_path",
     "sha256_bytes",
     "file_digest", "file_identity", "forget_digests", "canonical", "digest_of",
-    "load_registry", "_input_strings", "_validate_oracle_lanes",
+    "load_registry", "is_code_under_scripts", "economy_work_classes",
+    "_input_strings", "_validate_oracle_lanes",
     "gate_uses_t8n_resolver", "semantic_authority_digest", "runner_identity",
     "resolve_path", "component_files", "glob_population", "traversable_population",
     "component_populations", "trace_path_for", "module_dep_hash",
@@ -642,7 +785,8 @@ SOUNDNESS_AUTHORITY_NAMES = frozenset({
     "component_git_refs", "component_external", "component_env", "component_tools",
     "component_clock", "component_material_output", "fingerprint", "empty_cache", "read_cache",
     "_safe_host_label", "host_mismatch_warning", "read_active_cache", "lookup",
-    "store", "prune_details", "tree_identity", "plan", "capture_verdict",
+    "store", "commit_shared_records", "prune_details", "tree_identity", "plan",
+    "capture_verdict",
     "execute", "host_identity", "build_source_identity", "build_trace_state",
     "read_build_certificate", "write_build_certificate",
     "build_certificate_status", "run", "main",
@@ -1596,6 +1740,35 @@ def store(
             cache["details"][entry["digest"]] = entry["detail"]
 
 
+def commit_shared_records(
+    root: Path,
+    admitted: list[tuple[str, str, dict[str, Any], dict[str, Any], dict[str, Any]]],
+) -> tuple[bool, str]:
+    """Merge this run's earned records into the shared store, atomically.
+
+    The one shared-store transaction of a run: take the store lock, re-read
+    the store as it is *now* (another worktree may have committed since this
+    run planned), add each record with the same `store` admission it always
+    had, prune, replace.  The identity-specific path is written and nothing
+    else, exactly as before: a store that is empty, unreadable or foreign at
+    that path costs a fresh table holding this run's records, and legacy or
+    other-identity files are never touched.  Returns (written, reason).
+    """
+
+    lock = lock_path(root)
+    if not acquire_lock_wait(lock, shared_store_lock_wait()):
+        return False, "shared store lock not obtained"
+    try:
+        cache, _ = read_active_cache(root)
+        for identifier, print_, components, verdict, provenance in admitted:
+            store(cache, identifier, print_, components, verdict, provenance)
+        prune_details(cache)
+        atomic_json(cache_path(root), cache)
+        return True, ""
+    finally:
+        release_lock(lock)
+
+
 def prune_details(cache: dict[str, Any]) -> None:
     live = {
         digest
@@ -1767,6 +1940,18 @@ def capture_verdict(gate: dict[str, Any], result: subprocess.CompletedProcess) -
         "output_digest": sha256_bytes(output.encode("utf-8", "replace")),
         "passed": not problems,
     }
+    if not problems and any(REPORT_ONLY_MARK in line for line in summary):
+        # A report-only row passes as a process and prints findings that are
+        # review evidence, not permission to ignore them (pass criteria).  The
+        # findings are retained with the verdict, bounded, so the run and the
+        # report can show them under an explicit ADVISORY heading, distinct
+        # from the blocking verdict, and a credited row can still show them
+        # from its record.  Nothing here changes what counts as a pass.
+        findings = [
+            line for line in result.stdout.splitlines()
+            if line.strip() and line not in summary
+        ]
+        verdict["advisory"] = findings[-ADVISORY_LINES:]
     if problems:
         # Failed output is diagnostic evidence only: failed rows are never
         # cached, and retaining a bounded tail keeps the checkpoint useful
@@ -1778,17 +1963,156 @@ def capture_verdict(gate: dict[str, Any], result: subprocess.CompletedProcess) -
     return verdict
 
 
-def execute(root: Path, gate: dict[str, Any], echo: bool) -> tuple[dict[str, Any], float]:
+def print_advisory(label: str, verdict: dict[str, Any], note: str) -> None:
+    """Show a report-only row's findings under their own heading.
+
+    The heading is deliberately not the vocabulary of a failure: these lines
+    are review evidence a green manifest does not resolve, and a reader must
+    be able to tell them from a blocking verdict at a glance.
+    """
+
+    findings = verdict.get("advisory") or []
+    if not findings:
+        return
+    print(f"         ADVISORY — {label}: {len(findings)} line(s); {note}")
+    for line in findings:
+        print(f"           {line}")
+
+
+def progress_interval() -> float:
+    """Seconds between progress lines; the environment may shorten it."""
+
+    raw = os.environ.get(PROGRESS_INTERVAL_ENV)
+    if raw is None:
+        return PROGRESS_INTERVAL_S
+    try:
+        value = float(raw)
+    except ValueError:
+        return PROGRESS_INTERVAL_S
+    return value if value > 0 else PROGRESS_INTERVAL_S
+
+
+def execute(
+    root: Path, gate: dict[str, Any], echo: bool, log_path: Path | None = None
+) -> tuple[dict[str, Any], float]:
+    """Run one gate body, streaming its output while keeping the verdict capture.
+
+    Both streams are read line by line as the gate produces them: every line
+    goes to the run log (and to the terminal under `--echo`) at once, and a
+    bounded progress line is printed each interval while the row is still
+    running.  The verdict is still judged on the complete captured output
+    after exit, exactly as before -- streaming changes when output is seen,
+    never what counts as a pass.  Python children are told not to block
+    buffer, since a piped harness would otherwise show nothing until exit.
+    """
+
     started = time.monotonic()
-    result = subprocess.run(
-        gate["command"], cwd=root, capture_output=True, text=True, check=False
+    environment = dict(os.environ)
+    environment.setdefault("PYTHONUNBUFFERED", "1")
+    # Bytes, decoded with replacement: a gate that prints one non-UTF-8 byte
+    # must not kill the reader (which would hang the runner once the pipe
+    # buffer filled) or drop a chunk.  The verdict patterns are ASCII, so a
+    # replaced byte cannot make or break a summary line.
+    process = subprocess.Popen(
+        gate["command"], cwd=root, env=environment,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     )
+    captured: dict[str, list[str]] = {"stdout": [], "stderr": []}
+    latest = {"line": "", "count": 0}
+    pump_failures: dict[str, str] = {}
+    guard = threading.Lock()
+    log = None
+    if log_path is not None:
+        try:
+            log = log_path.open("a", encoding="utf-8")
+        except OSError as error:
+            pump_failures["log"] = f"run log unwritable: {error}"
+
+    def pump(stream: Any, name: str, sink: Any) -> None:
+        """Drain one pipe to the end no matter what fails on the way.
+
+        A failing log write or a broken `--echo` sink records a failure and
+        stops that side effect; reading continues, so the child can never
+        block on a full pipe because of our error.  The failure fails the
+        verdict below: output that was not fully observed is not evidence.
+        """
+
+        nonlocal log
+        try:
+            for raw in iter(stream.readline, b""):
+                line = raw.decode("utf-8", "replace")
+                with guard:
+                    captured[name].append(line)
+                    latest["line"] = line.rstrip("\r\n")
+                    latest["count"] += 1
+                    if log is not None:
+                        try:
+                            log.write(line)
+                            log.flush()
+                        except (OSError, ValueError) as error:
+                            pump_failures.setdefault("log", f"run log write failed: {error}")
+                            log = None
+                if echo and "echo" not in pump_failures:
+                    try:
+                        sink.write(line)
+                        sink.flush()
+                    except (OSError, ValueError) as error:
+                        with guard:
+                            pump_failures.setdefault("echo", f"--echo sink failed: {error}")
+        except Exception as error:  # noqa: BLE001 - any reader fault is recorded, never hidden
+            with guard:
+                pump_failures.setdefault(name, f"{name} reader failed: {error!r}")
+            try:
+                while stream.read(65536):
+                    pass
+            except Exception:  # noqa: BLE001 - draining is best effort after a fault
+                pass
+        finally:
+            stream.close()
+
+    pumps = [
+        threading.Thread(target=pump, args=(process.stdout, "stdout", sys.stdout), daemon=True),
+        threading.Thread(target=pump, args=(process.stderr, "stderr", sys.stderr), daemon=True),
+    ]
+    for thread in pumps:
+        thread.start()
+    interval = progress_interval()
+    next_report = started + interval
+    while True:
+        try:
+            process.wait(timeout=max(0.0, next_report - time.monotonic()))
+            break
+        except subprocess.TimeoutExpired:
+            with guard:
+                count, tail = latest["count"], latest["line"]
+            running = time.monotonic() - started
+            print(
+                f"         … {command_text(gate)} running {running:.0f}s, "
+                f"{count} output line(s)" + (f", last: {tail[:120]}" if tail else ""),
+                flush=True,
+            )
+            next_report += interval
+    for thread in pumps:
+        thread.join()
+    if log is not None:
+        log.close()
     elapsed = time.monotonic() - started
-    if echo:
-        sys.stdout.write(result.stdout)
-        sys.stderr.write(result.stderr)
-        sys.stdout.flush()
-    return capture_verdict(gate, result), elapsed
+    result = subprocess.CompletedProcess(
+        gate["command"], process.returncode,
+        "".join(captured["stdout"]), "".join(captured["stderr"]),
+    )
+    verdict = capture_verdict(gate, result)
+    if pump_failures:
+        # The child's output was not fully observed or recorded; a pass read
+        # out of it would be a pass nobody can inspect.
+        verdict["problems"].extend(sorted(pump_failures.values()))
+        verdict["passed"] = False
+        verdict.pop("advisory", None)
+        verdict.setdefault("output_tail", {
+            name: "".join(value.splitlines(keepends=True)[-200:])[-64 * 1024:]
+            for name, value in (("stdout", result.stdout), ("stderr", result.stderr))
+        })
+    return verdict, elapsed
 
 
 def run(root: Path, arguments: argparse.Namespace) -> int:
@@ -1807,10 +2131,23 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
         )
         return 2
 
+    # Progress lines are worth nothing block-buffered into a log file hours
+    # late; a stream that cannot be reconfigured (a StringIO under test) is
+    # left alone.
+    try:
+        sys.stdout.reconfigure(line_buffering=True)  # type: ignore[attr-defined]
+    except (AttributeError, ValueError):
+        pass
+
     registry = load_registry(registry_path(root))
+    # A snapshot, read without the shared lock: the store is only ever
+    # replaced atomically, so a reader sees a complete old or new file.  This
+    # run's own records are merged into whatever the store holds when the run
+    # ends (see `commit_shared_records`), never written over this snapshot.
     cache, cache_reason = read_active_cache(root)
     if cache_reason:
         print(f"check-gates: {cache_reason}; every gate will execute", file=sys.stderr)
+    admitted: list[tuple[str, str, dict[str, Any], dict[str, Any], dict[str, Any]]] = []
 
     identity = tree_identity(root)
     shared_admission = (
@@ -1825,6 +2162,21 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
     started_utc = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     wall_started = time.monotonic()
     failures: list[str] = []
+    log_file = run_log_path(root)
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    log_file.write_text(
+        f"# Blanc selective gate run started {started_utc}; every executed row's "
+        "output follows as it was produced\n",
+        encoding="utf-8",
+    )
+
+    def executed(gate: dict[str, Any], label: str) -> tuple[dict[str, Any], float]:
+        with log_file.open("a", encoding="utf-8") as log:
+            log.write(f"\n=== [{label}] {command_text(gate)}\n")
+        verdict, elapsed = execute(root, gate, echo=arguments.echo, log_path=log_file)
+        with log_file.open("a", encoding="utf-8") as log:
+            log.write(f"=== exit {verdict['exit']} after {elapsed:.1f}s\n")
+        return verdict, elapsed
 
     # Prerequisites run before planning, not at their catalogue position.
     # Every Lean-dependent fingerprint in this registry reads a Lake trace, and
@@ -1859,7 +2211,7 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
         # kept it would own the host for the whole selective run.
         try:
             with gate_semaphore.admitted(f"the {gate['id']} prerequisite", 8):
-                verdict, elapsed = execute(root, gate, echo=arguments.echo)
+                verdict, elapsed = executed(gate, "prerequisite")
         except gate_semaphore.Refused as refusal:
             for line in gate_semaphore.refusal_lines(
                 gate_semaphore.label(), f"the {gate['id']} prerequisite", refusal
@@ -1946,14 +2298,16 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
             for line in record["verdict"]["summary"]:
                 print(f"         {line}   (from {record['provenance'].get('commit', '?')[:12]}"
                       f" at {record['provenance'].get('recorded_utc', '?')})")
+            print_advisory(label, record["verdict"], "from the credited record")
             continue
 
         print(f"[fresh ] {label}")
-        verdict, elapsed = execute(root, row["gate"], echo=arguments.echo)
+        verdict, elapsed = executed(row["gate"], "fresh")
         row["elapsed"] = elapsed
         row["verdict"] = verdict
         for line in verdict["summary"]:
             print(f"         {line}")
+        print_advisory(label, verdict, "report-only findings; not part of the verdict")
         if not verdict["passed"]:
             row["cached"] = False
             row["cache_reason"] = "; ".join(verdict["problems"])
@@ -1988,20 +2342,28 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
             row["cache_reason"] = "inputs changed during the run; verdict not cached"
             print(f"         {row['cache_reason']}", file=sys.stderr)
             continue
-        store(
-            cache,
+        # Collected now, merged into the shared store at the end of the run
+        # under the store lock: the snapshot this run planned from may be
+        # older than the store by then, and another worktree's records must
+        # survive this run's write.
+        stored_verdict = {"exit": verdict["exit"], "summary": verdict["summary"],
+                          "output_digest": verdict["output_digest"]}
+        if verdict.get("advisory"):
+            # Kept with the record so a credited row still shows its
+            # report-only findings; bounded like the verdict's other fields.
+            stored_verdict["advisory"] = verdict["advisory"]
+        admitted.append((
             row["id"],
             after,
             components,
-            {"exit": verdict["exit"], "summary": verdict["summary"],
-             "output_digest": verdict["output_digest"]},
+            stored_verdict,
             {
                 "commit": identity["commit"],
                 "worktree": identity["worktree"],
                 "recorded_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 "duration_s": round(elapsed, 3),
             },
-        )
+        ))
         row["cached"] = True
 
     # Revalidate every reused row against the tree as it stands now.  A row
@@ -2022,8 +2384,17 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
 
     wall = time.monotonic() - wall_started
     if not drifted:
-        prune_details(cache)
-        atomic_json(cache_path(root), cache)
+        # Always a transaction, even with nothing admitted: a run leaves a
+        # readable store behind, as it always did.
+        committed, why = commit_shared_records(root, admitted)
+        if not committed:
+            # Nothing is lost but time: the verdicts stand in this run's report
+            # and manifest, and a later clean run re-earns the records.
+            for row in rows:
+                if row.get("cached"):
+                    row["cached"] = False
+                    row["cache_reason"] = f"shared store not written: {why}"
+            print(f"check-gates: shared store not written: {why}", file=sys.stderr)
 
     write_report(root, rows, identity, started_utc, wall, failures, drifted)
 
@@ -2083,6 +2454,7 @@ def write_report(
         f"- reused: {sum(1 for r in rows if r['disposition'] == 'reused')}",
         f"- build-certified: {sum(1 for r in rows if r['disposition'] == 'certified')}",
         f"- blocked: {sum(1 for r in rows if r['disposition'] == 'blocked')}",
+        f"- run log (every executed row's streamed output): {RUN_LOG_RELATIVE}",
         "",
         "| # | command | disposition | verdict | evidence from |",
         "|---|---|---|---|---|",
@@ -2154,6 +2526,21 @@ def write_report(
                 ),
             }
         )
+
+    advisory_rows = [row for row in rows if row.get("verdict", {}).get("advisory")]
+    if advisory_rows:
+        lines += [
+            "",
+            "## Advisory findings",
+            "",
+            "Report-only rows pass as processes; these lines are their findings, "
+            "review evidence that a green manifest does not resolve. They are not "
+            "part of any verdict above.",
+        ]
+        for row in advisory_rows:
+            source = "from the credited record" if row["disposition"] == "reused" else "executed now"
+            lines += ["", f"ADVISORY — `{command_text(row['gate'])}` ({source}):", ""]
+            lines.extend(f"    {line}" for line in row["verdict"]["advisory"])
 
     always_fresh = [row for row in rows if row["kind"] != "cacheable"]
     if always_fresh:
@@ -2446,6 +2833,12 @@ def render_inventory(root: Path) -> str:
                     f"- clock: {value['kind']} from "
                     + ", ".join(f"`{item}`" for item in value["files"])
                 )
+            elif kind == "untracked_reads":
+                for spec in value:
+                    lines.append(
+                        f"- untracked read (declared, contributes no digest): "
+                        f"`{spec['path']}` — {spec['reason']}"
+                    )
             else:
                 lines.append(f"- {kind}: " + ", ".join(f"`{item}`" for item in value))
         lines.append("")
@@ -2512,7 +2905,12 @@ def main(argv: list[str]) -> int:
             from gate_cache_selftest import self_test  # noqa: PLC0415
 
             return self_test()
-        if not acquire_lock(lock_path(root)):
+        # The whole run holds only this worktree's lock: it protects the
+        # candidate-local report, manifest and certificate, and keeps two runs
+        # in one worktree from interleaving their gate bodies.  The shared
+        # store lock is taken inside `run` for the store transaction alone,
+        # so a long row here excludes no other worktree's run or certification.
+        if not acquire_lock(local_lock_path(root)):
             return 2
         try:
             if arguments.mode == "certify-build":
@@ -2525,7 +2923,7 @@ def main(argv: list[str]) -> int:
                 return 0
             return run(root, arguments)
         finally:
-            release_lock(lock_path(root))
+            release_lock(local_lock_path(root))
     except GateCacheError as error:
         print(f"check-gates: {error}", file=sys.stderr)
         return 2

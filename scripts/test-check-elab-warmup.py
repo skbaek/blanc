@@ -18,14 +18,19 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 CHECK_ELAB = HERE / "check-elab.sh"
 
+# The lock and admission stubs record every acquisition in the same event log
+# as the Lake stub, so a control can read the order in which the script took
+# the report lock, planned, took the heavy boundary, planned again, and
+# elaborated -- or, for a plan that measures nothing, that it never took the
+# heavy boundary at all.
 LOCK_STUB = """#!/usr/bin/env bash
 gate_lock_release_all() { :; }
-gate_lock_heavy_acquire() { :; }
-gate_lock_acquire() { :; }
+gate_lock_heavy_acquire() { printf 'heavy-lock %s\\n' "$1" >> "$MOCK_LAKE_LOG"; }
+gate_lock_acquire() { printf 'report-lock %s\\n' "$2" >> "$MOCK_LAKE_LOG"; }
 """
 SEMAPHORE_STUB = """#!/usr/bin/env bash
 gate_semaphore_release() { :; }
-gate_semaphore_acquire() { :; }
+gate_semaphore_acquire() { printf 'semaphore %s %s %s\\n' "$1" "$2" "$3" >> "$MOCK_LAKE_LOG"; }
 """
 LAKE_STUB = """#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "$MOCK_LAKE_LOG"
@@ -40,6 +45,8 @@ import sys
 from pathlib import Path
 
 args = sys.argv[1:]
+with open(os.environ['MOCK_LAKE_LOG'], 'a') as log:
+    log.write('selector ' + args[0] + '\\n')
 def value(name):
     return args[args.index(name) + 1]
 if args[0] == 'modules':
@@ -112,6 +119,48 @@ def lean_calls(lines: list[str]) -> list[str]:
     return [line for line in lines if line.startswith("env lean Blanc/")]
 
 
+def first(lines: list[str], prefix: str, occurrence: int = 1) -> int:
+    """Index of the n-th event line starting with `prefix`; -1 when absent."""
+
+    seen = 0
+    for index, line in enumerate(lines):
+        if line.startswith(prefix):
+            seen += 1
+            if seen == occurrence:
+                return index
+    return -1
+
+
+def plan_before_hold_controls(root: Path) -> None:
+    """A --no-build run plans first; a plan that measures nothing takes no
+    heavy boundary, and a plan that measures takes it before elaborating and
+    plans again inside it."""
+
+    noop, events = run_case(root, "", "1.000", full=False)
+    assert noop.returncode == 0 and "OK — elab: 0 measured" in noop.stdout, noop.stdout
+    assert "no heavy-gate lock or host hold was taken" in noop.stdout
+    assert "shared publication skipped: nothing was measured" in noop.stdout
+    assert first(events, "report-lock") >= 0, events
+    assert first(events, "heavy-lock") == -1 and first(events, "semaphore") == -1, events
+    assert first(events, "selector plan", 2) == -1, "a no-op run plans once"
+    assert first(events, "selector publish") == -1, "a no-op run publishes nothing"
+    assert lean_calls(events) == []
+
+    measuring, events = run_case(root, "Blanc/A.lean", "1.000", full=False)
+    assert measuring.returncode == 0 and "OK — elab: 1 measured" in measuring.stdout
+    order = [
+        first(events, "report-lock"),
+        first(events, "selector plan", 1),
+        first(events, "heavy-lock elab"),
+        first(events, "semaphore the elaboration-time measurement 8 exclusive"),
+        first(events, "selector plan", 2),
+        first(events, "env lean Blanc/A.lean"),
+    ]
+    assert all(index >= 0 for index in order), (order, events)
+    assert order == sorted(order), (order, events)
+    assert first(events, "selector publish") >= 0, "a measuring run publishes"
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="blanc-elab-warmup-") as directory:
         root = make_root(Path(directory))
@@ -140,7 +189,11 @@ def main() -> int:
         assert "discarded one unrecorded warm-up elaboration" not in partial.stdout
         assert lean_calls(calls) == ["env lean Blanc/A.lean"]
 
-    print("OK — elab warm-up controls: full slowdown/refusal, restored green, partial unchanged (mocked)")
+        plan_before_hold_controls(root)
+
+    print("OK — elab warm-up and plan-before-hold controls: full slowdown/refusal, restored green, "
+          "partial unchanged, no-op plan takes no heavy boundary, measuring plan takes it "
+          "before elaborating and re-plans inside it (mocked)")
     return 0
 
 

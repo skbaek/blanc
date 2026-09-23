@@ -1,12 +1,26 @@
 #!/usr/bin/env python3
-"""Generate and check Blanc's economic inventory without executing gates."""
+"""Generate and check Blanc's economic inventory without executing gates.
+
+Every row carries a measured cost (evidence economy rule 4).  That cost is
+never typed by hand: `--import-costs` reads the selective runner's shared
+evidence ledger -- the same-host store `check-gates.sh` writes a record to
+for every fresh green cacheable row, each with its measured `duration_s` --
+and freezes what it found into `scripts/gate-measured-costs.json`, which the
+rendered inventory then quotes.  `--check` holds the committed document to
+the committed import; it never reads the host ledger, so it is the same
+verdict on every host and in CI.  Re-import when the ledger has newer
+evidence; the import's UTC and record counts say how current it is.
+"""
 
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
+import statistics
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -14,8 +28,10 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent
 REGISTRY = ROOT / "scripts/gate-registry.json"
 ECONOMY = ROOT / "scripts/gate-economy.json"
+COSTS = ROOT / "scripts/gate-measured-costs.json"
 CATALOGUE = ROOT / "scripts/GATES.md"
 OUTPUT = ROOT / "docs/GATE_ECONOMY.md"
+COSTS_SCHEMA = 1
 WORK_CLASSES = {"candidate-positive", "static-corpus", "harness-self-test", "prerequisite"}
 RESOURCE_CLASSES = {"light", "elaboration", "exclusive"}
 
@@ -45,6 +61,106 @@ def catalogue_times() -> dict[str, str]:
     return times
 
 
+def load_gate_cache() -> Any:
+    """The runner module, for its ledger reader; never leaves bytecode behind."""
+
+    path = ROOT / "scripts/gate-cache.py"
+    if not path.is_file():
+        raise EconomyError("gate-cache.py is absent; the evidence ledger cannot be read")
+    scripts = str(path.parent)
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    previous = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
+    try:
+        spec = importlib.util.spec_from_file_location("blanc_gate_cache_for_economy", path)
+        if spec is None or spec.loader is None:
+            raise EconomyError("cannot load gate-cache.py")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+    finally:
+        sys.dont_write_bytecode = previous
+    return module
+
+
+def import_costs() -> dict[str, Any]:
+    """Freeze each gate's measured cost from the shared evidence ledger.
+
+    Per gate: how many retained records carry a duration, their median, and
+    the newest record's duration, commit and UTC.  The ledger's stable-host
+    token is not copied; the source is named by its path shape only.
+    """
+
+    gc = load_gate_cache()
+    cache, reason = gc.read_active_cache(ROOT)
+    if reason:
+        raise EconomyError(f"evidence ledger unavailable: {reason}")
+    rows: dict[str, dict[str, Any]] = {}
+    for identifier, records in cache["gates"].items():
+        timed = [
+            record for record in records
+            if isinstance(record.get("provenance", {}).get("duration_s"), (int, float))
+        ]
+        if not timed:
+            continue
+        latest = max(timed, key=lambda record: record["provenance"].get("recorded_utc", ""))
+        rows[identifier] = {
+            "records": len(timed),
+            "median_s": round(statistics.median(r["provenance"]["duration_s"] for r in timed), 3),
+            "latest_s": round(latest["provenance"]["duration_s"], 3),
+            "latest_commit": str(latest["provenance"].get("commit", ""))[:12],
+            "latest_utc": str(latest["provenance"].get("recorded_utc", "")),
+        }
+    return {
+        "schema": COSTS_SCHEMA,
+        "imported_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "source": (
+            f"{gc.SHARED_STATE_RELATIVE}/{gc.EVIDENCE_FILENAME_PREFIX}<stable-host>.json "
+            "below the Git common directory; provenance.duration_s of each retained "
+            "green record"
+        ),
+        "rows": dict(sorted(rows.items())),
+    }
+
+
+def load_costs(gate_ids: set[str]) -> dict[str, Any]:
+    costs = load(COSTS)
+    if not isinstance(costs, dict) or costs.get("schema") != COSTS_SCHEMA:
+        raise EconomyError("measured-cost import schema is not 1")
+    if not isinstance(costs.get("imported_utc"), str) or not isinstance(costs.get("rows"), dict):
+        raise EconomyError("measured-cost import is malformed")
+    # A row for a gate that no longer exists is stale evidence, not a fault:
+    # a trim that renames or removes a row must not force a host-ledger
+    # re-import.  Stale rows are ignored and named in the rendered document.
+    costs["stale"] = sorted(identifier for identifier in costs["rows"] if identifier not in gate_ids)
+    for identifier, row in costs["rows"].items():
+        if identifier not in gate_ids:
+            continue
+        if (
+            not isinstance(row, dict)
+            or set(row) != {"records", "median_s", "latest_s", "latest_commit", "latest_utc"}
+            or not isinstance(row["records"], int) or row["records"] <= 0
+            or not all(isinstance(row[key], (int, float)) and row[key] >= 0
+                       for key in ("median_s", "latest_s"))
+            or not isinstance(row["latest_commit"], str)
+            or not isinstance(row["latest_utc"], str)
+        ):
+            raise EconomyError(f"measured-cost row {identifier} is malformed")
+    return costs
+
+
+def measured_cost_cell(costs: dict[str, Any], identifier: str) -> str:
+    row = costs["rows"].get(identifier)
+    if row is None:
+        return "no ledger record"
+    return (
+        f"median {row['median_s']:.1f} s over {row['records']} record(s); "
+        f"latest {row['latest_s']:.1f} s at {row['latest_commit'] or '?'} "
+        f"({row['latest_utc'][:10] or '?'})"
+    )
+
+
 def ci_population() -> int:
     commands: set[str] = set()
     for raw in (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8").splitlines():
@@ -58,7 +174,9 @@ def ci_population() -> int:
     return len(commands)
 
 
-def validated() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[str, str], dict[str, Any]]:
+def validated() -> tuple[
+    list[dict[str, Any]], dict[str, dict[str, Any]], dict[str, str], dict[str, Any], dict[str, Any]
+]:
     registry = load(REGISTRY)
     economy = load(ECONOMY)
     if registry.get("schema") != 1 or not isinstance(registry.get("gates"), list):
@@ -177,7 +295,8 @@ def validated() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[s
         )
     if ci_population() != economy["final_ci_population"]:
         raise EconomyError("final CI population does not match the workflow")
-    return gates, rows, times, economy
+    costs = load_costs(gate_ids)
+    return gates, rows, times, economy, costs
 
 
 def mark(classes: list[str], name: str) -> str:
@@ -185,23 +304,38 @@ def mark(classes: list[str], name: str) -> str:
 
 
 def render() -> str:
-    gates, rows, times, economy = validated()
+    gates, rows, times, economy, costs = validated()
+    measured = sum(1 for gate in gates if gate["id"] in costs["rows"])
     lines = [
         "# Blanc gate economic inventory",
         "",
         "Generated by `scripts/gate-economy.py` from the launch-current gate registry,",
-        "catalogue, and `scripts/gate-economy.json`. Do not edit by hand.",
+        "catalogue, `scripts/gate-economy.json` and the ledger import",
+        "`scripts/gate-measured-costs.json`. Do not edit by hand.",
         "",
         f"Launch population at `{economy['launch_catalogue_commit'][:12]}`: "
         f"**{economy['launch_population']}** catalogue rows and "
         f"**{economy['launch_ci_population']}** CI commands.",
         f"Final population: **{len(gates)}** catalogue rows and "
         f"**{economy['final_ci_population']}** CI commands. CI reconciliation is also audited by",
-        "`scripts/check-gates.sh --audit`. Timing cells below are the catalogue's latest",
-        "host-local observations; `unmeasured` is preserved honestly and no parallel sums are made.",
+        "`scripts/check-gates.sh --audit`. The catalogue time cell is the catalogue's own latest",
+        "host-local observation; `unmeasured` is preserved honestly and no parallel sums are made.",
+        f"The measured-cost cell is imported from the selective runner's evidence ledger",
+        f"(`--import-costs`, last imported {costs['imported_utc']}; {measured} of {len(gates)} rows",
+        "have a record): the median and newest `duration_s` of the retained green records,",
+        "never typed by hand. `no ledger record` means the row has not yet earned a shared",
+        "record on this host, so its only time is the catalogue cell.",
+        *(
+            [
+                f"Ignored as stale (imported for gates no longer registered): "
+                + ", ".join(f"`{item}`" for item in costs["stale"]) + "."
+            ]
+            if costs.get("stale")
+            else []
+        ),
         "",
-        "| # | gate | positive | static/corpus | harness/self-test | prerequisites | mutable input classes | material-output disposition | ordinary wall time | resource | historical actionable catches |",
-        "|---:|---|:---:|:---:|:---:|---|---|---|---|---|---|",
+        "| # | gate | positive | static/corpus | harness/self-test | prerequisites | mutable input classes | material-output disposition | catalogue time cell | measured cost (ledger) | resource | historical actionable catches |",
+        "|---:|---|:---:|:---:|:---:|---|---|---|---|---|---|---|",
     ]
     for gate in gates:
         row = rows[gate["id"]]
@@ -213,6 +347,7 @@ def render() -> str:
             f"| {gate['order']} | `{command}` | {mark(row['work'], 'candidate-positive')} | "
             f"{mark(row['work'], 'static-corpus')} | {mark(row['work'], 'harness-self-test')} | "
             f"{prerequisites} | {inputs} | {row.get('material_identity', 'not expensive')} | {times[command_text(gate)]} | "
+            f"{measured_cost_cell(costs, gate['id'])} | "
             f"{row['resource_class']} | {catches} |"
         )
     lines += [
@@ -257,18 +392,29 @@ def render() -> str:
 
 
 def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--write", action="store_true")
-    parser.add_argument("--check", action="store_true")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--write", action="store_true", help="regenerate docs/GATE_ECONOMY.md")
+    parser.add_argument("--check", action="store_true", help="hold the document to its generator")
+    parser.add_argument(
+        "--import-costs", action="store_true",
+        help="freeze measured costs from this host's evidence ledger, then regenerate",
+    )
     arguments = parser.parse_args(argv)
-    if arguments.write == arguments.check:
-        parser.error("choose exactly one of --write or --check")
+    if sum((arguments.write, arguments.check, arguments.import_costs)) != 1:
+        parser.error("choose exactly one of --write, --check or --import-costs")
     try:
+        if arguments.import_costs:
+            costs = import_costs()
+            COSTS.write_text(json.dumps(costs, indent=1) + "\n", encoding="utf-8")
+            print(
+                f"OK — gate economy inventory: imported measured costs for "
+                f"{len(costs['rows'])} gate(s) into {COSTS.relative_to(ROOT)}"
+            )
         rendered = render()
     except EconomyError as error:
         print(f"REGRESSION — gate economy inventory: {error}", file=sys.stderr)
         return 1
-    if arguments.write:
+    if arguments.write or arguments.import_costs:
         OUTPUT.write_text(rendered, encoding="utf-8")
         print(f"OK — gate economy inventory: wrote {OUTPUT.relative_to(ROOT)}")
         return 0

@@ -396,7 +396,7 @@ def run_suite(evidence_dir: Path | None) -> None:
         fix = fixture(Path(directory))
         data = fix.data(); data["host"] = "foreign-host"; fix.write_store(data)
         before = snapshot(fix); result = invoke(fix, "stable-host.json"); after = snapshot(fix)
-        assert result.returncode == 2 and "stable-host identity" in result.stderr and before == after
+        assert result.returncode == 2 and "different host identity" in result.stderr and before == after
         outputs.append({"name": "stable-host", "exit": "2", "stdout": result.stdout, "stderr": result.stderr.replace(str(fix.temp), "<fixture>"), "before_after_sha256": before})
 
     expect("toolchain", lambda path: fixture(path, toolchain_change=True), 2, "measurement protocol/configuration input changed: lean-toolchain", outputs)
@@ -413,12 +413,14 @@ def run_suite(evidence_dir: Path | None) -> None:
         outputs.append({"name": "wrong-candidate", "exit": "2", "stdout": result.stdout, "stderr": result.stderr.replace(str(fix.temp), "<fixture>"), "before_after_sha256": before})
 
     for name, mutation, phrase in [
-        ("malformed", lambda text: "bad row\n", "malformed/non-green"),
-        ("duplicate", lambda text: text + text.splitlines()[0] + "\n", "duplicate row"),
+        # The rows are parsed by the timing gate's own reader, so these
+        # falsifiers are refused in its words.
+        ("malformed", lambda text: "bad row\n", "malformed shared baseline row"),
+        ("duplicate", lambda text: text + text.splitlines()[0] + "\n", "invalid shared baseline row"),
         ("missing", lambda text: "\n".join(line for line in text.splitlines() if "Blanc/B.lean" not in line) + "\n", "exact complete Lean corpus"),
-        ("failed", lambda text: text.replace("OK\t1.500000\tBlanc/B.lean", "ERROR\t1.500000\tBlanc/B.lean"), "malformed/non-green"),
-        ("nonfinite", lambda text: text.replace("OK\t1.500000\tBlanc/B.lean", "OK\tnan\tBlanc/B.lean"), "non-finite/non-positive"),
-        ("negative", lambda text: text.replace("OK\t1.500000\tBlanc/B.lean", "OK\t-1.000000\tBlanc/B.lean"), "non-finite/non-positive"),
+        ("failed", lambda text: text.replace("OK\t1.500000\tBlanc/B.lean", "ERROR\t1.500000\tBlanc/B.lean"), "malformed shared baseline row"),
+        ("nonfinite", lambda text: text.replace("OK\t1.500000\tBlanc/B.lean", "OK\tnan\tBlanc/B.lean"), "invalid shared baseline row"),
+        ("negative", lambda text: text.replace("OK\t1.500000\tBlanc/B.lean", "OK\t-1.000000\tBlanc/B.lean"), "invalid shared baseline row"),
     ]:
         def build(path: Path, mutation: Callable[[str], str] = mutation) -> Fixture:
             fix = fixture(path)
@@ -430,14 +432,14 @@ def run_suite(evidence_dir: Path | None) -> None:
         fix = fixture(Path(directory))
         data = fix.data(); data["baselines"][1]["payload"] += "# digest damaged\n"; fix.write_store(data)
         before = snapshot(fix); result = invoke(fix, "digest.json"); after = snapshot(fix)
-        assert result.returncode == 2 and "payload digest mismatch" in result.stderr and before == after
+        assert result.returncode == 2 and "shared baseline record is invalid" in result.stderr and before == after
         outputs.append({"name": "digest-mismatch", "exit": "2", "stdout": result.stdout, "stderr": result.stderr.replace(str(fix.temp), "<fixture>"), "before_after_sha256": before})
 
     with tempfile.TemporaryDirectory(prefix="elab-migration-") as directory:
         fix = fixture(Path(directory))
         data = fix.data(); data["schema"] = 999; fix.write_store(data)
         before = snapshot(fix); result = invoke(fix, "schema.json"); after = snapshot(fix)
-        assert result.returncode == 2 and "schema/trust domain" in result.stderr and before == after
+        assert result.returncode == 2 and "schema is missing or incompatible" in result.stderr and before == after
         outputs.append({"name": "store-schema", "exit": "2", "stdout": result.stdout, "stderr": result.stderr.replace(str(fix.temp), "<fixture>"), "before_after_sha256": before})
 
     with tempfile.TemporaryDirectory(prefix="elab-migration-") as directory:

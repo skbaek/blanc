@@ -40,7 +40,9 @@
 #   scripts/check-gates.sh --inventory    # regenerate docs/GATE_INPUTS.md
 #   scripts/check-gates.sh --certify-build # after a successful host-safe lake build
 #
-# Evidence is written to `.lake/gate-report.md` and `.lake/gate-manifest.json`.
+# Evidence is written to `.lake/gate-report.md` and `.lake/gate-manifest.json`;
+# every executed row's output is streamed to `.lake/gate-run.log` as it is
+# produced, with a bounded progress line per minute while a row runs.
 
 set -euo pipefail
 
@@ -69,7 +71,7 @@ while [ "$#" -gt 0 ]; do
       exit 2
       ;;
     -h|--help)
-      sed -n '2,40p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+      sed -n '2,45p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)

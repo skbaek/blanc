@@ -875,10 +875,32 @@
     ],
     "tools": [
      "python3"
+    ],
+    "untracked_reads": [
+     {
+      "path": "Blanc/ProrataWethVaultCode.lean",
+      "reason": "mutation subject: the committed vault runtime literal the disposable copy is cut from; its own fidelity is the main row's verdict, a depends_on prerequisite"
+     },
+     {
+      "path": "Blanc/WethCode.lean",
+      "reason": "mutation subject: the committed WETH literal the vault's exact-call child is deployed from; verified by the main row"
+     },
+     {
+      "path": "scripts/prorata-weth-vault-reference.json",
+      "reason": "mutation carrier: the reference lock whose runtime digest the identity mutant swaps in the disposable copy; the committed lock is the reference row's subject"
+     },
+     {
+      "path": "scripts/prorata-weth-vault-reference-measurements.json",
+      "reason": "mutation carrier: the committed measurements the measurements mutant perturbs in the disposable copy; the main row byte-compares the committed file"
+     },
+     {
+      "path": "scripts/reference/prorata-weth-vault/inputs/standard-json-output.json",
+      "reason": "mutation subject: the compiler output the identity mutant deploys against; the reference row pins it"
+     }
     ]
    },
    "kind": "cacheable",
-   "note": "Harness self-test (evidence economy rule 3): 11 mutants of the kept controls -- the oracle offset and its four rounding directions, the locked reference identity, the committed measurements, the rollback projection, the deposit event order, the zero-receiver guard and selector coverage -- each run the narrowest --only/--side mode and must reach their named diagnostic; restore is byte identity to the committed file, whose green verdict is the prerequisite main row. Inputs are the harness's own files only: the committed Lean literals, Jaune binary, reference and measurement data it reads as subjects or mutation carriers are deliberately not fingerprinted, so the self-test reruns when a control changes, not when the subject does.",
+   "note": "Harness self-test (evidence economy rule 3): 11 mutants of the kept controls -- the oracle offset and its four rounding directions, the locked reference identity, the committed measurements, the rollback projection, the deposit event order, the zero-receiver guard and selector coverage -- each run the narrowest --only/--side mode and must reach their named diagnostic; restore is byte identity to the committed file, whose green verdict is the prerequisite main row. Inputs are the harness's own files only: the committed Lean literals, reference and measurement data it reads as subjects or mutation carriers are declared under untracked_reads and deliberately not fingerprinted; the Jaune binary it runs is not fingerprinted for this row either, since the read audit excuses every .lake/ read as a Lake-artifact channel and this row declares no Lean root. The self-test therefore reruns when a control changes, not when the subject or the runner binary does.",
    "verdict": {
     "expect_exit": 0,
     "summary_patterns": [
@@ -3563,6 +3585,7 @@
    "inputs": {
     "files": [
      "scripts/compare-elab-migration.py",
+     "scripts/check-elab-selection.py",
      "scripts/test-elab-migration-comparison.py"
     ],
     "tools": [
