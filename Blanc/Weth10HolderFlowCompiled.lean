@@ -592,9 +592,9 @@ theorem ninstAt_of_subcode_next
       (Func.compile table pc (.next n tail))) :
     Ninst.At code pc n := by
   rcases of_subcode sub with ⟨cd, hcode, hslice⟩
-  rcases of_bind_eq_some hcode with ⟨rest, hrest, hprefix⟩
-  simp [pure] at hprefix
-  rw [← hprefix] at hslice
+  rcases of_bind_eq_some hcode with ⟨_, _, hprefix⟩
+  rcases of_bind_eq_some hprefix with ⟨rest, _, hbytes⟩
+  rw [← Option.some.inj hbytes] at hslice
   exact Ninst.at_of_slice (List.slice_prefix hslice)
 
 /-- Follow one known childless machine continuation in the original frame.
@@ -1246,6 +1246,7 @@ theorem Xinst.step_call_spawn_ofCall
   all_goals first
     | cases hspawn
     | exact ⟨_, (genericCall_step_spawn_exact hspawn).1⟩
+    | exact ⟨_, (genericCallAmsterdam_step_spawn_exact hspawn).1⟩
 
 theorem Ninst.step_call_spawn_ofCall
     {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
@@ -1370,6 +1371,9 @@ theorem Exec.Frame.CompiledCursor.alignCommittedCallStep
 def NinstIsChildless : Ninst → Prop
   | .reg _ => True
   | .push _ _ => True
+  | .dupn _ => True
+  | .swapn _ => True
+  | .exchange _ => True
   | .exec _ => False
 
 private theorem Exec.Deriv.ParentStepActions.eq_nil_of_isChildless
@@ -1664,6 +1668,9 @@ theorem Devm.eq_of_burnBy
   · exact hleft.state.symm.trans hright.state
   · exact hleft.createdAccounts.symm.trans hright.createdAccounts
   · exact hleft.transientStorage.symm.trans hright.transientStorage
+  · exact hleft.stateGas.symm.trans hright.stateGas
+  · exact hleft.accountReads.symm.trans hright.accountReads
+  · exact hleft.storageReads.symm.trans hright.storageReads
 
 /-- The actual retained root execution, advanced past the runtime's entry
 `JUMPDEST`, is a compiled cursor at `weth10Main`. -/
@@ -2696,7 +2703,8 @@ theorem Exec.Frame.CompiledCursor.compiledTokenCallbackChronology
     (h_value_output : Line.Inv Devm.output value)
     (h_wf : Mem.Wf cursor.pre.memory)
     (h_reads : Mem.Reads cursor.pre.memory img)
-    (hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp)) :
+    (hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp))
+    (hfork : CoveredFork frame.sevm.benvStat.fork) :
     Blanc.Weth10.Exec.Frame.CompiledTokenCallbackChronology dp ca frame sel targetArg dataArg
       valueWord cursor.pre final cursor.actions := by
   rcases cursor.reachCallBoolCallbackWithPrefix hvalueChildless
@@ -2709,7 +2717,7 @@ theorem Exec.Frame.CompiledCursor.compiledTokenCallbackChronology
       have hcall := Ninst.Run.of_runCompiled hcallCompiled
       have hbool := Func.Run.of_runCompiled hboolCompiled
       rcases rawTokenCallbackIndexedStepBoundary_of_prefix dp sel
-          targetArg dataArg valueWord hprefix hcall hbool with
+          targetArg dataArg valueWord hprefix hcall hbool hfork with
         ⟨inputSize, input, parent, child, xl, pc, hraw⟩
       have hrawData := hraw
       rcases hrawData with
@@ -2815,7 +2823,7 @@ theorem Exec.Frame.compiledDepositToAndCallChronology
       cases hnil
       exact (of_run_callvalue hcv).output)
     hwfCallback hreadsCallback
-    context.invocation.2.2.2
+    context.invocation.2.2.2 context.covered
   have hcallbackActionsNil : callbackCursor.actions = [] :=
     hcallbackActions.trans hbodyActions
   have hstorEntry := getStor_eq_of_state_eq hentrySilent.state
@@ -2902,7 +2910,7 @@ theorem Exec.Frame.compiledApproveAndCallChronology
     (by unfold arg cdl; line_inv)
     (by unfold arg cdl; line_inv)
     (by unfold arg cdl; line_inv)
-    hwfCallback hreadsCallback context.invocation.2.2.2
+    hwfCallback hreadsCallback context.invocation.2.2.2 context.covered
   have hcallbackActionsNil : callbackCursor.actions = [] :=
     hcallbackActions.trans (hbodyActions.trans hwrapperActions)
   have hstorEntry := getStor_eq_of_state_eq hbodySilent.state
@@ -3312,13 +3320,14 @@ private theorem exists_acceptedValueCallTrace_same_slot
     {img : Bytes}
     (accepted : AcceptedValueCall e target value callPre guardPost)
     (hwf : Mem.Wf callPre.memory)
-    (hreads : Mem.Reads callPre.memory img) :
+    (hreads : Mem.Reads callPre.memory img)
+    (hfork : CoveredFork e.benvStat.fork) :
     ∃ trace : AcceptedValueCallTrace e target value callPre guardPost,
       trace.slot = trace.retained.slot ∧
       Mem.Wf guardPost.memory ∧ Mem.Reads guardPost.memory img := by
   rcases accepted with
     ⟨g, callPost, testPost, hstack, hcall, hiszero, hpop⟩
-  rcases of_run_call_val_with_depth_frame hstack hcall with
+  rcases of_run_call_val_with_depth_frame hstack hcall hfork with
       hfailed | hsuccess
   · exfalso
     have htest := prefix_of_iszero hiszero hfailed.1
@@ -3453,7 +3462,8 @@ private theorem Exec.Frame.CompiledCursor.compiledValueRedemptionContinuation
         some (Func.revertWith "WETH: burn amount exceeds balance")))
     (hsendError :
       (((weth10 dp).main :: weth10Aux)[sendErrorSlot]? =
-        some (Func.revertWith sendErrorReason))) :
+        some (Func.revertWith sendErrorReason)))
+    (hfork : CoveredFork frame.sevm.benvStat.fork) :
     ∃ (callPre : Devm)
         (successCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
           ((weth10 dp).main :: weth10Aux)
@@ -3593,7 +3603,7 @@ private theorem Exec.Frame.CompiledCursor.compiledValueRedemptionContinuation
     rw [← sendEvidence.memory]
     exact hreadsSend
   rcases exists_acceptedValueCallTrace_same_slot accepted
-      hwfCall hreadsCall with
+      hwfCall hreadsCall hfork with
     ⟨trace, htraceSlot, hwfTerminal, hreadsTerminal⟩
   have hcommits :
       Blanc.Weth10.RetainedXlot.RawCommits trace.retained.retained :=
@@ -3734,13 +3744,14 @@ theorem Exec.Frame.CompiledCursor.compiledValueRedemptionChronology
         some (Func.revertWith "WETH: burn amount exceeds balance")))
     (hsendError :
       (((weth10 dp).main :: weth10Aux)[sendErrorSlot]? =
-        some (Func.revertWith sendErrorReason))) :
+        some (Func.revertWith sendErrorReason)))
+    (hfork : CoveredFork frame.sevm.benvStat.fork) :
     Blanc.Weth10.Exec.Frame.CompiledValueRedemptionChronology dp ca frame cursor.pre
       (source.word frame.sevm).toAdr
       (Sevm.argWord frame.sevm amountArg) target
       cursor.actions := by
   rcases cursor.compiledValueRedemptionContinuation hstack hwf hreads
-      hsendChildless hsend hburnError hsendError with
+      hsendChildless hsend hburnError hsendError hfork with
     ⟨callPre, successCursor, trace, burn, htraceSlot, hcommits,
       occurrence, hsuccessActions, _hwfSuccess, _hreadsSuccess⟩
   have hsuccessRun : Func.Run
@@ -3778,7 +3789,8 @@ theorem Exec.Frame.CompiledCursor.enterTransferZeroThen
       (transferZeroThen success) final)
     (hstack : [] <<+ cursor.pre.stack)
     (hwf : Mem.Wf cursor.pre.memory)
-    (hreads : Mem.Reads cursor.pre.memory img) :
+    (hreads : Mem.Reads cursor.pre.memory img)
+    (hfork : CoveredFork frame.sevm.benvStat.fork) :
     ∃ (callPre guardPost : Devm)
         (trace : AcceptedValueCallTrace frame.sevm
           frame.sevm.caller.toB256 (Sevm.argWord frame.sevm 1)
@@ -3816,7 +3828,7 @@ theorem Exec.Frame.CompiledCursor.enterTransferZeroThen
       (by simp [weth10, weth10Aux, burnBalanceErrorSlot,
         burnBalanceError])
       (by simp [weth10, weth10Aux, ethTransferErrorSlot,
-        ethTransferError]) with
+        ethTransferError]) hfork with
     ⟨callPre, successCursor, trace, burn, htraceSlot, hcommits,
       occurrence, hactions, hwfSuccess, hreadsSuccess⟩
   refine ⟨callPre, successCursor.pre, trace, successCursor, ?_,
@@ -3874,6 +3886,7 @@ theorem Exec.Frame.compiledWithdrawChronology
       burnBalanceError])
     (by simp [weth10, weth10Aux, ethTransferErrorSlot,
       ethTransferError])
+  have chronology := chronology context.covered
   have rebased := chronology.of_entry_eq
     (funext (getStor_eq_of_state_eq hbodySilent.state))
     (funext (getBal_eq_of_state_eq hbodySilent.state))
@@ -3934,6 +3947,7 @@ theorem Exec.Frame.compiledWithdrawToChronology
       burnBalanceError])
     (by simp [weth10, weth10Aux, ethTransferErrorSlot,
       ethTransferError])
+  have chronology := chronology context.covered
   have rebased := chronology.of_entry_eq
     (funext (getStor_eq_of_state_eq hbodySilent.state))
     (funext (getBal_eq_of_state_eq hbodySilent.state))
@@ -4064,6 +4078,7 @@ theorem Exec.Frame.compiledTransferZeroChronology
       burnBalanceError])
     (by simp [weth10, weth10Aux, ethTransferErrorSlot,
       ethTransferError])
+  have chronology := chronology context.covered
   have rebased := chronology.of_entry_eq
     hownStor hownBal hownCode hownLogs hownOutput
   have hactions : zeroCursor.actions = [] :=
@@ -4782,6 +4797,7 @@ theorem Exec.Frame.compiledTransferFromZeroChronology
       burnBalanceError])
     (by simp [weth10, weth10Aux, ethTransferErrorSlot,
       ethTransferError])
+  have chronology := chronology context.covered
   have hactions : zeroCursor.actions = [] :=
     hzeroActions.trans (htargetActions.trans
       (hcoreActions.trans (htransferActions.trans hwrapperActions)))
@@ -4854,6 +4870,7 @@ theorem Exec.Frame.compiledWithdrawFromChronology
       burnBalanceError])
     (by simp [weth10, weth10Aux, etherTransferErrorSlot,
       etherTransferError])
+  have chronology := chronology context.covered
   have hactions : ownCursor.actions = [] :=
     hownActions.trans (hwithdrawActions.trans hwrapperActions)
   refine ⟨ownCursor.pre, hownObs, ?_⟩
@@ -5685,7 +5702,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transfer
       have heffect := (weth10_transfer_successEffect dp
         context.memory_wf context.memory_reads_empty run
         context.invocation.2.2.2
-        (by simpa only [transferSelector] using hselector) hnonempty).2
+        (by simpa only [transferSelector] using hselector) hnonempty context.covered).2
       have htarget : e.currentTarget = ca := context.invocation.2.1
       rcases heffect with hzero | hnonzero
       · rcases hzero with ⟨hraw, callPre, guardPost, hprefix, _⟩
@@ -5804,7 +5821,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_depositToAndCall
       subst pc
       have heffect := weth10_depositToAndCall_rawSuccessEffect dp
         context.invocation.2.2.2 hselector hnonempty context.memory_wf
-        context.memory_reads_empty run
+        context.memory_reads_empty run context.covered
       unfold DepositToAndCallRawSuccessEffect at heffect
       rcases heffect with
         ⟨callbackPre, inputSize, input, hstor, hlogs, hbal, hcode,
@@ -5856,7 +5873,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferAndCall
       subst pc
       have heffect := (weth10_transferAndCall_rawSuccessEffect dp
         context.invocation.2.2.2 hselector hnonempty context.memory_wf
-        context.memory_reads_empty run).2
+        context.memory_reads_empty run context.covered).2
       have htarget : e.currentTarget = ca := context.invocation.2.1
       rcases heffect with hzero | hnonzero
       · rcases hzero with
@@ -6023,7 +6040,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_withdraw
       have heffect := (weth10_withdraw_successEffect dp
         context.memory_wf context.memory_reads_empty run
         context.invocation.2.2.2
-        (by simpa only [withdrawSelector] using hselector) hnonempty).2
+        (by simpa only [withdrawSelector] using hselector) hnonempty context.covered).2
       rcases heffect with ⟨callPre, hprefix⟩
       unfold BurnCallPrefix at hprefix
       have htarget : e.currentTarget = ca := context.invocation.2.1
@@ -6067,7 +6084,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_withdrawTo
       have heffect := (weth10_withdrawTo_successEffect dp
         context.memory_wf context.memory_reads_empty run
         context.invocation.2.2.2
-        (by simpa only [withdrawToSelector] using hselector) hnonempty).2
+        (by simpa only [withdrawToSelector] using hselector) hnonempty context.covered).2
       rcases heffect with ⟨callPre, hprefix⟩
       unfold BurnCallPrefix at hprefix
       have htarget : e.currentTarget = ca := context.invocation.2.1
@@ -6172,7 +6189,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_flashLoan
         exact context.stateCode_eq
       have heffect := (weth10_flashLoan_rawSuccessEffect dp
         context.invocation.2.2.2 hstateCode hselector hnonempty
-        context.memory_wf context.memory_reads_empty run).2
+        context.memory_wf context.memory_reads_empty run context.covered).2
       unfold RawFlashLoanSuccessEffect at heffect
       rcases heffect with
         ⟨h0, h1, h2, htoken, recipient, sc, mid, settle, burn,
@@ -6304,7 +6321,7 @@ theorem Exec.Frame.hasAcceptedDebit_of_flowAction?_eq_some
           exact context.stateCode_eq
         have heffect := (weth10_flashLoan_rawSuccessEffect dp
           context.invocation.2.2.2 hstateCode hflash hnonempty
-          context.memory_wf context.memory_reads_empty run).2
+          context.memory_wf context.memory_reads_empty run context.covered).2
         unfold RawFlashLoanSuccessEffect at heffect
         rcases heffect with
           ⟨h0, h1, h2, htoken, recipient, sc, mid, settle, burn,
@@ -6377,21 +6394,21 @@ theorem Exec.Frame.hasGenuineWethEmitterEffect_of_flowAction?_eq_some
       · apply GenuineWethEmitterEffect.depositToAndCall hdepositCall
         have heffect := weth10_depositToAndCall_rawSuccessEffect dp
           context.invocation.2.2.2 hdepositCall hnonempty
-          context.memory_wf context.memory_reads_empty run
+          context.memory_wf context.memory_reads_empty run context.covered
         simpa only [Exec.Frame.post, Execution.committedPost] using heffect
       by_cases htransfer : Sevm.selector e = transferSelector
       · apply GenuineWethEmitterEffect.transfer htransfer
         have heffect := (weth10_transfer_successEffect dp
           context.memory_wf context.memory_reads_empty run
           context.invocation.2.2.2
-          (by simpa only [transferSelector] using htransfer) hnonempty).2
+          (by simpa only [transferSelector] using htransfer) hnonempty context.covered).2
         simpa only [Exec.Frame.post, Execution.committedPost] using heffect
       by_cases htransferCall :
           Sevm.selector e = transferAndCallSelector
       · apply GenuineWethEmitterEffect.transferAndCall htransferCall
         have heffect := (weth10_transferAndCall_rawSuccessEffect dp
           context.invocation.2.2.2 htransferCall hnonempty
-          context.memory_wf context.memory_reads_empty run).2
+          context.memory_wf context.memory_reads_empty run context.covered).2
         simpa only [Exec.Frame.post, Execution.committedPost] using heffect
       by_cases htransferFrom : Sevm.selector e = transferFromSelector
       · apply GenuineWethEmitterEffect.transferFrom htransferFrom
@@ -6406,7 +6423,7 @@ theorem Exec.Frame.hasGenuineWethEmitterEffect_of_flowAction?_eq_some
         have heffect := (weth10_withdraw_successEffect dp
           context.memory_wf context.memory_reads_empty run
           context.invocation.2.2.2
-          (by simpa only [withdrawSelector] using hwithdraw) hnonempty).2
+          (by simpa only [withdrawSelector] using hwithdraw) hnonempty context.covered).2
         simpa only [Exec.Frame.post, Execution.committedPost] using heffect
       by_cases hwithdrawTo : Sevm.selector e = withdrawToSelector
       · apply GenuineWethEmitterEffect.withdrawTo hwithdrawTo
@@ -6414,7 +6431,7 @@ theorem Exec.Frame.hasGenuineWethEmitterEffect_of_flowAction?_eq_some
           context.memory_wf context.memory_reads_empty run
           context.invocation.2.2.2
           (by simpa only [withdrawToSelector] using hwithdrawTo)
-          hnonempty).2
+          hnonempty context.covered).2
         simpa only [Exec.Frame.post, Execution.committedPost] using heffect
       by_cases hwithdrawFrom : Sevm.selector e = withdrawFromSelector
       · apply GenuineWethEmitterEffect.withdrawFrom hwithdrawFrom
@@ -6432,7 +6449,7 @@ theorem Exec.Frame.hasGenuineWethEmitterEffect_of_flowAction?_eq_some
           exact context.stateCode_eq
         have heffect := (weth10_flashLoan_rawSuccessEffect dp
           context.invocation.2.2.2 hstateCode hflash hnonempty
-          context.memory_wf context.memory_reads_empty run).2
+          context.memory_wf context.memory_reads_empty run context.covered).2
         simpa only [Exec.Frame.post, Execution.committedPost] using heffect
       have hprimary : primaryFlowAtom e = none := by
         simp [primaryFlowAtom, hnonempty, hdeposit, hdepositTo,
@@ -6852,7 +6869,7 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_depositToAndCall
       subst pc
       have heffect := weth10_depositToAndCall_rawStepSuccessEffect dp
         context.invocation.2.2.2 hselector hnonempty context.memory_wf
-        context.memory_reads_empty run
+        context.memory_reads_empty run context.covered
       rcases heffect with
         ⟨callbackPre, inputSize, input, hstor, hlogs, hbal, hcode,
           houtput, hboundary⟩
@@ -6909,13 +6926,13 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transfer
       have heffect := (weth10_transfer_successEffect dp
         context.memory_wf context.memory_reads_empty run
         context.invocation.2.2.2
-        (by simpa only [transferSelector] using hselector) hnonempty).2
+        (by simpa only [transferSelector] using hselector) hnonempty context.covered).2
       have htarget : e.currentTarget = ca := context.invocation.2.1
       rcases heffect with hzero | hnonzero
       · rcases hzero with
           ⟨hraw, callPre, guardPost, hprefix, hstorGuard, hbalGuard,
             hcodeGuard, hlogsGuard, htrue⟩
-        have htrace := exists_burnCallPrefixTrace hprefix
+        have htrace := exists_burnCallPrefixTrace hprefix context.covered
         have hprefix' := hprefix
         unfold BurnCallPrefix at hprefix'
         rw [htarget] at hprefix'
@@ -6987,13 +7004,13 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transferAndCall
       subst pc
       have heffect := (weth10_transferAndCall_rawStepSuccessEffect dp
         context.invocation.2.2.2 hselector hnonempty context.memory_wf
-        context.memory_reads_empty run).2
+        context.memory_reads_empty run context.covered).2
       have htarget : e.currentTarget = ca := context.invocation.2.1
       rcases heffect with hzero | hnonzero
       · rcases hzero with
           ⟨hraw, callPre, callbackPre, inputSize, input, hprefix,
             hboundary⟩
-        have htrace := exists_burnCallPrefixTrace hprefix
+        have htrace := exists_burnCallPrefixTrace hprefix context.covered
         have hprefix' := hprefix
         unfold BurnCallPrefix at hprefix'
         rw [htarget] at hprefix'
@@ -7090,7 +7107,7 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transferFrom
         rcases hburn with
           ⟨callPre, guardPost, hprefix, hstorGuard, hbalGuard,
             hcodeGuard, hlogsGuard, htrue⟩
-        have htrace := exists_burnCallPrefixTrace hprefix
+        have htrace := exists_burnCallPrefixTrace hprefix context.covered
         have hprefix' := hprefix
         unfold BurnCallPrefix at hprefix'
         rw [htarget, hrest, hsource] at hprefix'
@@ -7176,9 +7193,9 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_withdraw
       have heffect := (weth10_withdraw_successEffect dp
         context.memory_wf context.memory_reads_empty run
         context.invocation.2.2.2
-        (by simpa only [withdrawSelector] using hselector) hnonempty).2
+        (by simpa only [withdrawSelector] using hselector) hnonempty context.covered).2
       rcases heffect with ⟨callPre, hprefix⟩
-      have htrace := exists_burnCallPrefixTrace hprefix
+      have htrace := exists_burnCallPrefixTrace hprefix context.covered
       have hprefix' := hprefix
       unfold BurnCallPrefix at hprefix'
       have htarget : e.currentTarget = ca := context.invocation.2.1
@@ -7229,9 +7246,9 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_withdrawTo
         context.memory_wf context.memory_reads_empty run
         context.invocation.2.2.2
         (by simpa only [withdrawToSelector] using hselector)
-        hnonempty).2
+        hnonempty context.covered).2
       rcases heffect with ⟨callPre, hprefix⟩
-      have htrace := exists_burnCallPrefixTrace hprefix
+      have htrace := exists_burnCallPrefixTrace hprefix context.covered
       have hprefix' := hprefix
       unfold BurnCallPrefix at hprefix'
       have htarget : e.currentTarget = ca := context.invocation.2.1
@@ -7285,7 +7302,7 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_withdrawFrom
         (by simpa only [withdrawFromSelector] using hselector)
         hnonempty).2
       rcases heffect with ⟨corePre, hallowance, callPre, hprefix⟩
-      have htrace := exists_burnCallPrefixTrace hprefix
+      have htrace := exists_burnCallPrefixTrace hprefix context.covered
       have htarget : e.currentTarget = ca := context.invocation.2.1
       have hrest := callerAllowanceOutcome_rest_eq hallowance
       have hsilent := callerAllowanceOutcome_weth10Silent hallowance
@@ -7379,7 +7396,7 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_flashLoan
           hsettleLogs, hsettleOutput, hwfSettle, hreadsSettleEx,
           hsettle⟩ :=
         of_rawFlashLoanSuccessTail_step dp hstack' hwfSc hreadsRuntime
-          (by rfl) htail'
+          (by rfl) htail' context.covered
       obtain ⟨settleImg, hreadsSettle⟩ := hreadsSettleEx
       obtain ⟨burn, hburn, hallowance, hwfBurn, burnImg,
           hreadsBurn⟩ :=
@@ -7669,6 +7686,15 @@ private theorem sourceSstoreSiteCount_next (n : Ninst) (rest : Func) :
       simp [sourceSstoreSiteCount, Func.sourceSiteCount,
         ninstSourceSstoreSiteCount]
   | push bs h =>
+      simp [sourceSstoreSiteCount, Func.sourceSiteCount,
+        ninstSourceSstoreSiteCount]
+  | dupn a =>
+      simp [sourceSstoreSiteCount, Func.sourceSiteCount,
+        ninstSourceSstoreSiteCount]
+  | swapn a =>
+      simp [sourceSstoreSiteCount, Func.sourceSiteCount,
+        ninstSourceSstoreSiteCount]
+  | exchange a =>
       simp [sourceSstoreSiteCount, Func.sourceSiteCount,
         ninstSourceSstoreSiteCount]
 

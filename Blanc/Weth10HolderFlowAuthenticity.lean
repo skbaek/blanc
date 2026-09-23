@@ -45,6 +45,9 @@ structure Exec.Frame.AuthenticContext
   root : Blanc.Weth10.Exec.Frame.IsRoot frame
   invocation : Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame
   installed : Prog.At (weth10 dp) ca frame.pc frame.sevm frame.pre
+  /-- The frame runs on a covered fork; inherited from the root frame, since
+  a spawned child keeps its parent's block environment. -/
+  covered : CoveredFork frame.sevm.benvStat.fork
 
 theorem Exec.Frame.AuthenticContext.memory_wf
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
@@ -190,6 +193,52 @@ theorem Exec.mem_descendantFrames_isRoot
         · exact ihNext hnext
       · exact ihNext hmem
 
+/-- Every descendant retained by `Exec.descendantFrames` runs on its root's
+fork, so root coverage covers them all. -/
+theorem Exec.mem_descendantFrames_covered
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (hfork : CoveredFork sevm.benvStat.fork) {frame : Exec.Frame}
+    (hmem : frame ∈ Blanc.Exec.descendantFrames run) :
+    CoveredFork frame.sevm.benvStat.fork := by
+  induction run with
+  | halt hstep =>
+      simp [Blanc.Exec.descendantFrames] at hmem
+  | cont hstep next ih =>
+      exact ih hfork (by simpa only [Blanc.Exec.descendantFrames] using hmem)
+  | doneErr hstep henter hresume =>
+      simp [Blanc.Exec.descendantFrames] at hmem
+  | doneOk hstep henter hresume next ih =>
+      exact ih hfork (by simpa only [Blanc.Exec.descendantFrames] using hmem)
+  | runErr hstep henter child hresume ihChild =>
+      simp [Blanc.Exec.descendantFrames] at hmem
+  | runOk hstep henter child hresume next ihChild ihNext =>
+      have hchildFork := Evm.step_spawn_child_fork hstep henter hfork
+      simp only [Blanc.Exec.descendantFrames] at hmem
+      split at hmem
+      · simp only [List.mem_append, List.mem_cons] at hmem
+        rcases hmem with (rfl | hchild) | hnext
+        · exact hchildFork
+        · exact ihChild hchildFork hchild
+        · exact ihNext hfork hnext
+      · exact ihNext hfork hmem
+
+/-- Root coverage covers the complete committed-frame list. -/
+theorem Exec.committedFrames_covered
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (hfork : CoveredFork sevm.benvStat.fork) :
+    ∀ frame ∈ Blanc.Exec.committedFrames run,
+      CoveredFork frame.sevm.benvStat.fork := by
+  intro frame hframe
+  unfold Blanc.Exec.committedFrames at hframe
+  split at hframe
+  · simp only [List.mem_cons] at hframe
+    rcases hframe with rfl | hdesc
+    · exact hfork
+    · exact Blanc.Weth10.Exec.mem_descendantFrames_covered run hfork hdesc
+  · cases hframe
+
 /-- Root freshness plus the structural child theorem covers the complete
 committed-frame list. -/
 theorem Exec.committedFrames_isRoot
@@ -229,12 +278,14 @@ theorem Exec.Frame.authenticContext_of_mem_committedFrames_exactInvocation
     (run : Exec pc sevm pre out)
     (hcode : some (pre.getCode ca).toList = Prog.compile (weth10 dp))
     (hpc : pc = 0) (hmemory : pre.memory = Mem.empty)
+    (hfork : CoveredFork sevm.benvStat.fork)
     {frame : Exec.Frame}
     (hframe : frame ∈ Blanc.Exec.committedFrames run)
     (hinvocation : Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame) :
     Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame := by
   refine ⟨Blanc.Weth10.Exec.committedFrames_isRoot run hpc hmemory frame hframe,
-    hinvocation, ?_⟩
+    hinvocation, ?_,
+    Blanc.Weth10.Exec.committedFrames_covered run hfork frame hframe⟩
   refine ⟨Blanc.Weth10.Exec.committedFrames_installedCode run hcode frame hframe, ?_⟩
   intro _
   exact ⟨hinvocation.2.2.2, hinvocation.1⟩
@@ -247,6 +298,7 @@ theorem Exec.Frame.authenticContext_of_mem_committedFrames
     (run : Exec pc sevm pre out)
     (hcode : some (pre.getCode ca).toList = Prog.compile (weth10 dp))
     (hpc : pc = 0) (hmemory : pre.memory = Mem.empty)
+    (hfork : CoveredFork sevm.benvStat.fork)
     {frame : Exec.Frame} {action : FlowAction}
     (hframe : frame ∈ Blanc.Exec.committedFrames run)
     (haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
@@ -254,7 +306,7 @@ theorem Exec.Frame.authenticContext_of_mem_committedFrames
   have hinvocation :=
     Blanc.Weth10.Exec.Frame.exactInvocation_of_flowAction?_eq_some haction
   exact Blanc.Weth10.Exec.Frame.authenticContext_of_mem_committedFrames_exactInvocation
-    run hcode hpc hmemory hframe hinvocation
+    run hcode hpc hmemory hfork hframe hinvocation
 
 /-- All committed frames retained by one raw execution slot start at whole
 frame altitude. -/
