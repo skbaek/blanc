@@ -60,12 +60,17 @@ private theorem silentIn_rootContinuation :
     (change RootSilentSlot rootLoopSlot
      simp [RootSilentSlot, rootLoopSlot, emptyRevertSlot, bubbleRevertSlot])
 
-private theorem silentIn_rootLoop :
-    Func.SilentIn Devm.storageView RootSilentSlot rootLoop := by
+/-- The root loop's SHA-256 crossing is a `STATICCALL`, whose storage
+silence is a covered-fork fact, so the loop is silent in each covered
+context rather than universally. -/
+private theorem silentAt_rootLoop {sevm : Sevm}
+    (hfork : CoveredFork sevm.benvStat.fork) :
+    Func.SilentAt Devm.storageView sevm RootSilentSlot rootLoop := by
   unfold rootLoop rootLiveStep rootDeadStep rootFinish sha64 loadWord
     mstoreAt storeLe64At returnDataShorterThan returnMemoryRange pushList
   silent_structure with
     first
+    | exact fun run => Ninst.staticcall_inv_getStor hfork run
     | (change RootSilentSlot emptyRevertSlot
        simp [RootSilentSlot, emptyRevertSlot, bubbleRevertSlot,
          rootLoopSlot, rootContinuationSlot])
@@ -86,31 +91,32 @@ private theorem silentIn_getDepositRoot :
        simp [RootSilentSlot, emptyRevertSlot, bubbleRevertSlot,
          rootLoopSlot, rootContinuationSlot])
 
-private theorem rootSilentSlot_closed :
+private theorem rootSilentSlot_closed {sevm : Sevm}
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∀ k g, RootSilentSlot k → (runtime.main :: aux)[k]? = some g →
-      Func.SilentIn Devm.storageView RootSilentSlot g := by
+      Func.SilentAt Devm.storageView sevm RootSilentSlot g := by
   intro k g allowed lookup
   rcases allowed with h | h | h | h
   · subst k
     obtain rfl : Func.revert = g := Option.some.inj
       ((show (runtime.main :: aux)[emptyRevertSlot]? = some Func.revert from rfl).symm.trans
         lookup)
-    exact silentIn_emptyRevert
+    exact silentIn_emptyRevert.toSilentAt
   · subst k
     obtain rfl : Func.revertReturnData = g := Option.some.inj
       ((show (runtime.main :: aux)[bubbleRevertSlot]? =
           some Func.revertReturnData from rfl).symm.trans lookup)
-    exact silentIn_bubbleRevert
+    exact silentIn_bubbleRevert.toSilentAt
   · subst k
     obtain rfl : rootLoop = g := Option.some.inj
       ((show (runtime.main :: aux)[rootLoopSlot]? = some rootLoop from rfl).symm.trans
         lookup)
-    exact silentIn_rootLoop
+    exact silentAt_rootLoop hfork
   · subst k
     obtain rfl : rootContinuation = g := Option.some.inj
       ((show (runtime.main :: aux)[rootContinuationSlot]? =
           some rootContinuation from rfl).symm.trans lookup)
-    exact silentIn_rootContinuation
+    exact silentIn_rootContinuation.toSilentAt
 
 private def NativeShaPreserves
     (fs : List Func) (sevm : Sevm) (f : Func) : Prop :=
@@ -127,11 +133,11 @@ private theorem nativeShaPreserves_sha64
   intro s r native run
   have stackPrefix : ([] : Stack) <<+ s.stack := by
     simpa only [List.nil_append] using pref_append ([] : Stack) s.stack
-  rcases sha64_success_of_run hbubble hrev native.precompile
+  rcases sha64_success_of_run (hfork := native.covered) hbubble hrev native.precompile
       native.nondelegated stackPrefix run with
     ⟨q, _stack, successRun, _memory, _returnData, storage, code⟩
   have nativeQ : NativeShaEntry sevm q := by
-    refine ⟨?_, native.precompile⟩
+    refine ⟨?_, native.precompile, native.covered⟩
     rw [congrFun code 2]
     exact native.nondelegated
   rcases successPreserves nativeQ successRun with ⟨nativeR, storageR⟩
@@ -145,7 +151,7 @@ private theorem nativeShaPreserves_of_inv
   intro s r native run
   have storageEq := Func.of_inv Devm.getStor Devm.getStor storage run
   have codeEq := Func.of_inv Devm.getCode Devm.getCode code run
-  refine ⟨⟨?_, native.precompile⟩, storageEq.symm⟩
+  refine ⟨⟨?_, native.precompile, native.covered⟩, storageEq.symm⟩
   rw [← congrFun codeEq 2]
   exact native.nondelegated
 
@@ -161,7 +167,7 @@ private theorem NativeShaPreserves.branch
       funext a
       exact getCode_eq_of_state_eq pop.state a
     have native' : NativeShaEntry sevm s' := by
-      refine ⟨?_, native.precompile⟩
+      refine ⟨?_, native.precompile, native.covered⟩
       rw [← congrFun codeEq 2]
       exact native.nondelegated
     rcases left native' leftRun with ⟨nativeR, storageR⟩
@@ -173,7 +179,7 @@ private theorem NativeShaPreserves.branch
       funext a
       exact getCode_eq_of_state_eq stateEq a
     have native'' : NativeShaEntry sevm s'' := by
-      refine ⟨?_, native.precompile⟩
+      refine ⟨?_, native.precompile, native.covered⟩
       rw [← congrFun codeEq 2]
       exact native.nondelegated
     rcases right native'' rightRun with ⟨nativeR, storageR⟩
@@ -191,7 +197,7 @@ private theorem NativeShaPreserves.prepend
   rcases of_run_prepend line f run with ⟨q, lineRun, tailRun⟩
   have codeEq := code lineRun
   have nativeQ : NativeShaEntry sevm q := by
-    refine ⟨?_, native.precompile⟩
+    refine ⟨?_, native.precompile, native.covered⟩
     rw [← congrFun codeEq 2]
     exact native.nondelegated
   rcases tail nativeQ tailRun with ⟨nativeR, storageR⟩
@@ -210,7 +216,7 @@ private theorem NativeShaPreserves.call
     funext a
     exact getCode_eq_of_state_eq burn.state a
   have nativeMid : NativeShaEntry sevm mid := by
-    refine ⟨?_, native.precompile⟩
+    refine ⟨?_, native.precompile, native.covered⟩
     rw [← congrFun codeEq 2]
     exact native.nondelegated
   rcases body nativeMid bodyRun with ⟨nativeR, storageR⟩
@@ -254,9 +260,9 @@ private theorem getDepositRoot_historyTarget
     {baseline : List B256} {ca : Adr} :
     HistoryTargetSound baseline ca
       (nonpayableEndpoint getDepositRootEndpoint) := by
-  intro sevm s r target pre _wf _native _memory run
-  have storageView := Func.observe_eq_of_run_silentIn
-    rootSilentSlot_closed run silentIn_getDepositRoot
+  intro sevm s r target pre _wf native _memory run
+  have storageView := Func.observe_eq_of_run_silentAt
+    (rootSilentSlot_closed native.covered) run silentIn_getDepositRoot.toSilentAt
   subst ca
   refine ⟨trivial, ?_⟩
   exact (pre.inv.1 rfl).of_get_eq (fun key =>
@@ -311,7 +317,7 @@ private theorem HistoryDispatchState.of_line
     rw [← memoryEq]
     exact wf
   have native' : NativeShaEntry sevm s' := by
-    refine ⟨?_, native.precompile⟩
+    refine ⟨?_, native.precompile, native.covered⟩
     rw [← congrFun codeEq 2]
     exact native.nondelegated
   exact ⟨target, pre', wf', native', memoryEq.symm.trans empty⟩
@@ -327,7 +333,7 @@ private theorem HistoryDispatchState.of_popBurn
     funext a
     exact getCode_eq_of_state_eq pop.state a
   have native' : NativeShaEntry sevm s' := by
-    refine ⟨?_, native.precompile⟩
+    refine ⟨?_, native.precompile, native.covered⟩
     rw [← congrFun codeEq 2]
     exact native.nondelegated
   have wf' : Mem.Wf s'.memory := by
@@ -347,7 +353,7 @@ private theorem HistoryDispatchState.of_burn
     funext a
     exact getCode_eq_of_state_eq burn.state a
   have native' : NativeShaEntry sevm s' := by
-    refine ⟨?_, native.precompile⟩
+    refine ⟨?_, native.precompile, native.covered⟩
     rw [← congrFun codeEq 2]
     exact native.nondelegated
   have wf' : Mem.Wf s'.memory := by
@@ -376,7 +382,7 @@ private theorem historySpec_sound_of_targets
     {baseline : List B256} {ca : Adr}
     (h_all : ∀ p ∈ funcs, HistoryTargetSound baseline ca p.2) :
     (historySpec baseline).SoundAdmitted ca HistoryEntry := by
-  intro sevm pre post execution run h_ca admitted _ih h_wf h_pre
+  intro sevm pre post _hfork execution run h_ca admitted _ih h_wf h_pre
   have entry : HistoryEntry sevm pre :=
     Exec.HistoryAdmitted.root admitted h_ca
   have statePre : HistoryDispatchState baseline ca sevm pre :=
