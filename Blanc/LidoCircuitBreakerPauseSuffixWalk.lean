@@ -150,6 +150,7 @@ entry world's `temporalAccountAccessCost`, and the successor world is its
 theorem temporal_extcodesize_runCompiled
     {sevm : Sevm} {base : Devm} {x v : B256}
     {stack : List B256} {M : Mem} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hval : (base.getCode x.toAdr).size.toB256 = v)
     (hroom : stack.length < 1024) :
     Ninst.RunCompiled sevm
@@ -163,13 +164,15 @@ theorem temporal_extcodesize_runCompiled
     simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using
       Ninst.runCompiled_extcodesize_warm
         (devm := base.setMach ⟨x :: stack, M, G + gasWarmAccess, base.stateGas⟩)
-        rfl hwarm hval (by simp only [Devm.gasLeft_setMach]) hroom
+        hfork.rules_stateGas_none rfl hwarm hval (by simp only [Devm.gasLeft_setMach]) hroom
   · simp only [temporalAccountAccessBase, temporalAccountAccessCost,
       if_neg hwarm]
-    simpa only [addAccessedAddress_setMach_setMach, Devm.memory_setMach] using
+    have hsg : (addAccessedAddress base x.toAdr).stateGas = base.stateGas := rfl
+    simpa only [addAccessedAddress_setMach_setMach, Devm.memory_setMach,
+      Devm.stateGas_setMach, hsg] using
       Ninst.runCompiled_extcodesize_cold
         (devm := base.setMach ⟨x :: stack, M, G + gasColdAccountAccess, base.stateGas⟩)
-        rfl hwarm hval (by simp only [Devm.gasLeft_setMach]) hroom
+        hfork.rules_stateGas_none rfl hwarm hval (by simp only [Devm.gasLeft_setMach]) hroom
 
 /-! ## The two crossings, resolved at a warm code-carrying callee
 
@@ -187,6 +190,7 @@ account, so the EIP-150 `min` collapses and the crossing costs exactly
 
 private lemma responder_call_crossing
     {sevm : Sevm} {devm : Devm} {target iiw isw oiw osw : B256}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {s : List B256} {G : Nat}
     (hstk : devm.stack =
       Nat.toB256 G :: target :: 0 :: iiw :: isw :: oiw :: osw :: s)
@@ -270,7 +274,7 @@ private lemma responder_call_crossing
     exact ⟨by omega, by omega, by omega⟩
   obtain ⟨post, hrun, hstack, hmem, hgasl, herr, hout, hret, hlogs, hrefund,
     hatd, htrans, hask, haa, stmid, hsub, hstate⟩ :=
-    runCompiled_call_zero_value_responder (gw := Nat.toB256 G) (cw := target)
+    runCompiled_call_zero_value_responder (hfork := hfork) (gw := Nat.toB256 G) (cw := target)
       hstk (show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
         [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = 0 from hext)
       hdel hacc hsplit (by rw [hd0gas]; exact hcross) hdepth hnp
@@ -294,6 +298,7 @@ private lemma responder_call_crossing
 
 private lemma responder_staticcall_crossing
     {sevm : Sevm} {devm : Devm} {target iiw isw oiw osw : B256}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {s : List B256} {G : Nat}
     (hstk : devm.stack =
       Nat.toB256 G :: target :: iiw :: isw :: oiw :: osw :: s)
@@ -377,7 +382,7 @@ private lemma responder_staticcall_crossing
     exact ⟨by omega, by omega, by omega⟩
   obtain ⟨post, hrun, hstack, hmem, hgasl, herr, hout, hret, hlogs, hrefund,
     hatd, htrans, hask, haa, stmid, hsub, hstate⟩ :=
-    runCompiled_staticcall_responder (gw := Nat.toB256 G) (tw := target)
+    runCompiled_staticcall_responder (hfork := hfork) (gw := Nat.toB256 G) (tw := target)
       hstk (show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
         [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = 0 from hext)
       hdel hacc hsplit (by rw [hd0gas]; exact hcross) hdepth hnp
@@ -413,6 +418,7 @@ store: `16` to the store key, `1396` from the store to the lock `TSTORE`,
 `100` for the `TSTORE` itself. -/
 theorem pauseExpiryFinish_ok_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (pauser value expiryCurrent expiryOriginal : B256)
     (storeCost G : Nat)
     (hsize : 32 ≤ M.size) (halign : M.size % 32 = 0)
@@ -461,7 +467,7 @@ theorem pauseExpiryFinish_ok_runCompiled
       (((storePost.addLog hbLog).setMach ⟨[], M', G, (storePost.addLog hbLog).stateGas⟩).setTransVal
         sevm.currentTarget lockKey 0) := by
     refine Func.RunCompiled.next ?_ (Func.RunCompiled.last rfl)
-    have h := runCompiled_tstore_of (sevm := sevm)
+    have h := runCompiled_tstore_of (hfork := hfork) (sevm := sevm)
       (pre := (storePost.addLog hbLog).setMach ⟨[lockKey, 0], M', G + 100, (storePost.addLog hbLog).stateGas⟩)
       (key := lockKey) (value := 0) (stack := [])
       (G := G) rfl hstatic
@@ -476,6 +482,7 @@ theorem pauseExpiryFinish_ok_runCompiled
       (((storePost.addLog hbLog).setMach ⟨[], M', G, (storePost.addLog hbLog).stateGas⟩).setTransVal
         sevm.currentTarget lockKey 0) := by
     func_run (7) [1381]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     case h_cost =>
       simp only [show ((0 : B256) * 32).toNat = 0 by decide,
         show ((1 : B256) * 32).toNat = 32 by decide]
@@ -499,7 +506,7 @@ theorem pauseExpiryFinish_ok_runCompiled
       (((storePost.addLog hbLog).setMach ⟨[], M', G, (storePost.addLog hbLog).stateGas⟩).setTransVal
         sevm.currentTarget lockKey 0) := by
     refine Func.RunCompiled.next
-      (temporal_sstore_runCompiled hexpiry hexpiryOrig hstoreCost
+      (temporal_sstore_runCompiled (hfork := hfork) hexpiry hexpiryOrig hstoreCost
         hwarmExpiry (by omega) hstatic) ?_
     exact hlogTail
   -- the store key and the scratch write
@@ -511,6 +518,7 @@ theorem pauseExpiryFinish_ok_runCompiled
       pushB256 (1 * 32) ::: pushB256 (0 * 32) ::: Ninst.log 2 :::
       pushB256 0 ::: pushB256 lockKey ::: Ninst.tstore ::: Func.stop) _
   func_run (6) [0, expirySlot pauser]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_ext =>
     simp only [show ((0 : B256) * 32).toNat = 0 by decide]
     exact Devm.extCost_zero_of_le halign (by omega)
@@ -558,6 +566,7 @@ key, `16` for the count test and the taken branch and the zero push, and the
 finish's `1512`. -/
 theorem pauseSuccess_zeroCount_ok_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target duration pauser expiryCurrent expiryOriginal : B256)
     (countCost storeCost G : Nat)
@@ -656,7 +665,7 @@ theorem pauseSuccess_zeroCount_ok_runCompiled
         ⟨[], (M.write 0 duration.toBytes).write 0 (0 : B256).toBytes,
           G, ((temporalSstorePost sevm countBase (expirySlot pauser) 0).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, pauser], (0 : B256).toBytes⟩).stateGas⟩).setTransVal
         sevm.currentTarget lockKey 0) := by
-    refine pauseExpiryFinish_ok_runCompiled fs sevm countBase
+    refine pauseExpiryFinish_ok_runCompiled (hfork := hfork) fs sevm countBase
       (M.write 0 duration.toBytes) pauser 0
       expiryCurrent expiryOriginal storeCost G (by omega) halign' hcaller
       ?_ hexpiryOrig ?_ hstoreCost hstipend hstatic
@@ -680,6 +689,7 @@ theorem pauseSuccess_zeroCount_ok_runCompiled
           G, ((temporalSstorePost sevm countBase (expirySlot pauser) 0).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, pauser], (0 : B256).toBytes⟩).stateGas⟩).setTransVal
         sevm.currentTarget lockKey 0) := by
     func_run (3) [1]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     have hg : G + 1531 + storeCost - 19 = G + 1512 + storeCost := by omega
     rw [hg]
     exact hfinish
@@ -690,7 +700,7 @@ theorem pauseSuccess_zeroCount_ok_runCompiled
       Ninst.sload
       (countBase.setMach ⟨[(0 : B256)], M.write 0 duration.toBytes,
         G + 1531 + storeCost, countBase.stateGas⟩) := by
-    have h := temporal_sload_runCompiled (sevm := sevm) (base := eventBase)
+    have h := temporal_sload_runCompiled (hfork := hfork) (sevm := sevm) (base := eventBase)
       (key := countSlot pauser) (value := 0) (stack := [])
       (M := M.write 0 duration.toBytes)
       (G := G + 1531 + storeCost) hcount (by simp)
@@ -699,6 +709,7 @@ theorem pauseSuccess_zeroCount_ok_runCompiled
     exact h
   -- the event prefix
   func_run (14) [3, 0, 3, 1756, countSlot pauser]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try simp_rw [hdurationMemory]
   all_goals try simp_rw [hdurationValue]
   all_goals try simp_rw [show ((0 : B256) * 32).toNat = 0 by decide]
@@ -736,6 +747,7 @@ and interval `SLOAD`s and the expiry `SSTORE`, all hypothesis-supplied:
 and the finish's `1512`. -/
 theorem pauseSuccess_checkedCount_ok_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target duration pauser count interval expiryCurrent expiryOriginal : B256)
     (countCost intervalCost storeCost G : Nat)
@@ -847,7 +859,7 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
         ⟨[], (M.write 0 duration.toBytes).write 0
           (interval + sevm.benvStat.time).toBytes, G, ((temporalSstorePost sevm intervalBase (expirySlot pauser) (interval + sevm.benvStat.time)).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, pauser], (interval + sevm.benvStat.time).toBytes⟩).stateGas⟩).setTransVal
         sevm.currentTarget lockKey 0) := by
-    refine pauseExpiryFinish_ok_runCompiled fs sevm intervalBase
+    refine pauseExpiryFinish_ok_runCompiled (hfork := hfork) fs sevm intervalBase
       (M.write 0 duration.toBytes) pauser (interval + sevm.benvStat.time)
       expiryCurrent expiryOriginal storeCost G (by omega) halign' hcaller
       ?_ hexpiryOrig ?_ hstoreCost hstipend hstatic
@@ -880,6 +892,7 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
           (interval + sevm.benvStat.time).toBytes, G, ((temporalSstorePost sevm intervalBase (expirySlot pauser) (interval + sevm.benvStat.time)).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, pauser], (interval + sevm.benvStat.time).toBytes⟩).stateGas⟩).setTransVal
         sevm.currentTarget lockKey 0) := by
     func_run (6) [interval + sevm.benvStat.time, 0]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     · exact ltCheck_checkedSum_eq_zero hnof
     · have hg : G + 1539 + storeCost - 27 = G + 1512 + storeCost := by omega
       rw [hg]
@@ -906,7 +919,7 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
         heartbeatIntervalSlot
         (temporalSloadBase_accessedStorageKeys_addLog sevm base eventLog
           (countSlot pauser))).trans hintervalCost
-    have h := temporal_sload_runCompiled (sevm := sevm) (base := countBase)
+    have h := temporal_sload_runCompiled (hfork := hfork) (sevm := sevm) (base := countBase)
       (key := heartbeatIntervalSlot) (value := interval)
       (stack := [sevm.benvStat.time]) (M := M.write 0 duration.toBytes)
       (G := G + 1539 + storeCost) hvalue (by simp)
@@ -927,6 +940,7 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
           (interval + sevm.benvStat.time).toBytes, G, ((temporalSstorePost sevm intervalBase (expirySlot pauser) (interval + sevm.benvStat.time)).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, pauser], (interval + sevm.benvStat.time).toBytes⟩).stateGas⟩).setTransVal
         sevm.currentTarget lockKey 0) := by
     func_run (4) [0]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     · rw [B256.eqCheck, if_neg hcountNz]
     · have hg : G + 1560 + intervalCost + storeCost - 21 =
           G + 1539 + storeCost + intervalCost := by omega
@@ -939,7 +953,7 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
       Ninst.sload
       (countBase.setMach ⟨[count], M.write 0 duration.toBytes,
         G + 1560 + intervalCost + storeCost, countBase.stateGas⟩) := by
-    have h := temporal_sload_runCompiled (sevm := sevm) (base := eventBase)
+    have h := temporal_sload_runCompiled (hfork := hfork) (sevm := sevm) (base := eventBase)
       (key := countSlot pauser) (value := count) (stack := [])
       (M := M.write 0 duration.toBytes)
       (G := G + 1560 + intervalCost + storeCost) hcount (by simp)
@@ -948,6 +962,7 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
     exact h
   -- the event prefix
   func_run (14) [3, 0, 3, 1756, countSlot pauser]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try simp_rw [hdurationMemory]
   all_goals try simp_rw [hdurationValue]
   all_goals try simp_rw [show ((0 : B256) * 32).toNat = 0 by decide]
@@ -1016,6 +1031,7 @@ staging, `117` for the `CALL`, `44` to the `STATICCALL`, `117` for it, and
 `81` for the decode into `pauseSuccess`. -/
 theorem pauseAfterSet_toSuccess_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (target duration : B256) (M : Mem) (img : Bytes)
     (codeCost Gb : Nat)
     (hwf : Mem.Wf M)
@@ -1173,7 +1189,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
   -- the first crossing
   obtain ⟨post1, hrun1, hstk1, hmem1, hgas1, herr1, hout1, hret1, hlogs1,
     hrefund1, hatd1, htrans1, hask1, haa1, st₁, hsub1, hstate1⟩ :=
-    responder_call_crossing (sevm := sevm)
+    responder_call_crossing (hfork := hfork) (sevm := sevm)
       (devm := (temporalAccountAccessBase base target.toAdr).setMach
         ⟨[Nat.toB256 (Gb + 359), target, 0, 284, 36, 0, 0],
           (M.write 256 pauseForSelector.toBytes).write 288 duration.toBytes,
@@ -1219,7 +1235,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
     exact hcalleeCode
   obtain ⟨post2, hrun2, hstk2, hmem2, hgas2, herr2, hout2, hret2, hlogs2,
     hrefund2, hatd2, htrans2, hask2, haa2, st₂, hsub2, hstate2⟩ :=
-    responder_staticcall_crossing (sevm := sevm)
+    responder_staticcall_crossing (hfork := hfork) (sevm := sevm)
       (devm := post1.setMach
         ⟨[Nat.toB256 (Gb + 198), target, 284, 4, 0, 32],
           ((M.write 256 pauseForSelector.toBytes).write 288
@@ -1331,6 +1347,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
       rw [hdecodedValue]
       decide
     func_run (14) [0, 0, 3, 0, 1]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     case h_cost =>
       simp only [show ((0 : B256) * 32).toNat = 0 by decide]
       rw [Devm.extCost_zero_of_le (by omega) (by omega)]
@@ -1351,6 +1368,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
             Ninst.gas ::: Ninst.staticcall ::: Ninst.iszero :::
             ((Func.call bubbleRevertSlot) <?> decodePausedResult)))) post := by
     func_run (12) [0, 0, 3]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try simp_rw [show ((8 : B256) * 32).toNat = 256 by decide]
     all_goals try simp_rw [htargetMemory3]
     case h_ext =>
@@ -1385,6 +1403,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
                 ((Func.call bubbleRevertSlot) <?> decodePausedResult))))))
       post := by
     func_run (18) [0, 0, 3, 0, 3]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try simp_rw [show ((8 : B256) * 32).toNat = 256 by decide]
     all_goals try simp_rw [show ((9 : B256) * 32).toNat = 288 by decide]
     all_goals try simp_rw [hdurationMemory1]
@@ -1417,13 +1436,14 @@ theorem pauseAfterSet_toSuccess_runCompiled
       Ninst.extcodesize
       ((temporalAccountAccessBase base target.toAdr).setMach
         ⟨[calleeCode.size.toB256, target], M, Gb + 418, (temporalAccountAccessBase base target.toAdr).stateGas⟩) := by
-    have h := temporal_extcodesize_runCompiled (sevm := sevm) (base := base)
+    have h := temporal_extcodesize_runCompiled (hfork := hfork) (sevm := sevm) (base := base)
       (x := target) (v := calleeCode.size.toB256) (stack := [target])
       (M := M) (G := Gb + 418)
       (by rw [hcalleeCode]) (by simp)
     rw [hcodeCost] at h
     exact h
   func_run (3) [3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign (by
       have hoff : (targetWord * 32).toNat + 32 ≤ 768 := by decide
