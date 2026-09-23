@@ -1,0 +1,532 @@
+{
+ "schema": 1,
+ "imported_utc": "2026-09-23T15:07:34Z",
+ "source": "blanc-gate-evidence/evidence-v3-<stable-host>.json below the Git common directory; provenance.duration_s of each retained green record",
+ "rows": {
+  "axiom-audit": {
+   "records": 12,
+   "median_s": 15.743,
+   "latest_s": 22.656,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:57:38Z"
+  },
+  "beacon-deposit-assurance": {
+   "records": 12,
+   "median_s": 0.389,
+   "latest_s": 0.037,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T11:36:33Z"
+  },
+  "beacon-deposit-current-mainnet": {
+   "records": 3,
+   "median_s": 25.618,
+   "latest_s": 25.618,
+   "latest_commit": "0dabdfda6513",
+   "latest_utc": "2026-09-20T21:00:45Z"
+  },
+  "beacon-deposit-deployment": {
+   "records": 6,
+   "median_s": 2.545,
+   "latest_s": 1.974,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:57:15Z"
+  },
+  "beacon-deposit-differential": {
+   "records": 11,
+   "median_s": 23.061,
+   "latest_s": 22.768,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:57:11Z"
+  },
+  "beacon-deposit-model": {
+   "records": 4,
+   "median_s": 53.644,
+   "latest_s": 52.35,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:55:14Z"
+  },
+  "claims": {
+   "records": 12,
+   "median_s": 2.809,
+   "latest_s": 3.897,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:57:42Z"
+  },
+  "current-mainnet": {
+   "records": 2,
+   "median_s": 6.879,
+   "latest_s": 6.953,
+   "latest_commit": "cb702f16b805",
+   "latest_utc": "2026-09-18T21:32:12Z"
+  },
+  "cycle-write-free-semantic": {
+   "records": 12,
+   "median_s": 38.3,
+   "latest_s": 47.382,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T14:46:36Z"
+  },
+  "cycle-write-free-static": {
+   "records": 12,
+   "median_s": 44.788,
+   "latest_s": 48.336,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:53:24Z"
+  },
+  "doc-counts": {
+   "records": 12,
+   "median_s": 0.335,
+   "latest_s": 0.339,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T11:36:33Z"
+  },
+  "drip-current-mainnet": {
+   "records": 3,
+   "median_s": 342.09,
+   "latest_s": 342.09,
+   "latest_commit": "cb702f16b805",
+   "latest_utc": "2026-09-18T21:51:31Z"
+  },
+  "drip-evidence": {
+   "records": 12,
+   "median_s": 42.232,
+   "latest_s": 48.605,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T14:47:49Z"
+  },
+  "drip-stack-certificate-data": {
+   "records": 3,
+   "median_s": 0.943,
+   "latest_s": 0.947,
+   "latest_commit": "cb702f16b805",
+   "latest_utc": "2026-09-18T21:45:04Z"
+  },
+  "elab": {
+   "records": 12,
+   "median_s": 9.719,
+   "latest_s": 10.449,
+   "latest_commit": "c8bf9bbc256b",
+   "latest_utc": "2026-09-21T05:31:14Z"
+  },
+  "elab-migration-comparison-controls": {
+   "records": 1,
+   "median_s": 14.04,
+   "latest_s": 14.04,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T14:48:23Z"
+  },
+  "error-data": {
+   "records": 11,
+   "median_s": 1.625,
+   "latest_s": 1.401,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:54:21Z"
+  },
+  "execution-occurrence-semantic": {
+   "records": 9,
+   "median_s": 322.504,
+   "latest_s": 445.97,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T14:45:48Z"
+  },
+  "execution-occurrence-static": {
+   "records": 12,
+   "median_s": 16.109,
+   "latest_s": 16.565,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:52:35Z"
+  },
+  "execution-settlement": {
+   "records": 9,
+   "median_s": 4.774,
+   "latest_s": 4.531,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:52:19Z"
+  },
+  "extraction-ownership": {
+   "records": 12,
+   "median_s": 22.291,
+   "latest_s": 25.191,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T11:37:43Z"
+  },
+  "fmint-coverage": {
+   "records": 4,
+   "median_s": 0.384,
+   "latest_s": 0.382,
+   "latest_commit": "cb702f16b805",
+   "latest_utc": "2026-09-18T21:37:35Z"
+  },
+  "fmint-fixtures": {
+   "records": 8,
+   "median_s": 0.824,
+   "latest_s": 1.385,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T14:36:53Z"
+  },
+  "keccak-rate-boundary": {
+   "records": 12,
+   "median_s": 1.196,
+   "latest_s": 0.918,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T11:37:45Z"
+  },
+  "layering": {
+   "records": 12,
+   "median_s": 0.221,
+   "latest_s": 0.05,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T11:36:33Z"
+  },
+  "lido-access": {
+   "records": 11,
+   "median_s": 21.308,
+   "latest_s": 22.266,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:51:33Z"
+  },
+  "lido-artifact-profile": {
+   "records": 11,
+   "median_s": 2.202,
+   "latest_s": 5.417,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:50:34Z"
+  },
+  "lido-circuit-breaker-assurance": {
+   "records": 12,
+   "median_s": 0.423,
+   "latest_s": 0.066,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T11:36:33Z"
+  },
+  "lido-constructor": {
+   "records": 11,
+   "median_s": 1.946,
+   "latest_s": 1.855,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:50:37Z"
+  },
+  "lido-deployment": {
+   "records": 12,
+   "median_s": 30.209,
+   "latest_s": 38.19,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:52:14Z"
+  },
+  "lido-differential": {
+   "records": 11,
+   "median_s": 12.773,
+   "latest_s": 12.442,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:54:04Z"
+  },
+  "lido-dispatchers": {
+   "records": 11,
+   "median_s": 12.687,
+   "latest_s": 12.511,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:53:51Z"
+  },
+  "lido-enumeration": {
+   "records": 11,
+   "median_s": 4.534,
+   "latest_s": 4.788,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:51:10Z"
+  },
+  "lido-history": {
+   "records": 11,
+   "median_s": 1.94,
+   "latest_s": 1.883,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:51:35Z"
+  },
+  "lido-ossifiable-proxy-artifacts": {
+   "records": 2,
+   "median_s": 1.492,
+   "latest_s": 1.613,
+   "latest_commit": "cb702f16b805",
+   "latest_utc": "2026-09-18T21:27:34Z"
+  },
+  "lido-ossifiable-proxy-current-mainnet": {
+   "records": 2,
+   "median_s": 63.215,
+   "latest_s": 61.223,
+   "latest_commit": "cb702f16b805",
+   "latest_utc": "2026-09-18T21:36:59Z"
+  },
+  "lido-ossifiable-proxy-differential": {
+   "records": 4,
+   "median_s": 3.435,
+   "latest_s": 3.143,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:54:16Z"
+  },
+  "lido-ossifiable-proxy-performance": {
+   "records": 2,
+   "median_s": 0.732,
+   "latest_s": 0.738,
+   "latest_commit": "cb702f16b805",
+   "latest_utc": "2026-09-18T20:52:33Z"
+  },
+  "lido-ossifiable-proxy-reference": {
+   "records": 2,
+   "median_s": 3.285,
+   "latest_s": 3.329,
+   "latest_commit": "cb702f16b805",
+   "latest_utc": "2026-09-18T20:52:32Z"
+  },
+  "lido-reference": {
+   "records": 2,
+   "median_s": 5.139,
+   "latest_s": 5.041,
+   "latest_commit": "cb702f16b805",
+   "latest_utc": "2026-09-18T20:52:22Z"
+  },
+  "lido-registry-semantic": {
+   "records": 11,
+   "median_s": 78.368,
+   "latest_s": 86.557,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T14:38:22Z"
+  },
+  "lido-registry-static": {
+   "records": 12,
+   "median_s": 20.036,
+   "latest_s": 24.763,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:51:04Z"
+  },
+  "lido-runtime-errors": {
+   "records": 11,
+   "median_s": 1.98,
+   "latest_s": 1.954,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:50:39Z"
+  },
+  "lido-twg-census": {
+   "records": 2,
+   "median_s": 0.46,
+   "latest_s": 0.516,
+   "latest_commit": "cb702f16b805",
+   "latest_utc": "2026-09-18T20:52:22Z"
+  },
+  "lido-twg-differential": {
+   "records": 12,
+   "median_s": 5.919,
+   "latest_s": 5.749,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:54:11Z"
+  },
+  "lido-twg-pinned-target-current-mainnet": {
+   "records": 7,
+   "median_s": 13.895,
+   "latest_s": 15.987,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T14:48:06Z"
+  },
+  "lido-twg-reference": {
+   "records": 2,
+   "median_s": 5.915,
+   "latest_s": 5.891,
+   "latest_commit": "cb702f16b805",
+   "latest_utc": "2026-09-18T20:52:28Z"
+  },
+  "proof-debt": {
+   "records": 12,
+   "median_s": 4.141,
+   "latest_s": 4.581,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T11:37:10Z"
+  },
+  "proof-duplication": {
+   "records": 12,
+   "median_s": 3.604,
+   "latest_s": 4.175,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T11:37:15Z"
+  },
+  "proof-module-size": {
+   "records": 12,
+   "median_s": 1.045,
+   "latest_s": 0.769,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T11:37:11Z"
+  },
+  "proof-recipes": {
+   "records": 12,
+   "median_s": 17.552,
+   "latest_s": 32.538,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T11:37:05Z"
+  },
+  "proof-residue": {
+   "records": 12,
+   "median_s": 2.584,
+   "latest_s": 2.568,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T11:37:18Z"
+  },
+  "prorata-current-mainnet": {
+   "records": 4,
+   "median_s": 67.052,
+   "latest_s": 64.624,
+   "latest_commit": "cb702f16b805",
+   "latest_utc": "2026-09-18T21:35:58Z"
+  },
+  "prorata-fixtures": {
+   "records": 8,
+   "median_s": 0.751,
+   "latest_s": 0.617,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T14:36:55Z"
+  },
+  "prorata-weth-vault-artifact": {
+   "records": 5,
+   "median_s": 0.18,
+   "latest_s": 0.233,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T14:46:58Z"
+  },
+  "prorata-weth-vault-boundary": {
+   "records": 12,
+   "median_s": 0.478,
+   "latest_s": 0.081,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T14:46:59Z"
+  },
+  "prorata-weth-vault-differential": {
+   "records": 8,
+   "median_s": 56.018,
+   "latest_s": 110.159,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T11:39:35Z"
+  },
+  "prorata-weth-vault-differential-self-test": {
+   "records": 8,
+   "median_s": 2054.586,
+   "latest_s": 7852.648,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:50:28Z"
+  },
+  "prorata-weth-vault-oracle": {
+   "records": 3,
+   "median_s": 0.031,
+   "latest_s": 0.434,
+   "latest_commit": "cb702f16b805",
+   "latest_utc": "2026-09-18T20:52:33Z"
+  },
+  "prorata-weth-vault-oracle-self-test": {
+   "records": 3,
+   "median_s": 0.547,
+   "latest_s": 0.557,
+   "latest_commit": "cb702f16b805",
+   "latest_utc": "2026-09-18T20:53:31Z"
+  },
+  "prorata-weth-vault-reference": {
+   "records": 4,
+   "median_s": 0.214,
+   "latest_s": 0.468,
+   "latest_commit": "64e902ccf01f",
+   "latest_utc": "2026-09-19T12:43:09Z"
+  },
+  "prorata-weth-vault-reference-self-test": {
+   "records": 4,
+   "median_s": 0.285,
+   "latest_s": 0.531,
+   "latest_commit": "64e902ccf01f",
+   "latest_utc": "2026-09-19T12:43:10Z"
+  },
+  "proxy-pair-upgrade-semantic": {
+   "records": 11,
+   "median_s": 9.457,
+   "latest_s": 11.735,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T14:46:57Z"
+  },
+  "proxy-pair-upgrade-static": {
+   "records": 12,
+   "median_s": 0.402,
+   "latest_s": 0.064,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T14:36:55Z"
+  },
+  "recipe-dispatch-controls": {
+   "records": 7,
+   "median_s": 1.694,
+   "latest_s": 2.152,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T14:48:09Z"
+  },
+  "transient-settlement-semantic": {
+   "records": 12,
+   "median_s": 5.837,
+   "latest_s": 7.807,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T14:46:45Z"
+  },
+  "transient-settlement-static": {
+   "records": 12,
+   "median_s": 9.285,
+   "latest_s": 9.536,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:53:33Z"
+  },
+  "trust-surface": {
+   "records": 12,
+   "median_s": 1.284,
+   "latest_s": 1.294,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T11:37:44Z"
+  },
+  "weth-coverage": {
+   "records": 4,
+   "median_s": 0.369,
+   "latest_s": 0.374,
+   "latest_commit": "cb702f16b805",
+   "latest_utc": "2026-09-18T21:37:35Z"
+  },
+  "weth-fixtures": {
+   "records": 8,
+   "median_s": 0.57,
+   "latest_s": 0.441,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T14:36:54Z"
+  },
+  "weth10-current-mainnet": {
+   "records": 4,
+   "median_s": 91.858,
+   "latest_s": 89.361,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:56:47Z"
+  },
+  "weth10-deployment": {
+   "records": 12,
+   "median_s": 2.197,
+   "latest_s": 2.108,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:54:20Z"
+  },
+  "weth10-differential": {
+   "records": 6,
+   "median_s": 3.224,
+   "latest_s": 2.895,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:53:38Z"
+  },
+  "weth10-redemption": {
+   "records": 8,
+   "median_s": 1.159,
+   "latest_s": 0.912,
+   "latest_commit": "cfdd32e170f9",
+   "latest_utc": "2026-09-23T13:54:17Z"
+  },
+  "weth10-reference": {
+   "records": 2,
+   "median_s": 19.919,
+   "latest_s": 19.792,
+   "latest_commit": "cb702f16b805",
+   "latest_utc": "2026-09-18T20:52:17Z"
+  }
+ }
+}
