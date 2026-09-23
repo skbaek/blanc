@@ -749,8 +749,11 @@ theorem freshRegistrationWorld_run :
           ⟨freshWorldOwner, [heartbeatUpdatedEvent, freshWorldPauser],
             freshWorldExpiry.toBytes⟩] ∧
       some freshWorldSevm.code.toList = Prog.compile (runtime officialParams) := by
+  have hfork : CoveredFork freshWorldSevm.benvStat.fork := by
+    change CoveredFork .prague
+    exact CoveredFork.prague
   rcases freshWorld_dataFacts with ⟨hlength, hselector, hargTarget, hargNew⟩
-  rcases registerPauser_runCompiledTo_freshNonzero officialParams
+  rcases registerPauser_runCompiledTo_freshNonzero (hfork := hfork) officialParams
       freshWorldSevm freshWorldPre [] freshWorldTarget freshWorldPauser
       freshWorldTime freshWorldInterval freshWorldExpiry 0 0 0 0 0
       gasStorageSet gasStorageSet gasStorageSet gasStorageSet gasStorageSet 0
@@ -818,7 +821,7 @@ theorem freshRegistrationWorld_settles :
   have hsettle :
       (Frame.ofCall freshWorldMsg).settle (.ok post) = .ok post := by
     simp only [Frame.settle, Frame.settleMsg, Frame.ofCall,
-      executeCode.handleError, processMessage.settle, bind, Except.bind,
+      executeCode.handleErrorWith_ok, executeCode.handleError, processMessage.settle, bind, Except.bind,
       if_neg hnot]
     rfl
   rwa [hsettle] at hprocess
