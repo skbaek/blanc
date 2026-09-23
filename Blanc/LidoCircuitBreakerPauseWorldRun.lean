@@ -2134,10 +2134,13 @@ private theorem pauseLastWorld_master :
           ⟨configWorldOwner, [heartbeatUpdatedEvent, pauseWorldPauser],
             (0 : B256).toBytes⟩] ∧
       some pauseLastSevm.code.toList = Prog.compile (runtime officialParams) := by
+  have hfork : CoveredFork pauseLastSevm.benvStat.fork := by
+    change CoveredFork .prague
+    exact CoveredFork.prague
   -- the existential pauseAfterSet leg at the post-removal boundary
   obtain ⟨mid, hstk, hmem, hgas, herrF, houtF, hretF, hlogsF, hrefundF,
     hatdF, htransF, haskF, haaF, hchain, hclose⟩ :=
-    pauseAfterSet_toSuccess_runCompiled
+    pauseAfterSet_toSuccess_runCompiled (hfork := hfork)
       ((runtime officialParams).main :: (runtime officialParams).aux)
       pauseLastSevm ((indexClearPost pauseLastSevm (entryClearPost pauseLastSevm (temporalSloadBase pauseLastSevm (temporalSloadBase pauseLastSevm (temporalSloadBase pauseLastSevm (temporalSstorePost pauseLastSevm (temporalSloadBase pauseLastSevm (assignmentPost pauseLastSevm
       (pauseKernelBase pauseLastSevm pauseLastPre
@@ -2203,7 +2206,7 @@ private theorem pauseLastWorld_master :
         entryClearPost_accessedStorageKeys]
       exact lastWarm_expiry_rb3)
   -- the zero-count pauseSuccess walk from the boundary
-  have hW8 := pauseSuccess_zeroCount_ok_runCompiled
+  have hW8 := pauseSuccess_zeroCount_ok_runCompiled (hfork := hfork)
     ((runtime officialParams).main :: (runtime officialParams).aux)
     pauseLastSevm mid (pauseDecodedMemory (((((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes).write
@@ -2270,7 +2273,7 @@ private theorem pauseLastWorld_master :
     hafter
   rw [show (9349 + 1934 : Nat) = 0 + 11283 from by norm_num] at hfin
   -- through the cold-entry removal walk
-  have hrem := removeTarget_toFinish_coldEntry_runCompiled officialParams
+  have hrem := removeTarget_toFinish_coldEntry_runCompiled (hfork := hfork) officialParams
     pauseLastSevm (temporalSstorePost pauseLastSevm (temporalSloadBase pauseLastSevm (assignmentPost pauseLastSevm
       (pauseKernelBase pauseLastSevm pauseLastPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
@@ -2319,7 +2322,7 @@ private theorem pauseLastWorld_master :
     (by rw [lastMem_size1]; decide) (by rw [lastMem_size1]) hrem
   rw [show (26622 + 35 : Nat) = 0 + 26657 from by norm_num] at hglue
   -- through the shared Registry kernel
-  have hker := setPauserKernel_found_runCompiled officialParams pauseLastSevm
+  have hker := setPauserKernel_found_runCompiled (hfork := hfork) officialParams pauseLastSevm
     (pauseKernelBase pauseLastSevm pauseLastPre
       pauseWorldCallee.toB256 pauseWorldPauser)
     (pauseMemory pauseWorldCallee.toB256 pauseWorldDuration)
@@ -2349,7 +2352,7 @@ private theorem pauseLastWorld_master :
   rw [lastKernelPrefixGas,
     show (0 + 26657 + 8122 : Nat) = 34779 from by norm_num] at hker
   -- through the guarded body
-  have hbody := pause_body_runCompiled officialParams pauseLastSevm
+  have hbody := pause_body_runCompiled (hfork := hfork) officialParams pauseLastSevm
     pauseLastPre pauseWorldCallee.toB256 pauseWorldPauser pauseWorldExpiry
     pauseWorldDuration 2100 2100 2100 34779 _
     (pauseWorld_dataLength pauseLastWorldStor pauseLastWorldGas)
@@ -4195,9 +4198,12 @@ private theorem pauseRetainedWorld_master :
             (pauseWorldInterval + pauseWorldTime).toBytes⟩] ∧
       some pauseRetainedSevm.code.toList =
         Prog.compile (runtime officialParams) := by
+  have hfork : CoveredFork pauseRetainedSevm.benvStat.fork := by
+    change CoveredFork .prague
+    exact CoveredFork.prague
   obtain ⟨mid, hstk, hmem, hgas, herrF, houtF, hretF, hlogsF, hrefundF,
     hatdF, htransF, haskF, haaF, hchain, hclose⟩ :=
-    pauseAfterSet_toSuccess_runCompiled
+    pauseAfterSet_toSuccess_runCompiled (hfork := hfork)
       ((runtime officialParams).main :: (runtime officialParams).aux)
       pauseRetainedSevm ((temporalSstorePost pauseRetainedSevm (lengthWritePost pauseRetainedSevm (temporalSstorePost pauseRetainedSevm (temporalSstorePost pauseRetainedSevm
       (addAccessedStorageKey (temporalSstorePost pauseRetainedSevm
@@ -4254,7 +4260,7 @@ private theorem pauseRetainedWorld_master :
       countSlot pauseWorldPauser) ∈ mid.accessedStorageKeys :=
     (haskF _).mpr (by rw [addLog_accessedStorageKeys]; exact returnWarm_count_rb6)
   -- the checked-count pauseSuccess walk from the boundary
-  have hW8 := pauseSuccess_checkedCount_ok_runCompiled
+  have hW8 := pauseSuccess_checkedCount_ok_runCompiled (hfork := hfork)
     ((runtime officialParams).main :: (runtime officialParams).aux)
     pauseRetainedSevm mid (pauseDecodedMemory (((((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes).write
@@ -4351,7 +4357,7 @@ private theorem pauseRetainedWorld_master :
     (by rw [returnMem_sizeLast]) rfl
     hafter
   rw [show (11478 + 1934 : Nat) = 0 + 13412 from by norm_num] at hfin
-  have hrem := removeTarget_swapPop_toFinish_coldEntry_runCompiled officialParams
+  have hrem := removeTarget_swapPop_toFinish_coldEntry_runCompiled (hfork := hfork) officialParams
     pauseRetainedSevm (temporalSstorePost pauseRetainedSevm (temporalSloadBase pauseRetainedSevm (assignmentPost pauseRetainedSevm
       (pauseKernelBase pauseRetainedSevm pauseRetainedPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
@@ -4408,7 +4414,7 @@ private theorem pauseRetainedWorld_master :
     [] 38551 _ (by decide) returnMem_reads1 returnMem_new1
     (by rw [returnMem_size1]; decide) (by rw [returnMem_size1]) hrem
   rw [show (38551 + 35 : Nat) = 0 + 38586 from by norm_num] at hglue
-  have hker := setPauserKernel_found_runCompiled officialParams pauseRetainedSevm
+  have hker := setPauserKernel_found_runCompiled (hfork := hfork) officialParams pauseRetainedSevm
     (pauseKernelBase pauseRetainedSevm pauseRetainedPre
       pauseWorldCallee.toB256 pauseWorldPauser) (pauseMemory pauseWorldCallee.toB256 pauseWorldDuration) (pauseImage pauseWorldCallee.toB256 pauseWorldDuration) _
     pauseWorldCallee.toB256 0 pauseWorldPauser 2 pauseWorldPauser 2 2900 2900 38586 0
@@ -4437,7 +4443,7 @@ private theorem pauseRetainedWorld_master :
     unfold foundSetPauserKernelPrefixGas
     rw [returnCost_assignWarm, returnCost_countCold],
     show (0 + 38586 + 8122 : Nat) = 46708 from by norm_num] at hker
-  have hbody := pause_body_runCompiled officialParams pauseRetainedSevm
+  have hbody := pause_body_runCompiled (hfork := hfork) officialParams pauseRetainedSevm
     pauseRetainedPre pauseWorldCallee.toB256 pauseWorldPauser pauseWorldExpiry pauseWorldDuration 2100 2100 2100 46708 _
     (pauseWorld_dataLength pauseRetainedWorldStor pauseRetainedWorldGas) (by decide) rfl
     (pauseWorld_dataWord_target pauseRetainedWorldStor pauseRetainedWorldGas)
