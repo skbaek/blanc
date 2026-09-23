@@ -2713,14 +2713,15 @@
      "scripts/gate-semaphore.sh"
     ],
     "lean_entries": [
-     "scripts/ClaimCheck.lean"
+     "scripts/ClaimCheck.lean",
+     "scripts/CoveredForkControls.lean"
     ],
     "tools": [
      "lean"
     ]
    },
    "kind": "cacheable",
-   "note": "The pinned inventory count lives in the wrapper, so its bytes are an input.",
+   "note": "The pinned inventory count lives in the wrapper, so its bytes are an input. scripts/CoveredForkControls.lean is elaborated by the same wrapper after ClaimCheck.",
    "order": 56,
    "verdict": {
     "expect_exit": 0,
@@ -3636,7 +3637,7 @@
    "verdict": {
     "expect_exit": 0,
     "summary_patterns": [
-     "^OK — elaboration migration comparison: 23 synthetic CLI controls passed$"
+     "^OK \u2014 elaboration migration comparison: 23 synthetic CLI controls passed$"
     ]
    }
   }

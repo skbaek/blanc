@@ -351,12 +351,13 @@ example (f : Func) : f.compileShape.byteSize = f.compileShape.byteSize := by
 
 -- EXPECT: compiler-structural-composition
 example (entries : List (Nat × Func)) (n : Nat) (xs : Line) (f : Func)
-    (bs : Bytes) (h : Func.compile entries (n + CompiledShape.prefixByteSize xs) f = some bs) :
+    (bs : Bytes) (h : Func.compile entries (n + CompiledShape.prefixByteSize xs) f = some bs)
+    (hacc : ∀ i ∈ xs, Ninst.immAccepted i = true) :
     Func.compile entries n (xs +++ f) = some (xs.flatMap Ninst.toBytes ++ bs) := by
   expect_recipe_trigger "goal-shape:compile-prepend"
   expect_no_recipe_trigger "goal-shape:compile-branch"
   blanc_suggest
-  exact CompiledShape.compile_prepend_of h
+  exact CompiledShape.compile_prepend_of h hacc
 
 -- EXPECT: compiler-structural-composition
 example (entries : List (Nat × Func)) (n loc : Nat) (p q : Func) (pbs qbs : Bytes)
@@ -409,10 +410,10 @@ example (locations : List Nat) (n i : Nat) (d : UInt8)
 
 -- EXPECT: compiled-shape-byte-navigation
 example (locations : List Nat) (n i size : Nat) (d : UInt8)
-    (restShape : Func.CompileShape) (inst : Ninst) (rest : Func) :
-    Func.byteAtByShape locations n (.next size restShape)
+    (acc : Bool) (restShape : Func.CompileShape) (inst : Ninst) (rest : Func) :
+    Func.byteAtByShape locations n (.next size acc restShape)
         (.next inst rest) i d =
-      Func.byteAtByShape locations n (.next size restShape)
+      Func.byteAtByShape locations n (.next size acc restShape)
         (.next inst rest) i d := by
   expect_recipe_trigger "goal-shape:compiled-shape-byte-navigation"
   blanc_suggest
@@ -539,7 +540,7 @@ example {sevm : Sevm} {devm : Devm} {G : Nat}
     Ninst.RunCompiled sevm devm
       (CreationArtifact.pushB256AsPush2OrPush32 (Nat.toB256 (2 ^ 16)))
       (devm.setMach
-        ⟨Nat.toB256 (2 ^ 16) :: devm.stack, devm.memory, G⟩) := by
+        ⟨Nat.toB256 (2 ^ 16) :: devm.stack, devm.memory, G, devm.stateGas⟩) := by
   expect_recipe_trigger "goal-shape:bounded-creation-word-encoder"
   blanc_suggest
   exact Ninst.runCompiled_pushB256AsPush2OrPush32 gas room
@@ -557,12 +558,12 @@ example {sevm : Sevm} {devm post : Devm} {word : B256}
     (run : Ninst.RunCompiled sevm
       (devm.setMach
         ⟨devm.stack, devm.memory,
-          (CreationArtifact.pushB256AsPush2OrPush32 word).size⟩)
+          (CreationArtifact.pushB256AsPush2OrPush32 word).size, devm.stateGas⟩)
       Ninst.sload post) :
     Ninst.RunCompiled sevm
       (devm.setMach
         ⟨devm.stack, devm.memory,
-          (CreationArtifact.pushB256AsPush2OrPush32 word).size⟩)
+          (CreationArtifact.pushB256AsPush2OrPush32 word).size, devm.stateGas⟩)
       Ninst.sload post := by
   expect_no_recipe_trigger "goal-shape:bounded-creation-word-encoder"
   blanc_suggest
@@ -756,10 +757,10 @@ example (tree : DispatchTree) (selector : B256)
     (hmiss : ¬ tree.HasSelector selector) :
     ∃ run : Func.RunCompiledTo (program.main :: program.aux) sevm
         (base.setMach
-          ⟨[selector], Mem.empty, G + tree.dispatchMissGas selector⟩)
+          ⟨[selector], Mem.empty, G + tree.dispatchMissGas selector, base.stateGas⟩)
         (dispatch tree)
         (.error (.revert,
-          (base.setMach ⟨[], Mem.empty, G⟩).withOutput [])),
+          (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])),
       Func.RunCompiledTo.NoRawSstorePath run := by
   expect_recipe_trigger "goal-shape:raw-sstore-free-compiled-path"
   blanc_suggest
@@ -780,13 +781,13 @@ example {fs : List Func} {sevm : Sevm} {devm : Devm} {reason : String}
       (.error (.revert,
         (devm.setMach ⟨stack,
           Mem.writeStoresRev devm.memory
-            (bytesWords (errorData reason)).zipIdx, G⟩).withOutput
+            (bytesWords (errorData reason)).zipIdx, G, devm.stateGas⟩).withOutput
               (errorData reason)))) :
     Func.RunCompiledTo fs sevm devm ((.call slot) <?> otherwise)
       (.error (.revert,
         (devm.setMach ⟨stack,
           Mem.writeStoresRev devm.memory
-            (bytesWords (errorData reason)).zipIdx, G⟩).withOutput
+            (bytesWords (errorData reason)).zipIdx, G, devm.stateGas⟩).withOutput
               (errorData reason))) := by
   expect_recipe_trigger "goal-shape:constant-error-guard"
   blanc_suggest

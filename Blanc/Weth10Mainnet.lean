@@ -16,6 +16,19 @@ namespace Weth10
 
 /-! ## Mainnet rule selection -/
 
+/-- The modeled mainnet schedule never selects Amsterdam.  Stated by direct
+case analysis on the four activations rather than through
+`mainnetChainConfig_covered`, so the named-rules lemma below keeps the
+dependency footprint `scripts/check.sh` pins for it. -/
+private theorem mainnet_forkAt?_ne_amsterdam (t : Nat) :
+    mainnetChainConfig.forkAt? t ≠ some .amsterdam := by
+  simp only [ChainConfig.forkAt?, mainnetChainConfig, List.filter]
+  by_cases h1 : mainnetPragueTimestamp ≤ t <;>
+    by_cases h2 : mainnetOsakaTimestamp ≤ t <;>
+    by_cases h3 : mainnetBpo1Timestamp ≤ t <;>
+    by_cases h4 : mainnetBpo2Timestamp ≤ t <;>
+    simp [h1, h2, h3, h4]
+
 /-- Every successful lookup in the currently modeled mainnet schedule selects
 one of the four rule records named by that schedule. -/
 theorem mainnet_rulesAt_eq_named
@@ -28,7 +41,6 @@ theorem mainnet_rulesAt_eq_named
   | error e => simp [hf] at h
   | ok f =>
     rw [hf] at h
-    have hcov := mainnetChainConfig_covered timestamp f hf
     simp only [Fork.rules, bind, Except.bind, Except.mapError,
       Except.ok.injEq] at h
     subst h
@@ -38,7 +50,17 @@ theorem mainnet_rulesAt_eq_named
       | exact Or.inr (Or.inl rfl)
       | exact Or.inr (Or.inr (Or.inl rfl))
       | exact Or.inr (Or.inr (Or.inr rfl))
-      | exact absurd hcov (by decide)
+      | skip
+    exfalso
+    apply mainnet_forkAt?_ne_amsterdam timestamp
+    have hv : mainnetChainConfig.validate = .ok () := by decide
+    unfold ChainConfig.forkAt at hf
+    rw [hv] at hf
+    cases hq : mainnetChainConfig.forkAt? timestamp with
+    | none => simp [hq, Except.mapError, bind, Except.bind] at hf
+    | some g =>
+      simp only [hq, Except.mapError, bind, Except.bind, Except.ok.injEq] at hf
+      rw [hf]
 
 /-- At and after the final modeled mainnet activation, configured lookup
 selects BPO2. -/
