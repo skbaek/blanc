@@ -586,35 +586,35 @@ theorem constructorProgram_runCompiled {sevm : Sevm} {pre : Devm} {G : Nat}
     simpa only [mid, hstack, hmem] using
       Devm.burnBy_setMach_gas (devm := pre) (cost := gJumpdest) (G := G + 44610) (by simp only [hgas, gJumpdest])
   have h1 : Ninst.RunCompiled sevm mid callvalue s1 := by
-    simpa only [s1, mid, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
+    simpa only [s1, mid, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       (Ninst.runCompiled_pushItem (sevm := sevm) (devm := mid) (r := .callvalue) (x := sevm.value) (cost := gBase) (G := G + 44608) (by rintro ⟨⟩) rfl (by simp only [mid, Devm.gasLeft_setMach, gBase]) (by simp only [mid, Devm.stack_setMach, List.length_nil]; omega))
   have h2 : Ninst.RunCompiled sevm s1 iszero s2 := by
-    simpa only [s2, s1, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
+    simpa only [s2, s1, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       (Ninst.runCompiled_unary (sevm := sevm) (devm := s1) (r := .iszero) (cost := gVerylow) (G := G + 44605) (x := sevm.value) (v := 1) (s := []) (by rintro ⟨⟩) rfl (by simp only [s1, Devm.stack_setMach]) (by show B256.eqCheck sevm.value 0 = 1; rw [hvalue]; simp [B256.eqCheck]) (by simp only [s1, Devm.gasLeft_setMach, gVerylow]) (by simp only [List.length_nil]; omega))
   have hpop1 : Devm.PopBurnBy [(1 : B256)] (gVerylow + gHigh + gJumpdest) s2 s3 := by
-    simpa only [s3, s2, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
+    simpa only [s3, s2, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       Devm.popBurnBy_setMach (devm := s2) (x := 1) (s := []) (cost := gVerylow + gHigh + gJumpdest) (G := G + 44591) (by simp only [s2, Devm.stack_setMach]) (by simp only [s2, Devm.gasLeft_setMach, gVerylow, gHigh, gJumpdest])
   have hroom2 : s2.stack.length < 1024 := by
     simp only [s2, Devm.stack_setMach, List.length_cons, List.length_nil]; omega
   have h4 : Ninst.RunCompiled sevm s3 (pushCreationCoordinate 2001) s4 := by
-    simpa only [s4, s3, pushCreationCoordinate, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
+    simpa only [s4, s3, pushCreationCoordinate, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       (Ninst.runCompiled_pushB256Full (sevm := sevm) (devm := s3) (w := Nat.toB256 2001) (G := G + 44588) (by simp only [s3, Devm.gasLeft_setMach, gVerylow]) (by simp only [s3, Devm.stack_setMach, List.length_nil]; omega))
   have h5 : Ninst.RunCompiled sevm s4 codesize s5 := by
-    simpa only [s5, s4, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
+    simpa only [s5, s4, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       (Ninst.runCompiled_pushItem (sevm := sevm) (devm := s4) (r := .codesize) (x := sevm.code.size.toB256) (cost := gBase) (G := G + 44586) (by rintro ⟨⟩) rfl (by simp only [s4, Devm.gasLeft_setMach, gBase]) (by simp only [s4, Devm.stack_setMach, List.length_cons, List.length_nil]; omega))
   have h6 : Ninst.RunCompiled sevm s5 eq s6 := by
-    simpa only [s6, s5, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
+    simpa only [s6, s5, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       (Ninst.runCompiled_binary (sevm := sevm) (devm := s5) (r := .eq) (cost := gVerylow) (G := G + 44583) (x := sevm.code.size.toB256) (y := Nat.toB256 2001) (v := 1) (s := []) (by rintro ⟨⟩) rfl (by simp only [s5, Devm.stack_setMach]) (by show B256.eqCheck sevm.code.size.toB256 (Nat.toB256 2001) = 1; rw [hsize]; simp [B256.eqCheck]) (by simp only [s5, Devm.gasLeft_setMach, gVerylow]) (by simp only [List.length_nil]; omega))
   have hpop2 : Devm.PopBurnBy [(1 : B256)] (gVerylow + gHigh + gJumpdest) s6 s7 := by
-    simpa only [s7, s6, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
+    simpa only [s7, s6, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       Devm.popBurnBy_setMach (devm := s6) (x := 1) (s := []) (cost := gVerylow + gHigh + gJumpdest) (G := G + 44569) (by simp only [s6, Devm.stack_setMach]) (by simp only [s6, Devm.gasLeft_setMach, gVerylow, gHigh, gJumpdest])
   have hroom6 : s6.stack.length < 1024 := by
     simp only [s6, Devm.stack_setMach, List.length_cons, List.length_nil]; omega
   have h8 : Ninst.RunCompiled sevm s7 (pushB256 scale) s8 := by
-    simpa only [s8, s7, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
+    simpa only [s8, s7, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := s7) (w := scale) (c := gVerylow) (G := G + 44566) (by decide) (by simp only [s7, Devm.gasLeft_setMach, gVerylow]) (by simp only [s7, Devm.stack_setMach, List.length_nil]; omega))
   have h9 : Ninst.RunCompiled sevm s8 (pushB256 chiSlot) s9 := by
-    simpa only [s9, s8, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
+    simpa only [s9, s8, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := s8) (w := chiSlot) (c := gVerylow) (G := G + 44563) (by decide) (by simp only [s8, Devm.gasLeft_setMach, gVerylow]) (by simp only [s8, Devm.stack_setMach, List.length_cons, List.length_nil]; omega))
   have hc9 : s9.getStorVal sevm.currentTarget chiSlot = 0 := by
     simpa only [s9, s8, s7, s6, s5, s4, s3, s2, s1, mid, Devm.getStorVal_setMach] using hcurChi
@@ -633,10 +633,10 @@ theorem constructorProgram_runCompiled {sevm : Sevm} {pre : Devm} {G : Nat}
     · simp only [horigChi, hc9, hrefund9, hrcS]
     · simp only [s9, Devm.gasLeft_setMach, gasColdSload, gasStorageSet, Nat.add_assoc]
   have h11 : Ninst.RunCompiled sevm s10 timestamp s11 := by
-    simpa only [s11, s10, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
+    simpa only [s11, s10, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       (Ninst.runCompiled_pushItem (sevm := sevm) (devm := s10) (r := .timestamp) (x := sevm.benvStat.time) (cost := gBase) (G := G + 22461) (by rintro ⟨⟩) rfl (by simp only [s10, Devm.gasLeft_setMach, gBase]) (by simp only [s10, Devm.stack_setMach, List.length_nil]; omega))
   have h12 : Ninst.RunCompiled sevm s11 (pushB256 rhoSlot) s12 := by
-    simpa only [s12, s11, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
+    simpa only [s12, s11, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := s11) (w := rhoSlot) (c := gVerylow) (G := G + 22458) (by decide) (by simp only [s11, Devm.gasLeft_setMach, gVerylow]) (by simp only [s11, Devm.stack_setMach, List.length_cons, List.length_nil]; omega))
   have hcur9Rho : s9.getStorVal sevm.currentTarget rhoSlot = 0 := by
     simpa only [s9, s8, s7, s6, s5, s4, s3, s2, s1, mid, Devm.getStorVal_setMach] using hcurRho
@@ -665,13 +665,13 @@ theorem constructorProgram_runCompiled {sevm : Sevm} {pre : Devm} {G : Nat}
     · simp only [horigRho, hcur12, hrefund12, hrcT]
     · simp only [s12, Devm.gasLeft_setMach, gasColdSload, gasStorageSet, Nat.add_assoc]
   have h14 : Ninst.RunCompiled sevm s13 (pushCreationCoordinate 1762) s14 := by
-    simpa only [s14, s13, pushCreationCoordinate, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
+    simpa only [s14, s13, pushCreationCoordinate, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       (Ninst.runCompiled_pushB256Full (sevm := sevm) (devm := s13) (w := Nat.toB256 1762) (G := G + 355) (by simp only [s13, Devm.gasLeft_setMach, gVerylow]) (by simp only [s13, Devm.stack_setMach, List.length_nil]; omega))
   have h15 : Ninst.RunCompiled sevm s14 (pushCreationCoordinate 239) s15 := by
-    simpa only [s15, s14, pushCreationCoordinate, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
+    simpa only [s15, s14, pushCreationCoordinate, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       (Ninst.runCompiled_pushB256Full (sevm := sevm) (devm := s14) (w := Nat.toB256 239) (G := G + 352) (by simp only [s14, Devm.gasLeft_setMach, gVerylow]) (by simp only [s14, Devm.stack_setMach, List.length_cons, List.length_nil]; omega))
   have h16 : Ninst.RunCompiled sevm s15 (pushB256 0) s16 := by
-    simpa only [s16, s15, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
+    simpa only [s16, s15, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := s15) (w := 0) (c := gBase) (G := G + 350) (by decide) (by simp only [s15, Devm.gasLeft_setMach, gBase]) (by simp only [s15, Devm.stack_setMach, List.length_cons, List.length_nil]; omega))
   have hext16 : s16.extCost [⟨0, 1762⟩] = 174 :=
     Devm.extCost_of_size (N := Mem.empty) (n := 0) (i := 0) (sz := 1762) (e := 174) (by rfl) (by decide)
@@ -682,10 +682,10 @@ theorem constructorProgram_runCompiled {sevm : Sevm} {pre : Devm} {G : Nat}
     · simp only [s16, Devm.memory_setMach, B256.toNat_zero, hRO239, hRL1762, constructorCode_slice_exact hcode]
     · simp only [s16, Devm.gasLeft_setMach]
   have h18 : Ninst.RunCompiled sevm s17 (pushCreationCoordinate 1762) s18 := by
-    simpa only [s18, s17, pushCreationCoordinate, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
+    simpa only [s18, s17, pushCreationCoordinate, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       (Ninst.runCompiled_pushB256Full (sevm := sevm) (devm := s17) (w := Nat.toB256 1762) (G := G + 2) (by simp only [s17, Devm.gasLeft_setMach, gVerylow]) (by simp only [s17, Devm.stack_setMach, List.length_nil]; omega))
   have h19 : Ninst.RunCompiled sevm s18 (pushB256 0) s19 := by
-    simpa only [s19, s18, Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
+    simpa only [s19, s18, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := s18) (w := 0) (c := gBase) (G := G) (by decide) (by simp only [s18, Devm.gasLeft_setMach, gBase]) (by simp only [s18, Devm.stack_setMach, List.length_cons, List.length_nil]; omega))
   have hMsize32 : (Mem.empty.write 0 code).size % 32 = 0 := by
     rw [Mem.size_write_of_size (by rfl : Mem.empty.size = 0) (by decide : 0 % 32 = 0) codeSize_exact]
