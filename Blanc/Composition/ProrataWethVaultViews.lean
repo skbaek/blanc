@@ -24,6 +24,7 @@ preserved, and the returned ABI word is that pre-call WETH balance. -/
 theorem totalAssets_body_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (run : Func.RunCompiledTo fs sevm entry
       Blanc.ProrataWethVault.totalAssets (.ok post)) :
@@ -34,7 +35,7 @@ theorem totalAssets_body_effect
     refine ⟨memoryWf, ?_⟩
     intro index
     simp
-  have actualResources := totalAssetsResources_of_run config memoryWf run
+  have actualResources := totalAssetsResources_of_run config hfork memoryWf run
   unfold Blanc.ProrataWethVault.totalAssets at run
   obtain ⟨callPre, callPost, staging, crossing, suffix⟩ :=
     readTotalAssets_trace run
@@ -50,7 +51,7 @@ theorem totalAssets_body_effect
     exact config.code
   obtain ⟨word, returnPre, -, -, bodyStorage, bodyLogs, returnedWord,
       wordPrefix, -, -, -, returnRun⟩ :=
-    readTotalAssets_exactEffect callConfig memory staging actualResources.1
+    readTotalAssets_exactEffect callConfig hfork memory staging actualResources.1
       (actualResources.2 callPre staging) crossing suffix
   have stagingStorage : Devm.getStor entry = Devm.getStor callPre :=
     Line.of_inv Devm.getStor (by line_inv) staging
@@ -96,6 +97,7 @@ gas obligation are derived from the successful inherited compiled program. -/
 theorem totalAssets_compiled_effect
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (hselector : Sevm.selector sevm = selector "totalAssets" []) :
@@ -120,7 +122,7 @@ theorem totalAssets_compiled_effect
   have bodyMemoryWf : Mem.Wf bodyPre.memory := by
     rw [← entryMemory]
     exact memoryWf
-  have bodyEffect := totalAssets_body_effect bodyConfig bodyMemoryWf bodyRun
+  have bodyEffect := totalAssets_body_effect bodyConfig hfork bodyMemoryWf bodyRun
   rcases bodyEffect with ⟨output, storage, logs⟩
   have entryStorage : Devm.getStor pre = Devm.getStor bodyPre :=
     funext (getStor_eq_of_state_eq entryState)
