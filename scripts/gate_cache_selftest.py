@@ -3119,6 +3119,164 @@ def control_stale_owner_metadata_does_not_block_an_unlocked_mutex() -> None:
                 "released diagnostic owner metadata must not persist")
 
 
+LOCK_PROBE = (
+    "import fcntl, sys\n"
+    "with open(sys.argv[1], 'a+') as handle:\n"
+    "    try:\n"
+    "        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)\n"
+    "        print('free')\n"
+    "    except BlockingIOError:\n"
+    "        print('held')\n"
+)
+
+
+def control_shared_store_lock_is_free_while_a_row_runs() -> None:
+    """The store lock spans the store transaction, not the gate bodies.
+
+    A gate body probes both locks from inside the run.  The shared lock must
+    be free -- a two-hour row in this worktree excludes no other worktree --
+    while this worktree's own run lock must be held, so a second run here
+    is still refused for the whole run.
+    """
+
+    with scratch() as s:
+        s.write("scripts/x.txt", "one\n")
+        shared = gc.lock_path(s.root) / "mutex"
+        local = gc.local_lock_path(s.root) / "mutex"
+        # The probe opens the mutex inodes; a run creates them only when it
+        # takes the locks, so make both openable before the run starts.
+        for mutex in (shared, local):
+            mutex.parent.mkdir(parents=True, exist_ok=True)
+            mutex.touch()
+        (s.root / "scripts/probe.py").write_text(LOCK_PROBE, encoding="utf-8")
+        s.gate(
+            "g.sh",
+            "#!/bin/sh\n"
+            f'SHARED="$({sys.executable} "$(dirname "$0")/probe.py" "{shared}")"\n'
+            f'LOCAL="$({sys.executable} "$(dirname "$0")/probe.py" "{local}")"\n'
+            'echo "OK — g.sh: shared=$SHARED local=$LOCAL"\n',
+        )
+        s.registry([simple_gate("g", ["scripts/g.sh"], {"files": ["scripts/x.txt"]},
+                                "^OK — g.sh: ")])
+        out, err = io.StringIO(), io.StringIO()
+        with patched(gc, "ROOT", s.root), declared_coordination(None), \
+                patched(gate_semaphore, "ENTRY", s.coordination.entry), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = gc.main(["run"])
+        printed = out.getvalue() + err.getvalue()
+        require(code == 0, f"the run should be green:\n{printed}")
+        require("shared=free local=held" in printed,
+                f"a body must see the shared lock free and the local lock held:\n{printed}")
+
+
+def control_concurrent_records_merge_into_the_shared_store() -> None:
+    """Another worktree's records, committed mid-run, survive this run's write.
+
+    The gate body plays the other worktree: it adds a record to the shared
+    store while this run is between its snapshot and its commit.  The commit
+    is a read-merge-write under the store lock, so both records are there
+    afterwards; a snapshot written back over the store would have lost one.
+    """
+
+    with scratch() as s:
+        s.write("scripts/x.txt", "one\n")
+        store_path = gc.cache_path(s.root)
+        gc.atomic_json(store_path, gc.empty_cache())
+        foreign = {
+            "fingerprint": "f" * 64,
+            "components": {},
+            "verdict": {"exit": 0, "summary": ["OK — foreign: 1/1"], "output_digest": "0"},
+            "provenance": {"commit": "other", "worktree": "clean",
+                           "recorded_utc": "2026-09-23T00:00:00Z", "duration_s": 1.0},
+        }
+        (s.root / "scripts/inject.py").write_text(
+            "import json, sys\n"
+            "path = sys.argv[1]\n"
+            "store = json.load(open(path))\n"
+            f"store['gates']['foreign'] = [{foreign!r}]\n"
+            "json.dump(store, open(path, 'w'))\n",
+            encoding="utf-8",
+        )
+        s.gate(
+            "g.sh",
+            "#!/bin/sh\n"
+            f'{sys.executable} "$(dirname "$0")/inject.py" "{store_path}"\n'
+            'echo "OK — g.sh: 1/1 fine"\n',
+        )
+        s.registry([simple_gate("g", ["scripts/g.sh"], {"files": ["scripts/x.txt"]},
+                                "^OK — g.sh: ")])
+        s.git_init()
+        require(s.run() == 0, f"the run should be green:\n{s.output}")
+        cache, reason = s.cache()
+        require(reason is None, f"the merged store must stay readable: {reason}")
+        require("foreign" in cache["gates"],
+                "a record committed by another run mid-run must survive")
+        require("g" in cache["gates"], "and this run's own record must be there too")
+
+
+def control_certification_is_not_blocked_by_another_worktree() -> None:
+    """Certification writes only this worktree's certificate; it needs no
+    shared lock, but the worktree's own run lock still refuses it."""
+
+    with scratch() as s:
+        s.write("scripts/x.txt", "one\n")
+        s.git_init()
+        certificate = {"identity": "a" * 64, "host": "darwin-arm64-v2-1111222233334444"}
+        require(gc.acquire_lock(gc.lock_path(s.root)), "another worktree holds the store lock")
+        try:
+            out = io.StringIO()
+            with patched(gc, "ROOT", s.root), \
+                    patched(gc, "write_build_certificate", lambda root: certificate), \
+                    contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                code = gc.main(["certify-build"])
+            require(code == 0, f"a held store lock must not block certification:\n{out.getvalue()}")
+        finally:
+            gc.release_lock(gc.lock_path(s.root))
+        require(gc.acquire_lock(gc.local_lock_path(s.root)), "this worktree's run is in progress")
+        try:
+            out = io.StringIO()
+            with patched(gc, "ROOT", s.root), \
+                    patched(gc, "write_build_certificate", lambda root: certificate), \
+                    contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                code = gc.main(["certify-build"])
+            require(code == 2 and "REFUSED" in out.getvalue(),
+                    "the worktree's own run lock must still refuse certification")
+        finally:
+            gc.release_lock(gc.local_lock_path(s.root))
+
+
+def control_progress_streams_while_a_row_runs() -> None:
+    """A running row shows bounded progress and its output reaches the run
+    log as it is produced, while the verdict is still judged on the whole
+    captured output."""
+
+    with scratch() as s:
+        s.write("scripts/x.txt", "one\n")
+        s.gate(
+            "g.sh",
+            "#!/bin/sh\n"
+            "echo progress-line-one\n"
+            "sleep 0.7\n"
+            "echo progress-line-two >&2\n"
+            "sleep 0.3\n"
+            'echo "OK — g.sh: 1/1 fine"\n',
+        )
+        s.registry([simple_gate("g", ["scripts/g.sh"], {"files": ["scripts/x.txt"]},
+                                "^OK — g.sh: ")])
+        with environment({gc.PROGRESS_INTERVAL_ENV: "0.2"}):
+            require(s.run() == 0, f"the run should be green:\n{s.output}")
+        require("… scripts/g.sh running" in s.output,
+                f"a progress line must appear while the row runs:\n{s.output}")
+        require("last: progress-line-one" in s.output,
+                "the progress line must carry the latest output line")
+        log = gc.run_log_path(s.root).read_text(encoding="utf-8")
+        require("=== [fresh] scripts/g.sh" in log and "progress-line-one" in log
+                and "progress-line-two" in log and "=== exit 0" in log,
+                f"the run log must hold the row's streamed output and exit:\n{log}")
+        report = gc.report_path(s.root).read_text(encoding="utf-8")
+        require(gc.RUN_LOG_RELATIVE in report, "the report must name the run log")
+
+
 def control_same_repository_worktrees_share_records_and_lock() -> None:
     """The Git common directory, not a worktree-local `.lake`, is the trust root."""
 
@@ -4127,6 +4285,10 @@ CONTROLS = (
     control_lock_refuses_a_second_run,
     control_kernel_lock_refuses_another_process,
     control_stale_owner_metadata_does_not_block_an_unlocked_mutex,
+    control_shared_store_lock_is_free_while_a_row_runs,
+    control_concurrent_records_merge_into_the_shared_store,
+    control_certification_is_not_blocked_by_another_worktree,
+    control_progress_streams_while_a_row_runs,
     control_same_repository_worktrees_share_records_and_lock,
     control_other_physical_clone_never_inherits_shared_records,
     control_foreign_host_store_never_yields_reuse,

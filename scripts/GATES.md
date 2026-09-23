@@ -245,6 +245,16 @@ A credited row says *reused successful evidence*, never that the gate ran here;
 the build row separately says *exact build certificate*. Both files are
 candidate-local disposable state under `.lake/`.
 
+A row's output is streamed while it runs, not captured until it ends: every
+line goes to `.lake/gate-run.log` as it is produced (and to the terminal under
+`--echo`), and while a row is still running the runner prints one bounded
+progress line per minute — elapsed time, line count, and the latest line
+(`BLANC_GATE_PROGRESS_SECS` shortens the interval). The verdict is still
+judged on the complete captured output after exit, so streaming changes when
+output can be seen, never what counts as a pass. The runner line-buffers its
+own stdout, so a run redirected to a file shows its rows as they finish; a
+killed run leaves the log of everything its rows printed.
+
 Successful cacheable verdicts are stored atomically in
 `$(git rev-parse --git-common-dir)/blanc-gate-evidence/evidence-v3-<host>.json`.
 The host identity is stable across network-hostname changes: macOS uses the
@@ -275,11 +285,22 @@ earlier exact tree can recover its evidence. It is runner-written only, ignored
 by Git, and may be deleted; absence, corruption, schema mismatch, or an
 interrupted write costs fresh execution and never produces a credit.
 
-Selective runs in every worktree of that clone are serialized by the
-nonblocking kernel lock at the sibling `blanc-gate-evidence/run.lock`. Python
-exposes that lock on both macOS and Linux; it remains authoritative even when
-separate command sandboxes have distinct PID namespaces. The kernel releases
-the lock when its holder exits; the lock file is not deleted to infer liveness.
+Two kernel locks serialize what needs serializing, each held only as long as
+it protects. The sibling `blanc-gate-evidence/run.lock` is the shared-store
+lock: a run takes it for the single read-merge-write transaction that adds its
+earned records to the store at the end, and for nothing else, so a two-hour
+row in one worktree no longer excludes another worktree's selective run or
+`--certify-build`. Records are merged into the store as it stands at commit
+time, not written back over the snapshot the run planned from, so records
+another worktree committed meanwhile survive; a contending holder is waited
+for briefly, and if the store still cannot be written the run's verdicts stand
+in its report and the records are simply re-earned later. The worktree-local
+`.lake/gate-run.lock` spans a whole run and certification: a second run in the
+same worktree is refused at once with the holder named, since it would
+interleave gate bodies and overwrite the candidate-local report. Python
+exposes both locks on macOS and Linux; they remain authoritative even when
+separate command sandboxes have distinct PID namespaces. The kernel releases a
+lock when its holder exits; a lock file is not deleted to infer liveness.
 
 Runner identity follows the same relevance rule as gate inputs. The shared
 fingerprint/verdict/drift engine, stable-host helper and shell entry point
