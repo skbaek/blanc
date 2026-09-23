@@ -51,7 +51,9 @@
 #                 tree and every discovered module trace are already built at
 #                 this exact source revision;
 #                 otherwise the first file measured pays for everything stale
-#                 beneath it and every number is wrong.
+#                 beneath it and every number is wrong. A --no-build run plans
+#                 before it takes the heavy-gate lock and the exclusive host
+#                 hold, and a plan that measures nothing takes neither.
 #   --force       run even though Lean language servers are alive. See below.
 #   --self-test   run the fast invalidation/cache controls and no timing work.
 #   --report      write the per-file report here instead of
@@ -356,38 +358,106 @@ if [ "$CALIBRATE" -eq 1 ]; then
   fi
 fi
 
-# --- concurrency guard ------------------------------------------------------
+# --- report lock ------------------------------------------------------------
 # Canonicalised first, because the report lock is keyed on this string: two
-# spellings of one path would otherwise take two locks and share a file.
+# spellings of one path would otherwise take two locks and share a file. The
+# report lock is cheap and worktree-local; it also serializes this worktree's
+# cache-state commit, and every run takes it, measuring or not.
 mkdir -p "$(dirname "$REPORT")"
 REPORT="$(cd "$(dirname "$REPORT")" && pwd)/$(basename "$REPORT")"
+gate_lock_acquire "$REPORT.lock" "elab" "$REPORT" \
+  "wait for that run to finish, or pass --report <path> to write elsewhere" \
+  || exit 2
 
+# --- heavy boundary ---------------------------------------------------------
 # The same argument as the language-server guard above, applied to the other
 # thing that contends on this host: another gate run — from any checkout or
 # worktree of either Blanc or Jaune, since they all schedule onto the same
 # cores. This gate's only output is a timing, so a fixture tier dispatching
 # ten workers alongside it does not degrade a reference column — it decides
-# the verdict. So this gate takes the host-global heavy-gate lock, and unlike
-# the language-server guard there is no --force for it: a server can be idle
-# and harmless, whereas a heavy gate holding that lock is by construction
-# running. It also locks its report.
-gate_lock_heavy_acquire "elab" \
-  "the heavy-gate lock" \
-  "wait for that run to finish; measuring elaboration time beside it would measure the scheduler" \
-  || exit 2
-gate_lock_acquire "$REPORT.lock" "elab" "$REPORT" \
-  "wait for that run to finish, or pass --report <path> to write elsewhere" \
-  || exit 2
+# the verdict. So a run that will elaborate takes the host-global heavy-gate
+# lock and an exclusive host hold, and unlike the language-server guard there
+# is no --force for it: a server can be idle and harmless, whereas a heavy
+# gate holding that lock is by construction running.
+#
+# Taken lazily. A --no-build run plans first, and a plan with nothing to
+# measure takes neither: it elaborates nothing, so holding the host for it
+# would lock out real work for a cache lookup. A run that will build, or whose
+# plan measures at least one file, takes both before it elaborates, and then
+# plans again under that boundary so the selection describes the tree as it
+# is once admitted, not as it was while waiting.
+elab_take_heavy() {
+  gate_lock_heavy_acquire "elab" \
+    "the heavy-gate lock" \
+    "wait for that run to finish; measuring elaboration time beside it would measure the scheduler" \
+    || exit 2
+  gate_semaphore_acquire "the elaboration-time measurement" 8 exclusive || exit 2
+}
 
-# --- build precondition -----------------------------------------------------
-# Every measurement below elaborates one file against its dependencies' oleans.
-# If those are stale the first file to need them pays for rebuilding them and
-# its number is meaningless, so every discovered module must be current before
-# we start. Explicit targets also give a newly added, not-yet-imported module a
-# Lake trace; the selector uses each trace's transitive dependency hash.
-gate_semaphore_acquire "the elaboration-time measurement" 8 exclusive || exit 2
+# --- content/import-closure selection ---------------------------------------
+# The cache is evidence from a prior successful timing run, never a build
+# substitute. A current build establishes the oleans; this step decides which
+# source files can reuse their prior measurements. It is a function because a
+# measuring run plans twice: once to learn whether it must take the heavy
+# boundary at all, and again inside it.
+elab_plan() {
+  if [ "$CALIBRATE" -eq 1 ]; then
+    if ! python3 "$SELECTOR" plan --root "$ROOT" --state "$STATE" \
+        --plan "$PLANFILE" --environment-id "$LEAN_ID" \
+        --baseline "$BASELINE" --commit "$CANDIDATE_COMMIT"; then
+      echo "REGRESSION — elab: could not construct a safe selection plan"
+      exit 2
+    fi
+  elif [ "$FULL" -eq 1 ]; then
+    if ! python3 "$SELECTOR" plan --root "$ROOT" --state "$STATE" \
+        --plan "$PLANFILE" --environment-id "$LEAN_ID" --full \
+        --full-reason "$FULL_REASON"; then
+      echo "REGRESSION — elab: could not construct a safe selection plan"
+      exit 2
+    fi
+  else
+    if ! python3 "$SELECTOR" plan --root "$ROOT" --state "$STATE" \
+        --plan "$PLANFILE" --environment-id "$LEAN_ID"; then
+      echo "REGRESSION — elab: could not construct a safe selection plan"
+      exit 2
+    fi
+  fi
+
+  FILES="$(python3 "$SELECTOR" files --plan "$PLANFILE")" || exit 2
+  AFFECTED="$(python3 "$SELECTOR" files --plan "$PLANFILE" --affected)" || exit 2
+  SHARED="$(python3 "$SELECTOR" files --plan "$PLANFILE" --shared)" || exit 2
+  NFILES="$(printf '%s\n' "$FILES" | grep -c .)"
+  NMEASURE="$(printf '%s\n' "$AFFECTED" | grep -c .)"
+  NSKIP=$((NFILES - NMEASURE))
+  NSHARED="$(printf '%s\n' "$SHARED" | grep -c .)"
+
+  NCONTROL=0
+  NCANDIDATE=0
+  if [ "$CALIBRATE" -eq 1 ]; then
+    CONTROLS="$(python3 "$SELECTOR" files --plan "$PLANFILE" --controls)" || exit 2
+    CANDIDATES="$(python3 "$SELECTOR" files --plan "$PLANFILE" --candidates)" || exit 2
+    NCONTROL="$(printf '%s\n' "$CONTROLS" | grep -c .)"
+    NCANDIDATE="$(printf '%s\n' "$CANDIDATES" | grep -c .)"
+    CONTROLS="$(printf '%s' "$CONTROLS" | tr '\n' ' ')"
+    CANDIDATES="$(printf '%s' "$CANDIDATES" | tr '\n' ' ')"
+  fi
+}
+
+PLANFILE="$(mktemp)"
+MEASUREDFILE="$(mktemp)"
+: > "$MEASUREDFILE"
 
 if [ "$NO_BUILD" -eq 0 ]; then
+  # --- build precondition ---------------------------------------------------
+  # Every measurement below elaborates one file against its dependencies'
+  # oleans. If those are stale the first file to need them pays for rebuilding
+  # them and its number is meaningless, so every discovered module must be
+  # current before we start. Explicit targets also give a newly added,
+  # not-yet-imported module a Lake trace; the selector uses each trace's
+  # transitive dependency hash. The build elaborates, so it sits inside the
+  # heavy boundary, and a plan can only follow it: the selector reads the
+  # traces the build writes.
+  elab_take_heavy
   if ! MODULE_TARGETS="$(python3 "$SELECTOR" modules --root "$ROOT")"; then
     echo "SETUP — elab: could not discover local module build targets."
     echo "REGRESSION — elab: build precondition failed"
@@ -398,61 +468,25 @@ if [ "$NO_BUILD" -eq 0 ]; then
     echo "REGRESSION — elab: build precondition failed"
     exit 2
   fi
-fi
-
-# --- content/import-closure selection ---------------------------------------
-# The cache is evidence from a prior successful timing run, never a build
-# substitute. The build above establishes current oleans; this step decides
-# which source files can reuse their prior measurements.
-if ! LEAN_ID="$(lake env lean --version)"; then
-  echo "SETUP — elab: could not identify the active Lean toolchain"
-  echo "REGRESSION — elab: selection precondition failed"
-  exit 2
-fi
-
-PLANFILE="$(mktemp)"
-MEASUREDFILE="$(mktemp)"
-: > "$MEASUREDFILE"
-
-if [ "$CALIBRATE" -eq 1 ]; then
-  if ! python3 "$SELECTOR" plan --root "$ROOT" --state "$STATE" \
-      --plan "$PLANFILE" --environment-id "$LEAN_ID" \
-      --baseline "$BASELINE" --commit "$CANDIDATE_COMMIT"; then
-    echo "REGRESSION — elab: could not construct a safe selection plan"
+  if ! LEAN_ID="$(lake env lean --version)"; then
+    echo "SETUP — elab: could not identify the active Lean toolchain"
+    echo "REGRESSION — elab: selection precondition failed"
     exit 2
   fi
-elif [ "$FULL" -eq 1 ]; then
-  if ! python3 "$SELECTOR" plan --root "$ROOT" --state "$STATE" \
-      --plan "$PLANFILE" --environment-id "$LEAN_ID" --full \
-      --full-reason "$FULL_REASON"; then
-    echo "REGRESSION — elab: could not construct a safe selection plan"
-    exit 2
-  fi
+  elab_plan
 else
-  if ! python3 "$SELECTOR" plan --root "$ROOT" --state "$STATE" \
-      --plan "$PLANFILE" --environment-id "$LEAN_ID"; then
-    echo "REGRESSION — elab: could not construct a safe selection plan"
+  if ! LEAN_ID="$(lake env lean --version)"; then
+    echo "SETUP — elab: could not identify the active Lean toolchain"
+    echo "REGRESSION — elab: selection precondition failed"
     exit 2
   fi
-fi
-
-FILES="$(python3 "$SELECTOR" files --plan "$PLANFILE")" || exit 2
-AFFECTED="$(python3 "$SELECTOR" files --plan "$PLANFILE" --affected)" || exit 2
-SHARED="$(python3 "$SELECTOR" files --plan "$PLANFILE" --shared)" || exit 2
-NFILES="$(printf '%s\n' "$FILES" | grep -c .)"
-NMEASURE="$(printf '%s\n' "$AFFECTED" | grep -c .)"
-NSKIP=$((NFILES - NMEASURE))
-NSHARED="$(printf '%s\n' "$SHARED" | grep -c .)"
-
-NCONTROL=0
-NCANDIDATE=0
-if [ "$CALIBRATE" -eq 1 ]; then
-  CONTROLS="$(python3 "$SELECTOR" files --plan "$PLANFILE" --controls)" || exit 2
-  CANDIDATES="$(python3 "$SELECTOR" files --plan "$PLANFILE" --candidates)" || exit 2
-  NCONTROL="$(printf '%s\n' "$CONTROLS" | grep -c .)"
-  NCANDIDATE="$(printf '%s\n' "$CANDIDATES" | grep -c .)"
-  CONTROLS="$(printf '%s' "$CONTROLS" | tr '\n' ' ')"
-  CANDIDATES="$(printf '%s' "$CANDIDATES" | tr '\n' ' ')"
+  elab_plan
+  if [ "$NMEASURE" -gt 0 ]; then
+    elab_take_heavy
+    elab_plan
+  else
+    echo "NOTE — elab: the plan measures nothing; no heavy-gate lock or host hold was taken"
+  fi
 fi
 
 # Whole-word membership in a space-delimited list; paths never contain spaces
@@ -587,6 +621,13 @@ cache_results() {
   fi
   # Publication is best-effort and loud: it can never turn this run red, and
   # any skip says why.  A future new worktree credits what is recorded here.
+  # Publishers are serialized by the heavy-gate lock; a run that measured
+  # nothing took no such lock and has nothing new to publish, so it does not
+  # touch the shared store at all.
+  if [ "$NMEASURE" -eq 0 ]; then
+    echo "NOTE — elab: shared publication skipped: nothing was measured by this run"
+    return 0
+  fi
   if [ -n "$EXCLUSIONS" ]; then
     python3 "$SELECTOR" publish --plan "$PLANFILE" --report "$REPORT" \
       --exclude-file "$EXCLUSIONS"

@@ -937,8 +937,10 @@ REFUSED as unknown rather than reclaimed, and a lock path that cannot be created
 reported as contention. The heavy-gate lock is host-global — it lives
 at `~/.codex/locks/gate-heavy.lock` and is shared across both this repository
 and Jaune, and across every checkout or worktree of either, because they all
-contend for the same cores: one host, one heavy gate. This also serializes
-atomic updates of its local `.lake/check-elab-state.json` cache.
+contend for the same cores: one host, one heavy gate. It is taken only by a run
+that will elaborate (see the table below); the worktree-local report lock,
+which every run takes, serializes atomic updates of the local
+`.lake/check-elab-state.json` cache.
 
 If a timing run is red, the cache update remains fail-closed but does not throw
 away unrelated work: files that elaborated successfully and stayed within
@@ -1040,10 +1042,21 @@ command finishes. A same-label `ALREADY_HELD` response alone does not authorize
 timing; automatic inheritance refuses it. The report and heavy locks remain
 in force under either direct admission or explicit inheritance.
 
-| gate | report lock | heavy lock |
+| gate | report lock | heavy lock and exclusive hold |
 |---|---|---|
-| `scripts/check-elab.sh --no-build` | yes | yes |
+| `scripts/check-elab.sh --no-build` | yes | only when its plan measures at least one file |
+| `scripts/check-elab.sh` (building) | yes | yes, before the build |
 | every other ordinary gate invocation here | — (writes none) | no |
+
+`check-elab.sh --no-build` plans before it takes the heavy boundary. A plan
+that measures nothing — every represented file cache-valid — takes neither the
+heavy-gate lock nor the exclusive 8 GiB hold: it elaborates nothing, and it
+publishes nothing to the shared timing store, so the rule that every publisher
+holds the heavy lock still stands. A plan that measures takes both before the
+first elaboration and then plans again inside the boundary, so the selection
+describes the tree as admitted rather than as it was while waiting. A run
+without `--no-build` builds first, and the build elaborates, so it takes the
+boundary before building and plans after.
 
 Only `check-elab.sh` writes a report (`scripts/report-elab.txt`), host-local
 baseline (`scripts/baseline-elab.txt`), and local cache state
@@ -1054,7 +1067,7 @@ print to stdout and touch nothing, which is why they are safe to run at will.
 `check-elab.sh` refuses to measure one or more selected files under
 language-server contention — and that refusal is the gate working, not an
 obstacle. An all-cache-valid run performs no timing and therefore does not
-refuse on language-server memory.
+refuse on language-server memory, and it takes no heavy-gate lock or host hold.
 
 It keys on **resident size, not on the mere presence of a server**, and the
 distinction is deliberate: `lean-lsp-mcp` is mandated tooling here, so idle
