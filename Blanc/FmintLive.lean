@@ -67,6 +67,7 @@ Every premise is what a fresh top-level message frame supplies: an empty stack,
 empty memory, a storage key not yet warmed, and enough gas.  The conclusion
 names the post-state's output, so this is not merely "some run exists". -/
 theorem totalSupply_runCompiled {sevm : Sevm} {pre : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_sel : Sevm.selector sevm = tsSel)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -78,10 +79,11 @@ theorem totalSupply_runCompiled {sevm : Sevm} {pre : Devm}
         (Devm.getStorVal pre sevm.currentTarget supplySlot).toBytes := by
   rw [totalSupplyGas_eq] at h_gas
   set g := pre.gasLeft with hg
+  have h_stateGas : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
   exact
     ⟨_,
       Prog.runCompiled_intro (G := g - 1)
-        (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+        (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack, h_mem])
         (by
@@ -118,6 +120,7 @@ What it does **not** say, so that nothing downstream overreads it:
   shared-`JUMPDEST` optimisation would change it. -/
 theorem fmint_totalSupply_succeeds {sevm : Sevm} {pre : Devm}
     (h_code : some sevm.code.toList = Prog.compile fmint)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_sel : Sevm.selector sevm = tsSel)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -128,7 +131,7 @@ theorem fmint_totalSupply_succeeds {sevm : Sevm} {pre : Devm}
       Devm.output post =
         (Devm.getStorVal pre sevm.currentTarget supplySlot).toBytes := by
   obtain ⟨post, h_run, h_out⟩ :=
-    totalSupply_runCompiled h_sel h_stack h_mem h_cold h_gas
+    totalSupply_runCompiled hfork h_sel h_stack h_mem h_cold h_gas
   exact ⟨post, Prog.exec_of_runCompiled h_run h_code, h_out⟩
 
 end Fmint

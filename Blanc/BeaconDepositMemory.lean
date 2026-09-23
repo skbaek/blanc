@@ -408,17 +408,17 @@ private theorem return96_runCompiled
     (hmod : memory.size % 32 = 0)
     (hlen : image.length = 96) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory, G + 5⟩)
+      (base.setMach ⟨[], memory, G + 5, base.stateGas⟩)
       (returnMemoryRange 0 96)
-      ((base.setMach ⟨[], memory, G⟩).withOutput image) := by
-  let returnPre := base.setMach ⟨[(0 : B256), (96 : B256)], memory, G⟩
+      ((base.setMach ⟨[], memory, G, base.stateGas⟩).withOutput image) := by
+  let returnPre := base.setMach ⟨[(0 : B256), (96 : B256)], memory, G, base.stateGas⟩
   have hext : returnPre.extCost [⟨(0 : Nat), (96 : Nat)⟩] = 0 := by
     apply Devm.extCost_zero_of_le
     · exact hmod
     · rw [hsize]
   have hread :
-      (returnPre.setMach ⟨[], returnPre.memory, G⟩).memRead 0 96 =
-        ⟨image, base.setMach ⟨[], memory, G⟩⟩ := by
+      (returnPre.setMach ⟨[], returnPre.memory, G, returnPre.stateGas⟩).memRead 0 96 =
+        ⟨image, base.setMach ⟨[], memory, G, base.stateGas⟩⟩ := by
     apply Prod.ext
     · change (memory.read 0 96).1 = image
       rw [Mem.Reads.read hreads]
@@ -426,14 +426,14 @@ private theorem return96_runCompiled
       rw [List.drop_zero, List.takeD_eq_take _ (by omega),
         List.take_of_length_le (by omega)]
     · change
-        (base.setMach ⟨[], (memory.read 0 96).2, G⟩) =
-          base.setMach ⟨[], memory, G⟩
+        (base.setMach ⟨[], (memory.read 0 96).2, G, base.stateGas⟩) =
+          base.setMach ⟨[], memory, G, base.stateGas⟩
       rw [Mem.read_snd_eq_self
         (memExtSize_of_le hmod (by rw [hsize]))]
   unfold returnMemoryRange pushList
   func_run (2) []
   change Func.RunCompiled fs sevm returnPre Func.return_
-    ((base.setMach ⟨[], memory, G⟩).withOutput image)
+    ((base.setMach ⟨[], memory, G, base.stateGas⟩).withOutput image)
   exact Func.runCompiled_return_of (devm := returnPre) (G := G) (e := 0)
     rfl hext
     (by simp only [returnPre, Devm.gasLeft_setMach, Nat.add_zero])
@@ -452,10 +452,10 @@ private theorem storeByteShiftStack_runCompiled
     (hrest : Func.RunCompiled fs sevm
       (base.setMach
         ⟨(word >>> 8) :: stack,
-          memory.write i.toNat [word.2.2.toUInt8], G⟩)
+          memory.write i.toNat [word.2.2.toUInt8], G, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨word :: stack, memory, G + 15⟩)
+      (base.setMach ⟨word :: stack, memory, G + 15, base.stateGas⟩)
       (dup 0 ::: pushB256 i ::: mstore8 :::
         pushB256 8 ::: shr ::: rest)
       post := by
@@ -468,7 +468,7 @@ private theorem storeByteShiftStack_runCompiled
   · simp only [Devm.stack_setMach, List.length_cons]
     omega
   · omega
-  · simpa only [Devm.setMach_setMach, Devm.memory_setMach,
+  · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
       show (8 : B256).toNat = 8 by decide +kernel,
       show G + 15 - 15 = G by omega] using hrest
 
@@ -482,17 +482,17 @@ private theorem storeByteLastStack_runCompiled
     (hroom : stack.length + 1 < 1024)
     (hrest : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨stack, memory.write i.toNat [word.2.2.toUInt8], G⟩)
+        ⟨stack, memory.write i.toNat [word.2.2.toUInt8], G, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨word :: stack, memory, G + 6⟩)
+      (base.setMach ⟨word :: stack, memory, G + 6, base.stateGas⟩)
       (pushB256 i ::: mstore8 ::: rest)
       post := by
   func_run (2) [0]
   · simp only [Devm.stack_setMach, List.length_cons]
     omega
   · exact Devm.extCost_zero_of_le hsize32 hfit
-  · simpa only [Devm.setMach_setMach, Devm.memory_setMach,
+  · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
       show G + 6 - 6 = G by omega] using hrest
 
 /-- Execute `storeLe64At` at any non-wrapping concrete address.  The
@@ -523,10 +523,10 @@ theorem storeLe64At_runCompiled
     (hpush7 : pushCost (address + 7).toBytes.sig = gVerylow)
     (hrest : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨stack, storeLe64Memory memory offset word, G⟩)
+        ⟨stack, storeLe64Memory memory offset word, G, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨word :: stack, memory, G + 111⟩)
+      (base.setMach ⟨word :: stack, memory, G + 111, base.stateGas⟩)
       (storeLe64At address +++ rest) post := by
   let M0 := memory
   let M1 := M0.write address.toNat [word.2.2.toUInt8]
@@ -590,7 +590,7 @@ theorem storeLe64At_runCompiled
     rw [hnat0, hnat1, hnat2, hnat3, hnat4, hnat5, hnat6, hnat7]
     rfl
   have htail : Func.RunCompiled fs sevm
-      (base.setMach ⟨stack, M8, G⟩) rest post := by
+      (base.setMach ⟨stack, M8, G, base.stateGas⟩) rest post := by
     rw [hM8]
     exact hrest
   unfold storeLe64At
@@ -661,11 +661,11 @@ theorem storeLe64At64_runCompiled
     {word : B256} {G : Nat} {rest : Func}
     (hrest : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[], getDepositCountResultMemory word, G⟩)
+        ⟨[], getDepositCountResultMemory word, G, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[word], getDepositCountHeaderMemory, G + 111⟩)
+        ⟨[word], getDepositCountHeaderMemory, G + 111, base.stateGas⟩)
       (storeLe64At 64 +++ rest) post := by
   exact storeLe64At_runCompiled
     (memory := getDepositCountHeaderMemory)
@@ -691,10 +691,10 @@ theorem storeLe64At32_runCompiled
     (hfit : 32 + 8 ≤ memory.size)
     (hrest : Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[], storeLe64Memory memory 32 word, G⟩)
+        ⟨[], storeLe64Memory memory 32 word, G, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[word], memory, G + 111⟩)
+      (base.setMach ⟨[word], memory, G + 111, base.stateGas⟩)
       (storeLe64At 32 +++ rest) post := by
   exact storeLe64At_runCompiled
     (memory := memory) (address := 32) (offset := 32) (stack := [])
@@ -715,10 +715,10 @@ theorem getDepositCountHeader_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
     {G : Nat} {rest : Func}
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], getDepositCountHeaderMemory, G⟩)
+      (base.setMach ⟨[], getDepositCountHeaderMemory, G, base.stateGas⟩)
       rest post) :
     Func.RunCompiled fs sevm
-      (base.setMach ⟨[], Mem.empty, G + 34⟩)
+      (base.setMach ⟨[], Mem.empty, G + 34, base.stateGas⟩)
       (pushB256 32 ::: mstoreAt 0 +++
        pushB256 8 ::: mstoreAt 1 +++
        pushB256 0 ::: mstoreAt 2 +++ rest) post := by
@@ -727,7 +727,7 @@ theorem getDepositCountHeader_runCompiled
       (G := G + 31) (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [Devm.stack_setMach, List.length_nil]; omega)
-  · simp only [Devm.setMach_setMach, Devm.stack_setMach,
+  · simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
       Devm.memory_setMach]
     func_run (2) [3]
     · exact Devm.extCost_empty_word
@@ -736,7 +736,7 @@ theorem getDepositCountHeader_runCompiled
           (G := G + 20) (by decide +kernel)
           (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
           (by simp only [Devm.stack_setMach, List.length_nil]; omega)
-      · simp only [Devm.setMach_setMach, Devm.stack_setMach,
+      · simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
           Devm.memory_setMach]
         func_run (2) [3]
         · exact Devm.extCost_of_size (n := 32) rfl
@@ -746,7 +746,7 @@ theorem getDepositCountHeader_runCompiled
               (G := G + 9) pushCost_zero
               (by simp only [Devm.gasLeft_setMach, gBase]; omega)
               (by simp only [Devm.stack_setMach, List.length_nil]; omega)
-          · simp only [Devm.setMach_setMach, Devm.stack_setMach,
+          · simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
               Devm.memory_setMach]
             func_run (2) [3]
             · exact Devm.extCost_of_size (n := 64) rfl
@@ -759,7 +759,7 @@ theorem getDepositCountHeader_runCompiled
                 decide +kernel
               have hgas : G + 9 - 9 = G := by omega
               simpa only [getDepositCountHeaderMemory,
-                prepend, Devm.setMach_setMach, Devm.stack_setMach,
+                prepend, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
                 Devm.memory_setMach, Devm.gasLeft_setMach,
                 hzero, hone, htwo, hgas] using hrest
 
@@ -769,10 +769,10 @@ theorem getDepositCountReturn_runCompiled
     (word : B256) (G : Nat) :
     Func.RunCompiled fs sevm
       (base.setMach
-        ⟨[], getDepositCountResultMemory word, G + 5⟩)
+        ⟨[], getDepositCountResultMemory word, G + 5, base.stateGas⟩)
       (returnMemoryRange 0 96)
       ((base.setMach
-        ⟨[], getDepositCountResultMemory word, G⟩).withOutput
+        ⟨[], getDepositCountResultMemory word, G, base.stateGas⟩).withOutput
           (abiDynamicBytesReturn (le64 word.toNat))) := by
   have carrier := getDepositCountResultMemory_spec word
   exact return96_runCompiled G
@@ -792,10 +792,10 @@ private theorem storeByteShiftStack_runCompiledTo
     (hrest : Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨(word >>> 8) :: stack,
-          memory.write i.toNat [word.2.2.toUInt8], G⟩)
+          memory.write i.toNat [word.2.2.toUInt8], G, base.stateGas⟩)
       rest ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨word :: stack, memory, G + 15⟩)
+      (base.setMach ⟨word :: stack, memory, G + 15, base.stateGas⟩)
       (dup 0 ::: pushB256 i ::: mstore8 :::
         pushB256 8 ::: shr ::: rest)
       ex := by
@@ -808,7 +808,7 @@ private theorem storeByteShiftStack_runCompiledTo
   · simp only [Devm.stack_setMach, List.length_cons]
     omega
   · omega
-  · simpa only [Devm.setMach_setMach, Devm.memory_setMach,
+  · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
       show (8 : B256).toNat = 8 by decide +kernel,
       show G + 15 - 15 = G by omega] using hrest
 
@@ -822,17 +822,17 @@ private theorem storeByteLastStack_runCompiledTo
     (hroom : stack.length + 1 < 1024)
     (hrest : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨stack, memory.write i.toNat [word.2.2.toUInt8], G⟩)
+        ⟨stack, memory.write i.toNat [word.2.2.toUInt8], G, base.stateGas⟩)
       rest ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨word :: stack, memory, G + 6⟩)
+      (base.setMach ⟨word :: stack, memory, G + 6, base.stateGas⟩)
       (pushB256 i ::: mstore8 ::: rest)
       ex := by
   func_run (2) [0]
   · simp only [Devm.stack_setMach, List.length_cons]
     omega
   · exact Devm.extCost_zero_of_le hsize32 hfit
-  · simpa only [Devm.setMach_setMach, Devm.memory_setMach,
+  · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
       show G + 6 - 6 = G by omega] using hrest
 
 /-- Execute `storeLe64At` before an arbitrary final `Execution`.  This is the
@@ -863,10 +863,10 @@ theorem storeLe64At_runCompiledTo
     (hpush7 : pushCost (address + 7).toBytes.sig = gVerylow)
     (hrest : Func.RunCompiledTo fs sevm
       (base.setMach
-        ⟨stack, storeLe64Memory memory offset word, G⟩)
+        ⟨stack, storeLe64Memory memory offset word, G, base.stateGas⟩)
       rest ex) :
     Func.RunCompiledTo fs sevm
-      (base.setMach ⟨word :: stack, memory, G + 111⟩)
+      (base.setMach ⟨word :: stack, memory, G + 111, base.stateGas⟩)
       (storeLe64At address +++ rest) ex := by
   let M0 := memory
   let M1 := M0.write address.toNat [word.2.2.toUInt8]
@@ -930,7 +930,7 @@ theorem storeLe64At_runCompiledTo
     rw [hnat0, hnat1, hnat2, hnat3, hnat4, hnat5, hnat6, hnat7]
     rfl
   have htail : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨stack, M8, G⟩) rest ex := by
+      (base.setMach ⟨stack, M8, G, base.stateGas⟩) rest ex := by
     rw [hM8]
     exact hrest
   unfold storeLe64At
