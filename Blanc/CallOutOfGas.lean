@@ -12,20 +12,25 @@ lemma Xinst.step_call_zero_value_outOfGas {sevm : Sevm} {devm : Devm}
     {gw cw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_stk : devm.stack = gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost cw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : d1.gasLeft < mcc + ext) :
     Xinst.step sevm devm .call =
       .done (.error ⟨.halt (.outOfGas .none), d1⟩) := by
   subst h_ext; subst h_acc
+  have hgas : sevm.benvStat.rules.gas = pragueRules.gas :=
+    BenvStat.gas_eq_prague_of_stateGas_none hfork.rules_stateGas_none
+  simp only [Xinst.step]
+  rw [hfork.rules_stateGas_none, hgas]
   show XStep.ofExcept (do
     let ⟨gas, d⟩ ← devm.pop
     let ⟨callee, d⟩ ← d.popToAdr
@@ -65,28 +70,28 @@ lemma Xinst.step_call_zero_value_outOfGas {sevm : Sevm} {devm : Devm}
   simp only [bind, Except.bind]
   rw [Devm.popToAdr_eq_ok
     (devm := devm.setMach ⟨cw :: 0 :: iiw :: isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
+      devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
-    Devm.gasLeft_setMach]
+    Devm.gasLeft_setMach, Devm.stateGas_setMach]
   rw [Devm.pop_eq_ok
     (devm := devm.setMach ⟨0 :: iiw :: isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
+      devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
-    Devm.gasLeft_setMach]
+    Devm.gasLeft_setMach, Devm.stateGas_setMach]
   rw [Devm.popToNat_eq_ok
     (devm := devm.setMach ⟨iiw :: isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
-  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+      devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach, Devm.stateGas_setMach]
   rw [Devm.popToNat_eq_ok
     (devm := devm.setMach ⟨isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
-  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+      devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach, Devm.stateGas_setMach]
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨oiw :: osw :: s, devm.memory, devm.gasLeft⟩) rfl]
-  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+    (devm := devm.setMach ⟨oiw :: osw :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach, Devm.stateGas_setMach]
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨osw :: s, devm.memory, devm.gasLeft⟩) rfl]
-  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+    (devm := devm.setMach ⟨osw :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach, Devm.stateGas_setMach]
   simp only [or_true, if_pos trivial, Nat.add_zero,
     show ((0 : B256).toNat) = 0 from rfl]
   simp only [h_del, h_split]
@@ -98,20 +103,25 @@ lemma Xinst.step_staticcall_outOfGas {sevm : Sevm} {devm : Devm}
     {gw tw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_stk : devm.stack = gw :: tw :: iiw :: isw :: oiw :: osw :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).extCost
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
     (h_del : accessDelegation
-      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩)
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         tw.toAdr) tw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
     (h_acc : accessCost tw.toAdr
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft⟩).accessedAddresses
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
         + dgc = acc)
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
     (h_gas : d1.gasLeft < mcc + ext) :
     Xinst.step sevm devm .staticcall =
       .done (.error ⟨.halt (.outOfGas .none), d1⟩) := by
   subst h_ext; subst h_acc
+  have hgas : sevm.benvStat.rules.gas = pragueRules.gas :=
+    BenvStat.gas_eq_prague_of_stateGas_none hfork.rules_stateGas_none
+  simp only [Xinst.step]
+  rw [hfork.rules_stateGas_none, hgas]
   show XStep.ofExcept (do
     let ⟨gas, d⟩ ← devm.pop
     let ⟨target, d⟩ ← d.popToAdr
@@ -139,23 +149,23 @@ lemma Xinst.step_staticcall_outOfGas {sevm : Sevm} {devm : Devm}
   simp only [bind, Except.bind]
   rw [Devm.popToAdr_eq_ok
     (devm := devm.setMach ⟨tw :: iiw :: isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
+      devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
-    Devm.gasLeft_setMach]
+    Devm.gasLeft_setMach, Devm.stateGas_setMach]
   rw [Devm.popToNat_eq_ok
     (devm := devm.setMach ⟨iiw :: isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
-  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+      devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach, Devm.stateGas_setMach]
   rw [Devm.popToNat_eq_ok
     (devm := devm.setMach ⟨isw :: oiw :: osw :: s,
-      devm.memory, devm.gasLeft⟩) rfl]
-  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+      devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach, Devm.stateGas_setMach]
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨oiw :: osw :: s, devm.memory, devm.gasLeft⟩) rfl]
-  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+    (devm := devm.setMach ⟨oiw :: osw :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach, Devm.stateGas_setMach]
   rw [Devm.popToNat_eq_ok
-    (devm := devm.setMach ⟨osw :: s, devm.memory, devm.gasLeft⟩) rfl]
-  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
+    (devm := devm.setMach ⟨osw :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach, Devm.stateGas_setMach]
   simp only [h_del, h_split]
   rw [chargeGas_eq_outOfGas (devm := d1) h_gas]
   rfl

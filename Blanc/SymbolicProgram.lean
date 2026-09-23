@@ -1136,7 +1136,7 @@ theorem isSome_compile_next_pop (l : List (Nat × Func)) (m : Nat) (p : Func) :
       = (Func.compile l (m + 1) p).isSome := by
   cases h : Func.compile l (m + 1) p with
   | none => simp [Func.compile, Ninst.size, h]
-  | some bs => simp [Func.compile, Ninst.size, h]
+  | some bs => simp [Func.compile, Ninst.size, Ninst.immAccepted, h]
 
 theorem isSome_compile_padFunc (l : List (Nat × Func)) (f : Func) :
     ∀ (n m : Nat), (Func.compile l m (padFunc n f)).isSome

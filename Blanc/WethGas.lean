@@ -128,7 +128,7 @@ theorem weth_decimals_runCompiled {sevm : Sevm} {pre : Devm}
   refine
     ⟨_,
       Prog.runCompiled_intro (G := g - 1)
-        (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+        (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack, h_mem])
         (by
@@ -227,6 +227,7 @@ the `mach.gasLeft` field they leave untouched, so the post-state's `gasLeft` is
 Same four limits as `weth_balanceOf_succeeds`; see that theorem's docstring. -/
 theorem weth_balanceOf_gas_exact {sevm : Sevm} {pre : Devm}
     (h_code : some sevm.code.toList = Prog.compile weth)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = boSel)
     (h_stack : pre.stack = [])
@@ -240,11 +241,12 @@ theorem weth_balanceOf_gas_exact {sevm : Sevm} {pre : Devm}
         (Devm.getStorVal pre sevm.currentTarget (Sevm.dataWord sevm 4)).toBytes := by
   rw [balanceOfGas_eq] at h_gas
   set g := pre.gasLeft with hg
+  have h_stateGas : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
   refine
     ⟨_,
       Prog.exec_of_runCompiled
         (Prog.runCompiled_intro (G := g - 1)
-          (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+          (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
           (by simp only [gJumpdest]; omega)
           (by rw [h_stack, h_mem])
           (by
@@ -274,6 +276,7 @@ theorem's hypothesised one both come from `exec ⟨0, sevm, pre⟩`, hence are
 equal, and the gas equation transports across `injection`. -/
 theorem weth_balanceOf_gas_of_runCompiled {sevm : Sevm} {pre post : Devm}
     (h_code : some sevm.code.toList = Prog.compile weth)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = boSel)
     (h_stack : pre.stack = [])
@@ -284,7 +287,7 @@ theorem weth_balanceOf_gas_of_runCompiled {sevm : Sevm} {pre post : Devm}
     (h_run : Prog.RunCompiled sevm pre weth post) :
     pre.gasLeft = post.gasLeft + balanceOfGas := by
   obtain ⟨post', h_exec', h_gas_eq, _⟩ :=
-    weth_balanceOf_gas_exact h_code h_value h_sel h_stack h_mem h_cold h_gas
+    weth_balanceOf_gas_exact h_code hfork h_value h_sel h_stack h_mem h_cold h_gas
   have h_exec : exec ⟨0, sevm, pre⟩ = .ok post :=
     Prog.exec_of_runCompiled h_run h_code
   rw [h_exec] at h_exec'
@@ -349,6 +352,7 @@ same tree — differing only where `func_run` meets the `SLOAD`: the frame
 carries `∈` rather than `∉`, so the tactic selects `Ninst.runCompiled_sload_warm`,
 subtracts `gasWarmAccess`, and leaves the base state unmoved. -/
 theorem weth_balanceOf_warm_runCompiled {sevm : Sevm} {pre : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = boSel)
     (h_stack : pre.stack = [])
@@ -362,10 +366,11 @@ theorem weth_balanceOf_warm_runCompiled {sevm : Sevm} {pre : Devm}
         (Devm.getStorVal pre sevm.currentTarget (Sevm.dataWord sevm 4)).toBytes := by
   rw [balanceOfGasWarm_eq] at h_gas
   set g := pre.gasLeft with hg
+  have h_stateGas : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
   refine
     ⟨_,
       Prog.runCompiled_intro (G := g - 1)
-        (mid := pre.setMach ⟨[], Mem.empty, g - 1⟩)
+        (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack, h_mem])
         (by
@@ -387,6 +392,7 @@ theorem weth_balanceOf_warm_runCompiled {sevm : Sevm} {pre : Devm}
 `Prog.exec_of_runCompiled`. Same four limits as `weth_balanceOf_gas_exact`. -/
 theorem weth_balanceOf_warm_gas_exact {sevm : Sevm} {pre : Devm}
     (h_code : some sevm.code.toList = Prog.compile weth)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = boSel)
     (h_stack : pre.stack = [])
@@ -399,7 +405,7 @@ theorem weth_balanceOf_warm_gas_exact {sevm : Sevm} {pre : Devm}
       Devm.output post =
         (Devm.getStorVal pre sevm.currentTarget (Sevm.dataWord sevm 4)).toBytes := by
   obtain ⟨post, h_run, h_gas_eq, h_out⟩ :=
-    weth_balanceOf_warm_runCompiled h_value h_sel h_stack h_mem h_warm h_gas
+    weth_balanceOf_warm_runCompiled hfork h_value h_sel h_stack h_mem h_warm h_gas
   exact ⟨post, Prog.exec_of_runCompiled h_run h_code, h_gas_eq, h_out⟩
 
 /-! ## The closed form
@@ -585,6 +591,7 @@ one entrypoint of one contract, one fixed selector, exact under
 schedule. -/
 theorem weth_balanceOf_gas_exact_wethGas {sevm : Sevm} {pre : Devm} {cost : Nat}
     (h_code : some sevm.code.toList = Prog.compile weth)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = boSel)
     (h_stack : pre.stack = [])
@@ -601,11 +608,11 @@ theorem weth_balanceOf_gas_exact_wethGas {sevm : Sevm} {pre : Devm} {cost : Nat}
   · rw [if_pos h] at h_cost
     injection h_cost with h_cost
     subst h_cost
-    exact weth_balanceOf_warm_gas_exact h_code h_value h_sel h_stack h_mem h h_gas
+    exact weth_balanceOf_warm_gas_exact h_code hfork h_value h_sel h_stack h_mem h h_gas
   · rw [if_neg h] at h_cost
     injection h_cost with h_cost
     subst h_cost
-    exact weth_balanceOf_gas_exact h_code h_value h_sel h_stack h_mem h h_gas
+    exact weth_balanceOf_gas_exact h_code hfork h_value h_sel h_stack h_mem h h_gas
 
 /-- **`decimals()` costs exactly what `wethGas` says it does.** The same
 restatement as `weth_balanceOf_gas_exact_wethGas`, on the second target. The
@@ -642,6 +649,7 @@ is eliminated once for both altitudes rather than twice. -/
 theorem weth_balanceOf_gas_of_runCompiled_wethGas {sevm : Sevm} {pre post : Devm}
     {cost : Nat}
     (h_code : some sevm.code.toList = Prog.compile weth)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = boSel)
     (h_stack : pre.stack = [])
@@ -651,7 +659,7 @@ theorem weth_balanceOf_gas_of_runCompiled_wethGas {sevm : Sevm} {pre post : Devm
     (h_run : Prog.RunCompiled sevm pre weth post) :
     pre.gasLeft = post.gasLeft + cost := by
   obtain ⟨post', h_exec', h_gas_eq, _⟩ :=
-    weth_balanceOf_gas_exact_wethGas h_code h_value h_sel h_stack h_mem h_cost h_gas
+    weth_balanceOf_gas_exact_wethGas h_code hfork h_value h_sel h_stack h_mem h_cost h_gas
   have h_exec : exec ⟨0, sevm, pre⟩ = .ok post :=
     Prog.exec_of_runCompiled h_run h_code
   rw [h_exec] at h_exec'
