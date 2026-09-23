@@ -276,7 +276,7 @@ private theorem depositPostHashError_endpoint_runCompiledTo
   obtain ⟨logged, _hlogs, _hstorVal, _hstorMap, _hbal, hcode,
       _hloadedKeys, haddresses, _houtput, _herror, heventLift⟩ :=
     stageDepositEvent_storageEffectRun
-      (fs := runtime.main :: runtime.aux) (sevm := sevm) (base := base)
+      (fs := runtime.main :: runtime.aux) (sevm := sevm) (base := base) (hfork := hfork)
       (amount := amount) (oldCount := oldCount) (G := K + 1779)
       (body := depositAfterEvent)
       hdec.pubkeyTail hdec.withdrawalCredentialsTail hdec.signatureTail
