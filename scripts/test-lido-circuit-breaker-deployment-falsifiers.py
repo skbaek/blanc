@@ -6,6 +6,15 @@ runs only the Python checker.  For controls other than the full-body pin we
 deliberately re-pin the mutated declaration in the temporary checker: that
 demonstrates the named semantic control remains live if a reviewer tries to
 bless the changed body by updating its digest.
+
+Two modes (evidence economy, scripts/GATES.md). ``--lean-controls-only`` is
+the part the main gate runs: it compiles the arbitrary-premise root-extraction
+control and the synthetic-world boundary control against the committed Lean
+root, so it bites on production content. ``--source-cases-only`` is the
+harness self-test (the wrapper's ``--self-test``): every source case mutates a
+temporary copy and runs only the Python checker, so it shows a checker control
+bites and reruns when the harness changes, not on every Lean edit. With no
+flag both run.
 """
 from __future__ import annotations
 
@@ -222,7 +231,16 @@ def run_lean_controls() -> None:
     print("PASS lean-synthetic-boundary")
 
 
-def main() -> int:
+def main(argv: list[str]) -> int:
+    if len(argv) > 1 or (argv and argv[0] not in ("--lean-controls-only", "--source-cases-only")):
+        print("usage: test-lido-circuit-breaker-deployment-falsifiers.py "
+              "[--lean-controls-only | --source-cases-only]", file=sys.stderr)
+        return 2
+    mode = argv[0] if argv else None
+    if mode == "--lean-controls-only":
+        run_lean_controls()
+        print("S9 deployment falsifiers: PASS (2 Lean controls)")
+        return 0
     # The first case makes the complete body pin live.  Every remaining failure
     # survives a fresh temporary pin and therefore identifies its named control.
     cases = (
@@ -295,6 +313,9 @@ def main() -> int:
     )
     for case in cases:
         run_case(*case)
+    if mode == "--source-cases-only":
+        print(f"S9 deployment falsifiers: PASS ({len(cases)} source cases)")
+        return 0
     run_lean_controls()
     print(f"S9 deployment falsifiers: PASS ({len(cases)} source cases + 2 Lean controls)")
     return 0
@@ -302,7 +323,7 @@ def main() -> int:
 
 if __name__ == "__main__":
     try:
-        raise SystemExit(main())
+        raise SystemExit(main(sys.argv[1:]))
     except TestFailure as exc:
         print("FAIL: " + str(exc), file=sys.stderr)
         raise SystemExit(1)

@@ -13,6 +13,7 @@ import sys
 import tempfile
 
 import gate_semaphore
+import lean_mutant_batch
 
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -75,6 +76,24 @@ MUTANTS = {
     "-- PER-FRAME-CLEAR-MUTANT-CONTROL":
         "private theorem perFrameClearMutant : (initDevm foreignMsg).getTransVal addressA key = 0 := by native_decide\n",
 }
+
+# The refutation phrase, not the bare tactic name: any other `native_decide`
+# error in a mutant's lines (a failed Decidable synthesis, say) must not count.
+NATIVE_FALSE = ("Tactic `native_decide` evaluated that the proposition",)
+
+# Evidence economy (scripts/GATES.md, "Evidence economy"; ledger in Plans
+# reports/evidence-economy-20260923/trim-b1-ledger.md). These two mutants are
+# the only check that would notice a production change: no pinned control
+# rejects a transaction whose nonce is ahead of its sender's (UNRELATED), and
+# no control pins the cell a swapped TSTORE would write (OPERAND-ORDER; the
+# covering theorem Blanc.tstore_run_cell needs a Run witness to apply). They
+# stay in the main semantic row, batched into one elaboration. Every other
+# mutant restates the negation of a conjunct `concrete_controls` pins, so it
+# shows only that the fixture discriminates; it runs in the --self-test row.
+PRODUCTION_MUTANTS = (
+    "-- OPERAND-ORDER-MUTANT-CONTROL",
+    "-- UNRELATED-TRANSACTIONS-MUTANT-CONTROL",
+)
 
 
 def fail(message: str) -> None:
@@ -511,11 +530,20 @@ def audit_fixture(data: dict) -> None:
         fail(f"fixture compilation failed\n{proc.stdout}{proc.stderr}")
     if " ".join(proc.stdout.split()) != " ".join(EXPECTED.split()):
         fail(f"evaluator vector drifted: {proc.stdout.strip()}")
-    mutant = text
-    for marker, snippet in MUTANTS.items():
+    run_mutants(text, PRODUCTION_MUTANTS)
+
+
+def run_mutants(text: str, markers: tuple[str, ...]) -> None:
+    """One elaboration of every named mutant, each attributed to its lines."""
+    for marker in MUTANTS:
         if text.count(marker) != 1:
             fail(f"mutant marker absent or duplicated: {marker}")
-        mutant = mutant.replace(marker, snippet + marker)
+    mutants = [
+        lean_mutant_batch.Mutant(marker, MUTANTS[marker], NATIVE_FALSE,
+                                 keep_marker=True)
+        for marker in markers
+    ]
+    mutant, spans = lean_mutant_batch.insert(text, mutants)
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".lean", prefix="TransientSettlementMutants-",
         dir=ROOT / "scripts", delete=False,
@@ -527,8 +555,10 @@ def audit_fixture(data: dict) -> None:
     finally:
         tmp.unlink(missing_ok=True)
     output = result.stdout + result.stderr
-    if result.returncode == 0 or output.count("native_decide") < len(MUTANTS):
-        fail(f"batched mutants did not all fail for their pinned reason\n{output}")
+    problems = lean_mutant_batch.verdict(output, result.returncode, mutants, spans)
+    if problems:
+        fail("batched mutants did not all fail for their pinned reason: "
+             + "; ".join(problems) + f"\n{output}")
 
 
 def deletion_controls(data: dict, *, static: bool, semantic: bool) -> None:
@@ -628,6 +658,7 @@ def main() -> None:
     phase = parser.add_mutually_exclusive_group()
     phase.add_argument("--static-only", action="store_true")
     phase.add_argument("--semantic-only", action="store_true")
+    phase.add_argument("--self-test", action="store_true")
     parser.add_argument("--print-signatures", action="store_true")
     parser.add_argument("--print-compatibility", action="store_true")
     parser.add_argument("--write-manifest", action="store_true")
@@ -661,15 +692,29 @@ def main() -> None:
             ).hexdigest(),
         }, indent=2))
         return
-    if not arguments.semantic_only:
+    if arguments.self_test:
+        # Harness self-test (evidence economy rule 3): the parser falsifiers,
+        # the static and live positive-deletion controls, and the mutants
+        # whose failure a pinned control already implies. Its registry inputs
+        # are the harness and fixture only; the fixture's green compile is the
+        # prerequisite main semantic row's verdict.
         parser_controls()
+        audit_source(data)  # a clean baseline, so each deletion is what bites
+        deletion_controls(data, static=True, semantic=True)
+        self_test_markers = tuple(m for m in MUTANTS if m not in PRODUCTION_MUTANTS)
+        run_mutants(read(FIXTURE), self_test_markers)
+        print(
+            "OK — transient-settlement self-test: parser falsifiers, "
+            f"{len(data['owners'])} static + {len(data['requiredPositiveTheorems'])} "
+            f"live deletion controls, {len(self_test_markers)} fixture mutants "
+            "each failing in its own lines"
+        )
+        return
+    if not arguments.semantic_only:
         audit_source(data)
         audit_moves(data)
         audit_architecture(data)
         audit_frozen(data)
-    deletion_controls(
-        data, static=not arguments.semantic_only, semantic=not arguments.static_only
-    )
     if not arguments.static_only:
         audit_fixture(data)
     if arguments.static_only:
@@ -681,14 +726,14 @@ def main() -> None:
     elif arguments.semantic_only:
         print(
             "OK — transient-settlement semantic: "
-            f"25 evaluator controls, {len(MUTANTS)} mutants"
+            f"25 evaluator controls, {len(PRODUCTION_MUTANTS)} production mutants"
         )
     else:
         print(
             "OK — transient-settlement: "
             f"{len(data['owners'])} owned declarations, "
             f"{len(data['movedDonors'])} donor moves, "
-            f"25 evaluator controls, {len(MUTANTS)} mutants"
+            f"25 evaluator controls, {len(PRODUCTION_MUTANTS)} production mutants"
         )
 
 

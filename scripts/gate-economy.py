@@ -98,6 +98,13 @@ def validated() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[s
             "lido-twg-pinned-target-current-mainnet",
             "recipe-dispatch-controls",
             "elab-migration-comparison-controls",
+            # Evidence economy, batch 1 (2026-09-23): harness self-tests split
+            # out of their main rows; each depends on its main row.
+            "extraction-ownership-self-test",
+            "execution-occurrence-self-test",
+            "cycle-write-free-self-test",
+            "transient-settlement-self-test",
+            "lido-deployment-self-test",
         ],
     }
     for key, expected in expected_meta.items():
