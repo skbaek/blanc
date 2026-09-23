@@ -164,14 +164,18 @@ theorem gasSha25664_le_of_processMessage_clean
             calldata code false).withBenv benv)).dyna.gasLeft
         change ¬84 ≤ gas
         exact hgas)] at hexec
-      simp only [applyPrecompResult, executeCode.handleError] at hexec
-      rw [← hexec] at hset
-      unfold processMessage.settle at hset
-      simp only [bind, Except.bind, Option.isSome] at hset
-      injection hset with hchild
-      subst child
-      change true = false at hclean
-      contradiction
+      simp only [applyPrecompResult, executeCode.handleErrorWith] at hexec
+      split at hexec <;>
+        simp only [executeCode.handleError,
+          executeCode.handleErrorAmsterdam] at hexec
+      all_goals
+        rw [← hexec] at hset
+        unfold processMessage.settle at hset
+        simp only [bind, Except.bind, Option.isSome] at hset
+        injection hset with hchild
+        subst child
+        change true = false at hclean
+        contradiction
     · exact False.elim (hinterp.1 (by
         obtain ⟨st_mid, hsub, hbenv⟩ := of_benvAfterTransfer rfl hbt
         subst benv
@@ -210,13 +214,17 @@ theorem output_of_processMessage_sha256_64_clean
         exact hlen) (by
         change 84 ≤ gas
         exact hgas)] at hexec
-      simp only [applyPrecompResult, executeCode.handleError] at hexec
-      rw [← hexec] at hset
-      unfold processMessage.settle at hset
-      simp only [bind, Except.bind, Option.isSome] at hset
-      injection hset with hchild
-      subst child
-      rfl
+      simp only [applyPrecompResult, executeCode.handleErrorWith] at hexec
+      split at hexec <;>
+        simp only [executeCode.handleError,
+          executeCode.handleErrorAmsterdam] at hexec
+      all_goals
+        rw [← hexec] at hset
+        unfold processMessage.settle at hset
+        simp only [bind, Except.bind, Option.isSome] at hset
+        injection hset with hchild
+        subst child
+        rfl
     · exact False.elim (hinterp.1 (by
         obtain ⟨st_mid, hsub, hbenv⟩ := of_benvAfterTransfer rfl hbt
         subst benv
