@@ -94,7 +94,10 @@ macro "dca_kernel_decide" : tactic => `(tactic|
       liftMachMetaPure, accessCost, Devm.extCost, Devm.memExtends,
       Mem.extends, chargeGas, safeSub, calculateMsgCallGas, except64th,
       Std.TreeMap.getD_emptyc, Std.TreeMap.getD_insert,
-      Std.TreeMap.getD_erase]
+      Std.TreeMap.getD_erase,
+      BenvStat.rules, Fork.ruleSet, pragueRules, pragueGasSchedule,
+      GasSchedule.accessCost, GasSchedule.accessDelegation, XStep.ofExcept,
+      Except.assert]
     <;> decide))
 
 private theorem eq_spawn_of_spawned (step : XStep)
@@ -147,7 +150,7 @@ theorem create_empty_target_control
   have horig := hs
   simp only [Xinst.step, Bind.bind, Except.bind] at hs
   repeat' split at hs
-  all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
+  all_goals simp only [XStep.ofExcept, Pure.pure, Except.pure, reduceCtorEq] at hs
   all_goals first
     | cases hs
     | have hfresh := genericCreate.step_spawn_frame hs
@@ -166,6 +169,22 @@ theorem create_empty_target_control
           simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hshape
         all_goals obtain ⟨rfl, rfl⟩ := hshape
         all_goals rfl
+    | have hfresh := genericCreateAmsterdam.step_spawn_frame hs
+      constructor
+      · calc
+          devm.getCode frame.inner.currentTarget =
+              frame.inner.benv.state.getCode frame.inner.currentTarget :=
+            (Xinst.step_spawn_getCode horig _).symm
+          _ = _ := hfresh.1 _
+          _ = .empty := by rw [hfresh.2.1, hfresh.2.2]
+      · have hshape := hs
+        simp only [genericCreateAmsterdam.step, Bind.bind, Except.bind,
+          Pure.pure, Except.pure] at hshape
+        repeat' split at hshape
+        all_goals
+          simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hshape
+        all_goals obtain ⟨rfl, rfl⟩ := hshape
+        all_goals rfl
 
 /-- Every actual CREATE2 spawn has the same empty-code/no-direct-address
 boundary as CREATE. -/
@@ -177,7 +196,7 @@ theorem create2_empty_target_control
   have horig := hs
   simp only [Xinst.step, Bind.bind, Except.bind] at hs
   repeat' split at hs
-  all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
+  all_goals simp only [XStep.ofExcept, Pure.pure, Except.pure, reduceCtorEq] at hs
   all_goals first
     | cases hs
     | have hfresh := genericCreate.step_spawn_frame hs
@@ -191,6 +210,22 @@ theorem create2_empty_target_control
       · have hshape := hs
         simp only [genericCreate.step, Bind.bind, Except.bind, Except.assert,
           assertDynamic, Pure.pure, Except.pure] at hshape
+        repeat' split at hshape
+        all_goals
+          simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hshape
+        all_goals obtain ⟨rfl, rfl⟩ := hshape
+        all_goals rfl
+    | have hfresh := genericCreateAmsterdam.step_spawn_frame hs
+      constructor
+      · calc
+          devm.getCode frame.inner.currentTarget =
+              frame.inner.benv.state.getCode frame.inner.currentTarget :=
+            (Xinst.step_spawn_getCode horig _).symm
+          _ = _ := hfresh.1 _
+          _ = .empty := by rw [hfresh.2.1, hfresh.2.2]
+      · have hshape := hs
+        simp only [genericCreateAmsterdam.step, Bind.bind, Except.bind,
+          Pure.pure, Except.pure] at hshape
         repeat' split at hshape
         all_goals
           simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hshape

@@ -406,7 +406,7 @@ private theorem history_publicLastWriter (fixture : HistoryFixture) :
       write.storageOwner = historySevm.currentTarget ∧
       write.key = 0 ∧ write.value = 7 ∧ write.IsLastRetained := by
   rcases Exec.exists_lastRetainedSstore_of_getStor_ne
-      fixture.run fixture.commits fixture.changed with
+      fixture.run fixture.commits (by decide) fixture.changed with
     ⟨write, retained, owner, key, value, last⟩
   exact ⟨write, retained, owner, key, value.trans fixture.finalValue, last⟩
 
