@@ -333,7 +333,8 @@ private theorem Exec.Frame.CountedCursor.countedTokenCallbackChronology
     (h_value_output : Line.Inv Devm.output value)
     (h_wf : Mem.Wf cursor.pre.memory)
     (h_reads : Mem.Reads cursor.pre.memory img)
-    (hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp)) :
+    (hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp))
+    (hfork : CoveredFork frame.sevm.benvStat.fork) :
     ∃ (inputSize : B256) (input : Bytes)
         (callPre callPost parent child : Devm) (xl : Xlot) (pc : Nat)
         (retained : RetainedXlot xl),
@@ -355,7 +356,7 @@ private theorem Exec.Frame.CountedCursor.countedTokenCallbackChronology
       have hcall := Ninst.Run.of_runCompiled hcallCompiled
       have hbool := Func.Run.of_runCompiled hboolCompiled
       rcases rawTokenCallbackIndexedStepBoundary_of_prefix dp sel
-          targetArg dataArg valueWord hprefix hcall hbool with
+          targetArg dataArg valueWord hprefix hcall hbool hfork with
         ⟨inputSize, input, parent, child, xl, pc, hraw⟩
       have hrawData := hraw
       rcases hrawData with
@@ -403,7 +404,8 @@ private theorem RawTokenCallbackIndexedStepBoundary.allowanceRegionEffect
     (installed : some (pre.getCode ca).toList = Prog.compile (weth10 dp))
     (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
       (fun pc sevm childPre out _ =>
-        Exec.CoreAllowanceSound dp ca pc sevm childPre out)) :
+        Exec.CoreAllowanceSound dp ca pc sevm childPre out))
+    (hfork : CoveredFork e.benvStat.fork) :
     AllowanceRegionEffect ca pre post
       (retained.attributionStream dp ca) := by
   rcases callback with
@@ -445,7 +447,7 @@ private theorem RawTokenCallbackIndexedStepBoundary.allowanceRegionEffect
       rw [if_neg (not_delegation_of_compile hcallPreCode)]
     simp only [msg, callMsg, htargetCa, hnodel, Option.getD_none]
   have childEffect := trace.allowanceRegionDelta_of_forallDeeperAt hparent
-    hmsgDepth hcallPreCode htargetCode htargetDirect hdeeper
+    hmsgDepth hcallPreCode htargetCode htargetDirect hdeeper hfork
   have hprefix := AllowanceRegionEffect.of_getStorCode_eq
     (congrFun hstorPre ca) (congrFun hcodePre ca)
   have hchildToCallPost := AllowanceRegionEffect.of_getStorCode_eq
@@ -520,7 +522,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_depositToAndCall
         rcases Line.of_run_cons hline with ⟨c, hcv, hnil⟩
         cases hnil
         exact (of_run_callvalue hcv).output)
-      hwfCallback hreadsCallback context.invocation.2.2.2 with
+      hwfCallback hreadsCallback context.invocation.2.2.2 context.covered with
     ⟨_inputSize, _input, _callPre, _callPost, _parent, _child, _xl, _pc,
       retained, callback, hinner⟩
   have htarget : frame.sevm.currentTarget = ca := context.invocation.2.1
@@ -536,7 +538,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_depositToAndCall
     rw [← hcodeCallback]
     exact context.installed.1
   have childEffect := callback.allowanceRegionEffect retained htarget
-    installedCallback hdeeper
+    installedCallback hdeeper context.covered
   have hsel : Sevm.selector frame.sevm = depositToAndCallSelector :=
     hselector
   have hnotlast : ownRecordLast frame.sevm = false := by
@@ -838,7 +840,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferAndCall
       (by unfold arg cdl; line_inv)
       (by unfold arg cdl; line_inv)
       (by unfold arg cdl; line_inv)
-      hwfCallback hreadsCallback context.invocation.2.2.2 with
+      hwfCallback hreadsCallback context.invocation.2.2.2 context.covered with
     ⟨_inputSize, _input, _callPre, _callPost, _parent, _child, _xl, _pc,
       retained, callback, hinner⟩
   have htarget : frame.sevm.currentTarget = ca := context.invocation.2.1
@@ -876,7 +878,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferAndCall
     rw [← hcodeCallback]
     exact context.installed.1
   have childEffect := callback.allowanceRegionEffect retained htarget
-    installedCallback hdeeper
+    installedCallback hdeeper context.covered
   have hsel : Sevm.selector frame.sevm = transferAndCallSelector := hselector
   have hnotlast : ownRecordLast frame.sevm = false := by
     simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hsel,
@@ -926,6 +928,25 @@ Both retained children are transported by the recursion hypothesis, and the
 frame's own record — a `transferAndCall` selector — carries no allowance
 event. -/
 
+/-- Re-root a success continuation as its own frame, with the empty counted
+prefix.  Stated for an arbitrary body so that building the cursor never asks
+the elaborator to unfold `Func.compile` of a concrete body. -/
+private def Exec.Frame.CountedCursor.reroot
+    {dp : DeployParams} {ca : Adr} (frame : Exec.Frame)
+    {fs : List Func} {table : List (Nat × Func)} {body : Func}
+    {entryPc : Nat} {entry : Devm}
+    (continuation : Exec entryPc frame.sevm entry frame.out)
+    (hrun : Func.RunCompiled fs frame.sevm entry body frame.post)
+    (hsub : subcode frame.sevm.code.toList entryPc
+      (Func.compile table entryPc body))
+    (hbound : noPushBefore frame.sevm.code entryPc 32 = true) :
+    Blanc.Weth10.Exec.Frame.CountedCursor
+      (frame := ⟨entryPc, frame.sevm, entry, frame.out, continuation,
+        frame.committed⟩) dp ca fs table body frame.post :=
+  ⟨entryPc, entry, continuation,
+    ⟨[], Exec.Deriv.ParentPrefixActions.refl _⟩,
+    Exec.Deriv.ParentPrefixCounted.refl _, hrun, hsub, hbound⟩
+
 /-- The ERC-677 callback closes a redemption walk: whatever counted stream
 the callback continuation retains is precisely its own child's attribution
 stream, transported across the tagged allowance region by the recursion
@@ -936,23 +957,20 @@ private theorem Exec.Frame.tokenCallbackSuccessAllowanceCloser
     (hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp))
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
-        Exec.CoreAllowanceSound dp ca pc sevm pre out)) :
+        Exec.CoreAllowanceSound dp ca pc sevm pre out))
+    (hfork : CoveredFork frame.sevm.benvStat.fork) :
     SuccessAllowanceCloser dp ca frame
       (Sevm.argWord frame.sevm 1).toBytes
       (callBoolCallback onTokenTransferSelector 0 dataArg (arg 1)) := by
+  generalize hB : callBoolCallback onTokenTransferSelector 0 dataArg (arg 1) = B
   intro entryPc entry continuation hrun hsub hbound hwfEntry hreadsEntry
     hcodeEntry key hkey
-  let suffixCursor :
-      Blanc.Weth10.Exec.Frame.CountedCursor
-        (frame := ⟨entryPc, frame.sevm, entry, frame.out, continuation,
-          frame.committed⟩) dp ca
-        ((weth10 dp).main :: weth10Aux)
-        (table 0 ((weth10 dp).main :: weth10Aux))
-        (callBoolCallback onTokenTransferSelector 0 dataArg (arg 1))
-        frame.post :=
-    ⟨entryPc, entry, continuation,
-      ⟨[], Exec.Deriv.ParentPrefixActions.refl _⟩,
-      Exec.Deriv.ParentPrefixCounted.refl _, hrun, hsub, hbound⟩
+  let suffixCursor :=
+    Exec.Frame.CountedCursor.reroot (dp := dp) (ca := ca)
+      (fs := (weth10 dp).main :: weth10Aux)
+      (table := table 0 ((weth10 dp).main :: weth10Aux))
+      (body := B) frame continuation hrun hsub hbound
+  subst hB
   rcases suffixCursor.countedTokenCallbackChronology
       (sel := onTokenTransferSelector) (targetArg := 0) (dataArg := dataArg)
       (valueWord := Sevm.argWord frame.sevm 1) (value := arg 1)
@@ -967,11 +985,11 @@ private theorem Exec.Frame.tokenCallbackSuccessAllowanceCloser
       (by unfold arg cdl; line_inv)
       (by unfold arg cdl; line_inv)
       (by unfold arg cdl; line_inv)
-      hwfEntry hreadsEntry hcode with
+      hwfEntry hreadsEntry hcode (by exact hfork) with
     ⟨_inputSize, _input, _callPre, _callPost, _parent, _child, _xl, _pc,
       retained, callback, hinner⟩
   have childEffect := callback.allowanceRegionEffect retained htarget
-    hcodeEntry hdeeper
+    hcodeEntry hdeeper hfork
   rw [show Exec.attributionInner dp ca continuation =
       retained.attributionStream dp ca from hinner]
   exact childEffect.storage key hkey
@@ -1063,8 +1081,8 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferAndCallZero
     (by
       rw [Bytes.writeAt_zero_of_le (Nat.zero_le _)]
       exact Blanc.Weth10.Exec.Frame.tokenCallbackSuccessAllowanceCloser (frame := frame) context.invocation.2.1
-        context.invocation.2.2.2 hdeeper)
-    hdeeper
+        context.invocation.2.2.2 hdeeper context.covered)
+    hdeeper context.covered
   have hnotlast : ownRecordLast frame.sevm = false := by
     simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
       transferAndCallSelector_ne_flashLoanSelector,
@@ -1157,7 +1175,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_approveAndCall
       (by unfold arg cdl; line_inv)
       (by unfold arg cdl; line_inv)
       (by unfold arg cdl; line_inv)
-      hwfCallback hreadsCallback context.invocation.2.2.2 with
+      hwfCallback hreadsCallback context.invocation.2.2.2 context.covered with
     ⟨_inputSize, _input, _callPre, _callPost, _parent, _child, _xl, _pc,
       retained, callback, hinner⟩
   have htarget : frame.sevm.currentTarget = ca := context.invocation.2.1
@@ -1173,7 +1191,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_approveAndCall
     rw [← hcodeCallback]
     exact context.installed.1
   have childEffect := callback.allowanceRegionEffect retained htarget
-    installedCallback hdeeper
+    installedCallback hdeeper context.covered
   have hsel : Sevm.selector frame.sevm = approveAndCallSelector := hselector
   have hnotlast : ownRecordLast frame.sevm = false := by
     simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hsel,
@@ -1253,7 +1271,8 @@ private theorem RawTokenCallbackIndexedStepBoundary.allowanceRegionEffectSound
     (installed : some (pre.getCode ca).toList = Prog.compile (weth10 dp))
     (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
       (fun pc sevm childPre out _ =>
-        Exec.CoreAllowanceReadSound dp ca pc sevm childPre out)) :
+        Exec.CoreAllowanceReadSound dp ca pc sevm childPre out))
+    (hfork : CoveredFork e.benvStat.fork) :
     AllowanceRegionEffectSound ca pre post
       (retained.attributionStream dp ca) := by
   rcases callback with
@@ -1295,7 +1314,7 @@ private theorem RawTokenCallbackIndexedStepBoundary.allowanceRegionEffectSound
       rw [if_neg (not_delegation_of_compile hcallPreCode)]
     simp only [msg, callMsg, htargetCa, hnodel, Option.getD_none]
   have childEffect := trace.allowanceRegionDeltaSound_of_forallDeeperAt hparent
-    hmsgDepth hcallPreCode htargetCode htargetDirect hdeeper
+    hmsgDepth hcallPreCode htargetCode htargetDirect hdeeper hfork
   have hprefix := AllowanceRegionEffectSound.of_getStorCode_eq
     (congrFun hstorPre ca) (congrFun hcodePre ca)
   have hchildToCallPost := AllowanceRegionEffectSound.of_getStorCode_eq
@@ -1368,7 +1387,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_depositToAndCall
         rcases Line.of_run_cons hline with ⟨c, hcv, hnil⟩
         cases hnil
         exact (of_run_callvalue hcv).output)
-      hwfCallback hreadsCallback context.invocation.2.2.2 with
+      hwfCallback hreadsCallback context.invocation.2.2.2 context.covered with
     ⟨_inputSize, _input, _callPre, _callPost, _parent, _child, _xl, _pc,
       retained, callback, hinner⟩
   have htarget : frame.sevm.currentTarget = ca := context.invocation.2.1
@@ -1384,7 +1403,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_depositToAndCall
     rw [← hcodeCallback]
     exact context.installed.1
   have childEffect := callback.allowanceRegionEffectSound retained htarget
-    installedCallback hdeeper
+    installedCallback hdeeper context.covered
   have hsel : Sevm.selector frame.sevm = depositToAndCallSelector :=
     hselector
   have hnotlast : ownRecordLast frame.sevm = false := by
@@ -1541,7 +1560,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferAndCall
       (by unfold arg cdl; line_inv)
       (by unfold arg cdl; line_inv)
       (by unfold arg cdl; line_inv)
-      hwfCallback hreadsCallback context.invocation.2.2.2 with
+      hwfCallback hreadsCallback context.invocation.2.2.2 context.covered with
     ⟨_inputSize, _input, _callPre, _callPost, _parent, _child, _xl, _pc,
       retained, callback, hinner⟩
   have htarget : frame.sevm.currentTarget = ca := context.invocation.2.1
@@ -1579,7 +1598,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferAndCall
     rw [← hcodeCallback]
     exact context.installed.1
   have childEffect := callback.allowanceRegionEffectSound retained htarget
-    installedCallback hdeeper
+    installedCallback hdeeper context.covered
   have hsel : Sevm.selector frame.sevm = transferAndCallSelector := hselector
   have hnotlast : ownRecordLast frame.sevm = false := by
     simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hsel,
@@ -1679,7 +1698,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_approveAndCall
       (by unfold arg cdl; line_inv)
       (by unfold arg cdl; line_inv)
       (by unfold arg cdl; line_inv)
-      hwfCallback hreadsCallback context.invocation.2.2.2 with
+      hwfCallback hreadsCallback context.invocation.2.2.2 context.covered with
     ⟨_inputSize, _input, _callPre, _callPost, _parent, _child, _xl, _pc,
       retained, callback, hinner⟩
   have htarget : frame.sevm.currentTarget = ca := context.invocation.2.1
@@ -1695,7 +1714,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_approveAndCall
     rw [← hcodeCallback]
     exact context.installed.1
   have childEffect := callback.allowanceRegionEffectSound retained htarget
-    installedCallback hdeeper
+    installedCallback hdeeper context.covered
   have hsel : Sevm.selector frame.sevm = approveAndCallSelector := hselector
   have hnotlast : ownRecordLast frame.sevm = false := by
     simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hsel,
@@ -1768,23 +1787,20 @@ private theorem Exec.Frame.tokenCallbackSuccessAllowanceCloserSound
     (hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp))
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
       (fun pc sevm pre out _ =>
-        Exec.CoreAllowanceReadSound dp ca pc sevm pre out)) :
+        Exec.CoreAllowanceReadSound dp ca pc sevm pre out))
+    (hfork : CoveredFork frame.sevm.benvStat.fork) :
     SuccessAllowanceCloserSound dp ca frame
       (Sevm.argWord frame.sevm 1).toBytes
       (callBoolCallback onTokenTransferSelector 0 dataArg (arg 1)) := by
+  generalize hB : callBoolCallback onTokenTransferSelector 0 dataArg (arg 1) = B
   intro entryPc entry continuation hrun hsub hbound hwfEntry hreadsEntry
     hcodeEntry
-  let suffixCursor :
-      Blanc.Weth10.Exec.Frame.CountedCursor
-        (frame := ⟨entryPc, frame.sevm, entry, frame.out, continuation,
-          frame.committed⟩) dp ca
-        ((weth10 dp).main :: weth10Aux)
-        (table 0 ((weth10 dp).main :: weth10Aux))
-        (callBoolCallback onTokenTransferSelector 0 dataArg (arg 1))
-        frame.post :=
-    ⟨entryPc, entry, continuation,
-      ⟨[], Exec.Deriv.ParentPrefixActions.refl _⟩,
-      Exec.Deriv.ParentPrefixCounted.refl _, hrun, hsub, hbound⟩
+  let suffixCursor :=
+    Exec.Frame.CountedCursor.reroot (dp := dp) (ca := ca)
+      (fs := (weth10 dp).main :: weth10Aux)
+      (table := table 0 ((weth10 dp).main :: weth10Aux))
+      (body := B) frame continuation hrun hsub hbound
+  subst hB
   rcases suffixCursor.countedTokenCallbackChronology
       (sel := onTokenTransferSelector) (targetArg := 0) (dataArg := dataArg)
       (valueWord := Sevm.argWord frame.sevm 1) (value := arg 1)
@@ -1799,11 +1815,11 @@ private theorem Exec.Frame.tokenCallbackSuccessAllowanceCloserSound
       (by unfold arg cdl; line_inv)
       (by unfold arg cdl; line_inv)
       (by unfold arg cdl; line_inv)
-      hwfEntry hreadsEntry hcode with
+      hwfEntry hreadsEntry hcode (by exact hfork) with
     ⟨_inputSize, _input, _callPre, _callPost, _parent, _child, _xl, _pc,
       retained, callback, hinner⟩
   have childEffect := callback.allowanceRegionEffectSound retained htarget
-    hcodeEntry hdeeper
+    hcodeEntry hdeeper hfork
   rw [show Exec.attributionInner dp ca continuation =
       retained.attributionStream dp ca from hinner]
   exact ⟨fun key hkey => childEffect.storage key hkey, childEffect.entryRead⟩
@@ -1895,8 +1911,8 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferAndCallZero
     (by
       rw [Bytes.writeAt_zero_of_le (Nat.zero_le _)]
       exact Blanc.Weth10.Exec.Frame.tokenCallbackSuccessAllowanceCloserSound (frame := frame)
-        context.invocation.2.1 context.invocation.2.2.2 hdeeper)
-    hdeeper
+        context.invocation.2.1 context.invocation.2.2.2 hdeeper context.covered)
+    hdeeper context.covered
   have hnotlast : ownRecordLast frame.sevm = false := by
     simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
       transferAndCallSelector_ne_flashLoanSelector,
