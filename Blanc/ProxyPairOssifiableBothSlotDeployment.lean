@@ -31,7 +31,7 @@ def creationBenv : Benv :=
     state := creationState
     stat :=
       { (default : BenvStat) with
-        rules := pragueRules
+        fork := .prague
         origState := creationState } }
 
 /-- Complete creation input with the frozen nonempty setup payload. -/
@@ -213,7 +213,8 @@ theorem creationMessage_success : ∃ post, CreateResult post := by
     decide +kernel
   obtain ⟨raw, hrun, hrawImplementation, hrawAdmin, hrawLogs,
       hrawOutput, hrawGas, hrawError⟩ :=
-    program_success hseedValue hseedCode (by decide)
+    program_success
+      (hfork := by rw [hstat]; change CoveredFork .prague; exact CoveredFork.prague) hseedValue hseedCode (by decide)
       hbaseImplementationCode hcodeSizeNonzero haddressCold
       himplementationRaw himplementationOriginal himplementationCold
       hadminRaw hadminOriginal hadminCold hseedStatic hdepth hprecompile

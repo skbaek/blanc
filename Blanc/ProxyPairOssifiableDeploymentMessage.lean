@@ -112,6 +112,7 @@ cleared target receives exactly the two ERC-1967 writes and their source-order
 logs. -/
 theorem processCreateMessage_ossifiable_emptySetup_success
     (msg : Msg) (implementation requestedAdmin : Adr)
+    (hfork : CoveredFork msg.benv.stat.fork)
     (hvalue : msg.value = 0)
     (hcodeAddress : msg.codeAddress = .none)
     (hcode : msg.code.toList =
@@ -241,6 +242,7 @@ theorem processCreateMessage_ossifiable_emptySetup_success
   obtain ⟨raw, hrun, hrawStorage, hrawLogs, hrawOutput, hrawGas,
       hrawError⟩ :=
     ossifiableConstructorProgram_canonicalEmptyInput_forward_exact
+      (hfork := by rw [hstat]; exact hfork)
       hseedValue hseedCode himplementationNonzero hrequestedNonzero
       hbaseImplementationCode haddressCold' himplementationRaw
       himplementationOriginal' himplementationCold' hadminRaw

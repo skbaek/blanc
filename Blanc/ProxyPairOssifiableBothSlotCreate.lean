@@ -284,6 +284,7 @@ private theorem initializedBase_admin
 
 private theorem spawnChild_success
     {sevm : Sevm} {base : Devm} {memory : Mem} {image : Bytes}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hsize : memory.size = 288)
     (hreads : Mem.Reads memory image)
     (hsetupImage : image.sliceD 0x100 32 0 = setupData)
@@ -392,7 +393,7 @@ private theorem spawnChild_success
     exact initializedBase_admin sevm base implementation hadminRaw
   obtain ⟨child, walk, error, output, gas, implementationSlot,
       adminSlot, logs, keys⟩ :=
-    setupMain_runCompiledTo [] (initSevm spawn.child)
+    setupMain_runCompiledTo (hfork := hfork) [] (initSevm spawn.child)
       (initDevm spawn.child) 469851
       hchildStatic hchildImplementationWarm hchildAdminCold
       hchildImplementationOriginal hchildImplementationCurrent
@@ -427,7 +428,7 @@ private theorem spawnChild_success
     rw [MessageExecution.processMessage_eq_settle_exec_of_enter
       spawn.child (initEvm spawn.child) spawn.crossing.1, raw]
     simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-      executeCode.handleError, processMessage.settle,
+      executeCode.handleErrorWith_ok, executeCode.handleError, processMessage.settle,
       show child.error.isSome = false by rw [error]; rfl]
   obtain ⟨trace⟩ := ExecutionTrace.exists_processMessageTrace
     spawn.child (.ok child) process
@@ -446,6 +447,7 @@ private def resumedBase
 
 private theorem callAndTail_success
     {sevm : Sevm} {base : Devm} {memory : Mem} {image : Bytes}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hwf : Mem.Wf memory)
     (hsize : memory.size = 288)
     (hreads : Mem.Reads memory image)
@@ -493,7 +495,7 @@ private theorem callAndTail_success
   obtain ⟨child, ⟨certificate⟩, hchildError, hchildOutput,
       hchildGasLeft, hchildImplementation, hchildAdmin, hchildLogs,
       hchildKeys⟩ :=
-    spawnChild_success hsize hreads hsetupImage hstatic
+    spawnChild_success (hfork := hfork) hsize hreads hsetupImage hstatic
       himplementationOriginal hadminRaw hadminOriginal hadminCold spawn
       hinputOffset hinputSize houtputOffset houtputSize hafter hchildGas
       hspawnCode
@@ -591,7 +593,7 @@ private theorem callAndTail_success
     rw [hnil] at hlength
     simp at hlength
   obtain ⟨post, hafterRun, hstorage, hlogs, houtput, hgas, herror⟩ :=
-    ossifiableConstructorAfterSetup_dirtyAdmin_forward_exact
+    ossifiableConstructorAfterSetup_dirtyAdmin_forward_exact (hfork := hfork)
       (fs := ossifiableConstructorFunctions 1249 2188)
       (sevm := sevm) (base := resumed) (memory := memory)
       (image := image) (runtimeBytes := runtimeBaselineBytes)
@@ -639,6 +641,7 @@ private theorem callAndTail_success
 
 private theorem delegateSetup_success
     {sevm : Sevm} {base : Devm} {memory : Mem} {image : Bytes}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hwf : Mem.Wf memory)
     (hsize : memory.size = 288)
     (hreads : Mem.Reads memory image)
@@ -689,16 +692,18 @@ private theorem delegateSetup_success
     decide
   obtain ⟨post, hrest, himplementationPost, hadminPost, hlogsPost,
       houtputPost, hgasPost, herrorPost⟩ :=
-    callAndTail_success hwf hsize hreads hsetupImage hrequested
+    callAndTail_success (hfork := hfork) hwf hsize hreads hsetupImage hrequested
       himplementationCode himplementationOriginal hadminRaw hadminOriginal
       hadminCold hstatic hdepth hprecompile hruntime
   refine ⟨post, ?_, himplementationPost, hadminPost, hlogsPost,
     houtputPost, hgasPost, herrorPost⟩
   rw [ossifiableConstructorDelegateSetup_split_shape]
   func_run (2)
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · norm_num
   · norm_num
   func_run (2) [3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · norm_num
   · exact Devm.extCost_add_of_size (i := 128) (sz := 32) (n := 288)
       (a := gVerylow) (e := 3) hsize (by decide)
@@ -706,8 +711,10 @@ private theorem delegateSetup_success
   simp only [show (128 : B256).toNat = 128 by decide]
   rw [Mem.Reads.read hreads, hlength, hmemory128]
   func_run (1)
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · norm_num
   func_run (2) [3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · norm_num
   · exact Devm.extCost_add_of_size (i := 0) (sz := 32) (n := 288)
       (a := gVerylow) (e := 3) hsize (by decide)
@@ -715,12 +722,14 @@ private theorem delegateSetup_success
   simp only [show (0 : B256).toNat = 0 by decide]
   rw [Mem.Reads.read hreads, himplementation, hmemory0]
   func_run (1)
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · norm_num [gBase]
   simpa only [callPre, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
     Devm.stack_setMach] using hrest
 
 private theorem initialize_success
     {sevm : Sevm} {base : Devm} {memory : Mem} {image : Bytes}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hwf : Mem.Wf memory)
     (hsize : memory.size = 288)
     (hreads : Mem.Reads memory image)
@@ -769,7 +778,7 @@ private theorem initialize_success
       post.error = base.error := by
   obtain ⟨post, hsetup, himplementationPost, hadminPost, hlogsPost,
       houtputPost, hgasPost, herrorPost⟩ :=
-    delegateSetup_success hwf hsize hreads himplementation hrequested hlength
+    delegateSetup_success (hfork := hfork) hwf hsize hreads himplementation hrequested hlength
       hsetupImage himplementationCode himplementationOriginal hadminRaw
       hadminOriginal hadminCold hstatic hdepth hprecompile hruntime
   have hrun :=
@@ -777,7 +786,7 @@ private theorem initialize_success
       (fs := ossifiableConstructorFunctions 1249 2188)
       (sevm := sevm) (base := base) (post := post) (memory := memory)
       (image := image) (implementation := implementation) (length := 32)
-      (G := 499999) hreads himplementation hlength (by decide)
+      (G := 499999) hfork hreads himplementation hlength (by decide)
       himplementationNonzero hcodeSizeNonzero haddressCold
       himplementationRaw himplementationOriginal himplementationCold hsize
       hstatic (ossifiableConstructorFunctions_delegateSetup 1249 2188)
@@ -788,6 +797,7 @@ private theorem initialize_success
 
 private theorem decodeInitialize_success
     {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hcodeSize : sevm.code.size = 3597)
     (himplementation :
       ossifiableConstructorCodeWord sevm.code.toList 3437 =
@@ -854,7 +864,7 @@ private theorem decodeInitialize_success
     decodeForwardOneWordPayloadImage_setup hsetup
   obtain ⟨post, hinitialize, himplementationPost, hadminPost, hlogsPost,
       houtputPost, hgasPost, herrorPost⟩ :=
-    initialize_success hwf hsize hreads himplementationImage hrequestedImage
+    initialize_success (hfork := hfork) hwf hsize hreads himplementationImage hrequestedImage
       hlengthImage hsetupImage himplementationNonzero himplementationCode
       hcodeSizeNonzero haddressCold himplementationRaw
       himplementationOriginal himplementationCold hadminRaw hadminOriginal
@@ -872,6 +882,7 @@ private theorem decodeInitialize_success
 
 private theorem program_success_from_layout
     {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hvalue : sevm.value = 0)
     (hcodeSize : sevm.code.size = 3597)
     (himplementation :
@@ -920,7 +931,7 @@ private theorem program_success_from_layout
       post.error = base.error := by
   obtain ⟨post, hdecode, himplementationPost, hadminPost, hlogsPost,
       houtputPost, hgasPost, herrorPost⟩ :=
-    decodeInitialize_success hcodeSize himplementation hrequested hoffset
+    decodeInitialize_success (hfork := hfork) hcodeSize himplementation hrequested hoffset
       hlength hsetup himplementationNonzero himplementationCode
       hcodeSizeNonzero haddressCold himplementationRaw
       himplementationOriginal himplementationCold hadminRaw hadminOriginal
@@ -931,6 +942,7 @@ private theorem program_success_from_layout
       (ossifiableConstructorProgram 1249 3437 2188).main post := by
     rw [ossifiableConstructorProgram_main_shape]
     func_run (3) [1]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try norm_num [gBase, gVerylow, gHigh, gJumpdest]
     all_goals try simp [B256.eqCheck, hvalue]
     simpa using hdecode
@@ -947,6 +959,7 @@ the child's implementation, replaces its admin with `requestedAdmin`, and
 logs `AdminChanged(postSetupAdmin, requestedAdmin)` in source order. -/
 theorem program_success
     {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hvalue : sevm.value = 0)
     (hinput : sevm.code.toList =
       ossifiableFullCreateInput implementation requestedAdmin setupData)
@@ -1013,7 +1026,7 @@ theorem program_success
     simpa [ByteArray.sliceD_eq,
       show Linst.toUInt8 .stop = 0 by decide, hinput, createInput] using
       createInput_runtime
-  exact program_success_from_layout hvalue hcodeSize himplementation
+  exact program_success_from_layout (hfork := hfork) hvalue hcodeSize himplementation
     hrequested hoffset hlength hsetup himplementationNonzero
     himplementationCode hcodeSizeNonzero haddressCold himplementationRaw
     himplementationOriginal himplementationCold hadminRaw hadminOriginal
