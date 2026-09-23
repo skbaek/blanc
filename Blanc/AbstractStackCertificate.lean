@@ -137,6 +137,9 @@ def checkInstruction (code : ByteArray) (table : Table) (maximum pc : Nat)
       | some output =>
           checkSuccessor table maximum (pc + (Ninst.exec .call).size) output
   | .next (.exec _) => false
+  | .next (.dupn _) => false
+  | .next (.swapn _) => false
+  | .next (.exchange _) => false
   | .jump .jumpdest => checkSuccessor table maximum (pc + 1) input
   | .jump .jump =>
       match jumpTransfer input with
@@ -194,6 +197,9 @@ theorem checkInstruction_safe {evm : Evm} {table : Table} {maximum : Nat}
               intro pc post result
               obtain ⟨rfl, postMatch⟩ := result
               exact checkSuccessor_safe checked postMatch
+      | dupn _ => simp [checkInstruction] at checked
+      | swapn _ => simp [checkInstruction] at checked
+      | exchange _ => simp [checkInstruction] at checked
   | jump instruction =>
       cases instruction with
       | jumpdest =>
