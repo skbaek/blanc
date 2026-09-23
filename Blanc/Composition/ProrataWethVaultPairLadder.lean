@@ -158,20 +158,28 @@ structure PairBenvInv (vault : Adr) (benv : Benv) : Prop where
   wethNonprecompile : benv.stat.rules.isPrecomp wethAccount = false
   covered : CoveredFork benv.stat.fork
 
+/-- Equal rule records name the same fork: `BenvStat.rules` is `Fork.ruleSet` of the fork, and
+`Fork.ruleSet_fork` reads the fork back out of the record. -/
+private theorem fork_eq_of_rules_eq {s s' : BenvStat} (rules : s'.rules = s.rules) :
+    s'.fork = s.fork := by
+  have h := congrArg ForkRules.fork rules
+  simpa only [BenvStat.rules, Fork.ruleSet_fork] using h
+
 /-- The one transport every rung above the message uses: both code invariants by the generic ladder, the
-ledger by the rung's own replay, the rules by the rung's own statics. -/
+ledger by the rung's own replay, the rules by the rung's own statics.  Coverage travels with the rules,
+because a rule record names its fork. -/
 theorem PairBenvInv.transport {vault : Adr} {benv benv' : Benv}
     (inv : PairBenvInv vault benv)
     (code : pairVaultCodeSpec.BenvInv vault benv')
     (weth : wethSpec.BenvInv wethAccount benv')
-    (stat : benv'.stat = benv.stat)
+    (rules : benv'.stat.rules = benv.stat.rules)
     (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
       (benv'.state.getStor vault)) :
     PairBenvInv vault benv' :=
   ⟨⟨vaultStateInv_of_code code.state conserved, weth.state, inv.world.distinct,
       inv.world.vaultNotSystem, inv.world.wethNotSystem⟩,
-    code.ca, weth.ca, by rw [stat]; exact inv.wethNonprecompile,
-    by rw [stat]; exact inv.covered⟩
+    code.ca, weth.ca, by rw [rules]; exact inv.wethNonprecompile,
+    CoveredFork.of_eq (fork_eq_of_rules_eq rules).symm inv.covered⟩
 
 theorem PairBenvInv.afterTransaction {vault : Adr} {benv : Benv} {bout : BlockOutput}
     {tx : Tx} {index : Nat} {state : State} {bout' : BlockOutput}
@@ -216,7 +224,7 @@ theorem PairBenvInv.afterTransactions {vault : Adr} {txs : List (Nat × Tx)}
       ⟨inv.world.vaultCode, inv.vaultNotCreated⟩ inv.covered)
     (trace.benvInv (wethSpec_preserves wethAccount) inv.world.sumNof
       ⟨inv.world.weth, inv.wethNotCreated⟩ inv.covered)
-    trace.stat_eq (replay.conserved inv.world.conserved)
+    (congrArg BenvStat.rules trace.stat_eq) (replay.conserved inv.world.conserved)
 -- PB:192–194; `stat_eq` is §4 (G+2).
 
 theorem PairBenvInv.afterWithdrawals {vault : Adr} {benv : Benv} {wds : List Withdrawal}

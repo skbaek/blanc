@@ -7345,12 +7345,27 @@ lemma of_run_address {e : Sevm} {s s' : Devm} (h : Ninst.Run e s address s') :
   simp only [Rinst.run, Rinst.runCore] at run
   exact Devm.pushBurn_of_pushItem run
 
-/-- `SELFBALANCE` pushes the target balance (value-carrying inversion).
-Stated on the stack only: the
-run records an account read, so the historical `PushBurn` relation (which
-pins `accountReads`) no longer holds. Consumers route through
-`prefix_of_push_stack`. -/
+/-- Value-carrying inversion for SELFBALANCE on a covered fork.  The run
+records an EIP-7928 account read, which is the identity when the rules carry
+no block access list (`CoveredFork.rules_bal_none`), so the historical
+`PushBurn` holds on every covered fork.  For a fork-free stack fact use
+`of_run_selfbalance_stack`. -/
 lemma of_run_selfbalance {e : Sevm} {s s' : Devm}
+    (hfork : CoveredFork e.benvStat.fork)
+    (h : Ninst.Run e s selfbalance s') :
+    Devm.PushBurn [s.getBal e.currentTarget] s s' := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rcases Except.bind_eq_ok run with ⟨d1, hgas, hpush⟩
+  rw [Devm.balReadAccount_of_bal_none (CoveredFork.rules_bal_none hfork),
+    chargeGas_getBal_eq hgas] at hpush
+  exact Devm.pushBurn_of_burn_of_push (Devm.burn_of_chargeGas hgas)
+    (Devm.push_of_push hpush)
+
+/-- `SELFBALANCE` pushes the target balance, on the stack, on every fork
+(including one whose rules record the account read).  Consumers route
+through `prefix_of_push_stack`. -/
+lemma of_run_selfbalance_stack {e : Sevm} {s s' : Devm}
     (h : Ninst.Run e s selfbalance s') :
     Stack.Push [s.getBal e.currentTarget] s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
