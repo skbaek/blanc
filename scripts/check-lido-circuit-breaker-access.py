@@ -313,21 +313,21 @@ ROLES = {
         # Exact public dispatch representative at the strict expiry boundary:
         # `timestamp = expiry` reads false.
         "isPauserLive_runCompiled_at_expiry":
-            "8208f7812acc094b6b61014447bfde53101c2c3b6f844c2c8482b4ff9dd2b215",
+            "b3912ef7b7891d6e2d884246916e67a0d14ff75d355115a85453c33bdee47711",
         # Exact direct public execution for an arbitrary stored expiry.
         "isPauserLive_runCompiled":
-            "8059dc66dfb56b630a00af0c8e4ed0f74e8632316334bb386c184f07fc5e71d2",
+            "e8bd558645c4a0271bd87a55c4805359695853d521bb241a0a278c83909c7b86",
         # Strict-live corollary (returns one).
         "isPauserLive_runCompiled_of_live":
-            "cb64d9c77a1128dbf79fae336cc37474c45ffec745f5f4337de9f7d383fa92ba",
+            "57c5e93c4436f353d2c733762880536c2b901df971d1aeaf195e31a113bdf37c",
         # Strictly-later corollary (returns zero).
         "isPauserLive_runCompiled_of_later":
-            "b2575351c1c5348cf706e8197f3260362571b962b87d7e601f3c40c889e3f281",
+            "aad5c8638b7b1802afe856ea13bc0b657218f45ca92c0c8807295897a02e3a64",
         # Canonical configuration and expiry views.
         "heartbeatInterval_runCompiled":
-            "707a5a835dac676344a6d57cf98981f4a526827c5758eea7efb5bc4c98a50b88",
+            "a4c614e37cdcc672ccc8e0c60bf7f455f34de7fb62e8d9abe3845dfa54d8d458",
         "heartbeatExpiry_runCompiled":
-            "74eeb9b79e1f45b7f5b1fd52419a2dd4b2247659f2daf59ae75484f793d16526",
+            "1929e1e253466c6690daca608382a22887cd87065c124e7d01d9eeb9d293fcaa",
         # Configuration/expiry key separation used by the setter transition.
         "expirySlot_ne_heartbeatIntervalSlot":
             "2e2f697c43d7bbfcb11e9d35fec84a9d25aec7cdb3c37584b5f03e6a85a216c8",
@@ -338,24 +338,24 @@ ROLES = {
             "17c41f6ee3cddd262e039503e707b03beffb4b4e2e87b47283708688b413fd4c",
         # Admin necessity and the inclusive bound as a success requirement.
         "setHeartbeatInterval_runCompiledTo_success_requires_admin_and_inclusive":
-            "8305c396a90f8370dfe3d729562b365d2c22f0cae38ec4ef454e6719db5445e9",
+            "2f053f73595c05359fdce621ace1076ccd7d4b0e1380bd80b294631c2158472f",
         "setHeartbeatInterval_runCompiledTo_error_of_not_admin":
-            "4f888541658dc5f620da17968c55f68b3e5f37b75170ae8b1e6ff72cf0e29289",
+            "c06dfe62846223944d66a3297bb5f42baaebdc156405a60e02a8b6a4a8461820",
         "setHeartbeatInterval_success_settled_effects":
-            "d90aa89857c20d4fb9e3a986bd63336eb0bcde4fac0b8bd17b1bee313cbee4ed",
+            "7d999b4ff2e8f0f7ae95191fc04e515b2a1214b076c38df9c2d4ca549f402f1d",
         "setHeartbeatInterval_settled_error_restores_owner":
             "14f02920900d8dfc5c484da2f3de4f47a2a7726d6dd9a358533d5edf3deeff37",
         # Heartbeat success arm and its three source-ordered failure arms.
         "heartbeat_runCompiledTo_of_checkedExtension":
-            "b78969ae27a4200bde7c90312bd4b5bcbf462395377c71183ae9dd97dcc5785e",
+            "0f63bea199ad2494e9e1146ba3c46ade8dee517121f6697f58f2a339b30b5015",
         "heartbeat_runCompiledTo_error_of_count_zero":
-            "8e867bf6b32dcb0306fc92e46287bf0f5803729f87542ab8140ce241700e85c9",
+            "dfa946eb479481253c44dc735a86ad80aeb4e07e46e9bec0b4abba44053310ee",
         "heartbeat_runCompiledTo_error_of_expired":
-            "0eaeda9d9e940760b003605ddea5b7fc44315d477d876fff704d12597b190ce2",
+            "172157925a5e28e83318bec0774fe25c36ea88e2dee83c73a225caf93d188473",
         "heartbeat_runCompiledTo_error_of_add_wrap":
-            "8f55801187b898ede05b35a66eb7e87ee1d5ef9aa2959c12fe07474634434403",
+            "73eacf68a037bb2cbcb69824e1d7034dc76c05944c648f3e7212ca260a561454",
         "heartbeat_success_settled_effects":
-            "468003beedf81569a4c5456967a6fa875e8358159f7f16224d3860e96fa04c78",
+            "67d009fd6f02d74d5f538adf7e5760441b782ae15a758ae5ceeadcba25aa2875",
         "heartbeat_settled_error_restores_owner":
             "eaba8350289f67a716a5960880ba8a6a4ba3d056d7c8583b3f07ff514dac12c8",
     },
@@ -404,9 +404,9 @@ ROLES = {
     # ---- AT6: retained last writer and settlement ----
     "retained": {
         "Exec.runtimeOwnerCellAuthority_of_committedPost_ne":
-            "b8bf33d562eb4bc032c42c35b4923d86308f7825d20f77bf6fa47d2603824def",
+            "03ffeedaedf975ca88d4b23629157fc44c19bf4128b48b624880ff1a32d8d191",
         "ProcessMessage.runtimeOwnerCellAuthority_of_clean_settled_ne":
-            "c7029557823b890b66aa3b9ae0fca0843cfe2a7ed82b7a8f3408db103290dcb3",
+            "59c5bfb6efdcfa6498b45369d27aaa8b73898f566a6899b611d78fd1cf2b17d2",
         "ProcessMessage.runtime_settled_error_restores_owner":
             "957cd337dc365f28fe56bb835e6dca42d3e9be20f70e5ced21d5235c4a867ce5",
         # The three noncommitting negatives that keep the family honest.
@@ -446,63 +446,63 @@ ROLES = {
         "freshRegistration_sourceTrace_witness":
             "46aa83f709300ccb03334e27aee03b0fca8b9cbd1c5d3892d9404cb7a23f4657",
         "registerPauser_runCompiledTo_freshNonzero":
-            "ee93c3052e9e62df1c5922e9be164c97c6301109db893a497d5d1296f8ef98e0",
+            "9f25ed65272664593fcf42d1aee7e1667a6c7edba1c9ac58ed9b7b67a23328f7",
         "registerPauser_freshNonzero_success_settled_effects":
-            "077a0ecd6b4b32b32b8cd4f908d287bf9076118588300a722073416f95e99e6d",
+            "9b4c1d0cfb6b3a42881b1c38431d04355094f1df33dc9c4b283f5dafa7072a19",
     },
     "absent": {
         "absentZeroRegistration_sourceTrace_witness":
             "d73d20a0ad2e60eeac554250fb6ca9458afd6d1a5607565a8fc01bd71ec0508a",
         "registerPauser_runCompiledTo_absentZero":
-            "ed4ca68e9b95155c3f8de0352cb2cf9fef8475a72aa026fb810de3cf8d180327",
+            "a730ea7e19d7d4c80b12b92b89dc073813dd8d64547e1b5b04a9ef6df403315e",
         "registerPauser_absentZero_success_settled_effects":
-            "8593869f241db143f0cb0ce6af0a5aa9fc895b669ff561faba5c80f1650a330d",
+            "a79c992b1fc197fa3b3e154cdda20c5e2b4a2a4f837a6b5b0d8c10e9b548439b",
     },
     "unregister": {
         "foundZeroRetainedRegistration_sourceTrace_witness":
             "9e62f0cdecca971234d4cc239118aecefd58d3072f44f9df2ccc7a8a0c4e1439",
         "registerPauser_runCompiledTo_foundZeroRetainedLast":
-            "1517babc34cf57a4397e1ea2b1ca1203760b804325eea455a6f514a7070df9c8",
+            "c32a247527902e92d08c84923d405f618ba6b0e64a682792b14a1a124604c9f4",
         "registerPauser_foundZeroRetainedLast_success_settled_effects":
-            "164008b806a8dad2af19dc522be8213e869df1bdbfb881a094c7ab0d2003d168",
+            "6ecb406a9ee7cc02f33e408a37e7e580452f9083037c059c743035cd18af6af0",
         "registerPauser_runCompiledTo_foundZeroRetainedSwapPop":
-            "9475ec1efded9d6d5a96174ad375d4b4e2423b7a171f37e73171f9b4e1b43ef0",
+            "3975a48b6a24e7889eb07cffa12791b53d14e75e9904ef04c36e24639d941cc3",
         "registerPauser_foundZeroRetainedSwapPop_success_settled_effects":
-            "b43709356925020af281aae9405cbc1a03a974ffd38aee20e7308ff747791aa8",
+            "5b5f5ed1e15888f44e5229e90ac167c9496b76528daa0d1f107566ff36507cf6",
         "registerPauser_runCompiledTo_foundZeroOldLast":
-            "5b296587c33c08d7885654e4f9446e94a2fd57ac13e73bfcc08679a27f94de1d",
+            "dbd1200c6f18564ababef49f173120610df3ac222b59876e237841ccf69d1cc5",
         "registerPauser_foundZeroOldLast_success_settled_effects":
-            "1cab442db7419c6c13044e7c3ea15c0259369cb8f6a1f82a34e3716cfd63535a",
+            "17c4cad040e30c6e085b1a8ba1b900357e80fe77d156042614267e2f0b985b5d",
         "registerPauser_runCompiledTo_foundZeroOldLastSwapPop":
-            "8a7b652f2ac8cd40bd4770baf375a417d806b3ff949affd8ec41905d1faad7c6",
+            "4567a23ca60294380db4d6091da40324ff0332fc4dd4faf088360fbb3027ce5f",
         "registerPauser_foundZeroOldLastSwapPop_success_settled_effects":
-            "bcac04940e2eb03de51412de209a4da22f2cb600dd4a4e75afc8b5ca997974b4",
+            "48fe4679733633c38c615bbe575f8c9d6a0e217eb78144bddf041bc77df5e386",
     },
     "replacement": {
         "foundNonzeroReplacement_sourceTrace_witness":
             "39984f11d713ee86af9155e04308c48289e011a3f9718ba707f4d0f6d5032094",
         "registerPauser_runCompiledTo_retainedNonzero":
-            "37df45cd0713d59a849980061e9066bd981dd0f7bb777fcdcc96b218f375bb89",
+            "4b04704225aef1b5e32da2558c1d40a5bf7f6c4ebff4c6ec80611fe1f6c49f67",
         "registerPauser_retainedNonzero_success_settled_effects":
-            "5396bd8cb9b1a8a870a6d1140d703941a3b6023dce600dc817aa03f091b35995",
+            "760e5d3e2f02be96c2b94e3b8c6eec9e3e985aaa21bf7b4032a9013fad11e525",
         "registerPauser_runCompiledTo_oldLastNonzero":
-            "79c74357179e41621599b9410872ce4d2aff9b20892b2e20222ba1483bed0231",
+            "c0bf431575d5b384f3cdac38bd803af70d09ba90d8691ff2e260e9037701b04c",
         "registerPauser_oldLastNonzero_success_settled_effects":
-            "60a9a066c7026f82799dcbd27852be7390f400ad24ac62499b057fc9fc23b674",
+            "6d852570f5667f9020a0f572cf25b07ca1eca2d9718f82b497b9928e56cee4a9",
     },
     "substrate": {
         "registerPauser_stageArgs_runCompiled":
-            "8a710dafebb8b781eeb19ed8ccdf05e0a9517d607112c15cb1d6d0aec0e0b32b",
+            "4f06fd9c9e0058056d634e3333995c0fe16ad3f9e82507debd45b07ec0d9f00c",
         "setPauserKernel_foundNonzero_finishSetPauser_runCompiled":
-            "0af32ada94fc35c9d271a7ef683a2d5ff95fe3e2d140a9343cc45e08c8e08ded",
+            "1c20614b62b482aee1f2d90c96601d2c190cca7dd6ac22570783012fe074b653",
         "removeTarget_toFinish_runCompiled":
-            "96f7f047283f23c3f6ff7369b697ba8b6e42c169427c2380c08e7ed07eef9073",
+            "736ee2ac0f68262f851c97053a310ca1f65b65f920d016cd1351388954ae03f0",
         "removeTarget_runCompiled":
-            "a8d1d747346cfcb3970e5ecbf8f8b9f96a6418c5cc6e89d6465d106c1fdef706",
+            "d6a8c0a84ab0764a9d34c273a2994d3a9fb8b17a6abab98237f756557841bc91",
         "removeTarget_swapPop_toFinish_runCompiled":
-            "caf85d5050af3da4be4a174c0fe8e4c518dfb2b914c0ecada07bd9e140c70018",
+            "ada0290854bb7003d618e79d9665b81924389c854e598680d6d0bc31dd83d19e",
         "removeTarget_swapPop_runCompiled":
-            "5f8400bca3bb429dda0b2dcaf1c8b80e24e13724e35f7dacb2da415751f5ab1a",
+            "0e0a574182a77f580ba7e76fd0e07e4943a38ddf1f0d9ae32cfa802de064991b",
     },
     # ---- AT7 pause suffix and AT8 inhabitation ----
     # `sourceAttainment` and `registrationWorld` are owners for the trust scan
@@ -550,9 +550,9 @@ ROLES = {
         "configWorld_run":
             "b5844c465656c0994589bc4b1c98c01ea6db763dbd2da5cff89f5d2a81f013ef",
         "setPauseDuration_body_runCompiledTo":
-            "133ef1542d557a2778e459fa4d346174436df6cbbd4926dd31d8bd4e92360463",
+            "b8b48822be2599ba2e0c3be00fbd7cbe9752c79f2ad5c4e8ba620c96dec9d680",
         "setPauseDuration_dispatch_runCompiledTo":
-            "b899ab2a93dc3b88ab00d37530c546d88545f688cb10241b2590ef60350cd96d",
+            "4defa468207ba96b94d5566aeea2150c9f3f7f27e7b35b27a504383c45a77928",
         # The shared witness tail.  Every main-function witness routes through
         # it, so a weakening here is invisible in each witness's own header --
         # which is exactly the blind spot `attainable_shape_control` covers for
@@ -794,13 +794,13 @@ ROLES = {
         # the caller's storage, code and staged memory word survive; relax
         # either conclusion and the crossing stops being a crossing.
         "responder_call_effects":
-            "1e99a8c96ab905d1bfce1e4683e8186d200b37e487cf2dda97676266dc4964a2",
+            "6a02108f476608ddbbe21acd7514d0ff623364af8a31b63260aeb2ce4bafe177",
         "responder_staticcall_effects":
-            "54dba4bc7220dd379cde5fa6994a96f9403707bb52de7726bee8d8c5f964e7de",
+            "e80c8af7581874f65987b0a3fb2828a702cd4fa0a3df52782cd3c9c4e947c660",
         "responder_hcall":
-            "742387998c56dd1902b6a24592238b48df17689b2af9c6c2512dd644d8dec7a5",
+            "df41041f4772e13464734131d9f96a9c76334bdda6eb415469a7d3ef9f1afa3a",
         "responder_hstat":
-            "0bac8a5fafb00f9064fdacda4e8f27603f01ffbeb35954074a1a84b7b707e9bf",
+            "2a352ff0731fff8199d2d0cad8e843115f98f20f7a78ac0a656111a79e7cbfb8",
     },
     # ---- What the settled MESSAGE leaves behind, at the same two worlds ----
     #
@@ -871,7 +871,7 @@ ROLES = {
             "addd5265deefc79b9627c31db14841831fcf00f35c6cc970c02c571992f579a3",
         # What makes the line above a fact about the pause: the tower plus the `PauserSet` record IS `pauseAfterSet`'s entry, on the pause's continuation.
         "removeTarget_pauseAfterSet_runCompiled":
-            "cb411ff1fcfae53f3e13a2c9b3b8e9721d3f80b837a41ffdebdfdcfd4f4bbc28",
+            "02cff68785ad6e97c1bd24ce214c4780892cedf19b6fd6eeaeb7cb1a0ff58de1",
         # P3: neither storage nor transient storage moves between the boundary and the CALL.
         "pauseCallEntry_frame":
             "3ab2582962f43225ded36acf5f835fdffdbda408072fdd3c9f96c4acca0e6566",
@@ -880,10 +880,10 @@ ROLES = {
             "870ecb2b55649c76bd502afc1d08443d562651d5c27dfee94af9b5c3f669cb48",
         # P4: a re-entering pause takes the lock guard's refusal arm, whatever the target's code.
         "pause_body_runCompiledTo_error_of_locked":
-            "d121c6dbb924db996636324f0d041038e41cc3cf4eb35b939cc3e4b0b672459c",
+            "5d0dab35d93f64ad95f7f6cf6e2a25edf56f25332080fe6483ee4c13c5a3f270",
         # P4 at the deployed runtime's own entry.
         "pause_runCompiledTo_error_of_locked":
-            "20f5072a984703c8d8d89ab0a3053c3e545a849e4c1064d42dc45659fd61473f",
+            "6fe906a961e9d74b02c1f54177897bd70da5697f35004264c8fba1783a2cf838",
     },
     # ---- Stage 6: what the CircuitBreaker SENDS, and in what order ----
     #
@@ -913,9 +913,9 @@ ROLES = {
         # downstream of the callee's whole run and still carries no premise
         # about it.
         "pauseCall_boundary":
-            "5305fcec2a37665ade6f7b77d8edd2f493d8c65cb3a3f9f87ade7357d3a75499",
+            "3854d7e28ac63b95caaf6cab6036d7a9203ee0bdb56ed8afde7a8d77ca9f7c85",
         "pauseStat_boundary":
-            "4d8a28b323e4f7d7bbda8d21025768ff2a0c5da9b60210db53ab90b0b2fbb7d1",
+            "80ae3d69fc09d2ecb0c29fac482126813b333ccfb8075154db9311725c77f0c3",
         # The program cut the ordering results are stated against.  It is a
         # `rfl` identity with `pauseAfterSet`, so the branch results below are
         # about the deployed program and not about a paraphrase of it.
@@ -967,7 +967,7 @@ ROLES = {
         # second staging reached through the target word carried across the
         # callback.  The order is in the statement's own shape.
         "pause_externalBoundary":
-            "6f46c940f4668ab02c2d82c4b2cc4449d95dd266fa6fca24dc2a9944e1afc3bb",
+            "1460350ebe718e67a6d46e7c77ff2707a1c031c1dd293d3929228cf33523e9d3",
     },
     # Shared inversion facts for arbitrary compiled walks.  These declarations
     # are rooted at `Blanc`, not nested under a contract-family namespace.
@@ -1064,9 +1064,9 @@ ROLES = {
         "publicPause_reaches_pauseAfterSet":
             "ba22f7371cffca7434090f1f898c2b42d2c6eeb2565d035f344fffbbcb56a133",
         "pauseAfterSet_boundary_committed_outcomes":
-            "773d53dc2933107f3119fe93223022ef7c9fa9166a16ff1ad650fecaed0eb3ef",
+            "7bee59bfec7006183b836e92a5a21b83e08723f179d80eb0e2d0c1125edaa73e",
         "publicPause_committed_outcomes":
-            "334ec0f7a5514ab18f27564be749c76faecfb1434b12b20aa7ba8b68f6941394",
+            "6c9526f42a16e05551f508dcdcc7dfe9fdd41074add68c63f9fb9bdbe3986f22",
     },
     "publicPauseControl": {
         "pauseLastWorld_publicPausePremises":
