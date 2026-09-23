@@ -546,6 +546,9 @@ structure ForwardingSettlementContext
     d.parent.state outer.benv.state
   parentTransient : MessageTransientEqualAt outer.currentTarget
     d.parent.transientStorage outer.tenv.transientStorage
+  /-- The outer message runs on a covered (pre-Amsterdam) fork, so its
+  settlement uses the legacy error handler. -/
+  covered : CoveredFork outer.benv.stat.fork
 
 private theorem clean_tail_relation
     (outer : Msg)
@@ -567,7 +570,7 @@ private theorem clean_tail_relation
           (.ok (forwardingCleanPost d child gas)) =
         .ok (forwardingCleanPost d child gas) := by
     simp only [Frame.ofCall, Frame.settle, Frame.settleMsg,
-      executeCode.handleError, processMessage.settle]
+      executeCode.handleErrorWith_ok, processMessage.settle]
     change (if (forwardingCleanPost d child gas).error.isSome = true then
       Except.ok ((forwardingCleanPost d child gas).rollback
         outer.benv.state outer.tenv.transientStorage)
@@ -611,7 +614,10 @@ private theorem failed_tail_relation
       (Frame.ofCall outer).settle
           (.error (.revert, forwardingFailedPost d child gas)) =
         .ok (MessageExecution.settledRevert outer
-          (forwardingFailedPost d child gas)) := rfl
+          (forwardingFailedPost d child gas)) := by
+    simp only [Frame.settle_eq_settleMsg_handleErrorWith, Frame.ofCall,
+      context.covered.rules_stateGas_none]
+    rfl
   rw [settledEq]
   change ChildToWrapperOkAt outer.currentTarget child _
   refine {
@@ -680,8 +686,14 @@ theorem forwarding_atCall_execSat
         cases error with
         | halt reason => exact (childNonConsensus (.halt reason) rfl).elim
         | revert => exact (childNonConsensus .revert rfl).elim
-        | crypto reason => rfl
-        | internal reason => rfl
+        | crypto reason =>
+            simp only [Frame.settle_eq_settleMsg_handleErrorWith,
+              executeCode.handleErrorWith_crypto]
+            rfl
+        | internal reason =>
+            simp only [Frame.settle_eq_settleMsg_handleErrorWith,
+              executeCode.handleErrorWith_internal]
+            rfl
       rw [outerResult]
       exact ⟨rfl, (fun _ => rfl), (fun _ => rfl)⟩
   | ok child =>
@@ -801,6 +813,7 @@ def OssifiableFallbackPrefixBudget.callPre
 the caller's arbitrary-outcome witness to the exact `DELEGATECALL` state. -/
 theorem OssifiableFallbackPrefixBudget.execWitness_proxyFallback
     {fs : List Func} {sevm : Sevm} {entry : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (budget : OssifiableFallbackPrefixBudget sevm entry)
     {ex : Execution}
     (tail : Func.ExecWitness fs sevm budget.callPre
@@ -1003,7 +1016,7 @@ theorem OssifiableFallbackPrefixBudget.execWitness_proxyFallback
         (k := implementationSlotLit)
         (v := entry.getStorVal sevm.currentTarget implementationSlotLit)
         (s := (0 : B256) :: sizeWord :: 0 :: 0 :: [])
-        (c := sloadCost) (G := r10) hstack hbase hcost hvalue hgas (by
+        (c := sloadCost) (G := r10) hstack hfork hbase hcost hvalue hgas (by
           simp only [List.length_cons, List.length_nil]
           omega))
   have h11 : Ninst.RunCompiled sevm afterSload gas budget.callPre := by
@@ -1197,6 +1210,7 @@ theorem OssifiableForwardingRoute.compiledPrefix
     Prog.ExecWitness (initSevm (outer.withBenv afterTransfer))
       (initDevm (outer.withBenv afterTransfer)) runtimeBaseline raw := by
   let sevm := initSevm (outer.withBenv afterTransfer)
+  have hfork : CoveredFork sevm.benvStat.fork := d.covered
   let initial := initDevm (outer.withBenv afterTransfer)
   let dispatchCost := linearDispatchFallbackCost runtimeBaselineEntries
   let afterJump := initial.setMach
@@ -1211,7 +1225,7 @@ theorem OssifiableForwardingRoute.compiledPrefix
   have hfallback : Func.ExecWitness ossifiableRuntimeFunctions sevm
       (ossifiableRuntimeFallbackEntry outer afterTransfer route.fallbackGas)
       proxyFallback raw :=
-    route.prefixBudget.execWitness_proxyFallback htail
+    route.prefixBudget.execWitness_proxyFallback (hfork := hfork) htail
   have hmiss : ∀ candidate ∈ runtimeBaselineEntries,
       candidate.1 ≠ Sevm.selector sevm := by
     intro candidate member
@@ -1285,7 +1299,10 @@ theorem OssifiableForwardingRoute.settlement
     parentError := route.parentError
     parentLogs := route.parentLogs
     parentStorage := route.parentStorage
-    parentTransient := route.parentTransient }
+    parentTransient := route.parentTransient
+    covered := by
+      rw [← route.afterTransferStat]
+      exact d.covered }
 
 /-- The direct/delegated context certificate is constructed from the exact
 spawn descriptor plus the two genuinely non-definitional prefix facts:
