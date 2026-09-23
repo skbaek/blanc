@@ -2700,6 +2700,8 @@ def audit(root: Path, quiet: bool = False) -> int:
         policy_checks = (
             ([sys.executable, "scripts/gate-economy.py", "--check"],
              "economic inventory does not reconcile"),
+            ([sys.executable, "-B", "scripts/test-gate-economy.py"],
+             "economic inventory controls failed"),
             ([sys.executable, "scripts/ci_gate_policy.py", "--self-test"],
              "CI trust-policy controls failed"),
             ([sys.executable, "scripts/ci_gate_policy.py", "--audit"],

@@ -1,41 +1,5 @@
 {
  "schema": 1,
- "launch_catalogue_commit": "dfbb0207b7890c8b17fba1c5069350b78d769cd9",
- "launch_population": 53,
- "launch_ci_population": 34,
- "final_ci_population": 41,
- "split_families": [
-  "lido-circuit-breaker-registry",
-  "execution-occurrence",
-  "cycle-write-free",
-  "transient-settlement",
-  "proxy-pair-upgrade"
- ],
- "post_launch_gates": [
-  "beacon-deposit-assurance",
-  "beacon-deposit-deployment",
-  "weth10-current-mainnet",
-  "keccak-rate-boundary",
-  "drip-stack-certificate-data",
-  "prorata-weth-vault-artifact",
-  "prorata-weth-vault-boundary",
-  "prorata-weth-vault-reference",
-  "prorata-weth-vault-oracle",
-  "prorata-weth-vault-differential",
-  "prorata-weth-vault-oracle-self-test",
-  "prorata-weth-vault-differential-self-test",
-  "prorata-weth-vault-reference-self-test",
-  "drip-evidence",
-  "drip-current-mainnet",
-  "lido-twg-pinned-target-current-mainnet",
-  "recipe-dispatch-controls",
-  "elab-migration-comparison-controls",
-  "extraction-ownership-self-test",
-  "execution-occurrence-self-test",
-  "cycle-write-free-self-test",
-  "transient-settlement-self-test",
-  "lido-deployment-self-test"
- ],
  "rows": [
   {
    "id": "doc-counts",

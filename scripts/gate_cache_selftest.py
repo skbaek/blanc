@@ -279,7 +279,7 @@ class Scratch:
             self.root / "scripts/gate-economy.json",
             {"schema": 1, "rows": [{"id": key, "work": value} for key, value in work.items()]},
         )
-        for stub in ("gate-economy.py", "ci_gate_policy.py"):
+        for stub in ("gate-economy.py", "test-gate-economy.py", "ci_gate_policy.py"):
             self.write(f"scripts/{stub}", "raise SystemExit(0)\n")
         self.catalogue([" ".join(g["command"]) for g in gates], [])
         try:
@@ -3768,6 +3768,17 @@ def control_audit_fails_on_a_stale_generated_inventory() -> None:
         require(code != 0, "a hand-edited inventory must fail the audit")
 
 
+def control_economic_inventory_checks_are_live() -> None:
+    result = subprocess.run(
+        [sys.executable, "-B", str(Path(__file__).with_name("test-gate-economy.py"))],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    require(result.returncode == 0 and "OK — gate economy controls:" in result.stdout,
+            f"economic inventory controls failed or disappeared: {result.stdout}{result.stderr}")
+
+
 def control_audit_needs_a_catalogue_block() -> None:
     with scratch() as s:
         s.write("scripts/GATES.md", "# Verification gates\n\nno block here\n")
@@ -4512,6 +4523,7 @@ CONTROLS = (
     control_audit_accepts_a_reconciled_registry,
     control_audit_fails_on_catalogue_drift,
     control_audit_fails_on_a_stale_generated_inventory,
+    control_economic_inventory_checks_are_live,
     control_audit_needs_a_catalogue_block,
     control_audit_resolves_present_named_root_inputs,
     control_every_import_spelling_is_parsed_or_refused,
