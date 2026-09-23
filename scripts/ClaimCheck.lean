@@ -322,6 +322,7 @@ example {rules : ForkRules} {dp : DeployParams}
     {w : State} {msg : Msg}
     (state_eq : msg.benv.state = w)
     (rules_eq : msg.benv.stat.rules = rules)
+    (fork_covered : CoveredFork msg.benv.stat.fork)
     (target_eq : msg.target = some ca)
     (currentTarget_eq : msg.currentTarget = ca)
     (codeAddress_eq : msg.codeAddress = some ca)
@@ -348,6 +349,7 @@ example {rules : ForkRules} {dp : DeployParams}
     AdmissibleRedemptionMessageCore rules dp ca owner recipient q w msg :=
   { state_eq := state_eq
     rules_eq := rules_eq
+    fork_covered := fork_covered
     target_eq := target_eq
     currentTarget_eq := currentTarget_eq
     codeAddress_eq := codeAddress_eq
@@ -429,6 +431,7 @@ example {rules : ForkRules} {dp : DeployParams}
 example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (rules_eq : benv.stat.rules = rules)
+    (fork_covered : CoveredFork benv.stat.fork)
     (type_eq : ∃ maxPriorityFee maxFee,
       tx.type = .two benv.stat.chainId maxPriorityFee maxFee (some ca) [])
     (data_eq : tx.data = withdrawToCalldata recipient q)
@@ -441,7 +444,7 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     (owner_ne_zero : owner ≠ 0)
     (owner_sender_admissible : TransactionSenderAdmissible benv.state owner)
     (validated :
-      validateTransaction rules tx = .ok (calculateIntrinsicCost tx))
+      validateTransaction rules tx 0 = .ok (calculateIntrinsicCost rules tx 0))
     (checked :
       checkTransaction benv.beginTransaction
         (redemptionTxPreludeBout bout tx index) tx =
@@ -451,7 +454,7 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     (upfront_funded : tx.gas * redemptionEffectiveGasPrice benv tx ≤
       (benv.state.bal owner).toNat)
     (gas_cap : checkTransactionGasCap rules.tx tx.gas = .ok ())
-    (gas_bound : redemptionTransactionGasBound q tx ≤ tx.gas)
+    (gas_bound : redemptionTransactionGasBound q benv tx owner ≤ tx.gas)
     (block_gas_room : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
     (target_code :
       some (benv.state.getCode ca).toList = Prog.compile (weth10 dp))
@@ -464,6 +467,7 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
     AdmissibleRedemptionTx
       rules dp ca owner recipient q benv bout tx index :=
   { rules_eq := rules_eq
+    fork_covered := fork_covered
     type_eq := type_eq
     data_eq := data_eq
     selector_eq := selector_eq
@@ -491,6 +495,7 @@ example {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
 example {rules : ForkRules} {dp : DeployParams} {ca owner : Adr} {q : Nat}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (rules_eq : benv.stat.rules = rules)
+    (fork_covered : CoveredFork benv.stat.fork)
     (type_eq : ∃ maxPriorityFee maxFee,
       tx.type = .two benv.stat.chainId maxPriorityFee maxFee (some ca) [])
     (data_eq : tx.data = withdrawCalldata q)
@@ -504,7 +509,7 @@ example {rules : ForkRules} {dp : DeployParams} {ca owner : Adr} {q : Nat}
     (owner_not_precompile : rules.isPrecomp owner = false)
     (owner_code_free : (benv.state.getCode owner).toList = [])
     (validated :
-      validateTransaction rules tx = .ok (calculateIntrinsicCost tx))
+      validateTransaction rules tx 0 = .ok (calculateIntrinsicCost rules tx 0))
     (checked :
       checkTransaction benv.beginTransaction
         (redemptionTxPreludeBout bout tx index) tx =
@@ -514,7 +519,7 @@ example {rules : ForkRules} {dp : DeployParams} {ca owner : Adr} {q : Nat}
     (upfront_funded : tx.gas * redemptionEffectiveGasPrice benv tx ≤
       (benv.state.bal owner).toNat)
     (gas_cap : checkTransactionGasCap rules.tx tx.gas = .ok ())
-    (gas_bound : redemptionTransactionGasBound q tx ≤ tx.gas)
+    (gas_bound : redemptionTransactionGasBound q benv tx owner ≤ tx.gas)
     (block_gas_room : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
     (target_code :
       some (benv.state.getCode ca).toList = Prog.compile (weth10 dp))
@@ -523,6 +528,7 @@ example {rules : ForkRules} {dp : DeployParams} {ca owner : Adr} {q : Nat}
     (owner_account : RecipientAccountCase benv.state owner) :
     AdmissibleSelfRedemptionTx rules dp ca owner q benv bout tx index :=
   { rules_eq := rules_eq
+    fork_covered := fork_covered
     type_eq := type_eq
     data_eq := data_eq
     selector_eq := selector_eq
@@ -550,6 +556,7 @@ example {rules : ForkRules} {dp : DeployParams}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {maxPriorityFee maxFee : Nat}
     (rules_eq : benv.stat.rules = rules)
+    (fork_covered : CoveredFork benv.stat.fork)
     (type_eq : tx.type =
       .two benv.stat.chainId maxPriorityFee maxFee (some ca) [])
     (data_eq : tx.data = withdrawToCalldata recipient q)
@@ -563,7 +570,7 @@ example {rules : ForkRules} {dp : DeployParams}
     (max_fee_fits : tx.gas * maxFee ≤ B256.max.toNat)
     (max_fee_funded : tx.gas * maxFee ≤ (benv.state.bal owner).toNat)
     (gas_cap : checkTransactionGasCap rules.tx tx.gas = .ok ())
-    (gas_bound : redemptionTransactionGasBound q tx ≤ tx.gas)
+    (gas_bound : redemptionTransactionGasBound q benv tx owner ≤ tx.gas)
     (block_gas_room : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
     (target_code :
       some (benv.state.getCode ca).toList = Prog.compile (weth10 dp))
@@ -576,6 +583,7 @@ example {rules : ForkRules} {dp : DeployParams}
     NonSignatureRedemptionTxEnvelope rules dp ca owner recipient q benv bout tx
       index maxPriorityFee maxFee :=
   { rules_eq := rules_eq
+    fork_covered := fork_covered
     type_eq := type_eq
     data_eq := data_eq
     value_eq := value_eq
@@ -725,7 +733,7 @@ example {rules : ForkRules} {dp : DeployParams} {ca owner : Adr} {q : Nat}
 /-! Deployment constructor pins make the pre-execution/result boundary fail
 closed on record-field additions, removals, or type changes. -/
 
-example {cfg : ChainConfig} {rules : ForkRules}
+example {cfg : ChainConfig} {fork : Fork}
     {base : BlockChain} {sender ca : Adr}
     (configValid : cfg.Valid)
     (chainId_eq : cfg.chainId = base.chainId)
@@ -735,12 +743,12 @@ example {cfg : ChainConfig} {rules : ForkRules}
     (target_ne_zero : ca ≠ 0)
     (target_not_precompile : ∀ {timestamp selected},
       cfg.rulesAt timestamp = .ok selected → ¬ selected.isPrecomp ca)
-    (beacon_not_precompile : ¬ rules.isPrecomp beaconRootsAddress)
-    (history_not_precompile : ¬ rules.isPrecomp historyStorageAddress)
+    (beacon_not_precompile : ¬ (Fork.ruleSet fork).isPrecomp beaconRootsAddress)
+    (history_not_precompile : ¬ (Fork.ruleSet fork).isPrecomp historyStorageAddress)
     (withdrawalRequest_not_precompile :
-      ¬ rules.isPrecomp withdrawalRequestPredeployAddress)
+      ¬ (Fork.ruleSet fork).isPrecomp withdrawalRequestPredeployAddress)
     (consolidationRequest_not_precompile :
-      ¬ rules.isPrecomp consolidationRequestPredeployAddress)
+      ¬ (Fork.ruleSet fork).isPrecomp consolidationRequestPredeployAddress)
     (sender_ne_target : sender ≠ ca)
     (withdrawalRequest_ne_target : withdrawalRequestPredeployAddress ≠ ca)
     (consolidationRequest_ne_target : consolidationRequestPredeployAddress ≠ ca)
@@ -758,7 +766,7 @@ example {cfg : ChainConfig} {rules : ForkRules}
     (consolidationRequestCode :
       some (base.state.getCode consolidationRequestPredeployAddress).toList =
         Prog.compile deploymentSystemProgram) :
-    CanonicalDeploymentBase cfg rules base sender ca :=
+    CanonicalDeploymentBase cfg fork base sender ca :=
   { configValid := configValid
     chainId_eq := chainId_eq
     validContext := validContext
@@ -781,14 +789,14 @@ example {cfg : ChainConfig} {rules : ForkRules}
     withdrawalRequestCode := withdrawalRequestCode
     consolidationRequestCode := consolidationRequestCode }
 
-example {cfg : ChainConfig} {rules : ForkRules}
+example {cfg : ChainConfig} {fork : Fork}
     {base : BlockChain} {cb : CanonicalBlock}
     {deploymentTxBytes : Bytes} {deploymentTx : Tx} {sender ca : Adr}
     (txs_eq : cb.block.txs = [.inl deploymentTxBytes])
     (decode_eq : decodeTx (.inl deploymentTxBytes) = .ok deploymentTx)
     (ommers_eq : cb.block.ommers = [])
     (withdrawals_eq : cb.block.wds = [])
-    (rulesAt : cfg.rulesAt cb.block.header.timestamp = .ok rules)
+    (forkAt : cfg.forkAt cb.block.header.timestamp = .ok fork)
     (type_eq : ∃ maxPriorityFee maxFee,
       deploymentTx.type = .two cfg.chainId maxPriorityFee maxFee none [])
     (value_eq : deploymentTx.value = 0)
@@ -796,31 +804,32 @@ example {cfg : ChainConfig} {rules : ForkRules}
     (nonce_eq : deploymentTx.nonce = base.state.getNonce sender)
     (nonce_not_max : deploymentTx.nonce ≠ UInt64.max)
     (recoveredSender : recoverSender cfg.chainId deploymentTx = .ok sender)
-    (validated : validateTransaction rules deploymentTx =
-      .ok (calculateIntrinsicCost deploymentTx))
+    (validated : validateTransaction (Fork.ruleSet fork) deploymentTx 0 =
+      .ok (calculateIntrinsicCost (Fork.ruleSet fork) deploymentTx 0))
     (checked :
-      let benv := initBenv rules base cb.block.header
+      let benv := initBenv fork base cb.block.header
       checkTransaction benv.beginTransaction
         (deploymentTxPreludeBout .init deploymentTx 0) deploymentTx =
         .ok (sender, deploymentEffectiveGasPrice benv deploymentTx, [], 0))
     (base_fee_le_effective : cb.block.header.baseFeePerGas ≤
       deploymentEffectiveGasPrice
-        (initBenv rules base cb.block.header) deploymentTx)
+        (initBenv fork base cb.block.header) deploymentTx)
     (upfront_funded :
       deploymentTx.gas * deploymentEffectiveGasPrice
-        (initBenv rules base cb.block.header) deploymentTx ≤
+        (initBenv fork base cb.block.header) deploymentTx ≤
       (base.state.bal sender).toNat)
-    (gas_bound : deploymentTransactionGasBound deploymentTx ≤ deploymentTx.gas)
-    (runtime_code_fits : 6313 ≤ rules.code.maxCodeSize)
+    (gas_bound : deploymentTransactionGasBound
+      (initBenv fork base cb.block.header) deploymentTx sender ≤ deploymentTx.gas)
+    (runtime_code_fits : 6313 ≤ (Fork.ruleSet fork).code.maxCodeSize)
     (block_gas_room : deploymentTx.gas ≤ cb.block.header.gasLimit)
     (target_eq : ca = computeContractAddress sender deploymentTx.nonce) :
-    CanonicalWeth10DeploymentBlock cfg rules base cb deploymentTxBytes
+    CanonicalWeth10DeploymentBlock cfg fork base cb deploymentTxBytes
       deploymentTx sender ca :=
   { txs_eq := txs_eq
     decode_eq := decode_eq
     ommers_eq := ommers_eq
     withdrawals_eq := withdrawals_eq
-    rulesAt := rulesAt
+    forkAt := forkAt
     type_eq := type_eq
     value_eq := value_eq
     data_eq := data_eq
@@ -836,11 +845,11 @@ example {cfg : ChainConfig} {rules : ForkRules}
     block_gas_room := block_gas_room
     target_eq := target_eq }
 
-example {cfg : ChainConfig} {rules : ForkRules}
+example {cfg : ChainConfig} {fork : Fork}
     {base : BlockChain} {cb : CanonicalBlock}
     {deploymentTx : Tx} {sender ca : Adr}
     (txInput : Benv) (begun : Benv) (debit : State) (tenv : Tenv) (msg : Msg)
-    (systemPrefix : DeploymentSystemPrefix rules base cb.block txInput)
+    (systemPrefix : DeploymentSystemPrefix fork base cb.block txInput)
     (begun_eq : begun = txInput.beginTransaction)
     (debit_eq :
       (begun.state.incrNonce sender).subBal sender
@@ -852,14 +861,16 @@ example {cfg : ChainConfig} {rules : ForkRules}
     (msg_benv_eq : msg.benv = {begun with state := debit})
     (msg_caller_eq : msg.caller = sender)
     (msg_target_eq : msg.target = none)
-    (msg_gas_eq : msg.gas = deploymentTx.gas - deploymentIntrinsicGas deploymentTx)
+    (msg_gas_eq : msg.gas = deploymentTx.gas -
+      deploymentIntrinsicGas txInput deploymentTx sender)
     (msg_value_eq : msg.value = 0)
     (msg_data_eq : msg.data = [])
     (msg_code_eq : msg.code.toList = weth10InitCode)
     (msg_codeAddress_eq : msg.codeAddress = none)
     (msg_shouldTransferValue_eq : msg.shouldTransferValue = true)
     (msg_auths_eq : msg.tenv.stat.auths = [])
-    (msg_rules_eq : msg.benv.stat.rules = rules)
+    (msg_rules_eq : msg.benv.stat.rules = Fork.ruleSet fork)
+    (msg_fork_eq : msg.benv.stat.fork = fork)
     (msg_chainId_eq : msg.benv.stat.chainId = cfg.chainId)
     (target_eq : msg.currentTarget = ca)
     (params_eq :
@@ -867,7 +878,7 @@ example {cfg : ChainConfig} {rules : ForkRules}
         freshDeployParams cfg.chainId.toB256 ca)
     (noCodeOrNonce : accountHasCodeOrNonce msg.benv.state ca = false)
     (noStorage : accountHasStorage msg.benv.state ca = false) :
-    PreparedDeploymentContext cfg rules base cb deploymentTx sender ca :=
+    PreparedDeploymentContext cfg fork base cb deploymentTx sender ca :=
   { txInput := txInput
     begun := begun
     debit := debit
@@ -889,14 +900,15 @@ example {cfg : ChainConfig} {rules : ForkRules}
     msg_shouldTransferValue_eq := msg_shouldTransferValue_eq
     msg_auths_eq := msg_auths_eq
     msg_rules_eq := msg_rules_eq
+    msg_fork_eq := msg_fork_eq
     msg_chainId_eq := msg_chainId_eq
     target_eq := target_eq
     params_eq := params_eq
     noCodeOrNonce := noCodeOrNonce
     noStorage := noStorage }
 
-example {cfg : ChainConfig} {rules : ForkRules} {ca : Adr}
-    {ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca}
+example {cfg : ChainConfig} {fork : Fork} {ca : Adr}
+    {ctx : PreparedDeploymentContext cfg fork base cb deploymentTx sender ca}
     {post : State} {out : MsgCallOutput}
     (run : processMessageCall ctx.msg = .ok (post, out))
     (stable : Stable (freshDeployParams cfg.chainId.toB256 ca) ca post)
@@ -917,7 +929,7 @@ example {cfg : ChainConfig} {rules : ForkRules} {ca : Adr}
     (consolidationRequestCode :
       some (post.getCode consolidationRequestPredeployAddress).toList =
         Prog.compile deploymentSystemProgram) :
-    CanonicalDeploymentMessageResult cfg rules ca ctx post out :=
+    CanonicalDeploymentMessageResult cfg fork ca ctx post out :=
   { run := run
     stable := stable
     installed := installed
@@ -932,8 +944,8 @@ example {cfg : ChainConfig} {rules : ForkRules} {ca : Adr}
     withdrawalRequestCode := withdrawalRequestCode
     consolidationRequestCode := consolidationRequestCode }
 
-example {cfg : ChainConfig} {rules : ForkRules} {ca : Adr}
-    {ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca}
+example {cfg : ChainConfig} {fork : Fork} {ca : Adr}
+    {ctx : PreparedDeploymentContext cfg fork base cb deploymentTx sender ca}
     {post : State} {bout : BlockOutput}
     (run : processTransaction ctx.txInput .init deploymentTx 0 = .ok (post, bout))
     (stable : Stable (freshDeployParams cfg.chainId.toB256 ca) ca post)
@@ -942,6 +954,7 @@ example {cfg : ChainConfig} {rules : ForkRules} {ca : Adr}
     (emptyStorage : post.getStor ca = Stor.empty)
     (blockLogs : bout.blockLogs = [])
     (requests : bout.requests = [])
+    (blockAccessList : bout.blockAccessList = [])
     (depositRequests : parseDepositRequests bout = .ok [])
     (withdrawalRequestCode :
       some (post.getCode withdrawalRequestPredeployAddress).toList =
@@ -952,20 +965,21 @@ example {cfg : ChainConfig} {rules : ForkRules} {ca : Adr}
     (receiptSucceeded :
       (Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0)).map
         (fun entry => entry.2.succeeded) = some true) :
-    CanonicalDeploymentTransactionResult cfg rules ca ctx post bout :=
+    CanonicalDeploymentTransactionResult cfg fork ca ctx post bout :=
   { run := run
     stable := stable
     installed := installed
     emptyStorage := emptyStorage
     blockLogs := blockLogs
     requests := requests
+    blockAccessList := blockAccessList
     depositRequests := depositRequests
     withdrawalRequestCode := withdrawalRequestCode
     consolidationRequestCode := consolidationRequestCode
     receiptSucceeded := receiptSucceeded }
 
-example {cfg : ChainConfig} {rules : ForkRules} {ca : Adr}
-    {ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca}
+example {cfg : ChainConfig} {fork : Fork} {ca : Adr}
+    {ctx : PreparedDeploymentContext cfg fork base cb deploymentTx sender ca}
     {post : State} {bout : BlockOutput}
     (withdrawalOut : MsgCallOutput) (consolidationOut : MsgCallOutput)
     (withdrawalRun :
@@ -986,7 +1000,7 @@ example {cfg : ChainConfig} {rules : ForkRules} {ca : Adr}
       (flashExactSpec
         (freshDeployParams cfg.chainId.toB256 ca) 0).StateInv ca post)
     (stable : Stable (freshDeployParams cfg.chainId.toB256 ca) ca post) :
-    CanonicalDeploymentSuffixResult cfg rules ca ctx post bout :=
+    CanonicalDeploymentSuffixResult cfg fork ca ctx post bout :=
   { withdrawalOut := withdrawalOut
     consolidationOut := consolidationOut
     withdrawalRun := withdrawalRun
@@ -1000,18 +1014,19 @@ example {cfg : ChainConfig} {rules : ForkRules} {ca : Adr}
 
 example {cfg : ChainConfig} {base deployed : BlockChain}
     {dp : DeployParams} {ca : Adr}
-    (execution : ∃ (rules : ForkRules) (cb : CanonicalBlock)
+    (execution : ∃ (fork : Fork) (cb : CanonicalBlock)
         (deploymentTxBytes : Bytes) (deploymentTx : Tx) (sender : Adr)
-        (ctx : PreparedDeploymentContext cfg rules base cb deploymentTx sender ca)
+        (ctx : PreparedDeploymentContext cfg fork base cb deploymentTx sender ca)
         (post : State) (bout : BlockOutput),
-      CanonicalDeploymentBase cfg rules base sender ca ∧
-      CanonicalWeth10DeploymentBlock cfg rules base cb deploymentTxBytes
+      CanonicalDeploymentBase cfg fork base sender ca ∧
+      CanonicalWeth10DeploymentBlock cfg fork base cb deploymentTxBytes
         deploymentTx sender ca ∧
-      CanonicalDeploymentTransactionResult cfg rules ca ctx post bout ∧
-      Nonempty (CanonicalDeploymentSuffixResult cfg rules ca ctx post bout) ∧
-      stateTransitionUsing cfg
+      CoveredFork fork ∧
+      CanonicalDeploymentTransactionResult cfg fork ca ctx post bout ∧
+      Nonempty (CanonicalDeploymentSuffixResult cfg fork ca ctx post bout) ∧
+      stateTransitionAt fork
           base cb.block = .ok deployed ∧
-      applyBody (initBenv rules base cb.block.header)
+      applyBody (initBenv fork base cb.block.header)
           cb.block.txs cb.block.wds = .ok (post, bout) ∧
       post = deployed.state ∧
       (Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0)).map
@@ -1095,27 +1110,31 @@ example (hroot : DeploymentRoot cfg base deployed dp ca) :
 
 example (hroot : DeploymentRoot cfg base deployed dp ca)
     (hreach : BlockChain.ReachUsing cfg
-      deployed future) :
+      deployed future)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
     Stable dp ca future.state :=
-  hroot.reachable_stable hreach
+  hroot.reachable_stable hreach hcov
 
 example (hroot : DeploymentRoot cfg base deployed dp ca)
     (hreach : BlockChain.ReachUsing cfg
-      deployed future) :
+      deployed future)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
     some (future.state.getCode ca).toList = Prog.compile (weth10 dp) :=
-  hroot.reachable_code hreach
+  hroot.reachable_code hreach hcov
 
 example (hroot : DeploymentRoot cfg base deployed dp ca)
     (hreach : BlockChain.ReachUsing cfg
-      deployed future) :
+      deployed future)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
     (future.state.getStor ca).get flashMintedSlot = 0 :=
-  hroot.reachable_flashZero hreach
+  hroot.reachable_flashZero hreach hcov
 
 example (hroot : DeploymentRoot cfg base deployed dp ca)
     (hreach : BlockChain.ReachUsing cfg
-      deployed future) :
+      deployed future)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
     balSum (future.state.getStor ca) ≤ (future.state.bal ca).toNat :=
-  hroot.reachable_solvent hreach
+  hroot.reachable_solvent hreach hcov
 
 /-! The holder-flow history pins are intentionally proof-carrying and retain
 the complete applied-block sequence.  These examples make weakening the
@@ -3621,13 +3640,13 @@ example (dp : DeployParams) {ca : Adr} {sevm : Sevm} {pre : Devm}
         gVerylow + (gVerylow + gHigh + gJumpdest) +
         (gVerylow + gMid + gJumpdest) +
         revertSelectorCost (pre.setMach ⟨pre.stack,
-          (pre.memory.read (targetWord * 32).toNat 32).2, 0⟩)))
+          (pre.memory.read (targetWord * 32).toNat 32).2, 0, pre.stateGas⟩)))
     (hroom : pre.stack.length < 1023) :
     let fs := (runtime dp).main :: (runtime dp).aux
     let data := customErrorData "PausableZero"
     let post := (pre.setMach ⟨stack,
       (pre.memory.read (targetWord * 32).toNat 32).2.write 0
-        data.toB256.toBytes, G⟩).withOutput data
+        data.toB256.toBytes, G, pre.stateGas⟩).withOutput data
     Func.RunCompiledTo fs sevm pre setPauserKernel
         (.error (.revert, post)) ∧
       ∃ execution : Exec (loc + 1) sevm pre (.error (.revert, post)),
@@ -4129,7 +4148,7 @@ record bodies; these Lean wrappers independently pin each public field's type. -
 example {sevm : Sevm} {base post : Devm} {G : Nat}
     (h : OfficialValidationCheckpoints sevm base post G) :
     Prog.RunCompiled sevm
-        (base.setMach ⟨[], Mem.empty, G + officialConstructorRequiredGas⟩)
+        (base.setMach ⟨[], Mem.empty, G + officialConstructorRequiredGas, base.stateGas⟩)
         lidoCircuitBreakerConstructorProgram post ∧
       Func.RunCompiled
         (lidoCircuitBreakerConstructorProgram.main ::
@@ -4137,7 +4156,7 @@ example {sevm : Sevm} {base post : Devm} {G : Nat}
         sevm
         (base.setMach
           ⟨[(224 : B256), (616 : B256), (4282 : B256)],
-            officialConstructorDecodedMemory, G + 49961⟩)
+            officialConstructorDecodedMemory, G + 49961, base.stateGas⟩)
         officialConstructorEffectBody post ∧
       sevm.code.size = 5122 ∧
       (∀ i : Fin 7,
@@ -4261,13 +4280,13 @@ example {ca : Adr} {sevm : Sevm} {base post : Devm} {G : Nat}
       OfficialConstructorEffectCheckpoints sevm base post G ∧
       Jaune.exec ⟨0, sevm,
           base.setMach
-            ⟨[], Mem.empty, G + officialConstructorRequiredGas⟩⟩ =
+            ⟨[], Mem.empty, G + officialConstructorRequiredGas, base.stateGas⟩⟩ =
         .ok post :=
   ⟨h.target_eq, h.fullInput, h.prefixCompile, h.validationCheckpoints,
     h.errorArmLayout, h.effectCheckpoints, h.exec⟩
 
 example {chainId : UInt64} {base : BlockChain} {sender ca : Adr}
-    (h : CanonicalDeploymentBase chainId base sender ca) :
+    (h : CanonicalDeploymentBase .prague chainId base sender ca) :
     base.ValidContext ∧
       chainId = base.chainId ∧
       SumNof base.state.bal ∧
@@ -4310,19 +4329,20 @@ example {chainId : UInt64} {base : BlockChain} {cb : CanonicalBlock}
       tx.nonce = base.state.getNonce sender ∧
       tx.nonce ≠ UInt64.max ∧
       recoverSender chainId tx = .ok sender ∧
-      validateTransaction pragueRules tx =
-        .ok (calculateIntrinsicCost tx) ∧
-      (let benv := initBenv pragueRules base cb.block.header
+      validateTransaction pragueRules tx 0 =
+        .ok (calculateIntrinsicCost pragueRules tx 0) ∧
+      (let benv := initBenv .prague base cb.block.header
        checkTransaction benv.beginTransaction
           (deploymentTxPreludeBout .init tx 0) tx =
         .ok (sender, deploymentEffectiveGasPrice benv tx, [], 0)) ∧
       cb.block.header.baseFeePerGas ≤
         deploymentEffectiveGasPrice
-          (initBenv pragueRules base cb.block.header) tx ∧
+          (initBenv .prague base cb.block.header) tx ∧
       tx.gas * deploymentEffectiveGasPrice
-          (initBenv pragueRules base cb.block.header) tx ≤
+          (initBenv .prague base cb.block.header) tx ≤
         (base.state.bal sender).toNat ∧
-      deploymentTransactionGasBound tx ≤ tx.gas ∧
+      deploymentTransactionGasBound (initBenv .prague base cb.block.header) tx sender ≤
+        tx.gas ∧
       tx.gas ≤ cb.block.header.gasLimit ∧
       ca = computeContractAddress sender tx.nonce :=
   ⟨h.txs_eq, h.decode_eq, h.ommers_eq, h.withdrawals_eq, h.type_eq,
@@ -4334,7 +4354,7 @@ example {chainId : UInt64} {base : BlockChain} {cb : CanonicalBlock}
     {tx : Tx} {sender ca : Adr}
     (ctx : PreparedDeploymentContext chainId base cb tx sender ca) :
     ctx.txInput =
-        ((initBenv pragueRules base cb.block.header).withState
+        ((initBenv .prague base cb.block.header).withState
           ctx.systemPrefix.stBeacon).withState ctx.systemPrefix.stHistory ∧
       ctx.begun = ctx.txInput.beginTransaction ∧
       (ctx.begun.state.incrNonce sender).subBal sender
@@ -4346,7 +4366,7 @@ example {chainId : UInt64} {base : BlockChain} {cb : CanonicalBlock}
       ctx.msg.benv = {ctx.begun with state := ctx.debit} ∧
       ctx.msg.caller = sender ∧
       ctx.msg.target = none ∧
-      ctx.msg.gas = tx.gas - deploymentIntrinsicGas tx ∧
+      ctx.msg.gas = tx.gas - deploymentIntrinsicGas ctx.msg.benv tx sender ∧
       ctx.msg.value = 0 ∧
       ctx.msg.data = [] ∧
       ctx.msg.code.toList = officialFullCreateInput ∧
@@ -4583,13 +4603,13 @@ example {chainId : UInt64} {base deployed : BlockChain} {ca : Adr}
         (sender : Adr)
         (ctx : PreparedDeploymentContext chainId base cb tx sender ca)
         (post : State) (bout : BlockOutput),
-      CanonicalDeploymentBase chainId base sender ca ∧
+      CanonicalDeploymentBase .prague chainId base sender ca ∧
       CanonicalOfficialDeploymentBlock chainId base cb txBytes tx sender ca ∧
       OfficialDeploymentTransactionResult chainId ca ctx post bout ∧
       Nonempty (OfficialDeploymentSuffixResult chainId ca ctx post bout) ∧
       stateTransitionUsing (ChainConfig.pragueOnly chainId)
         base cb.block = .ok deployed ∧
-      applyBody (initBenv pragueRules base cb.block.header)
+      applyBody (initBenv .prague base cb.block.header)
         cb.block.txs cb.block.wds = .ok (post, bout) ∧
       post = deployed.state)
     (target_ne_zero : ca ≠ 0)
@@ -4710,6 +4730,7 @@ end LidoCircuitBreaker
 namespace ProxyPair
 
 example {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {implementation requestedAdmin : Adr} {G : Nat}
     (hvalue : sevm.value = 0)
     (hinput : sevm.code.toList =
@@ -4732,7 +4753,7 @@ example {sevm : Sevm} {base : Devm}
     (hstatic : sevm.isStatic = false)
     (hgas : 200000 ≤ G) :
     ∃ post,
-      Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, G + 320⟩)
+      Prog.RunCompiled sevm (base.setMach ⟨[], Mem.empty, G + 320, base.stateGas⟩)
         (ossifiableConstructorProgram 1249 3437 2188) post ∧
       Devm.getStor post sevm.currentTarget =
         ((Devm.getStor base sevm.currentTarget).set implementationSlotLit
@@ -4745,11 +4766,12 @@ example {sevm : Sevm} {base : Devm}
       post.gasLeft = G - 49894 ∧
       post.error = base.error :=
   ossifiableConstructorProgram_canonicalEmptyInput_forward_exact
-    hvalue hinput himplementationNonzero hrequestedNonzero hcodeSizeNonzero
+    hfork hvalue hinput himplementationNonzero hrequestedNonzero hcodeSizeNonzero
     haddressCold himplementationRaw himplementationOriginal
     himplementationCold hadminRaw hadminOriginal hadminCold hstatic hgas
 
 example (msg : Msg) (implementation requestedAdmin : Adr)
+    (hfork : CoveredFork msg.benv.stat.fork)
     (hvalue : msg.value = 0)
     (hcodeAddress : msg.codeAddress = .none)
     (hcode : msg.code.toList =
@@ -4773,11 +4795,9 @@ example (msg : Msg) (implementation requestedAdmin : Adr)
     (hmax : 2188 ≤ msg.benv.stat.rules.code.maxCodeSize) :
     ∃ post,
       OssifiableEmptySetupCreateResult msg implementation requestedAdmin post :=
-  processCreateMessage_ossifiable_emptySetup_success msg implementation
-    requestedAdmin hvalue hcodeAddress hcode himplementationNonzero
-    hrequestedNonzero himplementationCode haddressCold
-    himplementationOriginal himplementationCold hadminOriginal hadminCold
-    hstatic hgas hmax
+  processCreateMessage_ossifiable_emptySetup_success msg implementation requestedAdmin hfork hvalue
+    hcodeAddress hcode himplementationNonzero hrequestedNonzero himplementationCode haddressCold
+    himplementationOriginal himplementationCold hadminOriginal hadminCold hstatic hgas hmax
 
 example {runtimeOffset runtimeLength : Nat}
     {sevm : Sevm} {entry post : Devm} {tail : Stack}
@@ -4845,6 +4865,7 @@ example :
   OssifiableBothSlotFixture.message_success
 
 example {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hvalue : sevm.value = 0)
     (hinput : sevm.code.toList = ossifiableFullCreateInput
       OssifiableBothSlotFixture.implementation
@@ -4890,7 +4911,7 @@ example {sevm : Sevm} {base : Devm}
       post.output = runtimeBaselineBytes ∧
       post.gasLeft = 475566 ∧
       post.error = base.error :=
-  OssifiableBothSlotCreateFixture.program_success hvalue hinput
+  OssifiableBothSlotCreateFixture.program_success hfork hvalue hinput
     himplementationNonzero himplementationCode hcodeSizeNonzero
     haddressCold himplementationRaw himplementationOriginal
     himplementationCold hadminRaw hadminOriginal hadminCold hstatic hdepth
@@ -5660,6 +5681,7 @@ example
 example
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (stable :
       (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat ≤
@@ -5688,7 +5710,7 @@ example
             sevm.currentTarget.toB256).toNat
           (Devm.getStorVal pre sevm.currentTarget Blanc.ProrataWethVault.supplySlot).toNat))
         pre post :=
-  maxWithdraw_compiled_effect_exact config memoryWf stable balanceLe run selectorEq
+  maxWithdraw_compiled_effect_exact config hfork memoryWf stable balanceLe run selectorEq
 
 example
     {sevm : Sevm} {pre d : Devm}
@@ -6056,7 +6078,8 @@ example {cfg : ChainConfig} {deployed future : BlockChain}
 example {cfg : ChainConfig} {deployed future : BlockChain}
     {vault : Adr} (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
-    (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault) :
+    (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault)
+    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, PairTraceRealizes root steps future ∧ PairLedgerFaithful vault history steps ∧
     ∃ path : FourQuote.RealizedPath vault,
       path.steps = PairStepRecord.fourQuoteSteps steps ∧
@@ -6075,7 +6098,7 @@ example {cfg : ChainConfig} {deployed future : BlockChain}
           ∑ i ∈ Finset.range path.steps.length,
             path.creditAt i * (∏ j ∈ Finset.range i, path.dAt j) *
               (∏ j ∈ Finset.Icc (i + 2) path.steps.length, path.dAt j) :=
-  pair_history_realized_dust_trace_exact root history collision
+  pair_history_realized_dust_trace_exact root history collision hcov
 
 example {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
     {root : PairRoot cfg deployed vault} {coalition : Finset Adr} {victim : Adr}
@@ -6263,6 +6286,7 @@ example {msg : Msg} {benv : Benv} {codeAddress : Adr}
     hstatic hbranchSentry hbound hcountSentry hreconstructBound hcode hgasEntry
 
 example {sevm : Sevm} {base : Devm} {state : Acc}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {pubkey withdrawalCredentials signature : Bytes}
     {depositDataRoot : B256} {G : Nat} {reason : Reason}
     (hnonempty : sevm.data.length.toB256 ≠ 0)
@@ -6289,10 +6313,10 @@ example {sevm : Sevm} {base : Devm} {state : Acc}
     (hcode : sevm.code.toList = code) :
     ∃ runtimeCost post,
       ∃ execution : Exec 0 sevm
-          (base.setMach ⟨[], Mem.empty, G + runtimeCost⟩)
+          (base.setMach ⟨[], Mem.empty, G + runtimeCost, base.stateGas⟩)
           (.error (.revert, post)),
         Prog.RunCompiledTo sevm
-            (base.setMach ⟨[], Mem.empty, G + runtimeCost⟩)
+            (base.setMach ⟨[], Mem.empty, G + runtimeCost, base.stateGas⟩)
             runtime (.error (.revert, post)) ∧
           post.output = errorData (reasonString reason) ∧
           Exec.NoRawSstore execution ∧
@@ -6300,7 +6324,7 @@ example {sevm : Sevm} {base : Devm} {state : Acc}
           Exec.retainedStorageEffectTriples execution = [] ∧
           some sevm.code.toList = Prog.compile runtime := by
   simpa only [DepositPublicErrorWitness] using
-    deposit_error_runCompiledTo hnonempty hdataBound hcountBound hselector hdec
+    deposit_error_runCompiledTo hfork hnonempty hdataBound hcountBound hselector hdec
       hcountValue hnodeleg hwarm hpre hdepth hstatic hrootBound hcapBound herror
       hcode
 
@@ -6999,7 +7023,8 @@ example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
 -- actual history's DRIP calls.
 example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
     (root : DeploymentRoot cfg base deployed ca) (coalition : Finset Adr)
-    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future) :
+    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future)
+    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     coalitionUnits coalition ca future.state * chiN (future.state.getStor ca) +
         (transcriptTally scale.toNat freshNat scale.toNat 0
           (history.dripCalls coalition ca)).joinResidue +
@@ -7011,7 +7036,7 @@ example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
           (history.dripCalls coalition ca)).accrual +
         scale.toNat * (transcriptTally scale.toNat freshNat scale.toNat 0
           (history.dripCalls coalition ca)).joined :=
-  history_transcript_accounting_exact root coalition history
+  history_transcript_accounting_exact root coalition history hcov
 
 -- R2: the executed-flow balance identity.
 example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}

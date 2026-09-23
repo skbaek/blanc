@@ -717,12 +717,12 @@ Blanc.Weth10.processCreateMessage_weth10_success|$STANDARD
 Blanc.Weth10.freshDeployment_staticCertificate|$STANDARD
 Blanc.Weth10.flashExactSpec_preserves|$STANDARD
 Blanc.Weth10.processTransaction_preserves_stable|$STANDARD
-Blanc.Weth10.stateTransitionWith_preserves_stable|$STANDARD
+Blanc.Weth10.stateTransitionAt_preserves_stable|$STANDARD
 Blanc.Weth10.stateTransitionUsing_preserves_stable|$STANDARD
 Blanc.Weth10.stateTransition_preserves_stable|$STANDARD
 Blanc.Weth10.chainUsing_preserves_stable|$STANDARD
 Blanc.Weth10.chain_preserves_stable|$STANDARD
-Blanc.Weth10.addBlockToChainWith_preserves_stable|$STANDARD
+Blanc.Weth10.addBlockToChainAt_preserves_stable|$STANDARD
 Blanc.Weth10.addBlockToChainUsing_preserves_stable|$STANDARD
 Blanc.Weth10.addBlockToChain_preserves_stable|$STANDARD
 Blanc.Weth10.Stable.solvent|$STANDARD

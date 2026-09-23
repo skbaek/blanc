@@ -455,12 +455,12 @@ import Blanc.Composition.ProrataWethVaultNonrevert
 #print axioms Blanc.Weth10.freshDeployment_staticCertificate
 #print axioms Blanc.Weth10.flashExactSpec_preserves
 #print axioms Blanc.Weth10.processTransaction_preserves_stable
-#print axioms Blanc.Weth10.stateTransitionWith_preserves_stable
+#print axioms Blanc.Weth10.stateTransitionAt_preserves_stable
 #print axioms Blanc.Weth10.stateTransitionUsing_preserves_stable
 #print axioms Blanc.Weth10.stateTransition_preserves_stable
 #print axioms Blanc.Weth10.chainUsing_preserves_stable
 #print axioms Blanc.Weth10.chain_preserves_stable
-#print axioms Blanc.Weth10.addBlockToChainWith_preserves_stable
+#print axioms Blanc.Weth10.addBlockToChainAt_preserves_stable
 #print axioms Blanc.Weth10.addBlockToChainUsing_preserves_stable
 #print axioms Blanc.Weth10.addBlockToChain_preserves_stable
 #print axioms Blanc.Weth10.Stable.solvent
