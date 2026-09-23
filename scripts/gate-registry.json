@@ -3203,7 +3203,9 @@
      "scripts/check-prorata-weth-vault-artifact.py",
      "scripts/test-prorata-weth-vault-artifact.py",
      "scripts/gen-prorata-weth-vault-code.lean",
-     "scripts/prorata-weth-vault-code-proof.lean.in"
+     "scripts/prorata-weth-vault-code-proof.lean.in",
+     "Blanc/ProrataWethVault.lean",
+     "Blanc/ProrataWethVaultCode.lean"
     ],
     "lean_entries": [
      "Blanc/ProrataWethVaultArtifact.lean"
@@ -3236,7 +3238,9 @@
      "scripts/check-prorata-weth-vault-boundary.sh",
      "scripts/check-prorata-weth-vault-boundary.py",
      "Blanc.lean",
-     "scripts/check-layering.py"
+     "scripts/check-layering.py",
+     "Blanc/Composition/ProrataWethVaultBoundary.lean",
+     "Blanc/Composition/ProrataWethVaultEffects.lean"
     ],
     "lean_entries": [
      "Blanc/Composition/ProrataWethVaultStaging.lean"
