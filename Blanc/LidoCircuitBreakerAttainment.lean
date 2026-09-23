@@ -2290,6 +2290,7 @@ configuration cell is read for the event and then set, and the whole body costs
 is the same number because the two functions are structurally identical. -/
 theorem setPauseDuration_body_runCompiledTo
     (fs : List Func) (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (duration : B256) (G : Nat)
     (hdata : sevm.data.length.toB256 <? 36 = 0)
     (hadmin : sevm.caller.toB256 = dp.admin)
@@ -2313,6 +2314,7 @@ theorem setPauseDuration_body_runCompiledTo
   unfold setPauseDuration requireStaticArgs onlyAdmin arg cdl pushDeployWord
     mstoreAt logWith
   func_run [0, 1, 0, 0, 3, 3, 1262, 20000]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_val => simp [B256.eqCheck, hadmin]
   case h_val => rw [harg]; simp [B256.ltCheck, B256.not_lt.mpr hmin]
   case h_val => rw [harg]; simp [B256.gtCheck, B256.not_lt.mpr hmax]
@@ -2397,8 +2399,11 @@ theorem configWorld_run :
         (runtime officialParams) (.ok post) ∧
       some configWorldSevm.code.toList =
         Prog.compile (runtime officialParams) := by
+  have hfork : CoveredFork configWorldSevm.benvStat.fork := by
+    change CoveredFork .prague
+    exact CoveredFork.prague
   obtain ⟨post, hbody⟩ :=
-    setPauseDuration_body_runCompiledTo (runtimeMain officialParams :: aux)
+    setPauseDuration_body_runCompiledTo (hfork := hfork) (runtimeMain officialParams :: aux)
       officialParams configWorldSevm configWorldPre configWorldDuration 0
       (by rw [configWorld_dataLength]; decide) configWorld_admin configWorld_arg
       configWorld_bounds.1 configWorld_bounds.2.1 configWorld_bounds.2.2
@@ -2709,6 +2714,9 @@ theorem intervalWorld_run :
         (runtime officialParams) (.ok post) ∧
       some intervalWorldSevm.code.toList =
         Prog.compile (runtime officialParams) := by
+  have hfork : CoveredFork intervalWorldSevm.benvStat.fork := by
+    change CoveredFork .prague
+    exact CoveredFork.prague
   obtain ⟨post, hrun, _hgas, _hstore, _hlogs, _hexpiries, hcompile⟩ :=
     setHeartbeatInterval_runCompiledTo_zero_of_inclusive (hfork := hfork) officialParams
       intervalWorldSevm intervalWorldPre intervalWorldInterval 0
@@ -2883,7 +2891,7 @@ theorem attainable_setHeartbeatIntervalConfig_adminConfiguration :
     (fun found pathEq =>
       RuntimePersistentWrite.eq_of_path setHeartbeatIntervalConfig_index_pin
         found pathEq)
-    (by decide) intervalWorld_run (hfork := hfork)
+    (by decide) intervalWorld_run
     (fun _devm _post h =>
       runtimeMain_routeTo_setHeartbeatIntervalConfig officialParams h
         intervalWorld_selector)
@@ -3133,6 +3141,9 @@ theorem heartbeatWorld_run :
         (runtime officialParams) (.ok post) ∧
       some heartbeatWorldSevm.code.toList =
         Prog.compile (runtime officialParams) := by
+  have hfork : CoveredFork heartbeatWorldSevm.benvStat.fork := by
+    change CoveredFork .prague
+    exact CoveredFork.prague
   obtain ⟨post, hrun, _hgas, _hstore, _hlogs, hcompile⟩ :=
     heartbeat_runCompiledTo_of_checkedExtension (hfork := hfork) officialParams
       heartbeatWorldSevm heartbeatWorldPre heartbeatWorldCount
@@ -3148,7 +3159,8 @@ theorem heartbeatWorld_run :
       heartbeatWorld_extension
   have hentry :
       heartbeatWorldPre.setMach ⟨[], Mem.empty,
-        0 + heartbeatDispatchGas + heartbeatBodySuccessGasWarmUpdate, _⟩ =
+        0 + heartbeatDispatchGas + heartbeatBodySuccessGasWarmUpdate,
+        heartbeatWorldPre.stateGas⟩ =
         heartbeatWorldPre := rfl
   rw [hentry] at hrun
   exact ⟨post, hrun, hcompile⟩
@@ -3325,7 +3337,7 @@ theorem attainable_heartbeatExpiry_heartbeatExpiry :
     heartbeatWorld_currentTarget ?_
     (fun found pathEq =>
       RuntimePersistentWrite.eq_of_path heartbeatExpiry_index_pin found pathEq)
-    (by decide) heartbeatWorld_run (hfork := hfork)
+    (by decide) heartbeatWorld_run
     (fun _devm _post h =>
       runtimeMain_routeTo_heartbeatExpiry h heartbeatWorld_selector)
   rw [heartbeatWorld_codeAddress, heartbeatWorld_currentTarget]

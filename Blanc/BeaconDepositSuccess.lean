@@ -200,7 +200,7 @@ theorem depositEndpoint_success_runCompiledTo
       (amount := amount) (oldCount := oldCount) (G := suffixGas)
       (body := depositAfterEvent)
       hdec.pubkeyTail hdec.withdrawalCredentialsTail hdec.signatureTail
-      (by simpa only [oldCount] using hcountValue) hstatic
+      hfork (by simpa only [oldCount] using hcountValue) hstatic
   let stagedBase := logged.setMach
     ⟨[], depositEventMemory sevm.data amount oldCount, G, logged.stateGas⟩
   have hsource :
