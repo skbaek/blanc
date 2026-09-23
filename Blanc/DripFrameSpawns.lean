@@ -310,7 +310,8 @@ theorem nonexit_descendantFrames_nil {sevm : Sevm} {pre post : Devm}
     (hcode : sevm.code.toList = code)
     (hcanon : pre.memory = Mem.empty)
     (committed : Execution.commits (.ok post) = true)
-    (hnotExit : sevm.data.length.toB256 = 0 ∨ Sevm.selector sevm ≠ exitSelector) :
+    (hnotExit : sevm.data.length.toB256 = 0 ∨ Sevm.selector sevm ≠ exitSelector)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Exec.descendantFrames exc = [] := by
   have compiled : some sevm.code.toList = runtime.compile :=
     installed_compile hcode
@@ -332,7 +333,8 @@ theorem nonexit_descendantFrames_nil {sevm : Sevm} {pre post : Devm}
     ⟨mainCursor, mainFree, actualBurn⟩
   have seed : Devm.EqModGas entry mainCursor.pre :=
     (Devm.EqModGas.refl pre).of_burn burn actualBurn
-  rcases mainCursor.ofRunPrefix_sameFrame_gasFree compiled rfl walk seed with
+  rcases mainCursor.ofRunPrefix_sameFrame_gasFree compiled rfl walk seed
+      hfork.rules_stateGas_none with
     ⟨endCursor, -, endFree⟩
   exact Exec.descendantFrames_eq_nil_of_no_sameFrame_xinstAt exc
     ((mainFree.trans endFree).noExec_of_linstAt
@@ -399,6 +401,7 @@ structure ExitHandoffAt (coalition : Finset Adr) {sevm : Sevm} {pre post : Devm}
   process : ProcessMessage childMsg xl (.ok child)
   childClean : child.error.isSome = false
   entryTransfer : childMsg.benvAfterTransfer = .ok entry
+  benvStat : childMsg.benv.stat = sevm.benvStat
   targetNe : childMsg.currentTarget ≠ sevm.currentTarget
   depth : (initSevm (childMsg.withBenv entry)).depth < sevm.depth
   childPre : dripEntrySpec.Pre sevm.currentTarget
@@ -425,14 +428,15 @@ theorem exit_exec_handoffAt (coalition : Finset Adr) {sevm : Sevm} {pre post : D
     (hnonempty : sevm.data.length.toB256 ≠ 0)
     (hcanon : pre.memory = Mem.empty)
     (precondition : dripEntrySpec.Pre sevm.currentTarget sevm pre)
-    (caller_ne : sevm.caller ≠ sevm.currentTarget) :
+    (caller_ne : sevm.caller ≠ sevm.currentTarget)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Nonempty (ExitHandoffAt coalition exc) := by
-  have full := exit_exec_effect_full exc hcode hsel hnonempty hcanon
+  have full := exit_exec_effect_full exc hcode hsel hnonempty hcanon hfork
   unfold ExitPaysExactlyFull at full
   dsimp only at full
   rcases full with
     ⟨hargCap, -, -, hown, hfund, -, -, hclock, -, hguards, hnofm, hcapChi, -⟩
-  have spine := exit_callNode_spine_of_exec exc hcode hsel hnonempty hcanon
+  have spine := exit_callNode_spine_of_exec exc hcode hsel hnonempty hcanon hfork
   dsimp only at spine
   rcases spine with
     ⟨node, -, isCall, -, sameFrame, storEq, codeEq, -, -, nodeFree, balEq,
@@ -465,15 +469,19 @@ theorem exit_exec_handoffAt (coalition : Finset Adr) {sevm : Sevm} {pre post : D
     have evmStep := Evm.step_next (devm := node.node.devm) node.decoded
     rw [isCall, sevmEq] at evmStep
     rw [sevmEq, evmStep] at spawn
-    rcases Ninst.step_call_spawn_exact spawn acceptedStack with
+    rcases Ninst.step_call_spawn_exact spawn acceptedStack hfork with
       ⟨spawnParent, spawnDelegated, spawnAddress, spawnCode, spawnAvail,
         -, -, -, -, -, frameEq, -⟩
     subst frameEq
     subst slotEq
     obtain ⟨-, settled⟩ := RunFrame.some_inv process
     unfold Frame.settlementCommits
-    rw [ofCall_settle_of_clean _ _ settled.symm clean]
-    cases hError : child.error <;> simp_all
+    have key : ∀ m : Msg, m.benv.stat = sevm.benvStat →
+        (Frame.ofCall m).settle raw = .ok child := fun m hm =>
+      ofCall_settle_of_clean _ m settled.symm clean (by rw [hm]; rfl)
+    rw [key]
+    · cases hError : child.error <;> simp_all
+    · rfl
   have frames : Exec.descendantFrames exc = retained.settledFrames := by
     have head := nodeFree.descendantFrames_eq
     have step := Exec.Deriv.descendantFrames_eq_of_stepRun afterEdge nodeStep
@@ -494,6 +502,7 @@ theorem exit_exec_handoffAt (coalition : Finset Adr) {sevm : Sevm} {pre post : D
     process := handoff.process
     childClean := handoff.childClean
     entryTransfer := handoff.entryTransfer
+    benvStat := handoff.benvStat
     targetNe := handoff.targetNe
     depth := handoff.depth
     childPre := handoff.childPre
