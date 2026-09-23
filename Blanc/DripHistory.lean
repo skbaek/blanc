@@ -22,17 +22,21 @@ theorem DeploymentRoot.stateInv
 global balance-plus-withdrawal no-wrap bound and exact configured transition. -/
 theorem DeploymentRoot.reachable_stateInv
     (root : DeploymentRoot cfg base deployed ca)
-    (reach : BlockChain.ReachUsing cfg deployed future) :
+    (reach : BlockChain.ReachUsing cfg deployed future)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     dripSpec.StateInv ca future.state :=
   dripSpec.chainUsing_preserves_inv ca (dripSpec_preserves ca)
-    cfg deployed future reach root.stateInv
+    cfg deployed future reach root.stateInv hcov
 
 /-- The storage projection of configured DRIP continuation preservation. -/
 theorem DeploymentRoot.reachable_accountingInv
     (root : DeploymentRoot cfg base deployed ca)
-    (reach : BlockChain.ReachUsing cfg deployed future) :
+    (reach : BlockChain.ReachUsing cfg deployed future)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     AccountingInv (future.state.getStor ca) :=
-  (root.reachable_stateInv reach).inv
+  (root.reachable_stateInv reach hcov).inv
 
 end Drip
 
