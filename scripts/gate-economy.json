@@ -839,7 +839,9 @@
     "harness-self-test"
    ],
    "resource_class": "light",
-   "prerequisites": [],
+   "prerequisites": [
+    "prorata-weth-vault-differential"
+   ],
    "historical_catches": []
   },
   {
