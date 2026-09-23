@@ -329,6 +329,7 @@ def audit_gate(gate: dict, roots: list[Path], runner_bindings: set[Path]) -> dic
     reads: set[str] = set()
     writes: set[str] = set()
     listings: set[str] = set()
+    unverified: set[str] = set()
     if log.is_file():
         for line in log.read_text(encoding="utf-8", errors="replace").splitlines():
             kind, _, raw = line.partition("\t")
@@ -340,6 +341,8 @@ def audit_gate(gate: dict, roots: list[Path], runner_bindings: set[Path]) -> dic
                 writes.add(raw)
             elif kind == "L":
                 listings.add(raw)
+            elif kind == "U":
+                unverified.add(raw)
     # A gate's own scratch file is an output it happens to read back, not an
     # input: it did not exist before the run and cannot carry information from
     # one candidate to the next.
@@ -414,6 +417,7 @@ def audit_gate(gate: dict, roots: list[Path], runner_bindings: set[Path]) -> dic
         ],
         "undeclared": sorted(undeclared),
         "enumerated_undeclared": sorted(enumerated),
+        "unverified": sorted(unverified),
     }
 
 
@@ -448,7 +452,7 @@ def main(argv: list[str]) -> int:
 
     roots = interesting_roots()
     bindings = runner_binding_files()
-    results, failures, holes = [], [], []
+    results, failures, holes, unverified = [], [], [], []
     for gate in gates:
         outcome = audit_gate(gate, roots, bindings)
         results.append(outcome)
@@ -459,6 +463,9 @@ def main(argv: list[str]) -> int:
         if outcome["undeclared"]:
             holes.append(outcome["id"])
             flag = "HOLE"
+        if outcome["unverified"]:
+            unverified.append(outcome["id"])
+            flag = "UNKNOWN"
         print(f"{flag} {outcome['id']:<26} {outcome['reads_observed']:>5} reads, "
               f"{outcome['covered']:>4} declared, {len(outcome['undeclared'])} undeclared "
               f"({outcome['elapsed_s']}s)")
@@ -472,6 +479,8 @@ def main(argv: list[str]) -> int:
             print(f"       runner-binding read: {name}")
         for name in outcome["enumerated_undeclared"]:
             print(f"       enumerated directory, membership not declared: {name}")
+        for reason in outcome["unverified"]:
+            print(f"       UNVERIFIED OBSERVATION: {reason}")
 
     gc.atomic_json(OUT_DIR / "audit.json", {"gates": results})
     silent = [r["id"] for r in results if r["reads_observed"] == 0]
@@ -486,6 +495,12 @@ def main(argv: list[str]) -> int:
         print(f"REGRESSION — gate read audit: {len(holes)} gate(s) read something "
               f"their registry entry does not fingerprint: {', '.join(holes)}",
               file=sys.stderr)
+    if unverified:
+        print(f"REFUSED — gate read audit: {len(unverified)} gate(s) had an "
+              f"unverified file observation: {', '.join(unverified)}",
+              file=sys.stderr)
+        return 2
+    if holes:
         return 1
     print("OK — gate read audit: every observed Python read is covered by its "
           "gate's declared inputs, the runner-identity channel, the Lake "
