@@ -294,18 +294,37 @@ theorem ProcessCreateMessageTrace.allFramesRoot
         (Frame.enter_run_pc henter)
         (frame_enter_run_memory henter)
 
-/-- Accounted replay does not weaken the existing configured-chain stability
-theorem; its ordinary reach projection transports the checkpoint invariant to
-the endpoint. -/
+/-- One accounted block preserves stability at the covered fork its own
+schedule selected. -/
+private theorem AccountedBlock.stable
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
+    {pre post : BlockChain}
+    (accounted : AccountedBlock cfg dp ca pre post)
+    (hstable : Stable dp ca pre.state) :
+    Stable dp ca post.state := by
+  have hrun := accounted.transition
+  rw [stateTransitionUsing] at hrun
+  obtain ⟨_, _, hrun⟩ := Except.bind_eq_ok hrun
+  obtain ⟨f, hf, hrun⟩ := Except.bind_eq_ok hrun
+  have hfork : cfg.forkAt accounted.block.header.timestamp = .ok f :=
+    Except.mapError_eq_ok_iff.mp hf
+  rw [accounted.forkAt] at hfork
+  cases hfork
+  exact stateTransitionAt_preserves_stable dp ca accounted.fork _ _ _ hrun
+    (by simpa using accounted.bound) hstable accounted.covered
+
+/-- Accounted replay transports the checkpoint invariant to the endpoint; each
+block carries the coverage of the fork its schedule selected, so no global
+schedule premise is needed. -/
 theorem AccountedHistory.future_stable
     {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {checkpoint future : BlockChain}
     (history : AccountedHistory cfg dp ca checkpoint future)
     (hstable : Stable dp ca checkpoint.state) :
-    Stable dp ca future.state :=
-  chainUsing_preserves_stable dp ca
-    cfg checkpoint future
-    history.toReachUsing hstable
+    Stable dp ca future.state := by
+  induction history with
+  | refl => exact hstable
+  | step _ accounted ih => exact accounted.stable ih
 
 end Weth10
 

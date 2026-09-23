@@ -791,6 +791,20 @@ theorem Frame.enter_permitEcrecover {f : Frame} {benv : Benv}
   rw [Frame.enter_eq_done_executePrecomp h_bt h_ca h_pre,
     executePrecomp_one_permitImage hdata hgas]
 
+/-- On a covered fork the child-frame error handler is the no-state-gas one. -/
+private theorem handleErrorWith_withBenv_of_covered
+    {msg : Msg} {benv : Benv} {raw : Execution}
+    (hbt : msg.benvAfterTransfer = .ok benv)
+    (hfork : CoveredFork msg.benv.stat.fork) :
+    executeCode.handleErrorWith (msg.withBenv benv).benv.stat.rules.stateGas raw =
+      executeCode.handleError raw := by
+  have hsg : (msg.withBenv benv).benv.stat.rules.stateGas = none := by
+    change benv.stat.rules.stateGas = none
+    rw [benvAfterTransfer_stat hbt]
+    exact hfork.rules_stateGas_none
+  rw [hsg]
+  rfl
+
 /-- A clean synchronous answer from address 1 necessarily paid ecrecover's
 fixed charge.  This is the negative half of the precompile crossing: an
 underfunded precompile is converted to an exceptional-halt child and therefore
@@ -802,7 +816,8 @@ theorem gasEcrecover_le_of_processMessage_clean
     (hpm : ProcessMessage
       (callMsg sevm parent gas 0 sevm.currentTarget 1 1 true true
         calldata code false) xl (.ok child))
-    (hclean : child.error.isSome = false) :
+    (hclean : child.error.isSome = false)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     gasEcrecover ≤ gas := by
   by_contra hgas
   obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp hpm
@@ -835,6 +850,8 @@ theorem gasEcrecover_le_of_processMessage_clean
             calldata code false).withBenv benv)).dyna.gasLeft
         change ¬gasEcrecover ≤ gas
         exact hgas)] at hexec
+      rw [handleErrorWith_withBenv_of_covered hbt
+        (by rw [callMsg_stat]; exact hfork)] at hexec
       simp only [applyPrecompResult, executeCode.handleError] at hexec
       rw [← hexec] at hset
       unfold processMessage.settle at hset
@@ -859,10 +876,11 @@ theorem output_of_processMessage_permitEcrecover_clean
       (callMsg sevm parent gas 0 sevm.currentTarget 1 1 true true
         (permitEcrecoverImage digest v sigR sigS) code false)
       xl (.ok child))
-    (hclean : child.error.isSome = false) :
+    (hclean : child.error.isSome = false)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     child.output = permitEcrecoverOutput digest v sigR sigS := by
   have hgas : gasEcrecover ≤ gas :=
-    gasEcrecover_le_of_processMessage_clean hpre hpm hclean
+    gasEcrecover_le_of_processMessage_clean hpre hpm hclean hfork
   obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp hpm
   unfold FrameBody at hbody
   rcases hbt :
@@ -881,6 +899,8 @@ theorem output_of_processMessage_permitEcrecover_clean
       rw [executePrecomp_one_permitImage (by rfl) (by
         change gasEcrecover ≤ gas
         exact hgas), permitEcrecoverResult_eq] at hexec
+      rw [handleErrorWith_withBenv_of_covered hbt
+        (by rw [callMsg_stat]; exact hfork)] at hexec
       simp only [applyPrecompResult, executeCode.handleError] at hexec
       rw [← hexec] at hset
       unfold processMessage.settle at hset
@@ -905,7 +925,8 @@ theorem output_nil_of_processMessage_permitEcrecover_error
       (callMsg sevm parent gas 0 sevm.currentTarget 1 1 true true
         (permitEcrecoverImage digest v sigR sigS) code false)
       xl (.ok child))
-    (herr : child.error.isSome = true) :
+    (herr : child.error.isSome = true)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     child.output = [] := by
   obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp hpm
   unfold FrameBody at hbody
@@ -926,6 +947,8 @@ theorem output_nil_of_processMessage_permitEcrecover_error
       · rw [executePrecomp_one_permitImage (by rfl) (by
           change gasEcrecover ≤ gas
           exact hgas), permitEcrecoverResult_eq] at hexec
+        rw [handleErrorWith_withBenv_of_covered hbt
+          (by rw [callMsg_stat]; exact hfork)] at hexec
         simp only [applyPrecompResult, executeCode.handleError] at hexec
         rw [← hexec] at hset
         unfold processMessage.settle at hset
@@ -954,6 +977,8 @@ theorem output_nil_of_processMessage_permitEcrecover_error
               benv)).dyna.gasLeft
           change ¬gasEcrecover ≤ gas
           exact hgas)] at hexec
+        rw [handleErrorWith_withBenv_of_covered hbt
+          (by rw [callMsg_stat]; exact hfork)] at hexec
         simp only [applyPrecompResult, executeCode.handleError] at hexec
         rw [← hexec] at hset
         unfold processMessage.settle at hset
@@ -980,14 +1005,15 @@ theorem frame_of_processMessage_permitEcrecover_clean
       (callMsg sevm parent gas 0 sevm.currentTarget 1 1 true true
         (permitEcrecoverImage digest v sigR sigS) code false)
       xl (.ok child))
-    (hclean : child.error.isSome = false) :
+    (hclean : child.error.isSome = false)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     (∀ a, Devm.getStor child a = Devm.getStor parent a) ∧
       child.logs = [] ∧
       child.output = permitEcrecoverOutput digest v sigR sigS := by
   have hout :=
-    output_of_processMessage_permitEcrecover_clean hpre hpm hclean
+    output_of_processMessage_permitEcrecover_clean hpre hpm hclean hfork
   have hgas : gasEcrecover ≤ gas :=
-    gasEcrecover_le_of_processMessage_clean hpre hpm hclean
+    gasEcrecover_le_of_processMessage_clean hpre hpm hclean hfork
   obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp hpm
   unfold FrameBody at hbody
   rcases hbt :
@@ -1010,16 +1036,34 @@ theorem frame_of_processMessage_permitEcrecover_clean
       rw [executePrecomp_one_permitImage (by rfl) (by
         change gasEcrecover ≤ gas
         exact hgas), permitEcrecoverResult_eq] at hexec
+      change executeCode.handleErrorWith
+          (callMsg sevm parent gas 0 sevm.currentTarget 1 1 true true
+            (permitEcrecoverImage digest v sigR sigS) code false).benv.stat.rules.stateGas
+          _ = r0 at hexec
+      rw [show (callMsg sevm parent gas 0 sevm.currentTarget 1 1 true true
+            (permitEcrecoverImage digest v sigR sigS) code false).benv.stat.rules.stateGas
+            = none by
+          rw [callMsg_stat]; exact hfork.rules_stateGas_none] at hexec
+      simp only [executeCode.handleErrorWith] at hexec
       simp only [applyPrecompResult, executeCode.handleError] at hexec
       rw [← hexec] at hset
       unfold processMessage.settle at hset
       simp only [bind, Except.bind, Option.isSome] at hset
       injection hset with hchild
       subst child
-      refine ⟨?_, rfl, hout⟩
-      intro a
-      change ((st_mid.addBal 1 0).get a).stor = (parent.state.get a).stor
-      exact (of_state_transfer_fields hsub).1 a
+      have hsgC : (callMsg sevm parent gas 0 sevm.currentTarget 1 1 true true
+            (permitEcrecoverImage digest v sigR sigS) code false).benv.stat.rules.stateGas
+            = none := by
+        rw [callMsg_stat]; exact hfork.rules_stateGas_none
+      refine ⟨?_, ?_, hout⟩
+      · intro a
+        change ((st_mid.addBal 1 0).get a).stor = (parent.state.get a).stor
+        exact (of_state_transfer_fields hsub).1 a
+      · change (match (callMsg sevm parent gas 0 sevm.currentTarget 1 1 true true
+            (permitEcrecoverImage digest v sigR sigS) code false).benv.stat.rules.stateGas with
+          | none => []
+          | some _ => _) = []
+        rw [hsgC]
     · exact False.elim (hinterp.1 (by exact hpre))
 
 /-! ## Recovery-call walk -/
@@ -1435,7 +1479,7 @@ theorem of_recoverPermitSigner
           rw [hinput, hcode] at hpm
           exact houtChild.trans
             (output_nil_of_processMessage_permitEcrecover_error
-              hpre hpm herr)
+              hpre hpm herr hfork)
         · change getDelegatedCodeAddress (q.getCode 1) = some d at hsome
           rw [hnodelegQ] at hsome
           cases hsome
@@ -1470,7 +1514,7 @@ theorem of_recoverPermitSigner
         xl (.ok child) at hpm
       change code = q.getCode 1 at hcode
       rw [hinput, hcode] at hpm
-      rcases frame_of_processMessage_permitEcrecover_clean hpre hpm hclean with
+      rcases frame_of_processMessage_permitEcrecover_clean hpre hpm hclean hfork with
         ⟨hchildStor, hchildLogs, hout⟩
       have hcleanNot : ¬ child.error.isSome = true := by
         rw [hclean]
@@ -1731,7 +1775,11 @@ private lemma permit_sload_logs {e : Sevm} {s s' : Devm}
   refine (Devm.pop_of_pop h1).logs.trans ?_
   suffices H : ∀ (d : Devm) (c : Nat), s1.logs = d.logs →
       (chargeGas c d >>=
-        fun y => Devm.push (Devm.getStorVal y e.currentTarget key) y) =
+        fun y =>
+          Devm.push
+            ((Devm.balReadStorage e.benvStat.rules e.currentTarget key y).getStorVal
+              e.currentTarget key)
+            (Devm.balReadStorage e.benvStat.rules e.currentTarget key y)) =
           .ok s' → s1.logs = s'.logs by
     split at run1
     · exact H s1 gasWarmAccess rfl run1
@@ -1739,7 +1787,8 @@ private lemma permit_sload_logs {e : Sevm} {s s' : Devm}
         gasColdSload rfl run1
   intro d c hlogs run'
   rcases Except.bind_eq_ok run' with ⟨s2, h2, run2⟩
-  exact (hlogs.trans (Devm.burn_of_chargeGas h2).logs).trans
+  exact ((hlogs.trans (Devm.burn_of_chargeGas h2).logs).trans
+    Devm.balReadStorage_logs.symm).trans
     (Devm.push_of_push run2).logs
 
 private lemma permit_sload_output {e : Sevm} {s s' : Devm}
@@ -1750,7 +1799,11 @@ private lemma permit_sload_output {e : Sevm} {s s' : Devm}
   refine (Devm.pop_of_pop h1).output.trans ?_
   suffices H : ∀ (d : Devm) (c : Nat), s1.output = d.output →
       (chargeGas c d >>=
-        fun y => Devm.push (Devm.getStorVal y e.currentTarget key) y) =
+        fun y =>
+          Devm.push
+            ((Devm.balReadStorage e.benvStat.rules e.currentTarget key y).getStorVal
+              e.currentTarget key)
+            (Devm.balReadStorage e.benvStat.rules e.currentTarget key y)) =
           .ok s' → s1.output = s'.output by
     split at run1
     · exact H s1 gasWarmAccess rfl run1
@@ -1758,7 +1811,8 @@ private lemma permit_sload_output {e : Sevm} {s s' : Devm}
         gasColdSload rfl run1
   intro d c houtput run'
   rcases Except.bind_eq_ok run' with ⟨s2, h2, run2⟩
-  exact (houtput.trans (Devm.burn_of_chargeGas h2).output).trans
+  exact ((houtput.trans (Devm.burn_of_chargeGas h2).output).trans
+    Devm.balReadStorage_output.symm).trans
     (Devm.push_of_push run2).output
 
 private lemma permit_normalizeAddress_owner (owner : Adr) :
@@ -3397,7 +3451,8 @@ theorem permit_selected_success_effect (dp : DeployParams)
     (hp : xs <<+ s.stack) (hwf : Mem.Wf s.memory)
     (hr : Mem.Reads s.memory img)
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
-      (permit dp) r) :
+      (permit dp) r)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     let nonce := Devm.getStorVal s sevm.currentTarget (nonceKey owner)
     let domain := permitDomainSeparator dp sevm.benvStat.chainId.toB256
       sevm.currentTarget
@@ -3443,7 +3498,7 @@ theorem permit_selected_success_effect (dp : DeployParams)
   rcases of_run_prepend recoverPermitSigner _ recoverRun with
     ⟨signerState, signerRun, guardsRun⟩
   rcases of_recoverPermitSigner hpre hnodelegDigest hdec hpDigest
-      hwfDigest hrDigest signerRun with
+      hwfDigest hrDigest signerRun hfork with
     ⟨signer, out, hpSigner, hwfSigner, hrSigner, hsigner, hrecover⟩
   rcases of_permitSignerGuards_frame dp hdec hpSigner guardsRun with
     ⟨hsignerNonzero, hsignerOwner, approveState, hpApprove,
@@ -3546,11 +3601,12 @@ theorem permit_selected_success_preserves_flashMinted (dp : DeployParams)
     (hp : xs <<+ s.stack) (hwf : Mem.Wf s.memory)
     (hr : Mem.Reads s.memory img)
     (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
-      (permit dp) r) :
+      (permit dp) r)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Devm.getStorVal r sevm.currentTarget flashMintedSlot =
       Devm.getStorVal s sevm.currentTarget flashMintedSlot := by
   have hsuccess := permit_selected_success_effect dp hpre hnodeleg hdec hp
-    hwf hr run
+    hwf hr run hfork
   dsimp only at hsuccess
   rcases hsuccess with ⟨_, _, hstor, _, _⟩
   change (Devm.getStor r sevm.currentTarget).get flashMintedSlot =
@@ -3576,7 +3632,8 @@ theorem permit_exec_success_effect (dp : DeployParams)
     (exc : Exec 0 sevm pre (.ok post))
     (hcode : some sevm.code.toList = Prog.compile (weth10 dp))
     (hsel : Sevm.selector sevm = permitSelector)
-    (hnonempty : sevm.data.length.toB256 ≠ 0) :
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     let nonce := Devm.getStorVal pre sevm.currentTarget (nonceKey owner)
     let domain := permitDomainSeparator dp sevm.benvStat.chainId.toB256
       sevm.currentTarget
@@ -3607,7 +3664,7 @@ theorem permit_exec_success_effect (dp : DeployParams)
     rw [hmemoryEntry]
     exact hr
   have hsuccess := permit_selected_success_effect dp hprecomp hnodelegMid
-    hdec nil_pref hwfMid hrMid run
+    hdec nil_pref hwfMid hrMid run hfork
   dsimp only at hsuccess
   rcases hsuccess with
     ⟨hdeadline, hsigner, hstor, hlogs, houtput⟩
@@ -3640,7 +3697,8 @@ theorem permit_exec_success_preserves_flashMinted (dp : DeployParams)
     (exc : Exec 0 sevm pre (.ok post))
     (hcode : some sevm.code.toList = Prog.compile (weth10 dp))
     (hsel : Sevm.selector sevm = permitSelector)
-    (hnonempty : sevm.data.length.toB256 ≠ 0) :
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Devm.getStorVal post sevm.currentTarget flashMintedSlot =
       Devm.getStorVal pre sevm.currentTarget flashMintedSlot := by
   rcases exec_enters_weth10Nonpayable_logs exc hcode hsel hnonempty
@@ -3656,7 +3714,7 @@ theorem permit_exec_success_preserves_flashMinted (dp : DeployParams)
     rw [hmemoryEntry]
     exact hr
   have hflash := permit_selected_success_preserves_flashMinted dp hprecomp
-    hnodelegMid hdec nil_pref hwfMid hrMid run
+    hnodelegMid hdec nil_pref hwfMid hrMid run hfork
   calc
     Devm.getStorVal post sevm.currentTarget flashMintedSlot =
         Devm.getStorVal mid sevm.currentTarget flashMintedSlot := hflash
@@ -3732,11 +3790,12 @@ theorem permit_selected_invalid_no_success (dp : DeployParams)
             sevm.currentTarget)
           (permitStructHash owner spender value
             (Devm.getStorVal s sevm.currentTarget (nonceKey owner)) deadline))
-        v sigR sigS ≠ owner.toB256) :
+        v sigR sigS ≠ owner.toB256)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ¬ Func.Run ((weth10 dp).main :: weth10Aux) sevm s (permit dp) r := by
   intro run
   have hsuccess := permit_selected_success_effect dp hpre hnodeleg hdec hp
-    hwf hr run
+    hwf hr run hfork
   dsimp only at hsuccess
   exact hinvalid hsuccess.2.1
 
@@ -3759,7 +3818,8 @@ theorem permit_exec_invalid_no_success (dp : DeployParams)
         v sigR sigS ≠ owner.toB256)
     (hcode : some sevm.code.toList = Prog.compile (weth10 dp))
     (hsel : Sevm.selector sevm = permitSelector)
-    (hnonempty : sevm.data.length.toB256 ≠ 0) :
+    (hnonempty : sevm.data.length.toB256 ≠ 0)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Exec 0 sevm pre (.ok post) → False := by
   intro exc
   rcases exec_enters_weth10Nonpayable_logs exc hcode hsel hnonempty
@@ -3782,6 +3842,7 @@ theorem permit_exec_invalid_no_success (dp : DeployParams)
   apply permit_selected_invalid_no_success dp hprecomp hnodelegMid hdec
     nil_pref hwfMid hrMid
   · simpa only [hnonce] using hinvalid
+  · exact hfork
   · exact run
 
 /-- The reached expiry guard has the exact locked ABI payload and gas delta. -/
@@ -3797,13 +3858,13 @@ theorem permitExpiredGuard_runCompiledTo {dp : DeployParams} {sevm : Sevm}
     (h_room : stack.length < 1022) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach ⟨w :: stack, base.memory,
-        G + errorGuardCost base "WETH: Expired permit"⟩)
+        G + errorGuardCost base "WETH: Expired permit", base.stateGas⟩)
       ((.call expiredPermitErrorSlot) <?> otherwise)
       (.error (.revert,
         (base.setMach ⟨stack,
           Mem.writeStoresRev base.memory
             (bytesWords (errorData "WETH: Expired permit")).zipIdx,
-          G⟩).withOutput (errorData "WETH: Expired permit"))) := by
+          G, base.stateGas⟩).withOutput (errorData "WETH: Expired permit"))) := by
   simpa only [LockedError.reason, LockedError.slot] using
     (lockedErrorGuard_runCompiledTo (dp := dp) (sevm := sevm)
       (base := base) (G := G) (w := w) (stack := stack) (img := img)
@@ -3824,13 +3885,13 @@ theorem permitInvalidGuard_runCompiledTo {dp : DeployParams} {sevm : Sevm}
     (h_room : stack.length < 1022) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach ⟨w :: stack, base.memory,
-        G + errorGuardCost base "WETH: invalid permit"⟩)
+        G + errorGuardCost base "WETH: invalid permit", base.stateGas⟩)
       ((.call invalidPermitErrorSlot) <?> otherwise)
       (.error (.revert,
         (base.setMach ⟨stack,
           Mem.writeStoresRev base.memory
             (bytesWords (errorData "WETH: invalid permit")).zipIdx,
-          G⟩).withOutput (errorData "WETH: invalid permit"))) := by
+          G, base.stateGas⟩).withOutput (errorData "WETH: invalid permit"))) := by
   simpa only [LockedError.reason, LockedError.slot] using
     (lockedErrorGuard_runCompiledTo (dp := dp) (sevm := sevm)
       (base := base) (G := G) (w := w) (stack := stack) (img := img)
@@ -3857,13 +3918,13 @@ theorem permitExpired_selected_runCompiledTo
     (h_room : stack.length < 1020) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach ⟨stack, base.memory,
-        (G + errorGuardCost base "WETH: Expired permit") + 11⟩)
+        (G + errorGuardCost base "WETH: Expired permit") + 11, base.stateGas⟩)
       (permit dp)
       (.error (.revert,
         (base.setMach ⟨stack,
           Mem.writeStoresRev base.memory
             (bytesWords (errorData "WETH: Expired permit")).zipIdx,
-          G⟩).withOutput (errorData "WETH: Expired permit"))) := by
+          G, base.stateGas⟩).withOutput (errorData "WETH: Expired permit"))) := by
   rw [permit_eq_deadlineGuard]
   func_run (4) [1]
   all_goals try {
@@ -3895,13 +3956,13 @@ theorem permitSignerZero_runCompiledTo
     (h_room : stack.length < 1021) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach ⟨0 :: stack, base.memory,
-        (G + errorGuardCost base "WETH: invalid permit") + 6⟩)
+        (G + errorGuardCost base "WETH: invalid permit") + 6, base.stateGas⟩)
       permitSignerGuards
       (.error (.revert,
         (base.setMach ⟨0 :: stack,
           Mem.writeStoresRev base.memory
             (bytesWords (errorData "WETH: invalid permit")).zipIdx,
-          G⟩).withOutput (errorData "WETH: invalid permit"))) := by
+          G, base.stateGas⟩).withOutput (errorData "WETH: invalid permit"))) := by
   unfold permitSignerGuards
   func_run (2) [1]
   all_goals try {
