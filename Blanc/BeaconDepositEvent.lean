@@ -1093,8 +1093,9 @@ private theorem stageEventCountLog_runCompiledTo
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; decide)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
+  rw [← afterSload_stateGas (sevm := sevm) (base := base) (key := depositCountSlot)]
   apply Func.runCompiledTo_mstoreAt
       (base := afterSload sevm base depositCountSlot)
       (memory := M17) (stack := [oldCount])
@@ -1134,7 +1135,7 @@ private theorem stageEventCountLog_runCompiledTo
   · decide +kernel
   · change Func.RunCompiledTo fs sevm
       ((afterSload sevm base depositCountSlot).setMach
-        ⟨[], M19, G + 5366, base.stateGas⟩)
+        ⟨[], M19, G + 5366, (afterSload sevm base depositCountSlot).stateGas⟩)
       (([pushB256 depositEventTopic] ++ logWith 0 0 18) +++ body) ex
     exact hlog
 

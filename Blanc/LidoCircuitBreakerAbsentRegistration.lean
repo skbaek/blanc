@@ -156,6 +156,7 @@ private theorem finishSetPauser_absentZero_runCompiled
 
 private theorem afterOldPauser_absentZero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target oldLength next carry : B256)
     (arrayOriginal indexOriginal lengthOriginal : B256)
@@ -295,7 +296,7 @@ private theorem afterOldPauser_absentZero_runCompiled
   have hfinish := finishSetPauser_absentZero_runCompiled dp sevm removePost
     MLast imgLast target carry G hreadsLast htargetLast hpreviousLast
     hnewLast hcontinuationLast (by rw [hsizeLast]; decide) halignLast hstatic
-  have hremove := removeTarget_runCompiled dp sevm base M img
+  have hremove := removeTarget_runCompiled (hfork := hfork) dp sevm base M img
     target oldLength next 0 [carry] (by simp) arrayOriginal indexOriginal
     lengthOriginal
     holeCost movedIndexCost tailClearCost lengthRestoreCost indexClearCost
@@ -326,6 +327,7 @@ private theorem afterOldPauser_absentZero_runCompiled
 
 private theorem appendTarget_then_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes) (target length next : B256)
     (arrayOriginal indexOriginal lengthOriginal : B256)
     (arrayCost indexCost lengthCost afterGas : Nat)
@@ -482,7 +484,7 @@ private theorem appendTarget_then_runCompiled
         afterGas + 12 + lengthCost, indexPost.stateGas⟩)
       (Ninst.sstore ::: .call afterOldPauserSlot) post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled hlengthIndex hlengthOrig hlengthCost
+      (temporal_sstore_runCompiled (hfork := hfork) hlengthIndex hlengthOrig hlengthCost
         hwarmLengthIndex (by omega) hstatic)
       hafterCall
   have hlengthTail : Func.RunCompiled fs sevm
@@ -515,7 +517,7 @@ private theorem appendTarget_then_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore :::
         .call afterOldPauserSlot) post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled hindexArray hindexOrig hindexCost
+      (temporal_sstore_runCompiled (hfork := hfork) hindexArray hindexOrig hindexCost
         hwarmIndexArray (by omega) hstatic)
       hlengthTail
   have htargetOff' : (targetWord * 32).toNat + 32 ≤ M'.size := by
@@ -586,7 +588,7 @@ private theorem appendTarget_then_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore :::
         .call afterOldPauserSlot) post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled harrayBase harrayOrig harrayCost
+      (temporal_sstore_runCompiled (hfork := hfork) harrayBase harrayOrig harrayCost
         hwarmArrayBase (by omega) hstatic)
       hindexTail
   have harrayTag : Func.RunCompiled fs sevm
@@ -671,7 +673,7 @@ private theorem appendTarget_then_runCompiled
         loadWord arrayLengthWord +++ pushB256 arrayLengthSlot :::
         Ninst.sstore ::: .call afterOldPauserSlot) post := by
     exact Func.RunCompiled.next
-      (temporal_sload_runCompiled hlength (by decide)) harithmetic
+      (temporal_sload_runCompiled (hfork := hfork) hlength (by decide)) harithmetic
   simp only [appendTarget]
   func_run (1)
   case a =>
@@ -686,6 +688,7 @@ private theorem appendTarget_then_runCompiled
 
 private theorem appendTarget_absentZero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes) (target oldLength next : B256)
     (arrayOriginal indexOriginal lengthOriginal : B256)
     (arrayCost indexCost lengthCost holeCost movedIndexCost tailClearCost
@@ -849,7 +852,7 @@ private theorem appendTarget_absentZero_runCompiled
   have hcontinuationAppend : Bytes.toB256
       (imgAppend.sliceD (continuationWord * 32).toNat 32 0) = 0 :=
     (sliceBefore (by decide)).trans hcontinuation
-  have hafter := afterOldPauser_absentZero_runCompiled dp sevm lengthPost
+  have hafter := afterOldPauser_absentZero_runCompiled (hfork := hfork) dp sevm lengthPost
     MAppend imgAppend target oldLength next next arrayOriginal indexOriginal
     lengthOriginal holeCost movedIndexCost tailClearCost lengthRestoreCost
     indexClearCost G hwfAppend hreadsAppend htargetAppend hpreviousAppend
@@ -858,7 +861,7 @@ private theorem appendTarget_absentZero_runCompiled
     hindexOrig hlengthOrig hholeCost hmovedIndexCost htailClearCost
     hlengthRestoreCost hindexClearCost hwarmArrayPost hwarmIndexPost
     hwarmLengthPost hsub hgasFinal hstatic
-  have hrun := appendTarget_then_runCompiled dp sevm base M img target
+  have hrun := appendTarget_then_runCompiled (hfork := hfork) dp sevm base M img target
     oldLength next arrayOriginal indexOriginal lengthOriginal arrayCost
     indexCost lengthCost
     (G + 2459 + holeCost + movedIndexCost + tailClearCost +
@@ -989,6 +992,7 @@ the unchanged Registry trace/witness, lone `PauserSet`, and preservation of
 every canonical expiry slot. -/
 theorem setPauserKernel_absentZero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes) (entries : List Entry) (target : B256)
     (assignmentOriginal arrayOriginal indexOriginal lengthOriginal : B256)
     (assignmentCost arrayCost indexCost lengthCost holeCost movedIndexCost
@@ -1183,7 +1187,7 @@ theorem setPauserKernel_absentZero_runCompiled
   let post := (((indexClearPost sevm
       (entryClearPost sevm lengthPost target next)
       target oldLength).addLog eventLog).setMach ⟨[next], MLast, G, ((indexClearPost sevm (entryClearPost sevm lengthPost target next) target oldLength).addLog eventLog).stateGas⟩)
-  have happendRaw := appendTarget_absentZero_runCompiled dp sevm
+  have happendRaw := appendTarget_absentZero_runCompiled (hfork := hfork) dp sevm
     assignPost M' img' target oldLength next arrayOriginal indexOriginal
     lengthOriginal arrayCost indexCost lengthCost holeCost movedIndexCost
     tailClearCost lengthRestoreCost indexClearCost G hwf' hreads' htarget'
@@ -1199,7 +1203,7 @@ theorem setPauserKernel_absentZero_runCompiled
     simpa only [appendGas, post, lengthPost, indexPost, arrayPost, lengthBase,
       MAppend, MIndex, MLength, MLast, eventLog] using happendRaw
   have halign : M.size % 32 = 0 := by rw [hsize]
-  have hkernelRun := setPauserKernel_append_runCompiled dp sevm base M img
+  have hkernelRun := setPauserKernel_append_runCompiled (hfork := hfork) dp sevm base M img
     post target 0 assignmentOriginal assignmentCost appendGas
     hwf hreads htarget hnew htargetValid (by omega) halign hassignment
     hassignmentOrig hassignmentCost
@@ -1445,6 +1449,7 @@ def absentZeroRegisterBodyGas (sevm : Sevm) (base : Devm)
 registration. -/
 theorem registerPauser_body_absentZero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (entries : List Entry) (target : B256)
     (assignmentOriginal arrayOriginal indexOriginal lengthOriginal : B256)
     (assignmentCost arrayCost indexCost lengthCost holeCost movedIndexCost
@@ -1521,7 +1526,7 @@ theorem registerPauser_body_absentZero_runCompiled
   rcases registerMemory_spec target 0 with
     ⟨hwf, hreads, hsize, htargetRead, hnewRead,
       _hpreviousRead, hcontinuationRead⟩
-  rcases setPauserKernel_absentZero_runCompiled dp sevm base M img entries
+  rcases setPauserKernel_absentZero_runCompiled (hfork := hfork) dp sevm base M img entries
       target assignmentOriginal arrayOriginal indexOriginal lengthOriginal
       assignmentCost arrayCost indexCost lengthCost holeCost movedIndexCost
       tailClearCost lengthRestoreCost indexClearCost G hw hfind hwf hreads
@@ -1558,6 +1563,7 @@ theorem registerPauser_body_absentZero_runCompiled
 registration. -/
 theorem registerPauser_runCompiledTo_absentZero
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (entries : List Entry) (target : B256)
     (assignmentOriginal arrayOriginal indexOriginal lengthOriginal : B256)
     (assignmentCost arrayCost indexCost lengthCost holeCost movedIndexCost
@@ -1639,7 +1645,7 @@ theorem registerPauser_runCompiledTo_absentZero
   have hbodyData : sevm.data.length.toB256 <? 68 = 0 := by
     rw [hdata]
     decide +kernel
-  rcases registerPauser_body_absentZero_runCompiled dp sevm base entries target
+  rcases registerPauser_body_absentZero_runCompiled (hfork := hfork) dp sevm base entries target
       assignmentOriginal arrayOriginal indexOriginal lengthOriginal
       assignmentCost arrayCost indexCost lengthCost holeCost movedIndexCost
       tailClearCost lengthRestoreCost indexClearCost G hbodyData hadmin
@@ -1664,6 +1670,7 @@ theorem registerPauser_runCompiledTo_absentZero
 registration, derived from the generated-runtime execution. -/
 theorem registerPauser_absentZero_success_settled_effects
     (dp : DeployParams) {msg : Msg} {ca : Adr} {final settled : Devm}
+    (hfork : CoveredFork (initSevm msg).benvStat.fork)
     (entries : List Entry) (target : B256)
     (assignmentOriginal arrayOriginal indexOriginal lengthOriginal : B256)
     (assignmentCost arrayCost indexCost lengthCost holeCost movedIndexCost
@@ -1761,7 +1768,7 @@ theorem registerPauser_absentZero_success_settled_effects
     simpa [initSevm] using hcode
   have hadminInit : (initSevm msg).caller.toB256 = dp.admin := by
     simpa [initSevm] using hadmin
-  rcases registerPauser_runCompiledTo_absentZero dp (initSevm msg)
+  rcases registerPauser_runCompiledTo_absentZero (hfork := hfork) dp (initSevm msg)
       (initDevm msg) entries target assignmentOriginal arrayOriginal
       indexOriginal lengthOriginal assignmentCost arrayCost indexCost
       lengthCost holeCost movedIndexCost tailClearCost lengthRestoreCost

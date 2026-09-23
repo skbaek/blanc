@@ -83,6 +83,7 @@ theorem freshRegistration_sourceTrace_witness
 
 private theorem registerAfterSet_freshNonzero_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (newPauser timestamp interval expiry carry : B256)
     (G : Nat)
@@ -138,7 +139,7 @@ private theorem registerAfterSet_freshNonzero_runCompiled
     have h1 : gCallStipend = 2300 := rfl
     have h2 : gasStorageSet = 20000 := rfl
     omega
-  have htail := registerAfterSet_nonzeroNewPauserTail_runCompiled fs sevm base
+  have htail := registerAfterSet_nonzeroNewPauserTail_runCompiled (hfork := hfork) fs sevm base
     M img newPauser timestamp interval expiry 0 0 [carry] gasStorageSet G
     (by simp) hwf hreads hnew hnewNonzero hsize halign htime hinterval
     hintervalCold hexpiry hexpiryOrig hwarmExpiry hstoreCost hstipend hstatic
@@ -178,6 +179,7 @@ private theorem registerAfterSet_freshNonzero_runCompiled
 
 private theorem finishSetPauser_freshNonzero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target newPauser timestamp interval expiry carry : B256)
     (G : Nat)
@@ -242,7 +244,7 @@ private theorem finishSetPauser_freshNonzero_runCompiled
     change (sevm.currentTarget, expirySlot newPauser) ∈
       base.accessedStorageKeys
     exact hwarmExpiry
-  rcases registerAfterSet_freshNonzero_runCompiled
+  rcases registerAfterSet_freshNonzero_runCompiled (hfork := hfork)
       ((runtime dp).main :: (runtime dp).aux) sevm eventBase M img
       newPauser timestamp interval expiry carry G hwf hreads hprevious hnew
       hnewNonzero hsize halign htime hintervalEvent hintervalColdEvent
@@ -262,6 +264,7 @@ private theorem finishSetPauser_freshNonzero_runCompiled
 
 private theorem afterOldPauser_freshNonzero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target newPauser timestamp interval expiry count nextCount carry : B256)
     (countOriginal : B256) (countCost G : Nat)
@@ -354,14 +357,14 @@ private theorem afterOldPauser_freshNonzero_runCompiled
     rw [temporalSstorePost_accessedStorageKeys]
     exact temporalSloadBase_preserves_warm sevm base countKey
       (expirySlot newPauser) hwarmExpiry
-  rcases finishSetPauser_freshNonzero_runCompiled dp sevm countPost M img
+  rcases finishSetPauser_freshNonzero_runCompiled (hfork := hfork) dp sevm countPost M img
       target newPauser timestamp interval expiry carry G hwf hreads htarget
       hprevious hnew hcontinuation hnewValid.1 hsize halign htime
       hintervalPost hintervalColdPost hexpiryPost hexpiryOrig
       hwarmExpiryPost hstatic hextension hexpiryNonzero with
     ⟨post, hfinish, hgas, hstoreExpiry, hlogs⟩
   refine ⟨post, ?_, hgas, hstoreExpiry, ?_⟩
-  · have h := afterOldPauser_finishSetPauser_runCompiled dp sevm base M img
+  · have h := afterOldPauser_finishSetPauser_runCompiled (hfork := hfork) dp sevm base M img
       newPauser count nextCount countOriginal [carry] countCost (G + 25527)
       post (by simp) hreads hnew hnewValid.1 (by omega) halign hcount
       hcountOrig hcountNext hcountCost
@@ -378,6 +381,7 @@ private theorem afterOldPauser_freshNonzero_runCompiled
 
 private theorem appendTarget_freshNonzero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target newPauser timestamp interval expiry length next count nextCount : B256)
     (arrayOriginal indexOriginal lengthOriginal countOriginal : B256)
@@ -640,7 +644,7 @@ private theorem appendTarget_freshNonzero_runCompiled
   have hcontinuation' : Bytes.toB256
       (img'.sliceD (continuationWord * 32).toNat 32 0) = 0 :=
     (sliceBefore (by decide)).trans hcontinuation
-  rcases afterOldPauser_freshNonzero_runCompiled dp sevm lengthPost M' img'
+  rcases afterOldPauser_freshNonzero_runCompiled (hfork := hfork) dp sevm lengthPost M' img'
       target newPauser timestamp interval expiry count nextCount next countOriginal
       countCost G hwf' hreads' htarget' hprevious' hnew' hcontinuation'
       hnewValid hsize' halign' htime hcountPost hcountOrig hcountNext
@@ -669,7 +673,7 @@ private theorem appendTarget_freshNonzero_runCompiled
         afterGas + 12 + lengthCost, indexPost.stateGas⟩)
       (Ninst.sstore ::: .call afterOldPauserSlot) post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled hlengthIndex hlengthOrig hlengthCost
+      (temporal_sstore_runCompiled (hfork := hfork) hlengthIndex hlengthOrig hlengthCost
         hwarmLengthIndex (by norm_num [gCallStipend]; omega) hstatic)
       hafterCall
   have hlengthTail : Func.RunCompiled fs sevm
@@ -701,7 +705,7 @@ private theorem appendTarget_freshNonzero_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore :::
         .call afterOldPauserSlot) post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled hindexArray hindexOrig hindexCost
+      (temporal_sstore_runCompiled (hfork := hfork) hindexArray hindexOrig hindexCost
         hwarmIndexArray (by norm_num [gCallStipend]; omega) hstatic)
       hlengthTail
   have htargetOff' : (targetWord * 32).toNat + 32 ≤ M'.size := by
@@ -775,7 +779,7 @@ private theorem appendTarget_freshNonzero_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore :::
         .call afterOldPauserSlot) post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled harrayBase harrayOrig harrayCost
+      (temporal_sstore_runCompiled (hfork := hfork) harrayBase harrayOrig harrayCost
         hwarmArrayBase (by norm_num [gCallStipend]; omega) hstatic)
       hindexTail
   have harrayTag : Func.RunCompiled fs sevm
@@ -887,7 +891,7 @@ private theorem appendTarget_freshNonzero_runCompiled
         loadWord arrayLengthWord +++ pushB256 arrayLengthSlot :::
         Ninst.sstore ::: .call afterOldPauserSlot) post := by
     exact Func.RunCompiled.next
-      (temporal_sload_runCompiled hlength (by decide)) harithmetic
+      (temporal_sload_runCompiled (hfork := hfork) hlength (by decide)) harithmetic
   refine ⟨post, ?_, hgas, hstoreExpiry, ?_⟩
   · simp only [appendTarget]
     func_run (1)
@@ -943,6 +947,7 @@ entry witness; all concrete storage/access/value-cost facts used by the
 emitted five-write path remain explicit. -/
 theorem setPauserKernel_freshNonzero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes) (entries : List Entry)
     (target newPauser timestamp interval expiry : B256)
     (assignmentOriginal arrayOriginal indexOriginal lengthOriginal
@@ -1172,7 +1177,7 @@ theorem setPauserKernel_freshNonzero_runCompiled
       decide +kernel
     rw [hend]
     omega
-  rcases appendTarget_freshNonzero_runCompiled dp sevm assignPost M' img'
+  rcases appendTarget_freshNonzero_runCompiled (hfork := hfork) dp sevm assignPost M' img'
       target newPauser timestamp interval expiry length next count nextCount
       arrayOriginal indexOriginal lengthOriginal countOriginal
       arrayCost indexCost lengthCost countCost G hwf' hreads' htarget'
@@ -1192,7 +1197,7 @@ theorem setPauserKernel_freshNonzero_runCompiled
       (assignPost.setMach ⟨[], M', appendGas, assignPost.stateGas⟩)
       appendTarget post := by
     simpa only [appendGas, hmemoryCost] using happendRaw
-  have hkernelRun := setPauserKernel_append_runCompiled dp sevm base M img
+  have hkernelRun := setPauserKernel_append_runCompiled (hfork := hfork) dp sevm base M img
     post target newPauser assignmentOriginal assignmentCost appendGas
     hwf hreads htarget hnew htargetValid hsize halign hassignment
     hassignmentOrig hassignmentCost
@@ -1404,6 +1409,7 @@ def freshRegisterBodyGas (sevm : Sevm) (base : Devm)
 /-- Exact successful production body for a fresh nonzero registration. -/
 theorem registerPauser_body_freshNonzero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (entries : List Entry) (target newPauser timestamp interval expiry : B256)
     (assignmentOriginal arrayOriginal indexOriginal lengthOriginal
       countOriginal : B256)
@@ -1494,7 +1500,7 @@ theorem registerPauser_body_freshNonzero_runCompiled
   have halign : M.size % 32 = 0 := by
     change (registerMemory target newPauser).size % 32 = 0
     rw [hsize]
-  rcases setPauserKernel_freshNonzero_runCompiled dp sevm base M img entries
+  rcases setPauserKernel_freshNonzero_runCompiled (hfork := hfork) dp sevm base M img entries
       target newPauser timestamp interval expiry assignmentOriginal
       arrayOriginal indexOriginal lengthOriginal countOriginal assignmentCost
       arrayCost indexCost lengthCost countCost G hw hfind hwf hreads
@@ -1531,6 +1537,7 @@ theorem registerPauser_body_freshNonzero_runCompiled
 /-- Exact generated-runtime success for a fresh nonzero registration. -/
 theorem registerPauser_runCompiledTo_freshNonzero
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (entries : List Entry) (target newPauser timestamp interval expiry : B256)
     (assignmentOriginal arrayOriginal indexOriginal lengthOriginal
       countOriginal : B256)
@@ -1623,7 +1630,7 @@ theorem registerPauser_runCompiledTo_freshNonzero
   have hbodyData : sevm.data.length.toB256 <? 68 = 0 := by
     rw [hdata]
     decide +kernel
-  rcases registerPauser_body_freshNonzero_runCompiled dp sevm base entries
+  rcases registerPauser_body_freshNonzero_runCompiled (hfork := hfork) dp sevm base entries
       target newPauser timestamp interval expiry assignmentOriginal
       arrayOriginal indexOriginal lengthOriginal countOriginal assignmentCost
       arrayCost indexCost lengthCost countCost G hbodyData hadmin hargTarget
@@ -1648,6 +1655,7 @@ derived from the generated-runtime execution rather than supplied as facts
 about the raw result. -/
 theorem registerPauser_freshNonzero_success_settled_effects
     (dp : DeployParams) {msg : Msg} {ca : Adr}
+    (hfork : CoveredFork (initSevm msg).benvStat.fork)
     {final settled : Devm}
     (entries : List Entry) (target newPauser timestamp interval expiry : B256)
     (assignmentOriginal arrayOriginal indexOriginal lengthOriginal
@@ -1766,7 +1774,7 @@ theorem registerPauser_freshNonzero_success_settled_effects
     simpa [initSevm] using hcode
   have hadminInit : (initSevm msg).caller.toB256 = dp.admin := by
     simpa [initSevm] using hadmin
-  rcases registerPauser_runCompiledTo_freshNonzero dp (initSevm msg)
+  rcases registerPauser_runCompiledTo_freshNonzero (hfork := hfork) dp (initSevm msg)
       (initDevm msg) entries target newPauser timestamp interval expiry
       assignmentOriginal arrayOriginal indexOriginal lengthOriginal
       countOriginal assignmentCost arrayCost indexCost lengthCost countCost G
