@@ -606,7 +606,7 @@ theorem Exec.Frame.compiledTransferAndCallNonzeroChronology
       (by unfold arg cdl; line_inv)
       (by unfold arg cdl; line_inv)
       (by unfold arg cdl; line_inv)
-      hwfCallback hreadsCallback context.invocation.2.2.2
+      hwfCallback hreadsCallback context.invocation.2.2.2 context.covered
     have hcallbackActionsNil : callbackCursor.actions = [] := by
       calc
         callbackCursor.actions = nonzeroCursor.actions := hcallbackActions
@@ -674,7 +674,7 @@ theorem Exec.Frame.compiledTransferAndCallZeroChronology
       rw [← hownSilent.memory]
       exact context.memory_reads_empty
     rcases zeroCursor.enterTransferZeroThen (img := []) nil_pref
-        hwfZero hreadsZero with
+        hwfZero hreadsZero context.covered with
       ⟨callPre, guardPost, trace, callbackCursor, burn, htraceSlot,
         hcommits, occurrence, hcallbackPre, hcallbackActions,
         hwfCallback, hreadsCallback⟩
@@ -698,7 +698,7 @@ theorem Exec.Frame.compiledTransferAndCallZeroChronology
       (by unfold arg cdl; line_inv)
       (by unfold arg cdl; line_inv)
       (by unfold arg cdl; line_inv)
-      hwfCallback hreadsCallback context.invocation.2.2.2
+      hwfCallback hreadsCallback context.invocation.2.2.2 context.covered
     have hzeroActionsNil : zeroCursor.actions = [] := by
       calc
         zeroCursor.actions = bodyCursor.actions := hzeroActions
