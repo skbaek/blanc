@@ -406,13 +406,22 @@ private def preparedMessageFor
   let benv := benv.beginTransaction
   let bout ← .ok { bout with transactionsTrie :=
     bout.transactionsTrie.insert (BLT.bytes index.toBytes).toBytes tx }
+  -- Jaune's private `recoverValidationSender`, inlined verbatim.
+  let validationSender : Adr ←
+    match benv.stat.rules.stateGas with
+    | none => .ok 0
+    | some _ => do
+      Except.mapError TransitionError.transaction (checkTransactionChainId benv tx)
+      Except.mapError (fun e => TransitionError.senderRecovery e)
+        (recoverSender benv.stat.chainId tx)
   let ⟨intrinsicGas, _⟩ ← Except.mapError TransitionError.transaction
-    (validateTransaction benv.stat.rules tx)
+    (validateTransaction benv.stat.rules tx validationSender)
   let ⟨sender, effectiveGasPrice, blobVersionedHashes, _⟩ ←
     checkTransaction benv bout tx
   let blobGasFee := if tx.isTypeThree then
     calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx else 0
   let effectiveGasFee := tx.gas * effectiveGasPrice
+  let allocation := allocateEvmGas benv.stat.rules tx.gas intrinsicGas
   let state := benv.state.incrNonce sender
   let state ← (state.subBal sender (effectiveGasFee + blobGasFee).toB256).toExcept
     (TransitionError.internal (.invariant (.text "balance underflow")))
@@ -421,7 +430,8 @@ private def preparedMessageFor
     stat := {
       origin := sender
       gasPrice := effectiveGasPrice
-      gas := tx.gas - intrinsicGas
+      gas := allocation.executionGas
+      stateGasReservoir := allocation.stateGasReservoir
       accessListAddresses := .ofList (benv.stat.coinbase :: tx.accessList.map Prod.fst)
       accessListStorageKeys := .ofList
         (tx.accessList.map (fun ⟨adr, keys⟩ => keys.map (⟨adr, ·⟩))).flatten
