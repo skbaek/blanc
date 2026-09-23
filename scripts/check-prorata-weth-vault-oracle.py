@@ -455,8 +455,16 @@ def self_test() -> int:
     control_records: list[dict] = []
     with tempfile.TemporaryDirectory(prefix="prorata-weth-vault-oracle-mutant-") as tmp:
         sandbox = Path(tmp)
-        shutil.copytree(here, sandbox / "scripts",
-                        ignore=shutil.ignore_patterns("__pycache__"))
+        copied_scripts = sandbox / "scripts"
+        copied_scripts.mkdir()
+        for name in (
+            "check-prorata-weth-vault-oracle.py",
+            "prorata_weth_vault_oracle.py",
+            "gen-prorata-weth-vault-vectors.py",
+            "prorata-weth-vault-oracle-vectors.json",
+            "prorata-oracle-vectors.json",
+        ):
+            shutil.copy2(here / name, copied_scripts / name)
         (sandbox / "Blanc").symlink_to(root / "Blanc", target_is_directory=True)
         (sandbox / ".lake").symlink_to(root / ".lake", target_is_directory=True)
         model = sandbox / "scripts" / "prorata_weth_vault_oracle.py"
