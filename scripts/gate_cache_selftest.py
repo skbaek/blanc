@@ -262,6 +262,31 @@ class Scratch:
         except gc.GateCacheError:
             pass          # a deliberately malformed registry has no inventory
 
+    def economy(self, gates: list[dict[str, Any]], work: dict[str, list[str]]) -> None:
+        """A registry that names an economy inventory, plus that inventory.
+
+        `work` maps gate id to its work classes.  The runner's audit also
+        runs the economy and CI policy scripts by name when an inventory is
+        named, so stand-ins that exit 0 are written for both: their full
+        validation is not what these controls are about.
+        """
+
+        gc.atomic_json(
+            gc.registry_path(self.root),
+            {"schema": 1, "economy_inventory": "scripts/gate-economy.json", "gates": gates},
+        )
+        gc.atomic_json(
+            self.root / "scripts/gate-economy.json",
+            {"schema": 1, "rows": [{"id": key, "work": value} for key, value in work.items()]},
+        )
+        for stub in ("gate-economy.py", "ci_gate_policy.py"):
+            self.write(f"scripts/{stub}", "raise SystemExit(0)\n")
+        self.catalogue([" ".join(g["command"]) for g in gates], [])
+        try:
+            gc.atomic_write(self.root / gc.INVENTORY_RELATIVE, gc.render_inventory(self.root))
+        except gc.GateCacheError:
+            pass
+
     def catalogue(self, commands: list[str], ci: list[str]) -> None:
         block = "\n".join(commands)
         self.write(
@@ -728,7 +753,7 @@ def control_declared_untracked_read_contributes_no_digest() -> None:
         s.write("scripts/harness.txt", "harness\n")
         s.write("Blanc/Subject.lean", "subject one\n")
         command = s.passing_gate("g.sh", "ran.txt")
-        s.registry([simple_gate(
+        s.economy([simple_gate(
             "g", [command],
             {
                 "files": ["scripts/harness.txt"],
@@ -737,7 +762,7 @@ def control_declared_untracked_read_contributes_no_digest() -> None:
                      "reason": "mutation subject; harness-only cache inputs"},
                 ],
             },
-            "^OK — g.sh: ")])
+            "^OK — g.sh: ")], {"g": ["harness-self-test"]})
         require(s.run() == 0 and s.ran("ran.txt") == 1, "the first run must execute")
         s.write("Blanc/Subject.lean", "subject two\n")
         require(s.disposition("g") == "reused",
@@ -773,15 +798,145 @@ def control_malformed_untracked_reads_are_refused() -> None:
                                                 {"path": "b", "reason": "s"}]}),
         ("also fingerprinted", {"files": ["a"],
                                 "untracked_reads": [{"path": "a", "reason": "r"}]}),
+        ("code under scripts (.py)", {"files": ["a"],
+                                     "untracked_reads": [{"path": "scripts/helper.py", "reason": "r"}]}),
+        ("code under scripts (.sh)", {"files": ["a"],
+                                     "untracked_reads": [{"path": "scripts/run.sh", "reason": "r"}]}),
+        ("code under scripts (.lean)", {"files": ["a"],
+                                       "untracked_reads": [{"path": "scripts/Check.lean", "reason": "r"}]}),
+        ("code under a named scripts root", {"files": ["a"],
+                                             "untracked_reads": [{"path": "@eels/scripts/x.py", "reason": "r"}]}),
     ]
     for label, inputs in cases:
         with scratch() as s:
-            s.registry([dict(base, inputs=inputs)])
+            # The row is a harness self-test, so only the malformation refuses.
+            s.economy([dict(base, inputs=inputs)], {"g": ["harness-self-test"]})
             try:
                 s.load()
             except gc.GateCacheError:
                 continue
             raise ControlFailure(f"malformed untracked read accepted: {label}")
+    # And the well-formed data declaration those cases are variants of is accepted.
+    with scratch() as s:
+        s.economy(
+            [dict(base, inputs={"files": ["a"],
+                                "untracked_reads": [{"path": "scripts/data.json", "reason": "r"}]})],
+            {"g": ["harness-self-test"]},
+        )
+        s.load()
+
+
+def control_untracked_reads_need_a_harness_self_test_row() -> None:
+    """Only a row the economy inventory calls a harness self-test may declare
+    an untracked read; a registry naming no inventory cannot say so and is
+    refused too."""
+
+    base = {"id": "g", "order": 1, "command": ["x"], "kind": "cacheable",
+            "inputs": {"files": ["a"],
+                       "untracked_reads": [{"path": "Blanc/Subject.lean", "reason": "subject"}]},
+            "verdict": {"summary_patterns": ["^OK"]}}
+    with scratch() as s:
+        s.economy([dict(base)], {"g": ["candidate-positive", "static-corpus"]})
+        try:
+            s.load()
+            raise ControlFailure("an untracked read on a non-self-test row was accepted")
+        except gc.GateCacheError as error:
+            require("harness-self-test" in str(error), f"the refusal must name the work class: {error}")
+    with scratch() as s:
+        s.registry([dict(base)])            # no economy inventory named
+        try:
+            s.load()
+            raise ControlFailure("an untracked read with no economy inventory was accepted")
+        except gc.GateCacheError as error:
+            require("harness-self-test" in str(error), f"the refusal must name the work class: {error}")
+    with scratch() as s:
+        s.economy([dict(base)], {"g": ["harness-self-test", "static-corpus"]})
+        s.load()                             # the positive form is accepted
+
+
+def control_non_utf8_and_large_output_cannot_hang_or_drop() -> None:
+    """A stray byte followed by more than a pipe buffer of output must neither
+    kill the reader (which would deadlock the child on a full pipe) nor drop
+    the chunk; the row still passes and its output is fully captured."""
+
+    with scratch() as s:
+        s.write("scripts/x.txt", "one\n")
+        (s.root / "scripts/noisy.py").write_text(
+            "import sys\n"
+            "sys.stdout.buffer.write(b'\\xff not utf-8\\n')\n"
+            "for i in range(3000):\n"
+            "    sys.stdout.buffer.write(b'line %05d ' % i + b'x' * 40 + b'\\n')\n"
+            "sys.stdout.buffer.write(b'OK \\xe2\\x80\\x94 noisy.py: 1/1 fine\\n')\n"
+            "sys.stdout.flush()\n",
+            encoding="utf-8",
+        )
+        s.gate("g.sh", f"#!/bin/sh\nexec {sys.executable} \"$(dirname \"$0\")/noisy.py\"\n")
+        s.registry([simple_gate("g", ["scripts/g.sh"], {"files": ["scripts/x.txt"]},
+                                "^OK — noisy.py: ")])
+        started = time.monotonic()
+        require(s.run() == 0, f"a non-UTF-8 byte must not fail or hang the row:\n{s.output[-2000:]}")
+        require(time.monotonic() - started < 30, "the run must not stall on the pipe")
+        log = gc.run_log_path(s.root).read_text(encoding="utf-8")
+        require("\ufffd not utf-8" in log and "line 02999" in log,
+                "the stray byte is replaced and every later chunk is kept")
+
+
+def control_pump_failure_fails_the_verdict() -> None:
+    """Output that was not fully observed is not evidence: a broken --echo
+    sink or an unwritable run log records a failure and the verdict fails,
+    while the pipe is still drained to the end."""
+
+    class Broken(io.StringIO):
+        def write(self, text: str) -> int:  # type: ignore[override]
+            raise OSError("broken pipe (control)")
+
+    with scratch() as s:
+        (s.root / "scripts/big.py").write_text(
+            "import sys\n"
+            "for i in range(3000):\n"
+            "    sys.stdout.write('line %05d ' % i + 'x' * 40 + '\\n')\n"
+            "sys.stdout.write('OK \\u2014 big.py: 1/1 fine\\n')\n",
+            encoding="utf-8",
+        )
+        command = s.gate("g.sh", f"#!/bin/sh\nexec {sys.executable} \"$(dirname \"$0\")/big.py\"\n")
+        gate = simple_gate("g", [command], {"files": ["scripts/x.txt"]}, "^OK — big.py: ")
+        with contextlib.redirect_stdout(Broken()):
+            verdict, _ = gc.execute(s.root, gate, echo=True)
+        require(not verdict["passed"] and any("--echo sink failed" in p for p in verdict["problems"]),
+                f"a broken echo sink must fail the verdict: {verdict['problems']}")
+        require(verdict["summary"] == ["OK — big.py: 1/1 fine"],
+                "the pipe must still have been drained to its summary")
+        unwritable = s.root / ".lake" / "not-a-file"
+        unwritable.mkdir(parents=True, exist_ok=True)
+        verdict, _ = gc.execute(s.root, gate, echo=False, log_path=unwritable)
+        require(not verdict["passed"] and any("run log unwritable" in p for p in verdict["problems"]),
+                f"an unwritable run log must fail the verdict: {verdict['problems']}")
+
+
+def control_unobtainable_store_lock_costs_records_not_correctness() -> None:
+    """When the store lock cannot be taken within the wait, the run's verdicts
+    stand in its report but no record is claimed as cached, with the reason."""
+
+    with scratch() as s:
+        s.write("scripts/x.txt", "one\n")
+        command = s.passing_gate("g.sh", "ran.txt")
+        s.registry([simple_gate("g", [command], {"files": ["scripts/x.txt"]}, "^OK — g.sh: ")])
+        s.git_init()
+        require(gc.acquire_lock(gc.lock_path(s.root)), "another run holds the store lock")
+        try:
+            with environment({gc.SHARED_STORE_LOCK_WAIT_ENV: "0.3"}):
+                require(s.run() == 0, f"the verdicts must still stand:\n{s.output}")
+        finally:
+            gc.release_lock(gc.lock_path(s.root))
+        require("shared store not written: shared store lock not obtained" in s.output,
+                f"the run must state why nothing was recorded:\n{s.output}")
+        manifest = json.loads(gc.manifest_path(s.root).read_text(encoding="utf-8"))
+        row = next(item for item in manifest["rows"] if item["id"] == "g")
+        require(row["cached"] is False and row["cache_reason"]
+                == "shared store not written: shared store lock not obtained",
+                f"the manifest must say the record was not admitted: {row}")
+        cache, _ = s.cache()
+        require(not cache["gates"].get("g"), "no record may exist for the run")
 
 
 def control_membership_mode_ignores_content() -> None:
@@ -4268,6 +4423,10 @@ CONTROLS = (
     control_unrelated_change_still_reuses,
     control_declared_untracked_read_contributes_no_digest,
     control_malformed_untracked_reads_are_refused,
+    control_untracked_reads_need_a_harness_self_test_row,
+    control_non_utf8_and_large_output_cannot_hang_or_drop,
+    control_pump_failure_fails_the_verdict,
+    control_unobtainable_store_lock_costs_records_not_correctness,
     control_membership_mode_ignores_content,
     control_implementation_change_invalidates,
     control_command_arguments_invalidate,

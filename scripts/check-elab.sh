@@ -361,8 +361,11 @@ fi
 # --- report lock ------------------------------------------------------------
 # Canonicalised first, because the report lock is keyed on this string: two
 # spellings of one path would otherwise take two locks and share a file. The
-# report lock is cheap and worktree-local; it also serializes this worktree's
-# cache-state commit, and every run takes it, measuring or not.
+# report lock is cheap and every run takes it, measuring or not. It serializes
+# only runs that name the same --report path: two runs with different report
+# paths in one worktree can both commit .lake/check-elab-state.json. That
+# state is replaced atomically and holds only self-validating fingerprints,
+# so such a race can lose a measurement, never credit one.
 mkdir -p "$(dirname "$REPORT")"
 REPORT="$(cd "$(dirname "$REPORT")" && pwd)/$(basename "$REPORT")"
 gate_lock_acquire "$REPORT.lock" "elab" "$REPORT" \

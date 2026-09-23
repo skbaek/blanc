@@ -130,11 +130,13 @@ def load_costs(gate_ids: set[str]) -> dict[str, Any]:
         raise EconomyError("measured-cost import schema is not 1")
     if not isinstance(costs.get("imported_utc"), str) or not isinstance(costs.get("rows"), dict):
         raise EconomyError("measured-cost import is malformed")
+    # A row for a gate that no longer exists is stale evidence, not a fault:
+    # a trim that renames or removes a row must not force a host-ledger
+    # re-import.  Stale rows are ignored and named in the rendered document.
+    costs["stale"] = sorted(identifier for identifier in costs["rows"] if identifier not in gate_ids)
     for identifier, row in costs["rows"].items():
         if identifier not in gate_ids:
-            raise EconomyError(
-                f"measured-cost import carries a row for unknown gate {identifier}; re-import"
-            )
+            continue
         if (
             not isinstance(row, dict)
             or set(row) != {"records", "median_s", "latest_s", "latest_commit", "latest_utc"}
@@ -316,6 +318,14 @@ def render() -> str:
         "have a record): the median and newest `duration_s` of the retained green records,",
         "never typed by hand. `no ledger record` means the row has not yet earned a shared",
         "record on this host, so its only time is the catalogue cell.",
+        *(
+            [
+                f"Ignored as stale (imported for gates no longer registered): "
+                + ", ".join(f"`{item}`" for item in costs["stale"]) + "."
+            ]
+            if costs.get("stale")
+            else []
+        ),
         "",
         "| # | gate | positive | static/corpus | harness/self-test | prerequisites | mutable input classes | material-output disposition | catalogue time cell | measured cost (ledger) | resource | historical actionable catches |",
         "|---:|---|:---:|:---:|:---:|---|---|---|---|---|---|---|",

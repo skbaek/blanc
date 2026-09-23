@@ -108,7 +108,20 @@ PROGRESS_INTERVAL_S = 60.0
 PROGRESS_INTERVAL_ENV = "BLANC_GATE_PROGRESS_SECS"
 # The shared-store transaction is a read-merge-write of one file; a contending
 # holder is done in under a second, so wait this long rather than refuse.
+# The environment may shorten it (a control exercises the refusal branch).
 SHARED_STORE_LOCK_WAIT_S = 60.0
+SHARED_STORE_LOCK_WAIT_ENV = "BLANC_GATE_STORE_LOCK_WAIT_SECS"
+
+
+def shared_store_lock_wait() -> float:
+    raw = os.environ.get(SHARED_STORE_LOCK_WAIT_ENV)
+    if raw is None:
+        return SHARED_STORE_LOCK_WAIT_S
+    try:
+        value = float(raw)
+    except ValueError:
+        return SHARED_STORE_LOCK_WAIT_S
+    return value if value >= 0 else SHARED_STORE_LOCK_WAIT_S
 # The catalogue's report-only verdict form (`OK — … (report-only)`): the row
 # passes as a process and its findings are review evidence.  The runner keeps
 # up to this many of those finding lines with the verdict and shows them under
@@ -373,6 +386,39 @@ def atomic_json(path: Path, value: Any) -> None:
 # --- registry ---------------------------------------------------------------
 
 
+def is_code_under_scripts(given: str) -> bool:
+    """Code the gate could run: .py/.sh/.lean below scripts/ (any named root)."""
+
+    relative = given.split("/", 1)[1] if given.startswith("@") and "/" in given else given
+    return relative.startswith("scripts/") and relative.endswith((".py", ".sh", ".lean"))
+
+
+def economy_work_classes(registry_file: Path, registry: dict[str, Any]) -> dict[str, set[str]] | None:
+    """Gate id -> work classes from the economy inventory the registry names.
+
+    Returns None when the registry names no inventory or it cannot be read as
+    a row list; the caller then refuses what needs a work class.  This reads
+    the inventory only for that word; its full validation is
+    `gate-economy.py --check`, which the audit runs.
+    """
+
+    inventory = registry.get("economy_inventory")
+    if not isinstance(inventory, str) or not inventory:
+        return None
+    try:
+        economy = json.loads((registry_file.parent.parent / inventory).read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+    rows = economy.get("rows") if isinstance(economy, dict) else None
+    if not isinstance(rows, list):
+        return None
+    classes: dict[str, set[str]] = {}
+    for row in rows:
+        if isinstance(row, dict) and isinstance(row.get("id"), str) and isinstance(row.get("work"), list):
+            classes[row["id"]] = {item for item in row["work"] if isinstance(item, str)}
+    return classes
+
+
 def load_registry(path: Path) -> dict[str, Any]:
     """Read and fully validate the committed gate registry.
 
@@ -395,6 +441,7 @@ def load_registry(path: Path) -> dict[str, Any]:
     seen_ids: set[str] = set()
     seen_orders: set[int] = set()
     seen_commands: set[tuple[str, ...]] = set()
+    economy_work = economy_work_classes(path, registry)
     for gate in gates:
         if not isinstance(gate, dict):
             raise GateCacheError("gate registry entry is not an object")
@@ -512,6 +559,23 @@ def load_registry(path: Path) -> dict[str, Any]:
                 raise GateCacheError(
                     f"gate {identifier} declares {spec['path']} both as a fingerprinted "
                     "file and as an untracked read"
+                )
+            if is_code_under_scripts(spec["path"]):
+                # An exclusion may cover a subject or a data carrier, never code
+                # the gate could run: that would let a harness edit hide.
+                raise GateCacheError(
+                    f"gate {identifier} cannot declare code {spec['path']} as an "
+                    "untracked read"
+                )
+        if untracked:
+            # Only a harness self-test reads a subject it must not fingerprint
+            # (evidence economy rule 3); the work class is the economy
+            # inventory's word, so a registry that names no inventory, or a
+            # row the inventory does not call a harness self-test, is refused.
+            if economy_work is None or "harness-self-test" not in economy_work.get(identifier, set()):
+                raise GateCacheError(
+                    f"gate {identifier} declares untracked reads but its gate-economy "
+                    "work classes do not include harness-self-test"
                 )
         external = inputs.get("external", [])
         if not isinstance(external, list):
@@ -712,7 +776,8 @@ SOUNDNESS_AUTHORITY_NAMES = frozenset({
     "build_certificate_path",
     "sha256_bytes",
     "file_digest", "file_identity", "forget_digests", "canonical", "digest_of",
-    "load_registry", "_input_strings", "_validate_oracle_lanes",
+    "load_registry", "is_code_under_scripts", "economy_work_classes",
+    "_input_strings", "_validate_oracle_lanes",
     "gate_uses_t8n_resolver", "semantic_authority_digest", "runner_identity",
     "resolve_path", "component_files", "glob_population", "traversable_population",
     "component_populations", "trace_path_for", "module_dep_hash",
@@ -1691,7 +1756,7 @@ def commit_shared_records(
     """
 
     lock = lock_path(root)
-    if not acquire_lock_wait(lock, SHARED_STORE_LOCK_WAIT_S):
+    if not acquire_lock_wait(lock, shared_store_lock_wait()):
         return False, "shared store lock not obtained"
     try:
         cache, _ = read_active_cache(root)
@@ -1944,28 +2009,66 @@ def execute(
     started = time.monotonic()
     environment = dict(os.environ)
     environment.setdefault("PYTHONUNBUFFERED", "1")
+    # Bytes, decoded with replacement: a gate that prints one non-UTF-8 byte
+    # must not kill the reader (which would hang the runner once the pipe
+    # buffer filled) or drop a chunk.  The verdict patterns are ASCII, so a
+    # replaced byte cannot make or break a summary line.
     process = subprocess.Popen(
-        gate["command"], cwd=root, env=environment, text=True,
+        gate["command"], cwd=root, env=environment,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     )
     captured: dict[str, list[str]] = {"stdout": [], "stderr": []}
     latest = {"line": "", "count": 0}
+    pump_failures: dict[str, str] = {}
     guard = threading.Lock()
-    log = log_path.open("a", encoding="utf-8") if log_path is not None else None
+    log = None
+    if log_path is not None:
+        try:
+            log = log_path.open("a", encoding="utf-8")
+        except OSError as error:
+            pump_failures["log"] = f"run log unwritable: {error}"
 
     def pump(stream: Any, name: str, sink: Any) -> None:
-        for line in iter(stream.readline, ""):
+        """Drain one pipe to the end no matter what fails on the way.
+
+        A failing log write or a broken `--echo` sink records a failure and
+        stops that side effect; reading continues, so the child can never
+        block on a full pipe because of our error.  The failure fails the
+        verdict below: output that was not fully observed is not evidence.
+        """
+
+        nonlocal log
+        try:
+            for raw in iter(stream.readline, b""):
+                line = raw.decode("utf-8", "replace")
+                with guard:
+                    captured[name].append(line)
+                    latest["line"] = line.rstrip("\r\n")
+                    latest["count"] += 1
+                    if log is not None:
+                        try:
+                            log.write(line)
+                            log.flush()
+                        except (OSError, ValueError) as error:
+                            pump_failures.setdefault("log", f"run log write failed: {error}")
+                            log = None
+                if echo and "echo" not in pump_failures:
+                    try:
+                        sink.write(line)
+                        sink.flush()
+                    except (OSError, ValueError) as error:
+                        with guard:
+                            pump_failures.setdefault("echo", f"--echo sink failed: {error}")
+        except Exception as error:  # noqa: BLE001 - any reader fault is recorded, never hidden
             with guard:
-                captured[name].append(line)
-                latest["line"] = line.rstrip("\r\n")
-                latest["count"] += 1
-                if log is not None:
-                    log.write(line)
-                    log.flush()
-            if echo:
-                sink.write(line)
-                sink.flush()
-        stream.close()
+                pump_failures.setdefault(name, f"{name} reader failed: {error!r}")
+            try:
+                while stream.read(65536):
+                    pass
+            except Exception:  # noqa: BLE001 - draining is best effort after a fault
+                pass
+        finally:
+            stream.close()
 
     pumps = [
         threading.Thread(target=pump, args=(process.stdout, "stdout", sys.stdout), daemon=True),
@@ -1998,7 +2101,18 @@ def execute(
         gate["command"], process.returncode,
         "".join(captured["stdout"]), "".join(captured["stderr"]),
     )
-    return capture_verdict(gate, result), elapsed
+    verdict = capture_verdict(gate, result)
+    if pump_failures:
+        # The child's output was not fully observed or recorded; a pass read
+        # out of it would be a pass nobody can inspect.
+        verdict["problems"].extend(sorted(pump_failures.values()))
+        verdict["passed"] = False
+        verdict.pop("advisory", None)
+        verdict.setdefault("output_tail", {
+            name: "".join(value.splitlines(keepends=True)[-200:])[-64 * 1024:]
+            for name, value in (("stdout", result.stdout), ("stderr", result.stderr))
+        })
+    return verdict, elapsed
 
 
 def run(root: Path, arguments: argparse.Namespace) -> int:

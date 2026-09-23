@@ -954,9 +954,17 @@ reported as contention. The heavy-gate lock is host-global — it lives
 at `~/.codex/locks/gate-heavy.lock` and is shared across both this repository
 and Jaune, and across every checkout or worktree of either, because they all
 contend for the same cores: one host, one heavy gate. It is taken only by a run
-that will elaborate (see the table below); the worktree-local report lock,
-which every run takes, serializes atomic updates of the local
-`.lake/check-elab-state.json` cache.
+that will elaborate (see the table below). The report lock, which every run
+takes, serializes only runs naming the same `--report` path; two runs with
+different report paths in one worktree can both commit the local
+`.lake/check-elab-state.json`, which is replaced atomically and holds only
+self-validating fingerprints, so that race can lose a measurement and never
+credit one. One stated exception to the selector's own header comment (which
+says every store access happens under the heavy lock, held from before
+planning): a `--no-build` run now plans without it. That is safe because
+planning only reads, the shared store is replaced atomically, and a run that
+measures nothing publishes nothing; the selector's bytes are a fingerprinted
+measurement input, so the comment is corrected here rather than in the file.
 
 If a timing run is red, the cache update remains fail-closed but does not throw
 away unrelated work: files that elaborated successfully and stayed within
