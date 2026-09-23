@@ -1630,7 +1630,7 @@ private theorem gatewayPauseWorld_afterSetGatewaySeam :
             pauseAfterSet final := by
   obtain ⟨mid, hstk, hmem, hgas, _herr, _hout, _hret, _hlogs,
       _hrefund, _hatd, _htrans, hask, _haddrs, _hpaused, hchain, hclose⟩ :=
-    pauseAfterSet_gateway_toSuccess_runCompiled
+    pauseAfterSet_gateway_toSuccess_runCompiled (hfork := by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide)
       ((runtime officialParams).main :: (runtime officialParams).aux)
       gatewayPauseWorldSevm gatewayRunAfterSetBase pauseWorldCallee.toB256
       pauseWorldDuration gatewayRunMemoryLast gatewayRunImageLast 2600 42362
@@ -1794,7 +1794,7 @@ private theorem gatewayPauseWorld_successSuffix :
       (expirySlot pauseWorldPauser) = pauseWorldExpiry := by
     rw [gatewayPauseWorld_currentTarget, hstor]
     exact gatewayRunAfterSetBase_expiry
-  have hW8 := pauseSuccess_zeroCount_ok_runCompiled
+  have hW8 := pauseSuccess_zeroCount_ok_runCompiled (hfork := by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide)
     ((runtime officialParams).main :: (runtime officialParams).aux)
     gatewayPauseWorldSevm mid gatewayRunDecodedMemory gatewayRunImage8
     pauseWorldCallee.toB256 pauseWorldDuration pauseWorldPauser
@@ -1887,7 +1887,7 @@ private theorem gatewayPauseWorld_productionRun :
       simpa only [gatewayRunAfterSetNoLog, gatewayRunAfterSetBase,
         gatewayRunRemoveBase3, gatewayRunCountPost, gatewayRunKernelBase] using hafter)
   rw [show (71154 + 1934 : Nat) = 73088 from by norm_num] at hfin
-  have hrem := removeTarget_toFinish_coldEntry_runCompiled officialParams
+  have hrem := removeTarget_toFinish_coldEntry_runCompiled (hfork := by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide) officialParams
     gatewayPauseWorldSevm gatewayRunCountPost gatewayRunMemory1 gatewayRunImage1
     pauseWorldCallee.toB256 0 1 [] (by decide)
     pauseWorldCallee.toB256 1 1
@@ -1928,7 +1928,7 @@ private theorem gatewayPauseWorld_productionRun :
     (by rw [gatewayRunMemory1, stubRunMem_size1])
     hrem
   rw [show (88427 + 35 : Nat) = 88462 from by norm_num] at hglue
-  have hker := setPauserKernel_found_runCompiled officialParams
+  have hker := setPauserKernel_found_runCompiled (hfork := by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide) officialParams
     gatewayPauseWorldSevm gatewayRunKernelBase
     (pauseMemory pauseWorldCallee.toB256 pauseWorldDuration)
     (pauseImage pauseWorldCallee.toB256 pauseWorldDuration) _
@@ -1965,7 +1965,7 @@ private theorem gatewayPauseWorld_productionRun :
     show (0 + 88462 + 8122 : Nat) = 96584 from by norm_num] at hker
   have hcalldata := pauseCalldata_facts
     gatewayPauseWorld_publicPausePremises.calldata
-  have hbody := pause_body_runCompiled officialParams gatewayPauseWorldSevm
+  have hbody := pause_body_runCompiled (hfork := by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide) officialParams gatewayPauseWorldSevm
     gatewayPauseWorldPre pauseWorldCallee.toB256 pauseWorldPauser
     pauseWorldExpiry pauseWorldDuration 2100 2100 2100 96584 _
     hcalldata.1
@@ -2121,7 +2121,7 @@ theorem gatewayPauseWorld_closedPublicPause :
       (.ok final) := by
     simpa only [gatewayPauseWorldAfterSetEntry] using hafter
   have reached := gatewayPauseWorld_afterSetAt hafter'
-  have hook := gatewayBoundaryExecutions_of_afterSet_ok
+  have hook := gatewayBoundaryExecutions_of_afterSet_ok (hfork := by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide)
     (fs := (runtime officialParams).main :: (runtime officialParams).aux)
     (sevm := gatewayPauseWorldSevm) (entry := gatewayPauseWorldAfterSetEntry)
     (final := final) (target := pauseWorldCallee)
