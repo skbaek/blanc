@@ -955,8 +955,11 @@ theorem unregisterWorld_effects :
           ⟨unregWorldOwner, [heartbeatUpdatedEvent, unregWorldPauser],
             (0 : B256).toBytes⟩] ∧
       some unregWorldSevm.code.toList = Prog.compile (runtime officialParams) := by
+  have hfork : CoveredFork unregWorldSevm.benvStat.fork := by
+    change CoveredFork .prague
+    exact CoveredFork.prague
   rcases unregWorld_dataFacts with ⟨hlength, hselector, hargTarget, hargNew⟩
-  rcases registerPauser_runCompiledTo_foundZeroOldLast officialParams
+  rcases registerPauser_runCompiledTo_foundZeroOldLast (hfork := hfork) officialParams
       unregWorldSevm unregWorldPre [(unregWorldTarget, unregWorldPauser)]
       unregWorldTarget 0 unregWorldPauser 1 unregWorldOldExpiry
       unregWorldOldExpiry unregWorldPauser 1 unregWorldTarget 1 1
@@ -1074,12 +1077,13 @@ theorem unregisterWorld_settles :
   have hsettle :
       (Frame.ofCall unregWorldMsg).settle (.ok post) = .ok post := by
     simp only [Frame.settle, Frame.settleMsg, Frame.ofCall,
-      executeCode.handleError, processMessage.settle, bind, Except.bind,
+      executeCode.handleErrorWith_ok, executeCode.handleError, processMessage.settle, bind, Except.bind,
       if_neg hnot]
     rfl
   rw [hsettle] at hprocess
   refine ⟨hprocess, ?_⟩
   rcases registerPauser_foundZeroOldLast_success_settled_effects officialParams
+      (by change CoveredFork .prague; exact CoveredFork.prague)
       [(unregWorldTarget, unregWorldPauser)] unregWorldTarget 0
       unregWorldPauser 1 unregWorldOldExpiry unregWorldOldExpiry
       unregWorldPauser 1 unregWorldTarget 1 1

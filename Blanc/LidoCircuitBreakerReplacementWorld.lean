@@ -332,6 +332,12 @@ def replWorldMsg (oldCount : B256) (gas : Nat) : Msg :=
 def replWorldSevm (oldCount : B256) (gas : Nat) : Sevm :=
   initSevm (replWorldMsg oldCount gas)
 
+/-- The replacement world runs on Prague, a covered fork. -/
+private theorem replWorldSevm_covered (oldCount : B256) (gas : Nat) :
+    CoveredFork (replWorldSevm oldCount gas).benvStat.fork := by
+  change CoveredFork .prague
+  exact CoveredFork.prague
+
 def replWorldPre (oldCount : B256) (gas : Nat) : Devm :=
   initDevm (replWorldMsg oldCount gas)
 
@@ -715,7 +721,7 @@ theorem replRetainedWorld_run :
         Prog.compile (runtime officialParams) := by
   rcases replWorld_dataFacts replRetainedWorldCount replRetainedWorldGas with
     ⟨hlength, hselector, hargTarget, hargNew⟩
-  rcases registerPauser_runCompiledTo_retainedNonzero officialParams
+  rcases registerPauser_runCompiledTo_retainedNonzero (hfork := replWorldSevm_covered _ _) officialParams
       (replWorldSevm replRetainedWorldCount replRetainedWorldGas)
       (replWorldPre replRetainedWorldCount replRetainedWorldGas)
       replWorldTarget replWorldNewPauser replWorldOldPauser
@@ -877,7 +883,7 @@ theorem replOldLastWorld_run :
         Prog.compile (runtime officialParams) := by
   rcases replWorld_dataFacts replOldLastWorldCount replOldLastWorldGas with
     ⟨hlength, hselector, hargTarget, hargNew⟩
-  rcases registerPauser_runCompiledTo_oldLastNonzero officialParams
+  rcases registerPauser_runCompiledTo_oldLastNonzero (hfork := replWorldSevm_covered _ _) officialParams
       (replWorldSevm replOldLastWorldCount replOldLastWorldGas)
       (replWorldPre replOldLastWorldCount replOldLastWorldGas)
       replWorldTarget replWorldNewPauser replWorldOldPauser
