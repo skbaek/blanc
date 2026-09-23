@@ -37,4 +37,9 @@ set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
+  echo "REGRESSION — vault differential: python3 is $(python3 -V 2>&1); the checker needs Python 3.10+ (put ~/.local/bin or a 3.11 venv first on PATH)"
+  exit 2
+fi
+
 exec python3 -B "$SCRIPT_DIR/check-prorata-weth-vault-differential.py" "$@"

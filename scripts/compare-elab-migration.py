@@ -7,12 +7,37 @@ reader consumes two *explicitly named* shared-baseline records only after it
 can reconstruct their Git/object and runtime identities.  It writes one
 receipt outside the source worktree and never writes the shared store, a
 baseline, or ``.lake`` state.
+
+ONE READER
+
+There is one read-only evidence reader and identity implementation for the
+timing store, and it is the timing gate's own selector,
+``scripts/check-elab-selection.py``: its store path and constants, its store,
+record and baseline validation, its baseline-payload parser, its environment
+fingerprint recipe and its origin normalization.  This comparator imports
+that module and consumes those functions; it implements none of them a
+second time.  What it adds is *comparison policy*, which is different from
+the gate's *reuse policy*: any reader refusal is a refusal here (the gate
+would fall back to measuring), the two records are selected by exact
+identity, both payloads must cover their exact Lean corpus, and only the
+Jaune pin may differ between the two measurement environments.
+
+The environment identity of an immutable record is reproduced by staging the
+record's Git blobs into a scratch directory and calling the selector's own
+``environment_fingerprint`` on it, so the recipe cannot drift from the one
+that wrote the record without this reader noticing.  The selector's bytes are
+themselves one of the fingerprinted inputs, so a selector edit is a protocol
+change that makes records incomparable; this comparator therefore leaves the
+selector untouched and only reads it.
+
+The stable-host identity provider is loaded from the *candidate* root, not
+from this reader's own directory: the records under comparison were written
+by that candidate's provider, and a fixture may supply its own.
 """
 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import importlib.util
 import json
 import math
@@ -24,21 +49,12 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+# Reading provenance must never leave bytecode in a candidate worktree; the
+# process-local policy covers the selector and provider imports below.
+sys.dont_write_bytecode = True
 
 COMPARATOR_SCHEMA = 1
-STATE_VERSION = 1
-STORE_SCHEMA = 1
-STORE_DIRECTORY = "blanc-elab-evidence"
-STORE_PREFIX = "evidence-stable-host-v2"
-TRUST_DOMAIN = "same-git-common-directory"
-GLOBAL_INPUTS = (
-    "lean-toolchain",
-    "lakefile.lean",
-    "lakefile.toml",
-    "lake-manifest.json",
-    "scripts/check-elab.sh",
-    "scripts/check-elab-selection.py",
-)
+HERE = Path(__file__).resolve().parent
 REQUIRED_INPUTS = {
     "lean-toolchain",
     "lakefile.lean",
@@ -46,8 +62,6 @@ REQUIRED_INPUTS = {
     "scripts/check-elab.sh",
     "scripts/check-elab-selection.py",
 }
-LEAN_PATHSPECS = ("Blanc/", "Blanc.lean", "Main.lean")
-BASE_REF = "main"
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 LEAN_VERSION = re.compile(r"Lean \(version ([0-9]+(?:\.[0-9]+)+)(?:[ ,])")
@@ -58,8 +72,22 @@ class CompareError(RuntimeError):
     """The requested comparison has no safe interpretation."""
 
 
-def sha256_bytes(value: bytes) -> str:
-    return hashlib.sha256(value).hexdigest()
+def load_reader() -> Any:
+    """Import the timing gate's selector as the one evidence reader."""
+
+    path = HERE / "check-elab-selection.py"
+    if not path.is_file():
+        raise CompareError(f"timing evidence reader is absent: {path}")
+    spec = importlib.util.spec_from_file_location("blanc_elab_selection_reader", path)
+    if spec is None or spec.loader is None:
+        raise CompareError("cannot load the timing evidence reader")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception as error:  # a broken reader cannot receive a default
+        raise CompareError(f"timing evidence reader failed to load: {error}") from error
+    return module
 
 
 def command(root: Path, args: list[str], *, binary: bool = False) -> bytes | str:
@@ -140,9 +168,9 @@ def source_tree(root: Path, commit: str) -> dict[str, str]:
     return result
 
 
-def inputs_at(root: Path, commit: str) -> dict[str, bytes | None]:
-    values = {relative: blob(root, commit, relative) for relative in GLOBAL_INPUTS}
-    missing = sorted(relative for relative in REQUIRED_INPUTS if values[relative] is None)
+def inputs_at(reader: Any, root: Path, commit: str) -> dict[str, bytes | None]:
+    values = {relative: blob(root, commit, relative) for relative in reader.GLOBAL_INPUTS}
+    missing = sorted(relative for relative in REQUIRED_INPUTS if values.get(relative) is None)
     if missing:
         raise CompareError(
             f"immutable source {commit[:12]} lacks required measurement input(s): "
@@ -151,21 +179,30 @@ def inputs_at(root: Path, commit: str) -> dict[str, bytes | None]:
     return values
 
 
-def environment_fingerprint(inputs: dict[str, bytes | None], lean_stdout: str) -> str:
-    digest = hashlib.sha256()
-    digest.update(f"blanc-elab-state-v{STATE_VERSION}\0".encode("utf-8"))
-    digest.update(lean_stdout.encode("utf-8"))
-    digest.update(b"\0")
-    for relative in GLOBAL_INPUTS:
-        digest.update(relative.encode("utf-8"))
-        digest.update(b"\0")
-        digest.update(inputs[relative] if inputs[relative] is not None else b"<absent>")
-        digest.update(b"\0")
-    return digest.hexdigest()
+def environment_from_blobs(
+    reader: Any, inputs: dict[str, bytes | None], lean_stdout: str
+) -> str:
+    """Reproduce a record's environment with the selector's own recipe.
+
+    The immutable blobs are staged into a scratch directory laid out like a
+    checkout and handed to `environment_fingerprint`, the function that wrote
+    the record's environment field in the first place.  An absent input is
+    simply not staged, which is what the recipe hashes as absent.
+    """
+
+    with tempfile.TemporaryDirectory(prefix="blanc-elab-compare-inputs-") as staged:
+        base = Path(staged)
+        for relative, contents in inputs.items():
+            if contents is None:
+                continue
+            target = base / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(contents)
+        return reader.environment_fingerprint(base, lean_stdout)
 
 
 def load_host_identity(root: Path) -> str:
-    """Use the existing gate-cache host authority, never an option override."""
+    """Use the candidate's registered gate-cache host authority, never an option."""
 
     script = root / "scripts/gate-cache.py"
     if not script.is_file():
@@ -177,19 +214,11 @@ def load_host_identity(root: Path) -> str:
     if spec is None or spec.loader is None:
         raise CompareError("cannot load registered stable-host identity provider")
     module = importlib.util.module_from_spec(spec)
-    previous_bytecode_policy = sys.dont_write_bytecode
     try:
-        # `gate-cache.py` is a registered provider, but importing it normally
-        # creates scripts/__pycache__ in the candidate.  This reader must be
-        # safe in a clean worktree without a caller-supplied environment flag.
-        # The process-local policy also covers its provider-local imports.
-        sys.dont_write_bytecode = True
         spec.loader.exec_module(module)
         identity = module.host_identity()
     except Exception as error:  # provider failures cannot receive a default identity
         raise CompareError(f"registered stable-host identity provider failed: {error}") from error
-    finally:
-        sys.dont_write_bytecode = previous_bytecode_policy
     if not isinstance(identity, str) or not identity:
         raise CompareError("registered stable-host identity provider returned no identity")
     return identity
@@ -243,67 +272,23 @@ def valid_number(value: Any, *, positive: bool = False) -> bool:
     return math.isfinite(number) and (number > 0 if positive else number >= 0)
 
 
-def validate_record(record: Any) -> None:
-    if not isinstance(record, dict) or set(record) != {
-        "origin", "environment", "digest", "rows", "payload", "utc"
-    }:
-        raise CompareError("shared baseline record has an incompatible schema")
-    if not GIT_SHA.fullmatch(record["origin"]):
-        raise CompareError("shared baseline record has an invalid origin")
-    if not SHA256.fullmatch(record["environment"]):
-        raise CompareError("shared baseline record has an invalid environment")
-    if not SHA256.fullmatch(record["digest"]):
-        raise CompareError("shared baseline record has an invalid payload digest")
-    if not isinstance(record["rows"], int) or record["rows"] <= 0:
-        raise CompareError("shared baseline record has an invalid row count")
-    if not isinstance(record["payload"], str) or not record["payload"]:
-        raise CompareError("shared baseline record has no payload")
-    if not isinstance(record["utc"], str) or not record["utc"]:
-        raise CompareError("shared baseline record has an invalid UTC field")
-    if sha256_bytes(record["payload"].encode("utf-8")) != record["digest"]:
-        raise CompareError("shared baseline record payload digest mismatch")
+def shared_records(reader: Any, root: Path, host: str) -> tuple[Path, list[dict[str, Any]]]:
+    """The store's baseline records, through the one reader, refusing on any reason.
 
+    The gate treats a reader reason as "measure instead"; a comparison has
+    nothing to fall back to, so every reason is a refusal here.
+    """
 
-def validate_store(value: Any, host: str) -> list[dict[str, Any]]:
-    if not isinstance(value, dict) or set(value) != {
-        "schema", "trust_domain", "host", "measurements", "baselines"
-    }:
-        raise CompareError("shared timing store has an incompatible schema")
-    if value["schema"] != STORE_SCHEMA or value["trust_domain"] != TRUST_DOMAIN:
-        raise CompareError("shared timing store schema/trust domain is incompatible")
-    if value["host"] != host:
-        raise CompareError("shared timing store does not match registered stable-host identity")
-    if not isinstance(value["measurements"], dict) or not isinstance(value["baselines"], list):
-        raise CompareError("shared timing store tables are invalid")
-    for environment, table in value["measurements"].items():
-        if not SHA256.fullmatch(environment) or not isinstance(table, dict):
-            raise CompareError("shared measurement table is invalid")
-        for fingerprint, row in table.items():
-            if (
-                not SHA256.fullmatch(fingerprint)
-                or not isinstance(row, dict)
-                or set(row) != {"time", "commit", "utc"}
-                or not valid_number(row["time"])
-                or not isinstance(row["commit"], str)
-                or not isinstance(row["utc"], str)
-            ):
-                raise CompareError("shared measurement record is invalid")
-    for record in value["baselines"]:
-        validate_record(record)
-    return value["baselines"]
-
-
-def shared_store(root: Path, host: str) -> tuple[Path, list[dict[str, Any]]]:
-    common_raw = str(git(root, ["rev-parse", "--path-format=absolute", "--git-common-dir"]))
-    common = Path(common_raw).resolve()
-    path = common / STORE_DIRECTORY / f"{STORE_PREFIX}-{host}.json"
-    if not path.is_file():
-        raise CompareError(f"shared stable-host timing store is absent: {path}")
+    path = reader.shared_git_common_dir(root) / reader.SHARED_EVIDENCE_DIRNAME / (
+        f"{reader.SHARED_EVIDENCE_FILENAME_PREFIX}-{host}.json"
+    )
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise CompareError(f"cannot read shared stable-host timing store: {error}") from error
-    return path, validate_store(value, host)
+        store, reason, _writable = reader.read_shared_store(path, host)
+    except reader.SelectionError as error:
+        raise CompareError(f"shared stable-host timing store refused: {error}") from error
+    if reason is not None:
+        raise CompareError(f"shared stable-host timing store refused: {reason} ({path})")
+    return path, list(store["baselines"])
 
 
 def select_record(
@@ -325,22 +310,18 @@ def select_record(
     return selected[0]
 
 
-def parse_baseline(record: dict[str, Any], corpus: dict[str, str], label: str) -> dict[str, float]:
-    rows: dict[str, float] = {}
-    for line_number, raw in enumerate(record["payload"].splitlines(), start=1):
-        if not raw.strip() or raw.lstrip().startswith("#"):
-            continue
-        fields = raw.split("\t")
-        if len(fields) != 3 or fields[0] != "OK":
-            raise CompareError(f"{label} baseline has malformed/non-green row {line_number}")
-        path = fields[2]
+def parse_baseline(
+    reader: Any, record: dict[str, Any], corpus: dict[str, str], label: str
+) -> dict[str, float]:
+    """The reader parses the rows; comparison policy then holds them to the corpus."""
+
+    try:
+        rows = reader.validate_shared_baseline_payload(record["payload"])
+    except reader.SelectionError as error:
+        raise CompareError(f"{label} baseline payload refused: {error}") from error
+    for path in rows:
         if not path or path.startswith("/") or "\\" in path or any(part == ".." for part in path.split("/")):
-            raise CompareError(f"{label} baseline has unsafe source path at row {line_number}")
-        if path in rows:
-            raise CompareError(f"{label} baseline has duplicate row for {path}")
-        if not valid_number(fields[1], positive=True):
-            raise CompareError(f"{label} baseline has non-finite/non-positive time at row {line_number}")
-        rows[path] = float(fields[1])
+            raise CompareError(f"{label} baseline has unsafe source path {path!r}")
     if len(rows) != record["rows"]:
         raise CompareError(f"{label} baseline row count does not match its record")
     if set(rows) != set(corpus):
@@ -437,42 +418,22 @@ def timing_thresholds(protocol: bytes) -> tuple[float, float]:
     return values["DRIFT_FACTOR"], values["DRIFT_FLOOR"]
 
 
-def git_is_ancestor(root: Path, older: str, newer: str) -> bool:
-    result = subprocess.run(
-        ["git", "merge-base", "--is-ancestor", older, newer],
-        cwd=root,
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode not in {0, 1}:
-        raise CompareError("cannot determine source ancestry")
-    return result.returncode == 0
-
-
-def normalized_origin(root: Path, candidate: str) -> str:
-    base = str(git(root, ["merge-base", candidate, BASE_REF]))
-    result = subprocess.run(
-        ["git", "diff", "--quiet", base, candidate, "--", *LEAN_PATHSPECS],
-        cwd=root,
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode == 0:
-        return base
-    if result.returncode == 1:
-        return candidate
-    raise CompareError("cannot reproduce registered baseline-origin normalization")
-
-
 def validate_candidate_origin(
-    root: Path, candidate: str, origin: str, candidate_corpus: dict[str, str], candidate_inputs: dict[str, bytes | None]
+    reader: Any,
+    root: Path,
+    candidate: str,
+    origin: str,
+    candidate_corpus: dict[str, str],
+    candidate_inputs: dict[str, bytes | None],
 ) -> bool:
+    """A published origin is exact HEAD or the selector's own normalization."""
+
     if origin == candidate:
         return False
-    if normalized_origin(root, candidate) != origin:
+    if reader.baseline_origin_for_publish(root, candidate) != origin:
         raise CompareError("candidate record origin is neither exact HEAD nor registered normalization")
     origin_corpus = source_tree(root, origin)
-    origin_inputs = inputs_at(root, origin)
+    origin_inputs = inputs_at(reader, root, origin)
     if origin_corpus != candidate_corpus:
         raise CompareError("normalized candidate origin does not have the exact complete Lean corpus/blob identity")
     if origin_inputs != candidate_inputs:
@@ -488,7 +449,9 @@ def outside_root(path: Path, root: Path) -> bool:
         return True
 
 
-def atomic_json(path: Path, value: dict[str, Any]) -> None:
+def write_receipt(path: Path, value: dict[str, Any]) -> None:
+    """The one write: a new receipt outside the worktree, never a replacement."""
+
     if path.exists():
         raise CompareError(f"receipt already exists: {path}")
     if not path.parent.is_dir():
@@ -558,6 +521,7 @@ def compare_rows(
 
 
 def compare(args: argparse.Namespace) -> int:
+    reader = load_reader()
     root = args.root.resolve()
     if not root.is_dir():
         raise CompareError(f"candidate root does not exist: {root}")
@@ -570,7 +534,7 @@ def compare(args: argparse.Namespace) -> int:
     if head != candidate:
         raise CompareError("candidate identity is not the clean worktree HEAD")
     host = load_host_identity(root)
-    store_path, records = shared_store(root, host)
+    store_path, records = shared_records(reader, root, host)
     reference = select_record(
         records, args.reference_origin, args.reference_digest, args.reference_environment, "reference"
     )
@@ -579,12 +543,12 @@ def compare(args: argparse.Namespace) -> int:
     )
     reference_origin = resolve_commit(root, reference["origin"], "reference record origin")
     candidate_origin = resolve_commit(root, candidate_record["origin"], "candidate record origin")
-    if not git_is_ancestor(root, reference_origin, candidate):
+    if not reader.git_success(root, ["merge-base", "--is-ancestor", reference_origin, candidate]):
         raise CompareError("reference source identity is not an ancestor of the candidate")
     if not GIT_SHA.fullmatch(args.old_jaune) or not GIT_SHA.fullmatch(args.new_jaune) or args.old_jaune == args.new_jaune:
         raise CompareError("old/new Jaune identities must be distinct full Git revisions")
-    old_inputs = inputs_at(root, reference_origin)
-    candidate_inputs = inputs_at(root, candidate)
+    old_inputs = inputs_at(reader, root, reference_origin)
+    candidate_inputs = inputs_at(reader, root, candidate)
     require_only_jaune_transition(old_inputs, candidate_inputs, args.old_jaune, args.new_jaune)
     assert candidate_inputs["scripts/check-elab.sh"] is not None
     factor, floor = timing_thresholds(candidate_inputs["scripts/check-elab.sh"])
@@ -593,8 +557,8 @@ def compare(args: argparse.Namespace) -> int:
     require_runtime_matches_toolchain(old_inputs["lean-toolchain"], lean_stdout)
     if old_inputs["lean-toolchain"] != candidate_inputs["lean-toolchain"]:
         raise CompareError("immutable lean-toolchain differs across the comparison")
-    old_environment = environment_fingerprint(old_inputs, lean_stdout)
-    candidate_environment = environment_fingerprint(candidate_inputs, lean_stdout)
+    old_environment = environment_from_blobs(reader, old_inputs, lean_stdout)
+    candidate_environment = environment_from_blobs(reader, candidate_inputs, lean_stdout)
     if old_environment != reference["environment"]:
         raise CompareError("reference stored environment cannot be reproduced from immutable Git inputs and active Lean stdout")
     if candidate_environment != candidate_record["environment"]:
@@ -604,10 +568,10 @@ def compare(args: argparse.Namespace) -> int:
     old_corpus = source_tree(root, reference_origin)
     candidate_corpus = source_tree(root, candidate)
     normalized = validate_candidate_origin(
-        root, candidate, candidate_origin, candidate_corpus, candidate_inputs
+        reader, root, candidate, candidate_origin, candidate_corpus, candidate_inputs
     )
-    old_rows = parse_baseline(reference, old_corpus, "reference")
-    candidate_rows = parse_baseline(candidate_record, candidate_corpus, "candidate")
+    old_rows = parse_baseline(reader, reference, old_corpus, "reference")
+    candidate_rows = parse_baseline(reader, candidate_record, candidate_corpus, "candidate")
     comparison_rows, regressions = compare_rows(
         old_rows, candidate_rows, old_corpus, candidate_corpus, factor, floor
     )
@@ -617,17 +581,18 @@ def compare(args: argparse.Namespace) -> int:
     assert candidate_inputs["lean-toolchain"] is not None
     assert candidate_inputs["scripts/check-elab.sh"] is not None
     assert candidate_inputs["scripts/check-elab-selection.py"] is not None
+    sha256 = reader.sha256_bytes
     receipt = {
         "schema": COMPARATOR_SCHEMA,
         "kind": "blanc-elab-migration-comparison",
         "result": "REGRESSION" if regressions else "PASS",
         "threshold": {"factor_strictly_greater_than": factor, "seconds_strictly_greater_than": floor},
-        "store": {"path": str(store_path), "host": host, "trust_domain": TRUST_DOMAIN},
-        "runtime": {"lean_stdout": lean_stdout, "lean_stdout_sha256": sha256_bytes(lean_stdout.encode("utf-8"))},
+        "store": {"path": str(store_path), "host": host, "trust_domain": reader.SHARED_TRUST_DOMAIN},
+        "runtime": {"lean_stdout": lean_stdout, "lean_stdout_sha256": sha256(lean_stdout.encode("utf-8"))},
         "protocol": {
-            "lean_toolchain_sha256": sha256_bytes(candidate_inputs["lean-toolchain"]),
-            "check_elab_sha256": sha256_bytes(candidate_inputs["scripts/check-elab.sh"]),
-            "selection_sha256": sha256_bytes(candidate_inputs["scripts/check-elab-selection.py"]),
+            "lean_toolchain_sha256": sha256(candidate_inputs["lean-toolchain"]),
+            "check_elab_sha256": sha256(candidate_inputs["scripts/check-elab.sh"]),
+            "selection_sha256": sha256(candidate_inputs["scripts/check-elab-selection.py"]),
         },
         "reference": {
             "origin": reference_origin,
@@ -658,7 +623,7 @@ def compare(args: argparse.Namespace) -> int:
             "The normal-genesis command transcript remains separate final-B evidence.",
         ],
     }
-    atomic_json(args.receipt, receipt)
+    write_receipt(args.receipt, receipt)
     if regressions:
         print(
             "REGRESSION — elaboration migration comparison: "
