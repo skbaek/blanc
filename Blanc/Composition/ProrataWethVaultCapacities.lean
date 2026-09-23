@@ -62,6 +62,7 @@ theorem readTotalAssets_capacity_body_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm} {body : Func}
     {supply : B256} {calculate : Nat → Nat → Nat}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (supplyWindow : MemWordAt entry (supplyWord * 32).toNat supply)
     (localEffect : ∀ {bodyPre : Devm} {image : Bytes} {assets : B256},
@@ -84,7 +85,7 @@ theorem readTotalAssets_capacity_body_effect
         (Nat.toB256 (calculate
           ((entry.state.getStor wethAccount).get
             sevm.currentTarget.toB256).toNat supply.toNat)) entry post := by
-  have actualResources := totalAssetsResources_of_run config memoryWf run
+  have actualResources := totalAssetsResources_of_run config hfork memoryWf run
   have memory : MemoryImage entry entry.memory.data.toList := by
     refine ⟨memoryWf, ?_⟩
     intro index
@@ -103,7 +104,7 @@ theorem readTotalAssets_capacity_body_effect
     exact config.code
   obtain ⟨word, bodyPre, -, -, bodyStorage, bodyLogs, returnedWord,
       wordPrefix, bodyWf, -, preservesWindow, bodyRun⟩ :=
-    readTotalAssets_exactEffect callConfig memory staging actualResources.1
+    readTotalAssets_exactEffect callConfig hfork memory staging actualResources.1
       (actualResources.2 callPre staging) crossing suffix
   have bodyReads :
       Mem.Reads bodyPre.memory bodyPre.memory.data.toList := by
@@ -146,6 +147,7 @@ unstable-supply routes that deliberately avoid the WETH child. -/
 theorem maxMint_body_effect
     {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (returnLookup :
       (vault.main :: vault.aux)[returnWordSlot]? = some returnWord)
@@ -256,7 +258,7 @@ theorem maxMint_body_effect
         exact config.code
       have readWf : Mem.Wf readEntry.memory := readSupplyWindow.1
       obtain ⟨resultFits, result⟩ :=
-        readTotalAssets_capacity_body_effect readConfig readWf readSupplyWindow
+        readTotalAssets_capacity_body_effect readConfig hfork readWf readSupplyWindow
           (calculate := maxMintN)
           (by
             intro bodyPre image assets bodyWf bodyReads bodyStack
@@ -298,6 +300,7 @@ formula. -/
 theorem maxDeposit_body_effect
     {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (returnLookup :
       (vault.main :: vault.aux)[returnWordSlot]? = some returnWord)
@@ -406,7 +409,7 @@ theorem maxDeposit_body_effect
         exact config.code
       have readWf : Mem.Wf readEntry.memory := readSupplyWindow.1
       obtain ⟨resultFits, result⟩ :=
-        readTotalAssets_capacity_body_effect readConfig readWf readSupplyWindow
+        readTotalAssets_capacity_body_effect readConfig hfork readWf readSupplyWindow
           (calculate := maxDepositN)
           (by
             intro bodyPre image assets bodyWf bodyReads bodyStack
@@ -449,6 +452,7 @@ full-width arithmetic suffix. -/
 theorem maxWithdraw_body_effect
     {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (returnLookup :
       (vault.main :: vault.aux)[returnWordSlot]? = some returnWord)
@@ -560,7 +564,7 @@ theorem maxWithdraw_body_effect
       exact config.code
     have readWf : Mem.Wf readEntry.memory := readSupplyWindow.1
     obtain ⟨resultFits, result⟩ :=
-      readTotalAssets_capacity_body_effect readConfig readWf readSupplyWindow
+      readTotalAssets_capacity_body_effect readConfig hfork readWf readSupplyWindow
         (calculate := fun assets supply =>
           min maxWordN (maxWithdrawN amount.toNat assets supply))
         (by
@@ -728,6 +732,7 @@ policy against the pre-state WETH balance and share supply. -/
 theorem maxMint_compiled_effect
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre vault post)
     (selectorEq :
@@ -753,7 +758,7 @@ theorem maxMint_compiled_effect
         ((state.get sevm.currentTarget).stor.get supplySlot).toNat)
     config memoryWf maxMint_mem_vaultFuncs ?_ run selectorEq
   intro bodyPre bodyConfig bodyWf bodyRun
-  exact maxMint_body_effect bodyConfig bodyWf returnWord_lookup
+  exact maxMint_body_effect bodyConfig hfork bodyWf returnWord_lookup
     maxMintAfterAssetCap_lookup bodyRun
 
 /-- Public compiled `maxDeposit(receiver)` returns the exact frozen capacity
@@ -761,6 +766,7 @@ policy. -/
 theorem maxDeposit_compiled_effect
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre vault post)
     (selectorEq :
@@ -786,13 +792,14 @@ theorem maxDeposit_compiled_effect
         ((state.get sevm.currentTarget).stor.get supplySlot).toNat)
     config memoryWf maxDeposit_mem_vaultFuncs ?_ run selectorEq
   intro bodyPre bodyConfig bodyWf bodyRun
-  exact maxDeposit_body_effect bodyConfig bodyWf returnWord_lookup bodyRun
+  exact maxDeposit_body_effect bodyConfig hfork bodyWf returnWord_lookup bodyRun
 
 /-- Public compiled `maxWithdraw(owner)` returns the exact saturated capacity
 policy. -/
 theorem maxWithdraw_compiled_effect
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre vault post)
     (selectorEq :
@@ -824,13 +831,14 @@ theorem maxWithdraw_compiled_effect
         ((state.get sevm.currentTarget).stor.get supplySlot).toNat)
     config memoryWf maxWithdraw_mem_vaultFuncs ?_ run selectorEq
   intro bodyPre bodyConfig bodyWf bodyRun
-  exact maxWithdraw_body_effect bodyConfig bodyWf returnWord_lookup bodyRun
+  exact maxWithdraw_body_effect bodyConfig hfork bodyWf returnWord_lookup bodyRun
 
 /-- On the admitted nonzero-receiver, stable-supply domain, the `maxMint`
 policy reduces to the mathematical capacity formula itself. -/
 theorem maxMint_compiled_effect_stable
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (receiverNonzero : (Sevm.argWord sevm 0).toNat ≠ 0)
     (stable :
@@ -853,7 +861,7 @@ theorem maxMint_compiled_effect_stable
           (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat))
         pre post := by
   obtain ⟨valueZero, valid, fits, effect⟩ :=
-    maxMint_compiled_effect config memoryWf run selectorEq
+    maxMint_compiled_effect config hfork memoryWf run selectorEq
   simpa [maxMintViewN, receiverNonzero, Nat.not_lt_of_ge stable] using
     And.intro valueZero (And.intro valid (And.intro fits effect))
 
@@ -861,6 +869,7 @@ theorem maxMint_compiled_effect_stable
 theorem maxDeposit_compiled_effect_stable
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (receiverNonzero : (Sevm.argWord sevm 0).toNat ≠ 0)
     (stable :
@@ -883,7 +892,7 @@ theorem maxDeposit_compiled_effect_stable
           (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat))
         pre post := by
   obtain ⟨valueZero, valid, fits, effect⟩ :=
-    maxDeposit_compiled_effect config memoryWf run selectorEq
+    maxDeposit_compiled_effect config hfork memoryWf run selectorEq
   simpa [maxDepositViewN, receiverNonzero, Nat.not_lt_of_ge stable] using
     And.intro valueZero (And.intro valid (And.intro fits effect))
 
@@ -893,6 +902,7 @@ ERC-4626 asset claim. -/
 theorem maxWithdraw_compiled_effect_exact
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (stable :
       (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat ≤
@@ -922,7 +932,7 @@ theorem maxWithdraw_compiled_effect_exact
           (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat))
         pre post := by
   obtain ⟨valueZero, valid, fits, effect⟩ :=
-    maxWithdraw_compiled_effect config memoryWf run selectorEq
+    maxWithdraw_compiled_effect config hfork memoryWf run selectorEq
   let balance := (Devm.getStorVal pre sevm.currentTarget
     (Sevm.argWord sevm 0)).toNat
   let assets := ((pre.state.getStor wethAccount).get
