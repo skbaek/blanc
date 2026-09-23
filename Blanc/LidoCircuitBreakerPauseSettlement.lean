@@ -50,7 +50,7 @@ private theorem pauseWorld_settle_ok {stor : Stor} {gas : Nat} {post : Devm}
     (Frame.ofCall (pauseWorldMsg stor gas)).settle (.ok post) = .ok post := by
   have hnot : post.error.isSome ≠ true := by rw [herr]; simp
   simp only [Frame.settle, Frame.settleMsg, Frame.ofCall,
-    executeCode.handleError, processMessage.settle, bind, Except.bind,
+    executeCode.handleErrorWith_ok, executeCode.handleError, processMessage.settle, bind, Except.bind,
     if_neg hnot]
   rfl
 
