@@ -58,6 +58,7 @@ theorem inboundAfterQuote_effect_linked
     {sharesWord assetsSourceWord : B256}
     {receiver quote supply shares assets : B256}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (memoryReads : Mem.Reads entry.memory image)
     (receiverAt : Bytes.toB256
@@ -231,7 +232,7 @@ theorem inboundAfterQuote_effect_linked
     exact config.code
   obtain ⟨tailPre, movement, childForeign, childLogged, -, tailWf,
       tailWindow, tailRun, linked⟩ :=
-    callWethTransferFrom_worldEffect_linked callConfig ⟨childWf, childReads⟩
+    callWethTransferFrom_worldEffect_linked (hfork := hfork) callConfig ⟨childWf, childReads⟩
       (sliceBytes_of_toB256 assetsAt) (by omega) staging dynamic crossing suffix
   have stagingStorage : Devm.getStor childEntry = Devm.getStor callPre :=
     Line.of_inv Devm.getStor (by
@@ -321,6 +322,7 @@ theorem inboundAfterQuote_effect
     {sharesWord assetsSourceWord : B256}
     {receiver quote supply shares assets : B256}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (memoryReads : Mem.Reads entry.memory image)
     (receiverAt : Bytes.toB256
@@ -371,7 +373,7 @@ theorem inboundAfterQuote_effect
             (Blanc.ProrataWethVault.loadWord Blanc.ProrataWethVault.quoteWord))
           (.ok post) := by
   obtain ⟨callerNonzero, receiverValid, receiverNonzero, roomFits, effect, -,
-    finish⟩ := inboundAfterQuote_effect_linked config memoryWf memoryReads
+    finish⟩ := inboundAfterQuote_effect_linked (hfork := hfork) config memoryWf memoryReads
       receiverAt supplyAt sharesAt assetsAt sharesAbove sharesBelow assetsAbove
       assetsBelow supplyStorage stable stack run
   exact ⟨callerNonzero, receiverValid, receiverNonzero, roomFits, effect, finish⟩
@@ -386,6 +388,7 @@ only the argument staging in front of it is inbound-specific. -/
 theorem inboundQuoteStaging_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm} {arithmetic : Func}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (stack : [] <<+ entry.stack)
     (run : Func.RunCompiledTo fs sevm entry
@@ -440,7 +443,7 @@ theorem inboundQuoteStaging_effect
   obtain ⟨quotePre, image, supply, supplyEq, stable, quoteWf, quoteReads,
       carry, assetsAt, supplyAt, quoteStack, snapStorage, snapLogs, snapCode,
       quoteRun⟩ :=
-    quoteSnapshot_effect readConfig readWf readReads readRun
+    quoteSnapshot_effect (hfork := hfork) readConfig readWf readReads readRun
   have entryStorage : Devm.getStor entry = Devm.getStor quotePre :=
     argStorage.trans snapStorage
   refine ⟨quotePre, image, supply, ?_, stable, quoteWf, quoteReads,
@@ -512,6 +515,7 @@ theorem inboundBody_effect_linked
     {image afterImage : Bytes}
     {sharesWord assetsSourceWord receiver quote supply shares assets : B256}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (entryStorage : Devm.getStor entry = Devm.getStor quotePre)
     (entryLogs : entry.logs = quotePre.logs)
     (entryCode : quotePre.getCode wethAccount = entry.getCode wethAccount)
@@ -580,7 +584,7 @@ theorem inboundBody_effect_linked
     exact value
   obtain ⟨callerNonzero, receiverValid, receiverNonzero, roomFits,
       ⟨returned, movement, vaultStorage, foreign, logged⟩, linked, -⟩ :=
-    inboundAfterQuote_effect_linked afterConfig afterMemImage.1 afterMemImage.2
+    inboundAfterQuote_effect_linked (hfork := hfork) afterConfig afterMemImage.1 afterMemImage.2
       (carry (by decide +kernel) receiverAt)
       (carry (by decide +kernel) supplyAt)
       sharesAt assetsAt sharesAbove sharesBelow assetsAbove assetsBelow
@@ -629,6 +633,7 @@ theorem inboundBody_effect
     {image afterImage : Bytes}
     {sharesWord assetsSourceWord receiver quote supply shares assets : B256}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (entryStorage : Devm.getStor entry = Devm.getStor quotePre)
     (entryLogs : entry.logs = quotePre.logs)
     (entryCode : quotePre.getCode wethAccount = entry.getCode wethAccount)
@@ -681,7 +686,7 @@ theorem inboundBody_effect
       shares.toNat ≤ Blanc.ProrataWethVault.shareRoomN supply.toNat ∧
       InboundEffect sevm receiver assets shares quote entry post := by
   obtain ⟨callerNonzero, receiverValid, receiverNonzero, roomFits, effect, -⟩ :=
-    inboundBody_effect_linked config entryStorage entryLogs entryCode
+    inboundBody_effect_linked (hfork := hfork) config entryStorage entryLogs entryCode
       supplyProjection supplyEq stable receiverAt supplyAt afterMemImage
       afterFrame quoteFrame afterStack sharesAt assetsAt sharesAbove sharesBelow
       assetsAbove assetsBelow afterRun
@@ -691,6 +696,7 @@ theorem inboundBody_effect
 theorem deposit_body_effect_linked
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (lookup : fs[Blanc.ProrataWethVault.depositAfterQuoteSlot]? =
       some Blanc.ProrataWethVault.depositAfterQuote)
@@ -730,7 +736,7 @@ theorem deposit_body_effect_linked
   obtain ⟨quotePre, image, supply, supplyEq, stable, quoteWf, quoteReads,
       amountAt, receiverAt, assetsAt, supplyAt, quoteStack, quoteStorage,
       quoteLogs, quoteCode, supplyProjection, quoteRun⟩ :=
-    inboundQuoteStaging_effect config memoryWf stack run
+    inboundQuoteStaging_effect (hfork := hfork) config memoryWf stack run
   obtain ⟨quoteFits, afterPre, afterImage, afterStack, afterMemImage,
       afterFrame, quoteFrame, afterRun⟩ :=
     Blanc.ProrataWethVault.depositQuote_arithmetic_trace (R := Func.RunOk) quoteWf quoteReads
@@ -744,7 +750,7 @@ theorem deposit_body_effect_linked
     exact amountAt
   obtain ⟨callerNonzero, receiverValid, receiverNonzero, roomFits, effect,
       linked⟩ :=
-    inboundBody_effect_linked config quoteStorage quoteLogs quoteCode
+    inboundBody_effect_linked (hfork := hfork) config quoteStorage quoteLogs quoteCode
       supplyProjection supplyEq stable receiverAt supplyAt afterMemImage
       afterFrame quoteFrame afterStack
       (shares := Nat.toB256 (Blanc.ProrataWethVault.convertToSharesN
@@ -772,6 +778,7 @@ flow's complete observable effect is `InboundEffect`. -/
 theorem deposit_body_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (lookup : fs[Blanc.ProrataWethVault.depositAfterQuoteSlot]? =
       some Blanc.ProrataWethVault.depositAfterQuote)
@@ -805,7 +812,7 @@ theorem deposit_body_effect
         entry post := by
   obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
       receiverNonzero, roomFits, effect, -⟩ :=
-    deposit_body_effect_linked config memoryWf lookup stack run
+    deposit_body_effect_linked (hfork := hfork) config memoryWf lookup stack run
   exact ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
     receiverNonzero, roomFits, effect⟩
 
@@ -813,6 +820,7 @@ theorem deposit_body_effect
 theorem mint_body_effect_linked
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (lookup : fs[Blanc.ProrataWethVault.mintAfterQuoteSlot]? =
       some Blanc.ProrataWethVault.mintAfterQuote)
@@ -853,7 +861,7 @@ theorem mint_body_effect_linked
   obtain ⟨quotePre, image, supply, supplyEq, stable, quoteWf, quoteReads,
       amountAt, receiverAt, assetsAt, supplyAt, quoteStack, quoteStorage,
       quoteLogs, quoteCode, supplyProjection, quoteRun⟩ :=
-    inboundQuoteStaging_effect config memoryWf stack run
+    inboundQuoteStaging_effect (hfork := hfork) config memoryWf stack run
   obtain ⟨quoteFits, afterPre, afterImage, afterStack, afterMemImage,
       afterFrame, quoteFrame, afterRun⟩ :=
     Blanc.ProrataWethVault.mintQuote_arithmetic_trace (R := Func.RunOk) quoteWf quoteReads
@@ -867,7 +875,7 @@ theorem mint_body_effect_linked
     exact amountAt
   obtain ⟨callerNonzero, receiverValid, receiverNonzero, roomFits, effect,
       linked⟩ :=
-    inboundBody_effect_linked config quoteStorage quoteLogs quoteCode
+    inboundBody_effect_linked (hfork := hfork) config quoteStorage quoteLogs quoteCode
       supplyProjection supplyEq stable receiverAt supplyAt afterMemImage
       afterFrame quoteFrame afterStack
       (shares := Sevm.argWord sevm 0)
@@ -894,6 +902,7 @@ and the returned word is the charged assets. -/
 theorem mint_body_effect
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (lookup : fs[Blanc.ProrataWethVault.mintAfterQuoteSlot]? =
       some Blanc.ProrataWethVault.mintAfterQuote)
@@ -925,7 +934,7 @@ theorem mint_body_effect
         entry post := by
   obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
       receiverNonzero, roomFits, effect, -⟩ :=
-    mint_body_effect_linked config memoryWf lookup stack run
+    mint_body_effect_linked (hfork := hfork) config memoryWf lookup stack run
   exact ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
     receiverNonzero, roomFits, effect⟩
 
@@ -991,6 +1000,7 @@ private theorem mint_mem_vaultFuncs :
 theorem deposit_compiled_effect_linked
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq :
@@ -1038,7 +1048,7 @@ theorem deposit_compiled_effect_linked
     exact memoryWf
   obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
       receiverNonzero, roomFits, effect, linked⟩ :=
-    deposit_body_effect_linked bodyConfig bodyWf
+    deposit_body_effect_linked (hfork := hfork) bodyConfig bodyWf
       depositAfterQuote_lookup nil_pref bodyRun
   refine ⟨valueZero, supply, ?_, stable, ?_, callerNonzero, receiverValid,
     receiverNonzero, ?_, ?_, ?_⟩
@@ -1067,6 +1077,7 @@ moves. -/
 theorem deposit_compiled_effect
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq :
@@ -1099,7 +1110,7 @@ theorem deposit_compiled_effect
           pre post := by
   obtain ⟨valueZero, supply, supplyEq, stable, quoteFits, callerNonzero,
       receiverValid, receiverNonzero, roomFits, effect, -⟩ :=
-    deposit_compiled_effect_linked config memoryWf run selectorEq
+    deposit_compiled_effect_linked (hfork := hfork) config memoryWf run selectorEq
   exact ⟨valueZero, supply, supplyEq, stable, quoteFits, callerNonzero,
     receiverValid, receiverNonzero, roomFits, effect⟩
 
@@ -1107,6 +1118,7 @@ theorem deposit_compiled_effect
 theorem mint_compiled_effect_linked
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq :
@@ -1155,7 +1167,7 @@ theorem mint_compiled_effect_linked
     exact memoryWf
   obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
       receiverNonzero, roomFits, effect, linked⟩ :=
-    mint_body_effect_linked bodyConfig bodyWf
+    mint_body_effect_linked (hfork := hfork) bodyConfig bodyWf
       mintAfterQuote_lookup nil_pref bodyRun
   refine ⟨valueZero, supply, ?_, stable, ?_, callerNonzero, receiverValid,
     receiverNonzero, roomFits, ?_, ?_⟩
@@ -1176,6 +1188,7 @@ theorem mint_compiled_effect_linked
 theorem mint_compiled_effect
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq :
@@ -1206,7 +1219,7 @@ theorem mint_compiled_effect
           pre post := by
   obtain ⟨valueZero, supply, supplyEq, stable, quoteFits, callerNonzero,
       receiverValid, receiverNonzero, roomFits, effect, -⟩ :=
-    mint_compiled_effect_linked config memoryWf run selectorEq
+    mint_compiled_effect_linked (hfork := hfork) config memoryWf run selectorEq
   exact ⟨valueZero, supply, supplyEq, stable, quoteFits, callerNonzero,
     receiverValid, receiverNonzero, roomFits, effect⟩
 
@@ -1221,6 +1234,7 @@ pinning the asset's code buys.  See `Blanc/ProrataWethVaultLedgerSpec.lean`. -/
 theorem deposit_preserves_conserved
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq :
@@ -1231,13 +1245,14 @@ theorem deposit_preserves_conserved
       (Devm.getStor post sevm.currentTarget) := by
   obtain ⟨-, supply, supplyEq, stable, -, -, receiverValid, -, roomFits,
       effect⟩ :=
-    deposit_compiled_effect config memoryWf run selectorEq
+    deposit_compiled_effect (hfork := hfork) config memoryWf run selectorEq
   exact inboundEffect_preserves_conserved receiverValid supplyEq stable
     roomFits effect conserved
 
 theorem mint_preserves_conserved
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq :
@@ -1248,7 +1263,7 @@ theorem mint_preserves_conserved
       (Devm.getStor post sevm.currentTarget) := by
   obtain ⟨-, supply, supplyEq, stable, -, -, receiverValid, -, roomFits,
       effect⟩ :=
-    mint_compiled_effect config memoryWf run selectorEq
+    mint_compiled_effect (hfork := hfork) config memoryWf run selectorEq
   exact inboundEffect_preserves_conserved receiverValid supplyEq stable
     roomFits effect conserved
 
@@ -1268,6 +1283,7 @@ the content is `deposit_compiled_effect`'s. -/
 theorem deposit_compiled_effect_named
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq :
@@ -1284,7 +1300,7 @@ theorem deposit_compiled_effect_named
       InboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 0)
         shares shares pre post := by
   obtain ⟨-, supply, supplyEq, stable, fits, -, -, -, roomFits, effect⟩ :=
-    deposit_compiled_effect config memoryWf run selectorEq
+    deposit_compiled_effect (hfork := hfork) config memoryWf run selectorEq
   exact ⟨supply, _, supplyEq, B256.toNat_toB256_of_lt fits, stable, roomFits,
     effect⟩
 

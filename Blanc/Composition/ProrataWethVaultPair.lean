@@ -184,6 +184,7 @@ frame a caller opens on this state. -/
 theorem PairStable.totalAssets {vault : Adr} {rules : ForkRules}
     {w : Jaune.State} (h : PairStable vault rules w)
     {sevm : Sevm} {pre post : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (state : pre.state = w) (stat : sevm.benvStat.rules = rules)
     (target : sevm.currentTarget = vault) (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
@@ -193,7 +194,7 @@ theorem PairStable.totalAssets {vault : Adr} {rules : ForkRules}
   have config : DirectWethConfiguration sevm.currentTarget sevm pre := by
     rw [target]
     exact h.configuration state stat
-  obtain ⟨-, effect⟩ := totalAssets_compiled_effect config memoryWf run sel
+  obtain ⟨-, effect⟩ := totalAssets_compiled_effect (hfork := hfork) config memoryWf run sel
   rwa [state, target] at effect
 
 /-- **The final backing corollary**, in the clause-implied form and no
@@ -282,6 +283,7 @@ derived from the root envelope by the history carrier. -/
 theorem vault_message_preserves_backed
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (callerNotVault : sevm.caller ≠ sevm.currentTarget)
     (wethSumNof : SumNof (Stor.rest (Devm.getStor pre wethAccount)))
@@ -295,14 +297,14 @@ theorem vault_message_preserves_backed
   by_cases isDeposit :
       Sevm.selector sevm = selector "deposit" [.uint256, .address]
   · obtain ⟨-, supply, supplyEq, stable, fits, -, receiverValid, -, roomFits,
-        effect⟩ := deposit_compiled_effect config memoryWf run isDeposit
+        effect⟩ := deposit_compiled_effect (hfork := hfork) config memoryWf run isDeposit
     refine inboundEffect_preserves_backed callerNotVault receiverValid
       wethSumNof supplyEq stable roomFits ?_ effect backed
     rw [B256.toNat_toB256_of_lt fits, Nat.mul_comm]
     exact Blanc.ProrataWethVault.convertToSharesN_floor_le _ _ _
   by_cases isMint : Sevm.selector sevm = selector "mint" [.uint256, .address]
   · obtain ⟨-, supply, supplyEq, stable, fits, -, receiverValid, -, roomFits,
-        effect⟩ := mint_compiled_effect config memoryWf run isMint
+        effect⟩ := mint_compiled_effect (hfork := hfork) config memoryWf run isMint
     refine inboundEffect_preserves_backed callerNotVault receiverValid
       wethSumNof supplyEq stable roomFits ?_ effect backed
     rw [B256.toNat_toB256_of_lt fits]
@@ -311,7 +313,7 @@ theorem vault_message_preserves_backed
       selector "withdraw" [.uint256, .address, .address]
   · obtain ⟨-, supply, supplyEq, -, fits, -, -, -, ownerValid, -, covered,
         burnable, effect⟩ :=
-      withdraw_compiled_effect config memoryWf run isWithdraw
+      withdraw_compiled_effect (hfork := hfork) config memoryWf run isWithdraw
     have supplyNat : supply.toNat =
         supplyN (Devm.getStor pre sevm.currentTarget) :=
       congrArg B256.toNat supplyEq
@@ -327,7 +329,7 @@ theorem vault_message_preserves_backed
       selector "redeem" [.uint256, .address, .address]
   · obtain ⟨-, supply, supplyEq, -, fits, -, -, -, ownerValid, -, covered,
         burnable, effect⟩ :=
-      redeem_compiled_effect config memoryWf run isRedeem
+      redeem_compiled_effect (hfork := hfork) config memoryWf run isRedeem
     have supplyNat : supply.toNat =
         supplyN (Devm.getStor pre sevm.currentTarget) :=
       congrArg B256.toNat supplyEq
@@ -339,7 +341,7 @@ theorem vault_message_preserves_backed
         ?_ effect backed
       rw [B256.toNat_toB256_of_lt fits, ← supplyNat, Nat.mul_comm]
       exact Blanc.ProrataWethVault.convertToAssetsN_floor_le _ _ _
-  · have silent := nonflow_message_accountingStep config memoryWf run isDeposit
+  · have silent := nonflow_message_accountingStep (hfork := hfork) config memoryWf run isDeposit
       isMint isWithdraw isRedeem
     have snapshot : snapshotAt sevm post = snapshotAt sevm pre :=
       Blanc.Prorata.ProrataAccountingEffect.silent_inv silent
@@ -351,7 +353,7 @@ theorem vault_message_preserves_backed
         (Stor.rest (Devm.getStor pre wethAccount) sevm.currentTarget).toNat :=
       congrArg Blanc.Prorata.AccountingSnapshot.balance snapshot
     obtain ⟨conserved, capped, bound⟩ := backed
-    refine ⟨vault_nonflow_message_preserves_conserved memoryWf run isDeposit
+    refine ⟨vault_nonflow_message_preserves_conserved (hfork := hfork) memoryWf run isDeposit
       isMint isWithdraw isRedeem conserved, ?_, ?_⟩
     · rw [supplyKept]
       exact capped
@@ -469,6 +471,7 @@ theorem vault_processMessage_preserves_stable
     (code : some msg.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
     (callerNotVault : msg.caller ≠ vault)
     (stat : msg.benv.stat.rules = rules)
+    (hfork : CoveredFork msg.benv.stat.fork)
     (stable : PairStable vault rules msg.benv.state) :
     PairStable vault rules post.state := by
   obtain ⟨pcEq, sevmCode, sevmTarget, -, -, -, -, memoryWf⟩ :=
@@ -550,7 +553,12 @@ theorem vault_processMessage_preserves_stable
         have callerNe : sevm.caller ≠ sevm.currentTarget := by
           rw [ct, sevmEq]
           exact callerNotVault
-        have backedPost := vault_message_preserves_backed frameConfig memoryWf
+        have frameFork : CoveredFork sevm.benvStat.fork := by
+          rw [sevmEq]
+          show CoveredFork (msg.withBenv entry).benv.stat.fork
+          rw [show (msg.withBenv entry).benv = entry from rfl, entryStat]
+          exact hfork
+        have backedPost := vault_message_preserves_backed frameConfig frameFork memoryWf
           callerNe wethSumNof compiled backedPre
         rw [ct] at backedPost
         -- The asset's own clauses, from the generic frame ladder at this very
@@ -575,7 +583,7 @@ theorem vault_processMessage_preserves_stable
               stable.wethSolvent
             omega
         have postcond : Postcond wethAccount sevm execPost :=
-          weth_preserves_solvent wethAccount sevm pre execPost run
+          weth_preserves_solvent wethAccount sevm pre execPost frameFork run
             (fun hit => absurd (ct.symm.trans hit).symm stable.distinct) precond
         -- Neither runtime can move: both accounts hold compiled code.
         have vaultKept : execPost.getCode vault = pre.getCode vault :=
@@ -899,6 +907,7 @@ theorem PairInFlight.reverting_of_failed_inbound_child {vault : Adr}
     {sevm : Sevm} {entry callPre callPost : Devm} {image : Bytes}
     {assetsWord assets : B256}
     (config : DirectWethConfiguration sevm.currentTarget sevm callPre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memory : MemoryImage entry image)
     (assetsAt : ImageWordAt image assetsWord assets)
     (assetsAboveCalldata : 96 ≤ (assetsWord * 32).toNat)
@@ -909,7 +918,7 @@ theorem PairInFlight.reverting_of_failed_inbound_child {vault : Adr}
     (crossing : Ninst.RunCompiled sevm callPre call callPost)
     (failureFlag : ∃ tail, callPost.stack = (0 : B256) :: tail) :
     PairInFlight vault sevm callPre .reverting callPost :=
-  .reverting (transferFromStaging_rollback config memory assetsAt
+  .reverting (transferFromStaging_rollback (hfork := hfork) config memory assetsAt
     assetsAboveCalldata staging depth dynamic gasAvailable crossing
     failureFlag)
 
@@ -918,6 +927,7 @@ theorem PairInFlight.reverting_of_failed_outbound_child {vault : Adr}
     {sevm : Sevm} {entry callPre callPost : Devm} {image : Bytes}
     {receiverWord assetsWord assets : B256} {receiver : Adr}
     (config : DirectWethConfiguration sevm.currentTarget sevm callPre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memory : MemoryImage entry image)
     (receiverAt : ImageWordAt image receiverWord receiver.toB256)
     (assetsAt : ImageWordAt image assetsWord assets)
@@ -931,7 +941,7 @@ theorem PairInFlight.reverting_of_failed_outbound_child {vault : Adr}
     (crossing : Ninst.RunCompiled sevm callPre call callPost)
     (failureFlag : ∃ tail, callPost.stack = (0 : B256) :: tail) :
     PairInFlight vault sevm callPre .reverting callPost :=
-  .reverting (transferStaging_rollback config memory receiverAt assetsAt
+  .reverting (transferStaging_rollback (hfork := hfork) config memory receiverAt assetsAt
     receiverAboveSelector assetsAboveReceiver staging depth dynamic
     gasAvailable crossing failureFlag)
 
@@ -1004,6 +1014,7 @@ theorem inbound_stage_witnesses
     {sharesWord assetsSourceWord shares assets supply : B256}
     {tailBody : Func} {frame : Stack}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (memoryReads : Mem.Reads entry.memory image)
     (sharesAt : Bytes.toB256
@@ -1066,7 +1077,7 @@ theorem inbound_stage_witnesses
     rw [← congrFun (guardCode.trans stagingCode) wethAccount]
     exact config.code
   obtain ⟨settled, movement, childForeign, -, -, -, -, tailRun⟩ :=
-    callWethTransferFrom_worldEffect callConfig ⟨childWf, childReads⟩
+    callWethTransferFrom_worldEffect (hfork := hfork) callConfig ⟨childWf, childReads⟩
       (sliceBytes_of_toB256 assetsAt) assetsAboveCalldata staging dynamic
       crossing suffix
   -- Every world coordinate the stages read, relative to the flow entry.
@@ -1167,6 +1178,7 @@ theorem outbound_stage_witnesses
     {owner balance supply shares assets : B256} {receiver : Adr}
     {tailBody : Func} {frame : Stack}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (memoryReads : Mem.Reads entry.memory image)
     (sharesAt : Bytes.toB256
@@ -1258,7 +1270,7 @@ theorem outbound_stage_witnesses
     rw [Bytes.readWord_writeAt_of_disjoint _ _ _ _ (Or.inr (by omega))]
     exact sliceBytes_of_toB256 assetsAt
   obtain ⟨settled, movement, childForeign, -, -, -, -, tailRun⟩ :=
-    callWethTransfer_worldEffect callConfig ⟨burnWf, burnReads⟩ receiverAtChild
+    callWethTransfer_worldEffect (hfork := hfork) callConfig ⟨burnWf, burnReads⟩ receiverAtChild
       assetsAtChild receiverAboveSelector assetsAboveReceiver staging dynamic
       crossing suffix
   -- The burned stage's own coordinates.

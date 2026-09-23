@@ -48,6 +48,7 @@ any arithmetic. -/
 theorem maxDeposit_revert_visits_refused_weth_child
     {sevm : Sevm} {pre d : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (selectorEq : Sevm.selector sevm = selector "maxDeposit" [.address])
     (valueZero : sevm.value = 0)
@@ -82,7 +83,7 @@ theorem maxDeposit_revert_visits_refused_weth_child
     (receiverState.trans (supplyState.trans (branchState.trans readState))))
   obtain ⟨word, arithmeticPre, wordStack, arithmeticWf, arithmeticPreserves,
       arithmeticRun⟩ :=
-    readTotalAssets_avoiding readConfig readSupplyWindow.1 readRun
+    readTotalAssets_avoiding readConfig hfork readSupplyWindow.1 readRun
   exact Blanc.ProrataWethVault.maxDeposit_postTotalAssets_no_revert
     arithmeticWf (reads_self arithmeticPre)
     (arithmeticPreserves (by decide +kernel) readSupplyWindow) stable
@@ -92,6 +93,7 @@ theorem maxDeposit_revert_visits_refused_weth_child
 theorem maxMint_revert_visits_refused_weth_child
     {sevm : Sevm} {pre d : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (selectorEq : Sevm.selector sevm = selector "maxMint" [.address])
     (valueZero : sevm.value = 0)
@@ -126,7 +128,7 @@ theorem maxMint_revert_visits_refused_weth_child
     (receiverState.trans (supplyState.trans (branchState.trans readState))))
   obtain ⟨word, arithmeticPre, wordStack, arithmeticWf, arithmeticPreserves,
       arithmeticRun⟩ :=
-    readTotalAssets_avoiding readConfig readSupplyWindow.1 readRun
+    readTotalAssets_avoiding readConfig hfork readSupplyWindow.1 readRun
   exact Blanc.ProrataWethVault.maxMint_postTotalAssets_no_revert
     arithmeticWf (reads_self arithmeticPre)
     (arithmeticPreserves (by decide +kernel) readSupplyWindow)
@@ -136,6 +138,7 @@ theorem maxMint_revert_visits_refused_weth_child
 theorem maxWithdraw_revert_visits_refused_weth_child
     {sevm : Sevm} {pre d : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (selectorEq : Sevm.selector sevm = selector "maxWithdraw" [.address])
     (valueZero : sevm.value = 0)
@@ -174,7 +177,7 @@ theorem maxWithdraw_revert_visits_refused_weth_child
     (ownerState.trans (amountState.trans (branchState.trans readState))))
   obtain ⟨word, arithmeticPre, wordStack, arithmeticWf, arithmeticPreserves,
       arithmeticRun⟩ :=
-    readTotalAssets_avoiding readConfig readSupplyWindow.1 readRun
+    readTotalAssets_avoiding readConfig hfork readSupplyWindow.1 readRun
   exact Blanc.ProrataWethVault.maxWithdraw_postTotalAssets_no_revert
     arithmeticWf (reads_self arithmeticPre)
     (arithmeticPreserves (by decide +kernel) readAmountWindow)

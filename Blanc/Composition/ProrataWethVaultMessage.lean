@@ -30,6 +30,7 @@ open Jaune
 source-level obligation.  The dispatch entry moves no storage. -/
 private theorem readOnly_message
     {sevm : Sevm} {pre post : Devm} {sig : B256} {words : Nat} {body : Func}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm = sig)
     (memberAll : (sig, Blanc.ProrataWethVault.routed words body) ∈ Blanc.ProrataWethVault.vaultFuncs)
@@ -41,7 +42,7 @@ private theorem readOnly_message
     Blanc.ProrataWethVault.runCompiled_enters_endpoint_compiled_logs run selectorEq memberAll
   rw [congrFun (funext (getStor_eq_of_state_eq entryState))
     sevm.currentTarget] at conserved
-  exact Blanc.ProrataWethVault.readOnly_preserves_conserved _ memberRO
+  exact Blanc.ProrataWethVault.readOnly_preserves_conserved _ memberRO hfork
     (Func.WalkInv.toRun (R := Func.RunOk) endpointRun) conserved
 
 /-! ## Configured flow obligations and the target bundle
@@ -61,6 +62,7 @@ is an `InboundEffect`, and every inbound effect preserves conservation. -/
 theorem deposit_body_obligation
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (lookup : fs[Blanc.ProrataWethVault.depositAfterQuoteSlot]? =
       some Blanc.ProrataWethVault.depositAfterQuote)
@@ -73,7 +75,7 @@ theorem deposit_body_obligation
       (Devm.getStor post sevm.currentTarget) := by
   obtain ⟨supply, supplyEq, stable, -, -, receiverValid, -, roomFits,
       effect⟩ :=
-    deposit_body_effect config memoryWf lookup stack run
+    deposit_body_effect (hfork := hfork) config memoryWf lookup stack run
   exact inboundEffect_preserves_conserved receiverValid supplyEq stable
     roomFits effect conserved
 
@@ -81,6 +83,7 @@ theorem deposit_body_obligation
 theorem mint_body_obligation
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (lookup : fs[Blanc.ProrataWethVault.mintAfterQuoteSlot]? =
       some Blanc.ProrataWethVault.mintAfterQuote)
@@ -93,7 +96,7 @@ theorem mint_body_obligation
       (Devm.getStor post sevm.currentTarget) := by
   obtain ⟨supply, supplyEq, stable, -, -, receiverValid, -, roomFits,
       effect⟩ :=
-    mint_body_effect config memoryWf lookup stack run
+    mint_body_effect (hfork := hfork) config memoryWf lookup stack run
   exact inboundEffect_preserves_conserved receiverValid supplyEq stable
     roomFits effect conserved
 
@@ -103,6 +106,7 @@ covered outbound effect preserves conservation. -/
 theorem withdraw_body_obligation
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (afterLookup : fs[Blanc.ProrataWethVault.withdrawAfterQuoteSlot]? =
       some Blanc.ProrataWethVault.withdrawAfterQuote)
@@ -117,13 +121,14 @@ theorem withdraw_body_obligation
       (Devm.getStor post sevm.currentTarget) := by
   obtain ⟨_supply, _supplyEq, _stable, -, -, -, -, ownerValid, -, covered, -,
       effect⟩ :=
-    withdraw_body_effect config memoryWf afterLookup burnLookup stack run
+    withdraw_body_effect (hfork := hfork) config memoryWf afterLookup burnLookup stack run
   exact outboundEffect_preserves_conserved ownerValid covered effect conserved
 
 /-- Body-level configured obligation for `redeem`: mirror of `withdraw`. -/
 theorem redeem_body_obligation
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (afterLookup : fs[Blanc.ProrataWethVault.redeemAfterQuoteSlot]? =
       some Blanc.ProrataWethVault.redeemAfterQuote)
@@ -138,7 +143,7 @@ theorem redeem_body_obligation
       (Devm.getStor post sevm.currentTarget) := by
   obtain ⟨_supply, _supplyEq, _stable, -, -, -, -, ownerValid, -, covered, -,
       effect⟩ :=
-    redeem_body_effect config memoryWf afterLookup burnLookup stack run
+    redeem_body_effect (hfork := hfork) config memoryWf afterLookup burnLookup stack run
   exact outboundEffect_preserves_conserved ownerValid covered effect conserved
 
 /-- Enter a flow body from a message run, carrying configuration, memory
@@ -185,6 +190,7 @@ targets ignore the configuration; the four flows need it.  The statement is per-
 def TargetPreservesConserved (sig : B256) : Prop :=
   ∀ {sevm : Sevm} {pre post : Devm},
     DirectWethConfiguration sevm.currentTarget sevm pre →
+    CoveredFork sevm.benvStat.fork →
     Mem.Wf pre.memory →
     Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post →
     Sevm.selector sevm = sig →
@@ -205,58 +211,58 @@ theorem vault_target_obligations :
   simp only [Blanc.ProrataWethVault.vaultFuncs, List.mem_cons, List.not_mem_nil, or_false,
     Prod.mk.injEq] at member
   rcases member with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
-  · intro _sevm _pre _post _config memoryWf run selectorEq conserved
-    exact readOnly_message (words := 0)
+  · intro _sevm _pre _post _config hfork memoryWf run selectorEq conserved
+    exact readOnly_message (hfork := hfork) (words := 0)
       (body := Blanc.ProrataWethVault.totalAssets) run selectorEq
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · intro _sevm _pre _post _config memoryWf run selectorEq conserved
-    exact readOnly_message (words := 0)
+  · intro _sevm _pre _post _config hfork memoryWf run selectorEq conserved
+    exact readOnly_message (hfork := hfork) (words := 0)
       (body := Blanc.ProrataWethVault.name) run selectorEq
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · intro _sevm _pre _post _config memoryWf run selectorEq conserved
-    exact readOnly_message (words := 1)
+  · intro _sevm _pre _post _config hfork memoryWf run selectorEq conserved
+    exact readOnly_message (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.convertToAssets) run selectorEq
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · intro _sevm _pre _post _config memoryWf run selectorEq conserved
+  · intro _sevm _pre _post _config hfork memoryWf run selectorEq conserved
     exact Blanc.ProrataWethVault.approve_preserves_conserved memoryWf run selectorEq
       conserved
-  · intro _sevm _pre _post _config memoryWf run selectorEq conserved
-    exact readOnly_message (words := 1)
+  · intro _sevm _pre _post _config hfork memoryWf run selectorEq conserved
+    exact readOnly_message (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.previewWithdraw) run selectorEq
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · intro _sevm _pre _post _config memoryWf run selectorEq conserved
-    exact readOnly_message (words := 0)
+  · intro _sevm _pre _post _config hfork memoryWf run selectorEq conserved
+    exact readOnly_message (hfork := hfork) (words := 0)
       (body := Blanc.ProrataWethVault.totalSupply) run selectorEq
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · intro _sevm _pre _post _config memoryWf run selectorEq conserved
+  · intro _sevm _pre _post _config hfork memoryWf run selectorEq conserved
     exact Blanc.ProrataWethVault.transferFrom_preserves_conserved memoryWf run selectorEq
       conserved
-  · intro _sevm _pre _post _config memoryWf run selectorEq conserved
-    exact readOnly_message (words := 0)
+  · intro _sevm _pre _post _config hfork memoryWf run selectorEq conserved
+    exact readOnly_message (hfork := hfork) (words := 0)
       (body := Blanc.ProrataWethVault.decimals) run selectorEq
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · intro _sevm _pre _post _config memoryWf run selectorEq conserved
-    exact readOnly_message (words := 0)
+  · intro _sevm _pre _post _config hfork memoryWf run selectorEq conserved
+    exact readOnly_message (hfork := hfork) (words := 0)
       (body := Blanc.ProrataWethVault.asset) run selectorEq
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · intro _sevm _pre _post _config memoryWf run selectorEq conserved
-    exact readOnly_message (words := 1)
+  · intro _sevm _pre _post _config hfork memoryWf run selectorEq conserved
+    exact readOnly_message (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.maxDeposit) run selectorEq
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · intro _sevm _pre _post _config memoryWf run selectorEq conserved
-    exact readOnly_message (words := 1)
+  · intro _sevm _pre _post _config hfork memoryWf run selectorEq conserved
+    exact readOnly_message (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.previewRedeem) run selectorEq
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · intro _sevm _pre _post config memoryWf run selectorEq conserved
+  · intro _sevm _pre _post config hfork memoryWf run selectorEq conserved
     obtain ⟨bodyPre, bodyConfig, bodyWf, bodyRun, conservedBody⟩ :=
       enter_flow_body (words := 2) (body := Blanc.ProrataWethVault.deposit)
         config memoryWf run selectorEq
@@ -270,14 +276,14 @@ theorem vault_target_obligations :
         some Blanc.ProrataWethVault.depositAfterQuote := by
       simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
         Blanc.ProrataWethVault.depositAfterQuoteSlot]
-    exact deposit_body_obligation bodyConfig bodyWf afterLookup
+    exact deposit_body_obligation (hfork := hfork) bodyConfig bodyWf afterLookup
       nil_pref bodyRun conservedBody
-  · intro _sevm _pre _post _config memoryWf run selectorEq conserved
-    exact readOnly_message (words := 1)
+  · intro _sevm _pre _post _config hfork memoryWf run selectorEq conserved
+    exact readOnly_message (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.balanceOf) run selectorEq
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · intro _sevm _pre _post config memoryWf run selectorEq conserved
+  · intro _sevm _pre _post config hfork memoryWf run selectorEq conserved
     obtain ⟨bodyPre, bodyConfig, bodyWf, bodyRun, conservedBody⟩ :=
       enter_flow_body (words := 2) (body := Blanc.ProrataWethVault.mint)
         config memoryWf run selectorEq
@@ -288,22 +294,22 @@ theorem vault_target_obligations :
         some Blanc.ProrataWethVault.mintAfterQuote := by
       simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
         Blanc.ProrataWethVault.mintAfterQuoteSlot]
-    exact mint_body_obligation bodyConfig bodyWf afterLookup
+    exact mint_body_obligation (hfork := hfork) bodyConfig bodyWf afterLookup
       nil_pref bodyRun conservedBody
-  · intro _sevm _pre _post _config memoryWf run selectorEq conserved
-    exact readOnly_message (words := 0)
+  · intro _sevm _pre _post _config hfork memoryWf run selectorEq conserved
+    exact readOnly_message (hfork := hfork) (words := 0)
       (body := Blanc.ProrataWethVault.symbol) run selectorEq
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · intro _sevm _pre _post _config memoryWf run selectorEq conserved
+  · intro _sevm _pre _post _config hfork memoryWf run selectorEq conserved
     exact Blanc.ProrataWethVault.transfer_preserves_conserved memoryWf run selectorEq
       conserved
-  · intro _sevm _pre _post _config memoryWf run selectorEq conserved
-    exact readOnly_message (words := 1)
+  · intro _sevm _pre _post _config hfork memoryWf run selectorEq conserved
+    exact readOnly_message (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.previewMint) run selectorEq
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · intro _sevm _pre _post config memoryWf run selectorEq conserved
+  · intro _sevm _pre _post config hfork memoryWf run selectorEq conserved
     obtain ⟨bodyPre, bodyConfig, bodyWf, bodyRun, conservedBody⟩ :=
       enter_flow_body (words := 3) (body := Blanc.ProrataWethVault.withdraw)
         config memoryWf run selectorEq
@@ -320,9 +326,9 @@ theorem vault_target_obligations :
         some Blanc.ProrataWethVault.withdrawBurn := by
       simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
         Blanc.ProrataWethVault.withdrawBurnSlot]
-    exact withdraw_body_obligation bodyConfig bodyWf afterLookup burnLookup
+    exact withdraw_body_obligation (hfork := hfork) bodyConfig bodyWf afterLookup burnLookup
       nil_pref bodyRun conservedBody
-  · intro _sevm _pre _post config memoryWf run selectorEq conserved
+  · intro _sevm _pre _post config hfork memoryWf run selectorEq conserved
     obtain ⟨bodyPre, bodyConfig, bodyWf, bodyRun, conservedBody⟩ :=
       enter_flow_body (words := 3) (body := Blanc.ProrataWethVault.redeem)
         config memoryWf run selectorEq
@@ -339,35 +345,35 @@ theorem vault_target_obligations :
         some Blanc.ProrataWethVault.redeemBurn := by
       simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
         Blanc.ProrataWethVault.redeemBurnSlot]
-    exact redeem_body_obligation bodyConfig bodyWf afterLookup burnLookup
+    exact redeem_body_obligation (hfork := hfork) bodyConfig bodyWf afterLookup burnLookup
       nil_pref bodyRun conservedBody
-  · intro _sevm _pre _post _config memoryWf run selectorEq conserved
-    exact readOnly_message (words := 1)
+  · intro _sevm _pre _post _config hfork memoryWf run selectorEq conserved
+    exact readOnly_message (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.maxMint) run selectorEq
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · intro _sevm _pre _post _config memoryWf run selectorEq conserved
-    exact readOnly_message (words := 1)
+  · intro _sevm _pre _post _config hfork memoryWf run selectorEq conserved
+    exact readOnly_message (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.convertToShares) run selectorEq
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · intro _sevm _pre _post _config memoryWf run selectorEq conserved
-    exact readOnly_message (words := 1)
+  · intro _sevm _pre _post _config hfork memoryWf run selectorEq conserved
+    exact readOnly_message (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.maxWithdraw) run selectorEq
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · intro _sevm _pre _post _config memoryWf run selectorEq conserved
-    exact readOnly_message (words := 1)
+  · intro _sevm _pre _post _config hfork memoryWf run selectorEq conserved
+    exact readOnly_message (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.maxRedeem) run selectorEq
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · intro _sevm _pre _post _config memoryWf run selectorEq conserved
-    exact readOnly_message (words := 2)
+  · intro _sevm _pre _post _config hfork memoryWf run selectorEq conserved
+    exact readOnly_message (hfork := hfork) (words := 2)
       (body := Blanc.ProrataWethVault.allowance) run selectorEq
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · intro _sevm _pre _post _config memoryWf run selectorEq conserved
-    exact readOnly_message (words := 1)
+  · intro _sevm _pre _post _config hfork memoryWf run selectorEq conserved
+    exact readOnly_message (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.previewDeposit) run selectorEq
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
@@ -382,6 +388,7 @@ theorem vault_soundness
       (sig, target) ∈ Blanc.ProrataWethVault.vaultFuncs →
       TargetPreservesConserved sig)
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
@@ -390,19 +397,20 @@ theorem vault_soundness
       (Devm.getStor post sevm.currentTarget) := by
   obtain ⟨body, member⟩ :=
     Blanc.ProrataWethVault.selector_mem_vaultFuncs_of_ok run
-  exact bundle _ _ member config memoryWf run rfl conserved
+  exact bundle _ _ member config hfork memoryWf run rfl conserved
 
 /-- **One message preserves the ledger.**  Twenty-five branches, one per
 dispatch target, plus the impossibility of an unmatched selector. -/
 theorem vault_message_preserves_conserved
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
       (Devm.getStor pre sevm.currentTarget)) :
     LedgerConserved Blanc.ProrataWethVault.supplySlot (Devm.getStor post sevm.currentTarget) := by
-  exact vault_soundness vault_target_obligations config memoryWf run conserved
+  exact vault_soundness (hfork := hfork) vault_target_obligations config memoryWf run conserved
 
 /-- **The unconditional part.**  Every target except the four ERC-4626 flows
 preserves the ledger with no premise about the asset at all — no configuration,
@@ -411,6 +419,7 @@ external call, and stating them separately marks where the configuration
 genuinely enters rather than leaving it bundled with everything else. -/
 theorem vault_nonflow_message_preserves_conserved
     {sevm : Sevm} {pre post : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (notDeposit :
@@ -429,85 +438,85 @@ theorem vault_nonflow_message_preserves_conserved
   simp only [Blanc.ProrataWethVault.vaultFuncs, List.mem_cons,
     List.not_mem_nil, or_false, Prod.mk.injEq] at member
   rcases member with ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩
-  · exact readOnly_message (words := 0)
+  · exact readOnly_message (hfork := hfork) (words := 0)
       (body := Blanc.ProrataWethVault.totalAssets) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · exact readOnly_message (words := 0)
+  · exact readOnly_message (hfork := hfork) (words := 0)
       (body := Blanc.ProrataWethVault.name) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · exact readOnly_message (words := 1)
+  · exact readOnly_message (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.convertToAssets) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
   · exact Blanc.ProrataWethVault.approve_preserves_conserved memoryWf run sel
       conserved
-  · exact readOnly_message (words := 1)
+  · exact readOnly_message (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.previewWithdraw) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · exact readOnly_message (words := 0)
+  · exact readOnly_message (hfork := hfork) (words := 0)
       (body := Blanc.ProrataWethVault.totalSupply) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
   · exact Blanc.ProrataWethVault.transferFrom_preserves_conserved memoryWf run sel
       conserved
-  · exact readOnly_message (words := 0)
+  · exact readOnly_message (hfork := hfork) (words := 0)
       (body := Blanc.ProrataWethVault.decimals) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · exact readOnly_message (words := 0)
+  · exact readOnly_message (hfork := hfork) (words := 0)
       (body := Blanc.ProrataWethVault.asset) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · exact readOnly_message (words := 1)
+  · exact readOnly_message (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.maxDeposit) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · exact readOnly_message (words := 1)
+  · exact readOnly_message (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.previewRedeem) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
   · exact absurd sel notDeposit
-  · exact readOnly_message (words := 1)
+  · exact readOnly_message (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.balanceOf) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
   · exact absurd sel notMint
-  · exact readOnly_message (words := 0)
+  · exact readOnly_message (hfork := hfork) (words := 0)
       (body := Blanc.ProrataWethVault.symbol) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
   · exact Blanc.ProrataWethVault.transfer_preserves_conserved memoryWf run sel
       conserved
-  · exact readOnly_message (words := 1)
+  · exact readOnly_message (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.previewMint) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
   · exact absurd sel notWithdraw
   · exact absurd sel notRedeem
-  · exact readOnly_message (words := 1)
+  · exact readOnly_message (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.maxMint) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · exact readOnly_message (words := 1)
+  · exact readOnly_message (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.convertToShares) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · exact readOnly_message (words := 1)
+  · exact readOnly_message (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.maxWithdraw) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · exact readOnly_message (words := 1)
+  · exact readOnly_message (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.maxRedeem) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · exact readOnly_message (words := 2)
+  · exact readOnly_message (hfork := hfork) (words := 2)
       (body := Blanc.ProrataWethVault.allowance) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
-  · exact readOnly_message (words := 1)
+  · exact readOnly_message (hfork := hfork) (words := 1)
       (body := Blanc.ProrataWethVault.previewDeposit) run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs]) conserved
@@ -579,6 +588,7 @@ inductive ConfiguredMessages (vault : Adr) : Devm → Devm → Prop
       ConfiguredMessages vault s t →
       sevm.currentTarget = vault →
       DirectWethConfiguration vault sevm t →
+      CoveredFork sevm.benvStat.fork →
       Mem.Wf t.memory →
       Prog.RunCompiled sevm t Blanc.ProrataWethVault.vault u →
       ConfiguredMessages vault s u
@@ -593,9 +603,9 @@ theorem ConfiguredMessages.preserves_conserved {vault : Adr} {s t : Devm}
       (Devm.getStor t vault) := by
   induction chain with
   | refl => exact conserved
-  | step _ target config memoryWf run ih =>
+  | step _ target config hfork memoryWf run ih =>
       subst target
-      exact vault_message_preserves_conserved config memoryWf run ih
+      exact vault_message_preserves_conserved config hfork memoryWf run ih
 
 /-- **From the root.**  A configured two-runtime root conserves the ledger, and
 every reachable state along a chain of vault messages still does. -/
@@ -686,6 +696,7 @@ theorem vault_processMessage_some_preserves_conserved
     (distinct : wethAccount ≠ vault)
     (nonprecompile : msg.benv.stat.rules.isPrecomp wethAccount = false)
     (wethCode : (msg.benv.state.getCode wethAccount).toList = Blanc.wethCode)
+    (hfork : CoveredFork msg.benv.stat.fork)
     (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
       (msg.benv.state.getStor vault)) :
     LedgerConserved Blanc.ProrataWethVault.supplySlot
@@ -745,8 +756,15 @@ theorem vault_processMessage_some_preserves_conserved
           show LedgerConserved _ (pre.state.getStor vault)
           rw [storEq]
           exact conserved
+        have frameFork : CoveredFork sevm.benvStat.fork := by
+          rw [sevmEq]
+          show CoveredFork (msg.withBenv entry).benv.stat.fork
+          have statEq : (msg.withBenv entry).benv.stat = msg.benv.stat :=
+            benvAfterTransfer_stat transfer
+          rw [statEq]
+          exact hfork
         have conservedPost := vault_message_preserves_conserved frameConfig
-          memoryWf compiled conservedPre
+          frameFork memoryWf compiled conservedPre
         rw [ct] at conservedPost
         change LedgerConserved _ (execPost.state.getStor vault) at conservedPost
         rw [postEq]

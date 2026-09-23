@@ -102,12 +102,51 @@ private def ninstDecidableEq :
         isTrue (Jaune.Ninst.push_ext xle yle h)
       else
         isFalse (by intro equal; cases equal; exact h rfl)
+  | .dupn x, .dupn y =>
+      if h : x = y then
+        isTrue (by cases h; rfl)
+      else
+        isFalse (by intro equal; cases equal; exact h rfl)
+  | .swapn x, .swapn y =>
+      if h : x = y then
+        isTrue (by cases h; rfl)
+      else
+        isFalse (by intro equal; cases equal; exact h rfl)
+  | .exchange x, .exchange y =>
+      if h : x = y then
+        isTrue (by cases h; rfl)
+      else
+        isFalse (by intro equal; cases equal; exact h rfl)
   | .reg _, .exec _ => isFalse (by intro equal; cases equal)
   | .reg _, .push _ _ => isFalse (by intro equal; cases equal)
+  | .reg _, .dupn _ => isFalse (by intro equal; cases equal)
+  | .reg _, .swapn _ => isFalse (by intro equal; cases equal)
+  | .reg _, .exchange _ => isFalse (by intro equal; cases equal)
   | .exec _, .reg _ => isFalse (by intro equal; cases equal)
   | .exec _, .push _ _ => isFalse (by intro equal; cases equal)
+  | .exec _, .dupn _ => isFalse (by intro equal; cases equal)
+  | .exec _, .swapn _ => isFalse (by intro equal; cases equal)
+  | .exec _, .exchange _ => isFalse (by intro equal; cases equal)
   | .push _ _, .reg _ => isFalse (by intro equal; cases equal)
   | .push _ _, .exec _ => isFalse (by intro equal; cases equal)
+  | .push _ _, .dupn _ => isFalse (by intro equal; cases equal)
+  | .push _ _, .swapn _ => isFalse (by intro equal; cases equal)
+  | .push _ _, .exchange _ => isFalse (by intro equal; cases equal)
+  | .dupn _, .reg _ => isFalse (by intro equal; cases equal)
+  | .dupn _, .exec _ => isFalse (by intro equal; cases equal)
+  | .dupn _, .push _ _ => isFalse (by intro equal; cases equal)
+  | .dupn _, .swapn _ => isFalse (by intro equal; cases equal)
+  | .dupn _, .exchange _ => isFalse (by intro equal; cases equal)
+  | .swapn _, .reg _ => isFalse (by intro equal; cases equal)
+  | .swapn _, .exec _ => isFalse (by intro equal; cases equal)
+  | .swapn _, .push _ _ => isFalse (by intro equal; cases equal)
+  | .swapn _, .dupn _ => isFalse (by intro equal; cases equal)
+  | .swapn _, .exchange _ => isFalse (by intro equal; cases equal)
+  | .exchange _, .reg _ => isFalse (by intro equal; cases equal)
+  | .exchange _, .exec _ => isFalse (by intro equal; cases equal)
+  | .exchange _, .push _ _ => isFalse (by intro equal; cases equal)
+  | .exchange _, .dupn _ => isFalse (by intro equal; cases equal)
+  | .exchange _, .swapn _ => isFalse (by intro equal; cases equal)
 
 private instance : DecidableEq Jaune.Ninst := ninstDecidableEq
 
@@ -1082,11 +1121,11 @@ def StaticGasAvailable (pre : Devm) (inputSize : B256) : Prop :=
     pre.stack =
       gasWord :: wethAccount.toB256 :: 28 :: inputSize :: 0 :: 32 :: rest →
     let base := addAccessedAddress
-      (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩) wethAccount
-    let ext := (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩).extCost
+      (pre.setMach ⟨rest, pre.memory, pre.gasLeft, pre.stateGas⟩) wethAccount
+    let ext := (pre.setMach ⟨rest, pre.memory, pre.gasLeft, pre.stateGas⟩).extCost
       [⟨28, inputSize.toNat⟩, ⟨0, 32⟩]
     let access := accessCost wethAccount
-      (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩).accessedAddresses
+      (pre.setMach ⟨rest, pre.memory, pre.gasLeft, pre.stateGas⟩).accessedAddresses
     (calculateMsgCallGas 0 gasWord.toNat base.gasLeft ext access).1 + ext ≤
       base.gasLeft
 
@@ -1096,17 +1135,18 @@ def CallGasAvailable (pre : Devm) (inputSize : B256) : Prop :=
       gasWord :: wethAccount.toB256 :: 0 :: 28 :: inputSize :: 0 :: 32 ::
         rest →
     let base := addAccessedAddress
-      (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩) wethAccount
-    let ext := (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩).extCost
+      (pre.setMach ⟨rest, pre.memory, pre.gasLeft, pre.stateGas⟩) wethAccount
+    let ext := (pre.setMach ⟨rest, pre.memory, pre.gasLeft, pre.stateGas⟩).extCost
       [⟨28, inputSize.toNat⟩, ⟨0, 32⟩]
     let access := accessCost wethAccount
-      (pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩).accessedAddresses
+      (pre.setMach ⟨rest, pre.memory, pre.gasLeft, pre.stateGas⟩).accessedAddresses
     (calculateMsgCallGas 0 gasWord.toNat base.gasLeft ext access).1 + ext ≤
       base.gasLeft
 
 theorem balanceOfStaging_occurrence
     {sevm : Sevm} {entry callPre callPost : Devm} {image : Bytes}
     (config : DirectWethConfiguration sevm.currentTarget sevm callPre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memory : MemoryImage entry image)
     (staging : Line.Run sevm entry balanceOfStaging callPre)
     (depth : sevm.depth ≠ 0)
@@ -1116,7 +1156,7 @@ theorem balanceOfStaging_occurrence
       (balanceOfCalldata sevm.currentTarget) true := by
   obtain ⟨gasWord, rest, stack, window, -⟩ :=
     balanceOfStaging_boundary memory staging
-  apply exactWethStatcallOccurrence_of_runCompiled config stack window depth
+  apply exactWethStatcallOccurrence_of_runCompiled config hfork stack window depth
   · exact gasAvailable gasWord rest stack
   · exact crossing
 
@@ -1124,6 +1164,7 @@ theorem transferFromStaging_occurrence
     {sevm : Sevm} {entry callPre callPost : Devm} {image : Bytes}
     {assetsWord assets : B256}
     (config : DirectWethConfiguration sevm.currentTarget sevm callPre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memory : MemoryImage entry image)
     (assetsAt : ImageWordAt image assetsWord assets)
     (assetsAboveCalldata : 96 ≤ (assetsWord * 32).toNat)
@@ -1137,7 +1178,7 @@ theorem transferFromStaging_occurrence
       (transferFromCalldata sevm.caller sevm.currentTarget assets) false := by
   obtain ⟨gasWord, rest, stack, window, -⟩ :=
     transferFromStaging_boundary memory assetsAt assetsAboveCalldata staging
-  apply exactWethCallOccurrence_of_runCompiled config stack window depth dynamic
+  apply exactWethCallOccurrence_of_runCompiled config hfork stack window depth dynamic
   · exact gasAvailable gasWord rest stack
   · exact crossing
 
@@ -1145,6 +1186,7 @@ theorem transferStaging_occurrence
     {sevm : Sevm} {entry callPre callPost : Devm} {image : Bytes}
     {receiverWord assetsWord assets : B256} {receiver : Adr}
     (config : DirectWethConfiguration sevm.currentTarget sevm callPre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memory : MemoryImage entry image)
     (receiverAt : ImageWordAt image receiverWord receiver.toB256)
     (assetsAt : ImageWordAt image assetsWord assets)
@@ -1161,7 +1203,7 @@ theorem transferStaging_occurrence
   obtain ⟨gasWord, rest, stack, window, -⟩ :=
     transferStaging_boundary memory receiverAt assetsAt
       receiverAboveSelector assetsAboveReceiver staging
-  apply exactWethCallOccurrence_of_runCompiled config stack window depth dynamic
+  apply exactWethCallOccurrence_of_runCompiled config hfork stack window depth dynamic
   · exact gasAvailable gasWord rest stack
   · exact crossing
 
@@ -1360,6 +1402,7 @@ private theorem call_outputWindow_of_success
     (stack : pre.stack =
       gasWord :: target :: 0 :: 28 :: inputSize :: 0 :: 32 :: rest)
     (crossing : Ninst.RunCompiled sevm pre call post)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (successFlag : ∃ tail, post.stack = (1 : B256) :: tail)
     (returnDataLength : post.returnData.length = 32) :
     (post.memory.read 0 32).1 = post.returnData := by
@@ -1369,7 +1412,7 @@ private theorem call_outputWindow_of_success
     rw [stack]
     exact ⟨[], by simp [Split]⟩
   rcases of_run_call_val_with_depth operandPrefix
-      (Ninst.Run.of_runCompiled crossing) with failure | success
+      (Ninst.Run.of_runCompiled crossing) hfork with failure | success
   · obtain ⟨zeroPrefix, -⟩ := failure
     obtain ⟨tail, successStack⟩ := successFlag
     have onePrefix : (1 : B256) :: [] <<+ post.stack := by
@@ -1402,6 +1445,7 @@ private theorem staticcall_outputWindow_of_success
     (stack : pre.stack =
       gasWord :: target :: 28 :: inputSize :: 0 :: 32 :: rest)
     (crossing : Ninst.RunCompiled sevm pre staticcall post)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (successFlag : ∃ tail, post.stack = (1 : B256) :: tail)
     (returnDataLength : post.returnData.length = 32) :
     (post.memory.read 0 32).1 = post.returnData := by
@@ -1411,7 +1455,7 @@ private theorem staticcall_outputWindow_of_success
     rw [stack]
     exact ⟨[], by simp [Split]⟩
   rcases of_run_staticcall_val_with_depth operandPrefix
-      (Ninst.Run.of_runCompiled crossing) with failure | success
+      (Ninst.Run.of_runCompiled crossing) hfork with failure | success
   · obtain ⟨zeroPrefix, -, -⟩ := failure
     obtain ⟨tail, successStack⟩ := successFlag
     have onePrefix : (1 : B256) :: [] <<+ post.stack := by
@@ -1450,6 +1494,7 @@ theorem checkedBalanceOf_success
     {body : Func} {gasWord : B256} {rest : List B256}
     (occurrence : ExactWethChildOccurrence sevm callPre callPost staticcall
       (balanceOfCalldata sevm.currentTarget) true)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (stack : callPre.stack =
       gasWord :: wethAccount.toB256 :: 28 :: 36 :: 0 :: 32 :: rest)
     (crossing : Ninst.RunCompiled sevm callPre staticcall callPost)
@@ -1487,7 +1532,7 @@ theorem checkedBalanceOf_success
   have returnDataLength : callPost.returnData.length = 32 := by
     rw [← sizeReturnData]
     exact sizeLength
-  have outputWindow := staticcall_outputWindow_of_success stack crossing
+  have outputWindow := staticcall_outputWindow_of_success stack crossing hfork
     successFlag returnDataLength
   obtain ⟨mloadPre, pushZeroRun, decodeRun⟩ :=
     runCompiledTo_next_inv decodeRun
@@ -1542,6 +1587,7 @@ theorem checkedCanonicalTrue_successFrame
     {rest : List B256}
     (occurrence : ExactWethChildOccurrence sevm callPre callPost call
       calldata false)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (stack : callPre.stack =
       gasWord :: wethAccount.toB256 :: 0 :: 28 :: inputSize :: 0 :: 32 ::
         rest)
@@ -1578,7 +1624,7 @@ theorem checkedCanonicalTrue_successFrame
   have returnDataLength : callPost.returnData.length = 32 := by
     rw [← sizeReturnData]
     exact sizeLength
-  have outputWindow := call_outputWindow_of_success stack crossing
+  have outputWindow := call_outputWindow_of_success stack crossing hfork
     successFlag returnDataLength
   obtain ⟨mloadPre, pushZeroRun, canonicalRun⟩ :=
     runCompiledTo_next_inv canonicalRun
@@ -1675,6 +1721,7 @@ theorem checkedCanonicalTrue_success
     {rest : List B256}
     (occurrence : ExactWethChildOccurrence sevm callPre callPost call
       calldata false)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (stack : callPre.stack =
       gasWord :: wethAccount.toB256 :: 0 :: 28 :: inputSize :: 0 :: 32 ::
         rest)
@@ -1705,7 +1752,7 @@ theorem checkedCanonicalTrue_success
   have returnDataLength : callPost.returnData.length = 32 := by
     rw [← sizeReturnData]
     exact sizeLength
-  have outputWindow := call_outputWindow_of_success stack crossing
+  have outputWindow := call_outputWindow_of_success stack crossing hfork
     successFlag returnDataLength
   obtain ⟨mloadPre, pushZeroRun, canonicalRun⟩ :=
     runCompiledTo_next_inv canonicalRun
@@ -1768,6 +1815,7 @@ private theorem checkedCall_depth_ne_zero
       gasWord :: wethAccount.toB256 :: 0 :: 28 :: inputSize :: 0 :: 32 ::
         rest)
     (crossing : Ninst.RunCompiled sevm pre call post)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (suffix : Func.RunCompiledTo fs sevm post
       (iszero :::
         (Func.revert <?>
@@ -1782,7 +1830,7 @@ private theorem checkedCall_depth_ne_zero
   obtain ⟨status, tail, _, statusStack, statusNonzero, _⟩ :=
     checkedCall_status_nonzero suffix
   rcases of_run_call_val_with_depth operands
-      (Ninst.Run.of_runCompiled crossing) with failure | success
+      (Ninst.Run.of_runCompiled crossing) hfork with failure | success
   · obtain ⟨zeroPrefix, -⟩ := failure
     have statusPrefix : status :: [] <<+ post.stack := by
       rw [statusStack]
@@ -1796,13 +1844,16 @@ configured occurrence needs. -/
 theorem callGasAvailable_of_runCompiled
     {sevm : Sevm} {pre post : Devm} {inputSize : B256}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (run : Ninst.RunCompiled sevm pre call post) :
     CallGasAvailable pre inputSize := by
   intro gasWord rest stack
   obtain ⟨xl, _, steps⟩ := run
   have execution := steps 0
   rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at execution
-  let popped := pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩
+  have hgas : sevm.benvStat.rules.gas = pragueRules.gas :=
+    BenvStat.gas_eq_prague_of_stateGas_none hfork.rules_stateGas_none
+  let popped := pre.setMach ⟨rest, pre.memory, pre.gasLeft, pre.stateGas⟩
   let base := addAccessedAddress popped wethAccount
   have address : wethAccount.toB256.toAdr = wethAccount :=
     toAdr_toB256 wethAccount
@@ -1810,45 +1861,52 @@ theorem callGasAvailable_of_runCompiled
   have nondelegated : getDelegatedCodeAddress (pre.getCode wethAccount) = none := by
     unfold getDelegatedCodeAddress
     rw [if_neg config.notDelegated]
-  have delegation : accessDelegation base wethAccount =
+  have delegation : sevm.benvStat.rules.gas.accessDelegation base wethAccount =
       ⟨false, wethAccount, pre.getCode wethAccount, 0, base⟩ := by
-    simp only [accessDelegation, code, nondelegated]
+    simp only [GasSchedule.accessDelegation, code, nondelegated]
   dsimp only [base, popped] at delegation
   simp only [Xinst.step, Devm.pop_eq_ok stack, bind, Except.bind] at execution
   rw [Devm.popToAdr_eq_ok
     (devm := pre.setMach
       ⟨wethAccount.toB256 :: 0 :: 28 :: inputSize :: 0 :: 32 :: rest,
-        pre.memory, pre.gasLeft⟩) rfl] at execution
+        pre.memory, pre.gasLeft, pre.stateGas⟩) rfl] at execution
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
-    Devm.gasLeft_setMach] at execution
+    Devm.gasLeft_setMach, Devm.stateGas_setMach] at execution
   rw [Devm.pop_eq_ok
     (devm := pre.setMach
       ⟨0 :: 28 :: inputSize :: 0 :: 32 :: rest,
-        pre.memory, pre.gasLeft⟩) rfl] at execution
+        pre.memory, pre.gasLeft, pre.stateGas⟩) rfl] at execution
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
-    Devm.gasLeft_setMach] at execution
+    Devm.gasLeft_setMach, Devm.stateGas_setMach] at execution
   rw [Devm.popToNat_eq_ok
     (devm := pre.setMach
-      ⟨28 :: inputSize :: 0 :: 32 :: rest, pre.memory, pre.gasLeft⟩) rfl]
+      ⟨28 :: inputSize :: 0 :: 32 :: rest, pre.memory, pre.gasLeft,
+        pre.stateGas⟩) rfl]
       at execution
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
-    Devm.gasLeft_setMach] at execution
+    Devm.gasLeft_setMach, Devm.stateGas_setMach] at execution
   rw [Devm.popToNat_eq_ok
     (devm := pre.setMach
-      ⟨inputSize :: 0 :: 32 :: rest, pre.memory, pre.gasLeft⟩) rfl]
+      ⟨inputSize :: 0 :: 32 :: rest, pre.memory, pre.gasLeft,
+        pre.stateGas⟩) rfl]
       at execution
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
-    Devm.gasLeft_setMach] at execution
+    Devm.gasLeft_setMach, Devm.stateGas_setMach] at execution
   rw [Devm.popToNat_eq_ok
-    (devm := pre.setMach ⟨0 :: 32 :: rest, pre.memory, pre.gasLeft⟩) rfl]
+    (devm := pre.setMach ⟨0 :: 32 :: rest, pre.memory, pre.gasLeft,
+      pre.stateGas⟩) rfl]
       at execution
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
-    Devm.gasLeft_setMach] at execution
+    Devm.gasLeft_setMach, Devm.stateGas_setMach] at execution
   rw [Devm.popToNat_eq_ok
-    (devm := pre.setMach ⟨32 :: rest, pre.memory, pre.gasLeft⟩) rfl]
+    (devm := pre.setMach ⟨32 :: rest, pre.memory, pre.gasLeft,
+      pre.stateGas⟩) rfl]
       at execution
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
-    Devm.gasLeft_setMach, address, delegation, Nat.add_zero] at execution
+    Devm.gasLeft_setMach, Devm.stateGas_setMach, address, delegation,
+    Nat.add_zero] at execution
+  simp only [hfork.rules_stateGas_none, hgas, pragueRules_gas_accessCost]
+    at execution
   split at execution
   · cases XStep.run_ofExcept_error execution
   · rename_i charged charge
@@ -1866,6 +1924,7 @@ theorem readTotalAssets_exactEffect
     {fs : List Func} {sevm : Sevm}
     {entry callPre callPost final : Devm} {image : Bytes} {body : Func}
     (config : DirectWethConfiguration sevm.currentTarget sevm callPre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memory : MemoryImage entry image)
     (staging : Line.Run sevm entry balanceOfStaging callPre)
     (depth : sevm.depth ≠ 0)
@@ -1893,7 +1952,7 @@ theorem readTotalAssets_exactEffect
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨gasWord, rest, stack, -, callPreWf⟩ :=
     balanceOfStaging_boundary memory staging
-  have occurrence := balanceOfStaging_occurrence config memory staging depth
+  have occurrence := balanceOfStaging_occurrence config hfork memory staging depth
     gasAvailable crossing
   obtain ⟨status, statusTail, _, statusStack, statusNonzero, _, _, _, _, _⟩ :=
     checkedCall_status_nonzero suffix
@@ -1907,7 +1966,7 @@ theorem readTotalAssets_exactEffect
       rw [stack]
       exact ⟨[], by simp [Split]⟩
     rcases of_run_staticcall_val_with_depth operandPrefix
-        (Ninst.Run.of_runCompiled crossing) with failure | success
+        (Ninst.Run.of_runCompiled crossing) hfork with failure | success
     · obtain ⟨zeroPrefix, -, -⟩ := failure
       obtain ⟨tail, successStack⟩ := successFlag
       have onePrefix : (1 : B256) :: [] <<+ callPost.stack := by
@@ -1925,7 +1984,7 @@ theorem readTotalAssets_exactEffect
       ExactWethChildSuccess sevm callPre callPost staticcall
         (balanceOfCalldata sevm.currentTarget) callPost.returnData true :=
     ExactWethChildOccurrence.success_of_post occurrence successFlag rfl
-  have worldRun := ExactWethChildSuccess.worldProgramRun rawSuccess
+  have worldRun := ExactWethChildSuccess.worldProgramRun hfork rawSuccess
   obtain ⟨storage, logs, output⟩ :=
     SuccessfulWethWorldProgramRun.balanceOf_effect worldRun
   have returnDataLength : callPost.returnData.length = 32 := by
@@ -1935,7 +1994,7 @@ theorem readTotalAssets_exactEffect
     decide +kernel
   obtain ⟨word, bodyPre, _, returnedWord, wordPrefix, bodyState,
       checkedLogs, bodyWf, checkedPreservesWindow, bodyRun⟩ :=
-    checkedBalanceOf_success occurrence stack crossing returndataBound
+    checkedBalanceOf_success occurrence hfork stack crossing returndataBound
       callPostWf suffix
   have bodyStorage : Devm.getStor bodyPre = Devm.getStor callPre :=
     (funext (getStor_eq_of_state_eq bodyState)).trans storage
@@ -1960,7 +2019,7 @@ theorem readTotalAssets_exactEffect
       (by
         change 32 ≤ offset
         omega)
-      operandPrefix (Ninst.Run.of_runCompiled crossing)
+      operandPrefix (Ninst.Run.of_runCompiled crossing) hfork
     exact checkedPreservesWindow callPostWindow
   exact ⟨word, bodyPre, storage, logs, bodyStorage, bodyLogs,
     returnedWord.symm.trans output, wordPrefix, bodyWf, bodyCode,
@@ -2001,6 +2060,7 @@ theorem callWethTransferFrom_worldEffect_linked
     {entry callPre callPost final : Devm} {image : Bytes}
     {assetsWord assets : B256} {body : Func}
     (config : DirectWethConfiguration sevm.currentTarget sevm callPre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memory : MemoryImage entry image)
     (assetsAt : ImageWordAt image assetsWord assets)
     (assetsAboveCalldata : 96 ≤ (assetsWord * 32).toNat)
@@ -2032,10 +2092,10 @@ theorem callWethTransferFrom_worldEffect_linked
         callPre bodyPre := by
   obtain ⟨gasWord, rest, stack, -, callPreWf⟩ :=
     transferFromStaging_boundary memory assetsAt assetsAboveCalldata staging
-  have depth := checkedCall_depth_ne_zero stack crossing suffix
+  have depth := checkedCall_depth_ne_zero stack crossing hfork suffix
   have gasAvailable : CallGasAvailable callPre 100 :=
-    callGasAvailable_of_runCompiled config crossing
-  have occurrence := transferFromStaging_occurrence config memory assetsAt
+    callGasAvailable_of_runCompiled config hfork crossing
+  have occurrence := transferFromStaging_occurrence config hfork memory assetsAt
     assetsAboveCalldata staging depth dynamic gasAvailable crossing
   obtain ⟨status, statusTail, _, statusStack, statusNonzero, _, _, _, _, _⟩ :=
     checkedCall_status_nonzero suffix
@@ -2049,7 +2109,7 @@ theorem callWethTransferFrom_worldEffect_linked
     exact ⟨[], by simp [Split]⟩
   have callPostWf : Mem.Wf callPost.memory := by
     rcases of_run_call_val_with_depth operandPrefix
-        (Ninst.Run.of_runCompiled crossing) with failure | success
+        (Ninst.Run.of_runCompiled crossing) hfork with failure | success
     · obtain ⟨zeroPrefix, -⟩ := failure
       obtain ⟨tail, successStack⟩ := successFlag
       have onePrefix : (1 : B256) :: [] <<+ callPost.stack := by
@@ -2066,7 +2126,7 @@ theorem callWethTransferFrom_worldEffect_linked
         (transferFromCalldata sevm.caller sevm.currentTarget assets)
         callPost.returnData false :=
     ExactWethChildOccurrence.success_of_post occurrence successFlag rfl
-  have worldRun := ExactWethChildSuccess.worldProgramRun rawSuccess
+  have worldRun := ExactWethChildSuccess.worldProgramRun hfork rawSuccess
   have child := worldRun
   obtain ⟨movement, foreign, logged, output⟩ :=
     SuccessfulWethWorldProgramRun.transferFrom_effect worldRun
@@ -2076,7 +2136,7 @@ theorem callWethTransferFrom_worldEffect_linked
     rw [returnDataLength]
     decide +kernel
   obtain ⟨bodyPre, -, bodyState, bodyLogs, bodyWf, checkedWindow, bodyRun⟩ :=
-    checkedCanonicalTrue_successFrame occurrence stack crossing
+    checkedCanonicalTrue_successFrame occurrence hfork stack crossing
       returndataBound callPostWf suffix
   have bodyStorage : Devm.getStor bodyPre = Devm.getStor callPost :=
     funext (getStor_eq_of_state_eq bodyState)
@@ -2095,7 +2155,7 @@ theorem callWethTransferFrom_worldEffect_linked
       (by
         change 32 ≤ offset
         omega)
-      operandPrefix (Ninst.Run.of_runCompiled crossing) successFlag
+      operandPrefix (Ninst.Run.of_runCompiled crossing) hfork successFlag
       callPreWindow
     exact checkedWindow callPostWindow
   · rcases child with ⟨childSevm, childPre, rawPost, currentTarget, -, caller,
@@ -2117,6 +2177,7 @@ theorem callWethTransferFrom_worldEffect
     {entry callPre callPost final : Devm} {image : Bytes}
     {assetsWord assets : B256} {body : Func}
     (config : DirectWethConfiguration sevm.currentTarget sevm callPre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memory : MemoryImage entry image)
     (assetsAt : ImageWordAt image assetsWord assets)
     (assetsAboveCalldata : 96 ≤ (assetsWord * 32).toNat)
@@ -2144,7 +2205,7 @@ theorem callWethTransferFrom_worldEffect
         MemWordAt entry offset w → MemWordAt bodyPre offset w) ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨bodyPre, movement, foreign, logged, output, bodyWf, window, bodyRun,
-    -⟩ := callWethTransferFrom_worldEffect_linked config memory assetsAt
+    -⟩ := callWethTransferFrom_worldEffect_linked config hfork memory assetsAt
       assetsAboveCalldata staging dynamic crossing suffix
   exact ⟨bodyPre, movement, foreign, logged, output, bodyWf, window, bodyRun⟩
 
@@ -2156,6 +2217,7 @@ theorem callWethTransferFrom_exactEffect
     {entry callPre callPost final : Devm} {image : Bytes}
     {assetsWord assets : B256} {body : Func}
     (config : DirectWethConfiguration sevm.currentTarget sevm callPre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memory : MemoryImage entry image)
     (assetsAt : ImageWordAt image assetsWord assets)
     (assetsAboveCalldata : 96 ≤ (assetsWord * 32).toNat)
@@ -2177,10 +2239,10 @@ theorem callWethTransferFrom_exactEffect
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨gasWord, rest, stack, -, -⟩ :=
     transferFromStaging_boundary memory assetsAt assetsAboveCalldata staging
-  have depth := checkedCall_depth_ne_zero stack crossing suffix
+  have depth := checkedCall_depth_ne_zero stack crossing hfork suffix
   have gasAvailable : CallGasAvailable callPre 100 :=
-    callGasAvailable_of_runCompiled config crossing
-  have occurrence := transferFromStaging_occurrence config memory assetsAt
+    callGasAvailable_of_runCompiled config hfork crossing
+  have occurrence := transferFromStaging_occurrence config hfork memory assetsAt
     assetsAboveCalldata staging depth dynamic gasAvailable crossing
   obtain ⟨status, statusTail, _, statusStack, statusNonzero, _, _, _, _, _⟩ :=
     checkedCall_status_nonzero suffix
@@ -2192,7 +2254,7 @@ theorem callWethTransferFrom_exactEffect
         (transferFromCalldata sevm.caller sevm.currentTarget assets)
         callPost.returnData false :=
     ExactWethChildOccurrence.success_of_post occurrence successFlag rfl
-  have programRun := ExactWethChildSuccess.programRun rawSuccess
+  have programRun := ExactWethChildSuccess.programRun hfork rawSuccess
   obtain ⟨movement, output⟩ :=
     SuccessfulWethProgramRun.transferFrom_effect programRun
   have returnDataLength : callPost.returnData.length = 32 := by
@@ -2201,7 +2263,7 @@ theorem callWethTransferFrom_exactEffect
     rw [returnDataLength]
     decide +kernel
   obtain ⟨bodyPre, _, bodyRun⟩ :=
-    checkedCanonicalTrue_success occurrence stack crossing returndataBound
+    checkedCanonicalTrue_success occurrence hfork stack crossing returndataBound
       suffix
   exact ⟨bodyPre, movement, output, bodyRun⟩
 
@@ -2213,6 +2275,7 @@ theorem callWethTransfer_worldEffect_quiet
     {entry callPre callPost final : Devm} {image : Bytes}
     {receiverWord assetsWord assets : B256} {receiver : Adr} {body : Func}
     (config : DirectWethConfiguration sevm.currentTarget sevm callPre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memory : MemoryImage entry image)
     (receiverAt : ImageWordAt image receiverWord receiver.toB256)
     (assetsAt : ImageWordAt image assetsWord assets)
@@ -2246,10 +2309,10 @@ theorem callWethTransfer_worldEffect_quiet
   obtain ⟨gasWord, rest, stack, -, callPreWf⟩ :=
     transferStaging_boundary memory receiverAt assetsAt
       receiverAboveSelector assetsAboveReceiver staging
-  have depth := checkedCall_depth_ne_zero stack crossing suffix
+  have depth := checkedCall_depth_ne_zero stack crossing hfork suffix
   have gasAvailable : CallGasAvailable callPre 68 :=
-    callGasAvailable_of_runCompiled config crossing
-  have occurrence := transferStaging_occurrence config memory receiverAt
+    callGasAvailable_of_runCompiled config hfork crossing
+  have occurrence := transferStaging_occurrence config hfork memory receiverAt
     assetsAt receiverAboveSelector assetsAboveReceiver staging depth dynamic
     gasAvailable crossing
   obtain ⟨status, statusTail, _, statusStack, statusNonzero, _, _, _, _, _⟩ :=
@@ -2264,7 +2327,7 @@ theorem callWethTransfer_worldEffect_quiet
     exact ⟨[], by simp [Split]⟩
   have callPostWf : Mem.Wf callPost.memory := by
     rcases of_run_call_val_with_depth operandPrefix
-        (Ninst.Run.of_runCompiled crossing) with failure | success
+        (Ninst.Run.of_runCompiled crossing) hfork with failure | success
     · obtain ⟨zeroPrefix, -⟩ := failure
       obtain ⟨tail, successStack⟩ := successFlag
       have onePrefix : (1 : B256) :: [] <<+ callPost.stack := by
@@ -2281,7 +2344,7 @@ theorem callWethTransfer_worldEffect_quiet
         (transferCalldata receiver assets)
         callPost.returnData false :=
     ExactWethChildOccurrence.success_of_post occurrence successFlag rfl
-  have worldRun := ExactWethChildSuccess.worldProgramRun rawSuccess
+  have worldRun := ExactWethChildSuccess.worldProgramRun hfork rawSuccess
   have child := worldRun
   obtain ⟨movement, foreign, logged, output⟩ :=
     SuccessfulWethWorldProgramRun.transfer_effect worldRun
@@ -2291,7 +2354,7 @@ theorem callWethTransfer_worldEffect_quiet
     rw [returnDataLength]
     decide +kernel
   obtain ⟨bodyPre, -, bodyState, bodyLogs, bodyWf, checkedWindow, bodyRun⟩ :=
-    checkedCanonicalTrue_successFrame occurrence stack crossing
+    checkedCanonicalTrue_successFrame occurrence hfork stack crossing
       returndataBound callPostWf suffix
   have bodyStorage : Devm.getStor bodyPre = Devm.getStor callPost :=
     funext (getStor_eq_of_state_eq bodyState)
@@ -2309,7 +2372,7 @@ theorem callWethTransfer_worldEffect_quiet
       (by
         change 32 ≤ offset
         omega)
-      operandPrefix (Ninst.Run.of_runCompiled crossing) successFlag
+      operandPrefix (Ninst.Run.of_runCompiled crossing) hfork successFlag
       callPreWindow
     exact checkedWindow callPostWindow
   · rcases child with ⟨childSevm, childPre, rawPost, currentTarget, -, -,
@@ -2347,6 +2410,7 @@ theorem callWethTransfer_worldEffect
     {entry callPre callPost final : Devm} {image : Bytes}
     {receiverWord assetsWord assets : B256} {receiver : Adr} {body : Func}
     (config : DirectWethConfiguration sevm.currentTarget sevm callPre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memory : MemoryImage entry image)
     (receiverAt : ImageWordAt image receiverWord receiver.toB256)
     (assetsAt : ImageWordAt image assetsWord assets)
@@ -2376,7 +2440,7 @@ theorem callWethTransfer_worldEffect
         MemWordAt entry offset w → MemWordAt bodyPre offset w) ∧
       Func.RunCompiledTo fs sevm bodyPre body (.ok final) := by
   obtain ⟨bodyPre, movement, foreign, logged, output, bodyWf, window, bodyRun,
-    -⟩ := callWethTransfer_worldEffect_quiet config memory receiverAt assetsAt
+    -⟩ := callWethTransfer_worldEffect_quiet config hfork memory receiverAt assetsAt
       receiverAboveSelector assetsAboveReceiver staging dynamic crossing suffix
   exact ⟨bodyPre, movement, foreign, logged, output, bodyWf, window, bodyRun⟩
 
@@ -2388,6 +2452,7 @@ theorem callWethTransfer_exactEffect
     {entry callPre callPost final : Devm} {image : Bytes}
     {receiverWord assetsWord assets : B256} {receiver : Adr} {body : Func}
     (config : DirectWethConfiguration sevm.currentTarget sevm callPre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memory : MemoryImage entry image)
     (receiverAt : ImageWordAt image receiverWord receiver.toB256)
     (assetsAt : ImageWordAt image assetsWord assets)
@@ -2415,10 +2480,10 @@ theorem callWethTransfer_exactEffect
   obtain ⟨gasWord, rest, stack, -⟩ :=
     transferStaging_boundary memory receiverAt assetsAt
       receiverAboveSelector assetsAboveReceiver staging
-  have depth := checkedCall_depth_ne_zero stack crossing suffix
+  have depth := checkedCall_depth_ne_zero stack crossing hfork suffix
   have gasAvailable : CallGasAvailable callPre 68 :=
-    callGasAvailable_of_runCompiled config crossing
-  have occurrence := transferStaging_occurrence config memory receiverAt
+    callGasAvailable_of_runCompiled config hfork crossing
+  have occurrence := transferStaging_occurrence config hfork memory receiverAt
     assetsAt receiverAboveSelector assetsAboveReceiver staging depth dynamic
     gasAvailable crossing
   obtain ⟨status, statusTail, _, statusStack, statusNonzero, _, _, _, _, _⟩ :=
@@ -2430,7 +2495,7 @@ theorem callWethTransfer_exactEffect
       ExactWethChildSuccess sevm callPre callPost call
         (transferCalldata receiver assets) callPost.returnData false :=
     ExactWethChildOccurrence.success_of_post occurrence successFlag rfl
-  have programRun := ExactWethChildSuccess.programRun rawSuccess
+  have programRun := ExactWethChildSuccess.programRun hfork rawSuccess
   obtain ⟨movement, offAddress, output⟩ :=
     SuccessfulWethProgramRun.transfer_effect programRun
   have returnDataLength : callPost.returnData.length = 32 := by
@@ -2439,7 +2504,7 @@ theorem callWethTransfer_exactEffect
     rw [returnDataLength]
     decide +kernel
   obtain ⟨bodyPre, _, bodyRun⟩ :=
-    checkedCanonicalTrue_success occurrence stack crossing returndataBound
+    checkedCanonicalTrue_success occurrence hfork stack crossing returndataBound
       suffix
   exact ⟨bodyPre, movement, offAddress, output, bodyRun⟩
 
@@ -2447,6 +2512,7 @@ theorem callWethTransfer_exactEffect
 theorem balanceOfStaging_rollback
     {sevm : Sevm} {entry callPre callPost : Devm} {image : Bytes}
     (config : DirectWethConfiguration sevm.currentTarget sevm callPre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memory : MemoryImage entry image)
     (staging : Line.Run sevm entry balanceOfStaging callPre)
     (depth : sevm.depth ≠ 0)
@@ -2455,7 +2521,7 @@ theorem balanceOfStaging_rollback
     (failureFlag : ∃ tail, callPost.stack = (0 : B256) :: tail) :
     callPost.state = callPre.state := by
   exact ExactWethChildOccurrence.rollback_of_post
-    (balanceOfStaging_occurrence config memory staging depth gasAvailable
+    (balanceOfStaging_occurrence config hfork memory staging depth gasAvailable
       crossing) failureFlag
 
 /-- A failed staged delegated transfer exposes no partial WETH write. -/
@@ -2463,6 +2529,7 @@ theorem transferFromStaging_rollback
     {sevm : Sevm} {entry callPre callPost : Devm} {image : Bytes}
     {assetsWord assets : B256}
     (config : DirectWethConfiguration sevm.currentTarget sevm callPre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memory : MemoryImage entry image)
     (assetsAt : ImageWordAt image assetsWord assets)
     (assetsAboveCalldata : 96 ≤ (assetsWord * 32).toNat)
@@ -2475,7 +2542,7 @@ theorem transferFromStaging_rollback
     (failureFlag : ∃ tail, callPost.stack = (0 : B256) :: tail) :
     callPost.state = callPre.state := by
   exact ExactWethChildOccurrence.rollback_of_post
-    (transferFromStaging_occurrence config memory assetsAt
+    (transferFromStaging_occurrence config hfork memory assetsAt
       assetsAboveCalldata staging depth dynamic gasAvailable crossing)
     failureFlag
 
@@ -2484,6 +2551,7 @@ theorem transferStaging_rollback
     {sevm : Sevm} {entry callPre callPost : Devm} {image : Bytes}
     {receiverWord assetsWord assets : B256} {receiver : Adr}
     (config : DirectWethConfiguration sevm.currentTarget sevm callPre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memory : MemoryImage entry image)
     (receiverAt : ImageWordAt image receiverWord receiver.toB256)
     (assetsAt : ImageWordAt image assetsWord assets)
@@ -2498,7 +2566,7 @@ theorem transferStaging_rollback
     (failureFlag : ∃ tail, callPost.stack = (0 : B256) :: tail) :
     callPost.state = callPre.state := by
   exact ExactWethChildOccurrence.rollback_of_post
-    (transferStaging_occurrence config memory receiverAt assetsAt
+    (transferStaging_occurrence config hfork memory receiverAt assetsAt
       receiverAboveSelector assetsAboveReceiver staging depth dynamic
       gasAvailable crossing) failureFlag
 
@@ -2516,6 +2584,7 @@ The depth fact comes from the actual crossing and the executed zero-status
 guard, independently of the configured asset and any call-gas premise. -/
 private theorem readTotalAssets_depth_ne_zero
     {fs : List Func} {sevm : Sevm} {entry final : Devm} {body : Func}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (run : Func.RunCompiledTo fs sevm entry
       (Blanc.ProrataWethVault.readTotalAssets body) (.ok final)) :
@@ -2536,7 +2605,7 @@ private theorem readTotalAssets_depth_ne_zero
   obtain ⟨status, tail, _, statusStack, statusNonzero, _⟩ :=
     checkedCall_status_nonzero suffix
   rcases of_run_staticcall_val_with_depth operands
-      (Ninst.Run.of_runCompiled crossing) with failure | success
+      (Ninst.Run.of_runCompiled crossing) hfork with failure | success
   · obtain ⟨zeroPrefix, -, -⟩ := failure
     have statusPrefix : status :: [] <<+ callPost.stack := by
       rw [statusStack]
@@ -2549,13 +2618,16 @@ private theorem readTotalAssets_depth_ne_zero
 theorem staticGasAvailable_of_runCompiled
     {sevm : Sevm} {pre post : Devm} {inputSize : B256}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (run : Ninst.RunCompiled sevm pre staticcall post) :
     StaticGasAvailable pre inputSize := by
   intro gasWord rest stack
   obtain ⟨xl, _, steps⟩ := run
   have execution := steps 0
   rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at execution
-  let popped := pre.setMach ⟨rest, pre.memory, pre.gasLeft⟩
+  have hgas : sevm.benvStat.rules.gas = pragueRules.gas :=
+    BenvStat.gas_eq_prague_of_stateGas_none hfork.rules_stateGas_none
+  let popped := pre.setMach ⟨rest, pre.memory, pre.gasLeft, pre.stateGas⟩
   let base := addAccessedAddress popped wethAccount
   have address : wethAccount.toB256.toAdr = wethAccount :=
     toAdr_toB256 wethAccount
@@ -2563,30 +2635,34 @@ theorem staticGasAvailable_of_runCompiled
   have nondelegated : getDelegatedCodeAddress (pre.getCode wethAccount) = none := by
     unfold getDelegatedCodeAddress
     rw [if_neg config.notDelegated]
-  have delegation : accessDelegation base wethAccount =
+  have delegation : sevm.benvStat.rules.gas.accessDelegation base wethAccount =
       ⟨false, wethAccount, pre.getCode wethAccount, 0, base⟩ := by
-    simp only [accessDelegation, code, nondelegated]
+    simp only [GasSchedule.accessDelegation, code, nondelegated]
   dsimp only [base, popped] at delegation
   simp only [Xinst.step, Devm.pop_eq_ok stack, bind, Except.bind] at execution
   rw [Devm.popToAdr_eq_ok
     (devm := pre.setMach ⟨wethAccount.toB256 :: 28 :: inputSize :: 0 :: 32 :: rest,
-      pre.memory, pre.gasLeft⟩) rfl] at execution
-  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach] at execution
+      pre.memory, pre.gasLeft, pre.stateGas⟩) rfl] at execution
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach, Devm.stateGas_setMach] at execution
   rw [Devm.popToNat_eq_ok
     (devm := pre.setMach ⟨28 :: inputSize :: 0 :: 32 :: rest,
-      pre.memory, pre.gasLeft⟩) rfl] at execution
-  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach] at execution
+      pre.memory, pre.gasLeft, pre.stateGas⟩) rfl] at execution
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach, Devm.stateGas_setMach] at execution
   rw [Devm.popToNat_eq_ok
     (devm := pre.setMach ⟨inputSize :: 0 :: 32 :: rest,
-      pre.memory, pre.gasLeft⟩) rfl] at execution
-  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach] at execution
+      pre.memory, pre.gasLeft, pre.stateGas⟩) rfl] at execution
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach, Devm.stateGas_setMach] at execution
   rw [Devm.popToNat_eq_ok
-    (devm := pre.setMach ⟨0 :: 32 :: rest, pre.memory, pre.gasLeft⟩) rfl] at execution
-  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach] at execution
+    (devm := pre.setMach ⟨0 :: 32 :: rest, pre.memory, pre.gasLeft,
+      pre.stateGas⟩) rfl] at execution
+  simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach, Devm.stateGas_setMach] at execution
   rw [Devm.popToNat_eq_ok
-    (devm := pre.setMach ⟨32 :: rest, pre.memory, pre.gasLeft⟩) rfl] at execution
+    (devm := pre.setMach ⟨32 :: rest, pre.memory, pre.gasLeft,
+      pre.stateGas⟩) rfl] at execution
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
-    address, delegation, Nat.add_zero] at execution
+    Devm.stateGas_setMach, address, delegation, Nat.add_zero] at execution
+  simp only [hfork.rules_stateGas_none, hgas, pragueRules_gas_accessCost]
+    at execution
   split at execution
   · cases XStep.run_ofExcept_error execution
   · rename_i charged charge
@@ -2623,6 +2699,21 @@ private theorem balanceOfStaging_run_eq
         exact (Except.ok.inj leftEq).symm
     | exec x =>
         exact (nonexec x rfl).elim
+    | dupn imm =>
+        rcases left with ⟨xl, -, pc, leftRun⟩
+        rcases right with ⟨xl', -, pc', rightRun⟩
+        simp only [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at leftRun rightRun
+        exact Except.ok.inj (leftRun.2.trans rightRun.2.symm)
+    | swapn imm =>
+        rcases left with ⟨xl, -, pc, leftRun⟩
+        rcases right with ⟨xl', -, pc', rightRun⟩
+        simp only [Ninst.StepRun, Ninst.step_swapn, Step.run_ofExecution] at leftRun rightRun
+        exact Except.ok.inj (leftRun.2.trans rightRun.2.symm)
+    | exchange imm =>
+        rcases left with ⟨xl, -, pc, leftRun⟩
+        rcases right with ⟨xl', -, pc', rightRun⟩
+        simp only [Ninst.StepRun, Ninst.step_exchange, Step.run_ofExecution] at leftRun rightRun
+        exact Except.ok.inj (leftRun.2.trans rightRun.2.symm)
   have lineUnique : ∀ {line : Line} {pre post₁ post₂ : Devm},
       (∀ n ∈ line,
         Blanc.Ninst.pcFree n = true ∧ ∀ x, n ≠ .exec x) →
@@ -2660,11 +2751,12 @@ depth-and-gas package for every exact run of the fixed staging line. -/
 theorem totalAssetsResources_of_run
     {fs : List Func} {sevm : Sevm} {entry final : Devm} {body : Func}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf entry.memory)
     (run : Func.RunCompiledTo fs sevm entry
       (Blanc.ProrataWethVault.readTotalAssets body) (.ok final)) :
     TotalAssetsResources sevm entry := by
-  refine ⟨readTotalAssets_depth_ne_zero memoryWf run, ?_⟩
+  refine ⟨readTotalAssets_depth_ne_zero hfork memoryWf run, ?_⟩
   obtain ⟨callPre, _, staging, crossing, _⟩ := readTotalAssets_trace run
   have stagingCode : Devm.getCode entry = Devm.getCode callPre :=
     Line.of_inv Devm.getCode (by
@@ -2678,7 +2770,7 @@ theorem totalAssetsResources_of_run
     exact config.code
   intro otherPre otherStaging
   rw [balanceOfStaging_run_eq otherStaging staging]
-  exact staticGasAvailable_of_runCompiled callConfig crossing
+  exact staticGasAvailable_of_runCompiled callConfig hfork crossing
 
 /-! ## Shared quote snapshot
 
@@ -2695,6 +2787,7 @@ theorem quoteSnapshot_effect
     {fs : List Func} {sevm : Sevm} {readPre post : Devm} {readImage : Bytes}
     {arithmetic : Func}
     (config : DirectWethConfiguration sevm.currentTarget sevm readPre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf readPre.memory)
     (memoryReads : Mem.Reads readPre.memory readImage)
     (run : Func.RunCompiledTo fs sevm readPre
@@ -2723,7 +2816,7 @@ theorem quoteSnapshot_effect
       quotePre.getCode wethAccount = readPre.getCode wethAccount ∧
       Func.RunCompiledTo fs sevm quotePre arithmetic (.ok post) := by
   have resources : TotalAssetsResources sevm readPre := by
-    apply totalAssetsResources_of_run config memoryWf
+    apply totalAssetsResources_of_run config hfork memoryWf
     simpa only [Blanc.ProrataWethVault.snapshotQuoteState] using run
   unfold Blanc.ProrataWethVault.snapshotQuoteState at run
   obtain ⟨callPre, callPost, staging, crossing, suffix⟩ :=
@@ -2740,7 +2833,7 @@ theorem quoteSnapshot_effect
     exact config.code
   obtain ⟨assets, stagePre, -, -, stageStorage, stageLogs, returnedWord,
       assetsPrefix, stageWf, stageCode, stageWindow, stageRun⟩ :=
-    readTotalAssets_exactEffect callConfig ⟨memoryWf, memoryReads⟩ staging
+    readTotalAssets_exactEffect callConfig hfork ⟨memoryWf, memoryReads⟩ staging
       resources.1 (resources.2 callPre staging) crossing suffix
   have stagingStorage : Devm.getStor readPre = Devm.getStor callPre :=
     Line.of_inv Devm.getStor (by line_inv) staging
@@ -2974,6 +3067,7 @@ theorem vault_exactWethChild_of_occurrence
     (occurrence : Exec.NinstOccurrence root)
     (sameFrame : Exec.Deriv.ParentPrefix root occurrence.node)
     (decoded : occurrence.instruction = .exec x)
+    (hfork : CoveredFork root.sevm.benvStat.fork)
     (config : DirectWethConfiguration vault occurrence.node.sevm
       occurrence.node.devm)
     (source : StagedSourceFrame occurrence.node.sevm occurrence.node.devm)
@@ -3005,6 +3099,9 @@ theorem vault_exactWethChild_of_occurrence
   have run : Ninst.RunCompiled occurrence.node.sevm occurrence.node.devm
       (.exec x) post :=
     runCompiled_of_spawn spawn entered child resumed
+  have nodeFork : CoveredFork occurrence.node.sevm.benvStat.fork := by
+    rw [sameFrame.sevm_eq]
+    exact hfork
   have memory : MemoryImage entry entry.memory.data.toList := by
     refine ⟨source.memoryWf form entry staging', ?_⟩
     intro index
@@ -3017,8 +3114,8 @@ theorem vault_exactWethChild_of_occurrence
         rw [instruction] at run
         exact run
       have gasAvailable : StaticGasAvailable occurrence.node.devm 36 :=
-        staticGasAvailable_of_runCompiled config' crossing
-      have result := balanceOfStaging_occurrence config' memory staging' depth
+        staticGasAvailable_of_runCompiled config' nodeFork crossing
+      have result := balanceOfStaging_occurrence config' nodeFork memory staging' depth
         gasAvailable crossing
       refine ⟨balanceOfCalldata occurrence.node.sevm.currentTarget, true, ?_, ?_⟩
       · rw [instruction]
@@ -3031,14 +3128,14 @@ theorem vault_exactWethChild_of_occurrence
         rw [instruction] at run
         exact run
       have gasAvailable : CallGasAvailable occurrence.node.devm 100 :=
-        callGasAvailable_of_runCompiled config' crossing
+        callGasAvailable_of_runCompiled config' nodeFork crossing
       have above : 96 ≤ (Blanc.ProrataWethVault.amountWord * 32).toNat := by
         decide +kernel
       obtain ⟨assets, assetsAt⟩ :
           ∃ assets : B256, ImageWordAt entry.memory.data.toList
             Blanc.ProrataWethVault.amountWord assets :=
         ⟨_, imageWordAt_self _ _⟩
-      have result := transferFromStaging_occurrence config' memory assetsAt
+      have result := transferFromStaging_occurrence config' nodeFork memory assetsAt
         above staging' depth (dynamic instruction) gasAvailable crossing
       refine ⟨transferFromCalldata occurrence.node.sevm.caller
         occurrence.node.sevm.currentTarget assets, false, ?_, ?_⟩
@@ -3052,14 +3149,14 @@ theorem vault_exactWethChild_of_occurrence
         rw [instruction] at run
         exact run
       have gasAvailable : CallGasAvailable occurrence.node.devm 100 :=
-        callGasAvailable_of_runCompiled config' crossing
+        callGasAvailable_of_runCompiled config' nodeFork crossing
       have above : 96 ≤ (Blanc.ProrataWethVault.quoteWord * 32).toNat := by
         decide +kernel
       obtain ⟨assets, assetsAt⟩ :
           ∃ assets : B256, ImageWordAt entry.memory.data.toList
             Blanc.ProrataWethVault.quoteWord assets :=
         ⟨_, imageWordAt_self _ _⟩
-      have result := transferFromStaging_occurrence config' memory assetsAt
+      have result := transferFromStaging_occurrence config' nodeFork memory assetsAt
         above staging' depth (dynamic instruction) gasAvailable crossing
       refine ⟨transferFromCalldata occurrence.node.sevm.caller
         occurrence.node.sevm.currentTarget assets, false, ?_, ?_⟩
@@ -3073,7 +3170,7 @@ theorem vault_exactWethChild_of_occurrence
         rw [instruction] at run
         exact run
       have gasAvailable : CallGasAvailable occurrence.node.devm 68 :=
-        callGasAvailable_of_runCompiled config' crossing
+        callGasAvailable_of_runCompiled config' nodeFork crossing
       obtain ⟨receiver, receiverAt⟩ :=
         source.receiverShaped Blanc.ProrataWethVault.amountWord entry staging'
       have receiverAbove :
@@ -3086,7 +3183,7 @@ theorem vault_exactWethChild_of_occurrence
           ∃ assets : B256, ImageWordAt entry.memory.data.toList
             Blanc.ProrataWethVault.amountWord assets :=
         ⟨_, imageWordAt_self _ _⟩
-      have result := transferStaging_occurrence config' memory receiverAt
+      have result := transferStaging_occurrence config' nodeFork memory receiverAt
         assetsAt receiverAbove assetsAbove staging' depth
         (dynamic instruction) gasAvailable crossing
       refine ⟨transferCalldata receiver assets, false, ?_, ?_⟩
@@ -3100,7 +3197,7 @@ theorem vault_exactWethChild_of_occurrence
         rw [instruction] at run
         exact run
       have gasAvailable : CallGasAvailable occurrence.node.devm 68 :=
-        callGasAvailable_of_runCompiled config' crossing
+        callGasAvailable_of_runCompiled config' nodeFork crossing
       obtain ⟨receiver, receiverAt⟩ :=
         source.receiverShaped Blanc.ProrataWethVault.quoteWord entry staging'
       have receiverAbove :
@@ -3113,7 +3210,7 @@ theorem vault_exactWethChild_of_occurrence
           ∃ assets : B256, ImageWordAt entry.memory.data.toList
             Blanc.ProrataWethVault.quoteWord assets :=
         ⟨_, imageWordAt_self _ _⟩
-      have result := transferStaging_occurrence config' memory receiverAt
+      have result := transferStaging_occurrence config' nodeFork memory receiverAt
         assetsAt receiverAbove assetsAbove staging' depth
         (dynamic instruction) gasAvailable crossing
       refine ⟨transferCalldata receiver assets, false, ?_, ?_⟩

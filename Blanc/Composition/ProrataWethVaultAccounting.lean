@@ -389,6 +389,7 @@ named natural-number charge and retains its exact configured WETH effect. -/
 theorem mint_compiled_quote
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm = selector "mint" [.uint256, .address]) :
@@ -403,7 +404,7 @@ theorem mint_compiled_quote
       InboundEffect sevm (Sevm.argWord sevm 1) charged (Sevm.argWord sevm 0)
         charged pre post := by
   obtain ⟨-, supply, supplyEq, stable, chargeFits, -, -, -, room, effect⟩ :=
-    mint_compiled_effect config memoryWf run selectorEq
+    mint_compiled_effect (hfork := hfork) config memoryWf run selectorEq
   refine ⟨supply, _, supplyEq, ?_, stable, room, effect⟩
   exact B256.toNat_toB256_of_lt chargeFits
 
@@ -412,6 +413,7 @@ named natural-number burn and retains its exact configured WETH effect. -/
 theorem withdraw_compiled_quote
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -426,7 +428,7 @@ theorem withdraw_compiled_quote
       OutboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 2)
         (Sevm.argWord sevm 0) burned burned pre post := by
   obtain ⟨-, supply, supplyEq, -, burnFits, -, -, -, -, -, -, burnable, effect⟩ :=
-    withdraw_compiled_effect config memoryWf run selectorEq
+    withdraw_compiled_effect (hfork := hfork) config memoryWf run selectorEq
   refine ⟨supply, _, supplyEq, ?_, ?_, effect⟩
   exact B256.toNat_toB256_of_lt burnFits
   exact burnable
@@ -437,6 +439,7 @@ guard already provide its debit bounds. -/
 theorem withdraw_compiled_normal_snapshot
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -449,7 +452,7 @@ theorem withdraw_compiled_normal_snapshot
       snapshotAt sevm post = normalOutbound (Sevm.argWord sevm 0).toNat
         burned.toNat (snapshotAt sevm pre) := by
   obtain ⟨supply, burned, supplyEq, quote, burnable, effect⟩ :=
-    withdraw_compiled_quote config memoryWf run selectorEq
+    withdraw_compiled_quote (hfork := hfork) config memoryWf run selectorEq
   have quote' : burned.toNat = Blanc.ProrataWethVault.previewWithdrawN
       (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
         (snapshotAt sevm pre).supply := by
@@ -476,6 +479,7 @@ the capacity facts that make the supply-row addition non-wrapping. -/
 theorem deposit_compiled_quote
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm = selector "deposit" [.uint256, .address]) :
@@ -490,7 +494,7 @@ theorem deposit_compiled_quote
       InboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 0)
         shares shares pre post := by
   obtain ⟨supply, shares, supplyEq, quote, stable, room, effect⟩ :=
-    deposit_compiled_effect_named config memoryWf run selectorEq
+    deposit_compiled_effect_named (hfork := hfork) config memoryWf run selectorEq
   exact ⟨supply, shares, supplyEq, quote, stable, room, effect⟩
 
 /-- The compiled `redeem` occurrence exposes its floor asset quote in the
@@ -498,6 +502,7 @@ same named form as the other three public endpoints. -/
 theorem redeem_compiled_quote
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -512,7 +517,7 @@ theorem redeem_compiled_quote
       OutboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 2)
         assets (Sevm.argWord sevm 0) assets pre post := by
   obtain ⟨supply, assets, supplyEq, quote, burnable, effect⟩ :=
-    redeem_compiled_effect_named config memoryWf run selectorEq
+    redeem_compiled_effect_named (hfork := hfork) config memoryWf run selectorEq
   exact ⟨supply, assets, supplyEq, quote, burnable, effect⟩
 
 /-- A compiled `deposit` reaches the real normal inbound boundary once its
@@ -521,6 +526,7 @@ the supply-row fact. -/
 theorem deposit_compiled_normal_snapshot
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm = selector "deposit" [.uint256, .address])
@@ -534,7 +540,7 @@ theorem deposit_compiled_normal_snapshot
       snapshotAt sevm post = normalInbound (Sevm.argWord sevm 0).toNat
         shares.toNat (snapshotAt sevm pre) := by
   obtain ⟨supply, shares, supplyEq, quote, stable, room, effect⟩ :=
-    deposit_compiled_quote config memoryWf run selectorEq
+    deposit_compiled_quote (hfork := hfork) config memoryWf run selectorEq
   have quote' : shares.toNat = Blanc.ProrataWethVault.convertToSharesN
       (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
         (snapshotAt sevm pre).supply := by
@@ -551,6 +557,7 @@ inverse ceil quote rather than coercing it to the deposit quote. -/
 theorem mint_compiled_normal_snapshot
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm = selector "mint" [.uint256, .address])
@@ -568,7 +575,7 @@ theorem mint_compiled_normal_snapshot
       snapshotAt sevm post = normalInbound charged.toNat
         (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre) := by
   obtain ⟨supply, charged, supplyEq, quote, stable, room, effect⟩ :=
-    mint_compiled_quote config memoryWf run selectorEq
+    mint_compiled_quote (hfork := hfork) config memoryWf run selectorEq
   have quote' : charged.toNat = Blanc.ProrataWethVault.previewMintN
       (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
         (snapshotAt sevm pre).supply := by
@@ -586,6 +593,7 @@ pays the vault itself. -/
 theorem withdraw_compiled_retained_snapshot
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -597,7 +605,7 @@ theorem withdraw_compiled_retained_snapshot
           (snapshotAt sevm pre).supply ∧
       snapshotAt sevm post = retainedOutbound burned.toNat (snapshotAt sevm pre) := by
   obtain ⟨supply, burned, supplyEq, quote, burnable, effect⟩ :=
-    withdraw_compiled_quote config memoryWf run selectorEq
+    withdraw_compiled_quote (hfork := hfork) config memoryWf run selectorEq
   have quote' : burned.toNat = Blanc.ProrataWethVault.previewWithdrawN
       (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
         (snapshotAt sevm pre).supply := by
@@ -611,6 +619,7 @@ receiver differs from the vault. -/
 theorem redeem_compiled_normal_snapshot
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -623,7 +632,7 @@ theorem redeem_compiled_normal_snapshot
       snapshotAt sevm post = normalOutbound assets.toNat
         (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre) := by
   obtain ⟨supply, assets, supplyEq, quote, burnable, effect⟩ :=
-    redeem_compiled_quote config memoryWf run selectorEq
+    redeem_compiled_quote (hfork := hfork) config memoryWf run selectorEq
   have quote' : assets.toNat = Blanc.ProrataWethVault.convertToAssetsN
       (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
         (snapshotAt sevm pre).supply := by
@@ -637,6 +646,7 @@ itself. -/
 theorem redeem_compiled_retained_snapshot
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -649,7 +659,7 @@ theorem redeem_compiled_retained_snapshot
       snapshotAt sevm post = retainedOutbound (Sevm.argWord sevm 0).toNat
         (snapshotAt sevm pre) := by
   obtain ⟨supply, assets, supplyEq, quote, burnable, effect⟩ :=
-    redeem_compiled_quote config memoryWf run selectorEq
+    redeem_compiled_quote (hfork := hfork) config memoryWf run selectorEq
   have quote' : assets.toNat = Blanc.ProrataWethVault.convertToAssetsN
       (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
         (snapshotAt sevm pre).supply := by
@@ -1454,6 +1464,7 @@ theorem deposit_compiled_share_evidence
     (wethRowNof : B256.Nof (Stor.rest (Devm.getStor pre wethAccount)
       sevm.currentTarget) (Sevm.argWord sevm 0))
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm = selector "deposit" [.uint256, .address]) :
@@ -1469,7 +1480,7 @@ theorem deposit_compiled_share_evidence
         shares, shares⟩ target depositorNotVault supplyNof wethRowNof quote effect) := by
   obtain ⟨-, supply, supplyEq, stable, quoteFits, -, receiverValid, -, room,
       rawEffect⟩ :=
-    deposit_compiled_effect config memoryWf run selectorEq
+    deposit_compiled_effect (hfork := hfork) config memoryWf run selectorEq
   let shares := Nat.toB256 (Blanc.ProrataWethVault.convertToSharesN
     (Sevm.argWord sevm 0).toNat
     ((pre.state.getStor wethAccount).get sevm.currentTarget.toB256).toNat supply.toNat)
@@ -1520,6 +1531,7 @@ theorem mint_compiled_share_evidence
         (snapshotAt sevm pre).balance (snapshotAt sevm pre).supply →
       B256.Nof (Stor.rest (Devm.getStor pre wethAccount) sevm.currentTarget) charged)
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm = selector "mint" [.uint256, .address]) :
@@ -1537,7 +1549,7 @@ theorem mint_compiled_share_evidence
         Sevm.argWord sevm 0, assets⟩ target depositorNotVault supplyNof rowNof quote effect) := by
   obtain ⟨-, supply, supplyEq, stable, quoteFits, -, receiverValid, -, room,
       rawEffect⟩ :=
-    mint_compiled_effect config memoryWf run selectorEq
+    mint_compiled_effect (hfork := hfork) config memoryWf run selectorEq
   let assets := Nat.toB256 (Blanc.ProrataWethVault.previewMintN
     (Sevm.argWord sevm 0).toNat
     ((pre.state.getStor wethAccount).get sevm.currentTarget.toB256).toNat supply.toNat)
@@ -1583,6 +1595,7 @@ theorem mint_compiled_share_evidence
 private theorem withdraw_compiled_share_raw
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -1599,7 +1612,7 @@ private theorem withdraw_compiled_share_raw
           (Sevm.argWord sevm 2)).toNat := by
   obtain ⟨-, supply, supplyEq, -, quoteFits, -, receiverValid, -, ownerValid,
       -, covered, rawBurnable, rawEffect⟩ :=
-    withdraw_compiled_effect config memoryWf run selectorEq
+    withdraw_compiled_effect (hfork := hfork) config memoryWf run selectorEq
   let shares := Nat.toB256 (Blanc.ProrataWethVault.previewWithdrawN
     (Sevm.argWord sevm 0).toNat
     ((pre.state.getStor wethAccount).get sevm.currentTarget.toB256).toNat supply.toNat)
@@ -1627,6 +1640,7 @@ private theorem withdraw_compiled_share_raw
 private theorem redeem_compiled_share_raw
     {sevm : Sevm} {pre post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -1643,7 +1657,7 @@ private theorem redeem_compiled_share_raw
           (Sevm.argWord sevm 2)).toNat := by
   obtain ⟨-, supply, supplyEq, -, quoteFits, -, receiverValid, -, ownerValid,
       -, covered, rawBurnable, rawEffect⟩ :=
-    redeem_compiled_effect config memoryWf run selectorEq
+    redeem_compiled_effect (hfork := hfork) config memoryWf run selectorEq
   let assets := Nat.toB256 (Blanc.ProrataWethVault.convertToAssetsN
     (Sevm.argWord sevm 0).toNat
     ((pre.state.getStor wethAccount).get sevm.currentTarget.toB256).toNat supply.toNat)
@@ -1675,6 +1689,7 @@ theorem withdrawNormal_compiled_share_evidence
     (target : sevm.currentTarget = vault)
     (receiverNotVault : sevm.currentTarget ≠ (Sevm.argWord sevm 1).toAdr)
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -1690,7 +1705,7 @@ theorem withdrawNormal_compiled_share_evidence
         ⟨Sevm.argWord sevm 1, Sevm.argWord sevm 2, Sevm.argWord sevm 0, shares, shares⟩
         target receiverNotVault burnable quote effect) := by
   obtain ⟨shares, burnable, quote, effect, receiverValid, ownerValid, covered⟩ :=
-    withdraw_compiled_share_raw config memoryWf run selectorEq
+    withdraw_compiled_share_raw (hfork := hfork) config memoryWf run selectorEq
   refine ⟨shares, burnable, quote, effect, ?_⟩
   exact .withdrawNormal
     (words := ⟨Sevm.argWord sevm 1, Sevm.argWord sevm 2, Sevm.argWord sevm 0,
@@ -1705,6 +1720,7 @@ theorem withdrawSelf_compiled_share_evidence
     (target : sevm.currentTarget = vault)
     (receiverIsVault : (Sevm.argWord sevm 1).toAdr = sevm.currentTarget)
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -1720,7 +1736,7 @@ theorem withdrawSelf_compiled_share_evidence
         ⟨Sevm.argWord sevm 1, Sevm.argWord sevm 2, Sevm.argWord sevm 0, shares, shares⟩
         target receiverIsVault burnable quote effect) := by
   obtain ⟨shares, burnable, quote, effect, receiverValid, ownerValid, covered⟩ :=
-    withdraw_compiled_share_raw config memoryWf run selectorEq
+    withdraw_compiled_share_raw (hfork := hfork) config memoryWf run selectorEq
   refine ⟨shares, burnable, quote, effect, ?_⟩
   exact .withdrawSelf
     (words := ⟨Sevm.argWord sevm 1, Sevm.argWord sevm 2, Sevm.argWord sevm 0,
@@ -1735,6 +1751,7 @@ theorem redeemNormal_compiled_share_evidence
     (target : sevm.currentTarget = vault)
     (receiverNotVault : sevm.currentTarget ≠ (Sevm.argWord sevm 1).toAdr)
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -1750,7 +1767,7 @@ theorem redeemNormal_compiled_share_evidence
         ⟨Sevm.argWord sevm 1, Sevm.argWord sevm 2, assets, Sevm.argWord sevm 0, assets⟩
         target receiverNotVault burnable quote effect) := by
   obtain ⟨assets, burnable, quote, effect, receiverValid, ownerValid, covered⟩ :=
-    redeem_compiled_share_raw config memoryWf run selectorEq
+    redeem_compiled_share_raw (hfork := hfork) config memoryWf run selectorEq
   refine ⟨assets, burnable, quote, effect, ?_⟩
   exact .redeemNormal
     (words := ⟨Sevm.argWord sevm 1, Sevm.argWord sevm 2, assets,
@@ -1765,6 +1782,7 @@ theorem redeemSelf_compiled_share_evidence
     (target : sevm.currentTarget = vault)
     (receiverIsVault : (Sevm.argWord sevm 1).toAdr = sevm.currentTarget)
     (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (memoryWf : Mem.Wf pre.memory)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
@@ -1780,7 +1798,7 @@ theorem redeemSelf_compiled_share_evidence
         ⟨Sevm.argWord sevm 1, Sevm.argWord sevm 2, assets, Sevm.argWord sevm 0, assets⟩
         target receiverIsVault burnable quote effect) := by
   obtain ⟨assets, burnable, quote, effect, receiverValid, ownerValid, covered⟩ :=
-    redeem_compiled_share_raw config memoryWf run selectorEq
+    redeem_compiled_share_raw (hfork := hfork) config memoryWf run selectorEq
   refine ⟨assets, burnable, quote, effect, ?_⟩
   exact .redeemSelf
     (words := ⟨Sevm.argWord sevm 1, Sevm.argWord sevm 2, assets,
