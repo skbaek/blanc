@@ -322,6 +322,7 @@ node reached by the loose source prefix.  Its gas operand is the pushed
 literal zero, so no gas-sensitive crossing is needed. -/
 theorem weth_withdraw_callNode_identity_of_exec {sevm : Sevm} {pre post : Devm}
     (run : Exec 0 sevm pre (.ok post))
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hcode : some sevm.code.toList = Blanc.weth.compile)
     (htarget : sevm.currentTarget = wethAccount)
     (hdirect : sevm.codeAddress = some wethAccount)
@@ -346,7 +347,8 @@ theorem weth_withdraw_callNode_identity_of_exec {sevm : Sevm} {pre post : Devm}
     ⟨mainCursor, mainReached, actualBurn⟩
   have seed : Devm.EqModGas entry mainCursor.pre :=
     (Devm.EqModGas.refl pre).of_burn burn actualBurn
-  rcases mainCursor.ofRunPrefix compiled rfl hprefix seed with
+  rcases mainCursor.ofRunPrefix compiled rfl hprefix seed
+      (CoveredFork.rules_stateGas_none hfork) with
     ⟨callHead, agree, callReached⟩
   unfold wethWithdrawCallSuffix at callHead
   rcases callHead.nextForward rfl with ⟨callCursor, callEdge, callRun⟩
@@ -381,6 +383,7 @@ theorem weth_withdraw_callNode_identity_of_exec {sevm : Sevm} {pre post : Devm}
 
 private theorem weth_withdraw_callNode_facts {sevm : Sevm} {pre post : Devm}
     (run : Exec 0 sevm pre (.ok post))
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hcode : some sevm.code.toList = Blanc.weth.compile)
     (htarget : sevm.currentTarget = wethAccount)
     (hdirect : sevm.codeAddress = some wethAccount)
@@ -449,7 +452,8 @@ private theorem weth_withdraw_callNode_facts {sevm : Sevm} {pre post : Devm}
     ⟨mainCursor, mainReached, actualBurn⟩
   have seed : Devm.EqModGas entry mainCursor.pre :=
     (Devm.EqModGas.refl pre).of_burn burn actualBurn
-  rcases mainCursor.ofRunPrefix compiled rfl hprefix seed with
+  rcases mainCursor.ofRunPrefix compiled rfl hprefix seed
+      (CoveredFork.rules_stateGas_none hfork) with
     ⟨callHead, agree, callReached⟩
   unfold wethWithdrawCallSuffix at callHead
   rcases callHead.nextForward rfl with ⟨callCursor, callEdge, callRun⟩
@@ -481,7 +485,7 @@ private theorem weth_withdraw_callNode_facts {sevm : Sevm} {pre post : Devm}
   rcases of_run_branch restRun with
     ⟨_, _, hrev⟩ | ⟨w, guardPost, returnPre, hw, hpop, hburn, logRun⟩
   · exact (not_run_revert hrev).elim
-  rcases of_run_call_val_with_depth_frame (xs := []) hstack callRun' with
+  rcases of_run_call_val_with_depth_frame (xs := []) hstack callRun' hfork with
     hfailed | hentered
   · exact (hw (popBurn_pref hpop hfailed.1).1).elim
   rcases hentered with
@@ -555,11 +559,11 @@ private theorem call_settle_clean_transport
   have settled := (RunFrame.some_inv process).2
   have settled' : (Except.ok child : Execution) = Except.ok rawPost := by
     simpa [Frame.ofCall, Frame.settle, Frame.settleMsg,
-      executeCode.handleError, processMessage.settle, rawClean] using settled
+      executeCode.handleErrorWith_ok, processMessage.settle, rawClean] using settled
   have childEq : child = rawPost := Except.ok.inj settled'
   rw [childEq]
   simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-    executeCode.handleError, processMessage.settle, rawClean]
+    executeCode.handleErrorWith_ok, processMessage.settle, rawClean]
 
 private theorem retained_rawFrames_of_slot
     {xl : Xlot} {retained : ExecutionTrace.RetainedXlot xl}
@@ -599,13 +603,14 @@ private theorem rawChild_of_spawn
   · rfl
 
 theorem wethWithdrawAcceptedPayoutAt_body {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post))
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hcode : some sevm.code.toList = Blanc.weth.compile)
     (htarget : sevm.currentTarget = wethAccount) (hdirect : sevm.codeAddress = some wethAccount)
     (hcaller : sevm.caller ≠ wethAccount) (hsel : Sevm.selector sevm = selector "withdraw" [.uint256])
     (hpre : wethSpec.Pre wethAccount sevm pre) (hfresh : Exec.FreshEntry sevm pre) :
         ∃ split : WethWithdrawSplit sevm pre post,
           ∀ d ∈ split.payout.trace.rawFrames, d ∈ Exec.rawFrameRoots run := by
-  rcases weth_withdraw_callNode_facts run hcode htarget hdirect hcaller hsel hpre hfresh with
+  rcases weth_withdraw_callNode_facts run hfork hcode htarget hdirect hcaller hsel hpre hfresh with
     ⟨node, isCall, sameFrame, nodeStack, nodeMem, written, foreignKept, callBal,
       callCode, solvent, ⟨callPost, guardPost, stepEq, successPop, after, callFacts⟩⟩
   rcases callFacts with
@@ -672,7 +677,7 @@ theorem wethWithdrawAcceptedPayoutAt_body {sevm : Sevm} {pre post : Devm} (run :
         cases nodeRun.1
       · rw [slotEq] at nodeRun
         cases nodeRun.1
-      rcases Ninst.step_call_spawn_exact stepEq' hstackEq with
+      rcases Ninst.step_call_spawn_exact stepEq' hstackEq hfork with
         ⟨spawnParent, spawnDelegated, spawnAddress, spawnCode, spawnAvail,
           spawnDepth, spawnStack, spawnState, spawnMemory, spawnDelegation,
           frameEq, resumeEq⟩

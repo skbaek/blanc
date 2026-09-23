@@ -1084,10 +1084,10 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   *equal* storages) rather than the extensional `Devm.storageView`.
   `Exec.getStor_committedPost_eq_of_static` says a committing execution of a
   static frame ends with exactly its entry storage map at every account,
-  children included on a fork named by the current `CoveredFork` predicate
-  (presently Prague or BPO2); `Ninst.staticcall_inv_getStor_exact` lifts that
-  to one successful `STATICCALL` under the same explicit premise.  This does
-  not claim membership for BPO1 or Osaka.
+  children included on a fork named by the `CoveredFork` predicate (the four
+  pre-Amsterdam forks Prague, Osaka, BPO1 and BPO2; Amsterdam is excluded);
+  `Ninst.staticcall_inv_getStor_exact` lifts that to one successful
+  `STATICCALL` under the same explicit premise.
   For a recursive source walk at one covered `Sevm`, use
   `Func.SilentAt`, `Func.SilentIn.toSilentAt`, and
   `Func.observe_eq_of_run_silentAt`: ordinary instruction leaves still use

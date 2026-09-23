@@ -14,6 +14,7 @@ theorem Exec.corePairReplay (vault : Adr) :
       (fun pc sevm pre out _ => Exec.CorePairReplay vault pc sevm pre out)) :=
   Exec.corePairReplay_of_segments (vaultFramePairSegment vault)
     (wethFramePairSegment vault)
-    (fun run hcode ht hd hc hs hp hf => wethWithdrawAcceptedPayoutAt_body run hcode ht hd hc hs hp hf)
+    (fun run hfork hcode ht hd hc hs hp hf =>
+      wethWithdrawAcceptedPayoutAt_body run hfork hcode ht hd hc hs hp hf)
 
 end Blanc.Composition.ProrataWethVault

@@ -637,6 +637,7 @@ freshly under WETH's precondition by a caller other than WETH splits at its acce
 def WethWithdrawAcceptedPayout : Prop :=
   ∀ {sevm : Sevm} {pre post : Devm},
     Prog.RunCompiled sevm pre Blanc.weth post →
+    CoveredFork sevm.benvStat.fork →
     sevm.currentTarget = wethAccount → sevm.codeAddress = some wethAccount →
     sevm.caller ≠ wethAccount →
     Sevm.selector sevm = selector "withdraw" [.uint256] →
@@ -648,6 +649,7 @@ def WethWithdrawAcceptedPayout : Prop :=
 split whose retained callback is a raw subtree of that derivation. -/
 def WethWithdrawAcceptedPayoutAt : Prop :=
   ∀ {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post)),
+    CoveredFork sevm.benvStat.fork →
     some sevm.code.toList = Blanc.weth.compile →
     sevm.currentTarget = wethAccount → sevm.codeAddress = some wethAccount →
     sevm.caller ≠ wethAccount → Sevm.selector sevm = selector "withdraw" [.uint256] →
@@ -1120,7 +1122,8 @@ theorem Exec.CorePairReplay.atTarget {vault : Adr} {sevm : Sevm} {pre post : Dev
       framePath := framePath
       actor := some sevm.caller }
   by_cases selected : Sevm.selector sevm = selector "withdraw" [.uint256]
-  · obtain ⟨split, located⟩ := withdrawAt run (wethAt.2 target).1 target direct callerNotWeth
+  · obtain ⟨split, located⟩ := withdrawAt run hfork (wethAt.2 target).1 target direct
+      callerNotWeth
       selected inv.weth (inv.wethFresh target)
     have distinct : wethAccount ≠ vault := inv.vault.config.distinct
     -- the callback is aimed at the caller, which is neither account

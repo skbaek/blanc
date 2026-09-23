@@ -23,11 +23,11 @@ open Jaune
 exposes its accepted payout `CALL`, the storage written before it, and the
 callback entry's inherited code, block statics and WETH precondition. -/
 theorem wethWithdrawAcceptedPayout : WethWithdrawAcceptedPayout := by
-  intro sevm pre post run target _ callerNe selected precondition _
+  intro sevm pre post run hfork target _ callerNe selected precondition _
   obtain ⟨callPre, callPost, -, written, foreignKept, callRun, after, callStack,
     callBal, callCode, solvent, success, guardPost, nonzero, successPop⟩ :=
     weth_withdraw_preCall_split run selected
-  rcases of_run_call_val_with_depth_frame (xs := []) callStack callRun with
+  rcases of_run_call_val_with_depth_frame (xs := []) callStack callRun hfork with
     failed | callFacts
   · exact absurd (popBurn_pref successPop failed.1).1 nonzero
   exact WethWithdrawSplit.ofCallFacts target callerNe precondition written foreignKept

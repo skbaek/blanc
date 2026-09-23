@@ -380,7 +380,7 @@ theorem vaultFramePairSegment (vault : Adr) : VaultFramePairSegment vault := by
   by_cases isDeposit :
       Sevm.selector sevm = selector "deposit" [.uint256, .address]
   · obtain ⟨-, _, -, -, -, -, -, -, -, effect, child⟩ :=
-      deposit_compiled_effect_linked config memoryWf run isDeposit
+      deposit_compiled_effect_linked config hfork memoryWf run isDeposit
     have wethRowNof : B256.Nof
         (Stor.rest (Devm.getStor pre wethAccount) sevm.currentTarget)
         (Sevm.argWord sevm 0) := by
@@ -394,14 +394,14 @@ theorem vaultFramePairSegment (vault : Adr) : VaultFramePairSegment vault := by
       omega
     obtain ⟨_, _, _, _, evidence⟩ :=
       FourQuote.deposit_compiled_share_evidence target callerNotVault wethRowNof
-        config memoryWf run isDeposit
+        config hfork memoryWf run isDeposit
     obtain ⟨call, linked, visit⟩ := inbound_owned target child
     exact vaultRecord_segment (evidence := evidence) (own := some call)
       (linked := linked) (quiet := quiet_some) (actor := actor)
       (fun c same => by cases same; exact ⟨Or.inl isDeposit, visit⟩)
   by_cases isMint : Sevm.selector sevm = selector "mint" [.uint256, .address]
   · obtain ⟨-, supply, supplyEq, -, quoteFits, -, -, -, -, effect, child⟩ :=
-      mint_compiled_effect_linked config memoryWf run isMint
+      mint_compiled_effect_linked config hfork memoryWf run isMint
     have wethRowNof : ∀ charged : B256,
         charged.toNat = Blanc.ProrataWethVault.previewMintN
           (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
@@ -431,7 +431,7 @@ theorem vaultFramePairSegment (vault : Adr) : VaultFramePairSegment vault := by
       omega
     obtain ⟨_, _, _, _, _, evidence⟩ :=
       FourQuote.mint_compiled_share_evidence target callerNotVault wethRowNof
-        config memoryWf run isMint
+        config hfork memoryWf run isMint
     obtain ⟨call, linked, visit⟩ := inbound_owned target child
     exact vaultRecord_segment (evidence := evidence) (own := some call)
       (linked := linked) (quiet := quiet_some) (actor := actor)
@@ -439,34 +439,34 @@ theorem vaultFramePairSegment (vault : Adr) : VaultFramePairSegment vault := by
   by_cases isWithdraw : Sevm.selector sevm =
       selector "withdraw" [.uint256, .address, .address]
   · obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, quiet⟩ :=
-      withdraw_compiled_effect_quiet config memoryWf run isWithdraw
+      withdraw_compiled_effect_quiet config hfork memoryWf run isWithdraw
     by_cases self : (Sevm.argWord sevm 1).toAdr = sevm.currentTarget
     · obtain ⟨_, _, _, _, evidence⟩ :=
         FourQuote.withdrawSelf_compiled_share_evidence target self config
-          memoryWf run isWithdraw
+          hfork memoryWf run isWithdraw
       exact vaultRecord_segment (evidence := evidence) (own := none)
         (linked := linked_none) (quiet := quiet_of_agree quiet) (actor := actor)
         (fun _ impossible => by cases impossible)
     · obtain ⟨_, _, _, _, evidence⟩ :=
         FourQuote.withdrawNormal_compiled_share_evidence target
-          (fun h => self h.symm) config memoryWf run isWithdraw
+          (fun h => self h.symm) config hfork memoryWf run isWithdraw
       exact vaultRecord_segment (evidence := evidence) (own := none)
         (linked := linked_none) (quiet := quiet_of_agree quiet) (actor := actor)
         (fun _ impossible => by cases impossible)
   by_cases isRedeem : Sevm.selector sevm =
       selector "redeem" [.uint256, .address, .address]
   · obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, quiet⟩ :=
-      redeem_compiled_effect_quiet config memoryWf run isRedeem
+      redeem_compiled_effect_quiet config hfork memoryWf run isRedeem
     by_cases self : (Sevm.argWord sevm 1).toAdr = sevm.currentTarget
     · obtain ⟨_, _, _, _, evidence⟩ :=
         FourQuote.redeemSelf_compiled_share_evidence target self config
-          memoryWf run isRedeem
+          hfork memoryWf run isRedeem
       exact vaultRecord_segment (evidence := evidence) (own := none)
         (linked := linked_none) (quiet := quiet_of_agree quiet) (actor := actor)
         (fun _ impossible => by cases impossible)
     · obtain ⟨_, _, _, _, evidence⟩ :=
         FourQuote.redeemNormal_compiled_share_evidence target
-          (fun h => self h.symm) config memoryWf run isRedeem
+          (fun h => self h.symm) config hfork memoryWf run isRedeem
       exact vaultRecord_segment (evidence := evidence) (own := none)
         (linked := linked_none) (quiet := quiet_of_agree quiet) (actor := actor)
         (fun _ impossible => by cases impossible)
