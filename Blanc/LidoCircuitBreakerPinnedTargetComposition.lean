@@ -28,7 +28,8 @@ private theorem replayCell_eq_of_none
         exact none write (by simp [member]))
 
 private theorem pinnedPause_cell_eq
-    {sevm : Sevm} {target : Adr} {program : Prog} {duration : B256}
+    {sevm : Sevm}
+    (hfork : CoveredFork sevm.benvStat.fork) {target : Adr} {program : Prog} {duration : B256}
     {pausedUntil : Adr → Stor → B256} {surface : List B256}
     {callPre callPost : Devm} {key : B256}
     (bundle : LidoPinnedPauseTarget sevm.currentTarget sevm.caller target
@@ -52,9 +53,12 @@ private theorem pinnedPause_cell_eq
   unfold Ninst.StepRun at stepRun
   rw [spawn] at stepRun
   obtain ⟨result, frameRun, resumeRun⟩ := stepRun
+  have childFork : CoveredFork childEvm.sta.benvStat.fork := by
+    rw [RunFrame.benvStat_eq frameRun, Xinst.step_spawn_benvStat callSpawn]
+    exact hfork
   have replay := Xinst.storageReplay_some_of_body callSpawn frameRun
     resumeRun.symm (fun committed =>
-      Exec.storageReplay_committedPost rawRun committed)
+      Exec.storageReplay_committedPost rawRun committed childFork) hfork
   have noWrite := bundle.circuitBreaker_noninterference
     (Or.inl ⟨duration, exactCall⟩)
     ⟨uses, childEvm, raw, rfl, ⟨rawRun⟩⟩ process key member
@@ -69,7 +73,8 @@ private theorem pinnedPause_cell_eq
   · rfl
 
 private theorem pinnedStat_cell_eq
-    {sevm : Sevm} {target : Adr} {program : Prog}
+    {sevm : Sevm}
+    (hfork : CoveredFork sevm.benvStat.fork) {target : Adr} {program : Prog}
     {pausedUntil : Adr → Stor → B256} {surface : List B256}
     {statPre statPost : Devm} {key : B256}
     (bundle : LidoPinnedPauseTarget sevm.currentTarget sevm.caller target
@@ -93,9 +98,12 @@ private theorem pinnedStat_cell_eq
   unfold Ninst.StepRun at stepRun
   rw [spawn] at stepRun
   obtain ⟨result, frameRun, resumeRun⟩ := stepRun
+  have childFork : CoveredFork childEvm.sta.benvStat.fork := by
+    rw [RunFrame.benvStat_eq frameRun, Xinst.step_spawn_benvStat statSpawn]
+    exact hfork
   have replay := Xinst.storageReplay_some_of_body statSpawn frameRun
     resumeRun.symm (fun committed =>
-      Exec.storageReplay_committedPost rawRun committed)
+      Exec.storageReplay_committedPost rawRun committed childFork) hfork
   have noWrite := bundle.circuitBreaker_noninterference
     (Or.inr exactCall)
     ⟨uses, childEvm, raw, rfl, ⟨rawRun⟩⟩ process key member
@@ -308,6 +316,7 @@ theorem observation_ok_getStor_eq_of_owner_ne
 
 private theorem pinnedTrace_final_cell_eq
     {fs : List Func} {sevm : Sevm} {entry final : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {target : Adr} {program : Prog} {duration : B256}
     {pausedUntil : Adr → Stor → B256} {surface : List B256}
     {ex : Execution} {key : B256}
@@ -347,7 +356,7 @@ private theorem pinnedTrace_final_cell_eq
     congrArg (fun stor : Adr → Stor ↦ (stor sevm.currentTarget).get key)
       (pauseCallStaging_storInv callStaging).symm
   have callEq : cell callPost = cell callPre :=
-    pinnedPause_cell_eq bundle pinnedPause member
+    pinnedPause_cell_eq (hfork := hfork) bundle pinnedPause member
   have branchTestEq : cell branchTestPost = cell callPost :=
     congrArg (fun stor : Adr → Stor ↦ (stor sevm.currentTarget).get key)
       (Ninst.Hinv.inv (f := Devm.getStor)
@@ -360,7 +369,7 @@ private theorem pinnedTrace_final_cell_eq
     congrArg (fun stor : Adr → Stor ↦ (stor sevm.currentTarget).get key)
       (pauseStatStaging_storInv statStaging).symm
   have statEq : cell statPost = cell statPre :=
-    pinnedStat_cell_eq bundle pinnedStat member
+    pinnedStat_cell_eq (hfork := hfork) bundle pinnedStat member
   have observationEq : cell final = cell statPost :=
     observation_ok_getStorVal_eq_of_ne h_empty h_bubble h_failed h_panic
       different observationRun
@@ -378,6 +387,7 @@ private theorem canonicalAddress_toB256_local (a : Adr) :
 
 private theorem pinnedTrace_noninterference
     {fs : List Func} {sevm : Sevm} {entry final : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {target : Adr} {program : Prog} {duration : B256}
     {pausedUntil : Adr → Stor → B256} {surface : List B256}
     {ex : Execution}
@@ -413,11 +423,11 @@ private theorem pinnedTrace_noninterference
   constructor
   · exact (pauseSuccess_ok_getStorVal_eq_of_ne h_panic countDifferent
       successRun).symm.trans
-        (pinnedTrace_final_cell_eq h_empty h_bubble h_failed h_panic
+        (pinnedTrace_final_cell_eq (hfork := hfork) h_empty h_bubble h_failed h_panic
           bundle hook hex (by simp) countDifferent)
   · exact (pauseSuccess_ok_getStorVal_eq_of_ne h_panic intervalDifferent
       successRun).symm.trans
-        (pinnedTrace_final_cell_eq h_empty h_bubble h_failed h_panic
+        (pinnedTrace_final_cell_eq (hfork := hfork) h_empty h_bubble h_failed h_panic
           bundle hook hex (by simp) intervalDifferent)
 
 private theorem runFrame_result_unique
@@ -441,10 +451,11 @@ private theorem runFrame_result_unique
 
 private theorem stepCall_spawn_resume
     {sevm : Sevm} {pre : Devm} {msg : Msg} {resume : Resume}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (spawn : Xinst.step sevm pre .call =
       .spawn (Jaune.Frame.ofCall msg) resume) :
     ∃ parent oi os, resume = .call parent oi os := by
-  simp only [Xinst.step, Bind.bind, Except.bind] at spawn
+  simp only [Xinst.step, Bind.bind, Except.bind, hfork.rules_stateGas_none] at spawn
   repeat' split at spawn
   all_goals simp only [XStep.ofExcept, reduceCtorEq] at spawn
   all_goals first
@@ -453,10 +464,12 @@ private theorem stepCall_spawn_resume
 
 private theorem stepStatcall_spawn_resume
     {sevm : Sevm} {pre : Devm} {msg : Msg} {resume : Resume}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (spawn : Xinst.step sevm pre .staticcall =
       .spawn (Jaune.Frame.ofCall msg) resume) :
     ∃ parent oi os, resume = .call parent oi os := by
-  simp only [Xinst.step, Bind.bind, Except.bind, Pure.pure, Except.pure] at spawn
+  simp only [Xinst.step, Bind.bind, Except.bind, Pure.pure, Except.pure,
+    hfork.rules_stateGas_none] at spawn
   repeat' split at spawn
   all_goals simp only [XStep.ofExcept, reduceCtorEq] at spawn
   all_goals first
@@ -603,6 +616,7 @@ for. A hypothesis implied by the ones beside it does not belong in a
 signature -- it advertises a demand the theorem does not make. -/
 theorem directBoundaryExecutions_of_afterSet_ok
     {fs : List Func} {sevm : Sevm} {entry final : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {target : Adr} {duration : B256}
     {code : ByteArray} {program : Prog}
     (h_empty : fs[emptyRevertSlot]? = some Func.revert)
@@ -674,9 +688,9 @@ theorem directBoundaryExecutions_of_afterSet_ok
     -- non-spawning arm's flag selects the bubble and the bubble cannot end
     -- `.ok`.  See `pauseAfterCall_ok_depth_ne_zero`.
     have depth : sevm.depth ≠ 0 :=
-      pauseAfterCall_ok_depth_ne_zero h_bubble callStack callRun afterCall
+      pauseAfterCall_ok_depth_ne_zero (hfork := hfork) h_bubble callStack callRun afterCall
     obtain ⟨callBoundary, callExecution⟩ :=
-      pauseCall_boundary_with_execution callStack callData depth dynamic
+      pauseCall_boundary_with_execution (hfork := hfork) callStack callData depth dynamic
         callRun
     have callPreInstalled : callPre.getCode target = code := by
       calc
@@ -739,7 +753,7 @@ theorem directBoundaryExecutions_of_afterSet_ok
       have statData :=
         pauseStatStaging_boundary_calldata targetArm.memImage statStaging
       obtain ⟨statBoundary, statExecution⟩ :=
-        pauseStat_boundary_with_execution statStack statData depth statRun
+        pauseStat_boundary_with_execution (hfork := hfork) statStack statData depth statRun
       have callPreNonempty : (callPre.getCode target).toList ≠ [] := by
         rw [callPreInstalled]
         exact toListNonempty
@@ -800,6 +814,7 @@ the crossing now derives the fact itself — see
 retained binder. -/
 theorem stubBoundaryExecutions_of_afterSet_ok
     {fs : List Func} {sevm : Sevm} {entry final : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {target : Adr} {duration : B256}
     (h_empty : fs[emptyRevertSlot]? = some Func.revert)
     (h_bubble : fs[bubbleRevertSlot]? = some Func.revertReturnData)
@@ -815,7 +830,7 @@ theorem stubBoundaryExecutions_of_afterSet_ok
     (run : Func.RunCompiledTo fs sevm entry pauseAfterSet (.ok final)) :
     LidoPinnedBoundaryExecutions fs sevm entry target
       PinnedTargetControl.stubProgram duration (.ok final) :=
-  directBoundaryExecutions_of_afterSet_ok h_empty h_bubble
+  directBoundaryExecutions_of_afterSet_ok (hfork := hfork) h_empty h_bubble
     stubProgram_compile_toList targetNe nonprecompile
     installed targetWindow durationWindow dynamic run
 
@@ -852,6 +867,7 @@ private theorem spawnedChild_clean_of_zeroBranch
 
 private theorem staticcallMessage_entry_getStor_eq
     {sevm : Sevm} {pre : Devm} {msg : Msg} {resume : Resume}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {xl : Xlot} {program : Prog} {child : Devm} {owner : Adr}
     (spawn : Xinst.step sevm pre .staticcall =
       .spawn (Jaune.Frame.ofCall msg) resume)
@@ -861,8 +877,8 @@ private theorem staticcallMessage_entry_getStor_eq
   rcases executes with ⟨-, childEvm, raw, rfl, -⟩
   have actualEnter : (Jaune.Frame.ofCall msg).enter = .run childEvm :=
     (RunFrame.some_inv process).1
-  have resumeCall := stepStatcall_spawn_resume spawn
-  rcases Xinst.step_shape sevm pre .staticcall with
+  have resumeCall := stepStatcall_spawn_resume hfork spawn
+  rcases Xinst.step_shapeCovered sevm pre .staticcall hfork with
     ⟨done, shape, -⟩ |
     ⟨d, endowment, newAddress, mi, ms, hprefix, shape⟩ |
     ⟨d, d₀, gas, value, caller, target, codeAddress, transferValue,
@@ -955,6 +971,7 @@ private theorem observation_success_answer_one
 
 private theorem pinnedTarget_witness_and_paused
     {fs : List Func} {sevm : Sevm} {entry final : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {target : Adr} {program : Prog} {duration : B256}
     {pausedUntil : Adr → Stor → B256} {surface : List B256}
     {ex : Execution}
@@ -989,7 +1006,7 @@ private theorem pinnedTarget_witness_and_paused
       simpa only [Ninst.call, Ninst.step_exec] using pauseSpawn)
   have pauseClean : pauseChild.error.isSome = false :=
     spawnedChild_clean_of_zeroBranch pauseSpawn pauseProcess pauseStepRun
-      (stepCall_spawn_resume pauseXSpawn) callIszero branchPop
+      (stepCall_spawn_resume hfork pauseXSpawn) callIszero branchPop
   have pauseEffect := bundle.pauseFor_effect pauseExact pauseExecutes
     pauseProcess pauseClean
   rw [pauseTime] at pauseEffect
@@ -1005,7 +1022,7 @@ private theorem pinnedTarget_witness_and_paused
     observation_zeroBranch h_bubble observationRun
   have statClean : statChild.error.isSome = false :=
     spawnedChild_clean_of_zeroBranch statSpawn statProcess statStepRun
-      (stepStatcall_spawn_resume statXSpawn) statIszero statZeroPop
+      (stepStatcall_spawn_resume hfork statXSpawn) statIszero statZeroPop
   obtain ⟨observed, observedOutput, -, observedLong, observedOne⟩ :=
     observation_success_answer_one h_empty h_bubble h_failed statBoundary
       observationRun
@@ -1026,7 +1043,7 @@ private theorem pinnedTarget_witness_and_paused
       statMsg.benv.stat.time := queryTruth.mp acceptedExecution
   have statEntryStor : statMsg.benv.state.getStor target =
       statPre.state.getStor target :=
-    staticcallMessage_entry_getStor_eq statXSpawn statExecutes statProcess
+    staticcallMessage_entry_getStor_eq (hfork := hfork) statXSpawn statExecutes statProcess
   have callBranchStor : callPost.state.getStor target =
       branchTestPost.state.getStor target :=
     congrFun (Ninst.Hinv.inv (f := Devm.getStor)
@@ -1087,6 +1104,7 @@ program.  Both T2 noninterference equalities are derived from those occurrences,
 and the final pausedness claim names the same successful `final` state. -/
 theorem publicPause_pinnedTarget
     {sevm : Sevm} {pre : Devm} {owner : Adr}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {target duration idx0 len0 last0 : B256}
     {img : Bytes} {targetCode : ByteArray} {program : Prog}
     {pausedUntil : Adr → Stor → B256} {surface : List B256}
@@ -1104,16 +1122,16 @@ theorem publicPause_pinnedTarget
       MemWordAt entry (targetWord * 32).toNat target.toAdr.toB256 := by
     rw [canonicalTarget]
     exact targetWindow
-  have noninterference := pinnedTrace_noninterference
+  have noninterference := pinnedTrace_noninterference (hfork := hfork)
     (fs := (runtime officialParams).main :: (runtime officialParams).aux)
     (by rfl) (by rfl) (by rfl) (by rfl) bundle hook hex
-  have committedBoundary := pauseAfterSet_boundary_committed_outcomes
+  have committedBoundary := pauseAfterSet_boundary_committed_outcomes (hfork := hfork)
     (by rfl) (by rfl) (by rfl) (by rfl)
     targetAdrWindow durationWindow premises.entered premises.dynamic
     noninterference afterSetRun
   have committed : PublicPauseCommittedOutcomes sevm pre target duration
       targetCode ex := ⟨entry, reachedAt, committedBoundary⟩
-  have witness := pinnedTarget_witness_and_paused
+  have witness := pinnedTarget_witness_and_paused (hfork := hfork)
     (fs := (runtime officialParams).main :: (runtime officialParams).aux)
     (by rfl) (by rfl) (by rfl) (by rfl) targetNe bundle hook hex
   exact ⟨committed, witness⟩
@@ -1124,6 +1142,7 @@ combined parent-trace and program-occurrence witness extracted from this public
 run; only its two `MessageExecutesProgram` components are target-specific. -/
 theorem publicPause_stubPinnedTarget
     {sevm : Sevm} {pre : Devm} {owner : Adr}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {target duration idx0 len0 last0 : B256}
     {img : Bytes} {targetCode : ByteArray} {ex : Execution}
     (premises : PublicPauseEntryPremises sevm pre owner target duration
@@ -1142,7 +1161,7 @@ theorem publicPause_stubPinnedTarget
           PinnedTargetControl.stubProgram PinnedTargetControl.pausedUntil
           ex final := by
   intro entry reached hook final hex
-  exact publicPause_pinnedTarget premises targetNe publicRun
+  exact publicPause_pinnedTarget (hfork := hfork) premises targetNe publicRun
     (PinnedTargetControl.stub_lidoPinnedPauseTarget sevm.currentTarget
       sevm.caller target.toAdr targetNe)
     entry reached hook final hex
@@ -1153,6 +1172,7 @@ it is derived for every reached entry from that entry's two actual compiled
 stub occurrences. -/
 theorem publicPause_stub_committed_outcomes
     {sevm : Sevm} {pre final : Devm} {owner : Adr}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {target duration idx0 len0 last0 : B256}
     {img : Bytes} {targetCode : ByteArray} {ex : Execution}
     (premises : PublicPauseEntryPremises sevm pre owner target duration
@@ -1168,9 +1188,9 @@ theorem publicPause_stub_committed_outcomes
           ((runtime officialParams).main :: (runtime officialParams).aux)
           sevm entry target.toAdr PinnedTargetControl.stubProgram duration ex) :
     PublicPauseCommittedOutcomes sevm pre target duration targetCode ex := by
-  apply publicPause_committed_outcomes premises publicRun
+  apply publicPause_committed_outcomes (hfork := hfork) premises publicRun
   intro entry reached successPre successRun
-  exact pinnedTrace_noninterference
+  exact pinnedTrace_noninterference (hfork := hfork)
     (fs := (runtime officialParams).main :: (runtime officialParams).aux)
     (by rfl) (by rfl) (by rfl) (by rfl)
     (PinnedTargetControl.stub_lidoPinnedPauseTarget sevm.currentTarget
