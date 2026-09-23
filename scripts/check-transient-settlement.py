@@ -77,6 +77,10 @@ MUTANTS = {
         "private theorem perFrameClearMutant : (initDevm foreignMsg).getTransVal addressA key = 0 := by native_decide\n",
 }
 
+# The refutation phrase, not the bare tactic name: any other `native_decide`
+# error in a mutant's lines (a failed Decidable synthesis, say) must not count.
+NATIVE_FALSE = ("Tactic `native_decide` evaluated that the proposition",)
+
 # Evidence economy (scripts/GATES.md, "Evidence economy"; ledger in Plans
 # reports/evidence-economy-20260923/trim-b1-ledger.md). These two mutants are
 # the only check that would notice a production change: no pinned control
@@ -535,7 +539,7 @@ def run_mutants(text: str, markers: tuple[str, ...]) -> None:
         if text.count(marker) != 1:
             fail(f"mutant marker absent or duplicated: {marker}")
     mutants = [
-        lean_mutant_batch.Mutant(marker, MUTANTS[marker], ("native_decide",),
+        lean_mutant_batch.Mutant(marker, MUTANTS[marker], NATIVE_FALSE,
                                  keep_marker=True)
         for marker in markers
     ]
