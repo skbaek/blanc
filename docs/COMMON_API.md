@@ -38,6 +38,13 @@ registry has identified the likely vocabulary.
   [`Blanc/Basic.lean`](../Blanc/Basic.lean). Both are the substrate the
   branches below are stated over, so read the declaration and its module
   documentation there rather than expecting a need-first branch for it.
+- Fork coverage: `CoveredFork f` (`f ∈ coveredForks`) in `Blanc/Semantics.lean`.
+  Consume it only through `CoveredFork.stateGas_none`, `bal_none`,
+  `rules_stateGas_none`, `rules_bal_none`, `requests_eq`,
+  `beaconRoots_not_precompile`, `historyStorage_not_precompile`, `of_eq` and,
+  where a per-fork case split is unavoidable, `CoveredFork.cases`. Discharge a
+  schedule premise with `mainnetChainConfig_covered` or a concrete config lemma
+  such as `Drip.concreteConfig_covered`.
 
 ## E — execution
 

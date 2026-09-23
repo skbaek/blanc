@@ -48,7 +48,7 @@ inventing an observation that does not exist.
 #### P2 — A model-approved decoded deposit executes and settles with the model-linked storage update, exact committing chronology, and byte-exact event
 
 - **Declarations:** `Blanc.BeaconDeposit.deposit_success_settled_effects`, `Blanc.BeaconDeposit.deposit_success_retainedStorageEffectTriples`
-- **Premises:** canonical machine bounds, decoded calldata, exact selector and production bytes, a successful `deposit Bytes.sha256` result, concrete storage/count/access facts, sufficient gas, nonstatic depth, and enabled warm undelegated native SHA-256 at address `0x2`; settlement starts from the actual successful transfer result and ordinary non-precompile code address.
+- **Premises:** canonical machine bounds, decoded calldata, exact selector and production bytes, a successful `deposit Bytes.sha256` result, concrete storage/count/access facts, sufficient gas, nonstatic depth, and enabled warm undelegated native SHA-256 at address `0x2`; settlement starts from the actual successful transfer result and ordinary non-precompile code address.  Both declarations take a covered fork (`CoveredFork sevm.benvStat.fork`: Prague, Osaka, BPO1 or BPO2); no Amsterdam frame is covered.
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check.sh`, `scripts/check-claims.sh`, `scripts/check-beacon-deposit-differential.sh`
 - **Differential channel:** `selector-deposit-success`, the accepted noncanonical ABI rows, all successful value edges, and `chained-deposits-1-through-8` compare status, returndata, logical state, ETH, ordered logs, and the full SHA STATICCALL trace.
@@ -58,7 +58,7 @@ inventing an observation that does not exist.
 #### P3 — Decoded model errors, structural ABI failure, and selector miss revert through their exact compiled routes without retained storage effects
 
 - **Declarations:** `Blanc.BeaconDeposit.deposit_ne_assert_false`, `Blanc.BeaconDeposit.deposit_error_runCompiledTo`, `Blanc.BeaconDeposit.deposit_malformed_noRawSstore`, `Blanc.BeaconDeposit.unmatched_selector_noRawSstore`
-- **Premises:** the decoded error theorem is indexed by an actual model `.error reason` plus exact environment and machine bounds; malformed calldata supplies failure of the explicit structural decoder; selector miss is nonempty dispatch input outside the four-selector census.  The model theorem alone licenses omission of the terminal `assert(false)` arm.
+- **Premises:** the decoded error theorem is indexed by an actual model `.error reason` plus exact environment and machine bounds; malformed calldata supplies failure of the explicit structural decoder; selector miss is nonempty dispatch input outside the four-selector census.  The decoded error route takes a covered fork (`CoveredFork sevm.benvStat.fork`); the malformed and selector-miss routes are fork-independent.  The model theorem alone licenses omission of the terminal `assert(false)` arm.
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check.sh`, `scripts/check-claims.sh`, `scripts/check-beacon-deposit-differential.sh`
 - **Differential channel:** all eight `guard-01` through `guard-08` tags, `guard-precedence`, malformed ABI rows, accepted noncanonical controls, empty and unknown fallback rows, byte-exact revert channels, failed/short SHA responses, and bounded OOG rows.
@@ -68,7 +68,7 @@ inventing an observation that does not exist.
 #### P4 — ERC-165 and both views return their exact interface encodings without raw or retained storage writes on the named successful routes
 
 - **Declarations:** `Blanc.BeaconDeposit.supportsInterface_runCompiled_noRawSstore`, `Blanc.BeaconDeposit.getDepositRoot_zero_runCompiled_noRawSstore`, `Blanc.BeaconDeposit.getDepositCount_warm_runCompiled_noRawSstore`
-- **Premises:** exact selector, production code, calldata and machine bounds, zero call value, and route-specific storage/access facts.  The root view additionally needs `ZeroHashesCorrect`, count bounds, sufficient gas, and enabled warm undelegated SHA-256 at `0x2`; the count row is the warm specialization and a separately audited cold theorem exists.
+- **Premises:** exact selector, production code, calldata and machine bounds, zero call value, and route-specific storage/access facts.  The root view additionally needs `ZeroHashesCorrect`, count bounds, sufficient gas, and enabled warm undelegated SHA-256 at `0x2`; the count row is the warm specialization and a separately audited cold theorem exists.  The root and warm-count rows take a covered fork (`CoveredFork sevm.benvStat.fork`).
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check.sh`, `scripts/check-claims.sh`, `scripts/check-beacon-deposit-differential.sh`
 - **Differential channel:** `selector-get-deposit-root-empty`, `selector-get-deposit-count-empty`, ERC-165/deposit/`ffffffff`/dirty-padding support rows, chained root/count readback, and the three nonpayable value-rejection rows.
@@ -78,7 +78,7 @@ inventing an observation that does not exist.
 #### P5 — Every same-frame runtime SSTORE site is classified, successful deposit commits count before its one live branch cell, and construction has exactly the 31 zero-hash writes
 
 - **Declarations:** `Blanc.BeaconDeposit.Exec.NinstOccurrence.beaconRuntime_sstore_pc_of_rawFrameRoot`, `Blanc.BeaconDeposit.Exec.Deriv.beaconConstructor_sstore_coordinate`, `Blanc.BeaconDeposit.constructor_success_retainedStorageEffectTriples`
-- **Premises:** occurrence conclusions are relative to actual derivations rooted in the exact production runtime or constructor.  The success chronology retains the route-specific calldata/model/SHA/gas/storage premises; constructor execution starts from empty target storage with an enabled undelegated warm SHA precompile and exact creation bytes.
+- **Premises:** occurrence conclusions are relative to actual derivations rooted in the exact production runtime or constructor.  The success chronology retains the route-specific calldata/model/SHA/gas/storage premises; constructor execution starts from empty target storage with an enabled undelegated warm SHA precompile, exact creation bytes, and a covered fork (`CoveredFork sevm.benvStat.fork`).
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check.sh`, `scripts/check-claims.sh`, `scripts/check-beacon-deposit-differential.sh`
 - **Differential channel:** successful and chained deposit rows compare logical storage and logs while recording full SHA traces; the separate Prague creation measurement checks 31 SHA calls and exact constructor logical poststate for each artifact.
@@ -88,7 +88,7 @@ inventing an observation that does not exist.
 #### P6 — The compiled storage abstraction is established by construction, extended by successful deposits, and projects the model's exact count and mixed root
 
 - **Declarations:** `Blanc.BeaconDeposit.constructorFinalStorage_artifactInv`, `Blanc.BeaconDeposit.deposit_success_artifactInv`, `Blanc.BeaconDeposit.ArtifactInv.root_eq_mixedRootOf`, `Blanc.BeaconDeposit.ArtifactInv.count_eq_history_length`
-- **Premises:** construction uses the exact final storage; deposit preservation consumes an entry `ArtifactInv`, the exact compiled successful execution premises, and the same reconstructed deposit-data node used by the model.  Projection theorems consume `ArtifactInv stor history` rather than an unrelated poststate witness.
+- **Premises:** construction uses the exact final storage; deposit preservation consumes an entry `ArtifactInv`, the exact compiled successful execution premises including a covered fork (`CoveredFork sevm.benvStat.fork`), and the same reconstructed deposit-data node used by the model.  Projection theorems consume `ArtifactInv stor history` rather than an unrelated poststate witness.
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check.sh`, `scripts/check-claims.sh`, `scripts/check-beacon-deposit-differential.sh`
 - **Differential channel:** `chained-deposits-1-through-8`, `root-readback`, `count-readback`, `seeded-cap-layouts`, and the constructor logical-state projection corroborate the abstraction at finite states on each side's own raw layout.
