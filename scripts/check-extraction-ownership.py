@@ -34,6 +34,7 @@ import shutil
 import sys
 import tempfile
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 
@@ -120,41 +121,66 @@ class Config:
     mappings: tuple[Mapping, ...]
 
 
+_STRIP_NORMAL = re.compile(r'/-|--|"')
+_STRIP_QUOTED = re.compile(r'"')
+_STRIP_BLOCK = re.compile(r'/-|-/')
+_NOT_NEWLINE = re.compile(r'[^\n]')
+
+
+# Consumers (the occurrence, settlement and raw-attribution audits) call these
+# thousands of times over the same few hundred contract texts; both are pure in
+# their arguments, so they are memoized without bound. The scan jumps between
+# the tokens that change state instead of stepping one character at a time; its
+# output is identical to the character loop it replaced on all 29,656 Lean
+# files of Blanc, its packages and Jaune, and on 300,000 random strings over
+# the token alphabet (evidence economy, batch 2).
+@lru_cache(maxsize=None)
 def strip_comments(text: str) -> str:
-    """Remove Lean line/nested block comments while preserving line positions."""
+    """Remove Lean line/nested block comments while preserving line positions.
+
+    Inside a block comment every character but a newline becomes a space and
+    the nested `/-`/`-/` delimiters themselves are dropped; the opening `/-`
+    becomes two spaces; a line comment becomes spaces up to its newline; a
+    `"` not preceded by a backslash toggles string state, in which comment
+    tokens are text.
+    """
     out: list[str] = []
     i = 0
+    n = len(text)
     block = 0
     quoted = False
-    while i < len(text):
+    while i < n:
         if block:
-            if text.startswith("/-", i):
-                block += 1
-                i += 2
-            elif text.startswith("-/", i):
-                block -= 1
-                i += 2
-            else:
-                if text[i] == "\n":
-                    out.append("\n")
-                else:
-                    out.append(" ")
-                i += 1
+            match = _STRIP_BLOCK.search(text, i)
+            if match is None:
+                out.append(_NOT_NEWLINE.sub(" ", text[i:]))
+                break
+            out.append(_NOT_NEWLINE.sub(" ", text[i:match.start()]))
+            block += 1 if match.group() == "/-" else -1
+            i = match.end()
             continue
-        if not quoted and text.startswith("/-", i):
-            block = 1
-            out.extend("  ")
-            i += 2
-        elif not quoted and text.startswith("--", i):
-            while i < len(text) and text[i] != "\n":
-                out.append(" ")
-                i += 1
-        else:
-            char = text[i]
-            out.append(char)
-            if char == '"' and (i == 0 or text[i - 1] != "\\"):
+        match = (_STRIP_QUOTED if quoted else _STRIP_NORMAL).search(text, i)
+        if match is None:
+            out.append(text[i:])
+            break
+        j = match.start()
+        out.append(text[i:j])
+        token = match.group()
+        if token == '"':
+            out.append('"')
+            if j == 0 or text[j - 1] != "\\":
                 quoted = not quoted
-            i += 1
+            i = j + 1
+        elif token == "/-":
+            block = 1
+            out.append("  ")
+            i = j + 2
+        else:
+            newline = text.find("\n", j)
+            if newline < 0:
+                newline = n
+            out.append(" " * (newline - j))
+            i = newline
     if block:
         raise ValueError("unterminated block comment")
     return "".join(out)
@@ -172,9 +198,16 @@ def qualify(namespace: list[str], name: str) -> str:
 
 def declarations(path: Path) -> dict[str, tuple[str, int]]:
     """Return actual Lean declaration headers, qualified under namespaces."""
+    return dict(_declarations(str(path), path.read_text(encoding="utf-8")))
+
+
+@lru_cache(maxsize=None)
+def _declarations(path: str, text: str) -> dict[str, tuple[str, int]]:
+    # Keyed by the path and its current text, so an edited or temporary file
+    # is always re-parsed; callers receive a copy.
     scopes: list[tuple[str, list[str]]] = []
     found: dict[str, tuple[str, int]] = {}
-    for number, line in enumerate(strip_comments(path.read_text(encoding="utf-8")).splitlines(), 1):
+    for number, line in enumerate(strip_comments(text).splitlines(), 1):
         if match := NAMESPACE_RE.match(line):
             name = match.group(1)
             parts = name.split(".")

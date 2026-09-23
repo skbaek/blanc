@@ -105,6 +105,8 @@ def validated() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[s
             "cycle-write-free-self-test",
             "transient-settlement-self-test",
             "lido-deployment-self-test",
+            # Evidence economy, batch 2 (2026-09-24): the DRIP harness suites.
+            "drip-self-test",
         ],
     }
     for key, expected in expected_meta.items():

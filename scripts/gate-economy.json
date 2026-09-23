@@ -34,7 +34,8 @@
   "execution-occurrence-self-test",
   "cycle-write-free-self-test",
   "transient-settlement-self-test",
-  "lido-deployment-self-test"
+  "lido-deployment-self-test",
+  "drip-self-test"
  ],
  "rows": [
   {
@@ -889,8 +890,7 @@
    "id": "drip-evidence",
    "work": [
     "candidate-positive",
-    "static-corpus",
-    "harness-self-test"
+    "static-corpus"
    ],
    "resource_class": "exclusive",
    "prerequisites": [
@@ -972,6 +972,17 @@
    "resource_class": "light",
    "prerequisites": [
     "lido-deployment"
+   ],
+   "historical_catches": []
+  },
+  {
+   "id": "drip-self-test",
+   "work": [
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [
+    "drip-evidence"
    ],
    "historical_catches": []
   }

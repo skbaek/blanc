@@ -160,7 +160,7 @@ def req_bool(tok, line):
 
 SECTIONS = [
     "zero_hash", "le64", "incremental_root", "incremental_mixed_root",
-    "count_bytes", "naive_root", "naive_mixed_root", "branch_state",
+    "count_bytes", "branch_state",
     "deposit_inputs", "deposit_encoding", "deposit_event", "deposit_after",
     "guard_case", "insert_at_count", "walk_falls_through_at",
     "supports_interface",
@@ -185,8 +185,8 @@ def parse_regime(body):
             fail(f"evaluator FAILURE line: {line!r}")
         t = line.split(" ")
         kind = t[0]
-        if kind in ("zero_hash", "incremental_root", "incremental_mixed_root",
-                    "naive_root", "naive_mixed_root") and len(t) == 3:
+        if kind in ("zero_hash", "incremental_root",
+                    "incremental_mixed_root") and len(t) == 3:
             put(kind, req_int(t[1], line), req_hex(t[2], line, 64), line)
         elif kind in ("le64", "count_bytes") and len(t) == 3:
             put(kind, req_int(t[1], line), req_hex(t[2], line, 16), line)
@@ -309,11 +309,14 @@ def compare(P, vec, regime):
         eq("le64", n, v, oracle_le[n], line)
     stats.append(f"{len(oracle_le)} le64")
 
-    # Roots: exactly the count set in the file, five series per count.
+    # Roots: exactly the count set in the file, three series per count. The
+    # model-internal naive-vs-incremental agreement is no longer re-checked
+    # here: the evaluator elaborates `naive_agrees` (by `climb_spec`,
+    # `root_correct` and `rootAtE_eq`), which states it for every count, and
+    # the incremental series below is compared against the oracle's roots.
     roots = {r["count"]: r for r in k["roots"]}
     counts = set(roots)
-    for kind in ("incremental_root", "incremental_mixed_root", "count_bytes",
-                 "naive_root", "naive_mixed_root"):
+    for kind in ("incremental_root", "incremental_mixed_root", "count_bytes"):
         if set(P[kind]) != counts:
             fail(f"{kind} count set differs from vectors: model-only "
                  f"{sorted(set(P[kind]) - counts)}, oracle-only "
@@ -322,26 +325,15 @@ def compare(P, vec, regime):
         r = roots[n]
         ir, irl = P["incremental_root"][n]
         im, iml = P["incremental_mixed_root"][n]
-        nr, nrl = P["naive_root"][n]
-        nm, nml = P["naive_mixed_root"][n]
         eq("incremental_root", n, ir, r["root"], irl)
         eq("incremental_mixed_root", n, im, r["mixed_root"], iml)
-        eq("naive_root", n, nr, r["root"], nrl)
-        eq("naive_mixed_root", n, nm, r["mixed_root"], nml)
-        # Model-internal naive-vs-incremental agreement, asserted directly.
-        if nr != ir:
-            fail(f"naive_root {n}: Lean naive {nr} != Lean incremental {ir} "
-                 f"(line: {nrl!r})")
-        if nm != im:
-            fail(f"naive_mixed_root {n}: Lean naive {nm} != Lean incremental "
-                 f"{im} (line: {nml!r})")
         cb, cbl = P["count_bytes"][n]
         if n >= 2 ** 64:
             fail(f"count_bytes {n}: count does not fit in 8 bytes")
         eq("count_bytes", n, cb, n.to_bytes(8, "little").hex(), cbl,
            "independent le64")
-    stats.append(f"{len(counts)} counts x 5 series (incremental+naive roots, "
-                 "mixed, count_bytes)")
+    stats.append(f"{len(counts)} counts x 3 series (incremental root, "
+                 "mixed root, count_bytes)")
 
     # Branch states.
     bs = {b["count"]: b["branch"] for b in k["branch_states"]}

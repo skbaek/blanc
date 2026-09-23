@@ -3,7 +3,12 @@
 -- the fail-closed comparison against the independent Python oracle's vectors
 -- (`scripts/reference/beacon-deposit/vectors.json`).
 --
--- This is an evaluator, not an owner: it holds no proof or golden value.
+-- This is an evaluator, not an owner: it holds no golden value, and its only
+-- proofs are `chain_spec` and `naive_agrees` below, which state for the
+-- evaluator's own `chain` what the comparison once re-checked by finite cases
+-- (evidence economy rule 1): the incremental roots equal the naive reference
+-- roots. The naive series is therefore no longer emitted; the incremental
+-- series is still compared against the independent oracle's vectors.
 -- Its two blocks instantiate the model exactly with `Jaune.Bytes.keccak` and
 -- `Jaune.Bytes.sha256`; the oracle separately anchors those regimes to the
 -- upstream test constants. Everything here is computed by `#eval`
@@ -38,15 +43,61 @@ a FAILURE line and the compare script fails). -/
 def chain (H : Bytes → B256) (n : Nat) : Option Acc :=
   (List.range n).foldlM (fun s i => Acc.insert H s (leaf i)) Acc.empty
 
+/-- Every exercised chain succeeds and satisfies the accumulator invariant,
+by `empty_inv` and `insert_spec`. The bound `2 ^ 31` covers every count the
+evaluator uses with margin and does not name the insertion cap, so the
+cap-boundary mutant of the falsify campaign still elaborates. -/
+theorem chain_spec (H : Bytes → B256) :
+    ∀ n, n < 2 ^ 31 → ∃ s, chain H n = some s ∧ Inv H s (leaves n) := by
+  intro n
+  induction n with
+  | zero => intro _; exact ⟨Acc.empty, rfl, empty_inv H⟩
+  | succ n ih =>
+      intro hn
+      obtain ⟨s, hs, hinv⟩ := ih (by omega)
+      have hcount : s.count = n := by
+        rw [hinv.1]; simp [leaves]
+      obtain ⟨s', hins, _, hinv'⟩ :=
+        insert_spec H s (leaves n) (leaf n) hinv (by omega)
+      refine ⟨s', ?_, ?_⟩
+      · unfold chain at hs ⊢
+        rw [List.range_succ, List.foldlM_append, hs]
+        simp [hins]
+      · have : leaves (n + 1) = leaves n ++ [leaf n] := by
+          simp [leaves, List.range_succ]
+        rw [this]; exact hinv'
+
+/-- What the retired `naive_root`/`naive_mixed_root` series asserted, for
+every count rather than 29 of them: the incremental pre-mix root (`climb`,
+by `climb_spec`) and the mixed root (`Acc.root`, by `root_correct`) of the
+evaluated chain equal the naive reference roots in their evaluated form
+`rootAtE` (`rootAtE_eq`). -/
+theorem naive_agrees (H : Bytes → B256) (n : Nat) (hn : n < 2 ^ 31) (s : Acc)
+    (hs : chain H n = some s) :
+    climb H s.branch 32 0 s.count 0 = rootAtE H 32 (leaves n) ∧
+      Acc.root H s = mixIn H (rootAtE H 32 (leaves n)) (leaves n).length := by
+  obtain ⟨s', hs', hInv⟩ := chain_spec H n hn
+  rw [hs] at hs'
+  cases hs'
+  refine ⟨?_, ?_⟩
+  · obtain ⟨hc, hlt, hbr⟩ := hInv
+    have h0 : (leaves n).length / 2 ^ 0 = (leaves n).length := by simp
+    have hpend : rootAt H 0 (pending 0 (leaves n).length (leaves n)) = 0 := by
+      have hnil : pending 0 (leaves n).length (leaves n) = ([] : List B256) := by
+        unfold pending
+        rw [Nat.pow_zero, Nat.mod_one, Nat.sub_zero, List.drop_length]
+      rw [hnil, rootAt_nil]
+      rfl
+    have hclimb := climb_spec H (leaves n) 32 0 s.branch (by simpa using hc ▸ hlt)
+      (fun h' _ h2 hbit => hc ▸ hbr h' (by omega) (hc ▸ hbit))
+    rw [h0, hpend, Nat.zero_add] at hclimb
+    rw [hc, hclimb, rootAtE_eq]
+  · rw [root_correct H s (leaves n) hInv, rootAtE_eq]
+    rfl
+
 def rootCounts : List Nat :=
   [0, 1, 2, 3, 4, 5, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
    127, 128, 129, 255, 256, 257, 511, 512, 513, 1024, 1025]
-
-/-- The naive reference is evaluated through `rootAtE`, the derived form
-proved equal to `rootAt` in `BeaconDepositCorrectness` (`rootAtE_eq`); the
-primary spec's double recursion on empty subtrees is exponential to
-evaluate, and the proved equation is what licenses the substitution. -/
-def naiveCounts : List Nat := rootCounts
 
 def branchCounts : List Nat := [0, 1, 2, 3, 4, 8, 9, 33, 257]
 
@@ -70,10 +121,6 @@ def emitRoots (H : Bytes → B256) : IO Unit := do
         IO.println s!"incremental_root {n} {hex32 (climb H s.branch 32 0 s.count 0)}"
         IO.println s!"incremental_mixed_root {n} {hex32 (Acc.root H s)}"
         IO.println s!"count_bytes {n} {(Acc.countBytes s).toHex}"
-  for n in naiveCounts do
-    let nv := rootAtE H 32 (leaves n)
-    IO.println s!"naive_root {n} {hex32 nv}"
-    IO.println s!"naive_mixed_root {n} {hex32 (mixIn H nv (leaves n).length)}"
 
 def emitBranchStates (H : Bytes → B256) : IO Unit := do
   for n in branchCounts do

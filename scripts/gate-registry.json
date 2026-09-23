@@ -22,14 +22,28 @@
      "scripts/GATES.md",
      "docs/index.html",
      "docs/contracts/weth10.html",
-     "docs/contracts/lido-circuit-breaker.html"
+     "docs/contracts/lido-circuit-breaker.html",
+     ".github/workflows/ci.yml",
+     "LIDO_CIRCUIT_BREAKER_ASSURANCE.md",
+     "docs/contracts/lido-triggerable-withdrawals-gateway.html",
+     "scripts/check-layering.py",
+     "scripts/check-proof-module-size.py",
+     "scripts/check-trust-surface.py",
+     "scripts/module_path_policy.py",
+     "scripts/check-lido-circuit-breaker-deployment.py"
     ],
     "tools": [
      "python3"
+    ],
+    "populations": [
+     {
+      "pattern": "**/*.lean",
+      "root": "Blanc"
+     }
     ]
    },
    "kind": "cacheable",
-   "note": "Every producer and every published surface is an input. The catalogue is both a consumer of two counts and the subject of this gate's self-description check, so editing scripts/GATES.md reddens the gate that documents it. scripts/check-claims.sh is an input twice over: it restates the claim-pin count as its own expectation, and its verdict format string is what the published transcripts are pinned to. Blanc.lean is an input because PORTING.md's Lean reference must still be in the library root. scripts/check.sh is an input because the axiom-audit transcript is pinned to its verdict format string.",
+   "note": "Every producer and every published surface is an input. The catalogue is both a consumer of two counts and the subject of this gate's self-description check, so editing scripts/GATES.md reddens the gate that documents it. scripts/check-claims.sh is an input twice over: it restates the claim-pin count as its own expectation, and its verdict format string is what the published transcripts are pinned to. Blanc.lean is an input because PORTING.md's Lean reference must still be in the library root. scripts/check.sh is an input because the axiom-audit transcript is pinned to its verdict format string. The count producers are inputs too (read audit, evidence economy batch 2): the layering, module-size and trust-surface checkers and the shared module-path policy each derive a module population from Blanc/**/*.lean, the Lido deployment checker derives its public-theorem inventory from the committed Lean text, the CI command count is read from .github/workflows/ci.yml, and the assurance register and the TWG contract page are a producer and a consumer; the recursive Blanc population is what those producers enumerate.",
    "order": 1,
    "verdict": {
     "expect_exit": 0,
@@ -3229,7 +3243,6 @@
     "files": [
      "scripts/check-drip.sh",
      "scripts/gate-semaphore.sh",
-     "scripts/test-drip-gate-coordination.py",
      "scripts/check-drip-oracle.py",
      "scripts/check-drip-artifacts.py",
      "scripts/gen-drip-oracle-vectors.py",
@@ -3243,26 +3256,20 @@
      "Blanc/DripCreationCode.lean",
      "scripts/check-runtime-bytes.py",
      "scripts/check-drip-fixtures.py",
-     "scripts/test-check-drip-fixtures.py",
      "scripts/check-drip-replay.py",
-     "scripts/test-check-drip-replay.py",
      "scripts/drip_fixture_observers.py",
      "scripts/current-mainnet-target.json",
      "lake-manifest.json",
      ".lake/packages/jaune/.lake/build/bin/jaune",
      "scripts/check-drip-receipts.py",
-     "scripts/test-drip-receipts.py",
      "scripts/check-drip-arithmetic.py",
-     "scripts/test-drip-arithmetic.py",
      "scripts/drip_evaluator.py",
-     "scripts/test-drip-evaluator.py",
      "scripts/gate-cache.py",
      "scripts/gate_cache_lock.py",
      "scripts/gate_cache_t8n_root.py",
      "lakefile.lean",
      "lean-toolchain",
      "scripts/drip-evaluator-identity.py",
-     "scripts/test-drip-evaluator-identity.py",
      "Blanc/DripCore.lean",
      "Blanc/DripRpow.lean"
     ],
@@ -3350,7 +3357,7 @@
     ]
    },
    "kind": "cacheable",
-   "note": "CI-safe artifact/oracle controls, mocked evaluator protocols and fixed real Lean arithmetic comparison, followed by fail-closed manifest-wide BPO2 replay through pinned Jaune. The arithmetic evaluator computes 39 fixed public-definition rows compared with an independent Python integer implementation; this finite check is not a deployed-loop proof. Prior owned full/runner build, discovered evaluator imports and adjacent artifact-integrity/certification remain prerequisites; no implicit build occurs. The evaluator entry binds its imported depHash closure. The non-elaborating identity projection additionally binds actual pinned compiler bytes, normalized cache environment and current Jaune source bytes/discovery around the same shared snapshot used by execution; it does not authenticate artifact bytes. Mock suites synthesize their compiler/cache/import prerequisites and invoke no Lean child. Exact binary/package pin, recursive fixture population, literal parser, observer definitions and target profile remain real replay inputs. Pinned Jaune derives receipt encodings, blooms and trie roots from immutable manifest annotations and binds them to decoded block headers before native replay of the same snapshot. Lazy shell admission starts before real Lean evaluation and releases on every exit; static/mock checks take no hold. Missing fixtures/evaluator/imports/cache/runner or an incomplete child verdict fail closed.",
+   "note": "Committed vector regeneration, oracle semantics and artifact checks and fixed real Lean arithmetic comparison, followed by fail-closed manifest-wide BPO2 replay through pinned Jaune. The arithmetic evaluator computes 39 fixed public-definition rows compared with an independent Python integer implementation; this finite check is not a deployed-loop proof. Prior owned full/runner build, discovered evaluator imports and adjacent artifact-integrity/certification remain prerequisites; no implicit build occurs. The evaluator entry binds its imported depHash closure. The non-elaborating identity projection additionally binds actual pinned compiler bytes, normalized cache environment and current Jaune source bytes/discovery around the same shared snapshot used by execution; it does not authenticate artifact bytes. The corruption and mock suites are the drip-self-test row (evidence economy rule 3). Exact binary/package pin, recursive fixture population, literal parser, observer definitions and target profile remain real replay inputs. Pinned Jaune derives receipt encodings, blooms and trie roots from immutable manifest annotations and binds them to decoded block headers before native replay of the same snapshot. Lazy shell admission starts before real Lean evaluation and releases on every exit; static/mock checks take no hold. Missing fixtures/evaluator/imports/cache/runner or an incomplete child verdict fail closed.",
    "order": 72,
    "verdict": {
     "expect_exit": 0,
@@ -3739,6 +3746,53 @@
     "expect_exit": 0,
     "summary_patterns": [
      "^OK \u2014 Lido CircuitBreaker deployment self-test: "
+    ]
+   }
+  },
+  {
+   "command": [
+    "scripts/check-drip.sh",
+    "--self-test"
+   ],
+   "depends_on": [
+    "drip-evidence"
+   ],
+   "id": "drip-self-test",
+   "inputs": {
+    "files": [
+     "scripts/check-drip.sh",
+     "scripts/gate-semaphore.sh",
+     "scripts/check-drip-oracle.py",
+     "scripts/drip_oracle.py",
+     "scripts/check-drip-artifacts.py",
+     "scripts/test-drip-gate-coordination.py",
+     "scripts/test-check-drip-fixtures.py",
+     "scripts/test-check-drip-replay.py",
+     "scripts/test-drip-receipts.py",
+     "scripts/test-drip-arithmetic.py",
+     "scripts/test-drip-evaluator.py",
+     "scripts/test-drip-evaluator-identity.py",
+     "scripts/check-drip-fixtures.py",
+     "scripts/check-drip-replay.py",
+     "scripts/check-drip-receipts.py",
+     "scripts/drip_fixture_observers.py",
+     "scripts/check-drip-arithmetic.py",
+     "scripts/drip_evaluator.py",
+     "scripts/drip-evaluator-identity.py",
+     "scripts/check-runtime-bytes.py"
+    ],
+    "tools": [
+     "python3",
+     "bash"
+    ]
+   },
+   "kind": "cacheable",
+   "note": "Harness self-test: the oracle and artifact checkers' in-memory corruption suites (each first validates the committed vectors or artifacts) and the seven mocked or synthetic suites for the fixture verifier, replay driver, evaluator transport, receipt protocol, arithmetic protocol, evaluator identity projection and the wrapper's lazy host admission. No Lean child, no host hold. Inputs are the harness files only (evidence economy rule 3): the committed DRIP sources, vectors and fixtures it reads as subjects are deliberately not fingerprinted, so it reruns when a checker or control changes, not on every Lean edit; the green main row it depends on is the baseline.",
+   "order": 82,
+   "verdict": {
+    "expect_exit": 0,
+    "summary_patterns": [
+     "^OK \u2014 DRIP self-test: "
     ]
    }
   }

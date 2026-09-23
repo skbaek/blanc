@@ -46,8 +46,10 @@ fi
         path.write_text("#!/usr/bin/env bash\nset -eu\n" + body)
         path.chmod(0o755)
 
-    def run_gate(self):
-        result = subprocess.run(["/bin/bash", str(self.root / "scripts/check-drip.sh")],
+    def run_gate(self, *arguments):
+        self.log.unlink(missing_ok=True)
+        self.log.touch()
+        result = subprocess.run(["/bin/bash", str(self.root / "scripts/check-drip.sh"), *arguments],
                                 env=self.env, capture_output=True, text=True)
         return result, self.log.read_text().splitlines()
 
@@ -71,10 +73,26 @@ fi
         self.assertFalse(any("release" in row for row in rows))
 
     def test_static_failure_takes_no_hold(self):
-        self.env["MOCK_FAIL"] = "test-drip-receipts.py"
+        self.env["MOCK_FAIL"] = "check-drip-artifacts.py"
         result, rows = self.run_gate()
         self.assertEqual(result.returncode, 17)
         self.assertFalse(any(row.startswith("semaphore") for row in rows))
+
+    def test_self_test_runs_harness_suites_without_hold(self):
+        result, rows = self.run_gate("--self-test")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("python -B scripts/test-drip-receipts.py", rows)
+        self.assertNotIn("python -B scripts/check-drip-arithmetic.py", rows)
+        self.assertNotIn("python -B scripts/check-drip-replay.py", rows)
+        self.assertFalse(any(row.startswith("semaphore") for row in rows))
+        self.env["MOCK_FAIL"] = "test-drip-receipts.py"
+        result, rows = self.run_gate("--self-test")
+        self.assertEqual(result.returncode, 17)
+
+    def test_default_run_omits_harness_suites(self):
+        result, rows = self.run_gate()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(any("test-" in row or "--self-test" in row for row in rows))
 
     def test_evaluator_failure_releases_and_prevents_replay(self):
         self.env["MOCK_FAIL"] = "check-drip-arithmetic.py"

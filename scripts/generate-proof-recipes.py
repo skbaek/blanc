@@ -20,6 +20,7 @@ import sys
 import tempfile
 import unicodedata
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
@@ -262,53 +263,80 @@ def parse_registry_text(text: str, source: str) -> Tuple[Dict[str, Any], List[Di
     return top, recipes
 
 
+@lru_cache(maxsize=None)
 def strip_lean_comments(text: str, source: str) -> str:
-    """Remove nested Lean comments while preserving strings and line layout."""
+    """Remove nested Lean comments while preserving strings and line layout.
+
+    Pure in its arguments, so memoized: the declaration, tactic and
+    constructor inventories each strip the same ~500 Blanc modules, which is
+    now done once per process (evidence economy, batch 2).
+    """
+    # Jumps between the tokens that change state instead of stepping one
+    # character at a time; output and errors are identical to the character
+    # loop it replaced on every Lean file of Blanc, its packages and Jaune and
+    # on random strings over the token alphabet.
     out: List[str] = []
     index = 0
+    size = len(text)
     depth = 0
     quoted = False
-    escaped = False
-    while index < len(text):
+    while index < size:
         if depth:
-            if text.startswith("/-", index):
-                depth += 1
-                out.extend("  ")
-                index += 2
-            elif text.startswith("-/", index):
-                depth -= 1
-                out.extend("  ")
-                index += 2
-            else:
-                out.append("\n" if text[index] == "\n" else " ")
+            match = _STRIP_BLOCK.search(text, index)
+            if match is None:
+                out.append(_NOT_NEWLINE.sub(" ", text[index:]))
+                break
+            out.append(_NOT_NEWLINE.sub(" ", text[index:match.start()]))
+            depth += 1 if match.group() == "/-" else -1
+            out.append("  ")
+            index = match.end()
+            continue
+        if quoted:
+            match = _STRIP_QUOTED.search(text, index)
+            if match is None:
+                out.append(text[index:])
+                break
+            out.append(text[index:match.end()])
+            index = match.end()
+            if match.group() == '"':
+                quoted = False
+            elif index < size:
+                # The escaped character is text, whatever it is.
+                out.append(text[index])
                 index += 1
             continue
-        if not quoted and text.startswith("/-", index):
+        match = _STRIP_NORMAL.search(text, index)
+        if match is None:
+            out.append(text[index:])
+            break
+        start = match.start()
+        out.append(text[index:start])
+        token = match.group()
+        if token == '"':
+            out.append('"')
+            quoted = True
+            index = start + 1
+        elif token == "/-":
             depth = 1
-            out.extend("  ")
-            index += 2
-        elif not quoted and text.startswith("--", index):
-            while index < len(text) and text[index] != "\n":
-                out.append(" ")
-                index += 1
+            out.append("  ")
+            index = start + 2
         else:
-            char = text[index]
-            out.append(char)
-            if quoted:
-                if escaped:
-                    escaped = False
-                elif char == "\\":
-                    escaped = True
-                elif char == '"':
-                    quoted = False
-            elif char == '"':
-                quoted = True
-            index += 1
+            newline = text.find("\n", start)
+            if newline < 0:
+                newline = size
+            out.append(" " * (newline - start))
+            index = newline
     if depth:
         raise RecipeError(f"{source}: unterminated Lean block comment")
     if quoted:
         raise RecipeError(f"{source}: unterminated Lean string")
     return "".join(out)
+
+
+_STRIP_NORMAL = re.compile(r'/-|--|"')
+_STRIP_QUOTED = re.compile(r'\\|"')
+_STRIP_BLOCK = re.compile(r'/-|-/')
+_NOT_NEWLINE = re.compile(r'[^\n]')
 
 
 def qualify(namespace: Sequence[str], name: str) -> str:

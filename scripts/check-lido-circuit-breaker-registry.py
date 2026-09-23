@@ -15,6 +15,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from functools import lru_cache
 from pathlib import Path
 from typing import Mapping
 
@@ -152,8 +153,13 @@ def fail(message: str) -> None:
     raise Regression(message)
 
 
+@lru_cache(maxsize=None)
 def strip_comments(source: str) -> str:
-    """Remove Lean line/nested block comments, retaining source positions."""
+    """Remove Lean line/nested block comments, retaining source positions.
+
+    Pure in ``source``, so memoized: each falsifier pass re-strips only the
+    one text it changed instead of the whole corpus.
+    """
     out: list[str] = []
     i = 0
     depth = 0
@@ -491,32 +497,42 @@ def run(command: list[str]) -> str:
 
 
 def compile_fixture(relative: str) -> None:
+    """Elaborate one fixture once, with its axiom probes appended.
+
+    The elaborated copy is the committed fixture byte for byte followed only
+    by `#print axioms` commands, which cannot make a failing file elaborate,
+    so one run is both the fixture's positive compile and the evidence for
+    every axiom pin it owns.  (Each probe used to elaborate the whole fixture
+    again: six elaborations of two files.)
+    """
     gate_semaphore.guard("the Lido registry fixtures")
-    run(["lake", "env", "lean", relative])
-
-
-def axiom_check(relative: str, qualified: str) -> None:
-    gate_semaphore.guard("the Lido registry axiom probe")
+    probes = [qualified for owner, qualified in AXIOM_CONTROLS if owner == relative]
     source = (ROOT / relative).read_text()
     with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".lean", prefix="registry-axioms-", dir=ROOT,
+        mode="w", suffix=".lean", prefix="registry-fixture-", dir=ROOT,
         encoding="utf-8", delete=False,
     ) as handle:
         temporary = Path(handle.name)
         handle.write(source)
-        handle.write(f"\n#print axioms {qualified}\n")
+        for qualified in probes:
+            handle.write(f"\n#print axioms {qualified}\n")
     try:
         output = run(["lake", "env", "lean", str(temporary.relative_to(ROOT))])
     finally:
         temporary.unlink(missing_ok=True)
-    match = re.search(
+    for qualified in probes:
+        axiom_check(qualified, output)
+
+
+def axiom_check(qualified: str, output: str) -> None:
+    matches = re.findall(
         r"'" + re.escape(qualified) + r"' depends on axioms: \[([^\]]*)\]",
         output,
         re.DOTALL,
     )
-    if not match:
+    if len(matches) != 1:
         fail(f"{qualified}: unrecognised #print axioms output: {output.rstrip()}")
-    actual = {item.strip() for item in match.group(1).split(",") if item.strip()}
+    actual = {item.strip() for item in matches[0].split(",") if item.strip()}
     if actual != EXPECTED_AXIOMS:
         fail(f"{qualified}: axioms {sorted(actual)}, expected {sorted(EXPECTED_AXIOMS)}")
 
@@ -536,8 +552,9 @@ def main(argv: list[str]) -> None:
     if not arguments.static_only:
         compile_fixture(SUCCESS)
         compile_fixture(REGRESSION)
-        for relative, qualified in AXIOM_CONTROLS:
-            axiom_check(relative, qualified)
+        probed = {owner for owner, _ in AXIOM_CONTROLS}
+        if probed - {SUCCESS, REGRESSION}:
+            fail(f"axiom pins name an uncompiled fixture: {sorted(probed)}")
     owner_count = len(REQUIRED[OWNER])
     header_count = len(EXPECTED_HEADERS)
     success_count = len(REQUIRED[SUCCESS])
