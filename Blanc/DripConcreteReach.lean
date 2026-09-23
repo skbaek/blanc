@@ -52,22 +52,37 @@ theorem concreteGenesis_sum :
 
 theorem concreteDeployed_sum_le :
     sum concreteDeployed.state.bal ≤ sum concreteBase.state.bal :=
-  concreteDeploymentTrace.sum_le_of_empty_withdrawals
+  concreteDeploymentTrace.sum_le_of_empty_withdrawals CoveredFork.prague
+
+/-- The literal schedule selects Prague at every timestamp.  Keep this
+certificate separate from the concrete transition proofs so the configured
+trace constructors retain the actual fork selected by their headers. -/
+theorem concreteConfig_covered {timestamp : Nat} {fork : Fork}
+    (hfork : concreteConfig.forkAt timestamp = .ok fork) :
+    CoveredFork fork := by
+  have hprague : concreteConfig.forkAt timestamp = .ok .prague := by
+    simpa [concreteConfig] using ChainConfig.pragueOnly_forkAt 1 timestamp
+  rw [hprague] at hfork
+  cases hfork
+  exact CoveredFork.prague
 
 theorem concreteJoined_sum_le :
     sum concreteJoined.state.bal ≤ sum concreteDeployed.state.bal := by
-  rcases ExecutionTrace.exists_appliedBodyTrace concreteJoin_body with ⟨trace⟩
-  exact trace.sum_le_of_empty_withdrawals
+  rcases ExecutionTrace.exists_appliedBodyTrace concreteJoin_body
+    CoveredFork.prague with ⟨trace⟩
+  exact trace.sum_le_of_empty_withdrawals CoveredFork.prague
 
 theorem concreteDripped_sum_le :
     sum concreteDripped.state.bal ≤ sum concreteJoined.state.bal := by
-  rcases ExecutionTrace.exists_appliedBodyTrace concreteDrip_body with ⟨trace⟩
-  exact trace.sum_le_of_empty_withdrawals
+  rcases ExecutionTrace.exists_appliedBodyTrace concreteDrip_body
+    CoveredFork.prague with ⟨trace⟩
+  exact trace.sum_le_of_empty_withdrawals CoveredFork.prague
 
 theorem concreteExited_sum_le :
     sum concreteExited.state.bal ≤ sum concreteDripped.state.bal := by
-  rcases ExecutionTrace.exists_appliedBodyTrace concreteExit_body with ⟨trace⟩
-  exact trace.sum_le_of_empty_withdrawals
+  rcases ExecutionTrace.exists_appliedBodyTrace concreteExit_body
+    CoveredFork.prague with ⟨trace⟩
+  exact trace.sum_le_of_empty_withdrawals CoveredFork.prague
 
 /-- Each strict bound belongs to its actual world; the preceding world's
 bound is the one consumed by the next configured reach step. -/
@@ -143,7 +158,7 @@ noncomputable def concreteDeploymentBlockTrace :
         (congrArg (fun n => sum concreteBase.state.bal + n) empty).trans (Nat.add_zero _)
       exact (congrArg (fun n => n < 2 ^ 256) balance).mpr
         concrete_world_sum_bounds.1)
-    concreteDeploymentStep)
+    concreteDeploymentStep concreteConfig_covered)
 
 noncomputable def concreteJoinBlockTrace :
     ExecutionTrace.ConfiguredBlockTrace concreteConfig concreteDeployed concreteJoined :=
@@ -155,7 +170,7 @@ noncomputable def concreteJoinBlockTrace :
         (congrArg (fun n => sum concreteDeployed.state.bal + n) empty).trans (Nat.add_zero _)
       exact (congrArg (fun n => n < 2 ^ 256) balance).mpr
         concrete_world_sum_bounds.2.1)
-    concreteJoin_step)
+    concreteJoin_step concreteConfig_covered)
 
 noncomputable def concreteDripBlockTrace :
     ExecutionTrace.ConfiguredBlockTrace concreteConfig concreteJoined concreteDripped :=
@@ -167,7 +182,7 @@ noncomputable def concreteDripBlockTrace :
         (congrArg (fun n => sum concreteJoined.state.bal + n) empty).trans (Nat.add_zero _)
       exact (congrArg (fun n => n < 2 ^ 256) balance).mpr
         concrete_world_sum_bounds.2.2.1)
-    concreteDrip_step)
+    concreteDrip_step concreteConfig_covered)
 
 noncomputable def concreteExitBlockTrace :
     ExecutionTrace.ConfiguredBlockTrace concreteConfig concreteDripped concreteExited :=
@@ -179,7 +194,7 @@ noncomputable def concreteExitBlockTrace :
         (congrArg (fun n => sum concreteDripped.state.bal + n) empty).trans (Nat.add_zero _)
       exact (congrArg (fun n => n < 2 ^ 256) balance).mpr
         concrete_world_sum_bounds.2.2.2.1)
-    concreteExit_step)
+    concreteExit_step concreteConfig_covered)
 
 /-- The named typed traces retain these literal blocks, not just the same
 endpoints. No transition's body evidence is reconstructed here. -/
