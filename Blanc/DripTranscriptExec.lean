@@ -38,6 +38,7 @@ list of the suffix. -/
 def Exec.CoreDripTranscript (coalition : Finset Adr) (ca : Adr)
     (pc : Nat) (sevm : Sevm) (pre : Devm) (out : Execution) : Prop :=
   ∀ (run : Exec pc sevm pre out) (committed : Execution.commits out = true),
+    CoveredFork sevm.benvStat.fork →
     Prog.At Drip.runtime ca pc sevm pre →
     Drip.dripEntrySpec.Pre ca sevm pre →
     (sevm.currentTarget = ca → sevm.codeAddress = some ca) →
@@ -286,6 +287,7 @@ theorem exec_targetReplayAt (coalition : Finset Adr) {sevm : Sevm}
     (precondition : dripEntrySpec.Pre sevm.currentTarget sevm pre)
     (caller_ne : sevm.caller ≠ sevm.currentTarget)
     (committed : Execution.commits (.ok post) = true)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (exitNested : ∀ handoff : ExitHandoffAt coalition exc,
       ∃ nested, RealizedChain
         (snapshot coalition sevm.currentTarget handoff.entry.state) nested
@@ -300,7 +302,7 @@ theorem exec_targetReplayAt (coalition : Finset Adr) {sevm : Sevm}
     have exitJoin : exitSelector ≠ joinSelector := by decide +kernel
     have hvalue := (exec_enters_exit exc hcode hsel hempty).1
     obtain ⟨handoff⟩ := exit_exec_handoffAt coalition exc hcode hsel hempty
-      hcanon precondition caller_ne
+      hcanon precondition caller_ne hfork
     rcases exitNested handoff with ⟨nested, chain, kinds⟩
     refine ⟨⟨_, _, _, handoff.effect⟩, nested, ?_, ?_, ?_, ?_⟩
     · exact (execEntrySnapshot_of_value_zero hvalue).symm
@@ -318,7 +320,7 @@ theorem exec_targetReplayAt (coalition : Finset Adr) {sevm : Sevm}
     refine ⟨op, [], preEq, kindEq, ?_, ?_⟩
     · rw [postEq]
       exact Chain.nil _
-    · rw [nonexit_descendantFrames_nil exc hcode hcanon committed hnotExit]
+    · rw [nonexit_descendantFrames_nil exc hcode hcanon committed hnotExit hfork]
       rfl
 
 end Drip
@@ -347,16 +349,16 @@ theorem Exec.CoreDripTranscript.atTarget
         Exec.CoreDripTranscript coalition ca pc childSevm childPre childOut)) :
     Exec.CoreDripTranscript coalition ca 0 sevm pre (.ok post) := by
   subst ca
-  intro run committed installed precondition _ caller canonical
+  intro run committed hfork installed precondition _ caller canonical
   have hcode : sevm.code.toList = code := by
     have compiled := (installed.2 rfl).1
     rw [code_compile] at compiled
     exact Option.some.inj compiled
   have replay : TargetTranscript coalition sevm.currentTarget run := by
     apply exec_targetReplayAt coalition run hcode (canonical rfl) precondition
-      (caller rfl) committed
+      (caller rfl) committed hfork
     rintro ⟨childMsg, hentry, child, xl, retained, process, childClean,
-      entryTransfer, targetNe, depth, childPreH, _, _, _⟩
+      entryTransfer, benvStat, targetNe, depth, childPreH, _, _, _⟩
     dsimp only
     cases retained with
     | none =>
@@ -368,11 +370,12 @@ theorem Exec.CoreDripTranscript.atTarget
         exact Chain.nil _
     | @some childPc childSevm childPre childOut childRun =>
         obtain ⟨childCommitted, childTargetNe, childPrecondition, childAt,
-            childDepth, startEq, childPost⟩ :=
+            childDepth, startEq, childPost, childFork⟩ :=
           exitChild_facts coalition process childClean entryTransfer targetNe
-            depth childPreH
+            depth childPreH benvStat hfork
         rcases deeper childPc childSevm childPre childOut childRun
-            childDepth childAt childRun childCommitted childAt childPrecondition
+            childDepth childAt childRun childCommitted childFork childAt
+            childPrecondition
             (fun childTarget => (childTargetNe childTarget).elim)
             (fun childTarget => (childTargetNe childTarget).elim)
             (fun childTarget => (childTargetNe childTarget).elim) with
@@ -404,20 +407,20 @@ theorem Exec.CoreDripTranscript.nextNone
     (target_ne : sevm.currentTarget ≠ ca)
     (ih : Exec.CoreDripTranscript coalition ca (pc + n.size) sevm inter out) :
     Exec.CoreDripTranscript coalition ca pc sevm pre out := by
-  intro run committed _ precondition _ _ _
+  intro run committed hfork _ precondition _ _ _
   have interPre : dripEntrySpec.Pre ca sevm inter :=
     _root_.Blanc.ContractSpec.Ninst.none_preserves_precond
-      (c := dripEntrySpec) step target_ne precondition
+      (c := dripEntrySpec) hfork step target_ne precondition
   have installedInter : Prog.At runtime ca (pc + n.size) sevm inter :=
     ⟨interPre.code, fun target => (target_ne target).elim⟩
   have sumNof : sum pre.state.bal < 2 ^ 256 := precondition.side
   rcases (carrier coalition ca).ofStorageEqBalanceMono_observed
       (transcriptView coalition ca) ()
-      (_root_.Blanc.Ninst.foreignNone_getStor_eq step target_ne)
-      (_root_.Blanc.Ninst.targetBalanceMono_of_none step target_ne sumNof) with
+      (_root_.Blanc.Ninst.foreignNone_getStor_eq hfork step target_ne)
+      (_root_.Blanc.Ninst.targetBalanceMono_of_none hfork step target_ne sumNof) with
     ⟨headSteps, headReplay, headKinds⟩
   change List RealizedStep at headSteps
-  rcases ih next committed installedInter interPre
+  rcases ih next committed hfork installedInter interPre
       (fun target => (target_ne target).elim)
       (fun target => (target_ne target).elim)
       (fun target => (target_ne target).elim) with
@@ -439,7 +442,7 @@ theorem Exec.CoreDripTranscript.last
     (step : Linst.Run sevm pre l out)
     (target_ne : sevm.currentTarget ≠ ca) :
     Exec.CoreDripTranscript coalition ca pc sevm pre out := by
-  intro run committed _ precondition _ _ _
+  intro run committed hfork _ precondition _ _ _
   cases out with
   | error error =>
       simp [Execution.commits] at committed
@@ -467,13 +470,13 @@ theorem Exec.CoreDripTranscript.jump
     (target_ne : sevm.currentTarget ≠ ca)
     (ih : Exec.CoreDripTranscript coalition ca pc' sevm inter out) :
     Exec.CoreDripTranscript coalition ca pc sevm pre out := by
-  intro run committed _ precondition _ _ _
+  intro run committed hfork _ precondition _ _ _
   have stateEq : inter.state = pre.state := Jinst.preserves_state step
   have interPre : dripEntrySpec.Pre ca sevm inter :=
     precondition.state_eq stateEq
   have installedInter : Prog.At runtime ca pc' sevm inter :=
     ⟨interPre.code, fun target => (target_ne target).elim⟩
-  rcases ih next committed installedInter interPre
+  rcases ih next committed hfork installedInter interPre
       (fun target => (target_ne target).elim)
       (fun target => (target_ne target).elim)
       (fun target => (target_ne target).elim) with
@@ -505,23 +508,29 @@ theorem Exec.CoreDripTranscript.nextSome
       simp [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at step
   | push xs length =>
       simp [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at step
+  | dupn imm =>
+      cases (Step.run_ofExecution.mp step).1
+  | swapn imm =>
+      cases (Step.run_ofExecution.mp step).1
+  | exchange imm =>
+      cases (Step.run_ofExecution.mp step).1
   | exec x =>
-      intro run committed installed precondition _ _ _
+      intro run committed hfork installed precondition _ _ _
       obtain ⟨frame, resume, settled, spawnEq, frameRun, resumeRun, childAt,
           childPrecondition, childDirect, childCaller, childCanonical,
-          interPre⟩ :=
-        foreignSpawn_facts hat step child target_ne installed precondition
+          interPre, childFork⟩ :=
+        foreignSpawn_facts hat step child target_ne installed precondition hfork
       have installedInter : Prog.At runtime ca (pc + 1) sevm inter :=
         ⟨interPre.code, fun target => (target_ne target).elim⟩
       have sumNof : sum pre.state.bal < 2 ^ 256 := precondition.side
       rcases (carrier coalition ca).xinstForeignSome_observed
           (transcriptView coalition ca) spawnEq frameRun resumeRun target_ne
-          sumNof child
-          (fun childCommitted => ihChild child childCommitted childAt
+          hfork sumNof child
+          (fun childCommitted => ihChild child childCommitted childFork childAt
             childPrecondition childDirect childCaller childCanonical) with
         ⟨headSteps, headReplay, headKinds⟩
       change List RealizedStep at headSteps
-      rcases ihNext next committed installedInter interPre
+      rcases ihNext next committed hfork installedInter interPre
           (fun target => (target_ne target).elim)
           (fun target => (target_ne target).elim)
           (fun target => (target_ne target).elim) with
@@ -583,7 +592,8 @@ theorem Exec.dripTranscriptChain_of_messageRoot
     (evmEq : (⟨pc, sevm, pre⟩ : Evm) = initEvm (msg.withBenv entry))
     (committed : Execution.commits out = true)
     (ready : Drip.dripEntrySpec.MessageRunReady ca msg)
-    (caller_ne : msg.currentTarget = ca → msg.caller ≠ ca) :
+    (caller_ne : msg.currentTarget = ca → msg.caller ≠ ca)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ steps : List Drip.RealizedStep,
       Drip.RealizedChain (Drip.execEntrySnapshot coalition ca sevm pre.state) steps
         (Drip.snapshot coalition ca (Execution.committedPost out committed).state) ∧
@@ -592,7 +602,7 @@ theorem Exec.dripTranscriptChain_of_messageRoot
   obtain ⟨installed, precondition, direct, caller, canonical⟩ :=
     messageRoot_facts transfer evmEq ready caller_ne
   exact Exec.coreDripTranscript coalition pc sevm pre out run installed run
-    committed installed precondition direct caller canonical
+    committed hfork installed precondition direct caller canonical
 
 namespace Drip
 
@@ -603,9 +613,9 @@ noncomputable def ladderObserved (coalition : Finset Adr) (ca : Adr) :
   view := transcriptView coalition ca
   root := by
     intro _ _ msg entry pc sevm pre out run transfer evmEq committed runReady
-      callerNe sumNof
+      callerNe hfork sumNof
     exact Exec.dripTranscriptChain_of_messageRoot coalition run transfer evmEq
-      committed (dripEntrySpec_messageRunReady runReady sumNof) callerNe
+      committed (dripEntrySpec_messageRunReady runReady sumNof) callerNe hfork
 
 /-- The DRIP transcript of a retained configured history: one entry per settled
 DRIP call frame, in execution order. -/
@@ -621,11 +631,13 @@ once each, in execution order, each with its own computed kind. -/
 theorem dripTraceRealizes_transcript
     {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
     (root : DeploymentRoot cfg base deployed ca) (coalition : Finset Adr)
-    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future) :
+    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, DripTraceRealizes root coalition steps future ∧
       callKinds steps = history.dripCalls coalition ca :=
   (ladderObserved coalition ca).traceRealizes_of_configuredHistoryTrace
-    root.stateInv history
+    root.stateInv history hcov
 
 end Drip
 
