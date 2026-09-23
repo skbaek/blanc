@@ -347,7 +347,7 @@ private theorem rootLoopLive_storageEffectRun
           (i := (0 : B256)) (v := left) (s := [height])
           (G := K + 12) (e := 0) rfl
           (by
-            simpa only [hzeroNat] using
+            simpa only [hzeroNat, afterSload_stateGas] using
               (hext0 (afterSload sevm base (branchBase + height))
                 [0, left, height] (K + 15)))
           (by simp only [Devm.gasLeft_setMach, gVerylow]) rfl)
@@ -371,8 +371,9 @@ private theorem rootLoopLive_storageEffectRun
           (c := gVerylow) (G := K + 6)
           (M := memory.write 0 left.toBytes) rfl
           (by
-            simp only [hzeroNat, hn,
-              hextNode, Nat.add_zero])
+            simp only [hzeroNat, hn]
+            rw [← afterSload_stateGas (sevm := sevm) (base := base)
+              (key := branchBase + height), hextNode, Nat.add_zero])
           (by simpa only [Devm.memory_setMach, hzeroNat, hn] using hreadNode)
           (by simpa only [Devm.memory_setMach, hzeroNat, hn] using hreadMem)
           (by simp only [Devm.gasLeft_setMach, gVerylow])
@@ -396,7 +397,7 @@ private theorem rootLoopLive_storageEffectRun
           (i := (1 : B256) * 32) (v := node) (s := [height])
           (G := K) (e := 0) rfl
           (by
-            simpa only [h1] using
+            simpa only [h1, afterSload_stateGas] using
               (hext32 (afterSload sevm base (branchBase + height))
                 [(1 : B256) * 32, node, height] (K + 3)))
           (by simp only [Devm.gasLeft_setMach, gVerylow]) rfl)
@@ -548,7 +549,7 @@ private theorem rootLoopDead_storageEffectRun
           (i := (1 : B256) * 32) (v := right) (s := [height])
           (G := K) (e := 0) rfl
           (by
-            simpa only [h1] using
+            simpa only [h1, afterSload_stateGas] using
               (hext32 (afterSload sevm base (zeroHashBase + height))
                 [(1 : B256) * 32, right, height] (K + 3)))
           (by simp only [Devm.gasLeft_setMach, gVerylow]) rfl)
@@ -1386,7 +1387,7 @@ private theorem getDepositRootEndpoint_prefix_storageEffectRun
     (by rintro ⟨⟩)
     (by rintro operation ⟨⟩)
   change Func.StorageEffectRun (runtime.main :: runtime.aux) sevm
-    (loaded.setMach ⟨[count], Mem.empty, K + 100, loaded.stateGas⟩) _ ex []
+    (loaded.setMach ⟨[count], Mem.empty, K + 100, base.stateGas⟩) _ ex []
   storage_effect_run (9) [57, 3, 3]
   case h_ext =>
     exact Devm.extCost_of_size (N := Mem.empty)
@@ -1596,9 +1597,9 @@ theorem getDepositRootEndpoint_runCompiled
   have hloop' : Func.RunCompiledTo fs sevm
       (loaded.setMach
         ⟨[0], rootInitialMemory (Nat.toB256 count),
-          G + 416 + rootLoopGas sevm.currentTarget stor 32 initial, loaded.stateGas⟩)
+          G + 416 + rootLoopGas sevm.currentTarget stor 32 initial, base.stateGas⟩)
       rootLoop ex := by
-    simpa only [initial, rootInitialLoopState] using hloop
+    simpa only [initial, rootInitialLoopState, loaded, afterSload_stateGas] using hloop
   have hendpoint :=
     getDepositRootEndpoint_prefix_runCompiledTo (hfork := hfork)
       (K := G + 416 + rootLoopGas sevm.currentTarget stor 32 initial)
@@ -1787,9 +1788,9 @@ theorem getDepositRootEndpoint_storageEffectRun
   have hloop' : Func.StorageEffectRun (runtime.main :: runtime.aux) sevm
       (loaded.setMach
         ⟨[0], rootInitialMemory (Nat.toB256 count),
-          G + 416 + rootLoopGas sevm.currentTarget stor 32 initial, loaded.stateGas⟩)
+          G + 416 + rootLoopGas sevm.currentTarget stor 32 initial, base.stateGas⟩)
       rootLoop ex [] := by
-    simpa only [initial, rootInitialLoopState] using hloop
+    simpa only [initial, rootInitialLoopState, loaded, afterSload_stateGas] using hloop
   have hendpoint :=
     getDepositRootEndpoint_prefix_storageEffectRun (hfork := hfork)
       (K := G + 416 + rootLoopGas sevm.currentTarget stor 32 initial)

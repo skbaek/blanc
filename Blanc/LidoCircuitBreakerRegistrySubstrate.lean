@@ -86,6 +86,11 @@ def temporalSloadBase (sevm : Sevm) (base : Devm)
   if (sevm.currentTarget, key) ∈ base.accessedStorageKeys then base
   else addAccessedStorageKey base sevm.currentTarget key
 
+theorem temporalSloadBase_stateGas {sevm : Sevm} {base : Devm} {key : B256} :
+    (temporalSloadBase sevm base key).stateGas = base.stateGas := by
+  unfold temporalSloadBase
+  split <;> rfl
+
 def temporalSloadCost (sevm : Sevm) (base : Devm)
     (key : B256) : Nat :=
   if (sevm.currentTarget, key) ∈ base.accessedStorageKeys then gasWarmAccess
@@ -93,7 +98,7 @@ def temporalSloadCost (sevm : Sevm) (base : Devm)
 
 def temporalSstorePost (sevm : Sevm) (base : Devm)
     (key value : B256) : Devm :=
-  (base.withRefundCounter (sstoreNewRefundCounter value
+  (base.withRefundCounter (sstoreNewRefundCounter sevm.benvStat.rules.gas value
     (getOrigStorVal sevm sevm.currentTarget key)
     (base.getStorVal sevm.currentTarget key) base.refundCounter)).setStorVal
       sevm.currentTarget key value
@@ -101,6 +106,7 @@ def temporalSstorePost (sevm : Sevm) (base : Devm)
 theorem temporal_sload_runCompiled
     {sevm : Sevm} {base : Devm} {key value : B256}
     {stack : List B256} {M : Mem} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hvalue : base.getStorVal sevm.currentTarget key = value)
     (hroom : stack.length < 1024) :
     Ninst.RunCompiled sevm
@@ -110,21 +116,26 @@ theorem temporal_sload_runCompiled
         ⟨value :: stack, M, G, (temporalSloadBase sevm base key).stateGas⟩) := by
   by_cases hwarm : (sevm.currentTarget, key) ∈ base.accessedStorageKeys
   · simp only [temporalSloadBase, temporalSloadCost, if_pos hwarm]
-    exact Ninst.runCompiled_sload_warm rfl hwarm
+    exact Ninst.runCompiled_sload_warm hfork.rules_stateGas_none rfl hwarm
       (by simpa only [Devm.getStorVal_setMach] using hvalue)
       (by simp only [Devm.gasLeft_setMach]) hroom
   · simp only [temporalSloadBase, temporalSloadCost, if_neg hwarm]
+    have hsg : (addAccessedStorageKey base sevm.currentTarget key).stateGas =
+        base.stateGas := rfl
+    rw [hsg]
     simpa only [Devm.addAccessedStorageKey_setMach_setMach,
-      Devm.memory_setMach] using
+      Devm.memory_setMach, Devm.stateGas_setMach] using
       Ninst.runCompiled_sload_cold
         (devm := base.setMach ⟨key :: stack, M, G + gasColdSload, base.stateGas⟩)
-        rfl (by simpa only [accessedStorageKeys_setMach] using hwarm)
+        hfork.rules_stateGas_none rfl
+        (by simpa only [accessedStorageKeys_setMach] using hwarm)
         (by simpa only [Devm.getStorVal_setMach] using hvalue)
         (by simp only [Devm.gasLeft_setMach]) hroom
 
 theorem temporal_sstore_runCompiled
     {sevm : Sevm} {base : Devm} {key value current original : B256}
     {stack : List B256} {M : Mem} {G cost : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hcurrent : base.getStorVal sevm.currentTarget key = current)
     (horiginal : getOrigStorVal sevm sevm.currentTarget key = original)
     (hcost : sstoreValueCost original current value = cost)
@@ -137,6 +148,7 @@ theorem temporal_sstore_runCompiled
         ⟨stack, M, G, (temporalSstorePost sevm base key value).stateGas⟩) := by
   apply Ninst.runCompiled_sstore_warm
       (c := cost) (G := G)
+  · exact hfork.rules_stateGas_none
   · rfl
   · simpa only [accessedStorageKeys_setMach] using hwarm
   · simpa only [Devm.gasLeft_setMach] using hgas
@@ -351,11 +363,11 @@ theorem finishSetPauser_registerAfterSet_runCompiled
   all_goals try simp_rw [hpreviousMemory]
   all_goals try simp_rw [htargetMemory]
   all_goals try {
-    rw [Devm.extCost_zero_of_le halign (by omega)]
+    erw [Devm.extCost_zero_of_le halign (by omega)]
     norm_num [gVerylow, gLog, gLogdata, gLogtopic] }
   case h_cost =>
     simp only [show ((0 : B256) * 32).toNat = 0 by decide]
-    rw [Devm.extCost_zero_of_le halign (by omega)]
+    erw [Devm.extCost_zero_of_le halign (by omega)]
     norm_num [gLog, gLogdata, gLogtopic]
   case a =>
     rw [hnewValue, hpreviousValue, htargetValue]
@@ -441,6 +453,7 @@ Chronology-independent, so it lives here rather than in any leaf: the fresh,
 absent and replacement chronologies all reach this arm. -/
 theorem afterOldPauser_finishSetPauser_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (newPauser count nextCount countOriginal : B256)
     (stack : List B256) (countCost G : Nat) (post : Devm)
@@ -498,7 +511,7 @@ theorem afterOldPauser_finishSetPauser_runCompiled
         G + 12 + countCost, countBase.stateGas⟩)
       (Ninst.sstore ::: .call finishSetPauserSlot) post := by
     apply Func.RunCompiled.next
-    · exact temporal_sstore_runCompiled hcountBase hcountOrig hcountCost
+    · exact temporal_sstore_runCompiled (hfork := hfork) hcountBase hcountOrig hcountCost
         hwarmCount hgasStipend hstatic
     · exact hfinishCall
   have hnewCovered : (newPauserWord * 32).toNat + 32 ≤ M.size := by
@@ -549,7 +562,7 @@ theorem afterOldPauser_finishSetPauser_runCompiled
         G + 30 + countCost + temporalSloadCost sevm base countKey, base.stateGas⟩)
       (Ninst.sload ::: pushB256 1 ::: add ::: newCountKey +++
         Ninst.sstore ::: .call finishSetPauserSlot) post := by
-    exact Func.RunCompiled.next (temporal_sload_runCompiled hcount (by omega))
+    exact Func.RunCompiled.next (temporal_sload_runCompiled (hfork := hfork) hcount (by omega))
       hcountTail
   have hcountBody : Func.RunCompiled fs sevm
       (base.setMach ⟨stack, M,
@@ -742,6 +755,7 @@ exactly as the retained-old sibling does; the Registry kernel has already read
 and written that slot before control reaches here. -/
 theorem registerAfterSet_oldLast_newPauserTail_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (oldPauser oldExpiry oldExpiryOriginal : B256)
     (stack : List B256) (clearCost G : Nat) (post : Devm)
@@ -866,7 +880,7 @@ theorem registerAfterSet_oldLast_newPauserTail_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_ext =>
       simp only [show ((0 : B256) * 32).toNat = 0 by decide]
-      rw [Devm.extCost_zero_of_le halign (by omega)]
+      erw [Devm.extCost_zero_of_le halign (by omega)]
     case a =>
       simp only [show ((0 : B256) * 32).toNat = 0 by decide]
       exact hlogTail
@@ -877,7 +891,7 @@ theorem registerAfterSet_oldLast_newPauserTail_runCompiled
         loadWord previousPauserWord +++
         pushB256 heartbeatUpdatedEvent ::: logWith 1 0 1 +++ newTail) post :=
     Func.RunCompiled.next
-      (temporal_sstore_runCompiled hexpiry hexpiryOrig hclearCost hwarmExpiry
+      (temporal_sstore_runCompiled (hfork := hfork) hexpiry hexpiryOrig hclearCost hwarmExpiry
         hgasStipend hstatic) hmstore
   have hkey : Func.RunCompiled fs sevm
       (base.setMach ⟨stack, M, G + 1416 + clearCost, base.stateGas⟩)
@@ -910,6 +924,7 @@ theorem registerAfterSet_oldLast_newPauserTail_runCompiled
             pushB256 heartbeatUpdatedEvent ::: logWith 1 0 1 +++ newTail) <?>
           newTail)) post := by
     func_run (3) [1]
+    repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_val =>
       rw [Devm.getStorVal_setMach, hcount]
@@ -954,6 +969,7 @@ The stored value's `SSTORE` cost is caller-supplied, so nothing here assumes the
 new pauser's expiry slot was previously zero. -/
 private theorem registerAfterSet_expiryStoreLogTail_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (newPauser expiry currentExpiry expiryOriginal : B256)
     (stack : List B256) (storeCost G : Nat)
@@ -1013,7 +1029,7 @@ private theorem registerAfterSet_expiryStoreLogTail_runCompiled
       (base.setMach ⟨expirySlot newPauser :: expiry :: stack, M',
         G + 1395 + storeCost, base.stateGas⟩) Ninst.sstore
       (storePost.setMach ⟨stack, M', G + 1395, storePost.stateGas⟩) :=
-    temporal_sstore_runCompiled hexpiry hexpiryOrig hstoreCost hwarmExpiry
+    temporal_sstore_runCompiled (hfork := hfork) hexpiry hexpiryOrig hstoreCost hwarmExpiry
       hgasStipend hstatic
   have htail : Func.RunCompiled fs sevm
       (storePost.setMach ⟨stack, M', G + 1395, storePost.stateGas⟩)
@@ -1077,6 +1093,7 @@ this as readily as a fresh one.  The memory bound is `640 ≤ M.size`, which the
 found arm's 640 and the append arm's 704 both satisfy. -/
 theorem registerAfterSet_nonzeroNewPauserTail_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (newPauser timestamp interval expiry currentExpiry expiryOriginal : B256)
     (stack : List B256) (storeCost G : Nat)
@@ -1155,7 +1172,7 @@ theorem registerAfterSet_nonzeroNewPauserTail_runCompiled
         addAccessedStorageKey base sevm.currentTarget
           heartbeatIntervalSlot := by
     simp only [temporalSloadBase, if_neg hintervalCold]
-  have htail := registerAfterSet_expiryStoreLogTail_runCompiled fs sevm
+  have htail := registerAfterSet_expiryStoreLogTail_runCompiled (hfork := hfork) fs sevm
     (temporalSloadBase sevm base heartbeatIntervalSlot) M img newPauser expiry
     currentExpiry expiryOriginal stack storeCost G hstack hwf hreads hnew hsize
     halign (by rw [temporalSloadBase_getStorVal]; exact hexpiry) hexpiryOrig
@@ -1163,6 +1180,7 @@ theorem registerAfterSet_nonzeroNewPauserTail_runCompiled
       (expirySlot newPauser) hwarmExpiry)
     hstoreCost hgasStipend hstatic
   func_run (20) [3, 0, expiry, 0, 0, 3, expirySlot newPauser]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hnewCovered]
@@ -1179,11 +1197,11 @@ theorem registerAfterSet_nonzeroNewPauserTail_runCompiled
   case h_ext =>
     rw [hnewMemory]
     simp only [show ((0 : B256) * 32).toNat = 0 by decide]
-    rw [Devm.extCost_zero_of_le halign (by omega)]
+    erw [Devm.extCost_zero_of_le halign (by omega)]
   case h_cost =>
     rw [hnewMemory]
     simp only [show ((0 : B256) * 32).toNat = 0 by decide]
-    rw [Devm.extCost_zero_of_le halignM' hnewCoveredM']
+    erw [Devm.extCost_zero_of_le halignM' hnewCoveredM']
     norm_num [gVerylow]
   case h_val =>
     rw [hnewMemory]
@@ -1196,6 +1214,7 @@ theorem registerAfterSet_nonzeroNewPauserTail_runCompiled
     rw [hnewMemoryM', ← hafterIntervalEq]
     have hg : G + 3569 + storeCost - 2174 = G + 1395 + storeCost := by omega
     rw [hg]
+    rw [temporalSloadBase_stateGas] at htail
     exact htail
 
 /-- Exact kernel prefix reserve for the append arm: the outer nonzero guard
@@ -1213,6 +1232,7 @@ assignment is overwritten with `newPauser`, and the `iszero` branch selects
 absent-zero chronologies. -/
 theorem setPauserKernel_append_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes) (out : Devm)
     (target newPauser : B256) (assignmentOriginal : B256)
     (assignmentCost Ga : Nat)
@@ -1351,7 +1371,7 @@ theorem setPauserKernel_append_runCompiled
             previousCountKey +++ Ninst.sstore ::: .call afterOldPauserSlot)))
       out := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled hassignmentBase hassignmentOrig
+      (temporal_sstore_runCompiled (hfork := hfork) hassignmentBase hassignmentOrig
         hassignmentCost hwarmAssignment hgasStore hstatic)
       hiszero
   have htargetKeySecond : Func.RunCompiled fs sevm
@@ -1429,7 +1449,7 @@ theorem setPauserKernel_append_runCompiled
             previousCountKey +++ Ninst.sstore ::: .call afterOldPauserSlot)))
       out := by
     exact Func.RunCompiled.next
-      (temporal_sload_runCompiled hassignment (by decide)) hdup
+      (temporal_sload_runCompiled (hfork := hfork) hassignment (by decide)) hdup
   have htargetKeyFirst : Func.RunCompiled fs sevm
       (base.setMach ⟨[], M,
         Ga + 68 + assignmentCost +
@@ -1549,6 +1569,7 @@ walk touches sits below `640`, so any aligned image at least that large serves
 — a larger staged image included. -/
 theorem setPauserKernel_found_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes) (out : Devm)
     (target newPauser oldPauser oldCount : B256)
     (assignmentOriginal countOriginal : B256)
@@ -1682,7 +1703,7 @@ theorem setPauserKernel_found_runCompiled
         G + afterGas + 12 + countCost, countBase.stateGas⟩)
       (Ninst.sstore ::: .call afterOldPauserSlot) out :=
     Func.RunCompiled.next
-      (temporal_sstore_runCompiled hcountBase hcountOrig hcountCost hwarmCount
+      (temporal_sstore_runCompiled (hfork := hfork) hcountBase hcountOrig hcountCost hwarmCount
         hgasFinal hstatic) hafterCall
   have hcountKeyStore : Func.RunCompiled fs sevm
       (countBase.setMach ⟨[oldCount - 1], M',
@@ -1712,7 +1733,7 @@ theorem setPauserKernel_found_runCompiled
       (Ninst.sload ::: pushB256 1 ::: swap 0 ::: sub :::
         previousCountKey +++ Ninst.sstore ::: .call afterOldPauserSlot)
       out :=
-    Func.RunCompiled.next (temporal_sload_runCompiled hcount (by decide))
+    Func.RunCompiled.next (temporal_sload_runCompiled (hfork := hfork) hcount (by decide))
       harith
   have helse : Func.RunCompiled fs sevm
       (assignPost.setMach ⟨[], M', elseGas, assignPost.stateGas⟩)
@@ -1779,7 +1800,7 @@ theorem setPauserKernel_found_runCompiled
             .call afterOldPauserSlot)))
       out := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled hassignmentBase hassignmentOrig
+      (temporal_sstore_runCompiled (hfork := hfork) hassignmentBase hassignmentOrig
         hassignmentCost hwarmAssignment (by
           dsimp only [elseGas]
           omega) hstatic)
@@ -1862,7 +1883,7 @@ theorem setPauserKernel_found_runCompiled
             sub ::: previousCountKey +++ Ninst.sstore :::
             .call afterOldPauserSlot)))
       out :=
-    Func.RunCompiled.next (temporal_sload_runCompiled hassignment (by decide))
+    Func.RunCompiled.next (temporal_sload_runCompiled (hfork := hfork) hassignment (by decide))
       hdup
   have htargetKeyFirst : Func.RunCompiled fs sevm
       (base.setMach ⟨[], M,
@@ -1989,6 +2010,7 @@ disjointness between the two count slots is assumed, which is exactly what the
 same-pauser partition needs. -/
 theorem setPauserKernel_foundNonzero_finishSetPauser_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes) (out : Devm)
     (target newPauser oldPauser oldCount newCount nextCount : B256)
     (assignmentOriginal countOriginal newCountOriginal : B256)
@@ -2061,7 +2083,7 @@ theorem setPauserKernel_foundNonzero_finishSetPauser_runCompiled
     dsimp only [img']
     rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide)]
     exact hnew
-  have hafter := afterOldPauser_finishSetPauser_runCompiled dp sevm
+  have hafter := afterOldPauser_finishSetPauser_runCompiled (hfork := hfork) dp sevm
     (foundKernelPost sevm base target newPauser oldPauser oldCount) M' img'
     newPauser newCount nextCount newCountOriginal [] newCountCost G out
     (by simp) hreads' hnew' hnewNonzero (by omega) halign' hnewCount
@@ -2073,7 +2095,7 @@ theorem setPauserKernel_foundNonzero_finishSetPauser_runCompiled
         (foundKernelPost sevm base target newPauser oldPauser oldCount)
         (countSlot newPauser) + newCountCost) := by omega
   rw [hg] at hafter
-  exact setPauserKernel_found_runCompiled dp sevm base M img out target
+  exact setPauserKernel_found_runCompiled (hfork := hfork) dp sevm base M img out target
     newPauser oldPauser oldCount assignmentOriginal countOriginal
     assignmentCost countCost
     (64 + temporalSloadCost sevm
@@ -2316,6 +2338,7 @@ theorem registerPauser_success_settles_cleanly
     settled = final := by
   have hsettle := (RunFrame.some_inv hprocess).2
   simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
+    executeCode.handleErrorWith_ok,
     executeCode.handleError, processMessage.settle] at hsettle
   have hnotError : final.error.isSome ≠ true := by
     cases herror : final.error <;> simp_all
@@ -2414,6 +2437,7 @@ def indexClearPost (sevm : Sevm) (base : Devm)
 
 private theorem removeTarget_restoreTail_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target oldLength lengthValue indexValue _previous : B256)
     (stack : List B256)
@@ -2531,7 +2555,7 @@ private theorem removeTarget_restoreTail_runCompiled
             G + finishGas + 12 + indexClearCost, lengthPost.stateGas⟩)
         Ninst.sstore
         (removePost.setMach ⟨stack, M, G + finishGas + 12, removePost.stateGas⟩) := by
-      exact temporal_sstore_runCompiled hindexPost hindexOrig hindexCost
+      exact temporal_sstore_runCompiled (hfork := hfork) hindexPost hindexOrig hindexCost
         hwarmIndexPost hgasFinal hstatic
     exact Func.RunCompiled.next hsstore hfinishCall
   have hindexTail : Func.RunCompiled fs sevm
@@ -2562,7 +2586,7 @@ private theorem removeTarget_restoreTail_runCompiled
         Ninst.sstore
         (lengthPost.setMach
           ⟨stack, M, G + finishGas + 26 + indexClearCost, lengthPost.stateGas⟩) := by
-      exact temporal_sstore_runCompiled hlength hlengthOrig hlengthCost
+      exact temporal_sstore_runCompiled (hfork := hfork) hlength hlengthOrig hlengthCost
         hwarmLength (lt_of_lt_of_le hgasFinal (by omega)) hstatic
     exact Func.RunCompiled.next hsstore hindexTail
   func_run (6) [3]
@@ -2640,6 +2664,7 @@ theorem indexClearPost_logs
 
 private theorem removeTarget_storePrefix_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target oldLength next : B256) (stack : List B256)
     (hstack : stack.length ≤ 1)
@@ -2830,7 +2855,7 @@ private theorem removeTarget_storePrefix_runCompiled
   have hremovedValue := readValue removedIndexWord next hremovedWord
   have hlengthValue := readValue arrayLengthWord next hlengthWord
   have hlastValue := readValue lastTargetWord target hlastWord
-  have hrestore := removeTarget_restoreTail_runCompiled
+  have hrestore := removeTarget_restoreTail_runCompiled (hfork := hfork)
     dp sevm tailPost M img target oldLength next next 0 stack hstack
     lengthOriginal indexOriginal lengthRestoreCost indexClearCost finishGas G
     hreads htarget hlengthWord htargetValid hsize halign hlengthTail hindexTail
@@ -2861,7 +2886,7 @@ private theorem removeTarget_storePrefix_runCompiled
         .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled harrayMoved harrayOrig htailClearCost
+      (temporal_sstore_runCompiled (hfork := hfork) harrayMoved harrayOrig htailClearCost
         hwarmArrayMoved (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
       hrestore'
   have htailTag : Func.RunCompiled fs sevm
@@ -2939,7 +2964,7 @@ private theorem removeTarget_storePrefix_runCompiled
         .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled hindexHole hindexOrig hmovedIndexCost
+      (temporal_sstore_runCompiled (hfork := hfork) hindexHole hindexOrig hmovedIndexCost
         hwarmIndexHole (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
       htailPrefix
   have hmovedTag : Func.RunCompiled fs sevm
@@ -3026,7 +3051,7 @@ private theorem removeTarget_storePrefix_runCompiled
         .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled harray harrayOrig hholeCost hwarmArray
+      (temporal_sstore_runCompiled (hfork := hfork) harray harrayOrig hholeCost hwarmArray
         (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
       hmovedPrefix
   have hholeTag : Func.RunCompiled fs sevm
@@ -3126,6 +3151,7 @@ which is what a 640-to-704-byte image pays; an image that already covers 736
 bytes supplies `0`. -/
 theorem removeTarget_toFinish_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target oldLength next : B256) (stack : List B256)
     (hstack : stack.length ≤ 1)
@@ -3301,7 +3327,7 @@ theorem removeTarget_toFinish_runCompiled
       Bytes.sliceD_writeAt, B256.toB256_toBytes]
   let tailPost := entryClearPost sevm base target next
   let removePost := indexClearPost sevm tailPost target oldLength
-  have hstores := removeTarget_storePrefix_runCompiled
+  have hstores := removeTarget_storePrefix_runCompiled (hfork := hfork)
     dp sevm base MLast imgLast target oldLength next stack hstack
     arrayOriginal
     indexOriginal lengthOriginal holeCost movedIndexCost tailClearCost
@@ -3378,7 +3404,7 @@ theorem removeTarget_toFinish_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (Ninst.runCompiled_sload_warm rfl hwarmArray
+      (Ninst.runCompiled_sload_warm hfork.rules_stateGas_none rfl hwarmArray
         (by simpa only [Devm.getStorVal_setMach, arrayKey] using harray)
         (by simp only [Devm.gasLeft_setMach, gasWarmAccess]; omega)
         (by omega))
@@ -3517,7 +3543,7 @@ theorem removeTarget_toFinish_runCompiled
         .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (Ninst.runCompiled_sload_warm rfl hwarmLength
+      (Ninst.runCompiled_sload_warm hfork.rules_stateGas_none rfl hwarmLength
         (by simpa only [Devm.getStorVal_setMach] using hlength)
         (by simp only [Devm.gasLeft_setMach, gasWarmAccess]; omega)
         (by omega))
@@ -3625,7 +3651,7 @@ theorem removeTarget_toFinish_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (Ninst.runCompiled_sload_warm rfl hwarmIndex
+      (Ninst.runCompiled_sload_warm hfork.rules_stateGas_none rfl hwarmIndex
         (by simpa only [Devm.getStorVal_setMach, indexKey] using hindex)
         (by simp only [Devm.gasLeft_setMach, gasWarmAccess]; omega)
         (by omega))
@@ -3687,6 +3713,7 @@ tail clear collapse onto one slot.  An instance of
 `removeTarget_toFinish_runCompiled`. -/
 theorem removeTarget_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target oldLength next previous : B256) (stack : List B256)
     (hstack : stack.length ≤ 1)
@@ -3769,7 +3796,7 @@ theorem removeTarget_runCompiled
           target oldLength).addLog eventLog).setMach
         ⟨stack, MLast, G, ((indexClearPost sevm (entryClearPost sevm base target next) target oldLength).addLog eventLog).stateGas⟩) := by
   dsimp only
-  exact removeTarget_toFinish_runCompiled dp sevm base M img target oldLength
+  exact removeTarget_toFinish_runCompiled (hfork := hfork) dp sevm base M img target oldLength
     next stack hstack arrayOriginal indexOriginal lengthOriginal holeCost
     movedIndexCost tailClearCost lengthRestoreCost indexClearCost finishGas G
     hwf hreads htarget htargetValid hnextNonzero hnextBound entrySize
@@ -3820,6 +3847,7 @@ theorem swapPopClearPost_logs
 holding the removed index, the array length and the moved target. -/
 private theorem removeTarget_swapPop_storePrefix_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target lastTarget idx len oldLength : B256)
     (stack : List B256)
@@ -4045,7 +4073,7 @@ private theorem removeTarget_swapPop_storePrefix_runCompiled
   have hremovedValue := readValue removedIndexWord idx hremovedWord
   have hlengthValue := readValue arrayLengthWord len hlengthWord
   have hlastValue := readValue lastTargetWord lastTarget hlastWord
-  have hrestore := removeTarget_restoreTail_runCompiled
+  have hrestore := removeTarget_restoreTail_runCompiled (hfork := hfork)
     dp sevm tailPost M img target oldLength len idx 0 stack hstack
     lengthOriginal indexOriginal lengthRestoreCost indexClearCost finishGas G
     hreads htarget hlengthWord htargetValid hsize halign hlengthTailPost
@@ -4076,7 +4104,7 @@ private theorem removeTarget_swapPop_storePrefix_runCompiled
         .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled htailMovedPost htailOrig htailClearCost
+      (temporal_sstore_runCompiled (hfork := hfork) htailMovedPost htailOrig htailClearCost
         hwarmTailMoved (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
       hrestore'
   have htailTag : Func.RunCompiled fs sevm
@@ -4154,7 +4182,7 @@ private theorem removeTarget_swapPop_storePrefix_runCompiled
         .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled hmovedHolePost hmovedOrig hmovedIndexCost
+      (temporal_sstore_runCompiled (hfork := hfork) hmovedHolePost hmovedOrig hmovedIndexCost
         hwarmMovedHole (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
       htailPrefix
   have hmovedTag : Func.RunCompiled fs sevm
@@ -4241,7 +4269,7 @@ private theorem removeTarget_swapPop_storePrefix_runCompiled
         .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled hhole hholeOrig hholeCost hwarmHole
+      (temporal_sstore_runCompiled (hfork := hfork) hhole hholeOrig hholeCost hwarmHole
         (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
       hmovedPrefix
   have hholeTag : Func.RunCompiled fs sevm
@@ -4339,6 +4367,7 @@ same way: bounded below, word-aligned, and charging the caller-supplied
 expansion cost for each of the three scratch words. -/
 theorem removeTarget_swapPop_toFinish_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target lastTarget idx len oldLength : B256)
     (stack : List B256)
@@ -4533,7 +4562,7 @@ theorem removeTarget_swapPop_toFinish_runCompiled
       Bytes.sliceD_writeAt, B256.toB256_toBytes]
   let tailPost := swapPopClearPost sevm base lastTarget idx len
   let removePost := indexClearPost sevm tailPost target oldLength
-  have hstores := removeTarget_swapPop_storePrefix_runCompiled
+  have hstores := removeTarget_swapPop_storePrefix_runCompiled (hfork := hfork)
     dp sevm base MLast imgLast target lastTarget idx len oldLength
     stack hstack holeCurrent movedCurrent
     holeOriginal movedOriginal tailOriginal lengthOriginal indexOriginal
@@ -4614,7 +4643,7 @@ theorem removeTarget_swapPop_toFinish_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (Ninst.runCompiled_sload_warm rfl hwarmTail
+      (Ninst.runCompiled_sload_warm hfork.rules_stateGas_none rfl hwarmTail
         (by simpa only [Devm.getStorVal_setMach, tailKey] using htail)
         (by simp only [Devm.gasLeft_setMach, gasWarmAccess]; omega)
         (by omega))
@@ -4753,7 +4782,7 @@ theorem removeTarget_swapPop_toFinish_runCompiled
         .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (Ninst.runCompiled_sload_warm rfl hwarmLength
+      (Ninst.runCompiled_sload_warm hfork.rules_stateGas_none rfl hwarmLength
         (by simpa only [Devm.getStorVal_setMach] using hlength)
         (by simp only [Devm.gasLeft_setMach, gasWarmAccess]; omega)
         (by omega))
@@ -4861,7 +4890,7 @@ theorem removeTarget_swapPop_toFinish_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (Ninst.runCompiled_sload_warm rfl hwarmIndex
+      (Ninst.runCompiled_sload_warm hfork.rules_stateGas_none rfl hwarmIndex
         (by simpa only [Devm.getStorVal_setMach, indexKey] using hindex)
         (by simp only [Devm.gasLeft_setMach, gasWarmAccess]; omega)
         (by omega))
@@ -4921,6 +4950,7 @@ continuation only appends the `PauserSet` record.  An instance of
 `removeTarget_swapPop_toFinish_runCompiled`. -/
 theorem removeTarget_swapPop_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
     (target lastTarget idx len oldLength previous : B256)
     (stack : List B256)
@@ -5022,7 +5052,7 @@ theorem removeTarget_swapPop_runCompiled
           target oldLength).addLog eventLog).setMach
         ⟨stack, MLast, G, ((indexClearPost sevm (swapPopClearPost sevm base lastTarget idx len) target oldLength).addLog eventLog).stateGas⟩) := by
   dsimp only
-  exact removeTarget_swapPop_toFinish_runCompiled dp sevm base M img target
+  exact removeTarget_swapPop_toFinish_runCompiled (hfork := hfork) dp sevm base M img target
     lastTarget idx len oldLength stack hstack holeCurrent movedCurrent
     holeOriginal movedOriginal tailOriginal lengthOriginal indexOriginal
     holeCost movedIndexCost tailClearCost lengthRestoreCost indexClearCost
