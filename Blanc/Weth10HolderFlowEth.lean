@@ -920,6 +920,7 @@ def ExecBodyEthSound (dp : DeployParams) (ca : Adr) : Prop :=
     Exec.Frame.IsRoot (Exec.Frame.ofRun run hcommit) →
     (sevm.currentTarget = ca → sevm.codeAddress = some ca) →
     (backedSpec weth10 dp).Pre ca sevm pre →
+    CoveredFork sevm.benvStat.fork →
     EthBound ca pre.state
       (Execution.committedPost out hcommit).state
       (Exec.bodyEthActions dp ca run hcommit)
@@ -936,6 +937,7 @@ def CommittedExecEthSound (dp : DeployParams) (ca : Adr) : Prop :=
       initEvm (msg.withBenv benv))
     (hcommit : Execution.commits out = true),
     MessageRunReady dp ca msg →
+    CoveredFork msg.benv.stat.fork →
     EthBound ca msg.benv.state
       (Execution.committedPost out hcommit).state
       (Exec.flowActions dp ca run)
@@ -946,7 +948,10 @@ theorem ExecBodyEthSound.committedExecEthSound
     {dp : DeployParams} {ca : Adr}
     (sound : ExecBodyEthSound dp ca) :
     CommittedExecEthSound dp ca := by
-  intro msg benv pc sevm pre out run htransfer hinit hcommit runReady
+  intro msg benv pc sevm pre out run htransfer hinit hcommit runReady hfork
+  have hinitFork : CoveredFork (initSevm (msg.withBenv benv)).benvStat.fork := by
+    rw [initSevm_benvStat, Msg.withBenv_benvStat, benvAfterTransfer_stat htransfer]
+    exact hfork
   have hentry := Exec.entryEthBound (dp := dp) (ca := ca)
     run htransfer hinit hcommit
     runReady.ready.backed.ne runReady.ready.backed.val0
@@ -984,7 +989,7 @@ theorem ExecBodyEthSound.committedExecEthSound
         (by simpa [initSevm, Msg.withBenv] using htarget)
     · exact False.elim (hforeign
         (by simpa [initSevm, Msg.withBenv] using htarget))
-  have hbody := sound run hcommit hat hroot hdirect hprecond
+  have hbody := sound run hcommit hat hroot hdirect hprecond hinitFork
   simpa only [Exec.flowActions_eq_entry_append_body
       (dp := dp) (ca := ca) run hcommit] using
     hentry.trans hbody
@@ -1104,13 +1109,14 @@ theorem ProcessMessage.ethBound_of_committedExecSound
     (hprocess :
       ProcessMessage msg (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
     (hsound : CommittedExecEthSound dp ca)
-    (runReady : MessageRunReady dp ca msg) :
+    (runReady : MessageRunReady dp ca msg)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     EthBound ca msg.benv.state post.state
       (Exec.flowActions dp ca run) := by
   have henter := (RunFrame.some_inv hprocess).1
   rcases Frame.enter_run_inv henter with ⟨benv, htransfer, hinit⟩
   by_cases hcommit : Execution.commits out = true
-  · have hbound := hsound run htransfer hinit hcommit runReady
+  · have hbound := hsound run htransfer hinit hcommit runReady hfork
     rw [ProcessMessage.ok_state_eq_committedPost hprocess hcommit]
     exact hbound
   · have hstate :=
@@ -1125,7 +1131,8 @@ theorem ProcessMessageTrace.ethBound_of_committedExecSound
     {dp : DeployParams} {ca : Adr} {msg : Msg} {post : Devm}
     (trace : ProcessMessageTrace msg (.ok post))
     (hsound : CommittedExecEthSound dp ca)
-    (runReady : MessageRunReady dp ca msg) :
+    (runReady : MessageRunReady dp ca msg)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     EthBound ca msg.benv.state post.state
       (Blanc.Weth10.RetainedXlot.flowActions dp ca trace.retained) := by
   rcases trace with ⟨slot, retained, hprocess⟩
@@ -1134,7 +1141,7 @@ theorem ProcessMessageTrace.ethBound_of_committedExecSound
       exact ProcessMessage.ethBound_of_none hprocess runReady.ready
   | some run =>
       exact ProcessMessage.ethBound_of_committedExecSound
-        run hprocess hsound runReady
+        run hprocess hsound runReady hfork
 
 theorem processCreateMessage_msg_bal_eq (msg : Msg) :
     (processCreateMessage.msg msg).benv.state.bal =
@@ -1223,7 +1230,8 @@ theorem ProcessCreateMessageTrace.ethBound_of_committedExecSound
     (hsound : CommittedExecEthSound dp ca)
     (ready : MessageReady dp ca msg)
     (htargetNone : msg.target.isNone = true)
-    (htargetNe : msg.currentTarget ≠ ca) :
+    (htargetNe : msg.currentTarget ≠ ca)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     EthBound ca msg.benv.state post.state
       (if post.error.isSome then []
        else Blanc.Weth10.RetainedXlot.flowActions dp ca
@@ -1245,6 +1253,7 @@ theorem ProcessCreateMessageTrace.ethBound_of_committedExecSound
       have hrunPrepared := hprepared.runReady_of_foreign htargetNe
       have hbound := innerTrace.ethBound_of_committedExecSound
         hsound hrunPrepared
+        (by rw [processCreateMessage.msg_benvStat]; exact hfork)
       unfold EthBound at hbound ⊢
       rw [hpost, ← congrFun (processCreateMessage_msg_bal_eq msg) ca]
       simpa only [Bool.true_eq_false, if_false] using hbound
@@ -1467,7 +1476,7 @@ theorem CommittedExecEthSound.messageEthSound
         ready hcollision
       have hbound :=
         ProcessCreateMessageTrace.ethBound_of_committedExecSound trace
-          hsound ready htarget htargetNe
+          hsound ready htarget htargetNe hfork
       have hstate := processMessageCall_createRun_state_eq
         htarget hcollision hcore hresult hsg
       change EthBound ca msg.benv.state state
@@ -1492,6 +1501,9 @@ theorem CommittedExecEthSound.messageEthSound
           (Blanc.Weth10.RetainedXlot.flowActions dp ca trace.retained) :=
         ProcessMessageTrace.ethBound_of_committedExecSound trace hsound
           runReadyExec
+          (by rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_benv_stat,
+                ExecutionTrace.messageCallDelegation_benv_stat hdelegation]
+              exact hfork)
       have hstate := processMessageCall_callRun_state_eq
         htarget hdelegation hexecMsg hcore hresult hsg
       have hpre : execMsg.benv.state.bal = msg.benv.state.bal := by
