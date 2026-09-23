@@ -3277,6 +3277,56 @@ def control_progress_streams_while_a_row_runs() -> None:
         require(gc.RUN_LOG_RELATIVE in report, "the report must name the run log")
 
 
+def control_report_only_findings_are_advisory_not_verdict() -> None:
+    """A report-only row's findings appear under ADVISORY, apart from the
+    verdict, in the run, in the report, and again when the row is credited
+    from its record; an ordinary row's extra output earns no such heading."""
+
+    with scratch() as s:
+        s.write("scripts/x.txt", "one\n")
+        advisory = s.gate(
+            "advice.sh",
+            "#!/bin/sh\n"
+            "echo 'MODULE-SIZE — FINDING warning: Blanc/Big.lean: 1300 lines'\n"
+            "echo 'MODULE-SIZE — FINDING grandfathered-growth: Blanc/Old.lean: 9000 lines'\n"
+            "echo 'OK — advice.sh (report-only): 2 finding(s)'\n",
+        )
+        plain = s.gate(
+            "plain.sh",
+            "#!/bin/sh\n"
+            "echo 'some progress output'\n"
+            "echo 'OK — plain.sh: 1/1 fine'\n",
+        )
+        s.registry([
+            simple_gate("advice", [advisory], {"files": ["scripts/x.txt"]},
+                        "^OK — advice.sh \\(report-only\\): ", order=1),
+            simple_gate("plain", [plain], {"files": ["scripts/x.txt"]},
+                        "^OK — plain.sh: ", order=2),
+        ])
+        s.git_init()
+        require(s.run() == 0, f"report-only findings must not redden the run:\n{s.output}")
+        require("ADVISORY — scripts/advice.sh: 2 line(s)" in s.output,
+                f"the findings must print under an ADVISORY heading:\n{s.output}")
+        require("Blanc/Big.lean: 1300 lines" in s.output, "and carry the finding lines")
+        require("ADVISORY — scripts/plain.sh" not in s.output,
+                "an ordinary row's extra output must not be called advisory")
+        require("FAILED" not in s.output, "advisory findings must not use failure vocabulary")
+        report = gc.report_path(s.root).read_text(encoding="utf-8")
+        require("## Advisory findings" in report and "Blanc/Old.lean: 9000 lines" in report,
+                "the report must carry the findings in their own section")
+        cache, _ = s.cache()
+        require(cache["gates"]["advice"][0]["verdict"].get("advisory"),
+                "the record must retain the findings")
+
+        require(s.run() == 0 and s.disposition("advice") == "reused",
+                "the second run must credit the row")
+        require("ADVISORY — scripts/advice.sh: 2 line(s); from the credited record" in s.output,
+                f"a credited report-only row must still show its findings:\n{s.output}")
+        report = gc.report_path(s.root).read_text(encoding="utf-8")
+        require("(from the credited record):" in report,
+                "the report must say the findings come from the record")
+
+
 def control_same_repository_worktrees_share_records_and_lock() -> None:
     """The Git common directory, not a worktree-local `.lake`, is the trust root."""
 
@@ -4289,6 +4339,7 @@ CONTROLS = (
     control_concurrent_records_merge_into_the_shared_store,
     control_certification_is_not_blocked_by_another_worktree,
     control_progress_streams_while_a_row_runs,
+    control_report_only_findings_are_advisory_not_verdict,
     control_same_repository_worktrees_share_records_and_lock,
     control_other_physical_clone_never_inherits_shared_records,
     control_foreign_host_store_never_yields_reuse,

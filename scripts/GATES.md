@@ -833,6 +833,13 @@ Every gate prints exactly one summary line and exits nonzero on anything else.
   exceptions still exit nonzero as regressions.
   `check-proof-duplication.sh` is deliberately **not** in that list: its source
   findings block, so it has no report-only verdict at all.
+  The selective runner keeps such a row's finding lines with its verdict and
+  prints them under an explicit **`ADVISORY — …`** heading — in the run
+  transcript, in an *Advisory findings* section of `.lake/gate-report.md`, and
+  again when the row is credited from its record — so a 76-row green manifest
+  never reads as "every quality finding was resolved". Advisory lines are not
+  part of any verdict and never use failure vocabulary; no advisory finding
+  is a hard gate.
 - **`REGRESSION — …`** means the gate's own invariant broke: a layering
   violation, an axiom set that moved, an elaboration time past threshold, a
   fixture whose contract bytes are not the committed literal, a coverage budget

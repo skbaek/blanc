@@ -109,6 +109,12 @@ PROGRESS_INTERVAL_ENV = "BLANC_GATE_PROGRESS_SECS"
 # The shared-store transaction is a read-merge-write of one file; a contending
 # holder is done in under a second, so wait this long rather than refuse.
 SHARED_STORE_LOCK_WAIT_S = 60.0
+# The catalogue's report-only verdict form (`OK — … (report-only)`): the row
+# passes as a process and its findings are review evidence.  The runner keeps
+# up to this many of those finding lines with the verdict and shows them under
+# an ADVISORY heading, never under the blocking verdict.
+REPORT_ONLY_MARK = "(report-only)"
+ADVISORY_LINES = 200
 SHARED_STATE_RELATIVE = "blanc-gate-evidence"
 EVIDENCE_FILENAME_PREFIX = "evidence-v3-"
 LEGACY_EVIDENCE_FILENAME = "evidence.json"
@@ -1869,6 +1875,18 @@ def capture_verdict(gate: dict[str, Any], result: subprocess.CompletedProcess) -
         "output_digest": sha256_bytes(output.encode("utf-8", "replace")),
         "passed": not problems,
     }
+    if not problems and any(REPORT_ONLY_MARK in line for line in summary):
+        # A report-only row passes as a process and prints findings that are
+        # review evidence, not permission to ignore them (pass criteria).  The
+        # findings are retained with the verdict, bounded, so the run and the
+        # report can show them under an explicit ADVISORY heading, distinct
+        # from the blocking verdict, and a credited row can still show them
+        # from its record.  Nothing here changes what counts as a pass.
+        findings = [
+            line for line in result.stdout.splitlines()
+            if line.strip() and line not in summary
+        ]
+        verdict["advisory"] = findings[-ADVISORY_LINES:]
     if problems:
         # Failed output is diagnostic evidence only: failed rows are never
         # cached, and retaining a bounded tail keeps the checkpoint useful
@@ -1878,6 +1896,22 @@ def capture_verdict(gate: dict[str, Any], result: subprocess.CompletedProcess) -
             for name, value in (("stdout", result.stdout), ("stderr", result.stderr))
         }
     return verdict
+
+
+def print_advisory(label: str, verdict: dict[str, Any], note: str) -> None:
+    """Show a report-only row's findings under their own heading.
+
+    The heading is deliberately not the vocabulary of a failure: these lines
+    are review evidence a green manifest does not resolve, and a reader must
+    be able to tell them from a blocking verdict at a glance.
+    """
+
+    findings = verdict.get("advisory") or []
+    if not findings:
+        return
+    print(f"         ADVISORY — {label}: {len(findings)} line(s); {note}")
+    for line in findings:
+        print(f"           {line}")
 
 
 def progress_interval() -> float:
@@ -2150,6 +2184,7 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
             for line in record["verdict"]["summary"]:
                 print(f"         {line}   (from {record['provenance'].get('commit', '?')[:12]}"
                       f" at {record['provenance'].get('recorded_utc', '?')})")
+            print_advisory(label, record["verdict"], "from the credited record")
             continue
 
         print(f"[fresh ] {label}")
@@ -2158,6 +2193,7 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
         row["verdict"] = verdict
         for line in verdict["summary"]:
             print(f"         {line}")
+        print_advisory(label, verdict, "report-only findings; not part of the verdict")
         if not verdict["passed"]:
             row["cached"] = False
             row["cache_reason"] = "; ".join(verdict["problems"])
@@ -2196,12 +2232,17 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
         # under the store lock: the snapshot this run planned from may be
         # older than the store by then, and another worktree's records must
         # survive this run's write.
+        stored_verdict = {"exit": verdict["exit"], "summary": verdict["summary"],
+                          "output_digest": verdict["output_digest"]}
+        if verdict.get("advisory"):
+            # Kept with the record so a credited row still shows its
+            # report-only findings; bounded like the verdict's other fields.
+            stored_verdict["advisory"] = verdict["advisory"]
         admitted.append((
             row["id"],
             after,
             components,
-            {"exit": verdict["exit"], "summary": verdict["summary"],
-             "output_digest": verdict["output_digest"]},
+            stored_verdict,
             {
                 "commit": identity["commit"],
                 "worktree": identity["worktree"],
@@ -2371,6 +2412,21 @@ def write_report(
                 ),
             }
         )
+
+    advisory_rows = [row for row in rows if row.get("verdict", {}).get("advisory")]
+    if advisory_rows:
+        lines += [
+            "",
+            "## Advisory findings",
+            "",
+            "Report-only rows pass as processes; these lines are their findings, "
+            "review evidence that a green manifest does not resolve. They are not "
+            "part of any verdict above.",
+        ]
+        for row in advisory_rows:
+            source = "from the credited record" if row["disposition"] == "reused" else "executed now"
+            lines += ["", f"ADVISORY — `{command_text(row['gate'])}` ({source}):", ""]
+            lines.extend(f"    {line}" for line in row["verdict"]["advisory"])
 
     always_fresh = [row for row in rows if row["kind"] != "cacheable"]
     if always_fresh:
