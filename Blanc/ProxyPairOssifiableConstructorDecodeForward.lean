@@ -1080,6 +1080,7 @@ initializer.  The 300-gas prefix is the exact sum of its accepted guards,
 head/pointer/length copies, and zero-byte payload copy. -/
 theorem ossifiableConstructorDecodeInitialize_emptySetup_runCompiled
     {sevm : Sevm} {base : Devm} {runtimeBytes : Bytes}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {implementation requestedAdmin : Adr} {G : Nat}
     (hcodeSize : sevm.code.size = 3565)
     (himplementation :
@@ -1126,7 +1127,7 @@ theorem ossifiableConstructorDecodeInitialize_emptySetup_runCompiled
       post.gasLeft = G - 49894 ∧
       post.error = base.error := by
   obtain ⟨post, hbody, hstorage, hlogs, houtput, hgasPost, herrorPost⟩ :=
-    ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
+    ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled (hfork := hfork)
       (sevm := sevm) (base := base)
       (memory := decodeForwardLengthMemory sevm)
       (image := decodeForwardLengthImage sevm)
@@ -1181,6 +1182,7 @@ program entry.  The additional 20 gas consists of the value guard's accepted
 arm (19) and the compiled program's leading `JUMPDEST` (1). -/
 theorem ossifiableConstructorProgram_emptySetup_runCompiled
     {sevm : Sevm} {base : Devm} {runtimeBytes : Bytes}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {implementation requestedAdmin : Adr} {G : Nat}
     (hvalue : sevm.value = 0)
     (hcodeSize : sevm.code.size = 3565)
@@ -1226,7 +1228,7 @@ theorem ossifiableConstructorProgram_emptySetup_runCompiled
       post.gasLeft = G - 49894 ∧
       post.error = base.error := by
   obtain ⟨post, hdecode, hstorage, hlogs, houtput, hgasPost, herrorPost⟩ :=
-    ossifiableConstructorDecodeInitialize_emptySetup_runCompiled
+    ossifiableConstructorDecodeInitialize_emptySetup_runCompiled (hfork := hfork)
       hcodeSize himplementation hrequested
       hoffset hlength himplementationNonzero hrequestedNonzero
       hcodeSizeNonzero haddressCold himplementationRaw
@@ -1457,6 +1459,7 @@ private theorem ossifiableEmptyDataCreateInput_decodeSpec
 The returned bytes are the compiler-owned 2,188-byte runtime. -/
 theorem ossifiableConstructorProgram_canonicalEmptyInput_runCompiled
     {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {implementation requestedAdmin : Adr} {G : Nat}
     (hvalue : sevm.value = 0)
     (hinput : sevm.code.toList =
@@ -1523,7 +1526,7 @@ theorem ossifiableConstructorProgram_canonicalEmptyInput_runCompiled
     have hlengthExact := runtimeBaselineBytes_length_exact
     rw [hnil] at hlengthExact
     simp at hlengthExact
-  exact ossifiableConstructorProgram_emptySetup_runCompiled
+  exact ossifiableConstructorProgram_emptySetup_runCompiled (hfork := hfork)
     hvalue hcodeSize himplementation hrequested hoffset hlength
     himplementationNonzero hrequestedNonzero hcodeSizeNonzero haddressCold
     himplementationRaw himplementationOriginal himplementationCold
@@ -1536,6 +1539,7 @@ empty, so the execution-derived prepared route supplies the two ERC-1967
 writes and source-ordered logs without consulting the total evaluator. -/
 theorem ossifiableConstructorProgram_canonicalEmptyInput_forward_exact
     {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     {implementation requestedAdmin : Adr} {G : Nat}
     (hvalue : sevm.value = 0)
     (hinput : sevm.code.toList =
@@ -1571,7 +1575,7 @@ theorem ossifiableConstructorProgram_canonicalEmptyInput_forward_exact
       post.output = runtimeBaselineBytes ∧
       post.gasLeft = G - 49894 ∧
       post.error = base.error :=
-  ossifiableConstructorProgram_canonicalEmptyInput_runCompiled
+  ossifiableConstructorProgram_canonicalEmptyInput_runCompiled (hfork := hfork)
     hvalue hinput himplementationNonzero hrequestedNonzero
     hcodeSizeNonzero haddressCold himplementationRaw
     himplementationOriginal himplementationCold hadminRaw hadminOriginal
