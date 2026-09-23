@@ -370,9 +370,11 @@ theorem Exec.CoreDripTranscript.atTarget
         exact Chain.nil _
     | @some childPc childSevm childPre childOut childRun =>
         obtain ⟨childCommitted, childTargetNe, childPrecondition, childAt,
-            childDepth, startEq, childPost, childFork⟩ :=
+            childDepth, startEq, childPost⟩ :=
           exitChild_facts coalition process childClean entryTransfer targetNe
-            depth childPreH benvStat hfork
+            depth childPreH
+        have childFork :=
+          exitChild_covered process entryTransfer benvStat hfork
         rcases deeper childPc childSevm childPre childOut childRun
             childDepth childAt childRun childCommitted childFork childAt
             childPrecondition

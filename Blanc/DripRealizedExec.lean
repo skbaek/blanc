@@ -971,9 +971,7 @@ theorem exitChild_facts (coalition : Finset Adr) {sevm : Sevm}
     (targetNe : childMsg.currentTarget ≠ sevm.currentTarget)
     (depth : (initSevm (childMsg.withBenv hentry)).depth < sevm.depth)
     (childPreH : dripEntrySpec.Pre sevm.currentTarget
-      (initSevm (childMsg.withBenv hentry)) (initDevm (childMsg.withBenv hentry)))
-    (benvStat : childMsg.benv.stat = sevm.benvStat)
-    (hfork : CoveredFork sevm.benvStat.fork) :
+      (initSevm (childMsg.withBenv hentry)) (initDevm (childMsg.withBenv hentry))) :
     ∃ childCommitted : Execution.commits childOut = true,
       childSevm.currentTarget ≠ sevm.currentTarget ∧
       dripEntrySpec.Pre sevm.currentTarget childSevm childPre ∧
@@ -981,8 +979,7 @@ theorem exitChild_facts (coalition : Finset Adr) {sevm : Sevm}
       childSevm.depth < sevm.depth ∧
       execEntrySnapshot coalition sevm.currentTarget childSevm childPre.state =
         snapshot coalition sevm.currentTarget hentry.state ∧
-      child.state = (Execution.committedPost childOut childCommitted).state ∧
-      CoveredFork childSevm.benvStat.fork := by
+      child.state = (Execution.committedPost childOut childCommitted).state := by
   have settles :=
     _root_.Blanc.ProcessMessage.settlementCommits_of_some_ok_clean
       process childClean
@@ -1020,14 +1017,34 @@ theorem exitChild_facts (coalition : Finset Adr) {sevm : Sevm}
         snapshot coalition sevm.currentTarget hentry.state := by
     rw [execEntrySnapshot_of_target_ne childTargetNe, childPreEq]
     rfl
-  have childFork : CoveredFork childSevm.benvStat.fork := by
-    rw [childSevmEq, initSevm_benvStat, Msg.withBenv_benvStat,
-      benvAfterTransfer_stat entryTransfer, benvStat]
-    exact hfork
   exact ⟨childCommitted, childTargetNe, childPrecondition, childAt, childDepth,
     startEq,
-    _root_.Blanc.ProcessMessage.ok_state_eq_committedPost process childCommitted,
-    childFork⟩
+    _root_.Blanc.ProcessMessage.ok_state_eq_committedPost process childCommitted⟩
+
+/-- A filled child frame runs under its message's block statics, so it is
+covered whenever the message carries the parent's statics (as the exit
+handoff record states for every actual child) and the parent is covered. -/
+theorem exitChild_covered {sevm : Sevm}
+    {childMsg : Msg} {hentry : Benv} {child : Devm}
+    {childPc : Nat} {childSevm : Sevm} {childPre : Devm} {childOut : Execution}
+    (process : ProcessMessage childMsg
+      (.some ⟨⟨childPc, childSevm, childPre⟩, childOut⟩) (.ok child))
+    (entryTransfer : childMsg.benvAfterTransfer = .ok hentry)
+    (benvStat : childMsg.benv.stat = sevm.benvStat)
+    (hfork : CoveredFork sevm.benvStat.fork) :
+    CoveredFork childSevm.benvStat.fork := by
+  have enter := (RunFrame.some_inv process).1
+  rcases Frame.enter_run_inv enter with ⟨entry, transfer, childEvmEq⟩
+  simp only [Frame.ofCall] at transfer childEvmEq
+  have entryEq : entry = hentry :=
+    Except.ok.inj (transfer.symm.trans entryTransfer)
+  subst entry
+  have childSevmEq : childSevm =
+      initSevm (childMsg.withBenv hentry) :=
+    congrArg (fun evm : Evm => evm.sta) childEvmEq
+  rw [childSevmEq, initSevm_benvStat, Msg.withBenv_benvStat,
+    benvAfterTransfer_stat entryTransfer, benvStat]
+  exact hfork
 
 /-! ## The interpreter recursion -/
 
@@ -1097,9 +1114,11 @@ theorem Exec.CoreDripAccounting.atTarget
         exact Chain.nil _
     | @some childPc childSevm childPre childOut childRun =>
         obtain ⟨childCommitted, childTargetNe, childPrecondition, childAt,
-            childDepth, startEq, childPost, childFork⟩ :=
+            childDepth, startEq, childPost⟩ :=
           exitChild_facts coalition process childClean entryTransfer targetNe
-            depth childPreH benvStat hfork
+            depth childPreH
+        have childFork :=
+          exitChild_covered process entryTransfer benvStat hfork
         rcases deeper childPc childSevm childPre childOut childRun
             childDepth childAt childRun childCommitted childFork childAt
             childPrecondition

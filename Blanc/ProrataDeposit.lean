@@ -170,7 +170,7 @@ private theorem deposit_guard_prefix
       (B256.shiftRight (B256.shiftRight B256.max 130) 30 <? sevm.value) ::
       B256.shiftRight B256.max 130 :: B256.max :: [] <<+ d7.stack := by
     rw [← hbal6]
-    exact prefix_of_push_stack (of_run_selfbalance qbalance) p6
+    exact prefix_of_push_stack (of_run_selfbalance_stack qbalance) p6
   have p8 : (Devm.getBal pre sevm.currentTarget - sevm.value) ::
       (B256.shiftRight (B256.shiftRight B256.max 130) 30 <? sevm.value) ::
       B256.shiftRight B256.max 130 :: B256.max :: [] <<+ d8.stack :=
