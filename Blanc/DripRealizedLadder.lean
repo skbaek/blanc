@@ -15,10 +15,10 @@ noncomputable def ladder (coalition : Finset Adr) (ca : Adr) :
   tag _ _ := ()
   root := by
     intro _ _ msg entry pc sevm pre out run transfer evmEq committed runReady
-      callerNe sumNof
+      callerNe hfork sumNof
     exact (_root_.Blanc.Exec.dripRealizedChain_of_messageRoot coalition run
       transfer evmEq committed (dripEntrySpec_messageRunReady runReady sumNof)
-      callerNe).imp fun _ both => both.1
+      callerNe hfork).imp fun _ both => both.1
   preserves := dripSpec_preserves ca
 
 /-- T4a. -/
@@ -31,7 +31,7 @@ theorem retainedProcessMessageReplay (coalition : Finset Adr)
     (hfork : CoveredFork msg.benv.stat.fork) :
     ∃ steps, RealizedChain (snapshot coalition ca msg.benv.state) steps
       (snapshot coalition ca post.state) :=
-  (ladder coalition ca).processMessage trace ready callerNe sumNof 0 none
+  (ladder coalition ca).processMessage trace ready callerNe hfork sumNof 0 none
 
 /-- T4b. -/
 theorem retainedProcessCreateMessageReplay (coalition : Finset Adr)
@@ -39,11 +39,12 @@ theorem retainedProcessCreateMessageReplay (coalition : Finset Adr)
     (trace : ExecutionTrace.ProcessCreateMessageTrace msg (.ok post))
     (ready : dripSpec.MessageRunReady ca msg)
     (sumNof : sum msg.benv.state.bal < 2 ^ 256)
+    (hfork : CoveredFork msg.benv.stat.fork)
     (targetNone : msg.target.isNone = true) (targetNe : msg.currentTarget ≠ ca)
     (fresh : msg.benv.state.getStor msg.currentTarget = .empty) :
     ∃ steps, RealizedChain (snapshot coalition ca msg.benv.state) steps
       (snapshot coalition ca post.state) :=
-  (ladder coalition ca).processCreateMessage trace ready sumNof targetNone
+  (ladder coalition ca).processCreateMessage trace ready hfork sumNof targetNone
     targetNe fresh 0 none
 
 /-- T4c. -/
@@ -52,7 +53,8 @@ theorem retainedMessageCallReplay (coalition : Finset Adr)
     (trace : ExecutionTrace.MessageCallTrace msg state out)
     (ready : dripSpec.MessageRunReady ca msg)
     (callerNe : msg.currentTarget = ca → msg.caller ≠ ca)
-    (sumNof : sum msg.benv.state.bal < 2 ^ 256) :
+    (sumNof : sum msg.benv.state.bal < 2 ^ 256)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     ∃ steps, RealizedChain (snapshot coalition ca msg.benv.state) steps
       (snapshot coalition ca state) :=
   (ladder coalition ca).messageCall trace ready callerNe sumNof hfork 0 none
@@ -166,8 +168,7 @@ theorem TransactionMessageOccurrence.messageCallReplay_of_configuredBlock
   retainedMessageCallReplay coalition message ready callerNe
     (occurrence.msg_sum_nof_of_configuredBlock block) (by
       rw [occurrence.message_benv_stat_fork_eq]
-      rw [block.bodyTrace.transactions.stat_eq]
-      simpa [Benv.withState, initBenv] using block.covered)
+      simpa [Benv.withState, initBenv, initBenvStat] using block.covered)
 
 end Drip
 end Blanc
