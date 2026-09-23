@@ -238,7 +238,7 @@ theorem gatewayPauseWorld_closedPremises
       (gatewayCode controlDeployParams)
       (LidoTriggerableWithdrawalsGateway.runtime controlDeployParams)
       LidoTriggerableWithdrawalsGateway.pausedUntil ex final :=
-  publicPause_gatewayPinnedTarget gatewayPauseWorld_publicPausePremises
+  publicPause_gatewayPinnedTarget (hfork := by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide) gatewayPauseWorld_publicPausePremises
     gatewayPauseWorld_target_ne_owner gatewayPauseWorld_target_not_precompile
     publicRun success
 
