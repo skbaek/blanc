@@ -63,19 +63,23 @@ private theorem readOnlySilentSlot_closed_getStor :
     exact silentIn_maxMintAfterAssetCap_getStor
 
 /-- Every read-only dispatch target keeps every `Stor` tree. -/
-private theorem readOnly_silent_getStor :
+private theorem readOnly_silent_getStor {sevm : Sevm}
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∀ p ∈ Blanc.ProrataWethVault.readOnlyFuncs,
-      Func.SilentIn Devm.getStor Blanc.ProrataWethVault.ReadOnlySilentSlot p.2 := by
+      Func.SilentAt Devm.getStor sevm Blanc.ProrataWethVault.ReadOnlySilentSlot p.2 := by
   intro p member
   simp only [Blanc.ProrataWethVault.readOnlyFuncs, List.mem_cons,
     List.not_mem_nil, or_false] at member
   rcases member with h | h | h | h | h | h | h | h | h | h | h | h | h | h |
     h | h | h | h <;> (cases h) <;>
-    silent_structure with readOnly_slot
+    silent_structure with first
+      | exact fun run => Ninst.staticcall_inv_getStor_exact hfork run
+      | readOnly_slot
 
 /-- A compiled run of one read-only target keeps every `Stor` tree. -/
 private theorem readOnly_message_getStor
     {sevm : Sevm} {pre post : Devm} {sig : B256} {words : Nat} {body : Func}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm = sig)
     (memberAll : (sig, Blanc.ProrataWethVault.routed words body) ∈
@@ -86,16 +90,18 @@ private theorem readOnly_message_getStor
   obtain ⟨endpointPre, entryState, -, -, -, endpointRun⟩ :=
     Blanc.ProrataWethVault.runCompiled_enters_endpoint_compiled_logs run
       selectorEq memberAll
-  have walk := Func.observe_eq_of_run_silentIn
-    readOnlySilentSlot_closed_getStor
+  have walk := Func.observe_eq_of_run_silentAt
+    (fun k g permitted lookup =>
+      (readOnlySilentSlot_closed_getStor k g permitted lookup).toSilentAt)
     (Func.WalkInv.toRun (R := Func.RunOk) endpointRun)
-    (readOnly_silent_getStor _ memberRO)
+    (readOnly_silent_getStor hfork _ memberRO)
   exact walk.trans (funext (getStor_eq_of_state_eq entryState)).symm
 
 /-- A compiled vault run whose selector is none of the seven writers keeps
 every `Stor` tree. -/
 private theorem view_message_getStor
     {sevm : Sevm} {pre post : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (notDeposit :
       Sevm.selector sevm ≠ selector "deposit" [.uint256, .address])
@@ -121,82 +127,82 @@ private theorem view_message_getStor
     ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ | ⟨sel, rfl⟩ |
     ⟨sel, rfl⟩
   · exact readOnly_message_getStor (words := 0)
-      (body := Blanc.ProrataWethVault.totalAssets) run sel
+      (body := Blanc.ProrataWethVault.totalAssets) hfork run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
   · exact readOnly_message_getStor (words := 0)
-      (body := Blanc.ProrataWethVault.name) run sel
+      (body := Blanc.ProrataWethVault.name) hfork run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
   · exact readOnly_message_getStor (words := 1)
-      (body := Blanc.ProrataWethVault.convertToAssets) run sel
+      (body := Blanc.ProrataWethVault.convertToAssets) hfork run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
   · exact absurd sel notApprove
   · exact readOnly_message_getStor (words := 1)
-      (body := Blanc.ProrataWethVault.previewWithdraw) run sel
+      (body := Blanc.ProrataWethVault.previewWithdraw) hfork run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
   · exact readOnly_message_getStor (words := 0)
-      (body := Blanc.ProrataWethVault.totalSupply) run sel
+      (body := Blanc.ProrataWethVault.totalSupply) hfork run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
   · exact absurd sel notTransferFrom
   · exact readOnly_message_getStor (words := 0)
-      (body := Blanc.ProrataWethVault.decimals) run sel
+      (body := Blanc.ProrataWethVault.decimals) hfork run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
   · exact readOnly_message_getStor (words := 0)
-      (body := Blanc.ProrataWethVault.asset) run sel
+      (body := Blanc.ProrataWethVault.asset) hfork run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
   · exact readOnly_message_getStor (words := 1)
-      (body := Blanc.ProrataWethVault.maxDeposit) run sel
+      (body := Blanc.ProrataWethVault.maxDeposit) hfork run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
   · exact readOnly_message_getStor (words := 1)
-      (body := Blanc.ProrataWethVault.previewRedeem) run sel
+      (body := Blanc.ProrataWethVault.previewRedeem) hfork run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
   · exact absurd sel notDeposit
   · exact readOnly_message_getStor (words := 1)
-      (body := Blanc.ProrataWethVault.balanceOf) run sel
+      (body := Blanc.ProrataWethVault.balanceOf) hfork run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
   · exact absurd sel notMint
   · exact readOnly_message_getStor (words := 0)
-      (body := Blanc.ProrataWethVault.symbol) run sel
+      (body := Blanc.ProrataWethVault.symbol) hfork run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
   · exact absurd sel notTransfer
   · exact readOnly_message_getStor (words := 1)
-      (body := Blanc.ProrataWethVault.previewMint) run sel
+      (body := Blanc.ProrataWethVault.previewMint) hfork run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
   · exact absurd sel notWithdraw
   · exact absurd sel notRedeem
   · exact readOnly_message_getStor (words := 1)
-      (body := Blanc.ProrataWethVault.maxMint) run sel
+      (body := Blanc.ProrataWethVault.maxMint) hfork run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
   · exact readOnly_message_getStor (words := 1)
-      (body := Blanc.ProrataWethVault.convertToShares) run sel
+      (body := Blanc.ProrataWethVault.convertToShares) hfork run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
   · exact readOnly_message_getStor (words := 1)
-      (body := Blanc.ProrataWethVault.maxWithdraw) run sel
+      (body := Blanc.ProrataWethVault.maxWithdraw) hfork run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
   · exact readOnly_message_getStor (words := 1)
-      (body := Blanc.ProrataWethVault.maxRedeem) run sel
+      (body := Blanc.ProrataWethVault.maxRedeem) hfork run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
   · exact readOnly_message_getStor (words := 2)
-      (body := Blanc.ProrataWethVault.allowance) run sel
+      (body := Blanc.ProrataWethVault.allowance) hfork run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
   · exact readOnly_message_getStor (words := 1)
-      (body := Blanc.ProrataWethVault.previewDeposit) run sel
+      (body := Blanc.ProrataWethVault.previewDeposit) hfork run sel
       (by simp [Blanc.ProrataWethVault.vaultFuncs])
       (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
 
@@ -361,7 +367,7 @@ entered by a caller other than the vault is a provenance-tagged pair replay
 between its own endpoints: no record for a view, one accepted operation record
 for each writer. -/
 theorem vaultFramePairSegment (vault : Adr) : VaultFramePairSegment vault := by
-  intro sevm pre post run target direct callerNe inv provenance actor
+  intro sevm pre post run hfork target direct callerNe inv provenance actor
   have config : DirectWethConfiguration sevm.currentTarget sevm pre := by
     rw [target]
     exact inv.vault.config
@@ -497,7 +503,7 @@ theorem vaultFramePairSegment (vault : Adr) : VaultFramePairSegment vault := by
       (own := none) (linked := linked_none)
       (quiet := quiet_of_eq (foreign wethAccount notWeth)) (actor := actor)
       (fun _ impossible => by cases impossible)
-  have kept := view_message_getStor run isDeposit isMint isWithdraw isRedeem
+  have kept := view_message_getStor hfork run isDeposit isMint isWithdraw isRedeem
     isApprove isTransfer isTransferFrom
   exact ⟨[], PairReplay.nil_of_eq
     (PairBoundary.ofState_eq (congrFun kept vault) (congrFun kept wethAccount)),
