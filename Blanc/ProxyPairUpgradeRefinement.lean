@@ -677,6 +677,9 @@ private def sharedValueSpawn
     resolvedNotPrecompile := by
       change pragueRules.isPrecomp implementation = false
       exact notPrecompile
+    covered := by
+      change CoveredFork .prague
+      exact CoveredFork.prague
   }
 
 private theorem sharedValueSpawn_exists
@@ -1109,6 +1112,9 @@ private theorem fixtureV1ValueChild_run :
         simpa [initSevm] using fixtureV1ValueChild_data
       · unfold v1Entries linearDispatchWith nonpayable loadScalar mstoreAt
         func_run [1, 1, 3]
+        repeat (case h_legacy =>
+          exact CoveredFork.rules_stateGas_none
+            (by change CoveredFork .prague; exact CoveredFork.prague))
         all_goals try
           norm_num [Devm.gasLeft_setMach, gBase, gVerylow, gHigh,
             gJumpdest, gasColdSload]
@@ -1160,6 +1166,9 @@ private theorem fixtureV2ValueChild_run :
         simpa [initSevm] using fixtureV2ValueChild_data
       · unfold v2Entries linearDispatchWith nonpayable loadScalar mstoreAt
         func_run [1, 1, 3]
+        repeat (case h_legacy =>
+          exact CoveredFork.rules_stateGas_none
+            (by change CoveredFork .prague; exact CoveredFork.prague))
         all_goals try
           norm_num [Devm.gasLeft_setMach, gBase, gVerylow, gHigh,
             gJumpdest, gasColdSload]
@@ -1282,7 +1291,7 @@ private noncomputable def delegatedChildCertificate_of_run
     rw [MessageExecution.processMessage_eq_settle_exec_of_enter
       spawn.child (initEvm spawn.child) spawn.crossing.1, raw]
     simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-      executeCode.handleError, processMessage.settle,
+      executeCode.handleErrorWith_ok, executeCode.handleError, processMessage.settle,
       show child.error.isSome = false by rw [clean]; rfl]
   let trace := Classical.choice
     (ExecutionTrace.exists_processMessageTrace spawn.child (.ok child)
