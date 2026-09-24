@@ -116,15 +116,15 @@ private theorem firstWriterMutant (fixture : HistoryFixture) :
     "-- IDENTITY-MUTANT-CONTROL": r"""
 private theorem identityWeakenedMutant
     {frame : Exec.Frame} {program : Prog} {storage codeAddress other : Adr}
-    (exact : frame.exactInvocation program storage codeAddress) :
-    frame.exactInvocation program other codeAddress := by
+    (exact : Blanc.Exec.Frame.exactInvocation program storage codeAddress frame) :
+    Blanc.Exec.Frame.exactInvocation program other codeAddress frame := by
   exact exact
 """,
     "-- CODE-IDENTITY-MUTANT-CONTROL": r"""
 private theorem codeIdentityWeakenedMutant
     {frame : Exec.Frame} {program : Prog} {storage codeAddress other : Adr}
-    (exact : frame.exactInvocation program storage codeAddress) :
-    frame.exactInvocation program storage other := by
+    (exact : Blanc.Exec.Frame.exactInvocation program storage codeAddress frame) :
+    Blanc.Exec.Frame.exactInvocation program storage other frame := by
   exact exact
 """,
     "-- COMMITMENT-FILTERED-RAW-CHILD-MUTANT-CONTROL": r"""
@@ -170,8 +170,8 @@ private theorem commitRequiredAttributionMutant (w : TerminalSourceFixture) :
     "-- CHILD-AS-PARENT-IDENTITY-MUTANT-CONTROL": r"""
 private theorem childAsParentIdentityMutant
     (w : RawChildAttribution.CaughtFixture) :
-    w.call.root.exactInvocation RawChildAttribution.caughtProgram
-      RawChildAttribution.callTarget RawChildAttribution.callTarget := by
+    Blanc.Exec.Deriv.exactInvocation RawChildAttribution.caughtProgram
+      RawChildAttribution.callTarget RawChildAttribution.callTarget w.call.root := by
   exact w.call.childExact RawChildAttribution.caughtProgram w.compiled
 """,
     "-- MISSING-PARENT-PREFIX-MUTANT-CONTROL": r"""
