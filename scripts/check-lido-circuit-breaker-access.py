@@ -1278,10 +1278,10 @@ MUTATIONS = {
         # commitment premise — that is exactly the altitude it exists to hold.
         "raw-occurrence theorem given a commitment premise": (
             "    (selected : frameRoot ∈ Exec.rawFrameRoots globalRoot.exc)\n"
-            "    (invocation : frameRoot.exactInvocation (runtime dp) ca ca)",
+            "    (invocation : (Blanc.Exec.Deriv.exactInvocation (runtime dp) ca ca frameRoot))",
             "    (selected : frameRoot ∈ Exec.rawFrameRoots globalRoot.exc)\n"
             "    (committed : Execution.commits globalRoot.exc = true)\n"
-            "    (invocation : frameRoot.exactInvocation (runtime dp) ca ca)",
+            "    (invocation : (Blanc.Exec.Deriv.exactInvocation (runtime dp) ca ca frameRoot))",
         ),
         # AT8: the exhibited role must lie in THIS row's permitted role set; a
         # widened role set would let any write claim any authority.
@@ -1310,11 +1310,11 @@ MUTATIONS = {
         # never assumed by the caller.
         "owner-closure premise replaced by a caller-supplied assumption": (
             "    (rootExact :\n"
-            "      (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv).exactInvocation\n"
-            "        (runtime dp) ca ca)\n"
+            "      (Blanc.Exec.Deriv.exactInvocation\n"
+            "        (runtime dp) ca ca (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv)))\n"
             "    (write : Exec.SuccessfulSstoreOccurrence",
             "    (closure : ∀ frame ∈ Exec.committedFrames run,\n"
-            "      frame.exactInvocation (runtime dp) ca ca)\n"
+            "      Blanc.Exec.Frame.exactInvocation (runtime dp) ca ca frame)\n"
             "    (write : Exec.SuccessfulSstoreOccurrence",
         ),
         # AT8: attribution is to the LAST retained writer; a first-writer

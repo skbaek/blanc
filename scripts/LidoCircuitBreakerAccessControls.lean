@@ -602,7 +602,7 @@ theorem attainable_shape_control :
           (site : Prog.SourceSite),
           occurrence.instruction = .reg .sstore ∧
           frameRoot ∈ Exec.rawFrameRoots globalRoot.exc ∧
-          frameRoot.exactInvocation (runtime dp) ca ca ∧
+          (Blanc.Exec.Deriv.exactInvocation (runtime dp) ca ca frameRoot) ∧
           Exec.Deriv.ParentPrefix frameRoot occurrence.node ∧
           row.sourceSite? dp = some site ∧
           site.pc = occurrence.node.pc ∧
@@ -704,7 +704,7 @@ theorem setPauseDurationConfig_admin_site_control :
       site.pc = occurrence.node.pc ∧
       occurrence.instruction = .reg .sstore ∧
       frameRoot ∈ Exec.rawFrameRoots globalRoot.exc ∧
-      frameRoot.exactInvocation (runtime officialParams) ca ca ∧
+      (Blanc.Exec.Deriv.exactInvocation (runtime officialParams) ca ca frameRoot) ∧
       Exec.Deriv.ParentPrefix frameRoot occurrence.node ∧
       RuntimeWriteAuthority officialParams frameRoot occurrence.node
         .adminConfiguration ∧
@@ -785,7 +785,7 @@ theorem setHeartbeatIntervalConfig_admin_site_control :
       site.pc = occurrence.node.pc ∧
       occurrence.instruction = .reg .sstore ∧
       frameRoot ∈ Exec.rawFrameRoots globalRoot.exc ∧
-      frameRoot.exactInvocation (runtime officialParams) ca ca ∧
+      (Blanc.Exec.Deriv.exactInvocation (runtime officialParams) ca ca frameRoot) ∧
       Exec.Deriv.ParentPrefix frameRoot occurrence.node ∧
       RuntimeWriteAuthority officialParams frameRoot occurrence.node
         .adminConfiguration ∧
@@ -852,7 +852,7 @@ theorem heartbeatExpiry_live_site_control :
       site.pc = occurrence.node.pc ∧
       occurrence.instruction = .reg .sstore ∧
       frameRoot ∈ Exec.rawFrameRoots globalRoot.exc ∧
-      frameRoot.exactInvocation (runtime officialParams) ca ca ∧
+      (Blanc.Exec.Deriv.exactInvocation (runtime officialParams) ca ca frameRoot) ∧
       Exec.Deriv.ParentPrefix frameRoot occurrence.node ∧
       RuntimeWriteAuthority officialParams frameRoot occurrence.node
         .heartbeatExpiry ∧
@@ -1251,9 +1251,9 @@ runtime bytes. -/
 private theorem directPauseExactInvocation :
     ∃ (sevm : Sevm) (pre raw : Devm)
       (rootExec : Exec 0 sevm pre (.error (.revert, raw))),
-      (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ :
-          Exec.Deriv).exactInvocation
-        (runtime officialParams) (Nat.toAdr 100) (Nat.toAdr 100) := by
+      Blanc.Exec.Deriv.exactInvocation (runtime officialParams) (Nat.toAdr 100) (Nat.toAdr 100)
+        (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ :
+          Exec.Deriv) := by
   obtain ⟨msg, sevm, pre, raw, _htarget, hcurrent, hcodeAddress, hcodeBytes,
       _hvalue, _hdata, sevmEq, _hpre, _hframe, _hwitness, _hcaller,
       _hassignment, _hexpiry, _hlive, _htargetNe, _hcanonical, _hzeroCodeSize,
@@ -1280,13 +1280,13 @@ labelled storage-owner header mutations relabel. -/
 theorem storage_owner_identity_required_control :
     ∃ (sevm : Sevm) (pre raw : Devm)
       (rootExec : Exec 0 sevm pre (.error (.revert, raw))),
-      (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ :
-          Exec.Deriv).exactInvocation
-        (runtime officialParams) (Nat.toAdr 100) (Nat.toAdr 100) ∧
+      Blanc.Exec.Deriv.exactInvocation (runtime officialParams) (Nat.toAdr 100) (Nat.toAdr 100)
+        (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ :
+          Exec.Deriv) ∧
       ∀ other : Adr, other ≠ Nat.toAdr 100 →
-        ¬ (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ :
-            Exec.Deriv).exactInvocation
-          (runtime officialParams) other (Nat.toAdr 100) := by
+        ¬ Blanc.Exec.Deriv.exactInvocation (runtime officialParams) other (Nat.toAdr 100)
+          (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ :
+            Exec.Deriv) := by
   obtain ⟨sevm, pre, raw, rootExec, invocation⟩ := directPauseExactInvocation
   refine ⟨sevm, pre, raw, rootExec, invocation, ?_⟩
   intro other hne contra
@@ -1300,13 +1300,12 @@ substitute for code-address identity. -/
 theorem code_address_identity_required_control :
     ∃ (sevm : Sevm) (pre raw : Devm)
       (rootExec : Exec 0 sevm pre (.error (.revert, raw))),
-      (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ :
-          Exec.Deriv).exactInvocation
-        (runtime officialParams) (Nat.toAdr 100) (Nat.toAdr 100) ∧
+      Blanc.Exec.Deriv.exactInvocation (runtime officialParams) (Nat.toAdr 100) (Nat.toAdr 100)
+        (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ :
+          Exec.Deriv) ∧
       ∀ other : Adr, other ≠ Nat.toAdr 100 →
-        ¬ (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ :
-            Exec.Deriv).exactInvocation
-          (runtime officialParams) (Nat.toAdr 100) other := by
+        ¬ Blanc.Exec.Deriv.exactInvocation (runtime officialParams) (Nat.toAdr 100) other
+            (⟨0, sevm, pre, .error (.revert, raw), rootExec⟩ : Exec.Deriv) := by
   obtain ⟨sevm, pre, raw, rootExec, invocation⟩ := directPauseExactInvocation
   refine ⟨sevm, pre, raw, rootExec, invocation, ?_⟩
   intro other hne contra
@@ -1327,15 +1326,15 @@ theorem owner_closure_assumed_premise_rejected
     (committed : Execution.commits out = true)
     (installed : Prog.At (runtime dp) ca pc sevm pre)
     (rootExact :
-      (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv).exactInvocation
-        (runtime dp) ca ca)
+      (Blanc.Exec.Deriv.exactInvocation
+        (runtime dp) ca ca (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv)))
     (write : Exec.SuccessfulSstoreOccurrence
       (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv))
     (retained : write.Retained)
     (owner : write.storageOwner = ca) :
     ∃ frame ∈ Exec.committedFrames run,
-      frame.exactInvocation (runtime dp) ca ca ∧
-        Exec.Deriv.ParentPrefix frame.rootDeriv write.occurrence.node ∧
+      (Blanc.Exec.Frame.exactInvocation (runtime dp) ca ca frame) ∧
+        Exec.Deriv.ParentPrefix (Blanc.Exec.Frame.rootDeriv frame) write.occurrence.node ∧
         ∃ rawRoot ∈ Exec.rawFrameRoots run,
           Exec.Deriv.ParentPrefix rawRoot write.occurrence.node := by
   rcases Exec.retainedSstore_runtimeOwnerClosure run committed installed
@@ -1409,7 +1408,7 @@ private theorem attained_at_shape {row : RuntimePersistentWrite}
       site.pc = occurrence.node.pc ∧
       occurrence.instruction = .reg .sstore ∧
       frameRoot ∈ Exec.rawFrameRoots globalRoot.exc ∧
-      frameRoot.exactInvocation (runtime officialParams) ca ca ∧
+      (Blanc.Exec.Deriv.exactInvocation (runtime officialParams) ca ca frameRoot) ∧
       Exec.Deriv.ParentPrefix frameRoot occurrence.node ∧
       RuntimeWriteAuthority officialParams frameRoot occurrence.node
         .adminExpiry := by
@@ -1448,7 +1447,7 @@ theorem registerReplacementArm_admin_site_control :
         site.pc = occurrence.node.pc ∧
         occurrence.instruction = .reg .sstore ∧
         frameRoot ∈ Exec.rawFrameRoots globalRoot.exc ∧
-        frameRoot.exactInvocation (runtime officialParams) ca ca ∧
+        (Blanc.Exec.Deriv.exactInvocation (runtime officialParams) ca ca frameRoot) ∧
         Exec.Deriv.ParentPrefix frameRoot occurrence.node ∧
         RuntimeWriteAuthority officialParams frameRoot occurrence.node
           .adminExpiry := by
