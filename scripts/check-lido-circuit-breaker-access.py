@@ -365,11 +365,11 @@ ROLES = {
         # Every same-frame runtime SSTORE in an exact selected raw invocation
         # has exactly one source row.
         "Exec.NinstOccurrence.runtimePersistentWrite_of_rawFrameRoot":
-            "c73d59eb2e4a9975569a304e2b6362cdd95a5669ec866aec459681a1c9462e4f",
+            "9c518e33453b5b57fc285ce19732cdd5391fb71684e5862ec6729331ba7d737e",
         # ... and one of that row's actual permitted runtime authority roles,
         # for an enclosing invocation of any terminal outcome.
         "Exec.NinstOccurrence.runtimeWriteAuthority_of_rawFrameRoot":
-            "e755bf90f38ef62672e6dd79df675b41027cf702678c8bf73882bced5d546bb2",
+            "8530910bd3a3030e4d5ef4cefbd158eeffdf734247ef4643a8e312316879fe35",
         # Settlement-altitude storage bridge; deliberately not a log claim.
         # Role exclusivity at a single write.  These two are the artifact of
         # the deconflation fix: .adminRegistry/.adminExpiry and
@@ -388,7 +388,7 @@ ROLES = {
         "RuntimeWriteAuthority.pauseRegistry_not_pauseExpiry":
             "fb6d38950e205d47eff2c69b2c654da977e3e436094d7ecf8c9b31b27c9af14d",
         "ProcessMessage.runtimeOwnerStorage_eq_committedPost":
-            "cd2eeef907ec3f7af5ec7baac493cc3f8310d72c14d9f3926af36e2fc9c7a586",
+            "637629ced2fb2f2e361b98a6966b25790c510e9b25dfa8cd592783128d4a17ba",
     },
     # ---- AT6: owner-closure bridge ----
     "ownerClosure": {
@@ -396,18 +396,18 @@ ROLES = {
             "36f6c39e0a3c3b6b15eeb365177244b95e6ac40375ed94bd8575873dde88664a",
         # Public committed-frame closure for a global execution.
         "Exec.runtimeOwnerClosure":
-            "d480130bb42bb2983d217135981d42fccec22274c5b361d1765470f604d018f1",
+            "25553148c9eb61c9c7639ea17c3d502b8560112dd616ac934a27f704e0ea5eac",
         # Retained owner write => committed exact frame with a same-frame
         # prefix.  No chosen-writer identity premise.
         "Exec.retainedSstore_runtimeOwnerClosure":
-            "d20dc486e06b4c3e2cf126db9bf69c41d743ad525a789dfaff7061cd7704335b",
+            "916409e2e057944220b27267ae9060a41cc45dd52473688defa0277f8d082f26",
     },
     # ---- AT6: retained last writer and settlement ----
     "retained": {
         "Exec.runtimeOwnerCellAuthority_of_committedPost_ne":
-            "03ffeedaedf975ca88d4b23629157fc44c19bf4128b48b624880ff1a32d8d191",
+            "f95713b6f5ecfe1d95bb92f00c325ba4cbbb8d72fb0616e77d7c1b8dfa319a1e",
         "ProcessMessage.runtimeOwnerCellAuthority_of_clean_settled_ne":
-            "59c5bfb6efdcfa6498b45369d27aaa8b73898f566a6899b611d78fd1cf2b17d2",
+            "5afd9e34fdd804ae4893867b8fff2ac74f7e380a10e1c2e97c980f100734eb09",
         "ProcessMessage.runtime_settled_error_restores_owner":
             "957cd337dc365f28fe56bb835e6dca42d3e9be20f70e5ced21d5235c4a867ce5",
         # The three noncommitting negatives that keep the family honest.
