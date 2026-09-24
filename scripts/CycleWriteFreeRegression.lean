@@ -960,9 +960,9 @@ private theorem Fixture.child_sstore (w : Fixture) :
   have childSelected : w.childRoot ∈ Exec.rawFrameRoots w.run := by
     simp [Fixture.run, Fixture.childRoot, Exec.rawFrameRoots,
       Exec.rawFrameDescendants]
-  rcases (Exec.Deriv.ParentPrefix.refl w.childRoot).advance_cont
-      w.child w.valueStep with ⟨atTwo, edgeTwo, prefixTwo⟩
-  rcases prefixTwo.advance_cont atTwo w.keyStep with
+  rcases (Blanc.Exec.Deriv.ParentPrefix.advance_cont
+      w.child (Exec.Deriv.ParentPrefix.refl w.childRoot)) w.valueStep with ⟨atTwo, edgeTwo, prefixTwo⟩
+  rcases (Blanc.Exec.Deriv.ParentPrefix.advance_cont atTwo prefixTwo) w.keyStep with
     ⟨atFour, edgeFour, prefixFour⟩
   let node : Exec.Deriv :=
     ⟨4, w.childEvm.sta, w.afterKey, w.raw, atFour⟩

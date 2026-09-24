@@ -376,7 +376,7 @@ private theorem history_lastWriter (fixture : HistoryFixture) :
   rw [occurrenceEq, key, value]
   have get14 : Evm.getInst ⟨14, historySevm, fixture.s14⟩ =
       some (.next (.reg .sstore)) := fixture.occurrence14.decoded
-  have projected14 : fixture.node14.successfulSstore? = some {
+  have projected14 : (Blanc.Exec.Deriv.successfulSstore? fixture.node14) = some {
       node := fixture.node14
       owner := historySevm.currentTarget
       key := 0
@@ -468,7 +468,7 @@ private def SourceFixture.node (w : SourceFixture) : Exec.Deriv :=
   ⟨1, sourceSevm, w.afterJump, w.out, .cont w.step1 w.tail⟩
 
 private def SourceFixture.occurrence (w : SourceFixture) :
-    Exec.NinstOccurrence w.frame.rootDeriv :=
+    Exec.NinstOccurrence (Blanc.Exec.Frame.rootDeriv w.frame) :=
   { node := w.node
     instruction := .reg .sstore
     slot := .none
@@ -552,22 +552,22 @@ private theorem sourceFixture_nonempty : Nonempty SourceFixture := by
   | some witness => exact ⟨witness⟩
 
 private theorem SourceFixture.exact (w : SourceFixture) :
-    w.frame.exactInvocation sourceProgram
-      sourceSevm.currentTarget sourceAddress :=
+    (Blanc.Exec.Frame.exactInvocation sourceProgram
+      sourceSevm.currentTarget sourceAddress w.frame) :=
   ⟨rfl, rfl, rfl, w.compiled⟩
 
 private theorem SourceFixture.source_and_identity_controls
     (w : SourceFixture) :
-    (∃ write : Exec.SuccessfulSstoreOccurrence w.frame.rootDeriv,
+    (∃ write : Exec.SuccessfulSstoreOccurrence (Blanc.Exec.Frame.rootDeriv w.frame),
       write.occurrence.node.pc = 1 ∧
         sourceProgram.acceptsSstoreSite ⟨0, []⟩
           write.occurrence.node.pc = true) ∧
-    w.frame.exactInvocation sourceProgram
-      sourceSevm.currentTarget sourceAddress ∧
-    ¬ w.frame.exactInvocation sourceProgram
-      otherStorageTarget sourceAddress ∧
-    ¬ w.frame.exactInvocation sourceProgram
-      sourceSevm.currentTarget otherSourceAddress := by
+    (Blanc.Exec.Frame.exactInvocation sourceProgram
+      sourceSevm.currentTarget sourceAddress w.frame) ∧
+    ¬ (Blanc.Exec.Frame.exactInvocation sourceProgram
+      otherStorageTarget sourceAddress w.frame) ∧
+    ¬ (Blanc.Exec.Frame.exactInvocation sourceProgram
+      sourceSevm.currentTarget otherSourceAddress w.frame) := by
   rcases w.occurrence.toSuccessfulSstore rfl rfl with ⟨write, occurrenceEq⟩
   refine ⟨⟨write, ?_, ?_⟩, w.exact, ?_, ?_⟩
   · rw [occurrenceEq]
@@ -587,16 +587,16 @@ compiled SSTORE and exact-identity control, rather than merely mirroring its
 field tests in a disconnected Boolean. -/
 private theorem concrete_source_and_identity_controls :
     ∃ w : SourceFixture,
-      (∃ write : Exec.SuccessfulSstoreOccurrence w.frame.rootDeriv,
+      (∃ write : Exec.SuccessfulSstoreOccurrence (Blanc.Exec.Frame.rootDeriv w.frame),
         write.occurrence.node.pc = 1 ∧
           sourceProgram.acceptsSstoreSite ⟨0, []⟩
             write.occurrence.node.pc = true) ∧
-      w.frame.exactInvocation sourceProgram
-        sourceSevm.currentTarget sourceAddress ∧
-      ¬ w.frame.exactInvocation sourceProgram
-        otherStorageTarget sourceAddress ∧
-      ¬ w.frame.exactInvocation sourceProgram
-        sourceSevm.currentTarget otherSourceAddress := by
+      (Blanc.Exec.Frame.exactInvocation sourceProgram
+        sourceSevm.currentTarget sourceAddress w.frame) ∧
+      ¬ (Blanc.Exec.Frame.exactInvocation sourceProgram
+        otherStorageTarget sourceAddress w.frame) ∧
+      ¬ (Blanc.Exec.Frame.exactInvocation sourceProgram
+        sourceSevm.currentTarget otherSourceAddress w.frame) := by
   rcases sourceFixture_nonempty with ⟨w⟩
   exact ⟨w, w.source_and_identity_controls⟩
 
@@ -647,8 +647,8 @@ private theorem entryOogFixture_nonempty : Nonempty EntryOogFixture := by
   | some witness => exact ⟨witness⟩
 
 private theorem EntryOogFixture.exact (w : EntryOogFixture) :
-    w.root.exactInvocation sourceProgram
-      sourceSevm.currentTarget sourceAddress :=
+    (Blanc.Exec.Deriv.exactInvocation sourceProgram
+      sourceSevm.currentTarget sourceAddress w.root) :=
   ⟨rfl, rfl, rfl, w.compiled⟩
 
 /-- The errored outer root is retained, but no same-frame target at the main
@@ -712,8 +712,8 @@ private theorem TerminalSourceFixture.sameFrame (w : TerminalSourceFixture) :
   exact .step (.cont w.step0 (.halt w.step1)) (.refl _)
 
 private theorem TerminalSourceFixture.exact (w : TerminalSourceFixture) :
-    w.root.exactInvocation sourceProgram
-      sourceSevm.currentTarget sourceAddress :=
+    (Blanc.Exec.Deriv.exactInvocation sourceProgram
+      sourceSevm.currentTarget sourceAddress w.root) :=
   ⟨rfl, rfl, rfl, w.compiled⟩
 
 private def terminalSourceFixture? : Option TerminalSourceFixture :=
@@ -782,14 +782,14 @@ private theorem TerminalSourceFixture.exactAttribution
 
 private theorem concrete_raw_attribution_controls :
     (∃ w : EntryOogFixture,
-      w.root.exactInvocation sourceProgram
-        sourceSevm.currentTarget sourceAddress ∧
+      (Blanc.Exec.Deriv.exactInvocation sourceProgram
+        sourceSevm.currentTarget sourceAddress w.root) ∧
       Exec.rawFrameRoots w.run = [w.root] ∧
       ¬ ∃ target : Exec.Deriv,
         Exec.Deriv.ParentPrefix w.root target ∧ target.pc = 1) ∧
     (∃ w : TerminalSourceFixture,
-      w.root.exactInvocation sourceProgram
-        sourceSevm.currentTarget sourceAddress ∧
+      (Blanc.Exec.Deriv.exactInvocation sourceProgram
+        sourceSevm.currentTarget sourceAddress w.root) ∧
       w.occurrence.stepResult = .error w.err ∧
       w.occurrence.node.pc = 1 ∧
       sourceProgram.acceptsSstoreSite ⟨0, []⟩
@@ -804,8 +804,8 @@ contains no entered child.  The predicate therefore carries no direct-CALL or
 nondelegation provenance. -/
 private theorem coincident_identity_top_level_control :
     ∃ w : EntryOogFixture,
-      w.root.exactInvocation sourceProgram
-        sourceSevm.currentTarget sourceAddress ∧
+      (Blanc.Exec.Deriv.exactInvocation sourceProgram
+        sourceSevm.currentTarget sourceAddress w.root) ∧
       Exec.rawFrameRoots w.run = [w.root] := by
   rcases entryOogFixture_nonempty with ⟨w⟩
   exact ⟨w, w.exact, w.boundary.1⟩
@@ -904,8 +904,8 @@ private theorem SuccessfulSourceFixture.sameFrame
 private theorem SuccessfulSourceFixture.exact
     {program : Prog} {code : ByteArray} {pre : Devm}
     (w : SuccessfulSourceFixture program code pre) :
-    w.root.exactInvocation program
-      (attributedSevm code).currentTarget sourceAddress :=
+    Blanc.Exec.Deriv.exactInvocation program
+      (attributedSevm code).currentTarget sourceAddress w.root :=
   ⟨rfl, rfl, rfl, w.compiled⟩
 
 private def successfulSourceFixture?
@@ -1266,7 +1266,7 @@ private theorem Fixture.rootToTarget
 private theorem Fixture.exact
     {program : Prog} {code : ByteArray} {pre : Devm}
     (w : Fixture program code pre) :
-    w.root.exactInvocation program sourceAddress sourceAddress :=
+    (Blanc.Exec.Deriv.exactInvocation program sourceAddress sourceAddress w.root) :=
   ⟨rfl, rfl, rfl, w.compiled⟩
 
 private def fixture?
@@ -1563,11 +1563,11 @@ end Chronology
 
 private theorem exactInvocation_rejects_identity_drift
     {frame : Exec.Frame} {program : Prog} {storage codeAddress : Adr}
-    (exact : frame.exactInvocation program storage codeAddress) :
+    (exact : (Blanc.Exec.Frame.exactInvocation program storage codeAddress frame)) :
     (∀ other, other ≠ storage →
-      ¬ frame.exactInvocation program other codeAddress) ∧
+      ¬ (Blanc.Exec.Frame.exactInvocation program other codeAddress frame)) ∧
     (∀ other, other ≠ codeAddress →
-      ¬ frame.exactInvocation program storage other) := by
+      ¬ (Blanc.Exec.Frame.exactInvocation program storage other frame)) := by
   constructor
   · intro other different weakened
     exact different (weakened.2.1.symm.trans exact.2.1)
@@ -1902,7 +1902,7 @@ private theorem RawCallFixture.childSelected {parentCode childCode : ByteArray}
 private theorem RawCallFixture.childExact {parentCode childCode : ByteArray}
     (w : RawCallFixture parentCode childCode) (program : Prog)
   (compiled : some childCode.toList = program.compile) :
-    w.childRoot.exactInvocation program callTarget callTarget := by
+    (Blanc.Exec.Deriv.exactInvocation program callTarget callTarget w.childRoot) := by
   exact ⟨w.childPc, w.storageTarget, w.codeAddress, by
     change some w.childEvm.sta.code.toList = program.compile
     rw [w.codeEq]
@@ -1999,15 +1999,15 @@ private theorem caughtFixture_nonempty : Nonempty CaughtFixture := by
 
 private theorem CaughtFixture.control (w : CaughtFixture) :
     w.call.childRoot ∈ Exec.rawFrameRoots w.call.run ∧
-    w.call.childRoot.exactInvocation caughtProgram callTarget callTarget ∧
+    (Blanc.Exec.Deriv.exactInvocation caughtProgram callTarget callTarget w.call.childRoot) ∧
     ∃ occurrence : Exec.NinstOccurrence w.call.root,
       occurrence.instruction = .reg .sstore ∧
       Exec.Deriv.ParentPrefix w.call.childRoot occurrence.node ∧
       occurrence.node.pc = 1 ∧
       caughtProgram.acceptsSstoreSite ⟨0, []⟩ occurrence.node.pc = true := by
   refine ⟨w.call.childSelected, w.call.childExact caughtProgram w.compiled, ?_⟩
-  rcases (Exec.Deriv.ParentPrefix.refl w.call.childRoot).advance_cont
-      w.call.child w.entryStep with ⟨next, edge, childPrefix⟩
+  rcases (Blanc.Exec.Deriv.ParentPrefix.advance_cont
+      w.call.child (Exec.Deriv.ParentPrefix.refl w.call.childRoot)) w.entryStep with ⟨next, edge, childPrefix⟩
   let node : Exec.Deriv := ⟨1, w.call.childEvm.sta, w.afterEntry, w.call.raw, next⟩
   have nodeEq : node = ⟨1, w.call.childEvm.sta, w.afterEntry,
       w.call.raw, next⟩ := rfl
@@ -2170,7 +2170,7 @@ private theorem rollbackFixture_nonempty : Nonempty RollbackFixture := by
 
 private theorem RollbackFixture.control (w : RollbackFixture) :
     w.call.childRoot ∈ Exec.rawFrameRoots w.call.run ∧
-    w.call.childRoot.exactInvocation rollbackProgram callTarget callTarget ∧
+    (Blanc.Exec.Deriv.exactInvocation rollbackProgram callTarget callTarget w.call.childRoot) ∧
     Execution.commits w.call.raw = true ∧
     Execution.commits w.call.out ≠ true ∧
     ∃ occurrence : Exec.NinstOccurrence w.call.root,
@@ -2181,10 +2181,10 @@ private theorem RollbackFixture.control (w : RollbackFixture) :
         ⟨0, [.rest, .rest]⟩ occurrence.node.pc = true := by
   refine ⟨w.call.childSelected, w.call.childExact rollbackProgram w.compiled,
     w.childCommits, w.outerFails, ?_⟩
-  rcases (Exec.Deriv.ParentPrefix.refl w.call.childRoot).advance_cont
-      w.call.child w.entryStep with ⟨at1, edge1, prefix1⟩
-  rcases prefix1.advance_cont at1 w.valueStep with ⟨at3, edge3, prefix3⟩
-  rcases prefix3.advance_cont at3 w.keyStep with ⟨at4, edge4, prefix4⟩
+  rcases (Blanc.Exec.Deriv.ParentPrefix.advance_cont
+      w.call.child (Exec.Deriv.ParentPrefix.refl w.call.childRoot)) w.entryStep with ⟨at1, edge1, prefix1⟩
+  rcases (Blanc.Exec.Deriv.ParentPrefix.advance_cont at1 prefix1) w.valueStep with ⟨at3, edge3, prefix3⟩
+  rcases (Blanc.Exec.Deriv.ParentPrefix.advance_cont at3 prefix3) w.keyStep with ⟨at4, edge4, prefix4⟩
   let node : Exec.Deriv := ⟨4, w.call.childEvm.sta, w.beforeStore, w.call.raw, at4⟩
   have decoded : Ninst.At node.sevm.code node.pc (.reg .sstore) := by
     change Ninst.At w.call.childEvm.sta.code 4 (.reg .sstore)
@@ -2223,9 +2223,9 @@ private theorem concrete_controls :
 
 private theorem CaughtFixture.identity_negative (w : CaughtFixture) :
     (∀ other, other ≠ callTarget →
-      ¬ w.call.childRoot.exactInvocation caughtProgram other callTarget) ∧
+      ¬ (Blanc.Exec.Deriv.exactInvocation caughtProgram other callTarget w.call.childRoot)) ∧
     (∀ other, other ≠ callTarget →
-      ¬ w.call.childRoot.exactInvocation caughtProgram callTarget other) := by
+      ¬ (Blanc.Exec.Deriv.exactInvocation caughtProgram callTarget other w.call.childRoot)) := by
   have exact := w.call.childExact caughtProgram w.compiled
   constructor
   · intro other different weakened
@@ -2236,9 +2236,9 @@ private theorem CaughtFixture.identity_negative (w : CaughtFixture) :
 
 private theorem RollbackFixture.identity_negative (w : RollbackFixture) :
     (∀ other, other ≠ callTarget →
-      ¬ w.call.childRoot.exactInvocation rollbackProgram other callTarget) ∧
+      ¬ (Blanc.Exec.Deriv.exactInvocation rollbackProgram other callTarget w.call.childRoot)) ∧
     (∀ other, other ≠ callTarget →
-      ¬ w.call.childRoot.exactInvocation rollbackProgram callTarget other) := by
+      ¬ (Blanc.Exec.Deriv.exactInvocation rollbackProgram callTarget other w.call.childRoot)) := by
   have exact := w.call.childExact rollbackProgram w.compiled
   constructor
   · intro other different weakened
@@ -2249,16 +2249,16 @@ private theorem RollbackFixture.identity_negative (w : RollbackFixture) :
 
 private theorem CaughtFixture.same_code_other_address_rejected
     (w : CaughtFixture) :
-    (¬ w.call.childRoot.exactInvocation caughtProgram
-      otherCallTarget callTarget) ∧
-    (¬ w.call.childRoot.exactInvocation caughtProgram
-      callTarget otherCallTarget) := by
+    (¬ (Blanc.Exec.Deriv.exactInvocation caughtProgram
+      otherCallTarget callTarget w.call.childRoot)) ∧
+    (¬ (Blanc.Exec.Deriv.exactInvocation caughtProgram
+      callTarget otherCallTarget w.call.childRoot)) := by
   exact ⟨w.identity_negative.1 otherCallTarget (by native_decide),
     w.identity_negative.2 otherCallTarget (by native_decide)⟩
 
 private theorem RollbackFixture.different_code_not_caught
     (w : RollbackFixture) :
-    ¬ w.call.childRoot.exactInvocation caughtProgram callTarget callTarget := by
+    ¬ (Blanc.Exec.Deriv.exactInvocation caughtProgram callTarget callTarget w.call.childRoot) := by
   intro drifted
   have codeEq := drifted.2.2.2
   change some w.call.childEvm.sta.code.toList = caughtProgram.compile at codeEq
@@ -2288,15 +2288,15 @@ identity, the parent is not a same-frame prefix, equal bytes cannot be nominated
 at another address, and an actually entered different-code child is rejected. -/
 private theorem concrete_child_identity_boundaries :
     ∃ caught : CaughtFixture, ∃ rollback : RollbackFixture,
-      caught.call.childRoot.exactInvocation caughtProgram
-        callTarget callTarget ∧
+      (Blanc.Exec.Deriv.exactInvocation caughtProgram
+        callTarget callTarget caught.call.childRoot) ∧
       ¬ Exec.Deriv.ParentPrefix caught.call.root caught.call.childRoot ∧
-      ¬ caught.call.childRoot.exactInvocation caughtProgram
-        otherCallTarget callTarget ∧
-      ¬ caught.call.childRoot.exactInvocation caughtProgram
-        callTarget otherCallTarget ∧
-      ¬ rollback.call.childRoot.exactInvocation caughtProgram
-        callTarget callTarget := by
+      ¬ (Blanc.Exec.Deriv.exactInvocation caughtProgram
+        otherCallTarget callTarget caught.call.childRoot) ∧
+      ¬ (Blanc.Exec.Deriv.exactInvocation caughtProgram
+        callTarget otherCallTarget caught.call.childRoot) ∧
+      ¬ (Blanc.Exec.Deriv.exactInvocation caughtProgram
+        callTarget callTarget rollback.call.childRoot) := by
   rcases caughtFixture_nonempty with ⟨caught⟩
   rcases rollbackFixture_nonempty with ⟨rollback⟩
   exact ⟨caught, rollback,

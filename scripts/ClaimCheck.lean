@@ -6032,7 +6032,7 @@ example {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
   pair_history_stable root history collision hcov rulesAt
 
 example (vault : Adr) (frame : Exec.Frame)
-    (weth : frame.exactInvocation Blanc.weth wethAccount wethAccount)
+    (weth : Blanc.Exec.Frame.exactInvocation Blanc.weth wethAccount wethAccount frame)
     (fresh : Exec.FreshEntry frame.sevm frame.pre)
     (callerNotVault : frame.sevm.caller ≠ vault) :
     (Stor.rest (Devm.getStor frame.post wethAccount) vault =
