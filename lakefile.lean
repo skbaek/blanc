@@ -12,7 +12,7 @@ require mathlib from git
   "https://github.com/leanprover-community/mathlib4.git" @ "v4.34.0"
 
 require jaune from git
-  "https://github.com/skbaek/jaune.git" @ "6d0dcfff16691d4d612d22acab5696876d61f692"
+  "https://github.com/skbaek/jaune.git" @ "c326e3f99e3fecce7b88b85699c93dc82aa8a738"
 
 @[default_target]
 lean_lib «Blanc» where
