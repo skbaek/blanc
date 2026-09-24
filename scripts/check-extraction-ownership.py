@@ -603,10 +603,10 @@ def mutate_relocated_disconnected(root: Path) -> None:
 def mutate_relocated_missing(root: Path) -> None:
     path = root / ".lake/packages/jaune/Jaune/Exec.lean"
     text = path.read_text(encoding="utf-8")
-    old = "theorem exec_iff_exec_eq"
+    old = "lemma exec_iff_exec_eq"
     if text.count(old) != 1:
         raise ValueError(f"negative control could not uniquely find {old}")
-    path.write_text(text.replace(old, "theorem execControlRenamed", 1), encoding="utf-8")
+    path.write_text(text.replace(old, "lemma execControlRenamed", 1), encoding="utf-8")
 
 
 def mutate_direct_import_missing(root: Path) -> None:
