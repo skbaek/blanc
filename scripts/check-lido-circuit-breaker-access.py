@@ -301,7 +301,7 @@ ROLES = {
         # Executable-boundary version of the same fact: PUSH payload bytes that
         # look like opcodes are excluded by the `ParentPrefix` premise.
         "runtimeExec_instruction_exact":
-            "279092fd6e67da85c19a2dda261d0635d756ea7decb582d34c38e091c33b97da",
+            "deb8a4cc87dbcae774ff5c23f578e5a0b0abd7f62d56daf57267c771a503d281",
         # The three effect domains are pairwise disjoint.
         "runtimePersistent_effectDomains_separate":
             "bde74c901f9474287ea8116262a5c275319a938e79dd1bc7f7128d8bebdf2bc7",

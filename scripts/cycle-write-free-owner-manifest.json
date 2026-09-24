@@ -59,7 +59,7 @@
     },
     {
       "declaration": "Blanc.Exec.Deriv.noSstore_of_exactMain_entrySstoreFree",
-      "header": "theorem Exec.Deriv.noSstore_of_exactMain_entrySstoreFree {root target : Exec.Deriv} {program : Prog} {storageTarget codeAddress : Adr} (invocation : root.exactInvocation program storageTarget codeAddress) (members : List Nat) (accepted : program.entrySstoreFree program.main members = true) (sameFrame : Exec.Deriv.ParentPrefix root target) (storeAt : Ninst.At target.sevm.code target.pc (.reg .sstore)) : False :="
+      "header": "theorem Exec.Deriv.noSstore_of_exactMain_entrySstoreFree {root target : Exec.Deriv} {program : Prog} {storageTarget codeAddress : Adr} (invocation : (Blanc.Exec.Deriv.exactInvocation program storageTarget codeAddress root)) (members : List Nat) (accepted : program.entrySstoreFree program.main members = true) (sameFrame : Exec.Deriv.ParentPrefix root target) (storeAt : Ninst.At target.sevm.code target.pc (.reg .sstore)) : False :="
     }
   ],
   "legacyExemptions": [

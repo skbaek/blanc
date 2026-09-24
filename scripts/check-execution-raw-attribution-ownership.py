@@ -24,7 +24,7 @@ SOURCE_SITE_SIGNATURE = """theorem Exec.NinstOccurrence.sourceSite_of_rawFrameRo
     (occurrence : Exec.NinstOccurrence globalRoot)
     (instructionEq : occurrence.instruction = .reg .sstore)
     (_selected : frameRoot ∈ Exec.rawFrameRoots globalRoot.exc)
-    (invocation : frameRoot.exactInvocation program storageTarget codeAddress)
+    (invocation : (Blanc.Exec.Deriv.exactInvocation program storageTarget codeAddress frameRoot))
     (sameFrame : Exec.Deriv.ParentPrefix frameRoot occurrence.node) :
     ∃ site : Prog.SourceSite,
       site ∈ program.sourceSites ∧
