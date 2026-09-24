@@ -3688,18 +3688,13 @@
       "reason": "source copied into the isolated ownership mutation tree; the prerequisite extraction-ownership row verifies the committed owner, donor and consumer declarations"
      },
      {
-      "root": ".lake/packages/jaune/Jaune",
-      "pattern": "**/*.lean",
-      "reason": "pinned Jaune sources copied into the isolated ownership mutation tree; the prerequisite extraction-ownership row verifies the committed common and relocated declarations"
-     },
-     {
       "path": "Blanc.lean",
       "reason": "root aggregate copied into the isolated ownership mutation tree; the prerequisite extraction-ownership row audits it"
      }
     ]
    },
    "kind": "cacheable",
-   "note": "Harness self-test: a clean copied-tree audit, eleven isolated mutations and one parser probe. The two manifests and harness code define the controls and are fingerprinted; Blanc Lean files, Blanc.lean and the pinned Jaune sources are declared subject-only reads under a narrow glob, and the copied tree must remain traversable. The green extraction-ownership prerequisite verifies the committed subject.",
+   "note": "Harness self-test: a clean copied-tree audit, eleven isolated mutations and one parser probe. The two manifests and harness code define the controls and are fingerprinted; Blanc Lean files and Blanc.lean are declared subject-only reads under a narrow glob, and the copied tree must remain traversable. The green extraction-ownership prerequisite verifies the committed subject. The pinned Jaune sources it copies are under .lake/, which the read audit treats as the Lake-artifact channel.",
    "order": 77,
    "verdict": {
     "expect_exit": 0,
