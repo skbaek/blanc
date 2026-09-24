@@ -78,8 +78,6 @@ jobs:
       # second when a contract reaches into another contract's modules.
       - name: Import hierarchy (contracts are siblings)
         run: scripts/check-layering.sh
-      - name: Execution-settlement extraction ownership
-        run: scripts/check-extraction-ownership.sh
       - name: Imported source trust surface
         run: scripts/check-trust-surface.sh
       - name: Deployed WETH10 reference lock (offline)
@@ -100,6 +98,10 @@ jobs:
       - uses: leanprover/lean-action@v1
         with:
           build: true
+      # After lean-action: this gate reads the pinned Jaune package's source
+      # (.lake/packages/jaune) to check the relocated execution declarations.
+      - name: Execution-settlement extraction ownership
+        run: scripts/check-extraction-ownership.sh
       - name: Lido CircuitBreaker Registry RI7 static assurance
         run: scripts/check-lido-circuit-breaker-registry.sh --static-only
       - name: Lido CircuitBreaker Registry RI7 semantic assurance
