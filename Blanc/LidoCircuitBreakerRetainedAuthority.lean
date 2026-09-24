@@ -93,7 +93,7 @@ inductive Exec.RuntimeOwnerCellAuthority
       (frameCommitted : frame ∈ Exec.committedFrames run)
       (frameRaw : (Blanc.Exec.Frame.rootDeriv frame) ∈ Exec.rawFrameRoots run)
       (frameInvocation :
-        (Blanc.Exec.Deriv.exactInvocation (root := (Blanc.Exec.Frame.rootDeriv frame))) (runtime dp) ca ca)
+        (Blanc.Exec.Deriv.exactInvocation (runtime dp) ca ca (Blanc.Exec.Frame.rootDeriv frame)))
       (sameFrame :
         Exec.Deriv.ParentPrefix (Blanc.Exec.Frame.rootDeriv frame) write.occurrence.node)
       (row : RuntimePersistentWrite)
@@ -121,8 +121,8 @@ theorem Exec.runtimeOwnerCellAuthority_of_committedPost_ne
     (run : Exec pc sevm pre out)
     (installed : Prog.At (runtime dp) ca pc sevm pre)
     (rootExact :
-      (Blanc.Exec.Deriv.exactInvocation (root := (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv)))
-        (runtime dp) ca ca)
+      (Blanc.Exec.Deriv.exactInvocation
+        (runtime dp) ca ca (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv)))
     (committed : Execution.commits out = true)
     (hfork : CoveredFork sevm.benvStat.fork)
     {key : B256}
@@ -179,8 +179,8 @@ theorem ProcessMessage.runtimeOwnerCellAuthority_of_clean_settled_ne
     (run : Exec 0 sevm pre out)
     (installed : Prog.At (runtime dp) ca 0 sevm pre)
     (rootExact :
-      (Blanc.Exec.Deriv.exactInvocation (root := (⟨0, sevm, pre, out, run⟩ : Exec.Deriv)))
-        (runtime dp) ca ca)
+      (Blanc.Exec.Deriv.exactInvocation
+        (runtime dp) ca ca (⟨0, sevm, pre, out, run⟩ : Exec.Deriv)))
     (process : ProcessMessage msg
       (.some ⟨⟨0, sevm, pre⟩, out⟩) (.ok settled))
     (clean : settled.error.isSome = false)

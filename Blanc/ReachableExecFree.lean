@@ -531,8 +531,8 @@ theorem Exec.noExecOccurrence_of_exactMain_reachableExecFree
     (run : Exec pc sevm pre out) {program : Prog}
     {storageTarget codeAddress : Adr}
     (invocation :
-      (Blanc.Exec.Deriv.exactInvocation (root := (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv)))
-        program storageTarget codeAddress)
+      (Blanc.Exec.Deriv.exactInvocation
+        program storageTarget codeAddress (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv)))
     (members : List Nat)
     (accepted : program.reachableExecFree program.main members = true) :
     ∀ occurrence : Exec.NinstOccurrence
@@ -552,8 +552,8 @@ theorem Exec.noRetainedWriteTo_of_exactMain_reachableExecFree
     (run : Exec pc sevm pre out) {program : Prog}
     {storageTarget codeAddress owner : Adr} (key : B256)
     (invocation :
-      (Blanc.Exec.Deriv.exactInvocation (root := (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv)))
-        program storageTarget codeAddress)
+      (Blanc.Exec.Deriv.exactInvocation
+        program storageTarget codeAddress (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv)))
     (differentOwner : storageTarget ≠ owner)
     (members : List Nat)
     (accepted : program.reachableExecFree program.main members = true) :

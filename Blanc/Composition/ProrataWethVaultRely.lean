@@ -748,8 +748,8 @@ theorem VaultFrameConfiguration.exactWethChild_of_enteringOccurrence
     {vault codeAddress : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm}
     {out : Execution} {run : Exec pc sevm pre out} {child : Exec.LocatedFrame}
     (entering : Exec.LocatedFrame.EnteringOccurrence run child)
-    (invocation : (Blanc.Exec.Deriv.exactInvocation (root := (Blanc.Exec.Frame.rootDeriv entering.parent.frame)))
-      Blanc.ProrataWethVault.vault vault codeAddress)
+    (invocation : (Blanc.Exec.Deriv.exactInvocation
+      Blanc.ProrataWethVault.vault vault codeAddress (Blanc.Exec.Frame.rootDeriv entering.parent.frame)))
     (hfork : CoveredFork (Blanc.Exec.Frame.rootDeriv entering.parent.frame).sevm.benvStat.fork)
     (configuration : VaultFrameConfiguration vault
       entering.parent.frame.sevm entering.parent.frame.pre)

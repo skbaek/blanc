@@ -684,8 +684,8 @@ theorem Exec.noRawSstore_of_exactMain_entrySstoreFree_reachableExecFree
     (run : Exec pc sevm pre out) {program : Prog}
     {storageTarget codeAddress : Adr}
     (invocation :
-      (Blanc.Exec.Deriv.exactInvocation (root := (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv)))
-        program storageTarget codeAddress)
+      (Blanc.Exec.Deriv.exactInvocation
+        program storageTarget codeAddress (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv)))
     (storeMembers execMembers : List Nat)
     (storeAccepted :
       program.entrySstoreFree program.main storeMembers = true)

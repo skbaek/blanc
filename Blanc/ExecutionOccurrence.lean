@@ -2246,7 +2246,7 @@ root derivation; the commit proof adds no identity conjunct. -/
 theorem Exec.Frame.exactInvocation_iff_rootDeriv
     {frame : Exec.Frame} {program : Prog} {storageTarget codeAddress : Adr} :
     (Blanc.Exec.Frame.exactInvocation program storageTarget codeAddress frame) ↔
-      (Blanc.Exec.Deriv.exactInvocation (root := (Blanc.Exec.Frame.rootDeriv frame))) program storageTarget codeAddress := by
+      (Blanc.Exec.Deriv.exactInvocation program storageTarget codeAddress (Blanc.Exec.Frame.rootDeriv frame)) := by
   rfl
 
 @[simp] theorem table_length (start : Nat) (functions : List Func) :

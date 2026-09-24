@@ -270,8 +270,8 @@ theorem attainable_pauseRegistry_of_route {row : RuntimePersistentWrite}
     sameFrame⟩ :=
     Prog.exec_of_runCompiledTo_routeTo hburn hroute hcompile
   have invocation :
-      (fun a0 a1 a2 => Blanc.Exec.Deriv.exactInvocation a0 a1 a2 (⟨0, sevm, pre, .error (.revert, raw), exc⟩ : Exec.Deriv))
-        (runtime officialParams) (Nat.toAdr 100) (Nat.toAdr 100) := by
+      Blanc.Exec.Deriv.exactInvocation (runtime officialParams) (Nat.toAdr 100) (Nat.toAdr 100)
+        (⟨0, sevm, pre, .error (.revert, raw), exc⟩ : Exec.Deriv) := by
     refine ⟨rfl, ?_, ?_, hcompile⟩
     · show sevm.currentTarget = Nat.toAdr 100
       rw [hsevm]

@@ -714,8 +714,8 @@ private theorem Exec.runtimeDescendantOwnerClosure :
       ∀ {dp : DeployParams} {ca : Adr}
         {rootPc : Nat} {rootPre : Devm} {rootOut : Execution}
         {rootRun : Exec rootPc sevm rootPre rootOut},
-        (Blanc.Exec.Deriv.exactInvocation (root := (⟨rootPc, sevm, rootPre, rootOut, rootRun⟩ : Exec.Deriv)))
-          (runtime dp) ca ca →
+        (Blanc.Exec.Deriv.exactInvocation
+          (runtime dp) ca ca (⟨rootPc, sevm, rootPre, rootOut, rootRun⟩ : Exec.Deriv)) →
         Exec.Deriv.ParentPrefix
           ⟨rootPc, sevm, rootPre, rootOut, rootRun⟩
           ⟨pc, sevm, pre, out, run⟩ →
@@ -926,8 +926,8 @@ theorem Exec.runtimeOwnerClosure
     (committed : Execution.commits out = true)
     (installed : Prog.At (runtime dp) ca pc sevm pre)
     (rootExact :
-      (Blanc.Exec.Deriv.exactInvocation (root := (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv)))
-        (runtime dp) ca ca) :
+      (Blanc.Exec.Deriv.exactInvocation
+        (runtime dp) ca ca (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv))) :
     ∀ frame ∈ Exec.committedFrames run,
       frame.sevm.currentTarget = ca →
         (Blanc.Exec.Frame.exactInvocation (runtime dp) ca ca frame) := by
@@ -956,8 +956,8 @@ theorem Exec.retainedSstore_runtimeOwnerClosure
     (committed : Execution.commits out = true)
     (installed : Prog.At (runtime dp) ca pc sevm pre)
     (rootExact :
-      (Blanc.Exec.Deriv.exactInvocation (root := (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv)))
-        (runtime dp) ca ca)
+      (Blanc.Exec.Deriv.exactInvocation
+        (runtime dp) ca ca (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv)))
     (write : Exec.SuccessfulSstoreOccurrence
       (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv))
     (retained : write.Retained)

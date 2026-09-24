@@ -5851,8 +5851,8 @@ theorem ProcessMessage.runtimeOwnerStorage_eq_committedPost
     {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec 0 sevm pre out)
     (_invocation :
-      (Blanc.Exec.Deriv.exactInvocation (root := (⟨0, sevm, pre, out, run⟩ : Exec.Deriv)))
-        (runtime dp) ca ca)
+      (Blanc.Exec.Deriv.exactInvocation
+        (runtime dp) ca ca (⟨0, sevm, pre, out, run⟩ : Exec.Deriv)))
     (process : ProcessMessage msg
       (.some ⟨⟨0, sevm, pre⟩, out⟩) (.ok settled))
     (committed : Execution.commits out = true) :

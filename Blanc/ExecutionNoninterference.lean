@@ -166,8 +166,8 @@ theorem Exec.noRetainedWriteTo_of_sourceSites_no_exec
     (run : Exec pc sevm pre out) {program : Prog}
     {storageTarget codeAddress owner : Adr} (key : B256)
     (invocation :
-      (Blanc.Exec.Deriv.exactInvocation (root := (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv)))
-        program storageTarget codeAddress)
+      (Blanc.Exec.Deriv.exactInvocation
+        program storageTarget codeAddress (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv)))
     (differentOwner : storageTarget ≠ owner)
     (sourceNoExec : ∀ site ∈ program.sourceSites, ∀ x : Xinst,
       site.instruction ≠ .exec x) :
