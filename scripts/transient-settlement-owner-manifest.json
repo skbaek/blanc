@@ -19,10 +19,10 @@
     "exists_transactionTrace"
   ],
   "frozenAssuranceFiles": {
-    "Blanc/CycleWriteFree.lean": "9a686f1e72c3a9eca9926cdfbd0764fbdbe95dd2f2b51bd49f8399a8d8d23d98",
-    "Blanc/ExecutionFrames.lean": "29dabf3fb82dae7eeba47875e4b0a17ec28e12ef678c6a0b863a213d6b834afc",
-    "Blanc/ExecutionOccurrence.lean": "45faa5bddad3d945e8d878f23f6becabac7eb890e6be3c9585ab376c60b9c3b1",
-    "Blanc/ExecutionSettlement.lean": "828156260e9ae76ff413f02759fc400f9dc6aae8e6d65b4c4b5f8b1b80019f96",
+    "Blanc/CycleWriteFree.lean": "3262e96081c30e3e712183d8a902327ae331265e5575ac73f90280539a73dd6a",
+    "Blanc/ExecutionFrames.lean": "1da68cd39d9038c49748b65d10026411336cbf1d2ab2464280e3e7305c0c1963",
+    "Blanc/ExecutionOccurrence.lean": "9131c5050daa8cfec3f154e51ab8f79b623a7bb2c75fa76a2594623c7b447982",
+    "Blanc/ExecutionSettlement.lean": "a812568df48e78a953f28639a99413809379f45a20f4b6b0fc9b6d257cb3cfce",
     "scripts/CycleWriteFreeRegression.lean": "4022d12d48c507273d8f6eef6b7f522a33db3c631d39904669122ab197779ffe",
     "scripts/ExecutionOccurrenceControls.lean": "2d58ede6ca1a973d25e56ec1f97c24db3eb52a5068e9557a31ecf834c11b7ab6",
     "scripts/ExecutionOccurrenceRegression.lean": "b30549b881333778ca163e2043d6c9a6eff0252b97cdd3e49f0a267265c1a512",
@@ -34,11 +34,11 @@
     "scripts/cycle-write-free-owner-manifest.json": "1436cc0ae9adf2d41cbf8b7966715174d518378ed8a2713e07420040d7c77e8b",
     "scripts/execution-occurrence-lift-manifest.json": "a463d5559962eaa418152043e2c102188cc1ec24a155ee974a52a895aaec8c69",
     "scripts/execution-raw-attribution-owner-manifest.json": "803771c04e25de1b3b15607a4aaa82f654ebdb2a0ad96c7f5d5521a9b0aaef18",
-    "scripts/execution-settlement-lift-manifest.json": "6d388528be7cfb64a324a8a3d1b9aaf9bf19d4f4525b02cd7f899f1a1bbcc9d7"
+    "scripts/execution-settlement-lift-manifest.json": "fa966e7a2f858db1f1bdbfc8f719032f249373dddfeb23783ec9d7c2558d322b"
   },
   "jaunePinFiles": {
-    "lake-manifest.json": "4256c0dac60052d7c457d103162d6072e5a552acecdb07de820a5c951260e01a",
-    "lakefile.lean": "1dd34ffffc6bb1940bdcbb45faad37e0288be75094e49bd406295641469426f9"
+    "lake-manifest.json": "fe4e127935cca5088dc75423e8403623e7888924d80da2db61fc41b962e382be",
+    "lakefile.lean": "30bc7f6f1d58f551df67b8525e64d238254aaad00001237eff6c62e80a2da53d"
   },
   "movedDonors": [
     [
