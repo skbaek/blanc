@@ -451,7 +451,7 @@ theorem exit_exec_handoffAt (coalition : Finset Adr) {sevm : Sevm} {pre post : D
       hfund hclock hguards hnofm hcapChi storEq codeEq balEq postStor postBal
       hdepth parentState filled process clean callPostState
   obtain ⟨retained⟩ := ExecutionTrace.exists_retainedXlot_of_filled filled
-  have sevmEq : node.node.sevm = sevm := sameFrame.sevm_eq
+  have sevmEq : node.node.sevm = sevm := (Blanc.Exec.Deriv.ParentPrefix.sevm_eq sameFrame)
   have nodeStep : Step.Run
       (Evm.step ⟨node.node.pc, node.node.sevm, node.node.devm⟩) xl
       (.ok afterNode.devm) := by

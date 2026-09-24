@@ -96,16 +96,16 @@ private theorem Exec.Deriv.ParentStepActions.counted_of_call
           subst retainedRun
           rcases Ninst.step_call_spawn_ofCall hs with ⟨msg, rfl⟩
           have hrawCommits : Execution.commits raw = true := commits
-          have hcommit : Blanc.Frame.settlementCommits
+          have hcommit : Jaune.Frame.settlementCommits
               (Frame.ofCall msg) raw = true :=
             Frame.settlementCommits_ofCall_of_raw_commits hrawCommits
           have hlabel : RetainedXlot.attributionStream dp ca
               (RetainedXlot.some child) =
-              (if h : Blanc.Frame.settlementCommits
+              (if h : Jaune.Frame.settlementCommits
                     (Frame.ofCall msg) raw = true then
                 Exec.frameContribution dp ca
                   (Exec.Frame.ofRun child
-                    (Blanc.Frame.raw_commits_of_settlementCommits h))
+                    (Jaune.Frame.raw_commits_of_settlementCommits h))
                   (Exec.attributionInner dp ca child)
               else []) := by
             simp [RetainedXlot.attributionStream, Exec.attributionStream,

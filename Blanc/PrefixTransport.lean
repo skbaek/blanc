@@ -140,7 +140,7 @@ theorem Exec.Deriv.ExecFreeUntil.ofStep {start next : Exec.Deriv}
     (free : ∀ x : Xinst, ¬ Ninst.At start.sevm.code start.pc (.exec x)) :
     Exec.Deriv.ExecFreeUntil start next := by
   refine ⟨.step edge (.refl _), fun node reached => ?_⟩
-  rcases edge.parentPrefix_iff.mp reached with rfl | later
+  rcases (Blanc.Exec.Deriv.ParentStep.parentPrefix_iff edge).mp reached with rfl | later
   · exact Or.inr free
   · exact Or.inl later
 
@@ -179,7 +179,7 @@ theorem Exec.Deriv.ParentPrefix.eq_of_linstAt {root tail : Exec.Deriv}
     (lastAt : Linst.At root.sevm.code root.pc instruction) : tail = root := by
   cases reached with
   | refl => rfl
-  | step edge _ => exact (edge.false_of_linstAt lastAt).elim
+  | step edge _ => exact ((Blanc.Exec.Deriv.ParentStep.false_of_linstAt edge) lastAt).elim
 
 /-! ## Forward cursor duals -/
 
@@ -214,7 +214,7 @@ theorem Exec.Deriv.SourceCursor.mainForwardFree
       simp only [Prog.sourceSites, List.mem_flatMap]
       refine ⟨0, by simp, ?_⟩
       simpa only [hget] using member⟩,
-    Exec.Deriv.ExecFreeUntil.ofStep edge jumpdestAt.not_exec, burn⟩
+    Exec.Deriv.ExecFreeUntil.ofStep edge (Blanc.Jinst.At.not_exec jumpdestAt), burn⟩
 
 /-- Forward dual of `mainToward`: a successful compiled root at the entry
 counter crosses the compiler's leading `JUMPDEST` into the main body. Only the
@@ -312,7 +312,7 @@ theorem Exec.Deriv.SourceCursor.branchForwardFree
     exact Or.inl ⟨armCursor,
       (Exec.Deriv.ExecFreeUntil.ofStep pushEdge
         (PushAt.not_exec ⟨_, pushAt⟩)).trans
-        (Exec.Deriv.ExecFreeUntil.ofStep jumpEdge jumpiAt.not_exec),
+        (Exec.Deriv.ExecFreeUntil.ofStep jumpEdge (Blanc.Jinst.At.not_exec jumpiAt)),
       zeroPop⟩
   · have hloc256 : loc < 2 ^ 256 := by
       apply Nat.lt_trans hloc
@@ -353,8 +353,8 @@ theorem Exec.Deriv.SourceCursor.branchForwardFree
     exact Or.inr ⟨flag, nonzero, armCursor,
       ((Exec.Deriv.ExecFreeUntil.ofStep pushEdge
         (PushAt.not_exec ⟨_, pushAt⟩)).trans
-        (Exec.Deriv.ExecFreeUntil.ofStep jumpEdge jumpiAt.not_exec)).trans
-        (Exec.Deriv.ExecFreeUntil.ofStep jumpdestEdge jumpdestAt.not_exec),
+        (Exec.Deriv.ExecFreeUntil.ofStep jumpEdge (Blanc.Jinst.At.not_exec jumpiAt))).trans
+        (Exec.Deriv.ExecFreeUntil.ofStep jumpdestEdge (Blanc.Jinst.At.not_exec jumpdestAt)),
       bodyPop⟩
 
 
@@ -440,8 +440,8 @@ theorem Exec.Deriv.SourceCursor.callForwardFree
         · simpa only [hgetTable] using member⟩
   refine ⟨body, hgetBody, bodyCursor,
     ((Exec.Deriv.ExecFreeUntil.ofStep pushEdge pushAt.not_exec).trans
-      (Exec.Deriv.ExecFreeUntil.ofStep jumpEdge jumpAt.not_exec)).trans
-      (Exec.Deriv.ExecFreeUntil.ofStep jumpdestEdge jumpdestAt.not_exec), ?_⟩
+      (Exec.Deriv.ExecFreeUntil.ofStep jumpEdge (Blanc.Jinst.At.not_exec jumpAt))).trans
+      (Exec.Deriv.ExecFreeUntil.ofStep jumpdestEdge (Blanc.Jinst.At.not_exec jumpdestAt)), ?_⟩
   exact Devm.burn_trans
     (Devm.burn_trans (Devm.burn_of_pushBurn_nil pushBurn')
       (Devm.burn_of_popBurn_nil popBurn'))
@@ -494,7 +494,7 @@ theorem Exec.Deriv.SourceCursor.ofRunPrefix_sameFrame_gasFree
           (Ninst.run_eqModGas gasFree looseRun actualRun agree hsg) with
         ⟨cursor', agree', reached⟩
       exact ⟨cursor', agree', (Exec.Deriv.ExecFreeUntil.ofStep edge
-        (cursor.ninstAt.not_exec_of_gasFree gasFree)).trans reached⟩
+        ((Blanc.Ninst.At.not_exec_of_gasFree cursor.ninstAt) gasFree)).trans reached⟩
   | zero loosePop _ ih =>
       rcases cursor.branchForwardFree ok with
         ⟨arm, armReached, actualPop⟩ |
@@ -560,9 +560,9 @@ theorem Exec.Deriv.ExecFreeUntil.noExec_of_linstAt {start stop : Exec.Deriv}
       ∀ x : Xinst, ¬ Ninst.At node.sevm.code node.pc (.exec x) := by
   intro node reached x execAt
   rcases free.2 node reached with later | clean
-  · have atStop := later.eq_of_linstAt lastAt
+  · have atStop := (Blanc.Exec.Deriv.ParentPrefix.eq_of_linstAt later) lastAt
     subst atStop
-    exact execAt.false_of_linstAt lastAt
+    exact (Blanc.Ninst.At.false_of_linstAt execAt) lastAt
   · exact clean x execAt
 
 /-- An execution whose own same-frame chain decodes no frame-entering
@@ -612,7 +612,7 @@ theorem Exec.Deriv.ParentStep.not_parentPrefix_back
     (forward : Exec.Deriv.ParentPrefix next node)
     (back : Exec.Deriv.ParentPrefix node root) : False :=
   Exec.Deriv.lt_irrefl' root
-    ⟨next, Exec.Deriv.le_trans' back.le' forward.le', edge.prec⟩
+    ⟨next, Exec.Deriv.le_trans' (Blanc.Exec.Deriv.ParentPrefix.le' back) (Blanc.Exec.Deriv.ParentPrefix.le' forward), edge.prec⟩
 
 /-- A frame-entry-free span retains no descendant frame of its own: the
 descendant frames of its start are those of its end. -/
@@ -626,7 +626,7 @@ theorem Exec.Deriv.ExecFreeUntil.descendantFrames_eq {start stop : Exec.Deriv}
       have rootClean : ∀ x : Xinst,
           ¬ Ninst.At root.sevm.code root.pc (.exec x) := by
         rcases clean root (.refl _) with back | rootClean
-        · exact (edge.not_parentPrefix_back rest back).elim
+        · exact ((Blanc.Exec.Deriv.ParentStep.not_parentPrefix_back edge) rest back).elim
         · exact rootClean
       have nextClean : ∀ node, Exec.Deriv.ParentPrefix next node →
           Exec.Deriv.ParentPrefix tail node ∨

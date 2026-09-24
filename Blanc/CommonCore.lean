@@ -7,6 +7,7 @@ import Mathlib.Tactic.Have
 import Mathlib.Tactic.Clear_
 import Blanc.Semantics
 import Jaune.Transaction
+import Jaune.ExecDeriv
 
 namespace Blanc
 
@@ -448,30 +449,8 @@ before the endpoint body, and reverts with empty data. -/
 def nonpayable (body : Func) : Func :=
   callvalue ::: iszero ::: (body <?> Func.revert)
 
-abbrev Exec.Pred : Type :=
-  ∀ pc sevm devm exc, Exec pc sevm devm exc → Prop
-
 abbrev Prog.Pred : Type :=
   Nat → Sevm → Devm → Prog → Execution → Prop
-
-def Exec.Fa (π : Exec.Pred) : Prop :=
-  ∀ e s pc r (ex : Exec e s pc r), π _ _ _ _ ex
-
-def Fortify (π : Exec.Pred) : Exec.Pred :=
-  λ _ sevm _ _ exn =>
-    (Exec.Fa <| λ _ sevm' _ _ exn' => sevm'.depth < sevm.depth → π _ _ _ _ exn') → π _ _ _ _ exn
-
-lemma Exec.strong_rec (π : Exec.Pred)
-  (h_fa : Exec.Fa (Fortify π)) : Exec.Fa π := by
-  intros pc sevm devm exn exc
-  apply
-    @Nat.strongRecOn
-      (λ n => ∀ pc_ sevm_ devm_ exn_ (exc_ : Exec pc_ sevm_ devm_ exn_), n = sevm_.depth → π _ _ _ _ exc_)
-      sevm.depth
-  · intros n h pc_ sevm_ devm_ exn_ exc_ h_eq; apply h_fa
-    intros pc' sevm' devm' exn' exc' h_lt; rw [← h_eq] at h_lt
-    apply h sevm'.depth h_lt _ _ _ _ exc' rfl
-  · rfl
 
 def sumBelow (f : Adr → B256) : Nat → Nat
   | 0 => 0
@@ -584,7 +563,6 @@ def Prog.compile (p : Prog) : Option Bytes :=
   let t : List (Nat × Func) := table 0 (p.main :: p.aux)
   Table.compile t t
 
-
 lemma Prog.compile_ne_nil {p} : Prog.compile p ≠ some [] := by
   simp only [Prog.compile]; intro h
   rcases of_bind_eq_some h with ⟨bs, _, h'⟩; clear h
@@ -594,23 +572,22 @@ def subcode (cd : Bytes) (k : Nat) : Option Bytes → Prop
   | none => False
   | some bs => List.Slice cd k bs
 
-lemma Rinst.at_unique {e pc o o'} (h : At e pc o) (h' : At e pc o') : o = o' := by
+lemma Rinst.at_unique {e pc o o'} (h : Rinst.At e pc o) (h' : Rinst.At e pc o') : o = o' := by
   injection Eq.trans h.symm h' with eq
   injection eq with eq; injection eq with eq
 
-lemma Xinst.at_unique {e pc o o'} (h : At e pc o) (h' : At e pc o') : o = o' := by
+lemma Xinst.at_unique {e pc o o'} (h : Xinst.At e pc o) (h' : Xinst.At e pc o') : o = o' := by
   injection Eq.trans h.symm h' with eq
   injection eq with eq; injection eq with eq
 
-lemma Jinst.at_unique {e pc o o'} (h : At e pc o) (h' : At e pc o') : o = o' := by
+lemma Jinst.at_unique {e pc o o'} (h : Jinst.At e pc o) (h' : Jinst.At e pc o') : o = o' := by
   injection Eq.trans h.symm h' with eq; injection eq with eq
 
-lemma Linst.at_unique {e pc o o'} (h : At e pc o) (h' : At e pc o') : o = o' := by
+lemma Linst.at_unique {e pc o o'} (h : Linst.At e pc o) (h' : Linst.At e pc o') : o = o' := by
   injection Eq.trans h.symm h' with eq; injection eq with eq
 
 lemma Ninst.at_unique {e pc o o'} (h : At e pc o) (h' : At e pc o') : o = o' := by
   injection Eq.trans h.symm h' with eq; injection eq with eq
-
 
 lemma toInstType_pushToB8 {bs : Bytes} (h : bs.length ≤ 32) :
     (pushToB8 bs).toInstType = .P := by
@@ -645,11 +622,9 @@ lemma Rinst.toInstType_toUInt8 (r : Rinst) :
   · apply toInstType_toUInt8_swap
   · apply toInstType_toUInt8_log
 
-
 lemma Xinst.toInstType_toUInt8 (x : Xinst) :
     (Xinst.toUInt8 x).toInstType = .X := by
   cases x <;> rfl
-
 
 lemma ByteArray.toList_eq_toList_data {xs : ByteArray} :
     xs.toList = xs.data.toList := by
@@ -794,12 +769,10 @@ def PushAt (code : ByteArray) (pc : Nat) (xs : Bytes) : Prop :=
 lemma toUInt8_toXinst {o : Xinst} :
     UInt8.toXinst (Xinst.toUInt8 o) = some o := by cases o <;> rfl
 
-
 lemma toNat_pushToB8_eq {xs : Bytes} (le : xs.length ≤ 32) :
     (pushToB8 xs).toNat = xs.length + 95:= by
   simp only [pushToB8]; rw [UInt8.toNat_add_lo, Nat.lo_eq_of_lt] <;>
   {simp [UInt8.toNat_ofNat, UInt8.toNat_ofNat', Nat.toUInt8]; omega}
-
 
 lemma ByteArray.get!_eq_getElem!_toList
     (xs : ByteArray) (i : Nat) : xs.get! i = xs.toList[i]! := by
@@ -819,7 +792,6 @@ lemma ByteArray.size_eq_length_toList (xs : ByteArray) :
     xs.size = xs.toList.length := by
   simp only [ByteArray.size, Array.size]
   rw [ByteArray.toList_eq_toList_data]
-
 
 lemma ByteArray.sliceD_eq_replicate (xs : ByteArray) (m n : Nat) (d : UInt8)
     (le : xs.size ≤ m) : ByteArray.sliceD xs m n d = List.replicate n d := by
@@ -852,8 +824,6 @@ lemma ByteArray.sliceD_eq (xs : ByteArray) (m n : Nat) (d : UInt8) :
       · rw [ByteArray.size_eq_length_toList] at nlt
         rw [List.getD_eq_default nlt]
       · rw [← ih]; rw [ByteArray.sliceD_eq_replicate]; omega
-
-
 
 lemma pushAt_of_slice {code : ByteArray} {pc} {xs : Bytes} (le : xs.length ≤ 32)
     (slice : List.Slice code.toList pc (pushToB8L xs)) : PushAt code pc xs := by
@@ -1007,7 +977,6 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
           by rw [proof_irrel p hR])
       exact False.elim (hne232 hR hbyte0 (hEq _))
 
-
 lemma of_subcode {cd k} :
     ∀ {obs}, subcode cd k obs →
        ∃ bs, obs = some bs ∧ List.Slice cd k bs
@@ -1061,149 +1030,6 @@ lemma Prog.get?_table {m n} {c : List Func} :
     | succ n => simp [table]; apply ih
 
 -- alternative version of Exec which rolls all arguments into a structure.
-
-structure Exec.Deriv : Type where
-  (pc : Nat)
-  (sevm : Sevm)
-  (devm : Devm)
-  (exn : Execution)
-  (exc : Exec pc sevm devm exn)
-
-/-- The immediate sub-derivation relation.  One constructor per recursive
-premise of `Exec`: the same-frame continuation (`cont`, `doneOk`), the child
-derivation of a spawn (`runErrChild`, `runOkChild`), and the parent's
-continuation after a spawn returns (`runOkCont`). -/
-inductive Exec.Deriv.Prec : Exec.Deriv → Exec.Deriv → Prop
-  | cont {pc : Nat} {sevm : Sevm} {devm : Devm} {pc' : Nat}
-    {devm' : Devm} {exn : Execution}
-    (hstep : Evm.step ⟨pc, sevm, devm⟩ = .cont pc' devm')
-    (exc : Exec pc' sevm devm' exn) :
-    Exec.Deriv.Prec
-      ⟨pc', sevm, devm', exn, exc⟩
-      ⟨pc, sevm, devm, exn, .cont hstep exc⟩
-  | doneOk {pc : Nat} {sevm : Sevm} {devm : Devm}
-    {f : Frame} {rsm : Resume} {pc' : Nat} {r} {devm' : Devm} {exn : Execution}
-    (hstep : Evm.step ⟨pc, sevm, devm⟩ = .spawn f rsm pc')
-    (henter : f.enter = .done r)
-    (hr : rsm.run r = .ok devm')
-    (exc : Exec pc' sevm devm' exn) :
-    Exec.Deriv.Prec
-      ⟨pc', sevm, devm', exn, exc⟩
-      ⟨pc, sevm, devm, exn, .doneOk hstep henter hr exc⟩
-  | runErrChild {pc : Nat} {sevm : Sevm} {devm : Devm}
-    {f : Frame} {rsm : Resume} {pc' : Nat} {cevm : Evm} {raw : Execution} {e}
-    (hstep : Evm.step ⟨pc, sevm, devm⟩ = .spawn f rsm pc')
-    (henter : f.enter = .run cevm)
-    (excChild : Exec cevm.pc cevm.sta cevm.dyna raw)
-    (hr : rsm.run (f.settle raw) = .error e) :
-    Exec.Deriv.Prec
-      ⟨cevm.pc, cevm.sta, cevm.dyna, raw, excChild⟩
-      ⟨pc, sevm, devm, .error e, .runErr hstep henter excChild hr⟩
-  | runOkChild {pc : Nat} {sevm : Sevm} {devm : Devm}
-    {f : Frame} {rsm : Resume} {pc' : Nat} {cevm : Evm} {raw : Execution}
-    {devm' : Devm} {exn : Execution}
-    (hstep : Evm.step ⟨pc, sevm, devm⟩ = .spawn f rsm pc')
-    (henter : f.enter = .run cevm)
-    (excChild : Exec cevm.pc cevm.sta cevm.dyna raw)
-    (hr : rsm.run (f.settle raw) = .ok devm')
-    (exc : Exec pc' sevm devm' exn) :
-    Exec.Deriv.Prec
-      ⟨cevm.pc, cevm.sta, cevm.dyna, raw, excChild⟩
-      ⟨pc, sevm, devm, exn, .runOk hstep henter excChild hr exc⟩
-  | runOkCont {pc : Nat} {sevm : Sevm} {devm : Devm}
-    {f : Frame} {rsm : Resume} {pc' : Nat} {cevm : Evm} {raw : Execution}
-    {devm' : Devm} {exn : Execution}
-    (hstep : Evm.step ⟨pc, sevm, devm⟩ = .spawn f rsm pc')
-    (henter : f.enter = .run cevm)
-    (excChild : Exec cevm.pc cevm.sta cevm.dyna raw)
-    (hr : rsm.run (f.settle raw) = .ok devm')
-    (exc : Exec pc' sevm devm' exn) :
-    Exec.Deriv.Prec
-      ⟨pc', sevm, devm', exn, exc⟩
-      ⟨pc, sevm, devm, exn, .runOk hstep henter excChild hr exc⟩
-
-infix:70 " ≺ " => Exec.Deriv.Prec
-
-inductive Exec.Deriv.le : Exec.Deriv → Exec.Deriv → Prop
-  | refl : ∀ p, Exec.Deriv.le p p
-  | step : ∀ {p p' p''}, Exec.Deriv.le p p' → p' ≺ p'' → Exec.Deriv.le p p''
-
-def Exec.Deriv.lt (pk pk'' : Exec.Deriv) : Prop :=
-  ∃ pk' : Exec.Deriv, Exec.Deriv.le pk pk' ∧ Exec.Deriv.Prec pk' pk''
-
-lemma Exec.Deriv.lt_of_prec {pk pk' : Exec.Deriv} (h : pk ≺ pk') : lt pk pk' :=
-  ⟨pk, .refl _, h⟩
-
-abbrev Exec.Deriv.gt (pk pk' : Exec.Deriv) : Prop := Exec.Deriv.lt pk' pk
-
-lemma Exec.Deriv.eq_or_lt_of_le :
-  ∀ {p p'}, Exec.Deriv.le p p' → p = p' ∨ Exec.Deriv.lt p p' := by
-  intros p p'' h0; rcases h0 with _ | ⟨le, prec⟩
-  · left; rfl
-  · right; refine ⟨_, le, prec⟩
-
-lemma Exec.Deriv.acc_of_le {pk pk' : Exec.Deriv}
-    (h_le : Exec.Deriv.le pk pk') (h_acc : Acc Exec.Deriv.lt pk') : Acc Exec.Deriv.lt pk := by
-  cases Exec.Deriv.eq_or_lt_of_le h_le with
-  | inl h => rw [h]; exact h_acc
-  | inr h => exact Acc.inv h_acc h
-
-theorem Exec.Deriv.lt.well_founded : WellFounded Exec.Deriv.lt := by
-  constructor;
-  intro pk; rcases pk with ⟨_, _, _, _, _⟩
-  apply
-    @Exec.rec
-      (λ pc sevm devm exn exc => Acc Exec.Deriv.lt ⟨pc, sevm, devm, exn, exc⟩) <;>
-    clear *-
-  -- halt : no sub-derivation
-  · intro _ _ _ _ _; constructor
-    intro _ lt; rcases lt with ⟨_, _, ⟨_⟩⟩
-  -- cont : the same-frame continuation
-  · intro _ _ _ _ _ _ _ _ ih
-    constructor; intro _ lt
-    rcases lt with ⟨_, le, prec⟩
-    cases prec; exact acc_of_le le ih
-  -- doneErr : no sub-derivation
-  · intro _ _ _ _ _ _ _ _ _ _ _; constructor
-    intro _ lt; rcases lt with ⟨_, _, ⟨_⟩⟩
-  -- doneOk : the same-frame continuation
-  · intro _ _ _ _ _ _ _ _ _ _ _ _ _ ih
-    constructor; intro _ lt
-    rcases lt with ⟨_, le, prec⟩
-    cases prec; exact acc_of_le le ih
-  -- runErr : the child derivation only
-  · intro _ _ _ _ _ _ _ _ _ _ _ _ _ ihc
-    constructor; intro _ lt
-    rcases lt with ⟨_, le, prec⟩
-    cases prec; exact acc_of_le le ihc
-  -- runOk : the child derivation and the parent's continuation
-  · intro _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ihc ih
-    constructor; intro _ lt
-    rcases lt with ⟨_, le, prec⟩
-    cases prec
-    · exact acc_of_le le ihc
-    · exact acc_of_le le ih
-
-abbrev Exec.Deriv.Pred : Type := Exec.Deriv → Prop
-
-def Exec.Deriv.imp (π π' : Exec.Deriv.Pred) : Exec.Deriv.Pred := λ pk => π pk → π' pk
-
-infix:70 " →p " => Exec.Deriv.imp
-
-def Exec.Deriv.Fa (π : Exec.Deriv.Pred) : Prop := ∀ pk, π pk
-
-notation "□p" => Exec.Deriv.Fa
-
-def carryover (π : Exec.Deriv.Pred) : Exec.Deriv.Pred :=
-(λ pk => □p (Exec.Deriv.gt pk →p π)) →p π
-
-theorem Exec.Deriv.strongRec (π : Exec.Deriv.Pred) : □p (carryover π) → □p π := by
-  intro ih pk
-  apply @WellFounded.induction _ Exec.Deriv.lt Exec.Deriv.lt.well_founded π pk
-  clear pk; intro pk ih'
-  apply ih
-  intro pk' h_gt
-  apply ih' _ h_gt
 
 lemma Rinst.run_of_at {pc sevm pre r post}
     (exc : Exec pc sevm pre (.ok post)) (rat : Rinst.At sevm.code pc r) :
@@ -1276,10 +1102,10 @@ lemma Ninst.size_eq_length_toBytes (n : Ninst) :
     n.size = (Ninst.toBytes n).length := by cases n <;> rfl
 
 def Devm.Pop (xs : List B256): Devm → Devm → Prop :=
-  Rel {Rels.eq with stack := Stack.Pop xs}
+  Devm.Rel {Devm.Rels.eq with stack := Stack.Pop xs}
 
 def Devm.PushBurn (xs : List B256): Devm → Devm → Prop :=
-  Rel {Devm.Rels.eq with stack := Stack.Push xs, gasLeft := (· ≥ ·)}
+  Devm.Rel {Devm.Rels.eq with stack := Stack.Push xs, gasLeft := (· ≥ ·)}
 
 lemma Devm.pushBurn_of_run {x : B256} {pre inter : Devm} {cost : Nat} :
     (chargeGas cost pre >>= fun d => d.push x) = .ok inter →
@@ -1348,7 +1174,6 @@ lemma Devm.pop_append {xs ys : List B256} {devm devm' devm'' : Devm} :
   rintro ⟨_⟩; rename Stack.Pop _ _ _ => pop2
   constructor <;> try {exact Eq.trans asm asm} -- h2_mem
   exact append_split pop1 pop2
-
 
 lemma Devm.popBurn_of_pop_of_burn
     {xs devm devm' devm''}
@@ -1518,21 +1343,6 @@ def Func.RunIfOk (fs : List Func) (sevm : Sevm) (devm : Devm) (f : Func) : Execu
   | .error _ => True
   | .ok devm' => Func.Run fs sevm devm f devm'
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 lemma Stack.push_cons_pop_cons
     {x y} {xs ys} {s s' s''}
     (h : Stack.Push (x :: xs) s s')
@@ -1624,9 +1434,6 @@ lemma Devm.popBurn_of_popBurn_of_pop {devm devm' devm''} {xs}
   · exact Eq.trans popBurn.stateGas burn.stateGas
   · exact Eq.trans popBurn.accountReads burn.accountReads
   · exact Eq.trans popBurn.storageReads burn.storageReads
-
-
-
 
 lemma table_suffix {c k pfx sfx} (h : pfx <++ (table k c) ++> sfx) :
     ∃ k' c', sfx = table k' c' := by

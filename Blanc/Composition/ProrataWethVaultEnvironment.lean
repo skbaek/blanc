@@ -95,14 +95,14 @@ def WethFrameClass.Matches (sevm : Sevm) : WethFrameClass → Prop
 
 /-- The exact frame-root identity plus the class's own machine facts. -/
 def WethFrameClass.Classified (frame : Exec.Frame) (cls : WethFrameClass) : Prop :=
-  frame.exactInvocation Blanc.weth wethAccount wethAccount ∧
+  (Blanc.Exec.Frame.exactInvocation Blanc.weth wethAccount wethAccount frame) ∧
     cls.Matches frame.sevm
 
 /-- The total selector-driven classifier.  Only the exact compiled identity is
 a precondition; once a frame has it, every selector — including none of the
 ten — has a class. -/
 def WethFrameClass.classify? (frame : Exec.Frame) : Option WethFrameClass :=
-  if frame.exactInvocation Blanc.weth wethAccount wethAccount then
+  if (Blanc.Exec.Frame.exactInvocation Blanc.weth wethAccount wethAccount frame) then
     if Sevm.selector frame.sevm = selector "approve" [.address, .uint256] then
       some (.approve frame.sevm.caller.toB256 (Sevm.argWord frame.sevm 0)
         (Sevm.argWord frame.sevm 1))
@@ -261,7 +261,7 @@ precondition: no successful WETH frame is left unclassified.  This is the one
 property `WethAllowanceEvent.classify?` deliberately does not have. -/
 theorem WethFrameClass.classification_total
     {frame : Exec.Frame}
-    (identity : frame.exactInvocation Blanc.weth wethAccount wethAccount) :
+    (identity : (Blanc.Exec.Frame.exactInvocation Blanc.weth wethAccount wethAccount frame)) :
     ∃ cls, WethFrameClass.classify? frame = some cls ∧
       WethFrameClass.Classified frame cls := by
   have present : ∃ cls, WethFrameClass.classify? frame = some cls := by
@@ -777,7 +777,7 @@ theorem weth_withdraw_preCall_effect {sevm : Sevm} {pre post : Devm}
 /-- A committed exact WETH frame is a gas-exact compiled WETH run of its own
 machine. -/
 theorem wethFrame_runCompiled {frame : Exec.Frame}
-    (identity : frame.exactInvocation Blanc.weth wethAccount wethAccount) :
+    (identity : (Blanc.Exec.Frame.exactInvocation Blanc.weth wethAccount wethAccount frame)) :
     Prog.RunCompiled frame.sevm frame.pre Blanc.weth frame.post := by
   obtain ⟨pcZero, -, -, code⟩ := identity
   rcases frame with ⟨pc, sevm, pre, out, run, committed⟩
@@ -862,7 +862,7 @@ design's three-way statement omits, and it cannot be removed: `Blanc.weth` is
 not `reachableExecFree`, so nothing at this rung excludes the callback's own
 writes, and a consumer must recurse into it. -/
 theorem wethFrame_vaultRow_classified (vault : Adr) (frame : Exec.Frame)
-    (weth : frame.exactInvocation Blanc.weth wethAccount wethAccount)
+    (weth : (Blanc.Exec.Frame.exactInvocation Blanc.weth wethAccount wethAccount frame))
     (fresh : Exec.FreshEntry frame.sevm frame.pre)
     (callerNotVault : frame.sevm.caller ≠ vault) :
     (Stor.rest (Devm.getStor frame.post wethAccount) vault =

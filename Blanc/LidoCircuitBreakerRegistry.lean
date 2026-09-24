@@ -4322,7 +4322,7 @@ private theorem Func.RunTo.of_runCompiledTo
   | zero hroom hpop _ ih =>
       exact .zero (Devm.PopBurn.of_popBurnBy hpop) ih
   | succ hnz hroom hpop _ ih =>
-      exact .succ hnz (Devm.PopBurn.of_popBurnBy hpop) .refl ih
+      exact .succ hnz (Devm.PopBurn.of_popBurnBy hpop) Devm.Burn.refl ih
   | last hterminal => exact .last hterminal
   | next hstep _ ih => exact .next (Ninst.Run.of_runCompiled hstep) ih
   | call hget hroom hburn _ ih =>
@@ -5364,7 +5364,7 @@ private theorem Func.RunCompiledTo.exists_exec_targetZeroRawSstoreFree :
         cases impossible
       have jumpFree :
           ¬ Ninst.At sevm.code (pc + 3) (.reg .sstore) :=
-        fun storeAt => storeAt.false_of_jinstAt jumpiAt
+        fun storeAt => (Blanc.Ninst.At.false_of_jinstAt storeAt) jumpiAt
       exact ⟨.cont pushStep (.cont jumpStep leftRun),
         .cont pushFree (.cont jumpFree leftFree)⟩
   | @succ certPre certPost word left right certOut
@@ -5384,9 +5384,9 @@ private theorem Func.RunCompiledTo.exists_exec_targetZeroRawSstoreFree :
         cases impossible
       have jumpFree :
           ¬ Ninst.At sevm.code (pc + 3) (.reg .sstore) :=
-        fun storeAt => storeAt.false_of_jinstAt jumpiAt
+        fun storeAt => (Blanc.Ninst.At.false_of_jinstAt storeAt) jumpiAt
       have jumpdestFree : ¬ Ninst.At sevm.code loc (.reg .sstore) :=
-        fun storeAt => storeAt.false_of_jinstAt jumpdestAt
+        fun storeAt => (Blanc.Ninst.At.false_of_jinstAt storeAt) jumpdestAt
       exact ⟨.cont pushStep (.cont jumpStep
           (.cont jumpdestStep rightRun)),
         .cont pushFree (.cont jumpFree
@@ -5398,7 +5398,7 @@ private theorem Func.RunCompiledTo.exists_exec_targetZeroRawSstoreFree :
         rw [Evm.step_last terminalAt]
         exact congrArg Step.halt terminalRun
       have terminalFree : ¬ Ninst.At sevm.code pc (.reg .sstore) :=
-        fun storeAt => storeAt.false_of_linstAt terminalAt
+        fun storeAt => (Blanc.Ninst.At.false_of_linstAt storeAt) terminalAt
       exact ⟨.halt step, .halt terminalFree⟩
   | @next certPre certPost instruction certBody certOut
       instructionRun tail instructionNe instructionChildless tailFree ih =>
@@ -5445,9 +5445,9 @@ private theorem Func.RunCompiledTo.exists_exec_targetZeroRawSstoreFree :
         cases impossible
       have jumpFree :
           ¬ Ninst.At sevm.code (pc + 3) (.reg .sstore) :=
-        fun storeAt => storeAt.false_of_jinstAt jumpAt
+        fun storeAt => (Blanc.Ninst.At.false_of_jinstAt storeAt) jumpAt
       have jumpdestFree : ¬ Ninst.At sevm.code loc (.reg .sstore) :=
-        fun storeAt => storeAt.false_of_jinstAt jumpdestAt
+        fun storeAt => (Blanc.Ninst.At.false_of_jinstAt storeAt) jumpdestAt
       exact ⟨.cont pushStep (.cont jumpStep
           (.cont jumpdestStep bodyRun)),
         .cont pushFree (.cont jumpFree
@@ -6397,7 +6397,7 @@ private theorem Func.RunCompiledTo.exists_exec_directPausePath :
         cases impossible
       have jumpChildless : ∀ operation : Xinst,
           ¬ Ninst.At certSevm.code (pc + 3) (.exec operation) :=
-        fun _ operationAt => operationAt.false_of_jinstAt jumpiAt
+        fun _ operationAt => (Blanc.Ninst.At.false_of_jinstAt operationAt) jumpiAt
       exact ⟨.cont pushStep (.cont jumpStep leftRun),
         .cont pushChildless (.cont jumpChildless leftPath)⟩
   | @succ certFs certSevm certPre certPost left right certOut
@@ -6418,10 +6418,10 @@ private theorem Func.RunCompiledTo.exists_exec_directPausePath :
         cases impossible
       have jumpChildless : ∀ operation : Xinst,
           ¬ Ninst.At certSevm.code (pc + 3) (.exec operation) :=
-        fun _ operationAt => operationAt.false_of_jinstAt jumpiAt
+        fun _ operationAt => (Blanc.Ninst.At.false_of_jinstAt operationAt) jumpiAt
       have jumpdestChildless : ∀ operation : Xinst,
           ¬ Ninst.At certSevm.code loc (.exec operation) :=
-        fun _ operationAt => operationAt.false_of_jinstAt jumpdestAt
+        fun _ operationAt => (Blanc.Ninst.At.false_of_jinstAt operationAt) jumpdestAt
       exact ⟨.cont pushStep (.cont jumpStep
           (.cont jumpdestStep rightRun)),
         .cont pushChildless (.cont jumpChildless
@@ -6479,10 +6479,10 @@ private theorem Func.RunCompiledTo.exists_exec_directPausePath :
         cases impossible
       have jumpChildless : ∀ operation : Xinst,
           ¬ Ninst.At certSevm.code (pc + 3) (.exec operation) :=
-        fun _ operationAt => operationAt.false_of_jinstAt jumpAt
+        fun _ operationAt => (Blanc.Ninst.At.false_of_jinstAt operationAt) jumpAt
       have jumpdestChildless : ∀ operation : Xinst,
           ¬ Ninst.At certSevm.code loc (.exec operation) :=
-        fun _ operationAt => operationAt.false_of_jinstAt jumpdestAt
+        fun _ operationAt => (Blanc.Ninst.At.false_of_jinstAt operationAt) jumpdestAt
       exact ⟨.cont pushStep (.cont jumpStep
           (.cont jumpdestStep bodyRun)),
         .cont pushChildless (.cont jumpChildless
@@ -6586,8 +6586,8 @@ private theorem Exec.DirectPausePath.noCallOrStaticcallAt
       simp only [Exec.rawNodes, List.mem_cons, List.not_mem_nil,
         or_false] at reached
       subst node
-      exact ⟨fun callAt => callAt.false_of_linstAt terminalAt,
-        fun callAt => callAt.false_of_linstAt terminalAt⟩
+      exact ⟨fun callAt => (Blanc.Ninst.At.false_of_linstAt callAt) terminalAt,
+        fun callAt => (Blanc.Ninst.At.false_of_linstAt callAt) terminalAt⟩
   | cont rootChildless tailPath ih =>
       intro node reached
       simp only [Exec.rawNodes, List.mem_cons] at reached
@@ -15904,7 +15904,7 @@ private theorem directPausePath_exec_of_program_main
     Evm.jumpdest_cont hjumpdest hentryBurn
   have entryChildless : ∀ operation : Xinst,
       ¬ Ninst.At sevm.code 0 (.exec operation) :=
-    fun _ operationAt => operationAt.false_of_jinstAt hjumpdest
+    fun _ operationAt => (Blanc.Ninst.At.false_of_jinstAt operationAt) hjumpdest
   let rootExec : Exec 0 sevm pre (.error (.revert, raw)) :=
     .cont hentry mainExec
   have rootPath : Exec.DirectPausePath sevm.currentTarget target

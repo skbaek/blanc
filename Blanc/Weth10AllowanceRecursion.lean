@@ -61,10 +61,10 @@ theorem Exec.attributionInner_runOk
         Exec.attributionStream dp ca child
        else []) ++ Exec.attributionInner dp ca next := by
   rw [Exec.attributionInner]
-  by_cases hs : Blanc.Frame.settlementCommits f raw = true
+  by_cases hs : Jaune.Frame.settlementCommits f raw = true
   · rw [dif_pos hs, dif_pos hs,
       Exec.attributionStream_eq_frameContribution dp ca child
-        (Blanc.Frame.raw_commits_of_settlementCommits hs)]
+        (Jaune.Frame.raw_commits_of_settlementCommits hs)]
   · rw [dif_neg hs, dif_neg hs]
 
 /-! ## Message-level allowance transport -/
@@ -114,7 +114,7 @@ theorem ProcessMessage.allowanceRegionEffect_of_bodyEffect
       (if Blanc.Frame.settlementCommits
           (Frame.ofCall msg) out = true
        then Exec.attributionStream dp ca run else []) := by
-  by_cases hsettle : Blanc.Frame.settlementCommits
+  by_cases hsettle : Jaune.Frame.settlementCommits
       (Frame.ofCall msg) out = true
   · rw [if_pos hsettle]
     have committed : Execution.commits out = true :=
@@ -158,7 +158,7 @@ theorem ProcessMessage.allowanceRegionEffect_of_bodyEffect
       have hnone : post.error.isNone ≠ true := by
         intro hnone
         apply hsettle
-        unfold Blanc.Frame.settlementCommits
+        unfold Jaune.Frame.settlementCommits
         rw [← hset]
         exact hnone
       cases he : post.error <;> simp_all
@@ -191,7 +191,7 @@ theorem ProcessCreateMessage.allowanceRegionEffect_of_bodyEffect
       (if Blanc.Frame.settlementCommits
           (Frame.ofCreate msg) out = true
        then Exec.attributionStream dp ca run else []) := by
-  by_cases hsettle : Blanc.Frame.settlementCommits
+  by_cases hsettle : Jaune.Frame.settlementCommits
       (Frame.ofCreate msg) out = true
   · rw [if_pos hsettle]
     have committed : Execution.commits out = true :=
@@ -199,7 +199,7 @@ theorem ProcessCreateMessage.allowanceRegionEffect_of_bodyEffect
     have body := hbody committed
     have hset := (RunFrame.some_inv hprocess).2
     have hnone : post.error.isNone = true := by
-      unfold Blanc.Frame.settlementCommits at hsettle
+      unfold Jaune.Frame.settlementCommits at hsettle
       rw [← hset] at hsettle
       exact hsettle
     have herr : post.error.isSome = false := by
@@ -258,7 +258,7 @@ theorem ProcessCreateMessage.allowanceRegionEffect_of_bodyEffect
       have hnone : post.error.isNone ≠ true := by
         intro hnone
         apply hsettle
-        unfold Blanc.Frame.settlementCommits
+        unfold Jaune.Frame.settlementCommits
         rw [← hset]
         exact hnone
       cases he : post.error <;> simp_all
@@ -336,7 +336,7 @@ theorem GenericCall.allowanceRegionEffect_some_of_bodyEffect
         (effect.append
           (AllowanceRegionEffect.of_getStorCode_eq
             hpostStorage hpostCode)) using 1
-    by_cases hretain : Blanc.Frame.settlementCommits
+    by_cases hretain : Jaune.Frame.settlementCommits
         (Frame.ofCall
           (callMsg sevm (pre.withReturnData []) gas value caller target
             codeAddress stv isStatic ((pre.memory.read ii is).1) code
@@ -478,7 +478,7 @@ theorem GenericCreate.allowanceRegionEffect_some_of_bodyEffect
           (effect.append
             (AllowanceRegionEffect.of_getStorCode_eq
               hpostStorage hpostCode)) using 1
-      by_cases hretain : Blanc.Frame.settlementCommits
+      by_cases hretain : Jaune.Frame.settlementCommits
           (Frame.ofCreate
             (createMsg sevm
               (addAccessedAddress
@@ -1152,7 +1152,7 @@ theorem ProcessMessage.allowanceRegionEffectSound_of_bodyEffect
       (if Blanc.Frame.settlementCommits
           (Frame.ofCall msg) out = true
        then Exec.attributionStream dp ca run else []) := by
-  by_cases hsettle : Blanc.Frame.settlementCommits
+  by_cases hsettle : Jaune.Frame.settlementCommits
       (Frame.ofCall msg) out = true
   · rw [if_pos hsettle]
     have committed : Execution.commits out = true :=
@@ -1196,7 +1196,7 @@ theorem ProcessMessage.allowanceRegionEffectSound_of_bodyEffect
       have hnone : post.error.isNone ≠ true := by
         intro hnone
         apply hsettle
-        unfold Blanc.Frame.settlementCommits
+        unfold Jaune.Frame.settlementCommits
         rw [← hset]
         exact hnone
       cases he : post.error <;> simp_all
@@ -1229,7 +1229,7 @@ theorem ProcessCreateMessage.allowanceRegionEffectSound_of_bodyEffect
       (if Blanc.Frame.settlementCommits
           (Frame.ofCreate msg) out = true
        then Exec.attributionStream dp ca run else []) := by
-  by_cases hsettle : Blanc.Frame.settlementCommits
+  by_cases hsettle : Jaune.Frame.settlementCommits
       (Frame.ofCreate msg) out = true
   · rw [if_pos hsettle]
     have committed : Execution.commits out = true :=
@@ -1237,7 +1237,7 @@ theorem ProcessCreateMessage.allowanceRegionEffectSound_of_bodyEffect
     have body := hbody committed
     have hset := (RunFrame.some_inv hprocess).2
     have hnone : post.error.isNone = true := by
-      unfold Blanc.Frame.settlementCommits at hsettle
+      unfold Jaune.Frame.settlementCommits at hsettle
       rw [← hset] at hsettle
       exact hsettle
     have herr : post.error.isSome = false := by
@@ -1296,7 +1296,7 @@ theorem ProcessCreateMessage.allowanceRegionEffectSound_of_bodyEffect
       have hnone : post.error.isNone ≠ true := by
         intro hnone
         apply hsettle
-        unfold Blanc.Frame.settlementCommits
+        unfold Jaune.Frame.settlementCommits
         rw [← hset]
         exact hnone
       cases he : post.error <;> simp_all
@@ -1372,7 +1372,7 @@ theorem GenericCall.allowanceRegionEffectSound_some_of_bodyEffect
         (effect.append
           (AllowanceRegionEffectSound.of_getStorCode_eq
             hpostStorage hpostCode)) using 1
-    by_cases hretain : Blanc.Frame.settlementCommits
+    by_cases hretain : Jaune.Frame.settlementCommits
         (Frame.ofCall
           (callMsg sevm (pre.withReturnData []) gas value caller target
             codeAddress stv isStatic ((pre.memory.read ii is).1) code
@@ -1460,7 +1460,7 @@ theorem GenericCreate.allowanceRegionEffectSound_some_of_bodyEffect
           (effect.append
             (AllowanceRegionEffectSound.of_getStorCode_eq
               hpostStorage hpostCode)) using 1
-      by_cases hretain : Blanc.Frame.settlementCommits
+      by_cases hretain : Jaune.Frame.settlementCommits
           (Frame.ofCreate
             (createMsg sevm
               (addAccessedAddress

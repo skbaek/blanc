@@ -107,8 +107,8 @@ theorem attainable_of_entryRoute_frame_burn {sevm : Sevm} {pre : Devm}
     sameFrame⟩ :=
     Prog.exec_of_runCompiledTo_routeTo hburn hroute hcompile
   have invocation :
-      (⟨0, sevm, pre, .ok post, exc⟩ : Exec.Deriv).exactInvocation
-        (runtime officialParams) ca ca :=
+      (Blanc.Exec.Deriv.exactInvocation
+        (runtime officialParams) ca ca (⟨0, sevm, pre, .ok post, exc⟩ : Exec.Deriv)) :=
     ⟨rfl, owner, codeAddress, hcompile⟩
   have instructionEq : occurrence.instruction = .reg .sstore :=
     hinstr.trans hinstrTarget

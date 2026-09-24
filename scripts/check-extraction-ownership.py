@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
-"""Fail-closed ownership audit for the ExecutionSettlement extraction.
+"""Fail-closed ownership audit for the extracted execution layer.
 
-The sole ownership map is execution-settlement-lift-manifest.json.  It checks
+Two ownership maps are audited.
+
+The lift manifest, execution-settlement-lift-manifest.json, records the 14
+settlement declarations first lifted out of WETH10.  Their common owner is now
+Jaune's `Jaune/ExecSettlement.lean` in the pinned Jaune package (Blanc adopted
+Jaune's canonical execution layer).  It checks
 that every listed declaration is genuinely declared by the common module, that
 no listed donor declaration or common-owner basename shadow survives in the
 historical WETH10 donor family or the Lido family, that neither family contains
@@ -14,13 +19,26 @@ and opens `Blanc.ExecutionTrace` directly.  It deliberately does not try to
 recognize propositionally equivalent declarations under unrelated names; that
 remains an independent review obligation.
 
+The relocation manifest, jaune-exec-relocation-manifest.json, lists every
+handwritten declaration of the canonical execution layer (`Exec`, its
+inversions, adequacy, derivations, settlement, chronology and message
+execution) that moved from Blanc to Jaune.  Each must be declared under its
+`Jaune.*` name by its named module of the pinned Jaune package, and no Blanc
+module may declare it again, under its old `Blanc.*` name or under the
+`Jaune.*` name: a leftover or disconnected copy fails as
+RELOCATED-REDEFINED, a destination that no longer declares it as
+RELOCATED-MISSING.
+
 ``--negative-controls`` (the wrapper's ``--self-test``; evidence economy rule
-3, so it runs when the harness changes, not on every Lean edit) runs nine
+3, so it runs when the harness changes, not on every Lean edit) runs twelve
 controls: the historical donor alias, an
 unexpected donor export, a Lido common-owner basename shadow, a Lido alias, a
 missing common declaration, a missing direct import, and distinct trailing-`?`
 declaration parsing, plus removal of the WETH flow compatibility block and
-right-hand-side drift in the attribution compatibility block.  Each must fail
+right-hand-side drift in the attribution compatibility block, and three
+relocation controls: a leftover `Blanc.Exec` copy, a disconnected
+`Jaune.*`-named copy declared from Blanc, and a relocated declaration missing
+from its Jaune module.  Each must fail
 with its own diagnostic tag, so a green control run proves the relevant
 channel is live.
 """
@@ -39,7 +57,10 @@ from pathlib import Path
 
 
 MANIFEST = "scripts/execution-settlement-lift-manifest.json"
+RELOCATION_MANIFEST = "scripts/jaune-exec-relocation-manifest.json"
+RELOCATED_COUNT = 197
 DECL_KINDS = {"def", "theorem", "structure", "abbrev", "opaque", "axiom", "inductive", "class"}
+RELOCATION_KINDS = DECL_KINDS | {"lemma"}
 # Lean identifiers may carry a trailing `?` or `!`; retaining that suffix is
 # essential for ownership because `last` and `last?` are distinct declarations.
 IDENT_PART = r"[A-Za-z_][A-Za-z0-9_']*[!?]?"
@@ -189,7 +210,7 @@ def strip_comments(text: str) -> str:
 def qualify(namespace: list[str], name: str) -> str:
     if name.startswith("_root_."):
         return name.removeprefix("_root_.")
-    if name.startswith("Blanc.") or name == "Blanc":
+    if name.startswith(("Blanc.", "Jaune.")) or name in ("Blanc", "Jaune"):
         return name
     if "_root_" in namespace:
         namespace = namespace[namespace.index("_root_") + 1:]
@@ -272,7 +293,7 @@ def read_config(root: Path) -> Config:
         "schema", "commonModule", "contractModuleGlobs", "requiredDirectImport", "mappings"
     }:
         raise ValueError("manifest must contain exactly schema/commonModule/contractModuleGlobs/requiredDirectImport/mappings")
-    if value["schema"] != 2 or not isinstance(value["commonModule"], str) or not value["commonModule"]:
+    if value["schema"] != 3 or not isinstance(value["commonModule"], str) or not value["commonModule"]:
         raise ValueError("manifest has unsupported schema or invalid module paths")
     contract_globs = value["contractModuleGlobs"]
     if (not isinstance(contract_globs, list) or
@@ -291,12 +312,127 @@ def read_config(root: Path) -> Config:
         donor, common, kind = row["donor"], row["common"], row["kind"]
         if not all(isinstance(x, str) and x for x in (donor, common, kind)) or kind not in DECL_KINDS:
             raise ValueError(f"manifest mapping {index} has invalid donor/common/kind")
-        if not donor.startswith("Blanc.Weth10.") or not common.startswith("Blanc.") or common.startswith("Blanc.Weth10."):
+        if not donor.startswith("Blanc.Weth10.") or not common.startswith("Jaune."):
             raise ValueError(f"manifest mapping {index} has invalid ownership prefixes")
         mappings.append(Mapping(donor, common, kind))
     if len({row.donor for row in mappings}) != len(mappings) or len({row.common for row in mappings}) != len(mappings):
         raise ValueError("manifest mappings must have unique donor and common names")
     return Config(value["commonModule"], tuple(contract_globs), direct["module"], direct["import"], tuple(mappings))
+
+
+RELOCATION_DECL_RE = re.compile(
+    rf"^\s*(?:@\[[^]]+\]\s*)*(?:(?:private|protected|noncomputable|unsafe|partial|nonrec)\s+)*"
+    rf"(def|theorem|lemma|structure|abbrev|opaque|axiom|inductive|class|instance)\s+({IDENT})(?=\s|$)"
+)
+MUTUAL_RE = re.compile(r"^\s*mutual\s*$")
+
+
+@lru_cache(maxsize=None)
+def _tolerant_declarations(path: str, text: str) -> tuple[tuple[str, str, int], ...]:
+    """Every declaration header of a whole Lean file, qualified.
+
+    Unlike `declarations`, this reads arbitrary modules: `mutual` opens a scope
+    its `end` closes, an unmatched `end` is refused, and repeated names (a
+    `private` helper reused across sections) are all reported.
+    """
+    scopes: list[list[str]] = []
+    found: list[tuple[str, str, int]] = []
+    for number, line in enumerate(strip_comments(text).splitlines(), 1):
+        if match := NAMESPACE_RE.match(line):
+            scopes.append(match.group(1).split("."))
+            continue
+        if SECTION_RE.match(line) or MUTUAL_RE.match(line):
+            scopes.append([])
+            continue
+        if END_RE.match(line):
+            if not scopes:
+                raise ValueError(f"{path}: line {number}: unmatched end")
+            scopes.pop()
+            continue
+        if match := RELOCATION_DECL_RE.match(line):
+            kind, name = match.groups()
+            namespace = [part for parts in scopes for part in parts]
+            found.append((qualify(namespace, name), kind, number))
+    if scopes:
+        raise ValueError(f"{path}: unclosed scope")
+    return tuple(found)
+
+
+def tolerant_declarations(path: Path) -> tuple[tuple[str, str, int], ...]:
+    return _tolerant_declarations(str(path), path.read_text(encoding="utf-8"))
+
+
+@dataclass(frozen=True)
+class Relocated:
+    jaune: str
+    blanc: str
+    module: str
+
+
+def read_relocation(root: Path) -> tuple[str, tuple[Relocated, ...]]:
+    path = root / RELOCATION_MANIFEST
+    if not path.is_file():
+        raise ValueError(f"missing manifest {RELOCATION_MANIFEST}")
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"malformed manifest {RELOCATION_MANIFEST}: {exc.msg}") from exc
+    if not isinstance(value, dict) or set(value) != {"schema", "source", "jauneRoot", "declarations"}:
+        raise ValueError(f"{RELOCATION_MANIFEST} must contain exactly schema/source/jauneRoot/declarations")
+    if value["schema"] != 1 or value["jauneRoot"] != ".lake/packages/jaune":
+        raise ValueError(f"{RELOCATION_MANIFEST} has an unsupported schema or Jaune root")
+    rows = value["declarations"]
+    if not isinstance(rows, list) or len(rows) != RELOCATED_COUNT:
+        raise ValueError(f"{RELOCATION_MANIFEST} must list exactly {RELOCATED_COUNT} declarations")
+    out: list[Relocated] = []
+    for index, row in enumerate(rows, 1):
+        if not isinstance(row, dict) or not {"jaune", "blanc", "module", "kind"} <= set(row) <= {"jaune", "blanc", "module", "kind", "private"}:
+            raise ValueError(f"{RELOCATION_MANIFEST} row {index} has unexpected fields")
+        jaune, blanc, module, kind = row["jaune"], row["blanc"], row["module"], row["kind"]
+        if (not isinstance(jaune, str) or not jaune.startswith("Jaune.") or blanc != "Blanc." + jaune[len("Jaune."):]
+                or not isinstance(module, str) or not re.fullmatch(r"Jaune/[A-Za-z]+\.lean", module)
+                or kind not in RELOCATION_KINDS):
+            raise ValueError(f"{RELOCATION_MANIFEST} row {index} is malformed")
+        out.append(Relocated(jaune, blanc, module))
+    if len({row.jaune for row in out}) != len(out):
+        raise ValueError(f"{RELOCATION_MANIFEST} repeats a declaration")
+    return value["jauneRoot"], tuple(out)
+
+
+def relocation_audit(root: Path) -> list[str]:
+    """Every relocated declaration lives in Jaune and nowhere in Blanc."""
+    try:
+        jaune_root, rows = read_relocation(root)
+        errors: list[str] = []
+        by_module: dict[str, set[str]] = {}
+        for row in rows:
+            by_module.setdefault(row.module, set()).add(row.jaune)
+        for module, wanted in sorted(by_module.items()):
+            path = root / jaune_root / module
+            if not path.is_file():
+                errors.append(f"RELOCATED-MISSING — pinned Jaune module {jaune_root}/{module} is missing")
+                continue
+            declared = {name for name, _kind, _line in tolerant_declarations(path)}
+            for name in sorted(wanted - declared):
+                errors.append(f"RELOCATED-MISSING — {name} is not declared in {jaune_root}/{module}")
+        owners = {row.blanc: row.jaune for row in rows}
+        owners.update({row.jaune: row.jaune for row in rows})
+        blanc_files = sorted((root / "Blanc").rglob("*.lean"))
+        if (root / "Blanc.lean").is_file():
+            blanc_files.append(root / "Blanc.lean")
+        if not blanc_files:
+            errors.append("SETUP — extraction ownership: no Blanc modules to audit for relocated copies")
+        for path in blanc_files:
+            rel = path.relative_to(root).as_posix()
+            for name, kind, line in tolerant_declarations(path):
+                if name in owners:
+                    errors.append(
+                        f"RELOCATED-REDEFINED — {rel}:{line}: {kind} {name} "
+                        f"(owned by Jaune as {owners[name]})"
+                    )
+        return errors
+    except (OSError, ValueError) as exc:
+        return [f"SETUP — extraction ownership: {exc}"]
 
 
 def audit(root: Path) -> list[str]:
@@ -360,6 +496,7 @@ def audit(root: Path) -> list[str]:
             errors.append(f"DIRECT-IMPORT-MISSING — required consumer module missing: {config.direct_module}")
         elif config.direct_import not in imports(direct_path):
             errors.append(f"DIRECT-IMPORT-MISSING — {config.direct_module} does not directly import {config.direct_import}")
+        errors.extend(relocation_audit(root))
         return errors
     except (OSError, ValueError) as exc:
         return [f"SETUP — extraction ownership: {exc}"]
@@ -370,7 +507,7 @@ def mutate_donor_alias(root: Path) -> None:
     with path.open("a", encoding="utf-8") as handle:
         handle.write(
             "\nnamespace Blanc.Weth10.Execution\n"
-            "alias commits := Blanc.Execution.commits\n"
+            "alias commits := Jaune.Execution.commits\n"
             "end Blanc.Weth10.Execution\n"
         )
 
@@ -378,7 +515,7 @@ def mutate_donor_alias(root: Path) -> None:
 def mutate_donor_export(root: Path) -> None:
     path = root / "Blanc/Weth10HolderFlow.lean"
     with path.open("a", encoding="utf-8") as handle:
-        handle.write("\nexport Blanc.Execution (commits)\n")
+        handle.write("\nexport Jaune.Execution (commits)\n")
 
 
 def mutate_trace_compat_flow_missing(root: Path) -> None:
@@ -408,8 +545,11 @@ def mutate_trace_compat_attribution_drift(root: Path) -> None:
     path.write_text(text.replace(block, drifted, 1), encoding="utf-8")
 
 
+COMMON_MODULE = ".lake/packages/jaune/Jaune/ExecSettlement.lean"
+
+
 def mutate_common_missing(root: Path) -> None:
-    path = root / "Blanc/ExecutionSettlement.lean"
+    path = root / COMMON_MODULE
     text = path.read_text(encoding="utf-8")
     old = "def Execution.commits"
     if text.count(old) != 1:
@@ -422,7 +562,7 @@ def mutate_lido_shadow(root: Path) -> None:
     with path.open("a", encoding="utf-8") as handle:
         handle.write(
             "\nnamespace Blanc.LidoCircuitBreaker.Exec\n"
-            "def committedFrames := Blanc.Exec.committedFrames\n"
+            "def committedFrames := Jaune.Exec.committedFrames\n"
             "end Blanc.LidoCircuitBreaker.Exec\n"
         )
 
@@ -432,15 +572,47 @@ def mutate_lido_alias(root: Path) -> None:
     with path.open("a", encoding="utf-8") as handle:
         handle.write(
             "\nnamespace Blanc.LidoCircuitBreaker\n"
-            "alias lidoSettlementLegacy := Blanc.Execution.commits\n"
+            "alias lidoSettlementLegacy := Jaune.Execution.commits\n"
             "end Blanc.LidoCircuitBreaker\n"
         )
+
+
+def mutate_relocated_leftover(root: Path) -> None:
+    path = root / "Blanc/Semantics.lean"
+    text = path.read_text(encoding="utf-8")
+    old = "\nend Blanc"
+    if not text.endswith(old + "\n") and not text.endswith(old):
+        raise ValueError("negative control could not find the end of Blanc/Semantics.lean")
+    cut = text.rindex(old)
+    path.write_text(
+        text[:cut] + "\n\ntheorem Exec.halt_inv : True := trivial\n" + text[cut:],
+        encoding="utf-8",
+    )
+
+
+def mutate_relocated_disconnected(root: Path) -> None:
+    path = root / "Blanc/CommonCore.lean"
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(
+            "\nnamespace Jaune\n"
+            "def Exec.Deriv.Fa : Prop := True\n"
+            "end Jaune\n"
+        )
+
+
+def mutate_relocated_missing(root: Path) -> None:
+    path = root / ".lake/packages/jaune/Jaune/Exec.lean"
+    text = path.read_text(encoding="utf-8")
+    old = "theorem exec_iff_exec_eq"
+    if text.count(old) != 1:
+        raise ValueError(f"negative control could not uniquely find {old}")
+    path.write_text(text.replace(old, "theorem execControlRenamed", 1), encoding="utf-8")
 
 
 def mutate_direct_import_missing(root: Path) -> None:
     path = root / "Blanc/Weth10HolderFlow.lean"
     text = path.read_text(encoding="utf-8")
-    old = "import Blanc.ExecutionSettlement"
+    old = "import Jaune.ExecSettlement"
     if text.count(old) != 1:
         raise ValueError(f"negative control could not uniquely find {old}")
     path.write_text(text.replace(old, "-- removed by extraction-audit negative control", 1), encoding="utf-8")
@@ -458,6 +630,9 @@ def negative_controls(root: Path) -> list[str]:
         ("lido-alias", "CONTRACT-ALIAS", mutate_lido_alias),
         ("common-missing", "COMMON-MISSING", mutate_common_missing),
         ("direct-import-missing", "DIRECT-IMPORT-MISSING", mutate_direct_import_missing),
+        ("relocated-leftover", "RELOCATED-REDEFINED", mutate_relocated_leftover),
+        ("relocated-disconnected", "RELOCATED-REDEFINED", mutate_relocated_disconnected),
+        ("relocated-missing", "RELOCATED-MISSING", mutate_relocated_missing),
     ]
     failures: list[str] = []
     with tempfile.TemporaryDirectory(prefix="extraction-ownership-") as temp:
@@ -484,12 +659,19 @@ def negative_controls(root: Path) -> list[str]:
             failures.append(
                 f"CONTROL-FAILED — trailing-question-mark-parser: {exc}"
             )
-        # The audit reads only the lift manifest and Lean sources under
-        # Blanc/, so the seed copies exactly those rather than the whole tree.
+        # The audit reads only the two manifests, the Lean sources under
+        # Blanc/ (and Blanc.lean), and the pinned Jaune package's Lean sources,
+        # so the seed copies exactly those rather than the whole tree.
         copied = Path(temp) / "blanc"
         shutil.copytree(root / "Blanc", copied / "Blanc")
+        shutil.copy2(root / "Blanc.lean", copied / "Blanc.lean")
         (copied / MANIFEST).parent.mkdir(parents=True)
         shutil.copy2(root / MANIFEST, copied / MANIFEST)
+        shutil.copy2(root / RELOCATION_MANIFEST, copied / RELOCATION_MANIFEST)
+        shutil.copytree(
+            root / ".lake/packages/jaune/Jaune",
+            copied / ".lake/packages/jaune/Jaune",
+        )
         if audit(copied):
             failures.append("CONTROL-SETUP — the seed copy does not audit clean")
         for name, expected, mutate in controls:
@@ -526,9 +708,9 @@ def main() -> int:
                 print(control)
             print(f"REGRESSION — extraction ownership: {len(controls)} negative control(s) failed")
             return 1
-        print("OK — extraction ownership: 14/14 common declarations present; WETH10/Lido settlement shadows and aliases/exports absent; 21 approved trace compatibility abbreviations exact; direct import present; 9/9 negative controls live")
+        print("OK — extraction ownership: 14/14 common declarations present; WETH10/Lido settlement shadows and aliases/exports absent; 21 approved trace compatibility abbreviations exact; direct import present; 197/197 relocated declarations owned by Jaune only; 12/12 negative controls live")
     else:
-        print("OK — extraction ownership: 14/14 common declarations present; WETH10/Lido settlement shadows and aliases/exports absent; 21 approved trace compatibility abbreviations exact; direct import present")
+        print("OK — extraction ownership: 14/14 common declarations present; WETH10/Lido settlement shadows and aliases/exports absent; 21 approved trace compatibility abbreviations exact; direct import present; 197/197 relocated declarations owned by Jaune only")
     return 0
 
 

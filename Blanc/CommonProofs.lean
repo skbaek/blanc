@@ -3532,7 +3532,7 @@ The suspended child's oracle invariant (`inv`) supplies the interpreted-code
 case; `handleError_getCode` covers precompile and error selection. -/
 lemma ExecuteCode.codePreserve
     {msg : Msg} {xl : Xlot} {exn : Except (EvmError × State × AdrSet × Tra) Devm}
-    (inv : xl.InvGetCode)
+    (inv : (Blanc.Xlot.InvGetCode xl))
     (run : ExecuteCode msg xl exn) :
     MsgResult.CodePreserve msg.benv.state exn := by
   intro a ha
@@ -3554,7 +3554,7 @@ lemma ExecuteCode.codePreserve
 
 lemma ProcessMessage.codePreserve
     {msg : Msg} {xl : Xlot} {exn : Except (EvmError × State × AdrSet × Tra) Devm}
-    (inv : xl.InvGetCode)
+    (inv : (Blanc.Xlot.InvGetCode xl))
     (run : ProcessMessage msg xl exn) :
     MsgResult.CodePreserve msg.benv.state exn := by
   intro a ha
@@ -3589,7 +3589,7 @@ lemma ProcessMessage.codePreserve
 
 lemma ProcessMessage.preserves_getCode_gen
     {msg : Msg} {xl : Xlot} {exn : Except (EvmError × State × AdrSet × Tra) Devm}
-    (inv : xl.InvGetCode)
+    (inv : (Blanc.Xlot.InvGetCode xl))
     (run : ProcessMessage msg xl exn) :
     ∀ a : Adr,
       (msg.benv.state.getCode a).toList ≠ [] →
@@ -3622,7 +3622,7 @@ through `setCode` (`setCode_getCode`, excluded by `a ≠ msg.currentTarget`); th
 halt/error paths select states via rollback (`Devm.rollback_getCode`). -/
 lemma ProcessCreateMessage.codePreserve
     {msg : Msg} {xl : Xlot} {exn : Except (EvmError × State × AdrSet × Tra) Devm}
-    (inv : xl.InvGetCode)
+    (inv : (Blanc.Xlot.InvGetCode xl))
     (run : ProcessCreateMessage msg xl exn) :
     MsgResult.CodePreserveExcept msg.benv.state msg.currentTarget exn := by
   intro a h_a ha
@@ -3742,7 +3742,7 @@ lemma Resume.createAmsterdam_getCode {state : StateGasRules} {parent : Devm}
 
 lemma GenericCreate.codePreserve
     {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
-    {memoryIndex memorySize : Nat} {xl : Xlot} {exn : Execution} (inv : xl.InvGetCode)
+    {memoryIndex memorySize : Nat} {xl : Xlot} {exn : Execution} (inv : (Blanc.Xlot.InvGetCode xl))
     (run : GenericCreate sevm devm endowment newAddress memoryIndex memorySize xl exn) :
     Execution.CodePreserve devm exn := by
   intro a ha
@@ -3821,7 +3821,7 @@ lemma GenericCreate.codePreserve
 lemma GenericCreateAmsterdam.codePreserve
     {sevm : Sevm} {state : StateGasRules} {devm : Devm} {endowment : B256}
     {newAddress : Adr} {memoryIndex memorySize : Nat} {xl : Xlot}
-    {exn : Execution} (inv : xl.InvGetCode)
+    {exn : Execution} (inv : (Blanc.Xlot.InvGetCode xl))
     (run : GenericCreateAmsterdam sevm state devm endowment newAddress
       memoryIndex memorySize xl exn) :
     Execution.CodePreserve devm exn := by
@@ -4116,7 +4116,7 @@ lemma GenericCall.codePreserve
     {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
     {input_index input_size output_index output_size : Nat} {code : ByteArray}
     {disablePrecompiles : Bool} {xl : Xlot} {exn : Execution}
-    (inv : xl.InvGetCode)
+    (inv : (Blanc.Xlot.InvGetCode xl))
     (run : GenericCall sevm devm gas value caller target codeAddress shouldTransferValue isStaticcall input_index input_size output_index output_size code disablePrecompiles xl exn) :
     Execution.CodePreserve devm exn := by
   intro a ha
@@ -4149,7 +4149,7 @@ lemma GenericCallAmsterdam.codePreserve
     {input_index input_size output_index output_size : Nat} {code : ByteArray}
     {disablePrecompiles newAccountCharged insufficientBalance : Bool}
     {xl : Xlot} {exn : Execution}
-    (inv : xl.InvGetCode)
+    (inv : (Blanc.Xlot.InvGetCode xl))
     (run : GenericCallAmsterdam sevm state devm gas reservoir value caller
       target codeAddress shouldTransferValue isStaticcall input_index
       input_size output_index output_size code disablePrecompiles
@@ -6129,7 +6129,7 @@ lemma codePreserve_refl_trans :
     exact (hbc adr h2).trans h1
 
 lemma Xlot.invGetCode_of_rel {xl : Xlot}
-    (h : Xlot.Rel Devm.CodePreserve xl) : xl.InvGetCode := by
+    (h : Xlot.Rel Devm.CodePreserve xl) : (Blanc.Xlot.InvGetCode xl) := by
   rcases xl with _ | ⟨evm, exn⟩
   · trivial
   · intro a ha
@@ -6142,7 +6142,7 @@ relational `Xlot.Rel Devm.CodePreserve`.  Together with
 `Xlot.invGetCode_of_rel` this makes the two forms interchangeable, so the
 legacy `Xinst.preserves_getCode_gen` can project through the relational master. -/
 lemma Xlot.rel_of_invGetCode {xl : Xlot}
-    (h : xl.InvGetCode) : Xlot.Rel Devm.CodePreserve xl := by
+    (h : (Blanc.Xlot.InvGetCode xl)) : Xlot.Rel Devm.CodePreserve xl := by
   rcases xl with _ | ⟨evm, exn⟩
   · trivial
   · cases exn with
@@ -6164,7 +6164,7 @@ the `Xlot.InvGetCode` / `Xlot.Rel Devm.CodePreserve` bridge. -/
 lemma Xinst.codePreserve_effectRec (x : Xinst) :
     Xinst.EffectRec Devm.CodePreserve x := by
   intro sevm devm xl exn hxl run
-  have inv : xl.InvGetCode := Xlot.invGetCode_of_rel hxl
+  have inv : (Blanc.Xlot.InvGetCode xl) := Xlot.invGetCode_of_rel hxl
   have lift : ∀ {d : Devm}, Devm.InstructionFrame devm d →
       Execution.CodePreserve d exn →
       Execution.Rel Devm.CodePreserve devm exn := by
@@ -6203,7 +6203,7 @@ the relational master `Xinst.codePreserve_effectRec` through the
 `Xlot.rel_of_invGetCode` bridge.  Statement unchanged. -/
 lemma Xinst.preserves_getCode_gen
     {sevm devm x xl exn}
-    (inv : xl.InvGetCode)
+    (inv : (Blanc.Xlot.InvGetCode xl))
     (run : Xinst.Run sevm devm x xl exn) :
     ∀ a : Adr,
       (devm.getCode a).toList ≠ [] →
@@ -6886,10 +6886,10 @@ def Stack.Swap (n : Nat) : Stack → Stack → Prop
   | _, _ => False
 
 def Devm.Push (xs : List B256) : Devm → Devm → Prop :=
-  Rel {Rels.eq with stack := Stack.Push xs}
+  Devm.Rel {Devm.Rels.eq with stack := Stack.Push xs}
 
 def Devm.DiffBurn (xs ys : List B256) : Devm → Devm → Prop :=
-  Rel {Rels.eq with stack := Stack.Diff xs ys, gasLeft := (· ≥ ·)}
+  Devm.Rel {Devm.Rels.eq with stack := Stack.Diff xs ys, gasLeft := (· ≥ ·)}
 
 lemma Devm.push_of_push {x : B256} {s s' : Devm} (h : Devm.push x s = .ok s') :
     Devm.Push [x] s s' := by

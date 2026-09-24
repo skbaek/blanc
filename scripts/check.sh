@@ -292,8 +292,11 @@
 # bv_decide's per-declaration `<decl>._native.bv_decide.ax_*` axioms, which add
 # the Lean compiler to the trusted code base — and so does any missing axiom.
 # The closure is computed from scratch for every row by `#full_axioms`, the one
-# walker in scripts/AxiomAudit.lean, which scripts/axiom_audit.py splices into
-# AxiomCheck.lean before elaborating it. Lean's own `#print axioms` report is
+# walker, `Jaune.AxiomAudit.walk` in the pinned Jaune package's `AxiomAudit`
+# module, which AxiomCheck.lean imports and scripts/axiom_audit.py checks before
+# elaborating it. AxiomCheck.lean also imports Jaune's `ExecutionAxioms`, whose
+# own build pins the canonical execution layer's axiom sets; Blanc's duplicates
+# of those rows were deleted at adoption. Lean's own `#print axioms` report is
 # never the verdict source: since v4.30.0 it reads a per-module result
 # precomputed at olean export that can under-report an imported inductive
 # (lean4#15226; see that file's header), and it once let
@@ -439,13 +442,6 @@ Blanc.Weth10.weth10MainnetCode_eq|$STANDARD
 Blanc.Func.compile_eq_emitUnchecked|$STANDARD
 Blanc.Table.compile_eq_emitUnchecked|$STANDARD
 Blanc.Prog.compile_eq_emitUnchecked|$STANDARD
-Blanc.Frame.raw_commits_of_settlementCommits|$STANDARD
-Blanc.Exec.descendantFrames_runOk_of_settlementCommits|$STANDARD
-Blanc.Exec.descendantFrames_runOk_of_not_settlementCommits|$STANDARD
-Blanc.Exec.descendantFrames_runOk_create_codeDepositRollback|$STANDARD
-Blanc.Exec.committedFrames_eq_nil_of_not_commits|$STANDARD
-Blanc.ProcessMessage.settlementCommits_of_some_ok_clean|$STANDARD
-Blanc.Frame.settlementCommits_ofCall_of_raw_commits|$STANDARD
 Blanc.Exec.ninstOccurrence_iff_mem_rawNodes|$STANDARD
 Blanc.Exec.SuccessfulSstoreOccurrence.storage_update|$STANDARD
 Blanc.Exec.Deriv.ParentPrefix.linear|$STANDARD
@@ -456,8 +452,6 @@ Blanc.Exec.Frame.successfulSstore_sourceSite|$STANDARD
 Blanc.Exec.retainedNodes_sublist_rawNodes|$STANDARD
 Blanc.Exec.committedFrameRoots_sublist_retainedNodes|$STANDARD
 Blanc.Exec.mem_retainedNodes_iff_committedFrame_parentPrefix|$STANDARD
-Blanc.Exec.retainedNodes_runOk_of_settlementCommits|$STANDARD
-Blanc.Exec.retainedNodes_runOk_of_not_settlementCommits|$STANDARD
 Blanc.Exec.storageReplay_committedPost|$STANDARD
 Blanc.Exec.exists_lastRetainedSstore_of_getStor_ne|$STANDARD
 Blanc.Prog.acceptsSstoreSite_sound|$STANDARD
@@ -935,7 +929,6 @@ Blanc.Func.exec_of_runCompiledTo_appended_core|$STANDARD
 Blanc.Prog.exec_of_runCompiledTo_appended|$STANDARD
 Blanc.processCreateMessage_msg_getStor_currentTarget|$STANDARD
 Blanc.benvAfterTransfer_exists_zero|$STANDARD
-Blanc.benvAfterTransfer_stat|$STANDARD
 Blanc.processMessage_ok_of_exec|$STANDARD
 Blanc.processCreateMessage_ok_of_processMessage_and_charge|$STANDARD
 Blanc.processCreateMessage_ok_of_processMessage_error|$STANDARD
@@ -1388,11 +1381,6 @@ Blanc.ProrataWethVault.depositAfterQuote_not_static|$STANDARD
 Blanc.ProrataWethVault.mintAfterQuote_not_static|$STANDARD
 Blanc.ProrataWethVault.mint_never_overmints|propext, Quot.sound
 Blanc.ProrataWethVault.withdraw_never_overpays|propext, Quot.sound
-Blanc.Frame.enter_run_benvStat|$STANDARD
-Blanc.RunFrame.benvStat_eq|$STANDARD
-Blanc.genericCall.step_spawn_benvStat|$STANDARD
-Blanc.genericCreate.step_spawn_benvStat|$STANDARD
-Blanc.Xinst.step_spawn_benvStat|$STANDARD
 Blanc.Composition.ProrataWethVault.vault_rely_preserves_conserved|$STANDARD
 Blanc.Composition.ProrataWethVault.vault_rely_preserves|$STANDARD
 Blanc.Composition.ProrataWethVault.inboundEffect_accountingStep|$STANDARD

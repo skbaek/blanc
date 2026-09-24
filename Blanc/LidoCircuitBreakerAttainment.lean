@@ -94,7 +94,7 @@ def Attainable (dp : DeployParams) (row : RuntimePersistentWrite)
     (occurrence : Exec.NinstOccurrence globalRoot) (site : Prog.SourceSite),
     occurrence.instruction = .reg .sstore ∧
     frameRoot ∈ Exec.rawFrameRoots globalRoot.exc ∧
-    frameRoot.exactInvocation (runtime dp) ca ca ∧
+    (Blanc.Exec.Deriv.exactInvocation (runtime dp) ca ca frameRoot) ∧
     Exec.Deriv.ParentPrefix frameRoot occurrence.node ∧
     row.sourceSite? dp = some site ∧
     site.pc = occurrence.node.pc ∧
@@ -773,9 +773,9 @@ The route already crosses only same-frame steps, so the fact is free: see
 /-- The concrete registration world is an exact runtime invocation. -/
 theorem freshWorld_exactInvocation {post : Devm}
     (exc : Exec 0 freshWorldSevm freshWorldPre (.ok post)) :
-    (⟨0, freshWorldSevm, freshWorldPre, .ok post, exc⟩ :
-      Exec.Deriv).exactInvocation (runtime officialParams)
-      freshWorldOwner freshWorldOwner := by
+    Blanc.Exec.Deriv.exactInvocation (runtime officialParams)
+      freshWorldOwner freshWorldOwner
+      (⟨0, freshWorldSevm, freshWorldPre, .ok post, exc⟩ : Exec.Deriv) := by
   refine ⟨rfl, freshWorld_currentTarget, ?_, ?_⟩
   · show freshWorldSevm.codeAddress = some freshWorldOwner
     rw [freshWorld_codeAddress, freshWorld_currentTarget]
@@ -2112,7 +2112,7 @@ theorem attainable_of_entryRoute_frame {sevm : Sevm} {pre : Devm} {ca : Adr}
     sameFrame⟩ :=
     Prog.exec_of_runCompiledTo_routeTo hburn hroute hcompile
   have invocation :
-      (⟨0, sevm, pre, .ok post, exc⟩ : Exec.Deriv).exactInvocation
+      (Blanc.Exec.Deriv.exactInvocation (root := (⟨0, sevm, pre, .ok post, exc⟩ : Exec.Deriv)))
         (runtime officialParams) ca ca :=
     ⟨rfl, owner, codeAddress, hcompile⟩
   have instructionEq : occurrence.instruction = .reg .sstore :=

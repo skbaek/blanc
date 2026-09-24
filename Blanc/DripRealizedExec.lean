@@ -981,7 +981,7 @@ theorem exitChild_facts (coalition : Finset Adr) {sevm : Sevm}
         snapshot coalition sevm.currentTarget hentry.state ∧
       child.state = (Execution.committedPost childOut childCommitted).state := by
   have settles :=
-    _root_.Blanc.ProcessMessage.settlementCommits_of_some_ok_clean
+    _root_.Jaune.ProcessMessage.settlementCommits_of_some_ok_clean
       process childClean
   have childCommitted :=
     Frame.raw_commits_of_settlementCommits settles

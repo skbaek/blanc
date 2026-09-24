@@ -24,9 +24,9 @@ private theorem BodyEntry.of_burn
   rcases bodyEntry with ⟨bodyPre, hstor, hbal, hcode, run⟩
   refine ⟨bodyPre, hstor.trans ?_, hbal.trans ?_, hcode.trans ?_, run⟩
   · funext a
-    exact burn.getStor a
+    exact (Blanc.Devm.Burn.getStor burn) a
   · funext a
-    exact burn.getBal a
+    exact (Blanc.Devm.Burn.getBal burn) a
   · change entry.state.getCode = pre.state.getCode
     rw [burn.state]
 

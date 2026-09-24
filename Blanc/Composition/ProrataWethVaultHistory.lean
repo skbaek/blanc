@@ -160,7 +160,7 @@ end PairReplayWith
 /-- A record's owned call is the visit of some frame in `frames`. -/
 def PairStepRecord.OwnIn (vault : Adr) (frames : List Exec.Deriv)
     (r : PairStepRecord vault) : Prop :=
-  ∀ call, r.own = some call → ∃ d ∈ frames, d.pairVisit? vault = some call.visit
+  ∀ call, r.own = some call → ∃ d ∈ frames, (Blanc.Exec.Deriv.pairVisit? vault d) = some call.visit
 
 /-- Ownership witnesses survive enlarging the frame universe. -/
 theorem PairStepRecord.OwnIn.mono {vault : Adr} {F G : List Exec.Deriv}
@@ -262,7 +262,7 @@ theorem pairVisit?_vaultFrame {vault : Adr} {d : Exec.Deriv}
     (code : some d.sevm.code.toList = Blanc.ProrataWethVault.vault.compile)
     (selected : Sevm.selector d.sevm = selector "deposit" [.uint256, .address] ∨
       Sevm.selector d.sevm = selector "mint" [.uint256, .address]) :
-    d.pairVisit? vault =
+    (Blanc.Exec.Deriv.pairVisit? vault d) =
       some ⟨false, vault, d.sevm.caller.toB256, Devm.getStor d.devm wethAccount⟩ := by
   have wethNe : d.sevm.currentTarget ≠ wethAccount := by
     rw [target]
@@ -279,7 +279,7 @@ theorem pairVisit?_wethFrame {vault : Adr} {d : Exec.Deriv} (call : WethAllowanc
     (direct : d.sevm.codeAddress = some wethAccount)
     (code : some d.sevm.code.toList = Blanc.weth.compile)
     (sevmEq : call.sevm = d.sevm) (preEq : call.pre = d.devm) :
-    d.pairVisit? vault = some call.visit := by
+    (Blanc.Exec.Deriv.pairVisit? vault d) = some call.visit := by
   have selected := call.selected
   rw [sevmEq] at selected
   unfold Exec.Deriv.pairVisit?
@@ -1201,7 +1201,7 @@ theorem Exec.CorePairReplay.atTarget {vault : Adr} {sevm : Sevm} {pre post : Dev
           (congrArg (PairBoundary.ofState vault) childState)
     | @some childPc childSevm childPre childOut childRun =>
         have settles :=
-          _root_.Blanc.ProcessMessage.settlementCommits_of_some_ok_clean
+          _root_.Jaune.ProcessMessage.settlementCommits_of_some_ok_clean
             process split.payout.childClean
         have childCommitted := Frame.raw_commits_of_settlementCommits settles
         have enter := (RunFrame.some_inv process).1

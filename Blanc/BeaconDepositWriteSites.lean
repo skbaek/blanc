@@ -111,8 +111,8 @@ theorem Exec.Deriv.beaconConstructor_exactProgramPrefix
     {root : Exec.Deriv}
     (entryPc : root.pc = 0)
     (codeIdentity : root.sevm.code.toList = creationCode) :
-    root.exactProgramPrefix
-      constructorProgram constructorInitPrefix code := by
+    (Blanc.Exec.Deriv.exactProgramPrefix
+      constructorProgram constructorInitPrefix code root) := by
   refine ⟨entryPc, ?_⟩
   exact ⟨constructorInitPrefix_compile.symm, by
     simpa only [creationCode] using codeIdentity⟩
@@ -122,11 +122,11 @@ exact persistent-write source sites. -/
 theorem Exec.Deriv.beaconRuntime_sstore_pc
     {root target : Exec.Deriv}
     {storageTarget codeAddress : Adr}
-    (invocation : root.exactInvocation runtime storageTarget codeAddress)
+    (invocation : (Blanc.Exec.Deriv.exactInvocation runtime storageTarget codeAddress root))
     (sameFrame : Exec.Deriv.ParentPrefix root target)
     (storeAt : Ninst.At target.sevm.code target.pc (.reg .sstore)) :
       target.pc = 1070 ∨ target.pc = 2869 := by
-  rcases root.sstore_sourceSite invocation sameFrame storeAt with
+  rcases (Blanc.Exec.Deriv.sstore_sourceSite (root := root)) invocation sameFrame storeAt with
     ⟨site, sourceMember, sitePc, siteInstruction⟩
   have inventoryMember : site ∈ runtimeSstoreSourceSites :=
     mem_runtimeSstoreSourceSites_iff.mpr
@@ -145,7 +145,7 @@ loop's first-live branch write. -/
 theorem Exec.Deriv.beaconRuntime_sstore_coordinate
     {root target : Exec.Deriv}
     {storageTarget codeAddress : Adr}
-    (invocation : root.exactInvocation runtime storageTarget codeAddress)
+    (invocation : (Blanc.Exec.Deriv.exactInvocation runtime storageTarget codeAddress root))
     (sameFrame : Exec.Deriv.ParentPrefix root target)
     (storeAt : Ninst.At target.sevm.code target.pc (.reg .sstore)) :
     ∃ site : Prog.SourceSite,
@@ -153,7 +153,7 @@ theorem Exec.Deriv.beaconRuntime_sstore_coordinate
       site.pc = target.pc ∧
       ((site.path.functionIndex = 0 ∧ site.pc = 1070) ∨
         (site.path.functionIndex = 13 ∧ site.pc = 2869)) := by
-  rcases root.sstore_sourceSite invocation sameFrame storeAt with
+  rcases (Blanc.Exec.Deriv.sstore_sourceSite (root := root)) invocation sameFrame storeAt with
     ⟨site, sourceMember, sitePc, siteInstruction⟩
   have inventoryMember : site ∈ runtimeSstoreSourceSites :=
     mem_runtimeSstoreSourceSites_iff.mpr
@@ -170,8 +170,8 @@ theorem Exec.NinstOccurrence.beaconRuntime_sstore_pc_of_rawFrameRoot
     (occurrence : Exec.NinstOccurrence globalRoot)
     (instructionEq : occurrence.instruction = .reg .sstore)
     (selected : frameRoot ∈ Exec.rawFrameRoots globalRoot.exc)
-    (invocation : frameRoot.exactInvocation
-      runtime storageTarget codeAddress)
+    (invocation : (Blanc.Exec.Deriv.exactInvocation
+      runtime storageTarget codeAddress frameRoot))
     (sameFrame : Exec.Deriv.ParentPrefix frameRoot occurrence.node) :
     occurrence.node.pc = 1070 ∨ occurrence.node.pc = 2869 := by
   rcases occurrence.sourceSite_of_rawFrameRoot instructionEq selected
@@ -192,7 +192,7 @@ theorem Exec.NinstOccurrence.beaconRuntime_sstore_pc_of_rawFrameRoot
 classification.  The enclosing runtime may still revert later. -/
 theorem Exec.Deriv.beaconRuntime_successfulSstore_pc
     {root : Exec.Deriv} {storageTarget codeAddress : Adr}
-    (invocation : root.exactInvocation runtime storageTarget codeAddress)
+    (invocation : (Blanc.Exec.Deriv.exactInvocation runtime storageTarget codeAddress root))
     (write : Exec.SuccessfulSstoreOccurrence root)
     (sameFrame : Exec.Deriv.ParentPrefix root write.occurrence.node) :
     write.occurrence.node.pc = 1070 ∨
@@ -207,12 +207,12 @@ theorem Exec.Deriv.beaconRuntime_successfulSstore_pc
 zero-hash write site in the compiled creation prefix. -/
 theorem Exec.Deriv.beaconConstructor_sstore_pc
     {root target : Exec.Deriv}
-    (identity : root.exactProgramPrefix
-      constructorProgram constructorInitPrefix code)
+    (identity : (Blanc.Exec.Deriv.exactProgramPrefix
+      constructorProgram constructorInitPrefix code root))
     (sameFrame : Exec.Deriv.ParentPrefix root target)
     (storeAt : Ninst.At target.sevm.code target.pc (.reg .sstore)) :
     target.pc = 137 := by
-  rcases root.sstore_sourceSite_appended identity sameFrame storeAt with
+  rcases (Blanc.Exec.Deriv.sstore_sourceSite_appended (root := root)) identity sameFrame storeAt with
     ⟨site, sourceMember, sitePc, siteInstruction⟩
   have inventoryMember : site ∈ constructorSstoreSourceSites :=
     mem_constructorSstoreSourceSites_iff.mpr
@@ -224,15 +224,15 @@ theorem Exec.Deriv.beaconConstructor_sstore_pc
 function-table entry four and prefix PC 137. -/
 theorem Exec.Deriv.beaconConstructor_sstore_coordinate
     {root target : Exec.Deriv}
-    (identity : root.exactProgramPrefix
-      constructorProgram constructorInitPrefix code)
+    (identity : (Blanc.Exec.Deriv.exactProgramPrefix
+      constructorProgram constructorInitPrefix code root))
     (sameFrame : Exec.Deriv.ParentPrefix root target)
     (storeAt : Ninst.At target.sevm.code target.pc (.reg .sstore)) :
     ∃ site : Prog.SourceSite,
       site ∈ constructorSstoreSourceSites ∧
       site.pc = target.pc ∧
       site.path.functionIndex = 4 ∧ site.pc = 137 := by
-  rcases root.sstore_sourceSite_appended identity sameFrame storeAt with
+  rcases (Blanc.Exec.Deriv.sstore_sourceSite_appended (root := root)) identity sameFrame storeAt with
     ⟨site, sourceMember, sitePc, siteInstruction⟩
   have inventoryMember : site ∈ constructorSstoreSourceSites :=
     mem_constructorSstoreSourceSites_iff.mpr
@@ -244,8 +244,8 @@ theorem Exec.Deriv.beaconConstructor_sstore_coordinate
 classification.  The one source site may execute once per loop iteration. -/
 theorem Exec.Deriv.beaconConstructor_successfulSstore_pc
     {root : Exec.Deriv}
-    (identity : root.exactProgramPrefix
-      constructorProgram constructorInitPrefix code)
+    (identity : (Blanc.Exec.Deriv.exactProgramPrefix
+      constructorProgram constructorInitPrefix code root))
     (write : Exec.SuccessfulSstoreOccurrence root)
     (sameFrame : Exec.Deriv.ParentPrefix root write.occurrence.node) :
     write.occurrence.node.pc = 137 := by

@@ -26,10 +26,10 @@ theorem implGuarded_entrySstoreFree_rejected :
 private theorem successfulSstore_sourceSite_of_proxyRootCases
     {globalRoot : Exec.Deriv}
     (proxyInvocation :
-      globalRoot.exactInvocation proxyProg proxyAdr proxyAdr)
+      (Blanc.Exec.Deriv.exactInvocation proxyProg proxyAdr proxyAdr globalRoot))
     (rootCases : ∀ frameRoot ∈ Exec.rawFrameRoots globalRoot.exc,
       frameRoot = globalRoot ∨
-        frameRoot.exactInvocation implGuardedProg proxyAdr implAdr)
+        (Blanc.Exec.Deriv.exactInvocation implGuardedProg proxyAdr implAdr frameRoot))
     (write : Exec.SuccessfulSstoreOccurrence globalRoot) :
     ∃ site : Prog.SourceSite,
       site ∈ implGuardedProg.sourceSites ∧
@@ -43,7 +43,7 @@ private theorem successfulSstore_sourceSite_of_proxyRootCases
         write.occurrence.node.pc (.reg .sstore) := by
       rw [← write.instruction_eq]
       exact write.occurrence.decoded
-    exact (globalRoot.noSstore_of_exactMain_entrySstoreFree
+    exact ((Blanc.Exec.Deriv.noSstore_of_exactMain_entrySstoreFree (root := globalRoot))
       proxyInvocation [] proxy_entrySstoreFree sameFrame storeAt).elim
   · exact write.occurrence.sourceSite_of_rawFrameRoot
       write.instruction_eq selected implementationInvocation sameFrame
@@ -66,7 +66,7 @@ theorem proxyProg_success_successfulSstore_sourceSite :
     ⟨0, initSevm proxyMsgSuccess, initDevm proxyMsgSuccess,
       .ok final, outer⟩
   have proxyInvocation :
-      globalRoot.exactInvocation proxyProg proxyAdr proxyAdr := by
+      (Blanc.Exec.Deriv.exactInvocation proxyProg proxyAdr proxyAdr globalRoot) := by
     refine ⟨rfl, rfl, rfl, ?_⟩
     rw [show (initSevm proxyMsgSuccess).code = proxyCode by rfl]
     rw [show proxyCode.toList = proxyBytes by
@@ -75,7 +75,7 @@ theorem proxyProg_success_successfulSstore_sourceSite :
   have globalRootCases :
       ∀ frameRoot ∈ Exec.rawFrameRoots globalRoot.exc,
         frameRoot = globalRoot ∨
-          frameRoot.exactInvocation implGuardedProg proxyAdr implAdr := by
+          (Blanc.Exec.Deriv.exactInvocation implGuardedProg proxyAdr implAdr frameRoot) := by
     simpa [globalRoot] using rootCases
   refine ⟨final, outer, hexec, ?_⟩
   intro write
@@ -100,7 +100,7 @@ theorem proxyProg_revert_successfulSstore_sourceSite :
     ⟨0, initSevm proxyMsgRevert, initDevm proxyMsgRevert,
       .error (.revert, final), outer⟩
   have proxyInvocation :
-      globalRoot.exactInvocation proxyProg proxyAdr proxyAdr := by
+      (Blanc.Exec.Deriv.exactInvocation proxyProg proxyAdr proxyAdr globalRoot) := by
     refine ⟨rfl, rfl, rfl, ?_⟩
     rw [show (initSevm proxyMsgRevert).code = proxyCode by rfl]
     rw [show proxyCode.toList = proxyBytes by
@@ -109,7 +109,7 @@ theorem proxyProg_revert_successfulSstore_sourceSite :
   have globalRootCases :
       ∀ frameRoot ∈ Exec.rawFrameRoots globalRoot.exc,
         frameRoot = globalRoot ∨
-          frameRoot.exactInvocation implGuardedProg proxyAdr implAdr := by
+          (Blanc.Exec.Deriv.exactInvocation implGuardedProg proxyAdr implAdr frameRoot) := by
     simpa [globalRoot] using rootCases
   refine ⟨final, outer, hexec, ?_⟩
   intro write

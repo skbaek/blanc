@@ -132,6 +132,8 @@ import Blanc.ExecutionFrameTime
 import Blanc.RevertCause
 import Blanc.ProrataWethVaultMaxArithmetic
 import Blanc.Composition.ProrataWethVaultNonrevert
+import AxiomAudit
+import ExecutionAxioms
 
 /-! # Repository axiom audit rows
 
@@ -140,13 +142,19 @@ exact expected axiom set and requires this list and its own to be the same
 population. The number of rows is the published audited-theorem count
 (`scripts/check-doc-counts.py`).
 
-The row command is defined once, in `scripts/AxiomAudit.lean`, and
-`scripts/axiom_audit.py` splices it in after the imports above when the gate
-elaborates this file, so this file does not elaborate on its own. It walks each
-name from scratch over the environment's declarations; Lean's own axiom report
-is not used as a verdict source (lean4#15226, see that file's header). The
-driver refuses this file unless, comments aside, it holds only the imports and
-the rows, and it refuses the row command inside a comment. -/
+The row command is defined once, in the pinned Jaune package's `AxiomAudit`
+module (`Jaune.AxiomAudit.walk`, Jaune's `scripts/AxiomAudit.lean`), imported
+above. It walks each name from scratch over the environment's declarations;
+Lean's own axiom report is not used as a verdict source (lean4#15226, see that
+file's header). `scripts/axiom_audit.py` checks the pinned walker's source and
+refuses this file unless, comments aside, it holds only the imports and the
+rows, and it refuses the row command inside a comment.
+
+`import ExecutionAxioms` is the pinned Jaune's own destination audit: its
+`#expect_axioms` rows (the canonical execution layer Jaune owns, including the
+obligations whose Blanc duplicates were deleted at adoption) fail that module's
+build unless each walked set is exactly the expected one, so this file
+elaborates only against a Jaune revision whose audit passed. -/
 
 #full_axioms Blanc.weth_preserves_solvent
 #full_axioms Blanc.stateTransition_preserves_solvent
@@ -185,13 +193,6 @@ the rows, and it refuses the row command inside a comment. -/
 #full_axioms Blanc.Func.compile_eq_emitUnchecked
 #full_axioms Blanc.Table.compile_eq_emitUnchecked
 #full_axioms Blanc.Prog.compile_eq_emitUnchecked
-#full_axioms Blanc.Frame.raw_commits_of_settlementCommits
-#full_axioms Blanc.Exec.descendantFrames_runOk_of_settlementCommits
-#full_axioms Blanc.Exec.descendantFrames_runOk_of_not_settlementCommits
-#full_axioms Blanc.Exec.descendantFrames_runOk_create_codeDepositRollback
-#full_axioms Blanc.Exec.committedFrames_eq_nil_of_not_commits
-#full_axioms Blanc.ProcessMessage.settlementCommits_of_some_ok_clean
-#full_axioms Blanc.Frame.settlementCommits_ofCall_of_raw_commits
 #full_axioms Blanc.Exec.ninstOccurrence_iff_mem_rawNodes
 #full_axioms Blanc.Exec.SuccessfulSstoreOccurrence.storage_update
 #full_axioms Blanc.Exec.Deriv.ParentPrefix.linear
@@ -202,8 +203,6 @@ the rows, and it refuses the row command inside a comment. -/
 #full_axioms Blanc.Exec.retainedNodes_sublist_rawNodes
 #full_axioms Blanc.Exec.committedFrameRoots_sublist_retainedNodes
 #full_axioms Blanc.Exec.mem_retainedNodes_iff_committedFrame_parentPrefix
-#full_axioms Blanc.Exec.retainedNodes_runOk_of_settlementCommits
-#full_axioms Blanc.Exec.retainedNodes_runOk_of_not_settlementCommits
 #full_axioms Blanc.Exec.storageReplay_committedPost
 #full_axioms Blanc.Exec.exists_lastRetainedSstore_of_getStor_ne
 #full_axioms Blanc.Prog.acceptsSstoreSite_sound
@@ -681,7 +680,6 @@ the rows, and it refuses the row command inside a comment. -/
 #full_axioms Blanc.Prog.exec_of_runCompiledTo_appended
 #full_axioms Blanc.processCreateMessage_msg_getStor_currentTarget
 #full_axioms Blanc.benvAfterTransfer_exists_zero
-#full_axioms Blanc.benvAfterTransfer_stat
 #full_axioms Blanc.processMessage_ok_of_exec
 #full_axioms Blanc.processCreateMessage_ok_of_processMessage_and_charge
 #full_axioms Blanc.processCreateMessage_ok_of_processMessage_error
@@ -1134,11 +1132,6 @@ the rows, and it refuses the row command inside a comment. -/
 #full_axioms Blanc.ProrataWethVault.mintAfterQuote_not_static
 #full_axioms Blanc.ProrataWethVault.mint_never_overmints
 #full_axioms Blanc.ProrataWethVault.withdraw_never_overpays
-#full_axioms Blanc.Frame.enter_run_benvStat
-#full_axioms Blanc.RunFrame.benvStat_eq
-#full_axioms Blanc.genericCall.step_spawn_benvStat
-#full_axioms Blanc.genericCreate.step_spawn_benvStat
-#full_axioms Blanc.Xinst.step_spawn_benvStat
 #full_axioms Blanc.Composition.ProrataWethVault.vault_rely_preserves_conserved
 #full_axioms Blanc.Composition.ProrataWethVault.vault_rely_preserves
 #full_axioms Blanc.Composition.ProrataWethVault.inboundEffect_accountingStep

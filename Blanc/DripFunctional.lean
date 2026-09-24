@@ -436,7 +436,7 @@ theorem drip_exec_error_noRetainedWriteTo {sevm : Sevm} {pre : Devm} {err}
     (_hcode : sevm.code.toList = code)
     (owner : Adr) (key : B256) :
     Exec.NoRetainedWriteTo exc owner key :=
-  exc.noRetainedWriteTo_of_not_commits (by simp [Execution.commits]) owner key
+  (Blanc.Exec.noRetainedWriteTo_of_not_commits exc) (by simp [Execution.commits]) owner key
 
 theorem drip_exec_error_retainedWrites_nil {sevm : Sevm} {pre : Devm} {err}
     (exc : Exec 0 sevm pre (.error err))

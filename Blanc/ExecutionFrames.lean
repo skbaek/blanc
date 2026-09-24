@@ -48,7 +48,7 @@ theorem Exec.mem_rawFrameDescendants_of_mem_descendantFrames :
     ∀ {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
       (run : Exec pc sevm pre out) (frame : Exec.Frame),
       frame ∈ Exec.descendantFrames run →
-        frame.rootDeriv ∈ Exec.rawFrameDescendants run := by
+        (Blanc.Exec.Frame.rootDeriv (frame := frame)) ∈ Exec.rawFrameDescendants run := by
   intro pc sevm pre out run
   induction run with
   | halt hstep => simp [Exec.descendantFrames, Exec.rawFrameDescendants]
@@ -83,7 +83,7 @@ theorem Exec.mem_rawFrameRoots_of_mem_committedFrames
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) (frame : Exec.Frame)
     (member : frame ∈ Exec.committedFrames run) :
-    frame.rootDeriv ∈ Exec.rawFrameRoots run := by
+    (Blanc.Exec.Frame.rootDeriv (frame := frame)) ∈ Exec.rawFrameRoots run := by
   unfold Exec.committedFrames at member
   split at member
   next committed =>

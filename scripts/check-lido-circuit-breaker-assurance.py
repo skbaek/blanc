@@ -1020,7 +1020,7 @@ def probe_axioms(
     """`--probe`: ask Lean directly what the cited declarations depend on.
 
     Builds a probe carrying the import union above, the shared from-scratch
-    walker (`scripts/AxiomAudit.lean`) and one `#full_axioms` row per cited
+    walker (Jaune's `AxiomAudit` module) and one `#full_axioms` row per cited
     declaration, elaborates it with `lake env lean --stdin` from the repository
     root through `scripts/axiom_audit.py`, and reports the axiom set per name
     (None where the walk found no axiom at all). Lean's own `#print axioms` is

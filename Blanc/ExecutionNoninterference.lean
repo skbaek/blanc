@@ -104,7 +104,7 @@ theorem Exec.Deriv.ParentPrefix.sevm_eq
     (chain : Exec.Deriv.ParentPrefix root tail) : tail.sevm = root.sevm := by
   induction chain with
   | refl => rfl
-  | step head rest ih => exact ih.trans head.sevm_eq
+  | step head rest ih => exact ih.trans (Blanc.Exec.Deriv.ParentStep.sevm_eq head)
 
 /-- A direct invocation that enters no child frame cannot write somebody
 else's storage.  This is a sufficient route to the semantic predicate above,
@@ -130,7 +130,7 @@ theorem Exec.noRetainedWriteTo_of_no_execOccurrence
       noDescendants write.occurrence.reached
   have ownerEq := (Exec.StorageWrite.matches_eq_true.mp hmatch).1
   change write.occurrence.node.sevm.currentTarget = owner at ownerEq
-  rw [sameFrame.sevm_eq] at ownerEq
+  rw [(Blanc.Exec.Deriv.ParentPrefix.sevm_eq sameFrame)] at ownerEq
   exact differentOwner ownerEq
 
 /-- If every actually entered code frame owns storage at an address different
@@ -154,7 +154,7 @@ theorem Exec.noRetainedWriteTo_of_frame_owners_ne
     ⟨frameRoot, frameMember, sameFrame⟩
   have ownerEq := (Exec.StorageWrite.matches_eq_true.mp matchEq).1
   change write.occurrence.node.sevm.currentTarget = owner at ownerEq
-  rw [sameFrame.sevm_eq] at ownerEq
+  rw [(Blanc.Exec.Deriv.ParentPrefix.sevm_eq sameFrame)] at ownerEq
   exact different frameRoot frameMember ownerEq
 
 /-- A source-level absence of executable instructions is a named sufficient
@@ -166,7 +166,7 @@ theorem Exec.noRetainedWriteTo_of_sourceSites_no_exec
     (run : Exec pc sevm pre out) {program : Prog}
     {storageTarget codeAddress owner : Adr} (key : B256)
     (invocation :
-      (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv).exactInvocation
+      (Blanc.Exec.Deriv.exactInvocation (root := (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv)))
         program storageTarget codeAddress)
     (differentOwner : storageTarget ≠ owner)
     (sourceNoExec : ∀ site ∈ program.sourceSites, ∀ x : Xinst,
@@ -177,7 +177,7 @@ theorem Exec.noRetainedWriteTo_of_sourceSites_no_exec
       Exec.Deriv.ParentPrefix root node →
       ∀ x : Xinst, ¬ Ninst.At node.sevm.code node.pc (.exec x) := by
     intro node sameFrame x instructionAt
-    rcases root.nonPush_sourceSite invocation sameFrame (by trivial)
+    rcases (Blanc.Exec.Deriv.nonPush_sourceSite (root := root)) invocation sameFrame (by trivial)
         instructionAt with ⟨site, member, -, instructionEq⟩
     exact sourceNoExec site member x instructionEq
   have noDescendants : Exec.rawFrameDescendants run = [] :=
@@ -191,7 +191,7 @@ theorem Exec.noRetainedWriteTo_of_sourceSites_no_exec
     have nonPush : NinstNonPush occurrence.instruction := by
       rw [instructionEq]
       trivial
-    rcases root.nonPush_sourceSite invocation sameFrame nonPush
+    rcases (Blanc.Exec.Deriv.nonPush_sourceSite (root := root)) invocation sameFrame nonPush
         occurrence.decoded with ⟨site, member, -, sourceEq⟩
     exact sourceNoExec site member x (sourceEq.trans instructionEq)
   apply Exec.noRetainedWriteTo_of_no_execOccurrence run owner key

@@ -554,7 +554,7 @@ theorem stub_isPaused_truthful
       have branchStorage := zeroPop.getStor target
       exact keyStorage.symm.trans (branchStorage.trans
         (dispatchStorage.symm.trans (outerStorage.symm.trans
-          (entryBurn.getStor target))))
+          ((Blanc.Devm.Burn.getStor entryBurn) target))))
     rw [frame.currentTarget] at storedEq
     change storedUntil = (Devm.getStor afterKey target).get pausedUntilSlot at storedEq
     rw [storageAtLoad] at storedEq
@@ -577,7 +577,7 @@ theorem stub_isPaused_truthful
           Devm.getStor pre target :=
         queryStorage.symm.trans ((zeroPop.getStor target).trans
           (dispatchStorage.symm.trans (outerStorage.symm.trans
-            (entryBurn.getStor target))))
+            ((Blanc.Devm.Burn.getStor entryBurn) target))))
       change (Devm.getStor post target).get pausedUntilSlot =
         (Devm.getStor pre target).get pausedUntilSlot
       exact congrArg (fun stor : Stor => stor.get pausedUntilSlot) storageEq
@@ -715,8 +715,8 @@ theorem stub_lidoPinnedPauseTarget
       · exact exactCall.codeAddress
       · exact exactCall.codeAddress
     have invocation :
-        (⟨pc, sevm, pre, raw, actualRun⟩ : Exec.Deriv).exactInvocation
-          stubProgram target target := by
+        (Blanc.Exec.Deriv.exactInvocation
+          stubProgram target target (⟨pc, sevm, pre, raw, actualRun⟩ : Exec.Deriv)) := by
       refine ⟨pcZero, current.trans msgCurrent,
         codeAddress.trans msgCodeAddress, ?_⟩
       rw [codeEq]

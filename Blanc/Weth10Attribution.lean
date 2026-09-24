@@ -293,10 +293,10 @@ def Exec.attributionInner (dp : DeployParams) (ca : Adr)
   | .doneOk _ _ _ next => Exec.attributionInner dp ca next
   | .runErr _ _ _ _ => []
   | .runOk (f := f) (raw := raw) _ _ child _ next =>
-      (if h : Blanc.Frame.settlementCommits f raw = true then
+      (if h : Jaune.Frame.settlementCommits f raw = true then
         Exec.frameContribution dp ca
           (Exec.Frame.ofRun child
-            (Blanc.Frame.raw_commits_of_settlementCommits h))
+            (Jaune.Frame.raw_commits_of_settlementCommits h))
           (Exec.attributionInner dp ca child)
       else []) ++ Exec.attributionInner dp ca next
 termination_by sizeOf run

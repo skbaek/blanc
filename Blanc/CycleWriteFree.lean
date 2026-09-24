@@ -257,9 +257,9 @@ private theorem Exec.Deriv.SourceCursor.noSstore_core :
         Linst.at_of_slice cursor.codeSlice
       cases reached with
       | refl =>
-          exact storeAt.false_of_linstAt lastAt
+          exact (Blanc.Ninst.At.false_of_linstAt storeAt) lastAt
       | step edge suffix =>
-          exact edge.false_of_linstAt lastAt
+          exact (Blanc.Exec.Deriv.ParentStep.false_of_linstAt edge) lastAt
   | next instruction tail =>
       change instruction ≠ .reg .sstore ∧
         tail.LocalSstoreFree at sourceFree
@@ -357,7 +357,7 @@ SSTORE on the supplied finite arbitrary-outcome prefix. -/
 theorem Exec.Deriv.noSstore_of_exactMain_entrySstoreFree
     {root target : Exec.Deriv} {program : Prog}
     {storageTarget codeAddress : Adr}
-    (invocation : root.exactInvocation program storageTarget codeAddress)
+    (invocation : (Blanc.Exec.Deriv.exactInvocation program storageTarget codeAddress root))
     (members : List Nat)
     (accepted : program.entrySstoreFree program.main members = true)
     (sameFrame : Exec.Deriv.ParentPrefix root target)

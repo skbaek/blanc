@@ -272,7 +272,7 @@ theorem processCreateMessage_of_body_observed (C : SettlementCarrier ca)
       cases errorEq : post.error <;> simp_all
     rcases _root_.Blanc.ProcessCreateMessage.ok_getStor_eq_inner_of_clean
         process clean with ⟨inner, innerProcess, postStor, innerClean⟩
-    rcases _root_.Blanc.ProcessCreateMessage.ok_state_eq_inner_of_no_error
+    rcases _root_.Jaune.ProcessCreateMessage.ok_state_eq_inner_of_no_error
         process clean with ⟨balanceInner, balanceProcess, postBalance⟩
     have innerEq : inner = balanceInner := by
       have left := (RunFrame.some_inv innerProcess).2
@@ -282,7 +282,7 @@ theorem processCreateMessage_of_body_observed (C : SettlementCarrier ca)
     have preparedStor :=
       _root_.Blanc.processCreateMessage_msg_getStor_eq_of_empty fresh
     have preparedBalance :=
-      _root_.Blanc.processCreateMessage_msg_bal_eq msg
+      _root_.Jaune.processCreateMessage_msg_bal_eq msg
     have preparedSnapshot :
         C.ofState (processCreateMessage.msg msg).benv.state =
           C.ofState msg.benv.state :=

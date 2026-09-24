@@ -55,7 +55,7 @@ private theorem AcceptedValueCallTrace.guard_code_eq
     (installed : some (callPre.getCode ca).toList =
       Prog.compile (weth10 dp)) :
     guardPost.getCode ca = callPre.getCode ca := by
-  have hinv : trace.retained.slot.InvGetCode :=
+  have hinv : (Blanc.Xlot.InvGetCode trace.retained.slot) :=
     Xlot.invGetCode_of_rel
       (Xlot.codeRel_of_filled_eth trace.retained.retained.toFilled)
   have hne :
@@ -104,7 +104,7 @@ theorem genericCreate_prepared_bal
           (pre.gasLeft - except64th pre.gasLeft)).withReturnData
         []).incrNonce sevm.currentTarget) newAddress).state.bal =
       pre.state.bal :=
-  _root_.Blanc.genericCreate_prepared_bal sevm pre newAddress
+  _root_.Jaune.genericCreate_prepared_bal sevm pre newAddress
 
 /-- A zero-value message entry preserves the complete balance map, including
 the self-call case where caller and callee coincide. -/
@@ -1361,7 +1361,7 @@ theorem ProcessMessage.ethBound_of_settledBodyBound
           (Frame.ofCall msg) out = true
        then Exec.flowActions dp ca run else []) := by
   by_cases hsettle :
-      Blanc.Frame.settlementCommits
+      Jaune.Frame.settlementCommits
         (Frame.ofCall msg) out = true
   · rw [if_pos hsettle]
     exact ProcessMessage.ethBound_of_bodyBound run hprocess
@@ -1372,7 +1372,7 @@ theorem ProcessMessage.ethBound_of_settledBodyBound
       have hnone : post.error.isNone ≠ true := by
         intro hnone
         apply hsettle
-        unfold Blanc.Frame.settlementCommits
+        unfold Jaune.Frame.settlementCommits
         rw [← hset]
         exact hnone
       cases he : post.error <;> simp_all
@@ -1403,12 +1403,12 @@ theorem ProcessCreateMessage.ethBound_of_settledBodyBound
           (Frame.ofCreate msg) out = true
        then Exec.flowActions dp ca run else []) := by
   by_cases hsettle :
-      Blanc.Frame.settlementCommits
+      Jaune.Frame.settlementCommits
         (Frame.ofCreate msg) out = true
   · rw [if_pos hsettle]
     have hset := (RunFrame.some_inv hprocess).2
     have hnone : post.error.isNone = true := by
-      unfold Blanc.Frame.settlementCommits at hsettle
+      unfold Jaune.Frame.settlementCommits at hsettle
       rw [← hset] at hsettle
       exact hsettle
     have herr : post.error.isSome = false := by
@@ -1439,7 +1439,7 @@ theorem ProcessCreateMessage.ethBound_of_settledBodyBound
       have hnone : post.error.isNone ≠ true := by
         intro hnone
         apply hsettle
-        unfold Blanc.Frame.settlementCommits
+        unfold Jaune.Frame.settlementCommits
         rw [← hset]
         exact hnone
       cases he : post.error <;> simp_all
@@ -3894,7 +3894,7 @@ theorem Exec.CoreEthSound.nextSome
               simp only [canonical]
               unfold Exec.descendantFrames
               by_cases hscommits :
-                  Blanc.Frame.settlementCommits frame raw = true
+                  Jaune.Frame.settlementCommits frame raw = true
               · simp only [hscommits, dif_pos, if_pos,
                   List.filterMap_append, List.filterMap_cons] at hbound ⊢
                 have hraw :=

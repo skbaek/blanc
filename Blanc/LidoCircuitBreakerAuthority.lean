@@ -5673,7 +5673,7 @@ entry fact alongside the target-directed main cursor used by the authority
 classifier. -/
 private theorem runtimeMainTowardStorage
     {dp : DeployParams} {ca : Adr} {root target : Exec.Deriv}
-    (invocation : root.exactInvocation (runtime dp) ca ca)
+    (invocation : (Blanc.Exec.Deriv.exactInvocation (runtime dp) ca ca root))
     (reached : Exec.Deriv.ParentPrefix root target)
     (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore)) :
     ∃ cursor : Exec.Deriv.SourceCursor root (runtime dp)
@@ -5695,7 +5695,7 @@ private theorem runtimeMainTowardStorage
     (Prog.jumpable_of_get?_table compiled mainLookup).2
   cases reached with
   | refl =>
-      exact (targetAt.false_of_jinstAt jumpdestAt).elim
+      exact ((Blanc.Ninst.At.false_of_jinstAt targetAt) jumpdestAt).elim
   | step edge rest =>
       cases edge with
       | cont step next =>
@@ -5752,7 +5752,7 @@ theorem Exec.NinstOccurrence.runtimePersistentWrite_of_rawFrameRoot
     (occurrence : Exec.NinstOccurrence globalRoot)
     (instructionEq : occurrence.instruction = .reg .sstore)
     (selected : frameRoot ∈ Exec.rawFrameRoots globalRoot.exc)
-    (invocation : frameRoot.exactInvocation (runtime dp) ca ca)
+    (invocation : (Blanc.Exec.Deriv.exactInvocation (runtime dp) ca ca frameRoot))
     (sameFrame : Exec.Deriv.ParentPrefix frameRoot occurrence.node) :
     ∃ row : RuntimePersistentWrite, ∃ site : Prog.SourceSite,
       row ∈ RuntimePersistentWrite.all ∧
@@ -5785,7 +5785,7 @@ theorem Exec.NinstOccurrence.runtimeWriteAuthority_of_rawFrameRoot
     (occurrence : Exec.NinstOccurrence globalRoot)
     (instructionEq : occurrence.instruction = .reg .sstore)
     (selected : frameRoot ∈ Exec.rawFrameRoots globalRoot.exc)
-    (invocation : frameRoot.exactInvocation (runtime dp) ca ca)
+    (invocation : (Blanc.Exec.Deriv.exactInvocation (runtime dp) ca ca frameRoot))
     (sameFrame : Exec.Deriv.ParentPrefix frameRoot occurrence.node) :
     ∃ row : RuntimePersistentWrite, ∃ site : Prog.SourceSite,
       row ∈ RuntimePersistentWrite.all ∧
@@ -5851,7 +5851,7 @@ theorem ProcessMessage.runtimeOwnerStorage_eq_committedPost
     {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec 0 sevm pre out)
     (_invocation :
-      (⟨0, sevm, pre, out, run⟩ : Exec.Deriv).exactInvocation
+      (Blanc.Exec.Deriv.exactInvocation (root := (⟨0, sevm, pre, out, run⟩ : Exec.Deriv)))
         (runtime dp) ca ca)
     (process : ProcessMessage msg
       (.some ⟨⟨0, sevm, pre⟩, out⟩) (.ok settled))

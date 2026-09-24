@@ -345,7 +345,7 @@ theorem processCreateMessage (O : L.Observed)
           simpa [processCreateMessage.msg, Msg.withBenv] using target)
       have preparedSum :
           sum (processCreateMessage.msg msg).benv.state.bal < 2 ^ 256 := by
-        rw [_root_.Blanc.processCreateMessage_msg_bal_eq]
+        rw [_root_.Jaune.processCreateMessage_msg_bal_eq]
         exact sumNof
       have preparedFork :
           CoveredFork (processCreateMessage.msg msg).benv.stat.fork := by

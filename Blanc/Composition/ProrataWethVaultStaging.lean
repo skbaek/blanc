@@ -348,8 +348,8 @@ locates the source of an arbitrary-outcome occurrence, so the Rely/history
 layer can derive child caller and calldata from the configured parent frame. -/
 theorem vault_externalSource_run
     {root target : Exec.Deriv} {storageTarget codeAddress : Adr} {x : Xinst}
-    (invocation : root.exactInvocation Blanc.ProrataWethVault.vault
-      storageTarget codeAddress)
+    (invocation : (Blanc.Exec.Deriv.exactInvocation Blanc.ProrataWethVault.vault
+      storageTarget codeAddress root))
     (sameFrame : Exec.Deriv.ParentPrefix root target)
     (execAt : Ninst.At target.sevm.code target.pc (.exec x)) :
     ∃ (form : WethCallSourceForm) (entry : Devm),
@@ -373,8 +373,8 @@ theorem vault_externalSource_run
 `Exec.LocatedFrame.EnteringOccurrence` retains (`occurrence`, `sameFrame`). -/
 theorem vault_externalSource_run_of_occurrence
     {root : Exec.Deriv} {storageTarget codeAddress : Adr} {x : Xinst}
-    (invocation : root.exactInvocation Blanc.ProrataWethVault.vault
-      storageTarget codeAddress)
+    (invocation : (Blanc.Exec.Deriv.exactInvocation Blanc.ProrataWethVault.vault
+      storageTarget codeAddress root))
     (occurrence : Exec.NinstOccurrence root)
     (sameFrame : Exec.Deriv.ParentPrefix root occurrence.node)
     (decoded : occurrence.instruction = .exec x) :
@@ -3062,8 +3062,8 @@ theorem vault_exactWethChild_of_occurrence
     {root : Exec.Deriv} {vault codeAddress : Adr} {x : Xinst}
     {frame : Jaune.Frame} {resume : Resume} {childEvm : Evm} {raw : Execution}
     {post : Devm}
-    (invocation : root.exactInvocation Blanc.ProrataWethVault.vault vault
-      codeAddress)
+    (invocation : (Blanc.Exec.Deriv.exactInvocation Blanc.ProrataWethVault.vault vault
+      codeAddress root))
     (occurrence : Exec.NinstOccurrence root)
     (sameFrame : Exec.Deriv.ParentPrefix root occurrence.node)
     (decoded : occurrence.instruction = .exec x)
@@ -3100,7 +3100,7 @@ theorem vault_exactWethChild_of_occurrence
       (.exec x) post :=
     runCompiled_of_spawn spawn entered child resumed
   have nodeFork : CoveredFork occurrence.node.sevm.benvStat.fork := by
-    rw [sameFrame.sevm_eq]
+    rw [(Blanc.Exec.Deriv.ParentPrefix.sevm_eq sameFrame)]
     exact hfork
   have memory : MemoryImage entry entry.memory.data.toList := by
     refine ⟨source.memoryWf form entry staging', ?_⟩

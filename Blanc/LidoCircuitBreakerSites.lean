@@ -997,12 +997,12 @@ opcode-looking bytes inside PUSH payloads. -/
 theorem runtimeExec_instruction_exact
     {dp : DeployParams} {ca : Adr} {root target : Exec.Deriv}
     {instruction : Xinst}
-    (invocation : root.exactInvocation (runtime dp) ca ca)
+    (invocation : (Blanc.Exec.Deriv.exactInvocation (runtime dp) ca ca root))
     (sameFrame : Exec.Deriv.ParentPrefix root target)
     (instructionAt : Ninst.At target.sevm.code target.pc
       (.exec instruction)) :
     instruction = .call ∨ instruction = .staticcall := by
-  rcases root.nonPush_sourceSite invocation sameFrame (by trivial)
+  rcases (Blanc.Exec.Deriv.nonPush_sourceSite (root := root)) invocation sameFrame (by trivial)
       instructionAt with ⟨site, member, sitePc, siteInstruction⟩
   have external : site ∈ runtimeExternalCallSourceSites dp := by
     unfold runtimeExternalCallSourceSites

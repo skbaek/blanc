@@ -397,14 +397,20 @@
      "scripts/check-extraction-ownership.sh",
      "scripts/check-extraction-ownership.py",
      "scripts/execution-settlement-lift-manifest.json",
+     "scripts/jaune-exec-relocation-manifest.json",
      "Blanc/ExecutionSettlement.lean",
      "Blanc/Weth10HolderFlow.lean",
-     "Blanc/LidoCircuitBreakerCore.lean"
+     "Blanc/LidoCircuitBreakerCore.lean",
+     "Blanc.lean"
     ],
     "populations": [
      {
       "pattern": "**/*.lean",
       "root": "Blanc"
+     },
+     {
+      "pattern": "**/*.lean",
+      "root": ".lake/packages/jaune/Jaune"
      }
     ],
     "tools": [
@@ -412,7 +418,7 @@
     ]
    },
    "kind": "cacheable",
-   "note": "Audits the real tree only: the lift manifest, the common module, the Blanc/Weth10*.lean and Blanc/Lido*.lean contract globs and the direct importer, all inside the declared files and the Blanc population. The nine negative controls moved to extraction-ownership-self-test under the evidence economy; with no whole-tree copy left in this row, the three traversable populations that declared the copytree hazard are gone.",
+   "note": "Audits the real tree only: the lift manifest and the Jaune-relocation manifest, the common module (now the pinned Jaune package's Jaune/ExecSettlement.lean, inside the declared Jaune population), every Blanc module and Blanc.lean for relocated-declaration copies, the relocated declarations' Jaune modules, the Blanc/Weth10*.lean and Blanc/Lido*.lean contract globs and the direct importer, all inside the declared files and the Blanc population. The negative controls moved to extraction-ownership-self-test under the evidence economy; with no whole-tree copy left in this row, the three traversable populations that declared the copytree hazard are gone.",
    "order": 10,
    "verdict": {
     "expect_exit": 0,
@@ -1160,10 +1166,13 @@
      "scripts/lean_header.py",
      "scripts/gate_semaphore.py",
      "scripts/axiom_audit.py",
-     "scripts/AxiomAudit.lean"
+     ".lake/packages/jaune/scripts/AxiomAudit.lean"
     ],
     "lean_entries": [
      "scripts/LidoCircuitBreakerEnumerationControls.lean"
+    ],
+    "lean_modules": [
+     "AxiomAudit"
     ],
     "tools": [
      "lean",
@@ -1226,7 +1235,7 @@
      "scripts/lean_header.py",
      "scripts/gate_semaphore.py",
      "scripts/axiom_audit.py",
-     "scripts/AxiomAudit.lean"
+     ".lake/packages/jaune/scripts/AxiomAudit.lean"
     ],
     "lean_entries": [
      "scripts/LidoCircuitBreakerAccessControls.lean"
@@ -1262,7 +1271,8 @@
      "Blanc.LidoCircuitBreakerPreControl",
      "Blanc.LidoCircuitBreakerCallBoundary",
      "Blanc.LidoCircuitBreakerObservation",
-     "Blanc.LidoCircuitBreakerSuccess"
+     "Blanc.LidoCircuitBreakerSuccess",
+     "AxiomAudit"
     ],
     "tools": [
      "lean",
@@ -1297,12 +1307,13 @@
      "Blanc/Ladder.lean",
      "scripts/gate_semaphore.py",
      "scripts/axiom_audit.py",
-     "scripts/AxiomAudit.lean"
+     ".lake/packages/jaune/scripts/AxiomAudit.lean"
     ],
     "lean_modules": [
      "Blanc.LidoCircuitBreakerHistory",
      "Blanc.LidoCircuitBreakerHistoryEndpoints",
-     "Blanc.LidoCircuitBreakerHistoryChain"
+     "Blanc.LidoCircuitBreakerHistoryChain",
+     "AxiomAudit"
     ],
     "tools": [
      "lean",
@@ -2663,11 +2674,14 @@
      "scripts/check.sh",
      "scripts/gate-semaphore.sh",
      "scripts/axiom_audit.py",
-     "scripts/AxiomAudit.lean"
+     ".lake/packages/jaune/scripts/AxiomAudit.lean"
     ],
     "lean_entries": [
      "scripts/AxiomCheck.lean",
      "scripts/ProofRecipeSuggestions.lean"
+    ],
+    "lean_modules": [
+     "AxiomAudit"
     ],
     "tools": [
      "lean",
@@ -3007,11 +3021,14 @@
      "scripts/check-lido-circuit-breaker-registry.py",
      "scripts/gate_semaphore.py",
      "scripts/axiom_audit.py",
-     "scripts/AxiomAudit.lean"
+     ".lake/packages/jaune/scripts/AxiomAudit.lean"
     ],
     "lean_entries": [
      "scripts/LidoCircuitBreakerRegistrySuccess.lean",
      "scripts/LidoCircuitBreakerRegistryRegression.lean"
+    ],
+    "lean_modules": [
+     "AxiomAudit"
     ],
     "tools": [
      "lean",
@@ -3152,12 +3169,15 @@
      "scripts/check-stack-certificate-producer.sh",
      "Blanc/ProxyPairUpgradeStackSafetyData.lean",
      "scripts/axiom_audit.py",
-     "scripts/AxiomAudit.lean"
+     ".lake/packages/jaune/scripts/AxiomAudit.lean"
     ],
     "lean_entries": [
      "scripts/ProxyPairUpgradeAxiomCheck.lean",
      "scripts/ProxyPairUpgradeWitness.lean",
      "scripts/eval-proxy-pair-stack-bytes.lean"
+    ],
+    "lean_modules": [
+     "AxiomAudit"
     ],
     "tools": [
      "lean",
@@ -3643,7 +3663,8 @@
     "files": [
      "scripts/check-extraction-ownership.sh",
      "scripts/check-extraction-ownership.py",
-     "scripts/execution-settlement-lift-manifest.json"
+     "scripts/execution-settlement-lift-manifest.json",
+     "scripts/jaune-exec-relocation-manifest.json"
     ],
     "tools": [
      "python3"
@@ -3653,6 +3674,11 @@
       "root": "Blanc",
       "pattern": "**/*.lean",
       "mode": "traversable"
+     },
+     {
+      "root": ".lake/packages/jaune/Jaune",
+      "pattern": "**/*.lean",
+      "mode": "traversable"
      }
     ],
     "untracked_reads": [
@@ -3660,16 +3686,25 @@
       "root": "Blanc",
       "pattern": "**/*.lean",
       "reason": "source copied into the isolated ownership mutation tree; the prerequisite extraction-ownership row verifies the committed owner, donor and consumer declarations"
+     },
+     {
+      "root": ".lake/packages/jaune/Jaune",
+      "pattern": "**/*.lean",
+      "reason": "pinned Jaune sources copied into the isolated ownership mutation tree; the prerequisite extraction-ownership row verifies the committed common and relocated declarations"
+     },
+     {
+      "path": "Blanc.lean",
+      "reason": "root aggregate copied into the isolated ownership mutation tree; the prerequisite extraction-ownership row audits it"
      }
     ]
    },
    "kind": "cacheable",
-   "note": "Harness self-test: a clean copied-tree audit, eight isolated mutations and one parser probe. The lift manifest and harness code define the controls and are fingerprinted; Blanc Lean files are declared subject-only reads under a narrow glob, and the copied tree must remain traversable. The green extraction-ownership prerequisite verifies the committed subject.",
+   "note": "Harness self-test: a clean copied-tree audit, eleven isolated mutations and one parser probe. The two manifests and harness code define the controls and are fingerprinted; Blanc Lean files, Blanc.lean and the pinned Jaune sources are declared subject-only reads under a narrow glob, and the copied tree must remain traversable. The green extraction-ownership prerequisite verifies the committed subject.",
    "order": 77,
    "verdict": {
     "expect_exit": 0,
     "summary_patterns": [
-     "^OK \u2014 extraction ownership: .*9/9 negative controls live"
+     "^OK \u2014 extraction ownership: .*12/12 negative controls live"
     ]
    }
   },

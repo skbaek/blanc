@@ -289,7 +289,7 @@ theorem RealizedEffect.of_actor_eq {o : Nat} {kind : ProrataAccountingKind}
 deployed-byte route classification on the retained frame itself. -/
 theorem exactInvocation_route
     {ca : Adr} {frame : Exec.Frame}
-    (invocation : frame.exactInvocation prorata ca ca) :
+    (invocation : (Blanc.Exec.Frame.exactInvocation prorata ca ca frame)) :
     ProrataMainRoute (prorata.main :: prorata.aux)
       frame.sevm frame.pre frame.post := by
   rcases frame with ⟨pc, sevm, pre, out, run, committed⟩
@@ -1273,7 +1273,7 @@ theorem ProrataMainRoute.accountingReplay_or_withdraw
 the unique withdrawal shape whose paid child trace must be replayed next. -/
 theorem Exec.Frame.accountingReplay_or_realizedWithdrawal
     {ca : Adr} {frame : Exec.Frame}
-    (invocation : frame.exactInvocation prorata ca ca)
+    (invocation : (Blanc.Exec.Frame.exactInvocation prorata ca ca frame))
     (precondition : prorataSpec.Pre ca frame.sevm frame.pre)
     (provenance : ProrataAccountingProvenance)
     (actor : provenance.actor = some frame.sevm.caller)

@@ -1,3 +1,4 @@
+import Jaune.ExecSettlement
 import Blanc.ExecutionSettlement
 import Blanc.ExecutionHistory
 import Blanc.Weth10HolderFlowAlgebra
@@ -606,9 +607,9 @@ theorem Exec.retainedChildActions_eq_nil_of_create_codeDepositRollback
   have hframeSettle : f.settle raw = .ok settled := by
     unfold Frame.settle Frame.settleMsg
     simpa only [hcreate, ↓reduceIte] using hsettled
-  have hnot : Blanc.Frame.settlementCommits f raw ≠ true := by
+  have hnot : Jaune.Frame.settlementCommits f raw ≠ true := by
     intro hcommit
-    unfold Blanc.Frame.settlementCommits at hcommit
+    unfold Jaune.Frame.settlementCommits at hcommit
     rw [hframeSettle] at hcommit
     cases hoption : settled.error with
     | none => simp [hoption] at herror

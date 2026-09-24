@@ -570,7 +570,7 @@ private theorem retained_rawFrames_of_slot
     {frame : Exec.Frame}
     (slotEq : xl = .some
       ⟨⟨frame.pc, frame.sevm, frame.pre⟩, frame.out⟩) :
-    retained.rawFrames = Exec.rawFrameRoots frame.rootDeriv.exc := by
+    retained.rawFrames = Exec.rawFrameRoots (Blanc.Exec.Frame.rootDeriv frame).exc := by
   cases retained with
   | none => cases slotEq
   | @some pc0 sevm0 pre0 out0 childRun =>
@@ -659,7 +659,7 @@ theorem wethWithdrawAcceptedPayoutAt_body {sevm : Sevm} {pre post : Devm} (run :
   | none =>
       simp [facts, ExecutionTrace.RetainedXlot.rawFrames] at hd
   | some childRun =>
-      have sevmEq : node.node.sevm = sevm := sameFrame.sevm_eq
+      have sevmEq : node.node.sevm = sevm := (Blanc.Exec.Deriv.ParentPrefix.sevm_eq sameFrame)
       have acceptedStep' := Ninst.stepRun_pc_irrel (n := call) rfl
         (pc' := node.node.pc) hstep
       have nodeRun := node.stepRun
@@ -727,7 +727,7 @@ theorem wethWithdrawAcceptedPayoutAt_body {sevm : Sevm} {pre post : Devm} (run :
         have childRaw : childRoot ∈ Exec.rawFrameRoots run := by
           simp only [Exec.rawFrameRoots, List.mem_cons]
           exact Or.inr childDesc
-        change d ∈ childRun.rawFrameRoots at hd
+        change d ∈ (Blanc.Exec.rawFrameRoots childRun) at hd
         rw [retainedRoot] at hd
         exact Exec.rawFrameRoots_trans childRaw hd
 

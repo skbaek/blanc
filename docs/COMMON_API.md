@@ -31,9 +31,27 @@ registry has identified the likely vocabulary.
   `Blanc/CommonProofs.lean`, and `Blanc/Ladder.lean`; a helper found only in a
   contract module is a hoisting candidate, not a cross-contract import target.
 - Looking for a *definition* rather than a lemma: the compiled-program language
-  (`Func`, `Prog`, `Line`, `Ninst`, `Linst`, `Stack`) and the EVM seam over
-  Jaune's machine live in [`Blanc/Semantics.lean`](../Blanc/Semantics.lean),
-  whose banners mark which layer a statement belongs to; Blanc's own list
+  (`Func`, `Prog`, `Line`, `Ninst`, `Linst`, `Stack`) lives in
+  [`Blanc/Semantics.lean`](../Blanc/Semantics.lean). The EVM-generic
+  execution layer is **Jaune's**, not Blanc's: the canonical `Exec` relation,
+  its inversions and adequacy (`exec_iff_exec_eq`), the frame/step relations
+  and `*.At` decode predicates, derivations (`Exec.Deriv`, `□p`, `≺`, `→p`),
+  settlement (`Frame.settlementCommits`, `Exec.descendantFrames`,
+  `Exec.committedFrames`), raw/retained chronology (`Exec.rawNodes`,
+  `Exec.retainedNodes`, `ParentStep`/`ParentPrefix`) and message execution
+  are declared under `Jaune.*` in the pinned Jaune package's
+  `Jaune/ExecFrame.lean`, `Jaune/Exec.lean`, `Jaune/ExecDeriv.lean`,
+  `Jaune/ExecSettlement.lean`, `Jaune/ExecChronology.lean` and
+  `Jaune/MessageExecution.lean`. Blanc imports them through
+  `Blanc/Semantics.lean`, `Blanc/CommonCore.lean`,
+  `Blanc/ExecutionSettlement.lean`, `Blanc/ExecutionOccurrence.lean` and
+  `Blanc/MessageExecution.lean`, and every Blanc module `open`s `Jaune`, so
+  the short names below resolve to the Jaune declarations. Blanc keeps its
+  own theory about them (for example the `Blanc.Exec.*` occurrence,
+  source-cursor and replay lemmas), which is where the branches below
+  point; a new EVM-generic execution fact belongs in Jaune, and
+  `scripts/check-extraction-ownership.sh` fails if Blanc redeclares a
+  relocated declaration. Blanc's own list
   prefix/split algebra (`Split`, `Pref`, `Frel`) lives in
   [`Blanc/Basic.lean`](../Blanc/Basic.lean). Both are the substrate the
   branches below are stated over, so read the declaration and its module
@@ -304,8 +322,8 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
   derivation from a completed arbitrary-outcome compiled walk.
 - When a frame invariant must retain block statics across a child spawn, use
   `genericCall.step_spawn_benvStat`, `genericCreate.step_spawn_benvStat`, or
-  the instruction-neutral `Xinst.step_spawn_benvStat` in
-  [`Blanc/Semantics.lean`](../Blanc/Semantics.lean), then combine it with
+  the instruction-neutral `Xinst.step_spawn_benvStat` (Jaune's
+  `Jaune/Exec.lean`), then combine it with
   `Frame.enter_run_benvStat` or `RunFrame.benvStat_eq` after entry. When the
   spawn runs under Amsterdam state-gas rules, use the
   `genericCallAmsterdam`/`genericCreateAmsterdam` `step_spawn_depth` and
@@ -631,7 +649,8 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   entry, feasible-path reachability, or arbitrary child-frame stack safety.
   This table-construction interface is registered here; the existing
   same-frame recipe supplies the subsequent actual `ParentPrefix` transport.
-- Raw nodes, raw frame roots, and instruction occurrence:
+- Raw nodes (`Exec.rawNodes`, Jaune's `Jaune/ExecChronology.lean`), raw frame
+  roots, and instruction occurrence:
   [`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean).
 - `Prog.SourceSite.pcs` projects a source inventory to compiled counters;
   `Prog.SourceSite.coordinates` keeps each counter coupled to its owning
@@ -1178,8 +1197,8 @@ Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
   warm/refund/storage-write post; `Devm.sstoreWarmBase_accessedStorageKeys`
   is the corresponding already-warm key-set projection.
 - `State.set_bal`, `State.setStor_bal`, `State.incrNonce_bal`, and
-  `State.setCode_bal` in
-  [`Blanc/ExecutionSettlement.lean`](../Blanc/ExecutionSettlement.lean)
+  `State.setCode_bal` (Jaune's `Jaune/ExecSettlement.lean`, imported by
+  [`Blanc/ExecutionSettlement.lean`](../Blanc/ExecutionSettlement.lean))
   preserve the complete world-balance map across balance-neutral account
   updates. `genericCreate_prepared_bal`, `genericCreate_prepared_getStor`, and
   `processCreateMessage_msg_bal_eq` package the corresponding CREATE
@@ -1695,7 +1714,8 @@ candidate for folding into this walk, again as WETH10 family work.
 
 ### T1. I have `exec (initEvm msg)` and need `processMessage msg`
 
-Use [`Blanc/MessageExecution.lean`](../Blanc/MessageExecution.lean):
+Use Jaune's `Jaune/MessageExecution.lean`, imported by
+[`Blanc/MessageExecution.lean`](../Blanc/MessageExecution.lean):
 
 - `MessageExecution.processMessage_eq_settle_exec_of_enter` exposes the generic
   frame-settlement boundary from an exact successful `Frame.enter` equation;
@@ -1724,8 +1744,8 @@ Use [`Blanc/MessageExecution.lean`](../Blanc/MessageExecution.lean):
 - `settledRevert` and `settledHalt`, with their projection lemmas, name the
   canonical settled error machines.
 - `Frame.settle` is `settleMsg` after the rules-selected error handler: use
-  `Frame.settle_eq_settleMsg_handleErrorWith` in
-  [`Blanc/Semantics.lean`](../Blanc/Semantics.lean) to expose it, then identify
+  `Frame.settle_eq_settleMsg_handleErrorWith` (Jaune's `Jaune/ExecFrame.lean`)
+  to expose it, then identify
   the selected handler with `executeCode.handleErrorWith_none` (the legacy
   `handleError`), `executeCode.handleErrorWith_some` (Amsterdam
   `handleErrorAmsterdam`), or `executeCode.handleErrorWith_ok` (either handler
@@ -1748,12 +1768,15 @@ Use [`Blanc/MessageExecution.lean`](../Blanc/MessageExecution.lean):
   packages both conclusions.  None of these facts bypasses delegation
   resolution: the caller must first establish that the actual call selected
   the ordinary address-2 precompile route.
-- `Msg.initDevm_*` and `Msg.initSevm_*` expose canonical message-entry fields.
+- `Msg.initDevm_*` and `Msg.initSevm_*` (Jaune's
+  `Jaune/MessageExecution.lean`) expose canonical message-entry fields.
 
 ### T2. I need to know which child effects survive settlement
 
-Use [`Blanc/ExecutionSettlement.lean`](../Blanc/ExecutionSettlement.lean) and
-[`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean):
+Use Jaune's `Jaune/ExecSettlement.lean` and `Jaune/ExecChronology.lean`
+(imported by [`Blanc/ExecutionSettlement.lean`](../Blanc/ExecutionSettlement.lean)
+and [`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean)) and
+Blanc's [`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean):
 
 - `Execution.commits` and `Frame.settlementCommits` distinguish raw success
   from complete frame settlement.
@@ -2258,7 +2281,7 @@ the consumer instead of adding a premise that assumes the new semantics away.
   ([`Blanc/CommonCore.lean`](../Blanc/CommonCore.lean)); the `Ninst.step`
   equations for the three stack-access instructions are `Ninst.step_dupn`,
   `Ninst.step_swapn`, and `Ninst.step_exchange`
-  ([`Blanc/Semantics.lean`](../Blanc/Semantics.lean)); accepted-immediate
+  (Jaune's `Jaune/ExecFrame.lean`); accepted-immediate
   byte classification for the `noPushBefore` boundary walk is
   `toInstType_ne_p_of_decodeSingle` and `toInstType_ne_p_of_decodePair`
   ([`Blanc/Compiled.lean`](../Blanc/Compiled.lean)). There is no recipe:

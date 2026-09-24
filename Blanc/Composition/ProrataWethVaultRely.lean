@@ -142,7 +142,7 @@ theorem VaultFrameInv.xinst_some {vault : Adr} {pc : Nat} {sevm : Sevm} {pre int
     exact Xinst.step_spawn_getCode hstep a
   have childStat : evm'.sta.benvStat = sevm.benvStat := by
     rw [Frame.enter_run_benvStat henter]
-    exact _root_.Blanc.Xinst.step_spawn_benvStat hstep
+    exact _root_.Jaune.Xinst.step_spawn_benvStat hstep
   have childOwnCode : evm'.sta.currentTarget = vault →
       some evm'.sta.code.toList = Prog.compile Blanc.ProrataWethVault.vault := by
     intro childTarget
@@ -336,8 +336,8 @@ theorem VaultFrameConfiguration.parentPrefix {vault : Adr}
   | refl => exact configuration
   | step head _ ih =>
       apply ih
-      rw [head.sevm_eq]
-      exact configuration.of_codePreserve head.codePreserve
+      rw [(Blanc.Exec.Deriv.ParentStep.sevm_eq head)]
+      exact configuration.of_codePreserve (Blanc.Exec.Deriv.ParentStep.codePreserve head)
 
 /-- **Child-entry transport.**  A spawned interpreter child inherits the
 world's code and the block statics from the spawning instruction's pre-state.
@@ -411,7 +411,7 @@ theorem VaultFrameConfiguration.enteringOccurrence {vault : Adr}
             .runOk step entered child.frame.run resumed next ∧
           VaultFrameConfiguration vault entering.occurrence.node.sevm post := by
   have nodeConfiguration := configuration.parentPrefix entering.sameFrame
-  have frameEq := entering.sameFrame.sevm_eq
+  have frameEq := (Blanc.Exec.Deriv.ParentPrefix.sevm_eq entering.sameFrame)
   obtain ⟨frame, resume, nextPc, post, step, entered, resumed, next, exc⟩ :=
     entering.spawns
   refine ⟨nodeConfiguration, ?_, frame, resume, nextPc, post, step, entered,
@@ -748,9 +748,9 @@ theorem VaultFrameConfiguration.exactWethChild_of_enteringOccurrence
     {vault codeAddress : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm}
     {out : Execution} {run : Exec pc sevm pre out} {child : Exec.LocatedFrame}
     (entering : Exec.LocatedFrame.EnteringOccurrence run child)
-    (invocation : entering.parent.frame.rootDeriv.exactInvocation
+    (invocation : (Blanc.Exec.Deriv.exactInvocation (root := (Blanc.Exec.Frame.rootDeriv entering.parent.frame)))
       Blanc.ProrataWethVault.vault vault codeAddress)
-    (hfork : CoveredFork entering.parent.frame.rootDeriv.sevm.benvStat.fork)
+    (hfork : CoveredFork (Blanc.Exec.Frame.rootDeriv entering.parent.frame).sevm.benvStat.fork)
     (configuration : VaultFrameConfiguration vault
       entering.parent.frame.sevm entering.parent.frame.pre)
     (source : Source.StagedSourceFrame entering.occurrence.node.sevm

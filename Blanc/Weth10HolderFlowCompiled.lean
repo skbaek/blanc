@@ -231,7 +231,7 @@ theorem Exec.Deriv.ParentStepActions.descendantFlowActions_eq
         Exec.descendantFrames]
       split <;> rename_i hcommit
       · have hraw :=
-          Blanc.Frame.raw_commits_of_settlementCommits hcommit
+          Jaune.Frame.raw_commits_of_settlementCommits hcommit
         simp [Exec.flowActions, Exec.committedFrames, hraw]
         rw [← List.cons_append, List.filterMap_append]
       · simp
@@ -327,7 +327,7 @@ theorem Exec.Frame.NinstOccurrence.toCommon
     ⟨pc, current, continuation, before, selected, path, decoded,
       filled, stepRun, prec, edge⟩
   have neutralPrefix := path.toParentPrefix
-  rcases neutralPrefix.rawNodes_decomposition with
+  rcases (Blanc.Exec.Deriv.ParentPrefix.rawNodes_decomposition neutralPrefix) with
     ⟨earlier, decomposition⟩
   refine ⟨pc, current,
     { node := ⟨pc, frame.sevm, stepPre, frame.out, current⟩
@@ -339,11 +339,11 @@ theorem Exec.Frame.NinstOccurrence.toCommon
       filled := filled
       stepRun := stepRun }, rfl, rfl, rfl, rfl⟩
   change
-    (⟨pc, frame.sevm, stepPre, frame.out, current⟩ : Blanc.Exec.Deriv) ∈
+    (⟨pc, frame.sevm, stepPre, frame.out, current⟩ : Jaune.Exec.Deriv) ∈
       (⟨frame.pc, frame.sevm, frame.pre, frame.out, frame.run⟩ :
-        Blanc.Exec.Deriv).exc.rawNodes
+        Jaune.Exec.Deriv).exc.rawNodes
   rw [decomposition]
-  exact List.mem_append.mpr (Or.inr (Blanc.Exec.mem_rawNodes_self current))
+  exact List.mem_append.mpr (Or.inr (Jaune.Exec.mem_rawNodes_self current))
 
 /-- An instruction occurrence exposes the exact chronological split of the
 enclosing frame's proper-descendant ledger: all earlier settled children,
@@ -569,7 +569,7 @@ theorem Exec.Frame.advance_runCompiled_next
           cases hout
           cases Ninst.step_spawn_pc hs
           let selected :=
-            if Blanc.Frame.settlementCommits f raw = true then
+            if Jaune.Frame.settlementCommits f raw = true then
               Exec.flowActions dp ca child
             else []
           let edge : Exec.Deriv.ParentStepActions dp ca

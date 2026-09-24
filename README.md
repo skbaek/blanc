@@ -90,7 +90,11 @@ This repo contains the following files:
   (`Split`, `Pref`, `Frel`) and the small tactic helpers built on it. The
   generic list, word and `Except`/`Option` lemmas that used to live here are
   now upstream in Jaune, where any client of Jaune gets them.
-- [Semantics.lean](Blanc/Semantics.lean): formalized semantics of EVM and Blanc.
+- [Semantics.lean](Blanc/Semantics.lean): Blanc's compiled-program language
+  (`Func`, `Prog`, `Stack`) and its relations. The EVM-generic execution layer
+  (the canonical `Exec` relation, its inversions and adequacy, derivations,
+  settlement, chronology and message execution) is owned by Jaune
+  (`Jaune.ExecFrame` … `Jaune.MessageExecution`) and imported here.
 - [CommonCore.lean](Blanc/CommonCore.lean), [Tactics.lean](Blanc/Tactics.lean),
   and [CommonProofs.lean](Blanc/CommonProofs.lean): definitions and lemmas for
   writing and verifying Blanc programs, including the Blanc compiler's
@@ -942,9 +946,9 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
 1. **the pinned Jaune revision** below — trusting a Blanc theorem is trusting
    that specific Jaune, not the sibling checkout on your disk;
 2. **the axiom audit** below, which is stricter than Jaune's own gates: its
-   current source inventory pins the exact axiom set of 1346 named results and
+   current source inventory pins the exact axiom set of 1331 named results and
    fails on an extra *or* missing axiom.
-   Run `scripts/check.sh --no-build`; its `1346/1346` summary belongs to the
+   Run `scripts/check.sh --no-build`; its `1331/1331` summary belongs to the
    source identity printed by `git rev-parse HEAD`;
 3. **Blanc's own source**, guarded by
    [`scripts/check-trust-surface.sh`](scripts/check-trust-surface.sh). The gate
@@ -972,7 +976,7 @@ without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 
 CI builds the library and runs an
 **axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)) whose
-current source inventory contains **1346** top theorems. `scripts/check.sh`'s
+current source inventory contains **1331** top theorems. `scripts/check.sh`'s
 row list is the authority on membership; run `scripts/check.sh --no-build` and
 bind its exact-set verdict to
 `git rev-parse HEAD`. The separate `scripts/check-claims.sh` Lean-checks the

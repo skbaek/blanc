@@ -560,7 +560,7 @@ theorem Func.RunCompiledTo.exists_exec_noRawSstore_core :
         have impossible := Ninst.at_unique pushAt storeAt
         cases impossible
       have jumpSafe : ¬ Ninst.At sevm.code (pc + 3) (.reg .sstore) :=
-        fun storeAt => storeAt.false_of_jinstAt jumpiAt
+        fun storeAt => (Blanc.Ninst.At.false_of_jinstAt storeAt) jumpiAt
       exact ⟨.cont pushStep (.cont jumpStep leftRun),
         .cont pushSafe (.cont jumpSafe leftSafe)⟩
   | @succ certPre certPost word left right certOut
@@ -579,9 +579,9 @@ theorem Func.RunCompiledTo.exists_exec_noRawSstore_core :
         have impossible := Ninst.at_unique pushAt storeAt
         cases impossible
       have jumpSafe : ¬ Ninst.At sevm.code (pc + 3) (.reg .sstore) :=
-        fun storeAt => storeAt.false_of_jinstAt jumpiAt
+        fun storeAt => (Blanc.Ninst.At.false_of_jinstAt storeAt) jumpiAt
       have jumpdestSafe : ¬ Ninst.At sevm.code loc (.reg .sstore) :=
-        fun storeAt => storeAt.false_of_jinstAt jumpdestAt
+        fun storeAt => (Blanc.Ninst.At.false_of_jinstAt storeAt) jumpdestAt
       exact ⟨.cont pushStep (.cont jumpStep
           (.cont jumpdestStep rightRun)),
         .cont pushSafe (.cont jumpSafe
@@ -593,7 +593,7 @@ theorem Func.RunCompiledTo.exists_exec_noRawSstore_core :
         rw [Evm.step_last terminalAt]
         exact congrArg Step.halt terminalRun
       have terminalSafe : ¬ Ninst.At sevm.code pc (.reg .sstore) :=
-        fun storeAt => storeAt.false_of_linstAt terminalAt
+        fun storeAt => (Blanc.Ninst.At.false_of_linstAt storeAt) terminalAt
       exact ⟨.halt step, .halt terminalSafe⟩
   | @next certPre certPost instruction certBody certOut
       instructionRun tail instructionNe instructionChildless tailSafe ih =>
@@ -637,9 +637,9 @@ theorem Func.RunCompiledTo.exists_exec_noRawSstore_core :
         have impossible := Ninst.at_unique pushAt storeAt
         cases impossible
       have jumpSafe : ¬ Ninst.At sevm.code (pc + 3) (.reg .sstore) :=
-        fun storeAt => storeAt.false_of_jinstAt jumpAt
+        fun storeAt => (Blanc.Ninst.At.false_of_jinstAt storeAt) jumpAt
       have jumpdestSafe : ¬ Ninst.At sevm.code loc (.reg .sstore) :=
-        fun storeAt => storeAt.false_of_jinstAt jumpdestAt
+        fun storeAt => (Blanc.Ninst.At.false_of_jinstAt storeAt) jumpdestAt
       exact ⟨.cont pushStep (.cont jumpStep
           (.cont jumpdestStep bodyRun)),
         .cont pushSafe (.cont jumpSafe
@@ -671,7 +671,7 @@ theorem Prog.exists_exec_noRawSstore
       1 mainSub mainNoPush with
     ⟨mainExecution, mainExecutionSafe⟩
   have entrySafe : ¬ Ninst.At sevm.code 0 (.reg .sstore) :=
-    fun storeAt => storeAt.false_of_jinstAt jumpdestAt
+    fun storeAt => (Blanc.Ninst.At.false_of_jinstAt storeAt) jumpdestAt
   exact ⟨.cont entryStep mainExecution,
     .cont entrySafe mainExecutionSafe⟩
 
@@ -684,7 +684,7 @@ theorem Exec.noRawSstore_of_exactMain_entrySstoreFree_reachableExecFree
     (run : Exec pc sevm pre out) {program : Prog}
     {storageTarget codeAddress : Adr}
     (invocation :
-      (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv).exactInvocation
+      (Blanc.Exec.Deriv.exactInvocation (root := (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv)))
         program storageTarget codeAddress)
     (storeMembers execMembers : List Nat)
     (storeAccepted :

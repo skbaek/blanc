@@ -1239,7 +1239,7 @@ structure BodyFrameOccurrence
     (body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout) where
   bodyExecution : BodyExecutionOccurrence body
   frame : Exec.LocatedFrame
-  frameMember : frame ∈ bodyExecution.execution.run.committedFramePaths
+  frameMember : frame ∈ (Blanc.Exec.committedFramePaths bodyExecution.execution.run)
 
 def BodyFrameOccurrence.sourceTag
     {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}

@@ -30,7 +30,7 @@ private def proxyRootedRun
     (f : Func) (ex : Execution) : Prop :=
   ∃ run : Func.RunCompiledTo FS sevm devm f ex,
     rootedRunCompiledTo
-      (fun root => root.exactInvocation implGuardedProg proxyAdr implAdr) run
+      (fun root => (Blanc.Exec.Deriv.exactInvocation implGuardedProg proxyAdr implAdr root)) run
 
 private theorem proxyRootedRun_next
     {FS : List Func} {sevm : Sevm} {devm : Devm}
@@ -398,13 +398,13 @@ private theorem proxy_success_child_frame_roots
       (initEvm proxySuccessChild).sta
       (initEvm proxySuccessChild).dyna raw) :
     ∀ root ∈ Exec.rawFrameRoots child,
-      root.exactInvocation implGuardedProg proxyAdr implAdr := by
+      (Blanc.Exec.Deriv.exactInvocation implGuardedProg proxyAdr implAdr root) := by
   let childRoot : Exec.Deriv :=
     ⟨(initEvm proxySuccessChild).pc,
       (initEvm proxySuccessChild).sta,
       (initEvm proxySuccessChild).dyna, raw, child⟩
   have invocation :
-      childRoot.exactInvocation implGuardedProg proxyAdr implAdr := by
+      (Blanc.Exec.Deriv.exactInvocation implGuardedProg proxyAdr implAdr childRoot) := by
     refine ⟨rfl, rfl, rfl, ?_⟩
     change some implGuardedCode.toList = Prog.compile implGuardedProg
     rw [show implGuardedCode.toList = implGuardedBytes by
@@ -421,7 +421,7 @@ private theorem proxy_success_child_frame_roots
   have childless : Exec.rawFrameDescendants child = [] := by
     apply Exec.rawFrameDescendants_eq_nil_of_no_sameFrame_xinstAt child
     intro node sameFrame x instructionAt
-    rcases childRoot.nonPush_sourceSite invocation sameFrame (by trivial)
+    rcases (Blanc.Exec.Deriv.nonPush_sourceSite (root := childRoot)) invocation sameFrame (by trivial)
         instructionAt with ⟨site, member, _, instructionEq⟩
     exact noExecSource site member x instructionEq
   intro root member
@@ -522,7 +522,7 @@ private theorem proxy_success_delegatecall_spawn :
 
 private theorem proxy_success_delegatecall_allChildRoots {post : Devm} :
     ninstAllChildRoots
-      (fun root => root.exactInvocation implGuardedProg proxyAdr implAdr)
+      (fun root => (Blanc.Exec.Deriv.exactInvocation implGuardedProg proxyAdr implAdr root))
       (sevm := initSevm proxyMsgSuccess) (devm := proxyCallPreSuccess)
       (n := .exec .delegatecall) (devm' := post) := by
   exact ninstAllChildRoots_of_exec_spawn proxy_success_delegatecall_spawn
@@ -788,7 +788,7 @@ private theorem proxy_success_func_run :
         rw [implementationSlotLit_eq_slot, pairState_proxySlot]
       have hmem : (initDevm proxyMsgSuccess).memory = Mem.empty := by rfl
       have tailRooted : rootedRunCompiledTo
-          (fun root => root.exactInvocation implGuardedProg proxyAdr implAdr)
+          (fun root => (Blanc.Exec.Deriv.exactInvocation implGuardedProg proxyAdr implAdr root))
           htail :=
         rootedRunCompiledTo_of_execFree (run := htail) (by
           simp [proxySuccessTail, proxyReturnTail, funcExecFree, Ninst.pushB256])
@@ -814,7 +814,7 @@ theorem proxyProg_success_runCompiledTo :
       (∀ root ∈ Exec.rawFrameRoots outer,
         root = (⟨0, initSevm proxyMsgSuccess, initDevm proxyMsgSuccess,
           .ok final, outer⟩ : Exec.Deriv) ∨
-        root.exactInvocation implGuardedProg proxyAdr implAdr) ∧
+        (Blanc.Exec.Deriv.exactInvocation implGuardedProg proxyAdr implAdr root)) ∧
       final.output = implReturnWord.toBytes ∧
       final.gasLeft = 318 ∧
       final.state = pairState.setStorVal proxyAdr implSlot 1 ∧
@@ -855,7 +855,7 @@ theorem proxyProg_success_runCompiledTo :
       ∀ root ∈ Exec.rawFrameRoots outer,
         root = (⟨0, initSevm proxyMsgSuccess, initDevm proxyMsgSuccess,
           .ok final, outer⟩ : Exec.Deriv) ∨
-        root.exactInvocation implGuardedProg proxyAdr implAdr := by
+        (Blanc.Exec.Deriv.exactInvocation implGuardedProg proxyAdr implAdr root) := by
     intro root member
     simp only [Exec.rawFrameRoots, List.mem_cons] at member
     rcases member with rfl | member
@@ -971,13 +971,13 @@ private theorem proxy_revert_child_frame_roots
       (initEvm proxyRevertChild).sta
       (initEvm proxyRevertChild).dyna raw) :
     ∀ root ∈ Exec.rawFrameRoots child,
-      root.exactInvocation implGuardedProg proxyAdr implAdr := by
+      (Blanc.Exec.Deriv.exactInvocation implGuardedProg proxyAdr implAdr root) := by
   let childRoot : Exec.Deriv :=
     ⟨(initEvm proxyRevertChild).pc,
       (initEvm proxyRevertChild).sta,
       (initEvm proxyRevertChild).dyna, raw, child⟩
   have invocation :
-      childRoot.exactInvocation implGuardedProg proxyAdr implAdr := by
+      (Blanc.Exec.Deriv.exactInvocation implGuardedProg proxyAdr implAdr childRoot) := by
     refine ⟨rfl, rfl, rfl, ?_⟩
     change some implGuardedCode.toList = Prog.compile implGuardedProg
     rw [show implGuardedCode.toList = implGuardedBytes by
@@ -994,7 +994,7 @@ private theorem proxy_revert_child_frame_roots
   have childless : Exec.rawFrameDescendants child = [] := by
     apply Exec.rawFrameDescendants_eq_nil_of_no_sameFrame_xinstAt child
     intro node sameFrame x instructionAt
-    rcases childRoot.nonPush_sourceSite invocation sameFrame (by trivial)
+    rcases (Blanc.Exec.Deriv.nonPush_sourceSite (root := childRoot)) invocation sameFrame (by trivial)
         instructionAt with ⟨site, member, _, instructionEq⟩
     exact noExecSource site member x instructionEq
   intro root member
@@ -1110,7 +1110,7 @@ private theorem proxy_revert_delegatecall_spawn :
 
 private theorem proxy_revert_delegatecall_allChildRoots {post : Devm} :
     ninstAllChildRoots
-      (fun root => root.exactInvocation implGuardedProg proxyAdr implAdr)
+      (fun root => (Blanc.Exec.Deriv.exactInvocation implGuardedProg proxyAdr implAdr root))
       (sevm := initSevm proxyMsgRevert) (devm := proxyCallPreRevert)
       (n := .exec .delegatecall) (devm' := post) := by
   exact ninstAllChildRoots_of_exec_spawn proxy_revert_delegatecall_spawn
@@ -1371,7 +1371,7 @@ private theorem proxy_revert_func_run :
         rw [implementationSlotLit_eq_slot, pairState_proxySlot]
       have hmem : (initDevm proxyMsgRevert).memory = Mem.empty := by rfl
       have tailRooted : rootedRunCompiledTo
-          (fun root => root.exactInvocation implGuardedProg proxyAdr implAdr)
+          (fun root => (Blanc.Exec.Deriv.exactInvocation implGuardedProg proxyAdr implAdr root))
           htail :=
         rootedRunCompiledTo_of_execFree (run := htail) (by
           simp [proxySuccessTail, proxyReturnTail, funcExecFree, Ninst.pushB256])
@@ -1398,7 +1398,7 @@ theorem proxyProg_revert_runCompiledTo :
       (∀ root ∈ Exec.rawFrameRoots outer,
         root = (⟨0, initSevm proxyMsgRevert, initDevm proxyMsgRevert,
           .error (.revert, final), outer⟩ : Exec.Deriv) ∨
-        root.exactInvocation implGuardedProg proxyAdr implAdr) ∧
+        (Blanc.Exec.Deriv.exactInvocation implGuardedProg proxyAdr implAdr root)) ∧
       final.output = [] ∧
       final.gasLeft = 22439 ∧
       final.state = pairState ∧
@@ -1434,7 +1434,7 @@ theorem proxyProg_revert_runCompiledTo :
       ∀ root ∈ Exec.rawFrameRoots outer,
         root = (⟨0, initSevm proxyMsgRevert, initDevm proxyMsgRevert,
           .error (.revert, final), outer⟩ : Exec.Deriv) ∨
-        root.exactInvocation implGuardedProg proxyAdr implAdr := by
+        (Blanc.Exec.Deriv.exactInvocation implGuardedProg proxyAdr implAdr root) := by
     intro root member
     simp only [Exec.rawFrameRoots, List.mem_cons] at member
     rcases member with rfl | member

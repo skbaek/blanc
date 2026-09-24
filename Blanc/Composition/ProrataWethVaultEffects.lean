@@ -529,7 +529,7 @@ structure WethAllowanceEvent where
 event.  Successful commitment comes from `event.frame`; code identity is
 checked here rather than inherited from a message-level WETH claim. -/
 def WethAllowanceEvent.Classified (event : WethAllowanceEvent) : Prop :=
-  event.frame.exactInvocation Blanc.weth wethAccount wethAccount ∧
+  (Blanc.Exec.Frame.exactInvocation Blanc.weth wethAccount wethAccount event.frame) ∧
     Sevm.selector event.frame.sevm =
       if event.approval then selector "approve" [.address, .uint256]
       else selector "transferFrom" [.address, .address, .uint256]
@@ -537,7 +537,7 @@ def WethAllowanceEvent.Classified (event : WethAllowanceEvent) : Prop :=
 /-- Classify a retained frame only when its exact compiled root and selector
 both match.  Other WETH selectors are omitted here, not declared silent. -/
 def WethAllowanceEvent.classify? (frame : Exec.Frame) : Option WethAllowanceEvent :=
-  if frame.exactInvocation Blanc.weth wethAccount wethAccount then
+  if (Blanc.Exec.Frame.exactInvocation Blanc.weth wethAccount wethAccount frame) then
     if Sevm.selector frame.sevm = selector "approve" [.address, .uint256] then
       some ⟨frame, true⟩
     else if Sevm.selector frame.sevm =
@@ -608,7 +608,7 @@ theorem WethAllowanceEvent.classification_complete
     {frame : Exec.Frame} {approval : Bool}
     (classified : (⟨frame, approval⟩ : WethAllowanceEvent).Classified) :
     WethAllowanceEvent.classify? frame = some ⟨frame, approval⟩ := by
-  change frame.exactInvocation Blanc.weth wethAccount wethAccount ∧
+  change (Blanc.Exec.Frame.exactInvocation Blanc.weth wethAccount wethAccount frame) ∧
     Sevm.selector frame.sevm =
       if approval then selector "approve" [.address, .uint256]
       else selector "transferFrom" [.address, .address, .uint256] at classified
@@ -769,10 +769,10 @@ theorem retainedWethAllowanceEvent_memoryWf
   have source := WethAllowanceEvent.classification_sound classified
   have committed : event.frame ∈ Exec.committedFrames run := by
     simpa only [source.1] using frameMember
-  have raw : event.frame.rootDeriv ∈ Exec.rawFrameRoots run :=
+  have raw : (Blanc.Exec.Frame.rootDeriv event.frame) ∈ Exec.rawFrameRoots run :=
     Exec.mem_rawFrameRoots_of_mem_committedFrames run event.frame committed
   have entry : Exec.FreshEntry event.frame.sevm event.frame.pre :=
-    fresh event.frame.rootDeriv raw source.2.1.2.1
+    fresh (Blanc.Exec.Frame.rootDeriv event.frame) raw source.2.1.2.1
   rw [entry.2]
   exact Mem.wf_empty
 

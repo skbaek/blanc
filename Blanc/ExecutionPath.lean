@@ -33,9 +33,9 @@ def Exec.descendantFramePaths (parentPath : List Nat) (nextChild : Nat)
   | .runOk (f := frame) (raw := raw) _ _ child _ next =>
       let childPath := parentPath ++ [nextChild]
       let childFrames :=
-        if h : Blanc.Frame.settlementCommits frame raw = true then
+        if h : Jaune.Frame.settlementCommits frame raw = true then
           ⟨childPath, Exec.Frame.ofRun child
-            (Blanc.Frame.raw_commits_of_settlementCommits h)⟩ ::
+            (Jaune.Frame.raw_commits_of_settlementCommits h)⟩ ::
               Exec.descendantFramePaths childPath 0 child
         else []
       childFrames ++
@@ -70,10 +70,10 @@ structure Exec.LocatedFrame.EnteringOccurrence
   /-- The committed-path constructor records that exact spawn position. -/
   path_eq : child.path = parent.path ++ [childIndex]
   /-- The parent instruction which entered the child. -/
-  occurrence : Exec.NinstOccurrence parent.frame.rootDeriv
+  occurrence : Exec.NinstOccurrence (Blanc.Exec.Frame.rootDeriv parent.frame)
   /-- The entering node lies in the parent's own continuation, not a nested
   child frame. -/
-  sameFrame : Exec.Deriv.ParentPrefix parent.frame.rootDeriv occurrence.node
+  sameFrame : Exec.Deriv.ParentPrefix (Blanc.Exec.Frame.rootDeriv parent.frame) occurrence.node
   /-- The entering instruction itself survived complete settlement. -/
   retained : occurrence.Retained
   /-- Its recursive slot is the selected child's exact EVM and raw outcome. -/
@@ -159,7 +159,7 @@ private theorem Exec.descendantFramePaths_entering
     {pc : Nat} {pre : Devm}
     (current : Exec pc parentSevm pre parentOut)
     (sameFramePrefix : Exec.Deriv.ParentPrefix
-      (Exec.Frame.ofRun parentRun parentCommitted).rootDeriv
+      (Blanc.Exec.Frame.rootDeriv (Exec.Frame.ofRun parentRun parentCommitted))
       ⟨pc, parentSevm, pre, parentOut, current⟩)
     (nextChild : Nat) (child : Exec.LocatedFrame)
     (descendantsMember : ∀ descendant,
@@ -228,12 +228,12 @@ private theorem Exec.descendantFramePaths_entering
             ⟨_, parentSevm, _, parentOut,
               Exec.runOk hstep henter exec hresume next⟩
           have reached : node ∈ Exec.rawNodes
-              (Exec.Frame.ofRun parentRun parentCommitted).rootDeriv.exc := by
-            obtain ⟨before, chronology⟩ := sameFramePrefix.rawNodes_decomposition
+              (Blanc.Exec.Frame.rootDeriv (Exec.Frame.ofRun parentRun parentCommitted)).exc := by
+            obtain ⟨before, chronology⟩ := (Blanc.Exec.Deriv.ParentPrefix.rawNodes_decomposition sameFramePrefix)
             rw [chronology]
             simp [node, Exec.rawNodes]
           let occurrence : Exec.NinstOccurrence
-              (Exec.Frame.ofRun parentRun parentCommitted).rootDeriv :=
+              (Blanc.Exec.Frame.rootDeriv (Exec.Frame.ofRun parentRun parentCommitted)) :=
             { node := node
               instruction := .exec instruction
               slot := .some ⟨_, raw⟩
@@ -246,7 +246,7 @@ private theorem Exec.descendantFramePaths_entering
                 rw [← Evm.step_next decoded, hstep]
                 exact ⟨frame.settle raw, RunFrame.of_run henter, hresume.symm⟩ }
           have sameFrame : Exec.Deriv.ParentPrefix
-              (Exec.Frame.ofRun parentRun parentCommitted).rootDeriv
+              (Blanc.Exec.Frame.rootDeriv (Exec.Frame.ofRun parentRun parentCommitted))
               occurrence.node := by
             simpa only [occurrence, node] using sameFramePrefix
           have parentFrameRetained : Exec.Frame.ofRun parentRun parentCommitted ∈

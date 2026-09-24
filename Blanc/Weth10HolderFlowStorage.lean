@@ -193,7 +193,7 @@ theorem Exec.committedFrames_eq_nil_of_not_commits
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) (h : Execution.commits out ≠ true) :
     Blanc.Exec.committedFrames run = [] := by
-  simp [Blanc.Exec.committedFrames, h]
+  simp [Jaune.Exec.committedFrames, h]
 
 theorem Exec.flowActions_eq_nil_of_error
     {dp : DeployParams} {ca : Adr}
@@ -305,7 +305,7 @@ def FlowAction.HasExecOrigin (dp : DeployParams) (ca : Adr)
     (action : FlowAction) : Prop :=
   ∃ (pc : Nat) (sevm : Sevm) (pre : Devm) (out : Execution)
       (run : Exec pc sevm pre out) (frame : Exec.Frame),
-    frame ∈ Blanc.Exec.committedFrames run ∧
+    frame ∈ Jaune.Exec.committedFrames run ∧
       Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action ∧ Blanc.Weth10.Exec.Frame.IsRoot frame
 
 theorem FlowAction.HasExecOrigin.exists_exact_committedFrame

@@ -295,9 +295,9 @@ theorem attainable_adminRegistry_of_route {row : RuntimePersistentWrite}
     sameFrame⟩ :=
     Prog.exec_of_runCompiledTo_routeTo hburn hroute hcompile
   have invocation :
-      (⟨0, unregWorldSevm, unregWorldPre, .ok post, exc⟩ :
-          Exec.Deriv).exactInvocation
-        (runtime officialParams) unregWorldOwner unregWorldOwner :=
+      (Blanc.Exec.Deriv.exactInvocation
+        (runtime officialParams) unregWorldOwner unregWorldOwner (⟨0, unregWorldSevm, unregWorldPre, .ok post, exc⟩ :
+          Exec.Deriv)) :=
     ⟨rfl, unregWorld_currentTarget, unregWorld_codeAddress, hcompile⟩
   have instructionEq : occurrence.instruction = .reg .sstore :=
     hinstr.trans hinstrTarget

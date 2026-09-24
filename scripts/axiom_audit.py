@@ -1,40 +1,48 @@
 """The one driver for Blanc's from-scratch axiom audit.
 
 Every Blanc gate that pins a declaration's axiom set takes its verdict from
-``#full_axioms``, the walker defined once in ``scripts/AxiomAudit.lean``; read
-that file's header for why Lean's own ``#print axioms`` / ``collectAxioms``
-report is not used (https://github.com/leanprover/lean4/issues/15226). This
-module is how a gate gets the walker into the file it elaborates and reads the
-answer back. It never keeps a copy of the walker: the Lean text is read from
-the tree under test every time.
+``#full_axioms``, the walker defined once in Jaune's ``AxiomAudit`` module
+(``scripts/AxiomAudit.lean`` of the pinned Jaune revision, a root of Jaune's
+``Assurance`` library, ``Jaune.AxiomAudit.walk``); read that file's header for
+why Lean's own ``#print axioms`` / ``collectAxioms`` report is not used
+(https://github.com/leanprover/lean4/issues/15226). Blanc keeps no copy of the
+walker: an audit source imports the module, and this driver checks the pinned
+walker's source under ``.lake/packages/jaune`` before every elaboration.
 
 * :func:`audit_rows` validates a committed audit source and returns its rows.
-* :func:`splice` inserts the walker after a validated audit source's imports
-  (``scripts/AxiomCheck.lean``, ``scripts/ProxyPairUpgradeAxiomCheck.lean``).
+* :func:`splice` validates a committed audit source that imports
+  ``AxiomAudit`` (``scripts/AxiomCheck.lean``,
+  ``scripts/ProxyPairUpgradeAxiomCheck.lean``) and returns it unchanged.
 * :func:`probe_source` builds a probe from an import list and names (the Lido
-  gates' generated probes).
-* :func:`fixture_probe` appends the walker plus ``#full_axioms`` rows to a
-  fixture that is elaborated anyway (the Lido Registry fixtures).
+  gates' generated probes); it imports ``AxiomAudit`` itself.
+* :func:`fixture_probe` prefixes ``import AxiomAudit`` to a fixture that is
+  elaborated anyway (the Lido Registry fixtures) and appends ``#full_axioms``
+  rows.
 * :func:`elaborate` runs ``lake env lean --stdin`` on a source; no temporary
   file is written into the tree.
 * :func:`parse` reads the ``FULL-AXIOMS`` lines back, exactly one per name.
 
 Fail-closed rules enforced here, so no gate has to remember them:
 
+* The pinned walker source must begin with exactly ``import Lean``, import
+  nothing else, define ``#full_axioms`` in namespace ``Jaune.AxiomAudit``, and
+  its code (comments aside) may not name Lean's precomputed collector or its
+  per-module table.
 * A committed audit source, once ``--`` and nested ``/- -/`` comments are
   removed, may contain nothing but blank lines, a leading block of
-  ``import M`` lines and ``#full_axioms NAME`` rows, each name at most once.
+  ``import M`` lines (which must include ``AxiomAudit``) and
+  ``#full_axioms NAME`` rows, each name at most once.
   The text ``#full_axioms`` may not appear inside a comment either (so no
   static reader can count a commented-out row), and the report marker may not
   appear at all. ``#print axioms``, ``#eval``, a new ``elab`` or anything else
   is refused before Lean runs.
 * A generated probe is built only from plain dotted module and declaration
   names.
-* A fixture that has the walker appended may not mention ``#full_axioms``,
-  the report marker, the walker's namespace, or Lean's collector. Its other
-  code is the fixture's own reviewed source. A report it forged anyway would
-  still fail the gate: every appended row prints its own report, and
-  :func:`parse` refuses a name with two.
+* A fixture that has the rows appended may not mention ``#full_axioms``,
+  the report marker, the walker's namespace or module, or Lean's collector.
+  Its other code is the fixture's own reviewed source. A report it forged
+  anyway would still fail the gate: every appended row prints its own report,
+  and :func:`parse` refuses a name with two.
 * Neither the walker's code nor an audit source's code (comments aside) may
   name Lean's precomputed collector or its per-module table.
 * :func:`parse` requires exactly one report per requested name and none for
@@ -48,10 +56,10 @@ Command line (used by ``scripts/check.sh``)::
     python3 scripts/axiom_audit.py run scripts/AxiomCheck.lean
     python3 scripts/axiom_audit.py rows scripts/AxiomCheck.lean
 
-``run`` validates and elaborates the spliced file from the repository root and
-exits with Lean's status. ``rows`` validates the file and prints its audited
-names, one per line, which is the audit inventory. ``splice`` prints the
-spliced source.
+``run`` validates the walker and the file and elaborates the file from the
+repository root, exiting with Lean's status. ``rows`` validates the file and
+prints its audited names, one per line, which is the audit inventory.
+``splice`` prints the source that ``run`` elaborates.
 """
 
 from __future__ import annotations
@@ -63,7 +71,10 @@ from pathlib import Path
 from typing import Dict, FrozenSet, Iterable, List, Tuple
 
 
-WALKER_RELATIVE = "scripts/AxiomAudit.lean"
+# The walker is Jaune's: the `AxiomAudit` module of the pinned Jaune package.
+WALKER_MODULE = "AxiomAudit"
+WALKER_NAMESPACE = "Jaune.AxiomAudit"
+WALKER_RELATIVE = ".lake/packages/jaune/scripts/AxiomAudit.lean"
 COMMAND = "#full_axioms"
 
 # A declaration or module name as the audit accepts it: a plain dotted
@@ -137,14 +148,14 @@ def strip_lean_comments(text: str, label: str = WALKER_RELATIVE) -> str:
     return "".join(out)
 
 
-def walker_body(root: Path) -> str:
-    """The walker's text without its own `import Lean` line."""
+def check_walker(root: Path) -> None:
+    """Refuse unless the pinned Jaune walker source still satisfies the rules."""
 
     path = Path(root) / WALKER_RELATIVE
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
-        raise AuditError(f"cannot read the axiom walker {WALKER_RELATIVE}: {exc}")
+        raise AuditError(f"cannot read the pinned axiom walker {WALKER_RELATIVE}: {exc}")
     lines = text.splitlines()
     if not lines or lines[0].strip() != "import Lean":
         raise AuditError(f"{WALKER_RELATIVE} must begin with exactly `import Lean`")
@@ -159,7 +170,8 @@ def walker_body(root: Path) -> str:
         )
     if 'elab "#full_axioms "' not in code:
         raise AuditError(f"{WALKER_RELATIVE} no longer defines {COMMAND}")
-    return "\n".join(lines[1:]).strip("\n") + "\n"
+    if f"namespace {WALKER_NAMESPACE}" not in code:
+        raise AuditError(f"{WALKER_RELATIVE} no longer declares namespace {WALKER_NAMESPACE}")
 
 
 def _refuse_print_axioms(source: str, label: str) -> None:
@@ -233,21 +245,31 @@ def _checked_names(values: Iterable[str], what: str) -> List[str]:
     return checked
 
 
+def audit_imports(source: str, label: str) -> List[str]:
+    """The modules a validated audit source imports, in order."""
+
+    code = strip_lean_comments(source, label)
+    modules: List[str] = []
+    for raw in code.splitlines():
+        match = AUDIT_IMPORT.match(raw.strip())
+        if match:
+            modules.append(match.group(1))
+    return modules
+
+
 def splice(root: Path, source: str, label: str) -> str:
-    """The validated `source` with the walker inserted after its imports."""
+    """The validated `source`, which must itself import the walker module.
+
+    Nothing is inserted: the audit source names `import AxiomAudit`, so the
+    walker's Lake trace is one of its imports and the elaborated file is the
+    committed file byte for byte.
+    """
 
     audit_rows(source, label)
-    lines = source.splitlines()
-    cut = 0
-    for index, line in enumerate(lines):
-        if IMPORT.match(line):
-            cut = index + 1
-        elif line.strip() and not line.startswith("--"):
-            break
-    if cut == 0:
-        raise AuditError(f"{label}: no leading import block to splice the walker after")
-    head = lines[:cut] + ["import Lean"]
-    return "\n".join(head) + "\n\n" + walker_body(root) + "\n" + "\n".join(lines[cut:]) + "\n"
+    if WALKER_MODULE not in audit_imports(source, label):
+        raise AuditError(f"{label}: an audit source must `import {WALKER_MODULE}`")
+    check_walker(root)
+    return source if source.endswith("\n") else source + "\n"
 
 
 def rows(names: Iterable[str]) -> str:
@@ -255,16 +277,18 @@ def rows(names: Iterable[str]) -> str:
 
 
 def probe_source(root: Path, imports: Iterable[str], names: Iterable[str]) -> str:
-    """A complete probe: the imports, the walker, one row per name."""
+    """A complete probe: the imports, the walker module, one row per name."""
 
     modules = _checked_names(imports, "module")
     wanted = _checked_names(names, "declaration")
-    header = "".join(f"import {module}\n" for module in modules) + "import Lean\n"
-    return header + "\n" + walker_body(root) + "\n" + rows(wanted)
+    check_walker(root)
+    header = "".join(f"import {module}\n" for module in modules)
+    header += f"import {WALKER_MODULE}\n"
+    return header + "\n" + rows(wanted)
 
 
 def fixture_probe(root: Path, fixture: str, label: str, names: Iterable[str]) -> str:
-    """`fixture` followed by the walker and one row per name.
+    """`import AxiomAudit`, then `fixture`, then one row per name.
 
     The fixture may not mention the audit's command, report marker or
     namespace, or Lean's collector; a report it forged anyway would collide
@@ -274,10 +298,11 @@ def fixture_probe(root: Path, fixture: str, label: str, names: Iterable[str]) ->
     wanted = _checked_names(names, "declaration")
     code = strip_lean_comments(fixture, label)
     _refuse_report_forgery(fixture, label, code)
-    for token in (COMMAND, "BlancAxiomAudit"):
+    for token in (COMMAND, WALKER_NAMESPACE, WALKER_MODULE):
         if token in fixture:
             raise AuditError(f"{label}: a fixture may not mention `{token}`")
-    return fixture + "\n" + walker_body(root) + "\n" + rows(wanted)
+    check_walker(root)
+    return f"import {WALKER_MODULE}\n" + fixture + "\n" + rows(wanted)
 
 
 def elaborate(root: Path, source: str) -> Tuple[int, str]:

@@ -140,8 +140,8 @@ theorem Exec.CoreProrataAccounting.atTarget
   intro run committed installed precondition direct caller hfork
     blockIndex transactionIndex framePath nextChild
   let frame := Exec.Frame.ofRun run committed
-  have invocation : frame.exactInvocation prorata
-      sevm.currentTarget sevm.currentTarget := by
+  have invocation : (Blanc.Exec.Frame.exactInvocation prorata
+      sevm.currentTarget sevm.currentTarget frame) := by
     refine ⟨rfl, rfl, direct rfl, ?_⟩
     exact (installed.2 rfl).1
   let provenance : ProrataAccountingProvenance :=
@@ -178,7 +178,7 @@ theorem Exec.CoreProrataAccounting.atTarget
             (RealizedSnapshot.ofState sevm.currentTarget) childState
       | @some childPc childSevm childPre childOut childRun =>
           have settles :=
-            _root_.Blanc.ProcessMessage.settlementCommits_of_some_ok_clean
+            _root_.Jaune.ProcessMessage.settlementCommits_of_some_ok_clean
               process withdrawal.payout.childClean
           have childCommitted :=
             Frame.raw_commits_of_settlementCommits settles

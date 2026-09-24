@@ -27,7 +27,7 @@ private theorem Exec.mem_rawFrameDescendants_of_mem_descendantFrames :
     ∀ {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
       (run : Exec pc sevm pre out) (frame : Exec.Frame),
       frame ∈ Exec.descendantFrames run →
-        frame.rootDeriv ∈ Exec.rawFrameDescendants run := by
+        (Blanc.Exec.Frame.rootDeriv frame) ∈ Exec.rawFrameDescendants run := by
   intro pc sevm pre out run
   induction run with
   | halt hstep => simp [Exec.descendantFrames, Exec.rawFrameDescendants]
@@ -60,7 +60,7 @@ private theorem Exec.mem_rawFrameRoots_of_mem_committedFrames
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) (frame : Exec.Frame)
     (member : frame ∈ Exec.committedFrames run) :
-    frame.rootDeriv ∈ Exec.rawFrameRoots run := by
+    (Blanc.Exec.Frame.rootDeriv frame) ∈ Exec.rawFrameRoots run := by
   unfold Exec.committedFrames at member
   split at member
   next committed =>
@@ -91,11 +91,11 @@ inductive Exec.RuntimeOwnerCellAuthority
       (lastRetained : write.IsLastRetained)
       (frame : Exec.Frame)
       (frameCommitted : frame ∈ Exec.committedFrames run)
-      (frameRaw : frame.rootDeriv ∈ Exec.rawFrameRoots run)
+      (frameRaw : (Blanc.Exec.Frame.rootDeriv frame) ∈ Exec.rawFrameRoots run)
       (frameInvocation :
-        frame.rootDeriv.exactInvocation (runtime dp) ca ca)
+        (Blanc.Exec.Deriv.exactInvocation (root := (Blanc.Exec.Frame.rootDeriv frame))) (runtime dp) ca ca)
       (sameFrame :
-        Exec.Deriv.ParentPrefix frame.rootDeriv write.occurrence.node)
+        Exec.Deriv.ParentPrefix (Blanc.Exec.Frame.rootDeriv frame) write.occurrence.node)
       (row : RuntimePersistentWrite)
       (site : Prog.SourceSite)
       (row_mem : row ∈ RuntimePersistentWrite.all)
@@ -108,7 +108,7 @@ inductive Exec.RuntimeOwnerCellAuthority
         candidate.sourceSite? dp = some site → candidate = row)
       (role : InvocationRole)
       (role_permitted : role ∈ row.permittedRoles)
-      (authority : RuntimeWriteAuthority dp frame.rootDeriv
+      (authority : RuntimeWriteAuthority dp (Blanc.Exec.Frame.rootDeriv frame)
         write.occurrence.node role) :
       Exec.RuntimeOwnerCellAuthority dp ca run key final
 
@@ -121,7 +121,7 @@ theorem Exec.runtimeOwnerCellAuthority_of_committedPost_ne
     (run : Exec pc sevm pre out)
     (installed : Prog.At (runtime dp) ca pc sevm pre)
     (rootExact :
-      (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv).exactInvocation
+      (Blanc.Exec.Deriv.exactInvocation (root := (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv)))
         (runtime dp) ca ca)
     (committed : Execution.commits out = true)
     (hfork : CoveredFork sevm.benvStat.fork)
@@ -137,7 +137,7 @@ theorem Exec.runtimeOwnerCellAuthority_of_committedPost_ne
   rcases Exec.retainedSstore_runtimeOwnerClosure
       run committed installed rootExact write retained owner with
     ⟨frame, frameCommitted, frameInvocation, sameFrame⟩
-  have frameRaw : frame.rootDeriv ∈ Exec.rawFrameRoots run :=
+  have frameRaw : (Blanc.Exec.Frame.rootDeriv frame) ∈ Exec.rawFrameRoots run :=
     Exec.mem_rawFrameRoots_of_mem_committedFrames
       run frame frameCommitted
   rcases Blanc.LidoCircuitBreaker.Exec.NinstOccurrence.runtimeWriteAuthority_of_rawFrameRoot
@@ -179,7 +179,7 @@ theorem ProcessMessage.runtimeOwnerCellAuthority_of_clean_settled_ne
     (run : Exec 0 sevm pre out)
     (installed : Prog.At (runtime dp) ca 0 sevm pre)
     (rootExact :
-      (⟨0, sevm, pre, out, run⟩ : Exec.Deriv).exactInvocation
+      (Blanc.Exec.Deriv.exactInvocation (root := (⟨0, sevm, pre, out, run⟩ : Exec.Deriv)))
         (runtime dp) ca ca)
     (process : ProcessMessage msg
       (.some ⟨⟨0, sevm, pre⟩, out⟩) (.ok settled))
@@ -321,8 +321,8 @@ theorem exists_runtimeWriteAuthority_of_directPauseControl :
     directPause_zeroCode_postWrite_error_control
   let root : Exec.Deriv := ⟨0, sevm, pre, .error (.revert, raw), rootExec⟩
   have invocation :
-      root.exactInvocation (runtime officialParams)
-        (Nat.toAdr 100) (Nat.toAdr 100) := by
+      (Blanc.Exec.Deriv.exactInvocation (runtime officialParams)
+        (Nat.toAdr 100) (Nat.toAdr 100) root) := by
     refine ⟨rfl, ?_, ?_, ?_⟩
     · show sevm.currentTarget = Nat.toAdr 100
       rw [sevmEq]

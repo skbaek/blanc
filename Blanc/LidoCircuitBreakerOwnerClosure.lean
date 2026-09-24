@@ -23,7 +23,7 @@ def Exec.CoreRuntimeOwnerClosed (dp : DeployParams) (ca : Adr)
     (sevm.currentTarget = ca → sevm.codeAddress = some ca) →
     ∀ frame ∈ Exec.committedFrames run,
       frame.sevm.currentTarget = ca →
-        frame.exactInvocation (runtime dp) ca ca
+        (Blanc.Exec.Frame.exactInvocation (runtime dp) ca ca frame)
 
 /-- CALL and STATICCALL initialize a spawned child with its target's direct
 code address, including the same-target case where the generic away-from-parent
@@ -714,7 +714,7 @@ private theorem Exec.runtimeDescendantOwnerClosure :
       ∀ {dp : DeployParams} {ca : Adr}
         {rootPc : Nat} {rootPre : Devm} {rootOut : Execution}
         {rootRun : Exec rootPc sevm rootPre rootOut},
-        (⟨rootPc, sevm, rootPre, rootOut, rootRun⟩ : Exec.Deriv).exactInvocation
+        (Blanc.Exec.Deriv.exactInvocation (root := (⟨rootPc, sevm, rootPre, rootOut, rootRun⟩ : Exec.Deriv)))
           (runtime dp) ca ca →
         Exec.Deriv.ParentPrefix
           ⟨rootPc, sevm, rootPre, rootOut, rootRun⟩
@@ -724,7 +724,7 @@ private theorem Exec.runtimeDescendantOwnerClosure :
           (fun pc s d e _ => Exec.CoreRuntimeOwnerClosed dp ca pc s d e) →
         ∀ frame ∈ Exec.descendantFrames run,
           frame.sevm.currentTarget = ca →
-            frame.exactInvocation (runtime dp) ca ca := by
+            (Blanc.Exec.Frame.exactInvocation (runtime dp) ca ca frame) := by
   intro pc sevm pre out run
   induction run
   case halt curPc s d e hstep =>
@@ -867,7 +867,7 @@ private theorem Exec.CoreRuntimeOwnerClosed.atTarget
     Exec.CoreRuntimeOwnerClosed dp ca 0 sevm pre (.ok post) := by
   intro run committed installed direct frame member owner
   let root : Exec.Deriv := ⟨0, sevm, pre, .ok post, run⟩
-  have rootExact : root.exactInvocation (runtime dp) ca ca := by
+  have rootExact : (Blanc.Exec.Deriv.exactInvocation (runtime dp) ca ca root) := by
     refine ⟨rfl, target, direct target, ?_⟩
     exact (installed.2 target).1
   unfold Exec.committedFrames at member
@@ -926,11 +926,11 @@ theorem Exec.runtimeOwnerClosure
     (committed : Execution.commits out = true)
     (installed : Prog.At (runtime dp) ca pc sevm pre)
     (rootExact :
-      (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv).exactInvocation
+      (Blanc.Exec.Deriv.exactInvocation (root := (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv)))
         (runtime dp) ca ca) :
     ∀ frame ∈ Exec.committedFrames run,
       frame.sevm.currentTarget = ca →
-        frame.exactInvocation (runtime dp) ca ca := by
+        (Blanc.Exec.Frame.exactInvocation (runtime dp) ca ca frame) := by
   have lifted := Exec.coreRuntimeOwnerClosed (dp := dp) (ca := ca)
     pc sevm pre out run installed
   exact lifted run committed installed
@@ -956,15 +956,15 @@ theorem Exec.retainedSstore_runtimeOwnerClosure
     (committed : Execution.commits out = true)
     (installed : Prog.At (runtime dp) ca pc sevm pre)
     (rootExact :
-      (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv).exactInvocation
+      (Blanc.Exec.Deriv.exactInvocation (root := (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv)))
         (runtime dp) ca ca)
     (write : Exec.SuccessfulSstoreOccurrence
       (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv))
     (retained : write.Retained)
     (owner : write.storageOwner = ca) :
     ∃ frame ∈ Exec.committedFrames run,
-      frame.exactInvocation (runtime dp) ca ca ∧
-        Exec.Deriv.ParentPrefix frame.rootDeriv write.occurrence.node := by
+      (Blanc.Exec.Frame.exactInvocation (runtime dp) ca ca frame) ∧
+        Exec.Deriv.ParentPrefix (Blanc.Exec.Frame.rootDeriv frame) write.occurrence.node := by
   rcases (Exec.mem_retainedNodes_iff_committedFrame_parentPrefix
       run write.occurrence.node).mp retained with
     ⟨frame, member, sameFrame⟩

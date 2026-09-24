@@ -247,7 +247,7 @@ theorem Exec.ledgerMirrors_attributionInner (dp : DeployParams) (ca : Adr)
       split
       · rename_i hs
         rw [Exec.flowActions_eq_root_append_descendants child
-          (Blanc.Frame.raw_commits_of_settlementCommits hs)]
+          (Jaune.Frame.raw_commits_of_settlementCommits hs)]
         exact LedgerMirrors.frameContribution _ ihChild
       · exact .nil dp ca
 
@@ -451,7 +451,7 @@ theorem Exec.exists_descendantFrame_of_mem_attributionInner
   | cont hstep next ih =>
       intro record hmem
       simp only [Exec.attributionInner] at hmem
-      simpa only [Blanc.Exec.descendantFrames] using ih record hmem
+      simpa only [Jaune.Exec.descendantFrames] using ih record hmem
   | doneErr hstep henter hresume =>
       intro record hmem
       simp only [Exec.attributionInner] at hmem
@@ -459,7 +459,7 @@ theorem Exec.exists_descendantFrame_of_mem_attributionInner
   | doneOk hstep henter hresume next ih =>
       intro record hmem
       simp only [Exec.attributionInner] at hmem
-      simpa only [Blanc.Exec.descendantFrames] using ih record hmem
+      simpa only [Jaune.Exec.descendantFrames] using ih record hmem
   | runErr hstep henter child hresume ihChild =>
       intro record hmem
       simp only [Exec.attributionInner] at hmem
@@ -467,7 +467,7 @@ theorem Exec.exists_descendantFrame_of_mem_attributionInner
   | runOk hstep henter child hresume next ihChild ihNext =>
       intro record hmem
       simp only [Exec.attributionInner] at hmem
-      simp only [Blanc.Exec.descendantFrames]
+      simp only [Jaune.Exec.descendantFrames]
       rcases List.mem_append.mp hmem with hhere | hnext
       · split at hhere
         · rename_i hsettles
@@ -498,10 +498,10 @@ theorem Exec.exists_committedFrame_of_mem_attributionStream
   unfold Exec.attributionStream at hmem
   split at hmem
   · rename_i hcommits
-    have hframes : Blanc.Exec.committedFrames run =
+    have hframes : Jaune.Exec.committedFrames run =
         Exec.Frame.ofRun run hcommits ::
-          Blanc.Exec.descendantFrames run := by
-      unfold Blanc.Exec.committedFrames
+          Jaune.Exec.descendantFrames run := by
+      unfold Jaune.Exec.committedFrames
       rw [dif_pos hcommits]
     rcases Exec.mem_frameContribution hmem with ⟨hrecord, hexact⟩ | hinner
     · exact ⟨_, by rw [hframes]; exact List.mem_cons_self, hrecord, hexact⟩
@@ -518,7 +518,7 @@ def RetainedXlot.AllFramesCovered :
     {xl : Xlot} → RetainedXlot xl → Prop
   | _, .none => True
   | _, .some run =>
-      ∀ frame ∈ Blanc.Exec.committedFrames run,
+      ∀ frame ∈ Jaune.Exec.committedFrames run,
         CoveredFork frame.sevm.benvStat.fork
 
 theorem ProcessMessageTrace.allFramesCovered

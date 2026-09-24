@@ -461,7 +461,7 @@ theorem BodyExecutionOccurrence.exit_callChild_frameOccurrence
   refine ⟨node, gasWord, isCall, sitePc, sameFrame, storEq, codeEqNode,
     stackPref, memWf, ⟨callPost, guardPost, returnPre, stepEq, accepted⟩, ?_⟩
   intro childEvm raw slotEq
-  have sevmEq : node.node.sevm = occurrence.execution.sevm := sameFrame.sevm_eq
+  have sevmEq : node.node.sevm = occurrence.execution.sevm := (Blanc.Exec.Deriv.ParentPrefix.sevm_eq sameFrame)
   rcases accepted with
     ⟨acceptedGas, acceptedRest, parent, child, xl, delegated, nextAddress,
       childCode, avail, acceptedPc, acceptedPref, acceptedRun, acceptedPop,

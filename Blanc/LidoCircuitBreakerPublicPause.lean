@@ -144,7 +144,7 @@ theorem publicPause_reaches_pauseAfterSet
   have unlockedPre := premises.unlocked
   have unlockedMid : mid.getTransVal sevm.currentTarget lockKey = 0 := by
     unfold Devm.getTransVal at unlockedPre ⊢
-    rw [(Devm.Burn.of_burnBy entryBurn).transientStorage_eq]
+    rw [(Blanc.Devm.Burn.transientStorage_eq (Devm.Burn.of_burnBy entryBurn))]
     exact unlockedPre
   have assignedMid : mid.getStorVal sevm.currentTarget
       (assignmentSlot target) = sevm.caller.toB256 := by

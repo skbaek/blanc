@@ -57,7 +57,7 @@ The verifier is static and fail-closed. It reads this file and requires that:
 
 Channels 2 and 3 are static comparisons against expectations that the
 authorities themselves verify against Lean by elaborating a from-scratch
-`#full_axioms` probe (the shared walker in `scripts/AxiomAudit.lean`; Lean's
+`#full_axioms` probe (the shared walker, the pinned Jaune's `AxiomAudit` module; Lean's
 own `#print axioms` report is not a verdict source, lean4#15226) — so this
 register's axiom column is Lean-checked transitively, through gates whose own
 verdicts are recorded on the completion candidate. Running this gate with

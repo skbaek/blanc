@@ -187,7 +187,7 @@ private theorem noExec_of_selectedRuntimeEntry
     {selector : B256} {body : Func}
     (run : Exec pc sevm pre out)
     (invocation :
-      (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv).exactInvocation
+      (Blanc.Exec.Deriv.exactInvocation (root := (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv)))
         (runtime dp) gateway gateway)
     (guardZero :
       B256.ltCheck sevm.data.length.toB256 (4 : B256) = 0)
@@ -490,7 +490,7 @@ theorem pinnedPauseTarget_circuitBreaker_noninterference
     · intro target sameFrame x execAt
       rcases inbound with ⟨duration, exactCall⟩ | exactCall
       · have invocation :
-            (⟨pc, sevm, pre, raw, actualRun⟩ : Exec.Deriv).exactInvocation
+            (Blanc.Exec.Deriv.exactInvocation (root := (⟨pc, sevm, pre, raw, actualRun⟩ : Exec.Deriv)))
               (runtime dp) gateway gateway := by
           refine ⟨pcZero, current.trans exactCall.currentTarget,
             codeAddress.trans exactCall.codeAddress, ?_⟩
@@ -514,7 +514,7 @@ theorem pinnedPauseTarget_circuitBreaker_noninterference
           (by simp [sharedNonpayableFuncs]) pauseExecMembers
             (pauseForShared_reachableExecFree dp) sameFrame x execAt
       · have invocation :
-            (⟨pc, sevm, pre, raw, actualRun⟩ : Exec.Deriv).exactInvocation
+            (Blanc.Exec.Deriv.exactInvocation (root := (⟨pc, sevm, pre, raw, actualRun⟩ : Exec.Deriv)))
               (runtime dp) gateway gateway := by
           refine ⟨pcZero, current.trans exactCall.currentTarget,
             codeAddress.trans exactCall.codeAddress, ?_⟩

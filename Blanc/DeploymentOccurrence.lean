@@ -41,7 +41,7 @@ leading compiler `JUMPDEST`. -/
 theorem Exec.Deriv.SourceCursor.mainToward_appended
     {root target : Exec.Deriv} {program : Prog}
     {pfxCode sfxData : Bytes} {targetInstruction : Ninst}
-    (identity : root.exactProgramPrefix program pfxCode sfxData)
+    (identity : (Blanc.Exec.Deriv.exactProgramPrefix program pfxCode sfxData root))
     (reached : Exec.Deriv.ParentPrefix root target)
     (instructionAt : Ninst.At target.sevm.code target.pc targetInstruction) :
     ∃ cursor : Exec.Deriv.SourceCursor root program ⟨0, []⟩ program.main,
@@ -61,7 +61,7 @@ theorem Exec.Deriv.SourceCursor.mainToward_appended
     (Prog.jumpable_of_get?_table_appended hcompile hcode hget).2
   cases reached with
   | refl =>
-      exact (instructionAt.false_of_jinstAt jumpdestAt).elim
+      exact ((Blanc.Ninst.At.false_of_jinstAt instructionAt) jumpdestAt).elim
   | step edge rest =>
       cases edge with
       | cont hstep next =>
@@ -91,7 +91,7 @@ theorem Exec.Deriv.SourceCursor.mainToward_appended
               simpa only [hget] using member⟩
           have notStore : ¬ Ninst.At sevm.code 0 (.reg .sstore) := by
             intro storeHere
-            exact storeHere.false_of_jinstAt jumpdestAt
+            exact (Blanc.Ninst.At.false_of_jinstAt storeHere) jumpdestAt
           exact ⟨cursor, .step parentEdge notStore (.refl _), rest⟩
       | doneOk hstep henter hresume next =>
           have hstatic :
@@ -189,7 +189,7 @@ private theorem Exec.Deriv.ParentPrefix.advanceJumpToward_appended
   rcases start with ⟨pc, sevm, pre, out, run⟩
   dsimp at reached instructionAt jumpAt
   cases reached with
-  | refl => exact (instructionAt.false_of_jinstAt jumpAt).elim
+  | refl => exact ((Blanc.Ninst.At.false_of_jinstAt instructionAt) jumpAt).elim
   | step edge rest =>
       cases edge with
       | cont hstep next =>
@@ -236,11 +236,11 @@ theorem Exec.Deriv.SourceCursor.callToward_appended
     have h := @Prog.get?_table 0 index (program.main :: program.aux)
     rw [hgetTable] at h
     simpa using h.symm
-  rcases reached.advancePushToward_appended ⟨pushLe, pushAt⟩ (by simp)
+  rcases (Blanc.Exec.Deriv.ParentPrefix.advancePushToward_appended reached) ⟨pushLe, pushAt⟩ (by simp)
       targetNonPush instructionAt with
     ⟨afterPushPre, afterPush, pushEdge, afterPushReached, pushBurn⟩
   rw [List.toB256_pair _ hloc] at pushBurn
-  rcases afterPushReached.advanceJumpToward_appended jumpAt instructionAt with
+  rcases (Blanc.Exec.Deriv.ParentPrefix.advanceJumpToward_appended afterPushReached) jumpAt instructionAt with
     ⟨nextPc, beforeJumpdestPre, beforeJumpdest, jumpEdge,
       beforeJumpdestReached, jumpRun⟩
   rcases of_jump_run jumpRun with
@@ -261,7 +261,7 @@ theorem Exec.Deriv.SourceCursor.callToward_appended
     ⟨jumpdestAt, bodySlice⟩
   have bodyBoundary := Prog.jumpable_of_get?_table_appended
     compiled.compile_eq compiled.code_eq hgetTable
-  rcases beforeJumpdestReached.advanceJumpToward_appended jumpdestAt
+  rcases (Blanc.Exec.Deriv.ParentPrefix.advanceJumpToward_appended beforeJumpdestReached) jumpdestAt
       instructionAt with
     ⟨bodyPc, bodyPre, bodyExec, jumpdestEdge, bodyReached,
       jumpdestRun⟩
@@ -286,11 +286,11 @@ theorem Exec.Deriv.SourceCursor.callToward_appended
   have jumpNotStore : ¬ Ninst.At root.sevm.code (cursor.pc + 3)
       (.reg .sstore) := by
     intro storeAt
-    exact storeAt.false_of_jinstAt jumpAt
+    exact (Blanc.Ninst.At.false_of_jinstAt storeAt) jumpAt
   have jumpdestNotStore : ¬ Ninst.At root.sevm.code loc
       (.reg .sstore) := by
     intro storeAt
-    exact storeAt.false_of_jinstAt jumpdestAt
+    exact (Blanc.Ninst.At.false_of_jinstAt storeAt) jumpdestAt
   let compilerPrefix : Exec.Deriv.ParentNonSstorePrefix
       cursor.node bodyCursor.node :=
     .step pushEdge pushNotStore
@@ -350,8 +350,8 @@ private theorem Exec.Deriv.SourceCursor.toward_appended_core :
       have lastAt : Linst.At root.sevm.code cursor.pc outcome :=
         Linst.at_of_slice cursor.codeSlice
       cases chronology.cursorToTarget with
-      | refl => exact (instructionAt.false_of_linstAt lastAt).elim
-      | step edge suffix => exact (edge.false_of_linstAt lastAt).elim
+      | refl => exact ((Blanc.Ninst.At.false_of_linstAt instructionAt) lastAt).elim
+      | step edge suffix => exact ((Blanc.Exec.Deriv.ParentStep.false_of_linstAt edge) lastAt).elim
   | next instruction tail =>
       cases chronology.cursorToTarget with
       | refl =>
@@ -382,7 +382,7 @@ private theorem Exec.Deriv.SourceCursor.toward_appended_core :
           let tailChronology :
               Exec.Deriv.SourceCursor.Chronology
                 initial tailCursor target :=
-            ⟨chronology.initialToCursor.trans_appended
+            ⟨(Blanc.Exec.Deriv.ParentPrefix.trans_appended chronology.initialToCursor)
                 (.step tailEdge (.refl _)),
               tailReached⟩
           have rest := ih tailCursor.node tailEdge.lt initial tailCursor rfl
@@ -395,7 +395,7 @@ private theorem Exec.Deriv.SourceCursor.toward_appended_core :
         ⟨arm, compilerPrefix, armReached, decrease⟩
       · let armChronology :
             Exec.Deriv.SourceCursor.Chronology initial arm target :=
-          ⟨chronology.initialToCursor.trans_appended
+          ⟨(Blanc.Exec.Deriv.ParentPrefix.trans_appended chronology.initialToCursor)
               compilerPrefix.toParentPrefix_appended,
             armReached⟩
         have rest := ih arm.node decrease initial arm rfl compiled
@@ -403,7 +403,7 @@ private theorem Exec.Deriv.SourceCursor.toward_appended_core :
         exact .branchLeft cursor chronology arm compilerPrefix rest
       · let armChronology :
             Exec.Deriv.SourceCursor.Chronology initial arm target :=
-          ⟨chronology.initialToCursor.trans_appended
+          ⟨(Blanc.Exec.Deriv.ParentPrefix.trans_appended chronology.initialToCursor)
               compilerPrefix.toParentPrefix_appended,
             armReached⟩
         have rest := ih arm.node decrease initial arm rfl compiled
@@ -415,7 +415,7 @@ private theorem Exec.Deriv.SourceCursor.toward_appended_core :
         ⟨body, lookup, bodyCursor, compilerPrefix, bodyReached, decrease⟩
       let bodyChronology :
           Exec.Deriv.SourceCursor.Chronology initial bodyCursor target :=
-        ⟨chronology.initialToCursor.trans_appended
+        ⟨(Blanc.Exec.Deriv.ParentPrefix.trans_appended chronology.initialToCursor)
             compilerPrefix.toParentPrefix_appended,
           bodyReached⟩
       have rest := ih bodyCursor.node decrease initial bodyCursor rfl compiled
@@ -463,7 +463,7 @@ has a structural site in the prefix program. -/
 theorem Exec.Deriv.nonPush_sourceSite_appended
     {root target : Exec.Deriv} {program : Prog}
     {pfxCode sfxData : Bytes} {instruction : Ninst}
-    (identity : root.exactProgramPrefix program pfxCode sfxData)
+    (identity : (Blanc.Exec.Deriv.exactProgramPrefix program pfxCode sfxData root))
     (sameFrame : Exec.Deriv.ParentPrefix root target)
     (nonPush : NinstNonPush instruction)
     (instructionAt : Ninst.At target.sevm.code target.pc instruction) :
@@ -481,20 +481,20 @@ site in the prefix program, independently of the root outcome. -/
 theorem Exec.Deriv.sstore_sourceSite_appended
     {root target : Exec.Deriv} {program : Prog}
     {pfxCode sfxData : Bytes}
-    (identity : root.exactProgramPrefix program pfxCode sfxData)
+    (identity : (Blanc.Exec.Deriv.exactProgramPrefix program pfxCode sfxData root))
     (sameFrame : Exec.Deriv.ParentPrefix root target)
     (storeAt : Ninst.At target.sevm.code target.pc (.reg .sstore)) :
     ∃ site : Prog.SourceSite,
       site ∈ program.sourceSites ∧
       site.pc = target.pc ∧
       site.instruction = .reg .sstore := by
-  exact root.nonPush_sourceSite_appended identity sameFrame (by trivial) storeAt
+  exact (Blanc.Exec.Deriv.nonPush_sourceSite_appended (root := root)) identity sameFrame (by trivial) storeAt
 
 /-- Successful-SSTORE specialization for an arbitrary-outcome root whose
 compiled program occupies an exact prefix of the full code image. -/
 theorem Exec.Deriv.successfulSstore_sourceSite_appended
     {root : Exec.Deriv} {program : Prog} {pfxCode sfxData : Bytes}
-    (identity : root.exactProgramPrefix program pfxCode sfxData)
+    (identity : (Blanc.Exec.Deriv.exactProgramPrefix program pfxCode sfxData root))
     (write : Exec.SuccessfulSstoreOccurrence root)
     (sameFrame : Exec.Deriv.ParentPrefix root write.occurrence.node) :
     ∃ site : Prog.SourceSite,
@@ -505,6 +505,6 @@ theorem Exec.Deriv.successfulSstore_sourceSite_appended
       write.occurrence.node.pc (.reg .sstore) := by
     rw [← write.instruction_eq]
     exact write.occurrence.decoded
-  exact root.sstore_sourceSite_appended identity sameFrame storeAt
+  exact (Blanc.Exec.Deriv.sstore_sourceSite_appended (root := root)) identity sameFrame storeAt
 
 end Blanc

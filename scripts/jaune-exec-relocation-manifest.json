@@ -1,0 +1,1193 @@
+{
+ "schema": 1,
+ "source": "Jaune rename map jaune-exec-rename-map/1 (decision jaune-destination-axiom-pins-20260924): the handwritten declarations of Jaune's canonical execution layer, relocated from Blanc and adopted at Jaune c326e3f99e3fecce7b88b85699c93dc82aa8a738",
+ "jauneRoot": ".lake/packages/jaune",
+ "declarations": [
+  {
+   "jaune": "Jaune.Exec",
+   "blanc": "Blanc.Exec",
+   "module": "Jaune/Exec.lean",
+   "kind": "inductive"
+  },
+  {
+   "jaune": "Jaune.Xlot.Filled",
+   "blanc": "Blanc.Xlot.Filled",
+   "module": "Jaune/Exec.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Exec.halt_inv",
+   "blanc": "Blanc.Exec.halt_inv",
+   "module": "Jaune/Exec.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Exec.last_inv",
+   "blanc": "Blanc.Exec.last_inv",
+   "module": "Jaune/Exec.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Ninst.Run",
+   "blanc": "Blanc.Ninst.Run",
+   "module": "Jaune/Exec.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Fueled.ext",
+   "blanc": "Blanc.Fueled.ext",
+   "module": "Jaune/Exec.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Fueled.exhausted_ne_ofExcept",
+   "blanc": "Blanc.Fueled.exhausted_ne_ofExcept",
+   "module": "Jaune/Exec.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Fueled.ofExcept_inj",
+   "blanc": "Blanc.Fueled.ofExcept_inj",
+   "module": "Jaune/Exec.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.genericCall.step_spawn_depth",
+   "blanc": "Blanc.genericCall.step_spawn_depth",
+   "module": "Jaune/Exec.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.genericCreate.step_spawn_depth",
+   "blanc": "Blanc.genericCreate.step_spawn_depth",
+   "module": "Jaune/Exec.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.genericCallAmsterdam.step_spawn_depth",
+   "blanc": "Blanc.genericCallAmsterdam.step_spawn_depth",
+   "module": "Jaune/Exec.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.genericCreateAmsterdam.step_spawn_depth",
+   "blanc": "Blanc.genericCreateAmsterdam.step_spawn_depth",
+   "module": "Jaune/Exec.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Xinst.step_spawn_depth",
+   "blanc": "Blanc.Xinst.step_spawn_depth",
+   "module": "Jaune/Exec.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.genericCall.step_spawn_benvStat",
+   "blanc": "Blanc.genericCall.step_spawn_benvStat",
+   "module": "Jaune/Exec.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.genericCreate.step_spawn_benvStat",
+   "blanc": "Blanc.genericCreate.step_spawn_benvStat",
+   "module": "Jaune/Exec.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.genericCallAmsterdam.step_spawn_benvStat",
+   "blanc": "Blanc.genericCallAmsterdam.step_spawn_benvStat",
+   "module": "Jaune/Exec.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.genericCreateAmsterdam.step_spawn_benvStat",
+   "blanc": "Blanc.genericCreateAmsterdam.step_spawn_benvStat",
+   "module": "Jaune/Exec.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Xinst.step_spawn_benvStat",
+   "blanc": "Blanc.Xinst.step_spawn_benvStat",
+   "module": "Jaune/Exec.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Ninst.step_spawn_depth",
+   "blanc": "Blanc.Ninst.step_spawn_depth",
+   "module": "Jaune/Exec.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Step.spawn_depth_lt",
+   "blanc": "Blanc.Step.spawn_depth_lt",
+   "module": "Jaune/Exec.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.of_exec'",
+   "blanc": "Blanc.of_exec'",
+   "module": "Jaune/Exec.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.of_exec",
+   "blanc": "Blanc.of_exec",
+   "module": "Jaune/Exec.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.exec_iff_exec_eq",
+   "blanc": "Blanc.exec_iff_exec_eq",
+   "module": "Jaune/Exec.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Xlot.filled_exec",
+   "blanc": "Blanc.Xlot.filled_exec",
+   "module": "Jaune/Exec.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.of_runFrame",
+   "blanc": "Blanc.of_runFrame",
+   "module": "Jaune/Exec.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.of_processMessage",
+   "blanc": "Blanc.of_processMessage",
+   "module": "Jaune/Exec.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.of_processCreateMessage",
+   "blanc": "Blanc.of_processCreateMessage",
+   "module": "Jaune/Exec.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Jinst.Run",
+   "blanc": "Blanc.Jinst.Run",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Linst.Run",
+   "blanc": "Blanc.Linst.Run",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Xlot",
+   "blanc": "Blanc.Xlot",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Devm.Rels",
+   "blanc": "Blanc.Devm.Rels",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "structure"
+  },
+  {
+   "jaune": "Jaune.Devm.Rel",
+   "blanc": "Blanc.Devm.Rel",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "structure"
+  },
+  {
+   "jaune": "Jaune.Devm.Rels.eq",
+   "blanc": "Blanc.Devm.Rels.eq",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Devm.Burn",
+   "blanc": "Blanc.Devm.Burn",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Linst.At",
+   "blanc": "Blanc.Linst.At",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Ninst.At",
+   "blanc": "Blanc.Ninst.At",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Jinst.At",
+   "blanc": "Blanc.Jinst.At",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Rinst.At",
+   "blanc": "Blanc.Rinst.At",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Xinst.At",
+   "blanc": "Blanc.Xinst.At",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.RunFrame",
+   "blanc": "Blanc.RunFrame",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.ExecuteCode",
+   "blanc": "Blanc.ExecuteCode",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.ProcessMessage",
+   "blanc": "Blanc.ProcessMessage",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.ProcessCreateMessage",
+   "blanc": "Blanc.ProcessCreateMessage",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.XStep.Run",
+   "blanc": "Blanc.XStep.Run",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.GenericCreate",
+   "blanc": "Blanc.GenericCreate",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.GenericCall",
+   "blanc": "Blanc.GenericCall",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.GenericCreateAmsterdam",
+   "blanc": "Blanc.GenericCreateAmsterdam",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.GenericCallAmsterdam",
+   "blanc": "Blanc.GenericCallAmsterdam",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Xinst.Run",
+   "blanc": "Blanc.Xinst.Run",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Step.Run",
+   "blanc": "Blanc.Step.Run",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Ninst.StepRun",
+   "blanc": "Blanc.Ninst.StepRun",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Step.run_ofExecution",
+   "blanc": "Blanc.Step.run_ofExecution",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Step.ofExecution_ne_spawn",
+   "blanc": "Blanc.Step.ofExecution_ne_spawn",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Step.ofJump_ne_spawn",
+   "blanc": "Blanc.Step.ofJump_ne_spawn",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.XStep.toStep_spawn",
+   "blanc": "Blanc.XStep.toStep_spawn",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.XStep.run_toStep",
+   "blanc": "Blanc.XStep.run_toStep",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Step.run_ofJump",
+   "blanc": "Blanc.Step.run_ofJump",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Step.ofExecution_cont",
+   "blanc": "Blanc.Step.ofExecution_cont",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Step.ofExecution_ne_halt_ok",
+   "blanc": "Blanc.Step.ofExecution_ne_halt_ok",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Step.ofJump_cont",
+   "blanc": "Blanc.Step.ofJump_cont",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Step.ofJump_ne_halt_ok",
+   "blanc": "Blanc.Step.ofJump_ne_halt_ok",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Ninst.step_cont_pc",
+   "blanc": "Blanc.Ninst.step_cont_pc",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Ninst.step_spawn_pc",
+   "blanc": "Blanc.Ninst.step_spawn_pc",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Ninst.step_ne_halt_ok",
+   "blanc": "Blanc.Ninst.step_ne_halt_ok",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Ninst.step_reg",
+   "blanc": "Blanc.Ninst.step_reg",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Ninst.step_push",
+   "blanc": "Blanc.Ninst.step_push",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Ninst.step_exec",
+   "blanc": "Blanc.Ninst.step_exec",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Ninst.step_dupn",
+   "blanc": "Blanc.Ninst.step_dupn",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Ninst.step_swapn",
+   "blanc": "Blanc.Ninst.step_swapn",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Ninst.step_exchange",
+   "blanc": "Blanc.Ninst.step_exchange",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.RunFrame.of_done",
+   "blanc": "Blanc.RunFrame.of_done",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.RunFrame.of_run",
+   "blanc": "Blanc.RunFrame.of_run",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Frame.enter_run_depth",
+   "blanc": "Blanc.Frame.enter_run_depth",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.benvAfterTransfer_stat",
+   "blanc": "Blanc.benvAfterTransfer_stat",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.initSevm_benvStat",
+   "blanc": "Blanc.initSevm_benvStat",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Msg.withBenv_benvStat",
+   "blanc": "Blanc.Msg.withBenv_benvStat",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Frame.enter_run_benvStat",
+   "blanc": "Blanc.Frame.enter_run_benvStat",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.RunFrame.some_inv",
+   "blanc": "Blanc.RunFrame.some_inv",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.RunFrame.depth_eq",
+   "blanc": "Blanc.RunFrame.depth_eq",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.RunFrame.benvStat_eq",
+   "blanc": "Blanc.RunFrame.benvStat_eq",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.XStep.Run.some_inv",
+   "blanc": "Blanc.XStep.Run.some_inv",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Step.Run.some_inv",
+   "blanc": "Blanc.Step.Run.some_inv",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Ninst.step_spawn_inv",
+   "blanc": "Blanc.Ninst.step_spawn_inv",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.executeCode.enter_inl",
+   "blanc": "Blanc.executeCode.enter_inl",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Frame.enter_run_inv",
+   "blanc": "Blanc.Frame.enter_run_inv",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.ExecuteCode.some_inv",
+   "blanc": "Blanc.ExecuteCode.some_inv",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.executeCode.enter_inr",
+   "blanc": "Blanc.executeCode.enter_inr",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.executeCode.handleErrorWith_none",
+   "blanc": "Blanc.executeCode.handleErrorWith_none",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.executeCode.handleErrorWith_some",
+   "blanc": "Blanc.executeCode.handleErrorWith_some",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.executeCode.handleErrorWith_ok",
+   "blanc": "Blanc.executeCode.handleErrorWith_ok",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Frame.settle_eq_settleMsg_handleErrorWith",
+   "blanc": "Blanc.Frame.settle_eq_settleMsg_handleErrorWith",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.FrameBody",
+   "blanc": "Blanc.FrameBody",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.RunFrame.decompose",
+   "blanc": "Blanc.RunFrame.decompose",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.RunFrame.iff_settleMsg",
+   "blanc": "Blanc.RunFrame.iff_settleMsg",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.ProcessMessage.iff_body",
+   "blanc": "Blanc.ProcessMessage.iff_body",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.ProcessCreateMessage.iff_processMessage",
+   "blanc": "Blanc.ProcessCreateMessage.iff_processMessage",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Evm.step_invOp",
+   "blanc": "Blanc.Evm.step_invOp",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Evm.step_next",
+   "blanc": "Blanc.Evm.step_next",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Evm.step_jump",
+   "blanc": "Blanc.Evm.step_jump",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Evm.step_last",
+   "blanc": "Blanc.Evm.step_last",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Evm.step_spawn_inv",
+   "blanc": "Blanc.Evm.step_spawn_inv",
+   "module": "Jaune/ExecFrame.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Exec.Pred",
+   "blanc": "Blanc.Exec.Pred",
+   "module": "Jaune/ExecDeriv.lean",
+   "kind": "abbrev"
+  },
+  {
+   "jaune": "Jaune.Exec.Fa",
+   "blanc": "Blanc.Exec.Fa",
+   "module": "Jaune/ExecDeriv.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Fortify",
+   "blanc": "Blanc.Fortify",
+   "module": "Jaune/ExecDeriv.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Exec.strong_rec",
+   "blanc": "Blanc.Exec.strong_rec",
+   "module": "Jaune/ExecDeriv.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Exec.Deriv",
+   "blanc": "Blanc.Exec.Deriv",
+   "module": "Jaune/ExecDeriv.lean",
+   "kind": "structure"
+  },
+  {
+   "jaune": "Jaune.Exec.Deriv.Prec",
+   "blanc": "Blanc.Exec.Deriv.Prec",
+   "module": "Jaune/ExecDeriv.lean",
+   "kind": "inductive"
+  },
+  {
+   "jaune": "Jaune.Exec.Deriv.le",
+   "blanc": "Blanc.Exec.Deriv.le",
+   "module": "Jaune/ExecDeriv.lean",
+   "kind": "inductive"
+  },
+  {
+   "jaune": "Jaune.Exec.Deriv.lt",
+   "blanc": "Blanc.Exec.Deriv.lt",
+   "module": "Jaune/ExecDeriv.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Exec.Deriv.lt_of_prec",
+   "blanc": "Blanc.Exec.Deriv.lt_of_prec",
+   "module": "Jaune/ExecDeriv.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Exec.Deriv.gt",
+   "blanc": "Blanc.Exec.Deriv.gt",
+   "module": "Jaune/ExecDeriv.lean",
+   "kind": "abbrev"
+  },
+  {
+   "jaune": "Jaune.Exec.Deriv.eq_or_lt_of_le",
+   "blanc": "Blanc.Exec.Deriv.eq_or_lt_of_le",
+   "module": "Jaune/ExecDeriv.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Exec.Deriv.acc_of_le",
+   "blanc": "Blanc.Exec.Deriv.acc_of_le",
+   "module": "Jaune/ExecDeriv.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.Exec.Deriv.lt.well_founded",
+   "blanc": "Blanc.Exec.Deriv.lt.well_founded",
+   "module": "Jaune/ExecDeriv.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.Exec.Deriv.Pred",
+   "blanc": "Blanc.Exec.Deriv.Pred",
+   "module": "Jaune/ExecDeriv.lean",
+   "kind": "abbrev"
+  },
+  {
+   "jaune": "Jaune.Exec.Deriv.imp",
+   "blanc": "Blanc.Exec.Deriv.imp",
+   "module": "Jaune/ExecDeriv.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Exec.Deriv.Fa",
+   "blanc": "Blanc.Exec.Deriv.Fa",
+   "module": "Jaune/ExecDeriv.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.carryover",
+   "blanc": "Blanc.carryover",
+   "module": "Jaune/ExecDeriv.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Exec.Deriv.strongRec",
+   "blanc": "Blanc.Exec.Deriv.strongRec",
+   "module": "Jaune/ExecDeriv.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.Execution.commits",
+   "blanc": "Blanc.Execution.commits",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Frame.settlementCommits",
+   "blanc": "Blanc.Frame.settlementCommits",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.execution_commits_of_handleErrorWith_clean",
+   "blanc": "Blanc.execution_commits_of_handleErrorWith_clean",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "theorem",
+   "private": true
+  },
+  {
+   "jaune": "Jaune.processMessage_clean_input",
+   "blanc": "Blanc.processMessage_clean_input",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "theorem",
+   "private": true
+  },
+  {
+   "jaune": "Jaune.ProcessMessage.clean_input_state_of_settle",
+   "blanc": "Blanc.ProcessMessage.clean_input_state_of_settle",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.processCreateMessage_clean_input",
+   "blanc": "Blanc.processCreateMessage_clean_input",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "theorem",
+   "private": true
+  },
+  {
+   "jaune": "Jaune.Frame.raw_commits_of_settlementCommits",
+   "blanc": "Blanc.Frame.raw_commits_of_settlementCommits",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.Exec.outcome",
+   "blanc": "Blanc.Exec.outcome",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Exec.Frame",
+   "blanc": "Blanc.Exec.Frame",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "structure"
+  },
+  {
+   "jaune": "Jaune.Execution.committedPost",
+   "blanc": "Blanc.Execution.committedPost",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Exec.Frame.post",
+   "blanc": "Blanc.Exec.Frame.post",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Exec.Frame.ofRun",
+   "blanc": "Blanc.Exec.Frame.ofRun",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Exec.descendantFrames",
+   "blanc": "Blanc.Exec.descendantFrames",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Exec.descendantFrames_runOk_of_settlementCommits",
+   "blanc": "Blanc.Exec.descendantFrames_runOk_of_settlementCommits",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.Exec.descendantFrames_runOk_of_not_settlementCommits",
+   "blanc": "Blanc.Exec.descendantFrames_runOk_of_not_settlementCommits",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.Exec.descendantFrames_runOk_create_codeDepositRollback",
+   "blanc": "Blanc.Exec.descendantFrames_runOk_create_codeDepositRollback",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.Exec.committedFrames",
+   "blanc": "Blanc.Exec.committedFrames",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Exec.committedFrames_eq_nil_of_not_commits",
+   "blanc": "Blanc.Exec.committedFrames_eq_nil_of_not_commits",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.ProcessMessage.settlementCommits_of_some_ok_clean",
+   "blanc": "Blanc.ProcessMessage.settlementCommits_of_some_ok_clean",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.Frame.settlementCommits_ofCall_of_raw_commits",
+   "blanc": "Blanc.Frame.settlementCommits_ofCall_of_raw_commits",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.State.set_bal",
+   "blanc": "Blanc.State.set_bal",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.State.setStor_bal",
+   "blanc": "Blanc.State.setStor_bal",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.State.incrNonce_bal",
+   "blanc": "Blanc.State.incrNonce_bal",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.State.setCode_bal",
+   "blanc": "Blanc.State.setCode_bal",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "lemma"
+  },
+  {
+   "jaune": "Jaune.genericCreate_prepared_bal",
+   "blanc": "Blanc.genericCreate_prepared_bal",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.genericCreate_prepared_getStor",
+   "blanc": "Blanc.genericCreate_prepared_getStor",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.processCreateMessage_msg_bal_eq",
+   "blanc": "Blanc.processCreateMessage_msg_bal_eq",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.chargeStateGas_state_eq",
+   "blanc": "Blanc.chargeStateGas_state_eq",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "theorem",
+   "private": true
+  },
+  {
+   "jaune": "Jaune.processCreateMessage.chargeCodeGas_bal_eq",
+   "blanc": "Blanc.processCreateMessage.chargeCodeGas_bal_eq",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.ProcessCreateMessage.ok_state_eq_inner_of_no_error",
+   "blanc": "Blanc.ProcessCreateMessage.ok_state_eq_inner_of_no_error",
+   "module": "Jaune/ExecSettlement.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.Exec.rawNodes",
+   "blanc": "Blanc.Exec.rawNodes",
+   "module": "Jaune/ExecChronology.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Exec.mem_rawNodes_self",
+   "blanc": "Blanc.Exec.mem_rawNodes_self",
+   "module": "Jaune/ExecChronology.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.Exec.retainedNodesOfCommits",
+   "blanc": "Blanc.Exec.retainedNodesOfCommits",
+   "module": "Jaune/ExecChronology.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Exec.retainedNodes",
+   "blanc": "Blanc.Exec.retainedNodes",
+   "module": "Jaune/ExecChronology.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.Exec.retainedNodes_eq_nil_of_not_commits",
+   "blanc": "Blanc.Exec.retainedNodes_eq_nil_of_not_commits",
+   "module": "Jaune/ExecChronology.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.Exec.retainedNodes_eq_of_commits",
+   "blanc": "Blanc.Exec.retainedNodes_eq_of_commits",
+   "module": "Jaune/ExecChronology.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.Exec.retainedNodes_runOk_of_settlementCommits",
+   "blanc": "Blanc.Exec.retainedNodes_runOk_of_settlementCommits",
+   "module": "Jaune/ExecChronology.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.Exec.retainedNodes_runOk_of_not_settlementCommits",
+   "blanc": "Blanc.Exec.retainedNodes_runOk_of_not_settlementCommits",
+   "module": "Jaune/ExecChronology.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.Exec.Deriv.ParentStep",
+   "blanc": "Blanc.Exec.Deriv.ParentStep",
+   "module": "Jaune/ExecChronology.lean",
+   "kind": "inductive"
+  },
+  {
+   "jaune": "Jaune.Exec.Deriv.ParentStep.unique",
+   "blanc": "Blanc.Exec.Deriv.ParentStep.unique",
+   "module": "Jaune/ExecChronology.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.Exec.Deriv.ParentStep.prec",
+   "blanc": "Blanc.Exec.Deriv.ParentStep.prec",
+   "module": "Jaune/ExecChronology.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.Exec.Deriv.ParentStep.lt",
+   "blanc": "Blanc.Exec.Deriv.ParentStep.lt",
+   "module": "Jaune/ExecChronology.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.Exec.Deriv.ParentPrefix",
+   "blanc": "Blanc.Exec.Deriv.ParentPrefix",
+   "module": "Jaune/ExecChronology.lean",
+   "kind": "inductive"
+  },
+  {
+   "jaune": "Jaune.Exec.Deriv.ParentPrefix.snoc",
+   "blanc": "Blanc.Exec.Deriv.ParentPrefix.snoc",
+   "module": "Jaune/ExecChronology.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.Exec.Deriv.ParentPrefix.trans",
+   "blanc": "Blanc.Exec.Deriv.ParentPrefix.trans",
+   "module": "Jaune/ExecChronology.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.processMessage_eq_settle_exec_of_enter",
+   "blanc": "Blanc.MessageExecution.processMessage_eq_settle_exec_of_enter",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.frameEnter_eq_run_afterTransfer_of_notPrecompile",
+   "blanc": "Blanc.MessageExecution.frameEnter_eq_run_afterTransfer_of_notPrecompile",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.processMessage_eq_settle_exec_afterTransfer_of_notPrecompile",
+   "blanc": "Blanc.MessageExecution.processMessage_eq_settle_exec_afterTransfer_of_notPrecompile",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.processMessage_eq_settle_exec_afterTransfer_of_noCodeAddress",
+   "blanc": "Blanc.MessageExecution.processMessage_eq_settle_exec_afterTransfer_of_noCodeAddress",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.processMessage_eq_settle_exec_afterTransfer",
+   "blanc": "Blanc.MessageExecution.processMessage_eq_settle_exec_afterTransfer",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.executeCode_enter_of_codeAddress_not_precompile",
+   "blanc": "Blanc.MessageExecution.executeCode_enter_of_codeAddress_not_precompile",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.processMessage_eq_settle_exec_afterTransfer_of_codeEntry",
+   "blanc": "Blanc.MessageExecution.processMessage_eq_settle_exec_afterTransfer_of_codeEntry",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.processMessage_eq_settle_exec",
+   "blanc": "Blanc.MessageExecution.processMessage_eq_settle_exec",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.settledRevert",
+   "blanc": "Blanc.MessageExecution.settledRevert",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.settledHalt",
+   "blanc": "Blanc.MessageExecution.settledHalt",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "def"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.processMessage_clean_of_exec_afterTransfer",
+   "blanc": "Blanc.MessageExecution.processMessage_clean_of_exec_afterTransfer",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.processMessage_clean_of_exec",
+   "blanc": "Blanc.MessageExecution.processMessage_clean_of_exec",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.processMessage_revert_of_exec_afterTransfer",
+   "blanc": "Blanc.MessageExecution.processMessage_revert_of_exec_afterTransfer",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.processMessage_revert_of_exec_afterTransfer_of_noCodeAddress",
+   "blanc": "Blanc.MessageExecution.processMessage_revert_of_exec_afterTransfer_of_noCodeAddress",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.processMessage_clean_of_exec_afterTransfer_of_codeEntry",
+   "blanc": "Blanc.MessageExecution.processMessage_clean_of_exec_afterTransfer_of_codeEntry",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.processMessage_revert_of_exec",
+   "blanc": "Blanc.MessageExecution.processMessage_revert_of_exec",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.processMessage_halt_of_exec_afterTransfer",
+   "blanc": "Blanc.MessageExecution.processMessage_halt_of_exec_afterTransfer",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.processMessage_halt_of_exec",
+   "blanc": "Blanc.MessageExecution.processMessage_halt_of_exec",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.settledRevert_error",
+   "blanc": "Blanc.MessageExecution.settledRevert_error",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.settledRevert_output",
+   "blanc": "Blanc.MessageExecution.settledRevert_output",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.settledRevert_logs",
+   "blanc": "Blanc.MessageExecution.settledRevert_logs",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.settledRevert_state",
+   "blanc": "Blanc.MessageExecution.settledRevert_state",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.settledRevert_transientStorage",
+   "blanc": "Blanc.MessageExecution.settledRevert_transientStorage",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.settledHalt_error",
+   "blanc": "Blanc.MessageExecution.settledHalt_error",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.settledHalt_output",
+   "blanc": "Blanc.MessageExecution.settledHalt_output",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.settledHalt_logs",
+   "blanc": "Blanc.MessageExecution.settledHalt_logs",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.settledHalt_state",
+   "blanc": "Blanc.MessageExecution.settledHalt_state",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.MessageExecution.settledHalt_transientStorage",
+   "blanc": "Blanc.MessageExecution.settledHalt_transientStorage",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.Msg.initDevm_stack",
+   "blanc": "Blanc.Msg.initDevm_stack",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.Msg.initDevm_memory",
+   "blanc": "Blanc.Msg.initDevm_memory",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.Msg.initDevm_accessedStorageKeys",
+   "blanc": "Blanc.Msg.initDevm_accessedStorageKeys",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.Msg.initSevm_data",
+   "blanc": "Blanc.Msg.initSevm_data",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  },
+  {
+   "jaune": "Jaune.Msg.initSevm_currentTarget",
+   "blanc": "Blanc.Msg.initSevm_currentTarget",
+   "module": "Jaune/MessageExecution.lean",
+   "kind": "theorem"
+  }
+ ]
+}

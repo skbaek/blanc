@@ -95,17 +95,17 @@ theorem Exec.mem_descendantFrames_installedCode
   induction run with
   | halt hstep =>
       intro hcode frame hmem
-      simp [Blanc.Exec.descendantFrames] at hmem
+      simp [Jaune.Exec.descendantFrames] at hmem
   | cont hstep next ih =>
       intro hcode frame hmem
       apply ih
       · rw [step_ok_getCode_eq (dp := dp) (ca := ca) (xl := .none) trivial
           (by rw [hstep]; exact ⟨rfl, rfl⟩) hcode]
         exact hcode
-      · simpa only [Blanc.Exec.descendantFrames] using hmem
+      · simpa only [Jaune.Exec.descendantFrames] using hmem
   | doneErr hstep henter hresume =>
       intro hcode frame hmem
-      simp [Blanc.Exec.descendantFrames] at hmem
+      simp [Jaune.Exec.descendantFrames] at hmem
   | doneOk hstep henter hresume next ih =>
       intro hcode frame hmem
       apply ih
@@ -114,10 +114,10 @@ theorem Exec.mem_descendantFrames_installedCode
             rw [hstep]
             exact ⟨_, RunFrame.of_done henter, hresume.symm⟩) hcode]
         exact hcode
-      · simpa only [Blanc.Exec.descendantFrames] using hmem
+      · simpa only [Jaune.Exec.descendantFrames] using hmem
   | runErr hstep henter child hresume ihChild =>
       intro hcode frame hmem
-      simp [Blanc.Exec.descendantFrames] at hmem
+      simp [Jaune.Exec.descendantFrames] at hmem
   | @runOk pc sevm pre f rsm pc' cevm raw nextPre out hstep henter child
       hresume next ihChild ihNext =>
       intro hcode frame hmem
@@ -137,7 +137,7 @@ theorem Exec.mem_descendantFrames_installedCode
             rw [hstep]
             exact ⟨_, RunFrame.of_run henter, hresume.symm⟩) hcode]
         exact hcode
-      simp only [Blanc.Exec.descendantFrames] at hmem
+      simp only [Jaune.Exec.descendantFrames] at hmem
       split at hmem
       · simp only [List.mem_append, List.mem_cons] at hmem
         rcases hmem with (rfl | hchild) | hnext
@@ -154,7 +154,7 @@ theorem Exec.committedFrames_installedCode
     ∀ frame ∈ Blanc.Exec.committedFrames run,
       some (frame.pre.getCode ca).toList = Prog.compile (weth10 dp) := by
   intro frame hframe
-  unfold Blanc.Exec.committedFrames at hframe
+  unfold Jaune.Exec.committedFrames at hframe
   split at hframe
   · simp only [List.mem_cons] at hframe
     rcases hframe with rfl | hdesc
@@ -171,19 +171,19 @@ theorem Exec.mem_descendantFrames_isRoot
     Blanc.Weth10.Exec.Frame.IsRoot frame := by
   induction run with
   | halt hstep =>
-      simp [Blanc.Exec.descendantFrames] at hmem
+      simp [Jaune.Exec.descendantFrames] at hmem
   | cont hstep next ih =>
       apply ih
-      simpa only [Blanc.Exec.descendantFrames] using hmem
+      simpa only [Jaune.Exec.descendantFrames] using hmem
   | doneErr hstep henter hresume =>
-      simp [Blanc.Exec.descendantFrames] at hmem
+      simp [Jaune.Exec.descendantFrames] at hmem
   | doneOk hstep henter hresume next ih =>
       apply ih
-      simpa only [Blanc.Exec.descendantFrames] using hmem
+      simpa only [Jaune.Exec.descendantFrames] using hmem
   | runErr hstep henter child hresume ihChild =>
-      simp [Blanc.Exec.descendantFrames] at hmem
+      simp [Jaune.Exec.descendantFrames] at hmem
   | runOk hstep henter child hresume next ihChild ihNext =>
-      simp only [Blanc.Exec.descendantFrames] at hmem
+      simp only [Jaune.Exec.descendantFrames] at hmem
       split at hmem
       · simp only [List.mem_append, List.mem_cons] at hmem
         rcases hmem with (rfl | hchild) | hnext
@@ -203,18 +203,18 @@ theorem Exec.mem_descendantFrames_covered
     CoveredFork frame.sevm.benvStat.fork := by
   induction run with
   | halt hstep =>
-      simp [Blanc.Exec.descendantFrames] at hmem
+      simp [Jaune.Exec.descendantFrames] at hmem
   | cont hstep next ih =>
-      exact ih hfork (by simpa only [Blanc.Exec.descendantFrames] using hmem)
+      exact ih hfork (by simpa only [Jaune.Exec.descendantFrames] using hmem)
   | doneErr hstep henter hresume =>
-      simp [Blanc.Exec.descendantFrames] at hmem
+      simp [Jaune.Exec.descendantFrames] at hmem
   | doneOk hstep henter hresume next ih =>
-      exact ih hfork (by simpa only [Blanc.Exec.descendantFrames] using hmem)
+      exact ih hfork (by simpa only [Jaune.Exec.descendantFrames] using hmem)
   | runErr hstep henter child hresume ihChild =>
-      simp [Blanc.Exec.descendantFrames] at hmem
+      simp [Jaune.Exec.descendantFrames] at hmem
   | runOk hstep henter child hresume next ihChild ihNext =>
       have hchildFork := Evm.step_spawn_child_fork hstep henter hfork
-      simp only [Blanc.Exec.descendantFrames] at hmem
+      simp only [Jaune.Exec.descendantFrames] at hmem
       split at hmem
       · simp only [List.mem_append, List.mem_cons] at hmem
         rcases hmem with (rfl | hchild) | hnext
@@ -231,7 +231,7 @@ theorem Exec.committedFrames_covered
     ∀ frame ∈ Blanc.Exec.committedFrames run,
       CoveredFork frame.sevm.benvStat.fork := by
   intro frame hframe
-  unfold Blanc.Exec.committedFrames at hframe
+  unfold Jaune.Exec.committedFrames at hframe
   split at hframe
   · simp only [List.mem_cons] at hframe
     rcases hframe with rfl | hdesc
@@ -247,7 +247,7 @@ theorem Exec.committedFrames_isRoot
     (hpc : pc = 0) (hmemory : pre.memory = Mem.empty) :
     ∀ frame ∈ Blanc.Exec.committedFrames run, Blanc.Weth10.Exec.Frame.IsRoot frame := by
   intro frame hframe
-  unfold Blanc.Exec.committedFrames at hframe
+  unfold Jaune.Exec.committedFrames at hframe
   split at hframe
   · simp only [List.mem_cons] at hframe
     rcases hframe with rfl | hdesc
@@ -314,7 +314,7 @@ def RetainedXlot.AllFramesRoot :
     {xl : Xlot} → RetainedXlot xl → Prop
   | _, .none => True
   | _, .some run =>
-      ∀ frame ∈ Blanc.Exec.committedFrames run, Blanc.Weth10.Exec.Frame.IsRoot frame
+      ∀ frame ∈ Jaune.Exec.committedFrames run, Blanc.Weth10.Exec.Frame.IsRoot frame
 
 theorem ProcessMessageTrace.allFramesRoot
     {msg : Msg} {out : Except (EvmError × State × AdrSet × Tra) Devm}

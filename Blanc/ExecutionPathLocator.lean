@@ -106,7 +106,7 @@ theorem Exec.NinstOccurrence.exists_root_call_child
   have childCommitted := Frame.raw_commits_of_settlementCommits childSettles
   obtain ⟨next, nodeEq⟩ := Exec.exists_next_of_run_spawn occurrence.node.exc
     spawn entered childRun resumeRaw
-  obtain ⟨index, embedMember⟩ := sameFrame.descendants [] 0
+  obtain ⟨index, embedMember⟩ := (Blanc.Exec.Deriv.ParentPrefix.descendants sameFrame) [] 0
   let child : Exec.LocatedFrame :=
     ⟨[index], Exec.Frame.ofRun childRun childCommitted⟩
   have childMember : child ∈ Exec.committedFramePaths root := by

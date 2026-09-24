@@ -1084,10 +1084,10 @@ theorem ProcessMessage.ethBound_of_redemptionBodyBound
   rcases Frame.enter_run_inv henter with ⟨benv, htransfer, hinit⟩
   have hsettle := (RunFrame.some_inv hprocess).2
   have hsettleCommit :
-      Blanc.Frame.settlementCommits (Frame.ofCall msg) out = true := by
+      Jaune.Frame.settlementCommits (Frame.ofCall msg) out = true := by
     have hclean' : post.error.isNone = true := by
       cases herror : post.error <;> simp_all
-    unfold Blanc.Frame.settlementCommits
+    unfold Jaune.Frame.settlementCommits
     rw [← hsettle]
     exact hclean'
   have hcommit : Execution.commits out = true :=
@@ -1146,7 +1146,7 @@ theorem ProcessMessageTrace.ethBound_of_committedExecSound
 theorem processCreateMessage_msg_bal_eq (msg : Msg) :
     (processCreateMessage.msg msg).benv.state.bal =
       msg.benv.state.bal :=
-  Blanc.processCreateMessage_msg_bal_eq msg
+  Jaune.processCreateMessage_msg_bal_eq msg
 
 theorem MessageReady.processCreateMessage_msg
     {dp : DeployParams} {ca : Adr} {msg : Msg}
@@ -1196,7 +1196,7 @@ theorem processCreateMessage.chargeCodeGas_bal_eq
     {rules : ForkRules} {pre post : Devm}
     (h : processCreateMessage.chargeCodeGas rules pre = .ok post) :
     post.state.bal = pre.state.bal :=
-  _root_.Blanc.processCreateMessage.chargeCodeGas_bal_eq h
+  _root_.Jaune.processCreateMessage.chargeCodeGas_bal_eq h
 
 theorem ProcessCreateMessage.ok_state_eq_inner_of_no_error
     {msg : Msg} {slot : Xlot} {post : Devm}
@@ -1205,7 +1205,7 @@ theorem ProcessCreateMessage.ok_state_eq_inner_of_no_error
     ∃ inner : Devm,
       ProcessMessage (processCreateMessage.msg msg) slot (.ok inner) ∧
       post.state.bal = inner.state.bal :=
-  _root_.Blanc.ProcessCreateMessage.ok_state_eq_inner_of_no_error
+  _root_.Jaune.ProcessCreateMessage.ok_state_eq_inner_of_no_error
     hprocess herror
 
 /-- CREATE settlement around a no-interpreter-slot constructor is also ETH

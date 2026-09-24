@@ -91,9 +91,9 @@ theorem Exec.descendantActions_runOk
   unfold Exec.descendantActions Exec.flowActions
   simp only [Exec.descendantFrames, Exec.committedFrames,
     List.filterMap_append]
-  by_cases hs : Blanc.Frame.settlementCommits f raw = true
+  by_cases hs : Jaune.Frame.settlementCommits f raw = true
   · have hc : Execution.commits raw = true :=
-      Blanc.Frame.raw_commits_of_settlementCommits hs
+      Jaune.Frame.raw_commits_of_settlementCommits hs
     simp only [dif_pos hs, dif_pos hc]
   · simp only [dif_neg hs, List.filterMap_nil, List.nil_append]
 
@@ -1202,7 +1202,7 @@ theorem ProcessMessage.storageSegmentEffect_of_settlement
       (if Blanc.Frame.settlementCommits
           (Frame.ofCall msg) out = true
        then Exec.flowActions dp ca run else [])) := by
-  by_cases hsettle : Blanc.Frame.settlementCommits
+  by_cases hsettle : Jaune.Frame.settlementCommits
       (Frame.ofCall msg) out = true
   · rw [if_pos hsettle]
     let trace : ProcessMessageTrace msg (.ok post) :=
@@ -1215,7 +1215,7 @@ theorem ProcessMessage.storageSegmentEffect_of_settlement
       have hnone : post.error.isNone ≠ true := by
         intro hnone
         apply hsettle
-        unfold Blanc.Frame.settlementCommits
+        unfold Jaune.Frame.settlementCommits
         rw [← hset]
         exact hnone
       cases he : post.error <;> simp_all
@@ -1248,7 +1248,7 @@ theorem ProcessMessage.storageSegmentEffect_of_bodyEffect
       (if Blanc.Frame.settlementCommits
           (Frame.ofCall msg) out = true
        then Exec.flowActions dp ca run else [])) := by
-  by_cases hsettle : Blanc.Frame.settlementCommits
+  by_cases hsettle : Jaune.Frame.settlementCommits
       (Frame.ofCall msg) out = true
   · rw [if_pos hsettle]
     have committed : Execution.commits out = true :=
@@ -1293,7 +1293,7 @@ theorem ProcessMessage.storageSegmentEffect_of_bodyEffect
       have hnone : post.error.isNone ≠ true := by
         intro hnone
         apply hsettle
-        unfold Blanc.Frame.settlementCommits
+        unfold Jaune.Frame.settlementCommits
         rw [← hset]
         exact hnone
       cases he : post.error <;> simp_all
@@ -1442,7 +1442,7 @@ theorem ProcessCreateMessage.storageSegmentEffect_of_bodyEffect
       (if Blanc.Frame.settlementCommits
           (Frame.ofCreate msg) out = true
        then Exec.flowActions dp ca run else [])) := by
-  by_cases hsettle : Blanc.Frame.settlementCommits
+  by_cases hsettle : Jaune.Frame.settlementCommits
       (Frame.ofCreate msg) out = true
   · rw [if_pos hsettle]
     have committed : Execution.commits out = true :=
@@ -1450,7 +1450,7 @@ theorem ProcessCreateMessage.storageSegmentEffect_of_bodyEffect
     rcases hbody committed with ⟨body⟩
     have hset := (RunFrame.some_inv hprocess).2
     have hnone : post.error.isNone = true := by
-      unfold Blanc.Frame.settlementCommits at hsettle
+      unfold Jaune.Frame.settlementCommits at hsettle
       rw [← hset] at hsettle
       exact hsettle
     have herr : post.error.isSome = false := by
@@ -1511,7 +1511,7 @@ theorem ProcessCreateMessage.storageSegmentEffect_of_bodyEffect
       have hnone : post.error.isNone ≠ true := by
         intro hnone
         apply hsettle
-        unfold Blanc.Frame.settlementCommits
+        unfold Jaune.Frame.settlementCommits
         rw [← hset]
         exact hnone
       cases he : post.error <;> simp_all
@@ -1606,7 +1606,7 @@ theorem GenericCall.storageSegmentDelta_some
           (effect.append
             (StorageSegmentEffect.of_getStorCode_eq
               hpostStorage hpostCode)) using 1
-      by_cases hretain : Blanc.Frame.settlementCommits
+      by_cases hretain : Jaune.Frame.settlementCommits
           (Frame.ofCall
             (callMsg sevm (pre.withReturnData []) gas value caller target
               codeAddress stv isStatic ((pre.memory.read ii is).1) code
@@ -1677,7 +1677,7 @@ theorem GenericCall.storageSegmentEffect_some_of_bodyEffect
           (effect.append
             (StorageSegmentEffect.of_getStorCode_eq
               hpostStorage hpostCode)) using 1
-      by_cases hretain : Blanc.Frame.settlementCommits
+      by_cases hretain : Jaune.Frame.settlementCommits
           (Frame.ofCall
             (callMsg sevm (pre.withReturnData []) gas value caller target
               codeAddress stv isStatic ((pre.memory.read ii is).1) code
@@ -1920,7 +1920,7 @@ theorem GenericCreate.storageSegmentEffect_some_of_bodyEffect
             (effect.append
               (StorageSegmentEffect.of_getStorCode_eq
                 hpostStorage hpostCode)) using 1
-        by_cases hretain : Blanc.Frame.settlementCommits
+        by_cases hretain : Jaune.Frame.settlementCommits
             (Frame.ofCreate
               (createMsg sevm
                 (addAccessedAddress

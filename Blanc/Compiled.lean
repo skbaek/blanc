@@ -39,15 +39,15 @@ precondition is needed anywhere below. -/
 
 /-- `Devm.Burn` with the gas decrement pinned to `cost`. -/
 def Devm.BurnBy (cost : Nat) : Devm → Devm → Prop :=
-  Rel {
-    Rels.eq with
+  Devm.Rel {
+    Devm.Rels.eq with
     gasLeft := λ a b => a = b + cost
   }
 
 /-- `Devm.PopBurn` with the gas decrement pinned to `cost`. -/
 def Devm.PopBurnBy (xs : List B256) (cost : Nat) : Devm → Devm → Prop :=
-  Rel {
-    Rels.eq with
+  Devm.Rel {
+    Devm.Rels.eq with
     stack := Stack.Pop xs
     gasLeft := λ a b => a = b + cost
   }

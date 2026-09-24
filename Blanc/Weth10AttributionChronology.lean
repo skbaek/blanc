@@ -1612,14 +1612,14 @@ theorem Exec.Deriv.ParentStepCounted.selected_eq_retained_of_call
           subst retainedRun
           rcases Ninst.step_call_spawn_ofCall hs with ⟨msg, rfl⟩
           by_cases hraw : Execution.commits raw = true
-          · have hcommit : Blanc.Frame.settlementCommits
+          · have hcommit : Jaune.Frame.settlementCommits
                 (Frame.ofCall msg) raw = true :=
               Frame.settlementCommits_ofCall_of_raw_commits hraw
             simp [hcommit, RetainedXlot.attributionStream,
               Exec.attributionStream, hraw]
-          · have hnot : ¬ Blanc.Frame.settlementCommits
+          · have hnot : ¬ Jaune.Frame.settlementCommits
                 (Frame.ofCall msg) raw = true := fun h =>
-              hraw (Blanc.Frame.raw_commits_of_settlementCommits h)
+              hraw (Jaune.Frame.raw_commits_of_settlementCommits h)
             simp [RetainedXlot.attributionStream,
               Exec.attributionStream, hnot, hraw]
 

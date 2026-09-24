@@ -122,7 +122,7 @@ def pairVisit?
 theorem pairVisit?_eq_none_of_foreign {d : Exec.Deriv}
     (wethNe : d.sevm.currentTarget ≠ Composition.ProrataWethVault.wethAccount)
     (vaultNe : d.sevm.currentTarget ≠ vault) :
-    d.pairVisit? vault = none := by
+    (Blanc.Exec.Deriv.pairVisit? vault d) = none := by
   simp [pairVisit?, wethNe, vaultNe]
 
 end Exec.Deriv
