@@ -1166,8 +1166,8 @@ from its pin in either direction — extra or missing. In particular it fails on
 if `AxiomCheck.lean` and `check.sh` disagree about which theorems are audited,
 so a row cannot be dropped silently from either side. Every permitted pin is
 an exact subset of `[propext, Classical.choice, Quot.sound]`; most use all
-three, while the seven compile-shape emitter declarations are pinned to
-`[propext]`.
+three, and the rest pin a strictly smaller set: `[propext, Quot.sound]`,
+`[propext]`, or no axiom at all.
 
 ## WETH fixture suite — execution evidence
 
