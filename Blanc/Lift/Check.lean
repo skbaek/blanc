@@ -43,12 +43,14 @@ structure Entry : Type where
   rets : Nat
 deriving DecidableEq
 
-/-- The byte at `pc`, if any. -/
-def byteAt (code : ByteArray) (pc : Nat) : Option UInt8 := code.toList[pc]?
+/-- The byte at `pc`, if any.  Both byte readers go through `code.data.toList`,
+a projection, rather than `ByteArray.toList`, whose index loop is quadratic
+under kernel reduction (`ByteArray.toList_eq_toList_data` relates them). -/
+def byteAt (code : ByteArray) (pc : Nat) : Option UInt8 := code.data.toList[pc]?
 
 /-- The bytes at `pc` begin with `bs`. -/
 def bytesAt (code : ByteArray) (pc : Nat) (bs : Bytes) : Bool :=
-  decide ((code.toList.drop pc).take bs.length = bs)
+  decide ((code.data.toList.drop pc).take bs.length = bs)
 
 /-- Index labels `0, 1, …` for a frame of length `k`. -/
 def indexPattern (k : Nat) : Pattern :=
@@ -59,11 +61,14 @@ def readBack (frame : List AVal) : Option B256 → Option AVal
   | none => some .unk
   | some i => frame[i.toNat]?
 
-/-- The abstract effect of one non-jump instruction on a frame. -/
+/-- The abstract effect of one non-jump instruction on a frame.  Frames longer
+than the EVM's 1024-word stack are rejected: beyond that, index labels would
+alias modulo `2 ^ 256`. -/
 def absNinst (n : Ninst) (frame : List AVal) : Option (List AVal) :=
   match n with
   | .push bs _ => some (.const (Bytes.toB256 bs) :: frame)
   | n => do
+    guard (frame.length ≤ 1024)
     let out ← ninstTransfer n (indexPattern frame.length)
     out.mapM (readBack frame)
 
@@ -100,6 +105,12 @@ def checkNode (code : ByteArray) (es : List Entry) (m : Nat) :
       byteAt code pc == some (Jinst.toUInt8 .jumpi) &&
         checkNode code es m (pc + 1) a' f && checkNode code es m t.toNat a' g
     | _ => false
+  | pc, a, .branchTo f k =>
+    match a, es[k]? with
+    | .const t :: _ :: a', some e =>
+      byteAt code pc == some (Jinst.toUInt8 .jumpi) && e.pc == t.toNat &&
+        e.rets == m && gotoCompat a' e.frame && checkNode code es m (pc + 1) a' f
+    | _, _ => false
   | pc, a, .jump k =>
     match a, es[k]? with
     | .const t :: a', some e =>
@@ -129,7 +140,7 @@ def checkNode (code : ByteArray) (es : List Entry) (m : Nat) :
 
 /-- A lift certificate: entry `0` is the frame's start at pc `0` with an empty
 frame, and every entry's tree checks against the bytes. -/
-def Cert : Type := List (Entry × SFunc)
+abbrev Cert : Type := List (Entry × SFunc)
 
 def Cert.entries (c : Cert) : List Entry := List.map Prod.fst c
 def Cert.prog (c : Cert) : List SFunc := List.map Prod.snd c
