@@ -325,11 +325,9 @@ theorem bal_entry {sevm : Sevm} {b b' : Devm} {g G : Nat} {sel v : B256} {μ : M
   refine rx_push rfl (by simp) ?_
   exact rx_callRet (j := 6) rfl hcall hrun
 
-set_option maxRecDepth 1000 in
-theorem boSel_eq : Blanc.boSel = 0x70a08231 := by decide
+theorem boSel_eq : Blanc.boSel = 0x70a08231 := by decide +kernel
 
-set_option maxRecDepth 1000 in
-theorem dcSel_eq : Blanc.dcSel = 0x313ce567 := by decide
+theorem dcSel_eq : Blanc.dcSel = 0x313ce567 := by decide +kernel
 
 open Blanc.Lift in
 /-- The dispatcher path to `balanceOf(address)`: five non-matching comparisons,
