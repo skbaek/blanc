@@ -121,6 +121,40 @@ lemma byteAt_jinst_at {code : ByteArray} {pc : Nat} {j : Jinst}
 lemma ninst_bytes_ne_nil (n : Ninst) : Ninst.toBytes n ≠ [] := by
   cases n <;> simp [Ninst.toBytes, pushToB8L]
 
+lemma absNinst_nonpush_eq {n : Ninst} {a : List AVal}
+    (hn : ∀ (bs : Bytes) (fits : bs.length ≤ 32), n ≠ .push bs fits) :
+    absNinst n a =
+      (do
+        guard (a.length ≤ 1024)
+        let out ← ninstTransfer n (indexPattern a.length)
+        out.mapM (readBack a)) := by
+  cases n with
+  | push bs fits => exact (hn bs fits rfl).elim
+  | reg r => rfl
+  | exec x => rfl
+  | dupn i => rfl
+  | swapn i => rfl
+  | exchange i => rfl
+
+lemma absNinst_nonpush_spec {n : Ninst} {a a' : List AVal}
+    (hn : ∀ (bs : Bytes) (fits : bs.length ≤ 32), n ≠ .push bs fits)
+    (h : absNinst n a = some a') :
+    a.length ≤ 1024 ∧ ∃ out,
+      ninstTransfer n (indexPattern a.length) = some out ∧
+      out.mapM (readBack a) = some a' := by
+  rw [absNinst_nonpush_eq hn] at h
+  by_cases hlen : a.length ≤ 1024
+  · cases ht : ninstTransfer n (indexPattern a.length) with
+    | none => simp [hlen, ht] at h
+    | some out =>
+      cases hr : out.mapM (readBack a) with
+      | none => simp [hlen, ht, hr] at h
+      | some a'' =>
+        simp [hlen, ht, hr] at h
+        cases h
+        exact ⟨hlen, out, by simpa using ht, hr⟩
+  · simp [hlen] at h
+
 lemma cert_pair_mem : ∀ (c : Cert) (k : Nat) (e : Entry) (f : SFunc),
     c.entries[k]? = some e → c.prog[k]? = some f → List.Mem (e, f) c
   | [], _, _, _, he, _ => by simp [Cert.entries] at he
@@ -133,6 +167,56 @@ lemma cert_pair_mem : ∀ (c : Cert) (k : Nat) (e : Entry) (f : SFunc),
       apply cert_pair_mem c k e f
       · simpa [Cert.entries] using he
       · simpa [Cert.prog] using hf
+
+lemma cert_prog_of_entry : ∀ (c : Cert) (k : Nat) (e : Entry),
+    c.entries[k]? = some e → ∃ f, c.prog[k]? = some f
+  | [], _, _, he => by simp [Cert.entries] at he
+  | (e0, f0) :: c, 0, e, he => by
+      simp only [Cert.entries, Cert.prog, List.map_cons,
+        List.getElem?_cons_zero, Option.some.injEq] at he
+      cases he
+      exact ⟨f0, by simp [Cert.prog]⟩
+  | (e0, f0) :: c, k + 1, e, he => by
+      apply cert_prog_of_entry c k e
+      simpa [Cert.entries] using he
+
+lemma frameMatches_gotoCompat {ρ : B256} :
+    ∀ {a e s}, gotoCompat a e = true → FrameMatches ρ a s →
+      FrameMatches ρ e s := by
+  intro a
+  induction a with
+  | nil =>
+    intro e s hg hm
+    cases e with
+    | nil => exact hm
+    | cons e es => simp [gotoCompat] at hg
+  | cons av a ih =>
+    intro e s hg hm
+    cases e with
+    | nil => simp [gotoCompat] at hg
+    | cons ev es =>
+      cases hm with
+      | cons hhead htail =>
+        cases av <;> cases ev <;>
+          simp_all [gotoCompat, FrameMatches, AVal.Matches]
+
+lemma ret_mem_of_gotoCompat : ∀ {a e : List AVal},
+    gotoCompat a e = true → AVal.ret ∈ e → AVal.ret ∈ a := by
+  intro a
+  induction a with
+  | nil =>
+    intro e hg hm
+    cases e with
+    | nil => simp at hm
+    | cons e es => simp [gotoCompat] at hg
+  | cons av a ih =>
+    intro e hg hm
+    cases e with
+    | nil => simp [gotoCompat] at hg
+    | cons ev es =>
+      cases av <;> cases ev <;>
+        simp_all [gotoCompat] <;>
+        first | exact ih hg.2 hm | exact ih hg hm
 
 lemma cert_check_at {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
     (k : Nat) (e : Entry) (f : SFunc)
@@ -368,6 +452,7 @@ run returns `devm'` whose stack is `S' ++ base` with `S'.length = m`, and the
 rest of the execution is a strictly smaller derivation from `ρ`. -/
 def NodeClaim (code : ByteArray) (c : Cert) (pk : Exec.Deriv) : Prop :=
   ∀ (post : Devm), pk.exn = .ok post → pk.sevm.code = code →
+  CoveredFork pk.sevm.benvStat.fork →
   ∀ (m : Nat) (a : List AVal) (f : SFunc) (ρ : B256) (S base : List B256),
     checkNode code c.entries m pk.pc a f = true →
     pk.devm.stack = S ++ base → FrameMatches ρ a S →
@@ -382,7 +467,7 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
     ∀ pk : Exec.Deriv, NodeClaim code c pk := by
   apply Exec.Deriv.strongRec
   intro pk ih
-  intro post hpost hcode m a f ρ S base hcheck hstack hframe
+  intro post hpost hcode hfork m a f ρ S base hcheck hstack hframe
   rcases pk with ⟨pc, sevm, devm, exn, exc⟩
   cases exn with
   | error e => cases hpost
@@ -439,7 +524,7 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                       subst x
                       have hrun := ih
                         ⟨pc + 1, sevm, inter, .ok post, exc'⟩
-                        (Exec.Deriv.lt_of_prec prec) post rfl hcode m a' f ρ S1 base
+                        (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a' f ρ S1 base
                         hcheck'.1.2 hinter htail
                       cases hrun with
                       | inl run => exact Or.inl (SFunc.Run.zero t pop run)
@@ -465,7 +550,7 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                       subst x
                       have hrun := ih
                         ⟨t.toNat, sevm, inter, .ok post, exc'⟩
-                        (Exec.Deriv.lt_of_prec prec) post rfl hcode m a' g ρ S1 base
+                        (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a' g ρ S1 base
                         hcheck'.2 hinter htail
                       cases hrun with
                       | inl run => exact Or.inl (SFunc.Run.succ t y hy pop run)
@@ -476,7 +561,110 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                             (List.mem_cons_of_mem _ hret), devm', S', exc'',
                           deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
                           SFunc.Run.succ t y hy pop run, hst, hlen⟩
-    | branchTo f k => sorry
+    | branchTo f k =>
+      cases a with
+      | nil => simp [checkNode] at hcheck
+      | cons av a0 =>
+        cases av with
+        | ret => simp [checkNode] at hcheck
+        | unk => simp [checkNode] at hcheck
+        | const t =>
+          cases a0 with
+          | nil => simp [checkNode] at hcheck
+          | cons av2 a' =>
+            cases hk : c.entries[k]? with
+            | none => simp [checkNode, hk] at hcheck
+            | some e =>
+              have hcheck' :
+                  (((byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧
+                    e.pc = t.toNat) ∧ e.rets = m) ∧
+                    gotoCompat a' e.frame = true) ∧
+                    checkNode code c.entries m (pc + 1) a' f = true := by
+                simpa [checkNode, hk] using hcheck
+              rcases cert_prog_of_entry c k e hk with ⟨g, hg⟩
+              have hentry := cert_check_at hc k e g hk hg
+              have h_at : Jinst.At sevm.code pc .jumpi := by
+                apply byteAt_jinst_at
+                rw [hcode]
+                exact hcheck'.1.1.1.1
+              cases S with
+              | nil => cases hframe
+              | cons s0 S0 =>
+                cases S0 with
+                | nil =>
+                  have hlen := List.Forall₂.length_eq hframe
+                  simp at hlen
+                | cons s1 S1 =>
+                  cases hframe with
+                  | cons h0 hrest =>
+                    cases hrest with
+                    | cons h1 htail =>
+                      have hs0 : s0 = t := h0
+                      have hj := jumpi_at_exact exc h_at
+                      rcases hj with z | z
+                      · rcases z with ⟨x, inter, exc', pop, _, prec⟩
+                        have hpop := popBurn_two_stack pop
+                        rw [hstack] at hpop
+                        have hx : x = t := by
+                          have htx : s0 = x := by
+                            simpa using congrArg List.head? hpop
+                          exact htx.symm.trans hs0
+                        have hinter : inter.stack = S1 ++ base := by
+                          have hpop' : s0 :: s1 :: (S1 ++ base) =
+                              x :: 0 :: inter.stack := by simpa using hpop
+                          have htail' : s1 :: (S1 ++ base) = 0 :: inter.stack :=
+                            (List.cons.inj hpop').2
+                          exact (List.cons.inj htail').2.symm
+                        subst x
+                        have hrun := ih
+                          ⟨pc + 1, sevm, inter, .ok post, exc'⟩
+                          (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a' f ρ
+                          S1 base hcheck'.2 hinter htail
+                        cases hrun with
+                        | inl run => exact Or.inl (SFunc.Run.toZero t pop run)
+                        | inr run =>
+                          rcases run with
+                            ⟨hret, devm', S', exc'', hlt, run, hst, hlen⟩
+                          exact Or.inr ⟨List.mem_cons_of_mem _
+                              (List.mem_cons_of_mem _ hret), devm', S', exc'',
+                            deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
+                            SFunc.Run.toZero t pop run, hst, hlen⟩
+                      · rcases z with ⟨x, y, inter, exc', pop, _, _, hy, prec⟩
+                        have hpop := popBurn_two_stack pop
+                        rw [hstack] at hpop
+                        have hx : x = t := by
+                          have htx : s0 = x := by
+                            simpa using congrArg List.head? hpop
+                          exact htx.symm.trans hs0
+                        have hinter : inter.stack = S1 ++ base := by
+                          have hpop' : s0 :: s1 :: (S1 ++ base) =
+                              x :: y :: inter.stack := by simpa using hpop
+                          have htail' : s1 :: (S1 ++ base) = y :: inter.stack :=
+                            (List.cons.inj hpop').2
+                          exact (List.cons.inj htail').2.symm
+                        have hframe' : FrameMatches ρ e.frame S1 :=
+                          frameMatches_gotoCompat hcheck'.1.2 htail
+                        have hentry' :
+                            checkNode code c.entries e.rets t.toNat e.frame g = true := by
+                          simpa [hcheck'.1.1.1.2] using hentry
+                        subst x
+                        have hrun := ih
+                          ⟨t.toNat, sevm, inter, .ok post, exc'⟩
+                          (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork e.rets
+                          e.frame g ρ S1 base hentry' hinter hframe'
+                        cases hrun with
+                        | inl run => exact Or.inl (SFunc.Run.toSucc t y hy hg pop run)
+                        | inr run =>
+                          rcases run with
+                            ⟨hret, devm', S', exc'', hlt, run, hst, hlen⟩
+                          have hret' : AVal.ret ∈ a' :=
+                            ret_mem_of_gotoCompat hcheck'.1.2 hret
+                          have hlen' : S'.length = m := by
+                            simpa [hcheck'.1.1.2] using hlen
+                          exact Or.inr ⟨List.mem_cons_of_mem _
+                              (List.mem_cons_of_mem _ hret'), devm', S', exc'',
+                            deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
+                            SFunc.Run.toSucc t y hy hg pop run, hst, hlen'⟩
     | last l =>
       have hbyte : byteAt code pc = some l.toUInt8 := by
         simpa [checkNode] using hcheck
@@ -486,6 +674,80 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
         exact hbyte
       exact Or.inl (SFunc.Run.last (Linst.run_of_at exc h_at))
     | next n f =>
+      have next_nonpush (n : Ninst) (a' : List AVal) (out : Pattern)
+          (hlen : a.length ≤ 1024)
+          (htrans : ninstTransfer n (indexPattern a.length) = some out)
+          (hread : out.mapM (readBack a) = some a')
+          (hchild : checkNode code c.entries m (pc + n.size) a' f = true)
+          (h_at : Ninst.At sevm.code pc n) :
+          SFunc.Run c.prog sevm devm (.next n f) (.halted post) ∨
+          (AVal.ret ∈ a ∧
+            ∃ (devm' : Devm) (S' : List B256)
+              (exc' : Exec ρ.toNat sevm devm' (.ok post)),
+              Exec.Deriv.lt
+                  ⟨ρ.toNat, sevm, devm', .ok post, exc'⟩
+                  ⟨pc, sevm, devm, .ok post, exc⟩ ∧
+              SFunc.Run c.prog sevm devm (.next n f) (.returned devm') ∧
+              devm'.stack = S' ++ base ∧ S'.length = m) := by
+        rcases Ninst.run_of_at exc h_at with ⟨inter, exc', run, prec⟩
+        have hinput :
+            Matches
+                ((indexPattern a.length).map (label a ρ) ++ base.map some)
+                devm.stack := by
+          rw [hstack]
+          apply matches_append
+          · rw [indexPattern_map_label hlen]
+            exact frameMatches_matches hframe
+          · exact matches_some_map base
+        have hmap := ninstTransfer_map (label a ρ) rfl htrans
+        have happ := ninstTransfer_append (base.map some) hmap
+        have hout := ninstTransfer_run hfork hinput happ run
+        rw [mapM_readBack_label hread] at hout
+        rcases matches_split hout with ⟨S', below, hsp, hfirst, hbelow⟩
+        have hbelow' : below = base := matches_some_map_eq hbelow
+        have hinter : inter.stack = S' ++ base := by
+          simpa [hbelow'] using hsp
+        have hframe' : FrameMatches ρ a' S' := matches_to_frame hfirst
+        have hrun := ih
+          ⟨pc + n.size, sevm, inter, .ok post, exc'⟩
+          (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a' f ρ S' base
+          hchild hinter hframe'
+        cases hrun with
+        | inl run' => exact Or.inl (SFunc.Run.next run run')
+        | inr run' =>
+          rcases run' with ⟨hret, devm', Sret, exc'', hlt, run', hst, hlen'⟩
+          have hret' : AVal.ret ∈ a := ret_mem_of_readBack hread hret
+          exact Or.inr ⟨hret', devm', Sret, exc'',
+            deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
+            SFunc.Run.next run run', hst, hlen'⟩
+      have next_checked (n : Ninst)
+          (hnpush : ∀ (bs : Bytes) (fits : bs.length ≤ 32),
+            n ≠ .push bs fits)
+          (hcheck :
+            (bytesAt code pc (Ninst.toBytes n) = true ∧
+              Ninst.pcFree n = true) ∧
+            (match absNinst n a with
+             | some a' => checkNode code c.entries m (pc + n.size) a' f
+             | none => false) = true)
+          (h_at : Ninst.At sevm.code pc n) :
+          SFunc.Run c.prog sevm devm (.next n f) (.halted post) ∨
+          (AVal.ret ∈ a ∧
+            ∃ (devm' : Devm) (S' : List B256)
+              (exc' : Exec ρ.toNat sevm devm' (.ok post)),
+              Exec.Deriv.lt
+                  ⟨ρ.toNat, sevm, devm', .ok post, exc'⟩
+                  ⟨pc, sevm, devm, .ok post, exc⟩ ∧
+              SFunc.Run c.prog sevm devm (.next n f) (.returned devm') ∧
+              devm'.stack = S' ++ base ∧ S'.length = m) := by
+        have hrest := hcheck.2
+        cases ha : absNinst n a with
+        | none => simp [ha] at hrest
+        | some a' =>
+          have hchild : checkNode code c.entries m (pc + n.size) a' f = true := by
+            simpa [ha] using hrest
+          rcases absNinst_nonpush_spec hnpush ha with
+            ⟨hlen, out, htrans, hread⟩
+          exact next_nonpush n a' out hlen htrans hread hchild h_at
       cases n with
       | push bs fits =>
         have hcheck' :
@@ -506,7 +768,7 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
             FrameMatches ρ (.const (Bytes.toB256 bs) :: a)
               (Bytes.toB256 bs :: S) := List.Forall₂.cons rfl hframe
         have hrun := ih ⟨pc + (Ninst.push bs fits).size, sevm, inter,
-            .ok post, exc'⟩ (Exec.Deriv.lt_of_prec prec) post rfl hcode m
+            .ok post, exc'⟩ (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m
             (.const (Bytes.toB256 bs) :: a) f ρ
             (Bytes.toB256 bs :: S) base hcheck'.2 hstack' hframe'
         cases hrun with
@@ -517,11 +779,53 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
           exact Or.inr ⟨hret', devm', S', exc'',
             deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
             SFunc.Run.next run run', hst, hlen⟩
-      | reg r => sorry
-      | exec x => sorry
-      | dupn i => sorry
-      | swapn i => sorry
-      | exchange i => sorry
+      | reg r =>
+        simp only [checkNode, Bool.and_eq_true] at hcheck
+        have hbyte : bytesAt code pc (Ninst.toBytes (Ninst.reg r)) = true :=
+          hcheck.1.1
+        have h_at : Ninst.At sevm.code pc (Ninst.reg r) := by
+          apply Ninst.at_of_slice
+          apply bytesAt_slice (ninst_bytes_ne_nil (Ninst.reg r))
+          rw [hcode]
+          exact hbyte
+        exact next_checked (Ninst.reg r)
+          (by intro bs fits h; cases h) hcheck h_at
+      | exec x =>
+        simp only [checkNode, Bool.and_eq_true] at hcheck
+        have h_at : Ninst.At sevm.code pc (Ninst.exec x) := by
+          apply Ninst.at_of_slice
+          apply bytesAt_slice (ninst_bytes_ne_nil (Ninst.exec x))
+          rw [hcode]
+          exact hcheck.1.1
+        exact next_checked (Ninst.exec x)
+          (by intro bs fits h; cases h) hcheck h_at
+      | dupn i =>
+        simp only [checkNode, Bool.and_eq_true] at hcheck
+        have h_at : Ninst.At sevm.code pc (Ninst.dupn i) := by
+          apply Ninst.at_of_slice
+          apply bytesAt_slice (ninst_bytes_ne_nil (Ninst.dupn i))
+          rw [hcode]
+          exact hcheck.1.1
+        exact next_checked (Ninst.dupn i)
+          (by intro bs fits h; cases h) hcheck h_at
+      | swapn i =>
+        simp only [checkNode, Bool.and_eq_true] at hcheck
+        have h_at : Ninst.At sevm.code pc (Ninst.swapn i) := by
+          apply Ninst.at_of_slice
+          apply bytesAt_slice (ninst_bytes_ne_nil (Ninst.swapn i))
+          rw [hcode]
+          exact hcheck.1.1
+        exact next_checked (Ninst.swapn i)
+          (by intro bs fits h; cases h) hcheck h_at
+      | exchange i =>
+        simp only [checkNode, Bool.and_eq_true] at hcheck
+        have h_at : Ninst.At sevm.code pc (Ninst.exchange i) := by
+          apply Ninst.at_of_slice
+          apply bytesAt_slice (ninst_bytes_ne_nil (Ninst.exchange i))
+          rw [hcode]
+          exact hcheck.1.1
+        exact next_checked (Ninst.exchange i)
+          (by intro bs fits h; cases h) hcheck h_at
     | dest f =>
       have hcheck' : byteAt code pc = some (Jinst.toUInt8 .jumpdest) ∧
           checkNode code c.entries m (pc + 1) a f = true := by
@@ -535,7 +839,7 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
       have hstack' : inter.stack = S ++ base := by
         rw [← burn.stack, hstack]
       have hrun := ih ⟨pc + 1, sevm, inter, .ok post, exc'⟩
-        (Exec.Deriv.lt_of_prec prec) post rfl hcode m a f ρ S base
+        (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a f ρ S base
         hcheck'.2 hstack' hframe
       cases hrun with
       | inl run => exact Or.inl (SFunc.Run.dest burn run)
@@ -543,7 +847,68 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
         rcases run with ⟨hret, devm', S', exc'', hlt, run, hst, hlen⟩
         exact Or.inr ⟨hret, devm', S', exc'', deriv_lt_trans hlt
           (Exec.Deriv.lt_of_prec prec), SFunc.Run.dest burn run, hst, hlen⟩
-    | jump k => sorry
+    | jump k =>
+      cases a with
+      | nil => simp [checkNode] at hcheck
+      | cons av a' =>
+        cases av with
+        | ret => simp [checkNode] at hcheck
+        | unk => simp [checkNode] at hcheck
+        | const t =>
+          cases hk : c.entries[k]? with
+          | none => simp [checkNode, hk] at hcheck
+          | some e =>
+            have hcheck' :
+                (((byteAt code pc = some (Jinst.toUInt8 .jump) ∧
+                  e.pc = t.toNat) ∧ e.rets = m) ∧
+                  gotoCompat a' e.frame = true) := by
+              simpa [checkNode, hk] using hcheck
+            rcases cert_prog_of_entry c k e hk with ⟨g, hg⟩
+            have hentry := cert_check_at hc k e g hk hg
+            have h_at : Jinst.At sevm.code pc .jump := by
+              apply byteAt_jinst_at
+              rw [hcode]
+              exact hcheck'.1.1.1
+            cases S with
+            | nil => cases hframe
+            | cons s0 S1 =>
+              cases hframe with
+              | cons h0 htail =>
+                have hs0 : s0 = t := h0
+                rcases jump_at_exact exc h_at with
+                  ⟨x, inter, exc', pop, _, _, prec⟩
+                have hpop := popBurn_one_stack pop
+                rw [hstack] at hpop
+                have hx : x = t := by
+                  have htx : s0 = x := by
+                    simpa using congrArg List.head? hpop
+                  exact htx.symm.trans hs0
+                have hinter : inter.stack = S1 ++ base := by
+                  have hpop' : s0 :: (S1 ++ base) = x :: inter.stack := by
+                    simpa using hpop
+                  exact (List.cons.inj hpop').2.symm
+                have hframe' : FrameMatches ρ e.frame S1 :=
+                  frameMatches_gotoCompat hcheck'.2 htail
+                have hentry' :
+                    checkNode code c.entries e.rets t.toNat e.frame g = true := by
+                  simpa [hcheck'.1.1.2] using hentry
+                subst x
+                have hrun := ih
+                  ⟨t.toNat, sevm, inter, .ok post, exc'⟩
+                  (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork e.rets
+                  e.frame g ρ S1 base hentry' hinter hframe'
+                cases hrun with
+                | inl run => exact Or.inl (SFunc.Run.jump t hg pop run)
+                | inr run =>
+                  rcases run with
+                    ⟨hret, devm', S', exc'', hlt, run, hst, hlen⟩
+                  have hret' : AVal.ret ∈ a' :=
+                    ret_mem_of_gotoCompat hcheck'.2 hret
+                  have hlen' : S'.length = m := by
+                    simpa [hcheck'.1.2] using hlen
+                  exact Or.inr ⟨List.mem_cons_of_mem _ hret', devm', S', exc'',
+                    deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
+                    SFunc.Run.jump t hg pop run, hst, hlen'⟩
     | callNext k f => sorry
     | ret =>
       cases a with
@@ -599,6 +964,7 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
 pc `0` with an empty operand stack is a run of the certified program. -/
 theorem lift_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
     {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hstack : pre.stack = []) (exc : Exec 0 sevm pre (.ok post)) :
     SProg.Run c.prog sevm pre post := by
   sorry
