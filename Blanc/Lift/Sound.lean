@@ -1183,11 +1183,11 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
       cases Exec.halt_inv exc hstep
 
 /-- **The lifting theorem.**  A successful execution of certified bytes from
-pc `0` with an empty operand stack is a run of the certified program. -/
+pc `0` is a run of the certified program.  (The top-level frame is empty, so the
+initial operand stack is the untouched base of the recursion invariant.) -/
 theorem lift_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
     {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (hstack : pre.stack = []) (exc : Exec 0 sevm pre (.ok post)) :
+    (hfork : CoveredFork sevm.benvStat.fork) (exc : Exec 0 sevm pre (.ok post)) :
     SProg.Run c.prog sevm pre post := by
   cases c with
   | nil => simp [Cert.check] at hc
@@ -1202,7 +1202,7 @@ theorem lift_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
     have hf0 : checkNode code (Cert.entries ((e, f) :: c)) e.rets 0 [] f = true := by
       simpa [hepc, hef] using hf
     have hrun := node_sound hc0 ⟨0, sevm, pre, .ok post, exc⟩
-      post rfl hcode hfork e.rets [] f 0 [] [] hf0 (by simpa using hstack)
+      post rfl hcode hfork e.rets [] f 0 [] pre.stack hf0 (by simp)
       (by simp [FrameMatches])
     refine ⟨f, ?_, ?_⟩
     · simp [Cert.prog]
