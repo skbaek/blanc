@@ -78,6 +78,50 @@ theorem entry_17 :
     checkNode code (Cert.entries cert) 2 0x556 [.unk, .unk, .unk, .unk, .unk, .unk, .ret] t_0556_c17 = true := by
   decide +kernel
 
+theorem entry_18 :
+    checkNode code (Cert.entries cert) 0 0x3d4 [.unk] t_03d4_c18 = true := by
+  decide +kernel
+
+theorem entry_19 :
+    checkNode code (Cert.entries cert) 0 0x3ca [.unk] t_03ca_c19 = true := by
+  decide +kernel
+
+theorem entry_20 :
+    checkNode code (Cert.entries cert) 0 0x370 [.unk] t_0370_c20 = true := by
+  decide +kernel
+
+theorem entry_21 :
+    checkNode code (Cert.entries cert) 0 0x2e2 [.unk] t_02e2_c21 = true := by
+  decide +kernel
+
+theorem entry_22 :
+    checkNode code (Cert.entries cert) 0 0x295 [.unk] t_0295_c22 = true := by
+  decide +kernel
+
+theorem entry_23 :
+    checkNode code (Cert.entries cert) 0 0x266 [.unk] t_0266_c23 = true := by
+  decide +kernel
+
+theorem entry_24 :
+    checkNode code (Cert.entries cert) 0 0x243 [.unk] t_0243_c24 = true := by
+  decide +kernel
+
+theorem entry_25 :
+    checkNode code (Cert.entries cert) 0 0x1ca [.unk] t_01ca_c25 = true := by
+  decide +kernel
+
+theorem entry_26 :
+    checkNode code (Cert.entries cert) 0 0x1a1 [.unk] t_01a1_c26 = true := by
+  decide +kernel
+
+theorem entry_27 :
+    checkNode code (Cert.entries cert) 0 0x147 [.unk] t_0147_c27 = true := by
+  decide +kernel
+
+theorem entry_28 :
+    checkNode code (Cert.entries cert) 0 0xb9 [.unk] t_00b9_c28 = true := by
+  decide +kernel
+
 theorem cert_check : Cert.check code cert = true := by
   unfold Cert.check
   rw [Bool.and_eq_true]
@@ -85,7 +129,7 @@ theorem cert_check : Cert.check code cert = true := by
   rw [List.all_eq_true]
   intro p hp
   simp only [cert, List.mem_cons, List.not_mem_nil, or_false] at hp
-  rcases hp with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+  rcases hp with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   · exact entry_0
   · exact entry_1
   · exact entry_2
@@ -104,5 +148,16 @@ theorem cert_check : Cert.check code cert = true := by
   · exact entry_15
   · exact entry_16
   · exact entry_17
+  · exact entry_18
+  · exact entry_19
+  · exact entry_20
+  · exact entry_21
+  · exact entry_22
+  · exact entry_23
+  · exact entry_24
+  · exact entry_25
+  · exact entry_26
+  · exact entry_27
+  · exact entry_28
 
 end Blanc.Lift.Weth9
