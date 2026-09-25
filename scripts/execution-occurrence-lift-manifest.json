@@ -51,13 +51,13 @@
       "declaration": "genericCall_step_spawn_exact",
       "kind": "theorem",
       "donorModule": "Blanc/Weth10HolderFlowCompiled.lean",
-      "commonModule": "Blanc/Ladder.lean"
+      "commonModule": "Blanc/LadderBase.lean"
     },
     {
       "declaration": "genericCreate_step_spawn_exact",
       "kind": "theorem",
       "donorModule": "Blanc/Weth10HolderFlowExecAccounting.lean",
-      "commonModule": "Blanc/Ladder.lean"
+      "commonModule": "Blanc/LadderBase.lean"
     },
     {
       "declaration": "Xinst.step_spawn_codeAddress_eq_currentTarget",
