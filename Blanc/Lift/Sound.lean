@@ -218,6 +218,61 @@ lemma ret_mem_of_gotoCompat : ∀ {a e : List AVal},
         simp_all [gotoCompat] <;>
         first | exact ih hg.2 hm | exact ih hg hm
 
+lemma frameMatches_callCompat {r ρ : B256} :
+    ∀ {a e : List AVal} {s : List B256},
+      callCompat r a e = true → FrameMatches ρ a s →
+      ∃ sf sr, s = sf ++ sr ∧ FrameMatches r e sf ∧
+        FrameMatches ρ (a.drop e.length) sr := by
+  intro a
+  induction a with
+  | nil =>
+    intro e s hc hm
+    cases e with
+    | nil =>
+      exact ⟨[], s, by simp, by simp [FrameMatches], by simpa using hm⟩
+    | cons ev es => simp [callCompat] at hc
+  | cons av a ih =>
+    intro e s hc hm
+    cases e with
+    | nil =>
+      exact ⟨[], s, by simp, by simp [FrameMatches], by simpa using hm⟩
+    | cons ev es =>
+      cases s with
+      | nil => cases hm
+      | cons w s =>
+        cases hm with
+        | cons hhead htail =>
+          cases av <;> cases ev <;> simp [callCompat] at hc
+          all_goals
+            have hcall : callCompat r a es = true := by
+              first | exact hc.2 | exact hc
+            rcases ih hcall htail with ⟨sf, sr, hs, hf, hr⟩
+            refine ⟨w :: sf, sr, ?_, ?_, ?_⟩
+            · simp [hs]
+            · apply List.Forall₂.cons
+              · first
+                | simpa [AVal.Matches, hc.1] using hhead
+                | trivial
+              · exact hf
+            · simpa [hs] using hr
+
+lemma ret_not_mem_of_findIdx_none {xs : List AVal}
+    (h : xs.findIdx? (· == .ret) = none) :
+    ∀ x, x ∈ xs → x ≠ AVal.ret := by
+  intro x hx
+  have hf := (List.findIdx?_eq_none_iff.mp h) x hx
+  simpa using hf
+
+lemma frameMatches_unk_length {ρ : B256} : ∀ s : List B256,
+    FrameMatches ρ (List.replicate s.length .unk) s := by
+  intro s
+  induction s with
+  | nil => simp [FrameMatches]
+  | cons w s ih =>
+    change List.Forall₂ (AVal.Matches ρ)
+      (.unk :: List.replicate s.length .unk) (w :: s)
+    exact List.Forall₂.cons trivial ih
+
 lemma cert_check_at {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
     (k : Nat) (e : Entry) (f : SFunc)
     (he : c.entries[k]? = some e) (hf : c.prog[k]? = some f) :
@@ -347,6 +402,16 @@ lemma mem_of_getElem?_eq_some {α} {xs : List α} {i : Nat} {x : α}
     cases i with
     | zero => simp at h; cases h; simp
     | succ i => exact List.mem_cons_of_mem _ (ih (by simpa using h))
+
+lemma ret_mem_of_findIdx {xs : List AVal} {i : Nat}
+    (h : xs.findIdx? (· == .ret) = some i) : AVal.ret ∈ xs := by
+  have hp := List.of_findIdx?_eq_some h
+  cases hx : xs[i]? with
+  | none => simp [hx] at hp
+  | some a =>
+    have ha : a = AVal.ret := by simpa [hx] using hp
+    subst a
+    exact mem_of_getElem?_eq_some hx
 
 lemma ret_mem_of_readBack {a a' : List AVal} {out : List (Option B256)}
     (h : out.mapM (readBack a) = some a')
@@ -909,7 +974,164 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                   exact Or.inr ⟨List.mem_cons_of_mem _ hret', devm', S', exc'',
                     deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
                     SFunc.Run.jump t hg pop run, hst, hlen'⟩
-    | callNext k f => sorry
+    | callNext k f =>
+      cases a with
+      | nil => simp [checkNode] at hcheck
+      | cons av a' =>
+        cases av with
+        | ret => simp [checkNode] at hcheck
+        | unk => simp [checkNode] at hcheck
+        | const t =>
+          cases f with
+          | dest d =>
+            cases hk : c.entries[k]? with
+            | none => simp [checkNode, hk] at hcheck
+            | some e =>
+              simp [checkNode, hk] at hcheck
+              rcases cert_prog_of_entry c k e hk with ⟨g, hg⟩
+              have hentry := cert_check_at hc k e g hk hg
+              have h_at : Jinst.At sevm.code pc .jump := by
+                apply byteAt_jinst_at
+                rw [hcode]
+                exact hcheck.1.1.1
+              cases S with
+              | nil => cases hframe
+              | cons s0 S1 =>
+                cases hframe with
+                | cons h0 htail =>
+                  have hs0 : s0 = t := h0
+                  rcases jump_at_exact exc h_at with
+                    ⟨x, inter, exc', pop, _, _, prec⟩
+                  have hpop := popBurn_one_stack pop
+                  rw [hstack] at hpop
+                  have hx : x = t := by
+                    have htx : s0 = x := by
+                      simpa using congrArg List.head? hpop
+                    exact htx.symm.trans hs0
+                  have hinter : inter.stack = S1 ++ base := by
+                    have hpop' : s0 :: (S1 ++ base) = x :: inter.stack := by
+                      simpa using hpop
+                    exact (List.cons.inj hpop').2.symm
+                  have hentry' :
+                      checkNode code c.entries e.rets t.toNat e.frame g = true := by
+                    simpa [hcheck.1.1.2] using hentry
+                  subst x
+                  cases hidx : e.frame.findIdx? (· == .ret) with
+                  | none =>
+                    have hcall : callCompat 0 a' e.frame = true := by
+                      simpa [hidx] using hcheck.2
+                    have hret_no : ∀ x, x ∈ e.frame → x ≠ AVal.ret :=
+                      ret_not_mem_of_findIdx_none hidx
+                    rcases frameMatches_callCompat hcall htail with
+                      ⟨Sf, Sr, hsplit, hframee, hframer⟩
+                    have hstacke : inter.stack = Sf ++ (Sr ++ base) := by
+                      rw [hinter, hsplit]
+                      simp [List.append_assoc]
+                    have hrun := ih
+                      ⟨t.toNat, sevm, inter, .ok post, exc'⟩
+                      (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork e.rets
+                      e.frame g 0 Sf (Sr ++ base) hentry' hstacke hframee
+                    cases hrun with
+                    | inl run =>
+                      exact Or.inl (SFunc.Run.callHalt t hg pop run)
+                    | inr run =>
+                      rcases run with ⟨hret, devm', S', exc'', hlt, run, hst, hlen⟩
+                      exact (hret_no AVal.ret hret rfl).elim
+                  | some i =>
+                    cases haidx : a'[i]? with
+                    | none =>
+                      have hbad := hcheck.2
+                      simp [hidx, haidx] at hbad
+                    | some av =>
+                      cases av with
+                      | ret =>
+                        have hbad := hcheck.2
+                        simp [hidx, haidx] at hbad
+                      | unk =>
+                        have hbad := hcheck.2
+                        simp [hidx, haidx] at hbad
+                      | const r =>
+                        have hcall : callCompat r a' e.frame = true ∧
+                            byteAt code r.toNat = some (Jinst.toUInt8 .jumpdest) ∧
+                            checkNode code c.entries m (r.toNat + 1)
+                              (List.replicate e.rets .unk ++
+                                a'.drop e.frame.length) d = true := by
+                          simpa [hidx, haidx, Bool.and_eq_true] using hcheck.2
+                        rcases frameMatches_callCompat hcall.1 htail with
+                          ⟨Sf, Sr, hsplit, hframee, hframer⟩
+                        have hstacke : inter.stack = Sf ++ (Sr ++ base) := by
+                          rw [hinter, hsplit]
+                          simp [List.append_assoc]
+                        have hframee' : FrameMatches r e.frame Sf := hframee
+                        have hrun := ih
+                          ⟨t.toNat, sevm, inter, .ok post, exc'⟩
+                          (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork e.rets
+                          e.frame g r Sf (Sr ++ base) hentry' hstacke hframee'
+                        cases hrun with
+                        | inl run =>
+                          exact Or.inl (SFunc.Run.callHalt t hg pop run)
+                        | inr run =>
+                          rcases run with
+                            ⟨hret, devm', Sret, exc'', hlt, run, hst, hlen⟩
+                          have hunk : FrameMatches ρ
+                              (List.replicate e.rets .unk) Sret := by
+                            rw [← hlen]
+                            exact frameMatches_unk_length Sret
+                          have hcont : FrameMatches ρ
+                              (List.replicate e.rets .unk ++
+                                a'.drop e.frame.length) (Sret ++ Sr) := by
+                            apply matches_to_frame
+                            rw [List.map_append]
+                            apply matches_append
+                            · exact frameMatches_matches hunk
+                            · exact frameMatches_matches hframer
+                          have hst' : devm'.stack = (Sret ++ Sr) ++ base := by
+                            simpa [List.append_assoc] using hst
+                          have hlt_call : Exec.Deriv.lt
+                              ⟨r.toNat, sevm, devm', .ok post, exc''⟩
+                              ⟨pc, sevm, devm, .ok post, exc⟩ := by
+                            exact deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec)
+                          have h_atd : Jinst.At sevm.code r.toNat .jumpdest := by
+                            apply byteAt_jinst_at
+                            rw [hcode]
+                            exact hcall.2.1
+                          rcases jumpdest_at_exact exc'' h_atd with
+                            ⟨inter2, exc2, burn2, _, prec2⟩
+                          have hstackd : inter2.stack = (Sret ++ Sr) ++ base := by
+                            rw [← burn2.stack, hst']
+                          have hlt_dest : Exec.Deriv.lt
+                              ⟨r.toNat + 1, sevm, inter2, .ok post, exc2⟩
+                              ⟨r.toNat, sevm, devm', .ok post, exc''⟩ :=
+                            Exec.Deriv.lt_of_prec prec2
+                          have hrun' := ih
+                            ⟨r.toNat + 1, sevm, inter2, .ok post, exc2⟩
+                            (deriv_lt_trans hlt_dest hlt_call) post rfl hcode hfork m
+                            (List.replicate e.rets .unk ++ a'.drop e.frame.length)
+                            d ρ (Sret ++ Sr) base hcall.2.2 hstackd hcont
+                          cases hrun' with
+                          | inl run' =>
+                            exact Or.inl (SFunc.Run.callRet t hg pop run
+                              (SFunc.Run.dest burn2 run'))
+                          | inr run' =>
+                            rcases run' with
+                              ⟨hret', devm'', S'', exc''', hlt_cont, run', hst'', hlen'⟩
+                            have hret_a' : AVal.ret ∈ a' := by
+                              rcases List.mem_append.mp hret' with h | h
+                              · simp at h
+                              · exact List.mem_of_mem_drop h
+                            exact Or.inr ⟨List.mem_cons_of_mem _ hret_a', devm'', S'',
+                              exc''', deriv_lt_trans hlt_cont
+                                (deriv_lt_trans hlt_dest hlt_call),
+                              SFunc.Run.callRet t hg pop run
+                                (SFunc.Run.dest burn2 run'), hst'', hlen'⟩
+          | branch f g => simp [checkNode] at hcheck
+          | branchTo f k' => simp [checkNode] at hcheck
+          | last l => simp [checkNode] at hcheck
+          | next n f => simp [checkNode] at hcheck
+          | jump k' => simp [checkNode] at hcheck
+          | callNext k' f => simp [checkNode] at hcheck
+          | ret => simp [checkNode] at hcheck
+          | undefined => simp [checkNode] at hcheck
     | ret =>
       cases a with
       | nil => simp [checkNode] at hcheck
