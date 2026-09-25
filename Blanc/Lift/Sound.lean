@@ -1189,6 +1189,25 @@ theorem lift_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
     (hfork : CoveredFork sevm.benvStat.fork)
     (hstack : pre.stack = []) (exc : Exec 0 sevm pre (.ok post)) :
     SProg.Run c.prog sevm pre post := by
-  sorry
+  cases c with
+  | nil => simp [Cert.check] at hc
+  | cons p c =>
+    rcases p with ⟨e, f⟩
+    have hc0 : Cert.check code ((e, f) :: c) = true := hc
+    simp [Cert.check] at hc
+    have hepc : e.pc = 0 := by simpa using hc.1.1
+    have hef : e.frame = [] := by simpa using hc.1.2
+    have hf : checkNode code (Cert.entries ((e, f) :: c)) e.rets e.pc e.frame f = true := by
+      simpa using hc.2.1
+    have hf0 : checkNode code (Cert.entries ((e, f) :: c)) e.rets 0 [] f = true := by
+      simpa [hepc, hef] using hf
+    have hrun := node_sound hc0 ⟨0, sevm, pre, .ok post, exc⟩
+      post rfl hcode hfork e.rets [] f 0 [] [] hf0 (by simpa using hstack)
+      (by simp [FrameMatches])
+    refine ⟨f, ?_, ?_⟩
+    · simp [Cert.prog]
+    · cases hrun with
+      | inl run => exact run
+      | inr run => simp at run
 
 end Blanc.Lift
