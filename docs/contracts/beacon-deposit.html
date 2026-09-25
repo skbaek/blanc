@@ -276,7 +276,7 @@ DeploymentRoot.future_count_root      <span class="c">-- exact count, strictness
         <p class="dim" style="margin-bottom:6px">
           Beneath it sits the model oracle:
           <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-beacon-deposit-model.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-beacon-deposit-model.sh</span></a>
-          compares 360 lines of the hash-parametric model against independently generated vectors
+          compares the hash-parametric model against independently generated vectors, 360 compared lines,
           under both a Keccak and a SHA-256 instantiation, and its four falsifier mutants — swapped
           hash-argument order, a dropped count mix-in, a cap off-by-one, a regime substitution —
           are required to keep every proof elaborating and to be caught by the vectors anyway.
