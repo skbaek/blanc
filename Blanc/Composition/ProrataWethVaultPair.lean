@@ -450,7 +450,6 @@ private theorem benvAfterTransfer_bal_le_of_value_zero
             msg.benv.state.bal account from
           congrArg Acct.bal (State.setBal_get_ne caller)]
 
-
 /-- **One vault message preserves the stable boundary.**
 
 The `.some` slot is the interpreted case: a committing settlement exposes its

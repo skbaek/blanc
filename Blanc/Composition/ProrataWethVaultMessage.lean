@@ -4,6 +4,7 @@ import Blanc.Composition.ProrataWethVaultInbound
 import Blanc.Composition.ProrataWethVaultOutbound
 import Blanc.Composition.ProrataWethVaultBacking
 import Blanc.ProrataWethVaultLedgerSpec
+import Blanc.Composition.ProrataWethVaultTerminals
 
 /-!
 # One vault message preserves the share ledger
@@ -659,12 +660,6 @@ exposes its gas-exact `Prog.RunCompiled` to
 `vault_message_preserves_conserved`, and a noncommitting slot rolls back
 to the entry world. -/
 
-/-- The vault program has no `PC` instruction, so a raw execution of its
-compiled code is a gas-exact `Prog.RunCompiled`. -/
-private theorem vault_call_pcFree :
-    Prog.pcFree Blanc.ProrataWethVault.vault = true := by
-  decide +kernel
-
 /-- **Vault call preserves the ledger (slotless message).**  With no
 interpreted slot the message settles to its entry world or its
 post-transfer world; value transfer moves balances only. -/
@@ -748,7 +743,7 @@ theorem vault_processMessage_some_preserves_conserved
           exact code
         have compiled : Prog.RunCompiled sevm pre
             Blanc.ProrataWethVault.vault execPost :=
-          Prog.runCompiled_of_exec sevm pre _ execPost vault_call_pcFree run
+          Prog.runCompiled_of_exec sevm pre _ execPost vault_prog_pcFree run
             codeEq
         have conservedPre : LedgerConserved Blanc.ProrataWethVault.supplySlot
             (Devm.getStor pre sevm.currentTarget) := by

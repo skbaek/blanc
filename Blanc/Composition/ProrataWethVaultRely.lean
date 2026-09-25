@@ -55,7 +55,6 @@ namespace Blanc.Composition.ProrataWethVault
 
 open Jaune
 
-
 /-- The frame invariant carried across every frame of the execution. -/
 structure VaultFrameInv (vault : Adr) (sevm : Sevm) (pre : Devm) : Prop where
   /-- The storage-only spec's own precondition: the vault code installed, the

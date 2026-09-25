@@ -317,7 +317,6 @@ theorem PairStepRecord.OwnIn.of_foreignRoot {vault : Adr} {r : PairStepRecord va
     cases visit
   · exact ⟨d, sub d member, visit⟩
 
-
 /-- The vault branch of every structural handler: a frame at the vault is at `pc = 0`, so the
 whole run is one compiled vault run and the vault segment classifies it. -/
 theorem Exec.CorePairReplay.vaultFrame {vault : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm}
