@@ -24,7 +24,21 @@ dispatcher Hoare lemma (`SFunc.Run.hoare_single_call_with_gotos`) at
   because their trees are balance-silent (`SFunc.Run.getBal_of_balSilent`).
 
 The approve and transferFrom wrappers carry the local collision premise
-`AllowAdmitted sevm` of this frame.  No global keccak assumption appears.
+`AllowAdmitted sevm` of this frame, and so does `frame_post`; it is the only
+qualification, and no global keccak assumption appears.  Its necessity is the
+O4 control `approve_collision_control` (`Approve.lean`): an admitted collision
+lets an approve run end insolvent.
+
+**Not reached here: the admitted ladder.**  `ContractSpecSem.SoundAdmitted`
+hands the frame a deeper-frame hypothesis only for child derivations that are
+themselves `Exec.FrameAdmitted`.  `frame_post` needs that hypothesis at the
+`CALL` of `withdraw`, whose child derivation comes from the lifted run's
+`Ninst.Run` witness; nothing links it to the concrete root derivation, whose
+raw frame roots carry the admission (the lifted run forgets the derivation,
+and even the pc of each step).  So `frame_post` takes the `Sound`-shaped
+hypothesis, and `SoundAdmitted`/`PreservesAdmitted` for `weth9Spec` wait on a
+derivation-carrying lift: `node_sound` extended so every `CALL` child of the
+lifted run is a raw frame root of the concrete derivation.
 -/
 
 namespace Blanc.Lift.Weth9
