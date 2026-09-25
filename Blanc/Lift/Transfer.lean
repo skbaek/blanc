@@ -509,7 +509,137 @@ private theorem call_fail_stack_exact {sevm : Sevm} {s sf : Devm}
     (hfork : CoveredFork sevm.benvStat.fork)
     (hfail : ((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf) :
     sf.stack = 0 :: xs := by
-  sorry
+  rcases h_run with ⟨xl, h_fill, pc, h_run⟩
+  simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
+    Bind.bind, Except.bind, Except.assert] at h_run
+  rcases eq1 : Devm.pop s with _ | ⟨gas1, s1⟩ <;>
+    simp only [eq1] at h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
+  have e1 := (Devm.pop_of_pop eq1).stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e1
+  rcases eq2 : Devm.popToAdr s1 with _ | ⟨callee2, s2⟩ <;>
+    simp only [eq2] at h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
+  rcases Devm.pop_of_popToAdr eq2 with ⟨x2, hx2, hp2⟩
+  have e2 := (Devm.pop_of_pop hp2).stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e2
+  rcases eq3 : Devm.pop s2 with _ | ⟨value3, s3⟩ <;>
+    simp only [eq3] at h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
+  have e3 := (Devm.pop_of_pop eq3).stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e3
+  rcases eq4 : Devm.popToNat s3 with _ | ⟨inputIndex4, s4⟩ <;>
+    simp only [eq4] at h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
+  rcases Devm.pop_of_popToNat_val eq4 with ⟨x4, f4, hk4⟩
+  have e4 := f4.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e4
+  rcases eq5 : Devm.popToNat s4 with _ | ⟨inputSize5, s5⟩ <;>
+    simp only [eq5] at h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
+  rcases Devm.pop_of_popToNat_val eq5 with ⟨x5, f5, hk5⟩
+  have e5 := f5.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e5
+  rcases eq6 : Devm.popToNat s5 with _ | ⟨outputIndex6, s6⟩ <;>
+    simp only [eq6] at h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
+  rcases Devm.pop_of_popToNat_val eq6 with ⟨x6, f6, hk6⟩
+  have e6 := f6.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e6
+  rcases eq7 : Devm.popToNat s6 with _ | ⟨outputSize7, s7⟩ <;>
+    simp only [eq7] at h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
+  rcases Devm.pop_of_popToNat_val eq7 with ⟨x7, f7, hk7⟩
+  have e7 := f7.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e7
+  have estack : s.stack = gas1 :: x2 :: value3 :: x4 :: x5 :: x6 :: x7 :: s7.stack := by
+    rw [e1, e2, e3, e4, e5, e6, e7]
+  have hparts :
+      g = gas1 ∧ c = x2 ∧ v = value3 ∧ ii = x4 ∧ is = x5 ∧
+        oi = x6 ∧ os = x7 ∧ xs = s7.stack := by
+    simpa only [List.cons.injEq] using hs.symm.trans estack
+  have hs7 : s7.stack = xs := hparts.2.2.2.2.2.2.2.symm
+  rw [hfork.rules_stateGas_none] at h_run
+  split at h_run
+  · rename_i _ heq
+    cases heq
+    split at h_run
+    · cases XStep.run_ofExcept_error h_run
+    · rename_i s10 eq10
+      rcases hp11 : sevm.benvStat.rules.gas.accessDelegation
+          (addAccessedAddress s7 callee2) callee2 with
+        ⟨dp, na, code0, dagc, s9⟩
+      simp only [hp11] at eq10 h_run
+      have hs9 : s9.stack = s7.stack := by
+        have h := congrArg (fun q => (q.2.2.2.2 : Devm).stack) hp11
+        dsimp at h
+        rw [← h, GasSchedule.accessDelegation_stack]
+        rfl
+      have hs10 : s10.stack = xs := by
+        exact (Devm.burn_of_chargeGas eq10).stack.symm.trans
+          (hs9.trans hs7)
+      split at h_run
+      · cases XStep.run_ofExcept_error h_run
+      · by_cases hbal : ((s10.memExtends
+            [(inputIndex4, inputSize5), (outputIndex6, outputSize7)]).getAcct
+              sevm.currentTarget).bal < value3
+        · rw [if_pos hbal] at h_run
+          rcases eq12 : Devm.push 0
+                (s10.memExtends [(inputIndex4, inputSize5), (outputIndex6, outputSize7)]) with
+                _ | ⟨v12, s12, world12⟩ <;> simp only [eq12] at h_run
+          · cases XStep.run_ofExcept_error h_run
+          · have h_ex := Except.ok.inj h_run.2
+            rw [h_ex]
+            have hpush := (Devm.push_of_push eq12).stack
+            show ({ mach := v12, «meta» := s12, world := world12 } : Devm).stack = 0 :: xs
+            rw [hpush]
+            have hmem : (s10.memExtends
+                [(inputIndex4, inputSize5), (outputIndex6, outputSize7)]).stack = xs := by
+              exact hs10
+            simpa only [List.nil_append, List.cons_append] using congrArg
+              (fun z => (0 :: z)) hmem
+        · rw [if_neg hbal] at h_run
+          simp only [genericCall.step] at h_run
+          split at h_run
+          · simp only [Bind.bind, Except.bind] at h_run
+            split at h_run
+            · cases XStep.run_ofExcept_error h_run
+            · rename_i s12 hpush
+              have h_ex := Except.ok.inj h_run.2
+              rw [h_ex]
+              have hstack := (Devm.push_of_push hpush).stack
+              change s12.stack = 0 :: xs
+              rw [hstack]
+              change 0 :: (s10.memExtends
+                [(inputIndex4, inputSize5), (outputIndex6, outputSize7)]).stack = 0 :: xs
+              have hmem : (s10.memExtends
+                  [(inputIndex4, inputSize5), (outputIndex6, outputSize7)]).stack = xs := by
+                exact hs10
+              simpa only [List.nil_append, List.cons_append] using congrArg
+                (fun z => (0 :: z)) hmem
+          · rename_i h_depth_ne
+            simp only [XStep.Run] at h_run
+            rcases h_run with ⟨ex', run_pm₀, h_split⟩
+            rcases ex' with err' | child
+            · cases Resume.call_run_error h_split.symm
+            have hparent :
+                ((s10.memExtends
+                  [(inputIndex4, inputSize5), (outputIndex6, outputSize7)]).withReturnData
+                  []).stack = xs := by
+              show s10.stack = xs
+              exact hs10
+            by_cases herr : child.error.isSome
+            · have hsf := Resume.call_stack_flag h_split.symm
+              rw [if_pos herr] at hsf
+              rw [hsf, hparent]
+            · have hsf := Resume.call_stack_flag h_split.symm
+              rw [if_neg herr] at hsf
+              rw [hsf, hparent] at hfail
+              have hz : (0 : B256) = 1 :=
+                pref_head_unique hfail.1 (pref_append [1] xs)
+              exact (B256.zero_ne_one hz).elim
+  · rename_i s10 heq
+    cases heq
 
 private theorem ninstTransfer_run_call {sevm : Sevm} {devm devm' : Devm}
     {input output : Pattern} (hfork : CoveredFork sevm.benvStat.fork)
