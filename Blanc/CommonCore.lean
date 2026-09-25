@@ -2100,7 +2100,10 @@ theorem correct (sevm : Sevm) (pre : Devm) (p : Prog) (post : Devm)
 
 /-- The code-level interface consumed by the contract preservation ladder. -/
 structure CodeSem : Type where
-  /-- The deployed code image, or `none` for a vacuous code condition. -/
+  /-- The deployed code image. `none` makes `Pre`, `StateInv`, and `CodeSem.At`
+  unsatisfiable because `some (getCode ca).toList = image` cannot hold, so
+  statements over such a spec hold vacuously — exactly as `Prog.compile = none`
+  did before. -/
   image : Option (List UInt8)
   /-- The certified run relation of the code image. -/
   Run : Sevm → Devm → Devm → Prop
