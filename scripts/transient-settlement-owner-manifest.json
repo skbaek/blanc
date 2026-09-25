@@ -32,7 +32,7 @@
     "scripts/check-execution-raw-attribution-ownership.py": "d71734cea2d7e580eb6550eb77d6e1fdd51bb6eadb491adf5fd3ec6013790fee",
     "scripts/check-execution-settlement.py": "b43f5b3cdc2de74332d16be957553bd23014b59b346ce8450e133cf70c7d308b",
     "scripts/cycle-write-free-owner-manifest.json": "6f214db370ce643f8246da7637ad65ba1f9bd5cd319c07ec635f5d84826a02d3",
-    "scripts/execution-occurrence-lift-manifest.json": "a463d5559962eaa418152043e2c102188cc1ec24a155ee974a52a895aaec8c69",
+    "scripts/execution-occurrence-lift-manifest.json": "74a4baf302cd8a2e7d07ca7ba8ff4b14b6cf3715f888bb1c8b0fcd5a167ab735",
     "scripts/execution-raw-attribution-owner-manifest.json": "803771c04e25de1b3b15607a4aaa82f654ebdb2a0ad96c7f5d5521a9b0aaef18",
     "scripts/execution-settlement-lift-manifest.json": "fa966e7a2f858db1f1bdbfc8f719032f249373dddfeb23783ec9d7c2558d322b"
   },
