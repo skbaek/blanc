@@ -1,4 +1,4 @@
-import Blanc.Ladder
+import Blanc.LadderBase
 
 /-!
 # Contract preservation over certified code semantics
