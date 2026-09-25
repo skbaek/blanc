@@ -50,7 +50,7 @@ def ninstTransfer : Ninst → Pattern → Option Pattern
 /-- Success-only soundness: a successful run of an accepted instruction leaves
 a stack matching the transferred pattern. -/
 theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
-    {input output : Pattern}
+    {input output : Pattern} (hfork : CoveredFork sevm.benvStat.fork)
     (matched : Matches input devm.stack)
     (checked : ninstTransfer n input = some output)
     (run : Ninst.Run sevm devm n devm') :
