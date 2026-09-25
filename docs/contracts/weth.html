@@ -91,9 +91,10 @@
       <p class="stmt">If the WETH account holds the compiled artifact and is solvent at a configured
         chain state, it holds the artifact and stays solvent at every state reachable from there —
         whole valid blocks, every transaction anyone sent, arbitrary contracts doing arbitrary
-        things, across scheduled fork activations.</p>
+        things, across scheduled fork activations among the forks the proofs cover.</p>
 <pre><span class="k">theorem</span> <span class="d">chainUsing_preserves_solvent</span> (wa : <span class="t">Adr</span>) (cfg : <span class="t">ChainConfig</span>)
     (ch ch' : <span class="t">BlockChain</span>) (h_reach : <span class="t">BlockChain.ReachUsing</span> cfg ch ch')
+    (hfork : ∀ t f, cfg.forkAt t = .ok f → <span class="t">CoveredFork</span> f)
     (h_inv : <span class="t">State.Inv</span> wa ch.state) : <span class="t">State.Inv</span> wa ch'.state</pre>
     </div>
     <p class="cap"><b>Read the quantifiers</b> — <span class="mono">State.Inv</span> bundles three
@@ -114,7 +115,7 @@ addBlockToChain_preserves_solvent      <span class="c">-- one block, from raw RL
 chain_preserves_solvent                <span class="c">-- every reachable state</span>
 stateTransitionUsing_preserves_solvent <span class="c">-- …and the same three again on a</span>
 addBlockToChainUsing_preserves_solvent <span class="c">   *configured* chain, whose schedule</span>
-chainUsing_preserves_solvent           <span class="c">   crosses Prague, Osaka, BPO1, BPO2</span></pre>
+chainUsing_preserves_solvent           <span class="c">   selects only Prague, Osaka, BPO1, BPO2</span></pre>
     </div>
 
     <div class="dev" style="margin-top:26px">
@@ -132,11 +133,12 @@ chainUsing_preserves_solvent           <span class="c">   crosses Prague, Osaka,
     </div>
     <div class="dev">
       <div class="devhead"><h3>Does a scheduled hard fork void the claim?</h3><span class="devtag">pushback</span></div>
-      <p>No, in two senses. The <span class="mono">Using</span> rungs are proved over a configured
-        chain whose schedule crosses Prague, Osaka, BPO1, and BPO2 — an activation is one more step
-        of the induction, not a new proof. Beneath them, fork-parametric parents are stated for an
-        <em>arbitrary</em> <span class="mono">ForkRules</span>, because solvency is a statement about
-        how value moves and no fork rule moves value. The unqualified rungs are Prague; nothing on
+      <p>Not a covered one. The <span class="mono">Using</span> rungs are proved over any configured
+        chain whose schedule selects only covered forks — Prague, Osaka, BPO1, and BPO2 — so an
+        activation among them is one more step of the induction, not a new proof. Beneath them,
+        the fork-parametric parents are stated for an arbitrary covered <span class="mono">Fork</span>.
+        A fork outside that list is outside the claim: the pinned Jaune already models Amsterdam,
+        and no WETH theorem covers an Amsterdam block. The unqualified rungs are Prague; nothing on
         this page implies deployability on earlier forks.</p>
     </div>
     <div class="dev">

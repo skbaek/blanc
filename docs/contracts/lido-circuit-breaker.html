@@ -63,9 +63,9 @@
 <span class="ok">OK — Lido CircuitBreaker differential: 175/175 rows agree; 17/17 selectors + constructor; 144 causal history transactions; 464 resource boundaries …</span>
 <span class="p">$</span> scripts/check-lido-circuit-breaker-assurance.sh
 <span class="ok">OK — lido-circuit-breaker-assurance: 75 rows across 11 pillars … 158 axiom
-     expectations matched … 14/14 non-claim phrases present</span></div>
-        <p class="cap"><b>Fig. 1</b> — two CircuitBreaker gates, verbatim (exact-candidate run 2026-09-03 UTC), ellipses
-          marking elision: the differential matrix beside the locked Solidity reference, and the
+     expectations matched … 14/14 non-claim phrases present …</span></div>
+        <p class="cap"><b>Fig. 1</b> — two CircuitBreaker gates, verbatim, ellipses marking elision
+          (differential: exact-candidate run 2026-09-03 UTC; register verifier: run 2026-09-25 UTC): the differential matrix beside the locked Solidity reference, and the
           register verifier that fails if any cited declaration, axiom set, or non-claim phrase
           drifts from the tree it describes. The differential line continues “… 82 Solidity
           CALL/STATICCALL traces; 15 positive artifact checks + 1 runtime corruption; 16 live
@@ -107,13 +107,17 @@
 <pre><span class="k">theorem</span> <span class="d">chainUsing_preserves_registryStable</span> (dp : <span class="t">DeployParams</span>) (ca : <span class="t">Adr</span>)
     (cfg : <span class="t">ChainConfig</span>) (checkpoint future : <span class="t">BlockChain</span>)
     (reach : <span class="t">BlockChain.ReachUsing</span> cfg checkpoint future)
-    (stable : <span class="t">RegistryStable</span> dp ca checkpoint.state) :
+    (stable : <span class="t">RegistryStable</span> dp ca checkpoint.state)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → <span class="t">CoveredFork</span> f) :
     <span class="t">RegistryStable</span> dp ca future.state</pre>
     </div>
     <p class="cap"><b>Read what is absent</b> — no premise about the bytecode at any other
       address, no non-reentrancy condition, no direct-call-only restriction, no honesty asked of
       the contracts it pauses, no noninterference assumption, and no identification of the
-      post-callback entry list with the checkpoint’s. The owning gate probes all 104 public
+      post-callback entry list with the checkpoint’s. What is present is one schedule premise:
+      every fork the configuration selects is one the proofs cover — Prague, Osaka, BPO1, or
+      BPO2 — which Jaune’s mainnet schedule satisfies and an Amsterdam-scheduled chain does not.
+      The owning gate probes all 104 public
       theorems of the family for exactly Lean’s three standard axioms and admits no exception
       table. And the checkpoint hypothesis is not a supposition:
       <span class="mono">DeploymentRoot</span> discharges it for the one official deployment
@@ -335,8 +339,9 @@ runtimeWriteAuthority_of_rawFrameRoot <span class="c">-- every raw SSTORE in an 
         <span class="tick">the boundary’s third register</span>
         <p class="dim" style="font-size:.93rem;margin-bottom:0">
           The explicit exclusions are load-bearing: no operational event delivery, reorg, or
-          finality claim; no callback-time count/expiry coherence, no target truth, and no
-          composition of the full public <span class="mono">pause</span> result; no deployment
+          finality claim; no callback-time count/expiry coherence; no target truth for an
+          arbitrary target, and no composition of the full public <span class="mono">pause</span>
+          result except the gateway’s, for its two constructed worlds; no deployment
           shapes beyond the one official direct creation; and no verification of deployed
           Solidity. The normative target is locked by
           <span class="mono">scripts/lido-circuit-breaker-reference.json</span> — the vendored
@@ -381,7 +386,8 @@ runtimeWriteAuthority_of_rawFrameRoot <span class="c">-- every raw SSTORE in an 
         <p class="dim" style="font-size:.94rem;margin-bottom:0">
           Unlike the WETH10 page’s closed-form gas equations, these figures are measurements
           against the pinned oracle, and the page labels them as such rather than promoting
-          them. The executable evidence is specifically under the pinned Prague EELS; nothing
+          them. The differential evidence is specifically under the pinned Prague EELS; a separate
+          dated BPO2 lane replays only the pause and query shared with the gateway, and nothing
           here implies deployability or cost on any other fork.
         </p>
       </div>
