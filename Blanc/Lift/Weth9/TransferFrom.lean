@@ -41,187 +41,6 @@ def xferStor (s : Stor) (src dst : Adr) (wad : B256) : Stor :=
 
 end Weth9
 
-private theorem ff20_and_word (x : B256) :
-    (Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& x) =
-      x.toAdr.toB256 := by
-  rw [ff20_eq]
-  exact addressSlotReadWord_eq_toAdr_toB256 x
-
-private theorem and_mask_word (x : B256) : (x &&& ~~~ addressMask) = x.toAdr.toB256 := by
-  rw [B256.and_comm]
-  exact addressSlotReadWord_eq_toAdr_toB256 x
-
-private theorem w04_eq : Bytes.toB256 [0x04] = 4 := by decide
-
-/-- `mstore(0, addr(x)); mstore(32, base); keccak256(0, 64)`, entered with the
-word `x` above `0 :: base`. -/
-private def hashLine : List Ninst :=
-  [.push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
-   .reg .and,
-   .push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
-   .reg .and, .reg (.dup 1), .reg .mstore,
-   .push [0x20] (by decide), .reg .add, .reg (.swap 0), .reg (.dup 1),
-   .reg .mstore, .push [0x20] (by decide), .reg .add,
-   .push [0x00] (by decide), .reg .keccak256]
-
-/-- `slot, w, y` ↦ `slot, f(sload slot, w), f(sload slot, w), y`: the part of a
-read-modify-write before its `SSTORE`. -/
-private def updLine (op : Ninst) : List Ninst :=
-  [.push [0x00] (by decide), .reg (.dup 2), .reg (.dup 2), .reg .sload, op,
-   .reg (.swap 2), .reg .pop, .reg .pop, .reg (.dup 1), .reg (.swap 0)]
-
-private theorem hash_walk {sevm : Sevm} {s s' : Devm} {x base : B256} {ys : Stack}
-    (hp : x :: (0 : B256) :: base :: ys <<+ s.stack) (run : Line.Run sevm s hashLine s') :
-    mapSlot x.toAdr.toB256 base :: ys <<+ s'.stack ∧
-      Devm.getStor s' = Devm.getStor s ∧ s'.getBal = s.getBal := by
-  have hstor : Devm.getStor s = Devm.getStor s' :=
-    Line.of_inv Devm.getStor (by line_inv) run
-  have hbal : s.getBal = s'.getBal := Line.of_inv Devm.getBal (by line_inv) run
-  refine ⟨?_, hstor.symm, hbal.symm⟩
-  have hmem2 : ∀ μ : Mem,
-      (((μ.write 0 x.toAdr.toB256.toBytes).write 32 base.toBytes).read 0 64).1 =
-        x.toAdr.toB256.toBytes ++ base.toBytes := fun μ =>
-    Mem.read_two_word_writes_at_raw μ 0 x.toAdr.toB256 base
-  unfold hashLine at run
-  obtain ⟨s1, h1, run⟩ := Line.of_run_cons run
-  obtain ⟨s2, h2, run⟩ := Line.of_run_cons run
-  obtain ⟨s3, h3, run⟩ := Line.of_run_cons run
-  obtain ⟨s4, h4, run⟩ := Line.of_run_cons run
-  obtain ⟨s5, h5, run⟩ := Line.of_run_cons run
-  obtain ⟨s6, h6, run⟩ := Line.of_run_cons run
-  obtain ⟨s7, h7, run⟩ := Line.of_run_cons run
-  obtain ⟨s8, h8, run⟩ := Line.of_run_cons run
-  obtain ⟨s9, h9, run⟩ := Line.of_run_cons run
-  obtain ⟨s10, h10, run⟩ := Line.of_run_cons run
-  obtain ⟨s11, h11, run⟩ := Line.of_run_cons run
-  obtain ⟨s12, h12, run⟩ := Line.of_run_cons run
-  obtain ⟨s13, h13, run⟩ := Line.of_run_cons run
-  obtain ⟨s14, h14, run⟩ := Line.of_run_cons run
-  obtain ⟨s15, h15, run⟩ := Line.of_run_cons run
-  cases run
-  have hp2 : x.toAdr.toB256 :: (0 : B256) :: base :: ys <<+ s2.stack := by
-    have := prefix_of_and h2 (prefix_of_push (of_run_push h1) hp)
-    rwa [ff20_and_word] at this
-  have hp4 : x.toAdr.toB256 :: (0 : B256) :: base :: ys <<+ s4.stack := by
-    have := prefix_of_and h4 (prefix_of_push (of_run_push h3) hp2)
-    rwa [ff20_and_word, toAdr_toB256] at this
-  have hp5 : (0 : B256) :: x.toAdr.toB256 :: (0 : B256) :: base :: ys <<+ s5.stack :=
-    prefix_of_dup_val h5 (by show_nth) hp4
-  have hB := prefix_of_mstore_val h6 hp5
-  have hp6 : (0 : B256) :: base :: ys <<+ s6.stack := hB.1
-  have hp7 : (32 : B256) :: (0 : B256) :: base :: ys <<+ s7.stack := by
-    have := prefix_of_push (of_run_push h7) hp6
-    rwa [w20_eq] at this
-  have hp8 : (32 : B256) :: base :: ys <<+ s8.stack := by
-    have := prefix_of_add h8 hp7
-    rwa [w32_add_0] at this
-  have hp9 : base :: (32 : B256) :: ys <<+ s9.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
-      (of_run_swap h9) hp8
-  have hp10 : (32 : B256) :: base :: (32 : B256) :: ys <<+ s10.stack :=
-    prefix_of_dup_val h10 (by show_nth) hp9
-  have hm10 : s6.memory = s10.memory :=
-    Line.of_inv Devm.memory (by line_inv)
-      (.cons h7 (.cons h8 (.cons h9 (.cons h10 .nil))))
-  have hC := prefix_of_mstore_val h11 hp10
-  have hp11 : (32 : B256) :: ys <<+ s11.stack := hC.1
-  have hm11 : s11.memory =
-      (s5.memory.write 0 x.toAdr.toB256.toBytes).write 32 base.toBytes := by
-    rw [hC.2, ← hm10, hB.2, w0_toNat, w32_toNat]
-  have hp12 : (32 : B256) :: (32 : B256) :: ys <<+ s12.stack := by
-    have := prefix_of_push (of_run_push h12) hp11
-    rwa [w20_eq] at this
-  have hp13 : (64 : B256) :: ys <<+ s13.stack := by
-    have := prefix_of_add h13 hp12
-    rwa [w32_add_32] at this
-  have hp14 : (0 : B256) :: (64 : B256) :: ys <<+ s14.stack := by
-    have := prefix_of_push (of_run_push h14) hp13
-    rwa [w00_eq] at this
-  have hm14 : s11.memory = s14.memory :=
-    Line.of_inv Devm.memory (by line_inv) (.cons h12 (.cons h13 (.cons h14 .nil)))
-  have := (prefix_of_keccak256_val h15 hp14).1
-  rw [← hm14, hm11, w0_toNat, w64_toNat, hmem2] at this
-  exact this
-
-/-- The read-modify-write line, for an operation `op` computing `f`. -/
-private theorem upd_walk {sevm : Sevm} {s s' : Devm} {op : Ninst} {f : B256 → B256 → B256}
-    {slot w y : B256} {xs : Stack}
-    (hop : ∀ {a b : B256} {zs : Stack} {t t' : Devm}, Ninst.Run sevm t op t' →
-      a :: b :: zs <<+ t.stack → f a b :: zs <<+ t'.stack)
-    (hopStor : ∀ {t t' : Devm}, Ninst.Run sevm t op t' →
-      Devm.getStor t = Devm.getStor t' ∧ t.getBal = t'.getBal)
-    (hp : slot :: w :: y :: xs <<+ s.stack) (run : Line.Run sevm s (updLine op) s') :
-    slot :: f (s.getStorVal sevm.currentTarget slot) w ::
-        f (s.getStorVal sevm.currentTarget slot) w :: y :: xs <<+ s'.stack ∧
-      Devm.getStor s' = Devm.getStor s ∧ s'.getBal = s.getBal := by
-  unfold updLine at run
-  obtain ⟨s1, h1, run⟩ := Line.of_run_cons run
-  obtain ⟨s2, h2, run⟩ := Line.of_run_cons run
-  obtain ⟨s3, h3, run⟩ := Line.of_run_cons run
-  obtain ⟨s4, h4, run⟩ := Line.of_run_cons run
-  obtain ⟨s5, h5, run⟩ := Line.of_run_cons run
-  obtain ⟨s6, h6, run⟩ := Line.of_run_cons run
-  obtain ⟨s7, h7, run⟩ := Line.of_run_cons run
-  obtain ⟨s8, h8, run⟩ := Line.of_run_cons run
-  obtain ⟨s9, h9, run⟩ := Line.of_run_cons run
-  obtain ⟨s10, h10, run⟩ := Line.of_run_cons run
-  cases run
-  have hst4 : Devm.getStor s = Devm.getStor s4 :=
-    Line.of_inv Devm.getStor (by line_inv)
-      (.cons h1 (.cons h2 (.cons h3 (.cons h4 .nil))))
-  have hbal4 : s.getBal = s4.getBal :=
-    Line.of_inv Devm.getBal (by line_inv)
-      (.cons h1 (.cons h2 (.cons h3 (.cons h4 .nil))))
-  have hst10 : Devm.getStor s5 = Devm.getStor s' :=
-    Line.of_inv Devm.getStor (by line_inv)
-      (.cons h6 (.cons h7 (.cons h8 (.cons h9 (.cons h10 .nil)))))
-  have hbal10 : s5.getBal = s'.getBal :=
-    Line.of_inv Devm.getBal (by line_inv)
-      (.cons h6 (.cons h7 (.cons h8 (.cons h9 (.cons h10 .nil)))))
-  have hold : s3.getStorVal sevm.currentTarget slot =
-      s.getStorVal sevm.currentTarget slot := by
-    have hst3 : Devm.getStor s = Devm.getStor s3 :=
-      Line.of_inv Devm.getStor (by line_inv) (.cons h1 (.cons h2 (.cons h3 .nil)))
-    show (Devm.getStor s3 sevm.currentTarget).get slot =
-      (Devm.getStor s sevm.currentTarget).get slot
-    rw [← hst3]
-  refine ⟨?_, ?_, ?_⟩
-  · have hp1 : (0 : B256) :: slot :: w :: y :: xs <<+ s1.stack := by
-      have := prefix_of_push (of_run_push h1) hp
-      rwa [w00_eq] at this
-    have hp2 : w :: (0 : B256) :: slot :: w :: y :: xs <<+ s2.stack :=
-      prefix_of_dup_val h2 (by show_nth) hp1
-    have hp3 : slot :: w :: (0 : B256) :: slot :: w :: y :: xs <<+ s3.stack :=
-      prefix_of_dup_val h3 (by show_nth) hp2
-    obtain ⟨bal, hp4, hbal⟩ := prefix_of_sload h4 hp3
-    rw [hold] at hbal
-    subst hbal
-    have hp5 := hop h5 hp4
-    have hp6 : w :: (0 : B256) :: slot ::
-        f (s.getStorVal sevm.currentTarget slot) w :: y :: xs <<+ s6.stack :=
-      Stack.prefix_of_swap (n := 2) (by simp [Stack.Swap, Stack.SwapCore])
-        (of_run_swap h6) hp5
-    have hp8 := prefix_of_pop (of_run_pop h8) (prefix_of_pop (of_run_pop h7) hp6)
-    have hp9 := prefix_of_dup_val h9 (by show_nth) hp8
-    exact Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
-      (of_run_swap h10) hp9
-  · rw [← hst10, ← (hopStor h5).1, ← hst4]
-  · rw [← hbal10, ← (hopStor h5).2, ← hbal4]
-
-/-- Persistent observations shared by two machine states. -/
-private def Same (a b : Devm) : Prop := Devm.getStor a = Devm.getStor b ∧ a.getBal = b.getBal
-
-private theorem Same.trans {a b c : Devm} (h : Same a b) (h' : Same b c) : Same a c :=
-  ⟨h.1.trans h'.1, h.2.trans h'.2⟩
-
-private theorem Same.of_state {a b : Devm} (h : a.state = b.state) : Same a b :=
-  ⟨funext (getStor_eq_of_state_eq h), funext (getBal_eq_of_state_eq h)⟩
-
-private theorem silentSet_nil : SilentSet prog [] = true := rfl
-
 private def pre08cf : List Ninst :=
   [.reg (.dup 1), .push [0x03] (by decide), .push [0x00] (by decide), .reg (.dup 6)]
 
@@ -234,24 +53,6 @@ private theorem tree_08cf : ∃ tail : SFunc,
       [Ninst.sstore] ++ mid08cf ++ hashLine ++ updLine (.reg .add) ++ [Ninst.sstore]) tail) ∧
     tail.silent = true ∧ tail.refs.all (· ∈ ([] : List Nat)) = true :=
   ⟨_, rfl, by decide, by decide⟩
-
-private theorem sub_walk {sevm : Sevm} {slot w y : B256} {xs : Stack} {s s' : Devm}
-    (hp : slot :: w :: y :: xs <<+ s.stack) (run : Line.Run sevm s (updLine (.reg .sub)) s') :
-    slot :: (s.getStorVal sevm.currentTarget slot - w) ::
-        (s.getStorVal sevm.currentTarget slot - w) :: y :: xs <<+ s'.stack ∧
-      Devm.getStor s' = Devm.getStor s ∧ s'.getBal = s.getBal :=
-  upd_walk (f := fun a b => a - b) (fun h hp => prefix_of_sub h hp)
-    (fun h => ⟨Line.of_inv Devm.getStor (by line_inv) (.cons h .nil),
-      Line.of_inv Devm.getBal (by line_inv) (.cons h .nil)⟩) hp run
-
-private theorem add_walk {sevm : Sevm} {slot w y : B256} {xs : Stack} {s s' : Devm}
-    (hp : slot :: w :: y :: xs <<+ s.stack) (run : Line.Run sevm s (updLine (.reg .add)) s') :
-    slot :: (s.getStorVal sevm.currentTarget slot + w) ::
-        (s.getStorVal sevm.currentTarget slot + w) :: y :: xs <<+ s'.stack ∧
-      Devm.getStor s' = Devm.getStor s ∧ s'.getBal = s.getBal :=
-  upd_walk (f := fun a b => a + b) (fun h hp => prefix_of_add h hp)
-    (fun h => ⟨Line.of_inv Devm.getStor (by line_inv) (.cons h .nil),
-      Line.of_inv Devm.getBal (by line_inv) (.cons h .nil)⟩) hp run
 
 /-- Block `0x8cf`: the two balance writes, then the event and the return. -/
 private theorem xfer_08cf {sevm : Sevm} {d : Devm} {o : Outcome}
@@ -373,15 +174,6 @@ private theorem XferEff.of_same {sevm : Sevm} {d d' : Devm} {o : Outcome} {wad d
   rw [h.1, h.2]
   exact e
 
-/-- `iszero(iszero(iszero(lt(bal, wad))))` is nonzero only when `wad ≤ bal`. -/
-private theorem le_of_check {bal wad : B256}
-    (h : ((((bal <? wad) =? 0) =? 0) =? 0) ≠ 0) : wad ≤ bal := by
-  rw [← B256.not_lt]
-  intro hlt
-  apply h
-  rw [B256.ltCheck, ite_eq_left_of_eq_true _ _ (eq_true hlt)]
-  decide
-
 private theorem eq_zero_of_isz_ne {x : B256} (h : (x =? 0) ≠ 0) : x = 0 := by
   unfold B256.eqCheck at h
   split at h
@@ -401,32 +193,6 @@ private theorem ne_of_eqc_eq {x y : B256} (h : (x =? y) = 0) : x ≠ y := by
   rw [ite_eq_left_of_eq_true _ _ (eq_true rfl)] at h
   revert h
   decide
-
-/-- Two words popped by a `JUMPI`. -/
-private theorem prefix_of_popBurn2 {s s' : Devm} {a b d w : B256} {xs : Stack}
-    (hp : a :: b :: xs <<+ s.stack) (h : Devm.PopBurn [d, w] s s') :
-    a = d ∧ b = w ∧ xs <<+ s'.stack := by
-  have hs : s.stack = d :: w :: s'.stack := h.stack
-  rcases hp with ⟨t, ht⟩
-  have ht' : s.stack = a :: b :: (xs ++ t) := ht
-  rw [hs] at ht'
-  injection ht' with h1 ht'
-  injection ht' with h2 ht'
-  exact ⟨h1.symm, h2.symm, t, ht'⟩
-
-private theorem not_run_revert_tail {fs : List SFunc} {sevm : Sevm} {devm : Devm}
-    {o : Outcome} :
-    ¬ SFunc.Run fs sevm devm
-      (.next (.push [0x00] (by decide)) (.next (.reg (.dup 0)) (.last .revert))) o := by
-  intro run
-  rcases run with _ | _ | _ | _ | _ | ⟨_, run⟩
-  rcases run with _ | _ | _ | _ | _ | ⟨_, run⟩
-  rcases run with _ | _ | _ | _ | ⟨h_run⟩
-  dsimp [Linst.Run, Linst.run] at h_run
-  rcases Except.bind_eq_ok h_run with ⟨_, _, h2⟩
-  rcases Except.bind_eq_ok h2 with ⟨_, _, h4⟩
-  rcases Except.bind_eq_ok h4 with ⟨_, _, h6⟩
-  contradiction
 
 /-- `allowance[src][caller]`: two nested slot computations. -/
 private def allowLine : List Ninst :=
@@ -886,11 +652,6 @@ theorem Weth9.transferFrom_solvent {sevm : Sevm} {d : Devm} {o : Outcome}
       ((Outcome.devm o).getBal sevm.currentTarget) := by
   have hp : wad :: dst :: src :: rest <<+ d.stack := ⟨[], by simp [Split, hstack]⟩
   exact Weth9.transferFrom_solvent_of_prefix hg hp hoff h run
-
-private theorem solvent_zero {s : Stor} {v b : B256} (h : Solvent s v b) : Solvent s 0 b := by
-  unfold Solvent at h ⊢
-  rw [B256.toNat_zero]
-  omega
 
 /-- Entry 9 as a callee: a `callNext 9` from a frame whose stack starts with
 `wad, dst, src`, continued by a state-silent tree, preserves solvency. -/
