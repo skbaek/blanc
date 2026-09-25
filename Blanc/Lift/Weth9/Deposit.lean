@@ -1,30 +1,13 @@
 import Blanc.Lift.Weth9.Booked
+import Blanc.Lift.Weth9.Words
+import Blanc.Lift.Weth9.Step
 import Blanc.Lift.Silent
-import Blanc.AddressSlotProofs
 
 namespace Blanc.Lift
 
 open Jaune
 open Blanc
 open Weth9
-
-private def chain : List Ninst → SFunc → SFunc
-  | [], f => f
-  | n :: ns, f => .next n (chain ns f)
-
-private theorem run_chain_prefix {fs : List SFunc} {sevm : Sevm}
-    (xs ys : List Ninst) {devm : Devm} {f : SFunc} {o : Outcome}
-    (run : SFunc.Run fs sevm devm (chain (xs ++ ys) f) o) :
-    ∃ mid, Line.Run sevm devm xs mid ∧
-      SFunc.Run fs sevm mid (chain ys f) o := by
-  induction xs generalizing devm with
-  | nil => exact ⟨devm, .nil, run⟩
-  | cons n ns ih =>
-      change SFunc.Run fs sevm devm (.next n (chain (ns ++ ys) f)) o at run
-      cases run with
-      | next hstep hrest =>
-          rcases ih hrest with ⟨mid, hline, hrun⟩
-          exact ⟨mid, .cons hstep hline, hrun⟩
 
 private def depositPre : List Ninst :=
   [.reg .callvalue, .push [0x03] (by decide), .push [0x00] (by decide),
@@ -82,28 +65,6 @@ private theorem split_deposit_run {fs : List SFunc} {sevm : Sevm}
           exact ⟨_, d1, d2, d3, d, burn, hpre, of_run_singleton hsstore, hpost, hret⟩
 
 /-- The 20-byte all-ones push word is the complement of `addressMask`. -/
-private theorem ff20_eq :
-    Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] = ~~~ addressMask := by
-  decide
-
-/-- Masking an address word with the 20-byte all-ones word is the identity. -/
-private theorem ff20_and_adr (a : Adr) :
-    (Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& a.toB256) =
-      a.toB256 := by
-  rw [ff20_eq]
-  exact addressSlotReadWord_toB256 a
-
-private theorem w00_eq : Bytes.toB256 [0x00] = 0 := by decide
-private theorem w03_eq : Bytes.toB256 [0x03] = 3 := by decide
-private theorem w20_eq : Bytes.toB256 [0x20] = 32 := by decide
-private theorem w32_add_0 : (32 : B256) + 0 = 32 := by decide
-private theorem w32_add_32 : (32 : B256) + 32 = 64 := by decide
-private theorem w0_toNat : (0 : B256).toNat = 0 := by decide
-private theorem w32_toNat : (32 : B256).toNat = 32 := by decide
-private theorem w64_toNat : (64 : B256).toNat = 64 := by decide
-
 private theorem deposit_pre_stack {sevm : Sevm} {s s' : Devm}
     (run : Line.Run sevm s depositPre s') :
     ∃ xs : Stack,
