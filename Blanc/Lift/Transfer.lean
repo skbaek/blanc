@@ -1,5 +1,6 @@
 import Blanc.Lift.Basic
 import Blanc.AbstractStackTransfer
+import Blanc.Ladder
 
 /-!
 # Instruction stack transfer for lifted bytecode
@@ -472,13 +473,107 @@ private theorem matches_push_word {head : Option B256} {tail : Pattern}
   subst final
   exact ⟨headMatch, matched⟩
 
+private theorem matches_seven {a b c d e f g : Option B256} {tail : Pattern}
+    {s : Stack} (matched : Matches (a :: b :: c :: d :: e :: f :: g :: tail) s) :
+    ∃ (x1 x2 x3 x4 x5 x6 x7 : B256) (xs : Stack),
+      s = x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: x7 :: xs ∧ Matches tail xs := by
+  cases s with
+  | nil => simp only [Matches] at matched
+  | cons x1 s =>
+    cases s with
+    | nil => simp_all [Matches]
+    | cons x2 s =>
+      cases s with
+      | nil => simp_all [Matches]
+      | cons x3 s =>
+        cases s with
+        | nil => simp_all [Matches]
+        | cons x4 s =>
+          cases s with
+          | nil => simp_all [Matches]
+          | cons x5 s =>
+            cases s with
+            | nil => simp_all [Matches]
+            | cons x6 s =>
+              cases s with
+              | nil => simp_all [Matches]
+              | cons x7 xs =>
+                simp only [Matches] at matched
+                exact ⟨x1, x2, x3, x4, x5, x6, x7, xs, rfl,
+                  matched.2.2.2.2.2.2.2⟩
+
+private theorem call_fail_stack_exact {sevm : Sevm} {s sf : Devm}
+    {g c v ii is oi os : B256} {xs : Stack}
+    (hs : s.stack = g :: c :: v :: ii :: is :: oi :: os :: xs)
+    (h_run : Ninst.Run sevm s Ninst.call sf)
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfail : ((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf) :
+    sf.stack = 0 :: xs := by
+  sorry
+
 private theorem ninstTransfer_run_call {sevm : Sevm} {devm devm' : Devm}
     {input output : Pattern} (hfork : CoveredFork sevm.benvStat.fork)
     (matched : Matches input devm.stack)
     (checked : callTransfer input = some output)
     (run : Ninst.Run sevm devm (.exec .call) devm') :
     Matches output devm'.stack := by
-  sorry
+  cases input with
+  | nil => simp [callTransfer] at checked
+  | cons a input =>
+      cases input with
+      | nil => simp [callTransfer] at checked
+      | cons b input =>
+          cases input with
+          | nil => simp [callTransfer] at checked
+          | cons c input =>
+              cases input with
+              | nil => simp [callTransfer] at checked
+              | cons d input =>
+                  cases input with
+                  | nil => simp [callTransfer] at checked
+                  | cons e input =>
+                      cases input with
+                      | nil => simp [callTransfer] at checked
+                      | cons f input =>
+                          cases input with
+                          | nil => simp [callTransfer] at checked
+                          | cons g rest =>
+                              simp only [callTransfer, Option.some.injEq] at checked
+                              cases checked
+                              obtain ⟨gas, callee, value, inputIndex, inputSize,
+                                outputIndex, outputSize, xs, hstack, hrest⟩ :=
+                                matches_seven matched
+                              have hp :
+                                  (gas :: callee :: value :: inputIndex :: inputSize ::
+                                    outputIndex :: outputSize :: xs) <<+ devm.stack := by
+                                rw [hstack]
+                                simpa only [List.append_nil] using
+                                  (pref_append
+                                    (gas :: callee :: value :: inputIndex :: inputSize ::
+                                      outputIndex :: outputSize :: xs) [])
+                              have run' : Ninst.Run sevm devm Ninst.call devm' := by
+                                simpa only [Ninst.call] using run
+                              rcases of_run_call_val hp run' hfork with hfail | hsuccess
+                              · have hsf := call_fail_stack_exact hstack run' hfork hfail
+                                rw [hsf]
+                                exact ⟨Or.inl rfl, hrest⟩
+                              · rcases hsuccess with
+                                  ⟨parent, child, xl, dp, na, code, avail,
+                                    hparentStack, hstate, hmemory, hdelegated,
+                                    hfilled, hmessage, herror, hresume, hsfstate,
+                                    hsfreturn, hsfmemory, hflag⟩
+                                have hparent : parent.stack = xs := by
+                                  have hparts :
+                                      True ∧ True ∧ True ∧ True ∧ True ∧ True ∧ True ∧
+                                        parent.stack = xs := by
+                                    simpa only [List.cons.injEq] using
+                                      (hstack.symm.trans hparentStack).symm
+                                  exact hparts.2.2.2.2.2.2.2
+                                rw [hflag, hparent]
+                                exact matches_push_word (head := none)
+                                  (x := (1 : B256))
+                                  (headMatch := Or.inl rfl) hrest
+                                  (by simp [Stack.Push, Split])
 
 /-- Success-only soundness: a successful run of an accepted instruction leaves
 a stack matching the transferred pattern. -/
