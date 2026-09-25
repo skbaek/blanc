@@ -710,6 +710,9 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   `Func.RunPrefix.toLast_of_run`.
 - Determinism of execution witnesses:
   [`Blanc/ExecDeterminism.lean`](../Blanc/ExecDeterminism.lean).
+- Identifying an execution's descendant frames across one step (`Exec.descendantFrames_eq_of_nextNone`, `_of_jump`,
+  `_nil_of_last`, `_flatMap_of_nextSome`, `Exec.Deriv.descendantFrames_eq_of_stepRun`):
+  [`Blanc/ExecIdentification.lean`](../Blanc/ExecIdentification.lean).
 
 For settlement-retained wrappers, stable call-tree paths, or an exact ordered
 world-state replay, continue to E6, E7, or E8 respectively.  To rule out an

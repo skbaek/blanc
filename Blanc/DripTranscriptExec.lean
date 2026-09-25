@@ -16,6 +16,7 @@ import Blanc.DripTranscript
 import Blanc.DripFrameSpawns
 import Blanc.ExecutionAccountingObserved
 import Blanc.DripTraceRealizes
+import Blanc.ExecIdentification
 
 namespace Blanc
 
@@ -83,162 +84,6 @@ theorem committedFrames_flatMap_of_target_ne {coalition : Finset Adr}
 `Exec.CoreDripTranscript` quantifies over every derivation of its suffix; the
 interpreter eliminator hands each handler the step's own pieces.  `Exec.unique`
 identifies the two, one named lemma per step shape. -/
-
-/-- A nonrecursive instruction's derivation retains its continuation's
-descendant frames. -/
-theorem descendantFrames_eq_of_nextNone {pc : Nat} {sevm : Sevm}
-    {pre inter : Devm} {n : Ninst} {out : Execution}
-    (hat : Ninst.At sevm.code pc n)
-    (step : Ninst.StepRun pc sevm pre n .none (.ok inter))
-    (run : Exec pc sevm pre out) (next : Exec (pc + n.size) sevm inter out) :
-    Exec.descendantFrames run = Exec.descendantFrames next := by
-  have hroot : Evm.step ⟨pc, sevm, pre⟩ = Ninst.step ⟨pc, sevm, pre⟩ n :=
-    Evm.step_next hat
-  unfold Ninst.StepRun at step
-  cases run with
-  | halt hstep =>
-      rw [hroot] at hstep
-      rw [hstep] at step
-      rw [← step.2] at hstep
-      exact (Ninst.step_ne_halt_ok hstep).elim
-  | cont hstep next' =>
-      rw [hroot] at hstep
-      have hpc := Ninst.step_cont_pc hstep
-      rw [hstep] at step
-      cases step.2
-      subst hpc
-      simp only [Exec.descendantFrames]
-      rw [Exec.unique next' next]
-  | doneErr hstep henter hresume =>
-      rw [hroot] at hstep
-      rw [hstep] at step
-      obtain ⟨settled, frameRun, result⟩ := step
-      unfold RunFrame at frameRun
-      rw [henter] at frameRun
-      rw [frameRun.2, hresume] at result
-      cases result
-  | doneOk hstep henter hresume next' =>
-      rw [hroot] at hstep
-      have hpc := Ninst.step_spawn_pc hstep
-      rw [hstep] at step
-      obtain ⟨settled, frameRun, result⟩ := step
-      unfold RunFrame at frameRun
-      rw [henter] at frameRun
-      rw [frameRun.2, hresume] at result
-      cases result
-      subst hpc
-      simp only [Exec.descendantFrames]
-      rw [Exec.unique next' next]
-  | runErr hstep henter child hresume =>
-      rw [hroot] at hstep
-      rw [hstep] at step
-      obtain ⟨settled, frameRun, -⟩ := step
-      unfold RunFrame at frameRun
-      rw [henter] at frameRun
-      obtain ⟨raw, slot, -⟩ := frameRun
-      cases slot
-  | runOk hstep henter child hresume next' =>
-      rw [hroot] at hstep
-      rw [hstep] at step
-      obtain ⟨settled, frameRun, -⟩ := step
-      unfold RunFrame at frameRun
-      rw [henter] at frameRun
-      obtain ⟨raw, slot, -⟩ := frameRun
-      cases slot
-
-/-- A jump's derivation retains its continuation's descendant frames. -/
-theorem descendantFrames_eq_of_jump {pc pc' : Nat} {sevm : Sevm}
-    {pre inter : Devm} {j : Jinst} {out : Execution}
-    (hat : Jinst.At sevm.code pc j)
-    (step : Jinst.Run ⟨pc, sevm, pre⟩ j (.ok ⟨pc', inter⟩))
-    (run : Exec pc sevm pre out) (next : Exec pc' sevm inter out) :
-    Exec.descendantFrames run = Exec.descendantFrames next := by
-  have hroot : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' inter := by
-    rw [Evm.step_jump hat]
-    unfold Jinst.Run at step
-    rw [step]
-    rfl
-  cases run with
-  | cont hstep next' =>
-      cases hroot.symm.trans hstep
-      simp only [Exec.descendantFrames]
-      rw [Exec.unique next' next]
-  | halt hstep => cases hroot.symm.trans hstep
-  | doneErr hstep _ _ => cases hroot.symm.trans hstep
-  | doneOk hstep _ _ _ => cases hroot.symm.trans hstep
-  | runErr hstep _ _ _ => cases hroot.symm.trans hstep
-  | runOk hstep _ _ _ _ => cases hroot.symm.trans hstep
-
-/-- A terminal instruction's derivation retains no descendant frame. -/
-theorem descendantFrames_eq_nil_of_last {pc : Nat} {sevm : Sevm}
-    {pre : Devm} {l : Linst} {out : Execution}
-    (hat : Linst.At sevm.code pc l) (run : Exec pc sevm pre out) :
-    Exec.descendantFrames run = [] := by
-  have hroot := Evm.step_last (devm := pre) hat
-  cases run with
-  | halt _ => simp only [Exec.descendantFrames]
-  | cont hstep _ => cases hroot.symm.trans hstep
-  | doneErr hstep _ _ => cases hroot.symm.trans hstep
-  | doneOk hstep _ _ _ => cases hroot.symm.trans hstep
-  | runErr hstep _ _ _ => cases hroot.symm.trans hstep
-  | runOk hstep _ _ _ _ => cases hroot.symm.trans hstep
-
-/-- A filled spawn's derivation retains the settled child's committed frames,
-then its continuation's descendant frames, read through any frame
-observation. -/
-theorem descendantFrames_flatMap_of_nextSome {α : Type} (f : Exec.Frame → List α)
-    {pc : Nat} {sevm : Sevm} {pre inter settled : Devm} {x : Xinst}
-    {frame : Jaune.Frame} {resume : Resume} {cevm : Evm} {raw out : Execution}
-    (hat : Ninst.At sevm.code pc (.exec x))
-    (spawnEq : Xinst.step sevm pre x = .spawn frame resume)
-    (frameRun : RunFrame frame (.some ⟨cevm, raw⟩) (.ok settled))
-    (resumeRun : resume.run (.ok settled) = .ok inter)
-    (run : Exec pc sevm pre out) (child : Exec cevm.pc cevm.sta cevm.dyna raw)
-    (next : Exec (pc + 1) sevm inter out) :
-    (Exec.descendantFrames run).flatMap f =
-      (if Frame.settlementCommits frame raw = true
-        then (Exec.committedFrames child).flatMap f else []) ++
-      (Exec.descendantFrames next).flatMap f := by
-  have hroot : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume (pc + 1) := by
-    rw [Evm.step_next hat]
-    simp only [Ninst.step_exec, spawnEq, XStep.toStep]
-  obtain ⟨henter, hsettle⟩ := RunFrame.some_inv frameRun
-  cases run with
-  | runOk hstep henter' child' hresume next' =>
-      cases hroot.symm.trans hstep
-      rw [henter] at henter'
-      cases henter'
-      have rawEq := Exec.result_unique child child'
-      subst rawEq
-      rw [Exec.unique child' child]
-      rw [← hsettle, resumeRun] at hresume
-      cases hresume
-      rw [Exec.unique next' next]
-      by_cases settles : Frame.settlementCommits frame raw = true
-      · rw [Exec.descendantFrames_runOk_of_settlementCommits hstep henter child
-          _ next settles, if_pos settles]
-        simp [Exec.committedFrames,
-          Frame.raw_commits_of_settlementCommits settles]
-      · rw [Exec.descendantFrames_runOk_of_not_settlementCommits hstep henter
-          child _ next settles, if_neg settles, List.nil_append]
-  | halt hstep => cases hroot.symm.trans hstep
-  | cont hstep _ => cases hroot.symm.trans hstep
-  | doneErr hstep henter' _ =>
-      cases hroot.symm.trans hstep
-      rw [henter] at henter'
-      cases henter'
-  | doneOk hstep henter' _ _ =>
-      cases hroot.symm.trans hstep
-      rw [henter] at henter'
-      cases henter'
-  | runErr hstep henter' child' hresume =>
-      cases hroot.symm.trans hstep
-      rw [henter] at henter'
-      cases henter'
-      have rawEq := Exec.result_unique child child'
-      subst rawEq
-      rw [← hsettle, resumeRun] at hresume
-      cases hresume
 
 /-! ## The transcript observation -/
 
@@ -434,7 +279,7 @@ theorem Exec.CoreDripTranscript.nextNone
   rw [callKinds_append, headNil, tailKinds, List.nil_append,
     committedFrames_flatMap_of_target_ne next committed target_ne,
     committedFrames_flatMap_of_target_ne run committed target_ne,
-    descendantFrames_eq_of_nextNone hat step run next]
+    Exec.descendantFrames_eq_of_nextNone hat step run next]
 
 /-- A foreign terminal instruction contributes no call and no frame. -/
 theorem Exec.CoreDripTranscript.last
@@ -459,7 +304,7 @@ theorem Exec.CoreDripTranscript.last
       rw [execEntrySnapshot_of_target_ne target_ne]
       refine ⟨steps, replay, ?_⟩
       rw [committedFrames_flatMap_of_target_ne run committed target_ne,
-        descendantFrames_eq_nil_of_last hat run]
+        Exec.descendantFrames_eq_nil_of_last hat run]
       exact kinds
 
 /-- Jump execution is world-state silent and enters no frame. -/
@@ -488,7 +333,7 @@ theorem Exec.CoreDripTranscript.jump
   refine ⟨steps, replay, ?_⟩
   rw [kinds, committedFrames_flatMap_of_target_ne next committed target_ne,
     committedFrames_flatMap_of_target_ne run committed target_ne,
-    descendantFrames_eq_of_jump hat step run next]
+    Exec.descendantFrames_eq_of_jump hat step run next]
 
 /-- A foreign filled child contributes exactly its settled transcript, then
 the parent continuation's. -/
@@ -547,7 +392,7 @@ theorem Exec.CoreDripTranscript.nextSome
       rw [callKinds_append, headEq, tailKinds,
         committedFrames_flatMap_of_target_ne next committed target_ne,
         committedFrames_flatMap_of_target_ne run committed target_ne,
-        descendantFrames_flatMap_of_nextSome (frameCall coalition ca) hat
+        Exec.descendantFrames_flatMap_of_nextSome (frameCall coalition ca) hat
           spawnEq frameRun resumeRun run child next]
       rfl
 

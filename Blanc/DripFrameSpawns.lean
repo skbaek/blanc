@@ -1,6 +1,7 @@
 import Blanc.DripExitPreCallbackLocator
 import Blanc.DripRealizedExec
 import Blanc.ExecutionTraceSettledFrames
+import Blanc.ExecIdentification
 
 /-!
 DRIP frames spawn only their payout child.
@@ -341,53 +342,6 @@ theorem nonexit_descendantFrames_nil {sevm : Sevm} {pre post : Devm}
       (Linst.at_of_slice endCursor.codeSlice))
 
 /-! ## T4a: the exit frame's descendants are its payout child's -/
-
-/-- One same-frame step whose retained slot is `retained` contributes exactly
-that slot's settled frames, provided a spawned child's settlement commits. -/
-theorem Exec.Deriv.descendantFrames_eq_of_stepRun {node next : Exec.Deriv}
-    (edge : Exec.Deriv.ParentStep next node) {xl : Xlot}
-    (stepRun : Step.Run (Evm.step ⟨node.pc, node.sevm, node.devm⟩) xl
-      (.ok next.devm))
-    (settles : ∀ (frame : Jaune.Frame) (resume : Resume) (nextPc : Nat)
-      (evm : Evm) (raw : Execution),
-      Evm.step ⟨node.pc, node.sevm, node.devm⟩ = .spawn frame resume nextPc →
-      xl = .some ⟨evm, raw⟩ → Frame.settlementCommits frame raw = true)
-    (retained : ExecutionTrace.RetainedXlot xl) :
-    Exec.descendantFrames node.exc =
-      retained.settledFrames ++ Exec.descendantFrames next.exc := by
-  cases edge with
-  | cont hstep next =>
-      rw [hstep] at stepRun
-      obtain ⟨hxl, -⟩ := stepRun
-      subst hxl
-      cases retained
-      simp [Exec.descendantFrames]
-  | doneOk hstep henter hresume next =>
-      rw [hstep] at stepRun
-      obtain ⟨r, frameRun, -⟩ := stepRun
-      unfold RunFrame at frameRun
-      rw [henter] at frameRun
-      obtain ⟨hxl, -⟩ := frameRun
-      subst hxl
-      cases retained
-      simp [Exec.descendantFrames]
-  | runOk hstep henter child hresume next =>
-      have stepRun' := stepRun
-      rw [hstep] at stepRun'
-      obtain ⟨r, frameRun, -⟩ := stepRun'
-      unfold RunFrame at frameRun
-      rw [henter] at frameRun
-      obtain ⟨raw', hxl, -⟩ := frameRun
-      have commits := settles _ _ _ _ raw' hstep hxl
-      subst hxl
-      cases retained with
-      | some run =>
-          have rawEq := Exec.result_unique run child
-          subst rawEq
-          have runEq : run = child := Exec.unique _ _
-          subst runEq
-          have hraw := Frame.raw_commits_of_settlementCommits commits
-          simp [commits, Exec.committedFrames, hraw]
 
 /-- The retained accepted callback of one successful `exit` frame, carried by
 the frame's actual `CALL` child: the actual-child twin of `ExitHandoff`. -/
