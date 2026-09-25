@@ -3,8 +3,8 @@
 # The known-unreached subset of fmint's twelve selectors
 # (scripts/fmint-selectors.json, emitted from Blanc.Fmint.fmintFuncs by
 # scripts/gen-fmint-selectors.lean), checked by
-# scripts/check-fmint-coverage.sh (~/plans/fmint-code.md Step 2, mirroring
-# ~/plans/weth-evidence.md Step 2). This is a budget in the idiom of
+# scripts/check-fmint-coverage.sh (the fmint code plan's Step 2, mirroring
+# the WETH evidence plan's Step 2). This is a budget in the idiom of
 # Jaune's scripts/check-integrity.sh pending-budget: the gate fails if the
 # actual set of unreached selectors is not a subset of the rows below, or if
 # that set's size exceeds the declared budget number. A row lists a selector

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Runtime byte-equality gate, shared by `check-fmint.sh` and
-`check-weth.sh` (`~/plans/fmint-hygiene.md` Step 3).
+`check-weth.sh` (the fmint-hygiene plan's Step 3).
 
 Every fixture in both suites embeds its lender/runtime account's code as a
 literal hex string in a committed JSON file. That string is supposed to be
@@ -21,12 +21,12 @@ never by a hardcoded address (no fixture's runtime account is pinned to one
 address for a reason a future case couldn't change -- see
 `check-weth-coverage.py`'s header); a candidate of the expected length must
 then be byte-identical to the parsed literal, which is the leg
-`~/plans/fmint-hygiene.md` Step 3 added.
+the fmint-hygiene plan's Step 3 added.
 
 That byte-equality step used to be what separated this gate from the two
 coverage checkers, which identified their contract's account by a code
 length plus a 4-byte prefix. It no longer separates them:
-`~/plans/fmint-evidence.md` Step 1 rewrote
+the fmint-evidence plan's Step 1 rewrote
 `check-fmint-coverage.py`/`check-weth-coverage.py` to identify that account
 by whole-runtime byte equality as well, IMPORTING `parse_lean_literal` from
 this file rather than copying it. So this module is now the single
@@ -183,7 +183,7 @@ def parse_lean_literal(lean_path, name, _resolving=None):
     # `0xNN` tokens. A scan that merely pulled out every `0xNN`-shaped
     # substring and ignored the rest would silently accept a body holding
     # `List.replicate n 0` or a `++` splice -- exactly the "permissive
-    # fallback that converts an unknown result into success" planning.md
+    # fallback that converts an unknown result into success" the planning notes'
     # Sec 5 forbids.
     if not _HEX_BODY_RE.match(body):
         raise ParseError(

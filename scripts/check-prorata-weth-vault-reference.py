@@ -3,7 +3,7 @@
 
 Verifies, offline and without a Lean toolchain, that the vendored OpenZeppelin
 v5.7.0 closure under `scripts/reference/prorata-weth-vault/inputs/` is exactly
-the closure frozen at G1 (`~/plans/reports/prorata-erc4626-port-sf.md` §10),
+the closure frozen at G1 (the PRORATA ERC-4626 port's SF, §10),
 that the committed standard-JSON compiler input is built from exactly those
 bytes under the frozen settings, that the committed compiler output carries the
 frozen creation/runtime template identities, and that the reference's ABI
@@ -435,7 +435,7 @@ def compose_lock(root: Path, facts: dict, surface: dict) -> dict:
                         "bytes": path.stat().st_size if path.is_file() else None}
     return {
         "schema": 1,
-        "authority": "reports/prorata-erc4626-port-sf.md section 10 (Plans goal store); "
+        "authority": "the PRORATA ERC-4626 port's SF, section 10 (a planning record outside this repository); "
                      "constants embedded in scripts/check-prorata-weth-vault-reference.py",
         "reference": REFERENCE,
         "closure": closure,

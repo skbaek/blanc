@@ -3,8 +3,8 @@
 # direct Lido Circuit Breaker deployment root. Generated replay products are
 # temporary and never become Lean premises or committed goldens.
 #
-# Evidence economy (scripts/GATES.md; ledger in Plans
-# reports/evidence-economy-20260923/trim-b1-ledger.md): the repository axiom
+# Evidence economy (scripts/GATES.md; the batch-1 trim ledger is a
+# planning record outside this repository): the repository axiom
 # audit this gate used to rerun is the `axiom-audit` row's (`check.sh
 # --no-build`), which the deployment checker ties to by pinning the exact
 # expectation set. The 64 source falsifiers mutate temporary copies and run

@@ -4,9 +4,9 @@
 --
 --     lake env lean scripts/gen-fmint-borrowers.lean
 --
--- Fixture Step 2 of `~/plans/fmint-code.md` deliverable 6: the borrower zoo,
+-- Fixture Step 2 of the fmint code plan, deliverable 6: the borrower zoo,
 -- "written in Blanc and compiled into fixture pre-state `code` fields"
--- (`~/plans/flashmint-proposal.md`, evidence plan). This script IS that Blanc
+-- (the flash-mint proposal's evidence plan). This script IS that Blanc
 -- source -- a second, cheap exercise of the code-reuse question the proposal
 -- names, using the exact `Func`/`Line`/`Prog` machinery `Blanc/Fmint.lean`
 -- itself is written in. It is deliberately a standalone script under
@@ -48,7 +48,7 @@ open Jaune.Ninst Ninst
 
 Every borrower here either does nothing (`revertingBorrower`), or opens with
 `recordObservations` -- the anti-vacuity requirement
-(`~/plans/flashmint-proposal.md`, evidence plan): "each borrower records into
+(the flash-mint proposal's evidence plan): "each borrower records into
 its own storage, *during* the callback, the observed `msg.sender`, all five
 `onFlashLoan` arguments (`data` by its keccak hash), and the token's reported
 `balanceOf(self)` and `totalSupply()` mid-loan". -/

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# WETH fixture suite (non-vacuity arc, ~/plans/non-vacuity.md): runs the five
+# WETH fixture suite (non-vacuity arc): runs the five
 # committed fixtures in scripts/fixtures/weth/ through Jaune's fixture runner
 # at network Prague. Every fixture's WETH account carries Blanc.wethCode —
 # exactly the bytes Blanc.wethCode_compile witnesses as Prog.compile weth's
@@ -8,7 +8,7 @@
 # is external adjudication: Jaune and the frozen oracle agreeing on the exact
 # artifact the flagship solvency theorems are about.
 #
-# Before running any fixture (fmint-hygiene Step 3, ~/plans/fmint-hygiene.md):
+# Before running any fixture (fmint-hygiene Step 3):
 # every fixture's WETH account's code is compared byte-for-byte against the
 # committed Blanc.wethCode literal (scripts/check-runtime-bytes.py, shared
 # with check-fmint.sh) -- not merely the length-based identification the

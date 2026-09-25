@@ -1,5 +1,5 @@
 -- FlashSpec.lean : fmint's `flashLoan` success specification (Arc C of the
--- flashmint program, `~/plans/fmint-flashloan.md`).
+-- flashmint program, per the flash-loan arc's plan).
 --
 -- The entry route (`exec_enters_flashLoan`) composes `correct` with dispatch
 -- reachability, taking a successful top-level `Exec` at fmint's code to a run
@@ -7,7 +7,7 @@
 -- callback's calldata image, `CallbackBoundary`, the repayment postcondition,
 -- and then the headline `fmint_flashLoan_spec` with its seven `no_success_of_*`
 -- corollaries.  A final section adds the frame-level restoration family
--- (`~/plans/fmint-restoration.md`): `rollback_of_callback_failure` at the
+-- (from the restoration plan): `rollback_of_callback_failure` at the
 -- borrower's frame, and the shared `Blanc.rollback_of_no_success` with its
 -- seven instantiations at fmint's own message frame.  Those name a FRAME and
 -- never a transaction.
@@ -66,7 +66,7 @@ the `Func.Run` this delivers.
 **Hypothesis-position throughout**: the `Exec` is given, and this factors it.
 Nothing here says a `flashLoan` call ever succeeds — that would be a liveness
 claim, and no such content exists in this repository
-(`~/plans/liveness-prelude-proposal.md`). -/
+(see the liveness-prelude proposal). -/
 theorem exec_enters_flashLoan {sevm : Sevm} {pre post : Devm}
     (exc : Exec 0 sevm pre (.ok post))
     (h_code : some sevm.code.toList = Prog.compile fmint)
@@ -953,7 +953,7 @@ theorem flashLoan_callback_image {sevm : Sevm} {s r : Devm}
 
 /-! ## The callback boundary
 
-The relation the proposal names (`~/plans/flashmint-proposal.md`, headline 2):
+The relation the proposal names (the flash-mint proposal, headline 2):
 a successful `flashLoan` actually opened a child frame against the named
 receiver, handed it the canonically encoded `onFlashLoan` call, and resumed
 from a clean child whose returndata leads with the ERC-3156 magic word. -/
@@ -2447,7 +2447,7 @@ prose form — "a successful `flashLoan` performs the callback" — sounds like 
 statement that flash loans work.  It is not.  The `Exec` is a *hypothesis*
 throughout: nothing in this module, or anywhere in this repository, says that
 any `flashLoan` call ever succeeds, and the machinery that would be needed to
-say so is separate, unstarted work (`~/plans/liveness-prelude-proposal.md`).
+say so is separate, unstarted work (the liveness-prelude proposal).
 
 Four premises restrict what the headline covers, and they travel with every
 description of it:
@@ -2585,7 +2585,7 @@ answers with the magic word (respectively, with a full word at all).  It is
 *not* the stronger reading "if the receiver's code returns `X` then no success":
 `CallbackBoundary` pins the callback frame by equations — the message from the
 five arguments, `mid` from `child` — but it does not prove that frame *unique*.
-The 2026-08-06 audit of this question (`~/plans/fmint-restoration.md`, decision
+The 2026-08-06 audit of this question (the restoration plan, decision
 gate C) enumerated the seven existentials against `pre`.  Three *are* pinned:
 `gw` is `pre.stack`'s head, `receiver` follows from the next word because
 `Adr.toB256` is injective, and `dp`/`code` follow from
@@ -2800,7 +2800,7 @@ with `e` existentially bound: it is whichever error the total function
 happens to return for an execution that was going to fail anyway, not a
 constructor derived from walking the machine.  Pinning `e` — in this arc's
 case, showing it is always `EvmError.revert` on these paths — is later work
-(`~/plans/error-genre.md`'s Steps 2-3).
+(the error-genre plan's Steps 2-3).
 
 **These are still partial correctness, not liveness.**  Like their
 `no_success_of_*` sources, they rule executions *out*; nothing here rules any
@@ -2808,7 +2808,7 @@ execution *in*, and nothing says any of these calls is ever made.
 
 **These are at message-call altitude — one frame, not a transaction.**  `exec`
 is Jaune's single-frame semantics; nothing here says what a caller observes,
-or whether a surrounding transaction rolls back.  `~/plans/error-genre.md`'s
+or whether a surrounding transaction rolls back.  The error-genre plan's
 Step 4 lands the frame-level composition that connects this weak form to the
 restoration family below. -/
 
@@ -2953,7 +2953,7 @@ error flag set, and the state and transient storage it comes back with are the
 ones the message entered with.  Together with
 `ProcessMessage.rollback_of_error` (the generic mechanism, `CommonProofs.lean`)
 and `rollback_of_callback_failure` (the borrower's frame, above), these are the
-restoration family of `~/plans/fmint-restoration.md`.
+restoration family of the restoration plan.
 
 **Every statement names its frame, and the frame is `msg`'s own** — the frame
 `processMessage` opened for this message.  It is emphatically *not* the

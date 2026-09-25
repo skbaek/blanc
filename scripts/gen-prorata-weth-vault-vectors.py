@@ -209,7 +209,7 @@ def build() -> bytes:
         "meta": {
             "generator": "scripts/gen-prorata-weth-vault-vectors.py",
             "model": "scripts/prorata_weth_vault_oracle.py",
-            "statement": "~/plans/reports/prorata-erc4626-port-sf.md §4",
+            "statement": "the PRORATA ERC-4626 port's SF, §4",
             "arithmetic": "Python integers, floor and ceiling division only",
             "offset": V.O,
             "not_covered": ["events at the runner's altitude",

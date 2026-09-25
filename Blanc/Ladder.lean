@@ -1,6 +1,6 @@
 -- Ladder.lean : the contract-generic half of the solvency ladder.
 --
--- `~/plans/solvent-split.md`, the axis-2 cut of `Solvent.lean`.  This module
+-- the solvent-split plan, the axis-2 cut of `Solvent.lean`.  This module
 -- sits *below* `Blanc.Solvent`: it holds the world-state and balance-sum
 -- algebra that the ladder rests on, and the `ContractSpec` record that the
 -- contract-generic band of the ladder is parameterized by.  `Solvent.lean`
@@ -16,7 +16,7 @@
 -- the shipped contract, shown there to reproduce the existing `Precond` /
 -- `Postcond` / `State.Inv` bundles exactly; and `fmintSpec` in
 -- `Blanc/Conserved.lean`, the ERC-3156 flash-mint contract of
--- `~/plans/flashmint-proposal.md`, whose twelve `FuncSound` obligations and
+-- the flash-mint proposal, whose twelve `FuncSound` obligations and
 -- reverting fallback are all discharged there and assembled through
 -- `ContractSpec.sound_of_dispatch` / `ContractSpec.preserves_inv` into
 -- `fmint_preserves_conserved`.  (It was a statement-level instance only until
@@ -6166,7 +6166,7 @@ end ContractSpec
 
 /-! ## The quantified open-contract layer
 
-`~/plans/fmint-conserved.md` Step 6.  Two results sit here, both additive.
+From the conservation arc's Step 6.  Two results sit here, both additive.
 
 **The named statement** is `ContractSpec.preserves_of_dispatch` below: the
 invariant of *any* dispatcher-shaped program all of whose targets satisfy

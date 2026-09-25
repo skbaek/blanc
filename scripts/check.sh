@@ -12,7 +12,7 @@
 # hypothesis from being vacuous. `fmintCode_compile` is the same equation for
 # contract #2: it was audited from the moment the contract existed rather than
 # from the moment something was proved about it, and the conservation theorems
-# added by Arc B of `~/plans/flashmint-proposal.md` now land against that
+# added by Arc B of the flash-mint proposal now land against that
 # pinned, non-vacuous equation. Note what the fmint rows do and do not say:
 # they are *conservation* — the equality `totalSupply = Σ balances` at every
 # observable point — not solvency and not liveness.
@@ -32,7 +32,7 @@
 # and none of them is a state-restoration claim.
 #
 # The last eleven rows are the **restoration** family of
-# `~/plans/fmint-restoration.md`. Three properties bind all of them and are the
+# the restoration plan. Three properties bind all of them and are the
 # only safe way to read any one:
 #
 #   * each names a FRAME, never a transaction. A failed inner call can be caught
@@ -80,7 +80,7 @@
 #
 # The two `Prog.*` rows are `Blanc/Compiled.lean`'s bridge between the gas-exact
 # relation `Prog.RunCompiled` and Jaune's `exec`. They were built by
-# `~/plans/liveness-prelude.md` and audited here by `~/plans/forward-witness.md`
+# the liveness-prelude arc and audited here by the forward-witness arc's
 # Step 1, which closed the hole: everything that arc builds rests on them, so
 # they are pinned before anything is stacked on top. Read them exactly as
 # `Prog.runCompiled_iff_exec`'s own docstring states them — they convert run
@@ -89,7 +89,7 @@
 # not transaction level, and they are `.ok`-level only.
 #
 # `Blanc.Prog.exec_of_runCompiledTo` is `Blanc/Reverts.lean`'s outcome-generalised
-# sibling of the first of those two, added by `~/plans/error-genre.md` Step 2. It
+# sibling of the first of those two, added by the error-genre plan's Step 2. It
 # is the ONE thing in the row above's list that it lifts: the relation it bridges
 # from, `Prog.RunCompiledTo`, ends at an arbitrary `Execution` rather than at
 # `.ok`, so instantiating its conclusion at `.error (e, post)` states "this call
@@ -129,7 +129,7 @@
 # nothing about what a non-address key means.
 #
 # The following four rows were two more pairs of that same shape, one genre over,
-# added by `~/plans/error-genre.md` Step 3: `..._runCompiledTo` constructs a
+# added by the error-genre plan's Step 3: `..._runCompiledTo` constructs a
 # gas-exact walk and `fmint_*_reverts` composes it through
 # `Prog.exec_of_runCompiledTo` — but both land on `.error (.revert, post)` with
 # `Devm.output post = []` rather than on a success. They are the first rows in
@@ -152,7 +152,7 @@
 # ONE selector — the dispatch walk decides each fork by evaluating a concrete
 # comparison, so nothing here is quantified over selectors.
 #
-# The next two rows, added by `~/plans/error-genre.md` Step 4, lift that pair
+# The next two rows, added by the error-genre plan's Step 4, lift that pair
 # one altitude: from the code frame's `exec` to the frame `processMessage` opens
 # for a `Msg`. `Blanc.rollback_revert_of_exec_revert` is the mechanism,
 # contract-agnostic and stated once — a frame whose code reverts settles with
@@ -175,7 +175,7 @@
 # still binds (`FMINT_DEVIATIONS.md` row 21) — and so does the non-exhaustiveness
 # note: this condition reverts the frame, never only this condition does.
 #
-# The 86th row, added by `~/plans/adversarial-progress.md` Step 3, is the
+# The 86th row, added by the adversarial-progress plan's Step 3, is the
 # arc's pinned headline: `Blanc.Fmint.fmint_flashLoan_settles`, the guarded
 # trichotomy at `exec` altitude — under fmint's own entry conditions (frame
 # gas at the closed bound `flashLoanGas`, a non-static caller frame, canonical

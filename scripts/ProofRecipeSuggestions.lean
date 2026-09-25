@@ -863,8 +863,8 @@ example {σ : Type} {arch : UpgradeArchitecture σ} {v1 v2 : σ → Prop}
 /-! ### Checked MemoryStage authoring examples (blanc-memory-example-delivery-v1)
 
 These examples promote the eight validated declarations from the need-first
-discovery (Plans `reports/blanc-memory-need-discovery-v1.md` and
-`evidence/blanc-memory-need-discovery-v1/validated-snippets.lean`) into the
+discovery (its report and validated snippets are planning records kept
+outside this repository) into the
 normal checked authoring path.
 -/
 

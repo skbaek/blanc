@@ -2,7 +2,7 @@
 # Independent exact-integer oracle gate for the PRORATA WETH vault.
 #
 # The oracle in scripts/prorata_weth_vault_oracle.py is written from the frozen
-# statement (~/plans/reports/prorata-erc4626-port-sf.md §4) rather than from the
+# statement (the PRORATA ERC-4626 port's SF, §4) rather than from the
 # Lean development, so that it can disagree with the proofs if either side is
 # wrong. This gate checks the properties the statement asserts about its own
 # formulas -- the representability identity, both capacity bounds' tightness,

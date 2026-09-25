@@ -866,8 +866,8 @@ each is here for its own reason.
 
 `LOG` moves the *base* — `Devm.addLog` — and its successor's memory image is a
 projection out of the state it reads.  Handed to the walk as a term, both would
-be carried inside every later state (**F8** of `~/plans/reports/
-adversarial-progress-step2.md`); handed to a continuation, the base is a
+be carried inside every later state (**F8** of the adversarial-progress
+Step 2 report); handed to a continuation, the base is a
 variable and the image is whatever the caller names.
 
 `CALLDATACOPY`'s charge is affine in the copied length, and `func_run` requires
@@ -1003,7 +1003,7 @@ lemma Func.runCompiledTo_calldatacopy_step {fs : List Func} {sevm : Sevm}
 /-! ## EIP-150, at `value = 0`
 
 `calculateMsgCallGas` is where the 63/64 rule lives, and P4 of
-`~/plans/adversarial-progress.md` settles that it is *frame-local*: the cap is
+the adversarial-progress plan settles that it is *frame-local*: the cap is
 computed inside `Xinst.step`, and no transaction layer is touched.  At
 `value = 0` the stipend vanishes and the pair collapses to one `min`. -/
 

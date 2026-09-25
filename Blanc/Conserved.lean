@@ -4,7 +4,7 @@
 -- program layer — and, like that pair, it is named for the property proved
 -- rather than for the contract.
 --
--- From `~/plans/flashmint-proposal.md`, produced by `~/plans/solvent-split.md`
+-- From the flash-mint proposal, produced by the solvent-split plan
 -- as the second instance the `ContractSpec` record is validated against.  Its
 -- invariant is a storage-only *equality* — no callvalue term, no ETH-balance
 -- term and no `nof`-class side condition — which is what makes it the useful
@@ -16,8 +16,8 @@
 -- contract's property layer.  The notion both invariants are built from,
 -- `balSum`, lives upstream of both in `Blanc/CommonCore.lean`.
 --
--- STATE OF THE PROOF.  Arc B of `~/plans/flashmint-proposal.md`
--- (`~/plans/fmint-conserved.md`) is complete: the `Stor.Conserved` algebra —
+-- STATE OF THE PROOF.  Arc B of the flash-mint proposal
+-- (the conservation arc's plan) is complete: the `Stor.Conserved` algebra —
 -- the two invisibility lemmas, `Stor.Silent`, the four preservation
 -- combinators and the `balance ≤ supply` bound corollary — the `fmintSpec`
 -- bridges, all twelve `FuncSoundNoMem` obligations plus the reverting fallback,
@@ -54,7 +54,7 @@ open Jaune
 
 /-! ## Instance 2 — `fmint` (ERC-3156 flash mint)
 
-From `~/plans/flashmint-proposal.md`, whose open decision D1 resolved to the
+From the flash-mint proposal, whose open decision D1 resolved to the
 pure token: fmint is an ERC-20 with the ERC-3156 triple and no wrap/unwrap
 surface.  The contract is `Blanc.Fmint.fmint`, and `Blanc/FmintCode.lean`
 carries the witness that Blanc's compiler really produces its bytes.
@@ -91,7 +91,7 @@ ninety-six high bits set, and `validAdr_iff` says an address-shaped word meets
 This is the Lean form of `Blanc/Fmint.lean`'s second collision-guard `example`,
 which states the same fact about the six bytes `checkAddress` emits.  `decide`
 rather than `decide +kernel`: `B256`'s tactic-built comparison instances stall
-in the kernel evaluator (`~/plans/kernel-decidable.md`). -/
+in the kernel evaluator (recorded in the kernel-decidability note). -/
 theorem supplySlot_not_validAdr : ¬ ValidAdr supplySlot := by
   rw [validAdr_iff]
   decide
@@ -406,7 +406,7 @@ theorem fmintSpec_funcSound {fa : Adr} (f : Func)
 The fallback and the eight read-only dispatch targets: everything fmint can be
 asked to do that writes no storage.
 
-**Decision gate (`~/plans/fmint-conserved.md`, Step 2c), resolved NO-GO.**  The
+**Decision gate (the conservation arc's Step 2c), resolved NO-GO.**  The
 proposal offered a narrowed *syntactic* discharge lemma — a `Bool`-valued
 "no `sstore` and no `Xinst` whatsoever" predicate over `Func` plus a soundness
 theorem — as an alternative to running the existing invariance automation eight
@@ -415,7 +415,7 @@ was committed to.  The lemma is provable, but it costs **47 code lines against
 3** for those two targets and elaborates no faster (both routes sit inside the
 noise of the bare-import baseline, ~1.14 s on this host).  The predeclared rule
 required *strictly cheaper in both*, so it is dropped and the walks stand.  The
-measurement is recorded in `~/plans/reports/fmint-conserved-step-2.md`; do not
+measurement is recorded in that arc's Step 2 report; do not
 re-open it without new evidence. -/
 
 /-- Discharge an effect-free target.  The tactic itself is
@@ -2238,7 +2238,7 @@ consume. -/
 theorem fmintSpec_preserves (fa : Adr) : fmintSpec.Preserves fa :=
   ContractSpec.PreservesNoMem.preserves (fmintSpec_preservesNoMem fa)
 
-/-- **Headline 1 of `flashmint-proposal.md`**, now a theorem: an arbitrary
+/-- **Headline 1 of the flash-mint proposal**, now a theorem: an arbitrary
 execution that starts in an fmint frame with the supply conserved ends with the
 supply conserved.  Arbitrary includes reentrant — `flashLoan` hands control to
 borrower code that may call back in through any entrypoint at any depth, and
@@ -2344,7 +2344,7 @@ theorem addBlockToChainUsing_preserves_conserved (fa : Adr) (cfg : ChainConfig)
 
 /-! ### Context stability, demonstrated at fmint
 
-The quantified layer's second half (`~/plans/fmint-conserved.md` Step 6): the
+The quantified layer's second half (the conservation arc's Step 6): the
 extent to which fmint's discharged obligations survive a program extension,
 stated over the program-free core (`Func.Core`, `Blanc/Ladder.lean`) because
 `FuncSound` itself cannot transport — its `Pre` pins the exact program bytes.

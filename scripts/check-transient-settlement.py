@@ -81,8 +81,8 @@ MUTANTS = {
 # error in a mutant's lines (a failed Decidable synthesis, say) must not count.
 NATIVE_FALSE = ("Tactic `native_decide` evaluated that the proposition",)
 
-# Evidence economy (scripts/GATES.md, "Evidence economy"; ledger in Plans
-# reports/evidence-economy-20260923/trim-b1-ledger.md). These two mutants are
+# Evidence economy (scripts/GATES.md, "Evidence economy"; the batch-1 trim
+# ledger is a planning record outside this repository). These two mutants are
 # the only check that would notice a production change: no pinned control
 # rejects a transaction whose nonce is ahead of its sender's (UNRELATED), and
 # no control pins the cell a swapped TSTORE would write (OPERAND-ORDER; the

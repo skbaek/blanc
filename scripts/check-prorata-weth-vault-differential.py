@@ -30,8 +30,8 @@ states — fidelity of the compiled runtime to the frozen statement at its
 boundaries, agreement with the compiled reference, the reference's identity,
 and measurements.  Properties the PRORATA G4-G7 theorems prove for every state
 and role are not re-checked here; the removal ledger that maps each retired
-family to its covering theorem is Plans
-`reports/evidence-economy-20260923/vault-differential-ledger.md`.  EVM
+family to its covering theorem is the vault-differential
+ledger, a planning record outside this repository.  EVM
 conformance is Jaune's concern and is not replayed here.
 
 Finite evidence, never a theorem.

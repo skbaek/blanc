@@ -2,7 +2,7 @@
 """Check the independent PRORATA WETH vault oracle against the frozen statement.
 
 The oracle in `prorata_weth_vault_oracle.py` is written from
-`~/plans/reports/prorata-erc4626-port-sf.md` §4 rather than from the Lean
+the PRORATA ERC-4626 port's frozen specification (SF), §4, rather than the Lean
 development.  This gate checks the properties the SF *asserts* about those
 formulas, so that a transcription error in either the oracle or the statement
 shows up here rather than in a differential run.

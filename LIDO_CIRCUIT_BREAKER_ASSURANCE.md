@@ -13,7 +13,7 @@ every row, without exception — what the row does **not** claim.
 It exists because a proof corpus is not an argument until someone can say, for
 each sentence a reader might quote, which theorem makes it true and where that
 theorem stops. The plain-language companion
-(`lido-circuit-breaker-assurance-companion.md`, in the plans repository) is the
+(kept with the planning records outside this repository) is the
 same material written for owners; where the two disagree, this register wins,
 and where this register disagrees with a Lean statement, an axiom inventory, or
 a gate verdict, **the evidence wins and the prose is narrowed**.
@@ -30,7 +30,7 @@ Every row is a `####` block carrying seven labelled fields:
 | **Gate** | The gate that owns the row's evidence and would fail if it moved. |
 | **Differential channel** | The independent Solidity-oracle case that corroborates the row, or the explicit words `no direct oracle channel` where none exists. The differential campaign is finite evidence and is **never** a Lean premise. |
 | **Non-claims** | What this row does not say. These travel with the claims; a row quoted without its non-claims is a row misquoted. |
-| **Source** | Where each field came from: a completion report line, a Lean source line, or both. |
+| **Source** | Where each field came from: a completion report line (the reports are planning records kept outside this repository), a Lean source line, or both. |
 
 ## What this register is checked against
 
@@ -216,7 +216,7 @@ injectivity nor raw-slot/storage-root equality.
 - **Gate:** `scripts/check-lido-circuit-breaker-registry.sh`
 - **Differential channel:** no direct oracle channel
 - **Non-claims:** derives `entries.length + 1 ≤ 2 ^ 160` from the address domain. It does not assert a contract-chosen cap, and no public premise imposes one — `getPausables()` remains a parametric dynamic `address[]`.
-- **Source:** `reports/lido-circuit-breaker-registry-integrity-completion.md:373-390`; `Blanc/LidoCircuitBreakerRegistry.lean:22,59,72,89`
+- **Source:** the registry integrity completion report (lines 373-390); `Blanc/LidoCircuitBreakerRegistry.lean:22,59,72,89`
 
 #### REG-2 — The executable source trace of `setPauser` refines the pure list model: the trace's post-entries are exactly `setPauser entries target newPauser`
 
@@ -226,7 +226,7 @@ injectivity nor raw-slot/storage-root equality.
 - **Gate:** `scripts/check-lido-circuit-breaker-registry.sh`
 - **Differential channel:** no direct oracle channel
 - **Non-claims:** pure-model and source-trace altitude only. It establishes no EVM run; the compiled bridge is REG-4.
-- **Source:** `reports/lido-circuit-breaker-registry-integrity-completion.md:45,405`; `Blanc/LidoCircuitBreakerRegistry.lean:3405`
+- **Source:** the registry integrity completion report (lines 45,405); `Blanc/LidoCircuitBreakerRegistry.lean:3405`
 
 #### REG-3 — Replaying every chronological Registry write of a valid source trace onto concrete owner storage re-establishes the witness at the post-trace entry list
 
@@ -236,7 +236,7 @@ injectivity nor raw-slot/storage-root equality.
 - **Gate:** `scripts/check-lido-circuit-breaker-registry.sh`
 - **Differential channel:** `register-fresh#1:action`, `register-distinct-pauser#2:action`, `register-same-pauser#2:action`, `register-absent-to-zero#1:action`, `remove-only#2:action`, `remove-first#4:action`, `remove-middle#4:action`, `remove-last#4:action`, `moved-element-followup-replace#5:action`, `moved-element-followup-remove#5:action`
 - **Non-claims:** the witness holds **at the stable boundary after all writes replay**, not at intermediate stores. Source-trace altitude, not compiled execution.
-- **Source:** `reports/lido-circuit-breaker-registry-integrity-completion.md:88-104,417-424`; `Blanc/LidoCircuitBreakerRegistry.lean:3462`
+- **Source:** the registry integrity completion report (lines 88-104,417-424); `Blanc/LidoCircuitBreakerRegistry.lean:3462`
 
 #### REG-4 — A successful actual execution of the emitted shared `setPauser` kernel *derives* its source trace, and exposes the post-Registry intermediate state and continuation run
 
@@ -246,7 +246,7 @@ injectivity nor raw-slot/storage-root equality.
 - **Gate:** `scripts/check-lido-circuit-breaker-registry.sh`
 - **Differential channel:** `register-fresh#1:action`
 - **Non-claims:** success inversion only. No error taxonomy, no exhaustiveness, no termination claim, and no all-message success theorem.
-- **Source:** `reports/lido-circuit-breaker-registry-integrity-completion.md:46,110-160`; `Blanc/LidoCircuitBreakerRegistry.lean:17170,17088,3509`
+- **Source:** the registry integrity completion report (lines 46,110-160); `Blanc/LidoCircuitBreakerRegistry.lean:17170,17088,3509`
 
 #### REG-5 — For a zero target word the compiled program constructs the exact `PausableZero` revert, and no instruction occurrence in that derivation is an `SSTORE`
 
@@ -256,7 +256,7 @@ injectivity nor raw-slot/storage-root equality.
 - **Gate:** `scripts/check-lido-circuit-breaker-registry.sh`
 - **Differential channel:** `register-zero-target-before-write#1:action`
 - **Non-claims:** a **construction** over the stated domain, not a converse use of `RunCompiledTo`, and not error exhaustiveness. The guard's ordering is what is at stake: a compiled mutant that writes the assignment slot before the zero check is executed and refuted by `targetZeroGuardAfterAssignment_compiled_rejected`.
-- **Source:** `reports/lido-circuit-breaker-registry-integrity-completion.md:162-207`; `Blanc/LidoCircuitBreakerRegistry.lean:17025`
+- **Source:** the registry integrity completion report (lines 162-207); `Blanc/LidoCircuitBreakerRegistry.lean:17025`
 
 #### REG-6 — Every raw outcome of the `registerAfterSet` continuation preserves the Registry slots, and a successful register kernel execution reaches the source-model post-witness
 
@@ -266,7 +266,7 @@ injectivity nor raw-slot/storage-root equality.
 - **Gate:** `scripts/check-lido-circuit-breaker-registry.sh`
 - **Differential channel:** `register-fresh#1:action`, `register-absent-to-zero#1:action`, `register-same-pauser#2:action`
 - **Non-claims:** the conclusion is an `Execution.Rel` and so covers **every** raw outcome, not only success — but it is a raw-frame, pre-settlement fact.
-- **Source:** `reports/lido-circuit-breaker-registry-integrity-completion.md:47,209-238,250-269`; `Blanc/LidoCircuitBreakerRegistry.lean:5065,17239`
+- **Source:** the registry integrity completion report (lines 47,209-238,250-269); `Blanc/LidoCircuitBreakerRegistry.lean:5065,17239`
 
 #### REG-7 — A successful pause kernel execution reaches `pauseAfterSet` at a state where the target's assignment and index slots are both zero and the target is absent from the post-entry list
 
@@ -276,7 +276,7 @@ injectivity nor raw-slot/storage-root equality.
 - **Gate:** `scripts/check-lido-circuit-breaker-registry.sh`
 - **Differential channel:** `pause-eoa#2:action`
 - **Non-claims:** **deliberately a pre-yield boundary.** The theorem stops before the target receives control. It is not a terminal successful-pause final state and carries no descendant or callback noninterference.
-- **Source:** `reports/lido-circuit-breaker-registry-integrity-completion.md:272-317`; `Blanc/LidoCircuitBreakerRegistry.lean:17296`
+- **Source:** the registry integrity completion report (lines 272-317); `Blanc/LidoCircuitBreakerRegistry.lean:17296`
 
 #### REG-8 — An exact direct register or pause message that settles with an error restores the entry-state Registry witness, even when raw Registry `SSTORE`s really occurred inside the frame
 
@@ -286,7 +286,7 @@ injectivity nor raw-slot/storage-root equality.
 - **Gate:** `scripts/check-lido-circuit-breaker-registry.sh`
 - **Differential channel:** `pause-eoa#2:action`
 - **Non-claims:** settlement-frame restoration only. Not an error taxonomy, and not a claim about arbitrary descendant frames.
-- **Source:** `reports/lido-circuit-breaker-registry-integrity-completion.md:240-248,409-413,426-434`; `Blanc/LidoCircuitBreakerRegistry.lean:5120,5141,15980`
+- **Source:** the registry integrity completion report (lines 240-248,409-413,426-434); `Blanc/LidoCircuitBreakerRegistry.lean:5120,5141,15980`
 
 #### REG-9 — Cyfrin CB-3a: at any witness-carrying owner storage, a canonical target has a nonzero assignment iff a nonzero one-based index iff it occurs in the array, and a found entry's index is the unique array position holding it
 
@@ -296,7 +296,7 @@ injectivity nor raw-slot/storage-root equality.
 - **Gate:** `scripts/check-lido-circuit-breaker-registry.sh`
 - **Differential channel:** `register-fresh#1:action`, `remove-first#4:action`, `remove-middle#4:action`, `remove-last#4:action`
 - **Non-claims:** **derived from the combined invariant, not from any run.** Despite the `_registerPauser` suffix the statement mentions no `registerPauser` execution; it becomes an execution postcondition only in composition with REG-4, REG-6, and REG-8. It is not a reproduction of the Certora harness or CVL rules, which are recorded as unavailable evidence.
-- **Source:** `reports/lido-circuit-breaker-registry-integrity-completion.md:320-337,365-368`; `Blanc/LidoCircuitBreakerRegistry.lean:17389`
+- **Source:** the registry integrity completion report (lines 320-337,365-368); `Blanc/LidoCircuitBreakerRegistry.lean:17389`
 
 #### REG-10 — Cyfrin CB-6a: after replaying a removal trace's writes, both lookup slots and the dead array tail are clear and the swap-and-pop moved element's index is repaired
 
@@ -306,7 +306,7 @@ injectivity nor raw-slot/storage-root equality.
 - **Gate:** `scripts/check-lido-circuit-breaker-registry.sh`
 - **Differential channel:** `remove-only#2:action`, `remove-first#4:action`, `remove-middle#4:action`, `remove-last#4:action`, `moved-element-followup-remove#5:action`, `register-absent-to-zero#1:action`
 - **Non-claims:** stated over the replayed writes — **source-trace altitude, not compiled execution.** The compiled bridge is REG-4 and REG-7, not this theorem. In the absent-target branch it asserts only that the append-hole slot is zero.
-- **Source:** `reports/lido-circuit-breaker-registry-integrity-completion.md:339-359`; `Blanc/LidoCircuitBreakerRegistry.lean:17478`
+- **Source:** the registry integrity completion report (lines 339-359); `Blanc/LidoCircuitBreakerRegistry.lean:17478`
 
 #### REG-11 — Cyfrin CB-8a: every canonical pauser's stored count equals its multiplicity in the entry list, the zero-address count is zero, and the stored counts sum to the registry length
 
@@ -316,7 +316,7 @@ injectivity nor raw-slot/storage-root equality.
 - **Gate:** `scripts/check-lido-circuit-breaker-registry.sh`
 - **Differential channel:** `moved-element-followup-replace#5:action`
 - **Non-claims:** the sum is over the pausers **actually present** in the entry list, not over the address space. Invariant-level, not execution-level. Conservation follows from finite multiset cardinality; it is not a separately assumed invariant, which is precisely what breaks the circular dependency the campaign reported.
-- **Source:** `reports/lido-circuit-breaker-registry-integrity-completion.md:353-364,399-401`; `Blanc/LidoCircuitBreakerRegistry.lean:17654`
+- **Source:** the registry integrity completion report (lines 353-364,399-401); `Blanc/LidoCircuitBreakerRegistry.lean:17654`
 
 #### REG-12 — The empty registry satisfies the combined invariant
 
@@ -349,7 +349,7 @@ register never lets the pillar's name imply otherwise.
 - **Gate:** `scripts/check-lido-circuit-breaker-enumeration.sh`
 - **Differential channel:** `view-enumeration-empty#1:action`, `enumeration-singleton#2:action`, `enumeration-64-targets#65:action`
 - **Non-claims:** arbitrary **length**, not arbitrary **conditions** — the warm-key and exact-gas premises are load-bearing, and a cold-storage or under-gassed run is outside the statement. It constructs one successful finite run; it classifies no failure mode, says nothing about malformed or short calldata, and asserts no real-block admission.
-- **Source:** `reports/lido-circuit-breaker-enumeration-observability-completion.md:60,88-101,117-121`; `Blanc/LidoCircuitBreakerEnumeration.lean:1082`
+- **Source:** the enumeration observability completion report (lines 60,88-101,117-121); `Blanc/LidoCircuitBreakerEnumeration.lean:1082`
 
 #### ABI-2 — No instruction occurrence below the `getPausables` source cursor is an `SSTORE`, on arbitrary outcomes
 
@@ -359,7 +359,7 @@ register never lets the pillar's name imply otherwise.
 - **Gate:** `scripts/check-lido-circuit-breaker-enumeration.sh`, `scripts/check.sh`
 - **Differential channel:** no direct oracle channel
 - **Non-claims:** excludes **same-frame `SSTORE` occurrences only**. By itself it says nothing about `TSTORE`, logs, balance or code effects, child frames, termination, or out-of-gas. World and log silence on the successful path comes from ABI-3's constructed run, not from this theorem.
-- **Source:** `reports/lido-circuit-breaker-enumeration-observability-completion.md:61,122-124`; `Blanc/LidoCircuitBreakerEnumeration.lean:1196`, `Blanc/LidoCircuitBreaker.lean:743`
+- **Source:** the enumeration observability completion report (lines 61,122-124); `Blanc/LidoCircuitBreakerEnumeration.lean:1196`, `Blanc/LidoCircuitBreaker.lean:743`
 
 #### ABI-3 — The three read views agree with one another and with the registry snapshot they read
 
@@ -369,7 +369,7 @@ register never lets the pillar's name imply otherwise.
 - **Gate:** `scripts/check-lido-circuit-breaker-enumeration.sh`
 - **Differential channel:** `view-get-pauser#1:action`, `view-get-count#1:action`, `view-enumeration-empty#1:action`
 - **Non-claims:** three named **body** runs against one snapshot. Not a dispatcher-level or transaction-level statement.
-- **Source:** `reports/lido-circuit-breaker-enumeration-observability-completion.md:62`; `Blanc/LidoCircuitBreakerEnumeration.lean:1456`
+- **Source:** the enumeration observability completion report (lines 62); `Blanc/LidoCircuitBreakerEnumeration.lean:1456`
 
 #### ABI-4 — The executable dispatcher's selector list is definitionally the contract's own ABI metadata list
 
@@ -399,7 +399,7 @@ register never lets the pillar's name imply otherwise.
 - **Gate:** `scripts/check-lido-circuit-breaker-differential.sh`
 - **Differential channel:** all 175 manifest rows, spanning 17 selectors plus the constructor, 144 causal history transactions, 464 resource boundaries, and 82 Solidity call traces
 - **Non-claims:** **the matrix is not universal closure**, and its finiteness is asymmetric in places the observation report enumerates — for instance, non-canonical return words are measured at exactly one value, and two outcomes are measured only at exactly 32 bytes. Finite differential evidence is corroboration and is never a Lean premise.
-- **Source:** `reports/lido-circuit-breaker-observation.md:196-215`; `scripts/GATES.md`
+- **Source:** the observation report (lines 196-215); `scripts/GATES.md`
 
 ---
 
@@ -413,7 +413,7 @@ register never lets the pillar's name imply otherwise.
 - **Gate:** `scripts/check-lido-circuit-breaker-enumeration.sh`
 - **Differential channel:** `register-fresh#1:action`, `register-absent-to-zero#1:action`, `register-same-pauser#2:action`
 - **Non-claims:** a **raw local** event fact — raw logs can exist inside a frame whose containing message later fails. The event is deliberately unconditional on whether the assignment actually changed: a proposed strengthening requiring a changed assignment is rejected fail-closed, because it would wrongly exclude the zero-to-zero and same-pauser executions the source really performs.
-- **Source:** `reports/lido-circuit-breaker-enumeration-observability-completion.md:63,125-126,145-151`; `Blanc/LidoCircuitBreakerEnumeration.lean:1973`
+- **Source:** the enumeration observability completion report (lines 63,125-126,145-151); `Blanc/LidoCircuitBreakerEnumeration.lean:1973`
 
 #### MON-2 — A successful register continuation reaches the source-model post-witness and retains the `PauserSet` log in the terminal raw frame
 
@@ -423,7 +423,7 @@ register never lets the pillar's name imply otherwise.
 - **Gate:** `scripts/check-lido-circuit-breaker-enumeration.sh`
 - **Differential channel:** `register-fresh#1:action`
 - **Non-claims:** raw frame, pre-settlement. What follows the event is bounded only as "an optional log suffix"; the suffix is not enumerated.
-- **Source:** `reports/lido-circuit-breaker-enumeration-observability-completion.md:66`; `Blanc/LidoCircuitBreakerEnumeration.lean:2113`
+- **Source:** the enumeration observability completion report (lines 66); `Blanc/LidoCircuitBreakerEnumeration.lean:2113`
 
 #### MON-3 — Cleanly settled, that same run retains both the event and the matching Registry witness in the settled state
 
@@ -433,7 +433,7 @@ register never lets the pillar's name imply otherwise.
 - **Gate:** `scripts/check-lido-circuit-breaker-enumeration.sh`
 - **Differential channel:** `register-fresh#1:action`
 - **Non-claims:** clean-success settlement only; the error boundary is MON-4.
-- **Source:** `reports/lido-circuit-breaker-enumeration-observability-completion.md:67`; `Blanc/LidoCircuitBreakerEnumeration.lean:2175`
+- **Source:** the enumeration observability completion report (lines 67); `Blanc/LidoCircuitBreakerEnumeration.lean:2175`
 
 #### MON-4 — A monitor sees neither a rolled-back event nor a rolled-back registry: exact direct messages that settle with an error have empty logs and restore the input witness
 
@@ -443,7 +443,7 @@ register never lets the pillar's name imply otherwise.
 - **Gate:** `scripts/check-lido-circuit-breaker-enumeration.sh`
 - **Differential channel:** `register-zero-target-before-write#1:action`, `pause-eoa#2:action`
 - **Non-claims:** the named direct register and pause message shapes only — not all messages, and not nested frames.
-- **Source:** `reports/lido-circuit-breaker-enumeration-observability-completion.md:64,65,68`; `Blanc/LidoCircuitBreakerEnumeration.lean:2320,2237,2273`
+- **Source:** the enumeration observability completion report (lines 64,65,68); `Blanc/LidoCircuitBreakerEnumeration.lean:2320,2237,2273`
 
 #### MON-5 — From a committed direct register, a monitor's re-read of that same settled snapshot agrees with the event it just saw
 
@@ -453,7 +453,7 @@ register never lets the pillar's name imply otherwise.
 - **Gate:** `scripts/check-lido-circuit-breaker-enumeration.sh`
 - **Differential channel:** `register-fresh#1:action`, `view-get-pauser#1:action`, `view-get-count#1:action`, `view-enumeration-empty#1:action`
 - **Non-claims:** **one event plus one matching stable re-read**, local to the named message and snapshot. It asserts no history, no event-stream completeness, no reorg handling, no delivery, no RPC availability, no finality, no heartbeat liveness, no access authority, no deployment correctness — and above all not that an external target is honestly paused.
-- **Source:** `reports/lido-circuit-breaker-enumeration-observability-completion.md:69,127-133`; `Blanc/LidoCircuitBreakerEnumeration.lean:2452`
+- **Source:** the enumeration observability completion report (lines 69,127-133); `Blanc/LidoCircuitBreakerEnumeration.lean:2452`
 
 ---
 
@@ -473,7 +473,7 @@ into a neighbour's.
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** unauthorized-call reverts are differential **support** only; the theorem itself has no oracle channel
 - **Non-claims:** it does not determine which call opcode created the frame — a self-`CALLCODE` or `DELEGATECALL` form satisfying all four identity fields is deliberately not excluded. The guard is an existential over instruction **kind**, not identity. And it says nothing about who controls the admin key.
-- **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerAccess.lean`
+- **Source:** the access temporal authority report; `Blanc/LidoCircuitBreakerAccess.lean`
 
 #### ACC-2 — The classifier is a bijection between rows and structural sites, not a cardinality match, with exact pcs and three-domain separation
 
@@ -483,7 +483,7 @@ into a neighbour's.
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** no direct oracle channel
 - **Non-claims:** within-function row **order** is conventional, not certified: a permutation of two rows inside the same compiled function is caught by no theorem. Nothing scans raw `0x55` bytes, so a `0x55` inside a `PUSH` payload is excluded structurally rather than by byte-scanning.
-- **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerSites.lean`
+- **Source:** the access temporal authority report; `Blanc/LidoCircuitBreakerSites.lean`
 
 #### ACC-3 — The persistent-write inventories are exact — including that the constructor writes exactly two persistent cells — and depend on no axioms at all
 
@@ -503,7 +503,7 @@ into a neighbour's.
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** no direct oracle channel for the attribution itself
 - **Non-claims:** transient lock cells and effects on foreign targets are **separate domains** and are not covered by owner closure. No-op and reverted occurrences stay raw and are never called survivors.
-- **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerOwnerClosure.lean`
+- **Source:** the access temporal authority report; `Blanc/LidoCircuitBreakerOwnerClosure.lean`
 
 #### ACC-5 — Creation execution and runtime are separate domains: the transient and external-call sites are proved, by exact pc inventory, not to be persistent sites
 
@@ -513,7 +513,7 @@ into a neighbour's.
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** the differential gate's constructor worlds
 - **Non-claims:** no whole-program "this runtime contains no external call" claim is available **or true** — the `CALL` and `STATICCALL` edges sit inside `pauseAfterSet`. Immutables are not storage writes.
-- **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerSites.lean`
+- **Source:** the access temporal authority report; `Blanc/LidoCircuitBreakerSites.lean`
 
 #### ACC-6 — Twenty-seven of thirty permitted (site, role) pairs carry an explicit unconditional witness, and three *unpermitted* pairs are separately refuted, so the role sets are not merely sound upper bounds
 
@@ -523,7 +523,7 @@ into a neighbour's.
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** no direct oracle channel — attainability is a raw-occurrence existential
 - **Non-claims:** attainability is a **raw-occurrence** predicate. The `.pauseRegistry` witnesses live in worlds that **revert**, and none of them may be paraphrased as "a pause can persist a Registry change". No witness's entry state is exhibited as reachable from genesis. The remaining three of the thirty are neither attainable nor refutable at this altitude — a stated model boundary, not unfinished work. The three refutations are of pairs the table does **not** permit, which is why 27 inhabited plus 3 unsettleable accounts for the permitted set exactly; a two-role row remains an upper bound however many witnesses land.
-- **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`, `reports/lido-circuit-breaker-pause-join-completion.md`; `Blanc/LidoCircuitBreakerAttainment.lean`, `Blanc/LidoCircuitBreakerPauseAttainment.lean`, `Blanc/LidoCircuitBreakerPauseJoin.lean`
+- **Source:** the access temporal authority report, the pause join completion report; `Blanc/LidoCircuitBreakerAttainment.lean`, `Blanc/LidoCircuitBreakerPauseAttainment.lean`, `Blanc/LidoCircuitBreakerPauseJoin.lean`
 
 #### ACC-7 — Two role pairs that a permitted-role widening could conflate are provably distinct at a single write
 
@@ -533,7 +533,7 @@ into a neighbour's.
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** no direct oracle channel
 - **Non-claims:** exclusivity **within** the two named pairs only. The mechanism **cannot separate two roles living in the same compiled function** — the configuration and heartbeat-expiry roles, both in the main function, are not told apart by it, and separating them would need a path-step pin. Header pinning also cannot reach inside the authority record's constructor payloads, so a guard weakened *within* a role changes no pinned header; that separate blind spot is closed by the gate's own within-role guard-strength control, not by these theorems.
-- **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerAuthority.lean:318,342`
+- **Source:** the access temporal authority report; `Blanc/LidoCircuitBreakerAuthority.lean:318,342`
 
 ---
 
@@ -547,7 +547,7 @@ into a neighbour's.
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** the heartbeat boundary rows at `expiry-1`, `expiry`, and `expiry+1`
 - **Non-claims:** **warm-slot only.** The liveness, expiry, and interval views all carry the warm premise; nothing suggests the word differs cold, it is simply unproven. And `isPauserLive` never consults the Registry, so **"live" does not imply "registered"**.
-- **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerAccess.lean`
+- **Source:** the access temporal authority report; `Blanc/LidoCircuitBreakerAccess.lean`
 
 #### TMP-2 — Expired authority cannot revive itself: a zero-count caller errors with `SenderNotPauser` before any liveness test, and an expired caller errors, both without moving storage
 
@@ -557,7 +557,7 @@ into a neighbour's.
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** the heartbeat family — unregistered caller, expired caller, and the three boundary rows
 - **Non-claims:** the two entry facts — registered, and strictly live — are **independent**, and neither implies the other. A callee re-entering during a pause callback can observe zero assignments and a live expiry at the same instant. Nothing here may be read as "live implies registered".
-- **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerAccess.lean`
+- **Source:** the access temporal authority report; `Blanc/LidoCircuitBreakerAccess.lean`
 
 #### TMP-3 — Heartbeat extension is checked: success requires the checked-extension fact, and a wrapping sum reverts with a source-exact `Panic(0x11)` and restores owner state
 
@@ -567,7 +567,7 @@ into a neighbour's.
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** the heartbeat overflow rows, and their pause-side siblings for post-callback count and interval change
 - **Non-claims:** it does not claim overflow is **reachable** in any deployed configuration. The panic body's byte identity is a separate fact owned by `scripts/check-lido-circuit-breaker-runtime-errors.sh`, not by this theorem.
-- **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerAccess.lean`
+- **Source:** the access temporal authority report; `Blanc/LidoCircuitBreakerAccess.lean`
 
 Every registration chronology below shares a settlement shape that each row's own field does not repeat, and the shape is **not uniform** — where a premise is carried by some chronologies and not others, that is said here rather than glossed.
 
@@ -589,7 +589,7 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** `register-distinct-pauser#2:action`; admin-driven revival in the heartbeat family
 - **Non-claims:** this is the **replacement** chronology specifically — the target is already registered to another pauser. It is not a general theorem over all registration paths, and the sibling chronologies below cannot carry it: the fresh path requires the expiry cell to be zero, and the absent path writes no expiry at all.
-- **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerReplacementRegistration.lean:1358`
+- **Source:** the access temporal authority report; `Blanc/LidoCircuitBreakerReplacementRegistration.lean:1358`
 
 #### TMP-5 — A first registration writes a checked expiry into a cell required to be zero on entry
 
@@ -599,7 +599,7 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** `register-fresh#1:action`
 - **Non-claims:** because the entry cell is pinned to zero, this row says nothing about revival — there is nothing to revive. Revival is TMP-4.
-- **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerFreshRegistration.lean:1649`
+- **Source:** the access temporal authority report; `Blanc/LidoCircuitBreakerFreshRegistration.lean:1649`
 
 #### TMP-6 — When an assignment change leaves the old pauser with no assignments its expiry cell is cleared — unless the old and new pauser are the same address, in which case it carries the fresh expiry — and every other canonical pauser's is preserved
 
@@ -609,7 +609,7 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** the old- and new-pauser last-assignment expiry-cleanup rows; `register-same-pauser#2:action`; unregister first, middle, and last
 - **Non-claims:** **the clearing is conditional on the replacement path.** Re-registering the *same* pauser leaves that cell holding the fresh expiry rather than zero — the replacement chronology's conclusion is literally `if oldPauser = newPauser then expiry else 0`, and `register-same-pauser#2:action` is exactly that measured coordinate. The two removal chronologies clear unconditionally. This is proved on named chronologies, not over arbitrary removals, and it says nothing about callback-time coherence.
-- **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerReplacementRegistration.lean:2143`, `Blanc/LidoCircuitBreakerUnregisterRegistration.lean:3963,5310`
+- **Source:** the access temporal authority report; `Blanc/LidoCircuitBreakerReplacementRegistration.lean:2143`, `Blanc/LidoCircuitBreakerUnregisterRegistration.lean:3963,5310`
 
 #### TMP-7 — The absent-target, zero-pauser registration is a no-op on every expiry cell
 
@@ -619,7 +619,7 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** `register-absent-to-zero#1:action`
 - **Non-claims:** a preservation result — every canonical pauser's expiry cell equals its entry value, and one `PauserSet` log is emitted. It is the negation in direction of a revival fact and must never be cited for one.
-- **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerAbsentRegistration.lean:1665`
+- **Source:** the access temporal authority report; `Blanc/LidoCircuitBreakerAbsentRegistration.lean:1665`
 
 #### TMP-8 — One fully concrete unregistration world settles end to end, exhibiting the whole path rather than quantifying over it
 
@@ -629,7 +629,7 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** the unregister rows of the Registry family
 - **Non-claims:** **this is one concrete world**, with a single-entry registry, a fixed target address and a fixed pauser address. Nothing is quantified over targets, pausers, entry lists, gas, or worlds, and no genesis reachability is claimed. It exhibits that the unregistration path really settles; the general statements are TMP-4 through TMP-7, and this row must never be read as one of them.
-- **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerUnregisterWorld.lean:1038`
+- **Source:** the access temporal authority report; `Blanc/LidoCircuitBreakerUnregisterWorld.lean:1038`
 
 #### TMP-9 — An interval update moves no existing expiry: every canonical pauser's expiry cell is byte-identical afterwards, and the new interval governs only the next successful registration or heartbeat
 
@@ -639,7 +639,7 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** the admin interval-change callback row, and "interval change before renewal" in the heartbeat family
 - **Non-claims:** the log list is pinned **exactly** as the entry list extended, not as a containment. Nothing here is stated at transaction altitude.
-- **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerAccess.lean`
+- **Source:** the access temporal authority report; `Blanc/LidoCircuitBreakerAccess.lean`
 
 #### TMP-10 — Emitted record order is pinned exactly, not as a containment
 
@@ -649,7 +649,7 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** the ordered-log rows pinning `PauserSet`, `PauseTriggered`, and `HeartbeatUpdated`
 - **Non-claims:** raw frame logs after settlement are **not** falsely erased on error. Empty *observable* receipt logs are a different theorem at a different altitude, not a general erasure of raw logs.
-- **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreakerAccess.lean`
+- **Source:** the access temporal authority report; `Blanc/LidoCircuitBreakerAccess.lean`
 
 ---
 
@@ -663,7 +663,7 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** `pause-return-true` (the unregister-before-call channel); the reentry and interference family
 - **Non-claims:** the span stops at the `CALL`'s **pre-state**. No blanket invariance across the `CALL` is stated, and none could hold of an arbitrary callee. Nothing here says the pause completes, succeeds, or reaches its expiry write, and the composition from the public entry into a single checked object was not performed.
-- **Source:** `reports/lido-circuit-breaker-pre-control.md`; `Blanc/LidoCircuitBreakerPreControl.lean`
+- **Source:** the pre control report; `Blanc/LidoCircuitBreakerPreControl.lean`
 
 #### PAU-2 — A `pause` re-entered from the state at which the target holds control cannot pass the transient lock: it takes the refusal arm, reverts with the reentrancy payload, and writes nothing
 
@@ -673,7 +673,7 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** the reentry and interference family — same-target and different-target nested pause
 - **Non-claims:** this is the **protected pause entry only**. It is not a general "no descendant does anything" claim, and it says nothing about unprotected entries or about what the callee does.
-- **Source:** `reports/lido-circuit-breaker-pre-control.md`; `Blanc/LidoCircuitBreakerPauseGuards.lean`
+- **Source:** the pre control report; `Blanc/LidoCircuitBreakerPauseGuards.lean`
 
 #### PAU-3 — Every reached success walk over arbitrary target bytecode either commits an exact result or takes the storage-silent arithmetic-panic arm
 
@@ -683,7 +683,7 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** `pause-return-true`, `pause-last-assignment-zero-expiry-no-add`, `next-transaction-after-success`, and the ordered-log rows
 - **Non-claims:** it classifies derivations that **reach** a terminal result; it asserts nothing about whether any arm is reachable in any particular world. Accepting a canonical `1` is evidence that the target **reported** success, never that it really paused. Three of its claims — the terminal transient-lock cell, the raw whole-account storage equality, and the identity of the expiry word with the emitted heartbeat log's data word — have **no direct oracle channel**. Jaune's `STOP` preserves the active frame's incoming output, so the empty-output corollary routes through an honest enclosing-frame premise rather than asserting emptiness outright.
-- **Source:** `reports/lido-circuit-breaker-success.md`; `Blanc/LidoCircuitBreakerSuccess.lean`
+- **Source:** the success report; `Blanc/LidoCircuitBreakerSuccess.lean`
 
 #### PAU-4 — At two concrete cooperative-callee worlds the successful pause message survives settlement, with exactly the stated cells, logs, and non-interference
 
@@ -693,7 +693,7 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** `pause-return-true`, `next-transaction-after-success`
 - **Non-claims:** this must **not** be paraphrased as "a pause leaves the Registry clean". These are two concrete two-account worlds; nothing is quantified over callees, gas, entry lists, or worlds, and no genesis reachability is claimed. The cooperating callee is witness **content**, not a smuggled hypothesis. The Registry projections are **model-side by necessity**: a poststate witness would need a universal storage frame the walk does not export, so model and run meet only at the slots the trace actually touches.
-- **Source:** `reports/lido-circuit-breaker-pause-settlement-completion.md`, `reports/lido-circuit-breaker-pause-join-completion.md`; `Blanc/LidoCircuitBreakerPauseSettlement.lean`, `Blanc/LidoCircuitBreakerPauseJoin.lean`
+- **Source:** the pause settlement completion report, the pause join completion report; `Blanc/LidoCircuitBreakerPauseSettlement.lean`, `Blanc/LidoCircuitBreakerPauseJoin.lean`
 
 #### PAU-5 — The reached expiry write obeys the source's own zero test, and the only way an entered success walk misses that write is a checked-addition overflow
 
@@ -703,7 +703,7 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** `pause-last-assignment-zero-expiry-no-add`
 - **Non-claims:** the exact law is that the stored value is zero **iff the count is zero or both timestamp and interval are zero** — the shorter phrasing "stores zero iff the post-callback count read is zero", which an earlier report used, is literally false and is corrected here. The result does not identify the zero count with a stable last-assignment fact, does not construct the callback, does not prove terminal success, and does not assert final-state noninterference. It joins the access family only at the two concrete worlds of PAU-4, not universally.
-- **Source:** `reports/lido-circuit-breaker-pause-join-completion.md`; `Blanc/LidoCircuitBreakerPauseSuffix.lean:429,561,586`
+- **Source:** the pause join completion report; `Blanc/LidoCircuitBreakerPauseSuffix.lean:429,561,586`
 
 ---
 
@@ -717,7 +717,7 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** the 82 Solidity call and static-call traces in the differential gate; `pause-return-true`
 - **Non-claims:** nothing about what the target does with either message, what it returns, or whether it honours the duration. **The static flag is a fact about the message the CircuitBreaker builds, not a no-write theorem** — a static-context no-write result over arbitrary code exists nowhere in Jaune or Blanc and is not built here. CALL-1 alone makes no claim that either edge is reached in any particular run: its relations remain **implications at exact reached states**. TWG-3 separately constructs those edges and paused-state conclusions for two configured direct-installation worlds; CALL-1 does not generalise their reachability or target-truth conclusions to arbitrary targets or worlds.
-- **Source:** `reports/lido-circuit-breaker-call-boundary.md`; `Blanc/LidoCircuitBreakerCallBoundary.lean`
+- **Source:** the call boundary report; `Blanc/LidoCircuitBreakerCallBoundary.lean`
 
 #### CALL-2 — The staged target and duration words survive arbitrary callee execution
 
@@ -727,7 +727,7 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** no direct oracle channel
 - **Non-claims:** transport of two frame-local words only. Nothing about the rest of memory.
-- **Source:** `reports/lido-circuit-breaker-call-boundary.md`; `Blanc/LidoCircuitBreakerCallBoundary.lean`
+- **Source:** the call boundary report; `Blanc/LidoCircuitBreakerCallBoundary.lean`
 
 #### CALL-3 — The branch flag takes exactly two values and inverts the callee's error; the failure arm cannot commit, and any successful walk past the branch forces the `pauseFor` call to have succeeded
 
@@ -737,7 +737,7 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** the pause-failure family — target revert, query revert, fewer than 32 query bytes, a first word other than 0 or 1, and a first word of 0
 - **Non-claims:** **the failure arm's payload is a two-leg disjunction, not an unconditional claim.** The out-of-gas leg is not removable: without the memory-alignment premise the revert's own expansion charge is not provably zero.
-- **Source:** `reports/lido-circuit-breaker-call-boundary.md`; `Blanc/LidoCircuitBreakerCallBoundary.lean`
+- **Source:** the call boundary report; `Blanc/LidoCircuitBreakerCallBoundary.lean`
 
 #### CALL-4 — The compiled program accepts only the source-compatible return shape, routing short returns, `false`, and non-canonical first words to their exact payloads, while accepting a canonical `1` with trailing bytes
 
@@ -751,7 +751,7 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
   really paused.** TWG-3 separately supplies the verified target executions and
   composition theorem for its two configured direct-installation worlds; this
   decoder row does not generalise that result to other targets or worlds.
-- **Source:** `reports/lido-circuit-breaker-observation.md`; `Blanc/LidoCircuitBreakerObservation.lean`
+- **Source:** the observation report; `Blanc/LidoCircuitBreakerObservation.lean`
 
 ---
 
@@ -770,7 +770,7 @@ deliberately permitted, and how the same family lifts to the public pause entry.
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** no direct oracle channel — these are anti-vacuity controls, not behavioural claims
 - **Non-claims:** a control proves the pins cannot be gutted silently; it is **not itself an assurance claim**. Two gate limits are recorded rather than hidden: the mutation set re-runs header pinning and never compiles the mutant, so a definition-body weakening cannot be expressed there; and header pins reach neither the authority record's constructor payloads nor the interiors of the boundary and expiry-value `def`s, which is why the bespoke controls exist at all.
-- **Source:** `reports/lido-circuit-breaker-pre-control.md`, `reports/lido-circuit-breaker-call-boundary.md`; `scripts/LidoCircuitBreakerAccessControls.lean`
+- **Source:** the pre control report, the call boundary report; `scripts/LidoCircuitBreakerAccessControls.lean`
 
 #### HOSTILE-2 — The exact final state of one successful pause rests on an explicitly assumed noninterference premise, and two measured rows prove that assumption is not idle
 
@@ -780,7 +780,7 @@ deliberately permitted, and how the same family lifts to the public pause entry.
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** `overflow-pause-post-callback-count-positive` and `overflow-pause-post-callback-interval-change`, both cited in the module header and in the assumption's own docstring; supplemented by the admin-interval, admin-reassign, and callback-heartbeat rows
 - **Non-claims:** arbitrary target code **can** re-enter and make either equality false — that is the measured content of those two rows, not a hypothetical. A no-write theorem for the relevant calls, or an authorization invariant strong enough to exclude the writes, would derive the premise instead of assuming it; **neither exists**. Registry coherence across histories carries no such premise, and this row must never be generalised into one that does.
-- **Source:** `reports/lido-circuit-breaker-success.md`; `Blanc/LidoCircuitBreakerSuccess.lean`
+- **Source:** the success report; `Blanc/LidoCircuitBreakerSuccess.lean`
 
 #### HOSTILE-3 — The zero-count, live-expiry mid-call state is reachable and deliberately permitted, not a defect the proofs paper over
 
@@ -790,7 +790,7 @@ deliberately permitted, and how the same family lifts to the public pause entry.
 - **Gate:** `scripts/check-lido-circuit-breaker-differential.sh`
 - **Differential channel:** `callback-midcall-liveness`, `callback-heartbeat`
 - **Non-claims:** this is real source behaviour at an internal state, pinned as a live differential coordinate. It is **why** no callback-time count/expiry coherence is claimed anywhere in this register, and why a settled-boundary invariant — which could hold — is recorded as a successor rather than asserted here.
-- **Source:** `reports/lido-circuit-breaker-access-temporal-authority.md`; `Blanc/LidoCircuitBreaker.lean:176`
+- **Source:** the access temporal authority report; `Blanc/LidoCircuitBreaker.lean:176`
 
 #### HOSTILE-4 — A production public `pause(address)` execution reaches the exact Stage 6 `pauseAfterSet` state at every terminal polarity
 
@@ -836,7 +836,7 @@ axioms and admits no exception table.
 - **Gate:** `scripts/check-lido-circuit-breaker-deployment.sh`
 - **Differential channel:** no direct oracle channel for the theorem. The gate carries a **separate** finite replay — one temporary strict singleton Prague block through pinned EELS with 18 positive assertions and 26 live finite mutants — which is feasibility and cross-evaluator evidence only and is **never** a Lean premise.
 - **Non-claims:** not the deployed Solidity bytecode at `0x6019CB557978296BA3C08a7B73225C0975DFB2F7`; no signature, propagation, or inclusion claim; **not parameter-generic**; no co-block, clone, factory, proxy, or CREATE2 path; no nonzero endowment; no arbitrary fork; no universal patch or gas claim. It does not strengthen the history theorem and does not remove its reach bound.
-- **Source:** `reports/lido-circuit-breaker-deployment-root.md`; `Blanc/LidoCircuitBreakerDeploymentRoot.lean:49-58`
+- **Source:** the deployment root report; `Blanc/LidoCircuitBreakerDeploymentRoot.lean:49-58`
 
 #### DEP-2 — The official transaction runs end to end through the real pipeline to a receipt whose own success bit is set, with three ordered logs, no requests, and a singleton receipt key
 
@@ -846,7 +846,7 @@ axioms and admits no exception table.
 - **Gate:** `scripts/check-lido-circuit-breaker-deployment.sh`
 - **Differential channel:** no direct oracle channel — the differential campaign has no receipts at all; it compares slot readings, status, returndata, logs, and call traces, and never builds a block or a receipt
 - **Non-claims:** it does not claim the three logs parse as deposit requests. The opposite is proved: the parsed request list is empty.
-- **Source:** `reports/lido-circuit-breaker-deployment-root.md`, `reports/lido-circuit-breaker-history-h12.md:20-22`; `Blanc/LidoCircuitBreakerDeploymentTransaction.lean`
+- **Source:** the deployment root report, the history h12 report (lines 20-22); `Blanc/LidoCircuitBreakerDeploymentTransaction.lean`
 
 #### DEP-3 — Both checked Prague request-system suffix calls return empty request bytes and preserve state and output, and the whole block body composes to the deployed state
 
@@ -856,7 +856,7 @@ axioms and admits no exception table.
 - **Gate:** `scripts/check-lido-circuit-breaker-deployment.sh`
 - **Differential channel:** the finite replay's empty-requests and system-program assertions; no direct oracle channel for the Lean statement
 - **Non-claims:** **Prague-only.** The withdrawal- and consolidation-request predeploy addresses are pinned to the system program's code as a *base premise*, not proved.
-- **Source:** `reports/lido-circuit-breaker-deployment-root.md`; `Blanc/LidoCircuitBreakerDeploymentBlock.lean`
+- **Source:** the deployment root report; `Blanc/LidoCircuitBreakerDeploymentBlock.lean`
 
 #### DEP-4 — The fresh-frame constructor execution is walked in full: source-ordered validation, all twelve untaken error arms, the runtime copy and its twelve patches, exactly two configuration stores, three ordered logs, and a terminal return under a named sufficient gas
 
@@ -866,7 +866,7 @@ axioms and admits no exception table.
 - **Gate:** `scripts/check-lido-circuit-breaker-deployment.sh`
 - **Differential channel:** the five constructor-success rows and the eight named constructor-reject rows, including both zero and above-maximum bounds for each duration and the two precedence cases
 - **Non-claims:** the walk is for the **official** full CREATE input only. **No universal constructor-patch theorem is claimed.**
-- **Source:** `reports/lido-circuit-breaker-deployment-root.md`, `reports/lido-circuit-breaker-artifact-conformance-completion.md`; `Blanc/LidoCircuitBreakerDeploymentTrace.lean`
+- **Source:** the deployment root report, the artifact conformance completion report; `Blanc/LidoCircuitBreakerDeploymentTrace.lean`
 
 #### DEP-5 — The empty Registry witness at the constructor poststate is read out of the actual two-write storage through region separation, not assumed from a synthetic world
 
@@ -876,7 +876,7 @@ axioms and admits no exception table.
 - **Gate:** `scripts/check-lido-circuit-breaker-deployment.sh`
 - **Differential channel:** no direct oracle channel for the witness — the invariant's entry list is a Lean-side object with no image in a manifest that compares slot readings
 - **Non-claims:** **the synthetic stable world receives no deployment credit.** The gate's second compiled control starts from that world, obtains only stability plus reflexive reach, and provably *cannot* manufacture the execution or receipt witness.
-- **Source:** `reports/lido-circuit-breaker-deployment-root.md`, `reports/lido-circuit-breaker-history-h12.md:67-69`; `Blanc/LidoCircuitBreakerDeploymentMessage.lean:346`
+- **Source:** the deployment root report, the history h12 report (lines 67-69); `Blanc/LidoCircuitBreakerDeploymentMessage.lean:346`
 
 #### DEP-6 — Every configured reachable future of the root keeps the exact runtime, admits some Registry witness, satisfies membership and index equivalence at any canonical target, and conserves the global count
 
@@ -886,7 +886,7 @@ axioms and admits no exception table.
 - **Gate:** `scripts/check-lido-circuit-breaker-deployment.sh`
 - **Differential channel:** no direct oracle channel, and unreachable in principle by any campaign — there is no artifact a chain-reachability claim could be checked against
 - **Non-claims:** the witness is **existential**, not the checkpoint's list. No gas claim, no liveness, and nothing about any callee.
-- **Source:** `reports/lido-circuit-breaker-deployment-root.md`; `Blanc/LidoCircuitBreakerDeploymentRoot.lean`
+- **Source:** the deployment root report; `Blanc/LidoCircuitBreakerDeploymentRoot.lean`
 
 #### HIST-1 — From a checkpoint with the exact runtime installed and coherent storage, every reachable state is still stable — over arbitrary callee bytecode, arbitrary depth including same-instance re-entry, and arbitrary finite chains
 
@@ -896,7 +896,7 @@ axioms and admits no exception table.
 - **Gate:** `scripts/check-lido-circuit-breaker-history.sh`
 - **Differential channel:** no direct oracle channel
 - **Non-claims:** **not a deployment claim** — the checkpoint is a hypothesis, discharged for exactly one shape by DEP-1. Not a same-list claim, not liveness, not count/expiry coherence, and it says nothing about the callee.
-- **Source:** `reports/lido-circuit-breaker-history.md`; `Blanc/LidoCircuitBreakerHistoryChain.lean`
+- **Source:** the history report; `Blanc/LidoCircuitBreakerHistoryChain.lean`
 
 #### HIST-2 — Endpoint coverage is a typed obligation quantified over the production dispatch list itself, so omitting an endpoint cannot typecheck
 
@@ -906,7 +906,7 @@ axioms and admits no exception table.
 - **Gate:** `scripts/check-lido-circuit-breaker-history.sh`
 - **Differential channel:** the views, non-payability, and ABI-boundary rows exercise the same dispatch surface finitely, but **do not corroborate the typed quantifier**
 - **Non-claims:** soundness and preservation are **safety** properties. Nothing says any endpoint is reachable.
-- **Source:** `reports/lido-circuit-breaker-history.md`; `Blanc/LidoCircuitBreakerHistory.lean`
+- **Source:** the history report; `Blanc/LidoCircuitBreakerHistory.lean`
 
 #### HIST-3 — Coherence is transported across an arbitrary external call and across the pause route, which completes swap-and-pop unregistration *before* yielding to an arbitrary callee
 
@@ -916,7 +916,7 @@ axioms and admits no exception table.
 - **Gate:** `scripts/check-lido-circuit-breaker-history.sh`
 - **Differential channel:** five callback programs at depth two against one instance — same-target caught and bubbled, different-target caught and bubbled, and the clone-namespace row
 - **Non-claims:** the clone-namespace rows show that selected clone worlds use **distinct storage owners**. They establish no clone constructor root, no joint root, no factory, proxy, or CREATE2 route, and no universal two-instance theorem.
-- **Source:** `reports/lido-circuit-breaker-history.md`, `reports/lido-circuit-breaker-history-h12.md`; `Blanc/LidoCircuitBreakerHistoryChain.lean`
+- **Source:** the history report, the history h12 report; `Blanc/LidoCircuitBreakerHistoryChain.lean`
 
 #### HIST-4 — The ladder from a single message call up to a whole chain preserves stability at every rung
 
@@ -926,7 +926,7 @@ axioms and admits no exception table.
 - **Gate:** `scripts/check-lido-circuit-breaker-history.sh`
 - **Differential channel:** no direct oracle channel above the message-call rung — the campaign has no block, no receipt, no nonce or fee settlement, and no chain. The message-call level is corroborated by the 175 rows.
 - **Non-claims:** these are inductions over the landed **generic** ladder, not a hand-written shadow transaction semantics.
-- **Source:** `reports/lido-circuit-breaker-history.md`; `Blanc/LidoCircuitBreakerHistoryChain.lean`
+- **Source:** the history report; `Blanc/LidoCircuitBreakerHistoryChain.lean`
 
 #### HIST-5 — Both reachability relations are held open by compile-time controls that extend a reach chain by a block of which nothing whatever is assumed
 
@@ -936,7 +936,7 @@ axioms and admits no exception table.
 - **Gate:** `scripts/check-lido-circuit-breaker-history.sh`
 - **Differential channel:** no direct oracle channel, and unreachable in principle — the absence of a hypothesis is a property of a statement, and no fixture can witness it
 - **Non-claims:** these are **controls, not results**. They assert nothing about the Registry; their job is that an additive narrowing of either reach constructor stops them elaborating, which no re-pinning can paper over.
-- **Source:** `reports/lido-circuit-breaker-history.md`; `Blanc/LidoCircuitBreakerHistoryChain.lean`
+- **Source:** the history report; `Blanc/LidoCircuitBreakerHistoryChain.lean`
 
 #### HIST-6 — The family has models: the empty registry world satisfies stability, and the arbitrary-future consequences read fields inside the invariant rather than restating a header
 
@@ -946,7 +946,7 @@ axioms and admits no exception table.
 - **Gate:** `scripts/check-lido-circuit-breaker-history.sh`
 - **Differential channel:** no direct oracle channel
 - **Non-claims:** the exhibit shows the theorems are not vacuous. **It is not a deployment and must never be reported as one.**
-- **Source:** `reports/lido-circuit-breaker-history.md`; `Blanc/LidoCircuitBreakerHistoryEndpoints.lean`
+- **Source:** the history report; `Blanc/LidoCircuitBreakerHistoryEndpoints.lean`
 
 #### HIST-7 — The differential campaign and the history family are non-overlapping evidence; neither subsumes the other
 
@@ -956,7 +956,7 @@ axioms and admits no exception table.
 - **Gate:** `scripts/check-lido-circuit-breaker-differential.sh`
 - **Differential channel:** the full 175-row manifest, considered as a channel rather than as a set of cases
 - **Non-claims:** three things are **unreachable in principle** by the campaign, not merely unmeasured: unbounded chain reachability, the invariant's entry list, and the absence of a hypothesis. Conversely the campaign sees things no theorem states, notably byte-level oracle agreement. Neither channel is evidence for the other's claims.
-- **Source:** `reports/lido-circuit-breaker-history-h12.md`
+- **Source:** the history h12 report
 
 ---
 
@@ -970,7 +970,7 @@ axioms and admits no exception table.
 - **Gate:** `scripts/check-lido-circuit-breaker-reference.sh`
 - **Differential channel:** the lock is the differential campaign's own oracle basis
 - **Non-claims:** locking a source blob is not verifying a deployed artifact. The mainnet address, transaction, and block establish importance and provenance and nothing else.
-- **Source:** `reports/lido-circuit-breaker-artifact-conformance-completion.md`; `scripts/lido-circuit-breaker-reference.json`
+- **Source:** the artifact conformance completion report; `scripts/lido-circuit-breaker-reference.json`
 
 #### ART-2 — For arbitrary deployment parameters the production program compiles to the generated runtime bytes, and the official world's byte lengths and immutable offsets are exact
 
@@ -980,7 +980,7 @@ axioms and admits no exception table.
 - **Gate:** `scripts/check-lido-circuit-breaker-artifact-profile.sh`, `scripts/check.sh`
 - **Differential channel:** the deployment axis of the differential campaign — constructor and runtime extraction and representative calls in deployed worlds
 - **Non-claims:** compilation identity between Blanc's own program and Blanc's own emitted bytes. It says nothing about the Solidity compiler's output.
-- **Source:** `reports/lido-circuit-breaker-artifact-optimization-completion.md`; `Blanc/LidoCircuitBreakerCode.lean`
+- **Source:** the artifact optimization completion report; `Blanc/LidoCircuitBreakerCode.lean`
 
 #### ART-3 — On the finite resource vector the Blanc artifact is cheaper on every adequate boundary, with the declared out-of-gas controls equal
 
@@ -990,7 +990,7 @@ axioms and admits no exception table.
 - **Gate:** `scripts/check-lido-circuit-breaker-differential.sh`
 - **Differential channel:** the 464 resource boundaries and the 33 exact completion-threshold searches
 - **Non-claims:** **this is a finite manifest-bound result and not a universal gas theorem.** Blanc's mandatory `.branch` control-flow representation can carry a small intrinsic dispatch overhead relative to a direct-jump implementation, so a universal dominance claim would be false rather than merely unproved. Any future positive row is admissible only through an explicit independent architecture-evidence rule.
-- **Source:** `reports/lido-circuit-breaker-artifact-optimization-completion.md`; `plans/lido-circuit-breaker-program.md`
+- **Source:** the artifact optimization completion report; the CircuitBreaker programme plan
 
 #### ART-4 — Compatibility is complete and fail-closed: no accepted behavioural deviation, no pending row, no unknown-mismatch allowlist, and no architecture exception
 

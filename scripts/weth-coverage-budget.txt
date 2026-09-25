@@ -3,7 +3,7 @@
 # The known-unreached subset of Blanc's ten WETH selectors
 # (scripts/weth-selectors.json, emitted from Blanc.wethFuncs by
 # scripts/gen-weth-selectors.lean), checked by scripts/check-weth-coverage.sh
-# (~/plans/weth-evidence.md Step 2). This is a budget in the idiom of
+# (the WETH evidence plan's Step 2). This is a budget in the idiom of
 # Jaune's scripts/check-integrity.sh pending-budget: the gate fails if the
 # actual set of unreached selectors is not a subset of the rows below, or if
 # that set's size exceeds the declared budget number. A row lists a selector

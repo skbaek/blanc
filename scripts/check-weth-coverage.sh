@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Selector coverage gate for Blanc's WETH fixture suite (weth-evidence Step
-# 2, ~/plans/weth-evidence.md). Blanc's ten WETH selectors are obtained from
+# 2 of the WETH evidence plan). Blanc's ten WETH selectors are obtained from
 # `scripts/weth-selectors.json` -- committed, emitted from `Blanc.wethFuncs`
 # by `scripts/gen-weth-selectors.lean`, never retyped here (Fixed design
 # decision 5). This gate decodes every committed fixture's transactions,

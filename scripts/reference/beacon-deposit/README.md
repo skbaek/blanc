@@ -10,7 +10,7 @@ compiled-port successor goal, which will also decide whether to grow this
 directory into a schema-v2 lock.
 
 ## Pins (fetched 2026-08-28, methods and full evidence in
-`~/plans/reports/beacon-deposit-opening-completion.md`, section B1)
+the BeaconDeposit opening completion report, section B1)
 
 - `inputs/deposit_contract.sol` — the Solidity deposit contract, byte-exact
   from `ethereum/consensus-specs` at commit

@@ -3074,7 +3074,7 @@
     ]
    },
    "kind": "cacheable",
-   "note": "Compiled occurrence and direct-code positives, then the three production mutants (those no kept positive or theorem statement contradicts) in one elaboration, each attributed to its own lines by lean_mutant_batch.py; consumes the independently registered settlement verdict instead of starting that body again. The fixture-discrimination mutants and live deletions run in execution-occurrence-self-test; the removal/move ledger (Plans reports/evidence-economy-20260923/trim-b1-ledger.md) names each one's cover.",
+   "note": "Compiled occurrence and direct-code positives, then the three production mutants (those no kept positive or theorem statement contradicts) in one elaboration, each attributed to its own lines by lean_mutant_batch.py; consumes the independently registered settlement verdict instead of starting that body again. The fixture-discrimination mutants and live deletions run in execution-occurrence-self-test; the removal/move ledger (a planning record outside this repository) names each one's cover.",
    "order": 65,
    "verdict": {
     "expect_exit": 0,
@@ -3107,7 +3107,7 @@
     ]
    },
    "kind": "cacheable",
-   "note": "The concrete evaluator, then the two production mutants (BODY- and INDEX-SUBSTITUTION: no pinned positive contradicts them) in one elaboration, each attributed to its own lines. The 18 fixture-discrimination mutants run in cycle-write-free-self-test; the removal/move ledger (Plans reports/evidence-economy-20260923/trim-b1-ledger.md) names each one's cover.",
+   "note": "The concrete evaluator, then the two production mutants (BODY- and INDEX-SUBSTITUTION: no pinned positive contradicts them) in one elaboration, each attributed to its own lines. The 18 fixture-discrimination mutants run in cycle-write-free-self-test; the removal/move ledger (a planning record outside this repository) names each one's cover.",
    "order": 66,
    "verdict": {
     "expect_exit": 0,
@@ -3139,7 +3139,7 @@
     ]
    },
    "kind": "cacheable",
-   "note": "The 25-control evaluator, then the two production mutants (OPERAND-ORDER, UNRELATED-TRANSACTIONS) in one elaboration, each attributed to its own lines. The 20 mutants that restate the negation of a pinned control, and the live positive deletions, run in transient-settlement-self-test; the removal/move ledger (Plans reports/evidence-economy-20260923/trim-b1-ledger.md) names each one's cover.",
+   "note": "The 25-control evaluator, then the two production mutants (OPERAND-ORDER, UNRELATED-TRANSACTIONS) in one elaboration, each attributed to its own lines. The 20 mutants that restate the negation of a pinned control, and the live positive deletions, run in transient-settlement-self-test; the removal/move ledger (a planning record outside this repository) names each one's cover.",
    "order": 67,
    "verdict": {
     "expect_exit": 0,

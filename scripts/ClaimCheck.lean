@@ -4954,7 +4954,7 @@ open scoped BigOperators
 
 /-! ## PRORATA — the SF-frozen P3 and P4 headline statements.
 
-`~/plans/reports/prorata-etude-sf-memo.md` §5 freezes these five P3 shapes and
+The PRORATA etude's SF memo, §5, freezes these five P3 shapes and
 three P4 shapes.  The pins below carry the frozen types and use the named
 declarations as their bodies, so a statement change breaks this file while a
 proof-only refactor does not. -/
@@ -6964,7 +6964,7 @@ namespace Drip
 
 /-! ## DRIP — the R1–R4 headline statements.
 
-The frozen DRIP completion design (`drip-etude-completion-design.md` §4 row P2)
+The frozen DRIP completion design (its §4 row P2)
 names one statement pin per R-headline.  Each pin below carries the headline's
 exact type and uses the named declaration as its body, so a statement change
 breaks this file while a proof-only refactor does not. -/

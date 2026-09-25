@@ -309,8 +309,8 @@ MUTANT_DIAGNOSTICS = {
         ("Application type mismatch", "Type mismatch"),
 }
 
-# Evidence economy (scripts/GATES.md, "Evidence economy"; ledger in Plans
-# reports/evidence-economy-20260923/trim-b1-ledger.md). These three mutants are
+# Evidence economy (scripts/GATES.md, "Evidence economy"; the batch-1 trim
+# ledger is a planning record outside this repository). These three mutants are
 # the only check that would notice a production change: the type of
 # `SourceCursor.Chronology.initialToCursor`, the child-before-continuation
 # order of `Exec.rawFrameDescendants`, and the path/source indexing of

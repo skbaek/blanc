@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Elaboration-time gate for Blanc (port of Jaune's gate for
-# ~/plans/blanc-elab-gate.md).
+# Elaboration-time gate for Blanc (port of Jaune's gate, per the
+# Blanc elaboration-gate plan).
 #
 # Measures how long each affected module takes to re-elaborate against
 # already-built dependencies — the cost an interactive session pays to open or
@@ -159,7 +159,7 @@
 # SCOPE: THIS IS A LOCAL GATE, NOT A CI GATE
 #
 # Wall-clock measurements are machine-dependent in exactly the way
-# `notimeout.md` objected to when it abolished TIMEOUT as a fixture
+# the no-timeout plan objected to when it abolished TIMEOUT as a fixture
 # classification. The baseline therefore stays inside this Blanc checkout and
 # is ignored by Git. CI continues its existing correctness/build work and does
 # not consume this local performance history. The 1.0s absolute floor and the

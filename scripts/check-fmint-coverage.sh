@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Selector coverage gate for Blanc's fmint fixture suite (fmint-code Step 2,
-# ~/plans/fmint-code.md), the sibling of check-weth-coverage.sh. fmint's
+# of the fmint code plan), the sibling of check-weth-coverage.sh. fmint's
 # twelve selectors are obtained from scripts/fmint-selectors.json --
 # committed, emitted from Blanc.Fmint.fmintFuncs by
 # scripts/gen-fmint-selectors.lean, never retyped here. This gate decodes

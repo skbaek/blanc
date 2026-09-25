@@ -826,7 +826,7 @@ lemma Rinst.runCore_log_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
 
 The one instruction whose charge is not a function of the opcode: EIP-2200
 prices a store by the *original*, *current* and *new* values together, and by
-whether the key is already warm.  **A6** of `~/plans/adversarial-progress.md`
+whether the key is already warm.  **A6** of the adversarial-progress plan
 fixes how that enters a forward rule: the warmth splits the rule, exactly as it
 splits `SLOAD`'s and for the same reason — the cold arm moves the base state and
 the warm arm does not — and the value-case arithmetic is a caller-supplied

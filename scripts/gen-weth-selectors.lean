@@ -10,7 +10,7 @@
 -- to already be in), to `scripts/weth-selectors.json`.
 --
 -- This is the SOLE source `scripts/check-weth-coverage.sh` uses for "what
--- are Blanc's ten selectors" (~/plans/weth-evidence.md, Fixed design
+-- are Blanc's ten selectors" (the WETH evidence plan, Fixed design
 -- decision 5): no ABI signature string is retyped in the Python checker or
 -- anywhere else. Regenerating must leave the working tree clean
 -- (`git diff --exit-code scripts/weth-selectors.json`), exactly like

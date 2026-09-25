@@ -3,7 +3,7 @@
 `blockchain_tests` fixtures (deposit, withdraw, transfer, approve+transferFrom,
 reentrancy) at network Prague, whose account code is `Blanc.wethCode` and
 whose expectations come from the pinned frozen EELS oracle's t8n. Extends the
-Step-1 round-trip prototype (non-vacuity-step1.md) with the full WETH ABI and
+Step-1 round-trip prototype (the non-vacuity Step 1 report) with the full WETH ABI and
 a hand-authored (not oracle-derived -- the oracle only fills expectations)
 reentrancy-attacker contract.
 
@@ -62,7 +62,7 @@ EMPTY_TRIE_ROOT = (
 # System-contract addresses whose predeploys Prague requires (EIP-2935,
 # EIP-4788, EIP-7002, EIP-7251, plus the deposit contract for EIP-6110). Code
 # is copied verbatim from the EEST template fixture below -- never typed by
-# hand (Step-1 finding, non-vacuity-step1.md section 3, gotcha 4).
+# hand (Step-1 finding: that report's section 3, gotcha 4).
 SYSTEM = [
     "0x0000f90827f1c53a10cb7a02335b175320002935",
     "0x000f3df6d732807ef1319fb7b8bb8522d0beac02",
@@ -442,7 +442,7 @@ def probe_storage(probes):
 
 # ---- the spec-derived assertion layer -------------------------------------
 #
-# THE ANTI-CIRCULARITY RULE (~/plans/weth-evidence.md, D1). Every expectation
+# THE ANTI-CIRCULARITY RULE (the WETH evidence plan, D1). Every expectation
 # stated below is a function of (pre-state, transaction, WETH's intended
 # semantics) and of nothing else. None was read off an observed post-state.
 # The test each one has to pass is: *could it have been written before the
@@ -629,7 +629,7 @@ class Expectations:
                         f"    expected  {expected}",
                         f"    observed  {observed}", ""]
             out += [
-                "Nothing was written. This is a HALT (~/plans/weth-evidence.md):",
+                "Nothing was written. This is a HALT (per the WETH evidence plan):",
                 "either the expectation misstates WETH's semantics, or Blanc's",
                 "bytecode does not implement them. Do not relax the expectation",
                 "to make generation pass -- a genuine mismatch is the most",
@@ -702,14 +702,14 @@ def get_weth_code_hex():
         os.unlink(scratch)
     hexstr = out.strip().strip('"')
     # 1976 = 2 x 988 bytes. Was 1732 (866 bytes) until the `Func.rev`
-    # normalization (`~/plans/fmint-hygiene.md`) put two `PUSH0`s ahead of
+    # normalization (the fmint-hygiene plan) put two `PUSH0`s ahead of
     # each of WETH's eleven rev sites, then 1776 (888 bytes) until the
-    # `nonpayable` wrap of `wethFuncs` (`~/plans/weth-nonpayable-goal.md`)
+    # `nonpayable` wrap of `wethFuncs` (the WETH nonpayable goal)
     # put a ten-byte value guard ahead of each of the ten dispatched bodies.
     #
     # WHY THIS STAYS A LENGTH ASSERT: same adjudication as
     # `gen-fmint-fixtures.py`'s `get_fmint_code_hex`, recorded in full there
-    # (`~/plans/fmint-evidence.md` Step 1). In short -- this checks a
+    # (the fmint-evidence plan's Step 1). In short -- this checks a
     # subprocess's stdout, not the identity of an unknown account, and
     # byte-equality against the committed literal would compare `Blanc.wethCode`
     # with itself. Every fixture's WETH account IS checked byte-for-byte

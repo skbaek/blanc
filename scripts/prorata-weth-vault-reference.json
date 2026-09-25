@@ -76,7 +76,7 @@
       "sha256": "192a07ade38aed922d5bf3b7dac7bd332acc62290a035c837e5b44bba8e27e91"
     }
   },
-  "authority": "reports/prorata-erc4626-port-sf.md section 10 (Plans goal store); constants embedded in scripts/check-prorata-weth-vault-reference.py",
+  "authority": "the PRORATA ERC-4626 port's SF, section 10 (a planning record outside this repository); constants embedded in scripts/check-prorata-weth-vault-reference.py",
   "closure": {
     "contracts/ProrataWethVaultReference.sol": {
       "blob": null,

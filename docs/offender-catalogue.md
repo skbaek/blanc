@@ -4,7 +4,7 @@
 - **Snapshot date:** 2026-08-27
 - **Blanc source:** `283f84301353e6534d31f5e03897cc3a2eaf7ed0`
 - **Jaune source:** `c5628a53f289c3422fc958b482767ac097dfd527`
-- **Disposition evidence:** plans `6a498efac9b8b18f88e917b581f7921fdd6c57ad`
+- **Disposition evidence:** planning-record commit `6a498efac9b8b18f88e917b581f7921fdd6c57ad` (not public)
 
 This document is the normal starting point for a second elaboration-offender
 census. It records the post-cure committed-budget rows above the first census's
@@ -295,12 +295,15 @@ A second census is not complete until all of the following hold:
 
 ## Pinned evidence index
 
-- [First frozen catalogue (50 offenders)](https://github.com/skbaek/plans/blob/6a498efac9b8b18f88e917b581f7921fdd6c57ad/evidence/elab-offender-census/c4/offender-catalogue.md)
-- [Declaration-attribution directory (C2)](https://github.com/skbaek/plans/tree/6a498efac9b8b18f88e917b581f7921fdd6c57ad/evidence/elab-offender-census/c2/per-module)
-- [Per-family diagnosis directory (C5)](https://github.com/skbaek/plans/tree/6a498efac9b8b18f88e917b581f7921fdd6c57ad/evidence/elab-offender-census/c5/reports)
-- [Cure 2 completions and rejected routes](https://github.com/skbaek/plans/blob/6a498efac9b8b18f88e917b581f7921fdd6c57ad/reports/elab-cure-2-completions.md)
-- [Cure 3 ceiling-debt completion](https://github.com/skbaek/plans/blob/6a498efac9b8b18f88e917b581f7921fdd6c57ad/reports/elab-cure-3-ceiling-debt.md)
-- [Machine-readable ceiling disposition ledger](https://github.com/skbaek/plans/blob/6a498efac9b8b18f88e917b581f7921fdd6c57ad/evidence/elab-cure-3-ceiling-debt/disposition-ledger.json)
-- [Readable ceiling disposition ledger](https://github.com/skbaek/plans/blob/6a498efac9b8b18f88e917b581f7921fdd6c57ad/evidence/elab-cure-3-ceiling-debt/DISPOSITION_LEDGER.md)
-- [Cure 4 residue dispositions](https://github.com/skbaek/plans/blob/6a498efac9b8b18f88e917b581f7921fdd6c57ad/reports/elab-cure-4-residue.md)
-- [Final closeout review](https://github.com/skbaek/plans/blob/6a498efac9b8b18f88e917b581f7921fdd6c57ad/reports/elab-offender-census-final-review.md)
+These records are kept in a planning repository outside this one, pinned at
+commit `6a498efac9b8b18f88e917b581f7921fdd6c57ad`; they are not public.
+
+- First frozen catalogue (50 offenders)
+- Declaration-attribution directory (C2)
+- Per-family diagnosis directory (C5)
+- Cure 2 completions and rejected routes
+- Cure 3 ceiling-debt completion
+- Machine-readable ceiling disposition ledger
+- Readable ceiling disposition ledger
+- Cure 4 residue dispositions
+- Final closeout review

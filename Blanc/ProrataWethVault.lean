@@ -1,7 +1,7 @@
 -- ProrataWethVault.lean : a full-width ERC-4626 share vault over exact Blanc WETH.
 --
 -- This module owns the executable surface frozen in
--- `plans/reports/prorata-erc4626-port-sf.md`.  It deliberately imports only
+-- the PRORATA ERC-4626 port's frozen specification.  It deliberately imports only
 -- CommonCore: the vault and WETH are sibling contracts, while their eventual
 -- composition facts live above both families.
 

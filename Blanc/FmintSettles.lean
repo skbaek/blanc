@@ -24,7 +24,7 @@
 --
 -- **No warmth premise, anywhere.**  The `SLOAD` step's charge is an `if` on the
 -- frame's own accessed set, bounded by the schedule rather than decided, which
--- is A3 of `~/plans/adversarial-progress.md`: the statements this serves have no
+-- is A3 of the adversarial-progress plan: the statements this serves have no
 -- premise about the frame's history, so the trunk may not buy exactness with
 -- one.  The same goes for the two `SSTORE`s, whose EIP-2200 value cases are
 -- bounded by `gasStorageSet`.

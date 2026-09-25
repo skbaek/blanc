@@ -1,8 +1,8 @@
 {
   "acquisition": {
     "date": "2026-09-04",
-    "route": "copied from the clean local Git checkout of the pinned commit used for the SF dossier (/private/tmp/prorata-ref.BjJLXF/openzeppelin-contracts, HEAD verified) after every file matched the SHA-256 frozen in reports/prorata-erc4626-port-sf.md section 10; no network fetch was required",
-    "verifiedAgainst": "reports/prorata-erc4626-port-sf.md section 10 (Plans goal store)"
+    "route": "copied from the clean local Git checkout of the pinned commit used for the SF dossier (a disposable temporary checkout on the acquiring host, HEAD verified) after every file matched the SHA-256 frozen in the PRORATA ERC-4626 port's SF, section 10; no network fetch was required",
+    "verifiedAgainst": "the PRORATA ERC-4626 port's SF, section 10 (a planning record outside this repository)"
   },
   "closureManifest": {
     "construction": "not reproduced from the per-file table; per-file hashes are the identity",

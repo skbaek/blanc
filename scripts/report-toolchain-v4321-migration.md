@@ -1,6 +1,6 @@
 # Step 1 Blanc lockstep report — Lean/mathlib v4.32.1
 
-Date: 2026-07-25 (Asia/Seoul). Plan: `~/plans/migration.md`, Step 1.
+Date: 2026-07-25 (Asia/Seoul). Plan: the migration plan, Step 1.
 This is the downstream continuation of ELeVM's
 `scripts/report-toolchain-v4321-migration.md`.
 

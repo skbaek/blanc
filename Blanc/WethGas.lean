@@ -31,7 +31,7 @@ made so in this arc: `Jaune.Fork.ForkRules` (`Jaune/Fork.lean:161`) carries
 opcode gas schedule. Every constant this module sums is a global `def` in
 `Jaune/Machine.lean:500-537`, threaded nowhere through `ForkRules`. A
 `ForkRules` argument here would be an unused parameter, which is exactly the
-fake-parameter shape this arc's plan (`~/plans/gas-cost.md`, correction C1)
+fake-parameter shape this arc's plan (the gas-cost plan, correction C1)
 prohibits. `func_run`'s own `gasTacs` unfolds these symbols to numerals before
 calling `omega`, so a repricing changes the *proof term* even though it does
 not change the *statement* — never claim more than that. -/
@@ -58,7 +58,7 @@ no cold-key premise and no quantification over an argument word.
 
 It is chosen because it exercises **no instruction the walk has not already
 run**, which makes it a clean measurement of what a second target in a known
-genre costs (arc plan `~/plans/gas-cost.md`, gate G2). What differs is the
+genre costs (the gas-cost arc plan, gate G2). What differs is the
 *path*: `decimals()` sits at index 5 of `wethFuncs`' ten, where `balanceOf()`
 sits at index 6, so the two take different arms through the same four forks. -/
 
@@ -110,7 +110,7 @@ Unlike `weth_balanceOf_runCompiled` this states the **gas as a conjunct of the
 run**, which is what `Blanc/WethGas.lean` exists to supply and what the
 predecessor's two witnesses left inside their constructions. Stating it here
 rather than re-deriving the witness in a separate theorem is deliberate: the
-re-derivation Step 1 of `~/plans/gas-cost.md` had to perform, because
+re-derivation Step 1 of the gas-cost plan had to perform, because
 `weth_balanceOf_runCompiled`'s existential does not expose which witness it
 built, pays this module's dispatch keccak cost a second time. A target whose
 walk is written *inside* this module pays it once. -/
@@ -267,7 +267,7 @@ theorem weth_balanceOf_gas_exact {sevm : Sevm} {pre : Devm}
 /-- **`weth`'s `balanceOf(address)` call costs exactly `balanceOfGas`, from an
 arbitrary `Prog.RunCompiled` witness.**
 
-The shape `~/plans/gas-cost-proposal.md` names: the run sits in *hypothesis*
+The shape the gas-cost proposal names: the run sits in *hypothesis*
 position rather than being constructed. Not by inversion — there is no
 `Func.RunCompiled` inversion walk in this repository, and building one is out
 of this arc's budget (correction C2) — but by **determinism**: `exec` is a
@@ -323,7 +323,7 @@ the same stack, and the accessed-key set it ends in is the one it started in.
 
 Written out rather than derived from `balanceOfGas` so that it is, like every
 cost definition in this arc, an *independently authored* sum against the fee
-schedule and the compiled `Func` (`~/plans/gas-cost.md`, D1). The check that
+schedule and the compiled `Func` (the gas-cost plan, D1). The check that
 the authoring is right is `balanceOfGasWarm_eq` below. -/
 def balanceOfGasWarm : Nat :=
   gJumpdest
@@ -411,7 +411,7 @@ theorem weth_balanceOf_warm_gas_exact {sevm : Sevm} {pre : Devm}
 /-! ## The closed form
 
 Two constants are two constants. What a caller — and what
-`~/plans/fork-repricing-proposal.md` — actually wants is **one function**:
+the fork-repricing proposal — actually wants is **one function**:
 given a selector, what does a call to it cost? That is `wethGas`.
 
 ### Why `Option Nat`

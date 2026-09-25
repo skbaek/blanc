@@ -54,8 +54,8 @@ REQUIRED_POSITIVE_THEOREMS = {
     "Blanc.CycleWriteFreeRegression.required_positive_controls",
 }
 
-# Evidence economy (scripts/GATES.md, "Evidence economy"; ledger in Plans
-# reports/evidence-economy-20260923/trim-b1-ledger.md). These two mutants are
+# Evidence economy (scripts/GATES.md, "Evidence economy"; the batch-1 trim
+# ledger is a planning record outside this repository). These two mutants are
 # the only check that would notice a production change: no pinned positive
 # evaluates `outsideWriterProgram.entrySstoreFree writer []` (the entry
 # `localSstoreFree` conjunct on its own) or a call in a branch's right arm

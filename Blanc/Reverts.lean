@@ -138,7 +138,7 @@ The mirror of `Blanc/Compiled.lean`'s `Func.exec_of_runCompiled_core`, with the
 outcome generalised.  It is a near-copy on purpose, and the copy is deliberate
 rather than reluctant: `Func.exec_of_runCompiled_core` is consumed by two
 audited theorems, and making it a corollary of this one would rewrite their
-proof terms for no gain (`~/plans/error-genre.md`, decision E5).
+proof terms for no gain (the error-genre plan, decision E5).
 
 Four of the five cases transcribe with no change at all, because none of the
 machinery they use ever mentions the outcome:

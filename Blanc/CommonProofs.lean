@@ -15084,7 +15084,7 @@ lemma of_forwardArgTail_val {e : Sevm} {s s' : Devm} {k lenWord xs}
 /-! ### The returndata, value-carried
 
 Arc B consumed `of_returnDataShorterThan` / `of_checkReturnDataHead` to learn that a
-flag was pushed; the callback boundary (`~/plans/fmint-flashloan.md`, Step 4)
+flag was pushed; the callback boundary (Step 4 of the flash-loan arc's plan)
 needs them to say what the returndata *is*.  The same projection-restoring
 move as Step 1's calldata layer, applied to `RETURNDATASIZE`, `RETURNDATACOPY`
 and `MLOAD`, then to the two `Line` fragments built from them. -/
@@ -16003,7 +16003,7 @@ lemma B256.toNat_ceil32 {len : Nat} (h : 31 + len < 2 ^ 256) :
 Devm`, so it is defined on every `Evm`.  A statement of the form "no `.ok`
 outcome exists" therefore already implies the positive claim "this call
 settles with *some* error" — the case `exec` did not take is the only one
-left.  This is `~/plans/error-genre.md`'s E-A: the generic bridge, contract-
+left.  This is the error-genre plan's E-A: the generic bridge, contract-
 agnostic and mentioning no `Func`, `Prog`, or contract of Blanc's. -/
 
 /-- **A frame with no successful outcome settles with some error.**  Cases on

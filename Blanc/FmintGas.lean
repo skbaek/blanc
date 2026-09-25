@@ -18,7 +18,7 @@ exact under `Blanc/Compiled.lean`'s compiler-shape assumption**, plus the
 schedule limit `Blanc/WethGas.lean` states: `totalSupplyGas` is written in
 Jaune's gas symbols and never in numerals, but the *theorem* is not
 schedule-parametric — `Jaune.Fork.ForkRules` carries no opcode gas schedule
-(arc plan `~/plans/gas-cost.md`, correction C1). A repricing changes the
+(the gas-cost arc plan, correction C1). A repricing changes the
 number and the proof term, never the statement. -/
 
 /-- `Devm.gasLeft` through `Devm.withOutput`, local to this module. Fmint stays
@@ -257,7 +257,7 @@ the state argument is doing work the selector argument cannot. -/
 
 /-- `totalSupplyGas` with the storage read warm: the same path and the same
 charges, `gasWarmAccess` where the cold derivation pays `gasColdSload`.
-Independently authored against the fee schedule, per `~/plans/gas-cost.md` D1,
+Independently authored against the fee schedule, per the gas-cost arc plan's D1,
 and checked by `totalSupplyGasWarm_eq`. -/
 def totalSupplyGasWarm : Nat :=
   gJumpdest
@@ -384,7 +384,7 @@ def totalSupplyGasWith (jd base vl hi mem sload : Nat) : Nat :=
 arbitrary fee schedule.** `none` where this arc has not priced the selector —
 which here includes `flashLoan`, and for that one the `none` is *permanent*: a
 flash loan's cost includes the borrower's callback, which is unbounded, so no
-closed form exists at all. See `~/plans/gas-cost.md` §1.
+closed form exists at all. See the gas-cost arc plan, §1.
 
 The `Sevm` and `Devm` arguments are earned by `totalSupply()`'s storage read,
 exactly as `Blanc/WethGas.lean`'s are by `balanceOf(address)`'s; read that

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """An independent exact-integer model of the PRORATA WETH vault.
 
-Written from the frozen statement in `~/plans/reports/prorata-erc4626-port-sf.md`
-§4 — the formulas, the capacity policy and the revert classes — and *not* from
+Written from the frozen statement in the PRORATA ERC-4626 port's specification
+(SF), §4 — the formulas, the capacity policy and the revert classes — and *not* from
 the Lean development.  That independence is the point: this module exists to
 disagree with the proofs if either side is wrong, so it must not be derived
 from them.  Nothing here is ever reflected into a Lean proposition; it produces

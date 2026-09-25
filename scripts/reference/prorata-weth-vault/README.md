@@ -3,7 +3,7 @@
 This directory is the immutable, offline authority tree for the vault's
 differential referent: OpenZeppelin Contracts `v5.7.0` at commit
 `cab19933c33c2ad1d4c7a84864a3601dddfd16f3` (MIT), selected and frozen at G1 in
-`~/plans/reports/prorata-erc4626-port-sf.md` §10.
+the PRORATA ERC-4626 port's frozen specification (SF), §10.
 
 - `inputs/source/openzeppelin-contracts/` holds the 16 upstream sources of the
   transitive closure at their upstream paths, plus the upstream `LICENSE`.
@@ -24,8 +24,8 @@ differential referent: OpenZeppelin Contracts `v5.7.0` at commit
   (SHA-256 `704877a5…`) is not vendored, but it has been executed against
   this tree. The latest run: `SOLJSON=<that artifact> scripts/check-prorata-weth-vault-reference.sh
   --recompile-wasm` at Blanc `f86e4d7`, 2026-09-19, exit 0, verdict ending
-  "selected-wasm recompile leg: ran" (raw output: Plans `54030b9c`,
-  `evidence/prorata-erc4626-closure-v1/r6-wasm/02-recompile-wasm.txt`). The
+  "selected-wasm recompile leg: ran" (raw output: kept with the planning records outside this
+  repository, commit `54030b9c`). The
   gate hash-checked the artifact before running it, and the fresh output
   carried the frozen creation/runtime template identities. Because `$SOLJSON`
   is not vendored, that leg stays optional and outside the ordered gate set;
