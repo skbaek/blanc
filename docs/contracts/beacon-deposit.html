@@ -154,7 +154,8 @@ DeploymentRoot.future_count_root      <span class="c">-- exact count, strictness
         <p class="dim" style="font-size:.93rem;margin-bottom:0">
           Every hash in the contract is a <span class="mono">STATICCALL</span> to address
           <span class="mono">0x2</span> with a 64-byte input and a 32-byte window — twelve
-          source-shaped sites, all retained. The proofs name the fork’s precompile selection and
+          source-shaped sites, all retained. The proofs take the frame’s fork to be a covered one —
+          Prague, Osaka, BPO1, or BPO2, never Amsterdam — name its precompile selection and
           the absence of a delegation designator at <span class="mono">0x2</span>, prove the
           64-byte child input, and instantiate the answer as exactly
           <span class="mono">Bytes.sha256 input</span>: environment facts, not a hash axiom. A
@@ -275,7 +276,7 @@ DeploymentRoot.future_count_root      <span class="c">-- exact count, strictness
         <p class="dim" style="margin-bottom:6px">
           Beneath it sits the model oracle:
           <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-beacon-deposit-model.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-beacon-deposit-model.sh</span></a>
-          compares 476 lines of the hash-parametric model against independently generated vectors
+          compares 360 lines of the hash-parametric model against independently generated vectors
           under both a Keccak and a SHA-256 instantiation, and its four falsifier mutants — swapped
           hash-argument order, a dropped count mix-in, a cap off-by-one, a regime substitution —
           are required to keep every proof elaborating and to be caught by the vectors anyway.

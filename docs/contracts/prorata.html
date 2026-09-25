@@ -160,9 +160,10 @@ victim_loss_bound                                  <span class="c">-- P4: one qu
           The pure accounting is carried to real executions by a realized-execution ladder: one
           message call, a transaction, a transaction list, system messages, request calls, direct
           withdrawals, a block body, a configured block, a configured history, the frozen
-          interface, and the realized P3 endpoint. Nine of the eleven rungs added no hypothesis
-          at all; the two that did are discharged by the block carrier itself, so the endpoint
-          rests on the deployment root and the chain reach alone.
+          interface, and the realized P3 endpoint. Nine of the eleven rungs added no contract
+          hypothesis; the two that did are discharged by the block carrier itself, so the endpoint
+          rests on the deployment root, the chain reach, and the schedule premise every Blanc
+          chain theorem now carries — that each fork it selects is Prague, Osaka, BPO1, or BPO2.
         </p>
       </div>
     </div>
@@ -176,7 +177,7 @@ victim_loss_bound                                  <span class="c">-- P4: one qu
         “classifications consistent with the chain” rather than “executions”. P3 is untouched by
         this — strengthened, in fact, since it is universally quantified over realizing step
         lists and <span class="mono">prorataTraceRealizes_exists_of_reachUsing</span> guarantees
-        every real reach has one. And there is no existence theorem for the attack trace:
+        every real reach over the covered forks has one. And there is no existence theorem for the attack trace:
         anti-vacuity for P4 rests on the committed fixture controls, as the frozen statement
         assigns.</p>
     </div>
@@ -199,14 +200,16 @@ victim_loss_bound                                  <span class="c">-- P4: one qu
         until the balance falls, and the source comment says so rather than promising an exit. The
         claim class is the étude’s: composed from scratch, with the adversarial part proved. The
         port that buys the 4626 claim back — the same ledger over Blanc’s exact WETH, with a joint
-        two-contract invariant — is a declared successor, not a claim.</p>
+        two-contract invariant — has since landed as its own contract:
+        <a href="prorata-weth-vault.html" style="text-decoration:underline;text-underline-offset:3px">the ERC-4626 vault</a>,
+        with its own page and its own boundary.</p>
     </div>
 
     <p class="note" style="margin-top:26px">
       Claim class, stated: P1 through P4 each hold within <span class="mono">propext</span>,
       <span class="mono">Classical.choice</span>, and <span class="mono">Quot.sound</span>; P2 and
       P3 are exact, with no tolerance parameter anywhere; every statement is tied to the exact 343
-      bytes by the compile witness; and the étude’s 50 audited theorems sit in the repository-wide
+      bytes by the compile witness; and the étude’s 51 audited theorems sit in the repository-wide
       axiom audit, with the P3 and P4 headline statements pinned character for character. The
       statement-freeze memo and the module docstrings are the authority on which claim is which.
     </p>

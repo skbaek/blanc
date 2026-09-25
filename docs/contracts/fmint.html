@@ -92,6 +92,7 @@
         never a consensus exceptional halt — with the borrower’s code universally quantified: no
         hypothesis below mentions it.</p>
 <pre><span class="k">theorem</span> <span class="d">fmint_flashLoan_settles</span> {sevm : <span class="t">Sevm</span>} {pre : <span class="t">Devm</span>}
+    (hfork : <span class="t">CoveredFork</span> sevm.benvStat.fork)
     {receiver token amount : <span class="t">B256</span>} {data : <span class="t">Bytes</span>}
     (h_code : some sevm.code.toList = <span class="t">Prog</span>.compile fmint)
     (h_sel : <span class="t">Sevm</span>.selector sevm = flashLoanSelector)
@@ -110,7 +111,8 @@
     (∃ e post, exec ⟨0, sevm, pre⟩ = .error (e, post) ∧ <span class="t">NonConsensus</span> e)</pre>
     </div>
     <p class="cap"><b>Read the premises</b> — every one is about the caller’s frame and the
-      calldata, never the borrower: the exact bytes, canonical ERC-3156 argument encoding, the
+      calldata, never the borrower: a covered fork (Prague, Osaka, BPO1, or BPO2 — never
+      Amsterdam), the exact bytes, canonical ERC-3156 argument encoding, the
       guards’ facts, a clean entry frame, and <span class="mono">flashLoanGas data.length</span> of
       gas — 4,429,379 at empty data, EIP-150’s retained sixty-fourths inside the figure. Even
       <span class="mono">h_static</span> is about the caller: a static caller halts at the mint’s
@@ -129,7 +131,7 @@ addBlockToChain_preserves_conserved      <span class="c">-- one block, from raw 
 chain_preserves_conserved                <span class="c">-- every reachable state</span>
 stateTransitionUsing_preserves_conserved <span class="c">-- …and the same three again on a</span>
 addBlockToChainUsing_preserves_conserved <span class="c">   *configured* chain, across scheduled</span>
-chainUsing_preserves_conserved           <span class="c">   fork activations</span>
+chainUsing_preserves_conserved           <span class="c">   activations of the covered forks</span>
 Stor.Conserved.of_empty                  <span class="c">-- the base case: all-zero storage conserved</span></pre>
     </div>
 
@@ -252,9 +254,10 @@ settles_with_error_of_* (+6)    <span class="c">-- error genre, 13 rows: 7 name 
         <p class="dim" style="margin-bottom:6px">
           The scope notes are part of the claim, and the module docstrings are their authority.
           The headline takes four premises — canonical calldata, a size bound, frame freshness,
-          and the selector — so non-canonical encodings are out of scope, and the registry says so.
-          Two corollaries (<span class="mono">callback_never_magic</span>,
-          <span class="mono">callback_never_returns_word</span>) quantify over the callback
+          and the selector — beside the covered-fork premise every frame theorem now carries, so
+          non-canonical encodings are out of scope, and the registry says so.
+          Two corollaries (<span class="mono">no_success_of_callback_never_magic</span>,
+          <span class="mono">no_success_of_callback_never_returns_word</span>) quantify over the callback
           <em>boundaries</em> the headline could produce, not over the receiver’s code — the
           weaker, honest form, chosen because the boundary is pinned by equations rather than
           proved unique. Every rollback claim names a frame, never a transaction. And the compile
