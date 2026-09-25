@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ERC-4626 vault — a Blanc port over WETH</title>
+<meta name="description" content="Blanc’s PRORATA WETH vault: an ERC-4626 share vault over Blanc’s own exact WETH, ported against OpenZeppelin’s ERC4626 — all 25 functions with exact compiled effects, capacity proved honest as a statement about why a call can revert, backing, exact rounding residue and no coalition profit along every configured history of the vault–WETH pair under one stated key-noncollision premise, a 25-selector differential beside the compiled reference, and nine pre-registered deviations, the priced one a runtime four times the reference’s size that is cheaper on every measured call.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fdfcf8'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="../site.css">
+<script>document.documentElement.classList.add('js');</script>
+</head>
+<body>
+
+<header id="hdr">
+  <div class="wrap nav">
+    <a class="brand" href="../index.html">
+      <span class="sq"></span><b>Blanc</b><i>/blɑ̃/ — fr. “white”</i>
+    </a>
+    <nav class="navlinks">
+      <a href="#results">Results</a>
+      <a href="#pair">The pair</a>
+      <a href="#evidence">Evidence</a>
+      <a href="#deviations">Deviations</a>
+      <a href="#deltas">Deltas</a>
+      <a href="#notes">Notes</a>
+      <a class="ghbtn sib" href="../index.html#portfolio"><span class="sqf"></span>All implementations</a>
+      <a class="ghbtn" href="https://github.com/skbaek/blanc" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+<section class="hero" style="padding-top:56px">
+  <div class="wrap">
+    <p class="crumbs"><a href="../index.html">Blanc</a><span class="sep">/</span><a href="../index.html#portfolio">implementations</a><span class="sep">/</span><span class="here">ports</span></p>
+    <div class="herogrid" style="margin-top:26px">
+      <div>
+        <h1>ERC-4626 vault.</h1>
+        <p class="lede" style="margin-top:20px">
+          A share vault over wrapped ether, ported against OpenZeppelin’s
+          <span class="mono">ERC4626</span> (v5.7.0) — all 25 functions of the standard’s surface:
+          deposit, mint, withdraw, redeem, their previews and <span class="mono">max*</span>
+          views, the converters, and a transferable share token. Its asset is not an arbitrary
+          ERC-20 but Blanc’s own exact
+          <a href="weth.html" style="text-decoration:underline;text-underline-offset:3px">WETH</a>,
+          so the vault’s headline theorems quantify over two verified contracts at once.
+        </p>
+        <p class="lede" style="margin-top:14px">
+          It is the port the
+          <a href="prorata.html" style="text-decoration:underline;text-underline-offset:3px">PRORATA étude</a>
+          declared as its successor — the same offset-priced ledger, now with a real asset, a
+          token standard, and a joint two-contract invariant. A port never claims byte identity —
+          <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md" style="text-decoration:underline;text-underline-offset:3px">PORTING.md</a>
+          governs — and this one claims no ERC-4626 certification either: the standard is the
+          source of the frozen statement, not a party to the proof.
+        </p>
+      </div>
+      <div>
+        <div class="term"><span class="p">$</span> scripts/check-prorata-weth-vault-oracle.sh
+<span class="ok">OK — vault oracle: 12 property batteries over 63 boundary states agree with the frozen statement; offset-disabled control bites</span>
+<span class="p">$</span> scripts/check-prorata-weth-vault-reference.sh
+<span class="ok">OK — PRORATA WETH vault reference: 17 sources + LICENSE at cab19933 match the frozen closure; solc 0.8.36+commit.8a079791 output identity 5042/4347 bytes; 25 selectors equal the vault's …</span></div>
+        <p class="cap"><b>Fig. 1</b> — two vault gates, verbatim (run 2026-09-25 UTC), ellipsis
+          marking elision: the independent exact-integer oracle written from the frozen statement,
+          with the control showing the virtual offset is load-bearing, and the offline identity
+          check of the vendored OpenZeppelin closure, its compiler output, and a selector table
+          equal to the vault’s own. The line continues “… native recompile leg: not requested;
+          selected-wasm recompile leg: not requested.”</p>
+        <div class="pills">
+          <span class="pill"><span class="d"></span>17,481 B runtime — vs 4,347 reference</span>
+          <span class="pill"><span class="d"></span>25/25 selectors, both sides</span>
+          <span class="pill"><span class="d"></span>9 pre-registered deviations</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ RESULTS ═══════════ -->
+<section id="results">
+  <div class="wrap">
+    <p class="eyebrow">What the port proves</p>
+    <h2 style="max-width:30ch">A vault whose books are its asset’s books.</h2>
+    <p class="lede" style="margin-top:18px">
+      An ERC-4626 vault makes one promise that matters: the shares are backed by the asset the
+      vault actually holds. Stated about a vault alone, that promise has to assume something about
+      the token. Here the token is a verified contract too, so the promise is stated about both —
+      every configured history of the pair, arbitrary other actors included — and the one premise
+      it cannot discharge is named, finite, and printed in the statement.
+    </p>
+
+    <div class="thm" style="margin-top:26px">
+      <span class="stamp">machine-checked</span>
+      <div class="head">Theorem (<span class="mono">pair_history_backed</span>, Blanc/Composition/ProrataWethVaultLedgerFaithful.lean).</div>
+      <p class="stmt">From a configured root with the exact compiled vault and the exact Blanc WETH
+        runtime installed at distinct accounts, along any configured history over the covered
+        forks whose visited WETH allowance keys owned by the vault do not collide, the state reached
+        keeps the share ledger conserved, the supply within the offset-weighted WETH row the vault
+        actually holds, and WETH itself solvent.</p>
+<pre><span class="k">theorem</span> <span class="d">pair_history_backed</span> {cfg : <span class="t">ChainConfig</span>} {deployed future : <span class="t">BlockChain</span>} {vault : <span class="t">Adr</span>}
+    (root : <span class="t">PairRoot</span> cfg deployed vault)
+    (history : <span class="t">ConfiguredHistoryTrace</span> cfg deployed future)
+    (collision : <span class="t">NoVaultVisitKeyCollision</span> (history.pairVisits vault) vault)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → <span class="t">CoveredFork</span> fork) :
+    <span class="t">PairBacked</span> vault (future.state.getStor vault) (future.state.getStor wethAccount) ∧
+      <span class="t">State.Inv</span> wethAccount future.state</pre>
+    </div>
+    <p class="cap"><b>Read the premises</b> — <span class="mono">PairBacked</span> is three facts:
+      the share ledger sums to the supply, the supply stays under its cap, and the supply is at
+      most the offset <span class="mono">O = 1000</span> times the vault’s own WETH balance row.
+      <span class="mono">State.Inv</span> is WETH’s solvency invariant from the first port. The
+      collision premise is the one thing assumed: over the WETH allowance pairs the history’s
+      frames actually visit — rolled-back frames included — no pair owned by the vault shares a
+      hashed allowance key with a different written pair. It is finite and trace-local, not a
+      global Keccak injectivity claim, and it is never discharged. Without it,
+      <span class="mono">pair_reachable_backed_or_debit</span> still proves every configured
+      continuation is backed <em>or</em> retains a positive, runtime-authorized debit of the
+      vault’s WETH row — the failure the premise rules out is named, not hidden.</p>
+
+    <div class="listing tight" style="margin:26px 0 0">
+      <div class="bar"><span>Blanc/ProrataWethVault*.lean · Blanc/Composition/ProrataWethVault*.lean</span><span class="tag">the claim, rung by rung</span></div>
+<pre>deposit_compiled_effect · …                  <span class="c">-- every successful call to each of the 25 functions:</span>
+                                             <span class="c">   quote, exact WETH child, mint/burn, return, logs</span>
+vault_message_preserves_conserved            <span class="c">-- every vault message keeps shares summing to supply</span>
+wethFrame_vaultRow_classified                <span class="c">-- every foreign WETH frame leaves the vault's row alone,</span>
+                                             <span class="c">   credits it, debits by allowance, or hands off</span>
+pair_history_backed · pair_history_stable    <span class="c">-- the theorem above, and the stable pair state</span>
+deposit_exec_revert_visits_refused_weth_child <span class="c">-- capacity: within max*, a revert ran a refused</span>
+                                             <span class="c">   WETH child (and three siblings)</span>
+maxRedeem_exec_never_reverts                 <span class="c">-- …and maxRedeem, with valid calldata, never reverts</span>
+deposit_success_within_maxDeposit            <span class="c">-- every success stays within max* (four of them)</span>
+pair_history_realized_dust_trace_exact       <span class="c">-- P3: whole-history rounding residue, as an equality</span>
+pair_history_attacker_open_context           <span class="c">-- P4: coalition no-profit with an explicit subsidy term</span>
+pair_history_victim_loss_bound               <span class="c">-- P4: the victim loses at most one quantum</span></pre>
+    </div>
+
+    <div class="grid3" style="margin-top:26px">
+      <div class="panel">
+        <span class="tick">capacity, stated about the execution</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          ERC-4626 asks that <span class="mono">max*</span> never advertise what the vault would
+          refuse. At a stable pair state, with the call’s own validity conditions, a
+          <span class="mono">deposit</span>, <span class="mono">mint</span>,
+          <span class="mono">withdraw</span>, or <span class="mono">redeem</span> within its
+          <span class="mono">max*</span> that reverts is proved to have run a refused exact-WETH
+          child — for the caller’s own WETH balance or allowance, gas, depth, or a static context.
+          That is a revert-cause theorem, not liveness: no theorem here says a call
+          within <span class="mono">max*</span> succeeds.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">three exact child forms</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          The vault reaches WETH only through <span class="mono">balanceOf</span> by
+          <span class="mono">STATICCALL</span> and <span class="mono">transferFrom</span> and
+          <span class="mono">transfer</span> by <span class="mono">CALL</span>, each to the configured
+          account, each requiring a canonical 32-byte <span class="mono">true</span>, each proved to
+          roll back cleanly when the child fails — and a whole-vault inventory shows no other
+          external call exists. A deposit quotes its shares before the WETH transfer.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">rounding, inherited and re-proved</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          Each flow is the exact floor or ceiling formula of the frozen statement — deposit never
+          overmints, mint never undercharges, withdraw never underburns, redeem never overpays —
+          with a strict one-quantum residue bound, and each preview returns the same formula of the
+          same state as the successful actual. The accounting model beneath P3 and P4 is PRORATA’s,
+          reused rather than rewritten.
+        </p>
+      </div>
+    </div>
+
+    <div class="dev" style="margin-top:30px">
+      <div class="devhead"><h3>“No attacker profit” — over the executed operations?</h3><span class="devtag">pushback</span></div>
+      <p>Over some realization faithful to the chain, and the page says so rather than smoothing
+        it. The chain-level P3 and P4 forms conclude that a realized step list exists whose
+        allowance visits are members of the history’s own visits — membership, not order or
+        multiplicity — and state the accounting for that list. Coalition input is attributed by
+        actor, not by the account a credit came from, so a third party’s WETH that a coalition
+        actor moves in is priced as coalition input; the open-context form names outside gifts as
+        an explicit subsidy instead. And the attack carrier’s inhabitant is model-level: a concrete
+        attack path with the frozen transcript’s numbers, not an executed chain history meeting the
+        attack premises — that exhibit is registered as open.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>Why not an arbitrary ERC-20?</h3><span class="devtag">pushback</span></div>
+      <p>Because a vault’s backing is a fact about its asset, and an arbitrary token’s code is
+        exactly what a theorem cannot vouch for. Pairing the vault with a verified WETH is what
+        lets the backing theorem conclude something about the asset’s real state — WETH’s solvency
+        included — instead of assuming a well-behaved token. The price is scope: no theorem here is
+        about WETH9, a production vault address, the OpenZeppelin source, or any other asset, and
+        both contracts are installed directly at configured accounts — no
+        <span class="mono">CREATE</span> transaction is covered.</p>
+    </div>
+
+    <p class="note" style="margin-top:26px">
+      Claim class, stated: 176 audited theorems — 171 in the vault and pair namespaces and five
+      generic reverting-walk lemmas they introduced — sit in the repository-wide axiom audit, and
+      63 statements are pinned character for character. Every frame theorem takes a covered fork
+      and every chain headline a schedule of covered forks — Prague, Osaka, BPO1, BPO2; the mainnet
+      schedule is proved to satisfy it, and no Amsterdam frame or block is covered. Compiled-effect
+      theorems are partial correctness: they describe every successful run. The
+      <a href="https://github.com/skbaek/blanc/blob/main/docs/PRORATA_WETH_VAULT_CLAIM_MAP.md" style="text-decoration:underline;text-underline-offset:3px">theorem-to-claim map</a>
+      is the authority on which sentence each theorem carries, which only finite evidence
+      carries, and which is not carried at all.
+    </p>
+  </div>
+</section>
+
+<!-- ═══════════ THE PAIR ═══════════ -->
+<section id="pair">
+  <div class="wrap">
+    <p class="eyebrow">Composition — two verified contracts at once</p>
+    <h2 style="max-width:30ch">The vault and its asset, in one stratum.</h2>
+    <p class="lede" style="margin-top:18px">
+      The vault family proves what its own bytes do; everything that needs WETH’s bytes too lives
+      in the composition stratum — 34 modules strictly downstream of both families, which neither
+      imports. <span class="mono">PairRoot</span> installs the compiled vault and the inherited
+      WETH runtime at distinct, non-precompile accounts with empty storage, and every chain-level
+      headline starts there.
+    </p>
+    <div class="grid2" style="margin-top:26px;align-items:start">
+      <div class="panel">
+        <span class="tick">who may touch the vault’s WETH</span>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          <span class="mono">wethFrame_vaultRow_classified</span> is the history’s rely condition:
+          every exact WETH frame entered by a caller other than the vault either leaves the vault’s
+          row alone, credits it from another account, debits it through a runtime-authorized
+          allowance, or hands off to a <span class="mono">withdraw</span> callback — and the
+          classification is proved sound, complete, and total. A donation is therefore a credit
+          arm, accounted rather than minted against; the whole-history residue equality carries
+          credits as their own term.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">what the WETH side contributes</span>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          WETH’s exact credit is a bare addition modulo 2<sup>256</sup>. At the one boundary where
+          that matters — a nonzero deposit into a vault with no shares whose assets sit at the word ceiling — the vault
+          executes where the reference reverts, and the deviation registry records it. That world
+          violates WETH’s solvency invariant, which the pair theorem proves at every configured pair
+          state under the collision premise: the row exercises arithmetic, not a reachable history.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ EVIDENCE ═══════════ -->
+<section id="evidence">
+  <div class="wrap">
+    <p class="eyebrow">How we know it is ERC-4626</p>
+    <h2 style="max-width:30ch">A frozen statement, a vendored reference, and an oracle.</h2>
+    <p class="lede" style="margin-top:18px">
+      The standard (ERC-4626, Final) is the source of the frozen statement; OpenZeppelin v5.7.0 is
+      the differential referent, vendored and compiled, never trusted. Finite evidence carries
+      conformance; the theorems carry the frozen statement. Neither is asked to do the other’s job.
+    </p>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">The reference — which ERC4626, exactly</span><span class="foldsub">17 sources + LICENSE · frozen compiler output · 25 selectors · 7 corruptions</span></summary>
+      <div class="foldbody">
+        <p class="dim" style="margin-bottom:6px">
+          <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-prorata-weth-vault-reference.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-prorata-weth-vault-reference.sh</span></a>
+          verifies offline that the vendored closure is exactly the frozen 17-source set, by
+          per-file SHA-256 and Git blob, with the upstream MIT license; that the committed
+          standard-JSON input is built from those bytes; that the committed
+          <span class="mono">solc 0.8.36</span> output carries the frozen creation and runtime
+          identities; and that the reference’s method identifiers are exactly the vault’s 25
+          signatures, with no <span class="mono">permit</span> or ERC-165 on either side. Its
+          self-test corrupts a source byte, the lock, the bytecode, tree membership both ways, the
+          optimizer settings, and the vault’s own selector table; each must fail with its own
+          diagnostic.
+        </p>
+      </div>
+    </details>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">The oracle — arithmetic, falsified first</span><span class="foldsub">12 property batteries · 63 boundary states · 8 perturbations caught</span></summary>
+      <div class="foldbody">
+        <p class="dim" style="margin-bottom:6px">
+          An independent exact-integer model written from the frozen statement checks the
+          representability identity, the tightness of both capacity bounds, the four rounding
+          directions, round-trip non-profitability, ledger conservation over randomized
+          transcripts, and donation classification, over 63 boundary states, and regenerates the
+          committed golden vectors byte for byte. With the offset disabled, the control must bite.
+          Its frozen first-depositor transcript is the attack the theorems price: an attacker
+          putting in 1,000,001 wei takes out 500,125, and the victim of a 1,000,000-wei deposit
+          loses 249.
+        </p>
+      </div>
+    </details>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">Differential evidence — the sanity layer</span><span class="foldsub">25 selectors × 2 compiled sides · 31 check groups per side · 6 gas rows</span></summary>
+      <div class="foldbody">
+        <p class="dim">
+          <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-prorata-weth-vault-differential.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-prorata-weth-vault-differential.sh</span></a>
+          executes the committed vault runtime and the constructor-patched OpenZeppelin reference —
+          deployed from the locked creation input against Blanc’s WETH — through Jaune’s
+          <span class="mono">t8n</span> at BPO2, projects each side’s storage through its own
+          layout, and compares state, status, exact logs, and return data against the oracle over one
+          boundary matrix: empty, nonempty, and donated states; all 25 selectors on both sides;
+          every rounding direction; the guards and malformed calldata; rollback for every mutation;
+          the allowance boundary; <span class="mono">max*</span> attainability near the cap; the
+          registered deviations; and the frozen first-depositor transcript.
+        </p>
+        <p class="dim" style="margin-bottom:6px">
+          Where a theorem already covers a family, the differential no longer re-runs it: the gate
+          keeps what only execution can show — fidelity at the boundaries, agreement with the
+          compiled reference, reference identity, and measurements — and its self-test shows its
+          kept controls bite, eleven mutants each failing at its own named diagnostic.
+        </p>
+      </div>
+    </details>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">The static boundary — what the code may call</span><span class="foldsub">3 exact child forms · whole-source call closure · 7 optional Lean mutants</span></summary>
+      <div class="foldbody">
+        <p class="dim" style="margin-bottom:6px">
+          Two further gates bind the artifact and its boundary: one pins the routing surface, the
+          constants, the flat storage-key scheme, the auxiliary layout, the exact runtime digest,
+          the EIP-170 bound, and the kernel compile equality; the other pins the exact WETH account
+          and code, every <span class="mono">CALL</span>/<span class="mono">STATICCALL</span>
+          occurrence, the success and rollback projections, the canonical-true return checks, and
+          the whole-vault exclusion of hidden external calls — with seven Lean mutants available to
+          show the boundary headlines bite.
+        </p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ═══════════ DEVIATIONS ═══════════ -->
+<section id="deviations">
+  <div class="wrap">
+    <p class="eyebrow">Deviations</p>
+    <h2 style="max-width:28ch">Nine, pre-registered — and nothing else permitted.</h2>
+    <p class="lede" style="margin-top:18px">
+      <a href="https://github.com/skbaek/blanc/blob/main/PRORATA_WETH_VAULT_DEVIATIONS.md" style="text-decoration:underline;text-underline-offset:3px">PRORATA_WETH_VAULT_DEVIATIONS.md</a>
+      records nine intended differences, each decided when the statement was frozen and each now
+      carrying its evidence. Anything not listed is not a permitted difference: an unexpected
+      mismatch fails the differential rather than becoming a tenth row.
+    </p>
+
+    <div class="dev">
+      <div class="devhead"><h3>Configured asset, empty reverts, honest zero-receiver capacity</h3><span class="devtag">rows 1–3</span></div>
+      <p>The asset is a configured constant installed with the runtime rather than a
+        constructor-set immutable, so the claim stays about an installed runtime. Every revert
+        carries empty data where the reference returns custom errors. And
+        <span class="mono">maxDeposit</span>/<span class="mono">maxMint</span> report zero for the
+        zero receiver, matching the call that would revert, where the reference ignores the
+        receiver.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>A flat allowance key, guarded; a capped supply; an exact denominator</h3><span class="devtag">rows 4–6</span></div>
+      <p>Allowances live at a flat hashed key with an explicit guard refusing address-shaped or
+        reserved keys — the layout that makes conservation statable, with the guard a proved
+        conclusion of the compiled <span class="mono">approve</span> and
+        <span class="mono">transferFrom</span> effects. The supply is capped at
+        <span class="mono">U − O</span>, keeping <span class="mono">S + O</span> a nonzero word. And
+        the converters use an exact 257-bit <span class="mono">A + 1</span> denominator, so they
+        still quote at the word ceiling where the reference’s checked addition reverts.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>Canonical returns, no permit, and the size</h3><span class="devtag">rows 7–9</span></div>
+      <p>The vault requires WETH’s canonical 32-byte <span class="mono">true</span> where
+        <span class="mono">SafeERC20</span> also accepts empty returndata. It exposes no
+        EIP-2612 or ERC-165, and neither does the reference’s ABI. And the runtime is
+        independently authored at 17,481 bytes against the reference’s 4,347 — four times larger,
+        the priced cost of inlined full-width arithmetic and per-path guards, beside the gas that
+        design saves on every measured call.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ DELTAS ═══════════ -->
+<section id="deltas">
+  <div class="wrap">
+    <p class="eyebrow">Deltas</p>
+    <h2 style="max-width:26ch">Four times the bytes, less gas on every call measured.</h2>
+    <div class="grid2" style="margin-top:30px;align-items:start">
+      <div class="panel">
+        <span class="tick">measured — committed measurements, same WETH, Jaune at BPO2</span>
+        <div class="tablewrap"><table style="min-width:0">
+          <thead><tr><th>quantity</th><th class="num">Blanc</th><th class="num">reference</th></tr></thead>
+          <tbody>
+            <tr><td>runtime size</td><td class="num">17,481 B</td><td class="num">4,347 B</td></tr>
+            <tr><td>deposit, empty vault</td><td class="num">107,986</td><td class="num">110,152</td></tr>
+            <tr><td>deposit, donated vault</td><td class="num">56,662</td><td class="num">58,828</td></tr>
+            <tr><td>mint</td><td class="num">56,726</td><td class="num">58,926</td></tr>
+            <tr><td>redeem</td><td class="num">52,276</td><td class="num">54,942</td></tr>
+            <tr><td>withdraw</td><td class="num">52,337</td><td class="num">56,969</td></tr>
+            <tr><td>share transfer</td><td class="num">50,797</td><td class="num">51,587</td></tr>
+          </tbody>
+        </table></div>
+        <p class="cap" style="margin-top:12px">Each gas row is the receipt’s cumulative gas of one
+          transaction on Jaune’s <span class="mono">t8n</span> at BPO2, both sides against the same
+          Blanc WETH; sizes are the installed runtimes. The differential regenerates the file on
+          every run and fails on drift.</p>
+      </div>
+      <div class="panel">
+        <span class="tick">what the numbers are not</span>
+        <p class="dim" style="font-size:.94rem">
+          Six named transactions, not a workload: no average or aggregate is offered, and nothing
+          here is deployed-chain gas. The size is the registry’s ninth row, published as a cost,
+          and 17,481 bytes remains inside EIP-170 with room to spare.
+        </p>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          There is no deployed original to measure against: the reference is OpenZeppelin’s
+          contract compiled by the pinned <span class="mono">solc</span> and patched with the same
+          asset, which makes the comparison fair and makes it no claim about any vault on chain.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ NOTES ═══════════ -->
+<section id="notes">
+  <div class="wrap">
+    <p class="eyebrow">Notes</p>
+    <h2 style="max-width:24ch">What the build taught.</h2>
+    <div class="grid2" style="margin-top:30px;align-items:start">
+      <div class="panel">
+        <span class="tick">an honest map beats a longer list</span>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          The vault’s public claim was written sentence by sentence against the theorems, and the
+          map that resulted has three tables, not one: sentences a theorem carries, sentences only
+          finite evidence carries — conformance with OpenZeppelin, and <span class="mono">max*</span>
+          attainability as an actual successful call — and sentences not carried at all. A capacity
+          sentence that first read as liveness was rewritten into the revert-cause statement the
+          proofs actually give.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">an étude paying out</span>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          PRORATA was built to prove one hard thing about ratio pricing with no token standard in
+          the way. The vault spent that investment: its dust and attack headlines are the étude’s
+          accounting model instantiated over two contracts, with mint and withdraw made accounting
+          steps of the same model. What the vault added in turn — the generic reverting-walk
+          vocabulary its revert-cause theorems are stated in — sits in the shared layer, where the
+          next contract can find it.
+        </p>
+      </div>
+    </div>
+    <p class="note" style="margin-top:26px">
+      Boundary, restated: every theorem is about the exact compiled vault and the exact Blanc WETH
+      installed at configured accounts — never WETH9, a production address, the OpenZeppelin
+      source, or another asset; no <span class="mono">CREATE</span> is covered. The chain-level
+      headlines assume the finite allowance-key noncollision premise and never discharge it; P3 and
+      P4 hold for a realization faithful to the chain, not for the executed operations as such; the
+      attack inhabitant is model-level; there is no liveness or gas-sufficiency claim, no Amsterdam
+      coverage, and no ERC-4626 certification. The claim map and the registry are the authority.
+    </p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap footgrid">
+    <div style="max-width:46ch">
+      <div class="brand" style="margin-bottom:10px"><span class="sq"></span><b>Blanc</b><i>&nbsp;— the ERC-4626 vault over WETH</i></div>
+      <p class="dimmer" style="font-size:.85rem;margin:0">
+        Figures on this page trace to committed theorems, the claim map, registry rows,
+        measurements, and gate summaries; where evidence ends, the page says so.
+      </p>
+    </div>
+    <div class="footlinks">
+      <a href="../index.html#portfolio">all implementations →</a>
+      <a href="prorata.html">PRORATA, the étude it builds on →</a>
+      <a href="weth.html">WETH, its asset →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/docs/PRORATA_WETH_VAULT_CLAIM_MAP.md" target="_blank" rel="noopener">claim map →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/PRORATA_WETH_VAULT_DEVIATIONS.md" target="_blank" rel="noopener">deviation registry →</a>
+      <a href="https://github.com/skbaek/blanc/issues" target="_blank" rel="noopener">found an overclaim? →</a>
+    </div>
+  </div>
+</footer>
+
+<script src="../site.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRIP — a Blanc étude in accrual</title>
+<meta name="description" content="Blanc’s DRIP: a 1,762-byte ETH-native savings ledger built as the third étude — a per-second accrual index compounded by a Maker-shaped fixed-point rpow with a certified two-sided error band, no stale index after any successful drip or join, exact books and a principal-plus-accrual entitlement bound over every configured history’s actual calls, a kernel-checked stack-safety certificate over the exact runtime, 91 committed BPO2 fixtures, and an independent exact-integer oracle.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fdfcf8'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="../site.css">
+<script>document.documentElement.classList.add('js');</script>
+</head>
+<body>
+
+<header id="hdr">
+  <div class="wrap nav">
+    <a class="brand" href="../index.html">
+      <span class="sq"></span><b>Blanc</b><i>/blɑ̃/ — fr. “white”</i>
+    </a>
+    <nav class="navlinks">
+      <a href="#results">Results</a>
+      <a href="#evidence">Evidence</a>
+      <a href="#deviations">Deviations</a>
+      <a href="#deltas">Deltas</a>
+      <a href="#notes">Notes</a>
+      <a class="ghbtn sib" href="../index.html#portfolio"><span class="sqf"></span>All implementations</a>
+      <a class="ghbtn" href="https://github.com/skbaek/blanc" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+<section class="hero" style="padding-top:56px">
+  <div class="wrap">
+    <p class="crumbs"><a href="../index.html">Blanc</a><span class="sep">/</span><a href="../index.html#portfolio">implementations</a><span class="sep">/</span><span class="here">études</span></p>
+    <div class="herogrid" style="margin-top:26px">
+      <div>
+        <h1>DRIP.</h1>
+        <p class="lede" style="margin-top:20px">
+          The third étude: an ETH-native savings ledger pared down to the one hard thing a
+          savings rate adds — compounding. A per-second accrual index <span class="mono">chi</span>
+          grows by a fixed rate raised to the elapsed seconds, computed in 27-decimal fixed point
+          by a Maker-shaped <span class="mono">rpow</span>, so every update rounds, and the rounding
+          compounds. Its headlines: the rounding is certified to a two-sided band, a successful
+          update never leaves a stale index, and the books of every configured history balance
+          exactly, term by term, over the history’s own calls.
+        </p>
+        <p class="lede" style="margin-top:14px">
+          It models no deployed contract and claims no token standard and no Maker equivalence. Five
+          endpoints — <span class="mono">join</span>, the one payable entry, mints units against
+          the ether sent; <span class="mono">exit</span> burns units and pays out after its books
+          are written; <span class="mono">drip</span> advances the index; and two conversion views —
+          no events, no owner, no rate setter. The fixed rate compounds to 5% over a 365-day year,
+          less rounding in the twentieth decimal — a figure the kernel checks rather than the prose
+          asserting it.
+        </p>
+      </div>
+      <div>
+        <div class="term"><span class="p">$</span> scripts/check-drip-stack-certificate.sh
+<span class="ok">OK — DRIP stack certificate data: reusable producer controls, exact runtime-derived data/proof text and deterministic corruption controls passed</span>
+<span class="p">$</span> scripts/check-claims.sh
+<span class="ok">OK — claim statements: 460 definitions/statements and exact
+     record constructors pinned by Lean</span></div>
+        <p class="cap"><b>Fig. 1</b> — the stack-certificate provenance gate, verbatim (run
+          2026-09-25 UTC): the finite 735-row table over the exact runtime, regenerated and
+          byte-compared, whose soundness is a kernel-checked theorem rather than this script; and
+          the repository-wide statement-pin gate, shown in its verdict wording at the current pin
+          count, which pins DRIP’s twelve headline statements among the 460.</p>
+        <div class="pills">
+          <span class="pill"><span class="d"></span>1,762 B runtime</span>
+          <span class="pill"><span class="d"></span>certified rpow band</span>
+          <span class="pill"><span class="d"></span>91 fixtures / 137 transactions</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ RESULTS ═══════════ -->
+<section id="results">
+  <div class="wrap">
+    <p class="eyebrow">What the étude proves</p>
+    <h2 style="max-width:30ch">Compounding, with the books closed.</h2>
+    <p class="lede" style="margin-top:18px">
+      Every contract that pays a rate over time multiplies an index by a fixed-point power, and
+      every such power rounds — per multiplication, compounding with the exponent. The étude proves
+      four rungs, each stated over the exact compiled bytes or the configured histories that run
+      them: the one-call update and its certified rounding band; exact accounting over the
+      history’s actual calls; no stale index and a bounded entitlement; and a clock-paired
+      invariant with a monotone index.
+    </p>
+
+    <div class="thm" style="margin-top:26px">
+      <span class="stamp">machine-checked</span>
+      <div class="head">Theorem (<span class="mono">history_transcript_entitlement</span>, Blanc/DripTranscriptHistory.lean).</div>
+      <p class="stmt">From DRIP’s deployment root, along any configured history over the covered
+        forks, any coalition’s actual cumulative exit receipts never exceed its actual principal
+        plus the floor of its actual realized accrual — every term a fold of the history’s own
+        DRIP calls, not of a reconstructed or idealized trace.</p>
+<pre><span class="k">theorem</span> <span class="d">history_transcript_entitlement</span>
+    (root : <span class="t">DeploymentRoot</span> cfg base deployed ca) (coalition : <span class="t">Finset</span> <span class="t">Adr</span>)
+    (history : <span class="t">ExecutionTrace.ConfiguredHistoryTrace</span> cfg deployed future)
+    (hcov : ∀ timestamp fork,
+      cfg.forkAt timestamp = .ok fork → <span class="t">CoveredFork</span> fork) :
+    (transcriptTally scale.toNat freshNat scale.toNat 0
+        (history.dripCalls coalition ca)).paid ≤
+      (transcriptTally scale.toNat freshNat scale.toNat 0
+          (history.dripCalls coalition ca)).joined +
+        (transcriptTally scale.toNat freshNat scale.toNat 0
+          (history.dripCalls coalition ca)).accrual / scale.toNat</pre>
+    </div>
+    <p class="cap"><b>Read the quantifiers</b> — the coalition is any finite set of accounts, and
+      the history is every configured chain history from the deployment root: arbitrary blocks,
+      arbitrary other contracts, arbitrary interleavings of joins, drips, and exits.
+      <span class="mono">history.dripCalls</span> projects the history’s own calls to DRIP, and
+      <span class="mono">dripTraceRealizes_transcript</span> proves a realization exists whose call
+      steps are exactly that projection — so the tally is of what the chain did. The deployment
+      root is derived from a canonical creation step, not assumed, and it records that the
+      deployment ran at a covered fork. <span class="mono">cfg</span>,
+      <span class="mono">base</span>, <span class="mono">deployed</span>,
+      <span class="mono">ca</span>, and <span class="mono">future</span> are the module’s section
+      variables.</p>
+
+    <div class="listing tight" style="margin:26px 0 0">
+      <div class="bar"><span>Blanc/Drip*.lean</span><span class="tag">R1–R4, all twelve statements pinned</span></div>
+<pre>drip_compiled_drip                    <span class="c">-- R1: one compiled drip() sets chi to chi·rpow(elapsed)/S</span>
+                                      <span class="c">   and stamps the clock to the block time</span>
+drip_rpow_certified_band              <span class="c">-- R1: the deployed rpow tree's two-sided error band</span>
+drip_rpow_exact_telescope             <span class="c">-- R1: the exact rounding identity behind it</span>
+dripTraceRealizes_transcript          <span class="c">-- R2: every history realized by its own DRIP calls</span>
+history_transcript_accounting_exact   <span class="c">-- R2: units·chi + residues + S·paid = accrual + S·joined</span>
+history_transcript_balance_exact      <span class="c">-- R2: balance + all paid = all joined + outside credit</span>
+no_stale_index_success_callback_free  <span class="c">-- R3: a successful drip() or join() leaves no stale index</span>
+no_stale_index_settlement_exit        <span class="c">-- R3: …and exit() at its settlement boundary</span>
+history_transcript_entitlement        <span class="c">-- R3: the theorem above</span>
+realized_segment_certified            <span class="c">-- R3: same total elapsed time, certified drift apart</span>
+history_clockInv                      <span class="c">-- R4: the clock-paired invariant at the head timestamp</span>
+history_chi_rho_mono                  <span class="c">-- R4: index and clock never fall</span></pre>
+    </div>
+
+    <div class="grid3" style="margin-top:26px">
+      <div class="panel">
+        <span class="tick">rounding, certified not bounded loosely</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          <span class="mono">rpow</span> squares and multiplies by the rate, rounding half-up at
+          every step. The étude does not bound that error by a guess: an exact additive telescope
+          accounts for every rounding at every node of the deployed computation tree, and the
+          certified band follows from it — deliberately not a minimality statement. The runtime
+          performs at most 62 rounded multiplications, and one year’s factor is a kernel-decided
+          equation.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">checks, effects, then the payout</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          <span class="mono">exit</span> refreshes the index, writes the caller’s row and the total,
+          and only then sends ether to the caller with all remaining gas — reverting the whole call
+          if the send fails. The payout the call accepts is stated exactly, and a reentrant receiver
+          is inside the history theorems’ quantifier rather than excluded by a premise.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">a stack certificate, kernel-checked</span>
+        <p class="dim" style="font-size:.93rem;margin-bottom:0">
+          A finite 735-row table records the stack height at every node of the exact runtime’s
+          same-frame paths. <span class="mono">table_checked</span> shows the runtime and the table
+          agree, and <span class="mono">actual_entry_safe</span> that every node reachable from entry
+          stays within eight stack slots and steps safely — so stack depth becomes a checked fact
+          about the bytes rather than a proof obligation at every endpoint.
+        </p>
+      </div>
+    </div>
+
+    <div class="dev" style="margin-top:30px">
+      <div class="devhead"><h3>Is this the Maker savings rate, verified?</h3><span class="devtag">pushback</span></div>
+      <p>No. The <span class="mono">rpow</span> and the <span class="mono">chi</span>/<span class="mono">Pie</span>
+        vocabulary are Maker-shaped, but nothing here claims equivalence with Maker’s contracts or any deployed bytes. DRIP is composed from
+        scratch, ETH-native, with no rate governance at all: the claim class is the étude’s — the
+        adversarial arithmetic proved, the rest declined.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>Does the entitlement bound mean every holder can exit?</h3><span class="devtag">pushback</span></div>
+      <p>No, and it is stated the other way round: it bounds what a coalition can take out, not what
+        it can get. There is no solvency, liveness, or gas-sufficiency claim — accrual is paid from
+        whatever ether the contract holds, so an underfunded <span class="mono">exit</span> may
+        revert. The history theorems describe successful calls; the realization carrier is not
+        claimed to reject every fictitious ledger, and no ledger uniqueness is claimed.</p>
+    </div>
+
+    <p class="note" style="margin-top:26px">
+      Claim class, stated: the étude’s 63 audited theorems sit in the repository-wide axiom
+      audit — 54 within <span class="mono">propext</span>, <span class="mono">Classical.choice</span>,
+      and <span class="mono">Quot.sound</span>, nine within smaller sets — and its twelve R1–R4
+      headlines are pinned character for character. Chain-level headlines take a schedule of
+      covered forks — Prague, Osaka, BPO1, BPO2 — and the exit settlement theorem a covered frame
+      fork; no Amsterdam frame or block is covered.
+    </p>
+  </div>
+</section>
+
+<!-- ═══════════ EVIDENCE ═══════════ -->
+<section id="evidence">
+  <div class="wrap">
+    <p class="eyebrow">How we know it does what it claims</p>
+    <h2 style="max-width:28ch">An oracle, the real arithmetic, and a replay.</h2>
+    <p class="lede" style="margin-top:18px">
+      An étude has no deployed original to run beside, so the evidence was built to falsify the
+      frozen statement itself: an exact-integer oracle, the compiled arithmetic checked against it
+      row by row, and a fixture population replayed through Jaune — each finite, none a theorem, and
+      none asked to stand in for one.
+    </p>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">The oracle — the frozen statement, executable</span><span class="foldsub">38 frozen obligations · regenerated vectors · 12 corruptions caught</span></summary>
+      <div class="foldbody">
+        <p class="dim" style="margin-bottom:6px">
+          An independent Python model, with exact integers for the mathematics and explicit helpers
+          reproducing every 256-bit multiplication and addition guard of the frozen runtime, carries
+          the statement’s 38 scenario obligations — checks-effects-interactions and rollback
+          included. Its committed vectors are regenerated byte for byte on every run, and its own
+          boundary record says what it is: a falsifier and fixture oracle, not proof evidence.
+        </p>
+      </div>
+    </details>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">The arithmetic, and the replay — the sanity layer</span><span class="foldsub">39 arithmetic rows · 91 BPO2 fixtures · 137 transactions</span></summary>
+      <div class="foldbody">
+        <p class="dim" style="margin-bottom:6px">
+          <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-drip.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-drip.sh</span></a>
+          compares 39 rows of the real Lean arithmetic with independently computed Python integers,
+          then replays every committed fixture through the pinned Jaune at BPO2: 91 fixtures and 137
+          transactions spanning deployment, first and later joins, drips from the same second to
+          the maximum elapsed window, full and partial exits, and every guard — each block’s receipts,
+          blooms, and trie roots derived and bound to its decoded header before replay. Finite
+          arithmetic comparison is not the deployed-loop theorem, and the gate says so.
+        </p>
+      </div>
+    </details>
+
+    <details class="fold">
+      <summary><span class="twist">▸</span><span class="foldtitle">Proven functional specifications — the quantified layer</span><span class="foldsub">R1–R4 · a derived deployment root · a concrete history</span></summary>
+      <div class="foldbody">
+        <p class="dim">
+          The four rungs are listed in the
+          <a href="#results" style="text-decoration:underline;text-underline-offset:3px">results section</a>.
+          Beneath them, <span class="mono">canonicalDeploymentStep_establishes_root</span> derives
+          the deployment root from a canonical creation step, and
+          <span class="mono">configuredHistory_has_head_timestamp</span> shows every configured history
+          from a root has a head block, so the clock invariant’s antecedent is never vacuous.
+        </p>
+        <p class="dim" style="margin-bottom:6px">
+          The carrier is also inhabited by an actual chain:
+          <span class="mono">concreteHistory_realizes</span> exhibits a concrete history — a join, a
+          three-second drip, and an exit — through real blocks, and the kernel proves, among its
+          facts, the join transaction’s receipt at 76,144 gas.
+        </p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ═══════════ DEVIATIONS ═══════════ -->
+<section id="deviations">
+  <div class="wrap">
+    <p class="eyebrow">Deviations</p>
+    <h2 style="max-width:28ch">No reference, so no registry — and what the freeze did not get.</h2>
+    <p class="lede" style="margin-top:18px">
+      DRIP is referenced against nothing deployed; its authority is its own frozen statement.
+      Where the tree answers that statement differently, the source
+      says so in its docstrings, and two of the answers are theorems.
+    </p>
+
+    <div class="dev">
+      <div class="devhead"><h3>Exit freshness, at the settlement boundary</h3><span class="devtag">deviation from the freeze — scope</span></div>
+      <p>The freeze asked for one no-stale-index statement over all three mutating selectors.
+        <span class="mono">exit</span> writes its books before the payout call, so its post-state
+        is the resumed child’s, and carrying the clock equation through that child needs a
+        block-indexed frame ladder the shared layer does not yet have. So
+        <span class="mono">drip</span> and <span class="mono">join</span> get the post-state
+        statement, and <span class="mono">exit</span> gets the same two equations at its settlement
+        boundary, with the accepted payout the only remaining distance.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>A drafted witness that no chain can realize</h3><span class="devtag">deviation from the freeze — proved</span></div>
+      <p>The design drafted its concrete history’s call kinds with one second of elapsed time in
+        total, while the witness chain moves the clock by five. Rather than bend the carrier,
+        <span class="mono">concreteHistory_not_draftedKinds</span> proves no realization has the
+        drafted kinds, and the realized history carries the true ones.</p>
+    </div>
+    <div class="dev">
+      <div class="devhead"><h3>A band, not an optimum</h3><span class="devtag">not claimed</span></div>
+      <p>The certified band bounds the deployed tree’s rounding in both directions; it is not a
+        claim that no tighter band exists, rpow’s monotonicity in the exponent is not claimed, and
+        the segmentation drift bound is certified, not minimal.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ DELTAS ═══════════ -->
+<section id="deltas">
+  <div class="wrap">
+    <p class="eyebrow">Deltas</p>
+    <h2 style="max-width:26ch">No original, so no delta — only the measured costs.</h2>
+    <div class="grid2" style="margin-top:30px;align-items:start">
+      <div class="panel">
+        <span class="tick">measured — committed BPO2 fixtures, whole-transaction gas</span>
+        <div class="tablewrap"><table style="min-width:0">
+          <thead><tr><th>quantity</th><th class="num">value</th><th>status</th></tr></thead>
+          <tbody>
+            <tr><td>runtime size</td><td class="num">1,762 B</td><td class="dim">committed literal; kernel-checked length</td></tr>
+            <tr><td>creation code</td><td class="num">2,001 B</td><td class="dim">committed literal; kernel-checked length</td></tr>
+            <tr><td>deployment</td><td class="num">479,909</td><td class="dim">receipt gas, genesis deployment fixture</td></tr>
+            <tr><td><span class="mono">join</span>, first</td><td class="num">70,465</td><td class="dim">receipt gas</td></tr>
+            <tr><td><span class="mono">drip</span>, same second</td><td class="num">26,076</td><td class="dim">receipt gas</td></tr>
+            <tr><td><span class="mono">drip</span>, one year</td><td class="num">37,880</td><td class="dim">receipt gas; the rpow loop at 31,536,000 s</td></tr>
+            <tr><td><span class="mono">exit</span>, full</td><td class="num">34,591</td><td class="dim">receipt gas</td></tr>
+          </tbody>
+        </table></div>
+        <p class="cap" style="margin-top:12px">Each row is one committed fixture’s receipt through
+          the pinned current-mainnet target at BPO2, intrinsic gas included.</p>
+      </div>
+      <div class="panel">
+        <span class="tick">what an étude forgoes</span>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          There is no deployed original and no committed compiler shadow, so there is no delta to
+          publish; the figures are costs, not wins. They are Jaune and pinned-target costs, not
+          deployed gas, and no aggregate or workload weighting is offered.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ NOTES ═══════════ -->
+<section id="notes">
+  <div class="wrap">
+    <p class="eyebrow">Notes</p>
+    <h2 style="max-width:24ch">What the étude taught.</h2>
+    <div class="grid2" style="margin-top:30px;align-items:start">
+      <div class="panel">
+        <span class="tick">state the books over what happened</span>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          PRORATA’s attack theorems quantify over classifications consistent with the chain. DRIP
+          went one step further: its accounting identities are folds of the history’s own DRIP
+          calls, and a separate theorem proves those calls are exactly a realization’s steps. What
+          is tallied is what the chain executed — with the honest residue that the carrier may still
+          accept ledgers no chain produced.
+        </p>
+      </div>
+      <div class="panel">
+        <span class="tick">what the étude paid forward</span>
+        <p class="dim" style="font-size:.94rem;margin-bottom:0">
+          The finite stack certificate — an abstract checker, its soundness theorem, and a reusable
+          table producer — was built for DRIP and first reused by the proxy pair. Settled-frame,
+          observed-accounting, and frame-time carriers, a prefix-transport spine, and five generic
+          execution-identification lemmas were hoisted from its proofs into the shared layer, and
+          Jaune’s <span class="mono">rpow</span> layer is the arithmetic it stands on.
+        </p>
+      </div>
+    </div>
+    <p class="note" style="margin-top:26px">
+      Honesty budget, restated: exit freshness is proved at the settlement boundary, not the
+      post-state; the band is certified, not minimal; the realization carrier is not claimed to
+      reject fictitious ledgers; no solvency, liveness, gas-sufficiency, token-standard, or Maker
+      equivalence claim is made; and no Amsterdam frame or block is covered. The module docstrings
+      are the authority on each.
+    </p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap footgrid">
+    <div style="max-width:46ch">
+      <div class="brand" style="margin-bottom:10px"><span class="sq"></span><b>Blanc</b><i>&nbsp;— DRIP, the accrual étude</i></div>
+      <p class="dimmer" style="font-size:.85rem;margin:0">
+        Figures on this page trace to committed theorems, fixtures, the oracle, and gate
+        summaries; where evidence ends, the page says so.
+      </p>
+    </div>
+    <div class="footlinks">
+      <a href="../index.html#portfolio">all implementations →</a>
+      <a href="prorata.html">PRORATA, the second étude →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/Blanc/Drip.lean" target="_blank" rel="noopener">the source →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/Blanc/DripTranscriptHistory.lean" target="_blank" rel="noopener">the history headlines →</a>
+      <a href="https://github.com/skbaek/blanc/tree/main/scripts/fixtures/drip" target="_blank" rel="noopener">fixtures →</a>
+      <a href="https://github.com/skbaek/blanc/issues" target="_blank" rel="noopener">found an overclaim? →</a>
+    </div>
+  </div>
+</footer>
+
+<script src="../site.js"></script>
+
+</body>
+</html>
