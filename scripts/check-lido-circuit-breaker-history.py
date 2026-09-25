@@ -748,6 +748,11 @@ VOCABULARY_NAMES = {
         "Blanc.ContractSpec.Preserves",
         "Blanc.ContractSpec.StateInv",
         "Blanc.ContractSpec.MsgInv",
+    ),
+    # Split out of `Blanc/Ladder.lean` when the ladder was generalized over
+    # arbitrary code images (solc-bytecode-v1); the declarations moved
+    # verbatim, so their pins below are unchanged.
+    "Blanc/LadderBase.lean": (
         "Blanc.Exec.InvDepth",
         "Blanc.BlockChain.Reach",
         "Blanc.BlockChain.ReachUsing",
@@ -763,8 +768,6 @@ VOCABULARY_PINS = {
         "Blanc.Func.getStor_eq_of_run_storSilentIn": "15e4b349ffc9ce4a35e8e6b0573213efe975a1a991db75705b73c8b3065ea159"
     },
     "Blanc/Ladder.lean": {
-        "Blanc.BlockChain.Reach": "f65d2cfb2dd0fa916d35deac841a6eeebd45676aec48c7b5e76c2898807f6244",
-        "Blanc.BlockChain.ReachUsing": "cf3e4d62373f92180b65f6a0458426517e58e8ba501c0cf31ec744dd33ce386c",
         "Blanc.ContractSpec": "74cb032721b7e1cdff473d3da8860eda24ad0e2521b806386e659c5201ca116c",
         "Blanc.ContractSpec.FuncSound": "7a905dcb38bdc25ca1f166a0c46076c80fd2eff0827f0078d8048d8379356400",
         "Blanc.ContractSpec.MsgInv": "3ef6dcf39e3da7573446e9726f2d8524c4cc58aaef8e682c0f404134a6a527b2",
@@ -773,7 +776,11 @@ VOCABULARY_PINS = {
         "Blanc.ContractSpec.PreWf": "3d7d6e012e6ab6371fc1a760edfd3bde1b0b9784ddd6c137172b9c6d062d9955",
         "Blanc.ContractSpec.Preserves": "c3d6bb8c7b9a327ceb7932c23e42dd868f2bc21f5d1b613816cf817dffc9dd6b",
         "Blanc.ContractSpec.Sound": "eddb47a53d750faea42200607893492a9f4139587f7d6a6022d67209182c3cb6",
-        "Blanc.ContractSpec.StateInv": "e934052b2170660338713cb8b3adb45902fd7b1783ad709e4d0ac4947b7dd322",
+        "Blanc.ContractSpec.StateInv": "e934052b2170660338713cb8b3adb45902fd7b1783ad709e4d0ac4947b7dd322"
+    },
+    "Blanc/LadderBase.lean": {
+        "Blanc.BlockChain.Reach": "f65d2cfb2dd0fa916d35deac841a6eeebd45676aec48c7b5e76c2898807f6244",
+        "Blanc.BlockChain.ReachUsing": "cf3e4d62373f92180b65f6a0458426517e58e8ba501c0cf31ec744dd33ce386c",
         "Blanc.Exec.InvDepth": "35b8af0f976566c3e09c8b48c2fda26de372b47ae6601c5d3a01f3616445b47f"
     },
     "Blanc/LidoCircuitBreakerRegistryModel.lean": {

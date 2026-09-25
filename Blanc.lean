@@ -398,12 +398,17 @@ import Blanc.DripRpow
 import Blanc.DripSound
 import Blanc.DripStackSafetyCertificate
 
+-- The deployed solc WETH9, lifted from its runtime bytes (solc-bytecode-v1).
+import Blanc.Lift.Weth9.Solvency
+import Blanc.Lift.Weth9.Live
+
 -- The COMPOSITION stratum is strictly downstream of every contract family, so
 -- it is aggregated last. Roots aggregate composition; nothing imports back.
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControl
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControlRun
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControlRun
+import Blanc.Composition.Weth9WethGas
 
 namespace Blanc
 

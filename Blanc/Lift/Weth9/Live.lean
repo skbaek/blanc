@@ -1,6 +1,5 @@
 import Blanc.Lift.Weth9.Jumps
 import Blanc.Lift.ExactWalk
-import Blanc.WethGas
 import Blanc.Lift.Weth9.Words
 import Blanc.Lift.Weth9.Spec
 
@@ -325,9 +324,17 @@ theorem bal_entry {sevm : Sevm} {b b' : Devm} {g G : Nat} {sel v : B256} {μ : M
   refine rx_push rfl (by simp) ?_
   exact rx_callRet (j := 6) rfl hcall hrun
 
-theorem boSel_eq : Blanc.boSel = 0x70a08231 := by decide +kernel
+/-- WETH9's `balanceOf(address)` selector, from its ABI signature. -/
+abbrev boSel : B256 := selector "balanceOf" [.address]
 
-theorem dcSel_eq : Blanc.dcSel = 0x313ce567 := by decide +kernel
+/-- WETH9's `decimals()` selector, from its ABI signature. -/
+abbrev dcSel : B256 := selector "decimals" []
+
+theorem boSel_eq : boSel = 0x70a08231 := by decide +kernel
+
+theorem dcSel_eq : dcSel = 0x313ce567 := by decide +kernel
+
+theorem dcSel_ne_boSel : dcSel ≠ boSel := by rw [dcSel_eq, boSel_eq]; decide
 
 open Blanc.Lift in
 /-- The dispatcher path to `balanceOf(address)`: five non-matching comparisons,
@@ -509,7 +516,7 @@ theorem dispatch_decimals {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome}
 
 /-! ## The closed-form cost
 
-In the style of Blanc-WETH's `wethGasWith` (`Blanc/WethGas.lean`): the fee
+In the style of Blanc-WETH's `wethGasWith`: the fee
 schedule abstracted, one parenthesised group per segment of the walk, in the
 order the walk charges them.  `mem` is the linear memory coefficient: the
 dispatcher's `mstore(0x40, 0x60)` expands empty memory to three words
@@ -586,10 +593,10 @@ selector.  Both priced selectors read storage, so both carry the cold/warm
 `if`. -/
 def weth9GasWith (jd base vl lo hi mid ex mem kec kecw cold warm : Nat) :
     B256 → Sevm → Devm → Option Nat := fun sel sevm pre =>
-  if sel = Blanc.boSel then
+  if sel = boSel then
     some (balanceOfGas9With jd base vl lo hi mid mem kec kecw
       (if boKey sevm ∈ pre.accessedStorageKeys then warm else cold))
-  else if sel = Blanc.dcSel then
+  else if sel = dcSel then
     some (decimalsGas9With jd base vl lo hi mid ex mem
       (if dcKey sevm ∈ pre.accessedStorageKeys then warm else cold))
   else none
@@ -604,7 +611,7 @@ theorem weth9Gas_eq_with :
       gasKeccak256Word gasColdSload gasWarmAccess := rfl
 
 theorem weth9Gas_boSel {sevm : Sevm} {pre : Devm} :
-    weth9Gas Blanc.boSel sevm pre =
+    weth9Gas boSel sevm pre =
       some (if boKey sevm ∈ pre.accessedStorageKeys then balanceOfGas9Warm else balanceOfGas9) := by
   by_cases h : boKey sevm ∈ pre.accessedStorageKeys
   · rw [if_pos h]
@@ -615,21 +622,21 @@ theorem weth9Gas_boSel {sevm : Sevm} {pre : Devm} :
     rfl
 
 theorem weth9Gas_dcSel {sevm : Sevm} {pre : Devm} :
-    weth9Gas Blanc.dcSel sevm pre =
+    weth9Gas dcSel sevm pre =
       some (if dcKey sevm ∈ pre.accessedStorageKeys then decimalsGas9Warm else decimalsGas9) := by
   by_cases h : dcKey sevm ∈ pre.accessedStorageKeys
   · rw [if_pos h]
-    simp only [weth9Gas, weth9GasWith, if_neg Blanc.dcSel_ne_boSel, if_pos h]
+    simp only [weth9Gas, weth9GasWith, if_neg dcSel_ne_boSel, if_pos h]
     rfl
   · rw [if_neg h]
-    simp only [weth9Gas, weth9GasWith, if_neg Blanc.dcSel_ne_boSel, if_neg h]
+    simp only [weth9Gas, weth9GasWith, if_neg dcSel_ne_boSel, if_neg h]
     rfl
 
 /-- The most a priced WETH9 entrypoint can cost: the storage read cold. -/
 def weth9GasMaxWith (jd base vl lo hi mid ex mem kec kecw cold : Nat) : B256 → Option Nat :=
   fun sel =>
-    if sel = Blanc.boSel then some (balanceOfGas9With jd base vl lo hi mid mem kec kecw cold)
-    else if sel = Blanc.dcSel then some (decimalsGas9With jd base vl lo hi mid ex mem cold)
+    if sel = boSel then some (balanceOfGas9With jd base vl lo hi mid mem kec kecw cold)
+    else if sel = dcSel then some (decimalsGas9With jd base vl lo hi mid ex mem cold)
     else none
 
 def weth9GasMax : B256 → Option Nat :=
@@ -644,7 +651,7 @@ theorem weth9Gas_le_max {sel : B256} {sevm : Sevm} {pre : Devm} {cost : Nat}
     ∃ bound, weth9GasMax sel = some bound ∧ cost ≤ bound := by
   simp only [weth9Gas, weth9GasWith] at h_cost
   simp only [weth9GasMax, weth9GasMaxWith]
-  by_cases hb : sel = Blanc.boSel
+  by_cases hb : sel = boSel
   · subst hb
     rw [if_pos rfl] at h_cost ⊢
     refine ⟨_, rfl, ?_⟩
@@ -652,7 +659,7 @@ theorem weth9Gas_le_max {sel : B256} {sevm : Sevm} {pre : Devm} {cost : Nat}
     subst h_cost
     split <;> decide
   · rw [if_neg hb] at h_cost ⊢
-    by_cases hd : sel = Blanc.dcSel
+    by_cases hd : sel = dcSel
     · subst hd
       rw [if_pos rfl] at h_cost ⊢
       refine ⟨_, rfl, ?_⟩
@@ -661,31 +668,6 @@ theorem weth9Gas_le_max {sel : B256} {sevm : Sevm} {pre : Devm} {cost : Nat}
       split <;> decide
     · rw [if_neg hd] at h_cost
       exact absurd h_cost (by simp)
-
-/-! ## The deployed WETH9 against Blanc-WETH (a measurement)
-
-| call | Blanc-WETH `wethGas` | WETH9 `weth9Gas` |
-|---|---|---|
-| `balanceOf`, cold key | 2260 | 2534 (+274) |
-| `balanceOf`, warm key | 260 | 534 (+274) |
-| `decimals()` | 158 (constant, no storage) | 2444 cold / 444 warm |
-
-The +274 on `balanceOf` is solc 0.4's code shape, not the storage read: the
-free-memory-pointer store (12), the `CALLDATASIZE < 4` fallback test (21), a
-`DIV`/`AND` selector extraction instead of `SHR` (23), a linear comparison
-chain (6 × 22 before the wrapper, against Blanc-WETH's four-level tree), the
-`calldataload(4) & mask` decode and internal call/return (≈70), `keccak`-based
-mapping addressing (42 + its two `mstore`s), and ABI encoding through the
-free-memory pointer (one more word of memory).  `decimals()` differs in kind:
-WETH9 keeps it in storage slot 2, so it pays an `SLOAD`. -/
-
-theorem balanceOf_weth9_vs_weth :
-    balanceOfGas9 = Blanc.balanceOfGas + 274 ∧ balanceOfGas9Warm = Blanc.balanceOfGasWarm + 274 := by
-  decide
-
-theorem decimals_weth9_vs_weth :
-    decimalsGas9 = Blanc.decimalsGas + 2286 ∧ decimalsGas9Warm = Blanc.decimalsGas + 286 := by
-  decide
 
 /-! ## The runs -/
 
@@ -703,7 +685,7 @@ argument's address. -/
 theorem weth9_balanceOf_runExact {sevm : Sevm} {pre : Devm} {cost : Nat}
     (hfork : CoveredFork sevm.benvStat.fork)
     (h_value : sevm.value = 0)
-    (h_sel : Sevm.selector sevm = Blanc.boSel)
+    (h_sel : Sevm.selector sevm = boSel)
     (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -744,7 +726,7 @@ costing exactly `weth9Gas`, and it returns the low byte of storage slot 2. -/
 theorem weth9_decimals_runExact {sevm : Sevm} {pre : Devm} {cost : Nat}
     (hfork : CoveredFork sevm.benvStat.fork)
     (h_value : sevm.value = 0)
-    (h_sel : Sevm.selector sevm = Blanc.dcSel)
+    (h_sel : Sevm.selector sevm = dcSel)
     (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -790,7 +772,7 @@ theorem weth9_balanceOf_gas_exact {sevm : Sevm} {pre : Devm} {cost : Nat}
     (h_code : sevm.code = code)
     (hfork : CoveredFork sevm.benvStat.fork)
     (h_value : sevm.value = 0)
-    (h_sel : Sevm.selector sevm = Blanc.boSel)
+    (h_sel : Sevm.selector sevm = boSel)
     (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -811,7 +793,7 @@ theorem weth9_decimals_gas_exact {sevm : Sevm} {pre : Devm} {cost : Nat}
     (h_code : sevm.code = code)
     (hfork : CoveredFork sevm.benvStat.fork)
     (h_value : sevm.value = 0)
-    (h_sel : Sevm.selector sevm = Blanc.dcSel)
+    (h_sel : Sevm.selector sevm = dcSel)
     (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -833,7 +815,7 @@ theorem weth9_balanceOf_succeeds {sevm : Sevm} {pre : Devm}
     (h_code : sevm.code = code)
     (hfork : CoveredFork sevm.benvStat.fork)
     (h_value : sevm.value = 0)
-    (h_sel : Sevm.selector sevm = Blanc.boSel)
+    (h_sel : Sevm.selector sevm = boSel)
     (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)
@@ -855,7 +837,7 @@ theorem weth9_decimals_succeeds {sevm : Sevm} {pre : Devm}
     (h_code : sevm.code = code)
     (hfork : CoveredFork sevm.benvStat.fork)
     (h_value : sevm.value = 0)
-    (h_sel : Sevm.selector sevm = Blanc.dcSel)
+    (h_sel : Sevm.selector sevm = dcSel)
     (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
     (h_stack : pre.stack = [])
     (h_mem : pre.memory = Mem.empty)

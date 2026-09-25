@@ -47,57 +47,57 @@
       "theorem"
     ],
     [
-      "Blanc/Ladder.lean",
+      "Blanc/LadderBase.lean",
       "genericCall.step_spawn_isStatic",
       "theorem"
     ],
     [
-      "Blanc/Ladder.lean",
+      "Blanc/LadderBase.lean",
       "genericCreate.step_spawn_not_static",
       "theorem"
     ],
     [
-      "Blanc/Ladder.lean",
+      "Blanc/LadderBase.lean",
       "Xinst.step_spawn_isStatic",
       "theorem"
     ],
     [
-      "Blanc/Ladder.lean",
+      "Blanc/LadderBase.lean",
       "Evm.step_spawn_isStatic",
       "theorem"
     ],
     [
-      "Blanc/Ladder.lean",
+      "Blanc/LadderBase.lean",
       "executeCode.enter_inl_isStatic",
       "theorem"
     ],
     [
-      "Blanc/Ladder.lean",
+      "Blanc/LadderBase.lean",
       "Frame.enter_run_isStatic",
       "theorem"
     ],
     [
-      "Blanc/Ladder.lean",
+      "Blanc/LadderBase.lean",
       "Evm.step_run_isStatic",
       "theorem"
     ],
     [
-      "Blanc/Ladder.lean",
+      "Blanc/LadderBase.lean",
       "genericCall.step_spawn_isStatic_of_staticcall",
       "theorem"
     ],
     [
-      "Blanc/Ladder.lean",
+      "Blanc/LadderBase.lean",
       "Xinst.step_staticcall_spawn_isStatic",
       "theorem"
     ],
     [
-      "Blanc/Ladder.lean",
+      "Blanc/LadderBase.lean",
       "Ninst.step_staticcall_spawn_isStatic",
       "theorem"
     ],
     [
-      "Blanc/Ladder.lean",
+      "Blanc/LadderBase.lean",
       "Ninst.step_staticcall_run_isStatic",
       "theorem"
     ]

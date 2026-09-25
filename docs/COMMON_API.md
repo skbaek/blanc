@@ -24,11 +24,16 @@ registry has identified the likely vocabulary.
   [T — settlement](#t--settlement).
 - Relate source programs, compiled code, and deployed artifacts: go to
   [C — compilation and deployment](#c--compilation-and-deployment).
+- Verify bytecode Blanc did not compile (a deployed contract's runtime
+  bytes): go straight to
+  [C9](#c9-i-need-to-verify-deployed-bytecode-blanc-did-not-compile).
 - Link an auxiliary call table by name instead of by index: go straight to
   [C6](#c6-i-need-to-link-an-auxiliary-call-table-by-name-instead-of-by-index),
   the last branch of that section rather than its head.
 - None matches: search public declarations in `Blanc/CommonCore.lean`,
-  `Blanc/CommonProofs.lean`, and `Blanc/Ladder.lean`; a helper found only in a
+  `Blanc/CommonProofs.lean`, and the ladder (`Blanc/LadderBase.lean`,
+  `Blanc/LadderSem.lean`, and `Blanc/Ladder.lean`, which states
+  `ContractSpec` over them); a helper found only in a
   contract module is a hoisting candidate, not a cross-contract import target.
 - Looking for a *definition* rather than a lemma: the compiled-program language
   (`Func`, `Prog`, `Line`, `Ninst`, `Linst`, `Stack`) lives in
@@ -367,7 +372,7 @@ transfer, code-address, and storage-owner changes.
 
 To invert an existing source `Ninst.Run` over a direct call whose operands are
 already known, use the shared inversion pair in
-[`Blanc/Ladder.lean`](../Blanc/Ladder.lean) — do not re-derive the
+[`Blanc/LadderBase.lean`](../Blanc/LadderBase.lean) — do not re-derive the
 spawn/resume equations at the consumer:
 
 - `of_run_call_val_with_depth_frame`: from a known 7-operand stack prefix
@@ -542,7 +547,7 @@ different entry state with the same memory size, transport the exact cost with
 For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
 `ReturnsWord`, `of_storeReturnWord`, or the memory-side-condition-free
 `returnsWord_of_storeReturn` in
-[`Blanc/Ladder.lean`](../Blanc/Ladder.lean).
+[`Blanc/LadderBase.lean`](../Blanc/LadderBase.lean).
 
 ### E5. I need to inspect what happened in an `Exec`
 
@@ -1042,7 +1047,7 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   invariant as the pointwise projection `fun d => Devm.getBal d a`, for which
   `Rinst`/`Ninst` instances are registered beside the whole-family ones.
 - A terminal `Linst.Inv` goal is discharged from its registered `Linst.Hinv`
-  instance with `exact Linst.Hinv.inv`; `Blanc/Ladder.lean` registers
+  instance with `exact Linst.Hinv.inv`; `Blanc/LadderBase.lean` registers
   `Devm.getCode` preservation for both `Linst.stop` and `Linst.revert`.
 - A missing contract-neutral instance belongs in a shared module below every
   consumer, not in the first contract that needs it.
@@ -1133,7 +1138,8 @@ and closes at the following `SSTORE` without changing or duplicating the body.
 
 ### I3. A foreign or childless frame must preserve a contract precondition
 
-Use the generic frame lemmas in [`Blanc/Ladder.lean`](../Blanc/Ladder.lean):
+Use the generic frame lemmas in [`Blanc/LadderBase.lean`](../Blanc/LadderBase.lean)
+(the `ContractSpec.*` forms in [`Blanc/Ladder.lean`](../Blanc/Ladder.lean)):
 
 - `ProcessMessage.none_ok_state_eq_entry_of_clean` identifies a clean,
   childless settlement with its transferred entry state.
@@ -1173,7 +1179,7 @@ If several updates form a familiar semantic post-state, continue to S2.
 persistent-storage word across account-state equality, without requiring
 equality of the whole machine or world. Import that primitive owner directly.
 For the entire storage map at one address, the corresponding adapter is
-`getStor_eq_of_state_eq` in `Blanc/Ladder.lean`.
+`getStor_eq_of_state_eq` in `Blanc/LadderBase.lean`.
 
 Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
 
@@ -1211,7 +1217,7 @@ Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
 
 Use `Devm.StateWriteFrame` and its reflexive/transitive/composition lemmas in
 `Blanc/CommonProofs.lean`, then inspect higher-level relation combinators in
-[`Blanc/Ladder.lean`](../Blanc/Ladder.lean).
+[`Blanc/LadderBase.lean`](../Blanc/LadderBase.lean).
 
 If the fact is about which holder's balance moved rather than how states
 compose, continue to S5.
@@ -1238,7 +1244,7 @@ OssifiableProxy instance, see
 `Stor.rest` in [`Blanc/CommonCore.lean`](../Blanc/CommonCore.lean) is the
 holder-keyed view of persistent storage — exactly the domain `balSum` sums
 over — and it is the right vocabulary for "who moved, and by how much".  Its
-laws live in [`Blanc/Ladder.lean`](../Blanc/Ladder.lean):
+laws live in [`Blanc/LadderBase.lean`](../Blanc/LadderBase.lean):
 
 - `Stor.rest_set_self` and `Stor.rest_set_ne` are read-after-write on one row:
   a holder-keyed write is visible at its own row and nowhere else.  Reach for
@@ -2603,6 +2609,68 @@ budget instead; split the conjunction into one declaration per chunk, because
 both budgets are per-declaration. The lemma changes no statement, emits no
 byte, and needs neither `native_decide` nor a `maxRecDepth`/`maxHeartbeats`
 raise.
+
+### C9. I need to verify deployed bytecode Blanc did not compile
+
+The route is lift, then reason about the lifted program. A certificate is
+checked against the bytes by the kernel, a generic theorem turns every real
+execution into a run of the lifted program, and the contract's properties are
+proved over that run. The deployed WETH9 (`Blanc/Lift/Weth9/`) is the worked
+example; every module below is contract-neutral.
+
+- The lifted language: `SFunc` (a tree whose jumps are resolved to entry
+  indices), `SFunc.Run`/`SProg.Run` and the derivation-carrying
+  `SFunc.RunP`/`SProg.RunP` in [`Blanc/Lift/Basic.lean`](../Blanc/Lift/Basic.lean).
+  It is a sibling of `Func`, not a replacement: nothing in the compiler's
+  language changes.
+- The certificate and its checker: `Cert`, `Entry`, `checkNode` and
+  `Cert.check` in [`Blanc/Lift/Check.lean`](../Blanc/Lift/Check.lean), with
+  the per-instruction abstract transfer (`ninstTransfer`, `ninstTransfer_run`)
+  in [`Blanc/Lift/Transfer.lean`](../Blanc/Lift/Transfer.lean). Decide
+  `Cert.check` per entry with `decide +kernel`; one decision over the whole
+  certificate does not fit in memory for a real contract, and read bytes with
+  `code.data.toList` (`ByteArray.toList` is quadratic in the kernel).
+- Execution to lifted run (safety): `lift_sound`, and `lift_sound_in`, which
+  keeps each step's derivation (`StepIn`) for arguments about re-entrant child
+  frames, in [`Blanc/Lift/Sound.lean`](../Blanc/Lift/Sound.lean).
+- Lifted run to execution (liveness, exact gas): `SFunc.RunExact`,
+  `Cert.jumpsOk` and `lift_exact` in [`Blanc/Lift/Exact.lean`](../Blanc/Lift/Exact.lean);
+  the per-instruction walk steps (`rx_push`, `rx_sload_cold`, `rx_callRet`, …)
+  over the gas-carrying state `St` are in
+  [`Blanc/Lift/ExactWalk.lean`](../Blanc/Lift/ExactWalk.lean).
+- Jump destinations: `jumpable_eq_jumpdestOk` in
+  [`Blanc/Lift/Jumpdest.lean`](../Blanc/Lift/Jumpdest.lean) replaces Jaune's
+  exponential `jumpable` by the linear `jumpdestOk` scan, for every byte string.
+- Properties of the lifted program without per-path walks: a state-silent
+  entry set (`SilentSet`, `SFunc.Run.state_of_silent`) in
+  [`Blanc/Lift/Silent.lean`](../Blanc/Lift/Silent.lean), its balance analogue
+  (`BalSilentSet`, `SFunc.Run.getBal_of_balSilent`) in
+  [`Blanc/Lift/BalSilent.lean`](../Blanc/Lift/BalSilent.lean), and Hoare-style
+  composition across one internal call or an ABI wrapper
+  (`SFunc.Run.hoare_single_call`, `hoare_single_call_with_gotos`,
+  `hoare_wrapper`) in [`Blanc/Lift/Hoare.lean`](../Blanc/Lift/Hoare.lean).
+- The preservation ladder over a code image instead of `Prog.compile`:
+  `CodeSem` (image, run relation, `correct`) in
+  [`Blanc/CommonCore.lean`](../Blanc/CommonCore.lean); `ContractSpecSem`, its
+  `Sound`/`Preserves` rungs, `preserves_lift_sem` and `post_of_call_self` in
+  [`Blanc/LadderSem.lean`](../Blanc/LadderSem.lean); the admitted forms
+  `SoundAdmitted`/`PreservesAdmitted`/`preserves_inv_admitted` in
+  [`Blanc/ContractAdmissionSem.lean`](../Blanc/ContractAdmissionSem.lean) and
+  `lift_inv_admitted_sem` in
+  [`Blanc/ExecutionAdmissionSem.lean`](../Blanc/ExecutionAdmissionSem.lean),
+  which carry a frame-local premise (such as WETH9's allowance-slot collision
+  premise) up the message, transaction, body and history rungs. The
+  `Prog.compile` ladder in [`Blanc/Ladder.lean`](../Blanc/Ladder.lean) is the
+  instance of this one at `Prog.compile`, with byte-identical statements;
+  [`Blanc/LadderBase.lean`](../Blanc/LadderBase.lean) holds the
+  code-independent vocabulary both share.
+- A booked-sum solvency invariant (the sum over *distinct* balance slots, as a
+  hashed Solidity mapping needs) with its slot obligations proved once:
+  `BookedInv` and `ContractSpecSem.ofBookedSum` in
+  [`Blanc/Lift/BookedSpec.lean`](../Blanc/Lift/BookedSpec.lean).
+
+There is no recipe: the entry points are whole-contract theorems, not goal
+shapes a trigger could match.
 
 ## Common-library-first workflow
 

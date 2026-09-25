@@ -1305,6 +1305,7 @@
      "Blanc/LidoCircuitBreakerRegistryModel.lean",
      "Blanc/CommonProofs.lean",
      "Blanc/Ladder.lean",
+     "Blanc/LadderBase.lean",
      "scripts/gate_semaphore.py",
      "scripts/axiom_audit.py",
      ".lake/packages/jaune/scripts/AxiomAudit.lean"
@@ -3904,6 +3905,10 @@
      },
      {
       "path": "Blanc/Ladder.lean",
+      "reason": "committed Lean subject of the owner audit, manifest pin or deletion control; the static prerequisite verifies it"
+     },
+     {
+      "path": "Blanc/LadderBase.lean",
       "reason": "committed Lean subject of the owner audit, manifest pin or deletion control; the static prerequisite verifies it"
      },
      {

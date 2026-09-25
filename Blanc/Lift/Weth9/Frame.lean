@@ -4,6 +4,7 @@ import Blanc.Lift.Weth9.Deposit
 import Blanc.Lift.Weth9.Withdraw
 import Blanc.Lift.Weth9.Approve
 import Blanc.Lift.Weth9.TransferFrom
+import Blanc.Lift.Weth9.Shape
 
 /-!
 # WETH9 frame soundness

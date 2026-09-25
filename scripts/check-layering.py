@@ -154,6 +154,12 @@ SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "ExecutionTraceFrames", "ExecutionTraceSettledFrames",
            "ExecutionAccountingObserved", "FuncMainPrefix",
            "ChunkedDecide"]
+# The ladder over arbitrary code images and the generic bytecode lift
+# (solc-bytecode-v1): contract-neutral, no WETH9 name in any of them.
+SHARED += ["LadderBase", "LadderSem", "ContractAdmissionSem", "ExecutionAdmissionSem",
+           "Lift.Basic", "Lift.Check", "Lift.Transfer", "Lift.Sound", "Lift.Exact",
+           "Lift.ExactWalk", "Lift.Jumpdest", "Lift.Silent", "Lift.BalSilent",
+           "Lift.Hoare", "Lift.BookedSpec"]
 
 CONTRACTS = {
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",
@@ -295,6 +301,8 @@ CONTRACTS = {
                             "ProrataWethVaultDust",
                             "ProrataWethVaultViews"],
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],
+    # The deployed solc 0.4.19 WETH9 runtime, lifted from its bytes.
+    "weth9": ["Lift.Weth9.Cert", "Lift.Weth9.Check", "Lift.Weth9.Lift", "Lift.Weth9.Spec", "Lift.Weth9.Jumps", "Lift.Weth9.Words", "Lift.Weth9.Step", "Lift.Weth9.Walks", "Lift.Weth9.Booked", "Lift.Weth9.Premise", "Lift.Weth9.Shape", "Lift.Weth9.Contract", "Lift.Weth9.Deposit", "Lift.Weth9.Withdraw", "Lift.Weth9.Approve", "Lift.Weth9.TransferFrom", "Lift.Weth9.Frame", "Lift.Weth9.Solvency", "Lift.Weth9.Live"],
     "fmint": ["Fmint", "FmintCode", "Conserved", "FlashSpec", "FmintLive",
               "FmintReverts", "FmintGas", "FmintSettles"],
     "weth10": ["Weth10TemplateCode", "Weth10Core", "Weth10Backed", "Weth10Spec", "Weth10",
@@ -425,6 +433,7 @@ COMPOSITION = [
     "Composition.ProrataWethVaultLedgerVisits",
     "Composition.ProrataWethVaultWithdrawLocator",
     "Composition.ProrataWethVaultLedgerFaithful",
+    "Composition.Weth9WethGas",
     # Every joint owner is explicit; no family or shared module may import back.
 ]
 

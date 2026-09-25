@@ -1,5 +1,6 @@
 import Blanc.Lift.Weth9.Premise
 import Blanc.Lift.Silent
+import Blanc.Lift.Weth9.Shape
 
 /-!
 # WETH9 `transferFrom` and `transfer` preserve solvency

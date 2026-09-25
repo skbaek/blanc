@@ -1,4 +1,4 @@
-import Blanc.Lift.Weth9.Lift
+import Blanc.Lift.Sound
 
 namespace Jaune
 
@@ -204,15 +204,5 @@ theorem SFunc.Run.state_of_silent {fs : List SFunc} {S : List Nat}
     (run : SFunc.Run fs sevm devm f o) :
     (Outcome.devm o).state = devm.state :=
   SFunc.RunP.state_of_silent id hS hf hrefs run
-
-section Weth9
-
-open Weth9
-
-theorem Weth9.views_silent :
-    SilentSet Weth9.prog [2, 4, 6, 7, 10, 12, 14, 15, 16, 17] = true := by
-  decide +kernel
-
-end Weth9
 
 end Blanc.Lift
