@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TriggerableWithdrawalsGateway — a Blanc port of Lido’s gateway</title>
-<meta name="description" content="Blanc’s port of Lido’s TriggerableWithdrawalsGateway — the CircuitBreaker’s real pause target: 24 selectors and the constructor, a 60-agreement / 11-deviation differential beside the locked Solidity reference, five accepted deviations and 48 dearer gas rows published as priced costs, the pinned-pause-target bundle proved with noninterference discharged rather than assumed, and the portfolio’s first theorem about two verified contracts at once.">
+<meta name="description" content="Blanc’s port of Lido’s TriggerableWithdrawalsGateway — the CircuitBreaker’s real pause target: 24 selectors and the constructor, a 62-agreement / 9-deviation differential beside the locked Solidity reference, a runtime smaller than the reference and cheaper on all 51 named gas paths, three accepted and two repaired deviations, the pinned-pause-target bundle proved with noninterference discharged rather than assumed, and the portfolio’s first theorem about two verified contracts at once, with its successful run constructed in two concrete worlds.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fdfcf8'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="../site.css">
 <script>document.documentElement.classList.add('js');</script>
@@ -49,30 +49,34 @@
           callee does with the call — and a new stratum of the repository joins the two.
         </p>
         <p class="lede" style="margin-top:14px">
-          It is also the portfolio’s honest loss. The Blanc runtime is 7,820 bytes <em>larger</em>
-          than the reference and dearer on 48 of 51 named gas paths, and every one of those rows
-          is published as a priced cost rather than folded into an aggregate. A port never claims
-          byte identity —
+          It was once the portfolio’s honest loss — nearly twice the reference’s size and dearer on
+          48 of 51 named gas paths, every row published as a priced cost. It no longer is: after
+          re-optimization the runtime is 34 bytes <em>smaller</em> than the reference and every one
+          of the 51 named paths is a strict Blanc win, a ledger the gate now refuses to let
+          regress. A port never claims byte identity —
           <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md" style="text-decoration:underline;text-underline-offset:3px">PORTING.md</a>
-          governs what is claimed and what never is — and this one claims less than most: five
-          accepted behavioral deviations, each with a stance, none defended as an improvement.
+          governs what is claimed and what never is — and this one still claims less than most:
+          three accepted behavioral deviations, each with a stance, none defended as an
+          improvement, and two more repaired rather than waived.
         </p>
       </div>
       <div>
         <div class="term"><span class="p">$</span> scripts/check-lido-twg-differential.sh
-<span class="ok">OK — Lido TWG differential: 60 agreement rows + 11 exact registered-deviation rows; 24/24 selectors + constructor; 52 causal history messages; 186 resource boundaries …</span>
+<span class="ok">OK — Lido TWG differential: 62 agreement rows + 9 exact registered-deviation rows; 24/24 selectors + constructor; 52 causal history messages; 186 resource boundaries …</span>
 <span class="p">$</span> scripts/check-layering.sh
-<span class="ok">OK — layering: 8 contract(s) are siblings; 357 module(s) classified, 355 non-root checked, 2 composition module(s) downstream, no cross-contract, inverted or composition-inverted import</span></div>
-        <p class="cap"><b>Fig. 1</b> — two gates, verbatim (exact-candidate run 2026-09-03 UTC), ellipses marking
-          elision: the differential matrix beside the locked Solidity reference, whose eleven
-          registered-deviation rows are compared as exactly as the sixty agreements, and the
-          layering gate that now classifies a composition stratum strictly downstream of every
-          contract family. The differential line continues “… 46 reference CALL/STATICCALL traces;
-          10 positive artifact checks; 9 live channel/identity/semantic falsifiers.”</p>
+<span class="ok">OK — layering: 10 contract(s) are siblings; 496 module(s) classified, 494 non-root checked, 40 composition module(s) downstream, no cross-contract, inverted or composition-inverted import; …</span></div>
+        <p class="cap"><b>Fig. 1</b> — two gates, ellipses marking elision: the differential matrix
+          beside the locked Solidity reference, whose nine registered-deviation rows are compared as
+          exactly as the sixty-two agreements, shown as the exact verdict line the committed gate
+          registry requires for a pass; and the layering gate, verbatim from a run on 2026-09-25
+          UTC, classifying a composition stratum strictly downstream of every contract family. The
+          differential line continues “… 46 reference CALL/STATICCALL traces; 10 positive artifact
+          checks; 8 performance control/mutant checks; 9 live channel/identity/semantic
+          falsifiers.”</p>
         <div class="pills">
-          <span class="pill"><span class="d"></span>15,948 B runtime — vs 8,128 deployed</span>
-          <span class="pill"><span class="d"></span>24/24 selectors + constructor</span>
-          <span class="pill"><span class="d"></span>5 accepted deviations</span>
+          <span class="pill"><span class="d"></span>8,094 B runtime — vs 8,128 deployed</span>
+          <span class="pill"><span class="d"></span>51/51 gas paths cheaper</span>
+          <span class="pill"><span class="d"></span>3 accepted · 2 repaired</span>
         </div>
       </div>
     </div>
@@ -137,9 +141,11 @@ pauseForCalldata_eq · isPausedCalldata_eq <span class="c">-- exact ABI agreemen
                                          <span class="c">   on independent evidence — a real check</span>
 gatewayBoundaryExecutions_of_afterSet_ok <span class="c">-- direct installation supplies both program</span>
                                          <span class="c">   occurrences; no code-shape fact asked of the caller</span>
-publicPause_gatewayPinnedTarget          <span class="c">-- entry 3, conditional on the successful run (below)</span>
-gatewayPauseWorld_closedPremises         <span class="c">-- every entry-3 premise but reachability, discharged</span>
-                                         <span class="c">   for one concrete world</span></pre>
+publicPause_gatewayPinnedTarget          <span class="c">-- entry 3, for any successful run (below)</span>
+gatewayPauseWorld_closedPremises         <span class="c">-- every entry-3 premise but the run, discharged</span>
+                                         <span class="c">   for one concrete world</span>
+gatewayPauseWorld_closedPublicPause      <span class="c">-- …and the run itself, constructed: a finite pause</span>
+sentinelGatewayPauseWorld_closedPublicPause <span class="c">-- the same for the infinite sentinel</span></pre>
     </div>
 
     <div class="grid3" style="margin-top:26px">
@@ -152,20 +158,20 @@ gatewayPauseWorld_closedPremises         <span class="c">-- every entry-3 premis
           <span class="mono">getRoleMember</span> empty-revert where the reference carries a
           reason or a <span class="mono">Panic(0x32)</span>. Three accepted deviations, each
           filed as the declared local cost of one compact, proof-oriented error convention — not
-          as an improvement, and not as a size win, since the whole port is larger.
+          as an improvement. The runtime and gas ledger are strictly smaller and cheaper, but
+          those wins do not erase a returndata difference.
         </p>
       </div>
       <div class="panel">
-        <span class="tick">flat keys, fail-loud</span>
+        <span class="tick">two costs, repaired rather than waived</span>
         <p class="dim" style="font-size:.93rem;margin-bottom:0">
-          Role membership lives at the low 252 bits of
-          <span class="mono">role XOR account</span>, with the full role, canonical account, and a
-          global index in tagged regions. A nonempty record whose full identity differs is
-          refused rather than aliased, and views answer nonmembership rather than reading through
-          it — the WETH precedent, applied to authority. The cost is published: a colliding
-          state the reference admits can fail here, and enumeration order after a cross-role
-          removal can differ, because one global array is filtered where the reference keeps one
-          set per role.
+          Role membership first lived at flat keys with a fail-loud collision refusal, and one
+          global array was filtered for enumeration — two published costs: a colliding state the
+          reference admits could fail, and ordinals after a cross-role removal could differ. Both
+          were public observations, so both were replaced: membership now lives at a
+          nested-keccak slot from the full role and canonical account, with direct per-role
+          length, index, and member slots and the reference’s own within-role swap-pop. The rows
+          stay in the registry as repaired regression boundaries.
         </p>
       </div>
       <div class="panel">
@@ -182,14 +188,14 @@ gatewayPauseWorld_closedPremises         <span class="c">-- every entry-3 premis
     </div>
 
     <div class="dev" style="margin-top:30px">
-      <div class="devhead"><h3>Blanc is larger and dearer here. Why publish it at all?</h3><span class="devtag">pushback</span></div>
-      <p>Because the porting policy requires it, and because the point of this port was never
-        bytes. A gas increase on an externally callable path is a deviation like any other,
-        recorded and defended: 48 of the 51 named rows are dearer, each dispositioned as a measured
-        priced cost, and the runtime is 15,948 bytes against 8,128. What the port claims is
-        behavioral agreement on the published corpus, subject to five declared deviations, plus
-        the proved pause bundle — never “a better way to build it”. A portfolio that only reported
-        the contracts it beat would be advertising, not reporting.</p>
+      <div class="devhead"><h3>So the port is now simply better?</h3><span class="devtag">pushback</span></div>
+      <p>Smaller and cheaper on the ledger it names, and no more than that. The 51 cells are one
+        declared boundary — direct EELS Prague message gas, constructor rows with code deposit —
+        and every cell must stay a strict win or the gate fails; there is no disposition left to
+        waive a regression. What the port claims is behavioral agreement on the published corpus,
+        subject to three accepted deviations, plus the proved pause bundle. The earlier larger,
+        dearer runtime was published as a priced cost while it stood; a portfolio that only
+        reported the contracts it beat would be advertising, not reporting.</p>
     </div>
     <div class="dev">
       <div class="devhead"><h3>Does this say anything about Lido’s gateway on mainnet?</h3><span class="devtag">pushback</span></div>
@@ -203,10 +209,11 @@ gatewayPauseWorld_closedPremises         <span class="c">-- every entry-3 premis
     </div>
 
     <p class="note" style="margin-top:26px">
-      The family’s 24 audited theorems sit in the repository-wide axiom audit, with eight more in
-      the composition stratum below, every one pinned to exactly the standard three axioms. The
-      differential manifest freezes the artifact identity and the proof certificate separately,
-      because six conformance repairs moved the runtime after the first proofs landed — and the
+      The family’s 31 audited theorems sit in the repository-wide axiom audit, with twelve more in
+      the composition stratum below, each pinned to its exact axiom set — all but one to the
+      standard three. The differential manifest freezes the artifact identity and the proof
+      certificate separately, because conformance repairs and a re-optimization moved the
+      runtime after the first proofs landed — and the
       port’s claim documents keep that split explicit rather than calling either commit the
       identity of both.
     </p>
@@ -217,7 +224,7 @@ gatewayPauseWorld_closedPremises         <span class="c">-- every entry-3 premis
 <section id="composition">
   <div class="wrap">
     <p class="eyebrow">Composition — two verified contracts at once</p>
-    <h2 style="max-width:30ch">A pause that leaves its target really paused — up to one premise.</h2>
+    <h2 style="max-width:30ch">A pause that leaves its target really paused.</h2>
     <p class="lede" style="margin-top:18px">
       The CircuitBreaker port stops, deliberately, at the boundary of its own frame: a target’s
       canonical <span class="mono">true</span> is evidence the target <em>reported</em> success,
@@ -226,7 +233,7 @@ gatewayPauseWorld_closedPremises         <span class="c">-- every entry-3 premis
       grew one place for it — <span class="mono">Blanc/Composition/*</span>, a stratum that may
       import any number of contract families, that no contract or shared module may import, and
       whose edges the layering gate checks with committed negative controls. Its first inhabitant
-      is this theorem.
+      is this theorem; the ERC-4626 vault’s pair with WETH has since joined it.
     </p>
 
     <div class="thm" style="margin-top:26px">
@@ -242,6 +249,7 @@ gatewayPauseWorld_closedPremises         <span class="c">-- every entry-3 premis
         preserved by the gateway’s own proved noninterference.</p>
 <pre><span class="k">theorem</span> <span class="d">publicPause_gatewayPinnedTarget</span>
     {sevm : <span class="t">Sevm</span>} {pre final : <span class="t">Devm</span>} {owner : <span class="t">Adr</span>}
+    (hfork : <span class="t">CoveredFork</span> sevm.benvStat.fork)
     {target duration idx0 len0 last0 : <span class="t">B256</span>} {img : <span class="t">Bytes</span>}
     {dp : <span class="t">LidoTriggerableWithdrawalsGateway.DeployParams</span>}
     {ex : <span class="t">Execution</span>}
@@ -266,19 +274,24 @@ gatewayPauseWorld_closedPremises         <span class="c">-- every entry-3 premis
       rejected the candidate before the fourth’s bounded follow-ups accepted it, and each round
       removed a premise: from three low-level code facts, to one, to none, and finally the last
       implied hypothesis, <span class="mono">depth ≠ 0</span>, derived inside the crossing rather
-      than asked of any caller.</p>
+      than asked of any caller. What remains is the frame’s fork: like every Blanc theorem, it
+      holds for the covered forks Prague, Osaka, BPO1, and BPO2, and says nothing of Amsterdam.</p>
 
     <div class="dev" style="margin-top:30px">
       <div class="devhead"><h3>So entry 3 — “a successful pause leaves the target really paused” — is closed?</h3><span class="devtag">pushback</span></div>
-      <p>Not yet, and the register says so. The theorem is conditional on a successful production
-        run. <span class="mono">gatewayPauseWorld_closedPremises</span> discharges every other
-        premise for one concrete world — the production CircuitBreaker at its account, the
-        compiler’s own gateway output at the target, and only the explicit role, Registry, time,
-        and storage configuration — so that any successful run of that world yields the
-        conclusion with no further hypothesis. That the world’s public pause run <em>terminates
-        successfully</em> is not established here: it is the single objective of a successor goal,
-        authored and not started. The successor register keeps entry 3 open, and this page keeps
-        it open with it.</p>
+      <p>For two concrete worlds, yes, and the register says exactly that much.
+        <span class="mono">gatewayPauseWorld_closedPremises</span> discharges every premise but the
+        run for one world — the production CircuitBreaker at its account, the compiler’s own
+        gateway output at the target, and only the explicit role, Registry, time, and storage
+        configuration. <span class="mono">gatewayPauseWorld_closedPublicPause</span> then
+        constructs the run: a successful production public pause, its real child
+        <span class="mono">CALL</span> and warm query <span class="mono">STATICCALL</span>, callback
+        noninterference, and the pinned-target conclusion, all from the walks, with no external run
+        premise. <span class="mono">sentinelGatewayPauseWorld_closedPublicPause</span> does the
+        same for an infinite pause, and a sibling shows that world storing the
+        2<sup>256</sup>&nbsp;−&nbsp;1 sentinel itself. These are two finite configured Prague
+        worlds — not a universal liveness or gas theorem, not a statement about current mainnet
+        code or roles, and not a second transaction after the pause.</p>
     </div>
     <div class="dev">
       <div class="devhead"><h3>Why is the ABI agreement a theorem rather than a definition?</h3><span class="devtag">pushback</span></div>
@@ -294,12 +307,14 @@ gatewayPauseWorld_closedPremises         <span class="c">-- every entry-3 premis
     <p class="note" style="margin-top:26px">
       The stratum is one-way by construction: composition may name several families, the
       families stay siblings and neither imports the other, and roots aggregate composition
-      without the dependency ever running back. Eight negative controls — an unclassified
-      composition module, shared→composition, contract→composition, composition→root, an ordinary
-      cross-contract import, and prohibited imports hidden behind three comment shapes — each
-      fail at the intended edge in disposable copies and return to green when only the mutation
-      is removed. The CircuitBreaker’s 75-row assurance register carries the three composition
-      rows, and TWG-3 states plainly that no successful concrete production run is established.
+      without the dependency ever running back. The layering gate’s committed controls include
+      five composition-edge mutations: an unclassified composition module,
+      shared→composition, contract→composition, and composition→root for each of the two roots —
+      each fail at the intended edge in disposable copies and return to green when only
+      the mutation is removed. The CircuitBreaker’s 75-row assurance register carries four
+      composition rows: TWG-3 records the two constructed worlds, and TWG-4 a literal BPO2 replay
+      of the compiler-owned artifacts’ finite and sentinel pause and query — dated finite
+      evidence, never a theorem premise.
     </p>
   </div>
 </section>
@@ -337,17 +352,17 @@ gatewayPauseWorld_closedPremises         <span class="c">-- every entry-3 premis
     </details>
 
     <details class="fold">
-      <summary><span class="twist">▸</span><span class="foldtitle">Differential evidence — the sanity layer</span><span class="foldsub">60 agreements + 11 registered deviations · 52 causal messages · 186 resource boundaries</span></summary>
+      <summary><span class="twist">▸</span><span class="foldtitle">Differential evidence — the sanity layer</span><span class="foldsub">62 agreements + 9 registered deviations · 52 causal messages · 186 resource boundaries</span></summary>
       <div class="foldbody">
         <p class="dim">
           <a href="https://github.com/skbaek/blanc/blob/main/scripts/check-lido-twg-differential.sh" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">check-lido-twg-differential.sh</span></a>
           executes the exact compiler-derived Blanc creation and runtime artifacts beside the
           locked reference in a pinned EELS Prague interpreter, agreeing on status, exact
-          returndata, the logical projection, ETH, ordered logs, and calls — with the eleven rows
+          returndata, the logical projection, ETH, ordered logs, and calls — with the nine rows
           that exercise a registered deviation compared just as exactly, each naming its one stable
           registry row and its expected channels. No status-only allowlist and no unknown-mismatch
           allowlist exists. The corpus covers both pause polarities and both sentinel arms, seven
-          role negatives, enumeration and collision histories, limit configure, consume, and refill
+          role negatives, enumeration and collision histories kept as repaired regression rows, limit configure, consume, and refill
           behavior, the trigger path over mock worlds with fee, value, router, refund, ETH, log, and
           call effects, and explicit rollback.
         </p>
@@ -358,7 +373,10 @@ gatewayPauseWorld_closedPremises         <span class="c">-- every entry-3 premis
           by role enumeration, the revocation decrement, two non-terminating role loops, and the
           paused/resumed error polarity. Each is a declared conformance repair that moved the
           runtime, and the family revalidated every affected proof on the repaired program. The
-          cheapest way to be wrong is to prove the wrong program; tests catch that first.
+          cheapest way to be wrong is to prove the wrong program; tests catch that first. Later,
+          four production-shape controls with paired mutants were added to bind the re-optimized
+          runtime’s packing, nested-keccak role keys, per-role enumeration, and one-read
+          authorization route.
         </p>
       </div>
     </details>
@@ -372,9 +390,9 @@ gatewayPauseWorld_closedPremises         <span class="c">-- every entry-3 premis
           arbitrary deployment parameters, and every statement hypothesises those bytes. The
           pause-face and authorization families cover <span class="mono">pauseUntil</span>,
           <span class="mono">resume</span>, the role-gated negatives, and the protected surface;
-          the bundle and the composition theorem are stated in full above. The family’s
-          protected statements are pinned by <span class="mono">check-claims.sh</span>, and the
-          three composition rows sit in the
+          the bundle and the composition theorem are stated in full above. The composition’s
+          protected statements, both closed worlds included, are pinned by
+          <span class="mono">check-claims.sh</span>, and the four composition rows sit in the
           <a href="https://github.com/skbaek/blanc/blob/main/LIDO_CIRCUIT_BREAKER_ASSURANCE.md" style="text-decoration:underline;text-underline-offset:3px">CircuitBreaker’s assurance register</a>,
           whose verifier fails if any cited declaration, axiom set, or non-claim phrase drifts.
         </p>
@@ -387,13 +405,13 @@ gatewayPauseWorld_closedPremises         <span class="c">-- every entry-3 premis
 <section id="deviations">
   <div class="wrap">
     <p class="eyebrow">Deviations</p>
-    <h2 style="max-width:28ch">Five accepted — each priced, none an improvement.</h2>
+    <h2 style="max-width:28ch">Three accepted, two repaired — none an improvement.</h2>
     <p class="lede" style="margin-top:18px">
       <a href="https://github.com/skbaek/blanc/blob/main/LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md" style="text-decoration:underline;text-underline-offset:3px">LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md</a>
-      records five behavioral differences, all accepted, zero repaired, zero pending, with no
+      records five behavioral differences: three accepted, two repaired, zero pending, with no
       unknown-mismatch allowlist; its policy marker and its five row markers encode the same
-      counts, and the family gate rejects drift between them. Every row names which of the
-      policy’s three defenses it rests on, and none of these five rests on “better”.
+      counts, and the family gate rejects drift between them. None of the three accepted rows
+      rests on “better”.
     </p>
 
     <div class="dev">
@@ -403,31 +421,29 @@ gatewayPauseWorld_closedPremises         <span class="c">-- every entry-3 premis
         with the four-byte selector of a no-argument <span class="mono">AccessControlUnauthorizedAccount()</span>.
         Status and rollback agree; returndata differs on seven unauthorized paths.</p>
       <p><b>The argument:</b> one compact, proof-oriented error-table convention, at the declared
-        cost of the reference’s diagnostics. Not defended as an aggregate size win — the complete
-        port is larger — only as the local cost of the simpler verifiable representation.</p>
+        cost of the reference’s diagnostics. Not defended by the port’s size or gas wins — those
+        do not erase a returndata difference — only as the local cost of the simpler verifiable
+        representation.</p>
     </div>
     <div class="dev">
       <div class="devhead"><h3>Two more empty reverts</h3><span class="devtag">TWG-D02, TWG-D03 — accepted priced costs</span></div>
       <p>A wrong-account <span class="mono">renounceRole</span> and an out-of-bounds
         <span class="mono">getRoleMember</span> empty-revert where the reference returns a reason
-        string and a <span class="mono">Panic(0x32)</span> respectively; the second costs more
-        gas as well, and the row says so.</p>
-      <p><b>The argument:</b> the same rejection convention, and the terminal result of the same
-        filtered scan used for enumeration. Proof locality and one scan discipline — not size,
+        string and a <span class="mono">Panic(0x32)</span> respectively. Both remain gas wins; the
+        cost is returndata only.</p>
+      <p><b>The argument:</b> the same compact rejection convention. Proof locality — not size,
         not gas.</p>
     </div>
     <div class="dev">
-      <div class="devhead"><h3>Enumeration order, and collision refusal</h3><span class="devtag">TWG-D04, TWG-D05 — orthogonal; priced fail-loud design</span></div>
-      <p>After a suitable cross-role grant-and-revoke history, membership and count agree while
-        <span class="mono">getRoleMember(role, i)</span> may return a different valid member at
-        the same ordinal. And in a constructed colliding state, an operation the reference admits
-        can be refused, with <span class="mono">hasRole</span> answering false rather than
-        attributing another pair’s membership.</p>
-      <p><b>The argument:</b> ordinal stability after cross-role removal is not part of the
-        pause-and-withdrawal job, so D04 is orthogonal — but ordinals are public, so it is
-        registered rather than hidden as a storage freedom. D05 is a priced design cost with
-        fail-loud behavior: refusing a collision beats silently granting, revoking, or reading
-        another pair’s authority. Neither is claimed as overall superiority.</p>
+      <div class="devhead"><h3>Enumeration order, and collision refusal</h3><span class="devtag">TWG-D04, TWG-D05 — repaired</span></div>
+      <p>The former runtime could return a different valid member at the same ordinal after a
+        cross-role removal history, and in a constructed colliding state could refuse an operation
+        the reference admits. Both were first filed as orthogonal or priced fail-loud costs; both
+        changed public observations, so both were repaired rather than waived.</p>
+      <p><b>The record:</b> the current runtime returns the reference’s order, and both formerly
+        colliding grants succeed independently with <span class="mono">hasRole</span>, counts,
+        ordering, and logs matching. The stable IDs stay as regression boundaries, each held by a
+        live causal differential row.</p>
     </div>
   </div>
 </section>
@@ -436,37 +452,38 @@ gatewayPauseWorld_closedPremises         <span class="c">-- every entry-3 premis
 <section id="deltas">
   <div class="wrap">
     <p class="eyebrow">Deltas</p>
-    <h2 style="max-width:26ch">Larger, and dearer — measured, and published.</h2>
+    <h2 style="max-width:26ch">Smaller, and cheaper — on every named path.</h2>
     <div class="grid2" style="margin-top:30px;align-items:start">
       <div class="panel">
         <span class="tick">measured — committed manifest, pinned oracle</span>
         <div class="tablewrap"><table style="min-width:0">
           <thead><tr><th>quantity</th><th class="num">value</th><th>status</th></tr></thead>
           <tbody>
-            <tr><td>runtime size</td><td class="num">15,948 B</td><td class="dim">vs 8,128 reference — 7,820 larger; 8,628 B of EIP-170 headroom</td></tr>
-            <tr><td>full CREATE input</td><td class="num">18,136 B</td><td class="dim">vs 10,256 — 7,880 larger</td></tr>
-            <tr><td>successful construction gas</td><td class="num">3,400,489</td><td class="dim">vs 1,744,364, code deposit included, in pinned EELS</td></tr>
-            <tr><td><span class="mono">pauseFor</span>, finite duration</td><td class="num">29,772</td><td class="dim">vs 26,352 — dearer by 3,420</td></tr>
-            <tr><td>unauthorized role gate</td><td class="num">2,270</td><td class="dim">vs 32,304 — the compact error is 30,034 cheaper; one of three negative controls</td></tr>
-            <tr><td>named gas rows dearer</td><td class="num">48 / 51</td><td class="dim">every positive row carries a substantive grouped disposition</td></tr>
+            <tr><td>runtime size</td><td class="num">8,094 B</td><td class="dim">vs 8,128 reference — 34 smaller; 16,482 B of EIP-170 headroom</td></tr>
+            <tr><td>full CREATE input</td><td class="num">9,966 B</td><td class="dim">vs 10,256 — 290 smaller</td></tr>
+            <tr><td>successful construction gas</td><td class="num">1,735,425</td><td class="dim">vs 1,744,364, code deposit included, in pinned EELS</td></tr>
+            <tr><td><span class="mono">pauseFor</span>, finite duration</td><td class="num">25,598</td><td class="dim">vs 26,352 — cheaper by 754</td></tr>
+            <tr><td>unauthorized role gate</td><td class="num">2,393</td><td class="dim">vs 32,304 — the compact error is 29,911 cheaper</td></tr>
+            <tr><td>named gas rows dearer</td><td class="num">0 / 51</td><td class="dim">every cell a strict win; a nonnegative regeneration fails the gate</td></tr>
           </tbody>
         </table></div>
       </div>
       <div class="panel">
         <span class="tick">what is deliberately not claimed</span>
         <p class="dim" style="font-size:.94rem">
-          No size or gas superiority anywhere on this page — the numbers are measurements against
-          the locked reference under one declared boundary (direct EELS Prague message gas used;
-          constructor rows include code deposit and exclude intrinsic gas and refunds), and
-          sums and averages are never allowed to hide a positive public path. The one cheaper row
-          above is a diagnostic cost the reference pays and Blanc does not, and it is not offered
-          as a defense of anything.
+          No gas superiority beyond the ledger — the numbers are measurements against the locked
+          reference under one declared boundary (direct EELS Prague message gas used;
+          constructor rows include code deposit and exclude intrinsic gas and refunds), over 51
+          named cells. Arbitrary-world gas and access-list warming remain implementation freedoms,
+          and the unauthorized-gate row is a diagnostic cost the reference pays and Blanc does not,
+          not a defense of anything.
         </p>
         <p class="dim" style="font-size:.94rem;margin-bottom:0">
-          Universal gas behavior is not claimed in either direction; the family’s executable
-          evidence is under the pinned Prague EELS, and neither this family nor the CircuitBreaker
-          yet has a current-mainnet BPO2 lane of its own — a named follow-up, not an implied
-          coverage.
+          Universal gas behavior is not claimed in either direction. The family’s differential is
+          under the pinned Prague EELS; a separate BPO2 lane replays the compiler-owned
+          CircuitBreaker and gateway artifacts’ finite and sentinel pause and query, with two
+          execution mutants, as dated finite evidence behind a Prague-to-Osaka applicability
+          ledger — not a live-chain attestation.
         </p>
       </div>
     </div>
@@ -490,8 +507,9 @@ gatewayPauseWorld_closedPremises         <span class="c">-- every entry-3 premis
           follows. The inversion now exists, at zero depth a zero-value
           <span class="mono">CALL</span> cannot spawn and the bubble cannot end
           <span class="mono">.ok</span>, and the reviewer’s probe was treated as a blueprint and
-          re-derived against the semantics. The genuinely surviving hypotheses are two: a
-          non-static enclosing frame, and a target distinct from the caller.
+          re-derived against the semantics. The genuinely surviving hypotheses are a non-static
+          enclosing frame, a non-precompile target distinct from the caller, and — since the
+          semantics learned Amsterdam — a covered fork.
         </p>
       </div>
       <div class="panel">
@@ -510,11 +528,11 @@ gatewayPauseWorld_closedPremises         <span class="c">-- every entry-3 premis
     <p class="note" style="margin-top:26px">
       Boundary, restated: nothing on this page verifies the Solidity artifact deployed at
       <span class="mono">0xDC00…037B</span> — its address and snapshot block are provenance
-      identifiers. The composition theorem is conditional on a successful production run that no
-      concrete world has yet been shown to have; it does not cover a target behind a proxy, a
-      second transaction, liveness, or gas sufficiency; and the locator, vault, and router are
-      not ported. The five deviations and the raw-storage non-claim are the registry’s, in the
-      honest register.
+      identifiers. The composition theorem’s successful run is constructed in two finite
+      configured Prague worlds, not in general; it does not cover a target behind a proxy, a
+      second transaction, liveness, gas sufficiency, or an Amsterdam frame; and the locator,
+      vault, and router are not ported. The five deviation rows and the raw-storage non-claim are
+      the registry’s, in the honest register.
     </p>
   </div>
 </section>
