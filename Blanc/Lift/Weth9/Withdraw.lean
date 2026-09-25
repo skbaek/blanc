@@ -2,7 +2,7 @@ import Blanc.Lift.Weth9.Booked
 import Blanc.Lift.Weth9.Walks
 import Blanc.Lift.Weth9.Step
 import Blanc.Lift.Silent
-import Blanc.Lift.CallFrame
+import Blanc.LadderSem
 
 /-!
 # WETH9 `withdraw(wad)` preserves solvency
@@ -18,7 +18,7 @@ Withdrawal(msg.sender, wad);
 
 The walk is explicit, one instruction at a time, as in `Deposit.lean`.  The
 `CALL` is discharged by the contract-generic `ContractSpecSem.post_of_call_self`
-(`Blanc/Lift/CallFrame.lean`), whose deeper-frame hypothesis is exactly the one
+(`Blanc/LadderSem.lean`), whose deeper-frame hypothesis is exactly the one
 `ContractSpecSem.Sound` supplies.  Everything after the `CALL` (the failure
 check, the event, the return) is state-silent.
 -/
