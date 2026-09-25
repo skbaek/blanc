@@ -230,8 +230,8 @@ CLAIMS = [
         "census": {"README.md": 4, "scripts/GATES.md": 2, "docs/index.html": 6},
         "foreign": [
             "jaune: docs/index.html (3 quotations, spelled with a thousands "
-            "separator as 1,077; read and confirmed in agreement at jaune 730f96e "
-            "on 2026-09-12)"
+            "separator as 1,331; read and confirmed in agreement at jaune 9d49257 "
+            "on 2026-09-25)"
         ],
     },
     {
@@ -709,8 +709,9 @@ PATH_REFERENCES = [
 
 UNCHECKED_PUBLISHED_NUMBERS = [
     {
-        "number": "5,100/5,100 supported fixture files and the 34,005-case corpus",
-        "surfaces": "docs/index.html, README.md",
+        "number": "5,006/5,006 supported fixture files (of the 34,205-case "
+        "tests@v20.0.2 corpus the pinned Jaune revision reports)",
+        "surfaces": "docs/index.html",
         "producer": "none in this tree",
         "blocker": "Jaune's number, produced by a gate in that repository over a "
         "foreign EELS checkout. No committed artifact here determines it, and no "
@@ -747,12 +748,14 @@ UNCHECKED_PUBLISHED_NUMBERS = [
     },
     {
         "number": "the interpolated figures in every published gate transcript other "
-        "than check-claims.sh and the check.sh axiom-audit line (19 lines: the "
-        "WETH10 differential on two surfaces and the beacon-deposit, "
-        "CircuitBreaker, TWG and OssifiableProxy differential lines; the layering "
-        "line on two surfaces; 8 fixture, coverage and current-mainnet lines; the "
-        "beacon-deposit-assurance, CircuitBreaker-assurance and proxy-pair-upgrade "
-        "lines)",
+        "than the two registered check-claims.sh copies and the check.sh "
+        "axiom-audit line (23 lines: the WETH10 differential on two surfaces and "
+        "the beacon-deposit, CircuitBreaker, TWG and OssifiableProxy differential "
+        "lines; the layering line on two surfaces; 8 fixture, coverage and "
+        "current-mainnet lines; the beacon-deposit-assurance, "
+        "CircuitBreaker-assurance and proxy-pair-upgrade lines; the PRORATA WETH "
+        "vault oracle and reference lines; the DRIP stack-certificate line and the "
+        "DRIP page's copy of the check-claims.sh line)",
         "surfaces": "docs/index.html, docs/contracts/*.html",
         "producer": "the gates themselves, at run time",
         "blocker": "scripts/check-layering.py is static and deterministic over committed "
