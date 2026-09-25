@@ -59,11 +59,14 @@ def readBack (frame : List AVal) : Option B256 → Option AVal
   | none => some .unk
   | some i => frame[i.toNat]?
 
-/-- The abstract effect of one non-jump instruction on a frame. -/
+/-- The abstract effect of one non-jump instruction on a frame.  Frames longer
+than the EVM's 1024-word stack are rejected: beyond that, index labels would
+alias modulo `2 ^ 256`. -/
 def absNinst (n : Ninst) (frame : List AVal) : Option (List AVal) :=
   match n with
   | .push bs _ => some (.const (Bytes.toB256 bs) :: frame)
   | n => do
+    guard (frame.length ≤ 1024)
     let out ← ninstTransfer n (indexPattern frame.length)
     out.mapM (readBack frame)
 
