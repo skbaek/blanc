@@ -110,10 +110,11 @@ private theorem linst_getBal {sevm : Sevm} {pre post : Devm} {l : Linst}
   exact funext (getBal_eq_of_state_eq hframe.state.symm)
 
 /-- **A balance-silent run moves no ether.** -/
-theorem SFunc.Run.getBal_of_balSilent {fs : List SFunc} {S : List Nat}
+theorem SFunc.RunP.getBal_of_balSilent {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {fs : List SFunc} {S : List Nat}
     (hS : BalSilentSet fs S = true) {sevm : Sevm} {devm : Devm} {f : SFunc}
     {o : Outcome} (hf : f.balSilent = true) (hrefs : f.refs.all (· ∈ S) = true)
-    (run : SFunc.Run fs sevm devm f o) :
+    (run : SFunc.RunP P fs sevm devm f o) :
     (Outcome.devm o).getBal = devm.getBal := by
   have closed : ∀ {k g}, k ∈ S → fs[k]? = some g →
       g.balSilent = true ∧ g.refs.all (· ∈ S) = true := by
@@ -150,7 +151,7 @@ theorem SFunc.Run.getBal_of_balSilent {fs : List SFunc} {S : List Nat}
   | next hrun run ih =>
       have hfn := hf
       simp only [SFunc.balSilent, Bool.and_eq_true] at hfn
-      exact (ih hfn.2 hrefs).trans (Ninst.Run.getBal_of_balSilent hfn.1 hrun)
+      exact (ih hfn.2 hrefs).trans (Ninst.Run.getBal_of_balSilent hfn.1 (hP hrun))
   | dest burn run ih =>
       exact (ih hf hrefs).trans (funext (getBal_eq_of_state_eq burn.state.symm))
   | jump d lookup pop run ih =>
@@ -172,5 +173,13 @@ theorem SFunc.Run.getBal_of_balSilent {fs : List SFunc} {S : List Nat}
       have hfn := hf
       simp only [SFunc.balSilent] at hfn
       exact (ihTail hfn hfr.2).trans ((ihRun htarget.1 htarget.2).trans (popBal pop))
+
+/-- **A balance-silent run moves no ether** (over Jaune's steps). -/
+theorem SFunc.Run.getBal_of_balSilent {fs : List SFunc} {S : List Nat}
+    (hS : BalSilentSet fs S = true) {sevm : Sevm} {devm : Devm} {f : SFunc}
+    {o : Outcome} (hf : f.balSilent = true) (hrefs : f.refs.all (· ∈ S) = true)
+    (run : SFunc.Run fs sevm devm f o) :
+    (Outcome.devm o).getBal = devm.getBal :=
+  SFunc.RunP.getBal_of_balSilent id hS hf hrefs run
 
 end Blanc.Lift

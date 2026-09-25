@@ -200,23 +200,23 @@ variable {c : ContractSpecSem}
 
 Stated over any `ContractSpecSem` whose invariant admits the debit
 (`hstep`: from `Inv s v b` and `wad ≤ balanceOf[a]`, the ether covers `wad`
-and the invariant holds at the debited storage and balance).  `ih` is the
-deeper-frame hypothesis of `ContractSpecSem.Sound`, verbatim; `hpre` is the
+and the invariant holds at the debited storage and balance).  The run is
+over any step relation `P` that refines Jaune's; `hcallPost` discharges the
+one `CALL` (sending `wad` to the caller) from its `P`-step, and `hpre` is the
 frame precondition at the entry's pre-state. -/
-theorem Weth9.withdraw_post {ca : Adr}
+theorem Weth9.withdraw_post_gen {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {ca : Adr}
     (hstep : ∀ {s : Stor} {v b : B256} {a : Adr} {wad : B256},
       c.Inv s v b → wad ≤ s.get (balSlot a) →
       wad ≤ b ∧ c.Inv (s.set (balSlot a) (s.get (balSlot a) - wad)) 0 (b - wad))
     {sevm : Sevm} {devm : Devm} {o : Outcome} {g : SFunc}
     (hfork : CoveredFork sevm.benvStat.fork) (hca : sevm.currentTarget = ca)
-    (ih : ∀ pc' sevm' pre' post',
-        Exec pc' sevm' pre' (.ok post') →
-        sevm'.depth < sevm.depth →
-        CodeSem.At c.sem ca pc' sevm' pre' →
-        CoveredFork sevm'.benvStat.fork →
-        c.PreWf ca sevm' pre' →
-        c.Post ca sevm' post')
-    (hg : prog[8]? = some g) (run : SFunc.Run prog sevm devm g o)
+    (hcallPost : ∀ {s sf : Devm} {gas dst value : B256} {xs : Stack},
+        P sevm s (.exec .call) sf → gas :: dst :: value :: xs <<+ s.stack →
+        some (s.getCode ca).toList = c.sem.image → c.Side s.getBal →
+        value ≤ s.getBal ca → c.Inv (Devm.getStor s ca) 0 (s.getBal ca - value) →
+        c.Post ca sevm sf)
+    (hg : prog[8]? = some g) (run : SFunc.RunP P prog sevm devm g o)
     (hpre : c.Pre ca sevm devm) :
     c.Post ca sevm (Outcome.devm o) := by
   have hg' : g = t_09d9_c8 := by
@@ -226,9 +226,12 @@ theorem Weth9.withdraw_post {ca : Adr}
   cases run with
   | dest burn0 run =>
   rename_i d0
-  obtain ⟨d1, hdup, run⟩ := run_chain_prefix [.reg (.dup 0)] (slotLine ++ checkTail) run
-  obtain ⟨d2, hslot, run⟩ := run_chain_prefix slotLine checkTail run
-  obtain ⟨d3, hcheck, run⟩ := run_chain_prefix checkTail [] run
+  obtain ⟨d1, hdup, run⟩ := run_chain_prefixP [.reg (.dup 0)] (slotLine ++ checkTail) run
+  replace hdup := hdup.toRun hP
+  obtain ⟨d2, hslot, run⟩ := run_chain_prefixP slotLine checkTail run
+  replace hslot := hslot.toRun hP
+  obtain ⟨d3, hcheck, run⟩ := run_chain_prefixP checkTail [] run
+  replace hcheck := hcheck.toRun hP
   have hdup1 := of_run_singleton hdup
   obtain ⟨wad, hw, hpush⟩ := of_run_dup hdup1
   obtain ⟨rest, hrest⟩ : ∃ rest, d0.stack = wad :: rest := by
@@ -249,7 +252,7 @@ theorem Weth9.withdraw_post {ca : Adr}
   have same23 : SameCode d2 d3 := ⟨Line.of_inv Devm.getStor (by line_inv) hcheck,
       Line.of_inv Devm.getBal (by line_inv) hcheck,
       Line.of_inv Devm.getCode (by line_inv) hcheck⟩
-  change SFunc.Run prog sevm d3 (.branch t_0a23_c8 t_0a27_c8) o at run
+  change SFunc.RunP P prog sevm d3 (.branch t_0a23_c8 t_0a27_c8) o at run
   cases run with
   | zero _ _ run => exact absurd run not_run_revert_tail
   | succ dw w hwnz pop run =>
@@ -262,17 +265,22 @@ theorem Weth9.withdraw_post {ca : Adr}
   cases run with
   | dest burn1 run =>
   rename_i d5
-  obtain ⟨d6, hdup', run⟩ := run_chain_prefix [.reg (.dup 0)]
+  obtain ⟨d6, hdup', run⟩ := run_chain_prefixP [.reg (.dup 0)]
     (slotLine ++ updLine (.reg .sub) ++ [Ninst.sstore] ++ sendLine ++ [.exec .call]) run
-  obtain ⟨d7, hslot', run⟩ := run_chain_prefix slotLine
+  replace hdup' := hdup'.toRun hP
+  obtain ⟨d7, hslot', run⟩ := run_chain_prefixP slotLine
     (updLine (.reg .sub) ++ [Ninst.sstore] ++ sendLine ++ [.exec .call]) run
-  obtain ⟨d8, hdebit, run⟩ := run_chain_prefix (updLine (.reg .sub))
+  replace hslot' := hslot'.toRun hP
+  obtain ⟨d8, hdebit, run⟩ := run_chain_prefixP (updLine (.reg .sub))
     ([Ninst.sstore] ++ sendLine ++ [.exec .call]) run
-  obtain ⟨d9, hsstore, run⟩ := run_chain_prefix [Ninst.sstore]
+  replace hdebit := hdebit.toRun hP
+  obtain ⟨d9, hsstore, run⟩ := run_chain_prefixP [Ninst.sstore]
     (sendLine ++ [.exec .call]) run
-  obtain ⟨d10, hsend, run⟩ := run_chain_prefix sendLine [.exec .call] run
-  obtain ⟨d11, hcall, run⟩ := run_chain_prefix [.exec .call] [] run
-  change SFunc.Run prog sevm d11 afterCall o at run
+  replace hsstore := hsstore.toRun hP
+  obtain ⟨d10, hsend, run⟩ := run_chain_prefixP sendLine [.exec .call] run
+  replace hsend := hsend.toRun hP
+  obtain ⟨d11, hcall, run⟩ := run_chain_prefixP [.exec .call] [] run
+  change SFunc.RunP P prog sevm d11 afterCall o at run
   -- the debit walk
   have same45 : SameCode d4 d5 := SameCode.of_state burn1.state
   have hdup'1 := of_run_singleton hdup'
@@ -325,14 +333,71 @@ theorem Weth9.withdraw_post {ca : Adr}
   have hcode10 : d10.getCode = devm.getCode := by
     rw [← same910.code, ← hcode89, ← same08.code]
   have hpost : c.Post sevm.currentTarget sevm d11 := by
-    refine ContractSpecSem.post_of_call_self hfork rfl ih hp10 ?_ ?_ ?_ ?_
-      (of_run_singleton hcall)
+    refine hcallPost hcall.singleton hp10 ?_ ?_ ?_ ?_
     · rw [hcode10]; exact hpre.code
     · rw [hbal10]; exact hpre.side
     · rw [hbal10]; exact hleb
     · rw [hstor10, hbal10]; exact hinv
   exact ContractSpecSem.Post.of_state_eq hpost
-    (SFunc.Run.state_of_silent silentSet_nil afterCall_silent afterCall_refs run)
+    (SFunc.RunP.state_of_silent hP silentSet_nil afterCall_silent afterCall_refs run)
+
+/-- **WETH9 `withdraw(wad)` (entry 8) establishes the frame postcondition.**
+
+Stated over any `ContractSpecSem` whose invariant admits the debit
+(`hstep`: from `Inv s v b` and `wad ≤ balanceOf[a]`, the ether covers `wad`
+and the invariant holds at the debited storage and balance).  `ih` is the
+deeper-frame hypothesis of `ContractSpecSem.Sound`, verbatim; `hpre` is the
+frame precondition at the entry's pre-state. -/
+theorem Weth9.withdraw_post {ca : Adr}
+    (hstep : ∀ {s : Stor} {v b : B256} {a : Adr} {wad : B256},
+      c.Inv s v b → wad ≤ s.get (balSlot a) →
+      wad ≤ b ∧ c.Inv (s.set (balSlot a) (s.get (balSlot a) - wad)) 0 (b - wad))
+    {sevm : Sevm} {devm : Devm} {o : Outcome} {g : SFunc}
+    (hfork : CoveredFork sevm.benvStat.fork) (hca : sevm.currentTarget = ca)
+    (ih : ∀ pc' sevm' pre' post',
+        Exec pc' sevm' pre' (.ok post') →
+        sevm'.depth < sevm.depth →
+        CodeSem.At c.sem ca pc' sevm' pre' →
+        CoveredFork sevm'.benvStat.fork →
+        c.PreWf ca sevm' pre' →
+        c.Post ca sevm' post')
+    (hg : prog[8]? = some g) (run : SFunc.Run prog sevm devm g o)
+    (hpre : c.Pre ca sevm devm) :
+    c.Post ca sevm (Outcome.devm o) :=
+  Weth9.withdraw_post_gen (P := Ninst.Run) id hstep hfork hca
+    (fun hc hp hcode hside hle hinv =>
+      ContractSpecSem.post_of_call_self hfork hca ih hp hcode hside hle hinv hc)
+    hg run hpre
+
+/-- **WETH9 `withdraw(wad)` within a root derivation, under the admitted
+deeper-frame hypothesis.**  The run is a `StepIn R` run, so the `CALL`'s child
+derivation lies among `R`'s raw frame roots; given `R`'s frame admission, the
+child is admitted, which is all the `ContractSpecSem.SoundAdmitted` form of the
+deeper-frame hypothesis asks. -/
+theorem Weth9.withdraw_post_in {R : Exec.Deriv} {entry : Sevm → Devm → Prop} {ca : Adr}
+    (hstep : ∀ {s : Stor} {v b : B256} {a : Adr} {wad : B256},
+      c.Inv s v b → wad ≤ s.get (balSlot a) →
+      wad ≤ b ∧ c.Inv (s.set (balSlot a) (s.get (balSlot a) - wad)) 0 (b - wad))
+    {sevm : Sevm} {devm : Devm} {o : Outcome} {g : SFunc}
+    (hfork : CoveredFork sevm.benvStat.fork) (hca : sevm.currentTarget = ca)
+    (hadm : Exec.FrameAdmitted ca entry R.exc)
+    (ih : ∀ pc' sevm' pre' post' (child : Exec pc' sevm' pre' (.ok post')),
+      sevm'.depth < sevm.depth →
+      c.sem.At ca pc' sevm' pre' →
+      CoveredFork sevm'.benvStat.fork →
+      Exec.FrameAdmitted ca entry child →
+      c.PreWf ca sevm' pre' →
+      c.Post ca sevm' post')
+    (hg : prog[8]? = some g) (run : SFunc.RunP (StepIn R) prog sevm devm g o)
+    (hpre : c.Pre ca sevm devm) :
+    c.Post ca sevm (Outcome.devm o) :=
+  Weth9.withdraw_post_gen (P := StepIn R) StepIn.toRun hstep hfork hca
+    (fun hc hp hcode hside hle hinv =>
+      ContractSpecSem.post_of_call_self_with (Q := InRoots R) hfork hca
+        (fun pc' sevm' pre' post' child hq hd hat hf hpw =>
+          ih pc' sevm' pre' post' child hd hat hf (hadm.mono hq) hpw)
+        hp hcode hside hle hinv hc)
+    hg run hpre
 
 /-- The debit step for the solvency invariant itself: the `hstep` premise of
 `Weth9.withdraw_post` when the contract invariant is `Solvent`. -/

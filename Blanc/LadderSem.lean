@@ -2711,6 +2711,71 @@ theorem exec_preserves_noMem_sem (c : ContractSpecSem) (ca : Adr)
 
 
 
+
+end ContractSpecSem
+
+end Blanc
+
+namespace Jaune
+
+/-- An `Xlot` whose child derivation, if there is one, satisfies `Q`. -/
+def Xlot.FilledWith (Q : ∀ pc sevm devm exn, Exec pc sevm devm exn → Prop) :
+    Xlot → Prop
+  | .none => True
+  | .some ⟨evm, exn⟩ => ∃ e : Exec evm.pc evm.sta evm.dyna exn, Q _ _ _ _ e
+
+/-- `Ninst.Run` whose child derivation, if there is one, satisfies `Q`. -/
+def Ninst.RunWith (Q : ∀ pc sevm devm exn, Exec pc sevm devm exn → Prop)
+    (sevm : Sevm) (devm : Devm) (n : Ninst) (devm' : Devm) : Prop :=
+  ∃ xl : Xlot, xl.FilledWith Q ∧ ∃ pc, Ninst.StepRun pc sevm devm n xl (.ok devm')
+
+theorem Ninst.RunWith.toRun {Q : ∀ pc sevm devm exn, Exec pc sevm devm exn → Prop}
+    {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
+    (h : Ninst.RunWith Q sevm devm n devm') : Ninst.Run sevm devm n devm' := by
+  obtain ⟨xl, hf, pc, hr⟩ := h
+  refine ⟨xl, ?_, pc, hr⟩
+  cases xl with
+  | none => trivial
+  | some p =>
+      obtain ⟨evm, exn⟩ := p
+      obtain ⟨e, -⟩ := hf
+      exact ⟨e⟩
+
+theorem Ninst.RunWith.mono {Q Q' : ∀ pc sevm devm exn, Exec pc sevm devm exn → Prop}
+    (hQ : ∀ pc sevm devm exn (e : Exec pc sevm devm exn), Q _ _ _ _ e → Q' _ _ _ _ e)
+    {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
+    (h : Ninst.RunWith Q sevm devm n devm') : Ninst.RunWith Q' sevm devm n devm' := by
+  obtain ⟨xl, hf, pc, hr⟩ := h
+  refine ⟨xl, ?_, pc, hr⟩
+  cases xl with
+  | none => trivial
+  | some p =>
+      obtain ⟨evm, exn⟩ := p
+      obtain ⟨e, he⟩ := hf
+      exact ⟨e, hQ _ _ _ _ e he⟩
+
+theorem Ninst.Run.toRunWith {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
+    (h : Ninst.Run sevm devm n devm') :
+    Ninst.RunWith (fun _ _ _ _ _ => True) sevm devm n devm' := by
+  obtain ⟨xl, hf, pc, hr⟩ := h
+  refine ⟨xl, ?_, pc, hr⟩
+  cases xl with
+  | none => trivial
+  | some p =>
+      obtain ⟨evm, exn⟩ := p
+      obtain ⟨e⟩ := hf
+      exact ⟨e, trivial⟩
+
+end Jaune
+
+namespace Blanc
+
+open Jaune
+
+namespace ContractSpecSem
+
+variable {c : ContractSpecSem}
+
 /-! ### A value-carrying `CALL` from the contract's own frame
 
 If the contract's invariant already holds at the debited balance
@@ -2738,16 +2803,15 @@ private lemma post_of_state_eq_debited {ca : Adr} {sevm : Sevm} {s sf : Devm}
   rw [B256.toNat_sub_eq_of_le _ _ hle]
   omega
 
-/-- **A successful `CALL` in the contract's own frame preserves the frame
-postcondition**, given the invariant at the debited balance and the
-deeper-frame hypothesis of `ContractSpecSem.Sound`.  The generic core of
-`Blanc/Solvent.lean`'s `of_send_to_caller`. -/
-theorem post_of_call_self {ca : Adr} {sevm : Sevm} {s sf : Devm}
+/-- `post_of_call_self` for a `CALL` step whose child derivation satisfies `Q`,
+and a deeper-frame hypothesis needed only at such children. -/
+theorem post_of_call_self_with {Q : ∀ pc sevm devm exn, Exec pc sevm devm exn → Prop}
+    {ca : Adr} {sevm : Sevm} {s sf : Devm}
     {gas dst value : B256} {xs : Stack}
     (hfork : CoveredFork sevm.benvStat.fork)
     (hca : sevm.currentTarget = ca)
-    (ih : ∀ pc' sevm' pre' post',
-        Exec pc' sevm' pre' (.ok post') →
+    (ih : ∀ pc' sevm' pre' post' (child : Exec pc' sevm' pre' (.ok post')),
+        Q _ _ _ _ child →
         sevm'.depth < sevm.depth →
         CodeSem.At c.sem ca pc' sevm' pre' →
         CoveredFork sevm'.benvStat.fork →
@@ -2758,7 +2822,7 @@ theorem post_of_call_self {ca : Adr} {sevm : Sevm} {s sf : Devm}
     (hside : c.Side s.getBal)
     (hle : value ≤ s.getBal ca)
     (hinv : c.Inv (Devm.getStor s ca) 0 (s.getBal ca - value))
-    (run : Ninst.Run sevm s (.exec .call) sf) :
+    (run : Ninst.RunWith Q sevm s (.exec .call) sf) :
     c.Post ca sevm sf := by
   subst hca
   rcases run with ⟨xl, h_fill, pc, h_run⟩
@@ -2934,13 +2998,13 @@ theorem post_of_call_self {ca : Adr} {sevm : Sevm} {s sf : Devm}
           exact post_of_pre (hchildPre.state_eq h_child_state)
         · -- regular callee : a sub-execution takes place
           rw [h_xl_some] at h_fill
-          dsimp only [Xlot.Filled] at h_fill
+          dsimp only [Xlot.FilledWith] at h_fill
           have hstat : (childMsg.withBenv benv').benv.stat = sevm.benvStat := by
             show benv'.stat = sevm.benvStat
             rw [benvAfterTransfer_stat eq_bt, hc_stat]
           have hexn : ex''' = .ok child := exec_ok_of_handleError h_he h_err2
           subst hexn
-          obtain ⟨ex_sub⟩ := h_fill
+          obtain ⟨ex_sub, hq⟩ := h_fill
           have h_ss_ct : (initSevm (childMsg.withBenv benv')).currentTarget = callee :=
             hc_ct
           have hat : CodeSem.At c.sem sevm.currentTarget 0
@@ -2983,8 +3047,36 @@ theorem post_of_call_self {ca : Adr} {sevm : Sevm} {s sf : Devm}
             rw [hstat]
             exact hfork
           exact ih 0 (initSevm (childMsg.withBenv benv')) (initDevm (childMsg.withBenv benv'))
-            child ex_sub h_depth_lt hat hchildFork ⟨hchildPre, fun _ => Mem.wf_empty⟩
+            child ex_sub hq h_depth_lt hat hchildFork ⟨hchildPre, fun _ => Mem.wf_empty⟩
       exact Post.of_state_eq hchildPost h_sf_state
+
+/-- **A successful `CALL` in the contract's own frame preserves the frame
+postcondition**, given the invariant at the debited balance and the
+deeper-frame hypothesis of `ContractSpecSem.Sound`.  The generic core of
+`Blanc/Solvent.lean`'s `of_send_to_caller`; `post_of_call_self_with` is the
+same fact for a deeper-frame hypothesis restricted to the child derivations a
+predicate `Q` admits. -/
+theorem post_of_call_self {ca : Adr} {sevm : Sevm} {s sf : Devm}
+    {gas dst value : B256} {xs : Stack}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (hca : sevm.currentTarget = ca)
+    (ih : ∀ pc' sevm' pre' post',
+        Exec pc' sevm' pre' (.ok post') →
+        sevm'.depth < sevm.depth →
+        CodeSem.At c.sem ca pc' sevm' pre' →
+        CoveredFork sevm'.benvStat.fork →
+        c.PreWf ca sevm' pre' →
+        c.Post ca sevm' post')
+    (hp : gas :: dst :: value :: xs <<+ s.stack)
+    (hcode : some (s.getCode ca).toList = c.sem.image)
+    (hside : c.Side s.getBal)
+    (hle : value ≤ s.getBal ca)
+    (hinv : c.Inv (Devm.getStor s ca) 0 (s.getBal ca - value))
+    (run : Ninst.Run sevm s (.exec .call) sf) :
+    c.Post ca sevm sf :=
+  post_of_call_self_with (Q := fun _ _ _ _ _ => True) hfork hca
+    (fun pc' sevm' pre' post' child _ => ih pc' sevm' pre' post' child)
+    hp hcode hside hle hinv run.toRunWith
 
 end ContractSpecSem
 

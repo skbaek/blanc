@@ -133,10 +133,11 @@ private theorem linst_state_of_silent {sevm : Sevm} {pre post : Devm} {l : Linst
   rw [run] at hframe
   exact hframe.state.symm
 
-theorem SFunc.Run.state_of_silent {fs : List SFunc} {S : List Nat}
+theorem SFunc.RunP.state_of_silent {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {fs : List SFunc} {S : List Nat}
     (hS : SilentSet fs S = true) {sevm : Sevm} {devm : Devm} {f : SFunc} {o : Outcome}
     (hf : f.silent = true) (hrefs : f.refs.all (· ∈ S) = true)
-    (run : SFunc.Run fs sevm devm f o) :
+    (run : SFunc.RunP P fs sevm devm f o) :
     (Outcome.devm o).state = devm.state := by
   have closed : ∀ {k g}, k ∈ S → fs[k]? = some g →
       g.silent = true ∧ g.refs.all (· ∈ S) = true := by
@@ -173,7 +174,7 @@ theorem SFunc.Run.state_of_silent {fs : List SFunc} {S : List Nat}
       have hfn := hf
       simp only [SFunc.silent, Bool.and_eq_true] at hfn
       simpa [Outcome.devm] using
-        (ih hfn.2 hrefs).trans (ninst_state_of_silent hfn.1 hrun)
+        (ih hfn.2 hrefs).trans (ninst_state_of_silent hfn.1 (hP hrun))
   | dest burn run ih =>
       simpa [Outcome.devm] using (ih hf hrefs).trans burn.state.symm
   | jump d lookup pop run ih =>
@@ -196,6 +197,13 @@ theorem SFunc.Run.state_of_silent {fs : List SFunc} {S : List Nat}
       simp only [SFunc.silent] at hfn
       simpa [Outcome.devm] using
         (ihTail hfn hfr.2).trans ((ihRun htarget.1 htarget.2).trans pop.state.symm)
+
+theorem SFunc.Run.state_of_silent {fs : List SFunc} {S : List Nat}
+    (hS : SilentSet fs S = true) {sevm : Sevm} {devm : Devm} {f : SFunc} {o : Outcome}
+    (hf : f.silent = true) (hrefs : f.refs.all (· ∈ S) = true)
+    (run : SFunc.Run fs sevm devm f o) :
+    (Outcome.devm o).state = devm.state :=
+  SFunc.RunP.state_of_silent id hS hf hrefs run
 
 section Weth9
 

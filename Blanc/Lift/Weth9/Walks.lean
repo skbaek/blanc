@@ -212,9 +212,10 @@ theorem prefix_of_popBurn2 {s s' : Devm} {a b d w : B256} {xs : Stack}
   injection ht' with h2 ht'
   exact ⟨h1.symm, h2.symm, t, ht'⟩
 
-theorem not_run_revert_tail {fs : List SFunc} {sevm : Sevm} {devm : Devm}
+theorem not_run_revert_tail {P : Sevm → Devm → Ninst → Devm → Prop}
+    {fs : List SFunc} {sevm : Sevm} {devm : Devm}
     {o : Outcome} :
-    ¬ SFunc.Run fs sevm devm
+    ¬ SFunc.RunP P fs sevm devm
       (.next (.push [0x00] (by decide)) (.next (.reg (.dup 0)) (.last .revert))) o := by
   intro run
   rcases run with _ | _ | _ | _ | _ | ⟨_, run⟩

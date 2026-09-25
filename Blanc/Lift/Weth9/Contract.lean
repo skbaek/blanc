@@ -6,8 +6,8 @@ import Blanc.Lift.Weth9.Spec
 # The WETH9 frame contract
 
 `weth9Sem` is the certified code semantics of the pinned WETH9 runtime: its
-image is the deployed bytes and its run relation is the lifted program on a
-covered fork, justified by `exec_lift` (gate G1).  `weth9Spec` is the
+image is the deployed bytes and its run relation records that the frame runs
+those bytes and, on a covered fork, the lifted program (`exec_lift`, gate G1).  `weth9Spec` is the
 booked-sum frame contract (`ContractSpecSem.ofBookedSum`) at WETH9's
 collision-safe booked total `bookedSum`; its invariant is `Solvent`.
 -/
@@ -24,9 +24,10 @@ theorem code_toList_length : code.toList.length = 3124 := by
 /-- The certified semantics of the pinned WETH9 runtime. -/
 def weth9Sem : CodeSem where
   image := some code.toList
-  Run sevm pre post := CoveredFork sevm.benvStat.fork → SProg.Run prog sevm pre post
+  Run sevm pre post :=
+    sevm.code = code ∧ (CoveredFork sevm.benvStat.fork → SProg.Run prog sevm pre post)
   correct := by
-    intro sevm pre post exc hcode hfork
+    intro sevm pre post exc hcode
     have h : sevm.code.toList = code.toList := Option.some.inj hcode
     have hc : sevm.code = code := by
       cases hs : sevm.code with
@@ -36,7 +37,7 @@ def weth9Sem : CodeSem where
           rw [hs, hk] at h
           rw [ByteArray.toList_eq_toList_data, ByteArray.toList_eq_toList_data] at h
           exact congrArg ByteArray.mk (Array.toList_inj.mp h)
-    exact exec_lift hc hfork exc
+    exact ⟨hc, fun hfork => exec_lift hc hfork exc⟩
   ne_nil := by
     intro l hl h
     have h' : code.toList = l := Option.some.inj hl
