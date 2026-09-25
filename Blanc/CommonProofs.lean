@@ -6420,6 +6420,446 @@ lemma not_delegation_of_compile {p : Prog} {code : ByteArray}
   change (91 : UInt8) = 239 at h_false
   contradiction
 
+/-- The certified semantics of a compiled Blanc program. -/
+def Prog.codeSem (p : Prog) : CodeSem :=
+  { image := Prog.compile p
+    Run := fun sevm pre post => Prog.Run sevm pre p post
+    correct := by
+      intro sevm pre post h_run h_code
+      exact correct sevm pre p post h_run h_code
+    ne_nil := fun h => by
+      intro h_nil
+      apply Prog.compile_ne_nil (p := p)
+      exact h.trans (congrArg some h_nil)
+    not_delegation := fun h => not_delegation_of_compile h }
+
+lemma not_empty_of_codeSem {sem : CodeSem} {code : ByteArray}
+    (h : some code.toList = sem.image) : code ≠ .empty := by
+  intro hc
+  have h_ne : sem.image ≠ some [] := by
+    intro h_nil
+    exact (sem.ne_nil h_nil) rfl
+  apply h_ne
+  rw [← h, hc]
+  have h_empty_toList : ByteArray.empty.toList = [] := by
+    unfold ByteArray.toList
+    unfold ByteArray.toList.loop
+    rfl
+  exact congrArg some h_empty_toList
+
+/-- The "we are inside the contract" case, shared by every driver outcome:
+either the run failed (nothing to prove) or it completed a program run at
+`pc = 0`, which the depth induction turns into the contract-level invariant. -/
+private lemma lift_core_sem.atTarget
+    {ε : Nat → Sevm → Devm → Execution → Prop} {π : Sevm → Devm → Devm → Prop}
+    {ca : Adr} {sem : CodeSem}
+    (analog : ∀ {sevm pre post}, π sevm pre post → ε 0 sevm pre (.ok post))
+    ( depth_ind :
+      ∀ {sevm pre post},
+        sem.Run sevm pre post →
+        sevm.currentTarget = ca →
+        ForallDeeperAtSem sevm.depth ca sem (fun pc s d e _ => ε pc s d e) →
+        π sevm pre post )
+    ( errAtTarget :
+      ∀ {pc sevm devm err devm'},
+        sevm.currentTarget = ca → ε pc sevm devm (.error ⟨err, devm'⟩) )
+    {pc : Nat} {sevm : Sevm} {devm : Devm} {exn : Execution}
+    (ex : Exec pc sevm devm exn)
+    (h_fa : ForallDeeperAtSem sevm.depth ca sem (fun pc s d e _ => ε pc s d e))
+    (h_at_p : sem.At ca pc sevm devm) (h_eq : sevm.currentTarget = ca)
+    : ε pc sevm devm exn := by
+  cases exn with
+  | error e => exact errAtTarget h_eq
+  | ok post =>
+    have h_pc : pc = 0 := (h_at_p.right h_eq).right
+    subst h_pc
+    exact analog
+      (depth_ind (sem.correct ex (h_at_p.right h_eq).left) h_eq h_fa)
+
+/-- Code preservation across one driver step, in the form the `CodeSem.At`
+bookkeeping needs. -/
+lemma lift_core_sem.stepCode {pc : Nat} {sevm : Sevm} {devm devm' : Devm}
+    {xl : Xlot} (hxl : Xlot.Rel Devm.CodePreserve xl)
+    (hrun : Step.Run (Evm.step ⟨pc, sevm, devm⟩) xl (.ok devm'))
+    (a : Adr) (ha : (devm.getCode a).toList ≠ []) :
+    devm'.getCode a = devm.getCode a :=
+  Evm.step_effect codePreserve_refl_trans.1 Ninst.codePreserve_effectRec
+    Jinst.codePreserve_effect Linst.codePreserve_effect hxl hrun a ha
+
+/-- The eliminator every contract-level invariant proof runs on: strong
+induction on frame depth combined with the driver's case analysis, carrying the
+program-location bookkeeping (`CodeSem.At`) across steps and across suspensions.
+Its handlers stay indexed by *instruction kind*, so the decode dispatch happens
+here once and `lift`/`lift_inv` are insulated from the flattening. -/
+lemma lift_core_sem
+    (ε : Nat → Sevm → Devm → Execution → Prop)
+    (π : Sevm → Devm → Devm → Prop)
+    (analog : ∀ {sevm pre post}, π sevm pre post → ε 0 sevm pre (.ok post))
+    (ca : Adr) (sem : CodeSem)
+    ( depth_ind :
+      ∀ {sevm pre post},
+        sem.Run sevm pre post →
+        sevm.currentTarget = ca →
+        ForallDeeperAtSem sevm.depth ca sem (fun pc s d e _ => ε pc s d e) →
+        π sevm pre post )
+    ( errAtTarget :
+      ∀ {pc sevm devm err devm'},
+        sevm.currentTarget = ca →
+        ε pc sevm devm (.error ⟨err, devm'⟩) )
+    ( invOp :
+      ∀ {pc sevm devm},
+        sevm.code.getInst pc = none →
+        sevm.currentTarget ≠ ca →
+        ε pc sevm devm (.error ⟨.halt (.invalidOpcode .none), devm⟩) )
+    ( nextNoneErr :
+      ∀ {pc sevm devm n err devm'},
+        Ninst.At sevm.code pc n →
+        Ninst.StepRun pc sevm devm n .none (.error ⟨err, devm'⟩) →
+        sevm.currentTarget ≠ ca →
+        ε pc sevm devm (.error ⟨err, devm'⟩) )
+    ( nextSomeErr :
+      ∀ {pc sevm devm n evm_ exn_ err devm'},
+        Ninst.At sevm.code pc n →
+        Ninst.StepRun pc sevm devm n (.some ⟨evm_, exn_⟩) (.error ⟨err, devm'⟩) →
+        Exec evm_.pc evm_.sta evm_.dyna exn_ →
+        sevm.currentTarget ≠ ca →
+        ε evm_.pc evm_.sta evm_.dyna exn_ →
+        ε pc sevm devm (.error ⟨err, devm'⟩) )
+    ( nextNoneRec :
+      ∀ {pc sevm devm n devm' exn},
+        Ninst.At sevm.code pc n →
+        Ninst.StepRun pc sevm devm n .none (.ok devm') →
+        Exec (pc + n.size) sevm devm' exn →
+        sevm.currentTarget ≠ ca →
+        ε (pc + n.size) sevm devm' exn →
+        ε pc sevm devm exn )
+    ( nextSomeRec :
+      ∀ {pc sevm devm n evm_ exn_ devm' exn},
+        Ninst.At sevm.code pc n →
+        Ninst.StepRun pc sevm devm n (.some ⟨evm_, exn_⟩) (.ok devm') →
+        Exec evm_.pc evm_.sta evm_.dyna exn_ →
+        Exec (pc + n.size) sevm devm' exn →
+        sevm.currentTarget ≠ ca →
+        ε evm_.pc evm_.sta evm_.dyna exn_ →
+        ε (pc + n.size) sevm devm' exn →
+        ε pc sevm devm exn )
+    ( jumpErr :
+      ∀ {pc sevm devm j err devm'},
+        Jinst.At sevm.code pc j →
+        Jinst.Run ⟨pc, sevm, devm⟩ j (.error ⟨err, devm'⟩) →
+        sevm.currentTarget ≠ ca →
+        ε pc sevm devm (.error ⟨err, devm'⟩) )
+    ( jumpRec :
+      ∀ {pc sevm devm j pc' devm' exn},
+        Jinst.At sevm.code pc j →
+        Jinst.Run ⟨pc, sevm, devm⟩ j (.ok ⟨pc', devm'⟩) →
+        Exec pc' sevm devm' exn →
+        sevm.currentTarget ≠ ca →
+        ε pc' sevm devm' exn →
+        ε pc sevm devm exn )
+    ( last :
+      ∀ {pc sevm devm l exn},
+        Linst.At sevm.code pc l →
+        Linst.Run sevm devm l exn →
+        sevm.currentTarget ≠ ca →
+        ε pc sevm devm exn ) :
+    Exec.Fa (Exec.WknSem ca sem (fun pc s d e _ => ε pc s d e)) := by
+  apply Exec.strong_rec
+  apply @Exec.rec (Fortify (Exec.WknSem ca sem (fun pc s d e _ => ε pc s d e)))
+  -- halt
+  · intro pc sevm devm ex hstep h_fa h_at_p
+    rcases em (sevm.currentTarget = ca) with h_eq | h_ne
+    · exact lift_core_sem.atTarget analog depth_ind errAtTarget
+        (.halt hstep) h_fa h_at_p h_eq
+    · rcases hgi : (Evm.getInst ⟨pc, sevm, devm⟩) with _ | i
+      · rw [Evm.step_invOp hgi] at hstep
+        cases hstep
+        exact invOp hgi h_ne
+      · cases i with
+        | next n =>
+          have hns : Ninst.step ⟨pc, sevm, devm⟩ n = .halt ex := by
+            rw [← Evm.step_next (n := n) hgi]; exact hstep
+          have hrun : Ninst.StepRun pc sevm devm n .none ex := by
+            unfold Ninst.StepRun; rw [hns]; exact ⟨rfl, rfl⟩
+          cases ex with
+          | error e => exact nextNoneErr hgi hrun h_ne
+          | ok d => exact absurd hns Ninst.step_ne_halt_ok
+        | jump j =>
+          rw [Evm.step_jump (j := j) hgi] at hstep
+          rcases hj : j.run ⟨pc, sevm, devm⟩ with e | ⟨pc', devm'⟩ <;>
+            rw [hj] at hstep <;> simp only [Step.ofJump] at hstep
+          · cases hstep; exact jumpErr hgi hj h_ne
+          · cases hstep
+        | last l =>
+          rw [Evm.step_last (l := l) hgi] at hstep
+          cases hstep
+          exact last hgi rfl h_ne
+  -- cont
+  · intro pc sevm devm pc' devm' exn hstep ex ih h_fa h_at_p
+    rcases em (sevm.currentTarget = ca) with h_eq | h_ne
+    · exact lift_core_sem.atTarget analog depth_ind errAtTarget
+        (.cont hstep ex) h_fa h_at_p h_eq
+    · have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc =>
+        (sem.ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))) rfl
+      have hcode : devm'.getCode ca = devm.getCode ca :=
+        lift_core_sem.stepCode (xl := .none) trivial
+          (by rw [hstep]; exact ⟨rfl, rfl⟩) ca h_ne_code
+      have h_at' : sem.At ca pc' sevm devm' :=
+        ⟨by rw [hcode]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩
+      rcases hgi : (Evm.getInst ⟨pc, sevm, devm⟩) with _ | i
+      · rw [Evm.step_invOp hgi] at hstep; cases hstep
+      · cases i with
+        | next n =>
+          have hns : Ninst.step ⟨pc, sevm, devm⟩ n = .cont pc' devm' := by
+            rw [← Evm.step_next (n := n) hgi]; exact hstep
+          have hpc : pc' = pc + n.size := Ninst.step_cont_pc hns
+          subst hpc
+          have hrun : Ninst.StepRun pc sevm devm n .none (.ok devm') := by
+            unfold Ninst.StepRun; rw [hns]; exact ⟨rfl, rfl⟩
+          exact nextNoneRec hgi hrun ex h_ne (ih h_fa h_at')
+        | jump j =>
+          rw [Evm.step_jump (j := j) hgi] at hstep
+          exact jumpRec hgi (Step.ofJump_cont hstep) ex h_ne (ih h_fa h_at')
+        | last l =>
+          rw [Evm.step_last (l := l) hgi] at hstep; cases hstep
+  -- doneErr
+  · intro pc sevm devm f rsm pc' r e hstep henter hr h_fa h_at_p
+    rcases em (sevm.currentTarget = ca) with h_eq | h_ne
+    · exact lift_core_sem.atTarget analog depth_ind errAtTarget
+        (.doneErr hstep henter hr) h_fa h_at_p h_eq
+    · obtain ⟨x, hxat, -, -⟩ := Evm.step_spawn_inv hstep
+      have hrun : Ninst.StepRun pc sevm devm (.exec x) .none (.error e) := by
+        unfold Ninst.StepRun
+        rw [← Evm.step_next (n := Ninst.exec x) hxat, hstep]
+        exact ⟨r, RunFrame.of_done henter, hr.symm⟩
+      exact nextNoneErr hxat hrun h_ne
+  -- doneOk
+  · intro pc sevm devm f rsm pc' r devm' exn hstep henter hr ex ih h_fa h_at_p
+    rcases em (sevm.currentTarget = ca) with h_eq | h_ne
+    · exact lift_core_sem.atTarget analog depth_ind errAtTarget
+        (.doneOk hstep henter hr ex) h_fa h_at_p h_eq
+    · obtain ⟨x, hxat, -, hpc'⟩ := Evm.step_spawn_inv hstep
+      subst hpc'
+      have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc =>
+        (sem.ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))) rfl
+      have hrun : Ninst.StepRun pc sevm devm (.exec x) .none (.ok devm') := by
+        unfold Ninst.StepRun
+        rw [← Evm.step_next (n := Ninst.exec x) hxat, hstep]
+        exact ⟨r, RunFrame.of_done henter, hr.symm⟩
+      have hcode : devm'.getCode ca = devm.getCode ca :=
+        lift_core_sem.stepCode (xl := .none) trivial
+          (by rw [hstep]; exact ⟨r, RunFrame.of_done henter, hr.symm⟩) ca h_ne_code
+      have h_at' : sem.At ca (pc + 1) sevm devm' :=
+        ⟨by rw [hcode]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩
+      exact nextNoneRec hxat hrun ex h_ne (ih h_fa h_at')
+  -- runErr
+  · intro pc sevm devm f rsm pc' cevm raw e hstep henter child hr ihc h_fa h_at_p
+    rcases em (sevm.currentTarget = ca) with h_eq | h_ne
+    · exact lift_core_sem.atTarget analog depth_ind errAtTarget
+        (.runErr hstep henter child hr) h_fa h_at_p h_eq
+    · obtain ⟨x, hxat, -, -⟩ := Evm.step_spawn_inv hstep
+      obtain ⟨hpc0, hgc, hsrc⟩ := Evm.step_spawn_child hstep henter
+      have hdepth : cevm.sta.depth < sevm.depth := by
+        rw [Frame.enter_run_depth henter]; exact Step.spawn_depth_lt hstep
+      have h_at_child : sem.At ca cevm.pc cevm.sta cevm.dyna := by
+        refine ⟨by rw [hgc ca]; exact h_at_p.left, fun hct => ⟨?_, hpc0⟩⟩
+        have hne' : sevm.currentTarget ≠ cevm.sta.currentTarget := by
+          rw [hct]; exact h_ne
+        have hcode := hsrc hne'
+          (by rw [hct]; exact not_empty_of_codeSem h_at_p.left)
+          (by rw [hct]; exact sem.not_delegation h_at_p.left)
+        rw [hcode, hct]
+        exact h_at_p.left
+      have hrun :
+          Ninst.StepRun pc sevm devm (.exec x) (.some ⟨cevm, raw⟩) (.error e) := by
+        unfold Ninst.StepRun
+        rw [← Evm.step_next (n := Ninst.exec x) hxat, hstep]
+        exact ⟨f.settle raw, RunFrame.of_run henter, hr.symm⟩
+      exact nextSomeErr hxat hrun child h_ne
+        (h_fa cevm.pc cevm.sta cevm.dyna raw child hdepth h_at_child)
+  -- runOk
+  · intro pc sevm devm f rsm pc' cevm raw devm' exn hstep henter child hr ex
+      ihc ih h_fa h_at_p
+    rcases em (sevm.currentTarget = ca) with h_eq | h_ne
+    · exact lift_core_sem.atTarget analog depth_ind errAtTarget
+        (.runOk hstep henter child hr ex) h_fa h_at_p h_eq
+    · obtain ⟨x, hxat, -, hpc'⟩ := Evm.step_spawn_inv hstep
+      subst hpc'
+      obtain ⟨hpc0, hgc, hsrc⟩ := Evm.step_spawn_child hstep henter
+      have hdepth : cevm.sta.depth < sevm.depth := by
+        rw [Frame.enter_run_depth henter]; exact Step.spawn_depth_lt hstep
+      have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc =>
+        (sem.ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))) rfl
+      have h_at_child : sem.At ca cevm.pc cevm.sta cevm.dyna := by
+        refine ⟨by rw [hgc ca]; exact h_at_p.left, fun hct => ⟨?_, hpc0⟩⟩
+        have hne' : sevm.currentTarget ≠ cevm.sta.currentTarget := by
+          rw [hct]; exact h_ne
+        have hcode := hsrc hne'
+          (by rw [hct]; exact not_empty_of_codeSem h_at_p.left)
+          (by rw [hct]; exact sem.not_delegation h_at_p.left)
+        rw [hcode, hct]
+        exact h_at_p.left
+      have hchild : Xlot.Rel Devm.CodePreserve (.some ⟨cevm, raw⟩) :=
+        Exec.effect codePreserve_refl_trans.1 codePreserve_refl_trans.2
+          Ninst.codePreserve_effectRec Jinst.codePreserve_effect
+          Linst.codePreserve_effect child
+      have hrun :
+          Ninst.StepRun pc sevm devm (.exec x) (.some ⟨cevm, raw⟩) (.ok devm') := by
+        unfold Ninst.StepRun
+        rw [← Evm.step_next (n := Ninst.exec x) hxat, hstep]
+        exact ⟨f.settle raw, RunFrame.of_run henter, hr.symm⟩
+      have hcode : devm'.getCode ca = devm.getCode ca :=
+        lift_core_sem.stepCode (xl := .some ⟨cevm, raw⟩) hchild
+          (by rw [hstep]; exact ⟨f.settle raw, RunFrame.of_run henter, hr.symm⟩)
+          ca h_ne_code
+      have h_at' : sem.At ca (pc + 1) sevm devm' :=
+        ⟨by rw [hcode]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩
+      exact nextSomeRec hxat hrun child ex h_ne
+        (h_fa cevm.pc cevm.sta cevm.dyna raw child hdepth h_at_child)
+        (ih h_fa h_at')
+
+lemma lift_sem
+    (R : Sevm → Devm → Devm → Prop)
+    (ca : Adr) -- contract address
+    (sem : CodeSem)
+    ( depth_ind :
+      ∀ {sevm pre post},
+        sem.Run sevm pre post →
+        sevm.currentTarget = ca →
+        ForallSubExecSem sevm.depth ca sem R →
+        R sevm pre post )
+    ( nextNone :
+      ∀ {pc} {sevm} {pre} {n} {inter} {post},
+        Ninst.At sevm.code pc n →
+        Ninst.StepRun pc sevm pre n .none (.ok inter) →
+        Exec (pc + n.size) sevm inter (.ok post) →
+        sevm.currentTarget ≠ ca →
+        R sevm inter post →
+        R sevm pre post )
+    ( nextSome :
+      ∀ {pc} {sevm} {pre} {n} {evm'}
+        {exn' : Execution} {inter} {post},
+        Ninst.At sevm.code pc n →
+        Ninst.StepRun pc sevm pre n
+          (.some ⟨evm', exn'⟩)
+          (.ok inter) →
+        Exec evm'.pc evm'.sta evm'.dyna exn' →
+        Exec (pc + n.size) sevm inter (.ok post) →
+        sevm.currentTarget ≠ ca →
+        ifOk (R evm'.sta evm'.dyna) exn' →
+        R sevm inter post →
+        R sevm pre post )
+    ( jump :
+      ∀ {pc} {sevm} {pre} {j} {pc'} {inter} {post},
+        Jinst.At sevm.code pc j →
+        Jinst.Run ⟨pc, sevm, pre⟩ j (.ok ⟨pc', inter⟩) →
+        Exec pc' sevm inter (.ok post) →
+        sevm.currentTarget ≠ ca →
+        R sevm inter post →
+        R sevm pre post )
+    ( last :
+      ∀ {pc} {sevm} {pre} {l} {post},
+        Linst.At sevm.code pc l →
+        Linst.Run sevm pre l (.ok post) →
+        sevm.currentTarget ≠ ca →
+        R sevm pre post ) :
+    ∀ pc sevm pre post,
+      Exec pc sevm pre (.ok post) →
+      CodeSem.At sem ca pc sevm pre →
+      R sevm pre post := by
+  intro pc sevm pre post h_exc h_at
+  refine lift_core_sem (fun _ sevm pre exn => ifOk (R sevm pre) exn) R (fun h => h) ca sem
+    ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ pc sevm pre (.ok post) h_exc h_at
+  · intro sevm' pre' post' h_run h_eq h_fa
+    apply depth_ind h_run h_eq
+    intro pc_ sevm_ devm_ post_ h_exc' h_lt h_at'
+    exact h_fa pc_ sevm_ devm_ (.ok post_) h_exc' h_lt h_at'
+  · intro pc' sevm' devm' err devm'' h_eq; exact trivial
+  · intro pc' sevm' devm' h_get h_ne; exact trivial
+  · intro pc' sevm' devm' n err devm'' h_at' h_run h_ne; exact trivial
+  · intro pc' sevm' devm' n evm_ exn_ err devm'' h_at' h_run ex_sub h_ne h_ih; exact trivial
+  · intro pc' sevm' devm' n devm'' exn h_at' h_run ex h_ne h_ih
+    cases exn with
+    | error e => exact trivial
+    | ok post' => exact nextNone h_at' h_run ex h_ne h_ih
+  · intro pc' sevm' devm' n evm_ exn_ devm'' exn h_at' h_run ex_sub ex h_ne h_ih_sub h_ih
+    cases exn with
+    | error e => exact trivial
+    | ok post' => exact nextSome h_at' h_run ex_sub ex h_ne h_ih_sub h_ih
+  · intro pc' sevm' devm' j err devm'' h_at' h_run h_ne; exact trivial
+  · intro pc' sevm' devm' j pc_ devm'' exn h_at' h_run ex h_ne h_ih
+    cases exn with
+    | error e => exact trivial
+    | ok post' => exact jump h_at' h_run ex h_ne h_ih
+  · intro pc' sevm' devm' l exn h_at' h_run h_ne
+    cases exn with
+    | error e => exact trivial
+    | ok post' => exact last h_at' h_run h_ne
+
+lemma lift_inv_sem
+    (ca : Adr) (sem : CodeSem)
+    (σ : Sevm → Devm → Prop)
+    (ρ : Sevm → Devm → Prop)
+    ( with_depth_ind :
+      ∀ {sevm pre post},
+        sem.Run sevm pre post →
+        sevm.currentTarget = ca →
+        ( ∀ pc' sevm' pre' post',
+            Exec pc' sevm' pre' (.ok post') →
+            sevm'.depth < sevm.depth →
+            CodeSem.At sem ca pc' sevm' pre' →
+            σ sevm' pre' →
+            ρ sevm' post' ) →
+        σ sevm pre →
+        ρ sevm post )
+    ( nextNone :
+      ∀ {pc} {sevm} {pre} {n} {inter},
+        Ninst.At sevm.code pc n →
+        Ninst.StepRun pc sevm pre n .none (.ok inter) →
+        sevm.currentTarget ≠ ca →
+        σ sevm pre →
+        σ sevm inter )
+    ( nextSome :
+      ∀ {pc} {sevm} {pre} {n} {evm'} {exn'} {inter},
+        Ninst.At sevm.code pc n →
+        Ninst.StepRun pc sevm pre n (.some ⟨evm', exn'⟩) (.ok inter) →
+        Exec evm'.pc evm'.sta evm'.dyna exn' →
+        sevm.currentTarget ≠ ca →
+        σ sevm pre →
+        σ evm'.sta evm'.dyna ∧ (ifOk (ρ evm'.sta) exn' → σ sevm inter) )
+    ( jump :
+      ∀ {pc} {sevm} {pre} {j} {pc'} {inter},
+        Jinst.At sevm.code pc j →
+        Jinst.Run ⟨pc, sevm, pre⟩ j (.ok ⟨pc', inter⟩) →
+        sevm.currentTarget ≠ ca →
+        σ sevm pre →
+        σ sevm inter )
+    ( last :
+      ∀ {pc} {sevm} {pre} {l} {post},
+        Linst.At sevm.code pc l →
+        Linst.Run sevm pre l (.ok post) →
+        sevm.currentTarget ≠ ca →
+        σ sevm pre →
+        ρ sevm post ) :
+    ∀ pc sevm devm post,
+      Exec pc sevm devm (.ok post) →
+      CodeSem.At sem ca pc sevm devm →
+      σ sevm devm →
+      ρ sevm post := by
+  apply @Blanc.lift_sem (fun sevm pre post => σ sevm pre → ρ sevm post) ca sem with_depth_ind
+  · intro pc sevm pre n inter post h_at h_run _ h_ne h_ih h_pi
+    exact h_ih (nextNone h_at h_run h_ne h_pi)
+  · intro pc sevm pre n evm' exn' inter post h_at h_run ex_sub _ h_ne h_ifOk h_ih h_pi
+    rcases nextSome h_at h_run ex_sub h_ne h_pi with ⟨h_pi_sub, h_imp⟩
+    apply h_ih; apply h_imp
+    cases exn' with
+    | error e => exact trivial
+    | ok post' => exact h_ifOk h_pi_sub
+  · intro pc sevm pre j pc' inter post h_at h_run _ h_ne h_ih h_pi
+    exact h_ih (jump h_at h_run h_ne h_pi)
+  · intro pc sevm pre l post h_at h_run h_ne h_pi
+    exact last h_at h_run h_ne h_pi
+
 /-- The "we are inside the contract" case, shared by every driver outcome:
 either the run failed (nothing to prove) or it completed a program run at
 `pc = 0`, which the depth induction turns into the contract-level invariant. -/
@@ -6441,13 +6881,8 @@ private lemma lift_core.atTarget
     (h_fa : ForallDeeperAt sevm.depth ca p (fun pc s d e _ => ε pc s d e))
     (h_at_p : p.At ca pc sevm devm) (h_eq : sevm.currentTarget = ca) :
     ε pc sevm devm exn := by
-  cases exn with
-  | error e => exact errAtTarget h_eq
-  | ok post =>
-    have h_pc : pc = 0 := (h_at_p.right h_eq).right
-    subst h_pc
-    exact analog
-      (depth_ind (correct sevm devm p post ex (h_at_p.right h_eq).left) h_eq h_fa)
+  simpa [Prog.codeSem, CodeSem.At, Prog.At, ForallDeeperAtSem, ForallDeeperAt] using
+    (lift_core_sem.atTarget (sem := p.codeSem) analog depth_ind errAtTarget ex h_fa h_at_p h_eq)
 
 /-- Code preservation across one driver step, in the form the `Prog.At`
 bookkeeping needs. -/
@@ -6455,9 +6890,7 @@ lemma lift_core.stepCode {pc : Nat} {sevm : Sevm} {devm devm' : Devm}
     {xl : Xlot} (hxl : Xlot.Rel Devm.CodePreserve xl)
     (hrun : Step.Run (Evm.step ⟨pc, sevm, devm⟩) xl (.ok devm'))
     (a : Adr) (ha : (devm.getCode a).toList ≠ []) :
-    devm'.getCode a = devm.getCode a :=
-  Evm.step_effect codePreserve_refl_trans.1 Ninst.codePreserve_effectRec
-    Jinst.codePreserve_effect Linst.codePreserve_effect hxl hrun a ha
+    devm'.getCode a = devm.getCode a := lift_core_sem.stepCode hxl hrun a ha
 
 /-- The eliminator every contract-level invariant proof runs on: strong
 induction on frame depth combined with the driver's case analysis, carrying the
@@ -6537,159 +6970,10 @@ lemma lift_core
         sevm.currentTarget ≠ ca →
         ε pc sevm devm exn ) :
     Exec.Fa (Exec.Wkn ca p (fun pc s d e _ => ε pc s d e)) := by
-  apply Exec.strong_rec
-  apply @Exec.rec (Fortify (Exec.Wkn ca p (fun pc s d e _ => ε pc s d e)))
-  -- halt
-  · intro pc sevm devm ex hstep h_fa h_at_p
-    rcases em (sevm.currentTarget = ca) with h_eq | h_ne
-    · exact lift_core.atTarget analog depth_ind errAtTarget
-        (.halt hstep) h_fa h_at_p h_eq
-    · rcases hgi : (Evm.getInst ⟨pc, sevm, devm⟩) with _ | i
-      · rw [Evm.step_invOp hgi] at hstep
-        cases hstep
-        exact invOp hgi h_ne
-      · cases i with
-        | next n =>
-          have hns : Ninst.step ⟨pc, sevm, devm⟩ n = .halt ex := by
-            rw [← Evm.step_next (n := n) hgi]; exact hstep
-          have hrun : Ninst.StepRun pc sevm devm n .none ex := by
-            unfold Ninst.StepRun; rw [hns]; exact ⟨rfl, rfl⟩
-          cases ex with
-          | error e => exact nextNoneErr hgi hrun h_ne
-          | ok d => exact absurd hns Ninst.step_ne_halt_ok
-        | jump j =>
-          rw [Evm.step_jump (j := j) hgi] at hstep
-          rcases hj : j.run ⟨pc, sevm, devm⟩ with e | ⟨pc', devm'⟩ <;>
-            rw [hj] at hstep <;> simp only [Step.ofJump] at hstep
-          · cases hstep; exact jumpErr hgi hj h_ne
-          · cases hstep
-        | last l =>
-          rw [Evm.step_last (l := l) hgi] at hstep
-          cases hstep
-          exact last hgi rfl h_ne
-  -- cont
-  · intro pc sevm devm pc' devm' exn hstep ex ih h_fa h_at_p
-    rcases em (sevm.currentTarget = ca) with h_eq | h_ne
-    · exact lift_core.atTarget analog depth_ind errAtTarget
-        (.cont hstep ex) h_fa h_at_p h_eq
-    · have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc =>
-        Prog.compile_ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))
-      have hcode : devm'.getCode ca = devm.getCode ca :=
-        lift_core.stepCode (xl := .none) trivial
-          (by rw [hstep]; exact ⟨rfl, rfl⟩) ca h_ne_code
-      have h_at' : p.At ca pc' sevm devm' :=
-        ⟨by rw [hcode]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩
-      rcases hgi : (Evm.getInst ⟨pc, sevm, devm⟩) with _ | i
-      · rw [Evm.step_invOp hgi] at hstep; cases hstep
-      · cases i with
-        | next n =>
-          have hns : Ninst.step ⟨pc, sevm, devm⟩ n = .cont pc' devm' := by
-            rw [← Evm.step_next (n := n) hgi]; exact hstep
-          have hpc : pc' = pc + n.size := Ninst.step_cont_pc hns
-          subst hpc
-          have hrun : Ninst.StepRun pc sevm devm n .none (.ok devm') := by
-            unfold Ninst.StepRun; rw [hns]; exact ⟨rfl, rfl⟩
-          exact nextNoneRec hgi hrun ex h_ne (ih h_fa h_at')
-        | jump j =>
-          rw [Evm.step_jump (j := j) hgi] at hstep
-          exact jumpRec hgi (Step.ofJump_cont hstep) ex h_ne (ih h_fa h_at')
-        | last l =>
-          rw [Evm.step_last (l := l) hgi] at hstep; cases hstep
-  -- doneErr
-  · intro pc sevm devm f rsm pc' r e hstep henter hr h_fa h_at_p
-    rcases em (sevm.currentTarget = ca) with h_eq | h_ne
-    · exact lift_core.atTarget analog depth_ind errAtTarget
-        (.doneErr hstep henter hr) h_fa h_at_p h_eq
-    · obtain ⟨x, hxat, -, -⟩ := Evm.step_spawn_inv hstep
-      have hrun : Ninst.StepRun pc sevm devm (.exec x) .none (.error e) := by
-        unfold Ninst.StepRun
-        rw [← Evm.step_next (n := Ninst.exec x) hxat, hstep]
-        exact ⟨r, RunFrame.of_done henter, hr.symm⟩
-      exact nextNoneErr hxat hrun h_ne
-  -- doneOk
-  · intro pc sevm devm f rsm pc' r devm' exn hstep henter hr ex ih h_fa h_at_p
-    rcases em (sevm.currentTarget = ca) with h_eq | h_ne
-    · exact lift_core.atTarget analog depth_ind errAtTarget
-        (.doneOk hstep henter hr ex) h_fa h_at_p h_eq
-    · obtain ⟨x, hxat, -, hpc'⟩ := Evm.step_spawn_inv hstep
-      subst hpc'
-      have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc =>
-        Prog.compile_ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))
-      have hrun : Ninst.StepRun pc sevm devm (.exec x) .none (.ok devm') := by
-        unfold Ninst.StepRun
-        rw [← Evm.step_next (n := Ninst.exec x) hxat, hstep]
-        exact ⟨r, RunFrame.of_done henter, hr.symm⟩
-      have hcode : devm'.getCode ca = devm.getCode ca :=
-        lift_core.stepCode (xl := .none) trivial
-          (by rw [hstep]; exact ⟨r, RunFrame.of_done henter, hr.symm⟩) ca h_ne_code
-      have h_at' : p.At ca (pc + 1) sevm devm' :=
-        ⟨by rw [hcode]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩
-      exact nextNoneRec hxat hrun ex h_ne (ih h_fa h_at')
-  -- runErr
-  · intro pc sevm devm f rsm pc' cevm raw e hstep henter child hr ihc h_fa h_at_p
-    rcases em (sevm.currentTarget = ca) with h_eq | h_ne
-    · exact lift_core.atTarget analog depth_ind errAtTarget
-        (.runErr hstep henter child hr) h_fa h_at_p h_eq
-    · obtain ⟨x, hxat, -, -⟩ := Evm.step_spawn_inv hstep
-      obtain ⟨hpc0, hgc, hsrc⟩ := Evm.step_spawn_child hstep henter
-      have hdepth : cevm.sta.depth < sevm.depth := by
-        rw [Frame.enter_run_depth henter]; exact Step.spawn_depth_lt hstep
-      have h_at_child : p.At ca cevm.pc cevm.sta cevm.dyna := by
-        refine ⟨by rw [hgc ca]; exact h_at_p.left, fun hct => ⟨?_, hpc0⟩⟩
-        have hne' : sevm.currentTarget ≠ cevm.sta.currentTarget := by
-          rw [hct]; exact h_ne
-        have hcode := hsrc hne'
-          (by rw [hct]; exact not_empty_of_compile h_at_p.left)
-          (by rw [hct]; exact not_delegation_of_compile h_at_p.left)
-        rw [hcode, hct]
-        exact h_at_p.left
-      have hrun :
-          Ninst.StepRun pc sevm devm (.exec x) (.some ⟨cevm, raw⟩) (.error e) := by
-        unfold Ninst.StepRun
-        rw [← Evm.step_next (n := Ninst.exec x) hxat, hstep]
-        exact ⟨f.settle raw, RunFrame.of_run henter, hr.symm⟩
-      exact nextSomeErr hxat hrun child h_ne
-        (h_fa cevm.pc cevm.sta cevm.dyna raw child hdepth h_at_child)
-  -- runOk
-  · intro pc sevm devm f rsm pc' cevm raw devm' exn hstep henter child hr ex
-      ihc ih h_fa h_at_p
-    rcases em (sevm.currentTarget = ca) with h_eq | h_ne
-    · exact lift_core.atTarget analog depth_ind errAtTarget
-        (.runOk hstep henter child hr ex) h_fa h_at_p h_eq
-    · obtain ⟨x, hxat, -, hpc'⟩ := Evm.step_spawn_inv hstep
-      subst hpc'
-      obtain ⟨hpc0, hgc, hsrc⟩ := Evm.step_spawn_child hstep henter
-      have hdepth : cevm.sta.depth < sevm.depth := by
-        rw [Frame.enter_run_depth henter]; exact Step.spawn_depth_lt hstep
-      have h_ne_code : (devm.getCode ca).toList ≠ [] := fun hc =>
-        Prog.compile_ne_nil (Eq.trans h_at_p.left.symm (congrArg some hc))
-      have h_at_child : p.At ca cevm.pc cevm.sta cevm.dyna := by
-        refine ⟨by rw [hgc ca]; exact h_at_p.left, fun hct => ⟨?_, hpc0⟩⟩
-        have hne' : sevm.currentTarget ≠ cevm.sta.currentTarget := by
-          rw [hct]; exact h_ne
-        have hcode := hsrc hne'
-          (by rw [hct]; exact not_empty_of_compile h_at_p.left)
-          (by rw [hct]; exact not_delegation_of_compile h_at_p.left)
-        rw [hcode, hct]
-        exact h_at_p.left
-      have hchild : Xlot.Rel Devm.CodePreserve (.some ⟨cevm, raw⟩) :=
-        Exec.effect codePreserve_refl_trans.1 codePreserve_refl_trans.2
-          Ninst.codePreserve_effectRec Jinst.codePreserve_effect
-          Linst.codePreserve_effect child
-      have hrun :
-          Ninst.StepRun pc sevm devm (.exec x) (.some ⟨cevm, raw⟩) (.ok devm') := by
-        unfold Ninst.StepRun
-        rw [← Evm.step_next (n := Ninst.exec x) hxat, hstep]
-        exact ⟨f.settle raw, RunFrame.of_run henter, hr.symm⟩
-      have hcode : devm'.getCode ca = devm.getCode ca :=
-        lift_core.stepCode (xl := .some ⟨cevm, raw⟩) hchild
-          (by rw [hstep]; exact ⟨f.settle raw, RunFrame.of_run henter, hr.symm⟩)
-          ca h_ne_code
-      have h_at' : p.At ca (pc + 1) sevm devm' :=
-        ⟨by rw [hcode]; exact h_at_p.left, fun hc => (h_ne hc).elim⟩
-      exact nextSomeRec hxat hrun child ex h_ne
-        (h_fa cevm.pc cevm.sta cevm.dyna raw child hdepth h_at_child)
-        (ih h_fa h_at')
+  change Exec.Fa (Exec.WknSem ca p.codeSem (fun pc s d e _ => ε pc s d e))
+  exact lift_core_sem ε π analog ca p.codeSem depth_ind errAtTarget invOp
+    nextNoneErr nextSomeErr nextNoneRec nextSomeRec jumpErr jumpRec last
+
 
 lemma lift
     (R : Sevm → Devm → Devm → Prop)
@@ -6740,34 +7024,10 @@ lemma lift
       Exec pc sevm pre (.ok post) →
       Prog.At p ca pc sevm pre →
       R sevm pre post := by
-  intro pc sevm pre post h_exc h_at
-  refine lift_core (fun _ sevm pre exn => ifOk (R sevm pre) exn) R (fun h => h) ca p
-    ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ pc sevm pre (.ok post) h_exc h_at
-  · intro sevm' pre' post' h_run h_eq h_fa
-    apply depth_ind h_run h_eq
-    intro pc_ sevm_ devm_ post_ h_exc' h_lt h_at'
-    exact h_fa pc_ sevm_ devm_ (.ok post_) h_exc' h_lt h_at'
-  · intro pc' sevm' devm' err devm'' h_eq; exact trivial
-  · intro pc' sevm' devm' h_get h_ne; exact trivial
-  · intro pc' sevm' devm' n err devm'' h_at' h_run h_ne; exact trivial
-  · intro pc' sevm' devm' n evm_ exn_ err devm'' h_at' h_run ex_sub h_ne h_ih; exact trivial
-  · intro pc' sevm' devm' n devm'' exn h_at' h_run ex h_ne h_ih
-    cases exn with
-    | error e => exact trivial
-    | ok post' => exact nextNone h_at' h_run ex h_ne h_ih
-  · intro pc' sevm' devm' n evm_ exn_ devm'' exn h_at' h_run ex_sub ex h_ne h_ih_sub h_ih
-    cases exn with
-    | error e => exact trivial
-    | ok post' => exact nextSome h_at' h_run ex_sub ex h_ne h_ih_sub h_ih
-  · intro pc' sevm' devm' j err devm'' h_at' h_run h_ne; exact trivial
-  · intro pc' sevm' devm' j pc_ devm'' exn h_at' h_run ex h_ne h_ih
-    cases exn with
-    | error e => exact trivial
-    | ok post' => exact jump h_at' h_run ex h_ne h_ih
-  · intro pc' sevm' devm' l exn h_at' h_run h_ne
-    cases exn with
-    | error e => exact trivial
-    | ok post' => exact last h_at' h_run h_ne
+  simpa [Prog.codeSem, CodeSem.At, Prog.At, ForallSubExecSem, ForallSubExec,
+    ForallDeeperAtSem, ForallDeeperAt] using
+    (lift_sem R ca p.codeSem depth_ind nextNone nextSome jump last)
+
 
 lemma lift_inv
     (ca : Adr) (p : Prog)
@@ -6819,19 +7079,10 @@ lemma lift_inv
       Prog.At p ca pc sevm devm →
       σ sevm devm →
       ρ sevm post := by
-  apply @Blanc.lift (fun sevm pre post => σ sevm pre → ρ sevm post) ca p with_depth_ind
-  · intro pc sevm pre n inter post h_at h_run _ h_ne h_ih h_pi
-    exact h_ih (nextNone h_at h_run h_ne h_pi)
-  · intro pc sevm pre n evm' exn' inter post h_at h_run ex_sub _ h_ne h_ifOk h_ih h_pi
-    rcases nextSome h_at h_run ex_sub h_ne h_pi with ⟨h_pi_sub, h_imp⟩
-    apply h_ih; apply h_imp
-    cases exn' with
-    | error e => exact trivial
-    | ok post' => exact h_ifOk h_pi_sub
-  · intro pc sevm pre j pc' inter post h_at h_run _ h_ne h_ih h_pi
-    exact h_ih (jump h_at h_run h_ne h_pi)
-  · intro pc sevm pre l post h_at h_run h_ne h_pi
-    exact last h_at h_run h_ne h_pi
+  simpa [Prog.codeSem, CodeSem.At, Prog.At, ForallSubExecSem, ForallSubExec,
+    ForallDeeperAtSem, ForallDeeperAt] using
+    (lift_inv_sem ca p.codeSem σ ρ with_depth_ind nextNone nextSome jump last)
+
 
 syntax "show_prefix_zero" : tactic
 macro_rules

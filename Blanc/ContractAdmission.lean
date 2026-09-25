@@ -1,5 +1,6 @@
 import Blanc.Ladder
 import Blanc.ExecutionAdmission
+import Blanc.ContractAdmissionSem
 
 /-!
 # Contract preservation with trace-local frame admission
@@ -53,6 +54,39 @@ def PreservesAdmitted (c : ContractSpec) (ca : Adr)
     c.Pre ca sevm pre →
     c.Post ca sevm post
 
+def soundAdmitted_toSem (c : ContractSpec) (ca : Adr)
+    (entry : Sevm → Devm → Prop)
+    (h : c.SoundAdmitted ca entry) : c.toSem.SoundAdmitted ca entry := by
+  intro sevm pre post hfork execution hrun target admitted body hwf hpre
+  apply post_toSem
+  apply h hfork execution (by simpa [ContractSpec.toSem, Prog.codeSem] using hrun)
+    target admitted
+  · intro pc' sevm' pre' post' child depth childAt hfork' childAdmitted hpre'
+    exact post_ofSem (body (pc' := pc') (sevm' := sevm') (pre' := pre')
+      (post' := post') (child := child) depth
+      (by simpa [ContractSpec.toSem, Prog.codeSem, CodeSem.At, Prog.At] using childAt)
+      hfork' childAdmitted (preWf_toSem hpre'))
+  · exact hwf
+  · exact pre_ofSem hpre
+
+def preservesAdmitted_ofSem (c : ContractSpec) (ca : Adr)
+    (entry : Sevm → Devm → Prop)
+    (h : c.toSem.PreservesAdmitted ca entry) : c.PreservesAdmitted ca entry := by
+  intro sevm pre post hfork execution admitted h_code h_wf hpre
+  apply post_ofSem
+  apply h sevm pre post hfork execution admitted
+    (fun target => by simpa [ContractSpec.toSem, Prog.codeSem] using h_code target)
+    h_wf (pre_toSem hpre)
+
+def preservesAdmitted_toSem (c : ContractSpec) (ca : Adr)
+    (entry : Sevm → Devm → Prop)
+    (h : c.PreservesAdmitted ca entry) : c.toSem.PreservesAdmitted ca entry := by
+  intro sevm pre post hfork execution admitted h_code h_wf hpre
+  apply post_toSem
+  apply h sevm pre post hfork execution admitted
+    (fun target => by simpa [ContractSpec.toSem, Prog.codeSem] using h_code target)
+    h_wf (pre_ofSem hpre)
+
 /-- Generic frame ladder for trace-admitted contract soundness. The ordinary
 precondition transport is unchanged; the concrete admission proof is threaded
 only through actual target-frame roots by `lift_inv_admitted`. -/
@@ -88,112 +122,33 @@ theorem preserves_lift_admitted (c : ContractSpec) (ca : Adr)
       (sevm.currentTarget = ca → some sevm.code.toList = Prog.compile c.prog) →
       σ sevm pre →
       c.Post ca sevm post := by
-  intro sevm devm post hfork execution admitted h_code hσ
-  refine lift_inv_admitted entry ca c.prog
-    (fun e d => σ e d ∧ CoveredFork e.benvStat.fork) (c.Post ca) ?_
-    ?_ ?_ ?_ ?_ 0 sevm devm post execution ?_ admitted ⟨hσ, hfork⟩
-  · intro sevm' pre' post' run hprog target admitted ih hσ'
-    exact body hσ'.2 run hprog target admitted
-      (fun pc'' sevm'' pre'' post'' child depth childAt hfork' childAdmitted hpre' =>
-        ih pc'' sevm'' pre'' post'' child depth childAt childAdmitted ⟨hpre', hfork'⟩)
-      hσ'.1
-  · intro pc' sevm' pre' n' inter' h_at' h_run' h_ne' h_pc'
-    obtain ⟨hσ', hfork'⟩ := h_pc'
-    refine ⟨σ_of_ne h_ne' ?_, hfork'⟩
-    replace hσ' := σ_pre hσ'
-    cases n' with
-    | push xs le =>
-      have hrun := (Step.run_ofExecution (xl := (.none : Xlot))).mp h_run'
-      rcases Except.bind_eq_ok hrun.2.symm with ⟨devm1, h_charge, h_push⟩
-      exact hσ'.state_eq
-        (((Devm.burn_of_chargeGas h_charge).state).trans
-          ((Devm.push_of_push h_push).state)).symm
-    | dupn imm =>
-      have frame := Ninst.dupn_instructionFrame_effectRec
-        (xl := .none) trivial h_run'
-      exact hσ'.state_eq frame.state.symm
-    | swapn imm =>
-      have frame := Ninst.swapn_instructionFrame_effectRec
-        (xl := .none) trivial h_run'
-      exact hσ'.state_eq frame.state.symm
-    | exchange imm =>
-      have frame := Ninst.exchange_instructionFrame_effectRec
-        (xl := .none) trivial h_run'
-      exact hσ'.state_eq frame.state.symm
-    | reg r =>
-      have h_reg : Rinst.run ⟨pc', sevm', pre'⟩ r = .ok inter' := by
-        exact ((Step.run_ofExecution (xl := (.none : Xlot))).mp h_run').2.symm
-      by_cases h_ss : r = Rinst.sstore
-      · subst h_ss
-        have h_frame := Rinst.sstore_run_stateWriteFrame pc' pre' sevm'
-        rw [h_reg] at h_frame
-        refine Pre.of_eqs hσ' (h_frame.getCode_eq ca).symm ?_
-          (sstore_preserves_getStor_ne h_reg h_ne')
-        funext b
-        exact (h_frame.getBal_eq b).symm
-      · exact Pre.of_eqs hσ' (Rinst.preserves_getCode h_reg ca)
-          (Rinst.preserves_bal h_reg).symm
-          (congr_fun (Rinst.preserves_stor h_ss h_reg) ca).symm
-    | exec x =>
-      refine Xinst.none_preserves_precond (x := x) hfork' ?_ h_ne' hσ'
-      exact XStep.run_toStep.mp h_run'
-  · intro pc' sevm' pre' n' evm'' exn'' inter' h_at' h_run' ex_sub' h_ne' h_pc'
-    obtain ⟨hσ', hfork'⟩ := h_pc'
-    cases n' with
-    | push xs le =>
-      have hrun := (Step.run_ofExecution
-        (xl := (.some ⟨evm'', exn''⟩ : Xlot))).mp h_run'
-      cases hrun.1
-    | dupn imm =>
-      have hrun := (Step.run_ofExecution
-        (xl := (.some ⟨evm'', exn''⟩ : Xlot))).mp h_run'
-      cases hrun.1
-    | swapn imm =>
-      have hrun := (Step.run_ofExecution
-        (xl := (.some ⟨evm'', exn''⟩ : Xlot))).mp h_run'
-      cases hrun.1
-    | exchange imm =>
-      have hrun := (Step.run_ofExecution
-        (xl := (.some ⟨evm'', exn''⟩ : Xlot))).mp h_run'
-      cases hrun.1
-    | reg r =>
-      have hrun := (Step.run_ofExecution
-        (xl := (.some ⟨evm'', exn''⟩ : Xlot))).mp h_run'
-      cases hrun.1
-    | exec x =>
-      have hx : Xinst.Run sevm' pre' x (.some ⟨evm'', exn''⟩) (.ok inter') := by
-        exact XStep.run_toStep.mp h_run'
-      have hfork_c := Xinst.Run.some_child_fork hx hfork'
-      obtain ⟨h_child, h_back⟩ :=
-        Xinst.some_preserves_precond (x := x) hfork' hx ex_sub' h_ne' (σ_pre hσ')
-      exact ⟨⟨σ_of_wf (Xinst.some_child_wf hx) h_child, hfork_c⟩,
-        fun h_if => ⟨σ_of_ne h_ne' (h_back h_if), hfork'⟩⟩
-  · intro pc' sevm' pre' j' pc'' inter' h_at' h_run' h_ne' h_pc'
-    obtain ⟨hσ', hfork'⟩ := h_pc'
-    exact ⟨σ_of_ne h_ne'
-      (Pre.state_eq (σ_pre hσ') (Jinst.preserves_state h_run')), hfork'⟩
-  · intro pc' sevm' pre' l' post' h_at' h_run' h_ne' h_pc'
-    obtain ⟨hσ', hfork'⟩ := h_pc'
-    exact Linst.inv_postcond hfork' h_run' h_ne' (σ_pre hσ')
-  · exact ⟨(σ_pre hσ).1, fun target => ⟨h_code target, rfl⟩⟩
-
+  intro sevm pre post hfork execution admitted h_code hσ
+  refine post_ofSem (ContractSpecSem.preserves_lift_admitted_sem c.toSem ca entry σ
+    ?_ ?_ ?_ ?_ sevm pre post hfork execution admitted
+    (fun target => by simpa [ContractSpec.toSem, Prog.codeSem] using h_code target) hσ)
+  · intro e d h
+    exact pre_toSem (σ_pre h)
+  · intro e d h_ne h
+    exact σ_of_ne h_ne (pre_ofSem h)
+  · intro e d h_wf h
+    exact σ_of_wf h_wf (pre_ofSem h)
+  · intro sevm pre post hfork execution hrun target admitted ih hσ
+    apply post_toSem
+    apply body hfork execution (by simpa [ContractSpec.toSem, Prog.codeSem] using hrun)
+      target admitted
+    · intro pc' sevm' pre' post' child depth childAt hfork' childAdmitted hσ'
+      exact post_ofSem (ih pc' sevm' pre' post' child depth
+        (by simpa [ContractSpec.toSem, Prog.codeSem, CodeSem.At, Prog.At] using childAt)
+        hfork' childAdmitted hσ')
+    · exact hσ
 /-- The memory-carrying trace-admitted frame theorem. -/
 theorem preserves_inv_admitted (c : ContractSpec) (ca : Adr)
     (entry : Sevm → Devm → Prop)
     (body : c.SoundAdmitted ca entry) :
     c.PreservesAdmitted ca entry := by
-  intro sevm pre post hfork execution admitted h_code h_wf h_pre
-  refine preserves_lift_admitted c ca entry (c.PreWf ca)
-    (fun h => h.pre)
-    (fun h_ne h => ⟨h, fun target => (h_ne target).elim⟩)
-    (fun h_wf' h => ⟨h, fun _ => h_wf'⟩) ?_
-    sevm pre post hfork execution admitted h_code ⟨h_pre, h_wf⟩
-  intro sevm' pre' post' hfork' run h_prog h_target h_admitted ih h_pre'
-  exact body hfork' run h_prog h_target h_admitted
-    (fun pc'' sevm'' pre'' post'' child depth childAt hfork'' childAdmitted h_childPre =>
-      ih pc'' sevm'' pre'' post'' child depth childAt hfork'' childAdmitted h_childPre)
-    (h_pre'.wf h_target) h_pre'.pre
-
+  exact preservesAdmitted_ofSem c ca entry
+    (ContractSpecSem.preserves_inv_admitted c.toSem ca entry
+      (soundAdmitted_toSem c ca entry body))
 end ContractSpec
 
 end Blanc

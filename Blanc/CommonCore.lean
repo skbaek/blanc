@@ -2098,6 +2098,45 @@ theorem correct (sevm : Sevm) (pre : Devm) (p : Prog) (post : Devm)
   apply @Func.Run.call (p.main :: p.aux) sevm pre inter 0 p.main post rfl burn
   apply correct_core p.main p.aux ⟨1, sevm, inter, .ok post, exc'⟩ p.main eq h_sub
 
+/-- The code-level interface consumed by the contract preservation ladder. -/
+structure CodeSem : Type where
+  /-- The deployed code image, or `none` for a vacuous code condition. -/
+  image : Option (List UInt8)
+  /-- The certified run relation of the code image. -/
+  Run : Sevm → Devm → Devm → Prop
+  /-- A successful execution of the image satisfies the certified relation. -/
+  correct : ∀ {sevm pre post}, Exec 0 sevm pre (.ok post) →
+    some sevm.code.toList = image → Run sevm pre post
+  /-- A supplied code image is nonempty. -/
+  ne_nil : ∀ {l}, image = some l → l ≠ []
+  /-- A supplied code image is not a delegation marker. -/
+  not_delegation : ∀ {code : ByteArray},
+    some code.toList = image → ¬ isValidDelegation code
+
+/-- Program-location bookkeeping for an arbitrary certified code semantics. -/
+def CodeSem.At (sem : CodeSem) (ca : Adr)
+    (pc : Nat) (sevm : Sevm) (devm : Devm) : Prop :=
+  some (devm.getCode ca).toList = sem.image ∧
+  (sevm.currentTarget = ca → (some sevm.code.toList = sem.image ∧ pc = 0))
+
+def ForallSubExecSem (k : Nat) (ca : Adr) (sem : CodeSem)
+    (R : Sevm → Devm → Devm → Prop) : Prop :=
+  ∀ pc sevm devm post,
+    Exec pc sevm devm (.ok post) →
+    sevm.depth < k →
+    sem.At ca pc sevm devm →
+    R sevm devm post
+
+def ForallDeeperAtSem (k : Nat) (ca : Adr) (sem : CodeSem)
+    (ε : Exec.Pred) : Prop :=
+  ∀ pc sevm devm exn (ex : Exec pc sevm devm exn),
+    sevm.depth < k → sem.At ca pc sevm devm → ε pc sevm devm exn ex
+
+def Exec.WknSem (ca : Adr) (sem : CodeSem)
+    (π : Exec.Pred)
+    (pc sevm devm exn) (ex : Exec pc sevm devm exn) : Prop :=
+  sem.At ca pc sevm devm → π pc sevm devm exn ex
+
 def String.toBytes (s : String) : Bytes := s.toList.map Char.toUInt8
 def String.keccak (s : String) : B256 := (String.toBytes s).keccak
 
