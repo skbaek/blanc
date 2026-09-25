@@ -6,6 +6,7 @@ import Blanc.ReachableExecFree
 import Blanc.ExecutionTrace
 import Blanc.ExecutionMessageEffects
 import Blanc.ExecutionHistory
+import Blanc.Composition.ProrataWethVaultTerminals
 
 /-!
 # The rely rung
@@ -54,10 +55,6 @@ namespace Blanc.Composition.ProrataWethVault
 
 open Jaune
 
-/-- The vault program has no `PC` instruction, so a raw execution of its
-compiled code is a gas-exact `Prog.RunCompiled`. -/
-private theorem vault_pcFree : Prog.pcFree Blanc.ProrataWethVault.vault = true := by
-  decide +kernel
 
 /-- The frame invariant carried across every frame of the execution. -/
 structure VaultFrameInv (vault : Adr) (sevm : Sevm) (pre : Devm) : Prop where
@@ -208,7 +205,7 @@ theorem vault_rely_preserves_conserved (vault : Adr) :
     obtain ⟨inv, hfork⟩ := inv
     subst target
     have compiled : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post :=
-      Prog.runCompiled_of_exec sevm pre _ post vault_pcFree run (inv.code rfl)
+      Prog.runCompiled_of_exec sevm pre _ post vault_prog_pcFree run (inv.code rfl)
     have conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
         (Devm.getStor pre sevm.currentTarget) :=
       (ContractSpec.ofStorageOnly_preInv_iff).mp inv.preWf.pre.inv

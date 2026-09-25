@@ -3,6 +3,7 @@
 import Blanc.Composition.ProrataWethVaultMessage
 import Blanc.Composition.ProrataWethVaultViews
 import Blanc.Solvent
+import Blanc.Composition.ProrataWethVaultTerminals
 
 /-!
 # The pair's root and its stable boundary
@@ -449,13 +450,6 @@ private theorem benvAfterTransfer_bal_le_of_value_zero
             msg.benv.state.bal account from
           congrArg Acct.bal (State.setBal_get_ne caller)]
 
-/-- The vault program contains no `PC`, so a raw execution of its compiled code
-is a gas-exact `Prog.RunCompiled`.  Restated rather than imported: the sibling
-copies in `…Message.lean` and `…Rely.lean` are both `private`, and `…Rely.lean`
-sits above this module. -/
-private theorem pair_vault_pcFree :
-    Prog.pcFree Blanc.ProrataWethVault.vault = true := by
-  decide +kernel
 
 /-- **One vault message preserves the stable boundary.**
 
@@ -522,7 +516,7 @@ theorem vault_processMessage_preserves_stable
           exact code
         have compiled : Prog.RunCompiled sevm pre
             Blanc.ProrataWethVault.vault execPost :=
-          Prog.runCompiled_of_exec sevm pre _ execPost pair_vault_pcFree run
+          Prog.runCompiled_of_exec sevm pre _ execPost vault_prog_pcFree run
             codeEq
         -- Nonpayability, and with it the entry transfer's inertness.
         have msgZero : msg.value = 0 := by

@@ -5,6 +5,7 @@ import Blanc.Composition.ProrataWethVaultAccounting
 import Blanc.ProrataRealizedAccounting
 import Blanc.Composition.ProrataWethVaultRely
 import Blanc.Composition.ProrataWethVaultLedgerVisits
+import Blanc.Composition.ProrataWethVaultTerminals
 
 namespace Blanc.Composition.ProrataWethVault
 
@@ -316,8 +317,6 @@ theorem PairStepRecord.OwnIn.of_foreignRoot {vault : Adr} {r : PairStepRecord va
     cases visit
   · exact ⟨d, sub d member, visit⟩
 
-private theorem vault_pcFree' : Prog.pcFree Blanc.ProrataWethVault.vault = true := by
-  decide +kernel
 
 /-- The vault branch of every structural handler: a frame at the vault is at `pc = 0`, so the
 whole run is one compiled vault run and the vault segment classifies it. -/
@@ -331,7 +330,7 @@ theorem Exec.CorePairReplay.vaultFrame {vault : Adr} {pc : Nat} {sevm : Sevm} {p
   | ok post =>
       obtain ⟨code, pcZero⟩ := vaultAt.2 target
       subst pcZero
-      have compiled := Prog.runCompiled_of_exec sevm pre _ post vault_pcFree' run code
+      have compiled := Prog.runCompiled_of_exec sevm pre _ post vault_prog_pcFree run code
       obtain ⟨direct, callerNe⟩ := vaultDirect target
       rcases vaultSeg compiled hfork target direct callerNe inv
           ⟨blockIndex, transactionIndex, framePath, some sevm.caller⟩ rfl with
