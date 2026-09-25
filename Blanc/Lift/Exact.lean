@@ -1,6 +1,5 @@
 import Blanc.Lift.Sound
 import Blanc.Lift.Jumpdest
-import Blanc.Lift.Weth9.Cert
 
 /-!
 # The gas-exact converse for lifted bytecode
@@ -1105,13 +1104,5 @@ theorem lift_exact {code : ByteArray} {c : Cert}
       0 e.rets [] 0 [] pre.stack
       (by simpa [hepc, hef] using hf) hnode rfl (by simp [FrameMatches])
     exact hres
-
-namespace Weth9
-
-set_option maxRecDepth 100000 in
-theorem jumps_ok : Cert.jumpsOk code cert = true := by
-  decide +kernel
-
-end Weth9
 
 end Blanc.Lift
