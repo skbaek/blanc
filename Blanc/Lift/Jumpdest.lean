@@ -50,7 +50,12 @@ private lemma getD_replicate_shift (q j : Nat) (xs : List Bool) :
 The list has one flag for each byte: a `true` flag is an instruction start,
 and a `false` flag is a byte consumed as PUSH immediate data. -/
 def instStarts (cd : ByteArray) : List Bool :=
-  scanStarts cd.toList 0
+  scanStarts cd.data.toList 0
+
+/-- `instStarts` reads `cd.data.toList`, a projection, because `ByteArray.toList`'s
+index loop is quadratic under kernel reduction; the two lists are equal. -/
+private lemma instStarts_eq (cd : ByteArray) : instStarts cd = scanStarts cd.toList 0 := by
+  rw [instStarts, ByteArray.toList_eq_toList_data]
 
 private def instStartAt (cd : ByteArray) (k : Nat) : Bool :=
   (instStarts cd).getD k false
@@ -273,7 +278,7 @@ private lemma noPushBefore_of_scan_start {cd : ByteArray} {k : Nat}
   have hk' : k < cd.toList.length := by
     simpa [ByteArray.size_eq_length_toList] using hk
   have hs : (scanStarts cd.toList 0).getD k false = true := by
-    simpa [instStartAt, instStarts] using hstart
+    simpa [instStartAt, instStarts_eq] using hstart
   have hp := (scanStarts_true_iff cd.toList.length cd.toList rfl 0 k hk').mp hs
   rcases hp with ⟨ys, pre, rest, heq, hys, hzero, hbound, hpre, hinst⟩
   have hys0 : ys = [] := by simpa using hys
@@ -298,7 +303,7 @@ private lemma noPushBefore_iff_scan_start {cd : ByteArray} {k : Nat}
       have hk' : k < cd.toList.length := by
         simpa [ByteArray.size_eq_length_toList] using hk
       have hs : (scanStarts cd.toList 0).getD k false = false := by
-        simpa [instStartAt, instStarts] using hstart'
+        simpa [instStartAt, instStarts_eq] using hstart'
       have hc := scanStarts_false_cover cd.toList.length cd.toList rfl k hk' hs
       rcases hc with ⟨pre, b, ys, rest, heq, hpre, hlen, hys⟩
       have hslice : List.Slice cd.toList 0 (pre ++ ((b :: ys) ++ rest)) := by
