@@ -1735,7 +1735,22 @@ Blanc.Composition.ProrataWethVault.deposit_success_within_maxDeposit|$STANDARD
 Blanc.Composition.ProrataWethVault.mint_success_within_maxMint|$STANDARD
 Blanc.Composition.ProrataWethVault.withdraw_success_within_maxWithdraw|$STANDARD
 Blanc.Composition.ProrataWethVault.redeem_success_within_maxRedeem|$STANDARD
-Blanc.Composition.ProrataWethVault.vault_terminals_return_or_revert|$STANDARD"
+Blanc.Composition.ProrataWethVault.vault_terminals_return_or_revert|$STANDARD
+Blanc.Lift.Weth9.weth9_preserves_solvent|$STANDARD
+Blanc.Lift.Weth9.weth9_exec_preserves_solvent|$STANDARD
+Blanc.Lift.Weth9.weth9_messageCall_preserves_solvent|$STANDARD
+Blanc.Lift.Weth9.weth9_applyTransactions_preserves_solvent|$STANDARD
+Blanc.Lift.Weth9.weth9_appliedBody_preserves_solvent|$STANDARD
+Blanc.Lift.Weth9.weth9_block_preserves_solvent|$STANDARD
+Blanc.Lift.Weth9.weth9_history_preserves_solvent|$STANDARD
+Blanc.Lift.Weth9.weth9_balanceOf_runExact|$STANDARD
+Blanc.Lift.Weth9.weth9_decimals_runExact|$STANDARD
+Blanc.Lift.Weth9.weth9_balanceOf_succeeds|$STANDARD
+Blanc.Lift.Weth9.weth9_decimals_succeeds|$STANDARD
+Blanc.Lift.Weth9.weth9_balanceOf_gas_exact|$STANDARD
+Blanc.Lift.Weth9.weth9_decimals_gas_exact|$STANDARD
+Blanc.Lift.Weth9.weth9Gas_eq_with|$STANDARD
+Blanc.Lift.Weth9.weth9Gas_le_max|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'

@@ -134,6 +134,8 @@ import Blanc.ProrataWethVaultMaxArithmetic
 import Blanc.Composition.ProrataWethVaultNonrevert
 import AxiomAudit
 import ExecutionAxioms
+import Blanc.Lift.Weth9.Solvency
+import Blanc.Lift.Weth9.Live
 
 /-! # Repository axiom audit rows
 
@@ -1487,3 +1489,18 @@ elaborates only against a Jaune revision whose audit passed. -/
 #full_axioms Blanc.Composition.ProrataWethVault.withdraw_success_within_maxWithdraw
 #full_axioms Blanc.Composition.ProrataWethVault.redeem_success_within_maxRedeem
 #full_axioms Blanc.Composition.ProrataWethVault.vault_terminals_return_or_revert
+#full_axioms Blanc.Lift.Weth9.weth9_preserves_solvent
+#full_axioms Blanc.Lift.Weth9.weth9_exec_preserves_solvent
+#full_axioms Blanc.Lift.Weth9.weth9_messageCall_preserves_solvent
+#full_axioms Blanc.Lift.Weth9.weth9_applyTransactions_preserves_solvent
+#full_axioms Blanc.Lift.Weth9.weth9_appliedBody_preserves_solvent
+#full_axioms Blanc.Lift.Weth9.weth9_block_preserves_solvent
+#full_axioms Blanc.Lift.Weth9.weth9_history_preserves_solvent
+#full_axioms Blanc.Lift.Weth9.weth9_balanceOf_runExact
+#full_axioms Blanc.Lift.Weth9.weth9_decimals_runExact
+#full_axioms Blanc.Lift.Weth9.weth9_balanceOf_succeeds
+#full_axioms Blanc.Lift.Weth9.weth9_decimals_succeeds
+#full_axioms Blanc.Lift.Weth9.weth9_balanceOf_gas_exact
+#full_axioms Blanc.Lift.Weth9.weth9_decimals_gas_exact
+#full_axioms Blanc.Lift.Weth9.weth9Gas_eq_with
+#full_axioms Blanc.Lift.Weth9.weth9Gas_le_max
