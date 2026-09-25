@@ -43,12 +43,14 @@ structure Entry : Type where
   rets : Nat
 deriving DecidableEq
 
-/-- The byte at `pc`, if any. -/
-def byteAt (code : ByteArray) (pc : Nat) : Option UInt8 := code.toList[pc]?
+/-- The byte at `pc`, if any.  Both byte readers go through `code.data.toList`,
+a projection, rather than `ByteArray.toList`, whose index loop is quadratic
+under kernel reduction (`ByteArray.toList_eq_toList_data` relates them). -/
+def byteAt (code : ByteArray) (pc : Nat) : Option UInt8 := code.data.toList[pc]?
 
 /-- The bytes at `pc` begin with `bs`. -/
 def bytesAt (code : ByteArray) (pc : Nat) (bs : Bytes) : Bool :=
-  decide ((code.toList.drop pc).take bs.length = bs)
+  decide ((code.data.toList.drop pc).take bs.length = bs)
 
 /-- Index labels `0, 1, …` for a frame of length `k`. -/
 def indexPattern (k : Nat) : Pattern :=
