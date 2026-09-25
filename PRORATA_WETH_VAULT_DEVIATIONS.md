@@ -15,8 +15,9 @@ This file records where the two differ on purpose.
 | harness | `contracts/ProrataWethVaultReference.sol`, SHA-256 `db2d9df13d9c89b97a35f9e28b334a9dcee4565737779f6458a107494894d280` |
 | transitive closure | 17 sources, manifest SHA-256 `a1b486f5b2bc52ff8d28377424e0fed2a23d9cd28afa9b9f934148fbe1f1e6c8` |
 
-Recorded at G1 in `~/plans/reports/prorata-erc4626-port-sf.md` §10 and frozen
-there with per-file blob and SHA-256 identities.
+Recorded at G1 in the vault port's frozen specification (a planning record kept
+outside this repository) and frozen there with per-file blob and SHA-256
+identities.
 
 ## Status of this file
 

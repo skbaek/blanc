@@ -5,7 +5,11 @@ Solidity original. The same questions recur in every such project and every
 review of one: how closely must the Blanc artifact track the reference, and
 which differences are defects? This document is the standing answer.
 Principles 1–2 apply to all Blanc development; 3–5 apply whenever a
-reference exists.
+reference exists. Of the ten contracts in, seven are ports of a deployed or
+published reference — WETH, WETH10, BeaconDeposit, Lido's CircuitBreaker,
+TriggerableWithdrawalsGateway and OssifiableProxy, and the ERC-4626 vault over
+WETH — and three are études composed from scratch: FMINT, PRORATA and DRIP,
+of which FMINT is still referenced against OpenZeppelin's `ERC20FlashMint`.
 
 ## 1. Byte-identity is a non-goal, permanently
 
@@ -155,7 +159,10 @@ improvement. The freedom is paid for in bookkeeping:
   stance, evidence. [WETH_DEVIATIONS.md](WETH_DEVIATIONS.md),
   [WETH10_DEVIATIONS.md](WETH10_DEVIATIONS.md) and
   [FMINT_DEVIATIONS.md](FMINT_DEVIATIONS.md) are the practice this policy
-  canonizes.
+  canonizes; every later port keeps one too — `BEACON_DEPOSIT_DEVIATIONS.md`,
+  `LIDO_CIRCUIT_BREAKER_DEVIATIONS.md`,
+  `LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md`,
+  `OSSIFIABLE_PROXY_DEVIATIONS.md` and `PRORATA_WETH_VAULT_DEVIATIONS.md`.
 - An observable difference, once discovered, is dispositioned or it is a
   defect: either restore fidelity or record and defend the divergence.
   The registry is non-exhaustive as a matter of fact — no enumeration of

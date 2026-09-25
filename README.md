@@ -427,6 +427,40 @@ This repo contains the following files:
   suffix calls, and deployed-context reconstruction. The mainnet module
   specializes that root to BPO2 and exports future configured-chain stability
   plus literal code/flash/solvency projections.
+- [BeaconDeposit.lean](Blanc/BeaconDeposit.lean) and
+  [BeaconDepositCode.lean](Blanc/BeaconDepositCode.lean): the compiled port of
+  the pinned beacon deposit contract's four-selector runtime and its
+  compiler-owned bytes; the pure model in
+  [BeaconDepositModel.lean](Blanc/BeaconDepositModel.lean) is its
+  specification, and the rest of the `BeaconDeposit*` family carries the
+  port's proofs.
+- [LidoTriggerableWithdrawalsGateway.lean](Blanc/LidoTriggerableWithdrawalsGateway.lean)
+  and the `LidoTriggerableWithdrawalsGateway*` family: the port of Lido's
+  TriggerableWithdrawalsGateway, every selector with an executable dispatch
+  entry.
+- [ProxyPairOssifiableProgram.lean](Blanc/ProxyPairOssifiableProgram.lean)
+  and the `ProxyPair*` family: the port of Lido's OssifiableProxy (its seven
+  named endpoints over a forwarding body) beside a selector-free forwarding
+  proxy, and the upgrade relation between two implementations
+  ([`docs/PROXY_PAIR_UPGRADE.md`](docs/PROXY_PAIR_UPGRADE.md)).
+- [ProrataWethVault.lean](Blanc/ProrataWethVault.lean) and the
+  `ProrataWethVault*` family: a full-width ERC-4626 share vault over the exact
+  Blanc WETH, ported after OpenZeppelin's `ERC4626`; its chain-level pair
+  theorems with WETH live in the composition stratum below, and
+  [`docs/PRORATA_WETH_VAULT_CLAIM_MAP.md`](docs/PRORATA_WETH_VAULT_CLAIM_MAP.md)
+  maps each claim to its theorem.
+- [Prorata.lean](Blanc/Prorata.lean) and the `Prorata*` family: PRORATA, the
+  pro-rata share ledger étude — an ETH-native, non-transferable share ledger
+  with a virtual-offset price that never decreases.
+- [Drip.lean](Blanc/Drip.lean), [DripCore.lean](Blanc/DripCore.lean) and the
+  `Drip*` family: DRIP, the accrual-index savings ledger étude — fail-closed
+  ingress, one shared fresh-index machine, a checked Maker-shaped `rpow`, and a
+  checks-effects-interactions exit.
+
+Each of the ten contracts — seven ports (WETH, WETH10, BeaconDeposit, Lido's
+CircuitBreaker, TriggerableWithdrawalsGateway and OssifiableProxy, and the
+ERC-4626 vault) and three études (FMINT, PRORATA, DRIP) — has a page of
+receipts under [`docs/contracts/`](docs/contracts/).
 
 Blanc's WETH is a reimplementation; observable deviations from deployed WETH9
 are catalogued in [`WETH_DEVIATIONS.md`](WETH_DEVIATIONS.md). FMINT's
@@ -434,7 +468,12 @@ deviations from OpenZeppelin's `ERC20FlashMint` are catalogued in
 [`FMINT_DEVIATIONS.md`](FMINT_DEVIATIONS.md). WETH10's implementation
 freedoms, exclusions, deployed quirks, and current-main drift are catalogued in
 [`WETH10_DEVIATIONS.md`](WETH10_DEVIATIONS.md); no true in-scope deviation is
-accepted.
+accepted. The later ports keep the same kind of register:
+[`BEACON_DEPOSIT_DEVIATIONS.md`](BEACON_DEPOSIT_DEVIATIONS.md),
+[`LIDO_CIRCUIT_BREAKER_DEVIATIONS.md`](LIDO_CIRCUIT_BREAKER_DEVIATIONS.md),
+[`LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md`](LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md),
+[`OSSIFIABLE_PROXY_DEVIATIONS.md`](OSSIFIABLE_PROXY_DEVIATIONS.md) and
+[`PRORATA_WETH_VAULT_DEVIATIONS.md`](PRORATA_WETH_VAULT_DEVIATIONS.md).
 
 Every module is wrapped in `namespace Blanc`, and Blanc's Jaune imports are
 wrapped in `namespace Jaune`, so downstream code writes qualified names or
@@ -448,7 +487,7 @@ functional, error, gas, deployment or callback proof modules it needs.
 **Every contract's modules sit at the same level of the import hierarchy as
 every other's.** No contract's module imports another contract's, in either
 direction, at any layer. This binds contracts not yet written exactly as it
-binds WETH, FMINT and WETH10 here.
+binds the ten contracts here.
 
 The rule earns its keep as a diagnostic. When one contract needs something
 another already defines, that is not a licence to import across; it is evidence
@@ -532,7 +571,9 @@ gets its own classified, checked category instead.
 
 The first inhabitant is
 [`Blanc/Composition/LidoCircuitBreakerTriggerableWithdrawalsGateway.lean`](Blanc/Composition/LidoCircuitBreakerTriggerableWithdrawalsGateway.lean),
-and later cross-contract goals add their own.
+and the PRORATA WETH vault's pair theorems with WETH
+(`Blanc/Composition/ProrataWethVault*.lean`) are the second; later
+cross-contract goals add their own.
 
 
 The goal-local representation-changing v1/v2 witness and its exact compiled
@@ -970,7 +1011,7 @@ about whether they are the right theorems. Read the statements in
 a theorem's name.
 
 Blanc builds against a **pinned revision** of
-[Jaune](https://github.com/skbaek/jaune) — `require jaune from git … @ 0cc7f56a…`
+[Jaune](https://github.com/skbaek/jaune) — `require jaune from git … @ c326e3f9…`
 in [`lakefile.lean`](lakefile.lean) — so a fresh clone builds reproducibly
 without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 
@@ -980,10 +1021,12 @@ current source inventory contains **1331** top theorems. `scripts/check.sh`'s
 row list is the authority on membership; run `scripts/check.sh --no-build` and
 bind its exact-set verdict to
 `git rev-parse HEAD`. The separate `scripts/check-claims.sh` Lean-checks the
-exact statements of the WETH10 flagship set and the protected Lido Registry
+exact statements of the WETH10 flagship set; the protected Lido Registry
 mutation, enumeration, view-coherence, observability, exact official
 constructor/message/transaction/block, direct-root, and rooted-future
-boundaries; the axiom audit itself pins dependency closures, not theorem
+boundaries; the proxy-pair, PRORATA, PRORATA WETH vault and BeaconDeposit
+headlines; the CircuitBreaker × gateway composition closure; and DRIP's R1–R4
+headlines; the axiom audit itself pins dependency closures, not theorem
 statements. The families follow. Seven are WETH's
 headline solvency theorems:
 

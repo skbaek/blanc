@@ -1,8 +1,9 @@
 # PRORATA WETH vault — theorem-to-claim map
 
-Which theorem carries which sentence of the frozen claim
-(`~/plans/reports/prorata-erc4626-port-sf.md` §12), which sentences are
-carried only by finite evidence, and which are **not carried**.
+Which theorem carries which sentence of the frozen claim (the claim section of
+the vault port's frozen specification, a planning record kept outside this
+repository), which sentences are carried only by finite evidence, and which are
+**not carried**.
 
 ## Audit status of the names below
 
