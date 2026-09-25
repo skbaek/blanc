@@ -1,4 +1,5 @@
 import Blanc.Lift.Weth9.Booked
+import Blanc.Lift.Weth9.Words
 import Blanc.Lift.Silent
 import Blanc.AddressSlotProofs
 
@@ -80,29 +81,6 @@ private theorem split_deposit_run {fs : List SFunc} {sevm : Sevm}
       cases rest with
       | ret d hret =>
           exact ⟨_, d1, d2, d3, d, burn, hpre, of_run_singleton hsstore, hpost, hret⟩
-
-/-- The 20-byte all-ones push word is the complement of `addressMask`. -/
-private theorem ff20_eq :
-    Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] = ~~~ addressMask := by
-  decide
-
-/-- Masking an address word with the 20-byte all-ones word is the identity. -/
-private theorem ff20_and_adr (a : Adr) :
-    (Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& a.toB256) =
-      a.toB256 := by
-  rw [ff20_eq]
-  exact addressSlotReadWord_toB256 a
-
-private theorem w00_eq : Bytes.toB256 [0x00] = 0 := by decide
-private theorem w03_eq : Bytes.toB256 [0x03] = 3 := by decide
-private theorem w20_eq : Bytes.toB256 [0x20] = 32 := by decide
-private theorem w32_add_0 : (32 : B256) + 0 = 32 := by decide
-private theorem w32_add_32 : (32 : B256) + 32 = 64 := by decide
-private theorem w0_toNat : (0 : B256).toNat = 0 := by decide
-private theorem w32_toNat : (32 : B256).toNat = 32 := by decide
-private theorem w64_toNat : (64 : B256).toNat = 64 := by decide
 
 private theorem deposit_pre_stack {sevm : Sevm} {s s' : Devm}
     (run : Line.Run sevm s depositPre s') :
