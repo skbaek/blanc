@@ -52,6 +52,120 @@ def MessageCallTrace.FrameAdmitted
 
 end ExecutionTrace
 
+namespace ContractSpecSem
+
+variable {c : ContractSpecSem}
+
+structure MessageRunReady (c : ContractSpecSem) (ca : Adr) (msg : Msg) : Prop where
+  ready : c.MsgInv ca msg
+  codeOrForeign : msg.target.isNone = false ∨ msg.currentTarget ≠ ca
+
+theorem MsgInv.runReady_of_call
+    {ca : Adr} {msg : Msg} (ready : c.MsgInv ca msg)
+    (target : msg.target.isNone = false) :
+    c.MessageRunReady ca msg :=
+  by
+    refine ⟨ready, ?_⟩
+    exact Or.inl target
+
+theorem MsgInv.runReady_of_foreign
+    {ca : Adr} {msg : Msg} (ready : c.MsgInv ca msg)
+    (target : msg.currentTarget ≠ ca) :
+    c.MessageRunReady ca msg :=
+  by
+    refine ⟨ready, ?_⟩
+    exact Or.inr target
+
+theorem MsgInv.processCreateMessage_msg
+    {ca : Adr} {msg : Msg} (ready : c.MsgInv ca msg)
+    (targetNone : msg.target.isNone = true)
+    (targetNe : msg.currentTarget ≠ ca) :
+    c.MsgInv ca (processCreateMessage.msg msg) := by
+  have state : c.StateInv ca
+      (processCreateMessage.msg msg).benv.state := by
+    simpa [processCreateMessage.msg, Msg.withBenv,
+      addCreatedAccount, Benv.setStor, Benv.incrNonce] using
+      (StateInv.incrNonce
+        (StateInv.setStor_ne targetNe ready.state))
+  refine ⟨state, ?_, ?_, ?_, ?_, ?_⟩
+  · refine ⟨?_, ?_⟩
+    · simpa [processCreateMessage.msg, Msg.withBenv,
+        addCreatedAccount, Benv.setStor, Benv.incrNonce,
+        targetNe] using ready.nodel.ca
+    · exact fun empty =>
+        (c.sem.ne_nil (state.code.symm.trans (congrArg some empty))) rfl
+  · intro target
+    simp [processCreateMessage.msg, Msg.withBenv, targetNone] at target
+  · intro target
+    simp [processCreateMessage.msg, Msg.withBenv, targetNone] at target
+  · simpa [processCreateMessage.msg, Msg.withBenv] using ready.ne
+  · intro _ current
+    exact False.elim (targetNe (by
+      simpa [processCreateMessage.msg, Msg.withBenv] using current))
+
+theorem MsgInv.of_messageCallDelegation
+    {ca : Adr} {msg delegated : Msg} {refund : Nat}
+    (ready : c.MsgInv ca msg)
+    (run : ExecutionTrace.messageCallDelegation msg =
+      .ok ⟨delegated, refund⟩) :
+    c.MsgInv ca delegated := by
+  unfold ExecutionTrace.messageCallDelegation at run
+  split at run
+  · simp only [Except.ok.injEq, Prod.mk.injEq] at run
+    rcases run with ⟨rfl, rfl⟩
+    exact ready
+  · rcases Except.bind_eq_ok run with
+      ⟨⟨delegated', refundWord⟩, set, rest⟩
+    simp only [Except.ok.injEq, Prod.mk.injEq] at rest
+    rcases rest with ⟨rfl, rfl⟩
+    exact setDelegation_preserves_msgInv set ready
+
+theorem MsgInv.messageCallExecutionMessage
+    {ca : Adr} {msg : Msg} (ready : c.MsgInv ca msg) :
+    c.MsgInv ca (ExecutionTrace.messageCallExecutionMessage msg) := by
+  exact MsgInv.pc
+    (codeSrc := fun address => msg.benv.state.getCode address) ready
+
+theorem StateInv.ne_of_messageCreateCollision_false
+    {ca : Adr} {msg : Msg} (inv : c.StateInv ca msg.benv.state)
+    (collision : ExecutionTrace.messageCreateCollision msg = false) :
+    msg.currentTarget ≠ ca := by
+  have codeNe : (msg.benv.state.getCode ca).toList ≠ [] :=
+    fun empty => (c.sem.ne_nil (inv.code.symm.trans (congrArg some empty))) rfl
+  unfold ExecutionTrace.messageCreateCollision at collision
+  rw [Bool.or_eq_false_iff] at collision
+  exact ne_wa_of_not_hasCodeOrNonce codeNe collision.1
+
+end ContractSpecSem
+
+namespace ContractSpecSem
+
+variable {c : ContractSpecSem}
+
+lemma StateInv.of_exec_precond_admitted_sem
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    {sevm : Sevm} {pre post : Devm}
+    (preserves : c.PreservesAdmitted ca entry)
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (precond : c.Pre ca sevm pre)
+    (code : sevm.currentTarget = ca →
+      some sevm.code.toList = c.sem.image)
+    (wf : sevm.currentTarget = ca → Mem.Wf pre.memory)
+    (run : Exec 0 sevm pre (.ok post))
+    (admitted : Exec.FrameAdmitted ca entry run) :
+    c.StateInv ca post.state := by
+  have postcond : c.Post ca sevm post :=
+    preserves sevm pre post hfork run admitted code wf precond
+  apply StateInv.of_postcond postcond
+  have codeEq : post.getCode ca = pre.getCode ca :=
+    code_eq_of_exec_sem run precond.code
+  show some (post.state.getCode ca).toList = c.sem.image
+  rw [show post.state.getCode ca = post.getCode ca from rfl, codeEq]
+  exact precond.code
+
+
+end ContractSpecSem
+
 namespace ContractSpec
 
 variable {c : ContractSpec}
@@ -69,26 +183,23 @@ lemma StateInv.of_exec_precond_admitted
     (run : Exec 0 sevm pre (.ok post))
     (admitted : Exec.FrameAdmitted ca entry run) :
     c.StateInv ca post.state := by
-  have postcond : c.Post ca sevm post :=
-    preserves sevm pre post hfork run admitted code wf precond
-  apply StateInv.of_postcond postcond
-  have codeEq : post.getCode ca = pre.getCode ca :=
-    code_eq_of_exec run precond.code
-  show some (post.state.getCode ca).toList = Prog.compile c.prog
-  rw [show post.state.getCode ca = post.getCode ca from rfl, codeEq]
-  exact precond.code
+  exact stateInv_ofSem (ContractSpecSem.StateInv.of_exec_precond_admitted_sem
+    (c := c.toSem) (preservesAdmitted_toSem c ca entry preserves)
+    hfork (pre_toSem precond)
+    (fun target => by simpa [ContractSpec.toSem, Prog.codeSem] using code target)
+    wf run admitted)
 
 end ContractSpec
 
+
+
 namespace ExecutionTrace
 
-open ContractSpec
+open ContractSpecSem
 
-variable {c : ContractSpec}
+variable {c : ContractSpecSem}
 
-/-- A successful retained raw message preserves the invariant when every
-actual target-frame root in its concrete interpreter run is admitted. -/
-theorem ProcessMessageTrace.stateInv_admitted
+theorem ProcessMessageTrace.stateInv_admitted_sem
     {ca : Adr} {entry : Sevm → Devm → Prop}
     {msg : Msg} {post : Devm}
     (trace : ProcessMessageTrace msg (.ok post))
@@ -99,7 +210,7 @@ theorem ProcessMessageTrace.stateInv_admitted
     c.StateInv ca post.state := by
   rcases trace with ⟨slot, retained, run⟩
   have code : msg.currentTarget = ca →
-      some msg.code.toList = Prog.compile c.prog := by
+      some msg.code.toList = c.sem.image := by
     intro target
     rcases ready.codeOrForeign with targetSome | targetNe
     · exact ready.ready.code targetSome target
@@ -116,7 +227,7 @@ theorem ProcessMessageTrace.stateInv_admitted
       ready.ready.state
   have code' : (initSevm (msg.withBenv benv)).currentTarget = ca →
       some (initSevm (msg.withBenv benv)).code.toList =
-        Prog.compile c.prog := code
+        c.sem.image := code
   rcases raw with error | evm
   · rw [processMessage.settle_error] at settle
     cases settle
@@ -148,12 +259,12 @@ theorem ProcessMessageTrace.stateInv_admitted
             rw [initSevm_benvStat, Msg.withBenv_benvStat,
               benvAfterTransfer_stat transfer]
             exact hfork
-          exact StateInv.of_exec_precond_admitted preserves hfork' precond code'
+          exact StateInv.of_exec_precond_admitted_sem preserves hfork' precond code'
             (fun _ => Mem.wf_empty) execution admitted'
 
-/-- A retained CREATE core preserves an invariant at a distinct installed
-contract address under the same concrete frame admission. -/
-theorem ProcessCreateMessageTrace.stateInv_admitted
+
+
+theorem ProcessCreateMessageTrace.stateInv_admitted_sem
     {ca : Adr} {entry : Sevm → Devm → Prop}
     {msg : Msg} {post : Devm}
     (trace : ProcessCreateMessageTrace msg (.ok post))
@@ -179,7 +290,7 @@ theorem ProcessCreateMessageTrace.stateInv_admitted
     rw [processCreateMessage.msg_benvStat]
     exact hfork
   have innerInv : c.StateInv ca innerPost.state :=
-    innerTrace.stateInv_admitted preserves hfork' admitted innerReady
+    innerTrace.stateInv_admitted_sem preserves hfork' admitted innerReady
   have rest := settle.symm
   unfold processCreateMessage.settle at rest
   dsimp only [bind, Except.bind] at rest
@@ -207,9 +318,9 @@ theorem ProcessCreateMessageTrace.stateInv_admitted
     rw [← Except.ok.inj rest]
     exact ready.state
 
-/-- A settled retained message call preserves the invariant, while the
-existing no-self-destruction projection remains independent of admission. -/
-theorem MessageCallTrace.stateInv_admitted
+
+
+theorem MessageCallTrace.stateInv_admitted_sem
     {ca : Adr} {entry : Sevm → Devm → Prop}
     {msg : Msg} {state : State} {out : MsgCallOutput}
     (trace : MessageCallTrace msg state out)
@@ -220,14 +331,14 @@ theorem MessageCallTrace.stateInv_admitted
     c.StateInv ca state ∧
       (∀ address ∈ out.accountsToDelete.toList, address ≠ ca) := by
   refine ⟨?_, processMessageCall_accountsToDelete_ne hfork trace.result ready.nodel
-    (not_delegation_of_compile ready.state.code)⟩
+    (c.sem.not_delegation ready.state.code)⟩
   cases trace with
   | createCollision target collision result =>
       rw [processMessageCall_createCollision_state_eq target collision result hfork]
       exact ready.state
   | createRun target collision evm core coreTrace result =>
       rw [processMessageCall_createRun_state_eq target collision core result hfork]
-      exact coreTrace.stateInv_admitted preserves hfork admitted target
+      exact coreTrace.stateInv_admitted_sem preserves hfork admitted target
         (StateInv.ne_of_messageCreateCollision_false ready.state collision)
         ready
   | callRun target delegated refund delegation execMsg execMsgEq evm core
@@ -247,8 +358,64 @@ theorem MessageCallTrace.stateInv_admitted
         rw [execMsgEq, messageCallExecutionMessage_benv_stat,
           messageCallDelegation_benv_stat delegation]
         exact hfork
-      exact coreTrace.stateInv_admitted preserves execFork admitted
+      exact coreTrace.stateInv_admitted_sem preserves execFork admitted
         (execReady.runReady_of_call execTarget)
+
+
+end ExecutionTrace
+
+namespace ExecutionTrace
+
+open ContractSpec
+
+variable {c : ContractSpec}
+
+/-- A successful retained raw message preserves the invariant when every
+actual target-frame root in its concrete interpreter run is admitted. -/
+theorem ProcessMessageTrace.stateInv_admitted
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    {msg : Msg} {post : Devm}
+    (trace : ProcessMessageTrace msg (.ok post))
+    (preserves : c.PreservesAdmitted ca entry)
+    (hfork : CoveredFork msg.benv.stat.fork)
+    (admitted : trace.FrameAdmitted ca entry)
+    (ready : c.MessageRunReady ca msg) :
+    c.StateInv ca post.state := by
+  exact stateInv_ofSem (trace.stateInv_admitted_sem (c := c.toSem)
+    (preservesAdmitted_toSem c ca entry preserves) hfork admitted
+    ⟨msgInv_toSem ready.ready, ready.codeOrForeign⟩)
+/-- A retained CREATE core preserves an invariant at a distinct installed
+contract address under the same concrete frame admission. -/
+theorem ProcessCreateMessageTrace.stateInv_admitted
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    {msg : Msg} {post : Devm}
+    (trace : ProcessCreateMessageTrace msg (.ok post))
+    (preserves : c.PreservesAdmitted ca entry)
+    (hfork : CoveredFork msg.benv.stat.fork)
+    (admitted : trace.FrameAdmitted ca entry)
+    (targetNone : msg.target.isNone = true)
+    (targetNe : msg.currentTarget ≠ ca)
+    (ready : c.MsgInv ca msg) :
+    c.StateInv ca post.state := by
+  exact stateInv_ofSem (trace.stateInv_admitted_sem (c := c.toSem)
+    (preservesAdmitted_toSem c ca entry preserves) hfork admitted
+    targetNone targetNe (msgInv_toSem ready))
+/-- A settled retained message call preserves the invariant, while the
+existing no-self-destruction projection remains independent of admission. -/
+theorem MessageCallTrace.stateInv_admitted
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    {msg : Msg} {state : State} {out : MsgCallOutput}
+    (trace : MessageCallTrace msg state out)
+    (preserves : c.PreservesAdmitted ca entry)
+    (hfork : CoveredFork msg.benv.stat.fork)
+    (admitted : trace.FrameAdmitted ca entry)
+    (ready : c.MsgInv ca msg) :
+    c.StateInv ca state ∧
+      (∀ address ∈ out.accountsToDelete.toList, address ≠ ca) := by
+  rcases trace.stateInv_admitted_sem (c := c.toSem)
+    (preservesAdmitted_toSem c ca entry preserves) hfork admitted
+    (msgInv_toSem ready) with ⟨hstate, hdelete⟩
+  exact ⟨stateInv_ofSem hstate, hdelete⟩
 
 end ExecutionTrace
 

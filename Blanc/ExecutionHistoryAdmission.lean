@@ -33,6 +33,36 @@ def ConfiguredHistoryTrace.FrameAdmitted
   | .step prior block =>
       prior.FrameAdmitted ca entry ∧ block.FrameAdmitted ca entry
 
+open ContractSpecSem
+
+variable {c : ContractSpecSem}
+
+theorem ConfiguredBlockTrace.stateInv_admitted_sem
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    {cfg : ChainConfig} {pre post : BlockChain}
+    (trace : ConfiguredBlockTrace cfg pre post)
+    (preserves : c.PreservesAdmitted ca entry)
+    (admitted : trace.FrameAdmitted ca entry)
+    (inv : c.StateInv ca pre.state) :
+    c.StateInv ca post.state := by
+  rw [trace.postState]
+  exact trace.bodyTrace.stateInv_admitted_sem preserves trace.covered admitted
+    trace.openingBound ⟨inv, trace.not_mem_openingCreatedAccounts ca⟩
+
+theorem ConfiguredHistoryTrace.stateInv_admitted_sem
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (preserves : c.PreservesAdmitted ca entry)
+    (admitted : trace.FrameAdmitted ca entry)
+    (inv : c.StateInv ca checkpoint.state) :
+    c.StateInv ca future.state := by
+  induction trace with
+  | refl => exact inv
+  | step prior block ih =>
+      exact block.stateInv_admitted_sem preserves admitted.2
+        (ih admitted.1)
+
 open ContractSpec
 
 variable {c : ContractSpec}
@@ -47,9 +77,8 @@ theorem ConfiguredBlockTrace.stateInv_admitted
     (admitted : trace.FrameAdmitted ca entry)
     (inv : c.StateInv ca pre.state) :
     c.StateInv ca post.state := by
-  rw [trace.postState]
-  exact trace.bodyTrace.stateInv_admitted preserves trace.covered admitted
-    trace.openingBound (trace.openingBenvInv inv)
+  exact stateInv_ofSem (trace.stateInv_admitted_sem (c := c.toSem)
+    (preservesAdmitted_toSem c ca entry preserves) admitted (stateInv_toSem inv))
 
 /-- A retained configured history transports an arbitrary contract invariant
 when each concrete block trace is admitted. -/
@@ -61,11 +90,9 @@ theorem ConfiguredHistoryTrace.stateInv_admitted
     (admitted : trace.FrameAdmitted ca entry)
     (inv : c.StateInv ca checkpoint.state) :
     c.StateInv ca future.state := by
-  induction trace with
-  | refl => exact inv
-  | step prior block ih =>
-      exact block.stateInv_admitted preserves admitted.2
-        (ih admitted.1)
+  exact stateInv_ofSem (trace.stateInv_admitted_sem (c := c.toSem)
+    (preservesAdmitted_toSem c ca entry preserves) admitted
+    (stateInv_toSem inv))
 
 end ExecutionTrace
 

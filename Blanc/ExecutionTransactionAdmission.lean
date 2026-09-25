@@ -36,13 +36,43 @@ def ApplyTransactionsTrace.FrameAdmitted
   | .cons head tail =>
       head.FrameAdmitted ca entry ∧ tail.FrameAdmitted ca entry
 
-open ContractSpec
+open ContractSpecSem
 
-variable {c : ContractSpec}
+variable {c : ContractSpecSem}
 
-/-- An arbitrary contract invariant survives one retained transaction when
-the concrete message frames selected by that transaction are admitted. -/
-theorem TransactionTrace.benvInv_admitted
+theorem TransactionTrace.sender_ne_sem
+    {ca : Adr} {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (inv : c.StateInv ca benv.state)
+    (notCreated : ca ∉ benv.createdAccounts) :
+    trace.sender ≠ ca := by
+  have beginInv : c.BenvInv ca benv.beginTransaction := by
+    refine ⟨?_, ?_⟩
+    · simpa [Benv.beginTransaction] using inv
+    · simpa [Benv.beginTransaction] using notCreated
+  exact ContractSpecSem.checkTransaction_sender_ne_of_inv trace.checked beginInv
+
+/-- The generic prepared-message invariant used by the transaction rung. -/
+theorem TransactionTrace.msgInv_sem
+    {ca : Adr} {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (inv : c.StateInv ca benv.state)
+    (notCreated : ca ∉ benv.createdAccounts) :
+    c.MsgInv ca trace.msg := by
+  have senderNe := trace.sender_ne_sem inv notCreated
+  have debitInv : c.StateInv ca trace.debitState :=
+    StateInv.subBal senderNe trace.debit (StateInv.incrNonce inv)
+  have origin :
+      (transactionTenv benv.beginTransaction tx index trace.sender
+        trace.effectiveGasPrice trace.intrinsicGas
+        trace.blobVersionedHashes).stat.origin ≠ ca := by
+    simpa [transactionTenv] using senderNe
+  exact prepareMessage_preserves_inv trace.prepared debitInv
+    (by simpa [Benv.beginTransaction] using notCreated) origin
+
+theorem TransactionTrace.benvInv_admitted_sem
     {ca : Adr} {entry : Sevm → Devm → Prop}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
@@ -54,12 +84,12 @@ theorem TransactionTrace.benvInv_admitted
     (inv : c.BenvInv ca benv) :
     c.BenvInv ca (benv.withState state) := by
   have msgInv : c.MsgInv ca trace.msg :=
-    trace.msgInv inv.state inv.ca
+    trace.msgInv_sem inv.state inv.ca
   have msgFork : CoveredFork trace.msg.benv.stat.fork := by
     rw [prepareMessage_benv trace.prepared]
     simpa [Benv.beginTransaction] using hfork
   have messageInv :=
-    trace.message.stateInv_admitted preserves msgFork admitted msgInv
+    trace.message.stateInv_admitted_sem preserves msgFork admitted msgInv
   rcases trace.exists_stateChronology hfork with ⟨chronology⟩
   have bounds :=
     trace.settlement_sum_bounds chronology.refundCounter sumNof hfork
@@ -77,9 +107,9 @@ theorem TransactionTrace.benvInv_admitted
   rw [chronology.finalState_eq]
   exact finalInv
 
-/-- A retained transaction list threads trace-local admission and the ordinary
-balance-sum bound through every successful transaction. -/
-theorem ApplyTransactionsTrace.benvInv_admitted
+
+
+theorem ApplyTransactionsTrace.benvInv_admitted_sem
     {ca : Adr} {entry : Sevm → Devm → Prop}
     {txs : List (Nat × Tx)} {benv finalBenv : Benv}
     {bout finalBout : BlockOutput}
@@ -95,7 +125,7 @@ theorem ApplyTransactionsTrace.benvInv_admitted
   | @cons index tx txs benv bout txState txBout finalBenv finalBout
       head tail ih =>
       have headInv : c.BenvInv ca (benv.withState txState) :=
-        head.benvInv_admitted preserves hfork admitted.1 sumNof inv
+        head.benvInv_admitted_sem preserves hfork admitted.1 sumNof inv
       have nextFork : CoveredFork (benv.withState txState).stat.fork := by
         change CoveredFork benv.stat.fork
         exact hfork
@@ -105,6 +135,44 @@ theorem ApplyTransactionsTrace.benvInv_admitted
             processTransaction_sum_le head.result hfork.rules_stateGas_none)
           sumNof
       exact ih nextFork admitted.2 nextSum headInv
+
+
+open ContractSpec
+
+variable {c : ContractSpec}
+
+/-- An arbitrary contract invariant survives one retained transaction when
+the concrete message frames selected by that transaction are admitted. -/
+theorem TransactionTrace.benvInv_admitted
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (preserves : c.PreservesAdmitted ca entry)
+    (hfork : CoveredFork benv.stat.fork)
+    (admitted : trace.FrameAdmitted ca entry)
+    (sumNof : sum benv.state.bal < 2 ^ 256)
+    (inv : c.BenvInv ca benv) :
+    c.BenvInv ca (benv.withState state) := by
+  exact benvInv_ofSem (trace.benvInv_admitted_sem (c := c.toSem)
+    (preservesAdmitted_toSem c ca entry preserves) hfork admitted sumNof
+    (benvInv_toSem inv))
+/-- A retained transaction list threads trace-local admission and the ordinary
+balance-sum bound through every successful transaction. -/
+theorem ApplyTransactionsTrace.benvInv_admitted
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
+    (preserves : c.PreservesAdmitted ca entry)
+    (hfork : CoveredFork benv.stat.fork)
+    (admitted : trace.FrameAdmitted ca entry)
+    (sumNof : sum benv.state.bal < 2 ^ 256)
+    (inv : c.BenvInv ca benv) :
+    c.BenvInv ca finalBenv := by
+  exact benvInv_ofSem (trace.benvInv_admitted_sem (c := c.toSem)
+    (preservesAdmitted_toSem c ca entry preserves) hfork admitted sumNof
+    (benvInv_toSem inv))
 
 end ExecutionTrace
 
