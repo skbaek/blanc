@@ -91,7 +91,7 @@ fails. The correct response reports the open disjunct and stops.
 
 ### T1 answers
 
-1. `Blanc.of_run_call_val_with_depth_frame` in `Blanc/Ladder.lean`,
+1. `Blanc.of_run_call_val_with_depth_frame` in `Blanc/LadderBase.lean`,
    via the E2 bullet "`of_run_call_val_with_depth_frame`: from a known
    7-operand stack prefix …". Accept a compat projection
    (`of_run_call_val_with_depth`, `of_run_call_val`) only with a stated
@@ -108,7 +108,7 @@ fails. The correct response reports the open disjunct and stops.
 
 1. The `of_run_staticcall_val_with_depth_cause` family
    (`Blanc.of_run_staticcall_val_with_depth_cause`, compat projection
-   `of_run_staticcall_val_with_depth`) in `Blanc/Ladder.lean`, via the E2
+   `of_run_staticcall_val_with_depth`) in `Blanc/LadderBase.lean`, via the E2
    STATICCALL bullet. The failed arm carries a `StatcallFailureCause`
    witness.
 2. The E2 bullet's opcode-honesty sentence rules it out: CALL (7 operands,

@@ -107,7 +107,10 @@ This repo contains the following files:
 - [Ladder.lean](Blanc/Ladder.lean): the contract-generic verification ladder,
   including the `ContractSpec` record each contract instantiates and the
   dispatcher decomposition (`FuncSound`, `sound_of_dispatch`) that reduces a
-  whole-contract obligation to one obligation per dispatch target.
+  whole-contract obligation to one obligation per dispatch target. It is the
+  `Prog.compile` instance of the same ladder over an arbitrary certified code
+  image ([LadderSem.lean](Blanc/LadderSem.lean), `ContractSpecSem`); the
+  vocabulary both share is in [LadderBase.lean](Blanc/LadderBase.lean).
 - [Upgrade.lean](Blanc/Upgrade.lean): contract-neutral vocabulary for an
   explicit five-part upgrade architecture. It keeps migration soundness and
   shared behavioral refinement as separate predicates; product families must
@@ -263,7 +266,7 @@ This repo contains the following files:
   a still-live old expiry — and nothing composes the public `pause` entry through
   `setPauser`. One limit sits in the reachability relation rather than in the Registry:
   `BlockChain.ReachUsing.step` and `BlockChain.Reach.step`
-  ([Ladder.lean](Blanc/Ladder.lean)) admit a block only when the world's total
+  ([LadderBase.lean](Blanc/LadderBase.lean)) admit a block only when the world's total
   wei balance plus that block's withdrawals stays below `2 ^ 256`, so "every
   reachable state" silently excludes any history that would cross that bound — a
   restriction the Registry invariant itself never consults. Every statement is
