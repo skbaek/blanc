@@ -15,7 +15,8 @@ consumes (`ninstTransfer_append`).
 
 `ninstTransfer_run` is the success-only reading of a transfer: unlike
 `regularTransfer_safe` it needs no bound on the stack, because a successful run
-has already had room for every push.
+has already had room for every push.  It is stated on Blanc's covered forks,
+the scope of every lifting claim, because Blanc's CALL inversions are.
 -/
 
 namespace Blanc.Lift
@@ -472,7 +473,8 @@ private theorem matches_push_word {head : Option B256} {tail : Pattern}
   exact ⟨headMatch, matched⟩
 
 private theorem ninstTransfer_run_call {sevm : Sevm} {devm devm' : Devm}
-    {input output : Pattern} (matched : Matches input devm.stack)
+    {input output : Pattern} (hfork : CoveredFork sevm.benvStat.fork)
+    (matched : Matches input devm.stack)
     (checked : callTransfer input = some output)
     (run : Ninst.Run sevm devm (.exec .call) devm') :
     Matches output devm'.stack := by
@@ -481,7 +483,7 @@ private theorem ninstTransfer_run_call {sevm : Sevm} {devm devm' : Devm}
 /-- Success-only soundness: a successful run of an accepted instruction leaves
 a stack matching the transferred pattern. -/
 theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
-    {input output : Pattern}
+    {input output : Pattern} (hfork : CoveredFork sevm.benvStat.fork)
     (matched : Matches input devm.stack)
     (checked : ninstTransfer n input = some output)
     (run : Ninst.Run sevm devm n devm') :
@@ -664,7 +666,7 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
       cases x with
       | call =>
           simp only [ninstTransfer] at checked
-          exact ninstTransfer_run_call matched checked run
+          exact ninstTransfer_run_call hfork matched checked run
       | _ => cases checked
   | _ => cases checked
 
