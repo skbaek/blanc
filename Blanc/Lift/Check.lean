@@ -140,7 +140,7 @@ def checkNode (code : ByteArray) (es : List Entry) (m : Nat) :
 
 /-- A lift certificate: entry `0` is the frame's start at pc `0` with an empty
 frame, and every entry's tree checks against the bytes. -/
-def Cert : Type := List (Entry × SFunc)
+abbrev Cert : Type := List (Entry × SFunc)
 
 def Cert.entries (c : Cert) : List Entry := List.map Prod.fst c
 def Cert.prog (c : Cert) : List SFunc := List.map Prod.snd c
