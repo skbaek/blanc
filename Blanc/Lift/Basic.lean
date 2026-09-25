@@ -18,6 +18,8 @@ instruction of the bytes:
 * `branch f g` — a `JUMPI`: it pops the destination and the condition, falls
   through to `f` on zero and continues with `g` (the tree at the destination)
   otherwise;
+* `branchTo f k` — a `JUMPI` whose destination is entry `k`, entered as a goto
+  (a loop closed by a conditional back-edge); it falls through to `f` on zero;
 * `jump k` — a `JUMP` to entry `k`, as a goto within the current frame: loop
   heads, join points and shared tails;
 * `callNext k f` — a `JUMP` to entry `k` that runs it as a callee; if the callee
@@ -41,6 +43,7 @@ open Jaune
 
 inductive SFunc : Type
   | branch : SFunc → SFunc → SFunc
+  | branchTo : SFunc → Nat → SFunc
   | last : Linst → SFunc
   | next : Ninst → SFunc → SFunc
   | dest : SFunc → SFunc
@@ -66,6 +69,16 @@ inductive SFunc.Run (fs : List SFunc) (sevm : Sevm) :
     Devm.PopBurn [d, w] devm devm' →
     SFunc.Run fs sevm devm' g o →
     SFunc.Run fs sevm devm (.branch f g) o
+  | toZero {devm devm' : Devm} {f : SFunc} {k : Nat} {o : Outcome} (d : B256) :
+    Devm.PopBurn [d, 0] devm devm' →
+    SFunc.Run fs sevm devm' f o →
+    SFunc.Run fs sevm devm (.branchTo f k) o
+  | toSucc {devm devm' : Devm} {f g : SFunc} {k : Nat} {o : Outcome} (d w : B256) :
+    w ≠ 0 →
+    fs[k]? = some g →
+    Devm.PopBurn [d, w] devm devm' →
+    SFunc.Run fs sevm devm' g o →
+    SFunc.Run fs sevm devm (.branchTo f k) o
   | last {devm devm' : Devm} {l : Linst} :
     Linst.Run sevm devm l (.ok devm') →
     SFunc.Run fs sevm devm (.last l) (.halted devm')

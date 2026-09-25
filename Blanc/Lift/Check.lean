@@ -103,6 +103,12 @@ def checkNode (code : ByteArray) (es : List Entry) (m : Nat) :
       byteAt code pc == some (Jinst.toUInt8 .jumpi) &&
         checkNode code es m (pc + 1) a' f && checkNode code es m t.toNat a' g
     | _ => false
+  | pc, a, .branchTo f k =>
+    match a, es[k]? with
+    | .const t :: _ :: a', some e =>
+      byteAt code pc == some (Jinst.toUInt8 .jumpi) && e.pc == t.toNat &&
+        e.rets == m && gotoCompat a' e.frame && checkNode code es m (pc + 1) a' f
+    | _, _ => false
   | pc, a, .jump k =>
     match a, es[k]? with
     | .const t :: a', some e =>
