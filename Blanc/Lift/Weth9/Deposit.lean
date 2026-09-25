@@ -81,14 +81,256 @@ private theorem split_deposit_run {fs : List SFunc} {sevm : Sevm}
       | ret d hret =>
           exact ⟨_, d1, d2, d3, d, burn, hpre, of_run_singleton hsstore, hpost, hret⟩
 
+/-
+private def depositA : List Ninst :=
+  [.reg .callvalue, .push [0x03] (by decide), .push [0x00] (by decide),
+   .reg .caller,
+   .push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
+   .reg .and,
+   .push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
+   .reg .and]
+private def depositB : List Ninst := [.reg (.dup 1), .reg .mstore]
+private def depositC : List Ninst :=
+  [.push [0x20] (by decide), .reg .add, .reg (.swap 0), .reg (.dup 1), .reg .mstore]
+private def depositD : List Ninst :=
+  [.push [0x20] (by decide), .reg .add, .push [0x00] (by decide), .reg .keccak256]
+private def depositE : List Ninst :=
+  [.push [0x00] (by decide), .reg (.dup 2), .reg (.dup 2), .reg .sload, .reg .add,
+   .reg (.swap 2), .reg .pop, .reg .pop, .reg (.dup 1), .reg (.swap 0)]
+
+private theorem depositPre_split :
+    depositPre = depositA ++ depositB ++ depositC ++ depositD ++ depositE := by
+  simp [depositA, depositB, depositC, depositD, depositE, depositPre]
+
+private def depositA1 : List Ninst :=
+  [.reg .callvalue, .push [0x03] (by decide), .push [0x00] (by decide), .reg .caller]
+private def depositA2 : List Ninst :=
+  [.push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
+   .reg .and,
+   .push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
+   .reg .and]
+
+private theorem depositA_split : depositA = depositA1 ++ depositA2 := by
+  simp [depositA, depositA1, depositA2]
+
+private def depositA2a : List Ninst :=
+  [.push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
+   .reg .and]
+private def depositA2b : List Ninst :=
+  [.push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
+   .reg .and]
+
+private theorem depositA2_split : depositA2 = depositA2a ++ depositA2b := by
+  simp [depositA2, depositA2a, depositA2b]
+
+private theorem caller_mask (a : Adr) :
+    (a.toB256 &&& Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]) =
+      a.toB256 := by
+  have hmask : Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
+      = (~~~ addressMask) := by decide
+  rw [hmask, B256.and_comm]
+  exact addressSlotReadWord_toB256 a
+
+private theorem deposit_segment_A2a {sevm : Sevm} {s s' : Devm} {xs : Stack}
+    (hxs : sevm.caller.toB256 :: 0 :: (3 : B256) :: sevm.value :: xs <<+ s.stack)
+    (run : Line.Run sevm s depositA2a s') :
+    sevm.caller.toB256 :: 0 :: (3 : B256) :: sevm.value :: xs <<+ s'.stack ∧
+      s'.memory = s.memory := by
+  revert run
+  line_execute 1
+  have r₁ := of_run_singleton h₁
+  have hp1 := prefix_of_push (of_run_pushB256 r₁) hxs
+  line_execute 1
+  have r₂ := of_run_singleton h₂
+  intro hrest
+  cases hrest
+  have hp2 : sevm.caller.toB256 :: 0 :: (3 : B256) :: sevm.value :: xs <<+ s'.stack := by
+    simpa [caller_mask] using prefix_of_and r₂ hp1
+  exact ⟨hp2, (Line.of_inv Devm.memory (by line_inv) h₂).symm⟩
+
+private theorem deposit_segment_A2b {sevm : Sevm} {s s' : Devm} {xs : Stack}
+    (hxs : sevm.caller.toB256 :: 0 :: (3 : B256) :: sevm.value :: xs <<+ s.stack)
+    (run : Line.Run sevm s depositA2b s') :
+    sevm.caller.toB256 :: 0 :: (3 : B256) :: sevm.value :: xs <<+ s'.stack ∧
+      s'.memory = s.memory := by
+  revert run
+  line_execute 1
+  have r₁ := of_run_singleton h₁
+  have hp1 := prefix_of_push (of_run_pushB256 r₁) hxs
+  line_execute 1
+  have r₂ := of_run_singleton h₂
+  intro hrest
+  cases hrest
+  have hp2 : sevm.caller.toB256 :: 0 :: (3 : B256) :: sevm.value :: xs <<+ s'.stack := by
+    simpa [caller_mask] using prefix_of_and r₂ hp1
+  exact ⟨hp2, (Line.of_inv Devm.memory (by line_inv) h₂).symm⟩
+
+private theorem deposit_segment_A1 {sevm : Sevm} {s s' : Devm} {xs : Stack}
+    (hxs : xs <<+ s.stack) (run : Line.Run sevm s depositA1 s') :
+    sevm.caller.toB256 :: 0 :: (3 : B256) :: sevm.value :: xs <<+ s'.stack ∧
+      s'.memory = s.memory := by
+  revert run
+  line_execute 4
+  intro hrest
+  cases hrest
+  have hp : sevm.caller.toB256 :: 0 :: (3 : B256) :: sevm.value :: xs <<+ s'.stack := by
+    generalize_line_prefix
+  exact ⟨hp, (Line.of_inv Devm.memory (by line_inv) h₁).symm⟩
+
+private theorem deposit_segment_A2 {sevm : Sevm} {s s' : Devm} {xs : Stack}
+    (hxs : sevm.caller.toB256 :: 0 :: (3 : B256) :: sevm.value :: xs <<+ s.stack)
+    (run : Line.Run sevm s depositA2 s') :
+    sevm.caller.toB256 :: 0 :: (3 : B256) :: sevm.value :: xs <<+ s'.stack ∧
+      s'.memory = s.memory := by
+  rw [depositA2_split] at run
+  rcases of_run_append depositA2a run with ⟨sm, h1, h2⟩
+  rcases deposit_segment_A2a hxs h1 with ⟨hp, hm⟩
+  rcases deposit_segment_A2b hp h2 with ⟨hp', hm'⟩
+  exact ⟨hp', hm'.trans hm⟩
+
+private theorem deposit_segment_A {sevm : Sevm} {s s' : Devm} {xs : Stack}
+    (hxs : xs <<+ s.stack) (run : Line.Run sevm s depositA s') :
+    sevm.caller.toB256 :: 0 :: (3 : B256) :: sevm.value :: xs <<+ s'.stack ∧
+      s'.memory = s.memory := by
+  rw [depositA_split] at run
+  rcases of_run_append depositA1 run with ⟨sm, h1, h2⟩
+  rcases deposit_segment_A1 hxs h1 with ⟨hp, hm⟩
+  rcases deposit_segment_A2 hp h2 with ⟨hp', hm'⟩
+  exact ⟨hp', hm'.trans hm⟩
+-/
+
 private theorem deposit_pre_stack {sevm : Sevm} {s s' : Devm}
     (run : Line.Run sevm s depositPre s') :
     ∃ xs : Stack,
       xs <<+ s.stack ∧
       balSlot sevm.caller ::
           (s.getStorVal sevm.currentTarget (balSlot sevm.caller) + sevm.value) :: xs <<+ s'.stack ∧
-      s'.memory = s.memory.extend 0 64 := by
+      (((s.memory.write 0 sevm.caller.toB256.toBytes).write 32 (3 : B256).toBytes).read 0 64).1 =
+        sevm.caller.toB256.toBytes ++ (3 : B256).toBytes := by
+  revert run
   sorry
+/-
+  have hp5raw :
+      [((sevm.caller.toB256 &&& Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff]) &&& Bytes.toB256 [0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]), 0, 3, sevm.value]
+        <<+ s₂.stack := by sorry
+  have hmask : Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
+      = (~~~ addressMask) := by decide
+  have hcaller_mask :
+      (sevm.caller.toB256 &&& Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff]) = sevm.caller.toB256 := by
+    rw [hmask, B256.and_comm]
+    exact addressSlotReadWord_toB256 sevm.caller
+  have hp5 : sevm.caller.toB256 :: 0 :: (3 : B256) :: sevm.value :: s.stack <<+ s₂.stack := by
+    simpa [hcaller_mask] using hp5raw
+  line_execute 1
+  have hp6 : 0 :: sevm.caller.toB256 :: 0 :: (3 : B256) :: sevm.value :: s.stack <<+ s₃.stack := by
+    generalize_line_prefix
+  line_execute 1
+  have hm1 := prefix_of_mstore_val (of_run_singleton h₄) hp6
+  have hp7 : 0 :: (3 : B256) :: sevm.value :: s.stack <<+ s₄.stack := hm1.1
+  line_execute 4
+  have hp8 : (32 : B256) :: (3 : B256) :: (32 : B256) :: sevm.value :: s.stack <<+ s₅.stack := by
+    generalize_line_prefix
+  line_execute 1
+  have hm2 := prefix_of_mstore_val (of_run_singleton h₆) hp8
+  have hp9 : (32 : B256) :: sevm.value :: s.stack <<+ s₆.stack := hm2.1
+  line_execute 3
+  have hp10 : 0 :: (64 : B256) :: sevm.value :: s.stack <<+ s₇.stack := by
+    generalize_line_prefix
+  line_execute 1
+  have hm3 := prefix_of_keccak256_val (of_run_singleton h₈) hp10
+  have hp11 := hm3.1
+ -/
+/-
+  have hmask : Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
+      = (~~~ addressMask) := by decide
+  have hcaller_mask :
+      (sevm.caller.toB256 &&& Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff]) = sevm.caller.toB256 := by
+    rw [hmask, B256.and_comm]
+    exact addressSlotReadWord_toB256 sevm.caller
+  have hp6 : sevm.caller.toB256 :: 0 :: (3 : B256) :: sevm.value :: s.stack <<+ s₃.stack := by
+    simpa [hcaller_mask] using prefix_of_and r5 hp5
+  line_execute 1
+  have r6 := of_run_singleton h₄
+  have hp7 := prefix_of_push (of_run_pushB256 r6) hp6
+  line_execute 1
+  have r7 := of_run_singleton h₅
+  have hp8 : sevm.caller.toB256 :: 0 :: (3 : B256) :: sevm.value :: s.stack <<+ s₅.stack := by
+    simpa [hcaller_mask] using prefix_of_and r7 hp7
+  line_execute 1
+  have r8 := of_run_singleton h₆
+  have hp9 : 0 :: sevm.caller.toB256 :: 0 :: (3 : B256) :: sevm.value :: s.stack <<+ s₆.stack :=
+    prefix_of_dup_val r8 (by decide) hp8
+  line_execute 1
+  have r9 := of_run_singleton h₇
+  have hm1 := prefix_of_mstore_val r9 hp9
+  have hp10 : 0 :: (3 : B256) :: sevm.value :: s.stack <<+ s₇.stack := hm1.1
+  line_execute 3
+  have hp11 : (3 : B256) :: (32 : B256) :: sevm.value :: s.stack <<+ s₈.stack := by
+    generalize_line_prefix
+  line_execute 1
+  have r10 := of_run_singleton h₉
+  have hp12 : (32 : B256) :: (3 : B256) :: (32 : B256) :: sevm.value :: s.stack <<+ s₉.stack :=
+    prefix_of_dup_val r10 (by decide) hp11
+  line_execute 1
+  have r11 := of_run_singleton h₁₀
+  have hm2 := prefix_of_mstore_val r11 hp12
+  have hp13 : (32 : B256) :: sevm.value :: s.stack <<+ s₁₀.stack := hm2.1
+  line_execute 3
+  have hp14 : 0 :: (32 : B256) :: sevm.value :: s.stack <<+ s₁₁.stack := by
+    generalize_line_prefix
+  line_execute 1
+  have r12 := of_run_singleton h₁₂
+  have hm3 := prefix_of_keccak256_val r12 hp14
+  have hp15 := hm3.1
+  line_execute 1
+  have hp16 : (0 : B256) :: (balSlot sevm.caller) :: sevm.value :: s.stack <<+ s₁₃.stack := by
+    simpa [balSlot, mapSlot] using
+      (prefix_of_push (of_run_pushB256 (of_run_singleton h₁₃)) hp15)
+  line_execute 2
+  have hp17 : (balSlot sevm.caller) :: 0 :: 0 :: (balSlot sevm.caller) ::
+      sevm.value :: s.stack <<+ s₁₄.stack := by
+    generalize_line_prefix
+  line_execute 1
+  rcases prefix_of_sload (of_run_singleton h₁₅) hp17 with ⟨old, hp18, hold⟩
+  line_execute 1
+  have hp19 : (old + sevm.value) :: 0 :: (balSlot sevm.caller) ::
+      sevm.value :: s.stack <<+ s₁₆.stack := by
+    simpa using prefix_of_add (of_run_singleton h₁₆) hp18
+  line_execute 1
+  have hp20 : (balSlot sevm.caller) :: 0 :: (old + sevm.value) ::
+      sevm.value :: s.stack <<+ s₁₇.stack := by
+    generalize_line_prefix
+  line_execute 2
+  have hp21 : (old + sevm.value) :: sevm.value :: s.stack <<+ s₁₈.stack := by
+    generalize_line_prefix
+  line_execute 1
+  have hp22 : sevm.value :: (old + sevm.value) :: sevm.value :: s.stack <<+ s₁₉.stack := by
+    generalize_line_prefix
+  line_execute 1
+  have hp23 : (old + sevm.value) :: sevm.value :: sevm.value :: s.stack <<+ s₂₀.stack := by
+    generalize_line_prefix
+  intro hlast
+  cases hlast
+  sorry
+ -/
 /-
   revert run
   line_execute 1
