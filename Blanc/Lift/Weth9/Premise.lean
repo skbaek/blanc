@@ -1,7 +1,7 @@
 import Blanc.Lift.Hoare
 import Blanc.Lift.Weth9.Booked
 import Blanc.Lift.Weth9.Step
-import Blanc.Lift.Weth9.Words
+import Blanc.Lift.Weth9.Walks
 
 namespace Blanc.Lift.Weth9
 
@@ -61,19 +61,15 @@ choosing a value larger than the available balance violates `Solvent`.  Thus
 the local collision premise is semantic evidence, not merely a proof hint.
 -/
 
-/-- A callee specification may be discharged once its concrete walk has
-established the storage and balance effects of its SSTORE. -/
-theorem approve_callee_spec_of_write
-    {sevm : Sevm} {d : Devm} {o : Outcome} {value key : B256}
-    (hset : Devm.getStor (Outcome.devm o) sevm.currentTarget =
-      (Devm.getStor d sevm.currentTarget).set key value)
-    (hbal : Devm.getBal (Outcome.devm o) = Devm.getBal d)
-    (hoff : ∀ a, balSlot a ≠ key)
-    (run : SFunc.Run prog sevm d t_057b_c11 o)
-    (h : Solvent (Devm.getStor d sevm.currentTarget) sevm.value
-      (Devm.getBal d sevm.currentTarget)) :
-    Solvent (Devm.getStor (Outcome.devm o) sevm.currentTarget) 0
-      (Devm.getBal (Outcome.devm o) sevm.currentTarget) := by
-  exact solvent_of_off_write hset hbal hoff h
+theorem ff20_and_dataWord (sevm : Sevm) :
+    (Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&&
+      Sevm.dataWord sevm 4) = allowArg sevm := by
+  rw [B256.and_comm, allowArg_eq]
+
+theorem allowArg_mask (sevm : Sevm) :
+    allowArg sevm &&& ~~~ addressMask = allowArg sevm := by
+  unfold allowArg
+  exact B256.and_idem_right _ _
 
 end Blanc.Lift.Weth9

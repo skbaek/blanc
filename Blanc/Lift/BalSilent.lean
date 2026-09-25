@@ -1,16 +1,21 @@
-import Blanc.Lift.Weth9.Lift
+import Blanc.Lift.Silent
+
+/-!
+# Balance-silent synthetic trees
+
+A synthetic tree whose instructions never execute an `.exec` instruction
+(`CALL`, `CREATE`, …) and whose terminal is not `SELFDESTRUCT` leaves every
+account's ether balance unchanged: storage writes (`SSTORE`) are allowed.
+This is the balance half of `SFunc.Run.state_of_silent`, for trees that write
+storage.
+-/
 
 namespace Jaune
 
-/-- A nonterminal instruction which does not write the persistent world. -/
-def Ninst.stateSilent : Ninst → Bool
-  | .reg .sstore => false
-  | .reg _ => true
+/-- A nonterminal instruction that cannot move ether. -/
+def Ninst.balSilent : Ninst → Bool
   | .exec _ => false
-  | .push _ _ => true
-  | .dupn _ => true
-  | .swapn _ => true
-  | .exchange _ => true
+  | _ => true
 
 end Jaune
 
@@ -18,65 +23,35 @@ namespace Blanc.Lift
 
 open Jaune
 
-/-- A synthetic tree whose instructions and terminal, if any, are state-silent. -/
-def SFunc.silent : SFunc → Bool
-  | .branch f g => f.silent && g.silent
-  | .branchTo f _ => f.silent
+/-- A synthetic tree whose instructions and terminal cannot move ether. -/
+def SFunc.balSilent : SFunc → Bool
+  | .branch f g => f.balSilent && g.balSilent
+  | .branchTo f _ => f.balSilent
   | .last l => if l = .selfdestruct then false else true
-  | .next n f => n.stateSilent && f.silent
-  | .dest f => f.silent
+  | .next n f => n.balSilent && f.balSilent
+  | .dest f => f.balSilent
   | .jump _ => true
-  | .callNext _ f => f.silent
+  | .callNext _ f => f.balSilent
   | .ret => true
   | .undefined => true
 
-/-- Entry indices mentioned by a synthetic tree. -/
-def SFunc.refs : SFunc → List Nat
-  | .branch f g => f.refs ++ g.refs
-  | .branchTo f k => k :: f.refs
-  | .last _ => []
-  | .next _ f => f.refs
-  | .dest f => f.refs
-  | .jump k => [k]
-  | .callNext k f => k :: f.refs
-  | .ret => []
-  | .undefined => []
-
-/-- `S` is closed under the entries referenced by its members. -/
-def SilentSet (fs : List SFunc) (S : List Nat) : Bool :=
+/-- `S` is closed under the entries referenced by its members, all of which
+are balance-silent. -/
+def BalSilentSet (fs : List SFunc) (S : List Nat) : Bool :=
   S.all fun k => match fs[k]? with
-    | some g => g.silent && g.refs.all (· ∈ S)
+    | some g => g.balSilent && g.refs.all (· ∈ S)
     | none => false
 
-namespace Outcome
-
-/-- Forget whether a synthetic run halted or returned. -/
-def devm : Outcome → Devm
-  | .halted d => d
-  | .returned d => d
-
-end Outcome
-
-private theorem ninst_state_of_silent {sevm : Sevm} {pre post : Devm} {n : Ninst}
-    (hn : n.stateSilent = true) (run : Ninst.Run sevm pre n post) :
-    post.state = pre.state := by
+theorem Ninst.Run.getBal_of_balSilent {sevm : Sevm} {pre post : Devm} {n : Ninst}
+    (hn : n.balSilent = true) (run : Ninst.Run sevm pre n post) :
+    post.getBal = pre.getBal := by
   cases n with
   | reg r =>
       rcases run with ⟨xl, -, pc, hrun⟩
       simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at hrun
       have hrun' : Rinst.run ⟨pc, sevm, pre⟩ r = .ok post := hrun.2.symm
-      rcases eq_or_ne r .tstore with rfl | ht
-      · have hframe := Rinst.tstore_run_transientWriteFrame pc pre sevm
-        rw [hrun'] at hframe
-        exact hframe.state.symm
-      · have hsstore : r ≠ .sstore := by
-          intro h
-          subst r
-          simp [Ninst.stateSilent] at hn
-        have hframe := Rinst.preserves_state (pc := pc) (sevm := sevm)
-          (pre := pre) (post := post) hsstore ht hrun'
-        exact hframe.symm
-  | exec x => simp [Ninst.stateSilent] at hn
+      exact (Rinst.preserves_bal hrun').symm
+  | exec x => simp [Ninst.balSilent] at hn
   | push bs hbs =>
       rcases run with ⟨xl, -, pc, hrun⟩
       have hxl : xl = .none := by
@@ -87,7 +62,7 @@ private theorem ninst_state_of_silent {sevm : Sevm} {pre post : Devm} {n : Ninst
         (R := fun a b : Devm => a.state = b.state) (fun _ _ h => h.state)
         (pc := pc) (sevm := sevm) (pre := pre) (xl := .none) (out := .ok post)
         trivial hrun
-      exact hrel.symm
+      exact funext (getBal_eq_of_state_eq hrel.symm)
   | dupn imm =>
       rcases run with ⟨xl, -, pc, hrun⟩
       have hxl : xl = .none := by
@@ -98,7 +73,7 @@ private theorem ninst_state_of_silent {sevm : Sevm} {pre post : Devm} {n : Ninst
         (R := fun a b : Devm => a.state = b.state) (fun _ _ h => h.state)
         (pc := pc) (sevm := sevm) (pre := pre) (xl := .none) (out := .ok post)
         trivial hrun
-      exact hrel.symm
+      exact funext (getBal_eq_of_state_eq hrel.symm)
   | swapn imm =>
       rcases run with ⟨xl, -, pc, hrun⟩
       have hxl : xl = .none := by
@@ -109,7 +84,7 @@ private theorem ninst_state_of_silent {sevm : Sevm} {pre post : Devm} {n : Ninst
         (R := fun a b : Devm => a.state = b.state) (fun _ _ h => h.state)
         (pc := pc) (sevm := sevm) (pre := pre) (xl := .none) (out := .ok post)
         trivial hrun
-      exact hrel.symm
+      exact funext (getBal_eq_of_state_eq hrel.symm)
   | exchange imm =>
       rcases run with ⟨xl, -, pc, hrun⟩
       have hxl : xl = .none := by
@@ -120,99 +95,91 @@ private theorem ninst_state_of_silent {sevm : Sevm} {pre post : Devm} {n : Ninst
         (R := fun a b : Devm => a.state = b.state) (fun _ _ h => h.state)
         (pc := pc) (sevm := sevm) (pre := pre) (xl := .none) (out := .ok post)
         trivial hrun
-      exact hrel.symm
+      exact funext (getBal_eq_of_state_eq hrel.symm)
 
-private theorem linst_state_of_silent {sevm : Sevm} {pre post : Devm} {l : Linst}
-    (hl : (l != .selfdestruct) = true) (run : Linst.Run sevm pre l (.ok post)) :
-    post.state = pre.state := by
+private theorem linst_getBal {sevm : Sevm} {pre post : Devm} {l : Linst}
+    (hl : (if l = .selfdestruct then false else true) = true)
+    (run : Linst.Run sevm pre l (.ok post)) :
+    post.getBal = pre.getBal := by
   have hnot : l ≠ .selfdestruct := by
     intro h
     subst l
     simp at hl
   have hframe := Linst.run_instructionFrame sevm pre l hnot
   rw [run] at hframe
-  exact hframe.state.symm
+  exact funext (getBal_eq_of_state_eq hframe.state.symm)
 
-theorem SFunc.RunP.state_of_silent {P : Sevm → Devm → Ninst → Devm → Prop}
+/-- **A balance-silent run moves no ether.** -/
+theorem SFunc.RunP.getBal_of_balSilent {P : Sevm → Devm → Ninst → Devm → Prop}
     (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {fs : List SFunc} {S : List Nat}
-    (hS : SilentSet fs S = true) {sevm : Sevm} {devm : Devm} {f : SFunc} {o : Outcome}
-    (hf : f.silent = true) (hrefs : f.refs.all (· ∈ S) = true)
+    (hS : BalSilentSet fs S = true) {sevm : Sevm} {devm : Devm} {f : SFunc}
+    {o : Outcome} (hf : f.balSilent = true) (hrefs : f.refs.all (· ∈ S) = true)
     (run : SFunc.RunP P fs sevm devm f o) :
-    (Outcome.devm o).state = devm.state := by
+    (Outcome.devm o).getBal = devm.getBal := by
   have closed : ∀ {k g}, k ∈ S → fs[k]? = some g →
-      g.silent = true ∧ g.refs.all (· ∈ S) = true := by
+      g.balSilent = true ∧ g.refs.all (· ∈ S) = true := by
     intro k g hk hget
     have h := (List.all_eq_true.mp hS) k hk
     rw [hget] at h
     simpa using h
+  have popBal : ∀ {xs : List B256} {a b : Devm}, Devm.PopBurn xs a b →
+      b.getBal = a.getBal := fun pop => funext (getBal_eq_of_state_eq pop.state.symm)
   induction run with
   | zero d pop run ih =>
       have hff := hf
       have hfr := hrefs
-      simp only [SFunc.silent, Bool.and_eq_true] at hff
+      simp only [SFunc.balSilent, Bool.and_eq_true] at hff
       simp only [SFunc.refs, List.all_append, Bool.and_eq_true] at hfr
-      simpa [Outcome.devm] using (ih hff.1 hfr.1).trans pop.state.symm
+      exact (ih hff.1 hfr.1).trans (popBal pop)
   | succ d w hnz pop run ih =>
       have hff := hf
       have hfr := hrefs
-      simp only [SFunc.silent, Bool.and_eq_true] at hff
+      simp only [SFunc.balSilent, Bool.and_eq_true] at hff
       simp only [SFunc.refs, List.all_append, Bool.and_eq_true] at hfr
-      simpa [Outcome.devm] using (ih hff.2 hfr.2).trans pop.state.symm
+      exact (ih hff.2 hfr.2).trans (popBal pop)
   | toZero d pop run ih =>
       have hfr := hrefs
       simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hfr
-      simpa [Outcome.devm] using (ih hf hfr.2).trans pop.state.symm
+      exact (ih hf hfr.2).trans (popBal pop)
   | toSucc d w hnz lookup pop run ih =>
       have hfr := hrefs
       simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hfr
       have htarget := closed (of_decide_eq_true hfr.1) lookup
-      simpa [SFunc.refs, SFunc.silent, Outcome.devm] using
-        (ih htarget.1 htarget.2).trans pop.state.symm
+      exact (ih htarget.1 htarget.2).trans (popBal pop)
   | last hrun =>
-      simpa [Outcome.devm] using linst_state_of_silent (by simpa [SFunc.silent] using hf) hrun
+      exact linst_getBal (by simpa [SFunc.balSilent] using hf) hrun
   | next hrun run ih =>
       have hfn := hf
-      simp only [SFunc.silent, Bool.and_eq_true] at hfn
-      simpa [Outcome.devm] using
-        (ih hfn.2 hrefs).trans (ninst_state_of_silent hfn.1 (hP hrun))
+      simp only [SFunc.balSilent, Bool.and_eq_true] at hfn
+      exact (ih hfn.2 hrefs).trans (Ninst.Run.getBal_of_balSilent hfn.1 (hP hrun))
   | dest burn run ih =>
-      simpa [Outcome.devm] using (ih hf hrefs).trans burn.state.symm
+      exact (ih hf hrefs).trans (funext (getBal_eq_of_state_eq burn.state.symm))
   | jump d lookup pop run ih =>
       have hfr := hrefs
       simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hfr
       have htarget := closed (of_decide_eq_true hfr.1) lookup
-      simpa [Outcome.devm] using (ih htarget.1 htarget.2).trans pop.state.symm
+      exact (ih htarget.1 htarget.2).trans (popBal pop)
   | ret d pop =>
-      simpa [Outcome.devm] using pop.state.symm
+      exact popBal pop
   | callHalt d lookup pop run ih =>
       have hfr := hrefs
       simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hfr
       have htarget := closed (of_decide_eq_true hfr.1) lookup
-      simpa [Outcome.devm] using (ih htarget.1 htarget.2).trans pop.state.symm
+      exact (ih htarget.1 htarget.2).trans (popBal pop)
   | callRet d lookup pop run tail ihRun ihTail =>
       have hfr := hrefs
       simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hfr
       have htarget := closed (of_decide_eq_true hfr.1) lookup
       have hfn := hf
-      simp only [SFunc.silent] at hfn
-      simpa [Outcome.devm] using
-        (ihTail hfn hfr.2).trans ((ihRun htarget.1 htarget.2).trans pop.state.symm)
+      simp only [SFunc.balSilent] at hfn
+      exact (ihTail hfn hfr.2).trans ((ihRun htarget.1 htarget.2).trans (popBal pop))
 
-theorem SFunc.Run.state_of_silent {fs : List SFunc} {S : List Nat}
-    (hS : SilentSet fs S = true) {sevm : Sevm} {devm : Devm} {f : SFunc} {o : Outcome}
-    (hf : f.silent = true) (hrefs : f.refs.all (· ∈ S) = true)
+/-- **A balance-silent run moves no ether** (over Jaune's steps). -/
+theorem SFunc.Run.getBal_of_balSilent {fs : List SFunc} {S : List Nat}
+    (hS : BalSilentSet fs S = true) {sevm : Sevm} {devm : Devm} {f : SFunc}
+    {o : Outcome} (hf : f.balSilent = true) (hrefs : f.refs.all (· ∈ S) = true)
     (run : SFunc.Run fs sevm devm f o) :
-    (Outcome.devm o).state = devm.state :=
-  SFunc.RunP.state_of_silent id hS hf hrefs run
-
-section Weth9
-
-open Weth9
-
-theorem Weth9.views_silent :
-    SilentSet Weth9.prog [2, 4, 6, 7, 10, 12, 14, 15, 16, 17] = true := by
-  decide +kernel
-
-end Weth9
+    (Outcome.devm o).getBal = devm.getBal :=
+  SFunc.RunP.getBal_of_balSilent id hS hf hrefs run
 
 end Blanc.Lift

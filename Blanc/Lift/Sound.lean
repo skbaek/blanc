@@ -1,4 +1,6 @@
 import Blanc.Lift.Check
+import Blanc.LadderSem
+import Blanc.ExecutionFrames
 
 /-!
 # The lifting theorem (safety direction)
@@ -510,28 +512,124 @@ lemma push_run_stack {sevm : Sevm} {pre inter : Devm} {bs : Bytes}
     rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hstep
     cases hstep.1
 
+/-! ### Where a lifted step's child derivation sits -/
+
+/-- A child derivation all of whose raw frame roots are raw frame roots of the
+root derivation `R`. -/
+def InRoots (R : Exec.Deriv) : ∀ pc sevm devm exn, Exec pc sevm devm exn → Prop :=
+  fun _ _ _ _ e => ∀ r ∈ Exec.rawFrameRoots e, r ∈ Exec.rawFrameRoots R.exc
+
+/-- A lifted instruction step inside the root derivation `R`: a Jaune step
+whose child derivation, if any, lies among `R`'s raw frame roots. -/
+abbrev StepIn (R : Exec.Deriv) : Sevm → Devm → Ninst → Devm → Prop :=
+  Ninst.RunWith (InRoots R)
+
+theorem StepIn.toRun {R : Exec.Deriv} {sevm : Sevm} {d d' : Devm} {n : Ninst}
+    (h : StepIn R sevm d n d') : Ninst.Run sevm d n d' :=
+  Ninst.RunWith.toRun h
+
+/-- Raw frame descendants shrink along the immediate sub-derivation relation. -/
+lemma desc_sub_of_prec {q p : Exec.Deriv} (h : Exec.Deriv.Prec q p) :
+    ∀ r ∈ Exec.rawFrameDescendants q.exc, r ∈ Exec.rawFrameDescendants p.exc := by
+  intro r hr
+  cases h with
+  | cont hstep exc => simpa [Exec.rawFrameDescendants] using hr
+  | doneOk hstep henter hr' exc => simpa [Exec.rawFrameDescendants] using hr
+  | runErrChild hstep henter excChild hr' =>
+      simp only [Exec.rawFrameDescendants]
+      exact List.mem_cons_of_mem _ hr
+  | runOkChild hstep henter excChild hr' exc =>
+      simp only [Exec.rawFrameDescendants]
+      exact List.mem_cons_of_mem _ (List.mem_append_left _ hr)
+  | runOkCont hstep henter excChild hr' exc =>
+      simp only [Exec.rawFrameDescendants]
+      exact List.mem_cons_of_mem _ (List.mem_append_right _ hr)
+
+lemma desc_sub_of_le {q p : Exec.Deriv} (h : Exec.Deriv.le q p) :
+    ∀ r ∈ Exec.rawFrameDescendants q.exc, r ∈ Exec.rawFrameDescendants p.exc := by
+  induction h with
+  | refl => exact fun _ hr => hr
+  | step _ prec ih => exact fun r hr => desc_sub_of_prec prec r (ih r hr)
+
+lemma desc_sub_of_lt {q p : Exec.Deriv} (h : Exec.Deriv.lt q p) :
+    ∀ r ∈ Exec.rawFrameDescendants q.exc, r ∈ Exec.rawFrameDescendants p.exc := by
+  obtain ⟨q', hle, prec⟩ := h
+  exact fun r hr => desc_sub_of_prec prec r (desc_sub_of_le hle r hr)
+
+/-- `Ninst.run_of_at`, recording that the step's child derivation (if any) is
+among the raw frame descendants of the derivation it was read off. -/
+lemma Ninst.runIn_of_at {pc sevm pre n post}
+    (exc : Exec pc sevm pre (.ok post))
+    (nat : Ninst.At sevm.code pc n) :
+    ∃ (inter : Devm)
+      (exc' : Exec (pc + n.size) sevm inter (.ok post)),
+      Ninst.RunWith (fun _ _ _ _ e =>
+          ∀ r ∈ Exec.rawFrameRoots e, r ∈ Exec.rawFrameDescendants exc)
+        sevm pre n inter ∧
+      Exec.Deriv.Prec
+        ⟨(pc + n.size), sevm, inter, .ok post, exc'⟩
+        ⟨pc, sevm, pre, .ok post, exc⟩ := by
+  have hstep : Evm.step ⟨pc, sevm, pre⟩ = Ninst.step ⟨pc, sevm, pre⟩ n :=
+    Evm.step_next nat
+  cases exc with
+  | halt h => cases Ninst.step_ne_halt_ok (hstep.symm.trans h)
+  | cont h exc' =>
+    have hs := hstep.symm.trans h
+    cases Ninst.step_cont_pc hs
+    refine ⟨_, exc', ⟨.none, trivial, pc, ?_⟩, Exec.Deriv.Prec.cont h exc'⟩
+    simp only [Ninst.StepRun, hs, Step.Run]
+    exact ⟨trivial, trivial⟩
+  | doneOk h henter hr exc' =>
+    have hs := hstep.symm.trans h
+    cases Ninst.step_spawn_pc hs
+    refine ⟨_, exc', ⟨.none, trivial, pc, ?_⟩,
+      Exec.Deriv.Prec.doneOk h henter hr exc'⟩
+    simp only [Ninst.StepRun, hs, Step.Run]
+    exact ⟨_, RunFrame.of_done henter, hr.symm⟩
+  | runOk h henter excChild hr exc' =>
+    have hs := hstep.symm.trans h
+    cases Ninst.step_spawn_pc hs
+    refine ⟨_, exc', ⟨.some ⟨_, _⟩, ⟨excChild, ?_⟩, pc, ?_⟩,
+      Exec.Deriv.Prec.runOkCont h henter excChild hr exc'⟩
+    · intro r hr'
+      simp only [Exec.rawFrameRoots, List.mem_cons] at hr'
+      simp only [Exec.rawFrameDescendants, List.mem_cons, List.mem_append]
+      rcases hr' with rfl | hr'
+      · exact Or.inl rfl
+      · exact Or.inr (Or.inl hr')
+    · simp only [Ninst.StepRun, hs, Step.Run]
+      exact ⟨_, RunFrame.of_run henter, hr.symm⟩
+
 /-- The recursion invariant.  For a successful derivation at a node checked
 with frame `a` and return arity `m`: the node's run halts with the derivation's
 result, or the current function returns — then `.ret` occurs in the frame, the
 run returns `devm'` whose stack is `S' ++ base` with `S'.length = m`, and the
 rest of the execution is a strictly smaller derivation from `ρ`. -/
-def NodeClaim (code : ByteArray) (c : Cert) (pk : Exec.Deriv) : Prop :=
+def NodeClaim0 (code : ByteArray) (c : Cert) (R pk : Exec.Deriv) : Prop :=
   ∀ (post : Devm), pk.exn = .ok post → pk.sevm.code = code →
   CoveredFork pk.sevm.benvStat.fork →
   ∀ (m : Nat) (a : List AVal) (f : SFunc) (ρ : B256) (S base : List B256),
     checkNode code c.entries m pk.pc a f = true →
     pk.devm.stack = S ++ base → FrameMatches ρ a S →
-    SFunc.Run c.prog pk.sevm pk.devm f (.halted post) ∨
+    SFunc.RunP (StepIn R) c.prog pk.sevm pk.devm f (.halted post) ∨
     (AVal.ret ∈ a ∧
       ∃ (devm' : Devm) (S' : List B256) (exc' : Exec ρ.toNat pk.sevm devm' (.ok post)),
         Exec.Deriv.lt ⟨ρ.toNat, pk.sevm, devm', .ok post, exc'⟩ pk ∧
-        SFunc.Run c.prog pk.sevm pk.devm f (.returned devm') ∧
+        SFunc.RunP (StepIn R) c.prog pk.sevm pk.devm f (.returned devm') ∧
         devm'.stack = S' ++ base ∧ S'.length = m)
 
-theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true) :
-    ∀ pk : Exec.Deriv, NodeClaim code c pk := by
+/-- `NodeClaim0`, for a derivation whose raw frame descendants are raw frame
+roots of the root derivation `R`: each lifted step is then a `StepIn R`. -/
+def NodeClaim (code : ByteArray) (c : Cert) (R pk : Exec.Deriv) : Prop :=
+  (∀ r ∈ Exec.rawFrameDescendants pk.exc, r ∈ Exec.rawFrameRoots R.exc) →
+    NodeClaim0 code c R pk
+
+theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
+    (R : Exec.Deriv) : ∀ pk : Exec.Deriv, NodeClaim code c R pk := by
   apply Exec.Deriv.strongRec
-  intro pk ih
+  intro pk ih hsub
+  replace ih : ∀ q, Exec.Deriv.lt q pk → NodeClaim0 code c R q :=
+    fun q hq => ih q hq (fun r hr => hsub r (desc_sub_of_lt hq r hr))
   intro post hpost hcode hfork m a f ρ S base hcheck hstack hframe
   rcases pk with ⟨pc, sevm, devm, exn, exc⟩
   cases exn with
@@ -592,14 +690,14 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                         (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a' f ρ S1 base
                         hcheck'.1.2 hinter htail
                       cases hrun with
-                      | inl run => exact Or.inl (SFunc.Run.zero t pop run)
+                      | inl run => exact Or.inl (SFunc.RunP.zero t pop run)
                       | inr run =>
                         rcases run with
                           ⟨hret, devm', S', exc'', hlt, run, hst, hlen⟩
                         exact Or.inr ⟨List.mem_cons_of_mem _
                             (List.mem_cons_of_mem _ hret), devm', S', exc'',
                           deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
-                          SFunc.Run.zero t pop run, hst, hlen⟩
+                          SFunc.RunP.zero t pop run, hst, hlen⟩
                     · rcases z with ⟨x, y, inter, exc', pop, _, _, hy, prec⟩
                       have hpop := popBurn_two_stack pop
                       rw [hstack] at hpop
@@ -618,14 +716,14 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                         (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a' g ρ S1 base
                         hcheck'.2 hinter htail
                       cases hrun with
-                      | inl run => exact Or.inl (SFunc.Run.succ t y hy pop run)
+                      | inl run => exact Or.inl (SFunc.RunP.succ t y hy pop run)
                       | inr run =>
                         rcases run with
                           ⟨hret, devm', S', exc'', hlt, run, hst, hlen⟩
                         exact Or.inr ⟨List.mem_cons_of_mem _
                             (List.mem_cons_of_mem _ hret), devm', S', exc'',
                           deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
-                          SFunc.Run.succ t y hy pop run, hst, hlen⟩
+                          SFunc.RunP.succ t y hy pop run, hst, hlen⟩
     | branchTo f k =>
       cases a with
       | nil => simp [checkNode] at hcheck
@@ -686,14 +784,14 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                           (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a' f ρ
                           S1 base hcheck'.2 hinter htail
                         cases hrun with
-                        | inl run => exact Or.inl (SFunc.Run.toZero t pop run)
+                        | inl run => exact Or.inl (SFunc.RunP.toZero t pop run)
                         | inr run =>
                           rcases run with
                             ⟨hret, devm', S', exc'', hlt, run, hst, hlen⟩
                           exact Or.inr ⟨List.mem_cons_of_mem _
                               (List.mem_cons_of_mem _ hret), devm', S', exc'',
                             deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
-                            SFunc.Run.toZero t pop run, hst, hlen⟩
+                            SFunc.RunP.toZero t pop run, hst, hlen⟩
                       · rcases z with ⟨x, y, inter, exc', pop, _, _, hy, prec⟩
                         have hpop := popBurn_two_stack pop
                         rw [hstack] at hpop
@@ -718,7 +816,7 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                           (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork e.rets
                           e.frame g ρ S1 base hentry' hinter hframe'
                         cases hrun with
-                        | inl run => exact Or.inl (SFunc.Run.toSucc t y hy hg pop run)
+                        | inl run => exact Or.inl (SFunc.RunP.toSucc t y hy hg pop run)
                         | inr run =>
                           rcases run with
                             ⟨hret, devm', S', exc'', hlt, run, hst, hlen⟩
@@ -729,7 +827,7 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                           exact Or.inr ⟨List.mem_cons_of_mem _
                               (List.mem_cons_of_mem _ hret'), devm', S', exc'',
                             deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
-                            SFunc.Run.toSucc t y hy hg pop run, hst, hlen'⟩
+                            SFunc.RunP.toSucc t y hy hg pop run, hst, hlen'⟩
     | last l =>
       have hbyte : byteAt code pc = some l.toUInt8 := by
         simpa [checkNode] using hcheck
@@ -737,7 +835,7 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
         apply byteAt_linst_at
         rw [hcode]
         exact hbyte
-      exact Or.inl (SFunc.Run.last (Linst.run_of_at exc h_at))
+      exact Or.inl (SFunc.RunP.last (Linst.run_of_at exc h_at))
     | next n f =>
       have next_nonpush (n : Ninst) (a' : List AVal) (out : Pattern)
           (hlen : a.length ≤ 1024)
@@ -745,16 +843,19 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
           (hread : out.mapM (readBack a) = some a')
           (hchild : checkNode code c.entries m (pc + n.size) a' f = true)
           (h_at : Ninst.At sevm.code pc n) :
-          SFunc.Run c.prog sevm devm (.next n f) (.halted post) ∨
+          SFunc.RunP (StepIn R) c.prog sevm devm (.next n f) (.halted post) ∨
           (AVal.ret ∈ a ∧
             ∃ (devm' : Devm) (S' : List B256)
               (exc' : Exec ρ.toNat sevm devm' (.ok post)),
               Exec.Deriv.lt
                   ⟨ρ.toNat, sevm, devm', .ok post, exc'⟩
                   ⟨pc, sevm, devm, .ok post, exc⟩ ∧
-              SFunc.Run c.prog sevm devm (.next n f) (.returned devm') ∧
+              SFunc.RunP (StepIn R) c.prog sevm devm (.next n f) (.returned devm') ∧
               devm'.stack = S' ++ base ∧ S'.length = m) := by
-        rcases Ninst.run_of_at exc h_at with ⟨inter, exc', run, prec⟩
+        rcases Ninst.runIn_of_at exc h_at with ⟨inter, exc', runW, prec⟩
+        have run : Ninst.Run sevm devm _ inter := runW.toRun
+        have runS : StepIn R sevm devm _ inter :=
+          runW.mono (fun _ _ _ _ _ he r hr => hsub r (he r hr))
         have hinput :
             Matches
                 ((indexPattern a.length).map (label a ρ) ++ base.map some)
@@ -778,13 +879,13 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
           (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a' f ρ S' base
           hchild hinter hframe'
         cases hrun with
-        | inl run' => exact Or.inl (SFunc.Run.next run run')
+        | inl run' => exact Or.inl (SFunc.RunP.next runS run')
         | inr run' =>
           rcases run' with ⟨hret, devm', Sret, exc'', hlt, run', hst, hlen'⟩
           have hret' : AVal.ret ∈ a := ret_mem_of_readBack hread hret
           exact Or.inr ⟨hret', devm', Sret, exc'',
             deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
-            SFunc.Run.next run run', hst, hlen'⟩
+            SFunc.RunP.next runS run', hst, hlen'⟩
       have next_checked (n : Ninst)
           (hnpush : ∀ (bs : Bytes) (fits : bs.length ≤ 32),
             n ≠ .push bs fits)
@@ -795,14 +896,14 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
              | some a' => checkNode code c.entries m (pc + n.size) a' f
              | none => false) = true)
           (h_at : Ninst.At sevm.code pc n) :
-          SFunc.Run c.prog sevm devm (.next n f) (.halted post) ∨
+          SFunc.RunP (StepIn R) c.prog sevm devm (.next n f) (.halted post) ∨
           (AVal.ret ∈ a ∧
             ∃ (devm' : Devm) (S' : List B256)
               (exc' : Exec ρ.toNat sevm devm' (.ok post)),
               Exec.Deriv.lt
                   ⟨ρ.toNat, sevm, devm', .ok post, exc'⟩
                   ⟨pc, sevm, devm, .ok post, exc⟩ ∧
-              SFunc.Run c.prog sevm devm (.next n f) (.returned devm') ∧
+              SFunc.RunP (StepIn R) c.prog sevm devm (.next n f) (.returned devm') ∧
               devm'.stack = S' ++ base ∧ S'.length = m) := by
         have hrest := hcheck.2
         cases ha : absNinst n a with
@@ -826,7 +927,10 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
           apply bytesAt_slice (ninst_bytes_ne_nil (.push bs fits))
           rw [hcode]
           exact hcheck'.1.1
-        rcases Ninst.run_of_at exc h_at with ⟨inter, exc', run, prec⟩
+        rcases Ninst.runIn_of_at exc h_at with ⟨inter, exc', runW, prec⟩
+        have run : Ninst.Run sevm devm _ inter := runW.toRun
+        have runS : StepIn R sevm devm _ inter :=
+          runW.mono (fun _ _ _ _ _ he r hr => hsub r (he r hr))
         have hstack' : inter.stack = Bytes.toB256 bs :: (S ++ base) := by
           rw [push_run_stack run, hstack]
         have hframe' :
@@ -837,13 +941,13 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
             (.const (Bytes.toB256 bs) :: a) f ρ
             (Bytes.toB256 bs :: S) base hcheck'.2 hstack' hframe'
         cases hrun with
-        | inl run' => exact Or.inl (SFunc.Run.next run run')
+        | inl run' => exact Or.inl (SFunc.RunP.next runS run')
         | inr run' =>
           rcases run' with ⟨hret, devm', S', exc'', hlt, run', hst, hlen⟩
           have hret' : AVal.ret ∈ a := by simpa using hret
           exact Or.inr ⟨hret', devm', S', exc'',
             deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
-            SFunc.Run.next run run', hst, hlen⟩
+            SFunc.RunP.next runS run', hst, hlen⟩
       | reg r =>
         simp only [checkNode, Bool.and_eq_true] at hcheck
         have hbyte : bytesAt code pc (Ninst.toBytes (Ninst.reg r)) = true :=
@@ -907,11 +1011,11 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
         (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a f ρ S base
         hcheck'.2 hstack' hframe
       cases hrun with
-      | inl run => exact Or.inl (SFunc.Run.dest burn run)
+      | inl run => exact Or.inl (SFunc.RunP.dest burn run)
       | inr run =>
         rcases run with ⟨hret, devm', S', exc'', hlt, run, hst, hlen⟩
         exact Or.inr ⟨hret, devm', S', exc'', deriv_lt_trans hlt
-          (Exec.Deriv.lt_of_prec prec), SFunc.Run.dest burn run, hst, hlen⟩
+          (Exec.Deriv.lt_of_prec prec), SFunc.RunP.dest burn run, hst, hlen⟩
     | jump k =>
       cases a with
       | nil => simp [checkNode] at hcheck
@@ -963,7 +1067,7 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                   (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork e.rets
                   e.frame g ρ S1 base hentry' hinter hframe'
                 cases hrun with
-                | inl run => exact Or.inl (SFunc.Run.jump t hg pop run)
+                | inl run => exact Or.inl (SFunc.RunP.jump t hg pop run)
                 | inr run =>
                   rcases run with
                     ⟨hret, devm', S', exc'', hlt, run, hst, hlen⟩
@@ -973,7 +1077,7 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                     simpa [hcheck'.1.2] using hlen
                   exact Or.inr ⟨List.mem_cons_of_mem _ hret', devm', S', exc'',
                     deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
-                    SFunc.Run.jump t hg pop run, hst, hlen'⟩
+                    SFunc.RunP.jump t hg pop run, hst, hlen'⟩
     | callNext k f =>
       cases a with
       | nil => simp [checkNode] at hcheck
@@ -1033,7 +1137,7 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                       e.frame g 0 Sf (Sr ++ base) hentry' hstacke hframee
                     cases hrun with
                     | inl run =>
-                      exact Or.inl (SFunc.Run.callHalt t hg pop run)
+                      exact Or.inl (SFunc.RunP.callHalt t hg pop run)
                     | inr run =>
                       rcases run with ⟨hret, devm', S', exc'', hlt, run, hst, hlen⟩
                       exact (hret_no AVal.ret hret rfl).elim
@@ -1069,7 +1173,7 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                           e.frame g r Sf (Sr ++ base) hentry' hstacke hframee'
                         cases hrun with
                         | inl run =>
-                          exact Or.inl (SFunc.Run.callHalt t hg pop run)
+                          exact Or.inl (SFunc.RunP.callHalt t hg pop run)
                         | inr run =>
                           rcases run with
                             ⟨hret, devm', Sret, exc'', hlt, run, hst, hlen⟩
@@ -1110,8 +1214,8 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                             d ρ (Sret ++ Sr) base hcall.2.2 hstackd hcont
                           cases hrun' with
                           | inl run' =>
-                            exact Or.inl (SFunc.Run.callRet t hg pop run
-                              (SFunc.Run.dest burn2 run'))
+                            exact Or.inl (SFunc.RunP.callRet t hg pop run
+                              (SFunc.RunP.dest burn2 run'))
                           | inr run' =>
                             rcases run' with
                               ⟨hret', devm'', S'', exc''', hlt_cont, run', hst'', hlen'⟩
@@ -1122,8 +1226,8 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                             exact Or.inr ⟨List.mem_cons_of_mem _ hret_a', devm'', S'',
                               exc''', deriv_lt_trans hlt_cont
                                 (deriv_lt_trans hlt_dest hlt_call),
-                              SFunc.Run.callRet t hg pop run
-                                (SFunc.Run.dest burn2 run'), hst'', hlen'⟩
+                              SFunc.RunP.callRet t hg pop run
+                                (SFunc.RunP.dest burn2 run'), hst'', hlen'⟩
           | branch f g => simp [checkNode] at hcheck
           | branchTo f k' => simp [checkNode] at hcheck
           | last l => simp [checkNode] at hcheck
@@ -1171,7 +1275,7 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                 (List.Forall₂.length_eq htail).symm.trans hcheck'.2
               subst x
               exact Or.inr ⟨by simp, inter, S1, exc',
-                Exec.Deriv.lt_of_prec prec, SFunc.Run.ret ρ pop, hinter,
+                Exec.Deriv.lt_of_prec prec, SFunc.RunP.ret ρ pop, hinter,
                 hlen⟩
     | undefined =>
       have hnone_code : code.getInst pc = none := by
@@ -1182,13 +1286,16 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
       have hstep := Evm.step_invOp (devm := devm) hnone
       cases Exec.halt_inv exc hstep
 
-/-- **The lifting theorem.**  A successful execution of certified bytes from
-pc `0` is a run of the certified program.  (The top-level frame is empty, so the
-initial operand stack is the untouched base of the recursion invariant.) -/
-theorem lift_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
+/-- **The lifting theorem, inside the derivation.**  A successful execution of
+certified bytes from pc `0` is a run of the certified program whose every
+instruction step is a `StepIn` of that execution: a child derivation carried by
+a step (a `CALL`'s callee frame) has all its raw frame roots among the
+execution's own.  (The top-level frame is empty, so the initial operand stack
+is the untouched base of the recursion invariant.) -/
+theorem lift_sound_in {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
     {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
     (hfork : CoveredFork sevm.benvStat.fork) (exc : Exec 0 sevm pre (.ok post)) :
-    SProg.Run c.prog sevm pre post := by
+    SProg.RunP (StepIn ⟨0, sevm, pre, .ok post, exc⟩) c.prog sevm pre post := by
   cases c with
   | nil => simp [Cert.check] at hc
   | cons p c =>
@@ -1201,7 +1308,8 @@ theorem lift_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
       simpa using hc.2.1
     have hf0 : checkNode code (Cert.entries ((e, f) :: c)) e.rets 0 [] f = true := by
       simpa [hepc, hef] using hf
-    have hrun := node_sound hc0 ⟨0, sevm, pre, .ok post, exc⟩
+    have hrun := node_sound hc0 ⟨0, sevm, pre, .ok post, exc⟩ ⟨0, sevm, pre, .ok post, exc⟩
+      (fun r hr => List.mem_cons_of_mem _ hr)
       post rfl hcode hfork e.rets [] f 0 [] pre.stack hf0 (by simp)
       (by simp [FrameMatches])
     refine ⟨f, ?_, ?_⟩
@@ -1209,5 +1317,14 @@ theorem lift_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
     · cases hrun with
       | inl run => exact run
       | inr run => simp at run
+
+/-- **The lifting theorem.**  A successful execution of certified bytes from
+pc `0` is a run of the certified program: `lift_sound_in`, forgetting where
+each step's child derivation sits. -/
+theorem lift_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
+    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
+    (hfork : CoveredFork sevm.benvStat.fork) (exc : Exec 0 sevm pre (.ok post)) :
+    SProg.Run c.prog sevm pre post :=
+  (lift_sound_in hc hcode hfork exc).mono StepIn.toRun
 
 end Blanc.Lift

@@ -152,7 +152,8 @@ private theorem linst_state_of_silent' {sevm : Sevm} {pre post : Devm} {l : Lins
   rw [run] at hframe'
   exact hframe'.state.symm
 
-theorem SFunc.Run.hoare_single_call
+theorem SFunc.RunP.hoare_single_call {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {fs : List SFunc} {S K : List Nat} {sevm : Sevm} {devm : Devm}
     {f : SFunc} {o : Outcome} {Φ₀ Φ₁ : Devm → Prop}
     (hS : SilentSet fs S = true)
@@ -161,22 +162,22 @@ theorem SFunc.Run.hoare_single_call
     (hstable0 : ∀ {d d'}, d.state = d'.state → Φ₀ d → Φ₀ d')
     (hstable1 : ∀ {d d'}, d.state = d'.state → Φ₁ d → Φ₁ d')
     (hspec : ∀ {k g}, k ∈ K → fs[k]? = some g →
-      ∀ {d o}, Φ₀ d → SFunc.Run fs sevm d g o → Φ₁ (Outcome.devm o))
+      ∀ {d o}, Φ₀ d → SFunc.RunP P fs sevm d g o → Φ₁ (Outcome.devm o))
     (hsc : f.silentCalls S 1 = true)
     (hcalls : f.callRefs.all (· ∈ K) = true)
-    (run : SFunc.Run fs sevm devm f o) (h0 : Φ₀ devm) :
+    (run : SFunc.RunP P fs sevm devm f o) (h0 : Φ₀ devm) :
     Φ₁ (Outcome.devm o) := by
-  have silent_preserve : ∀ {P : Devm → Prop},
-      (∀ {d d'}, d.state = d'.state → P d → P d') →
+  have silent_preserve : ∀ {Ψ : Devm → Prop},
+      (∀ {d d'}, d.state = d'.state → Ψ d → Ψ d') →
       ∀ {d : Devm} {g : SFunc} {q : Outcome},
-        SFunc.Run fs sevm d g q → g.silentCalls S 0 = true →
-          P d → P (Outcome.devm q) := by
-    intro P hstable d g q r
+        SFunc.RunP P fs sevm d g q → g.silentCalls S 0 = true →
+          Ψ d → Ψ (Outcome.devm q) := by
+    intro Ψ hstable d g q r
     intro hzero' hp
     obtain ⟨hg, hrefs⟩ := silentCalls0_silent_refs hzero'
-    apply hstable (SFunc.Run.state_of_silent hS hg hrefs r).symm hp
+    apply hstable (SFunc.RunP.state_of_silent hP hS hg hrefs r).symm hp
   have go : ∀ {d : Devm} {g : SFunc} {q : Outcome},
-      SFunc.Run fs sevm d g q → g.silentCalls S 1 = true →
+      SFunc.RunP P fs sevm d g q → g.silentCalls S 1 = true →
         g.callRefs.all (· ∈ K) = true → Φ₀ d → Φ₁ (Outcome.devm q) := by
     intro d g q r
     induction r with
@@ -214,7 +215,7 @@ theorem SFunc.Run.hoare_single_call
         intro hsc' hcalls' hp
         have hsc'' := hsc'
         simp only [SFunc.silentCalls, Bool.and_eq_true] at hsc''
-        have hstep := ninst_state_of_silent' hsc''.1 hrun
+        have hstep := ninst_state_of_silent' hsc''.1 (hP hrun)
         apply ih hsc''.2 hcalls' (hstable0 hstep.symm hp)
     | dest burn run ih =>
         intro hsc' hcalls' hp
@@ -243,7 +244,8 @@ theorem SFunc.Run.hoare_single_call
         exact silent_preserve hstable1 tail hsc'' hcallee
   exact go run hsc hcalls h0
 
-theorem SFunc.Run.hoare_single_call_with_gotos
+theorem SFunc.RunP.hoare_single_call_with_gotos {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {fs : List SFunc} {S W K : List Nat} {sevm : Sevm} {devm : Devm}
     {f : SFunc} {o : Outcome} {Φ₀ Φ₁ : Devm → Prop}
     (hS : SilentSet fs S = true)
@@ -252,25 +254,25 @@ theorem SFunc.Run.hoare_single_call_with_gotos
     (hstable0 : ∀ {d d'}, d.state = d'.state → Φ₀ d → Φ₀ d')
     (hstable1 : ∀ {d d'}, d.state = d'.state → Φ₁ d → Φ₁ d')
     (hspec : ∀ {k g}, k ∈ K → fs[k]? = some g →
-      ∀ {d o}, Φ₀ d → SFunc.Run fs sevm d g o → Φ₁ (Outcome.devm o))
+      ∀ {d o}, Φ₀ d → SFunc.RunP P fs sevm d g o → Φ₁ (Outcome.devm o))
     (hwrap : ∀ {k g}, k ∈ W → fs[k]? = some g →
-      ∀ {d o}, Φ₀ d → SFunc.Run fs sevm d g o → Φ₁ (Outcome.devm o))
+      ∀ {d o}, Φ₀ d → SFunc.RunP P fs sevm d g o → Φ₁ (Outcome.devm o))
     (hsc : f.silentCallsWith S W 1 = true)
     (hcalls : f.callRefs.all (· ∈ K) = true)
-    (run : SFunc.Run fs sevm devm f o) (h0 : Φ₀ devm) :
+    (run : SFunc.RunP P fs sevm devm f o) (h0 : Φ₀ devm) :
     Φ₁ (Outcome.devm o) := by
-  have silent_preserve : ∀ {P : Devm → Prop},
-      (∀ {d d'}, d.state = d'.state → P d → P d') →
+  have silent_preserve : ∀ {Ψ : Devm → Prop},
+      (∀ {d d'}, d.state = d'.state → Ψ d → Ψ d') →
       ∀ {d : Devm} {g : SFunc} {q : Outcome},
-        SFunc.Run fs sevm d g q → g.silentCallsWith S W 0 = true →
-          P d → P (Outcome.devm q) := by
-    intro P hstable d g q r
+        SFunc.RunP P fs sevm d g q → g.silentCallsWith S W 0 = true →
+          Ψ d → Ψ (Outcome.devm q) := by
+    intro Ψ hstable d g q r
     intro hzero' hp
     obtain ⟨hg, hrefs⟩ := silentCalls0_silent_refs
       (by simpa [SFunc.silentCallsWith] using hzero')
-    apply hstable (SFunc.Run.state_of_silent hS hg hrefs r).symm hp
+    apply hstable (SFunc.RunP.state_of_silent hP hS hg hrefs r).symm hp
   have go : ∀ {d : Devm} {g : SFunc} {q : Outcome},
-      SFunc.Run fs sevm d g q → g.silentCallsWith S W 1 = true →
+      SFunc.RunP P fs sevm d g q → g.silentCallsWith S W 1 = true →
         g.callRefs.all (· ∈ K) = true → Φ₀ d → Φ₁ (Outcome.devm q) := by
     intro d g q r
     induction r with
@@ -313,7 +315,7 @@ theorem SFunc.Run.hoare_single_call_with_gotos
         intro hsc' hcalls' hp
         have hsc'' := hsc'
         simp only [SFunc.silentCallsWith, Bool.and_eq_true] at hsc''
-        have hstep := ninst_state_of_silent' hsc''.1 hrun
+        have hstep := ninst_state_of_silent' hsc''.1 (hP hrun)
         apply ih hsc''.2 hcalls' (hstable0 hstep.symm hp)
     | dest burn run ih =>
         intro hsc' hcalls' hp
@@ -348,6 +350,64 @@ theorem SFunc.Run.hoare_single_call_with_gotos
           (by simpa [SFunc.silentCallsWith] using hsc'') hcallee
   exact go run hsc hcalls h0
 
+theorem SFunc.RunP.hoare_wrapper {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {fs : List SFunc} {S : List Nat} {k : Nat} {sevm : Sevm} {devm : Devm}
+    {wrapper callee : SFunc} {o : Outcome} {Φ₀ Φ₁ : Devm → Prop}
+    (hS : SilentSet fs S = true)
+    (hzero : ∀ {j g}, j ∈ S → fs[j]? = some g → g.silentCalls S 0 = true)
+    (h01 : ∀ d, Φ₀ d → Φ₁ d)
+    (hstable0 : ∀ {d d'}, d.state = d'.state → Φ₀ d → Φ₀ d')
+    (hstable1 : ∀ {d d'}, d.state = d'.state → Φ₁ d → Φ₁ d')
+    (hlookup : fs[k]? = some callee)
+    (hcallee : ∀ {d o}, Φ₀ d → SFunc.RunP P fs sevm d callee o → Φ₁ (Outcome.devm o))
+    (hsc : wrapper.silentCalls S 1 = true)
+    (hcalls : wrapper.callRefs.all (· ∈ [k]) = true)
+    (run : SFunc.RunP P fs sevm devm wrapper o) (h0 : Φ₀ devm) :
+    Φ₁ (Outcome.devm o) := by
+  apply SFunc.RunP.hoare_single_call hP hS hzero h01 hstable0 hstable1
+    (fun {j g} hj hjg => by
+      have hjk : j = k := by simpa using hj
+      subst j
+      have hcg : callee = g := Option.some.inj (hlookup.symm.trans hjg)
+      subst g
+      intro d o hd hr
+      exact hcallee hd hr) hsc hcalls run h0
+
+theorem SFunc.Run.hoare_single_call
+    {fs : List SFunc} {S K : List Nat} {sevm : Sevm} {devm : Devm}
+    {f : SFunc} {o : Outcome} {Φ₀ Φ₁ : Devm → Prop}
+    (hS : SilentSet fs S = true)
+    (hzero : ∀ {k g}, k ∈ S → fs[k]? = some g → g.silentCalls S 0 = true)
+    (h01 : ∀ d, Φ₀ d → Φ₁ d)
+    (hstable0 : ∀ {d d'}, d.state = d'.state → Φ₀ d → Φ₀ d')
+    (hstable1 : ∀ {d d'}, d.state = d'.state → Φ₁ d → Φ₁ d')
+    (hspec : ∀ {k g}, k ∈ K → fs[k]? = some g →
+      ∀ {d o}, Φ₀ d → SFunc.Run fs sevm d g o → Φ₁ (Outcome.devm o))
+    (hsc : f.silentCalls S 1 = true)
+    (hcalls : f.callRefs.all (· ∈ K) = true)
+    (run : SFunc.Run fs sevm devm f o) (h0 : Φ₀ devm) :
+    Φ₁ (Outcome.devm o) :=
+  SFunc.RunP.hoare_single_call id hS hzero h01 hstable0 hstable1 hspec hsc hcalls run h0
+
+theorem SFunc.Run.hoare_single_call_with_gotos
+    {fs : List SFunc} {S W K : List Nat} {sevm : Sevm} {devm : Devm}
+    {f : SFunc} {o : Outcome} {Φ₀ Φ₁ : Devm → Prop}
+    (hS : SilentSet fs S = true)
+    (hzero : ∀ {k g}, k ∈ S → fs[k]? = some g → g.silentCalls S 0 = true)
+    (h01 : ∀ d, Φ₀ d → Φ₁ d)
+    (hstable0 : ∀ {d d'}, d.state = d'.state → Φ₀ d → Φ₀ d')
+    (hstable1 : ∀ {d d'}, d.state = d'.state → Φ₁ d → Φ₁ d')
+    (hspec : ∀ {k g}, k ∈ K → fs[k]? = some g →
+      ∀ {d o}, Φ₀ d → SFunc.Run fs sevm d g o → Φ₁ (Outcome.devm o))
+    (hwrap : ∀ {k g}, k ∈ W → fs[k]? = some g →
+      ∀ {d o}, Φ₀ d → SFunc.Run fs sevm d g o → Φ₁ (Outcome.devm o))
+    (hsc : f.silentCallsWith S W 1 = true)
+    (hcalls : f.callRefs.all (· ∈ K) = true)
+    (run : SFunc.Run fs sevm devm f o) (h0 : Φ₀ devm) :
+    Φ₁ (Outcome.devm o) :=
+  SFunc.RunP.hoare_single_call_with_gotos id hS hzero h01 hstable0 hstable1 hspec hwrap hsc hcalls run h0
+
 theorem SFunc.Run.hoare_wrapper
     {fs : List SFunc} {S : List Nat} {k : Nat} {sevm : Sevm} {devm : Devm}
     {wrapper callee : SFunc} {o : Outcome} {Φ₀ Φ₁ : Devm → Prop}
@@ -361,15 +421,8 @@ theorem SFunc.Run.hoare_wrapper
     (hsc : wrapper.silentCalls S 1 = true)
     (hcalls : wrapper.callRefs.all (· ∈ [k]) = true)
     (run : SFunc.Run fs sevm devm wrapper o) (h0 : Φ₀ devm) :
-    Φ₁ (Outcome.devm o) := by
-  apply SFunc.Run.hoare_single_call hS hzero h01 hstable0 hstable1
-    (fun {j g} hj hjg => by
-      have hjk : j = k := by simpa using hj
-      subst j
-      have hcg : callee = g := Option.some.inj (hlookup.symm.trans hjg)
-      subst g
-      intro d o hd hr
-      exact hcallee hd hr) hsc hcalls run h0
+    Φ₁ (Outcome.devm o) :=
+  SFunc.RunP.hoare_wrapper id hS hzero h01 hstable0 hstable1 hlookup hcallee hsc hcalls run h0
 
 section Weth9
 

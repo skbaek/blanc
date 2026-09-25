@@ -19,54 +19,13 @@ open Weth9
 
 namespace Weth9
 
-private theorem w04_eq : Bytes.toB256 [0x04] = 4 := by decide
-
-private theorem ff20_and_and (x : B256) :
-    (Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&&
-    (Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& x)) =
-      x &&& ~~~ addressMask := by
-  rw [ff20_eq, B256.and_comm (~~~ addressMask) x,
-    B256.and_comm (~~~ addressMask) (x &&& ~~~ addressMask), B256.and_idem_right]
-
-private theorem ff20_and_dataWord (sevm : Sevm) :
-    (Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&&
-      Sevm.dataWord sevm 4) = allowArg sevm := by
-  rw [B256.and_comm, allowArg_eq]
-
-private theorem allowArg_mask (sevm : Sevm) :
-    allowArg sevm &&& ~~~ addressMask = allowArg sevm := by
-  unfold allowArg
-  exact B256.and_idem_right _ _
-
 /-- The storage/balance pair a solvency statement reads at the contract. -/
 private theorem solvent_transport {ca : Adr} {v : B256} {d d' : Devm}
-    (hs : Devm.getStor d' = Devm.getStor d) (hb : Devm.getBal d' = Devm.getBal d)
-    (h : Solvent (Devm.getStor d ca) v (Devm.getBal d ca)) :
+    (hs : Same d' d) (h : Solvent (Devm.getStor d ca) v (Devm.getBal d ca)) :
     Solvent (Devm.getStor d' ca) v (Devm.getBal d' ca) := by
-  rw [hs, hb]; exact h
-
-private theorem getStor_of_state {d d' : Devm} (h : d'.state = d.state) :
-    Devm.getStor d' = Devm.getStor d := by
-  funext a; unfold Devm.getStor Devm.getAcct; rw [h]
-
-private theorem getBal_of_state {d d' : Devm} (h : d'.state = d.state) :
-    Devm.getBal d' = Devm.getBal d := by
-  funext a; unfold Devm.getBal Devm.getAcct; rw [h]
+  rw [hs.stor, hs.bal]; exact h
 
 /-! ## Entry 11: the approve body -/
-
-private abbrev pF : Ninst :=
-  .push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide)
-
-/-- `mapSlot a b` from stack `a :: 0 :: b`: two MSTOREs and a SHA3. -/
-private def hashBlock : List Ninst :=
-  [.reg (.dup 1), .reg .mstore, .push [0x20] (by decide), .reg .add,
-   .reg (.swap 0), .reg (.dup 1), .reg .mstore, .push [0x20] (by decide),
-   .reg .add, .push [0x00] (by decide), .reg .keccak256]
 
 private def approveA : List Ninst :=
   [.push [0x00] (by decide), .reg (.dup 1), .push [0x04] (by decide),
@@ -93,61 +52,6 @@ private theorem approve_tree_eq :
     t_057b_c11 = .dest (chain (approveA ++ (hashBlock ++ (approveB ++
       (hashBlock ++ (approveC ++ ([Ninst.sstore] ++ approvePost)))))) .ret) := by
   simp [t_057b_c11, approveA, approveB, approveC, approvePost, hashBlock, pF, chain]
-
-private theorem hash_block {sevm : Sevm} {s s' : Devm} {a b : B256} {xs : Stack}
-    (run : Line.Run sevm s hashBlock s') (hp : a :: 0 :: b :: xs <<+ s.stack) :
-    mapSlot a b :: xs <<+ s'.stack := by
-  unfold hashBlock at run
-  obtain ⟨s1, h1, run⟩ := Line.of_run_cons run
-  obtain ⟨s2, h2, run⟩ := Line.of_run_cons run
-  obtain ⟨s3, h3, run⟩ := Line.of_run_cons run
-  obtain ⟨s4, h4, run⟩ := Line.of_run_cons run
-  obtain ⟨s5, h5, run⟩ := Line.of_run_cons run
-  obtain ⟨s6, h6, run⟩ := Line.of_run_cons run
-  obtain ⟨s7, h7, run⟩ := Line.of_run_cons run
-  obtain ⟨s8, h8, run⟩ := Line.of_run_cons run
-  obtain ⟨s9, h9, run⟩ := Line.of_run_cons run
-  obtain ⟨s10, h10, run⟩ := Line.of_run_cons run
-  obtain ⟨s11, h11, run⟩ := Line.of_run_cons run
-  cases run
-  have hp1 : (0 : B256) :: a :: 0 :: b :: xs <<+ s1.stack :=
-    prefix_of_dup_val h1 (by show_nth) hp
-  have hm1 : s.memory = s1.memory := Ninst.Hinv.inv h1
-  have hA := prefix_of_mstore_val h2 hp1
-  have hm2 : s2.memory = s.memory.write 0 a.toBytes := by
-    rw [hA.2, ← hm1, w0_toNat]
-  have hp3 : (32 : B256) :: (0 : B256) :: b :: xs <<+ s3.stack := by
-    have := prefix_of_push (of_run_push h3) hA.1
-    rwa [w20_eq] at this
-  have hp4 : (32 : B256) :: b :: xs <<+ s4.stack := by
-    have := prefix_of_add h4 hp3
-    rwa [w32_add_0] at this
-  have hp5 : b :: (32 : B256) :: xs <<+ s5.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
-      (of_run_swap h5) hp4
-  have hp6 : (32 : B256) :: b :: (32 : B256) :: xs <<+ s6.stack :=
-    prefix_of_dup_val h6 (by show_nth) hp5
-  have hm6 : s2.memory = s6.memory :=
-    Line.of_inv Devm.memory (by line_inv)
-      (.cons h3 (.cons h4 (.cons h5 (.cons h6 .nil))))
-  have hB := prefix_of_mstore_val h7 hp6
-  have hm7 : s7.memory = (s.memory.write 0 a.toBytes).write 32 b.toBytes := by
-    rw [hB.2, ← hm6, hm2, w32_toNat]
-  have hp8 : (32 : B256) :: (32 : B256) :: xs <<+ s8.stack := by
-    have := prefix_of_push (of_run_push h8) hB.1
-    rwa [w20_eq] at this
-  have hp9 : (64 : B256) :: xs <<+ s9.stack := by
-    have := prefix_of_add h9 hp8
-    rwa [w32_add_32] at this
-  have hp10 : (0 : B256) :: (64 : B256) :: xs <<+ s10.stack := by
-    have := prefix_of_push (of_run_push h10) hp9
-    rwa [w00_eq] at this
-  have hm10 : s7.memory = s10.memory :=
-    Line.of_inv Devm.memory (by line_inv) (.cons h8 (.cons h9 (.cons h10 .nil)))
-  have hmem : (((s.memory.write 0 a.toBytes).write 32 b.toBytes).read 0 64).1 =
-      a.toBytes ++ b.toBytes := Mem.read_two_word_writes_at_raw s.memory 0 a b
-  have := (prefix_of_keccak256_val h11 hp10).1
-  rwa [← hm10, hm7, w0_toNat, w64_toNat, hmem] at this
 
 private theorem approve_segA {sevm : Sevm} {s s' : Devm} {v sp : B256} {xs : Stack}
     (run : Line.Run sevm s approveA s') (hp : v :: sp :: xs <<+ s.stack) :
@@ -417,11 +321,6 @@ private theorem wrap_line_stack {sevm : Sevm} {s s' : Devm}
   have hp23 := prefix_of_pop (of_run_pop h23) (prefix_of_pop (of_run_pop h22) hp21)
   exact ⟨_, v, [r], prefix_of_push (of_run_push h24) hp23⟩
 
-private theorem solvent_zero {s : Stor} {v b : B256} (h : Solvent s v b) : Solvent s 0 b := by
-  unfold Solvent at h ⊢
-  rw [B256.toNat_zero]
-  omega
-
 /-- **Entry 27 wrapper spec.**  Under the local allowance-collision premise,
 the `approve` selector wrapper turns solvency with the callvalue in flight into
 solvency with nothing in flight, on both its revert and its call branch. -/
@@ -447,7 +346,7 @@ theorem approve_wrapper_solvent {sevm : Sevm} {d : Devm} {o : Outcome} {w : SFun
   rename_i d0 d1 d2 d3
   have hs3 : Solvent (Devm.getStor d3 sevm.currentTarget) sevm.value
       (Devm.getBal d3 sevm.currentTarget) := by
-    refine solvent_transport (d := d0) ?_ ?_ (solvent_transport (d := d) (d' := d0) ?_ ?_ h)
+    refine solvent_transport (d := d0) ⟨?_, ?_⟩ (solvent_transport (d := d) (d' := d0) ⟨?_, ?_⟩ h)
     · exact (Line.of_inv Devm.getStor (by line_inv) (.cons h1 (.cons h2 (.cons h3 .nil)))).symm
     · exact (Line.of_inv Devm.getBal (by line_inv) (.cons h1 (.cons h2 (.cons h3 .nil)))).symm
     · funext a; exact Devm.Burn.getStor burn a
@@ -456,24 +355,24 @@ theorem approve_wrapper_solvent {sevm : Sevm} {d : Devm} {o : Outcome} {w : SFun
   | zero x pop r =>
     rename_i d4
     have hs4 := solvent_transport (d := d3) (d' := d4)
-      (getStor_of_state pop.state.symm) (getBal_of_state pop.state.symm) hs3
+      (Same.of_state pop.state.symm) hs3
     have hst := SFunc.Run.state_of_silent (S := []) rfl (by decide) (by decide) r
-    exact solvent_zero (solvent_transport (getStor_of_state hst) (getBal_of_state hst) hs4)
+    exact solvent_zero (solvent_transport (Same.of_state hst) hs4)
   | succ x ww hnz pop r =>
     rename_i d4
     have hs4 := solvent_transport (d := d3) (d' := d4)
-      (getStor_of_state pop.state.symm) (getBal_of_state pop.state.symm) hs3
+      (Same.of_state pop.state.symm) hs3
     rw [wrap_tree_eq] at r
     cases r with
     | dest burn2 r =>
     rename_i d5
     have hs5 := solvent_transport (d := d4) (d' := d5)
-      (getStor_of_state burn2.state.symm) (getBal_of_state burn2.state.symm) hs4
+      (Same.of_state burn2.state.symm) hs4
     rcases run_chain_prefix wrapLine [] r with ⟨d6, hl, r⟩
     have hs6 : Solvent (Devm.getStor d6 sevm.currentTarget) sevm.value
         (Devm.getBal d6 sevm.currentTarget) :=
-      solvent_transport (Line.of_inv Devm.getStor (by line_inv) hl).symm
-        (Line.of_inv Devm.getBal (by line_inv) hl).symm hs5
+      solvent_transport ⟨(Line.of_inv Devm.getStor (by line_inv) hl).symm,
+        (Line.of_inv Devm.getBal (by line_inv) hl).symm⟩ hs5
     obtain ⟨t, v, ys, hstk⟩ := wrap_line_stack hl
     have hoff : ∀ a, balSlot a ≠
         allowKey sevm.caller.toB256 (allowArg sevm &&& ~~~ addressMask) := by
@@ -482,14 +381,14 @@ theorem approve_wrapper_solvent {sevm : Sevm} {d : Devm} {o : Outcome} {w : SFun
     cases r with
     | @callHalt _ d7 _ _ _ g x lookup pop2 rc =>
       have hs7 := solvent_transport (d := d6) (d' := d7)
-        (getStor_of_state pop2.state.symm) (getBal_of_state pop2.state.symm) hs6
+        (Same.of_state pop2.state.symm) hs6
       exact approve_solvent lookup (popBurn_pref pop2 hstk).2 hoff hs7 rc
     | @callRet _ d7 d8 _ _ g _ x lookup pop2 rc tail =>
       have hs7 := solvent_transport (d := d6) (d' := d7)
-        (getStor_of_state pop2.state.symm) (getBal_of_state pop2.state.symm) hs6
+        (Same.of_state pop2.state.symm) hs6
       have hc := approve_solvent lookup (popBurn_pref pop2 hstk).2 hoff hs7 rc
       have hst := SFunc.Run.state_of_silent (S := []) rfl (by decide) (by decide) tail
-      exact solvent_transport (getStor_of_state hst) (getBal_of_state hst) hc
+      exact solvent_transport (Same.of_state hst) hc
 
 end Weth9
 
