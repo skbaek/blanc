@@ -10,7 +10,7 @@ kernel-checked converse bridge `exec_of_runExact` compose into a real Jaune exec
 deployed bytes from a frame start:
 
 * `c3crv_exec`: a raw effect that succeeds is executed, gas-exact, ending as it says;
-* `c3crv_step_exec`: under `VyInv` and `Fresh`, a call the model accepts (every function but
+* `c3crv_step_exec`: under `VyInv` and `FreshKeys`, a call the model accepts (every function but
   `set_name`) is executed, gas-exact, and ends in the model's new state, events and return data;
 * `c3crv_setName_exec`: `set_name`, the model accepting with the owner answering the caller, is
   executed whenever the minter's `owner()` answers the caller (`OwnerCallOk`); its gas after the
@@ -52,7 +52,7 @@ theorem c3crv_step_exec {sevm : Sevm} {pre : Devm} {s : Curve3Crv.State} {K : Ke
     (hk : sels[k]? = some (Sevm.selector sevm)) (hlen : 4 ≤ sevm.data.length)
     (hcd : sevm.data.length < 2 ^ 256)
     (hinv : VyInv (Devm.getStor pre sevm.currentTarget) s K)
-    (hfresh : ∀ k' ∈ callKeys sevm.caller (decodeCall sevm), Fresh K k')
+    (hfresh : FreshKeys K (callKeys sevm.caller (decodeCall sevm)))
     (hok : Curve3Crv.step (c3ctx sevm ow) (decodeCall sevm) s = .ok o) :
     ∃ c, ∀ G, gCallStipend < G → ∃ post,
       Nonempty (Exec 0 sevm (St pre [] Mem.empty (G + c)) (.ok post)) ∧ post.gasLeft = G ∧
@@ -83,7 +83,7 @@ theorem c3crv_setName_exec {sevm : Sevm} {pre : Devm} {s : Curve3Crv.State} {K :
     (hsel : Sevm.selector sevm = selSetName) (hlen : 4 ≤ sevm.data.length)
     (hcd : sevm.data.length < 2 ^ 256)
     (hinv : VyInv (Devm.getStor pre sevm.currentTarget) s K)
-    (hfresh : ∀ k' ∈ callKeys sevm.caller (decodeCall sevm), Fresh K k')
+    (hfresh : FreshKeys K (callKeys sevm.caller (decodeCall sevm)))
     (hok : Curve3Crv.step (c3ctx sevm (some sevm.caller.toB256)) (decodeCall sevm) s = .ok o) :
     ∃ R P, ∀ Gc, OwnerCallOk sevm pre sevm.caller.toB256 R Gc → ∀ G, Gc + P ≤ G →
       G < 2 ^ 256 → ∃ post,

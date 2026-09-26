@@ -44,6 +44,32 @@ abbrev vyCa0 : Bytes := [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0
   0xd5, 0xfa, 0x0e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00]
 
+/-- A word the address clamp admits is an address word. -/
+theorem B256.toAdr_toB256_of_lt {x : B256} (h : x.toNat < 2 ^ 160) : x.toAdr.toB256 = x := by
+  obtain ⟨⟨h1, h2⟩, l⟩ := x
+  have e := B256.toNat_eq ((h1, h2), l)
+  rw [B128.toNat_eq] at e
+  simp only [] at e
+  have hl := B128.toNat_lt (x := l)
+  have hh1 : h1.toNat = 0 := by
+    rcases Nat.eq_zero_or_pos h1.toNat with h0 | h0
+    · exact h0
+    · exfalso
+      have : 2 ^ 64 * 2 ^ 128 ≤ (h1.toNat * 2 ^ 64 + h2.toNat) * 2 ^ 128 :=
+        Nat.mul_le_mul_right _ (Nat.le_add_right_of_le (Nat.le_mul_of_pos_left _ h0))
+      omega
+  have hh2 : h2.toNat < 2 ^ 32 := by
+    by_contra hc
+    have : 2 ^ 32 * 2 ^ 128 ≤ (h1.toNat * 2 ^ 64 + h2.toNat) * 2 ^ 128 :=
+      Nat.mul_le_mul_right _ (by omega)
+    omega
+  have e1 : h1 = 0 := UInt64.toNat_inj.mp (by rw [hh1]; rfl)
+  have e2 : h2.toUInt32.toUInt64 = h2 := UInt64.toNat_inj.mp (by
+    rw [UInt32.toNat_toUInt64, UInt64.toNat_toUInt32, Nat.mod_eq_of_lt hh2])
+  show ((⟨0, h2.toUInt32.toUInt64⟩, l) : B256) = ((h1, h2), l)
+  rw [e1, e2]
+  rfl
+
 /-- The address clamp word, `2^160`. -/
 theorem vyC20_toB256 : (Bytes.toB256 vyC20).toNat = 2 ^ 160 := by decide
 

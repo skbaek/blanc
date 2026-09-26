@@ -1,4 +1,5 @@
 import Blanc.Lift.Curve3Crv.Dispatch
+import Blanc.Lift.Curve3Crv.Slots
 
 /-!
 # The raw effects refine the model (pure)
@@ -52,6 +53,76 @@ def RawRefines (sevm : Sevm) (raw : Option Raw) (res : Curve3Crv.Result) (K' : K
   (∀ r, raw = some r → ∃ o, res = .ok o ∧ Corr sevm K' r o) ∧
     (∀ o, res = .ok o → ∃ r, raw = some r ∧ Corr sevm K' r o)
 
+/-- Both sides succeed under one condition, with one result each. -/
+theorem RawRefines.of_iff {sevm : Sevm} {raw : Option Raw} {res : Curve3Crv.Result}
+    {K' : Key → Prop} (r0 : Raw) (o0 : Curve3Crv.Out) (P : Prop)
+    (hraw : ∀ r, raw = some r ↔ P ∧ r = r0) (hres : ∀ o, res = .ok o ↔ P ∧ o = o0)
+    (hc : P → Corr sevm K' r0 o0) : RawRefines sevm raw res K' := by
+  refine ⟨fun r hr => ?_, fun o ho => ?_⟩
+  · obtain ⟨hP, rfl⟩ := (hraw r).mp hr
+    exact ⟨o0, (hres o0).mpr ⟨hP, rfl⟩, hc hP⟩
+  · obtain ⟨hP, rfl⟩ := (hres o).mp ho
+    exact ⟨r0, (hraw r0).mpr ⟨hP, rfl⟩, hc hP⟩
+
+/-! ## Storage facts the refinement lemmas share -/
+
+/-- A write off a string's slots keeps the string. -/
+theorem VyStr.set_ne {stor : Stor} {base x v : B256} {n : Nat} {bs : Bytes}
+    (h0 : base ≠ x) (hj : ∀ j < n, base + Nat.toB256 (j + 1) ≠ x) (h : VyStr stor base n bs) :
+    VyStr (stor.set x v) base n bs := by
+  have hw : vyStrWords (stor.set x v) base n = vyStrWords stor base n := by
+    unfold vyStrWords
+    simp only [List.flatMap_def]
+    congr 1
+    apply List.map_congr_left
+    intro j hjm
+    rw [Stor.get_set_ne _ (Ne.symm (hj j (List.mem_range.mp hjm)))]
+  obtain ⟨h1, h2, h3⟩ := h
+  refine ⟨?_, h2, ?_⟩
+  · rw [Stor.get_set_ne _ (Ne.symm h0)]; exact h1
+  · rw [hw]; exact h3
+
+/-- A write to one of the three word slots keeps both strings. -/
+theorem VyInv.strs_set_word {stor : Stor} {s : Curve3Crv.State} {x v : B256}
+    (hx : x ∈ vyWordSlots) (hn : VyStr stor vyNameBase 2 s.name)
+    (hy : VyStr stor vySymbolBase 1 s.symbol) :
+    VyStr (stor.set x v) vyNameBase 2 s.name ∧ VyStr (stor.set x v) vySymbolBase 1 s.symbol := by
+  have h := vyStrSlots_apart.1
+  refine ⟨hn.set_ne (h _ (by simp [vyNameSlots]) x hx) (fun j hj => h _ ?_ x hx),
+    hy.set_ne (h _ (by simp [vySymbolSlots]) x hx) (fun j hj => h _ ?_ x hx)⟩
+  · have : j = 0 ∨ j = 1 := by omega
+    rcases this with rfl | rfl <;> simp [vyNameSlots]
+  · have : j = 0 := by omega
+    subst this; simp [vySymbolSlots]
+
+/-- A write to one of the three word slots, with the model changed only in those words. -/
+theorem VyInv.of_set_word {stor : Stor} {s s' : Curve3Crv.State} {K : Key → Prop} {x v : B256}
+    (h : VyInv stor s K) (hx : x ∈ vyWordSlots) (hbal : s'.balanceOf = s.balanceOf)
+    (hall : s'.allowances = s.allowances) (hname : s'.name = s.name) (hsym : s'.symbol = s.symbol)
+    (hdec : (stor.set x v).get vyDecimalsSlot = s'.decimals)
+    (hsup : (stor.set x v).get vySupplySlot = s'.totalSupply)
+    (hmin : (stor.set x v).get vyMinterSlot = s'.minter.toB256) (hcons : Curve3Crv.Conserved s') :
+    VyInv (stor.set x v) s' K := by
+  have hxf : x ∈ vyFixedSlots := by
+    simp only [vyWordSlots, List.mem_cons, List.not_mem_nil, or_false] at hx
+    rcases hx with rfl | rfl | rfl <;> simp [vyFixedSlots]
+  have hval : ∀ k : Key, k.val s' = k.val s := by
+    intro k; cases k <;> simp [Key.val, hbal, hall]
+  obtain ⟨hn, hy⟩ := VyInv.strs_set_word (v := v) hx h.name h.symbol
+  refine ⟨hdec, hsup, hmin, hname ▸ hn, hsym ▸ hy, fun k hk => ?_, fun k hk => ?_, fun y hy' => ?_,
+    h.inj, h.apart, hcons⟩
+  · rw [Stor.get_set_ne _ (fun e : x = k.slot => h.apart k hk (e ▸ hxf)), hval]
+    exact h.known k hk
+  · rw [hval]; exact h.unknown k hk
+  · by_cases hyx : x = y
+    · exact .inl (hyx ▸ hxf)
+    · rw [Stor.get_set_ne _ hyx] at hy'
+      exact h.support y hy'
+
+theorem toB256_inj_adr {a b : Adr} (h : a.toB256 = b.toB256) : a = b := by
+  have := congrArg B256.toAdr h
+  simpa only [toAdr_toB256] using this
+
 section Segments
 
 variable {sevm : Sevm} {stor : Stor} {s : Curve3Crv.State} {K : Key → Prop} {ow : Option B256}
@@ -63,10 +134,35 @@ differs at slot 6 only, a fixed slot, so every `VyInv` field but `minter` transf
 (`Stor.get_set_ne` with `apart`, `support` gains nothing new); `minter`: `m.toAdr.toB256 = m`
 for `m < 2^160`.  No keys. -/
 theorem refine_setMinter (hinv : VyInv stor s K)
-    (hf : ∀ k ∈ callKeys sevm.caller (callAt sevm 0), Fresh K k) :
+    (_hf : FreshKeys K (callKeys sevm.caller (callAt sevm 0))) :
     RawRefines sevm (rawOf 0 sevm ow stor) (Curve3Crv.step (c3ctx sevm ow) (callAt sevm 0) s)
       (Key.extend K (callKeys sevm.caller (callAt sevm 0))) := by
-  sorry
+  have hcall : stor.get vyMinterSlot = sevm.caller.toB256 ↔ sevm.caller = s.minter := by
+    rw [hinv.minter]
+    exact ⟨fun e => (toB256_inj_adr e).symm, fun e => by rw [e]⟩
+  refine RawRefines.of_iff (stor.set vyMinterSlot (Sevm.argWord sevm 0), [], none)
+    ({s with minter := (Sevm.argWord sevm 0).toAdr}, [], .stop)
+    (sevm.value = 0 ∧ (Sevm.argWord sevm 0).toNat < 2 ^ 160 ∧ sevm.caller = s.minter) ?_ ?_ ?_
+  · intro r
+    simp only [rawOf, rawSetMinter, hcall]
+    split_ifs <;> simp_all [eq_comm]
+  · intro o
+    simp only [callAt, Curve3Crv.step, Curve3Crv.body, c3ctx]
+    by_cases hv : sevm.value = 0
+    · simp only [hv, ite_true, Curve3Crv.setMinter_eq_ok, true_and]
+      constructor
+      · rintro ⟨h1, h2, h3⟩; exact ⟨⟨h1, h2⟩, h3⟩
+      · rintro ⟨⟨h1, h2⟩, h3⟩; exact ⟨h1, h2, h3⟩
+    · simp [hv]
+  · rintro ⟨-, hm, -⟩
+    refine ⟨?_, rfl, rfl⟩
+    have hext : Key.extend K (callKeys sevm.caller (callAt sevm 0)) = K := by
+      funext k; simp [Key.extend, callKeys, callAt]
+    rw [hext]
+    refine hinv.of_set_word (by simp [vyWordSlots]) rfl rfl rfl rfl ?_ ?_ ?_ hinv.conserved
+    · rw [Stor.get_set_ne _ (by decide)]; exact hinv.decimals
+    · rw [Stor.get_set_ne _ (by decide)]; exact hinv.supply
+    · rw [Stor.get_set_self]; exact (B256.toAdr_toB256_of_lt hm).symm
 
 -- SEGMENT: refineSetName (pure, medium: the string words)
 /-- `set_name`.  Proof sketch: the guards agree (`strArg`'s length is the length word;
@@ -79,7 +175,7 @@ name: the length word is `L0`; the first `L0` bytes of the two data words are th
 content bytes (`vyStrWords` of the stored words is `(data.sliceD (s0+32) 64 0)` up to the words
 the loop wrote, which cover `L0` bytes: `L0 ≤ 32 ((32 + L0)/32)`); likewise the symbol. -/
 theorem refine_setName (hinv : VyInv stor s K)
-    (hf : ∀ k ∈ callKeys sevm.caller (callAt sevm 1), Fresh K k) :
+    (hf : FreshKeys K (callKeys sevm.caller (callAt sevm 1))) :
     RawRefines sevm (rawOf 1 sevm ow stor) (Curve3Crv.step (c3ctx sevm ow) (callAt sevm 1) s)
       (Key.extend K (callKeys sevm.caller (callAt sevm 1))) := by
   sorry
@@ -91,20 +187,98 @@ model state unchanged, no events; the return word is `VyInv.supply`/`decimals`, 
 `h.toAdr.toB256 = h` below `2^160`).  `VyInv` over `K` extended by a fresh key: its slot
 reads `0 = val` (`get_slot`), injectivity and `apart` from `Fresh`. -/
 theorem refine_wordView {k : Nat} (hk : k = 2 ∨ k = 3 ∨ k = 11 ∨ k = 12) (hinv : VyInv stor s K)
-    (hf : ∀ k' ∈ callKeys sevm.caller (callAt sevm k), Fresh K k') :
+    (hf : FreshKeys K (callKeys sevm.caller (callAt sevm k))) :
     RawRefines sevm (rawOf k sevm ow stor) (Curve3Crv.step (c3ctx sevm ow) (callAt sevm k) s)
       (Key.extend K (callKeys sevm.caller (callAt sevm k))) := by
-  sorry
+  have hext := hinv.extend hf
+  rcases hk with rfl | rfl | rfl | rfl
+  · refine RawRefines.of_iff (stor, [], some (stor.get vySupplySlot).toBytes)
+      (s, [], .word s.totalSupply) (sevm.value = 0) ?_ ?_ ?_
+    · intro r; simp only [rawOf, rawTotalSupply]; split_ifs <;> simp_all [eq_comm]
+    · intro o
+      simp only [callAt, Curve3Crv.step, Curve3Crv.body, Curve3Crv.totalSupplyView, c3ctx]
+      split_ifs <;> simp_all [eq_comm]
+    · intro _
+      exact ⟨hext, rfl, by simp only [RetMatch, RetOut, hinv.supply]⟩
+  · refine RawRefines.of_iff (stor, [], some (stor.get (mapSlot (mapSlot 4
+      (Sevm.argWord sevm 0)) (Sevm.argWord sevm 1))).toBytes) (s, [], .word (s.allowances (Sevm.argWord sevm 0).toAdr
+      (Sevm.argWord sevm 1).toAdr)) (sevm.value = 0 ∧ (Sevm.argWord sevm 0).toNat < 2 ^ 160 ∧
+      (Sevm.argWord sevm 1).toNat < 2 ^ 160) ?_ ?_ ?_
+    · intro r; simp only [rawOf, rawAllowance]; split_ifs <;> simp_all [eq_comm]
+    · intro o
+      simp only [callAt, Curve3Crv.step, Curve3Crv.body, Curve3Crv.allowanceView, c3ctx]
+      by_cases h1 : sevm.value = 0
+      · simp only [h1, ite_true, true_and]
+        split_ifs <;> simp_all [eq_comm]
+      · simp [h1]
+    · rintro ⟨-, h0, h1⟩
+      refine ⟨hext, rfl, ?_⟩
+      have hs := hinv.get_slot (hf.1 _ (List.mem_singleton_self _))
+      simp only [Key.slot, Key.val, vyAllowSlot, B256.toAdr_toB256_of_lt h0,
+        B256.toAdr_toB256_of_lt h1] at hs
+      simp only [RetMatch, RetOut]
+      rw [hs]
+  · refine RawRefines.of_iff (stor, [], some (stor.get vyDecimalsSlot).toBytes)
+      (s, [], .word s.decimals) (sevm.value = 0) ?_ ?_ ?_
+    · intro r; simp only [rawOf, rawDecimals]; split_ifs <;> simp_all [eq_comm]
+    · intro o
+      simp only [callAt, Curve3Crv.step, Curve3Crv.body, Curve3Crv.decimalsView, c3ctx]
+      split_ifs <;> simp_all [eq_comm]
+    · intro _
+      exact ⟨hext, rfl, by simp only [RetMatch, RetOut, hinv.decimals]⟩
+  · refine RawRefines.of_iff (stor, [], some (stor.get (mapSlot 3 (Sevm.argWord sevm 0))).toBytes)
+      (s, [], .word (s.balanceOf (Sevm.argWord sevm 0).toAdr))
+      (sevm.value = 0 ∧ (Sevm.argWord sevm 0).toNat < 2 ^ 160) ?_ ?_ ?_
+    · intro r; simp only [rawOf, rawBalanceOf]; split_ifs <;> simp_all [eq_comm]
+    · intro o
+      simp only [callAt, Curve3Crv.step, Curve3Crv.body, Curve3Crv.balanceOfView, c3ctx]
+      by_cases h1 : sevm.value = 0
+      · simp only [h1, ite_true, true_and]
+        split_ifs <;> simp_all [eq_comm]
+      · simp [h1]
+    · rintro ⟨-, h0⟩
+      refine ⟨hext, rfl, ?_⟩
+      have hs := hinv.get_slot (hf.1 _ (List.mem_singleton_self _))
+      simp only [Key.slot, Key.val, vyBalSlot, B256.toAdr_toB256_of_lt h0] at hs
+      simp only [RetMatch, RetOut]
+      rw [hs]
 
 -- SEGMENT: refineStringViews (pure, short)
 /-- `name`, `symbol`.  Proof sketch: `VyInv.name`/`symbol` give the length bound and
 `vyStrOf stor base n = s.name` (`VyStr`'s third clause is exactly `vyStrOf`); the return data is
 `abiString` of it on both sides. -/
 theorem refine_stringView {k : Nat} (hk : k = 9 ∨ k = 10) (hinv : VyInv stor s K)
-    (hf : ∀ k' ∈ callKeys sevm.caller (callAt sevm k), Fresh K k') :
+    (hf : FreshKeys K (callKeys sevm.caller (callAt sevm k))) :
     RawRefines sevm (rawOf k sevm ow stor) (Curve3Crv.step (c3ctx sevm ow) (callAt sevm k) s)
       (Key.extend K (callKeys sevm.caller (callAt sevm k))) := by
-  sorry
+  have hext := hinv.extend hf
+  have hstr : ∀ {base n bs}, VyStr stor base n bs → vyStrOf stor base n = bs := by
+    intro base n bs h
+    rw [vyStrOf, h.1]
+    exact h.2.2.symm
+  rcases hk with rfl | rfl
+  · obtain ⟨hl, hle, -⟩ := hinv.name
+    refine RawRefines.of_iff (stor, [], some (abiString s.name)) (s, [], .string s.name)
+      (sevm.value = 0) ?_ ?_ ?_
+    · intro r
+      simp only [rawOf, rawName, hl, hstr hinv.name]
+      split_ifs <;> simp_all [eq_comm]
+    · intro o
+      simp only [callAt, Curve3Crv.step, Curve3Crv.body, Curve3Crv.nameView, c3ctx]
+      split_ifs <;> simp_all [eq_comm]
+    · intro _
+      exact ⟨hext, rfl, rfl⟩
+  · obtain ⟨hl, hle, -⟩ := hinv.symbol
+    refine RawRefines.of_iff (stor, [], some (abiString s.symbol)) (s, [], .string s.symbol)
+      (sevm.value = 0) ?_ ?_ ?_
+    · intro r
+      simp only [rawOf, rawSymbol, hl, hstr hinv.symbol]
+      split_ifs <;> simp_all [eq_comm]
+    · intro o
+      simp only [callAt, Curve3Crv.step, Curve3Crv.body, Curve3Crv.symbolView, c3ctx]
+      split_ifs <;> simp_all [eq_comm]
+    · intro _
+      exact ⟨hext, rfl, rfl⟩
 
 -- SEGMENT: refineTransfer (pure, medium)
 /-- `transfer`.  Proof sketch: `get_slot` for `bal caller` and `bal d` (both fresh) turns the raw
@@ -115,7 +289,7 @@ abstracts `ledgerCredit (ledgerDebit …)` on the two keys, everything else is u
 `support` gains exactly the two slots, now live; `conserved` by the model's `step_conserved`.
 The log entry is `eventLog` of `.transfer a d' v` (`d'.toB256 = d`). -/
 theorem refine_transfer (hinv : VyInv stor s K)
-    (hf : ∀ k ∈ callKeys sevm.caller (callAt sevm 4), Fresh K k) :
+    (hf : FreshKeys K (callKeys sevm.caller (callAt sevm 4))) :
     RawRefines sevm (rawOf 4 sevm ow stor) (Curve3Crv.step (c3ctx sevm ow) (callAt sevm 4) s)
       (Key.extend K (callKeys sevm.caller (callAt sevm 4))) := by
   sorry
@@ -127,7 +301,7 @@ off `vyFixedSlots`); the allowance key `allow f caller` is fresh, so its slot is
 both balance slots, and its read is the model's `s.allowances f caller`; the write matches
 `Function.update … (ledgerDebit …)`. -/
 theorem refine_transferFrom (hinv : VyInv stor s K)
-    (hf : ∀ k ∈ callKeys sevm.caller (callAt sevm 5), Fresh K k) :
+    (hf : FreshKeys K (callKeys sevm.caller (callAt sevm 5))) :
     RawRefines sevm (rawOf 5 sevm ow stor) (Curve3Crv.step (c3ctx sevm ow) (callAt sevm 5) s)
       (Key.extend K (callKeys sevm.caller (callAt sevm 5))) := by
   sorry
@@ -136,7 +310,7 @@ theorem refine_transferFrom (hinv : VyInv stor s K)
 /-- `approve`.  Proof sketch: one fresh key `allow caller p`; the guard `v = 0 ∨ current = 0`
 reads the model's allowance (`get_slot`); one write. -/
 theorem refine_approve (hinv : VyInv stor s K)
-    (hf : ∀ k ∈ callKeys sevm.caller (callAt sevm 6), Fresh K k) :
+    (hf : FreshKeys K (callKeys sevm.caller (callAt sevm 6))) :
     RawRefines sevm (rawOf 6 sevm ow stor) (Curve3Crv.step (c3ctx sevm ow) (callAt sevm 6) s)
       (Key.extend K (callKeys sevm.caller (callAt sevm 6))) := by
   sorry
@@ -146,7 +320,7 @@ theorem refine_approve (hinv : VyInv stor s K)
 the supply write is of the unchanged balance slot (off `vyFixedSlots`); guards and effects are
 the model's clause by clause; `conserved` by `step_conserved`. -/
 theorem refine_mintBurn {k : Nat} (hk : k = 7 ∨ k = 8) (hinv : VyInv stor s K)
-    (hf : ∀ k' ∈ callKeys sevm.caller (callAt sevm k), Fresh K k') :
+    (hf : FreshKeys K (callKeys sevm.caller (callAt sevm k))) :
     RawRefines sevm (rawOf k sevm ow stor) (Curve3Crv.step (c3ctx sevm ow) (callAt sevm k) s)
       (Key.extend K (callKeys sevm.caller (callAt sevm k))) := by
   sorry
@@ -156,7 +330,7 @@ end Segments
 /-- **The refinement of every body's raw effect**, assembled. -/
 theorem refine_at {sevm : Sevm} {stor : Stor} {s : Curve3Crv.State} {K : Key → Prop}
     {ow : Option B256} {k : Nat} (hk : k < 13) (hinv : VyInv stor s K)
-    (hf : ∀ k' ∈ callKeys sevm.caller (callAt sevm k), Fresh K k') :
+    (hf : FreshKeys K (callKeys sevm.caller (callAt sevm k))) :
     RawRefines sevm (rawOf k sevm ow stor) (Curve3Crv.step (c3ctx sevm ow) (callAt sevm k) s)
       (Key.extend K (callKeys sevm.caller (callAt sevm k))) := by
   rcases k with _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | k

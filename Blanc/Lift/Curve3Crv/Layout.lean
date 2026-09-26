@@ -26,7 +26,8 @@ almost surely false.  `VyInv stor s K` instead relates storage to the model on a
 values; every other key's model value is zero; and every nonzero storage word sits at a fixed
 slot or a live key's slot (`support`).  A frame needs only the local premise `Fresh` for the
 keys it touches — the key is live, or its slot is none of the finitely many slots in use —
-the counterpart of WETH9's trace-local `AllowAdmitted`.  The contract's history makes it true
+the counterpart of WETH9's trace-local `AllowAdmitted` (`FreshKeys`: each touched key fresh, and
+the touched keys' slots pairwise distinct).  The contract's history makes it true
 of every frame whose touched slots avoid a hash collision with a slot already in use.
 -/
 
@@ -56,8 +57,8 @@ def vySymbolBase : B256 := ((1 : B256).toBytes).keccak
 /-- The slots of the non-mapping variables: the three words and the string slots the setter's
 copy loops can write (`name`: length and two data words; `symbol`: length and one). -/
 def vyFixedSlots : List B256 :=
-  [vyDecimalsSlot, vySupplySlot, vyMinterSlot, vyNameBase, vyNameBase + 1, vyNameBase + 2,
-    vySymbolBase, vySymbolBase + 1]
+  [vyDecimalsSlot, vySupplySlot, vyMinterSlot, vyNameBase, vyNameBase + Nat.toB256 1,
+    vyNameBase + Nat.toB256 2, vySymbolBase, vySymbolBase + Nat.toB256 1]
 
 /-! ## Mapping keys -/
 
@@ -108,6 +109,11 @@ slots in use. -/
 def Fresh (K : Key → Prop) (k : Key) : Prop :=
   K k ∨ (k.slot ∉ vyFixedSlots ∧ ∀ k', K k' → k'.slot ≠ k.slot)
 
+/-- The frame-local premise for the keys `ks` a frame touches: each is `Fresh`, and their slots
+are pairwise distinct. -/
+def FreshKeys (K : Key → Prop) (ks : List Key) : Prop :=
+  (∀ k ∈ ks, Fresh K k) ∧ ∀ k ∈ ks, ∀ k' ∈ ks, k.slot = k'.slot → k = k'
+
 /-- The live keys after touching `ks`. -/
 def Key.extend (K : Key → Prop) (ks : List Key) : Key → Prop := fun k => K k ∨ k ∈ ks
 
@@ -123,5 +129,37 @@ theorem VyInv.get_slot {stor : Stor} {s : Curve3Crv.State} {K : Key → Prop} (h
       rcases h.support _ hne with hx | ⟨k', hk', he⟩
       · exact hfix hx
       · exact hoff k' hk' he
+
+/-- Touching fresh keys without writing keeps the abstraction over the extended live keys. -/
+theorem VyInv.extend {stor : Stor} {s : Curve3Crv.State} {K : Key → Prop} {ks : List Key}
+    (h : VyInv stor s K) (hf : FreshKeys K ks) : VyInv stor s (Key.extend K ks) := by
+  refine ⟨h.decimals, h.supply, h.minter, h.name, h.symbol, ?_, ?_, ?_, ?_, ?_, h.conserved⟩
+  · intro k _
+    by_cases hk : k ∈ ks
+    · exact h.get_slot (hf.1 k hk)
+    · rename_i hK
+      exact h.known k (hK.resolve_right hk)
+  · intro k hk
+    exact h.unknown k (fun hK => hk (.inl hK))
+  · intro x hx
+    rcases h.support x hx with hx | ⟨k, hK, he⟩
+    · exact .inl hx
+    · exact .inr ⟨k, .inl hK, he⟩
+  · intro k k' hk hk' he
+    rcases hk with hk | hk <;> rcases hk' with hk' | hk'
+    · exact h.inj k k' hk hk' he
+    · rcases hf.1 k' hk' with hK' | ⟨-, hoff⟩
+      · exact h.inj k k' hk hK' he
+      · exact absurd he (hoff k hk)
+    · rcases hf.1 k hk with hK | ⟨-, hoff⟩
+      · exact h.inj k k' hK hk' he
+      · exact absurd he.symm (hoff k' hk')
+    · exact hf.2 k hk k' hk' he
+  · intro k hk
+    rcases hk with hk | hk
+    · exact h.apart k hk
+    · rcases hf.1 k hk with hK | ⟨hfix, -⟩
+      · exact h.apart k hK
+      · exact hfix
 
 end Blanc.Lift.Curve3Crv

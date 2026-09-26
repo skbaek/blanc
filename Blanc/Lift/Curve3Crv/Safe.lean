@@ -6,7 +6,7 @@ import Blanc.Lift.Curve3Crv.SafeViews
 # The deployed 3Crv runtime refines the model (safety), composed from its segments
 
 Every successful frame execution of the deployed bytes, from a frame start and the storage
-abstraction `VyInv … s K`, with the frame-local `Fresh` premise for the keys the call touches:
+abstraction `VyInv … s K`, with the frame-local `FreshKeys` premise for the keys the call touches:
 
 * if the call writes (`set_minter`, `set_name`, `transfer`, `transferFrom`, `approve`, `mint`,
   `burnFrom`), it is exactly the model's `step` on the call `decodeCall` reads: the model
@@ -50,7 +50,7 @@ theorem c3crv_frame_refines {sevm : Sevm} {pre post : Devm} {s : Curve3Crv.State
     (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty)
     (hinv : VyInv (Devm.getStor pre sevm.currentTarget) s K)
-    (hfresh : ∀ k ∈ callKeys sevm.caller (decodeCall sevm), Fresh K k)
+    (hfresh : FreshKeys K (callKeys sevm.caller (decodeCall sevm)))
     (exc : Exec 0 sevm pre (.ok post)) :
     (IsWriter (decodeCall sevm) →
       ∃ ow : Option B256, (∀ w, ow = some w → OwnerAnswer sevm pre s.minter w) ∧
