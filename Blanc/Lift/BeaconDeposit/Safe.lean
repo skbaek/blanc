@@ -17,7 +17,7 @@ import Blanc.Lift.BeaconDeposit.SafeInsertLive
 
 Every successful frame execution of the deployed runtime either is a `deposit` whose effect is
 the model's (`deposit_frame_refines`, first conjunct), or keeps every storage map and the log
-list (second conjunct).  The route: `exec_lift`; the dispatcher (`safe_dispatch`); the three view
+list (second conjunct).  The route: `lift_sound`; the dispatcher (`safe_dispatch`); the three view
 wrappers are quiet (`viewSet_quiet`, `SFunc.Run.world_of_quiet`); the `deposit` wrapper
 (`safe_decoder`) and the body's inversion segments (`safe_guards` … `safe_countBump`); the
 insertion loop by `SFunc.RunP.loop` over the two pass inversions (`safe_insertDead`,
@@ -353,7 +353,7 @@ theorem deposit_frame_refines {sevm : Sevm} {pre post : Devm} {history : List B2
         post.logs = pre.logs ++ [BeaconDeposit.depositEventLog sevm.currentTarget ev]) ∧
     (Sevm.selector sevm ≠ BeaconDeposit.depositSelector →
       (∀ a, Devm.getStor post a = Devm.getStor pre a) ∧ post.logs = pre.logs) := by
-  obtain ⟨f, hf, run⟩ := exec_lift hcode hfork exc
+  obtain ⟨f, hf, run⟩ := lift_sound cert_check hcode hfork exc
   have hf0 : prog[0]? = some t_0000_c0 := rfl
   rw [hf0] at hf
   cases hf
