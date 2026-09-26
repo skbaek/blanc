@@ -377,22 +377,25 @@ theorem ric_copy_exit {i src dst len : B256} (hlt : B256.ltCheck i len = 0)
   · exact absurd hw (by decide)
   exact ⟨G7, run⟩
 
-/-- Control branches to the inline continuation of a `branchTo` when the condition word is zero. -/
-theorem ric_branchTo_zero {dd : B256} {f : SFunc} {k : Nat}
-    (run : SFunc.RunCut fs sevm C (St b (dd :: 0 :: S) M G) (.branchTo f k) r) :
-    ∃ G', SFunc.RunCut fs sevm C (St b S M G') f r := by
-  cases run with
-  | toZero d0 h k =>
-      obtain ⟨-, -, e⟩ := St.of_pop2 h
-      exact ⟨_, e ▸ k⟩
-  | toSuccCut _ w hw _ h =>
-      obtain ⟨-, rfl, -⟩ := St.of_pop2 h
-      exact absurd rfl hw
-  | toSucc _ w hw _ _ h _ =>
-      obtain ⟨-, rfl, -⟩ := St.of_pop2 h
-      exact absurd rfl hw
-
 end CopyLoop
+
+/-- `MSTORE` at a numeral address, inverted. -/
+theorem ri_mstore_nat {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+    {i v : B256} (inat : Nat) {d : Devm} (hi : i.toNat = inat)
+    (h : Ninst.Run sevm (St b (i :: v :: S) M G) (.reg .mstore) d) :
+    ∃ G', d = St b S (M.write inat v.toBytes) G' := by
+  obtain ⟨G', hd⟩ := ri_mstore h
+  rw [hi] at hd
+  exact ⟨G', hd⟩
+
+/-- `CALLDATACOPY` with numeral destination and size, inverted. -/
+theorem ri_calldatacopy_nat {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+    {di si sz : B256} (dn zn : Nat) {d : Devm} (hi : di.toNat = dn) (hz : sz.toNat = zn)
+    (h : Ninst.Run sevm (St b (di :: si :: sz :: S) M G) (.reg .calldatacopy) d) :
+    ∃ G', d = St b S (M.write dn (sevm.data.sliceD si.toNat zn 0)) G' := by
+  obtain ⟨G', hd⟩ := ri_calldatacopy h
+  rw [hi, hz] at hd
+  exact ⟨G', hd⟩
 
 /-! ## Added for s-sha -/
 
