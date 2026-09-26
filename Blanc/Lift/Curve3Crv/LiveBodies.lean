@@ -83,7 +83,97 @@ the evolving base (`afterSload`, `afterSstore`), `rx_log3` (static frame exclude
 `sloadCost`/`sstoreCost` terms, all fixed by `b`. -/
 theorem live_transfer (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     {r : Raw} (hr : rawTransfer sevm stor₀ = some r) : BodyLive sevm b t_02ce_c0 r := by
-  sorry
+  unfold rawTransfer at hr
+  dsimp only at hr
+  split_ifs at hr with hg
+  obtain ⟨hv, hd, hle, hnof⟩ := hg
+  cases hr
+  have hM := vyMem_empty_size (Sevm.dataWord sevm 0)
+  have hwf0 := vyMem_wf Mem.wf_empty (Sevm.dataWord sevm 0)
+  have h3 : Bytes.toB256 [0x03] = 3 := by decide
+  have hv1 : Sevm.dataWord sevm (Bytes.toB256 [0x24]) = Sevm.argWord sevm 1 := by
+    show Sevm.dataWord sevm _ = Sevm.dataWord sevm _
+    congr 1
+  have hd0 : Sevm.dataWord sevm (Bytes.toB256 [0x04]) = Sevm.argWord sevm 0 := rfl
+  set d := Sevm.argWord sevm 0
+  set v := Sevm.argWord sevm 1
+  set s1 := mapSlot 3 sevm.caller.toB256
+  set s2 := mapSlot 3 d
+  set x := b.getStorVal sevm.currentTarget s1
+  set b2 := afterSstore sevm (afterSload sevm b s1) s1 (x - v)
+  set y := b2.getStorVal sevm.currentTarget s2
+  have hy : y = (((stor₀).set s1 ((stor₀).get s1 - v)).get s2) := getStorVal_afterStore
+  set M1 := ((vyMem Mem.empty (Sevm.dataWord sevm 0)).write 224 sevm.caller.toB256.toBytes).write
+    192 (3 : B256).toBytes
+  have hM1 : M1.size = 256 := by simp only [M1, Mem.size_write_word_at, hM]; decide
+  set M2 := (M1.write 224 d.toBytes).write 192 (3 : B256).toBytes
+  have hM2 : M2.size = 256 := by simp only [M2, Mem.size_write_word_at, hM1]; decide
+  have hwf2 : Mem.Wf M2 := ((((hwf0.write _ _).write _ _).write _ _).write _ _)
+  set M3 := M2.write 320 v.toBytes
+  have hM3 : M3.size = 352 := by simp only [M3, Mem.size_write_word_at, hM2]; decide
+  refine ⟨3 + 3 + 3 + 3 + 3 + 1756 + 3 + 3 + 3 + 2 + 3 + 3 + 12 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm b2 s2) s2 (y + v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b2 s2 + 3 + 3 + 3 + 3 + 42 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm b s1) s1 (x - v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b s1 + 3 + 42 + 3 + 3 + 3 + 3 + 9 + 3 + 2 + 3 + 34 + 19, fun G hG => ?_⟩
+  have h320 : (Bytes.toB256 [0x01, 0x40]).toNat = 320 := by decide
+  have h32 : (Bytes.toB256 [0x20]).toNat = 32 := by decide
+  have h0 : (Bytes.toB256 [0x00]).toNat = 0 := by decide
+  have hwf3 : Mem.Wf M3 := hwf2.write _ _
+  set b4 := (afterSstore sevm (afterSload sevm b2 s2) s2 (y + v)).addLog
+    ⟨sevm.currentTarget, [transferTopic, sevm.caller.toB256, d], v.toBytes⟩
+  set M5 := M3.write 0 (1 : B256).toBytes
+  refine ⟨((St b4 [] M5 G).memRead 0 32).2.withOutput (1 : B256).toBytes, ?_, rfl, ?_⟩
+  · unfold entrySt
+    rw [show G + (3 + 3 + 3 + 3 + 3 + 1756 + 3 + 3 + 3 + 2 + 3 + 3 + 12 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm b2 s2) s2 (y + v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b2 s2 + 3 + 3 + 3 + 3 + 42 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm b s1) s1 (x - v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b s1 + 3 + 42 + 3 + 3 + 3 + 3 + 9 + 3 + 2 + 3 + 34 + 19) = G + 3 + 3 + 3 + 3 + 3 + 1756 + 3 + 3 + 3 + 2 + 3 + 3 + 12 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm b2 s2) s2 (y + v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b2 s2 + 3 + 3 + 3 + 3 + 42 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm b s1) s1 (x - v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b s1 + 3 + 42 + 3 + 3 + 3 + 3 + 9 + 3 + 2 + 3 + 34 + 19 by omega]
+    refine rx_vyNonpayable (h := 0x02) (l := 0xd8) (fail := t_02d4_c0) hv (by simp) ?_
+    refine rx_vyAddrArg (p := 0x04) (h := 0x02) (l := 0xe9) (fail := t_02e5_c0)
+      (vyMem_reads Mem.wf_empty Mem.reads_empty _) (vyImg_clamps _ _) (by rw [hM]) (by rw [hM]; omega)
+      (by rw [hd0]; exact hd) (by simp) ?_
+    refine rx_push (w := 3) h3 (by simp) ?_
+    refine rx_caller (by simp) ?_
+    refine rx_vySlot (c1 := 9) hM (by omega) (by decide) (by decide) (by simp) ?_
+    refine rx_vySubStore (p := 0x24) (h := 0x03) (l := 0x0a) (fail := t_0306_c0) hfork hstatic
+      (by rw [hv1]; exact hle) (by omega) (by simp) ?_
+    rw [hv1]
+    refine rx_push (w := 3) h3 (by simp) ?_
+    refine rx_push rfl (by simp) ?_
+    refine rx_calldataload (by simp) ?_
+    rw [hd0]
+    refine rx_vySlot (c1 := 3) hM1 (by omega) (by decide) (by decide) (by simp) ?_
+    refine rx_vyAddStore (p := 0x24) (h := 0x03) (l := 0x38) (fail := t_0334_c0) hfork hstatic
+      (by rw [hv1]; show y.toNat + v.toNat < 2 ^ 256; rw [hy]; exact hnof) (by omega) (by simp) ?_
+    rw [hv1]
+    refine rx_push rfl (by simp) ?_
+    refine rx_calldataload (by simp) ?_
+    rw [hv1]
+    refine rx_push rfl (by simp) ?_
+    refine rx_mstore (c := 12) ?_ (M' := M3) (by rw [h320]) ?_
+    · rw [h320, St.extCost_eq hM2]; decide
+    refine rx_push rfl (by simp) ?_
+    refine rx_calldataload (by simp) ?_
+    rw [hd0]
+    refine rx_caller (by simp) ?_
+    refine rx_push (w := transferTopic) (by decide) (by simp) ?_
+    refine rx_push rfl (by simp) ?_
+    refine rx_push rfl (by simp) ?_
+    refine rx_log3 (c := 1756) (data := v.toBytes) hstatic ?_ ?_ ?_ ?_
+    · rw [h320, h32, St, Devm.extCost_zero_of_le (by rw [hM3]) (by rw [hM3])]; decide
+    · rw [h320, h32]; exact Mem.read_write_word_of_wf hwf2 320 v
+    · rw [h320, h32]; exact read_covered hM3 (by decide) (by decide)
+    refine rx_push (w := 1) (by decide) (by simp) ?_
+    refine rx_push rfl (by simp) ?_
+    refine rx_mstore (c := 3) ?_ (M' := M5) (by rw [h0]) ?_
+    · rw [h0, St, Devm.extCost_zero_of_le (by rw [hM3]) (by rw [hM3]; omega)]; rfl
+    refine rx_push rfl (by simp) ?_
+    refine rx_push rfl (by simp) ?_
+    refine rx_return ?_ ?_
+    · have hM5 : M5.size = 352 := by simp only [M5, Mem.size_write_word_at, hM3]; decide
+      rw [h0, h32, St, Devm.extCost_zero_of_le (by rw [hM5]) (by rw [hM5]; omega)]
+    · rw [h0, h32]; exact Mem.read_write_word_of_wf hwf3 0 1
+  · refine ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_⟩
+    · rw [getStor_St_return, getStor_addLog, getStor_afterStore, getStor_afterStore, hy]
+      rfl
+    · rw [getStor_St_return, getStor_addLog, getStor_afterStore_ne ha, getStor_afterStore_ne ha]
+    · rw [logs_St_return, logs_addLog, logs_afterStore, logs_afterStore]
+    · cases ho
+      exact output_St_return _ _ _ _ _ _ _
 
 -- SEGMENT: liveTransferFrom (172 nodes)
 /-- `transferFrom`: forwards of `safeTransferFrom`, the minter branch decided by `rawTransferFrom`'s

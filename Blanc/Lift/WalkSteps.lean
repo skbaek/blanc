@@ -136,4 +136,43 @@ theorem Mem.read_write_word_of_wf {M : Mem} (hwf : Mem.Wf M) (n : Nat) (v : B256
   rw [(Mem.reads_data M).write hwf n v.toBytes |>.read]
   exact sliceD_word_same _ _ _
 
+/-! ## A load then a store of one key, and a log entry, seen from the world -/
+
+/-- The word at `key` after `SLOAD k; SSTORE k v` over `b`. -/
+theorem getStorVal_afterStore {sevm : Sevm} {b : Devm} {k v key : B256} :
+    (afterSstore sevm (afterSload sevm b k) k v).getStorVal sevm.currentTarget key =
+      ((Devm.getStor b sevm.currentTarget).set k v).get key := by
+  show (Devm.getStor _ _).get _ = _
+  rw [afterSstore_getStor_self, afterSload_getStor]
+
+theorem getStor_afterStore {sevm : Sevm} {b : Devm} {k v : B256} :
+    Devm.getStor (afterSstore sevm (afterSload sevm b k) k v) sevm.currentTarget =
+      (Devm.getStor b sevm.currentTarget).set k v := by
+  rw [afterSstore_getStor_self, afterSload_getStor]
+
+theorem getStor_afterStore_ne {sevm : Sevm} {b : Devm} {k v : B256} {a : Adr}
+    (ha : a ≠ sevm.currentTarget) :
+    Devm.getStor (afterSstore sevm (afterSload sevm b k) k v) a = Devm.getStor b a := by
+  rw [afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha), afterSload_getStor]
+
+theorem getStor_addLog (d : Devm) (L : Log) (a : Adr) :
+    Devm.getStor (d.addLog L) a = Devm.getStor d a := rfl
+
+/-- The state `RETURN` leaves keeps the base's storage. -/
+theorem getStor_St_return (b : Devm) (S : List B256) (M : Mem) (G i n : Nat) (out : Bytes)
+    (a : Adr) :
+    Devm.getStor (((St b S M G).memRead i n).2.withOutput out) a = Devm.getStor b a := rfl
+
+theorem logs_St_return (b : Devm) (S : List B256) (M : Mem) (G i n : Nat) (out : Bytes) :
+    (((St b S M G).memRead i n).2.withOutput out).logs = b.logs := rfl
+
+theorem output_St_return (b : Devm) (S : List B256) (M : Mem) (G i n : Nat) (out : Bytes) :
+    (((St b S M G).memRead i n).2.withOutput out).output = out := rfl
+
+theorem logs_addLog (d : Devm) (L : Log) : (d.addLog L).logs = d.logs ++ [L] := rfl
+
+theorem logs_afterStore {sevm : Sevm} {b : Devm} {k v : B256} :
+    (afterSstore sevm (afterSload sevm b k) k v).logs = b.logs := by
+  rw [afterSstore_logs, afterSload_logs]
+
 end Blanc.Lift

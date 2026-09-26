@@ -28,31 +28,6 @@ def SafeBody (sevm : Sevm) (b : Devm) (f : SFunc) (raw : Option Raw) : Prop :=
   ∀ G post, SFunc.Run prog sevm (entrySt sevm b G) f (.halted post) →
     ∃ r, raw = some r ∧ Lands sevm b post r
 
-theorem getStorVal_afterStore {sevm : Sevm} {b : Devm} {k v key : B256} :
-    (afterSstore sevm (afterSload sevm b k) k v).getStorVal sevm.currentTarget key =
-      ((Devm.getStor b sevm.currentTarget).set k v).get key := by
-  show (Devm.getStor _ _).get _ = _
-  rw [afterSstore_getStor_self, afterSload_getStor]
-
-theorem getStor_afterStore {sevm : Sevm} {b : Devm} {k v : B256} :
-    Devm.getStor (afterSstore sevm (afterSload sevm b k) k v) sevm.currentTarget =
-      (Devm.getStor b sevm.currentTarget).set k v := by
-  rw [afterSstore_getStor_self, afterSload_getStor]
-
-theorem getStor_afterStore_ne {sevm : Sevm} {b : Devm} {k v : B256} {a : Adr}
-    (ha : a ≠ sevm.currentTarget) :
-    Devm.getStor (afterSstore sevm (afterSload sevm b k) k v) a = Devm.getStor b a := by
-  rw [afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha), afterSload_getStor]
-
-theorem getStor_addLog (d : Devm) (L : Log) (a : Adr) :
-    Devm.getStor (d.addLog L) a = Devm.getStor d a := rfl
-
-theorem logs_addLog (d : Devm) (L : Log) : (d.addLog L).logs = d.logs ++ [L] := rfl
-
-theorem logs_afterStore {sevm : Sevm} {b : Devm} {k v : B256} :
-    (afterSstore sevm (afterSload sevm b k) k v).logs = b.logs := by
-  rw [afterSstore_logs, afterSload_logs]
-
 section
 
 variable {sevm : Sevm} {b : Devm}
