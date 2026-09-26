@@ -75,6 +75,7 @@ stores at a height `h` whose size bit is set and below which every bit is clear,
 theorem safe_insert_loop {sevm : Sevm} {b₀ : Devm} {x : Nat} {node0 : B256}
     {br : Nat → B256} {stor1 : Stor}
     {x₁ x₂ x₃ x₄ y₁ y₂ y₃ y₄ y₅ y₆ y₇ d : B256} {rest : List B256}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hsha : ShaReady sevm b₀) (hrest : rest.length ≤ 4) (hx : x < 2 ^ 256)
     (hstor1 : Devm.getStor b₀ sevm.currentTarget = stor1)
     (hbr : ∀ h < 32, stor1.get (solBranchSlot h) = br h)
@@ -126,7 +127,7 @@ theorem safe_insert_loop {sevm : Sevm} {b₀ : Devm} {x : Nat} {node0 : B256}
     · rw [show 1024 + 96 * (h + 1) = 1120 + 96 * h by omega,
         show 928 + 96 * (h + 1) = 1024 + 96 * h by omega]
       exact hM'
-  · obtain ⟨hh32, b', G', hK, rfl⟩ := safe_insertLive (hh := hh)
+  · obtain ⟨hh32, b', G', hK, rfl⟩ := safe_insertLive hfork (hh := hh)
       (by rw [hszv]; exact hbit) hrun
     refine ⟨h, b', Mh, G', rfl, hh32, hdead, hbit, ?_⟩
     refine ⟨fun a => ?_, fun a => ?_, ?_, ?_, ?_, ?_⟩
@@ -251,7 +252,7 @@ theorem deposit_route {sevm : Sevm} {pre post : Devm} {history : List B256} {G1 
     omega
   rw [t_0f6e_c20_eq, hroot, e1] at run6
   obtain ⟨h, bf, Mf, Gf, hd, hh, hdead, hlive, hW⟩ := safe_insert_loop (b₀ := b6) (x := x)
-    (node0 := rt) (br := br) (stor1 := stor1) (rest := [sel]) (hsha.of_eq hc6 ha6) (by simp)
+    (node0 := rt) (br := br) (stor1 := stor1) (rest := [sel]) hfork (hsha.of_eq hc6 ha6) (by simp)
     (by omega) hb6stor hbr (M := M6) (G := G8) hM6 run6
   cases hd
   have hn : h = insertDepth 32 x := insertDepth_unique (by omega) hx32 hdead hlive
