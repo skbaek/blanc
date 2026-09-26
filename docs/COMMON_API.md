@@ -2674,10 +2674,10 @@ contract-neutral.
 - solc idioms, gas-exact: the word-copy loop (`copy_loop`) in
   [`Blanc/Lift/CopyLoop.lean`](../Blanc/Lift/CopyLoop.lean); the
   `sha256(abi.encodePacked(a, b))` site through the SHA-256 precompile
-  (`packed_sha_pair`, `copy_sha`) in
-  [`Blanc/Lift/PackedSha.lean`](../Blanc/Lift/PackedSha.lean), and its forms over
-  memory that already covers the destination (`copy_sha_gen`,
-  `copy_sha_covered`) in
+  (`copy_sha_gen` over memory of any word-aligned size, with its result image
+  `shaImg`; its corollaries `copy_sha` and `packed_sha_pair`) in
+  [`Blanc/Lift/PackedSha.lean`](../Blanc/Lift/PackedSha.lean), and the corollary
+  over memory that already covers the destination (`copy_sha_covered`) in
   [`Blanc/Lift/PackedShaCovered.lean`](../Blanc/Lift/PackedShaCovered.lean).
 - Jump destinations: `jumpable_eq_jumpdestOk` in
   [`Blanc/Lift/Jumpdest.lean`](../Blanc/Lift/Jumpdest.lean) replaces Jaune's
