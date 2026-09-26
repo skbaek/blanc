@@ -1,5 +1,5 @@
 import Blanc.Lift.BeaconDeposit.BodySpec
-import Blanc.Lift.PackedShaTight
+import Blanc.Lift.PackedShaCovered
 
 /-!
 # Body segment 7: one hashing iteration of the insertion loop
@@ -83,7 +83,7 @@ theorem body_insertDead {sevm : Sevm} {b : Devm} {sz nd : B256} {R : List B256} 
   set br := b.getStorVal sevm.currentTarget (solBranchSlot h) with hbr
   have hfp' : img.sliceD 64 32 0 = (Nat.toB256 (928 + 96 * h)).toBytes := hfp
   obtain ⟨b', M', img', hpost, hwf', hr', hs', hw', hh', hrun⟩ :=
-    packed_sha_pair_tight (fs := prog) (sevm := sevm) (C := []) (b := b1)
+    packed_sha_pair (fs := prog) (sevm := sevm) (C := []) (b := b1)
       (R := Nat.toB256 h :: sz :: nd :: R) (M := M) (G := G + 44)
       (e0 := 0x10) (e1 := 0x25) (r0 := 0x0f) (r1 := 0xe8) (c0 := 0x10) (c1 := 0x82)
       (v0 := 0x10) (v1 := 0x97) (k := 22) (fail1 := t_1079_c22) (fail2 := t_1093_c22)

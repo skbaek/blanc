@@ -438,7 +438,7 @@ theorem copy_sha {img : Bytes} {n s d : Nat} {w1 w2 x1 x3 x4 : B256}
     (hwarm : (2 : Adr) ∈ b.accessedAddresses)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
     (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
-    (hG : G + 1000 < 2 ^ 256) :
+    (hG : G + 246 < 2 ^ 256) :
     ∃ b' M' img', ShaCallPost b b' (Bytes.sha256 (w1.toBytes ++ w2.toBytes)).toBytes ∧
       Mem.Wf M' ∧ Mem.Reads M' img' ∧ M'.size = d + 96 ∧
       img'.sliceD 64 32 0 = (Nat.toB256 d).toBytes ∧
@@ -585,7 +585,7 @@ theorem packed_sha_pair {img : Bytes} {n f : Nat} {a bw : B256}
     (hwarm : (2 : Adr) ∈ b.accessedAddresses)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
     (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
-    (hG : G + 1000 < 2 ^ 256) :
+    (hG : G + 246 < 2 ^ 256) :
     ∃ b' M' img', ShaCallPost b b' (hashPairBytes a bw) ∧ Mem.Wf M' ∧
       Mem.Reads M' img' ∧ M'.size = f + 192 ∧
       img'.sliceD 64 32 0 = (Nat.toB256 (f + 96)).toBytes ∧

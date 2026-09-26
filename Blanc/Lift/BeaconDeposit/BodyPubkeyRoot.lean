@@ -1,5 +1,5 @@
 import Blanc.Lift.BeaconDeposit.BodySpec
-import Blanc.Lift.PackedShaTight
+import Blanc.Lift.PackedShaCovered
 
 /-!
 # Body segment 3: the `LOG1` and `pubkey_root`
