@@ -312,4 +312,12 @@ theorem ri_codecopy {di ci sz : B256} {d : Devm}
 
 end Steps
 
+/-! ## Added for s-sha -/
+
+/-- Name the top of an inverted step's successor: `ri_val (w := v) (by decide) (ri_add s)`
+turns a computed top word into the literal `v`. -/
+theorem ri_val {b d : Devm} {S : List B256} {M : Mem} {v w : B256} (hv : v = w)
+    (h : ∃ G', d = St b (v :: S) M G') : ∃ G', d = St b (w :: S) M G' :=
+  hv ▸ h
+
 end Blanc.Lift

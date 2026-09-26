@@ -543,4 +543,135 @@ theorem ric_copy_sha {img : Bytes} {n s d : Nat} {w1 w2 x1 x3 x4 : B256}
 
 end Copy
 
+/-! ## Added for s-sha -/
+
+section Pack
+
+variable {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm} {r : Seg}
+  {R : List B256} {M : Mem} {G : Nat} {e0 e1 r0 r1 : UInt8} {k : Nat} {X T : SFunc}
+
+/-- **Pack two words, copy, merge and call, inverted** (the converse of `packed_sha_pair`):
+from `bw :: a :: 2` over the free pointer `f`, every successful cut run stores `a`, `bw` at
+`f + 0x20`, `f + 0x40` with the length at `f` and the free pointer `f + 0x60`, then makes the
+copy site of `ric_copy_sha`, continuing with `T` over the digest `sha256 (a ‖ bw)`. -/
+theorem ric_pack_sha {img : Bytes} {n f : Nat} {a bw : B256}
+    {c0 c1 v0 v1 : UInt8} {fail1 fail2 : SFunc}
+    (hk : fs[k]? = some (mcpyTree e0 e1 r0 r1 k
+      (mergeTree (shaCallTree c0 c1 v0 v1 fail1 fail2 T))))
+    (hkC : k ∉ C) (hf1 : fail1.noOk = true)
+    (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hs : M.size = n) (hn : n % 32 = 0)
+    (h96 : 96 ≤ n) (hnf : n ≤ f + 96) (hf32 : f % 32 = 0) (hf96 : 96 ≤ f)
+    (hfb : f + 2000 < 2 ^ 256) (hfp : img.sliceD 64 32 0 = (Nat.toB256 f).toBytes)
+    (hnodeleg : getDelegatedCodeAddress (b.getCode 2) = none)
+    (hwarm : (2 : Adr) ∈ b.accessedAddresses)
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (run : SFunc.RunCut fs sevm C (St b (bw :: a :: 2 :: R) M G)
+      (pack2Tree (mcpyTree e0 e1 r0 r1 k X)) r) :
+    ∃ b' M' G', ShaCallPost b b' (Bytes.sha256 (a.toBytes ++ bw.toBytes)).toBytes ∧
+      Mem.Wf M' ∧ Mem.Reads M' (shaImg (packImg img f a bw) (f + 96) a bw) ∧
+      M'.size = f + 192 ∧
+      SFunc.RunCut fs sevm C (St b' (Nat.toB256 32 :: Nat.toB256 (f + 96) :: R) M' G') T r := by
+  have h40 : (Bytes.toB256 [0x40]).toNat = 64 := by decide
+  have tf : (Nat.toB256 f).toNat = f := toNat_toB256' (by omega)
+  have tf32 : (Nat.toB256 (f + 32)).toNat = f + 32 := toNat_toB256' (by omega)
+  have tf64 : (Nat.toB256 (f + 64)).toNat = f + 64 := toNat_toB256' (by omega)
+  set M1 := M.write (f + 32) a.toBytes with hM1
+  set M2 := M1.write (f + 64) bw.toBytes with hM2
+  set M3 := M2.write f (Nat.toB256 64).toBytes with hM3
+  set M4 := M3.write 64 (Nat.toB256 (f + 96)).toBytes with hM4
+  have hs1 : M1.size = max n (f + 64) := by
+    rw [hM1, Mem.size_write_word_aligned (by omega) (by omega)]; omega
+  have hs2 : M2.size = f + 96 := by
+    rw [hM2, Mem.size_write_word_aligned (by omega) (by omega)]; omega
+  have hs3 : M3.size = f + 96 := by
+    rw [hM3, Mem.size_write_word_aligned (by omega) (by omega)]; omega
+  have hs4 : M4.size = f + 96 := by
+    rw [hM4, Mem.size_write_word_aligned (by omega) (by omega)]; omega
+  have hwf1 : Mem.Wf M1 := hwf.write _ _
+  have hwf2 : Mem.Wf M2 := hwf1.write _ _
+  have hwf3 : Mem.Wf M3 := hwf2.write _ _
+  have hwf4 : Mem.Wf M4 := hwf3.write _ _
+  have hr1 := hr.write hwf (f + 32) a.toBytes
+  have hr2 := hr1.write hwf1 (f + 64) bw.toBytes
+  have hr3 := hr2.write hwf2 f (Nat.toB256 64).toBytes
+  have hr4 : Mem.Reads M4 (packImg img f a bw) := hr3.write hwf3 64 _
+  have hfp2 : (Bytes.writeAt (Bytes.writeAt img (f + 32) a.toBytes) (f + 64)
+      bw.toBytes).sliceD 64 32 0 = (Nat.toB256 f).toBytes := by
+    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega),
+      Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega), hfp]
+  unfold pack2Tree at run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  rw [h40, read_word hr 64 hfp, read_covered hs hn (by omega)] at run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 (f + 32))
+    (push20_add (by omega)) (ri_add s1)
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore s1
+  rw [tf32, ← hM1] at run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 (f + 64))
+    (push20_add' rfl (by omega)) (ri_add s1)
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore s1
+  rw [tf64, ← hM2] at run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 (f + 96))
+    (push20_add' rfl (by omega)) (ri_add s1)
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  rw [h40, read_word hr2 64 hfp2, read_covered hs2 (by omega) (by omega)] at run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 96)
+    (sub_toB256' (by omega) (by omega) (by omega)) (ri_sub s1)
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 64)
+    (by decide) (ri_sub s1)
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore s1
+  rw [tf, ← hM3] at run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore s1
+  rw [h40, ← hM4] at run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  rw [h40, read_word hr4 64 (packImg_word64 hf96), read_covered hs4 (by omega) (by omega)] at run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  rw [tf, read_word hr4 f (packImg_len hf96), read_covered hs4 (by omega) (by omega)] at run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 (f + 32))
+    (push20_add (by omega)) (ri_add s1)
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_sha (s := f + 32) (d := f + 96)
+    (n := f + 96) hk hkC hf1 hwf4 hr4 hs4 (by omega) (by omega) (by omega) (by omega) (by omega)
+    (by omega) (packImg_word64 hf96) (packImg_a hf96)
+    (by rw [show f + 32 + 32 = f + 64 by omega]; exact packImg_b hf96)
+    hnodeleg hwarm hpre hfork hdepth run
+  exact ⟨b', M', G', hpost, hwf', hr', by rw [hs']; omega, run⟩
+
+end Pack
+
 end Blanc.Lift
