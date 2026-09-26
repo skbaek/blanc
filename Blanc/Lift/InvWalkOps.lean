@@ -10,7 +10,11 @@ Companions to `Blanc/Lift/ExactWalk.lean` and `Blanc/Lift/ExactWalkOps.lean` for
 inverting successful single-step execution: binary operations (`SUB`, `GT`, `MUL`,
 `DIV`, `MOD`, `OR`, `EXP`, `SHL`, `SHR`, `BYTE`), unary `NOT`, environment pushes
 (`CALLVALUE`, `CALLDATASIZE`, `RETURNDATASIZE`, `GAS`, `CALLDATALOAD`), and
-memory operations (`MLOAD`, `MSTORE`, `MSTORE8`, `CALLDATACOPY`, `CODECOPY`).
+memory operations (`MLOAD`, `MSTORE`, `MSTORE8`, `CALLDATACOPY`, `CODECOPY`, with
+numeral-offset forms), `ri_val` to name a successor's top word, the solc word-copy loop
+inverted (`ric_copy_step`, `ric_copy_exit`), and the comparison-flag facts a failed guard
+leaves (`toNat_le_of_gtCheck_eq_zero`, `toNat_ge_of_ltCheck_eq_zero`,
+`eq_zero_of_iszero_ne_zero`).
 
 Each lemma pairs with its forward counterpart: from a successful synthetic run of a
 node at an `St b S M G` state, the successor is again an `St` over the base `b`.
@@ -312,9 +316,34 @@ theorem ri_codecopy {di ci sz : B256} {d : Devm}
   rw [hs₄] at eq
   exact ⟨_, eq.symm⟩
 
+/-- `MSTORE` at a numeral address, inverted. -/
+theorem ri_mstore_nat {i v : B256} (inat : Nat) {d : Devm} (hi : i.toNat = inat)
+    (h : Ninst.Run sevm (St b (i :: v :: S) M G) (.reg .mstore) d) :
+    ∃ G', d = St b S (M.write inat v.toBytes) G' := by
+  obtain ⟨G', hd⟩ := ri_mstore h
+  rw [hi] at hd
+  exact ⟨G', hd⟩
+
+/-- `CALLDATACOPY` with numeral destination and size, inverted. -/
+theorem ri_calldatacopy_nat {di si sz : B256} (dn zn : Nat) {d : Devm} (hi : di.toNat = dn)
+    (hz : sz.toNat = zn)
+    (h : Ninst.Run sevm (St b (di :: si :: sz :: S) M G) (.reg .calldatacopy) d) :
+    ∃ G', d = St b S (M.write dn (sevm.data.sliceD si.toNat zn 0)) G' := by
+  obtain ⟨G', hd⟩ := ri_calldatacopy h
+  rw [hi, hz] at hd
+  exact ⟨G', hd⟩
+
+/-! ## Naming a successor's top word -/
+
+/-- Name the top of an inverted step's successor: `ri_val (w := v) (by decide) (ri_add s)`
+turns a computed top word into the literal `v`. -/
+theorem ri_val {b d : Devm} {S : List B256} {M : Mem} {v w : B256} (hv : v = w)
+    (h : ∃ G', d = St b (v :: S) M G') : ∃ G', d = St b (w :: S) M G' :=
+  hv ▸ h
+
 end Steps
 
-/-! ## Added for s-event -/
+/-! ## The solc word-copy loop, inverted -/
 
 section CopyLoop
 
@@ -379,33 +408,7 @@ theorem ric_copy_exit {i src dst len : B256} (hlt : B256.ltCheck i len = 0)
 
 end CopyLoop
 
-/-- `MSTORE` at a numeral address, inverted. -/
-theorem ri_mstore_nat {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
-    {i v : B256} (inat : Nat) {d : Devm} (hi : i.toNat = inat)
-    (h : Ninst.Run sevm (St b (i :: v :: S) M G) (.reg .mstore) d) :
-    ∃ G', d = St b S (M.write inat v.toBytes) G' := by
-  obtain ⟨G', hd⟩ := ri_mstore h
-  rw [hi] at hd
-  exact ⟨G', hd⟩
-
-/-- `CALLDATACOPY` with numeral destination and size, inverted. -/
-theorem ri_calldatacopy_nat {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
-    {di si sz : B256} (dn zn : Nat) {d : Devm} (hi : di.toNat = dn) (hz : sz.toNat = zn)
-    (h : Ninst.Run sevm (St b (di :: si :: sz :: S) M G) (.reg .calldatacopy) d) :
-    ∃ G', d = St b S (M.write dn (sevm.data.sliceD si.toNat zn 0)) G' := by
-  obtain ⟨G', hd⟩ := ri_calldatacopy h
-  rw [hi, hz] at hd
-  exact ⟨G', hd⟩
-
-/-! ## Added for s-sha -/
-
-/-- Name the top of an inverted step's successor: `ri_val (w := v) (by decide) (ri_add s)`
-turns a computed top word into the literal `v`. -/
-theorem ri_val {b d : Devm} {S : List B256} {M : Mem} {v w : B256} (hv : v = w)
-    (h : ∃ G', d = St b (v :: S) M G') : ∃ G', d = St b (w :: S) M G' :=
-  hv ▸ h
-
-/-! ## Added for s-decoder -/
+/-! ## Comparison flags -/
 
 lemma toNat_le_of_gtCheck_eq_zero {x y : B256} (h : B256.gtCheck x y = 0) :
     x.toNat ≤ y.toNat := by
@@ -428,96 +431,6 @@ lemma eq_zero_of_iszero_ne_zero {x : B256} (h : B256.eqCheck x 0 ≠ 0) : x = 0 
   unfold B256.eqCheck at h; split at h
   · assumption
   · contradiction
-
-/-- Trees with no halting terminal: only `.revert`, `.ret`, `.undefined`. -/
-def SFunc.noHalt : SFunc → Bool
-  | .branch f g => f.noHalt && g.noHalt
-  | .branchTo f _ => f.noHalt
-  | .last l => l == .revert
-  | .next _ f => f.noHalt
-  | .dest f => f.noHalt
-  | .jump _ => true
-  | .callNext _ f => f.noHalt
-  | .ret => true
-  | .undefined => true
-
-/-- `S` is closed under the entries referenced by its members, and none of them halts. -/
-def NoHaltSet (fs : List SFunc) (S : List Nat) : Bool :=
-  S.all fun k => match fs[k]? with
-    | some g => g.noHalt && g.refs.all (· ∈ S)
-    | none => false
-
-/-- A run of a tree in a `NoHaltSet` cannot halt. -/
-theorem SFunc.RunP.not_halted {P : Sevm → Devm → Ninst → Devm → Prop}
-    {fs : List SFunc} {S : List Nat} (hS : NoHaltSet fs S = true)
-    {sevm : Sevm} {devm : Devm} {f : SFunc} {D : Devm} {o : Outcome}
-    (hf : f.noHalt = true) (hrefs : f.refs.all (· ∈ S) = true)
-    (run : SFunc.RunP P fs sevm devm f o) (ho : o = .halted D) : False := by
-  have closed : ∀ {k g}, k ∈ S → fs[k]? = some g →
-      g.noHalt = true ∧ g.refs.all (· ∈ S) = true := by
-    intro k g hk hget
-    have h := (List.all_eq_true.mp hS) k hk
-    rw [hget] at h
-    simpa using h
-  induction run with
-  | zero d pop run ih =>
-      simp only [SFunc.noHalt, Bool.and_eq_true] at hf
-      simp only [SFunc.refs, List.all_append, Bool.and_eq_true] at hrefs
-      exact ih hf.1 hrefs.1 ho
-  | succ d w hnz pop run ih =>
-      simp only [SFunc.noHalt, Bool.and_eq_true] at hf
-      simp only [SFunc.refs, List.all_append, Bool.and_eq_true] at hrefs
-      exact ih hf.2 hrefs.2 ho
-  | toZero d pop run ih =>
-      simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hrefs
-      exact ih hf hrefs.2 ho
-  | toSucc d w hnz lookup pop run ih =>
-      simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hrefs
-      have ht := closed (of_decide_eq_true hrefs.1) lookup
-      exact ih ht.1 ht.2 ho
-  | last hrun =>
-      cases ho
-      rename_i l
-      simp only [SFunc.noHalt] at hf
-      have : l = .revert := by
-        revert hf
-        cases l <;> decide
-      subst this
-      exact Linst.not_run_revert_ok hrun
-  | next hrun run ih =>
-      simp only [SFunc.noHalt] at hf
-      exact ih hf hrefs ho
-  | dest burn run ih =>
-      exact ih hf hrefs ho
-  | jump d lookup pop run ih =>
-      simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hrefs
-      have ht := closed (of_decide_eq_true hrefs.1) lookup
-      exact ih ht.1 ht.2 ho
-  | ret => cases ho
-  | callHalt d lookup pop run ih =>
-      simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hrefs
-      have ht := closed (of_decide_eq_true hrefs.1) lookup
-      cases ho
-      exact ih ht.1 ht.2 rfl
-  | callRet d lookup pop run tail ihRun ihTail =>
-      simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hrefs
-      simp only [SFunc.noHalt] at hf
-      exact ihTail hf hrefs.2 ho
-
-/-- A run of an entry in a `NoHaltSet` cannot halt. -/
-theorem SFunc.RunP.not_halted_entry {P : Sevm → Devm → Ninst → Devm → Prop}
-    {fs : List SFunc} {S : List Nat} (hS : NoHaltSet fs S = true)
-    {k : Nat} (hkS : k ∈ S) {g : SFunc} (hk : fs[k]? = some g)
-    {sevm : Sevm} {devm : Devm} {D : Devm} {o : Outcome}
-    (run : SFunc.RunP P fs sevm devm g o) (ho : o = .halted D) : False := by
-  have closed : ∀ {k g}, k ∈ S → fs[k]? = some g →
-      g.noHalt = true ∧ g.refs.all (· ∈ S) = true := by
-    intro k g hk hget
-    have h := (List.all_eq_true.mp hS) k hk
-    rw [hget] at h
-    simpa using h
-  have ht := closed hkS hk
-  exact SFunc.RunP.not_halted hS ht.1 ht.2 run ho
 
 end Blanc.Lift
 

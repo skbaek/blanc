@@ -428,7 +428,7 @@ the copy loops' exit tests, whose words are fixed by the memory facts (`mload 0x
 `mload 0xc0 = 8`).  Each one-word copy loop is two passes of fixed shape (inlined pass, then
 entry 26 resp. 11 exits), inverted by `cases` on `.branch`/`.jump`; a generic inversion of
 `copyLoopTree` (the converse of `copy_step`/`copy_exit`, `CopyLoop.lean`) serves both.  The
-image equation is the one `body_event` proves. -/
+image equation is `body_event`'s (`event_mem`). -/
 theorem safe_event {sevm : Sevm} {b : Devm} {sel rt sP wP pP a c : B256} {G : Nat} {M : Mem}
     {o : Outcome}
     (hM : BodyMem M 256 0x100
@@ -447,111 +447,18 @@ theorem safe_event {sevm : Sevm} {b : Devm} {sel rt sP wP pP a c : B256} {G : Na
           sel] M' G') t_071c_c4 o := by
   obtain ⟨hwf, hs, img, hr, hfp, hf⟩ := hM
   have h80 : img.sliceD 128 32 0 = (8 : B256).toBytes := hf (0x80, (8 : B256).toBytes) (by simp)
-  have ha0 : img.sliceD 160 8 0 = BeaconDeposit.le64 a.toNat :=
-    hf (0xa0, BeaconDeposit.le64 a.toNat) (by simp)
-  have hc0 : img.sliceD 192 32 0 = (8 : B256).toBytes := hf (0xc0, (8 : B256).toBytes) (by simp)
-  have he0 : img.sliceD 224 8 0 = BeaconDeposit.le64 c.toNat :=
-    hf (0xe0, BeaconDeposit.le64 c.toNat) (by simp)
   have h0 : RW M img := ⟨hwf, hr⟩
-  set V := Bytes.toB256 ((imgA img (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)).sliceD 160 32 0) with hV
-  set U := Bytes.toB256 ((imgC (imgB (imgA img (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)) 608 V) (sevm.data.sliceD sP.toNat 96 0)).sliceD 224 32 0) with hU
-  have hsA : (memA M (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)).size = 608 := by unfold memA; exact (sz_step (n' := 608) (sz_step (n' := 608) (sz_step (n' := 608) (sz_step (n' := 576) (sz_step (n' := 544) (sz_step (n' := 544) (sz_step (n' := 544) (sz_step (n' := 512) (sz_step (n' := 448) (sz_step (n' := 288) hs (by decide) (B256.length_toBytes _) (by decide)) (by decide) (B256.length_toBytes _) (by decide)) (by decide) (List.length_sliceD _ _ _ _) (by decide)) (by decide) (B256.length_toBytes _) (by decide)) (by decide) (B256.length_toBytes _) (by decide)) (by decide) (B256.length_toBytes _) (by decide)) (by decide) (List.length_sliceD _ _ _ _) (by decide)) (by decide) (B256.length_toBytes _) (by decide)) (by decide) (B256.length_toBytes _) (by decide)) (by decide) (B256.length_toBytes _) (by decide))
-  have hsB : (memB (memA M (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)) 608 V).size = 640 := by
-    unfold memB
-    exact sz_step (n' := 640) (sz_step (n' := 640) hsA (by decide) (B256.length_toBytes _)
-      (by decide)) (by decide) (B256.length_toBytes _) (by decide)
-  have hsC : (memC (memB (memA M (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)) 608 V) (sevm.data.sliceD sP.toNat 96 0)).size = 800 := by unfold memC; exact (sz_step (n' := 800) (sz_step (n' := 800) (sz_step (n' := 800) (sz_step (n' := 768) (sz_step (n' := 672) (sz_step (n' := 640) hsB (by decide) (B256.length_toBytes _) (by decide)) (by decide) (B256.length_toBytes _) (by decide)) (by decide) (List.length_sliceD _ _ _ _) (by decide)) (by decide) (B256.length_toBytes _) (by decide)) (by decide) (B256.length_toBytes _) (by decide)) (by decide) (B256.length_toBytes _) (by decide))
-  have hsD : (memB (memC (memB (memA M (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)) 608 V) (sevm.data.sliceD sP.toNat 96 0)) 800 U).size = 832 := by
-    unfold memB
-    exact sz_step (n' := 832) (sz_step (n' := 832) hsC (by decide) (B256.length_toBytes _)
-      (by decide)) (by decide) (B256.length_toBytes _) (by decide)
+  obtain ⟨hsA, hsB, hsC, hc0B, hM'⟩ := event_mem (sevm := sevm) (sP := sP) (wP := wP) (pP := pP)
+    hwf hs hr hfp hf
+  set V := Bytes.toB256 ((imgA img (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)).sliceD 160 32 0)
   have hA := h0.memA (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)
   have hB := hA.memB 608 V
   have hC := hB.memC (sevm.data.sliceD sP.toNat 96 0)
-  have hD := hC.memB 800 U
-  have hc0B : (imgB (imgA img (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)) 608 V).sliceD 192 32 0 = (8 : B256).toBytes := by
-    unfold imgB imgA; peel; exact hc0
-  have hW : ∀ (W : B256) (Y : Bytes) (s : Nat) (L : Bytes), Y.sliceD s 8 0 = L →
-      W = Bytes.toB256 (Y.sliceD s 32 0) → (maskTop8 &&& W).toBytes = L ++ List.replicate 24 0 := by
-    intro W Y s L hL hWY
-    rw [maskTop8_and, hWY, Bytes.toBytes_toB256_of_length (List.length_sliceD _ _ _ _),
-      show (32 : Nat) = 8 + 24 from rfl, List.sliceD_split, List.take_left' (List.length_sliceD _ _ _ _),
-      hL]
-  have hVb : (maskTop8 &&& V).toBytes = BeaconDeposit.le64 a.toNat ++ List.replicate 24 0 :=
-    hW V _ 160 _ (by unfold imgA; peel; exact ha0) rfl
-  have hUb : (maskTop8 &&& U).toBytes = BeaconDeposit.le64 c.toNat ++ List.replicate 24 0 :=
-    hW U _ 224 _ (by unfold imgC imgB imgA; peel; exact he0) rfl
-  have hev : (imgB (imgC (imgB (imgA img (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)) 608 V) (sevm.data.sliceD sP.toNat 96 0)) 800 U).sliceD 256 576 0 =
-      (160 : B256).toBytes ++ ((256 : B256).toBytes ++ ((320 : B256).toBytes ++ ((384 : B256).toBytes ++
-      ((512 : B256).toBytes ++ ((48 : B256).toBytes ++ ((sevm.data.sliceD pP.toNat 48 0) ++ (List.replicate 16 0 ++
-      ((32 : B256).toBytes ++ ((sevm.data.sliceD wP.toNat 32 0) ++ ((8 : B256).toBytes ++
-      ((BeaconDeposit.le64 a.toNat ++ List.replicate 24 0) ++ ((96 : B256).toBytes ++ ((sevm.data.sliceD sP.toNat 96 0) ++
-      ((8 : B256).toBytes ++ (BeaconDeposit.le64 c.toNat ++ List.replicate 24 0))))))))))))))) := by
-    unfold imgB imgC imgA
-    refine sliceD_cat (la := 32) (lb := 544) ?_ ?_
-    · peel; self_slice
-    refine sliceD_cat (la := 32) (lb := 512) ?_ ?_
-    · peel; self_slice
-    refine sliceD_cat (la := 32) (lb := 480) ?_ ?_
-    · peel; self_slice
-    refine sliceD_cat (la := 32) (lb := 448) ?_ ?_
-    · peel; self_slice
-    refine sliceD_cat (la := 32) (lb := 416) ?_ ?_
-    · peel; self_slice
-    refine sliceD_cat (la := 32) (lb := 384) ?_ ?_
-    · peel; self_slice
-    refine sliceD_cat (la := 48) (lb := 336) ?_ ?_
-    · peel; self_slice
-    refine sliceD_cat (la := 16) (lb := 320) ?_ ?_
-    · peel; decide
-    refine sliceD_cat (la := 32) (lb := 288) ?_ ?_
-    · peel; self_slice
-    refine sliceD_cat (la := 32) (lb := 256) ?_ ?_
-    · peel; self_slice
-    refine sliceD_cat (la := 32) (lb := 224) ?_ ?_
-    · peel; self_slice
-    refine sliceD_cat (la := 32) (lb := 192) ?_ ?_
-    · peel; exact hVb
-    refine sliceD_cat (la := 32) (lb := 160) ?_ ?_
-    · peel; self_slice
-    refine sliceD_cat (la := 96) (lb := 64) ?_ ?_
-    · peel; self_slice
-    refine sliceD_cat (la := 32) (lb := 32) ?_ ?_
-    · peel; self_slice
-    peel
-    exact hUb
-  have hevs : BeaconDeposit.abiDepositEvent (bodyEvent sevm pP wP sP a c) =
-      (160 : B256).toBytes ++ ((256 : B256).toBytes ++ ((320 : B256).toBytes ++ ((384 : B256).toBytes ++
-      ((512 : B256).toBytes ++ ((48 : B256).toBytes ++ ((sevm.data.sliceD pP.toNat 48 0) ++ (List.replicate 16 0 ++
-      ((32 : B256).toBytes ++ ((sevm.data.sliceD wP.toNat 32 0) ++ ((8 : B256).toBytes ++
-      ((BeaconDeposit.le64 a.toNat ++ List.replicate 24 0) ++ ((96 : B256).toBytes ++ ((sevm.data.sliceD sP.toNat 96 0) ++
-      ((8 : B256).toBytes ++ (BeaconDeposit.le64 c.toNat ++ List.replicate 24 0))))))))))))))) := by
-    simp only [BeaconDeposit.abiDepositEvent, bodyEvent, abiBytesTail, List.length_sliceD,
-      List.append_assoc]
-    rfl
-  have hlen : ((160 : B256).toBytes ++ ((256 : B256).toBytes ++ ((320 : B256).toBytes ++ ((384 : B256).toBytes ++
-      ((512 : B256).toBytes ++ ((48 : B256).toBytes ++ ((sevm.data.sliceD pP.toNat 48 0) ++ (List.replicate 16 0 ++
-      ((32 : B256).toBytes ++ ((sevm.data.sliceD wP.toNat 32 0) ++ ((8 : B256).toBytes ++
-      ((BeaconDeposit.le64 a.toNat ++ List.replicate 24 0) ++ ((96 : B256).toBytes ++ ((sevm.data.sliceD sP.toNat 96 0) ++
-      ((8 : B256).toBytes ++ (BeaconDeposit.le64 c.toNat ++ List.replicate 24 0)))))))))))))))).length = 576 := by
-    simp [List.length_sliceD, B256.length_toBytes, BeaconDeposit.le64, List.length_append]
   have run := SFunc.runP_iff_runCutP_nil.mp run
   obtain ⟨G1, run⟩ := safe_ev_head h0 hs hfp h80 run
   obtain ⟨G2, run⟩ := safe_ev_amount hA hsA run
   obtain ⟨G3, run⟩ := safe_ev_sig hB hsB hc0B run
   obtain ⟨G4, run⟩ := safe_ev_index hC hsC run
-  refine ⟨b, memB (memC (memB (memA M (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)) 608 V) (sevm.data.sliceD sP.toNat 96 0)) 800 U, G4, Keep.refl b,
-    ⟨hD.1, hsD, _, hD.2, ?_, ?_⟩, SFunc.runP_iff_runCutP_nil.mpr run⟩
-  · unfold imgB imgC imgA; peel; exact hfp
-  · intro p hp
-    simp only [List.mem_cons, List.mem_nil_iff, or_false] at hp
-    rcases hp with rfl | rfl | rfl
-    · show _ = (8 : B256).toBytes
-      rw [B256.length_toBytes]; unfold imgB imgC imgA; peel; exact h80
-    · show List.sliceD _ 160 8 0 = BeaconDeposit.le64 a.toNat
-      unfold imgB imgC imgA; peel; exact ha0
-    · show _ = BeaconDeposit.abiDepositEvent (bodyEvent sevm pP wP sP a c)
-      rw [hevs, hlen]
-      exact hev
+  exact ⟨b, _, G4, Keep.refl b, hM', SFunc.runP_iff_runCutP_nil.mpr run⟩
 
 end Blanc.Lift.BeaconDeposit

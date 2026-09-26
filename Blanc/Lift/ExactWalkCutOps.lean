@@ -1,6 +1,7 @@
 import Blanc.Lift.ExactWalkCut
 import Blanc.ForwardSha256
 import Blanc.ForwardStorageAccess
+import Jaune.MulDiv
 
 /-!
 # More walk steps for exact runs and exact cut runs
@@ -16,7 +17,8 @@ storage read of a state-dependent key need:
   (`Ninst.runCompiled_staticcall_sha256_64_warm`), whose successor's world
   is only known through `ShaCallPost`;
 * for exact cut runs (`SFunc.RunExactCut`), the same steps and the named-value
-  binary operations, plus the goto `rxc_jump` into an entry outside the cut.
+  binary operations and `CALLDATACOPY`, plus the goto `rxc_jump` into an entry outside the
+  cut.
 
 Nothing here mentions a contract.
 -/
@@ -42,6 +44,18 @@ theorem toB256_sub_toB256 {a b : Nat} (hb : b ≤ a) (ha : a < 2 ^ 256) :
     B256.toNat_toB256_of_lt ha, B256.toNat_toB256_of_lt (show b < 2 ^ 256 by omega),
     B256.toNat_toB256_of_lt (show a - b < 2 ^ 256 by omega)]
 
+theorem toB256_div_two {y : Nat} (hy : y < 2 ^ 256) : Nat.toB256 y / 2 = Nat.toB256 (y / 2) := by
+  apply B256.toNat_inj
+  rw [B256.toNat_div (by decide), B256.toNat_toB256_of_lt hy,
+    B256.toNat_toB256_of_lt (lt_of_le_of_lt (Nat.div_le_self _ _) hy)]
+  rfl
+
+/-- A counter's increment by the pushed one-byte immediate `0x01`. -/
+theorem one_add_toB256 {h : Nat} (hh : h + 1 < 2 ^ 256) :
+    Bytes.toB256 [0x01] + Nat.toB256 h = Nat.toB256 (h + 1) := by
+  rw [show Bytes.toB256 [0x01] = Nat.toB256 1 by decide, toB256_add_toB256 (by omega),
+    Nat.add_comm]
+
 /-! ## What the SHA-256 precompile call leaves -/
 
 /-- The world after a successful precompile call, relative to the one before:
@@ -61,6 +75,51 @@ theorem ShaCallPost.getStorVal {b b' : Devm} {rd : Bytes} (h : ShaCallPost b b' 
     (k : B256) : b'.getStorVal a k = b.getStorVal a k := by
   show (Devm.getStor b' a).get k = (Devm.getStor b a).get k
   rw [h.stor]
+
+/-- The SHA-256 precompile premises (`Ninst.runCompiled_staticcall_sha256_64_warm`) a frame's
+world carries: address 2 undelegated and warm, a precompile of the fork, a covered fork.  The
+frame's nonzero depth is a separate premise of the liveness steps. -/
+structure ShaReady (sevm : Sevm) (b : Devm) : Prop where
+  nodeleg : getDelegatedCodeAddress (b.getCode 2) = none
+  warm : (2 : Adr) ∈ b.accessedAddresses
+  pre : decide (sevm.benvStat.rules.isPrecomp 2) = true
+  fork : CoveredFork sevm.benvStat.fork
+
+theorem ShaReady.of_eq {sevm : Sevm} {b b' : Devm} (h : ShaReady sevm b)
+    (hc : ∀ a, b'.getCode a = b.getCode a) (ha : b'.accessedAddresses = b.accessedAddresses) :
+    ShaReady sevm b' :=
+  ⟨by rw [hc]; exact h.nodeleg, by rw [ha]; exact h.warm, h.pre, h.fork⟩
+
+/-- What a step that writes no storage and emits no log leaves of the world: storage, code, the
+warm accounts, logs, output and error unchanged (`ShaCallPost` without the return data and the
+key set). -/
+structure BaseRel (b b' : Devm) : Prop where
+  stor : ∀ a, Devm.getStor b' a = Devm.getStor b a
+  code : ∀ a, b'.getCode a = b.getCode a
+  addrs : b'.accessedAddresses = b.accessedAddresses
+  logs : b'.logs = b.logs
+  output : b'.output = b.output
+  error : b'.error = b.error
+
+theorem BaseRel.refl (b : Devm) : BaseRel b b := ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl⟩
+
+theorem BaseRel.trans {b b' b'' : Devm} (h1 : BaseRel b b') (h2 : BaseRel b' b'') :
+    BaseRel b b'' :=
+  ⟨fun a => (h2.stor a).trans (h1.stor a), fun a => (h2.code a).trans (h1.code a),
+    h2.addrs.trans h1.addrs, h2.logs.trans h1.logs, h2.output.trans h1.output,
+    h2.error.trans h1.error⟩
+
+theorem BaseRel.getStorVal {b b' : Devm} (h : BaseRel b b') (a : Adr) (k : B256) :
+    b'.getStorVal a k = b.getStorVal a k := by
+  show (Devm.getStor b' a).get k = (Devm.getStor b a).get k
+  rw [h.stor]
+
+theorem baseRel_sha {b b' : Devm} {rd : Bytes} (h : ShaCallPost b b' rd) : BaseRel b b' :=
+  ⟨h.stor, h.code, h.addrs, h.logs, h.output, h.error⟩
+
+theorem ShaReady.of_rel {sevm : Sevm} {b b' : Devm} (h : ShaReady sevm b) (hr : BaseRel b b') :
+    ShaReady sevm b' :=
+  h.of_eq hr.code hr.addrs
 
 /-- The successor of `Ninst.runCompiled_staticcall_sha256_64_warm` from `St b …`, as an `St`
 over a base that satisfies `ShaCallPost`. -/
@@ -264,6 +323,17 @@ theorem rxc_shl {x y v : B256} (hv : y <<< x.toNat = v) (hroom : S.length < 1024
     SFunc.RunExactCut fs sevm C (St b (x :: y :: S) M (G + 3)) (.next (.reg .shl) f) r :=
   rxc_binary (fn := fun x y => y <<< x.toNat) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) hv
     hroom k
+
+/-- `CALLDATACOPY` inside a cut run. -/
+theorem rxc_calldatacopy {di si sz : B256} {c : Nat} {M' : Mem}
+    (hc : gVerylow + gasCopy * ceilDiv sz.toNat 32
+      + (St b (di :: si :: sz :: S) M (G + c)).extCost [⟨di.toNat, sz.toNat⟩] = c)
+    (hw : M.write di.toNat (sevm.data.sliceD si.toNat sz.toNat 0) = M')
+    (k : SFunc.RunExactCut fs sevm C (St b S M' G) f r) :
+    SFunc.RunExactCut fs sevm C (St b (di :: si :: sz :: S) M (G + c))
+      (.next (.reg .calldatacopy) f) r :=
+  .next (Ninst.runCompiled_calldatacopy_of (devm := St b (di :: si :: sz :: S) M (G + c))
+    (G := G) rfl hc hw rfl) k
 
 /-- An internal call that returns, inside a cut run (the callee runs uncut). -/
 theorem rxc_callRet {d : B256} {j : Nat} {D : Devm} (hj : fs[j]? = some g)

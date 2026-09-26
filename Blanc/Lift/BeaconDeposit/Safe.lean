@@ -17,7 +17,7 @@ import Blanc.Lift.BeaconDeposit.SafeInsertLive
 
 Every successful frame execution of the deployed runtime either is a `deposit` whose effect is
 the model's (`deposit_frame_refines`, first conjunct), or keeps every storage map and the log
-list (second conjunct).  The route: `exec_lift`; the dispatcher (`safe_dispatch`); the three view
+list (second conjunct).  The route: `lift_sound`; the dispatcher (`safe_dispatch`); the three view
 wrappers are quiet (`viewSet_quiet`, `SFunc.Run.world_of_quiet`); the `deposit` wrapper
 (`safe_decoder`) and the body's inversion segments (`safe_guards` … `safe_countBump`); the
 insertion loop by `SFunc.RunP.loop` over the two pass inversions (`safe_insertDead`,
@@ -87,7 +87,7 @@ theorem safe_insert_loop {sevm : Sevm} {b₀ : Devm} {x : Nat} {node0 : B256}
       t_0f6e_c23 o) :
     ∃ h bf Mf Gf, o = .returned (St bf rest Mf Gf) ∧ h < 32 ∧ (∀ j < h, (x / 2 ^ j) % 2 = 0) ∧
       (x / 2 ^ h) % 2 = 1 ∧
-      WorldEq (afterSstore sevm b₀ (solBranchSlot h) (insertNode Bytes.sha256 br h node0)) bf := by
+      BaseRel (afterSstore sevm b₀ (solBranchSlot h) (insertNode Bytes.sha256 br h node0)) bf := by
   let T : List B256 := [x₁, x₂, x₃, x₄, y₁, y₂, y₃, y₄, y₅, y₆, y₇, d] ++ rest
   let I : Devm → Prop := fun devm => ∃ h bh Mh Gh,
     devm = St bh (Nat.toB256 h :: Nat.toB256 (x / 2 ^ h) :: insertNode Bytes.sha256 br h node0 :: T)
@@ -96,7 +96,7 @@ theorem safe_insert_loop {sevm : Sevm} {b₀ : Devm} {x : Nat} {node0 : B256}
       BodyMem Mh (1024 + 96 * h) (Nat.toB256 (928 + 96 * h)) []
   let Q : Outcome → Prop := fun o => ∃ h bf Mf Gf, o = .returned (St bf rest Mf Gf) ∧ h < 32 ∧
     (∀ j < h, (x / 2 ^ j) % 2 = 0) ∧ (x / 2 ^ h) % 2 = 1 ∧
-    WorldEq (afterSstore sevm b₀ (solBranchSlot h) (insertNode Bytes.sha256 br h node0)) bf
+    BaseRel (afterSstore sevm b₀ (solBranchSlot h) (insertNode Bytes.sha256 br h node0)) bf
   have hL0 : LoopBase sevm.currentTarget b₀ b₀ 0 :=
     ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl, fun _ =>
       ⟨.inl, fun h => h.elim id (fun ⟨_, hj, _⟩ => absurd hj (Nat.not_lt_zero _))⟩⟩
@@ -353,7 +353,7 @@ theorem deposit_frame_refines {sevm : Sevm} {pre post : Devm} {history : List B2
         post.logs = pre.logs ++ [BeaconDeposit.depositEventLog sevm.currentTarget ev]) ∧
     (Sevm.selector sevm ≠ BeaconDeposit.depositSelector →
       (∀ a, Devm.getStor post a = Devm.getStor pre a) ∧ post.logs = pre.logs) := by
-  obtain ⟨f, hf, run⟩ := exec_lift hcode hfork exc
+  obtain ⟨f, hf, run⟩ := lift_sound cert_check hcode hfork exc
   have hf0 : prog[0]? = some t_0000_c0 := rfl
   rw [hf0] at hf
   cases hf

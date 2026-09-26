@@ -12,13 +12,6 @@ def erc165Gas (sevm : Sevm) : Nat :=
 theorem supportsInterfaceSelector_eq :
     Blanc.BeaconDeposit.supportsInterfaceSelector = 0x01ffc9a7 := by decide +kernel
 
-open Blanc.Lift in
-theorem pre_eq_St {pre : Devm} {g c : Nat} (h_stack : pre.stack = [])
-    (h_mem : pre.memory = Mem.empty) (hg : g + c = pre.gasLeft) :
-    St pre [] Mem.empty (g + c) = pre := by
-  rw [hg]
-  exact (St.self h_stack h_mem).symm
-
 def memFp : Mem := Mem.empty.write 64 (0x80 : B256).toBytes
 
 theorem memFp_size : memFp.size = 96 := by
@@ -30,18 +23,9 @@ theorem wf_memFp : Mem.Wf memFp := Mem.wf_empty.write _ _
 theorem reads_memFp : Mem.Reads memFp (Bytes.writeAt [] 64 (0x80 : B256).toBytes) :=
   Mem.reads_empty.write Mem.wf_empty 64 _
 
-theorem sliceD_word_same (bs : Bytes) (n : Nat) (w : B256) :
-    (Bytes.writeAt bs n w.toBytes).sliceD n 32 0 = w.toBytes := by
-  have h := Bytes.sliceD_writeAt bs w.toBytes n
-  rwa [B256.length_toBytes] at h
-
 theorem memFp_fp : (memFp.read 64 32).1 = (0x80 : B256).toBytes := by
   rw [reads_memFp.read]
   exact sliceD_word_same _ _ _
-
-theorem read_snd_self {μ : Mem} {n i : Nat} (hs : μ.size = n) (h32 : n % 32 = 0)
-    (hw : i + 32 ≤ n) : (μ.read i 32).2 = μ := by
-  exact Mem.read_snd_eq_self (by rw [hs]; exact memExtSize_of_le h32 hw)
 
 def memOut (μ : Mem) (v : B256) : Mem := μ.write 128 v.toBytes
 
@@ -72,7 +56,7 @@ theorem bool_tail {sevm : Sevm} {b : Devm} {g : Nat} {v sel : B256} :
     refine rx_push (w := 64) (by decide) (by simp) ?_
     refine rx_dup1 (by simp) ?_
     refine rx_mload (c := 3) (v := 0x80) ?_ ?_
-      (read_snd_self memFp_size (by decide) (by decide)) (by simp) ?_
+      (read_covered memFp_size (by decide) (by decide)) (by simp) ?_
     · rw [St.extCost_eq memFp_size]
       decide
     · show Bytes.toB256 (memFp.read 64 32).1 = _
@@ -85,7 +69,7 @@ theorem bool_tail {sevm : Sevm} {b : Devm} {g : Nat} {v sel : B256} :
     · rw [St.extCost_eq memFp_size]
       decide
     refine rx_mload (c := 3) (v := 0x80) ?_ ?_
-      (read_snd_self (memOut_size memFp_size _) (by decide) (by decide)) (by simp) ?_
+      (read_covered (memOut_size memFp_size _) (by decide) (by decide)) (by simp) ?_
     · rw [St.extCost_eq (memOut_size memFp_size _)]
       decide
     · show Bytes.toB256 ((memOut memFp _).read 64 32).1 = _

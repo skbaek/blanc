@@ -18,8 +18,12 @@ shape, which this module lifts once:
 * **call** (`shaCallTree`): `STATICCALL` of the precompile at address 2 over the 64 bytes at
   `fp'`, output over its first word, the success test, the `RETURNDATASIZE ≥ 32` test.
 
-`copy_sha` is the gas-exact cut run of the last three from the copy loop's head (any two words
-at `d - 0x40` copied to the free pointer `d`); `packed_sha_pair` prefixes the packing.  Both are
+`copy_sha_gen` is the gas-exact cut run of the last three from the copy loop's head (any two
+words at `d - 0x40` copied to the free pointer `d`) over memory of any word-aligned size `n ≥ d`,
+with the result image named (`shaImg`); `copy_sha` is its corollary for memory that ends within
+a word of `d`; `packed_sha_pair` prefixes the packing of two stack words (`pack2Tree`), and
+`pair_mem_sha` the packing of a stack word with the word at the free pointer (`pairMemTree`,
+a chain of hashes where each digest feeds the next site).  All are
 stated as an existential over the call's successor world followed by "any continuation run of
 the tail yields a run of the site", so a loop iteration can name the world before it walks.
 `mcpy_iter`, `mcpy_exit` and `merge0` are the copy loop's pieces; a merge with a nonzero
@@ -103,6 +107,31 @@ def pack2Tree (X : SFunc) : SFunc :=
                                   (.next (.reg (.dup 3)) (.next (.reg (.dup 3))
                                     X)))))))))))))))))))))))))))))))))))))))))))
 
+/-- The packing of a word `h₁` on the stack and a word `h₂` read from the free pointer (the
+previous site's digest), with the previous site's return size and pointer still on the stack;
+ends in the copy's operands and `X`. -/
+def pairMemTree (X : SFunc) : SFunc :=
+  .dest (.next (.reg .pop) (.next (.reg .mload) (.next (.push [0x40] (by decide))
+    (.next (.reg (.dup 0)) (.next (.reg .mload) (.next (.push [0x20] (by decide))
+      (.next (.reg (.dup 1)) (.next (.reg (.dup 1)) (.next (.reg .add) (.next (.reg (.swap 4))
+        (.next (.reg (.swap 0)) (.next (.reg (.swap 4)) (.next (.reg .mstore)
+          (.next (.reg (.dup 0)) (.next (.reg (.dup 2)) (.next (.reg .add)
+            (.next (.reg (.swap 2)) (.next (.reg (.swap 0)) (.next (.reg (.swap 2))
+              (.next (.reg .mstore) (.next (.reg (.dup 0)) (.next (.reg .mload)
+                (.next (.reg (.dup 0)) (.next (.reg (.dup 3)) (.next (.reg .sub)
+                  (.next (.reg (.dup 2)) (.next (.reg .add) (.next (.reg (.dup 1))
+                    (.next (.reg .mstore) (.next (.push [0x60] (by decide))
+                      (.next (.reg (.swap 0)) (.next (.reg (.swap 2)) (.next (.reg .add)
+                        (.next (.reg (.swap 0)) (.next (.reg (.dup 1)) (.next (.reg (.swap 0))
+                          (.next (.reg .mstore) (.next (.reg (.dup 1)) (.next (.reg .mload)
+                            (.next (.reg (.swap 1)) (.next (.reg (.swap 2))
+                              (.next (.reg (.swap 0)) (.next (.reg (.swap 1))
+                                (.next (.reg (.dup 2)) (.next (.reg (.swap 1))
+                                  (.next (.reg (.dup 4)) (.next (.reg .add)
+                                    (.next (.reg (.swap 0)) (.next (.reg (.dup 0))
+                                      (.next (.reg (.dup 3)) (.next (.reg (.dup 3))
+                                        X)))))))))))))))))))))))))))))))))))))))))))))))))))
+
 /-! ## Words, charges and images -/
 
 /-- The 32 bytes of `sha256 (a ‖ b)`. -/
@@ -152,10 +181,6 @@ theorem charge_word {b : Devm} {S : List B256} {M : Mem} {G n i : Nat} (hs : M.s
     gVerylow + (St b S M G).extCost [⟨i, 32⟩] =
       3 + (calculateMemoryGasCost (max n (i + 32)) - calculateMemoryGasCost n) := by
   rw [St.extCost_eq hs, memExtSize_word_aligned hn hi]; rfl
-
-theorem read_covered {M : Mem} {n i : Nat} (hs : M.size = n) (hn : n % 32 = 0)
-    (hi : i + 32 ≤ n) : (M.read i 32).2 = M :=
-  Mem.read_snd_eq_self (by rw [hs]; exact memExtSize_of_le hn hi)
 
 theorem read_ext_size {M : Mem} {n i : Nat} (hs : M.size = n) (hn : n % 32 = 0)
     (hi : i % 32 = 0) : (M.read i 32).2.size = max n (i + 32) := by
@@ -418,19 +443,43 @@ theorem copyImg2_input {img : Bytes} {d : Nat} {w1 w2 : B256} :
   rw [copyImg2]
   exact Bytes.read_two_word_writes_at _ _ _ _
 
-/-- **Copy, merge and call**: from the copy loop's head with two words `w1`, `w2` at `s` and
-`s + 0x20` to be copied to the free pointer `d = s + 0x40`, the two passes (the first inlined,
-the second through entry `k`), the exit test, the merge, and the precompile call over the
-copied 64 bytes with its checks.  598 gas and the expansion to `d + 0x60`.  The stack under the
-copy's operands carries the length `0x40`, three words the tail discards around the free pointer `d`, and the
-precompile's address.  The successor world is `ShaCallPost`-related, and the continuation `T` starts with
-the returned size and `d` on the stack. -/
-theorem copy_sha {img : Bytes} {n s d : Nat} {w1 w2 x1 x3 x4 : B256}
+/-- The image after the site: the two words copied to `d` and the digest written over the
+first. -/
+def shaImg (img : Bytes) (d : Nat) (w1 w2 : B256) : Bytes :=
+  Bytes.writeAt (copyImg2 img d w1 w2) d (Bytes.sha256 (w1.toBytes ++ w2.toBytes)).toBytes
+
+/-- A byte window disjoint from a write reads as before. -/
+theorem sliceD_writeAt_out {bs xs : Bytes} {start len n : Nat}
+    (h : start + len ≤ n ∨ n + xs.length ≤ start) :
+    (Bytes.writeAt bs n xs).sliceD start len 0 = bs.sliceD start len 0 := by
+  rcases h with h | h
+  · exact Bytes.sliceD_writeAt_before _ _ _ _ _ h
+  · exact Bytes.sliceD_writeAt_after _ _ _ _ _ h
+
+theorem shaImg_out {img : Bytes} {d start len : Nat} {w1 w2 : B256}
+    (h : start + len ≤ d ∨ d + 64 ≤ start) :
+    (shaImg img d w1 w2).sliceD start len 0 = img.sliceD start len 0 := by
+  unfold shaImg copyImg2
+  rw [sliceD_writeAt_out (by rw [B256.length_toBytes]; omega),
+    sliceD_writeAt_out (by rw [B256.length_toBytes]; omega),
+    sliceD_writeAt_out (by rw [B256.length_toBytes]; omega)]
+
+theorem shaImg_digest {img : Bytes} {d : Nat} {w1 w2 : B256} :
+    (shaImg img d w1 w2).sliceD d 32 0 = (Bytes.sha256 (w1.toBytes ++ w2.toBytes)).toBytes := by
+  unfold shaImg
+  have := Bytes.sliceD_writeAt (copyImg2 img d w1 w2)
+    (Bytes.sha256 (w1.toBytes ++ w2.toBytes)).toBytes d
+  rwa [B256.length_toBytes] at this
+
+/-- **Copy, merge and call over memory of any size** `n ≥ d`: 598 gas and the expansion to
+`max n (d + 0x60)`; the result image is `shaImg img d w1 w2`.  The starting tree's exit `X` is
+arbitrary (a first pass inlined in the caller's tree jumps to the loop entry `k`). -/
+theorem copy_sha_gen {img : Bytes} {n s d : Nat} {w1 w2 x1 x3 x4 : B256} {X : SFunc}
     (hk : fs[k]? = some (mcpyTree e0 e1 r0 r1 k
       (mergeTree (shaCallTree c0 c1 v0 v1 fail1 fail2 T))))
     (hkC : k ∉ C)
     (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hs : M.size = n) (hn : n % 32 = 0)
-    (hdn : d ≤ n) (hnd : n ≤ d + 32) (hsd : s + 64 = d) (hd32 : d % 32 = 0) (hd96 : 96 ≤ s)
+    (hdn : d ≤ n) (hsd : s + 64 = d) (hd32 : d % 32 = 0) (hd96 : 96 ≤ s)
     (hdb : d + 1000 < 2 ^ 256) (hfp : img.sliceD 64 32 0 = (Nat.toB256 d).toBytes)
     (hw1 : img.sliceD s 32 0 = w1.toBytes) (hw2 : img.sliceD (s + 32) 32 0 = w2.toBytes)
     (hR : R.length < 900)
@@ -439,26 +488,27 @@ theorem copy_sha {img : Bytes} {n s d : Nat} {w1 w2 x1 x3 x4 : B256}
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
     (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hG : G + 246 < 2 ^ 256) :
-    ∃ b' M' img', ShaCallPost b b' (Bytes.sha256 (w1.toBytes ++ w2.toBytes)).toBytes ∧
-      Mem.Wf M' ∧ Mem.Reads M' img' ∧ M'.size = d + 96 ∧
-      img'.sliceD 64 32 0 = (Nat.toB256 d).toBytes ∧
-      img'.sliceD d 32 0 = (Bytes.sha256 (w1.toBytes ++ w2.toBytes)).toBytes ∧
+    ∃ b' M', ShaCallPost b b' (Bytes.sha256 (w1.toBytes ++ w2.toBytes)).toBytes ∧
+      Mem.Wf M' ∧ Mem.Reads M' (shaImg img d w1 w2) ∧ M'.size = max n (d + 96) ∧
       ∀ r, SFunc.RunExactCut fs sevm C (St b' (Nat.toB256 32 :: Nat.toB256 d :: R) M' G) T r →
       SFunc.RunExactCut fs sevm C
         (St b (Nat.toB256 s :: Nat.toB256 d :: Nat.toB256 64 :: Nat.toB256 64 :: x1 ::
           Nat.toB256 d :: x3 :: x4 :: 2 :: R) M
-          (G + (598 + (calculateMemoryGasCost (d + 96) - calculateMemoryGasCost n))))
-        (mcpyTree e0 e1 r0 r1 k (mergeTree (shaCallTree c0 c1 v0 v1 fail1 fail2 T))) r := by
-  have m3 := calculateMemoryGasCost_mono (show n ≤ d + 32 by omega)
-  have m4 := calculateMemoryGasCost_mono (show d + 32 ≤ d + 64 by omega)
-  have m5 := calculateMemoryGasCost_mono (show d + 64 ≤ d + 96 by omega)
+          (G + (598 + (calculateMemoryGasCost (max n (d + 96)) - calculateMemoryGasCost n))))
+        (mcpyTree e0 e1 r0 r1 k X) r := by
+  set n1 := max n (d + 32) with hn1
+  set n2 := max n (d + 64) with hn2
+  set n3 := max n (d + 96) with hn3
+  have m3 := calculateMemoryGasCost_mono (show n ≤ n1 by omega)
+  have m4 := calculateMemoryGasCost_mono (show n1 ≤ n2 by omega)
+  have m5 := calculateMemoryGasCost_mono (show n2 ≤ n3 by omega)
   have h40 : (Bytes.toB256 [0x40]).toNat = 64 := by decide
   have hw1' : (M.read s 32).1 = w1.toBytes := by rw [hr.read, hw1]
   set M5 := M.write d (M.read s 32).1 with hM5
   have hwf5 : Mem.Wf M5 := hwf.write _ _
   have hr5 : Mem.Reads M5 (Bytes.writeAt img d w1.toBytes) := by
     rw [hM5, hw1']; exact hr.write hwf _ _
-  have hs5 : M5.size = d + 32 := by
+  have hs5 : M5.size = n1 := by
     rw [hM5, hw1', Mem.size_write_word_aligned (by omega) (by omega)]; omega
   have hw2' : (M5.read (s + 32) 32).1 = w2.toBytes := by
     rw [hr5.read, Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega), hw2]
@@ -466,16 +516,16 @@ theorem copy_sha {img : Bytes} {n s d : Nat} {w1 w2 x1 x3 x4 : B256}
   have hwf6 : Mem.Wf M6 := hwf5.write _ _
   have hr6 : Mem.Reads M6 (copyImg2 img d w1 w2) := by
     rw [hM6, hw2']; exact hr5.write hwf5 _ _
-  have hs6 : M6.size = d + 64 := by
+  have hs6 : M6.size = n2 := by
     rw [hM6, hw2', Mem.size_write_word_aligned (by omega) (by omega)]; omega
   set M7 := (M6.read (d + 64) 32).2.write (d + 64) (M6.read (d + 64) 32).1 with hM7
-  have hs6' : (M6.read (d + 64) 32).2.size = d + 96 := by
+  have hs6' : (M6.read (d + 64) 32).2.size = n3 := by
     rw [read_ext_size hs6 (by omega) (by omega)]; omega
   have hwf7 : Mem.Wf M7 := (hwf6.extend _ _).write _ _
   have hr7 : Mem.Reads M7 (copyImg2 img d w1 w2) := by
     rw [hM7, hr6.read]
     exact Mem.Reads.write_self (hwf6.extend _ _) (hr6.extend _ _) _
-  have hs7 : M7.size = d + 96 := by
+  have hs7 : M7.size = n3 := by
     rw [hM7, ← toBytes_read, Mem.size_write_word_aligned (by omega) (by omega), hs6']; omega
   have hin : (M7.read d 64).1 = w1.toBytes ++ w2.toBytes := by
     rw [hr7.read, copyImg2_input]
@@ -488,38 +538,30 @@ theorem copy_sha {img : Bytes} {n s d : Nat} {w1 w2 x1 x3 x4 : B256}
   rw [hF, hin] at hpost hstep
   set M8 := M7.write d (Bytes.sha256 (w1.toBytes ++ w2.toBytes)).toBytes with hM8
   have hwf8 : Mem.Wf M8 := hwf7.write _ _
-  have hr8 := hr7.write hwf7 d (Bytes.sha256 (w1.toBytes ++ w2.toBytes)).toBytes
-  have hs8 : M8.size = d + 96 := by
+  have hr8 : Mem.Reads M8 (shaImg img d w1 w2) := hr7.write hwf7 d _
+  have hs8 : M8.size = n3 := by
     rw [hM8, Mem.size_write_word_aligned (by omega) (by omega), hs7]; omega
   have hw7 : (copyImg2 img d w1 w2).sliceD 64 32 0 = (Nat.toB256 d).toBytes := by
     rw [copyImg2_word64 (by omega), hfp]
-  have hw8 : (Bytes.writeAt (copyImg2 img d w1 w2) d
-      (Bytes.sha256 (w1.toBytes ++ w2.toBytes)).toBytes).sliceD 64 32 0 =
-      (Nat.toB256 d).toBytes := by
-    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega), hw7]
-  have hh8 : (Bytes.writeAt (copyImg2 img d w1 w2) d
-      (Bytes.sha256 (w1.toBytes ++ w2.toBytes)).toBytes).sliceD d 32 0 =
-      (Bytes.sha256 (w1.toBytes ++ w2.toBytes)).toBytes := by
-    have := Bytes.sliceD_writeAt (copyImg2 img d w1 w2)
-      (Bytes.sha256 (w1.toBytes ++ w2.toBytes)).toBytes d
-    rwa [B256.length_toBytes] at this
+  have hw8 : (shaImg img d w1 w2).sliceD 64 32 0 = (Nat.toB256 d).toBytes := by
+    rw [shaImg_out (by omega), hfp]
   have hrd : b'.returnData.length.toB256 = Nat.toB256 32 := by
     rw [hpost.returnData, B256.length_toBytes]
-  refine ⟨b', M8, _, hpost, hwf8, hr8, hs8, hw8, hh8, fun r kont => ?_⟩
-  rw [show G + (598 + (calculateMemoryGasCost (d + 96) - calculateMemoryGasCost n)) =
+  refine ⟨b', M8, hpost, hwf8, hr8, hs8, fun r kont => ?_⟩
+  rw [show G + (598 + (calculateMemoryGasCost n3 - calculateMemoryGasCost n)) =
     G + 62 + 184 + 50
-      + (118 + (3 + (calculateMemoryGasCost (d + 96) - calculateMemoryGasCost (d + 64)))) + 23
-      + (76 + (3 + (calculateMemoryGasCost (d + 64) - calculateMemoryGasCost (d + 32))))
-      + (76 + (3 + (calculateMemoryGasCost (d + 32) - calculateMemoryGasCost n))) by omega]
+      + (118 + (3 + (calculateMemoryGasCost n3 - calculateMemoryGasCost n2))) + 23
+      + (76 + (3 + (calculateMemoryGasCost n2 - calculateMemoryGasCost n1)))
+      + (76 + (3 + (calculateMemoryGasCost n1 - calculateMemoryGasCost n))) by omega]
   -- the copy: two passes and the exit test
-  refine mcpy_iter (s := s) (d := d) (l := 64) (n := n) (n' := d + 32)
+  refine mcpy_iter (s := s) (d := d) (l := 64) (n := n) (n' := n1)
     (by omega) (by omega) hs (by omega) hn (by omega) (by omega) (by omega) (by omega)
     (by simp; omega) hk hkC ?_
-  refine mcpy_iter (s := s + 32) (d := d + 32) (l := 32) (n := d + 32) (n' := d + 64)
+  refine mcpy_iter (s := s + 32) (d := d + 32) (l := 32) (n := n1) (n' := n2)
     (by omega) (by omega) hs5 (by omega) (by omega) (by omega) (by omega) (by omega) (by omega)
     (by simp; omega) hk hkC ?_
   refine mcpy_exit (s := s + 64) (d := d + 64) (l := 0) (by omega) (by simp; omega) ?_
-  refine merge0 (s := s + 64) (d := d + 64) (n := d + 64) (n' := d + 96) hs6 (by omega)
+  refine merge0 (s := s + 64) (d := d + 64) (n := n2) (n' := n3) hs6 (by omega)
     (by omega) (by omega) (by omega) (by omega) (by omega) (by simp; omega) ?_
   -- the call
   unfold shaCallTree
@@ -568,6 +610,48 @@ theorem copy_sha {img : Bytes} {n s d : Nat} {w1 w2 x1 x3 x4 : B256}
   refine rxc_push rfl (by simp; omega) ?_
   refine rxc_branch_succ (by decide) ?_
   exact kont
+
+
+/-- **Copy, merge and call**: from the copy loop's head with two words `w1`, `w2` at `s` and
+`s + 0x20` to be copied to the free pointer `d = s + 0x40`, the two passes (the first inlined,
+the second through entry `k`), the exit test, the merge, and the precompile call over the
+copied 64 bytes with its checks: `copy_sha_gen` when memory ends by `d + 0x20`.  598 gas and
+the expansion to `d + 0x60`.  The stack under the
+copy's operands carries the length `0x40`, three words the tail discards around the free pointer `d`, and the
+precompile's address.  The successor world is `ShaCallPost`-related, and the continuation `T` starts with
+the returned size and `d` on the stack. -/
+theorem copy_sha {img : Bytes} {n s d : Nat} {w1 w2 x1 x3 x4 : B256}
+    (hk : fs[k]? = some (mcpyTree e0 e1 r0 r1 k
+      (mergeTree (shaCallTree c0 c1 v0 v1 fail1 fail2 T))))
+    (hkC : k ∉ C)
+    (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hs : M.size = n) (hn : n % 32 = 0)
+    (hdn : d ≤ n) (hnd : n ≤ d + 32) (hsd : s + 64 = d) (hd32 : d % 32 = 0) (hd96 : 96 ≤ s)
+    (hdb : d + 1000 < 2 ^ 256) (hfp : img.sliceD 64 32 0 = (Nat.toB256 d).toBytes)
+    (hw1 : img.sliceD s 32 0 = w1.toBytes) (hw2 : img.sliceD (s + 32) 32 0 = w2.toBytes)
+    (hR : R.length < 900)
+    (hnodeleg : getDelegatedCodeAddress (b.getCode 2) = none)
+    (hwarm : (2 : Adr) ∈ b.accessedAddresses)
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hG : G + 246 < 2 ^ 256) :
+    ∃ b' M' img', ShaCallPost b b' (Bytes.sha256 (w1.toBytes ++ w2.toBytes)).toBytes ∧
+      Mem.Wf M' ∧ Mem.Reads M' img' ∧ M'.size = d + 96 ∧
+      img'.sliceD 64 32 0 = (Nat.toB256 d).toBytes ∧
+      img'.sliceD d 32 0 = (Bytes.sha256 (w1.toBytes ++ w2.toBytes)).toBytes ∧
+      ∀ r, SFunc.RunExactCut fs sevm C (St b' (Nat.toB256 32 :: Nat.toB256 d :: R) M' G) T r →
+      SFunc.RunExactCut fs sevm C
+        (St b (Nat.toB256 s :: Nat.toB256 d :: Nat.toB256 64 :: Nat.toB256 64 :: x1 ::
+          Nat.toB256 d :: x3 :: x4 :: 2 :: R) M
+          (G + (598 + (calculateMemoryGasCost (d + 96) - calculateMemoryGasCost n))))
+        (mcpyTree e0 e1 r0 r1 k (mergeTree (shaCallTree c0 c1 v0 v1 fail1 fail2 T))) r := by
+  obtain ⟨b', M', hpost, hwf', hr', hs', hrun⟩ := copy_sha_gen (X := mergeTree
+    (shaCallTree c0 c1 v0 v1 fail1 fail2 T)) (x1 := x1) (x3 := x3) (x4 := x4) (R := R) (G := G)
+    hk hkC hwf hr hs hn hdn hsd hd32 hd96 hdb hfp hw1 hw2 hR hnodeleg hwarm hpre hfork hdepth hG
+  have hmax : max n (d + 96) = d + 96 := by omega
+  refine ⟨b', M', shaImg img d w1 w2, hpost, hwf', hr', by rw [hs', hmax],
+    (shaImg_out (d := d) (start := 64) (len := 32) (by omega)).trans hfp, shaImg_digest, fun r kont => ?_⟩
+  have hc := hrun r kont
+  rwa [hmax] at hc
 
 /-- **`sha256(abi.encodePacked(a, b))`** with `b` on top of `a` (and the precompile's address
 `2` below them), the free pointer at `f` (word-aligned, past the scratch words) and memory of
@@ -700,6 +784,180 @@ theorem packed_sha_pair {img : Bytes} {n f : Nat} {a bw : B256}
   refine rxc_swap (n := 0) rfl ?_
   refine rxc_push rfl (by simp; omega) ?_
   refine rxc_add' (push20_add (a := f) (by omega)) (by simp; omega) ?_
+  refine rxc_swap (n := 0) rfl ?_
+  refine rxc_dup (n := 0) rfl (by simp; omega) ?_
+  refine rxc_dup (n := 3) rfl (by simp; omega) ?_
+  refine rxc_dup (n := 3) rfl (by simp; omega) ?_
+  exact hc
+
+
+/-- The image after `pair_mem_sha`: `h₁ ‖ h₂` at `f + 0x20`, the length at `f`, the free
+pointer `f + 0x60`, the digest at `f + 0x60`. -/
+def pairMemImg (img : Bytes) (f : Nat) (h1 h2 : B256) : Bytes :=
+  shaImg (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt img (f + 32) h1.toBytes)
+    (f + 64) h2.toBytes) f (Nat.toB256 64).toBytes) 64 (Nat.toB256 (f + 96)).toBytes) (f + 96)
+    h1 h2
+
+/-- **`sha256(abi.encodePacked(h₁, h₂))` with `h₂` the word at the free pointer `f`** (the
+previous site's digest) over memory that covers the packing (`f + 0x60 ≤ n`): the packing
+(`pairMemTree`), then `copy_sha_gen` from `f + 0x20` to `f + 0x60`.  751 gas and the expansion
+to `max n (f + 0xc0)`. -/
+theorem pair_mem_sha {img : Bytes} {n f : Nat} {h1 h2 : B256} {X : SFunc}
+    (hk : fs[k]? = some (mcpyTree e0 e1 r0 r1 k
+      (mergeTree (shaCallTree c0 c1 v0 v1 fail1 fail2 T))))
+    (hkC : k ∉ C)
+    (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hs : M.size = n) (hn : n % 32 = 0)
+    (hfn : f + 96 ≤ n) (hf32 : f % 32 = 0) (hf96 : 96 ≤ f) (hnb : n + 1000 < 2 ^ 256)
+    (hfp : img.sliceD 64 32 0 = (Nat.toB256 f).toBytes) (hh2 : img.sliceD f 32 0 = h2.toBytes)
+    (hR : R.length < 900)
+    (hnodeleg : getDelegatedCodeAddress (b.getCode 2) = none)
+    (hwarm : (2 : Adr) ∈ b.accessedAddresses)
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hG : G + 246 < 2 ^ 256) :
+    ∃ b' M', ShaCallPost b b' (Bytes.sha256 (h1.toBytes ++ h2.toBytes)).toBytes ∧
+      Mem.Wf M' ∧ Mem.Reads M' (pairMemImg img f h1 h2) ∧ M'.size = max n (f + 192) ∧
+      ∀ r, SFunc.RunExactCut fs sevm C
+          (St b' (Nat.toB256 32 :: Nat.toB256 (f + 96) :: R) M' G) T r →
+        SFunc.RunExactCut fs sevm C
+          (St b (Nat.toB256 32 :: Nat.toB256 f :: h1 :: 2 :: R) M
+            (G + (751 + (calculateMemoryGasCost (max n (f + 192)) - calculateMemoryGasCost n))))
+          (pairMemTree (mcpyTree e0 e1 r0 r1 k X)) r := by
+  set img1 := Bytes.writeAt img (f + 32) h1.toBytes with himg1
+  set img2 := Bytes.writeAt img1 (f + 64) h2.toBytes with himg2
+  set img3 := Bytes.writeAt img2 f (Nat.toB256 64).toBytes with himg3
+  set img4 := Bytes.writeAt img3 64 (Nat.toB256 (f + 96)).toBytes with himg4
+  set M1 := M.write (f + 32) h1.toBytes with hM1
+  set M2 := M1.write (f + 64) h2.toBytes with hM2
+  set M3 := M2.write f (Nat.toB256 64).toBytes with hM3
+  set M4 := M3.write 64 (Nat.toB256 (f + 96)).toBytes with hM4
+  have hs1 : M1.size = n := by
+    rw [hM1, Mem.size_write_word_aligned (by omega) (by omega), hs]; omega
+  have hs2 : M2.size = n := by
+    rw [hM2, Mem.size_write_word_aligned (by omega) (by omega), hs1]; omega
+  have hs3 : M3.size = n := by
+    rw [hM3, Mem.size_write_word_aligned (by omega) (by omega), hs2]; omega
+  have hs4 : M4.size = n := by
+    rw [hM4, Mem.size_write_word_aligned (by omega) (by omega), hs3]; omega
+  have hwf1 : Mem.Wf M1 := hwf.write _ _
+  have hwf2 : Mem.Wf M2 := hwf1.write _ _
+  have hwf3 : Mem.Wf M3 := hwf2.write _ _
+  have hwf4 : Mem.Wf M4 := hwf3.write _ _
+  have hr1 : Mem.Reads M1 img1 := hr.write hwf _ _
+  have hr2 : Mem.Reads M2 img2 := hr1.write hwf1 _ _
+  have hr3 : Mem.Reads M3 img3 := hr2.write hwf2 _ _
+  have hr4 : Mem.Reads M4 img4 := hr3.write hwf3 _ _
+  have hfp2 : img2.sliceD 64 32 0 = (Nat.toB256 f).toBytes := by
+    rw [himg2, sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg1,
+      sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), hfp]
+  have hfp4 : img4.sliceD 64 32 0 = (Nat.toB256 (f + 96)).toBytes := by
+    have := Bytes.sliceD_writeAt img3 (Nat.toB256 (f + 96)).toBytes 64
+    rwa [B256.length_toBytes] at this
+  have hlen4 : img4.sliceD f 32 0 = (Nat.toB256 64).toBytes := by
+    rw [himg4, sliceD_writeAt_out (by rw [B256.length_toBytes]; omega)]
+    have := Bytes.sliceD_writeAt img2 (Nat.toB256 64).toBytes f
+    rwa [B256.length_toBytes] at this
+  have hw1 : img4.sliceD (f + 32) 32 0 = h1.toBytes := by
+    rw [himg4, sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg3,
+      sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg2,
+      sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg1]
+    have := Bytes.sliceD_writeAt img h1.toBytes (f + 32)
+    rwa [B256.length_toBytes] at this
+  have hw2 : img4.sliceD (f + 32 + 32) 32 0 = h2.toBytes := by
+    rw [himg4, sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg3,
+      sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg2,
+      show f + 32 + 32 = f + 64 by omega]
+    have := Bytes.sliceD_writeAt img1 h2.toBytes (f + 64)
+    rwa [B256.length_toBytes] at this
+  obtain ⟨b', M', hpost, hwf', hr', hs', hrun⟩ :=
+    copy_sha_gen (fs := fs) (sevm := sevm) (C := C) (b := b) (M := M4) (G := G)
+      (R := R) (X := X) (img := img4) (n := n) (s := f + 32) (d := f + 96)
+      (x1 := Nat.toB256 (f + 32)) (x3 := Nat.toB256 (f + 96)) (x4 := Nat.toB256 f)
+      hk hkC hwf4 hr4 hs4 hn (by omega) (by omega) (by omega) (by omega) (by omega) hfp4 hw1 hw2
+      hR hnodeleg hwarm hpre hfork hdepth hG
+  refine ⟨b', M', hpost, hwf', hr', hs'.trans (by omega), fun r kont => ?_⟩
+  have hc := hrun r kont
+  have hmax : max n (f + 96 + 96) = max n (f + 192) := by omega
+  rw [hmax] at hc
+  rw [show G + (751 + (calculateMemoryGasCost (max n (f + 192)) - calculateMemoryGasCost n)) =
+    G + (598 + (calculateMemoryGasCost (max n (f + 192)) - calculateMemoryGasCost n)) + 153
+    by omega]
+  have hf : (Nat.toB256 f).toNat = f := toNat_toB256' (by omega)
+  have h40 : (Bytes.toB256 [0x40]).toNat = 64 := rfl
+  have p20 : Bytes.toB256 [0x20] = Nat.toB256 32 := by decide
+  have p40 : Bytes.toB256 [0x40] = Nat.toB256 64 := by decide
+  have p60 : Bytes.toB256 [0x60] = Nat.toB256 96 := by decide
+  unfold pairMemTree
+  refine rxc_dest ?_
+  refine rxc_pop ?_
+  refine rxc_mload (c := 3) (v := h2) ?_ (by rw [hf]; exact read_word hr f hh2) ?_
+    (by simp; omega) ?_
+  · rw [hf]; exact charge_covered hs hn (by omega)
+  · rw [hf]; exact read_covered hs hn (by omega)
+  refine rxc_push rfl (by simp; omega) ?_
+  refine rxc_dup (n := 0) rfl (by simp; omega) ?_
+  refine rxc_mload (c := 3) (v := Nat.toB256 f) ?_ (by rw [h40]; exact read_word hr 64 hfp) ?_
+    (by simp; omega) ?_
+  · rw [h40]; exact charge_covered hs hn (by omega)
+  · rw [h40]; exact read_covered hs hn (by omega)
+  refine rxc_push rfl (by simp; omega) ?_
+  refine rxc_dup (n := 1) rfl (by simp; omega) ?_
+  refine rxc_dup (n := 1) rfl (by simp; omega) ?_
+  refine rxc_add' (v := Nat.toB256 (f + 32))
+    (by simp only [p20, p40, p60]; exact add_toB256' (by omega) (by omega)) (by simp; omega) ?_
+  refine rxc_swap (n := 4) rfl ?_
+  refine rxc_swap (n := 0) rfl ?_
+  refine rxc_swap (n := 4) rfl ?_
+  refine rxc_mstore (c := 3) (M' := M1) ?_ (by rw [toNat_toB256' (by omega)]) ?_
+  · rw [toNat_toB256' (by omega)]; exact charge_covered hs hn (by omega)
+  refine rxc_dup (n := 0) rfl (by simp; omega) ?_
+  refine rxc_dup (n := 2) rfl (by simp; omega) ?_
+  refine rxc_add' (v := Nat.toB256 (f + 64))
+    (by simp only [p20, p40, p60]; exact add_toB256' (by omega) (by omega)) (by simp; omega) ?_
+  refine rxc_swap (n := 2) rfl ?_
+  refine rxc_swap (n := 0) rfl ?_
+  refine rxc_swap (n := 2) rfl ?_
+  refine rxc_mstore (c := 3) (M' := M2) ?_ (by rw [toNat_toB256' (by omega)]) ?_
+  · rw [toNat_toB256' (by omega)]; exact charge_covered hs1 hn (by omega)
+  refine rxc_dup (n := 0) rfl (by simp; omega) ?_
+  refine rxc_mload (c := 3) (v := Nat.toB256 f) ?_ (by rw [h40]; exact read_word hr2 64 hfp2) ?_
+    (by simp; omega) ?_
+  · rw [h40]; exact charge_covered hs2 hn (by omega)
+  · rw [h40]; exact read_covered hs2 hn (by omega)
+  refine rxc_dup (n := 0) rfl (by simp; omega) ?_
+  refine rxc_dup (n := 3) rfl (by simp; omega) ?_
+  refine rxc_sub' (v := Nat.toB256 0) (sub_toB256' (by omega) (by omega) (by omega))
+    (by simp; omega) ?_
+  refine rxc_dup (n := 2) rfl (by simp; omega) ?_
+  refine rxc_add' (v := Nat.toB256 64)
+    (by simp only [p20, p40, p60]; exact add_toB256' (by omega) (by omega)) (by simp; omega) ?_
+  refine rxc_dup (n := 1) rfl (by simp; omega) ?_
+  refine rxc_mstore (c := 3) (M' := M3) ?_ (by rw [toNat_toB256' (by omega)]) ?_
+  · rw [toNat_toB256' (by omega)]; exact charge_covered hs2 hn (by omega)
+  refine rxc_push rfl (by simp; omega) ?_
+  refine rxc_swap (n := 0) rfl ?_
+  refine rxc_swap (n := 2) rfl ?_
+  refine rxc_add' (v := Nat.toB256 (f + 96))
+    (by simp only [p20, p40, p60]; exact add_toB256' (by omega) (by omega)) (by simp; omega) ?_
+  refine rxc_swap (n := 0) rfl ?_
+  refine rxc_dup (n := 1) rfl (by simp; omega) ?_
+  refine rxc_swap (n := 0) rfl ?_
+  refine rxc_mstore (c := 3) (M' := M4) ?_ (by rw [h40]) ?_
+  · rw [h40]; exact charge_covered hs3 hn (by omega)
+  refine rxc_dup (n := 1) rfl (by simp; omega) ?_
+  refine rxc_mload (c := 3) (v := Nat.toB256 64) ?_
+    (by rw [hf]; exact read_word hr4 f hlen4) ?_ (by simp; omega) ?_
+  · rw [hf]; exact charge_covered hs4 hn (by omega)
+  · rw [hf]; exact read_covered hs4 hn (by omega)
+  refine rxc_swap (n := 1) rfl ?_
+  refine rxc_swap (n := 2) rfl ?_
+  refine rxc_swap (n := 0) rfl ?_
+  refine rxc_swap (n := 1) rfl ?_
+  refine rxc_dup (n := 2) rfl (by simp; omega) ?_
+  refine rxc_swap (n := 1) rfl ?_
+  refine rxc_dup (n := 4) rfl (by simp; omega) ?_
+  refine rxc_add' (v := Nat.toB256 (f + 32))
+    (by simp only [p20, p40, p60]; exact add_toB256' (by omega) (by omega)) (by simp; omega) ?_
   refine rxc_swap (n := 0) rfl ?_
   refine rxc_dup (n := 0) rfl (by simp; omega) ?_
   refine rxc_dup (n := 3) rfl (by simp; omega) ?_

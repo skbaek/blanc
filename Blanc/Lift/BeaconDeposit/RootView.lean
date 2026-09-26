@@ -70,7 +70,8 @@ theorem root_exit {b : Devm} {M : Mem} {img : Bytes} {node rv ret : B256} {count
     {R0 : List B256}
     (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hs : M.size = 3296)
     (hfp : img.sliceD 64 32 0 = (Nat.toB256 3200).toBytes) (hR : R0.length < 800)
-    (hok : ShaOk sevm b) (hG : G + 5000 < 2 ^ 256) (hcd : sevm.data.length < 2 ^ 256)
+    (hok : ShaReady sevm b)
+    (hdepth : sevm.depth ≠ 0) (hG : G + 5000 < 2 ^ 256) (hcd : sevm.data.length < 2 ^ 256)
     (hcount : b.getStorVal sevm.currentTarget solCountSlot = Nat.toB256 count)
     (hc32 : count < 2 ^ 32)
     (hwarm : (⟨sevm.currentTarget, solCountSlot⟩ : Adr × B256) ∈ b.accessedStorageKeys) :
@@ -188,7 +189,7 @@ theorem root_exit {b : Devm} {M : Mem} {img : Bytes} {node rv ret : B256} {count
       (x1 := Nat.toB256 3296) (x3 := Nat.toB256 3360) (x4 := Nat.toB256 3264)
       prog_30 (by simp) hwf6 hr6 hs6 (by decide) (by decide) (by decide) (by decide) (by decide)
       (by decide) (by omega) h6_64 h6_node h6_w2 (by simp; omega) hok.nodeleg hok.warm hok.pre
-      hok.fork hok.depth (by omega)
+      hok.fork hdepth (by omega)
   have hle8 : (ws.toBytes).take 8 = Blanc.BeaconDeposit.le64 count := by
     have h8 : (Blanc.BeaconDeposit.le64 count).length = 8 := rfl
     rw [hws, toBytes_read, hr2.read, show (32 : Nat) = 8 + 24 from rfl, List.sliceD_split,
@@ -387,7 +388,8 @@ theorem root_fn {sevm : Sevm} {base : Devm} {stor : Stor} {count : Nat} {ret : B
     {R0 : List B256} {G : Nat}
     (hstor : Devm.getStor base sevm.currentTarget = stor)
     (hcountValue : stor.get solCountSlot = Nat.toB256 count) (hc32 : count < 2 ^ 32)
-    (hzero : SolZeroHashesCorrect stor) (hok : ShaOk sevm base) (hR : R0.length < 700)
+    (hzero : SolZeroHashesCorrect stor) (hok : ShaReady sevm base)
+    (hdepth : sevm.depth ≠ 0) (hR : R0.length < 700)
     (hcd : sevm.data.length < 2 ^ 256) (hG : G + rootFnGas sevm base count + 5000 < 2 ^ 256) :
     ∃ bF MF, BaseRel base bF ∧
       bF.accessedStorageKeys = rootKeys sevm.currentTarget 32 0 count
@@ -434,7 +436,7 @@ theorem root_fn {sevm : Sevm} {base : Devm} {stor : Stor} {count : Nat} {ret : B
       root_exit (sevm := sevm) (G := G) (b := b)
         (node := climb Bytes.sha256 (solAcc stor).branch 32 0 count 0)
         (rv := Bytes.toB256 [0x00]) (ret := ret) (R0 := R0) hwf hr hs' hfp' (by omega)
-        ((hok.of_rel hrel1).of_rel hrel) (by unfold rootFnGas at hG; omega) hcd hcb hc32 hwb
+        ((hok.of_rel hrel1).of_rel hrel) hdepth (by unfold rootFnGas at hG; omega) hcd hcb hc32 hwb
     exact ⟨_, hrunF, by simp, bF, MF, rfl, hrel.trans hrelF, by rw [hkeysF, hkeys], hwfF, hsF,
       hfpF⟩
   obtain ⟨r, hrun, bF, MF, rfl, hrelF, hkeysF, hwfF, hsF, hfpF⟩ :=
@@ -446,7 +448,7 @@ theorem root_fn {sevm : Sevm} {base : Devm} {stor : Stor} {count : Nat} {ret : B
         bF.accessedStorageKeys = rootKeys sevm.currentTarget 32 0 count b1.accessedStorageKeys ∧
         Mem.Wf MF ∧ MF.size = 3456 ∧
         (∃ img, Mem.Reads MF img ∧ img.sliceD 64 32 0 = (Nat.toB256 3360).toBytes))
-      hstor1 hzero hc32 (hok.of_rel hrel1) (by simp; omega) (by unfold rootFnGas at hG; rw [← hb1] at hG; omega)
+      hstor1 hzero hc32 (hok.of_rel hrel1) hdepth (by simp; omega) (by unfold rootFnGas at hG; rw [← hb1] at hG; omega)
       hexit wf_mem0 reads_mem0 mem0_size img0_word
   · refine ⟨bF, MF, hrel1.trans hrelF, hkeysF, hwfF, hsF, hfpF, ?_⟩
     rw [← acc_root_eq hcountValue hc32]
@@ -478,7 +480,7 @@ theorem root_wrapper {sevm : Sevm} {base : Devm} {stor : Stor} {count : Nat} {se
     (hval : sevm.value = 0)
     (hstor : Devm.getStor base sevm.currentTarget = stor)
     (hcountValue : stor.get solCountSlot = Nat.toB256 count) (hc32 : count < 2 ^ 32)
-    (hzero : SolZeroHashesCorrect stor) (hok : ShaOk sevm base)
+    (hzero : SolZeroHashesCorrect stor) (hok : ShaReady sevm base) (hdepth : sevm.depth ≠ 0)
     (hcd : sevm.data.length < 2 ^ 256) (hG : G + rootFnGas sevm base count + 6000 < 2 ^ 256) :
     ∃ bF MF, BaseRel base bF ∧
       bF.accessedStorageKeys = rootKeys sevm.currentTarget 32 0 count
@@ -490,7 +492,7 @@ theorem root_wrapper {sevm : Sevm} {base : Devm} {stor : Stor} {count : Nat} {se
   obtain ⟨bF, MF, hrelF, hkeysF, hwfF, hsF, ⟨img, hr, hfp⟩, hfn⟩ :=
     root_fn (sevm := sevm) (base := base) (stor := stor) (count := count)
       (ret := Bytes.toB256 [0x02, 0x59]) (R0 := [sel]) (G := G + 43) hstor hcountValue hc32 hzero
-      hok (by simp) hcd (by omega)
+      hok hdepth (by simp) hcd (by omega)
   set MF' := MF.write 3360 root.toBytes with hMF'
   have hsF' : MF'.size = 3456 := by
     rw [hMF', Mem.size_write_word_aligned (by rw [hsF]) (by decide), hsF]; decide
@@ -634,7 +636,7 @@ theorem get_deposit_root_runExact (sevm : Sevm) (base : Devm) (stor : Stor) (cou
     hselector.trans Blanc.BeaconDeposit.getDepositRootSelector_eq
   obtain ⟨bF, MF, hrel, hkeys, hrun⟩ := root_wrapper (sevm := sevm) (base := base) (stor := stor)
     (count := count) (sel := Sevm.selector sevm) (G := G) hvalue hstor hcountValue hcount hzero
-    ⟨hnodeleg, hwarm, hpre, hfork, hdepth⟩ hdataBound (by unfold rootViewGas at hbound; omega)
+    ⟨hnodeleg, hwarm, hpre, hfork⟩ hdepth hdataBound (by unfold rootViewGas at hbound; omega)
   have hd := dispatch_root (b := base) hdataLength hdataBound hsel hrun
   rw [show G + (82 + rootFnGas sevm base count) + 139 = G + rootViewGas sevm base count by
     unfold rootViewGas; omega] at hd

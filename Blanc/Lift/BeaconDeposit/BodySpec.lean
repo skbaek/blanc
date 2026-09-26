@@ -2,6 +2,7 @@ import Blanc.Lift.BeaconDeposit.CountView
 import Blanc.Lift.BeaconDeposit.DepositArgs
 import Blanc.Lift.BeaconDeposit.Layout
 import Blanc.ForwardStorageAccess
+import Blanc.Lift.ExactWalkCutOps
 
 /-!
 # The deployed `deposit` body: the vocabulary of its segment statements
@@ -19,11 +20,11 @@ This module fixes what the segment statements share:
   offset.  All the body's memory addresses are constants (the three lengths are fixed by the
   guards), so `n`, `fp` and the offsets are numerals, except in the insertion loop, where they
   grow by `0x60` per hashing iteration.
-* `ShaReady sevm b` — the premises of the SHA-256 precompile step
-  (`Ninst.runCompiled_staticcall_sha256_64_warm`): address 2 warm and undelegated, a precompile
-  of the fork, a covered fork.  The liveness theorems (the `Body*` segments) take the frame's
-  nonzero depth (`sevm.depth ≠ 0`) as a separate premise, since at depth `0` the call fails;
-  the segment inversions (`Safe*`) need no depth premise.
+* `ShaReady sevm b` (the shared kit's, `Blanc/Lift/ExactWalkCutOps.lean`) — the premises of
+  the SHA-256 precompile step, carried across a `Keep` by `ShaReady.keep`.  The liveness
+  theorems (the `Body*` segments) take the frame's nonzero depth (`sevm.depth ≠ 0`) as a
+  separate premise, since at depth `0` the call fails; the segment inversions (`Safe*`) need
+  no depth premise.
 * the insertion loop's model quantities (`insertDepth`, `insertNode`) and the body's gas
   (`deadGas`, `deadRun`, `bodyGas`).
 
@@ -64,16 +65,9 @@ theorem Keep.getStorVal {b b' : Devm} (h : Keep b b') (a : Adr) (k : B256) :
   show (Devm.getStor b' a).get k = (Devm.getStor b a).get k
   rw [h.stor]
 
-/-- The SHA-256 precompile premises (`Ninst.runCompiled_staticcall_sha256_64_warm`). -/
-structure ShaReady (sevm : Sevm) (b : Devm) : Prop where
-  nodeleg : getDelegatedCodeAddress (b.getCode 2) = none
-  warm : (2 : Adr) ∈ b.accessedAddresses
-  pre : decide (sevm.benvStat.rules.isPrecomp 2) = true
-  fork : CoveredFork sevm.benvStat.fork
-
-theorem ShaReady.keep {sevm : Sevm} {b b' : Devm} (h : ShaReady sevm b) (hk : Keep b b') :
-    ShaReady sevm b' :=
-  ⟨by rw [hk.code]; exact h.nodeleg, by rw [hk.addrs]; exact h.warm, h.pre, h.fork⟩
+theorem _root_.Blanc.Lift.ShaReady.keep {sevm : Sevm} {b b' : Devm} (h : ShaReady sevm b)
+    (hk : Keep b b') : ShaReady sevm b' :=
+  h.of_eq hk.code hk.addrs
 
 /-! ## Memory at a boundary -/
 

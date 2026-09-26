@@ -13,18 +13,6 @@ namespace Blanc.Lift.BeaconDeposit
 
 open Jaune
 
-/-- `LOG1`, with the whole charge named. -/
-private theorem rx_log1 {fs : List SFunc} {sevm : Sevm} {b : Devm} {f : SFunc} {o : Outcome}
-    {S : List B256} {M : Mem} {G c : Nat} {i sz t : B256} {data : Bytes}
-    (hstatic : sevm.isStatic = false)
-    (hc : gLog + gLogdata * sz.toNat + gLogtopic * 1 +
-      (St b (i :: sz :: t :: S) M (G + c)).extCost [⟨i.toNat, sz.toNat⟩] = c)
-    (hd : (M.read i.toNat sz.toNat).1 = data) (hM : (M.read i.toNat sz.toNat).2 = M)
-    (k : SFunc.RunExact fs sevm (St (b.addLog ⟨sevm.currentTarget, [t], data⟩) S M G) f o) :
-    SFunc.RunExact fs sevm (St b (i :: sz :: t :: S) M (G + c)) (.next (.reg (.log 1)) f) o :=
-  .next (Ninst.runCompiled_log_of (n := 1) (topics := [t]) (s := S) rfl rfl hstatic hc hd hM
-    rfl) k
-
 /-- Entry 12: the `pubkey_root` copy loop at `0x07bf`, its merge and precompile call, ending at
 the return-size check's continuation `t_086e_c12`. -/
 private theorem prog_12 : prog[12]? = some (mcpyTree 0x07 0xfc 0x07 0xbf 12

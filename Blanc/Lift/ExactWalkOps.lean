@@ -5,7 +5,7 @@ import Blanc.Lift.ExactWalk
 
 Companions to `Blanc/Lift/ExactWalk.lean` for the instructions a solc 0.6
 runtime uses beyond WETH9's: the shifts, `BYTE`, `NOT`, `GT`, `MSTORE8`,
-`CALLDATACOPY`, `EXP` with a nonzero exponent, and the `JUMP` goto.  Every
+`CALLDATACOPY`, `LOG1`, `EXP` with a nonzero exponent, and the `JUMP` goto.  Every
 lemma has the same backwards shape as its siblings there: the run of the node
 from `St b S M (G + c)` follows from the run of its continuation from
 `St b S' M' G`.
@@ -96,6 +96,18 @@ theorem rx_calldatacopy {di si sz : B256} {c : Nat} {M' : Mem}
       (.next (.reg .calldatacopy) f) o :=
   .next (Ninst.runCompiled_calldatacopy_of (devm := St b (di :: si :: sz :: S) M (G + c))
     (G := G) rfl hc hw rfl) k
+
+/-- `LOG1`, with the whole charge named: the entry appended to the base carries the executing
+address, the topic and the bytes of the window; memory is the window read's image. -/
+theorem rx_log1 {i sz t : B256} {c : Nat} {data : Bytes}
+    (hstatic : sevm.isStatic = false)
+    (hc : gLog + gLogdata * sz.toNat + gLogtopic * 1 +
+      (St b (i :: sz :: t :: S) M (G + c)).extCost [⟨i.toNat, sz.toNat⟩] = c)
+    (hd : (M.read i.toNat sz.toNat).1 = data) (hM : (M.read i.toNat sz.toNat).2 = M)
+    (k : SFunc.RunExact fs sevm (St (b.addLog ⟨sevm.currentTarget, [t], data⟩) S M G) f o) :
+    SFunc.RunExact fs sevm (St b (i :: sz :: t :: S) M (G + c)) (.next (.reg (.log 1)) f) o :=
+  .next (Ninst.runCompiled_log_of (n := 1) (topics := [t]) (s := S) rfl rfl hstatic hc hd hM
+    rfl) k
 
 /-- `EXP` with its exponent's byte charge named. -/
 theorem rx_exp' {x y : B256} {c : Nat} (hc : gExp + gExpbyte * y.bytecount = c)

@@ -1,4 +1,5 @@
-import Blanc.Lift.BeaconDeposit.SafeShaKit
+import Blanc.Lift.BeaconDeposit.BodyShaKit
+import Blanc.Lift.InvWalkSha
 
 /-!
 # Safety segment L1: one hashing pass of the insertion loop, inverted

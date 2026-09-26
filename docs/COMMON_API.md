@@ -2645,19 +2645,32 @@ contract-neutral.
 - Lifted run to execution (liveness, exact gas): `SFunc.RunExact`,
   `Cert.jumpsOk` and `lift_exact` in [`Blanc/Lift/Exact.lean`](../Blanc/Lift/Exact.lean);
   the per-instruction walk steps (`rx_push`, `rx_sload_cold`, `rx_callRet`, …)
-  over the gas-carrying state `St` are in
+  over the gas-carrying state `St`, a frame's entry state as an `St` (`pre_eq_St`), the
+  word read-back facts `sliceD_word_same` and `read_covered`, and one solc dispatcher
+  comparison (`cmp_miss`, `cmp_hit`) are in
   [`Blanc/Lift/ExactWalk.lean`](../Blanc/Lift/ExactWalk.lean), with more steps
-  (`rx_shl`, `rx_byte`, `rx_mstore8`, `rx_calldatacopy`, …) in
+  (`rx_shl`, `rx_byte`, `rx_mstore8`, `rx_calldatacopy`, `rx_log1`, …) in
   [`Blanc/Lift/ExactWalkOps.lean`](../Blanc/Lift/ExactWalkOps.lean) and the
   cut-run forms (`rxc_*`, `SFunc.RunExact.toCut`) in
   [`Blanc/Lift/ExactWalkCut.lean`](../Blanc/Lift/ExactWalkCut.lean) and
-  [`Blanc/Lift/ExactWalkCutOps.lean`](../Blanc/Lift/ExactWalkCutOps.lean).
+  [`Blanc/Lift/ExactWalkCutOps.lean`](../Blanc/Lift/ExactWalkCutOps.lean), which
+  also holds the pointer arithmetic the steps take as premises
+  (`toB256_add_toB256`, `toB256_sub_toB256`, `toB256_div_two`, `one_add_toB256`), the
+  SHA-256 precompile step's premises and world facts (`ShaReady`, `ShaCallPost`,
+  `staticcall_sha_step`), and `BaseRel`, the world a step that writes no storage and emits
+  no log keeps.
 - Successful lifted run to facts (safety, the inversion walk): per-node `ric_*`
   (control, over `SFunc.RunCut`; `SFunc.Run.cut`/`SFunc.RunCut.uncut` for uncut
-  runs) and per-instruction `ri_*` (successor as an `St`) in
+  runs) and per-instruction `ri_*` (successor as an `St`; numeral-offset forms
+  `ri_mstore_nat`/`ri_calldatacopy_nat`, and `ri_val` to name a successor's top word) in
   [`Blanc/Lift/InvWalk.lean`](../Blanc/Lift/InvWalk.lean) and
-  [`Blanc/Lift/InvWalkOps.lean`](../Blanc/Lift/InvWalkOps.lean); failing arms
-  (`SFunc.noOk`, `SFunc.RunCutP.false_of_noOk`), conditional gotos
+  [`Blanc/Lift/InvWalkOps.lean`](../Blanc/Lift/InvWalkOps.lean), which also holds the
+  solc word-copy loop inverted (`ric_copy_step`, `ric_copy_exit`, the converses of
+  `copy_step`/`copy_exit`) and the facts a failed comparison guard leaves
+  (`toNat_le_of_gtCheck_eq_zero`, `toNat_ge_of_ltCheck_eq_zero`,
+  `eq_zero_of_iszero_ne_zero`); failing arms
+  (`SFunc.noOk`, `SFunc.RunCutP.false_of_noOk`), trees that cannot halt (`SFunc.noHalt`,
+  `NoHaltSet`, `SFunc.RunP.not_halted`, `SFunc.RunP.not_halted_entry`), conditional gotos
   (`ric_branchTo`), internal calls (`ric_call`, `ric_callRet`), `ri_sload` and
   `ri_log1` in [`Blanc/Lift/InvWalkWorld.lean`](../Blanc/Lift/InvWalkWorld.lean);
   the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA
@@ -2674,10 +2687,11 @@ contract-neutral.
 - solc idioms, gas-exact: the word-copy loop (`copy_loop`) in
   [`Blanc/Lift/CopyLoop.lean`](../Blanc/Lift/CopyLoop.lean); the
   `sha256(abi.encodePacked(a, b))` site through the SHA-256 precompile
-  (`packed_sha_pair`, `copy_sha`) in
-  [`Blanc/Lift/PackedSha.lean`](../Blanc/Lift/PackedSha.lean), and its forms over
-  memory that already covers the destination (`copy_sha_gen`,
-  `copy_sha_covered`) in
+  (`copy_sha_gen` over memory of any word-aligned size, with its result image
+  `shaImg`; its corollaries `copy_sha`, `packed_sha_pair`, and `pair_mem_sha` for a
+  pair whose second word is the previous digest at the free pointer) in
+  [`Blanc/Lift/PackedSha.lean`](../Blanc/Lift/PackedSha.lean), and the corollary
+  over memory that already covers the destination (`copy_sha_covered`) in
   [`Blanc/Lift/PackedShaCovered.lean`](../Blanc/Lift/PackedShaCovered.lean).
 - Jump destinations: `jumpable_eq_jumpdestOk` in
   [`Blanc/Lift/Jumpdest.lean`](../Blanc/Lift/Jumpdest.lean) replaces Jaune's

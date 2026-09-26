@@ -377,135 +377,15 @@ theorem sig_site3 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
           (St b' (Nat.toB256 32 :: Nat.toB256 640 :: R) M' G) t_0b4c_c16 r →
         SFunc.RunExactCut prog sevm []
           (St b (Nat.toB256 32 :: Nat.toB256 544 :: h1 :: 2 :: R) M (G + 751)) t_0a66_c15 r := by
-  set img1 := Bytes.writeAt img 576 h1.toBytes with himg1
-  set img2 := Bytes.writeAt img1 608 h2.toBytes with himg2
-  set img3 := Bytes.writeAt img2 544 (Nat.toB256 64).toBytes with himg3
-  set img4 := Bytes.writeAt img3 64 (Nat.toB256 640).toBytes with himg4
-  set M1 := M.write 576 h1.toBytes with hM1
-  set M2 := M1.write 608 h2.toBytes with hM2
-  set M3 := M2.write 544 (Nat.toB256 64).toBytes with hM3
-  set M4 := M3.write 64 (Nat.toB256 640).toBytes with hM4
-  have hs1 : M1.size = 832 := by
-    rw [hM1, Mem.size_write_word_aligned (by rw [hs]) (by decide), hs]; rfl
-  have hs2 : M2.size = 832 := by
-    rw [hM2, Mem.size_write_word_aligned (by rw [hs1]) (by decide), hs1]; rfl
-  have hs3 : M3.size = 832 := by
-    rw [hM3, Mem.size_write_word_aligned (by rw [hs2]) (by decide), hs2]; rfl
-  have hs4 : M4.size = 832 := by
-    rw [hM4, Mem.size_write_word_aligned (by rw [hs3]) (by decide), hs3]; rfl
-  have hwf1 : Mem.Wf M1 := hwf.write _ _
-  have hwf2 : Mem.Wf M2 := hwf1.write _ _
-  have hwf3 : Mem.Wf M3 := hwf2.write _ _
-  have hwf4 : Mem.Wf M4 := hwf3.write _ _
-  have hr1 : Mem.Reads M1 img1 := hr.write hwf _ _
-  have hr2 : Mem.Reads M2 img2 := hr1.write hwf1 _ _
-  have hr3 : Mem.Reads M3 img3 := hr2.write hwf2 _ _
-  have hr4 : Mem.Reads M4 img4 := hr3.write hwf3 _ _
-  have hfp2 : img2.sliceD 64 32 0 = (Nat.toB256 544).toBytes := by
-    rw [himg2, sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg1,
-      sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), hfp]
-  have hfp3 : img3.sliceD 64 32 0 = (Nat.toB256 544).toBytes := by
-    rw [himg3, sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), hfp2]
-  have hfp4 : img4.sliceD 64 32 0 = (Nat.toB256 640).toBytes := by
-    have := Bytes.sliceD_writeAt img3 (Nat.toB256 640).toBytes 64
-    rwa [B256.length_toBytes] at this
-  have hlen4 : img4.sliceD 544 32 0 = (Nat.toB256 64).toBytes := by
-    rw [himg4, sliceD_writeAt_out (by rw [B256.length_toBytes]; omega)]
-    have := Bytes.sliceD_writeAt img2 (Nat.toB256 64).toBytes 544
-    rwa [B256.length_toBytes] at this
-  have hw1 : img4.sliceD 576 32 0 = h1.toBytes := by
-    rw [himg4, sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg3,
-      sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg2,
-      sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg1]
-    have := Bytes.sliceD_writeAt img h1.toBytes 576
-    rwa [B256.length_toBytes] at this
-  have hw2 : img4.sliceD (576 + 32) 32 0 = h2.toBytes := by
-    rw [himg4, sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg3,
-      sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg2]
-    have := Bytes.sliceD_writeAt img1 h2.toBytes 608
-    rwa [B256.length_toBytes] at this
   obtain ⟨b', M', hpost, hwf', hr', hs', hrun⟩ :=
-    copy_sha_gen (fs := prog) (sevm := sevm) (C := []) (b := b) (M := M4) (G := G)
-      (R := R) (X := t_0ada_c15) (img := img4) (n := 832) (s := 576) (d := 640)
-      (x1 := Nat.toB256 576) (x3 := Nat.toB256 640) (x4 := Nat.toB256 544)
-      prog_16 (by simp) hwf4 hr4 hs4 (by decide) (by decide) (by decide) (by decide) (by decide)
-      (by omega) hfp4 hw1 hw2 (by omega) hsha.nodeleg hsha.warm hsha.pre hsha.fork
-      hdepth (by omega)
+    pair_mem_sha (fs := prog) (sevm := sevm) (C := []) (b := b) (M := M) (G := G) (R := R)
+      (X := t_0ada_c15) (img := img) (n := 832) (f := 544) prog_16 (by simp) hwf hr hs (by decide)
+      (by decide) (by decide) (by decide) (by decide) hfp hh2 (by omega) hsha.nodeleg hsha.warm
+      hsha.pre hsha.fork hdepth (by omega)
   refine ⟨b', M', hpost, hwf', hr', by rw [hs']; rfl, fun r kont => ?_⟩
   have hc := hrun r kont
-  rw [show max 832 (640 + 96) = 832 from rfl, Nat.sub_self, Nat.add_zero] at hc
-  have h544 : (Nat.toB256 544).toNat = 544 := toNat_toB256' (by decide)
-  have h40 : (Bytes.toB256 [0x40]).toNat = 64 := rfl
-  unfold t_0a66_c15
-  refine rxc_dest ?_
-  refine rxc_pop ?_
-  refine rxc_mload (c := 3) (v := h2) ?_ (by rw [h544]; exact read_word hr 544 hh2) ?_
-    (by simp; omega) ?_
-  · rw [h544]; exact charge_covered hs (by decide) (by decide)
-  · rw [h544]; exact read_covered hs (by decide) (by decide)
-  refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_dup (n := 0) rfl (by simp; omega) ?_
-  refine rxc_mload (c := 3) (v := Nat.toB256 544) ?_ (by rw [h40]; exact read_word hr 64 hfp) ?_
-    (by simp; omega) ?_
-  · rw [h40]; exact charge_covered hs (by decide) (by decide)
-  · rw [h40]; exact read_covered hs (by decide) (by decide)
-  refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_dup (n := 1) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 1) rfl (by simp; omega) ?_
-  refine rxc_add' (v := Nat.toB256 576) (by decide) (by simp; omega) ?_
-  refine rxc_swap (n := 4) rfl ?_
-  refine rxc_swap (n := 0) rfl ?_
-  refine rxc_swap (n := 4) rfl ?_
-  refine rxc_mstore (c := 3) (M' := M1) ?_ (by rw [toNat_toB256' (by decide)]) ?_
-  · rw [toNat_toB256' (by decide)]; exact charge_covered hs (by decide) (by decide)
-  refine rxc_dup (n := 0) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 2) rfl (by simp; omega) ?_
-  refine rxc_add' (v := Nat.toB256 608) (by decide) (by simp; omega) ?_
-  refine rxc_swap (n := 2) rfl ?_
-  refine rxc_swap (n := 0) rfl ?_
-  refine rxc_swap (n := 2) rfl ?_
-  refine rxc_mstore (c := 3) (M' := M2) ?_ (by rw [toNat_toB256' (by decide)]) ?_
-  · rw [toNat_toB256' (by decide)]; exact charge_covered hs1 (by decide) (by decide)
-  refine rxc_dup (n := 0) rfl (by simp; omega) ?_
-  refine rxc_mload (c := 3) (v := Nat.toB256 544) ?_ (by rw [h40]; exact read_word hr2 64 hfp2) ?_
-    (by simp; omega) ?_
-  · rw [h40]; exact charge_covered hs2 (by decide) (by decide)
-  · rw [h40]; exact read_covered hs2 (by decide) (by decide)
-  refine rxc_dup (n := 0) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 3) rfl (by simp; omega) ?_
-  refine rxc_sub' (v := Nat.toB256 0) (by decide) (by simp; omega) ?_
-  refine rxc_dup (n := 2) rfl (by simp; omega) ?_
-  refine rxc_add' (v := Nat.toB256 64) (by decide) (by simp; omega) ?_
-  refine rxc_dup (n := 1) rfl (by simp; omega) ?_
-  refine rxc_mstore (c := 3) (M' := M3) ?_ (by rw [toNat_toB256' (by decide)]) ?_
-  · rw [toNat_toB256' (by decide)]; exact charge_covered hs2 (by decide) (by decide)
-  refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_swap (n := 0) rfl ?_
-  refine rxc_swap (n := 2) rfl ?_
-  refine rxc_add' (v := Nat.toB256 640) (by decide) (by simp; omega) ?_
-  refine rxc_swap (n := 0) rfl ?_
-  refine rxc_dup (n := 1) rfl (by simp; omega) ?_
-  refine rxc_swap (n := 0) rfl ?_
-  refine rxc_mstore (c := 3) (M' := M4) ?_ (by rw [h40]) ?_
-  · rw [h40]; exact charge_covered hs3 (by decide) (by decide)
-  refine rxc_dup (n := 1) rfl (by simp; omega) ?_
-  refine rxc_mload (c := 3) (v := Nat.toB256 64) ?_
-    (by rw [toNat_toB256' (by decide)]; exact read_word hr4 544 hlen4) ?_ (by simp; omega) ?_
-  · rw [toNat_toB256' (by decide)]; exact charge_covered hs4 (by decide) (by decide)
-  · rw [toNat_toB256' (by decide)]; exact read_covered hs4 (by decide) (by decide)
-  refine rxc_swap (n := 1) rfl ?_
-  refine rxc_swap (n := 2) rfl ?_
-  refine rxc_swap (n := 0) rfl ?_
-  refine rxc_swap (n := 1) rfl ?_
-  refine rxc_dup (n := 2) rfl (by simp; omega) ?_
-  refine rxc_swap (n := 1) rfl ?_
-  refine rxc_dup (n := 4) rfl (by simp; omega) ?_
-  refine rxc_add' (v := Nat.toB256 576) (by decide) (by simp; omega) ?_
-  refine rxc_swap (n := 0) rfl ?_
-  refine rxc_dup (n := 0) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 3) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 3) rfl (by simp; omega) ?_
-  rw [t_0a9d_c15_eq]
+  rw [show max 832 (544 + 192) = 832 from rfl, Nat.sub_self, Nat.add_zero] at hc
+  rw [show t_0a66_c15 = pairMemTree t_0a9d_c15 from rfl, t_0a9d_c15_eq]
   exact hc
 
 /-! ## Composition -/

@@ -9,10 +9,13 @@ Companions to `InvWalk.lean`:
   `REVERT`/`undefined` terminals, with `SFunc.RunCutP.false_of_noOk` and
   `SFunc.RunP.false_of_noOk`: such a tree has no successful run at all, so every `REVERT` arm
   of an inversion walk closes by `(by decide)`;
+* `SFunc.noHalt` and the closed entry sets `NoHaltSet`, with `SFunc.RunP.not_halted` and
+  `SFunc.RunP.not_halted_entry`: trees whose only terminals are `REVERT`, returns and
+  `undefined` never halt;
 * `ric_branchTo`/`ric_branchToCut` for conditional gotos, and `ric_call`/`ri_call` for internal
   calls (`callNext`), the converses of `rx_branchTo_*` and `rx_callRet`;
 * the world steps `ri_sload` (successor over `afterSload`) and `ri_log1` (the entry appended by
-  `addLog`), the converses of `rx_sload_sel` and `Ninst.runCompiled_log_of`.
+  `addLog`), the converses of `rx_sload_sel` and `rx_log1`.
 
 Nothing here mentions a contract.
 -/
@@ -53,6 +56,98 @@ theorem SFunc.RunP.false_of_noOk {P : Sevm → Devm → Ninst → Devm → Prop}
     {fs : List SFunc} {sevm : Sevm} {devm : Devm} {f : SFunc} {o : Outcome}
     (run : SFunc.RunP P fs sevm devm f o) (h : f.noOk = true) : False :=
   (SFunc.runP_iff_runCutP_nil.mp run).false_of_noOk h
+
+/-! ## Trees that cannot halt -/
+
+/-- Trees with no halting terminal: only `.revert`, `.ret`, `.undefined`. -/
+def SFunc.noHalt : SFunc → Bool
+  | .branch f g => f.noHalt && g.noHalt
+  | .branchTo f _ => f.noHalt
+  | .last l => l == .revert
+  | .next _ f => f.noHalt
+  | .dest f => f.noHalt
+  | .jump _ => true
+  | .callNext _ f => f.noHalt
+  | .ret => true
+  | .undefined => true
+
+/-- `S` is closed under the entries referenced by its members, and none of them halts. -/
+def NoHaltSet (fs : List SFunc) (S : List Nat) : Bool :=
+  S.all fun k => match fs[k]? with
+    | some g => g.noHalt && g.refs.all (· ∈ S)
+    | none => false
+
+/-- A run of a tree in a `NoHaltSet` cannot halt. -/
+theorem SFunc.RunP.not_halted {P : Sevm → Devm → Ninst → Devm → Prop}
+    {fs : List SFunc} {S : List Nat} (hS : NoHaltSet fs S = true)
+    {sevm : Sevm} {devm : Devm} {f : SFunc} {D : Devm} {o : Outcome}
+    (hf : f.noHalt = true) (hrefs : f.refs.all (· ∈ S) = true)
+    (run : SFunc.RunP P fs sevm devm f o) (ho : o = .halted D) : False := by
+  have closed : ∀ {k g}, k ∈ S → fs[k]? = some g →
+      g.noHalt = true ∧ g.refs.all (· ∈ S) = true := by
+    intro k g hk hget
+    have h := (List.all_eq_true.mp hS) k hk
+    rw [hget] at h
+    simpa using h
+  induction run with
+  | zero d pop run ih =>
+      simp only [SFunc.noHalt, Bool.and_eq_true] at hf
+      simp only [SFunc.refs, List.all_append, Bool.and_eq_true] at hrefs
+      exact ih hf.1 hrefs.1 ho
+  | succ d w hnz pop run ih =>
+      simp only [SFunc.noHalt, Bool.and_eq_true] at hf
+      simp only [SFunc.refs, List.all_append, Bool.and_eq_true] at hrefs
+      exact ih hf.2 hrefs.2 ho
+  | toZero d pop run ih =>
+      simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hrefs
+      exact ih hf hrefs.2 ho
+  | toSucc d w hnz lookup pop run ih =>
+      simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hrefs
+      have ht := closed (of_decide_eq_true hrefs.1) lookup
+      exact ih ht.1 ht.2 ho
+  | last hrun =>
+      cases ho
+      rename_i l
+      simp only [SFunc.noHalt] at hf
+      have : l = .revert := by
+        revert hf
+        cases l <;> decide
+      subst this
+      exact Linst.not_run_revert_ok hrun
+  | next hrun run ih =>
+      simp only [SFunc.noHalt] at hf
+      exact ih hf hrefs ho
+  | dest burn run ih =>
+      exact ih hf hrefs ho
+  | jump d lookup pop run ih =>
+      simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hrefs
+      have ht := closed (of_decide_eq_true hrefs.1) lookup
+      exact ih ht.1 ht.2 ho
+  | ret => cases ho
+  | callHalt d lookup pop run ih =>
+      simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hrefs
+      have ht := closed (of_decide_eq_true hrefs.1) lookup
+      cases ho
+      exact ih ht.1 ht.2 rfl
+  | callRet d lookup pop run tail ihRun ihTail =>
+      simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hrefs
+      simp only [SFunc.noHalt] at hf
+      exact ihTail hf hrefs.2 ho
+
+/-- A run of an entry in a `NoHaltSet` cannot halt. -/
+theorem SFunc.RunP.not_halted_entry {P : Sevm → Devm → Ninst → Devm → Prop}
+    {fs : List SFunc} {S : List Nat} (hS : NoHaltSet fs S = true)
+    {k : Nat} (hkS : k ∈ S) {g : SFunc} (hk : fs[k]? = some g)
+    {sevm : Sevm} {devm : Devm} {D : Devm} {o : Outcome}
+    (run : SFunc.RunP P fs sevm devm g o) (ho : o = .halted D) : False := by
+  have closed : ∀ {k g}, k ∈ S → fs[k]? = some g →
+      g.noHalt = true ∧ g.refs.all (· ∈ S) = true := by
+    intro k g hk hget
+    have h := (List.all_eq_true.mp hS) k hk
+    rw [hget] at h
+    simpa using h
+  have ht := closed hkS hk
+  exact SFunc.RunP.not_halted hS ht.1 ht.2 run ho
 
 /-! ## Gotos and calls of cut runs -/
 
