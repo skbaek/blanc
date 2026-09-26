@@ -690,6 +690,126 @@ theorem safe_burnFrom (hfork : CoveredFork sevm.benvStat.fork) :
     · cases ho
       exact hout
 
+/-! ### `set_name`'s two copy loops, inverted -/
+
+/-- A copy loop's word `i`, read back from memory. -/
+private theorem storeWord {M : Mem} {sn i : Nat} {src : Bytes}
+    (h : (M.read (sn + 32 * i) 32).1 = src.sliceD (32 * i) 32 0) :
+    Bytes.toB256 (M.read (sn + 32 * i) 32).1 = Bytes.toB256 (src.sliceD (32 * i) 32 0) := by
+  rw [h]
+
+/-- **One of `set_name`'s store segments, inverted**: the set-up and the loop at entry `k` (cap
+`n + 1`) store `min (n + 1) ((32 + L) / 32 + 1)` words of `src` (read at `sn` in memory, `L` its
+first word) at the string's base, and the run goes on at the loop's exit tree `exitT` (entry `j`)
+with six more words on the stack; memory from `0x140` up is kept. -/
+theorem ric_storeSeg (hfork : CoveredFork sevm.benvStat.fork) {d : Devm} {S : List B256} {M : Mem}
+    {G : Nat} {o : Outcome} {s0 s1 sl cp e0 e1 x0 x1 r0 r1 : UInt8} {j k n sn : Nat}
+    {exitT : SFunc} {src : Bytes}
+    (hk : prog[k]? = some (vyStoreLoopTree e0 e1 x0 x1 r0 r1 j k exitT))
+    (hj : prog[j]? = some exitT) (hcase : (cp = 3 ∧ n = 2) ∨ (cp = 2 ∧ n = 1))
+    (hs : M.size = 672) (hwf : Mem.Wf M) (hsn : (Bytes.toB256 [s0, s1]).toNat = sn)
+    (hsn1 : 0x140 ≤ sn) (hsn2 : sn + 32 * (n + 1) ≤ 672)
+    (hsrc : ∀ i, i ≤ n → (M.read (sn + 32 * i) 32).1 = src.sliceD (32 * i) 32 0)
+    (hL : (Bytes.toB256 (src.sliceD 0 32 0)).toNat ≤ 32 * n)
+    (run : SFunc.RunCut prog sevm [] (St d S M G)
+      (vyStoreHead s0 s1 sl cp (vyStoreLoopTree e0 e1 x0 x1 r0 r1 j k exitT)) (.done o)) :
+    ∃ (x1 x2 x3 x4 x5 x6 : B256) (d' : Devm) (M' : Mem) (G' : Nat),
+      SFunc.RunCut prog sevm [] (St d' (x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: S) M' G') exitT
+        (.done o) ∧
+      Devm.getStor d' sevm.currentTarget = vyCopyStore (Devm.getStor d sevm.currentTarget)
+        (Bytes.toB256 [sl]).toBytes.keccak src
+        (min (n + 1) ((32 + (Bytes.toB256 (src.sliceD 0 32 0)).toNat) / 32 + 1)) ∧
+      (∀ a, a ≠ sevm.currentTarget → Devm.getStor d' a = Devm.getStor d a) ∧
+      d'.logs = d.logs ∧ M'.size = 672 ∧ Mem.Wf M' ∧
+      (∀ a len, 0x140 ≤ a → (M'.read a len).1 = (M.read a len).1) := by
+  obtain ⟨G1, run⟩ := ric_vyStoreHead hs (by decide) (by decide) hwf hsn (by omega) (by omega) run
+  set base := (Bytes.toB256 [sl]).toBytes.keccak
+  set L := (Bytes.toB256 (src.sliceD 0 32 0)).toNat with hLdef
+  have hLw : Bytes.toB256 (M.read sn 32).1 = Bytes.toB256 (src.sliceD 0 32 0) := by
+    have := hsrc 0 (Nat.zero_le _); simp only [Nat.mul_zero, Nat.add_zero] at this; rw [this]
+  rw [hLw] at run
+  set lp := Bytes.toB256 (src.sliceD 0 32 0) + Bytes.toB256 [0x20]
+  have hlp : lp.toNat = L + 32 := by
+    rw [B256.toNat_add, show (Bytes.toB256 [0x20]).toNat = 32 by decide,
+      Nat.lo_eq_of_lt (by omega)]
+  set M1 := M.write 0xc0 (Bytes.toB256 [sl]).toBytes
+  have hwf1 : Mem.Wf M1 := hwf.write _ _
+  set M2 := M1.write 0x120 (Nat.toB256 0).toBytes
+  have hwf2 : Mem.Wf M2 := hwf1.write _ _
+  have hsz : ∀ (N : Mem) (w : B256), N.size = 672 → (N.write 0x120 w.toBytes).size = 672 := by
+    intro N w h; rw [Mem.size_write_of_le (by rw [B256.length_toBytes, h]; omega), h]
+  have hs1 : M1.size = 672 := by
+    rw [Mem.size_write_of_le (by rw [B256.length_toBytes, hs]; omega), hs]
+  have hs2 : M2.size = 672 := hsz M1 _ hs1
+  have hkeep : ∀ (N : Mem) (w : B256) (n' : Nat), Mem.Wf N → n' + 32 ≤ 0x140 →
+      ∀ a len, 0x140 ≤ a → ((N.write n' w.toBytes).read a len).1 = (N.read a len).1 :=
+    fun N w n' hN hn a len ha =>
+      Mem.read_write_disjoint hN _ _ (Or.inl (by rw [B256.length_toBytes]; omega))
+  have hk2 : ∀ a len, 0x140 ≤ a → (M2.read a len).1 = (M.read a len).1 := by
+    intro a len ha
+    rw [hkeep M1 _ _ hwf1 (by omega) a len ha, hkeep M _ _ hwf (by omega) a len ha]
+  have hc2 : (M2.read 0x120 32).1 = (Nat.toB256 0).toBytes := Mem.read_write_word_of_wf hwf1 _ _
+  set cap := Bytes.toB256 [cp] + Bytes.toB256 [0x00]
+  have hne1 : cap ≠ Nat.toB256 (0 + 1) := by rcases hcase with ⟨rfl, -⟩ | ⟨rfl, -⟩ <;> decide
+  have hkC : k ∉ ([] : List Nat) := by simp
+  have hjC : j ∉ ([] : List Nat) := by simp
+  -- iteration 0
+  rcases ric_vyStoreIter hfork (i := 0) hs2 (by decide) (by decide) hsn (by omega) (by decide) hc2
+    hk hkC hj hjC run with ⟨hlt, -⟩ | ⟨-, G2, run⟩
+  · omega
+  rw [ite_eq_right_of_eq_false _ _ (eq_false hne1)] at run
+  rw [hk2 _ _ (by omega), storeWord (hsrc 0 (Nat.zero_le _))] at run
+  set d1 := afterSstore sevm d (base + Nat.toB256 0) (Bytes.toB256 (src.sliceD (32 * 0) 32 0))
+  set M3 := M2.write 0x120 (Nat.toB256 (0 + 1)).toBytes
+  have hwf3 : Mem.Wf M3 := hwf2.write _ _
+  have hs3 : M3.size = 672 := hsz M2 _ hs2
+  have hk3 : ∀ a len, 0x140 ≤ a → (M3.read a len).1 = (M.read a len).1 := by
+    intro a len ha; rw [hkeep M2 _ _ hwf2 (by omega) a len ha, hk2 a len ha]
+  have hc3 : (M3.read 0x120 32).1 = (Nat.toB256 1).toBytes := Mem.read_write_word_of_wf hwf2 _ _
+  -- iteration 1
+  rcases ric_vyStoreIter hfork (i := 1) hs3 (by decide) (by decide) hsn (by omega) (by decide) hc3
+    hk hkC hj hjC run with ⟨hlt, -⟩ | ⟨-, G3, run⟩
+  · omega
+  rw [hk3 _ _ (by omega), storeWord (hsrc 1 (by omega))] at run
+  set d2 := afterSstore sevm d1 (base + Nat.toB256 1) (Bytes.toB256 (src.sliceD (32 * 1) 32 0))
+  set M4 := M3.write 0x120 (Nat.toB256 (1 + 1)).toBytes
+  have hwf4 : Mem.Wf M4 := hwf3.write _ _
+  have hs4 : M4.size = 672 := hsz M3 _ hs3
+  have hk4 : ∀ a len, 0x140 ≤ a → (M4.read a len).1 = (M.read a len).1 := by
+    intro a len ha; rw [hkeep M3 _ _ hwf3 (by omega) a len ha, hk3 a len ha]
+  have hst2 : Devm.getStor d2 sevm.currentTarget =
+      vyCopyStore (Devm.getStor d sevm.currentTarget) base src 2 := by
+    simp only [d2, d1, afterSstore_getStor_self]; rfl
+  have hot2 : ∀ a, a ≠ sevm.currentTarget → Devm.getStor d2 a = Devm.getStor d a := by
+    intro a ha
+    simp only [d2, d1]
+    rw [afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha), afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha)]
+  have hlg2 : d2.logs = d.logs := by simp only [d2, d1, afterSstore_logs]
+  rcases hcase with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
+  · -- `name`: a third pass
+    rw [ite_eq_right_of_eq_false _ _ (eq_false (by decide))] at run
+    have hc4 : (M4.read 0x120 32).1 = (Nat.toB256 2).toBytes := Mem.read_write_word_of_wf hwf3 _ _
+    rcases ric_vyStoreIter hfork (i := 2) hs4 (by decide) (by decide) hsn (by omega) (by decide)
+      hc4 hk hkC hj hjC run with ⟨hlt, G4, run⟩ | ⟨hle, G4, run⟩
+    · refine ⟨_, _, _, _, _, _, d2, M4, G4, run, ?_, hot2, hlg2, hs4, hwf4, hk4⟩
+      rw [hst2]
+      congr 1
+      omega
+    · rw [ite_eq_left_of_eq_true _ _ (eq_true (by decide))] at run
+      rw [hk4 _ _ (by omega), storeWord (hsrc 2 le_rfl)] at run
+      refine ⟨_, _, _, _, _, _, _, M4.write 0x120 (Nat.toB256 (2 + 1)).toBytes, G4, run, ?_, ?_,
+        ?_, hsz M4 _ hs4, hwf4.write _ _, ?_⟩
+      · rw [afterSstore_getStor_self, hst2, show min (2 + 1) ((32 + L) / 32 + 1) = 3 by omega]
+        rfl
+      · intro a ha
+        rw [afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha), hot2 a ha]
+      · rw [afterSstore_logs, hlg2]
+      · intro a len ha; rw [hkeep M4 _ _ hwf4 (by omega) a len ha, hk4 a len ha]
+  · -- `symbol`: the counter reached the cap
+    rw [ite_eq_left_of_eq_true _ _ (eq_true (by decide))] at run
+    refine ⟨_, _, _, _, _, _, d2, M4, G3, run, ?_, hot2, hlg2, hs4, hwf4, hk4⟩
+    rw [hst2, show min (1 + 1) ((32 + L) / 32 + 1) = 2 by omega]
+
 -- SEGMENT: safeSetName (217 nodes incl. loop entries 8 and 11, joins 1 and 2; the largest)
 /-- `set_name`: the owner's answer came from the frame's static call to the stored minter.
 
@@ -713,7 +833,242 @@ theorem safe_setName (hfork : CoveredFork sevm.benvStat.fork) {G : Nat} {post : 
     (run : SFunc.Run prog sevm (entrySt sevm b G) t_00f1_c0 (.halted post)) :
     ∃ w, OwnerAnswer sevm b ((stor₀).get vyMinterSlot).toAdr w ∧
       ∃ r, rawSetName sevm stor₀ (some w) = some r ∧ Lands sevm b post r := by
-  sorry
+  have hM0 := vyMem_empty_size (Sevm.dataWord sevm 0)
+  have hwf0 := vyMem_wf Mem.wf_empty (Sevm.dataWord sevm 0)
+  have hr0 : Mem.Reads (vyMem Mem.empty (Sevm.dataWord sevm 0)) (vyImg [] (Sevm.dataWord sevm 0)) :=
+    vyMem_reads Mem.wf_empty Mem.reads_empty _
+  have run := run.cut
+  unfold entrySt at run
+  obtain ⟨hv, G1, run⟩ := ric_vyNonpayable (h := 0x00) (l := 0xfb) (fail := t_00f7_c0)
+    (by decide) run
+  -- `name`'s bytes to `0x140`, its length guard
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_calldataload s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_add s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_calldatacopy s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_calldataload s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_add s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_calldataload s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_gt s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_iszero s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_push s1
+  rcases ric_branch run with ⟨-, G18, run⟩ | ⟨hg0, G18, run⟩
+  · exact (run.false_of_noOk (by decide)).elim
+  obtain ⟨G19, run⟩ := ric_dest run
+  -- `symbol`'s bytes to `0x1c0`, its length guard
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_calldataload s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G23, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G24, rfl⟩ := ri_add s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_calldatacopy s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G27, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G28, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G29, rfl⟩ := ri_calldataload s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G30, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G31, rfl⟩ := ri_add s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G32, rfl⟩ := ri_calldataload s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G33, rfl⟩ := ri_gt s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G34, rfl⟩ := ri_iszero s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G35, rfl⟩ := ri_push s1
+  rcases ric_branch run with ⟨-, G36, run⟩ | ⟨hg1, G36, run⟩
+  · exact (run.false_of_noOk (by decide)).elim
+  obtain ⟨G37, run⟩ := ric_dest run
+  -- the owner call
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G38, rfl⟩ := ri_caller s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G39, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G40, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G41, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G42, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G43, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G44, rfl⟩ := ri_mstore s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G45, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G46, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G47, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨gw, G48, rfl⟩ := ri_gas s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨flag, out, hpost, hans⟩ := ri_staticcall hfork s1
+  rw [hpost.eq_St] at run
+  have n320 : (Bytes.toB256 [0x01, 0x40]).toNat = 320 := by decide
+  have n96 : (Bytes.toB256 [0x60]).toNat = 96 := by decide
+  have n448 : (Bytes.toB256 [0x01, 0xc0]).toNat = 448 := by decide
+  have n64 : (Bytes.toB256 [0x40]).toNat = 64 := by decide
+  have n544 : (Bytes.toB256 [0x02, 0x20]).toNat = 544 := by decide
+  have n572 : (Bytes.toB256 [0x02, 0x3c]).toNat = 572 := by decide
+  have n4 : (Bytes.toB256 [0x04]).toNat = 4 := by decide
+  have n640 : (Bytes.toB256 [0x02, 0x80]).toNat = 640 := by decide
+  have n32 : (Bytes.toB256 [0x20]).toNat = 32 := by decide
+  have n6 : Bytes.toB256 [0x06] = vyMinterSlot := by decide
+  simp only [n320, n96, n448, n64, n544, n572, n4, n640, n32, n6] at run hans
+  set s0B := Bytes.toB256 [0x04] + Sevm.dataWord sevm (Bytes.toB256 [0x04])
+  set s1B := Bytes.toB256 [0x04] + Sevm.dataWord sevm (Bytes.toB256 [0x24])
+  set src0 := sevm.data.sliceD s0B.toNat 96 0
+  set src1 := sevm.data.sliceD s1B.toNat 64 0
+  set selw := Bytes.toB256 [0x8d, 0xa5, 0xcb, 0x5b]
+  set M0 := vyMem Mem.empty (Sevm.dataWord sevm 0)
+  set M1 := M0.write 320 src0
+  set M2 := M1.write 448 src1
+  set M3 := M2.write 544 selw.toBytes
+  set M3e := M3.extends [(572, 4), (640, 32)]
+  set M4 := M3e.write 640 (out.take 32)
+  have hwf1 : Mem.Wf M1 := hwf0.write _ _
+  have hwf2 : Mem.Wf M2 := hwf1.write _ _
+  have hwf3 : Mem.Wf M3 := hwf2.write _ _
+  have hwf3e : Mem.Wf M3e := Mem.Wf.extends _ hwf3
+  have hwf4 : Mem.Wf M4 := hwf3e.write _ _
+  have hs1 : M1.size = 416 := by
+    rw [Mem.size_write_of_length (List.length_sliceD _ _ _ _) (by decide), hM0]; rfl
+  have hs2 : M2.size = 512 := by
+    rw [Mem.size_write_of_length (List.length_sliceD _ _ _ _) (by decide), hs1]; rfl
+  have hs3 : M3.size = 576 := by
+    rw [Mem.size_write_of_length (B256.length_toBytes _) (by decide), hs2]; rfl
+  have hs3e : M3e.size = 672 := by
+    show memExtsSize M3.size _ = _
+    rw [hs3]; rfl
+  have hs4 : M4.size = 672 := by
+    rw [Mem.size_write_of_le (by rw [hs3e, List.length_take]; omega), hs3e]
+  have hr4 : Mem.Reads M4 (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt
+      (vyImg [] (Sevm.dataWord sevm 0)) 320 src0) 448 src1) 544 selw.toBytes) 640 (out.take 32)) :=
+    (Mem.Reads.extends _ (((hr0.write hwf0 _ _).write hwf1 _ _).write hwf2 _ _)).write hwf3e _ _
+  -- the flag, the answer's length, its first word
+  obtain ⟨d2, s1, run⟩ := ric_next run; obtain ⟨G49, rfl⟩ := ri_push s1
+  rcases ric_branch run with ⟨-, G50, run⟩ | ⟨hfl, G50, run⟩
+  · exact (run.false_of_noOk (by decide)).elim
+  have hflag : flag = 1 := by
+    rcases hpost.flag with h | h
+    · exact absurd h hfl
+    · exact h
+  obtain ⟨G51, run⟩ := ric_dest run
+  obtain ⟨d2, s1, run⟩ := ric_next run; obtain ⟨G52, rfl⟩ := ri_push s1
+  obtain ⟨d2, s1, run⟩ := ric_next run; obtain ⟨G53, rfl⟩ := ri_returndatasize s1
+  obtain ⟨d2, s1, run⟩ := ric_next run; obtain ⟨G54, rfl⟩ := ri_gt s1
+  obtain ⟨d2, s1, run⟩ := ric_next run; obtain ⟨G55, rfl⟩ := ri_push s1
+  rcases ric_branch run with ⟨-, G56, run⟩ | ⟨hrds, G56, run⟩
+  · exact (run.false_of_noOk (by decide)).elim
+  rw [hpost.returnData] at hrds
+  have hlen : 32 ≤ out.length := by
+    by_contra hc
+    apply hrds
+    rw [B256.gtCheck, ite_eq_right_iff]
+    intro h
+    rw [gt_iff_lt, B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256, Nat.lo,
+      show (Bytes.toB256 [0x1f]).toNat = 31 by decide] at h
+    have := Nat.mod_le out.length (2 ^ 256)
+    omega
+  obtain ⟨G57, run⟩ := ric_dest run
+  obtain ⟨d2, s1, run⟩ := ric_next run; obtain ⟨G58, rfl⟩ := ri_push s1
+  obtain ⟨d2, s1, run⟩ := ric_next run; obtain ⟨G59, rfl⟩ := ri_pop s1
+  obtain ⟨d2, s1, run⟩ := ric_next run; obtain ⟨G60, rfl⟩ := ri_push s1
+  obtain ⟨d2, s1, run⟩ := ric_next run; obtain ⟨G61, rfl⟩ := ri_mload s1
+  rw [n640, read_covered hs4 (by decide) (by decide)] at run
+  have hw640 : (M4.read 640 32).1 = out.take 32 := by
+    rw [hr4.read]
+    have h := Bytes.sliceD_writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt
+      (vyImg [] (Sevm.dataWord sevm 0)) 320 src0) 448 src1) 544 selw.toBytes) (out.take 32) 640
+    rwa [List.length_take, Nat.min_eq_left hlen] at h
+  rw [hw640] at run
+  obtain ⟨d2, s1, run⟩ := ric_next run; obtain ⟨G62, rfl⟩ := ri_eq s1
+  obtain ⟨d2, s1, run⟩ := ric_next run; obtain ⟨G63, rfl⟩ := ri_push s1
+  rcases ric_branch run with ⟨-, G64, run⟩ | ⟨heq, G64, run⟩
+  · exact (run.false_of_noOk (by decide)).elim
+  have hword : Bytes.toB256 (out.take 32) = sevm.caller.toB256 := by
+    by_contra hc
+    exact heq (by simp [B256.eqCheck, hc])
+  obtain ⟨G65, run⟩ := ric_dest run
+  -- the two copy loops
+  have hL0w : Bytes.toB256 (src0.sliceD 0 32 0) = Sevm.dataWord sevm s0B := by
+    rw [Bytes.sliceD_sliceD_of_le _ _ _ _ _ (by decide), Nat.add_zero]; rfl
+  have hL1w : Bytes.toB256 (src1.sliceD 0 32 0) = Sevm.dataWord sevm s1B := by
+    rw [Bytes.sliceD_sliceD_of_le _ _ _ _ _ (by decide), Nat.add_zero]; rfl
+  have hL0 : (Sevm.dataWord sevm s0B).toNat ≤ 64 :=
+    toNat_le_of_gtCheck_eq_zero (eq_zero_of_iszero_ne_zero hg0)
+  have hL1 : (Sevm.dataWord sevm s1B).toNat ≤ 32 :=
+    toNat_le_of_gtCheck_eq_zero (eq_zero_of_iszero_ne_zero hg1)
+  have hsrc0 : ∀ i, i ≤ 2 → (M4.read (320 + 32 * i) 32).1 = src0.sliceD (32 * i) 32 0 := by
+    intro i hi
+    rw [hr4.read, Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega),
+      Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega),
+      Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega),
+      Bytes.sliceD_writeAt_inside _ _ _ _ _ (by omega) (by rw [List.length_sliceD]; omega),
+      Nat.add_sub_cancel_left]
+  obtain ⟨y1, y2, y3, y4, y5, y6, d2, M5, G66, run, hst2, hot2, hlg2, hs5, hwf5, hkeep5⟩ :=
+    ric_storeSeg (s0 := 0x01) (s1 := 0x40) (sl := 0x00) (cp := 0x03) (e0 := 0x01) (e1 := 0xad)
+      (x0 := 0x01) (x1 := 0xcf) (r0 := 0x01) (r1 := 0x9a) (j := 1) (k := 8) (n := 2)
+      (exitT := t_01cf_c1) (src := src0) hfork rfl rfl (Or.inl ⟨rfl, rfl⟩) hs4 hwf4 n320
+      (by decide) (by decide) hsrc0 (by rw [hL0w]; omega) run
+  have hsrc1 : ∀ i, i ≤ 1 → (M5.read (448 + 32 * i) 32).1 = src1.sliceD (32 * i) 32 0 := by
+    intro i hi
+    rw [hkeep5 _ _ (by omega), hr4.read, Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega),
+      Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega),
+      Bytes.sliceD_writeAt_inside _ _ _ _ _ (by omega) (by rw [List.length_sliceD]; omega),
+      Nat.add_sub_cancel_left]
+  unfold t_01cf_c1 at run
+  obtain ⟨G67, run⟩ := ric_dest run
+  obtain ⟨d3, s1, run⟩ := ric_next run; obtain ⟨G68, rfl⟩ := ri_pop s1
+  obtain ⟨d3, s1, run⟩ := ric_next run; obtain ⟨G69, rfl⟩ := ri_pop s1
+  obtain ⟨d3, s1, run⟩ := ric_next run; obtain ⟨G70, rfl⟩ := ri_pop s1
+  obtain ⟨d3, s1, run⟩ := ric_next run; obtain ⟨G71, rfl⟩ := ri_pop s1
+  obtain ⟨d3, s1, run⟩ := ric_next run; obtain ⟨G72, rfl⟩ := ri_pop s1
+  obtain ⟨d3, s1, run⟩ := ric_next run; obtain ⟨G73, rfl⟩ := ri_pop s1
+  obtain ⟨z1, z2, z3, z4, z5, z6, d3, M6, G74, run, hst3, hot3, hlg3, -, -, -⟩ :=
+    ric_storeSeg (s0 := 0x01) (s1 := 0xc0) (sl := 0x01) (cp := 0x02) (e0 := 0x02) (e1 := 0x07)
+      (x0 := 0x02) (x1 := 0x29) (r0 := 0x01) (r1 := 0xf4) (j := 2) (k := 11) (n := 1)
+      (exitT := t_0229_c2) (src := src1) hfork rfl rfl (Or.inr ⟨rfl, rfl⟩) hs5 hwf5 n448
+      (by decide) (by decide) hsrc1 (by rw [hL1w]; omega) run
+  unfold t_0229_c2 at run
+  obtain ⟨G75, run⟩ := ric_dest run
+  obtain ⟨d4, s1, run⟩ := ric_next run; obtain ⟨G76, rfl⟩ := ri_pop s1
+  obtain ⟨d4, s1, run⟩ := ric_next run; obtain ⟨G77, rfl⟩ := ri_pop s1
+  obtain ⟨d4, s1, run⟩ := ric_next run; obtain ⟨G78, rfl⟩ := ri_pop s1
+  obtain ⟨d4, s1, run⟩ := ric_next run; obtain ⟨G79, rfl⟩ := ri_pop s1
+  obtain ⟨d4, s1, run⟩ := ric_next run; obtain ⟨G80, rfl⟩ := ri_pop s1
+  obtain ⟨d4, s1, run⟩ := ric_next run; obtain ⟨G81, rfl⟩ := ri_pop s1
+  cases run with
+  | last hl =>
+    cases hl
+    have hs0 : s0B = Sevm.argWord sevm 0 + 4 := by
+      show Bytes.toB256 [0x04] + Sevm.dataWord sevm (Bytes.toB256 [0x04]) = _
+      rw [B256.add_comm, show Bytes.toB256 [0x04] = 4 by decide]; rfl
+    have hs1 : s1B = Sevm.argWord sevm 1 + 4 := by
+      show Bytes.toB256 [0x04] + Sevm.dataWord sevm (Bytes.toB256 [0x24]) = _
+      rw [B256.add_comm, show Bytes.toB256 [0x04] = 4 by decide]
+      congr 1
+    have hnb : (Bytes.toB256 [0x00]).toBytes.keccak = vyNameBase := by
+      rw [show Bytes.toB256 [0x00] = 0 by decide]; rfl
+    have hsb : (Bytes.toB256 [0x01]).toBytes.keccak = vySymbolBase := by
+      rw [show Bytes.toB256 [0x01] = 1 by decide]; rfl
+    have hd1 : ∀ a, Devm.getStor d1 a = Devm.getStor b a := by
+      intro a; rw [hpost.stor a, afterSload_getStor]
+    have hin : (M3.read 572 4).1 = ownerCalldata := by
+      rw [((Mem.reads_data M2).write hwf2 544 selw.toBytes).read,
+        Bytes.sliceD_writeAt_inside _ _ _ _ _ (by decide) (by rw [B256.length_toBytes])]
+      decide
+    have hans' := hans hflag
+    rw [hin] at hans'
+    refine ⟨sevm.caller.toB256, ⟨out, ?_, hlen, hword⟩,
+      (vyCopyStore (vyCopyStore stor₀ vyNameBase src0
+        (min 3 ((32 + (Sevm.dataWord sevm s0B).toNat) / 32 + 1))) vySymbolBase src1
+        (min 2 ((32 + (Sevm.dataWord sevm s1B).toNat) / 32 + 1)), [], none), ?_, ?_⟩
+    · obtain ⟨parent, child, xl, dp, na, code, gas, hst, hdel, hfill, hproc, hclean, hout⟩ := hans'
+      refine ⟨parent, child, xl, dp, na, code, gas, ?_, ?_, hfill, hproc, hclean, hout⟩
+      · rw [hst]; unfold afterSload; split <;> rfl
+      · simp only [afterSload_getCode] at hdel; exact hdel
+    · simp only [rawSetName, ← hs0, ← hs1]
+      exact ite_eq_left ⟨hv, hL0, hL1, trivial⟩
+    · refine ⟨?_, fun a ha => ?_, ?_, fun o ho => by cases ho⟩
+      · show Devm.getStor d3 _ = _
+        rw [hst3, hst2, hd1, hnb, hsb, hL0w, hL1w]
+      · show Devm.getStor d3 _ = _
+        rw [hot3 a ha, hot2 a ha, hd1]
+      · show d3.logs = _
+        rw [hlg3, hlg2, hpost.logs, afterSload_logs, List.append_nil]
 
 end
 

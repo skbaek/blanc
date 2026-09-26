@@ -229,6 +229,69 @@ theorem toB256_inj_adr {a b : Adr} (h : a.toB256 = b.toB256) : a = b := by
   have := congrArg B256.toAdr h
   simpa only [toAdr_toB256] using this
 
+/-! ## The string copy's storage -/
+
+theorem sliceD_zero_take (bs : Bytes) {n : Nat} (h : n ≤ bs.length) :
+    bs.sliceD 0 n 0 = bs.take n := by
+  unfold List.sliceD
+  rw [List.drop_zero, List.takeD_eq_take _ h]
+
+theorem vyCopyStore_succ (stor : Stor) (base : B256) (src : Bytes) (n : Nat) :
+    vyCopyStore stor base src (n + 1) = (vyCopyStore stor base src n).set (base + Nat.toB256 n)
+      (Bytes.toB256 (src.sliceD (32 * n) 32 0)) := by
+  unfold vyCopyStore
+  rw [List.range_succ, List.foldl_append]
+  rfl
+
+theorem add_toB256_inj {base : B256} {i j : Nat} (hi : i < 2 ^ 256) (hj : j < 2 ^ 256)
+    (h : base + Nat.toB256 i = base + Nat.toB256 j) : i = j := by
+  have := congrArg B256.toNat h
+  rw [B256.toNat_add, B256.toNat_add, B256.toNat_toB256_of_lt hi, B256.toNat_toB256_of_lt hj,
+    Nat.lo, Nat.lo] at this
+  have := B256.toNat_lt base
+  omega
+
+/-- The copy leaves every slot it does not write. -/
+theorem vyCopyStore_get_off {stor : Stor} {base x : B256} {src : Bytes} {n : Nat}
+    (h : ∀ i < n, base + Nat.toB256 i ≠ x) : (vyCopyStore stor base src n).get x = stor.get x := by
+  induction n with
+  | zero => rfl
+  | succ n ih =>
+    rw [vyCopyStore_succ, Stor.get_set_ne _ (h n (by omega)), ih (fun i hi => h i (by omega))]
+
+/-- The copy's word `i`. -/
+theorem vyCopyStore_get_at {stor : Stor} {base : B256} {src : Bytes} {n i : Nat} (hi : i < n)
+    (hn : n ≤ 2 ^ 256) :
+    (vyCopyStore stor base src n).get (base + Nat.toB256 i) =
+      Bytes.toB256 (src.sliceD (32 * i) 32 0) := by
+  induction n with
+  | zero => omega
+  | succ n ih =>
+    rw [vyCopyStore_succ]
+    by_cases hin : i = n
+    · subst hin; rw [Stor.get_set_self]
+    · rw [Stor.get_set_ne _ (fun he => hin (add_toB256_inj (by omega) (by omega) he).symm),
+        ih (by omega) (by omega)]
+
+theorem add_toB256_zero (base : B256) : base + Nat.toB256 0 = base := by
+  apply B256.toNat_inj
+  rw [B256.toNat_add, B256.toNat_toB256_of_lt (by decide), Nat.add_zero,
+    Nat.lo_eq_of_lt (B256.toNat_lt _)]
+
+/-- The copy's word `0`, at the base itself. -/
+theorem vyCopyStore_get_zero {stor : Stor} {base : B256} {src : Bytes} {n : Nat} (hn : 0 < n)
+    (hn' : n ≤ 2 ^ 256) :
+    (vyCopyStore stor base src n).get base = Bytes.toB256 (src.sliceD 0 32 0) := by
+  have h := vyCopyStore_get_at (stor := stor) (base := base) (src := src) hn hn'
+  rwa [add_toB256_zero] at h
+
+/-- A string word written by the copy, as bytes. -/
+theorem vyCopyStore_bytes_at {stor : Stor} {base : B256} {src : Bytes} {n i : Nat} (hi : i < n)
+    (hn : n ≤ 2 ^ 256) :
+    ((vyCopyStore stor base src n).get (base + Nat.toB256 i)).toBytes = src.sliceD (32 * i) 32 0 := by
+  rw [vyCopyStore_get_at hi hn]
+  exact Bytes.toBytes_toB256_of_length (List.length_sliceD _ _ _ _)
+
 section Segments
 
 variable {sevm : Sevm} {stor : Stor} {s : Curve3Crv.State} {K : Key → Prop} {ow : Option B256}
@@ -284,7 +347,136 @@ theorem refine_setName (hinv : VyInv stor s K)
     (hf : FreshKeys K (callKeys sevm.caller (callAt sevm 1))) :
     RawRefines sevm (rawOf 1 sevm ow stor) (Curve3Crv.step (c3ctx sevm ow) (callAt sevm 1) s)
       (Key.extend K (callKeys sevm.caller (callAt sevm 1))) := by
-  sorry
+  clear hf
+  set s0 := Sevm.argWord sevm 0 + 4
+  set s1 := Sevm.argWord sevm 1 + 4
+  set L0 := (Sevm.dataWord sevm s0).toNat with hL0def
+  set L1 := (Sevm.dataWord sevm s1).toNat with hL1def
+  set src0 := sevm.data.sliceD s0.toNat 96 0
+  set src1 := sevm.data.sliceD s1.toNat 64 0
+  set n0 := min 3 ((32 + L0) / 32 + 1)
+  set n1 := min 2 ((32 + L1) / 32 + 1)
+  set T := vyCopyStore (vyCopyStore stor vyNameBase src0 n0) vySymbolBase src1 n1
+  have hkeys : callKeys sevm.caller (callAt sevm 1) = [] := rfl
+  rw [hkeys]
+  refine RawRefines.of_iff (T, [], none)
+    ({ s with name := strArg sevm 0, symbol := strArg sevm 1 }, [], .stop)
+    (sevm.value = 0 ∧ L0 ≤ 64 ∧ L1 ≤ 32 ∧ ow = some sevm.caller.toB256) ?_ ?_ ?_
+  · intro r
+    show rawSetName sevm stor ow = some r ↔ _
+    unfold rawSetName
+    dsimp only
+    split_ifs with h
+    · exact ⟨fun h' => ⟨h, (Option.some.inj h').symm⟩, fun ⟨_, h'⟩ => h' ▸ rfl⟩
+    · exact ⟨fun h' => absurd h' (by simp), fun ⟨hP, _⟩ => absurd hP h⟩
+  · intro o
+    have hl0 : (strArg sevm 0).length = L0 := List.length_sliceD _ _ _ _
+    have hl1 : (strArg sevm 1).length = L1 := List.length_sliceD _ _ _ _
+    simp only [callAt, Curve3Crv.step, Curve3Crv.body, Curve3Crv.setName, c3ctx, hl0, hl1]
+    clear hL0def hL1def
+    rcases ow with _ | w <;> split_ifs <;> simp [*, eq_comm]
+    by_cases hw : w = sevm.caller.toB256 <;> simp [hw, eq_comm]
+  rintro ⟨-, hL0, hL1, -⟩
+  refine ⟨?_, rfl, rfl⟩
+  -- the written slots
+  have hname : ∀ i < 3, vyNameBase + Nat.toB256 i ∈ vyNameSlots := by
+    intro i hi
+    have : i = 0 ∨ i = 1 ∨ i = 2 := by omega
+    rcases this with rfl | rfl | rfl
+    · rw [add_toB256_zero]; simp [vyNameSlots]
+    · simp [vyNameSlots]
+    · simp [vyNameSlots]
+  have hsym : ∀ i < 2, vySymbolBase + Nat.toB256 i ∈ vySymbolSlots := by
+    intro i hi
+    have : i = 0 ∨ i = 1 := by omega
+    rcases this with rfl | rfl
+    · rw [add_toB256_zero]; simp [vySymbolSlots]
+    · simp [vySymbolSlots]
+  have hn0 : n0 ≤ 3 := Nat.min_le_left _ _
+  have hn0' : 2 ≤ n0 := by simp only [n0]; omega
+  have hn1 : n1 = 2 := by simp only [n1]; omega
+  have hfix : ∀ x, x ∈ vyNameSlots ++ vySymbolSlots → x ∈ vyFixedSlots := by
+    intro x hx
+    simp only [List.mem_append, vyNameSlots, vySymbolSlots, List.mem_cons, List.not_mem_nil,
+      or_false] at hx
+    rcases hx with (rfl | rfl | rfl) | (rfl | rfl) <;> simp [vyFixedSlots]
+  have hoff : ∀ x, x ∉ vyNameSlots ++ vySymbolSlots → T.get x = stor.get x := by
+    intro x hx
+    rw [vyCopyStore_get_off (fun i hi he =>
+        hx (List.mem_append_right _ (by rw [← he]; exact hsym i (by omega)))),
+      vyCopyStore_get_off (fun i hi he =>
+        hx (List.mem_append_left _ (by rw [← he]; exact hname i (by omega))))]
+  have hsymoff : ∀ i < 3, T.get (vyNameBase + Nat.toB256 i) =
+      (vyCopyStore stor vyNameBase src0 n0).get (vyNameBase + Nat.toB256 i) := by
+    intro i hi
+    exact vyCopyStore_get_off (fun j hj he =>
+      vyStrSlots_apart.2 _ (hname i hi) _ (hsym j (by omega)) he.symm)
+  have hword : ∀ x ∈ vyWordSlots, T.get x = stor.get x := by
+    intro x hx
+    exact hoff x (fun hs => vyStrSlots_apart.1 x hs x hx rfl)
+  have hw0 : ∀ (src : Bytes) (s' : B256), src = sevm.data.sliceD s'.toNat src.length 0 →
+      32 ≤ src.length → Bytes.toB256 (src.sliceD 0 32 0) = Sevm.dataWord sevm s' := by
+    intro src s' hsrc hlen
+    rw [hsrc, Bytes.sliceD_sliceD_of_le _ _ _ _ _ hlen, Nat.add_zero]; rfl
+  have hsl : ∀ (s' : B256) (w L : Nat), 32 + L ≤ w →
+      (sevm.data.sliceD s'.toNat w 0).sliceD 32 L 0 = sevm.data.sliceD (s'.toNat + 32) L 0 :=
+    fun s' w L h => Bytes.sliceD_sliceD_of_le _ _ _ _ _ h
+  refine ⟨?_, ?_, ?_, ?_, ?_, fun k hk => ?_, fun k hk => ?_, fun y hy => ?_, ?_, ?_,
+    hinv.conserved⟩
+  · rw [hword _ (by simp [vyWordSlots])]; exact hinv.decimals
+  · rw [hword _ (by simp [vyWordSlots])]; exact hinv.supply
+  · rw [hword _ (by simp [vyWordSlots])]; exact hinv.minter
+  · -- the new name
+    have hlen0 : (strArg sevm 0).length = L0 := List.length_sliceD _ _ _ _
+    refine ⟨?_, by rw [hlen0]; omega, ?_⟩
+    · have h0 := hsymoff 0 (by omega)
+      rw [add_toB256_zero] at h0
+      show _ = (strArg sevm 0).length
+      rw [h0, vyCopyStore_get_zero (by omega) (by omega),
+        hw0 src0 s0 (by rw [List.length_sliceD]) (by rw [List.length_sliceD]; omega), hlen0]
+    · have hW : vyStrWords T vyNameBase 2 =
+          (T.get (vyNameBase + Nat.toB256 1)).toBytes ++ (T.get (vyNameBase + Nat.toB256 2)).toBytes := by
+        simp [vyStrWords, List.range_succ]
+      rw [hW, hlen0, hsymoff 1 (by omega), vyCopyStore_bytes_at (by omega) (by omega)]
+      by_cases h32 : L0 ≤ 32
+      · rw [List.take_append_of_le_length (by rw [List.length_sliceD]; omega),
+          ← sliceD_zero_take _ (by rw [List.length_sliceD]; omega),
+          Bytes.sliceD_sliceD_of_le _ _ _ _ _ (by omega), Nat.add_zero, hsl s0 96 L0 (by omega)]
+        rfl
+      · rw [hsymoff 2 (by omega), vyCopyStore_bytes_at (by simp only [n0]; omega) (by omega),
+          show 32 * 1 = 32 from rfl, show 32 * 2 = 32 + 32 from rfl, ← List.sliceD_split,
+          ← sliceD_zero_take _ (by rw [List.length_sliceD]; omega),
+          Bytes.sliceD_sliceD_of_le _ _ _ _ _ (by omega), Nat.add_zero, hsl s0 96 L0 (by omega)]
+        rfl
+  · -- the new symbol
+    have hlen1 : (strArg sevm 1).length = L1 := List.length_sliceD _ _ _ _
+    refine ⟨?_, by rw [hlen1]; omega, ?_⟩
+    · show _ = (strArg sevm 1).length
+      rw [vyCopyStore_get_zero (by omega) (by omega),
+        hw0 src1 s1 (by rw [List.length_sliceD]) (by rw [List.length_sliceD]; omega), hlen1]
+    · have hW : vyStrWords T vySymbolBase 1 = (T.get (vySymbolBase + Nat.toB256 1)).toBytes := by
+        simp [vyStrWords]
+      rw [hW, hlen1, vyCopyStore_bytes_at (by omega) (by omega),
+        ← sliceD_zero_take _ (by rw [List.length_sliceD]; omega),
+        Bytes.sliceD_sliceD_of_le _ _ _ _ _ (by omega), Nat.add_zero, hsl s1 64 L1 (by omega)]
+      rfl
+  · have hK : K k := by simpa [Key.extend] using hk
+    rw [hoff _ (fun hs => hinv.apart k hK (hfix _ hs))]
+    cases k <;> exact hinv.known _ hK
+  · have hK : ¬ K k := fun h => hk (.inl h)
+    cases k <;> exact hinv.unknown _ hK
+  · by_cases hs : y ∈ vyNameSlots ++ vySymbolSlots
+    · exact .inl (hfix y hs)
+    · rw [hoff y hs] at hy
+      rcases hinv.support y hy with hx | ⟨k, hK, he⟩
+      · exact .inl hx
+      · exact .inr ⟨k, .inl hK, he⟩
+  · intro k k' hk hk' he
+    simp only [Key.extend, List.not_mem_nil, or_false] at hk hk'
+    exact hinv.inj k k' hk hk' he
+  · intro k hk
+    simp only [Key.extend, List.not_mem_nil, or_false] at hk
+    exact hinv.apart k hk
 
 -- SEGMENT: refineWordViews (pure, short; four views)
 /-- `totalSupply`, `decimals`, `balanceOf`, `allowance`.  Proof sketch: storage unchanged, the
