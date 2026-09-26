@@ -180,6 +180,16 @@ theorem Mem.Reads.write_self {μ : Mem} {bs : Bytes} (hwf : Mem.Wf μ) (h : Mem.
   intro i
   rw [h.write hwf n _ i, Bytes.getD_writeAt_self]
 
+/-- Memory past its size reads as zeros. -/
+theorem read_past_size {M : Mem} (hwf : Mem.Wf M) {i : Nat} (hi : M.size ≤ i) (k : Nat) :
+    (M.read i k).1 = List.replicate k 0 := by
+  show Array.sliceD _ _ _ _ = _
+  rw [Array.sliceD_eq_map]
+  apply List.ext_getElem (by simp)
+  intro j h1 h2
+  simp only [List.getElem_map, List.getElem_range, List.getElem_replicate]
+  exact Array.getD_of_size_le 0 (by unfold Mem.Wf at hwf; omega)
+
 /-! ### Bitwise facts of the merge with nothing left over -/
 
 theorem ones_eq : Bytes.toB256 onesPush = B256.max := by decide

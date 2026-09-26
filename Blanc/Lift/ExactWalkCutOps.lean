@@ -259,6 +259,24 @@ theorem rxc_staticcall_sha {iiw oiw : B256}
     hroom hG
   exact .next hrun (k b' hpost)
 
+theorem rxc_shl {x y v : B256} (hv : y <<< x.toNat = v) (hroom : S.length < 1024)
+    (k : SFunc.RunExactCut fs sevm C (St b (v :: S) M G) f r) :
+    SFunc.RunExactCut fs sevm C (St b (x :: y :: S) M (G + 3)) (.next (.reg .shl) f) r :=
+  rxc_binary (fn := fun x y => y <<< x.toNat) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) hv
+    hroom k
+
+/-- An internal call that returns, inside a cut run (the callee runs uncut). -/
+theorem rxc_callRet {d : B256} {j : Nat} {D : Devm} (hj : fs[j]? = some g)
+    (hcall : SFunc.RunExact fs sevm (St b S M G) g (.returned D))
+    (k : SFunc.RunExactCut fs sevm C D f r) :
+    SFunc.RunExactCut fs sevm C (St b (d :: S) M (G + 8)) (.callNext j f) r :=
+  .callRet d hj popBurnBy_St1 hcall k
+
+/-- A callee's `JUMP` back to its return address, inside a cut run. -/
+theorem rxc_ret {d : B256} :
+    SFunc.RunExactCut fs sevm C (St b (d :: S) M (G + 8)) .ret (.done (.returned (St b S M G))) :=
+  .ret d popBurnBy_St1
+
 end CutSteps
 
 end Blanc.Lift
