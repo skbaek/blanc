@@ -233,8 +233,8 @@ theorem insert_loop {sevm : Sevm} {b₀ : Devm} {G : Nat} {x n : Nat} {node0 : B
       rw [hval]
       congr 1
       by_cases hk : (sevm.currentTarget, solBranchSlot h) ∈ keys0
-      · rw [if_pos (hmem.mpr hk), if_pos hk]
-      · rw [if_neg (fun h' => hk (hmem.mp h')), if_neg hk]
+      · rw [ite_eq_left (hmem.mpr hk), ite_eq_left hk]
+      · rw [ite_eq_right (fun h' => hk (hmem.mp h')), ite_eq_right hk]
     refine ⟨afterSstore sevm b (solBranchSlot h) nd, M, ?_, ?_⟩
     · refine ⟨fun a => ?_, fun a => ?_, ?_, ?_, ?_, ?_⟩
       · rw [getStor_afterSstore, getStor_afterSstore, hL.stor, hL.stor]
@@ -257,8 +257,8 @@ theorem insert_loop {sevm : Sevm} {b₀ : Devm} {G : Nat} {x n : Nat} {node0 : B
       unfold sloadCost sloadCostOfKeys
       have hm := (hL.mem_self hh32).trans (hkeys h hh32)
       by_cases hk : (sevm.currentTarget, solBranchSlot h) ∈ keys0
-      · rw [if_pos (hm.mpr hk), if_pos hk]
-      · rw [if_neg (fun h' => hk (hm.mp h')), if_neg hk]
+      · rw [ite_eq_left (hm.mpr hk), ite_eq_left hk]
+      · rw [ite_eq_right (fun h' => hk (hm.mp h')), ite_eq_right hk]
     have hrun0 : deadRun sevm.currentTarget keys0 h (m + 1) =
         deadGas h + sloadCostOfKeys sevm.currentTarget keys0 (solBranchSlot h) +
           deadRun sevm.currentTarget keys0 (h + 1) m := rfl
@@ -311,19 +311,18 @@ theorem deposit_ok_facts {H : Bytes → B256} {s s' : BeaconDeposit.Acc}
           BeaconDeposit.le64 s.count⟩ := by
   unfold BeaconDeposit.deposit at hOk
   split_ifs at hOk with h1 h2 h3 h4 h5 h6 h7
-  all_goals first | (simp at hOk; done) | skip
   by_cases hn : BeaconDeposit.depositDataNode H pk wc sig
       (BeaconDeposit.le64 (v / BeaconDeposit.oneGwei)) = root
-  · rw [if_neg (not_not.mpr hn), hn] at hOk
+  · rw [ite_eq_right (not_not.mpr hn), hn] at hOk
     split at hOk
     · rename_i br hw
       cases hOk
       exact ⟨not_not.mp h1, not_not.mp h2, not_not.mp h3, by omega, not_not.mp h5, by omega, hn,
         h7, br, hw, rfl, rfl⟩
     · cases hOk
-  · rw [if_pos hn] at hOk
+  · rw [ite_eq_left hn] at hOk
     cases hOk
-  all_goals (simp only at hOk; split_ifs at hOk <;> cases hOk)
+  all_goals (simp only at hOk; split_ifs at hOk)
 
 /-! ## Small facts the composition uses -/
 
@@ -343,6 +342,20 @@ theorem argBytes_eq {sevm : Sevm} {i k : Nat} (h : (argBytes sevm i).length = k)
   rw [hl, B256.toNat_toB256_of_lt]
   have := B256.toNat_lt (argLen sevm i)
   omega
+
+theorem argPtr_toNat {sevm : Sevm} {i : Nat} (h : TailDecodable sevm i) :
+    (argPtr sevm i).toNat = 36 + (argOff sevm i).toNat := by
+  have h1 := h.1
+  unfold argPtr
+  rw [B256.toNat_add, B256.toNat_add, Nat.lo_eq_of_lt (a := (4 : B256).toNat + _) (by
+      rw [show (4 : B256).toNat = 4 from rfl]; omega),
+    Nat.lo_eq_of_lt (by rw [show (4 : B256).toNat = 4 from rfl, show (32 : B256).toNat = 32 from rfl]; omega),
+    show (4 : B256).toNat = 4 from rfl, show (32 : B256).toNat = 32 from rfl]
+  omega
+
+theorem acc_mk_eq {f g : Nat → B256} {c d : Nat} (h1 : f = g) (h2 : c = d) :
+    (⟨f, c⟩ : BeaconDeposit.Acc) = ⟨g, d⟩ := by
+  subst h1 h2; rfl
 
 /-! ## The body -/
 
@@ -374,6 +387,226 @@ theorem deposit_body_runExact (sevm : Sevm) (b : Devm) (sel : B256) (g : Nat)
       b'.logs = b.logs ++ [BeaconDeposit.depositEventLog sevm.currentTarget ev] ∧
       (∀ a, b'.getCode a = b.getCode a) ∧ b'.accessedAddresses = b.accessedAddresses ∧
       b'.output = b.output ∧ b'.error = b.error := by
-  sorry
+  -- the model's success
+  obtain ⟨hpk, hwc, hsg, hv1, hv2, hv3, hnode, hcap, br', hwalk, rfl, rfl⟩ := deposit_ok_facts hOk
+  clear hOk
+  set tgt := sevm.currentTarget with htgt
+  set stor := Devm.getStor b tgt with hstor
+  set w := bodyCount sevm b with hw
+  have hwst : stor.get solCountSlot = w := rfl
+  have hcnt : (solAcc stor).count = w.toNat := rfl
+  obtain ⟨hpkB, hL0⟩ := argBytes_eq hpk
+  obtain ⟨hwcB, hL1⟩ := argBytes_eq hwc
+  obtain ⟨hsgB, hL2⟩ := argBytes_eq hsg
+  set pP := argPtr sevm 0
+  set wP := argPtr sevm 1
+  set sP := argPtr sevm 2
+  set rt := argRoot sevm
+  have hstk : depositArgStack sevm [sel] = [rt, 96, sP, 32, wP, 48, pP, 0x01b8, sel] := by
+    rw [depositArgStack, hL0, hL1, hL2]; rfl
+  -- the value
+  set v := sevm.value.toNat
+  have hamt : (gweiAmount sevm).toNat = v / 10 ^ 9 := by
+    rw [gweiAmount, B256.toNat_div (by decide)]; rfl
+  have hv1' : 10 ^ 18 ≤ v := hv1
+  have hv2' : v % 10 ^ 9 = 0 := hv2
+  have hv3' : v / 10 ^ 9 < 2 ^ 64 := by
+    have : v / 10 ^ 9 ≤ 2 ^ 64 - 1 := hv3
+    omega
+  set a := gweiAmount sevm
+  -- gas accounting
+  set L := bodyInsertGas sevm b
+  set cs := countStoreCost sevm w
+  set G6 := g + 1 + L
+  set G5 := G6 + (281 + cs)
+  set G4 := G5 + 2553
+  set G3 := G4 + 2526
+  set G2 := G3 + 6205
+  set G1 := G2 + 1104
+  have hstart : G1 + (1882 + sloadCost sevm b solCountSlot) = g + 1 + bodyGas sevm b := by
+    show _ = g + 1 + (14551 + sloadCostOfKeys sevm.currentTarget b.accessedStorageKeys
+      solCountSlot + cs + L)
+    rw [sloadCostOfKeys_eq_sloadCost]
+    simp only [G1, G2, G3, G4, G5, G6]
+    omega
+  -- segment 1
+  obtain ⟨b1, M1, hK1, hM1, r1⟩ := body_guards (b := b) (sel := sel) (rt := rt) (sP := sP)
+    (wP := wP) (pP := pP) (G := G1) hcd hsha.fork hv1' hv2' hv3'
+  -- segment 2
+  obtain ⟨b2, M2, hK2, hM2, r2⟩ := body_event (sevm := sevm) (b := b1) (sel := sel) (rt := rt)
+    (sP := sP) (wP := wP) (pP := pP) (a := a) (c := w) (G := G2) hM1
+  -- segment 3
+  have hc1 : ∀ x, b1.getCode x = b.getCode x := fun x => by rw [hK1.code, afterSload_getCode]
+  have ha1 : b1.accessedAddresses = b.accessedAddresses := by
+    rw [hK1.addrs, afterSload_accessedAddresses]
+  have hsha2 : ShaReady sevm b2 :=
+    hsha.of_eq (fun x => by rw [hK2.code, hc1]) (by rw [hK2.addrs, ha1])
+  set ev := bodyEvent sevm pP wP sP a w
+  have hlen : (BeaconDeposit.abiDepositEvent ev).length = 576 := by
+    simp [ev, bodyEvent, BeaconDeposit.abiDepositEvent, abiBytesTail, List.length_sliceD,
+      BeaconDeposit.le64, ceil32, B256.length_toBytes]
+  obtain ⟨b3, M3, hK3, hM3, r3⟩ := body_pubkeyRoot (sevm := sevm) (b := b2) (sel := sel) (rt := rt)
+    (sP := sP) (wP := wP) (pP := pP) (a := a) (G := G3) hsha2 hstatic hlen (by omega) hM2
+  -- world facts so far
+  have hc3 : ∀ x, b3.getCode x = b.getCode x := fun x => by
+    rw [hK3.code]; show b2.getCode x = _; rw [hK2.code, hc1]
+  have ha3 : b3.accessedAddresses = b.accessedAddresses := by
+    rw [hK3.addrs]; show b2.accessedAddresses = _; rw [hK2.addrs, ha1]
+  -- segment 4
+  have hsP : sP.toNat + 96 < 2 ^ 256 := by
+    have := argPtr_toNat hdec.2.2.2
+    have := hdec.2.2.2.1
+    show (argPtr sevm 2).toNat + 96 < _
+    omega
+  set pkR := BeaconDeposit.pubkeyRoot Bytes.sha256 (sevm.data.sliceD pP.toNat 48 0)
+  obtain ⟨b4, M4, hK4, hM4, r4⟩ := body_signatureRoot (sevm := sevm) (b := b3) (sel := sel)
+    (rt := rt) (sP := sP) (wP := wP) (pP := pP) (a := a) (pkR := pkR) (G := G4)
+    (hsha.of_eq hc3 ha3) hsP (by omega) hM3
+  -- segment 5
+  set sR := BeaconDeposit.signatureRoot Bytes.sha256 (sevm.data.sliceD sP.toNat 96 0)
+  obtain ⟨b5, M5, hK5, hM5, r5⟩ := body_dataNode (sevm := sevm) (b := b4) (sel := sel) (rt := rt)
+    (sP := sP) (wP := wP) (pP := pP) (a := a) (pkR := pkR) (sR := sR) (G := G5)
+    (hsha.of_eq (fun x => by rw [hK4.code, hc3]) (by rw [hK4.addrs, ha3])) (by omega) hM4
+  -- segment 6
+  have hkeys5 : b5.accessedStorageKeys =
+      sloadAccessedStorageKeys tgt b.accessedStorageKeys solCountSlot := by
+    rw [hK5.keys, hK4.keys, hK3.keys]
+    show b2.accessedStorageKeys = _
+    rw [hK2.keys, hK1.keys, afterSload_accessedStorageKeys]
+  have hstor5 : ∀ x, Devm.getStor b5 x = Devm.getStor b x := fun x => by
+    rw [hK5.stor, hK4.stor, hK3.stor]
+    show Devm.getStor b2 x = _
+    rw [hK2.stor, hK1.stor, afterSload_getStor]
+  have hw5 : b5.getStorVal sevm.currentTarget solCountSlot = w := by
+    show (Devm.getStor b5 _).get _ = _
+    rw [hstor5]; rfl
+  have hwarm5 : (⟨sevm.currentTarget, solCountSlot⟩ : Adr × B256) ∈ b5.accessedStorageKeys := by
+    rw [hkeys5, mem_sloadAccessedStorageKeys]; exact .inr rfl
+  have hcs5 : sstoreCost sevm b5 solCountSlot (1 + w) = cs := by
+    unfold sstoreCost; rw [ite_eq_left hwarm5, hw5, Nat.zero_add]; rfl
+  have hroot : BeaconDeposit.hashPair Bytes.sha256
+      (Bytes.sha256 (pkR.toBytes ++ sevm.data.sliceD wP.toNat 32 0))
+      (Bytes.sha256 (BeaconDeposit.le64 a.toNat ++ BeaconDeposit.zeros 24 ++ sR.toBytes)) = rt := by
+    rw [← hnode, hpkB, hwcB, hsgB, hamt]; rfl
+  obtain ⟨b6, M6, hK6, hM6, r6⟩ := body_countBump (sevm := sevm) (b := b5) (sel := sel) (rt := rt)
+    (sP := sP) (wP := wP) (pP := pP) (a := a) (pkR := pkR) (sR := sR) (G := G6) hsha.fork hstatic
+    hwarm5 hroot (by rw [hw5]; omega) (by rw [hw5, hcs5]; omega) hM5
+  rw [hw5] at hK6 r6
+  rw [hcs5] at r6
+  -- the insertion loop
+  set x := w.toNat + 1 with hx
+  have hx32 : x < 2 ^ 32 := by
+    have : w.toNat < 2 ^ 32 - 1 := hcnt ▸ hcap
+    omega
+  set n := bodyDepth sevm b
+  have hn : n < 32 := insertDepth_lt 32 x (by omega) hx32
+  set br := (solAcc stor).branch
+  set nd := insertNode Bytes.sha256 br n rt
+  set stor1 := stor.set solCountSlot (1 + w)
+  have hb6stor : Devm.getStor b6 sevm.currentTarget = stor1 := by
+    rw [hK6.stor, afterSstore_getStor_self, hstor5]
+  have hbr : ∀ h < 32, stor1.get (solBranchSlot h) = br h := fun h hh => by
+    rw [Stor.get_set_ne _ (Ne.symm (solBranchSlot_ne_count hh))]
+    simp [br, solAcc, hh, stor]
+  have hkeys6 : ∀ j < 32, ((sevm.currentTarget, solBranchSlot j) ∈ b6.accessedStorageKeys ↔
+      (sevm.currentTarget, solBranchSlot j) ∈ b.accessedStorageKeys) := fun j hj => by
+    rw [hK6.keys, afterSstore_accessedStorageKeys, mem_sloadAccessedStorageKeys, hkeys5,
+      mem_sloadAccessedStorageKeys]
+    have hne : (sevm.currentTarget, solBranchSlot j) ≠ (tgt, solCountSlot) :=
+      fun e => solBranchSlot_ne_count hj (Prod.mk.inj e).2
+    constructor
+    · rintro ((h | h) | h)
+      · exact h
+      · exact absurd h hne
+      · exact absurd h hne
+    · exact fun h => .inl (.inl h)
+  have hlc : liveStoreCost sevm b.accessedStorageKeys stor1 n nd = bodyLiveCost sevm b :=
+    liveStoreCost_congr (Stor.get_set_ne _ (Ne.symm (solBranchSlot_ne_count hn)) _)
+  have hc6 : ∀ y, b6.getCode y = b.getCode y := fun y => by
+    rw [hK6.code, afterSstore_getCode, hK5.code, hK4.code, hc3]
+  have ha6 : b6.accessedAddresses = b.accessedAddresses := by
+    rw [hK6.addrs, afterSstore_accessedAddresses, hK5.addrs, hK4.addrs, ha3]
+  have hM6' : BodyMem M6 (1024 + 96 * 0) (Nat.toB256 (928 + 96 * 0)) [] := hM6
+  have hL0' : LoopBase sevm.currentTarget b6 b6 0 :=
+    ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl, fun _ =>
+      ⟨.inl, fun h => h.elim id (fun ⟨_, hj, _⟩ => absurd hj (Nat.not_lt_zero _))⟩⟩
+  obtain ⟨bf, Mf, hW, rL⟩ := insert_loop (sevm := sevm) (b₀ := b6) (G := g + 1) (x := x) (n := n)
+    (node0 := rt) (br := br) (keys0 := b.accessedStorageKeys) (stor1 := stor1)
+    (x₁ := sR) (x₂ := pkR) (x₃ := 128) (x₄ := a) (y₁ := rt) (y₂ := 96) (y₃ := sP) (y₄ := 32)
+    (y₅ := wP) (y₆ := 48) (y₇ := pP) (d := 440) (rest := [sel]) hsha.fork hstatic
+    (hsha.of_eq hc6 ha6) (by simp) (by omega) hn (fun h hh => insertDepth_dead 32 x h hh)
+    (insertDepth_live 32 x (by omega) hx32) hb6stor hbr hkeys6 (by rw [hlc]; omega)
+    n 0 b6 M6 (by omega) hL0' hM6' (by rw [hlc]; show g + 1 + L < 2 ^ 256; omega)
+  rw [hlc] at rL
+  have e1 : (1 + w) = Nat.toB256 (x / 2 ^ 0) := by
+    rw [Nat.pow_zero, Nat.div_one]
+    apply B256.toNat_inj
+    rw [B256.toNat_toB256_of_lt (by omega), B256.toNat_add, show (1 : B256).toNat = 1 from rfl,
+      Nat.lo_eq_of_lt (by omega)]
+    omega
+  have hrun6 : SFunc.RunExact prog sevm
+      (St b6 [0, 1 + w,
+        BeaconDeposit.hashPair Bytes.sha256
+          (Bytes.sha256 (pkR.toBytes ++ sevm.data.sliceD wP.toNat 32 0))
+          (Bytes.sha256 (BeaconDeposit.le64 a.toNat ++ BeaconDeposit.zeros 24 ++ sR.toBytes)),
+        sR, pkR, 128, a, rt, 96, sP, 32, wP, 48, pP, 440, sel] M6 G6) t_0f6e_c20
+      (.returned (St bf [sel] Mf (g + 1))) := by
+    rw [t_0f6e_c20_eq, hroot, e1]
+    exact rL
+  refine ⟨bf, Mf, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · rw [hstk, ← hstart]
+    exact r1 _ (r2 _ (r3 _ (r4 _ (r5 _ (r6 _ hrun6)))))
+  · rw [hW.stor, afterSstore_getStor_self, hb6stor]; rfl
+  · -- the model's accumulator
+    have hw' := walk_insertNode Bytes.sha256 br rt 32 0 x (by omega) hx32
+    rw [Nat.zero_add] at hw'
+    have hbr' : br' = BeaconDeposit.setSlot br n nd := by
+      have : BeaconDeposit.walk Bytes.sha256 br 32 0 x rt = some br' := by rw [hx, ← hcnt]; exact hwalk
+      rw [show insertNode Bytes.sha256 br 0 rt = rt from rfl] at hw'
+      rw [hw'] at this
+      exact (Option.some.inj this).symm
+    rw [hW.stor, afterSstore_getStor_self, hb6stor, hbr', hcnt]
+    refine acc_mk_eq ?_ ?_
+    · funext h
+      by_cases hh : h < 32
+      · rw [ite_eq_left hh]
+        unfold BeaconDeposit.setSlot
+        by_cases hhn : h = n
+        · subst hhn; rw [ite_eq_left rfl, Stor.get_set_self]
+        · rw [ite_eq_right hhn, Stor.get_set_ne _ (fun e => hhn (solBranchSlot_inj hh hn e.symm)),
+            hbr h hh]
+      · rw [ite_eq_right hh]
+        unfold BeaconDeposit.setSlot
+        rw [ite_eq_right (by omega)]
+        simp [br, solAcc, hh]
+    · rw [Stor.get_set_ne _ (solBranchSlot_ne_count hn), Stor.get_set_self]
+      have := congrArg B256.toNat e1
+      rw [Nat.pow_zero, Nat.div_one, B256.toNat_toB256_of_lt (by omega)] at this
+      exact this
+  · intro y hy
+    rw [hW.stor, getStor_afterSstore, ite_eq_right hy, hK6.stor, getStor_afterSstore, ite_eq_right hy, hstor5]
+  · rw [hW.logs, afterSstore_logs, hK6.logs, afterSstore_logs, hK5.logs, hK4.logs, hK3.logs]
+    show b2.logs ++ _ = _
+    rw [hK2.logs, hK1.logs, afterSload_logs]
+    have hev : ev = ⟨argBytes sevm 0, argBytes sevm 1,
+        BeaconDeposit.le64 (v / BeaconDeposit.oneGwei), argBytes sevm 2,
+        BeaconDeposit.le64 (solAcc stor).count⟩ := by
+      rw [hpkB, hwcB, hsgB, hcnt]
+      show bodyEvent sevm pP wP sP a w = _
+      unfold bodyEvent
+      rw [hamt]
+      rfl
+    rw [hev]
+    rfl
+  · intro y; rw [hW.code, afterSstore_getCode, hc6]
+  · rw [hW.addrs, afterSstore_accessedAddresses, ha6]
+  · rw [hW.output, afterSstore_output, hK6.output, afterSstore_output, hK5.output, hK4.output,
+      hK3.output]
+    show b2.output = _
+    rw [hK2.output, hK1.output, afterSload_output]
+  · rw [hW.error, afterSstore_error, hK6.error, afterSstore_error, hK5.error, hK4.error,
+      hK3.error]
+    show b2.error = _
+    rw [hK2.error, hK1.error, afterSload_error]
 
 end Blanc.Lift.BeaconDeposit
