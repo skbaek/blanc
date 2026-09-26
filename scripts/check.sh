@@ -1750,7 +1750,17 @@ Blanc.Lift.Weth9.weth9_decimals_succeeds|$STANDARD
 Blanc.Lift.Weth9.weth9_balanceOf_gas_exact|$STANDARD
 Blanc.Lift.Weth9.weth9_decimals_gas_exact|$STANDARD
 Blanc.Lift.Weth9.weth9Gas_eq_with|$STANDARD
-Blanc.Lift.Weth9.weth9Gas_le_max|$STANDARD"
+Blanc.Lift.Weth9.weth9Gas_le_max|$STANDARD
+Blanc.Lift.BeaconDeposit.beacon_history_preserves_solInv|$STANDARD
+Blanc.Lift.BeaconDeposit.deposit_exec_solInv|$STANDARD
+Blanc.Lift.BeaconDeposit.frameHistory_root_view|$STANDARD
+Blanc.Lift.BeaconDeposit.frameHistory_count_view|$STANDARD
+Blanc.Lift.BeaconDeposit.supportsInterface_exec|$STANDARD
+Blanc.Lift.BeaconDeposit.get_deposit_count_cold_exec|$STANDARD
+Blanc.Lift.ri_codecopy|$STANDARD
+Blanc.Lift.ric_branchToCut|$STANDARD
+Blanc.Lift.ric_revert|$STANDARD
+Blanc.Lift.rx_mload_ext|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'

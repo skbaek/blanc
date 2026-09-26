@@ -3,31 +3,29 @@ import Blanc.Lift.BeaconDeposit.DepositExec
 import Blanc.Lift.BeaconDeposit.Views
 
 /-!
-# Headline corollaries for the deployed runtime (B3): rejection, frame histories, OPEN-1
+# Headline corollaries for the deployed runtime (B3): frame histories
 
 Corollaries of the per-frame refinement `deposit_frame_refines` (`Safe.lean`) and the view
 theorems (`Views.lean`), over real Jaune executions of the deployed bytes:
 
-* `deposit_reject_no_success`: a `deposit` call whose calldata is not `DepositDecodable`, or on
-  which the model's `deposit` returns an error, has no successful frame execution;
 * `FrameHistory` / `frameHistory_solInv`: a chain of successful frames, each starting from the
   previous one's post-storage of the contract, extends the storage abstraction by exactly the
   model nodes of the `deposit`-selector frames in order; `frameHistory_root_view` and
-  `frameHistory_count_view` read the resulting mixed root and count through the deployed views;
-* `solInv_inv`, `solInv_root`, `solInv_count`: the OPEN-1 transfer. `SolInv stor history`
-  (`Layout.lean`) contains the model invariant `Inv Bytes.sha256 (solAcc stor) history` as its
-  second conjunct by definition, so `root_correct` and `deposit_inv` apply to the deployed
-  contract's storage.
+  `frameHistory_count_view` read the resulting mixed root and count through the deployed views.
 
 ## Register rows (`BEACON_DEPOSIT_ASSURANCE.md`) and their deployed-runtime counterparts
 
-* OPEN-1: `solInv_inv` (with `solInv_root`, `solInv_count`); the model theorems themselves are
-  unchanged.
+* OPEN-1: `SolInv stor history` (`Layout.lean`) contains the model invariant
+  `Inv Bytes.sha256 (solAcc stor) history` as its second conjunct by definition, so
+  `root_correct` and `deposit_inv` apply to the deployed contract's storage; the model theorems
+  themselves are unchanged.
 * P1: not covered here: the deployed bytes are fixed by the B1 certificate (`Check.lean`), not
   compiled by Blanc.
 * P2: `deposit_exec_solInv` (`DepositExec.lean`), liveness of a model-accepted deposit.
-* P3: `deposit_reject_no_success`, success-only: no revert data, route, or retained-effect
-  statement (the lift bridges only relate successful executions).
+* P3: the first conjunct of `deposit_frame_refines`, success-only: a successful `deposit`-selector
+  frame has `DepositDecodable` calldata on which the model's `deposit` returns `.ok`, so a
+  rejected deposit has no successful frame.  No revert data, route, or retained-effect statement
+  (the lift bridges only relate successful executions).
 * P4: `get_deposit_count_warm_exec`, `get_deposit_count_cold_exec`, `supportsInterface_exec`,
   `get_deposit_root_exec` (`Views.lean`).
 * P5: `deposit_frame_refines`, the storage-shape conjunct (writes exactly the count slot and one
@@ -47,49 +45,6 @@ theorems (`Views.lean`), over real Jaune executions of the deployed bytes:
 namespace Blanc.Lift.BeaconDeposit
 
 open Jaune
-
-/-! ## OPEN-1 transfer -/
-
-/-- **OPEN-1 transfer.**  The storage abstraction carries the model invariant for its history,
-so the model theorems (`root_correct`, `deposit_inv`) apply to the deployed contract's storage. -/
-theorem solInv_inv {stor : Stor} {history : List B256} (h : SolInv stor history) :
-    BeaconDeposit.Inv Bytes.sha256 (solAcc stor) history :=
-  h.2
-
-theorem solInv_root {stor : Stor} {history : List B256} (h : SolInv stor history) :
-    BeaconDeposit.Acc.root Bytes.sha256 (solAcc stor) =
-      BeaconDeposit.mixedRootOf Bytes.sha256 history :=
-  BeaconDeposit.root_correct _ _ _ (solInv_inv h)
-
-theorem solInv_count {stor : Stor} {history : List B256} (h : SolInv stor history) :
-    (solAcc stor).count = history.length :=
-  (solInv_inv h).1
-
-/-! ## P3: rejected deposits have no successful frame -/
-
-/-- **P3 counterpart (success-only).**  Under `deposit_frame_refines`'s premises, a frame whose
-selector is `deposit`'s and whose calldata is not `DepositDecodable`, or on whose decoded
-arguments the model's `deposit` returns an error, has no successful execution.  Revert data,
-the reverting route, and the identity of the model error with the deployed code's revert are not
-covered: the lift bridges relate successful executions only. -/
-theorem deposit_reject_no_success {sevm : Sevm} {pre post : Devm} {history : List B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
-    (hcd : sevm.data.length < 2 ^ 256)
-    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty)
-    (hsha : ShaReady sevm pre)
-    (hinv : SolInv (Devm.getStor pre sevm.currentTarget) history)
-    (hsel : Sevm.selector sevm = BeaconDeposit.depositSelector)
-    (hrej : ¬ DepositDecodable sevm ∨
-      ∃ r, BeaconDeposit.deposit Bytes.sha256 (solAcc (Devm.getStor pre sevm.currentTarget))
-        (argBytes sevm 0) (argBytes sevm 1) (argBytes sevm 2) (argRoot sevm)
-        sevm.value.toNat = .error r) :
-    IsEmpty (Exec 0 sevm pre (.ok post)) := by
-  refine ⟨fun exc => ?_⟩
-  obtain ⟨hdec, s', ev, hOk, -⟩ :=
-    (deposit_frame_refines hcode hfork hcd hstack hmem hsha hinv exc).1 hsel
-  rcases hrej with hnd | ⟨r, herr⟩
-  · exact hnd hdec
-  · rw [hOk] at herr; cases herr
 
 /-! ## P8: histories of frames -/
 

@@ -313,27 +313,6 @@ theorem copy_loop {C : List Nat} (hk : fs[k]? = some (copyLoopTree e0 e1 r0 r1 k
     (St b (copyStack srcB dstB lenB R j0) M (Gx + copyGas n dstB.toNat N j0))
     ⟨M, hwf, by simpa using hr, by simpa using hs, by simp⟩
 
-/-- `copy_loop` at the top level of a function (nothing else cut), with the
-exit continuation an ordinary exact run whose gotos avoid the loop head. -/
-theorem copy_loop_runExact (hk : fs[k]? = some (copyLoopTree e0 e1 r0 r1 k exitT))
-    (h : CopyWf srcB dstB lenB R n N) {j0 : Nat} (hj0 : j0 ≤ N)
-    {M : Mem} (hwf : Mem.Wf M) (hr : Mem.Reads M (copyImg img srcB.toNat dstB.toNat j0))
-    (hs : M.size = copySize n dstB.toNat j0) {Gx : Nat} {E : List Nat} (Q : Outcome → Prop)
-    (hav : exitT.avoids [k] E = true)
-    (hE : ∀ j t, j ∈ E → fs[j]? = some t → t.avoids [k] E = true)
-    (hexit : ∀ M' : Mem, Mem.Wf M' → Mem.Reads M' (copyImg img srcB.toNat dstB.toNat N) →
-      M'.size = copySize n dstB.toNat N →
-      ∃ o, SFunc.RunExact fs sevm (St b (copyStack srcB dstB lenB R N) M' Gx) exitT o ∧ Q o) :
-    ∃ o, SFunc.RunExact fs sevm
-      (St b (copyStack srcB dstB lenB R j0) M (Gx + copyGas n dstB.toNat N j0))
-      (copyLoopTree e0 e1 r0 r1 k exitT) o ∧ Q o := by
-  obtain ⟨r, hrun, o, rfl, hQ⟩ := copy_loop (C := []) hk (by simp) h hj0 hwf hr hs
-    (fun r => ∃ o, r = .done o ∧ Q o)
-    (fun M' h1 h2 h3 => by
-      obtain ⟨o, hrun, hQ⟩ := hexit M' h1 h2 h3
-      exact ⟨.done o, hrun.toCut hE hav, by simp, o, rfl, hQ⟩)
-  exact ⟨o, SFunc.runExact_iff_runExactCut_nil.mpr hrun, hQ⟩
-
 end Copy
 
 end Blanc.Lift

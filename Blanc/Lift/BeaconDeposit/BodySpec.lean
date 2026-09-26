@@ -60,11 +60,6 @@ theorem Keep.trans {b b' b'' : Devm} (h : Keep b b') (h' : Keep b' b'') : Keep b
     h'.addrs.trans h.addrs, h'.keys.trans h.keys, h'.logs.trans h.logs,
     h'.output.trans h.output, h'.error.trans h.error⟩
 
-theorem Keep.getStorVal {b b' : Devm} (h : Keep b b') (a : Adr) (k : B256) :
-    b'.getStorVal a k = b.getStorVal a k := by
-  show (Devm.getStor b' a).get k = (Devm.getStor b a).get k
-  rw [h.stor]
-
 theorem _root_.Blanc.Lift.ShaReady.keep {sevm : Sevm} {b b' : Devm} (h : ShaReady sevm b)
     (hk : Keep b b') : ShaReady sevm b' :=
   h.of_eq hk.code hk.addrs
@@ -77,11 +72,6 @@ def BodyMem (M : Mem) (n : Nat) (fp : B256) (facts : List (Nat × Bytes)) : Prop
   Mem.Wf M ∧ M.size = n ∧
     ∃ img : Bytes, Mem.Reads M img ∧ img.sliceD 64 32 0 = fp.toBytes ∧
       ∀ p ∈ facts, img.sliceD p.1 p.2.length 0 = p.2
-
-theorem BodyMem.mono {M : Mem} {n : Nat} {fp : B256} {facts facts' : List (Nat × Bytes)}
-    (h : BodyMem M n fp facts) (hsub : ∀ p ∈ facts', p ∈ facts) : BodyMem M n fp facts' := by
-  obtain ⟨hwf, hs, img, hr, hfp, hf⟩ := h
-  exact ⟨hwf, hs, img, hr, hfp, fun p hp => hf p (hsub p hp)⟩
 
 /-! ## The arguments -/
 

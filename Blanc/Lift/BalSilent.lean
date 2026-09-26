@@ -174,12 +174,4 @@ theorem SFunc.RunP.getBal_of_balSilent {P : Sevm → Devm → Ninst → Devm →
       simp only [SFunc.balSilent] at hfn
       exact (ihTail hfn hfr.2).trans ((ihRun htarget.1 htarget.2).trans (popBal pop))
 
-/-- **A balance-silent run moves no ether** (over Jaune's steps). -/
-theorem SFunc.Run.getBal_of_balSilent {fs : List SFunc} {S : List Nat}
-    (hS : BalSilentSet fs S = true) {sevm : Sevm} {devm : Devm} {f : SFunc}
-    {o : Outcome} (hf : f.balSilent = true) (hrefs : f.refs.all (· ∈ S) = true)
-    (run : SFunc.Run fs sevm devm f o) :
-    (Outcome.devm o).getBal = devm.getBal :=
-  SFunc.RunP.getBal_of_balSilent id hS hf hrefs run
-
 end Blanc.Lift

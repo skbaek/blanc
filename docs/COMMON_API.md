@@ -2683,7 +2683,7 @@ contract-neutral.
   `eq_zero_of_iszero_ne_zero`); failing arms
   (`SFunc.noOk`, `SFunc.RunCutP.false_of_noOk`), trees that cannot halt (`SFunc.noHalt`,
   `NoHaltSet`, `SFunc.RunP.not_halted`, `SFunc.RunP.not_halted_entry`), conditional gotos
-  (`ric_branchTo`), internal calls (`ric_call`, `ric_callRet`), `ri_sload` and
+  (`ric_branchTo`), internal calls (`ric_call`), `ri_sload` and
   `ri_log1` in [`Blanc/Lift/InvWalkWorld.lean`](../Blanc/Lift/InvWalkWorld.lean);
   the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA
   site (`ric_copy_sha`, the converse of `copy_sha_gen`) in
@@ -2719,12 +2719,10 @@ contract-neutral.
   [`Blanc/Lift/Vyper.lean`](../Blanc/Lift/Vyper.lean).
 - Loops: a back-edge to entry `k` is reasoned about one iteration at a time on
   runs cut at `k` (`SFunc.RunCutP`, `SFunc.RunExactCut`). Safety:
-  `SFunc.RunCutP.loop` (invariant; `loop_indexed`, `SFunc.RunP.loop`), which
+  `SFunc.RunCutP.loop` (invariant; `SFunc.RunP.loop`), which
   nests because the outer cut list is a parameter; liveness:
   `SFunc.RunExactCut.iterate` builds a whole loop run from per-iteration cut
-  runs; both in [`Blanc/Lift/Loop.lean`](../Blanc/Lift/Loop.lean), with a
-  minimal counted loop in
-  [`Blanc/Lift/LoopExample.lean`](../Blanc/Lift/LoopExample.lean).
+  runs; both in [`Blanc/Lift/Loop.lean`](../Blanc/Lift/Loop.lean).
 - solc idioms, gas-exact: the word-copy loop (`copy_loop`) in
   [`Blanc/Lift/CopyLoop.lean`](../Blanc/Lift/CopyLoop.lean); the
   `sha256(abi.encodePacked(a, b))` site through the SHA-256 precompile
@@ -2740,13 +2738,13 @@ contract-neutral.
 - Properties of the lifted program without per-path walks: a state-silent
   entry set (`SilentSet`, `SFunc.Run.state_of_silent`) in
   [`Blanc/Lift/Silent.lean`](../Blanc/Lift/Silent.lean), its balance analogue
-  (`BalSilentSet`, `SFunc.Run.getBal_of_balSilent`) in
+  (`BalSilentSet`, `SFunc.RunP.getBal_of_balSilent`) in
   [`Blanc/Lift/BalSilent.lean`](../Blanc/Lift/BalSilent.lean), a quiet entry set
   that may make static calls (the SHA-256 precompile) but writes no storage and
   emits no log (`QuietSet`, `SFunc.Run.world_of_quiet`) in
   [`Blanc/Lift/Quiet.lean`](../Blanc/Lift/Quiet.lean), and Hoare-style
   composition across one internal call or an ABI wrapper
-  (`SFunc.Run.hoare_single_call`, `hoare_single_call_with_gotos`,
+  (`SFunc.RunP.hoare_single_call`, `hoare_single_call_with_gotos`,
   `hoare_wrapper`) in [`Blanc/Lift/Hoare.lean`](../Blanc/Lift/Hoare.lean).
 - The preservation ladder over a code image instead of `Prog.compile`:
   `CodeSem` (image, run relation, `correct`) in

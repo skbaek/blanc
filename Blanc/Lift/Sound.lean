@@ -355,17 +355,6 @@ lemma deriv_lt_trans {p q r : Exec.Deriv}
   rcases hqr with ⟨q', hq, hq'⟩
   exact ⟨q', deriv_le_trans (Exec.Deriv.le.step hp hp') hq, hq'⟩
 
-lemma jump_at_data {pc : Nat} {sevm : Sevm} {devm post : Devm}
-    (exc : Exec pc sevm devm (.ok post))
-    (jat : Jinst.At sevm.code pc .jump) :
-    ∃ (x : B256) (inter : Devm) (exc' : Exec x.toNat sevm inter (.ok post)),
-      Devm.PopBurn [x] devm inter ∧
-      Exec.Deriv.Prec
-        ⟨x.toNat, sevm, inter, .ok post, exc'⟩
-        ⟨pc, sevm, devm, .ok post, exc⟩ := by
-  rcases jump_at_exact exc jat with ⟨x, inter, exc', pop, _, _, prec⟩
-  exact ⟨x, inter, exc', pop, prec⟩
-
 lemma popBurn_one_stack {x : B256} {s s' : Devm}
     (h : Devm.PopBurn [x] s s') : s.stack = x :: s'.stack := by
   simpa [Stack.Pop, Split] using h.stack
@@ -404,16 +393,6 @@ lemma mem_of_getElem?_eq_some {α} {xs : List α} {i : Nat} {x : α}
     cases i with
     | zero => simp at h; cases h; simp
     | succ i => exact List.mem_cons_of_mem _ (ih (by simpa using h))
-
-lemma ret_mem_of_findIdx {xs : List AVal} {i : Nat}
-    (h : xs.findIdx? (· == .ret) = some i) : AVal.ret ∈ xs := by
-  have hp := List.of_findIdx?_eq_some h
-  cases hx : xs[i]? with
-  | none => simp [hx] at hp
-  | some a =>
-    have ha : a = AVal.ret := by simpa [hx] using hp
-    subst a
-    exact mem_of_getElem?_eq_some hx
 
 lemma ret_mem_of_readBack {a a' : List AVal} {out : List (Option B256)}
     (h : out.mapM (readBack a) = some a')

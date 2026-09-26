@@ -152,14 +152,4 @@ theorem SProg.RunP.mono {P Q : Sevm → Devm → Ninst → Devm → Prop}
   obtain ⟨f, hf, r⟩ := run
   exact ⟨f, hf, r.mono hPQ⟩
 
-/-- `undefined` never runs. -/
-theorem SFunc.RunP.not_undefined {P : Sevm → Devm → Ninst → Devm → Prop}
-    {fs : List SFunc} {sevm : Sevm} {devm : Devm}
-    {o : Outcome} : ¬ SFunc.RunP P fs sevm devm .undefined o := by
-  intro h; cases h
-
-theorem SFunc.Run.not_undefined {fs : List SFunc} {sevm : Sevm} {devm : Devm}
-    {o : Outcome} : ¬ SFunc.Run fs sevm devm .undefined o := by
-  intro h; cases h
-
 end Blanc.Lift

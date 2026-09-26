@@ -403,6 +403,11 @@ import Blanc.DripStackSafetyCertificate
 import Blanc.Lift.Weth9.Solvency
 import Blanc.Lift.Weth9.Live
 
+-- The deployed beacon deposit contract, lifted from its runtime bytes
+-- (beacon-deposit-bytecode-v1); these two tops reach the whole lift kit.
+import Blanc.Lift.BeaconDeposit.Ladder
+import Blanc.Lift.BeaconDeposit.Refines
+
 -- The COMPOSITION stratum is strictly downstream of every contract family, so
 -- it is aggregated last. Roots aggregate composition; nothing imports back.
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway

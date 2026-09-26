@@ -162,7 +162,7 @@ SHARED += ["LadderBase", "LadderSem", "ContractAdmissionSem", "ExecutionAdmissio
            "Lift.Hoare", "Lift.BookedSpec"]
 # Loops, kernel-economical checking, walk kits and solc idioms (beacon-deposit-bytecode-v1):
 # contract-neutral, no contract name in any of them.
-SHARED += ["Lift.Loop", "Lift.LoopExample", "Lift.CheckFast", "Lift.ExactWalkOps",
+SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.ExactWalkOps",
            "Lift.ExactWalkCut", "Lift.ExactWalkCutOps", "Lift.CopyLoop", "Lift.PackedSha",
            "Lift.PackedShaCovered", "Lift.Quiet", "Lift.InvWalk", "Lift.InvWalkOps",
            "Lift.InvWalkWorld", "Lift.InvWalkSha"]

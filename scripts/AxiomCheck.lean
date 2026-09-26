@@ -136,6 +136,8 @@ import AxiomAudit
 import ExecutionAxioms
 import Blanc.Lift.Weth9.Solvency
 import Blanc.Lift.Weth9.Live
+import Blanc.Lift.BeaconDeposit.Ladder
+import Blanc.Lift.BeaconDeposit.Refines
 
 /-! # Repository axiom audit rows
 
@@ -1504,3 +1506,13 @@ elaborates only against a Jaune revision whose audit passed. -/
 #full_axioms Blanc.Lift.Weth9.weth9_decimals_gas_exact
 #full_axioms Blanc.Lift.Weth9.weth9Gas_eq_with
 #full_axioms Blanc.Lift.Weth9.weth9Gas_le_max
+#full_axioms Blanc.Lift.BeaconDeposit.beacon_history_preserves_solInv
+#full_axioms Blanc.Lift.BeaconDeposit.deposit_exec_solInv
+#full_axioms Blanc.Lift.BeaconDeposit.frameHistory_root_view
+#full_axioms Blanc.Lift.BeaconDeposit.frameHistory_count_view
+#full_axioms Blanc.Lift.BeaconDeposit.supportsInterface_exec
+#full_axioms Blanc.Lift.BeaconDeposit.get_deposit_count_cold_exec
+#full_axioms Blanc.Lift.ri_codecopy
+#full_axioms Blanc.Lift.ric_branchToCut
+#full_axioms Blanc.Lift.ric_revert
+#full_axioms Blanc.Lift.rx_mload_ext
