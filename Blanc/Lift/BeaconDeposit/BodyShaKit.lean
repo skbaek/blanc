@@ -12,6 +12,10 @@ namespace Blanc.Lift.BeaconDeposit
 
 open Jaune
 
+/-- A precompile call keeps the body's world. -/
+theorem Keep.of_sha {b b' : Devm} {rd : Bytes} (h : ShaCallPost b b' rd) : Keep b b' :=
+  ⟨h.stor, h.code, h.addrs, h.keys, h.logs, h.output, h.error⟩
+
 /-! ## The slice helper (entry 13) -/
 
 /-- **The calldata slice helper** `x[st:en]` of a `bytes calldata` of length `len` at `x`

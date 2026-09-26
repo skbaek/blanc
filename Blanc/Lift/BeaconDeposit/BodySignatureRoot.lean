@@ -507,9 +507,6 @@ theorem sig_site3 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
 
 /-! ## Composition -/
 
-theorem Keep.of_sha {b b' : Devm} {rd : Bytes} (h : ShaCallPost b b' rd) : Keep b b' :=
-  ⟨h.stor, h.code, h.addrs, h.keys, h.logs, h.output, h.error⟩
-
 theorem signatureRoot_eq (sevm : Sevm) (p : Nat) :
     BeaconDeposit.signatureRoot Bytes.sha256 (sevm.data.sliceD p 96 0) =
       Bytes.sha256 ((Bytes.sha256 (sevm.data.sliceD p 64 0)).toBytes ++
