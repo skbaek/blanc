@@ -138,6 +138,9 @@ import Blanc.Lift.Weth9.Solvency
 import Blanc.Lift.Weth9.Live
 import Blanc.Lift.BeaconDeposit.Ladder
 import Blanc.Lift.BeaconDeposit.Refines
+import Blanc.Lift.Curve3Crv.Ladder
+import Blanc.Lift.Curve3Crv.Exec
+import Blanc.Curve3Crv.Properties
 
 /-! # Repository axiom audit rows
 
@@ -1516,3 +1519,19 @@ elaborates only against a Jaune revision whose audit passed. -/
 #full_axioms Blanc.Lift.ric_branchToCut
 #full_axioms Blanc.Lift.ric_revert
 #full_axioms Blanc.Lift.rx_mload_ext
+#full_axioms Blanc.Lift.Curve3Crv.c3crv_history_preserves_inv
+#full_axioms Blanc.Lift.Curve3Crv.c3crv_step_exec
+#full_axioms Blanc.Lift.Curve3Crv.c3crv_setName_exec
+#full_axioms Blanc.Curve3Crv.init_conserved
+#full_axioms Blanc.Curve3Crv.supply_change_by_minter
+#full_axioms Blanc.Curve3Crv.minter_change_by_minter
+#full_axioms Blanc.Curve3Crv.transferFrom_spends_max_allowance
+#full_axioms Blanc.Curve3Crv.transferFrom_minter_keeps_allowances
+#full_axioms Blanc.Curve3Crv.approve_zero_first
+#full_axioms Blanc.Curve3Crv.allowance_change_authorized
+#full_axioms Blanc.Curve3Crv.balance_debit_authorized
+#full_axioms Blanc.Curve3Crv.transfer_ok_iff
+#full_axioms Blanc.Curve3Crv.transferFrom_ok_iff
+#full_axioms Blanc.Curve3Crv.approve_ok_iff
+#full_axioms Blanc.Curve3Crv.mint_ok_iff
+#full_axioms Blanc.Curve3Crv.burnFrom_ok_iff

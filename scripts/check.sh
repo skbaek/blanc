@@ -1757,6 +1757,22 @@ Blanc.Lift.BeaconDeposit.frameHistory_root_view|$STANDARD
 Blanc.Lift.BeaconDeposit.frameHistory_count_view|$STANDARD
 Blanc.Lift.BeaconDeposit.supportsInterface_exec|$STANDARD
 Blanc.Lift.BeaconDeposit.get_deposit_count_cold_exec|$STANDARD
+Blanc.Lift.Curve3Crv.c3crv_history_preserves_inv|$STANDARD
+Blanc.Lift.Curve3Crv.c3crv_step_exec|$STANDARD
+Blanc.Lift.Curve3Crv.c3crv_setName_exec|$STANDARD
+Blanc.Curve3Crv.init_conserved|$STANDARD
+Blanc.Curve3Crv.supply_change_by_minter|$STANDARD
+Blanc.Curve3Crv.minter_change_by_minter|$STANDARD
+Blanc.Curve3Crv.transferFrom_spends_max_allowance|$STANDARD
+Blanc.Curve3Crv.transferFrom_minter_keeps_allowances|$STANDARD
+Blanc.Curve3Crv.approve_zero_first|propext
+Blanc.Curve3Crv.allowance_change_authorized|$STANDARD
+Blanc.Curve3Crv.balance_debit_authorized|$STANDARD
+Blanc.Curve3Crv.transfer_ok_iff|$STANDARD
+Blanc.Curve3Crv.transferFrom_ok_iff|$STANDARD
+Blanc.Curve3Crv.approve_ok_iff|propext, Quot.sound
+Blanc.Curve3Crv.mint_ok_iff|$STANDARD
+Blanc.Curve3Crv.burnFrom_ok_iff|$STANDARD
 Blanc.Lift.ri_codecopy|$STANDARD
 Blanc.Lift.ric_branchToCut|$STANDARD
 Blanc.Lift.ric_revert|$STANDARD
