@@ -2652,9 +2652,17 @@ contract-neutral.
   cut-run forms (`rxc_*`, `SFunc.RunExact.toCut`) in
   [`Blanc/Lift/ExactWalkCut.lean`](../Blanc/Lift/ExactWalkCut.lean) and
   [`Blanc/Lift/ExactWalkCutOps.lean`](../Blanc/Lift/ExactWalkCutOps.lean).
-  The inverse steps for safety walks (`ri_*`, `ric_*`: from a successful run of
-  a node, the state after it) are in
-  [`Blanc/Lift/InvWalk.lean`](../Blanc/Lift/InvWalk.lean).
+- Successful lifted run to facts (safety, the inversion walk): per-node `ric_*`
+  (control, over `SFunc.RunCut`; `SFunc.Run.cut`/`SFunc.RunCut.uncut` for uncut
+  runs) and per-instruction `ri_*` (successor as an `St`) in
+  [`Blanc/Lift/InvWalk.lean`](../Blanc/Lift/InvWalk.lean) and
+  [`Blanc/Lift/InvWalkOps.lean`](../Blanc/Lift/InvWalkOps.lean); failing arms
+  (`SFunc.noOk`, `SFunc.RunCutP.false_of_noOk`), conditional gotos
+  (`ric_branchTo`), internal calls (`ric_call`, `ric_callRet`), `ri_sload` and
+  `ri_log1` in [`Blanc/Lift/InvWalkWorld.lean`](../Blanc/Lift/InvWalkWorld.lean);
+  the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA
+  site (`ric_copy_sha`, the converse of `copy_sha_gen`) in
+  [`Blanc/Lift/InvWalkSha.lean`](../Blanc/Lift/InvWalkSha.lean).
 - Loops: a back-edge to entry `k` is reasoned about one iteration at a time on
   runs cut at `k` (`SFunc.RunCutP`, `SFunc.RunExactCut`). Safety:
   `SFunc.RunCutP.loop` (invariant; `loop_indexed`, `SFunc.RunP.loop`), which

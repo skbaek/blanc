@@ -164,7 +164,8 @@ SHARED += ["LadderBase", "LadderSem", "ContractAdmissionSem", "ExecutionAdmissio
 # contract-neutral, no contract name in any of them.
 SHARED += ["Lift.Loop", "Lift.LoopExample", "Lift.CheckFast", "Lift.ExactWalkOps",
            "Lift.ExactWalkCut", "Lift.ExactWalkCutOps", "Lift.CopyLoop", "Lift.PackedSha",
-           "Lift.PackedShaCovered", "Lift.Quiet", "Lift.InvWalk"]
+           "Lift.PackedShaCovered", "Lift.Quiet", "Lift.InvWalk", "Lift.InvWalkOps",
+           "Lift.InvWalkWorld", "Lift.InvWalkSha"]
 
 CONTRACTS = {
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",
