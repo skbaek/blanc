@@ -299,17 +299,6 @@ theorem allowance_change_authorized {ctx : Ctx} {c : Call} {s : State} {out : Ou
 
 /-! ## Balance authority -/
 
-theorem ledgerCredit_debit_ne {f : Adr → B256} {src dst a : Adr} {v : B256}
-    (nof : B256.Nof (ledgerDebit f src v dst) v) (ha : a ≠ src) :
-    f a ≤ ledgerCredit (ledgerDebit f src v) dst v a := by
-  by_cases hd : a = dst
-  · subst hd
-    rw [ledgerCredit_self, ledgerDebit_ne v ha]
-    rw [ledgerDebit_ne v ha] at nof
-    rw [B256.le_iff_toNat_le_toNat, B256.toNat_add_eq_of_nof _ _ nof]
-    omega
-  · rw [ledgerCredit_ne v hd, ledgerDebit_ne v ha]
-
 /-- **A balance falls only by its holder's own `transfer`, the minter's
 `transferFrom`/`burnFrom`, or a spender's allowance-covered `transferFrom`.** -/
 theorem balance_debit_authorized {ctx : Ctx} {c : Call} {s : State} {out : Out}
@@ -327,7 +316,7 @@ theorem balance_debit_authorized {ctx : Ctx} {c : Call} {s : State} {out : Out}
     obtain ⟨-, -, nof, rfl⟩ := transfer_eq_ok.mp h
     by_cases ha : a = ctx.sender
     · exact .inl ha.symm
-    · exact absurd hlt (not_lt.mpr (ledgerCredit_debit_ne nof ha))
+    · exact absurd hlt (not_lt.mpr (ledgerDebit_credit_ge_of_ne nof ha))
   | transferFrom f d v =>
     obtain ⟨-, -, -, nof, hal, rfl⟩ := transferFrom_eq_ok.mp h
     by_cases hm : ctx.sender = s.minter
@@ -335,7 +324,7 @@ theorem balance_debit_authorized {ctx : Ctx} {c : Call} {s : State} {out : Out}
     by_cases ha : a = f.toAdr
     · subst ha
       exact .inr (.inr ⟨f, d, v, rfl, rfl, hal hm, by simp [hm]⟩)
-    · exact absurd hlt (not_lt.mpr (ledgerCredit_debit_ne nof ha))
+    · exact absurd hlt (not_lt.mpr (ledgerDebit_credit_ge_of_ne nof ha))
   | burnFrom f v => exact .inr (.inl (burnFrom_eq_ok.mp h).2.1)
   | mint d v => exact .inr (.inl (mint_eq_ok.mp h).2.1)
   | setMinter m => obtain ⟨-, -, rfl⟩ := setMinter_eq_ok.mp h; exact absurd hlt (keep rfl)

@@ -98,4 +98,17 @@ theorem ledgerDebit_credit_nof {f : Adr → B256} {src dst : Adr} {v : B256}
     have := add_le_sum_of_ne f same
     omega
 
+/-- A row other than the debited one never falls across a non-wrapping
+debit-then-credit. -/
+theorem ledgerDebit_credit_ge_of_ne {f : Adr → B256} {src dst a : Adr} {v : B256}
+    (nof : B256.Nof (ledgerDebit f src v dst) v) (ha : a ≠ src) :
+    f a ≤ ledgerCredit (ledgerDebit f src v) dst v a := by
+  by_cases hd : a = dst
+  · subst hd
+    rw [ledgerCredit_self, ledgerDebit_ne v ha]
+    rw [ledgerDebit_ne v ha] at nof
+    rw [B256.le_iff_toNat_le_toNat, B256.toNat_add_eq_of_nof _ _ nof]
+    omega
+  · rw [ledgerCredit_ne v hd, ledgerDebit_ne v ha]
+
 end Blanc

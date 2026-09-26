@@ -1280,7 +1280,8 @@ laws live in [`Blanc/LadderBase.lean`](../Blanc/LadderBase.lean):
   `sum_ledgerDebit_credit` read off the exact `sum` movement under the
   checked-arithmetic guard; `ledgerDebit_credit_nof` shows the credit half of
   a covered transfer cannot wrap when `SumNof` holds (a checked-add revert is
-  then dead).
+  then dead), and `ledgerDebit_credit_ge_of_ne` says no row other than the
+  debited one falls across such a transfer.
 - For an exact observation of a finite coalition, import
   [`Blanc/LedgerConservation.lean`](../Blanc/LedgerConservation.lean) and use
   `ledgerSumOn`. `ledgerSumOn_congr` transports pointwise agreement;
