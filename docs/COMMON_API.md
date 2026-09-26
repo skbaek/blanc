@@ -2647,11 +2647,13 @@ contract-neutral.
   the per-instruction walk steps (`rx_push`, `rx_sload_cold`, `rx_callRet`, …)
   over the gas-carrying state `St` are in
   [`Blanc/Lift/ExactWalk.lean`](../Blanc/Lift/ExactWalk.lean), with more steps
-  (`rx_shl`, `rx_byte`, `rx_mstore8`, `rx_calldatacopy`, …) in
+  (`rx_shl`, `rx_byte`, `rx_mstore8`, `rx_calldatacopy`, `rx_log1`, …) in
   [`Blanc/Lift/ExactWalkOps.lean`](../Blanc/Lift/ExactWalkOps.lean) and the
   cut-run forms (`rxc_*`, `SFunc.RunExact.toCut`) in
   [`Blanc/Lift/ExactWalkCut.lean`](../Blanc/Lift/ExactWalkCut.lean) and
-  [`Blanc/Lift/ExactWalkCutOps.lean`](../Blanc/Lift/ExactWalkCutOps.lean).
+  [`Blanc/Lift/ExactWalkCutOps.lean`](../Blanc/Lift/ExactWalkCutOps.lean), which
+  also holds the pointer arithmetic the steps take as premises
+  (`toB256_add_toB256`, `toB256_sub_toB256`, `toB256_div_two`, `one_add_toB256`).
 - Successful lifted run to facts (safety, the inversion walk): per-node `ric_*`
   (control, over `SFunc.RunCut`; `SFunc.Run.cut`/`SFunc.RunCut.uncut` for uncut
   runs) and per-instruction `ri_*` (successor as an `St`) in

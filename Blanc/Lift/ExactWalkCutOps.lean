@@ -1,6 +1,7 @@
 import Blanc.Lift.ExactWalkCut
 import Blanc.ForwardSha256
 import Blanc.ForwardStorageAccess
+import Jaune.MulDiv
 
 /-!
 # More walk steps for exact runs and exact cut runs
@@ -16,7 +17,8 @@ storage read of a state-dependent key need:
   (`Ninst.runCompiled_staticcall_sha256_64_warm`), whose successor's world
   is only known through `ShaCallPost`;
 * for exact cut runs (`SFunc.RunExactCut`), the same steps and the named-value
-  binary operations, plus the goto `rxc_jump` into an entry outside the cut.
+  binary operations and `CALLDATACOPY`, plus the goto `rxc_jump` into an entry outside the
+  cut.
 
 Nothing here mentions a contract.
 -/
@@ -41,6 +43,18 @@ theorem toB256_sub_toB256 {a b : Nat} (hb : b ≤ a) (ha : a < 2 ^ 256) :
         B256.toNat_toB256_of_lt ha]; exact hb),
     B256.toNat_toB256_of_lt ha, B256.toNat_toB256_of_lt (show b < 2 ^ 256 by omega),
     B256.toNat_toB256_of_lt (show a - b < 2 ^ 256 by omega)]
+
+theorem toB256_div_two {y : Nat} (hy : y < 2 ^ 256) : Nat.toB256 y / 2 = Nat.toB256 (y / 2) := by
+  apply B256.toNat_inj
+  rw [B256.toNat_div (by decide), B256.toNat_toB256_of_lt hy,
+    B256.toNat_toB256_of_lt (lt_of_le_of_lt (Nat.div_le_self _ _) hy)]
+  rfl
+
+/-- A counter's increment by the pushed one-byte immediate `0x01`. -/
+theorem one_add_toB256 {h : Nat} (hh : h + 1 < 2 ^ 256) :
+    Bytes.toB256 [0x01] + Nat.toB256 h = Nat.toB256 (h + 1) := by
+  rw [show Bytes.toB256 [0x01] = Nat.toB256 1 by decide, toB256_add_toB256 (by omega),
+    Nat.add_comm]
 
 /-! ## What the SHA-256 precompile call leaves -/
 
@@ -264,6 +278,17 @@ theorem rxc_shl {x y v : B256} (hv : y <<< x.toNat = v) (hroom : S.length < 1024
     SFunc.RunExactCut fs sevm C (St b (x :: y :: S) M (G + 3)) (.next (.reg .shl) f) r :=
   rxc_binary (fn := fun x y => y <<< x.toNat) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) hv
     hroom k
+
+/-- `CALLDATACOPY` inside a cut run. -/
+theorem rxc_calldatacopy {di si sz : B256} {c : Nat} {M' : Mem}
+    (hc : gVerylow + gasCopy * ceilDiv sz.toNat 32
+      + (St b (di :: si :: sz :: S) M (G + c)).extCost [⟨di.toNat, sz.toNat⟩] = c)
+    (hw : M.write di.toNat (sevm.data.sliceD si.toNat sz.toNat 0) = M')
+    (k : SFunc.RunExactCut fs sevm C (St b S M' G) f r) :
+    SFunc.RunExactCut fs sevm C (St b (di :: si :: sz :: S) M (G + c))
+      (.next (.reg .calldatacopy) f) r :=
+  .next (Ninst.runCompiled_calldatacopy_of (devm := St b (di :: si :: sz :: S) M (G + c))
+    (G := G) rfl hc hw rfl) k
 
 /-- An internal call that returns, inside a cut run (the callee runs uncut). -/
 theorem rxc_callRet {d : B256} {j : Nat} {D : Devm} (hj : fs[j]? = some g)

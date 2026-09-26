@@ -19,11 +19,6 @@ private theorem prog_22 : prog[22]? = some (mcpyTree 0x10 0x25 0x0f 0xe8 22
 
 private theorem prog_23 : prog[23]? = some t_0f6e_c23 := rfl
 
-private theorem one_add_toB256' {h : Nat} (hh : h + 1 < 2 ^ 256) :
-    Bytes.toB256 [0x01] + Nat.toB256 h = Nat.toB256 (h + 1) := by
-  rw [show Bytes.toB256 [0x01] = Nat.toB256 1 by decide, toB256_add_toB256 (by omega),
-    Nat.add_comm]
-
 /-- The dead arm's hashing block: the key, the `SLOAD`, and `packed_sha_pair`'s shape (the
 first copy pass inlined in entry 23 is entry 22's). -/
 private theorem t_0faf_c23_eq : t_0faf_c23 = .dest (.next (.reg .add) (.next (.reg .sload)
@@ -153,7 +148,7 @@ theorem body_insertDead {sevm : Sevm} {b : Devm} {sz nd : B256} {R : List B256} 
   refine rxc_swap (n := 1) rfl ?_
   refine rxc_pop ?_
   refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_add' (one_add_toB256' (by omega)) (by simp; omega) ?_
+  refine rxc_add' (one_add_toB256 (by omega)) (by simp; omega) ?_
   refine rxc_push rfl (by simp; omega) ?_
   exact rxc_jump prog_23 (by simp) k
 

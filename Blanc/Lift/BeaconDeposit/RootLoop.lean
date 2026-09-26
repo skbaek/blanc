@@ -126,16 +126,6 @@ theorem rootMemSize_mod (h : Nat) : rootMemSize h % 32 = 0 := by
 theorem rootMemSize_ge (h : Nat) : 96 ≤ rootMemSize h := by
   unfold rootMemSize; split <;> omega
 
-private theorem toB256_div_two {s : Nat} (hs : s < 2 ^ 256) :
-    Nat.toB256 s / Bytes.toB256 [0x02] = Nat.toB256 (s / 2) := by
-  rw [Blanc.wordDiv_eq_toB256_div, B256.toNat_toB256_of_lt hs,
-    show (Bytes.toB256 [0x02]).toNat = 2 by decide]
-
-theorem one_add_toB256 {h : Nat} (hh : h + 1 < 2 ^ 256) :
-    Bytes.toB256 [0x01] + Nat.toB256 h = Nat.toB256 (h + 1) := by
-  rw [show Bytes.toB256 [0x01] = Nat.toB256 1 by decide, toB256_add_toB256 (by omega),
-    Nat.add_comm]
-
 theorem eq_one_mod_two (s : Nat) :
     B256.eqCheck (Bytes.toB256 [0x01]) (Nat.toB256 (s % 2)) = if s % 2 = 1 then 1 else 0 := by
   rcases Nat.mod_two_eq_zero_or_one s with h | h <;> rw [h] <;> decide
@@ -155,7 +145,8 @@ theorem root_join {b : Devm} {h s : Nat} {x : B256} (hh : h + 1 < 2 ^ 256) (hs :
   refine rxc_dest ?_
   refine rxc_push rfl (by simp; omega) ?_
   refine rxc_dup (n := 2) rfl (by simp; omega) ?_
-  refine rxc_div (toB256_div_two hs) (by simp; omega) ?_
+  refine rxc_div (show Nat.toB256 s / Bytes.toB256 [0x02] = Nat.toB256 (s / 2) by
+    rw [show Bytes.toB256 [0x02] = (2 : B256) by decide, toB256_div_two hs]) (by simp; omega) ?_
   refine rxc_swap (n := 1) rfl ?_
   refine rxc_pop ?_
   refine rxc_push rfl (by simp; omega) ?_

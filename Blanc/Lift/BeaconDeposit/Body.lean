@@ -174,12 +174,6 @@ theorem LoopBase.mem_self {tgt : Adr} {b₀ b : Devm} {h : Nat} (hL : LoopBase t
       omega
   · exact .inl
 
-theorem toB256_div_two {y : Nat} (hy : y < 2 ^ 256) : Nat.toB256 y / 2 = Nat.toB256 (y / 2) := by
-  apply B256.toNat_inj
-  rw [B256.toNat_div (by decide), B256.toNat_toB256_of_lt hy,
-    B256.toNat_toB256_of_lt (lt_of_le_of_lt (Nat.div_le_self _ _) hy)]
-  rfl
-
 /-! ## The insertion loop -/
 
 /-- **The insertion loop from height `h`**, `m` dead iterations before the storing one at

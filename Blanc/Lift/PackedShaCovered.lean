@@ -9,32 +9,12 @@ site's copy loop, merge and precompile call over memory of any word-aligned size
 words (`d + 0x60 ≤ n`): a flat 598-gas charge, memory keeps its size, and the image facts a
 caller needs are stated directly (the free-pointer word, the digest, everything below `d`).
 
-Also: the cut walk step for `CALLDATACOPY`.
-
 Nothing here mentions a contract.
 -/
 
 namespace Blanc.Lift
 
 open Jaune
-
-section CutCopy
-
-variable {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm} {f : SFunc} {r : Seg}
-  {S : List B256} {M : Mem} {G : Nat}
-
-/-- `CALLDATACOPY` inside a cut run. -/
-theorem rxc_calldatacopy {di si sz : B256} {c : Nat} {M' : Mem}
-    (hc : gVerylow + gasCopy * ceilDiv sz.toNat 32
-      + (St b (di :: si :: sz :: S) M (G + c)).extCost [⟨di.toNat, sz.toNat⟩] = c)
-    (hw : M.write di.toNat (sevm.data.sliceD si.toNat sz.toNat 0) = M')
-    (k : SFunc.RunExactCut fs sevm C (St b S M' G) f r) :
-    SFunc.RunExactCut fs sevm C (St b (di :: si :: sz :: S) M (G + c))
-      (.next (.reg .calldatacopy) f) r :=
-  .next (Ninst.runCompiled_calldatacopy_of (devm := St b (di :: si :: sz :: S) M (G + c))
-    (G := G) rfl hc hw rfl) k
-
-end CutCopy
 
 section SiteCovered
 
