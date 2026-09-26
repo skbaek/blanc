@@ -1,5 +1,5 @@
 import Blanc.Lift.BeaconDeposit.BodySignatureRoot
-import Blanc.Lift.BeaconDeposit.SafeShaKit
+import Blanc.Lift.InvWalkSha
 
 /-!
 # Safety segment B4: `signature_root`, inverted (converse of `body_signatureRoot`)

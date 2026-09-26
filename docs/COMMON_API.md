@@ -2656,10 +2656,16 @@ contract-neutral.
   (`toB256_add_toB256`, `toB256_sub_toB256`, `toB256_div_two`, `one_add_toB256`).
 - Successful lifted run to facts (safety, the inversion walk): per-node `ric_*`
   (control, over `SFunc.RunCut`; `SFunc.Run.cut`/`SFunc.RunCut.uncut` for uncut
-  runs) and per-instruction `ri_*` (successor as an `St`) in
+  runs) and per-instruction `ri_*` (successor as an `St`; numeral-offset forms
+  `ri_mstore_nat`/`ri_calldatacopy_nat`, and `ri_val` to name a successor's top word) in
   [`Blanc/Lift/InvWalk.lean`](../Blanc/Lift/InvWalk.lean) and
-  [`Blanc/Lift/InvWalkOps.lean`](../Blanc/Lift/InvWalkOps.lean); failing arms
-  (`SFunc.noOk`, `SFunc.RunCutP.false_of_noOk`), conditional gotos
+  [`Blanc/Lift/InvWalkOps.lean`](../Blanc/Lift/InvWalkOps.lean), which also holds the
+  solc word-copy loop inverted (`ric_copy_step`, `ric_copy_exit`, the converses of
+  `copy_step`/`copy_exit`) and the facts a failed comparison guard leaves
+  (`toNat_le_of_gtCheck_eq_zero`, `toNat_ge_of_ltCheck_eq_zero`,
+  `eq_zero_of_iszero_ne_zero`); failing arms
+  (`SFunc.noOk`, `SFunc.RunCutP.false_of_noOk`), trees that cannot halt (`SFunc.noHalt`,
+  `NoHaltSet`, `SFunc.RunP.not_halted`, `SFunc.RunP.not_halted_entry`), conditional gotos
   (`ric_branchTo`), internal calls (`ric_call`, `ric_callRet`), `ri_sload` and
   `ri_log1` in [`Blanc/Lift/InvWalkWorld.lean`](../Blanc/Lift/InvWalkWorld.lean);
   the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA

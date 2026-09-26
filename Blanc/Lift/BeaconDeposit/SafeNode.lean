@@ -1,5 +1,5 @@
 import Blanc.Lift.BeaconDeposit.BodyNode
-import Blanc.Lift.BeaconDeposit.SafeShaKit
+import Blanc.Lift.InvWalkSha
 
 /-!
 # Safety segment B5: the `DepositData` node, inverted (converse of `body_dataNode`)

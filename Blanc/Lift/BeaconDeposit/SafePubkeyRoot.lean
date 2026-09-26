@@ -1,4 +1,5 @@
-import Blanc.Lift.BeaconDeposit.SafeShaKit
+import Blanc.Lift.BeaconDeposit.BodyShaKit
+import Blanc.Lift.InvWalkSha
 
 /-!
 # Safety segment B3: the `LOG1` and `pubkey_root`, inverted (converse of `body_pubkeyRoot`)
