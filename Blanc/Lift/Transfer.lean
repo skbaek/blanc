@@ -31,7 +31,7 @@ def dropTransfer : Nat → Pattern → Option Pattern
   | _ + 1, [] => none
 
 /-- `regularTransfer`, extended by the regular opcodes of solc output that it
-rejects. -/
+rejects (and `XOR`, which Vyper uses for `!=`). -/
 def liftRegularTransfer : Rinst → Pattern → Option Pattern
   | .exp, words => binaryTransfer words
   | .not, words => unaryTransfer words
@@ -41,6 +41,7 @@ def liftRegularTransfer : Rinst → Pattern → Option Pattern
   | .log n, words => dropTransfer (n.val + 2) words
   | .mod, words => binaryTransfer words
   | .or, words => binaryTransfer words
+  | .xor, words => binaryTransfer words
   | .byte, words => binaryTransfer words
   | .shl, words => binaryTransfer words
   | .calldatacopy, words => dropTransfer 3 words
@@ -301,7 +302,7 @@ private theorem liftRegularTransfer_map {r : Rinst} {words output : Pattern}
   case log n =>
       rw [← dropTransfer_map φ hφ (n.val + 2) words]
       simpa using congrArg (Option.map (List.map φ)) checked
-  case mod | or | byte | shl => exact binaryTransfer_map φ hφ checked
+  case mod | or | xor | byte | shl => exact binaryTransfer_map φ hφ checked
   case calldatacopy | codecopy | returndatacopy =>
       rw [← dropTransfer_map φ hφ 3 words]
       simpa using congrArg (Option.map (List.map φ)) checked
@@ -318,7 +319,7 @@ private theorem liftRegularTransfer_append {r : Rinst}
   case not | balance => exact unaryTransfer_append checked
   case address => cases checked; rfl
   case log n => exact dropTransfer_append (n.val + 2) checked
-  case mod | or | byte | shl => exact binaryTransfer_append checked
+  case mod | or | xor | byte | shl => exact binaryTransfer_append checked
   case calldatacopy | codecopy | returndatacopy => exact dropTransfer_append 3 checked
   case returndatasize => cases checked; rfl
   case mstore8 => exact dropTwoTransfer_append checked
@@ -1046,7 +1047,7 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
           rw [← dropTransfer_eq_drop checked]
           rw [← hlen]
           simpa using hd
-      | mod | or | byte | shl =>
+      | mod | or | xor | byte | shl =>
           rcases binary_checked checked with ⟨head, head', tail, rfl, rfl⟩
           rcases of_run_reg run with ⟨pc, hr⟩
           simp only [Rinst.run, Rinst.runCore] at hr

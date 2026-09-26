@@ -8,7 +8,7 @@ import Blanc.Lift.Silent
 
 Companions to `Blanc/Lift/ExactWalk.lean` and `Blanc/Lift/ExactWalkOps.lean` for
 inverting successful single-step execution: binary operations (`SUB`, `GT`, `MUL`,
-`DIV`, `MOD`, `OR`, `EXP`, `SHL`, `SHR`, `BYTE`), unary `NOT`, environment pushes
+`DIV`, `MOD`, `OR`, `XOR`, `EXP`, `SHL`, `SHR`, `BYTE`), unary `NOT`, environment pushes
 (`CALLVALUE`, `CALLDATASIZE`, `RETURNDATASIZE`, `GAS`, `CALLDATALOAD`), and
 memory operations (`MLOAD`, `MSTORE`, `MSTORE8`, `CALLDATACOPY`, `CODECOPY`, with
 numeral-offset forms), `ri_val` to name a successor's top word, the solc word-copy loop
@@ -97,6 +97,14 @@ theorem ri_or {x y : B256} {d : Devm}
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   exact St.of_diff (v := (· ||| ·)) (Devm.diffBurn_of_applyBinary run)
+
+/-- `XOR`, inverted. -/
+theorem ri_xor {x y : B256} {d : Devm}
+    (h : Ninst.Run sevm (St b (x :: y :: S) M G) (.reg .xor) d) :
+    ∃ G', d = St b ((x ^^^ y) :: S) M G' := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact St.of_diff (v := (· ^^^ ·)) (Devm.diffBurn_of_applyBinary run)
 
 /-- `SHL`, inverted. -/
 theorem ri_shl {x y : B256} {d : Devm}

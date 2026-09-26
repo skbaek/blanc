@@ -224,6 +224,9 @@ CONTRACTS = {
                        "BeaconDepositDeploymentRoot",
                        "BeaconDepositHistory", "BeaconDepositHistorySound",
                        "BeaconDepositHistoryChain"],
+    # the deployed 3Crv runtime (Vyper 0.2.4), lifted (vyper-3crv-bytecode-v1)
+    "curve-3crv": ["Lift.Curve3Crv.Cert", "Lift.Curve3Crv.Check", "Lift.Curve3Crv.Jumps",
+                   "Lift.Curve3Crv.Lift", "Lift.Curve3Crv.Prog"],
     "drip": ["DripCore", "Drip", "DripCode", "DripDeploy", "DripConcreteHistory", "DripConcreteHistory.Deployment", "DripConcreteHistory.Join", "DripConcreteHistory.Accrual", "DripConcreteHistory.AccrualExit", "DripConcreteReach", "DripCreationCode",
              "DripRpow", "DripIngress", "DripFunctional", "DripAccounting", "DripTranscript", "DripMachine", "DripEndpoints", "DripFresh", 
              "DripStackSafetyData", "DripStackSafety", "DripStackSafetyRegion214", "DripStackSafetyRegion576", "DripStackSafetyRegion1022", 
