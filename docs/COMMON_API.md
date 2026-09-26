@@ -2638,6 +2638,17 @@ example; every module below is contract-neutral.
   the per-instruction walk steps (`rx_push`, `rx_sload_cold`, `rx_callRet`, …)
   over the gas-carrying state `St` are in
   [`Blanc/Lift/ExactWalk.lean`](../Blanc/Lift/ExactWalk.lean).
+- Successful lifted run to facts (safety, the inversion walk): per-node `ric_*`
+  (control, over `SFunc.RunCut`; `SFunc.Run.cut`/`SFunc.RunCut.uncut` for uncut
+  runs) and per-instruction `ri_*` (successor as an `St`) in
+  [`Blanc/Lift/InvWalk.lean`](../Blanc/Lift/InvWalk.lean) and
+  [`Blanc/Lift/InvWalkOps.lean`](../Blanc/Lift/InvWalkOps.lean); failing arms
+  (`SFunc.noOk`, `SFunc.RunCutP.false_of_noOk`), conditional gotos
+  (`ric_branchTo`), internal calls (`ric_call`, `ric_callRet`), `ri_sload` and
+  `ri_log1` in [`Blanc/Lift/InvWalkWorld.lean`](../Blanc/Lift/InvWalkWorld.lean);
+  the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA
+  site (`ric_copy_sha`, the converse of `copy_sha_gen`) in
+  [`Blanc/Lift/InvWalkSha.lean`](../Blanc/Lift/InvWalkSha.lean).
 - Jump destinations: `jumpable_eq_jumpdestOk` in
   [`Blanc/Lift/Jumpdest.lean`](../Blanc/Lift/Jumpdest.lean) replaces Jaune's
   exponential `jumpable` by the linear `jumpdestOk` scan, for every byte string.
