@@ -196,7 +196,124 @@ pushes `1` and jumps (`.jump 4`) to the join `t_04f6_c4`; otherwise the allowanc
 0x20, approvalSig, caller, a0)`, `return(0, 32)`. -/
 theorem safe_approve (hfork : CoveredFork sevm.benvStat.fork) :
     SafeBody sevm b t_04ab_c0 (rawApprove sevm stor₀) := by
-  sorry
+  intro G post run
+  have hM := vyMem_empty_size (Sevm.dataWord sevm 0)
+  have hwf0 := vyMem_wf Mem.wf_empty (Sevm.dataWord sevm 0)
+  have h4 : Bytes.toB256 [0x04] = 4 := by decide
+  have hv1 : Sevm.dataWord sevm (Bytes.toB256 [0x24]) = Sevm.argWord sevm 1 := by
+    show Sevm.dataWord sevm _ = Sevm.dataWord sevm _
+    congr 1
+  have hd0 : Sevm.dataWord sevm (Bytes.toB256 [0x04]) = Sevm.argWord sevm 0 := rfl
+  set p := Sevm.argWord sevm 0
+  set v := Sevm.argWord sevm 1
+  set slot := mapSlot (mapSlot 4 sevm.caller.toB256) p
+  -- the join (entry 4) and the write, from any base with `b`'s storage and logs
+  have tail : ∀ (b' : Devm) (M' : Mem) (G' : Nat) (flag : B256), Mem.Wf M' →
+      (∀ a, Devm.getStor b' a = Devm.getStor b a) → b'.logs = b.logs →
+      SFunc.RunCut prog sevm [] (St b' [flag] M' G') t_04f6_c4 (.done (.halted post)) →
+      flag ≠ 0 ∧ Lands sevm b post ((stor₀).set slot v,
+        [⟨sevm.currentTarget, [approvalTopic, sevm.caller.toB256, p], v.toBytes⟩],
+        some (1 : B256).toBytes) := by
+    intro b' M' G' flag hwf hst hlg run
+    unfold t_04f6_c4 t_04f7_c4 at run
+    obtain ⟨G1, run⟩ := ric_dest run
+    obtain ⟨G2, run⟩ := ric_dest run
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
+    rcases ric_branch run with ⟨-, G4, run⟩ | ⟨hflag, G4, run⟩
+    · exact (run.false_of_noOk (by decide)).elim
+    refine ⟨hflag, ?_⟩
+    obtain ⟨G5, run⟩ := ric_dest run
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_calldataload s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_caller s1
+    obtain ⟨G10, run⟩ := ric_vySlot run
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_calldataload s1
+    obtain ⟨G13, run⟩ := ric_vySlot run
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_sstore hfork s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_calldataload s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_mstore s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_calldataload s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_caller s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G23, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G24, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_log3 s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G27, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G28, rfl⟩ := ri_mstore s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G29, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G30, rfl⟩ := ri_push s1
+    cases run with
+    | last hl =>
+      obtain ⟨hout, hstor, hlogs⟩ := ri_return hl
+      have h320 : (Bytes.toB256 [0x01, 0x40]).toNat = 320 := by decide
+      have h32 : (Bytes.toB256 [0x20]).toNat = 32 := by decide
+      have htopic : Bytes.toB256 [0x8c, 0x5b, 0xe1, 0xe5, 0xeb, 0xec, 0x7d, 0x5b, 0xd1, 0x4f, 0x71,
+          0x42, 0x7d, 0x1e, 0x84, 0xf3, 0xdd, 0x03, 0x14, 0xc0, 0xf7, 0xb2, 0x29, 0x1e, 0x5b, 0x20,
+          0x0a, 0xc8, 0xc7, 0xc3, 0xb9, 0x25] = approvalTopic := by decide
+      have h0 : (Bytes.toB256 [0x00]).toNat = 0 := by decide
+      simp only [hv1, hd0] at hout hstor hlogs
+      simp only [h4] at hout hstor hlogs
+      simp only [h320, h32, h0] at hout hlogs
+      set M2 := vySlotMem (vySlotMem M' 4 sevm.caller.toB256) (mapSlot 4 sevm.caller.toB256) p
+      have hwf2 : Mem.Wf M2 := vySlotMem_wf (vySlotMem_wf hwf _ _) _ _
+      have hwf3 : Mem.Wf (((M2.write 320 v.toBytes).read 320 32).2) :=
+        (hwf2.write _ _).extend _ _
+      rw [Mem.read_write_word_of_wf hwf3] at hout
+      rw [Mem.read_write_word_of_wf hwf2] at hlogs
+      refine ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_⟩
+      · rw [hstor, getStor_addLog, afterSstore_getStor_self, hst]
+      · rw [hstor, getStor_addLog, afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha), hst]
+      · rw [hlogs, logs_addLog, afterSstore_logs, hlg, htopic]
+      · cases ho
+        exact hout
+  have run := run.cut
+  unfold entrySt at run
+  obtain ⟨hv, G1, run⟩ := ric_vyNonpayable (h := 0x04) (l := 0xb5) (fail := t_04b1_c0)
+    (by decide) run
+  obtain ⟨hp, G2, run⟩ := ric_vyAddrArg (p := 0x04) (h := 0x04) (l := 0xc6) (fail := t_04c2_c0)
+    (by decide) (vyMem_reads Mem.wf_empty Mem.reads_empty _) (vyImg_clamps _ _) (by rw [hM])
+    (by rw [hM]; omega) run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_calldataload s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_iszero s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_iszero s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
+  have hp' : p.toNat < 2 ^ 160 := hp
+  rcases ric_branch run with ⟨hz, G8, run⟩ | ⟨hnz, G8, run⟩
+  · -- a zero value: straight to the join
+    have hv0 : v = 0 := by
+      rw [hv1] at hz
+      by_contra hne
+      simp [B256.eqCheck, hne] at hz
+      exact absurd hz (by decide)
+    unfold t_04d1_c0 at run
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_push s1
+    obtain ⟨G11, run⟩ := ric_jump (g := t_04f6_c4) (by simp) rfl run
+    obtain ⟨-, hl⟩ := tail b _ _ _ hwf0 (fun _ => rfl) rfl run
+    exact ⟨_, by simp only [rawApprove]; exact ite_eq_left ⟨hv, hp', .inl hv0⟩, hl⟩
+  · -- a nonzero value: the current allowance is read and must be zero
+    obtain ⟨G9, run⟩ := ric_dest run
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_caller s1
+    obtain ⟨G12, run⟩ := ric_vySlot run
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_calldataload s1
+    obtain ⟨G15, run⟩ := ric_vySlot run
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_sload hfork s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_iszero s1
+    simp only [hd0] at run
+    simp only [h4] at run
+    obtain ⟨hflag, hl⟩ := tail _ _ _ _ (vySlotMem_wf (vySlotMem_wf hwf0 _ _) _ _)
+      (fun a => afterSload_getStor _ _ _ _) (afterSload_logs _ _ _) run
+    have hcur : (stor₀).get slot = 0 := eq_zero_of_iszero_ne_zero hflag
+    exact ⟨_, by simp only [rawApprove]; exact ite_eq_left ⟨hv, hp', .inr hcur⟩, hl⟩
 
 -- SEGMENT: safeMintBurn (121 + 117 nodes; `mint` and `burnFrom`, mechanically identical)
 /-- `mint` and `burnFrom`.  Proof sketch: guards; minter check as `safeSetMinter`;

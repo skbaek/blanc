@@ -518,7 +518,88 @@ theorem refine_approve (hinv : VyInv stor s K)
     (hf : FreshKeys K (callKeys sevm.caller (callAt sevm 6))) :
     RawRefines sevm (rawOf 6 sevm ow stor) (Curve3Crv.step (c3ctx sevm ow) (callAt sevm 6) s)
       (Key.extend K (callKeys sevm.caller (callAt sevm 6))) := by
-  sorry
+  set a := sevm.caller with ha_def
+  set p := Sevm.argWord sevm 0 with hp_def
+  set v := Sevm.argWord sevm 1 with hv_def
+  by_cases hp : p.toNat < 2 ^ 160
+  swap
+  · refine ⟨fun r hr => ?_, fun o ho => ?_⟩
+    · simp only [rawOf, rawApprove] at hr
+      split_ifs at hr with hc
+      exact absurd hc.2.1 hp
+    · simp only [callAt, Curve3Crv.step, Curve3Crv.body, c3ctx] at ho
+      by_cases hv : sevm.value = 0
+      · simp only [hv, ite_true] at ho
+        exact absurd (Curve3Crv.approve_eq_ok.mp ho).1 hp
+      · simp [hv] at ho
+  set p' := p.toAdr
+  have hks : callKeys a (callAt sevm 6) = [.allow a p'] := rfl
+  have hslot : mapSlot (mapSlot 4 a.toB256) p = vyAllowSlot a p' := by
+    simp only [vyAllowSlot, p', B256.toAdr_toB256_of_lt hp]
+  have hcur : stor.get (vyAllowSlot a p') = s.allowances a p' :=
+    hinv.get_slot (hf.1 (.allow a p') (by simp [hks]))
+  have hap : vyAllowSlot a p' ∉ vyFixedSlots := hinv.slot_apart (hf.1 (.allow a p') (by simp [hks]))
+  set s' : Curve3Crv.State :=
+    { s with allowances := (Function.update s.allowances a (Function.update (s.allowances a) p' v)) }
+  refine RawRefines.of_iff (stor.set (vyAllowSlot a p') v,
+      [⟨sevm.currentTarget, [approvalTopic, a.toB256, p], v.toBytes⟩], some (1 : B256).toBytes)
+    (s', [.approval a p' v], .bool true)
+    (sevm.value = 0 ∧ (v = 0 ∨ s.allowances a p' = 0)) ?_ ?_ ?_
+  · intro r
+    simp only [rawOf, rawApprove, ← ha_def, ← hp_def, ← hv_def]
+    rw [hslot, hcur]
+    split_ifs with hc <;> simp_all [eq_comm]
+  · intro o
+    simp only [callAt, Curve3Crv.step, Curve3Crv.body, c3ctx]
+    by_cases hv : sevm.value = 0
+    · simp only [hv, ite_true, Curve3Crv.approve_eq_ok, true_and]
+      constructor
+      · rintro ⟨-, h1, h2⟩; exact ⟨h1, h2⟩
+      · rintro ⟨h1, h2⟩; exact ⟨hp, h1, h2⟩
+    · simp [hv]
+  · rintro ⟨hv, hz⟩
+    have hstep : Curve3Crv.step (c3ctx sevm ow) (callAt sevm 6) s =
+        .ok (s', [.approval a p' v], .bool true) := by
+      simp only [callAt, Curve3Crv.step, Curve3Crv.body, c3ctx, hv, ite_true]
+      exact Curve3Crv.approve_eq_ok.mpr ⟨hp, hz, rfl⟩
+    refine ⟨?_, ?_, rfl⟩
+    · rw [hks]
+      have hne : ∀ x ∈ vyWordSlots, vyAllowSlot a p' ≠ x := fun x hx e => hap (by
+        rw [e]; simp only [vyWordSlots, List.mem_cons, List.not_mem_nil, or_false] at hx
+        rcases hx with rfl | rfl | rfl <;> simp [vyFixedSlots])
+      refine hinv.update (ws := []) (hf := hks ▸ hf) (by simp) ?_ ?_ ?_ rfl rfl ?_ ?_ ?_
+        (Curve3Crv.step_conserved hinv.conserved hstep)
+      · intro x hx _
+        dsimp only
+        rw [Stor.get_set_ne (k := vyAllowSlot a p') _ (hx (.allow a p') (by simp))]
+      · intro k hk
+        simp only [List.mem_cons, List.not_mem_nil, or_false] at hk
+        subst hk
+        show (stor.set (vyAllowSlot a p') v).get (vyAllowSlot a p') =
+          Function.update s.allowances a (Function.update (s.allowances a) p' v) a p'
+        simp [Stor.get_set_self]
+      · intro k hk
+        cases k with
+        | bal c => rfl
+        | allow o q =>
+          simp only [List.mem_cons, Key.allow.injEq, List.not_mem_nil, or_false, not_and] at hk
+          show Function.update s.allowances a (Function.update (s.allowances a) p' v) o q =
+            s.allowances o q
+          by_cases ho : o = a
+          · subst ho
+            simp [Function.update_of_ne (hk rfl)]
+          · simp [Function.update_of_ne ho]
+      · dsimp only
+        rw [Stor.get_set_ne _ (hne _ (by simp [vyWordSlots]))]
+        exact hinv.decimals
+      · dsimp only
+        rw [Stor.get_set_ne _ (hne _ (by simp [vyWordSlots]))]
+        exact hinv.supply
+      · dsimp only
+        rw [Stor.get_set_ne _ (hne _ (by simp [vyWordSlots]))]
+        exact hinv.minter
+    · simp only [List.map, eventLog, List.cons.injEq, and_true]
+      rw [B256.toAdr_toB256_of_lt hp]
 
 -- SEGMENT: refineMintBurn (pure, medium; `mint` and `burnFrom`)
 /-- `mint`.  Proof: slot 5 then one fresh balance key; the balance read after
