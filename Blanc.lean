@@ -7,6 +7,7 @@ import Blanc.StaticPrecompileMessage
 import Blanc.BalanceAlgebra
 import Blanc.OffsetPricing
 import Blanc.LedgerConservation
+import Blanc.LedgerUpdate
 import Blanc.StorageOnlySpec
 import Blanc.StaticStores
 import Blanc.WordArithmetic
@@ -409,6 +410,8 @@ import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControl
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControlRun
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControlRun
 import Blanc.Composition.Weth9WethGas
+import Blanc.Curve3Crv.Model
+import Blanc.Curve3Crv.Properties
 
 namespace Blanc
 

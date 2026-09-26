@@ -166,8 +166,12 @@ SHARED += ["Lift.Loop", "Lift.LoopExample", "Lift.CheckFast", "Lift.ExactWalkOps
            "Lift.ExactWalkCut", "Lift.ExactWalkCutOps", "Lift.CopyLoop", "Lift.PackedSha",
            "Lift.PackedShaCovered", "Lift.Quiet", "Lift.InvWalk", "Lift.InvWalkOps",
            "Lift.InvWalkWorld", "Lift.InvWalkSha"]
+# Pure-model ledger updates (vyper-3crv-bytecode-v1): contract-neutral.
+SHARED += ["LedgerUpdate"]
 
 CONTRACTS = {
+    # The 3Crv LP token (CurveTokenV2.vy, Vyper 0.2.4), modelled from source (vyper-3crv-bytecode-v1).
+    "curve-3crv": ["Curve3Crv.Model", "Curve3Crv.Properties"],
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",
                        # the deployed runtime, lifted (decision beacon-lift-layering-family-20260926)
                        "Lift.BeaconDeposit.Body", "Lift.BeaconDeposit.BodyCount", "Lift.BeaconDeposit.BodyEvent", "Lift.BeaconDeposit.BodyEventHead", "Lift.BeaconDeposit.BodyEventKit", "Lift.BeaconDeposit.BodyEventLoop", "Lift.BeaconDeposit.BodyEventSig", "Lift.BeaconDeposit.BodyGuards", "Lift.BeaconDeposit.BodyInsertDead", "Lift.BeaconDeposit.BodyInsertLive", "Lift.BeaconDeposit.BodyNode", "Lift.BeaconDeposit.BodyPubkeyRoot", "Lift.BeaconDeposit.BodyShaKit", "Lift.BeaconDeposit.BodySignatureRoot", "Lift.BeaconDeposit.BodySpec", "Lift.BeaconDeposit.Cert", "Lift.BeaconDeposit.Check", "Lift.BeaconDeposit.CountView", "Lift.BeaconDeposit.DepositArgs", "Lift.BeaconDeposit.DepositDecode", "Lift.BeaconDeposit.DepositExec", "Lift.BeaconDeposit.Erc165", "Lift.BeaconDeposit.Jumps", "Lift.BeaconDeposit.Ladder", "Lift.BeaconDeposit.Layout", "Lift.BeaconDeposit.Lift", "Lift.BeaconDeposit.LittleEndian", "Lift.BeaconDeposit.Prog", "Lift.BeaconDeposit.Refines", "Lift.BeaconDeposit.RootLoop", "Lift.BeaconDeposit.RootView", "Lift.BeaconDeposit.Safe", "Lift.BeaconDeposit.SafeCount", "Lift.BeaconDeposit.SafeDecoder", "Lift.BeaconDeposit.SafeDispatch", "Lift.BeaconDeposit.SafeEvent", "Lift.BeaconDeposit.SafeGuards", "Lift.BeaconDeposit.SafeInsertDead", "Lift.BeaconDeposit.SafeInsertLive", "Lift.BeaconDeposit.SafeLittleEndian", "Lift.BeaconDeposit.SafeNode", "Lift.BeaconDeposit.SafePubkeyRoot", "Lift.BeaconDeposit.SafeSignatureRoot", "Lift.BeaconDeposit.SafeViews", "Lift.BeaconDeposit.Views",

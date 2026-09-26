@@ -1271,6 +1271,16 @@ laws live in [`Blanc/LadderBase.lean`](../Blanc/LadderBase.lean):
   growth of an address-prefix sum by the value credited including the wrapping
   case, and `transfer_does_not_increase_sum` is the paired-movement form.
   These are upper bounds; they do not establish that no wrap occurred.
+- For a *pure* token model whose ledger is a function `Adr → B256` rather
+  than storage, use [`Blanc/LedgerUpdate.lean`](../Blanc/LedgerUpdate.lean).
+  `ledgerDebit`/`ledgerCredit` are the one-row `Function.update` movements,
+  with `_self`/`_ne` read-back lemmas; `ledgerDebit_decrease`,
+  `ledgerCredit_increase` and `ledgerDebit_credit_transfer` package them as
+  `Decrease`/`Increase`/`Transfer`; `sum_ledgerDebit`, `sum_ledgerCredit` and
+  `sum_ledgerDebit_credit` read off the exact `sum` movement under the
+  checked-arithmetic guard; `ledgerDebit_credit_nof` shows the credit half of
+  a covered transfer cannot wrap when `SumNof` holds (a checked-add revert is
+  then dead).
 - For an exact observation of a finite coalition, import
   [`Blanc/LedgerConservation.lean`](../Blanc/LedgerConservation.lean) and use
   `ledgerSumOn`. `ledgerSumOn_congr` transports pointwise agreement;
