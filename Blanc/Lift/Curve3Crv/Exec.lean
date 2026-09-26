@@ -13,7 +13,8 @@ deployed bytes from a frame start:
 * `c3crv_step_exec`: under `VyInv` and `FreshKeys`, a call the model accepts (every function but
   `set_name`) is executed, gas-exact, and ends in the model's new state, events and return data;
 * `c3crv_setName_exec`: `set_name`, the model accepting with the owner answering the caller, is
-  executed whenever the minter's `owner()` answers the caller (`OwnerCallOk`); its gas after the
+  executed whenever the minter's `owner()` answers the caller with fewer than `2^256` bytes
+  (`OwnerCallOk`) and the calldata is shorter than `2^256` bytes; its gas after the
   call is the callee's, so it is not exact.
 -/
 
@@ -36,7 +37,7 @@ theorem c3crv_exec {sevm : Sevm} {pre : Devm} {k : Nat} {ow : Option B256} {r : 
   obtain ⟨f, hf⟩ : ∃ f, bodies[k]? = some f := by
     have hlt : k < sels.length := (List.getElem?_eq_some_iff.mp hk).1
     exact ⟨_, List.getElem?_eq_getElem (by simpa [sels, bodies] using hlt)⟩
-  obtain ⟨c, hc⟩ := live_at hfork hstatic hk1 hf hr
+  obtain ⟨c, hc⟩ := live_at hfork hstatic hcd hk1 hf hr
   refine ⟨c + dispatchGas k, fun G hG => ?_⟩
   obtain ⟨post, hrun, hg, hl⟩ := hc G hG
   have hd := live_dispatch hf hk rfl hlen hcd hrun
@@ -75,7 +76,8 @@ theorem c3crv_step_exec {sevm : Sevm} {pre : Devm} {s : Curve3Crv.State} {K : Ke
 /-- **`set_name` the model accepts is a real execution** whenever the minter's `owner()` answers
 the caller: there are a gas amount `R` the body needs after the call and a prefix cost `P` such
 that, if the call answers leaving `R` whenever made with at least `Gc`, every frame with at least
-`Gc + P` gas (beyond the dispatcher's) succeeds and ends in the model's step. -/
+`Gc + P` gas (beyond the dispatcher's) succeeds and ends in the model's step.  `OwnerCallOk`
+includes that the answer is shorter than `2^256` bytes; `hcd` bounds the calldata likewise. -/
 theorem c3crv_setName_exec {sevm : Sevm} {pre : Devm} {s : Curve3Crv.State} {K : Key → Prop}
     {o : Curve3Crv.Out}
     (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)

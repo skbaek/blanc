@@ -999,22 +999,12 @@ counter at `0x120`: `SFunc.RunExactCut.iterate` with the invariant "memory reads
 words"; then the join: `CALLDATACOPY` from `CALLDATASIZE` zero-fills `ceil32 L - L` bytes after the
 string (the `(L - 1) mod 32` arithmetic is `ceil32`, including `L = 0` by wrapping), `mstore(0x160,
 0x20)`, `return(0x160, ceil32 (0x40 + L))`, which reads `abiString (vyStrOf stor base n)`.
+Premise `hcd`: the calldata is shorter than `2^256` bytes, so `CALLDATASIZE` does not wrap and
+the zero-fill reads zeros.
 The same loop shape as `set_name`'s, reversed (storage to memory): one generic lemma serves both
 views. -/
-theorem live_name (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
-    (hr : rawName sevm stor₀ = some r) : BodyLive sevm b t_0716_c0 r := by
-  sorry
-
--- SEGMENT: liveStringViews (see `live_name`)
-theorem live_symbol (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
-    (hr : rawSymbol sevm stor₀ = some r) : BodyLive sevm b t_07ca_c0 r := by
-  sorry
-
-/-- `live_name` under the calldata-size bound the frame supplies (`CALLDATASIZE` is the zero-fill
-source; see the note on `live_name`). -/
-theorem live_name_of_cd (hfork : CoveredFork sevm.benvStat.fork)
-    (hcd : sevm.data.length < 2 ^ 256) {r : Raw}
-    (hr : rawName sevm stor₀ = some r) : BodyLive sevm b t_0716_c0 r := by
+theorem live_name (hfork : CoveredFork sevm.benvStat.fork) (hcd : sevm.data.length < 2 ^ 256)
+    {r : Raw} (hr : rawName sevm stor₀ = some r) : BodyLive sevm b t_0716_c0 r := by
   unfold rawName at hr
   split_ifs at hr with h
   cases hr
@@ -1026,10 +1016,9 @@ theorem live_name_of_cd (hfork : CoveredFork sevm.benvStat.fork)
     (x0 := 0x07) (x1 := 0x74) (r0 := 0x07) (r1 := 0x3f) hfork hcd hv rfl rfl rfl
     (Or.inl ⟨rfl, rfl, hL⟩)
 
-/-- `live_symbol` under the calldata-size bound. -/
-theorem live_symbol_of_cd (hfork : CoveredFork sevm.benvStat.fork)
-    (hcd : sevm.data.length < 2 ^ 256) {r : Raw}
-    (hr : rawSymbol sevm stor₀ = some r) : BodyLive sevm b t_07ca_c0 r := by
+-- SEGMENT: liveStringViews (see `live_name`)
+theorem live_symbol (hfork : CoveredFork sevm.benvStat.fork) (hcd : sevm.data.length < 2 ^ 256)
+    {r : Raw} (hr : rawSymbol sevm stor₀ = some r) : BodyLive sevm b t_07ca_c0 r := by
   unfold rawSymbol at hr
   split_ifs at hr with h
   cases hr
@@ -1046,7 +1035,7 @@ end
 /-- The raw effect of body `k` succeeds with `r` and body `k` runs to it (all bodies but
 `set_name`). -/
 theorem live_at {sevm : Sevm} {b : Devm} (hfork : CoveredFork sevm.benvStat.fork)
-    (hstatic : sevm.isStatic = false) {k : Nat} {f : SFunc} {ow : Option B256} {r : Raw}
+    (hstatic : sevm.isStatic = false) (hcd : sevm.data.length < 2 ^ 256) {k : Nat} {f : SFunc} {ow : Option B256} {r : Raw}
     (hk1 : k ≠ 1) (hf : bodies[k]? = some f)
     (hr : rawOf k sevm ow (Devm.getStor b sevm.currentTarget) = some r) : BodyLive sevm b f r := by
   rcases k with _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | k
@@ -1062,8 +1051,8 @@ theorem live_at {sevm : Sevm} {b : Devm} (hfork : CoveredFork sevm.benvStat.fork
   · exact live_approve hfork hstatic hr
   · exact live_mint hfork hstatic hr
   · exact live_burnFrom hfork hstatic hr
-  · exact live_name hfork hr
-  · exact live_symbol hfork hr
+  · exact live_name hfork hcd hr
+  · exact live_symbol hfork hcd hr
   · exact live_decimals hfork hr
   · exact live_balanceOf hfork hr
 
@@ -1233,22 +1222,11 @@ theorem rx_storeSeg (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isS
 /-! ## `set_name`: live when the owner answers -/
 
 /-- The static call `set_name` makes answers `w` whenever it is made with at least `Gc` gas and
-the owner calldata in its input window, and leaves at least `R` gas: a premise about the
-contract at the stored minter, over any call-site memory and stack below. -/
+the owner calldata in its input window, and leaves at least `R` gas, its answer shorter than
+`2^256` bytes (`RETURNDATASIZE` pushes the length modulo `2^256`, so a longer answer could fail
+the `RETURNDATASIZE > 31` check): a premise about the contract at the stored minter, over any
+call-site memory and stack below. -/
 def OwnerCallOk (sevm : Sevm) (b : Devm) (w : B256) (R Gc : Nat) : Prop :=
-  ∀ (S : List B256) (M : Mem) (G : Nat), Gc ≤ G → G < 2 ^ 256 →
-    (M.read 0x23c 4).1 = ownerCalldata →
-    ∃ d out, Ninst.RunCompiled sevm
-        (St (afterSload sevm b vyMinterSlot) (Nat.toB256 G ::
-          b.getStorVal sevm.currentTarget vyMinterSlot :: 0x23c :: 4 :: 0x280 :: 0x20 :: S) M G)
-        (.exec .staticcall) d ∧
-      StaticCallPost (afterSload sevm b vyMinterSlot) d S M 0x23c 4 0x280 0x20 1 out ∧
-      32 ≤ out.length ∧ Bytes.toB256 (out.take 32) = w ∧ R ≤ d.gasLeft
-
-/-- `OwnerCallOk` with the answer's length a word: `RETURNDATASIZE` pushes the length modulo
-`2^256`, so the frozen `OwnerCallOk` alone cannot rule out a wrapped length failing the
-`RETURNDATASIZE > 31` check (see the note on `live_setName`). -/
-def OwnerCallOkLt (sevm : Sevm) (b : Devm) (w : B256) (R Gc : Nat) : Prop :=
   ∀ (S : List B256) (M : Mem) (G : Nat), Gc ≤ G → G < 2 ^ 256 →
     (M.read 0x23c 4).1 = ownerCalldata →
     ∃ d out, Ninst.RunCompiled sevm
@@ -1268,31 +1246,14 @@ so the final gas is not stated.
 Proof sketch: the forward walk of `safeSetName`'s prefix (`rx_calldatacopy`s with their
 expansion to `0x200`, length guards from `rawSetName`), `mstore(0x220, sel)` (expansion to
 `0x240`), `rx_sload_sel`, `rx_gas` (pushes the gas left, `G - P + …`, below `2^256`), then the
-call step from `OwnerCallOk` (`rx_staticcall`'s continuation form, flag `1`), the three checks,
-and the two copy loops by `SFunc.RunExactCut.iterate` at the `sstoreCost`s of the string
-slots, all within `R`. -/
+call step from `OwnerCallOk` (`rx_staticcall`'s continuation form, flag `1`), the three checks
+(the answer's length below `2^256`, from `OwnerCallOk`), and the two copy loops unrolled pass by
+pass (`rx_storeSeg`) at the `sstoreCost`s of the string slots, all within `R`. -/
 theorem live_setName {sevm : Sevm} {b : Devm} (hfork : CoveredFork sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) {r : Raw}
     (hr : rawSetName sevm (Devm.getStor b sevm.currentTarget) (some sevm.caller.toB256) =
       some r) :
     ∃ R P, ∀ Gc, OwnerCallOk sevm b sevm.caller.toB256 R Gc → ∀ G, Gc + P ≤ G → G < 2 ^ 256 →
-      ∃ post, SFunc.RunExact prog sevm (entrySt sevm b G) t_00f1_c0 (.halted post) ∧
-        Lands sevm b post r := by
-  sorry
-
-end Blanc.Lift.Curve3Crv
-
-namespace Blanc.Lift.Curve3Crv
-
-open Jaune
-
-/-- **`set_name`, forward**, under `OwnerCallOkLt` (the owner's answer is shorter than
-`2^256` bytes). -/
-theorem live_setName_lt {sevm : Sevm} {b : Devm} (hfork : CoveredFork sevm.benvStat.fork)
-    (hstatic : sevm.isStatic = false) {r : Raw}
-    (hr : rawSetName sevm (Devm.getStor b sevm.currentTarget) (some sevm.caller.toB256) =
-      some r) :
-    ∃ R P, ∀ Gc, OwnerCallOkLt sevm b sevm.caller.toB256 R Gc → ∀ G, Gc + P ≤ G → G < 2 ^ 256 →
       ∃ post, SFunc.RunExact prog sevm (entrySt sevm b G) t_00f1_c0 (.halted post) ∧
         Lands sevm b post r := by
   unfold rawSetName at hr
@@ -1518,3 +1479,4 @@ theorem live_setName_lt {sevm : Sevm} {b : Devm} (hfork : CoveredFork sevm.benvS
       rw [hlg2, hlg1, hpost.logs, afterSload_logs, List.append_nil]
 
 end Blanc.Lift.Curve3Crv
+
