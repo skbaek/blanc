@@ -126,7 +126,7 @@ theorem rootMemSize_mod (h : Nat) : rootMemSize h % 32 = 0 := by
 theorem rootMemSize_ge (h : Nat) : 96 ≤ rootMemSize h := by
   unfold rootMemSize; split <;> omega
 
-theorem toB256_div_two {s : Nat} (hs : s < 2 ^ 256) :
+private theorem toB256_div_two {s : Nat} (hs : s < 2 ^ 256) :
     Nat.toB256 s / Bytes.toB256 [0x02] = Nat.toB256 (s / 2) := by
   rw [Blanc.wordDiv_eq_toB256_div, B256.toNat_toB256_of_lt hs,
     show (Bytes.toB256 [0x02]).toNat = 2 by decide]
