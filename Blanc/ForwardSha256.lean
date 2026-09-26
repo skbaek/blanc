@@ -235,7 +235,7 @@ lemma State.subBal_addBal_get_stor
     unfold State.addBal
     rw [State.setBal_get_stor_direct, State.setBal_get_stor_direct]
 
-private lemma rawInsertIfNew_eq_self_of_contains
+lemma rawInsertIfNew_eq_self_of_contains
     {α : Type} {β : α → Type} [BEq α] [Hashable α]
     (m : Std.DHashMap.Internal.Raw₀ α β) (a : α) (b : β a)
     (h : Std.DHashMap.Internal.Raw₀.contains m a = true) :
@@ -248,7 +248,7 @@ private lemma rawInsertIfNew_eq_self_of_contains
   · rfl
   · contradiction
 
-private lemma rawInsertListIfNew_eq_self_of_forall_contains
+lemma rawInsertListIfNew_eq_self_of_forall_contains
     {α : Type} {β : α → Type} [BEq α] [Hashable α]
     (m : Std.DHashMap.Internal.Raw₀ α β)
     (l : List ((a : α) × β a))
@@ -263,7 +263,7 @@ private lemma rawInsertListIfNew_eq_self_of_forall_contains
           (h hd (by simp))]
       exact ih (fun p hp => h p (by simp [hp]))
 
-private lemma rawUnion_self
+lemma rawUnion_self
     {α : Type} {β : α → Type}
     [BEq α] [Hashable α] [EquivBEq α] [LawfulHashable α]
     (m : Std.DHashMap.Internal.Raw₀ α β)
@@ -277,7 +277,7 @@ private lemma rawUnion_self
   rw [Std.DHashMap.Internal.Raw₀.contains_eq_containsKey hwf]
   exact Std.Internal.List.containsKey_of_mem hp
 
-private lemma hashSet_union_self
+lemma hashSet_union_self
     {α : Type} [BEq α] [Hashable α] [EquivBEq α]
     [LawfulHashable α] (m : Std.HashSet α) :
     m.union m = m := by
@@ -288,7 +288,7 @@ private lemma hashSet_union_self
   unfold Std.HashSet.union Std.HashMap.union Std.DHashMap.union
   congr 3
 
-private lemma hashSet_insert_eq_self_of_mem
+lemma hashSet_insert_eq_self_of_mem
     {α : Type} [BEq α] [Hashable α]
     (m : Std.HashSet α) (a : α) (h : a ∈ m) :
     m.insert a = m := by
