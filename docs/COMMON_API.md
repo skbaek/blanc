@@ -2694,7 +2694,11 @@ contract-neutral.
   (`StaticAnswered`), inverted (`ri_staticcall`) and forward over a caller-supplied step
   (`rx_staticcall`), in [`Blanc/Lift/StaticCall.lean`](../Blanc/Lift/StaticCall.lean).
   `CALLER` (`rx_caller`, `ri_caller`), `KECCAK256` inverted (`ri_keccak`), `LOG3`
-  (`rx_log3`, `ri_log3`) and `SSTORE` forward at its selected cost (`rx_sstore`) are in
+  (`rx_log3`, `ri_log3`), `SSTORE` forward at its selected cost (`rx_sstore`), `RETURN`
+  inverted (`ri_return`), the memory facts `Mem.reads_data`/`Mem.read_write_word_of_wf`, and
+  the world projections after a store, log or return (`getStor_afterStore`,
+  `getStor_afterStore_ne`, `getStorVal_afterStore`, `logs_afterStore`, `getStor_addLog`,
+  `logs_addLog`, `getStor_St_return`, `logs_St_return`, `output_St_return`) are in
   [`Blanc/Lift/WalkSteps.lean`](../Blanc/Lift/WalkSteps.lean).
 - Hashed storage slots: `mapSlot key base = keccak256(pad32 key ‖ pad32 base)`, solc's mapping
   slot and, with the arguments swapped (slot first), Vyper's, in
@@ -2703,7 +2707,11 @@ contract-neutral.
   memory `vyMem`/`vyImg`), the clamp constants as a carried image invariant (`VyClamps`,
   `VyClamps.writeAt`), the non-payable guard and address-argument clamp every body starts with
   (`vyNonpayable`, `vyAddrArg`, their `rx_`/`ric_` forms), and the `HashMap` slot scratch window
-  (`vySlot_read`, `vySlot_keccak`), in [`Blanc/Lift/Vyper.lean`](../Blanc/Lift/Vyper.lean).
+  (`vySlot_read`, `vySlot_keccak`) with its whole macro (`vySlot`, `ric_vySlot`, `rx_vySlot`),
+  the checked storage subtract/add macros (`vySubStore`, `vyAddStore`, their `rx_`/`ric_`
+  forms, `B256.nof_iff_not_add_lt`), the selector read (`vyImg_selector`), and word facts
+  (`B256.xor_zero`, `B256.xor_eq_zero_iff`, `B256.toAdr_toB256_of_lt`), in
+  [`Blanc/Lift/Vyper.lean`](../Blanc/Lift/Vyper.lean).
 - Loops: a back-edge to entry `k` is reasoned about one iteration at a time on
   runs cut at `k` (`SFunc.RunCutP`, `SFunc.RunExactCut`). Safety:
   `SFunc.RunCutP.loop` (invariant; `loop_indexed`, `SFunc.RunP.loop`), which
