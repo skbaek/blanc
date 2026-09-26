@@ -887,4 +887,443 @@ theorem rx_vyLoadExit (hroom : R.length + 12 < 1024) {i : Nat} (hi : lp.toNat < 
 
 end LoadLoop
 
+/-! ## The string store loop (memory to storage)
+
+The setter's side of the string copy: stack `cap :: 0x120 :: lp :: base :: src :: R`, counter
+`i` at `0x120`; while `32 i ≤ lp` it stores the memory word at `src + 32 i` to storage slot
+`base + i`, bumps the counter, and loops back to its entry `k` unless the counter reached `cap`
+(then `exitT`); a failing test jumps to entry `j`.  Forward: `rx_vyStoreStep`, `rx_vyStoreLast`,
+`rx_vyStoreExit`; inverted: `ric_vyStoreIter` (one pass, either way out). -/
+
+/-- The store loop's head tree (see the section note). -/
+def vyStoreLoopTree (e0 e1 x0 x1 r0 r1 : UInt8) (j k : Nat) (exitT : SFunc) : SFunc :=
+  .dest (.next (.reg (.dup 2)) (.next (.push [0x01, 0x20] (by decide)) (.next (.reg .mload)
+  (.next (.push [0x20] (by decide)) (.next (.reg .mul) (.next (.reg .gt) (.next (.reg .iszero)
+  (.next (.push [e0, e1] (by simp)) (.branch (.next (.push [x0, x1] (by simp)) (.jump j))
+  (.dest (.next (.push [0x01, 0x20] (by decide)) (.next (.reg .mload)
+  (.next (.push [0x20] (by decide)) (.next (.reg .mul) (.next (.reg (.dup 5)) (.next (.reg .add)
+  (.next (.reg .mload) (.next (.push [0x01, 0x20] (by decide)) (.next (.reg .mload)
+  (.next (.reg (.dup 5)) (.next (.reg .add) (.next (.reg .sstore)
+  (.dest (.next (.reg (.dup 1)) (.next (.reg .mload) (.next (.push [0x01] (by decide))
+  (.next (.reg .add) (.next (.reg (.dup 0)) (.next (.reg (.dup 3)) (.next (.reg .mstore)
+  (.next (.reg (.dup 1)) (.next (.reg .eq) (.next (.reg .iszero)
+  (.next (.push [r0, r1] (by simp)) (.branchTo exitT k)))))))))))))))))))))))))))))))))))
+
+/-- The store loop's stack. -/
+def vyStoreStack (cap lp base src : B256) (R : List B256) : List B256 :=
+  cap :: 0x120 :: lp :: base :: src :: R
+
+/-- An `SSTORE`'s selected charge is at most a cold access plus a fresh set. -/
+theorem sstoreCost_le (sevm : Sevm) (d : Devm) (key value : B256) :
+    sstoreCost sevm d key value ≤ gasColdSload + gasStorageSet := by
+  have hv : sstoreValueCost (getOrigStorVal sevm sevm.currentTarget key)
+      (d.getStorVal sevm.currentTarget key) value ≤ gasStorageSet := by
+    rw [sstoreValueCost]
+    split_ifs <;> decide +kernel
+  unfold sstoreCost
+  split <;> omega
+
+section StoreLoop
+
+variable {fs : List SFunc} {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
+  {cap lp base src : B256} {R : List B256} {e0 e1 x0 x1 r0 r1 : UInt8} {j k : Nat}
+  {exitT : SFunc}
+
+/-- One pass of the head and the body up to the counter's `EQ` test. -/
+private theorem rx_vyStoreBody (hfork : CoveredFork sevm.benvStat.fork)
+    (hstatic : sevm.isStatic = false) (hroom : R.length + 12 < 1024) {i : Nat}
+    (hi : 32 * i ≤ lp.toNat) {s : Nat} (hs : M.size = s) (hs32 : s % 32 = 0) (hs1 : 0x140 ≤ s)
+    {sn : Nat} (hsn : src.toNat = sn) (hsrc : sn + 32 * i + 32 ≤ s) (hbig : s < 2 ^ 256)
+    (hctr : (M.read 0x120 32).1 = (Nat.toB256 i).toBytes) (hG : gCallStipend < G)
+    (kk : SFunc.RunExact fs sevm
+      (St (afterSstore sevm b (base + Nat.toB256 i) (Bytes.toB256 (M.read (sn + 32 * i) 32).1))
+        (B256.eqCheck cap (Nat.toB256 (i + 1)) :: vyStoreStack cap lp base src R)
+        (M.write 0x120 (Nat.toB256 (i + 1)).toBytes) G)
+      (.next (.reg .iszero) (.next (.push [r0, r1] (by simp)) (.branchTo exitT k))) o) :
+    SFunc.RunExact fs sevm (St b (vyStoreStack cap lp base src R) M
+      (G + 101 + sstoreCost sevm b (base + Nat.toB256 i)
+        (Bytes.toB256 (M.read (sn + 32 * i) 32).1)))
+      (vyStoreLoopTree e0 e1 x0 x1 r0 r1 j k exitT) o := by
+  subst hsn
+  set w := Bytes.toB256 (M.read (src.toNat + 32 * i) 32).1
+  set sc := sstoreCost sevm b (base + Nat.toB256 i) w
+  have h120 : (0x120 : B256).toNat = 0x120 := by decide
+  have hp120 : Bytes.toB256 [0x01, 0x20] = 0x120 := by decide
+  have hi' : Bytes.toB256 (M.read 0x120 32).1 = Nat.toB256 i := by
+    rw [hctr, B256.toB256_toBytes]
+  have hM : (M.read 0x120 32).2 = M := read_covered hs hs32 (by omega)
+  have h32i := vy_mul32 (i := i) (by omega)
+  have hsa : (src + Nat.toB256 (32 * i)).toNat = src.toNat + 32 * i := by
+    rw [B256.toNat_add, B256.toNat_toB256_of_lt (by omega), Nat.lo_eq_of_lt (by omega)]
+  have hgt : B256.gtCheck (Nat.toB256 (32 * i)) lp = 0 := by
+    rw [B256.gtCheck, ite_eq_right_iff]
+    intro h
+    rw [gt_iff_lt, B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt (by omega)] at h
+    omega
+  have hM1 : (M.write 0x120 (Nat.toB256 (i + 1)).toBytes).size = s := by
+    rw [Mem.size_write_of_le (by rw [B256.length_toBytes, hs]; omega), hs]
+  have hone := one_add_toB256 (h := i) (by omega)
+  have hc0 : gVerylow + (calculateMemoryGasCost s - calculateMemoryGasCost s) = 3 := by
+    rw [Nat.sub_self]; rfl
+  rw [show G + 101 + sc = G + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 1 + sc + 3 + 3 + 3 + 3 + 3 +
+    3 + 3 + 5 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 5 + 3 + 3 + 3 + 3 + 1 by omega]
+  unfold vyStoreLoopTree vyStoreStack
+  unfold vyStoreStack at kk
+  refine rx_dest ?_
+  refine rx_dup (n := 2) rfl (by simp; omega) ?_
+  refine rx_push hp120 (by simp; omega) ?_
+  refine rx_mload (c := 3) (v := Nat.toB256 i) ?_ (by rw [h120]; exact hi')
+    (by rw [h120]; exact hM) (by simp; omega) ?_
+  · rw [h120, St.extCost_eq hs, memExtSize_of_le hs32 (by omega)]; exact hc0
+  refine rx_push rfl (by simp; omega) ?_
+  refine rx_mul h32i (by simp; omega) ?_
+  refine rx_gt hgt (by simp; omega) ?_
+  refine rx_iszero (v := 1) (by decide) (by simp; omega) ?_
+  refine rx_push rfl (by simp; omega) ?_
+  refine rx_branch_succ (by decide) (rx_dest ?_)
+  refine rx_push hp120 (by simp; omega) ?_
+  refine rx_mload (c := 3) (v := Nat.toB256 i) ?_ (by rw [h120]; exact hi')
+    (by rw [h120]; exact hM) (by simp; omega) ?_
+  · rw [h120, St.extCost_eq hs, memExtSize_of_le hs32 (by omega)]; exact hc0
+  refine rx_push rfl (by simp; omega) ?_
+  refine rx_mul h32i (by simp; omega) ?_
+  refine rx_dup (n := 5) rfl (by simp; omega) ?_
+  refine rx_add (by simp; omega) ?_
+  refine rx_mload (c := 3) (v := w) ?_ (by rw [hsa]) (by rw [hsa]; exact read_covered hs hs32 hsrc)
+    (by simp; omega) ?_
+  · rw [hsa, St.extCost_eq hs, memExtSize_of_le hs32 hsrc]; exact hc0
+  refine rx_push hp120 (by simp; omega) ?_
+  refine rx_mload (c := 3) (v := Nat.toB256 i) ?_ (by rw [h120]; exact hi')
+    (by rw [h120]; exact hM) (by simp; omega) ?_
+  · rw [h120, St.extCost_eq hs, memExtSize_of_le hs32 (by omega)]; exact hc0
+  refine rx_dup (n := 5) rfl (by simp; omega) ?_
+  refine rx_add (by simp; omega) ?_
+  refine rx_sstore hfork (by omega) hstatic ?_
+  refine rx_dest ?_
+  refine rx_dup (n := 1) rfl (by simp; omega) ?_
+  refine rx_mload (c := 3) (v := Nat.toB256 i) ?_ (by rw [h120]; exact hi')
+    (by rw [h120]; exact hM) (by simp; omega) ?_
+  · rw [h120, St.extCost_eq hs, memExtSize_of_le hs32 (by omega)]; exact hc0
+  refine rx_push rfl (by simp; omega) ?_
+  refine rx_add (by simp; omega) ?_
+  rw [hone]
+  refine rx_dup (n := 0) rfl (by simp; omega) ?_
+  refine rx_dup (n := 3) rfl (by simp; omega) ?_
+  refine rx_mstore (c := 3) ?_ (M' := M.write 0x120 (Nat.toB256 (i + 1)).toBytes)
+    (by rw [h120]) ?_
+  · rw [h120, St.extCost_eq hs, memExtSize_of_le hs32 (by omega)]; exact hc0
+  refine rx_dup (n := 1) rfl (by simp; omega) ?_
+  exact rx_eq rfl (by simp; omega) kk
+
+/-- **A store iteration that loops back.** -/
+theorem rx_vyStoreStep (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hroom : R.length + 12 < 1024) {i : Nat} (hi : 32 * i ≤ lp.toNat)
+    (hcap : cap ≠ Nat.toB256 (i + 1)) {s : Nat} (hs : M.size = s) (hs32 : s % 32 = 0)
+    (hs1 : 0x140 ≤ s) {sn : Nat} (hsn : src.toNat = sn) (hsrc : sn + 32 * i + 32 ≤ s)
+    (hbig : s < 2 ^ 256) (hctr : (M.read 0x120 32).1 = (Nat.toB256 i).toBytes)
+    (hG : gCallStipend < G) {gk : SFunc} (hk : fs[k]? = some gk)
+    (kk : SFunc.RunExact fs sevm
+      (St (afterSstore sevm b (base + Nat.toB256 i) (Bytes.toB256 (M.read (sn + 32 * i) 32).1))
+        (vyStoreStack cap lp base src R) (M.write 0x120 (Nat.toB256 (i + 1)).toBytes) G) gk o) :
+    SFunc.RunExact fs sevm (St b (vyStoreStack cap lp base src R) M
+      (G + 117 + sstoreCost sevm b (base + Nat.toB256 i)
+        (Bytes.toB256 (M.read (sn + 32 * i) 32).1)))
+      (vyStoreLoopTree e0 e1 x0 x1 r0 r1 j k exitT) o := by
+  rw [show G + 117 = G + 10 + 3 + 3 + 101 by omega]
+  refine rx_vyStoreBody hfork hstatic hroom hi hs hs32 hs1 hsn hsrc hbig hctr (by omega) ?_
+  refine rx_iszero (v := 1) ?_ (by simp [vyStoreStack]; omega) ?_
+  · simp [B256.eqCheck, hcap]
+  refine rx_push rfl (by simp [vyStoreStack]; omega) ?_
+  exact rx_branchTo_succ (by decide) hk kk
+
+/-- **A store iteration that falls through** (the counter reached `cap`). -/
+theorem rx_vyStoreLast (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hroom : R.length + 12 < 1024) {i : Nat} (hi : 32 * i ≤ lp.toNat)
+    (hcap : cap = Nat.toB256 (i + 1)) {s : Nat} (hs : M.size = s) (hs32 : s % 32 = 0)
+    (hs1 : 0x140 ≤ s) {sn : Nat} (hsn : src.toNat = sn) (hsrc : sn + 32 * i + 32 ≤ s)
+    (hbig : s < 2 ^ 256) (hctr : (M.read 0x120 32).1 = (Nat.toB256 i).toBytes)
+    (hG : gCallStipend < G)
+    (kk : SFunc.RunExact fs sevm
+      (St (afterSstore sevm b (base + Nat.toB256 i) (Bytes.toB256 (M.read (sn + 32 * i) 32).1))
+        (vyStoreStack cap lp base src R) (M.write 0x120 (Nat.toB256 (i + 1)).toBytes) G) exitT o) :
+    SFunc.RunExact fs sevm (St b (vyStoreStack cap lp base src R) M
+      (G + 117 + sstoreCost sevm b (base + Nat.toB256 i)
+        (Bytes.toB256 (M.read (sn + 32 * i) 32).1)))
+      (vyStoreLoopTree e0 e1 x0 x1 r0 r1 j k exitT) o := by
+  rw [show G + 117 = G + 10 + 3 + 3 + 101 by omega]
+  refine rx_vyStoreBody hfork hstatic hroom hi hs hs32 hs1 hsn hsrc hbig hctr (by omega) ?_
+  refine rx_iszero (v := 0) ?_ (by simp [vyStoreStack]; omega) ?_
+  · simp [B256.eqCheck, hcap]
+  refine rx_push rfl (by simp [vyStoreStack]; omega) ?_
+  exact rx_branchTo_zero kk
+
+/-- **The store loop's failing test**: `32 i > lp`, on to entry `j`. -/
+theorem rx_vyStoreExit (hroom : R.length + 12 < 1024) {i : Nat} (hi : lp.toNat < 32 * i)
+    (hi' : 32 * i < 2 ^ 256) {s : Nat} (hs : M.size = s) (hs32 : s % 32 = 0) (hs1 : 0x140 ≤ s)
+    (hctr : (M.read 0x120 32).1 = (Nat.toB256 i).toBytes) {gj : SFunc} (hj : fs[j]? = some gj)
+    (kk : SFunc.RunExact fs sevm (St b (vyStoreStack cap lp base src R) M G) gj o) :
+    SFunc.RunExact fs sevm (St b (vyStoreStack cap lp base src R) M (G + 48))
+      (vyStoreLoopTree e0 e1 x0 x1 r0 r1 j k exitT) o := by
+  have h120 : (0x120 : B256).toNat = 0x120 := by decide
+  have hp120 : Bytes.toB256 [0x01, 0x20] = 0x120 := by decide
+  have hM : (M.read 0x120 32).2 = M := read_covered hs hs32 (by omega)
+  have hgt : B256.gtCheck (Nat.toB256 (32 * i)) lp = 1 := by
+    rw [B256.gtCheck, ite_eq_left_iff]
+    intro h
+    exact absurd (by rw [gt_iff_lt, B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hi']; exact hi) h
+  rw [show G + 48 = G + 8 + 3 + 10 + 3 + 3 + 3 + 5 + 3 + 3 + 3 + 3 + 1 by omega]
+  unfold vyStoreLoopTree vyStoreStack
+  unfold vyStoreStack at kk
+  refine rx_dest ?_
+  refine rx_dup (n := 2) rfl (by simp; omega) ?_
+  refine rx_push hp120 (by simp; omega) ?_
+  refine rx_mload (c := 3) (v := Nat.toB256 i) ?_ (by rw [h120, hctr, B256.toB256_toBytes])
+    (by rw [h120]; exact hM) (by simp; omega) ?_
+  · rw [h120, St.extCost_eq hs, memExtSize_of_le hs32 (by omega), Nat.sub_self]; rfl
+  refine rx_push rfl (by simp; omega) ?_
+  refine rx_mul (vy_mul32 hi') (by simp; omega) ?_
+  refine rx_gt hgt (by simp; omega) ?_
+  refine rx_iszero (v := 0) (by decide) (by simp; omega) ?_
+  refine rx_push rfl (by simp; omega) ?_
+  refine rx_branch_zero ?_
+  refine rx_push rfl (by simp; omega) ?_
+  exact rx_jump hj kk
+
+/-- **One pass of the store loop, inverted**: either the test fails and the run goes on at
+entry `j`, or word `i` was stored, the counter bumped, and the run goes on at `exitT` (the
+counter reached `cap`) or back at entry `k`. -/
+theorem ric_vyStoreIter (hfork : CoveredFork sevm.benvStat.fork) {C : List Nat} {r : Seg}
+    {i : Nat} {s : Nat} (hs : M.size = s) (hs32 : s % 32 = 0) (hs1 : 0x140 ≤ s) {sn : Nat}
+    (hsn : src.toNat = sn) (hsrc : sn + 32 * i + 32 ≤ s) (hbig : s < 2 ^ 256)
+    (hctr : (M.read 0x120 32).1 = (Nat.toB256 i).toBytes) {gk gj : SFunc}
+    (hk : fs[k]? = some gk) (hkC : k ∉ C) (hj : fs[j]? = some gj) (hjC : j ∉ C)
+    (run : SFunc.RunCut fs sevm C (St b (vyStoreStack cap lp base src R) M G)
+      (vyStoreLoopTree e0 e1 x0 x1 r0 r1 j k exitT) r) :
+    (lp.toNat < 32 * i ∧
+      ∃ G', SFunc.RunCut fs sevm C (St b (vyStoreStack cap lp base src R) M G') gj r) ∨
+    (32 * i ≤ lp.toNat ∧ ∃ G', SFunc.RunCut fs sevm C
+      (St (afterSstore sevm b (base + Nat.toB256 i) (Bytes.toB256 (M.read (sn + 32 * i) 32).1))
+        (vyStoreStack cap lp base src R) (M.write 0x120 (Nat.toB256 (i + 1)).toBytes) G')
+      (if cap = Nat.toB256 (i + 1) then exitT else gk) r) := by
+  subst hsn
+  have h120 : (Bytes.toB256 [0x01, 0x20]).toNat = 0x120 := by decide
+  have h120' : (0x120 : B256).toNat = 0x120 := by decide
+  have hi' : Bytes.toB256 (M.read 0x120 32).1 = Nat.toB256 i := by
+    rw [hctr, B256.toB256_toBytes]
+  have hM : (M.read 0x120 32).2 = M := read_covered hs hs32 (by omega)
+  have h32i := vy_mul32 (i := i) (by omega)
+  have hsa : (src + Nat.toB256 (32 * i)).toNat = src.toNat + 32 * i := by
+    rw [B256.toNat_add, B256.toNat_toB256_of_lt (by omega), Nat.lo_eq_of_lt (by omega)]
+  have hone := one_add_toB256 (h := i) (by omega)
+  unfold vyStoreLoopTree vyStoreStack at run
+  unfold vyStoreStack
+  obtain ⟨G1, run⟩ := ric_dest run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_dup (n := 2) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_mload s1
+  rw [h120, hM, hi'] at run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_mul s1
+  rw [h32i] at run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_gt s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_iszero s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_push s1
+  rcases ric_branch run with ⟨hw, G10, run⟩ | ⟨hw, G10, run⟩
+  · left
+    refine ⟨?_, ?_⟩
+    · by_contra hc
+      apply absurd hw
+      have : B256.gtCheck (Nat.toB256 (32 * i)) lp = 0 := by
+        rw [B256.gtCheck, ite_eq_right_iff]
+        intro h
+        rw [gt_iff_lt, B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt (by omega)] at h
+        omega
+      rw [this]; decide
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_push s1
+    exact ric_jump hjC hj run
+  right
+  refine ⟨?_, ?_⟩
+  · by_contra hc
+    apply hw
+    have : B256.gtCheck (Nat.toB256 (32 * i)) lp = 1 := by
+      rw [B256.gtCheck, ite_eq_left_iff]
+      intro h
+      exact absurd (by rw [gt_iff_lt, B256.lt_iff_toNat_lt_toNat,
+        B256.toNat_toB256_of_lt (by omega)]; omega) h
+    rw [this]; decide
+  obtain ⟨G11, run⟩ := ric_dest run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_mload s1
+  rw [h120, hM, hi'] at run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_mul s1
+  rw [h32i] at run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_dup (n := 5) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_add s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_mload s1
+  rw [hsa, read_covered hs hs32 hsrc] at run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_mload s1
+  rw [h120, hM, hi'] at run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_dup (n := 5) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_add s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G23, rfl⟩ := ri_sstore hfork s1
+  obtain ⟨G24, run⟩ := ric_dest run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_dup (n := 1) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_mload s1
+  rw [h120', hM, hi'] at run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G27, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G28, rfl⟩ := ri_add s1
+  rw [hone] at run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G29, rfl⟩ := ri_dup (n := 0) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G30, rfl⟩ := ri_dup (n := 3) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G31, rfl⟩ := ri_mstore s1
+  rw [h120'] at run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G32, rfl⟩ := ri_dup (n := 1) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G33, rfl⟩ := ri_eq s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G34, rfl⟩ := ri_iszero s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G35, rfl⟩ := ri_push s1
+  rcases ric_branchTo hkC hk run with ⟨hw, G36, run⟩ | ⟨hw, G36, run⟩
+  · have hc : cap = Nat.toB256 (i + 1) := by
+      by_contra hc
+      simp only [B256.eqCheck, hc, ↓reduceIte] at hw
+      exact absurd hw (by decide)
+    exact ⟨G36, by rw [ite_eq_left_of_eq_true _ _ (eq_true hc)]; exact run⟩
+  · have hc : cap ≠ Nat.toB256 (i + 1) := by
+      intro hc
+      simp only [B256.eqCheck, hc, ↓reduceIte] at hw
+      exact hw (by decide)
+    exact ⟨G36, by rw [ite_eq_right_of_eq_false _ _ (eq_false hc)]; exact run⟩
+
+end StoreLoop
+
+/-- A read of a window a write misses sees the memory before the write. -/
+theorem Mem.read_write_disjoint {M : Mem} (hwf : Mem.Wf M) (n : Nat) (xs : Bytes) {a len : Nat}
+    (h : n + xs.length ≤ a ∨ a + len ≤ n) : ((M.write n xs).read a len).1 = (M.read a len).1 := by
+  rw [((Mem.reads_data M).write hwf n xs).read, (Mem.reads_data M).read]
+  rcases h with h | h
+  · exact Bytes.sliceD_writeAt_after _ _ _ _ _ h
+  · exact Bytes.sliceD_writeAt_before _ _ _ _ _ h
+
+/-- The store loop's set-up: `mstore(0xc0, sl); keccak(0xc0, 0x20)` for the base, the length
+word at `src` plus 32, the counter `0` at `0x120`, the cap `cp`. -/
+def vyStoreHead (s0 s1 sl cp : UInt8) (loopT : SFunc) : SFunc :=
+  .next (.push [s0, s1] (by simp)) (.next (.reg (.dup 0)) (.next (.push [sl] (by simp))
+  (.next (.push [0xc0] (by decide)) (.next (.reg .mstore) (.next (.push [0x20] (by decide))
+  (.next (.push [0xc0] (by decide)) (.next (.reg .keccak256) (.next (.push [0x20] (by decide))
+  (.next (.reg (.dup 2)) (.next (.reg .mload) (.next (.reg .add)
+  (.next (.push [0x01, 0x20] (by decide)) (.next (.push [0x00] (by decide))
+  (.next (.push [cp] (by simp)) (.next (.reg (.dup 1)) (.next (.reg (.dup 3))
+  (.next (.reg .mstore) (.next (.reg .add) loopT))))))))))))))))))
+
+section StoreHead
+
+variable {fs : List SFunc} {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+  {o : Outcome} {s0 s1 sl cp : UInt8} {loopT : SFunc}
+
+/-- **The store loop's set-up, forward** (90 gas over a memory already covering `0x140`). -/
+theorem rx_vyStoreHead (hroom : S.length + 8 < 1024) {s sn : Nat} (hs : M.size = s)
+    (hs32 : s % 32 = 0) (hs1 : 0x140 ≤ s) (hwf : Mem.Wf M)
+    (hsn : (Bytes.toB256 [s0, s1]).toNat = sn) (hsn1 : 0xe0 ≤ sn) (hsn2 : sn + 32 ≤ s)
+    (kk : SFunc.RunExact fs sevm
+      (St b (vyStoreStack (Bytes.toB256 [cp] + Nat.toB256 0)
+          (Bytes.toB256 (M.read sn 32).1 + Bytes.toB256 [0x20]) (Bytes.toB256 [sl]).toBytes.keccak
+          (Bytes.toB256 [s0, s1]) (Bytes.toB256 [s0, s1] :: S))
+        ((M.write 0xc0 (Bytes.toB256 [sl]).toBytes).write 0x120 (Nat.toB256 0).toBytes) G)
+      loopT o) :
+    SFunc.RunExact fs sevm (St b S M (G + 90)) (vyStoreHead s0 s1 sl cp loopT) o := by
+  have hc0 : (Bytes.toB256 [0xc0]).toNat = 0xc0 := by decide
+  have h20 : (Bytes.toB256 [0x20]).toNat = 32 := by decide
+  have h120 : (0x120 : B256).toNat = 0x120 := by decide
+  set M1 := M.write 0xc0 (Bytes.toB256 [sl]).toBytes
+  have hM1 : M1.size = s := by
+    rw [Mem.size_write_of_le (by rw [B256.length_toBytes, hs]; omega), hs]
+  have hwf1 : Mem.Wf M1 := hwf.write _ _
+  have hL : (M1.read sn 32).1 = (M.read sn 32).1 :=
+    Mem.read_write_disjoint hwf _ _ (by rw [B256.length_toBytes]; omega)
+  have hx : ∀ n (hn : n = s), gVerylow + (calculateMemoryGasCost (memExtSize s 0xc0 32) -
+      calculateMemoryGasCost n) = 3 := by
+    intro n hn; subst hn; rw [memExtSize_of_le hs32 (by omega), Nat.sub_self]; rfl
+  rw [show G + 90 = G + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 36 + 3 + 3 + 3 + 3 + 3 + 3 + 3
+    by omega]
+  unfold vyStoreHead
+  refine rx_push rfl (by omega) ?_
+  refine rx_dup (n := 0) rfl (by simp; omega) ?_
+  refine rx_push rfl (by simp; omega) ?_
+  refine rx_push rfl (by simp; omega) ?_
+  refine rx_mstore (c := 3) ?_ (M' := M1) (by rw [hc0]) ?_
+  · rw [hc0, St.extCost_eq hs]; exact hx s rfl
+  refine rx_push rfl (by simp; omega) ?_
+  refine rx_push rfl (by simp; omega) ?_
+  refine rx_keccak (c := 36) ?_ (by rw [hc0, h20, Mem.read_write_word_of_wf hwf])
+    (by rw [hc0, h20]; exact read_covered hM1 (by omega) (by omega)) (by simp; omega) ?_
+  · rw [hc0, h20, St, Devm.extCost_zero_of_le (by rw [hM1]; exact hs32) (by rw [hM1]; omega)]
+    decide
+  refine rx_push rfl (by simp; omega) ?_
+  refine rx_dup (n := 2) rfl (by simp; omega) ?_
+  refine rx_mload (c := 3) (v := Bytes.toB256 (M.read sn 32).1) ?_ (by rw [hsn, hL])
+    (by rw [hsn]; exact read_covered hM1 (by omega) hsn2) (by simp; omega) ?_
+  · rw [hsn, St.extCost_eq hM1, memExtSize_of_le hs32 hsn2, Nat.sub_self]; rfl
+  refine rx_add (by simp; omega) ?_
+  refine rx_push (w := 0x120) (by decide) (by simp; omega) ?_
+  refine rx_push (w := Nat.toB256 0) (by decide) (by simp; omega) ?_
+  refine rx_push rfl (by simp; omega) ?_
+  refine rx_dup (n := 1) rfl (by simp; omega) ?_
+  refine rx_dup (n := 3) rfl (by simp; omega) ?_
+  refine rx_mstore (c := 3) ?_ (by rw [h120]) ?_
+  · rw [h120, St.extCost_eq hM1, memExtSize_of_le hs32 (by omega), Nat.sub_self]; rfl
+  exact rx_add (by simp; omega) kk
+
+/-- **The store loop's set-up, inverted.** -/
+theorem ric_vyStoreHead {C : List Nat} {r : Seg} {s sn : Nat} (hs : M.size = s)
+    (hs32 : s % 32 = 0) (hs1 : 0x140 ≤ s) (hwf : Mem.Wf M)
+    (hsn : (Bytes.toB256 [s0, s1]).toNat = sn) (hsn1 : 0xe0 ≤ sn) (hsn2 : sn + 32 ≤ s)
+    (run : SFunc.RunCut fs sevm C (St b S M G) (vyStoreHead s0 s1 sl cp loopT) r) :
+    ∃ G', SFunc.RunCut fs sevm C
+      (St b (vyStoreStack (Bytes.toB256 [cp] + Bytes.toB256 [0x00])
+          (Bytes.toB256 (M.read sn 32).1 + Bytes.toB256 [0x20]) (Bytes.toB256 [sl]).toBytes.keccak
+          (Bytes.toB256 [s0, s1]) (Bytes.toB256 [s0, s1] :: S))
+        ((M.write 0xc0 (Bytes.toB256 [sl]).toBytes).write 0x120 (Nat.toB256 0).toBytes) G')
+      loopT r := by
+  have hc0 : (Bytes.toB256 [0xc0]).toNat = 0xc0 := by decide
+  have h20 : (Bytes.toB256 [0x20]).toNat = 32 := by decide
+  have h120 : (Bytes.toB256 [0x01, 0x20]).toNat = 0x120 := by decide
+  have hp120 : Bytes.toB256 [0x01, 0x20] = 0x120 := by decide
+  have h0 : Bytes.toB256 [0x00] = Nat.toB256 0 := by decide
+  set M1 := M.write 0xc0 (Bytes.toB256 [sl]).toBytes
+  have hM1 : M1.size = s := by
+    rw [Mem.size_write_of_le (by rw [B256.length_toBytes, hs]; omega), hs]
+  have hwf1 : Mem.Wf M1 := hwf.write _ _
+  have hL : (M1.read sn 32).1 = (M.read sn 32).1 :=
+    Mem.read_write_disjoint hwf _ _ (by rw [B256.length_toBytes]; omega)
+  unfold vyStoreHead at run
+  obtain ⟨d1, s1', run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_push s1'
+  obtain ⟨d1, s1', run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_dup (n := 0) rfl s1'
+  obtain ⟨d1, s1', run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1'
+  obtain ⟨d1, s1', run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_push s1'
+  obtain ⟨d1, s1', run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_mstore s1'
+  rw [hc0] at run
+  obtain ⟨d1, s1', run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_push s1'
+  obtain ⟨d1, s1', run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1'
+  obtain ⟨d1, s1', run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_keccak s1'
+  rw [hc0, h20, Mem.read_write_word_of_wf hwf,
+    read_covered hM1 (by omega) (by omega)] at run
+  obtain ⟨d1, s1', run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_push s1'
+  obtain ⟨d1, s1', run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_dup (n := 2) rfl s1'
+  obtain ⟨d1, s1', run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_mload s1'
+  rw [hsn, hL, read_covered hM1 (by omega) hsn2] at run
+  obtain ⟨d1, s1', run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_add s1'
+  obtain ⟨d1, s1', run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_push s1'
+  obtain ⟨d1, s1', run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_push s1'
+  obtain ⟨d1, s1', run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_push s1'
+  obtain ⟨d1, s1', run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_dup (n := 1) rfl s1'
+  obtain ⟨d1, s1', run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_dup (n := 3) rfl s1'
+  obtain ⟨d1, s1', run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_mstore s1'
+  rw [h120, h0] at run
+  obtain ⟨d1, s1', run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_add s1'
+  rw [hp120] at run
+  exact ⟨G19, run⟩
+
+end StoreHead
+
 end Blanc.Lift
