@@ -206,12 +206,212 @@ the supply update with the overflow (mint) or underflow (burn) guard; the balanc
 `[sig, 0, a0]` (mint) or `[sig, a0, 0]` (burn); `return(0, 32)`. -/
 theorem safe_mint (hfork : CoveredFork sevm.benvStat.fork) :
     SafeBody sevm b t_056e_c0 (rawMint sevm stor₀) := by
-  sorry
+  intro G post run
+  have hM := vyMem_empty_size (Sevm.dataWord sevm 0)
+  have hwf0 := vyMem_wf Mem.wf_empty (Sevm.dataWord sevm 0)
+  have run := run.cut
+  unfold entrySt at run
+  obtain ⟨hv, G1, run⟩ := ric_vyNonpayable (h := 0x05) (l := 0x78) (fail := t_0574_c0)
+    (by decide) run
+  obtain ⟨hd, G2, run⟩ := ric_vyAddrArg (p := 0x04) (h := 0x05) (l := 0x89) (fail := t_0585_c0)
+    (by decide) (vyMem_reads Mem.wf_empty Mem.reads_empty _) (vyImg_clamps _ _) (by rw [hM])
+    (by rw [hM]; omega) run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_caller s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_eq s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
+  rcases ric_branch run with ⟨-, G8, run⟩ | ⟨hmin, G8, run⟩
+  · exact (run.false_of_noOk (by decide)).elim
+  obtain ⟨G9, run⟩ := ric_dest run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_calldataload s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_xor s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_push s1
+  rcases ric_branch run with ⟨-, G15, run⟩ | ⟨hnz, G15, run⟩
+  · exact (run.false_of_noOk (by decide)).elim
+  obtain ⟨G16, run⟩ := ric_dest run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_push s1
+  obtain ⟨hnof1, G18, run⟩ := ric_vyAddStore (p := 0x24) (h := 0x05) (l := 0xbd)
+    (fail := t_05b9_c0) hfork (by decide) run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_calldataload s1
+  obtain ⟨G22, run⟩ := ric_vySlot run
+  obtain ⟨hnof2, G23, run⟩ := ric_vyAddStore (p := 0x24) (h := 0x05) (l := 0xeb)
+    (fail := t_05e7_c0) hfork (by decide) run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G24, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_calldataload s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G27, rfl⟩ := ri_mstore s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G28, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G29, rfl⟩ := ri_calldataload s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G30, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G31, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G32, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G33, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G34, rfl⟩ := ri_log3 s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G35, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G36, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G37, rfl⟩ := ri_mstore s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G38, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G39, rfl⟩ := ri_push s1
+  cases run with
+  | last hl =>
+    obtain ⟨hout, hstor, hlogs⟩ := ri_return hl
+    have h3 : Bytes.toB256 [0x03] = 3 := by decide
+    have h5 : Bytes.toB256 [0x05] = vySupplySlot := by decide
+    have h6 : Bytes.toB256 [0x06] = vyMinterSlot := by decide
+    have hz : Bytes.toB256 [0x00] = 0 := by decide
+    have h320 : (Bytes.toB256 [0x01, 0x40]).toNat = 320 := by decide
+    have h32 : (Bytes.toB256 [0x20]).toNat = 32 := by decide
+    have hv1 : Sevm.dataWord sevm (Bytes.toB256 [0x24]) = Sevm.argWord sevm 1 := by
+      show Sevm.dataWord sevm _ = Sevm.dataWord sevm _
+      congr 1
+    have hd0 : Sevm.dataWord sevm (Bytes.toB256 [0x04]) = Sevm.argWord sevm 0 := rfl
+    have htopic : Bytes.toB256 [0xdd, 0xf2, 0x52, 0xad, 0x1b, 0xe2, 0xc8, 0x9b, 0x69, 0xc2, 0xb0,
+        0x68, 0xfc, 0x37, 0x8d, 0xaa, 0x95, 0x2b, 0xa7, 0xf1, 0x63, 0xc4, 0xa1, 0x16, 0x28, 0xf5, 0x5a,
+        0x4d, 0xf5, 0x23, 0xb3, 0xef] = transferTopic := by decide
+    simp only [h3, h5, h6, hz, hv1, hd0] at hmin hnz hnof1 hnof2 hout hstor hlogs
+    simp only [getStorVal_afterStore, getStorVal_afterSload,
+      afterSload_getStor] at hnof1 hnof2 hstor hlogs
+    simp only [h320, h32] at hout hlogs
+    set M2 := vySlotMem (vyMem Mem.empty (Sevm.dataWord sevm 0)) 3 (Sevm.argWord sevm 0)
+    have hwf2 : Mem.Wf M2 := vySlotMem_wf hwf0 _ _
+    have hwf3 : Mem.Wf (((M2.write 320 (Sevm.argWord sevm 1).toBytes).read 320 32).2) :=
+      (hwf2.write _ _).extend _ _
+    rw [Mem.read_write_word_of_wf hwf3] at hout
+    rw [Mem.read_write_word_of_wf hwf2] at hlogs
+    have hd' : (Sevm.argWord sevm 0).toNat < 2 ^ 160 := hd
+    have hmin' : (stor₀).get vyMinterSlot = sevm.caller.toB256 := by
+      have h := hmin
+      simp only [B256.eqCheck] at h
+      split_ifs at h with he
+      · exact he.symm
+      · exact absurd rfl h
+    have hnz' : Sevm.argWord sevm 0 ≠ 0 := by
+      rw [B256.xor_zero] at hnz; exact hnz
+    set st1 := (stor₀).set vySupplySlot ((stor₀).get vySupplySlot + Sevm.argWord sevm 1)
+    refine ⟨(st1.set (mapSlot 3 (Sevm.argWord sevm 0))
+        (st1.get (mapSlot 3 (Sevm.argWord sevm 0)) + Sevm.argWord sevm 1),
+      [⟨sevm.currentTarget, [transferTopic, 0, Sevm.argWord sevm 0],
+        (Sevm.argWord sevm 1).toBytes⟩], some (1 : B256).toBytes), ?_,
+      ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_⟩⟩
+    · simp only [rawMint]
+      exact ite_eq_left ⟨hv, hd', hmin', hnz', hnof1, hnof2⟩
+    · rw [hstor, getStor_addLog, getStor_afterStore, getStor_afterStore, afterSload_getStor]
+      rfl
+    · rw [hstor, getStor_addLog, getStor_afterStore_ne ha, getStor_afterStore_ne ha,
+        afterSload_getStor]
+    · rw [hlogs, logs_addLog, logs_afterStore, logs_afterStore, afterSload_logs, htopic]
+    · cases ho
+      exact hout
 
 -- SEGMENT: safeMintBurn (see `safe_mint`)
 theorem safe_burnFrom (hfork : CoveredFork sevm.benvStat.fork) :
     SafeBody sevm b t_0644_c0 (rawBurnFrom sevm stor₀) := by
-  sorry
+  intro G post run
+  have hM := vyMem_empty_size (Sevm.dataWord sevm 0)
+  have hwf0 := vyMem_wf Mem.wf_empty (Sevm.dataWord sevm 0)
+  have run := run.cut
+  unfold entrySt at run
+  obtain ⟨hv, G1, run⟩ := ric_vyNonpayable (h := 0x06) (l := 0x4e) (fail := t_064a_c0)
+    (by decide) run
+  obtain ⟨hd, G2, run⟩ := ric_vyAddrArg (p := 0x04) (h := 0x06) (l := 0x5f) (fail := t_065b_c0)
+    (by decide) (vyMem_reads Mem.wf_empty Mem.reads_empty _) (vyImg_clamps _ _) (by rw [hM])
+    (by rw [hM]; omega) run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_caller s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_eq s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
+  rcases ric_branch run with ⟨-, G8, run⟩ | ⟨hmin, G8, run⟩
+  · exact (run.false_of_noOk (by decide)).elim
+  obtain ⟨G9, run⟩ := ric_dest run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_calldataload s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_xor s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_push s1
+  rcases ric_branch run with ⟨-, G15, run⟩ | ⟨hnz, G15, run⟩
+  · exact (run.false_of_noOk (by decide)).elim
+  obtain ⟨G16, run⟩ := ric_dest run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_push s1
+  obtain ⟨hnof1, G18, run⟩ := ric_vySubStore (p := 0x24) (h := 0x06) (l := 0x91)
+    (fail := t_068d_c0) hfork (by decide) run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_calldataload s1
+  obtain ⟨G22, run⟩ := ric_vySlot run
+  obtain ⟨hnof2, G23, run⟩ := ric_vySubStore (p := 0x24) (h := 0x06) (l := 0xbd)
+    (fail := t_06b9_c0) hfork (by decide) run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G24, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_calldataload s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G27, rfl⟩ := ri_mstore s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G28, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G29, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G30, rfl⟩ := ri_calldataload s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G31, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G32, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G33, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G34, rfl⟩ := ri_log3 s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G35, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G36, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G37, rfl⟩ := ri_mstore s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G38, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G39, rfl⟩ := ri_push s1
+  cases run with
+  | last hl =>
+    obtain ⟨hout, hstor, hlogs⟩ := ri_return hl
+    have h3 : Bytes.toB256 [0x03] = 3 := by decide
+    have h5 : Bytes.toB256 [0x05] = vySupplySlot := by decide
+    have h6 : Bytes.toB256 [0x06] = vyMinterSlot := by decide
+    have hz : Bytes.toB256 [0x00] = 0 := by decide
+    have h320 : (Bytes.toB256 [0x01, 0x40]).toNat = 320 := by decide
+    have h32 : (Bytes.toB256 [0x20]).toNat = 32 := by decide
+    have hv1 : Sevm.dataWord sevm (Bytes.toB256 [0x24]) = Sevm.argWord sevm 1 := by
+      show Sevm.dataWord sevm _ = Sevm.dataWord sevm _
+      congr 1
+    have hd0 : Sevm.dataWord sevm (Bytes.toB256 [0x04]) = Sevm.argWord sevm 0 := rfl
+    have htopic : Bytes.toB256 [0xdd, 0xf2, 0x52, 0xad, 0x1b, 0xe2, 0xc8, 0x9b, 0x69, 0xc2, 0xb0,
+        0x68, 0xfc, 0x37, 0x8d, 0xaa, 0x95, 0x2b, 0xa7, 0xf1, 0x63, 0xc4, 0xa1, 0x16, 0x28, 0xf5, 0x5a,
+        0x4d, 0xf5, 0x23, 0xb3, 0xef] = transferTopic := by decide
+    simp only [h3, h5, h6, hz, hv1, hd0] at hmin hnz hnof1 hnof2 hout hstor hlogs
+    simp only [getStorVal_afterStore, getStorVal_afterSload,
+      afterSload_getStor] at hnof1 hnof2 hstor hlogs
+    simp only [h320, h32] at hout hlogs
+    set M2 := vySlotMem (vyMem Mem.empty (Sevm.dataWord sevm 0)) 3 (Sevm.argWord sevm 0)
+    have hwf2 : Mem.Wf M2 := vySlotMem_wf hwf0 _ _
+    have hwf3 : Mem.Wf (((M2.write 320 (Sevm.argWord sevm 1).toBytes).read 320 32).2) :=
+      (hwf2.write _ _).extend _ _
+    rw [Mem.read_write_word_of_wf hwf3] at hout
+    rw [Mem.read_write_word_of_wf hwf2] at hlogs
+    have hd' : (Sevm.argWord sevm 0).toNat < 2 ^ 160 := hd
+    have hmin' : (stor₀).get vyMinterSlot = sevm.caller.toB256 := by
+      have h := hmin
+      simp only [B256.eqCheck] at h
+      split_ifs at h with he
+      · exact he.symm
+      · exact absurd rfl h
+    have hnz' : Sevm.argWord sevm 0 ≠ 0 := by
+      rw [B256.xor_zero] at hnz; exact hnz
+    set st1 := (stor₀).set vySupplySlot ((stor₀).get vySupplySlot - Sevm.argWord sevm 1)
+    refine ⟨(st1.set (mapSlot 3 (Sevm.argWord sevm 0))
+        (st1.get (mapSlot 3 (Sevm.argWord sevm 0)) - Sevm.argWord sevm 1),
+      [⟨sevm.currentTarget, [transferTopic, Sevm.argWord sevm 0, 0],
+        (Sevm.argWord sevm 1).toBytes⟩], some (1 : B256).toBytes), ?_,
+      ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_⟩⟩
+    · simp only [rawBurnFrom]
+      exact ite_eq_left ⟨hv, hd', hmin', hnz', hnof1, hnof2⟩
+    · have e : b.getStorVal sevm.currentTarget vySupplySlot = (stor₀).get vySupplySlot := rfl
+      rw [hstor, getStor_addLog, getStor_afterStore, getStor_afterStore, afterSload_getStor, e]
+    · rw [hstor, getStor_addLog, getStor_afterStore_ne ha, getStor_afterStore_ne ha,
+        afterSload_getStor]
+    · rw [hlogs, logs_addLog, logs_afterStore, logs_afterStore, afterSload_logs, htopic]
+    · cases ho
+      exact hout
 
 -- SEGMENT: safeSetName (217 nodes incl. loop entries 8 and 11, joins 1 and 2; the largest)
 /-- `set_name`: the owner's answer came from the frame's static call to the stored minter.

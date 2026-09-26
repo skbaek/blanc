@@ -155,6 +155,11 @@ theorem getStor_afterStore_ne {sevm : Sevm} {b : Devm} {k v : B256} {a : Adr}
     Devm.getStor (afterSstore sevm (afterSload sevm b k) k v) a = Devm.getStor b a := by
   rw [afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha), afterSload_getStor]
 
+theorem getStorVal_afterSload {sevm : Sevm} {b : Devm} {k : B256} {a : Adr} {x : B256} :
+    (afterSload sevm b k).getStorVal a x = b.getStorVal a x := by
+  show (Devm.getStor _ _).get _ = (Devm.getStor _ _).get _
+  rw [afterSload_getStor]
+
 theorem getStor_addLog (d : Devm) (L : Log) (a : Adr) :
     Devm.getStor (d.addLog L) a = Devm.getStor d a := rfl
 

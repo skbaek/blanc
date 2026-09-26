@@ -70,6 +70,21 @@ theorem B256.toAdr_toB256_of_lt {x : B256} (h : x.toNat < 2 ^ 160) : x.toAdr.toB
   rw [e1, e2]
   rfl
 
+/-- `x != 0` compiles to `XOR` with zero. -/
+theorem B256.xor_zero (x : B256) : x ^^^ 0 = x := by
+  obtain ⟨⟨a, b⟩, ⟨c, d⟩⟩ := x
+  show ((⟨⟨a ^^^ 0, b ^^^ 0⟩, ⟨c ^^^ 0, d ^^^ 0⟩⟩ : B256)) = _
+  simp
+
+/-- `x != y` compiles to `XOR`: the word is zero exactly when the operands agree. -/
+theorem B256.xor_eq_zero_iff (x y : B256) : x ^^^ y = 0 ↔ x = y := by
+  obtain ⟨⟨a, b⟩, ⟨c, d⟩⟩ := x
+  obtain ⟨⟨a', b'⟩, ⟨c', d'⟩⟩ := y
+  change ((((a ^^^ a', b ^^^ b'), (c ^^^ c', d ^^^ d')) : (UInt64 × UInt64) × (UInt64 × UInt64)) =
+    ((0, 0), (0, 0))) ↔ (((a, b), (c, d)) : (UInt64 × UInt64) × (UInt64 × UInt64)) =
+    ((a', b'), (c', d'))
+  simp only [Prod.mk.injEq, UInt64.xor_eq_zero_iff]
+
 /-- The address clamp word, `2^160`. -/
 theorem vyC20_toB256 : (Bytes.toB256 vyC20).toNat = 2 ^ 160 := by decide
 
