@@ -20,7 +20,7 @@ nonzero, i.e. `nd = rt` (`B256.eqCheck`).  The cap check `0xffffffff > count`: i
 or `afterSload` of it, same storage).  The `SSTORE`'s successor is `afterSstore` (compare
 `Ninst.runCompiled_sstore_selected`). -/
 theorem safe_countBump {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR nd : B256} {G : Nat}
-    {M : Mem} {o : Outcome}
+    {M : Mem} {o : Outcome} (hfork : CoveredFork sevm.benvStat.fork)
     (hM : BodyMem M 1024 0x3a0 [(0x3a0, nd.toBytes)])
     (run : SFunc.Run prog sevm
       (St b [0x20, 0x3a0, 0, sR, pkR, 0x80, a, rt, 96, sP, 32, wP, 48, pP, 0x01b8, sel] M G)
