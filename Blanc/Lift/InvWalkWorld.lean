@@ -1,4 +1,4 @@
-import Blanc.Lift.InvWalk
+import Blanc.Lift.InvWalkOps
 
 /-!
 # Inverting successful synthetic runs: failing arms, calls, gotos and world steps
@@ -202,60 +202,5 @@ theorem ri_log1 {i sz t : B256} {d : Devm}
   rfl
 
 end World
-
--- TEMP (kit-ops): the sibling `InvWalkOps.lean` owns these; drop at merge in its favour.
-section TempKitOps
-
-variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
-
-theorem ri_calldatasize {d : Devm}
-    (h : Ninst.Run sevm (St b S M G) (.reg .calldatasize) d) :
-    ∃ G', d = St b (sevm.data.length.toB256 :: S) M G' := by
-  have hp := of_run_calldatasize h
-  have hs : d.stack = sevm.data.length.toB256 :: S := by
-    simpa [Stack.Push, Split] using hp.stack
-  have e := St.of_stackRel hp
-  rw [hs] at e
-  exact ⟨_, e⟩
-
-theorem ri_calldataload {x : B256} {d : Devm}
-    (h : Ninst.Run sevm (St b (x :: S) M G) (.reg .calldataload) d) :
-    ∃ G', d = St b (Sevm.dataWord sevm x :: S) M G' := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  rw [show (St b (x :: S) M G).pop = .ok (x, St b S M G) from rfl] at run
-  simp only [Except.bind_ok] at run
-  rcases Except.bind_eq_ok run with ⟨s1, h1, h2⟩
-  have e2 := Devm.eq_of_push_ok h2
-  subst e2
-  have e1 := Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas h1)
-  refine ⟨s1.gasLeft, ?_⟩
-  rw [e1]
-  rfl
-
-theorem ri_shr {x y : B256} {d : Devm}
-    (h : Ninst.Run sevm (St b (x :: y :: S) M G) (.reg .shr) d) :
-    ∃ G', d = St b ((y >>> x.toNat) :: S) M G' := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact St.of_diff (v := fun x y => y >>> x.toNat) (Devm.diffBurn_of_applyBinary run)
-
-theorem ri_mstore {i v : B256} {d : Devm}
-    (h : Ninst.Run sevm (St b (i :: v :: S) M G) (.reg .mstore) d) :
-    ∃ G', d = St b S (M.write i.toNat v.toBytes) G' := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  rw [show (St b (i :: v :: S) M G).popToNat = .ok (i.toNat, St b (v :: S) M G) from rfl] at run
-  simp only [Except.bind_ok] at run
-  rw [show (St b (v :: S) M G).pop = .ok (v, St b S M G) from rfl] at run
-  simp only [Except.bind_ok] at run
-  rcases Except.bind_eq_ok run with ⟨s1, h1, h2⟩
-  cases h2
-  have e1 := Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas h1)
-  refine ⟨s1.gasLeft, ?_⟩
-  rw [e1]
-  rfl
-
-end TempKitOps
 
 end Blanc.Lift
