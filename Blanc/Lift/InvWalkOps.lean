@@ -1,10 +1,7 @@
 import Blanc.Lift.InvWalk
 import Blanc.Lift.ExactWalkOps
-<<<<<<< HEAD
 import Blanc.Lift.CopyLoop
-=======
 import Blanc.Lift.Silent
->>>>>>> claude/beacon-deposit-bytecode-v1
 
 /-!
 # Inversion step lemmas for stack, environment and memory operations
@@ -317,7 +314,6 @@ theorem ri_codecopy {di ci sz : B256} {d : Devm}
 
 end Steps
 
-<<<<<<< HEAD
 /-! ## Added for s-event -/
 
 section CopyLoop
@@ -397,7 +393,7 @@ theorem ric_branchTo_zero {dd : B256} {f : SFunc} {k : Nat}
       exact absurd rfl hw
 
 end CopyLoop
-=======
+
 /-! ## Added for s-sha -/
 
 /-- Name the top of an inverted step's successor: `ri_val (w := v) (by decide) (ri_add s)`
@@ -519,7 +515,6 @@ theorem SFunc.RunP.not_halted_entry {P : Sevm → Devm → Ninst → Devm → Pr
     simpa using h
   have ht := closed hkS hk
   exact SFunc.RunP.not_halted hS ht.1 ht.2 run ho
->>>>>>> claude/beacon-deposit-bytecode-v1
 
 end Blanc.Lift
 
