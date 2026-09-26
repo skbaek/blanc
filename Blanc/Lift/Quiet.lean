@@ -1,5 +1,6 @@
 import Blanc.Lift.Silent
 import Blanc.StaticCallStorage
+import Blanc.CompiledFixedInvariance
 
 /-!
 # Storage- and log-quiet synthetic trees
@@ -36,6 +37,70 @@ namespace Blanc.Lift
 open Jaune
 open scoped LogOutputHinv
 
+lemma Ninst.dupn_logs {imm : UInt8} {sevm : Sevm} {pre post : Devm}
+    (run : Ninst.Run sevm pre (.dupn imm) post) : post.logs = pre.logs := by
+  rcases run with ⟨xl, -, pc, hrun⟩
+  simp only [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at hrun
+  obtain ⟨rfl, hstep⟩ := hrun
+  split at hstep
+  · rcases Except.bind_eq_ok hstep.symm with ⟨d1, h1, h2⟩
+    have hb := (Devm.burn_of_chargeGas h1).logs
+    split at h2
+    · cases h2
+    · split at h2
+      · cases h2
+      · have hp := (Devm.push_of_push h2).logs
+        rw [← hp, hb]
+  · cases hstep
+
+lemma Ninst.swapn_logs {imm : UInt8} {sevm : Sevm} {pre post : Devm}
+    (run : Ninst.Run sevm pre (.swapn imm) post) : post.logs = pre.logs := by
+  rcases run with ⟨xl, -, pc, hrun⟩
+  simp only [Ninst.StepRun, Ninst.step_swapn, Step.run_ofExecution] at hrun
+  obtain ⟨rfl, hstep⟩ := hrun
+  split at hstep
+  · rcases Except.bind_eq_ok hstep.symm with ⟨d1, h1, h2⟩
+    have hb := (Devm.burn_of_chargeGas h1).logs
+    split at h2
+    · cases h2
+    · split at h2
+      · cases h2
+      · injection h2 with h2
+        rw [← h2]
+        exact hb.symm
+  · cases hstep
+
+lemma Ninst.exchange_logs {imm : UInt8} {sevm : Sevm} {pre post : Devm}
+    (run : Ninst.Run sevm pre (.exchange imm) post) : post.logs = pre.logs := by
+  rcases run with ⟨xl, -, pc, hrun⟩
+  simp only [Ninst.StepRun, Ninst.step_exchange, Step.run_ofExecution] at hrun
+  obtain ⟨rfl, hstep⟩ := hrun
+  split at hstep
+  · rcases Except.bind_eq_ok hstep.symm with ⟨d1, h1, h2⟩
+    have hb := (Devm.burn_of_chargeGas h1).logs
+    split at h2
+    · cases h2
+    · split at h2
+      · cases h2
+      · injection h2 with h2
+        rw [← h2]
+        exact hb.symm
+  · cases hstep
+
+lemma Rinst.preserves_logs {pc : Nat} {sevm : Sevm} {pre post : Devm} {r : Rinst}
+    (hr : ∀ n, r ≠ .log n)
+    (run : Rinst.run ⟨pc, sevm, pre⟩ r = .ok post) : post.logs = pre.logs := by
+  cases r
+  all_goals try (solve | intro n; contradiction | contradiction)
+  all_goals try exact (Rinst.Hinv.inv run).symm
+  all_goals simp only [Rinst.run, Rinst.runCore] at run
+  all_goals with_reducible first
+    | exact (Devm.diffBurn_of_applyBinary run).choose_spec.choose_spec.logs.symm
+    | exact (Devm.diffBurn_of_applyTernary run).choose_spec.choose_spec.choose_spec.logs.symm
+    | exact (Devm.diffBurn_of_applyUnary run).choose_spec.logs.symm
+    | exact (Devm.pushBurn_of_pushItem run).logs.symm
+  all_goals sorry
+
 -- SEGMENT: ninstWorldOfQuiet
 /-- **A quiet step keeps every storage map and the log list.**
 
@@ -51,7 +116,39 @@ theorem Ninst.world_of_quiet {sevm : Sevm} {pre post : Devm} {n : Ninst}
     (hfork : CoveredFork sevm.benvStat.fork) (hn : n.quiet = true)
     (run : Ninst.Run sevm pre n post) :
     Devm.getStor post = Devm.getStor pre ∧ post.logs = pre.logs := by
-  sorry
+  cases n with
+  | push bytes bound =>
+      exact ⟨(Ninst.Hinv.inv (f := Devm.getStor) run).symm,
+             (Ninst.Hinv.inv (f := Devm.logs) run).symm⟩
+  | dupn imm =>
+      rcases run with ⟨xl, -, pc, hrun⟩
+      have hxl : xl = .none := by
+        simp only [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at hrun
+        exact hrun.1
+      subst hxl
+      have frame := Ninst.dupn_instructionFrame_effectRec (xl := .none) trivial hrun
+      exact ⟨(funext (Devm.InstructionFrame.getStor frame)).symm,
+             Ninst.dupn_logs ⟨.none, trivial, pc, hrun⟩⟩
+  | swapn imm =>
+      rcases run with ⟨xl, -, pc, hrun⟩
+      have hxl : xl = .none := by
+        simp only [Ninst.StepRun, Ninst.step_swapn, Step.run_ofExecution] at hrun
+        exact hrun.1
+      subst hxl
+      have frame := Ninst.swapn_instructionFrame_effectRec (xl := .none) trivial hrun
+      exact ⟨(funext (Devm.InstructionFrame.getStor frame)).symm,
+             Ninst.swapn_logs ⟨.none, trivial, pc, hrun⟩⟩
+  | exchange imm =>
+      rcases run with ⟨xl, -, pc, hrun⟩
+      have hxl : xl = .none := by
+        simp only [Ninst.StepRun, Ninst.step_exchange, Step.run_ofExecution] at hrun
+        exact hrun.1
+      subst hxl
+      have frame := Ninst.exchange_instructionFrame_effectRec (xl := .none) trivial hrun
+      exact ⟨(funext (Devm.InstructionFrame.getStor frame)).symm,
+             Ninst.exchange_logs ⟨.none, trivial, pc, hrun⟩⟩
+  | exec x => sorry
+  | reg r => sorry
 
 -- SEGMENT: linstWorldOfOk
 /-- **A successful terminal other than `SELFDESTRUCT` keeps every storage map and the log
