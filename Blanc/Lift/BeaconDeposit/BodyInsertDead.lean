@@ -1,5 +1,4 @@
 import Blanc.Lift.BeaconDeposit.BodySpec
-import Blanc.Lift.BeaconDeposit.RootLoop
 import Blanc.Lift.PackedShaTight
 
 /-!
@@ -15,14 +14,19 @@ open Jaune
 
 /-- The insertion loop's copy entry: the solc word-copy loop at `0x0fe8` whose exit merges and
 calls the precompile, returning to the loop head through `t_1097_c22`. -/
-theorem prog_22 : prog[22]? = some (mcpyTree 0x10 0x25 0x0f 0xe8 22
+private theorem prog_22 : prog[22]? = some (mcpyTree 0x10 0x25 0x0f 0xe8 22
     (mergeTree (shaCallTree 0x10 0x82 0x10 0x97 t_1079_c22 t_1093_c22 t_1097_c22))) := rfl
 
-theorem prog_23 : prog[23]? = some t_0f6e_c23 := rfl
+private theorem prog_23 : prog[23]? = some t_0f6e_c23 := rfl
+
+private theorem one_add_toB256' {h : Nat} (hh : h + 1 < 2 ^ 256) :
+    Bytes.toB256 [0x01] + Nat.toB256 h = Nat.toB256 (h + 1) := by
+  rw [show Bytes.toB256 [0x01] = Nat.toB256 1 by decide, toB256_add_toB256 (by omega),
+    Nat.add_comm]
 
 /-- The dead arm's hashing block: the key, the `SLOAD`, and `packed_sha_pair`'s shape (the
 first copy pass inlined in entry 23 is entry 22's). -/
-theorem t_0faf_c23_eq : t_0faf_c23 = .dest (.next (.reg .add) (.next (.reg .sload)
+private theorem t_0faf_c23_eq : t_0faf_c23 = .dest (.next (.reg .add) (.next (.reg .sload)
     (.next (.reg (.dup 4)) (pack2Tree (mcpyTree 0x10 0x25 0x0f 0xe8 22
       (mergeTree (shaCallTree 0x10 0x82 0x10 0x97 t_1079_c22 t_1093_c22 t_1097_c22))))))) := rfl
 
@@ -149,7 +153,7 @@ theorem body_insertDead {sevm : Sevm} {b : Devm} {sz nd : B256} {R : List B256} 
   refine rxc_swap (n := 1) rfl ?_
   refine rxc_pop ?_
   refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_add' (one_add_toB256 (by omega)) (by simp; omega) ?_
+  refine rxc_add' (one_add_toB256' (by omega)) (by simp; omega) ?_
   refine rxc_push rfl (by simp; omega) ?_
   exact rxc_jump prog_23 (by simp) k
 
