@@ -220,7 +220,7 @@ theorem deposit_route {sevm : Sevm} {pre post : Devm} {history : List B256} {G1 
     show (Devm.getStor b5 _).get _ = _
     rw [hstor5]; rfl
   obtain ⟨hroot, hcap, b6, M6, G8, hK6, hM6, run6⟩ := safe_countBump (sevm := sevm) (b := b5)
-    (a := a) (pkR := pkR) (sR := sR) hM5 run5
+    (a := a) (pkR := pkR) (sR := sR) hfork hM5 run5
   rw [hw5] at hcap hK6 run6
   -- the insertion loop
   set x := w.toNat + 1 with hx

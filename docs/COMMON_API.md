@@ -2615,8 +2615,10 @@ raise.
 The route is lift, then reason about the lifted program. A certificate is
 checked against the bytes by the kernel, a generic theorem turns every real
 execution into a run of the lifted program, and the contract's properties are
-proved over that run. The deployed WETH9 (`Blanc/Lift/Weth9/`) is the worked
-example; every module below is contract-neutral.
+proved over that run. The deployed WETH9 (`Blanc/Lift/Weth9/`) and the deployed
+beacon deposit contract (`Blanc/Lift/BeaconDeposit/`: loops, SHA-256 precompile calls,
+dynamic ABI decoding, events) are the worked examples; every module below is
+contract-neutral.
 
 - The lifted language: `SFunc` (a tree whose jumps are resolved to entry
   indices), `SFunc.Run`/`SProg.Run` and the derivation-carrying
@@ -2629,7 +2631,14 @@ example; every module below is contract-neutral.
   in [`Blanc/Lift/Transfer.lean`](../Blanc/Lift/Transfer.lean). Decide
   `Cert.check` per entry with `decide +kernel`; one decision over the whole
   certificate does not fit in memory for a real contract, and read bytes with
-  `code.data.toList` (`ByteArray.toList` is quadratic in the kernel).
+  `code.data.toList` (`ByteArray.toList` is quadratic in the kernel). For a
+  contract of more than a few kilobytes, decide each entry on the trie-reading
+  copies `checkNodeT`/`jumpsOkNodeT` and rewrite back with `checkNodeT_eq`/
+  `jumpsOkNodeT_eq` (`CodeTries.ofCode`) in
+  [`Blanc/Lift/CheckFast.lean`](../Blanc/Lift/CheckFast.lean): plain byte reads
+  are linear per instruction and a 1,474-node entry of the 6,358-byte beacon
+  deposit contract passed 16 GiB, while the trie decides it in 6 s / 3.4 GiB
+  (`Blanc/Lift/BeaconDeposit/Check.lean` is the template).
 - Execution to lifted run (safety): `lift_sound`, and `lift_sound_in`, which
   keeps each step's derivation (`StepIn`) for arguments about re-entrant child
   frames, in [`Blanc/Lift/Sound.lean`](../Blanc/Lift/Sound.lean).
@@ -2637,7 +2646,39 @@ example; every module below is contract-neutral.
   `Cert.jumpsOk` and `lift_exact` in [`Blanc/Lift/Exact.lean`](../Blanc/Lift/Exact.lean);
   the per-instruction walk steps (`rx_push`, `rx_sload_cold`, `rx_callRet`, …)
   over the gas-carrying state `St` are in
-  [`Blanc/Lift/ExactWalk.lean`](../Blanc/Lift/ExactWalk.lean).
+  [`Blanc/Lift/ExactWalk.lean`](../Blanc/Lift/ExactWalk.lean), with more steps
+  (`rx_shl`, `rx_byte`, `rx_mstore8`, `rx_calldatacopy`, …) in
+  [`Blanc/Lift/ExactWalkOps.lean`](../Blanc/Lift/ExactWalkOps.lean) and the
+  cut-run forms (`rxc_*`, `SFunc.RunExact.toCut`) in
+  [`Blanc/Lift/ExactWalkCut.lean`](../Blanc/Lift/ExactWalkCut.lean) and
+  [`Blanc/Lift/ExactWalkCutOps.lean`](../Blanc/Lift/ExactWalkCutOps.lean).
+- Successful lifted run to facts (safety, the inversion walk): per-node `ric_*`
+  (control, over `SFunc.RunCut`; `SFunc.Run.cut`/`SFunc.RunCut.uncut` for uncut
+  runs) and per-instruction `ri_*` (successor as an `St`) in
+  [`Blanc/Lift/InvWalk.lean`](../Blanc/Lift/InvWalk.lean) and
+  [`Blanc/Lift/InvWalkOps.lean`](../Blanc/Lift/InvWalkOps.lean); failing arms
+  (`SFunc.noOk`, `SFunc.RunCutP.false_of_noOk`), conditional gotos
+  (`ric_branchTo`), internal calls (`ric_call`, `ric_callRet`), `ri_sload` and
+  `ri_log1` in [`Blanc/Lift/InvWalkWorld.lean`](../Blanc/Lift/InvWalkWorld.lean);
+  the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA
+  site (`ric_copy_sha`, the converse of `copy_sha_gen`) in
+  [`Blanc/Lift/InvWalkSha.lean`](../Blanc/Lift/InvWalkSha.lean).
+- Loops: a back-edge to entry `k` is reasoned about one iteration at a time on
+  runs cut at `k` (`SFunc.RunCutP`, `SFunc.RunExactCut`). Safety:
+  `SFunc.RunCutP.loop` (invariant; `loop_indexed`, `SFunc.RunP.loop`), which
+  nests because the outer cut list is a parameter; liveness:
+  `SFunc.RunExactCut.iterate` builds a whole loop run from per-iteration cut
+  runs; both in [`Blanc/Lift/Loop.lean`](../Blanc/Lift/Loop.lean), with a
+  minimal counted loop in
+  [`Blanc/Lift/LoopExample.lean`](../Blanc/Lift/LoopExample.lean).
+- solc idioms, gas-exact: the word-copy loop (`copy_loop`) in
+  [`Blanc/Lift/CopyLoop.lean`](../Blanc/Lift/CopyLoop.lean); the
+  `sha256(abi.encodePacked(a, b))` site through the SHA-256 precompile
+  (`packed_sha_pair`, `copy_sha`) in
+  [`Blanc/Lift/PackedSha.lean`](../Blanc/Lift/PackedSha.lean), and its forms over
+  memory that already covers the destination (`copy_sha_gen`,
+  `copy_sha_covered`) in
+  [`Blanc/Lift/PackedShaCovered.lean`](../Blanc/Lift/PackedShaCovered.lean).
 - Jump destinations: `jumpable_eq_jumpdestOk` in
   [`Blanc/Lift/Jumpdest.lean`](../Blanc/Lift/Jumpdest.lean) replaces Jaune's
   exponential `jumpable` by the linear `jumpdestOk` scan, for every byte string.
@@ -2645,7 +2686,10 @@ example; every module below is contract-neutral.
   entry set (`SilentSet`, `SFunc.Run.state_of_silent`) in
   [`Blanc/Lift/Silent.lean`](../Blanc/Lift/Silent.lean), its balance analogue
   (`BalSilentSet`, `SFunc.Run.getBal_of_balSilent`) in
-  [`Blanc/Lift/BalSilent.lean`](../Blanc/Lift/BalSilent.lean), and Hoare-style
+  [`Blanc/Lift/BalSilent.lean`](../Blanc/Lift/BalSilent.lean), a quiet entry set
+  that may make static calls (the SHA-256 precompile) but writes no storage and
+  emits no log (`QuietSet`, `SFunc.Run.world_of_quiet`) in
+  [`Blanc/Lift/Quiet.lean`](../Blanc/Lift/Quiet.lean), and Hoare-style
   composition across one internal call or an ABI wrapper
   (`SFunc.Run.hoare_single_call`, `hoare_single_call_with_gotos`,
   `hoare_wrapper`) in [`Blanc/Lift/Hoare.lean`](../Blanc/Lift/Hoare.lean).

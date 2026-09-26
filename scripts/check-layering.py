@@ -160,9 +160,17 @@ SHARED += ["LadderBase", "LadderSem", "ContractAdmissionSem", "ExecutionAdmissio
            "Lift.Basic", "Lift.Check", "Lift.Transfer", "Lift.Sound", "Lift.Exact",
            "Lift.ExactWalk", "Lift.Jumpdest", "Lift.Silent", "Lift.BalSilent",
            "Lift.Hoare", "Lift.BookedSpec"]
+# Loops, kernel-economical checking, walk kits and solc idioms (beacon-deposit-bytecode-v1):
+# contract-neutral, no contract name in any of them.
+SHARED += ["Lift.Loop", "Lift.LoopExample", "Lift.CheckFast", "Lift.ExactWalkOps",
+           "Lift.ExactWalkCut", "Lift.ExactWalkCutOps", "Lift.CopyLoop", "Lift.PackedSha",
+           "Lift.PackedShaCovered", "Lift.Quiet", "Lift.InvWalk", "Lift.InvWalkOps",
+           "Lift.InvWalkWorld", "Lift.InvWalkSha"]
 
 CONTRACTS = {
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",
+                       # the deployed runtime, lifted (decision beacon-lift-layering-family-20260926)
+                       "Lift.BeaconDeposit.Body", "Lift.BeaconDeposit.BodyCount", "Lift.BeaconDeposit.BodyEvent", "Lift.BeaconDeposit.BodyEventHead", "Lift.BeaconDeposit.BodyEventKit", "Lift.BeaconDeposit.BodyEventLoop", "Lift.BeaconDeposit.BodyEventSig", "Lift.BeaconDeposit.BodyGuards", "Lift.BeaconDeposit.BodyInsertDead", "Lift.BeaconDeposit.BodyInsertLive", "Lift.BeaconDeposit.BodyNode", "Lift.BeaconDeposit.BodyPubkeyRoot", "Lift.BeaconDeposit.BodyShaKit", "Lift.BeaconDeposit.BodySignatureRoot", "Lift.BeaconDeposit.BodySpec", "Lift.BeaconDeposit.Cert", "Lift.BeaconDeposit.Check", "Lift.BeaconDeposit.CountView", "Lift.BeaconDeposit.DepositArgs", "Lift.BeaconDeposit.DepositDecode", "Lift.BeaconDeposit.DepositExec", "Lift.BeaconDeposit.Erc165", "Lift.BeaconDeposit.Jumps", "Lift.BeaconDeposit.Layout", "Lift.BeaconDeposit.Lift", "Lift.BeaconDeposit.LittleEndian", "Lift.BeaconDeposit.Prog", "Lift.BeaconDeposit.RootLoop", "Lift.BeaconDeposit.RootView", "Lift.BeaconDeposit.Safe", "Lift.BeaconDeposit.SafeCount", "Lift.BeaconDeposit.SafeDecoder", "Lift.BeaconDeposit.SafeDispatch", "Lift.BeaconDeposit.SafeEvent", "Lift.BeaconDeposit.SafeGuards", "Lift.BeaconDeposit.SafeInsertDead", "Lift.BeaconDeposit.SafeInsertLive", "Lift.BeaconDeposit.SafeNode", "Lift.BeaconDeposit.SafePubkeyRoot", "Lift.BeaconDeposit.SafeSignatureRoot", "Lift.BeaconDeposit.SafeViews", "Lift.BeaconDeposit.Views",
                        "BeaconDepositCore", "BeaconDepositEncoding",
                        "BeaconDeposit", "BeaconDepositErrorCatalog",
                        "BeaconDepositErrorModel",
