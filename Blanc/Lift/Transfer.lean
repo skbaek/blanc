@@ -39,7 +39,20 @@ def liftRegularTransfer : Rinst → Pattern → Option Pattern
   | .address, words => some (none :: words)
   | .balance, words => unaryTransfer words
   | .log n, words => dropTransfer (n.val + 2) words
+  | .mod, words => binaryTransfer words
+  | .or, words => binaryTransfer words
+  | .byte, words => binaryTransfer words
+  | .shl, words => binaryTransfer words
+  | .calldatacopy, words => dropTransfer 3 words
+  | .codecopy, words => dropTransfer 3 words
+  | .returndatasize, words => some (none :: words)
+  | .returndatacopy, words => dropTransfer 3 words
+  | .mstore8, words => dropTwoTransfer words
   | r, words => regularTransfer r words
+
+def staticcallTransfer : Pattern → Option Pattern
+  | _ :: _ :: _ :: _ :: _ :: _ :: words => some (none :: words)
+  | _ => none
 
 /-- Stack transfer of a non-push, non-jump instruction.  `PUSH` is handled by
 the checker itself because it is the one instruction whose output word is a
@@ -47,6 +60,7 @@ literal rather than a copy of an input. -/
 def ninstTransfer : Ninst → Pattern → Option Pattern
   | .reg r, words => liftRegularTransfer r words
   | .exec .call, words => callTransfer words
+  | .exec .staticcall, words => staticcallTransfer words
   | _, _ => none
 
 private theorem dropTransfer_map (φ : Option B256 → Option B256)
@@ -287,6 +301,12 @@ private theorem liftRegularTransfer_map {r : Rinst} {words output : Pattern}
   case log n =>
       rw [← dropTransfer_map φ hφ (n.val + 2) words]
       simpa using congrArg (Option.map (List.map φ)) checked
+  case mod | or | byte | shl => exact binaryTransfer_map φ hφ checked
+  case calldatacopy | codecopy | returndatacopy =>
+      rw [← dropTransfer_map φ hφ 3 words]
+      simpa using congrArg (Option.map (List.map φ)) checked
+  case returndatasize => cases checked; simp [hφ]
+  case mstore8 => exact dropTwoTransfer_map φ hφ checked
   all_goals exact regularTransfer_map φ hφ checked
 
 private theorem liftRegularTransfer_append {r : Rinst}
@@ -298,6 +318,10 @@ private theorem liftRegularTransfer_append {r : Rinst}
   case not | balance => exact unaryTransfer_append checked
   case address => cases checked; rfl
   case log n => exact dropTransfer_append (n.val + 2) checked
+  case mod | or | byte | shl => exact binaryTransfer_append checked
+  case calldatacopy | codecopy | returndatacopy => exact dropTransfer_append 3 checked
+  case returndatasize => cases checked; rfl
+  case mstore8 => exact dropTwoTransfer_append checked
   all_goals exact regularTransfer_append checked
 
 private theorem callTransfer_map (φ : Option B256 → Option B256)
@@ -356,6 +380,57 @@ private theorem callTransfer_append {words output below : Pattern}
                               simp only [callTransfer, Option.some.injEq] at checked ⊢
                               cases checked
                               rfl
+
+private theorem staticcallTransfer_map (φ : Option B256 → Option B256)
+    (hφ : φ none = none) {words output : Pattern}
+    (checked : staticcallTransfer words = some output) :
+    staticcallTransfer (words.map φ) = some (output.map φ) := by
+  cases words with
+  | nil => simp [staticcallTransfer] at checked
+  | cons a words =>
+      cases words with
+      | nil => simp [staticcallTransfer] at checked
+      | cons b words =>
+          cases words with
+          | nil => simp [staticcallTransfer] at checked
+          | cons c words =>
+              cases words with
+              | nil => simp [staticcallTransfer] at checked
+              | cons d words =>
+                  cases words with
+                  | nil => simp [staticcallTransfer] at checked
+                  | cons e words =>
+                      cases words with
+                      | nil => simp [staticcallTransfer] at checked
+                      | cons f words =>
+                          simp only [staticcallTransfer, Option.some.injEq] at checked ⊢
+                          cases checked
+                          simp [hφ]
+
+private theorem staticcallTransfer_append {words output below : Pattern}
+    (checked : staticcallTransfer words = some output) :
+    staticcallTransfer (words ++ below) = some (output ++ below) := by
+  cases words with
+  | nil => simp [staticcallTransfer] at checked
+  | cons a words =>
+      cases words with
+      | nil => simp [staticcallTransfer] at checked
+      | cons b words =>
+          cases words with
+          | nil => simp [staticcallTransfer] at checked
+          | cons c words =>
+              cases words with
+              | nil => simp [staticcallTransfer] at checked
+              | cons d words =>
+                  cases words with
+                  | nil => simp [staticcallTransfer] at checked
+                  | cons e words =>
+                      cases words with
+                      | nil => simp [staticcallTransfer] at checked
+                      | cons f words =>
+                          simp only [staticcallTransfer, Option.some.injEq] at checked ⊢
+                          cases checked
+                          rfl
 
 private theorem matches_pop {input : Pattern} {xs : Stack}
     {s rest : Stack} (matched : Matches input s)
@@ -472,6 +547,32 @@ private theorem matches_push_word {head : Option B256} {tail : Pattern}
   simp only [Stack.Push, Split] at pushed
   subst final
   exact ⟨headMatch, matched⟩
+
+private theorem matches_six {a b c d e f : Option B256} {tail : Pattern}
+    {s : Stack} (matched : Matches (a :: b :: c :: d :: e :: f :: tail) s) :
+    ∃ (x1 x2 x3 x4 x5 x6 : B256) (xs : Stack),
+      s = x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: xs ∧ Matches tail xs := by
+  cases s with
+  | nil => simp only [Matches] at matched
+  | cons x1 s =>
+    cases s with
+    | nil => simp_all [Matches]
+    | cons x2 s =>
+      cases s with
+      | nil => simp_all [Matches]
+      | cons x3 s =>
+        cases s with
+        | nil => simp_all [Matches]
+        | cons x4 s =>
+          cases s with
+          | nil => simp_all [Matches]
+          | cons x5 s =>
+            cases s with
+            | nil => simp_all [Matches]
+            | cons x6 xs =>
+              simp only [Matches] at matched
+              exact ⟨x1, x2, x3, x4, x5, x6, xs, rfl,
+                matched.2.2.2.2.2.2⟩
 
 private theorem matches_seven {a b c d e f g : Option B256} {tail : Pattern}
     {s : Stack} (matched : Matches (a :: b :: c :: d :: e :: f :: g :: tail) s) :
@@ -705,6 +806,178 @@ private theorem ninstTransfer_run_call {sevm : Sevm} {devm devm' : Devm}
                                   (headMatch := Or.inl rfl) hrest
                                   (by simp [Stack.Push, Split])
 
+private theorem staticcall_fail_stack_exact {sevm : Sevm} {s sf : Devm}
+    {g t ii is oi os : B256} {xs : Stack}
+    (hs : s.stack = g :: t :: ii :: is :: oi :: os :: xs)
+    (h_run : Ninst.Run sevm s Ninst.staticcall sf)
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfail : ((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf) :
+    sf.stack = 0 :: xs := by
+  rcases h_run with ⟨xl, h_fill, pc, h_run⟩
+  simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
+    Bind.bind, Except.bind] at h_run
+  rcases eq1 : Devm.pop s with _ | ⟨gas1, s1⟩ <;>
+    simp only [eq1] at h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
+  have e1 := (Devm.pop_of_pop eq1).stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e1
+  rcases eq2 : Devm.popToAdr s1 with _ | ⟨target, s2⟩ <;>
+    simp only [eq2] at h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
+  rcases Devm.pop_of_popToAdr eq2 with ⟨x2, hx2, hp2⟩
+  have e2 := (Devm.pop_of_pop hp2).stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e2
+  rcases eq3 : Devm.popToNat s2 with _ | ⟨inputIndex, s3⟩ <;>
+    simp only [eq3] at h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
+  rcases Devm.pop_of_popToNat_val eq3 with ⟨x3, f3, hx3⟩
+  have e3 := f3.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e3
+  rcases eq4 : Devm.popToNat s3 with _ | ⟨inputSize, s4⟩ <;>
+    simp only [eq4] at h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
+  rcases Devm.pop_of_popToNat_val eq4 with ⟨x4, f4, hx4⟩
+  have e4 := f4.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e4
+  rcases eq5 : Devm.popToNat s4 with _ | ⟨outputIndex, s5⟩ <;>
+    simp only [eq5] at h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
+  rcases Devm.pop_of_popToNat_val eq5 with ⟨x5, f5, hx5⟩
+  have e5 := f5.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e5
+  rcases eq6 : Devm.popToNat s5 with _ | ⟨outputSize, s6⟩ <;>
+    simp only [eq6] at h_run
+  · cases XStep.run_ofExcept_error_stateGas h_run
+  rcases Devm.pop_of_popToNat_val eq6 with ⟨x6, f6, hx6⟩
+  have e6 := f6.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e6
+  have estack : s.stack = gas1 :: x2 :: x3 :: x4 :: x5 :: x6 :: s6.stack := by
+    rw [e1, e2, e3, e4, e5, e6]
+  have hparts : g = gas1 ∧ t = x2 ∧ ii = x3 ∧ is = x4 ∧
+      oi = x5 ∧ os = x6 ∧ xs = s6.stack := by
+    simpa only [List.cons.injEq] using hs.symm.trans estack
+  subst hx2
+  subst hx3
+  subst hx4
+  subst hx5
+  subst hx6
+  have hs6 : s6.stack = xs := hparts.2.2.2.2.2.2.symm
+  rw [hfork.rules_stateGas_none] at h_run
+  split at h_run
+  · rename_i _ heq
+    cases heq
+    split at h_run
+    · cases XStep.run_ofExcept_error h_run
+    · rename_i s10 eq10
+      rcases hp10 : sevm.benvStat.rules.gas.accessDelegation
+          (addAccessedAddress s6 x2.toAdr) x2.toAdr with
+        ⟨dp, na, code0, dagc, s9⟩
+      simp only [hp10] at eq10 h_run
+      have hs9 : s9.stack = s6.stack := by
+        have h := congrArg (fun q => (q.2.2.2.2 : Devm).stack) hp10
+        dsimp at h
+        rw [← h, GasSchedule.accessDelegation_stack]
+        rfl
+      have hs10 : s10.stack = xs := by
+        exact (Devm.burn_of_chargeGas eq10).stack.symm.trans (hs9.trans hs6)
+      simp only [genericCall.step] at h_run
+      split at h_run
+      · simp only [Bind.bind, Except.bind] at h_run
+        split at h_run
+        · cases XStep.run_ofExcept_error h_run
+        · rename_i s12 hpush
+          have h_ex := Except.ok.inj h_run.2
+          rw [h_ex]
+          have hstack := (Devm.push_of_push hpush).stack
+          change s12.stack = 0 :: xs
+          rw [hstack]
+          change 0 :: s10.stack = 0 :: xs
+          exact congrArg (fun z => (0 :: z)) hs10
+      · rename_i h_depth_ne
+        simp only [XStep.Run] at h_run
+        rcases h_run with ⟨ex', run_pm₀, h_split⟩
+        rcases ex' with err' | child
+        · cases Resume.call_run_error h_split.symm
+        have hparent :
+            ((s10.memExtends
+              [(x3.toNat, x4.toNat), (x5.toNat, x6.toNat)]).withReturnData
+              []).stack = xs := by
+          show s10.stack = xs
+          exact hs10
+        by_cases herr : child.error.isSome
+        · have hsf := Resume.call_stack_flag h_split.symm
+          rw [if_pos herr] at hsf
+          rw [hsf, hparent]
+        · have hsf := Resume.call_stack_flag h_split.symm
+          rw [if_neg herr] at hsf
+          rw [hsf, hparent] at hfail
+          have hz : (0 : B256) = 1 :=
+            pref_head_unique hfail.1 (pref_append [1] xs)
+          exact (B256.zero_ne_one hz).elim
+  · rename_i s10 heq
+    cases heq
+
+private theorem ninstTransfer_run_staticcall {sevm : Sevm} {devm devm' : Devm}
+    {input output : Pattern} (hfork : CoveredFork sevm.benvStat.fork)
+    (matched : Matches input devm.stack)
+    (checked : staticcallTransfer input = some output)
+    (run : Ninst.Run sevm devm (.exec .staticcall) devm') :
+    Matches output devm'.stack := by
+  cases input with
+  | nil => simp [staticcallTransfer] at checked
+  | cons a input =>
+      cases input with
+      | nil => simp [staticcallTransfer] at checked
+      | cons b input =>
+          cases input with
+          | nil => simp [staticcallTransfer] at checked
+          | cons c input =>
+              cases input with
+              | nil => simp [staticcallTransfer] at checked
+              | cons d input =>
+                  cases input with
+                  | nil => simp [staticcallTransfer] at checked
+                  | cons e input =>
+                      cases input with
+                      | nil => simp [staticcallTransfer] at checked
+                      | cons f rest =>
+                          simp only [staticcallTransfer, Option.some.injEq] at checked
+                          cases checked
+                          obtain ⟨gas, target, inputIndex, inputSize, outputIndex,
+                            outputSize, xs, hstack, hrest⟩ := matches_six matched
+                          have hp :
+                              (gas :: target :: inputIndex :: inputSize :: outputIndex ::
+                                outputSize :: xs) <<+ devm.stack := by
+                            rw [hstack]
+                            simpa only [List.append_nil] using
+                              (pref_append
+                                (gas :: target :: inputIndex :: inputSize :: outputIndex ::
+                                  outputSize :: xs) [])
+                          have run' : Ninst.Run sevm devm Ninst.staticcall devm' := by
+                            simpa only [Ninst.staticcall] using run
+                          rcases of_run_staticcall_val_with_depth hp run' hfork with
+                            hfail | hsuccess
+                          · have hsf := staticcall_fail_stack_exact hstack run' hfork
+                              ⟨hfail.1, hfail.2.1⟩
+                            rw [hsf]
+                            exact ⟨Or.inl rfl, hrest⟩
+                          · rcases hsuccess with
+                              ⟨parent, child, xl, dp, na, code, avail, hdepth,
+                                hparentStack, hstate, hmemory, hdelegated, hfilled,
+                                hmessage, herror, hresume, hsfstate, hsfreturn,
+                                hsfmemory, hflag⟩
+                            have hparent : parent.stack = xs := by
+                              have hparts :
+                                  True ∧ True ∧ True ∧ True ∧ True ∧ True ∧
+                                    parent.stack = xs := by
+                                simpa only [List.cons.injEq] using
+                                  (hstack.symm.trans hparentStack).symm
+                              exact hparts.2.2.2.2.2.2
+                            rw [hflag, hparent]
+                            exact matches_push_word (head := none) (x := (1 : B256))
+                              (headMatch := Or.inl rfl) hrest
+                              (by simp [Stack.Push, Split])
+
 /-- Success-only soundness: a successful run of an accepted instruction leaves
 a stack matching the transferred pattern. -/
 theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
@@ -773,6 +1046,33 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
           rw [← dropTransfer_eq_drop checked]
           rw [← hlen]
           simpa using hd
+      | mod | or | byte | shl =>
+          rcases binary_checked checked with ⟨head, head', tail, rfl, rfl⟩
+          rcases of_run_reg run with ⟨pc, hr⟩
+          simp only [Rinst.run, Rinst.runCore] at hr
+          rcases Devm.diffBurn_of_applyBinary hr with ⟨x, y, hd⟩
+          exact matches_diff matched hd.stack
+      | calldatacopy =>
+          rcases of_run_calldatacopy run with ⟨x, y, z, hp⟩
+          rw [← dropTransfer_eq_drop checked]
+          exact matches_pop matched hp
+      | codecopy =>
+          rcases of_run_codecopy_mem run with ⟨x, y, z, hp, _⟩
+          rw [← dropTransfer_eq_drop checked]
+          exact matches_pop matched hp
+      | returndatacopy =>
+          rcases of_run_returndatacopy run with ⟨x, y, z, hp⟩
+          rw [← dropTransfer_eq_drop checked]
+          exact matches_pop matched hp
+      | returndatasize =>
+          cases checked
+          rcases of_run_returndatasize run with ⟨x, hp⟩
+          exact matches_push_word (head := none) (x := x)
+            (headMatch := Or.inl rfl) matched hp.stack
+      | mstore8 =>
+          rcases dropTwo_checked checked with ⟨head, head', tail, rfl, rfl⟩
+          rcases of_run_mstore8_val run with ⟨x, y, hp, _⟩
+          exact matches_diff matched (diff_of_pop hp)
       | caller =>
           simp only [regularTransfer] at checked
           cases checked
@@ -892,6 +1192,9 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
       | call =>
           simp only [ninstTransfer] at checked
           exact ninstTransfer_run_call hfork matched checked run
+      | staticcall =>
+          simp only [ninstTransfer] at checked
+          exact ninstTransfer_run_staticcall hfork matched checked run
       | _ => cases checked
   | _ => cases checked
 
@@ -906,7 +1209,8 @@ theorem ninstTransfer_map {n : Ninst} {input output : Pattern}
   | exec x =>
       cases x with
       | call => exact callTransfer_map φ hφ checked
-      | create | callcode | delegatecall | create2 | staticcall => cases checked
+      | staticcall => exact staticcallTransfer_map φ hφ checked
+      | create | callcode | delegatecall | create2 => cases checked
   | push bs fits => cases checked
   | dupn imm => cases checked
   | swapn imm => cases checked
@@ -921,7 +1225,8 @@ theorem ninstTransfer_append {n : Ninst} {input output : Pattern}
   | exec x =>
       cases x with
       | call => exact callTransfer_append checked
-      | create | callcode | delegatecall | create2 | staticcall => cases checked
+      | staticcall => exact staticcallTransfer_append checked
+      | create | callcode | delegatecall | create2 => cases checked
   | push bs fits => cases checked
   | dupn imm => cases checked
   | swapn imm => cases checked
