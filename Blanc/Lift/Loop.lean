@@ -109,19 +109,96 @@ theorem SFunc.RunCutP.mono {P Q : Sevm → Devm → Ninst → Devm → Prop}
     (hPQ : ∀ {s d n d'}, P s d n d' → Q s d n d')
     {fs : List SFunc} {sevm : Sevm} {C : List Nat} {devm : Devm} {f : SFunc} {r : Seg}
     (run : SFunc.RunCutP P fs sevm C devm f r) : SFunc.RunCutP Q fs sevm C devm f r := by
-  sorry
+  refine SFunc.RunCutP.rec
+    (motive := fun devm f r _ => SFunc.RunCutP Q fs sevm C devm f r)
+    (fun d pop hrun ih => .zero d pop ih)
+    (fun d w hnz pop hrun ih => .succ d w hnz pop ih)
+    (fun d pop hrun ih => .toZero d pop ih)
+    (fun d w hnz hk pop => .toSuccCut d w hnz hk pop)
+    (fun d w hnz hnot hget pop hrun ih => .toSucc d w hnz hnot hget pop ih)
+    (fun h => .last h)
+    (fun h hrun ih => .next (hPQ h) ih)
+    (fun burn hrun ih => .dest burn ih)
+    (fun d hk pop => .jumpCut d hk pop)
+    (fun d hnot hget pop hrun ih => .jump d hnot hget pop ih)
+    (fun d pop => .ret d pop)
+    (fun d hget pop hrun => .callHalt d hget pop (SFunc.RunP.mono hPQ hrun))
+    (fun d hget pop hrun hcont ih => .callRet d hget pop (SFunc.RunP.mono hPQ hrun) ih)
+    run
 
 /-- With nothing cut, a cut run is a run. -/
 theorem SFunc.runP_iff_runCutP_nil {P : Sevm → Devm → Ninst → Devm → Prop}
     {fs : List SFunc} {sevm : Sevm} {devm : Devm} {f : SFunc} {o : Outcome} :
     SFunc.RunP P fs sevm devm f o ↔ SFunc.RunCutP P fs sevm [] devm f (.done o) := by
-  sorry
+  constructor
+  · intro run
+    induction run with
+    | zero d pop _ ih => exact .zero d pop ih
+    | succ d w hnz pop _ ih => exact .succ d w hnz pop ih
+    | toZero d pop _ ih => exact .toZero d pop ih
+    | toSucc d w hnz hget pop _ ih =>
+      exact .toSucc d w hnz (by simp) (by simpa using hget) pop ih
+    | last h => exact .last h
+    | next h _ ih => exact .next h ih
+    | dest burn _ ih => exact .dest burn ih
+    | jump d hget pop _ ih => exact .jump d (by simp) (by simpa using hget) pop ih
+    | ret d pop => exact .ret d pop
+    | callHalt d hget pop run => exact .callHalt d (by simpa using hget) pop run
+    | callRet d hget pop run cont ihRun ihTail =>
+      exact .callRet d (by simpa using hget) pop run ihTail
+  · intro run
+    have aux : ∀ {devm f r}, SFunc.RunCutP P fs sevm [] devm f r →
+        ∀ o, r = .done o → SFunc.RunP P fs sevm devm f o := by
+      intro devm f r run
+      refine SFunc.RunCutP.rec
+        (motive := fun devm f r _ => ∀ o, r = .done o →
+          SFunc.RunP P fs sevm devm f o)
+        (fun d pop hrun ih o heq => .zero d pop (ih o heq))
+        (fun d w hnz pop hrun ih o heq => .succ d w hnz pop (ih o heq))
+        (fun d pop hrun ih o heq => .toZero d pop (ih o heq))
+        (fun d w hnz hk pop o heq => by simp at hk)
+        (fun d w hnz hnot hget pop hrun ih o heq =>
+          .toSucc d w hnz (by simpa using hget) pop (ih o heq))
+        (fun h o heq => by cases heq; exact .last h)
+        (fun h hrun ih o heq => .next h (ih o heq))
+        (fun burn hrun ih o heq => .dest burn (ih o heq))
+        (fun d hk pop o heq => by simp at hk)
+        (fun d hnot hget pop hrun ih o heq =>
+          .jump d (by simpa using hget) pop (ih o heq))
+        (fun d pop o heq => by cases heq; exact .ret d pop)
+        (fun d hget pop hrun o heq => by
+          cases heq
+          exact .callHalt d (by simpa using hget) pop hrun)
+        (fun d hget pop hrun hcont ih o heq =>
+          .callRet d (by simpa using hget) pop hrun (ih o heq))
+        run
+    exact aux run o rfl
 
 /-- With nothing cut, a cut run never stops at an entry. -/
 theorem SFunc.RunCutP.nil_not_at {P : Sevm → Devm → Ninst → Devm → Prop}
     {fs : List SFunc} {sevm : Sevm} {devm devm' : Devm} {f : SFunc} {k : Nat} :
     ¬ SFunc.RunCutP P fs sevm [] devm f (.at k devm') := by
-  sorry
+  intro run
+  have aux : ∀ {devm f r}, SFunc.RunCutP P fs sevm [] devm f r →
+      ∀ k d, r ≠ .at k d := by
+    intro devm f r run
+    refine SFunc.RunCutP.rec
+      (motive := fun devm f r _ => ∀ k d, r ≠ .at k d)
+      (fun d pop hrun ih => ih)
+      (fun d w hnz pop hrun ih => ih)
+      (fun d pop hrun ih => ih)
+      (fun d w hnz hk pop => by simp at hk)
+      (fun d w hnz hnot hget pop hrun ih => ih)
+      (fun h k d => by simp)
+      (fun h hrun ih => ih)
+      (fun burn hrun ih => ih)
+      (fun d hk pop => by simp at hk)
+      (fun d hnot hget pop hrun ih => ih)
+      (fun d pop k d' => by simp)
+      (fun d hget pop hrun k d' => by simp)
+      (fun d hget pop hrun hcont ih k d' => ih k d')
+      run
+  exact (aux run k devm') rfl
 
 /-- A run cut at `j` that stopped at `j` resumes with a run from `j`'s tree. -/
 theorem SFunc.RunCutP.resume {P : Sevm → Devm → Ninst → Devm → Prop}
@@ -131,7 +208,40 @@ theorem SFunc.RunCutP.resume {P : Sevm → Devm → Ninst → Devm → Prop}
     (seg : SFunc.RunCutP P fs sevm (j :: C) devm f (.at j devm'))
     (rest : SFunc.RunCutP P fs sevm C devm' g r) :
     SFunc.RunCutP P fs sevm C devm f r := by
-  sorry
+  have aux : ∀ {devm f r} d,
+      SFunc.RunCutP P fs sevm (j :: C) devm f r → r = .at j d →
+        ∀ r', SFunc.RunCutP P fs sevm C d g r' →
+          SFunc.RunCutP P fs sevm C devm f r' := by
+    intro devm f r d seg
+    refine SFunc.RunCutP.rec (C := j :: C)
+      (motive := fun devm f r _ => ∀ d, r = .at j d →
+        ∀ r', SFunc.RunCutP P fs sevm C d g r' →
+          SFunc.RunCutP P fs sevm C devm f r')
+      (fun d0 pop hrun ih d heq r' rest => .zero d0 pop (ih d heq r' rest))
+      (fun d0 w hnz pop hrun ih d heq r' rest => .succ d0 w hnz pop (ih d heq r' rest))
+      (fun d0 pop hrun ih d heq r' rest => .toZero d0 pop (ih d heq r' rest))
+      (fun d0 w hnz hk pop d heq r' rest => by
+        cases heq
+        exact .toSucc d0 w hnz hjC hj pop rest)
+      (fun d0 w hnz hnot hget pop hrun ih d heq r' rest =>
+        .toSucc d0 w hnz (fun hk => hnot (List.mem_cons_of_mem j hk))
+          hget pop (ih d heq r' rest))
+      (fun h d heq r' rest => by cases heq)
+      (fun h hrun ih d heq r' rest => .next h (ih d heq r' rest))
+      (fun burn hrun ih d heq r' rest => .dest burn (ih d heq r' rest))
+      (fun d0 hk pop d heq r' rest => by
+        cases heq
+        exact .jump d0 hjC hj pop rest)
+      (fun d0 hnot hget pop hrun ih d heq r' rest =>
+        .jump d0 (fun hk => hnot (List.mem_cons_of_mem j hk))
+          hget pop (ih d heq r' rest))
+      (fun d0 pop d heq r' rest => by cases heq)
+      (fun d0 hget pop hrun d heq r' rest => by cases heq)
+      (fun d0 hget pop hrun hcont ih d heq r' rest =>
+        .callRet d0 hget pop hrun (ih d heq r' rest))
+      seg d
+
+  exact aux devm' seg rfl r rest
 
 /-- A run cut at `j` that did not stop at `j` never reached `j`: it is a run cut
 at the rest of the list, with the same result. -/
@@ -141,7 +251,33 @@ theorem SFunc.RunCutP.uncut {P : Sevm → Devm → Ninst → Devm → Prop}
     (seg : SFunc.RunCutP P fs sevm (j :: C) devm f r)
     (hr : ∀ d, r ≠ .at j d) :
     SFunc.RunCutP P fs sevm C devm f r := by
-  sorry
+  refine SFunc.RunCutP.rec
+    (motive := fun devm f r _ => (∀ d, r ≠ .at j d) →
+      SFunc.RunCutP P fs sevm C devm f r)
+    (fun d pop hrun ih hr => .zero d pop (ih hr))
+    (fun d w hnz pop hrun ih hr => .succ d w hnz pop (ih hr))
+    (fun d pop hrun ih hr => .toZero d pop (ih hr))
+    (fun d w hnz hk pop hr => by
+      simp only [List.mem_cons] at hk
+      rcases hk with rfl | hk
+      · exact False.elim (hr _ rfl)
+      · exact .toSuccCut d w hnz hk pop)
+    (fun d w hnz hnot hget pop hrun ih hr =>
+      .toSucc d w hnz (fun hk => hnot (List.mem_cons_of_mem j hk)) hget pop (ih hr))
+    (fun h hr => .last h)
+    (fun h hrun ih hr => .next h (ih hr))
+    (fun burn hrun ih hr => .dest burn (ih hr))
+    (fun d hk pop hr => by
+      simp only [List.mem_cons] at hk
+      rcases hk with rfl | hk
+      · exact False.elim (hr _ rfl)
+      · exact .jumpCut d hk pop)
+    (fun d hnot hget pop hrun ih hr =>
+      .jump d (fun hk => hnot (List.mem_cons_of_mem j hk)) hget pop (ih hr))
+    (fun d pop hr => .ret d pop)
+    (fun d hget pop hrun hr => .callHalt d hget pop hrun)
+    (fun d hget pop hrun hcont ih hr => .callRet d hget pop hrun (ih hr))
+    seg hr
 
 /-- What one iteration of a loop at `k` must establish: re-entering `k` keeps the
 invariant `I`, and every other way out (a cut entry of the outer list, or the end
@@ -161,7 +297,77 @@ theorem SFunc.RunCutP.loop {P : Sevm → Devm → Ninst → Devm → Prop}
     (step : ∀ devm, I devm → ∀ r, SFunc.RunCutP P fs sevm (k :: C) devm g r →
       Seg.LoopPost k I Q r) :
     ∀ devm r, I devm → SFunc.RunCutP P fs sevm C devm g r → Q r := by
-  sorry
+  intro devm r hI run
+  have aux : ∀ {devm f r}, SFunc.RunCutP P fs sevm C devm f r →
+      (∀ r', SFunc.RunCutP P fs sevm (k :: C) devm f r' →
+        Seg.LoopPost k I Q r') → Q r := by
+    intro devm f r run
+    refine SFunc.RunCutP.rec (C := C)
+      (motive := fun devm f r _ =>
+        (∀ r', SFunc.RunCutP P fs sevm (k :: C) devm f r' →
+          Seg.LoopPost k I Q r') → Q r)
+      (fun d pop hrun ih H =>
+        ih (fun r' h' => H r' (.zero d pop h')))
+      (fun d w hnz pop hrun ih H =>
+        ih (fun r' h' => H r' (.succ d w hnz pop h')))
+      (fun d pop hrun ih H =>
+        ih (fun r' h' => H r' (.toZero d pop h')))
+      (fun {s0 s1 f0 t} d w hnz hk pop H => by
+        have htk : t ≠ k := by
+          intro h
+          apply hkC
+          simpa [h] using hk
+        have hp := H _ (.toSuccCut d w hnz (List.mem_cons_of_mem k hk) pop)
+        simpa [Seg.LoopPost, htk] using hp)
+      (fun {s0 s1 f0 g0 t r0} d w hnz hnot hget pop hrun ih H => by
+        by_cases htk : t = k
+        · subst t
+          have hfg : g = _ := Option.some.inj (hk.symm.trans hget)
+          cases hfg
+          have hp := H _ (.toSuccCut d w hnz (by simp) pop)
+          have hInv : I s1 := by simpa [Seg.LoopPost] using hp
+          exact ih (step s1 hInv)
+        · have hnot' : t ∉ k :: C := by
+            intro hm
+            have hm' := List.mem_cons.mp hm
+            rcases hm' with h | hm
+            · exact htk h
+            · exact hnot hm
+          exact ih (fun r' h' => H r' (.toSucc d w hnz hnot' hget pop h')))
+      (fun h H => by simpa [Seg.LoopPost] using H _ (.last h))
+      (fun h hrun ih H =>
+        ih (fun r' h' => H r' (.next h h')))
+      (fun burn hrun ih H =>
+        ih (fun r' h' => H r' (.dest burn h')))
+      (fun {s0 s1 t} d hk pop H => by
+        have htk : t ≠ k := by
+          intro h
+          apply hkC
+          simpa [h] using hk
+        have hp := H _ (.jumpCut d (List.mem_cons_of_mem k hk) pop)
+        simpa [Seg.LoopPost, htk] using hp)
+      (fun {s0 s1 t f0 r0} d hnot hget pop hrun ih H => by
+        by_cases htk : t = k
+        · subst t
+          have hfg : g = _ := Option.some.inj (hk.symm.trans hget)
+          cases hfg
+          have hp := H _ (.jumpCut d (by simp) pop)
+          have hInv : I s1 := by simpa [Seg.LoopPost] using hp
+          exact ih (step s1 hInv)
+        · have hnot' : t ∉ k :: C := by
+            intro hm
+            have hm' := List.mem_cons.mp hm
+            rcases hm' with h | hm
+            · exact htk h
+            · exact hnot hm
+          exact ih (fun r' h' => H r' (.jump d hnot' hget pop h')))
+      (fun d pop H => by simpa [Seg.LoopPost] using H _ (.ret d pop))
+      (fun d hget pop hrun H => by
+        simpa [Seg.LoopPost] using H _ (.callHalt d hget pop hrun))
+      (fun d hget pop hrun hcont ih H =>
+        ih (fun r' h' => H r' (.callRet d hget pop hrun h')))
+      run
+  exact aux run (step devm hI)
 
 /-- The loop rule with an iteration index: `J i` holds on the `i`-th entry to the
 loop head. -/
@@ -172,7 +378,20 @@ theorem SFunc.RunCutP.loop_indexed {P : Sevm → Devm → Ninst → Devm → Pro
     (step : ∀ i devm, J i devm → ∀ r, SFunc.RunCutP P fs sevm (k :: C) devm g r →
       Seg.LoopPost k (J (i + 1)) Q r) :
     ∀ i devm r, J i devm → SFunc.RunCutP P fs sevm C devm g r → Q r := by
-  sorry
+  intro i devm r hJ run
+  have hloop := SFunc.RunCutP.loop (P := P) (fs := fs) (sevm := sevm)
+    (C := C) (k := k) (g := g) hk hkC (fun d => ∃ i, J i d) Q (by
+      intro d hI r hrun
+      rcases hI with ⟨i, hI⟩
+      have hp := step i d hI r hrun
+      rcases r with ⟨j, d'⟩ | o
+      · by_cases h : j = k
+        · simp [Seg.LoopPost, h]
+          have hp' : J (i + 1) d' := by simpa [Seg.LoopPost, h] using hp
+          exact ⟨i + 1, hp'⟩
+        · simpa [Seg.LoopPost, h] using hp
+      · simpa [Seg.LoopPost] using hp)
+  exact hloop devm r ⟨i, hJ⟩ run
 
 /-- The loop rule for a loop at the top level of a function (nothing else cut). -/
 theorem SFunc.RunP.loop {P : Sevm → Devm → Ninst → Devm → Prop}
@@ -184,7 +403,18 @@ theorem SFunc.RunP.loop {P : Sevm → Devm → Ninst → Devm → Prop}
       | .at _ devm' => I devm'
       | .done o => Q o) :
     ∀ devm o, I devm → SFunc.RunP P fs sevm devm g o → Q o := by
-  sorry
+  intro devm o hI run
+  have hcut : SFunc.RunCutP P fs sevm [] devm g (.done o) :=
+    (SFunc.runP_iff_runCutP_nil (P := P)).mp run
+  have hloop := SFunc.RunCutP.loop (P := P) (fs := fs) (sevm := sevm)
+    (C := []) (k := k) (g := g) hk (by simp) I
+    (fun r => match r with
+      | .at _ d => I d
+      | .done o => Q o) (by
+      intro d hI r hrun
+      have hp := step d hI r hrun
+      cases r <;> simpa [Seg.LoopPost] using hp)
+  exact hloop devm (.done o) hI hcut
 
 /-! ## Exact-gas cut runs -/
 
@@ -256,13 +486,76 @@ inductive SFunc.RunExactCut (fs : List SFunc) (sevm : Sevm) (C : List Nat) :
 theorem SFunc.RunExactCut.toRunCut {fs : List SFunc} {sevm : Sevm} {C : List Nat}
     {devm : Devm} {f : SFunc} {r : Seg}
     (run : SFunc.RunExactCut fs sevm C devm f r) : SFunc.RunCut fs sevm C devm f r := by
-  sorry
+  refine SFunc.RunExactCut.rec
+    (motive := fun devm f r _ => SFunc.RunCut fs sevm C devm f r)
+    (fun d hpop hrun ih => .zero d (Devm.PopBurn.of_popBurnBy hpop) ih)
+    (fun d w hnz hpop hrun ih =>
+      .succ d w hnz (Devm.PopBurn.of_popBurnBy hpop) ih)
+    (fun d hpop hrun ih => .toZero d (Devm.PopBurn.of_popBurnBy hpop) ih)
+    (fun d w hnz hk hpop =>
+      .toSuccCut d w hnz hk (Devm.PopBurn.of_popBurnBy hpop))
+    (fun d w hnz hnot hget hpop hrun ih =>
+      .toSucc d w hnz hnot hget (Devm.PopBurn.of_popBurnBy hpop) ih)
+    (fun h => .last h)
+    (fun h hrun ih => .next (Ninst.Run.of_runCompiled h) ih)
+    (fun hburn hrun ih => .dest (Devm.Burn.of_burnBy hburn) ih)
+    (fun d hk hpop => .jumpCut d hk (Devm.PopBurn.of_popBurnBy hpop))
+    (fun d hnot hget hpop hrun ih =>
+      .jump d hnot hget (Devm.PopBurn.of_popBurnBy hpop) ih)
+    (fun d hpop => .ret d (Devm.PopBurn.of_popBurnBy hpop))
+    (fun d hget hpop hrun =>
+      .callHalt d hget (Devm.PopBurn.of_popBurnBy hpop) hrun.toRun)
+    (fun d hget hpop hrun hcont ih =>
+      .callRet d hget (Devm.PopBurn.of_popBurnBy hpop) hrun.toRun ih)
+    run
 
 /-- With nothing cut, an exact cut run is an exact run. -/
 theorem SFunc.runExact_iff_runExactCut_nil {fs : List SFunc} {sevm : Sevm}
     {devm : Devm} {f : SFunc} {o : Outcome} :
     SFunc.RunExact fs sevm devm f o ↔ SFunc.RunExactCut fs sevm [] devm f (.done o) := by
-  sorry
+  constructor
+  · intro run
+    induction run with
+    | zero d hpop hrun ih => exact .zero d hpop ih
+    | succ d w hnz hpop hrun ih => exact .succ d w hnz hpop ih
+    | toZero d hpop hrun ih => exact .toZero d hpop ih
+    | toSucc d w hnz hget hpop hrun ih =>
+      exact .toSucc d w hnz (by simp) hget hpop ih
+    | last h => exact .last h
+    | next h hrun ih => exact .next h ih
+    | dest hburn hrun ih => exact .dest hburn ih
+    | jump d hget hpop hrun ih => exact .jump d (by simp) hget hpop ih
+    | ret d hpop => exact .ret d hpop
+    | callHalt d hget hpop hrun => exact .callHalt d hget hpop hrun
+    | callRet d hget hpop hrun hcont ihrun ihcont =>
+      exact .callRet d hget hpop hrun ihcont
+  · intro run
+    have aux : ∀ {devm f r}, SFunc.RunExactCut fs sevm [] devm f r →
+        ∀ o, r = .done o → SFunc.RunExact fs sevm devm f o := by
+      intro devm f r run
+      refine SFunc.RunExactCut.rec
+        (motive := fun devm f r _ => ∀ o, r = .done o →
+          SFunc.RunExact fs sevm devm f o)
+        (fun d hpop hrun ih o heq => .zero d hpop (ih o heq))
+        (fun d w hnz hpop hrun ih o heq => .succ d w hnz hpop (ih o heq))
+        (fun d hpop hrun ih o heq => .toZero d hpop (ih o heq))
+        (fun d w hnz hk hpop o heq => by simp at hk)
+        (fun d w hnz hnot hget hpop hrun ih o heq =>
+          .toSucc d w hnz hget hpop (ih o heq))
+        (fun h o heq => by cases heq; exact .last h)
+        (fun h hrun ih o heq => .next h (ih o heq))
+        (fun hburn hrun ih o heq => .dest hburn (ih o heq))
+        (fun d hk hpop o heq => by simp at hk)
+        (fun d hnot hget hpop hrun ih o heq =>
+          .jump d hget hpop (ih o heq))
+        (fun d hpop o heq => by cases heq; exact .ret d hpop)
+        (fun d hget hpop hrun o heq => by
+          cases heq
+          exact .callHalt d hget hpop hrun)
+        (fun d hget hpop hrun hcont ih o heq =>
+          .callRet d hget hpop hrun (ih o heq))
+        run
+    exact aux run o rfl
 
 theorem SFunc.RunExactCut.resume {fs : List SFunc} {sevm : Sevm} {C : List Nat}
     {j : Nat} {g : SFunc} (hj : fs[j]? = some g) (hjC : j ∉ C)
@@ -270,14 +563,73 @@ theorem SFunc.RunExactCut.resume {fs : List SFunc} {sevm : Sevm} {C : List Nat}
     (seg : SFunc.RunExactCut fs sevm (j :: C) devm f (.at j devm'))
     (rest : SFunc.RunExactCut fs sevm C devm' g r) :
     SFunc.RunExactCut fs sevm C devm f r := by
-  sorry
+  have aux : ∀ {devm f r} d,
+      SFunc.RunExactCut fs sevm (j :: C) devm f r → r = .at j d →
+        ∀ r', SFunc.RunExactCut fs sevm C d g r' →
+          SFunc.RunExactCut fs sevm C devm f r' := by
+    intro devm f r d seg
+    refine SFunc.RunExactCut.rec (C := j :: C)
+      (motive := fun devm f r _ => ∀ d, r = .at j d →
+        ∀ r', SFunc.RunExactCut fs sevm C d g r' →
+          SFunc.RunExactCut fs sevm C devm f r')
+      (fun d0 pop hrun ih d heq r' rest => .zero d0 pop (ih d heq r' rest))
+      (fun d0 w hnz pop hrun ih d heq r' rest => .succ d0 w hnz pop (ih d heq r' rest))
+      (fun d0 pop hrun ih d heq r' rest => .toZero d0 pop (ih d heq r' rest))
+      (fun d0 w hnz hk pop d heq r' rest => by
+        cases heq
+        exact .toSucc d0 w hnz hjC hj pop rest)
+      (fun d0 w hnz hnot hget pop hrun ih d heq r' rest =>
+        .toSucc d0 w hnz (fun hk => hnot (List.mem_cons_of_mem j hk))
+          hget pop (ih d heq r' rest))
+      (fun h d heq r' rest => by cases heq)
+      (fun h hrun ih d heq r' rest => .next h (ih d heq r' rest))
+      (fun burn hrun ih d heq r' rest => .dest burn (ih d heq r' rest))
+      (fun d0 hk pop d heq r' rest => by
+        cases heq
+        exact .jump d0 hjC hj pop rest)
+      (fun d0 hnot hget pop hrun ih d heq r' rest =>
+        .jump d0 (fun hk => hnot (List.mem_cons_of_mem j hk))
+          hget pop (ih d heq r' rest))
+      (fun d0 pop d heq r' rest => by cases heq)
+      (fun d0 hget pop hrun d heq r' rest => by cases heq)
+      (fun d0 hget pop hrun hcont ih d heq r' rest =>
+        .callRet d0 hget pop hrun (ih d heq r' rest))
+      seg d
+  exact aux devm' seg rfl r rest
 
 theorem SFunc.RunExactCut.uncut {fs : List SFunc} {sevm : Sevm} {C : List Nat} {j : Nat}
     {devm : Devm} {f : SFunc} {r : Seg}
     (seg : SFunc.RunExactCut fs sevm (j :: C) devm f r)
     (hr : ∀ d, r ≠ .at j d) :
     SFunc.RunExactCut fs sevm C devm f r := by
-  sorry
+  refine SFunc.RunExactCut.rec
+    (motive := fun devm f r _ => (∀ d, r ≠ .at j d) →
+      SFunc.RunExactCut fs sevm C devm f r)
+    (fun d pop hrun ih hr => .zero d pop (ih hr))
+    (fun d w hnz pop hrun ih hr => .succ d w hnz pop (ih hr))
+    (fun d pop hrun ih hr => .toZero d pop (ih hr))
+    (fun d w hnz hk pop hr => by
+      simp only [List.mem_cons] at hk
+      rcases hk with rfl | hk
+      · exact False.elim (hr _ rfl)
+      · exact .toSuccCut d w hnz hk pop)
+    (fun d w hnz hnot hget pop hrun ih hr =>
+      .toSucc d w hnz (fun hk => hnot (List.mem_cons_of_mem j hk))
+        hget pop (ih hr))
+    (fun h hr => .last h)
+    (fun h hrun ih hr => .next h (ih hr))
+    (fun burn hrun ih hr => .dest burn (ih hr))
+    (fun d hk pop hr => by
+      simp only [List.mem_cons] at hk
+      rcases hk with rfl | hk
+      · exact False.elim (hr _ rfl)
+      · exact .jumpCut d hk pop)
+    (fun d hnot hget pop hrun ih hr =>
+      .jump d (fun hk => hnot (List.mem_cons_of_mem j hk)) hget pop (ih hr))
+    (fun d pop hr => .ret d pop)
+    (fun d hget pop hrun hr => .callHalt d hget pop hrun)
+    (fun d hget pop hrun hcont ih hr => .callRet d hget pop hrun (ih hr))
+    seg hr
 
 /-- **Loop construction.**  `N` iterations of the loop at entry `k`, each an exact
 run of its tree cut at `k` from `J i` to `J (i + 1)`, followed by a final pass from
@@ -291,6 +643,21 @@ theorem SFunc.RunExactCut.iterate {fs : List SFunc} {sevm : Sevm} {C : List Nat}
     (exit : ∀ devm, J N devm →
       ∃ r, SFunc.RunExactCut fs sevm (k :: C) devm g r ∧ (∀ d, r ≠ .at k d) ∧ R r) :
     ∀ devm, J 0 devm → ∃ r, SFunc.RunExactCut fs sevm C devm g r ∧ R r := by
-  sorry
+  have aux : ∀ m i, i + m = N → ∀ devm, J i devm →
+      ∃ r, SFunc.RunExactCut fs sevm C devm g r ∧ R r := by
+    intro m
+    induction m with
+    | zero =>
+      intro i hi devm hJ
+      have hiN : i = N := by omega
+      obtain ⟨r, hrun, hne, hR⟩ := exit devm (by simpa [hiN] using hJ)
+      exact ⟨r, SFunc.RunExactCut.uncut hrun hne, hR⟩
+    | succ m ih =>
+      intro i hi devm hJ
+      have hlt : i < N := by omega
+      obtain ⟨devm', hbody, hJ'⟩ := body i hlt devm hJ
+      obtain ⟨r, hrun, hR⟩ := ih (i + 1) (by omega) devm' hJ'
+      exact ⟨r, SFunc.RunExactCut.resume hk hkC hbody hrun, hR⟩
+  exact aux N 0 (by simp)
 
 end Blanc.Lift
