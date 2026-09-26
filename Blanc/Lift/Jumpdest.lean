@@ -57,7 +57,7 @@ index loop is quadratic under kernel reduction; the two lists are equal. -/
 private lemma instStarts_eq (cd : ByteArray) : instStarts cd = scanStarts cd.toList 0 := by
   rw [instStarts, ByteArray.toList_eq_toList_data]
 
-private def instStartAt (cd : ByteArray) (k : Nat) : Bool :=
+def instStartAt (cd : ByteArray) (k : Nat) : Bool :=
   (instStarts cd).getD k false
 
 private inductive Instrs : List UInt8 → Prop
