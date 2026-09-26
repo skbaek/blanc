@@ -1,12 +1,13 @@
 import Blanc.Lift.Weth9.Lift
+import Blanc.Lift.MapSlot
 
 /-!
 # The WETH9 solvency specification
 
 WETH9 (solc 0.4.19) keeps `balanceOf` as a Solidity mapping at base slot 3 and
 `allowance` as a nested mapping at base slot 4; a mapping value lives at
-`keccak256(pad32(key) ‖ pad32(base))` (`mapSlot`).  Nothing in the contract
-checks for hash collisions.
+`keccak256(pad32(key) ‖ pad32(base))` (`mapSlot`, `Blanc/Lift/MapSlot.lean`).  Nothing in
+the contract checks for hash collisions.
 
 **Booked balances count every storage slot once.**  Summing `s.get (balSlot a)`
 over all addresses would count a slot shared by two addresses twice, and a
@@ -22,9 +23,6 @@ execution writes (see the soundness module).
 namespace Blanc.Lift.Weth9
 
 open Jaune
-
-/-- Solidity's mapping slot `keccak256(pad32(key) ‖ pad32(base))`. -/
-def mapSlot (key base : B256) : B256 := (key.toBytes ++ base.toBytes).keccak
 
 /-- `balanceOf[a]`. -/
 def balSlot (a : Adr) : B256 := mapSlot a.toB256 3

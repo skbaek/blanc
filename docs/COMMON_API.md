@@ -2688,6 +2688,30 @@ contract-neutral.
   the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA
   site (`ric_copy_sha`, the converse of `copy_sha_gen`) in
   [`Blanc/Lift/InvWalkSha.lean`](../Blanc/Lift/InvWalkSha.lean).
+- A `STATICCALL` to an arbitrary callee, whose code is unknown: its abstract outcome
+  (`StaticCallPost`: flag, returned bytes as output window and return data, every storage
+  map and the log list kept) and, for a set flag, the successful static child message
+  (`StaticAnswered`), inverted (`ri_staticcall`) and forward over a caller-supplied step
+  (`rx_staticcall`), in [`Blanc/Lift/StaticCall.lean`](../Blanc/Lift/StaticCall.lean).
+  `CALLER` (`rx_caller`, `ri_caller`), `KECCAK256` inverted (`ri_keccak`), `LOG3`
+  (`rx_log3`, `ri_log3`), `SSTORE` forward at its selected cost (`rx_sstore`), `RETURN`
+  inverted (`ri_return`), the memory facts `Mem.reads_data`/`Mem.read_write_word_of_wf`, and
+  the world projections after a store, log or return (`getStor_afterStore`,
+  `getStor_afterStore_ne`, `getStorVal_afterStore`, `logs_afterStore`, `getStor_addLog`,
+  `logs_addLog`, `getStor_St_return`, `logs_St_return`, `output_St_return`) are in
+  [`Blanc/Lift/WalkSteps.lean`](../Blanc/Lift/WalkSteps.lean).
+- Hashed storage slots: `mapSlot key base = keccak256(pad32 key ‖ pad32 base)`, solc's mapping
+  slot and, with the arguments swapped (slot first), Vyper's, in
+  [`Blanc/Lift/MapSlot.lean`](../Blanc/Lift/MapSlot.lean).
+- Vyper 0.2.x runtimes: the frame prologue (`vyPrologue`, `ric_vyPrologue`, `rx_vyPrologue`,
+  memory `vyMem`/`vyImg`), the clamp constants as a carried image invariant (`VyClamps`,
+  `VyClamps.writeAt`), the non-payable guard and address-argument clamp every body starts with
+  (`vyNonpayable`, `vyAddrArg`, their `rx_`/`ric_` forms), and the `HashMap` slot scratch window
+  (`vySlot_read`, `vySlot_keccak`) with its whole macro (`vySlot`, `ric_vySlot`, `rx_vySlot`),
+  the checked storage subtract/add macros (`vySubStore`, `vyAddStore`, their `rx_`/`ric_`
+  forms, `B256.nof_iff_not_add_lt`), the selector read (`vyImg_selector`), and word facts
+  (`B256.xor_zero`, `B256.xor_eq_zero_iff`, `B256.toAdr_toB256_of_lt`), in
+  [`Blanc/Lift/Vyper.lean`](../Blanc/Lift/Vyper.lean).
 - Loops: a back-edge to entry `k` is reasoned about one iteration at a time on
   runs cut at `k` (`SFunc.RunCutP`, `SFunc.RunExactCut`). Safety:
   `SFunc.RunCutP.loop` (invariant; `loop_indexed`, `SFunc.RunP.loop`), which
