@@ -71,11 +71,6 @@ structure ShaCallPost (b b' : Devm) (rd : Bytes) : Prop where
   error : b'.error = b.error
   returnData : b'.returnData = rd
 
-theorem ShaCallPost.getStorVal {b b' : Devm} {rd : Bytes} (h : ShaCallPost b b' rd) (a : Adr)
-    (k : B256) : b'.getStorVal a k = b.getStorVal a k := by
-  show (Devm.getStor b' a).get k = (Devm.getStor b a).get k
-  rw [h.stor]
-
 /-- The SHA-256 precompile premises (`Ninst.runCompiled_staticcall_sha256_64_warm`) a frame's
 world carries: address 2 undelegated and warm, a precompile of the fork, a covered fork.  The
 frame's nonzero depth is a separate premise of the liveness steps. -/
@@ -191,24 +186,6 @@ theorem rx_mload_ext {i v : B256} {c : Nat} {M' : Mem}
   .next (Ninst.runCompiled_mload_of (devm := St b (i :: S) M (G + c)) (G := G) rfl hc hv hM
     rfl hroom) k
 
-/-- The SHA-256 precompile `STATICCALL` after solc's `GAS`, over covered windows. -/
-theorem rx_staticcall_sha {iiw oiw : B256}
-    (hcov : memExtsSize M.size [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = M.size)
-    (hnodeleg : getDelegatedCodeAddress (b.getCode 2) = none)
-    (hwarm : (2 : Adr) ∈ b.accessedAddresses)
-    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
-    (hbound : G + 184 < 2 ^ 256) (hroom : S.length < 1024) (hG : 1 ≤ G)
-    (k : ∀ b', ShaCallPost b b' (Bytes.sha256 (M.read iiw.toNat 64).1).toBytes →
-      SFunc.RunExact fs sevm
-        (St b' (1 :: S) (M.write oiw.toNat (Bytes.sha256 (M.read iiw.toNat 64).1).toBytes) G) f o) :
-    SFunc.RunExact fs sevm
-      (St b (Nat.toB256 (G + 184) :: 2 :: iiw :: 64 :: oiw :: 32 :: S) M (G + 184))
-      (.next (.exec .staticcall) f) o := by
-  obtain ⟨b', hpost, hrun⟩ := staticcall_sha_step hcov hnodeleg hwarm hpre hfork hdepth hbound
-    hroom hG
-  exact .next hrun (k b' hpost)
-
 end Steps
 
 /-! ## Exact cut-run steps -/
@@ -300,23 +277,6 @@ theorem rxc_mload_ext {i v : B256} {c : Nat} {M' : Mem}
     SFunc.RunExactCut fs sevm C (St b (i :: S) M (G + c)) (.next (.reg .mload) f) r :=
   .next (Ninst.runCompiled_mload_of (devm := St b (i :: S) M (G + c)) (G := G) rfl hc hv hM
     rfl hroom) k
-
-theorem rxc_staticcall_sha {iiw oiw : B256}
-    (hcov : memExtsSize M.size [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = M.size)
-    (hnodeleg : getDelegatedCodeAddress (b.getCode 2) = none)
-    (hwarm : (2 : Adr) ∈ b.accessedAddresses)
-    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
-    (hbound : G + 184 < 2 ^ 256) (hroom : S.length < 1024) (hG : 1 ≤ G)
-    (k : ∀ b', ShaCallPost b b' (Bytes.sha256 (M.read iiw.toNat 64).1).toBytes →
-      SFunc.RunExactCut fs sevm C
-        (St b' (1 :: S) (M.write oiw.toNat (Bytes.sha256 (M.read iiw.toNat 64).1).toBytes) G) f r) :
-    SFunc.RunExactCut fs sevm C
-      (St b (Nat.toB256 (G + 184) :: 2 :: iiw :: 64 :: oiw :: 32 :: S) M (G + 184))
-      (.next (.exec .staticcall) f) r := by
-  obtain ⟨b', hpost, hrun⟩ := staticcall_sha_step hcov hnodeleg hwarm hpre hfork hdepth hbound
-    hroom hG
-  exact .next hrun (k b' hpost)
 
 theorem rxc_shl {x y v : B256} (hv : y <<< x.toNat = v) (hroom : S.length < 1024)
     (k : SFunc.RunExactCut fs sevm C (St b (v :: S) M G) f r) :

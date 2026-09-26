@@ -6,8 +6,8 @@ import Blanc.Lift.InvWalkOps
 Companions to `InvWalk.lean`:
 
 * `SFunc.noOk`, a decidable test for trees built only of straight-line steps and branches over
-  `REVERT`/`undefined` terminals, with `SFunc.RunCutP.false_of_noOk` and
-  `SFunc.RunP.false_of_noOk`: such a tree has no successful run at all, so every `REVERT` arm
+  `REVERT`/`undefined` terminals, with `SFunc.RunCutP.false_of_noOk`
+  (a plain run is the cut run with nothing cut): such a tree has no successful run at all, so every `REVERT` arm
   of an inversion walk closes by `(by decide)`;
 * `SFunc.noHalt` and the closed entry sets `NoHaltSet`, with `SFunc.RunP.not_halted` and
   `SFunc.RunP.not_halted_entry`: trees whose only terminals are `REVERT`, returns and
@@ -50,12 +50,6 @@ theorem SFunc.RunCutP.false_of_noOk {P : Sevm → Devm → Ninst → Devm → Pr
   | next _ _ ih => exact ih h
   | dest _ _ ih => exact ih h
   | _ => simp [SFunc.noOk] at h
-
-/-- A tree with `noOk` has no run. -/
-theorem SFunc.RunP.false_of_noOk {P : Sevm → Devm → Ninst → Devm → Prop}
-    {fs : List SFunc} {sevm : Sevm} {devm : Devm} {f : SFunc} {o : Outcome}
-    (run : SFunc.RunP P fs sevm devm f o) (h : f.noOk = true) : False :=
-  (SFunc.runP_iff_runCutP_nil.mp run).false_of_noOk h
 
 /-! ## Trees that cannot halt -/
 
@@ -202,15 +196,6 @@ theorem ric_call {k : Nat} {dd : B256} (hk : fs[k]? = some g)
       rw [hk] at hk'
       cases hk'
       exact ⟨_, .inl ⟨_, (St.of_pop1 h).2 ▸ hr, k⟩⟩
-
-/-- `ric_call` when the continuation cannot halt through the callee: the callee returns. -/
-theorem ric_callRet {k : Nat} {dd : B256} (hk : fs[k]? = some g)
-    (hnh : ∀ D, r ≠ .done (.halted D))
-    (run : SFunc.RunCut fs sevm C (St b (dd :: S) M G) (.callNext k f) r) :
-    ∃ G' D, SFunc.Run fs sevm (St b S M G') g (.returned D) ∧ SFunc.RunCut fs sevm C D f r := by
-  obtain ⟨G', ⟨D, h1, h2⟩ | ⟨D, -, hr⟩⟩ := ric_call hk run
-  · exact ⟨G', D, h1, h2⟩
-  · exact absurd hr (hnh D)
 
 end Control
 
