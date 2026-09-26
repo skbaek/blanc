@@ -34,6 +34,7 @@ end Jaune
 namespace Blanc.Lift
 
 open Jaune
+open scoped LogOutputHinv
 
 -- SEGMENT: ninstWorldOfQuiet
 /-- **A quiet step keeps every storage map and the log list.**
@@ -62,7 +63,27 @@ world; `STOP`/`RETURN` set only the output and `REVERT` has no successful run (u
 theorem Linst.world_of_ok {sevm : Sevm} {pre post : Devm} {l : Linst}
     (hl : l ≠ .selfdestruct) (run : Linst.Run sevm pre l (.ok post)) :
     Devm.getStor post = Devm.getStor pre ∧ post.logs = pre.logs := by
-  sorry
+  cases l with
+  | stop =>
+      have hf := Linst.run_instructionFrame sevm pre .stop (by simp)
+      rw [run] at hf
+      exact ⟨funext (fun a => (hf.getStor a).symm), (Linst.Hinv.inv run).symm⟩
+  | return_ =>
+      have hf := Linst.run_instructionFrame sevm pre .return_ (by simp)
+      rw [run] at hf
+      exact ⟨funext (fun a => (hf.getStor a).symm), (Linst.Hinv.inv run).symm⟩
+  | revert =>
+      simp only [Linst.Run, Linst.run] at run
+      cases h : pre.popToNat with
+      | error e => simp [h] at run
+      | ok x =>
+        cases h2 : x.2.popToNat with
+        | error e => simp [h, h2] at run
+        | ok y =>
+          cases h3 : chargeGas (y.2.extCost [(x.1, y.1)]) y.2 with
+          | error e => simp [h, h2, h3] at run
+          | ok d => simp [h, h2, h3] at run
+  | selfdestruct => exact (hl rfl).elim
 
 /-- A synthetic tree whose instructions are quiet and whose terminals are not
 `SELFDESTRUCT`. -/
