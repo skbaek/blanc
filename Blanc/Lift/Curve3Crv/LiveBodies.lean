@@ -790,11 +790,6 @@ theorem rx_strPrefix (hfork : CoveredFork sevm.benvStat.fork) (hv : sevm.value =
     rw [St.extCost_eq hM1]; decide
   exact rx_add (by simp) kk
 
-theorem sliceD_zero_take (bs : Bytes) {n : Nat} (h : n ≤ bs.length) :
-    bs.sliceD 0 n 0 = bs.take n := by
-  unfold List.sliceD
-  rw [List.drop_zero, List.takeD_eq_take _ h]
-
 /-- **The string views, forward**, for either view: `sl` the variable's slot (its base is
 `keccak(sl)`), `cp` the loop's cap (`n + 1` words: the length and `n` data words). -/
 theorem live_strView (hfork : CoveredFork sevm.benvStat.fork) (hcd : sevm.data.length < 2 ^ 256)
