@@ -158,10 +158,6 @@ theorem push20_add {a : Nat} (h : a + 32 < 2 ^ 256) :
   rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, toB256_add_toB256 (by omega),
     Nat.add_comm]
 
-theorem add_push20 {a : Nat} (h : a + 32 < 2 ^ 256) :
-    Nat.toB256 a + Bytes.toB256 [0x20] = Nat.toB256 (a + 32) := by
-  rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, toB256_add_toB256 (by omega)]
-
 theorem lt_toB256 {a b : Nat} (ha : a < 2 ^ 256) (hb : b < 2 ^ 256) :
     B256.ltCheck (Nat.toB256 a) (Nat.toB256 b) = if a < b then 1 else 0 := by
   have e : Nat.toB256 a < Nat.toB256 b ↔ a < b := by
@@ -220,8 +216,6 @@ theorem read_past_size {M : Mem} (hwf : Mem.Wf M) {i : Nat} (hi : M.size ≤ i) 
   exact Array.getD_of_size_le 0 (by unfold Mem.Wf at hwf; omega)
 
 /-! ### Bitwise facts of the merge with nothing left over -/
-
-theorem ones_eq : Bytes.toB256 onesPush = B256.max := by decide
 
 theorem bexp_256_32 : B256.bexp (Bytes.toB256 [0x01, 0x00]) (Nat.toB256 32) = 0 := by
   decide +kernel

@@ -374,40 +374,6 @@ theorem SFunc.RunP.hoare_wrapper {P : Sevm → Devm → Ninst → Devm → Prop}
       intro d o hd hr
       exact hcallee hd hr) hsc hcalls run h0
 
-theorem SFunc.Run.hoare_single_call
-    {fs : List SFunc} {S K : List Nat} {sevm : Sevm} {devm : Devm}
-    {f : SFunc} {o : Outcome} {Φ₀ Φ₁ : Devm → Prop}
-    (hS : SilentSet fs S = true)
-    (hzero : ∀ {k g}, k ∈ S → fs[k]? = some g → g.silentCalls S 0 = true)
-    (h01 : ∀ d, Φ₀ d → Φ₁ d)
-    (hstable0 : ∀ {d d'}, d.state = d'.state → Φ₀ d → Φ₀ d')
-    (hstable1 : ∀ {d d'}, d.state = d'.state → Φ₁ d → Φ₁ d')
-    (hspec : ∀ {k g}, k ∈ K → fs[k]? = some g →
-      ∀ {d o}, Φ₀ d → SFunc.Run fs sevm d g o → Φ₁ (Outcome.devm o))
-    (hsc : f.silentCalls S 1 = true)
-    (hcalls : f.callRefs.all (· ∈ K) = true)
-    (run : SFunc.Run fs sevm devm f o) (h0 : Φ₀ devm) :
-    Φ₁ (Outcome.devm o) :=
-  SFunc.RunP.hoare_single_call id hS hzero h01 hstable0 hstable1 hspec hsc hcalls run h0
-
-theorem SFunc.Run.hoare_single_call_with_gotos
-    {fs : List SFunc} {S W K : List Nat} {sevm : Sevm} {devm : Devm}
-    {f : SFunc} {o : Outcome} {Φ₀ Φ₁ : Devm → Prop}
-    (hS : SilentSet fs S = true)
-    (hzero : ∀ {k g}, k ∈ S → fs[k]? = some g → g.silentCalls S 0 = true)
-    (h01 : ∀ d, Φ₀ d → Φ₁ d)
-    (hstable0 : ∀ {d d'}, d.state = d'.state → Φ₀ d → Φ₀ d')
-    (hstable1 : ∀ {d d'}, d.state = d'.state → Φ₁ d → Φ₁ d')
-    (hspec : ∀ {k g}, k ∈ K → fs[k]? = some g →
-      ∀ {d o}, Φ₀ d → SFunc.Run fs sevm d g o → Φ₁ (Outcome.devm o))
-    (hwrap : ∀ {k g}, k ∈ W → fs[k]? = some g →
-      ∀ {d o}, Φ₀ d → SFunc.Run fs sevm d g o → Φ₁ (Outcome.devm o))
-    (hsc : f.silentCallsWith S W 1 = true)
-    (hcalls : f.callRefs.all (· ∈ K) = true)
-    (run : SFunc.Run fs sevm devm f o) (h0 : Φ₀ devm) :
-    Φ₁ (Outcome.devm o) :=
-  SFunc.RunP.hoare_single_call_with_gotos id hS hzero h01 hstable0 hstable1 hspec hwrap hsc hcalls run h0
-
 theorem SFunc.Run.hoare_wrapper
     {fs : List SFunc} {S : List Nat} {k : Nat} {sevm : Sevm} {devm : Devm}
     {wrapper callee : SFunc} {o : Outcome} {Φ₀ Φ₁ : Devm → Prop}

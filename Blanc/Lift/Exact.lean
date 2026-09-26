@@ -93,11 +93,6 @@ theorem SFunc.RunExact.toRun {fs : List SFunc} {sevm : Sevm} {devm : Devm}
       .callRet d hget (Devm.PopBurn.of_popBurnBy hpop) ihrun ihcont)
     h
 
-theorem SProg.Run.of_runExact {fs : List SFunc} {sevm : Sevm} {devm devm' : Devm}
-    (h : SProg.RunExact fs sevm devm devm') : SProg.Run fs sevm devm devm' := by
-  rcases h with ⟨f, hf, hr⟩
-  exact ⟨f, hf, SFunc.RunExact.toRun hr⟩
-
 /-! ## The jumpability certificate -/
 
 def jumpsOkNode (code : ByteArray) (es : List Entry) : SFunc → List AVal → Bool
@@ -149,17 +144,6 @@ lemma cert_jumpsOk_at {code : ByteArray} {c : Cert}
   have hmem := cert_pair_mem c k e f he hf
   have h := (List.all_eq_true.mp hc) (e, f) hmem
   exact h
-
-private lemma burnBy_state {cost : Nat} {devm devm' : Devm}
-    (h : Devm.BurnBy cost devm devm') :
-    devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - cost, devm.stateGas⟩ = devm' := by
-  refine Devm.eq_of_proj h.stack h.memory ?_ h.logs h.refundCounter h.output
-    h.accountsToDelete h.returnData h.error h.accessedAddresses
-    h.accessedStorageKeys h.state h.createdAccounts h.transientStorage h.stateGas
-    h.accountReads h.storageReads
-  have hg := h.gasLeft
-  change devm.gasLeft - cost = devm'.gasLeft
-  omega
 
 private lemma popBurnBy_state {xs : List B256} {cost : Nat} {devm devm' : Devm}
     (h : Devm.PopBurnBy xs cost devm devm') :

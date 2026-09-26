@@ -5,7 +5,7 @@ import Blanc.ExecutionHistoryAdmission
 import Blanc.ExecutionTraceFresh
 
 /-!
-# The beacon deposit invariant at frame, message, transaction, block and history altitude
+# The beacon deposit invariant at frame and history altitude
 
 The beacon counterpart of `Blanc/Lift/Weth9/Solvency.lean`.  `beaconSem` is the certified code
 semantics of the deployed runtime (`code`); `beaconSpec` is the storage-only frame contract whose
@@ -23,12 +23,12 @@ deeper-frame hypothesis is not consumed.
 
 * `CoveredFork`, the code (`sevm.code = code`): given by the ladder (`hfork`, `beaconSem.Run`).
 * `isPrecomp 2` (part of `ShaReady`): discharged from `CoveredFork` (`isPrecomp_two`).
-* empty stack and memory at frame start (`Exec.FreshEntry`): **discharged** at every trace rung
-  (message call and up) by the existing `*.freshFrameAdmitted` theorems, since every retained
-  interpreter root is a freshly entered frame.  At the two `Exec` rungs, which start from an
+* empty stack and memory at frame start (`Exec.FreshEntry`): **discharged** at the history rung
+  by the existing `*.freshFrameAdmitted` theorems, since every retained interpreter root is a
+  freshly entered frame.  At frame altitude (`beaconSpec_soundAdmitted`), which starts from an
   arbitrary machine, it is part of the admitted entry `beaconFrameEntry`.
 
-Carried in `beaconEntry` (the only entry condition the trace rungs ask for), each because frame
+Carried in `beaconEntry` (the only entry condition the history rung asks for), each because frame
 semantics does not supply it:
 
 * `sevm.data.length < 2 ^ 256`: a transaction's calldata is an unbounded `Bytes` in the model;
@@ -44,8 +44,9 @@ semantics does not supply it:
 No call-depth condition is carried: at the maximal call depth (`sevm.depth = 0`) the SHA-256
 `STATICCALL` fails and pushes `0`, which is the failure disjunct of `ri_staticcall_sha`.
 
-The block and history rungs are over retained traces (`ConfiguredBlockTrace`,
-`ConfiguredHistoryTrace`), as for WETH9.
+The history rung is over retained traces (`ConfiguredHistoryTrace`), as for WETH9.  It is the
+only contract-level rung kept: the message, transaction and block altitudes are one-line
+instances of the same generic `*_admitted_sem` theorems at `beaconSpec_preservesAdmitted`.
 -/
 
 namespace Blanc.Lift.BeaconDeposit
@@ -130,7 +131,7 @@ def beaconEntry : Sevm → Devm → Prop := fun sevm pre =>
   sevm.data.length < 2 ^ 256 ∧ getDelegatedCodeAddress (pre.getCode 2) = none ∧
     (2 : Adr) ∈ pre.accessedAddresses
 
-/-- The full frame entry: fresh entry (discharged at every trace rung) and `beaconEntry`. -/
+/-- The full frame entry: fresh entry (discharged at the history rung) and `beaconEntry`. -/
 def beaconFrameEntry : Sevm → Devm → Prop := fun sevm pre =>
   Exec.FreshEntry sevm pre ∧ beaconEntry sevm pre
 
@@ -151,83 +152,10 @@ theorem beaconSpec_soundAdmitted (ca : Adr) :
   · rw [(h.2 hsel).1]
     exact ⟨history, hinv⟩
 
-/-- **Beacon frame preservation, trace-admitted**: the form the message, transaction and block
-rungs consume. -/
+/-- **Beacon frame preservation, trace-admitted**: the form the history rung consumes. -/
 theorem beaconSpec_preservesAdmitted (ca : Adr) :
     beaconSpec.PreservesAdmitted ca beaconFrameEntry :=
   beaconSpec.preserves_inv_admitted ca beaconFrameEntry (beaconSpec_soundAdmitted ca)
-
-/-- Every successful execution whose entered beacon frames are admitted takes the frame
-precondition to the frame postcondition. -/
-theorem beacon_preserves_solInv (ca : Adr) (sevm : Sevm) (pre post : Devm)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (execution : Exec 0 sevm pre (.ok post))
-    (admitted : Exec.FrameAdmitted ca beaconFrameEntry execution)
-    (hcode : sevm.currentTarget = ca → some sevm.code.toList = beaconSem.image)
-    (hwf : sevm.currentTarget = ca → Mem.Wf pre.memory)
-    (hpre : beaconSpec.Pre ca sevm pre) : beaconSpec.Post ca sevm post :=
-  beaconSpec_preservesAdmitted ca sevm pre post hfork execution admitted hcode hwf hpre
-
-/-- The same for the total executable `exec`.  The admission is stated for the execution's
-derivation (unique up to `Exec.unique`). -/
-theorem beacon_exec_preserves_solInv (ca : Adr) (sevm : Sevm) (pre post : Devm)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (hrun : exec ⟨0, sevm, pre⟩ = .ok post)
-    (admitted : ∀ execution : Exec 0 sevm pre (.ok post),
-      Exec.FrameAdmitted ca beaconFrameEntry execution)
-    (hcode : sevm.currentTarget = ca → some sevm.code.toList = beaconSem.image)
-    (hwf : sevm.currentTarget = ca → Mem.Wf pre.memory)
-    (hpre : beaconSpec.Pre ca sevm pre) : beaconSpec.Post ca sevm post := by
-  obtain ⟨execution⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr hrun
-  exact beacon_preserves_solInv ca sevm pre post hfork execution (admitted execution)
-    hcode hwf hpre
-
-/-- Message-call rung: fresh entry is discharged from the trace; only `beaconEntry` is
-admitted. -/
-theorem beacon_messageCall_preserves_solInv {ca : Adr} {msg : Msg} {state : State}
-    {out : MsgCallOutput} (trace : MessageCallTrace msg state out)
-    (hfork : CoveredFork msg.benv.stat.fork)
-    (admitted : trace.FrameAdmitted ca beaconEntry)
-    (ready : beaconSpec.MsgInv ca msg) :
-    beaconSpec.StateInv ca state ∧
-      (∀ address ∈ out.accountsToDelete.toList, address ≠ ca) :=
-  trace.stateInv_admitted_sem (beaconSpec_preservesAdmitted ca) hfork
-    ((trace.freshFrameAdmitted ca).and admitted) ready
-
-/-- Transaction-list rung. -/
-theorem beacon_applyTransactions_preserves_solInv {ca : Adr}
-    {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
-    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
-    (hfork : CoveredFork benv.stat.fork)
-    (admitted : trace.FrameAdmitted ca beaconEntry)
-    (sumNof : sum benv.state.bal < 2 ^ 256)
-    (inv : beaconSpec.BenvInv ca benv) :
-    beaconSpec.BenvInv ca finalBenv :=
-  trace.benvInv_admitted_sem (beaconSpec_preservesAdmitted ca) hfork
-    ((trace.freshFrameAdmitted ca).and admitted) sumNof inv
-
-/-- Block-body rung: system messages, transactions, withdrawals and requests. -/
-theorem beacon_appliedBody_preserves_solInv {ca : Adr}
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
-    {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
-    (hfork : CoveredFork benv.stat.fork)
-    (admitted : trace.FrameAdmitted ca beaconEntry)
-    (bound : sum benv.state.bal + wdsum wds < 2 ^ 256)
-    (inv : beaconSpec.BenvInv ca benv) :
-    beaconSpec.StateInv ca state :=
-  trace.stateInv_admitted_sem (beaconSpec_preservesAdmitted ca) hfork
-    ((trace.freshFrameAdmitted ca).and admitted) bound inv
-
-/-- Block rung: one configured block whose entered beacon frames satisfy `beaconEntry`
-preserves the beacon state invariant. -/
-theorem beacon_block_preserves_solInv {ca : Adr} {cfg : ChainConfig}
-    {pre post : BlockChain} (trace : ConfiguredBlockTrace cfg pre post)
-    (admitted : trace.FrameAdmitted ca beaconEntry)
-    (inv : beaconSpec.StateInv ca pre.state) :
-    beaconSpec.StateInv ca post.state :=
-  trace.stateInv_admitted_sem (beaconSpec_preservesAdmitted ca)
-    ((trace.freshFrameAdmitted ca).and admitted) inv
 
 /-- History rung: a configured history whose entered beacon frames satisfy `beaconEntry`
 preserves the beacon state invariant. -/
@@ -239,12 +167,5 @@ theorem beacon_history_preserves_solInv {ca : Adr} {cfg : ChainConfig}
     beaconSpec.StateInv ca future.state :=
   trace.stateInv_admitted_sem (beaconSpec_preservesAdmitted ca)
     ((trace.freshFrameAdmitted ca).and admitted) inv
-
-/-- The state invariant is the deployed code and `SolInv` for some history. -/
-theorem beaconSpec_stateInv_iff {ca : Adr} {w : State} :
-    beaconSpec.StateInv ca w ↔
-      (some (w.getCode ca).toList = some code.toList ∧
-        ∃ history, SolInv (w.getStor ca) history) :=
-  ⟨fun h => ⟨h.code, h.inv⟩, fun h => ⟨h.1, trivial, h.2⟩⟩
 
 end Blanc.Lift.BeaconDeposit

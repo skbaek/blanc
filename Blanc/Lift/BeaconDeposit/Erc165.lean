@@ -33,12 +33,6 @@ theorem memOut_size {μ : Mem} (hs : μ.size = 96) (v : B256) : (memOut μ v).si
   rw [memOut, Mem.size_write_word_at, hs]
   rfl
 
-theorem memOut_fp {μ : Mem} {bs : Bytes} (hwf : Mem.Wf μ) (hr : Mem.Reads μ bs)
-    (hfp : (μ.read 64 32).1 = (0x80 : B256).toBytes) (v : B256) :
-    ((memOut μ v).read 64 32).1 = (0x80 : B256).toBytes := by
-  rw [memOut, (hr.write hwf 128 v.toBytes).read,
-    Bytes.readWord_writeAt_of_disjoint _ _ _ _ (.inl (by omega)), ← hr.read, hfp]
-
 theorem memOut_val {μ : Mem} {bs : Bytes} (hwf : Mem.Wf μ) (hr : Mem.Reads μ bs) (v : B256) :
     ((memOut μ v).read 128 32).1 = v.toBytes := by
   rw [memOut, (hr.write hwf 128 v.toBytes).read]

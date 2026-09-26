@@ -10,7 +10,7 @@ import Blanc.Lift.Weth9.Shape
 # WETH9 frame soundness
 
 The whole WETH9 frame, assembled from the function specifications by the
-dispatcher Hoare lemma (`SFunc.Run.hoare_single_call_with_gotos`) at
+dispatcher Hoare lemma (`SFunc.RunP.hoare_single_call_with_gotos`) at
 `Φ₀ := weth9Spec.Pre ca sevm` and `Φ₁ := weth9Spec.Post ca sevm`:
 
 * entry `0` dispatches by goto into the selector wrappers `18–28` and calls
@@ -22,7 +22,7 @@ dispatcher Hoare lemma (`SFunc.Run.hoare_single_call_with_gotos`) at
 * wrappers `20, 25, 27` (transfer, transferFrom, approve) have solvency specs
   (`transfer_wrapper_solvent`, `transferFrom_wrapper_solvent`,
   `approve_wrapper_solvent`); the side condition `SumNof` of `Post` follows
-  because their trees are balance-silent (`SFunc.Run.getBal_of_balSilent`).
+  because their trees are balance-silent (`SFunc.RunP.getBal_of_balSilent`).
 
 The approve and transferFrom wrappers carry the local collision premise
 `AllowAdmitted sevm` of this frame, and so does `frame_post`; it is the only
