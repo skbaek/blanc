@@ -184,6 +184,11 @@ theorem rx_div {x y v : B256} (hv : x / y = v) (hroom : S.length < 1024)
     SFunc.RunExact fs sevm (St b (x :: y :: S) M (G + 5)) (.next (.reg .div) f) o :=
   rx_binary (fn := (· / ·)) (c := gLow) (by rintro ⟨⟩) (fun _ => rfl) hv hroom k
 
+theorem rx_mod {x y v : B256} (hv : x % y = v) (hroom : S.length < 1024)
+    (k : SFunc.RunExact fs sevm (St b (v :: S) M G) f o) :
+    SFunc.RunExact fs sevm (St b (x :: y :: S) M (G + 5)) (.next (.reg .mod) f) o :=
+  rx_binary (fn := (· % ·)) (c := gLow) (by rintro ⟨⟩) (fun _ => rfl) hv hroom k
+
 theorem rx_iszero {x v : B256} (hv : B256.eqCheck x 0 = v) (hroom : S.length < 1024)
     (k : SFunc.RunExact fs sevm (St b (v :: S) M G) f o) :
     SFunc.RunExact fs sevm (St b (x :: S) M (G + 3)) (.next (.reg .iszero) f) o :=

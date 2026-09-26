@@ -1,4 +1,5 @@
 import Blanc.Lift.BeaconDeposit.BodySpec
+import Jaune.MulDiv
 
 /-!
 # Body segment 1: the six guards and the two `to_little_endian_64` calls
@@ -43,6 +44,123 @@ theorem body_guards {sevm : Sevm} {b : Devm} {sel rt sP wP pP : B256} {G : Nat}
         SFunc.RunExact prog sevm
           (St b [rt, 96, sP, 32, wP, 48, pP, 0x01b8, sel] mem0
             (G + (1882 + sloadCost sevm b solCountSlot))) t_0304_c7 o := by
+  -- value-guard facts, bridging `.toNat` hypotheses to the `B256` operations the code runs
+  have hyne : (1000000000 : B256) ≠ 0 := by decide
+  have h1e9 : (1000000000 : B256).toNat = 10 ^ 9 := by decide
+  have h1ether : (0x0de0b6b3a7640000 : B256).toNat = 10 ^ 18 := by decide
+  have hmaskNat : (0xffffffffffffffff : B256).toNat = 2 ^ 64 - 1 := by decide
+  have hnotlt1 : ¬ sevm.value < (0x0de0b6b3a7640000 : B256) := by
+    rw [B256.lt_iff_toNat_lt_toNat, h1ether]; omega
+  have hltz : B256.ltCheck sevm.value (0x0de0b6b3a7640000 : B256) = 0 := by
+    rw [B256.ltCheck, if_neg hnotlt1]
+  have hmodv : sevm.value % (1000000000 : B256) = 0 := by
+    apply B256.toNat_inj
+    rw [B256.toNat_mod hyne, h1e9, hv2]
+    rfl
+  have hgweiNat : (gweiAmount sevm).toNat = sevm.value.toNat / 10 ^ 9 := by
+    rw [gweiAmount, B256.toNat_div hyne, h1e9]
+  have hle64 : gweiAmount sevm ≤ (0xffffffffffffffff : B256) := by
+    rw [B256.le_iff_toNat_le_toNat, hgweiNat, hmaskNat]; omega
+  have hgtz : B256.gtCheck (gweiAmount sevm) (0xffffffffffffffff : B256) = 0 := by
+    rw [B256.gtCheck, if_neg (B256.not_lt.mpr hle64)]
+  set cnt := b.getStorVal sevm.currentTarget solCountSlot with hcntdef
+  set b'' := afterSload sevm b solCountSlot with hb''def
+  -- the first `to_little_endian_64` call, over `mem0`, encoding the gwei amount
+  obtain ⟨M1, hwf1, hr1, hs1, hcall1⟩ := to_little_endian_64_run (sevm := sevm) (b := b)
+      (G := G + (874 + sloadCost sevm b solCountSlot)) (v := gweiAmount sevm)
+      (ret := (1344 : B256))
+      (rest := [96, gweiAmount sevm, rt, 96, sP, 32, wP, 48, pP, 440, sel])
+      (by simp) wf_mem0 reads_mem0 (by rw [mem0_size]) (by rw [mem0_size])
+      img0_fp (by rw [p80]) (by rw [p80]; omega) (by rw [p80]; decide) hcd
+  have himg1 : Mem.Reads M1 (img1 (gweiAmount sevm)) := hr1
+  have hs1' : M1.size = 192 := by rw [hs1, mem0_size, p80]; decide
+  have hfp2 : Bytes.toB256 ((img1 (gweiAmount sevm)).sliceD 64 32 0) = (192 : B256) := by
+    rw [img1_fp, B256.toB256_toBytes]; decide
+  -- the second `to_little_endian_64` call, over the first call's image, encoding the count
+  obtain ⟨M', hwf', hr', hs', hcall2⟩ := to_little_endian_64_run (sevm := sevm) (b := b'')
+      (G := G) (v := cnt) (ret := (1397 : B256))
+      (rest := [96, sP, (128 : B256), 32, wP, 48, pP, BeaconDeposit.depositEventTopic,
+        (128 : B256), gweiAmount sevm, rt, 96, sP, 32, wP, 48, pP, 440, sel])
+      (by simp) hwf1 himg1 (by rw [hs1']) (by rw [hs1']; decide) hfp2
+      (by decide) (by decide) (by decide) hcd
+  set img2 := leImg (img1 (gweiAmount sevm)) (192 : B256) cnt with himg2def
+  have himg2_eq : img2 = Bytes.writeAt
+      (Bytes.writeAt (Bytes.writeAt (img1 (gweiAmount sevm)) 192 (8 : B256).toBytes) 64
+        (256 : B256).toBytes)
+      224 (BeaconDeposit.le64 cnt.toNat) := by
+    rw [himg2def, leImg, show (192 : B256).toNat = 192 from by decide,
+      show (192 : B256) + 64 = (256 : B256) from by decide]
+  have hs'' : M'.size = 256 := by
+    rw [hs', hs1', show (192 : B256).toNat = 192 from by decide]; decide
+  have himg2_fp : img2.sliceD 64 32 0 = (256 : B256).toBytes := by
+    rw [himg2_eq, Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide)]
+    have := Bytes.sliceD_writeAt
+      (Bytes.writeAt (img1 (gweiAmount sevm)) 192 (8 : B256).toBytes) (256 : B256).toBytes 64
+    rwa [B256.length_toBytes] at this
+  have himg1_160 : (img1 (gweiAmount sevm)).sliceD 160 8 0 =
+      BeaconDeposit.le64 (gweiAmount sevm).toNat := by
+    rw [img1, leImg, p80, show (128 + 32 : Nat) = 160 by rfl]
+    have h8 : (BeaconDeposit.le64 (gweiAmount sevm).toNat).length = 8 := rfl
+    have := Bytes.sliceD_writeAt
+      (Bytes.writeAt (Bytes.writeAt img0 128 (8 : B256).toBytes) 64
+        (Bytes.toB256 [0x80] + 64).toBytes)
+      (BeaconDeposit.le64 (gweiAmount sevm).toNat) 160
+    rwa [h8] at this
+  have himg2_128 : img2.sliceD 128 32 0 = (8 : B256).toBytes := by
+    rw [himg2_eq, Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide),
+      Bytes.sliceD_writeAt_after _ _ _ _ _ (by decide),
+      Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide)]
+    exact img1_len (gweiAmount sevm)
+  have himg2_160 : img2.sliceD 160 8 0 = BeaconDeposit.le64 (gweiAmount sevm).toNat := by
+    rw [himg2_eq, Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide),
+      Bytes.sliceD_writeAt_after _ _ _ _ _ (by decide),
+      Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide)]
+    exact himg1_160
+  have himg2_192 : img2.sliceD 192 32 0 = (8 : B256).toBytes := by
+    rw [himg2_eq, Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide),
+      Bytes.sliceD_writeAt_after _ _ _ _ _ (by decide)]
+    exact Bytes.sliceD_writeAt _ _ _
+  have himg2_224 : img2.sliceD 224 8 0 = BeaconDeposit.le64 cnt.toNat := by
+    rw [himg2_eq]
+    have h8 : (BeaconDeposit.le64 cnt.toNat).length = 8 := rfl
+    have := Bytes.sliceD_writeAt
+      (Bytes.writeAt (Bytes.writeAt (img1 (gweiAmount sevm)) 192 (8 : B256).toBytes) 64
+        (256 : B256).toBytes)
+      (BeaconDeposit.le64 cnt.toNat) 224
+    rwa [h8] at this
+  have hBodyMem : BodyMem M' 256 256
+      [(128, (8 : B256).toBytes), (160, BeaconDeposit.le64 (gweiAmount sevm).toNat),
+        (192, (8 : B256).toBytes), (224, BeaconDeposit.le64 cnt.toNat)] := by
+    refine ⟨hwf', hs'', img2, hr', himg2_fp, ?_⟩
+    intro p hp
+    simp only [List.mem_cons, List.mem_nil_iff, or_false] at hp
+    rcases hp with rfl | rfl | rfl | rfl
+    · exact himg2_128
+    · exact himg2_160
+    · exact himg2_192
+    · exact himg2_224
+  refine ⟨b'', M', Keep.refl b'', hBodyMem, fun o k => ?_⟩
+  unfold t_0304_c7
+  refine rx_dest ?_
+  refine rx_push rfl (by simp) ?_
+  refine rx_dup (n := 6) rfl (by simp) ?_
+  refine rx_eq (v := 1) (by decide) (by simp) ?_
+  refine rx_push rfl (by simp) ?_
+  refine rx_branch_succ (by decide) ?_
+  unfold t_035d_c7
+  refine rx_dest ?_
+  refine rx_push rfl (by simp) ?_
+  refine rx_dup (n := 4) rfl (by simp) ?_
+  refine rx_eq (v := 1) (by decide) (by simp) ?_
+  refine rx_push rfl (by simp) ?_
+  refine rx_branch_succ (by decide) ?_
+  unfold t_03b6_c7
+  refine rx_dest ?_
+  refine rx_push rfl (by simp) ?_
+  refine rx_dup (n := 2) rfl (by simp) ?_
+  refine rx_eq (v := 1) (by decide) (by simp) ?_
+  refine rx_push rfl (by simp) ?_
+  refine rx_branch_succ (by decide) ?_
   sorry
 
 end Blanc.Lift.BeaconDeposit
