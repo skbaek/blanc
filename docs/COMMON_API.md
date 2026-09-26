@@ -2655,7 +2655,10 @@ contract-neutral.
   [`Blanc/Lift/ExactWalkCut.lean`](../Blanc/Lift/ExactWalkCut.lean) and
   [`Blanc/Lift/ExactWalkCutOps.lean`](../Blanc/Lift/ExactWalkCutOps.lean), which
   also holds the pointer arithmetic the steps take as premises
-  (`toB256_add_toB256`, `toB256_sub_toB256`, `toB256_div_two`, `one_add_toB256`).
+  (`toB256_add_toB256`, `toB256_sub_toB256`, `toB256_div_two`, `one_add_toB256`), the
+  SHA-256 precompile step's premises and world facts (`ShaReady`, `ShaCallPost`,
+  `staticcall_sha_step`), and `BaseRel`, the world a step that writes no storage and emits
+  no log keeps.
 - Successful lifted run to facts (safety, the inversion walk): per-node `ric_*`
   (control, over `SFunc.RunCut`; `SFunc.Run.cut`/`SFunc.RunCut.uncut` for uncut
   runs) and per-instruction `ri_*` (successor as an `St`; numeral-offset forms

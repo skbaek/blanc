@@ -87,7 +87,7 @@ theorem safe_insert_loop {sevm : Sevm} {b₀ : Devm} {x : Nat} {node0 : B256}
       t_0f6e_c23 o) :
     ∃ h bf Mf Gf, o = .returned (St bf rest Mf Gf) ∧ h < 32 ∧ (∀ j < h, (x / 2 ^ j) % 2 = 0) ∧
       (x / 2 ^ h) % 2 = 1 ∧
-      WorldEq (afterSstore sevm b₀ (solBranchSlot h) (insertNode Bytes.sha256 br h node0)) bf := by
+      BaseRel (afterSstore sevm b₀ (solBranchSlot h) (insertNode Bytes.sha256 br h node0)) bf := by
   let T : List B256 := [x₁, x₂, x₃, x₄, y₁, y₂, y₃, y₄, y₅, y₆, y₇, d] ++ rest
   let I : Devm → Prop := fun devm => ∃ h bh Mh Gh,
     devm = St bh (Nat.toB256 h :: Nat.toB256 (x / 2 ^ h) :: insertNode Bytes.sha256 br h node0 :: T)
@@ -96,7 +96,7 @@ theorem safe_insert_loop {sevm : Sevm} {b₀ : Devm} {x : Nat} {node0 : B256}
       BodyMem Mh (1024 + 96 * h) (Nat.toB256 (928 + 96 * h)) []
   let Q : Outcome → Prop := fun o => ∃ h bf Mf Gf, o = .returned (St bf rest Mf Gf) ∧ h < 32 ∧
     (∀ j < h, (x / 2 ^ j) % 2 = 0) ∧ (x / 2 ^ h) % 2 = 1 ∧
-    WorldEq (afterSstore sevm b₀ (solBranchSlot h) (insertNode Bytes.sha256 br h node0)) bf
+    BaseRel (afterSstore sevm b₀ (solBranchSlot h) (insertNode Bytes.sha256 br h node0)) bf
   have hL0 : LoopBase sevm.currentTarget b₀ b₀ 0 :=
     ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl, fun _ =>
       ⟨.inl, fun h => h.elim id (fun ⟨_, hj, _⟩ => absurd hj (Nat.not_lt_zero _))⟩⟩

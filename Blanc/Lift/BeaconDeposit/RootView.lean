@@ -70,7 +70,7 @@ theorem root_exit {b : Devm} {M : Mem} {img : Bytes} {node rv ret : B256} {count
     {R0 : List B256}
     (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hs : M.size = 3296)
     (hfp : img.sliceD 64 32 0 = (Nat.toB256 3200).toBytes) (hR : R0.length < 800)
-    (hok : ShaOk sevm b) (hG : G + 5000 < 2 ^ 256) (hcd : sevm.data.length < 2 ^ 256)
+    (hok : ShaReady sevm b) (hG : G + 5000 < 2 ^ 256) (hcd : sevm.data.length < 2 ^ 256)
     (hcount : b.getStorVal sevm.currentTarget solCountSlot = Nat.toB256 count)
     (hc32 : count < 2 ^ 32)
     (hwarm : (⟨sevm.currentTarget, solCountSlot⟩ : Adr × B256) ∈ b.accessedStorageKeys) :
@@ -387,7 +387,7 @@ theorem root_fn {sevm : Sevm} {base : Devm} {stor : Stor} {count : Nat} {ret : B
     {R0 : List B256} {G : Nat}
     (hstor : Devm.getStor base sevm.currentTarget = stor)
     (hcountValue : stor.get solCountSlot = Nat.toB256 count) (hc32 : count < 2 ^ 32)
-    (hzero : SolZeroHashesCorrect stor) (hok : ShaOk sevm base) (hR : R0.length < 700)
+    (hzero : SolZeroHashesCorrect stor) (hok : ShaReady sevm base) (hR : R0.length < 700)
     (hcd : sevm.data.length < 2 ^ 256) (hG : G + rootFnGas sevm base count + 5000 < 2 ^ 256) :
     ∃ bF MF, BaseRel base bF ∧
       bF.accessedStorageKeys = rootKeys sevm.currentTarget 32 0 count
@@ -478,7 +478,7 @@ theorem root_wrapper {sevm : Sevm} {base : Devm} {stor : Stor} {count : Nat} {se
     (hval : sevm.value = 0)
     (hstor : Devm.getStor base sevm.currentTarget = stor)
     (hcountValue : stor.get solCountSlot = Nat.toB256 count) (hc32 : count < 2 ^ 32)
-    (hzero : SolZeroHashesCorrect stor) (hok : ShaOk sevm base)
+    (hzero : SolZeroHashesCorrect stor) (hok : ShaReady sevm base)
     (hcd : sevm.data.length < 2 ^ 256) (hG : G + rootFnGas sevm base count + 6000 < 2 ^ 256) :
     ∃ bF MF, BaseRel base bF ∧
       bF.accessedStorageKeys = rootKeys sevm.currentTarget 32 0 count

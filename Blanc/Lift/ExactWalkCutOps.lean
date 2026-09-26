@@ -76,6 +76,51 @@ theorem ShaCallPost.getStorVal {b b' : Devm} {rd : Bytes} (h : ShaCallPost b b' 
   show (Devm.getStor b' a).get k = (Devm.getStor b a).get k
   rw [h.stor]
 
+/-- The SHA-256 precompile premises (`Ninst.runCompiled_staticcall_sha256_64_warm`): address 2
+undelegated and warm, a precompile of the fork, a covered fork, nonzero depth. -/
+structure ShaReady (sevm : Sevm) (b : Devm) : Prop where
+  nodeleg : getDelegatedCodeAddress (b.getCode 2) = none
+  warm : (2 : Adr) ∈ b.accessedAddresses
+  pre : decide (sevm.benvStat.rules.isPrecomp 2) = true
+  fork : CoveredFork sevm.benvStat.fork
+  depth : sevm.depth ≠ 0
+
+theorem ShaReady.of_eq {sevm : Sevm} {b b' : Devm} (h : ShaReady sevm b)
+    (hc : ∀ a, b'.getCode a = b.getCode a) (ha : b'.accessedAddresses = b.accessedAddresses) :
+    ShaReady sevm b' :=
+  ⟨by rw [hc]; exact h.nodeleg, by rw [ha]; exact h.warm, h.pre, h.fork, h.depth⟩
+
+/-- What a step that writes no storage and emits no log leaves of the world: storage, code, the
+warm accounts, logs, output and error unchanged (`ShaCallPost` without the return data and the
+key set). -/
+structure BaseRel (b b' : Devm) : Prop where
+  stor : ∀ a, Devm.getStor b' a = Devm.getStor b a
+  code : ∀ a, b'.getCode a = b.getCode a
+  addrs : b'.accessedAddresses = b.accessedAddresses
+  logs : b'.logs = b.logs
+  output : b'.output = b.output
+  error : b'.error = b.error
+
+theorem BaseRel.refl (b : Devm) : BaseRel b b := ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl⟩
+
+theorem BaseRel.trans {b b' b'' : Devm} (h1 : BaseRel b b') (h2 : BaseRel b' b'') :
+    BaseRel b b'' :=
+  ⟨fun a => (h2.stor a).trans (h1.stor a), fun a => (h2.code a).trans (h1.code a),
+    h2.addrs.trans h1.addrs, h2.logs.trans h1.logs, h2.output.trans h1.output,
+    h2.error.trans h1.error⟩
+
+theorem BaseRel.getStorVal {b b' : Devm} (h : BaseRel b b') (a : Adr) (k : B256) :
+    b'.getStorVal a k = b.getStorVal a k := by
+  show (Devm.getStor b' a).get k = (Devm.getStor b a).get k
+  rw [h.stor]
+
+theorem baseRel_sha {b b' : Devm} {rd : Bytes} (h : ShaCallPost b b' rd) : BaseRel b b' :=
+  ⟨h.stor, h.code, h.addrs, h.logs, h.output, h.error⟩
+
+theorem ShaReady.of_rel {sevm : Sevm} {b b' : Devm} (h : ShaReady sevm b) (hr : BaseRel b b') :
+    ShaReady sevm b' :=
+  h.of_eq hr.code hr.addrs
+
 /-- The successor of `Ninst.runCompiled_staticcall_sha256_64_warm` from `St b …`, as an `St`
 over a base that satisfies `ShaCallPost`. -/
 theorem staticcall_sha_step {sevm : Sevm} {b : Devm} {iiw oiw : B256} {S : List B256}

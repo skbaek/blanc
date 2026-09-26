@@ -118,11 +118,6 @@ structure LoopBase (tgt : Adr) (b₀ b : Devm) (h : Nat) : Prop where
   keys : ∀ y, y ∈ b.accessedStorageKeys ↔
     y ∈ b₀.accessedStorageKeys ∨ ∃ j < h, y = (tgt, solBranchSlot j)
 
-theorem ShaReady.of_eq {sevm : Sevm} {b b' : Devm} (h : ShaReady sevm b)
-    (hc : ∀ a, b'.getCode a = b.getCode a) (ha : b'.accessedAddresses = b.accessedAddresses) :
-    ShaReady sevm b' :=
-  ⟨by rw [hc]; exact h.nodeleg, by rw [ha]; exact h.warm, h.pre, h.fork, h.depth⟩
-
 theorem LoopBase.step {sevm : Sevm} {b₀ b b' : Devm} {h : Nat}
     (hL : LoopBase sevm.currentTarget b₀ b h)
     (hK : Keep (afterSload sevm b (solBranchSlot h)) b') :
@@ -145,15 +140,6 @@ theorem LoopBase.step {sevm : Sevm} {b₀ b b' : Devm} {h : Nat}
       · rcases Nat.lt_succ_iff_lt_or_eq.mp hj with hj | rfl
         · exact .inl (.inr ⟨j, hj, rfl⟩)
         · exact .inr rfl
-
-/-- `Keep` without the key set. -/
-structure WorldEq (b b' : Devm) : Prop where
-  stor : ∀ a, Devm.getStor b' a = Devm.getStor b a
-  code : ∀ a, b'.getCode a = b.getCode a
-  addrs : b'.accessedAddresses = b.accessedAddresses
-  logs : b'.logs = b.logs
-  output : b'.output = b.output
-  error : b'.error = b.error
 
 theorem getStor_afterSstore (sevm : Sevm) (b : Devm) (k v : B256) (a : Adr) :
     Devm.getStor (afterSstore sevm b k v) a =
@@ -195,7 +181,7 @@ theorem insert_loop {sevm : Sevm} {b₀ : Devm} {G : Nat} {x n : Nat} {node0 : B
       BodyMem M (1024 + 96 * h) (Nat.toB256 (928 + 96 * h)) [] →
       G + (deadRun sevm.currentTarget keys0 h m +
         (143 + liveStoreCost sevm keys0 stor1 n (insertNode Bytes.sha256 br n node0))) < 2 ^ 256 →
-      ∃ bf Mf, WorldEq
+      ∃ bf Mf, BaseRel
           (afterSstore sevm b₀ (solBranchSlot n) (insertNode Bytes.sha256 br n node0)) bf ∧
         SFunc.RunExact prog sevm
           (St b (Nat.toB256 h :: Nat.toB256 (x / 2 ^ h) :: insertNode Bytes.sha256 br h node0 ::
