@@ -92,7 +92,7 @@ theorem Resume.call_ok_meta {parent child sf : Devm} {oi os : Nat}
 
 /-- **`STATICCALL` of the SHA-256 precompile, inverted.**  Over a 64-byte input window at
 `ii` and a 32-byte output window at `oi`, with address 2 warm, undelegated and a precompile of
-a covered fork at nonzero depth: a successful step either pushed the failure flag `0`, or
+a covered fork: a successful step either pushed the failure flag `0`, or
 pushed `1` over a base `b'` that `ShaCallPost`-extends `b` with the digest as return data,
 with the digest written over the (extended) output window. -/
 theorem ri_staticcall_sha {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
@@ -100,7 +100,7 @@ theorem ri_staticcall_sha {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G 
     (hnodeleg : getDelegatedCodeAddress (b.getCode 2) = none)
     (hwarm : (2 : Adr) ∈ b.accessedAddresses)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h : Ninst.Run sevm (St b (g :: 2 :: ii :: 64 :: oi :: 32 :: S) M G) (.exec .staticcall) d) :
     d.stack = 0 :: S ∨
       ∃ b' G', ShaCallPost b b' (Bytes.sha256 (M.read ii.toNat 64).1).toBytes ∧
@@ -139,6 +139,22 @@ theorem ri_staticcall_sha {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G 
   split at h_run
   · cases XStep.run_ofExcept_error h_run
   rename_i v hcharge
+  by_cases hdepth : sevm.depth = 0
+  · left
+    simp only [pure, Except.pure, XStep.ofExcept, genericCall.step, hdepth, ite_true] at h_run
+    obtain ⟨Gv, rfl⟩ : ∃ Gv, v = St b S M Gv :=
+      ⟨_, Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas hcharge)⟩
+    simp only [bind, Except.bind] at h_run
+    split at h_run
+    · simp [XStep.Run] at h_run
+    · rename_i d' hp
+      split at hp
+      · cases hp
+      · rename_i d'' hpush
+        cases hp
+        simp only [XStep.Run, Except.ok.injEq] at h_run
+        rw [h_run.2, Devm.eq_of_push_ok hpush]
+        rfl
   simp only [pure, Except.pure, XStep.ofExcept, genericCall.step, hdepth, ite_false] at h_run
   simp only [XStep.Run] at h_run
   rcases h_run with ⟨ex', run_pm₀, h_split⟩
@@ -305,7 +321,7 @@ theorem ric_shaCall {img : Bytes} {n d : Nat} {x1 x3 x4 : B256} {c0 c1 v0 v1 : U
     (hnodeleg : getDelegatedCodeAddress (b.getCode 2) = none)
     (hwarm : (2 : Adr) ∈ b.accessedAddresses)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (run : SFunc.RunCut fs sevm C
       (St b (Bytes.toB256 [0x20] :: Nat.toB256 64 :: x1 :: Nat.toB256 d :: x3 :: x4 :: 2 :: R)
         M G) (shaCallTree c0 c1 v0 v1 fail1 fail2 T) r) :
@@ -345,7 +361,7 @@ theorem ric_shaCall {img : Bytes} {n d : Nat} {x1 x3 x4 : B256} {c0 c1 v0 v1 : U
   clear s1
   have hcov : M.extends [⟨d, 64⟩, ⟨d, 32⟩] = M :=
     Mem.extends_covered (by rw [hs]; exact memExtsSize_two_covered hn (by omega) (by omega))
-  rcases ri_staticcall_sha hnodeleg hwarm hpre hfork hdepth s1' with hfail | ⟨b', G19, hpost, rfl⟩
+  rcases ri_staticcall_sha hnodeleg hwarm hpre hfork s1' with hfail | ⟨b', G19, hpost, rfl⟩
   · -- the failure flag: the first check's arm
     rw [St.self hfail rfl] at run
     obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_iszero s2
@@ -411,7 +427,7 @@ theorem ric_copy_sha {img : Bytes} {n s d : Nat} {w1 w2 x1 x3 x4 : B256}
     (hnodeleg : getDelegatedCodeAddress (b.getCode 2) = none)
     (hwarm : (2 : Adr) ∈ b.accessedAddresses)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (run : SFunc.RunCut fs sevm C
       (St b (Nat.toB256 s :: Nat.toB256 d :: Nat.toB256 64 :: Nat.toB256 64 :: x1 ::
         Nat.toB256 d :: x3 :: x4 :: 2 :: R) M G) (mcpyTree e0 e1 r0 r1 k X) r) :
@@ -463,7 +479,7 @@ theorem ric_copy_sha {img : Bytes} {n s d : Nat} {w1 w2 x1 x3 x4 : B256}
     (by omega) (by omega) run
   -- the call
   obtain ⟨b', G5, hpost, run⟩ := ric_shaCall (img := copyImg2 img d w1 w2) (n := n3) hf1 hwf7
-    hr7 hs7 (by omega) (by omega) (by omega) hd32 (by omega) hw7 hnodeleg hwarm hpre hfork hdepth
+    hr7 hs7 (by omega) (by omega) (by omega) hd32 (by omega) hw7 hnodeleg hwarm hpre hfork
     run
   rw [hin] at hpost run
   exact ⟨b', _, G5, hpost, hwf7.write _ _, hr7.write hwf7 d _,
@@ -493,7 +509,7 @@ theorem ric_pack_sha {img : Bytes} {n f : Nat} {a bw : B256}
     (hnodeleg : getDelegatedCodeAddress (b.getCode 2) = none)
     (hwarm : (2 : Adr) ∈ b.accessedAddresses)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (run : SFunc.RunCut fs sevm C (St b (bw :: a :: 2 :: R) M G)
       (pack2Tree (mcpyTree e0 e1 r0 r1 k X)) r) :
     ∃ b' M' G', ShaCallPost b b' (Bytes.sha256 (a.toBytes ++ bw.toBytes)).toBytes ∧
@@ -597,7 +613,7 @@ theorem ric_pack_sha {img : Bytes} {n f : Nat} {a bw : B256}
     (n := f + 96) hk hkC hf1 hwf4 hr4 hs4 (by omega) (by omega) (by omega) (by omega) (by omega)
     (by omega) (packImg_word64 hf96) (packImg_a hf96)
     (by rw [show f + 32 + 32 = f + 64 by omega]; exact packImg_b hf96)
-    hnodeleg hwarm hpre hfork hdepth run
+    hnodeleg hwarm hpre hfork run
   exact ⟨b', M', G', hpost, hwf', hr', by rw [hs']; omega, run⟩
 
 end Pack

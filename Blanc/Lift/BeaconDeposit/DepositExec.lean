@@ -32,7 +32,7 @@ theorem deposit_runExact (sevm : Sevm) (base : Devm) (G : Nat)
     (hOk : BeaconDeposit.deposit Bytes.sha256 (solAcc (Devm.getStor base sevm.currentTarget))
       (argBytes sevm 0) (argBytes sevm 1) (argBytes sevm 2) (argRoot sevm) sevm.value.toNat =
         .ok (s', ev))
-    (hsha : ShaReady sevm base) (hstatic : sevm.isStatic = false)
+    (hsha : ShaReady sevm base) (hdepth : sevm.depth ≠ 0) (hstatic : sevm.isStatic = false)
     (hsentryLive : gCallStipend < G + 52 + bodyLiveCost sevm base)
     (hsentryCount : gCallStipend < G + 4 + bodyInsertGas sevm base +
       countStoreCost sevm (bodyCount sevm base))
@@ -44,7 +44,7 @@ theorem deposit_runExact (sevm : Sevm) (base : Devm) (G : Nat)
       (∀ a, a ≠ sevm.currentTarget → Devm.getStor b' a = Devm.getStor base a) ∧
       b'.logs = base.logs ++ [BeaconDeposit.depositEventLog sevm.currentTarget ev] := by
   obtain ⟨b', M', hbody, hst, hacc, hother, hlogs, -⟩ := deposit_body_runExact sevm base
-    (Sevm.selector sevm) G s' ev hdec hcd hOk hsha hstatic hsentryLive hsentryCount hbound
+    (Sevm.selector sevm) G s' ev hdec hcd hOk hsha hdepth hstatic hsentryLive hsentryCount hbound
   obtain ⟨post, hw, rfl⟩ := deposit_wrapper (g' := G) hdec hcd hbody
   have hsel' : Sevm.selector sevm = 0x22895118 :=
     hsel.trans Blanc.BeaconDeposit.depositSelector_eq
@@ -67,7 +67,7 @@ theorem deposit_exec_solInv (sevm : Sevm) (base : Devm) (G : Nat) (history : Lis
     (hOk : BeaconDeposit.deposit Bytes.sha256 (solAcc (Devm.getStor base sevm.currentTarget))
       (argBytes sevm 0) (argBytes sevm 1) (argBytes sevm 2) (argRoot sevm) sevm.value.toNat =
         .ok (s', ev))
-    (hsha : ShaReady sevm base) (hstatic : sevm.isStatic = false)
+    (hsha : ShaReady sevm base) (hdepth : sevm.depth ≠ 0) (hstatic : sevm.isStatic = false)
     (hsentryLive : gCallStipend < G + 52 + bodyLiveCost sevm base)
     (hsentryCount : gCallStipend < G + 4 + bodyInsertGas sevm base +
       countStoreCost sevm (bodyCount sevm base))
@@ -82,7 +82,7 @@ theorem deposit_exec_solInv (sevm : Sevm) (base : Devm) (G : Nat) (history : Lis
       (∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor base a) ∧
       post.logs = base.logs ++ [BeaconDeposit.depositEventLog sevm.currentTarget ev] := by
   obtain ⟨b', M', hrun, hst, hacc, hother, hlogs⟩ := deposit_runExact sevm base G s' ev
-    hdataLength hcd hsel hdec hOk hsha hstatic hsentryLive hsentryCount hbound
+    hdataLength hcd hsel hdec hOk hsha hdepth hstatic hsentryLive hsentryCount hbound
   refine ⟨St b' [Sevm.selector sevm] M' G, exec_of_runExact hcode hsha.fork hrun, rfl, hacc,
     ⟨fun h' hh' => ?_, ?_⟩, hother, hlogs⟩
   · -- the zero-hash table: the body writes only the count slot and one branch slot below 32

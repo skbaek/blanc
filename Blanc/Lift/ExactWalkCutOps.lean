@@ -76,19 +76,19 @@ theorem ShaCallPost.getStorVal {b b' : Devm} {rd : Bytes} (h : ShaCallPost b b' 
   show (Devm.getStor b' a).get k = (Devm.getStor b a).get k
   rw [h.stor]
 
-/-- The SHA-256 precompile premises (`Ninst.runCompiled_staticcall_sha256_64_warm`): address 2
-undelegated and warm, a precompile of the fork, a covered fork, nonzero depth. -/
+/-- The SHA-256 precompile premises (`Ninst.runCompiled_staticcall_sha256_64_warm`) a frame's
+world carries: address 2 undelegated and warm, a precompile of the fork, a covered fork.  The
+frame's nonzero depth is a separate premise of the liveness steps. -/
 structure ShaReady (sevm : Sevm) (b : Devm) : Prop where
   nodeleg : getDelegatedCodeAddress (b.getCode 2) = none
   warm : (2 : Adr) ∈ b.accessedAddresses
   pre : decide (sevm.benvStat.rules.isPrecomp 2) = true
   fork : CoveredFork sevm.benvStat.fork
-  depth : sevm.depth ≠ 0
 
 theorem ShaReady.of_eq {sevm : Sevm} {b b' : Devm} (h : ShaReady sevm b)
     (hc : ∀ a, b'.getCode a = b.getCode a) (ha : b'.accessedAddresses = b.accessedAddresses) :
     ShaReady sevm b' :=
-  ⟨by rw [hc]; exact h.nodeleg, by rw [ha]; exact h.warm, h.pre, h.fork, h.depth⟩
+  ⟨by rw [hc]; exact h.nodeleg, by rw [ha]; exact h.warm, h.pre, h.fork⟩
 
 /-- What a step that writes no storage and emits no log leaves of the world: storage, code, the
 warm accounts, logs, output and error unchanged (`ShaCallPost` without the return data and the

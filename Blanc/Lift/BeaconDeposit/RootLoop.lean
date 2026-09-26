@@ -142,7 +142,7 @@ theorem root_iter_live {b : Devm} {h size : Nat} {node : B256} {img : Bytes}
     (hh : h < 32) (hsize : size < 2 ^ 32) (hodd : size % 2 = 1)
     (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hs : M.size = rootMemSize h)
     (hfp : img.sliceD 64 32 0 = (Nat.toB256 (rootFp h)).toBytes) (hR : R.length < 800)
-    (hok : ShaReady sevm b) (hG : G + 2000 < 2 ^ 256) :
+    (hok : ShaReady sevm b) (hdepth : sevm.depth ≠ 0) (hG : G + 2000 < 2 ^ 256) :
     ∃ b' M', IterPost sevm b b' (rootKey size h) h M' ∧
       SFunc.RunExactCut prog sevm [24]
         (St b (Nat.toB256 h :: Nat.toB256 size :: node :: R) M
@@ -163,7 +163,7 @@ theorem root_iter_live {b : Devm} {h size : Nat} {node : B256} {img : Bytes}
       (T := t_11dd_c24) (img := img) (n := rootMemSize h) (f := rootFp h) (a := br) (bw := node)
       prog_27 (by simp) hwf hr hs (rootMemSize_mod h) (rootMemSize_ge h) (rootMemSize_le h)
       (by unfold rootFp; omega) (by unfold rootFp; omega) (by unfold rootFp; omega) hfp
-      (by simp; omega) hok1.nodeleg hok1.warm hok1.pre hok1.fork hok1.depth (by omega)
+      (by simp; omega) hok1.nodeleg hok1.warm hok1.pre hok1.fork hdepth (by omega)
   refine ⟨b', M', ⟨hrel1.trans (baseRel_sha hpost), ?_, hwf', ?_, img', hr', ?_⟩, ?_⟩
   · rw [hpost.keys, hb1, afterSload_accessedStorageKeys, hkey]
   · rw [hs', rootMemSize_succ]
@@ -235,7 +235,7 @@ theorem root_iter_dead {b : Devm} {h size : Nat} {node : B256} {img : Bytes}
     (hh : h < 32) (hsize : size < 2 ^ 32) (heven : size % 2 = 0)
     (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hs : M.size = rootMemSize h)
     (hfp : img.sliceD 64 32 0 = (Nat.toB256 (rootFp h)).toBytes) (hR : R.length < 800)
-    (hok : ShaReady sevm b) (hG : G + 2000 < 2 ^ 256) :
+    (hok : ShaReady sevm b) (hdepth : sevm.depth ≠ 0) (hG : G + 2000 < 2 ^ 256) :
     ∃ b' M', IterPost sevm b b' (rootKey size h) h M' ∧
       SFunc.RunExactCut prog sevm [24]
         (St b (Nat.toB256 h :: Nat.toB256 size :: node :: R) M
@@ -256,7 +256,7 @@ theorem root_iter_dead {b : Devm} {h size : Nat} {node : B256} {img : Bytes}
       (T := t_12dd_c24) (img := img) (n := rootMemSize h) (f := rootFp h) (a := node) (bw := zh)
       prog_28 (by simp) hwf hr hs (rootMemSize_mod h) (rootMemSize_ge h) (rootMemSize_le h)
       (by unfold rootFp; omega) (by unfold rootFp; omega) (by unfold rootFp; omega) hfp
-      (by simp; omega) hok1.nodeleg hok1.warm hok1.pre hok1.fork hok1.depth (by omega)
+      (by simp; omega) hok1.nodeleg hok1.warm hok1.pre hok1.fork hdepth (by omega)
   refine ⟨b', M', ⟨hrel1.trans (baseRel_sha hpost), ?_, hwf', ?_, img', hr', ?_⟩, ?_⟩
   · rw [hpost.keys, hb1, afterSload_accessedStorageKeys, hkey]
   · rw [hs', rootMemSize_succ]
@@ -327,7 +327,7 @@ theorem root_iter {b : Devm} {h size : Nat} {node : B256} {img : Bytes}
     (hh : h < 32) (hsize : size < 2 ^ 32)
     (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hs : M.size = rootMemSize h)
     (hfp : img.sliceD 64 32 0 = (Nat.toB256 (rootFp h)).toBytes) (hR : R.length < 800)
-    (hok : ShaReady sevm b) (hG : G + 2000 < 2 ^ 256) :
+    (hok : ShaReady sevm b) (hdepth : sevm.depth ≠ 0) (hG : G + 2000 < 2 ^ 256) :
     ∃ b' M', IterPost sevm b b' (rootKey size h) h M' ∧
       SFunc.RunExactCut prog sevm [24]
         (St b (Nat.toB256 h :: Nat.toB256 size :: node :: R) M
@@ -336,8 +336,8 @@ theorem root_iter {b : Devm} {h size : Nat} {node : B256} {img : Bytes}
         (.at 24 (St b' (Nat.toB256 (h + 1) :: Nat.toB256 (size / 2) ::
           rootNode sevm b size h node :: R) M' G)) := by
   rcases Nat.mod_two_eq_zero_or_one size with he | ho
-  · exact root_iter_dead hh hsize he hwf hr hs hfp hR hok hG
-  · exact root_iter_live hh hsize ho hwf hr hs hfp hR hok hG
+  · exact root_iter_dead hh hsize he hwf hr hs hfp hR hok hdepth hG
+  · exact root_iter_live hh hsize ho hwf hr hs hfp hR hok hdepth hG
 
 end Iter
 
@@ -412,7 +412,8 @@ nothing else cut), then the exit tree from height 32, which may end any way `Q` 
 theorem root_loop {sevm : Sevm} {base : Devm} {stor : Stor} {count : Nat} {R : List B256}
     {Gx : Nat} {Q : Seg → Prop}
     (hstor : Devm.getStor base sevm.currentTarget = stor) (hzero : SolZeroHashesCorrect stor)
-    (hcount : count < 2 ^ 32) (hok : ShaReady sevm base) (hR : R.length < 800)
+    (hcount : count < 2 ^ 32) (hok : ShaReady sevm base)
+    (hdepth : sevm.depth ≠ 0) (hR : R.length < 800)
     (hG : Gx + rootGas sevm.currentTarget 32 0 count base.accessedStorageKeys + 2000 < 2 ^ 256)
     (hexit : ∀ devm, RootInv sevm base stor count base.accessedStorageKeys R Gx 32 devm →
       ∃ r, SFunc.RunExactCut prog sevm [24] devm t_10d1_c24 r ∧ (∀ d, r ≠ .at 24 d) ∧ Q r)
@@ -440,7 +441,7 @@ theorem root_loop {sevm : Sevm} {base : Devm} {stor : Stor} {count : Nat} {R : L
       (32 - (i + 1)) (i + 1) (count / 2 ^ (i + 1))
         (rootKeys sevm.currentTarget (i + 1) 0 count base.accessedStorageKeys))
       (node := climb Bytes.sha256 (solAcc stor).branch i 0 count 0)
-      hi hsz hwf hr hs hfp (by omega) (hok.of_rel hrel) (by omega)
+      hi hsz hwf hr hs hfp (by omega) (hok.of_rel hrel) hdepth (by omega)
   have hc := climb_succ Bytes.sha256 (solAcc stor).branch i 0 count 0
   rw [Nat.zero_add] at hc
   rw [div_pow_div_two, rootNode_eq hrel hstor hzero hi, ← hc] at hrun

@@ -21,7 +21,8 @@ def sig1Img (img : Bytes) (sevm : Sevm) (sP : Nat) : Bytes :=
 
 theorem sig_site1 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
     {a rt sP pkR : B256} {R : List B256}
-    (hsha : ShaReady sevm b) (hR : R.length ≤ 20) (hG : G + 256 < 2 ^ 256)
+    (hsha : ShaReady sevm b) (hdepth : sevm.depth ≠ 0)
+    (hR : R.length ≤ 20) (hG : G + 256 < 2 ^ 256)
     (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hs : M.size = 832)
     (hfp : img.sliceD 64 32 0 = (Nat.toB256 352).toBytes)
     (hpk : img.sliceD 352 32 0 = pkR.toBytes) :
@@ -75,7 +76,7 @@ theorem sig_site1 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
       (x1 := Nat.toB256 384) (x3 := Nat.toB256 448) (x4 := Nat.toB256 352)
       prog_14 (by simp) hwf3 hr3 hs3 (by decide) (by decide) (by decide) (by decide) (by decide)
       (by omega) hfp3 hw1 hw2 (by simp; omega) hsha.nodeleg hsha.warm hsha.pre hsha.fork
-      hsha.depth (by omega)
+      hdepth (by omega)
   rw [cdWord_pair] at hpost
   refine ⟨b', M', hpost, hwf', hr', by rw [hs']; rfl, fun r kont => ?_⟩
   have hc := hrun r kont
@@ -190,7 +191,8 @@ def sig2Img (img : Bytes) (sevm : Sevm) (p : Nat) : Bytes :=
 
 theorem sig_site2 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
     {a rt sP pkR h1 : B256} {R : List B256}
-    (hsha : ShaReady sevm b) (hR : R.length ≤ 20) (hG : G + 256 < 2 ^ 256)
+    (hsha : ShaReady sevm b) (hdepth : sevm.depth ≠ 0)
+    (hR : R.length ≤ 20) (hG : G + 256 < 2 ^ 256)
     (hsP : sP.toNat + 96 < 2 ^ 256)
     (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hs : M.size = 832)
     (hfp : img.sliceD 64 32 0 = (Nat.toB256 448).toBytes)
@@ -256,7 +258,7 @@ theorem sig_site2 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
       (x1 := Nat.toB256 480) (x3 := Nat.toB256 544) (x4 := Nat.toB256 448)
       prog_15 (by simp) hwf4 hr4 hs4 (by decide) (by decide) (by decide) (by decide) (by decide)
       (by omega) hfp4 hw1 hw2 (by simp; omega) hsha.nodeleg hsha.warm hsha.pre hsha.fork
-      hsha.depth (by omega)
+      hdepth (by omega)
   rw [cdWord_toBytes] at hpost
   refine ⟨b', M', hpost, hwf', hr', by rw [hs']; rfl, fun r kont => ?_⟩
   have hc := hrun r kont
@@ -364,7 +366,8 @@ def sig3Img (img : Bytes) (h1 h2 : B256) : Bytes :=
 
 theorem sig_site3 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
     {h1 h2 : B256} {R : List B256}
-    (hsha : ShaReady sevm b) (hR : R.length ≤ 40) (hG : G + 256 < 2 ^ 256)
+    (hsha : ShaReady sevm b) (hdepth : sevm.depth ≠ 0)
+    (hR : R.length ≤ 40) (hG : G + 256 < 2 ^ 256)
     (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hs : M.size = 832)
     (hfp : img.sliceD 64 32 0 = (Nat.toB256 544).toBytes)
     (hh2 : img.sliceD 544 32 0 = h2.toBytes) :
@@ -378,7 +381,7 @@ theorem sig_site3 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
     pair_mem_sha (fs := prog) (sevm := sevm) (C := []) (b := b) (M := M) (G := G) (R := R)
       (X := t_0ada_c15) (img := img) (n := 832) (f := 544) prog_16 (by simp) hwf hr hs (by decide)
       (by decide) (by decide) (by decide) (by decide) hfp hh2 (by omega) hsha.nodeleg hsha.warm
-      hsha.pre hsha.fork hsha.depth (by omega)
+      hsha.pre hsha.fork hdepth (by omega)
   refine ⟨b', M', hpost, hwf', hr', by rw [hs']; rfl, fun r kont => ?_⟩
   have hc := hrun r kont
   rw [show max 832 (544 + 192) = 832 from rfl, Nat.sub_self, Nat.add_zero] at hc
@@ -422,7 +425,8 @@ helper's two `callNext 13` runs are short straight-line walks (`rx_callRet (j :=
 (`List.sliceD_split`). -/
 theorem body_signatureRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR : B256} {G : Nat}
     {M : Mem}
-    (hsha : ShaReady sevm b) (hsP : sP.toNat + 96 < 2 ^ 256) (hG : G + 2526 < 2 ^ 256)
+    (hsha : ShaReady sevm b) (hdepth : sevm.depth ≠ 0)
+    (hsP : sP.toNat + 96 < 2 ^ 256) (hG : G + 2526 < 2 ^ 256)
     (hM : BodyMem M 832 0x160
       [(0x80, (8 : B256).toBytes), (0xa0, BeaconDeposit.le64 a.toNat), (0x160, pkR.toBytes)]) :
     ∃ b' M', Keep b b' ∧
@@ -451,7 +455,7 @@ theorem body_signatureRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR : B25
   -- site 1
   obtain ⟨b1, M1, hp1, hwf1, hr1, hs1, r1⟩ := sig_site1 (sevm := sevm) (b := b) (M := M)
     (img := img) (G := G + 751 + 892) (a := a) (rt := rt) (sP := sP) (pkR := pkR) (R := R)
-    hsha (by simp [hR]) (by omega) hwf hr hs hfp0 hpk
+    hsha hdepth (by simp [hR]) (by omega) hwf hr hs hfp0 hpk
   set I1 := sig1Img img sevm sP.toNat
   set h1 := Bytes.sha256 (sevm.data.sliceD sP.toNat 64 0)
   have hK1 := Keep.of_sha hp1
@@ -467,7 +471,7 @@ theorem body_signatureRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR : B25
   -- site 2
   obtain ⟨b2, M2, hp2, hwf2, hr2, hs2, r2⟩ := sig_site2 (sevm := sevm) (b := b1) (M := M1)
     (img := I1) (G := G + 751) (a := a) (rt := rt) (sP := sP) (pkR := pkR) (h1 := h1) (R := R)
-    (hsha.keep hK1) (by simp [hR]) (by omega) hsP hwf1 hr1 hs1 hI1fp hI1h
+    (hsha.keep hK1) hdepth (by simp [hR]) (by omega) hsP hwf1 hr1 hs1 hI1fp hI1h
   set I2 := sig2Img I1 sevm (sP.toNat + 64)
   set h2 := Bytes.sha256 (sevm.data.sliceD (sP.toNat + 64) 32 0 ++ (0 : B256).toBytes)
   have hK2 := Keep.of_sha hp2
@@ -485,7 +489,7 @@ theorem body_signatureRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR : B25
   obtain ⟨b3, M3, hp3, hwf3, hr3, hs3, r3⟩ := sig_site3 (sevm := sevm) (b := b2) (M := M2)
     (img := I2) (G := G) (h1 := h1) (h2 := h2)
     (R := 0 :: pkR :: 0x80 :: a :: rt :: 96 :: sP :: R)
-    ((hsha.keep hK1).keep hK2) (by simp [hR]) (by omega) hwf2 hr2 hs2 hI2fp hI2h
+    ((hsha.keep hK1).keep hK2) hdepth (by simp [hR]) (by omega) hwf2 hr2 hs2 hI2fp hI2h
   have hK3 := Keep.of_sha hp3
   set I3 := sig3Img I2 h1 h2
   have hout : ∀ st len, 96 ≤ st → st + len ≤ 352 → I3.sliceD st len 0 = img.sliceD st len 0 := by

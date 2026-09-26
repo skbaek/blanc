@@ -168,7 +168,7 @@ theorem insert_loop {sevm : Sevm} {b₀ : Devm} {G : Nat} {x n : Nat} {node0 : B
     {br : Nat → B256} {keys0 : KeySet} {stor1 : Stor}
     {x₁ x₂ x₃ x₄ y₁ y₂ y₃ y₄ y₅ y₆ y₇ d : B256} {rest : List B256}
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
-    (hsha : ShaReady sevm b₀) (hrest : rest.length ≤ 4)
+    (hsha : ShaReady sevm b₀) (hdepth : sevm.depth ≠ 0) (hrest : rest.length ≤ 4)
     (hx : x < 2 ^ 256) (hn : n < 32) (hdead : ∀ h < n, (x / 2 ^ h) % 2 = 0)
     (hlive : (x / 2 ^ n) % 2 = 1)
     (hstor1 : Devm.getStor b₀ sevm.currentTarget = stor1)
@@ -247,7 +247,7 @@ theorem insert_loop {sevm : Sevm} {b₀ : Devm} {G : Nat} {x n : Nat} {node0 : B
       (sz := Nat.toB256 (x / 2 ^ h)) (nd := insertNode Bytes.sha256 br h node0)
       (R := [x₁, x₂, x₃, x₄, y₁, y₂, y₃, y₄, y₅, y₆, y₇, d] ++ rest) (h := h)
       (G := G + (deadRun sevm.currentTarget keys0 (h + 1) m + L))
-      (hsha.of_eq hL.code hL.addrs) hh32
+      (hsha.of_eq hL.code hL.addrs) hdepth hh32
       (by rw [B256.toNat_toB256_of_lt hxh]; exact hdead h hh) (by simp; omega)
       (by rw [hcostS]; rw [hrun0] at hG; omega) hM
     have hM'' : BodyMem M' (1024 + 96 * (h + 1)) (Nat.toB256 (928 + 96 * (h + 1))) [] := by
@@ -346,7 +346,8 @@ the decoder's argument stack over `mem0` and returns to the decoder's tag with e
 gas left, having spent `bodyGas`.  Its storage is `bodyStor` (count incremented, one branch slot
 written), whose `solAcc` is the model's new accumulator; one log, the model event's, is appended;
 every other account's storage, all code, the accessed addresses, output and error are
-unchanged.  Premises: the SHA-256 precompile's (`ShaReady`), a non-static frame, the two
+unchanged.  Premises: the SHA-256 precompile's (`ShaReady`), a frame not at the maximal call
+depth (at depth `0` the `STATICCALL` fails), a non-static frame, the two
 `SSTORE` sentries, and the gas below `2^256`. -/
 theorem deposit_body_runExact (sevm : Sevm) (b : Devm) (sel : B256) (g : Nat)
     (s' : BeaconDeposit.Acc) (ev : BeaconDeposit.DepositEvent)
@@ -354,7 +355,7 @@ theorem deposit_body_runExact (sevm : Sevm) (b : Devm) (sel : B256) (g : Nat)
     (hOk : BeaconDeposit.deposit Bytes.sha256 (solAcc (Devm.getStor b sevm.currentTarget))
       (argBytes sevm 0) (argBytes sevm 1) (argBytes sevm 2) (argRoot sevm) sevm.value.toNat =
         .ok (s', ev))
-    (hsha : ShaReady sevm b) (hstatic : sevm.isStatic = false)
+    (hsha : ShaReady sevm b) (hdepth : sevm.depth ≠ 0) (hstatic : sevm.isStatic = false)
     (hsentryLive : gCallStipend < g + 52 + bodyLiveCost sevm b)
     (hsentryCount : gCallStipend < g + 4 + bodyInsertGas sevm b + countStoreCost sevm (bodyCount sevm b))
     (hbound : g + 1 + bodyGas sevm b < 2 ^ 256) :
@@ -426,7 +427,7 @@ theorem deposit_body_runExact (sevm : Sevm) (b : Devm) (sel : B256) (g : Nat)
     simp [ev, bodyEvent, BeaconDeposit.abiDepositEvent, abiBytesTail, List.length_sliceD,
       BeaconDeposit.le64, ceil32, B256.length_toBytes]
   obtain ⟨b3, M3, hK3, hM3, r3⟩ := body_pubkeyRoot (sevm := sevm) (b := b2) (sel := sel) (rt := rt)
-    (sP := sP) (wP := wP) (pP := pP) (a := a) (G := G3) hsha2 hstatic hlen (by omega) hM2
+    (sP := sP) (wP := wP) (pP := pP) (a := a) (G := G3) hsha2 hdepth hstatic hlen (by omega) hM2
   -- world facts so far
   have hc3 : ∀ x, b3.getCode x = b.getCode x := fun x => by
     rw [hK3.code]; show b2.getCode x = _; rw [hK2.code, hc1]
@@ -441,12 +442,12 @@ theorem deposit_body_runExact (sevm : Sevm) (b : Devm) (sel : B256) (g : Nat)
   set pkR := BeaconDeposit.pubkeyRoot Bytes.sha256 (sevm.data.sliceD pP.toNat 48 0)
   obtain ⟨b4, M4, hK4, hM4, r4⟩ := body_signatureRoot (sevm := sevm) (b := b3) (sel := sel)
     (rt := rt) (sP := sP) (wP := wP) (pP := pP) (a := a) (pkR := pkR) (G := G4)
-    (hsha.of_eq hc3 ha3) hsP (by omega) hM3
+    (hsha.of_eq hc3 ha3) hdepth hsP (by omega) hM3
   -- segment 5
   set sR := BeaconDeposit.signatureRoot Bytes.sha256 (sevm.data.sliceD sP.toNat 96 0)
   obtain ⟨b5, M5, hK5, hM5, r5⟩ := body_dataNode (sevm := sevm) (b := b4) (sel := sel) (rt := rt)
     (sP := sP) (wP := wP) (pP := pP) (a := a) (pkR := pkR) (sR := sR) (G := G5)
-    (hsha.of_eq (fun x => by rw [hK4.code, hc3]) (by rw [hK4.addrs, ha3])) (by omega) hM4
+    (hsha.of_eq (fun x => by rw [hK4.code, hc3]) (by rw [hK4.addrs, ha3])) hdepth (by omega) hM4
   -- segment 6
   have hkeys5 : b5.accessedStorageKeys =
       sloadAccessedStorageKeys tgt b.accessedStorageKeys solCountSlot := by
@@ -514,7 +515,7 @@ theorem deposit_body_runExact (sevm : Sevm) (b : Devm) (sel : B256) (g : Nat)
     (node0 := rt) (br := br) (keys0 := b.accessedStorageKeys) (stor1 := stor1)
     (x₁ := sR) (x₂ := pkR) (x₃ := 128) (x₄ := a) (y₁ := rt) (y₂ := 96) (y₃ := sP) (y₄ := 32)
     (y₅ := wP) (y₆ := 48) (y₇ := pP) (d := 440) (rest := [sel]) hsha.fork hstatic
-    (hsha.of_eq hc6 ha6) (by simp) (by omega) hn (fun h hh => insertDepth_dead 32 x h hh)
+    (hsha.of_eq hc6 ha6) hdepth (by simp) (by omega) hn (fun h hh => insertDepth_dead 32 x h hh)
     (insertDepth_live 32 x (by omega) hx32) hb6stor hbr hkeys6 (by rw [hlc]; omega)
     n 0 b6 M6 (by omega) hL0' hM6' (by rw [hlc]; show g + 1 + L < 2 ^ 256; omega)
   rw [hlc] at rL

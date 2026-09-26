@@ -21,7 +21,10 @@ This module fixes what the segment statements share:
   guards), so `n`, `fp` and the offsets are numerals, except in the insertion loop, where they
   grow by `0x60` per hashing iteration.
 * `ShaReady sevm b` (the shared kit's, `Blanc/Lift/ExactWalkCutOps.lean`) — the premises of
-  the SHA-256 precompile step, carried across a `Keep` by `ShaReady.keep`.
+  the SHA-256 precompile step, carried across a `Keep` by `ShaReady.keep`.  The liveness
+  theorems (the `Body*` segments) take the frame's nonzero depth (`sevm.depth ≠ 0`) as a
+  separate premise, since at depth `0` the call fails; the segment inversions (`Safe*`) need
+  no depth premise.
 * the insertion loop's model quantities (`insertDepth`, `insertNode`) and the body's gas
   (`deadGas`, `deadRun`, `bodyGas`).
 

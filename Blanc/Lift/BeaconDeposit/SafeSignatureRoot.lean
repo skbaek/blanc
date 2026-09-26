@@ -210,7 +210,7 @@ private theorem inv_site1 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : 
     (x1 := Nat.toB256 384) (x3 := Nat.toB256 448) (x4 := Nat.toB256 352)
     (R := 2 :: 0 :: pkR :: 0x80 :: a :: rt :: 96 :: sP :: R)
     prog_14 (by simp) (by decide) hwf3 hr3 hs3 (by decide) (by decide) (by decide) (by decide)
-    (by decide) (by decide) hfp3 hw1 hw2 hsha.nodeleg hsha.warm hsha.pre hsha.fork hsha.depth run
+    (by decide) (by decide) hfp3 hw1 hw2 hsha.nodeleg hsha.warm hsha.pre hsha.fork run
   rw [cdWord_pair] at hpost
   exact ⟨b', M', G', hpost, hwf', hr', by rw [hs']; rfl, run⟩
 
@@ -368,7 +368,7 @@ private theorem inv_site2 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : 
     (x1 := Nat.toB256 480) (x3 := Nat.toB256 544) (x4 := Nat.toB256 448)
     (R := h1 :: 2 :: 0 :: pkR :: 0x80 :: a :: rt :: 96 :: sP :: R)
     prog_15 (by simp) (by decide) hwf4 hr4 hs4 (by decide) (by decide) (by decide) (by decide)
-    (by decide) (by decide) hfp4 hw1 hw2 hsha.nodeleg hsha.warm hsha.pre hsha.fork hsha.depth run
+    (by decide) (by decide) hfp4 hw1 hw2 hsha.nodeleg hsha.warm hsha.pre hsha.fork run
   rw [cdWord_toBytes] at hpost
   exact ⟨b', M', G', hpost, hwf', hr', by rw [hs']; rfl, run⟩
 
@@ -505,7 +505,7 @@ private theorem inv_site3 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : 
   obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_sha (s := 576) (d := 640) (n := 832)
     (x1 := Nat.toB256 576) (x3 := Nat.toB256 640) (x4 := Nat.toB256 544) (R := R)
     prog_16 (by simp) (by decide) hwf4 hr4 hs4 (by decide) (by decide) (by decide) (by decide)
-    (by decide) (by decide) hfp4 hw1 hw2 hsha.nodeleg hsha.warm hsha.pre hsha.fork hsha.depth run
+    (by decide) (by decide) hfp4 hw1 hw2 hsha.nodeleg hsha.warm hsha.pre hsha.fork run
   exact ⟨b', M', G', hpost, hwf', hr', by rw [hs']; rfl, run⟩
 
 -- SEGMENT: safeSignatureRoot
