@@ -521,14 +521,184 @@ theorem refine_approve (hinv : VyInv stor s K)
   sorry
 
 -- SEGMENT: refineMintBurn (pure, medium; `mint` and `burnFrom`)
-/-- `mint`, `burnFrom`.  Proof sketch: slot 5 then one fresh balance key; the balance read after
+/-- `mint`.  Proof: slot 5 then one fresh balance key; the balance read after
 the supply write is of the unchanged balance slot (off `vyFixedSlots`); guards and effects are
 the model's clause by clause; `conserved` by `step_conserved`. -/
-theorem refine_mintBurn {k : Nat} (hk : k = 7 ∨ k = 8) (hinv : VyInv stor s K)
-    (hf : FreshKeys K (callKeys sevm.caller (callAt sevm k))) :
-    RawRefines sevm (rawOf k sevm ow stor) (Curve3Crv.step (c3ctx sevm ow) (callAt sevm k) s)
-      (Key.extend K (callKeys sevm.caller (callAt sevm k))) := by
-  sorry
+theorem refine_mint (hinv : VyInv stor s K)
+    (hf : FreshKeys K (callKeys sevm.caller (callAt sevm 7))) :
+    RawRefines sevm (rawOf 7 sevm ow stor) (Curve3Crv.step (c3ctx sevm ow) (callAt sevm 7) s)
+      (Key.extend K (callKeys sevm.caller (callAt sevm 7))) := by
+  set d := Sevm.argWord sevm 0 with hd_def
+  set v := Sevm.argWord sevm 1 with hv_def
+  set f := s.balanceOf with hf_def
+  have hmin : stor.get vyMinterSlot = sevm.caller.toB256 ↔ sevm.caller = s.minter := by
+    rw [hinv.minter]
+    exact ⟨fun e => (toB256_inj_adr e).symm, fun e => by rw [e]⟩
+  by_cases hd : d.toNat < 2 ^ 160
+  swap
+  · refine ⟨fun r hr => ?_, fun o ho => ?_⟩
+    · simp only [rawOf, rawMint] at hr
+      split_ifs at hr with hc
+      exact absurd hc.2.1 hd
+    · simp only [callAt, Curve3Crv.step, Curve3Crv.body, c3ctx] at ho
+      by_cases hv : sevm.value = 0
+      · simp only [hv, ite_true] at ho
+        exact absurd (Curve3Crv.mint_eq_ok.mp ho).1 hd
+      · simp [hv] at ho
+  set d' := d.toAdr
+  have hks : callKeys sevm.caller (callAt sevm 7) = [.bal d'] := rfl
+  have hs2 : mapSlot 3 d = vyBalSlot d' := by
+    simp only [vyBalSlot, d', B256.toAdr_toB256_of_lt hd]
+  have hfd : stor.get (vyBalSlot d') = f d' := hinv.get_slot (hf.1 (.bal d') (by simp [hks]))
+  have hap : vyBalSlot d' ∉ vyFixedSlots := hinv.slot_apart (hf.1 (.bal d') (by simp [hks]))
+  have h5 : vyBalSlot d' ≠ vySupplySlot := fun e => hap (by rw [e]; simp [vyFixedSlots])
+  have h2 : vyBalSlot d' ≠ vyDecimalsSlot := fun e => hap (by rw [e]; simp [vyFixedSlots])
+  have h6 : vyBalSlot d' ≠ vyMinterSlot := fun e => hap (by rw [e]; simp [vyFixedSlots])
+  have hyE : (stor.set vySupplySlot (s.totalSupply + v)).get (vyBalSlot d') = f d' := by
+    rw [Stor.get_set_ne _ (Ne.symm h5), hfd]
+  set s' : Curve3Crv.State := { s with totalSupply := s.totalSupply + v, balanceOf := ledgerCredit f d' v }
+  refine RawRefines.of_iff ((stor.set vySupplySlot (s.totalSupply + v)).set (vyBalSlot d')
+      (f d' + v), [⟨sevm.currentTarget, [transferTopic, 0, d], v.toBytes⟩], some (1 : B256).toBytes)
+    (s', [.transfer 0 d' v], .bool true) (sevm.value = 0 ∧ sevm.caller = s.minter ∧ d ≠ 0 ∧ s.totalSupply.toNat + v.toNat < 2 ^ 256 ∧ (f d').toNat + v.toNat < 2 ^ 256) ?_ ?_ ?_
+  · intro r
+    simp only [rawOf, rawMint, ← hd_def, ← hv_def]
+    rw [hs2, hinv.supply, hyE]
+    split_ifs with hc <;> simp_all [eq_comm]
+  · intro o
+    simp only [callAt, Curve3Crv.step, Curve3Crv.body, c3ctx]
+    by_cases hv : sevm.value = 0
+    · simp only [hv, ite_true, Curve3Crv.mint_eq_ok, true_and, B256.Nof]
+      constructor
+      · rintro ⟨-, h1, h2, h3, h4, h5⟩; exact ⟨⟨h1, h2, h3, h4⟩, h5⟩
+      · rintro ⟨⟨h1, h2, h3, h4⟩, h5⟩; exact ⟨hd, h1, h2, h3, h4, h5⟩
+    · simp [hv]
+  · rintro ⟨hv, hmn, hnz, hs1, hs2'⟩
+    have hstep : Curve3Crv.step (c3ctx sevm ow) (callAt sevm 7) s = .ok (s', [.transfer 0 d' v], .bool true) := by
+      simp only [callAt, Curve3Crv.step, Curve3Crv.body, c3ctx, hv, ite_true]
+      exact Curve3Crv.mint_eq_ok.mpr ⟨hd, hmn, hnz, hs1, hs2', rfl⟩
+    refine ⟨?_, ?_, rfl⟩
+    · rw [hks]
+      refine hinv.update (ws := [vySupplySlot]) (hf := hks ▸ hf) (by simp [vyWordSlots]) ?_ ?_ ?_
+        rfl rfl ?_ ?_ ?_ (Curve3Crv.step_conserved hinv.conserved hstep)
+      · intro x hx hw
+        dsimp only
+        have h1 := hx (.bal d') (by simp)
+        have h3 : vySupplySlot ≠ x := fun e => hw (by simp [e])
+        rw [Stor.get_set_ne (k := vyBalSlot d') _ h1, Stor.get_set_ne _ h3]
+      · intro k hk
+        simp only [List.mem_cons, List.not_mem_nil, or_false] at hk
+        subst hk
+        show ((stor.set vySupplySlot _).set (vyBalSlot d') (f d' + v)).get (vyBalSlot d') =
+          ledgerCredit f d' v d'
+        rw [Stor.get_set_self, ledgerCredit_self]
+      · intro k hk
+        cases k with
+        | bal c =>
+          simp only [List.mem_cons, Key.bal.injEq, List.not_mem_nil, or_false] at hk
+          show ledgerCredit f d' v c = f c
+          rw [ledgerCredit_ne _ hk]
+        | allow o p => rfl
+      · dsimp only
+        rw [Stor.get_set_ne _ h2, Stor.get_set_ne _ (by decide)]
+        exact hinv.decimals
+      · dsimp only
+        rw [Stor.get_set_ne _ h5, Stor.get_set_self]
+      · dsimp only
+        rw [Stor.get_set_ne _ h6, Stor.get_set_ne _ (by decide)]
+        exact hinv.minter
+    · simp only [List.map, eventLog, List.cons.injEq, and_true]
+      rw [B256.toAdr_toB256_of_lt hd]
+      rfl
+
+-- SEGMENT: refineMintBurn (pure, medium; `mint` and `burnFrom`)
+/-- `burnFrom`.  Proof: slot 5 then one fresh balance key; the balance read after
+the supply write is of the unchanged balance slot (off `vyFixedSlots`); guards and effects are
+the model's clause by clause; `conserved` by `step_conserved`. -/
+theorem refine_burnFrom (hinv : VyInv stor s K)
+    (hf : FreshKeys K (callKeys sevm.caller (callAt sevm 8))) :
+    RawRefines sevm (rawOf 8 sevm ow stor) (Curve3Crv.step (c3ctx sevm ow) (callAt sevm 8) s)
+      (Key.extend K (callKeys sevm.caller (callAt sevm 8))) := by
+  set d := Sevm.argWord sevm 0 with hd_def
+  set v := Sevm.argWord sevm 1 with hv_def
+  set f := s.balanceOf with hf_def
+  have hmin : stor.get vyMinterSlot = sevm.caller.toB256 ↔ sevm.caller = s.minter := by
+    rw [hinv.minter]
+    exact ⟨fun e => (toB256_inj_adr e).symm, fun e => by rw [e]⟩
+  by_cases hd : d.toNat < 2 ^ 160
+  swap
+  · refine ⟨fun r hr => ?_, fun o ho => ?_⟩
+    · simp only [rawOf, rawBurnFrom] at hr
+      split_ifs at hr with hc
+      exact absurd hc.2.1 hd
+    · simp only [callAt, Curve3Crv.step, Curve3Crv.body, c3ctx] at ho
+      by_cases hv : sevm.value = 0
+      · simp only [hv, ite_true] at ho
+        exact absurd (Curve3Crv.burnFrom_eq_ok.mp ho).1 hd
+      · simp [hv] at ho
+  set d' := d.toAdr
+  have hks : callKeys sevm.caller (callAt sevm 8) = [.bal d'] := rfl
+  have hs2 : mapSlot 3 d = vyBalSlot d' := by
+    simp only [vyBalSlot, d', B256.toAdr_toB256_of_lt hd]
+  have hfd : stor.get (vyBalSlot d') = f d' := hinv.get_slot (hf.1 (.bal d') (by simp [hks]))
+  have hap : vyBalSlot d' ∉ vyFixedSlots := hinv.slot_apart (hf.1 (.bal d') (by simp [hks]))
+  have h5 : vyBalSlot d' ≠ vySupplySlot := fun e => hap (by rw [e]; simp [vyFixedSlots])
+  have h2 : vyBalSlot d' ≠ vyDecimalsSlot := fun e => hap (by rw [e]; simp [vyFixedSlots])
+  have h6 : vyBalSlot d' ≠ vyMinterSlot := fun e => hap (by rw [e]; simp [vyFixedSlots])
+  have hyE : (stor.set vySupplySlot (s.totalSupply - v)).get (vyBalSlot d') = f d' := by
+    rw [Stor.get_set_ne _ (Ne.symm h5), hfd]
+  set s' : Curve3Crv.State := { s with totalSupply := s.totalSupply - v, balanceOf := ledgerDebit f d' v }
+  refine RawRefines.of_iff ((stor.set vySupplySlot (s.totalSupply - v)).set (vyBalSlot d')
+      (f d' - v), [⟨sevm.currentTarget, [transferTopic, d, 0], v.toBytes⟩], some (1 : B256).toBytes)
+    (s', [.transfer d' 0 v], .bool true) (sevm.value = 0 ∧ sevm.caller = s.minter ∧ d ≠ 0 ∧ v ≤ s.totalSupply ∧ v ≤ f d') ?_ ?_ ?_
+  · intro r
+    simp only [rawOf, rawBurnFrom, ← hd_def, ← hv_def]
+    rw [hs2, hinv.supply, hyE]
+    split_ifs with hc <;> simp_all [eq_comm]
+  · intro o
+    simp only [callAt, Curve3Crv.step, Curve3Crv.body, c3ctx]
+    by_cases hv : sevm.value = 0
+    · simp only [hv, ite_true, Curve3Crv.burnFrom_eq_ok, true_and]
+      constructor
+      · rintro ⟨-, h1, h2, h3, h4, h5⟩; exact ⟨⟨h1, h2, h3, h4⟩, h5⟩
+      · rintro ⟨⟨h1, h2, h3, h4⟩, h5⟩; exact ⟨hd, h1, h2, h3, h4, h5⟩
+    · simp [hv]
+  · rintro ⟨hv, hmn, hnz, hs1, hs2'⟩
+    have hstep : Curve3Crv.step (c3ctx sevm ow) (callAt sevm 8) s = .ok (s', [.transfer d' 0 v], .bool true) := by
+      simp only [callAt, Curve3Crv.step, Curve3Crv.body, c3ctx, hv, ite_true]
+      exact Curve3Crv.burnFrom_eq_ok.mpr ⟨hd, hmn, hnz, hs1, hs2', rfl⟩
+    refine ⟨?_, ?_, rfl⟩
+    · rw [hks]
+      refine hinv.update (ws := [vySupplySlot]) (hf := hks ▸ hf) (by simp [vyWordSlots]) ?_ ?_ ?_
+        rfl rfl ?_ ?_ ?_ (Curve3Crv.step_conserved hinv.conserved hstep)
+      · intro x hx hw
+        dsimp only
+        have h1 := hx (.bal d') (by simp)
+        have h3 : vySupplySlot ≠ x := fun e => hw (by simp [e])
+        rw [Stor.get_set_ne (k := vyBalSlot d') _ h1, Stor.get_set_ne _ h3]
+      · intro k hk
+        simp only [List.mem_cons, List.not_mem_nil, or_false] at hk
+        subst hk
+        show ((stor.set vySupplySlot _).set (vyBalSlot d') (f d' - v)).get (vyBalSlot d') =
+          ledgerDebit f d' v d'
+        rw [Stor.get_set_self, ledgerDebit_self]
+      · intro k hk
+        cases k with
+        | bal c =>
+          simp only [List.mem_cons, Key.bal.injEq, List.not_mem_nil, or_false] at hk
+          show ledgerDebit f d' v c = f c
+          rw [ledgerDebit_ne _ hk]
+        | allow o p => rfl
+      · dsimp only
+        rw [Stor.get_set_ne _ h2, Stor.get_set_ne _ (by decide)]
+        exact hinv.decimals
+      · dsimp only
+        rw [Stor.get_set_ne _ h5, Stor.get_set_self]
+      · dsimp only
+        rw [Stor.get_set_ne _ h6, Stor.get_set_ne _ (by decide)]
+        exact hinv.minter
+    · simp only [List.map, eventLog, List.cons.injEq, and_true]
+      rw [B256.toAdr_toB256_of_lt hd]
+      rfl
 
 end Segments
 
@@ -546,8 +716,8 @@ theorem refine_at {sevm : Sevm} {stor : Stor} {s : Curve3Crv.State} {K : Key →
   · exact refine_transfer hinv hf
   · exact refine_transferFrom hinv hf
   · exact refine_approve hinv hf
-  · exact refine_mintBurn (by simp) hinv hf
-  · exact refine_mintBurn (by simp) hinv hf
+  · exact refine_mint hinv hf
+  · exact refine_burnFrom hinv hf
   · exact refine_stringView (by simp) hinv hf
   · exact refine_stringView (by simp) hinv hf
   · exact refine_wordView (by simp) hinv hf
