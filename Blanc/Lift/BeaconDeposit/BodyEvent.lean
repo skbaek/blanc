@@ -13,41 +13,24 @@ namespace Blanc.Lift.BeaconDeposit
 
 open Jaune
 
--- SEGMENT: event
-/-- **Segment 2 (`0x0575 → 0x071c`, trees `t_0575_c7`, loop entry 26, `t_0675_c3`, loop entry 11,
-ending at `t_071c_c4`).**  Over the two little-endian buffers (`8` and the amount's bytes at
-`0x80`/`0xa0`, `8` and the count's bytes at `0xc0`/`0xe0`), the code ABI-encodes the event at
-the free pointer `0x100` without moving it: five head words `0xa0, 0x100, 0x140, 0x180, 0x200`
-(relative), the pubkey (`CALLDATACOPY` of 48 bytes, a zero word after it, rounded up), the
-withdrawal credentials (32 bytes), the amount (the solc copy loop, first pass inlined at
-`0x0630`, loop entry 26; then the partial-word clean-up at `0x065c`), the signature (96 bytes,
-`t_0675_c3`) and the index (copy loop at `0x06d7`, first pass inlined in entry 3, loop entry 11;
-clean-up at `0x0703`).  The 576 bytes at `0x100` are then `abiDepositEvent`; memory has grown to
-`0x340`.  1104 gas.
-
-Proof sketch.  Straight-line `rx_*` steps (`rx_calldatacopy` with
-`Bytes.writeAt`/`sliceD` algebra, as in `to_little_endian_64_run`); each copy loop copies one
-word, so `copy_step` for the inlined pass and `copy_loop` with `N = 1` at the loop entry, joined
-with `SFunc.RunExactCut.resume` exactly as `count_tail` does (`CountView.lean`), or simply
-unrolled through `rx_jump`.  The clean-up keeps the top `8` bytes of the copied word (mask
-`256^24 - 1`, `maskTop8_and`).  The final image equation is the longest step: split the 576 bytes
-with `List.sliceD_split` and read each piece through `Bytes.sliceD_writeAt_*`. -/
-theorem body_event {sevm : Sevm} {b : Devm} {sel rt sP wP pP a c : B256} {G : Nat} {M : Mem}
-    (hM : BodyMem M 256 0x100
+/-- **The event's memory image**, shared by `body_event` and its inversion `safe_event`: from
+the memory at the segment's start, the sizes after the head, amount and signature pieces, the
+count's length word surviving the amount's clean-up, and the final `BodyMem` with the
+ABI-encoded event at `0x100` (`V`, `U` are the words the two clean-ups load). -/
+theorem event_mem {sevm : Sevm} {sP wP pP a c : B256} {M : Mem} {img : Bytes}
+    (hwf : Mem.Wf M) (hs : M.size = 256) (hr : Mem.Reads M img)
+    (hfp : img.sliceD 64 32 0 = (0x100 : B256).toBytes)
+    (hf : ∀ p ∈ [(0x80, (8 : B256).toBytes), (0xa0, BeaconDeposit.le64 a.toNat),
+        (0xc0, (8 : B256).toBytes), (0xe0, BeaconDeposit.le64 c.toNat)],
+      img.sliceD p.1 p.2.length 0 = p.2) :
+    (memA M (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)).size = 608 ∧
+    (memB (memA M (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)) 608 (Bytes.toB256 ((imgA img (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)).sliceD 160 32 0))).size = 640 ∧
+    (memC (memB (memA M (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)) 608 (Bytes.toB256 ((imgA img (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)).sliceD 160 32 0))) (sevm.data.sliceD sP.toNat 96 0)).size = 800 ∧
+    (imgB (imgA img (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)) 608 (Bytes.toB256 ((imgA img (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)).sliceD 160 32 0))).sliceD 192 32 0 =
+      (8 : B256).toBytes ∧
+    BodyMem (memB (memC (memB (memA M (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)) 608 (Bytes.toB256 ((imgA img (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)).sliceD 160 32 0))) (sevm.data.sliceD sP.toNat 96 0)) 800 (Bytes.toB256 ((imgC (imgB (imgA img (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)) 608 (Bytes.toB256 ((imgA img (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)).sliceD 160 32 0))) (sevm.data.sliceD sP.toNat 96 0)).sliceD 224 32 0))) 832 0x100
       [(0x80, (8 : B256).toBytes), (0xa0, BeaconDeposit.le64 a.toNat),
-        (0xc0, (8 : B256).toBytes), (0xe0, BeaconDeposit.le64 c.toNat)]) :
-    ∃ b' M', Keep b b' ∧
-      BodyMem M' 832 0x100
-        [(0x80, (8 : B256).toBytes), (0xa0, BeaconDeposit.le64 a.toNat),
-          (0x100, BeaconDeposit.abiDepositEvent (bodyEvent sevm pP wP sP a c))] ∧
-      ∀ o, SFunc.RunExact prog sevm
-          (St b' [8, 0x340, 0x180, 0x160, 0x140, 0x120, 0x100, 0x100, 0xc0, 96, sP, 0x80, 32, wP,
-            48, pP, BeaconDeposit.depositEventTopic, 0x80, a, rt, 96, sP, 32, wP, 48, pP, 0x01b8,
-            sel] M' G) t_071c_c4 o →
-        SFunc.RunExact prog sevm
-          (St b [0xc0, 96, sP, 0x80, 32, wP, 48, pP, BeaconDeposit.depositEventTopic, 0x80, a, rt,
-            96, sP, 32, wP, 48, pP, 0x01b8, sel] M (G + 1104)) t_0575_c7 o := by
-  obtain ⟨hwf, hs, img, hr, hfp, hf⟩ := hM
+        (0x100, BeaconDeposit.abiDepositEvent (bodyEvent sevm pP wP sP a c))] := by
   have h80 : img.sliceD 128 32 0 = (8 : B256).toBytes := hf (0x80, (8 : B256).toBytes) (by simp)
   have ha0 : img.sliceD 160 8 0 = BeaconDeposit.le64 a.toNat :=
     hf (0xa0, BeaconDeposit.le64 a.toNat) (by simp)
@@ -137,8 +120,7 @@ theorem body_event {sevm : Sevm} {b : Devm} {sel rt sP wP pP a c : B256} {G : Na
       ((BeaconDeposit.le64 a.toNat ++ List.replicate 24 0) ++ ((96 : B256).toBytes ++ ((sevm.data.sliceD sP.toNat 96 0) ++
       ((8 : B256).toBytes ++ (BeaconDeposit.le64 c.toNat ++ List.replicate 24 0)))))))))))))))).length = 576 := by
     simp [List.length_sliceD, B256.length_toBytes, BeaconDeposit.le64, List.length_append]
-  refine ⟨b, memB (memC (memB (memA M (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)) 608 V) (sevm.data.sliceD sP.toNat 96 0)) 800 U, Keep.refl b,
-    ⟨hD.1, hsD, _, hD.2, ?_, ?_⟩, fun o k => ?_⟩
+  refine ⟨hsA, hsB, hsC, hc0B, hD.1, hsD, _, hD.2, ?_, ?_⟩
   · unfold imgB imgC imgA; peel; exact hfp
   · intro p hp
     simp only [List.mem_cons, List.mem_nil_iff, or_false] at hp
@@ -150,6 +132,51 @@ theorem body_event {sevm : Sevm} {b : Devm} {sel rt sP wP pP a c : B256} {G : Na
     · show _ = BeaconDeposit.abiDepositEvent (bodyEvent sevm pP wP sP a c)
       rw [hevs, hlen]
       exact hev
+
+-- SEGMENT: event
+/-- **Segment 2 (`0x0575 → 0x071c`, trees `t_0575_c7`, loop entry 26, `t_0675_c3`, loop entry 11,
+ending at `t_071c_c4`).**  Over the two little-endian buffers (`8` and the amount's bytes at
+`0x80`/`0xa0`, `8` and the count's bytes at `0xc0`/`0xe0`), the code ABI-encodes the event at
+the free pointer `0x100` without moving it: five head words `0xa0, 0x100, 0x140, 0x180, 0x200`
+(relative), the pubkey (`CALLDATACOPY` of 48 bytes, a zero word after it, rounded up), the
+withdrawal credentials (32 bytes), the amount (the solc copy loop, first pass inlined at
+`0x0630`, loop entry 26; then the partial-word clean-up at `0x065c`), the signature (96 bytes,
+`t_0675_c3`) and the index (copy loop at `0x06d7`, first pass inlined in entry 3, loop entry 11;
+clean-up at `0x0703`).  The 576 bytes at `0x100` are then `abiDepositEvent`; memory has grown to
+`0x340`.  1104 gas.
+
+Proof sketch.  Straight-line `rx_*` steps (`rx_calldatacopy` with
+`Bytes.writeAt`/`sliceD` algebra, as in `to_little_endian_64_run`); each copy loop copies one
+word, so `copy_step` for the inlined pass and `copy_loop` with `N = 1` at the loop entry, joined
+with `SFunc.RunExactCut.resume` exactly as `count_tail` does (`CountView.lean`), or simply
+unrolled through `rx_jump`.  The clean-up keeps the top `8` bytes of the copied word (mask
+`256^24 - 1`, `maskTop8_and`).  The final image equation is the longest step: split the 576 bytes
+with `List.sliceD_split` and read each piece through `Bytes.sliceD_writeAt_*`. -/
+theorem body_event {sevm : Sevm} {b : Devm} {sel rt sP wP pP a c : B256} {G : Nat} {M : Mem}
+    (hM : BodyMem M 256 0x100
+      [(0x80, (8 : B256).toBytes), (0xa0, BeaconDeposit.le64 a.toNat),
+        (0xc0, (8 : B256).toBytes), (0xe0, BeaconDeposit.le64 c.toNat)]) :
+    ∃ b' M', Keep b b' ∧
+      BodyMem M' 832 0x100
+        [(0x80, (8 : B256).toBytes), (0xa0, BeaconDeposit.le64 a.toNat),
+          (0x100, BeaconDeposit.abiDepositEvent (bodyEvent sevm pP wP sP a c))] ∧
+      ∀ o, SFunc.RunExact prog sevm
+          (St b' [8, 0x340, 0x180, 0x160, 0x140, 0x120, 0x100, 0x100, 0xc0, 96, sP, 0x80, 32, wP,
+            48, pP, BeaconDeposit.depositEventTopic, 0x80, a, rt, 96, sP, 32, wP, 48, pP, 0x01b8,
+            sel] M' G) t_071c_c4 o →
+        SFunc.RunExact prog sevm
+          (St b [0xc0, 96, sP, 0x80, 32, wP, 48, pP, BeaconDeposit.depositEventTopic, 0x80, a, rt,
+            96, sP, 32, wP, 48, pP, 0x01b8, sel] M (G + 1104)) t_0575_c7 o := by
+  obtain ⟨hwf, hs, img, hr, hfp, hf⟩ := hM
+  have h80 : img.sliceD 128 32 0 = (8 : B256).toBytes := hf (0x80, (8 : B256).toBytes) (by simp)
+  have h0 : RW M img := ⟨hwf, hr⟩
+  obtain ⟨hsA, hsB, hsC, hc0B, hM'⟩ := event_mem (sevm := sevm) (sP := sP) (wP := wP) (pP := pP)
+    hwf hs hr hfp hf
+  set V := Bytes.toB256 ((imgA img (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)).sliceD 160 32 0)
+  have hA := h0.memA (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)
+  have hB := hA.memB 608 V
+  have hC := hB.memC (sevm.data.sliceD sP.toNat 96 0)
+  refine ⟨b, _, Keep.refl b, hM', fun o k => ?_⟩
   rw [show G + 1104 = G + 263 + 207 + 263 + 371 by omega]
   exact ev_head (by simp) h0 hs hfp h80 (ev_amount (by simp) hA hsA
     (ev_sig (by simp) hB hsB hc0B (ev_index (by simp) hC hsC k)))
