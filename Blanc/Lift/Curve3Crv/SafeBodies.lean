@@ -186,7 +186,167 @@ tail once over an arbitrary base (`ric_jump`/`ric_branchTo` hand the run of `t_0
 unchanged). -/
 theorem safe_transferFrom (hfork : CoveredFork sevm.benvStat.fork) :
     SafeBody sevm b t_0390_c0 (rawTransferFrom sevm stor₀) := by
-  sorry
+  intro G post run
+  have hM := vyMem_empty_size (Sevm.dataWord sevm 0)
+  have hwf0 := vyMem_wf Mem.wf_empty (Sevm.dataWord sevm 0)
+  have h3 : Bytes.toB256 [0x03] = 3 := by decide
+  have h4 : Bytes.toB256 [0x04] = 4 := by decide
+  have h6 : Bytes.toB256 [0x06] = vyMinterSlot := by decide
+  have hf0 : Sevm.dataWord sevm (Bytes.toB256 [0x04]) = Sevm.argWord sevm 0 := rfl
+  have hd1 : Sevm.dataWord sevm (Bytes.toB256 [0x24]) = Sevm.argWord sevm 1 := by
+    show Sevm.dataWord sevm _ = Sevm.dataWord sevm _
+    congr 1
+  have hv2 : Sevm.dataWord sevm (Bytes.toB256 [0x44]) = Sevm.argWord sevm 2 := by
+    show Sevm.dataWord sevm _ = Sevm.dataWord sevm _
+    congr 1
+  -- the shared tail (join entry 3): the event and `return(1)`, from any base
+  have tail : ∀ (b' : Devm) (M' : Mem) (G' : Nat), Mem.Wf M' →
+      SFunc.RunCut prog sevm [] (St b' [] M' G') t_045b_c3 (.done (.halted post)) →
+      (∀ a, Devm.getStor post a = Devm.getStor b' a) ∧
+      post.logs = b'.logs ++ [⟨sevm.currentTarget,
+        [transferTopic, Sevm.argWord sevm 0, Sevm.argWord sevm 1],
+        (Sevm.argWord sevm 2).toBytes⟩] ∧ post.output = (1 : B256).toBytes := by
+    intro b' M' G' hwf run
+    unfold t_045b_c3 at run
+    obtain ⟨G1, run⟩ := ric_dest run
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_calldataload s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_mstore s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_calldataload s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_calldataload s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_log3 s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_mstore s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_push s1
+    cases run with
+    | last hl =>
+      obtain ⟨hout, hstor, hlogs⟩ := ri_return hl
+      have h320 : (Bytes.toB256 [0x01, 0x40]).toNat = 320 := by decide
+      have h32 : (Bytes.toB256 [0x20]).toNat = 32 := by decide
+      have h0 : (Bytes.toB256 [0x00]).toNat = 0 := by decide
+      have htopic : Bytes.toB256 [0xdd, 0xf2, 0x52, 0xad, 0x1b, 0xe2, 0xc8, 0x9b, 0x69, 0xc2, 0xb0,
+          0x68, 0xfc, 0x37, 0x8d, 0xaa, 0x95, 0x2b, 0xa7, 0xf1, 0x63, 0xc4, 0xa1, 0x16, 0x28, 0xf5,
+          0x5a, 0x4d, 0xf5, 0x23, 0xb3, 0xef] = transferTopic := by decide
+      simp only [hf0, hd1, hv2] at hout hlogs
+      simp only [h320, h32, h0] at hout hlogs
+      have hwf3 : Mem.Wf (((M'.write 320 (Sevm.argWord sevm 2).toBytes).read 320 32).2) :=
+        (hwf.write _ _).extend _ _
+      rw [Mem.read_write_word_of_wf hwf3] at hout
+      rw [Mem.read_write_word_of_wf hwf] at hlogs
+      refine ⟨fun a => by rw [hstor, getStor_addLog], ?_, hout⟩
+      rw [hlogs, logs_addLog, htopic]
+  have run := run.cut
+  unfold entrySt at run
+  obtain ⟨hv, G1, run⟩ := ric_vyNonpayable (h := 0x03) (l := 0x9a) (fail := t_0396_c0)
+    (by decide) run
+  obtain ⟨hf, G2, run⟩ := ric_vyAddrArg (p := 0x04) (h := 0x03) (l := 0xab) (fail := t_03a7_c0)
+    (by decide) (vyMem_reads Mem.wf_empty Mem.reads_empty _) (vyImg_clamps _ _) (by rw [hM])
+    (by rw [hM]; omega) run
+  obtain ⟨hd, G3, run⟩ := ric_vyAddrArg (p := 0x24) (h := 0x03) (l := 0xbd) (fail := t_03b9_c0)
+    (by decide) (vyMem_reads Mem.wf_empty Mem.reads_empty _) (vyImg_clamps _ _) (by rw [hM])
+    (by rw [hM]; omega) run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_calldataload s1
+  obtain ⟨G7, run⟩ := ric_vySlot run
+  obtain ⟨hle, G8, run⟩ := ric_vySubStore (p := 0x44) (h := 0x03) (l := 0xe0) (fail := t_03dc_c0)
+    hfork (by decide) run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_calldataload s1
+  obtain ⟨G12, run⟩ := ric_vySlot run
+  obtain ⟨hnof, G13, run⟩ := ric_vyAddStore (p := 0x44) (h := 0x04) (l := 0x0e)
+    (fail := t_040a_c0) hfork (by decide) run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_caller s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_xor s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_iszero s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_push s1
+  have hwf1 : Mem.Wf (vySlotMem (vySlotMem (vyMem Mem.empty (Sevm.dataWord sevm 0))
+      (Bytes.toB256 [0x03]) (Sevm.dataWord sevm (Bytes.toB256 [0x04]))) (Bytes.toB256 [0x03])
+      (Sevm.dataWord sevm (Bytes.toB256 [0x24]))) := vySlotMem_wf (vySlotMem_wf hwf0 _ _) _ _
+  rcases ric_branchTo (g := t_045b_c3) (by simp) rfl run with ⟨hx, G20, run⟩ | ⟨hx, G20, run⟩
+  · -- the caller is not the minter: the allowance is spent
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_push s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G23, rfl⟩ := ri_calldataload s1
+    obtain ⟨G24, run⟩ := ric_vySlot run
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_caller s1
+    obtain ⟨G26, run⟩ := ric_vySlot run
+    obtain ⟨hle2, G27, run⟩ := ric_vySubStore (p := 0x44) (h := 0x04) (l := 0x50)
+      (fail := t_044c_c0) hfork (by decide) run
+    obtain ⟨hst, hlg, hout⟩ := tail _ _ _ (vySlotMem_wf (vySlotMem_wf hwf1 _ _) _ _) run
+    have gv : ∀ k, b.getStorVal sevm.currentTarget k = (stor₀).get k := fun _ => rfl
+    have hf' : (Sevm.argWord sevm 0).toNat < 2 ^ 160 := hf
+    have hd' : (Sevm.argWord sevm 1).toNat < 2 ^ 160 := by rw [← hd1]; exact hd
+    simp only [hf0, hd1, hv2] at hle hnof hle2 hx hst hlg
+    simp only [h3, h4, h6] at hle hnof hle2 hx hst hlg
+    simp only [getStorVal_afterStore, getStorVal_afterSload, getStor_afterStore] at hnof hle2 hx
+    simp only [gv] at hle hnof hle2 hx
+    have hspend : ((((stor₀).set (mapSlot 3 (Sevm.argWord sevm 0))
+        ((stor₀).get (mapSlot 3 (Sevm.argWord sevm 0)) - Sevm.argWord sevm 2)).set
+        (mapSlot 3 (Sevm.argWord sevm 1))
+        ((((stor₀).set (mapSlot 3 (Sevm.argWord sevm 0))
+          ((stor₀).get (mapSlot 3 (Sevm.argWord sevm 0)) - Sevm.argWord sevm 2)).get
+          (mapSlot 3 (Sevm.argWord sevm 1))) + Sevm.argWord sevm 2)).get vyMinterSlot) ≠
+        sevm.caller.toB256 := by
+      intro he
+      rw [he] at hx
+      simp [B256.eqCheck, B256.xor_eq_zero_iff] at hx
+      exact absurd hx (by decide)
+    refine ⟨?r, ?raw, ?lands⟩
+    case raw =>
+      simp only [rawTransferFrom]
+      rw [ite_eq_left ⟨hv, hf', hd', hle, hnof, fun _ => hle2⟩, ite_eq_left hspend]
+    refine ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_⟩
+    · rw [hst, getStor_afterStore, afterSload_getStor, getStor_afterStore, getStor_afterStore]
+      simp only [getStorVal_afterStore, getStorVal_afterSload, getStor_afterStore, gv]
+    · rw [hst, getStor_afterStore_ne ha, afterSload_getStor, getStor_afterStore_ne ha,
+        getStor_afterStore_ne ha]
+    · rw [hlg, logs_afterStore, afterSload_logs, logs_afterStore, logs_afterStore]
+    · cases ho
+      exact hout
+  · -- the caller is the minter: no allowance
+    obtain ⟨hst, hlg, hout⟩ := tail _ _ _ hwf1 run
+    have gv : ∀ k, b.getStorVal sevm.currentTarget k = (stor₀).get k := fun _ => rfl
+    have hf' : (Sevm.argWord sevm 0).toNat < 2 ^ 160 := hf
+    have hd' : (Sevm.argWord sevm 1).toNat < 2 ^ 160 := by rw [← hd1]; exact hd
+    simp only [hf0, hd1, hv2] at hle hnof hx hst hlg
+    simp only [h3, h6] at hle hnof hx hst hlg
+    simp only [getStorVal_afterStore, getStor_afterStore] at hnof hx
+    simp only [gv] at hle hnof hx
+    have hnspend : ¬ (((((stor₀).set (mapSlot 3 (Sevm.argWord sevm 0))
+        ((stor₀).get (mapSlot 3 (Sevm.argWord sevm 0)) - Sevm.argWord sevm 2)).set
+        (mapSlot 3 (Sevm.argWord sevm 1))
+        ((((stor₀).set (mapSlot 3 (Sevm.argWord sevm 0))
+          ((stor₀).get (mapSlot 3 (Sevm.argWord sevm 0)) - Sevm.argWord sevm 2)).get
+          (mapSlot 3 (Sevm.argWord sevm 1))) + Sevm.argWord sevm 2)).get vyMinterSlot) ≠
+        sevm.caller.toB256) := by
+      intro hne
+      apply hne
+      have := eq_zero_of_iszero_ne_zero hx
+      rw [B256.xor_eq_zero_iff] at this
+      exact this.symm
+    refine ⟨?r2, ?raw2, ?lands2⟩
+    case raw2 =>
+      simp only [rawTransferFrom]
+      rw [ite_eq_left ⟨hv, hf', hd', hle, hnof, fun h => absurd h hnspend⟩, ite_eq_right hnspend]
+    refine ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_⟩
+    · rw [hst, afterSload_getStor, getStor_afterStore, getStor_afterStore]
+      simp only [getStorVal_afterStore, gv]
+    · rw [hst, afterSload_getStor, getStor_afterStore_ne ha, getStor_afterStore_ne ha]
+    · rw [hlg, afterSload_logs, logs_afterStore, logs_afterStore]
+    · cases ho
+      exact hout
 
 -- SEGMENT: safeApprove (97 nodes incl. join entry 4)
 /-- `approve`.  Proof sketch: guards; `PUSH1 0x24 CALLDATALOAD ISZERO ISZERO JUMPI`: a zero value
