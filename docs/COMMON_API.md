@@ -2628,7 +2628,8 @@ contract-neutral.
 - The certificate and its checker: `Cert`, `Entry`, `checkNode` and
   `Cert.check` in [`Blanc/Lift/Check.lean`](../Blanc/Lift/Check.lean), with
   the per-instruction abstract transfer (`ninstTransfer`, `ninstTransfer_run`)
-  in [`Blanc/Lift/Transfer.lean`](../Blanc/Lift/Transfer.lean). Decide
+  in [`Blanc/Lift/Transfer.lean`](../Blanc/Lift/Transfer.lean) (it accepts `XOR`,
+  Vyper's `!=`, alongside solc's opcodes). Decide
   `Cert.check` per entry with `decide +kernel`; one decision over the whole
   certificate does not fit in memory for a real contract, and read bytes with
   `code.data.toList` (`ByteArray.toList` is quadratic in the kernel). For a
@@ -2649,7 +2650,7 @@ contract-neutral.
   word read-back facts `sliceD_word_same` and `read_covered`, and one solc dispatcher
   comparison (`cmp_miss`, `cmp_hit`) are in
   [`Blanc/Lift/ExactWalk.lean`](../Blanc/Lift/ExactWalk.lean), with more steps
-  (`rx_shl`, `rx_byte`, `rx_mstore8`, `rx_calldatacopy`, `rx_log1`, …) in
+  (`rx_shl`, `rx_xor`, `rx_byte`, `rx_mstore8`, `rx_calldatacopy`, `rx_log1`, …) in
   [`Blanc/Lift/ExactWalkOps.lean`](../Blanc/Lift/ExactWalkOps.lean) and the
   cut-run forms (`rxc_*`, `SFunc.RunExact.toCut`) in
   [`Blanc/Lift/ExactWalkCut.lean`](../Blanc/Lift/ExactWalkCut.lean) and
@@ -2661,7 +2662,7 @@ contract-neutral.
   no log keeps.
 - Successful lifted run to facts (safety, the inversion walk): per-node `ric_*`
   (control, over `SFunc.RunCut`; `SFunc.Run.cut`/`SFunc.RunCut.uncut` for uncut
-  runs) and per-instruction `ri_*` (successor as an `St`; numeral-offset forms
+  runs) and per-instruction `ri_*` (successor as an `St`, `ri_xor` among them; numeral-offset forms
   `ri_mstore_nat`/`ri_calldatacopy_nat`, and `ri_val` to name a successor's top word) in
   [`Blanc/Lift/InvWalk.lean`](../Blanc/Lift/InvWalk.lean) and
   [`Blanc/Lift/InvWalkOps.lean`](../Blanc/Lift/InvWalkOps.lean), which also holds the

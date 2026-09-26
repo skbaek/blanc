@@ -61,6 +61,11 @@ theorem rx_or {x y v : B256} (hv : (x ||| y) = v) (hroom : S.length < 1024)
     SFunc.RunExact fs sevm (St b (x :: y :: S) M (G + 3)) (.next (.reg .or) f) o :=
   rx_binary (fn := B256.or) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) hv hroom k
 
+theorem rx_xor {x y v : B256} (hv : (x ^^^ y) = v) (hroom : S.length < 1024)
+    (k : SFunc.RunExact fs sevm (St b (v :: S) M G) f o) :
+    SFunc.RunExact fs sevm (St b (x :: y :: S) M (G + 3)) (.next (.reg .xor) f) o :=
+  rx_binary (fn := B256.xor) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) hv hroom k
+
 theorem rx_mul {x y v : B256} (hv : x * y = v) (hroom : S.length < 1024)
     (k : SFunc.RunExact fs sevm (St b (v :: S) M G) f o) :
     SFunc.RunExact fs sevm (St b (x :: y :: S) M (G + 5)) (.next (.reg .mul) f) o :=
