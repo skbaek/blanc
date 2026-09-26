@@ -42,4 +42,13 @@ def SolZeroHashesCorrect (stor : Stor) : Prop :=
 def SolInv (stor : Stor) (history : List B256) : Prop :=
   SolZeroHashesCorrect stor ∧ Inv Bytes.sha256 (solAcc stor) history
 
+/-- The zero-hash slots are disjoint from the branch slots and the count slot. -/
+theorem solZeroHashSlot_ne {h' h : Nat} (hh' : h' < 32) (hh : h < 32) :
+    solZeroHashSlot h' ≠ solBranchSlot h ∧ solZeroHashSlot h' ≠ solCountSlot := by
+  have e1 : (solZeroHashSlot h').toNat = 33 + h' := B256.toNat_toB256_of_lt (by omega)
+  have e2 : (solBranchSlot h).toNat = h := B256.toNat_toB256_of_lt (by omega)
+  have e3 : (solCountSlot).toNat = 32 := by decide
+  exact ⟨fun e => by have := congrArg B256.toNat e; omega,
+    fun e => by have := congrArg B256.toNat e; omega⟩
+
 end Blanc.Lift.BeaconDeposit
