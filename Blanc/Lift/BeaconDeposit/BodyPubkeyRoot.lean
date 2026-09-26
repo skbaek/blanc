@@ -55,7 +55,8 @@ two loop passes are unrolled with `rx_jump` (entry 12 is `prog[12]`).  The diges
 the 64 input bytes are `pubkey ++ zeros 16` (`BeaconDeposit.pubkeyRoot`). -/
 theorem body_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G : Nat} {M : Mem}
     {data : Bytes}
-    (hsha : ShaReady sevm b) (hstatic : sevm.isStatic = false)
+    (hsha : ShaReady sevm b) (hdepth : sevm.depth ≠ 0)
+    (hstatic : sevm.isStatic = false)
     (hlen : data.length = 576) (hG : G + 6205 < 2 ^ 256)
     (hM : BodyMem M 832 0x100
       [(0x80, (8 : B256).toBytes), (0xa0, BeaconDeposit.le64 a.toNat), (0x100, data)]) :
@@ -159,7 +160,7 @@ theorem body_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
       rw [this]; decide
     rw [e1, e2]
   have hsha' : ShaReady sevm (b.addLog L) :=
-    ⟨hsha.nodeleg, hsha.warm, hsha.pre, hsha.fork, hsha.depth⟩
+    ⟨hsha.nodeleg, hsha.warm, hsha.pre, hsha.fork⟩
   obtain ⟨b', M', img', hpost, hwf', hr', hs', hw', hh', hlow, hrun⟩ :=
     copy_sha_covered (fs := prog) (sevm := sevm) (C := []) (b := b.addLog L) (R := 0 :: R0)
       (M := M4) (G := G) (k := 12) (T := t_086e_c12) (fail1 := t_0850_c12)
@@ -169,7 +170,7 @@ theorem body_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
       (x3 := Nat.toB256 352) (x4 := Nat.toB256 256)
       prog_12 (by simp) hwf4 hr4 hs4 (by norm_num) (by norm_num) (by norm_num) (by norm_num)
       (by norm_num) (by norm_num) hfp4 hw1 hw2 (by simp [hR0]) hsha'.nodeleg hsha'.warm
-      hsha'.pre hsha'.fork hsha'.depth (by omega)
+      hsha'.pre hsha'.fork hdepth (by omega)
   refine ⟨b', M', ⟨hpost.stor, hpost.code, hpost.addrs, hpost.keys, hpost.logs, hpost.output,
     hpost.error⟩, ⟨hwf', hs', img', hr', ?_, ?_⟩, fun o k => ?_⟩
   · rw [hw', show (0x160 : B256) = Nat.toB256 352 by decide]

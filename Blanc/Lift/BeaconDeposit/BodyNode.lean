@@ -22,7 +22,8 @@ def node1Img (img : Bytes) (sevm : Sevm) (pkR : B256) (wp : Nat) : Bytes :=
 
 theorem node_site1 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
     {a rt sP wP pkR sR : B256} {R : List B256}
-    (hsha : ShaReady sevm b) (hR : R.length ≤ 20) (hG : G + 256 < 2 ^ 256)
+    (hsha : ShaReady sevm b) (hdepth : sevm.depth ≠ 0)
+    (hR : R.length ≤ 20) (hG : G + 256 < 2 ^ 256)
     (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hs : M.size = 832)
     (hfp : img.sliceD 64 32 0 = (Nat.toB256 640).toBytes)
     (hsR : img.sliceD 640 32 0 = sR.toBytes) :
@@ -86,7 +87,7 @@ theorem node_site1 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
       (x1 := Nat.toB256 672) (x3 := Nat.toB256 736) (x4 := Nat.toB256 640)
       prog_17 (by simp) hwf4 hr4 hs4 (by decide) (by decide) (by decide) (by decide) (by decide)
       (by omega) hfp4 hw1 hw2 (by simp; omega) hsha.nodeleg hsha.warm hsha.pre hsha.fork
-      hsha.depth (by omega)
+      hdepth (by omega)
   rw [cdWord_toBytes] at hpost
   refine ⟨b', M', hpost, hwf', hr', by rw [hs']; rfl, fun r kont => ?_⟩
   have hc := hrun r kont
@@ -270,7 +271,8 @@ theorem node2Pack_w2 {img : Bytes} {sR : B256} :
 
 theorem node_site2 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
     {a rt sP wP pkR sR n1 : B256} {R : List B256}
-    (hsha : ShaReady sevm b) (hR : R.length ≤ 20) (hG : G + 256 < 2 ^ 256)
+    (hsha : ShaReady sevm b) (hdepth : sevm.depth ≠ 0)
+    (hR : R.length ≤ 20) (hG : G + 256 < 2 ^ 256)
     (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hs : M.size = 832)
     (hfp : img.sliceD 64 32 0 = (Nat.toB256 736).toBytes)
     (hn1 : img.sliceD 736 32 0 = n1.toBytes)
@@ -343,7 +345,7 @@ theorem node_site2 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
       (x1 := Nat.toB256 768) (x3 := Nat.toB256 832) (x4 := Nat.toB256 736)
       prog_19 (by simp) hwf5 hr5 hs5 (by decide) (by decide) (by decide) (by decide) (by decide)
       (by omega) hfp5 (hpack ▸ node2Pack_w1 ha0) (hpack ▸ node2Pack_w2) (by simp; omega)
-      hsha.nodeleg hsha.warm hsha.pre hsha.fork hsha.depth (by omega)
+      hsha.nodeleg hsha.warm hsha.pre hsha.fork hdepth (by omega)
   rw [amtWord_toBytes] at hpost
   refine ⟨b', M', hpost, hwf', hr', by rw [hs']; rfl, fun r kont => ?_⟩
   have hc := hrun r kont
@@ -508,7 +510,8 @@ def node3Img (img : Bytes) (h1 h2 : B256) : Bytes :=
 
 theorem node_site3 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
     {h1 h2 : B256} {R : List B256}
-    (hsha : ShaReady sevm b) (hR : R.length ≤ 40) (hG : G + 256 < 2 ^ 256)
+    (hsha : ShaReady sevm b) (hdepth : sevm.depth ≠ 0)
+    (hR : R.length ≤ 40) (hG : G + 256 < 2 ^ 256)
     (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hs : M.size = 928)
     (hfp : img.sliceD 64 32 0 = (Nat.toB256 832).toBytes)
     (hh2 : img.sliceD 832 32 0 = h2.toBytes) :
@@ -571,7 +574,7 @@ theorem node_site3 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
       (x1 := Nat.toB256 864) (x3 := Nat.toB256 928) (x4 := Nat.toB256 832)
       prog_20 (by simp) hwf4 hr4 hs4 (by decide) (by decide) (by decide) (by decide) (by decide)
       (by omega) hfp4 hw1 hw2 (by omega) hsha.nodeleg hsha.warm hsha.pre hsha.fork
-      hsha.depth (by omega)
+      hdepth (by omega)
   refine ⟨b', M', hpost, hwf', hr', by rw [hs']; rfl, fun r kont => ?_⟩
   have hc := hrun r kont
   rw [show calculateMemoryGasCost (max 928 (928 + 96)) - calculateMemoryGasCost 928 = 10 from
@@ -674,7 +677,8 @@ following `MSTORE` of `0` at `+8` overwrites.  The digest equation is `hashPair`
 digests (`BeaconDeposit.hashPair`). -/
 theorem body_dataNode {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR : B256} {G : Nat}
     {M : Mem}
-    (hsha : ShaReady sevm b) (hG : G + 2553 < 2 ^ 256)
+    (hsha : ShaReady sevm b) (hdepth : sevm.depth ≠ 0)
+    (hG : G + 2553 < 2 ^ 256)
     (hM : BodyMem M 832 0x280
       [(0x80, (8 : B256).toBytes), (0xa0, BeaconDeposit.le64 a.toNat), (0x280, sR.toBytes)]) :
     ∃ b' M', Keep b b' ∧
@@ -705,7 +709,7 @@ theorem body_dataNode {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR : B256}
   -- site 1
   obtain ⟨b1, M1, hp1, hwf1, hr1, hs1, r1⟩ := node_site1 (sevm := sevm) (b := b) (M := M)
     (img := img) (G := G + 761 + 989) (a := a) (rt := rt) (sP := sP) (wP := wP) (pkR := pkR)
-    (sR := sR) (R := R) hsha (by simp [hR]) (by omega) hwf hr hs hfp0 hsR
+    (sR := sR) (R := R) hsha hdepth (by simp [hR]) (by omega) hwf hr hs hfp0 hsR
   set I1 := node1Img img sevm pkR wP.toNat
   set n1 := Bytes.sha256 (pkR.toBytes ++ sevm.data.sliceD wP.toNat 32 0)
   have hK1 := Keep.of_sha hp1
@@ -729,7 +733,7 @@ theorem body_dataNode {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR : B256}
   -- site 2
   obtain ⟨b2, M2, hp2, hwf2, hr2, hs2, r2⟩ := node_site2 (sevm := sevm) (b := b1) (M := M1)
     (img := I1) (G := G + 761) (a := a) (rt := rt) (sP := sP) (wP := wP) (pkR := pkR)
-    (sR := sR) (n1 := n1) (R := R) (hsha.keep hK1) (by simp [hR]) (by omega) hwf1 hr1 hs1
+    (sR := sR) (n1 := n1) (R := R) (hsha.keep hK1) hdepth (by simp [hR]) (by omega) hwf1 hr1 hs1
     hI1fp hI1n ((hI1 128 32 (by omega) (by omega)).trans h80)
     ((hI1 160 8 (by omega) (by omega)).trans ha0)
   set I2 := shaImg (node2Pack I1 sR) 832 (amtWord a) sR
@@ -749,7 +753,7 @@ theorem body_dataNode {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR : B256}
   obtain ⟨b3, M3, hp3, hwf3, hr3, hs3, r3⟩ := node_site3 (sevm := sevm) (b := b2) (M := M2)
     (img := I2) (G := G) (h1 := n1) (h2 := n2)
     (R := 0 :: sR :: pkR :: 0x80 :: a :: rt :: 96 :: sP :: 32 :: wP :: R)
-    ((hsha.keep hK1).keep hK2) (by simp [hR]) (by omega) hwf2 hr2 hs2 hI2fp hI2n
+    ((hsha.keep hK1).keep hK2) hdepth (by simp [hR]) (by omega) hwf2 hr2 hs2 hI2fp hI2n
   have hK3 := Keep.of_sha hp3
   refine ⟨b3, M3, hK1.trans (hK2.trans hK3), ⟨hwf3, hs3, node3Img I2 n1 n2, hr3, ?_, ?_⟩, ?_⟩
   · simp only [node3Img]

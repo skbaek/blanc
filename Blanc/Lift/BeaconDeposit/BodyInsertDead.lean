@@ -49,7 +49,8 @@ segment 3 (both copy passes unrolled with `rx_jump`: `prog[22] = t_0fe8_c22`), a
 `Nat.toB256 h + 0 = solBranchSlot h`; the digest is `hashPair` of the loaded word and `nd`. -/
 theorem body_insertDead {sevm : Sevm} {b : Devm} {sz nd : B256} {R : List B256} {h G : Nat}
     {M : Mem}
-    (hsha : ShaReady sevm b) (hh : h < 32) (hsz : sz.toNat % 2 = 0) (hR : R.length ≤ 16)
+    (hsha : ShaReady sevm b) (hdepth : sevm.depth ≠ 0)
+    (hh : h < 32) (hsz : sz.toNat % 2 = 0) (hR : R.length ≤ 16)
     (hG : G + deadGas h + sloadCost sevm b (solBranchSlot h) < 2 ^ 256)
     (hM : BodyMem M (1024 + 96 * h) (Nat.toB256 (928 + 96 * h)) []) :
     ∃ b' M', Keep (afterSload sevm b (solBranchSlot h)) b' ∧
@@ -79,7 +80,7 @@ theorem body_insertDead {sevm : Sevm} {b : Devm} {sz nd : B256} {R : List B256} 
     exact (B256.toNat_toB256_of_lt (by omega)).symm
   set b1 := afterSload sevm b (solBranchSlot h) with hb1
   have hok1 : ShaReady sevm b1 := ⟨by rw [hb1, afterSload_getCode]; exact hsha.nodeleg,
-    by rw [hb1, afterSload_accessedAddresses]; exact hsha.warm, hsha.pre, hsha.fork, hsha.depth⟩
+    by rw [hb1, afterSload_accessedAddresses]; exact hsha.warm, hsha.pre, hsha.fork⟩
   set br := b.getStorVal sevm.currentTarget (solBranchSlot h) with hbr
   have hfp' : img.sliceD 64 32 0 = (Nat.toB256 (928 + 96 * h)).toBytes := hfp
   obtain ⟨b', M', img', hpost, hwf', hr', hs', hw', hh', hrun⟩ :=
@@ -90,7 +91,7 @@ theorem body_insertDead {sevm : Sevm} {b : Devm} {sz nd : B256} {R : List B256} 
       (T := t_1097_c22) (img := img) (n := 1024 + 96 * h) (f := 928 + 96 * h) (a := br)
       (bw := nd)
       prog_22 (by simp) hwf hr hs (by omega) (by omega) (by omega) (by omega) (by omega)
-      (by omega) hfp' (by simp; omega) hok1.nodeleg hok1.warm hok1.pre hok1.fork hok1.depth
+      (by omega) hfp' (by simp; omega) hok1.nodeleg hok1.warm hok1.pre hok1.fork hdepth
       (by unfold deadGas at hG; omega)
   refine ⟨b', M', ⟨hpost.stor, hpost.code, hpost.addrs, hpost.keys, hpost.logs, hpost.output,
     hpost.error⟩, ⟨hwf', by rw [hs']; omega, img', hr', by rw [hw']; congr 2; omega,

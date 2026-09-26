@@ -40,13 +40,9 @@ semantics does not supply it:
   system message starts with an empty accessed set.  The segment inversions
   (`ri_staticcall_sha`) are stated for a warm call; a cold call adds `2` to the accessed set, so
   the `Keep` bookkeeping of the segments would not hold.
-* `sevm.depth ≠ 0`: **false for real frames** at the maximal call depth (Jaune's `depth` counts
-  the remaining depth, so the 1024th nested frame has `depth = 0`).  There the SHA-256
-  `STATICCALL` fails and pushes `0`; `ri_staticcall_sha` already has that disjunct but takes
-  `sevm.depth ≠ 0` as a premise.  Dropping the premise from `ri_staticcall_sha` (depth `0` lands
-  in its failure disjunct) and hence from `ShaReady` would remove it from this ladder.
-  Transaction top frames have the full depth, so a direct call to the deposit contract from a
-  transaction satisfies it.
+
+No call-depth condition is carried: at the maximal call depth (`sevm.depth = 0`) the SHA-256
+`STATICCALL` fails and pushes `0`, which is the failure disjunct of `ri_staticcall_sha`.
 
 The block and history rungs are over retained traces (`ConfiguredBlockTrace`,
 `ConfiguredHistoryTrace`), as for WETH9.
@@ -128,11 +124,11 @@ theorem isPrecomp_two {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) :
     (by decide) (by decide) (by decide) (by decide)
 
 /-- **The carried entry condition** at every entered beacon frame: calldata length, the
-precompile account's code is not a delegation, the precompile is warm, and the frame is not at
-the maximal call depth.  Each is explained in the module docstring. -/
+precompile account's code is not a delegation, and the precompile is warm.  Each is explained in
+the module docstring. -/
 def beaconEntry : Sevm → Devm → Prop := fun sevm pre =>
   sevm.data.length < 2 ^ 256 ∧ getDelegatedCodeAddress (pre.getCode 2) = none ∧
-    (2 : Adr) ∈ pre.accessedAddresses ∧ sevm.depth ≠ 0
+    (2 : Adr) ∈ pre.accessedAddresses
 
 /-- The full frame entry: fresh entry (discharged at every trace rung) and `beaconEntry`. -/
 def beaconFrameEntry : Sevm → Devm → Prop := fun sevm pre =>
@@ -143,9 +139,9 @@ theorem beaconSpec_soundAdmitted (ca : Adr) :
     beaconSpec.SoundAdmitted ca beaconFrameEntry := by
   intro sevm pre post hfork execution hrun hca admitted _ _ hpre
   subst hca
-  obtain ⟨⟨hstack, hmem⟩, hcd, hnodeleg, hwarm, hdepth⟩ := admitted.root rfl
+  obtain ⟨⟨hstack, hmem⟩, hcd, hnodeleg, hwarm⟩ := admitted.root rfl
   obtain ⟨history, hinv⟩ := hpre.inv.left rfl
-  have hsha : ShaReady sevm pre := ⟨hnodeleg, hwarm, isPrecomp_two hfork, hfork, hdepth⟩
+  have hsha : ShaReady sevm pre := ⟨hnodeleg, hwarm, isPrecomp_two hfork, hfork⟩
   have h := deposit_frame_refines hrun hfork hcd hstack hmem hsha hinv execution
   refine ⟨trivial, ?_⟩
   show ∃ history, SolInv (Devm.getStor post sevm.currentTarget) history

@@ -21,7 +21,9 @@ This module fixes what the segment statements share:
   grow by `0x60` per hashing iteration.
 * `ShaReady sevm b` — the premises of the SHA-256 precompile step
   (`Ninst.runCompiled_staticcall_sha256_64_warm`): address 2 warm and undelegated, a precompile
-  of the fork, a covered fork, nonzero depth.
+  of the fork, a covered fork.  The liveness theorems (the `Body*` segments) take the frame's
+  nonzero depth (`sevm.depth ≠ 0`) as a separate premise, since at depth `0` the call fails;
+  the segment inversions (`Safe*`) need no depth premise.
 * the insertion loop's model quantities (`insertDepth`, `insertNode`) and the body's gas
   (`deadGas`, `deadRun`, `bodyGas`).
 
@@ -68,11 +70,10 @@ structure ShaReady (sevm : Sevm) (b : Devm) : Prop where
   warm : (2 : Adr) ∈ b.accessedAddresses
   pre : decide (sevm.benvStat.rules.isPrecomp 2) = true
   fork : CoveredFork sevm.benvStat.fork
-  depth : sevm.depth ≠ 0
 
 theorem ShaReady.keep {sevm : Sevm} {b b' : Devm} (h : ShaReady sevm b) (hk : Keep b b') :
     ShaReady sevm b' :=
-  ⟨by rw [hk.code]; exact h.nodeleg, by rw [hk.addrs]; exact h.warm, h.pre, h.fork, h.depth⟩
+  ⟨by rw [hk.code]; exact h.nodeleg, by rw [hk.addrs]; exact h.warm, h.pre, h.fork⟩
 
 /-! ## Memory at a boundary -/
 
