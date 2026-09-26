@@ -31,7 +31,48 @@ after the `SSTORE` is 0), `.last` of `STOP`.  Cost:
 `19 + 34 + 3 + sloadCost + 2 + 3 + 3 + 10 + 1 + 3 + 3 + 3 + sstoreCost`. -/
 theorem live_setMinter (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     {r : Raw} (hr : rawSetMinter sevm stor₀ = some r) : BodyLive sevm b t_00b0_c0 r := by
-  sorry
+  unfold rawSetMinter at hr
+  split_ifs at hr with hg
+  obtain ⟨hv, hm, hmin⟩ := hg
+  cases hr
+  set m := Sevm.argWord sevm 0
+  set b1 := afterSload sevm b vyMinterSlot
+  have hm4 : Sevm.dataWord sevm (Bytes.toB256 [0x04]) = m := rfl
+  have hM := vyMem_empty_size (Sevm.dataWord sevm 0)
+  refine ⟨sstoreCost sevm b1 vyMinterSlot m + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 2 +
+    sloadCost sevm b vyMinterSlot + 3 + 34 + 19, fun G hG => ?_⟩
+  refine ⟨St (afterSstore sevm b1 vyMinterSlot m) [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G,
+    ?_, rfl, ?_⟩
+  · unfold entrySt
+    rw [show G + (sstoreCost sevm b1 vyMinterSlot m + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 2 +
+      sloadCost sevm b vyMinterSlot + 3 + 34 + 19) = G + sstoreCost sevm b1 vyMinterSlot m + 3 + 3
+      + 3 + 1 + 10 + 3 + 3 + 2 + sloadCost sevm b vyMinterSlot + 3 + 34 + 19 by omega]
+    refine rx_vyNonpayable (h := 0x00) (l := 0xba) (fail := t_00b6_c0) hv (by simp) ?_
+    refine rx_vyAddrArg (p := 0x04) (h := 0x00) (l := 0xcb) (fail := t_00c7_c0)
+      (vyMem_reads Mem.wf_empty Mem.reads_empty _) (vyImg_clamps _ _) (by rw [hM]) (by rw [hM]; omega)
+      (by rw [hm4]; exact hm) (by simp) ?_
+    refine rx_push (w := vyMinterSlot) rfl (by simp) ?_
+    refine rx_sload_sel hfork (by simp) ?_
+    refine rx_caller (by simp) ?_
+    refine rx_eq (v := 1) ?_ (by simp) ?_
+    · have : b.getStorVal sevm.currentTarget vyMinterSlot = sevm.caller.toB256 := hmin
+      simp [B256.eqCheck, this]
+    refine rx_push rfl (by simp) ?_
+    refine rx_branch_succ (by decide) ?_
+    refine rx_dest ?_
+    refine rx_push rfl (by simp) ?_
+    refine rx_calldataload (by simp) ?_
+    rw [hm4]
+    refine rx_push (w := vyMinterSlot) rfl (by simp) ?_
+    refine rx_sstore hfork (by omega) hstatic ?_
+    exact .last rfl
+  · refine ⟨?_, fun a ha => ?_, ?_, fun o ho => by cases ho⟩
+    · show Devm.getStor (afterSstore sevm b1 vyMinterSlot m) _ = _
+      rw [afterSstore_getStor_self, afterSload_getStor]
+    · show Devm.getStor (afterSstore sevm b1 vyMinterSlot m) _ = _
+      rw [afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha), afterSload_getStor]
+    · show (afterSstore sevm b1 vyMinterSlot m).logs = _
+      rw [afterSstore_logs, afterSload_logs, List.append_nil]
 
 -- SEGMENT: liveTransfer (107 nodes)
 /-- `transfer`.  Proof sketch: the walk of `safeTransfer` forwards; the two slots by the

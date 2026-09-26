@@ -43,7 +43,47 @@ terminal (`Linst.world_of_ok`-style: `Linst.Run … .stop` keeps the state).  St
 unchanged, logs unchanged. -/
 theorem safe_setMinter (hfork : CoveredFork sevm.benvStat.fork) :
     SafeBody sevm b t_00b0_c0 (rawSetMinter sevm stor₀) := by
-  sorry
+  intro G post run
+  have hM := vyMem_empty_size (Sevm.dataWord sevm 0)
+  have run := run.cut
+  unfold entrySt at run
+  obtain ⟨hv, G1, run⟩ := ric_vyNonpayable (h := 0x00) (l := 0xba) (fail := t_00b6_c0)
+    (by decide) run
+  obtain ⟨hm, G2, run⟩ := ric_vyAddrArg (p := 0x04) (h := 0x00) (l := 0xcb) (fail := t_00c7_c0)
+    (by decide) (vyMem_reads Mem.wf_empty Mem.reads_empty _) (vyImg_clamps _ _) (by rw [hM])
+    (by rw [hM]; omega) run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_caller s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_eq s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
+  rcases ric_branch run with ⟨-, G8, run⟩ | ⟨hw, G8, run⟩
+  · exact (run.false_of_noOk (by decide)).elim
+  obtain ⟨G9, run⟩ := ric_dest run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_calldataload s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_sstore hfork s1
+  cases run with
+  | last hl =>
+    cases hl
+    have hmin : (stor₀).get vyMinterSlot = sevm.caller.toB256 := by
+      have h := hw
+      simp only [B256.eqCheck] at h
+      split_ifs at h with he
+      · exact he.symm
+      · exact absurd rfl h
+    have hm' : (Sevm.argWord sevm 0).toNat < 2 ^ 160 := hm
+    refine ⟨((stor₀).set vyMinterSlot (Sevm.argWord sevm 0), [], none),
+      by simp only [rawSetMinter, hv, hm', hmin, and_self, ite_true], ?_⟩
+    refine ⟨?_, fun a ha => ?_, ?_, fun o ho => by cases ho⟩
+    · show Devm.getStor (afterSstore sevm _ _ _) _ = _
+      rw [afterSstore_getStor_self, afterSload_getStor]
+      rfl
+    · show Devm.getStor (afterSstore sevm _ _ _) _ = _
+      rw [afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha), afterSload_getStor]
+    · show (afterSstore sevm _ _ _).logs = _
+      rw [afterSstore_logs, afterSload_logs, List.append_nil]
 
 -- SEGMENT: safeTransfer (107 nodes)
 /-- `transfer`.  Proof sketch: guards as `safeSetMinter`; `PUSH1 3 CALLER` and the scratch
