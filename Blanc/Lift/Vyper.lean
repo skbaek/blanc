@@ -12,8 +12,8 @@ clamp constants at `0x20 … 0xa0` (`2^160` for address arguments at `0x20`; the
 
 * `vyPrologue f`: the prologue as a lifted tree before `f`; `ric_vyPrologue` (inverted, over any
   memory) and `rx_vyPrologue` (forward from empty memory, 75 gas);
-* `vyMem M w`: memory after it; `VyClamps img`: the five constants in a memory image, which
-  word writes outside `0x20 … 0xc0` keep (`VyClamps.writeAt`);
+* `vyMem M w`: memory after it; `VyClamps img`: the five constants in a memory image
+  (`vyImg_clamps` establishes it, `VyClamps.clamp` reads the address clamp);
 * `mapSlot slot key` (`MapSlot.lean`) is Vyper's `HashMap` slot `keccak(slot ‖ key)`, and
   `vySlot_read` the scratch window `mstore(0xe0, key); mstore(0xc0, slot)` hashes.
 
@@ -141,13 +141,6 @@ def VyClamps (img : Bytes) : Prop :=
   img.sliceD 96 32 0 = (Bytes.toB256 vyC60).toBytes ∧
   img.sliceD 128 32 0 = (Bytes.toB256 vyC80).toBytes ∧
   img.sliceD 160 32 0 = (Bytes.toB256 vyCa0).toBytes
-
-/-- A word write outside `0x20 … 0xc0` keeps the constants. -/
-theorem VyClamps.writeAt {img : Bytes} (h : VyClamps img) {n : Nat} (hn : n + 32 ≤ 32 ∨ 192 ≤ n)
-    (v : B256) : VyClamps (Bytes.writeAt img n v.toBytes) := by
-  obtain ⟨h1, h2, h3, h4, h5⟩ := h
-  refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;>
-  · rwa [Bytes.readWord_writeAt_of_disjoint _ _ _ _ (by omega)]
 
 theorem vyImg_clamps (img : Bytes) (w : B256) : VyClamps (vyImg img w) := by
   unfold vyImg
@@ -540,17 +533,6 @@ section StoresForward
 
 variable {fs : List SFunc} {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
   {f : SFunc} {o : Outcome}
-
-theorem vySlotMem_eq {M : Mem} (hM : M.size ≤ 256) (h32 : M.size % 32 = 0) (slot key : B256) :
-    vySlotMem M slot key = (M.write 224 key.toBytes).write 192 slot.toBytes := by
-  have hs1 : (M.write 224 key.toBytes).size = 256 := by
-    rw [Mem.size_write_word_at]
-    split_ifs with h
-    · omega
-    · rfl
-  have hs2 : ((M.write 224 key.toBytes).write 192 slot.toBytes).size = 256 := by
-    rw [Mem.size_write_word_at, hs1]; rfl
-  exact Mem.read_snd_eq_self (by rw [hs2]; rfl)
 
 /-- **The slot sequence, forward**, over a memory of at most eight words (`c1` the first store's
 charge: 9 from six words, 3 from eight). -/

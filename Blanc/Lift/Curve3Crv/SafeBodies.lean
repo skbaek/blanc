@@ -14,8 +14,8 @@ succeeded and the post state `Lands` as it says.  The kit: `ric_vyNonpayable`,
 `mstore(0xe0, key); mstore(0xc0, slot); keccak(0xc0, 0x40)` inverts to `mapSlot slot key`
 by `vySlot_keccak`.
 
-Memory: the prologue image `vyImg [] w` with the constants (`VyClamps`) is carried through
-the scratch writes at `0xc0 … 0x100` and `0x140` (`VyClamps.writeAt`); only `0x20` is read.
+Memory: the address clamp at `0x20` is read from the prologue image `vyImg [] w`
+(`vyImg_clamps`, `VyClamps.clamp`) before any scratch write.
 -/
 
 namespace Blanc.Lift.Curve3Crv

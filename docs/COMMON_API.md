@@ -2704,8 +2704,8 @@ contract-neutral.
   slot and, with the arguments swapped (slot first), Vyper's, in
   [`Blanc/Lift/MapSlot.lean`](../Blanc/Lift/MapSlot.lean).
 - Vyper 0.2.x runtimes: the frame prologue (`vyPrologue`, `ric_vyPrologue`, `rx_vyPrologue`,
-  memory `vyMem`/`vyImg`), the clamp constants as a carried image invariant (`VyClamps`,
-  `VyClamps.writeAt`), the non-payable guard and address-argument clamp every body starts with
+  memory `vyMem`/`vyImg`), the clamp constants as an image invariant (`VyClamps`,
+  `vyImg_clamps`, `VyClamps.clamp`), the non-payable guard and address-argument clamp every body starts with
   (`vyNonpayable`, `vyAddrArg`, their `rx_`/`ric_` forms), and the `HashMap` slot scratch window
   (`vySlot_read`, `vySlot_keccak`) with its whole macro (`vySlot`, `ric_vySlot`, `rx_vySlot`),
   the checked storage subtract/add macros (`vySubStore`, `vyAddStore`, their `rx_`/`ric_`
