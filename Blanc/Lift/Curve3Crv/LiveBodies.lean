@@ -305,17 +305,24 @@ private theorem live_transferFrom_spend (hfork : CoveredFork sevm.benvStat.fork)
   have hr' := (Option.some.inj hr).symm
   subst hr'
   set s3 := mapSlot (mapSlot 4 f) sevm.caller.toB256 with hs3_def
-  set z := b3.getStorVal sevm.currentTarget s3 with hz_def
+  -- the minter read warms `vyMinterSlot`: the allowance block runs over `b3m`, not `b3`
+  set b3m := afterSload sevm b3 vyMinterSlot with hb3m_def
+  set z := b3m.getStorVal sevm.currentTarget s3 with hz_def
   have hz_eq : z = (((Devm.getStor b sevm.currentTarget).set s1
       ((Devm.getStor b sevm.currentTarget).get s1 - v)).set s2
       (((Devm.getStor b sevm.currentTarget).set s1
         ((Devm.getStor b sevm.currentTarget).get s1 - v)).get s2 + v)).get s3 := by
-    rw [hz_def, hb3_def, getStorVal_afterStore, hb2_def, getStor_afterStore, hy_eq, hx_eq]
+    rw [hz_def, hb3m_def, getStorVal_afterSload, hb3_def, getStorVal_afterStore, hb2_def, getStor_afterStore, hy_eq, hx_eq]
   have hzle : v ≤ z := by rw [hz_eq]; exact hspendarrow hspend0
-  set b4 := afterSstore sevm (afterSload sevm b3 s3) s3 (z - v) with hb4_def
+  set b4 := afterSstore sevm (afterSload sevm b3m s3) s3 (z - v) with hb4_def
+  -- the allowance slot's two `vySlot`s leave their own scratch words in memory
+  set M3 := (((M2.write 224 f.toBytes).write 192 (4 : B256).toBytes).write 224
+    sevm.caller.toB256.toBytes).write 192 (mapSlot 4 f).toBytes with hM3_def
+  have hM3 : M3.size = 256 := by simp only [hM3_def, Mem.size_write_word_at, hM2]; decide
+  have hwf3 : Mem.Wf M3 := ((((hwf2.write _ _).write _ _).write _ _).write _ _)
   refine ⟨1814 +
-    (2 + sstoreCost sevm (afterSload sevm b3 s3) s3 (z - v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 +
-      10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b3 s3 + 3) +
+    (2 + sstoreCost sevm (afterSload sevm b3m s3) s3 (z - v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 +
+      10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b3m s3 + 3) +
     (42 + 3 + 3 + 3 + 3 + 3 + 3) + 2 + (42 + 3 + 3 + 3 + 3 + 3 + 3) + 3 + 3 + 3 +
     10 + 3 + 3 + 3 + 2 + sloadCost sevm b3 vyMinterSlot + 3 +
     (2 + sstoreCost sevm (afterSload sevm b2 s2) s2 (y + v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 +
@@ -324,7 +331,7 @@ private theorem live_transferFrom_spend (hfork : CoveredFork sevm.benvStat.fork)
     (2 + sstoreCost sevm (afterSload sevm b s1) s1 (x - v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 +
       10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b s1 + 3) +
     (42 + 3 + 3 + 3 + 3 + 9 + 3) + 3 + 3 + 3 + 34 + 34 + 19, fun G hG => ?_⟩
-  obtain ⟨post, hrun, hgas, hland⟩ := tail b4 M2
+  obtain ⟨post, hrun, hgas, hland⟩ := tail b4 M3
     (((Devm.getStor b sevm.currentTarget).set s1
         ((Devm.getStor b sevm.currentTarget).get s1 - v)).set s2
       (((Devm.getStor b sevm.currentTarget).set s1
@@ -333,19 +340,19 @@ private theorem live_transferFrom_spend (hfork : CoveredFork sevm.benvStat.fork)
             ((Devm.getStor b sevm.currentTarget).get s1 - v)).set s2
           (((Devm.getStor b sevm.currentTarget).set s1
               ((Devm.getStor b sevm.currentTarget).get s1 - v)).get s2 + v)).get s3 - v))
-    hwf2 hM2
-    (by rw [hb4_def, getStor_afterStore, hb3_def, getStor_afterStore, hb2_def,
+    hwf3 hM3
+    (by rw [hb4_def, getStor_afterStore, hb3m_def, afterSload_getStor, hb3_def, getStor_afterStore, hb2_def,
         getStor_afterStore, hy_eq, hx_eq, hz_eq])
     (fun a ha => by
-      rw [hb4_def, getStor_afterStore_ne ha, hb3_def, getStor_afterStore_ne ha, hb2_def,
+      rw [hb4_def, getStor_afterStore_ne ha, hb3m_def, afterSload_getStor, hb3_def, getStor_afterStore_ne ha, hb2_def,
         getStor_afterStore_ne ha])
-    (by rw [hb4_def, logs_afterStore, hb3_def, logs_afterStore, hb2_def, logs_afterStore])
+    (by rw [hb4_def, logs_afterStore, hb3m_def, afterSload_logs, hb3_def, logs_afterStore, hb2_def, logs_afterStore])
     G hG
   refine ⟨post, ?_, hgas, hland⟩
   unfold entrySt
   rw [show G + (1814 +
-      (2 + sstoreCost sevm (afterSload sevm b3 s3) s3 (z - v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 +
-        10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b3 s3 + 3) +
+      (2 + sstoreCost sevm (afterSload sevm b3m s3) s3 (z - v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 +
+        10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b3m s3 + 3) +
       (42 + 3 + 3 + 3 + 3 + 3 + 3) + 2 + (42 + 3 + 3 + 3 + 3 + 3 + 3) + 3 + 3 + 3 +
       10 + 3 + 3 + 3 + 2 + sloadCost sevm b3 vyMinterSlot + 3 +
       (2 + sstoreCost sevm (afterSload sevm b2 s2) s2 (y + v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 +
@@ -355,8 +362,8 @@ private theorem live_transferFrom_spend (hfork : CoveredFork sevm.benvStat.fork)
         10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b s1 + 3) +
       (42 + 3 + 3 + 3 + 3 + 9 + 3) + 3 + 3 + 3 + 34 + 34 + 19) =
     G + 1814 +
-      2 + sstoreCost sevm (afterSload sevm b3 s3) s3 (z - v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 +
-        10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b3 s3 + 3 +
+      2 + sstoreCost sevm (afterSload sevm b3m s3) s3 (z - v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 +
+        10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b3m s3 + 3 +
       42 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + 42 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 +
       10 + 3 + 3 + 3 + 2 + sloadCost sevm b3 vyMinterSlot + 3 +
       2 + sstoreCost sevm (afterSload sevm b2 s2) s2 (y + v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 +
@@ -402,6 +409,7 @@ private theorem live_transferFrom_spend (hfork : CoveredFork sevm.benvStat.fork)
     simp [B256.eqCheck, hne]) (by simp) ?_
   refine rx_push rfl (by simp) ?_
   refine rx_branchTo_zero ?_
+  rw [show afterSload sevm b3 6 = b3m from rfl]
   unfold t_0423_c0
   refine rx_push (w := 4) h4 (by simp) ?_
   refine rx_push (w := 4) h4 (by simp) ?_
@@ -415,7 +423,7 @@ private theorem live_transferFrom_spend (hfork : CoveredFork sevm.benvStat.fork)
     (by omega) (by decide) (by decide) (by simp) ?_
   refine rx_vySubStore (p := 0x44) (h := 0x04) (l := 0x50) (fail := t_044c_c0) hfork hstatic
     (by rw [hv2]; exact hzle) (by omega) (by simp) ?_
-  rw [hv2, ← hb4_def]
+  rw [hv2]
   exact hrun
 
 /-- `transferFrom`: forwards of `safeTransferFrom`, the minter branch decided by `rawTransferFrom`'s
