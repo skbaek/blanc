@@ -1,5 +1,6 @@
 import Blanc.Lift.BeaconDeposit.BodySpec
 import Jaune.MulDiv
+import Blanc.Lift.ExactWalkCutOps
 
 /-!
 # Body segment 1: the six guards and the two `to_little_endian_64` calls
@@ -139,7 +140,16 @@ theorem body_guards {sevm : Sevm} {b : Devm} {sel rt sP wP pP : B256} {G : Nat}
     · exact himg2_160
     · exact himg2_192
     · exact himg2_224
+  have hg1 : leGas mem0.size (Bytes.toB256 [0x80]).toNat = 830 := by
+    rw [mem0_size, p80]; decide
+  have hg2 : leGas M1.size (192 : B256).toNat = 827 := by
+    rw [hs1']; decide
+  have h80 : Bytes.toB256 [0x80] = (128 : B256) := by decide
+  rw [hg1, h80] at hcall1
+  rw [hg2] at hcall2
   refine ⟨b'', M', Keep.refl b'', hBodyMem, fun o k => ?_⟩
+  rw [show G + (1882 + sloadCost sevm b solCountSlot) =
+    (((G + (874 + sloadCost sevm b solCountSlot)) + 830) + 8) + 170 by omega]
   unfold t_0304_c7
   refine rx_dest ?_
   refine rx_push rfl (by simp) ?_
@@ -161,6 +171,59 @@ theorem body_guards {sevm : Sevm} {b : Devm} {sel rt sP wP pP : B256} {G : Nat}
   refine rx_eq (v := 1) (by decide) (by simp) ?_
   refine rx_push rfl (by simp) ?_
   refine rx_branch_succ (by decide) ?_
-  sorry
+  unfold t_040f_c7
+  refine rx_dest ?_
+  refine rx_push (w := 0x0de0b6b3a7640000) (by decide) (by simp) ?_
+  refine rx_callvalue (by simp) ?_
+  refine rx_lt hltz (by simp) ?_
+  refine rx_iszero (v := 1) (by decide) (by simp) ?_
+  refine rx_push rfl (by simp) ?_
+  refine rx_branch_succ (by decide) ?_
+  unfold t_0470_c7
+  refine rx_dest ?_
+  refine rx_push (w := 1000000000) (by decide) (by simp) ?_
+  refine rx_callvalue (by simp) ?_
+  refine rx_mod hmodv (by simp) ?_
+  refine rx_iszero (v := 1) (by decide) (by simp) ?_
+  refine rx_push rfl (by simp) ?_
+  refine rx_branch_succ (by decide) ?_
+  unfold t_04cd_c7
+  refine rx_dest ?_
+  refine rx_push (w := 1000000000) (by decide) (by simp) ?_
+  refine rx_callvalue (by simp) ?_
+  refine rx_div (v := gweiAmount sevm) rfl (by simp) ?_
+  refine rx_push (w := 0xffffffffffffffff) (by decide) (by simp) ?_
+  refine rx_dup (n := 1) rfl (by simp) ?_
+  refine rx_gt hgtz (by simp) ?_
+  refine rx_iszero (v := 1) (by decide) (by simp) ?_
+  refine rx_push rfl (by simp) ?_
+  refine rx_branch_succ (by decide) ?_
+  unfold t_0535_c7
+  refine rx_dest ?_
+  refine rx_push (w := 96) (by decide) (by simp) ?_
+  refine rx_push (w := 1344) (by decide) (by simp) ?_
+  refine rx_dup (n := 2) rfl (by simp) ?_
+  refine rx_push rfl (by simp) ?_
+  refine rx_callRet (j := 25) rfl hcall1 ?_
+  rw [show G + (874 + sloadCost sevm b solCountSlot) =
+    (((G + 827) + 11) + sloadCost sevm b solCountSlot) + 36 by omega]
+  unfold t_0540_c7
+  refine rx_dest ?_
+  refine rx_swap1 ?_
+  refine rx_pop ?_
+  refine rx_push (w := BeaconDeposit.depositEventTopic)
+    (by rw [BeaconDeposit.depositEventTopic_eq]; decide) (by simp) ?_
+  refine rx_dup (n := 9) rfl (by simp) ?_
+  refine rx_dup (n := 9) rfl (by simp) ?_
+  refine rx_dup (n := 9) rfl (by simp) ?_
+  refine rx_dup (n := 9) rfl (by simp) ?_
+  refine rx_dup (n := 5) rfl (by simp) ?_
+  refine rx_dup (n := 10) rfl (by simp) ?_
+  refine rx_dup (n := 10) rfl (by simp) ?_
+  refine rx_push (w := 1397) (by decide) (by simp) ?_
+  refine rx_push (w := solCountSlot) (by decide) (by simp) ?_
+  refine rx_sload_sel hfork (by simp) ?_
+  refine rx_push rfl (by simp) ?_
+  exact rx_callRet (j := 25) rfl hcall2 k
 
 end Blanc.Lift.BeaconDeposit
