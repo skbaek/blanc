@@ -233,7 +233,10 @@ CONTRACTS = {
     # lifted (vyper-3crv-bytecode-v1).
     "curve-3crv": ["Curve3Crv.Model", "Curve3Crv.Properties", "Lift.Curve3Crv.Cert", "Lift.Curve3Crv.Check", "Lift.Curve3Crv.Jumps",
                    "Lift.Curve3Crv.Lift", "Lift.Curve3Crv.Prog", "Lift.Curve3Crv.Layout",
-                   "Lift.Curve3Crv.Decode", "Lift.Curve3Crv.Spec", "Lift.Curve3Crv.ViewBodies"],
+                   "Lift.Curve3Crv.Decode", "Lift.Curve3Crv.Spec", "Lift.Curve3Crv.ViewBodies",
+                   "Lift.Curve3Crv.Dispatch", "Lift.Curve3Crv.Refine", "Lift.Curve3Crv.SafeBodies",
+                   "Lift.Curve3Crv.SafeViews", "Lift.Curve3Crv.LiveBodies", "Lift.Curve3Crv.Safe",
+                   "Lift.Curve3Crv.Exec"],
     "drip": ["DripCore", "Drip", "DripCode", "DripDeploy", "DripConcreteHistory", "DripConcreteHistory.Deployment", "DripConcreteHistory.Join", "DripConcreteHistory.Accrual", "DripConcreteHistory.AccrualExit", "DripConcreteReach", "DripCreationCode",
              "DripRpow", "DripIngress", "DripFunctional", "DripAccounting", "DripTranscript", "DripMachine", "DripEndpoints", "DripFresh", 
              "DripStackSafetyData", "DripStackSafety", "DripStackSafetyRegion214", "DripStackSafetyRegion576", "DripStackSafetyRegion1022", 
