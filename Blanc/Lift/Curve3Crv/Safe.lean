@@ -48,7 +48,7 @@ theorem writer_post {sevm : Sevm} {pre post : Devm} {K' : Key → Prop} {r : Raw
 theorem c3crv_frame_refines {sevm : Sevm} {pre post : Devm} {s : Curve3Crv.State}
     {K : Key → Prop}
     (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
-    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty)
+    (hcd : sevm.data.length < 2 ^ 256) (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty)
     (hinv : VyInv (Devm.getStor pre sevm.currentTarget) s K)
     (hfresh : FreshKeys K (callKeys sevm.caller (decodeCall sevm)))
     (exc : Exec 0 sevm pre (.ok post)) :
@@ -66,7 +66,7 @@ theorem c3crv_frame_refines {sevm : Sevm} {pre post : Devm} {s : Curve3Crv.State
   rw [show (Cert.prog cert)[0]? = some t_0000_c0 from rfl] at hf0
   cases hf0
   rw [St.self hstack hmem] at run
-  obtain ⟨k, f, sel, G', hk, hs, hsel, hlen, runB⟩ := safe_dispatch run
+  obtain ⟨k, f, sel, G', hk, hs, hsel, hlen, runB⟩ := safe_dispatch hcd run
   have hdec := decodeCall_at hs hsel hlen
   rw [hdec] at hfresh ⊢
   have hk13 : k < 13 := by

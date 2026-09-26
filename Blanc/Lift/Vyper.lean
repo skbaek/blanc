@@ -153,6 +153,24 @@ theorem vyImg_clamps (img : Bytes) (w : B256) : VyClamps (vyImg img w) := by
     exact sliceD_word_same _ _ _
   · exact sliceD_word_same _ _ _
 
+/-- `mload(0)` after the prologue is the selector: the calldata's first word shifted down 224
+bits. -/
+theorem vyImg_selector (w : B256) : Bytes.toB256 ((vyImg [] w).sliceD 0 32 0) = w >>> 224 := by
+  unfold vyImg
+  rw [Bytes.sliceD_writeAt_before _ _ 0 32 160 (by omega),
+    Bytes.sliceD_writeAt_before _ _ 0 32 128 (by omega),
+    Bytes.sliceD_writeAt_before _ _ 0 32 96 (by omega),
+    Bytes.sliceD_writeAt_before _ _ 0 32 64 (by omega),
+    Bytes.sliceD_writeAt_before _ _ 0 32 32 (by omega), shiftRight_224_eq_toB256_take_four]
+  have hw : w.toBytes = w.toBytes.take 4 ++ w.toBytes.drop 4 := (List.take_append_drop 4 _).symm
+  have e : (Bytes.writeAt [] 28 w.toBytes).sliceD 0 32 0 =
+      List.replicate 28 0 ++ w.toBytes.take 4 := by
+    simp only [Bytes.writeAt, List.sliceD, List.drop_zero, List.drop_nil, List.append_nil]
+    rw [List.takeD_eq_take _ (by simp [B256.length_toBytes]), hw]
+    simp [List.takeD]
+  rw [e]
+  simp [Bytes.toB256_zero_cons]
+
 /-- The address clamp an image with the constants yields to `MLOAD 0x20`. -/
 theorem VyClamps.clamp {img : Bytes} (h : VyClamps img) :
     Bytes.toB256 (img.sliceD 32 32 0) = Bytes.toB256 vyC20 := by
