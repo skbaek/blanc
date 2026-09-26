@@ -10,50 +10,62 @@ open Jaune
 
 theorem jumps_0 :
     jumpsOkNode code (Cert.entries cert) t_0000_c0 [] = true := by
+  rw [← jumpsOkNodeT_eq codeTries]
   decide +kernel
 
 theorem jumps_1 :
     jumpsOkNode code (Cert.entries cert) t_01cf_c1 [.unk, .unk, .unk, .unk, .unk, .unk] = true := by
+  rw [← jumpsOkNodeT_eq codeTries]
   decide +kernel
 
 theorem jumps_2 :
     jumpsOkNode code (Cert.entries cert) t_0229_c2 [.unk, .unk, .unk, .unk, .unk, .unk] = true := by
+  rw [← jumpsOkNodeT_eq codeTries]
   decide +kernel
 
 theorem jumps_3 :
     jumpsOkNode code (Cert.entries cert) t_045b_c3 [] = true := by
+  rw [← jumpsOkNodeT_eq codeTries]
   decide +kernel
 
 theorem jumps_4 :
     jumpsOkNode code (Cert.entries cert) t_04f6_c4 [.unk] = true := by
+  rw [← jumpsOkNodeT_eq codeTries]
   decide +kernel
 
 theorem jumps_5 :
     jumpsOkNode code (Cert.entries cert) t_0774_c5 [.unk, .unk, .unk, .unk, .unk, .unk] = true := by
+  rw [← jumpsOkNodeT_eq codeTries]
   decide +kernel
 
 theorem jumps_6 :
     jumpsOkNode code (Cert.entries cert) t_0828_c6 [.unk, .unk, .unk, .unk, .unk, .unk] = true := by
+  rw [← jumpsOkNodeT_eq codeTries]
   decide +kernel
 
 theorem jumps_7 :
     jumpsOkNode code (Cert.entries cert) t_08de_c7 [] = true := by
+  rw [← jumpsOkNodeT_eq codeTries]
   decide +kernel
 
 theorem jumps_8 :
     jumpsOkNode code (Cert.entries cert) t_019a_c8 [.unk, .unk, .unk, .unk, .unk, .unk] = true := by
+  rw [← jumpsOkNodeT_eq codeTries]
   decide +kernel
 
 theorem jumps_9 :
     jumpsOkNode code (Cert.entries cert) t_073f_c9 [.unk, .unk, .unk, .unk, .unk, .unk] = true := by
+  rw [← jumpsOkNodeT_eq codeTries]
   decide +kernel
 
 theorem jumps_10 :
     jumpsOkNode code (Cert.entries cert) t_07f3_c10 [.unk, .unk, .unk, .unk, .unk, .unk] = true := by
+  rw [← jumpsOkNodeT_eq codeTries]
   decide +kernel
 
 theorem jumps_11 :
     jumpsOkNode code (Cert.entries cert) t_01f4_c11 [.unk, .unk, .unk, .unk, .unk, .unk] = true := by
+  rw [← jumpsOkNodeT_eq codeTries]
   decide +kernel
 
 theorem jumps_ok : Cert.jumpsOk code cert = true := by
