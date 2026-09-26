@@ -96,6 +96,22 @@ theorem ri_log3 {i sz t1 t2 t3 : B256} {d : Devm}
   rw [e1]
   rfl
 
+/-- `RETURN`, inverted: the output is the window, storage and logs are the base's. -/
+theorem ri_return {i sz : B256} {d : Devm}
+    (h : Linst.Run sevm (St b (i :: sz :: S) M G) .return_ (.ok d)) :
+    d.output = (M.read i.toNat sz.toNat).1 ∧ (∀ a, Devm.getStor d a = Devm.getStor b a) ∧
+      d.logs = b.logs := by
+  simp only [Linst.Run, Linst.run] at h
+  rw [show (St b (i :: sz :: S) M G).popToNat = .ok (i.toNat, St b (sz :: S) M G) from rfl] at h
+  simp only [Except.bind_ok] at h
+  rw [show (St b (sz :: S) M G).popToNat = .ok (sz.toNat, St b S M G) from rfl] at h
+  simp only [Except.bind_ok] at h
+  rcases Except.bind_eq_ok h with ⟨s1, h1, h2⟩
+  have e1 := Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas h1)
+  cases h2
+  rw [e1]
+  exact ⟨rfl, fun _ => rfl, rfl⟩
+
 /-- `SSTORE` at its selected cost (warm/cold, EIP-2200 schedule), with the sentry premise. -/
 theorem rx_sstore {k' v : B256} (hfork : CoveredFork sevm.benvStat.fork)
     (hsentry : gCallStipend < G + sstoreCost sevm b k' v) (hstatic : sevm.isStatic = false)
@@ -107,5 +123,17 @@ theorem rx_sstore {k' v : B256} (hfork : CoveredFork sevm.benvStat.fork)
   exact k
 
 end Steps
+
+/-- Every memory reads as its own backing array. -/
+theorem Mem.reads_data (μ : Mem) : Mem.Reads μ μ.data.toList := by
+  intro index
+  by_cases bound : index < μ.data.size <;>
+    simp [Array.getD, bound, List.getD_eq_getElem?_getD]
+
+/-- A word written into a well-formed memory reads back. -/
+theorem Mem.read_write_word_of_wf {M : Mem} (hwf : Mem.Wf M) (n : Nat) (v : B256) :
+    ((M.write n v.toBytes).read n 32).1 = v.toBytes := by
+  rw [(Mem.reads_data M).write hwf n v.toBytes |>.read]
+  exact sliceD_word_same _ _ _
 
 end Blanc.Lift

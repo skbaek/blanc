@@ -355,4 +355,308 @@ theorem vySlot_keccak (μ : Mem) (slot key : B256) :
     (((μ.write 224 key.toBytes).write 192 slot.toBytes).read 192 64).1.keccak = mapSlot slot key := by
   rw [vySlot_read]; rfl
 
+
+/-! ## Mapping slots and checked storage updates, as trees -/
+
+section Stores
+
+variable {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm} {S : List B256} {M : Mem}
+  {G : Nat} {f : SFunc} {r : Seg}
+
+/-- The `HashMap` slot sequence: from `[key, slot]`, `mstore(0xe0, key); mstore(0xc0, slot);
+keccak(0xc0, 0x40)`, then `f`. -/
+def vySlot (f : SFunc) : SFunc :=
+  .next (.push [0xe0] (by simp)) (.next (.reg .mstore) (.next (.push [0xc0] (by simp))
+    (.next (.reg .mstore) (.next (.push [0x40] (by simp)) (.next (.push [0xc0] (by simp))
+      (.next (.reg .keccak256) f))))))
+
+/-- The memory the slot sequence leaves. -/
+def vySlotMem (M : Mem) (slot key : B256) : Mem :=
+  (((M.write 224 key.toBytes).write 192 slot.toBytes).read 192 64).2
+
+theorem vySlotMem_wf {M : Mem} (h : Mem.Wf M) (slot key : B256) : Mem.Wf (vySlotMem M slot key) :=
+  ((h.write _ _).write _ _).extend _ _
+
+/-- **The slot sequence, inverted.** -/
+theorem ric_vySlot {key slot : B256}
+    (run : SFunc.RunCut fs sevm C (St b (key :: slot :: S) M G) (vySlot f) r) :
+    ∃ G', SFunc.RunCut fs sevm C (St b (mapSlot slot key :: S) (vySlotMem M slot key) G') f r := by
+  have he0 : (Bytes.toB256 [0xe0]).toNat = 224 := by decide
+  have hc0 : (Bytes.toB256 [0xc0]).toNat = 192 := by decide
+  have h40 : (Bytes.toB256 [0x40]).toNat = 64 := by decide
+  unfold vySlot at run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_mstore s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_mstore s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_keccak s1
+  rw [he0, hc0, h40, vySlot_keccak] at run
+  exact ⟨G7, run⟩
+
+/-- A checked `self.x -= v` with the slot on the stack and `v` the calldata word at `p`:
+`DUP1 SLOAD PUSH1 p CALLDATALOAD DUP1 DUP3 LT ISZERO PUSH2 ok JUMPI` (reverting on fall-through),
+`JUMPDEST DUP1 DUP3 SUB SWAP1 POP SWAP1 POP DUP2 SSTORE POP`. -/
+def vySubStore (p h l : UInt8) (fail rest : SFunc) : SFunc :=
+  .next (.reg (.dup 0)) (.next (.reg .sload) (.next (.push [p] (by simp))
+    (.next (.reg .calldataload) (.next (.reg (.dup 0)) (.next (.reg (.dup 2)) (.next (.reg .lt)
+      (.next (.reg .iszero) (.next (.push [h, l] (by simp)) (.branch fail
+        (.dest (.next (.reg (.dup 0)) (.next (.reg (.dup 2)) (.next (.reg .sub)
+          (.next (.reg (.swap 0)) (.next (.reg .pop) (.next (.reg (.swap 0)) (.next (.reg .pop)
+            (.next (.reg (.dup 1)) (.next (.reg .sstore) (.next (.reg .pop) rest))))))))))))))))))))
+
+/-- A checked `self.x += v`: `DUP1 SLOAD PUSH1 p CALLDATALOAD DUP2 DUP2 DUP4 ADD LT ISZERO PUSH2
+ok JUMPI` (the sum wrapped below the old value reverts), `JUMPDEST DUP1 DUP3 ADD SWAP1 POP SWAP1
+POP DUP2 SSTORE POP`. -/
+def vyAddStore (p h l : UInt8) (fail rest : SFunc) : SFunc :=
+  .next (.reg (.dup 0)) (.next (.reg .sload) (.next (.push [p] (by simp))
+    (.next (.reg .calldataload) (.next (.reg (.dup 1)) (.next (.reg (.dup 1)) (.next (.reg (.dup 3))
+      (.next (.reg .add) (.next (.reg .lt) (.next (.reg .iszero) (.next (.push [h, l] (by simp))
+        (.branch fail (.dest (.next (.reg (.dup 0)) (.next (.reg (.dup 2)) (.next (.reg .add)
+          (.next (.reg (.swap 0)) (.next (.reg .pop) (.next (.reg (.swap 0)) (.next (.reg .pop)
+            (.next (.reg (.dup 1)) (.next (.reg .sstore) (.next (.reg .pop)
+              rest))))))))))))))))))))))
+
+/-- The sum of two words does not wrap exactly when it is not below the first. -/
+theorem B256.nof_iff_not_add_lt (y v : B256) :
+    y.toNat + v.toNat < 2 ^ 256 ↔ ¬ (y + v < y) := by
+  rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_add]
+  have hy := B256.toNat_lt y
+  have hv := B256.toNat_lt v
+  unfold Nat.lo
+  constructor
+  · intro h; rw [Nat.mod_eq_of_lt h]; omega
+  · intro h
+    by_contra hc
+    rw [Nat.mod_eq_sub_mod (by omega), Nat.mod_eq_of_lt (by omega)] at h
+    omega
+
+/-- **A checked subtraction store, inverted**: the stored word covered the calldata word, and
+the slot now holds the difference. -/
+theorem ric_vySubStore {slot : B256} {p h l : UInt8} {fail rest : SFunc}
+    (hfork : CoveredFork sevm.benvStat.fork) (hf : fail.noOk = true)
+    (run : SFunc.RunCut fs sevm C (St b (slot :: S) M G) (vySubStore p h l fail rest) r) :
+    Sevm.dataWord sevm (Bytes.toB256 [p]) ≤ b.getStorVal sevm.currentTarget slot ∧
+      ∃ G', SFunc.RunCut fs sevm C
+        (St (afterSstore sevm (afterSload sevm b slot) slot
+          (b.getStorVal sevm.currentTarget slot - Sevm.dataWord sevm (Bytes.toB256 [p]))) S M G')
+        rest r := by
+  unfold vySubStore at run
+  set x := b.getStorVal sevm.currentTarget slot
+  set v := Sevm.dataWord sevm (Bytes.toB256 [p])
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_dup (w := slot) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_calldataload s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_dup (w := v) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_dup (w := x) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_lt s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_iszero s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_push s1
+  rcases ric_branch run with ⟨-, G10, run⟩ | ⟨hw, G10, run⟩
+  · exact (run.false_of_noOk hf).elim
+  obtain ⟨G11, run⟩ := ric_dest run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_dup (w := v) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_dup (w := x) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_sub s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_swap (S' := v :: (x - v) :: x ::
+    slot :: S) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_pop s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_swap (S' := x :: (x - v) ::
+    slot :: S) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_pop s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_dup (w := slot) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_sstore hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_pop s1
+  refine ⟨?_, G21, run⟩
+  have h0 := eq_zero_of_iszero_ne_zero hw
+  have := toNat_ge_of_ltCheck_eq_zero h0
+  exact B256.le_iff_toNat_le_toNat.mpr this
+
+/-- **A checked addition store, inverted**: the sum did not wrap, and the slot now holds it. -/
+theorem ric_vyAddStore {slot : B256} {p h l : UInt8} {fail rest : SFunc}
+    (hfork : CoveredFork sevm.benvStat.fork) (hf : fail.noOk = true)
+    (run : SFunc.RunCut fs sevm C (St b (slot :: S) M G) (vyAddStore p h l fail rest) r) :
+    (b.getStorVal sevm.currentTarget slot).toNat +
+        (Sevm.dataWord sevm (Bytes.toB256 [p])).toNat < 2 ^ 256 ∧
+      ∃ G', SFunc.RunCut fs sevm C
+        (St (afterSstore sevm (afterSload sevm b slot) slot
+          (b.getStorVal sevm.currentTarget slot + Sevm.dataWord sevm (Bytes.toB256 [p]))) S M G')
+        rest r := by
+  unfold vyAddStore at run
+  set x := b.getStorVal sevm.currentTarget slot
+  set v := Sevm.dataWord sevm (Bytes.toB256 [p])
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_dup (w := slot) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_calldataload s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_dup (w := x) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_dup (w := v) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_dup (w := x) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_add s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_lt s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_iszero s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_push s1
+  rcases ric_branch run with ⟨-, G12, run⟩ | ⟨hw, G12, run⟩
+  · exact (run.false_of_noOk hf).elim
+  obtain ⟨G13, run⟩ := ric_dest run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_dup (w := v) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_dup (w := x) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_add s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_swap (S' := v :: (x + v) :: x ::
+    slot :: S) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_pop s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_swap (S' := x :: (x + v) ::
+    slot :: S) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_pop s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_dup (w := slot) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_sstore hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G23, rfl⟩ := ri_pop s1
+  refine ⟨?_, G23, run⟩
+  have h0 := eq_zero_of_iszero_ne_zero hw
+  rw [B256.nof_iff_not_add_lt]
+  intro hlt
+  simp [B256.ltCheck, hlt] at h0
+  exact absurd h0 (by decide)
+
+end Stores
+section StoresForward
+
+variable {fs : List SFunc} {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+  {f : SFunc} {o : Outcome}
+
+theorem vySlotMem_eq {M : Mem} (hM : M.size ≤ 256) (h32 : M.size % 32 = 0) (slot key : B256) :
+    vySlotMem M slot key = (M.write 224 key.toBytes).write 192 slot.toBytes := by
+  have hs1 : (M.write 224 key.toBytes).size = 256 := by
+    rw [Mem.size_write_word_at]
+    split_ifs with h
+    · omega
+    · rfl
+  have hs2 : ((M.write 224 key.toBytes).write 192 slot.toBytes).size = 256 := by
+    rw [Mem.size_write_word_at, hs1]; rfl
+  exact Mem.read_snd_eq_self (by rw [hs2]; rfl)
+
+/-- **The slot sequence, forward**, over a memory of at most eight words (`c1` the first store's
+charge: 9 from six words, 3 from eight). -/
+theorem rx_vySlot {n c1 : Nat} (hM : M.size = n) (hn : n ≤ 256) (h32 : n % 32 = 0)
+    (hc1 : gVerylow + (calculateMemoryGasCost (memExtSize n 224 32) - calculateMemoryGasCost n)
+      = c1) {slot key : B256} (hroom : S.length + 2 < 1024)
+    (k : SFunc.RunExact fs sevm
+      (St b (mapSlot slot key :: S) ((M.write 224 key.toBytes).write 192 slot.toBytes) G) f o) :
+    SFunc.RunExact fs sevm (St b (key :: slot :: S) M (G + 42 + 3 + 3 + 3 + 3 + c1 + 3))
+      (vySlot f) o := by
+  have he0 : (Bytes.toB256 [0xe0]).toNat = 224 := by decide
+  have hc0 : (Bytes.toB256 [0xc0]).toNat = 192 := by decide
+  have h40 : (Bytes.toB256 [0x40]).toNat = 64 := by decide
+  have hs1 : (M.write 224 key.toBytes).size = 256 := by
+    rw [Mem.size_write_word_at, hM]
+    split_ifs with h
+    · omega
+    · rfl
+  have hs2 : ((M.write 224 key.toBytes).write 192 slot.toBytes).size = 256 := by
+    rw [Mem.size_write_word_at, hs1]; rfl
+  unfold vySlot
+  refine rx_push rfl (by simp; omega) ?_
+  refine rx_mstore (c := c1) ?_ (M' := M.write 224 key.toBytes) (by rw [he0]) ?_
+  · rw [he0, St.extCost_eq hM]; exact hc1
+  refine rx_push rfl (by simp; omega) ?_
+  refine rx_mstore (c := 3) ?_ (M' := (M.write 224 key.toBytes).write 192 slot.toBytes)
+    (by rw [hc0]) ?_
+  · rw [hc0, St, Devm.extCost_zero_of_le (by rw [hs1]) (by rw [hs1]; omega)]; rfl
+  refine rx_push rfl (by omega) ?_
+  refine rx_push rfl (by simp; omega) ?_
+  refine rx_keccak (c := 42) ?_ ?_ ?_ (by omega) k
+  · rw [hc0, h40, St, Devm.extCost_zero_of_le (by rw [hs2]) (by rw [hs2])]; decide
+  · rw [hc0, h40]; exact vySlot_keccak M slot key
+  · rw [hc0, h40]
+    exact Mem.read_snd_eq_self (by rw [hs2]; rfl)
+
+/-- **A checked subtraction store, forward.** -/
+theorem rx_vySubStore {slot : B256} {p h l : UInt8} {fail rest : SFunc}
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hle : Sevm.dataWord sevm (Bytes.toB256 [p]) ≤ b.getStorVal sevm.currentTarget slot)
+    (hG : gCallStipend < G + 2) (hroom : S.length + 6 < 1024)
+    (k : SFunc.RunExact fs sevm
+      (St (afterSstore sevm (afterSload sevm b slot) slot
+        (b.getStorVal sevm.currentTarget slot - Sevm.dataWord sevm (Bytes.toB256 [p]))) S M G)
+      rest o) :
+    let x := b.getStorVal sevm.currentTarget slot
+    let v := Sevm.dataWord sevm (Bytes.toB256 [p])
+    SFunc.RunExact fs sevm (St b (slot :: S) M (G + 2 + sstoreCost sevm (afterSload sevm b slot) slot (x - v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b slot + 3))
+      (vySubStore p h l fail rest) o := by
+  intro x v
+  unfold vySubStore
+  refine rx_dup (n := 0) rfl (by simp; omega) ?_
+  refine rx_sload_sel hfork (by simp; omega) ?_
+  refine rx_push rfl (by simp; omega) ?_
+  refine rx_calldataload (by simp; omega) ?_
+  refine rx_dup (n := 0) rfl (by simp; omega) ?_
+  refine rx_dup (n := 2) rfl (by simp; omega) ?_
+  refine rx_lt (v := 0) ?_ (by simp; omega) ?_
+  · simp only [B256.ltCheck]
+    rw [ite_eq_right_iff]
+    intro hlt
+    rw [B256.lt_iff_toNat_lt_toNat] at hlt
+    have := B256.le_iff_toNat_le_toNat.mp hle
+    omega
+  refine rx_iszero (v := 1) (by simp [B256.eqCheck]) (by simp; omega) ?_
+  refine rx_push rfl (by simp; omega) ?_
+  refine rx_branch_succ (by decide) (rx_dest ?_)
+  refine rx_dup (n := 0) rfl (by simp; omega) ?_
+  refine rx_dup (n := 2) rfl (by simp; omega) ?_
+  refine rx_sub (by simp; omega) ?_
+  refine rx_swap (n := 0) rfl ?_
+  refine rx_pop ?_
+  refine rx_swap (n := 0) rfl ?_
+  refine rx_pop ?_
+  refine rx_dup (n := 1) rfl (by simp; omega) ?_
+  refine rx_sstore hfork (by omega) hstatic ?_
+  exact rx_pop k
+
+/-- **A checked addition store, forward.** -/
+theorem rx_vyAddStore {slot : B256} {p h l : UInt8} {fail rest : SFunc}
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hnof : (b.getStorVal sevm.currentTarget slot).toNat +
+      (Sevm.dataWord sevm (Bytes.toB256 [p])).toNat < 2 ^ 256)
+    (hG : gCallStipend < G + 2) (hroom : S.length + 7 < 1024)
+    (k : SFunc.RunExact fs sevm
+      (St (afterSstore sevm (afterSload sevm b slot) slot
+        (b.getStorVal sevm.currentTarget slot + Sevm.dataWord sevm (Bytes.toB256 [p]))) S M G)
+      rest o) :
+    let x := b.getStorVal sevm.currentTarget slot
+    let v := Sevm.dataWord sevm (Bytes.toB256 [p])
+    SFunc.RunExact fs sevm (St b (slot :: S) M (G + 2 + sstoreCost sevm (afterSload sevm b slot) slot (x + v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b slot + 3))
+      (vyAddStore p h l fail rest) o := by
+  intro x v
+  unfold vyAddStore
+  refine rx_dup (n := 0) rfl (by simp; omega) ?_
+  refine rx_sload_sel hfork (by simp; omega) ?_
+  refine rx_push rfl (by simp; omega) ?_
+  refine rx_calldataload (by simp; omega) ?_
+  refine rx_dup (n := 1) rfl (by simp; omega) ?_
+  refine rx_dup (n := 1) rfl (by simp; omega) ?_
+  refine rx_dup (n := 3) rfl (by simp; omega) ?_
+  refine rx_add (by simp; omega) ?_
+  refine rx_lt (v := 0) ?_ (by simp; omega) ?_
+  · simp only [B256.ltCheck]
+    rw [ite_eq_right_iff]
+    intro hlt
+    exact absurd hlt ((B256.nof_iff_not_add_lt _ _).mp hnof)
+  refine rx_iszero (v := 1) (by simp [B256.eqCheck]) (by simp; omega) ?_
+  refine rx_push rfl (by simp; omega) ?_
+  refine rx_branch_succ (by decide) (rx_dest ?_)
+  refine rx_dup (n := 0) rfl (by simp; omega) ?_
+  refine rx_dup (n := 2) rfl (by simp; omega) ?_
+  refine rx_add (by simp; omega) ?_
+  refine rx_swap (n := 0) rfl ?_
+  refine rx_pop ?_
+  refine rx_swap (n := 0) rfl ?_
+  refine rx_pop ?_
+  refine rx_dup (n := 1) rfl (by simp; omega) ?_
+  refine rx_sstore hfork (by omega) hstatic ?_
+  exact rx_pop k
+
+end StoresForward
+
 end Blanc.Lift

@@ -28,6 +28,31 @@ def SafeBody (sevm : Sevm) (b : Devm) (f : SFunc) (raw : Option Raw) : Prop :=
   ∀ G post, SFunc.Run prog sevm (entrySt sevm b G) f (.halted post) →
     ∃ r, raw = some r ∧ Lands sevm b post r
 
+theorem getStorVal_afterStore {sevm : Sevm} {b : Devm} {k v key : B256} :
+    (afterSstore sevm (afterSload sevm b k) k v).getStorVal sevm.currentTarget key =
+      ((Devm.getStor b sevm.currentTarget).set k v).get key := by
+  show (Devm.getStor _ _).get _ = _
+  rw [afterSstore_getStor_self, afterSload_getStor]
+
+theorem getStor_afterStore {sevm : Sevm} {b : Devm} {k v : B256} :
+    Devm.getStor (afterSstore sevm (afterSload sevm b k) k v) sevm.currentTarget =
+      (Devm.getStor b sevm.currentTarget).set k v := by
+  rw [afterSstore_getStor_self, afterSload_getStor]
+
+theorem getStor_afterStore_ne {sevm : Sevm} {b : Devm} {k v : B256} {a : Adr}
+    (ha : a ≠ sevm.currentTarget) :
+    Devm.getStor (afterSstore sevm (afterSload sevm b k) k v) a = Devm.getStor b a := by
+  rw [afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha), afterSload_getStor]
+
+theorem getStor_addLog (d : Devm) (L : Log) (a : Adr) :
+    Devm.getStor (d.addLog L) a = Devm.getStor d a := rfl
+
+theorem logs_addLog (d : Devm) (L : Log) : (d.addLog L).logs = d.logs ++ [L] := rfl
+
+theorem logs_afterStore {sevm : Sevm} {b : Devm} {k v : B256} :
+    (afterSstore sevm (afterSload sevm b k) k v).logs = b.logs := by
+  rw [afterSstore_logs, afterSload_logs]
+
 section
 
 variable {sevm : Sevm} {b : Devm}
@@ -98,7 +123,83 @@ second read is over the first write's base (`afterSstore`, `getStorVal`), which 
 `rawTransfer`'s `st1`. -/
 theorem safe_transfer (hfork : CoveredFork sevm.benvStat.fork) :
     SafeBody sevm b t_02ce_c0 (rawTransfer sevm stor₀) := by
-  sorry
+  intro G post run
+  have hM := vyMem_empty_size (Sevm.dataWord sevm 0)
+  have hwf0 := vyMem_wf Mem.wf_empty (Sevm.dataWord sevm 0)
+  have run := run.cut
+  unfold entrySt at run
+  obtain ⟨hv, G1, run⟩ := ric_vyNonpayable (h := 0x02) (l := 0xd8) (fail := t_02d4_c0)
+    (by decide) run
+  obtain ⟨hd, G2, run⟩ := ric_vyAddrArg (p := 0x04) (h := 0x02) (l := 0xe9) (fail := t_02e5_c0)
+    (by decide) (vyMem_reads Mem.wf_empty Mem.reads_empty _) (vyImg_clamps _ _) (by rw [hM])
+    (by rw [hM]; omega) run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_caller s1
+  obtain ⟨G5, run⟩ := ric_vySlot run
+  obtain ⟨hle, G6, run⟩ := ric_vySubStore (p := 0x24) (h := 0x03) (l := 0x0a) (fail := t_0306_c0)
+    hfork (by decide) run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_calldataload s1
+  obtain ⟨G10, run⟩ := ric_vySlot run
+  obtain ⟨hnof, G11, run⟩ := ric_vyAddStore (p := 0x24) (h := 0x03) (l := 0x38)
+    (fail := t_0334_c0) hfork (by decide) run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_calldataload s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_mstore s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_calldataload s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_caller s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_log3 s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G23, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G24, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_mstore s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G27, rfl⟩ := ri_push s1
+  cases run with
+  | last hl =>
+    obtain ⟨hout, hstor, hlogs⟩ := ri_return hl
+    have h3 : Bytes.toB256 [0x03] = 3 := by decide
+    have h320 : (Bytes.toB256 [0x01, 0x40]).toNat = 320 := by decide
+    have h32 : (Bytes.toB256 [0x20]).toNat = 32 := by decide
+    have h0 : (Bytes.toB256 [0x00]).toNat = 0 := by decide
+    have hv1 : Sevm.dataWord sevm (Bytes.toB256 [0x24]) = Sevm.argWord sevm 1 := by
+      show Sevm.dataWord sevm _ = Sevm.dataWord sevm _
+      congr 1
+    have hd0 : Sevm.dataWord sevm (Bytes.toB256 [0x04]) = Sevm.argWord sevm 0 := rfl
+    have htopic : Bytes.toB256 [0xdd, 0xf2, 0x52, 0xad, 0x1b, 0xe2, 0xc8, 0x9b, 0x69, 0xc2, 0xb0,
+        0x68, 0xfc, 0x37, 0x8d, 0xaa, 0x95, 0x2b, 0xa7, 0xf1, 0x63, 0xc4, 0xa1, 0x16, 0x28, 0xf5, 0x5a,
+        0x4d, 0xf5, 0x23, 0xb3, 0xef] = transferTopic := by decide
+    simp only [h3, hv1, hd0] at hle hnof hout hstor hlogs
+    simp only [getStorVal_afterStore] at hnof hstor hlogs
+    simp only [h320, h32, h0] at hout hlogs
+    set M2 := vySlotMem (vySlotMem (vyMem Mem.empty (Sevm.dataWord sevm 0)) 3 sevm.caller.toB256) 3
+      (Sevm.argWord sevm 0)
+    have hwf2 : Mem.Wf M2 := vySlotMem_wf (vySlotMem_wf hwf0 _ _) _ _
+    have hwf3 : Mem.Wf (((M2.write 320 (Sevm.argWord sevm 1).toBytes).read 320 32).2) :=
+      (hwf2.write _ _).extend _ _
+    rw [Mem.read_write_word_of_wf hwf3] at hout
+    rw [Mem.read_write_word_of_wf hwf2] at hlogs
+    have hd' : (Sevm.argWord sevm 0).toNat < 2 ^ 160 := hd
+    set st1 := (stor₀).set (mapSlot 3 sevm.caller.toB256)
+      ((stor₀).get (mapSlot 3 sevm.caller.toB256) - Sevm.argWord sevm 1)
+    refine ⟨(st1.set (mapSlot 3 (Sevm.argWord sevm 0))
+        (st1.get (mapSlot 3 (Sevm.argWord sevm 0)) + Sevm.argWord sevm 1),
+      [⟨sevm.currentTarget, [transferTopic, sevm.caller.toB256, Sevm.argWord sevm 0],
+        (Sevm.argWord sevm 1).toBytes⟩], some (1 : B256).toBytes), ?_,
+      ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_⟩⟩
+    · simp only [rawTransfer, vyBalSlot]
+      exact ite_eq_left ⟨hv, hd', hle, hnof⟩
+    · rw [hstor, getStor_addLog, getStor_afterStore, getStor_afterStore]
+      rfl
+    · rw [hstor, getStor_addLog, getStor_afterStore_ne ha, getStor_afterStore_ne ha]
+    · rw [hlogs, logs_addLog, logs_afterStore, logs_afterStore, htopic]
+    · cases ho
+      exact hout
 
 -- SEGMENT: safeTransferFrom (172 nodes incl. join entry 3)
 /-- `transferFrom`.  Proof sketch: as `safeTransfer` for the two clamps and two balance writes;

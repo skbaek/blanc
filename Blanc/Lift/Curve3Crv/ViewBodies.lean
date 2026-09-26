@@ -107,43 +107,6 @@ theorem live_decimals (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
   refine rx_push (w := vyDecimalsSlot) rfl (by simp) ?_
   exact hrun
 
-/-- The mapping-slot scratch sequence of a view, forward: `PUSH1 slot`, the key word, then
-`mstore(0xe0, key); mstore(0xc0, slot); keccak(0xc0, 0x40)` over a memory of at most eight words
-(`c1` the first store's charge: 9 when memory grows from six words, 3 from eight). -/
-private theorem slot_seq {M : Mem} {n c1 : Nat} (hM : M.size = n) (hn : n ≤ 256)
-    (hc1 : gVerylow + (calculateMemoryGasCost (memExtSize n 224 32) - calculateMemoryGasCost n)
-      = c1) (slot key : B256) {f : SFunc} {o : Outcome} (G : Nat)
-    (k : SFunc.RunExact prog sevm
-      (St b [mapSlot slot key] ((M.write 224 key.toBytes).write 192 slot.toBytes) G) f o) :
-    SFunc.RunExact prog sevm (St b [key, slot] M (G + 42 + 3 + 3 + 3 + 3 + c1 + 3))
-      (.next (.push [0xe0] (by decide)) (.next (.reg .mstore) (.next (.push [0xc0] (by decide))
-        (.next (.reg .mstore) (.next (.push [0x40] (by decide)) (.next (.push [0xc0] (by decide))
-          (.next (.reg .keccak256) f))))))) o := by
-  have he0 : (Bytes.toB256 [0xe0]).toNat = 224 := by decide
-  have hc0 : (Bytes.toB256 [0xc0]).toNat = 192 := by decide
-  have h40 : (Bytes.toB256 [0x40]).toNat = 64 := by decide
-  have hs1 : (M.write 224 key.toBytes).size = 256 := by
-    rw [Mem.size_write_word_at, hM]
-    split_ifs with h
-    · omega
-    · rfl
-  have hs2 : ((M.write 224 key.toBytes).write 192 slot.toBytes).size = 256 := by
-    rw [Mem.size_write_word_at, hs1]; rfl
-  refine rx_push rfl (by simp) ?_
-  refine rx_mstore (c := c1) ?_ (M' := M.write 224 key.toBytes) (by rw [he0]) ?_
-  · rw [he0, St.extCost_eq hM]; exact hc1
-  refine rx_push rfl (by simp) ?_
-  refine rx_mstore (c := 3) ?_ (M' := (M.write 224 key.toBytes).write 192 slot.toBytes)
-    (by rw [hc0]) ?_
-  · rw [hc0, St, Devm.extCost_zero_of_le (by rw [hs1]) (by rw [hs1]; omega)]; rfl
-  refine rx_push rfl (by simp) ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_keccak (c := 42) ?_ ?_ ?_ (by simp) k
-  · rw [hc0, h40, St, Devm.extCost_zero_of_le (by rw [hs2]) (by rw [hs2])]; decide
-  · rw [hc0, h40]; exact vySlot_keccak M slot key
-  · rw [hc0, h40]
-    exact Mem.read_snd_eq_self (by rw [hs2]; rfl)
-
 /-- `balanceOf(a)`: the non-payable guard, the address clamp, the slot `keccak(3 ‖ a)`, 140 gas
 and its `SLOAD`. -/
 theorem live_balanceOf (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
@@ -176,7 +139,7 @@ theorem live_balanceOf (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
   refine rx_push rfl (by simp) ?_
   refine rx_calldataload (by simp) ?_
   rw [ha4]
-  exact slot_seq (c1 := 9) hM (by omega) (by decide) 3 a _ hrun
+  exact rx_vySlot (c1 := 9) hM (by omega) (by decide) (by decide) (by simp) hrun
 
 /-- `allowance(o, p)`: the guard, two clamps, the nested slot `keccak(keccak(4 ‖ o) ‖ p)`, 240 gas
 and its `SLOAD`. -/
@@ -222,11 +185,11 @@ theorem live_allowance (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
   refine rx_push rfl (by simp) ?_
   refine rx_calldataload (by simp) ?_
   rw [ho4]
-  refine slot_seq (c1 := 9) hM (by omega) (by decide) 4 o _ ?_
+  refine rx_vySlot (c1 := 9) hM (by omega) (by decide) (by decide) (by simp) ?_
   refine rx_push rfl (by simp) ?_
   refine rx_calldataload (by simp) ?_
   rw [hq4]
-  exact slot_seq (c1 := 3) hs1 (by omega) (by decide) (mapSlot 4 o) q _ hrun
+  exact rx_vySlot (c1 := 3) hs1 (by omega) (by decide) (by decide) (by simp) hrun
 
 end
 
