@@ -252,6 +252,21 @@ end Control
 
 section World
 
+/-- A burn only moves gas: the successor is the predecessor with its gas replaced. -/
+theorem Devm.eq_setGas_of_burn {a c : Devm} (h : Devm.Burn a c) :
+    c = a.setMach ⟨a.stack, a.memory, c.gasLeft, a.stateGas⟩ := by
+  obtain ⟨hs, hmem, _, hlogs, hrc, hout, hdel, hrd, herr, haddr, hkeys, hstate, hcre, htr, hsg,
+    hacc, hsto⟩ := h
+  rcases c with ⟨⟨s, m, g, sg⟩, ⟨l, rc, o, del, rd, e, ad, ks, cr, ar, sr⟩, ⟨st, tr⟩⟩
+  rcases a with ⟨⟨s0, m0, g0, sg0⟩, ⟨l0, rc0, o0, del0, rd0, e0, ad0, ks0, cr0, ar0, sr0⟩,
+    ⟨st0, tr0⟩⟩
+  simp only [Devm.stack, Devm.memory, Devm.logs, Devm.refundCounter, Devm.output,
+    Devm.accountsToDelete, Devm.returnData, Devm.error, Devm.accessedAddresses,
+    Devm.accessedStorageKeys, Devm.state, Devm.createdAccounts, Devm.transientStorage,
+    Devm.stateGas, Devm.Rels.eq] at *
+  subst hs hmem hlogs hrc hout hdel hrd herr haddr hkeys hstate hcre htr hsg hacc hsto
+  rfl
+
 variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
 
 -- SEGMENT: riSstore
@@ -264,7 +279,27 @@ sentry only move gas.  Compare the pieces field by field (`Devm.ext`, `Meta.ext`
 theorem ri_sstore {k v : B256} {d : Devm} (hfork : CoveredFork sevm.benvStat.fork)
     (h : Ninst.Run sevm (St b (k :: v :: S) M G) (.reg .sstore) d) :
     ∃ G', d = St (afterSstore sevm b k v) S M G' := by
-  sorry
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore, hfork.rules_stateGas_none,
+    Devm.balReadStorage_of_bal_none (CoveredFork.rules_bal_none hfork),
+    Devm.balReadAccount_of_bal_none (CoveredFork.rules_bal_none hfork)] at run
+  rw [show (St b (k :: v :: S) M G).pop = .ok (k, St b (v :: S) M G) from rfl] at run
+  simp only [Except.bind_ok] at run
+  rw [show (St b (v :: S) M G).pop = .ok (v, St b S M G) from rfl] at run
+  simp only [Except.bind_ok] at run
+  rcases Except.bind_eq_ok run with ⟨_, -, run₃⟩
+  rcases Except.bind_eq_ok run₃ with ⟨s₅, h7, run₇⟩
+  rcases Except.bind_eq_ok run₇ with ⟨_, -, h9⟩
+  cases h9
+  have e5 := Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas h7)
+  refine ⟨s₅.gasLeft, ?_⟩
+  rw [e5]
+  unfold afterSstore
+  by_cases hw : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ b.accessedStorageKeys
+  · simp only [St.accessedStorageKeys, hw, not_true_eq_false, ite_false, ite_true]
+    rfl
+  · simp only [St.accessedStorageKeys, hw, not_false_eq_true, ite_false, ite_true]
+    rfl
 
 end World
 
