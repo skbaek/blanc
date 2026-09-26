@@ -140,14 +140,6 @@ theorem safe_insert_loop {sevm : Sevm} {b₀ : Devm} {x : Nat} {node0 : B256}
 
 /-! ## The `deposit` route -/
 
-theorem solZeroHashSlot_ne {h' h : Nat} (hh' : h' < 32) (hh : h < 32) :
-    solZeroHashSlot h' ≠ solBranchSlot h ∧ solZeroHashSlot h' ≠ solCountSlot := by
-  have e1 : (solZeroHashSlot h').toNat = 33 + h' := B256.toNat_toB256_of_lt (by omega)
-  have e2 : (solBranchSlot h).toNat = h := B256.toNat_toB256_of_lt (by omega)
-  have e3 : (solCountSlot).toNat = 32 := by decide
-  exact ⟨fun e => by have := congrArg B256.toNat e; omega,
-    fun e => by have := congrArg B256.toNat e; omega⟩
-
 /-- The `deposit` wrapper's successful runs, from the dispatcher's hand-off. -/
 theorem deposit_route {sevm : Sevm} {pre post : Devm} {history : List B256} {G1 : Nat}
     (hfork : CoveredFork sevm.benvStat.fork) (hcd : sevm.data.length < 2 ^ 256)
