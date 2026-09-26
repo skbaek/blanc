@@ -93,6 +93,12 @@ theorem Bytes.writeAt_writeAt_append (bs : Bytes) (n : Nat) (xs ys : Bytes) :
       · rw [ite_eq_left h2, ite_eq_left (by omega), Blanc.List.getD_append_left 0 (by omega)]
       · rw [ite_eq_right h2, ite_eq_right (by omega)]
 
+/-- An empty write changes no byte a reader sees. -/
+theorem _root_.Blanc.Mem.Reads.writeAt_nil {μ : Mem} {bs : Bytes} (h : Mem.Reads μ bs) (n : Nat) :
+    Mem.Reads μ (Bytes.writeAt bs n []) := by
+  intro i
+  rw [h i, Bytes.getD_writeAt, ite_eq_right (by simp)]
+
 /-! ## The loop's shape -/
 
 /-- The copy body, ending in the back-edge `JUMP` to the head at entry `k`. -/
@@ -264,22 +270,25 @@ theorem copy_exit {C : List Nat} (h : CopyWf srcB dstB lenB R n N) {M : Mem} {G 
 /-- **The copy loop**, from the head of iteration `j0` through the exit tree, as
 an exact cut run built with `SFunc.RunExactCut.iterate`: `copyGas` to the exit
 tree, with the image, size and stack `copyImg`, `copySize` and `copyStack` at
-`N`. -/
+`N`.  The exit continuation may end differently for each final memory (the
+loop's memory is only known through its image), so the result is any `Rr`
+that every exit establishes. -/
 theorem copy_loop {C : List Nat} (hk : fs[k]? = some (copyLoopTree e0 e1 r0 r1 k exitT))
     (hkC : k ∉ C) (h : CopyWf srcB dstB lenB R n N) {j0 : Nat} (hj0 : j0 ≤ N)
     {M : Mem} (hwf : Mem.Wf M) (hr : Mem.Reads M (copyImg img srcB.toNat dstB.toNat j0))
-    (hs : M.size = copySize n dstB.toNat j0) {Gx : Nat} {r : Seg} (hr0 : ∀ d, r ≠ .at k d)
+    (hs : M.size = copySize n dstB.toNat j0) {Gx : Nat} (Rr : Seg → Prop)
     (hexit : ∀ M' : Mem, Mem.Wf M' → Mem.Reads M' (copyImg img srcB.toNat dstB.toNat N) →
       M'.size = copySize n dstB.toNat N →
-      SFunc.RunExactCut fs sevm (k :: C) (St b (copyStack srcB dstB lenB R N) M' Gx) exitT r) :
-    SFunc.RunExactCut fs sevm C
+      ∃ r, SFunc.RunExactCut fs sevm (k :: C) (St b (copyStack srcB dstB lenB R N) M' Gx) exitT r ∧
+        (∀ d, r ≠ .at k d) ∧ Rr r) :
+    ∃ r, SFunc.RunExactCut fs sevm C
       (St b (copyStack srcB dstB lenB R j0) M (Gx + copyGas n dstB.toNat N j0))
-      (copyLoopTree e0 e1 r0 r1 k exitT) r := by
+      (copyLoopTree e0 e1 r0 r1 k exitT) r ∧ Rr r := by
   let J : Nat → Devm → Prop := fun i devm => ∃ M', Mem.Wf M' ∧
     Mem.Reads M' (copyImg img srcB.toNat dstB.toNat (j0 + i)) ∧
     M'.size = copySize n dstB.toNat (j0 + i) ∧
     devm = St b (copyStack srcB dstB lenB R (j0 + i)) M' (Gx + copyGas n dstB.toNat N (j0 + i))
-  obtain ⟨r', hrun, hr'⟩ := SFunc.RunExactCut.iterate (fs := fs) (sevm := sevm) (C := C) hk hkC J (N - j0) (· = r)
+  exact SFunc.RunExactCut.iterate (fs := fs) (sevm := sevm) (C := C) hk hkC J (N - j0) Rr
     (fun i hi devm ⟨M', hwf', hr', hs', hdevm⟩ => by
       obtain ⟨M'', hwf'', hr'', hs'', hrun⟩ :=
         copy_step (fs := fs) (sevm := sevm) (b := b) (e0 := e0) (e1 := e1) (r0 := r0) (r1 := r1)
@@ -297,31 +306,33 @@ theorem copy_loop {C : List Nat} (hk : fs[k]? = some (copyLoopTree e0 e1 r0 r1 k
     (fun devm ⟨M', hwf', hr', hs', hdevm⟩ => by
       have hN : j0 + (N - j0) = N := by omega
       rw [hN] at hr' hs' hdevm
-      refine ⟨r, ?_, hr0, rfl⟩
+      obtain ⟨r, hrun, hr0, hR⟩ := hexit M' hwf' hr' hs'
+      refine ⟨r, ?_, hr0, hR⟩
       rw [hdevm, show Gx + copyGas n dstB.toNat N N = Gx + 26 by unfold copyGas; simp]
-      exact copy_exit h (hexit M' hwf' hr' hs'))
+      exact copy_exit h hrun)
     (St b (copyStack srcB dstB lenB R j0) M (Gx + copyGas n dstB.toNat N j0))
     ⟨M, hwf, by simpa using hr, by simpa using hs, by simp⟩
-  rw [hr'] at hrun
-  exact hrun
 
 /-- `copy_loop` at the top level of a function (nothing else cut), with the
 exit continuation an ordinary exact run whose gotos avoid the loop head. -/
 theorem copy_loop_runExact (hk : fs[k]? = some (copyLoopTree e0 e1 r0 r1 k exitT))
     (h : CopyWf srcB dstB lenB R n N) {j0 : Nat} (hj0 : j0 ≤ N)
     {M : Mem} (hwf : Mem.Wf M) (hr : Mem.Reads M (copyImg img srcB.toNat dstB.toNat j0))
-    (hs : M.size = copySize n dstB.toNat j0) {Gx : Nat} {o : Outcome} {E : List Nat}
+    (hs : M.size = copySize n dstB.toNat j0) {Gx : Nat} {E : List Nat} (Q : Outcome → Prop)
     (hav : exitT.avoids [k] E = true)
     (hE : ∀ j t, j ∈ E → fs[j]? = some t → t.avoids [k] E = true)
     (hexit : ∀ M' : Mem, Mem.Wf M' → Mem.Reads M' (copyImg img srcB.toNat dstB.toNat N) →
       M'.size = copySize n dstB.toNat N →
-      SFunc.RunExact fs sevm (St b (copyStack srcB dstB lenB R N) M' Gx) exitT o) :
-    SFunc.RunExact fs sevm
+      ∃ o, SFunc.RunExact fs sevm (St b (copyStack srcB dstB lenB R N) M' Gx) exitT o ∧ Q o) :
+    ∃ o, SFunc.RunExact fs sevm
       (St b (copyStack srcB dstB lenB R j0) M (Gx + copyGas n dstB.toNat N j0))
-      (copyLoopTree e0 e1 r0 r1 k exitT) o := by
-  rw [SFunc.runExact_iff_runExactCut_nil]
-  exact copy_loop (C := []) hk (by simp) h hj0 hwf hr hs (by simp)
-    (fun M' h1 h2 h3 => (hexit M' h1 h2 h3).toCut hE hav)
+      (copyLoopTree e0 e1 r0 r1 k exitT) o ∧ Q o := by
+  obtain ⟨r, hrun, o, rfl, hQ⟩ := copy_loop (C := []) hk (by simp) h hj0 hwf hr hs
+    (fun r => ∃ o, r = .done o ∧ Q o)
+    (fun M' h1 h2 h3 => by
+      obtain ⟨o, hrun, hQ⟩ := hexit M' h1 h2 h3
+      exact ⟨.done o, hrun.toCut hE hav, by simp, o, rfl, hQ⟩)
+  exact ⟨o, SFunc.runExact_iff_runExactCut_nil.mpr hrun, hQ⟩
 
 end Copy
 

@@ -39,6 +39,18 @@ theorem rx_byte {x y v : B256} (hv : (List.getD y.toBytes x.toNat 0).toB256 = v)
   rx_binary (fn := fun x y => (List.getD y.toBytes x.toNat 0).toB256) (c := gVerylow)
     (by rintro ⟨⟩) (fun _ => rfl) hv hroom k
 
+/-- `ADD` with the sum named (to keep a walk's stack in normal form). -/
+theorem rx_add' {x y v : B256} (hv : x + y = v) (hroom : S.length < 1024)
+    (k : SFunc.RunExact fs sevm (St b (v :: S) M G) f o) :
+    SFunc.RunExact fs sevm (St b (x :: y :: S) M (G + 3)) (.next (.reg .add) f) o :=
+  rx_binary (fn := (· + ·)) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) hv hroom k
+
+/-- `SUB` with the difference named. -/
+theorem rx_sub' {x y v : B256} (hv : x - y = v) (hroom : S.length < 1024)
+    (k : SFunc.RunExact fs sevm (St b (v :: S) M G) f o) :
+    SFunc.RunExact fs sevm (St b (x :: y :: S) M (G + 3)) (.next (.reg .sub) f) o :=
+  rx_binary (fn := (· - ·)) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) hv hroom k
+
 theorem rx_gt {x y v : B256} (hv : B256.gtCheck x y = v) (hroom : S.length < 1024)
     (k : SFunc.RunExact fs sevm (St b (v :: S) M G) f o) :
     SFunc.RunExact fs sevm (St b (x :: y :: S) M (G + 3)) (.next (.reg .gt) f) o :=
