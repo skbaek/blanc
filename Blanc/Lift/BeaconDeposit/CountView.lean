@@ -116,36 +116,6 @@ theorem maskTop8_and (W : B256) :
 
 /-! ## The dispatcher -/
 
-/-- One solc dispatcher comparison that does not match: `DUP1 PUSH4 c EQ PUSH2 d JUMPI`. -/
-theorem cmp_miss {sevm : Sevm} {b : Devm} {M : Mem} {g : Nat} {o : Outcome} {sel : B256}
-    {c0 c1 c2 c3 d0 d1 : UInt8} {l1 l2} {nxt : SFunc} {j : Nat}
-    (hne : Bytes.toB256 [c0, c1, c2, c3] ≠ sel)
-    (k : SFunc.RunExact prog sevm (St b [sel] M g) nxt o) :
-    SFunc.RunExact prog sevm (St b [sel] M (g + 22))
-      (.next (.reg (.dup 0)) (.next (.push [c0, c1, c2, c3] l1) (.next (.reg .eq)
-        (.next (.push [d0, d1] l2) (.branchTo nxt j))))) o := by
-  refine rx_dup1 (by simp) ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_eq (v := 0) ?_ (by simp) ?_
-  · simp [B256.eqCheck, hne]
-  refine rx_push rfl (by simp) ?_
-  exact rx_branchTo_zero k
-
-/-- One solc dispatcher comparison that matches, jumping to entry `j`. -/
-theorem cmp_hit {sevm : Sevm} {b : Devm} {M : Mem} {g : Nat} {o : Outcome} {sel : B256}
-    {c0 c1 c2 c3 d0 d1 : UInt8} {l1 l2} {nxt tgt : SFunc} {j : Nat}
-    (heq : Bytes.toB256 [c0, c1, c2, c3] = sel) (hj : prog[j]? = some tgt)
-    (k : SFunc.RunExact prog sevm (St b [sel] M g) tgt o) :
-    SFunc.RunExact prog sevm (St b [sel] M (g + 22))
-      (.next (.reg (.dup 0)) (.next (.push [c0, c1, c2, c3] l1) (.next (.reg .eq)
-        (.next (.push [d0, d1] l2) (.branchTo nxt j))))) o := by
-  refine rx_dup1 (by simp) ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_eq (v := 1) ?_ (by simp) ?_
-  · simp [B256.eqCheck, heq]
-  refine rx_push rfl (by simp) ?_
-  exact rx_branchTo_succ (by decide) hj k
-
 /-- The dispatcher path to `get_deposit_count()` (entry 33): `mstore(0x40, 0x80)`, the
 `CALLDATASIZE < 4` test, the selector `calldataload(0) >> 224`, two misses and the hit.
 117 gas. -/

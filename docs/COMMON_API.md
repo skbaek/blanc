@@ -2645,7 +2645,9 @@ contract-neutral.
 - Lifted run to execution (liveness, exact gas): `SFunc.RunExact`,
   `Cert.jumpsOk` and `lift_exact` in [`Blanc/Lift/Exact.lean`](../Blanc/Lift/Exact.lean);
   the per-instruction walk steps (`rx_push`, `rx_sload_cold`, `rx_callRet`, …)
-  over the gas-carrying state `St` are in
+  over the gas-carrying state `St`, a frame's entry state as an `St` (`pre_eq_St`), the
+  word read-back facts `sliceD_word_same` and `read_covered`, and one solc dispatcher
+  comparison (`cmp_miss`, `cmp_hit`) are in
   [`Blanc/Lift/ExactWalk.lean`](../Blanc/Lift/ExactWalk.lean), with more steps
   (`rx_shl`, `rx_byte`, `rx_mstore8`, `rx_calldatacopy`, `rx_log1`, …) in
   [`Blanc/Lift/ExactWalkOps.lean`](../Blanc/Lift/ExactWalkOps.lean) and the

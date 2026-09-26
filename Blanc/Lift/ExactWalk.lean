@@ -51,6 +51,24 @@ theorem St.self {d : Devm} {S : List B256} {M : Mem} (hS : d.stack = S) (hM : d.
   subst hS hM
   rfl
 
+/-- A frame's entry state (empty stack and memory) is an `St` over itself. -/
+theorem pre_eq_St {pre : Devm} {g c : Nat} (h_stack : pre.stack = [])
+    (h_mem : pre.memory = Mem.empty) (hg : g + c = pre.gasLeft) :
+    St pre [] Mem.empty (g + c) = pre := by
+  rw [hg]
+  exact (St.self h_stack h_mem).symm
+
+/-- The word just written at `n` reads back. -/
+theorem sliceD_word_same (bs : Bytes) (n : Nat) (w : B256) :
+    (Bytes.writeAt bs n w.toBytes).sliceD n 32 0 = w.toBytes := by
+  have h := Bytes.sliceD_writeAt bs w.toBytes n
+  rwa [B256.length_toBytes] at h
+
+/-- A word read inside an aligned memory leaves it unchanged. -/
+theorem read_covered {M : Mem} {n i : Nat} (hs : M.size = n) (hn : n % 32 = 0)
+    (hi : i + 32 ≤ n) : (M.read i 32).2 = M :=
+  Mem.read_snd_eq_self (by rw [hs]; exact memExtSize_of_le hn hi)
+
 /-- `EXP`, evaluated forward. -/
 theorem Rinst.runCore_exp_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
     {x y : B256} {s : List B256} (h_stk : devm.stack = x :: y :: s)
@@ -319,6 +337,36 @@ theorem rx_return {i sz : B256} {out : Bytes}
   show Linst.run sevm _ .return_ = _
   exact Linst.run_return_eq_ok (out := out) rfl (by rw [hext]; exact Nat.zero_le _)
     (by rw [hext, Nat.sub_zero]; exact Prod.ext hout rfl)
+
+/-! ## The solc dispatcher -/
+
+/-- One solc dispatcher comparison that does not match: `DUP1 PUSH4 c EQ PUSH2 d JUMPI`. -/
+theorem cmp_miss {sel : B256} {c0 c1 c2 c3 d0 d1 : UInt8} {l1 l2} {nxt : SFunc} {j : Nat}
+    (hne : Bytes.toB256 [c0, c1, c2, c3] ≠ sel)
+    (k : SFunc.RunExact fs sevm (St b [sel] M G) nxt o) :
+    SFunc.RunExact fs sevm (St b [sel] M (G + 22))
+      (.next (.reg (.dup 0)) (.next (.push [c0, c1, c2, c3] l1) (.next (.reg .eq)
+        (.next (.push [d0, d1] l2) (.branchTo nxt j))))) o := by
+  refine rx_dup1 (by simp) ?_
+  refine rx_push rfl (by simp) ?_
+  refine rx_eq (v := 0) ?_ (by simp) ?_
+  · simp [B256.eqCheck, hne]
+  refine rx_push rfl (by simp) ?_
+  exact rx_branchTo_zero k
+
+/-- One solc dispatcher comparison that matches, jumping to entry `j`. -/
+theorem cmp_hit {sel : B256} {c0 c1 c2 c3 d0 d1 : UInt8} {l1 l2} {nxt tgt : SFunc} {j : Nat}
+    (heq : Bytes.toB256 [c0, c1, c2, c3] = sel) (hj : fs[j]? = some tgt)
+    (k : SFunc.RunExact fs sevm (St b [sel] M G) tgt o) :
+    SFunc.RunExact fs sevm (St b [sel] M (G + 22))
+      (.next (.reg (.dup 0)) (.next (.push [c0, c1, c2, c3] l1) (.next (.reg .eq)
+        (.next (.push [d0, d1] l2) (.branchTo nxt j))))) o := by
+  refine rx_dup1 (by simp) ?_
+  refine rx_push rfl (by simp) ?_
+  refine rx_eq (v := 1) ?_ (by simp) ?_
+  · simp [B256.eqCheck, heq]
+  refine rx_push rfl (by simp) ?_
+  exact rx_branchTo_succ (by decide) hj k
 
 end Steps
 

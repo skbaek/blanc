@@ -182,10 +182,6 @@ theorem charge_word {b : Devm} {S : List B256} {M : Mem} {G n i : Nat} (hs : M.s
       3 + (calculateMemoryGasCost (max n (i + 32)) - calculateMemoryGasCost n) := by
   rw [St.extCost_eq hs, memExtSize_word_aligned hn hi]; rfl
 
-theorem read_covered {M : Mem} {n i : Nat} (hs : M.size = n) (hn : n % 32 = 0)
-    (hi : i + 32 ≤ n) : (M.read i 32).2 = M :=
-  Mem.read_snd_eq_self (by rw [hs]; exact memExtSize_of_le hn hi)
-
 theorem read_ext_size {M : Mem} {n i : Nat} (hs : M.size = n) (hn : n % 32 = 0)
     (hi : i % 32 = 0) : (M.read i 32).2.size = max n (i + 32) := by
   show memExtSize M.size i 32 = _

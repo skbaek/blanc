@@ -2,16 +2,11 @@ import Blanc.Lift.Weth9.Jumps
 import Blanc.Lift.ExactWalk
 import Blanc.Lift.Weth9.Words
 import Blanc.Lift.Weth9.Spec
+import Jaune.MulDiv
 
 namespace Blanc.Lift.Weth9
 
 open Jaune
-
-theorem toNat_div' {x y : B256} (h : y ≠ 0) : (x / y).toNat = x.toNat / y.toNat := by
-  show (B256.divMod x y).fst.toNat = _
-  rw [B256.divMod, ite_eq_right_iff.mpr (fun h0 => absurd h0 h)]
-  exact B256.toNat_toB256_of_lt
-    (Nat.lt_of_le_of_lt (Nat.div_le_self _ _) (B256.toNat_lt x))
 
 /-- solc 0.4's selector extraction, `div(calldataload(0), 2^224) & 0xffffffff`,
 is `Sevm.selector`'s `>>> 224`. -/
@@ -28,7 +23,7 @@ theorem sel_extract (x : B256) :
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00] ≠ 0 := by decide
   apply B256.toNat_inj
-  rw [B256.toNat_and, toNat_div' hP0, hP, hm, Nat.and_comm, Nat.and_two_pow_sub_one_eq_mod]
+  rw [B256.toNat_and, B256.toNat_div hP0, hP, hm, Nat.and_comm, Nat.and_two_pow_sub_one_eq_mod]
   rcases x with ⟨⟨x3, x2⟩, lo⟩
   have h1 : B256.shiftRight ((x3, x2), lo) 224 = ((0 : B128), B128.shiftRight (x3, x2) 96) := by
     simp [B256.shiftRight]; rfl
@@ -64,15 +59,6 @@ theorem wf_memFp : Mem.Wf memFp := Mem.wf_empty.write _ _
 
 theorem reads_memFp : Mem.Reads memFp (Bytes.writeAt [] 64 (0x60 : B256).toBytes) :=
   Mem.reads_empty.write Mem.wf_empty 64 _
-
-theorem sliceD_word_same (bs : Bytes) (n : Nat) (w : B256) :
-    (Bytes.writeAt bs n w.toBytes).sliceD n 32 0 = w.toBytes := by
-  have h := Bytes.sliceD_writeAt bs w.toBytes n
-  rwa [B256.length_toBytes] at h
-
-theorem read_snd_self {μ : Mem} {n i : Nat} (hs : μ.size = n) (h32 : n % 32 = 0)
-    (hw : i + 32 ≤ n) : (μ.read i 32).2 = μ :=
-  Mem.read_snd_eq_self (by rw [hs]; exact memExtSize_of_le h32 hw)
 
 theorem read_snd_self64 {μ : Mem} {n : Nat} (hs : μ.size = n) (h32 : n % 32 = 0)
     (hw : 64 ≤ n) : (μ.read 0 64).2 = μ :=
@@ -250,7 +236,7 @@ theorem word_tail {sevm : Sevm} {b : Devm} {g : Nat} {v r sel : B256} {μ : Mem}
   case run =>
     refine rx_dest ?_
     refine rx_push (w := 64) (by decide) (by simp) ?_
-    refine rx_mload (c := 3) (v := 0x60) ?_ ?_ (read_snd_self hs (by decide) (by decide))
+    refine rx_mload (c := 3) (v := 0x60) ?_ ?_ (read_covered hs (by decide) (by decide))
       (by simp) ?_
     · rw [St.extCost_eq hs]; decide
     · show Bytes.toB256 (μ.read 64 32).1 = _
@@ -267,7 +253,7 @@ theorem word_tail {sevm : Sevm} {b : Devm} {g : Nat} {v r sel : B256} {μ : Mem}
     refine rx_pop ?_
     refine rx_push (w := 64) (by decide) (by simp) ?_
     refine rx_mload (c := 3) (v := 0x60) ?_ ?_
-      (read_snd_self (memOut_size hs v) (by decide) (by decide)) (by simp) ?_
+      (read_covered (memOut_size hs v) (by decide) (by decide)) (by simp) ?_
     · rw [St.extCost_eq (memOut_size hs v)]; decide
     · show Bytes.toB256 ((memOut μ v).read 64 32).1 = _
       rw [memOut_fp hwf hr hfp, B256.toB256_toBytes]
@@ -352,13 +338,6 @@ theorem dispatch_balanceOf {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome}
   refine cmp_miss (by rw [hsel]; decide) ?_
   exact cmp_hit (j := 22) (by rw [hsel]; decide) rfl k
 
-open Blanc.Lift in
-/-- `pre` as an `St` state. -/
-theorem pre_eq_St {pre : Devm} {g c : Nat} (h_stack : pre.stack = [])
-    (h_mem : pre.memory = Mem.empty) (hg : g + c = pre.gasLeft) :
-    St pre [] Mem.empty (g + c) = pre := by
-  rw [hg]; exact (St.self h_stack h_mem).symm
-
 /-! ## `decimals()`
 
 WETH9 stores `decimals` as a `uint8` packed at the bottom of slot 2, so unlike
@@ -373,7 +352,7 @@ theorem bexp_256_0 : B256.bexp (Bytes.toB256 [0x01, 0x00]) 0 = 1 := by
 
 theorem div_one' (s : B256) : s / 1 = s := by
   apply B256.toNat_inj
-  rw [toNat_div' (by decide), show (1 : B256).toNat = 1 from rfl, Nat.div_one]
+  rw [B256.toNat_div (by decide), show (1 : B256).toNat = 1 from rfl, Nat.div_one]
 
 open Blanc.Lift in
 /-- The `decimals` getter at 0xb05 up to its `SLOAD` of slot 2: 7 gas. -/
@@ -438,7 +417,7 @@ theorem dec_tail {sevm : Sevm} {b : Devm} {g : Nat} {d r sel : B256} :
   case run =>
     refine rx_dest ?_
     refine rx_push (w := 64) (by decide) (by simp) ?_
-    refine rx_mload (c := 3) (v := 0x60) ?_ ?_ (read_snd_self memFp_size (by decide) (by decide))
+    refine rx_mload (c := 3) (v := 0x60) ?_ ?_ (read_covered memFp_size (by decide) (by decide))
       (by simp) ?_
     · rw [St.extCost_eq memFp_size]; decide
     · show Bytes.toB256 (memFp.read 64 32).1 = _
@@ -459,7 +438,7 @@ theorem dec_tail {sevm : Sevm} {b : Devm} {g : Nat} {d r sel : B256} :
     refine rx_pop ?_
     refine rx_push (w := 64) (by decide) (by simp) ?_
     refine rx_mload (c := 3) (v := 0x60) ?_ ?_
-      (read_snd_self (memOut_size memFp_size _) (by decide) (by decide)) (by simp) ?_
+      (read_covered (memOut_size memFp_size _) (by decide) (by decide)) (by simp) ?_
     · rw [St.extCost_eq (memOut_size memFp_size _)]; decide
     · show Bytes.toB256 ((memOut memFp _).read 64 32).1 = _
       rw [memOut_fp wf_memFp reads_memFp memFp_fp, B256.toB256_toBytes]
