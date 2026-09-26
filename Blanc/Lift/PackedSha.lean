@@ -18,8 +18,12 @@ shape, which this module lifts once:
 * **call** (`shaCallTree`): `STATICCALL` of the precompile at address 2 over the 64 bytes at
   `fp'`, output over its first word, the success test, the `RETURNDATASIZE ≥ 32` test.
 
-`packed_sha_pair` is the gas-exact cut run of all four from the two words on the stack to the
-call's continuation, with the hash `sha256 (a ‖ b)` at `fp'` and the free pointer at `fp'`.
+`copy_sha` is the gas-exact cut run of the last three from the copy loop's head (any two words
+at `d - 0x40` copied to the free pointer `d`); `packed_sha_pair` prefixes the packing.  Both are
+stated as an existential over the call's successor world followed by "any continuation run of
+the tail yields a run of the site", so a loop iteration can name the world before it walks.
+`mcpy_iter`, `mcpy_exit` and `merge0` are the copy loop's pieces; a merge with a nonzero
+remainder (the count bytes of the beacon contract's mix-in) is walked where it occurs.
 The trees take the code's own push immediates and entry indices as parameters.
 
 Nothing here mentions a contract.

@@ -219,7 +219,8 @@ theorem root_iter_live {b : Devm} {h size : Nat} {node : B256} {img : Bytes}
     simp [rootNode, hodd, solBranchSlot, hbr]
   rw [hnode]
   unfold rootIterGas
-  rw [if_pos hodd, hkey, sloadCostOfKeys_eq_sloadCost]
+  simp only [hodd, ↓reduceIte]
+  rw [hkey, sloadCostOfKeys_eq_sloadCost]
   rw [show G + (878 + sloadCost sevm b (Nat.toB256 h) + rootIterMem h) =
     G + 56 + (727 + rootIterMem h) + 3 + sloadCost sevm b (Nat.toB256 h) + 92 by omega]
   unfold t_10d1_c24 t_10db_c24 t_10e7_c24
@@ -240,7 +241,7 @@ theorem root_iter_live {b : Devm} {h size : Nat} {node : B256} {img : Bytes}
   · rw [show Bytes.toB256 [0x01] = 1 by decide]
     exact Blanc.one_and_toB256_eq_mod_two size (by omega)
   refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_eq (v := 1) (by rw [eq_one_mod_two, if_pos hodd]) (by simp; omega) ?_
+  refine rxc_eq (v := 1) (by rw [eq_one_mod_two]; simp [hodd]) (by simp; omega) ?_
   refine rxc_iszero (v := 0) (by decide) (by simp; omega) ?_
   refine rxc_push rfl (by simp; omega) ?_
   refine rxc_branch_zero ?_
@@ -311,7 +312,8 @@ theorem root_iter_dead {b : Devm} {h size : Nat} {node : B256} {img : Bytes}
     simp [rootNode, heven, solZeroHashSlot, hzh]
   rw [hnode]
   unfold rootIterGas
-  rw [if_neg (by omega), hkey, sloadCostOfKeys_eq_sloadCost]
+  simp only [show ¬ size % 2 = 1 by omega, ↓reduceIte]
+  rw [hkey, sloadCostOfKeys_eq_sloadCost]
   rw [show G + (868 + sloadCost sevm b (Nat.toB256 (33 + h)) + rootIterMem h) =
     G + 45 + (727 + rootIterMem h) + sloadCost sevm b (Nat.toB256 (33 + h)) + 96 by omega]
   unfold t_10d1_c24 t_10db_c24 t_11e6_c24
@@ -332,7 +334,7 @@ theorem root_iter_dead {b : Devm} {h size : Nat} {node : B256} {img : Bytes}
   · rw [show Bytes.toB256 [0x01] = 1 by decide]
     exact Blanc.one_and_toB256_eq_mod_two size (by omega)
   refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_eq (v := 0) (by rw [eq_one_mod_two, if_neg (by omega)]) (by simp; omega) ?_
+  refine rxc_eq (v := 0) (by rw [eq_one_mod_two]; simp [heven]) (by simp; omega) ?_
   refine rxc_iszero (v := 1) (by decide) (by simp; omega) ?_
   refine rxc_push rfl (by simp; omega) ?_
   refine rxc_branch_succ (by decide) ?_

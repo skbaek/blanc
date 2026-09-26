@@ -1,6 +1,28 @@
 import Blanc.Lift.BeaconDeposit.RootLoop
 import Blanc.Lift.BeaconDeposit.CountView
 
+/-!
+# `get_deposit_root()` on the deployed beacon deposit contract: liveness with exact gas
+
+The walk of the deployed runtime's `get_deposit_root` path over the lifted program `prog`:
+
+* the dispatcher (entry 0): three selector misses and the hit on `0xc5f2892f`
+  (`dispatch_root`, 139 gas);
+* the wrapper (entry 34): the `nonpayable` guard, the call into the internal function, and the
+  `RETURN` of the root word stored at the free pointer (`root_wrapper`, 82 gas);
+* the internal function (entry 10, `root_fn`): the count read (warm or cold), the 32
+  iterations of the Merkle loop at entry 24 (`root_loop`, `Blanc/Lift/BeaconDeposit/RootLoop.lean`),
+  and the exit (`root_exit`, 1959 gas): the count re-read (warm by then),
+  `to_little_endian_64` (`to_little_endian_64_run`), the packing of
+  `node ‖ le64 count ‖ bytes24(0)` (with a partial-word copy of the eight count bytes) and its
+  SHA-256 through `copy_sha` (`Blanc/Lift/PackedSha.lean`).
+
+`get_deposit_root_runExact` is the counterpart of the Blanc port's
+`getDepositRoot_zero_runCompiled_noRawSstore` over `SProg.RunExact prog`: the output is
+`(Acc.root sha256 (solAcc stor)).toBytes` and the gas is `rootViewGas`, to be composed with
+the certificate's `exec_of_runExact` once it is checked.
+-/
+
 namespace Blanc.Lift.BeaconDeposit
 
 open Jaune
@@ -32,7 +54,7 @@ theorem mem_sloadAccessed {o : Adr} {keys : KeySet} {k : B256} {p : Adr × B256}
 theorem mem_rootKeys {o : Adr} {p : Adr × B256} :
     ∀ n h s keys, p ∈ keys → p ∈ rootKeys o n h s keys
   | 0, _, _, _, hp => hp
-  | n + 1, h, s, keys, hp => mem_rootKeys n (h + 1) (s / 2) _ (mem_sloadAccessed hp)
+  | n + 1, h, s, _, hp => mem_rootKeys n (h + 1) (s / 2) _ (mem_sloadAccessed hp)
 
 /-- The gas from the loop head at height 32 to the function's return: the exit test and the
 count re-read (152, the slot warm), `to_little_endian_64` (821), the mix-in's packing and the
@@ -65,10 +87,10 @@ theorem root_exit {b : Devm} {M : Mem} {img : Bytes} {node rv ret : B256} {count
   have h40 : (Bytes.toB256 [0x40]).toNat = 64 := by decide
   have hcost : sloadCost sevm b (Bytes.toB256 [0x20]) = 100 := by
     rw [show Bytes.toB256 [0x20] = solCountSlot by decide]
-    unfold sloadCost; rw [if_pos hwarm]; rfl
+    unfold sloadCost; rw [ite_eq_left_iff.mpr (fun h => absurd hwarm h)]; rfl
   have hafter : afterSload sevm b (Bytes.toB256 [0x20]) = b := by
     rw [show Bytes.toB256 [0x20] = solCountSlot by decide]
-    unfold afterSload; rw [if_pos hwarm]
+    unfold afterSload; exact ite_eq_left_iff.mpr (fun h => absurd hwarm h)
   have hcnt : b.getStorVal sevm.currentTarget (Bytes.toB256 [0x20]) = Nat.toB256 count := by
     rw [show Bytes.toB256 [0x20] = solCountSlot by decide, hcount]
   -- `to_little_endian_64`
@@ -155,8 +177,7 @@ theorem root_exit {b : Devm} {M : Mem} {img : Bytes} {node rv ret : B256} {count
       Bytes.sliceD_writeAt_inside _ _ _ _ _ (by omega) (by rw [B256.length_toBytes]; omega), hval]
     have ht : (ws.toBytes.take 8).length = 8 := by simp [B256.length_toBytes]
     rw [show B256.toBytes 0 = List.replicate 32 0 by decide]
-    simp only [List.sliceD, show 3296 + (8 + 24) - 3328 = 0 from rfl,
-      show 3296 + (8 + 24) + 8 - 3336 = 0 from rfl, List.drop_zero]
+    simp only [List.sliceD, show 3296 + (8 + 24) - 3328 = 0 from rfl, List.drop_zero]
     rw [List.takeD_eq_take 0 (by simp [ht]), List.take_left' ht,
       List.takeD_eq_take 0 (by simp), List.take_replicate]
     rfl
@@ -447,5 +468,177 @@ theorem root_fn {sevm : Sevm} {base : Devm} {stor : Stor} {count : Nat} {ret : B
     refine rx_dup (n := 1) rfl (by simp; omega) ?_
     rw [t_10d1_c10_eq, SFunc.runExact_iff_runExactCut_nil]
     exact hrun
+
+/-! ## The wrapper (entry 34) and the dispatcher -/
+
+/-- The `get_deposit_root` wrapper: the `nonpayable` guard, the call into entry 10, and the
+return of the root word stored at the free pointer.  82 gas of its own. -/
+theorem root_wrapper {sevm : Sevm} {base : Devm} {stor : Stor} {count : Nat} {sel : B256}
+    {G : Nat}
+    (hval : sevm.value = 0)
+    (hstor : Devm.getStor base sevm.currentTarget = stor)
+    (hcountValue : stor.get solCountSlot = Nat.toB256 count) (hc32 : count < 2 ^ 32)
+    (hzero : SolZeroHashesCorrect stor) (hok : ShaOk sevm base)
+    (hcd : sevm.data.length < 2 ^ 256) (hG : G + rootFnGas sevm base count + 6000 < 2 ^ 256) :
+    ∃ bF MF, BaseRel base bF ∧
+      bF.accessedStorageKeys = rootKeys sevm.currentTarget 32 0 count
+        (afterSload sevm base solCountSlot).accessedStorageKeys ∧
+      SFunc.RunExact prog sevm (St base [sel] mem0 (G + (82 + rootFnGas sevm base count)))
+        t_0244_c34
+        (.halted ((St bF [sel] MF G).withOutput (Acc.root Bytes.sha256 (solAcc stor)).toBytes)) := by
+  set root := Acc.root Bytes.sha256 (solAcc stor) with hroot
+  obtain ⟨bF, MF, hrelF, hkeysF, hwfF, hsF, ⟨img, hr, hfp⟩, hfn⟩ :=
+    root_fn (sevm := sevm) (base := base) (stor := stor) (count := count)
+      (ret := Bytes.toB256 [0x02, 0x59]) (R0 := [sel]) (G := G + 43) hstor hcountValue hc32 hzero
+      hok (by simp) hcd (by omega)
+  set MF' := MF.write 3360 root.toBytes with hMF'
+  have hsF' : MF'.size = 3456 := by
+    rw [hMF', Mem.size_write_word_aligned (by rw [hsF]) (by decide), hsF]; decide
+  have hr' := hr.write hwfF 3360 root.toBytes
+  have hfp' : (Bytes.writeAt img 3360 root.toBytes).sliceD 64 32 0 =
+      (Nat.toB256 3360).toBytes := by
+    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega), hfp]
+  have h40 : (Bytes.toB256 [0x40]).toNat = 64 := by decide
+  have h3360 : (Nat.toB256 3360).toNat = 3360 := by decide
+  refine ⟨bF, MF', hrelF, hkeysF, ?_⟩
+  rw [show G + (82 + rootFnGas sevm base count) = G + 43 + rootFnGas sevm base count + 39 by
+    omega]
+  unfold t_0244_c34
+  refine rx_dest ?_
+  refine rx_callvalue (by simp) ?_
+  refine rx_dup1 (by simp) ?_
+  refine rx_iszero (v := 1) (by simp [B256.eqCheck, hval]) (by simp) ?_
+  refine rx_push rfl (by simp) ?_
+  refine rx_branch_succ (by decide) ?_
+  unfold t_0250_c34
+  refine rx_dest ?_
+  refine rx_pop ?_
+  refine rx_push rfl (by simp) ?_
+  refine rx_push rfl (by simp) ?_
+  refine rx_callRet (j := 10) rfl hfn ?_
+  unfold t_0259_c34
+  refine rx_dest ?_
+  refine rx_push rfl (by simp) ?_
+  refine rx_dup1 (by simp) ?_
+  refine rx_mload (c := 3) (v := Nat.toB256 3360) ?_ (by rw [h40]; exact read_word hr 64 hfp) ?_
+    (by simp) ?_
+  · rw [h40]; exact charge_covered hsF (by decide) (by decide)
+  · rw [h40]; exact read_covered hsF (by decide) (by decide)
+  refine rx_swap2 ?_
+  refine rx_dup3 (by simp) ?_
+  refine rx_mstore (c := 3) (M' := MF') ?_ (by rw [h3360]) ?_
+  · rw [h3360]; exact charge_covered hsF (by decide) (by decide)
+  refine rx_mload (c := 3) (v := Nat.toB256 3360) ?_ (by rw [h40]; exact read_word hr' 64 hfp') ?_
+    (by simp) ?_
+  · rw [h40]; exact charge_covered hsF' (by decide) (by decide)
+  · rw [h40]; exact read_covered hsF' (by decide) (by decide)
+  refine rx_swap1 ?_
+  refine rx_dup2 (by simp) ?_
+  refine rx_swap1 ?_
+  refine rx_sub' (v := 0) (by decide) (by simp) ?_
+  refine rx_push rfl (by simp) ?_
+  refine rx_add' (v := 32) (by decide) (by simp) ?_
+  refine rx_swap1 ?_
+  have hret := rx_return (fs := prog) (sevm := sevm) (b := bF) (S := [sel]) (M := MF') (G := G)
+    (i := Nat.toB256 3360) (sz := 32) (out := root.toBytes) ?_ ?_
+  · have hpost : ((St bF [sel] MF' G).memRead (Nat.toB256 3360).toNat (32 : B256).toNat).2 =
+        St bF [sel] MF' G := by
+      show (St bF [sel] MF' G).withMemory (MF'.read _ _).2 = _
+      rw [h3360, show (32 : B256).toNat = 32 by decide,
+        read_covered hsF' (by decide) (by decide)]
+      rfl
+    rw [hpost] at hret
+    exact hret
+  · rw [St.extCost_eq hsF', h3360, show (32 : B256).toNat = 32 by decide]; decide
+  · rw [h3360, show (32 : B256).toNat = 32 by decide, hr'.read, sliceD_word_self]
+
+/-- The dispatcher path to `get_deposit_root()` (entry 34): `mstore(0x40, 0x80)`, the
+`CALLDATASIZE < 4` test, the selector, three misses and the hit.  139 gas. -/
+theorem dispatch_root {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome}
+    (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = 0xc5f2892f)
+    (k : SFunc.RunExact prog sevm (St b [Sevm.selector sevm] mem0 g) t_0244_c34 o) :
+    SFunc.RunExact prog sevm (St b [] Mem.empty (g + 139)) t_0000_c0 o := by
+  refine rx_push rfl (by simp) ?_
+  refine rx_push rfl (by simp) ?_
+  refine rx_mstore (c := 12) (M' := mem0) ?_ (by rw [show (Bytes.toB256 [0x40]).toNat = 64 by decide]; rfl) ?_
+  · rw [St.extCost_eq (n := 0) rfl]; decide
+  refine rx_push rfl (by simp) ?_
+  refine rx_calldatasize (by simp) ?_
+  refine rx_lt (v := 0) ?_ (by simp) ?_
+  · rw [B256.ltCheck, ite_eq_right_iff]
+    intro h
+    have h1 := B256.toNat_lt_toNat h
+    rw [B256.toNat_toB256_of_lt h_len'] at h1
+    have h4 : (Bytes.toB256 [0x04]).toNat = 4 := by decide
+    omega
+  refine rx_push rfl (by simp) ?_
+  refine rx_branch_zero ?_
+  refine rx_push rfl (by simp) ?_
+  refine rx_calldataload (by simp) ?_
+  refine rx_push rfl (by simp) ?_
+  refine rx_shr (v := Sevm.selector sevm) ?_ (by simp) ?_
+  · rw [show (Bytes.toB256 [0xe0]).toNat = 224 by decide,
+      show Bytes.toB256 [0x00] = 0 by decide]
+    rfl
+  refine cmp_miss (by rw [hsel]; decide) ?_
+  refine cmp_miss (by rw [hsel]; decide) ?_
+  refine cmp_miss (by rw [hsel]; decide) ?_
+  exact cmp_hit (j := 34) (by rw [hsel]; decide) rfl k
+
+/-! ## `get_deposit_root()` -/
+
+/-- Gas of a `get_deposit_root()` call: the dispatcher (139), the wrapper (82) and the internal
+function (`rootFnGas`: 19, the count read, the 32 iterations of `rootGas` and the exit
+`rootExitGas`). -/
+def rootViewGas (sevm : Sevm) (base : Devm) (count : Nat) : Nat :=
+  139 + (82 + rootFnGas sevm base count)
+
+/-- **`get_deposit_root()` on the deployed bytes: a gas-exact lifted run returning the model
+root.**  The counterpart of the Blanc port's `getDepositRoot_zero_runCompiled_noRawSstore`:
+the same premises (calldata at least a selector and `CALLDATASIZE` a word, zero value, the
+selector, a covered fork, the count below `2^32`, the constructor's zero-hash table, the
+undelegated and warm precompile 2, `isPrecomp 2`, a nonzero depth, a gas bound) with the
+deployed layout's slots (`solCountSlot`, `SolZeroHashesCorrect`).  The output is
+`(Acc.root sha256 (solAcc stor)).toBytes`; storage, code, warm accounts, logs and error are
+unchanged, and the warm storage keys are the count slot and the 32 slots the loop reads
+(`rootKeys`).  Compose with the certificate's `exec_of_runExact` for the `Exec` statement. -/
+theorem get_deposit_root_runExact (sevm : Sevm) (base : Devm) (stor : Stor) (count G : Nat)
+    (hdataLength : 4 ≤ sevm.data.length)
+    (hdataBound : sevm.data.length < 2 ^ 256)
+    (hvalue : sevm.value = 0)
+    (hselector : Sevm.selector sevm = Blanc.BeaconDeposit.getDepositRootSelector)
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (hstor : Devm.getStor base sevm.currentTarget = stor)
+    (hcountValue : stor.get solCountSlot = Nat.toB256 count)
+    (hcount : count < 2 ^ 32)
+    (hzero : SolZeroHashesCorrect stor)
+    (hnodeleg : getDelegatedCodeAddress (base.getCode 2) = none)
+    (hwarm : (2 : Adr) ∈ base.accessedAddresses)
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hdepth : sevm.depth ≠ 0)
+    (hbound : G + rootViewGas sevm base count + 6000 < 2 ^ 256) :
+    ∃ post, SProg.RunExact prog sevm
+        (base.setMach ⟨[], Mem.empty, G + rootViewGas sevm base count, base.stateGas⟩) post ∧
+      post.stack = [Sevm.selector sevm] ∧
+      post.gasLeft = G ∧
+      post.output = (Acc.root Bytes.sha256 (solAcc stor)).toBytes ∧
+      (∀ a, Devm.getStor post a = Devm.getStor base a) ∧
+      (∀ a, post.getCode a = base.getCode a) ∧
+      post.accessedAddresses = base.accessedAddresses ∧
+      post.accessedStorageKeys = rootKeys sevm.currentTarget 32 0 count
+        (afterSload sevm base solCountSlot).accessedStorageKeys ∧
+      post.logs = base.logs ∧
+      post.error = base.error := by
+  have hsel : Sevm.selector sevm = 0xc5f2892f :=
+    hselector.trans Blanc.BeaconDeposit.getDepositRootSelector_eq
+  obtain ⟨bF, MF, hrel, hkeys, hrun⟩ := root_wrapper (sevm := sevm) (base := base) (stor := stor)
+    (count := count) (sel := Sevm.selector sevm) (G := G) hvalue hstor hcountValue hcount hzero
+    ⟨hnodeleg, hwarm, hpre, hfork, hdepth⟩ hdataBound (by unfold rootViewGas at hbound; omega)
+  have hd := dispatch_root (b := base) hdataLength hdataBound hsel hrun
+  rw [show G + (82 + rootFnGas sevm base count) + 139 = G + rootViewGas sevm base count by
+    unfold rootViewGas; omega] at hd
+  exact ⟨_, ⟨_, rfl, hd⟩, rfl, rfl, rfl, fun a => hrel.stor a, fun a => hrel.code a, hrel.addrs,
+    hkeys, hrel.logs, hrel.error⟩
 
 end Blanc.Lift.BeaconDeposit
