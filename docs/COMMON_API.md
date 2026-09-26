@@ -2688,6 +2688,22 @@ contract-neutral.
   the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA
   site (`ric_copy_sha`, the converse of `copy_sha_gen`) in
   [`Blanc/Lift/InvWalkSha.lean`](../Blanc/Lift/InvWalkSha.lean).
+- A `STATICCALL` to an arbitrary callee, whose code is unknown: its abstract outcome
+  (`StaticCallPost`: flag, returned bytes as output window and return data, every storage
+  map and the log list kept) and, for a set flag, the successful static child message
+  (`StaticAnswered`), inverted (`ri_staticcall`) and forward over a caller-supplied step
+  (`rx_staticcall`), in [`Blanc/Lift/StaticCall.lean`](../Blanc/Lift/StaticCall.lean).
+  `CALLER` (`rx_caller`, `ri_caller`), `KECCAK256` inverted (`ri_keccak`), `LOG3`
+  (`rx_log3`, `ri_log3`) and `SSTORE` forward at its selected cost (`rx_sstore`) are in
+  [`Blanc/Lift/WalkSteps.lean`](../Blanc/Lift/WalkSteps.lean).
+- Hashed storage slots: `mapSlot key base = keccak256(pad32 key ‖ pad32 base)`, solc's mapping
+  slot and, with the arguments swapped (slot first), Vyper's, in
+  [`Blanc/Lift/MapSlot.lean`](../Blanc/Lift/MapSlot.lean).
+- Vyper 0.2.x runtimes: the frame prologue (`vyPrologue`, `ric_vyPrologue`, `rx_vyPrologue`,
+  memory `vyMem`/`vyImg`), the clamp constants as a carried image invariant (`VyClamps`,
+  `VyClamps.writeAt`), the non-payable guard and address-argument clamp every body starts with
+  (`vyNonpayable`, `vyAddrArg`, their `rx_`/`ric_` forms), and the `HashMap` slot scratch window
+  (`vySlot_read`, `vySlot_keccak`), in [`Blanc/Lift/Vyper.lean`](../Blanc/Lift/Vyper.lean).
 - Loops: a back-edge to entry `k` is reasoned about one iteration at a time on
   runs cut at `k` (`SFunc.RunCutP`, `SFunc.RunExactCut`). Safety:
   `SFunc.RunCutP.loop` (invariant; `loop_indexed`, `SFunc.RunP.loop`), which
