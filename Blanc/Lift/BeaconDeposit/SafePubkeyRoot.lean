@@ -199,7 +199,7 @@ theorem safe_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
     rw [e1, e2]
   have hsha' :
       ShaReady sevm (b.addLog ⟨sevm.currentTarget, [BeaconDeposit.depositEventTopic], data⟩) :=
-    ⟨hsha.nodeleg, hsha.warm, hsha.pre, hsha.fork, hsha.depth⟩
+    ⟨hsha.nodeleg, hsha.warm, hsha.pre, hsha.fork⟩
   obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_sha (s := 288) (d := 352) (n := 832)
     (w1 := w1) (w2 := w2) (x1 := Nat.toB256 288) (x3 := Nat.toB256 352) (x4 := Nat.toB256 256)
     (k := 12) (C := []) (T := t_086e_c12) (fail1 := t_0850_c12) (fail2 := t_086a_c12)
@@ -207,7 +207,7 @@ theorem safe_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
       (mergeTree (shaCallTree 0x08 0x59 0x08 0x6e t_0850_c12 t_086a_c12 t_086e_c12))) from rfl)
     (by simp) (by decide) hwf4 hr4 hs4 (by norm_num) (by norm_num) (by norm_num) (by norm_num)
     (by norm_num) (by norm_num) hfp4 hw1 hw2 hsha'.nodeleg hsha'.warm hsha'.pre hsha'.fork
-    hsha'.depth run
+    run
   refine ⟨b', M', G', Keep.of_sha hpost, ⟨hwf', by rw [hs']; rfl, shaImg img4 352 w1 w2, hr', ?_,
     ?_⟩, run.uncut⟩
   · rw [shaImg_out (by norm_num)]

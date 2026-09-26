@@ -112,7 +112,7 @@ theorem safe_insertDead {sevm : Sevm} {b : Devm} {sz nd : B256} {R : List B256} 
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
   set b1 := afterSload sevm b (solBranchSlot h) with hb1
   have hok1 : ShaReady sevm b1 := ⟨by rw [hb1, afterSload_getCode]; exact hsha.nodeleg,
-    by rw [hb1, afterSload_accessedAddresses]; exact hsha.warm, hsha.pre, hsha.fork, hsha.depth⟩
+    by rw [hb1, afterSload_accessedAddresses]; exact hsha.warm, hsha.pre, hsha.fork⟩
   set br := b.getStorVal sevm.currentTarget (solBranchSlot h) with hbr
   have hfp' : img.sliceD 64 32 0 = (Nat.toB256 (928 + 96 * h)).toBytes := hfp
   obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_pack_sha (a := br) (bw := nd)
@@ -120,7 +120,7 @@ theorem safe_insertDead {sevm : Sevm} {b : Devm} {sz nd : B256} {R : List B256} 
     (show prog[22]? = some (mcpyTree 0x10 0x25 0x0f 0xe8 22
       (mergeTree (shaCallTree 0x10 0x82 0x10 0x97 t_1079_c22 t_1093_c22 t_1097_c22))) from rfl)
     (by simp) (by decide) hwf hr hs (by omega) (by omega) (by omega) (by omega) (by omega)
-    (by omega) hfp' hok1.nodeleg hok1.warm hok1.pre hok1.fork hok1.depth run
+    (by omega) hfp' hok1.nodeleg hok1.warm hok1.pre hok1.fork run
   -- t_1097_c22: the digest, `size / 2`, `h + 1` and the jump to the head
   have hF : (Nat.toB256 (928 + 96 * h + 96)).toNat = 928 + 96 * h + 96 :=
     toNat_toB256' (by omega)
