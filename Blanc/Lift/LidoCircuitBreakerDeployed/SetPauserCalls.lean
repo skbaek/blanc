@@ -106,6 +106,10 @@ theorem StorStep.sstore {sevm : Sevm} {b b' : Devm} {s : Stor} (h : StorStep sev
    fun a ha => by rw [afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha), h.other a ha],
    by rw [afterSstore_logs, h.logs]⟩
 
+theorem StorStep.congr {sevm : Sevm} {b b' : Devm} {s s' : Stor} (h : StorStep sevm b b' s)
+    (e : s = s') : StorStep sevm b b' s' :=
+  e ▸ h
+
 theorem StorStep.trans {sevm : Sevm} {b b' b'' : Devm} {s s' : Stor}
     (h : StorStep sevm b b' s) (h' : StorStep sevm b' b'' s') : StorStep sevm b b'' s' :=
   ⟨h'.self, fun a ha => by rw [h'.other a ha, h.other a ha], by rw [h'.logs, h.logs]⟩
