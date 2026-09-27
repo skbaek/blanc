@@ -29,7 +29,12 @@ def poolAcct4 : Acct :=
   { poolAcct with
     stor := poolStorage4.foldl (fun s kv => Std.TreeMap.insert s kv.1.toB256 kv.2.toB256) .empty }
 
-def world4 : State := Std.TreeMap.insert .empty proxyAddress poolAcct4
+/-- Concrete storage writes for `P` at frame-4 entry. -/
+def poolWrites4 : List ((Adr × B256) × B256) :=
+  poolStorage4.map fun (k, v) => ((proxyAddress, k.toB256), v.toB256)
+
+/-- The world, built by folding `poolWrites4` from the storage-free base world. -/
+def world4 : State := stateFoldStor world0_base poolWrites4
 
 def gas4 : Nat := 28116400
 
@@ -56,6 +61,19 @@ def pre4 : Devm :=
   let d := adrs4.foldr (fun a d => addAccessedAddress d a) d
   keys4.foldr (fun k d => addAccessedStorageKey d k.1 k.2) d
 
-def c4 : Cfg := ⟨pre4, t_0000_c0, [], keys4, adrs4⟩
+def stor4 : StorShadow := storShadowOf poolWrites4
+
+def c4 : Cfg := ⟨pre4, t_0000_c0, [], keys4, adrs4, stor4⟩
+
+/-- The start `Agree` storage conjunct for frame 4. -/
+theorem world4_stor_agree : ∀ a k, storOf world4 a k = lookupS stor4 a k :=
+  storOf_stateFoldStor poolWrites4 storOf_world0_base
+
+theorem c4_agree_stor : ∀ a k, storOf c4.devm.state a k = lookupS c4.stor a k := by
+  intro a k
+  change storOf world4 a k = lookupS stor4 a k
+  exact world4_stor_agree a k
+
+
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame4

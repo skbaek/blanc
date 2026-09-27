@@ -37,13 +37,28 @@ def poolStorage : List (Nat × Nat) :=
   [(7, tokenAddress.toNat), (8, 1000), (9, 1000), (12, 10000),
    (15, 10 ^ 18), (16, 10 ^ 18), (26, 2000), (balanceOfASlot, 2000)]
 
+/-- The storage-free pool account at `P`: the 45-byte proxy, 1000 wei, empty storage. -/
+def poolAcct0 : Acct :=
+  { nonce := 1, bal := (1000 : Nat).toB256, code := proxyCode, stor := .empty }
+
+/-- The storage-free world: proxy `P` placed in the empty state. -/
+def world0_base : State := stateSetB (default : State) proxyAddress poolAcct0
+
+theorem storOf_world0_base (a : Adr) (k : B256) : storOf world0_base a k = 0 :=
+  storOf_stateSetB_empty (default : State) proxyAddress a poolAcct0 k (storOf_empty a k) rfl
+
+
+/-- Concrete storage writes for `P` in frame 1. -/
+def poolWrites1 : List ((Adr × B256) × B256) :=
+  poolStorage.map fun (k, v) => ((proxyAddress, k.toB256), v.toB256)
+
+/-- The world, built by folding `poolWrites1` from the storage-free base world. -/
+def world0 : State := stateFoldStor world0_base poolWrites1
+
 /-- The pool account `P`: the 45-byte proxy, 1000 wei, the pool storage. -/
 def poolAcct : Acct :=
   { nonce := 1, bal := (1000 : Nat).toB256, code := proxyCode,
     stor := poolStorage.foldl (fun s kv => Std.TreeMap.insert s kv.1.toB256 kv.2.toB256) .empty }
-
-/-- The world, built by `Std.TreeMap.insert` (kernel-reducible, unlike `State.set`). -/
-def world0 : State := Std.TreeMap.insert .empty proxyAddress poolAcct
 
 def gas1 : Nat := 29528638
 
@@ -65,10 +80,12 @@ address (the top-level message starts with empty accessed sets, as in the prefli
 def pre1 : Devm :=
   addAccessedAddress (((default : Devm).withGasLeft gas1).withState world0) implementationAddress
 
-def c0 : Cfg := ⟨pre1, t_0000_c0, [], [], [implementationAddress]⟩
+def stor1 : StorShadow := storShadowOf poolWrites1
+
+def c0 : Cfg := ⟨pre1, t_0000_c0, [], [], [implementationAddress], stor1⟩
 
 theorem c0_agree : Agree c0 := by
-  refine ⟨fun x => ?_, fun a => ?_⟩
+  refine ⟨fun x => ?_, fun a => ?_, ?_⟩
   · show x ∈ (default : Devm).accessedStorageKeys ↔ x ∈ ([] : List (Adr × B256))
     simp [show (default : Devm).accessedStorageKeys = .emptyWithCapacity from rfl]
   · show a ∈ (default : Devm).accessedAddresses.insert implementationAddress ↔
@@ -77,6 +94,9 @@ theorem c0_agree : Agree c0 := by
       show (default : Devm).accessedAddresses = .emptyWithCapacity from rfl]
     simp only [Std.HashSet.not_mem_emptyWithCapacity, or_false]
     exact ⟨Eq.symm, Eq.symm⟩
+  · show ∀ a k, storOf world0 a k = lookupS stor1 a k
+    exact storOf_stateFoldStor poolWrites1 storOf_world0_base
+
 
 /-- The observed projection a chunk decision pins: gas, stack and memory bytes. -/
 def summ : Res → Option (Nat × List Nat × List Nat)
