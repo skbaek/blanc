@@ -686,6 +686,50 @@ lemma Ninst.runIn_of_at {pc sevm pre n post}
     · simp only [Ninst.StepRun, hs, Step.Run]
       exact ⟨_, RunFrame.of_run henter, hr.symm⟩
 
+/-! ### `PC` nodes -/
+
+/-- A successful execution over a `PC` byte at `pc` takes the `PC` step at `pc`
+itself (not at some other pc), childless. -/
+lemma pc_stepRun_of_at {pc sevm pre post}
+    (exc : Exec pc sevm pre (.ok post))
+    (nat : Ninst.At sevm.code pc (.reg .pc)) :
+    ∃ (inter : Devm) (exc' : Exec (pc + 1) sevm inter (.ok post)),
+      Ninst.StepRun pc sevm pre (.reg .pc) .none (.ok inter) ∧
+      Exec.Deriv.Prec
+        ⟨pc + 1, sevm, inter, .ok post, exc'⟩
+        ⟨pc, sevm, pre, .ok post, exc⟩ := by
+  have hstep : Evm.step ⟨pc, sevm, pre⟩ = Ninst.step ⟨pc, sevm, pre⟩ (.reg .pc) :=
+    Evm.step_next nat
+  rw [Ninst.step_reg] at hstep
+  cases exc with
+  | halt h =>
+    rw [hstep] at h
+    cases hr : Rinst.run ⟨pc, sevm, pre⟩ .pc <;> simp [hr, Step.ofExecution] at h
+  | cont h exc' =>
+    have hs := hstep.symm.trans h
+    cases hr : Rinst.run ⟨pc, sevm, pre⟩ .pc <;> simp [hr, Step.ofExecution] at hs
+    obtain ⟨rfl, rfl⟩ := hs
+    refine ⟨_, exc', ?_, Exec.Deriv.Prec.cont h exc'⟩
+    simp only [Ninst.StepRun, Ninst.step_reg, hr, Step.ofExecution, Step.Run]
+    exact ⟨trivial, trivial⟩
+  | doneOk h =>
+    rw [hstep] at h
+    cases hr : Rinst.run ⟨pc, sevm, pre⟩ .pc <;> simp [hr, Step.ofExecution] at h
+  | runOk h =>
+    rw [hstep] at h
+    cases hr : Rinst.run ⟨pc, sevm, pre⟩ .pc <;> simp [hr, Step.ofExecution] at h
+
+/-- The `PC` step at `p` pushes `p`. -/
+lemma pc_stepRun_stack {p : Nat} {sevm : Sevm} {pre inter : Devm}
+    (h : Ninst.StepRun p sevm pre (.reg .pc) .none (.ok inter)) :
+    inter.stack = Nat.toB256 p :: pre.stack := by
+  simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at h
+  have hr : Rinst.run ⟨p, sevm, pre⟩ .pc = .ok inter := h.2.symm
+  simp only [Rinst.run, Rinst.runCore] at hr
+  rw [pushItem_def] at hr
+  have hp := (Devm.pushBurn_of_run hr).stack
+  simpa [Stack.Push, Split] using hp
+
 /-- The recursion invariant.  For a successful derivation at a node checked
 with frame `a` and return arity `m`: the node's run halts with the derivation's
 result, or the current function returns — then `.ret` occurs in the frame, the
@@ -1325,6 +1369,7 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
           | jump k' => simp [checkNode] at hcheck
           | callNext k' f => simp [checkNode] at hcheck
           | ret => simp [checkNode] at hcheck
+          | pcAt p' f => simp [checkNode] at hcheck
           | undefined => simp [checkNode] at hcheck
     | ret =>
       cases a with
@@ -1367,6 +1412,35 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
               exact Or.inr ⟨by simp, inter, S1, exc',
                 Exec.Deriv.lt_of_prec prec, SFunc.RunP.ret ρ pop, hinter,
                 hlen⟩
+    | pcAt p f =>
+      have hcheck' :
+          (bytesAt code pc (Ninst.toBytes (Ninst.reg .pc)) = true ∧ p = pc) ∧
+            checkNode code c.entries m (pc + 1) (.const (Nat.toB256 pc) :: a) f = true := by
+        simpa [checkNode] using hcheck
+      obtain ⟨⟨hbytes, rfl⟩, hchild⟩ := hcheck'
+      have h_at : Ninst.At sevm.code p (Ninst.reg .pc) := by
+        apply Ninst.at_of_slice
+        apply bytesAt_slice (ninst_bytes_ne_nil (Ninst.reg .pc))
+        rw [hcode]
+        exact hbytes
+      rcases pc_stepRun_of_at exc h_at with ⟨inter, exc', hstepPc, prec⟩
+      have runS : StepIn R sevm devm (.reg .pc) inter := ⟨.none, trivial, p, hstepPc⟩
+      have hstack' : inter.stack = Nat.toB256 p :: (S ++ base) := by
+        rw [pc_stepRun_stack hstepPc, hstack]
+      have hframe' :
+          FrameMatches ρ (.const (Nat.toB256 p) :: a) (Nat.toB256 p :: S) :=
+        List.Forall₂.cons rfl hframe
+      have hrun := ih ⟨p + 1, sevm, inter, .ok post, exc'⟩
+        (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m
+        (.const (Nat.toB256 p) :: a) f ρ (Nat.toB256 p :: S) base hchild hstack' hframe'
+      cases hrun with
+      | inl run' => exact Or.inl (SFunc.RunP.pcAt runS hstepPc run')
+      | inr run' =>
+        rcases run' with ⟨hret, devm', S', exc'', hlt, run', hst, hlen⟩
+        have hret' : AVal.ret ∈ a := by simpa using hret
+        exact Or.inr ⟨hret', devm', S', exc'',
+          deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
+          SFunc.RunP.pcAt runS hstepPc run', hst, hlen⟩
     | undefined =>
       have hnone_code : code.getInst pc = none := by
         simpa [checkNode, Option.isNone_iff_eq_none] using hcheck

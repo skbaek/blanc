@@ -149,6 +149,9 @@ def checkNodeT (code : ByteArray) (d : Nat) (t : LTrie UInt8) (es : List Entry) 
     match a with
     | .ret :: a' => LTrie.get? d t pc == some (Jinst.toUInt8 .jump) && a'.length == m
     | _ => false
+  | pc, a, .pcAt p f =>
+    bytesAtT d t pc (Ninst.toBytes (.reg .pc)) && p == pc &&
+      checkNodeT code d t es m (pc + 1) (.const (Nat.toB256 pc) :: a) f
   | pc, _, .undefined => (code.getInst pc).isNone
 
 private lemma getElem?_eq_drop_head {α : Type} (xs : List α) (i : Nat) :
@@ -252,6 +255,11 @@ theorem checkNodeT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es : 
         | cons av a =>
           cases av <;> simp [Q, checkNodeT, checkNode, byteAt, T.bytes_eq]
       · simp [P]
+    | pcAt p f ih =>
+      constructor
+      · intro pc a
+        simp [Q, checkNodeT, checkNode, bytesAtT_eq T.bytes_eq, ih.1]
+      · simp [P]
     | undefined =>
       constructor
       · intro pc a; rfl
@@ -323,6 +331,7 @@ def jumpsOkNodeT (code : ByteArray) (d : Nat) (T : CodeTries code d) (es : List 
         | none => true
     | _, _, _ => false
   | .ret, _ => true
+  | .pcAt p f, a => jumpsOkNodeT code d T es f (.const (Nat.toB256 p) :: a)
   | .undefined, _ => true
 
 theorem jumpsOkNodeT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es : List Entry)
@@ -394,6 +403,11 @@ theorem jumpsOkNodeT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es 
     | ret =>
       constructor
       · intro a; rfl
+      · simp [P]
+    | pcAt p f ih =>
+      constructor
+      · intro a
+        simp [Q, jumpsOkNodeT, jumpsOkNode, ih.1]
       · simp [P]
     | undefined =>
       constructor

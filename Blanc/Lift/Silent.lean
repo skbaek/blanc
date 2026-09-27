@@ -28,6 +28,7 @@ def SFunc.silent : SFunc → Bool
   | .jump _ => true
   | .callNext _ f => f.silent
   | .ret => true
+  | .pcAt _ f => f.silent
   | .undefined => true
 
 /-- Entry indices mentioned by a synthetic tree. -/
@@ -40,6 +41,7 @@ def SFunc.refs : SFunc → List Nat
   | .jump k => [k]
   | .callNext k f => k :: f.refs
   | .ret => []
+  | .pcAt _ f => f.refs
   | .undefined => []
 
 /-- `S` is closed under the entries referenced by its members. -/
@@ -197,6 +199,10 @@ theorem SFunc.RunP.state_of_silent {P : Sevm → Devm → Ninst → Devm → Pro
       simp only [SFunc.silent] at hfn
       simpa [Outcome.devm] using
         (ihTail hfn hfr.2).trans ((ihRun htarget.1 htarget.2).trans pop.state.symm)
+  | pcAt hrun _ run ih =>
+      simpa [Outcome.devm] using
+        (ih (by simpa [SFunc.silent] using hf) (by simpa [SFunc.refs] using hrefs)).trans
+          (ninst_state_of_silent (n := .reg .pc) rfl (hP hrun))
 
 theorem SFunc.Run.state_of_silent {fs : List SFunc} {S : List Nat}
     (hS : SilentSet fs S = true) {sevm : Sevm} {devm : Devm} {f : SFunc} {o : Outcome}

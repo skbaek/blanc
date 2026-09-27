@@ -33,6 +33,7 @@ def SFunc.balSilent : SFunc → Bool
   | .jump _ => true
   | .callNext _ f => f.balSilent
   | .ret => true
+  | .pcAt _ f => f.balSilent
   | .undefined => true
 
 /-- `S` is closed under the entries referenced by its members, all of which
@@ -173,5 +174,8 @@ theorem SFunc.RunP.getBal_of_balSilent {P : Sevm → Devm → Ninst → Devm →
       have hfn := hf
       simp only [SFunc.balSilent] at hfn
       exact (ihTail hfn hfr.2).trans ((ihRun htarget.1 htarget.2).trans (popBal pop))
+  | pcAt hrun _ run ih =>
+      exact (ih (by simpa [SFunc.balSilent] using hf) (by simpa [SFunc.refs] using hrefs)).trans
+        (Ninst.Run.getBal_of_balSilent (n := .reg .pc) rfl (hP hrun))
 
 end Blanc.Lift

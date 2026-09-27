@@ -16,7 +16,9 @@ exploration differences of the solc-w3 fork are options (`--no-join-entries`,
 `--wrapper-order fall-first`), not code paths per contract.  `--fold` (registry
 option `"fold": true`) folds ADD, MUL, SUB, LT, GT, EQ and ISZERO over constant
 operands exactly as `foldConst` in `Blanc/Lift/Check.lean`; off by default, so
-every certificate registered without it regenerates byte-identically.
+every certificate registered without it regenerates byte-identically.  `--pc`
+(registry option `"pc": true`) lifts `PC` as `SFunc.pcAt pc`, pushing the node's
+own pc; off by default.
 
 Supported opcodes.  `LEAN_REG` maps each regular opcode the producer may emit to
 its Lean `Ninst`; every row is checked, on each run, against the arms of
@@ -283,6 +285,8 @@ def run_registry(args: argparse.Namespace) -> int:
                 argv += ["--wrapper-order", opts["wrapper_order"]]
             if opts.get("fold") is True:
                 argv.append("--fold")
+            if opts.get("pc") is True:
+                argv.append("--pc")
             if "header" in row:
                 argv += ["--header", row["header"]]
             check = row.get("check")
@@ -353,6 +357,8 @@ parser.add_argument("--no-join-entries", action="store_true",
                     help="do not promote multi-predecessor JUMPDESTs to join entries (solc-w3 exploration)")
 parser.add_argument("--wrapper-order", choices=("taken-first", "fall-first"), default="taken-first",
                     help="build order of a dispatcher selector branch (fall-first: solc-w3 exploration)")
+parser.add_argument("--pc", action="store_true",
+                    help="lift PC as SFunc.pcAt (pushes the node's own pc)")
 parser.add_argument("--fold", action="store_true",
                     help="fold ADD/MUL/SUB/LT/GT/EQ/ISZERO over constant operands (mirror of foldConst)")
 parser.add_argument("--lock-spec", type=str, default=None,
@@ -433,6 +439,12 @@ FOLD2 = {
     0x14: lambda x, y: 1 if x == y else 0,  # EQ
 }
 def step_inst(op: int, data: bytes, stack: List[Tuple[Any, ...]], cur_pc: Optional[int] = None) -> Optional[List[Tuple[Any, ...]]]:
+    if op == 0x58 and args.pc:  # PC: the node's own pc (SFunc.pcAt)
+        if cur_pc is None:
+            return None
+        st = list(stack)
+        st.insert(0, ('const', cur_pc))
+        return st
     # Check if opcode is supported in the checker model
     if op not in BASE_SUPPORTED_OPS:
         if cur_pc is not None:
@@ -974,7 +986,7 @@ def build_tree(cur_pc: int, cur_st: List[Tuple[Any, ...]], cur_rets: int, path: 
         nxt_st = step_inst(op, d, cur_st, cur_pc)
         if nxt_st is None:
             op_name = OPCODE_EFFECTS.get(op, ("UNKNOWN", 0, 0))[0]
-            if op not in BASE_SUPPORTED_OPS:
+            if op not in BASE_SUPPORTED_OPS and not (op == 0x58 and args.pc):
                 raise RuntimeError(f"Unsupported opcode {op_name} (0x{op:02x}) at 0x{cur_pc:04x}")
             else:
                 raise RuntimeError(f"Stack underflow at 0x{cur_pc:04x} on {op_name} (stack depth {len(cur_st)})")
@@ -997,7 +1009,7 @@ def scan_unsupported() -> Dict[int, List[int]]:
             continue
         visited.add(p)
         op, sz, d = inst_map[p]
-        if op not in BASE_SUPPORTED_OPS:
+        if op not in BASE_SUPPORTED_OPS and not (op == 0x58 and args.pc):
             unsupported_found.setdefault(op, []).append(p)
         if op in (0x00, 0xf3, 0xfd, 0xfe, 0xff):
             continue
@@ -1243,6 +1255,11 @@ def emit_block(tree: Any, entry_idx: int) -> str:
         if k == 'join_ref':
             target_k = t[1]
             return f"t_{entries[target_k][0]:04x}_c{target_k}"
+        elif k == 'next' and t[1][0] == 0x58:  # PC at the node's pc
+            sub = t[2]
+            if sub[0] in ('dest', 'join_ref'):
+                return f"(.pcAt 0x{t[3]:x} {emit_block(sub, entry_idx)})"
+            return f"(.pcAt 0x{t[3]:x} {render(sub)})"
         elif k == 'next':
             op, d = t[1]
             sub = t[2]

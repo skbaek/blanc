@@ -17,6 +17,7 @@ def SFunc.silentCalls (S : List Nat) : Nat → SFunc → Bool
   | 0, .callNext _ _ => false
   | b + 1, .callNext _ f => f.silentCalls S b
   | _, .ret => true
+  | b, .pcAt _ f => f.silentCalls S b
   | _, .undefined => true
 
 /-- As `silentCalls`, but a jump to an entry in `W` is treated as the one
@@ -33,6 +34,7 @@ def SFunc.silentCallsWith (S W : List Nat) : Nat → SFunc → Bool
   | b + 1, .jump k => k ∈ S || k ∈ W
   | b + 1, .callNext _ f => f.silentCallsWith S W b
   | b + 1, .ret => true
+  | b + 1, .pcAt _ f => f.silentCallsWith S W (b + 1)
   | b + 1, .undefined => true
 
 /-- The `callNext` entry indices occurring in a tree. -/
@@ -45,6 +47,7 @@ def SFunc.callRefs : SFunc → List Nat
   | .jump _ => []
   | .callNext k f => k :: f.callRefs
   | .ret => []
+  | .pcAt _ f => f.callRefs
   | .undefined => []
 
 private theorem silentCalls0_silent_refs {S : List Nat} {f : SFunc}
@@ -73,6 +76,9 @@ private theorem silentCalls0_silent_refs {S : List Nat} {f : SFunc}
   | callNext k f ih =>
       simp [SFunc.silentCalls] at h
   | ret => simp [SFunc.silentCalls, SFunc.silent, SFunc.refs]
+  | pcAt p f ih =>
+      simp only [SFunc.silentCalls, SFunc.silent, SFunc.refs] at h ⊢
+      exact ih h
   | undefined => simp [SFunc.silentCalls, SFunc.silent, SFunc.refs]
 
 private theorem ninst_state_of_silent' {sevm : Sevm} {pre post : Devm} {n : Ninst}
@@ -242,6 +248,11 @@ theorem SFunc.RunP.hoare_single_call {P : Sevm → Devm → Ninst → Devm → P
         have hk : _ := of_decide_eq_true hcalls''.1
         have hcallee := hspec hk lookup (hstable0 pop.state hp) run
         exact silent_preserve hstable1 tail hsc'' hcallee
+    | pcAt hrun _ run ih =>
+        intro hsc' hcalls' hp
+        have hstep := ninst_state_of_silent' (n := .reg .pc) rfl (hP hrun)
+        exact ih (by simpa [SFunc.silentCalls] using hsc')
+          (by simpa [SFunc.callRefs] using hcalls') (hstable0 hstep.symm hp)
   exact go run hsc hcalls h0
 
 theorem SFunc.RunP.hoare_single_call_with_gotos {P : Sevm → Devm → Ninst → Devm → Prop}
@@ -348,6 +359,11 @@ theorem SFunc.RunP.hoare_single_call_with_gotos {P : Sevm → Devm → Ninst →
         have hcallee := hspec hk lookup (hstable0 pop.state hp) run
         exact silent_preserve hstable1 tail
           (by simpa [SFunc.silentCallsWith] using hsc'') hcallee
+    | pcAt hrun _ run ih =>
+        intro hsc' hcalls' hp
+        have hstep := ninst_state_of_silent' (n := .reg .pc) rfl (hP hrun)
+        exact ih (by simpa [SFunc.silentCallsWith] using hsc')
+          (by simpa [SFunc.callRefs] using hcalls') (hstable0 hstep.symm hp)
   exact go run hsc hcalls h0
 
 theorem SFunc.RunP.hoare_wrapper {P : Sevm → Devm → Ninst → Devm → Prop}

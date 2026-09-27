@@ -726,6 +726,7 @@ theorem lock_step (hc : Cert.check code c = true) (hl : lockCert sp c ann = true
     visit_sound reach hfl (by rw [hpc]; exact hvis)
   have hvalv : Val sp F n σv.kv σv.facts S := by rw [hkv, hfacts]; exact hval
   cases f with
+  | pcAt _ _ => simp [lockNode] at hlock
   | next i f =>
     simp only [checkNode, Bool.and_eq_true] at hcheck
     obtain ⟨⟨hbytes, _⟩, hrest⟩ := hcheck
@@ -1062,6 +1063,12 @@ theorem cursor_sstore_node {n : Exec.Deriv} {κ : Cursor} (ok : CursorOK code c 
     rw [hat] at hj
     cases hj
   cases f with
+  | pcAt p g =>
+    simp only [checkNode, Bool.and_eq_true] at hcheck
+    have hi := Ninst.at_of_slice (bytesAt_slice (ninst_bytes_ne_nil (.reg .pc)) hcheck.1.1)
+    unfold Ninst.At at hi hat
+    rw [hat] at hi
+    cases hi
   | next i g =>
     simp only [checkNode, Bool.and_eq_true] at hcheck
     have hi := Ninst.at_of_slice (bytesAt_slice (ninst_bytes_ne_nil i) hcheck.1.1)
@@ -1164,6 +1171,7 @@ theorem LockOK.not_selfdestruct {n : Exec.Deriv} {κ : Cursor} {σ : LSt}
     rw [hat] at hj
     cases hj
   cases f with
+  | pcAt _ _ => simp [lockNode] at hl
   | last l =>
     have hl' := byteAt_linst_at (show byteAt code pc = some l.toUInt8 by
       simpa [checkNode] using hcheck)

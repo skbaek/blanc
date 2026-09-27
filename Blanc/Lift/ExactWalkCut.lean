@@ -34,6 +34,7 @@ def SFunc.avoids (C E : List Nat) : SFunc → Bool
   | .jump k => E.contains k && !C.contains k
   | .callNext _ f => f.avoids C E
   | .ret => true
+  | .pcAt _ f => f.avoids C E
   | .undefined => true
 
 /-- An exact run whose gotos all avoid the cut list is an exact cut run. -/
@@ -72,6 +73,9 @@ theorem SFunc.RunExact.toCut {fs : List SFunc} {sevm : Sevm} {C E : List Nat}
   | callRet d hget pop hrun _ _ ih =>
     simp only [SFunc.avoids] at hf
     exact .callRet d hget pop hrun (ih hf)
+  | pcAt hpc _ ih =>
+    simp only [SFunc.avoids] at hf
+    exact .pcAt hpc (ih hf)
 
 /-! ## Cut walk steps -/
 

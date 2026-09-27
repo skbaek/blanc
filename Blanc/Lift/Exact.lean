@@ -66,6 +66,10 @@ inductive SFunc.RunExact (fs : List SFunc) (sevm : Sevm) :
     SFunc.RunExact fs sevm devm' g (.returned devm'') →
     SFunc.RunExact fs sevm devm'' f o →
     SFunc.RunExact fs sevm devm (.callNext k f) o
+  | pcAt {devm devm' : Devm} {p : Nat} {f : SFunc} {o : Outcome} :
+    Ninst.StepRun p sevm devm (.reg .pc) .none (.ok devm') →
+    SFunc.RunExact fs sevm devm' f o →
+    SFunc.RunExact fs sevm devm (.pcAt p f) o
 
 def SProg.RunExact (fs : List SFunc) (sevm : Sevm) (devm devm' : Devm) : Prop :=
   ∃ f, fs[0]? = some f ∧ SFunc.RunExact fs sevm devm f (.halted devm')
@@ -91,6 +95,7 @@ theorem SFunc.RunExact.toRun {fs : List SFunc} {sevm : Sevm} {devm : Devm}
       .callHalt d hget (Devm.PopBurn.of_popBurnBy hpop) ih)
     (fun d hget hpop hrun hcont ihrun ihcont =>
       .callRet d hget (Devm.PopBurn.of_popBurnBy hpop) ihrun ihcont)
+    (fun {_ _ p _ _} hstep _ ih => .pcAt ⟨.none, trivial, p, hstep⟩ hstep ih)
     h
 
 /-! ## The jumpability certificate -/
@@ -132,6 +137,7 @@ def jumpsOkNode (code : ByteArray) (es : List Entry) : SFunc → List AVal → B
         | none => true
     | _, _, _ => false
   | .ret, _ => true
+  | .pcAt p f, a => jumpsOkNode code es f (.const (Nat.toB256 p) :: a)
   | .undefined, _ => true
 
 def Cert.jumpsOk (code : ByteArray) (c : Cert) : Bool :=
@@ -1009,6 +1015,7 @@ theorem node_exact {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
           | jump _ => simp [checkNode] at hcheck
           | callNext _ _ => simp [checkNode] at hcheck
           | ret => simp [checkNode] at hcheck
+          | pcAt _ _ => simp [checkNode] at hcheck
           | undefined => simp [checkNode] at hcheck)
     (fun {devm devm' devm'' k f g o} d hget hpop hrun hcont ihrun ihcont => by
       intro pc m a ρ S base hcheck hjump hstack hframe hρ
@@ -1173,7 +1180,39 @@ theorem node_exact {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
           | jump _ => simp [checkNode] at hcheck
           | callNext _ _ => simp [checkNode] at hcheck
           | ret => simp [checkNode] at hcheck
+          | pcAt _ _ => simp [checkNode] at hcheck
           | undefined => simp [checkNode] at hcheck)
+    (fun {devm devm' p f o} hstepPc _ ih => by
+      intro pc m a ρ S base hcheck hjump hstack hframe hρ
+      have hcheck' :
+          (bytesAt code pc (Ninst.toBytes (Ninst.reg .pc)) = true ∧ p = pc) ∧
+            checkNode code c.entries m (pc + 1) (.const (Nat.toB256 pc) :: a) f = true := by
+        simpa [checkNode] using hcheck
+      obtain ⟨⟨hbytes, rfl⟩, hchild⟩ := hcheck'
+      have h_at : Ninst.At sevm.code p (Ninst.reg .pc) := by
+        apply Ninst.at_of_slice
+        apply bytesAt_slice (ninst_bytes_ne_nil (Ninst.reg .pc))
+        rw [hcode]
+        exact hbytes
+      have hstack' : devm'.stack = Nat.toB256 p :: (S ++ base) := by
+        rw [pc_stepRun_stack hstepPc, hstack]
+      have hframe' :
+          FrameMatches ρ (.const (Nat.toB256 p) :: a) (Nat.toB256 p :: S) :=
+        List.Forall₂.cons rfl hframe
+      have hrec := ih (p + 1) m (.const (Nat.toB256 p) :: a) ρ (Nat.toB256 p :: S) base
+        hchild (by simpa [jumpsOkNode] using hjump) hstack' hframe' (by
+          intro h
+          exact hρ (by simpa using h))
+      cases o with
+      | halted post =>
+        rcases hrec with ⟨exc⟩
+        exact Ninst.exec_of_stepRun (xl := .none) h_at trivial hstepPc ⟨exc⟩
+      | returned devm'' =>
+        rcases hrec with ⟨hret, Sret, hst, hlenret, hcont⟩
+        refine ⟨by simpa using hret, Sret, hst, hlenret, ?_⟩
+        intro r hr
+        rcases hcont hr with ⟨exc⟩
+        exact Ninst.exec_of_stepRun (xl := .none) h_at trivial hstepPc ⟨exc⟩)
     run
 
 /-- The top-level gas-exact converse. -/

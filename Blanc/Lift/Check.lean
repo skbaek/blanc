@@ -157,6 +157,9 @@ def checkNode (code : ByteArray) (es : List Entry) (m : Nat) :
     match a with
     | .ret :: a' => byteAt code pc == some (Jinst.toUInt8 .jump) && a'.length == m
     | _ => false
+  | pc, a, .pcAt p f =>
+    bytesAt code pc (Ninst.toBytes (.reg .pc)) && p == pc &&
+      checkNode code es m (pc + 1) (.const (Nat.toB256 pc) :: a) f
   | pc, _, .undefined => (code.getInst pc).isNone
 
 /-- A lift certificate: entry `0` is the frame's start at pc `0` with an empty

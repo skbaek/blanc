@@ -121,6 +121,8 @@ inductive SStep (c : Cert) : Cursor → Cursor → Prop
   | ret {pc : Nat} {a : List AVal} {m : Nat} {k : Cont} {K : List Cont} :
       SStep c ⟨.ret, pc, .ret :: a, m, k :: K⟩
         ⟨k.f, k.tag.toNat, List.replicate k.rets .unk ++ k.a, k.m, K⟩
+  | pcAt {f : SFunc} {p : Nat} {a : List AVal} {m : Nat} {K : List Cont} :
+      SStep c ⟨.pcAt p f, p, a, m, K⟩ ⟨f, p + 1, .const (Nat.toB256 p) :: a, m, K⟩
 
 /-! ### One same-frame edge, by instruction kind -/
 
@@ -164,6 +166,29 @@ theorem parentStep_ninst {n' n : Exec.Deriv} {i : Ninst}
     simp only [Ninst.StepRun, hs, Step.Run]
     exact ⟨_, RunFrame.of_run henter, hresume.symm⟩
 
+/-- A same-frame edge out of a `PC` is the `PC` step at the node's own pc. -/
+theorem parentStep_pc {n' n : Exec.Deriv}
+    (edge : Exec.Deriv.ParentStep n' n) (hat : Ninst.At n.sevm.code n.pc (.reg .pc)) :
+    n'.pc = n.pc + 1 ∧ Ninst.StepRun n.pc n.sevm n.devm (.reg .pc) .none (.ok n'.devm) := by
+  rcases n with ⟨pc, sevm, pre, out, run⟩
+  dsimp only at hat ⊢
+  have hstep0 := Evm.step_next (devm := pre) hat
+  rw [Ninst.step_reg] at hstep0
+  cases edge with
+  | cont hstep next =>
+    have hs := hstep0.symm.trans hstep
+    cases hr : Rinst.run ⟨pc, sevm, pre⟩ .pc <;> simp [hr, Step.ofExecution] at hs
+    obtain ⟨rfl, rfl⟩ := hs
+    refine ⟨rfl, ?_⟩
+    simp only [Ninst.StepRun, Ninst.step_reg, hr, Step.ofExecution, Step.Run]
+    exact ⟨trivial, trivial⟩
+  | doneOk hstep _ _ _ =>
+    have hs := hstep0.symm.trans hstep
+    cases hr : Rinst.run ⟨pc, sevm, pre⟩ .pc <;> simp [hr, Step.ofExecution] at hs
+  | runOk hstep _ _ _ _ =>
+    have hs := hstep0.symm.trans hstep
+    cases hr : Rinst.run ⟨pc, sevm, pre⟩ .pc <;> simp [hr, Step.ofExecution] at hs
+
 theorem parentStep_false_of_linst {n' n : Exec.Deriv} {l : Linst}
     (edge : Exec.Deriv.ParentStep n' n) (hat : Linst.At n.sevm.code n.pc l) : False := by
   cases edge with
@@ -189,8 +214,8 @@ theorem ret_mem_of_absNinst {n : Ninst} {a a' : List AVal}
     simpa using hm
   · have hn : ∀ (bs : Bytes) (fits : bs.length ≤ 32), n ≠ .push bs fits :=
       fun bs fits he => hpush ⟨bs, fits, he⟩
-    obtain ⟨_, out, _, hread⟩ := absNinst_nonpush_spec hn h
-    exact ret_mem_of_readBack hread hm
+    obtain ⟨_, out, a0, _, hread, hfold⟩ := absNinst_nonpush_spec hn h
+    exact ret_mem_of_readBack hread (ret_mem_of_foldTop (hfold ▸ hm))
 
 /-- The abstract effect of a checked non-jump instruction is sound for one
 instruction run, whatever the frame's eventual outcome: the words the
@@ -209,7 +234,7 @@ theorem absNinst_run_stack {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
       List.Forall₂.cons rfl hframe⟩
   · have hn : ∀ (bs : Bytes) (fits : bs.length ≤ 32), n ≠ .push bs fits :=
       fun bs fits he => hpush ⟨bs, fits, he⟩
-    obtain ⟨hlen, out, htrans, hread⟩ := absNinst_nonpush_spec hn habs
+    obtain ⟨hlen, out, a0, htrans, hread, hfold⟩ := absNinst_nonpush_spec hn habs
     have hinput :
         Matches ((indexPattern a.length).map (label a ρ) ++ rest.map some)
           devm.stack := by
@@ -223,7 +248,9 @@ theorem absNinst_run_stack {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
     rw [mapM_readBack_label hread] at hout
     obtain ⟨S', below, hsp, hfirst, hbelow⟩ := matches_split hout
     rw [matches_some_map_eq hbelow] at hsp
-    exact ⟨S', hsp, matches_to_frame hfirst⟩
+    refine ⟨S', hsp, ?_⟩
+    rw [hfold]
+    exact frameMatches_foldTop hframe hstack run hsp (matches_to_frame hfirst)
 
 theorem pop_one_frame {ρ : B256} {av : AVal} {a : List AVal} {S rest : List B256}
     {x : B256} {d d' : Devm} (hstack : d.stack = S ++ rest)
@@ -455,6 +482,7 @@ theorem cursor_step {code : ByteArray} {c : Cert} (hc : Cert.check code c = true
     | .const _ :: _, .jump _, hcheck, _, _ => simp [checkNode] at hcheck
     | .const _ :: _, .callNext _ _, hcheck, _, _ => simp [checkNode] at hcheck
     | .const _ :: _, .ret, hcheck, _, _ => simp [checkNode] at hcheck
+    | .const _ :: _, .pcAt _ _, hcheck, _, _ => simp [checkNode] at hcheck
     | .const _ :: _, .undefined, hcheck, _, _ => simp [checkNode] at hcheck
   | ret =>
     match a, hcheck, hret, hframe with
@@ -488,6 +516,21 @@ theorem cursor_step {code : ByteArray} {c : Cert} (hc : Cert.check code c = true
     have hat : Linst.At n.sevm.code n.pc l := by
       rw [hcode, hpc]; exact byteAt_linst_at hbyte
     exact (Cursor.parentStep_false_of_linst edge hat).elim
+  | pcAt p f =>
+    have h' : (bytesAt code pc (Ninst.toBytes (Ninst.reg .pc)) = true ∧ p = pc) ∧
+        checkNode code c.entries m (pc + 1) (.const (Nat.toB256 pc) :: a) f = true := by
+      simpa [checkNode] using hcheck
+    obtain ⟨⟨hbytes, rfl⟩, hrest⟩ := h'
+    have hat : Ninst.At n.sevm.code n.pc (.reg .pc) := by
+      rw [hcode, hpc]
+      exact Ninst.at_of_slice (bytesAt_slice (ninst_bytes_ne_nil _) hbytes)
+    obtain ⟨hpc', hrun⟩ := Cursor.parentStep_pc edge hat
+    rw [hpc] at hrun
+    refine ⟨_, .pcAt, hcode', by simp [hpc', hpc], hrest,
+      fun hm => hret (by simpa using hm), Nat.toB256 p :: S, rest, ?_,
+      List.Forall₂.cons rfl hframe, hK⟩
+    rw [pc_stepRun_stack hrun, hstack]
+    rfl
   | undefined =>
     have hnone : n.sevm.code.getInst n.pc = none := by
       rw [hcode, hpc]; simpa [checkNode, Option.isNone_iff_eq_none] using hcheck
@@ -541,7 +584,7 @@ theorem CursorOK.exec_call_or_staticcall {code : ByteArray} {c : Cert} {n : Exec
     cases habs : absNinst (.exec x) a with
     | none => simp [habs] at hrest
     | some a' =>
-      obtain ⟨_, out, htrans, _⟩ := absNinst_nonpush_spec (fun _ _ h => by cases h) habs
+      obtain ⟨_, out, _, htrans, _⟩ := absNinst_nonpush_spec (fun _ _ h => by cases h) habs
       cases x <;> simp [ninstTransfer] at htrans ⊢
   | last l =>
     have hl := byteAt_linst_at (show byteAt code pc = some l.toUInt8 by
@@ -582,5 +625,11 @@ theorem CursorOK.exec_call_or_staticcall {code : ByteArray} {c : Cert} {n : Exec
     split at hcheck
     · exact (hjump _ (by simp at hcheck; exact hcheck.1)).elim
     · cases hcheck
+  | pcAt p g =>
+    simp only [checkNode, Bool.and_eq_true] at hcheck
+    have hi := Ninst.at_of_slice (bytesAt_slice (ninst_bytes_ne_nil (.reg .pc)) hcheck.1.1)
+    unfold Ninst.At at hi hat
+    rw [hat] at hi
+    cases hi
 
 end Blanc.Lift
