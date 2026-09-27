@@ -421,6 +421,26 @@ def mstoreStep (c : Cfg) (g : SFunc) : Option Cfg :=
     else none
   | _ => none
 
+/-- `Array.sliceD` (one `getD`, hence one walk from the head, per byte) as `List.sliceD`
+(one `drop` and one `take`). -/
+theorem array_sliceD_eq_list (xs : Array UInt8) (m n : Nat) :
+    Array.sliceD xs m n 0 = List.sliceD xs.toList m n 0 := by
+  rw [Array.sliceD_eq_map, List.sliceD_eq_map]
+  apply List.map_congr_left
+  intro j _
+  simp [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD]
+
+/-- `MLOAD` reading memory through `List.sliceD` (`Ninst.runCompiled_mload_of`). -/
+def mloadStep (c : Cfg) (g : SFunc) : Option Cfg :=
+  match c.devm.stack with
+  | i :: s =>
+    let cost := gVerylow + c.devm.extCost [⟨i.toNat, 32⟩]
+    if cost ≤ c.devm.gasLeft ∧ s.length < 1024 then
+      some ⟨c.devm.setMach ⟨Bytes.toB256 (List.sliceD c.devm.memory.data.toList i.toNat 32 0) :: s,
+        c.devm.memory.extend i.toNat 32, c.devm.gasLeft - cost, c.devm.stateGas⟩, g, c.K, c.keys, c.adrs⟩
+    else none
+  | _ => none
+
 /-- `CALLDATACOPY` through `memWriteB` (`Ninst.runCompiled_calldatacopy_of`). -/
 def calldatacopyStep (sevm : Sevm) (c : Cfg) (g : SFunc) : Option Cfg :=
   match c.devm.stack with
@@ -788,6 +808,7 @@ def wstep (fs : List SFunc) (sevm : Sevm) (c : Cfg) : Res :=
     | .reg .sload => match sloadStep sevm c g with | some c' => .cont c' | none => .stuck
     | .reg .sstore => match sstoreStep sevm c g with | some c' => .cont c' | none => .stuck
     | .reg .mstore => match mstoreStep c g with | some c' => .cont c' | none => .stuck
+    | .reg .mload => match mloadStep c g with | some c' => .cont c' | none => .stuck
     | .reg .calldatacopy => match calldatacopyStep sevm c g with | some c' => .cont c' | none => .stuck
     | .exec .call => match callStep sevm c g with | some c' => .cont c' | none => .stuck
     | n =>
@@ -983,6 +1004,25 @@ theorem mstoreStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
       exact StepOk.same rfl rfl (AccKeep.setMach _ _) rfl fun o r =>
         .next (Ninst.runCompiled_mstore hs (by exact (Nat.sub_add_cancel hgas).symm)
           (mem_write_eq_B _ _ _)) r
+    · cases h
+  · cases h
+
+theorem mloadStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
+    (h : mloadStep c g = some c') (hf : c.f = .next (.reg .mload) g) :
+    StepOk fs sevm c c' := by
+  rcases c with ⟨devm, f, K, keys, adrs⟩
+  simp only at hf; subst hf
+  simp only [mloadStep] at h
+  split at h
+  · rename_i i s hs
+    split at h
+    · rename_i hc
+      obtain ⟨hgas, hroom⟩ := hc
+      cases h
+      exact StepOk.same rfl rfl (AccKeep.setMach _ _) rfl fun o r =>
+        .next (Ninst.runCompiled_mload_of hs rfl
+          (by simp only [Mem.read, array_sliceD_eq_list]) rfl
+          (by exact (Nat.sub_add_cancel hgas).symm) hroom) r
     · cases h
   · cases h
 
@@ -1184,6 +1224,9 @@ theorem wstep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg}
       · cases h; exact mstoreStep_cont (by assumption) rfl
       · cases h
     · split at h
+      · cases h; exact mloadStep_cont (by assumption) rfl
+      · cases h
+    · split at h
       · cases h; exact calldatacopyStep_cont (by assumption) rfl
       · cases h
     · split at h
@@ -1224,6 +1267,7 @@ theorem wstep_done {fs : List SFunc} {sevm : Sevm} {c : Cfg} {o : Outcome}
   | next n g =>
     simp only [wstep] at h
     split at h
+    · split at h <;> cases h
     · split at h <;> cases h
     · split at h <;> cases h
     · split at h <;> cases h
