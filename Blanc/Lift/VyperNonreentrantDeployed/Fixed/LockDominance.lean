@@ -24,7 +24,6 @@ open Jaune Blanc.LockExclusion Blanc.Lift.LockCheck
 /-- The comparator's lock as a `LockSpec` over its runtime. -/
 def lockL : LockSpec := ⟨code, 0, 2, lockBodies, lockMutBodies⟩
 
-theorem lockL_eq : lockL = lockSpec.lockSpec code := rfl
 
 /-- **The comparator's lock dominance.** -/
 theorem lock_dominance : lockL.Dominance :=

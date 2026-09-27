@@ -88,10 +88,6 @@ theorem t0864_ret {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {t dur t2 ra : B2
   rw [hr]
   rfl
 
-theorem regInv_afterSload_addLog {sevm : Sevm} {b : Devm} {L : Log} {k : B256}
-    (h : RegInv (Devm.getStor b sevm.currentTarget)) :
-    RegInv (Devm.getStor (afterSload sevm (b.addLog L) k) sevm.currentTarget) := by
-  rw [afterSload_getStor]; exact h
 
 /-- `t_07ec_c13`: the `PauseTriggered` event, then `_setHeartbeatExpiry(msg.sender,
 …)` (entry 22, directly or after the checked addition, entry 23), then the lock

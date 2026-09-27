@@ -16,8 +16,6 @@ storage projection `solRegistryStorage`:
    `l3_count_sum_raw`: the same rewritten to raw storage reads.
 3. `RegistryZero`: the logical zero storage state, and `inv_of_registryZero`
    providing an empty witness `[]`.
-4. `l1_l3_of_history`: obtaining the witness and concluding L1 and L3 from the
-   preserved state invariant at history altitude.
 -/
 
 namespace Blanc.Lift.LidoCircuitBreakerDeployed
@@ -248,57 +246,5 @@ theorem inv_of_registryZero {s : Stor} (h : RegistryZero s) :
       norm_num
     exact (h.2 0 h0).2.2
 
-/-- History rung corollary: the state invariant preserved across execution
-history guarantees the existence of a Registry witness at the contract storage,
-and therefore the L1 membership and L3 count-sum corollaries hold there. -/
-theorem l1_l3_of_history {ca : Adr} {future : BlockChain}
-    (hinv : lidoSpec.StateInv ca future.state) :
-    ∃ entries,
-      (∀ {t : B256}, canonicalAddress t →
-        ((solRegistryStorage (future.state.getStor ca)).read (assignmentSlot t) ≠ 0 ↔
-          t ∈ entries.map Prod.fst) ∧
-        ((solRegistryStorage (future.state.getStor ca)).read (indexSlot t) ≠ 0 ↔
-          t ∈ entries.map Prod.fst) ∧
-        ∀ index pauser, findEntry entries t = some (index, pauser) →
-          (solRegistryStorage (future.state.getStor ca)).read (assignmentSlot t) = pauser ∧
-          (solRegistryStorage (future.state.getStor ca)).read (indexSlot t) =
-            Nat.toB256 (index + 1) ∧
-          (solRegistryStorage (future.state.getStor ca)).read
-            (arrayEntrySlot (Nat.toB256 (index + 1))) = t) ∧
-      (∀ p, canonicalAddress p →
-        (solRegistryStorage (future.state.getStor ca)).read (countSlot p) =
-          Nat.toB256 (assignmentCount entries p)) ∧
-      (solRegistryStorage (future.state.getStor ca)).read (countSlot 0) = 0 ∧
-      (∑ p ∈ (entries.map Prod.snd).toFinset,
-        ((solRegistryStorage (future.state.getStor ca)).read (countSlot p)).toNat) =
-          entries.length := by
-  have h := hinv.inv
-  rw [lidoSpec_inv] at h
-  obtain ⟨entries, hw⟩ := h
-  exact ⟨entries, l1_membership hw, l3_count_sum hw⟩
-
-/-- History rung raw corollary: the state invariant preserved across execution
-history implies the raw storage forms of L1 and L3. -/
-theorem l1_l3_of_history_raw {ca : Adr} {future : BlockChain}
-    (hinv : lidoSpec.StateInv ca future.state) :
-    ∃ entries,
-      (∀ {t : B256}, canonicalAddress t →
-        (addressSlotReadWord ((future.state.getStor ca).get (mapSlot t 3)) ≠ 0 ↔
-          t ∈ entries.map Prod.fst) ∧
-        ((future.state.getStor ca).get (mapSlot t 4) ≠ 0 ↔
-          t ∈ entries.map Prod.fst) ∧
-        ∀ index pauser, findEntry entries t = some (index, pauser) →
-          addressSlotReadWord ((future.state.getStor ca).get (mapSlot t 3)) = pauser ∧
-          (future.state.getStor ca).get (mapSlot t 4) = Nat.toB256 (index + 1) ∧
-          addressSlotReadWord ((future.state.getStor ca).get (registryArraySlot index)) = t) ∧
-      (∀ p, canonicalAddress p →
-        (future.state.getStor ca).get (mapSlot p 6) = Nat.toB256 (assignmentCount entries p)) ∧
-      (future.state.getStor ca).get (mapSlot 0 6) = 0 ∧
-      (∑ p ∈ (entries.map Prod.snd).toFinset,
-        ((future.state.getStor ca).get (mapSlot p 6)).toNat) = entries.length := by
-  have h := hinv.inv
-  rw [lidoSpec_inv] at h
-  obtain ⟨entries, hw⟩ := h
-  exact ⟨entries, l1_membership_raw hw, l3_count_sum_raw hw⟩
 
 end Blanc.Lift.LidoCircuitBreakerDeployed

@@ -20,8 +20,7 @@ This module carries that fact:
   wrapper both the state-stable condition and `MemOK` of the wrapper-entry
   memory.  Everything it needs about an instruction is `memSafe_step`.
 * `LidoWriterSpecsM A`: `LidoWriterSpecs A` with `MemOK d.memory` added to both
-  fields' premises (so `LidoWriterSpecs.toM` embeds the old form), and the frame,
-  soundness and history rungs over it.
+  fields' premises, and the frame, soundness and history rungs over it.
 -/
 
 namespace Blanc.Lift.LidoCircuitBreakerDeployed
@@ -48,8 +47,6 @@ theorem MemOK.write_word {μ : Mem} (h : MemOK μ) (i : Nat) (w : B256) :
 theorem MemOK.extend {μ : Mem} (h : MemOK μ) (i sz : Nat) : MemOK (μ.extend i sz) :=
   ⟨h.1.extend i sz, memExtSize_mod_32 h.2⟩
 
-theorem MemOK.read {μ : Mem} (h : MemOK μ) (i sz : Nat) : MemOK (μ.read i sz).2 :=
-  h.extend i sz
 
 /-- The dispatcher's instructions: none writes the world, and memory changes
 only by a word store. -/
@@ -174,10 +171,6 @@ structure LidoWriterSpecsM (A : List LidoCircuitBreaker.Entry → Sevm → Prop)
     lidoSpec.Pre sevm.currentTarget sevm d → SFunc.RunP (StepIn R) prog sevm d w o →
     lidoSpec.Post sevm.currentTarget sevm (Outcome.devm o)
 
-theorem LidoWriterSpecs.toM {A : List LidoCircuitBreaker.Entry → Sevm → Prop}
-    (W : LidoWriterSpecs A) : LidoWriterSpecsM A :=
-  ⟨fun hf hw hl hA _ hp r => W.registerPauser hf hw hl hA hp r,
-   fun hf hc ha ih hw hl hA _ hp r => W.pause hf hc ha ih hw hl hA hp r⟩
 
 private instance : Inhabited SFunc := ⟨.undefined⟩
 

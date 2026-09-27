@@ -163,10 +163,6 @@ private theorem Evm.step_ne_cont_of_last {pc pc' : Nat} {sevm : Sevm} {d d' : De
     Evm.step ⟨pc, sevm, d⟩ ≠ .cont pc' d' := by
   rw [Evm.step_last hat]; exact fun h => nomatch h
 
-private theorem Evm.step_ne_spawn_of_last {pc pc' : Nat} {sevm : Sevm} {d : Devm}
-    {f : Frame} {rsm : Resume} {l : Linst} (hat : sevm.code.getInst pc = some (.last l)) :
-    Evm.step ⟨pc, sevm, d⟩ ≠ .spawn f rsm pc' := by
-  rw [Evm.step_last hat]; exact fun h => nomatch h
 
 /-- One continuing step of a forwarder frame keeps it on its reachable pcs. -/
 theorem ForwarderShape.reach_cont {K : ByteArray} {I : Adr} (hK : ForwarderShape K I)

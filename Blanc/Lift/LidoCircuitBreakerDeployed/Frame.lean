@@ -212,16 +212,5 @@ theorem lidoSpec_preservesAdmitted {A : List LidoCircuitBreaker.Entry → Sevm �
     (ca : Adr) : lidoSpec.PreservesAdmitted ca (lidoFrameEntry A) :=
   lidoSpec.preserves_inv_admitted ca (lidoFrameEntry A) (lidoSpec_soundAdmitted W ca)
 
-/-- **History rung**: given the two Registry writers' specs, a configured
-history whose entered CircuitBreaker frames satisfy `lidoEntry A` preserves the
-state invariant (the deployed code, and a Registry witness of the storage). -/
-theorem lido_history_preserves_inv {A : List LidoCircuitBreaker.Entry → Sevm → Prop} (W : LidoWriterSpecs A)
-    {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (admitted : trace.FrameAdmitted ca (lidoEntry A))
-    (inv : lidoSpec.StateInv ca checkpoint.state) :
-    lidoSpec.StateInv ca future.state :=
-  trace.stateInv_admitted_sem (lidoSpec_preservesAdmitted W ca)
-    ((trace.freshFrameAdmitted ca).and admitted) inv
 
 end Blanc.Lift.LidoCircuitBreakerDeployed

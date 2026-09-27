@@ -731,68 +731,6 @@ structure RawFreshReadEffect (before after : Stor) (entries : List Entry)
         target newPauser).read
           (arrayEntrySlot (Nat.toB256 (probe + 1)))
 
-/-- The deployed storage projection consumes the shared fresh-registration
-preservation proof once the raw five-store effect and local observation
-equations have been shown. -/
-theorem RawFreshReadEffect.preservesRegistry
-    {before after : Stor} {entries : List Entry}
-    {target newPauser : B256}
-    (hw : RegistryWitness (solRegistryStorage before) entries)
-    (htarget : nonzeroCanonicalAddress target)
-    (hnew : nonzeroCanonicalAddress newPauser)
-    (hfind : findEntry entries target = none)
-    (heffect : RawFreshReadEffect before after entries target newPauser) :
-    RegistryWitness (solRegistryStorage after)
-      (entries ++ [(target, newPauser)]) := by
-  have hlogical : RegistryWitness
-      (logicalFreshPost (solRegistryStorage before) entries target newPauser)
-      (entries ++ [(target, newPauser)]) := by
-    apply RegistryWitness.applyFreshWritesOfReadEffect hw htarget hnew hfind
-    intro key
-    rfl
-  exact {
-    targetsNodup := hlogical.targetsNodup
-    targetsValid := hlogical.targetsValid
-    pausersValid := hlogical.pausersValid
-    lengthWord := by
-      rw [solRegistryStorage_length, heffect.writes, heffect.length]
-      exact hlogical.lengthWord
-    arrayWords := by
-      intro probe hprobe
-      simp only [List.length_append, List.length_cons, List.length_nil]
-        at hprobe
-      have hbound : probe + 1 < 2 ^ 252 := by
-        have hlength := hw.fresh_length_lt_2pow252
-        omega
-      rw [solRegistryStorage_array _ _ hbound, heffect.writes]
-      rw [heffect.array probe hprobe]
-      exact hlogical.arrayWords probe (by
-        simp only [List.length_append, List.length_cons, List.length_nil]
-        omega)
-    assignments := by
-      intro probe hprobe
-      rw [solRegistryStorage_assignment _ _ hprobe, heffect.writes,
-        heffect.assignments probe hprobe]
-      exact hlogical.assignments probe hprobe
-    indices := by
-      intro probe hprobe
-      rw [solRegistryStorage_index _ _ hprobe, heffect.writes,
-        heffect.indices probe hprobe]
-      exact hlogical.indices probe hprobe
-    counts := by
-      intro probe hprobe
-      rw [solRegistryStorage_count _ _ hprobe, heffect.writes,
-        heffect.counts probe hprobe]
-      exact hlogical.counts probe hprobe
-    zeroCount := by
-      have hzero : canonicalAddress (0 : B256) := by
-        unfold canonicalAddress
-        change (0 : Nat) < 2 ^ 160
-        norm_num
-      rw [solRegistryStorage_count _ _ hzero, heffect.writes,
-        heffect.counts 0 hzero]
-      exact hlogical.zeroCount
-  }
 
 /-! ## Found-nonzero and absent-zero: the raw layer straight from the
 unified premise
