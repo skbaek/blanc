@@ -1,6 +1,7 @@
 import Blanc.Lift.Basic
 import Blanc.AbstractStackTransfer
 import Blanc.Ladder
+import Blanc.TransientSettlement
 
 /-!
 # Instruction stack transfer for lifted bytecode
@@ -34,10 +35,12 @@ def dropTransfer : Nat → Pattern → Option Pattern
 rejects (and `XOR`, which Vyper uses for `!=`). -/
 def liftRegularTransfer : Rinst → Pattern → Option Pattern
   | .exp, words => binaryTransfer words
+  | .slt, words => binaryTransfer words
   | .not, words => unaryTransfer words
   | .keccak256, words => binaryTransfer words
   | .address, words => some (none :: words)
   | .balance, words => unaryTransfer words
+  | .extcodesize, words => unaryTransfer words
   | .log n, words => dropTransfer (n.val + 2) words
   | .mod, words => binaryTransfer words
   | .or, words => binaryTransfer words
@@ -49,6 +52,8 @@ def liftRegularTransfer : Rinst → Pattern → Option Pattern
   | .returndatasize, words => some (none :: words)
   | .returndatacopy, words => dropTransfer 3 words
   | .mstore8, words => dropTwoTransfer words
+  | .tload, words => unaryTransfer words
+  | .tstore, words => dropTwoTransfer words
   | r, words => regularTransfer r words
 
 def staticcallTransfer : Pattern → Option Pattern
@@ -296,8 +301,8 @@ private theorem liftRegularTransfer_map {r : Rinst} {words output : Pattern}
     (checked : liftRegularTransfer r words = some output) :
     liftRegularTransfer r (words.map φ) = some (output.map φ) := by
   cases r <;> simp only [liftRegularTransfer] at checked ⊢
-  case exp | keccak256 => exact binaryTransfer_map φ hφ checked
-  case not | balance => exact unaryTransfer_map φ hφ checked
+  case exp | slt | keccak256 => exact binaryTransfer_map φ hφ checked
+  case not | balance | extcodesize | tload => exact unaryTransfer_map φ hφ checked
   case address => cases checked; simp [hφ]
   case log n =>
       rw [← dropTransfer_map φ hφ (n.val + 2) words]
@@ -307,7 +312,7 @@ private theorem liftRegularTransfer_map {r : Rinst} {words output : Pattern}
       rw [← dropTransfer_map φ hφ 3 words]
       simpa using congrArg (Option.map (List.map φ)) checked
   case returndatasize => cases checked; simp [hφ]
-  case mstore8 => exact dropTwoTransfer_map φ hφ checked
+  case mstore8 | tstore => exact dropTwoTransfer_map φ hφ checked
   all_goals exact regularTransfer_map φ hφ checked
 
 private theorem liftRegularTransfer_append {r : Rinst}
@@ -315,14 +320,14 @@ private theorem liftRegularTransfer_append {r : Rinst}
     (checked : liftRegularTransfer r words = some output) :
     liftRegularTransfer r (words ++ below) = some (output ++ below) := by
   cases r <;> simp only [liftRegularTransfer] at checked ⊢
-  case exp | keccak256 => exact binaryTransfer_append checked
-  case not | balance => exact unaryTransfer_append checked
+  case exp | slt | keccak256 => exact binaryTransfer_append checked
+  case not | balance | extcodesize | tload => exact unaryTransfer_append checked
   case address => cases checked; rfl
   case log n => exact dropTransfer_append (n.val + 2) checked
   case mod | or | xor | byte | shl => exact binaryTransfer_append checked
   case calldatacopy | codecopy | returndatacopy => exact dropTransfer_append 3 checked
   case returndatasize => cases checked; rfl
-  case mstore8 => exact dropTwoTransfer_append checked
+  case mstore8 | tstore => exact dropTwoTransfer_append checked
   all_goals exact regularTransfer_append checked
 
 private theorem callTransfer_map (φ : Option B256 → Option B256)
@@ -992,7 +997,7 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
       simp only [ninstTransfer] at checked
       simp only [liftRegularTransfer] at checked
       cases r with
-      | add | mul | sub | div | lt | gt | eq | and | shr =>
+      | add | mul | sub | div | lt | gt | slt | eq | and | shr =>
           simp only [regularTransfer] at checked
           rcases binary_checked checked with ⟨head, head', tail, rfl, rfl⟩
           rcases of_run_reg run with ⟨pc, hr⟩
@@ -1021,6 +1026,29 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
           rcases unary_checked checked with ⟨head, tail, rfl, rfl⟩
           rcases of_run_sload run with ⟨x, hd⟩
           exact matches_diff matched hd
+      | tload =>
+          rcases unary_checked checked with ⟨head, tail, rfl, rfl⟩
+          cases hstack : devm.stack with
+          | nil => simp [Matches, hstack] at matched
+          | cons key rest =>
+              rw [hstack] at matched
+              obtain ⟨_, tailMatched⟩ := matched
+              have postStack := (tload_run_cell run hstack).1
+              rw [postStack]
+              exact ⟨Or.inl rfl, tailMatched⟩
+      | tstore =>
+          rcases dropTwo_checked checked with ⟨head, head', tail, rfl, rfl⟩
+          cases hstack : devm.stack with
+          | nil => simp [Matches, hstack] at matched
+          | cons key rest =>
+              cases rest with
+              | nil => simp [Matches, hstack] at matched
+              | cons value xs =>
+                  rw [hstack] at matched
+                  obtain ⟨_, _, tailMatched⟩ := matched
+                  have postStack := (tstore_run_cell run hstack).1
+                  rw [postStack]
+                  exact tailMatched
       | exp =>
           rcases binary_checked checked with ⟨head, head', tail, rfl, rfl⟩
           rcases of_run_reg run with ⟨pc, hr⟩
@@ -1168,6 +1196,42 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
                         (x := (devm.world.state.get top.toAdr).bal)
                         (headMatch := Or.inl rfl) htail
                       exact hpushed
+      | extcodesize =>
+          rcases unary_checked checked with ⟨head, tail, rfl, rfl⟩
+          cases hstack : devm.stack with
+          | nil => simp [Matches, hstack] at matched
+          | cons address xs =>
+              rw [hstack] at matched
+              obtain ⟨_, tailMatched⟩ := matched
+              have pref :
+                  (devm.getCode address.toAdr).size.toB256 :: xs <<+ devm'.stack :=
+                (prefix_of_extcodesize_val
+                  (by rw [hstack]; simpa using pref_append (address :: xs) []) run).1
+              have sameLength : devm'.stack.length = (address :: xs).length := by
+                rcases of_run_reg run with ⟨pc, hr⟩
+                simp only [Rinst.run, Rinst.runCore] at hr
+                rcases Except.bind_eq_ok hr with ⟨⟨adr, d0⟩, hpop, hr⟩
+                rcases Devm.pop_of_popToAdr hpop with ⟨word, _, hp⟩
+                have hpStack := (Devm.pop_of_pop hp).stack
+                split at hr
+                all_goals
+                  rcases Except.bind_eq_ok hr with ⟨d1, hgas, hpush⟩
+                  have hbStack := (Devm.burn_of_chargeGas hgas).stack
+                  have hpushStack := (Devm.push_of_push hpush).stack
+                  simp only [Stack.Pop, Stack.Push, Split,
+                    Devm.balReadAccount_stack] at hpStack hpushStack
+                  simp [hstack] at hpStack
+                  change d0.stack = d1.stack at hbStack
+                  rw [hpushStack]
+                  simp only [List.length_cons]
+                  rw [← hbStack, ← hpStack.2]
+                  simp
+              have exactStack :
+                  (devm.getCode address.toAdr).size.toB256 :: xs = devm'.stack :=
+                List.pref_unique (by simpa using sameLength.symm) pref
+                  (by simpa using pref_append devm'.stack [])
+              rw [← exactStack]
+              exact ⟨Or.inl rfl, tailMatched⟩
       | dup index =>
           simp only [regularTransfer] at checked
           rcases lookup : input[index]? with _ | selected

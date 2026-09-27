@@ -2640,7 +2640,9 @@ contract-neutral.
   `Cert.check` in [`Blanc/Lift/Check.lean`](../Blanc/Lift/Check.lean), with
   the per-instruction abstract transfer (`ninstTransfer`, `ninstTransfer_run`)
   in [`Blanc/Lift/Transfer.lean`](../Blanc/Lift/Transfer.lean) (it accepts `XOR`,
-  Vyper's `!=`, alongside solc's opcodes). Decide
+  Vyper's `!=`, and the `SLT`, `EXTCODESIZE`, `TLOAD`, and `TSTORE` steps needed
+  by deployed Lido bytecode; these success-only lifted transfers do not extend
+  native `regularTransfer_safe`). Decide
   `Cert.check` per entry with `decide +kernel`; one decision over the whole
   certificate does not fit in memory for a real contract, and read bytes with
   `code.data.toList` (`ByteArray.toList` is quadratic in the kernel). For a
