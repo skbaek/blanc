@@ -3,6 +3,7 @@ import Blanc.Lift.WalkSteps
 import Blanc.LidoCircuitBreakerCore
 import Blanc.Lift.Weth9.Words
 import Blanc.Lift.Vyper
+import Blanc.Lift.MapSlot
 
 /-! Inversion of the deployed CircuitBreaker's checked-arithmetic helper
 entries on a successful run: entry 40 (checked decrement), entry 24 (checked
@@ -24,6 +25,37 @@ abbrev ffWord : B256 := Bytes.toB256
 section
 
 variable {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
+
+/-- The Solidity mapping-slot scratch idiom: two word stores at 0 and 32 of a
+well-formed, word-aligned image, hashed over `[0, 64)`, give `mapSlot key base`
+without extending memory, and keep the image well-formed and aligned. -/
+theorem scratch_mapSlot {M : Mem} (hmem : Mem.Wf M) (halign : M.size % 32 = 0)
+    (key base : B256) :
+    ((((M.write 0 key.toBytes).write 32 base.toBytes).read 0 64).1).keccak =
+        mapSlot key base ∧
+      (((M.write 0 key.toBytes).write 32 base.toBytes).read 0 64).2 =
+        (M.write 0 key.toBytes).write 32 base.toBytes ∧
+      Mem.Wf ((M.write 0 key.toBytes).write 32 base.toBytes) ∧
+      ((M.write 0 key.toBytes).write 32 base.toBytes).size % 32 = 0 := by
+  have hsize1 : (M.write 0 key.toBytes).size % 32 = 0 := by
+    rw [Mem.size_write_word_at]
+    split_ifs
+    · exact halign
+    · decide
+  have hsize2 : ((M.write 0 key.toBytes).write 32 base.toBytes).size % 32 = 0 := by
+    rw [Mem.size_write_word_at]
+    split_ifs
+    · exact hsize1
+    · decide
+  have hsize64 : 64 ≤ ((M.write 0 key.toBytes).write 32 base.toBytes).size := by
+    rw [Mem.size_write_word_at]
+    split_ifs with h
+    · exact h
+    · decide
+  refine ⟨?_, Mem.read_snd_eq_self (memExtSize_of_le hsize2 (by omega)),
+    (hmem.write 0 _).write 32 _, hsize2⟩
+  rw [Mem.read_two_word_writes_at hmem (Mem.reads_data M) 0 key base]
+  rfl
 
 /-- The `Panic(0x11)` block never completes successfully. -/
 theorem panic42_not_run {C : List Nat} {S : List B256} {r : Seg}
