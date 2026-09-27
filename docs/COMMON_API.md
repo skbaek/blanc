@@ -1105,6 +1105,20 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   storage), `Ninst.none_getStor_eq_of_ne_sstore`,
   `Exec.rawFrameDescendants_entry` (pc 0 and covered fork for every raw
   descendant root) and `Exec.Deriv.ParentPrefix.antisymm`.
+- Storage-owner discipline from world premises:
+  [`Blanc/OwnerDiscipline.lean`](../Blanc/OwnerDiscipline.lean).
+  `Exec.ownerCode_of_world` says every raw frame root (any outcome) owning
+  `P`'s storage runs `C` or an EIP-1167 forwarder `K` to `I`, when `P` holds
+  `K` or `C`, `I` holds `C`, and no frame running `C` executes
+  `DELEGATECALL`/`CALLCODE` (`Exec.NoDelegateFrom`);
+  `Exec.ownerDiscipline_of_world` discharges `LockSpec.OwnerDiscipline` from
+  it.  `ForwarderShape K I` is the decidable forwarder shape (`forwarderCode`
+  template; `forwarderShape_847e`/`_6326` by `decide`), `noSstore_of_scan`
+  proves `NoSstore` by a finite scan.  Reusable spawn facts there:
+  `Xinst.step_delegatecall_spawn_code` (child code = code at the popped
+  address), `Xinst.step_directCall_spawn_code` (`CALL`/`STATICCALL`, including
+  a call back into the current account), `Xinst.step_create_spawn_fresh`
+  (`CREATE*` only enters a codeless account) and `Jinst.runCore_ok_pc`.
 - Write-freedom across cycles:
   [`Blanc/CycleWriteFree.lean`](../Blanc/CycleWriteFree.lean).
   Its public `Func.callsIn_mem_iff` reflects the shared internal-call checker.
