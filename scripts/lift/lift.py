@@ -2091,6 +2091,9 @@ def check_source_mem(head: List[str]) -> str:
     # Assemble by a chain over the certificate's tails (a membership case split over
     # hundreds of entries exceeds simp's recursion depth).
     lines.extend([
+        "-- Unfolding `cert.drop k` for a few hundred entries needs more than the default depth.",
+        "set_option maxRecDepth 100000",
+        "",
         f"theorem rest_{n} : Cert.checkEntriesM code (Cert.entries cert) mems true {n} (cert.drop {n}) = true := rfl",
         "",
         f"theorem jrest_{n} : Cert.jumpsEntriesM code (Cert.entries cert) mems true {n} (cert.drop {n}) = true := rfl",
@@ -2099,10 +2102,10 @@ def check_source_mem(head: List[str]) -> str:
     for i in reversed(range(n)):
         lines.extend([
             f"theorem rest_{i} : Cert.checkEntriesM code (Cert.entries cert) mems true {i} (cert.drop {i}) = true :=",
-            f"  Cert.checkEntriesM_drop cert {i} (by decide) entry_{i} rest_{i + 1}",
+            f"  Cert.checkEntriesM_drop cert {i} (by decide +kernel) entry_{i} rest_{i + 1}",
             "",
             f"theorem jrest_{i} : Cert.jumpsEntriesM code (Cert.entries cert) mems true {i} (cert.drop {i}) = true :=",
-            f"  Cert.jumpsEntriesM_drop cert {i} (by decide) jumps_{i} jrest_{i + 1}",
+            f"  Cert.jumpsEntriesM_drop cert {i} (by decide +kernel) jumps_{i} jrest_{i + 1}",
             "",
         ])
     lines.extend([
