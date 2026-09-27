@@ -151,4 +151,24 @@ theorem vplus_exclusion_impl {sevm : Sevm} {pre : Devm} {out : Execution}
     ¬ lockL.Enters curvePlainImpl847e G :=
   vplus_exclusion R hfork (Or.inr hI) hI hroot hash hF active spawn hG
 
+/-- The Curve ETH/stETH plain pool `0x21e27a5e5513d6e65c4f830167390997aa84843a` (factory
+`0xB9fC157394Af804a3578134A6585C0dc9cc990d4`, pool index 303): a deployed EIP-1167 forwarder
+to the comparator implementation `curvePlainImpl847e`.  Its runtime bytes are provenance
+(read from three public operators), not a theorem; the premise `hP` below restates them. -/
+def curveStethPool847e : Adr := 0x21e27a5e5513d6e65c4f830167390997aa84843a
+
+/-- V+ for the deployed ETH/stETH pool behind the comparator. -/
+theorem vplus_exclusion_stethPool {sevm : Sevm} {pre : Devm} {out : Execution}
+    (R : Exec 0 sevm pre out) (hfork : CoveredFork sevm.benvStat.fork)
+    (hP : pre.getCode curveStethPool847e = forwarderCode curvePlainImpl847e)
+    (hI : pre.getCode curvePlainImpl847e = code)
+    (hroot : sevm.currentTarget = curveStethPool847e →
+      sevm.code = pre.getCode curveStethPool847e)
+    (hash : lockL.HashAvoidIn curveStethPool847e R)
+    {F h c : Exec.Deriv} (hF : F ∈ Exec.rawFrameRoots R)
+    (active : ActiveRel curveStethPool847e F h) (spawn : Spawns h c)
+    {G : Exec.Deriv} (hG : G ∈ Exec.rawFrameRoots c.exc) :
+    ¬ lockL.Enters curveStethPool847e G :=
+  vplus_exclusion R hfork (Or.inl hP) hI hroot hash hF active spawn hG
+
 end Blanc.Lift.VyperNonreentrantDeployed.Fixed
