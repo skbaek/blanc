@@ -1091,6 +1091,20 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   `Exec.noRetainedWriteTo_of_no_execOccurrence`,
   `Exec.noRetainedWriteTo_of_sourceSites_no_exec`, and
   `Exec.noRetainedWriteTo_of_frame_owners_ne` are the committing routes.
+- Reentrancy-lock exclusion over the all-outcome frame tree:
+  [`Blanc/LockExclusion.lean`](../Blanc/LockExclusion.lean).
+  `LockExclusion.LockSpec.lock_exclusion` says an active lock frame's spawned
+  child (any outcome) enters no guarded body of the same owner and code;
+  `LockSpec.locked_core` keeps the lock cell fixed, slot-addressed owner
+  `SSTORE`s absent and `NoRetainedWriteTo` true below any locked node.  Both
+  take the per-code `LockSpec.Dominance` and the per-world
+  `OwnerDiscipline`/`HashAvoidIn` as hypotheses.  Reusable step facts there:
+  `Evm.step_cont_getStor_get` (one cell across a continuing step unless an
+  owner `SSTORE` hits its key), `Evm.step_doneOk_getStor_eq`,
+  `Evm.step_spawn_enter_getStor` (an entered child starts from the parent's
+  storage), `Ninst.none_getStor_eq_of_ne_sstore`,
+  `Exec.rawFrameDescendants_entry` (pc 0 and covered fork for every raw
+  descendant root) and `Exec.Deriv.ParentPrefix.antisymm`.
 - Write-freedom across cycles:
   [`Blanc/CycleWriteFree.lean`](../Blanc/CycleWriteFree.lean).
   Its public `Func.callsIn_mem_iff` reflects the shared internal-call checker.
