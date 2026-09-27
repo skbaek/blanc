@@ -2713,7 +2713,10 @@ contract-neutral.
   successor precedes the node), `LockCheck.lockAt_edge` (one cell across a
   same-frame edge that spawns nothing and stores elsewhere) and
   `LockCheck.cursor_sstore_node`. Worked use:
-  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/LockDominance.lean`.
+  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/LockDominance.lean`; the full
+  `lock_exclusion` instance (dominance, `ownerDiscipline_of_world` for a
+  forwarder owner, `NoDelegateFrom` from the cursor, release-pc activity) is
+  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Exclusion.lean`.
 - Lifted run to execution (liveness, exact gas): `SFunc.RunExact`,
   `Cert.jumpsOk` and `lift_exact` in [`Blanc/Lift/Exact.lean`](../Blanc/Lift/Exact.lean);
   the per-instruction walk steps (`rx_push`, `rx_sload_cold`, `rx_callRet`, …)
