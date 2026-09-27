@@ -54,6 +54,45 @@ theorem addressSlotReadWord_eq_toAdr_toB256 (raw : B256) :
     addressSlotReadWord address.toB256 = address.toB256 := by
   rw [addressSlotReadWord_eq_toAdr_toB256, toAdr_toB256]
 
+/-- A word below `2^160` clears the packed address mask.  This is the
+contract-neutral fact underlying every `canonicalAddress → addressMask &&&
+word = 0` call site (e.g. `Blanc.LidoCircuitBreaker.canonicalAddress_mask_zero`,
+which wraps this lemma; moved here so a deployed-storage projection needs no
+Lido-specific import to read an already-canonical address word back clean). -/
+theorem addressMask_and_eq_zero_of_lt {word : B256}
+    (h : word.toNat < 2 ^ 160) : addressMask &&& word = 0 := by
+  rw [← validAdr_iff]
+  rcases word with ⟨⟨wz, wh⟩, wl⟩
+  have hword := B256.toNat_eq ((wz, wh), wl)
+  have hhigh := B128.toNat_eq (wz, wh)
+  have hlt : B256.toNat ((wz, wh), wl) < 2 ^ 160 := h
+  dsimp only at hword hhigh
+  have hzNat : wz.toNat = 0 := by
+    have hwh := UInt64.toNat_lt wh
+    have hwl := B128.toNat_lt (x := wl)
+    omega
+  have hwhLt : wh.toNat < 2 ^ 32 := by
+    have hwz := UInt64.toNat_lt wz
+    have hwl := B128.toNat_lt (x := wl)
+    omega
+  have hz : wz = 0 := by
+    apply UInt64.toNat_inj.mp
+    simpa using hzNat
+  have hwh : wh.toUInt32.toUInt64 = wh := by
+    apply UInt64.toNat_inj.mp
+    simp only [UInt32.toNat_toUInt64, UInt64.toNat_toUInt32]
+    rw [Nat.mod_eq_of_lt hwhLt]
+  exact ⟨⟨wh.toUInt32, wl⟩, by simp [Adr.toB256, hz, hwh]; rfl⟩
+
+/-- A word below `2^160` already reads back as itself through the packed
+address projection: the direct fact a caller needs when a value being
+written is already known canonical, without routing through
+`addressSlotReadWord_write_of_clean` at a second word. -/
+theorem addressSlotReadWord_eq_self_of_lt {word : B256}
+    (h : word.toNat < 2 ^ 160) : addressSlotReadWord word = word := by
+  rw [addressSlotReadWord_eq_toAdr_toB256]
+  exact toB256_toAdr (validAdr_iff.mpr (addressMask_and_eq_zero_of_lt h))
+
 /-- A packed address assignment replaces the public low-160-bit read while
 retaining the raw word's high bits. -/
 theorem addressSlotReadWord_write_of_clean (raw clean : B256)

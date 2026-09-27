@@ -107,6 +107,357 @@ theorem solRegistryStorage_array (raw : Stor) (index : Nat)
   simp [assignmentRegion, indexRegion, countRegion, arrayRegion,
     hnonzero, hpred, registryArraySlot]
 
+/-! ## A single collision-freedom premise for every raw-write transport
+
+`solKey` inverts `solRegistryStorage`'s decode: it is the actual Solidity
+slot a tagged logical Registry key reads from.  `RegistryKeysFaithful`
+replaces what would otherwise be one bespoke key-correspondence bundle per
+transition (a `LocalRemovalKeys`, and a `LocalFreshKeys`/nonzero/absent-zero
+copy of it) with one reviewable assumption: no other *observed* logical key
+shares a raw slot with a *written* key.  This is never global Keccak
+injectivity — only collision-freedom at the finitely many keys a
+transition's writes and a witness's reads actually touch. -/
+
+/-- Raw Solidity slot of a tagged logical Registry key, mirroring
+`solRegistryStorage`'s decoding exactly. -/
+def solKey (key : B256) : B256 :=
+  let region := key.toNat / 2 ^ 252
+  let payload := Nat.toB256 (key.toNat % 2 ^ 252)
+  if region = assignmentRegion then mapSlot payload 3
+  else if region = indexRegion then mapSlot payload 4
+  else if region = countRegion then mapSlot payload 6
+  else if region = arrayRegion then
+    if payload = 0 then 5 else registryArrayBase + (payload - 1)
+  else 0
+
+theorem solKey_assignmentSlot {probe : B256} (h : canonicalAddress probe) :
+    solKey (assignmentSlot probe) = mapSlot probe 3 := by
+  have h' := tagged_region_payload (region := assignmentRegion)
+    (by norm_num [assignmentRegion]) (canonicalAddress_payload_lt h)
+  simp only [assignmentSlot, solKey, h'.1, h'.2]
+  simp
+
+theorem solKey_indexSlot {probe : B256} (h : canonicalAddress probe) :
+    solKey (indexSlot probe) = mapSlot probe 4 := by
+  have h' := tagged_region_payload (region := indexRegion)
+    (by norm_num [indexRegion]) (canonicalAddress_payload_lt h)
+  simp only [indexSlot, solKey, h'.1, h'.2]
+  simp [assignmentRegion, indexRegion]
+
+theorem solKey_countSlot {probe : B256} (h : canonicalAddress probe) :
+    solKey (countSlot probe) = mapSlot probe 6 := by
+  have h' := tagged_region_payload (region := countRegion)
+    (by norm_num [countRegion]) (canonicalAddress_payload_lt h)
+  simp only [countSlot, solKey, h'.1, h'.2]
+  simp [assignmentRegion, indexRegion, countRegion]
+
+theorem solKey_arrayLengthSlot : solKey arrayLengthSlot = 5 := by
+  have h' := tagged_region_payload (region := arrayRegion) (payload := 0)
+    (by norm_num [arrayRegion]) (by
+      change (0 : Nat) < 2 ^ 252
+      norm_num)
+  simp only [arrayLengthSlot, solKey, h'.1, h'.2]
+  simp [assignmentRegion, indexRegion, countRegion, arrayRegion]
+
+theorem solKey_arrayEntrySlot {index : Nat} (hindex : index + 1 < 2 ^ 252) :
+    solKey (arrayEntrySlot (Nat.toB256 (index + 1))) = registryArraySlot index := by
+  have h256 : index + 1 < 2 ^ 256 := by omega
+  have hword : (Nat.toB256 (index + 1)).toNat < 2 ^ 252 := by
+    rw [B256.toNat_toB256_of_lt h256]
+    exact hindex
+  have h' := tagged_region_payload (region := arrayRegion)
+    (by norm_num [arrayRegion]) hword
+  simp only [arrayEntrySlot, solKey, h'.1, h'.2]
+  have hnonzero : Nat.toB256 (index + 1) ≠ 0 := by
+    intro heq
+    have hn := congrArg B256.toNat heq
+    rw [B256.toNat_toB256_of_lt h256] at hn
+    change index + 1 = 0 at hn
+    omega
+  have hpred : Nat.toB256 (index + 1) - 1 = Nat.toB256 index := by
+    simpa using (natToB256_pred_eq_sub_one (index + 1) (by omega) h256).symm
+  simp [assignmentRegion, indexRegion, countRegion, arrayRegion,
+    hnonzero, hpred, registryArraySlot]
+
+/-- The logical keys a `RegistryWitness` observes: canonical-address
+payloads for the three mapping families, and array payloads `0 .. bound`
+(the length slot, plus every populated entry slot).  `bound` is a plain
+`Nat` rather than a specific `entries.length` so the same predicate covers
+both a witness's *before* observation and the extra index a fresh write
+introduces (its caller supplies whichever bound dominates both). -/
+def RegistryObservable (bound : Nat) (key : B256) : Prop :=
+  (∃ probe, canonicalAddress probe ∧ key = assignmentSlot probe) ∨
+  (∃ probe, canonicalAddress probe ∧ key = indexSlot probe) ∨
+  (∃ probe, canonicalAddress probe ∧ key = countSlot probe) ∨
+  key = arrayLengthSlot ∨
+  (∃ i, i < bound ∧ key = arrayEntrySlot (Nat.toB256 (i + 1)))
+
+/-- No other observed logical key shares a raw slot with a written key:
+collision-freedom only at the finitely many written slots, never global
+Keccak injectivity. -/
+def RegistryKeysFaithful (bound : Nat) (T : List B256) : Prop :=
+  ∀ t ∈ T, ∀ k, RegistryObservable bound k → solKey k = solKey t → k = t
+
+theorem RegistryKeysFaithful.mono {bound : Nat} {T T' : List B256}
+    (h : RegistryKeysFaithful bound T) (hsub : ∀ t ∈ T', t ∈ T) :
+    RegistryKeysFaithful bound T' :=
+  fun t ht k hk heq => h t (hsub t ht) k hk heq
+
+/-- The actual raw `Stor.set` value for a logical write: packed through the
+address mask for the two address-shaped families (assignment, populated
+array entries), verbatim otherwise (index, count, array length). -/
+def registryRawValue (key old value : B256) : B256 :=
+  let region := key.toNat / 2 ^ 252
+  let payload := Nat.toB256 (key.toNat % 2 ^ 252)
+  if region = assignmentRegion then addressSlotWriteWord old value
+  else if region = arrayRegion ∧ payload ≠ 0 then addressSlotWriteWord old value
+  else value
+
+private theorem registryRawValue_assignmentSlot {probe old value : B256}
+    (h : canonicalAddress probe) :
+    registryRawValue (assignmentSlot probe) old value = addressSlotWriteWord old value := by
+  have h' := tagged_region_payload (region := assignmentRegion)
+    (by norm_num [assignmentRegion]) (canonicalAddress_payload_lt h)
+  simp only [assignmentSlot, registryRawValue, h'.1, h'.2]
+  simp
+
+private theorem registryRawValue_indexSlot {probe old value : B256}
+    (h : canonicalAddress probe) :
+    registryRawValue (indexSlot probe) old value = value := by
+  have h' := tagged_region_payload (region := indexRegion)
+    (by norm_num [indexRegion]) (canonicalAddress_payload_lt h)
+  simp only [indexSlot, registryRawValue, h'.1, h'.2]
+  simp [assignmentRegion, indexRegion, arrayRegion]
+
+private theorem registryRawValue_countSlot {probe old value : B256}
+    (h : canonicalAddress probe) :
+    registryRawValue (countSlot probe) old value = value := by
+  have h' := tagged_region_payload (region := countRegion)
+    (by norm_num [countRegion]) (canonicalAddress_payload_lt h)
+  simp only [countSlot, registryRawValue, h'.1, h'.2]
+  simp [assignmentRegion, countRegion, arrayRegion]
+
+private theorem registryRawValue_arrayLengthSlot {old value : B256} :
+    registryRawValue arrayLengthSlot old value = value := by
+  have h' := tagged_region_payload (region := arrayRegion) (payload := 0)
+    (by norm_num [arrayRegion]) (by
+      change (0 : Nat) < 2 ^ 252
+      norm_num)
+  simp only [arrayLengthSlot, registryRawValue, h'.1, h'.2]
+  simp [assignmentRegion, arrayRegion]
+
+private theorem registryRawValue_arrayEntrySlot {index : Nat} {old value : B256}
+    (hindex : index + 1 < 2 ^ 252) :
+    registryRawValue (arrayEntrySlot (Nat.toB256 (index + 1))) old value =
+      addressSlotWriteWord old value := by
+  have h256 : index + 1 < 2 ^ 256 := by omega
+  have hword : (Nat.toB256 (index + 1)).toNat < 2 ^ 252 := by
+    rw [B256.toNat_toB256_of_lt h256]
+    exact hindex
+  have h' := tagged_region_payload (region := arrayRegion)
+    (by norm_num [arrayRegion]) hword
+  have hnonzero : Nat.toB256 (index + 1) ≠ 0 := by
+    intro heq
+    have hn := congrArg B256.toNat heq
+    rw [B256.toNat_toB256_of_lt h256] at hn
+    change index + 1 = 0 at hn
+    omega
+  simp only [arrayEntrySlot, registryRawValue, h'.1, h'.2]
+  simp [assignmentRegion, arrayRegion, hnonzero]
+
+/-- A chronological chain of logical Registry writes, applied at their raw
+Solidity slots with the actual Solidity write shape (plain word, or a
+packed-address read-modify-write) per key. -/
+def applyRegistryRawWrites (raw : Stor) (writes : List (B256 × B256)) : Stor :=
+  writes.foldl
+    (fun s w => s.set (solKey w.1) (registryRawValue w.1 (s.get (solKey w.1)) w.2))
+    raw
+
+private theorem solRegistryStorage_read_congr
+    {bound : Nat} {a b : Stor} {key : B256}
+    (hlength : bound < 2 ^ 252)
+    (hkey : RegistryObservable bound key)
+    (h : a.get (solKey key) = b.get (solKey key)) :
+    (solRegistryStorage a).read key = (solRegistryStorage b).read key := by
+  rcases hkey with
+    ⟨probe, hprobe, rfl⟩ | ⟨probe, hprobe, rfl⟩ | ⟨probe, hprobe, rfl⟩ |
+      rfl | ⟨i, hi, rfl⟩
+  · rw [solKey_assignmentSlot hprobe] at h
+    rw [solRegistryStorage_assignment _ _ hprobe, solRegistryStorage_assignment _ _ hprobe, h]
+  · rw [solKey_indexSlot hprobe] at h
+    rw [solRegistryStorage_index _ _ hprobe, solRegistryStorage_index _ _ hprobe, h]
+  · rw [solKey_countSlot hprobe] at h
+    rw [solRegistryStorage_count _ _ hprobe, solRegistryStorage_count _ _ hprobe, h]
+  · rw [solKey_arrayLengthSlot] at h
+    rw [solRegistryStorage_length, solRegistryStorage_length, h]
+  · have hbound : i + 1 < 2 ^ 252 := by omega
+    rw [solKey_arrayEntrySlot hbound] at h
+    rw [solRegistryStorage_array _ _ hbound, solRegistryStorage_array _ _ hbound, h]
+
+private theorem solRegistryStorage_read_of_set
+    {bound : Nat} {before : Stor} {logicalKey value : B256}
+    (hlength : bound < 2 ^ 252)
+    (hkey : RegistryObservable bound logicalKey)
+    (hclean : addressSlotReadWord value = value) :
+    (solRegistryStorage
+      (before.set (solKey logicalKey)
+        (registryRawValue logicalKey (before.get (solKey logicalKey)) value))
+      ).read logicalKey = value := by
+  rcases hkey with
+    ⟨probe, hprobe, rfl⟩ | ⟨probe, hprobe, rfl⟩ | ⟨probe, hprobe, rfl⟩ |
+      rfl | ⟨i, hi, rfl⟩
+  · rw [solKey_assignmentSlot hprobe]
+    rw [solRegistryStorage_assignment _ _ hprobe, Stor.get_set_ite, if_pos rfl,
+      registryRawValue_assignmentSlot hprobe]
+    exact addressSlotReadWord_write_of_clean _ _ hclean
+  · rw [solKey_indexSlot hprobe]
+    rw [solRegistryStorage_index _ _ hprobe, Stor.get_set_ite, if_pos rfl,
+      registryRawValue_indexSlot hprobe]
+  · rw [solKey_countSlot hprobe]
+    rw [solRegistryStorage_count _ _ hprobe, Stor.get_set_ite, if_pos rfl,
+      registryRawValue_countSlot hprobe]
+  · rw [solKey_arrayLengthSlot]
+    rw [solRegistryStorage_length, Stor.get_set_ite, if_pos rfl,
+      registryRawValue_arrayLengthSlot]
+  · have hbound : i + 1 < 2 ^ 252 := by omega
+    rw [solKey_arrayEntrySlot hbound]
+    rw [solRegistryStorage_array _ _ hbound, Stor.get_set_ite, if_pos rfl,
+      registryRawValue_arrayEntrySlot hbound]
+    exact addressSlotReadWord_write_of_clean _ _ hclean
+
+private theorem solRegistryStorage_step
+    {bound : Nat} {before : Stor} {logicalKey value : B256}
+    (hlength : bound < 2 ^ 252)
+    (hkeyObs : RegistryObservable bound logicalKey)
+    (hclean : addressSlotReadWord value = value)
+    {key : B256} (hkey : RegistryObservable bound key)
+    (hfaithfulOne : ∀ k, RegistryObservable bound k →
+      solKey k = solKey logicalKey → k = logicalKey) :
+    (solRegistryStorage
+      (before.set (solKey logicalKey)
+        (registryRawValue logicalKey (before.get (solKey logicalKey)) value))
+      ).read key =
+      if logicalKey = key then value else (solRegistryStorage before).read key := by
+  by_cases heq : logicalKey = key
+  · simp only [if_pos heq]
+    rw [← heq]
+    exact solRegistryStorage_read_of_set hlength hkeyObs hclean
+  · simp only [if_neg heq]
+    have hne : solKey logicalKey ≠ solKey key := by
+      intro hcontra
+      exact heq (hfaithfulOne key hkey hcontra.symm).symm
+    apply solRegistryStorage_read_congr hlength hkey
+    rw [Stor.get_set_ite, if_neg hne]
+
+/-- **The unified raw-write transport lemma.**  Given the actual raw writes
+of a chronological chain of logical Registry writes (plain words or
+packed-address read-modify-writes, per `applyRegistryRawWrites`), and that
+the written keys are `RegistryKeysFaithful` for the observed keys, every
+observed logical key's Solidity-decoded value after the chain agrees with
+the logical fold of the writes — the single fact each of the four native
+transitions' raw analogues now consumes, in place of a bespoke
+key-correspondence bundle. -/
+theorem solRegistryStorage_applyRegistryRawWrites
+    {bound : Nat} {before : Stor} {writes : List (B256 × B256)}
+    (hlength : bound < 2 ^ 252)
+    (hfaithful : RegistryKeysFaithful bound (writes.map Prod.fst))
+    (hobservable : ∀ w ∈ writes, RegistryObservable bound w.1)
+    (hclean : ∀ w ∈ writes, addressSlotReadWord w.2 = w.2)
+    {key : B256} (hkey : RegistryObservable bound key) :
+    (solRegistryStorage (applyRegistryRawWrites before writes)).read key =
+      writes.foldl (fun cur w => if w.1 = key then w.2 else cur)
+        ((solRegistryStorage before).read key) := by
+  induction writes generalizing before with
+  | nil => rfl
+  | cons w rest ih =>
+    have hfaithfulRest : RegistryKeysFaithful bound (rest.map Prod.fst) :=
+      hfaithful.mono (fun t ht => List.mem_cons_of_mem _ ht)
+    have hobservableRest : ∀ w' ∈ rest, RegistryObservable bound w'.1 :=
+      fun w' hw' => hobservable w' (List.mem_cons_of_mem _ hw')
+    have hcleanRest : ∀ w' ∈ rest, addressSlotReadWord w'.2 = w'.2 :=
+      fun w' hw' => hclean w' (List.mem_cons_of_mem _ hw')
+    have hw1obs : RegistryObservable bound w.1 :=
+      hobservable w List.mem_cons_self
+    have hw1clean : addressSlotReadWord w.2 = w.2 :=
+      hclean w List.mem_cons_self
+    have hfaithfulOne : ∀ k, RegistryObservable bound k →
+        solKey k = solKey w.1 → k = w.1 :=
+      fun k hk heq => hfaithful w.1 List.mem_cons_self k hk heq
+    have hstep :
+        (solRegistryStorage
+          (before.set (solKey w.1) (registryRawValue w.1 (before.get (solKey w.1)) w.2))
+          ).read key =
+        if w.1 = key then w.2 else (solRegistryStorage before).read key :=
+      solRegistryStorage_step hlength hw1obs hw1clean hkey hfaithfulOne
+    show (solRegistryStorage
+        (applyRegistryRawWrites
+          (before.set (solKey w.1) (registryRawValue w.1 (before.get (solKey w.1)) w.2))
+          rest)).read key =
+      rest.foldl (fun cur w' => if w'.1 = key then w'.2 else cur)
+        (if w.1 = key then w.2 else (solRegistryStorage before).read key)
+    rw [← hstep]
+    exact ih hfaithfulRest hobservableRest hcleanRest
+      (before := before.set (solKey w.1) (registryRawValue w.1 (before.get (solKey w.1)) w.2))
+
+/-- Combine the unified transport lemma with pointwise raw equality (the
+form a later bytecode-walk proof supplies) to conclude the deployed
+projection's `RegistryWitness` from the corresponding logical-fold witness. -/
+theorem RegistryWitness.ofRawRegistryWrites
+    {before after : Stor} {entries' : List Entry} {bound : Nat}
+    {writes : List (B256 × B256)}
+    (hlength : bound < 2 ^ 252)
+    (hboundPost : entries'.length ≤ bound)
+    (hfaithful : RegistryKeysFaithful bound (writes.map Prod.fst))
+    (hobservable : ∀ w ∈ writes, RegistryObservable bound w.1)
+    (hclean : ∀ w ∈ writes, addressSlotReadWord w.2 = w.2)
+    (hwrites : ∀ key, after.get key = (applyRegistryRawWrites before writes).get key)
+    (hlogical : RegistryWitness
+      { read := fun key => writes.foldl (fun cur w => if w.1 = key then w.2 else cur)
+          ((solRegistryStorage before).read key) } entries') :
+    RegistryWitness (solRegistryStorage after) entries' := by
+  have hread : ∀ key, RegistryObservable bound key →
+      (solRegistryStorage after).read key =
+        writes.foldl (fun cur w => if w.1 = key then w.2 else cur)
+          ((solRegistryStorage before).read key) := by
+    intro key hkey
+    have hcongr := solRegistryStorage_read_congr (bound := bound) (key := key)
+      hlength hkey (a := after) (b := applyRegistryRawWrites before writes)
+      (by rw [hwrites])
+    rw [hcongr]
+    exact solRegistryStorage_applyRegistryRawWrites hlength hfaithful hobservable hclean hkey
+  exact {
+    targetsNodup := hlogical.targetsNodup
+    targetsValid := hlogical.targetsValid
+    pausersValid := hlogical.pausersValid
+    lengthWord := by
+      rw [hread arrayLengthSlot (Or.inr (Or.inr (Or.inr (Or.inl rfl))))]
+      exact hlogical.lengthWord
+    arrayWords := by
+      intro probe hprobe
+      rw [hread _ (Or.inr (Or.inr (Or.inr (Or.inr
+        ⟨probe, by omega, rfl⟩))))]
+      exact hlogical.arrayWords probe hprobe
+    assignments := by
+      intro probe hprobe
+      rw [hread _ (Or.inl ⟨probe, hprobe, rfl⟩)]
+      exact hlogical.assignments probe hprobe
+    indices := by
+      intro probe hprobe
+      rw [hread _ (Or.inr (Or.inl ⟨probe, hprobe, rfl⟩))]
+      exact hlogical.indices probe hprobe
+    counts := by
+      intro probe hprobe
+      rw [hread _ (Or.inr (Or.inr (Or.inl ⟨probe, hprobe, rfl⟩)))]
+      exact hlogical.counts probe hprobe
+    zeroCount := by
+      have hzero : canonicalAddress (0 : B256) := by
+        unfold canonicalAddress
+        change (0 : Nat) < 2 ^ 160
+        norm_num
+      rw [hread _ (Or.inr (Or.inr (Or.inl ⟨0, hzero, rfl⟩)))]
+      exact hlogical.zeroCount
+  }
+
 /-- A functional post-observation with the same seven logical writes as the
 native Registry removal.  This is used only to share its preservation proof. -/
 def logicalRemovalPost (before : LogicalStorage) (entries : List Entry)
