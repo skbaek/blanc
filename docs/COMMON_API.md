@@ -288,7 +288,10 @@ registry has identified the likely vocabulary.
   `addressSlotReadWord_write_of_clean`.  The
   value-carrying inversions
   `of_loadAddressWordAt_val` and `of_storeAddressWordAt_val` live in
-  [`Blanc/AddressSlotProofs.lean`](../Blanc/AddressSlotProofs.lean).
+  [`Blanc/AddressSlotProofs.lean`](../Blanc/AddressSlotProofs.lean), with the
+  `PUSH20 0xff..ff` literal as the mask (`ff20_eq`, `ff20_and_adr`, `ff20_and_word`,
+  `and_mask_word`, `ff20_and_and`) and `addressMask_and_write_of_clean` (a packed
+  write of a clean word keeps the raw upper ninety-six bits).
   Use it when delegated code can make a nominal address slot raw-dirty; a plain
   full-word `SSTORE` is observably different in that state.
 - **Four-bit tagged logical storage keys.** `Blanc.TaggedStorage.encode` in
@@ -1345,7 +1348,8 @@ this owner directly; CommonProofs and Ladder do not reexport it.
 Use the fixed-width arithmetic declarations in
 [`Blanc/WordArithmetic.lean`](../Blanc/WordArithmetic.lean) and the basic word
 identities in [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean) before
-destructing a `B256`. `wordModulusN`, `maxWordN`, `wordModulusN_pos`,
+destructing a `B256` (`B256.or_comm` and `B256.or_zero` are in
+[`Blanc/AddressSlotProofs.lean`](../Blanc/AddressSlotProofs.lean)). `wordModulusN`, `maxWordN`, `wordModulusN_pos`,
 `maxWordN_lt_wordModulusN`, and `maxWord_toNat` name the standard `2^256`
 bounds. `div_two_div_pow`, `div_pow_div_two`,
 `one_and_toB256_eq_mod_two`, and `toB256_shiftRight_one` bridge recurring
@@ -2767,7 +2771,19 @@ contract-neutral.
   the world projections after a store, log or return (`getStor_afterStore`,
   `getStor_afterStore_ne`, `getStorVal_afterStore`, `logs_afterStore`, `getStor_addLog`,
   `logs_addLog`, `getStor_St_return`, `logs_St_return`, `output_St_return`) are in
-  [`Blanc/Lift/WalkSteps.lean`](../Blanc/Lift/WalkSteps.lean).
+  [`Blanc/Lift/WalkSteps.lean`](../Blanc/Lift/WalkSteps.lean), which also holds
+  `SLT`, `TIMESTAMP`, `LOG2`, `TLOAD` and `TSTORE` inverted (`ri_slt`, `ri_timestamp`,
+  `ri_log2`, `ri_tload`, `ri_tstore`; `getStor_setTransVal`, `getCode_setTransVal`) and
+  `StorStep sevm b b' s`, a chain of loads and stores that changed only the executing
+  contract's storage (to `s`) and no log, built with `StorStep.refl`/`.sload`/`.sstore`/
+  `.trans`/`.congr`/`.of_getStor` and read with `StorStep.getStorVal`
+  (`getStorVal_eq_getStor` unfolds a word read).
+- Concrete runs checked by kernel evaluation of Jaune's own `Evm.step`:
+  `ConcreteRun.stepN` (at most `n` continuing steps), `stepN_add`, `stepN_sta`, and the
+  bridges into the canonical derivation `ConcreteRun.exec_of_stepN`,
+  `exec_of_stepN_halt` and `exec_of_stepN_spawn_runOk` (across one `.spawn`), in
+  [`Blanc/ConcreteRun.lean`](../Blanc/ConcreteRun.lean). Worked use:
+  `Blanc/Lift/VyperNonreentrantDeployed/Concrete/ProxyConcrete.lean`.
 - Hashed storage slots: `mapSlot key base = keccak256(pad32 key ‖ pad32 base)`, solc's mapping
   slot and, with the arguments swapped (slot first), Vyper's, in
   [`Blanc/Lift/MapSlot.lean`](../Blanc/Lift/MapSlot.lean).

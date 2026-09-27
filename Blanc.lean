@@ -408,6 +408,57 @@ import Blanc.Lift.Weth9.Live
 import Blanc.Lift.BeaconDeposit.Ladder
 import Blanc.Lift.BeaconDeposit.Refines
 
+-- The certificate cursor, the reentrancy-lock exclusion kit with its bytecode checker,
+-- owner discipline, and concrete-run evaluation (deployed-lido-vyper-v1): shared.
+import Blanc.Lift.Cursor
+import Blanc.LockExclusion
+import Blanc.OwnerDiscipline
+import Blanc.Lift.LockCheck
+import Blanc.Lift.LockCheckSound
+import Blanc.Lift.LockCheckFlow
+import Blanc.ConcreteRun
+
+-- The deployed Lido CircuitBreaker, lifted from its runtime bytes (deployed-lido-vyper-v1).
+import Blanc.Lift.LidoCircuitBreakerDeployed.Cert
+import Blanc.Lift.LidoCircuitBreakerDeployed.Check
+import Blanc.Lift.LidoCircuitBreakerDeployed.Contract
+import Blanc.Lift.LidoCircuitBreakerDeployed.Corollaries
+import Blanc.Lift.LidoCircuitBreakerDeployed.Foreign
+import Blanc.Lift.LidoCircuitBreakerDeployed.Frame
+import Blanc.Lift.LidoCircuitBreakerDeployed.FrameMem
+import Blanc.Lift.LidoCircuitBreakerDeployed.History
+import Blanc.Lift.LidoCircuitBreakerDeployed.L2
+import Blanc.Lift.LidoCircuitBreakerDeployed.L2Frame
+import Blanc.Lift.LidoCircuitBreakerDeployed.NoHalt
+import Blanc.Lift.LidoCircuitBreakerDeployed.Pause
+import Blanc.Lift.LidoCircuitBreakerDeployed.PauseSteps
+import Blanc.Lift.LidoCircuitBreakerDeployed.Prog
+import Blanc.Lift.LidoCircuitBreakerDeployed.RegistryEffects
+import Blanc.Lift.LidoCircuitBreakerDeployed.RegistryLayout
+import Blanc.Lift.LidoCircuitBreakerDeployed.Removal
+import Blanc.Lift.LidoCircuitBreakerDeployed.SetPauserCalls
+import Blanc.Lift.LidoCircuitBreakerDeployed.SetPauserFresh
+import Blanc.Lift.LidoCircuitBreakerDeployed.SetPauserNonzero
+import Blanc.Lift.LidoCircuitBreakerDeployed.SetPauserRemoval
+import Blanc.Lift.LidoCircuitBreakerDeployed.Silent
+import Blanc.Lift.LidoCircuitBreakerDeployed.Wrappers
+import Blanc.Lift.LidoCircuitBreakerDeployed.Writers
+
+-- The deployed Vyper 0.3.7 nonreentrant comparator 0x847e and its proxy (deployed-lido-vyper-v1).
+import Blanc.Lift.VyperNonreentrantDeployed.Code
+import Blanc.Lift.VyperNonreentrantDeployed.CodeFacts
+import Blanc.Lift.VyperNonreentrantDeployed.Concrete.Fixture
+import Blanc.Lift.VyperNonreentrantDeployed.Concrete.ProxyConcrete
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Check
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exclusion
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.LockAnn
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.LockCheck
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.LockDominance
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.LockSpec
+import Blanc.Lift.VyperNonreentrantDeployed.ProxyEntry
+import Blanc.Lift.VyperNonreentrantDeployed.ProxyTail
+
 -- The COMPOSITION stratum is strictly downstream of every contract family, so
 -- it is aggregated last. Roots aggregate composition; nothing imports back.
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway

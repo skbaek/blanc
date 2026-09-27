@@ -71,13 +71,13 @@ theorem t0864_ret {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {t dur t2 ra : B2
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G7, rfl⟩ := ri_dup rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G8, rfl⟩ := ri_tload' s1
+  obtain ⟨G8, rfl⟩ := ri_tload s1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G9, rfl⟩ := ri_and s1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G10, rfl⟩ := ri_dup rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G11, rfl⟩ := ri_tstore' hfork s1
+  obtain ⟨G11, rfl⟩ := ri_tstore hfork s1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G12, rfl⟩ := ri_pop s1
   obtain ⟨d1, s1, run⟩ := ric_next run
@@ -211,7 +211,7 @@ theorem t07ec_regInv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {t dur t2 ra :
     obtain ⟨d1, s1, run⟩ := ric_next run
     obtain ⟨G45, rfl⟩ := ri_swap (n := 0) rfl s1
     obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G46, rfl⟩ := ri_timestamp' s1
+    obtain ⟨G46, rfl⟩ := ri_timestamp s1
     obtain ⟨d1, s1, run⟩ := ric_next run
     obtain ⟨G47, rfl⟩ := ri_push s1
     obtain ⟨G48, hcall⟩ := ric_call (g := t_10a8_c23) rfl run
@@ -420,7 +420,7 @@ theorem entry13_regInv {A : List Entry → Sevm → Prop}
   obtain ⟨d1, s1, run⟩ := rp_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
   obtain ⟨d1, s1, run⟩ := rp_next run
-  obtain ⟨_, rfl⟩ := ri_tload' (StepIn.toRun s1)
+  obtain ⟨_, rfl⟩ := ri_tload (StepIn.toRun s1)
   obtain ⟨d1, s1, run⟩ := rp_next run
   obtain ⟨_, rfl⟩ := ri_and (StepIn.toRun s1)
   obtain ⟨d1, s1, run⟩ := rp_next run
@@ -438,7 +438,7 @@ theorem entry13_regInv {A : List Entry → Sevm → Prop}
   obtain ⟨d1, s1, run⟩ := rp_next run
   obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun s1)
   obtain ⟨d1, s1, run⟩ := rp_next run
-  obtain ⟨_, rfl⟩ := ri_tload' (StepIn.toRun s1)
+  obtain ⟨_, rfl⟩ := ri_tload (StepIn.toRun s1)
   obtain ⟨d1, s1, run⟩ := rp_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
   obtain ⟨d1, s1, run⟩ := rp_next run
@@ -450,7 +450,7 @@ theorem entry13_regInv {A : List Entry → Sevm → Prop}
   obtain ⟨d1, s1, run⟩ := rp_next run
   obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl (StepIn.toRun s1)
   obtain ⟨d1, s1, run⟩ := rp_next run
-  obtain ⟨_, rfl⟩ := ri_tstore' hfork (StepIn.toRun s1)
+  obtain ⟨_, rfl⟩ := ri_tstore hfork (StepIn.toRun s1)
   obtain ⟨d1, s1, run⟩ := rp_next run
   obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun s1)
   obtain ⟨d1, s1, run⟩ := rp_next run
@@ -540,7 +540,7 @@ theorem entry13_regInv {A : List Entry → Sevm → Prop}
   obtain ⟨d1, s1, run⟩ := rp_next run
   obtain ⟨_, rfl⟩ := ri_sload hfork (StepIn.toRun s1)
   obtain ⟨d1, s1, run⟩ := rp_next run
-  obtain ⟨_, rfl⟩ := ri_timestamp' (StepIn.toRun s1)
+  obtain ⟨_, rfl⟩ := ri_timestamp (StepIn.toRun s1)
   obtain ⟨d1, s1, run⟩ := rp_next run
   obtain ⟨_, rfl⟩ := ri_lt (StepIn.toRun s1)
   obtain ⟨d1, s1, run⟩ := rp_next run

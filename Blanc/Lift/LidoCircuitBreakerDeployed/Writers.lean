@@ -27,59 +27,6 @@ open Blanc
 open Blanc.Lift
 open Blanc.LidoCircuitBreaker
 
-/-! ## Local step inversions -/
-
-section Steps
-
-variable {fs : List SFunc} {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
-
-/-- `SLT`, inverted, value forgotten. -/
-theorem ri_slt' {x y : B256} {d : Devm}
-    (h : Ninst.Run sevm (St b (x :: y :: S) M G) (.reg .slt) d) :
-    ∃ z G', d = St b (z :: S) M G' := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact ⟨_, St.of_diff (Devm.diffBurn_of_applyBinary run)⟩
-
-/-- `TIMESTAMP`, inverted. -/
-theorem ri_timestamp' {d : Devm}
-    (h : Ninst.Run sevm (St b S M G) (.reg .timestamp) d) :
-    ∃ G', d = St b (sevm.benvStat.time :: S) M G' := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  have hp := Devm.pushBurn_of_pushItem run
-  have hs : d.stack = sevm.benvStat.time :: S := by
-    simpa [Stack.Push, Split] using hp.stack
-  have e := St.of_stackRel hp
-  rw [hs] at e
-  exact ⟨_, e⟩
-
-/-- `LOG2`, inverted, the base's new log forgotten. -/
-theorem ri_log2' {i sz t1 t2 : B256} {d : Devm}
-    (h : Ninst.Run sevm (St b (i :: sz :: t1 :: t2 :: S) M G) (.reg (.log 2)) d) :
-    ∃ b' M' G', d = St b' S M' G' := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  rw [show (St b (i :: sz :: t1 :: t2 :: S) M G).popToNat =
-    .ok (i.toNat, St b (sz :: t1 :: t2 :: S) M G) from rfl] at run
-  simp only [Except.bind_ok] at run
-  rw [show (St b (sz :: t1 :: t2 :: S) M G).popToNat =
-    .ok (sz.toNat, St b (t1 :: t2 :: S) M G) from rfl] at run
-  simp only [Except.bind_ok] at run
-  rw [show (St b (t1 :: t2 :: S) M G).popN ((2 : Fin 5) : Nat) =
-    .ok ([t1, t2], St b S M G) from rfl] at run
-  simp only [Except.bind_ok] at run
-  rcases Except.bind_eq_ok run with ⟨s1, h1, h2⟩
-  rcases Except.bind_eq_ok h2 with ⟨_, -, h3⟩
-  cases h3
-  have e1 := Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas h1)
-  refine ⟨b.addLog ⟨sevm.currentTarget, [t1, t2], (M.read i.toNat sz.toNat).1⟩,
-    (M.read i.toNat sz.toNat).2, s1.gasLeft, ?_⟩
-  rw [e1]
-  rfl
-
-end Steps
-
 theorem eq_of_eqCheck_ne {a b : B256} (h : B256.eqCheck a b ≠ 0) : a = b := by
   unfold B256.eqCheck at h
   split_ifs at h with he
@@ -97,7 +44,7 @@ theorem canonical_toAdr_toB256 (x : B256) : canonicalAddress x.toAdr.toB256 := b
 theorem canonical_of_mask_eq {x : B256}
     (h : x = x &&& Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
       0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]) : canonicalAddress x := by
-  rw [B256.and_comm, Weth9.ff20_and_word] at h
+  rw [B256.and_comm, ff20_and_word] at h
   rw [h]
   exact canonical_toAdr_toB256 x
 
@@ -170,7 +117,7 @@ theorem entry20_ret {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {cds ra : B256}
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G7, rfl⟩ := ri_sub s1
   obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨z, G8, rfl⟩ := ri_slt' s1
+  obtain ⟨z, G8, rfl⟩ := ri_slt s1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G9, rfl⟩ := ri_iszero s1
   obtain ⟨d1, s1, run⟩ := ric_next run
@@ -322,7 +269,7 @@ theorem entry22_ret {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {v p ra : B256}
   obtain ⟨G38, rfl⟩ := ri_swap (n := 0) rfl s1
   dsimp only [List.set] at run
   obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨b', M', G39, rfl⟩ := ri_log2' s1
+  obtain ⟨b', M', G39, rfl⟩ := ri_log2 s1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G40, rfl⟩ := ri_pop s1
   obtain ⟨d1, s1, run⟩ := ric_next run
@@ -384,11 +331,11 @@ theorem rawFreshPost_eq_apply (raw : Stor) (entries : List Entry) {t np : B256}
     (hlen : entries.length + 1 < 2 ^ 252) :
     rawFreshPost raw entries t np = applyRegistryRawWrites raw (freshWrites entries t np) := by
   simp only [applyRegistryRawWrites, freshWrites, List.foldl_cons, List.foldl_nil]
-  rw [solKey_assignmentSlot ht, registryRawValue_assignmentSlot' ht,
-    solKey_arrayEntrySlot hlen, registryRawValue_arrayEntrySlot' hlen,
-    solKey_indexSlot ht, registryRawValue_indexSlot' ht,
-    solKey_arrayLengthSlot, registryRawValue_arrayLengthSlot',
-    solKey_countSlot hnp, registryRawValue_countSlot' hnp]
+  rw [solKey_assignmentSlot ht, registryRawValue_assignmentSlot ht,
+    solKey_arrayEntrySlot hlen, registryRawValue_arrayEntrySlot hlen,
+    solKey_indexSlot ht, registryRawValue_indexSlot ht,
+    solKey_arrayLengthSlot, registryRawValue_arrayLengthSlot,
+    solKey_countSlot hnp, registryRawValue_countSlot hnp]
   rfl
 
 /-- Fresh registration preserves the Registry witness under `freshWriteKeys`
@@ -606,7 +553,7 @@ theorem t0418_foreign {Φ : Stor → Prop}
     obtain ⟨d1, s1, run⟩ := ric_next run
     obtain ⟨G11, rfl⟩ := ri_sload hfork s1
     obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G12, rfl⟩ := ri_timestamp' s1
+    obtain ⟨G12, rfl⟩ := ri_timestamp s1
     obtain ⟨d1, s1, run⟩ := ric_next run
     obtain ⟨G13, rfl⟩ := ri_push s1
     obtain ⟨d1, s1, run⟩ := ric_next run

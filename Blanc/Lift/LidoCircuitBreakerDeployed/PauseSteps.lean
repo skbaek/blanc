@@ -6,12 +6,13 @@ import Blanc.Lift.StaticCall
 
 Generic inversions the `pause` body (entry 13) uses beyond `Writers.lean`:
 node inversions for runs under an arbitrary step relation (`pause` runs under
-`StepIn R`, which the one `CALL` needs), the transient-storage steps, the
-stack shape after `EXTCODESIZE` and `CALL`, code preservation for trees with no
-external step, and the return shapes of the decoders 7 and 33.  None mentions
-the contract except the entry lemmas at the end.  Hoist candidates for
-`Blanc/Lift` (the node inversions, `ri_tload'`, `ri_tstore'`, the stack shapes,
-`RunP.code_of_regOnly`).
+`StepIn R`, which the one `CALL` needs), the stack shape after `EXTCODESIZE`
+and `CALL`, code preservation for trees with no external step, and the return
+shapes of the decoders 7 and 33 (the transient-storage steps `ri_tload`,
+`ri_tstore` now live in `Blanc/Lift/WalkSteps.lean`).  None mentions the
+contract except the entry lemmas at the end.  Hoist candidates for `Blanc/Lift`
+(the node inversions, the stack shapes, `RunP.code_of_regOnly` with `NoHalt`'s
+`instRegOnly`/`treeRegOnly`/`RegOnlySet`).
 -/
 
 namespace Blanc.Lift.LidoCircuitBreakerDeployed
@@ -73,47 +74,6 @@ end RunP
 section Steps
 
 variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
-
-/-- `TLOAD`, inverted. -/
-theorem ri_tload' {k : B256} {d : Devm}
-    (h : Ninst.Run sevm (St b (k :: S) M G) (.reg .tload) d) :
-    ∃ G', d = St b (b.getTransVal sevm.currentTarget k :: S) M G' := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  rw [show (St b (k :: S) M G).pop = .ok (k, St b S M G) from rfl] at run
-  simp only [Except.bind_ok] at run
-  have hp := Devm.pushBurn_of_pushItem run
-  have hs : d.stack = b.getTransVal sevm.currentTarget k :: S := by
-    have h2 := hp.stack
-    simp only [Stack.Push, Split, List.cons_append, List.nil_append] at h2
-    exact h2
-  have e := St.of_stackRel hp
-  rw [hs] at e
-  exact ⟨_, e⟩
-
-/-- `TSTORE`, inverted (no state-gas dimension under a covered fork). -/
-theorem ri_tstore' {k v : B256} {d : Devm} (hfork : CoveredFork sevm.benvStat.fork)
-    (h : Ninst.Run sevm (St b (k :: v :: S) M G) (.reg .tstore) d) :
-    ∃ G', d = St (b.setTransVal sevm.currentTarget k v) S M G' := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore, hfork.rules_stateGas_none] at run
-  rw [show (St b (k :: v :: S) M G).pop = .ok (k, St b (v :: S) M G) from rfl] at run
-  simp only [Except.bind_ok] at run
-  rw [show (St b (v :: S) M G).pop = .ok (v, St b S M G) from rfl] at run
-  simp only [Except.bind_ok] at run
-  rcases Except.bind_eq_ok run with ⟨s1, h1, run1⟩
-  rcases Except.bind_eq_ok run1 with ⟨_, -, h2⟩
-  cases h2
-  have e1 := Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas h1)
-  refine ⟨s1.gasLeft, ?_⟩
-  rw [e1]
-  rfl
-
-theorem getStor_setTransVal (d : Devm) (a : Adr) (k v : B256) :
-    Devm.getStor (d.setTransVal a k v) = Devm.getStor d := rfl
-
-theorem getCode_setTransVal (d : Devm) (a : Adr) (k v : B256) :
-    Devm.getCode (d.setTransVal a k v) = Devm.getCode d := rfl
 
 /-- A full-stack pattern of known words matches only that stack. -/
 theorem matches_known_iff : ∀ (S rest : List B256), Matches (S.map some) rest ↔ rest = S
@@ -287,7 +247,7 @@ theorem entry7_ret {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {cds ra : B256}
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G6, rfl⟩ := ri_sub s1
   obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨z, G7, rfl⟩ := ri_slt' s1
+  obtain ⟨z, G7, rfl⟩ := ri_slt s1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G8, rfl⟩ := ri_iszero s1
   obtain ⟨d1, s1, run⟩ := ric_next run
@@ -346,7 +306,7 @@ theorem entry33_ret {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {h e ra : B256}
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G6, rfl⟩ := ri_sub s1
   obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨z, G7, rfl⟩ := ri_slt' s1
+  obtain ⟨z, G7, rfl⟩ := ri_slt s1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G8, rfl⟩ := ri_iszero s1
   obtain ⟨d1, s1, run⟩ := ric_next run

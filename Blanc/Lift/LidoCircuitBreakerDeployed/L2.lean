@@ -230,7 +230,7 @@ theorem l2_entry32_absent {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
       List.foldl_nil]
     rw [solKey_indexSlot htarget.2, Stor.get_set_ne _ h4, solKey_arrayLengthSlot,
       Stor.get_set_ne _ h5, hkey, Stor.get_set_self,
-      registryRawValue_arrayEntrySlot' hlenLt]
+      registryRawValue_arrayEntrySlot hlenLt]
     exact addressSlotReadWord_write_of_clean _ _ rfl
   · have h := hpost.lengthWord
     rw [solRegistryStorage_length] at h

@@ -171,6 +171,10 @@ SHARED += ["LedgerUpdate"]
 # Walk steps for arbitrary static calls, CALLER/KECCAK256/LOG3/SSTORE, hashed slots and the
 # Vyper 0.2.x front end (vyper-3crv-bytecode-v1): contract-neutral.
 SHARED += ["Lift.StaticCall", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper"]
+# The frame cursor, the reentrancy-lock exclusion kit and its bytecode checker, owner
+# discipline, and concrete-run evaluation (deployed-lido-vyper-v1): contract-neutral.
+SHARED += ["Lift.Cursor", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
+           "Lift.LockCheck", "Lift.LockCheckSound", "Lift.LockCheckFlow"]
 
 CONTRACTS = {
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",
@@ -406,7 +410,36 @@ CONTRACTS = {
                              "LidoCircuitBreakerDeploymentRoot",
                              "LidoCircuitBreakerHistory",
                              "LidoCircuitBreakerHistoryEndpoints",
-                             "LidoCircuitBreakerHistoryChain"],
+                             "LidoCircuitBreakerHistoryChain",
+                             # The deployed runtime, lifted from its bytes; it refines the source model
+                             # above (RegistryLayout/Removal/SetPauserCalls import it), so it is the same
+                             # family, as with beacon-deposit (deployed-lido-vyper-v1).
+                             "Lift.LidoCircuitBreakerDeployed.Cert",
+                             "Lift.LidoCircuitBreakerDeployed.Check",
+                             "Lift.LidoCircuitBreakerDeployed.Contract",
+                             "Lift.LidoCircuitBreakerDeployed.Corollaries",
+                             "Lift.LidoCircuitBreakerDeployed.Foreign",
+                             "Lift.LidoCircuitBreakerDeployed.Frame",
+                             "Lift.LidoCircuitBreakerDeployed.FrameMem",
+                             "Lift.LidoCircuitBreakerDeployed.History",
+                             "Lift.LidoCircuitBreakerDeployed.L2",
+                             "Lift.LidoCircuitBreakerDeployed.L2Frame",
+                             "Lift.LidoCircuitBreakerDeployed.NoHalt",
+                             "Lift.LidoCircuitBreakerDeployed.Pause",
+                             "Lift.LidoCircuitBreakerDeployed.PauseSteps",
+                             "Lift.LidoCircuitBreakerDeployed.Prog",
+                             "Lift.LidoCircuitBreakerDeployed.RegistryEffects",
+                             "Lift.LidoCircuitBreakerDeployed.RegistryLayout",
+                             "Lift.LidoCircuitBreakerDeployed.Removal",
+                             "Lift.LidoCircuitBreakerDeployed.SetPauserCalls",
+                             "Lift.LidoCircuitBreakerDeployed.SetPauserFresh",
+                             "Lift.LidoCircuitBreakerDeployed.SetPauserNonzero",
+                             "Lift.LidoCircuitBreakerDeployed.SetPauserRemoval",
+                             "Lift.LidoCircuitBreakerDeployed.Silent",
+                             "Lift.LidoCircuitBreakerDeployed.Wrappers",
+                             "Lift.LidoCircuitBreakerDeployed.Writers"],
+    # The deployed Vyper 0.3.7 nonreentrant comparator 0x847e and its proxy (deployed-lido-vyper-v1).
+    "vyper-nonreentrant-deployed": ["Lift.VyperNonreentrantDeployed.Code", "Lift.VyperNonreentrantDeployed.CodeFacts", "Lift.VyperNonreentrantDeployed.Concrete.Fixture", "Lift.VyperNonreentrantDeployed.Concrete.ProxyConcrete", "Lift.VyperNonreentrantDeployed.Fixed.Cert", "Lift.VyperNonreentrantDeployed.Fixed.Check", "Lift.VyperNonreentrantDeployed.Fixed.Exclusion", "Lift.VyperNonreentrantDeployed.Fixed.LockAnn", "Lift.VyperNonreentrantDeployed.Fixed.LockCheck", "Lift.VyperNonreentrantDeployed.Fixed.LockDominance", "Lift.VyperNonreentrantDeployed.Fixed.LockSpec", "Lift.VyperNonreentrantDeployed.ProxyEntry", "Lift.VyperNonreentrantDeployed.ProxyTail"],
 }
 
 # The composition stratum: `Blanc/Composition/*.lean`, spelled here exactly as

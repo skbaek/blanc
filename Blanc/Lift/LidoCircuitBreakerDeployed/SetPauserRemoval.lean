@@ -144,7 +144,7 @@ theorem ff20_and_eq_read (w : B256) :
     Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
       0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& w =
       addressSlotReadWord w := by
-  rw [Weth9.ff20_eq]
+  rw [ff20_eq]
   rfl
 
 /-- `t_0b27_c4` through `t_0b5a_c4`: read the array's last element (as an
@@ -327,7 +327,7 @@ theorem t0b6a_inv {I1 last idx oldP newP target R : B256} {base : List B256} {po
   rw [ff20_and_canonical hlast] at run
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G22, rfl⟩ := ri_or s1
-  rw [B256.or_comm' last] at run
+  rw [B256.or_comm last] at run
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G23, rfl⟩ := ri_swap (n := 0) rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run
@@ -762,7 +762,7 @@ theorem removalTailStor_eq_rawRemovalPost
     Stor.get_set_ne _ hk4k3, Stor.get_set_ne _ h5c6, Stor.get_set_ne _ h5k3,
     Stor.get_set_ne _ htc6, Stor.get_set_ne _ htk3, Stor.get_set_ne _ h5mk,
     Stor.get_set_ne _ h5hole, hidx, hlen, hpredLen, hpredIdx, htailRead, htail', hnewLen,
-    addressSlotWriteWord, B256.or_zero']
+    addressSlotWriteWord, B256.or_zero]
 
 
 /-! ## The found-target removal branch -/

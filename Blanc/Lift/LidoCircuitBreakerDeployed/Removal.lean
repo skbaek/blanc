@@ -3,7 +3,6 @@ import Blanc.Lift.WalkSteps
 import Blanc.Lift.Vyper
 import Blanc.AddressSlotProofs
 import Blanc.LidoCircuitBreakerRegistryModel
-import Blanc.Lift.Weth9.Words
 
 /-! Inversion of the deployed CircuitBreaker removal entry on a successful run. -/
 
@@ -40,7 +39,7 @@ theorem entry32_target_guard_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
   · have hmask : target &&&
         Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
           0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] = target := by
-      rw [B256.and_comm, Weth9.ff20_and_word,
+      rw [B256.and_comm, ff20_and_word,
         B256.toAdr_toB256_of_lt htarget.2]
     exact (htarget.1 (hmask ▸ hz)).elim
   · exact ⟨G6, run⟩
@@ -102,7 +101,7 @@ theorem entry32_assignment_split {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
   have htargetMask : target &&& Bytes.toB256
       [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] = target := by
-    rw [B256.and_comm, Weth9.ff20_and_word,
+    rw [B256.and_comm, ff20_and_word,
       B256.toAdr_toB256_of_lt htarget]
   rw [htargetMask] at run
   obtain ⟨d1, s1, run⟩ := ric_next run
@@ -176,7 +175,7 @@ theorem entry32_assignment_split {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
       [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&&
       newPauser = newPauser := by
-    rw [Weth9.ff20_and_word, B256.toAdr_toB256_of_lt hnewPauser]
+    rw [ff20_and_word, B256.toAdr_toB256_of_lt hnewPauser]
   rw [hnewMask] at run
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G22, rfl⟩ := ri_push s1
@@ -211,7 +210,7 @@ theorem entry32_assignment_split {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
       [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] =
       addressSlotReadWord (b.getStorVal sevm.currentTarget (mapSlot target 3)) := by
-    rw [B256.and_comm, Weth9.ff20_eq]
+    rw [B256.and_comm, ff20_eq]
     rfl
   rw [haddr] at run
   obtain ⟨d1, s1, run⟩ := ric_next run

@@ -53,7 +53,7 @@ def solRegistryStorage (raw : Stor) : LogicalStorage :=
           (raw.get (registryArrayBase + (payload - 1)))
       else 0 }
 
-private theorem tagged_region_payload
+theorem tagged_region_payload
     {region : Nat} {payload : B256}
     (hregion : region < 16) (hpayload : payload.toNat < 2 ^ 252) :
     (slot region payload).toNat / 2 ^ 252 = region ∧
@@ -282,7 +282,7 @@ def registryRawValue (key old value : B256) : B256 :=
   else if region = arrayRegion ∧ payload ≠ 0 then addressSlotWriteWord old value
   else value
 
-private theorem registryRawValue_assignmentSlot {probe old value : B256}
+theorem registryRawValue_assignmentSlot {probe old value : B256}
     (h : canonicalAddress probe) :
     registryRawValue (assignmentSlot probe) old value = addressSlotWriteWord old value := by
   have h' := tagged_region_payload (region := assignmentRegion)
@@ -290,7 +290,7 @@ private theorem registryRawValue_assignmentSlot {probe old value : B256}
   simp only [assignmentSlot, registryRawValue, h'.1, h'.2]
   simp
 
-private theorem registryRawValue_indexSlot {probe old value : B256}
+theorem registryRawValue_indexSlot {probe old value : B256}
     (h : canonicalAddress probe) :
     registryRawValue (indexSlot probe) old value = value := by
   have h' := tagged_region_payload (region := indexRegion)
@@ -298,7 +298,7 @@ private theorem registryRawValue_indexSlot {probe old value : B256}
   simp only [indexSlot, registryRawValue, h'.1, h'.2]
   simp [assignmentRegion, indexRegion, arrayRegion]
 
-private theorem registryRawValue_countSlot {probe old value : B256}
+theorem registryRawValue_countSlot {probe old value : B256}
     (h : canonicalAddress probe) :
     registryRawValue (countSlot probe) old value = value := by
   have h' := tagged_region_payload (region := countRegion)
@@ -306,7 +306,7 @@ private theorem registryRawValue_countSlot {probe old value : B256}
   simp only [countSlot, registryRawValue, h'.1, h'.2]
   simp [assignmentRegion, countRegion, arrayRegion]
 
-private theorem registryRawValue_arrayLengthSlot {old value : B256} :
+theorem registryRawValue_arrayLengthSlot {old value : B256} :
     registryRawValue arrayLengthSlot old value = value := by
   have h' := tagged_region_payload (region := arrayRegion) (payload := 0)
     (by norm_num [arrayRegion]) (by
@@ -315,7 +315,7 @@ private theorem registryRawValue_arrayLengthSlot {old value : B256} :
   simp only [arrayLengthSlot, registryRawValue, h'.1, h'.2]
   simp [assignmentRegion, arrayRegion]
 
-private theorem registryRawValue_arrayEntrySlot {index : Nat} {old value : B256}
+theorem registryRawValue_arrayEntrySlot {index : Nat} {old value : B256}
     (hindex : index + 1 < 2 ^ 252) :
     registryRawValue (arrayEntrySlot (Nat.toB256 (index + 1))) old value =
       addressSlotWriteWord old value := by

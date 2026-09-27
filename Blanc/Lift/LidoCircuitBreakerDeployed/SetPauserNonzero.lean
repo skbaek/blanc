@@ -262,68 +262,6 @@ theorem solKey_ne_of_faithful {bound : Nat} {T : List B256} {t k : B256}
     (hne : k ≠ t) : solKey k ≠ solKey t :=
   fun h => hne (hf t ht k hk h)
 
-private theorem tagged_region_payload' {region : Nat} {payload : B256}
-    (hregion : region < 16) (hpayload : payload.toNat < 2 ^ 252) :
-    (slot region payload).toNat / 2 ^ 252 = region ∧
-    Nat.toB256 ((slot region payload).toNat % 2 ^ 252) = payload := by
-  have hslot : slot region payload = TaggedStorage.encode region payload := by
-    rw [TaggedStorage.encode_eq_of_payload_lt hpayload]
-    rfl
-  rw [hslot]
-  exact TaggedStorage.encode_region_payload_of_bounds hregion hpayload
-
-theorem registryRawValue_assignmentSlot' {probe old value : B256}
-    (h : canonicalAddress probe) :
-    registryRawValue (assignmentSlot probe) old value = addressSlotWriteWord old value := by
-  have h' := tagged_region_payload' (region := assignmentRegion)
-    (by norm_num [assignmentRegion]) (canonicalAddress_payload_lt h)
-  simp only [assignmentSlot, registryRawValue, h'.1, h'.2]
-  simp
-
-theorem registryRawValue_countSlot' {probe old value : B256}
-    (h : canonicalAddress probe) :
-    registryRawValue (countSlot probe) old value = value := by
-  have h' := tagged_region_payload' (region := countRegion)
-    (by norm_num [countRegion]) (canonicalAddress_payload_lt h)
-  simp only [countSlot, registryRawValue, h'.1, h'.2]
-  simp [assignmentRegion, countRegion, arrayRegion]
-
-theorem registryRawValue_indexSlot' {probe old value : B256}
-    (h : canonicalAddress probe) :
-    registryRawValue (indexSlot probe) old value = value := by
-  have h' := tagged_region_payload' (region := indexRegion)
-    (by norm_num [indexRegion]) (canonicalAddress_payload_lt h)
-  simp only [indexSlot, registryRawValue, h'.1, h'.2]
-  simp [assignmentRegion, indexRegion, arrayRegion]
-
-theorem registryRawValue_arrayLengthSlot' {old value : B256} :
-    registryRawValue arrayLengthSlot old value = value := by
-  have h' := tagged_region_payload' (region := arrayRegion) (payload := 0)
-    (by norm_num [arrayRegion]) (by
-      change (0 : Nat) < 2 ^ 252
-      norm_num)
-  simp only [arrayLengthSlot, registryRawValue, h'.1, h'.2]
-  simp [assignmentRegion, arrayRegion]
-
-theorem registryRawValue_arrayEntrySlot' {index : Nat} {old value : B256}
-    (hindex : index + 1 < 2 ^ 252) :
-    registryRawValue (arrayEntrySlot (Nat.toB256 (index + 1))) old value =
-      addressSlotWriteWord old value := by
-  have h256 : index + 1 < 2 ^ 256 := by omega
-  have hword : (Nat.toB256 (index + 1)).toNat < 2 ^ 252 := by
-    rw [B256.toNat_toB256_of_lt h256]
-    exact hindex
-  have h' := tagged_region_payload' (region := arrayRegion)
-    (by norm_num [arrayRegion]) hword
-  have hnonzero : Nat.toB256 (index + 1) ≠ 0 := by
-    intro heq
-    have hn := congrArg B256.toNat heq
-    rw [B256.toNat_toB256_of_lt h256] at hn
-    change index + 1 = 0 at hn
-    omega
-  simp only [arrayEntrySlot, registryRawValue, h'.1, h'.2]
-  simp [assignmentRegion, arrayRegion, hnonzero]
-
 /-! ## The found-target, nonzero-new-pauser branch -/
 
 /-- Every successful run of `setPauser` (entry 32) on a found target with a
@@ -430,8 +368,8 @@ theorem setPauser_nonzero_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     rw [hcN, one_add_natToB256 (by omega)]
     simp only [rawNonzeroPost, applyRegistryRawWrites, nonzeroWrites, List.foldl,
       solKey_assignmentSlot htarget.2, solKey_countSlot hold.2, solKey_countSlot hnew.2,
-      registryRawValue_assignmentSlot' htarget.2, registryRawValue_countSlot' hold.2,
-      registryRawValue_countSlot' hnew.2]
+      registryRawValue_assignmentSlot htarget.2, registryRawValue_countSlot hold.2,
+      registryRawValue_countSlot hnew.2]
     rfl
   · intro a ha
     rw [getStor_St_addLog, getStor_afterStore_ne ha, getStor_afterStore_ne ha, getStor_afterStore_ne ha]

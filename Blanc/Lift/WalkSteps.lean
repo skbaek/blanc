@@ -147,6 +147,96 @@ theorem rx_sstore {k' v : B256} (hfork : CoveredFork sevm.benvStat.fork)
   rw [← afterSstore_stateGas (sevm := sevm) (devm := b) (key := k') (value := v)]
   exact k
 
+/-! ## `SLT`, `TIMESTAMP`, `LOG2`, `TLOAD`, `TSTORE` inverted
+
+(Hoisted from the deployed Lido CircuitBreaker walks.) -/
+
+/-- `SLT`, inverted, value forgotten. -/
+theorem ri_slt {x y : B256} {d : Devm}
+    (h : Ninst.Run sevm (St b (x :: y :: S) M G) (.reg .slt) d) :
+    ∃ z G', d = St b (z :: S) M G' := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  exact ⟨_, St.of_diff (Devm.diffBurn_of_applyBinary run)⟩
+
+/-- `TIMESTAMP`, inverted. -/
+theorem ri_timestamp {d : Devm}
+    (h : Ninst.Run sevm (St b S M G) (.reg .timestamp) d) :
+    ∃ G', d = St b (sevm.benvStat.time :: S) M G' := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  have hp := Devm.pushBurn_of_pushItem run
+  have hs : d.stack = sevm.benvStat.time :: S := by
+    simpa [Stack.Push, Split] using hp.stack
+  have e := St.of_stackRel hp
+  rw [hs] at e
+  exact ⟨_, e⟩
+
+/-- `LOG2`, inverted, the base's new log forgotten. -/
+theorem ri_log2 {i sz t1 t2 : B256} {d : Devm}
+    (h : Ninst.Run sevm (St b (i :: sz :: t1 :: t2 :: S) M G) (.reg (.log 2)) d) :
+    ∃ b' M' G', d = St b' S M' G' := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rw [show (St b (i :: sz :: t1 :: t2 :: S) M G).popToNat =
+    .ok (i.toNat, St b (sz :: t1 :: t2 :: S) M G) from rfl] at run
+  simp only [Except.bind_ok] at run
+  rw [show (St b (sz :: t1 :: t2 :: S) M G).popToNat =
+    .ok (sz.toNat, St b (t1 :: t2 :: S) M G) from rfl] at run
+  simp only [Except.bind_ok] at run
+  rw [show (St b (t1 :: t2 :: S) M G).popN ((2 : Fin 5) : Nat) =
+    .ok ([t1, t2], St b S M G) from rfl] at run
+  simp only [Except.bind_ok] at run
+  rcases Except.bind_eq_ok run with ⟨s1, h1, h2⟩
+  rcases Except.bind_eq_ok h2 with ⟨_, -, h3⟩
+  cases h3
+  have e1 := Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas h1)
+  refine ⟨b.addLog ⟨sevm.currentTarget, [t1, t2], (M.read i.toNat sz.toNat).1⟩,
+    (M.read i.toNat sz.toNat).2, s1.gasLeft, ?_⟩
+  rw [e1]
+  rfl
+
+/-- `TLOAD`, inverted. -/
+theorem ri_tload {k : B256} {d : Devm}
+    (h : Ninst.Run sevm (St b (k :: S) M G) (.reg .tload) d) :
+    ∃ G', d = St b (b.getTransVal sevm.currentTarget k :: S) M G' := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rw [show (St b (k :: S) M G).pop = .ok (k, St b S M G) from rfl] at run
+  simp only [Except.bind_ok] at run
+  have hp := Devm.pushBurn_of_pushItem run
+  have hs : d.stack = b.getTransVal sevm.currentTarget k :: S := by
+    have h2 := hp.stack
+    simp only [Stack.Push, Split, List.cons_append, List.nil_append] at h2
+    exact h2
+  have e := St.of_stackRel hp
+  rw [hs] at e
+  exact ⟨_, e⟩
+
+/-- `TSTORE`, inverted (no state-gas dimension under a covered fork). -/
+theorem ri_tstore {k v : B256} {d : Devm} (hfork : CoveredFork sevm.benvStat.fork)
+    (h : Ninst.Run sevm (St b (k :: v :: S) M G) (.reg .tstore) d) :
+    ∃ G', d = St (b.setTransVal sevm.currentTarget k v) S M G' := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore, hfork.rules_stateGas_none] at run
+  rw [show (St b (k :: v :: S) M G).pop = .ok (k, St b (v :: S) M G) from rfl] at run
+  simp only [Except.bind_ok] at run
+  rw [show (St b (v :: S) M G).pop = .ok (v, St b S M G) from rfl] at run
+  simp only [Except.bind_ok] at run
+  rcases Except.bind_eq_ok run with ⟨s1, h1, run1⟩
+  rcases Except.bind_eq_ok run1 with ⟨_, -, h2⟩
+  cases h2
+  have e1 := Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas h1)
+  refine ⟨s1.gasLeft, ?_⟩
+  rw [e1]
+  rfl
+
+theorem getStor_setTransVal (d : Devm) (a : Adr) (k v : B256) :
+    Devm.getStor (d.setTransVal a k v) = Devm.getStor d := rfl
+
+theorem getCode_setTransVal (d : Devm) (a : Adr) (k v : B256) :
+    Devm.getCode (d.setTransVal a k v) = Devm.getCode d := rfl
+
 end Steps
 
 /-- Every memory reads as its own backing array. -/
@@ -204,5 +294,57 @@ theorem logs_addLog (d : Devm) (L : Log) : (d.addLog L).logs = d.logs ++ [L] := 
 theorem logs_afterStore {sevm : Sevm} {b : Devm} {k v : B256} :
     (afterSstore sevm (afterSload sevm b k) k v).logs = b.logs := by
   rw [afterSstore_logs, afterSload_logs]
+
+/-! ## Storage chains of the executing contract
+
+(Hoisted from the deployed Lido CircuitBreaker `setPauser` walks.) -/
+
+/-- `b'` agrees with `b` except in the contract's own storage, which is `s`
+(access sets may differ): every other account's storage and the log list are
+unchanged. -/
+structure StorStep (sevm : Sevm) (b b' : Devm) (s : Stor) : Prop where
+  self : Devm.getStor b' sevm.currentTarget = s
+  other : ∀ a, a ≠ sevm.currentTarget → Devm.getStor b' a = Devm.getStor b a
+  logs : b'.logs = b.logs
+
+theorem getStorVal_eq_getStor (d : Devm) (a : Adr) (k : B256) :
+    d.getStorVal a k = (Devm.getStor d a).get k := rfl
+
+/-- Any chain of selected loads and stores is a `StorStep` from its base, with
+the contract storage read off the chain. -/
+theorem StorStep.of_getStor {sevm : Sevm} {b b' : Devm}
+    (other : ∀ a, a ≠ sevm.currentTarget → Devm.getStor b' a = Devm.getStor b a)
+    (logs : b'.logs = b.logs) :
+    StorStep sevm b b' (Devm.getStor b' sevm.currentTarget) :=
+  ⟨rfl, other, logs⟩
+
+theorem StorStep.refl (sevm : Sevm) (b : Devm) :
+    StorStep sevm b b (Devm.getStor b sevm.currentTarget) :=
+  ⟨rfl, fun _ _ => rfl, rfl⟩
+
+theorem StorStep.getStorVal {sevm : Sevm} {b b' : Devm} {s : Stor} (h : StorStep sevm b b' s)
+    (k : B256) : b'.getStorVal sevm.currentTarget k = s.get k := by
+  show (Devm.getStor b' sevm.currentTarget).get k = _
+  rw [h.self]
+
+theorem StorStep.sload {sevm : Sevm} {b b' : Devm} {s : Stor} (h : StorStep sevm b b' s)
+    (k : B256) : StorStep sevm b (afterSload sevm b' k) s :=
+  ⟨by rw [afterSload_getStor, h.self],
+   fun a ha => by rw [afterSload_getStor, h.other a ha],
+   by rw [afterSload_logs, h.logs]⟩
+
+theorem StorStep.sstore {sevm : Sevm} {b b' : Devm} {s : Stor} (h : StorStep sevm b b' s)
+    (k v : B256) : StorStep sevm b (afterSstore sevm b' k v) (s.set k v) :=
+  ⟨by rw [afterSstore_getStor_self, h.self],
+   fun a ha => by rw [afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha), h.other a ha],
+   by rw [afterSstore_logs, h.logs]⟩
+
+theorem StorStep.congr {sevm : Sevm} {b b' : Devm} {s s' : Stor} (h : StorStep sevm b b' s)
+    (e : s = s') : StorStep sevm b b' s' :=
+  e ▸ h
+
+theorem StorStep.trans {sevm : Sevm} {b b' b'' : Devm} {s s' : Stor}
+    (h : StorStep sevm b b' s) (h' : StorStep sevm b' b'' s') : StorStep sevm b b'' s' :=
+  ⟨h'.self, fun a ha => by rw [h'.other a ha, h.other a ha], by rw [h'.logs, h.logs]⟩
 
 end Blanc.Lift

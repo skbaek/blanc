@@ -276,7 +276,7 @@ theorem freshStor_eq_rawFreshPost
     rawFreshPost, Stor.get_set_ite]
   have h5e : ¬ ((5 : B256) = registryArraySlot entries.length) := fun h => he5 h.symm
   simp only [h5e, ite_false, addressSlotWriteWord]
-  rw [B256.or_comm' target]
+  rw [B256.or_comm target]
   by_cases hk5 : (5 : B256) = key
   · subst hk5
     have hc5 : ¬ (mapSlot newPauser 6 = 5) := fun h => h5c h.symm
@@ -402,7 +402,7 @@ theorem absentZeroStor_eq_rawAbsentZeroPost
   have hclean : addressSlotReadWord target = target :=
     addressSlotReadWord_eq_self_of_lt htarget.2
   have hX : ∀ w, target ||| addressMask &&& w = addressSlotWriteWord w target := fun w =>
-    B256.or_comm' _ _
+    B256.or_comm _ _
   constructor
   · intro key
     simp only [removalTailStor, pushStor, Stor.get_set_ne _ h35, hlen, hsucc, he,
@@ -411,14 +411,14 @@ theorem absentZeroStor_eq_rawAbsentZeroPost
       htail, hnewLen]
     simp only [rawAbsentZeroPost, applyRegistryRawWrites, absentZeroWrites, List.foldl,
       solKey_assignmentSlot htarget.2, solKey_indexSlot htarget.2, solKey_arrayLengthSlot,
-      harrKey, registryRawValue_assignmentSlot' htarget.2,
-      registryRawValue_indexSlot' htarget.2, registryRawValue_arrayLengthSlot',
-      registryRawValue_arrayEntrySlot' hlenLt, Stor.get_set_ite]
+      harrKey, registryRawValue_assignmentSlot htarget.2,
+      registryRawValue_indexSlot htarget.2, registryRawValue_arrayLengthSlot,
+      registryRawValue_arrayEntrySlot hlenLt, Stor.get_set_ite]
     have h5e : ¬ ((5 : B256) = registryArraySlot entries.length) := fun h => he5 h.symm
     have hclr : ∀ w, addressMask &&& addressSlotWriteWord w target = addressMask &&& w :=
       fun w => addressMask_and_write_of_clean w target
         (addressMask_and_eq_zero_of_lt htarget.2)
-    have hclr0 : ∀ w, addressSlotWriteWord w 0 = addressMask &&& w := fun w => B256.or_zero' _
+    have hclr0 : ∀ w, addressSlotWriteWord w 0 = addressMask &&& w := fun w => B256.or_zero _
     simp only [h5e, h4e, ite_true, ite_false, hclr0, hclr]
     by_cases h1 : mapSlot target 4 = key
     · simp only [h1, ite_true]
