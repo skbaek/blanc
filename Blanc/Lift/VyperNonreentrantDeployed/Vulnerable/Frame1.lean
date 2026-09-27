@@ -60,9 +60,23 @@ def sevm1 : Sevm :=
     depth := 1
     benvStat := { (default : BenvStat) with origState := world0 } }
 
-def pre1 : Devm := ((default : Devm).withGasLeft gas1).withState world0
+/-- Frame 1's entry machine: the proxy's `DELEGATECALL` has warmed the implementation
+address (the top-level message starts with empty accessed sets, as in the preflight). -/
+def pre1 : Devm :=
+  addAccessedAddress (((default : Devm).withGasLeft gas1).withState world0) implementationAddress
 
-def c0 : Cfg := ⟨pre1, t_0000_c0, [], []⟩
+def c0 : Cfg := ⟨pre1, t_0000_c0, [], [], [implementationAddress]⟩
+
+theorem c0_agree : Agree c0 := by
+  refine ⟨fun x => ?_, fun a => ?_⟩
+  · show x ∈ (default : Devm).accessedStorageKeys ↔ x ∈ ([] : List (Adr × B256))
+    simp [show (default : Devm).accessedStorageKeys = .emptyWithCapacity from rfl]
+  · show a ∈ (default : Devm).accessedAddresses.insert implementationAddress ↔
+      a ∈ [implementationAddress]
+    rw [Std.HashSet.mem_insert, List.mem_singleton, beq_iff_eq,
+      show (default : Devm).accessedAddresses = .emptyWithCapacity from rfl]
+    simp only [Std.HashSet.not_mem_emptyWithCapacity, or_false]
+    exact ⟨Eq.symm, Eq.symm⟩
 
 /-- The observed projection a chunk decision pins: gas, stack and memory bytes. -/
 def summ : Res → Option (Nat × List Nat × List Nat)

@@ -1,5 +1,6 @@
 import Blanc.Lift.Exact
 import Blanc.Forward
+import Blanc.ForwardCall
 
 /-!
 # Executable witnesses for lifted certificates
@@ -353,6 +354,7 @@ structure Cfg where
   f : SFunc
   K : List SFunc
   keys : List (Adr × B256)
+  adrs : List Adr
 
 /-- One interpreter step: a next configuration, a final outcome, or stuck. -/
 inductive Res
@@ -373,12 +375,12 @@ def sloadStep (sevm : Sevm) (c : Cfg) (g : SFunc) : Option Cfg :=
     if sevm.benvStat.rules.stateGas.isNone ∧ s.length < 1024 then
       if (ct, k) ∈ c.keys then
         if gasWarmAccess ≤ c.devm.gasLeft then
-          some ⟨mach' c.devm (v :: s) gasWarmAccess, g, c.K, c.keys⟩
+          some ⟨mach' c.devm (v :: s) gasWarmAccess, g, c.K, c.keys, c.adrs⟩
         else none
       else if gasColdSload ≤ c.devm.gasLeft then
         some ⟨(addAccessedStorageKey c.devm ct k).setMach
             ⟨v :: s, c.devm.memory, c.devm.gasLeft - gasColdSload, c.devm.stateGas⟩,
-          g, c.K, (ct, k) :: c.keys⟩
+          g, c.K, (ct, k) :: c.keys, c.adrs⟩
       else none
     else none
   | _ => none
@@ -397,13 +399,13 @@ def sstoreStep (sevm : Sevm) (c : Cfg) (g : SFunc) : Option Cfg :=
         let cost := sstoreValueCost orig cur v
         if cost ≤ c.devm.gasLeft then
           some ⟨(devmSetStorValB (c.devm.withRefundCounter rc) ct k v).setMach
-              ⟨s, c.devm.memory, c.devm.gasLeft - cost, c.devm.stateGas⟩, g, c.K, c.keys⟩
+              ⟨s, c.devm.memory, c.devm.gasLeft - cost, c.devm.stateGas⟩, g, c.K, c.keys, c.adrs⟩
         else none
       else
         let cost := gasColdSload + sstoreValueCost orig cur v
         if cost ≤ c.devm.gasLeft then
           some ⟨(devmSetStorValB ((addAccessedStorageKey c.devm ct k).withRefundCounter rc) ct k v).setMach
-              ⟨s, c.devm.memory, c.devm.gasLeft - cost, c.devm.stateGas⟩, g, c.K, (ct, k) :: c.keys⟩
+              ⟨s, c.devm.memory, c.devm.gasLeft - cost, c.devm.stateGas⟩, g, c.K, (ct, k) :: c.keys, c.adrs⟩
         else none
     else none
   | _ => none
@@ -415,7 +417,7 @@ def mstoreStep (c : Cfg) (g : SFunc) : Option Cfg :=
     let cost := gVerylow + c.devm.extCost [⟨i.toNat, 32⟩]
     if cost ≤ c.devm.gasLeft then
       some ⟨c.devm.setMach ⟨s, memWriteB c.devm.memory i.toNat v.toBytes, c.devm.gasLeft - cost,
-        c.devm.stateGas⟩, g, c.K, c.keys⟩
+        c.devm.stateGas⟩, g, c.K, c.keys, c.adrs⟩
     else none
   | _ => none
 
@@ -426,42 +428,343 @@ def calldatacopyStep (sevm : Sevm) (c : Cfg) (g : SFunc) : Option Cfg :=
     let cost := gVerylow + gasCopy * ceilDiv sz.toNat 32 + c.devm.extCost [⟨di.toNat, sz.toNat⟩]
     if cost ≤ c.devm.gasLeft then
       some ⟨c.devm.setMach ⟨s, memWriteB c.devm.memory di.toNat (sevm.data.sliceD si.toNat sz.toNat 0),
-        c.devm.gasLeft - cost, c.devm.stateGas⟩, g, c.K, c.keys⟩
+        c.devm.gasLeft - cost, c.devm.stateGas⟩, g, c.K, c.keys, c.adrs⟩
     else none
   | _ => none
+
+/-! ## `CALL`
+
+The `.call` arm of `Xinst.step` is stuck under kernel evaluation in two places:
+the warm/cold charge (`accessCost` tests `Std.HashSet` membership) and the value
+transfer in `Frame.enter` (`State.set`).  `callPrep` computes the arm up to its
+spawn with the charge decided on the address shadow, and `frameEnterB` is
+`Frame.enter` through `stateSetB`; both are proved equal to Jaune's
+(`callPrep_spec`, `frame_enter_eq_B`), by way of the forward lemmas of
+`Blanc/ForwardCall.lean`.  A precompile child answers synchronously and is run
+by the interpreter; a code child's result is supplied as data together with
+its `Exec` derivation (`callRun_cont`).  Delegated (EIP-7702) callees are not
+covered: the interpreter is stuck there. -/
+
+/-- Prague's `accessCost`, warm/cold decided on the address shadow. -/
+def accessCostL (x : Adr) (l : List Adr) : Nat :=
+  if x ∈ l then gasWarmAccess else gasColdAccountAccess
+
+theorem accessCost_eq_L {x : Adr} {s : AdrSet} {l : List Adr} (h : ∀ a, a ∈ s ↔ a ∈ l) :
+    accessCost x s = accessCostL x l := by
+  unfold accessCost accessCostL
+  simp only [h x]
+
+/-- `State.setBal` through `stateSetB`. -/
+def stateSetBalB (st : State) (a : Adr) (v : B256) : State :=
+  stateSetB st a ((st.get a).withBal v)
+
+theorem state_setBal_eq_B (st : State) (a : Adr) (v : B256) :
+    st.setBal a v = stateSetBalB st a v :=
+  state_set_eq_setB _ _ _
+
+/-- `Msg.benvAfterTransfer` through `stateSetB`. -/
+def benvAfterTransferB (msg : Msg) : Except (EvmError × State × AdrSet × Tra) Benv :=
+  if msg.shouldTransferValue then
+    if msg.benv.state.bal msg.caller < msg.value then
+      .error ⟨.internal (.assertion .none), msg.benv.state, msg.benv.createdAccounts,
+        msg.tenv.transientStorage⟩
+    else
+      let st1 := stateSetBalB msg.benv.state msg.caller (msg.benv.state.bal msg.caller - msg.value)
+      .ok ((msg.benv.withState st1).withState
+        (stateSetBalB st1 msg.currentTarget (st1.bal msg.currentTarget + msg.value)))
+  else .ok msg.benv
+
+theorem benvAfterTransfer_eq_B (msg : Msg) : msg.benvAfterTransfer = benvAfterTransferB msg := by
+  unfold Msg.benvAfterTransfer benvAfterTransferB
+  by_cases ht : msg.shouldTransferValue = true
+  · simp only [ht, ↓reduceIte]
+    by_cases hb : msg.benv.state.bal msg.caller < msg.value
+    · simp [hb, Benv.subBal, State.subBal, Option.toExcept]
+    · simp [hb, Benv.subBal, State.subBal, Option.toExcept, Benv.addBal, State.addBal,
+        state_setBal_eq_B]
+      rfl
+  · simp [ht]
+
+/-- `Frame.enter` through `benvAfterTransferB`. -/
+def frameEnterB (f : Frame) : FrameEntry :=
+  match benvAfterTransferB f.inner with
+  | .error e => .done (f.settleMsg (.error e))
+  | .ok benv =>
+    match executeCode.enter (f.inner.withBenv benv) with
+    | .inl evm => .run evm
+    | .inr raw => .done (f.settle raw)
+
+theorem frame_enter_eq_B (f : Frame) : f.enter = frameEnterB f := by
+  unfold Frame.enter frameEnterB
+  rw [benvAfterTransfer_eq_B]
+  rfl
+
+/-- `Devm.memWrite` through `memWriteB`. -/
+def devmMemWriteB (d : Devm) (i : Nat) (xs : Bytes) : Devm :=
+  d.setMach {d.mach with memory := memWriteB d.memory i xs}
+
+theorem devm_memWrite_eq_B (d : Devm) (i : Nat) (xs : Bytes) :
+    d.memWrite i xs = devmMemWriteB d i xs := by
+  unfold Devm.memWrite liftMachPure Mach.memWrite devmMemWriteB
+  rw [← mem_write_eq_B]; rfl
+
+/-- `Resume.run (.call p oi os)` on a settled child, through `devmMemWriteB`. -/
+def resumeCallB (p : Devm) (oi os : Nat) :
+    Except (EvmError × State × AdrSet × Tra) Devm → Option Devm
+  | .error _ => none
+  | .ok child =>
+    if child.error.isSome then
+      match (incorporateChildOnError p child child.output).push 0 with
+      | .ok e2 => some (devmMemWriteB e2 oi (child.output.take os))
+      | .error _ => none
+    else
+      match (incorporateChildOnSuccess p child child.output).push 1 with
+      | .ok e2 => some (devmMemWriteB e2 oi (child.output.take os))
+      | .error _ => none
+
+theorem resumeCallB_sound {p d : Devm} {oi os : Nat}
+    {r : Except (EvmError × State × AdrSet × Tra) Devm} (h : resumeCallB p oi os r = some d) :
+    Resume.run (.call p oi os) r = .ok d := by
+  rcases r with e | child
+  · simp [resumeCallB] at h
+  · simp only [resumeCallB] at h
+    simp only [Resume.run, liftToExecution, bind, Except.bind]
+    split at h
+    · rename_i he
+      simp only [he, ↓reduceIte]
+      split at h
+      · rename_i e2 h2
+        cases h; rw [h2]; simp only [devm_memWrite_eq_B]
+      · cases h
+    · rename_i he
+      simp only [he, Bool.false_eq_true, ↓reduceIte]
+      split at h
+      · rename_i e2 h2
+        cases h; rw [h2]; simp only [devm_memWrite_eq_B]
+      · cases h
+
+/-- The accessed sets after the resume: the parent's, and on success the child's. -/
+theorem resumeCallB_acc {p d child : Devm} {oi os : Nat}
+    (h : resumeCallB p oi os (.ok child) = some d) :
+    (∀ a, a ∈ d.accessedAddresses ↔
+      a ∈ p.accessedAddresses ∨ (child.error.isSome = false ∧ a ∈ child.accessedAddresses)) ∧
+    (∀ k, k ∈ d.accessedStorageKeys ↔
+      k ∈ p.accessedStorageKeys ∨ (child.error.isSome = false ∧ k ∈ child.accessedStorageKeys)) := by
+  simp only [resumeCallB] at h
+  split at h
+  · rename_i he
+    split at h
+    · rename_i e2 h2
+      cases h
+      have hp := Devm.push_of_push h2
+      refine ⟨fun a => ?_, fun k => ?_⟩
+      · show a ∈ e2.accessedAddresses ↔ _
+        rw [← hp.accessedAddresses]; simp [he, incorporateChildOnError]; rfl
+      · show k ∈ e2.accessedStorageKeys ↔ _
+        rw [← hp.accessedStorageKeys]; simp [he, incorporateChildOnError]; rfl
+    · cases h
+  · rename_i he
+    split at h
+    · rename_i e2 h2
+      cases h
+      have hp := Devm.push_of_push h2
+      refine ⟨fun a => ?_, fun k => ?_⟩
+      · show a ∈ e2.accessedAddresses ↔ _
+        rw [← hp.accessedAddresses]
+        simp only [Bool.not_eq_true] at he
+        exact Std.HashSet.mem_union_iff.trans (by simp [he]; exact Iff.rfl)
+      · show k ∈ e2.accessedStorageKeys ↔ _
+        rw [← hp.accessedStorageKeys]
+        simp only [Bool.not_eq_true] at he
+        exact Std.HashSet.mem_union_iff.trans (by simp [he]; exact Iff.rfl)
+    · cases h
+
+/-- The new-account charge of a value-bearing `CALL`. -/
+def createCostL (d : Devm) (a : Adr) : Nat := if ¬ (d.getAcct a).Empty then 0 else gNewAccount
+
+/-- A `CALL` computed up to its spawn: the child frame, the suspended parent, the
+output window, and the parent's address shadow (the callee added). -/
+structure CallPrep where
+  f : Frame
+  p : Devm
+  oi : Nat
+  os : Nat
+  adrs : List Adr
+
+/-- The `.call` arm of `Xinst.step` up to its spawn, warm/cold on the shadow
+(`Xinst.step_call_zero_value_spawn`, `Xinst.step_call_nonzero_spawn`). -/
+def callPrep (sevm : Sevm) (c : Cfg) : Option CallPrep :=
+  match c.devm.stack with
+  | gw :: cw :: vw :: iiw :: isw :: oiw :: osw :: s =>
+    if decide (CoveredFork sevm.benvStat.fork) ∧ sevm.depth ≠ 0 then
+      let d0 := c.devm.setMach ⟨s, c.devm.memory, c.devm.gasLeft, c.devm.stateGas⟩
+      let ext := d0.extCost [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]
+      let callee := cw.toAdr
+      let dA := addAccessedAddress d0 callee
+      let code := dA.state.getCode callee
+      match getDelegatedCodeAddress code with
+      | some _ => none
+      | none =>
+        let acc := accessCostL callee c.adrs
+        if vw = 0 then
+          let r := calculateMsgCallGas 0 gw.toNat dA.gasLeft ext acc
+          if r.1 + ext ≤ dA.gasLeft then
+            let p := callSpawnParent dA (r.1 + ext) iiw.toNat isw.toNat oiw.toNat osw.toNat
+            some ⟨Frame.ofCall (callSpawnMsg sevm p r.2 callee callee iiw.toNat isw.toNat code false),
+              p, oiw.toNat, osw.toNat, callee :: c.adrs⟩
+          else none
+        else
+          let create := createCostL dA callee
+          let r := calculateMsgCallGas vw.toNat gw.toNat dA.gasLeft ext (acc + create + gasCallValue)
+          if r.1 + ext ≤ dA.gasLeft ∧ sevm.isStatic = false ∧
+              ¬ (dA.getAcct sevm.currentTarget).bal < vw then
+            let p := callSpawnParent dA (r.1 + ext) iiw.toNat isw.toNat oiw.toNat osw.toNat
+            some ⟨Frame.ofCall (valueCallSpawnMsg sevm p r.2 vw callee callee iiw.toNat isw.toNat
+                code false), p, oiw.toNat, osw.toNat, callee :: c.adrs⟩
+          else none
+    else none
+  | _ => none
+
+theorem callPrep_spec {sevm : Sevm} {c : Cfg} {cp : CallPrep} (h : callPrep sevm c = some cp)
+    (hA : ∀ a, a ∈ c.devm.accessedAddresses ↔ a ∈ c.adrs) :
+    Xinst.step sevm c.devm .call = .spawn cp.f (.call cp.p cp.oi cp.os) ∧
+      (∀ a, a ∈ cp.p.accessedAddresses ↔ a ∈ cp.adrs) ∧
+      cp.p.accessedStorageKeys = c.devm.accessedStorageKeys ∧
+      cp.f.isCreate = false ∧ cp.f.inner.accessedAddresses = cp.p.accessedAddresses ∧
+      cp.f.inner.accessedStorageKeys = cp.p.accessedStorageKeys ∧
+      cp.f.inner.benv.stat.rules.stateGas = none := by
+  rcases c with ⟨devm, f, K, keys, adrs⟩
+  simp only [callPrep] at h
+  split at h
+  · rename_i gw cw vw iiw isw oiw osw s hs
+    split at h
+    · rename_i hcond
+      obtain ⟨hfork, hdepth⟩ := hcond
+      have hfork' : CoveredFork sevm.benvStat.fork := of_decide_eq_true hfork
+      split at h
+      · cases h
+      · rename_i hdel
+        have hdel' : accessDelegation
+            (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
+              cw.toAdr) cw.toAdr =
+            ⟨false, cw.toAdr, (addAccessedAddress
+              (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) cw.toAdr).state.getCode
+              cw.toAdr, 0,
+              addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
+                cw.toAdr⟩ := by
+          unfold accessDelegation
+          simp only at hdel ⊢
+          rw [hdel]
+        have hacc : accessCost cw.toAdr
+            (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses + 0 =
+            accessCostL cw.toAdr adrs := by
+          rw [Nat.add_zero]; exact accessCost_eq_L hA
+        have hins : ∀ a, a ∈ (addAccessedAddress
+            (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) cw.toAdr).accessedAddresses ↔
+            a ∈ cw.toAdr :: adrs := by
+          intro a
+          show a ∈ devm.accessedAddresses.insert cw.toAdr ↔ _
+          rw [Std.HashSet.mem_insert, List.mem_cons, hA a, beq_iff_eq]
+          constructor <;> rintro (h | h) <;> first | exact .inl h.symm | exact .inr h
+        have hsg := hfork'.rules_stateGas_none
+        split at h
+        · rename_i hv
+          subst hv
+          split at h
+          · rename_i hgas
+            cases h
+            exact ⟨Xinst.step_call_zero_value_spawn hfork' hs rfl hdel' hacc rfl hgas hdepth,
+              hins, rfl, rfl, rfl, rfl, hsg⟩
+          · cases h
+        · rename_i hv
+          split at h
+          · rename_i hc
+            obtain ⟨hgas, hstatic, hsender⟩ := hc
+            cases h
+            exact ⟨Xinst.step_call_nonzero_spawn hfork' hs hv rfl hdel' hacc rfl rfl hgas hstatic
+              hsender hdepth, hins, rfl, rfl, rfl, rfl, hsg⟩
+          · cases h
+    · cases h
+  · cases h
+
+/-- A precompile child leaves the accessed sets it was given. -/
+theorem frameEnterB_done_acc {f : Frame} {child : Devm} (hf : f.isCreate = false)
+    (hsg : f.inner.benv.stat.rules.stateGas = none)
+    (h : frameEnterB f = .done (.ok child)) :
+    child.accessedAddresses = f.inner.accessedAddresses ∧
+      child.accessedStorageKeys = f.inner.accessedStorageKeys := by
+  unfold frameEnterB at h
+  split at h
+  · simp [Frame.settleMsg, hf, processMessage.settle, bind, Except.bind] at h
+  · rename_i benv hb
+    split at h
+    · cases h
+    · rename_i raw he
+      simp only [FrameEntry.done.injEq] at h
+      unfold executeCode.enter at he
+      split at he
+      · cases he
+      · rename_i adr _
+        split at he
+        · simp only [Sum.inr.injEq] at he
+          subst he
+          simp only [Frame.settle, Frame.settleMsg, hf, Bool.false_eq_true, ↓reduceIte,
+            executeCode.handleErrorWith, Msg.withBenv, hsg] at h
+          unfold executePrecomp applyPrecompResult at h
+          split at h
+          · rename_i m cost _
+            cases m <;>
+              simp [executeCode.handleError, processMessage.settle, bind, Except.bind] at h <;>
+              (try split at h) <;> (try cases h) <;> exact ⟨rfl, rfl⟩
+          · simp [executeCode.handleError, processMessage.settle, bind, Except.bind] at h
+            split at h <;> cases h <;> exact ⟨rfl, rfl⟩
+        · cases he
+
+/-- A `CALL` whose child answers synchronously (a precompile), run to the
+parent's resumed state. -/
+def callStep (sevm : Sevm) (c : Cfg) (g : SFunc) : Option Cfg :=
+  match callPrep sevm c with
+  | some cp =>
+    match frameEnterB cp.f with
+    | .done r =>
+      match resumeCallB cp.p cp.oi cp.os r with
+      | some d => some ⟨d, g, c.K, c.keys, cp.adrs⟩
+      | none => none
+    | .run _ => none
+  | none => none
 
 /-- One node of the certificate tree. -/
 def wstep (fs : List SFunc) (sevm : Sevm) (c : Cfg) : Res :=
   match c.f with
   | .dest g =>
-    if gJumpdest ≤ c.devm.gasLeft then .cont ⟨mach' c.devm c.devm.stack gJumpdest, g, c.K, c.keys⟩
+    if gJumpdest ≤ c.devm.gasLeft then .cont ⟨mach' c.devm c.devm.stack gJumpdest, g, c.K, c.keys, c.adrs⟩
     else .stuck
   | .jump k =>
     match c.devm.stack, fs[k]? with
     | _ :: s, some g =>
-      if gMid ≤ c.devm.gasLeft then .cont ⟨mach' c.devm s gMid, g, c.K, c.keys⟩ else .stuck
+      if gMid ≤ c.devm.gasLeft then .cont ⟨mach' c.devm s gMid, g, c.K, c.keys, c.adrs⟩ else .stuck
     | _, _ => .stuck
   | .branch f g =>
     match c.devm.stack with
     | _ :: w :: s =>
       if gHigh ≤ c.devm.gasLeft then
-        .cont ⟨mach' c.devm s gHigh, if w = 0 then f else g, c.K, c.keys⟩
+        .cont ⟨mach' c.devm s gHigh, if w = 0 then f else g, c.K, c.keys, c.adrs⟩
       else .stuck
     | _ => .stuck
   | .branchTo f k =>
     match c.devm.stack with
     | _ :: w :: s =>
       if gHigh ≤ c.devm.gasLeft then
-        if w = 0 then .cont ⟨mach' c.devm s gHigh, f, c.K, c.keys⟩
+        if w = 0 then .cont ⟨mach' c.devm s gHigh, f, c.K, c.keys, c.adrs⟩
         else match fs[k]? with
-          | some g => .cont ⟨mach' c.devm s gHigh, g, c.K, c.keys⟩
+          | some g => .cont ⟨mach' c.devm s gHigh, g, c.K, c.keys, c.adrs⟩
           | none => .stuck
       else .stuck
     | _ => .stuck
   | .callNext k f =>
     match c.devm.stack, fs[k]? with
     | _ :: s, some g =>
-      if gMid ≤ c.devm.gasLeft then .cont ⟨mach' c.devm s gMid, g, f :: c.K, c.keys⟩ else .stuck
+      if gMid ≤ c.devm.gasLeft then .cont ⟨mach' c.devm s gMid, g, f :: c.K, c.keys, c.adrs⟩ else .stuck
     | _, _ => .stuck
   | .ret =>
     match c.devm.stack with
@@ -469,12 +772,12 @@ def wstep (fs : List SFunc) (sevm : Sevm) (c : Cfg) : Res :=
       if gMid ≤ c.devm.gasLeft then
         match c.K with
         | [] => .done (.returned (mach' c.devm s gMid))
-        | g :: K => .cont ⟨mach' c.devm s gMid, g, K, c.keys⟩
+        | g :: K => .cont ⟨mach' c.devm s gMid, g, K, c.keys, c.adrs⟩
       else .stuck
     | _ => .stuck
   | .pcAt p g =>
     match Ninst.step ⟨p, sevm, c.devm⟩ (.reg .pc) with
-    | .cont _ d => .cont ⟨d, g, c.K, c.keys⟩
+    | .cont _ d => .cont ⟨d, g, c.K, c.keys, c.adrs⟩
     | _ => .stuck
   | .last l =>
     match l.run sevm c.devm with
@@ -486,10 +789,11 @@ def wstep (fs : List SFunc) (sevm : Sevm) (c : Cfg) : Res :=
     | .reg .sstore => match sstoreStep sevm c g with | some c' => .cont c' | none => .stuck
     | .reg .mstore => match mstoreStep c g with | some c' => .cont c' | none => .stuck
     | .reg .calldatacopy => match calldatacopyStep sevm c g with | some c' => .cont c' | none => .stuck
+    | .exec .call => match callStep sevm c g with | some c' => .cont c' | none => .stuck
     | n =>
       if ninstAccKeeps n then
         match Ninst.step ⟨0, sevm, c.devm⟩ n with
-        | .cont _ d => .cont ⟨d, g, c.K, c.keys⟩
+        | .cont _ d => .cont ⟨d, g, c.K, c.keys, c.adrs⟩
         | _ => .stuck
       else .stuck
   | .undefined => .stuck
@@ -512,8 +816,10 @@ def RunK (fs : List SFunc) (sevm : Sevm) : Devm → SFunc → List SFunc → Out
     (∃ d, SFunc.RunExact fs sevm devm f (.returned d) ∧ RunK fs sevm d g K o) ∨
       (∃ d, o = .halted d ∧ SFunc.RunExact fs sevm devm f (.halted d))
 
-/-- The shadow is the accessed-key set. -/
-def Agree (c : Cfg) : Prop := ∀ x, x ∈ c.devm.accessedStorageKeys ↔ x ∈ c.keys
+/-- The shadows are the accessed-key and accessed-address sets. -/
+def Agree (c : Cfg) : Prop :=
+  (∀ x, x ∈ c.devm.accessedStorageKeys ↔ x ∈ c.keys) ∧
+    (∀ a, a ∈ c.devm.accessedAddresses ↔ a ∈ c.adrs)
 
 theorem RunK.lift {fs : List SFunc} {sevm : Sevm} {devm devm' : Devm} {f f' : SFunc}
     (h : ∀ o, SFunc.RunExact fs sevm devm' f' o → SFunc.RunExact fs sevm devm f o) :
@@ -548,11 +854,12 @@ def StepOk (fs : List SFunc) (sevm : Sevm) (c c' : Cfg) : Prop :=
   (Agree c → Agree c') ∧ ∀ o, Agree c → RunK fs sevm c'.devm c'.f c'.K o → RunK fs sevm c.devm c.f c.K o
 
 theorem StepOk.same {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} (hk : c'.keys = c.keys)
-    (ha : AccKeep c.devm c'.devm) (hK : c'.K = c.K)
+    (hA : c'.adrs = c.adrs) (ha : AccKeep c.devm c'.devm) (hK : c'.K = c.K)
     (h : ∀ o, SFunc.RunExact fs sevm c'.devm c'.f o → SFunc.RunExact fs sevm c.devm c.f o) :
     StepOk fs sevm c c' := by
-  refine ⟨fun hc x => ?_, fun o _ r => ?_⟩
-  · rw [ha.2, hk]; exact hc x
+  refine ⟨fun hc => ⟨fun x => ?_, fun a => ?_⟩, fun o _ r => ?_⟩
+  · rw [ha.2, hk]; exact hc.1 x
+  · rw [ha.1, hA]; exact hc.2 a
   · rw [hK] at r; exact RunK.lift h r
 
 theorem pc_step_accKeep {sevm : Sevm} {devm d : Devm} {p q : Nat}
@@ -585,7 +892,7 @@ theorem StepOk.of {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} (hk : Agree c →
 theorem sloadStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
     (h : sloadStep sevm c g = some c') (hf : c.f = .next (.reg .sload) g) :
     StepOk fs sevm c c' := by
-  rcases c with ⟨devm, f, K, keys⟩
+  rcases c with ⟨devm, f, K, keys, adrs⟩
   simp only at hf; subst hf
   simp only [sloadStep] at h
   split at h
@@ -600,15 +907,15 @@ theorem sloadStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
         · rename_i hgas
           cases h
           exact StepOk.of (fun hc => hc) rfl fun hc o r =>
-            .next (Ninst.runCompiled_sload_warm hleg' hs ((hc _).mpr hw) rfl
+            .next (Ninst.runCompiled_sload_warm hleg' hs ((hc.1 _).mpr hw) rfl
               (G := devm.gasLeft - gasWarmAccess) (by show devm.gasLeft = _; omega) hroom) r
         · cases h
       · rename_i hw
         split at h
         · rename_i hgas
           cases h
-          exact StepOk.of (fun hc => agree_insert hc) rfl fun hc o r =>
-            .next (Ninst.runCompiled_sload_cold hleg' hs (fun hm => hw ((hc _).mp hm)) rfl
+          exact StepOk.of (fun hc => ⟨agree_insert hc.1, hc.2⟩) rfl fun hc o r =>
+            .next (Ninst.runCompiled_sload_cold hleg' hs (fun hm => hw ((hc.1 _).mp hm)) rfl
               (G := devm.gasLeft - gasColdSload) (by show devm.gasLeft = _; omega) hroom) r
         · cases h
     · cases h
@@ -617,7 +924,7 @@ theorem sloadStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
 theorem sstoreStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
     (h : sstoreStep sevm c g = some c') (hf : c.f = .next (.reg .sstore) g) :
     StepOk fs sevm c c' := by
-  rcases c with ⟨devm, f, K, keys⟩
+  rcases c with ⟨devm, f, K, keys, adrs⟩
   simp only at hf; subst hf
   simp only [sstoreStep] at h
   split at h
@@ -632,7 +939,7 @@ theorem sstoreStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
         · rename_i hgas
           cases h
           refine StepOk.of (fun hc => hc) rfl fun hc o r => .next ?_ r
-          have h := Ninst.runCompiled_sstore_warm hleg' hs ((hc _).mpr hw) hsentry hstatic rfl rfl
+          have h := Ninst.runCompiled_sstore_warm hleg' hs ((hc.1 _).mpr hw) hsentry hstatic rfl rfl
             (G := devm.gasLeft - _) (by exact (Nat.sub_add_cancel hgas).symm)
           rwa [devm_setStorVal_eq_B] at h
         · cases h
@@ -640,8 +947,8 @@ theorem sstoreStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
         split at h
         · rename_i hgas
           cases h
-          refine StepOk.of (fun hc => agree_insert hc) rfl fun hc o r => .next ?_ r
-          have h := Ninst.runCompiled_sstore_cold hleg' hs (fun hm => hw ((hc _).mp hm)) hsentry
+          refine StepOk.of (fun hc => ⟨agree_insert hc.1, hc.2⟩) rfl fun hc o r => .next ?_ r
+          have h := Ninst.runCompiled_sstore_cold hleg' hs (fun hm => hw ((hc.1 _).mp hm)) hsentry
             hstatic rfl rfl (G := devm.gasLeft - _) (by exact (Nat.sub_add_cancel hgas).symm)
           rwa [devm_setStorVal_eq_B] at h
         · cases h
@@ -651,11 +958,13 @@ theorem sstoreStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
 theorem generic_cont {fs : List SFunc} {sevm : Sevm} {c : Cfg} {n : Ninst} {g : SFunc}
     {q : Nat} {d : Devm} (hn : ninstAccKeeps n = true)
     (hstep : Ninst.step ⟨0, sevm, c.devm⟩ n = .cont q d) (hf : c.f = .next n g) :
-    StepOk fs sevm c ⟨d, g, c.K, c.keys⟩ := by
+    StepOk fs sevm c ⟨d, g, c.K, c.keys, c.adrs⟩ := by
   have hk := ninstAccKeeps_step hn hstep
-  refine StepOk.of (fun hc x => ?_) rfl fun _ o r => ?_
+  refine StepOk.of (fun hc => ⟨fun x => ?_, fun a => ?_⟩) rfl fun _ o r => ?_
   · show x ∈ d.accessedStorageKeys ↔ x ∈ c.keys
-    rw [hk.2]; exact hc x
+    rw [hk.2]; exact hc.1 x
+  · show a ∈ d.accessedAddresses ↔ a ∈ c.adrs
+    rw [hk.1]; exact hc.2 a
   · rw [hf]
     exact .next (Ninst.runCompiled_of_run (pcFree_of_ninstAccKeeps hn)
       ⟨.none, trivial, 0, by simp [Ninst.StepRun, hstep, Step.Run]⟩) r
@@ -663,7 +972,7 @@ theorem generic_cont {fs : List SFunc} {sevm : Sevm} {c : Cfg} {n : Ninst} {g : 
 theorem mstoreStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
     (h : mstoreStep c g = some c') (hf : c.f = .next (.reg .mstore) g) :
     StepOk fs sevm c c' := by
-  rcases c with ⟨devm, f, K, keys⟩
+  rcases c with ⟨devm, f, K, keys, adrs⟩
   simp only at hf; subst hf
   simp only [mstoreStep] at h
   split at h
@@ -671,7 +980,7 @@ theorem mstoreStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
     split at h
     · rename_i hgas
       cases h
-      exact StepOk.same rfl (AccKeep.setMach _ _) rfl fun o r =>
+      exact StepOk.same rfl rfl (AccKeep.setMach _ _) rfl fun o r =>
         .next (Ninst.runCompiled_mstore hs (by exact (Nat.sub_add_cancel hgas).symm)
           (mem_write_eq_B _ _ _)) r
     · cases h
@@ -680,7 +989,7 @@ theorem mstoreStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
 theorem calldatacopyStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
     (h : calldatacopyStep sevm c g = some c') (hf : c.f = .next (.reg .calldatacopy) g) :
     StepOk fs sevm c c' := by
-  rcases c with ⟨devm, f, K, keys⟩
+  rcases c with ⟨devm, f, K, keys, adrs⟩
   simp only at hf; subst hf
   simp only [calldatacopyStep] at h
   split at h
@@ -688,21 +997,89 @@ theorem calldatacopyStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : 
     split at h
     · rename_i hgas
       cases h
-      exact StepOk.same rfl (AccKeep.setMach _ _) rfl fun o r =>
+      exact StepOk.same rfl rfl (AccKeep.setMach _ _) rfl fun o r =>
         .next (Ninst.runCompiled_calldatacopy_of hs rfl (mem_write_eq_B _ _ _)
           (by exact (Nat.sub_add_cancel hgas).symm)) r
     · cases h
   · cases h
 
+theorem callStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
+    (h : callStep sevm c g = some c') (hf : c.f = .next (.exec .call) g) :
+    StepOk fs sevm c c' := by
+  simp only [callStep] at h
+  split at h
+  · rename_i cp hp
+    split at h
+    · rename_i r he
+      split at h
+      · rename_i d hr
+        cases h
+        refine StepOk.of ?_ rfl ?_
+        · intro hc
+          obtain ⟨_, hpa, hpk, hcr, hia, hik, hsg⟩ := callPrep_spec hp hc.2
+          rcases r with e | child
+          · simp [resumeCallB] at hr
+          obtain ⟨hda, hdk⟩ := resumeCallB_acc hr
+          obtain ⟨hca, hck⟩ := frameEnterB_done_acc hcr hsg he
+          refine ⟨fun x => ?_, fun a => ?_⟩
+          · show x ∈ d.accessedStorageKeys ↔ x ∈ c.keys
+            rw [hdk x, hck, hik, hpk, hc.1 x]
+            exact ⟨fun h => h.elim id (·.2), .inl⟩
+          · show a ∈ d.accessedAddresses ↔ a ∈ cp.adrs
+            rw [hda a, hca, hia, hpa a]
+            exact ⟨fun h => h.elim id (·.2), .inl⟩
+        · intro hc o r'
+          obtain ⟨hstep, -⟩ := callPrep_spec hp hc.2
+          rw [hf]
+          exact .next (Ninst.runCompiled_exec_doneFrame hstep (by rw [frame_enter_eq_B]; exact he)
+            (resumeCallB_sound hr)) r'
+      · cases h
+    · cases h
+  · cases h
+
+/-- **A `CALL` into code.**  The child's execution `raw` is supplied with its
+`Exec` derivation from the machine the frame enters with; a successful child
+contributes its accessed sets, given as shadows `ckeys`/`cadrs`. -/
+theorem callRun_cont {fs : List SFunc} {sevm : Sevm} {c : Cfg} {g : SFunc} {cp : CallPrep}
+    {cevm : Evm} {raw : Execution} {child d : Devm}
+    {ckeys : List (Adr × B256)} {cadrs : List Adr}
+    (hf : c.f = .next (.exec .call) g) (hp : callPrep sevm c = some cp)
+    (he : frameEnterB cp.f = .run cevm) (hx : Nonempty (Exec cevm.pc cevm.sta cevm.dyna raw))
+    (hs : cp.f.settle raw = .ok child) (hce : child.error.isSome = false)
+    (hr : resumeCallB cp.p cp.oi cp.os (.ok child) = some d)
+    (hca : ∀ a, a ∈ child.accessedAddresses ↔ a ∈ cadrs)
+    (hck : ∀ k, k ∈ child.accessedStorageKeys ↔ k ∈ ckeys) :
+    StepOk fs sevm c ⟨d, g, c.K, c.keys ++ ckeys, cp.adrs ++ cadrs⟩ := by
+  refine StepOk.of ?_ rfl ?_
+  · intro hc
+    obtain ⟨_, hpa, hpk, -⟩ := callPrep_spec hp hc.2
+    obtain ⟨hda, hdk⟩ := resumeCallB_acc hr
+    refine ⟨fun x => ?_, fun a => ?_⟩
+    · show x ∈ d.accessedStorageKeys ↔ x ∈ c.keys ++ ckeys
+      rw [hdk x, hce, hpk, hc.1 x, hck x, List.mem_append]
+      simp
+    · show a ∈ d.accessedAddresses ↔ a ∈ cp.adrs ++ cadrs
+      rw [hda a, hce, hpa a, hca a, List.mem_append]
+      simp
+  · intro hc o r'
+    obtain ⟨hstep, -⟩ := callPrep_spec hp hc.2
+    rw [hf]
+    refine .next ⟨.some ⟨cevm, raw⟩, hx, fun pc => ?_⟩ r'
+    apply XStep.run_toStep.mpr
+    show XStep.Run (Xinst.step sevm c.devm .call) _ _
+    rw [hstep]
+    refine ⟨_, RunFrame.of_run (by rw [frame_enter_eq_B]; exact he), ?_⟩
+    rw [hs]; exact (resumeCallB_sound hr).symm
+
 theorem wstep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg}
     (h : wstep fs sevm c = .cont c') : StepOk fs sevm c c' := by
-  rcases c with ⟨devm, f, K, keys⟩
+  rcases c with ⟨devm, f, K, keys, adrs⟩
   cases f with
   | dest g =>
     simp only [wstep] at h
     split at h
     · cases h
-      refine StepOk.same rfl (AccKeep.setMach _ _) rfl fun o r => .dest ?_ r
+      refine StepOk.same rfl rfl (AccKeep.setMach _ _) rfl fun o r => .dest ?_ r
       exact Devm.burnBy_setMach (by assumption)
     · cases h
   | jump k =>
@@ -711,7 +1088,7 @@ theorem wstep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg}
     · rename_i d s g hs hg
       split at h
       · cases h
-        exact StepOk.same rfl (AccKeep.setMach _ _) rfl fun o r =>
+        exact StepOk.same rfl rfl (AccKeep.setMach _ _) rfl fun o r =>
           .jump d hg (popBurnBy1 hs (by assumption)) r
       · cases h
     · cases h
@@ -721,7 +1098,7 @@ theorem wstep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg}
     · rename_i d w s hs
       split at h
       · cases h
-        refine StepOk.same rfl (AccKeep.setMach _ _) rfl fun o r => ?_
+        refine StepOk.same rfl rfl (AccKeep.setMach _ _) rfl fun o r => ?_
         by_cases hw : w = 0
         · subst hw; simp only [ite_true] at r
           exact .zero d (popBurnBy2 hs (by assumption)) r
@@ -738,13 +1115,13 @@ theorem wstep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg}
         split at h
         · rename_i hw
           cases h; subst hw
-          exact StepOk.same rfl (AccKeep.setMach _ _) rfl fun o r =>
+          exact StepOk.same rfl rfl (AccKeep.setMach _ _) rfl fun o r =>
             .toZero d (popBurnBy2 hs hgas) r
         · rename_i hw
           split at h
           · rename_i g hg
             cases h
-            exact StepOk.same rfl (AccKeep.setMach _ _) rfl fun o r =>
+            exact StepOk.same rfl rfl (AccKeep.setMach _ _) rfl fun o r =>
               .toSucc d w hw hg (popBurnBy2 hs hgas) r
           · cases h
       · cases h
@@ -756,7 +1133,7 @@ theorem wstep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg}
       split at h
       · rename_i hgas
         cases h
-        refine ⟨fun hc x => hc x, fun o _ r => ?_⟩
+        refine ⟨fun hc => hc, fun o _ r => ?_⟩
         have hpop := popBurnBy1 (cost := gMid) hs hgas
         rcases r with ⟨d1, r1, rest⟩ | ⟨d1, rfl, r1⟩
         · cases K with
@@ -778,7 +1155,7 @@ theorem wstep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg}
         · cases h
         · rename_i g K' _
           cases h
-          refine ⟨fun hc x => hc x, fun o _ r => ?_⟩
+          refine ⟨fun hc => hc, fun o _ r => ?_⟩
           exact .inl ⟨_, .ret d (popBurnBy1 hs hgas), r⟩
       · cases h
     · cases h
@@ -787,7 +1164,7 @@ theorem wstep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg}
     split at h
     · rename_i q d hstep
       cases h
-      refine StepOk.same rfl (pc_step_accKeep hstep) rfl fun o r => .pcAt ?_ r
+      refine StepOk.same rfl rfl (pc_step_accKeep hstep) rfl fun o r => .pcAt ?_ r
       simp [Ninst.StepRun, hstep, Step.Run]
     · cases h
   | last l =>
@@ -810,6 +1187,9 @@ theorem wstep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg}
       · cases h; exact calldatacopyStep_cont (by assumption) rfl
       · cases h
     · split at h
+      · cases h; exact callStep_cont (by assumption) rfl
+      · cases h
+    · split at h
       · rename_i hn
         split at h
         · rename_i q d hstep
@@ -820,7 +1200,7 @@ theorem wstep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg}
 
 theorem wstep_done {fs : List SFunc} {sevm : Sevm} {c : Cfg} {o : Outcome}
     (h : wstep fs sevm c = .done o) : RunK fs sevm c.devm c.f c.K o := by
-  rcases c with ⟨devm, f, K, keys⟩
+  rcases c with ⟨devm, f, K, keys, adrs⟩
   cases f with
   | ret =>
     simp only [wstep] at h
@@ -844,6 +1224,7 @@ theorem wstep_done {fs : List SFunc} {sevm : Sevm} {c : Cfg} {o : Outcome}
   | next n g =>
     simp only [wstep] at h
     split at h
+    · split at h <;> cases h
     · split at h <;> cases h
     · split at h <;> cases h
     · split at h <;> cases h
@@ -893,9 +1274,9 @@ theorem wrun_done {fs : List SFunc} {sevm : Sevm} :
 /-- **The witness engine.**  A frame whose interpreter run from entry `0`
 halts is a gas-exact run of the certificate's program. -/
 theorem wrun_exact {fs : List SFunc} {sevm : Sevm} {pre post : Devm} {f0 : SFunc}
-    {keys : List (Adr × B256)} {n : Nat} (h0 : fs[0]? = some f0)
-    (hagree : ∀ x, x ∈ pre.accessedStorageKeys ↔ x ∈ keys)
-    (h : wrun fs sevm n ⟨pre, f0, [], keys⟩ = .done (.halted post)) :
+    {keys : List (Adr × B256)} {adrs : List Adr} {n : Nat} (h0 : fs[0]? = some f0)
+    (hagree : Agree ⟨pre, f0, [], keys, adrs⟩)
+    (h : wrun fs sevm n ⟨pre, f0, [], keys, adrs⟩ = .done (.halted post)) :
     SProg.RunExact fs sevm pre post :=
   ⟨f0, h0, wrun_done h hagree⟩
 
