@@ -619,25 +619,26 @@ theorem RegistryWitness.assignmentAt_canonical
       rw [findEntry_assignmentAt hfind]
       exact (hw.pausersValid (target, pauser) hmem).2
 
-/-- A fresh nonzero registration's exact five writes restore the combined
-Registry witness at the post-Registry boundary. -/
-theorem RegistryWitness.applyFreshWrites
-    {s : Stor} {entries : List Entry}
-    (hw : RegistryWitness (logicalStorageOfStor s) entries)
+/-- The five chronological logical Registry writes for a fresh nonzero
+registration preserve the witness for any functional storage observation
+with the stated pointwise write effect. -/
+theorem RegistryWitness.applyFreshWritesOfReadEffect
+    {s post : LogicalStorage} {entries : List Entry}
+    (hw : RegistryWitness s entries)
     {target newPauser : B256}
     (htarget : nonzeroCanonicalAddress target)
     (hnew : nonzeroCanonicalAddress newPauser)
-    (hfind : findEntry entries target = none) :
-    RegistryWitness
-      (logicalStorageOfStor
-        (applyRegistryWrites s
-          [(assignmentSlot target, newPauser),
-            (arrayEntrySlot (Nat.toB256 (entries.length + 1)), target),
-            (indexSlot target, Nat.toB256 (entries.length + 1)),
-            (arrayLengthSlot, Nat.toB256 (entries.length + 1)),
-            (countSlot newPauser,
-              Nat.toB256 (assignmentCount entries newPauser + 1))]))
-      (entries ++ [(target, newPauser)]) := by
+    (hfind : findEntry entries target = none)
+    (hread : ∀ key, post.read key =
+      [(assignmentSlot target, newPauser),
+        (arrayEntrySlot (Nat.toB256 (entries.length + 1)), target),
+        (indexSlot target, Nat.toB256 (entries.length + 1)),
+        (arrayLengthSlot, Nat.toB256 (entries.length + 1)),
+        (countSlot newPauser,
+          Nat.toB256 (assignmentCount entries newPauser + 1))].foldl
+        (fun current write => if write.1 = key then write.2 else current)
+        (s.read key)) :
+    RegistryWitness post (entries ++ [(target, newPauser)]) := by
   have hnext256 := hw.fresh_length_lt_2pow256
   have hnext252 :
       (Nat.toB256 (entries.length + 1)).toNat < 2 ^ 252 := by
@@ -674,8 +675,8 @@ theorem RegistryWitness.applyFreshWrites
     rcases hmem with hmem | rfl
     · exact hw.pausersValid entry hmem
     · exact hnew
-  · simp only [logicalStorageOfStor, applyRegistryWrites_get,
-      List.foldl_cons, List.foldl_nil]
+  · rw [hread]
+    simp only [List.foldl_cons, List.foldl_nil]
     simp [haddressLength.2.2]
   · intro index hindex
     by_cases hold : index < entries.length
@@ -702,12 +703,12 @@ theorem RegistryWitness.applyFreshWrites
             norm_num at hlength ⊢
             omega) heq
         omega
-      simp only [logicalStorageOfStor, applyRegistryWrites_get,
-        List.foldl_cons, List.foldl_nil]
+      rw [hread]
+      simp only [List.foldl_cons, List.foldl_nil]
       simp [hfamilies.1, hfamilies.2.1, hfamilies.2.2,
         hnewOld, hlengthOld,
         targetAt_append_old entries (target, newPauser) hold]
-      simpa [logicalStorageOfStor] using hw.arrayWords index hold
+      simpa using hw.arrayWords index hold
     · have heq : index = entries.length := by
         simp only [List.length_append, List.length_cons, List.length_nil]
           at hindex
@@ -716,8 +717,8 @@ theorem RegistryWitness.applyFreshWrites
       have hfamilies :=
         registryAddressFamilies_ne_arrayEntrySlot
           htarget.2 hnew.2 hnext252
-      simp only [logicalStorageOfStor, applyRegistryWrites_get,
-        List.foldl_cons, List.foldl_nil]
+      rw [hread]
+      simp only [List.foldl_cons, List.foldl_nil]
       simp [hfamilies.2.1, hfamilies.2.2,
         hlengthNext,
         targetAt_append_length_of_findEntry_none hfind]
@@ -730,8 +731,8 @@ theorem RegistryWitness.applyFreshWrites
       registryAddressFamilies_ne_arrayLengthSlot hwanted hnew.2
     by_cases heq : wanted = target
     · subst wanted
-      simp only [logicalStorageOfStor, applyRegistryWrites_get,
-        List.foldl_cons, List.foldl_nil]
+      rw [hread]
+      simp only [List.foldl_cons, List.foldl_nil]
       simp [Ne.symm harray.1, Ne.symm hpair.1,
         Ne.symm hlength.1, Ne.symm hpair.2.1,
         assignmentAt_append_target_of_findEntry_none hfind]
@@ -739,12 +740,12 @@ theorem RegistryWitness.applyFreshWrites
         intro hslots
         exact (Ne.symm heq)
           (assignmentSlot_injective htarget.2 hwanted hslots)
-      simp only [logicalStorageOfStor, applyRegistryWrites_get,
-        List.foldl_cons, List.foldl_nil]
+      rw [hread]
+      simp only [List.foldl_cons, List.foldl_nil]
       simp [hassignment, Ne.symm harray.1, Ne.symm hpair.1,
         Ne.symm hlength.1, Ne.symm hpair.2.1,
         assignmentAt_append_of_ne entries target newPauser wanted heq]
-      simpa [logicalStorageOfStor] using hw.assignments wanted hwanted
+      simpa using hw.assignments wanted hwanted
   · intro wanted hwanted
     have hpair :=
       registryAddressFamilies_pairwise htarget.2 hwanted hnew.2
@@ -754,19 +755,19 @@ theorem RegistryWitness.applyFreshWrites
       registryAddressFamilies_ne_arrayLengthSlot hwanted hnew.2
     by_cases heq : wanted = target
     · subst wanted
-      simp only [logicalStorageOfStor, applyRegistryWrites_get,
-        List.foldl_cons, List.foldl_nil]
+      rw [hread]
+      simp only [List.foldl_cons, List.foldl_nil]
       simp [Ne.symm hpair.2.2,
         oneBasedIndexAt_append_target_of_findEntry_none hfind]
     · have hindexSlot : indexSlot target ≠ indexSlot wanted := by
         intro hslots
         exact (Ne.symm heq) (indexSlot_injective htarget.2 hwanted hslots)
-      simp only [logicalStorageOfStor, applyRegistryWrites_get,
-        List.foldl_cons, List.foldl_nil]
+      rw [hread]
+      simp only [List.foldl_cons, List.foldl_nil]
       simp [hpair.1, Ne.symm harray.2.1, hindexSlot,
         Ne.symm hlength.2.1, Ne.symm hpair.2.2,
         oneBasedIndexAt_append_of_ne entries target newPauser wanted heq]
-      simpa [logicalStorageOfStor] using hw.indices wanted hwanted
+      simpa using hw.indices wanted hwanted
   · intro wanted hwanted
     have hpair :=
       registryAddressFamilies_pairwise htarget.2 htarget.2 hwanted
@@ -776,18 +777,18 @@ theorem RegistryWitness.applyFreshWrites
       registryAddressFamilies_ne_arrayLengthSlot htarget.2 hwanted
     by_cases heq : wanted = newPauser
     · subst wanted
-      simp only [logicalStorageOfStor, applyRegistryWrites_get,
-        List.foldl_cons, List.foldl_nil]
+      rw [hread]
+      simp only [List.foldl_cons, List.foldl_nil]
       simp [assignmentCount_append, Nat.add_comm]
     · have hcountSlot : countSlot newPauser ≠ countSlot wanted := by
         intro hslots
         exact (Ne.symm heq) (countSlot_injective hnew.2 hwanted hslots)
-      simp only [logicalStorageOfStor, applyRegistryWrites_get,
-        List.foldl_cons, List.foldl_nil]
+      rw [hread]
+      simp only [List.foldl_cons, List.foldl_nil]
       simp [hpair.2.1, Ne.symm harray.2.2, hpair.2.2,
         Ne.symm hlength.2.2, hcountSlot, assignmentCount_append,
         if_neg (Ne.symm heq)]
-      simpa [logicalStorageOfStor] using hw.counts wanted hwanted
+      simpa using hw.counts wanted hwanted
   · have hzeroCanonical : canonicalAddress (0 : B256) := by
       unfold canonicalAddress
       change (0 : Nat) < 2 ^ 160
@@ -803,11 +804,176 @@ theorem RegistryWitness.applyFreshWrites
     have hcount0 : countSlot newPauser ≠ countSlot 0 := by
       intro hslots
       exact hnew.1 (countSlot_injective hnew.2 hzeroCanonical hslots)
-    simp only [logicalStorageOfStor, applyRegistryWrites_get,
-      List.foldl_cons, List.foldl_nil]
+    rw [hread]
+    simp only [List.foldl_cons, List.foldl_nil]
     simp [hpair.2.1, Ne.symm harray.2.2, hpair.2.2,
       Ne.symm hlength.2.2, hcount0]
-    simpa [logicalStorageOfStor] using hw.zeroCount
+    simpa using hw.zeroCount
+
+/-- A fresh nonzero registration's exact five writes restore the combined
+Registry witness at the post-Registry boundary. -/
+theorem RegistryWitness.applyFreshWrites
+    {s : Stor} {entries : List Entry}
+    (hw : RegistryWitness (logicalStorageOfStor s) entries)
+    {target newPauser : B256}
+    (htarget : nonzeroCanonicalAddress target)
+    (hnew : nonzeroCanonicalAddress newPauser)
+    (hfind : findEntry entries target = none) :
+    RegistryWitness
+      (logicalStorageOfStor
+        (applyRegistryWrites s
+          [(assignmentSlot target, newPauser),
+            (arrayEntrySlot (Nat.toB256 (entries.length + 1)), target),
+            (indexSlot target, Nat.toB256 (entries.length + 1)),
+            (arrayLengthSlot, Nat.toB256 (entries.length + 1)),
+            (countSlot newPauser,
+              Nat.toB256 (assignmentCount entries newPauser + 1))]))
+      (entries ++ [(target, newPauser)]) := by
+  apply RegistryWitness.applyFreshWritesOfReadEffect hw htarget hnew hfind
+  intro key
+  simpa only [logicalStorageOfStor] using
+    applyRegistryWrites_get s
+      [(assignmentSlot target, newPauser),
+        (arrayEntrySlot (Nat.toB256 (entries.length + 1)), target),
+        (indexSlot target, Nat.toB256 (entries.length + 1)),
+        (arrayLengthSlot, Nat.toB256 (entries.length + 1)),
+        (countSlot newPauser,
+          Nat.toB256 (assignmentCount entries newPauser + 1))] key
+
+/-- The three chronological logical Registry writes for reassigning an
+existing target to a nonzero pauser preserve the witness for any functional
+storage observation with the stated pointwise write effect. -/
+theorem RegistryWitness.applyFoundNonzeroWritesOfReadEffect
+    {s post : LogicalStorage} {entries : List Entry}
+    (hw : RegistryWitness s entries)
+    {target newPauser oldPauser : B256} {index : Nat}
+    (htarget : nonzeroCanonicalAddress target)
+    (hnew : nonzeroCanonicalAddress newPauser)
+    (hfind : findEntry entries target = some (index, oldPauser))
+    (hread : ∀ key, post.read key =
+      [(assignmentSlot target, newPauser),
+        (countSlot oldPauser,
+          Nat.toB256 (assignmentCount entries oldPauser - 1)),
+        (countSlot newPauser,
+          Nat.toB256
+            ((assignmentCount entries newPauser -
+              (if oldPauser = newPauser then 1 else 0)) + 1))].foldl
+        (fun current write => if write.1 = key then write.2 else current)
+        (s.read key)) :
+    RegistryWitness post (setEntryAt index (target, newPauser) entries) := by
+  have hold : nonzeroCanonicalAddress oldPauser :=
+    hw.pausersValid (target, oldPauser) (mem_of_findEntry hfind)
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · rw [setEntryAt_targets_of_findEntry hfind]
+    exact hw.targetsNodup
+  · exact setEntryAt_targetsValid_of_findEntry hfind hw.targetsValid
+  · exact setEntryAt_pausersValid_of_findEntry hfind hw.pausersValid hnew
+  · have holdLength :=
+      registryAddressFamilies_ne_arrayLengthSlot htarget.2 hold.2
+    have hnewLength :=
+      registryAddressFamilies_ne_arrayLengthSlot htarget.2 hnew.2
+    rw [hread]
+    simp only [List.foldl_cons, List.foldl_nil]
+    simp [holdLength.1, holdLength.2.2, hnewLength.2.2,
+      setEntryAt_length_of_findEntry hfind]
+    simpa using hw.lengthWord
+  · intro wantedIndex hwantedIndex
+    have holdIndex : wantedIndex < entries.length := by
+      rw [setEntryAt_length_of_findEntry hfind] at hwantedIndex
+      exact hwantedIndex
+    have hword256 : wantedIndex + 1 < 2 ^ 256 := by
+      have hlength := hw.entries_length_le
+      norm_num at hlength ⊢
+      omega
+    have hword252 :
+        (Nat.toB256 (wantedIndex + 1)).toNat < 2 ^ 252 := by
+      rw [B256.toNat_toB256_of_lt hword256]
+      have hlength := hw.entries_length_le
+      norm_num at hlength ⊢
+      omega
+    have holdArray :=
+      registryAddressFamilies_ne_arrayEntrySlot htarget.2 hold.2 hword252
+    have hnewArray :=
+      registryAddressFamilies_ne_arrayEntrySlot htarget.2 hnew.2 hword252
+    rw [hread]
+    simp only [List.foldl_cons, List.foldl_nil]
+    simp [holdArray.1, holdArray.2.2, hnewArray.2.2,
+      targetAt_setEntryAt_of_findEntry hfind holdIndex]
+    simpa using hw.arrayWords wantedIndex holdIndex
+  · intro wanted hwanted
+    have holdPair :=
+      registryAddressFamilies_pairwise hwanted htarget.2 hold.2
+    have hnewPair :=
+      registryAddressFamilies_pairwise hwanted htarget.2 hnew.2
+    by_cases heq : wanted = target
+    · subst wanted
+      rw [hread]
+      simp only [List.foldl_cons, List.foldl_nil]
+      simp [Ne.symm holdPair.2.1, Ne.symm hnewPair.2.1,
+        assignmentAt_setEntryAt_target_of_findEntry hfind]
+    · have hassignment : assignmentSlot target ≠ assignmentSlot wanted := by
+        intro hslots
+        exact (Ne.symm heq)
+          (assignmentSlot_injective htarget.2 hwanted hslots)
+      rw [hread]
+      simp only [List.foldl_cons, List.foldl_nil]
+      simp [hassignment, Ne.symm holdPair.2.1, Ne.symm hnewPair.2.1,
+        assignmentAt_setEntryAt_of_findEntry_ne hfind heq]
+      simpa using hw.assignments wanted hwanted
+  · intro wanted hwanted
+    have holdPair :=
+      registryAddressFamilies_pairwise htarget.2 hwanted hold.2
+    have hnewPair :=
+      registryAddressFamilies_pairwise htarget.2 hwanted hnew.2
+    rw [hread]
+    simp only [List.foldl_cons, List.foldl_nil]
+    simp [holdPair.1, Ne.symm holdPair.2.2, Ne.symm hnewPair.2.2,
+      oneBasedIndexAt_setEntryAt_of_findEntry hfind]
+    simpa using hw.indices wanted hwanted
+  · intro wanted hwanted
+    have hassignment :=
+      registryAddressFamilies_pairwise htarget.2 htarget.2 hwanted
+    by_cases hnewEq : wanted = newPauser
+    · subst wanted
+      rw [hread]
+      simp only [List.foldl_cons, List.foldl_nil]
+      simp [assignmentCount_setEntryAt_of_findEntry hfind]
+    · have hcountNew : countSlot newPauser ≠ countSlot wanted := by
+        intro hslots
+        exact (Ne.symm hnewEq)
+          (countSlot_injective hnew.2 hwanted hslots)
+      by_cases holdEq : wanted = oldPauser
+      · subst wanted
+        rw [hread]
+        simp only [List.foldl_cons, List.foldl_nil]
+        simp [hcountNew, Ne.symm hnewEq,
+          assignmentCount_setEntryAt_of_findEntry hfind]
+      · have hcountOld : countSlot oldPauser ≠ countSlot wanted := by
+          intro hslots
+          exact (Ne.symm holdEq)
+            (countSlot_injective hold.2 hwanted hslots)
+        rw [hread]
+        simp only [List.foldl_cons, List.foldl_nil]
+        simp [hassignment.2.1, hcountOld, hcountNew]
+        rw [assignmentCount_setEntryAt_of_findEntry hfind]
+        simp [Ne.symm holdEq, Ne.symm hnewEq]
+        simpa using hw.counts wanted hwanted
+  · have hzeroCanonical : canonicalAddress (0 : B256) := by
+      unfold canonicalAddress
+      change (0 : Nat) < 2 ^ 160
+      norm_num
+    have hassignment :=
+      registryAddressFamilies_pairwise htarget.2 htarget.2 hzeroCanonical
+    have hold0 : countSlot oldPauser ≠ countSlot 0 := by
+      intro hslots
+      exact hold.1 (countSlot_injective hold.2 hzeroCanonical hslots)
+    have hnew0 : countSlot newPauser ≠ countSlot 0 := by
+      intro hslots
+      exact hnew.1 (countSlot_injective hnew.2 hzeroCanonical hslots)
+    rw [hread]
+    simp only [List.foldl_cons, List.foldl_nil]
+    simp [hassignment.2.1, hold0, hnew0]
+    simpa using hw.zeroCount
 
 /-- Reassigning an existing target to a nonzero pauser preserves the combined
 Registry witness after the exact assignment, decrement, and increment chronology. -/
@@ -829,141 +995,40 @@ theorem RegistryWitness.applyFoundNonzeroWrites
                 ((assignmentCount entries newPauser -
                   (if oldPauser = newPauser then 1 else 0)) + 1))]))
       (setEntryAt index (target, newPauser) entries) := by
-  have hold : nonzeroCanonicalAddress oldPauser :=
-    hw.pausersValid (target, oldPauser) (mem_of_findEntry hfind)
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · rw [setEntryAt_targets_of_findEntry hfind]
-    exact hw.targetsNodup
-  · exact setEntryAt_targetsValid_of_findEntry hfind hw.targetsValid
-  · exact setEntryAt_pausersValid_of_findEntry hfind hw.pausersValid hnew
-  · have holdLength :=
-      registryAddressFamilies_ne_arrayLengthSlot htarget.2 hold.2
-    have hnewLength :=
-      registryAddressFamilies_ne_arrayLengthSlot htarget.2 hnew.2
-    simp only [logicalStorageOfStor, applyRegistryWrites_get,
-      List.foldl_cons, List.foldl_nil]
-    simp [holdLength.1, holdLength.2.2, hnewLength.2.2,
-      setEntryAt_length_of_findEntry hfind]
-    simpa [logicalStorageOfStor] using hw.lengthWord
-  · intro wantedIndex hwantedIndex
-    have holdIndex : wantedIndex < entries.length := by
-      rw [setEntryAt_length_of_findEntry hfind] at hwantedIndex
-      exact hwantedIndex
-    have hword256 : wantedIndex + 1 < 2 ^ 256 := by
-      have hlength := hw.entries_length_le
-      norm_num at hlength ⊢
-      omega
-    have hword252 :
-        (Nat.toB256 (wantedIndex + 1)).toNat < 2 ^ 252 := by
-      rw [B256.toNat_toB256_of_lt hword256]
-      have hlength := hw.entries_length_le
-      norm_num at hlength ⊢
-      omega
-    have holdArray :=
-      registryAddressFamilies_ne_arrayEntrySlot htarget.2 hold.2 hword252
-    have hnewArray :=
-      registryAddressFamilies_ne_arrayEntrySlot htarget.2 hnew.2 hword252
-    simp only [logicalStorageOfStor, applyRegistryWrites_get,
-      List.foldl_cons, List.foldl_nil]
-    simp [holdArray.1, holdArray.2.2, hnewArray.2.2,
-      targetAt_setEntryAt_of_findEntry hfind holdIndex]
-    simpa [logicalStorageOfStor] using hw.arrayWords wantedIndex holdIndex
-  · intro wanted hwanted
-    have holdPair :=
-      registryAddressFamilies_pairwise hwanted htarget.2 hold.2
-    have hnewPair :=
-      registryAddressFamilies_pairwise hwanted htarget.2 hnew.2
-    by_cases heq : wanted = target
-    · subst wanted
-      simp only [logicalStorageOfStor, applyRegistryWrites_get,
-        List.foldl_cons, List.foldl_nil]
-      simp [Ne.symm holdPair.2.1, Ne.symm hnewPair.2.1,
-        assignmentAt_setEntryAt_target_of_findEntry hfind]
-    · have hassignment : assignmentSlot target ≠ assignmentSlot wanted := by
-        intro hslots
-        exact (Ne.symm heq)
-          (assignmentSlot_injective htarget.2 hwanted hslots)
-      simp only [logicalStorageOfStor, applyRegistryWrites_get,
-        List.foldl_cons, List.foldl_nil]
-      simp [hassignment, Ne.symm holdPair.2.1, Ne.symm hnewPair.2.1,
-        assignmentAt_setEntryAt_of_findEntry_ne hfind heq]
-      simpa [logicalStorageOfStor] using hw.assignments wanted hwanted
-  · intro wanted hwanted
-    have holdPair :=
-      registryAddressFamilies_pairwise htarget.2 hwanted hold.2
-    have hnewPair :=
-      registryAddressFamilies_pairwise htarget.2 hwanted hnew.2
-    simp only [logicalStorageOfStor, applyRegistryWrites_get,
-      List.foldl_cons, List.foldl_nil]
-    simp [holdPair.1, Ne.symm holdPair.2.2, Ne.symm hnewPair.2.2,
-      oneBasedIndexAt_setEntryAt_of_findEntry hfind]
-    simpa [logicalStorageOfStor] using hw.indices wanted hwanted
-  · intro wanted hwanted
-    have hassignment :=
-      registryAddressFamilies_pairwise htarget.2 htarget.2 hwanted
-    by_cases hnewEq : wanted = newPauser
-    · subst wanted
-      simp only [logicalStorageOfStor, applyRegistryWrites_get,
-        List.foldl_cons, List.foldl_nil]
-      simp [assignmentCount_setEntryAt_of_findEntry hfind]
-    · have hcountNew : countSlot newPauser ≠ countSlot wanted := by
-        intro hslots
-        exact (Ne.symm hnewEq)
-          (countSlot_injective hnew.2 hwanted hslots)
-      by_cases holdEq : wanted = oldPauser
-      · subst wanted
-        simp only [logicalStorageOfStor, applyRegistryWrites_get,
-          List.foldl_cons, List.foldl_nil]
-        simp [hcountNew, Ne.symm hnewEq,
-          assignmentCount_setEntryAt_of_findEntry hfind]
-      · have hcountOld : countSlot oldPauser ≠ countSlot wanted := by
-          intro hslots
-          exact (Ne.symm holdEq)
-            (countSlot_injective hold.2 hwanted hslots)
-        simp only [logicalStorageOfStor, applyRegistryWrites_get,
-          List.foldl_cons, List.foldl_nil]
-        simp [hassignment.2.1, hcountOld, hcountNew]
-        rw [assignmentCount_setEntryAt_of_findEntry hfind]
-        simp [Ne.symm holdEq, Ne.symm hnewEq]
-        simpa [logicalStorageOfStor] using hw.counts wanted hwanted
-  · have hzeroCanonical : canonicalAddress (0 : B256) := by
-      unfold canonicalAddress
-      change (0 : Nat) < 2 ^ 160
-      norm_num
-    have hassignment :=
-      registryAddressFamilies_pairwise htarget.2 htarget.2 hzeroCanonical
-    have hold0 : countSlot oldPauser ≠ countSlot 0 := by
-      intro hslots
-      exact hold.1 (countSlot_injective hold.2 hzeroCanonical hslots)
-    have hnew0 : countSlot newPauser ≠ countSlot 0 := by
-      intro hslots
-      exact hnew.1 (countSlot_injective hnew.2 hzeroCanonical hslots)
-    simp only [logicalStorageOfStor, applyRegistryWrites_get,
-      List.foldl_cons, List.foldl_nil]
-    simp [hassignment.2.1, hold0, hnew0]
-    simpa [logicalStorageOfStor] using hw.zeroCount
+  apply RegistryWitness.applyFoundNonzeroWritesOfReadEffect hw htarget hnew hfind
+  intro key
+  simpa only [logicalStorageOfStor] using
+    applyRegistryWrites_get s
+      [(assignmentSlot target, newPauser),
+        (countSlot oldPauser,
+          Nat.toB256 (assignmentCount entries oldPauser - 1)),
+        (countSlot newPauser,
+          Nat.toB256
+            ((assignmentCount entries newPauser -
+              (if oldPauser = newPauser then 1 else 0)) + 1))] key
 
-/-- The absent-target/zero-pauser path restores the original witness after its
-exact append, repeated-write, tail-clear, length-restore, and index-clear trace. -/
-theorem RegistryWitness.applyAbsentZeroWrites
-    {s : Stor} {entries : List Entry}
-    (hw : RegistryWitness (logicalStorageOfStor s) entries)
+/-- The nine chronological logical Registry writes for an absent-target,
+zero-pauser path preserve the witness for any functional storage observation
+with the stated pointwise write effect. -/
+theorem RegistryWitness.applyAbsentZeroWritesOfReadEffect
+    {s post : LogicalStorage} {entries : List Entry}
+    (hw : RegistryWitness s entries)
     {target : B256}
     (htarget : nonzeroCanonicalAddress target)
-    (hfind : findEntry entries target = none) :
-    RegistryWitness
-      (logicalStorageOfStor
-        (applyRegistryWrites s
-          [(assignmentSlot target, 0),
-            (arrayEntrySlot (Nat.toB256 (entries.length + 1)), target),
-            (indexSlot target, Nat.toB256 (entries.length + 1)),
-            (arrayLengthSlot, Nat.toB256 (entries.length + 1)),
-            (arrayEntrySlot (Nat.toB256 (entries.length + 1)), target),
-            (indexSlot target, Nat.toB256 (entries.length + 1)),
-            (arrayEntrySlot (Nat.toB256 (entries.length + 1)), 0),
-            (arrayLengthSlot, Nat.toB256 entries.length),
-            (indexSlot target, 0)]))
-      entries := by
+    (hfind : findEntry entries target = none)
+    (hread : ∀ key, post.read key =
+      [(assignmentSlot target, 0),
+        (arrayEntrySlot (Nat.toB256 (entries.length + 1)), target),
+        (indexSlot target, Nat.toB256 (entries.length + 1)),
+        (arrayLengthSlot, Nat.toB256 (entries.length + 1)),
+        (arrayEntrySlot (Nat.toB256 (entries.length + 1)), target),
+        (indexSlot target, Nat.toB256 (entries.length + 1)),
+        (arrayEntrySlot (Nat.toB256 (entries.length + 1)), 0),
+        (arrayLengthSlot, Nat.toB256 entries.length),
+        (indexSlot target, 0)].foldl
+        (fun current write => if write.1 = key then write.2 else current)
+        (s.read key)) :
+    RegistryWitness post entries := by
   have hnext256 := hw.fresh_length_lt_2pow256
   have hnext252 :
       (Nat.toB256 (entries.length + 1)).toNat < 2 ^ 252 := by
@@ -984,8 +1049,8 @@ theorem RegistryWitness.applyAbsentZeroWrites
     lengthWord := by
       have hlength :=
         registryAddressFamilies_ne_arrayLengthSlot htarget.2 htarget.2
-      simp only [logicalStorageOfStor, applyRegistryWrites_get,
-        List.foldl_cons, List.foldl_nil]
+      rw [hread]
+      simp only [List.foldl_cons, List.foldl_nil]
       simp [hlength.2.1]
     arrayWords := by
       intro index hindex
@@ -1013,10 +1078,10 @@ theorem RegistryWitness.applyAbsentZeroWrites
             norm_num at hbound ⊢
             omega) heq
         omega
-      simp only [logicalStorageOfStor, applyRegistryWrites_get,
-        List.foldl_cons, List.foldl_nil]
+      rw [hread]
+      simp only [List.foldl_cons, List.foldl_nil]
       simp [hfamilies.1, hfamilies.2.1, hfreshOld, holdLength]
-      simpa [logicalStorageOfStor] using hw.arrayWords index hindex
+      simpa using hw.arrayWords index hindex
     assignments := by
       intro wanted hwanted
       have harray :=
@@ -1027,19 +1092,19 @@ theorem RegistryWitness.applyAbsentZeroWrites
         registryAddressFamilies_pairwise hwanted htarget.2 htarget.2
       by_cases heq : wanted = target
       · subst wanted
-        simp only [logicalStorageOfStor, applyRegistryWrites_get,
-          List.foldl_cons, List.foldl_nil]
+        rw [hread]
+        simp only [List.foldl_cons, List.foldl_nil]
         simp [Ne.symm harray.1, Ne.symm hpair.1, Ne.symm hlength.1,
           findEntry_none_assignmentAt hfind]
       · have hassignment : assignmentSlot target ≠ assignmentSlot wanted := by
           intro hslots
           exact (Ne.symm heq)
             (assignmentSlot_injective htarget.2 hwanted hslots)
-        simp only [logicalStorageOfStor, applyRegistryWrites_get,
-          List.foldl_cons, List.foldl_nil]
+        rw [hread]
+        simp only [List.foldl_cons, List.foldl_nil]
         simp [hassignment, Ne.symm harray.1, Ne.symm hpair.1,
           Ne.symm hlength.1]
-        simpa [logicalStorageOfStor] using hw.assignments wanted hwanted
+        simpa using hw.assignments wanted hwanted
     indices := by
       intro wanted hwanted
       have harray :=
@@ -1050,18 +1115,18 @@ theorem RegistryWitness.applyAbsentZeroWrites
         registryAddressFamilies_pairwise htarget.2 hwanted htarget.2
       by_cases heq : wanted = target
       · subst wanted
-        simp only [logicalStorageOfStor, applyRegistryWrites_get,
-          List.foldl_cons, List.foldl_nil]
+        rw [hread]
+        simp only [List.foldl_cons, List.foldl_nil]
         (simp [findEntry_none_oneBasedIndexAt hfind]; rfl)
       · have hindexSlot : indexSlot target ≠ indexSlot wanted := by
           intro hslots
           exact (Ne.symm heq)
             (indexSlot_injective htarget.2 hwanted hslots)
-        simp only [logicalStorageOfStor, applyRegistryWrites_get,
-          List.foldl_cons, List.foldl_nil]
+        rw [hread]
+        simp only [List.foldl_cons, List.foldl_nil]
         simp [hpair.1, Ne.symm harray.2.1, hindexSlot,
           Ne.symm hlength.2.1]
-        simpa [logicalStorageOfStor] using hw.indices wanted hwanted
+        simpa using hw.indices wanted hwanted
     counts := by
       intro wanted hwanted
       have harray :=
@@ -1070,11 +1135,11 @@ theorem RegistryWitness.applyAbsentZeroWrites
         registryAddressFamilies_ne_arrayLengthSlot htarget.2 hwanted
       have hpair :=
         registryAddressFamilies_pairwise htarget.2 htarget.2 hwanted
-      simp only [logicalStorageOfStor, applyRegistryWrites_get,
-        List.foldl_cons, List.foldl_nil]
+      rw [hread]
+      simp only [List.foldl_cons, List.foldl_nil]
       simp [hpair.2.1, hpair.2.2, Ne.symm harray.2.2,
         Ne.symm hlength.2.2]
-      simpa [logicalStorageOfStor] using hw.counts wanted hwanted
+      simpa using hw.counts wanted hwanted
     zeroCount := by
       have hzeroCanonical : canonicalAddress (0 : B256) := by
         unfold canonicalAddress
@@ -1087,12 +1152,47 @@ theorem RegistryWitness.applyAbsentZeroWrites
         registryAddressFamilies_ne_arrayLengthSlot htarget.2 hzeroCanonical
       have hpair :=
         registryAddressFamilies_pairwise htarget.2 htarget.2 hzeroCanonical
-      simp only [logicalStorageOfStor, applyRegistryWrites_get,
-        List.foldl_cons, List.foldl_nil]
+      rw [hread]
+      simp only [List.foldl_cons, List.foldl_nil]
       simp [hpair.2.1, hpair.2.2, Ne.symm harray.2.2,
         Ne.symm hlength.2.2]
-      simpa [logicalStorageOfStor] using hw.zeroCount
+      simpa using hw.zeroCount
   }
+
+/-- The absent-target/zero-pauser path restores the original witness after its
+exact append, repeated-write, tail-clear, length-restore, and index-clear trace. -/
+theorem RegistryWitness.applyAbsentZeroWrites
+    {s : Stor} {entries : List Entry}
+    (hw : RegistryWitness (logicalStorageOfStor s) entries)
+    {target : B256}
+    (htarget : nonzeroCanonicalAddress target)
+    (hfind : findEntry entries target = none) :
+    RegistryWitness
+      (logicalStorageOfStor
+        (applyRegistryWrites s
+          [(assignmentSlot target, 0),
+            (arrayEntrySlot (Nat.toB256 (entries.length + 1)), target),
+            (indexSlot target, Nat.toB256 (entries.length + 1)),
+            (arrayLengthSlot, Nat.toB256 (entries.length + 1)),
+            (arrayEntrySlot (Nat.toB256 (entries.length + 1)), target),
+            (indexSlot target, Nat.toB256 (entries.length + 1)),
+            (arrayEntrySlot (Nat.toB256 (entries.length + 1)), 0),
+            (arrayLengthSlot, Nat.toB256 entries.length),
+            (indexSlot target, 0)]))
+      entries := by
+  apply RegistryWitness.applyAbsentZeroWritesOfReadEffect hw htarget hfind
+  intro key
+  simpa only [logicalStorageOfStor] using
+    applyRegistryWrites_get s
+      [(assignmentSlot target, 0),
+        (arrayEntrySlot (Nat.toB256 (entries.length + 1)), target),
+        (indexSlot target, Nat.toB256 (entries.length + 1)),
+        (arrayLengthSlot, Nat.toB256 (entries.length + 1)),
+        (arrayEntrySlot (Nat.toB256 (entries.length + 1)), target),
+        (indexSlot target, Nat.toB256 (entries.length + 1)),
+        (arrayEntrySlot (Nat.toB256 (entries.length + 1)), 0),
+        (arrayLengthSlot, Nat.toB256 entries.length),
+        (indexSlot target, 0)] key
 
 /-- The target in the current final array entry, if any.  A found source target
 ensures this is the real final target; the zero default only defines the

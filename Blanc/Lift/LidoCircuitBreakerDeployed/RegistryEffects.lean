@@ -421,4 +421,128 @@ theorem rawRemoval_preservesRegistry
     (rawRemovalReadEffect_of_local_keys_and_writes
       hw htarget hfind hkeys hwrites)
 
+/-! ## `LocalRemovalKeys` is an instance of the unified premise
+
+Everything above this point is unchanged.  `LocalRemovalKeys` remains the
+proof-internal bundle `rawRemoval_preservesRegistry` consumes, but a caller
+no longer has to state it directly: it is now *derived* from
+`RegistryKeysFaithful`, the one premise shape §3 of the critique asked for
+(`Blanc/Lift/LidoCircuitBreakerDeployed/RegistryLayout.lean`).  A future
+bytecode-walk statement review reads one collision-freedom assumption for
+every transition, not a bespoke bundle per transition. -/
+
+/-- The seven logical keys `rawRemovalPost`'s writes touch, in write order:
+exactly `removalLogicalKey`'s seven values.  `RegistryKeysFaithful` over this
+list is what `LocalRemovalKeys` derives from. -/
+def removalWriteKeys (entries : List Entry) (target oldPauser : B256)
+    (index : Nat) : List B256 :=
+  [assignmentSlot target, countSlot oldPauser,
+    arrayEntrySlot (Nat.toB256 (index + 1)), indexSlot (sourceLastTarget entries),
+    arrayEntrySlot (Nat.toB256 entries.length), arrayLengthSlot, indexSlot target]
+
+private theorem removalRawKey_eq_solKey
+    {raw : Stor} {entries : List Entry} {target oldPauser : B256} {index : Nat}
+    (hw : RegistryWitness (solRegistryStorage raw) entries)
+    (htarget : nonzeroCanonicalAddress target)
+    (hfind : findEntry entries target = some (index, oldPauser))
+    (write : RemovalWrite) :
+    removalRawKey entries target oldPauser index write =
+      solKey (removalLogicalKey entries target oldPauser index write) := by
+  have hold : nonzeroCanonicalAddress oldPauser :=
+    hw.pausersValid (target, oldPauser) (mem_of_findEntry hfind)
+  have hfoundLt := findEntry_index_lt hfind
+  have hlengthLt := hw.entries_length_lt_2pow252
+  obtain ⟨last, hlast⟩ := last_some_of_findEntry hfind
+  have hlastValid : nonzeroCanonicalAddress last.1 :=
+    hw.targetsValid last (last_mem_of_last entries hlast)
+  have hm : nonzeroCanonicalAddress (sourceLastTarget entries) := by
+    simpa [sourceLastTarget, hlast] using hlastValid
+  cases write with
+  | assignment => simp [removalRawKey, removalLogicalKey, solKey_assignmentSlot htarget.2]
+  | count => simp [removalRawKey, removalLogicalKey, solKey_countSlot hold.2]
+  | hole =>
+    have hbound : index + 1 < 2 ^ 252 := by omega
+    simp [removalRawKey, removalLogicalKey, solKey_arrayEntrySlot hbound]
+  | movedIndex => simp [removalRawKey, removalLogicalKey, solKey_indexSlot hm.2]
+  | tail =>
+    have htailBound : entries.length - 1 + 1 < 2 ^ 252 := by omega
+    have htailEq : entries.length - 1 + 1 = entries.length := by omega
+    have h := solKey_arrayEntrySlot (index := entries.length - 1) htailBound
+    rw [htailEq] at h
+    simp only [removalRawKey, removalLogicalKey]
+    exact h.symm
+  | length => simp [removalRawKey, removalLogicalKey, solKey_arrayLengthSlot]
+  | removedIndex => simp [removalRawKey, removalLogicalKey, solKey_indexSlot htarget.2]
+
+/-- Every `LocalRemovalKeys` obligation is `RegistryKeysFaithful` read back at
+the write whose raw/logical key pair it names. -/
+theorem LocalRemovalKeys_of_registryKeysFaithful
+    {raw : Stor} {entries : List Entry} {target oldPauser : B256} {index : Nat}
+    (hw : RegistryWitness (solRegistryStorage raw) entries)
+    (htarget : nonzeroCanonicalAddress target)
+    (hfind : findEntry entries target = some (index, oldPauser))
+    (hfaithful : RegistryKeysFaithful entries.length
+      (removalWriteKeys entries target oldPauser index)) :
+    LocalRemovalKeys entries target oldPauser index := by
+  have hcorr : ∀ {rawKey logicalKey : B256},
+      RegistryObservable entries.length logicalKey → rawKey = solKey logicalKey →
+      RemovalKeyCorrespondence entries target oldPauser index rawKey logicalKey := by
+    intro rawKey logicalKey hobs hrawKey write
+    have hrw := removalRawKey_eq_solKey hw htarget hfind write
+    have hmem : removalLogicalKey entries target oldPauser index write ∈
+        removalWriteKeys entries target oldPauser index := by
+      cases write <;> simp [removalWriteKeys, removalLogicalKey]
+    constructor
+    · intro h
+      apply hfaithful _ hmem logicalKey hobs
+      rw [← hrawKey, h]
+      exact hrw
+    · intro h
+      rw [hrawKey, h]
+      exact hrw.symm
+  have hlengthLt := hw.entries_length_lt_2pow252
+  refine {
+    assignments := fun probe hprobe =>
+      hcorr (Or.inl ⟨probe, hprobe, rfl⟩) (solKey_assignmentSlot hprobe).symm
+    indices := fun probe hprobe =>
+      hcorr (Or.inr (Or.inl ⟨probe, hprobe, rfl⟩)) (solKey_indexSlot hprobe).symm
+    counts := fun probe hprobe =>
+      hcorr (Or.inr (Or.inr (Or.inl ⟨probe, hprobe, rfl⟩))) (solKey_countSlot hprobe).symm
+    length :=
+      hcorr (Or.inr (Or.inr (Or.inr (Or.inl rfl)))) solKey_arrayLengthSlot.symm
+    array := fun probe hprobe => ?_ }
+  have hbound : probe + 1 < 2 ^ 252 := by omega
+  exact hcorr (Or.inr (Or.inr (Or.inr (Or.inr ⟨probe, hprobe, rfl⟩))))
+    (solKey_arrayEntrySlot hbound).symm
+
+/-- The raw seven-write pointwise effect, from the unified premise directly
+(no `LocalRemovalKeys` to state). -/
+theorem rawRemovalReadEffect_of_registryKeysFaithful
+    {raw : Stor} {entries : List Entry} {target oldPauser : B256} {index : Nat}
+    (hw : RegistryWitness (solRegistryStorage raw) entries)
+    (htarget : nonzeroCanonicalAddress target)
+    (hfind : findEntry entries target = some (index, oldPauser))
+    (hfaithful : RegistryKeysFaithful entries.length
+      (removalWriteKeys entries target oldPauser index)) :
+    RawRemovalReadEffect raw
+      (rawRemovalPost raw entries target oldPauser index)
+      entries target oldPauser index :=
+  rawRemovalReadEffect_of_local_keys hw htarget hfind
+    (LocalRemovalKeys_of_registryKeysFaithful hw htarget hfind hfaithful)
+
+/-- `rawRemoval_preservesRegistry`, stated over the unified premise. -/
+theorem rawRemoval_preservesRegistry_of_registryKeysFaithful
+    {before after : Stor} {entries : List Entry} {target oldPauser : B256} {index : Nat}
+    (hw : RegistryWitness (solRegistryStorage before) entries)
+    (htarget : nonzeroCanonicalAddress target)
+    (hfind : findEntry entries target = some (index, oldPauser))
+    (hfaithful : RegistryKeysFaithful entries.length
+      (removalWriteKeys entries target oldPauser index))
+    (hwrites : ∀ key, after.get key =
+      (rawRemovalPost before entries target oldPauser index).get key) :
+    RegistryWitness (solRegistryStorage after) (swapPop entries index) :=
+  RawRemovalReadEffect.preservesRegistry hw htarget hfind
+    { rawRemovalReadEffect_of_registryKeysFaithful hw htarget hfind hfaithful with
+      writes := hwrites }
+
 end Blanc.Lift.LidoCircuitBreakerDeployed

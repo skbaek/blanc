@@ -4,12 +4,13 @@ import Blanc.Lift.ExactWalkCutOps
 import Blanc.ForwardCall
 
 /-!
-# More walk steps: `CALLER`, `KECCAK256`, `LOG3`, selected `SSTORE`
+# More walk steps: `CALLER`, `KECCAK256`, `LOG3`/`LOG4`, selected `SSTORE`
 
 Forward (`rx_*`) and inverse (`ri_*`) steps the solc walks did not need: `CALLER`
 (`rx_caller`, `ri_caller`), `KECCAK256` inverted (`ri_keccak`; forward `rx_keccak` is in
-`ExactWalk.lean`), a three-topic `LOG3` (`rx_log3`, `ri_log3`), and `SSTORE` forward at its
-selected cost (`rx_sstore`; inverse `ri_sstore` is in `InvWalk.lean`).
+`ExactWalk.lean`), a three-topic `LOG3` (`rx_log3`, `ri_log3`), a four-topic `LOG4`
+inverted (`ri_log4`), and `SSTORE` forward at its selected cost (`rx_sstore`; inverse
+`ri_sstore` is in `InvWalk.lean`).
 
 Nothing here mentions a contract.
 -/
@@ -87,6 +88,30 @@ theorem ri_log3 {i sz t1 t2 t3 : B256} {d : Devm}
   simp only [Except.bind_ok] at run
   rw [show (St b (t1 :: t2 :: t3 :: S) M G).popN ((3 : Fin 5) : Nat) =
     .ok ([t1, t2, t3], St b S M G) from rfl] at run
+  simp only [Except.bind_ok] at run
+  rcases Except.bind_eq_ok run with ⟨s1, h1, h2⟩
+  rcases Except.bind_eq_ok h2 with ⟨_, -, h3⟩
+  cases h3
+  have e1 := Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas h1)
+  refine ⟨s1.gasLeft, ?_⟩
+  rw [e1]
+  rfl
+
+/-- `LOG4`, inverted. -/
+theorem ri_log4 {i sz t1 t2 t3 t4 : B256} {d : Devm}
+    (h : Ninst.Run sevm (St b (i :: sz :: t1 :: t2 :: t3 :: t4 :: S) M G) (.reg (.log 4)) d) :
+    ∃ G', d = St (b.addLog ⟨sevm.currentTarget, [t1, t2, t3, t4], (M.read i.toNat sz.toNat).1⟩)
+      S (M.read i.toNat sz.toNat).2 G' := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  rw [show (St b (i :: sz :: t1 :: t2 :: t3 :: t4 :: S) M G).popToNat =
+    .ok (i.toNat, St b (sz :: t1 :: t2 :: t3 :: t4 :: S) M G) from rfl] at run
+  simp only [Except.bind_ok] at run
+  rw [show (St b (sz :: t1 :: t2 :: t3 :: t4 :: S) M G).popToNat =
+    .ok (sz.toNat, St b (t1 :: t2 :: t3 :: t4 :: S) M G) from rfl] at run
+  simp only [Except.bind_ok] at run
+  rw [show (St b (t1 :: t2 :: t3 :: t4 :: S) M G).popN ((4 : Fin 5) : Nat) =
+    .ok ([t1, t2, t3, t4], St b S M G) from rfl] at run
   simp only [Except.bind_ok] at run
   rcases Except.bind_eq_ok run with ⟨s1, h1, h2⟩
   rcases Except.bind_eq_ok h2 with ⟨_, -, h3⟩

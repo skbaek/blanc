@@ -1,6 +1,7 @@
 import Blanc.LidoCircuitBreakerRegistry
 import Blanc.CycleWriteFree
 import Blanc.TransientSettlement
+import Blanc.AddressSlotProofs
 
 /-! Pure ABI layout and bounded-offset facts for Registry enumeration. -/
 
@@ -1222,30 +1223,12 @@ theorem enumeration_writing_mutant_certificate_rejected :
   rw [enumeration_writing_mutant_rejected] at hbool
   contradiction
 
+/-- Wraps the moved, contract-neutral `addressMask_and_eq_zero_of_lt`
+(`Blanc/AddressSlotProofs.lean`): `canonicalAddress` unfolds to exactly its
+`word.toNat < 2 ^ 160` premise. -/
 theorem canonicalAddress_mask_zero {word : B256}
-    (h : canonicalAddress word) : addressMask &&& word = 0 := by
-  rw [← validAdr_iff]
-  rcases word with ⟨⟨wz, wh⟩, wl⟩
-  have hword := B256.toNat_eq ((wz, wh), wl)
-  have hhigh := B128.toNat_eq (wz, wh)
-  have hlt : B256.toNat ((wz, wh), wl) < 2 ^ 160 := h
-  dsimp only at hword hhigh
-  have hzNat : wz.toNat = 0 := by
-    have hwh := UInt64.toNat_lt wh
-    have hwl := B128.toNat_lt (x := wl)
-    omega
-  have hwhLt : wh.toNat < 2 ^ 32 := by
-    have hwz := UInt64.toNat_lt wz
-    have hwl := B128.toNat_lt (x := wl)
-    omega
-  have hz : wz = 0 := by
-    apply UInt64.toNat_inj.mp
-    simpa using hzNat
-  have hwh : wh.toUInt32.toUInt64 = wh := by
-    apply UInt64.toNat_inj.mp
-    simp only [UInt32.toNat_toUInt64, UInt64.toNat_toUInt32]
-    rw [Nat.mod_eq_of_lt hwhLt]
-  exact ⟨⟨wh.toUInt32, wl⟩, by simp [Adr.toB256, hz, hwh]; rfl⟩
+    (h : canonicalAddress word) : addressMask &&& word = 0 :=
+  addressMask_and_eq_zero_of_lt h
 
 def registryScalarBodyGasWarm : Nat := 179
 
