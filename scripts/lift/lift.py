@@ -13,7 +13,10 @@ Plans evidence (`solc-bytecode-v1/w3/lift.py`, `beacon-deposit-bytecode-v1/w0/li
 (`deployed-lido-vyper-v1/certificate/generate.py`: PUSH0, TLOAD/TSTORE, SLT,
 EXTCODESIZE, compatible-join repair, join-aware call continuations).  The two
 exploration differences of the solc-w3 fork are options (`--no-join-entries`,
-`--wrapper-order fall-first`), not code paths per contract.
+`--wrapper-order fall-first`), not code paths per contract.  `--fold` (registry
+option `"fold": true`) folds ADD, MUL, SUB, LT, GT, EQ and ISZERO over constant
+operands exactly as `foldConst` in `Blanc/Lift/Check.lean`; off by default, so
+every certificate registered without it regenerates byte-identically.
 
 Supported opcodes.  `LEAN_REG` maps each regular opcode the producer may emit to
 its Lean `Ninst`; every row is checked, on each run, against the arms of
@@ -274,6 +277,8 @@ def run_registry(args: argparse.Namespace) -> int:
                 argv.append("--no-join-entries")
             if "wrapper_order" in opts:
                 argv += ["--wrapper-order", opts["wrapper_order"]]
+            if opts.get("fold") is True:
+                argv.append("--fold")
             if "header" in row:
                 argv += ["--header", row["header"]]
             check = row.get("check")
@@ -336,6 +341,8 @@ parser.add_argument("--no-join-entries", action="store_true",
                     help="do not promote multi-predecessor JUMPDESTs to join entries (solc-w3 exploration)")
 parser.add_argument("--wrapper-order", choices=("taken-first", "fall-first"), default="taken-first",
                     help="build order of a dispatcher selector branch (fall-first: solc-w3 exploration)")
+parser.add_argument("--fold", action="store_true",
+                    help="fold ADD/MUL/SUB/LT/GT/EQ/ISZERO over constant operands (mirror of foldConst)")
 parser.add_argument("--report-dir", type=Path, default=None, help="also write cert.json/cfg.json diagnostics here")
 
 args = parser.parse_args()
@@ -397,6 +404,16 @@ back_edges: List[Dict[str, Any]] = []
 external_calls: List[Dict[str, Any]] = []
 
 # 3. Abstract state transfer (mirror of absNinst)
+W256 = 1 << 256
+# foldConst's binary ops; x = top of stack, y = second (Jaune's applyBinary order)
+FOLD2 = {
+    0x01: lambda x, y: x + y,               # ADD
+    0x02: lambda x, y: x * y,               # MUL
+    0x03: lambda x, y: x - y,               # SUB
+    0x10: lambda x, y: 1 if x < y else 0,   # LT
+    0x11: lambda x, y: 1 if x > y else 0,   # GT
+    0x14: lambda x, y: 1 if x == y else 0,  # EQ
+}
 def step_inst(op: int, data: bytes, stack: List[Tuple[Any, ...]], cur_pc: Optional[int] = None) -> Optional[List[Tuple[Any, ...]]]:
     # Check if opcode is supported in the checker model
     if op not in BASE_SUPPORTED_OPS:
@@ -425,13 +442,19 @@ def step_inst(op: int, data: bytes, stack: List[Tuple[Any, ...]], cur_pc: Option
         return st
     elif op in (0x01, 0x02, 0x03, 0x04, 0x0a, 0x10, 0x11, 0x14, 0x16, 0x1c, 0x20): # 2 -> 1
         if len(st) < 2: return None
-        st.pop(0); st.pop(0)
-        st.insert(0, ('unk',))
+        x, y = st.pop(0), st.pop(0)
+        if args.fold and op in FOLD2 and x[0] == 'const' and y[0] == 'const':
+            st.insert(0, ('const', FOLD2[op](x[1], y[1]) % W256))
+        else:
+            st.insert(0, ('unk',))
         return st
     elif op in (0x15, 0x19, 0x31, 0x35, 0x51, 0x54): # 1 -> 1
         if len(st) < 1: return None
-        st.pop(0)
-        st.insert(0, ('unk',))
+        x = st.pop(0)
+        if args.fold and op == 0x15 and x[0] == 'const':
+            st.insert(0, ('const', 1 if x[1] == 0 else 0))
+        else:
+            st.insert(0, ('unk',))
         return st
     elif op in (0x30, 0x32, 0x33, 0x34, 0x36, 0x42, 0x5a): # 0 -> 1
         st.insert(0, ('unk',))

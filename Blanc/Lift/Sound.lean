@@ -129,7 +129,8 @@ lemma absNinst_nonpush_eq {n : Ninst} {a : List AVal}
       (do
         guard (a.length ≤ 1024)
         let out ← ninstTransfer n (indexPattern a.length)
-        out.mapM (readBack a)) := by
+        let a0 ← out.mapM (readBack a)
+        pure (foldTop (foldConst n a) a0)) := by
   cases n with
   | push bs fits => exact (hn bs fits rfl).elim
   | reg r => rfl
@@ -141,9 +142,9 @@ lemma absNinst_nonpush_eq {n : Ninst} {a : List AVal}
 lemma absNinst_nonpush_spec {n : Ninst} {a a' : List AVal}
     (hn : ∀ (bs : Bytes) (fits : bs.length ≤ 32), n ≠ .push bs fits)
     (h : absNinst n a = some a') :
-    a.length ≤ 1024 ∧ ∃ out,
+    a.length ≤ 1024 ∧ ∃ out a0,
       ninstTransfer n (indexPattern a.length) = some out ∧
-      out.mapM (readBack a) = some a' := by
+      out.mapM (readBack a) = some a0 ∧ a' = foldTop (foldConst n a) a0 := by
   rw [absNinst_nonpush_eq hn] at h
   by_cases hlen : a.length ≤ 1024
   · cases ht : ninstTransfer n (indexPattern a.length) with
@@ -153,8 +154,7 @@ lemma absNinst_nonpush_spec {n : Ninst} {a a' : List AVal}
       | none => simp [hlen, ht, hr] at h
       | some a'' =>
         simp [hlen, ht, hr] at h
-        cases h
-        exact ⟨hlen, out, by simpa using ht, hr⟩
+        exact ⟨hlen, out, a'', by simpa using ht, hr, h.symm⟩
   · simp [hlen] at h
 
 lemma cert_pair_mem : ∀ (c : Cert) (k : Nat) (e : Entry) (f : SFunc),
@@ -491,6 +491,113 @@ lemma push_run_stack {sevm : Sevm} {pre inter : Devm} {bs : Bytes}
     rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hstep
     cases hstep.1
 
+/-! ### Folded instructions -/
+
+lemma applyBinary_top {f : B256 → B256 → B256} {cost : Nat} {pre inter : Devm}
+    {x y : B256} {rest : List B256}
+    (h : applyBinary f cost pre = .ok inter) (hs : pre.stack = x :: y :: rest) :
+    inter.stack = f x y :: rest := by
+  obtain ⟨x', y', hd⟩ := Devm.diffBurn_of_applyBinary h
+  obtain ⟨s1, hpop, hpush⟩ := hd.stack
+  simp only [Stack.Pop, Stack.Push, Split, List.cons_append, List.nil_append] at hpop hpush
+  rw [hs] at hpop
+  simp only [List.cons.injEq] at hpop
+  obtain ⟨rfl, rfl, rfl⟩ := hpop
+  exact hpush
+
+lemma applyUnary_top {f : B256 → B256} {cost : Nat} {pre inter : Devm}
+    {x : B256} {rest : List B256}
+    (h : applyUnary f cost pre = .ok inter) (hs : pre.stack = x :: rest) :
+    inter.stack = f x :: rest := by
+  obtain ⟨x', hd⟩ := Devm.diffBurn_of_applyUnary h
+  obtain ⟨s1, hpop, hpush⟩ := hd.stack
+  simp only [Stack.Pop, Stack.Push, Split, List.cons_append, List.nil_append] at hpop hpush
+  rw [hs] at hpop
+  simp only [List.cons.injEq] at hpop
+  obtain ⟨rfl, rfl⟩ := hpop
+  exact hpush
+
+/-- A successful step of a folded instruction, from a stack its frame
+describes, leaves the folded constant on top. -/
+lemma foldConst_run {sevm : Sevm} {pre inter : Devm} {n : Ninst} {a : List AVal}
+    {c ρ : B256} {S base : List B256}
+    (hf : foldConst n a = some c) (hframe : FrameMatches ρ a S)
+    (hstack : pre.stack = S ++ base) (run : Ninst.Run sevm pre n inter) :
+    ∃ rest, inter.stack = c :: rest := by
+  unfold foldConst at hf
+  split at hf
+  all_goals first
+    | (cases hf; done)
+    | skip
+  all_goals
+    first
+    | (simp at hf; done)
+    | skip
+  all_goals
+    cases hf
+    rcases of_run_reg run with ⟨pc, r⟩
+    simp only [Rinst.run, Rinst.runCore] at r
+  · rcases hframe with _ | ⟨h0, _ | ⟨h1, _⟩⟩
+    simp only [AVal.Matches] at h0 h1
+    subst h0; subst h1
+    exact ⟨_, applyBinary_top r (by simpa using hstack)⟩
+  · rcases hframe with _ | ⟨h0, _ | ⟨h1, _⟩⟩
+    simp only [AVal.Matches] at h0 h1
+    subst h0; subst h1
+    exact ⟨_, applyBinary_top r (by simpa using hstack)⟩
+  · rcases hframe with _ | ⟨h0, _ | ⟨h1, _⟩⟩
+    simp only [AVal.Matches] at h0 h1
+    subst h0; subst h1
+    exact ⟨_, applyBinary_top r (by simpa using hstack)⟩
+  · rcases hframe with _ | ⟨h0, _ | ⟨h1, _⟩⟩
+    simp only [AVal.Matches] at h0 h1
+    subst h0; subst h1
+    exact ⟨_, applyBinary_top r (by simpa using hstack)⟩
+  · rcases hframe with _ | ⟨h0, _ | ⟨h1, _⟩⟩
+    simp only [AVal.Matches] at h0 h1
+    subst h0; subst h1
+    exact ⟨_, applyBinary_top r (by simpa using hstack)⟩
+  · rcases hframe with _ | ⟨h0, _ | ⟨h1, _⟩⟩
+    simp only [AVal.Matches] at h0 h1
+    subst h0; subst h1
+    exact ⟨_, applyBinary_top r (by simpa using hstack)⟩
+  · rcases hframe with _ | ⟨h0, _⟩
+    simp only [AVal.Matches] at h0
+    subst h0
+    exact ⟨_, applyUnary_top (f := fun x => B256.eqCheck x 0) r (by simpa using hstack)⟩
+
+/-- The folded frame still describes the successor stack. -/
+lemma frameMatches_foldTop {sevm : Sevm} {pre inter : Devm} {n : Ninst}
+    {a a0 : List AVal} {ρ : B256} {S S' base : List B256}
+    (hframe : FrameMatches ρ a S) (hstack : pre.stack = S ++ base)
+    (run : Ninst.Run sevm pre n inter) (hinter : inter.stack = S' ++ base)
+    (h0 : FrameMatches ρ a0 S') :
+    FrameMatches ρ (foldTop (foldConst n a) a0) S' := by
+  cases hf : foldConst n a with
+  | none => cases a0 <;> exact h0
+  | some c =>
+    obtain ⟨rest, hr⟩ := foldConst_run hf hframe hstack run
+    cases h0 with
+    | nil => exact List.Forall₂.nil
+    | @cons v w t T hv ht =>
+      refine List.Forall₂.cons ?_ ht
+      have hw : w = c := by
+        have := hinter.symm.trans hr
+        simp only [List.cons_append, List.cons.injEq] at this
+        exact this.1
+      exact hw
+
+lemma ret_mem_of_foldTop {v : Option B256} {a0 : List AVal}
+    (h : AVal.ret ∈ foldTop v a0) : AVal.ret ∈ a0 := by
+  cases v with
+  | none => cases a0 <;> exact h
+  | some c =>
+    cases a0 with
+    | nil => exact h
+    | cons x t =>
+      simp only [foldTop, List.mem_cons, reduceCtorEq, false_or] at h
+      exact List.mem_cons_of_mem _ h
+
 /-! ### Where a lifted step's child derivation sits -/
 
 /-- A child derivation all of whose raw frame roots are raw frame roots of the
@@ -816,10 +923,11 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
         exact hbyte
       exact Or.inl (SFunc.RunP.last (Linst.run_of_at exc h_at))
     | next n f =>
-      have next_nonpush (n : Ninst) (a' : List AVal) (out : Pattern)
+      have next_nonpush (n : Ninst) (a0 a' : List AVal) (out : Pattern)
           (hlen : a.length ≤ 1024)
           (htrans : ninstTransfer n (indexPattern a.length) = some out)
-          (hread : out.mapM (readBack a) = some a')
+          (hread : out.mapM (readBack a) = some a0)
+          (hfold : a' = foldTop (foldConst n a) a0)
           (hchild : checkNode code c.entries m (pc + n.size) a' f = true)
           (h_at : Ninst.At sevm.code pc n) :
           SFunc.RunP (StepIn R) c.prog sevm devm (.next n f) (.halted post) ∨
@@ -852,7 +960,9 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
         have hbelow' : below = base := matches_some_map_eq hbelow
         have hinter : inter.stack = S' ++ base := by
           simpa [hbelow'] using hsp
-        have hframe' : FrameMatches ρ a' S' := matches_to_frame hfirst
+        have hframe' : FrameMatches ρ a' S' := by
+          rw [hfold]
+          exact frameMatches_foldTop hframe hstack run hinter (matches_to_frame hfirst)
         have hrun := ih
           ⟨pc + n.size, sevm, inter, .ok post, exc'⟩
           (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a' f ρ S' base
@@ -861,7 +971,8 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
         | inl run' => exact Or.inl (SFunc.RunP.next runS run')
         | inr run' =>
           rcases run' with ⟨hret, devm', Sret, exc'', hlt, run', hst, hlen'⟩
-          have hret' : AVal.ret ∈ a := ret_mem_of_readBack hread hret
+          have hret' : AVal.ret ∈ a :=
+            ret_mem_of_readBack hread (ret_mem_of_foldTop (hfold ▸ hret))
           exact Or.inr ⟨hret', devm', Sret, exc'',
             deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
             SFunc.RunP.next runS run', hst, hlen'⟩
@@ -891,8 +1002,8 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
           have hchild : checkNode code c.entries m (pc + n.size) a' f = true := by
             simpa [ha] using hrest
           rcases absNinst_nonpush_spec hnpush ha with
-            ⟨hlen, out, htrans, hread⟩
-          exact next_nonpush n a' out hlen htrans hread hchild h_at
+            ⟨hlen, out, a0, htrans, hread, hfold⟩
+          exact next_nonpush n a0 a' out hlen htrans hread hfold hchild h_at
       cases n with
       | push bs fits =>
         have hcheck' :

@@ -61,16 +61,37 @@ def readBack (frame : List AVal) : Option B256 → Option AVal
   | none => some .unk
   | some i => frame[i.toNat]?
 
+/-- The word a folded instruction leaves on top when its operands are known
+constants: Jaune's own operation, top of stack first (`applyBinary f` computes
+`f top second`).  Only these seven instructions fold. -/
+def foldConst : Ninst → List AVal → Option B256
+  | .reg .add, .const x :: .const y :: _ => some (x + y)
+  | .reg .mul, .const x :: .const y :: _ => some (x * y)
+  | .reg .sub, .const x :: .const y :: _ => some (x - y)
+  | .reg .lt, .const x :: .const y :: _ => some (B256.ltCheck x y)
+  | .reg .gt, .const x :: .const y :: _ => some (B256.gtCheck x y)
+  | .reg .eq, .const x :: .const y :: _ => some (B256.eqCheck x y)
+  | .reg .iszero, .const x :: _ => some (B256.eqCheck x 0)
+  | _, _ => none
+
+/-- Replace the top word of a transferred frame by a folded constant. -/
+def foldTop : Option B256 → List AVal → List AVal
+  | some c, _ :: a => .const c :: a
+  | _, a => a
+
 /-- The abstract effect of one non-jump instruction on a frame.  Frames longer
 than the EVM's 1024-word stack are rejected: beyond that, index labels would
-alias modulo `2 ^ 256`. -/
+alias modulo `2 ^ 256`.  A folded instruction (`foldConst`) over constant
+operands leaves its constant result; the fold only refines an `.unk`, so it
+never rejects a tree the unfolded transfer accepts. -/
 def absNinst (n : Ninst) (frame : List AVal) : Option (List AVal) :=
   match n with
   | .push bs _ => some (.const (Bytes.toB256 bs) :: frame)
   | n => do
     guard (frame.length ≤ 1024)
     let out ← ninstTransfer n (indexPattern frame.length)
-    out.mapM (readBack frame)
+    let a' ← out.mapM (readBack frame)
+    pure (foldTop (foldConst n frame) a')
 
 /-- A goto target's declared frame admits the current frame. -/
 def gotoCompat : List AVal → List AVal → Bool

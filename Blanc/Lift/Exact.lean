@@ -584,10 +584,11 @@ theorem node_exact {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
       intro pc m a ρ S base hcheck hjump hstack hframe hρ
       rcases hrun with ⟨xl, hfilled, hsteps⟩
       have hrunN : Ninst.Run sevm devm n devm' := ⟨xl, hfilled, 0, hsteps 0⟩
-      have next_nonpush (n0 : Ninst) (a0 : List AVal) (out : Pattern)
+      have next_nonpush (n0 : Ninst) (a1 a0 : List AVal) (out : Pattern)
           (hlen : a.length ≤ 1024)
           (htrans : ninstTransfer n0 (indexPattern a.length) = some out)
-          (hread : out.mapM (readBack a) = some a0)
+          (hread : out.mapM (readBack a) = some a1)
+          (hfold : a0 = foldTop (foldConst n0 a) a1)
           (hchild : checkNode code c.entries m (pc + n0.size) a0 f = true)
           (hjump0 : jumpsOkNode code c.entries f a0 = true)
           (hstep0 : Ninst.StepRun pc sevm devm n0 xl (.ok devm'))
@@ -611,10 +612,15 @@ theorem node_exact {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
         have hbelow' : below = base := matches_some_map_eq hbelow
         have hinter : devm'.stack = S' ++ base := by
           simpa [hbelow'] using hsp
-        have hframe' : FrameMatches ρ a0 S' := matches_to_frame hfirst
+        have hframe' : FrameMatches ρ a0 S' := by
+          rw [hfold]
+          exact frameMatches_foldTop hframe hstack ⟨xl, hfilled, pc, hstep0⟩ hinter
+            (matches_to_frame hfirst)
+        have hret0 : AVal.ret ∈ a0 → AVal.ret ∈ a := fun h =>
+          ret_mem_of_readBack hread (ret_mem_of_foldTop (hfold ▸ h))
         have hρ' : AVal.ret ∈ a0 → jumpdestOk code ρ.toNat = true := by
           intro h
-          exact hρ (ret_mem_of_readBack hread h)
+          exact hρ (hret0 h)
         have hrec := ih (pc + n0.size) m a0 ρ S' base
           hchild hjump0 hinter hframe' hρ'
         cases o with
@@ -623,7 +629,7 @@ theorem node_exact {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
           exact Ninst.exec_of_stepRun h_at hfilled hstep0 ⟨exc⟩
         | returned devm'' =>
           rcases hrec with ⟨hret, Sret, hst, hlenret, hcont⟩
-          have hret' : AVal.ret ∈ a := ret_mem_of_readBack hread hret
+          have hret' : AVal.ret ∈ a := hret0 hret
           refine ⟨hret', Sret, hst, hlenret, ?_⟩
           intro r hr
           rcases hcont hr with ⟨exc⟩
@@ -675,10 +681,10 @@ theorem node_exact {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
             simpa [ha] using hcheck.2
           rcases absNinst_nonpush_spec (by
             intro bs fits h
-            cases h) ha with ⟨hlen, out, htrans, hread⟩
+            cases h) ha with ⟨hlen, out, a1, htrans, hread, hfold⟩
           have hjump' : jumpsOkNode code c.entries f a0 = true := by
             simpa [jumpsOkNode, ha] using hjump
-          exact next_nonpush (Ninst.reg r) a0 out hlen htrans hread hchild hjump'
+          exact next_nonpush (Ninst.reg r) a1 a0 out hlen htrans hread hfold hchild hjump'
             (hsteps pc) h_at
       | exec x =>
         simp only [checkNode, Bool.and_eq_true] at hcheck
@@ -694,10 +700,10 @@ theorem node_exact {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
             simpa [ha] using hcheck.2
           rcases absNinst_nonpush_spec (by
             intro bs fits h
-            cases h) ha with ⟨hlen, out, htrans, hread⟩
+            cases h) ha with ⟨hlen, out, a1, htrans, hread, hfold⟩
           have hjump' : jumpsOkNode code c.entries f a0 = true := by
             simpa [jumpsOkNode, ha] using hjump
-          exact next_nonpush (Ninst.exec x) a0 out hlen htrans hread hchild hjump'
+          exact next_nonpush (Ninst.exec x) a1 a0 out hlen htrans hread hfold hchild hjump'
             (hsteps pc) h_at
       | dupn i =>
         simp only [checkNode, Bool.and_eq_true] at hcheck
@@ -713,10 +719,10 @@ theorem node_exact {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
             simpa [ha] using hcheck.2
           rcases absNinst_nonpush_spec (by
             intro bs fits h
-            cases h) ha with ⟨hlen, out, htrans, hread⟩
+            cases h) ha with ⟨hlen, out, a1, htrans, hread, hfold⟩
           have hjump' : jumpsOkNode code c.entries f a0 = true := by
             simpa [jumpsOkNode, ha] using hjump
-          exact next_nonpush (Ninst.dupn i) a0 out hlen htrans hread hchild hjump'
+          exact next_nonpush (Ninst.dupn i) a1 a0 out hlen htrans hread hfold hchild hjump'
             (hsteps pc) h_at
       | swapn i =>
         simp only [checkNode, Bool.and_eq_true] at hcheck
@@ -732,10 +738,10 @@ theorem node_exact {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
             simpa [ha] using hcheck.2
           rcases absNinst_nonpush_spec (by
             intro bs fits h
-            cases h) ha with ⟨hlen, out, htrans, hread⟩
+            cases h) ha with ⟨hlen, out, a1, htrans, hread, hfold⟩
           have hjump' : jumpsOkNode code c.entries f a0 = true := by
             simpa [jumpsOkNode, ha] using hjump
-          exact next_nonpush (Ninst.swapn i) a0 out hlen htrans hread hchild hjump'
+          exact next_nonpush (Ninst.swapn i) a1 a0 out hlen htrans hread hfold hchild hjump'
             (hsteps pc) h_at
       | exchange i =>
         simp only [checkNode, Bool.and_eq_true] at hcheck
@@ -751,10 +757,10 @@ theorem node_exact {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
             simpa [ha] using hcheck.2
           rcases absNinst_nonpush_spec (by
             intro bs fits h
-            cases h) ha with ⟨hlen, out, htrans, hread⟩
+            cases h) ha with ⟨hlen, out, a1, htrans, hread, hfold⟩
           have hjump' : jumpsOkNode code c.entries f a0 = true := by
             simpa [jumpsOkNode, ha] using hjump
-          exact next_nonpush (Ninst.exchange i) a0 out hlen htrans hread hchild hjump'
+          exact next_nonpush (Ninst.exchange i) a1 a0 out hlen htrans hread hfold hchild hjump'
             (hsteps pc) h_at)
     (fun {devm devm' f o} hburn hrun ih => by
       intro pc m a ρ S base hcheck hjump hstack hframe hρ
