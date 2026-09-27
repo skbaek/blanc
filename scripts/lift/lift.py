@@ -2080,10 +2080,8 @@ def literal_tries_lines(depth: int) -> List[str]:
                 "  kernel_rfl", ""]
     out += [
         f"def codeTries : CodeTries code {depth} :=",
-        "  { bytes := bytesTrie",
-        "    starts := startsTrie",
-        f"    bytes_eq := fun i => by rw [bytesTrie_eq]; exact LTrie.get?_ofList {depth} _ (by decide +kernel) i",
-        f"    starts_eq := fun i => by rw [startsTrie_eq, LTrie.get?_ofList {depth} _ (by decide +kernel) i]; rfl }}",
+        f"  CodeTries.ofData code {depth} bytesTrie startsTrie bytesTrie_eq startsTrie_eq",
+        "    (by decide +kernel) (by decide +kernel)",
         "",
     ]
     return out
@@ -2111,7 +2109,7 @@ def check_source() -> Any:
         "",
     ])
     if args.check_literal_tries and args.check_parts < 2:
-        lines.insert(2, "import Blanc.ConcreteRun")
+        lines[2:2] = ["import Blanc.Lift.CodeTriesData", "import Blanc.ConcreteRun"]
     if MEMRET:
         return check_source_mem(lines)
     blocks = []
@@ -2160,7 +2158,8 @@ def split_check(head: List[str], blocks: List[List[str]], assembly: List[str]) -
         split = next(k for k, l in enumerate(lines) if l.startswith("/-- Depth "))
         preamble = lines[2:split]  # from the blank line after the imports
         tries = ([f"import {ns}.Cert", "import Blanc.Lift.CheckFast"] +
-                 (["import Blanc.ConcreteRun"] if args.check_literal_tries else []) + preamble + lines[split:])
+                 (["import Blanc.Lift.CodeTriesData", "import Blanc.ConcreteRun"] if args.check_literal_tries else []) +
+                 preamble + lines[split:])
         tries += [f"end {ns}", ""]
         files["CheckTries"] = "\n".join(tries)
         bounds = check_part_bounds(n, args.check_parts)
