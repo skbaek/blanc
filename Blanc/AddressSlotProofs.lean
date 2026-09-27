@@ -61,7 +61,14 @@ theorem addressSlotReadWord_write_of_clean (raw clean : B256)
     addressSlotReadWord (addressSlotWriteWord raw clean) = clean := by
   have hcomponent (m x v : UInt64) (hv : (~~~m) &&& v = v) :
       (~~~m) &&& ((m &&& x) ||| v) = v := by
-    bv_decide
+    apply UInt64.toBitVec_inj.mp
+    have hv' := congrArg UInt64.toBitVec hv
+    simp only [UInt64.toBitVec_and, UInt64.toBitVec_not] at hv'
+    simp only [UInt64.toBitVec_and, UInt64.toBitVec_or,
+      UInt64.toBitVec_not]
+    rw [BitVec.and_or_distrib_left, ← BitVec.and_assoc,
+      BitVec.not_and_self]
+    simp [hv']
   unfold addressSlotReadWord at hclean ⊢
   unfold addressSlotWriteWord
   rcases hmask : addressMask with ⟨⟨m0, m1⟩, ⟨m2, m3⟩⟩

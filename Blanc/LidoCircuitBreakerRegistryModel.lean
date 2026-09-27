@@ -337,6 +337,26 @@ theorem findEntry_index_lt {entries target index pauser}
             obtain ⟨rfl, rfl⟩ := h
             exact Nat.succ_lt_succ (ih hfind)
 
+/-- A successful Registry lookup returns an entry from the source list. -/
+theorem mem_of_findEntry {entries : List Entry} {target : B256}
+    {index : Nat} {pauser : B256}
+    (h : findEntry entries target = some (index, pauser)) :
+    (target, pauser) ∈ entries := by
+  induction entries generalizing index pauser with
+  | nil => simp [findEntry] at h
+  | cons entry rest ih =>
+      by_cases heq : entry.1 = target
+      · simp [findEntry, heq] at h
+        obtain ⟨rfl, rfl⟩ := h
+        simp [← heq]
+      · cases hrest : findEntry rest target with
+        | none => simp [findEntry, heq, hrest] at h
+        | some found =>
+            obtain ⟨foundIndex, foundPauser⟩ := found
+            simp [findEntry, heq, hrest] at h
+            obtain ⟨rfl, rfl⟩ := h
+            exact List.mem_cons_of_mem entry (ih hrest)
+
 theorem assignmentCount_pos_of_findEntry {entries target index pauser}
     (h : findEntry entries target = some (index, pauser)) :
     0 < assignmentCount entries pauser := by

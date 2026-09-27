@@ -600,25 +600,6 @@ theorem applyRegistryWrites_get (s : Stor) (writes : List RegistryWrite)
       · rw [if_pos h, ← h, Stor.get_set_self]
       · rw [if_neg h, Stor.get_set_ne s h write.2]
 
-private theorem mem_of_findEntry {entries : List Entry} {target : B256}
-    {index : Nat} {pauser : B256}
-    (h : findEntry entries target = some (index, pauser)) :
-    (target, pauser) ∈ entries := by
-  induction entries generalizing index pauser with
-  | nil => simp [findEntry] at h
-  | cons entry rest ih =>
-      by_cases heq : entry.1 = target
-      · simp [findEntry, heq] at h
-        obtain ⟨rfl, rfl⟩ := h
-        simp [← heq]
-      · cases hrest : findEntry rest target with
-        | none => simp [findEntry, heq, hrest] at h
-        | some found =>
-            obtain ⟨foundIndex, foundPauser⟩ := found
-            simp [findEntry, heq, hrest] at h
-            obtain ⟨rfl, rfl⟩ := h
-            exact List.mem_cons_of_mem entry (ih hrest)
-
 /-- A concrete Registry witness makes every current assignment canonical,
 including the zero value of an absent target. -/
 theorem RegistryWitness.assignmentAt_canonical
