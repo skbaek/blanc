@@ -27,7 +27,11 @@ is no way to assume one.
 
 Modes.
   lift:      --hex FILE --sha256 DIGEST --namespace NS --cert-out FILE [--check-out FILE] ...
+             [--lock-spec JSON --lock-spec-module MOD --lock-ann-out FILE --lock-check-out FILE]
   registry:  --registry scripts/lift/certificates.json (--verify | --write) [--only ID]
+The lock options also emit reentrancy-lock annotations for the certificate
+(`scripts/lift/lockann.py`, checked by `Blanc/Lift/LockCheck.lean`'s `lockCert`)
+and their per-entry kernel decisions.
 The registry mode regenerates every registered certificate from its committed
 input and byte-compares (`--verify`, used by `scripts/check-lift-certificates.sh`)
 or rewrites (`--write`) the committed Lean files.
@@ -285,6 +289,11 @@ def run_registry(args: argparse.Namespace) -> int:
             if check:
                 argv += ["--check-out", str(out / "Check.lean"), "--check-header", check["header"],
                          "--check-split-nodes", str(check.get("split_nodes", 0))]
+            lock = row.get("lock")
+            if lock:
+                argv += ["--lock-spec", json.dumps(lock["spec"]), "--lock-spec-module", lock["spec_module"],
+                         "--lock-ann-out", str(out / "LockAnn.lean"),
+                         "--lock-check-out", str(out / "LockCheck.lean"), "--lock-header", lock["header"]]
             proc = subprocess.run(argv, capture_output=True, text=True, timeout=args.timeout)
             if proc.returncode != 0:
                 print(f"FAIL {ident}: producer exit {proc.returncode}\n{proc.stdout}{proc.stderr}")
@@ -294,6 +303,9 @@ def run_registry(args: argparse.Namespace) -> int:
             pairs = [(out / "Cert.lean", root / row["cert"])]
             if check:
                 pairs.append((out / "Check.lean", root / check["path"]))
+            if lock:
+                pairs.append((out / "LockAnn.lean", root / lock["ann"]))
+                pairs.append((out / "LockCheck.lean", root / lock["check"]))
             for produced, committed in pairs:
                 rel = committed.relative_to(root)
                 if args.write:
@@ -343,6 +355,12 @@ parser.add_argument("--wrapper-order", choices=("taken-first", "fall-first"), de
                     help="build order of a dispatcher selector branch (fall-first: solc-w3 exploration)")
 parser.add_argument("--fold", action="store_true",
                     help="fold ADD/MUL/SUB/LT/GT/EQ/ISZERO over constant operands (mirror of foldConst)")
+parser.add_argument("--lock-spec", type=str, default=None,
+                    help="reentrancy-lock spec as JSON {slot, locked, bodies, mutBodies, setPcs, releasePcs}")
+parser.add_argument("--lock-spec-module", type=str, default=None, help="Lean module defining `lockSpec` (hand-written)")
+parser.add_argument("--lock-ann-out", type=Path, default=None, help="LockAnn.lean to write")
+parser.add_argument("--lock-check-out", type=Path, default=None, help="per-entry LockCheck.lean to write")
+parser.add_argument("--lock-header", type=str, default=DEFAULT_HEADER, help="lock files' generator comment")
 parser.add_argument("--report-dir", type=Path, default=None, help="also write cert.json/cfg.json diagnostics here")
 
 args = parser.parse_args()
@@ -1634,7 +1652,88 @@ if args.check_out is not None:
     args.check_out.parent.mkdir(parents=True, exist_ok=True)
     args.check_out.write_text(check_source())
 
-# 11. Final summary print
+# 11. Reentrancy-lock annotations (`scripts/lift/lockann.py`) and their per-entry decisions.
+lock_opts = (args.lock_spec, args.lock_spec_module, args.lock_ann_out, args.lock_check_out)
+if any(o is not None for o in lock_opts):
+    if any(o is None for o in lock_opts):
+        parser.error("lock mode needs --lock-spec, --lock-spec-module, --lock-ann-out and --lock-check-out")
+    sys.path.insert(0, str(SCRIPT.parent))
+    import lockann
+
+    def _frame(e):
+        return [('const', int(v[6:-1], 16)) if v.startswith('const') else v for v in e["frame"]]
+    lock_entries = [(int(e["pc"], 16), _frame(e), e["rets"]) for e in json_entries]
+    lock_trees = {int(k): v for k, v in json_trees.items()}
+    checker = lockann.Checker(json.loads(args.lock_spec), lock_entries, lock_trees, OPCODE_EFFECTS)
+    checker.infer()
+    lock_errors = checker.check()
+    for msg in lock_errors:
+        print(f"Lock rejected: {msg}", file=sys.stderr)
+    if lock_errors:
+        sys.exit(1)
+    ns = args.namespace
+    ann_lines = [
+        "import Blanc.Lift.LockCheck",
+        "",
+        f"/-! {args.lock_header}",
+        "One reentrancy-lock annotation per certificate entry (`Blanc/Lift/LockCheck.lean`). -/",
+        "",
+        f"namespace {ns}",
+        "",
+        "open Blanc.Lift.LockCheck",
+        "",
+    ]
+    for k in range(len(lock_entries)):
+        ann_lines.append(f"def lockAnn_{k} : LSt := {lockann.lean_state(checker.ann[k])}")
+    ann_lines += ["", "def lockAnn : List LSt := ["]
+    ann_lines.append(",\n".join(f"  lockAnn_{k}" for k in range(len(lock_entries))))
+    ann_lines += ["]", "", f"end {ns}", ""]
+    args.lock_ann_out.parent.mkdir(parents=True, exist_ok=True)
+    args.lock_ann_out.write_text("\n".join(ann_lines))
+    chk = [
+        f"import {ns}.Cert",
+        f"import {ns}.LockAnn",
+        f"import {args.lock_spec_module}",
+        "",
+        f"/-! {args.lock_header}",
+        "Each entry's lock walk is one kernel decision; `lock_cert` assembles them. -/",
+        "",
+        f"namespace {ns}",
+        "",
+        "open Jaune Blanc.Lift.LockCheck",
+        "",
+    ]
+    for i, line in enumerate(cert_entries_lines):
+        m = re.match(r"^  \(⟨(0x[0-9a-f]+), (\[[^\]]*\]), (\d+)⟩, (t_\w+)\)$", line)
+        if m is None:
+            raise RuntimeError(f"cannot read certificate entry {i}: {line}")
+        pc, frame, _, tree = m.groups()
+        chk += [
+            f"theorem lock_entry_{i} :",
+            f"    lockNode lockSpec (Cert.entries cert) lockAnn {pc} {frame} lockAnn_{i} {tree} = true := by",
+            "  decide +kernel",
+            "",
+        ]
+    n = len(cert_entries_lines)
+    chk += [
+        "theorem lock_cert : lockCert lockSpec cert lockAnn = true := by",
+        "  unfold lockCert",
+        "  rw [Bool.and_eq_true, Bool.and_eq_true]",
+        "  refine ⟨⟨by decide +kernel, by decide +kernel⟩, ?_⟩",
+        "  rw [List.all_eq_true]",
+        "  intro p hp",
+        "  simp only [cert, lockAnn, List.zip_cons_cons, List.zip_nil_left, List.mem_cons,",
+        "    List.not_mem_nil, or_false] at hp",
+        "  rcases hp with " + " | ".join(["rfl"] * n),
+    ]
+    chk += [f"  · exact lock_entry_{i}" for i in range(n)]
+    chk += ["", f"end {ns}", ""]
+    args.lock_check_out.parent.mkdir(parents=True, exist_ok=True)
+    args.lock_check_out.write_text("\n".join(chk))
+    print(f"Lock: accepted ({len(lock_entries)} annotations, "
+          f"{sum(len(a.facts) for a in checker.ann.values())} facts)")
+
+# 12. Final summary print
 largest = max(entry_node_counts.items(), key=lambda kv: kv[1]) if entry_node_counts else (0, 0)
 print(f"Counts: entries={len(entries)}, calls={len(call_sites)}, rets={len(return_sites)}, nodes={total_nodes}, loops={len(distinct_back_edges)}, ext_calls={len(distinct_calls)}, largest_entry={largest[0]}:{largest[1]}")
 print(f"Self-check verdict: {'PASS' if self_check_passed else 'FAIL'}")

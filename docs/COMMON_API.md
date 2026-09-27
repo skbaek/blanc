@@ -1091,6 +1091,34 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   `Exec.noRetainedWriteTo_of_no_execOccurrence`,
   `Exec.noRetainedWriteTo_of_sourceSites_no_exec`, and
   `Exec.noRetainedWriteTo_of_frame_owners_ne` are the committing routes.
+- Reentrancy-lock exclusion over the all-outcome frame tree:
+  [`Blanc/LockExclusion.lean`](../Blanc/LockExclusion.lean).
+  `LockExclusion.LockSpec.lock_exclusion` says an active lock frame's spawned
+  child (any outcome) enters no guarded body of the same owner and code;
+  `LockSpec.locked_core` keeps the lock cell fixed, slot-addressed owner
+  `SSTORE`s absent and `NoRetainedWriteTo` true below any locked node.  Both
+  take the per-code `LockSpec.Dominance` and the per-world
+  `OwnerDiscipline`/`HashAvoidIn` as hypotheses.  Reusable step facts there:
+  `Evm.step_cont_getStor_get` (one cell across a continuing step unless an
+  owner `SSTORE` hits its key), `Evm.step_doneOk_getStor_eq`,
+  `Evm.step_spawn_enter_getStor` (an entered child starts from the parent's
+  storage), `Ninst.none_getStor_eq_of_ne_sstore`,
+  `Exec.rawFrameDescendants_entry` (pc 0 and covered fork for every raw
+  descendant root) and `Exec.Deriv.ParentPrefix.antisymm`.
+- Storage-owner discipline from world premises:
+  [`Blanc/OwnerDiscipline.lean`](../Blanc/OwnerDiscipline.lean).
+  `Exec.ownerCode_of_world` says every raw frame root (any outcome) owning
+  `P`'s storage runs `C` or an EIP-1167 forwarder `K` to `I`, when `P` holds
+  `K` or `C`, `I` holds `C`, and no frame running `C` executes
+  `DELEGATECALL`/`CALLCODE` (`Exec.NoDelegateFrom`);
+  `Exec.ownerDiscipline_of_world` discharges `LockSpec.OwnerDiscipline` from
+  it.  `ForwarderShape K I` is the decidable forwarder shape (`forwarderCode`
+  template; `forwarderShape_847e`/`_6326` by `decide`), `noSstore_of_scan`
+  proves `NoSstore` by a finite scan.  Reusable spawn facts there:
+  `Xinst.step_delegatecall_spawn_code` (child code = code at the popped
+  address), `Xinst.step_directCall_spawn_code` (`CALL`/`STATICCALL`, including
+  a call back into the current account), `Xinst.step_create_spawn_fresh`
+  (`CREATE*` only enters a codeless account) and `Jinst.runCore_ok_pc`.
 - Write-freedom across cycles:
   [`Blanc/CycleWriteFree.lean`](../Blanc/CycleWriteFree.lean).
   Its public `Func.callsIn_mem_iff` reflects the shared internal-call checker.
@@ -2662,6 +2690,33 @@ contract-neutral.
 - Execution to lifted run (safety): `lift_sound`, and `lift_sound_in`, which
   keeps each step's derivation (`StepIn`) for arguments about re-entrant child
   frames, in [`Blanc/Lift/Sound.lean`](../Blanc/Lift/Sound.lean).
+- Every execution prefix to a certificate node (all outcomes, no success
+  premise): the certificate cursor `Cursor`/`Cont`, its invariant `CursorOK`
+  (checked node, pc, stack segments matched per pending function), the
+  synthetic step `SStep`, `cursor_start`, `cursor_step` (one `ParentStep`,
+  including a `CALL` over a child of any outcome, is one `SStep`) and
+  `cursor_of_parentPrefix`, with `CursorOK.exec_call_or_staticcall` (a reached
+  node spawns only by `CALL`/`STATICCALL`), in
+  [`Blanc/Lift/Cursor.lean`](../Blanc/Lift/Cursor.lean). Use it for safety facts
+  about reverting or out-of-gas frames, which `lift_sound` cannot see.
+- A reentrancy lock's `LockSpec.Dominance` from a certificate (all outcomes):
+  the checker `LockCheck.Spec`/`LockCheck.lockCert` (one Boolean walk with
+  producer annotations from `scripts/lift/lift.py --lock-spec`) in
+  [`Blanc/Lift/LockCheck.lean`](../Blanc/Lift/LockCheck.lean); the fact
+  semantics in [`Blanc/Lift/LockCheckSound.lean`](../Blanc/Lift/LockCheckSound.lean);
+  `LockCheck.dominance`, its strong form `LockCheck.dominance_strong` (only
+  release pcs write the slot after a mutating body start) and
+  `LockCheck.no_forbidden`, over the invariant `LockOK`/`LConts`,
+  `lock_step` and `lock_of_parentPrefix`, in
+  [`Blanc/Lift/LockCheckFlow.lean`](../Blanc/Lift/LockCheckFlow.lean), which
+  also holds the step facts `LockCheck.pp_back` (a node strictly before a
+  successor precedes the node), `LockCheck.lockAt_edge` (one cell across a
+  same-frame edge that spawns nothing and stores elsewhere) and
+  `LockCheck.cursor_sstore_node`. Worked use:
+  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/LockDominance.lean`; the full
+  `lock_exclusion` instance (dominance, `ownerDiscipline_of_world` for a
+  forwarder owner, `NoDelegateFrom` from the cursor, release-pc activity) is
+  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Exclusion.lean`.
 - Lifted run to execution (liveness, exact gas): `SFunc.RunExact`,
   `Cert.jumpsOk` and `lift_exact` in [`Blanc/Lift/Exact.lean`](../Blanc/Lift/Exact.lean);
   the per-instruction walk steps (`rx_push`, `rx_sload_cold`, `rx_callRet`, …)
