@@ -312,6 +312,8 @@ def run_registry(args: argparse.Namespace) -> int:
             if check:
                 argv += ["--check-out", str(out / "Check.lean"), "--check-header", check["header"],
                          "--check-split-nodes", str(check.get("split_nodes", 0))]
+                if "parts" in check:
+                    argv += ["--check-parts", str(check["parts"])]
             lock = row.get("lock")
             if lock:
                 argv += ["--lock-spec", json.dumps(lock["spec"]), "--lock-spec-module", lock["spec_module"],
@@ -326,6 +328,17 @@ def run_registry(args: argparse.Namespace) -> int:
             pairs = [(out / "Cert.lean", root / row["cert"])]
             if check:
                 pairs.append((out / "Check.lean", root / check["path"]))
+                if "parts" in check:
+                    # split memory-mode Check: CheckTries and CheckPart<i> beside Check.lean
+                    check_dir = (root / check["path"]).parent
+                    produced_parts = sorted(out.glob("CheckTries.lean")) + sorted(
+                        out.glob("CheckPart*.lean"), key=lambda q: int(q.stem[len("CheckPart"):]))
+                    pairs += [(q, check_dir / q.name) for q in produced_parts]
+                    names = {q.name for q in produced_parts}
+                    for extra in sorted(check_dir.glob("CheckPart*.lean")):
+                        if extra.name not in names:
+                            print(f"FAIL {ident}: {extra.relative_to(root)} is not produced by the registered generator")
+                            failures += 1
             if lock:
                 pairs.append((out / "LockAnn.lean", root / lock["ann"]))
                 pairs.append((out / "LockCheck.lean", root / lock["check"]))
@@ -372,6 +385,8 @@ parser.add_argument("--header", type=str, default=DEFAULT_HEADER, help="Cert.lea
 parser.add_argument("--check-header", type=str, default=DEFAULT_HEADER, help="Check.lean generator comment")
 parser.add_argument("--check-split-nodes", type=int, default=0,
                     help="Check.lean: decide an entry above this many nodes block by block (0: never)")
+parser.add_argument("--check-parts", type=int, default=0,
+                    help="split the generated Check into CheckTries, CheckPart0..N-1 and the assembling Check (N >= 2; registry check.parts)")
 parser.add_argument("--no-join-entries", action="store_true",
                     help="do not promote multi-predecessor JUMPDESTs to join entries (solc-w3 exploration)")
 parser.add_argument("--wrapper-order", choices=("taken-first", "fall-first"), default="taken-first",
@@ -2012,7 +2027,7 @@ if out_dir is not None:
 
 # 10. Per-entry Check.lean: each entry is one kernel decision over trie-backed code
 # reads (`Blanc/Lift/CheckFast.lean`), assembled into `cert_check`.
-def check_source() -> str:
+def check_source() -> Any:
     depth = max(1, (len(code) - 1).bit_length())
     ns = args.namespace
     lines = [
@@ -2034,6 +2049,7 @@ def check_source() -> str:
     ]
     if MEMRET:
         return check_source_mem(lines)
+    blocks = []
     for i, line in enumerate(cert_entries_lines):
         m = re.match(r"^  \(⟨(0x[0-9a-f]+), (\[[^\]]*\]), (\d+)⟩, (t_\w+)\)$", line)
         if m is None:
@@ -2041,7 +2057,7 @@ def check_source() -> str:
         pc, frame, rets, tree = m.groups()
         if args.check_split_nodes and entry_node_counts.get(i, 0) > args.check_split_nodes:
             raise RuntimeError(f"entry {i} has {entry_node_counts[i]} nodes > --check-split-nodes; splitting is not implemented")
-        lines.extend([
+        blocks.append([
             f"theorem entry_{i} :",
             f"    checkNode code (Cert.entries cert) {rets} {pc} {frame} {tree} = true := by",
             "  rw [← checkNodeT_eq codeTries]",
@@ -2049,7 +2065,7 @@ def check_source() -> str:
             "",
         ])
     n = len(cert_entries_lines)
-    lines.extend([
+    assembly = [
         "theorem cert_check : Cert.check code cert = true := by",
         "  unfold Cert.check",
         "  rw [Bool.and_eq_true]",
@@ -2058,49 +2074,113 @@ def check_source() -> str:
         "  intro p hp",
         "  simp only [cert, List.mem_cons, List.not_mem_nil, or_false] at hp",
         "  rcases hp with " + " | ".join(["rfl"] * n),
-    ])
-    lines.extend(f"  · exact entry_{i}" for i in range(n))
+    ]
+    assembly.extend(f"  · exact entry_{i}" for i in range(n))
+    files = split_check(lines, blocks, assembly)
+    return files if args.check_parts >= 2 else files["Check"]
+
+
+def split_check(head: List[str], blocks: List[List[str]], assembly: List[str]) -> Dict[str, str]:
+    """The generated Check as files by name.  With `--check-parts N >= 2` (registry
+    `check.parts`): `CheckTries` (the code tries), `CheckPart0`..`CheckPart{N-1}` (contiguous
+    ranges of the per-entry decisions, which build in parallel) and `Check` (imports the parts
+    and holds the assembly); otherwise one `Check`."""
+    ns = args.namespace
+    lines = list(head)
+    files: Dict[str, str] = {}
+    n = len(blocks)
+    if args.check_parts >= 2:
+        # `head` is: imports (2), blank, doc (3 lines), blank, namespace, blank, open, blank,
+        # then the codeTries definition.
+        split = next(k for k, l in enumerate(lines) if l.startswith("/-- Depth "))
+        preamble = lines[2:split]  # from the blank line after the imports
+        tries = [f"import {ns}.Cert", "import Blanc.Lift.CheckFast"] + preamble + lines[split:]
+        tries += [f"end {ns}", ""]
+        files["CheckTries"] = "\n".join(tries)
+        bounds = check_part_bounds(n, args.check_parts)
+        for p in range(len(bounds) - 1):
+            lo, hi = bounds[p], bounds[p + 1]
+            body = [f"import {ns}.CheckTries"] + [
+                l.replace("Each entry is decided against trie-backed reads of the exact runtime.",
+                          f"Entries {lo}..{hi - 1}, each decided against trie-backed reads of the exact runtime.")
+                for l in preamble]
+            for i in range(lo, hi):
+                body += blocks[i]
+            body += [f"end {ns}", ""]
+            files[f"CheckPart{p}"] = "\n".join(body)
+        lines = ([f"import {ns}.CheckPart{p}" for p in range(len(bounds) - 1)] +
+                 [l.replace("Each entry is decided against trie-backed reads of the exact runtime.",
+                            "Assembles the per-entry decisions of the CheckPart modules.")
+                  for l in preamble])
+    else:
+        for b in blocks:
+            lines += b
+    lines += assembly
     lines.extend(["", f"end {ns}", ""])
-    return "\n".join(lines)
+    files["Check"] = "\n".join(lines)
+    return files
 
 
-def check_source_mem(head: List[str]) -> str:
+def check_part_bounds(n: int, parts: int) -> List[int]:
+    """Contiguous entry ranges of about equal estimated kernel cost, as `parts + 1` boundaries
+    from 0 to n.  An entry's two decisions cost about a fixed 2.8 s plus 0.012 s per tree node
+    (fitted to the 0x6326 parts, 2026-09-27), so an entry weighs its node count plus 233."""
+    weights = [entry_node_counts.get(i, 0) + 233 for i in range(n)]
+    total = sum(weights)
+    bounds, acc = [0], 0
+    for i, w in enumerate(weights):
+        acc += w
+        if len(bounds) < parts and acc * parts >= total * len(bounds) and i + 1 < n:
+            bounds.append(i + 1)
+    bounds.append(n)
+    return bounds
+
+
+def entry_decisions_mem(i: int) -> List[str]:
+    """`entry_i`/`jumps_i`, stated over `cert[i]` so the chain step `Cert.checkEntriesM_drop`
+    matches them syntactically: the elaborator never unfolds the certificate list (whose depth
+    would need a raised `maxRecDepth`); only the kernel reads the entry."""
+    e = f"(cert[{i}]'(by decide +kernel))"
+    return [
+        f"theorem entry_{i} :",
+        f"    checkNodeM code (Cert.entries cert) mems true",
+        f"      {e}.1.rets {e}.1.pc",
+        f"      {e}.1.frame (mems.getD {i} []) {e}.2 = true := by",
+        "  rw [← checkNodeMT_eq codeTries]",
+        "  decide +kernel",
+        "",
+        f"theorem jumps_{i} :",
+        f"    jumpsOkNodeM code (Cert.entries cert) true",
+        f"      {e}.2 {e}.1.frame (mems.getD {i} []) = true := by",
+        "  rw [← jumpsOkNodeMT_eq codeTries]",
+        "  decide +kernel",
+        "",
+    ]
+
+
+def check_source_mem(head: List[str]) -> Dict[str, str]:
     """Memory-tracking certificate (`Cert.checkM`, `Cert.jumpsOkM`): per-entry decisions of
-    `checkNodeM` and `jumpsOkNodeM` against trie-backed reads, assembled by membership."""
+    `checkNodeM` and `jumpsOkNodeM` against trie-backed reads, assembled by a chain over the
+    certificate's tails.  No file needs a raised recursion depth or heartbeat budget."""
     lines = [l.replace("The generic equality rewrites each result to the unchanged Cert.check.",
                        "The generic equalities rewrite each result to Cert.checkM / Cert.jumpsOkM.")
              for l in head]
     n = len(cert_entries_lines)
     for i, line in enumerate(cert_entries_lines):
-        m = re.match(r"^  \(⟨(0x[0-9a-f]+), (\[[^\]]*\]), (\d+)⟩, (t_\w+)\)$", line)
-        if m is None:
+        if re.match(r"^  \(⟨(0x[0-9a-f]+), (\[[^\]]*\]), (\d+)⟩, (t_\w+)\)$", line) is None:
             raise RuntimeError(f"cannot read certificate entry {i}: {line}")
-        pc, frame, rets, tree = m.groups()
-        lines.extend([
-            f"theorem entry_{i} :",
-            f"    checkNodeM code (Cert.entries cert) mems true {rets} {pc} {frame} (mems.getD {i} []) {tree} = true := by",
-            "  rw [← checkNodeMT_eq codeTries]",
-            "  decide +kernel",
-            "",
-            f"theorem jumps_{i} :",
-            f"    jumpsOkNodeM code (Cert.entries cert) true {tree} {frame} (mems.getD {i} []) = true := by",
-            "  rw [← jumpsOkNodeMT_eq codeTries]",
-            "  decide +kernel",
-            "",
-        ])
-    # Assemble by a chain over the certificate's tails (a membership case split over
-    # hundreds of entries exceeds simp's recursion depth).
-    lines.extend([
-        "-- Unfolding `cert.drop k` for a few hundred entries needs more than the default depth.",
-        "set_option maxRecDepth 100000",
+    blocks = [entry_decisions_mem(i) for i in range(n)]
+    # Chain over the certificate's tails: each step is syntactic in its premises.
+    assembly = [
+        f"theorem rest_{n} : Cert.checkEntriesM code (Cert.entries cert) mems true {n} (cert.drop {n}) = true := by",
+        "  decide +kernel",
         "",
-        f"theorem rest_{n} : Cert.checkEntriesM code (Cert.entries cert) mems true {n} (cert.drop {n}) = true := rfl",
+        f"theorem jrest_{n} : Cert.jumpsEntriesM code (Cert.entries cert) mems true {n} (cert.drop {n}) = true := by",
+        "  decide +kernel",
         "",
-        f"theorem jrest_{n} : Cert.jumpsEntriesM code (Cert.entries cert) mems true {n} (cert.drop {n}) = true := rfl",
-        "",
-    ])
+    ]
     for i in reversed(range(n)):
-        lines.extend([
+        assembly.extend([
             f"theorem rest_{i} : Cert.checkEntriesM code (Cert.entries cert) mems true {i} (cert.drop {i}) = true :=",
             f"  Cert.checkEntriesM_drop cert {i} (by decide +kernel) entry_{i} rest_{i + 1}",
             "",
@@ -2108,7 +2188,7 @@ def check_source_mem(head: List[str]) -> str:
             f"  Cert.jumpsEntriesM_drop cert {i} (by decide +kernel) jumps_{i} jrest_{i + 1}",
             "",
         ])
-    lines.extend([
+    assembly.extend([
         "theorem cert_checkM : Cert.checkM code cert mems true = true := by",
         "  unfold Cert.checkM",
         "  rw [Bool.and_eq_true, Bool.and_eq_true]",
@@ -2116,13 +2196,17 @@ def check_source_mem(head: List[str]) -> str:
         "",
         "theorem cert_jumpsOkM : Cert.jumpsOkM code cert mems true = true := jrest_0",
     ])
-    lines.extend(["", f"end {args.namespace}", ""])
-    return "\n".join(lines)
+    return split_check(lines, blocks, assembly)
 
 
 if args.check_out is not None:
     args.check_out.parent.mkdir(parents=True, exist_ok=True)
-    args.check_out.write_text(check_source())
+    _check = check_source()
+    if isinstance(_check, dict):
+        for _name, _text in _check.items():
+            (args.check_out if _name == "Check" else args.check_out.with_name(_name + ".lean")).write_text(_text)
+    else:
+        args.check_out.write_text(_check)
 
 # 11. Reentrancy-lock annotations (`scripts/lift/lockann.py`) and their per-entry decisions.
 lock_opts = (args.lock_spec, args.lock_spec_module, args.lock_ann_out, args.lock_check_out)
