@@ -280,7 +280,12 @@ registry has identified the likely vocabulary.
   the low-word projection to the ordinary address conversion, and
   `addressSlotReadWord_write_of_clean` gives the public read after a packed
   write of an address-shaped word; `addressSlotReadWord_get_set_packed`
-  frames that read through a concrete storage update.  The
+  frames that read through a concrete storage update.  `addressMask_and_eq_zero_of_lt`
+  gives the mask fact directly from a `word.toNat < 2 ^ 160` bound (the
+  contract-neutral fact behind any per-contract `canonicalAddress`), and
+  `addressSlotReadWord_eq_self_of_lt` is its corollary for a value already
+  known to read back clean, without a second word or
+  `addressSlotReadWord_write_of_clean`.  The
   value-carrying inversions
   `of_loadAddressWordAt_val` and `of_storeAddressWordAt_val` live in
   [`Blanc/AddressSlotProofs.lean`](../Blanc/AddressSlotProofs.lean).
