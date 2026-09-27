@@ -1,14 +1,19 @@
 import Blanc.Lift.LidoCircuitBreakerDeployed.Prog
 import Blanc.Lift.WalkSteps
+import Blanc.LidoCircuitBreakerCore
+import Blanc.Lift.Weth9.Words
+import Blanc.Lift.Vyper
 
 /-! Inversion of the deployed CircuitBreaker's checked-arithmetic helper
 entries on a successful run: entry 40 (checked decrement), entry 24 (checked
 increment), entry 25 (checked subtraction).  Each helper's overflow arm
-reaches a `Panic(0x11)` revert block, so a returned run excludes it. -/
+reaches a `Panic(0x11)` revert block, so a returned run excludes it.  Also
+entry 5, `setPauser`'s shared tail: the `PauserSet` `LOG4` and the return. -/
 
 namespace Blanc.Lift.LidoCircuitBreakerDeployed
 
 open Jaune
+open Blanc.LidoCircuitBreaker
 
 /-- The all-ones word the checked helpers push. -/
 abbrev ffWord : B256 := Bytes.toB256
@@ -177,6 +182,89 @@ theorem entry25_returned_inv {x y r : B256} {R : List B256} {D : Devm}
     obtain ⟨G16, hr⟩ := ric_ret run
     cases hr
     exact ⟨G16, rfl⟩
+
+/-- The `PauserSet(target, previousPauser, newPauser)` event topic entry 5 pushes. -/
+abbrev pauserSetTopic : B256 := Bytes.toB256
+  [0xd9, 0x2c, 0x3c, 0x28, 0xed, 0x17, 0x46, 0x32, 0x68, 0xf8, 0x64, 0x77, 0x64, 0x63, 0xc4,
+   0xc2, 0x15, 0x4f, 0x89, 0xb1, 0x81, 0x56, 0xd3, 0xed, 0xf7, 0x7c, 0x0e, 0x37, 0xd0, 0x47,
+   0x69, 0x13]
+
+private theorem ff20_and_canonical {w : B256} (h : canonicalAddress w) :
+    Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& w = w := by
+  rw [Weth9.ff20_and_word, B256.toAdr_toB256_of_lt h]
+
+/-- Entry 5, `setPauser`'s shared tail: from `oldPauser :: newPauser :: target
+:: k :: ret :: base` it emits the `PauserSet` log with the three canonical
+addresses as topics (over whatever memory window the free pointer names) and
+returns to `base`, leaving storage untouched. -/
+theorem entry5_inv {C : List Nat} {oldP newP target k ret : B256} {base : List B256}
+    {post : Devm}
+    (hold : canonicalAddress oldP) (hnew : canonicalAddress newP)
+    (htarget : canonicalAddress target)
+    (run : SFunc.RunCut prog sevm C (St b (oldP :: newP :: target :: k :: ret :: base) M G)
+      t_0c5e_c5 (.done (.returned post))) :
+    ∃ data M' G', post = St
+      (b.addLog ⟨sevm.currentTarget, [pauserSetTopic, target, oldP, newP], data⟩) base M' G' := by
+  unfold t_0c5e_c5 at run
+  obtain ⟨G1, run⟩ := ric_dest run
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G2, rfl⟩ := ri_dup (w := newP) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G3, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G4, rfl⟩ := ri_and s1
+  rw [ff20_and_canonical hnew] at run
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G5, rfl⟩ := ri_dup (w := oldP) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G6, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G7, rfl⟩ := ri_and s1
+  rw [ff20_and_canonical hold] at run
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G8, rfl⟩ := ri_dup (w := target) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G9, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G10, rfl⟩ := ri_and s1
+  rw [ff20_and_canonical htarget] at run
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G11, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G12, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G13, rfl⟩ := ri_mload s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G14, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G15, rfl⟩ := ri_mload s1
+  generalize (Bytes.toB256 [0x40] : B256) = p at run
+  generalize hM1 : (M.read p.toNat 32) = r1 at run
+  generalize hM2 : (r1.2.read p.toNat 32) = r2 at run
+  generalize Bytes.toB256 r1.1 = f1 at run
+  generalize Bytes.toB256 r2.1 = f2 at run
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G16, rfl⟩ := ri_dup (w := f2) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G17, rfl⟩ := ri_swap (n := 1) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G18, rfl⟩ := ri_sub s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G19, rfl⟩ := ri_swap (n := 0) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G20, rfl⟩ := ri_log4 s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G21, rfl⟩ := ri_pop s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G22, rfl⟩ := ri_pop s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G23, rfl⟩ := ri_pop s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G24, rfl⟩ := ri_pop s1
+  obtain ⟨G25, hr⟩ := ric_ret run
+  cases hr
+  exact ⟨_, _, G25, rfl⟩
 
 end
 
