@@ -87,13 +87,13 @@ theorem attacker_child : ChildOk sevm1 cfg339 post2 ∧ ChildAgree post2 keysA a
 deployed 0x6326 certificate, with its attacker subtree (the reentrant `add_liquidity`
 through the proxy) and its token child both run, is a gas-exact run from `pre1` to a
 halted machine with the EELS gas and return data `[100, 100]`, whose world has
-`totalSupply = 1800 < 1906 = balanceOf[A]` and the remove-lock released. -/
+`totalSupply = 1800 < 1906 = balanceOf[A]` and the remove-lock released, with no error. -/
 theorem frame1_closed :
     ∃ post, SProg.RunExact fs1 sevm1 pre1 post ∧ post.gasLeft = 29372882 ∧
       post.output = word 100 ++ word 100 ∧
       (storOf post.state proxyAddress (26 : Nat).toB256).toNat = 1800 ∧
       (storOf post.state proxyAddress balanceOfASlot.toB256).toNat = 1906 ∧
-      (storOf post.state proxyAddress (2 : Nat).toB256).toNat = 0 :=
+      (storOf post.state proxyAddress (2 : Nat).toB256).toNat = 0 ∧ post.error = none :=
   let ⟨k, a, g, o, e⟩ := attacker_child
   frame1_full post2 g o e k a
 

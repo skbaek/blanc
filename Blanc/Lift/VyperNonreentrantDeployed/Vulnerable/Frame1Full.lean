@@ -23,7 +23,7 @@ and settlement, `ChildOk`; its observed gas, output and success; its world shado
 `ChildAgree`), frame 1, with the token child run by its own certificate, is a gas-exact
 run of the certificate from `pre1` to a halted machine with the EELS gas and return data
 `[100, 100]`, whose world has `totalSupply = 1800 < 1906 = balanceOf[A]` and the
-remove-lock released. -/
+remove-lock released, with no error. -/
 theorem frame1_full (d1 : Devm)
     (g1 : d1.gasLeft = gasA) (o1 : d1.output = []) (e1 : d1.error = none)
     (k1 : ChildOk sevm1 cfg339 d1) (a1 : ChildAgree d1 keysA adrsA storA acsA) :
@@ -31,7 +31,7 @@ theorem frame1_full (d1 : Devm)
       post.output = word 100 ++ word 100 ∧
       (storOf post.state proxyAddress (26 : Nat).toB256).toNat = 1800 ∧
       (storOf post.state proxyAddress balanceOfASlot.toB256).toNat = 1906 ∧
-      (storOf post.state proxyAddress (2 : Nat).toB256).toNat = 0 := by
+      (storOf post.state proxyAddress (2 : Nat).toB256).toNat = 0 ∧ post.error = none := by
   have hk := frame1_kernel d1
   rw [childObs_eq g1 o1 e1] at hk
   unfold run1 at hk
@@ -56,15 +56,16 @@ theorem frame1_full (d1 : Devm)
             rcases r with c | ⟨post | post, cl⟩ | _
             · simp [obs1, obs1EELS] at hk
             · simp only [obs1, obs1EELS, Option.some.injEq, Prod.mk.injEq] at hk
-              obtain ⟨hg, ho, h26, hA, h2'⟩ := hk
+              obtain ⟨hg, ho, h26, hA, h2', he⟩ := hk
               obtain ⟨run, hcl, hst⟩ := wrun_done hr (s.1 c0_agree)
               have hs : ∀ a k, storOf post.state a k = lookupS cl.stor a k := fun a k => by
                 rw [hst post rfl]; exact hcl.2.2.1 a k
-              refine ⟨post, ⟨t_0000_c0, fs1_zero, s.2 _ c0_agree run⟩, hg, ?_, ?_, ?_, ?_⟩
+              refine ⟨post, ⟨t_0000_c0, fs1_zero, s.2 _ c0_agree run⟩, hg, ?_, ?_, ?_, ?_, ?_⟩
               · exact List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) ho
               · rw [hs]; exact h26
               · rw [hs]; exact hA
               · rw [hs]; exact h2'
+              · exact Option.isNone_iff_eq_none.mp he
             · simp [obs1, obs1EELS] at hk
             · simp [obs1, obs1EELS] at hk
           · simp [obs1, obs1EELS] at hk

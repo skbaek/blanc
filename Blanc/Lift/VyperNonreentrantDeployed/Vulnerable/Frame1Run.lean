@@ -116,17 +116,18 @@ def run1 (d1 : Devm) : Res :=
   | _ => .stuck
 
 /-- What frame 1's halt shows: gas, return data, and `P`'s `totalSupply` (slot 26),
-`balanceOf[A]` and remove-lock (slot 2) in the halting configuration's storage shadow. -/
-def obs1 : Res → Option (Nat × List Nat × Nat × Nat × Nat)
+`balanceOf[A]` and remove-lock (slot 2) in the halting configuration's storage shadow, and
+success (no error). -/
+def obs1 : Res → Option (Nat × List Nat × Nat × Nat × Nat × Bool)
   | .done (.halted d) cl => some (d.gasLeft, d.output.map UInt8.toNat,
       (lookupS cl.stor proxyAddress (26 : Nat).toB256).toNat,
       (lookupS cl.stor proxyAddress balanceOfASlot.toB256).toNat,
-      (lookupS cl.stor proxyAddress (2 : Nat).toB256).toNat)
+      (lookupS cl.stor proxyAddress (2 : Nat).toB256).toNat, d.error.isNone)
   | _ => none
 
 /-- The EELS observation at frame 1's `RETURN` (step 762): gas 29,372,882, return data
-`[100, 100]`, `totalSupply = 1800 < 1906 = balanceOf[A]`, lock released. -/
-def obs1EELS : Option (Nat × List Nat × Nat × Nat × Nat) :=
-  some (29372882, (word 100 ++ word 100).map UInt8.toNat, 1800, 1906, 0)
+`[100, 100]`, `totalSupply = 1800 < 1906 = balanceOf[A]`, lock released, success. -/
+def obs1EELS : Option (Nat × List Nat × Nat × Nat × Nat × Bool) :=
+  some (29372882, (word 100 ++ word 100).map UInt8.toNat, 1800, 1906, 0, true)
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
