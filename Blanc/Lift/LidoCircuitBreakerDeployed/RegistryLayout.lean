@@ -852,4 +852,81 @@ theorem rawNonzero_preservesRegistry
     · exact absurd hfam
         (not_registryAddressFamily_countSlot hnew.2 hw.entries_length_lt_2pow252)
 
+/-- The nine chronological logical writes for an absent-target,
+zero-new-pauser call: exactly `applyAbsentZeroWritesOfReadEffect`'s write
+list (`Blanc/LidoCircuitBreakerRegistry.lean`).  A fresh push immediately
+undone by the swap-pop removal branch, since `_newPauser = 0` there too; the
+entries list is unchanged, but the nine physical writes still happen. -/
+def absentZeroWrites (entries : List Entry) (target : B256) :
+    List (B256 × B256) :=
+  [(assignmentSlot target, 0),
+   (arrayEntrySlot (Nat.toB256 (entries.length + 1)), target),
+   (indexSlot target, Nat.toB256 (entries.length + 1)),
+   (arrayLengthSlot, Nat.toB256 (entries.length + 1)),
+   (arrayEntrySlot (Nat.toB256 (entries.length + 1)), target),
+   (indexSlot target, Nat.toB256 (entries.length + 1)),
+   (arrayEntrySlot (Nat.toB256 (entries.length + 1)), 0),
+   (arrayLengthSlot, Nat.toB256 entries.length),
+   (indexSlot target, 0)]
+
+/-- The actual raw Solidity write order for the absent-target,
+zero-new-pauser path. -/
+def rawAbsentZeroPost (raw : Stor) (entries : List Entry) (target : B256) : Stor :=
+  applyRegistryRawWrites raw (absentZeroWrites entries target)
+
+/-- Concrete application of the shared logical nine-write preservation
+theorem to the deployed Solidity storage projection: the absent-target,
+zero-new-pauser call. -/
+theorem rawAbsentZero_preservesRegistry
+    {before after : Stor} {entries : List Entry} {target : B256}
+    (hw : RegistryWitness (solRegistryStorage before) entries)
+    (htarget : nonzeroCanonicalAddress target)
+    (hfind : findEntry entries target = none)
+    (hfaithful : RegistryKeysFaithful (entries.length + 1)
+      ((absentZeroWrites entries target).map Prod.fst))
+    (hwrites : ∀ key, after.get key =
+      (rawAbsentZeroPost before entries target).get key) :
+    RegistryWitness (solRegistryStorage after) entries := by
+  have hlogical : RegistryWitness
+      { read := fun key => (absentZeroWrites entries target).foldl
+          (fun cur w => if w.1 = key then w.2 else cur)
+          ((solRegistryStorage before).read key) }
+      entries := by
+    apply RegistryWitness.applyAbsentZeroWritesOfReadEffect hw htarget hfind
+    intro key
+    rfl
+  have hlengthLt : entries.length + 1 < 2 ^ 252 := hw.fresh_length_lt_2pow252
+  refine RegistryWitness.ofRawRegistryWrites
+    hlengthLt ?_ hfaithful ?_ ?_ hwrites hlogical
+  · omega
+  · intro w hw'
+    have harr : entries.length < entries.length + 1 := by omega
+    simp only [absentZeroWrites, List.mem_cons, List.not_mem_nil, or_false] at hw'
+    rcases hw' with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    · exact Or.inl ⟨target, htarget.2, rfl⟩
+    · exact Or.inr (Or.inr (Or.inr (Or.inr ⟨entries.length, harr, rfl⟩)))
+    · exact Or.inr (Or.inl ⟨target, htarget.2, rfl⟩)
+    · exact Or.inr (Or.inr (Or.inr (Or.inl rfl)))
+    · exact Or.inr (Or.inr (Or.inr (Or.inr ⟨entries.length, harr, rfl⟩)))
+    · exact Or.inr (Or.inl ⟨target, htarget.2, rfl⟩)
+    · exact Or.inr (Or.inr (Or.inr (Or.inr ⟨entries.length, harr, rfl⟩)))
+    · exact Or.inr (Or.inr (Or.inr (Or.inl rfl)))
+    · exact Or.inr (Or.inl ⟨target, htarget.2, rfl⟩)
+  · intro w hw' hfam
+    have hzero : canonicalAddress (0 : B256) := by
+      unfold canonicalAddress
+      change (0 : Nat) < 2 ^ 160
+      norm_num
+    simp only [absentZeroWrites, List.mem_cons, List.not_mem_nil, or_false] at hw'
+    rcases hw' with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    · exact addressSlotReadWord_eq_self_of_lt hzero
+    · exact addressSlotReadWord_eq_self_of_lt htarget.2
+    · exact absurd hfam (not_registryAddressFamily_indexSlot htarget.2 hlengthLt)
+    · exact absurd hfam (not_registryAddressFamily_arrayLengthSlot hlengthLt)
+    · exact addressSlotReadWord_eq_self_of_lt htarget.2
+    · exact absurd hfam (not_registryAddressFamily_indexSlot htarget.2 hlengthLt)
+    · exact addressSlotReadWord_eq_self_of_lt hzero
+    · exact absurd hfam (not_registryAddressFamily_arrayLengthSlot hlengthLt)
+    · exact absurd hfam (not_registryAddressFamily_indexSlot htarget.2 hlengthLt)
+
 end Blanc.Lift.LidoCircuitBreakerDeployed
