@@ -4,7 +4,23 @@ import Blanc.AddressSlotProofs
 
 /-! The deployed Lido Registry's Solidity storage layout, projected onto the
 CircuitBreaker's existing tagged logical observation.  This is a storage
-interpretation, not a bytecode execution claim. -/
+interpretation, not a bytecode execution claim.
+
+## Premise instances a future statement carries
+
+Each of the four `raw…_preservesRegistry` theorems below (removal, fresh,
+nonzero, absent-zero) takes its own `RegistryKeysFaithful bound T`, `T`
+being that transition's own written-key list (`removalWriteKeys`,
+`(nonzeroWrites …).map Prod.fst`, …) and `bound` the array-index ceiling
+that transition's writes and the pre-state witness both stay under.  A
+single `setPauser` call takes exactly one of the four branches, so a
+statement about one call (L2) carries exactly one such premise, chosen by
+which branch `previousPauser`/`_newPauser` select; a statement walking a
+chain of calls carries one instance per call in the chain, not one per
+transition kind.  None of the four is global Keccak injectivity: each is
+collision-freedom at that one call's own finitely many touched keys, so nor
+does composing several calls' premises grow the assumption's shape, only
+its instance count. -/
 
 namespace Blanc.Lift.LidoCircuitBreakerDeployed
 
