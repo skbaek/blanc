@@ -2088,29 +2088,31 @@ def check_source_mem(head: List[str]) -> str:
             "  decide +kernel",
             "",
         ])
-    alts = " | ".join(["⟨rfl, rfl⟩"] * n)
+    # Assemble by a chain over the certificate's tails (a membership case split over
+    # hundreds of entries exceeds simp's recursion depth).
+    lines.extend([
+        f"theorem rest_{n} : Cert.checkEntriesM code (Cert.entries cert) mems true {n} (cert.drop {n}) = true := rfl",
+        "",
+        f"theorem jrest_{n} : Cert.jumpsEntriesM code (Cert.entries cert) mems true {n} (cert.drop {n}) = true := rfl",
+        "",
+    ])
+    for i in reversed(range(n)):
+        lines.extend([
+            f"theorem rest_{i} : Cert.checkEntriesM code (Cert.entries cert) mems true {i} (cert.drop {i}) = true :=",
+            f"  Cert.checkEntriesM_drop cert {i} (by decide) entry_{i} rest_{i + 1}",
+            "",
+            f"theorem jrest_{i} : Cert.jumpsEntriesM code (Cert.entries cert) mems true {i} (cert.drop {i}) = true :=",
+            f"  Cert.jumpsEntriesM_drop cert {i} (by decide) jumps_{i} jrest_{i + 1}",
+            "",
+        ])
     lines.extend([
         "theorem cert_checkM : Cert.checkM code cert mems true = true := by",
         "  unfold Cert.checkM",
         "  rw [Bool.and_eq_true, Bool.and_eq_true]",
-        "  refine ⟨⟨by decide +kernel, by decide +kernel⟩, ?_⟩",
-        "  apply Cert.checkEntriesM_of_indexedFrom",
-        "  intro k p hp",
-        "  simp only [cert, Cert.indexedFrom, List.mem_cons, Prod.mk.injEq,",
-        "    List.not_mem_nil, or_false, Nat.reduceAdd] at hp",
-        "  rcases hp with " + alts,
-    ])
-    lines.extend(f"  · exact entry_{i}" for i in range(n))
-    lines.extend([
+        "  exact ⟨⟨by decide +kernel, by decide +kernel⟩, rest_0⟩",
         "",
-        "theorem cert_jumpsOkM : Cert.jumpsOkM code cert mems true = true := by",
-        "  apply Cert.jumpsOkM_of_indexed",
-        "  intro k p hp",
-        "  simp only [cert, Cert.indexed, Cert.indexedFrom, List.mem_cons, Prod.mk.injEq,",
-        "    List.not_mem_nil, or_false, Nat.reduceAdd] at hp",
-        "  rcases hp with " + alts,
+        "theorem cert_jumpsOkM : Cert.jumpsOkM code cert mems true = true := jrest_0",
     ])
-    lines.extend(f"  · exact jumps_{i}" for i in range(n))
     lines.extend(["", f"end {args.namespace}", ""])
     return "\n".join(lines)
 

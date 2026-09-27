@@ -646,4 +646,25 @@ theorem Cert.jumpsOkM_of_indexed {code : ByteArray} {c : Cert} {ms : List MemMap
     Cert.jumpsOkM code c ms b = true :=
   Cert.jumpsEntriesM_of_indexedFrom c 0 hall
 
+/-- One step of a chain proof of `Cert.checkEntriesM` over the tails of a long certificate. -/
+theorem Cert.checkEntriesM_drop {code : ByteArray} {es : List Entry} {ms : List MemMap}
+    {b : Bool} (c : Cert) (k : Nat) (hk : k < c.length)
+    (h : checkNodeM code es ms b (c[k]'hk).1.rets (c[k]'hk).1.pc (c[k]'hk).1.frame
+      (ms.getD k []) (c[k]'hk).2 = true)
+    (hrest : Cert.checkEntriesM code es ms b (k + 1) (c.drop (k + 1)) = true) :
+    Cert.checkEntriesM code es ms b k (c.drop k) = true := by
+  rw [List.drop_eq_getElem_cons hk]
+  simp only [Cert.checkEntriesM, Bool.and_eq_true]
+  exact ⟨h, hrest⟩
+
+/-- One step of a chain proof of `Cert.jumpsEntriesM`. -/
+theorem Cert.jumpsEntriesM_drop {code : ByteArray} {es : List Entry} {ms : List MemMap}
+    {b : Bool} (c : Cert) (k : Nat) (hk : k < c.length)
+    (h : jumpsOkNodeM code es b (c[k]'hk).2 (c[k]'hk).1.frame (ms.getD k []) = true)
+    (hrest : Cert.jumpsEntriesM code es ms b (k + 1) (c.drop (k + 1)) = true) :
+    Cert.jumpsEntriesM code es ms b k (c.drop k) = true := by
+  rw [List.drop_eq_getElem_cons hk]
+  simp only [Cert.jumpsEntriesM, Bool.and_eq_true]
+  exact ⟨h, hrest⟩
+
 end Blanc.Lift
