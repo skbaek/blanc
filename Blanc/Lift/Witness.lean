@@ -884,6 +884,30 @@ def wrun (fs : List SFunc) (sevm : Sevm) : Nat → Cfg → Res
     | .cont c' => wrun fs sevm n c'
     | r => r
 
+/-- Composition of runs: running `n + m` steps is running `n` steps, then `m`
+steps from the intermediate configuration if it continued. -/
+theorem wrun_add (fs : List SFunc) (sevm : Sevm) :
+    ∀ (n m : Nat) (c : Cfg),
+      wrun fs sevm (n + m) c =
+        match wrun fs sevm n c with
+        | .cont c' => wrun fs sevm m c'
+        | r => r
+  | 0, m, c => by simp [wrun]
+  | n + 1, m, c => by
+    simp only [Nat.succ_add, wrun]
+    cases h : wstep fs sevm c with
+    | cont c' => exact wrun_add fs sevm n m c'
+    | done o => rfl
+    | stuck => rfl
+
+/-- Step composition when the first chunk continues. -/
+theorem wrun_add_cont {fs : List SFunc} {sevm : Sevm} {n m : Nat} {c c' : Cfg} {r : Res}
+    (h1 : wrun fs sevm n c = .cont c') (h2 : wrun fs sevm m c' = r) :
+    wrun fs sevm (n + m) c = r := by
+  rw [wrun_add, h1]
+  exact h2
+
+
 /-! ## Soundness -/
 
 /-- `SFunc.RunExact` with a stack of pending internal-call continuations:
