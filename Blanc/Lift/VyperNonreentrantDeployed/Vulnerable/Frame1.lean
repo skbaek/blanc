@@ -54,10 +54,12 @@ def tokenCode : ByteArray := ⟨#[
   0x35, 0x01, 0x90, 0x55, 0x60, 0x01, 0x60, 0x00, 0x52, 0x60, 0x20, 0x60, 0x00, 0xf3]⟩
 
 /-- The pre-state's accounts without storage (vminus-preflight section 2): the proxy
-`P` with 1000 wei, the implementation, the attacker and the token, all nonce 1. -/
+`P` with 1000 wei, the implementation, the attacker and the token, all nonce 1.  The
+implementation's code is the registered certificate's `code` (the same 17,535 bytes as
+`implementationCode`, SHA-256 082cdf7d...), so the frames it runs in need no bridge. -/
 def accts0 : List (Adr × Acct) :=
   [(proxyAddress, ⟨1, (1000 : Nat).toB256, .empty, proxyCode⟩),
-   (implementationAddress, ⟨1, 0, .empty, implementationCode⟩),
+   (implementationAddress, ⟨1, 0, .empty, code⟩),
    (attackerAddress, ⟨1, 0, .empty, attackerCode⟩),
    (tokenAddress, ⟨1, 0, .empty, tokenCode⟩)]
 

@@ -1,79 +1,29 @@
-import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.SubtreeRun
 
 /-!
 V- witness, frame 4: the implementation's reentrant `add_liquidity([100, 0], 0, A)` under
-`DELEGATECALL` from the proxy `P` (storage owner `P`, value 100, EELS depth 4), entered while
-`remove_liquidity` holds its lock (slot 2 = 1) and has written `balances[0] := 900`.
-The entry state is the EELS Prague trace's frame-4 entry (Plans
-`evidence/deployed-lido-vyper-v1/vminus-witness-w1/trace_steps.py`): gas 28,116,400, the P
-balance 1000 (the attacker's 100 back), accessed addresses {impl, 0x4, A, P} and accessed
-keys {(P, 2), (P, 26), (P, 8)}.  Accounts other than `P` are not read by this frame and are
-left out of this probe world.
+the proxy's `DELEGATECALL` (storage owner `P`, value 100, EELS depth 4), entered from its
+real spawn (`Subtree.c4`: the world and accessed sets frame 1 and the attacker left, the
+lock of `remove_liquidity` (slot 2) held and `balances[0] = 900`).  What its halt shows:
+gas, return data, success, and the halting configuration's shadows.
 -/
 
-namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame4
+namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree
 
 open Jaune Blanc.Lift Blanc.Lift.Witness
 open Blanc.Lift.VyperNonreentrantDeployed Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
 
-/-- `add_liquidity(uint256[2],uint256,address)` = `0x0c3e4b54`, `([100, 0], 0, A)`. -/
-def addCalldata : Bytes :=
-  [0x0c, 0x3e, 0x4b, 0x54] ++ word 100 ++ word 0 ++ word 0 ++ word attackerAddress.toNat
+/-- Frame 4's halt: gas, return data, no error and whether the halting configuration's
+storage keys, addresses and storage shadows are `keys4`/`adrs4`/`storA` (decided), and its
+account shadow (compared by the kernel as a term: its codes are the fixture's constants). -/
+def obs4 : Res → Option (Nat × List Nat × Bool × AcctShadow)
+  | .done (.halted d) cl => some (d.gasLeft, d.output.map UInt8.toNat, d.error.isNone &&
+      decide (cl.keys = keys4) && decide (cl.adrs = adrs4) && decide (cl.stor = storA), cl.acs)
+  | _ => none
 
-/-- P's storage at frame-4 entry: frame 1 has set the lock (slot 2) and `balances[0] := 900`. -/
-def poolStorage4 : List (Nat × Nat) :=
-  [(2, 1), (7, tokenAddress.toNat), (8, 900), (9, 1000), (12, 10000),
-   (15, 10 ^ 18), (16, 10 ^ 18), (26, 2000), (balanceOfASlot, 2000)]
+/-- The EELS observation at frame 4's `RETURN`: gas 28,053,821, returning 106 (the LP
+minted to `A`), with `totalSupply = balanceOf[A] = 2106` in `P`'s storage shadow. -/
+def obs4EELS : Option (Nat × List Nat × Bool × AcctShadow) :=
+  some (gas4, (word 106).map UInt8.toNat, true, acsA)
 
-def poolAcct4 : Acct :=
-  { poolAcct with
-    stor := poolStorage4.foldl (fun s kv => Std.TreeMap.insert s kv.1.toB256 kv.2.toB256) .empty }
-
-/-- Concrete storage writes for `P` at frame-4 entry. -/
-def poolWrites4 : List ((Adr × B256) × B256) :=
-  poolStorage4.map fun (k, v) => ((proxyAddress, k.toB256), v.toB256)
-
-/-- The world, built by folding `poolWrites4` from the storage-free base world. -/
-def world4 : State := stateFoldStor world0_base poolWrites4
-
-def gas4 : Nat := 28116400
-
-def sevm4 : Sevm :=
-  { (default : Sevm) with
-    caller := attackerAddress
-    target := some proxyAddress
-    currentTarget := proxyAddress
-    gas := gas4
-    value := (100 : Nat).toB256
-    data := addCalldata
-    codeAddress := some implementationAddress
-    code := code
-    depth := 1020
-    benvStat := { (default : BenvStat) with origState := world0 } }
-
-def adrs4 : List Adr := [proxyAddress, attackerAddress, 4, implementationAddress]
-def keys4 : List (Adr × B256) :=
-  [(proxyAddress, (8 : Nat).toB256), (proxyAddress, (26 : Nat).toB256),
-   (proxyAddress, (2 : Nat).toB256)]
-
-def pre4 : Devm :=
-  let d := ((default : Devm).withGasLeft gas4).withState world4
-  let d := adrs4.foldr (fun a d => addAccessedAddress d a) d
-  keys4.foldr (fun k d => addAccessedStorageKey d k.1 k.2) d
-
-def stor4 : StorShadow := storShadowOf poolWrites4
-
-def c4 : Cfg := ⟨pre4, t_0000_c0, [], keys4, adrs4, stor4, acs0⟩
-
-/-- The start `Agree` storage conjunct for frame 4. -/
-theorem world4_stor_agree : ∀ a k, storOf world4 a k = lookupS stor4 a k :=
-  storOf_stateFoldStor poolWrites4 storOf_world0_base
-
-theorem c4_agree_stor : ∀ a k, storOf c4.devm.state a k = lookupS c4.stor a k := by
-  intro a k
-  change storOf world4 a k = lookupS stor4 a k
-  exact world4_stor_agree a k
-
-
-
-end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame4
+end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree

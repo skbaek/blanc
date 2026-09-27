@@ -18,12 +18,6 @@ open Blanc.Lift.VyperNonreentrantDeployed
 
 theorem fs1_zero : fs1[0]? = some t_0000_c0 := by kernel_rfl
 
-private theorem stepOk_trans {fs : List SFunc} {sevm : Sevm} {c c' c'' : Cfg}
-    (s1 : StepOk fs sevm c c') (s2 : StepOk fs sevm c' c'') : StepOk fs sevm c c'' :=
-  ⟨fun hc => s2.1 (s1.1 hc), fun o hc r => s1.2 o hc (s2.2 o (s1.1 hc) r)⟩
-
-theorem token_jumpsOk : Cert.jumpsOk Token.code Token.cert = true := by decide +kernel
-
 /-- **Frame 1 of the V- witness.**  Given the attacker child `d1` (its `Exec` derivation
 and settlement, `ChildOk`; its observed gas, output and success; its world shadows,
 `ChildAgree`), frame 1, with the token child run by its own certificate, is a gas-exact
@@ -49,16 +43,15 @@ theorem frame1_full (d1 : Devm)
     · rename_i c2 h2
       split at hk
       · rename_i c3 h3
-        have s3 := stepOk_trans (stepOk_trans (wrun_cont h1) (callResume_cont h2 k1 a1))
-          (wrun_cont h3)
+        have s3 := ((wrun_cont h1).trans (callResume_cont h2 k1 a1)).trans (wrun_cont h3)
         split at hk
         · rename_i d2 cl hc
           split at hk
           · rename_i c4 h4
             obtain ⟨k2, a2⟩ := childOk_of_childRun
-              (fun hcode hfork hrun => lift_exact Token.cert_check token_jumpsOk hcode hfork hrun)
+              (fun hcode hfork hrun => lift_exact Token.cert_check Token.cert_jumpsOk hcode hfork hrun)
               (s3.1 c0_agree) hc (callResume_error h4)
-            have s := stepOk_trans s3 (callResume_cont h4 k2 a2)
+            have s := s3.trans (callResume_cont h4 k2 a2)
             generalize hr : wrun fs1 sevm1 188 c4 = r at hk
             rcases r with c | ⟨post | post, cl⟩ | _
             · simp [obs1, obs1EELS] at hk

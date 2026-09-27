@@ -1,5 +1,5 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
-import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Token.Check
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.WitnessCerts
 import Blanc.Lift.WitnessChild
 
 /-!
@@ -25,36 +25,61 @@ open Blanc.Lift.VyperNonreentrantDeployed
 
 def gasA : Nat := 28953417
 
+/-- The accessed storage keys after the attacker's subtree (the halting configuration of
+the attacker frame: its own, then those of the proxy frame and the implementation frame,
+duplicates kept; membership is what matters). -/
 def keysA : List (Adr × B256) :=
-  [(proxyAddress, (0 : Nat).toB256), (proxyAddress, (2 : Nat).toB256),
-   (proxyAddress, (8 : Nat).toB256), (proxyAddress, (9 : Nat).toB256),
-   (proxyAddress, (10 : Nat).toB256), (proxyAddress, (12 : Nat).toB256),
-   (proxyAddress, (14 : Nat).toB256), (proxyAddress, (15 : Nat).toB256),
-   (proxyAddress, (16 : Nat).toB256), (proxyAddress, (26 : Nat).toB256),
-   (proxyAddress, balanceOfASlot.toB256)]
+  [(proxyAddress, (8 : Nat).toB256), (proxyAddress, (26 : Nat).toB256),
+   (proxyAddress, (2 : Nat).toB256), (proxyAddress, (8 : Nat).toB256),
+   (proxyAddress, (26 : Nat).toB256), (proxyAddress, (2 : Nat).toB256),
+   (proxyAddress, balanceOfASlot.toB256), (proxyAddress, (10 : Nat).toB256),
+   (proxyAddress, (16 : Nat).toB256), (proxyAddress, (15 : Nat).toB256),
+   (proxyAddress, (9 : Nat).toB256), (proxyAddress, (12 : Nat).toB256),
+   (proxyAddress, (14 : Nat).toB256), (proxyAddress, (0 : Nat).toB256),
+   (proxyAddress, (8 : Nat).toB256), (proxyAddress, (26 : Nat).toB256),
+   (proxyAddress, (2 : Nat).toB256)]
 
-def adrsA : List Adr := [attackerAddress, 4, proxyAddress, implementationAddress]
+def adrsA : List Adr :=
+  [proxyAddress, attackerAddress, (4 : Adr), implementationAddress, proxyAddress,
+   attackerAddress, (4 : Adr), implementationAddress, implementationAddress, proxyAddress,
+   attackerAddress, (4 : Adr), implementationAddress]
 
-/-- `P`'s storage after the reentrant `add_liquidity`: lock 2 still held, `balances =
-[1000, 1000]`, `totalSupply = balanceOf[A] = 2106`; `T` untouched. -/
+/-- `P`'s storage after the reentrant `add_liquidity` (newest first): its lock (slot 0)
+taken and released, `totalSupply = balanceOf[A] = 2106`, `balances = [1000, 1000]`; below
+them frame 1's writes before step 339 (lock 2 held, `balances[0] := 900`) and the
+pre-state; `T` untouched. -/
 def storA : StorShadow :=
-  [((proxyAddress, (2 : Nat).toB256), (1 : Nat).toB256),
-   ((proxyAddress, (7 : Nat).toB256), tokenAddress.toNat.toB256),
-   ((proxyAddress, (8 : Nat).toB256), (1000 : Nat).toB256),
-   ((proxyAddress, (9 : Nat).toB256), (1000 : Nat).toB256),
-   ((proxyAddress, (12 : Nat).toB256), (10000 : Nat).toB256),
-   ((proxyAddress, (15 : Nat).toB256), (10 ^ 18 : Nat).toB256),
-   ((proxyAddress, (16 : Nat).toB256), (10 ^ 18 : Nat).toB256),
+  [((proxyAddress, (0 : Nat).toB256), (0 : Nat).toB256),
    ((proxyAddress, (26 : Nat).toB256), (2106 : Nat).toB256),
    ((proxyAddress, balanceOfASlot.toB256), (2106 : Nat).toB256),
-   ((tokenAddress, proxyAddress.toNat.toB256), (1000 : Nat).toB256)]
+   ((proxyAddress, (9 : Nat).toB256), (1000 : Nat).toB256),
+   ((proxyAddress, (8 : Nat).toB256), (1000 : Nat).toB256),
+   ((proxyAddress, (0 : Nat).toB256), (1 : Nat).toB256),
+   ((proxyAddress, (8 : Nat).toB256), (900 : Nat).toB256),
+   ((proxyAddress, (2 : Nat).toB256), (1 : Nat).toB256),
+   ((tokenAddress, proxyAddress.toNat.toB256), (1000 : Nat).toB256),
+   ((proxyAddress, balanceOfASlot.toB256), (2000 : Nat).toB256),
+   ((proxyAddress, (26 : Nat).toB256), (2000 : Nat).toB256),
+   ((proxyAddress, (16 : Nat).toB256), (1000000000000000000 : Nat).toB256),
+   ((proxyAddress, (15 : Nat).toB256), (1000000000000000000 : Nat).toB256),
+   ((proxyAddress, (12 : Nat).toB256), (10000 : Nat).toB256),
+   ((proxyAddress, (9 : Nat).toB256), (1000 : Nat).toB256),
+   ((proxyAddress, (8 : Nat).toB256), (1000 : Nat).toB256),
+   ((proxyAddress, (7 : Nat).toB256), tokenAddress.toNat.toB256)]
 
-/-- The accounts after the attacker's subtree: the 100 wei went to `A` and came back. -/
+/-- The accounts after the attacker's subtree (newest first): the 100 wei went to `A`
+(frame 1's `CALL`) and came back (`A`'s `CALL` to `P`). -/
 def acsA : AcctShadow :=
   [(proxyAddress, ⟨1, (1000 : Nat).toB256, .empty, proxyCode⟩),
-   (implementationAddress, ⟨1, 0, .empty, implementationCode⟩),
-   (attackerAddress, ⟨1, 0, .empty, attackerCode⟩),
-   (tokenAddress, ⟨1, 0, .empty, tokenCode⟩)]
+   (attackerAddress, ⟨1, (0 : Nat).toB256, .empty, attackerCode⟩),
+   (attackerAddress, ⟨1, (100 : Nat).toB256, .empty, attackerCode⟩),
+   (proxyAddress, ⟨1, (900 : Nat).toB256, .empty, proxyCode⟩),
+   ((4 : Adr), ⟨0, (0 : Nat).toB256, .empty, .empty⟩),
+   (proxyAddress, ⟨1, (1000 : Nat).toB256, .empty, proxyCode⟩),
+   (tokenAddress, ⟨1, (0 : Nat).toB256, .empty, tokenCode⟩),
+   (attackerAddress, ⟨1, (0 : Nat).toB256, .empty, attackerCode⟩),
+   (implementationAddress, ⟨1, (0 : Nat).toB256, .empty, code⟩),
+   (proxyAddress, ⟨1, (1000 : Nat).toB256, .empty, proxyCode⟩)]
 
 /-! ### The run -/
 

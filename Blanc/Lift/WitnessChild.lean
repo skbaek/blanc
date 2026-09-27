@@ -24,6 +24,10 @@ namespace Blanc.Lift.Witness
 
 open Jaune Blanc.Lift
 
+theorem StepOk.trans {fs : List SFunc} {sevm : Sevm} {c c' c'' : Cfg}
+    (s1 : StepOk fs sevm c c') (s2 : StepOk fs sevm c' c'') : StepOk fs sevm c c'' :=
+  ⟨fun hc => s2.1 (s1.1 hc), fun o hc r => s1.2 o hc (s2.2 o (s1.1 hc) r)⟩
+
 /-! ## Halting keeps the accessed sets -/
 
 theorem linst_return_keep {sevm : Sevm} {devm d : Devm}
@@ -121,12 +125,43 @@ theorem frame_settle_ok {f : Frame} {post : Devm} (hcr : f.isCreate = false)
   simp [Frame.settle, Frame.settleMsg, hcr, executeCode.handleErrorWith, hsg,
     executeCode.handleError, processMessage.settle, bind, Except.bind, he]
 
+/-- The start configuration of a frame entered with shadows agrees, given that the
+frame's message agrees with them. -/
+theorem frameStart_agree {f : Frame} {acs : AcctShadow} {cevm : Evm}
+    {keys : List (Adr × B256)} {adrs : List Adr} {stor : StorShadow} (f0 : SFunc)
+    (he : frameEnterS f acs = .run cevm)
+    (hK : ∀ x, x ∈ f.inner.accessedStorageKeys ↔ x ∈ keys)
+    (hA : ∀ a, a ∈ f.inner.accessedAddresses ↔ a ∈ adrs)
+    (hS : ∀ a k, storOf f.inner.benv.state a k = lookupS stor a k)
+    (hC : AcctAgree f.inner.benv.state acs) :
+    Agree ⟨cevm.dyna, f0, [], keys, adrs, stor, acsTransfer f.inner acs⟩ := by
+  obtain ⟨benv, hb, rfl⟩ := frameEnterS_run he
+  have hbB : benvAfterTransferB f.inner = .ok benv := by
+    rw [benvAfterTransfer_eq_S hC]; exact hb
+  refine ⟨fun x => hK x, fun a => hA a, fun a k => ?_, ?_⟩
+  · show storOf benv.state a k = lookupS stor a k
+    rw [benvAfterTransferB_stor hbB]; exact hS a k
+  · exact acctAgree_transfer hC hb
+
+/-- A halting run from an agreeing configuration: the halting configuration's shadows
+describe the halted machine. -/
+theorem childAgree_of_halt {fs : List SFunc} {sevm : Sevm} {n : Nat} {c cl : Cfg} {post : Devm}
+    (hrun : wrun fs sevm n c = .done (.halted post) cl) (hc : Agree c) :
+    ChildAgree post cl.keys cl.adrs cl.stor cl.acs := by
+  obtain ⟨-, hcl, -⟩ := wrun_done hrun hc
+  have hkeep := wrun_halt_keep hrun
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · intro a; rw [hkeep.1]; exact hcl.2.1 a
+  · intro k; rw [hkeep.2.1]; exact hcl.1 k
+  · intro a k; rw [hkeep.2.2]; exact hcl.2.2.1 a k
+  · intro a; rw [hkeep.2.2]; exact hcl.2.2.2 a
+
 /-- **A code child run by its own certificate.**  The frame `f` enters (`frameEnterS`)
 with the machine `cevm`; its message's accessed sets, storage and accounts agree with
-`keys`/`adrs`/`stor`/`acs`; a halting run of `fs` from `cevm` with those shadows (the
-value transfer applied to `acs`) whose halted machine has no error is an `Exec` from
-`cevm` (by `hexact`), the frame settles to it, and its shadows are the halting
-configuration's. -/
+`keys`/`adrs`/`stor`/`acs`; a run of `fs` from `cevm` with those shadows (the value
+transfer applied to `acs`) that takes the steps `hstep` and then halts, with no error, is
+an `Exec` from `cevm` (by `hexact`), the frame settles to it, and its shadows are the
+halting configuration's. -/
 theorem frame_of_wrun {fs : List SFunc} {f : Frame} {acs : AcctShadow} {cevm : Evm}
     {keys : List (Adr × B256)} {adrs : List Adr} {stor : StorShadow} {f0 : SFunc} {n : Nat}
     {post : Devm} {c1 cl : Cfg}
@@ -144,22 +179,12 @@ theorem frame_of_wrun {fs : List SFunc} {f : Frame} {acs : AcctShadow} {cevm : E
     (herr : post.error = none) :
     Nonempty (Exec cevm.pc cevm.sta cevm.dyna (.ok post)) ∧ f.settle (.ok post) = .ok post ∧
       ChildAgree post cl.keys cl.adrs cl.stor cl.acs := by
-  obtain ⟨benv, hb, rfl⟩ := frameEnterS_run he
-  have hag : Agree ⟨(initEvm (f.inner.withBenv benv)).dyna, f0, [], keys, adrs, stor,
-      acsTransfer f.inner acs⟩ := by
-    have hbB : benvAfterTransferB f.inner = .ok benv := by
-      rw [benvAfterTransfer_eq_S hC]; exact hb
-    refine ⟨fun x => hK x, fun a => hA a, fun a k => ?_, ?_⟩
-    · show storOf benv.state a k = lookupS stor a k
-      rw [benvAfterTransferB_stor hbB]; exact hS a k
-    · exact acctAgree_transfer hC hb
-  obtain ⟨run, hcl, hst⟩ := wrun_done hrun (hstep.1 hag)
-  have hkeep := wrun_halt_keep hrun
-  refine ⟨hexact ⟨f0, h0, hstep.2 _ hag run⟩, frame_settle_ok hcr hsg herr, ?_, ?_, ?_, ?_⟩
-  · intro a; rw [hkeep.1]; exact hcl.2.1 a
-  · intro k; rw [hkeep.2.1]; exact hcl.1 k
-  · intro a k; rw [hkeep.2.2]; exact hcl.2.2.1 a k
-  · intro a; rw [hkeep.2.2]; exact hcl.2.2.2 a
+  have hag := frameStart_agree f0 he hK hA hS hC
+  obtain ⟨benv, -, hcev⟩ := frameEnterS_run he
+  have hpc : cevm.pc = 0 := by rw [hcev]; rfl
+  obtain ⟨run, -, -⟩ := wrun_done hrun (hstep.1 hag)
+  refine ⟨hpc ▸ hexact ⟨f0, h0, hstep.2 _ hag run⟩, frame_settle_ok hcr hsg herr,
+    childAgree_of_halt hrun (hstep.1 hag)⟩
 
 /-! ## Code children of a `CALL` in a witness run -/
 
@@ -173,6 +198,23 @@ def childStart (sevm : Sevm) (c : Cfg) (f0 : SFunc) : Option (Evm × Cfg) :=
       some (cevm, ⟨cevm.dyna, f0, [], c.keys, cp.adrs, c.stor, acsTransfer cp.f.inner c.acs⟩)
     | .done _ => none
   | none => none
+
+/-- The child's start configuration agrees. -/
+theorem childStart_agree {sevm : Sevm} {c cc : Cfg} {f0 : SFunc} {cevm : Evm} (hagree : Agree c)
+    (hs : childStart sevm c f0 = some (cevm, cc)) : Agree cc := by
+  unfold childStart at hs
+  split at hs
+  · rename_i cp hp
+    split at hs
+    · rename_i cevm' he
+      simp only [Option.some.injEq, Prod.mk.injEq] at hs
+      obtain ⟨-, rfl⟩ := hs
+      obtain ⟨-, hpa, hpk, -, hia, hik, -, hst⟩ := callPrep_spec hp hagree.2.1 hagree.2.2.2
+      exact frameStart_agree f0 he (fun x => by rw [hik, hpk]; exact hagree.1 x)
+        (fun a => by rw [hia]; exact hpa a) (fun a k => by rw [hst]; exact hagree.2.2.1 a k)
+        (by rw [hst]; exact hagree.2.2.2)
+    · cases hs
+  · cases hs
 
 /-- The child of the code `CALL` at `c`, run for at most `n` steps over `fs`, provided
 its code is `code` (as bytes) and its fork is covered. -/
@@ -353,5 +395,6 @@ theorem dcallPrep_spec {sevm : Sevm} {devm : Devm} {adrs : List Adr} {acs : Acct
         · cases h
     · cases h
   · cases h
+
 
 end Blanc.Lift.Witness
