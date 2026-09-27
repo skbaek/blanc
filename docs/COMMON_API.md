@@ -2662,6 +2662,15 @@ contract-neutral.
 - Execution to lifted run (safety): `lift_sound`, and `lift_sound_in`, which
   keeps each step's derivation (`StepIn`) for arguments about re-entrant child
   frames, in [`Blanc/Lift/Sound.lean`](../Blanc/Lift/Sound.lean).
+- Every execution prefix to a certificate node (all outcomes, no success
+  premise): the certificate cursor `Cursor`/`Cont`, its invariant `CursorOK`
+  (checked node, pc, stack segments matched per pending function), the
+  synthetic step `SStep`, `cursor_start`, `cursor_step` (one `ParentStep`,
+  including a `CALL` over a child of any outcome, is one `SStep`) and
+  `cursor_of_parentPrefix`, with `CursorOK.exec_call_or_staticcall` (a reached
+  node spawns only by `CALL`/`STATICCALL`), in
+  [`Blanc/Lift/Cursor.lean`](../Blanc/Lift/Cursor.lean). Use it for safety facts
+  about reverting or out-of-gas frames, which `lift_sound` cannot see.
 - Lifted run to execution (liveness, exact gas): `SFunc.RunExact`,
   `Cert.jumpsOk` and `lift_exact` in [`Blanc/Lift/Exact.lean`](../Blanc/Lift/Exact.lean);
   the per-instruction walk steps (`rx_push`, `rx_sload_cold`, `rx_callRet`, …)
