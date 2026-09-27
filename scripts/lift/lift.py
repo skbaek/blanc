@@ -13,7 +13,22 @@ Plans evidence (`solc-bytecode-v1/w3/lift.py`, `beacon-deposit-bytecode-v1/w0/li
 (`deployed-lido-vyper-v1/certificate/generate.py`: PUSH0, TLOAD/TSTORE, SLT,
 EXTCODESIZE, compatible-join repair, join-aware call continuations).  The two
 exploration differences of the solc-w3 fork are options (`--no-join-entries`,
-`--wrapper-order fall-first`), not code paths per contract.
+`--wrapper-order fall-first`), not code paths per contract.  `--fold` (registry
+option `"fold": true`) folds ADD, MUL, SUB, LT, GT, EQ and ISZERO over constant
+operands exactly as `foldConst` in `Blanc/Lift/Check.lean`; off by default, so
+every certificate registered without it regenerates byte-identically.  `--pc`
+(registry option `"pc": true`) lifts `PC` as `SFunc.pcAt pc`, pushing the node's
+own pc; off by default.  `--decide-jumpi` (registry option `"decide_jumpi":
+true`) emits a JUMPI with a constant condition with its dead side `.undefined`,
+which `checkNode` does not check (`AVal.jumps?`); off by default.
+`--memret callnext --const-mem --entry-cap K --widen agree` (registry option
+`"memret": "callnext", "const_mem": true, "entry_cap": K`) is the memory-tracking
+mode ported from Plans evidence/deployed-lido-vyper-v1/memret-probe/lift_memret.py:
+PC, the seven folds and decided JUMPIs, a constant memory map whose transfer is
+exactly `absMem`/`memTop` (`Blanc/Lift/CheckMem.lean`), entries keyed by constant
+state with at most K per control context (then widened to the constants all agree
+on), a `mems` list beside `cert`, and a generated Check proving `Cert.checkM` and
+`Cert.jumpsOkM` (what `lift_soundM`/`lift_exactM` consume).
 
 Supported opcodes.  `LEAN_REG` maps each regular opcode the producer may emit to
 its Lean `Ninst`; every row is checked, on each run, against the arms of
@@ -278,12 +293,29 @@ def run_registry(args: argparse.Namespace) -> int:
                 argv.append("--no-join-entries")
             if "wrapper_order" in opts:
                 argv += ["--wrapper-order", opts["wrapper_order"]]
+            if opts.get("fold") is True:
+                argv.append("--fold")
+            if opts.get("pc") is True:
+                argv.append("--pc")
+            if opts.get("decide_jumpi") is True:
+                argv.append("--decide-jumpi")
+            if "memret" in opts:
+                # memory-tracking certificate (`Cert.checkM`): the vyper-memret-probe-v1 mode,
+                # ported with the Lean checker's exact memory transfer
+                argv += ["--memret", opts["memret"]]
+                if opts.get("const_mem") is True:
+                    argv += ["--const-mem", "--entry-cap", str(opts.get("entry_cap", 2)),
+                             "--widen", opts.get("widen", "agree")]
             if "header" in row:
                 argv += ["--header", row["header"]]
             check = row.get("check")
             if check:
                 argv += ["--check-out", str(out / "Check.lean"), "--check-header", check["header"],
                          "--check-split-nodes", str(check.get("split_nodes", 0))]
+                if "parts" in check:
+                    argv += ["--check-parts", str(check["parts"])]
+                if check.get("literal_tries") is True:
+                    argv.append("--check-literal-tries")
             lock = row.get("lock")
             if lock:
                 argv += ["--lock-spec", json.dumps(lock["spec"]), "--lock-spec-module", lock["spec_module"],
@@ -298,6 +330,17 @@ def run_registry(args: argparse.Namespace) -> int:
             pairs = [(out / "Cert.lean", root / row["cert"])]
             if check:
                 pairs.append((out / "Check.lean", root / check["path"]))
+                if "parts" in check:
+                    # split memory-mode Check: CheckTries and CheckPart<i> beside Check.lean
+                    check_dir = (root / check["path"]).parent
+                    produced_parts = sorted(out.glob("CheckTries.lean")) + sorted(
+                        out.glob("CheckPart*.lean"), key=lambda q: int(q.stem[len("CheckPart"):]))
+                    pairs += [(q, check_dir / q.name) for q in produced_parts]
+                    names = {q.name for q in produced_parts}
+                    for extra in sorted(check_dir.glob("CheckPart*.lean")):
+                        if extra.name not in names:
+                            print(f"FAIL {ident}: {extra.relative_to(root)} is not produced by the registered generator")
+                            failures += 1
             if lock:
                 pairs.append((out / "LockAnn.lean", root / lock["ann"]))
                 pairs.append((out / "LockCheck.lean", root / lock["check"]))
@@ -344,10 +387,20 @@ parser.add_argument("--header", type=str, default=DEFAULT_HEADER, help="Cert.lea
 parser.add_argument("--check-header", type=str, default=DEFAULT_HEADER, help="Check.lean generator comment")
 parser.add_argument("--check-split-nodes", type=int, default=0,
                     help="Check.lean: decide an entry above this many nodes block by block (0: never)")
+parser.add_argument("--check-parts", type=int, default=0,
+                    help="split the generated Check into CheckTries, CheckPart0..N-1 and the assembling Check (N >= 2; registry check.parts)")
+parser.add_argument("--check-literal-tries", action="store_true",
+                    help="emit the code tries as data checked once against LTrie.ofList (registry check.literal_tries)")
 parser.add_argument("--no-join-entries", action="store_true",
                     help="do not promote multi-predecessor JUMPDESTs to join entries (solc-w3 exploration)")
 parser.add_argument("--wrapper-order", choices=("taken-first", "fall-first"), default="taken-first",
                     help="build order of a dispatcher selector branch (fall-first: solc-w3 exploration)")
+parser.add_argument("--decide-jumpi", action="store_true",
+                    help="a constant JUMPI condition decides the branch; the dead side is .undefined")
+parser.add_argument("--pc", action="store_true",
+                    help="lift PC as SFunc.pcAt (pushes the node's own pc)")
+parser.add_argument("--fold", action="store_true",
+                    help="fold ADD/MUL/SUB/LT/GT/EQ/ISZERO over constant operands (mirror of foldConst)")
 parser.add_argument("--lock-spec", type=str, default=None,
                     help="reentrancy-lock spec as JSON {slot, locked, bodies, mutBodies, setPcs, releasePcs}")
 parser.add_argument("--lock-spec-module", type=str, default=None, help="Lean module defining `lockSpec` (hand-written)")
@@ -355,8 +408,25 @@ parser.add_argument("--lock-ann-out", type=Path, default=None, help="LockAnn.lea
 parser.add_argument("--lock-check-out", type=Path, default=None, help="per-entry LockCheck.lean to write")
 parser.add_argument("--lock-header", type=str, default=DEFAULT_HEADER, help="lock files' generator comment")
 parser.add_argument("--report-dir", type=Path, default=None, help="also write cert.json/cfg.json diagnostics here")
+parser.add_argument("--memret", choices=("off", "callnext", "inline"), default="off",
+                    help="PROBE: off = canonical; callnext = memory map may hold `ret` (memory-carried return tags become callNext/ret); inline = memory map holds only constant jump destinations (callees duplicated per caller)")
+parser.add_argument("--no-fold-add", action="store_true", help="PROBE: do not fold ADD of two constants")
+parser.add_argument("--probe-json", type=Path, default=None, help="PROBE: write site diagnostics here")
+parser.add_argument("--const-mem", action="store_true", help="PROBE: keep every constant word in the memory map, fold arithmetic/comparison ops on constants, decide JUMPIs with a constant condition (live side only), and key loop/goto entries by the full constant state up to --entry-cap entries per pc")
+parser.add_argument("--entry-cap", type=int, default=4, help="PROBE (--const-mem): full-constant entries per pc before entries generalize back to control values")
+parser.add_argument("--widen", choices=("agree", "control"), default="agree", help="PROBE (--const-mem): at the per-pc cap keep values all entries at that pc agree on (agree) or only control values (control)")
+parser.add_argument("--no-callee-join-exempt", action="store_true", help="PROBE (inline): do not exempt joins whose disagreeing positions hold jump destinations")
 
 args = parser.parse_args()
+MEMRET = args.memret != "off"
+FOLD_ADD = MEMRET and not args.no_fold_add
+CONST_MEM = MEMRET and args.const_mem
+if MEMRET:
+    args.pc = True     # PC as SFunc.pcAt (the node's own pc)
+if CONST_MEM:
+    args.fold = True   # exactly foldConst's seven ops (Blanc/Lift/Check.lean)
+ENTRY_CAP = args.entry_cap
+JOIN_EXEMPT = args.memret == "inline" and not args.no_callee_join_exempt
 
 check_lean_transfers(args.blanc_root)
 
@@ -407,6 +477,16 @@ if len(code) >= 2:
         trailer_len = potential_cbor_len + 2
         trailer_start = len(code) - trailer_len
 
+if MEMRET:
+    BASE_SUPPORTED_OPS = BASE_SUPPORTED_OPS | {0x58}  # PROBE: PC (no Lean transfer; pcFree rejects it)
+# PROBE site diagnostics
+probe_pc_sites: Dict[int, Set[int]] = {}      # pc of PC -> constants produced
+probe_mload_hits: Dict[int, Set[Any]] = {}     # pc of MLOAD -> abstract values read back
+probe_jump_sites: Dict[int, Set[str]] = {}     # pc of JUMP/JUMPI -> how the tree resolved it
+probe_kills: Dict[int, int] = {}               # pc of memory writer -> number of times it cleared the whole map
+probe_kill_events: List[Tuple[int, str]] = []
+probe_entry_nodes: Dict[int, int] = {}          # entry -> nodes built
+
 # Track encountered unsupported opcodes
 encountered_unsupported: Dict[int, List[int]] = {} # op -> list of pcs
 
@@ -415,7 +495,23 @@ back_edges: List[Dict[str, Any]] = []
 external_calls: List[Dict[str, Any]] = []
 
 # 3. Abstract state transfer (mirror of absNinst)
+W256 = 1 << 256
+# foldConst's binary ops; x = top of stack, y = second (Jaune's applyBinary order)
+FOLD2 = {
+    0x01: lambda x, y: x + y,               # ADD
+    0x02: lambda x, y: x * y,               # MUL
+    0x03: lambda x, y: x - y,               # SUB
+    0x10: lambda x, y: 1 if x < y else 0,   # LT
+    0x11: lambda x, y: 1 if x > y else 0,   # GT
+    0x14: lambda x, y: 1 if x == y else 0,  # EQ
+}
 def step_inst(op: int, data: bytes, stack: List[Tuple[Any, ...]], cur_pc: Optional[int] = None) -> Optional[List[Tuple[Any, ...]]]:
+    if op == 0x58 and args.pc:  # PC: the node's own pc (SFunc.pcAt)
+        if cur_pc is None:
+            return None
+        st = list(stack)
+        st.insert(0, ('const', cur_pc))
+        return st
     # Check if opcode is supported in the checker model
     if op not in BASE_SUPPORTED_OPS:
         if cur_pc is not None:
@@ -443,13 +539,19 @@ def step_inst(op: int, data: bytes, stack: List[Tuple[Any, ...]], cur_pc: Option
         return st
     elif op in (0x01, 0x02, 0x03, 0x04, 0x0a, 0x10, 0x11, 0x14, 0x16, 0x1c, 0x20): # 2 -> 1
         if len(st) < 2: return None
-        st.pop(0); st.pop(0)
-        st.insert(0, ('unk',))
+        x, y = st.pop(0), st.pop(0)
+        if args.fold and op in FOLD2 and x[0] == 'const' and y[0] == 'const':
+            st.insert(0, ('const', FOLD2[op](x[1], y[1]) % W256))
+        else:
+            st.insert(0, ('unk',))
         return st
     elif op in (0x15, 0x19, 0x31, 0x35, 0x51, 0x54): # 1 -> 1
         if len(st) < 1: return None
-        st.pop(0)
-        st.insert(0, ('unk',))
+        x = st.pop(0)
+        if args.fold and op == 0x15 and x[0] == 'const':
+            st.insert(0, ('const', 1 if x[1] == 0 else 0))
+        else:
+            st.insert(0, ('unk',))
         return st
     elif op in (0x30, 0x32, 0x33, 0x34, 0x36, 0x42, 0x5a): # 0 -> 1
         st.insert(0, ('unk',))
@@ -509,10 +611,122 @@ def call_compat(t: int, caller_frame: List[Tuple[Any, ...]], callee_frame: Tuple
             return False
     return True
 
+# PROBE: abstract memory.  A map is a sorted tuple of (offset, AVal) pairs: the
+# 32-byte word at `offset` is described by AVal.  Absent offsets are unknown.
+# Only values that can matter for control are kept: constant jump destinations,
+# and (mode callnext) the current function's return tag `('ret',)`.
+EMPTY_MEM: Tuple[Tuple[int, Tuple[Any, ...]], ...] = ()
+W256 = 1 << 256
+
+def mem_get(mem, off):
+    for o, v in mem:
+        if o == off:
+            return v
+    return None
+
+def mem_kill(mem, lo, hi):
+    """Drop every word [o, o+32) overlapping [lo, hi)."""
+    return tuple((o, v) for (o, v) in mem if o + 32 <= lo or hi <= o)
+
+def mem_keepable(v):
+    if v[0] == 'const' and (CONST_MEM or v[1] in jumpdests):
+        return True
+    return args.memret == "callnext" and v[0] == 'ret'
+
+def _kill_all(mem, cur_pc, why):
+    if mem and cur_pc is not None:
+        probe_kills[cur_pc] = probe_kills.get(cur_pc, 0) + 1
+        probe_kill_events.append((cur_pc, why))
+    return EMPTY_MEM
+
+def _range_write(mem, off, size, cur_pc, why):
+    if size[0] == 'const' and size[1] == 0:
+        return mem
+    if off[0] == 'const' and size[0] == 'const':
+        return mem_kill(mem, off[1], off[1] + size[1])
+    return _kill_all(mem, cur_pc, why)
+
+# Memory transfer, exactly `absMem` (Blanc/Lift/CheckMem.lean): MSTORE at a constant
+# offset records its value, CALLDATACOPY over a constant window forgets what it overlaps,
+# the instructions of `rinstMemKeeps` (and every PUSH, and PC as `pcAt`) keep the map, and
+# every other instruction forgets it.
+LEAN_MEM_KEEP: Set[int] = (
+    {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x0b, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+     0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x20, 0x30, 0x32, 0x33, 0x34, 0x35,
+     0x36, 0x38, 0x3a, 0x3d, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x48, 0x4a, 0x50, 0x51,
+     0x54, 0x55, 0x58, 0x59, 0x5c, 0x5d}
+    | set(range(0x5f, 0xa0)) | set(range(0xa0, 0xa5)))
+
+def step_full(op, data, stack, mem, cur_pc):
+    """Stack transfer (step_inst: PC, folds) plus the memory map (`absMem`/`memTop`)."""
+    nxt = step_inst(op, data, stack, cur_pc)
+    if nxt is None or not MEMRET:
+        return (nxt, mem) if nxt is not None else None
+    pre = stack
+    if op == 0x51:  # MLOAD (memTop)
+        if pre[0][0] == 'const':
+            v = mem_get(mem, pre[0][1])
+            if v is not None:
+                nxt[0] = v
+                probe_mload_hits.setdefault(cur_pc, set()).add(v)
+    if op == 0x52:  # MSTORE off val
+        off, val = pre[0], pre[1]
+        if off[0] == 'const':
+            mem = mem_kill(mem, off[1], off[1] + 32)
+            if mem_keepable(val):
+                mem = tuple(sorted(mem + ((off[1], val),)))
+        else:
+            mem = _kill_all(mem, cur_pc, "MSTORE at non-constant offset")
+    elif op == 0x37:  # CALLDATACOPY dest src size
+        if pre[0][0] == 'const' and pre[2][0] == 'const':
+            mem = mem_kill(mem, pre[0][1], pre[0][1] + pre[2][1])
+        else:
+            mem = _kill_all(mem, cur_pc, "CALLDATACOPY with non-constant window")
+    elif op not in LEAN_MEM_KEEP:
+        mem = _kill_all(mem, cur_pc, OPCODE_EFFECTS.get(op, ("?", 0, 0))[0] + " forgets memory")
+    return nxt, mem
+
+def mem_compat(caller_mem, entry_mem) -> bool:
+    """Every word the entry declares, the caller knows with the same value."""
+    for o, e in entry_mem:
+        a = mem_get(caller_mem, o)
+        if a is None:
+            return False
+        if e[0] == 'const' and (a[0] != 'const' or a[1] != e[1]):
+            return False
+        if e[0] == 'ret' and a[0] != 'ret':
+            return False
+    return True
+
+def control_mem(mem):
+    """Control values only (jump destinations; `ret` in callnext mode), whatever --const-mem keeps."""
+    return tuple((o, v) for (o, v) in mem
+                 if (v[0] == 'const' and v[1] in jumpdests) or (args.memret == "callnext" and v[0] == 'ret'))
+
+def generalize_mem(mem):
+    return tuple((o, v) for (o, v) in mem if mem_keepable(v))
+
+def pointwise_mem(mems):
+    first = mems[0]
+    return tuple((o, v) for (o, v) in first if all(mem_get(m, o) == v for m in mems[1:]))
+
+PROBE_CALLEES: Set[int] = set()
+callee_failures: Dict[str, Set[str]] = {}
+for _p, (_op, _sz, _d) in inst_map.items():
+    # PROBE: Vyper 0.2.x internal call idiom `PUSH1 k; PC; ADD; PUSH2 f; JUMP` -> f
+    if _op == 0x58 and (_p + 2) in inst_map and inst_map[_p + 2][0] == 0x61 and (_p + 5) in inst_map and inst_map[_p + 5][0] == 0x56:
+        PROBE_CALLEES.add(int.from_bytes(inst_map[_p + 2][2], "big"))
+
 # 4. Callee analysis (solc convention)
 callee_memo: Dict[Tuple[int, Tuple[Tuple[Any, ...], ...]], Tuple[bool, Optional[int]]] = {}
 
 explore_budget = [400000]
+
+def on_path(pc, path):
+    """Canonical: a back edge is any revisit of a pc on the path.  PROBE (--const-mem): a pc may
+    recur with distinct constant states up to --entry-cap times (bounded unrolling)."""
+    n = sum(1 for (p, *_r) in path if p == pc)
+    return n >= (ENTRY_CAP if CONST_MEM else 1)
 
 def check_callee(t: int, callee_frame: Tuple[Tuple[Any, ...], ...]) -> Tuple[bool, Optional[int]]:
     key = (t, callee_frame)
@@ -521,11 +735,12 @@ def check_callee(t: int, callee_frame: Tuple[Tuple[Any, ...], ...]) -> Tuple[boo
     
     returns = set()
     failed = False
+    why = []
     
-    def explore(cur_pc: int, cur_st: List[Tuple[Any, ...]], path: Set[Tuple[int, Tuple[Tuple[Any, ...], ...]]]):
+    def explore(cur_pc: int, cur_st: List[Tuple[Any, ...]], path: Set[Tuple[int, Tuple[Tuple[Any, ...], ...]]], cur_mem=EMPTY_MEM):
         nonlocal failed
         if failed: return
-        state_key = (cur_pc, tuple(cur_st))
+        state_key = (cur_pc, tuple(cur_st), cur_mem)
         if state_key in seen:
             return
         seen.add(state_key)
@@ -547,10 +762,20 @@ def check_callee(t: int, callee_frame: Tuple[Tuple[Any, ...], ...]) -> Tuple[boo
                     return
                 tgt = cur_st[0]
                 rem = cur_st[2:]
-                explore(cur_pc + 1, rem, new_path)
+                cond = cur_st[1]
+                if CONST_MEM and cond[0] == 'const':
+                    if cond[1] == 0:
+                        explore(cur_pc + 1, rem, new_path, cur_mem)
+                    elif tgt[0] == 'const':
+                        if not on_path(tgt[1], new_path):
+                            explore(tgt[1], rem, new_path, cur_mem)
+                    else:
+                        failed = True
+                    return
+                explore(cur_pc + 1, rem, new_path, cur_mem)
                 if tgt[0] == 'const':
-                    if not any(p == tgt[1] for (p, _) in new_path):
-                        explore(tgt[1], rem, new_path)
+                    if not on_path(tgt[1], new_path):
+                        explore(tgt[1], rem, new_path, cur_mem)
                 else:
                     failed = True
                 return
@@ -564,49 +789,64 @@ def check_callee(t: int, callee_frame: Tuple[Tuple[Any, ...], ...]) -> Tuple[boo
                     returns.add(len(rem))
                     return
                 elif tgt[0] == 'const':
-                    if any(p == tgt[1] for (p, _) in new_path):
+                    if on_path(tgt[1], new_path):
                         return # Loop back-edge encountered in callee, cycle terminates
                     sub_call = None
                     for i, v in enumerate(rem):
                         if v[0] == 'const' and v[1] in jumpdests:
-                            sub_cf = (('unk',),) * i + (('ret',),)
-                            is_c, sub_rets = check_callee(tgt[1], sub_cf)
+                            is_c, sub_cf, sub_rets = try_callee(tgt[1], i, rem)
                             if is_c:
-                                sub_call = (i, sub_rets)
+                                sub_call = (i, sub_rets, sub_cf)
                             break
                     if sub_call is not None:
-                        i, sub_rets = sub_call
+                        i, sub_rets, sub_cf = sub_call
                         ret_pc = rem[i][1]
-                        cont_st = [('unk',)] * sub_rets + list(rem[i+1:])
-                        explore(ret_pc, cont_st, new_path)
+                        cont_st = [('unk',)] * sub_rets + list(rem[len(sub_cf):])
+                        explore(ret_pc, cont_st, new_path, EMPTY_MEM)
                         return
                     else:
-                        explore(tgt[1], rem, new_path)
+                        explore(tgt[1], rem, new_path, cur_mem)
                         return
                 else:
+                    why.append(f"JUMP to {tgt} at 0x{cur_pc:04x}")
                     failed = True
                     return
             elif op in (0x00, 0xf3, 0xfd, 0xfe, 0xff):
                 return
             else:
-                nxt = step_inst(op, d, cur_st, cur_pc)
+                nxt = step_full(op, d, cur_st, cur_mem, cur_pc)
                 if nxt is None:
+                    why.append(f"step fails at 0x{cur_pc:04x} op 0x{op:02x} depth {len(cur_st)}")
                     failed = True
                     return
-                cur_st = nxt
+                cur_st, cur_mem = nxt
                 cur_pc += sz
 
     seen: Set[Tuple[int, Tuple[Tuple[Any, ...], ...]]] = set()
     try:
         explore(t, list(callee_frame), set())
-    except (RecursionError, RuntimeError):
+    except (RecursionError, RuntimeError) as ex:
+        why.append(f"exception {type(ex).__name__}: {ex}")
         failed = True
     if not failed and len(returns) == 1:
         res = (True, list(returns)[0])
     else:
         res = (False, None)
+        if MEMRET and t in PROBE_CALLEES:
+            callee_failures.setdefault(hex(t), set()).add(f"frame {callee_frame}: " + ("; ".join(why[:3]) if failed else f"return arities {sorted(returns)}"))
     callee_memo[key] = res
     return res
+
+def try_callee(t, i, rem):
+    """Callee frame `unk^i ++ [ret]` (solc: tag below the arguments); PROBE (memret): also
+    `unk^i ++ [ret] ++ unk^j`, the Vyper 0.2.x shape (tag on top, j stack arguments below it)."""
+    extra = range(0, len(rem) - i) if MEMRET else range(0, 1)
+    for j in extra:
+        cf = (('unk',),) * i + (('ret',),) + (('unk',),) * j
+        is_c, r = check_callee(t, cf)
+        if is_c:
+            return True, cf, r
+    return False, None, None
 
 # 4. Selector wrappers detection: `DUP1; PUSH4 sel; EQ; PUSH2 tgt; JUMPI` in the dispatcher.
 WRAPPERS: Set[int] = set()
@@ -651,11 +891,13 @@ def pointwise_generalization(frames: List[List[Tuple[Any, ...]]]) -> Tuple[Optio
                 return None, f"Return positions disagree at index {i}"
             gen.append(('ret',))
         elif all(v == vals[0] for v in vals):
-            if vals[0][0] == 'const' and vals[0][1] not in jumpdests:
+            if vals[0][0] == 'const' and vals[0][1] not in jumpdests and not CONST_MEM:
                 gen.append(('unk',))
             else:
                 gen.append(vals[0])
         else:
+            if JOIN_EXEMPT and any(v[0] == 'const' and v[1] in jumpdests for v in vals):
+                return None, f"PROBE exempt: jump destinations disagree at index {i}"
             gen.append(('unk',))
     return tuple(gen), None
 
@@ -667,10 +909,54 @@ call_sites: List[Tuple[int, int, int]] = []
 return_sites: List[Tuple[int, int, int]] = []
 rejections: List[str] = []
 
-def get_or_create_entry(epc: int, eframe: Tuple[Tuple[Any, ...], ...], erets: int, role: str = "goto") -> int:
-    key = (epc, tuple(eframe), erets)
+entries_at_pc: Dict[int, int] = {}
+entries_by_ctx: Dict[Any, List[int]] = {}
+capped_by_ctx: Dict[Any, List[int]] = {}
+probe_capped: Dict[int, int] = {}
+
+def gf(frame):
+    """PROBE: frame of a loop/goto/wrapper entry before the per-pc cap (const-mem keeps every constant)."""
+    return tuple(frame) if CONST_MEM else generalize_frame(frame)
+
+def gm(mem):
+    return tuple(mem) if CONST_MEM else generalize_mem(mem)
+
+def get_or_create_entry(epc: int, eframe: Tuple[Tuple[Any, ...], ...], erets: int, role: str = "goto", emem=EMPTY_MEM) -> int:
+    key = (epc, tuple(eframe), erets, emem)
     if key in entry_map:
         return entry_map[key]
+    ctx = (epc, generalize_frame(eframe), erets, control_mem(emem))
+    if CONST_MEM and role in ("goto", "loop", "wrapper") and len(entries_by_ctx.get(ctx, [])) >= ENTRY_CAP:
+        # PROBE: cap reached for this control context (pc, control-value frame shape, rets, control
+        # memory).  Reuse a compatible capped entry, else widen: keep control values and exactly the
+        # constants on which every entry of this context (and the new state) agree
+        # (--widen control: keep only control values, the canonical generalization).
+        for j in capped_by_ctx.get(ctx, []):
+            jpc, jf, jr, jm = entries[j]
+            if goto_compat(list(eframe), jf) and mem_compat(emem, jm):
+                return j
+        if args.widen == "control":
+            key = ctx
+        else:
+            peers = [entries[j] for j in entries_by_ctx[ctx]]
+            wf = []
+            for i, v in enumerate(eframe):
+                if v[0] == 'ret' or (v[0] == 'const' and v[1] in jumpdests):
+                    wf.append(v)
+                elif v[0] == 'const' and all(pf[1][i] == v for pf in peers):
+                    wf.append(v)
+                else:
+                    wf.append(('unk',))
+            wm = tuple((o, v) for (o, v) in emem
+                       if v[0] == 'ret' or (v[0] == 'const' and v[1] in jumpdests)
+                       or all(mem_get(pf[3], o) == v for pf in peers))
+            key = (epc, tuple(wf), erets, wm)
+        if key in entry_map:
+            return entry_map[key]
+        probe_capped[epc] = probe_capped.get(epc, 0) + 1
+        capped_by_ctx.setdefault(ctx, []).append(len(entries))
+    entries_at_pc[epc] = entries_at_pc.get(epc, 0) + 1
+    entries_by_ctx.setdefault(ctx, []).append(len(entries))
     idx = len(entries)
     if idx >= MAX_ENTRIES:
         raise RuntimeError(f"Entry cap {MAX_ENTRIES} exceeded")
@@ -689,6 +975,7 @@ pre_func_rets: Dict[int, int] = {} # jd -> rets of enclosing function
 func_queue: List[Tuple[int, int, Tuple[Tuple[Any, ...], ...]]] = [
     (0, 0, ())
 ]
+# (PROBE) every function starts with an empty memory map
 for wpc in sorted(WRAPPERS):
     func_queue.append((wpc, 0, (('unk',),)))
 
@@ -704,8 +991,8 @@ while func_queue:
     
     visited_states: Set[Tuple[int, Tuple[Tuple[Any, ...], ...]]] = set()
     
-    def explore_func(pc: int, st: List[Tuple[Any, ...]], path: Set[int]):
-        state_key = (pc, tuple(st))
+    def explore_func(pc: int, st: List[Tuple[Any, ...]], path: Set[int], mem=EMPTY_MEM):
+        state_key = (pc, tuple(st), mem)
         if state_key in visited_states:
             return
         visited_states.add(state_key)
@@ -733,8 +1020,7 @@ while func_queue:
                     call_info = None
                     for i, v in enumerate(rem):
                         if v[0] == 'const' and v[1] in jumpdests:
-                            sub_cf = (('unk',),) * i + (('ret',),)
-                            is_c, sub_rets = check_callee(tgt[1], sub_cf)
+                            is_c, sub_cf, sub_rets = try_callee(tgt[1], i, rem)
                             if is_c:
                                 call_info = (i, sub_cf, sub_rets)
                                 break
@@ -744,17 +1030,17 @@ while func_queue:
                             discovered_funcs.add(tgt[1])
                             func_queue.append((tgt[1], sub_rets, sub_cf))
                         cont_pc = rem[i][1]
-                        cont_st = [('unk',)] * sub_rets + list(rem[i+1:])
-                        explore_func(cont_pc, cont_st, path)
+                        cont_st = [('unk',)] * sub_rets + list(rem[len(sub_cf):])
+                        explore_func(cont_pc, cont_st, path, EMPTY_MEM)
                         return
                     else:
                         target_pc = tgt[1]
                         if target_pc in jumpdests:
-                            pre_incoming_edges.setdefault(target_pc, []).append((pc, 'jump', list(rem)))
+                            pre_incoming_edges.setdefault(target_pc, []).append((pc, 'jump', (list(rem), mem)))
                             if target_pc in path:
                                 pre_back_edges.add((pc, target_pc))
                             else:
-                                explore_func(target_pc, rem, path)
+                                explore_func(target_pc, rem, path, mem)
                         return
                 else:
                     return
@@ -764,24 +1050,24 @@ while func_queue:
                 rem = st[2:]
                 fall_pc = pc + 1
                 if fall_pc in jumpdests:
-                    pre_incoming_edges.setdefault(fall_pc, []).append((pc, 'fallthrough', list(rem)))
-                explore_func(fall_pc, rem, path)
+                    pre_incoming_edges.setdefault(fall_pc, []).append((pc, 'fallthrough', (list(rem), mem)))
+                explore_func(fall_pc, rem, path, mem)
                 if tgt[0] == 'const':
                     target_pc = tgt[1]
                     if target_pc in jumpdests:
-                        pre_incoming_edges.setdefault(target_pc, []).append((pc, 'jumpi_taken', list(rem)))
+                        pre_incoming_edges.setdefault(target_pc, []).append((pc, 'jumpi_taken', (list(rem), mem)))
                         if target_pc in path:
                             pre_back_edges.add((pc, target_pc))
                         else:
-                            explore_func(target_pc, rem, path)
+                            explore_func(target_pc, rem, path, mem)
                 return
             else:
-                nxt = step_inst(op, d, st, pc)
+                nxt = step_full(op, d, st, mem, pc)
                 if nxt is None: return
-                st = nxt
+                st, mem = nxt
                 nxt_pc = pc + sz
                 if nxt_pc in jumpdests:
-                    pre_incoming_edges.setdefault(nxt_pc, []).append((pc, 'fallthrough', list(st)))
+                    pre_incoming_edges.setdefault(nxt_pc, []).append((pc, 'fallthrough', (list(st), mem)))
                 pc = nxt_pc
 
     explore_func(f_pc, list(f_frame), set())
@@ -803,8 +1089,17 @@ for jd in sorted(pre_incoming_edges.keys()):
             distinct_edges[edge_key] = stk
     
     if len(distinct_edges) >= 2:
-        frames = list(distinct_edges.values())
+        frames = [f for (f, _m) in distinct_edges.values()]
+        _mems = [_m for (_f, _m) in distinct_edges.values()]
+        join_mem = pointwise_mem(_mems)
         gen_frame, err = pointwise_generalization(frames)
+        if gen_frame is not None and JOIN_EXEMPT:
+            for _o in {o for m in _mems for (o, v) in m if v[0] == 'const' and v[1] in jumpdests}:
+                if mem_get(join_mem, _o) is None:
+                    gen_frame, err = None, f"PROBE exempt: memory jump destinations disagree at 0x{_o:x}"
+                    break
+        if gen_frame is not None and not CONST_MEM:
+            join_mem = generalize_mem(join_mem)
         if gen_frame is None:
             unmerged_joins.append({
                 "pc": jd,
@@ -814,12 +1109,15 @@ for jd in sorted(pre_incoming_edges.keys()):
             })
         elif not args.no_join_entries:
             f_rets = pre_func_rets.get(jd, 0)
-            k = get_or_create_entry(jd, gen_frame, f_rets, role="join")
+            k = get_or_create_entry(jd, gen_frame, f_rets, role="join", emem=join_mem)
             join_entries[jd] = k
 
 node_count = 0
 
-def build_tree(cur_pc: int, cur_st: List[Tuple[Any, ...]], cur_rets: int, path: Set[Tuple[int, Tuple[Tuple[Any, ...], ...]]], entry_idx: int) -> Any:
+def jsite(pc, how):
+    probe_jump_sites.setdefault(pc, set()).add(how)
+
+def build_tree(cur_pc: int, cur_st: List[Tuple[Any, ...]], cur_rets: int, path: Set[Tuple[int, Tuple[Tuple[Any, ...], ...]]], entry_idx: int, cur_mem=EMPTY_MEM) -> Any:
     global node_count
     node_count += 1
     if node_count > MAX_NODES:
@@ -828,11 +1126,12 @@ def build_tree(cur_pc: int, cur_st: List[Tuple[Any, ...]], cur_rets: int, path: 
     # If this PC is a registered join entry and we are entering from another entry (fallthrough), transition to it
     if (cur_pc in join_entries and entry_idx != join_entries[cur_pc]
         and cur_rets == entries[join_entries[cur_pc]][2]
-        and goto_compat(cur_st, entries[join_entries[cur_pc]][1])):
+        and goto_compat(cur_st, entries[join_entries[cur_pc]][1])
+        and mem_compat(cur_mem, entries[join_entries[cur_pc]][3])):
         k = join_entries[cur_pc]
         return ('join_ref', k, cur_pc)
 
-    state_key = (cur_pc, tuple(cur_st))
+    state_key = (cur_pc, tuple(cur_st), cur_mem)
     if state_key in path:
         msg = f"LOOP REVISIT at 0x{cur_pc:04x} with stack {cur_st}"
         raise RuntimeError(msg)
@@ -847,57 +1146,98 @@ def build_tree(cur_pc: int, cur_st: List[Tuple[Any, ...]], cur_rets: int, path: 
     elif op == 0xfe:
         return ('undefined', cur_pc)
     elif op == 0x5b: # JUMPDEST
-        sub = build_tree(cur_pc + 1, cur_st, cur_rets, new_path, entry_idx)
+        sub = build_tree(cur_pc + 1, cur_st, cur_rets, new_path, entry_idx, cur_mem)
         return ('dest', sub, cur_pc)
     elif op == 0x57: # JUMPI
         tgt = cur_st[0]
         rem = cur_st[2:]
-        if tgt[0] == 'const':
-            if any(p == tgt[1] for (p, _) in new_path) or ((cur_pc, tgt[1]) in pre_back_edges):
-                k = get_or_create_entry(tgt[1], generalize_frame(rem), cur_rets, role="loop")
+        M = cur_mem
+        cond = cur_st[1] if len(cur_st) >= 2 else ('unk',)
+        if CONST_MEM and cond[0] == 'const':
+            # PROBE: decided JUMPI, only the live side is built
+            if cond[1] == 0:
+                jsite(cur_pc, "decided fall")
+                fall = build_tree(cur_pc + 1, rem, cur_rets, new_path, entry_idx, M)
+                return ('jumpiF', fall, cur_pc)
+            if tgt[0] != 'const':
+                raise RuntimeError(f"Non-const decided JUMPI target {tgt} at 0x{cur_pc:04x}")
+            if any(p == tgt[1] for (p, *_r) in new_path) or ((cur_pc, tgt[1]) in pre_back_edges):
+                k = get_or_create_entry(tgt[1], gf(rem), cur_rets, role="loop", emem=gm(M))
+                back_edges.append({"kind": "jumpiTo", "pc": cur_pc, "target_entry": k, "target_pc": tgt[1],
+                                   "target_frame": entries[k][1], "caller_entry": entry_idx})
+                jsite(cur_pc, f"decided taken, loop entry {k} (0x{tgt[1]:04x})")
+                return ('jumpiTo', k, cur_pc)
+            if tgt[1] in join_entries and cur_rets == entries[join_entries[tgt[1]]][2] and goto_compat(rem, entries[join_entries[tgt[1]]][1]) and mem_compat(M, entries[join_entries[tgt[1]]][3]):
+                k = join_entries[tgt[1]]
+                jsite(cur_pc, f"decided taken, join entry {k} (0x{tgt[1]:04x})")
+                return ('jumpiTo', k, cur_pc)
+            jsite(cur_pc, f"decided taken inline (0x{tgt[1]:04x})")
+            taken = build_tree(tgt[1], rem, cur_rets, new_path, entry_idx, M)
+            return ('jumpiT', taken, cur_pc)
+        # --decide-jumpi (without --const-mem, which decides above): the dead side is
+        # emitted as `.undefined`, which checkNode (AVal.jumps?) never checks.
+        decided_false = args.decide_jumpi and tgt[0] == 'const' and cond[0] == 'const' and cond[1] == 0
+        decided_true = args.decide_jumpi and tgt[0] == 'const' and cond[0] == 'const' and cond[1] != 0
+        def fall_tree():
+            if decided_true:
+                return ('undefined', cur_pc + 1)
+            return build_tree(cur_pc + 1, rem, cur_rets, new_path, entry_idx, M)
+        if tgt[0] == 'const' and not decided_false:
+            if any(p == tgt[1] for (p, *_r) in new_path) or ((cur_pc, tgt[1]) in pre_back_edges):
+                k = get_or_create_entry(tgt[1], gf(rem), cur_rets, role="loop", emem=gm(M))
                 back_edges.append({
                     "kind": "branchTo",
                     "pc": cur_pc,
                     "target_entry": k,
                     "target_pc": tgt[1],
-                    "target_frame": generalize_frame(rem),
+                    "target_frame": entries[k][1],
                     "caller_entry": entry_idx
                 })
-                fall = build_tree(cur_pc + 1, rem, cur_rets, new_path, entry_idx)
+                jsite(cur_pc, f"branchTo loop entry {k} (0x{tgt[1]:04x})")
+                fall = fall_tree()
                 return ('branchTo', fall, k, cur_pc)
-            elif tgt[1] in join_entries:
+            elif tgt[1] in join_entries and goto_compat(rem, entries[join_entries[tgt[1]]][1]) and mem_compat(M, entries[join_entries[tgt[1]]][3]):
                 k = join_entries[tgt[1]]
-                fall = build_tree(cur_pc + 1, rem, cur_rets, new_path, entry_idx)
+                jsite(cur_pc, f"branchTo join entry {k} (0x{tgt[1]:04x})")
+                fall = fall_tree()
                 return ('branchTo', fall, k, cur_pc)
-            elif entry_idx == 0 and tgt[1] in WRAPPERS:
+            elif entry_idx == 0 and tgt[1] in WRAPPERS and not decided_true:
                 # Build order only decides entry numbering (solc-w3 built the fallthrough first).
+                jsite(cur_pc, f"branchTo wrapper (0x{tgt[1]:04x})")
                 if args.wrapper_order == "fall-first":
-                    fall = build_tree(cur_pc + 1, rem, cur_rets, new_path, entry_idx)
-                taken = build_tree(tgt[1], rem, cur_rets, new_path, entry_idx)
+                    fall = build_tree(cur_pc + 1, rem, cur_rets, new_path, entry_idx, M)
+                taken = build_tree(tgt[1], rem, cur_rets, new_path, entry_idx, M)
                 wrap_idx = len(deferred_wrappers)
-                deferred_wrappers.append((tgt[1], generalize_frame(rem), cur_rets, taken))
+                deferred_wrappers.append((tgt[1], gf(rem), cur_rets, taken, gm(M)))
                 if args.wrapper_order == "taken-first":
-                    fall = build_tree(cur_pc + 1, rem, cur_rets, new_path, entry_idx)
+                    fall = build_tree(cur_pc + 1, rem, cur_rets, new_path, entry_idx, M)
                 return ('branchTo', fall, ('wrapper', wrap_idx), cur_pc)
-        fall = build_tree(cur_pc + 1, rem, cur_rets, new_path, entry_idx)
-        taken = build_tree(tgt[1], rem, cur_rets, new_path, entry_idx)
+        if tgt[0] != 'const':
+            raise RuntimeError(f"Non-const JUMPI target {tgt} at 0x{cur_pc:04x}")
+        jsite(cur_pc, f"branch inline (0x{tgt[1]:04x})")
+        fall = fall_tree()
+        if decided_false:
+            taken = ('undefined', tgt[1])
+        else:
+            taken = build_tree(tgt[1], rem, cur_rets, new_path, entry_idx, M)
         return ('branch', fall, taken, cur_pc)
     elif op == 0x56: # JUMP
         tgt = cur_st[0]
         rem = cur_st[1:]
+        M = cur_mem
         if tgt[0] == 'ret':
             if len(rem) != cur_rets:
                 raise RuntimeError(f"Return frame len {len(rem)} != rets {cur_rets} at 0x{cur_pc:04x}")
             return_sites.append((cur_pc, entry_idx, len(rem)))
+            jsite(cur_pc, "ret")
             return ('ret', cur_pc)
         elif tgt[0] == 'const':
-            is_back = any(p == tgt[1] for (p, _) in new_path) or ((cur_pc, tgt[1]) in pre_back_edges)
+            is_back = any(p == tgt[1] for (p, *_r) in new_path) or ((cur_pc, tgt[1]) in pre_back_edges)
             call_info = None
             if not is_back:
                 for i, v in enumerate(rem):
                     if v[0] == 'const' and v[1] in jumpdests:
-                        sub_cf = (('unk',),) * i + (('ret',),)
-                        is_c, sub_rets = check_callee(tgt[1], sub_cf)
+                        is_c, sub_cf, sub_rets = try_callee(tgt[1], i, rem)
                         if is_c:
                             call_info = (i, sub_cf, sub_rets)
                             break
@@ -906,12 +1246,13 @@ def build_tree(cur_pc: int, cur_st: List[Tuple[Any, ...]], cur_rets: int, path: 
                 k = get_or_create_entry(tgt[1], sub_cf, sub_rets, role="callee")
                 ret_pc = rem[i][1]
                 call_sites.append((cur_pc, k, ret_pc))
-                cont_st = [('unk',)] * sub_rets + list(rem[i+1:])
-                cont_tree = build_tree(ret_pc, cont_st, cur_rets, new_path, entry_idx)
+                jsite(cur_pc, f"callNext entry {k} (0x{tgt[1]:04x}) cont 0x{ret_pc:04x}")
+                cont_st = [('unk',)] * sub_rets + list(rem[len(sub_cf):])
+                cont_tree = build_tree(ret_pc, cont_st, cur_rets, new_path, entry_idx, EMPTY_MEM)
                 return ('callNext', k, cont_tree, cur_pc)
             elif is_back:
-                g_frame = generalize_frame(rem)
-                k = get_or_create_entry(tgt[1], g_frame, cur_rets, role="loop")
+                k = get_or_create_entry(tgt[1], gf(rem), cur_rets, role="loop", emem=gm(M))
+                g_frame = entries[k][1]
                 back_edges.append({
                     "kind": "jump",
                     "pc": cur_pc,
@@ -920,15 +1261,18 @@ def build_tree(cur_pc: int, cur_st: List[Tuple[Any, ...]], cur_rets: int, path: 
                     "target_frame": g_frame,
                     "caller_entry": entry_idx
                 })
+                jsite(cur_pc, f"jump loop entry {k} (0x{tgt[1]:04x})")
                 return ('jump', k, cur_pc)
-            elif tgt[1] in join_entries:
+            elif tgt[1] in join_entries and goto_compat(rem, entries[join_entries[tgt[1]]][1]) and mem_compat(M, entries[join_entries[tgt[1]]][3]):
                 k = join_entries[tgt[1]]
+                jsite(cur_pc, f"jump join entry {k} (0x{tgt[1]:04x})")
                 return ('jump', k, cur_pc)
             else:
-                g_frame = generalize_frame(rem)
-                k = get_or_create_entry(tgt[1], g_frame, cur_rets, role="goto")
+                k = get_or_create_entry(tgt[1], gf(rem), cur_rets, role="goto", emem=gm(M))
+                jsite(cur_pc, f"jump goto entry {k} (0x{tgt[1]:04x})")
                 return ('jump', k, cur_pc)
         else:
+            jsite(cur_pc, f"UNRESOLVED target {tgt}")
             raise RuntimeError(f"Non-const/ret JUMP target {tgt} at 0x{cur_pc:04x}")
     else:
         # Record external calls (CALL, STATICCALL, DELEGATECALL, CALLCODE)
@@ -948,14 +1292,15 @@ def build_tree(cur_pc: int, cur_st: List[Tuple[Any, ...]], cur_rets: int, path: 
                 "entry_idx": entry_idx
             })
 
-        nxt_st = step_inst(op, d, cur_st, cur_pc)
+        nxt_full = step_full(op, d, cur_st, cur_mem, cur_pc)
+        nxt_st, nxt_mem = nxt_full if nxt_full is not None else (None, None)
         if nxt_st is None:
             op_name = OPCODE_EFFECTS.get(op, ("UNKNOWN", 0, 0))[0]
-            if op not in BASE_SUPPORTED_OPS:
+            if op not in BASE_SUPPORTED_OPS and not (op == 0x58 and args.pc):
                 raise RuntimeError(f"Unsupported opcode {op_name} (0x{op:02x}) at 0x{cur_pc:04x}")
             else:
                 raise RuntimeError(f"Stack underflow at 0x{cur_pc:04x} on {op_name} (stack depth {len(cur_st)})")
-        sub = build_tree(cur_pc + sz, nxt_st, cur_rets, new_path, entry_idx)
+        sub = build_tree(cur_pc + sz, nxt_st, cur_rets, new_path, entry_idx, nxt_mem)
         return ('next', (op, d), sub, cur_pc)
 
 # Pre-scan reachable instructions to report all unsupported opcodes if any exist
@@ -974,7 +1319,7 @@ def scan_unsupported() -> Dict[int, List[int]]:
             continue
         visited.add(p)
         op, sz, d = inst_map[p]
-        if op not in BASE_SUPPORTED_OPS:
+        if op not in BASE_SUPPORTED_OPS and not (op == 0x58 and args.pc):
             unsupported_found.setdefault(op, []).append(p)
         if op in (0x00, 0xf3, 0xfd, 0xfe, 0xff):
             continue
@@ -1008,6 +1353,7 @@ rejected_entries: List[Tuple[int, int, str]] = []
 # Build Entry 0
 try:
     trees[0] = build_tree(0, [], 0, set(), 0)
+    probe_entry_nodes[0] = node_count
 except Exception as e:
     msg = str(e)
     rejected_entries.append((0, 0, msg))
@@ -1016,10 +1362,12 @@ except Exception as e:
 # Build all callee/goto entries discovered
 idx = 1
 while idx < len(entries):
-    epc, ef, er = entries[idx]
+    epc, ef, er, emem = entries[idx]
+    _n0 = node_count
     try:
-        t = build_tree(epc, list(ef), er, set(), idx)
+        t = build_tree(epc, list(ef), er, set(), idx, emem)
         trees[idx] = t
+        probe_entry_nodes[idx] = node_count - _n0
     except Exception as e:
         msg = str(e)
         rejected_entries.append((idx, epc, msg))
@@ -1028,8 +1376,8 @@ while idx < len(entries):
 
 # Append the wrapper entries and patch their branchTo placeholders.
 wrapper_index: Dict[int, int] = {}
-for wi, (wpc, wframe, wrets, wtree) in enumerate(deferred_wrappers):
-    k = get_or_create_entry(wpc, wframe, wrets, role="wrapper")
+for wi, (wpc, wframe, wrets, wtree, wmem) in enumerate(deferred_wrappers):
+    k = get_or_create_entry(wpc, wframe, wrets, role="wrapper", emem=wmem)
     trees[k] = wtree
     wrapper_index[wi] = k
 
@@ -1049,13 +1397,47 @@ def _patch(t: Any) -> Any:
         return ('branchTo', _patch(t[1]), t[2], t[3])
     if kind == 'callNext':
         return ('callNext', t[1], _patch(t[2]), t[3])
+    if kind in ('jumpiF', 'jumpiT'):
+        return (kind, _patch(t[1]), t[2])
     return t
 
 if 0 in trees:
     trees[0] = _patch(trees[0])
 
+probe_extra: Dict[str, Any] = {}
+
+def write_probe(status):
+    if args.probe_json is None:
+        return
+    ent = []
+    for i, (epc, ef, er, em) in enumerate(entries):
+        ent.append({"index": i, "pc": hex(epc), "rets": er, "role": entry_roles.get(i), "built_nodes": probe_entry_nodes.get(i),
+                    "frame": [v[0] if v[0] != 'const' else f"const(0x{v[1]:x})" for v in ef],
+                    "mem": [[hex(o), v[0] if v[0] != 'const' else f"const(0x{v[1]:x})"] for o, v in em]})
+    data = {
+        "status": status, "memret": args.memret, "fold_add": FOLD_ADD,
+        "pc_sites": {hex(k): sorted(hex(x) for x in v) for k, v in sorted(probe_pc_sites.items())},
+        "mload_hits": {hex(k): sorted(str(x) for x in v) for k, v in sorted(probe_mload_hits.items())},
+        "jump_sites": {hex(k): sorted(v) for k, v in sorted(probe_jump_sites.items())},
+        "whole_map_kills": {hex(k): v for k, v in sorted(probe_kills.items())},
+        "kill_reasons": sorted({f"{hex(pc)}: {why}" for pc, why in probe_kill_events}),
+        "rejections": rejections,
+        "callee_failures": {k: sorted(v) for k, v in sorted(callee_failures.items())},
+        "entries": ent,
+        "call_sites": [[hex(a), b, hex(c)] for a, b, c in call_sites],
+        "return_sites": sorted({hex(r[0]) for r in return_sites}),
+        "const_mem": CONST_MEM, "entry_cap": ENTRY_CAP if CONST_MEM else None, "join_exempt": JOIN_EXEMPT,
+        "folds": {},
+        "capped_entries_by_pc": {hex(k): v for k, v in sorted(probe_capped.items())},
+        "entries_by_pc": {hex(k): v for k, v in sorted(entries_at_pc.items())},
+        "unmerged_joins": [{"pc": hex(u["pc"]), "reason": u["reason"]} for u in unmerged_joins],
+    }
+    data.update(probe_extra)
+    args.probe_json.write_text(json.dumps(data, indent=1))
+
 # A rejected entry has no tree; the certificate would not check, so the run fails.
 if rejected_entries:
+    write_probe("rejected")
     for msg in rejections:
         print(f"Rejected: {msg}", file=sys.stderr)
     sys.exit(1)
@@ -1063,7 +1445,7 @@ if rejected_entries:
 # 7. Independent Python Mirror Checker
 debug_entry = False
 
-def check_node(code_bytes: bytes, es: List[Tuple[int, Tuple[Tuple[Any, ...], ...], int]], m: int, pc: int, a: List[Tuple[Any, ...]], tree: Any) -> bool:
+def check_node(code_bytes: bytes, es, m: int, pc: int, a: List[Tuple[Any, ...]], tree: Any, mem=EMPTY_MEM) -> bool:
     kind = tree[0]
     def fail(reason: str) -> bool:
         if debug_entry:
@@ -1073,11 +1455,12 @@ def check_node(code_bytes: bytes, es: List[Tuple[int, Tuple[Tuple[Any, ...], ...
     if kind == 'join_ref':
         k = tree[1]
         if k >= len(es): return fail(f"join_ref k >= len(es): {k} >= {len(es)}")
-        e_pc, e_frame, e_rets = es[k]
+        e_pc, e_frame, e_rets, e_mem = es[k]
         if pc >= len(code_bytes) or pc != e_pc: return fail(f"join_ref pc mismatch: pc 0x{pc:04x} != e_pc 0x{e_pc:04x}")
         if e_rets != m: return fail(f"join_ref rets mismatch: {e_rets} != {m} at 0x{pc:04x}")
         if not goto_compat(a, e_frame): return fail(f"join_ref goto_compat: a={a} != e_frame={e_frame} at 0x{pc:04x}")
-        res = check_node(code_bytes, es, m, pc, a, trees[k])
+        if not mem_compat(mem, e_mem): return fail("join_ref memcompat")
+        res = check_node(code_bytes, es, m, pc, a, trees[k], mem)
         if not res:
             return fail(f"join_ref check_node(trees[{k}]) failed at 0x{pc:04x}")
         return True
@@ -1086,45 +1469,53 @@ def check_node(code_bytes: bytes, es: List[Tuple[int, Tuple[Tuple[Any, ...], ...
         sz = 1 + len(d)
         if pc >= len(code_bytes) or code_bytes[pc] != op: return fail(f"next opcode mismatch: code[{pc}] != {hex(op)}")
         if d and code_bytes[pc+1 : pc+sz] != d: return fail("next data mismatch")
-        nxt_a = step_inst(op, d, a, pc)
-        if nxt_a is None: return fail(f"next step_inst returned None for {hex(op)}")
-        return check_node(code_bytes, es, m, pc + sz, nxt_a, tree[2])
+        nxt = step_full(op, d, a, mem, pc)
+        if nxt is None: return fail(f"next step_inst returned None for {hex(op)}")
+        return check_node(code_bytes, es, m, pc + sz, nxt[0], tree[2], nxt[1])
     elif kind == 'last':
         if not (pc < len(code_bytes) and code_bytes[pc] == tree[1]):
             return fail(f"last opcode mismatch at {pc}: code={code_bytes[pc] if pc < len(code_bytes) else None} != {hex(tree[1])}")
         return True
     elif kind == 'dest':
         if pc >= len(code_bytes) or code_bytes[pc] != 0x5b: return fail("dest not 0x5b")
-        return check_node(code_bytes, es, m, pc + 1, a, tree[1])
+        return check_node(code_bytes, es, m, pc + 1, a, tree[1], mem)
     elif kind == 'branch':
         fall, taken = tree[1], tree[2]
         if len(a) < 2: return fail("branch stack < 2")
         tgt, rem = a[0], a[2:]
         if tgt[0] != 'const': return fail("branch target not const")
         if pc >= len(code_bytes) or code_bytes[pc] != 0x57: return fail("branch not 0x57")
-        return check_node(code_bytes, es, m, pc + 1, rem, fall) and check_node(code_bytes, es, m, tgt[1], rem, taken)
+        cond = a[1]  # mirror of AVal.jumps?: a constant condition skips the dead side
+        jumps = (cond[1] != 0) if cond[0] == 'const' else None
+        return ((jumps is True or check_node(code_bytes, es, m, pc + 1, rem, fall, mem)) and
+                (jumps is False or check_node(code_bytes, es, m, tgt[1], rem, taken, mem)))
     elif kind == 'branchTo':
         fall, k = tree[1], tree[2]
         if len(a) < 2: return fail(f"branchTo stack < 2: {a}")
         tgt, rem = a[0], a[2:]
         if tgt[0] != 'const': return fail("branchTo target not const")
         if k >= len(es): return fail("branchTo k >= len(es)")
-        e_pc, e_frame, e_rets = es[k]
+        e_pc, e_frame, e_rets, e_mem = es[k]
         if pc >= len(code_bytes) or code_bytes[pc] != 0x57: return fail("branchTo not 0x57")
         if e_pc != tgt[1] or e_rets != m: return fail(f"branchTo epc {hex(e_pc)} != tgt {hex(tgt[1])} or erets {e_rets} != m {m}")
         if not goto_compat(rem, e_frame): return fail(f"branchTo goto_compat failed: rem={rem} != e_frame={e_frame}")
-        return check_node(code_bytes, es, m, pc + 1, rem, fall)
+        if not mem_compat(mem, e_mem): return fail("branchTo memcompat")
+        cond = a[1]
+        if cond[0] == 'const' and cond[1] != 0:
+            return True
+        return check_node(code_bytes, es, m, pc + 1, rem, fall, mem)
     elif kind == 'jump':
         k = tree[1]
         if len(a) < 1: return fail("jump stack < 1")
         tgt, rem = a[0], a[1:]
         if tgt[0] != 'const': return fail("jump target not const")
         if k >= len(es): return fail("jump k >= len(es)")
-        e_pc, e_frame, e_rets = es[k]
+        e_pc, e_frame, e_rets, e_mem = es[k]
         if pc >= len(code_bytes) or code_bytes[pc] != 0x56: return fail("jump not 0x56")
         if e_pc != tgt[1]: return fail(f"jump epc {hex(e_pc)} != tgt {hex(tgt[1])}")
         if e_rets != m: return fail(f"jump erets {e_rets} != m {m}")
         if not goto_compat(rem, e_frame): return fail(f"jump goto_compat failed: rem={rem} != e_frame={e_frame}")
+        if not mem_compat(mem, e_mem): return fail("jump memcompat")
         return True
     elif kind == 'callNext':
         k, f = tree[1], tree[2]
@@ -1138,7 +1529,7 @@ def check_node(code_bytes: bytes, es: List[Tuple[int, Tuple[Tuple[Any, ...], ...
             shape = trees[shape[1]]
         if shape[0] != "dest": return fail("callNext cont not dest")
         if k >= len(es): return fail("callNext k >= len(es)")
-        e_pc, e_frame, e_rets = es[k]
+        e_pc, e_frame, e_rets, e_mem = es[k]
         if pc >= len(code_bytes) or code_bytes[pc] != 0x56: return fail("callNext not 0x56")
         if e_pc != tgt[1]: return fail("callNext epc != tgt")
         if len(rem) < len(e_frame): return fail("callNext len(rem) < len(e_frame)")
@@ -1154,9 +1545,31 @@ def check_node(code_bytes: bytes, es: List[Tuple[int, Tuple[Tuple[Any, ...], ...
             if not call_compat(r, rem, e_frame):
                 return fail("callNext call_compat failed")
             nxt_a = [('unk',)] * e_rets + rem[len(e_frame):]
-            return check_node(code_bytes, es, m, r, nxt_a, f)
+            if e_mem: return fail("callee entry declares memory")
+            return check_node(code_bytes, es, m, r, nxt_a, f, EMPTY_MEM)
         else:
             return call_compat(0, rem, e_frame)
+    elif kind in ('jumpiF', 'jumpiT', 'jumpiTo'):
+        # PROBE: decided JUMPI.  Sound only if the abstract condition is a constant that the
+        # frame invariant guarantees; the dead side is then unreachable.
+        if len(a) < 2: return fail("decided jumpi stack < 2")
+        tgt, cond, rem = a[0], a[1], a[2:]
+        if pc >= len(code_bytes) or code_bytes[pc] != 0x57: return fail("decided jumpi not 0x57")
+        if cond[0] != 'const': return fail("decided jumpi condition not const")
+        if kind == 'jumpiF':
+            if cond[1] != 0: return fail("jumpiF with nonzero condition")
+            return check_node(code_bytes, es, m, pc + 1, rem, tree[1], mem)
+        if cond[1] == 0: return fail("jumpiT/To with zero condition")
+        if tgt[0] != 'const': return fail("decided jumpi target not const")
+        if kind == 'jumpiT':
+            return check_node(code_bytes, es, m, tgt[1], rem, tree[1], mem)
+        k = tree[1]
+        if k >= len(es): return fail("jumpiTo k >= len(es)")
+        e_pc, e_frame, e_rets, e_mem = es[k]
+        if e_pc != tgt[1] or e_rets != m: return fail("jumpiTo entry mismatch")
+        if not goto_compat(rem, e_frame): return fail("jumpiTo goto_compat")
+        if not mem_compat(mem, e_mem): return fail("jumpiTo memcompat")
+        return True
     elif kind == 'ret':
         if len(a) < 1: return fail("ret stack < 1")
         if a[0][0] != 'ret': return fail("ret top not ret")
@@ -1172,9 +1585,9 @@ def check_node(code_bytes: bytes, es: List[Tuple[int, Tuple[Tuple[Any, ...], ...
 self_check_passed = True
 checked_entries_count = 0
 for e_idx in sorted(trees.keys()):
-    epc, ef, er = entries[e_idx]
+    epc, ef, er, emem = entries[e_idx]
     debug_entry = False
-    v = check_node(code, entries, er, epc, list(ef), trees[e_idx])
+    v = check_node(code, entries, er, epc, list(ef), trees[e_idx], emem)
     if not v:
         self_check_passed = False
         print(f"Self-check FAILED on entry {e_idx} (pc 0x{epc:04x})", file=sys.stderr)
@@ -1182,6 +1595,7 @@ for e_idx in sorted(trees.keys()):
         checked_entries_count += 1
 
 if not self_check_passed:
+    write_probe("selfcheck-fail")
     print("Self-check mirror rejected! Exiting non-zero.", file=sys.stderr)
     sys.exit(1)
 
@@ -1193,12 +1607,16 @@ def op_to_lean_reg(op: int) -> str:
         return f".reg (.dup {op - 0x80})"
     elif 0x90 <= op <= 0x9f:
         return f".reg (.swap {op - 0x90})"
+    elif op == 0x58 and MEMRET:
+        return ".reg .pc"
     else:
         raise ValueError(f"Unknown regular opcode 0x{op:02x}")
 
 # Decompose trees into definitions per basic block (ends at dest, branch, jump, callNext, ret, last)
 lean_defs: List[Tuple[str, str]] = [] # (name, body)
 def_memo: Dict[Tuple[int, int], str] = {} # (pc, entry_idx) -> def_name
+def_variants: Dict[Tuple[int, int], List[Tuple[Any, str]]] = {}
+probe_def_variants = [0]
 
 def emit_block(tree: Any, entry_idx: int) -> str:
     kind = tree[0]
@@ -1209,10 +1627,18 @@ def emit_block(tree: Any, entry_idx: int) -> str:
     cur_pc = tree[-1]
     key = (cur_pc, entry_idx)
     if key in def_memo:
-        return def_memo[key]
-    
-    def_name = f"t_{cur_pc:04x}_c{entry_idx}"
-    def_memo[key] = def_name
+        # PROBE: the canonical memo assumes one tree per (pc, entry); with unrolling a pc can carry
+        # several distinct trees in one entry, which get suffixed names.
+        for (t0, nm) in def_variants[key]:
+            if t0 is tree or t0 == tree:
+                return nm
+        def_name = f"t_{cur_pc:04x}_c{entry_idx}_{len(def_variants[key])}"
+        def_variants[key].append((tree, def_name))
+        probe_def_variants[0] += 1
+    else:
+        def_name = f"t_{cur_pc:04x}_c{entry_idx}"
+        def_memo[key] = def_name
+        def_variants[key] = [(tree, def_name)]
     
     # Render tree into string
     def render(t: Any) -> str:
@@ -1220,6 +1646,11 @@ def emit_block(tree: Any, entry_idx: int) -> str:
         if k == 'join_ref':
             target_k = t[1]
             return f"t_{entries[target_k][0]:04x}_c{target_k}"
+        elif k == 'next' and t[1][0] == 0x58:  # PC at the node's pc
+            sub = t[2]
+            if sub[0] in ('dest', 'join_ref'):
+                return f"(.pcAt 0x{t[3]:x} {emit_block(sub, entry_idx)})"
+            return f"(.pcAt 0x{t[3]:x} {render(sub)})"
         elif k == 'next':
             op, d = t[1]
             sub = t[2]
@@ -1266,6 +1697,12 @@ def emit_block(tree: Any, entry_idx: int) -> str:
             return ".ret"
         elif k == 'undefined':
             return ".undefined"
+        elif k == 'jumpiF':  # decided JUMPI, condition 0: the taken side is dead
+            return f"(.branch {emit_block(t[1], entry_idx)} .undefined)"
+        elif k == 'jumpiT':  # decided JUMPI, nonzero condition: the fall-through is dead
+            return f"(.branch .undefined {emit_block(t[1], entry_idx)})"
+        elif k == 'jumpiTo':
+            return f"(.branchTo .undefined {t[1]})"
         else:
             raise ValueError(f"Unknown kind {k}")
 
@@ -1280,7 +1717,7 @@ for e_idx in sorted(trees.keys()):
 
 # Generate Cert.lean
 lean_lines = []
-lean_lines.append("import Blanc.Lift.Check")
+lean_lines.append("import Blanc.Lift.CheckMem" if MEMRET else "import Blanc.Lift.Check")
 lean_lines.append("")
 lean_lines.append(f"/-! {args.header} -/")
 lean_lines.append("")
@@ -1324,7 +1761,7 @@ lean_lines.append("")
 def_dict = {name: body for name, body in lean_defs}
 dep_graph: Dict[str, Set[str]] = {name: set() for name in def_dict}
 for name, body in lean_defs:
-    refs = re.findall(r"t_[0-9a-f]{4}_c\d+", body)
+    refs = re.findall(r"t_[0-9a-f]{4}_c\d+(?:_\d+)?", body)
     for ref in refs:
         if ref in def_dict and ref != name:
             dep_graph[name].add(ref)
@@ -1355,7 +1792,7 @@ lean_lines.append("")
 # Generate def cert : Cert
 lean_lines.append("def cert : Cert := [")
 cert_entries_lines = []
-for i, (epc, eframe, erets) in enumerate(entries):
+for i, (epc, eframe, erets, emem) in enumerate(entries):
     frame_vals = []
     for v in eframe:
         if v[0] == 'unk':
@@ -1371,6 +1808,14 @@ for i, (epc, eframe, erets) in enumerate(entries):
 lean_lines.append(",\n".join(cert_entries_lines))
 lean_lines.append("]")
 lean_lines.append("")
+if MEMRET:
+    # The declared memory map of each entry, parallel to `cert` (`Cert.checkM`).
+    def _mem_lean(emem):
+        return "[" + ", ".join(f"(0x{o:x}, " + (".ret" if v[0] == 'ret' else f"(.const (Nat.toB256 0x{v[1]:x}))") + ")" for o, v in emem) + "]"
+    lean_lines.append("def mems : List MemMap := [")
+    lean_lines.append(",\n".join(f"  {_mem_lean(e[3])}" for e in entries))
+    lean_lines.append("]")
+    lean_lines.append("")
 lean_lines.append(f"end {args.namespace}")
 lean_lines.append("")
 
@@ -1402,6 +1847,10 @@ def tree_to_json(t: Any) -> Dict[str, Any]:
         return {"kind": "ret", "pc": t[1]}
     elif kind == 'undefined':
         return {"kind": "undefined", "pc": t[1]}
+    elif kind in ('jumpiF', 'jumpiT'):
+        return {"kind": kind, "pc": t[2], "sub": tree_to_json(t[1])}
+    elif kind == 'jumpiTo':
+        return {"kind": kind, "pc": t[2], "target_entry": t[1]}
     else:
         return {"kind": "unknown"}
 
@@ -1421,6 +1870,8 @@ def count_tree_nodes(t: Any) -> int:
         return 1
     elif kind == 'callNext':
         return 1 + count_tree_nodes(t[2])
+    elif kind in ('jumpiF', 'jumpiT'):
+        return 1 + count_tree_nodes(t[1])
     elif kind in ('last', 'ret', 'undefined'):
         return 1
     return 1
@@ -1429,12 +1880,13 @@ entry_node_counts = {i: count_tree_nodes(trees[i]) for i in sorted(trees.keys())
 total_nodes = sum(entry_node_counts.values())
 
 json_entries = []
-for i, (epc, eframe, erets) in enumerate(entries):
+for i, (epc, eframe, erets, emem) in enumerate(entries):
     json_entries.append({
         "index": i,
         "pc": hex(epc),
         "frame": [v[0] if v[0] != 'const' else f"const(0x{v[1]:x})" for v in eframe],
         "rets": erets,
+        "mem": [[hex(o), v[0] if v[0] != 'const' else f"const(0x{v[1]:x})"] for o, v in emem],
         "role": entry_roles.get(i, "goto"),
         "node_count": entry_node_counts.get(i, 0),
         "status": "verified" if i in trees else "rejected"
@@ -1548,6 +2000,10 @@ for e_idx in sorted(trees.keys()):
             if hex(pc) != hex_str:
                 cfg_jump[hex(pc)] = e_idx
                 cfg_pc_to_entry[hex(pc)] = e_idx
+        elif kind in ('jumpiF', 'jumpiT'):
+            walk_cfg(t[1])
+        elif kind == 'jumpiTo':
+            cfg_reaches[e_idx].add(t[1])
         elif kind in ('last', 'undefined'):
             pass
 
@@ -1575,7 +2031,63 @@ if out_dir is not None:
 
 # 10. Per-entry Check.lean: each entry is one kernel decision over trie-backed code
 # reads (`Blanc/Lift/CheckFast.lean`), assembled into `cert_check`.
-def check_source() -> str:
+def inst_starts(bs: bytes) -> List[bool]:
+    """`instStarts` (`Blanc/Lift/Jumpdest.lean`): true at an instruction start, false on
+    PUSH immediate bytes."""
+    out, skip = [], 0
+    for b in bs:
+        if skip:
+            out.append(False); skip -= 1
+        else:
+            out.append(True); skip = b - 0x5f if 0x60 <= b <= 0x7f else 0
+    return out
+
+
+def literal_tries_lines(depth: int) -> List[str]:
+    """The code tries as data: depth-8 subtrees as definitions, the top levels over them, and
+    one kernel check each (`kernel_rfl`) that the data is `LTrie.ofList` of the code.  Each
+    per-entry decision then unfolds data instead of rebuilding the tries (about 1 s each)."""
+    sub = min(8, depth)
+    width = 1 << sub
+    top = depth - sub
+
+    def leaf_tree(vals, d, fmt):
+        if d == 0:
+            v = vals[0] if vals else None
+            return "(.leaf none)" if v is None else f"(.leaf (some {fmt(v)}))"
+        h = 1 << (d - 1)
+        return f"(.node {leaf_tree(vals[:h], d - 1, fmt)} {leaf_tree(vals[h:], d - 1, fmt)})"
+
+    out: List[str] = []
+    for name, ty, vals, fmt, src in (
+            ("bytesTrie", "UInt8", list(code), str, "code.data.toList"),
+            ("startsTrie", "Bool", inst_starts(code), lambda b: "true" if b else "false", "instStarts code")):
+        chunks = [vals[i * width:(i + 1) * width] for i in range(1 << top)]
+        for i, ch in enumerate(chunks):
+            if ch:
+                out.append(f"def {name}_{i} : LTrie {ty} :=\n  {leaf_tree(ch, sub, fmt)}")
+            else:
+                out.append(f"def {name}_{i} : LTrie {ty} := LTrie.ofList {sub} []")
+            out.append("")
+
+        def top_tree(lo, d):
+            if d == 0:
+                return f"{name}_{lo}"
+            h = 1 << (d - 1)
+            return f"(.node {top_tree(lo, d - 1)} {top_tree(lo + h, d - 1)})"
+        out += [f"def {name} : LTrie {ty} := {top_tree(0, top)}", "",
+                f"theorem {name}_eq : {name} = LTrie.ofList {depth} ({src}) := by",
+                "  kernel_rfl", ""]
+    out += [
+        f"def codeTries : CodeTries code {depth} :=",
+        f"  CodeTries.ofData code {depth} bytesTrie startsTrie bytesTrie_eq startsTrie_eq",
+        "    (by decide +kernel) (by decide +kernel)",
+        "",
+    ]
+    return out
+
+
+def check_source() -> Any:
     depth = max(1, (len(code) - 1).bit_length())
     ns = args.namespace
     lines = [
@@ -1591,10 +2103,16 @@ def check_source() -> str:
         "open Jaune",
         "",
         f"/-- Depth {depth} covers all {len(code)} runtime byte positions. -/",
+    ] + (literal_tries_lines(depth) if args.check_literal_tries else [
         f"def codeTries : CodeTries code {depth} :=",
         f"  CodeTries.ofCode code {depth} (by decide +kernel) (by decide +kernel)",
         "",
-    ]
+    ])
+    if args.check_literal_tries and args.check_parts < 2:
+        lines[2:2] = ["import Blanc.Lift.CodeTriesData", "import Blanc.ConcreteRun"]
+    if MEMRET:
+        return check_source_mem(lines)
+    blocks = []
     for i, line in enumerate(cert_entries_lines):
         m = re.match(r"^  \(⟨(0x[0-9a-f]+), (\[[^\]]*\]), (\d+)⟩, (t_\w+)\)$", line)
         if m is None:
@@ -1602,7 +2120,7 @@ def check_source() -> str:
         pc, frame, rets, tree = m.groups()
         if args.check_split_nodes and entry_node_counts.get(i, 0) > args.check_split_nodes:
             raise RuntimeError(f"entry {i} has {entry_node_counts[i]} nodes > --check-split-nodes; splitting is not implemented")
-        lines.extend([
+        blocks.append([
             f"theorem entry_{i} :",
             f"    checkNode code (Cert.entries cert) {rets} {pc} {frame} {tree} = true := by",
             "  rw [← checkNodeT_eq codeTries]",
@@ -1610,7 +2128,7 @@ def check_source() -> str:
             "",
         ])
     n = len(cert_entries_lines)
-    lines.extend([
+    assembly = [
         "theorem cert_check : Cert.check code cert = true := by",
         "  unfold Cert.check",
         "  rw [Bool.and_eq_true]",
@@ -1619,15 +2137,141 @@ def check_source() -> str:
         "  intro p hp",
         "  simp only [cert, List.mem_cons, List.not_mem_nil, or_false] at hp",
         "  rcases hp with " + " | ".join(["rfl"] * n),
-    ])
-    lines.extend(f"  · exact entry_{i}" for i in range(n))
+    ]
+    assembly.extend(f"  · exact entry_{i}" for i in range(n))
+    files = split_check(lines, blocks, assembly)
+    return files if args.check_parts >= 2 else files["Check"]
+
+
+def split_check(head: List[str], blocks: List[List[str]], assembly: List[str]) -> Dict[str, str]:
+    """The generated Check as files by name.  With `--check-parts N >= 2` (registry
+    `check.parts`): `CheckTries` (the code tries), `CheckPart0`..`CheckPart{N-1}` (contiguous
+    ranges of the per-entry decisions, which build in parallel) and `Check` (imports the parts
+    and holds the assembly); otherwise one `Check`."""
+    ns = args.namespace
+    lines = list(head)
+    files: Dict[str, str] = {}
+    n = len(blocks)
+    if args.check_parts >= 2:
+        # `head` is: imports (2), blank, doc (3 lines), blank, namespace, blank, open, blank,
+        # then the codeTries definition.
+        split = next(k for k, l in enumerate(lines) if l.startswith("/-- Depth "))
+        preamble = lines[2:split]  # from the blank line after the imports
+        tries = ([f"import {ns}.Cert", "import Blanc.Lift.CheckFast"] +
+                 (["import Blanc.Lift.CodeTriesData", "import Blanc.ConcreteRun"] if args.check_literal_tries else []) +
+                 preamble + lines[split:])
+        tries += [f"end {ns}", ""]
+        files["CheckTries"] = "\n".join(tries)
+        bounds = check_part_bounds(n, args.check_parts)
+        for p in range(len(bounds) - 1):
+            lo, hi = bounds[p], bounds[p + 1]
+            body = [f"import {ns}.CheckTries"] + [
+                l.replace("Each entry is decided against trie-backed reads of the exact runtime.",
+                          f"Entries {lo}..{hi - 1}, each decided against trie-backed reads of the exact runtime.")
+                for l in preamble]
+            for i in range(lo, hi):
+                body += blocks[i]
+            body += [f"end {ns}", ""]
+            files[f"CheckPart{p}"] = "\n".join(body)
+        lines = ([f"import {ns}.CheckPart{p}" for p in range(len(bounds) - 1)] +
+                 [l.replace("Each entry is decided against trie-backed reads of the exact runtime.",
+                            "Assembles the per-entry decisions of the CheckPart modules.")
+                  for l in preamble])
+    else:
+        for b in blocks:
+            lines += b
+    lines += assembly
     lines.extend(["", f"end {ns}", ""])
-    return "\n".join(lines)
+    files["Check"] = "\n".join(lines)
+    return files
+
+
+def check_part_bounds(n: int, parts: int) -> List[int]:
+    """Contiguous entry ranges of about equal estimated kernel cost, as `parts + 1` boundaries
+    from 0 to n.  An entry's two decisions cost about a fixed 2.8 s plus 0.012 s per tree node
+    (fitted to the 0x6326 parts, 2026-09-27), so an entry weighs its node count plus 233."""
+    weights = [entry_node_counts.get(i, 0) + 233 for i in range(n)]
+    total = sum(weights)
+    bounds, acc = [0], 0
+    for i, w in enumerate(weights):
+        acc += w
+        if len(bounds) < parts and acc * parts >= total * len(bounds) and i + 1 < n:
+            bounds.append(i + 1)
+    bounds.append(n)
+    return bounds
+
+
+def entry_decisions_mem(i: int) -> List[str]:
+    """`entry_i`/`jumps_i`, stated over `cert[i]` so the chain step `Cert.checkEntriesM_drop`
+    matches them syntactically: the elaborator never unfolds the certificate list (whose depth
+    would need a raised `maxRecDepth`); only the kernel reads the entry."""
+    e = f"(cert[{i}]'(by decide +kernel))"
+    return [
+        f"theorem entry_{i} :",
+        f"    checkNodeM code (Cert.entries cert) mems true",
+        f"      {e}.1.rets {e}.1.pc",
+        f"      {e}.1.frame (mems.getD {i} []) {e}.2 = true := by",
+        "  rw [← checkNodeMT_eq codeTries]",
+        "  decide +kernel",
+        "",
+        f"theorem jumps_{i} :",
+        f"    jumpsOkNodeM code (Cert.entries cert) true",
+        f"      {e}.2 {e}.1.frame (mems.getD {i} []) = true := by",
+        "  rw [← jumpsOkNodeMT_eq codeTries]",
+        "  decide +kernel",
+        "",
+    ]
+
+
+def check_source_mem(head: List[str]) -> Dict[str, str]:
+    """Memory-tracking certificate (`Cert.checkM`, `Cert.jumpsOkM`): per-entry decisions of
+    `checkNodeM` and `jumpsOkNodeM` against trie-backed reads, assembled by a chain over the
+    certificate's tails.  No file needs a raised recursion depth or heartbeat budget."""
+    lines = [l.replace("The generic equality rewrites each result to the unchanged Cert.check.",
+                       "The generic equalities rewrite each result to Cert.checkM / Cert.jumpsOkM.")
+             for l in head]
+    n = len(cert_entries_lines)
+    for i, line in enumerate(cert_entries_lines):
+        if re.match(r"^  \(⟨(0x[0-9a-f]+), (\[[^\]]*\]), (\d+)⟩, (t_\w+)\)$", line) is None:
+            raise RuntimeError(f"cannot read certificate entry {i}: {line}")
+    blocks = [entry_decisions_mem(i) for i in range(n)]
+    # Chain over the certificate's tails: each step is syntactic in its premises.
+    assembly = [
+        f"theorem rest_{n} : Cert.checkEntriesM code (Cert.entries cert) mems true {n} (cert.drop {n}) = true := by",
+        "  decide +kernel",
+        "",
+        f"theorem jrest_{n} : Cert.jumpsEntriesM code (Cert.entries cert) mems true {n} (cert.drop {n}) = true := by",
+        "  decide +kernel",
+        "",
+    ]
+    for i in reversed(range(n)):
+        assembly.extend([
+            f"theorem rest_{i} : Cert.checkEntriesM code (Cert.entries cert) mems true {i} (cert.drop {i}) = true :=",
+            f"  Cert.checkEntriesM_drop cert {i} (by decide +kernel) entry_{i} rest_{i + 1}",
+            "",
+            f"theorem jrest_{i} : Cert.jumpsEntriesM code (Cert.entries cert) mems true {i} (cert.drop {i}) = true :=",
+            f"  Cert.jumpsEntriesM_drop cert {i} (by decide +kernel) jumps_{i} jrest_{i + 1}",
+            "",
+        ])
+    assembly.extend([
+        "theorem cert_checkM : Cert.checkM code cert mems true = true := by",
+        "  unfold Cert.checkM",
+        "  rw [Bool.and_eq_true, Bool.and_eq_true]",
+        "  exact ⟨⟨by decide +kernel, by decide +kernel⟩, rest_0⟩",
+        "",
+        "theorem cert_jumpsOkM : Cert.jumpsOkM code cert mems true = true := jrest_0",
+    ])
+    return split_check(lines, blocks, assembly)
 
 
 if args.check_out is not None:
     args.check_out.parent.mkdir(parents=True, exist_ok=True)
-    args.check_out.write_text(check_source())
+    _check = check_source()
+    if isinstance(_check, dict):
+        for _name, _text in _check.items():
+            (args.check_out if _name == "Check" else args.check_out.with_name(_name + ".lean")).write_text(_text)
+    else:
+        args.check_out.write_text(_check)
 
 # 11. Reentrancy-lock annotations (`scripts/lift/lockann.py`) and their per-entry decisions.
 lock_opts = (args.lock_spec, args.lock_spec_module, args.lock_ann_out, args.lock_check_out)
@@ -1710,8 +2354,103 @@ if any(o is not None for o in lock_opts):
     print(f"Lock: accepted ({len(lock_entries)} annotations, "
           f"{sum(len(a.facts) for a in checker.ann.values())} facts)")
 
+# PROBE: witness-selector restriction and certificate sizes
+if MEMRET:
+    def _sel_body(sel):
+        for _p in _pcs:
+            op_, sz_, d_ = inst_map[_p]
+            if op_ == 0x63 and int.from_bytes(d_, "big") == sel:
+                q = _p + sz_
+                seq = []
+                while len(seq) < 5 and q in inst_map:
+                    seq.append((q, inst_map[q][0])); q += inst_map[q][1]
+                ops_ = [o for _, o in seq]
+                if ops_[:3] == [0x81, 0x14, 0x15] and 0x60 <= ops_[3] <= 0x62 and ops_[4] == 0x57:
+                    return seq[4][0] + 1
+        return None
+    def _find(t, want):
+        stack_ = [t]
+        while stack_:
+            u = stack_.pop()
+            if u[-1] == want and u[0] != 'join_ref':
+                return u
+            if u[0] in ('next',): stack_.append(u[2])
+            elif u[0] in ('dest', 'jumpiF', 'jumpiT'): stack_.append(u[1])
+            elif u[0] == 'branch': stack_ += [u[1], u[2]]
+            elif u[0] == 'branchTo': stack_.append(u[1])
+            elif u[0] == 'callNext': stack_.append(u[2])
+        return None
+    def _refs(t):
+        out, stack_ = set(), [t]
+        while stack_:
+            u = stack_.pop()
+            k_ = u[0]
+            if k_ == 'join_ref': out.add(u[1])
+            elif k_ == 'next': stack_.append(u[2])
+            elif k_ in ('dest', 'jumpiF', 'jumpiT'): stack_.append(u[1])
+            elif k_ == 'branch': stack_ += [u[1], u[2]]
+            elif k_ == 'branchTo': out.add(u[2]); stack_.append(u[1])
+            elif k_ in ('jump', 'jumpiTo'): out.add(u[1])
+            elif k_ == 'callNext': out.add(u[1]); stack_.append(u[2])
+        return out
+    def _count_kind(t, want):
+        n_, stack_ = 0, [t]
+        while stack_:
+            u = stack_.pop()
+            if u[0] == want: n_ += 1
+            k_ = u[0]
+            if k_ == 'next': stack_.append(u[2])
+            elif k_ in ('dest', 'jumpiF', 'jumpiT'): stack_.append(u[1])
+            elif k_ == 'branch': stack_ += [u[1], u[2]]
+            elif k_ == 'branchTo': stack_.append(u[1])
+            elif k_ == 'callNext': stack_.append(u[2])
+        return n_
+    def_bytes_by_entry: Dict[int, int] = {}
+    for name, body in sorted_defs:
+        e_ = int(re.match(r"t_[0-9a-f]{4}_c(\d+)", name).group(1))
+        def_bytes_by_entry[e_] = def_bytes_by_entry.get(e_, 0) + len(f"def {name} : SFunc := {body}\n".encode())
+    cert_bytes = len("\n".join(lean_lines).encode())
+    code_bytes_len = sum(len((l + "\n").encode()) for l in lean_lines if l.startswith("  0x") or l.startswith("def code") or l.startswith("def codeChunk") or l == "]")
+    witness = {}
+    all_reach: Set[int] = set()
+    for sel in (0x3eb1719f, 0x0c3e4b54):
+        body_pc = _sel_body(sel)
+        info: Dict[str, Any] = {"body_pc": hex(body_pc) if body_pc is not None else None}
+        host = None
+        for e_ in sorted(trees):
+            sub_ = _find(trees[e_], body_pc) if body_pc is not None else None
+            if sub_ is not None:
+                host = (e_, sub_); break
+        if host is not None:
+            reach, todo = set(), list(_refs(host[1]))
+            while todo:
+                k_ = todo.pop()
+                if k_ in reach: continue
+                reach.add(k_); todo += list(_refs(trees[k_]))
+            all_reach |= reach
+            info.update({"host_entry": host[0], "subtree_nodes": count_tree_nodes(host[1]),
+                         "reachable_entries": len(reach), "reachable_nodes": sum(entry_node_counts[k_] for k_ in reach),
+                         "reachable_callee_entries": sum(1 for k_ in reach if entry_roles.get(k_) == "callee"),
+                         "reachable_loop_back_edges": len({b["pc"] for b in back_edges if b["caller_entry"] in reach}),
+                         "reachable_callnext_nodes": sum(_count_kind(trees[k_], 'callNext') for k_ in reach) + _count_kind(host[1], 'callNext'),
+                         "reachable_decided_jumpis": sum(_count_kind(trees[k_], 'jumpiF') + _count_kind(trees[k_], 'jumpiT') + _count_kind(trees[k_], 'jumpiTo') for k_ in reach)})
+        witness[hex(sel)] = info
+    probe_extra.update({
+        "witness": witness,
+        "witness_union": {"entries": len(all_reach), "nodes": sum(entry_node_counts[k_] for k_ in all_reach),
+                           "def_bytes": sum(def_bytes_by_entry.get(k_, 0) for k_ in all_reach),
+                           "entry_indices": sorted(all_reach)},
+        "cert_bytes": cert_bytes, "code_literal_bytes": code_bytes_len,
+        "def_variants": probe_def_variants[0],
+        "totals": {"entries": len(entries), "nodes": total_nodes, "loops": len(distinct_back_edges),
+                   "call_sites": len(call_sites), "callee_entries": sum(1 for r in entry_roles.values() if r == "callee"),
+                   "rets": len(return_sites)},
+    })
+    print(f"PROBE: cert_bytes={cert_bytes} def_variants={probe_def_variants[0]} witness_union_entries={len(all_reach)} witness_union_nodes={probe_extra['witness_union']['nodes']}")
+
 # 12. Final summary print
 largest = max(entry_node_counts.items(), key=lambda kv: kv[1]) if entry_node_counts else (0, 0)
 print(f"Counts: entries={len(entries)}, calls={len(call_sites)}, rets={len(return_sites)}, nodes={total_nodes}, loops={len(distinct_back_edges)}, ext_calls={len(distinct_calls)}, largest_entry={largest[0]}:{largest[1]}")
 print(f"Self-check verdict: {'PASS' if self_check_passed else 'FAIL'}")
+write_probe("pass" if self_check_passed else "selfcheck-fail")
 print(f"Generated: {lean_file}" + (f", {args.check_out}" if args.check_out is not None else ""))

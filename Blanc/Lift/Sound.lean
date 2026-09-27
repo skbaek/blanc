@@ -1,4 +1,5 @@
 import Blanc.Lift.Check
+import Blanc.Lift.MemMap
 import Blanc.LadderSem
 import Blanc.ExecutionFrames
 
@@ -23,15 +24,6 @@ derivation from `ρ` is strictly smaller, which is what lets the caller's
 namespace Blanc.Lift
 
 open Jaune AbstractStackSafety
-
-/-- One abstract word describes one concrete word, reading `.ret` as `ρ`. -/
-def AVal.Matches (ρ : B256) : AVal → B256 → Prop
-  | .const c, w => w = c
-  | .ret, w => w = ρ
-  | .unk, _ => True
-
-def FrameMatches (ρ : B256) (a : List AVal) (s : List B256) : Prop :=
-  List.Forall₂ (AVal.Matches ρ) a s
 
 def concrete (ρ : B256) : AVal → Option B256
   | .const c => some c
@@ -129,7 +121,8 @@ lemma absNinst_nonpush_eq {n : Ninst} {a : List AVal}
       (do
         guard (a.length ≤ 1024)
         let out ← ninstTransfer n (indexPattern a.length)
-        out.mapM (readBack a)) := by
+        let a0 ← out.mapM (readBack a)
+        pure (foldTop (foldConst n a) a0)) := by
   cases n with
   | push bs fits => exact (hn bs fits rfl).elim
   | reg r => rfl
@@ -141,9 +134,9 @@ lemma absNinst_nonpush_eq {n : Ninst} {a : List AVal}
 lemma absNinst_nonpush_spec {n : Ninst} {a a' : List AVal}
     (hn : ∀ (bs : Bytes) (fits : bs.length ≤ 32), n ≠ .push bs fits)
     (h : absNinst n a = some a') :
-    a.length ≤ 1024 ∧ ∃ out,
+    a.length ≤ 1024 ∧ ∃ out a0,
       ninstTransfer n (indexPattern a.length) = some out ∧
-      out.mapM (readBack a) = some a' := by
+      out.mapM (readBack a) = some a0 ∧ a' = foldTop (foldConst n a) a0 := by
   rw [absNinst_nonpush_eq hn] at h
   by_cases hlen : a.length ≤ 1024
   · cases ht : ninstTransfer n (indexPattern a.length) with
@@ -153,8 +146,7 @@ lemma absNinst_nonpush_spec {n : Ninst} {a a' : List AVal}
       | none => simp [hlen, ht, hr] at h
       | some a'' =>
         simp [hlen, ht, hr] at h
-        cases h
-        exact ⟨hlen, out, by simpa using ht, hr⟩
+        exact ⟨hlen, out, a'', by simpa using ht, hr, h.symm⟩
   · simp [hlen] at h
 
 lemma cert_pair_mem : ∀ (c : Cert) (k : Nat) (e : Entry) (f : SFunc),
@@ -491,6 +483,129 @@ lemma push_run_stack {sevm : Sevm} {pre inter : Devm} {bs : Bytes}
     rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hstep
     cases hstep.1
 
+/-! ### Decided `JUMPI`s -/
+
+/-- The fall-through side of a `JUMPI` whose condition was zero is checked. -/
+lemma live_fall {ρ : B256} {v : AVal} {P : Prop} (hv : AVal.Matches ρ v 0)
+    (h : v.jumps? = some true ∨ P) : P := by
+  rcases h with h | h
+  · cases v <;> simp_all [AVal.jumps?, AVal.Matches]
+  · exact h
+
+/-- The taken side of a `JUMPI` whose condition was nonzero is checked. -/
+lemma live_taken {ρ w : B256} {v : AVal} {P : Prop} (hw : w ≠ 0) (hv : AVal.Matches ρ v w)
+    (h : v.jumps? = some false ∨ P) : P := by
+  rcases h with h | h
+  · cases v <;> simp_all [AVal.jumps?, AVal.Matches]
+  · exact h
+
+/-! ### Folded instructions -/
+
+lemma applyBinary_top {f : B256 → B256 → B256} {cost : Nat} {pre inter : Devm}
+    {x y : B256} {rest : List B256}
+    (h : applyBinary f cost pre = .ok inter) (hs : pre.stack = x :: y :: rest) :
+    inter.stack = f x y :: rest := by
+  obtain ⟨x', y', hd⟩ := Devm.diffBurn_of_applyBinary h
+  obtain ⟨s1, hpop, hpush⟩ := hd.stack
+  simp only [Stack.Pop, Stack.Push, Split, List.cons_append, List.nil_append] at hpop hpush
+  rw [hs] at hpop
+  simp only [List.cons.injEq] at hpop
+  obtain ⟨rfl, rfl, rfl⟩ := hpop
+  exact hpush
+
+lemma applyUnary_top {f : B256 → B256} {cost : Nat} {pre inter : Devm}
+    {x : B256} {rest : List B256}
+    (h : applyUnary f cost pre = .ok inter) (hs : pre.stack = x :: rest) :
+    inter.stack = f x :: rest := by
+  obtain ⟨x', hd⟩ := Devm.diffBurn_of_applyUnary h
+  obtain ⟨s1, hpop, hpush⟩ := hd.stack
+  simp only [Stack.Pop, Stack.Push, Split, List.cons_append, List.nil_append] at hpop hpush
+  rw [hs] at hpop
+  simp only [List.cons.injEq] at hpop
+  obtain ⟨rfl, rfl⟩ := hpop
+  exact hpush
+
+/-- A successful step of a folded instruction, from a stack its frame
+describes, leaves the folded constant on top. -/
+lemma foldConst_run {sevm : Sevm} {pre inter : Devm} {n : Ninst} {a : List AVal}
+    {c ρ : B256} {S base : List B256}
+    (hf : foldConst n a = some c) (hframe : FrameMatches ρ a S)
+    (hstack : pre.stack = S ++ base) (run : Ninst.Run sevm pre n inter) :
+    ∃ rest, inter.stack = c :: rest := by
+  unfold foldConst at hf
+  split at hf
+  all_goals first
+    | (cases hf; done)
+    | skip
+  all_goals
+    first
+    | (simp at hf; done)
+    | skip
+  all_goals
+    cases hf
+    rcases of_run_reg run with ⟨pc, r⟩
+    simp only [Rinst.run, Rinst.runCore] at r
+  · rcases hframe with _ | ⟨h0, _ | ⟨h1, _⟩⟩
+    simp only [AVal.Matches] at h0 h1
+    subst h0; subst h1
+    exact ⟨_, applyBinary_top r (by simpa using hstack)⟩
+  · rcases hframe with _ | ⟨h0, _ | ⟨h1, _⟩⟩
+    simp only [AVal.Matches] at h0 h1
+    subst h0; subst h1
+    exact ⟨_, applyBinary_top r (by simpa using hstack)⟩
+  · rcases hframe with _ | ⟨h0, _ | ⟨h1, _⟩⟩
+    simp only [AVal.Matches] at h0 h1
+    subst h0; subst h1
+    exact ⟨_, applyBinary_top r (by simpa using hstack)⟩
+  · rcases hframe with _ | ⟨h0, _ | ⟨h1, _⟩⟩
+    simp only [AVal.Matches] at h0 h1
+    subst h0; subst h1
+    exact ⟨_, applyBinary_top r (by simpa using hstack)⟩
+  · rcases hframe with _ | ⟨h0, _ | ⟨h1, _⟩⟩
+    simp only [AVal.Matches] at h0 h1
+    subst h0; subst h1
+    exact ⟨_, applyBinary_top r (by simpa using hstack)⟩
+  · rcases hframe with _ | ⟨h0, _ | ⟨h1, _⟩⟩
+    simp only [AVal.Matches] at h0 h1
+    subst h0; subst h1
+    exact ⟨_, applyBinary_top r (by simpa using hstack)⟩
+  · rcases hframe with _ | ⟨h0, _⟩
+    simp only [AVal.Matches] at h0
+    subst h0
+    exact ⟨_, applyUnary_top (f := fun x => B256.eqCheck x 0) r (by simpa using hstack)⟩
+
+/-- The folded frame still describes the successor stack. -/
+lemma frameMatches_foldTop {sevm : Sevm} {pre inter : Devm} {n : Ninst}
+    {a a0 : List AVal} {ρ : B256} {S S' base : List B256}
+    (hframe : FrameMatches ρ a S) (hstack : pre.stack = S ++ base)
+    (run : Ninst.Run sevm pre n inter) (hinter : inter.stack = S' ++ base)
+    (h0 : FrameMatches ρ a0 S') :
+    FrameMatches ρ (foldTop (foldConst n a) a0) S' := by
+  cases hf : foldConst n a with
+  | none => cases a0 <;> exact h0
+  | some c =>
+    obtain ⟨rest, hr⟩ := foldConst_run hf hframe hstack run
+    cases h0 with
+    | nil => exact List.Forall₂.nil
+    | @cons v w t T hv ht =>
+      refine List.Forall₂.cons ?_ ht
+      have hw : w = c := by
+        have := hinter.symm.trans hr
+        simp only [List.cons_append, List.cons.injEq] at this
+        exact this.1
+      exact hw
+
+lemma ret_mem_of_foldTop {v : Option B256} {a0 : List AVal}
+    (h : AVal.ret ∈ foldTop v a0) : AVal.ret ∈ a0 := by
+  cases v with
+  | none => cases a0 <;> exact h
+  | some c =>
+    cases a0 with
+    | nil => exact h
+    | cons x t =>
+      simp only [foldTop, List.mem_cons, reduceCtorEq, false_or] at h
+      exact List.mem_cons_of_mem _ h
+
 /-! ### Where a lifted step's child derivation sits -/
 
 /-- A child derivation all of whose raw frame roots are raw frame roots of the
@@ -579,19 +694,111 @@ lemma Ninst.runIn_of_at {pc sevm pre n post}
     · simp only [Ninst.StepRun, hs, Step.Run]
       exact ⟨_, RunFrame.of_run henter, hr.symm⟩
 
+/-! ### `PC` nodes -/
+
+/-- A successful execution over a `PC` byte at `pc` takes the `PC` step at `pc`
+itself (not at some other pc), childless. -/
+lemma pc_stepRun_of_at {pc sevm pre post}
+    (exc : Exec pc sevm pre (.ok post))
+    (nat : Ninst.At sevm.code pc (.reg .pc)) :
+    ∃ (inter : Devm) (exc' : Exec (pc + 1) sevm inter (.ok post)),
+      Ninst.StepRun pc sevm pre (.reg .pc) .none (.ok inter) ∧
+      Exec.Deriv.Prec
+        ⟨pc + 1, sevm, inter, .ok post, exc'⟩
+        ⟨pc, sevm, pre, .ok post, exc⟩ := by
+  have hstep : Evm.step ⟨pc, sevm, pre⟩ = Ninst.step ⟨pc, sevm, pre⟩ (.reg .pc) :=
+    Evm.step_next nat
+  rw [Ninst.step_reg] at hstep
+  cases exc with
+  | halt h =>
+    rw [hstep] at h
+    cases hr : Rinst.run ⟨pc, sevm, pre⟩ .pc <;> simp [hr, Step.ofExecution] at h
+  | cont h exc' =>
+    have hs := hstep.symm.trans h
+    cases hr : Rinst.run ⟨pc, sevm, pre⟩ .pc <;> simp [hr, Step.ofExecution] at hs
+    obtain ⟨rfl, rfl⟩ := hs
+    refine ⟨_, exc', ?_, Exec.Deriv.Prec.cont h exc'⟩
+    simp only [Ninst.StepRun, Ninst.step_reg, hr, Step.ofExecution, Step.Run]
+    exact ⟨trivial, trivial⟩
+  | doneOk h =>
+    rw [hstep] at h
+    cases hr : Rinst.run ⟨pc, sevm, pre⟩ .pc <;> simp [hr, Step.ofExecution] at h
+  | runOk h =>
+    rw [hstep] at h
+    cases hr : Rinst.run ⟨pc, sevm, pre⟩ .pc <;> simp [hr, Step.ofExecution] at h
+
+/-- The `PC` step keeps memory. -/
+lemma pc_stepRun_memory {p : Nat} {sevm : Sevm} {pre inter : Devm}
+    (h : Ninst.StepRun p sevm pre (.reg .pc) .none (.ok inter)) :
+    inter.memory = pre.memory := by
+  simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at h
+  have hr : Rinst.run ⟨p, sevm, pre⟩ .pc = .ok inter := h.2.symm
+  simp only [Rinst.run, Rinst.runCore] at hr
+  rw [pushItem_def] at hr
+  exact (Devm.pushBurn_of_run hr).memory.symm
+
+/-- The `PC` step at `p` pushes `p`. -/
+lemma pc_stepRun_stack {p : Nat} {sevm : Sevm} {pre inter : Devm}
+    (h : Ninst.StepRun p sevm pre (.reg .pc) .none (.ok inter)) :
+    inter.stack = Nat.toB256 p :: pre.stack := by
+  simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at h
+  have hr : Rinst.run ⟨p, sevm, pre⟩ .pc = .ok inter := h.2.symm
+  simp only [Rinst.run, Rinst.runCore] at hr
+  rw [pushItem_def] at hr
+  have hp := (Devm.pushBurn_of_run hr).stack
+  simpa [Stack.Push, Split] using hp
+
+/-! ### Checked entries, with or without memory tracking -/
+
+/-- Every entry's tree checks, from its declared memory map. -/
+def Cert.CheckedM (code : ByteArray) (c : Cert) (ms : List MemMap) (b : Bool) : Prop :=
+  ∀ k e f, c.entries[k]? = some e → c.prog[k]? = some f →
+    checkNodeM code c.entries ms b e.rets e.pc e.frame (ms.getD k []) f = true
+
+theorem Cert.checkedM_of_check {code : ByteArray} {c : Cert} (hc : Cert.check code c = true) :
+    Cert.CheckedM code c [] false := by
+  intro k e f he hf
+  have h := cert_check_at hc k e f he hf
+  rw [checkNode_eq_checkNodeM] at h
+  simpa using h
+
+theorem Cert.checkEntriesM_at {code : ByteArray} {es : List Entry} {ms : List MemMap}
+    {b : Bool} : ∀ (c : Cert) (k : Nat), Cert.checkEntriesM code es ms b k c = true →
+      ∀ j e f, c.entries[j]? = some e → c.prog[j]? = some f →
+        checkNodeM code es ms b e.rets e.pc e.frame (ms.getD (k + j) []) f = true
+  | [], _, _, j, e, f, he, _ => by simp [Cert.entries] at he
+  | (e0, f0) :: c, k, h, 0, e, f, he, hf => by
+      simp only [Cert.entries, Cert.prog, List.map_cons, List.getElem?_cons_zero,
+        Option.some.injEq] at he hf
+      subst he hf
+      simp only [Cert.checkEntriesM, Bool.and_eq_true] at h
+      simpa using h.1
+  | (e0, f0) :: c, k, h, j + 1, e, f, he, hf => by
+      simp only [Cert.checkEntriesM, Bool.and_eq_true] at h
+      have := Cert.checkEntriesM_at c (k + 1) h.2 j e f (by simpa [Cert.entries] using he)
+        (by simpa [Cert.prog] using hf)
+      simpa [Nat.add_assoc, Nat.add_comm 1 j] using this
+
+theorem Cert.checkedM_of_checkM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
+    (hc : Cert.checkM code c ms b = true) : Cert.CheckedM code c ms b := by
+  intro k e f he hf
+  simp only [Cert.checkM, Bool.and_eq_true] at hc
+  simpa using Cert.checkEntriesM_at c 0 hc.2 k e f he hf
+
 /-- The recursion invariant.  For a successful derivation at a node checked
 with frame `a` and return arity `m`: the node's run halts with the derivation's
 result, or the current function returns — then `.ret` occurs in the frame, the
 run returns `devm'` whose stack is `S' ++ base` with `S'.length = m`, and the
 rest of the execution is a strictly smaller derivation from `ρ`. -/
-def NodeClaim0 (code : ByteArray) (c : Cert) (R pk : Exec.Deriv) : Prop :=
+def NodeClaim0 (code : ByteArray) (c : Cert) (ms : List MemMap) (b : Bool)
+    (R pk : Exec.Deriv) : Prop :=
   ∀ (post : Devm), pk.exn = .ok post → pk.sevm.code = code →
   CoveredFork pk.sevm.benvStat.fork →
-  ∀ (m : Nat) (a : List AVal) (f : SFunc) (ρ : B256) (S base : List B256),
-    checkNode code c.entries m pk.pc a f = true →
-    pk.devm.stack = S ++ base → FrameMatches ρ a S →
+  ∀ (m : Nat) (a : List AVal) (f : SFunc) (ρ : B256) (S base : List B256) (μ : MemMap),
+    checkNodeM code c.entries ms b m pk.pc a μ f = true →
+    pk.devm.stack = S ++ base → FrameMatches ρ a S → MemMatches ρ μ pk.devm.memory →
     SFunc.RunP (StepIn R) c.prog pk.sevm pk.devm f (.halted post) ∨
-    (AVal.ret ∈ a ∧
+    (RetIn a μ ∧
       ∃ (devm' : Devm) (S' : List B256) (exc' : Exec ρ.toNat pk.sevm devm' (.ok post)),
         Exec.Deriv.lt ⟨ρ.toNat, pk.sevm, devm', .ok post, exc'⟩ pk ∧
         SFunc.RunP (StepIn R) c.prog pk.sevm pk.devm f (.returned devm') ∧
@@ -599,17 +806,19 @@ def NodeClaim0 (code : ByteArray) (c : Cert) (R pk : Exec.Deriv) : Prop :=
 
 /-- `NodeClaim0`, for a derivation whose raw frame descendants are raw frame
 roots of the root derivation `R`: each lifted step is then a `StepIn R`. -/
-def NodeClaim (code : ByteArray) (c : Cert) (R pk : Exec.Deriv) : Prop :=
+def NodeClaim (code : ByteArray) (c : Cert) (ms : List MemMap) (b : Bool)
+    (R pk : Exec.Deriv) : Prop :=
   (∀ r ∈ Exec.rawFrameDescendants pk.exc, r ∈ Exec.rawFrameRoots R.exc) →
-    NodeClaim0 code c R pk
+    NodeClaim0 code c ms b R pk
 
-theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
-    (R : Exec.Deriv) : ∀ pk : Exec.Deriv, NodeClaim code c R pk := by
+theorem node_soundM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
+    (hc : Cert.CheckedM code c ms b)
+    (R : Exec.Deriv) : ∀ pk : Exec.Deriv, NodeClaim code c ms b R pk := by
   apply Exec.Deriv.strongRec
   intro pk ih hsub
-  replace ih : ∀ q, Exec.Deriv.lt q pk → NodeClaim0 code c R q :=
+  replace ih : ∀ q, Exec.Deriv.lt q pk → NodeClaim0 code c ms b R q :=
     fun q hq => ih q hq (fun r hr => hsub r (desc_sub_of_lt hq r hr))
-  intro post hpost hcode hfork m a f ρ S base hcheck hstack hframe
+  intro post hpost hcode hfork m a f ρ S base μ hcheck hstack hframe hmem
   rcases pk with ⟨pc, sevm, devm, exn, exc⟩
   cases exn with
   | error e => cases hpost
@@ -618,20 +827,20 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
     cases f with
     | branch f g =>
       cases a with
-      | nil => simp [checkNode] at hcheck
+      | nil => simp [checkNodeM] at hcheck
       | cons av a0 =>
         cases av with
-        | ret => simp [checkNode] at hcheck
-        | unk => simp [checkNode] at hcheck
+        | ret => simp [checkNodeM] at hcheck
+        | unk => simp [checkNodeM] at hcheck
         | const t =>
           cases a0 with
-          | nil => simp [checkNode] at hcheck
+          | nil => simp [checkNodeM] at hcheck
           | cons av2 a' =>
             have hcheck' :
                 (byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧
-                  checkNode code c.entries m (pc + 1) a' f = true) ∧
-                checkNode code c.entries m t.toNat a' g = true := by
-              simpa [checkNode] using hcheck
+                  (av2.jumps? = some true ∨ checkNodeM code c.entries ms b m (pc + 1) a' μ f = true)) ∧
+                (av2.jumps? = some false ∨ checkNodeM code c.entries ms b m t.toNat a' μ g = true) := by
+              simpa [checkNodeM] using hcheck
             have h_at : Jinst.At sevm.code pc .jumpi := by
               apply byteAt_jinst_at
               rw [hcode]
@@ -654,6 +863,10 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                     · rcases z with ⟨x, inter, exc', pop, _, prec⟩
                       have hpop := popBurn_two_stack pop
                       rw [hstack] at hpop
+                      have hs1 : s1 = 0 := by
+                        have h := hpop
+                        simp only [List.cons_append, List.cons.injEq] at h
+                        exact h.2.1
                       have hx : x = t := by
                         have htx : s0 = x := by simpa using congrArg List.head? hpop
                         exact htx.symm.trans hs0
@@ -666,20 +879,25 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                       subst x
                       have hrun := ih
                         ⟨pc + 1, sevm, inter, .ok post, exc'⟩
-                        (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a' f ρ S1 base
-                        hcheck'.1.2 hinter htail
+                        (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a' f ρ S1 base μ
+                        (live_fall (hs1 ▸ h1) hcheck'.1.2) hinter htail
+                        (hmem.of_memory_eq pop.memory)
                       cases hrun with
                       | inl run => exact Or.inl (SFunc.RunP.zero t pop run)
                       | inr run =>
                         rcases run with
                           ⟨hret, devm', S', exc'', hlt, run, hst, hlen⟩
-                        exact Or.inr ⟨List.mem_cons_of_mem _
-                            (List.mem_cons_of_mem _ hret), devm', S', exc'',
+                        exact Or.inr ⟨RetIn.of_frame (fun h => List.mem_cons_of_mem _
+                            (List.mem_cons_of_mem _ h)) hret, devm', S', exc'',
                           deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
                           SFunc.RunP.zero t pop run, hst, hlen⟩
                     · rcases z with ⟨x, y, inter, exc', pop, _, _, hy, prec⟩
                       have hpop := popBurn_two_stack pop
                       rw [hstack] at hpop
+                      have hs1 : s1 = y := by
+                        have h := hpop
+                        simp only [List.cons_append, List.cons.injEq] at h
+                        exact h.2.1
                       have hx : x = t := by
                         have htx : s0 = x := by simpa using congrArg List.head? hpop
                         exact htx.symm.trans hs0
@@ -692,39 +910,46 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                       subst x
                       have hrun := ih
                         ⟨t.toNat, sevm, inter, .ok post, exc'⟩
-                        (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a' g ρ S1 base
-                        hcheck'.2 hinter htail
+                        (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a' g ρ S1 base μ
+                        (live_taken hy (hs1 ▸ h1) hcheck'.2) hinter htail
+                        (hmem.of_memory_eq pop.memory)
                       cases hrun with
                       | inl run => exact Or.inl (SFunc.RunP.succ t y hy pop run)
                       | inr run =>
                         rcases run with
                           ⟨hret, devm', S', exc'', hlt, run, hst, hlen⟩
-                        exact Or.inr ⟨List.mem_cons_of_mem _
-                            (List.mem_cons_of_mem _ hret), devm', S', exc'',
+                        exact Or.inr ⟨RetIn.of_frame (fun h => List.mem_cons_of_mem _
+                            (List.mem_cons_of_mem _ h)) hret, devm', S', exc'',
                           deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
                           SFunc.RunP.succ t y hy pop run, hst, hlen⟩
     | branchTo f k =>
       cases a with
-      | nil => simp [checkNode] at hcheck
+      | nil => simp [checkNodeM] at hcheck
       | cons av a0 =>
         cases av with
-        | ret => simp [checkNode] at hcheck
-        | unk => simp [checkNode] at hcheck
+        | ret => simp [checkNodeM] at hcheck
+        | unk => simp [checkNodeM] at hcheck
         | const t =>
           cases a0 with
-          | nil => simp [checkNode] at hcheck
+          | nil => simp [checkNodeM] at hcheck
           | cons av2 a' =>
             cases hk : c.entries[k]? with
-            | none => simp [checkNode, hk] at hcheck
+            | none => simp [checkNodeM, hk] at hcheck
             | some e =>
               have hcheck' :
                   (((byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧
                     e.pc = t.toNat) ∧ e.rets = m) ∧
                     gotoCompat a' e.frame = true) ∧
-                    checkNode code c.entries m (pc + 1) a' f = true := by
-                simpa [checkNode, hk] using hcheck
+                    (av2.jumps? = some true ∨
+                      checkNodeM code c.entries ms b m (pc + 1) a' μ f = true) := by
+                have h := hcheck
+                simp only [checkNodeM, hk, Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true] at h
+                exact ⟨h.1.1, h.2⟩
+              have hmc : memCompat μ (ms.getD k []) = true := by
+                simp only [checkNodeM, hk, Bool.and_eq_true] at hcheck
+                exact hcheck.1.2
               rcases cert_prog_of_entry c k e hk with ⟨g, hg⟩
-              have hentry := cert_check_at hc k e g hk hg
+              have hentry := hc k e g hk hg
               have h_at : Jinst.At sevm.code pc .jumpi := by
                 apply byteAt_jinst_at
                 rw [hcode]
@@ -747,6 +972,10 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                       · rcases z with ⟨x, inter, exc', pop, _, prec⟩
                         have hpop := popBurn_two_stack pop
                         rw [hstack] at hpop
+                        have hs1 : s1 = 0 := by
+                          have h := hpop
+                          simp only [List.cons_append, List.cons.injEq] at h
+                          exact h.2.1
                         have hx : x = t := by
                           have htx : s0 = x := by
                             simpa using congrArg List.head? hpop
@@ -761,19 +990,24 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                         have hrun := ih
                           ⟨pc + 1, sevm, inter, .ok post, exc'⟩
                           (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a' f ρ
-                          S1 base hcheck'.2 hinter htail
+                          S1 base μ (live_fall (hs1 ▸ h1) hcheck'.2) hinter htail
+                          (hmem.of_memory_eq pop.memory)
                         cases hrun with
                         | inl run => exact Or.inl (SFunc.RunP.toZero t pop run)
                         | inr run =>
                           rcases run with
                             ⟨hret, devm', S', exc'', hlt, run, hst, hlen⟩
-                          exact Or.inr ⟨List.mem_cons_of_mem _
-                              (List.mem_cons_of_mem _ hret), devm', S', exc'',
+                          exact Or.inr ⟨RetIn.of_frame (fun h => List.mem_cons_of_mem _
+                              (List.mem_cons_of_mem _ h)) hret, devm', S', exc'',
                             deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
                             SFunc.RunP.toZero t pop run, hst, hlen⟩
                       · rcases z with ⟨x, y, inter, exc', pop, _, _, hy, prec⟩
                         have hpop := popBurn_two_stack pop
                         rw [hstack] at hpop
+                        have hs1 : s1 = y := by
+                          have h := hpop
+                          simp only [List.cons_append, List.cons.injEq] at h
+                          exact h.2.1
                         have hx : x = t := by
                           have htx : s0 = x := by
                             simpa using congrArg List.head? hpop
@@ -787,43 +1021,48 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                         have hframe' : FrameMatches ρ e.frame S1 :=
                           frameMatches_gotoCompat hcheck'.1.2 htail
                         have hentry' :
-                            checkNode code c.entries e.rets t.toNat e.frame g = true := by
+                            checkNodeM code c.entries ms b e.rets t.toNat e.frame
+                              (ms.getD k []) g = true := by
                           simpa [hcheck'.1.1.1.2] using hentry
                         subst x
                         have hrun := ih
                           ⟨t.toNat, sevm, inter, .ok post, exc'⟩
                           (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork e.rets
-                          e.frame g ρ S1 base hentry' hinter hframe'
+                          e.frame g ρ S1 base (ms.getD k []) hentry' hinter hframe'
+                          ((hmem.of_memory_eq pop.memory).of_memCompat hmc)
                         cases hrun with
                         | inl run => exact Or.inl (SFunc.RunP.toSucc t y hy hg pop run)
                         | inr run =>
                           rcases run with
                             ⟨hret, devm', S', exc'', hlt, run, hst, hlen⟩
-                          have hret' : AVal.ret ∈ a' :=
-                            ret_mem_of_gotoCompat hcheck'.1.2 hret
+                          have hret' : RetIn a' μ :=
+                            hret.imp (ret_mem_of_gotoCompat hcheck'.1.2)
+                              (mem_snd_of_memCompat hmc)
                           have hlen' : S'.length = m := by
                             simpa [hcheck'.1.1.2] using hlen
-                          exact Or.inr ⟨List.mem_cons_of_mem _
-                              (List.mem_cons_of_mem _ hret'), devm', S', exc'',
+                          exact Or.inr ⟨RetIn.of_frame (fun h => List.mem_cons_of_mem _
+                              (List.mem_cons_of_mem _ h)) hret', devm', S', exc'',
                             deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
                             SFunc.RunP.toSucc t y hy hg pop run, hst, hlen'⟩
     | last l =>
       have hbyte : byteAt code pc = some l.toUInt8 := by
-        simpa [checkNode] using hcheck
+        simpa [checkNodeM] using hcheck
       have h_at : Linst.At sevm.code pc l := by
         apply byteAt_linst_at
         rw [hcode]
         exact hbyte
       exact Or.inl (SFunc.RunP.last (Linst.run_of_at exc h_at))
     | next n f =>
-      have next_nonpush (n : Ninst) (a' : List AVal) (out : Pattern)
+      have next_nonpush (n : Ninst) (a0 a' : List AVal) (out : Pattern)
           (hlen : a.length ≤ 1024)
           (htrans : ninstTransfer n (indexPattern a.length) = some out)
-          (hread : out.mapM (readBack a) = some a')
-          (hchild : checkNode code c.entries m (pc + n.size) a' f = true)
+          (hread : out.mapM (readBack a) = some a0)
+          (hfold : a' = foldTop (foldConst n a) a0)
+          (hchild : checkNodeM code c.entries ms b m (pc + n.size)
+            (if b then memFold (memTop n a μ) a' else a') (if b then absMem n a μ else []) f = true)
           (h_at : Ninst.At sevm.code pc n) :
           SFunc.RunP (StepIn R) c.prog sevm devm (.next n f) (.halted post) ∨
-          (AVal.ret ∈ a ∧
+          (RetIn a μ ∧
             ∃ (devm' : Devm) (S' : List B256)
               (exc' : Exec ρ.toNat sevm devm' (.ok post)),
               Exec.Deriv.lt
@@ -852,16 +1091,23 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
         have hbelow' : below = base := matches_some_map_eq hbelow
         have hinter : inter.stack = S' ++ base := by
           simpa [hbelow'] using hsp
-        have hframe' : FrameMatches ρ a' S' := matches_to_frame hfirst
+        have hframe0 : FrameMatches ρ a' S' := by
+          rw [hfold]
+          exact frameMatches_foldTop hframe hstack run hinter (matches_to_frame hfirst)
+        obtain ⟨hframe', hmem'⟩ := step_mem_sound b hframe hstack hmem run hinter hframe0
         have hrun := ih
           ⟨pc + n.size, sevm, inter, .ok post, exc'⟩
-          (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a' f ρ S' base
-          hchild hinter hframe'
+          (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m _ f ρ S' base _
+          hchild hinter hframe' hmem'
         cases hrun with
         | inl run' => exact Or.inl (SFunc.RunP.next runS run')
         | inr run' =>
           rcases run' with ⟨hret, devm', Sret, exc'', hlt, run', hst, hlen'⟩
-          have hret' : AVal.ret ∈ a := ret_mem_of_readBack hread hret
+          have hret' : RetIn a μ := by
+            rcases RetIn.of_step b hret with h | h | h
+            · exact .inl (ret_mem_of_readBack hread (ret_mem_of_foldTop (hfold ▸ h)))
+            · exact .inl h
+            · exact .inr h
           exact Or.inr ⟨hret', devm', Sret, exc'',
             deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
             SFunc.RunP.next runS run', hst, hlen'⟩
@@ -872,11 +1118,12 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
             (bytesAt code pc (Ninst.toBytes n) = true ∧
               Ninst.pcFree n = true) ∧
             (match absNinst n a with
-             | some a' => checkNode code c.entries m (pc + n.size) a' f
+             | some a' => checkNodeM code c.entries ms b m (pc + n.size)
+                 (if b then memFold (memTop n a μ) a' else a') (if b then absMem n a μ else []) f
              | none => false) = true)
           (h_at : Ninst.At sevm.code pc n) :
           SFunc.RunP (StepIn R) c.prog sevm devm (.next n f) (.halted post) ∨
-          (AVal.ret ∈ a ∧
+          (RetIn a μ ∧
             ∃ (devm' : Devm) (S' : List B256)
               (exc' : Exec ρ.toNat sevm devm' (.ok post)),
               Exec.Deriv.lt
@@ -888,19 +1135,23 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
         cases ha : absNinst n a with
         | none => simp [ha] at hrest
         | some a' =>
-          have hchild : checkNode code c.entries m (pc + n.size) a' f = true := by
+          have hchild : checkNodeM code c.entries ms b m (pc + n.size)
+              (if b then memFold (memTop n a μ) a' else a') (if b then absMem n a μ else []) f
+                = true := by
             simpa [ha] using hrest
           rcases absNinst_nonpush_spec hnpush ha with
-            ⟨hlen, out, htrans, hread⟩
-          exact next_nonpush n a' out hlen htrans hread hchild h_at
+            ⟨hlen, out, a0, htrans, hread, hfold⟩
+          exact next_nonpush n a0 a' out hlen htrans hread hfold hchild h_at
       cases n with
       | push bs fits =>
         have hcheck' :
             (bytesAt code pc (Ninst.toBytes (Ninst.push bs fits)) = true ∧
               Ninst.pcFree (Ninst.push bs fits) = true) ∧
-            checkNode code c.entries m (pc + (Ninst.push bs fits).size)
-              (.const (Bytes.toB256 bs) :: a) f = true := by
-          simpa [checkNode, absNinst] using hcheck
+            checkNodeM code c.entries ms b m (pc + (Ninst.push bs fits).size)
+              (if b then memFold (memTop (.push bs fits) a μ) (.const (Bytes.toB256 bs) :: a)
+                else .const (Bytes.toB256 bs) :: a)
+              (if b then absMem (.push bs fits) a μ else []) f = true := by
+          simpa only [checkNodeM, absNinst, Bool.and_eq_true] using hcheck
         have h_at : Ninst.At sevm.code pc (.push bs fits) := by
           apply Ninst.at_of_slice
           apply bytesAt_slice (ninst_bytes_ne_nil (.push bs fits))
@@ -912,23 +1163,28 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
           runW.mono (fun _ _ _ _ _ he r hr => hsub r (he r hr))
         have hstack' : inter.stack = Bytes.toB256 bs :: (S ++ base) := by
           rw [push_run_stack run, hstack]
-        have hframe' :
+        have hframe0 :
             FrameMatches ρ (.const (Bytes.toB256 bs) :: a)
               (Bytes.toB256 bs :: S) := List.Forall₂.cons rfl hframe
+        obtain ⟨hframe', hmem'⟩ := step_mem_sound b hframe hstack hmem run
+          (by rw [hstack']; rfl) hframe0
         have hrun := ih ⟨pc + (Ninst.push bs fits).size, sevm, inter,
             .ok post, exc'⟩ (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m
-            (.const (Bytes.toB256 bs) :: a) f ρ
-            (Bytes.toB256 bs :: S) base hcheck'.2 hstack' hframe'
+            _ f ρ (Bytes.toB256 bs :: S) base _ hcheck'.2 hstack' hframe' hmem'
         cases hrun with
         | inl run' => exact Or.inl (SFunc.RunP.next runS run')
         | inr run' =>
           rcases run' with ⟨hret, devm', S', exc'', hlt, run', hst, hlen⟩
-          have hret' : AVal.ret ∈ a := by simpa using hret
+          have hret' : RetIn a μ := by
+            rcases RetIn.of_step b hret with h | h | h
+            · exact .inl (by simpa using h)
+            · exact .inl h
+            · exact .inr h
           exact Or.inr ⟨hret', devm', S', exc'',
             deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
             SFunc.RunP.next runS run', hst, hlen⟩
       | reg r =>
-        simp only [checkNode, Bool.and_eq_true] at hcheck
+        simp only [checkNodeM, Bool.and_eq_true] at hcheck
         have hbyte : bytesAt code pc (Ninst.toBytes (Ninst.reg r)) = true :=
           hcheck.1.1
         have h_at : Ninst.At sevm.code pc (Ninst.reg r) := by
@@ -939,7 +1195,7 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
         exact next_checked (Ninst.reg r)
           (by intro bs fits h; cases h) hcheck h_at
       | exec x =>
-        simp only [checkNode, Bool.and_eq_true] at hcheck
+        simp only [checkNodeM, Bool.and_eq_true] at hcheck
         have h_at : Ninst.At sevm.code pc (Ninst.exec x) := by
           apply Ninst.at_of_slice
           apply bytesAt_slice (ninst_bytes_ne_nil (Ninst.exec x))
@@ -948,7 +1204,7 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
         exact next_checked (Ninst.exec x)
           (by intro bs fits h; cases h) hcheck h_at
       | dupn i =>
-        simp only [checkNode, Bool.and_eq_true] at hcheck
+        simp only [checkNodeM, Bool.and_eq_true] at hcheck
         have h_at : Ninst.At sevm.code pc (Ninst.dupn i) := by
           apply Ninst.at_of_slice
           apply bytesAt_slice (ninst_bytes_ne_nil (Ninst.dupn i))
@@ -957,7 +1213,7 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
         exact next_checked (Ninst.dupn i)
           (by intro bs fits h; cases h) hcheck h_at
       | swapn i =>
-        simp only [checkNode, Bool.and_eq_true] at hcheck
+        simp only [checkNodeM, Bool.and_eq_true] at hcheck
         have h_at : Ninst.At sevm.code pc (Ninst.swapn i) := by
           apply Ninst.at_of_slice
           apply bytesAt_slice (ninst_bytes_ne_nil (Ninst.swapn i))
@@ -966,7 +1222,7 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
         exact next_checked (Ninst.swapn i)
           (by intro bs fits h; cases h) hcheck h_at
       | exchange i =>
-        simp only [checkNode, Bool.and_eq_true] at hcheck
+        simp only [checkNodeM, Bool.and_eq_true] at hcheck
         have h_at : Ninst.At sevm.code pc (Ninst.exchange i) := by
           apply Ninst.at_of_slice
           apply bytesAt_slice (ninst_bytes_ne_nil (Ninst.exchange i))
@@ -976,8 +1232,8 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
           (by intro bs fits h; cases h) hcheck h_at
     | dest f =>
       have hcheck' : byteAt code pc = some (Jinst.toUInt8 .jumpdest) ∧
-          checkNode code c.entries m (pc + 1) a f = true := by
-        simpa [checkNode] using hcheck
+          checkNodeM code c.entries ms b m (pc + 1) a μ f = true := by
+        simpa [checkNodeM] using hcheck
       have hbyte : byteAt code pc = some (Jinst.toUInt8 .jumpdest) := hcheck'.1
       have h_at : Jinst.At sevm.code pc .jumpdest := by
         apply byteAt_jinst_at
@@ -987,8 +1243,8 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
       have hstack' : inter.stack = S ++ base := by
         rw [← burn.stack, hstack]
       have hrun := ih ⟨pc + 1, sevm, inter, .ok post, exc'⟩
-        (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a f ρ S base
-        hcheck'.2 hstack' hframe
+        (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a f ρ S base μ
+        hcheck'.2 hstack' hframe (hmem.of_memory_eq burn.memory)
       cases hrun with
       | inl run => exact Or.inl (SFunc.RunP.dest burn run)
       | inr run =>
@@ -997,22 +1253,24 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
           (Exec.Deriv.lt_of_prec prec), SFunc.RunP.dest burn run, hst, hlen⟩
     | jump k =>
       cases a with
-      | nil => simp [checkNode] at hcheck
+      | nil => simp [checkNodeM] at hcheck
       | cons av a' =>
         cases av with
-        | ret => simp [checkNode] at hcheck
-        | unk => simp [checkNode] at hcheck
+        | ret => simp [checkNodeM] at hcheck
+        | unk => simp [checkNodeM] at hcheck
         | const t =>
           cases hk : c.entries[k]? with
-          | none => simp [checkNode, hk] at hcheck
+          | none => simp [checkNodeM, hk] at hcheck
           | some e =>
-            have hcheck' :
-                (((byteAt code pc = some (Jinst.toUInt8 .jump) ∧
+            have hcheck0 :
+                ((((byteAt code pc = some (Jinst.toUInt8 .jump) ∧
                   e.pc = t.toNat) ∧ e.rets = m) ∧
-                  gotoCompat a' e.frame = true) := by
-              simpa [checkNode, hk] using hcheck
+                  gotoCompat a' e.frame = true) ∧ memCompat μ (ms.getD k []) = true) := by
+              simpa only [checkNodeM, hk, Bool.and_eq_true, beq_iff_eq] using hcheck
+            have hcheck' := hcheck0.1
+            have hmc := hcheck0.2
             rcases cert_prog_of_entry c k e hk with ⟨g, hg⟩
-            have hentry := cert_check_at hc k e g hk hg
+            have hentry := hc k e g hk hg
             have h_at : Jinst.At sevm.code pc .jump := by
               apply byteAt_jinst_at
               rw [hcode]
@@ -1038,45 +1296,49 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                 have hframe' : FrameMatches ρ e.frame S1 :=
                   frameMatches_gotoCompat hcheck'.2 htail
                 have hentry' :
-                    checkNode code c.entries e.rets t.toNat e.frame g = true := by
+                    checkNodeM code c.entries ms b e.rets t.toNat e.frame
+                      (ms.getD k []) g = true := by
                   simpa [hcheck'.1.1.2] using hentry
                 subst x
                 have hrun := ih
                   ⟨t.toNat, sevm, inter, .ok post, exc'⟩
                   (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork e.rets
-                  e.frame g ρ S1 base hentry' hinter hframe'
+                  e.frame g ρ S1 base (ms.getD k []) hentry' hinter hframe'
+                  ((hmem.of_memory_eq pop.memory).of_memCompat hmc)
                 cases hrun with
                 | inl run => exact Or.inl (SFunc.RunP.jump t hg pop run)
                 | inr run =>
                   rcases run with
                     ⟨hret, devm', S', exc'', hlt, run, hst, hlen⟩
-                  have hret' : AVal.ret ∈ a' :=
-                    ret_mem_of_gotoCompat hcheck'.2 hret
+                  have hret' : RetIn a' μ :=
+                    hret.imp (ret_mem_of_gotoCompat hcheck'.2) (mem_snd_of_memCompat hmc)
                   have hlen' : S'.length = m := by
                     simpa [hcheck'.1.2] using hlen
-                  exact Or.inr ⟨List.mem_cons_of_mem _ hret', devm', S', exc'',
-                    deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
+                  exact Or.inr ⟨RetIn.of_frame (fun h => List.mem_cons_of_mem _ h) hret',
+                    devm', S', exc'', deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
                     SFunc.RunP.jump t hg pop run, hst, hlen'⟩
     | callNext k f =>
       cases a with
-      | nil => simp [checkNode] at hcheck
+      | nil => simp [checkNodeM] at hcheck
       | cons av a' =>
         cases av with
-        | ret => simp [checkNode] at hcheck
-        | unk => simp [checkNode] at hcheck
+        | ret => simp [checkNodeM] at hcheck
+        | unk => simp [checkNodeM] at hcheck
         | const t =>
           cases f with
           | dest d =>
             cases hk : c.entries[k]? with
-            | none => simp [checkNode, hk] at hcheck
+            | none => simp [checkNodeM, hk] at hcheck
             | some e =>
-              simp [checkNode, hk] at hcheck
+              simp only [checkNodeM, hk, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq,
+                List.isEmpty_iff] at hcheck
+              have hempty : ms.getD k [] = [] := hcheck.1.2
               rcases cert_prog_of_entry c k e hk with ⟨g, hg⟩
-              have hentry := cert_check_at hc k e g hk hg
+              have hentry := hc k e g hk hg
               have h_at : Jinst.At sevm.code pc .jump := by
                 apply byteAt_jinst_at
                 rw [hcode]
-                exact hcheck.1.1.1
+                exact hcheck.1.1.1.1
               cases S with
               | nil => cases hframe
               | cons s0 S1 =>
@@ -1096,8 +1358,11 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                       simpa using hpop
                     exact (List.cons.inj hpop').2.symm
                   have hentry' :
-                      checkNode code c.entries e.rets t.toNat e.frame g = true := by
-                    simpa [hcheck.1.1.2] using hentry
+                      checkNodeM code c.entries ms b e.rets t.toNat e.frame
+                        (ms.getD k []) g = true := by
+                    simpa [hcheck.1.1.1.2] using hentry
+                  have hmemc : MemMatches ρ (ms.getD k []) inter.memory := by
+                    rw [hempty]; exact memMatches_nil _ _
                   subst x
                   cases hidx : e.frame.findIdx? (· == .ret) with
                   | none =>
@@ -1113,13 +1378,16 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                     have hrun := ih
                       ⟨t.toNat, sevm, inter, .ok post, exc'⟩
                       (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork e.rets
-                      e.frame g 0 Sf (Sr ++ base) hentry' hstacke hframee
+                      e.frame g 0 Sf (Sr ++ base) (ms.getD k []) hentry' hstacke hframee
+                      (by rw [hempty]; exact memMatches_nil _ _)
                     cases hrun with
                     | inl run =>
                       exact Or.inl (SFunc.RunP.callHalt t hg pop run)
                     | inr run =>
                       rcases run with ⟨hret, devm', S', exc'', hlt, run, hst, hlen⟩
-                      exact (hret_no AVal.ret hret rfl).elim
+                      rcases hret with hret | hret
+                      · exact (hret_no AVal.ret hret rfl).elim
+                      · rw [hempty] at hret; simp at hret
                   | some i =>
                     cases haidx : a'[i]? with
                     | none =>
@@ -1136,9 +1404,9 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                       | const r =>
                         have hcall : callCompat r a' e.frame = true ∧
                             byteAt code r.toNat = some (Jinst.toUInt8 .jumpdest) ∧
-                            checkNode code c.entries m (r.toNat + 1)
+                            checkNodeM code c.entries ms b m (r.toNat + 1)
                               (List.replicate e.rets .unk ++
-                                a'.drop e.frame.length) d = true := by
+                                a'.drop e.frame.length) [] d = true := by
                           simpa [hidx, haidx, Bool.and_eq_true] using hcheck.2
                         rcases frameMatches_callCompat hcall.1 htail with
                           ⟨Sf, Sr, hsplit, hframee, hframer⟩
@@ -1149,7 +1417,8 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                         have hrun := ih
                           ⟨t.toNat, sevm, inter, .ok post, exc'⟩
                           (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork e.rets
-                          e.frame g r Sf (Sr ++ base) hentry' hstacke hframee'
+                          e.frame g r Sf (Sr ++ base) (ms.getD k []) hentry' hstacke hframee'
+                          (by rw [hempty]; exact memMatches_nil _ _)
                         cases hrun with
                         | inl run =>
                           exact Or.inl (SFunc.RunP.callHalt t hg pop run)
@@ -1190,7 +1459,8 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                             ⟨r.toNat + 1, sevm, inter2, .ok post, exc2⟩
                             (deriv_lt_trans hlt_dest hlt_call) post rfl hcode hfork m
                             (List.replicate e.rets .unk ++ a'.drop e.frame.length)
-                            d ρ (Sret ++ Sr) base hcall.2.2 hstackd hcont
+                            d ρ (Sret ++ Sr) base [] hcall.2.2 hstackd hcont
+                            (memMatches_nil _ _)
                           cases hrun' with
                           | inl run' =>
                             exact Or.inl (SFunc.RunP.callRet t hg pop run
@@ -1199,33 +1469,36 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                             rcases run' with
                               ⟨hret', devm'', S'', exc''', hlt_cont, run', hst'', hlen'⟩
                             have hret_a' : AVal.ret ∈ a' := by
-                              rcases List.mem_append.mp hret' with h | h
-                              · simp at h
-                              · exact List.mem_of_mem_drop h
-                            exact Or.inr ⟨List.mem_cons_of_mem _ hret_a', devm'', S'',
+                              rcases hret' with hret' | hret'
+                              · rcases List.mem_append.mp hret' with h | h
+                                · simp at h
+                                · exact List.mem_of_mem_drop h
+                              · simp at hret'
+                            exact Or.inr ⟨.inl (List.mem_cons_of_mem _ hret_a'), devm'', S'',
                               exc''', deriv_lt_trans hlt_cont
                                 (deriv_lt_trans hlt_dest hlt_call),
                               SFunc.RunP.callRet t hg pop run
                                 (SFunc.RunP.dest burn2 run'), hst'', hlen'⟩
-          | branch f g => simp [checkNode] at hcheck
-          | branchTo f k' => simp [checkNode] at hcheck
-          | last l => simp [checkNode] at hcheck
-          | next n f => simp [checkNode] at hcheck
-          | jump k' => simp [checkNode] at hcheck
-          | callNext k' f => simp [checkNode] at hcheck
-          | ret => simp [checkNode] at hcheck
-          | undefined => simp [checkNode] at hcheck
+          | branch f g => simp [checkNodeM] at hcheck
+          | branchTo f k' => simp [checkNodeM] at hcheck
+          | last l => simp [checkNodeM] at hcheck
+          | next n f => simp [checkNodeM] at hcheck
+          | jump k' => simp [checkNodeM] at hcheck
+          | callNext k' f => simp [checkNodeM] at hcheck
+          | ret => simp [checkNodeM] at hcheck
+          | pcAt p' f => simp [checkNodeM] at hcheck
+          | undefined => simp [checkNodeM] at hcheck
     | ret =>
       cases a with
-      | nil => simp [checkNode] at hcheck
+      | nil => simp [checkNodeM] at hcheck
       | cons av a' =>
         cases av with
-        | const c => simp [checkNode] at hcheck
-        | unk => simp [checkNode] at hcheck
+        | const c => simp [checkNodeM] at hcheck
+        | unk => simp [checkNodeM] at hcheck
         | ret =>
           have hcheck' : byteAt code pc = some (Jinst.toUInt8 .jump) ∧
               a'.length = m := by
-            simpa [checkNode] using hcheck
+            simpa [checkNodeM] using hcheck
           have h_at : Jinst.At sevm.code pc .jump := by
             apply byteAt_jinst_at
             rw [hcode]
@@ -1253,17 +1526,74 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
               have hlen : S1.length = m :=
                 (List.Forall₂.length_eq htail).symm.trans hcheck'.2
               subst x
-              exact Or.inr ⟨by simp, inter, S1, exc',
+              exact Or.inr ⟨by simp [RetIn], inter, S1, exc',
                 Exec.Deriv.lt_of_prec prec, SFunc.RunP.ret ρ pop, hinter,
                 hlen⟩
+    | pcAt p f =>
+      have hcheck' :
+          (bytesAt code pc (Ninst.toBytes (Ninst.reg .pc)) = true ∧ p = pc) ∧
+            checkNodeM code c.entries ms b m (pc + 1) (.const (Nat.toB256 pc) :: a) μ f = true := by
+        simpa [checkNodeM] using hcheck
+      obtain ⟨⟨hbytes, rfl⟩, hchild⟩ := hcheck'
+      have h_at : Ninst.At sevm.code p (Ninst.reg .pc) := by
+        apply Ninst.at_of_slice
+        apply bytesAt_slice (ninst_bytes_ne_nil (Ninst.reg .pc))
+        rw [hcode]
+        exact hbytes
+      rcases pc_stepRun_of_at exc h_at with ⟨inter, exc', hstepPc, prec⟩
+      have runS : StepIn R sevm devm (.reg .pc) inter := ⟨.none, trivial, p, hstepPc⟩
+      have hstack' : inter.stack = Nat.toB256 p :: (S ++ base) := by
+        rw [pc_stepRun_stack hstepPc, hstack]
+      have hframe' :
+          FrameMatches ρ (.const (Nat.toB256 p) :: a) (Nat.toB256 p :: S) :=
+        List.Forall₂.cons rfl hframe
+      have hrun := ih ⟨p + 1, sevm, inter, .ok post, exc'⟩
+        (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m
+        (.const (Nat.toB256 p) :: a) f ρ (Nat.toB256 p :: S) base μ hchild hstack' hframe'
+        (hmem.of_memory_eq (pc_stepRun_memory hstepPc).symm)
+      cases hrun with
+      | inl run' => exact Or.inl (SFunc.RunP.pcAt runS hstepPc run')
+      | inr run' =>
+        rcases run' with ⟨hret, devm', S', exc'', hlt, run', hst, hlen⟩
+        have hret' : RetIn a μ := RetIn.of_frame (fun h => by simpa using h) hret
+        exact Or.inr ⟨hret', devm', S', exc'',
+          deriv_lt_trans hlt (Exec.Deriv.lt_of_prec prec),
+          SFunc.RunP.pcAt runS hstepPc run', hst, hlen⟩
     | undefined =>
       have hnone_code : code.getInst pc = none := by
-        simpa [checkNode, Option.isNone_iff_eq_none] using hcheck
+        simpa [checkNodeM, Option.isNone_iff_eq_none] using hcheck
       have hnone : sevm.code.getInst pc = none := by
         rw [hcode]
         exact hnone_code
       have hstep := Evm.step_invOp (devm := devm) hnone
       cases Exec.halt_inv exc hstep
+
+theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
+    (R : Exec.Deriv) : ∀ pk : Exec.Deriv, NodeClaim code c [] false R pk :=
+  node_soundM (Cert.checkedM_of_check hc) R
+
+/-- The lifting theorem inside the derivation, from checked entries whose entry
+`0` starts the frame. -/
+theorem lift_sound_inM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
+    (hck : Cert.CheckedM code c ms b)
+    (hstart : ∃ e f c', c = (e, f) :: c' ∧ e.pc = 0 ∧ e.frame = [] ∧ ms.getD 0 [] = [])
+    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
+    (hfork : CoveredFork sevm.benvStat.fork) (exc : Exec 0 sevm pre (.ok post)) :
+    SProg.RunP (StepIn ⟨0, sevm, pre, .ok post, exc⟩) c.prog sevm pre post := by
+  obtain ⟨e, f, c', rfl, hepc, hef, hm0⟩ := hstart
+  have hf := hck 0 e f (by simp [Cert.entries]) (by simp [Cert.prog])
+  have hf0 : checkNodeM code (Cert.entries ((e, f) :: c')) ms b e.rets 0 [] [] f = true := by
+    rw [hm0, hepc, hef] at hf
+    exact hf
+  have hrun := node_soundM hck ⟨0, sevm, pre, .ok post, exc⟩ ⟨0, sevm, pre, .ok post, exc⟩
+    (fun r hr => List.mem_cons_of_mem _ hr)
+    post rfl hcode hfork e.rets [] f 0 [] pre.stack [] hf0 (by simp)
+    (by simp [FrameMatches]) (memMatches_nil _ _)
+  refine ⟨f, ?_, ?_⟩
+  · simp [Cert.prog]
+  · cases hrun with
+    | inl run => exact run
+    | inr run => exact absurd run.1 retIn_nil_nil
 
 /-- **The lifting theorem, inside the derivation.**  A successful execution of
 certified bytes from pc `0` is a run of the certified program whose every
@@ -1275,27 +1605,13 @@ theorem lift_sound_in {code : ByteArray} {c : Cert} (hc : Cert.check code c = tr
     {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
     (hfork : CoveredFork sevm.benvStat.fork) (exc : Exec 0 sevm pre (.ok post)) :
     SProg.RunP (StepIn ⟨0, sevm, pre, .ok post, exc⟩) c.prog sevm pre post := by
+  apply lift_sound_inM (Cert.checkedM_of_check hc) _ hcode hfork exc
   cases c with
   | nil => simp [Cert.check] at hc
   | cons p c =>
     rcases p with ⟨e, f⟩
-    have hc0 : Cert.check code ((e, f) :: c) = true := hc
     simp [Cert.check] at hc
-    have hepc : e.pc = 0 := by simpa using hc.1.1
-    have hef : e.frame = [] := by simpa using hc.1.2
-    have hf : checkNode code (Cert.entries ((e, f) :: c)) e.rets e.pc e.frame f = true := by
-      simpa using hc.2.1
-    have hf0 : checkNode code (Cert.entries ((e, f) :: c)) e.rets 0 [] f = true := by
-      simpa [hepc, hef] using hf
-    have hrun := node_sound hc0 ⟨0, sevm, pre, .ok post, exc⟩ ⟨0, sevm, pre, .ok post, exc⟩
-      (fun r hr => List.mem_cons_of_mem _ hr)
-      post rfl hcode hfork e.rets [] f 0 [] pre.stack hf0 (by simp)
-      (by simp [FrameMatches])
-    refine ⟨f, ?_, ?_⟩
-    · simp [Cert.prog]
-    · cases hrun with
-      | inl run => exact run
-      | inr run => simp at run
+    exact ⟨e, f, c, rfl, by simpa using hc.1.1, by simpa using hc.1.2, by simp⟩
 
 /-- **The lifting theorem.**  A successful execution of certified bytes from
 pc `0` is a run of the certified program: `lift_sound_in`, forgetting where
@@ -1305,5 +1621,20 @@ theorem lift_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
     (hfork : CoveredFork sevm.benvStat.fork) (exc : Exec 0 sevm pre (.ok post)) :
     SProg.Run c.prog sevm pre post :=
   (lift_sound_in hc hcode hfork exc).mono StepIn.toRun
+
+/-- **The lifting theorem, with a constant memory map.**  As `lift_sound`, for a
+certificate accepted by `Cert.checkM`. -/
+theorem lift_soundM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
+    (hc : Cert.checkM code c ms b = true)
+    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
+    (hfork : CoveredFork sevm.benvStat.fork) (exc : Exec 0 sevm pre (.ok post)) :
+    SProg.Run c.prog sevm pre post := by
+  refine (lift_sound_inM (Cert.checkedM_of_checkM hc) ?_ hcode hfork exc).mono StepIn.toRun
+  cases c with
+  | nil => simp [Cert.checkM] at hc
+  | cons p c =>
+    rcases p with ⟨e, f⟩
+    simp only [Cert.checkM, Bool.and_eq_true, beq_iff_eq, List.isEmpty_iff] at hc
+    exact ⟨e, f, c, rfl, hc.1.1.1, hc.1.1.2, hc.1.2⟩
 
 end Blanc.Lift

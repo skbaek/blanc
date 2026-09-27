@@ -61,16 +61,37 @@ def readBack (frame : List AVal) : Option B256 → Option AVal
   | none => some .unk
   | some i => frame[i.toNat]?
 
+/-- The word a folded instruction leaves on top when its operands are known
+constants: Jaune's own operation, top of stack first (`applyBinary f` computes
+`f top second`).  Only these seven instructions fold. -/
+def foldConst : Ninst → List AVal → Option B256
+  | .reg .add, .const x :: .const y :: _ => some (x + y)
+  | .reg .mul, .const x :: .const y :: _ => some (x * y)
+  | .reg .sub, .const x :: .const y :: _ => some (x - y)
+  | .reg .lt, .const x :: .const y :: _ => some (B256.ltCheck x y)
+  | .reg .gt, .const x :: .const y :: _ => some (B256.gtCheck x y)
+  | .reg .eq, .const x :: .const y :: _ => some (B256.eqCheck x y)
+  | .reg .iszero, .const x :: _ => some (B256.eqCheck x 0)
+  | _, _ => none
+
+/-- Replace the top word of a transferred frame by a folded constant. -/
+def foldTop : Option B256 → List AVal → List AVal
+  | some c, _ :: a => .const c :: a
+  | _, a => a
+
 /-- The abstract effect of one non-jump instruction on a frame.  Frames longer
 than the EVM's 1024-word stack are rejected: beyond that, index labels would
-alias modulo `2 ^ 256`. -/
+alias modulo `2 ^ 256`.  A folded instruction (`foldConst`) over constant
+operands leaves its constant result; the fold only refines an `.unk`, so it
+never rejects a tree the unfolded transfer accepts. -/
 def absNinst (n : Ninst) (frame : List AVal) : Option (List AVal) :=
   match n with
   | .push bs _ => some (.const (Bytes.toB256 bs) :: frame)
   | n => do
     guard (frame.length ≤ 1024)
     let out ← ninstTransfer n (indexPattern frame.length)
-    out.mapM (readBack frame)
+    let a' ← out.mapM (readBack frame)
+    pure (foldTop (foldConst n frame) a')
 
 /-- A goto target's declared frame admits the current frame. -/
 def gotoCompat : List AVal → List AVal → Bool
@@ -89,6 +110,14 @@ def callCompat (t : B256) : List AVal → List AVal → Bool
   | .const c :: a, .ret :: e => c == t && callCompat t a e
   | _, _ => false
 
+/-- What a `JUMPI` condition word decides: `some true` for a known nonzero
+constant (the jump is taken), `some false` for the constant zero (it falls
+through), `none` when the word is unknown.  A decided `JUMPI`'s dead side is
+not checked: no execution reaches it. -/
+def AVal.jumps? : AVal → Option Bool
+  | .const w => some (w != 0)
+  | _ => none
+
 def checkNode (code : ByteArray) (es : List Entry) (m : Nat) :
     Nat → List AVal → SFunc → Bool
   | pc, a, .next n f =>
@@ -101,15 +130,17 @@ def checkNode (code : ByteArray) (es : List Entry) (m : Nat) :
     byteAt code pc == some (Jinst.toUInt8 .jumpdest) && checkNode code es m (pc + 1) a f
   | pc, a, .branch f g =>
     match a with
-    | .const t :: _ :: a' =>
+    | .const t :: v :: a' =>
       byteAt code pc == some (Jinst.toUInt8 .jumpi) &&
-        checkNode code es m (pc + 1) a' f && checkNode code es m t.toNat a' g
+        (v.jumps? == some true || checkNode code es m (pc + 1) a' f) &&
+        (v.jumps? == some false || checkNode code es m t.toNat a' g)
     | _ => false
   | pc, a, .branchTo f k =>
     match a, es[k]? with
-    | .const t :: _ :: a', some e =>
+    | .const t :: v :: a', some e =>
       byteAt code pc == some (Jinst.toUInt8 .jumpi) && e.pc == t.toNat &&
-        e.rets == m && gotoCompat a' e.frame && checkNode code es m (pc + 1) a' f
+        e.rets == m && gotoCompat a' e.frame &&
+        (v.jumps? == some true || checkNode code es m (pc + 1) a' f)
     | _, _ => false
   | pc, a, .jump k =>
     match a, es[k]? with
@@ -136,6 +167,9 @@ def checkNode (code : ByteArray) (es : List Entry) (m : Nat) :
     match a with
     | .ret :: a' => byteAt code pc == some (Jinst.toUInt8 .jump) && a'.length == m
     | _ => false
+  | pc, a, .pcAt p f =>
+    bytesAt code pc (Ninst.toBytes (.reg .pc)) && p == pc &&
+      checkNode code es m (pc + 1) (.const (Nat.toB256 pc) :: a) f
   | pc, _, .undefined => (code.getInst pc).isNone
 
 /-- A lift certificate: entry `0` is the frame's start at pc `0` with an empty

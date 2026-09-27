@@ -63,6 +63,7 @@ def SFunc.noHalt : SFunc → Bool
   | .jump _ => true
   | .callNext _ f => f.noHalt
   | .ret => true
+  | .pcAt _ f => f.noHalt
   | .undefined => true
 
 /-- `S` is closed under the entries referenced by its members, and none of them halts. -/
@@ -127,6 +128,10 @@ theorem SFunc.RunP.not_halted {P : Sevm → Devm → Ninst → Devm → Prop}
       simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hrefs
       simp only [SFunc.noHalt] at hf
       exact ihTail hf hrefs.2 ho
+  | pcAt _ _ run ih =>
+      simp only [SFunc.noHalt] at hf
+      simp only [SFunc.refs] at hrefs
+      exact ih hf hrefs ho
 
 /-- A run of an entry in a `NoHaltSet` cannot halt. -/
 theorem SFunc.RunP.not_halted_entry {P : Sevm → Devm → Ninst → Devm → Prop}

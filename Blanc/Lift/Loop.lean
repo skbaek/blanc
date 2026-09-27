@@ -99,6 +99,11 @@ inductive SFunc.RunCutP (P : Sevm → Devm → Ninst → Devm → Prop) (fs : Li
     SFunc.RunP P fs sevm devm' g (.returned devm'') →
     SFunc.RunCutP P fs sevm C devm'' f r →
     SFunc.RunCutP P fs sevm C devm (.callNext k f) r
+  | pcAt {devm devm' : Devm} {p : Nat} {f : SFunc} {r : Seg} :
+    P sevm devm (.reg .pc) devm' →
+    Ninst.StepRun p sevm devm (.reg .pc) .none (.ok devm') →
+    SFunc.RunCutP P fs sevm C devm' f r →
+    SFunc.RunCutP P fs sevm C devm (.pcAt p f) r
 
 /-- A cut run over Jaune's instruction steps. -/
 abbrev SFunc.RunCut (fs : List SFunc) (sevm : Sevm) (C : List Nat) :
@@ -125,6 +130,7 @@ theorem SFunc.runP_iff_runCutP_nil {P : Sevm → Devm → Ninst → Devm → Pro
     | callHalt d hget pop run => exact .callHalt d (by simpa using hget) pop run
     | callRet d hget pop run cont ihRun ihTail =>
       exact .callRet d (by simpa using hget) pop run ihTail
+    | pcAt h hpc _ ih => exact .pcAt h hpc ih
   · intro run
     have aux : ∀ {devm f r}, SFunc.RunCutP P fs sevm [] devm f r →
         ∀ o, r = .done o → SFunc.RunP P fs sevm devm f o := by
@@ -150,6 +156,7 @@ theorem SFunc.runP_iff_runCutP_nil {P : Sevm → Devm → Ninst → Devm → Pro
           exact .callHalt d (by simpa using hget) pop hrun)
         (fun d hget pop hrun hcont ih o heq =>
           .callRet d (by simpa using hget) pop hrun (ih o heq))
+        (fun h hpc hrun ih o heq => .pcAt h hpc (ih o heq))
         run
     exact aux run o rfl
 
@@ -240,6 +247,8 @@ theorem SFunc.RunCutP.loop {P : Sevm → Devm → Ninst → Devm → Prop}
         simpa [Seg.LoopPost] using H _ (.callHalt d hget pop hrun))
       (fun d hget pop hrun hcont ih H =>
         ih (fun r' h' => H r' (.callRet d hget pop hrun h')))
+      (fun h hpc hrun ih H =>
+        ih (fun r' h' => H r' (.pcAt h hpc h')))
       run
   exact aux run (step devm hI)
 
@@ -331,6 +340,10 @@ inductive SFunc.RunExactCut (fs : List SFunc) (sevm : Sevm) (C : List Nat) :
     SFunc.RunExact fs sevm devm' g (.returned devm'') →
     SFunc.RunExactCut fs sevm C devm'' f r →
     SFunc.RunExactCut fs sevm C devm (.callNext k f) r
+  | pcAt {devm devm' : Devm} {p : Nat} {f : SFunc} {r : Seg} :
+    Ninst.StepRun p sevm devm (.reg .pc) .none (.ok devm') →
+    SFunc.RunExactCut fs sevm C devm' f r →
+    SFunc.RunExactCut fs sevm C devm (.pcAt p f) r
 
 /-- With nothing cut, an exact cut run is an exact run. -/
 theorem SFunc.runExact_iff_runExactCut_nil {fs : List SFunc} {sevm : Sevm}
@@ -352,6 +365,7 @@ theorem SFunc.runExact_iff_runExactCut_nil {fs : List SFunc} {sevm : Sevm}
     | callHalt d hget hpop hrun => exact .callHalt d hget hpop hrun
     | callRet d hget hpop hrun hcont ihrun ihcont =>
       exact .callRet d hget hpop hrun ihcont
+    | pcAt hpc hrun ih => exact .pcAt hpc ih
   · intro run
     have aux : ∀ {devm f r}, SFunc.RunExactCut fs sevm [] devm f r →
         ∀ o, r = .done o → SFunc.RunExact fs sevm devm f o := by
@@ -377,6 +391,7 @@ theorem SFunc.runExact_iff_runExactCut_nil {fs : List SFunc} {sevm : Sevm}
           exact .callHalt d hget hpop hrun)
         (fun d hget hpop hrun hcont ih o heq =>
           .callRet d hget hpop hrun (ih o heq))
+        (fun hpc hrun ih o heq => .pcAt hpc (ih o heq))
         run
     exact aux run o rfl
 
@@ -417,6 +432,7 @@ theorem SFunc.RunExactCut.resume {fs : List SFunc} {sevm : Sevm} {C : List Nat}
       (fun d0 hget pop hrun d heq r' rest => by cases heq)
       (fun d0 hget pop hrun hcont ih d heq r' rest =>
         .callRet d0 hget pop hrun (ih d heq r' rest))
+      (fun hpc hrun ih d heq r' rest => .pcAt hpc (ih d heq r' rest))
       seg d
   exact aux devm' seg rfl r rest
 
@@ -452,6 +468,7 @@ theorem SFunc.RunExactCut.uncut {fs : List SFunc} {sevm : Sevm} {C : List Nat} {
     (fun d pop hr => .ret d pop)
     (fun d hget pop hrun hr => .callHalt d hget pop hrun)
     (fun d hget pop hrun hcont ih hr => .callRet d hget pop hrun (ih hr))
+    (fun hpc hrun ih hr => .pcAt hpc (ih hr))
     seg hr
 
 /-- **Loop construction.**  `N` iterations of the loop at entry `k`, each an exact

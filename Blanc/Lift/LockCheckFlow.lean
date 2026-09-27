@@ -726,6 +726,7 @@ theorem lock_step (hc : Cert.check code c = true) (hl : lockCert sp c ann = true
     visit_sound reach hfl (by rw [hpc]; exact hvis)
   have hvalv : Val sp F n σv.kv σv.facts S := by rw [hkv, hfacts]; exact hval
   cases f with
+  | pcAt _ _ => simp [lockNode] at hlock
   | next i f =>
     simp only [checkNode, Bool.and_eq_true] at hcheck
     obtain ⟨⟨hbytes, _⟩, hrest⟩ := hcheck
@@ -767,8 +768,8 @@ theorem lock_step (hc : Cert.check code c = true) (hl : lockCert sp c ann = true
     match a, hcheck, hret, hframe with
     | .const t :: v :: a', hcheck, hret, hframe =>
       have h' : (byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧
-            checkNode code c.entries m (pc + 1) a' f = true) ∧
-          checkNode code c.entries m t.toNat a' g = true := by
+            (v.jumps? = some true ∨ checkNode code c.entries m (pc + 1) a' f = true)) ∧
+          (v.jumps? = some false ∨ checkNode code c.entries m t.toNat a' g = true) := by
         simpa [checkNode] using hcheck
       have hat : Jinst.At n.sevm.code n.pc .jumpi := by
         rw [hcode, hpc]; exact byteAt_jinst_at h'.1.1
@@ -781,17 +782,19 @@ theorem lock_step (hc : Cert.check code c = true) (hl : lockCert sp c ann = true
       rw [hkvv] at hvalv
       rcases of_jumpi_run (Cursor.parentStep_jinst edge hat) with
         ⟨x, hpc', pop⟩ | ⟨x, y, hpc', pop, _, hy⟩
-      · obtain ⟨_, S1, rfl, hst, hfr⟩ := frame_pop_two hframe hstack pop
+      · have hlive := live_fall (Cursor.pop_two_second hstack hframe pop) h'.1.2
+        obtain ⟨_, S1, rfl, hst, hfr⟩ := frame_pop_two hframe hstack pop
         obtain ⟨hv1, hp1⟩ := refine_sound (zero := true) hnn hvalv (fun _ => rfl)
           (fun h => by cases h)
-        exact ⟨⟨f, pc + 1, a', m, K⟩, _, reach', hcode', by simp [hpc', hpc], h'.1.2, hret',
+        exact ⟨⟨f, pc + 1, a', m, K⟩, _, reach', hcode', by simp [hpc', hpc], hlive, hret',
           hlock.1, jump_flags reach edge hfork hat hFV hp1 id id, S1, rest, hst, hfr, hv1, hK'⟩
-      · obtain ⟨hx, S1, rfl, hst, hfr⟩ := frame_pop_two hframe hstack pop
+      · have hlive := live_taken hy (Cursor.pop_two_second hstack hframe pop) h'.2
+        obtain ⟨hx, S1, rfl, hst, hfr⟩ := frame_pop_two hframe hstack pop
         have hx : x = t := hx
         subst hx
         obtain ⟨hv1, hp1⟩ := refine_sound (zero := false) hnn hvalv (fun h => by cases h)
           (fun _ => hy)
-        exact ⟨⟨g, x.toNat, a', m, K⟩, _, reach', hcode', hpc', h'.2, hret',
+        exact ⟨⟨g, x.toNat, a', m, K⟩, _, reach', hcode', hpc', hlive, hret',
           hlock.2, jump_flags reach edge hfork hat hFV hp1 id id, S1, rest, hst, hfr, hv1, hK'⟩
     | [], hcheck, _, _ => simp [checkNode] at hcheck
     | [.const _], hcheck, _, _ => simp [checkNode] at hcheck
@@ -806,7 +809,7 @@ theorem lock_step (hc : Cert.check code c = true) (hl : lockCert sp c ann = true
         have h' : (((byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧
               e.pc = t.toNat) ∧ e.rets = m) ∧
               gotoCompat a' e.frame = true) ∧
-              checkNode code c.entries m (pc + 1) a' f = true := by
+              (v.jumps? = some true ∨ checkNode code c.entries m (pc + 1) a' f = true) := by
           simpa [checkNode, hk] using hcheck
         have hat : Jinst.At n.sevm.code n.pc .jumpi := by
           rw [hcode, hpc]; exact byteAt_jinst_at h'.1.1.1.1
@@ -824,10 +827,11 @@ theorem lock_step (hc : Cert.check code c = true) (hl : lockCert sp c ann = true
         rw [hkvv] at hvalv
         rcases of_jumpi_run (Cursor.parentStep_jinst edge hat) with
           ⟨x, hpc', pop⟩ | ⟨x, y, hpc', pop, _, hy⟩
-        · obtain ⟨_, S1, rfl, hst, hfr⟩ := frame_pop_two hframe hstack pop
+        · have hlive := live_fall (Cursor.pop_two_second hstack hframe pop) h'.2
+          obtain ⟨_, S1, rfl, hst, hfr⟩ := frame_pop_two hframe hstack pop
           obtain ⟨hv1, hp1⟩ := refine_sound (zero := true) hnn hvalv (fun _ => rfl)
             (fun h => by cases h)
-          exact ⟨⟨f, pc + 1, a', m, K⟩, _, reach', hcode', by simp [hpc', hpc], h'.2, hret',
+          exact ⟨⟨f, pc + 1, a', m, K⟩, _, reach', hcode', by simp [hpc', hpc], hlive, hret',
             hlock.1, jump_flags reach edge hfork hat hFV hp1 id id, S1, rest, hst, hfr, hv1,
             hK'⟩
         · obtain ⟨hx, S1, rfl, hst, hfr⟩ := frame_pop_two hframe hstack pop
@@ -1062,6 +1066,12 @@ theorem cursor_sstore_node {n : Exec.Deriv} {κ : Cursor} (ok : CursorOK code c 
     rw [hat] at hj
     cases hj
   cases f with
+  | pcAt p g =>
+    simp only [checkNode, Bool.and_eq_true] at hcheck
+    have hi := Ninst.at_of_slice (bytesAt_slice (ninst_bytes_ne_nil (.reg .pc)) hcheck.1.1)
+    unfold Ninst.At at hi hat
+    rw [hat] at hi
+    cases hi
   | next i g =>
     simp only [checkNode, Bool.and_eq_true] at hcheck
     have hi := Ninst.at_of_slice (bytesAt_slice (ninst_bytes_ne_nil i) hcheck.1.1)
@@ -1164,6 +1174,7 @@ theorem LockOK.not_selfdestruct {n : Exec.Deriv} {κ : Cursor} {σ : LSt}
     rw [hat] at hj
     cases hj
   cases f with
+  | pcAt _ _ => simp [lockNode] at hl
   | last l =>
     have hl' := byteAt_linst_at (show byteAt code pc = some l.toUInt8 by
       simpa [checkNode] using hcheck)

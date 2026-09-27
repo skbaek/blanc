@@ -996,6 +996,7 @@ def SFunc.quiet : SFunc → Bool
   | .jump _ => true
   | .callNext _ f => f.quiet
   | .ret => true
+  | .pcAt _ f => f.quiet
   | .undefined => true
 
 /-- `S` is closed under the entries referenced by its members, and all of them are quiet. -/
@@ -1069,5 +1070,9 @@ theorem SFunc.Run.world_of_quiet {fs : List SFunc} {S : List Nat}
       have ht := closed (of_decide_eq_true hrefs.1) lookup
       simp only [SFunc.quiet] at hf
       exact tr (ihTail hf hrefs.2) (tr (ihRun ht.1 ht.2) (PopBurn.world pop))
+  | pcAt hrun _ run ih =>
+      simp only [SFunc.quiet] at hf
+      simp only [SFunc.refs] at hrefs
+      exact tr (ih hf hrefs) (Ninst.world_of_quiet (n := .reg .pc) hfork rfl hrun)
 
 end Blanc.Lift

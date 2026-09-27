@@ -730,6 +730,15 @@
    "historical_catches": []
   },
   {
+   "id": "lift-certificates",
+   "work": [
+    "static-corpus"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
    "id": "prorata-weth-vault-artifact",
    "work": [
     "candidate-positive",

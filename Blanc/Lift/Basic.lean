@@ -26,6 +26,10 @@ instruction of the bytes:
   returns, execution continues with `f` (the tree at the return tag);
 * `ret` — a `JUMP` through a return tag: returns to the innermost pending
   `callNext`;
+* `pcAt p f` — a `PC` instruction at program counter `p`, then `f`.  The node
+  carries its own pc, so its run is the `PC` step at `p` (it pushes `p`); the
+  checker accepts it only at pc `p` over a `PC` byte.  `.next (.reg .pc) f`
+  would forget which pc was pushed;
 * `undefined` — a byte Jaune cannot decode (`0xFE` and unassigned opcodes).  It
   has no rule: reaching it never succeeds.
 
@@ -50,6 +54,7 @@ inductive SFunc : Type
   | jump : Nat → SFunc
   | callNext : Nat → SFunc → SFunc
   | ret : SFunc
+  | pcAt : Nat → SFunc → SFunc
   | undefined : SFunc
 
 /-- How a synthetic run ends: the frame halted successfully, or the current
@@ -113,6 +118,11 @@ inductive SFunc.RunP (P : Sevm → Devm → Ninst → Devm → Prop) (fs : List 
     SFunc.RunP P fs sevm devm' g (.returned devm'') →
     SFunc.RunP P fs sevm devm'' f o →
     SFunc.RunP P fs sevm devm (.callNext k f) o
+  | pcAt {devm devm' : Devm} {p : Nat} {f : SFunc} {o : Outcome} :
+    P sevm devm (.reg .pc) devm' →
+    Ninst.StepRun p sevm devm (.reg .pc) .none (.ok devm') →
+    SFunc.RunP P fs sevm devm' f o →
+    SFunc.RunP P fs sevm devm (.pcAt p f) o
 
 /-- The run relation of a synthetic tree over Jaune's instruction steps. -/
 abbrev SFunc.Run (fs : List SFunc) (sevm : Sevm) : Devm → SFunc → Outcome → Prop :=
@@ -135,6 +145,7 @@ theorem SFunc.RunP.mono {P Q : Sevm → Devm → Ninst → Devm → Prop}
   | ret d pop => exact .ret d pop
   | callHalt d lookup pop _ ih => exact .callHalt d lookup pop ih
   | callRet d lookup pop _ _ ihRun ihTail => exact .callRet d lookup pop ihRun ihTail
+  | pcAt h hpc _ ih => exact .pcAt (hPQ h) hpc ih
 
 /-- A whole frame: entry `0` runs from the frame's initial state and halts. -/
 def SProg.RunP (P : Sevm → Devm → Ninst → Devm → Prop) (fs : List SFunc) (sevm : Sevm)

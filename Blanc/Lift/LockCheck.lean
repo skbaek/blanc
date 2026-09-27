@@ -37,7 +37,8 @@ abstract lock state `LSt`:
 **Requirements.**  Every body start needs `passed`; every mutating body start
 needs `setNow`; an `SSTORE` whose key may equal the slot is accepted only if
 the key is the constant slot, `passed` holds, and the pc is a release pc or
-(before any mutating body start) a set pc; `SELFDESTRUCT` is rejected (the
+(before any mutating body start) a set pc; `SELFDESTRUCT` and every `PC` node (`SFunc.pcAt`, which no lock-checked
+certificate uses) are rejected (the
 certificate itself admits no `DELEGATECALL`, `CALLCODE`, `CREATE` or
 `CREATE2`).
 
@@ -334,6 +335,7 @@ def lockNode (sp : Spec) (es : List Entry) (ann : List LSt) :
           | none => true
       | _, _, _, _ => false
   | pc, _, σ, .ret => (visit sp pc σ).isSome
+  | _, _, _, .pcAt _ _ => false
   | pc, _, σ, .undefined => (visit sp pc σ).isSome
 
 /-- The lock check of a whole certificate: one annotation per entry, entry
