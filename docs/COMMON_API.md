@@ -277,7 +277,10 @@ registry has identified the likely vocabulary.
   upper 96 bits, while assignments preserve those bits and replace only the
   low 160 bits.  Use `addressSlotReadWord` and `addressSlotWriteWord` for the
   matching pure word projections; `addressSlotReadWord_eq_toAdr_toB256` ties
-  the low-word projection to the ordinary address conversion.  The
+  the low-word projection to the ordinary address conversion, and
+  `addressSlotReadWord_write_of_clean` gives the public read after a packed
+  write of an address-shaped word; `addressSlotReadWord_get_set_packed`
+  frames that read through a concrete storage update.  The
   value-carrying inversions
   `of_loadAddressWordAt_val` and `of_storeAddressWordAt_val` live in
   [`Blanc/AddressSlotProofs.lean`](../Blanc/AddressSlotProofs.lean).
@@ -1184,6 +1187,8 @@ For the entire storage map at one address, the corresponding adapter is
 
 Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
 
+- `Stor.get_set_ite` exposes a single storage-map update as the equality
+  branch at an arbitrary observed key.
 - `Devm.addAccessedStorageKey_setMach_setMach` cancels an obsolete machine
   component across an access-key update followed by the final `setMach`.
 - `of_run_sload_state` and `of_run_sload_logs` expose the persistent-state

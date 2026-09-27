@@ -9,6 +9,15 @@ open Jaune Jaune.List Jaune.Except _root_.List _root_.Nat
 open Jaune.Ninst Ninst
 open DispatchTree
 
+/-- Read a single storage update as an equality branch at the observed key. -/
+theorem Stor.get_set_ite (s : Stor) (key value probe : B256) :
+    (s.set key value).get probe =
+      if key = probe then value else s.get probe := by
+  by_cases h : key = probe
+  · subst probe
+    simp [Stor.get_set_self]
+  · simp [h, Stor.get_set_ne _ h]
+
 -- Splitting a body's line at any point and prepending the pieces in order is
 -- the same as prepending the whole line. Every module that decomposes a
 -- compiled body into named line segments needs this, so it is stated once here

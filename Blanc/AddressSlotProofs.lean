@@ -54,6 +54,49 @@ theorem addressSlotReadWord_eq_toAdr_toB256 (raw : B256) :
     addressSlotReadWord address.toB256 = address.toB256 := by
   rw [addressSlotReadWord_eq_toAdr_toB256, toAdr_toB256]
 
+/-- A packed address assignment replaces the public low-160-bit read while
+retaining the raw word's high bits. -/
+theorem addressSlotReadWord_write_of_clean (raw clean : B256)
+    (hclean : addressSlotReadWord clean = clean) :
+    addressSlotReadWord (addressSlotWriteWord raw clean) = clean := by
+  have hcomponent (m x v : UInt64) (hv : (~~~m) &&& v = v) :
+      (~~~m) &&& ((m &&& x) ||| v) = v := by
+    bv_decide
+  unfold addressSlotReadWord at hclean ⊢
+  unfold addressSlotWriteWord
+  rcases hmask : addressMask with ⟨⟨m0, m1⟩, ⟨m2, m3⟩⟩
+  rcases raw with ⟨⟨x0, x1⟩, ⟨x2, x3⟩⟩
+  rcases clean with ⟨⟨v0, v1⟩, ⟨v2, v3⟩⟩
+  have h0 := congrArg (fun w : B256 => w.1.1) hclean
+  have h1 := congrArg (fun w : B256 => w.1.2) hclean
+  have h2 := congrArg (fun w : B256 => w.2.1) hclean
+  have h3 := congrArg (fun w : B256 => w.2.2) hclean
+  rw [hmask] at h0 h1 h2 h3
+  change (~~~m0) &&& v0 = v0 at h0
+  change (~~~m1) &&& v1 = v1 at h1
+  change (~~~m2) &&& v2 = v2 at h2
+  change (~~~m3) &&& v3 = v3 at h3
+  apply Prod.ext
+  · apply Prod.ext
+    · exact hcomponent m0 x0 v0 h0
+    · exact hcomponent m1 x1 v1 h1
+  · apply Prod.ext
+    · exact hcomponent m2 x2 v2 h2
+    · exact hcomponent m3 x3 v3 h3
+
+/-- Reading a packed address after a storage write yields the new address at
+the written key and leaves every other public address read unchanged. -/
+theorem addressSlotReadWord_get_set_packed (s : Stor)
+    (key value probe : B256)
+    (hclean : addressSlotReadWord value = value) :
+    addressSlotReadWord
+      ((s.set key (addressSlotWriteWord (s.get key) value)).get probe) =
+      if key = probe then value else addressSlotReadWord (s.get probe) := by
+  by_cases h : key = probe
+  · subst probe
+    simp [Stor.get_set_self, addressSlotReadWord_write_of_clean _ _ hclean]
+  · simp [h, Stor.get_set_ne _ h]
+
 private theorem shr96_ones_eq_not_addressMask :
     (~~~ (0 : B256)) >>> (96 : Nat).toB256.toNat = ~~~ addressMask := by
   rw [B256.toNat_toB256, Nat.lo_eq_of_lt (by omega)]
