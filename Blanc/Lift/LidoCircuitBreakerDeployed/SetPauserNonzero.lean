@@ -288,6 +288,42 @@ theorem registryRawValue_countSlot' {probe old value : B256}
   simp only [countSlot, registryRawValue, h'.1, h'.2]
   simp [assignmentRegion, countRegion, arrayRegion]
 
+theorem registryRawValue_indexSlot' {probe old value : B256}
+    (h : canonicalAddress probe) :
+    registryRawValue (indexSlot probe) old value = value := by
+  have h' := tagged_region_payload' (region := indexRegion)
+    (by norm_num [indexRegion]) (canonicalAddress_payload_lt h)
+  simp only [indexSlot, registryRawValue, h'.1, h'.2]
+  simp [assignmentRegion, indexRegion, arrayRegion]
+
+theorem registryRawValue_arrayLengthSlot' {old value : B256} :
+    registryRawValue arrayLengthSlot old value = value := by
+  have h' := tagged_region_payload' (region := arrayRegion) (payload := 0)
+    (by norm_num [arrayRegion]) (by
+      change (0 : Nat) < 2 ^ 252
+      norm_num)
+  simp only [arrayLengthSlot, registryRawValue, h'.1, h'.2]
+  simp [assignmentRegion, arrayRegion]
+
+theorem registryRawValue_arrayEntrySlot' {index : Nat} {old value : B256}
+    (hindex : index + 1 < 2 ^ 252) :
+    registryRawValue (arrayEntrySlot (Nat.toB256 (index + 1))) old value =
+      addressSlotWriteWord old value := by
+  have h256 : index + 1 < 2 ^ 256 := by omega
+  have hword : (Nat.toB256 (index + 1)).toNat < 2 ^ 252 := by
+    rw [B256.toNat_toB256_of_lt h256]
+    exact hindex
+  have h' := tagged_region_payload' (region := arrayRegion)
+    (by norm_num [arrayRegion]) hword
+  have hnonzero : Nat.toB256 (index + 1) ≠ 0 := by
+    intro heq
+    have hn := congrArg B256.toNat heq
+    rw [B256.toNat_toB256_of_lt h256] at hn
+    change index + 1 = 0 at hn
+    omega
+  simp only [arrayEntrySlot, registryRawValue, h'.1, h'.2]
+  simp [assignmentRegion, arrayRegion, hnonzero]
+
 /-! ## The found-target, nonzero-new-pauser branch -/
 
 /-- Every successful run of `setPauser` (entry 32) on a found target with a

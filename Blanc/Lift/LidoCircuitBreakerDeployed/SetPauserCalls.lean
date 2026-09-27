@@ -4,6 +4,7 @@ import Blanc.LidoCircuitBreakerCore
 import Blanc.Lift.Weth9.Words
 import Blanc.Lift.Vyper
 import Blanc.Lift.MapSlot
+import Blanc.AddressSlotProofs
 
 /-! Inversion of the deployed CircuitBreaker's checked-arithmetic helper
 entries on a successful run: entry 40 (checked decrement), entry 24 (checked
@@ -124,6 +125,40 @@ theorem StorStep.congr {sevm : Sevm} {b b' : Devm} {s s' : Stor} (h : StorStep s
 theorem StorStep.trans {sevm : Sevm} {b b' b'' : Devm} {s s' : Stor}
     (h : StorStep sevm b b' s) (h' : StorStep sevm b' b'' s') : StorStep sevm b b'' s' :=
   ⟨h'.self, fun a ha => by rw [h'.other a ha, h.other a ha], by rw [h'.logs, h.logs]⟩
+
+/-- A packed address write whose new address clears the mask leaves the raw
+word's upper 96 bits (the `addressMask` part) unchanged. -/
+theorem addressMask_and_write_of_clean (raw clean : B256)
+    (hclean : addressMask &&& clean = 0) :
+    addressMask &&& addressSlotWriteWord raw clean = addressMask &&& raw := by
+  have hcomponent (m x v : UInt64) (hv : m &&& v = 0) :
+      m &&& ((m &&& x) ||| v) = m &&& x := by
+    apply UInt64.toBitVec_inj.mp
+    have hv' := congrArg UInt64.toBitVec hv
+    simp only [UInt64.toBitVec_and, UInt64.toBitVec_zero] at hv'
+    simp only [UInt64.toBitVec_and, UInt64.toBitVec_or]
+    rw [BitVec.and_or_distrib_left, ← BitVec.and_assoc, BitVec.and_self, hv',
+      BitVec.or_zero]
+  unfold addressSlotWriteWord
+  rcases hmask : addressMask with ⟨⟨m0, m1⟩, ⟨m2, m3⟩⟩
+  rcases raw with ⟨⟨x0, x1⟩, ⟨x2, x3⟩⟩
+  rcases clean with ⟨⟨v0, v1⟩, ⟨v2, v3⟩⟩
+  rw [hmask] at hclean
+  have h0 := congrArg (fun w : B256 => w.1.1) hclean
+  have h1 := congrArg (fun w : B256 => w.1.2) hclean
+  have h2 := congrArg (fun w : B256 => w.2.1) hclean
+  have h3 := congrArg (fun w : B256 => w.2.2) hclean
+  change m0 &&& v0 = 0 at h0
+  change m1 &&& v1 = 0 at h1
+  change m2 &&& v2 = 0 at h2
+  change m3 &&& v3 = 0 at h3
+  apply Prod.ext
+  · apply Prod.ext
+    · exact hcomponent m0 x0 v0 h0
+    · exact hcomponent m1 x1 v1 h1
+  · apply Prod.ext
+    · exact hcomponent m2 x2 v2 h2
+    · exact hcomponent m3 x3 v3 h3
 
 theorem B256.or_comm' (x y : B256) : x ||| y = y ||| x := by
   rcases x with ⟨⟨xh0, xh1⟩, ⟨xl0, xl1⟩⟩
