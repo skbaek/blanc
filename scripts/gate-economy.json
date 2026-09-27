@@ -732,8 +732,7 @@
   {
    "id": "lift-certificates",
    "work": [
-    "static-corpus",
-    "harness-self-test"
+    "static-corpus"
    ],
    "resource_class": "light",
    "prerequisites": [],
