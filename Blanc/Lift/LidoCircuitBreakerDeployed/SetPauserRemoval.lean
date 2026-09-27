@@ -625,7 +625,7 @@ theorem ffWord_add_length_base {L : Nat} (hpos : 0 < L) (hlt : L < 2 ^ 256) :
   rw [show 2 ^ 256 - 1 + (L + registryArrayBase.toNat) =
     (registryArrayBase.toNat + (L - 1)) + 2 ^ 256 by omega, Nat.add_mod_right]
 
-private theorem arrayEntrySlot_ne_arrayLengthSlot {i : Nat} (hi : i + 1 < 2 ^ 252) :
+theorem arrayEntrySlot_ne_arrayLengthSlot {i : Nat} (hi : i + 1 < 2 ^ 252) :
     arrayEntrySlot (Nat.toB256 (i + 1)) ≠ arrayLengthSlot := by
   intro heq
   have hb256 : i + 1 < 2 ^ 256 := by omega
