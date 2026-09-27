@@ -13,15 +13,17 @@ open Jaune
 open Blanc.LidoCircuitBreaker
 
 /-- Entry 32 first tests the canonical, nonzero target and enters its body.
-The returned run retains the exact caller stack, memory, and residual gas. -/
+The returned run retains the exact caller stack, memory, and residual gas.
+The new-pauser argument is threaded through untouched: the guard never reads
+it, so this holds for an arbitrary `newPauser`. -/
 theorem entry32_target_guard_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
-    {target : B256} {base : List B256} {post : Devm}
+    {newPauser target : B256} {base : List B256} {post : Devm}
     (htarget : nonzeroCanonicalAddress target)
     (run : SFunc.Run prog sevm
-      (St b (0 :: target :: 3 :: 0x3c2 :: base) M G)
+      (St b (newPauser :: target :: 3 :: 0x3c2 :: base) M G)
       t_0934_c32 (.returned post)) :
     ∃ G', SFunc.RunCut prog sevm []
-      (St b (0 :: target :: 3 :: 0x3c2 :: base) M G')
+      (St b (newPauser :: target :: 3 :: 0x3c2 :: base) M G')
       t_0981_c32 (.done (.returned post)) := by
   have run := run.cut
   unfold t_0934_c32 at run
@@ -43,29 +45,48 @@ theorem entry32_target_guard_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     exact (htarget.1 (hmask ▸ hz)).elim
   · exact ⟨G6, run⟩
 
-/-- The found-target branch clears the assignment's low address field and
-continues with the actual old pauser; the packed upper bits are retained. -/
-theorem entry32_assignment_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
-    {target : B256} {base : List B256} {post : Devm}
+/-- The assignment rewrite: the target's low address field is replaced by the
+new pauser (the packed upper bits retained), and control continues with the
+actual old pauser, at `t_09da_c32` when it was nonzero (found target) and at
+the push block `t_0a16_c32` when it was zero (absent target).
+Stated for an arbitrary canonical `newPauser`: all four `setPauser`
+branches share it, diverging here on the old pauser and later at entry 4's
+test of `newPauser`. -/
+theorem entry32_assignment_split {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
+    {newPauser target : B256} {base : List B256} {post : Devm}
     (hfork : CoveredFork sevm.benvStat.fork)
     (htarget : canonicalAddress target) (hmem : Mem.Wf M)
     (halign : M.size % 32 = 0)
-    (hold : addressSlotReadWord
-      (b.getStorVal sevm.currentTarget (mapSlot target 3)) ≠ 0)
+    (hnewPauser : canonicalAddress newPauser)
     (run : SFunc.RunCut prog sevm []
-      (St b (0 :: target :: 3 :: 0x3c2 :: base) M G)
+      (St b (newPauser :: target :: 3 :: 0x3c2 :: base) M G)
       t_0981_c32 (.done (.returned post))) :
-    ∃ G', SFunc.RunCut prog sevm []
+    ∃ G', (addressSlotReadWord
+        (b.getStorVal sevm.currentTarget (mapSlot target 3)) ≠ 0 ∧
+      SFunc.RunCut prog sevm []
       (St (afterSstore sevm
         (afterSload sevm b (mapSlot target 3))
         (mapSlot target 3)
         (addressSlotWriteWord
-          (b.getStorVal sevm.currentTarget (mapSlot target 3)) 0))
+          (b.getStorVal sevm.currentTarget (mapSlot target 3)) newPauser))
         (addressSlotReadWord
           (b.getStorVal sevm.currentTarget (mapSlot target 3)) ::
-          0 :: target :: 3 :: 0x3c2 :: base)
+          newPauser :: target :: 3 :: 0x3c2 :: base)
         ((M.write 0 target.toBytes).write 32 (3 : B256).toBytes) G')
-      t_09da_c32 (.done (.returned post)) := by
+      t_09da_c32 (.done (.returned post))) ∨
+    (addressSlotReadWord
+        (b.getStorVal sevm.currentTarget (mapSlot target 3)) = 0 ∧
+      SFunc.RunCut prog sevm []
+      (St (afterSstore sevm
+        (afterSload sevm b (mapSlot target 3))
+        (mapSlot target 3)
+        (addressSlotWriteWord
+          (b.getStorVal sevm.currentTarget (mapSlot target 3)) newPauser))
+        (addressSlotReadWord
+          (b.getStorVal sevm.currentTarget (mapSlot target 3)) ::
+          newPauser :: target :: 3 :: 0x3c2 :: base)
+        ((M.write 0 target.toBytes).write 32 (3 : B256).toBytes) G')
+      t_0a16_c32 (.done (.returned post))) := by
   unfold t_0981_c32 at run
   obtain ⟨G1, run⟩ := ric_dest run
   obtain ⟨d1, s1, run⟩ := ric_next run
@@ -144,18 +165,19 @@ theorem entry32_assignment_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G18, rfl⟩ := ri_sload hfork s1
   obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G19, rfl⟩ := ri_dup (w := (0 : B256)) rfl s1
+  obtain ⟨G19, rfl⟩ := ri_dup (w := newPauser) rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G20, rfl⟩ := ri_dup (w := Bytes.toB256
     [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]) rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G21, rfl⟩ := ri_and s1
-  have hzero : Bytes.toB256
+  have hnewMask : Bytes.toB256
       [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&&
-      (0 : B256) = 0 := by decide
-  rw [hzero] at run
+      newPauser = newPauser := by
+    rw [Weth9.ff20_and_word, B256.toAdr_toB256_of_lt hnewPauser]
+  rw [hnewMask] at run
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G22, rfl⟩ := ri_push s1
   have hhigh : Bytes.toB256
@@ -197,14 +219,40 @@ theorem entry32_assignment_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     (w := addressSlotReadWord (b.getStorVal sevm.currentTarget (mapSlot target 3))) rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G31, rfl⟩ := ri_iszero s1
-  have hflag : B256.eqCheck
-      (addressSlotReadWord (b.getStorVal sevm.currentTarget (mapSlot target 3))) 0 = 0 := by
-    simp [B256.eqCheck, hold]
-  rw [hflag] at run
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G32, rfl⟩ := ri_push s1
-  rcases ric_branch run with ⟨_, G33, run⟩ | ⟨hnz, G33, run⟩
-  · exact ⟨G33, run⟩
-  · exact (hnz rfl).elim
+  rcases ric_branch run with ⟨hz, G33, run⟩ | ⟨hnz, G33, run⟩
+  · refine ⟨G33, .inl ⟨fun h0 => ?_, run⟩⟩
+    rw [h0] at hz
+    exact absurd hz (by decide)
+  · exact ⟨G33, .inr ⟨eq_zero_of_iszero_ne_zero hnz, run⟩⟩
+
+/-- The found-target arm of `entry32_assignment_split`. -/
+theorem entry32_assignment_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
+    {newPauser target : B256} {base : List B256} {post : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (htarget : canonicalAddress target) (hmem : Mem.Wf M)
+    (halign : M.size % 32 = 0)
+    (hnewPauser : canonicalAddress newPauser)
+    (hold : addressSlotReadWord
+      (b.getStorVal sevm.currentTarget (mapSlot target 3)) ≠ 0)
+    (run : SFunc.RunCut prog sevm []
+      (St b (newPauser :: target :: 3 :: 0x3c2 :: base) M G)
+      t_0981_c32 (.done (.returned post))) :
+    ∃ G', SFunc.RunCut prog sevm []
+      (St (afterSstore sevm
+        (afterSload sevm b (mapSlot target 3))
+        (mapSlot target 3)
+        (addressSlotWriteWord
+          (b.getStorVal sevm.currentTarget (mapSlot target 3)) newPauser))
+        (addressSlotReadWord
+          (b.getStorVal sevm.currentTarget (mapSlot target 3)) ::
+          newPauser :: target :: 3 :: 0x3c2 :: base)
+        ((M.write 0 target.toBytes).write 32 (3 : B256).toBytes) G')
+      t_09da_c32 (.done (.returned post)) := by
+  obtain ⟨G', ⟨-, run⟩ | ⟨h0, -⟩⟩ :=
+    entry32_assignment_split hfork htarget hmem halign hnewPauser run
+  · exact ⟨G', run⟩
+  · exact absurd h0 hold
 
 end Blanc.Lift.LidoCircuitBreakerDeployed
