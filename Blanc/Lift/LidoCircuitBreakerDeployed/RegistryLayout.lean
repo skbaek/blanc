@@ -342,7 +342,7 @@ def applyRegistryRawWrites (raw : Stor) (writes : List (B256 × B256)) : Stor :=
     (fun s w => s.set (solKey w.1) (registryRawValue w.1 (s.get (solKey w.1)) w.2))
     raw
 
-private theorem solRegistryStorage_read_congr
+theorem solRegistryStorage_read_congr
     {bound : Nat} {a b : Stor} {key : B256}
     (hlength : bound < 2 ^ 252)
     (hkey : RegistryObservable bound key)

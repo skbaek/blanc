@@ -9,7 +9,8 @@ import Blanc.StorageOnlySpec
 
 `lidoSem` is the certified code semantics of the deployed Lido CircuitBreaker
 runtime: its image is the deployed bytes and its run relation records that the
-frame runs those bytes and, on a covered fork, the lifted program (`exec_lift`).
+frame runs those bytes and, on a covered fork, the lifted program (`lift_sound`
+over `cert_check`).
 `lidoSpec` is the storage-only frame contract whose invariant is that the
 contract's storage abstracts some Registry model state under `RegistryWitness`
 applied to `solRegistryStorage`.
@@ -20,14 +21,6 @@ namespace Blanc.Lift.LidoCircuitBreakerDeployed
 open Jaune
 open Blanc
 open Blanc.LidoCircuitBreaker
-
-/-- On a covered fork, a successful execution of the Lido CircuitBreaker runtime from
-pc `0` is a run of the lifted program. -/
-theorem exec_lift {sevm : Sevm} {pre post : Devm}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
-    (exc : Exec 0 sevm pre (.ok post)) :
-    SProg.Run prog sevm pre post :=
-  lift_sound cert_check hcode hfork exc
 
 theorem code_toList_length : code.toList.length = 4584 := by
   rw [ByteArray.toList_eq_toList_data, Array.length_toList]
@@ -49,7 +42,7 @@ def lidoSem : CodeSem where
           rw [hs, hk] at h
           rw [ByteArray.toList_eq_toList_data, ByteArray.toList_eq_toList_data] at h
           exact congrArg ByteArray.mk (Array.toList_inj.mp h)
-    exact ⟨hc, fun hfork => exec_lift hc hfork exc⟩
+    exact ⟨hc, fun hfork => lift_sound cert_check hc hfork exc⟩
   ne_nil := by
     intro l hl h
     have h' : code.toList = l := Option.some.inj hl
