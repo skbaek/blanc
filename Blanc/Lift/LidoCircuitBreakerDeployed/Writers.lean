@@ -463,12 +463,12 @@ theorem entry32_zero_false {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {np : B2
 entry-32 run from well-formed memory preserves `RegInv` and returns to `base`,
 given the selected branch's keys faithful at `2 ^ 160`. -/
 theorem setPauser_step {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {np t : B256}
-    {base : List B256} {post : Devm} {entries : List Entry}
+    {ra : B256} {base : List B256} {post : Devm} {entries : List Entry}
     (hfork : CoveredFork sevm.benvStat.fork) (hmem : MemOK M)
     (hw : RegistryWitness (solRegistryStorage (Devm.getStor b sevm.currentTarget)) entries)
     (ht : canonicalAddress t) (hnp : canonicalAddress np)
     (hkeys : t ≠ 0 → RegistryKeysFaithful (2 ^ 160) (setPauserKeys entries t np))
-    (run : SFunc.Run prog sevm (St b (np :: t :: 3 :: 0x3c2 :: base) M G) t_0934_c32
+    (run : SFunc.Run prog sevm (St b (np :: t :: 3 :: ra :: base) M G) t_0934_c32
       (.returned post)) :
     RegInv (Devm.getStor post sevm.currentTarget) ∧ ∃ b' M' G', post = St b' base M' G' := by
   by_cases ht0 : t = 0

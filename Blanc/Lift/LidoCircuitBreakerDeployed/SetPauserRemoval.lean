@@ -573,12 +573,12 @@ theorem removalArm_inv {oldP target R : B256} {base : List B256} {post : Devm}
 /-- The found-target prefix shared by the nonzero and removal branches: the
 target guard, the assignment rewrite, and the old pauser's count decrement,
 up to entry 4, with the world effect named. -/
-theorem foundPrefix_inv {newPauser target oldP : B256} {base : List B256} {post : Devm}
+theorem foundPrefix_inv {newPauser target oldP : B256} {ra : B256} {base : List B256} {post : Devm}
     (hfork : CoveredFork sevm.benvStat.fork) (hmem : Mem.Wf M) (halign : M.size % 32 = 0)
     (htarget : nonzeroCanonicalAddress target) (hnew : canonicalAddress newPauser)
     (hold : nonzeroCanonicalAddress oldP)
     (hassign : addressSlotReadWord (b.getStorVal sevm.currentTarget (mapSlot target 3)) = oldP)
-    (run : SFunc.Run prog sevm (St b (newPauser :: target :: 3 :: 0x3c2 :: base) M G)
+    (run : SFunc.Run prog sevm (St b (newPauser :: target :: 3 :: ra :: base) M G)
       t_0934_c32 (.returned post)) :
     ∃ b2 M2 G2, StorStep sevm b b2
         ((((Devm.getStor b sevm.currentTarget).set (mapSlot target 3)
@@ -588,7 +588,7 @@ theorem foundPrefix_inv {newPauser target oldP : B256} {base : List B256} {post 
             (addressSlotWriteWord (b.getStorVal sevm.currentTarget (mapSlot target 3))
               newPauser)).get (mapSlot oldP 6))) ∧
       Mem.Wf M2 ∧ M2.size % 32 = 0 ∧
-      SFunc.RunCut prog sevm [] (St b2 (oldP :: newPauser :: target :: 3 :: 0x3c2 :: base) M2 G2)
+      SFunc.RunCut prog sevm [] (St b2 (oldP :: newPauser :: target :: 3 :: ra :: base) M2 G2)
         t_0a81_c4 (.done (.returned post)) := by
   obtain ⟨G1, run⟩ := entry32_target_guard_inv htarget run
   obtain ⟨G2, run⟩ := entry32_assignment_inv hfork htarget.2 hmem halign hnew
@@ -775,7 +775,7 @@ zero new pauser returns to its caller's `base` stack, having emitted the
 account's storage unchanged.  Covers the last-index and non-last-index
 removals alike: the bytecode does not branch on them. -/
 theorem setPauser_removal_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
-    {target : B256} {base : List B256} {post : Devm}
+    {target : B256} {ra : B256} {base : List B256} {post : Devm}
     {entries : List LidoCircuitBreaker.Entry} {index : Nat} {oldPauser : B256}
     (hfork : CoveredFork sevm.benvStat.fork) (hmem : Mem.Wf M) (halign : M.size % 32 = 0)
     (hw : RegistryWitness (solRegistryStorage (Devm.getStor b sevm.currentTarget)) entries)
@@ -783,7 +783,7 @@ theorem setPauser_removal_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     (hfind : findEntry entries target = some (index, oldPauser))
     (hfaithful : RegistryKeysFaithful entries.length
       (removalWriteKeys entries target oldPauser index))
-    (run : SFunc.Run prog sevm (St b (0 :: target :: 3 :: 0x3c2 :: base) M G)
+    (run : SFunc.Run prog sevm (St b (0 :: target :: 3 :: ra :: base) M G)
       t_0934_c32 (.returned post)) :
     (∀ key, (Devm.getStor post sevm.currentTarget).get key =
       (rawRemovalPost (Devm.getStor b sevm.currentTarget) entries target oldPauser

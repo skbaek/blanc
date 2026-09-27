@@ -331,7 +331,7 @@ nonzero new pauser returns to its caller's `base` stack, having emitted the
 `PauserSet` log, with the contract's storage pointwise equal to
 `rawNonzeroPost` and every other account's storage unchanged. -/
 theorem setPauser_nonzero_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
-    {newPauser target : B256} {base : List B256} {post : Devm}
+    {newPauser target : B256} {ra : B256} {base : List B256} {post : Devm}
     {entries : List LidoCircuitBreaker.Entry} {index : Nat} {oldPauser : B256}
     (hfork : CoveredFork sevm.benvStat.fork) (hmem : Mem.Wf M) (halign : M.size % 32 = 0)
     (hw : RegistryWitness (solRegistryStorage (Devm.getStor b sevm.currentTarget)) entries)
@@ -339,7 +339,7 @@ theorem setPauser_nonzero_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     (hfind : findEntry entries target = some (index, oldPauser))
     (hfaithful : RegistryKeysFaithful entries.length
       ((nonzeroWrites entries target newPauser oldPauser).map Prod.fst))
-    (run : SFunc.Run prog sevm (St b (newPauser :: target :: 3 :: 0x3c2 :: base) M G)
+    (run : SFunc.Run prog sevm (St b (newPauser :: target :: 3 :: ra :: base) M G)
       t_0934_c32 (.returned post)) :
     (∀ key, (Devm.getStor post sevm.currentTarget).get key =
       (rawNonzeroPost (Devm.getStor b sevm.currentTarget) entries target newPauser

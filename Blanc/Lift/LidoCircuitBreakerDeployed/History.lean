@@ -6,9 +6,7 @@ import Blanc.Lift.LidoCircuitBreakerDeployed.Corollaries
 # The instantiated Lido history theorem, and its L1/L3 corollaries
 
 `LidoWriterSpecsM lidoA` from the two writer walks, and the history rung over
-the concrete per-frame premise `lidoA`.  The one hypothesis left is
-`Entry32Spec 0x6ce`: the `setPauser` branch walks at `pause`'s return tag (see
-`Pause.lean`); it carries no world premise.
+the concrete per-frame premise `lidoA`.
 -/
 
 namespace Blanc.Lift.LidoCircuitBreakerDeployed
@@ -21,24 +19,24 @@ open Blanc.ExecutionTrace
 open scoped BigOperators
 
 /-- Both Registry writers, with the concrete premise `lidoA`. -/
-theorem lidoWriterSpecsM (h32 : Entry32Spec 0x6ce) : LidoWriterSpecsM lidoA :=
+theorem lidoWriterSpecsM : LidoWriterSpecsM lidoA :=
   ⟨fun hfork hw hloc hA hmem hpre run =>
       registerPauser_wrapper_post hfork hw hloc hA hmem hpre run,
    fun hfork hcode hadm ih hw hloc hA hmem hpre run =>
-      pause_wrapper_post h32 hfork hcode hadm ih hw hloc hA hmem hpre run⟩
+      pause_wrapper_post hfork hcode hadm ih hw hloc hA hmem hpre run⟩
 
 /-- **The instantiated Lido history theorem.**  A configured history whose
 entered CircuitBreaker frames satisfy `lidoEntry lidoA` (`LocalApart`, and the
 `lidoA` collision premise over every witness of the frame-entry storage)
 preserves the state invariant: the deployed code and some Registry witness of
 the contract's storage. -/
-theorem lido_history_preserves_inv_concrete (h32 : Entry32Spec 0x6ce)
+theorem lido_history_preserves_inv_concrete
     {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (admitted : trace.FrameAdmitted ca (lidoEntry lidoA))
     (inv : lidoSpec.StateInv ca checkpoint.state) :
     lidoSpec.StateInv ca future.state :=
-  lido_history_preserves_inv_mem (lidoWriterSpecsM h32) trace admitted inv
+  lido_history_preserves_inv_mem lidoWriterSpecsM trace admitted inv
 
 /-- The checkpoint premise in raw form gives the state invariant. -/
 theorem stateInv_of_registryZeroRaw {ca : Adr} {w : Jaune.State}
@@ -53,7 +51,7 @@ slots are nonzero exactly for registered targets (and pin a found entry's
 pauser, index and array word), every canonical pauser's count slot is its
 number of assignments, the zero pauser's count is zero, and the counts of the
 live pausers sum to the number of entries, which is the array length word. -/
-theorem lido_history_l1_l3 (h32 : Entry32Spec 0x6ce)
+theorem lido_history_l1_l3
     {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (admitted : trace.FrameAdmitted ca (lidoEntry lidoA))
@@ -75,7 +73,7 @@ theorem lido_history_l1_l3 (h32 : Entry32Spec 0x6ce)
       (∑ p ∈ (entries.map Prod.snd).toFinset,
         ((future.state.getStor ca).get (mapSlot p 6)).toNat) = entries.length ∧
       (future.state.getStor ca).get 5 = Nat.toB256 entries.length := by
-  have h := (lido_history_preserves_inv_concrete h32 trace admitted
+  have h := (lido_history_preserves_inv_concrete trace admitted
     (stateInv_of_registryZeroRaw hcode hzero)).inv
   rw [lidoSpec_inv] at h
   obtain ⟨entries, hw⟩ := h

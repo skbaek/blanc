@@ -68,7 +68,7 @@ length word `n - 1`; when `index + 1 < n`, the moved element (the old tail)
 at the hole with index `index + 1`; and when `index + 1 = n`, the moved element
 is `t` (hole = tail). -/
 theorem l2_entry32_found {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
-    {target : B256} {base : List B256} {post : Devm}
+    {target : B256} {ra : B256} {base : List B256} {post : Devm}
     {entries : List Entry} {index : Nat} {oldPauser : B256}
     (hfork : CoveredFork sevm.benvStat.fork) (hmem : Mem.Wf M) (halign : M.size % 32 = 0)
     (hw : RegistryWitness (solRegistryStorage (Devm.getStor b sevm.currentTarget)) entries)
@@ -76,7 +76,7 @@ theorem l2_entry32_found {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     (hfind : findEntry entries target = some (index, oldPauser))
     (hfaithful : RegistryKeysFaithful entries.length
       (removalWriteKeys entries target oldPauser index))
-    (run : SFunc.Run prog sevm (St b (0 :: target :: 3 :: 0x3c2 :: base) M G)
+    (run : SFunc.Run prog sevm (St b (0 :: target :: 3 :: ra :: base) M G)
       t_0934_c32 (.returned post)) :
     RegistryWitness (solRegistryStorage (Devm.getStor post sevm.currentTarget))
       (swapPop entries index) ∧
@@ -176,7 +176,7 @@ assignment address field and index word zero, clears the address field of the
 slot the bytecode pushed and popped (`registryArraySlot n`), and keeps the
 length word `n`. -/
 theorem l2_entry32_absent {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
-    {target : B256} {base : List B256} {post : Devm}
+    {target : B256} {ra : B256} {base : List B256} {post : Devm}
     {entries : List Entry}
     (hfork : CoveredFork sevm.benvStat.fork) (hmem : Mem.Wf M) (halign : M.size % 32 = 0)
     (hw : RegistryWitness (solRegistryStorage (Devm.getStor b sevm.currentTarget)) entries)
@@ -184,7 +184,7 @@ theorem l2_entry32_absent {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     (hfind : findEntry entries target = none)
     (hfaithful : RegistryKeysFaithful (entries.length + 1)
       ((absentZeroWrites entries target).map Prod.fst))
-    (run : SFunc.Run prog sevm (St b (0 :: target :: 3 :: 0x3c2 :: base) M G)
+    (run : SFunc.Run prog sevm (St b (0 :: target :: 3 :: ra :: base) M G)
       t_0934_c32 (.returned post)) :
     RegistryWitness (solRegistryStorage (Devm.getStor post sevm.currentTarget)) entries ∧
     target ∉ entries.map Prod.fst ∧

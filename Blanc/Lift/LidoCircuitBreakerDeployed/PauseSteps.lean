@@ -231,8 +231,8 @@ theorem SFunc.RunP.code_of_regOnly {P : Sevm → Devm → Ninst → Devm → Pro
 /-- **`setPauser(t, 0)` (entry 32) from a caller whose return tag is `ra`**: a
 successful run from well-formed memory preserves `RegInv`, keeps code, and
 returns to `base`, given the branch keys faithful at `2 ^ 160`.  The four
-`setPauser_*_inv` branch walks prove it at `ra = 0x3c2` (registerPauser's tag,
-`entry32Spec_3c2`); `pause` calls entry 32 with tag `0x6ce`. -/
+`setPauser_*_inv` branch walks prove it for an arbitrary `ra` (`entry32Spec`);
+`pause` calls entry 32 with tag `0x6ce`. -/
 def Entry32Spec (ra : B256) : Prop :=
   ∀ {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {t : B256} {base : List B256} {post : Devm}
     {entries : List Entry},
@@ -252,7 +252,7 @@ theorem entry32_code {sevm : Sevm} {d post : Devm}
   simp only [Bool.and_eq_true] at h
   exact SFunc.RunP.code_of_regOnly id setPauserClosure_regOnly h.1 h.2 run
 
-theorem entry32Spec_3c2 : Entry32Spec 0x3c2 := by
+theorem entry32Spec (ra : B256) : Entry32Spec ra := by
   intro hfork hmem hw ht hkeys run
   obtain ⟨hinv, hpost⟩ := setPauser_step hfork hmem hw ht (canonicalAddress_zero) hkeys run
   exact ⟨hinv, by rw [entry32_code run]; rfl, hpost⟩
@@ -261,6 +261,8 @@ where
     unfold canonicalAddress
     change (0 : Nat) < 2 ^ 160
     norm_num
+
+theorem entry32Spec_3c2 : Entry32Spec 0x3c2 := entry32Spec 0x3c2
 
 /-! ## The single-address decoder (entry 7) and the bool decoder (entry 33) -/
 

@@ -9,8 +9,8 @@ selector wrapper 49 → decoder 7 → body 13:
 * `t_05ac`/`t_05e8`: the `nonReentrant` lock (`TLOAD`, revert if held, `TSTORE`),
   the `getPauser(t) == msg.sender` check;
 * `t_0673`: the liveness check;
-* `t_06ba`: `setPauser(t, 0)` (entry 32, return tag `0x6ce`), discharged by an
-  `Entry32Spec 0x6ce` hypothesis (see below);
+* `t_06ba`: `setPauser(t, 0)` (entry 32, return tag `0x6ce`), discharged by
+  `entry32Spec 0x6ce`;
 * `t_06ce`/`t_0733`: `extcodesize`, then the one external `CALL` (`pauseFor`),
   discharged by `ContractSpecSem.post_of_call_self_with (Q := InRoots R)` and the
   admitted deeper-frame hypothesis, as `Weth9.withdraw_post_in` does;
@@ -21,14 +21,10 @@ selector wrapper 49 → decoder 7 → body 13:
   been changed by a reentrant frame during the `CALL`);
 * `t_0864`: the lock release.
 
-**The one premise not discharged here.**  The branch walks
-`setPauser_{removal,absentZero}_inv` are stated for entry 32's caller stack
-`np :: t :: 3 :: 0x3c2 :: base`, `0x3c2` being `registerPauser`'s return tag;
-`pause` calls entry 32 with tag `0x6ce`.  Nothing in entry 32 reads the tag
-before its final `ret` pops it, but the walks fix it syntactically, so the
-`pause` field is proved from `Entry32Spec 0x6ce`, which the same walks prove
-once their `0x3c2` is generalised to a variable (`entry32Spec_3c2` is the
-instance they already give).
+**Entry 32 discharge.** Entry 32's branch walks `setPauser_*_inv` generalize
+the caller's return tag to an arbitrary variable `ra`, proved by `entry32Spec`
+in `PauseSteps.lean`. The call in `pause` at tag `0x6ce` is discharged by
+`entry32Spec 0x6ce`.
 -/
 
 namespace Blanc.Lift.LidoCircuitBreakerDeployed
@@ -399,10 +395,10 @@ theorem zero_le_B256 (x : B256) : (0 : B256) ≤ x := by
 /-- **The `pause(t)` body (entry 13)**, inside a root derivation `R`: from the
 frame-entry witness, the frame's code, well-formed memory, the `setPauser(t, 0)`
 branch keys and the caller's `heartbeatExpiry` slot off the Registry, a
-successful run keeps `RegInv`.  Entry 32 (return tag `0x6ce`) is `h32`; the
-`CALL` child is discharged from `R`'s frame admission and the admitted
-deeper-frame hypothesis. -/
-theorem entry13_regInv {A : List Entry → Sevm → Prop} (h32 : Entry32Spec 0x6ce)
+successful run keeps `RegInv`.  Entry 32 (return tag `0x6ce`) is discharged by
+`entry32Spec 0x6ce`; the `CALL` child is discharged from `R`'s frame admission
+and the admitted deeper-frame hypothesis. -/
+theorem entry13_regInv {A : List Entry → Sevm → Prop}
     {R : Exec.Deriv} {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {t ra : B256}
     {xs : List B256} {D : Devm} {entries : List Entry}
     (hfork : CoveredFork sevm.benvStat.fork)
@@ -587,7 +583,7 @@ theorem entry13_regInv {A : List Entry → Sevm → Prop} (h32 : Entry32Spec 0x6
   rw [show (Bytes.toB256 [] : B256) = 0 from rfl, show (Bytes.toB256 [3] : B256) = 3 from rfl,
     show (Bytes.toB256 [0x06, 0xce] : B256) = 0x6ce from rfl] at r32
   obtain ⟨hinv2, hcode2, b2, M2, G9, rfl⟩ :=
-    h32 hfork ⟨hscr2.2.2.1, hscr2.2.2.2⟩
+    (entry32Spec 0x6ce) hfork ⟨hscr2.2.2.1, hscr2.2.2.2⟩
       (by simp only [afterSload_getStor, getStor_setTransVal]; exact hw) ht hkeys
       (r32.mono StepIn.toRun)
   unfold t_06ce_c13 at run
@@ -706,9 +702,8 @@ theorem entry13_regInv {A : List Entry → Sevm → Prop} (h32 : Entry32Spec 0x6
 private instance : Inhabited SFunc := ⟨.undefined⟩
 
 /-- **`pause(address)` (wrapper 49) establishes the frame postcondition** inside
-a root derivation: the `pause` field of `LidoWriterSpecsM lidoA`, given
-`Entry32Spec 0x6ce`. -/
-theorem pause_wrapper_post (h32 : Entry32Spec 0x6ce) {R : Exec.Deriv} {sevm : Sevm} {d : Devm}
+a root derivation: the `pause` field of `LidoWriterSpecsM lidoA`. -/
+theorem pause_wrapper_post {R : Exec.Deriv} {sevm : Sevm} {d : Devm}
     {o : Outcome} {w : SFunc}
     (hfork : CoveredFork sevm.benvStat.fork) (_hcode : sevm.code = code)
     (hadm : Exec.FrameAdmitted sevm.currentTarget (lidoFrameEntry lidoA) R.exc)
@@ -749,7 +744,7 @@ theorem pause_wrapper_post (h32 : Entry32Spec 0x6ce) {R : Exec.Deriv} {sevm : Se
   rcases hcall with ⟨D13, r13, run⟩ | ⟨D13, r13, -⟩
   swap
   · exact (SFunc.RunP.not_halted_entry writerNoHalt_set (k := 13) (by decide) rfl r13 rfl).elim
-  have hinv := entry13_regInv h32 hfork hadm ih hmem hwit hpre.code ht
+  have hinv := entry13_regInv hfork hadm ih hmem hwit hpre.code ht
     (fun ht0 => hAe.2 ⟨ht0, ht⟩) hloc.1 r13
   have hst := SFunc.RunP.state_of_silent StepIn.toRun (S := []) rfl (by decide) (by decide) run
   have h : RegInv (Devm.getStor (Outcome.devm o) sevm.currentTarget) := by

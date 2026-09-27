@@ -165,18 +165,18 @@ theorem t0a16_inv {newP target R : B256} {base : List B256} {post : Devm}
 /-- The absent-target prefix shared by the fresh and absent-zero branches: the
 target guard, the assignment rewrite (the old pauser reads zero), and the
 push block, up to entry 4, with the world effect named. -/
-theorem absentPrefix_inv {newPauser target : B256} {base : List B256} {post : Devm}
+theorem absentPrefix_inv {newPauser target : B256} {ra : B256} {base : List B256} {post : Devm}
     (hfork : CoveredFork sevm.benvStat.fork) (hmem : Mem.Wf M) (halign : M.size % 32 = 0)
     (htarget : nonzeroCanonicalAddress target) (hnew : canonicalAddress newPauser)
     (hassign : addressSlotReadWord (b.getStorVal sevm.currentTarget (mapSlot target 3)) = 0)
-    (run : SFunc.Run prog sevm (St b (newPauser :: target :: 3 :: 0x3c2 :: base) M G)
+    (run : SFunc.Run prog sevm (St b (newPauser :: target :: 3 :: ra :: base) M G)
       t_0934_c32 (.returned post)) :
     ∃ b2 M2 G2, StorStep sevm b b2
         (pushStor ((Devm.getStor b sevm.currentTarget).set (mapSlot target 3)
           (addressSlotWriteWord ((Devm.getStor b sevm.currentTarget).get (mapSlot target 3))
             newPauser)) target) ∧
       Mem.Wf M2 ∧ M2.size % 32 = 0 ∧
-      SFunc.RunCut prog sevm [] (St b2 (0 :: newPauser :: target :: 3 :: 0x3c2 :: base) M2 G2)
+      SFunc.RunCut prog sevm [] (St b2 (0 :: newPauser :: target :: 3 :: ra :: base) M2 G2)
         t_0a81_c4 (.done (.returned post)) := by
   obtain ⟨G1, run⟩ := entry32_target_guard_inv htarget run
   obtain ⟨G2, ⟨hne, -⟩ | ⟨-, run⟩⟩ :=
@@ -296,7 +296,7 @@ other account's storage unchanged.  The bytecode stores the length before the
 new element and index; the pointwise equality absorbs the reorder through the
 branch's own `RegistryKeysFaithful` instance over `freshWriteKeys`. -/
 theorem setPauser_fresh_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
-    {newPauser target : B256} {base : List B256} {post : Devm}
+    {newPauser target : B256} {ra : B256} {base : List B256} {post : Devm}
     {entries : List LidoCircuitBreaker.Entry}
     (hfork : CoveredFork sevm.benvStat.fork) (hmem : Mem.Wf M) (halign : M.size % 32 = 0)
     (hw : RegistryWitness (solRegistryStorage (Devm.getStor b sevm.currentTarget)) entries)
@@ -304,7 +304,7 @@ theorem setPauser_fresh_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     (hfind : findEntry entries target = none)
     (hfaithful : RegistryKeysFaithful (entries.length + 1)
       (freshWriteKeys entries target newPauser))
-    (run : SFunc.Run prog sevm (St b (newPauser :: target :: 3 :: 0x3c2 :: base) M G)
+    (run : SFunc.Run prog sevm (St b (newPauser :: target :: 3 :: ra :: base) M G)
       t_0934_c32 (.returned post)) :
     (∀ key, (Devm.getStor post sevm.currentTarget).get key =
       (rawFreshPost (Devm.getStor b sevm.currentTarget) entries target newPauser).get key) ∧
@@ -438,7 +438,7 @@ the contract's storage pointwise equal to `rawAbsentZeroPost` (the exact
 `hwrites` shape of `rawAbsentZero_preservesRegistry`) and every other
 account's storage unchanged. -/
 theorem setPauser_absentZero_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
-    {target : B256} {base : List B256} {post : Devm}
+    {target : B256} {ra : B256} {base : List B256} {post : Devm}
     {entries : List LidoCircuitBreaker.Entry}
     (hfork : CoveredFork sevm.benvStat.fork) (hmem : Mem.Wf M) (halign : M.size % 32 = 0)
     (hw : RegistryWitness (solRegistryStorage (Devm.getStor b sevm.currentTarget)) entries)
@@ -446,7 +446,7 @@ theorem setPauser_absentZero_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     (hfind : findEntry entries target = none)
     (hfaithful : RegistryKeysFaithful (entries.length + 1)
       ((absentZeroWrites entries target).map Prod.fst))
-    (run : SFunc.Run prog sevm (St b (0 :: target :: 3 :: 0x3c2 :: base) M G)
+    (run : SFunc.Run prog sevm (St b (0 :: target :: 3 :: ra :: base) M G)
       t_0934_c32 (.returned post)) :
     (∀ key, (Devm.getStor post sevm.currentTarget).get key =
       (rawAbsentZeroPost (Devm.getStor b sevm.currentTarget) entries target).get key) ∧

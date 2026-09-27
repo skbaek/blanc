@@ -17,13 +17,13 @@ The returned run retains the exact caller stack, memory, and residual gas.
 The new-pauser argument is threaded through untouched: the guard never reads
 it, so this holds for an arbitrary `newPauser`. -/
 theorem entry32_target_guard_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
-    {newPauser target : B256} {base : List B256} {post : Devm}
+    {newPauser target : B256} {ra : B256} {base : List B256} {post : Devm}
     (htarget : nonzeroCanonicalAddress target)
     (run : SFunc.Run prog sevm
-      (St b (newPauser :: target :: 3 :: 0x3c2 :: base) M G)
+      (St b (newPauser :: target :: 3 :: ra :: base) M G)
       t_0934_c32 (.returned post)) :
     ∃ G', SFunc.RunCut prog sevm []
-      (St b (newPauser :: target :: 3 :: 0x3c2 :: base) M G')
+      (St b (newPauser :: target :: 3 :: ra :: base) M G')
       t_0981_c32 (.done (.returned post)) := by
   have run := run.cut
   unfold t_0934_c32 at run
@@ -53,13 +53,13 @@ Stated for an arbitrary canonical `newPauser`: all four `setPauser`
 branches share it, diverging here on the old pauser and later at entry 4's
 test of `newPauser`. -/
 theorem entry32_assignment_split {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
-    {newPauser target : B256} {base : List B256} {post : Devm}
+    {newPauser target : B256} {ra : B256} {base : List B256} {post : Devm}
     (hfork : CoveredFork sevm.benvStat.fork)
     (htarget : canonicalAddress target) (hmem : Mem.Wf M)
     (halign : M.size % 32 = 0)
     (hnewPauser : canonicalAddress newPauser)
     (run : SFunc.RunCut prog sevm []
-      (St b (newPauser :: target :: 3 :: 0x3c2 :: base) M G)
+      (St b (newPauser :: target :: 3 :: ra :: base) M G)
       t_0981_c32 (.done (.returned post))) :
     ∃ G', (addressSlotReadWord
         (b.getStorVal sevm.currentTarget (mapSlot target 3)) ≠ 0 ∧
@@ -71,7 +71,7 @@ theorem entry32_assignment_split {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
           (b.getStorVal sevm.currentTarget (mapSlot target 3)) newPauser))
         (addressSlotReadWord
           (b.getStorVal sevm.currentTarget (mapSlot target 3)) ::
-          newPauser :: target :: 3 :: 0x3c2 :: base)
+          newPauser :: target :: 3 :: ra :: base)
         ((M.write 0 target.toBytes).write 32 (3 : B256).toBytes) G')
       t_09da_c32 (.done (.returned post))) ∨
     (addressSlotReadWord
@@ -84,7 +84,7 @@ theorem entry32_assignment_split {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
           (b.getStorVal sevm.currentTarget (mapSlot target 3)) newPauser))
         (addressSlotReadWord
           (b.getStorVal sevm.currentTarget (mapSlot target 3)) ::
-          newPauser :: target :: 3 :: 0x3c2 :: base)
+          newPauser :: target :: 3 :: ra :: base)
         ((M.write 0 target.toBytes).write 32 (3 : B256).toBytes) G')
       t_0a16_c32 (.done (.returned post))) := by
   unfold t_0981_c32 at run
@@ -229,7 +229,7 @@ theorem entry32_assignment_split {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
 
 /-- The found-target arm of `entry32_assignment_split`. -/
 theorem entry32_assignment_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
-    {newPauser target : B256} {base : List B256} {post : Devm}
+    {newPauser target : B256} {ra : B256} {base : List B256} {post : Devm}
     (hfork : CoveredFork sevm.benvStat.fork)
     (htarget : canonicalAddress target) (hmem : Mem.Wf M)
     (halign : M.size % 32 = 0)
@@ -237,7 +237,7 @@ theorem entry32_assignment_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     (hold : addressSlotReadWord
       (b.getStorVal sevm.currentTarget (mapSlot target 3)) ≠ 0)
     (run : SFunc.RunCut prog sevm []
-      (St b (newPauser :: target :: 3 :: 0x3c2 :: base) M G)
+      (St b (newPauser :: target :: 3 :: ra :: base) M G)
       t_0981_c32 (.done (.returned post))) :
     ∃ G', SFunc.RunCut prog sevm []
       (St (afterSstore sevm
@@ -247,7 +247,7 @@ theorem entry32_assignment_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
           (b.getStorVal sevm.currentTarget (mapSlot target 3)) newPauser))
         (addressSlotReadWord
           (b.getStorVal sevm.currentTarget (mapSlot target 3)) ::
-          newPauser :: target :: 3 :: 0x3c2 :: base)
+          newPauser :: target :: 3 :: ra :: base)
         ((M.write 0 target.toBytes).write 32 (3 : B256).toBytes) G')
       t_09da_c32 (.done (.returned post)) := by
   obtain ⟨G', ⟨-, run⟩ | ⟨h0, -⟩⟩ :=
