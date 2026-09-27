@@ -192,6 +192,14 @@ def RegistryObservable (bound : Nat) (key : B256) : Prop :=
   key = arrayLengthSlot ∨
   (∃ i, i < bound ∧ key = arrayEntrySlot (Nat.toB256 (i + 1)))
 
+/-- The two Registry key families whose raw slot is packed through the
+address mask (assignment, and a populated array entry).  Only a write at
+one of these needs its value already canonical to read back clean; the
+plain-word families (index, count, array length) never do, and a write's
+value there need not even be address-shaped (a count, say). -/
+def RegistryAddressFamily (key : B256) : Prop :=
+  (∃ probe, key = assignmentSlot probe) ∨ (∃ i, key = arrayEntrySlot (Nat.toB256 (i + 1)))
+
 /-- No other observed logical key shares a raw slot with a written key:
 collision-freedom only at the finitely many written slots, never global
 Keccak injectivity. -/
@@ -298,7 +306,7 @@ private theorem solRegistryStorage_read_of_set
     {bound : Nat} {before : Stor} {logicalKey value : B256}
     (hlength : bound < 2 ^ 252)
     (hkey : RegistryObservable bound logicalKey)
-    (hclean : addressSlotReadWord value = value) :
+    (hclean : RegistryAddressFamily logicalKey → addressSlotReadWord value = value) :
     (solRegistryStorage
       (before.set (solKey logicalKey)
         (registryRawValue logicalKey (before.get (solKey logicalKey)) value))
@@ -309,7 +317,7 @@ private theorem solRegistryStorage_read_of_set
   · rw [solKey_assignmentSlot hprobe]
     rw [solRegistryStorage_assignment _ _ hprobe, Stor.get_set_ite, if_pos rfl,
       registryRawValue_assignmentSlot hprobe]
-    exact addressSlotReadWord_write_of_clean _ _ hclean
+    exact addressSlotReadWord_write_of_clean _ _ (hclean (Or.inl ⟨probe, rfl⟩))
   · rw [solKey_indexSlot hprobe]
     rw [solRegistryStorage_index _ _ hprobe, Stor.get_set_ite, if_pos rfl,
       registryRawValue_indexSlot hprobe]
@@ -323,13 +331,13 @@ private theorem solRegistryStorage_read_of_set
     rw [solKey_arrayEntrySlot hbound]
     rw [solRegistryStorage_array _ _ hbound, Stor.get_set_ite, if_pos rfl,
       registryRawValue_arrayEntrySlot hbound]
-    exact addressSlotReadWord_write_of_clean _ _ hclean
+    exact addressSlotReadWord_write_of_clean _ _ (hclean (Or.inr ⟨i, rfl⟩))
 
 private theorem solRegistryStorage_step
     {bound : Nat} {before : Stor} {logicalKey value : B256}
     (hlength : bound < 2 ^ 252)
     (hkeyObs : RegistryObservable bound logicalKey)
-    (hclean : addressSlotReadWord value = value)
+    (hclean : RegistryAddressFamily logicalKey → addressSlotReadWord value = value)
     {key : B256} (hkey : RegistryObservable bound key)
     (hfaithfulOne : ∀ k, RegistryObservable bound k →
       solKey k = solKey logicalKey → k = logicalKey) :
@@ -362,7 +370,7 @@ theorem solRegistryStorage_applyRegistryRawWrites
     (hlength : bound < 2 ^ 252)
     (hfaithful : RegistryKeysFaithful bound (writes.map Prod.fst))
     (hobservable : ∀ w ∈ writes, RegistryObservable bound w.1)
-    (hclean : ∀ w ∈ writes, addressSlotReadWord w.2 = w.2)
+    (hclean : ∀ w ∈ writes, RegistryAddressFamily w.1 → addressSlotReadWord w.2 = w.2)
     {key : B256} (hkey : RegistryObservable bound key) :
     (solRegistryStorage (applyRegistryRawWrites before writes)).read key =
       writes.foldl (fun cur w => if w.1 = key then w.2 else cur)
@@ -374,11 +382,11 @@ theorem solRegistryStorage_applyRegistryRawWrites
       hfaithful.mono (fun t ht => List.mem_cons_of_mem _ ht)
     have hobservableRest : ∀ w' ∈ rest, RegistryObservable bound w'.1 :=
       fun w' hw' => hobservable w' (List.mem_cons_of_mem _ hw')
-    have hcleanRest : ∀ w' ∈ rest, addressSlotReadWord w'.2 = w'.2 :=
+    have hcleanRest : ∀ w' ∈ rest, RegistryAddressFamily w'.1 → addressSlotReadWord w'.2 = w'.2 :=
       fun w' hw' => hclean w' (List.mem_cons_of_mem _ hw')
     have hw1obs : RegistryObservable bound w.1 :=
       hobservable w List.mem_cons_self
-    have hw1clean : addressSlotReadWord w.2 = w.2 :=
+    have hw1clean : RegistryAddressFamily w.1 → addressSlotReadWord w.2 = w.2 :=
       hclean w List.mem_cons_self
     have hfaithfulOne : ∀ k, RegistryObservable bound k →
         solKey k = solKey w.1 → k = w.1 :=
@@ -409,7 +417,7 @@ theorem RegistryWitness.ofRawRegistryWrites
     (hboundPost : entries'.length ≤ bound)
     (hfaithful : RegistryKeysFaithful bound (writes.map Prod.fst))
     (hobservable : ∀ w ∈ writes, RegistryObservable bound w.1)
-    (hclean : ∀ w ∈ writes, addressSlotReadWord w.2 = w.2)
+    (hclean : ∀ w ∈ writes, RegistryAddressFamily w.1 → addressSlotReadWord w.2 = w.2)
     (hwrites : ∀ key, after.get key = (applyRegistryRawWrites before writes).get key)
     (hlogical : RegistryWitness
       { read := fun key => writes.foldl (fun cur w => if w.1 = key then w.2 else cur)
