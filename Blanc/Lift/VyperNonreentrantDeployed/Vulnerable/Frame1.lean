@@ -37,20 +37,46 @@ def poolStorage : List (Nat × Nat) :=
   [(7, tokenAddress.toNat), (8, 1000), (9, 1000), (12, 10000),
    (15, 10 ^ 18), (16, 10 ^ 18), (26, 2000), (balanceOfASlot, 2000)]
 
-/-- The storage-free pool account at `P`: the 45-byte proxy, 1000 wei, empty storage. -/
-def poolAcct0 : Acct :=
-  { nonce := 1, bal := (1000 : Nat).toB256, code := proxyCode, stor := .empty }
+/-- The attacker's runtime (85 bytes, vminus-preflight `meta.json`): builds
+`add_liquidity([100, 0], 0, A)` calldata and `CALL`s `P` with all gas and value 100. -/
+def attackerCode : ByteArray := ⟨#[
+  0x63, 0x0c, 0x3e, 0x4b, 0x54, 0x60, 0xe0, 0x1b, 0x60, 0x00, 0x52, 0x60, 0x64, 0x60, 0x04, 0x52,
+  0x60, 0x00, 0x60, 0x24, 0x52, 0x60, 0x00, 0x60, 0x44, 0x52, 0x73, 0xaa, 0xaa, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0a, 0x11, 0x60,
+  0x64, 0x52, 0x60, 0x00, 0x60, 0x00, 0x60, 0x84, 0x60, 0x00, 0x60, 0x64, 0x73, 0x98, 0x48, 0x48,
+  0x2d, 0xa3, 0xee, 0x30, 0x76, 0x16, 0x5c, 0xe6, 0x49, 0x7e, 0xda, 0x90, 0x6e, 0x66, 0xbb, 0x85,
+  0xc5, 0x5a, 0xf1, 0x50, 0x00]⟩
 
-/-- The storage-free world: proxy `P` placed in the empty state. -/
-def world0_base : State := stateSetB (default : State) proxyAddress poolAcct0
+/-- The honest token's runtime (30 bytes, vminus-preflight `meta.json`): `transfer`
+with `balanceOf[addr]` at slot `addr`, returning 32-byte `true`. -/
+def tokenCode : ByteArray := ⟨#[
+  0x33, 0x54, 0x60, 0x24, 0x35, 0x90, 0x03, 0x33, 0x55, 0x60, 0x04, 0x35, 0x80, 0x54, 0x60, 0x24,
+  0x35, 0x01, 0x90, 0x55, 0x60, 0x01, 0x60, 0x00, 0x52, 0x60, 0x20, 0x60, 0x00, 0xf3]⟩
+
+/-- The pre-state's accounts without storage (vminus-preflight section 2): the proxy
+`P` with 1000 wei, the implementation, the attacker and the token, all nonce 1. -/
+def accts0 : List (Adr × Acct) :=
+  [(proxyAddress, ⟨1, (1000 : Nat).toB256, .empty, proxyCode⟩),
+   (implementationAddress, ⟨1, 0, .empty, implementationCode⟩),
+   (attackerAddress, ⟨1, 0, .empty, attackerCode⟩),
+   (tokenAddress, ⟨1, 0, .empty, tokenCode⟩)]
+
+/-- The storage-free world. -/
+def world0_base : State := stateFoldAcct default accts0
 
 theorem storOf_world0_base (a : Adr) (k : B256) : storOf world0_base a k = 0 :=
-  storOf_stateSetB_empty (default : State) proxyAddress a poolAcct0 k (storOf_empty a k) rfl
+  storOf_stateFoldAcct accts0 a k
 
+/-- The account shadow of the pre-state. -/
+def acs0 : AcctShadow := acctShadowOf accts0
 
-/-- Concrete storage writes for `P` in frame 1. -/
+theorem acctAgree_world0_base : AcctAgree world0_base acs0 := acctAgree_stateFoldAcct accts0
+
+/-- Concrete storage writes of the pre-state: the pool's at `P`, and the token's
+`balanceOf[P] = 1000` at slot `P`. -/
 def poolWrites1 : List ((Adr × B256) × B256) :=
-  poolStorage.map fun (k, v) => ((proxyAddress, k.toB256), v.toB256)
+  poolStorage.map (fun (k, v) => ((proxyAddress, k.toB256), v.toB256)) ++
+    [((tokenAddress, proxyAddress.toNat.toB256), (1000 : Nat).toB256)]
 
 /-- The world, built by folding `poolWrites1` from the storage-free base world. -/
 def world0 : State := stateFoldStor world0_base poolWrites1
@@ -72,7 +98,7 @@ def sevm1 : Sevm :=
     data := removeCalldata
     codeAddress := some implementationAddress
     code := code
-    depth := 1
+    depth := 1023
     benvStat := { (default : BenvStat) with origState := world0 } }
 
 /-- Frame 1's entry machine: the proxy's `DELEGATECALL` has warmed the implementation
@@ -82,10 +108,10 @@ def pre1 : Devm :=
 
 def stor1 : StorShadow := storShadowOf poolWrites1
 
-def c0 : Cfg := ⟨pre1, t_0000_c0, [], [], [implementationAddress], stor1⟩
+def c0 : Cfg := ⟨pre1, t_0000_c0, [], [], [implementationAddress], stor1, acs0⟩
 
 theorem c0_agree : Agree c0 := by
-  refine ⟨fun x => ?_, fun a => ?_, ?_⟩
+  refine ⟨fun x => ?_, fun a => ?_, ?_, ?_⟩
   · show x ∈ (default : Devm).accessedStorageKeys ↔ x ∈ ([] : List (Adr × B256))
     simp [show (default : Devm).accessedStorageKeys = .emptyWithCapacity from rfl]
   · show a ∈ (default : Devm).accessedAddresses.insert implementationAddress ↔
@@ -96,6 +122,8 @@ theorem c0_agree : Agree c0 := by
     exact ⟨Eq.symm, Eq.symm⟩
   · show ∀ a k, storOf world0 a k = lookupS stor1 a k
     exact storOf_stateFoldStor poolWrites1 storOf_world0_base
+  · show AcctAgree world0 acs0
+    exact acctAgree_stateFoldStor poolWrites1 acctAgree_world0_base
 
 
 /-- The observed projection a chunk decision pins: gas, stack and memory bytes. -/

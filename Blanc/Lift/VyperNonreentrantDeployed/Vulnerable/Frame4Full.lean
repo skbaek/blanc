@@ -14,7 +14,7 @@ open Blanc.Lift.VyperNonreentrantDeployed Blanc.Lift.VyperNonreentrantDeployed.V
 
 theorem frame4_full :
     (match wrun (Cert.prog cert) sevm4 4505 c4 with
-      | .done (.halted d) => some (d.gasLeft, d.output.map UInt8.toNat,
+      | .done (.halted d) _ => some (d.gasLeft, d.output.map UInt8.toNat,
           (d.getStorVal proxyAddress (26 : Nat).toB256).toNat,
           (d.getStorVal proxyAddress balanceOfASlot.toB256).toNat)
       | _ => none) =

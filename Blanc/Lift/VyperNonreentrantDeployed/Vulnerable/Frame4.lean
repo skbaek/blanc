@@ -63,7 +63,7 @@ def pre4 : Devm :=
 
 def stor4 : StorShadow := storShadowOf poolWrites4
 
-def c4 : Cfg := ⟨pre4, t_0000_c0, [], keys4, adrs4, stor4⟩
+def c4 : Cfg := ⟨pre4, t_0000_c0, [], keys4, adrs4, stor4, acs0⟩
 
 /-- The start `Agree` storage conjunct for frame 4. -/
 theorem world4_stor_agree : ∀ a k, storOf world4 a k = lookupS stor4 a k :=
