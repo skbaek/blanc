@@ -778,4 +778,78 @@ theorem RawFreshReadEffect.preservesRegistry
       exact hlogical.zeroCount
   }
 
+/-! ## Found-nonzero and absent-zero: the raw layer straight from the
+unified premise
+
+Unlike removal and fresh above (whose raw-write structs and proofs predate
+this module's transport lemma), these two transitions are stated directly
+against `RegistryKeysFaithful`/`applyRegistryRawWrites`/
+`RegistryWitness.ofRawRegistryWrites` from the start; there is no
+per-transition `RawXReadEffect` bundle to keep in step. -/
+
+/-- The three chronological logical writes for reassigning an existing
+target to a nonzero pauser: exactly `applyFoundNonzeroWritesOfReadEffect`'s
+write list (`Blanc/LidoCircuitBreakerRegistry.lean`). -/
+def nonzeroWrites (entries : List Entry) (target newPauser oldPauser : B256) :
+    List (B256 × B256) :=
+  [(assignmentSlot target, newPauser),
+   (countSlot oldPauser, Nat.toB256 (assignmentCount entries oldPauser - 1)),
+   (countSlot newPauser,
+     Nat.toB256 ((assignmentCount entries newPauser -
+       (if oldPauser = newPauser then 1 else 0)) + 1))]
+
+/-- The actual raw Solidity write order for the found-target,
+nonzero-new-pauser reassignment path: `pauser[target] = newPauser`, then the
+old pauser's decrement, then the new pauser's increment.  The two count
+slots may alias when `oldPauser = newPauser`; the chronological fold handles
+that the same way `nonzeroWrites`' logical fold does, since both are the
+same list applied in the same order. -/
+def rawNonzeroPost (raw : Stor) (entries : List Entry)
+    (target newPauser oldPauser : B256) : Stor :=
+  applyRegistryRawWrites raw (nonzeroWrites entries target newPauser oldPauser)
+
+/-- Concrete application of the shared logical three-write preservation
+theorem to the deployed Solidity storage projection: the found-target,
+nonzero-new-pauser reassignment. -/
+theorem rawNonzero_preservesRegistry
+    {before after : Stor} {entries : List Entry}
+    {target newPauser oldPauser : B256} {index : Nat}
+    (hw : RegistryWitness (solRegistryStorage before) entries)
+    (htarget : nonzeroCanonicalAddress target)
+    (hnew : nonzeroCanonicalAddress newPauser)
+    (hfind : findEntry entries target = some (index, oldPauser))
+    (hfaithful : RegistryKeysFaithful entries.length
+      ((nonzeroWrites entries target newPauser oldPauser).map Prod.fst))
+    (hwrites : ∀ key, after.get key =
+      (rawNonzeroPost before entries target newPauser oldPauser).get key) :
+    RegistryWitness (solRegistryStorage after)
+      (setEntryAt index (target, newPauser) entries) := by
+  have hold : nonzeroCanonicalAddress oldPauser :=
+    hw.pausersValid (target, oldPauser) (mem_of_findEntry hfind)
+  have hlogical : RegistryWitness
+      { read := fun key => (nonzeroWrites entries target newPauser oldPauser).foldl
+          (fun cur w => if w.1 = key then w.2 else cur)
+          ((solRegistryStorage before).read key) }
+      (setEntryAt index (target, newPauser) entries) := by
+    apply RegistryWitness.applyFoundNonzeroWritesOfReadEffect hw htarget hnew hfind
+    intro key
+    rfl
+  refine RegistryWitness.ofRawRegistryWrites
+    hw.entries_length_lt_2pow252 ?_ hfaithful ?_ ?_ hwrites hlogical
+  · rw [setEntryAt_length_of_findEntry hfind]
+  · intro w hw'
+    simp only [nonzeroWrites, List.mem_cons, List.not_mem_nil, or_false] at hw'
+    rcases hw' with rfl | rfl | rfl
+    · exact Or.inl ⟨target, htarget.2, rfl⟩
+    · exact Or.inr (Or.inr (Or.inl ⟨oldPauser, hold.2, rfl⟩))
+    · exact Or.inr (Or.inr (Or.inl ⟨newPauser, hnew.2, rfl⟩))
+  · intro w hw' hfam
+    simp only [nonzeroWrites, List.mem_cons, List.not_mem_nil, or_false] at hw'
+    rcases hw' with rfl | rfl | rfl
+    · exact addressSlotReadWord_eq_self_of_lt hnew.2
+    · exact absurd hfam
+        (not_registryAddressFamily_countSlot hold.2 hw.entries_length_lt_2pow252)
+    · exact absurd hfam
+        (not_registryAddressFamily_countSlot hnew.2 hw.entries_length_lt_2pow252)
+
 end Blanc.Lift.LidoCircuitBreakerDeployed
