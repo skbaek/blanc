@@ -271,4 +271,87 @@ theorem callResume_error {sevm : Sevm} {c c' : Cfg} {child : Devm} {ckeys : List
     · cases h
   · cases h
 
+/-! ## `DELEGATECALL` up to its spawn -/
+
+/-- The `.delegatecall` arm of `Xinst.step` up to its spawn (`Xinst.step_delegatecall_spawn`),
+warm/cold on the address shadow `adrs`, the callee's code from the account shadow `acs`. -/
+def dcallPrep (sevm : Sevm) (devm : Devm) (adrs : List Adr) (acs : AcctShadow) :
+    Option CallPrep :=
+  match devm.stack with
+  | gw :: cw :: iiw :: isw :: oiw :: osw :: s =>
+    if decide (CoveredFork sevm.benvStat.fork) ∧ sevm.depth ≠ 0 then
+      let d0 := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩
+      let ext := d0.extCost [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]
+      let callee := cw.toAdr
+      let dA := addAccessedAddress d0 callee
+      let code := (lookupA acs callee).code
+      match getDelegatedCodeAddress code with
+      | some _ => none
+      | none =>
+        let acc := accessCostL callee adrs
+        let r := calculateMsgCallGas 0 gw.toNat dA.gasLeft ext acc
+        if r.1 + ext ≤ dA.gasLeft then
+          let p := callSpawnParent dA (r.1 + ext) iiw.toNat isw.toNat oiw.toNat osw.toNat
+          some ⟨Frame.ofCall (delegatecallSpawnMsg sevm p r.2 callee iiw.toNat isw.toNat code false),
+            p, oiw.toNat, osw.toNat, callee :: adrs⟩
+        else none
+    else none
+  | _ => none
+
+theorem dcallPrep_spec {sevm : Sevm} {devm : Devm} {adrs : List Adr} {acs : AcctShadow}
+    {cp : CallPrep} (h : dcallPrep sevm devm adrs acs = some cp)
+    (hA : ∀ a, a ∈ devm.accessedAddresses ↔ a ∈ adrs) (hC : AcctAgree devm.state acs) :
+    Xinst.step sevm devm .delegatecall = .spawn cp.f (.call cp.p cp.oi cp.os) ∧
+      (∀ a, a ∈ cp.p.accessedAddresses ↔ a ∈ cp.adrs) ∧
+      cp.p.accessedStorageKeys = devm.accessedStorageKeys ∧
+      cp.f.isCreate = false ∧ cp.f.inner.accessedAddresses = cp.p.accessedAddresses ∧
+      cp.f.inner.accessedStorageKeys = cp.p.accessedStorageKeys ∧
+      cp.f.inner.benv.stat.rules.stateGas = none ∧ cp.f.inner.benv.state = devm.state ∧
+      cp.p.state = devm.state := by
+  simp only [dcallPrep] at h
+  split at h
+  · rename_i gw cw iiw isw oiw osw s hs
+    have hcode : (lookupA acs cw.toAdr).code = (addAccessedAddress
+        (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) cw.toAdr).state.getCode
+        cw.toAdr := (congrArg Acct.code (hC cw.toAdr)).symm
+    simp only [hcode] at h
+    split at h
+    · rename_i hcond
+      obtain ⟨hfork, hdepth⟩ := hcond
+      have hfork' : CoveredFork sevm.benvStat.fork := of_decide_eq_true hfork
+      split at h
+      · cases h
+      · rename_i hdel
+        have hdel' : accessDelegation
+            (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
+              cw.toAdr) cw.toAdr =
+            ⟨false, cw.toAdr, (addAccessedAddress
+              (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) cw.toAdr).state.getCode
+              cw.toAdr, 0,
+              addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
+                cw.toAdr⟩ := by
+          unfold accessDelegation
+          simp only at hdel ⊢
+          rw [hdel]
+        have hacc : accessCost cw.toAdr
+            (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses + 0 =
+            accessCostL cw.toAdr adrs := by
+          rw [Nat.add_zero]; exact accessCost_eq_L hA
+        have hins : ∀ a, a ∈ (addAccessedAddress
+            (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) cw.toAdr).accessedAddresses ↔
+            a ∈ cw.toAdr :: adrs := by
+          intro a
+          show a ∈ devm.accessedAddresses.insert cw.toAdr ↔ _
+          rw [Std.HashSet.mem_insert, List.mem_cons, hA a, beq_iff_eq]
+          constructor <;> rintro (h | h) <;> first | exact .inl h.symm | exact .inr h
+        have hsg := hfork'.rules_stateGas_none
+        split at h
+        · rename_i hgas
+          cases h
+          exact ⟨Xinst.step_delegatecall_spawn hfork' hs rfl hdel' hacc rfl hgas hdepth,
+            hins, rfl, rfl, rfl, rfl, hsg, rfl, rfl⟩
+        · cases h
+    · cases h
+  · cases h
+
 end Blanc.Lift.Witness
