@@ -288,12 +288,14 @@ def Enters (L : LockSpec) (P : Adr) (G : Exec.Deriv) : Prop :=
   CPFrame P L.code G ∧ ∃ x, ParentPrefix G x ∧ x.pc ∈ L.bodies
 
 /-- Per-code dominance obligation (discharged from a certificate elsewhere):
-in every frame running `L.code` whose executed hashes avoid the slot,
+in every frame running `L.code` on a covered fork whose executed hashes avoid
+the slot,
 (a) every body start and every slot-addressed `SSTORE` is preceded, in its
 frame, by a node where the lock cell did not hold `locked`; and (c) every
 mutating body start holds `locked`. -/
 def Dominance (L : LockSpec) : Prop :=
-  ∀ F : Exec.Deriv, F.pc = 0 → F.sevm.code = L.code → HashAvoid L.slot F →
+  ∀ F : Exec.Deriv, F.pc = 0 → CoveredFork F.sevm.benvStat.fork →
+    F.sevm.code = L.code → HashAvoid L.slot F →
     ∀ n, ParentPrefix F n →
       ((n.pc ∈ L.bodies ∨ SstoreAt n L.slot) →
         ∃ m, ParentPrefix F m ∧ ParentPrefix m n ∧
@@ -388,12 +390,14 @@ itself safe: dominance forbids its being a body start or slot-addressed
 other `P`-owned frame from writing storage. -/
 theorem nodeSafe_head (dom : L.Dominance) {F E : Exec.Deriv}
     (pc0 : F.pc = 0) (reach : ParentPrefix F E) (ok : FrameOK L P F)
+    (eFork : CoveredFork E.sevm.benvStat.fork)
     (anc : LockedFrom L P F E) : NodeSafe L P E := by
   have sevmEq : E.sevm = F.sevm := Blanc.Exec.Deriv.ParentPrefix.sevm_eq reach
   have dominated : ∀ owned : F.sevm.currentTarget = P,
       F.sevm.code = L.code → (E.pc ∈ L.bodies ∨ SstoreAt E L.slot) → False := by
     intro owned code bad
-    rcases (dom F pc0 code (ok.2 ⟨pc0, owned, code⟩) E reach).1 bad with
+    rcases (dom F pc0 (by rw [← sevmEq]; exact eFork) code
+        (ok.2 ⟨pc0, owned, code⟩) E reach).1 bad with
       ⟨m, hFm, hmE, unlocked⟩
     rw [owned] at unlocked
     exact unlocked (anc m hFm hmE)
@@ -478,18 +482,18 @@ theorem nodeSafe_of_lockedFrom (dom : L.Dominance) :
   intro pc sevm pre out run
   induction run with
   | halt hstep =>
-      intro F pc0 reach ok _ _ anc x member
+      intro F pc0 reach ok _ hfork anc x member
       simp only [Exec.rawNodes, List.mem_singleton] at member
       subst x
-      exact nodeSafe_head dom pc0 reach ok anc
+      exact nodeSafe_head dom pc0 reach ok hfork anc
   | doneErr hstep henter hresume =>
-      intro F pc0 reach ok _ _ anc x member
+      intro F pc0 reach ok _ hfork anc x member
       simp only [Exec.rawNodes, List.mem_singleton] at member
       subst x
-      exact nodeSafe_head dom pc0 reach ok anc
+      exact nodeSafe_head dom pc0 reach ok hfork anc
   | @cont _ _ _ _ post _ hstep next ih =>
       intro F pc0 reach ok okDesc hfork anc x member
-      have head := nodeSafe_head dom pc0 reach ok anc
+      have head := nodeSafe_head dom pc0 reach ok hfork anc
       have edge := ParentStep.cont hstep next
       have locked : lockAt P L.slot post = L.locked := by
         unfold lockAt
@@ -504,7 +508,7 @@ theorem nodeSafe_of_lockedFrom (dom : L.Dominance) :
           (lockedFrom_step anc reach edge locked) x member
   | @doneOk _ _ _ _ _ _ _ post _ hstep henter hresume next ih =>
       intro F pc0 reach ok okDesc hfork anc x member
-      have head := nodeSafe_head dom pc0 reach ok anc
+      have head := nodeSafe_head dom pc0 reach ok hfork anc
       have edge := ParentStep.doneOk hstep henter hresume next
       have locked : lockAt P L.slot post = L.locked := by
         unfold lockAt
@@ -518,7 +522,7 @@ theorem nodeSafe_of_lockedFrom (dom : L.Dominance) :
           (lockedFrom_step anc reach edge locked) x member
   | @runErr _ _ _ _ _ _ childEvm _ _ hstep henter child hresume childIh =>
       intro F pc0 reach ok okDesc hfork anc x member
-      have head := nodeSafe_head dom pc0 reach ok anc
+      have head := nodeSafe_head dom pc0 reach ok hfork anc
       simp only [Exec.rawFrameDescendants, List.mem_cons] at okDesc
       have childLocked : lockAt P L.slot childEvm.dyna = L.locked := by
         unfold lockAt
@@ -533,7 +537,7 @@ theorem nodeSafe_of_lockedFrom (dom : L.Dominance) :
           (lockedFrom_self childLocked) x member
   | @runOk _ _ _ _ _ _ childEvm _ post _ hstep henter child hresume next childIh nextIh =>
       intro F pc0 reach ok okDesc hfork anc x member
-      have head := nodeSafe_head dom pc0 reach ok anc
+      have head := nodeSafe_head dom pc0 reach ok hfork anc
       simp only [Exec.rawFrameDescendants, List.mem_cons,
         List.mem_append] at okDesc
       have childLocked : lockAt P L.slot childEvm.dyna = L.locked := by
@@ -673,7 +677,7 @@ theorem LockSpec.lock_exclusion
     fun G member => frameOK_of_mem owner hash
       (mem_rawFrameRoots_of_descendant hF member)
   have bLocked : lockAt P L.slot b.devm = L.locked := by
-    have := (dom F pc0 fCode (hash F hF ⟨pc0, fOwner, fCode⟩) b reachB).2 mutBody
+    have := (dom F pc0 fFork fCode (hash F hF ⟨pc0, fOwner, fCode⟩) b reachB).2 mutBody
     rwa [fOwner] at this
   have hLocked :=
     lockAt_of_segment dom reachB segment okDesc fFork noStore bLocked
@@ -775,7 +779,7 @@ nothing, which is the point of a guard: the hypothesis is not contradictory.) -/
 theorem dominance_of_noSstore_of_nil
     (noStore : NoSstore L.code) (bodies : L.bodies = [])
     (mutBodies : L.mutBodies = []) : L.Dominance := by
-  intro F _ code _ n reach
+  intro F _ _ code _ n reach
   refine ⟨?_, ?_⟩
   · rintro (body | store)
     · rw [bodies] at body
@@ -809,7 +813,7 @@ frame running it halts at pc 0, so no body start is reached and no `SSTORE`
 executes; the obligation is met with nonempty `bodies` and `mutBodies`. -/
 theorem stopLock_dominance (slot locked : B256) :
     (⟨stopCode, slot, locked, [1], [1]⟩ : LockSpec).Dominance := by
-  intro F pc0 code _ n reach
+  intro F pc0 _ code _ n reach
   have atRoot : n = F := by
     cases reach with
     | refl => rfl
