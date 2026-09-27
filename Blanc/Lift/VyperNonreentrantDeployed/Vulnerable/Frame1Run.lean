@@ -1,16 +1,19 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Token.Check
+import Blanc.Lift.WitnessChild
 
 /-!
 V- witness, frame 1 whole: the run of `remove_liquidity(200, [0, 0], A)` from `c0` to its
-`RETURN`, with the frame's two code children supplied as data.
+`RETURN`, with the attacker child supplied as data and the token child run.
 
 Frame 1 (763 EELS steps) makes six `CALL`s: the identity precompile at steps 323, 506,
 559 and 607 (run by the interpreter), the attacker `A` at step 339 (value 100: `A`
 re-enters the pool, EELS frames 2-4) and the token `T` at step 574 (`transfer(A, 100)`,
-EELS frame 5).  The two code children are not executed here: each is a settled machine
-`d` whose gas, output and error are fixed below, and whose accessed sets, storage and
-accounts are described by the shadows below (EELS values, cross-checked against Jaune's
-own `runFrame`; untrusted: the frame theorem takes them as hypotheses).
+EELS frame 5).  The attacker child is not executed here: it is a settled machine `d1`
+whose gas, output and error are fixed below, and whose accessed sets, storage and
+accounts are described by the shadows below (untrusted here: the frame theorem takes
+them as hypotheses, and the attacker frame's theorem proves them).  The token child is
+run by its own lifted certificate.
 -/
 
 namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
@@ -53,33 +56,6 @@ def acsA : AcctShadow :=
    (attackerAddress, ⟨1, 0, .empty, attackerCode⟩),
    (tokenAddress, ⟨1, 0, .empty, tokenCode⟩)]
 
-/-! ### The token child (step 574): its settled shadows -/
-
-def gasT : Nat := 28918737
-
-def keysT : List (Adr × B256) :=
-  (tokenAddress, proxyAddress.toNat.toB256) :: (tokenAddress, attackerAddress.toNat.toB256) ::
-    (proxyAddress, (7 : Nat).toB256) :: keysA
-
-def adrsT : List Adr := tokenAddress :: adrsA
-
-/-- After `transfer(A, 100)`: `balances[1] := 900` in `P`, `T.balanceOf[P] = 900`,
-`T.balanceOf[A] = 100`. -/
-def storT : StorShadow :=
-  [((proxyAddress, (2 : Nat).toB256), (1 : Nat).toB256),
-   ((proxyAddress, (7 : Nat).toB256), tokenAddress.toNat.toB256),
-   ((proxyAddress, (8 : Nat).toB256), (1000 : Nat).toB256),
-   ((proxyAddress, (9 : Nat).toB256), (900 : Nat).toB256),
-   ((proxyAddress, (12 : Nat).toB256), (10000 : Nat).toB256),
-   ((proxyAddress, (15 : Nat).toB256), (10 ^ 18 : Nat).toB256),
-   ((proxyAddress, (16 : Nat).toB256), (10 ^ 18 : Nat).toB256),
-   ((proxyAddress, (26 : Nat).toB256), (2106 : Nat).toB256),
-   ((proxyAddress, balanceOfASlot.toB256), (2106 : Nat).toB256),
-   ((tokenAddress, proxyAddress.toNat.toB256), (900 : Nat).toB256),
-   ((tokenAddress, attackerAddress.toNat.toB256), (100 : Nat).toB256)]
-
-def acsT : AcctShadow := acsA
-
 /-! ### The run -/
 
 /-- Frame 1's program. -/
@@ -91,25 +67,25 @@ def cfg339 : Cfg :=
   | .cont c => c
   | _ => c0
 
-/-- Frame 1 at its `CALL` to the token (EELS step 574), after the attacker child `d1`. -/
-def cfg574 (d1 : Devm) : Cfg :=
-  match callResume sevm1 cfg339 d1 keysA adrsA storA acsA with
-  | some c => match wrun fs1 sevm1 234 c with
-    | .cont c' => c'
-    | _ => c0
-  | none => c0
+/-- The token's program (its lifted certificate). -/
+abbrev fsT : List SFunc := Cert.prog Token.cert
 
-/-- The whole of frame 1, from `c0`, with the children `d1` (attacker) and `d2` (token). -/
-def run1 (d1 d2 : Devm) : Res :=
+/-- The whole of frame 1, from `c0`, with the attacker child `d1` supplied; the token
+child (step 574) is run by its own certificate (`childRun`) and resumed from with the
+shadows of its halting configuration. -/
+def run1 (d1 : Devm) : Res :=
   match wrun fs1 sevm1 339 c0 with
   | .cont c1 =>
     match callResume sevm1 c1 d1 keysA adrsA storA acsA with
     | some c2 =>
       match wrun fs1 sevm1 234 c2 with
       | .cont c3 =>
-        match callResume sevm1 c3 d2 keysT adrsT storT acsT with
-        | some c4 => wrun fs1 sevm1 188 c4
-        | none => .stuck
+        match childRun fsT Token.code sevm1 23 c3 with
+        | .done (.halted d2) cl =>
+          match callResume sevm1 c3 d2 cl.keys cl.adrs cl.stor cl.acs with
+          | some c4 => wrun fs1 sevm1 188 c4
+          | none => .stuck
+        | _ => .stuck
       | _ => .stuck
     | none => .stuck
   | _ => .stuck

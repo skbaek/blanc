@@ -129,7 +129,7 @@ value transfer applied to `acs`) whose halted machine has no error is an `Exec` 
 configuration's. -/
 theorem frame_of_wrun {fs : List SFunc} {f : Frame} {acs : AcctShadow} {cevm : Evm}
     {keys : List (Adr × B256)} {adrs : List Adr} {stor : StorShadow} {f0 : SFunc} {n : Nat}
-    {post : Devm} {cl : Cfg}
+    {post : Devm} {c1 cl : Cfg}
     (he : frameEnterS f acs = .run cevm)
     (hK : ∀ x, x ∈ f.inner.accessedStorageKeys ↔ x ∈ keys)
     (hA : ∀ a, a ∈ f.inner.accessedAddresses ↔ a ∈ adrs)
@@ -139,8 +139,8 @@ theorem frame_of_wrun {fs : List SFunc} {f : Frame} {acs : AcctShadow} {cevm : E
     (hexact : SProg.RunExact fs cevm.sta cevm.dyna post →
       Nonempty (Exec 0 cevm.sta cevm.dyna (.ok post)))
     (h0 : fs[0]? = some f0)
-    (hrun : wrun fs cevm.sta n ⟨cevm.dyna, f0, [], keys, adrs, stor, acsTransfer f.inner acs⟩ =
-      .done (.halted post) cl)
+    (hstep : StepOk fs cevm.sta ⟨cevm.dyna, f0, [], keys, adrs, stor, acsTransfer f.inner acs⟩ c1)
+    (hrun : wrun fs cevm.sta n c1 = .done (.halted post) cl)
     (herr : post.error = none) :
     Nonempty (Exec cevm.pc cevm.sta cevm.dyna (.ok post)) ∧ f.settle (.ok post) = .ok post ∧
       ChildAgree post cl.keys cl.adrs cl.stor cl.acs := by
@@ -153,9 +153,9 @@ theorem frame_of_wrun {fs : List SFunc} {f : Frame} {acs : AcctShadow} {cevm : E
     · show storOf benv.state a k = lookupS stor a k
       rw [benvAfterTransferB_stor hbB]; exact hS a k
     · exact acctAgree_transfer hC hb
-  obtain ⟨run, hcl, hst⟩ := wrun_done hrun hag
+  obtain ⟨run, hcl, hst⟩ := wrun_done hrun (hstep.1 hag)
   have hkeep := wrun_halt_keep hrun
-  refine ⟨hexact ⟨f0, h0, run⟩, frame_settle_ok hcr hsg herr, ?_, ?_, ?_, ?_⟩
+  refine ⟨hexact ⟨f0, h0, hstep.2 _ hag run⟩, frame_settle_ok hcr hsg herr, ?_, ?_, ?_, ?_⟩
   · intro a; rw [hkeep.1]; exact hcl.2.1 a
   · intro k; rw [hkeep.2.1]; exact hcl.1 k
   · intro a k; rw [hkeep.2.2]; exact hcl.2.2.1 a k
@@ -192,10 +192,46 @@ theorem byteArray_eq_of_toList {a b : ByteArray} (h : a.data.toList = b.data.toL
   simp only at h
   rw [Array.toList_inj.mp h]
 
-/-- **A code child discharged.**  If the child of the code `CALL` at an agreeing `c`
-halts under its own certificate (`hexact`: a run of `fs` is an `Exec` of `code`, e.g.
-`lift_exact`) with no error, the halted machine is that call's child (`ChildOk`), and
-the halting configuration's shadows describe it (`ChildAgree`). -/
+/-- **A code child discharged.**  If the child of the code `CALL` at an agreeing `c`,
+started by `childStart`, takes the steps `hstep` (chunks, and `callResume`s of its own
+code children) and then halts under its own certificate (`hexact`: a run of `fs` is an
+`Exec` of `code`, e.g. `lift_exact`) with no error, the halted machine is that call's
+child (`ChildOk`), and the halting configuration's shadows describe it (`ChildAgree`). -/
+theorem childOk_of_start {fs : List SFunc} {code : ByteArray} {sevm : Sevm} {n : Nat}
+    {c c1 cl cc : Cfg} {f0 : SFunc} {cevm : Evm} {post : Devm}
+    (hexact : ∀ {sevm' : Sevm} {pre : Devm}, sevm'.code = code →
+      CoveredFork sevm'.benvStat.fork → SProg.RunExact fs sevm' pre post →
+      Nonempty (Exec 0 sevm' pre (.ok post)))
+    (hagree : Agree c) (h0 : fs[0]? = some f0) (hs : childStart sevm c f0 = some (cevm, cc))
+    (hfork : CoveredFork cevm.sta.benvStat.fork) (hcode : cevm.sta.code = code)
+    (hstep : StepOk fs cevm.sta cc c1) (hrun : wrun fs cevm.sta n c1 = .done (.halted post) cl)
+    (herr : post.error = none) :
+    ChildOk sevm c post ∧ ChildAgree post cl.keys cl.adrs cl.stor cl.acs := by
+  unfold childStart at hs
+  split at hs
+  · rename_i cp hp
+    split at hs
+    · rename_i cevm' he
+      simp only [Option.some.injEq, Prod.mk.injEq] at hs
+      obtain ⟨h1, h2⟩ := hs
+      subst h1 h2
+      obtain ⟨-, hpa, hpk, hcr, hia, hik, hsg, hst⟩ := callPrep_spec hp hagree.2.1 hagree.2.2.2
+      have hC : AcctAgree cp.f.inner.benv.state c.acs := by rw [hst]; exact hagree.2.2.2
+      obtain ⟨hx, hs, ha⟩ := frame_of_wrun he
+        (fun x => by rw [hik, hpk]; exact hagree.1 x)
+        (fun a => by rw [hia]; exact hpa a)
+        (fun a k => by rw [hst]; exact hagree.2.2.1 a k) hC hcr hsg
+        (hexact hcode hfork) h0 hstep hrun herr
+      refine ⟨fun cp' cevm'' hp' he' => ?_, ha⟩
+      rw [hp] at hp'
+      cases hp'
+      rw [he] at he'
+      cases he'
+      exact ⟨.ok post, hx, hs⟩
+    · cases hs
+  · cases hs
+
+/-- `childOk_of_start` for a child that runs straight to its halt (`childRun`). -/
 theorem childOk_of_childRun {fs : List SFunc} {code : ByteArray} {sevm : Sevm} {n : Nat}
     {c cl : Cfg} {post : Devm}
     (hexact : ∀ {sevm' : Sevm} {pre : Devm}, sevm'.code = code →
@@ -209,119 +245,29 @@ theorem childOk_of_childRun {fs : List SFunc} {code : ByteArray} {sevm : Sevm} {
   · rename_i f0 h0
     split at hrun
     · rename_i cevm cc hcs
-      unfold childStart at hcs
-      split at hcs
-      · rename_i cp hp
-        split at hcs
-        · rename_i cevm' he
-          simp only [Option.some.injEq, Prod.mk.injEq] at hcs
-          obtain ⟨h1, h2⟩ := hcs
-          subst h1 h2
-          split at hrun
-          · rename_i hcond
-            obtain ⟨hfork, hcode⟩ := hcond
-            have hfork' : CoveredFork cevm'.sta.benvStat.fork := of_decide_eq_true hfork
-            have hcode' : cevm'.sta.code = code := byteArray_eq_of_toList hcode
-            obtain ⟨-, hpa, hpk, hcr, hia, hik, hsg, hst⟩ :=
-              callPrep_spec hp hagree.2.1 hagree.2.2.2
-            have hC : AcctAgree cp.f.inner.benv.state c.acs := by rw [hst]; exact hagree.2.2.2
-            obtain ⟨hx, hs, ha⟩ := frame_of_wrun he
-              (fun x => by rw [hik, hpk]; exact hagree.1 x)
-              (fun a => by rw [hia]; exact hpa a)
-              (fun a k => by rw [hst]; exact hagree.2.2.1 a k) hC hcr hsg
-              (hexact hcode' hfork') h0 hrun herr
-            refine ⟨fun cp' cevm'' hp' he' => ?_, ha⟩
-            rw [hp] at hp'
-            cases hp'
-            rw [he] at he'
-            cases he'
-            exact ⟨.ok post, hx, hs⟩
-          · cases hrun
-        · cases hcs
-      · cases hcs
+      split at hrun
+      · rename_i hcond
+        exact childOk_of_start hexact hagree h0 hcs (of_decide_eq_true hcond.1)
+          (byteArray_eq_of_toList hcond.2) ⟨id, fun _ _ r => r⟩ hrun herr
+      · cases hrun
     · cases hrun
   · cases hrun
 
-/-! ## `DELEGATECALL` up to its spawn -/
-
-/-- The `.delegatecall` arm of `Xinst.step` up to its spawn (`Xinst.step_delegatecall_spawn`),
-warm/cold on the address shadow `adrs`, the callee's code from the account shadow `acs`. -/
-def dcallPrep (sevm : Sevm) (devm : Devm) (adrs : List Adr) (acs : AcctShadow) :
-    Option CallPrep :=
-  match devm.stack with
-  | gw :: cw :: iiw :: isw :: oiw :: osw :: s =>
-    if decide (CoveredFork sevm.benvStat.fork) ∧ sevm.depth ≠ 0 then
-      let d0 := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩
-      let ext := d0.extCost [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]
-      let callee := cw.toAdr
-      let dA := addAccessedAddress d0 callee
-      let code := (lookupA acs callee).code
-      match getDelegatedCodeAddress code with
-      | some _ => none
-      | none =>
-        let acc := accessCostL callee adrs
-        let r := calculateMsgCallGas 0 gw.toNat dA.gasLeft ext acc
-        if r.1 + ext ≤ dA.gasLeft then
-          let p := callSpawnParent dA (r.1 + ext) iiw.toNat isw.toNat oiw.toNat osw.toNat
-          some ⟨Frame.ofCall (delegatecallSpawnMsg sevm p r.2 callee iiw.toNat isw.toNat code false),
-            p, oiw.toNat, osw.toNat, callee :: adrs⟩
-        else none
-    else none
-  | _ => none
-
-theorem dcallPrep_spec {sevm : Sevm} {devm : Devm} {adrs : List Adr} {acs : AcctShadow}
-    {cp : CallPrep} (h : dcallPrep sevm devm adrs acs = some cp)
-    (hA : ∀ a, a ∈ devm.accessedAddresses ↔ a ∈ adrs) (hC : AcctAgree devm.state acs) :
-    Xinst.step sevm devm .delegatecall = .spawn cp.f (.call cp.p cp.oi cp.os) ∧
-      (∀ a, a ∈ cp.p.accessedAddresses ↔ a ∈ cp.adrs) ∧
-      cp.p.accessedStorageKeys = devm.accessedStorageKeys ∧
-      cp.f.isCreate = false ∧ cp.f.inner.accessedAddresses = cp.p.accessedAddresses ∧
-      cp.f.inner.accessedStorageKeys = cp.p.accessedStorageKeys ∧
-      cp.f.inner.benv.stat.rules.stateGas = none ∧ cp.f.inner.benv.state = devm.state ∧
-      cp.p.state = devm.state := by
-  simp only [dcallPrep] at h
+/-- A `callResume` succeeds only on a child without error. -/
+theorem callResume_error {sevm : Sevm} {c c' : Cfg} {child : Devm} {ckeys : List (Adr × B256)}
+    {cadrs : List Adr} {cstor : StorShadow} {cacs : AcctShadow}
+    (h : callResume sevm c child ckeys cadrs cstor cacs = some c') : child.error = none := by
+  unfold callResume at h
   split at h
-  · rename_i gw cw iiw isw oiw osw s hs
-    have hcode : (lookupA acs cw.toAdr).code = (addAccessedAddress
-        (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) cw.toAdr).state.getCode
-        cw.toAdr := (congrArg Acct.code (hC cw.toAdr)).symm
-    simp only [hcode] at h
-    split at h
-    · rename_i hcond
-      obtain ⟨hfork, hdepth⟩ := hcond
-      have hfork' : CoveredFork sevm.benvStat.fork := of_decide_eq_true hfork
-      split at h
-      · cases h
-      · rename_i hdel
-        have hdel' : accessDelegation
-            (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
-              cw.toAdr) cw.toAdr =
-            ⟨false, cw.toAdr, (addAccessedAddress
-              (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) cw.toAdr).state.getCode
-              cw.toAdr, 0,
-              addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
-                cw.toAdr⟩ := by
-          unfold accessDelegation
-          simp only at hdel ⊢
-          rw [hdel]
-        have hacc : accessCost cw.toAdr
-            (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses + 0 =
-            accessCostL cw.toAdr adrs := by
-          rw [Nat.add_zero]; exact accessCost_eq_L hA
-        have hins : ∀ a, a ∈ (addAccessedAddress
-            (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) cw.toAdr).accessedAddresses ↔
-            a ∈ cw.toAdr :: adrs := by
-          intro a
-          show a ∈ devm.accessedAddresses.insert cw.toAdr ↔ _
-          rw [Std.HashSet.mem_insert, List.mem_cons, hA a, beq_iff_eq]
-          constructor <;> rintro (h | h) <;> first | exact .inl h.symm | exact .inr h
-        have hsg := hfork'.rules_stateGas_none
-        split at h
-        · rename_i hgas
-          cases h
-          exact ⟨Xinst.step_delegatecall_spawn hfork' hs rfl hdel' hacc rfl hgas hdepth,
-            hins, rfl, rfl, rfl, rfl, hsg, rfl, rfl⟩
+  · split at h
+    · split at h
+      · split at h
+        · rename_i hce
+          cases he : child.error
+          · rfl
+          · rw [he] at hce; cases hce
         · cases h
+      · cases h
     · cases h
   · cases h
 
