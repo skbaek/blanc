@@ -314,6 +314,8 @@ def run_registry(args: argparse.Namespace) -> int:
                          "--check-split-nodes", str(check.get("split_nodes", 0))]
                 if "parts" in check:
                     argv += ["--check-parts", str(check["parts"])]
+                if check.get("literal_tries") is True:
+                    argv.append("--check-literal-tries")
             lock = row.get("lock")
             if lock:
                 argv += ["--lock-spec", json.dumps(lock["spec"]), "--lock-spec-module", lock["spec_module"],
@@ -387,6 +389,8 @@ parser.add_argument("--check-split-nodes", type=int, default=0,
                     help="Check.lean: decide an entry above this many nodes block by block (0: never)")
 parser.add_argument("--check-parts", type=int, default=0,
                     help="split the generated Check into CheckTries, CheckPart0..N-1 and the assembling Check (N >= 2; registry check.parts)")
+parser.add_argument("--check-literal-tries", action="store_true",
+                    help="emit the code tries as data checked once against LTrie.ofList (registry check.literal_tries)")
 parser.add_argument("--no-join-entries", action="store_true",
                     help="do not promote multi-predecessor JUMPDESTs to join entries (solc-w3 exploration)")
 parser.add_argument("--wrapper-order", choices=("taken-first", "fall-first"), default="taken-first",
@@ -2027,6 +2031,64 @@ if out_dir is not None:
 
 # 10. Per-entry Check.lean: each entry is one kernel decision over trie-backed code
 # reads (`Blanc/Lift/CheckFast.lean`), assembled into `cert_check`.
+def inst_starts(bs: bytes) -> List[bool]:
+    """`instStarts` (`Blanc/Lift/Jumpdest.lean`): true at an instruction start, false on
+    PUSH immediate bytes."""
+    out, skip = [], 0
+    for b in bs:
+        if skip:
+            out.append(False); skip -= 1
+        else:
+            out.append(True); skip = b - 0x5f if 0x60 <= b <= 0x7f else 0
+    return out
+
+
+def literal_tries_lines(depth: int) -> List[str]:
+    """The code tries as data: depth-8 subtrees as definitions, the top levels over them, and
+    one kernel check each (`kernel_rfl`) that the data is `LTrie.ofList` of the code.  Each
+    per-entry decision then unfolds data instead of rebuilding the tries (about 1 s each)."""
+    sub = min(8, depth)
+    width = 1 << sub
+    top = depth - sub
+
+    def leaf_tree(vals, d, fmt):
+        if d == 0:
+            v = vals[0] if vals else None
+            return "(.leaf none)" if v is None else f"(.leaf (some {fmt(v)}))"
+        h = 1 << (d - 1)
+        return f"(.node {leaf_tree(vals[:h], d - 1, fmt)} {leaf_tree(vals[h:], d - 1, fmt)})"
+
+    out: List[str] = []
+    for name, ty, vals, fmt, src in (
+            ("bytesTrie", "UInt8", list(code), str, "code.data.toList"),
+            ("startsTrie", "Bool", inst_starts(code), lambda b: "true" if b else "false", "instStarts code")):
+        chunks = [vals[i * width:(i + 1) * width] for i in range(1 << top)]
+        for i, ch in enumerate(chunks):
+            if ch:
+                out.append(f"def {name}_{i} : LTrie {ty} :=\n  {leaf_tree(ch, sub, fmt)}")
+            else:
+                out.append(f"def {name}_{i} : LTrie {ty} := LTrie.ofList {sub} []")
+            out.append("")
+
+        def top_tree(lo, d):
+            if d == 0:
+                return f"{name}_{lo}"
+            h = 1 << (d - 1)
+            return f"(.node {top_tree(lo, d - 1)} {top_tree(lo + h, d - 1)})"
+        out += [f"def {name} : LTrie {ty} := {top_tree(0, top)}", "",
+                f"theorem {name}_eq : {name} = LTrie.ofList {depth} ({src}) := by",
+                "  kernel_rfl", ""]
+    out += [
+        f"def codeTries : CodeTries code {depth} :=",
+        "  { bytes := bytesTrie",
+        "    starts := startsTrie",
+        f"    bytes_eq := fun i => by rw [bytesTrie_eq]; exact LTrie.get?_ofList {depth} _ (by decide +kernel) i",
+        f"    starts_eq := fun i => by rw [startsTrie_eq, LTrie.get?_ofList {depth} _ (by decide +kernel) i]; rfl }}",
+        "",
+    ]
+    return out
+
+
 def check_source() -> Any:
     depth = max(1, (len(code) - 1).bit_length())
     ns = args.namespace
@@ -2043,10 +2105,13 @@ def check_source() -> Any:
         "open Jaune",
         "",
         f"/-- Depth {depth} covers all {len(code)} runtime byte positions. -/",
+    ] + (literal_tries_lines(depth) if args.check_literal_tries else [
         f"def codeTries : CodeTries code {depth} :=",
         f"  CodeTries.ofCode code {depth} (by decide +kernel) (by decide +kernel)",
         "",
-    ]
+    ])
+    if args.check_literal_tries and args.check_parts < 2:
+        lines.insert(2, "import Blanc.ConcreteRun")
     if MEMRET:
         return check_source_mem(lines)
     blocks = []
@@ -2094,7 +2159,8 @@ def split_check(head: List[str], blocks: List[List[str]], assembly: List[str]) -
         # then the codeTries definition.
         split = next(k for k, l in enumerate(lines) if l.startswith("/-- Depth "))
         preamble = lines[2:split]  # from the blank line after the imports
-        tries = [f"import {ns}.Cert", "import Blanc.Lift.CheckFast"] + preamble + lines[split:]
+        tries = ([f"import {ns}.Cert", "import Blanc.Lift.CheckFast"] +
+                 (["import Blanc.ConcreteRun"] if args.check_literal_tries else []) + preamble + lines[split:])
         tries += [f"end {ns}", ""]
         files["CheckTries"] = "\n".join(tries)
         bounds = check_part_bounds(n, args.check_parts)

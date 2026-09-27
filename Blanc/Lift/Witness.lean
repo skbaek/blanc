@@ -202,6 +202,147 @@ theorem pcFree_of_ninstAccKeeps {n : Ninst} (hn : ninstAccKeeps n = true) : Nins
   | reg r => cases r <;> simp_all [ninstAccKeeps, rinstAccKeeps, Ninst.pcFree]
   | _ => rfl
 
+/-! ## Kernel-reducible state writes
+
+Jaune's `State.set` tests `ac = .nil` through an instance built by `rw` (a `propext`
+cast), which the kernel cannot reduce, so every state write (`SSTORE`, a value
+transfer) is stuck under kernel evaluation.  `State.setB` tests the same condition
+with a `Bool` and is equal to it (`State.set_eq_setB`). -/
+
+/-- `ac = .nil`, decided by a `Bool`. -/
+def acctNilB (ac : Acct) : Bool :=
+  ac.nonce == 0 && ac.bal == 0 && ac.stor.isEmpty && ac.code.size == 0
+
+theorem acctNilB_iff (ac : Acct) : acctNilB ac = true ↔ ac = .nil := by
+  rcases ac with ⟨n, b, s, ⟨c⟩⟩
+  simp only [acctNilB, Acct.nil, Bool.and_eq_true, beq_iff_eq, Acct.mk.injEq]
+  constructor
+  · rintro ⟨⟨⟨hn, hb⟩, hs⟩, hc⟩
+    refine ⟨hn, hb, Std.TreeMap.eq_empty_of_isEmpty hs, ?_⟩
+    simp only [ByteArray.size] at hc
+    rw [Array.size_eq_zero_iff.mp hc]
+  · rintro ⟨hn, hb, hs, hc⟩
+    subst hs
+    refine ⟨⟨⟨hn, hb⟩, rfl⟩, ?_⟩
+    rw [hc]; rfl
+
+/-- `State.set` with a kernel-reducible test. -/
+def stateSetB (w : State) (a : Adr) (ac : Acct) : State :=
+  if acctNilB ac then w.erase a else w.insert a ac
+
+theorem state_set_eq_setB (w : State) (a : Adr) (ac : Acct) : w.set a ac = stateSetB w a ac := by
+  unfold State.set stateSetB
+  by_cases h : ac = .nil
+  · simp only [h, ↓reduceIte, (acctNilB_iff Acct.nil).mpr rfl]
+  · have h' : acctNilB ac = false := by
+      cases hb : acctNilB ac
+      · rfl
+      · exact absurd ((acctNilB_iff ac).mp hb) h
+    simp only [h, h', ↓reduceIte, Bool.false_eq_true]
+
+/-- `State.setStorVal` through `stateSetB`. -/
+def stateSetStorValB (w : State) (adr : Adr) (key val : B256) : State :=
+  let acct : Acct := w.get adr
+  stateSetB w adr {acct with stor := acct.stor.set key val}
+
+theorem state_setStorVal_eq_B (w : State) (adr : Adr) (key val : B256) :
+    w.setStorVal adr key val = stateSetStorValB w adr key val := by
+  unfold State.setStorVal stateSetStorValB
+  exact state_set_eq_setB _ _ _
+
+/-- `Devm.setStorVal` through `stateSetB`. -/
+def devmSetStorValB (devm : Devm) (adr : Adr) (key val : B256) : Devm :=
+  devm.withState (stateSetStorValB devm.state adr key val)
+
+theorem devm_setStorVal_eq_B (devm : Devm) (adr : Adr) (key val : B256) :
+    devm.setStorVal adr key val = devmSetStorValB devm adr key val := by
+  unfold Devm.setStorVal devmSetStorValB
+  rw [state_setStorVal_eq_B]
+
+/-! ## Kernel-cheap memory writes
+
+Jaune's `Mem.write` grows memory with `Array.copyD` (a fold of `setIfInBounds`,
+quadratic under kernel evaluation, and every later read re-forces it).  `memWriteB`
+pads by appending zeros instead and is equal to it (`mem_write_eq_B`). -/
+
+/-- `Array.copyD xs (Array.replicate m 0)`, as an append. -/
+def padTo (xs : Array UInt8) (m : Nat) : Array UInt8 :=
+  ⟨(xs.toList ++ List.replicate (m - xs.size) 0).take m⟩
+
+theorem copyD_replicate_eq_padTo (xs : Array UInt8) (m : Nat) :
+    Array.copyD xs (Array.replicate m 0) = padTo xs m := by
+  apply Array.ext
+  · rw [Array.size_copyD]; simp [padTo]; omega
+  · intro i h1 h2
+    rw [Array.size_copyD, Array.size_replicate] at h1
+    have e1 : (Array.copyD xs (Array.replicate m 0))[i] =
+        (Array.copyD xs (Array.replicate m 0)).getD i 0 := by
+      rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem]; rfl
+    rw [e1]
+    by_cases hi : i < xs.size
+    · rw [Array.getD_copyD_of_lt _ _ _ _ hi (by simpa using h1)]
+      simp [padTo, List.getElem_take, List.getElem_append_left (by simpa using hi : i < xs.toList.length),
+        Array.getD_eq_getD_getElem?, hi]
+    · rw [Array.getD_copyD_of_size_le _ _ _ _ (by omega)]
+      simp only [padTo, List.getElem_toArray, List.getElem_take]
+      rw [List.getElem_append_right (by simp; omega)]
+      simp [Array.getD_eq_getD_getElem?, h1]
+
+/-- `Array.writeD` within bounds, as one splice (a single level for later reads). -/
+def spliceD (a : Array UInt8) (n : Nat) (xs : Bytes) : Array UInt8 :=
+  ⟨a.toList.take n ++ xs ++ a.toList.drop (n + xs.length)⟩
+
+theorem writeD_eq_spliceD (a : Array UInt8) (n : Nat) (xs : Bytes) (h : n + xs.length ≤ a.size) :
+    Array.writeD a n xs = spliceD a n xs := by
+  apply Array.ext
+  · rw [Array.size_writeD]; simp [spliceD]; omega
+  · intro i h1 h2
+    rw [Array.size_writeD] at h1
+    have e1 : (Array.writeD a n xs)[i] = (Array.writeD a n xs).getD i 0 := by
+      rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem]; rfl
+    rw [e1, Array.getD_writeD 0 xs a n i h]
+    simp only [spliceD, List.getElem_toArray]
+    by_cases hi : i < n
+    · simp only [show ¬(n ≤ i ∧ i < n + xs.length) from by omega, ↓reduceIte]
+      rw [List.getElem_append_left (by simp; omega), List.getElem_append_left (by simp; omega)]
+      simp [Array.getD_eq_getD_getElem?, h1]
+    · by_cases hj : i < n + xs.length
+      · simp only [show n ≤ i ∧ i < n + xs.length from ⟨by omega, hj⟩, and_self, ↓reduceIte]
+        rw [List.getElem_append_left (by simp; omega), List.getElem_append_right (by simp; omega)]
+        simp [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem (by omega : i - n < xs.length),
+          Nat.min_eq_left (by omega : n ≤ a.size)]
+      · simp only [show ¬(n ≤ i ∧ i < n + xs.length) from by omega, ↓reduceIte]
+        rw [List.getElem_append_right (by simp; omega)]
+        simp [Array.getD_eq_getD_getElem?, h1, Nat.min_eq_left (by omega : n ≤ a.size)]
+        congr 1; omega
+
+theorem padTo_size (xs : Array UInt8) (m : Nat) : (padTo xs m).size = m := by
+  simp [padTo]; omega
+
+theorem ceil32_ge (n : Nat) : n ≤ ceil32 n := by
+  unfold ceil32; split <;> omega
+
+/-- `Mem.write` with `padTo` for the growth and one splice for the write. -/
+def memWriteB (μ : Mem) (n : Nat) : Bytes → Mem
+  | [] => μ
+  | xs@(_ :: _) =>
+    if n + xs.length ≤ μ.size then
+      if n + xs.length ≤ μ.data.size then ⟨spliceD μ.data n xs, μ.size⟩
+      else ⟨spliceD (padTo μ.data (n + xs.length)) n xs, μ.size⟩
+    else
+      ⟨spliceD (padTo μ.data (ceil32 (n + xs.length))) n xs, ceil32 (n + xs.length)⟩
+
+theorem mem_write_eq_B (μ : Mem) (n : Nat) (xs : Bytes) : μ.write n xs = memWriteB μ n xs := by
+  cases xs with
+  | nil => rfl
+  | cons x xs =>
+    simp only [Mem.write, memWriteB, copyD_replicate_eq_padTo]
+    split
+    · split
+      · rename_i h; rw [writeD_eq_spliceD _ _ _ h]
+      · rw [writeD_eq_spliceD _ _ _ (by rw [padTo_size])]
+    · rw [writeD_eq_spliceD _ _ _ (by rw [padTo_size]; exact ceil32_ge _)]
+
 /-! ## The interpreter -/
 
 /-- An interpreter configuration: the machine state, the node to run, the
@@ -255,15 +396,37 @@ def sstoreStep (sevm : Sevm) (c : Cfg) (g : SFunc) : Option Cfg :=
       if (ct, k) ∈ c.keys then
         let cost := sstoreValueCost orig cur v
         if cost ≤ c.devm.gasLeft then
-          some ⟨((c.devm.withRefundCounter rc).setStorVal ct k v).setMach
+          some ⟨(devmSetStorValB (c.devm.withRefundCounter rc) ct k v).setMach
               ⟨s, c.devm.memory, c.devm.gasLeft - cost, c.devm.stateGas⟩, g, c.K, c.keys⟩
         else none
       else
         let cost := gasColdSload + sstoreValueCost orig cur v
         if cost ≤ c.devm.gasLeft then
-          some ⟨(((addAccessedStorageKey c.devm ct k).withRefundCounter rc).setStorVal ct k v).setMach
+          some ⟨(devmSetStorValB ((addAccessedStorageKey c.devm ct k).withRefundCounter rc) ct k v).setMach
               ⟨s, c.devm.memory, c.devm.gasLeft - cost, c.devm.stateGas⟩, g, c.K, (ct, k) :: c.keys⟩
         else none
+    else none
+  | _ => none
+
+/-- `MSTORE` through `memWriteB` (`Ninst.runCompiled_mstore`). -/
+def mstoreStep (c : Cfg) (g : SFunc) : Option Cfg :=
+  match c.devm.stack with
+  | i :: v :: s =>
+    let cost := gVerylow + c.devm.extCost [⟨i.toNat, 32⟩]
+    if cost ≤ c.devm.gasLeft then
+      some ⟨c.devm.setMach ⟨s, memWriteB c.devm.memory i.toNat v.toBytes, c.devm.gasLeft - cost,
+        c.devm.stateGas⟩, g, c.K, c.keys⟩
+    else none
+  | _ => none
+
+/-- `CALLDATACOPY` through `memWriteB` (`Ninst.runCompiled_calldatacopy_of`). -/
+def calldatacopyStep (sevm : Sevm) (c : Cfg) (g : SFunc) : Option Cfg :=
+  match c.devm.stack with
+  | di :: si :: sz :: s =>
+    let cost := gVerylow + gasCopy * ceilDiv sz.toNat 32 + c.devm.extCost [⟨di.toNat, sz.toNat⟩]
+    if cost ≤ c.devm.gasLeft then
+      some ⟨c.devm.setMach ⟨s, memWriteB c.devm.memory di.toNat (sevm.data.sliceD si.toNat sz.toNat 0),
+        c.devm.gasLeft - cost, c.devm.stateGas⟩, g, c.K, c.keys⟩
     else none
   | _ => none
 
@@ -321,6 +484,8 @@ def wstep (fs : List SFunc) (sevm : Sevm) (c : Cfg) : Res :=
     match n with
     | .reg .sload => match sloadStep sevm c g with | some c' => .cont c' | none => .stuck
     | .reg .sstore => match sstoreStep sevm c g with | some c' => .cont c' | none => .stuck
+    | .reg .mstore => match mstoreStep c g with | some c' => .cont c' | none => .stuck
+    | .reg .calldatacopy => match calldatacopyStep sevm c g with | some c' => .cont c' | none => .stuck
     | n =>
       if ninstAccKeeps n then
         match Ninst.step ⟨0, sevm, c.devm⟩ n with
@@ -466,17 +631,19 @@ theorem sstoreStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
         split at h
         · rename_i hgas
           cases h
-          exact StepOk.of (fun hc => hc) rfl fun hc o r =>
-            .next (Ninst.runCompiled_sstore_warm hleg' hs ((hc _).mpr hw) hsentry hstatic rfl rfl
-              (G := devm.gasLeft - _) (by exact (Nat.sub_add_cancel hgas).symm)) r
+          refine StepOk.of (fun hc => hc) rfl fun hc o r => .next ?_ r
+          have h := Ninst.runCompiled_sstore_warm hleg' hs ((hc _).mpr hw) hsentry hstatic rfl rfl
+            (G := devm.gasLeft - _) (by exact (Nat.sub_add_cancel hgas).symm)
+          rwa [devm_setStorVal_eq_B] at h
         · cases h
       · rename_i hw
         split at h
         · rename_i hgas
           cases h
-          exact StepOk.of (fun hc => agree_insert hc) rfl fun hc o r =>
-            .next (Ninst.runCompiled_sstore_cold hleg' hs (fun hm => hw ((hc _).mp hm)) hsentry
-              hstatic rfl rfl (G := devm.gasLeft - _) (by exact (Nat.sub_add_cancel hgas).symm)) r
+          refine StepOk.of (fun hc => agree_insert hc) rfl fun hc o r => .next ?_ r
+          have h := Ninst.runCompiled_sstore_cold hleg' hs (fun hm => hw ((hc _).mp hm)) hsentry
+            hstatic rfl rfl (G := devm.gasLeft - _) (by exact (Nat.sub_add_cancel hgas).symm)
+          rwa [devm_setStorVal_eq_B] at h
         · cases h
     · cases h
   · cases h
@@ -492,6 +659,40 @@ theorem generic_cont {fs : List SFunc} {sevm : Sevm} {c : Cfg} {n : Ninst} {g : 
   · rw [hf]
     exact .next (Ninst.runCompiled_of_run (pcFree_of_ninstAccKeeps hn)
       ⟨.none, trivial, 0, by simp [Ninst.StepRun, hstep, Step.Run]⟩) r
+
+theorem mstoreStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
+    (h : mstoreStep c g = some c') (hf : c.f = .next (.reg .mstore) g) :
+    StepOk fs sevm c c' := by
+  rcases c with ⟨devm, f, K, keys⟩
+  simp only at hf; subst hf
+  simp only [mstoreStep] at h
+  split at h
+  · rename_i i v s hs
+    split at h
+    · rename_i hgas
+      cases h
+      exact StepOk.same rfl (AccKeep.setMach _ _) rfl fun o r =>
+        .next (Ninst.runCompiled_mstore hs (by exact (Nat.sub_add_cancel hgas).symm)
+          (mem_write_eq_B _ _ _)) r
+    · cases h
+  · cases h
+
+theorem calldatacopyStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
+    (h : calldatacopyStep sevm c g = some c') (hf : c.f = .next (.reg .calldatacopy) g) :
+    StepOk fs sevm c c' := by
+  rcases c with ⟨devm, f, K, keys⟩
+  simp only at hf; subst hf
+  simp only [calldatacopyStep] at h
+  split at h
+  · rename_i di si sz s hs
+    split at h
+    · rename_i hgas
+      cases h
+      exact StepOk.same rfl (AccKeep.setMach _ _) rfl fun o r =>
+        .next (Ninst.runCompiled_calldatacopy_of hs rfl (mem_write_eq_B _ _ _)
+          (by exact (Nat.sub_add_cancel hgas).symm)) r
+    · cases h
+  · cases h
 
 theorem wstep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg}
     (h : wstep fs sevm c = .cont c') : StepOk fs sevm c c' := by
@@ -603,6 +804,12 @@ theorem wstep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg}
       · cases h; exact sstoreStep_cont (by assumption) rfl
       · cases h
     · split at h
+      · cases h; exact mstoreStep_cont (by assumption) rfl
+      · cases h
+    · split at h
+      · cases h; exact calldatacopyStep_cont (by assumption) rfl
+      · cases h
+    · split at h
       · rename_i hn
         split at h
         · rename_i q d hstep
@@ -637,6 +844,8 @@ theorem wstep_done {fs : List SFunc} {sevm : Sevm} {c : Cfg} {o : Outcome}
   | next n g =>
     simp only [wstep] at h
     split at h
+    · split at h <;> cases h
+    · split at h <;> cases h
     · split at h <;> cases h
     · split at h <;> cases h
     · split at h
