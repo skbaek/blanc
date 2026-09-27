@@ -57,10 +57,78 @@ theorem scratch_mapSlot {M : Mem} (hmem : Mem.Wf M) (halign : M.size % 32 = 0)
   rw [Mem.read_two_word_writes_at hmem (Mem.reads_data M) 0 key base]
   rfl
 
-/-- The `Panic(0x11)` block never completes successfully. -/
-theorem panic42_not_run {C : List Nat} {S : List B256} {r : Seg}
-    (run : SFunc.RunCut prog sevm C (St b S M G) t_107b_c42 r) : False := by
-  unfold t_107b_c42 at run
+/-- A one-word scratch store at 0 of a well-formed, word-aligned image,
+hashed over `[0, 32)`: the dynamic-array base idiom. -/
+theorem scratch_word {M : Mem} (hmem : Mem.Wf M) (halign : M.size % 32 = 0) (v : B256) :
+    ((M.write 0 v.toBytes).read 0 32).1.keccak = v.toBytes.keccak ∧
+      ((M.write 0 v.toBytes).read 0 32).2 = M.write 0 v.toBytes ∧
+      Mem.Wf (M.write 0 v.toBytes) ∧ (M.write 0 v.toBytes).size % 32 = 0 := by
+  have hsize1 : (M.write 0 v.toBytes).size % 32 = 0 := by
+    rw [Mem.size_write_word_at]
+    split_ifs
+    · exact halign
+    · decide
+  have hsize32 : 32 ≤ (M.write 0 v.toBytes).size := by
+    rw [Mem.size_write_word_at]
+    split_ifs with h
+    · exact h
+    · decide
+  refine ⟨?_, Mem.read_snd_eq_self (memExtSize_of_le hsize1 (by omega)),
+    hmem.write 0 _, hsize1⟩
+  rw [Mem.read_write_word_of_wf hmem 0 v]
+
+/-- `b'` agrees with `b` except in the contract's own storage, which is `s`
+(access sets may differ): every other account's storage and the log list are
+unchanged. -/
+structure StorStep (sevm : Sevm) (b b' : Devm) (s : Stor) : Prop where
+  self : Devm.getStor b' sevm.currentTarget = s
+  other : ∀ a, a ≠ sevm.currentTarget → Devm.getStor b' a = Devm.getStor b a
+  logs : b'.logs = b.logs
+
+theorem StorStep.refl (sevm : Sevm) (b : Devm) :
+    StorStep sevm b b (Devm.getStor b sevm.currentTarget) :=
+  ⟨rfl, fun _ _ => rfl, rfl⟩
+
+theorem StorStep.getStorVal {sevm : Sevm} {b b' : Devm} {s : Stor} (h : StorStep sevm b b' s)
+    (k : B256) : b'.getStorVal sevm.currentTarget k = s.get k := by
+  show (Devm.getStor b' sevm.currentTarget).get k = _
+  rw [h.self]
+
+theorem StorStep.sload {sevm : Sevm} {b b' : Devm} {s : Stor} (h : StorStep sevm b b' s)
+    (k : B256) : StorStep sevm b (afterSload sevm b' k) s :=
+  ⟨by rw [afterSload_getStor, h.self],
+   fun a ha => by rw [afterSload_getStor, h.other a ha],
+   by rw [afterSload_logs, h.logs]⟩
+
+theorem StorStep.sstore {sevm : Sevm} {b b' : Devm} {s : Stor} (h : StorStep sevm b b' s)
+    (k v : B256) : StorStep sevm b (afterSstore sevm b' k v) (s.set k v) :=
+  ⟨by rw [afterSstore_getStor_self, h.self],
+   fun a ha => by rw [afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha), h.other a ha],
+   by rw [afterSstore_logs, h.logs]⟩
+
+theorem StorStep.trans {sevm : Sevm} {b b' b'' : Devm} {s s' : Stor}
+    (h : StorStep sevm b b' s) (h' : StorStep sevm b' b'' s') : StorStep sevm b b'' s' :=
+  ⟨h'.self, fun a ha => by rw [h'.other a ha, h.other a ha], by rw [h'.logs, h.logs]⟩
+
+theorem B256.or_comm' (x y : B256) : x ||| y = y ||| x := by
+  rcases x with ⟨⟨xh0, xh1⟩, ⟨xl0, xl1⟩⟩
+  rcases y with ⟨⟨yh0, yh1⟩, ⟨yl0, yl1⟩⟩
+  apply Prod.ext <;> apply Prod.ext <;> exact UInt64.or_comm _ _
+
+theorem B256.or_zero' (x : B256) : x ||| 0 = x := by
+  rcases x with ⟨⟨xh0, xh1⟩, ⟨xl0, xl1⟩⟩
+  apply Prod.ext <;> apply Prod.ext <;> exact UInt64.or_zero
+
+/-- Solidity's `Panic(code)` revert block: selector and code stores, then
+`REVERT`.  It never completes successfully. -/
+theorem panicBlock_not_run {C : List Nat} {S : List B256} {r : Seg}
+    {p1 p2 p3 p4 p5 p6 : Bytes} {h1 : p1.length ≤ 32} {h2 : p2.length ≤ 32}
+    {h3 : p3.length ≤ 32} {h4 : p4.length ≤ 32} {h5 : p5.length ≤ 32} {h6 : p6.length ≤ 32}
+    (run : SFunc.RunCut prog sevm C (St b S M G)
+      (.dest (.next (.push p1 h1) (.next (.push p2 h2) (.next (.reg .mstore)
+        (.next (.push p3 h3) (.next (.push p4 h4) (.next (.reg .mstore)
+          (.next (.push p5 h5) (.next (.push p6 h6) (.last .revert)))))))))) r) :
+    False := by
   obtain ⟨G1, run⟩ := ric_dest run
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G2, rfl⟩ := ri_push s1
@@ -80,13 +148,32 @@ theorem panic42_not_run {C : List Nat} {S : List B256} {r : Seg}
   obtain ⟨G9, rfl⟩ := ri_push s1
   exact ric_revert run
 
+/-- The arithmetic `Panic(0x11)` blocks (entries 38, 39, 42). -/
+theorem panic42_not_run {C : List Nat} {S : List B256} {r : Seg}
+    (run : SFunc.RunCut prog sevm C (St b S M G) t_107b_c42 r) : False :=
+  panicBlock_not_run run
+
 theorem panic39_not_run {C : List Nat} {S : List B256} {r : Seg}
     (run : SFunc.RunCut prog sevm C (St b S M G) t_107b_c39 r) : False :=
-  panic42_not_run (show SFunc.RunCut prog sevm C (St b S M G) t_107b_c42 r from run)
+  panicBlock_not_run run
 
 theorem panic38_not_run {C : List Nat} {S : List B256} {r : Seg}
     (run : SFunc.RunCut prog sevm C (St b S M G) t_107b_c38 r) : False :=
-  panic42_not_run (show SFunc.RunCut prog sevm C (St b S M G) t_107b_c42 r from run)
+  panicBlock_not_run run
+
+/-- The array-bounds `Panic(0x32)` blocks (entries 26, 27). -/
+theorem panic26_not_run {C : List Nat} {S : List B256} {r : Seg}
+    (run : SFunc.RunCut prog sevm C (St b S M G) t_1158_c26 r) : False :=
+  panicBlock_not_run run
+
+theorem panic27_not_run {C : List Nat} {S : List B256} {r : Seg}
+    (run : SFunc.RunCut prog sevm C (St b S M G) t_1158_c27 r) : False :=
+  panicBlock_not_run run
+
+/-- The empty-array-pop `Panic(0x31)` block (entry 28). -/
+theorem panic28_not_run {C : List Nat} {S : List B256} {r : Seg}
+    (run : SFunc.RunCut prog sevm C (St b S M G) t_1185_c28 r) : False :=
+  panicBlock_not_run run
 
 /-- Entry 40, the checked decrement: a returned run had a nonzero operand and
 returns `ff..ff + x` (that is, `x - 1`) over the caller's remaining stack. -/
@@ -221,10 +308,15 @@ abbrev pauserSetTopic : B256 := Bytes.toB256
    0xc2, 0x15, 0x4f, 0x89, 0xb1, 0x81, 0x56, 0xd3, 0xed, 0xf7, 0x7c, 0x0e, 0x37, 0xd0, 0x47,
    0x69, 0x13]
 
-private theorem ff20_and_canonical {w : B256} (h : canonicalAddress w) :
+theorem ff20_and_canonical {w : B256} (h : canonicalAddress w) :
     Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
       0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& w = w := by
   rw [Weth9.ff20_and_word, B256.toAdr_toB256_of_lt h]
+
+theorem mask_and_canonical {w : B256} (h : canonicalAddress w) :
+    w &&& Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] = w := by
+  rw [B256.and_comm, Weth9.ff20_and_word, B256.toAdr_toB256_of_lt h]
 
 /-- Entry 5, `setPauser`'s shared tail: from `oldPauser :: newPauser :: target
 :: k :: ret :: base` it emits the `PauserSet` log with the three canonical

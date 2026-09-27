@@ -16,11 +16,6 @@ section Blocks
 
 variable {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
 
-private theorem mask_and_canonical {w : B256} (h : canonicalAddress w) :
-    w &&& Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] = w := by
-  rw [B256.and_comm, Weth9.ff20_and_word, B256.toAdr_toB256_of_lt h]
-
 /-- `t_09da_c32`: the old pauser's count slot is read, decremented through
 entry 40 (whose zero arm reverts), written back, and control joins entry 4
 with the caller's stack. -/
