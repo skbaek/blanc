@@ -278,6 +278,20 @@ theorem pop_two_frame {ρ : B256} {av bv : AVal} {a : List AVal} {S rest : List 
       obtain ⟨rfl, rfl, hs⟩ := hp
       exact ⟨h0, S1, hs.symm, htail⟩
 
+theorem pop_two_second {ρ : B256} {av bv : AVal} {a : List AVal} {S rest : List B256}
+    {x y : B256} {d d' : Devm} (hstack : d.stack = S ++ rest)
+    (hframe : FrameMatches ρ (av :: bv :: a) S) (pop : Devm.PopBurn [x, y] d d') :
+    AVal.Matches ρ bv y := by
+  cases hframe with
+  | @cons _ s0 _ S0 h0 htail =>
+    cases htail with
+    | @cons _ s1 _ S1 h1 htail =>
+      have hp := popBurn_two_stack pop
+      rw [hstack] at hp
+      simp only [List.cons_append, List.cons.injEq] at hp
+      obtain ⟨rfl, rfl, _⟩ := hp
+      exact h1
+
 end Cursor
 
 /-! ### The cursor theorems -/
@@ -346,21 +360,23 @@ theorem cursor_step {code : ByteArray} {c : Cert} (hc : Cert.check code c = true
     match a, hcheck, hret, hframe with
     | .const t :: v :: a', hcheck, hret, hframe =>
       have h' : (byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧
-            checkNode code c.entries m (pc + 1) a' f = true) ∧
-          checkNode code c.entries m t.toNat a' g = true := by
+            (v.jumps? = some true ∨ checkNode code c.entries m (pc + 1) a' f = true)) ∧
+          (v.jumps? = some false ∨ checkNode code c.entries m t.toNat a' g = true) := by
         simpa [checkNode] using hcheck
       have hat : Jinst.At n.sevm.code n.pc .jumpi := by
         rw [hcode, hpc]; exact byteAt_jinst_at h'.1.1
       have hret' : RetOK a' m K := fun hm =>
         hret (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ hm))
       rcases of_jumpi_run (Cursor.parentStep_jinst edge hat) with
-        ⟨x, hpc', pop⟩ | ⟨x, y, hpc', pop, _, _⟩
+        ⟨x, hpc', pop⟩ | ⟨x, y, hpc', pop, _, hy⟩
       · obtain ⟨_, S1, hst, hfr⟩ := Cursor.pop_two_frame hstack hframe pop
-        exact ⟨_, .zero, hcode', by simp [hpc', hpc], h'.1.2, hret', S1, rest, hst, hfr, hK⟩
-      · obtain ⟨hx, S1, hst, hfr⟩ := Cursor.pop_two_frame hstack hframe pop
+        exact ⟨_, .zero, hcode', by simp [hpc', hpc],
+          live_fall (Cursor.pop_two_second hstack hframe pop) h'.1.2, hret', S1, rest, hst, hfr, hK⟩
+      · have hv := Cursor.pop_two_second hstack hframe pop
+        obtain ⟨hx, S1, hst, hfr⟩ := Cursor.pop_two_frame hstack hframe pop
         have hx : x = t := hx
         subst hx
-        exact ⟨_, .succ, hcode', hpc', h'.2, hret', S1, rest, hst, hfr, hK⟩
+        exact ⟨_, .succ, hcode', hpc', live_taken hy hv h'.2, hret', S1, rest, hst, hfr, hK⟩
     | [], hcheck, _, _ => simp [checkNode] at hcheck
     | [.const _], hcheck, _, _ => simp [checkNode] at hcheck
     | .ret :: _, hcheck, _, _ => simp [checkNode] at hcheck
@@ -374,7 +390,7 @@ theorem cursor_step {code : ByteArray} {c : Cert} (hc : Cert.check code c = true
         have h' : (((byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧
               e.pc = t.toNat) ∧ e.rets = m) ∧
               gotoCompat a' e.frame = true) ∧
-              checkNode code c.entries m (pc + 1) a' f = true := by
+              (v.jumps? = some true ∨ checkNode code c.entries m (pc + 1) a' f = true) := by
           simpa [checkNode, hk] using hcheck
         have hat : Jinst.At n.sevm.code n.pc .jumpi := by
           rw [hcode, hpc]; exact byteAt_jinst_at h'.1.1.1.1
@@ -383,7 +399,8 @@ theorem cursor_step {code : ByteArray} {c : Cert} (hc : Cert.check code c = true
         rcases of_jumpi_run (Cursor.parentStep_jinst edge hat) with
           ⟨x, hpc', pop⟩ | ⟨x, y, hpc', pop, _, _⟩
         · obtain ⟨_, S1, hst, hfr⟩ := Cursor.pop_two_frame hstack hframe pop
-          exact ⟨_, .toZero, hcode', by simp [hpc', hpc], h'.2, hret', S1, rest, hst, hfr, hK⟩
+          exact ⟨_, .toZero, hcode', by simp [hpc', hpc],
+            live_fall (Cursor.pop_two_second hstack hframe pop) h'.2, hret', S1, rest, hst, hfr, hK⟩
         · obtain ⟨hx, S1, hst, hfr⟩ := Cursor.pop_two_frame hstack hframe pop
           have hx : x = t := hx
           subst hx

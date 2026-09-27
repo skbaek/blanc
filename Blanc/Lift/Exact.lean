@@ -109,14 +109,14 @@ def jumpsOkNode (code : ByteArray) (es : List Entry) : SFunc → List AVal → B
   | .dest f, a => jumpsOkNode code es f a
   | .branch f g, a =>
     match a with
-    | .const t :: _ :: a' =>
-      jumpdestOk code t.toNat && jumpsOkNode code es f a' &&
-        jumpsOkNode code es g a'
+    | .const t :: v :: a' =>
+      (v.jumps? == some true || jumpsOkNode code es f a') &&
+        (v.jumps? == some false || (jumpdestOk code t.toNat && jumpsOkNode code es g a'))
     | _ => false
   | .branchTo f k, a =>
     match a, es[k]? with
-    | .const _ :: _ :: a', some e =>
-      jumpdestOk code e.pc && jumpsOkNode code es f a'
+    | .const _ :: v :: a', some e =>
+      jumpdestOk code e.pc && (v.jumps? == some true || jumpsOkNode code es f a')
     | _, _ => false
   | .jump k, a =>
     match a, es[k]? with
@@ -169,6 +169,20 @@ private lemma popBurnBy_one_stack {x : B256} {s s' : Devm}
 private lemma popBurnBy_two_stack {x y : B256} {s s' : Devm}
     (h : Devm.PopBurnBy [x, y] gHigh s s') : s.stack = x :: y :: s'.stack := by
   simpa [Stack.Pop, Split] using h.stack
+
+private lemma cond_matches {ρ : B256} {av av2 : AVal} {a' : List AVal}
+    {S base : List B256} {devm devm' : Devm} {d w : B256}
+    (hframe : FrameMatches ρ (av :: av2 :: a') S) (hstack : devm.stack = S ++ base)
+    (hpop : Devm.PopBurnBy [d, w] gHigh devm devm') : AVal.Matches ρ av2 w := by
+  have hs := popBurnBy_two_stack hpop
+  rw [hstack] at hs
+  cases hframe with
+  | cons _ hrest =>
+    cases hrest with
+    | cons h1 _ =>
+      simp only [List.cons_append, List.cons.injEq] at hs
+      rw [← hs.2.1]
+      exact h1
 
 private def ExactResult (code : ByteArray) (c : Cert) (sevm : Sevm)
     (pc m : Nat) (a : List AVal) (f : SFunc) (ρ : B256) (S base : List B256)
@@ -256,29 +270,23 @@ theorem node_exact {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
           cases a0 with
           | nil => simp [checkNode] at hcheck
           | cons av2 a' =>
+            have hcheck0 :
+                (byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧
+                  (av2.jumps? = some true ∨ checkNode code c.entries m (pc + 1) a' f = true)) ∧
+                (av2.jumps? = some false ∨ checkNode code c.entries m t.toNat a' g = true) := by
+              simpa [checkNode] using hcheck
+            have hjump0 :
+                (av2.jumps? = some true ∨ jumpsOkNode code c.entries f a' = true) ∧
+                (av2.jumps? = some false ∨
+                  (jumpdestOk code t.toNat = true ∧ jumpsOkNode code c.entries g a' = true)) := by
+              simpa [jumpsOkNode] using hjump
+            have hv := cond_matches hframe hstack hpop
             have hcheck' :
                 (byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧
-                  checkNode code c.entries m (pc + 1) a' f = true) ∧
-                checkNode code c.entries m t.toNat a' g = true := by
-              simpa [checkNode] using hcheck
-            have hjump' :
-                jumpdestOk code t.toNat = true ∧
-                jumpsOkNode code c.entries f a' = true ∧
-                jumpsOkNode code c.entries g a' = true := by
-              have hh :
-                  ((jumpdestOk code t.toNat &&
-                    jumpsOkNode code c.entries f a') &&
-                    jumpsOkNode code c.entries g a') = true := by
-                simpa [jumpsOkNode] using hjump
-              have hh' := Eq.mp
-                (Bool.and_eq_true_eq_eq_true_and_eq_true
-                  (jumpdestOk code t.toNat && jumpsOkNode code c.entries f a')
-                  (jumpsOkNode code c.entries g a')) hh
-              have hleft := Eq.mp
-                (Bool.and_eq_true_eq_eq_true_and_eq_true
-                  (jumpdestOk code t.toNat)
-                  (jumpsOkNode code c.entries f a')) hh'.1
-              exact ⟨hleft.1, hleft.2, hh'.2⟩
+                  checkNode code c.entries m (pc + 1) a' f = true) ∧ True :=
+              ⟨⟨hcheck0.1.1, live_fall hv hcheck0.1.2⟩, trivial⟩
+            have hjump' : True ∧ jumpsOkNode code c.entries f a' = true ∧ True :=
+              ⟨trivial, live_fall hv hjump0.1, trivial⟩
             have h_at : Jinst.At sevm.code pc .jumpi := by
               apply byteAt_jinst_at
               rw [hcode]
@@ -338,29 +346,25 @@ theorem node_exact {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
           cases a0 with
           | nil => simp [checkNode] at hcheck
           | cons av2 a' =>
-            have hcheck' :
+            have hcheck0 :
                 (byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧
-                  checkNode code c.entries m (pc + 1) a' f = true) ∧
-                checkNode code c.entries m t.toNat a' g = true := by
+                  (av2.jumps? = some true ∨ checkNode code c.entries m (pc + 1) a' f = true)) ∧
+                (av2.jumps? = some false ∨ checkNode code c.entries m t.toNat a' g = true) := by
               simpa [checkNode] using hcheck
+            have hjump0 :
+                (av2.jumps? = some true ∨ jumpsOkNode code c.entries f a' = true) ∧
+                (av2.jumps? = some false ∨
+                  (jumpdestOk code t.toNat = true ∧ jumpsOkNode code c.entries g a' = true)) := by
+              simpa [jumpsOkNode] using hjump
+            have hv := cond_matches hframe hstack hpop
+            have hcheck' :
+                (byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧ True) ∧
+                checkNode code c.entries m t.toNat a' g = true :=
+              ⟨⟨hcheck0.1.1, trivial⟩, live_taken hne hv hcheck0.2⟩
             have hjump' :
-                jumpdestOk code t.toNat = true ∧
-                jumpsOkNode code c.entries f a' = true ∧
-                jumpsOkNode code c.entries g a' = true := by
-              have hh :
-                  ((jumpdestOk code t.toNat &&
-                    jumpsOkNode code c.entries f a') &&
-                    jumpsOkNode code c.entries g a') = true := by
-                simpa [jumpsOkNode] using hjump
-              have hh' := Eq.mp
-                (Bool.and_eq_true_eq_eq_true_and_eq_true
-                  (jumpdestOk code t.toNat && jumpsOkNode code c.entries f a')
-                  (jumpsOkNode code c.entries g a')) hh
-              have hleft := Eq.mp
-                (Bool.and_eq_true_eq_eq_true_and_eq_true
-                  (jumpdestOk code t.toNat)
-                  (jumpsOkNode code c.entries f a')) hh'.1
-              exact ⟨hleft.1, hleft.2, hh'.2⟩
+                jumpdestOk code t.toNat = true ∧ True ∧
+                jumpsOkNode code c.entries g a' = true :=
+              ⟨(live_taken hne hv hjump0.2).1, trivial, (live_taken hne hv hjump0.2).2⟩
             have h_at : Jinst.At sevm.code pc .jumpi := by
               apply byteAt_jinst_at
               rw [hcode]
@@ -428,16 +432,28 @@ theorem node_exact {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
             cases hk : c.entries[k]? with
             | none => simp [checkNode, hk] at hcheck
             | some e =>
+              have hcheck0 :
+                  (((byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧
+                    e.pc = t.toNat) ∧ e.rets = m) ∧
+                    gotoCompat a' e.frame = true) ∧
+                    (av2.jumps? = some true ∨
+                      checkNode code c.entries m (pc + 1) a' f = true) := by
+                simpa [checkNode, hk] using hcheck
+              have hv := cond_matches hframe hstack hpop
               have hcheck' :
                   (((byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧
                     e.pc = t.toNat) ∧ e.rets = m) ∧
                     gotoCompat a' e.frame = true) ∧
-                    checkNode code c.entries m (pc + 1) a' f = true := by
-                simpa [checkNode, hk] using hcheck
+                    checkNode code c.entries m (pc + 1) a' f = true :=
+                ⟨hcheck0.1, live_fall hv hcheck0.2⟩
+              have hjump0 :
+                  jumpdestOk code e.pc = true ∧
+                    (av2.jumps? = some true ∨ jumpsOkNode code c.entries f a' = true) := by
+                simpa [jumpsOkNode, hk, Bool.and_eq_true] using hjump
               have hjump' :
                   jumpdestOk code e.pc = true ∧
-                    jumpsOkNode code c.entries f a' = true := by
-                simpa [jumpsOkNode, hk, Bool.and_eq_true] using hjump
+                    jumpsOkNode code c.entries f a' = true :=
+                ⟨hjump0.1, live_fall hv hjump0.2⟩
               have h_at : Jinst.At sevm.code pc .jumpi := by
                 apply byteAt_jinst_at
                 rw [hcode]
@@ -501,7 +517,8 @@ theorem node_exact {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                   (((byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧
                     e.pc = t.toNat) ∧ e.rets = m) ∧
                     gotoCompat a' e.frame = true) ∧
-                    checkNode code c.entries m (pc + 1) a' f = true := by
+                    (av2.jumps? = some true ∨
+                      checkNode code c.entries m (pc + 1) a' f = true) := by
                 simpa [checkNode, hk] using hcheck
               rcases cert_prog_of_entry c k e hk with ⟨g', hg'⟩
               have hgg : g = g' := Option.some.inj (hget.symm.trans hg')
@@ -509,7 +526,7 @@ theorem node_exact {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
               have hentry := cert_check_at hc k e g hk hg'
               have hjump' :
                   jumpdestOk code e.pc = true ∧
-                    jumpsOkNode code c.entries f a' = true := by
+                    (av2.jumps? = some true ∨ jumpsOkNode code c.entries f a' = true) := by
                 simpa [jumpsOkNode, hk, Bool.and_eq_true] using hjump
               have h_at : Jinst.At sevm.code pc .jumpi := by
                 apply byteAt_jinst_at

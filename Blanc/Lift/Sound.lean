@@ -491,6 +491,22 @@ lemma push_run_stack {sevm : Sevm} {pre inter : Devm} {bs : Bytes}
     rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hstep
     cases hstep.1
 
+/-! ### Decided `JUMPI`s -/
+
+/-- The fall-through side of a `JUMPI` whose condition was zero is checked. -/
+lemma live_fall {ρ : B256} {v : AVal} {P : Prop} (hv : AVal.Matches ρ v 0)
+    (h : v.jumps? = some true ∨ P) : P := by
+  rcases h with h | h
+  · cases v <;> simp_all [AVal.jumps?, AVal.Matches]
+  · exact h
+
+/-- The taken side of a `JUMPI` whose condition was nonzero is checked. -/
+lemma live_taken {ρ w : B256} {v : AVal} {P : Prop} (hw : w ≠ 0) (hv : AVal.Matches ρ v w)
+    (h : v.jumps? = some false ∨ P) : P := by
+  rcases h with h | h
+  · cases v <;> simp_all [AVal.jumps?, AVal.Matches]
+  · exact h
+
 /-! ### Folded instructions -/
 
 lemma applyBinary_top {f : B256 → B256 → B256} {cost : Nat} {pre inter : Devm}
@@ -780,8 +796,8 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
           | cons av2 a' =>
             have hcheck' :
                 (byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧
-                  checkNode code c.entries m (pc + 1) a' f = true) ∧
-                checkNode code c.entries m t.toNat a' g = true := by
+                  (av2.jumps? = some true ∨ checkNode code c.entries m (pc + 1) a' f = true)) ∧
+                (av2.jumps? = some false ∨ checkNode code c.entries m t.toNat a' g = true) := by
               simpa [checkNode] using hcheck
             have h_at : Jinst.At sevm.code pc .jumpi := by
               apply byteAt_jinst_at
@@ -805,6 +821,10 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                     · rcases z with ⟨x, inter, exc', pop, _, prec⟩
                       have hpop := popBurn_two_stack pop
                       rw [hstack] at hpop
+                      have hs1 : s1 = 0 := by
+                        have h := hpop
+                        simp only [List.cons_append, List.cons.injEq] at h
+                        exact h.2.1
                       have hx : x = t := by
                         have htx : s0 = x := by simpa using congrArg List.head? hpop
                         exact htx.symm.trans hs0
@@ -818,7 +838,7 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                       have hrun := ih
                         ⟨pc + 1, sevm, inter, .ok post, exc'⟩
                         (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a' f ρ S1 base
-                        hcheck'.1.2 hinter htail
+                        (live_fall (hs1 ▸ h1) hcheck'.1.2) hinter htail
                       cases hrun with
                       | inl run => exact Or.inl (SFunc.RunP.zero t pop run)
                       | inr run =>
@@ -831,6 +851,10 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                     · rcases z with ⟨x, y, inter, exc', pop, _, _, hy, prec⟩
                       have hpop := popBurn_two_stack pop
                       rw [hstack] at hpop
+                      have hs1 : s1 = y := by
+                        have h := hpop
+                        simp only [List.cons_append, List.cons.injEq] at h
+                        exact h.2.1
                       have hx : x = t := by
                         have htx : s0 = x := by simpa using congrArg List.head? hpop
                         exact htx.symm.trans hs0
@@ -844,7 +868,7 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                       have hrun := ih
                         ⟨t.toNat, sevm, inter, .ok post, exc'⟩
                         (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a' g ρ S1 base
-                        hcheck'.2 hinter htail
+                        (live_taken hy (hs1 ▸ h1) hcheck'.2) hinter htail
                       cases hrun with
                       | inl run => exact Or.inl (SFunc.RunP.succ t y hy pop run)
                       | inr run =>
@@ -872,7 +896,8 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                   (((byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧
                     e.pc = t.toNat) ∧ e.rets = m) ∧
                     gotoCompat a' e.frame = true) ∧
-                    checkNode code c.entries m (pc + 1) a' f = true := by
+                    (av2.jumps? = some true ∨
+                      checkNode code c.entries m (pc + 1) a' f = true) := by
                 simpa [checkNode, hk] using hcheck
               rcases cert_prog_of_entry c k e hk with ⟨g, hg⟩
               have hentry := cert_check_at hc k e g hk hg
@@ -898,6 +923,10 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                       · rcases z with ⟨x, inter, exc', pop, _, prec⟩
                         have hpop := popBurn_two_stack pop
                         rw [hstack] at hpop
+                        have hs1 : s1 = 0 := by
+                          have h := hpop
+                          simp only [List.cons_append, List.cons.injEq] at h
+                          exact h.2.1
                         have hx : x = t := by
                           have htx : s0 = x := by
                             simpa using congrArg List.head? hpop
@@ -912,7 +941,7 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                         have hrun := ih
                           ⟨pc + 1, sevm, inter, .ok post, exc'⟩
                           (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m a' f ρ
-                          S1 base hcheck'.2 hinter htail
+                          S1 base (live_fall (hs1 ▸ h1) hcheck'.2) hinter htail
                         cases hrun with
                         | inl run => exact Or.inl (SFunc.RunP.toZero t pop run)
                         | inr run =>
@@ -925,6 +954,10 @@ theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
                       · rcases z with ⟨x, y, inter, exc', pop, _, _, hy, prec⟩
                         have hpop := popBurn_two_stack pop
                         rw [hstack] at hpop
+                        have hs1 : s1 = y := by
+                          have h := hpop
+                          simp only [List.cons_append, List.cons.injEq] at h
+                          exact h.2.1
                         have hx : x = t := by
                           have htx : s0 = x := by
                             simpa using congrArg List.head? hpop

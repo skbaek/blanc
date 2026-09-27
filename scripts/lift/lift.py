@@ -18,7 +18,9 @@ option `"fold": true`) folds ADD, MUL, SUB, LT, GT, EQ and ISZERO over constant
 operands exactly as `foldConst` in `Blanc/Lift/Check.lean`; off by default, so
 every certificate registered without it regenerates byte-identically.  `--pc`
 (registry option `"pc": true`) lifts `PC` as `SFunc.pcAt pc`, pushing the node's
-own pc; off by default.
+own pc; off by default.  `--decide-jumpi` (registry option `"decide_jumpi":
+true`) emits a JUMPI with a constant condition with its dead side `.undefined`,
+which `checkNode` does not check (`AVal.jumps?`); off by default.
 
 Supported opcodes.  `LEAN_REG` maps each regular opcode the producer may emit to
 its Lean `Ninst`; every row is checked, on each run, against the arms of
@@ -287,6 +289,8 @@ def run_registry(args: argparse.Namespace) -> int:
                 argv.append("--fold")
             if opts.get("pc") is True:
                 argv.append("--pc")
+            if opts.get("decide_jumpi") is True:
+                argv.append("--decide-jumpi")
             if "header" in row:
                 argv += ["--header", row["header"]]
             check = row.get("check")
@@ -357,6 +361,8 @@ parser.add_argument("--no-join-entries", action="store_true",
                     help="do not promote multi-predecessor JUMPDESTs to join entries (solc-w3 exploration)")
 parser.add_argument("--wrapper-order", choices=("taken-first", "fall-first"), default="taken-first",
                     help="build order of a dispatcher selector branch (fall-first: solc-w3 exploration)")
+parser.add_argument("--decide-jumpi", action="store_true",
+                    help="a constant JUMPI condition decides the branch; the dead side is .undefined")
 parser.add_argument("--pc", action="store_true",
                     help="lift PC as SFunc.pcAt (pushes the node's own pc)")
 parser.add_argument("--fold", action="store_true",
@@ -887,7 +893,16 @@ def build_tree(cur_pc: int, cur_st: List[Tuple[Any, ...]], cur_rets: int, path: 
     elif op == 0x57: # JUMPI
         tgt = cur_st[0]
         rem = cur_st[2:]
-        if tgt[0] == 'const':
+        # --decide-jumpi: a constant condition decides the JUMPI; the dead side is
+        # emitted as `.undefined`, which checkNode (AVal.jumps?) never checks.
+        cond = cur_st[1] if len(cur_st) > 1 else ('unk',)
+        decided_false = args.decide_jumpi and tgt[0] == 'const' and cond[0] == 'const' and cond[1] == 0
+        decided_true = args.decide_jumpi and tgt[0] == 'const' and cond[0] == 'const' and cond[1] != 0
+        def fall_tree():
+            if decided_true:
+                return ('undefined', cur_pc + 1)
+            return build_tree(cur_pc + 1, rem, cur_rets, new_path, entry_idx)
+        if tgt[0] == 'const' and not decided_false:
             if any(p == tgt[1] for (p, _) in new_path) or ((cur_pc, tgt[1]) in pre_back_edges):
                 k = get_or_create_entry(tgt[1], generalize_frame(rem), cur_rets, role="loop")
                 back_edges.append({
@@ -898,13 +913,13 @@ def build_tree(cur_pc: int, cur_st: List[Tuple[Any, ...]], cur_rets: int, path: 
                     "target_frame": generalize_frame(rem),
                     "caller_entry": entry_idx
                 })
-                fall = build_tree(cur_pc + 1, rem, cur_rets, new_path, entry_idx)
+                fall = fall_tree()
                 return ('branchTo', fall, k, cur_pc)
             elif tgt[1] in join_entries:
                 k = join_entries[tgt[1]]
-                fall = build_tree(cur_pc + 1, rem, cur_rets, new_path, entry_idx)
+                fall = fall_tree()
                 return ('branchTo', fall, k, cur_pc)
-            elif entry_idx == 0 and tgt[1] in WRAPPERS:
+            elif entry_idx == 0 and tgt[1] in WRAPPERS and not decided_true:
                 # Build order only decides entry numbering (solc-w3 built the fallthrough first).
                 if args.wrapper_order == "fall-first":
                     fall = build_tree(cur_pc + 1, rem, cur_rets, new_path, entry_idx)
@@ -914,8 +929,11 @@ def build_tree(cur_pc: int, cur_st: List[Tuple[Any, ...]], cur_rets: int, path: 
                 if args.wrapper_order == "taken-first":
                     fall = build_tree(cur_pc + 1, rem, cur_rets, new_path, entry_idx)
                 return ('branchTo', fall, ('wrapper', wrap_idx), cur_pc)
-        fall = build_tree(cur_pc + 1, rem, cur_rets, new_path, entry_idx)
-        taken = build_tree(tgt[1], rem, cur_rets, new_path, entry_idx)
+        fall = fall_tree()
+        if decided_false:
+            taken = ('undefined', tgt[1])
+        else:
+            taken = build_tree(tgt[1], rem, cur_rets, new_path, entry_idx)
         return ('branch', fall, taken, cur_pc)
     elif op == 0x56: # JUMP
         tgt = cur_st[0]
@@ -1137,7 +1155,10 @@ def check_node(code_bytes: bytes, es: List[Tuple[int, Tuple[Tuple[Any, ...], ...
         tgt, rem = a[0], a[2:]
         if tgt[0] != 'const': return fail("branch target not const")
         if pc >= len(code_bytes) or code_bytes[pc] != 0x57: return fail("branch not 0x57")
-        return check_node(code_bytes, es, m, pc + 1, rem, fall) and check_node(code_bytes, es, m, tgt[1], rem, taken)
+        cond = a[1]  # mirror of AVal.jumps?: a constant condition skips the dead side
+        jumps = (cond[1] != 0) if cond[0] == 'const' else None
+        return ((jumps is True or check_node(code_bytes, es, m, pc + 1, rem, fall)) and
+                (jumps is False or check_node(code_bytes, es, m, tgt[1], rem, taken)))
     elif kind == 'branchTo':
         fall, k = tree[1], tree[2]
         if len(a) < 2: return fail(f"branchTo stack < 2: {a}")
@@ -1148,6 +1169,9 @@ def check_node(code_bytes: bytes, es: List[Tuple[int, Tuple[Tuple[Any, ...], ...
         if pc >= len(code_bytes) or code_bytes[pc] != 0x57: return fail("branchTo not 0x57")
         if e_pc != tgt[1] or e_rets != m: return fail(f"branchTo epc {hex(e_pc)} != tgt {hex(tgt[1])} or erets {e_rets} != m {m}")
         if not goto_compat(rem, e_frame): return fail(f"branchTo goto_compat failed: rem={rem} != e_frame={e_frame}")
+        cond = a[1]
+        if cond[0] == 'const' and cond[1] != 0:
+            return True
         return check_node(code_bytes, es, m, pc + 1, rem, fall)
     elif kind == 'jump':
         k = tree[1]

@@ -114,15 +114,17 @@ def checkNodeT (code : ByteArray) (d : Nat) (t : LTrie UInt8) (es : List Entry) 
     LTrie.get? d t pc == some (Jinst.toUInt8 .jumpdest) && checkNodeT code d t es m (pc + 1) a f
   | pc, a, .branch f g =>
     match a with
-    | .const tg :: _ :: a' =>
+    | .const tg :: v :: a' =>
       LTrie.get? d t pc == some (Jinst.toUInt8 .jumpi) &&
-        checkNodeT code d t es m (pc + 1) a' f && checkNodeT code d t es m tg.toNat a' g
+        (v.jumps? == some true || checkNodeT code d t es m (pc + 1) a' f) &&
+        (v.jumps? == some false || checkNodeT code d t es m tg.toNat a' g)
     | _ => false
   | pc, a, .branchTo f k =>
     match a, es[k]? with
-    | .const tg :: _ :: a', some e =>
+    | .const tg :: v :: a', some e =>
       LTrie.get? d t pc == some (Jinst.toUInt8 .jumpi) && e.pc == tg.toNat &&
-        e.rets == m && gotoCompat a' e.frame && checkNodeT code d t es m (pc + 1) a' f
+        e.rets == m && gotoCompat a' e.frame &&
+        (v.jumps? == some true || checkNodeT code d t es m (pc + 1) a' f)
     | _, _ => false
   | pc, a, .jump k =>
     match a, es[k]? with
@@ -303,14 +305,14 @@ def jumpsOkNodeT (code : ByteArray) (d : Nat) (T : CodeTries code d) (es : List 
   | .dest f, a => jumpsOkNodeT code d T es f a
   | .branch f g, a =>
     match a with
-    | .const t :: _ :: a' =>
-      jumpdestOkT code d T t.toNat && jumpsOkNodeT code d T es f a' &&
-        jumpsOkNodeT code d T es g a'
+    | .const t :: v :: a' =>
+      (v.jumps? == some true || jumpsOkNodeT code d T es f a') &&
+        (v.jumps? == some false || (jumpdestOkT code d T t.toNat && jumpsOkNodeT code d T es g a'))
     | _ => false
   | .branchTo f k, a =>
     match a, es[k]? with
-    | .const _ :: _ :: a', some e =>
-      jumpdestOkT code d T e.pc && jumpsOkNodeT code d T es f a'
+    | .const _ :: v :: a', some e =>
+      jumpdestOkT code d T e.pc && (v.jumps? == some true || jumpsOkNodeT code d T es f a')
     | _, _ => false
   | .jump k, a =>
     match a, es[k]? with

@@ -110,6 +110,14 @@ def callCompat (t : B256) : List AVal → List AVal → Bool
   | .const c :: a, .ret :: e => c == t && callCompat t a e
   | _, _ => false
 
+/-- What a `JUMPI` condition word decides: `some true` for a known nonzero
+constant (the jump is taken), `some false` for the constant zero (it falls
+through), `none` when the word is unknown.  A decided `JUMPI`'s dead side is
+not checked: no execution reaches it. -/
+def AVal.jumps? : AVal → Option Bool
+  | .const w => some (w != 0)
+  | _ => none
+
 def checkNode (code : ByteArray) (es : List Entry) (m : Nat) :
     Nat → List AVal → SFunc → Bool
   | pc, a, .next n f =>
@@ -122,15 +130,17 @@ def checkNode (code : ByteArray) (es : List Entry) (m : Nat) :
     byteAt code pc == some (Jinst.toUInt8 .jumpdest) && checkNode code es m (pc + 1) a f
   | pc, a, .branch f g =>
     match a with
-    | .const t :: _ :: a' =>
+    | .const t :: v :: a' =>
       byteAt code pc == some (Jinst.toUInt8 .jumpi) &&
-        checkNode code es m (pc + 1) a' f && checkNode code es m t.toNat a' g
+        (v.jumps? == some true || checkNode code es m (pc + 1) a' f) &&
+        (v.jumps? == some false || checkNode code es m t.toNat a' g)
     | _ => false
   | pc, a, .branchTo f k =>
     match a, es[k]? with
-    | .const t :: _ :: a', some e =>
+    | .const t :: v :: a', some e =>
       byteAt code pc == some (Jinst.toUInt8 .jumpi) && e.pc == t.toNat &&
-        e.rets == m && gotoCompat a' e.frame && checkNode code es m (pc + 1) a' f
+        e.rets == m && gotoCompat a' e.frame &&
+        (v.jumps? == some true || checkNode code es m (pc + 1) a' f)
     | _, _ => false
   | pc, a, .jump k =>
     match a, es[k]? with
