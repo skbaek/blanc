@@ -203,6 +203,7 @@ scripts/check-cycle-write-free.sh --semantic-only
 scripts/check-transient-settlement.sh --semantic-only
 scripts/check-proxy-pair-upgrade.sh --semantic-only --composed-prerequisites
 scripts/check-drip-stack-certificate.sh
+scripts/check-lift-certificates.sh
 scripts/check-prorata-weth-vault-artifact.sh
 scripts/check-prorata-weth-vault-boundary.sh
 scripts/check-drip.sh

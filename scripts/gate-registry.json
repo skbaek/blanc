@@ -3231,6 +3231,44 @@
   },
   {
    "command": [
+    "scripts/check-lift-certificates.sh"
+   ],
+   "id": "lift-certificates",
+   "inputs": {
+    "files": [
+     "scripts/check-lift-certificates.sh",
+     "Blanc/Lift/Weth9/Cert.lean",
+     "Blanc/Lift/BeaconDeposit/Cert.lean",
+     "Blanc/Lift/Curve3Crv/Cert.lean",
+     "Blanc/Lift/LidoCircuitBreakerDeployed/Cert.lean",
+     "Blanc/Lift/LidoCircuitBreakerDeployed/Check.lean",
+     "Blanc/Lift/VyperNonreentrantDeployed/Fixed/Cert.lean",
+     "Blanc/Lift/VyperNonreentrantDeployed/Fixed/Check.lean",
+     "Blanc/Lift/Transfer.lean",
+     "Blanc/AbstractStackTransfer.lean"
+    ],
+    "populations": [
+     {
+      "pattern": "**/*",
+      "root": "scripts/lift"
+     }
+    ],
+    "tools": [
+     "python3"
+    ]
+   },
+   "kind": "cacheable",
+   "note": "Non-elaborating deterministic regeneration; byte-compares generated certificates from committed runtime hex inputs against Blanc/Lift/**/Cert.lean and registered Check.lean modules. The producer is untrusted; the Lean Cert.check in the Check modules is the trust boundary. On each run the producer reconciles its opcode table against Blanc/Lift/Transfer.lean and Blanc/AbstractStackTransfer.lean. No external inputs.",
+   "order": 70,
+   "verdict": {
+    "expect_exit": 0,
+    "summary_patterns": [
+     "^OK \u2014 lift-certificates: "
+    ]
+   }
+  },
+  {
+   "command": [
     "scripts/check-prorata-weth-vault-artifact.sh"
    ],
    "id": "prorata-weth-vault-artifact",
@@ -3254,7 +3292,7 @@
    },
    "kind": "cacheable",
    "note": "The focused Lean root supplies Lake's transitive depHash for the program, generated literal, artifact pins, toolchain, and Jaune dependency; the static checker independently binds the expected ABI, storage/configuration, literal shape, size, and digest.",
-   "order": 70,
+   "order": 71,
    "verdict": {
     "expect_exit": 0,
     "summary_patterns": [
@@ -3289,7 +3327,7 @@
    },
    "kind": "cacheable",
    "note": "The focused Lean root supplies Lake's transitive depHash for the exact WETH boundary, effects and source-staging owners. The static checker directly reads the root import and COMPOSITION table, while the registered layering dependency supplies the independent total-architecture verdict. Optional --falsify mutants are a hard-hold campaign and are deliberately outside the cached default command.",
-   "order": 71,
+   "order": 72,
    "verdict": {
     "expect_exit": 0,
     "summary_patterns": [
@@ -3421,7 +3459,7 @@
    },
    "kind": "cacheable",
    "note": "Committed vector regeneration, oracle semantics and artifact checks and fixed real Lean arithmetic comparison, followed by fail-closed manifest-wide BPO2 replay through pinned Jaune. The arithmetic evaluator computes 39 fixed public-definition rows compared with an independent Python integer implementation; this finite check is not a deployed-loop proof. Prior owned full/runner build, discovered evaluator imports and adjacent artifact-integrity/certification remain prerequisites; no implicit build occurs. The evaluator entry binds its imported depHash closure. The non-elaborating identity projection additionally binds actual pinned compiler bytes, normalized cache environment and current Jaune source bytes/discovery around the same shared snapshot used by execution; it does not authenticate artifact bytes. The corruption and mock suites are the drip-self-test row (evidence economy rule 3). Exact binary/package pin, recursive fixture population, literal parser, observer definitions and target profile remain real replay inputs. Pinned Jaune derives receipt encodings, blooms and trie roots from immutable manifest annotations and binds them to decoded block headers before native replay of the same snapshot. Lazy shell admission starts before real Lean evaluation and releases on every exit; static/mock checks take no hold. Missing fixtures/evaluator/imports/cache/runner or an incomplete child verdict fail closed.",
-   "order": 72,
+   "order": 73,
    "verdict": {
     "expect_exit": 0,
     "summary_patterns": [
@@ -3504,7 +3542,7 @@
    },
    "kind": "cacheable",
    "note": "DRIP's isolated, read-only BPO2 consumer of the contract-neutral current-mainnet API. It runs the generated fixture writer only as --check-runtime under the verified target interpreter and byte-compares the complete generated JSON population. The fixture population is committed from the generator's explicit --write mode after runtime validation and is byte-compared by this read-only check. CI retains target-independent DRIP arithmetic/artifact controls and committed-fixture replay through the separate drip-evidence row; this external row owns regeneration only.",
-   "order": 73,
+   "order": 74,
    "verdict": {
     "expect_exit": 0,
     "summary_patterns": [
@@ -3586,7 +3624,7 @@
    },
    "kind": "cacheable",
    "note": "Finite model-boundary BPO2 replay of the exact compiler-emitted official CircuitBreaker and locator-0x800 gateway runtimes. The shell independently pins the four-row/five-channel contract, artifact identities, ledger digest, runtime-lock digest, EIP-7825 gas bound and the independently derived EIP-7934 singleton-block RLP bound; the generator checks exact CircuitBreaker tagged and gateway nested-keccak/tagged storage, ordered events, captured outputs and receipt gas for both duration arms without supplying any theorem premise or live-chain attestation.",
-   "order": 74,
+   "order": 75,
    "verdict": {
     "expect_exit": 0,
     "summary_patterns": [
@@ -3615,7 +3653,7 @@
    },
    "kind": "cacheable",
    "note": "The isolated recipe-dispatch controls. Its verdict is determined by the elaborated suggestions file and by scripts/check.sh's own bytes, which carry this mode's population floors and its verdict format string. The dispatch the controls exercise \u2014 Blanc/ProofRecipeTactic.lean, Blanc/Tactics.lean and the generated Blanc/ProofRecipesGenerated.lean \u2014 is reached through the Lean entry's import closure rather than declared again here, so deleting the leaf delegation inside proofRecipeMatches both invalidates this row and fails it. It is registered separately from axiom-audit on purpose: that row couples these controls to the whole AxiomCheck.lean artifact set, so one unrelated missing object leaves them with no green baseline and no way to show that a mutation bites.",
-   "order": 75,
+   "order": 76,
    "verdict": {
     "expect_exit": 0,
     "summary_patterns": [
@@ -3643,7 +3681,7 @@
    },
    "kind": "cacheable",
    "note": "Synthetic controls for the read-only elaboration-migration comparator. Each case creates a disposable Git repository, fixture-local Lake command and registered host provider, then verifies positive comparison plus provenance, runtime, threshold, record-schema and write-safety falsifiers. The production comparator remains an explicit post-genesis reader of two named shared records; this control neither initializes nor changes a normal elaboration baseline or cache.",
-   "order": 76,
+   "order": 77,
    "verdict": {
     "expect_exit": 0,
     "summary_patterns": [
@@ -3696,7 +3734,7 @@
    },
    "kind": "cacheable",
    "note": "Harness self-test: a clean copied-tree audit, eleven isolated mutations and one parser probe. The two manifests and harness code define the controls and are fingerprinted; Blanc Lean files and Blanc.lean are declared subject-only reads under a narrow glob, and the copied tree must remain traversable. The green extraction-ownership prerequisite verifies the committed subject. The pinned Jaune sources it copies are under .lake/, which the read audit treats as the Lake-artifact channel.",
-   "order": 77,
+   "order": 78,
    "verdict": {
     "expect_exit": 0,
     "summary_patterns": [
@@ -3731,7 +3769,7 @@
    },
    "kind": "cacheable",
    "note": "Harness self-test: the 17 occurrence and 2 direct-code mutants whose failure a kept positive or theorem already implies, in one elaboration each attributed to its own lines, and the 7 live direct-code deletions in one elaboration. The fixtures are files here, not Lean entries. Inputs are the harness and fixture files only (evidence economy rule 3): the committed Lean sources and oleans it reads as subjects are deliberately not fingerprinted, so it reruns when a control or fixture changes, not on every Lean edit; the green main row it depends on is the baseline.",
-   "order": 78,
+   "order": 79,
    "verdict": {
     "expect_exit": 0,
     "summary_patterns": [
@@ -3828,7 +3866,7 @@
    },
    "kind": "cacheable",
    "note": "Harness self-test: clean ownership audit, in-memory falsifiers, positive deletions and fixture mutants. Harness, owner manifest, classification and fixture definitions are fingerprinted. The contract Lean families and root module are declared subject-only reads; the static and semantic prerequisites verify the committed sources.",
-   "order": 79,
+   "order": 80,
    "verdict": {
     "expect_exit": 0,
     "summary_patterns": [
@@ -3920,7 +3958,7 @@
    },
    "kind": "cacheable",
    "note": "Harness self-test: parser falsifiers, clean owner audit, positive deletions and batched fixture mutants. Harness, owner and lift manifests, frozen assurance control definitions and fixture files are fingerprinted. Named Blanc Lean files and the WETH family are declared subject-only reads; the static and semantic prerequisites verify the committed sources.",
-   "order": 80,
+   "order": 81,
    "verdict": {
     "expect_exit": 0,
     "summary_patterns": [
@@ -3994,7 +4032,7 @@
    },
    "kind": "cacheable",
    "note": "Harness self-test: 64 isolated source falsifiers with named diagnostics. The checker, falsifier table, AxiomCheck.lean and check.sh expectation definitions are fingerprinted. Ten copied deployment Lean files are declared subject-only reads; the lido-deployment prerequisite verifies the committed sources.",
-   "order": 81,
+   "order": 82,
    "verdict": {
     "expect_exit": 0,
     "summary_patterns": [
@@ -4082,7 +4120,7 @@
    },
    "kind": "cacheable",
    "note": "Harness self-test: two corruption suites and seven mocked or synthetic suites, with no Lean child or host hold. Harness and evaluator-identity definitions, Lean evaluator text and Lake configuration are fingerprinted. Committed DRIP Lean sources, vectors and target data are declared subject-only reads; the drip-evidence prerequisite verifies them.",
-   "order": 82,
+   "order": 83,
    "verdict": {
     "expect_exit": 0,
     "summary_patterns": [
