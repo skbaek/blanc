@@ -607,4 +607,43 @@ theorem jumpsOkNodeMT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es
     | undefined => exact ⟨fun a μ => rfl, by simp [P]⟩
   exact (hall f).1 a μ
 
+/-! ## Assembling a memory-tracking certificate from per-entry decisions -/
+
+/-- The entries of a certificate with their indices, from `k`. -/
+def Cert.indexedFrom : Nat → Cert → List (Nat × (Entry × SFunc))
+  | _, [] => []
+  | k, p :: c => (k, p) :: Cert.indexedFrom (k + 1) c
+
+def Cert.indexed (c : Cert) : List (Nat × (Entry × SFunc)) := Cert.indexedFrom 0 c
+
+theorem Cert.checkEntriesM_of_indexedFrom {code : ByteArray} {es : List Entry}
+    {ms : List MemMap} {b : Bool} : ∀ (c : Cert) (k : Nat),
+    (∀ j p, (j, p) ∈ Cert.indexedFrom k c →
+      checkNodeM code es ms b p.1.rets p.1.pc p.1.frame (ms.getD j []) p.2 = true) →
+    Cert.checkEntriesM code es ms b k c = true
+  | [], _, _ => rfl
+  | (e, f) :: c, k, h => by
+    simp only [Cert.checkEntriesM, Bool.and_eq_true]
+    exact ⟨h k (e, f) (by simp [Cert.indexedFrom]),
+      Cert.checkEntriesM_of_indexedFrom c (k + 1)
+        (fun j p hp => h j p (by simp [Cert.indexedFrom, hp]))⟩
+
+theorem Cert.jumpsEntriesM_of_indexedFrom {code : ByteArray} {es : List Entry}
+    {ms : List MemMap} {b : Bool} : ∀ (c : Cert) (k : Nat),
+    (∀ j p, (j, p) ∈ Cert.indexedFrom k c →
+      jumpsOkNodeM code es b p.2 p.1.frame (ms.getD j []) = true) →
+    Cert.jumpsEntriesM code es ms b k c = true
+  | [], _, _ => rfl
+  | (e, f) :: c, k, h => by
+    simp only [Cert.jumpsEntriesM, Bool.and_eq_true]
+    exact ⟨h k (e, f) (by simp [Cert.indexedFrom]),
+      Cert.jumpsEntriesM_of_indexedFrom c (k + 1)
+        (fun j p hp => h j p (by simp [Cert.indexedFrom, hp]))⟩
+
+theorem Cert.jumpsOkM_of_indexed {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
+    (hall : ∀ k p, (k, p) ∈ Cert.indexed c →
+      jumpsOkNodeM code c.entries b p.2 p.1.frame (ms.getD k []) = true) :
+    Cert.jumpsOkM code c ms b = true :=
+  Cert.jumpsEntriesM_of_indexedFrom c 0 hall
+
 end Blanc.Lift
