@@ -33,6 +33,7 @@ def treeRegOnly : SFunc → Bool
   | .jump _ => true
   | .callNext _ f => treeRegOnly f
   | .ret => true
+  | .pcAt _ f => treeRegOnly f
   | .undefined => true
 
 /-- `S` is closed under references, and all its members are `treeRegOnly`. -/

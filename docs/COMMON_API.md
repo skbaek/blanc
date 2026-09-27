@@ -2797,6 +2797,28 @@ contract-neutral.
   `exec_of_stepN_halt` and `exec_of_stepN_spawn_runOk` (across one `.spawn`), in
   [`Blanc/ConcreteRun.lean`](../Blanc/ConcreteRun.lean). Worked use:
   `Blanc/Lift/VyperNonreentrantDeployed/Concrete/ProxyConcrete.lean`.
+- A concrete frame run over a lifted certificate, as a gas-exact `SProg.RunExact`
+  (an executable witness: liveness from one start state, by kernel evaluation): the
+  interpreter `Witness.wrun` over the certificate's decoded tree, its single step
+  `wstep`, the configuration `Cfg` with the accessed-set and storage/account shadows
+  (`StorShadow`, `AcctShadow`, `storOf`, `AcctAgree`), the kernel-reducible writes
+  `stateSetB`/`memWriteB` (with `state_set_eq_setB`, `mem_write_eq_B`), the `CALL`
+  preparation `callPrep`/`callPrep_spec`, and chunk composition `wrun_add`/`wrun_add_cont`
+  in [`Blanc/Lift/WitnessArms.lean`](../Blanc/Lift/WitnessArms.lean); the soundness
+  theorem `Witness.wrun_exact` (from `wrun_cont`/`wrun_done` over `RunK`/`Agree`), the
+  shadow seeds `stateFoldAcct`/`stateFoldStor`, and code children supplied as data
+  (`ChildOk`, `ChildAgree`, `callResume`) in
+  [`Blanc/Lift/Witness.lean`](../Blanc/Lift/Witness.lean). A code child discharged by its
+  own witness run: `childStart`/`childStart_agree`, `childRun`, `childOk_of_start`,
+  `childOk_of_childRun`, `frame_of_wrun`, `childAgree_of_halt`, and the DELEGATECALL
+  preparation `dcallPrep`/`dcallPrep_spec`, in
+  [`Blanc/Lift/WitnessChild.lean`](../Blanc/Lift/WitnessChild.lean); the frame-level spawn
+  fact `SpawnedBy sevm devm x child` (`Xinst.step` spawns a frame entering as `child`) and
+  `spawnedBy_of_callPrep`, `spawnedBy_of_childStart`, `spawnedBy_of_dcallPrep` in
+  [`Blanc/Lift/WitnessSpawn.lean`](../Blanc/Lift/WitnessSpawn.lean). Code tries given as
+  generated literals (checked once by kernel `rfl`): `CodeTries.ofData` in
+  [`Blanc/Lift/CodeTriesData.lean`](../Blanc/Lift/CodeTriesData.lean). Worked use:
+  `Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Top.lean` (`vminus_witness`).
 - Hashed storage slots: `mapSlot key base = keccak256(pad32 key ‖ pad32 base)`, solc's mapping
   slot and, with the arguments swapped (slot first), Vyper's, in
   [`Blanc/Lift/MapSlot.lean`](../Blanc/Lift/MapSlot.lean).

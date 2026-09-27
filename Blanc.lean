@@ -418,6 +418,16 @@ import Blanc.Lift.LockCheckSound
 import Blanc.Lift.LockCheckFlow
 import Blanc.ConcreteRun
 
+-- The constant memory map and its checker, code tries as data, and the executable-witness
+-- engine with its child runs and spawn facts (deployed-lido-vyper-v1, V-): shared.
+import Blanc.Lift.MemMap
+import Blanc.Lift.CheckMem
+import Blanc.Lift.CodeTriesData
+import Blanc.Lift.WitnessArms
+import Blanc.Lift.Witness
+import Blanc.Lift.WitnessChild
+import Blanc.Lift.WitnessSpawn
+
 -- The deployed Lido CircuitBreaker, lifted from its runtime bytes (deployed-lido-vyper-v1).
 import Blanc.Lift.LidoCircuitBreakerDeployed.Cert
 import Blanc.Lift.LidoCircuitBreakerDeployed.Check
@@ -458,6 +468,44 @@ import Blanc.Lift.VyperNonreentrantDeployed.Fixed.LockDominance
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.LockSpec
 import Blanc.Lift.VyperNonreentrantDeployed.ProxyEntry
 import Blanc.Lift.VyperNonreentrantDeployed.ProxyTail
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.CheckPart0
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.CheckPart1
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.CheckPart2
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.CheckPart3
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.CheckTries
+
+-- The vulnerable Vyper comparator 0x6326, its token and attacker, and the witnessed
+-- reentry vminus_witness (deployed-lido-vyper-v1, V-).
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Attacker.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Check
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.CheckPart0
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.CheckPart1
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.CheckPart2
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.CheckPart3
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.CheckPart4
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.CheckPart5
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.CheckTries
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame0
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1Call
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1Full
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1Kernel
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1Prefix
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1Run
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame2
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame3
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame4
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame4Child
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame4ChunkA
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame4ChunkB
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame4Chunks
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame4Full
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Locks
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.SubtreeRun
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Token.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.WitnessCerts
 
 -- The COMPOSITION stratum is strictly downstream of every contract family, so
 -- it is aggregated last. Roots aggregate composition; nothing imports back.

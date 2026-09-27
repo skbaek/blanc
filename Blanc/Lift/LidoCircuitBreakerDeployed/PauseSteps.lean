@@ -185,6 +185,10 @@ theorem SFunc.RunP.code_of_regOnly {P : Sevm → Devm → Ninst → Devm → Pro
       simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hrefs
       have ht := closed (of_decide_eq_true hrefs.1) lookup
       exact (ihTail hf hrefs.2).trans ((ihRun ht.1 ht.2).trans (ofState pop.state).symm)
+  | pcAt hrun _ run ih =>
+      simp only [treeRegOnly] at hf
+      simp only [SFunc.refs] at hrefs
+      exact (ih hf hrefs).trans (code_of_step (n := .reg .pc) rfl (hP hrun))
 
 /-! ## Entry 32 at an arbitrary return tag -/
 

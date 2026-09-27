@@ -151,6 +151,7 @@ theorem SFunc.RunP.hoare_gotos_mem {P : Sevm → Devm → Ninst → Devm → Pro
   | ret => exact absurd hf Bool.false_ne_true
   | callHalt => exact absurd hf Bool.false_ne_true
   | callRet => exact absurd hf Bool.false_ne_true
+  | pcAt => exact absurd hf Bool.false_ne_true
 
 theorem entry0_dispMem : treeDispMem wrapperEntries t_0000_c0 = true := by
   decide +kernel

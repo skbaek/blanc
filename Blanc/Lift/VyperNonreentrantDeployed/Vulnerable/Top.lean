@@ -16,6 +16,11 @@ frame whose code is lifted runs by its certificate, whose run is an `Exec` of th
 are named by the certificate interpreter's configuration (`wrun`), whose shadows agree with
 the real machine (`Agree`).  The node-quantified form (a counterexample to the literal V+
 exclusion over `Exec.Deriv` nodes) needs a node-exposing lift and is not attempted here.
+
+Limits: the top-level caller `A` holds code (`attackerCode`), so under EIP-3607 this exact
+message is a valid `processMessage` witness but not the first frame of a valid transaction
+(a transaction from an account with code is rejected); the witness is about message
+execution, not transaction admission.
 -/
 
 namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top
