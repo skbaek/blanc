@@ -2690,6 +2690,19 @@ contract-neutral.
 - Execution to lifted run (safety): `lift_sound`, and `lift_sound_in`, which
   keeps each step's derivation (`StepIn`) for arguments about re-entrant child
   frames, in [`Blanc/Lift/Sound.lean`](../Blanc/Lift/Sound.lean).
+- Bytecode whose control flow runs through `PC`, constant arithmetic, constant
+  `JUMPI` conditions or memory (Vyper 0.2 internal calls keep the return tag in
+  memory): `SFunc.pcAt` (a `PC` carrying its own pc) in `Blanc/Lift/Basic.lean`;
+  the folds `foldConst` and decided `JUMPI`s (`AVal.jumps?`) are part of
+  `checkNode`; the memory-tracking checker `checkNodeM`/`Cert.checkM` over declared
+  maps (`absMem`, `memTop`, `memCompat`; `checkNode_eq_checkNodeM` with tracking
+  off) in [`Blanc/Lift/CheckMem.lean`](../Blanc/Lift/CheckMem.lean); the invariant
+  `MemMatches`, the return address in frame or map (`RetIn`) and the
+  per-instruction facts `absMem_sound`, `memTop_sound`, `step_mem_sound` (and
+  `Mem.write_agree`, which needs no `Mem.Wf`) in
+  [`Blanc/Lift/MemMap.lean`](../Blanc/Lift/MemMap.lean); `lift_soundM` in Sound,
+  `lift_exactM`/`Cert.jumpsOkM` in Exact, trie mirrors `checkNodeMT`/`jumpsOkNodeMT`
+  in CheckFast. Produce with `scripts/lift/lift.py --memret callnext --const-mem`.
 - Every execution prefix to a certificate node (all outcomes, no success
   premise): the certificate cursor `Cursor`/`Cont`, its invariant `CursorOK`
   (checked node, pc, stack segments matched per pending function), the
