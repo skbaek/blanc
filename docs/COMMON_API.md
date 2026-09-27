@@ -287,6 +287,7 @@ registry has identified the likely vocabulary.
   [`Blanc/TaggedStorage.lean`](../Blanc/TaggedStorage.lean) combines a region
   with a payload after masking the payload to 252 bits.  Use
   `encode_eq_of_payload_lt` when bridging an existing unmasked `OR` encoder,
+  `encode_region_payload_of_bounds` to decode its region and bounded payload,
   `encode_injective_of_payload_lt` for a fixed region, and
   `encode_ne_of_region_ne` for distinct regions.  The injectivity facts require
   payloads below `2^252`, and region separation also requires both regions

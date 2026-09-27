@@ -83,6 +83,21 @@ theorem encode_toNat_of_bounds
       B256.toNat_toB256_of_lt horlt
     _ = region * 2 ^ 252 + payload.toNat := hor
 
+/-- Decode the four-bit region and bounded payload of an encoded key. -/
+theorem encode_region_payload_of_bounds
+    {region : Nat} {payload : B256}
+    (hregion : region < 16) (hpayload : payload.toNat < 2 ^ 252) :
+    (encode region payload).toNat / 2 ^ 252 = region ∧
+    Nat.toB256 ((encode region payload).toNat % 2 ^ 252) = payload := by
+  rw [encode_toNat_of_bounds hregion hpayload]
+  have hpositive : 0 < 2 ^ 252 := by norm_num
+  constructor
+  · omega
+  · have hmod : (region * 2 ^ 252 + payload.toNat) % 2 ^ 252 =
+        payload.toNat := by omega
+    rw [hmod]
+    exact toB256_toNat payload
+
 /-- Within the four-bit tag range, encoding is injective in a bounded payload. -/
 theorem encode_injective_of_payload_lt
     {region : Nat} {left right : B256}
