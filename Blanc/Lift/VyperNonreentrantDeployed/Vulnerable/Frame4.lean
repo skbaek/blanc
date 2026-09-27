@@ -26,4 +26,7 @@ minted to `A`), with `totalSupply = balanceOf[A] = 2106` in `P`'s storage shadow
 def obs4EELS : Option (Nat × List Nat × Bool × AcctShadow) :=
   some (gas4, (word 106).map UInt8.toNat, true, acsA)
 
+/-- Frame 4's run from its real spawn. -/
+def r4 : Res := wrun fs1 e4.sta 4505 c4
+
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree

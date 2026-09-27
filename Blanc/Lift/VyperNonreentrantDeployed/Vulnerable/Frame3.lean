@@ -16,6 +16,8 @@ namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree
 open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.ConcreteRun
 open Blanc.Lift.VyperNonreentrantDeployed Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
 
+attribute [local irreducible] cfg339 e2 cc2 aCall cp3 e3 cp4 e4 post4
+
 /-- The proxy resumed from a settled child `d`. -/
 def d32 (d : Devm) : Devm := (resumeCallB cp4.p cp4.oi cp4.os (.ok d)).getD default
 
@@ -112,7 +114,7 @@ theorem frame3_child : ChildOk e2.sta aCall post3 ∧ ChildAgree post3 keys3 adr
     simp [adrs3']
   · show x ∈ post3.accessedStorageKeys ↔ _
     rw [show post3 = post3F post4 from rfl, hkk, (hacc.2 x), hpe, hpk, ha4.2.1 x]
-    simp only [true_and, Bool.false_eq_true, keys3, List.mem_append]
+    simp only [true_and, keys3, List.mem_append]
     rw [show e31.dyna.accessedStorageKeys = e3.dyna.accessedStorageKeys from rfl, e3_keys x]
   · show storOf post3.state a k = _
     rw [show post3 = post3F post4 from rfl, hks, resumeCallB_state hr]; exact ha4.2.2.1 a k

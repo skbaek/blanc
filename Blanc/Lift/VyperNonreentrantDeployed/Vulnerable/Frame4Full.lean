@@ -12,6 +12,6 @@ namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree
 open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.ConcreteRun
 open Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
 
-theorem frame4_kernel : obs4 (wrun fs1 e4.sta 4505 c4) = obs4EELS := by kernel_rfl
+theorem frame4_kernel : obs4 r4 = obs4EELS := by kernel_rfl
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree

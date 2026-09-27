@@ -81,34 +81,52 @@ theorem cp4_spec :
 
 /-- Frame 4 runs the registered certificate's code: the fixture's implementation account
 holds that very constant. -/
-theorem e4_code : e4.sta.code = code := by kernel_rfl
+theorem e4_code_fork : (e4.sta.code, e4.sta.benvStat.fork) = (code, .prague) := by kernel_rfl
 
-theorem e4_fork : CoveredFork e4.sta.benvStat.fork := of_decide_eq_true (by decide +kernel)
+theorem e4_code : e4.sta.code = code := (Prod.mk.inj e4_code_fork).1
 
-/-- Frame 4's run from its real spawn. -/
-def r4 : Res := wrun fs1 e4.sta 4505 c4
+theorem e4_fork : CoveredFork e4.sta.benvStat.fork := by
+  rw [(Prod.mk.inj e4_code_fork).2]; exact CoveredFork.prague
+
+/-- The halted machine of a run's outcome (named, so that an equation about the run
+transports to it without the kernel re-evaluating the run). -/
+def haltedOf : Res → Devm
+  | .done (.halted d) _ => d
+  | _ => default
+
+/-- The halting configuration of a run's outcome. -/
+def haltCfgOf : Res → Cfg
+  | .done (.halted _) cl => cl
+  | _ => c0
 
 /-- Frame 4's halted (and settled) machine. -/
-def post4 : Devm := match r4 with | .done (.halted d) _ => d | _ => default
+def post4 : Devm := haltedOf r4
 
 /-- Frame 4's halting configuration. -/
-def cl4 : Cfg := match r4 with | .done (.halted _) cl => cl | _ => c0
+def cl4 : Cfg := haltCfgOf r4
 
-theorem r4_facts : r4 = .done (.halted post4) cl4 ∧ post4.gasLeft = gas4 ∧
-    post4.output = word 106 ∧ post4.error = none ∧ cl4.keys = keys4 ∧ cl4.adrs = adrs4 ∧
-    cl4.stor = storA ∧ cl4.acs = acsA := by
-  have h : obs4 r4 = obs4EELS := frame4_kernel
-  unfold post4 cl4
-  generalize r4 = r at h ⊢
+/-- What a halt with frame 4's observation is. -/
+theorem obs4_facts {r : Res} (h : obs4 r = obs4EELS) : ∃ d cl, r = .done (.halted d) cl ∧
+    d.gasLeft = gas4 ∧ d.output = word 106 ∧ d.error = none ∧ cl.keys = keys4 ∧
+    cl.adrs = adrs4 ∧ cl.stor = storA ∧ cl.acs = acsA := by
   rcases r with c | ⟨d | d, cl⟩ | _
   · simp [obs4, obs4EELS] at h
   · simp only [obs4, obs4EELS, Option.some.injEq, Prod.mk.injEq, Bool.and_eq_true,
       decide_eq_true_eq] at h
     obtain ⟨hg, ho, ⟨⟨⟨he, hk⟩, ha⟩, hs⟩, hc⟩ := h
-    refine ⟨rfl, hg, List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) ho,
+    exact ⟨d, cl, rfl, hg, List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) ho,
       Option.isNone_iff_eq_none.mp he, hk, ha, hs, hc⟩
   · simp [obs4, obs4EELS] at h
   · simp [obs4, obs4EELS] at h
+
+theorem r4_facts : r4 = .done (.halted post4) cl4 ∧ post4.gasLeft = gas4 ∧
+    post4.output = word 106 ∧ post4.error = none ∧ cl4.keys = keys4 ∧ cl4.adrs = adrs4 ∧
+    cl4.stor = storA ∧ cl4.acs = acsA := by
+  obtain ⟨d, cl, hr, h⟩ := obs4_facts frame4_kernel
+  have hd : post4 = d := congrArg haltedOf hr
+  have hc : cl4 = cl := congrArg haltCfgOf hr
+  subst hd hc
+  exact ⟨hr, h⟩
 
 /-- **Frame 4 as the proxy's child.** -/
 theorem frame4_child : Nonempty (Exec e4.pc e4.sta e4.dyna (.ok post4)) ∧

@@ -14,6 +14,8 @@ namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree
 open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.ConcreteRun
 open Blanc.Lift.VyperNonreentrantDeployed Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
 
+attribute [local irreducible] cfg339 e2 cc2 aCall cp3 e3 cp4 e4 post4 post3
+
 /-- The proxy frame's settled machine as the attacker's child, its observed parts as
 literals. -/
 abbrev obsChild3 (d : Devm) : Devm := childObs gas3 (word 106) d
@@ -41,21 +43,22 @@ theorem e2_code : e2.sta.code = Attacker.code := byteArray_eq_of_toList (by deci
 theorem e2_fork : CoveredFork e2.sta.benvStat.fork := of_decide_eq_true (by decide +kernel)
 
 /-- The attacker frame's settled machine. -/
-def post2 : Devm := match run2 post3 with | .done (.halted d) _ => d | _ => default
+def post2 : Devm := haltedOf (run2 post3)
 
-/-- **The attacker's subtree as frame 1's child** (EELS frames 2-4). -/
-theorem attacker_child : ChildOk sevm1 cfg339 post2 ∧ ChildAgree post2 keysA adrsA storA acsA ∧
-    post2.gasLeft = gasA ∧ post2.output = [] ∧ post2.error = none := by
-  obtain ⟨k3, a3, g3, o3, e3'⟩ := frame3_child
-  have hk := frame2_kernel post3
-  rw [show obsChild3 post3 = post3 from childObs_eq g3 o3 e3'] at hk
-  cases hc : callResume e2.sta aCall post3 keys3 adrs3' storA acsA with
-  | none => simp [run2, hc, obs2] at hk
-  | some c =>
-    have hrun2 : run2 post3 = wrun fs2 e2.sta 2 c := by simp only [run2, hc]
-    rw [hrun2] at hk
-    unfold post2
-    rw [hrun2]
+/-- The attacker's frame from any settled proxy frame `d3` that is the `CALL`'s child with
+the proxy frame's gas, output, success and shadows. -/
+theorem attacker_of_child (d3 : Devm) (k3 : ChildOk e2.sta aCall d3)
+    (a3 : ChildAgree d3 keys3 adrs3' storA acsA) (g3 : d3.gasLeft = gas3)
+    (o3 : d3.output = word 106) (e3' : d3.error = none) :
+    ChildOk sevm1 cfg339 (haltedOf (run2 d3)) ∧
+      ChildAgree (haltedOf (run2 d3)) keysA adrsA storA acsA ∧
+      (haltedOf (run2 d3)).gasLeft = gasA ∧ (haltedOf (run2 d3)).output = [] ∧
+      (haltedOf (run2 d3)).error = none := by
+  have hk := frame2_kernel d3
+  rw [show obsChild3 d3 = d3 from childObs_eq g3 o3 e3'] at hk
+  unfold run2 at hk ⊢
+  split at hk
+  · rename_i c hc
     generalize hr : wrun fs2 e2.sta 2 c = r at hk ⊢
     rcases r with c' | ⟨d | d, cl⟩ | _
     · simp [obs2] at hk
@@ -72,6 +75,13 @@ theorem attacker_child : ChildOk sevm1 cfg339 post2 ∧ ChildAgree post2 keysA a
         herr⟩
     · simp [obs2] at hk
     · simp [obs2] at hk
+  · simp [obs2] at hk
+
+/-- **The attacker's subtree as frame 1's child** (EELS frames 2-4). -/
+theorem attacker_child : ChildOk sevm1 cfg339 post2 ∧ ChildAgree post2 keysA adrsA storA acsA ∧
+    post2.gasLeft = gasA ∧ post2.output = [] ∧ post2.error = none :=
+  let ⟨k3, a3, g3, o3, e3'⟩ := frame3_child
+  attacker_of_child post3 k3 a3 g3 o3 e3'
 
 /-- **Frame 1 of the V- witness, closed.**  `remove_liquidity(200, [0, 0], A)` on the
 deployed 0x6326 certificate, with its attacker subtree (the reentrant `add_liquidity`

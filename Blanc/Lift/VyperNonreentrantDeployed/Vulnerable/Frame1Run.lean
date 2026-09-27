@@ -40,9 +40,9 @@ def keysA : List (Adr × B256) :=
    (proxyAddress, (2 : Nat).toB256)]
 
 def adrsA : List Adr :=
-  [proxyAddress, attackerAddress, (4 : Adr), implementationAddress, proxyAddress,
-   attackerAddress, (4 : Adr), implementationAddress, implementationAddress, proxyAddress,
-   attackerAddress, (4 : Adr), implementationAddress]
+  [proxyAddress, attackerAddress, (4 : Adr), implementationAddress, implementationAddress,
+   proxyAddress, attackerAddress, (4 : Adr), implementationAddress, implementationAddress,
+   proxyAddress, attackerAddress, (4 : Adr), implementationAddress]
 
 /-- `P`'s storage after the reentrant `add_liquidity` (newest first): its lock (slot 0)
 taken and released, `totalSupply = balanceOf[A] = 2106`, `balances = [1000, 1000]`; below
