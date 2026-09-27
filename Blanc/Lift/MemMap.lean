@@ -1,4 +1,6 @@
-import Blanc.Lift.Sound
+import Blanc.Lift.CheckMem
+import Blanc.LadderSem
+import Blanc.ExecutionFrames
 
 /-!
 # A constant memory map for lifted frames (piece D, foundations)
@@ -15,16 +17,24 @@ size).  The invariant keeps every recorded word below the logical size, and
 window in all three of its branches (`Mem.write_agree`), so the map survives
 disjoint writes on any memory, well-formed or not.
 
-The transfer (`absMem`) and its per-instruction soundness live beside this
-file's facts; the checker threading is the next unit.
+The transfer (`absMem`, `memTop`, in `Blanc/Lift/CheckMem.lean`) is sound
+instruction by instruction (`absMem_sound`, `memTop_sound`).  `AVal.Matches`
+and `FrameMatches`, the frame invariant of `Blanc/Lift/Sound.lean`, live here so
+that the memory invariant can be stated beside them.
 -/
 
 namespace Blanc.Lift
 
 open Jaune
 
-/-- Abstract words at fixed memory offsets. -/
-abbrev MemMap : Type := List (Nat × AVal)
+/-- One abstract word describes one concrete word, reading `.ret` as `ρ`. -/
+def AVal.Matches (ρ : B256) : AVal → B256 → Prop
+  | .const c, w => w = c
+  | .ret, w => w = ρ
+  | .unk, _ => True
+
+def FrameMatches (ρ : B256) (a : List AVal) (s : List B256) : Prop :=
+  List.Forall₂ (AVal.Matches ρ) a s
 
 /-- The word memory holds at offset `o`, as `MLOAD` reads it. -/
 def memWord (μ : Mem) (o : Nat) : B256 := Bytes.toB256 (μ.read o 32).1
@@ -32,10 +42,6 @@ def memWord (μ : Mem) (o : Nat) : B256 := Bytes.toB256 (μ.read o 32).1
 /-- Every recorded word lies below the logical size and reads as recorded. -/
 def MemMatches (ρ : B256) (mem : MemMap) (μ : Mem) : Prop :=
   ∀ o v, (o, v) ∈ mem → o + 32 ≤ μ.size ∧ AVal.Matches ρ v (memWord μ o)
-
-/-- Forget every word overlapping the window `[lo, hi)`. -/
-def memKill (mem : MemMap) (lo hi : Nat) : MemMap :=
-  mem.filter fun p => decide (p.1 + 32 ≤ lo) || decide (hi ≤ p.1)
 
 /-- `μ'` is at least as large as `μ` and agrees with it below `μ`'s size outside
 `[lo, hi)`. -/
@@ -228,23 +234,6 @@ theorem memKeep_pushItem {d d' : Devm} {x : B256} {c : Nat} (h : pushItem x c d 
   rw [pushItem_def] at h
   exact .of_eq (Devm.pushBurn_of_run h).memory
 
-/-- Regular instructions whose successful step leaves every memory byte as it
-was and never shrinks the logical size (a read may extend it). -/
-def rinstMemKeeps : Rinst → Bool
-  | .add | .mul | .sub | .div | .sdiv | .mod | .smod | .signextend | .lt | .gt | .slt
-  | .sgt | .eq | .and | .or | .xor | .byte | .shl | .shr | .sar | .iszero | .not
-  | .address | .origin | .caller | .callvalue | .calldatasize | .codesize | .gasprice
-  | .returndatasize | .coinbase | .timestamp | .number | .prevrandao | .gaslimit | .chainid
-  | .basefee | .blobbasefee | .msize
-  | .pop | .calldataload | .mload | .keccak256 | .dup _ | .swap _ => true
-  | _ => false
-
-/-- Every `PUSH`, and the regular instructions of `rinstMemKeeps`. -/
-def ninstMemKeeps : Ninst → Bool
-  | .push _ _ => true
-  | .reg r => rinstMemKeeps r
-  | _ => false
-
 theorem rinstMemKeeps_run {pc : Nat} {sevm : Sevm} {devm devm' : Devm} {r : Rinst}
     (hr : rinstMemKeeps r = true) (h : Rinst.runCore pc devm sevm r = .ok devm') :
     MemKeep devm devm' := by
@@ -293,6 +282,93 @@ theorem rinstMemKeeps_run {pc : Nat} {sevm : Sevm} {devm devm' : Devm} {r : Rins
     · cases h2
     · cases h2
       exact (memKeep_chargeGas h1).trans ⟨rfl, Nat.le_refl _⟩
+  case sload =>
+    obtain ⟨⟨x, d1⟩, h1, e1⟩ := Except.bind_eq_ok h
+    split at e1
+    · obtain ⟨d2, h2, h3⟩ := Except.bind_eq_ok e1
+      have k3 := memKeep_push h3
+      have k2 : MemKeep d2 (Devm.balReadStorage sevm.benvStat.rules sevm.currentTarget x d2) :=
+        MemKeep.of_eq rfl
+      exact (memKeep_pop h1).trans ((memKeep_chargeGas h2).trans (k2.trans k3))
+    · obtain ⟨d2, h2, h3⟩ := Except.bind_eq_ok e1
+      have k3 := memKeep_push h3
+      have k2 : MemKeep d2 (Devm.balReadStorage sevm.benvStat.rules sevm.currentTarget x d2) :=
+        MemKeep.of_eq rfl
+      have k1 : MemKeep d1 (addAccessedStorageKey d1 sevm.currentTarget x) := MemKeep.of_eq rfl
+      exact (memKeep_pop h1).trans (k1.trans ((memKeep_chargeGas h2).trans (k2.trans k3)))
+  case tload =>
+    obtain ⟨⟨x, d1⟩, h1, h2⟩ := Except.bind_eq_ok h
+    exact (memKeep_pop h1).trans (memKeep_pushItem h2)
+  case log n =>
+    obtain ⟨⟨mi, d1⟩, h1, e1⟩ := Except.bind_eq_ok h
+    obtain ⟨⟨sz, d2⟩, h2, e2⟩ := Except.bind_eq_ok e1
+    obtain ⟨⟨tp, d3⟩, h3, e3⟩ := Except.bind_eq_ok e2
+    obtain ⟨d4, h4, e4⟩ := Except.bind_eq_ok e3
+    obtain ⟨_, h5, h6⟩ := Except.bind_eq_ok e4
+    cases h6
+    have hk3 : MemKeep d2 d3 := .of_eq (Devm.pop_of_popN h3).2.memory
+    exact (memKeep_popToNat h1).trans ((memKeep_popToNat h2).trans (hk3.trans
+      ((memKeep_chargeGas h4).trans ((MemKeep.memRead d4 mi sz).trans ⟨rfl, Nat.le_refl _⟩))))
+  case tstore =>
+    split at h
+    · obtain ⟨⟨x, d1⟩, h1, e1⟩ := Except.bind_eq_ok h
+      obtain ⟨⟨y, d2⟩, h2, e2⟩ := Except.bind_eq_ok e1
+      obtain ⟨d3, h3, e3⟩ := Except.bind_eq_ok e2
+      obtain ⟨_, _, h5⟩ := Except.bind_eq_ok e3
+      cases h5
+      have k4 : MemKeep d3 (d3.setTransVal sevm.currentTarget x y) := MemKeep.of_eq rfl
+      exact (memKeep_pop h1).trans ((memKeep_pop h2).trans ((memKeep_chargeGas h3).trans k4))
+    · obtain ⟨_, _, e0⟩ := Except.bind_eq_ok h
+      obtain ⟨⟨x, d1⟩, h1, e1⟩ := Except.bind_eq_ok e0
+      obtain ⟨⟨y, d2⟩, h2, e2⟩ := Except.bind_eq_ok e1
+      obtain ⟨d3, h3, h5⟩ := Except.bind_eq_ok e2
+      cases h5
+      have k4 : MemKeep d3 (d3.setTransVal sevm.currentTarget x y) := MemKeep.of_eq rfl
+      exact (memKeep_pop h1).trans ((memKeep_pop h2).trans ((memKeep_chargeGas h3).trans k4))
+  case sstore =>
+    split at h
+    · obtain ⟨⟨x, d1⟩, h1, e1⟩ := Except.bind_eq_ok h
+      obtain ⟨⟨y, d2⟩, h2, e2⟩ := Except.bind_eq_ok e1
+      obtain ⟨_, _, e3⟩ := Except.bind_eq_ok e2
+      obtain ⟨⟨d3, g⟩, h4, e4⟩ := Except.bind_eq_ok e3
+      obtain ⟨g3, h5, e5⟩ := Except.bind_eq_ok e4
+      obtain ⟨d4, h6, e6⟩ := Except.bind_eq_ok e5
+      obtain ⟨d5, h7, e7⟩ := Except.bind_eq_ok e6
+      obtain ⟨_, _, h9⟩ := Except.bind_eq_ok e7
+      cases h9
+      have m3 : d3.memory = d2.memory := by
+        injection h4 with eq
+        split at eq <;> (injection eq with eq _; subst eq; rfl)
+      have m4 : d4.memory = d3.memory := by
+        injection h6 with eq; rw [← eq]; rfl
+      apply MemKeep.of_eq
+      show devm.memory = d5.memory
+      rw [← (Devm.burn_of_chargeGas h7).memory, m4, m3, ← (Devm.pop_of_pop h2).memory,
+        ← (Devm.pop_of_pop h1).memory]
+    · obtain ⟨_, _, e0⟩ := Except.bind_eq_ok h
+      obtain ⟨⟨x, d1⟩, h1, e1⟩ := Except.bind_eq_ok e0
+      obtain ⟨⟨y, d2⟩, h2, e2⟩ := Except.bind_eq_ok e1
+      obtain ⟨_, _, e3⟩ := Except.bind_eq_ok e2
+      obtain ⟨d3, hchg, e4⟩ := Except.bind_eq_ok e3
+      obtain ⟨d4, hstg, h9⟩ := Except.bind_eq_ok e4
+      cases h9
+      have mc := (Devm.burn_of_chargeGas hchg).memory
+      have ms := Devm.chargeStateGas_memory hstg
+      apply MemKeep.of_eq
+      show devm.memory = d4.memory
+      rw [ms, ← mc]
+      have e1 : ∀ (a : Nat) (d : Devm), (Devm.creditStateGasRefund a d).memory = d.memory :=
+        fun _ _ => rfl
+      have e2 : ∀ (r : Int) (d : Devm), (d.withRefundCounter r).memory = d.memory :=
+        fun _ _ => rfl
+      have e3 : ∀ (rl : ForkRules) (a : Adr) (k : B256) (d : Devm),
+          (Devm.balReadStorage rl a k d).memory = d.memory := fun _ _ _ _ => rfl
+      have e4 : ∀ (d : Devm) (a : Adr) (k : B256),
+          (addAccessedStorageKey d a k).memory = d.memory := fun _ _ _ => rfl
+      rw [e1, e2, e3]
+      split
+      · rw [e4, ← (Devm.pop_of_pop h2).memory, ← (Devm.pop_of_pop h1).memory]
+      · rw [← (Devm.pop_of_pop h2).memory, ← (Devm.pop_of_pop h1).memory]
 
 theorem ninstMemKeeps_run {sevm : Sevm} {pre post : Devm} {n : Ninst}
     (hn : ninstMemKeeps n = true) (run : Ninst.Run sevm pre n post) : MemKeep pre post := by
@@ -396,22 +472,6 @@ theorem mload_run_stack {sevm : Sevm} {pre post : Devm} {o : B256} {rest : List 
 
 /-! ## The memory transfer -/
 
-/-- The map after one instruction: `MSTORE` at a constant offset records its
-value, `CALLDATACOPY` over a constant window forgets what it overlaps, an
-instruction of `ninstMemKeeps` keeps the map, and anything else forgets it. -/
-def absMem (n : Ninst) (a : List AVal) (mem : MemMap) : MemMap :=
-  match n, a with
-  | .reg .mstore, .const o :: v :: _ => (o.toNat, v) :: memKill mem o.toNat (o.toNat + 32)
-  | .reg .calldatacopy, .const d :: _ :: .const z :: _ =>
-    memKill mem d.toNat (d.toNat + z.toNat)
-  | n, _ => if ninstMemKeeps n then mem else []
-
-/-- The word an `MLOAD` at a constant offset reads, when the map records it. -/
-def memTop (n : Ninst) (a : List AVal) (mem : MemMap) : Option AVal :=
-  match n, a with
-  | .reg .mload, .const o :: _ => mem.lookup o.toNat
-  | _, _ => none
-
 theorem mem_of_lookup_eq_some {mem : MemMap} {o : Nat} {v : AVal}
     (h : mem.lookup o = some v) : (o, v) ∈ mem := by
   induction mem with
@@ -465,5 +525,111 @@ theorem memTop_sound {sevm : Sevm} {pre post : Devm} {n : Ninst} {a : List AVal}
     exact ⟨_, _, mload_run_stack run (by simpa using hstack),
       (hm _ _ (mem_of_lookup_eq_some ht)).2⟩
   · cases ht
+
+/-- One checked instruction step keeps both invariants: the frame refined by a
+recorded `MLOAD` result still describes the stack, and the transferred map
+still describes memory. -/
+theorem step_mem_sound (b : Bool) {sevm : Sevm} {pre post : Devm} {n : Ninst}
+    {a a' : List AVal} {μ : MemMap} {ρ : B256} {S S' base : List B256}
+    (hframe : FrameMatches ρ a S) (hstack : pre.stack = S ++ base)
+    (hm : MemMatches ρ μ pre.memory) (run : Ninst.Run sevm pre n post)
+    (hpost : post.stack = S' ++ base) (h' : FrameMatches ρ a' S') :
+    FrameMatches ρ (if b then memFold (memTop n a μ) a' else a') S' ∧
+      MemMatches ρ (if b then absMem n a μ else []) post.memory := by
+  cases b with
+  | false => exact ⟨h', memMatches_nil _ _⟩
+  | true =>
+    refine ⟨?_, absMem_sound hframe hstack hm run⟩
+    simp only [if_true]
+    cases ht : memTop n a μ with
+    | none => cases a' <;> exact h'
+    | some v =>
+      obtain ⟨w, rest, hw, hv⟩ := memTop_sound ht hframe hstack hm run
+      cases h' with
+      | nil => exact List.Forall₂.nil
+      | @cons x s t T _ htail =>
+        refine List.Forall₂.cons ?_ htail
+        have := hpost.symm.trans hw
+        simp only [List.cons_append, List.cons.injEq] at this
+        rw [this.1]
+        exact hv
+
+/-- A goto's declared map is recorded identically by the current one. -/
+theorem MemMatches.of_memCompat {ρ : B256} {cur decl : MemMap} {μ : Mem}
+    (hc : memCompat cur decl = true) (hm : MemMatches ρ cur μ) : MemMatches ρ decl μ := by
+  intro o v hov
+  have h := List.all_eq_true.mp hc (o, v) hov
+  simp only [beq_iff_eq] at h
+  exact hm o v (mem_of_lookup_eq_some h)
+
+theorem MemMatches.of_memory_eq {ρ : B256} {mem : MemMap} {μ μ' : Mem} (h : μ = μ')
+    (hm : MemMatches ρ mem μ) : MemMatches ρ mem μ' := h ▸ hm
+
+/-! ## Where the return address can be -/
+
+/-- The current function's return address occurs in the frame or the map. -/
+def RetIn (a : List AVal) (μ : MemMap) : Prop :=
+  AVal.ret ∈ a ∨ AVal.ret ∈ μ.map Prod.snd
+
+theorem RetIn.of_frame {a a' : List AVal} {μ : MemMap} (h : AVal.ret ∈ a' → AVal.ret ∈ a)
+    (hr : RetIn a' μ) : RetIn a μ := hr.imp_left h
+
+theorem retIn_nil_nil : ¬ RetIn [] [] := by simp [RetIn]
+
+theorem mem_snd_memKill {mem : MemMap} {lo hi : Nat} {v : AVal}
+    (h : v ∈ (memKill mem lo hi).map Prod.snd) : v ∈ mem.map Prod.snd := by
+  simp only [List.mem_map] at h ⊢
+  obtain ⟨p, hp, rfl⟩ := h
+  exact ⟨p, List.mem_of_mem_filter hp, rfl⟩
+
+theorem mem_snd_absMem {n : Ninst} {a : List AVal} {mem : MemMap} {v : AVal}
+    (h : v ∈ (absMem n a mem).map Prod.snd) : v ∈ a ∨ v ∈ mem.map Prod.snd := by
+  unfold absMem at h
+  split at h
+  · rw [List.map_cons] at h
+    rcases List.mem_cons.mp h with h | h
+    · left; subst h; simp
+    · right; exact mem_snd_memKill h
+  · right; exact mem_snd_memKill h
+  · split at h
+    · exact .inr h
+    · simp at h
+
+/-- The return address after a checked step was already in the frame or the map. -/
+theorem RetIn.of_step (b : Bool) {n : Ninst} {a a' : List AVal} {μ : MemMap}
+    (h : RetIn (if b then memFold (memTop n a μ) a' else a') (if b then absMem n a μ else [])) :
+    AVal.ret ∈ a' ∨ AVal.ret ∈ a ∨ AVal.ret ∈ μ.map Prod.snd := by
+  cases b with
+  | false =>
+    rcases h with h | h
+    · exact .inl (by simpa using h)
+    · simp at h
+  | true =>
+    simp only [if_true] at h
+    rcases h with h | h
+    · cases ht : memTop n a μ with
+      | none => rw [ht] at h; exact .inl (by cases a' <;> exact h)
+      | some v =>
+        rw [ht] at h
+        cases a' with
+        | nil => exact .inl h
+        | cons x t =>
+          rcases List.mem_cons.mp h with h | h
+          · subst h
+            unfold memTop at ht
+            split at ht
+            · exact .inr (.inr (List.mem_map.mpr ⟨_, mem_of_lookup_eq_some ht, rfl⟩))
+            · cases ht
+          · exact .inl (List.mem_cons_of_mem _ h)
+    · exact .inr (mem_snd_absMem h)
+
+/-- A goto's declared map is contained in the current one. -/
+theorem mem_snd_of_memCompat {cur decl : MemMap} {v : AVal} (hc : memCompat cur decl = true)
+    (h : v ∈ decl.map Prod.snd) : v ∈ cur.map Prod.snd := by
+  simp only [List.mem_map] at h ⊢
+  obtain ⟨⟨o, w⟩, hp, rfl⟩ := h
+  have hl := List.all_eq_true.mp hc (o, w) hp
+  simp only [beq_iff_eq] at hl
+  exact ⟨(o, w), mem_of_lookup_eq_some hl, rfl⟩
 
 end Blanc.Lift

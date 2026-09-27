@@ -417,4 +417,194 @@ theorem jumpsOkNodeT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es 
       · simp [P]
   exact (hall f).1 a
 
+/-! ## The memory-tracking checkers, reading from tries -/
+
+/-- `checkNodeM`, reading bytes from the trie `t` (arm by arm as `checkNodeT`). -/
+def checkNodeMT (code : ByteArray) (d : Nat) (t : LTrie UInt8) (es : List Entry)
+    (ms : List MemMap) (b : Bool) (m : Nat) : Nat → List AVal → MemMap → SFunc → Bool
+  | pc, a, μ, .next n f =>
+    bytesAtT d t pc (Ninst.toBytes n) && Ninst.pcFree n &&
+      match absNinst n a with
+      | some a' =>
+        checkNodeMT code d t es ms b m (pc + n.size) (if b then memFold (memTop n a μ) a' else a')
+          (if b then absMem n a μ else []) f
+      | none => false
+  | pc, _, _, .last l => LTrie.get? d t pc == some l.toUInt8
+  | pc, a, μ, .dest f =>
+    LTrie.get? d t pc == some (Jinst.toUInt8 .jumpdest) &&
+      checkNodeMT code d t es ms b m (pc + 1) a μ f
+  | pc, a, μ, .branch f g =>
+    match a with
+    | .const tg :: v :: a' =>
+      LTrie.get? d t pc == some (Jinst.toUInt8 .jumpi) &&
+        (v.jumps? == some true || checkNodeMT code d t es ms b m (pc + 1) a' μ f) &&
+        (v.jumps? == some false || checkNodeMT code d t es ms b m tg.toNat a' μ g)
+    | _ => false
+  | pc, a, μ, .branchTo f k =>
+    match a, es[k]? with
+    | .const tg :: v :: a', some e =>
+      LTrie.get? d t pc == some (Jinst.toUInt8 .jumpi) && e.pc == tg.toNat &&
+        e.rets == m && gotoCompat a' e.frame && memCompat μ (ms.getD k []) &&
+        (v.jumps? == some true || checkNodeMT code d t es ms b m (pc + 1) a' μ f)
+    | _, _ => false
+  | pc, a, μ, .jump k =>
+    match a, es[k]? with
+    | .const tg :: a', some e =>
+      LTrie.get? d t pc == some (Jinst.toUInt8 .jump) && e.pc == tg.toNat &&
+        e.rets == m && gotoCompat a' e.frame && memCompat μ (ms.getD k [])
+    | _, _ => false
+  | pc, a, _, .callNext k f =>
+    match a, f, es[k]? with
+    | .const tg :: a', .dest _, some e =>
+      LTrie.get? d t pc == some (Jinst.toUInt8 .jump) && e.pc == tg.toNat &&
+        decide (e.frame.length ≤ a'.length) && (ms.getD k []).isEmpty &&
+        (match e.frame.findIdx? (· == .ret) with
+         | some i =>
+           match a'[i]? with
+           | some (.const r) =>
+             callCompat r a' e.frame &&
+               checkNodeMT code d t es ms b m r.toNat
+                 (List.replicate e.rets .unk ++ a'.drop e.frame.length) [] f
+           | _ => false
+         | none => callCompat 0 a' e.frame)
+    | _, _, _ => false
+  | pc, a, _, .ret =>
+    match a with
+    | .ret :: a' => LTrie.get? d t pc == some (Jinst.toUInt8 .jump) && a'.length == m
+    | _ => false
+  | pc, a, μ, .pcAt p f =>
+    bytesAtT d t pc (Ninst.toBytes (.reg .pc)) && p == pc &&
+      checkNodeMT code d t es ms b m (pc + 1) (.const (Nat.toB256 pc) :: a) μ f
+  | pc, _, _, .undefined => (code.getInst pc).isNone
+
+theorem checkNodeMT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es : List Entry)
+    (ms : List MemMap) (b : Bool) (m pc : Nat) (a : List AVal) (μ : MemMap) (f : SFunc) :
+    checkNodeMT code d T.bytes es ms b m pc a μ f = checkNodeM code es ms b m pc a μ f := by
+  let Q : SFunc → Prop := fun f =>
+    ∀ (pc : Nat) (a : List AVal) (μ : MemMap),
+      checkNodeMT code d T.bytes es ms b m pc a μ f = checkNodeM code es ms b m pc a μ f
+  let P : SFunc → Prop := fun f =>
+    Q f ∧ match f with
+    | .dest g => Q g
+    | _ => True
+  have hall : ∀ f : SFunc, P f := by
+    intro f
+    induction f with
+    | next n f ih =>
+      refine ⟨fun pc a μ => ?_, by simp [P]⟩
+      cases h : absNinst n a <;>
+        simp [Q, checkNodeMT, checkNodeM, byteAt, bytesAtT_eq T.bytes_eq, ih.1, h]
+    | last l => exact ⟨fun pc a μ => by simp [Q, checkNodeMT, checkNodeM, byteAt, T.bytes_eq],
+        by simp [P]⟩
+    | dest f ih =>
+      exact ⟨fun pc a μ => by simp [Q, checkNodeMT, checkNodeM, byteAt, T.bytes_eq, ih.1], ih.1⟩
+    | branch f g ihf ihg =>
+      refine ⟨fun pc a μ => ?_, by simp [P]⟩
+      rcases a with _ | ⟨_ | _ | _, _ | ⟨_, a⟩⟩ <;>
+        simp [Q, checkNodeMT, checkNodeM, byteAt, T.bytes_eq, ihf.1, ihg.1]
+    | branchTo f k ih =>
+      refine ⟨fun pc a μ => ?_, by simp [P]⟩
+      rcases a with _ | ⟨_ | _ | _, _ | ⟨_, a⟩⟩ <;> cases h : es[k]? <;>
+        simp [Q, checkNodeMT, checkNodeM, byteAt, T.bytes_eq, ih.1, h]
+    | jump k =>
+      refine ⟨fun pc a μ => ?_, by simp [P]⟩
+      rcases a with _ | ⟨_ | _ | _, a⟩ <;> cases h : es[k]? <;>
+        simp [Q, checkNodeMT, checkNodeM, byteAt, T.bytes_eq, h]
+    | callNext k f ih =>
+      refine ⟨fun pc a μ => ?_, by simp [P]⟩
+      rcases a with _ | ⟨_ | _ | _, a⟩ <;> cases f <;> cases h : es[k]? <;>
+        simp [Q, checkNodeMT, checkNodeM, byteAt, T.bytes_eq, ih.1, ih.2, h, *] <;> rfl
+    | ret =>
+      exact ⟨fun pc a μ => by
+        rcases a with _ | ⟨_ | _ | _, a⟩ <;> simp [Q, checkNodeMT, checkNodeM, byteAt, T.bytes_eq],
+        by simp [P]⟩
+    | pcAt p f ih =>
+      exact ⟨fun pc a μ => by
+        simp [Q, checkNodeMT, checkNodeM, bytesAtT_eq T.bytes_eq, ih.1], by simp [P]⟩
+    | undefined => exact ⟨fun pc a μ => rfl, by simp [P]⟩
+  exact (hall f).1 pc a μ
+
+/-- `jumpsOkNodeM` with `jumpdestOk` replaced by `jumpdestOkT`. -/
+def jumpsOkNodeMT (code : ByteArray) (d : Nat) (T : CodeTries code d) (es : List Entry)
+    (b : Bool) : SFunc → List AVal → MemMap → Bool
+  | .next n f, a, μ =>
+    match absNinst n a with
+    | some a' => jumpsOkNodeMT code d T es b f (if b then memFold (memTop n a μ) a' else a')
+        (if b then absMem n a μ else [])
+    | none => true
+  | .last _, _, _ => true
+  | .dest f, a, μ => jumpsOkNodeMT code d T es b f a μ
+  | .branch f g, a, μ =>
+    match a with
+    | .const t :: v :: a' =>
+      (v.jumps? == some true || jumpsOkNodeMT code d T es b f a' μ) &&
+        (v.jumps? == some false ||
+          (jumpdestOkT code d T t.toNat && jumpsOkNodeMT code d T es b g a' μ))
+    | _ => false
+  | .branchTo f k, a, μ =>
+    match a, es[k]? with
+    | .const _ :: v :: a', some e =>
+      jumpdestOkT code d T e.pc && (v.jumps? == some true || jumpsOkNodeMT code d T es b f a' μ)
+    | _, _ => false
+  | .jump k, a, _ =>
+    match a, es[k]? with
+    | .const _ :: _, some e => jumpdestOkT code d T e.pc
+    | _, _ => false
+  | .callNext k f, a, _ =>
+    match a, f, es[k]? with
+    | .const _ :: a', .dest dd, some e =>
+      jumpdestOkT code d T e.pc &&
+        match e.frame.findIdx? (· == .ret) with
+        | some i =>
+          match a'[i]? with
+          | some (.const r) =>
+            jumpdestOkT code d T r.toNat &&
+              jumpsOkNodeMT code d T es b dd
+                (List.replicate e.rets .unk ++ a'.drop e.frame.length) []
+          | _ => false
+        | none => true
+    | _, _, _ => false
+  | .ret, _, _ => true
+  | .pcAt p f, a, μ => jumpsOkNodeMT code d T es b f (.const (Nat.toB256 p) :: a) μ
+  | .undefined, _, _ => true
+
+theorem jumpsOkNodeMT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es : List Entry)
+    (b : Bool) (f : SFunc) (a : List AVal) (μ : MemMap) :
+    jumpsOkNodeMT code d T es b f a μ = jumpsOkNodeM code es b f a μ := by
+  let Q : SFunc → Prop := fun f =>
+    ∀ (a : List AVal) (μ : MemMap), jumpsOkNodeMT code d T es b f a μ = jumpsOkNodeM code es b f a μ
+  let P : SFunc → Prop := fun f =>
+    Q f ∧ match f with
+    | .dest g => Q g
+    | _ => True
+  have hall : ∀ f : SFunc, P f := by
+    intro f
+    induction f with
+    | next n f ih =>
+      refine ⟨fun a μ => ?_, by simp [P]⟩
+      cases h : absNinst n a <;> simp [Q, jumpsOkNodeMT, jumpsOkNodeM, ih.1, h]
+    | last l => exact ⟨fun a μ => rfl, by simp [P]⟩
+    | dest f ih => exact ⟨fun a μ => by simp [Q, jumpsOkNodeMT, jumpsOkNodeM, ih.1], ih.1⟩
+    | branch f g ihf ihg =>
+      refine ⟨fun a μ => ?_, by simp [P]⟩
+      rcases a with _ | ⟨_ | _ | _, _ | ⟨_, a⟩⟩ <;>
+        simp [Q, jumpsOkNodeMT, jumpsOkNodeM, jumpdestOkT_eq T, ihf.1, ihg.1]
+    | branchTo f k ih =>
+      refine ⟨fun a μ => ?_, by simp [P]⟩
+      rcases a with _ | ⟨_ | _ | _, _ | ⟨_, a⟩⟩ <;> cases h : es[k]? <;>
+        simp [Q, jumpsOkNodeMT, jumpsOkNodeM, jumpdestOkT_eq T, ih.1, h]
+    | jump k =>
+      refine ⟨fun a μ => ?_, by simp [P]⟩
+      rcases a with _ | ⟨_ | _ | _, a⟩ <;> cases h : es[k]? <;>
+        simp [Q, jumpsOkNodeMT, jumpsOkNodeM, jumpdestOkT_eq T, h]
+    | callNext k f ih =>
+      refine ⟨fun a μ => ?_, by simp [P]⟩
+      rcases a with _ | ⟨_ | _ | _, a⟩ <;> cases f <;> cases h : es[k]? <;>
+        simp [Q, jumpsOkNodeMT, jumpsOkNodeM, jumpdestOkT_eq T, ih.1, ih.2, h, *] <;> rfl
+    | ret => exact ⟨fun a μ => rfl, by simp [P]⟩
+    | pcAt p f ih =>
+      exact ⟨fun a μ => by simp [Q, jumpsOkNodeMT, jumpsOkNodeM, ih.1], by simp [P]⟩
+    | undefined => exact ⟨fun a μ => rfl, by simp [P]⟩
+  exact (hall f).1 a μ
+
 end Blanc.Lift
