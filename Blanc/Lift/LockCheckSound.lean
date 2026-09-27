@@ -5,7 +5,8 @@ import Blanc.LockExclusion
 /-!
 # Soundness of the reentrancy-lock checker
 
-`LockCheck.dominance`: for any certificate `c` with `Cert.check code c` and
+`LockCheck.dominance` (proved in `Blanc/Lift/LockCheckFlow.lean` from this
+module): for any certificate `c` with `Cert.check code c` and
 `lockCert sp c ann`, every frame running `code` from pc `0` on a covered fork
 whose executed hashes avoid the slot meets the dominance obligation of
 `Blanc/LockExclusion.lean` (every body start and every slot-addressed

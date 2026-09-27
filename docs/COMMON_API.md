@@ -2685,6 +2685,21 @@ contract-neutral.
   node spawns only by `CALL`/`STATICCALL`), in
   [`Blanc/Lift/Cursor.lean`](../Blanc/Lift/Cursor.lean). Use it for safety facts
   about reverting or out-of-gas frames, which `lift_sound` cannot see.
+- A reentrancy lock's `LockSpec.Dominance` from a certificate (all outcomes):
+  the checker `LockCheck.Spec`/`LockCheck.lockCert` (one Boolean walk with
+  producer annotations from `scripts/lift/lift.py --lock-spec`) in
+  [`Blanc/Lift/LockCheck.lean`](../Blanc/Lift/LockCheck.lean); the fact
+  semantics in [`Blanc/Lift/LockCheckSound.lean`](../Blanc/Lift/LockCheckSound.lean);
+  `LockCheck.dominance`, its strong form `LockCheck.dominance_strong` (only
+  release pcs write the slot after a mutating body start) and
+  `LockCheck.no_forbidden`, over the invariant `LockOK`/`LConts`,
+  `lock_step` and `lock_of_parentPrefix`, in
+  [`Blanc/Lift/LockCheckFlow.lean`](../Blanc/Lift/LockCheckFlow.lean), which
+  also holds the step facts `LockCheck.pp_back` (a node strictly before a
+  successor precedes the node), `LockCheck.lockAt_edge` (one cell across a
+  same-frame edge that spawns nothing and stores elsewhere) and
+  `LockCheck.cursor_sstore_node`. Worked use:
+  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/LockDominance.lean`.
 - Lifted run to execution (liveness, exact gas): `SFunc.RunExact`,
   `Cert.jumpsOk` and `lift_exact` in [`Blanc/Lift/Exact.lean`](../Blanc/Lift/Exact.lean);
   the per-instruction walk steps (`rx_push`, `rx_sload_cold`, `rx_callRet`, …)
