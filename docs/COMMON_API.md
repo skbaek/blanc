@@ -1232,8 +1232,9 @@ Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
   warming path.  Use these instead of widening the global `Ninst.Hinv`
   instance set: access metadata changes even though these projections do not.
 - `Devm.getStorVal_setStorVal_self` is persistent storage read-after-write.
-- `Devm.setStorVal_getCode` carries account code across a persistent storage
-  write. `Devm.setCode_getStor`, `Devm.setCode_logs`,
+- Jaune's `Devm.setStorVal_getCode` carries account code across a persistent
+  storage write, and Jaune's `Devm.setCode_getStor` storage across code
+  installation. `Devm.setCode_logs`,
   `Devm.setCode_output`, `Devm.setCode_error`,
   `Devm.setCode_refundCounter`, and `Devm.setCode_accountsToDelete` carry the
   persistent storage and frame observations that code installation does not
@@ -2630,7 +2631,7 @@ never have fired.
 ETH balance, and a contract whose invariant reads only storage still owes the
 record's eight balance obligations.  `ContractSpec.ofStorageOnly` in
 [`Blanc/StorageOnlySpec.lean`](../Blanc/StorageOnlySpec.lean) packages that
-argument once: `getStor_addBal`/`getStor_subBal_addBal` say balance movement
+argument once: Jaune's `getStor_addBal` and `getStor_subBal_addBal` say balance movement
 never moves storage, `ofStorageOnly_preInv_iff`/`ofStorageOnly_postInv_iff`
 reduce the frame invariants to the storage predicate, and
 `ofStorageOnly_funcSound` reduces each per-target obligation to the bare
@@ -2801,8 +2802,9 @@ contract-neutral.
   (an executable witness: liveness from one start state, by kernel evaluation): the
   interpreter `Witness.wrun` over the certificate's decoded tree, its single step
   `wstep`, the configuration `Cfg` with the accessed-set and storage/account shadows
-  (`StorShadow`, `AcctShadow`, `storOf`, `AcctAgree`), the kernel-reducible writes
-  `stateSetB`/`memWriteB` (with `state_set_eq_setB`, `mem_write_eq_B`), the `CALL`
+  (`StorShadow`, `AcctShadow`, `storOf`, `AcctAgree`), Jaune's `State.set`
+  directly (kernel-reducible at the pinned Jaune), the kernel-cheap memory write
+  `memWriteB` (with `mem_write_eq_B`), the `CALL`
   preparation `callPrep`/`callPrep_spec`, and chunk composition `wrun_add`/`wrun_add_cont`
   in [`Blanc/Lift/WitnessArms.lean`](../Blanc/Lift/WitnessArms.lean); the soundness
   theorem `Witness.wrun_exact` (from `wrun_cont`/`wrun_done` over `RunK`/`Agree`), the
@@ -2851,9 +2853,9 @@ contract-neutral.
   [`Blanc/Lift/PackedSha.lean`](../Blanc/Lift/PackedSha.lean), and the corollary
   over memory that already covers the destination (`copy_sha_covered`) in
   [`Blanc/Lift/PackedShaCovered.lean`](../Blanc/Lift/PackedShaCovered.lean).
-- Jump destinations: `jumpable_eq_jumpdestOk` in
-  [`Blanc/Lift/Jumpdest.lean`](../Blanc/Lift/Jumpdest.lean) replaces Jaune's
-  exponential `jumpable` by the linear `jumpdestOk` scan, for every byte string.
+- Jump destinations: Jaune's own `jumpable_eq_jumpdestOk` (`Jaune/Machine.lean`)
+  replaces its exponential `jumpable` by the linear `jumpdestOk` scan, for every
+  byte string; Blanc keeps no copy.
 - Properties of the lifted program without per-path walks: a state-silent
   entry set (`SilentSet`, `SFunc.Run.state_of_silent`) in
   [`Blanc/Lift/Silent.lean`](../Blanc/Lift/Silent.lean), its balance analogue
