@@ -66,13 +66,16 @@ theorem live_setMinter (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.
     refine rx_push (w := vyMinterSlot) rfl (by simp) ?_
     refine rx_sstore hfork (by omega) hstatic ?_
     exact .last rfl
-  · refine ⟨?_, fun a ha => ?_, ?_, fun o ho => by cases ho⟩
+  · refine ⟨?_, fun a ha => ?_, ?_, (fun o ho => by cases ho), ?_⟩
     · show Devm.getStor (afterSstore sevm b1 vyMinterSlot m) _ = _
       rw [afterSstore_getStor_self, afterSload_getStor]
     · show Devm.getStor (afterSstore sevm b1 vyMinterSlot m) _ = _
       rw [afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha), afterSload_getStor]
     · show (afterSstore sevm b1 vyMinterSlot m).logs = _
       rw [afterSstore_logs, afterSload_logs, List.append_nil]
+    · intro _
+      change (afterSstore sevm b1 vyMinterSlot m).output = b.output
+      rw [afterSstore_output, afterSload_output]
 
 -- SEGMENT: liveTransfer (107 nodes)
 /-- `transfer`.  Proof sketch: the walk of `safeTransfer` forwards; the two slots by the
@@ -167,7 +170,7 @@ theorem live_transfer (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.i
     · have hM5 : M5.size = 352 := by simp only [M5, Mem.size_write_word_at, hM3]; decide
       rw [h0, h32, St, Devm.extCost_zero_of_le (by rw [hM5]) (by rw [hM5]; omega)]
     · rw [h0, h32]; exact Mem.read_write_word_of_wf hwf3 0 1
-  · refine ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_⟩
+  · refine ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_, fun h => by cases h⟩
     · rw [getStor_St_return, getStor_addLog, getStor_afterStore, getStor_afterStore, hy]
       rfl
     · rw [getStor_St_return, getStor_addLog, getStor_afterStore_ne ha, getStor_afterStore_ne ha]
@@ -235,7 +238,7 @@ private theorem live_transferFrom_tail (hstatic : sevm.isStatic = false) (f d v 
     · have hN2 : N2.size = 352 := by simp only [hN2_def, Mem.size_write_word_at, hN1]; decide
       rw [h0, h32, St, Devm.extCost_zero_of_le (by rw [hN2]) (by rw [hN2]; omega)]
     · rw [h0, h32]; exact Mem.read_write_word_of_wf hwfN1 0 1
-  · refine ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_⟩
+  · refine ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_, fun h => by cases h⟩
     · rw [getStor_St_return, getStor_addLog, hself]
     · rw [getStor_St_return, getStor_addLog, hother a ha]
     · rw [logs_St_return, logs_addLog, hlogs]
@@ -640,7 +643,7 @@ theorem live_approve (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.is
       · have hM5 : M5.size = 352 := by simp only [M5, Mem.size_write_word_at, hM3]; decide
         rw [h0, h32, St, Devm.extCost_zero_of_le (by rw [hM5]) (by rw [hM5]; omega)]
       · rw [h0, h32]; exact Mem.read_write_word_of_wf hwf3 0 1
-    · refine ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_⟩
+    · refine ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_, fun h => by cases h⟩
       · rw [getStor_St_return, getStor_addLog, afterSstore_getStor_self, hst]
       · rw [getStor_St_return, getStor_addLog, afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha), hst]
       · rw [logs_St_return, logs_addLog, afterSstore_logs, hlg]
@@ -810,7 +813,7 @@ theorem live_mint (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isSta
     · have hM5 : M5.size = 352 := by simp only [M5, Mem.size_write_word_at, hM3]; decide
       rw [h0, h32, St, Devm.extCost_zero_of_le (by rw [hM5]) (by rw [hM5]; omega)]
     · rw [h0, h32]; exact Mem.read_write_word_of_wf hwf3 0 1
-  · refine ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_⟩
+  · refine ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_, fun h => by cases h⟩
     · rw [getStor_St_return, getStor_addLog, getStor_afterStore, getStor_afterStore,
         afterSload_getStor, hy, hsup']
     · rw [getStor_St_return, getStor_addLog, getStor_afterStore_ne ha, getStor_afterStore_ne ha,
@@ -919,7 +922,7 @@ theorem live_burnFrom (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.i
     · have hM5 : M5.size = 352 := by simp only [M5, Mem.size_write_word_at, hM3]; decide
       rw [h0, h32, St, Devm.extCost_zero_of_le (by rw [hM5]) (by rw [hM5]; omega)]
     · rw [h0, h32]; exact Mem.read_write_word_of_wf hwf3 0 1
-  · refine ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_⟩
+  · refine ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_, fun h => by cases h⟩
     · rw [getStor_St_return, getStor_addLog, getStor_afterStore, getStor_afterStore,
         afterSload_getStor, hy, hsup']
     · rw [getStor_St_return, getStor_addLog, getStor_afterStore_ne ha, getStor_afterStore_ne ha,
@@ -1240,7 +1243,7 @@ theorem live_strView (hfork : CoveredFork sevm.benvStat.fork) (hcd : sevm.data.l
       Lands sevm b post (stor₀, [], some (abiString (vyStrOf stor₀ base n))) := by
     intro post bb h1 h2 h3 h4 h5
     refine ⟨by rw [h3, h1], fun a _ => by rw [h3, h1], by rw [h4, h2, List.append_nil],
-      fun o ho => ?_⟩
+      fun o ho => ?_, fun h => by cases h⟩
     cases ho; exact h5
   rcases hcase with ⟨rfl, rfl, hL⟩ | ⟨rfl, rfl, hL⟩
   · -- `name`: three words
@@ -1440,7 +1443,7 @@ theorem rx_storeSeg (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isS
         (Bytes.toB256 [sl]).toBytes.keccak src
         (min (n + 1) ((32 + (Bytes.toB256 (src.sliceD 0 32 0)).toNat) / 32 + 1)) ∧
       (∀ a, a ≠ sevm.currentTarget → Devm.getStor d' a = Devm.getStor d a) ∧
-      d'.logs = d.logs ∧ M'.size = 672 ∧ Mem.Wf M' ∧
+      d'.logs = d.logs ∧ d'.output = d.output ∧ M'.size = 672 ∧ Mem.Wf M' ∧
       (∀ a len, 0x140 ≤ a → (M'.read a len).1 = (M.read a len).1) ∧
       ∀ G o, gCallStipend < G →
         SFunc.RunExact prog sevm (St d' (y1 :: y2 :: y3 :: y4 :: y5 :: y6 :: S) M' G) exitT o →
@@ -1500,6 +1503,7 @@ theorem rx_storeSeg (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isS
     simp only [d2, d1]
     rw [afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha), afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha)]
   have hlg2 : d2.logs = d.logs := by simp only [d2, d1, afterSstore_logs]
+  have hout2 : d2.output = d.output := by simp only [d2, d1, afterSstore_output]
   have hb0 := sstoreCost_le sevm d (base + Nat.toB256 0) (Bytes.toB256 (M2.read (sn + 32 * 0) 32).1)
   have hb1 := sstoreCost_le sevm d1 (base + Nat.toB256 1) (Bytes.toB256 (M3.read (sn + 32 * 1) 32).1)
   have hroom : ([srcB] ++ S).length + 12 < 1024 := by simp; omega
@@ -1511,7 +1515,7 @@ theorem rx_storeSeg (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isS
         48 + 117 + sstoreCost sevm d1 (base + Nat.toB256 1)
           (Bytes.toB256 (M3.read (sn + 32 * 1) 32).1) + 117 +
           sstoreCost sevm d (base + Nat.toB256 0) (Bytes.toB256 (M2.read (sn + 32 * 0) 32).1) + 90,
-        by omega, ?_, hot2, hlg2, hs4, hwf4, hk4, fun G o hG kk => ?_⟩
+        by omega, ?_, hot2, hlg2, hout2, hs4, hwf4, hk4, fun G o hG kk => ?_⟩
       · rw [hst2]; congr 1; omega
       rw [show G + (48 + 117 + sstoreCost sevm d1 (base + Nat.toB256 1)
           (Bytes.toB256 (M3.read (sn + 32 * 1) 32).1) + 117 +
@@ -1539,12 +1543,13 @@ theorem rx_storeSeg (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isS
           117 + sstoreCost sevm d1 (base + Nat.toB256 1)
           (Bytes.toB256 (M3.read (sn + 32 * 1) 32).1) + 117 +
           sstoreCost sevm d (base + Nat.toB256 0) (Bytes.toB256 (M2.read (sn + 32 * 0) 32).1) + 90,
-        by omega, ?_, ?_, ?_, hsz M4 _ hs4, hwf4.write _ _, ?_, fun G o hG kk => ?_⟩
+        by omega, ?_, ?_, ?_, ?_, hsz M4 _ hs4, hwf4.write _ _, ?_, fun G o hG kk => ?_⟩
       · rw [afterSstore_getStor_self, hst2, hw2, show min (2 + 1) ((32 + L) / 32 + 1) = 3 by omega]
         rfl
       · intro a ha
         rw [afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha), hot2 a ha]
       · rw [afterSstore_logs, hlg2]
+      · rw [afterSstore_output, hout2]
       · intro a len ha; rw [hkeep M4 _ _ hwf4 (by omega) a len ha, hk4 a len ha]
       rw [show G + (117 + sstoreCost sevm d2 (base + Nat.toB256 2)
           (Bytes.toB256 (M4.read (sn + 32 * 2) 32).1) + 117 + sstoreCost sevm d1 (base + Nat.toB256 1)
@@ -1566,7 +1571,7 @@ theorem rx_storeSeg (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isS
     refine ⟨cap, 0x120, lp, base, srcB, srcB, d2, M4,
       117 + sstoreCost sevm d1 (base + Nat.toB256 1) (Bytes.toB256 (M3.read (sn + 32 * 1) 32).1) +
         117 + sstoreCost sevm d (base + Nat.toB256 0) (Bytes.toB256 (M2.read (sn + 32 * 0) 32).1) + 90,
-      by omega, ?_, hot2, hlg2, hs4, hwf4, hk4, fun G o hG kk => ?_⟩
+      by omega, ?_, hot2, hlg2, hout2, hs4, hwf4, hk4, fun G o hG kk => ?_⟩
     · rw [hst2, show min (1 + 1) ((32 + L) / 32 + 1) = 2 by omega]
     rw [show G + (117 + sstoreCost sevm d1 (base + Nat.toB256 1)
         (Bytes.toB256 (M3.read (sn + 32 * 1) 32).1) + 117 +
@@ -1701,7 +1706,7 @@ theorem live_setName {sevm : Sevm} {b : Devm} (hfork : CoveredFork sevm.benvStat
       Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega),
       Bytes.sliceD_writeAt_inside _ _ _ _ _ (by omega) (by rw [List.length_sliceD]; omega),
       Nat.add_sub_cancel_left]
-  obtain ⟨y1, y2, y3, y4, y5, y6, d', M', c1, hc1, hst1, hot1, hlg1, hs', hwf', hk', hrun1⟩ :=
+  obtain ⟨y1, y2, y3, y4, y5, y6, d', M', c1, hc1, hst1, hot1, hlg1, hout1, hs', hwf', hk', hrun1⟩ :=
     rx_storeSeg (s0 := 0x01) (s1 := 0x40) (sl := 0x00) (cp := 0x03) (e0 := 0x01) (e1 := 0xad)
       (x0 := 0x01) (x1 := 0xcf) (r0 := 0x01) (r1 := 0x9a) (j := 1) (k := 8) (n := 2)
       (exitT := t_01cf_c1) (src := src0) (d := d) (S := []) hfork hstatic rfl rfl
@@ -1713,7 +1718,7 @@ theorem live_setName {sevm : Sevm} {b : Devm} (hfork : CoveredFork sevm.benvStat
       Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega),
       Bytes.sliceD_writeAt_inside _ _ _ _ _ (by omega) (by rw [List.length_sliceD]; omega),
       Nat.add_sub_cancel_left]
-  obtain ⟨z1, z2, z3, z4, z5, z6, d'', M'', c2, hc2, hst2, hot2, hlg2, -, -, -, hrun2⟩ :=
+  obtain ⟨z1, z2, z3, z4, z5, z6, d'', M'', c2, hc2, hst2, hot2, hlg2, hout2, -, -, -, hrun2⟩ :=
     rx_storeSeg (s0 := 0x01) (s1 := 0xc0) (sl := 0x01) (cp := 0x02) (e0 := 0x02) (e1 := 0x07)
       (x0 := 0x02) (x1 := 0x29) (r0 := 0x01) (r1 := 0xf4) (j := 2) (k := 11) (n := 1)
       (exitT := t_0229_c2) (src := src1) (d := d') (S := []) hfork hstatic rfl rfl
@@ -1832,13 +1837,16 @@ theorem live_setName {sevm : Sevm} {b : Devm} (hfork : CoveredFork sevm.benvStat
       rw [show Bytes.toB256 [0x01] = 1 by decide]; rfl
     have hd : ∀ a, Devm.getStor d a = Devm.getStor b a := by
       intro a; rw [hpost.stor a, afterSload_getStor]
-    refine ⟨?_, fun a ha => ?_, ?_, fun o ho => by cases ho⟩
+    refine ⟨?_, fun a ha => ?_, ?_, (fun o ho => by cases ho), ?_⟩
     · show Devm.getStor d'' _ = _
       rw [hst2, hst1, hd, hnb, hsb, hL0w, hL1w, ← hs0, ← hs1]
     · show Devm.getStor d'' _ = _
       rw [hot2 a ha, hot1 a ha, hd]
     · show d''.logs = _
       rw [hlg2, hlg1, hpost.logs, afterSload_logs, List.append_nil]
+    · intro _
+      change d''.output = b.output
+      rw [hout2, hout1, hpost.output rfl, afterSload_output]
 
 end Blanc.Lift.Curve3Crv
 

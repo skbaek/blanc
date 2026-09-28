@@ -89,12 +89,24 @@ def abiString (bs : Bytes) : Bytes :=
   (32 : B256).toBytes ++ (Nat.toB256 bs.length).toBytes ++ bs ++
     List.replicate (ceil32 bs.length - bs.length) 0
 
-/-- The return data of a model result (`STOP` returns nothing and is not constrained). -/
+/-- The return data of a model result at fresh frame entry: `STOP` returns no bytes. -/
 def RetOut (out : Bytes) : Ret → Prop
-  | .stop => True
+  | .stop => out = []
   | .bool b => out = (if b then (1 : B256) else 0).toBytes
   | .word w => out = w.toBytes
   | .string bs => out = abiString bs
+
+/-- The exact output relation over an arbitrary base machine. Jaune's `STOP`
+preserves its enclosing output field; the other results overwrite it. -/
+def RetOutFrom (initial out : Bytes) : Ret → Prop
+  | .stop => out = initial
+  | .bool b => RetOut out (.bool b)
+  | .word w => RetOut out (.word w)
+  | .string bs => RetOut out (.string bs)
+
+theorem RetOutFrom.of_empty {initial out : Bytes} {ret : Ret}
+    (h : RetOutFrom initial out ret) (hempty : initial = []) : RetOut out ret := by
+  cases ret <;> simpa only [RetOutFrom, RetOut, hempty] using h
 
 /-! ## Keys and writers -/
 

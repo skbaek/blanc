@@ -37,9 +37,11 @@ def rawOf (k : Nat) (sevm : Sevm) (ow : Option B256) (stor : Stor) : Option Raw 
   | 12 => rawBalanceOf sevm stor
   | _ => none
 
-/-- The return data of a raw effect and a model result agree. -/
+/-- The return kind and data of a raw effect and a model result agree.
+Only `none` represents `STOP`; a `RETURN` cannot be matched to it. -/
 def RetMatch : Option Bytes → Ret → Prop
   | none, r => r = .stop
+  | some _, .stop => False
   | some out, r => RetOut out r
 
 /-- A raw effect and a model result correspond: storage abstracts the new state over `K'`, the
