@@ -66,6 +66,53 @@ def ContractSpec.ofStorageOnly (p : Prog) (P : Stor → Prop) : ContractSpec whe
     rw [getStor_addBal]
     exact h_inv
 
+/-- A storage-only invariant over certified code semantics. The code image is
+independent of the projection-silent balance and transfer obligations. -/
+def ContractSpecSem.ofStorageOnly (sem : CodeSem) (P : Stor → Prop) : ContractSpecSem where
+  sem := sem
+  Inv := fun s _ _ => P s
+  Side := fun _ => True
+  inv_forget := id
+  inv_mono := fun h _ => h
+  inv_recv := fun h _ => h
+  side_le := fun _ _ => trivial
+  side_transfer := fun _ _ => trivial
+  side_addBal := fun _ _ => trivial
+  inv_transfer := by
+    intro st st' caller callee ca wad v sub _ _ invariant
+    show P _
+    rw [getStor_subBal_addBal sub]
+    exact invariant
+  inv_recv_transfer := by
+    intro st st' caller ca wad sub _ _ invariant
+    show P _
+    rw [getStor_subBal_addBal sub]
+    exact invariant
+  inv_addBal := by
+    intro st ca target value v _ _ invariant
+    show P _
+    rw [getStor_addBal]
+    exact invariant
+
+/-- A semantic storage-only entry invariant is the storage property itself;
+both target cases discard callvalue and balance. -/
+theorem ContractSpecSem.ofStorageOnly_preInv_iff {sem : CodeSem} {P : Stor → Prop}
+    {ca : Adr} {sevm : Sevm} {devm : Devm} :
+    (ContractSpecSem.ofStorageOnly sem P).PreInv devm ca sevm ↔
+      P (Devm.getStor devm ca) := by
+  constructor
+  · intro h
+    by_cases target : sevm.currentTarget = ca
+    · exact h.1 target
+    · exact h.2 target
+  · exact fun invariant => ⟨fun _ => invariant, fun _ => invariant⟩
+
+/-- A semantic storage-only exit invariant is the storage property outright. -/
+theorem ContractSpecSem.ofStorageOnly_postInv_iff {sem : CodeSem} {P : Stor → Prop}
+    {ca : Adr} {devm : Devm} :
+    (ContractSpecSem.ofStorageOnly sem P).PostInv devm ca ↔
+      P (Devm.getStor devm ca) := Iff.rfl
+
 /-- The frame-entry invariant of a storage-determined spec carries no
 callvalue case: both branches of `PreInv` are the same proposition, so the
 conjunction collapses.  Hoisted from fmint's `fmintSpec_preInv_iff`, which is

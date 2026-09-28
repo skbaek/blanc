@@ -45,6 +45,11 @@ semantics does not supply it:
   For a real history the history's own live-key set is a witness whenever the frame's touched
   slots avoid a collision with a slot in use.
 
+The existential entry abstraction includes `VyInv.conserved`.  Thus this legacy rung assumes a
+conserving abstraction anew at each target entry; it does not compose one initial model witness
+through the history.  `CarriedHistory.lean`'s `c3crv_history_carried` supplies that composition using
+independent calldata and raw-history key-separation premises.
+
 The rung is over retained traces (`ConfiguredHistoryTrace`), as for WETH9 and the beacon deposit
 contract.  By user rule only the top rung is stated; the message, transaction, body and block
 rungs follow from the same `c3crvSpec_preservesAdmitted` exactly as in the beacon ladder.
@@ -118,9 +123,10 @@ def c3crvSpec : ContractSpecSem where
     rw [getStor_addBal]
     exact h_inv
 
-/-- **The carried entry condition** at every entered 3Crv frame: calldata length, and an
-abstraction of the entry storage under which the call's keys are fresh.  Each is explained in
-the module docstring. -/
+/-- **The legacy entry condition** at every entered 3Crv frame: calldata length, and a fresh
+conserving abstraction of the entry storage under which the call's keys are fresh.  This
+re-assumes `VyInv.conserved` at each entry; see `c3crv_history_carried` for composition from
+one initial abstraction. -/
 def c3crvEntry : Sevm → Devm → Prop := fun sevm pre =>
   sevm.data.length < 2 ^ 256 ∧
     ∃ s K, VyInv (Devm.getStor pre sevm.currentTarget) s K ∧
