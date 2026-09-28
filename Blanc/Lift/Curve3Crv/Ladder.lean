@@ -15,13 +15,13 @@ conservation invariant (`VyInv.conserved : Conserved s`), so no separate conjunc
 side condition is `True` (the invariant reads storage only; the balance obligations are the
 `StorageOnlySpec` rewrites).
 
-Frame soundness (`c3crvSpec_soundAdmitted`) is `c3crv_frame_refines` (`Safe.lean`): a writer
+Frame soundness (`c3crvSpec_soundAdmitted`) uses `c3crv_frame_refines_raw` (`Safe.lean`): a writer
 frame's post storage abstracts the model's post state over the extended live keys, every other
 successful frame keeps every storage map.  The only call the contract makes is `set_name`'s
-`STATICCALL` to the minter, which `c3crv_frame_refines` already accounts for (a static callee
+`STATICCALL` to the minter, which `c3crv_frame_refines_raw` already accounts for (a static callee
 writes no storage), so the deeper-frame hypothesis is not consumed.
 
-## The frame premises of `c3crv_frame_refines`
+## The frame premises of `c3crv_frame_refines_raw`
 
 * `CoveredFork`, the code (`sevm.code = code`): given by the ladder (`hfork`, `c3crvSem.Run`).
 * empty stack and memory at frame start (`Exec.FreshEntry`): **discharged** at the history rung
@@ -130,13 +130,13 @@ def c3crvEntry : Sevm → Devm → Prop := fun sevm pre =>
 def c3crvFrameEntry : Sevm → Devm → Prop := fun sevm pre =>
   Exec.FreshEntry sevm pre ∧ c3crvEntry sevm pre
 
-/-- **3Crv frame soundness, trace-admitted**, from `c3crv_frame_refines`. -/
+/-- **3Crv frame soundness, trace-admitted**, from `c3crv_frame_refines_raw`. -/
 theorem c3crvSpec_soundAdmitted (ca : Adr) :
     c3crvSpec.SoundAdmitted ca c3crvFrameEntry := by
   intro sevm pre post hfork execution hrun hca admitted _ _ _
   subst hca
   obtain ⟨⟨hstack, hmem⟩, hcd, s, K, hinv, hfresh⟩ := admitted.root rfl
-  have h := c3crv_frame_refines hrun hfork hcd hstack hmem hinv hfresh execution
+  have h := c3crv_frame_refines_raw hrun hfork hcd hstack hmem hinv hfresh execution
   refine ⟨trivial, ?_⟩
   show ∃ s K, VyInv (Devm.getStor post sevm.currentTarget) s K
   by_cases hw : IsWriter (decodeCall sevm)

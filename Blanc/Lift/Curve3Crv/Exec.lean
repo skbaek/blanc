@@ -16,6 +16,10 @@ deployed bytes from a frame start:
   executed whenever the minter's `owner()` answers the caller with fewer than `2^256` bytes
   (`OwnerCallOk`) and the calldata is shorter than `2^256` bytes; its gas after the
   call is the callee's, so it is not exact.
+
+The model-output headlines require empty initial output, supplied by genuine
+frame initialization (`Frame.enter_run_output_empty`). The used raw liveness
+helpers retain arbitrary-base coverage and the exact `Lands.stop_output` relation.
 -/
 
 namespace Blanc.Lift.Curve3Crv
@@ -51,7 +55,7 @@ theorem c3crv_step_exec {sevm : Sevm} {pre : Devm} {s : Curve3Crv.State} {K : Ke
     (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hk1 : k ≠ 1)
     (hk : sels[k]? = some (Sevm.selector sevm)) (hlen : 4 ≤ sevm.data.length)
-    (hcd : sevm.data.length < 2 ^ 256)
+    (hcd : sevm.data.length < 2 ^ 256) (houtput : pre.output = [])
     (hinv : VyInv (Devm.getStor pre sevm.currentTarget) s K)
     (hfresh : FreshKeys K (callKeys sevm.caller (decodeCall sevm)))
     (hok : Curve3Crv.step (c3ctx sevm ow) (decodeCall sevm) s = .ok o) :
@@ -71,7 +75,8 @@ theorem c3crv_step_exec {sevm : Sevm} {pre : Devm} {s : Curve3Crv.State} {K : Ke
   obtain ⟨c, hx⟩ := c3crv_exec hcode hfork hstatic hk1 hk hlen hcd hr
   refine ⟨c, fun G hG => ?_⟩
   obtain ⟨post, he, hg, hl⟩ := hx G hG
-  exact ⟨post, he, hg, writer_post hl hc⟩
+  obtain ⟨hstor, hother, hlogs, hout⟩ := writer_post hl hc
+  exact ⟨post, he, hg, hstor, hother, hlogs, hout.of_empty houtput⟩
 
 /-- **`set_name` the model accepts is a real execution** whenever the minter's `owner()` answers
 the caller: there are a gas amount `R` the body needs after the call and a prefix cost `P` such
@@ -83,7 +88,7 @@ theorem c3crv_setName_exec {sevm : Sevm} {pre : Devm} {s : Curve3Crv.State} {K :
     (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false)
     (hsel : Sevm.selector sevm = selSetName) (hlen : 4 ≤ sevm.data.length)
-    (hcd : sevm.data.length < 2 ^ 256)
+    (hcd : sevm.data.length < 2 ^ 256) (houtput : pre.output = [])
     (hinv : VyInv (Devm.getStor pre sevm.currentTarget) s K)
     (hfresh : FreshKeys K (callKeys sevm.caller (decodeCall sevm)))
     (hok : Curve3Crv.step (c3ctx sevm (some sevm.caller.toB256)) (decodeCall sevm) s = .ok o) :
@@ -104,6 +109,8 @@ theorem c3crv_setName_exec {sevm : Sevm} {pre : Devm} {s : Curve3Crv.State} {K :
   refine ⟨R, P, fun Gc hcall G hG hG' => ?_⟩
   obtain ⟨post, hrun, hl⟩ := hx Gc hcall G hG hG'
   have hd := live_dispatch (k := 1) rfl hs1 hsel hlen hcd hrun
-  exact ⟨post, exec_of_runExact hcode hfork ⟨_, rfl, hd⟩, writer_post hl hc⟩
+  obtain ⟨hstor, hother, hlogs, hout⟩ := writer_post hl hc
+  exact ⟨post, exec_of_runExact hcode hfork ⟨_, rfl, hd⟩,
+    hstor, hother, hlogs, hout.of_empty houtput⟩
 
 end Blanc.Lift.Curve3Crv

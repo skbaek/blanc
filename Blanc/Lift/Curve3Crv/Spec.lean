@@ -160,6 +160,7 @@ structure Lands (sevm : Sevm) (b post : Devm) (r : Raw) : Prop where
   other : ∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor b a
   logs : post.logs = b.logs ++ r.2.1
   output : ∀ o, r.2.2 = some o → post.output = o
+  stop_output : r.2.2 = none → post.output = b.output
 
 /-- The frame state at a body's entry: the base, empty stack, the prologue's memory. -/
 def entrySt (sevm : Sevm) (b : Devm) (G : Nat) : Devm :=

@@ -25,6 +25,14 @@ theorem Frame.enter_run_fresh
   obtain ⟨benv, _htransfer, rfl⟩ := Frame.enter_run_inv henter
   exact ⟨rfl, rfl⟩
 
+/-- Genuine frame initialization clears the enclosing output field, independently
+of the child's calldata, value transfer and initial world. -/
+theorem Frame.enter_run_output_empty
+    {frame : Frame} {child : Evm}
+    (henter : frame.enter = .run child) : child.dyna.output = [] := by
+  obtain ⟨benv, _htransfer, rfl⟩ := Frame.enter_run_inv henter
+  rfl
+
 /-- Every raw descendant is the root of a freshly entered child frame. -/
 theorem Exec.rawFrameDescendants_fresh
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}

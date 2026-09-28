@@ -48,7 +48,7 @@ private theorem word_tail (hfork : CoveredFork sevm.benvStat.fork) {M : Mem} {im
     refine rx_push (w := 0) rfl (by simp) ?_
     refine rx_return ?_ hread
     rw [h0, h32, St, Devm.extCost_zero_of_le (by rw [hsz]; exact hn32) (by rw [hsz]; omega)]
-  · refine ⟨?_, fun a _ => ?_, ?_, fun o ho => ?_⟩
+  · refine ⟨?_, fun a _ => ?_, ?_, fun o ho => ?_, fun h => by cases h⟩
     · show Devm.getStor (afterSload sevm b k) _ = _
       rw [afterSload_getStor]
     · show Devm.getStor (afterSload sevm b k) _ = _

@@ -53,6 +53,7 @@ structure StaticCallPost (b d : Devm) (S : List B256) (M : Mem) (ii is oi os fla
   returnData : d.returnData = out
   stor : ∀ a, Devm.getStor d a = Devm.getStor b a
   logs : d.logs = b.logs
+  output : flag = 1 → d.output = b.output
   flag : flag = 0 ∨ flag = 1
 
 theorem StaticCallPost.eq_St {b d : Devm} {S : List B256} {M : Mem} {ii is oi os flag : B256}
@@ -125,12 +126,13 @@ theorem ri_staticcall {g t ii is oi os : B256} {d : Devm}
   · obtain ⟨hpf, -, out, hret, hmem, -⟩ := hfail
     rw [hstack] at hpf
     have h0 : flag = 0 := (pref_head_unique hpf (pref_append [flag] S)).symm
-    refine ⟨flag, out, ⟨hstack, hmem, hret, fun a => congrFun hw.1 a, hw.2, .inl h0⟩, ?_⟩
+    refine ⟨flag, out, ⟨hstack, hmem, hret, fun a => congrFun hw.1 a, hw.2,
+      fun h1 => False.elim (by rw [h0] at h1; exact (by decide : (0 : B256) ≠ 1) h1), .inl h0⟩, ?_⟩
     intro h1
     rw [h0] at h1
     exact absurd h1 (by decide)
-  · obtain ⟨parent, child, xl, dp, na, code, avail, -, hs, hstate, hpm, -, -, hdel, hfill, hproc,
-      hclean, -, -, hret, hmem, hpst⟩ := hsucc
+  · obtain ⟨parent, child, xl, dp, na, code, avail, -, hs, hstate, hpm, -, houtput, hdel, hfill, hproc,
+      hclean, hresume, -, hret, hmem, hpst⟩ := hsucc
     have hS : parent.stack = S := by
       have := hs
       simp only [St.stack, List.cons.injEq] at this
@@ -139,7 +141,8 @@ theorem ri_staticcall {g t ii is oi os : B256} {d : Devm}
     have h1 : flag = 1 := (List.cons.inj hstack).1.symm
     refine ⟨flag, child.output, ⟨by rw [← h1] at hstack; rw [hpst, hS, h1],
       by rw [hmem, hpm]; rfl,
-      hret, fun a => congrFun hw.1 a, hw.2, .inr h1⟩, fun _ => ?_⟩
+      hret, fun a => congrFun hw.1 a, hw.2,
+      fun _ => (Resume.call_output hresume).trans houtput, .inr h1⟩, fun _ => ?_⟩
     exact ⟨parent, child, xl, dp, na, code, _, hstate, hdel, hfill, hproc, hclean, rfl⟩
 
 /-- **`STATICCALL` to an arbitrary callee, forward.**  Given the step itself (a premise about the

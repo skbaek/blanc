@@ -1975,6 +1975,8 @@ consumer needs canonical interpreter ingress as one conjunct:
   `pre.memory = Mem.empty`. `Exec.FrameAdmitted.fresh_of_enter` derives it
   from one actual frame entry, and `Exec.FrameAdmitted.and` combines it with
   an independently established contract-specific condition.
+  `Frame.enter_run_output_empty` derives the independent `pre.output = []`
+  fact from the same genuine entry; it is not part of `Exec.FreshEntry`.
 - `ForallSubExecAdmitted`, `lift_admitted`, and `lift_inv_admitted` are the
   arbitrary-`Exec` eliminators. Unlike `RootedExecution`'s forward compiled
   construction, they keep the selected execution proof in the induction
@@ -2779,6 +2781,9 @@ contract-neutral.
   map and the log list kept) and, for a set flag, the successful static child message
   (`StaticAnswered`), inverted (`ri_staticcall`) and forward over a caller-supplied step
   (`rx_staticcall`), in [`Blanc/Lift/StaticCall.lean`](../Blanc/Lift/StaticCall.lean).
+  `StaticCallPost.output` retains the parent's enclosing output when the flag
+  is set; child bytes populate memory and `returnData`. It reuses
+  `Resume.call_output` in `Blanc/LadderBase.lean`.
   `CALLER` (`rx_caller`, `ri_caller`), `KECCAK256` inverted (`ri_keccak`), `LOG3`
   (`rx_log3`, `ri_log3`), `SSTORE` forward at its selected cost (`rx_sstore`), `RETURN`
   inverted (`ri_return`), the memory facts `Mem.reads_data`/`Mem.read_write_word_of_wf`, and
