@@ -25,12 +25,6 @@ private lemma memRead_getStorVal (devm : Devm) (index size : Nat)
     (devm.memRead index size).2.getStorVal owner key =
       devm.getStorVal owner key := rfl
 
-private lemma withOutput_gasLeft (devm : Devm) (out : Bytes) :
-    (devm.withOutput out).gasLeft = devm.gasLeft := rfl
-
-private lemma memRead_gasLeft (devm : Devm) (index size : Nat) :
-    (devm.memRead index size).2.gasLeft = devm.gasLeft := rfl
-
 def stubPausePost (sevm : Sevm) (base : Devm)
     (duration : B256) : Devm :=
   temporalSstorePost sevm
@@ -199,7 +193,7 @@ theorem stubQuery_true_warm_runCompiledTo
   · refine ⟨rfl, ?_, ?_, rfl, ?_, ?_⟩
     · rw [withOutput_getStorVal, memRead_getStorVal,
         Devm.getStorVal_setMach, Devm.getStorVal_setMach, hstored]
-    · rw [withOutput_gasLeft, memRead_gasLeft,
+    · rw [Devm.withOutput_gasLeft, Devm.memRead_snd_gasLeft,
         Devm.gasLeft_setMach]
     · rfl
     · rfl

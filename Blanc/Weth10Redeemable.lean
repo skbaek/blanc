@@ -22,14 +22,6 @@ namespace Weth10
 
 open Jaune.Ninst Ninst
 
-private instance : Std.TransCmp
-    (compare : Bytes → Bytes → Ordering) := by
-  rw [show (compare : Bytes → Bytes → Ordering) =
-      List.compareLex (compare : UInt8 → UInt8 → Ordering) by
-    funext xs ys
-    exact jauneListCompare_eq_compareLex xs ys]
-  infer_instance
-
 /-! ## Canonical natural-amount interface -/
 
 /-- The booked WETH10 balance exposed to downstream arithmetic in `Nat`. -/
@@ -454,14 +446,6 @@ def redemptionTransactionGasBound
     (q : Nat) (benv : Benv) (tx : Tx) (sender : Adr) : Nat :=
   max (redemptionCalldataFloorGas benv tx sender)
     (redemptionIntrinsicGas benv tx sender + redemptionRuntimeCeiling q)
-
-/-- In the no-state-gas lane intrinsic cost ignores the sender: its only
-sender use is the state-gas recipient surcharge. -/
-private theorem calculateIntrinsicCost_sender_congr_none {rules : ForkRules}
-    {tx : Tx} {s1 s2 : Adr} (hsg : rules.stateGas = none) :
-    calculateIntrinsicCost rules tx s1 = calculateIntrinsicCost rules tx s2 := by
-  unfold calculateIntrinsicCost
-  rw [hsg]
 
 def redemptionEffectiveGasPrice (benv : Benv) (tx : Tx) : Nat :=
   Blanc.deploymentEffectiveGasPrice benv tx
@@ -2310,30 +2294,6 @@ theorem processMessageCall_eq_of_exec
     htoNat, Option.toExcept, Nat.cast_zero, zero_add, hsg]
   rfl
 
-lemma B256.sub_zero_exact (x : B256) : x - 0 = x := by
-  rcases x with ⟨xh, xl⟩
-  change (((xh - (0 : B128)) -
-    (if xl < (0 : B128) then (1 : B128) else 0),
-    xl - (0 : B128))) = (xh, xl)
-  have h : ¬ xl < (0 : B128) := by
-    intro h
-    rcases h with h | ⟨_, h⟩
-    · exact UInt64.not_lt_zero h
-    · exact UInt64.not_lt_zero h
-  rw [if_neg h, B128.sub_zero, B128.sub_zero, B128.sub_zero]
-
-lemma B256.add_zero_exact (x : B256) : x + 0 = x := by
-  apply B256.toNat_inj
-  rw [B256.toNat_add]
-  rw [show (0 : B256).toNat = 0 from rfl]
-  norm_num [Nat.lo_eq]
-  exact B256.toNat_lt x
-
-lemma B256.zero_le_exact (x : B256) : (0 : B256) ≤ x := by
-  rw [B256.le_iff_toNat_le_toNat]
-  rw [show (0 : B256).toNat = 0 from rfl]
-  norm_num
-
 lemma zero_transfer_bal {st mid : State} {caller target : Adr}
     (hsub : st.subBal caller 0 = some mid) :
     ∀ a, (mid.addBal target 0).bal a = st.bal a := by
@@ -2354,7 +2314,7 @@ lemma zero_transfer_bal {st mid : State} {caller target : Adr}
       show ((st.setBal caller _).get caller).bal = _
       rw [State.setBal_get_self]
       change st.bal caller - 0 = st.bal caller
-      exact B256.sub_zero_exact _
+      exact B256.sub_zero _
   · by_cases ht : target = a
     · subst a
       show (((st.setBal caller _).setBal target _).get target).bal = _
@@ -2362,7 +2322,7 @@ lemma zero_transfer_bal {st mid : State} {caller target : Adr}
       show ((st.setBal caller _).get target).bal + 0 = _
       rw [State.setBal_get_ne hc]
       change st.bal target + 0 = st.bal target
-      exact B256.add_zero_exact _
+      exact B256.add_zero _
     · show (((st.setBal caller _).setBal target _).get a).bal = _
       rw [State.setBal_get_ne ht]
       show ((st.setBal caller _).get a).bal = _
@@ -2405,7 +2365,7 @@ theorem Stable.withdrawTo_messageFrame_of_le
     henv.currentTarget_eq
   have haffordable : ¬ msg.benv.state.bal msg.caller < msg.value := by
     rw [henv.value_eq]
-    exact not_lt_of_ge (B256.zero_le_exact _)
+    exact not_lt_of_ge (B256.zero_le _)
   rcases Msg.benvAfterTransfer_of_affordable msg
       henv.shouldTransferValue_eq haffordable with ⟨stmid, hsub, hbt⟩
   let benv' :=
@@ -2561,7 +2521,7 @@ theorem Stable.withdraw_messageFrame_of_le
     henv.currentTarget_eq
   have haffordable : ¬ msg.benv.state.bal msg.caller < msg.value := by
     rw [henv.value_eq]
-    exact not_lt_of_ge (B256.zero_le_exact _)
+    exact not_lt_of_ge (B256.zero_le _)
   rcases Msg.benvAfterTransfer_of_affordable msg
       henv.shouldTransferValue_eq haffordable with ⟨stmid, hsub, hbt⟩
   let benv' :=

@@ -112,14 +112,6 @@ theorem jauneListCompare_eq_compareLex {α : Type u} [Ord α]
           cases h : compare x y <;>
             simp [Jaune.List.compare, List.compareLex, h, ih]
 
-private instance : Std.TransCmp
-    (compare : Bytes → Bytes → Ordering) := by
-  rw [show (compare : Bytes → Bytes → Ordering) =
-      List.compareLex (compare : UInt8 → UInt8 → Ordering) by
-    funext xs ys
-    exact jauneListCompare_eq_compareLex xs ys]
-  infer_instance
-
 /-- The small nonempty program used at mandatory protocol system addresses in
 strict private-chain deployment anchors. -/
 def deploymentSystemProgram : Prog := ⟨Func.stop, []⟩

@@ -133,7 +133,7 @@ theorem Msg.benvAfterTransfer_bal_eq_of_value_eq_zero
         by_cases hcaller : msg.caller = address
         · subst address
           rw [State.setBal_get_self]
-          exact B256.sub_zero_exact _
+          exact B256.sub_zero _
         · rw [State.setBal_get_ne hcaller]
       have haddBal :
           (debit.addBal msg.currentTarget 0).bal = debit.bal := by
@@ -142,7 +142,7 @@ theorem Msg.benvAfterTransfer_bal_eq_of_value_eq_zero
         by_cases htarget : msg.currentTarget = address
         · subst address
           rw [State.setBal_get_self]
-          exact B256.add_zero_exact _
+          exact B256.add_zero _
         · rw [State.setBal_get_ne htarget]
       exact haddBal.trans hdebitBal
 

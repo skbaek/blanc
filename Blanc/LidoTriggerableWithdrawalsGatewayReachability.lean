@@ -2417,12 +2417,6 @@ private theorem memRead_getStorVal (devm : Devm) (index size : Nat)
     (devm.memRead index size).2.getStorVal owner key =
       devm.getStorVal owner key := rfl
 
-private theorem withOutput_gasLeft (devm : Devm) (out : Bytes) :
-    (devm.withOutput out).gasLeft = devm.gasLeft := rfl
-
-private theorem memRead_gasLeft (devm : Devm) (index size : Nat) :
-    (devm.memRead index size).2.gasLeft = devm.gasLeft := rfl
-
 /-- The exact query body costs `121` gas with a warm resume slot and returns
 the canonical true word.  The extra one gas versus the control stub is the
 production gateway's nonzero tagged storage slot. -/
@@ -2469,7 +2463,7 @@ private theorem isPaused_true_warm_runCompiledTo
   · refine ⟨rfl, ?_, ?_, rfl, ?_, ?_⟩
     · rw [withOutput_getStorVal, memRead_getStorVal,
         Devm.getStorVal_setMach, Devm.getStorVal_setMach, hstored]
-    · rw [withOutput_gasLeft, memRead_gasLeft,
+    · rw [Devm.withOutput_gasLeft, Devm.memRead_snd_gasLeft,
         Devm.gasLeft_setMach]
     · rfl
     · rfl
@@ -2654,7 +2648,7 @@ private theorem isPaused_true_cold_runCompiledTo
     · rw [withOutput_getStorVal, memRead_getStorVal,
         Devm.getStorVal_setMach, Devm.getStorVal_setMach,
         getStorVal_addAccessedStorageKey, Devm.getStorVal_setMach, hstored]
-    · rw [withOutput_gasLeft, memRead_gasLeft,
+    · rw [Devm.withOutput_gasLeft, Devm.memRead_snd_gasLeft,
         Devm.gasLeft_setMach]
     · rfl
     · rfl
