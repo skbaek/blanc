@@ -46,14 +46,6 @@ theorem RegistryKeysFaithful.bound_mono {b b' : Nat} {T : List B256}
     RegistryKeysFaithful b T :=
   fun t ht k hk heq => h t ht k (hk.mono hle) heq
 
-/-- Separation of a foreign slot is antitone in the bound: if raw slot `w`
-is disjoint from all registry slots observed up to bound `b'`, it is also disjoint
-from all registry slots observed up to any smaller bound `b ≤ b'`. -/
-theorem ForeignApart.bound_mono {b b' : Nat} {w : B256}
-    (h : ForeignApart b' w) (hle : b ≤ b') :
-    ForeignApart b w :=
-  fun k hk => h k (hk.mono hle)
-
 /-- A raw storage write to a foreign slot `w` preserves the registry witness.
 Because `w` is apart from all observed registry keys up to `bound`, reading any
 observed slot in the updated storage `s.set w v` returns the same value as in

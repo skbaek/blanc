@@ -405,26 +405,10 @@ theorem rawRemovalReadEffect_of_local_keys_and_writes
   let heffect := rawRemovalReadEffect_of_local_keys hw htarget hfind hkeys
   exact { heffect with writes := hwrites }
 
-/-- Concrete application of the shared logical seven-write preservation
-theorem to the deployed Solidity storage projection. -/
-theorem rawRemoval_preservesRegistry
-    {before after : Stor} {entries : List Entry}
-    {target oldPauser : B256} {index : Nat}
-    (hw : RegistryWitness (solRegistryStorage before) entries)
-    (htarget : nonzeroCanonicalAddress target)
-    (hfind : findEntry entries target = some (index, oldPauser))
-    (hkeys : LocalRemovalKeys entries target oldPauser index)
-    (hwrites : ∀ key, after.get key =
-      (rawRemovalPost before entries target oldPauser index).get key) :
-    RegistryWitness (solRegistryStorage after) (swapPop entries index) := by
-  exact RawRemovalReadEffect.preservesRegistry hw htarget hfind
-    (rawRemovalReadEffect_of_local_keys_and_writes
-      hw htarget hfind hkeys hwrites)
-
 /-! ## `LocalRemovalKeys` is an instance of the unified premise
 
 Everything above this point is unchanged.  `LocalRemovalKeys` remains the
-proof-internal bundle `rawRemoval_preservesRegistry` consumes, but a caller
+proof-internal bundle `rawRemovalReadEffect_of_local_keys` consumes, but a caller
 no longer has to state it directly: it is now *derived* from
 `RegistryKeysFaithful`, the one premise shape §3 of the critique asked for
 (`Blanc/Lift/LidoCircuitBreakerDeployed/RegistryLayout.lean`).  A future
@@ -530,7 +514,9 @@ theorem rawRemovalReadEffect_of_registryKeysFaithful
   rawRemovalReadEffect_of_local_keys hw htarget hfind
     (LocalRemovalKeys_of_registryKeysFaithful hw htarget hfind hfaithful)
 
-/-- `rawRemoval_preservesRegistry`, stated over the unified premise. -/
+/-- Concrete application of the shared logical seven-write preservation
+theorem to the deployed Solidity storage projection, stated over the unified
+premise. -/
 theorem rawRemoval_preservesRegistry_of_registryKeysFaithful
     {before after : Stor} {entries : List Entry} {target oldPauser : B256} {index : Nat}
     (hw : RegistryWitness (solRegistryStorage before) entries)

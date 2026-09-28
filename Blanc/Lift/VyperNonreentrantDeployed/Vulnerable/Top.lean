@@ -61,11 +61,6 @@ theorem e0_code : e0.sta.code = proxyCode := by
   simp only [Prod.mk.injEq] at h
   exact h.2.1
 
-theorem e0_pc : e0.pc = 0 := by
-  have h := e0_facts
-  simp only [Prod.mk.injEq] at h
-  exact h.1
-
 theorem cp1_spec :
     Xinst.step e0_31.sta e0_31.dyna .delegatecall = .spawn cp1.f (.call cp1.p cp1.oi cp1.os) ∧
       (∀ a, a ∈ cp1.p.accessedAddresses ↔ a ∈ cp1.adrs) ∧

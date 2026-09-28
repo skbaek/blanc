@@ -16,7 +16,7 @@ pending `callNext` continuations (`Cont`).  `CursorOK code c n κ` says the
 concrete node `n` sits at `κ`: same pc, the tree checks there
 (`checkNode … = true`), and the concrete operand stack decomposes into one
 segment per pending function, each matched by its abstract frame
-(`FrameMatches`) — `node_sound`'s recursion invariant made explicit.
+(`FrameMatches`) — `node_soundM`'s recursion invariant made explicit.
 
 * `cursor_start`: a checked certificate places every frame entered at pc `0`
   at entry `0`;

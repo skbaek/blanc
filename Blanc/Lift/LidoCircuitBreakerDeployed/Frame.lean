@@ -206,11 +206,5 @@ theorem lidoSpec_soundAdmitted {A : List LidoCircuitBreaker.Entry → Sevm → P
   exact lido_frame_post_in (R := ⟨0, sevm, pre, .ok post, execution⟩) W hfork hrun.1 hin
     hloc hA admitted ih hpre
 
-/-- **Lido CircuitBreaker frame preservation, trace-admitted**: the form the
-trace rungs consume. -/
-theorem lidoSpec_preservesAdmitted {A : List LidoCircuitBreaker.Entry → Sevm → Prop} (W : LidoWriterSpecs A)
-    (ca : Adr) : lidoSpec.PreservesAdmitted ca (lidoFrameEntry A) :=
-  lidoSpec.preserves_inv_admitted ca (lidoFrameEntry A) (lidoSpec_soundAdmitted W ca)
-
 
 end Blanc.Lift.LidoCircuitBreakerDeployed

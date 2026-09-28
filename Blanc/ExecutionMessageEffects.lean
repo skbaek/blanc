@@ -20,12 +20,6 @@ private theorem State.setBal_getStor_eq
   funext target
   exact State.setBal_get_stor
 
-private theorem State.addBal_getStor_eq
-    (state : State) (address : Adr) (value : B256) :
-    (state.addBal address value).getStor = state.getStor := by
-  unfold State.addBal
-  exact State.setBal_getStor_eq state address _
-
 /-- A successful message-entry value transfer preserves the complete storage
 map. -/
 theorem benvAfterTransfer_getStor_eq

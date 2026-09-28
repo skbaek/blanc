@@ -369,17 +369,6 @@ def ForallDeeper (k : Nat) (ε : Exec.Pred) : Prop :=
 def ForallDeeperAt (k : Nat) (ca : Adr) (p : Prog) (ε : Exec.Pred) : Prop :=
   ForallDeeper k (fun pc sevm devm exn ex => p.At ca pc sevm devm → ε pc sevm devm exn ex)
 
-lemma Benv.subBal_getCode {benv benv' : Benv} {adr a : Adr} {val : B256} (h : benv.subBal adr val = some benv') :
-  benv'.state.getCode a = benv.state.getCode a := by
-  dsimp [Benv.subBal, Option.bind] at h
-  split at h
-  · contradiction
-  · rename_i st' h_sub
-    injection h with h2
-    subst h2
-    dsimp [Benv.withState]
-    exact State.subBal_getCode h_sub
-
 /-! The solvency-facing world relation. -/
 
 def Devm.WorldEq (d d' : Devm) : Prop :=

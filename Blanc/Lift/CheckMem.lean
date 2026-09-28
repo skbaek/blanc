@@ -189,15 +189,4 @@ theorem checkNode_eq_checkNodeM (code : ByteArray) (es : List Entry) (m : Nat)
     | undefined => exact ⟨fun pc a => by simp [Q, checkNode, checkNodeM], by simp [P]⟩
   exact (hall f).1 pc a
 
-/-- `checkNodeM` at `.branch` with an unknown condition is the byte check and
-both sub-tree checks (the memory map threads through unchanged). -/
-theorem checkNodeM_branch_unk {code : ByteArray} (es : List Entry) (ms : List MemMap)
-    (b : Bool) (m pc : Nat) (tgt : B256) (v : AVal) (a' : List AVal) (μ : MemMap)
-    (f g : SFunc) (hv : v.jumps? = none) :
-    checkNodeM code es ms b m pc (.const tgt :: v :: a') μ (.branch f g) =
-      (byteAt code pc == some (Jinst.toUInt8 .jumpi) &&
-        checkNodeM code es ms b m (pc + 1) a' μ f &&
-        checkNodeM code es ms b m tgt.toNat a' μ g) := by
-  simp [checkNodeM, hv]
-
 end Blanc.Lift

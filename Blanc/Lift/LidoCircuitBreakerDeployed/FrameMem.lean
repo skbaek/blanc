@@ -44,9 +44,6 @@ theorem MemOK.write_word {μ : Mem} (h : MemOK μ) (i : Nat) (w : B256) :
   · exact h.2
   · rw [ceil32_eq_mul]; omega
 
-theorem MemOK.extend {μ : Mem} (h : MemOK μ) (i sz : Nat) : MemOK (μ.extend i sz) :=
-  ⟨h.1.extend i sz, memExtSize_mod_32 h.2⟩
-
 
 /-- The dispatcher's instructions: none writes the world, and memory changes
 only by a word store. -/

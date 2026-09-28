@@ -2097,8 +2097,9 @@ def literal_tries_lines(depth: int) -> List[str]:
 # `decide +kernel` over roughly this many SFunc tree nodes peaks under the ~4 GiB host
 # admission norm (the frame-4 precedent measured ~900 steps per decision at that peak,
 # 2026-09-27).  An entry above this many nodes is split at unknown-condition branches
-# (`checkNode_branch_unk`/`checkNodeT_branch_unk`, `Blanc/Lift/CheckFast.lean`) into pieces at
-# or below this size, each its own kernel decision, instead of one whole-tree decision.
+# (`checkNodeT`'s own `.branch` equation, `Blanc/Lift/CheckFast.lean`: the byte check and
+# both sub-tree checks) into pieces at or below this size, each its own kernel decision,
+# instead of one whole-tree decision.
 CHECK_SPLIT_NODE_BUDGET = 1000
 
 
@@ -2156,7 +2157,7 @@ class SplitNode:
 
 def split_entry_plan(entry_idx: int, threshold: int) -> SplitNode:
     """Recursively split entry `entry_idx`'s tree at unknown-condition `.branch` nodes -- the
-    only splitting axiom, `checkNode_branch_unk`/`checkNodeT_branch_unk` -- into pieces of at
+    only splitting axiom, `checkNodeT`'s own `.branch` equation -- into pieces of at
     most `threshold` tree nodes each, returned as a `SplitNode` tree (root first).
 
     A piece's SFunc argument is either an *existing* named sub-`def` the generator's own

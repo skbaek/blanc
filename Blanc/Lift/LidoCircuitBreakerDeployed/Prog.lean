@@ -8,9 +8,6 @@ namespace Blanc.Lift.LidoCircuitBreakerDeployed
 /-- The exact deployed runtime's certified lifted program. -/
 abbrev prog : List SFunc := Cert.prog cert
 
-theorem entry32_lookup : prog[32]? = some t_0934_c32 := by
-  rfl
-
 theorem entry4_lookup : prog[4]? = some t_0a81_c4 := by
   rfl
 

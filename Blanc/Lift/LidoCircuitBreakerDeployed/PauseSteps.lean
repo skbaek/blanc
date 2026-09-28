@@ -226,8 +226,6 @@ where
     change (0 : Nat) < 2 ^ 160
     norm_num
 
-theorem entry32Spec_3c2 : Entry32Spec 0x3c2 := entry32Spec 0x3c2
-
 /-! ## The single-address decoder (entry 7) and the bool decoder (entry 33) -/
 
 /-- Entry 7 (`abi_decode_address` over `calldatasize`) returns the canonical

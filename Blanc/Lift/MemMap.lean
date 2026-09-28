@@ -98,14 +98,6 @@ theorem memExtsSize_ge : ∀ (s : Nat) (ps : List (Nat × Nat)), s ≤ memExtsSi
   | _, [] => Nat.le_refl _
   | s, ⟨i, n⟩ :: ps => le_trans (memExtSize_ge s i n) (memExtsSize_ge _ ps)
 
-theorem MemMatches.extend {ρ : B256} {mem : MemMap} {μ : Mem} (i n : Nat)
-    (hm : MemMatches ρ mem μ) : MemMatches ρ mem (μ.extend i n) :=
-  MemMatches.of_data_eq (μ := μ) (μ' := μ.extend i n) rfl (memExtSize_ge _ _ _) hm
-
-theorem MemMatches.extends {ρ : B256} {mem : MemMap} {μ : Mem} (ps : List (Nat × Nat))
-    (hm : MemMatches ρ mem μ) : MemMatches ρ mem (μ.extends ps) :=
-  MemMatches.of_data_eq (μ := μ) (μ' := μ.extends ps) rfl (memExtsSize_ge _ _) hm
-
 /-- `Mem.write`'s backing array, before the payload is laid over it: it holds
 the payload's window and agrees with the old bytes below the old logical size.
 Unlike `Mem.write_aux` this needs no `Mem.Wf`. -/

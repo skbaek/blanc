@@ -37,24 +37,12 @@ theorem remove_guard_bytes :
       some (.next (.push [0x02] (by decide))), some (.next (.reg .sstore))) := by
   kernel_rfl
 
-theorem remove_release_bytes :
-    (code.getInst 7788, code.getInst 7790, code.getInst 7792) =
-    (some (.next (.push [0x00] (by decide))), some (.next (.push [0x02] (by decide))),
-      some (.next (.reg .sstore))) := by
-  kernel_rfl
-
 theorem add_guard_bytes :
     (code.getInst 88, code.getInst 90, code.getInst 94, code.getInst 95, code.getInst 97,
       code.getInst 99) =
     (some (.next (.push [0x00] (by decide))), some (.next (.reg .sload)),
       some (.jump .jumpi), some (.next (.push [0x01] (by decide))),
       some (.next (.push [0x00] (by decide))), some (.next (.reg .sstore))) := by
-  kernel_rfl
-
-theorem add_release_bytes :
-    (code.getInst 2017, code.getInst 2019, code.getInst 2021) =
-    (some (.next (.push [0x00] (by decide))), some (.next (.push [0x00] (by decide))),
-      some (.next (.reg .sstore))) := by
   kernel_rfl
 
 /-! ### The run -/

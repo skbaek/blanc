@@ -223,16 +223,6 @@ theorem jumpsOkNode_eq_jumpsOkNodeM (code : ByteArray) (es : List Entry) (f : SF
     | undefined => exact ⟨fun a => rfl, by simp [P]⟩
   exact (hall f).1 a
 
-/-- `jumpsOkNodeM` at `.branch` with an unknown condition needs both sub-trees
-(and the taken target to be a jump destination). -/
-theorem jumpsOkNodeM_branch_unk {code : ByteArray} (es : List Entry) (b : Bool)
-    (tgt : B256) (v : AVal) (a' : List AVal) (μ : MemMap) (f g : SFunc)
-    (hv : v.jumps? = none) :
-    jumpsOkNodeM code es b (.branch f g) (.const tgt :: v :: a') μ =
-      (jumpsOkNodeM code es b f a' μ &&
-        (jumpdestOk code tgt.toNat && jumpsOkNodeM code es b g a' μ)) := by
-  simp [jumpsOkNodeM, hv]
-
 /-- Every entry is jump-safe from its declared map. -/
 def Cert.JumpsOkM (code : ByteArray) (c : Cert) (ms : List MemMap) (b : Bool) : Prop :=
   ∀ k e f, c.entries[k]? = some e → c.prog[k]? = some f →

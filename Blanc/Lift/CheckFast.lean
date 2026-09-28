@@ -607,66 +607,6 @@ theorem jumpsOkNodeMT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es
     | undefined => exact ⟨fun a μ => rfl, by simp [P]⟩
   exact (hall f).1 a μ
 
-/-! ## Splitting one node check at an unknown-condition branch -/
-
-/-- `checkNode` at `.branch` with an unknown condition is the byte check and both
-sub-tree checks. Each sub-tree can then be its own `decide +kernel` theorem and
-the entry composed without re-deciding the whole tree. -/
-theorem checkNode_branch_unk {code : ByteArray} (es : List Entry) (m pc : Nat)
-    (tgt : B256) (v : AVal) (a' : List AVal) (f g : SFunc) (hv : v.jumps? = none) :
-    checkNode code es m pc (.const tgt :: v :: a') (.branch f g) =
-      (byteAt code pc == some (Jinst.toUInt8 .jumpi) &&
-        checkNode code es m (pc + 1) a' f && checkNode code es m tgt.toNat a' g) := by
-  simp [checkNode, hv]
-
-/-- Trie-reading copy of `checkNode_branch_unk`. -/
-theorem checkNodeT_branch_unk {code : ByteArray} {d : Nat} (t : LTrie UInt8)
-    (es : List Entry) (m pc : Nat) (tgt : B256) (v : AVal) (a' : List AVal)
-    (f g : SFunc) (hv : v.jumps? = none) :
-    checkNodeT code d t es m pc (.const tgt :: v :: a') (.branch f g) =
-      (LTrie.get? d t pc == some (Jinst.toUInt8 .jumpi) &&
-        checkNodeT code d t es m (pc + 1) a' f &&
-        checkNodeT code d t es m tgt.toNat a' g) := by
-  simp [checkNodeT, hv]
-
-/-- `jumpsOkNode` at `.branch` with an unknown condition needs both sub-trees
-(and the taken target to be a jump destination). -/
-theorem jumpsOkNode_branch_unk {code : ByteArray} (es : List Entry)
-    (tgt : B256) (v : AVal) (a' : List AVal) (f g : SFunc) (hv : v.jumps? = none) :
-    jumpsOkNode code es (.branch f g) (.const tgt :: v :: a') =
-      (jumpsOkNode code es f a' && (jumpdestOk code tgt.toNat && jumpsOkNode code es g a')) := by
-  simp [jumpsOkNode, hv]
-
-/-- Trie-reading copy of `jumpsOkNode_branch_unk`. -/
-theorem jumpsOkNodeT_branch_unk {code : ByteArray} {d : Nat} (T : CodeTries code d)
-    (es : List Entry) (tgt : B256) (v : AVal) (a' : List AVal) (f g : SFunc)
-    (hv : v.jumps? = none) :
-    jumpsOkNodeT code d T es (.branch f g) (.const tgt :: v :: a') =
-      (jumpsOkNodeT code d T es f a' &&
-        (jumpdestOkT code d T tgt.toNat && jumpsOkNodeT code d T es g a')) := by
-  simp [jumpsOkNodeT, hv]
-
-/-- Trie-reading memory-tracking copy of the branch-split equation. -/
-theorem checkNodeMT_branch_unk {code : ByteArray} {d : Nat} (t : LTrie UInt8)
-    (es : List Entry) (ms : List MemMap) (b : Bool) (m pc : Nat)
-    (tgt : B256) (v : AVal) (a' : List AVal) (μ : MemMap) (f g : SFunc)
-    (hv : v.jumps? = none) :
-    checkNodeMT code d t es ms b m pc (.const tgt :: v :: a') μ (.branch f g) =
-      (LTrie.get? d t pc == some (Jinst.toUInt8 .jumpi) &&
-        checkNodeMT code d t es ms b m (pc + 1) a' μ f &&
-        checkNodeMT code d t es ms b m tgt.toNat a' μ g) := by
-  simp [checkNodeMT, hv]
-
-/-- Trie-reading memory-tracking copy of the jumps branch-split equation. -/
-theorem jumpsOkNodeMT_branch_unk {code : ByteArray} {d : Nat} (T : CodeTries code d)
-    (es : List Entry) (b : Bool)
-    (tgt : B256) (v : AVal) (a' : List AVal) (μ : MemMap) (f g : SFunc)
-    (hv : v.jumps? = none) :
-    jumpsOkNodeMT code d T es b (.branch f g) (.const tgt :: v :: a') μ =
-      (jumpsOkNodeMT code d T es b f a' μ &&
-        (jumpdestOkT code d T tgt.toNat && jumpsOkNodeMT code d T es b g a' μ)) := by
-  simp [jumpsOkNodeMT, hv]
-
 /-! ## Assembling a memory-tracking certificate from per-entry decisions -/
 
 /-- The entries of a certificate with their indices, from `k`. -/

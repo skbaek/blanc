@@ -11,7 +11,7 @@ execution of those bytes from pc `0` with an empty stack is a synthetic run of
 the certificate's program.  It is stated over arbitrary bytes and certificates;
 a contract instantiates it with one kernel-checked `Cert.check … = true`.
 
-The proof is one strong recursion over `Exec.Deriv` (`node_sound`).  Its
+The proof is one strong recursion over `Exec.Deriv` (`node_soundM`).  Its
 invariant relates the concrete operand stack to an abstract frame: the stack is
 `S ++ base`, where `S` matches the frame word by word (`FrameMatches ρ`, with
 `.ret` read as the current function's return address `ρ`) and `base` belongs to
@@ -1567,10 +1567,6 @@ theorem node_soundM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
         exact hnone_code
       have hstep := Evm.step_invOp (devm := devm) hnone
       cases Exec.halt_inv exc hstep
-
-theorem node_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
-    (R : Exec.Deriv) : ∀ pk : Exec.Deriv, NodeClaim code c [] false R pk :=
-  node_soundM (Cert.checkedM_of_check hc) R
 
 /-- The lifting theorem inside the derivation, from checked entries whose entry
 `0` starts the frame. -/
