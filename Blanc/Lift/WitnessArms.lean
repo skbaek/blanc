@@ -7,8 +7,8 @@ import Blanc.ConcreteRun
 # Executable witnesses: the interpreter and its instruction arms
 
 The kernel-evaluable interpreter `wrun` of `Blanc.Lift.Witness` and everything it
-executes: the accessed-set bookkeeping (`AccKeep`, `ninstAccKeeps`), kernel-reducible
-state and memory writes (`stateSetB`, `memWriteB`), the storage and account shadows,
+executes: the accessed-set bookkeeping (`AccKeep`, `ninstAccKeeps`), kernel-cheap
+memory writes (`memWriteB`), the storage and account shadows,
 the per-instruction arms (`sloadStep`, `sstoreStep`, `mstoreStep`, `calldatacopyStep`,
 `keccakStep`, `logStep`, `callStep`) and the `CALL` preparation `callPrep`, with
 `wstep`, `wrun` and the chunk composition `wrun_add`/`wrun_add_cont`.  The soundness
@@ -190,63 +190,6 @@ theorem pcFree_of_ninstAccKeeps {n : Ninst} (hn : ninstAccKeeps n = true) : Nins
   | reg r => cases r <;> simp_all [ninstAccKeeps, rinstAccKeeps, Ninst.pcFree]
   | _ => rfl
 
-/-! ## Kernel-reducible state writes
-
-Jaune's `State.set` tests `ac = .nil` through an instance built by `rw` (a `propext`
-cast), which the kernel cannot reduce, so every state write (`SSTORE`, a value
-transfer) is stuck under kernel evaluation.  `State.setB` tests the same condition
-with a `Bool` and is equal to it (`State.set_eq_setB`). -/
-
-/-- `ac = .nil`, decided by a `Bool`. -/
-def acctNilB (ac : Acct) : Bool :=
-  ac.nonce == 0 && ac.bal == 0 && ac.stor.isEmpty && ac.code.size == 0
-
-theorem acctNilB_iff (ac : Acct) : acctNilB ac = true ↔ ac = .nil := by
-  rcases ac with ⟨n, b, s, ⟨c⟩⟩
-  simp only [acctNilB, Acct.nil, Bool.and_eq_true, beq_iff_eq, Acct.mk.injEq]
-  constructor
-  · rintro ⟨⟨⟨hn, hb⟩, hs⟩, hc⟩
-    refine ⟨hn, hb, Std.TreeMap.eq_empty_of_isEmpty hs, ?_⟩
-    simp only [ByteArray.size] at hc
-    rw [Array.size_eq_zero_iff.mp hc]
-  · rintro ⟨hn, hb, hs, hc⟩
-    subst hs
-    refine ⟨⟨⟨hn, hb⟩, rfl⟩, ?_⟩
-    rw [hc]; rfl
-
-/-- `State.set` with a kernel-reducible test. -/
-def stateSetB (w : State) (a : Adr) (ac : Acct) : State :=
-  if acctNilB ac then w.erase a else w.insert a ac
-
-theorem state_set_eq_setB (w : State) (a : Adr) (ac : Acct) : w.set a ac = stateSetB w a ac := by
-  unfold State.set stateSetB
-  by_cases h : ac = .nil
-  · simp only [h, ↓reduceIte, (acctNilB_iff Acct.nil).mpr rfl]
-  · have h' : acctNilB ac = false := by
-      cases hb : acctNilB ac
-      · rfl
-      · exact absurd ((acctNilB_iff ac).mp hb) h
-    simp only [h, h', ↓reduceIte, Bool.false_eq_true]
-
-/-- `State.setStorVal` through `stateSetB`. -/
-def stateSetStorValB (w : State) (adr : Adr) (key val : B256) : State :=
-  let acct : Acct := w.get adr
-  stateSetB w adr {acct with stor := acct.stor.set key val}
-
-theorem state_setStorVal_eq_B (w : State) (adr : Adr) (key val : B256) :
-    w.setStorVal adr key val = stateSetStorValB w adr key val := by
-  unfold State.setStorVal stateSetStorValB
-  exact state_set_eq_setB _ _ _
-
-/-- `Devm.setStorVal` through `stateSetB`. -/
-def devmSetStorValB (devm : Devm) (adr : Adr) (key val : B256) : Devm :=
-  devm.withState (stateSetStorValB devm.state adr key val)
-
-theorem devm_setStorVal_eq_B (devm : Devm) (adr : Adr) (key val : B256) :
-    devm.setStorVal adr key val = devmSetStorValB devm adr key val := by
-  unfold Devm.setStorVal devmSetStorValB
-  rw [state_setStorVal_eq_B]
-
 /-! ## Kernel-cheap memory writes
 
 Jaune's `Mem.write` grows memory with `Array.copyD` (a fold of `setIfInBounds`,
@@ -363,34 +306,33 @@ def acsSetBal (acs : AcctShadow) (a : Adr) (v : B256) : AcctShadow :=
 def AcctAgree (st : State) (acs : AcctShadow) : Prop :=
   ∀ a, acctView (st.get a) = lookupA acs a
 
-theorem acctView_get_stateSetB (st : State) (a b : Adr) (ac : Acct) :
-    acctView ((stateSetB st a ac).get b) = if a = b then acctView ac else acctView (st.get b) := by
-  rw [← state_set_eq_setB]
+theorem acctView_get_set (st : State) (a b : Adr) (ac : Acct) :
+    acctView ((State.set st a ac).get b) = if a = b then acctView ac else acctView (st.get b) := by
   by_cases h : a = b
   · subst h; rw [State.get_set_self]; simp
   · rw [State.get_set_ne _ h]; simp [h]
 
-theorem acctAgree_stateSetB {st : State} {acs : AcctShadow} (h : AcctAgree st acs) (a : Adr)
-    (ac : Acct) : AcctAgree (stateSetB st a ac) ((a, acctView ac) :: acs) := by
+theorem acctAgree_set {st : State} {acs : AcctShadow} (h : AcctAgree st acs) (a : Adr)
+    (ac : Acct) : AcctAgree (State.set st a ac) ((a, acctView ac) :: acs) := by
   intro b
-  rw [acctView_get_stateSetB]
+  rw [acctView_get_set]
   simp only [lookupA]
   split
   · rfl
   · exact h b
 
 /-- A storage write keeps every account view. -/
-theorem acctView_stateSetStorValB (w : State) (adr : Adr) (k v : B256) (b : Adr) :
-    acctView ((stateSetStorValB w adr k v).get b) = acctView (w.get b) := by
-  unfold stateSetStorValB
-  rw [acctView_get_stateSetB]
+theorem acctView_setStorVal (w : State) (adr : Adr) (k v : B256) (b : Adr) :
+    acctView ((State.setStorVal w adr k v).get b) = acctView (w.get b) := by
+  unfold State.setStorVal
+  rw [acctView_get_set]
   split
   · subst_vars; rfl
   · rfl
 
-theorem acctAgree_stateSetStorValB {w : State} {acs : AcctShadow} (h : AcctAgree w acs)
-    (adr : Adr) (k v : B256) : AcctAgree (stateSetStorValB w adr k v) acs := by
-  intro b; rw [acctView_stateSetStorValB]; exact h b
+theorem acctAgree_setStorVal {w : State} {acs : AcctShadow} (h : AcctAgree w acs)
+    (adr : Adr) (k v : B256) : AcctAgree (State.setStorVal w adr k v) acs := by
+  intro b; rw [acctView_setStorVal]; exact h b
 
 
 
@@ -454,14 +396,14 @@ def sstoreStep (sevm : Sevm) (c : Cfg) (g : SFunc) : Option Cfg :=
       if (ct, k) ∈ c.keys then
         let cost := sstoreValueCost orig cur v
         if cost ≤ c.devm.gasLeft then
-          some ⟨(devmSetStorValB (c.devm.withRefundCounter rc) ct k v).setMach
+          some ⟨(Devm.setStorVal (c.devm.withRefundCounter rc) ct k v).setMach
               ⟨s, c.devm.memory, c.devm.gasLeft - cost, c.devm.stateGas⟩, g, c.K, c.keys, c.adrs,
               ((ct, k), v) :: c.stor, c.acs⟩
         else none
       else
         let cost := gasColdSload + sstoreValueCost orig cur v
         if cost ≤ c.devm.gasLeft then
-          some ⟨(devmSetStorValB ((addAccessedStorageKey c.devm ct k).withRefundCounter rc) ct k v).setMach
+          some ⟨(Devm.setStorVal ((addAccessedStorageKey c.devm ct k).withRefundCounter rc) ct k v).setMach
               ⟨s, c.devm.memory, c.devm.gasLeft - cost, c.devm.stateGas⟩, g, c.K, (ct, k) :: c.keys, c.adrs,
               ((ct, k), v) :: c.stor, c.acs⟩
         else none
@@ -542,7 +484,7 @@ The `.call` arm of `Xinst.step` is stuck under kernel evaluation in two places:
 the warm/cold charge (`accessCost` tests `Std.HashSet` membership) and the value
 transfer in `Frame.enter` (`State.set`).  `callPrep` computes the arm up to its
 spawn with the charge decided on the address shadow, and `frameEnterB` is
-`Frame.enter` through `stateSetB`; both are proved equal to Jaune's
+`Frame.enter` through `benvAfterTransferB`; both are proved equal to Jaune's
 (`callPrep_spec`, `frame_enter_eq_B`), by way of the forward lemmas of
 `Blanc/ForwardCall.lean`.  A precompile child answers synchronously and is run
 by the interpreter; a code child's result is supplied as data together with
@@ -558,35 +500,27 @@ theorem accessCost_eq_L {x : Adr} {s : AdrSet} {l : List Adr} (h : ∀ a, a ∈ 
   unfold accessCost accessCostL
   simp only [h x]
 
-/-- `State.setBal` through `stateSetB`. -/
-def stateSetBalB (st : State) (a : Adr) (v : B256) : State :=
-  stateSetB st a ((st.get a).withBal v)
-
-theorem state_setBal_eq_B (st : State) (a : Adr) (v : B256) :
-    st.setBal a v = stateSetBalB st a v :=
-  state_set_eq_setB _ _ _
-
-theorem acctAgree_stateSetBalB {st : State} {acs : AcctShadow} (h : AcctAgree st acs) (a : Adr)
-    (v : B256) : AcctAgree (stateSetBalB st a v) (acsSetBal acs a v) := by
+theorem acctAgree_setBal {st : State} {acs : AcctShadow} (h : AcctAgree st acs) (a : Adr)
+    (v : B256) : AcctAgree (State.setBal st a v) (acsSetBal acs a v) := by
   intro b
-  unfold stateSetBalB acsSetBal
-  rw [acctView_get_stateSetB]
+  unfold State.setBal acsSetBal
+  rw [acctView_get_set]
   simp only [lookupA]
   split
   · subst_vars
     rw [← h]; rfl
   · exact h b
 
-/-- `Msg.benvAfterTransfer` through `stateSetB`. -/
+/-- `Msg.benvAfterTransfer` with the transfer written through `State.setBal`. -/
 def benvAfterTransferB (msg : Msg) : Except (EvmError × State × AdrSet × Tra) Benv :=
   if msg.shouldTransferValue then
     if msg.benv.state.bal msg.caller < msg.value then
       .error ⟨.internal (.assertion .none), msg.benv.state, msg.benv.createdAccounts,
         msg.tenv.transientStorage⟩
     else
-      let st1 := stateSetBalB msg.benv.state msg.caller (msg.benv.state.bal msg.caller - msg.value)
+      let st1 := State.setBal msg.benv.state msg.caller (msg.benv.state.bal msg.caller - msg.value)
       .ok ((msg.benv.withState st1).withState
-        (stateSetBalB st1 msg.currentTarget (st1.bal msg.currentTarget + msg.value)))
+        (State.setBal st1 msg.currentTarget (st1.bal msg.currentTarget + msg.value)))
   else .ok msg.benv
 
 theorem benvAfterTransfer_eq_B (msg : Msg) : msg.benvAfterTransfer = benvAfterTransferB msg := by
@@ -595,8 +529,7 @@ theorem benvAfterTransfer_eq_B (msg : Msg) : msg.benvAfterTransfer = benvAfterTr
   · simp only [ht, ↓reduceIte]
     by_cases hb : msg.benv.state.bal msg.caller < msg.value
     · simp [hb, Benv.subBal, State.subBal, Option.toExcept]
-    · simp [hb, Benv.subBal, State.subBal, Option.toExcept, Benv.addBal, State.addBal,
-        state_setBal_eq_B]
+    · simp [hb, Benv.subBal, State.subBal, Option.toExcept, Benv.addBal, State.addBal]
       rfl
   · simp [ht]
 
@@ -623,10 +556,10 @@ def benvAfterTransferS (msg : Msg) (acs : AcctShadow) :
       .error ⟨.internal (.assertion .none), msg.benv.state, msg.benv.createdAccounts,
         msg.tenv.transientStorage⟩
     else
-      let st1 := stateSetBalB msg.benv.state msg.caller ((lookupA acs msg.caller).bal - msg.value)
+      let st1 := State.setBal msg.benv.state msg.caller ((lookupA acs msg.caller).bal - msg.value)
       let bt := (lookupA (acsSetBal acs msg.caller ((lookupA acs msg.caller).bal - msg.value))
         msg.currentTarget).bal
-      .ok ((msg.benv.withState st1).withState (stateSetBalB st1 msg.currentTarget (bt + msg.value)))
+      .ok ((msg.benv.withState st1).withState (State.setBal st1 msg.currentTarget (bt + msg.value)))
   else .ok msg.benv
 
 /-- The account shadow after a value transfer. -/
@@ -648,7 +581,7 @@ theorem benvAfterTransfer_eq_S {msg : Msg} {acs : AcctShadow} (h : AcctAgree msg
   · split
     · rfl
     · dsimp only
-      rw [bal_eq_lookupA (acctAgree_stateSetBalB h _ _) msg.currentTarget]
+      rw [bal_eq_lookupA (acctAgree_setBal h _ _) msg.currentTarget]
   · rfl
 
 theorem acctAgree_transfer {msg : Msg} {acs : AcctShadow} {benv : Benv}
@@ -662,7 +595,7 @@ theorem acctAgree_transfer {msg : Msg} {acs : AcctShadow} {benv : Benv}
     split at ht
     · cases ht
     · cases ht
-      exact acctAgree_stateSetBalB (acctAgree_stateSetBalB h _ _) _ _
+      exact acctAgree_setBal (acctAgree_setBal h _ _) _ _
   · rename_i hsv
     cases ht
     simp only [hsv, Bool.false_eq_true, ↓reduceIte]
@@ -902,9 +835,8 @@ theorem callPrep_spec {sevm : Sevm} {c : Cfg} {cp : CallPrep} (h : callPrep sevm
     · cases h
   · cases h
 
-theorem stateSetBalB_stor (st : State) (b : Adr) (v : B256) (a : Adr) (k : B256) :
-    storOf (stateSetBalB st b v) a k = storOf st a k := by
-  rw [← state_setBal_eq_B]
+theorem storOf_setBal (st : State) (b : Adr) (v : B256) (a : Adr) (k : B256) :
+    storOf (State.setBal st b v) a k = storOf st a k := by
   unfold storOf State.setBal
   by_cases h : b = a
   · subst h; rw [State.get_set_self]; rfl
@@ -919,8 +851,8 @@ theorem benvAfterTransferB_stor {m : Msg} {benv : Benv} (h : benvAfterTransferB 
   · split at h
     · cases h
     · cases h
-      show storOf (stateSetBalB _ _ _) a k = _
-      rw [stateSetBalB_stor, stateSetBalB_stor]
+      show storOf (State.setBal _ _ _) a k = _
+      rw [storOf_setBal, storOf_setBal]
   · cases h; rfl
 
 /-- A precompile child leaves the accessed sets it was given, and the storage. -/

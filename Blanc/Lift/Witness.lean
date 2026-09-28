@@ -147,20 +147,12 @@ theorem storOf_set_empty (st : State) (p a : Adr) (ac : Acct) (k : B256)
   · subst h; rw [State.get_set_self]; exact h_ac
   · rw [State.get_set_ne _ h]; exact h_st
 
-/-- Setting an account with empty storage via `stateSetB` preserves storage-emptiness. -/
-theorem storOf_stateSetB_empty (st : State) (p a : Adr) (ac : Acct) (k : B256)
-    (h_st : storOf st a k = 0) (h_ac : ac.stor.get k = 0) :
-    storOf (stateSetB st p ac) a k = 0 := by
-  rw [← state_set_eq_setB]
-  exact storOf_set_empty st p a ac k h_st h_ac
-
-/-- Writing `(ct, k, v)` into a state (via `stateSetStorValB`) and prepending to the shadow
+/-- Writing `(ct, k, v)` into a state (`State.setStorVal`) and prepending to the shadow
 preserves storage agreement. -/
-theorem storOf_stateSetStorValB {st : State} {l : StorShadow} {ct : Adr} {k v : B256}
+theorem storOf_setStorVal_cons {st : State} {l : StorShadow} {ct : Adr} {k v : B256}
     (h : ∀ a k, storOf st a k = lookupS l a k) :
-    ∀ a k', storOf (stateSetStorValB st ct k v) a k' = lookupS (((ct, k), v) :: l) a k' := by
+    ∀ a k', storOf (State.setStorVal st ct k v) a k' = lookupS (((ct, k), v) :: l) a k' := by
   intro a k'
-  rw [← state_setStorVal_eq_B]
   rw [storOf_setStorVal]
   simp only [lookupS]
   split
@@ -170,12 +162,12 @@ theorem storOf_stateSetStorValB {st : State} {l : StorShadow} {ct : Adr} {k v : 
 /-- A storage write moves the storage shadow by one entry. -/
 theorem storOf_sstore {d : Devm} {l : StorShadow} {ct : Adr} {k v : B256}
     (h : ∀ a k, storOf d.state a k = lookupS l a k) :
-    ∀ a k', storOf (devmSetStorValB d ct k v).state a k' = lookupS (((ct, k), v) :: l) a k' :=
-  storOf_stateSetStorValB h
+    ∀ a k', storOf (Devm.setStorVal d ct k v).state a k' = lookupS (((ct, k), v) :: l) a k' :=
+  storOf_setStorVal_cons h
 
 /-- Apply a list of storage writes to a world state, in order. -/
 def stateFoldStor (st : State) (writes : List ((Adr × B256) × B256)) : State :=
-  writes.foldl (fun s ((a, k), v) => stateSetStorValB s a k v) st
+  writes.foldl (fun s ((a, k), v) => State.setStorVal s a k v) st
 
 /-- Storage shadow constructed by folding writes (newest first). -/
 def storShadowOf (writes : List ((Adr × B256) × B256)) : StorShadow :=
@@ -185,7 +177,7 @@ def storShadowOf (writes : List ((Adr × B256) × B256)) : StorShadow :=
 theorem storOf_foldl_writes (writes : List ((Adr × B256) × B256)) :
     ∀ (st : State) (s : StorShadow),
       (∀ a k, storOf st a k = lookupS s a k) →
-      ∀ a k, storOf (writes.foldl (fun st ((a, k), v) => stateSetStorValB st a k v) st) a k =
+      ∀ a k, storOf (writes.foldl (fun st ((a, k), v) => State.setStorVal st a k v) st) a k =
              lookupS (writes.foldl (fun s w => w :: s) s) a k := by
   induction writes with
   | nil =>
@@ -196,7 +188,7 @@ theorem storOf_foldl_writes (writes : List ((Adr × B256) × B256)) :
     rcases w with ⟨⟨ct, key⟩, val⟩
     simp only [List.foldl_cons]
     apply ih
-    exact storOf_stateSetStorValB h
+    exact storOf_setStorVal_cons h
 
 /-- Agreement for a state built by folding a list of writes from an empty-storage base,
 with the shadow built from the same list. -/
@@ -256,7 +248,7 @@ theorem sstoreStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
         · rename_i hgas
           cases h
           refine StepOk.of (fun hc => ⟨hc.1, hc.2.1, storOf_sstore hc.2.2.1,
-            acctAgree_stateSetStorValB hc.2.2.2 _ _ _⟩) rfl fun hc o r => .next ?_ r
+            acctAgree_setStorVal hc.2.2.2 _ _ _⟩) rfl fun hc o r => .next ?_ r
           have hcur : devm.getStorVal sevm.currentTarget k = lookupS stor sevm.currentTarget k :=
             hc.2.2.1 _ _
           have h := Ninst.runCompiled_sstore_warm hleg' hs ((hc.1 _).mpr hw) hsentry hstatic
@@ -264,14 +256,14 @@ theorem sstoreStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
             (congrArg (fun x => sstoreNewRefundCounter sevm.benvStat.rules.gas v
               (getOrigStorVal sevm sevm.currentTarget k) x devm.refundCounter) hcur)
             (G := devm.gasLeft - _) (by exact (Nat.sub_add_cancel hgas).symm)
-          rwa [devm_setStorVal_eq_B] at h
+          exact h
         · cases h
       · rename_i hw
         split at h
         · rename_i hgas
           cases h
           refine StepOk.of (fun hc => ⟨agree_insert hc.1, hc.2.1, storOf_sstore hc.2.2.1,
-            acctAgree_stateSetStorValB hc.2.2.2 _ _ _⟩) rfl
+            acctAgree_setStorVal hc.2.2.2 _ _ _⟩) rfl
             fun hc o r => .next ?_ r
           have hcur : devm.getStorVal sevm.currentTarget k = lookupS stor sevm.currentTarget k :=
             hc.2.2.1 _ _
@@ -282,7 +274,7 @@ theorem sstoreStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
             (congrArg (fun x => sstoreNewRefundCounter sevm.benvStat.rules.gas v
               (getOrigStorVal sevm sevm.currentTarget k) x devm.refundCounter) hcur)
             (G := devm.gasLeft - _) (by exact (Nat.sub_add_cancel hgas).symm)
-          rwa [devm_setStorVal_eq_B] at h
+          exact h
         · cases h
     · cases h
   · cases h
@@ -732,9 +724,9 @@ theorem wrun_exact {fs : List SFunc} {sevm : Sevm} {pre post : Devm} {f0 : SFunc
 
 /-! ## Seeding the account shadow -/
 
-/-- A world built from storage-free accounts (each placed through `stateSetB`). -/
+/-- A world built from storage-free accounts (each placed through `State.set`). -/
 def stateFoldAcct (st : State) (accts : List (Adr × Acct)) : State :=
-  accts.foldl (fun s (a, ac) => stateSetB s a (acctView ac)) st
+  accts.foldl (fun s (a, ac) => State.set s a (acctView ac)) st
 
 /-- The account shadow of `stateFoldAcct`'s accounts (newest first). -/
 def acctShadowOf (accts : List (Adr × Acct)) : AcctShadow :=
@@ -742,14 +734,14 @@ def acctShadowOf (accts : List (Adr × Acct)) : AcctShadow :=
 
 theorem acctAgree_foldAcct (accts : List (Adr × Acct)) :
     ∀ (st : State) (acs : AcctShadow), AcctAgree st acs →
-      AcctAgree (accts.foldl (fun s (a, ac) => stateSetB s a (acctView ac)) st)
+      AcctAgree (accts.foldl (fun s (a, ac) => State.set s a (acctView ac)) st)
         (accts.foldl (fun s (a, ac) => (a, acctView ac) :: s) acs) := by
   induction accts with
   | nil => intro st acs h; exact h
   | cons x xs ih =>
     intro st acs h
     rcases x with ⟨a, ac⟩
-    exact ih _ _ (acctAgree_stateSetB h a (acctView ac))
+    exact ih _ _ (acctAgree_set h a (acctView ac))
 
 theorem acctAgree_stateFoldAcct (accts : List (Adr × Acct)) :
     AcctAgree (stateFoldAcct default accts) (acctShadowOf accts) :=
@@ -757,13 +749,13 @@ theorem acctAgree_stateFoldAcct (accts : List (Adr × Acct)) :
 
 theorem storOf_foldAcct (accts : List (Adr × Acct)) :
     ∀ (st : State), (∀ a k, storOf st a k = 0) →
-      ∀ a k, storOf (accts.foldl (fun s (a, ac) => stateSetB s a (acctView ac)) st) a k = 0 := by
+      ∀ a k, storOf (accts.foldl (fun s (a, ac) => State.set s a (acctView ac)) st) a k = 0 := by
   induction accts with
   | nil => intro st h; exact h
   | cons x xs ih =>
     intro st h
     rcases x with ⟨b, ac⟩
-    exact ih _ fun a k => storOf_stateSetB_empty st b a (acctView ac) k (h a k) rfl
+    exact ih _ fun a k => storOf_set_empty st b a (acctView ac) k (h a k) rfl
 
 theorem storOf_stateFoldAcct (accts : List (Adr × Acct)) (a : Adr) (k : B256) :
     storOf (stateFoldAcct default accts) a k = 0 :=
@@ -771,13 +763,13 @@ theorem storOf_stateFoldAcct (accts : List (Adr × Acct)) (a : Adr) (k : B256) :
 
 theorem acctAgree_foldStor (writes : List ((Adr × B256) × B256)) :
     ∀ (st : State) (acs : AcctShadow), AcctAgree st acs →
-      AcctAgree (writes.foldl (fun st ((a, k), v) => stateSetStorValB st a k v) st) acs := by
+      AcctAgree (writes.foldl (fun st ((a, k), v) => State.setStorVal st a k v) st) acs := by
   induction writes with
   | nil => intro st acs h; exact h
   | cons w ws ih =>
     intro st acs h
     rcases w with ⟨⟨a, k⟩, v⟩
-    exact ih _ _ (acctAgree_stateSetStorValB h a k v)
+    exact ih _ _ (acctAgree_setStorVal h a k v)
 
 theorem acctAgree_stateFoldStor (writes : List ((Adr × B256) × B256)) {st : State}
     {acs : AcctShadow} (h : AcctAgree st acs) : AcctAgree (stateFoldStor st writes) acs :=

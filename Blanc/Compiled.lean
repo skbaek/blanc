@@ -783,11 +783,6 @@ lemma peel_inst_of_push {bs : Bytes} (le : bs.length ≤ 32) :
   | [] => exact Or.inr ⟨Or.inl (by simp), rfl⟩
   | x :: bs' => exact Or.inl ⟨by simp, by simp at le ⊢; omega, by simp⟩
 
-/-- Local `DecidableEq` for Jaune's `InstType` (Jaune declares none):
-enables `decide` over closed byte-classification goals. -/
-private instance : DecidableEq InstType := fun a b => by
-  cases a <;> cases b <;> first | exact isTrue rfl | exact isFalse (by simp)
-
 /-- An accepted `DUPN`/`SWAPN` immediate is never a `PUSH`-class byte, so the
 boundary walk can peel it as data. Peels all 256 bytes by the
 `Nat.forall_lt_succ_left'` pattern beside `toInstType_toUInt8_swap`, closing
