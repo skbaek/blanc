@@ -169,7 +169,7 @@ theorem cfg_of_obsD {c : Cfg} {x : Bnd} (h : obsD x (.cont c) = obsDOk x) :
   have hd' : data' = data := Array.toList_inj.mp hd
   subst hs hd' hsz hg hsg hk ha hst hf hK hc
   rcases m with ⟨_, _, _, _, _, _, _, _, _, _, _⟩
-  simp only [Devm.refundCounter, Devm.output, Devm.returnData, Devm.error, Devm.mach,
+  simp only [Devm.refundCounter, Devm.output, Devm.returnData, Devm.error,
     Option.isNone_iff_eq_none] at hrc ho hrd he
   subst hrc ho hrd he
   rfl
