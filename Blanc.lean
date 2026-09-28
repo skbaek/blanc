@@ -39,6 +39,9 @@ import Blanc.ExecutionTraceFresh
 import Blanc.ExecutionOccurrence
 import Blanc.ExecutionAccountingReplay
 import Blanc.ExecutionAccountingLadder
+import Blanc.ExecutionAccountingAdmission
+import Blanc.ExecutionAccountingCore
+import Blanc.ExecutionDirectCode
 import Blanc.CallSpawnExact
 import Blanc.StaticCallStorage
 import Blanc.ExecutionTraceFrames
@@ -407,10 +410,12 @@ import Blanc.Lift.Weth9.Live
 -- (beacon-deposit-bytecode-v1); these two tops reach the whole lift kit.
 import Blanc.Lift.BeaconDeposit.Ladder
 import Blanc.Lift.BeaconDeposit.Refines
+import Blanc.Lift.BeaconDeposit.CommittedHistory
 
 -- The certificate cursor, the reentrancy-lock exclusion kit with its bytecode checker,
 -- owner discipline, and concrete-run evaluation (deployed-lido-vyper-v1): shared.
 import Blanc.Lift.Cursor
+import Blanc.Lift.CallRestriction
 import Blanc.LockExclusion
 import Blanc.OwnerDiscipline
 import Blanc.Lift.LockCheck

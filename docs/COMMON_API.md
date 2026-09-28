@@ -438,10 +438,13 @@ spawn equation without operand knowledge — use the spawn-source family in
 - `Xinst.step_spawn_source`: the trichotomy over any
   `Xinst.step sevm devm x = .spawn f rsm` — empty target code, same target as
   the parent, or code identity under `¬ isValidDelegation`. Its second disjunct
-  (`f.inner.currentTarget = sevm.currentTarget`) is explicitly open: no shared
-  step-level lemma resolves a same-target child, so report the open disjunct
-  rather than forcing the inversion. Message-level same-target resolution with
-  the callee word known goes through `not_delegation_of_compile` instead.
+  (`f.inner.currentTarget = sevm.currentTarget`) remains open for an arbitrary
+  instruction. For an actual STATICCALL spawn,
+  `Xinst.step_staticcall_sameTarget_code` in
+  [`Blanc/ExecutionDirectCode.lean`](../Blanc/ExecutionDirectCode.lean) gives
+  direct-code identity from same-target and nondelegation evidence. It is the
+  shared owner of the former Lido private proof. Message-level resolution with
+  the callee word known goes through `not_delegation_of_compile`.
 - `Xinst.step_spawn_codeAddress_eq_currentTarget`: away-from-parent child
   code-address identity, from the spawn equation plus `≠`, nonempty target code,
   and no-delegation evidence.
@@ -2148,6 +2151,34 @@ seams and rungs are the observed ones read through `ReplayObservation.trivial`
 and `Observed.trivial` (observing nothing).  Do not restate an unobserved rung
 to carry a projection; instantiate an observation.
 
+For deployed bytecode or a proof needing actual-frame entry premises, use
+[`Blanc/ExecutionAccountingAdmission.lean`](../Blanc/ExecutionAccountingAdmission.lean):
+`ExecutionAccountingReplay.AccountingLadderAdmitted c ca entry` takes a
+`ContractSpecSem`, admitted preservation, and one observed root law. The law
+relates replay steps to exactly `Exec.committedFrames run` and receives
+`Exec.FrameAdmitted` for that same run. Its wrapper rungs carry the corresponding
+trace admission through message creation, transactions, system messages,
+requests, withdrawals, blocks and histories. `configuredHistory` concludes
+replay and equality to `history.settledFrames.flatMap view.frameObs`; it derives
+fork coverage from each retained block. Admission remains an entry premise,
+never a supplied storage chain or endpoint condition. The legacy
+`AccountingLadder.Observed.toAdmitted` adapter derives fresh entry from retained
+traces and preserves the existing compiled API. Shared wrapper bounds and
+`ReplayCarrier.ofAddBal_observed` / `ofAddBal` now live in the admitted module;
+the old ladder reexports them by import.
+
+The single-execution bridge is
+[`Blanc/ExecutionAccountingCore.lean`](../Blanc/ExecutionAccountingCore.lean).
+`Exec.CoreAccounting` combines empty observations for static runs with exact
+observed replay under the world word bound. `Exec.coreAccounting` lifts a
+semantic target handler using the existing interpreter and settlement seams;
+foreign frames must observe nothing, and foreign entry snapshots must equal
+`ofState`. Its target handler receives only the already-derived lower-depth
+core. Static observation emptiness is independent of the balance bound.
+`Exec.CoreAccounting.messageRoot_facts` derives the semantic entry location and
+entry balance bound from an actual transferred, run-ready message. Neither
+bridge supplies a contract-specific deposit classification or entry premise.
+
 ### T3. The wrapper is a transaction and the fact is about an installed contract
 
 Use
@@ -2724,6 +2755,14 @@ contract-neutral.
   node spawns only by `CALL`/`STATICCALL`), in
   [`Blanc/Lift/Cursor.lean`](../Blanc/Lift/Cursor.lean). Use it for safety facts
   about reverting or out-of-gas frames, which `lift_sound` cannot see.
+- Restrict external instruction families along a checked certificate cursor:
+  [`Blanc/Lift/CallRestriction.lean`](../Blanc/Lift/CallRestriction.lean) defines
+  `SFunc.execsSatisfy` and `Cursor.ExecsSatisfy` (active function and pending
+  returns). `SStep.execsSatisfy` preserves the restriction;
+  `Cursor.execsSatisfy_of_reachable` starts it from the checked certificate;
+  `CursorOK.execsSatisfy` turns actual instruction decoding into `allowed x = true`.
+  This constrains same-frame instruction families, not child commitment or
+  effects, and requires the check on every certificate function.
 - A reentrancy lock's `LockSpec.Dominance` from a certificate (all outcomes):
   the checker `LockCheck.Spec`/`LockCheck.lockCert` (one Boolean walk with
   producer annotations from `scripts/lift/lift.py --lock-spec`) in
