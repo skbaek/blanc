@@ -1702,9 +1702,7 @@ field by field against `emptyWitness`, not a header. -/
 theorem emptyRegistryWorld_witness (dp : DeployParams) (ca : Adr) :
     RegistryWitness
       (logicalStorageOfStor ((emptyRegistryWorld dp ca).getStor ca)) [] := by
-  show RegistryWitness
-    (logicalStorageOfStor ((emptyRegistryWorld dp ca).get ca).stor) []
-  rw [emptyRegistryWorld_get]
+  rw [Jaune.State.getStor, emptyRegistryWorld_get]
   exact emptyWitness
 
 /-- **Control 1, the invariant is inhabited.**  `RegistryStable` holds at the
@@ -1713,8 +1711,7 @@ have a nonempty premise set.  Again: an exhibit, not a deployment. -/
 theorem emptyRegistryWorld_registryStable (dp : DeployParams) (ca : Adr) :
     RegistryStable dp ca (emptyRegistryWorld dp ca) where
   code := by
-    show some ((emptyRegistryWorld dp ca).get ca).code.toList = _
-    rw [emptyRegistryWorld_get, lidoCircuitBreakerCode_compile]
+    rw [Jaune.State.getCode, emptyRegistryWorld_get, lidoCircuitBreakerCode_compile]
     exact congrArg some (byteArray_mk_toArray_toList _)
   coherent := ⟨[], emptyRegistryWorld_witness dp ca⟩
 

@@ -2051,6 +2051,25 @@ theorem breakerState_stor (stor : Stor) :
     ((breakerState stor).get configWorldOwner).stor = stor := by
   rw [breakerState, State.get_set_self]
 
+/-- The deployment's current storage at a skeleton world, read through the
+message's entry `Devm`.  Stated over a variable `stor` so the kernel never
+evaluates a concrete world's `State.set` when a site uses it. -/
+theorem breakerMsg_getStorVal (caller : Adr) (stor : Stor) (time : B256)
+    (data : Bytes) (keys : Std.HashSet (Adr × B256)) (gas : Nat) (k : B256) :
+    (initDevm (breakerMsg caller stor time data keys gas)).getStorVal
+      configWorldOwner k = stor.get k := by
+  change ((breakerState stor).get configWorldOwner).stor.get k = _
+  rw [breakerState_stor]
+
+/-- The deployment's original storage at a skeleton world, as
+`breakerMsg_getStorVal`. -/
+theorem breakerMsg_getOrigStorVal (caller : Adr) (stor : Stor) (time : B256)
+    (data : Bytes) (keys : Std.HashSet (Adr × B256)) (gas : Nat) (k : B256) :
+    getOrigStorVal (initSevm (breakerMsg caller stor time data keys gas))
+      configWorldOwner k = stor.get k := by
+  change ((breakerState stor).get configWorldOwner).stor.get k = _
+  rw [breakerState_stor]
+
 private theorem breakerMsg_byteArray_ofList_toList (bs : Bytes) :
     (ByteArray.mk bs.toArray).toList = bs := by
   rw [ByteArray.toList_eq_toList_data]
@@ -2251,16 +2270,12 @@ theorem configWorld_warm :
 theorem configWorld_old :
     configWorldPre.getStorVal configWorldSevm.currentTarget
       pauseDurationSlot = 0 := by
-  change (configWorldState.get configWorldOwner).stor.get pauseDurationSlot = 0
-  rw [configWorldState, breakerState_stor]
-  rfl
+  exact (breakerMsg_getStorVal _ _ _ _ _ _ _).trans rfl
 
 theorem configWorld_orig :
     getOrigStorVal configWorldSevm configWorldSevm.currentTarget
       pauseDurationSlot = 0 := by
-  change (configWorldState.get configWorldOwner).stor.get pauseDurationSlot = 0
-  rw [configWorldState, breakerState_stor]
-  rfl
+  exact (breakerMsg_getOrigStorVal _ _ _ _ _ _ _).trans rfl
 
 /-- The configured duration clears both immutable bounds inclusively and is
 nonzero, so the two guard branches fall through and the store is priced as a
@@ -2683,18 +2698,12 @@ theorem intervalWorld_warm :
 theorem intervalWorld_old :
     intervalWorldPre.getStorVal intervalWorldSevm.currentTarget
       heartbeatIntervalSlot = 0 := by
-  change ((breakerState Stor.empty).get configWorldOwner).stor.get
-    heartbeatIntervalSlot = 0
-  rw [breakerState_stor]
-  rfl
+  exact (breakerMsg_getStorVal _ _ _ _ _ _ _).trans rfl
 
 theorem intervalWorld_orig :
     getOrigStorVal intervalWorldSevm intervalWorldSevm.currentTarget
       heartbeatIntervalSlot = 0 := by
-  change ((breakerState Stor.empty).get configWorldOwner).stor.get
-    heartbeatIntervalSlot = 0
-  rw [breakerState_stor]
-  rfl
+  exact (breakerMsg_getOrigStorVal _ _ _ _ _ _ _).trans rfl
 
 /-- The configured interval clears both immutable bounds inclusively and is
 nonzero, so the two guard branches fall through and the store is priced as a
@@ -3061,33 +3070,37 @@ theorem heartbeatWorld_selector :
 theorem heartbeatWorld_count :
     heartbeatWorldPre.getStorVal heartbeatWorldSevm.currentTarget
       (countSlot heartbeatWorldSevm.caller.toB256) = heartbeatWorldCount := by
-  change ((breakerState heartbeatWorldStor).get configWorldOwner).stor.get
+  refine (breakerMsg_getStorVal _ _ _ _ _ _ _).trans ?_
+  change heartbeatWorldStor.get
     (countSlot heartbeatWorldPauser) = heartbeatWorldCount
-  rw [breakerState_stor, heartbeatWorldStor,
+  rw [heartbeatWorldStor,
     Stor.get_set_ne _ heartbeatWorld_expiry_ne_count, Stor.get_set_self]
 
 theorem heartbeatWorld_oldExpiry :
     heartbeatWorldPre.getStorVal heartbeatWorldSevm.currentTarget
       (expirySlot heartbeatWorldSevm.caller.toB256) =
       heartbeatWorldOldExpiry := by
-  change ((breakerState heartbeatWorldStor).get configWorldOwner).stor.get
+  refine (breakerMsg_getStorVal _ _ _ _ _ _ _).trans ?_
+  change heartbeatWorldStor.get
     (expirySlot heartbeatWorldPauser) = heartbeatWorldOldExpiry
-  rw [breakerState_stor, heartbeatWorldStor, Stor.get_set_self]
+  rw [heartbeatWorldStor, Stor.get_set_self]
 
 theorem heartbeatWorld_origExpiry :
     getOrigStorVal heartbeatWorldSevm heartbeatWorldSevm.currentTarget
       (expirySlot heartbeatWorldSevm.caller.toB256) =
       heartbeatWorldOldExpiry := by
-  change ((breakerState heartbeatWorldStor).get configWorldOwner).stor.get
+  refine (breakerMsg_getOrigStorVal _ _ _ _ _ _ _).trans ?_
+  change heartbeatWorldStor.get
     (expirySlot heartbeatWorldPauser) = heartbeatWorldOldExpiry
-  rw [breakerState_stor, heartbeatWorldStor, Stor.get_set_self]
+  rw [heartbeatWorldStor, Stor.get_set_self]
 
 theorem heartbeatWorld_intervalValue :
     heartbeatWorldPre.getStorVal heartbeatWorldSevm.currentTarget
       heartbeatIntervalSlot = heartbeatWorldInterval := by
-  change ((breakerState heartbeatWorldStor).get configWorldOwner).stor.get
+  refine (breakerMsg_getStorVal _ _ _ _ _ _ _).trans ?_
+  change heartbeatWorldStor.get
     heartbeatIntervalSlot = heartbeatWorldInterval
-  rw [breakerState_stor, heartbeatWorldStor,
+  rw [heartbeatWorldStor,
     Stor.get_set_ne _ heartbeatWorld_expiry_ne_interval,
     Stor.get_set_ne _ heartbeatWorld_count_ne_interval, Stor.get_set_self]
 
