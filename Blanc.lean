@@ -417,6 +417,7 @@ import Blanc.Lift.BeaconDeposit.CommittedHistory
 -- owner discipline, and concrete-run evaluation (deployed-lido-vyper-v1): shared.
 import Blanc.Lift.Cursor
 import Blanc.Lift.CallRestriction
+import Blanc.Lift.StaticOnlyFrames
 import Blanc.LockExclusion
 import Blanc.OwnerDiscipline
 import Blanc.Lift.LockCheck
@@ -521,6 +522,7 @@ import Blanc.Curve3Crv.Model
 import Blanc.Curve3Crv.Properties
 import Blanc.Lift.Curve3Crv.Ladder
 import Blanc.Lift.Curve3Crv.CarriedHistory
+import Blanc.Lift.Curve3Crv.CommittedHistory
 import Blanc.Lift.Curve3Crv.Exec
 
 namespace Blanc
