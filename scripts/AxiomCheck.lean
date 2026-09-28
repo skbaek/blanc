@@ -141,6 +141,20 @@ import Blanc.Lift.BeaconDeposit.Refines
 import Blanc.Lift.Curve3Crv.Ladder
 import Blanc.Lift.Curve3Crv.Exec
 import Blanc.Curve3Crv.Properties
+import Blanc.ConcreteRun
+import Blanc.LockExclusion
+import Blanc.OwnerDiscipline
+import Blanc.Lift.WalkSteps
+import Blanc.Lift.Witness
+import Blanc.Lift.WitnessArms
+import Blanc.Lift.CheckFast
+import Blanc.Lift.Sound
+import Blanc.Lift.LidoCircuitBreakerDeployed.L2Frame
+import Blanc.Lift.LidoCircuitBreakerDeployed.History
+import Blanc.Lift.VyperNonreentrantDeployed.CodeFacts
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exclusion
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.LockDominance
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top
 
 /-! # Repository axiom audit rows
 
@@ -1535,3 +1549,27 @@ elaborates only against a Jaune revision whose audit passed. -/
 #full_axioms Blanc.Curve3Crv.approve_ok_iff
 #full_axioms Blanc.Curve3Crv.mint_ok_iff
 #full_axioms Blanc.Curve3Crv.burnFrom_ok_iff
+#full_axioms Blanc.ConcreteRun.stepN_add
+#full_axioms Blanc.ConcreteRun.stepN_eq_get
+#full_axioms Blanc.Lift.getStor_setTransVal
+#full_axioms Blanc.Lift.getCode_setTransVal
+#full_axioms Blanc.Lift.getStorVal_eq_getStor
+#full_axioms Blanc.Lift.Witness.wrun_exact
+#full_axioms Blanc.Lift.Witness.wrun_add_cont
+#full_axioms Blanc.Lift.Cert.checkEntriesM_of_indexedFrom
+#full_axioms Blanc.Lift.Cert.jumpsOkM_of_indexed
+#full_axioms Blanc.Lift.lift_soundM
+#full_axioms Blanc.LockExclusion.LockSpec.locked_core
+#full_axioms Blanc.LockExclusion.dominance_of_noSstore_of_nil
+#full_axioms Blanc.LockExclusion.stopLock_dominance
+#full_axioms Blanc.LockExclusion.hashAvoid_of_no_keccak
+#full_axioms Blanc.forwarderShape_6326
+#full_axioms Blanc.noSstore_forwarder_6326
+#full_axioms Blanc.Lift.LidoCircuitBreakerDeployed.l2_registerPauser_zero
+#full_axioms Blanc.Lift.LidoCircuitBreakerDeployed.lido_history_l1_l3
+#full_axioms Blanc.Lift.VyperNonreentrantDeployed.proxyCode_size
+#full_axioms Blanc.Lift.VyperNonreentrantDeployed.proxyCode_implementation_bytes
+#full_axioms Blanc.Lift.VyperNonreentrantDeployed.Fixed.lock_no_forbidden
+#full_axioms Blanc.Lift.VyperNonreentrantDeployed.Fixed.vplus_exclusion_impl
+#full_axioms Blanc.Lift.VyperNonreentrantDeployed.Fixed.vplus_exclusion_stethPool
+#full_axioms Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top.vminus_witness

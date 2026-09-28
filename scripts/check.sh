@@ -1776,7 +1776,31 @@ Blanc.Curve3Crv.burnFrom_ok_iff|$STANDARD
 Blanc.Lift.ri_codecopy|$STANDARD
 Blanc.Lift.ric_branchToCut|$STANDARD
 Blanc.Lift.ric_revert|$STANDARD
-Blanc.Lift.rx_mload_ext|$STANDARD"
+Blanc.Lift.rx_mload_ext|$STANDARD
+Blanc.ConcreteRun.stepN_add|$STANDARD
+Blanc.ConcreteRun.stepN_eq_get|$STANDARD
+Blanc.Lift.getStor_setTransVal|$STANDARD
+Blanc.Lift.getCode_setTransVal|$STANDARD
+Blanc.Lift.getStorVal_eq_getStor|$STANDARD
+Blanc.Lift.Witness.wrun_exact|$STANDARD
+Blanc.Lift.Witness.wrun_add_cont|$STANDARD
+Blanc.Lift.Cert.checkEntriesM_of_indexedFrom|propext, Quot.sound
+Blanc.Lift.Cert.jumpsOkM_of_indexed|propext, Quot.sound
+Blanc.Lift.lift_soundM|$STANDARD
+Blanc.LockExclusion.LockSpec.locked_core|$STANDARD
+Blanc.LockExclusion.dominance_of_noSstore_of_nil|$STANDARD
+Blanc.LockExclusion.stopLock_dominance|$STANDARD
+Blanc.LockExclusion.hashAvoid_of_no_keccak|$STANDARD
+Blanc.forwarderShape_6326|propext, Quot.sound
+Blanc.noSstore_forwarder_6326|propext, Quot.sound
+Blanc.Lift.LidoCircuitBreakerDeployed.l2_registerPauser_zero|$STANDARD
+Blanc.Lift.LidoCircuitBreakerDeployed.lido_history_l1_l3|$STANDARD
+Blanc.Lift.VyperNonreentrantDeployed.proxyCode_size|
+Blanc.Lift.VyperNonreentrantDeployed.proxyCode_implementation_bytes|
+Blanc.Lift.VyperNonreentrantDeployed.Fixed.lock_no_forbidden|$STANDARD
+Blanc.Lift.VyperNonreentrantDeployed.Fixed.vplus_exclusion_impl|$STANDARD
+Blanc.Lift.VyperNonreentrantDeployed.Fixed.vplus_exclusion_stethPool|$STANDARD
+Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top.vminus_witness|$STANDARD"
 # Secondary net only: the exact-set comparison below is the primary check;
 # this pattern catches forbidden names in output the per-theorem parse missed.
 FORBIDDEN='sorryAx|ofReduceBool|ofReduceNat|_native\.'
