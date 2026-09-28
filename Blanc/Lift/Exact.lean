@@ -1,5 +1,4 @@
 import Blanc.Lift.Sound
-import Blanc.Lift.Jumpdest
 
 /-!
 # The gas-exact converse for lifted bytecode

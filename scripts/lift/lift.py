@@ -2032,7 +2032,7 @@ if out_dir is not None:
 # 10. Per-entry Check.lean: each entry is one kernel decision over trie-backed code
 # reads (`Blanc/Lift/CheckFast.lean`), assembled into `cert_check`.
 def inst_starts(bs: bytes) -> List[bool]:
-    """`instStarts` (`Blanc/Lift/Jumpdest.lean`): true at an instruction start, false on
+    """`instStarts` (Jaune `Jaune/Machine.lean`): true at an instruction start, false on
     PUSH immediate bytes."""
     out, skip = [], 0
     for b in bs:

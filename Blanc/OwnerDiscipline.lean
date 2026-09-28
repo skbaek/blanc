@@ -1,5 +1,4 @@
 import Blanc.LockExclusion
-import Blanc.Lift.Jumpdest
 
 /-!
 # Storage-owner discipline from world premises

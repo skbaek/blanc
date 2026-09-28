@@ -158,7 +158,7 @@ SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
 # (solc-bytecode-v1): contract-neutral, no WETH9 name in any of them.
 SHARED += ["LadderBase", "LadderSem", "ContractAdmissionSem", "ExecutionAdmissionSem",
            "Lift.Basic", "Lift.Check", "Lift.Transfer", "Lift.Sound", "Lift.Exact",
-           "Lift.ExactWalk", "Lift.Jumpdest", "Lift.Silent", "Lift.BalSilent",
+           "Lift.ExactWalk", "Lift.Silent", "Lift.BalSilent",
            "Lift.Hoare", "Lift.BookedSpec"]
 # Loops, kernel-economical checking, walk kits and solc idioms (beacon-deposit-bytecode-v1):
 # contract-neutral, no contract name in any of them.
