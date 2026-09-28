@@ -2186,6 +2186,22 @@ core. Static observation emptiness is independent of the balance bound.
 entry balance bound from an actual transferred, run-ready message. Neither
 bridge supplies a contract-specific deposit classification or entry premise.
 
+Two consumers exist. The beacon deposit contract observes deposit nodes
+(`Blanc/Lift/BeaconDeposit/CommittedHistory.lean`); Curve 3Crv observes the
+ordered writer invocations of its settlement-committed frames, with the storage
+boundary as carrier and a model replay universally quantified over the opening
+abstraction (`Blanc/Lift/Curve3Crv/CommittedReplay.lean`,
+`CommittedHistory.lean`). A deployed contract whose certified bytes spawn only
+by `STATICCALL` shares one descendant argument,
+[`Blanc/Lift/StaticOnlyFrames.lean`](../Blanc/Lift/StaticOnlyFrames.lean):
+`Xinst.isStaticcall` with `parentPrefix_exec_staticcall_of_cert` turns a
+`SFunc.execsSatisfy Xinst.isStaticcall` check of each certificate function into
+`x = .staticcall` at every same-frame location, and
+`Exec.staticOnly_descendantFrames_flatMap_eq_nil` removes every observed
+descendant of a target frame from that restriction and the ladder's lower-depth
+hypothesis. The static callee may be the contract itself; it is then a static
+lower-depth target frame closed by the same hypothesis.
+
 ### T3. The wrapper is a transaction and the fact is about an installed contract
 
 Use

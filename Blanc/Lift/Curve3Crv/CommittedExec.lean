@@ -17,6 +17,7 @@ namespace Blanc.Lift.Curve3Crv
 
 open Jaune Blanc.Lift Blanc.ExecutionTrace
 
+/-- The checked deployed certificate executes no external instruction but `STATICCALL`. -/
 private theorem cert_onlyStaticcall :
     ∀ f ∈ cert.prog, f.execsSatisfy Xinst.isStaticcall = true := by
   intro f member
@@ -24,17 +25,6 @@ private theorem cert_onlyStaticcall :
     List.mem_cons, List.not_mem_nil, or_false] at member
   rcases member with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   all_goals decide +kernel
-
-/-- The checked deployed certificate permits only STATICCALL at every actual
-same-frame location, including internal jumps and returns. -/
-theorem parentPrefix_exec_staticcall {root node : Exec.Deriv}
-    (pc : root.pc = 0) (installed : root.sevm.code = code)
-    (fork : CoveredFork root.sevm.benvStat.fork)
-    (chain : Exec.Deriv.ParentPrefix root node)
-    {x : Xinst} (instruction : Ninst.At node.sevm.code node.pc (.exec x)) :
-    x = .staticcall :=
-  parentPrefix_exec_staticcall_of_cert cert_check cert_onlyStaticcall pc installed fork chain
-    instruction
 
 /-- A selected committed frame contributes exactly its own invocation, if any.
 Every retained child is a static `owner()` query; the lower-depth static-frame
@@ -58,8 +48,8 @@ theorem target_committedFrameInvocations {ca : Adr} {entry : Sevm → Devm → P
   have descendants := Exec.staticOnly_descendantFrames_flatMap_eq_nil ca c3crvSem entry
     (committedFrameInvocations ca) ⟨0, sevm, pre, .ok post, run⟩ target installed.1 fork
     (fun chain instruction =>
-      parentPrefix_exec_staticcall (root := ⟨0, sevm, pre, .ok post, run⟩) rfl hcode fork
-        chain instruction)
+      parentPrefix_exec_staticcall_of_cert cert_check cert_onlyStaticcall
+        (root := ⟨0, sevm, pre, .ok post, run⟩) rfl hcode fork chain instruction)
     (fun child childCommitted childFork depth childAt childAdmitted static =>
       deeper child childCommitted childFork depth childAt childAdmitted static)
     run (.refl _) (by

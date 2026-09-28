@@ -173,7 +173,7 @@ SHARED += ["LedgerUpdate"]
 SHARED += ["Lift.StaticCall", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper"]
 # The frame cursor, the reentrancy-lock exclusion kit and its bytecode checker, owner
 # discipline, and concrete-run evaluation (deployed-lido-vyper-v1): contract-neutral.
-SHARED += ["Lift.Cursor", "Lift.CallRestriction", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
+SHARED += ["Lift.Cursor", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
            "Lift.LockCheck", "Lift.LockCheckSound", "Lift.LockCheckFlow"]
 # The constant memory map and its checker, code tries as data, and the executable-witness
 # engine with its child runs and spawn facts (deployed-lido-vyper-v1, V-): contract-neutral.
@@ -245,7 +245,9 @@ CONTRACTS = {
                    "Lift.Curve3Crv.Dispatch", "Lift.Curve3Crv.Refine", "Lift.Curve3Crv.SafeBodies",
                    "Lift.Curve3Crv.SafeViews", "Lift.Curve3Crv.LiveBodies", "Lift.Curve3Crv.Safe",
                    "Lift.Curve3Crv.Exec", "Lift.Curve3Crv.Slots", "Lift.Curve3Crv.Ladder",
-                   "Lift.Curve3Crv.HistoryKeys", "Lift.Curve3Crv.CarriedHistory"],
+                   "Lift.Curve3Crv.HistoryKeys", "Lift.Curve3Crv.CarriedHistory",
+                   "Lift.Curve3Crv.CommittedReplay", "Lift.Curve3Crv.CommittedExec",
+                   "Lift.Curve3Crv.CommittedHistory"],
     "drip": ["DripCore", "Drip", "DripCode", "DripDeploy", "DripConcreteHistory", "DripConcreteHistory.Deployment", "DripConcreteHistory.Join", "DripConcreteHistory.Accrual", "DripConcreteHistory.AccrualExit", "DripConcreteReach", "DripCreationCode",
              "DripRpow", "DripIngress", "DripFunctional", "DripAccounting", "DripTranscript", "DripMachine", "DripEndpoints", "DripFresh", 
              "DripStackSafetyData", "DripStackSafety", "DripStackSafetyRegion214", "DripStackSafetyRegion576", "DripStackSafetyRegion1022", 

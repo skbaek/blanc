@@ -14,6 +14,8 @@ The writer replay below carries concrete invocation and owner-answer evidence
 from checked frame refinement. Its existential step list is not identified
 with an exact trace-extracted invocation list; it states model reachability
 from the one initial checkpoint, with no fresh conserving witness at entry.
+`CommittedHistory.lean` (`c3crv_history_committed`) is the exact form: the model
+run over the settlement-committed writer invocations extracted from the history.
 -/
 
 namespace Blanc.Lift.Curve3Crv
@@ -164,7 +166,8 @@ entries, including rolled-back branches; it is conservative across rollback.
 The returned writer list proves reachability from `initial`, with actual
 successful target executions, owner-answer evidence, and pre/post storage
 refinement at every step. It is not identified with an exact list extracted
-from the history. Interpreter ingress, non-target movements and rollback
+from the history (see `c3crv_history_committed` for that identification).
+Interpreter ingress, non-target movements and rollback
 are discharged by the configured-history ladder. Initial storage/code
 authentication and the truth of collision separation remain premises. -/
 theorem c3crv_history_carried {ca : Adr} {cfg : ChainConfig}
