@@ -54,4 +54,7 @@ def eT : Evm := match frameEnterS cpH.f cH.acs with | .run e => e | .done _ => d
 
 theorem enterT : frameEnterS cpH.f cH.acs = .run eT := by kernel_rfl
 
+/-- The pool holds the comparator in the entry shadow. -/
+theorem c0_pool_code : (lookupA c0.acs poolAddress).code = code := by kernel_rfl
+
 end Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness

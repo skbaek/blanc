@@ -163,15 +163,15 @@ theorem bytesAtT_eq' {code : ByteArray} {d : Nat} {t : LTrie UInt8}
       | zero => cases xs <;> rfl
       | succ i ih => cases xs with
         | nil => simp
-        | cons x xs => simpa using ih xs
+        | cons x xs => exact ih xs
     rw [hd]
     cases h : code.data.toList.drop pc with
-    | nil => simp [h]
+    | nil => simp
     | cons c cs =>
       have hnext : code.data.toList.drop (pc + 1) = cs := by
         rw [← List.drop_drop, h]; rfl
       have hbeq : (c == b) = decide (c = b) := rfl
-      simp [h, hnext, hbeq]
+      simp [hnext, hbeq]
 
 /-- A decoded instruction is the real one. -/
 theorem decodeT_sound {code : ByteArray} {d : Nat} (T : CodeTries code d) {pc : Nat}
@@ -356,7 +356,7 @@ theorem jrunT_accKeep {code : ByteArray} {d : Nat} (T : CodeTries code d) {pc pc
       split at h
       · cases h
       · rename_i e he
-        simp only [Except.assert, pure, Except.pure] at h
+        simp only [Except.assert] at h
         split at h
         · cases h
         · cases h; exact (accKeep_pop hp).trans (accKeep_chargeGas he)
@@ -374,7 +374,7 @@ theorem jrunT_accKeep {code : ByteArray} {d : Nat} (T : CodeTries code d) {pc pc
           have hk := (accKeep_pop hp).trans ((accKeep_pop hp2).trans (accKeep_chargeGas he))
           split at h
           · cases h; exact hk
-          · simp only [Except.assert, pure, Except.pure] at h
+          · simp only [Except.assert] at h
             split at h
             · cases h
             · cases h; exact hk
@@ -741,5 +741,28 @@ theorem resume_agree_ok {sevm : Sevm} {c : PCfg} {cp : CallPrep} {child d : Devm
 theorem childAgree_of_pagree {c : PCfg} (h : PAgree c) :
     ChildAgree c.devm c.keys c.adrs c.stor c.acs :=
   ⟨h.2.1, h.1, h.2.2.1, h.2.2.2⟩
+
+/-! ## Chains -/
+
+/-- Two nodes of one same-frame chain are comparable. -/
+theorem parentPrefix_total {a x b : Exec.Deriv} (hx : ParentPrefix a x) (hb : ParentPrefix a b) :
+    ParentPrefix x b ∨ ParentPrefix b x := by
+  induction hx generalizing b with
+  | refl => exact .inl hb
+  | step head rest ih =>
+    cases hb with
+    | refl => exact .inr (.step head rest)
+    | step head' rest' =>
+      have := Jaune.Exec.Deriv.ParentStep.unique head head'
+      subst this
+      exact ih rest'
+
+/-- A frame whose chain executes no `KECCAK256` avoids every slot with its hashes. -/
+theorem hashAvoid_of_noKeccak {F : Exec.Deriv} {code : ByteArray} {slot : B256}
+    (hcode : F.sevm.code = code) (h : ∀ x, ParentPrefix F x → NoKeccakAt code x.pc) :
+    Blanc.LockExclusion.HashAvoid slot F := by
+  intro x y hx _ hat
+  rw [Blanc.Exec.Deriv.ParentPrefix.sevm_eq hx, hcode] at hat
+  exact absurd hat (h x hx)
 
 end Blanc.Lift.NodeWalk
