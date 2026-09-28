@@ -95,11 +95,12 @@ def cfg339 : Cfg :=
 /-- The token's program (its lifted certificate). -/
 abbrev fsT : List SFunc := Cert.prog Token.cert
 
-/-- The whole of frame 1, from `c0`, with the attacker child `d1` supplied; the token
-child (step 574) is run by its own certificate (`childRun`) and resumed from with the
-shadows of its halting configuration. -/
-def run1 (d1 : Devm) : Res :=
-  match wrun fs1 sevm1 339 c0 with
+/-- Frame 1 after its first 339 steps (with result `r`), with the attacker child `d1`
+supplied; the token child (step 574) is run by its own certificate (`childRun`) and resumed
+from with the shadows of its halting configuration.  Taking the prefix's result as an
+argument lets a proof about the rest case on it without the kernel evaluating the prefix. -/
+def run1From (r : Res) (d1 : Devm) : Res :=
+  match r with
   | .cont c1 =>
     match callResume sevm1 c1 d1 keysA adrsA storA acsA with
     | some c2 =>
@@ -114,6 +115,9 @@ def run1 (d1 : Devm) : Res :=
       | _ => .stuck
     | none => .stuck
   | _ => .stuck
+
+/-- The whole of frame 1, from `c0`, with the attacker child `d1` supplied. -/
+def run1 (d1 : Devm) : Res := run1From (wrun fs1 sevm1 339 c0) d1
 
 /-- What frame 1's halt shows: gas, return data, and `P`'s `totalSupply` (slot 26),
 `balanceOf[A]` and remove-lock (slot 2) in the halting configuration's storage shadow, and

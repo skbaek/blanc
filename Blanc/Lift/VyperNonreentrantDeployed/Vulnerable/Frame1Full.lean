@@ -34,7 +34,7 @@ theorem frame1_full (d1 : Devm)
       (storOf post.state proxyAddress (2 : Nat).toB256).toNat = 0 ∧ post.error = none := by
   have hk := frame1_kernel d1
   rw [childObs_eq g1 o1 e1] at hk
-  unfold run1 at hk
+  unfold run1 run1From at hk
   split at hk
   · rename_i c1 h1
     have hc1 : cfg339 = c1 := by unfold cfg339; rw [h1]
