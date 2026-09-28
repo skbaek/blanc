@@ -151,10 +151,11 @@ def count_deployment_public_theorems(root: pathlib.Path) -> int:
 #                Anti-vacuity per surface: the registered patterns are what the
 #                gate knows about, the census is what the surface actually
 #                contains, and the two must agree in number.
-#   census_patterns -- optional per-surface patterns for stale quotations whose
-#                      published value differs from the produced value; these
-#                      count the quotation while the consumer still checks its
-#                      captured value against the producer.
+#   census_patterns -- optional per-surface semantic quotation census, used when
+#                      stale values or unrelated equal integers make a bare-number
+#                      census ambiguous. It counts quotations at any value while
+#                      consumers independently check every captured value. Missing
+#                      or duplicated quotations still fail the exact census.
 #
 # Anti-vacuity is per PATTERN, not per file: README.md's three audited-theorem
 # patterns yield four captured groups, so a file-level floor of three still
@@ -511,9 +512,8 @@ CLAIMS = [
             (
                 # The deployment gate's catalogue row states the inventory twice
                 # (the derivation and its scale cell) and its helper-script row
-                # once. The value collides with nothing else in the catalogue;
-                # the three `ERC-165` mentions are the neighbouring integer and
-                # are not counted by a census of this one.
+                # once. Count these semantic quotations independently of the
+                # shared-module population, which can have the same integer.
                 "scripts/GATES.md",
                 [
                     re.compile(r"the exact (\d{2,5})-name public theorem inventory"),
@@ -523,6 +523,11 @@ CLAIMS = [
             ),
         ],
         "census": {"scripts/GATES.md": 3},
+        "census_patterns": {"scripts/GATES.md": re.compile(
+            r"the exact \d{2,5}-name public theorem inventory|"
+            r"semantic fragments; \d{2,5} exact axiom probes|"
+            r"derives all \d{2,5} public theorem names"
+        )},
         "foreign": [],
     },
     {
@@ -545,6 +550,10 @@ CLAIMS = [
             ),
         ],
         "census": {"scripts/GATES.md": 1},
+        # Composition-module totals can coincide with the CI command total.
+        "census_patterns": {"scripts/GATES.md": re.compile(
+            r"Production CI executes its \d{1,4} registered commands"
+        )},
         "foreign": [],
     },
     {
