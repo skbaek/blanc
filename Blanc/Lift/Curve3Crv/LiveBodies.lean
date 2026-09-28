@@ -933,20 +933,6 @@ theorem live_burnFrom (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.i
 
 /-! ### The string views' shared pieces -/
 
-theorem ceil32_eq (L : Nat) : ceil32 L = L + 31 - (L + 31) % 32 := by
-  unfold ceil32
-  rcases h : L % 32 with _ | m
-  · simp only; omega
-  · simp only; omega
-
-/-- Reading calldata from its own size reads zeros. -/
-theorem sliceD_data_end (bs : Bytes) (z : Nat) : bs.sliceD bs.length z 0 = List.replicate z 0 := by
-  unfold List.sliceD
-  rw [List.drop_length]
-  induction z with
-  | zero => rfl
-  | succ z ih => simp [List.takeD, ih, List.replicate_succ]
-
 /-- The string views' join: zero-pad the string, `mstore(0x160, 0x20)`, and return the ABI
 string from `0x160`, over a memory whose word at `0x180` is the length and whose bytes at
 `0x1a0` are the string. -/
@@ -1090,18 +1076,6 @@ theorem live_strJoin (hcd : sevm.data.length < 2 ^ 256) {M : Mem} {sz : Nat} {Lw
   refine rx_return ?_ (by rw [h160, hret]; exact hout)
   rw [h160, hret, St, Devm.extCost_zero_of_le (by rw [hM2s]; exact hsz32) (by rw [hM2s]; omega)]
 
-/-- The string views' body: the `CALLVALUE` guard, `mstore(0xc0, sl); keccak(0xc0, 0x20)` for
-the base, the length word, the counter at `0x120`, then the load loop `loopT`. -/
-def strBody (h0 h1 sl cp : UInt8) (fail loopT : SFunc) : SFunc :=
-  .next (.reg .callvalue) (.next (.reg .iszero) (.next (.push [h0, h1] (by simp))
-  (.branch fail (.dest (.next (.push [sl] (by simp)) (.next (.reg (.dup 0))
-  (.next (.push [0xc0] (by decide)) (.next (.reg .mstore) (.next (.push [0x20] (by decide))
-  (.next (.push [0xc0] (by decide)) (.next (.reg .keccak256) (.next (.push [0x01, 0x80] (by decide))
-  (.next (.push [0x20] (by decide)) (.next (.reg (.dup 2)) (.next (.reg .sload) (.next (.reg .add)
-  (.next (.push [0x01, 0x20] (by decide)) (.next (.push [0x00] (by decide))
-  (.next (.push [cp] (by simp)) (.next (.reg (.dup 1)) (.next (.reg (.dup 3))
-  (.next (.reg .mstore) (.next (.reg .add) loopT)))))))))))))))))))))))
-
 /-- The string views' prefix, forward, to the load loop's head. -/
 theorem rx_strPrefix (hfork : CoveredFork sevm.benvStat.fork) (hv : sevm.value = 0)
     {h0 h1 sl cp : UInt8} {fail loopT : SFunc} {G : Nat} {o : Outcome}
@@ -1114,7 +1088,7 @@ theorem rx_strPrefix (hfork : CoveredFork sevm.benvStat.fork) (hv : sevm.value =
           288 (Nat.toB256 0).toBytes) G) loopT o) :
     SFunc.RunExact prog sevm
       (entrySt sevm b (G + 118 + sloadCost sevm b (Bytes.toB256 [sl]).toBytes.keccak))
-      (strBody h0 h1 sl cp fail loopT) o := by
+      (vyStrView h0 h1 sl cp fail loopT) o := by
   have hM0 := vyMem_empty_size (Sevm.dataWord sevm 0)
   have hwf0 : Mem.Wf (vyMem Mem.empty (Sevm.dataWord sevm 0)) := vyMem_wf Mem.wf_empty _
   set M1 := (vyMem Mem.empty (Sevm.dataWord sevm 0)).write 192 (Bytes.toB256 [sl]).toBytes
@@ -1122,7 +1096,7 @@ theorem rx_strPrefix (hfork : CoveredFork sevm.benvStat.fork) (hv : sevm.value =
   have hc0 : (Bytes.toB256 [0xc0]).toNat = 192 := by decide
   have h20 : (Bytes.toB256 [0x20]).toNat = 32 := by decide
   have h120 : (Bytes.toB256 [0x01, 0x20]).toNat = 288 := by decide
-  unfold entrySt strBody
+  unfold entrySt vyStrView
   rw [show G + 118 + sloadCost sevm b (Bytes.toB256 [sl]).toBytes.keccak =
     G + 3 + 12 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b (Bytes.toB256 [sl]).toBytes.keccak +
       3 + 3 + 3 + 36 + 3 + 3 + 6 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 2 by omega]
@@ -1164,7 +1138,7 @@ theorem live_strView (hfork : CoveredFork sevm.benvStat.fork) (hcd : sevm.data.l
     (hj : prog[j]? = some joinT)
     (hcase : (cp = 3 ∧ n = 2 ∧ ((stor₀).get (Bytes.toB256 [sl]).toBytes.keccak).toNat ≤ 64) ∨
       (cp = 2 ∧ n = 1 ∧ ((stor₀).get (Bytes.toB256 [sl]).toBytes.keccak).toNat ≤ 32)) :
-    BodyLive sevm b (strBody h0 h1 sl cp fail (vyLoadLoopTree e0 e1 x0 x1 r0 r1 j k joinT))
+    BodyLive sevm b (vyStrView h0 h1 sl cp fail (vyLoadLoopTree e0 e1 x0 x1 r0 r1 j k joinT))
       (stor₀, [], some (abiString (vyStrOf stor₀ (Bytes.toB256 [sl]).toBytes.keccak n))) := by
   subst hjT
   set base := (Bytes.toB256 [sl]).toBytes.keccak with hbase

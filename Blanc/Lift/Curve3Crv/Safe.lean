@@ -16,11 +16,14 @@ abstraction `VyInv … s K`, with the frame-local `FreshKeys` premise for the ke
   accounts' storage is unchanged, the model's events are appended as `LOG3` entries, and the
   return data is the model's;
 * otherwise (the six views; a selector miss or short calldata cannot succeed) every storage map
-  and the log list are unchanged.
+  and the log list are unchanged, the model accepts the call, and the return data is exactly the
+  model's ABI-encoded answer (`RetOut`), whatever the enclosing output was.
 
 Route: `lift_sound`; the dispatcher (`safe_dispatch`) hands body `k` its entry state; views by
-the kernel-decided quiet sets (`view_world`); writers by their inversion segments
-(`SafeBodies.lean`) and the pure refinement (`refine_at`).
+the kernel-decided quiet sets (`view_world`) and their inversion segments (`safe_totalSupply`,
+`safe_allowance`, `safe_name`, `safe_symbol`, `safe_decimals`, `safe_balanceOf`; the string views
+use the length bound `VyInv.name`/`symbol` supplies); writers by their inversion segments
+(`SafeBodies.lean`); both through the pure refinement (`refine_at`).
 
 `c3crv_frame_refines_raw` keeps Jaune's exact `STOP` output preservation over
 an arbitrary base. `c3crv_frame_refines` specializes to empty entry output;
@@ -53,6 +56,24 @@ theorem writer_post {sevm : Sevm} {pre post : Devm} {K' : Key → Prop} {r : Raw
     · exact hret
     · exact hret
 
+/-- A view's raw effect always returns bytes. -/
+theorem rawOf_view_some {k : Nat} {sevm : Sevm} {ow : Option B256} {stor : Stor} {r : Raw}
+    (hk : k ∈ viewKs) (hr : rawOf k sevm ow stor = some r) : ∃ out, r.2.2 = some out := by
+  simp only [viewKs, List.mem_cons, List.not_mem_nil, or_false] at hk
+  rcases hk with rfl | rfl | rfl | rfl | rfl | rfl <;>
+    simp only [rawOf, rawTotalSupply, rawAllowance, rawName, rawSymbol, rawDecimals,
+      rawBalanceOf] at hr <;>
+    split_ifs at hr <;> cases hr <;> exact ⟨_, rfl⟩
+
+/-- A landing that returned bytes matching the model's result returns exactly the model's
+answer, whatever the enclosing output was. -/
+theorem retOut_of_some {sevm : Sevm} {pre post : Devm} {r : Raw} {o : Curve3Crv.Out}
+    {out : Bytes} (hl : Lands sevm pre post r) (hret : RetMatch r.2.2 o.2.2)
+    (hs : r.2.2 = some out) : RetOut post.output o.2.2 := by
+  rw [hs] at hret
+  rw [hl.output out hs]
+  cases h : o.2.2 <;> simp only [h, RetMatch, RetOut] at hret ⊢ <;> exact hret
+
 /-- **Raw refinement of the deployed runtime**, retaining exact output over an arbitrary base. -/
 theorem c3crv_frame_refines_raw {sevm : Sevm} {pre post : Devm} {s : Curve3Crv.State}
     {K : Key → Prop}
@@ -70,7 +91,9 @@ theorem c3crv_frame_refines_raw {sevm : Sevm} {pre post : Devm} {s : Curve3Crv.S
           post.logs = pre.logs ++ o.2.1.map (eventLog sevm.currentTarget) ∧
           RetOutFrom pre.output post.output o.2.2) ∧
     (¬ IsWriter (decodeCall sevm) →
-      (∀ a, Devm.getStor post a = Devm.getStor pre a) ∧ post.logs = pre.logs) := by
+      (∀ a, Devm.getStor post a = Devm.getStor pre a) ∧ post.logs = pre.logs ∧
+        ∃ o, Curve3Crv.step (c3ctx sevm none) (decodeCall sevm) s = .ok o ∧
+          RetOut post.output o.2.2) := by
   obtain ⟨f0, hf0, run⟩ := lift_sound cert_check hcode hfork exc
   rw [show (Cert.prog cert)[0]? = some t_0000_c0 from rfl] at hf0
   cases hf0
@@ -95,12 +118,20 @@ theorem c3crv_frame_refines_raw {sevm : Sevm} {pre post : Devm} {s : Curve3Crv.S
     intro ow how ⟨r, hr, hl⟩
     obtain ⟨o, ho, hc⟩ := (refine_at (ow := ow) hk13 hinv hfresh).1 r hr
     exact ⟨ow, how, o, ho, writer_post hl hc⟩
-  -- a view, from quietness
-  have view : k ∈ viewKs →
-      (∀ a, Devm.getStor post a = Devm.getStor pre a) ∧ post.logs = pre.logs := by
-    intro hv
+  -- a view, from quietness and its inversion segment
+  have view : k ∈ viewKs → (∃ r, rawOf k sevm none stor = some r ∧ Lands sevm pre post r) →
+      (∀ a, Devm.getStor post a = Devm.getStor pre a) ∧ post.logs = pre.logs ∧
+        ∃ o, Curve3Crv.step (c3ctx sevm none) (callAt sevm k) s = .ok o ∧
+          RetOut post.output o.2.2 := by
+    intro hv ⟨r, hr, hl⟩
     have hw := view_world hfork hv hk runB
-    exact ⟨fun a => congrFun hw.1 a, hw.2⟩
+    obtain ⟨o, ho, hc⟩ := (refine_at (ow := none) hk13 hinv hfresh).1 r hr
+    obtain ⟨out, hout⟩ := rawOf_view_some hv hr
+    exact ⟨fun a => congrFun hw.1 a, hw.2, o, ho, retOut_of_some hl hc.2.2 hout⟩
+  have hLname : (stor.get vyNameBase).toNat ≤ 64 := by
+    have h := hinv.name; rw [VyStr] at h; omega
+  have hLsym : (stor.get vySymbolBase).toNat ≤ 32 := by
+    have h := hinv.symbol; rw [VyStr] at h; omega
   have none_ok : ∀ w, (none : Option B256) = some w → OwnerAnswer sevm pre s.minter w :=
     fun _ h => absurd h (by simp)
   rcases k with _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | k
@@ -115,8 +146,10 @@ theorem c3crv_frame_refines_raw {sevm : Sevm} {pre post : Devm} {s : Curve3Crv.S
       rw [hinv.minter, toAdr_toB256]
     rw [hm] at hw
     exact writer (some w) (fun w' h => by cases h; exact hw) ⟨r, hr, hl⟩
-  · exact ⟨fun h => False.elim h, fun _ => view (by simp [viewKs])⟩
-  · exact ⟨fun h => False.elim h, fun _ => view (by simp [viewKs])⟩
+  · exact ⟨fun h => False.elim h,
+      fun _ => view (by simp [viewKs]) (safe_totalSupply hfork G' post runB)⟩
+  · exact ⟨fun h => False.elim h,
+      fun _ => view (by simp [viewKs]) (safe_allowance hfork G' post runB)⟩
   · exact ⟨fun _ => writer none none_ok (safe_transfer hfork G' post runB),
       fun h => absurd trivial h⟩
   · exact ⟨fun _ => writer none none_ok (safe_transferFrom hfork G' post runB),
@@ -127,10 +160,14 @@ theorem c3crv_frame_refines_raw {sevm : Sevm} {pre post : Devm} {s : Curve3Crv.S
       fun h => absurd trivial h⟩
   · exact ⟨fun _ => writer none none_ok (safe_burnFrom hfork G' post runB),
       fun h => absurd trivial h⟩
-  · exact ⟨fun h => False.elim h, fun _ => view (by simp [viewKs])⟩
-  · exact ⟨fun h => False.elim h, fun _ => view (by simp [viewKs])⟩
-  · exact ⟨fun h => False.elim h, fun _ => view (by simp [viewKs])⟩
-  · exact ⟨fun h => False.elim h, fun _ => view (by simp [viewKs])⟩
+  · exact ⟨fun h => False.elim h,
+      fun _ => view (by simp [viewKs]) (safe_name hfork hcd hLname G' post runB)⟩
+  · exact ⟨fun h => False.elim h,
+      fun _ => view (by simp [viewKs]) (safe_symbol hfork hcd hLsym G' post runB)⟩
+  · exact ⟨fun h => False.elim h,
+      fun _ => view (by simp [viewKs]) (safe_decimals hfork G' post runB)⟩
+  · exact ⟨fun h => False.elim h,
+      fun _ => view (by simp [viewKs]) (safe_balanceOf hfork G' post runB)⟩
 
 /-- Fresh entry makes the exact raw output relation the model's return bytes. -/
 theorem c3crv_frame_refines {sevm : Sevm} {pre post : Devm} {s : Curve3Crv.State}
@@ -150,7 +187,9 @@ theorem c3crv_frame_refines {sevm : Sevm} {pre post : Devm} {s : Curve3Crv.State
           post.logs = pre.logs ++ o.2.1.map (eventLog sevm.currentTarget) ∧
           RetOut post.output o.2.2) ∧
     (¬ IsWriter (decodeCall sevm) →
-      (∀ a, Devm.getStor post a = Devm.getStor pre a) ∧ post.logs = pre.logs) := by
+      (∀ a, Devm.getStor post a = Devm.getStor pre a) ∧ post.logs = pre.logs ∧
+        ∃ o, Curve3Crv.step (c3ctx sevm none) (decodeCall sevm) s = .ok o ∧
+          RetOut post.output o.2.2) := by
   have h := c3crv_frame_refines_raw hcode hfork hcd hstack hmem hinv hfresh exc
   refine ⟨?_, h.2⟩
   intro hw
@@ -176,7 +215,9 @@ theorem c3crv_entered_frame_refines {sevm : Sevm} {pre post : Devm} {s : Curve3C
           post.logs = pre.logs ++ o.2.1.map (eventLog sevm.currentTarget) ∧
           RetOut post.output o.2.2) ∧
     (¬ IsWriter (decodeCall sevm) →
-      (∀ a, Devm.getStor post a = Devm.getStor pre a) ∧ post.logs = pre.logs) := by
+      (∀ a, Devm.getStor post a = Devm.getStor pre a) ∧ post.logs = pre.logs ∧
+        ∃ o, Curve3Crv.step (c3ctx sevm none) (decodeCall sevm) s = .ok o ∧
+          RetOut post.output o.2.2) := by
   obtain ⟨hstack, hmem⟩ := Frame.enter_run_fresh henter
   exact c3crv_frame_refines hcode hfork hcd hstack hmem
     (Frame.enter_run_output_empty henter) hinv hfresh exc

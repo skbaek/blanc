@@ -2893,7 +2893,9 @@ contract-neutral.
   `rx_vyLoadStep`, `rx_vyLoadLast`, `rx_vyLoadExit`) and memory to storage (`vyStoreLoopTree`,
   `rx_vyStoreStep`, `rx_vyStoreLast`, `rx_vyStoreExit`, one pass inverted `ric_vyStoreIter`,
   and the set-up `vyStoreHead` with `rx_`/`ric_vyStoreHead`), unrolled per pass since the cap
-  bounds the count, and `sstoreCost_le`, `Mem.read_write_disjoint`, `vy_mul32`, in
+  bounds the count, the load loop's pass inverted (`ric_vyLoadIter`), a stored-`String` view's
+  body up to its load loop (`vyStrView`) with the join's `ceil32_eq` and the zero-fill read
+  `sliceD_data_end`, and `sstoreCost_le`, `Mem.read_write_disjoint`, `vy_mul32`, in
   [`Blanc/Lift/Vyper.lean`](../Blanc/Lift/Vyper.lean).
 - Loops: a back-edge to entry `k` is reasoned about one iteration at a time on
   runs cut at `k` (`SFunc.RunCutP`, `SFunc.RunExactCut`). Safety:
