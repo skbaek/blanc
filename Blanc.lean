@@ -467,7 +467,6 @@ import Blanc.Lift.VyperNonreentrantDeployed.Fixed.LockCheck
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.LockDominance
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.LockSpec
 import Blanc.Lift.VyperNonreentrantDeployed.ProxyEntry
-import Blanc.Lift.VyperNonreentrantDeployed.ProxyTail
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.CheckPart0
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.CheckPart1
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.CheckPart2
@@ -488,10 +487,8 @@ import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.CheckPart5
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.CheckTries
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame0
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
-import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1Call
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1Full
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1Kernel
-import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1Prefix
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1Run
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame2
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame3
