@@ -1618,12 +1618,84 @@ def_memo: Dict[Tuple[int, int], str] = {} # (pc, entry_idx) -> def_name
 def_variants: Dict[Tuple[int, int], List[Tuple[Any, str]]] = {}
 probe_def_variants = [0]
 
+def render_sfunc(t: Any, entry_idx: int) -> str:
+    """One SFunc node as Lean syntax: inlines a straight-line `.next`/`.dest` run and refers to
+    any `.dest`/join-reference or `.branch`-child boundary by its `emit_block`-memoized name
+    (never inlining a named boundary's own body), so the result only ever references names
+    already written to `Cert.lean` -- safe to use standalone, without minting a new top-level
+    `def` (`split_entry_plan` uses this for a piece boundary that falls inside a run rather than
+    exactly at one of those boundaries)."""
+    k = t[0]
+    if k == 'join_ref':
+        target_k = t[1]
+        return f"t_{entries[target_k][0]:04x}_c{target_k}"
+    elif k == 'next' and t[1][0] == 0x58:  # PC at the node's pc
+        sub = t[2]
+        if sub[0] in ('dest', 'join_ref'):
+            return f"(.pcAt 0x{t[3]:x} {emit_block(sub, entry_idx)})"
+        return f"(.pcAt 0x{t[3]:x} {render_sfunc(sub, entry_idx)})"
+    elif k == 'next':
+        op, d = t[1]
+        sub = t[2]
+        if 0x5f <= op <= 0x7f:
+            hex_list = ", ".join(f"0x{b:02x}" for b in d)
+            op_str = f".push [{hex_list}] (by decide)"
+        else:
+            op_str = op_to_lean_reg(op)
+
+        # If next instruction is JUMPDEST or join_ref, branch to new block def
+        if sub[0] in ('dest', 'join_ref'):
+            child_name = emit_block(sub, entry_idx)
+            return f"(.next ({op_str}) {child_name})"
+        else:
+            return f"(.next ({op_str}) {render_sfunc(sub, entry_idx)})"
+    elif k == 'dest':
+        sub = t[1]
+        if sub[0] in ('dest', 'join_ref'):
+            child_name = emit_block(sub, entry_idx)
+            return f"(.dest {child_name})"
+        else:
+            return f"(.dest {render_sfunc(sub, entry_idx)})"
+    elif k == 'branch':
+        fall, taken = t[1], t[2]
+        fall_name = emit_block(fall, entry_idx)
+        taken_name = emit_block(taken, entry_idx)
+        return f"(.branch {fall_name} {taken_name})"
+    elif k == 'branchTo':
+        fall_name = emit_block(t[1], entry_idx)
+        return f"(.branchTo {fall_name} {t[2]})"
+    elif k == 'last':
+        op = t[1]
+        last_map = {0x00: ".last .stop", 0xf3: ".last .return_", 0xfd: ".last .revert", 0xff: ".last .selfdestruct"}
+        return f"({last_map[op]})"
+    elif k == 'jump':
+        target_k = t[1]
+        return f"(.jump {target_k})"
+    elif k == 'callNext':
+        target_k = t[1]
+        cont = t[2]
+        cont_name = emit_block(cont, entry_idx)
+        return f"(.callNext {target_k} {cont_name})"
+    elif k == 'ret':
+        return ".ret"
+    elif k == 'undefined':
+        return ".undefined"
+    elif k == 'jumpiF':  # decided JUMPI, condition 0: the taken side is dead
+        return f"(.branch {emit_block(t[1], entry_idx)} .undefined)"
+    elif k == 'jumpiT':  # decided JUMPI, nonzero condition: the fall-through is dead
+        return f"(.branch .undefined {emit_block(t[1], entry_idx)})"
+    elif k == 'jumpiTo':
+        return f"(.branchTo .undefined {t[1]})"
+    else:
+        raise ValueError(f"Unknown kind {k}")
+
+
 def emit_block(tree: Any, entry_idx: int) -> str:
     kind = tree[0]
     if kind == 'join_ref':
         target_k = tree[1]
         return f"t_{entries[target_k][0]:04x}_c{target_k}"
-    
+
     cur_pc = tree[-1]
     key = (cur_pc, entry_idx)
     if key in def_memo:
@@ -1639,74 +1711,8 @@ def emit_block(tree: Any, entry_idx: int) -> str:
         def_name = f"t_{cur_pc:04x}_c{entry_idx}"
         def_memo[key] = def_name
         def_variants[key] = [(tree, def_name)]
-    
-    # Render tree into string
-    def render(t: Any) -> str:
-        k = t[0]
-        if k == 'join_ref':
-            target_k = t[1]
-            return f"t_{entries[target_k][0]:04x}_c{target_k}"
-        elif k == 'next' and t[1][0] == 0x58:  # PC at the node's pc
-            sub = t[2]
-            if sub[0] in ('dest', 'join_ref'):
-                return f"(.pcAt 0x{t[3]:x} {emit_block(sub, entry_idx)})"
-            return f"(.pcAt 0x{t[3]:x} {render(sub)})"
-        elif k == 'next':
-            op, d = t[1]
-            sub = t[2]
-            if 0x5f <= op <= 0x7f:
-                hex_list = ", ".join(f"0x{b:02x}" for b in d)
-                op_str = f".push [{hex_list}] (by decide)"
-            else:
-                op_str = op_to_lean_reg(op)
-            
-            # If next instruction is JUMPDEST or join_ref, branch to new block def
-            if sub[0] in ('dest', 'join_ref'):
-                child_name = emit_block(sub, entry_idx)
-                return f"(.next ({op_str}) {child_name})"
-            else:
-                return f"(.next ({op_str}) {render(sub)})"
-        elif k == 'dest':
-            sub = t[1]
-            if sub[0] in ('dest', 'join_ref'):
-                child_name = emit_block(sub, entry_idx)
-                return f"(.dest {child_name})"
-            else:
-                return f"(.dest {render(sub)})"
-        elif k == 'branch':
-            fall, taken = t[1], t[2]
-            fall_name = emit_block(fall, entry_idx)
-            taken_name = emit_block(taken, entry_idx)
-            return f"(.branch {fall_name} {taken_name})"
-        elif k == 'branchTo':
-            fall_name = emit_block(t[1], entry_idx)
-            return f"(.branchTo {fall_name} {t[2]})"
-        elif k == 'last':
-            op = t[1]
-            last_map = {0x00: ".last .stop", 0xf3: ".last .return_", 0xfd: ".last .revert", 0xff: ".last .selfdestruct"}
-            return f"({last_map[op]})"
-        elif k == 'jump':
-            target_k = t[1]
-            return f"(.jump {target_k})"
-        elif k == 'callNext':
-            target_k = t[1]
-            cont = t[2]
-            cont_name = emit_block(cont, entry_idx)
-            return f"(.callNext {target_k} {cont_name})"
-        elif k == 'ret':
-            return ".ret"
-        elif k == 'undefined':
-            return ".undefined"
-        elif k == 'jumpiF':  # decided JUMPI, condition 0: the taken side is dead
-            return f"(.branch {emit_block(t[1], entry_idx)} .undefined)"
-        elif k == 'jumpiT':  # decided JUMPI, nonzero condition: the fall-through is dead
-            return f"(.branch .undefined {emit_block(t[1], entry_idx)})"
-        elif k == 'jumpiTo':
-            return f"(.branchTo .undefined {t[1]})"
-        else:
-            raise ValueError(f"Unknown kind {k}")
 
-    body = render(tree)
+    body = render_sfunc(tree, entry_idx)
     lean_defs.append((def_name, body))
     return def_name
 
@@ -2087,6 +2093,164 @@ def literal_tries_lines(depth: int) -> List[str]:
     return out
 
 
+# Kernel-decision node budget for `--check-split-nodes`/registry `check.split_nodes`: a
+# `decide +kernel` over roughly this many SFunc tree nodes peaks under the ~4 GiB host
+# admission norm (the frame-4 precedent measured ~900 steps per decision at that peak,
+# 2026-09-27).  An entry above this many nodes is split at unknown-condition branches
+# (`checkNode_branch_unk`/`checkNodeT_branch_unk`, `Blanc/Lift/CheckFast.lean`) into pieces at
+# or below this size, each its own kernel decision, instead of one whole-tree decision.
+CHECK_SPLIT_NODE_BUDGET = 1000
+
+
+def aval_lean(v: Tuple[Any, ...]) -> str:
+    """One abstract stack value (`step_inst`/`step_full`'s tuple form) as Lean `AVal` syntax."""
+    if v[0] == 'unk':
+        return ".unk"
+    elif v[0] == 'ret':
+        return ".ret"
+    elif v[0] == 'const':
+        return f"(.const (Nat.toB256 0x{v[1]:x}))"
+    raise ValueError(f"unknown AVal {v}")
+
+
+def stack_lean(st: List[Tuple[Any, ...]]) -> str:
+    return "[" + ", ".join(aval_lean(v) for v in st) + "]"
+
+
+def ninst_lean(op: int, d: bytes) -> str:
+    """One instruction as a Lean `Ninst` literal (matches `render_sfunc`'s own `.next` rendering
+    of the same instruction, so a fact about it applies to the connector's real def body)."""
+    if 0x5f <= op <= 0x7f:
+        hex_list = ", ".join(f"0x{b:02x}" for b in d)
+        return f".push [{hex_list}] (by decide)"
+    return op_to_lean_reg(op)
+
+
+class SplitNode:
+    """One node of a `split_entry_plan` result.  `kind == 'piece'`: `sfunc` is the SFunc
+    expression text (a name, if `named`, or `render_sfunc` literal text otherwise) to be decided
+    on its own; `pc`/`st` are its goal's pc/stack.  `kind == 'step'`: `sfunc` is a pre-existing
+    named `def` (from `Cert.lean`) that must be unfolded to reach its `children` (1, from a
+    `.dest`/join-ref crossing reached partway through a run, or 2, from a `.branch`); `pc`/`st`
+    are the pc/stack *at that named def's own start* (not at its children); and `hints` are
+    `absNinst instr frame = some frame'` facts (`decide`-proved, one per `.next` step of that
+    run) that let `simp` collapse each step's `match absNinst ... with` without unfolding
+    `ninstTransfer`/`regularTransfer` itself across the whole entry (unfolding `absNinst` bare,
+    with no fact to short-circuit its `match`, left `simp` making no progress and hitting
+    `maxRecDepth`; a fully-reduced `show` target hit the same limit reducing `LTrie.get?`/
+    `codeTries.bytes` through the elaborator's own `isDefEq`, which `decide +kernel`'s kernel-level
+    evaluation does not: hence `simp`, primed by one concrete fact per step, plus the structural
+    unfolding lemmas for `Ninst.size`/`Ninst.pcFree`/`Ninst.toBytes`/`bytesAtT`/`LTrie.get?`)."""
+    __slots__ = ("kind", "sfunc", "pc", "st", "children", "hints")
+
+    def __init__(self, kind: str, sfunc: str, pc: int, st: List[Tuple[Any, ...]],
+                 children: Tuple["SplitNode", ...] = (),
+                 hints: Optional[List[str]] = None) -> None:
+        self.kind = kind
+        self.sfunc = sfunc
+        self.pc = pc
+        self.st = st
+        self.children = children
+        self.hints = hints if hints is not None else []
+
+
+def split_entry_plan(entry_idx: int, threshold: int) -> SplitNode:
+    """Recursively split entry `entry_idx`'s tree at unknown-condition `.branch` nodes -- the
+    only splitting axiom, `checkNode_branch_unk`/`checkNodeT_branch_unk` -- into pieces of at
+    most `threshold` tree nodes each, returned as a `SplitNode` tree (root first).
+
+    A piece's SFunc argument is either an *existing* named sub-`def` the generator's own
+    `emit_block`/`render_sfunc` pass already wrote into `Cert.lean` (a branch's fall/taken side,
+    or a `.dest`/join-reference boundary) -- reused via `emit_block`'s `(pc, entry)` memo, never
+    minting a new top-level definition there -- or, when a piece boundary falls strictly inside
+    a straight-line `.next`/`.dest` run that was never separately named (i.e. between two such
+    boundaries), the literal SFunc expression text from `render_sfunc`, which itself only ever
+    refers to *existing* names for any further boundary it contains.  Either way nothing
+    references a name absent from the already-written `Cert.lean`.
+
+    Every `'step'` node gets its own small theorem (`check_source` below): one `simp only` call
+    scoped to that one connector's own name, its per-instruction `absNinst` facts (`hints`), the
+    structural unfolding lemmas, and its 1-2 already-proven children, followed by `decide` on
+    whatever small byte/trie boolean algebra remains (never a child's own, larger, subtree, since
+    each child was already rewritten to `true`).  This keeps every individual tactic call bounded
+    to one connector's own (basic-block-length) run, regardless of how many steps the whole entry
+    needs in total -- so nothing keyed on the entry's overall size (`simp`'s internal recursion,
+    or a `decide +kernel` spanning the whole tree) ever recurs: a single `simp only [<every
+    connector and piece>]` call over the *whole* entry hit Lean's `maxRecDepth`, which this
+    contract may not raise.
+
+    Raises if a subtree above the threshold cannot be reduced further -- a decided-condition
+    branch, or a terminal node with no branch beneath it -- which no currently registered
+    contract hits (`--fold`/`--decide-jumpi` are off for every split-enabled certificate, so
+    every genuine `.branch` node's condition is `.unk`)."""
+    depth = max(1, (len(code) - 1).bit_length())
+    epc, eframe, _erets, _emem = entries[entry_idx]
+
+    def too_big_to_split(tree: Any, st: List[Tuple[Any, ...]]) -> bool:
+        kind = tree[0]
+        return kind != 'next' and kind != 'dest' and not (kind == 'branch' and st[1][0] != 'const')
+
+    def open_named(tree: Any, pc: int, st: List[Tuple[Any, ...]]) -> SplitNode:
+        """`tree` occurs here as an *existing* named boundary (entry root, a `.dest`/join-ref
+        crossing, or a branch child): decide whether it is small enough to be a piece as-is, or
+        must be opened and walked further."""
+        size = count_tree_nodes(tree)
+        if size <= threshold:
+            return SplitNode('piece', emit_block(tree, entry_idx), pc, list(st))
+        if too_big_to_split(tree, st):
+            raise RuntimeError(
+                f"entry {entry_idx}: node at pc 0x{pc:x} ({tree[0]}) has {size} nodes > "
+                f"{threshold} and cannot be split further (no unknown-condition branch)")
+        name = emit_block(tree, entry_idx)
+        return descend(tree, pc, st, name, pc, list(st), [])
+
+    def descend(tree: Any, pc: int, st: List[Tuple[Any, ...]], name: str,
+                start_pc: int, start_st: List[Tuple[Any, ...]], hints: List[str]) -> SplitNode:
+        """Walk purely through `.next`/`.dest` steps of `tree` (no new naming -- each connector's
+        own step theorem lets `simp` walk these via `checkNodeT`'s equations, primed with one
+        `absNinst` hint per `.next` step in `hints`) until a piece boundary (size <= threshold)
+        or a genuine named boundary is reached.  `name`/`start_pc`/`start_st` are the enclosing
+        connector's own def name and starting pc/stack, carried through unchanged: a `'step'`
+        node's goal is stated at its *own* start, not mid-walk."""
+        size = count_tree_nodes(tree)
+        kind = tree[0]
+        if size <= threshold:
+            return SplitNode('piece', render_sfunc(tree, entry_idx), pc, list(st))
+        if too_big_to_split(tree, st):
+            raise RuntimeError(
+                f"entry {entry_idx}: node at pc 0x{pc:x} ({kind}) has {size} nodes > "
+                f"{threshold} and cannot be split further (no unknown-condition branch)")
+        if kind == 'next':
+            op, d = tree[1]
+            sub = tree[2]
+            npc = pc + inst_map[pc][1]
+            nxt_st, _ = step_full(op, d, list(st), EMPTY_MEM, pc)
+            hint = (f"show absNinst ({ninst_lean(op, d)}) {stack_lean(st)} = "
+                    f"some {stack_lean(nxt_st)} from by decide")
+            next_hints = hints + [hint]
+            if sub[0] in ('dest', 'join_ref'):
+                child = open_named(sub, npc, nxt_st)
+                return SplitNode('step', name, start_pc, start_st, (child,), next_hints)
+            return descend(sub, npc, nxt_st, name, start_pc, start_st, next_hints)
+        elif kind == 'dest':
+            sub = tree[1]
+            if sub[0] in ('dest', 'join_ref'):
+                child = open_named(sub, pc + 1, st)
+                return SplitNode('step', name, start_pc, start_st, (child,), hints)
+            return descend(sub, pc + 1, st, name, start_pc, start_st, hints)
+        else:  # kind == 'branch', unknown condition (too_big_to_split already ruled out 'const')
+            tgt = st[0]
+            rem = st[2:]
+            toNat_hint = (f"show (Nat.toB256 0x{tgt[1]:x}).toNat = 0x{tgt[1]:x} "
+                          f"from by decide")
+            fall_child = open_named(tree[1], pc + 1, rem)
+            taken_child = open_named(tree[2], tgt[1], rem)
+            return SplitNode('step', name, start_pc, start_st, (fall_child, taken_child),
+                              hints + [toNat_hint])
+
+    return open_named(trees[entry_idx], epc, list(eframe))
+
+
 def check_source() -> Any:
     depth = max(1, (len(code) - 1).bit_length())
     ns = args.namespace
@@ -2119,7 +2283,71 @@ def check_source() -> Any:
             raise RuntimeError(f"cannot read certificate entry {i}: {line}")
         pc, frame, rets, tree = m.groups()
         if args.check_split_nodes and entry_node_counts.get(i, 0) > args.check_split_nodes:
-            raise RuntimeError(f"entry {i} has {entry_node_counts[i]} nodes > --check-split-nodes; splitting is not implemented")
+            root = split_entry_plan(i, args.check_split_nodes)
+            block: List[str] = []
+            counter = [0]
+
+            def emit_node(node: SplitNode) -> str:
+                """Emit `node`'s theorem (children first) and return its name.  A `'piece'` is
+                one `decide +kernel`; a `'step'` is one *bounded* `simp only` -- its own
+                connector name plus `checkNodeT`'s equations and its 1-2 already-proven
+                children -- never the whole entry's connectors and pieces at once."""
+                if node.kind == 'piece':
+                    thm = f"entry_{i}_piece_{counter[0]}"
+                    counter[0] += 1
+                    block.extend([
+                        f"theorem {thm} :",
+                        f"    checkNodeT code {depth} codeTries.bytes (Cert.entries cert) {rets} "
+                        f"0x{node.pc:x} {stack_lean(node.st)} {node.sfunc} = true := by",
+                        "  decide +kernel",
+                        "",
+                    ])
+                    return thm
+                child_names = [emit_node(c) for c in node.children]
+                thm = f"entry_{i}_step_{counter[0]}"
+                counter[0] += 1
+                # The branch-only lemmas (the two `AVal.jumps?` shortcut facts and the
+                # taken-side pc's `B256.toNat_toB256_of_lt`/`Bool` and/or-with-a-known-side
+                # cleanup) only apply to a 2-child (`.branch`) step; a 1-child (`.dest`/
+                # join-ref crossing) step never produces a `none == some _` or `||`/`&&`
+                # term, so including them there is only linter noise.
+                branch_only = ([
+                    "B256.toNat_toB256_of_lt",
+                    "Bool.true_and", "Bool.and_true", "Bool.false_or", "Bool.or_false",
+                    "Bool.true_or", "Bool.or_true", "Bool.false_and", "Bool.and_false",
+                    "show ((none : Option Bool) == some true) = false from by decide",
+                    "show ((none : Option Bool) == some false) = false from by decide",
+                ] if len(node.children) == 2 else [])
+                simp_names = ([node.sfunc, "checkNodeT", "AVal.jumps?", "Ninst.size",
+                               "Ninst.pcFree", "Ninst.toBytes", "Rinst.toUInt8", "Xinst.toUInt8",
+                               "pushToB8L", "bytesAtT", "LTrie.get?",
+                               "List.length_cons", "List.length_nil"] +
+                              branch_only + node.hints + child_names)
+                block.extend([
+                    f"theorem {thm} :",
+                    f"    checkNodeT code {depth} codeTries.bytes (Cert.entries cert) {rets} "
+                    f"0x{node.pc:x} {stack_lean(node.st)} {node.sfunc} = true := by",
+                    "  simp [" + ", ".join(simp_names) + "] <;> decide",
+                    "",
+                ])
+                return thm
+
+            root_ref = emit_node(root)
+            block += [
+                f"/-- Entry {i} has {entry_node_counts[i]} tree nodes, above the "
+                f"`--check-split-nodes {args.check_split_nodes}` budget (`CHECK_SPLIT_NODE_BUDGET`,"
+                " scripts/lift/lift.py): split at unknown-condition branches into pieces at or"
+                " below the budget, each its own kernel decision, and composed by rewriting with"
+                f" the branch lemmas (one small step per connector, `entry_{i}_step_*`) instead of"
+                " one whole-tree decision. -/",
+                f"theorem entry_{i} :",
+                f"    checkNode code (Cert.entries cert) {rets} {pc} {frame} {tree} = true := by",
+                "  rw [← checkNodeT_eq codeTries]",
+                f"  exact {root_ref}",
+                "",
+            ]
+            blocks.append(block)
+            continue
         blocks.append([
             f"theorem entry_{i} :",
             f"    checkNode code (Cert.entries cert) {rets} {pc} {frame} {tree} = true := by",
