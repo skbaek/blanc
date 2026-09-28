@@ -60,9 +60,9 @@ private theorem initialize_setStorVal_getStorVal_ne
     (value : B256) (hne : writtenKey ≠ readKey) :
     (base.setStorVal target writtenKey value).getStorVal target readKey =
       base.getStorVal target readKey := by
-  show (_root_.Blanc.Devm.getStor
+  show (Jaune.Devm.getStor
       (base.setStorVal target writtenKey value) target).get readKey =
-    (_root_.Blanc.Devm.getStor base target).get readKey
+    (Jaune.Devm.getStor base target).get readKey
   rw [setStorVal_getStor_self, Stor.get_set_ne _ hne]
 
 private theorem initialize_not_mem_hashSet_insert

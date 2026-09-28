@@ -625,28 +625,8 @@ theorem benvAfterTransfer_preserves_getStor
     {msg : Msg} {benv : Benv}
     (transfer : msg.benvAfterTransfer = .ok benv)
     (target : Adr) :
-    benv.state.getStor target = msg.benv.state.getStor target := by
-  have setStor : ∀ (s : State) (b : Adr) (v : B256),
-      (s.setBal b v).getStor target = s.getStor target := by
-    intro s b v
-    show ((s.setBal b v).get target).stor = (s.get target).stor
-    exact State.setBal_get_stor
-  cases stv : msg.shouldTransferValue with
-  | false =>
-      have benvEq := of_benvAfterTransfer_no (by simpa using stv) transfer
-      rw [benvEq]
-  | true =>
-      obtain ⟨mid, sub, rfl⟩ := of_benvAfterTransfer stv transfer
-      show ((msg.benv.withState mid).state.addBal msg.currentTarget
-        msg.value).getStor target = msg.benv.state.getStor target
-      unfold State.addBal
-      rw [setStor]
-      show mid.getStor target = msg.benv.state.getStor target
-      unfold State.subBal at sub
-      split at sub
-      · simp at sub
-      · cases sub
-        exact setStor _ _ _
+    benv.state.getStor target = msg.benv.state.getStor target :=
+  benvAfterTransfer_ok_getStor transfer target
 
 /-! ## Vault calls preserve the ledger
 

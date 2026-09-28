@@ -1347,7 +1347,7 @@ lemma Pre.of_inv_benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
     (h_inv : c.StateInv wa msg.benv.state) :
     c.Pre wa (initSevm (msg.withBenv benv)) (initDevm (msg.withBenv benv)) := by
   by_cases h_stv : msg.shouldTransferValue = true
-  · rcases Blanc.of_benvAfterTransfer h_stv hb with ⟨st_mid, h_sub, hbenv⟩
+  · rcases Jaune.of_benvAfterTransfer h_stv hb with ⟨st_mid, h_sub, hbenv⟩
     have hbs : (initDevm (msg.withBenv benv)).state
         = st_mid.addBal msg.currentTarget msg.value := by
       show benv.state = _; rw [hbenv]; rfl
@@ -1370,7 +1370,7 @@ lemma StateInv.of_benvAfterTransfer {ca : Adr} {msg : Msg} {benv : Benv}
     (h_inv : c.StateInv ca msg.benv.state) :
     c.StateInv ca benv.state := by
   by_cases h_stv : msg.shouldTransferValue = true
-  · rcases Blanc.of_benvAfterTransfer h_stv hb with ⟨st_mid, h_sub, hbenv⟩
+  · rcases Jaune.of_benvAfterTransfer h_stv hb with ⟨st_mid, h_sub, hbenv⟩
     have hbs : benv.state = st_mid.addBal msg.currentTarget msg.value := by
       rw [hbenv]; rfl
     rcases of_state_transfer_fields (callee := msg.currentTarget) h_sub with
@@ -1381,7 +1381,7 @@ lemma StateInv.of_benvAfterTransfer {ca : Adr} {msg : Msg} {benv : Benv}
                  h_t_code ca]; exact h_inv.code,
            c.side_transfer h_sub h_inv.side,
            c.inv_transfer h_sub (h_ne h_stv) h_inv.side h_inv.inv⟩
-  · have hbenv : benv = msg.benv := Blanc.of_benvAfterTransfer_no h_stv hb
+  · have hbenv : benv = msg.benv := Jaune.of_benvAfterTransfer_no h_stv hb
     rw [hbenv]; exact h_inv
 
 lemma StateInv.setStor_ne {wa a : Adr} {s : Stor} {w : Jaune.State}

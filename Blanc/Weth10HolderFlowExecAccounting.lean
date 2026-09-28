@@ -922,12 +922,8 @@ traces whose value is definitionally zero. -/
 theorem benvAfterTransfer_getStor_eq
     {msg : Msg} {benv : Benv}
     (htransfer : msg.benvAfterTransfer = .ok benv) (a : Adr) :
-    benv.state.getStor a = msg.benv.state.getStor a := by
-  by_cases hstv : msg.shouldTransferValue = true
-  · rcases of_benvAfterTransfer hstv htransfer with
-      ⟨middle, hsub, rfl⟩
-    exact (of_state_transfer_fields hsub).1 a
-  · rw [of_benvAfterTransfer_no hstv htransfer]
+    benv.state.getStor a = msg.benv.state.getStor a :=
+  benvAfterTransfer_ok_getStor htransfer a
 
 theorem installedWeth10Code_size_ne_zero
     {dp : DeployParams} {ca : Adr} {pre : Devm}

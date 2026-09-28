@@ -77,18 +77,10 @@ theorem chargeCodeGas_runtimeBaseline
   unfold ossifiableRuntimeCodeDepositGas at hgas ⊢
   obtain ⟨tail, hcons⟩ := runtimeBaselineBytes_cons
   have hlength := runtimeBaselineBytes_length_exact
-  unfold processCreateMessage.chargeCodeGas
-  rw [hstateGas]
-  rw [houtput, hcons]
-  rw [hcons] at hlength
-  simp only [List.length_cons] at hlength
-  simp only [List.length_cons, hlength, gasCodeDeposit]
-  rw [chargeGas_eq_ok hgas]
-  change
-    ((if rules.code.maxCodeSize < 2188 then
-      Except.error ⟨.halt (.outOfGas .none), _⟩
-    else Except.ok _) : Execution) = Except.ok _
-  rw [if_neg (by omega)]
+  rw [processCreateMessage.chargeCodeGas_legacy_eq_ok hstateGas
+    (by rw [houtput, hcons]; simp <;> decide) (by rw [houtput, hlength]; exact hgas)
+    (by rw [houtput, hlength]; exact hmax), houtput, hlength]
+  rfl
 
 /-- Settled observations of a successful canonical empty-setup CREATE. -/
 structure OssifiableEmptySetupCreateResult

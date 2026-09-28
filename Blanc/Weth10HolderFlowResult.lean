@@ -125,21 +125,8 @@ private theorem state_addBal_getStor_eq
 theorem benvAfterTransfer_state_getStor_eq
     {msg : Msg} {benv : Benv}
     (h : msg.benvAfterTransfer = .ok benv) :
-    benv.state.getStor = msg.benv.state.getStor := by
-  cases hvalue : msg.shouldTransferValue with
-  | false =>
-      have heq := of_benvAfterTransfer_no (by simpa using hvalue) h
-      subst benv
-      rfl
-  | true =>
-      rcases of_benvAfterTransfer hvalue h with ⟨debit, hsub, rfl⟩
-      rcases State.of_subBal hsub with ⟨_, hdebitEq⟩
-      have hdebit : debit.getStor = msg.benv.state.getStor := by
-        rw [hdebitEq]
-        exact state_setBal_getStor_eq _ _ _
-      simpa [Benv.withState, Benv.addBal] using
-        (state_addBal_getStor_eq debit msg.currentTarget msg.value).trans
-          hdebit
+    benv.state.getStor = msg.benv.state.getStor :=
+  funext (benvAfterTransfer_ok_getStor h)
 
 /-! ## Settled message boundary -/
 

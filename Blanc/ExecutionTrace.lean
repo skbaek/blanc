@@ -299,25 +299,6 @@ def transactionTenv (benv : Benv) (tx : Tx) (index : Nat)
         indexInBlock := index
         txHash := getTxHash tx } }
 
-/-- Intrinsic-cost sender independence in the none lane: the only `sender`
-use in `calculateIntrinsicCost` is the some-lane recipient check, so
-covered-fork validation results agree for any recovery address. This is what
-lets transaction traces record the opaque `validationSender` without
-replaying Jaune-private sender recovery. -/
-private lemma calculateIntrinsicCost_sender_congr_none {rules : ForkRules}
-    {tx : Tx} {s1 s2 : Adr} (hsg : rules.stateGas = none) :
-    calculateIntrinsicCost rules tx s1 = calculateIntrinsicCost rules tx s2 := by
-  unfold calculateIntrinsicCost
-  rw [hsg]
-
-/-- None-lane validation agrees for any recovery address. -/
-private lemma validateTransaction_sender_congr_none {rules : ForkRules}
-    {tx : Tx} {s1 s2 : Adr} (hsg : rules.stateGas = none) :
-    validateTransaction rules tx s1 = validateTransaction rules tx s2 := by
-  unfold validateTransaction
-  rw [hsg]
-  rw [calculateIntrinsicCost_sender_congr_none hsg]
-
 /-- Prepared messages keep their builder's fork: `prepareMessage` fixes
 `benv` into the message untouched. -/
 private lemma prepareMessage_benv_stat_fork {benv : Benv} {tenv : Tenv}

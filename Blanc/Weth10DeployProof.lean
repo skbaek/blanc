@@ -392,15 +392,6 @@ private theorem weth10Code_cons (dp : DeployParams) :
   change weth10Code dp = Jinst.jumpdest.toUInt8 :: (cp ++ ct)
   exact hbytes
 
-private theorem benvAfterTransfer_getStor
-    {msg : Msg} {benv' : Benv}
-    (h : msg.benvAfterTransfer = .ok benv') (a : Adr) :
-    benv'.state.getStor a = msg.benv.state.getStor a := by
-  by_cases h_stv : msg.shouldTransferValue = true
-  · obtain ⟨st_mid, h_sub, rfl⟩ := of_benvAfterTransfer h_stv h
-    exact (of_state_transfer_fields h_sub).1 a
-  · rw [of_benvAfterTransfer_no h_stv h]
-
 private theorem initEvm_exec_weth10_zero
     {msg : Msg}
     (h_value : msg.value = 0)
@@ -423,17 +414,10 @@ private theorem chargeCodeGas_weth10_output
   obtain ⟨tail, hcons⟩ := weth10Code_cons dp
   have hlen : (weth10Code dp).length = 6313 :=
     weth10Code_length dp
-  unfold processCreateMessage.chargeCodeGas
-  rw [h_legacy, h_output, hcons]
-  rw [hcons] at hlen
-  simp only [List.length_cons] at hlen
-  simp only [List.length_cons, hlen, gasCodeDeposit]
-  rw [chargeGas_eq_ok h_gas]
-  change
-    ((if rules.code.maxCodeSize < 6313 then
-      Except.error ⟨.halt (.outOfGas .none), _⟩
-    else Except.ok _) : Execution) = Except.ok _
-  rw [if_neg (by omega)]
+  rw [processCreateMessage.chargeCodeGas_legacy_eq_ok h_legacy
+    (by rw [h_output, hcons]; simp <;> decide) (by rw [h_output, hlen]; exact h_gas)
+    (by rw [h_output, hlen]; exact h_max), h_output, hlen]
+  rfl
 
 private structure Weth10CodeGasCheckpoint
     (rules : ForkRules) (d : Devm) (dp : DeployParams)
@@ -545,7 +529,7 @@ private theorem processMessage_weth10_checkpoint
     processCreateMessage_msg_getStor_currentTarget msg
   have h_benv_stor :
       benv.state.getStor msg.currentTarget = Stor.empty := by
-    rw [benvAfterTransfer_getStor h_transfer, h_prepared_stor]
+    rw [benvAfterTransfer_ok_getStor h_transfer, h_prepared_stor]
   refine ⟨initPost, {
     process := h_pm
     output := h_output

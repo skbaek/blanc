@@ -369,49 +369,6 @@ def ForallDeeper (k : Nat) (ε : Exec.Pred) : Prop :=
 def ForallDeeperAt (k : Nat) (ca : Adr) (p : Prog) (ε : Exec.Pred) : Prop :=
   ForallDeeper k (fun pc sevm devm exn ex => p.At ca pc sevm devm → ε pc sevm devm exn ex)
 
-lemma State.setBal_getCode (st : State) (adr a : Adr) (val : B256) :
-  (st.setBal adr val).getCode a = st.getCode a := by
-  dsimp [State.setBal, State.set, State.getCode]
-  split_ifs with h_if
-  · unfold State.get
-    by_cases h : compare adr a = Ordering.eq
-    · have h2 : adr = a := compare_eq_iff_eq.mp h
-      subst h2
-      rw [Std.TreeMap.getD_erase]
-      split_ifs; try rfl
-      · have h3 := congrArg Acct.code h_if
-        exact h3.symm
-    · rw [Std.TreeMap.getD_erase]
-      simp [h]
-  · unfold State.get
-    by_cases h : compare adr a = Ordering.eq
-    · have h2 : adr = a := compare_eq_iff_eq.mp h
-      subst h2
-      rw [Std.TreeMap.getD_insert]
-      dsimp [Acct.withBal]
-      simp
-    · rw [Std.TreeMap.getD_insert]
-      simp [h]
-
-lemma State.addBal_getCode (st : State) (adr a : Adr) (val : B256) :
-  (st.addBal adr val).getCode a = st.getCode a := by
-  dsimp [State.addBal]
-  exact State.setBal_getCode st adr a (st.bal adr + val)
-
-lemma State.subBal_getCode {st st' : State} {adr a : Adr} {val : B256} (h : st.subBal adr val = some st') :
-  st'.getCode a = st.getCode a := by
-  dsimp [State.subBal] at h
-  split at h
-  · contradiction
-  · injection h with h2
-    subst h2
-    exact State.setBal_getCode st adr a (st.bal adr - val)
-
-lemma Benv.addBal_getCode (benv : Benv) (adr a : Adr) (val : B256) :
-  (benv.addBal adr val).state.getCode a = benv.state.getCode a := by
-  dsimp [Benv.addBal, Benv.withState]
-  exact State.addBal_getCode benv.state adr a val
-
 lemma Benv.subBal_getCode {benv benv' : Benv} {adr a : Adr} {val : B256} (h : benv.subBal adr val = some benv') :
   benv'.state.getCode a = benv.state.getCode a := by
   dsimp [Benv.subBal, Option.bind] at h
@@ -583,56 +540,11 @@ lemma Devm.restoreChildGas_getCode {gas reservoir : Nat} {devm : Devm}
     {a : Adr} :
     (Devm.restoreChildGas gas reservoir devm).getCode a = devm.getCode a := rfl
 
-lemma Devm.incrNonce_getCode {devm : Devm} {adr a : Adr} : (devm.incrNonce adr).getCode a = devm.getCode a := by
-  dsimp [Devm.incrNonce, Devm.withState, Devm.setWorld, Devm.world, Devm.state,
-    Devm.getCode, Devm.getAcct, State.incrNonce, State.set, State.getCode]
-  split_ifs with h_if
-  · unfold State.get
-    by_cases h : compare adr a = Ordering.eq
-    · have h2 : adr = a := compare_eq_iff_eq.mp h
-      subst h2
-      rw [Std.TreeMap.getD_erase]
-      split_ifs; try rfl
-      · have h3 := congrArg Acct.code h_if
-        exact h3.symm
-    · rw [Std.TreeMap.getD_erase]
-      simp [h]
-  · unfold State.get
-    by_cases h : compare adr a = Ordering.eq
-    · have h2 : adr = a := compare_eq_iff_eq.mp h
-      subst h2
-      rw [Std.TreeMap.getD_insert]
-      simp
-    · rw [Std.TreeMap.getD_insert]
-      simp [h]
-
 lemma addCreatedAccount_getCode {benv : Benv} {adr a : Adr} : (addCreatedAccount benv adr).state.getCode a = benv.state.getCode a := by
   rfl
 
 lemma Benv.setStor_getCode {benv : Benv} {adr a : Adr} {stor : Stor} : (benv.setStor adr stor).state.getCode a = benv.state.getCode a := by
   dsimp [Benv.setStor, Benv.state, State.setStor, State.set, State.getCode]
-  split_ifs with h_if
-  · unfold State.get
-    by_cases h : compare adr a = Ordering.eq
-    · have h2 : adr = a := compare_eq_iff_eq.mp h
-      subst h2
-      rw [Std.TreeMap.getD_erase]
-      split_ifs; try rfl
-      · have h3 := congrArg Acct.code h_if
-        exact h3.symm
-    · rw [Std.TreeMap.getD_erase]
-      simp [h]
-  · unfold State.get
-    by_cases h : compare adr a = Ordering.eq
-    · have h2 : adr = a := compare_eq_iff_eq.mp h
-      subst h2
-      rw [Std.TreeMap.getD_insert]
-      simp
-    · rw [Std.TreeMap.getD_insert]
-      simp [h]
-
-lemma Benv.incrNonce_getCode {benv : Benv} {adr a : Adr} : (benv.incrNonce adr).state.getCode a = benv.state.getCode a := by
-  dsimp [Benv.incrNonce, Benv.state, State.incrNonce, State.set, State.getCode]
   split_ifs with h_if
   · unfold State.get
     by_cases h : compare adr a = Ordering.eq
@@ -759,9 +671,6 @@ lemma Devm.popToAdr_getBal_eq {devm devm' adr} (h : Devm.popToAdr devm = .ok ⟨
 
 lemma Devm.popToNat_getBal_eq {devm devm' n} (h : Devm.popToNat devm = .ok ⟨n, devm'⟩) (a : Adr) : devm'.getBal a = devm.getBal a := by
   exact (Devm.popToNat_worldEq_of_ok h).getBal a |>.symm
-
-def Devm.getStor (devm : Devm) (adr : Adr) : Stor :=
-  (devm.getAcct adr).stor
 
 lemma Devm.withRefundCounter_getStor (devm : Devm) (refundCounter : Int) :
     Devm.getStor (devm.withRefundCounter refundCounter) = Devm.getStor devm := by
@@ -2602,21 +2511,6 @@ theorem ProcessCreateMessage.rollback_of_error
                 msg.tenv.transientStorage).state :=
             congrArg Devm.state heq
           _ = msg.benv.state := rfl
-
-/-- Writer leaf: value transfer changes balances but preserves code. -/
-lemma benvAfterTransfer_ok_getCode {msg : Msg} {benv : Benv}
-    (h : msg.benvAfterTransfer = .ok benv) (a : Adr) :
-    benv.state.getCode a = msg.benv.state.getCode a := by
-  dsimp [Msg.benvAfterTransfer, Msg.shouldTransferValue] at h
-  split at h
-  · cases h_sub : msg.benv.subBal msg.caller msg.value with
-    | none => simp [h_sub, Option.toExcept, Bind.bind, Except.bind] at h
-    | some benv_sub =>
-      simp [h_sub, Option.toExcept, Bind.bind, Except.bind] at h
-      subst benv
-      rw [Benv.addBal_getCode]
-      exact Benv.subBal_getCode h_sub
-  · simp only [Except.ok.injEq] at h; subst benv; rfl
 
 /-- Writer leaf: create preparation (nonce bump, created-account marking, empty
 storage) preserves code. -/
@@ -9849,9 +9743,6 @@ end AdrSet
 /-! ## §2 The NoDel invariant -/
 
 -- rfl-bridge between the Devm-level and State-level code projections.
-lemma Devm.getCode_state (d : Devm) (a : Adr) :
-    d.getCode a = d.state.getCode a := rfl
-
 -- The frame-level invariant. The `code` conjunct is the fuel for the
 -- CREATE collision guards; it is transported by the PROVED getCode ladder,
 -- never re-proved here.
@@ -12597,37 +12488,11 @@ lemma setStorVal_getStor_self {devm : Devm} {adr : Adr} {key val : B256} :
   show (Devm.getStor (devm.setStorVal adr key val) adr).get key = val
   rw [setStorVal_getStor_self, Stor.get_set_self]
 
-/-- Persistent storage writes preserve every account's code. -/
-lemma Devm.setStorVal_getCode (devm : Devm) (owner : Adr)
-    (key value : B256) (address : Adr) :
-    (devm.setStorVal owner key value).getCode address =
-      devm.getCode address := by
-  show ((devm.state.setStorVal owner key value).get address).code =
-    (devm.state.get address).code
-  unfold State.setStorVal
-  by_cases h : owner = address
-  · subst h
-    rw [State.get_set_self]
-  · rw [State.get_set_ne _ h]
-
 /-- Installing account code preserves the frame log sequence. -/
 lemma Devm.setCode_logs (devm : Devm) (address : Adr)
     (code : ByteArray) :
     (devm.setCode address code).logs = devm.logs := by
   rfl
-
-/-- Installing account code preserves every account's persistent storage. -/
-lemma Devm.setCode_getStor (devm : Devm) (address : Adr)
-    (code : ByteArray) :
-    Devm.getStor (devm.setCode address code) = Devm.getStor devm := by
-  funext target
-  change ((devm.state.setCode address code).get target).stor =
-    (devm.state.get target).stor
-  unfold State.setCode
-  by_cases h : address = target
-  · subst h
-    rw [State.get_set_self]
-  · rw [State.get_set_ne _ h]
 
 /-- Installing account code preserves the frame output bytes. -/
 lemma Devm.setCode_output (devm : Devm) (address : Adr)

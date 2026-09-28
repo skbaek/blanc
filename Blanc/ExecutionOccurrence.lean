@@ -626,13 +626,8 @@ theorem Exec.StorageReplay.append
 theorem benvAfterTransfer_getStor_eq
     {msg : Msg} {benv : Benv}
     (transfer : msg.benvAfterTransfer = .ok benv) :
-    benv.state.getStor = msg.benv.state.getStor := by
-  funext owner
-  by_cases enabled : msg.shouldTransferValue = true
-  · rcases of_benvAfterTransfer enabled transfer with
-      ⟨middle, sub, rfl⟩
-    exact (of_state_transfer_fields sub).1 owner
-  · rw [of_benvAfterTransfer_no enabled transfer]
+    benv.state.getStor = msg.benv.state.getStor :=
+  funext (benvAfterTransfer_ok_getStor transfer)
 
 /-- Settlement-aware replay transport for a concrete CALL message body. -/
 theorem ProcessMessage.storageReplay_of_body

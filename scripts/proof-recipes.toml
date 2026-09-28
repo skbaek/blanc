@@ -352,8 +352,8 @@ triggers = ["goal-shape:successor-projection"]
 preferred_path = "Use an existing named, oriented, one-layer projection lemma when one already serves the goal; otherwise keep the explicit local normalization."
 boundary = "Do not replace deep state towers with transparent abbreviations or broad unfolding. The tested one-layer projection retrofit regressed, and later owner analysis found kernel checks dominate the relevant Lido access and Registry work; this does not recommend `setMach`-chain cleanup or a module split. Resource ceilings do not bound this kernel-side cost. Experimental history: Blanc commit 0eee78d571e673f37543e4d306608af445065017, `scripts/proof-recipes.toml`, recipe `successor-projection-normalization`."
 owner_module = "Blanc/Forward.lean"
-canonical_example = "Blanc/Forward.lean:Devm.getStorVal_setMach"
-symbols = ["declaration:Devm.getStorVal_setMach"]
+canonical_example = "Blanc/Forward.lean:Devm.stack_setMach"
+symbols = ["declaration:Devm.stack_setMach"]
 review_owner = "proof-infrastructure"
 review_date = "2026-08-21"
 
@@ -656,7 +656,6 @@ symbols = [
   "declaration:Devm.memWrite_stack",
   "declaration:Devm.addAccessedStorageKey_setMach_setMach",
   "declaration:Devm.getStorVal_setStorVal_self",
-  "declaration:Devm.setStorVal_getCode",
   "declaration:Devm.setCode_logs",
   "declaration:Devm.setCode_output",
   "declaration:Devm.setCode_error",

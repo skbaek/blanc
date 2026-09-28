@@ -31,21 +31,8 @@ map. -/
 theorem benvAfterTransfer_getStor_eq
     {msg : Msg} {entry : Benv}
     (run : msg.benvAfterTransfer = .ok entry) :
-    entry.state.getStor = msg.benv.state.getStor := by
-  cases transfer : msg.shouldTransferValue with
-  | false =>
-      have entryEq := of_benvAfterTransfer_no (by simpa using transfer) run
-      subst entry
-      rfl
-  | true =>
-      rcases of_benvAfterTransfer transfer run with ⟨debit, sub, rfl⟩
-      rcases State.of_subBal sub with ⟨_, debitEq⟩
-      have debitStor : debit.getStor = msg.benv.state.getStor := by
-        rw [debitEq]
-        exact State.setBal_getStor_eq _ _ _
-      simpa [Benv.withState, Benv.addBal] using
-        (State.addBal_getStor_eq debit msg.currentTarget msg.value).trans
-          debitStor
+    entry.state.getStor = msg.benv.state.getStor :=
+  funext (benvAfterTransfer_ok_getStor run)
 
 /-- A successful no-interpreter-slot message either rolls back or retains
 only its storage-silent entry transfer. -/

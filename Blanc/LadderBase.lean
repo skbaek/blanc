@@ -283,32 +283,6 @@ lemma B256.le_add_right {xs ys : B256} (h : B256.Nof xs ys) : xs ≤ xs + ys := 
 
 
 
-lemma State.setBal_get_self {st : Jaune.State} {adr : Adr} {v : B256} :
-    (st.setBal adr v).get adr = (st.get adr).withBal v := State.get_set_self _ _ _
-
-lemma State.setBal_get_ne {st : Jaune.State} {adr a : Adr} {v : B256} (h : adr ≠ a) :
-    (st.setBal adr v).get a = st.get a := State.get_set_ne _ h _
-
-lemma State.setBal_get_stor {st : Jaune.State} {b a : Adr} {v : B256} :
-    ((st.setBal b v).get a).stor = (st.get a).stor := by
-  by_cases h : b = a
-  · subst h; rw [State.setBal_get_self]; rfl
-  · rw [State.setBal_get_ne h]
-
-lemma State.setBal_get_code {st : Jaune.State} {b a : Adr} {v : B256} :
-    ((st.setBal b v).get a).code = (st.get a).code := by
-  by_cases h : b = a
-  · subst h; rw [State.setBal_get_self]; rfl
-  · rw [State.setBal_get_ne h]
-
-lemma State.of_subBal {st st' : Jaune.State} {ct : Adr} {wad : B256}
-    (h : st.subBal ct wad = some st') :
-    wad ≤ st.bal ct ∧ st' = st.setBal ct (st.bal ct - wad) := by
-  unfold State.subBal at h
-  split_ifs at h with h_lt
-  cases h
-  exact ⟨B256.not_lt.mp h_lt, rfl⟩
-
 lemma of_state_transfer_fields {st st' : Jaune.State} {ct callee : Adr} {wad : B256}
     (h_sub : st.subBal ct wad = some st') :
     (∀ a, ((st'.addBal callee wad).get a).stor = (st.get a).stor) ∧
@@ -464,27 +438,6 @@ lemma of_transfer_bal_target {st st_mid : Jaune.State} {caller target : Adr} {va
   have h1 := B256.toNat_le_toNat h_le
   have h2 := add_le_sum_of_ne st.bal (Ne.symm h_ne)
   omega
-
-lemma State.incrNonce_get_bal {st : Jaune.State} {adr a : Adr} :
-    ((st.incrNonce adr).get a).bal = (st.get a).bal := by
-  simp only [State.incrNonce]
-  by_cases h : adr = a
-  · subst h; rw [State.get_set_self]
-  · rw [State.get_set_ne _ h]
-
-lemma State.incrNonce_get_stor {st : Jaune.State} {adr a : Adr} :
-    ((st.incrNonce adr).get a).stor = (st.get a).stor := by
-  simp only [State.incrNonce]
-  by_cases h : adr = a
-  · subst h; rw [State.get_set_self]
-  · rw [State.get_set_ne _ h]
-
-lemma State.incrNonce_get_code {st : Jaune.State} {adr a : Adr} :
-    ((st.incrNonce adr).get a).code = (st.get a).code := by
-  simp only [State.incrNonce]
-  by_cases h : adr = a
-  · subst h; rw [State.get_set_self]
-  · rw [State.get_set_ne _ h]
 
 -- ## Sum after addBal
 
@@ -687,13 +640,6 @@ lemma sstore_preserves_getStor_ne {pc : Nat} {sevm : Sevm} {s s' : Devm} {a : Ad
 lemma addAccessedAddress_state {devm : Devm} {a : Adr} :
     (addAccessedAddress devm a).state = devm.state := by
   exact (addAccessedAddress_worldEq devm a).1.symm
-
-lemma of_benvAfterTransfer_no {msg : Msg} {benv' : Benv}
-    (h_stv : ¬ msg.shouldTransferValue = true)
-    (h : msg.benvAfterTransfer = .ok benv') : benv' = msg.benv := by
-  unfold Msg.benvAfterTransfer at h
-  rw [if_neg h_stv] at h
-  exact (Except.ok.inj h).symm
 
 lemma of_executeCode_noneCode {msg : Msg} {xl : Xlot}
     {ex : Except (EvmError × Jaune.State × AdrSet × Tra) Devm}
@@ -1111,22 +1057,6 @@ lemma of_handleError_err {sg : Option StateGasRules} {err : EvmError} {d : Devm}
       first
         | exact Or.inl ⟨_, h.symm, rfl, rfl⟩
         | exact Or.inr ⟨_, h.symm⟩
-
-lemma of_benvAfterTransfer {msg : Msg} {benv' : Benv}
-    (h_stv : msg.shouldTransferValue = true)
-    (h : msg.benvAfterTransfer = .ok benv') :
-    ∃ st_mid, msg.benv.state.subBal msg.caller msg.value = some st_mid ∧
-      benv' = (msg.benv.withState st_mid).addBal msg.currentTarget msg.value := by
-  unfold Msg.benvAfterTransfer at h
-  rw [h_stv] at h
-  simp only [if_true] at h
-  unfold Benv.subBal at h
-  rcases hq : msg.benv.state.subBal msg.caller msg.value with _ | st_mid <;>
-    rw [hq] at h <;>
-    simp only [Option.toExcept, bind, Option.bind, Except.bind] at h
-  · cases h
-  · injection h with h
-    exact ⟨st_mid, rfl, h.symm⟩
 
 lemma of_executeCode_someCode {msg : Msg} {adr : Adr} {xl : Xlot}
     {ex : Except (EvmError × Jaune.State × AdrSet × Tra) Devm}

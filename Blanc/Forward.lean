@@ -47,14 +47,6 @@ are *written* as `setMach` terms rather than destructured. -/
 lemma Devm.stack_setMach {devm : Devm} {m : Mach} :
     (devm.setMach m).stack = m.stack := rfl
 
-/-- Storage is a world field, so a machine write cannot move it. -/
-lemma Devm.getStorVal_setMach {devm : Devm} {m : Mach} {a : Adr} {k : B256} :
-    (devm.setMach m).getStorVal a k = devm.getStorVal a k := rfl
-
-/-- Account code is a world field, so a machine write cannot move it. -/
-lemma Devm.getCode_setMach {devm : Devm} {m : Mach} {a : Adr} :
-    (devm.setMach m).getCode a = devm.getCode a := rfl
-
 /-- Every one-dimensional fork uses the Prague gas schedule.  `BenvStat.rules`
 is selected from the five concrete forks, and Amsterdam is the only fork whose
 state-gas switch is present. -/

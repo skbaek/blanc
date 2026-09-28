@@ -213,8 +213,8 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Preferred path: Use an existing named, oriented, one-layer projection lemma when one already serves the goal; otherwise keep the explicit local normalization.
 - Boundary: Do not replace deep state towers with transparent abbreviations or broad unfolding. The tested one-layer projection retrofit regressed, and later owner analysis found kernel checks dominate the relevant Lido access and Registry work; this does not recommend `setMach`-chain cleanup or a module split. Resource ceilings do not bound this kernel-side cost. Experimental history: Blanc commit 0eee78d571e673f37543e4d306608af445065017, `scripts/proof-recipes.toml`, recipe `successor-projection-normalization`.
 - Owner module: [Blanc/Forward.lean](../Blanc/Forward.lean)
-- Canonical example: [Blanc/Forward.lean](../Blanc/Forward.lean) — `Devm.getStorVal_setMach`
-- Registered symbols: `declaration:Devm.getStorVal_setMach`
+- Canonical example: [Blanc/Forward.lean](../Blanc/Forward.lean) — `Devm.stack_setMach`
+- Registered symbols: `declaration:Devm.stack_setMach`
 - Review: `proof-infrastructure` on `2026-08-21`
 
 ## `runcompiled-family-compression`
@@ -358,7 +358,7 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Boundary: Use the smallest abstract-base law that matches the goal. Do not unfold a concrete effect tower merely because these laws themselves are definitionally simple.
 - Owner module: [Blanc/CommonProofs.lean](../Blanc/CommonProofs.lean)
 - Canonical example: [Blanc/CommonProofs.lean](../Blanc/CommonProofs.lean) — `Devm.addAccessedStorageKey_setMach_setMach`
-- Registered symbols: `module:Blanc/CommonProofs.lean`, `declaration:Devm.memWrite_memory`, `declaration:Devm.memWrite_stack`, `declaration:Devm.addAccessedStorageKey_setMach_setMach`, `declaration:Devm.getStorVal_setStorVal_self`, `declaration:Devm.setStorVal_getCode`, `declaration:Devm.setCode_logs`, `declaration:Devm.setCode_output`, `declaration:Devm.setCode_error`, `declaration:Devm.returnPost_getStorVal`, `declaration:Devm.returnPost_accessedStorageKeys`, `declaration:Devm.sstoreBase_state`, `declaration:Devm.sstoreBase_accessedStorageKeys`, `declaration:Devm.sstoreWarmBase_accessedStorageKeys`, `module:Blanc/AddressSlot.lean`, `module:Blanc/AddressSlotProofs.lean`, `declaration:addressSlotReadWord`, `declaration:addressSlotWriteWord`, `declaration:addressSlotReadWord_eq_toAdr_toB256`, `declaration:of_loadAddressWordAt_val`, `declaration:of_storeAddressWordAt_val`
+- Registered symbols: `module:Blanc/CommonProofs.lean`, `declaration:Devm.memWrite_memory`, `declaration:Devm.memWrite_stack`, `declaration:Devm.addAccessedStorageKey_setMach_setMach`, `declaration:Devm.getStorVal_setStorVal_self`, `declaration:Devm.setCode_logs`, `declaration:Devm.setCode_output`, `declaration:Devm.setCode_error`, `declaration:Devm.returnPost_getStorVal`, `declaration:Devm.returnPost_accessedStorageKeys`, `declaration:Devm.sstoreBase_state`, `declaration:Devm.sstoreBase_accessedStorageKeys`, `declaration:Devm.sstoreWarmBase_accessedStorageKeys`, `module:Blanc/AddressSlot.lean`, `module:Blanc/AddressSlotProofs.lean`, `declaration:addressSlotReadWord`, `declaration:addressSlotWriteWord`, `declaration:addressSlotReadWord_eq_toAdr_toB256`, `declaration:of_loadAddressWordAt_val`, `declaration:of_storeAddressWordAt_val`
 - Review: `proof-infrastructure` on `2026-08-30`
 
 ## `compiled-terminal-at-zero`

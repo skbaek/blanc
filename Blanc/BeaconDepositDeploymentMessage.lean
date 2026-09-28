@@ -37,18 +37,10 @@ private theorem chargeCodeGas_code
   rw [constructorCodeDepositGas_eq] at hgas ⊢
   obtain ⟨tail, hcons⟩ := code_cons_jumpdest
   have hlen := constructorAppendedRuntime_length_exact
-  unfold processCreateMessage.chargeCodeGas
-  rw [hstateGas]
-  rw [houtput, hcons]
-  rw [hcons] at hlen
-  simp only [List.length_cons] at hlen
-  simp only [List.length_cons, hlen, gasCodeDeposit]
-  rw [chargeGas_eq_ok hgas]
-  change
-    ((if rules.code.maxCodeSize < 2891 then
-      Except.error ⟨.halt (.outOfGas .none), _⟩
-    else Except.ok _) : Execution) = Except.ok _
-  rw [if_neg (by omega)]
+  rw [processCreateMessage.chargeCodeGas_legacy_eq_ok hstateGas
+    (by rw [houtput, hcons]; simp <;> decide) (by rw [houtput, hlen]; exact hgas)
+    (by rw [houtput, hlen]; exact hmax), houtput, hlen]
+  rfl
 
 /-! ## Retained direct-CREATE result -/
 
@@ -276,7 +268,7 @@ theorem processCreateMessage_establishes_artifact
   have hpostStorage : Devm.getStor post msg.currentTarget =
       constructorFinalStorage := by
     dsimp only [post]
-    rw [congrFun (_root_.Blanc.Devm.setCode_getStor charged msg.currentTarget
+    rw [congrFun (Jaune.Devm.setCode_getStor charged msg.currentTarget
       ⟨⟨charged.output⟩⟩) msg.currentTarget]
     change (charged.state.get msg.currentTarget).stor = _
     rw [← hmach.state]

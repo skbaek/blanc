@@ -1101,10 +1101,6 @@ lemma Devm.eq_of_proj {a b : Devm}
   subst_vars
   rfl
 
-/-- Overwriting an overwritten machine keeps only the last write. -/
-lemma Devm.setMach_setMach {devm : Devm} {m m' : Mach} :
-    (devm.setMach m).setMach m' = devm.setMach m' := rfl
-
 lemma Devm.memory_setMach {devm : Devm} {m : Mach} :
     (devm.setMach m).memory = m.memory := rfl
 

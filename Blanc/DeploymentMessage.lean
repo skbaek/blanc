@@ -26,19 +26,8 @@ theorem processCreateMessage_msg_getStor_currentTarget (msg : Msg) :
 /-- A zero-value message can always cross its optional entry transfer. -/
 theorem benvAfterTransfer_exists_zero
     {msg : Msg} (hvalue : msg.value = 0) :
-    ∃ benv, msg.benvAfterTransfer = .ok benv := by
-  have hnot : ¬ msg.benv.state.bal msg.caller < (0 : B256) := by
-    rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_zero]
-    omega
-  unfold Msg.benvAfterTransfer
-  rw [hvalue]
-  by_cases htransfer : msg.shouldTransferValue = true
-  · rw [if_pos htransfer]
-    unfold Benv.subBal State.subBal
-    rw [if_neg hnot]
-    exact ⟨_, rfl⟩
-  · rw [if_neg htransfer]
-    exact ⟨_, rfl⟩
+    ∃ benv, msg.benvAfterTransfer = .ok benv :=
+  benvAfterTransfer_exists_of_value_zero hvalue
 
 /-- A successful raw `exec` with no frame error settles as the corresponding
 ordinary message result. -/

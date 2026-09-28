@@ -425,61 +425,6 @@ private theorem getBal_setStorVal_eq {d : Devm} {a : Adr} {k v : B256} {b : Adr}
     rw [State.get_set_self]
   · rw [State.get_set_ne _ h]
 
-private theorem b256_sub_zero (x : B256) : x - 0 = x := by
-  rcases x with ⟨xh, xl⟩
-  have hborrow : ¬ xl < (0 : B128) := by
-    intro hlt
-    rcases hlt with hlt | ⟨_, hlt⟩
-    · exact UInt64.not_lt_zero hlt
-    · exact UInt64.not_lt_zero hlt
-  show ((xh - (0 : B128)) -
-      (if xl < (0 : B128) then (1 : B128) else 0),
-    xl - (0 : B128)) = (xh, xl)
-  simp only [if_neg hborrow, B128.sub_zero]
-
-private theorem b256_add_zero (x : B256) : x + 0 = x := by
-  apply B256.toNat_inj
-  rw [B256.toNat_add, show (0 : B256).toNat = 0 from rfl, Nat.add_zero]
-  exact Nat.lo_eq_of_lt (B256.toNat_lt x)
-
-/-- A zero-value message entry preserves the complete balance map, including
-the self-call case where caller and callee coincide. -/
-private theorem benvAfterTransfer_bal_of_value_zero {msg : Msg} {post : Benv}
-    (hzero : msg.value = 0)
-    (hrun : msg.benvAfterTransfer = .ok post) :
-    post.state.bal = msg.benv.state.bal := by
-  by_cases hstv : msg.shouldTransferValue = true
-  · obtain ⟨debit, hsub, rfl⟩ := of_benvAfterTransfer hstv hrun
-    rw [hzero] at hsub ⊢
-    have hdebit : debit.bal = msg.benv.state.bal := by
-      obtain ⟨_, hdebitEq⟩ := State.of_subBal hsub
-      rw [hdebitEq]
-      funext a
-      show ((msg.benv.state.setBal msg.caller _).get a).bal = _
-      by_cases hcaller : msg.caller = a
-      · subst hcaller
-        rw [State.setBal_get_self]
-        exact b256_sub_zero _
-      · simp only [State.setBal_get_ne hcaller, State.bal]
-    have hadd : ((msg.benv.withState debit).addBal
-        msg.currentTarget 0).state.bal = debit.bal := by
-      have e : ((msg.benv.withState debit).addBal
-          msg.currentTarget 0).state =
-          debit.addBal msg.currentTarget 0 := rfl
-      rw [e]
-      funext a
-      show ((debit.addBal msg.currentTarget 0).get a).bal = _
-      unfold State.addBal
-      by_cases htarget : msg.currentTarget = a
-      · subst htarget
-        rw [State.setBal_get_self]
-        exact b256_add_zero _
-      · simp only [State.setBal_get_ne htarget, State.bal]
-    exact hadd.trans hdebit
-  · have h := of_benvAfterTransfer_no hstv hrun
-    subst post
-    rfl
-
 private theorem addBal_bal_ne {st : State} {a b : Adr} {v : B256} (h : a ≠ b) :
     (st.addBal a v).bal b = st.bal b := by
   show ((st.setBal a (st.bal a + v)).get b).bal = (st.get b).bal
@@ -992,17 +937,10 @@ private theorem chargeCodeGas_drip_output
       .ok (d.setMach ⟨d.stack, d.memory, d.gasLeft - 352400, d.stateGas⟩) := by
   obtain ⟨tail, hcons⟩ := code_cons
   have hlen : code.length = 1762 := codeSize_exact
-  unfold processCreateMessage.chargeCodeGas
-  rw [hstateGas]
-  rw [h_output, hcons]
-  rw [hcons] at hlen
-  simp only [List.length_cons] at hlen
-  simp only [List.length_cons, hlen, gasCodeDeposit]
-  rw [chargeGas_eq_ok h_gas]
-  change ((if rules.code.maxCodeSize < 1762 then
-      Except.error ⟨.halt (.outOfGas .none), _⟩
-    else Except.ok _) : Execution) = Except.ok _
-  rw [if_neg (by omega)]
+  rw [processCreateMessage.chargeCodeGas_legacy_eq_ok hstateGas
+    (by rw [h_output, hcons]; simp <;> decide) (by rw [h_output, hlen]; exact h_gas)
+    (by rw [h_output, hlen]; exact h_max), h_output, hlen]
+  rfl
 
 structure DripCodeGasCheckpoint (rules : ForkRules) (d : Devm) (charged : Devm) : Prop where
   charge : processCreateMessage.chargeCodeGas rules d = .ok charged

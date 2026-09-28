@@ -28,12 +28,6 @@ namespace Blanc
 
 open Jaune
 
-/-- The storage at `ca` is blind to a credit. -/
-theorem getStor_addBal (w : Jaune.State) (ca a : Adr) (val : B256) :
-    (w.addBal a val).getStor ca = w.getStor ca := by
-  show ((w.setBal a _).get ca).stor = (w.get ca).stor
-  rw [State.setBal_get_stor]
-
 /-- The storage at `ca` is blind to a debit followed by a credit. -/
 theorem getStor_subBal_addBal {st st' : Jaune.State} {caller callee ca : Adr}
     {wad : B256} (h_sub : st.subBal caller wad = some st') :

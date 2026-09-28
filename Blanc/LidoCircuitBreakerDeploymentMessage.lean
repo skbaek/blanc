@@ -427,18 +427,10 @@ private theorem chargeCodeGas_official_output
   rw [officialCodeDepositGas_eq] at hgas ⊢
   obtain ⟨tail, hcons⟩ := lidoCircuitBreakerCode_official_cons
   have hlen := lidoCircuitBreakerCode_official_length
-  unfold processCreateMessage.chargeCodeGas
-  rw [hstateGas]
-  rw [houtput, hcons]
-  rw [hcons] at hlen
-  simp only [List.length_cons] at hlen
-  simp only [List.length_cons, hlen, gasCodeDeposit]
-  rw [chargeGas_eq_ok hgas]
-  change
-    ((if rules.code.maxCodeSize < 4282 then
-      Except.error ⟨.halt (.outOfGas .none), _⟩
-    else Except.ok _) : Execution) = Except.ok _
-  rw [if_neg (by omega)]
+  rw [processCreateMessage.chargeCodeGas_legacy_eq_ok hstateGas
+    (by rw [houtput, hcons]; simp <;> decide) (by rw [houtput, hlen]; exact hgas)
+    (by rw [houtput, hlen]; exact hmax), houtput, hlen]
+  rfl
 
 private structure OfficialConstructorRawCheckpoint
     (msg : Msg) (raw : Devm) : Type where
