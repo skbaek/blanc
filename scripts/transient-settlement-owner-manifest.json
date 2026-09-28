@@ -21,7 +21,7 @@
   "frozenAssuranceFiles": {
     "Blanc/CycleWriteFree.lean": "3262e96081c30e3e712183d8a902327ae331265e5575ac73f90280539a73dd6a",
     "Blanc/ExecutionFrames.lean": "1da68cd39d9038c49748b65d10026411336cbf1d2ab2464280e3e7305c0c1963",
-    "Blanc/ExecutionOccurrence.lean": "675f8fa50d3756396bd248e45e5e53b4ed8da97df6a81605d241fc9f1ffac3bb",
+    "Blanc/ExecutionOccurrence.lean": "ffb07bf224012d23dbac60cb7065a67bb906f14d33b537ec304355ec20165c37",
     "Blanc/ExecutionSettlement.lean": "a812568df48e78a953f28639a99413809379f45a20f4b6b0fc9b6d257cb3cfce",
     "scripts/CycleWriteFreeRegression.lean": "598ac1819b04fdb45304033d8fb7b70f401fc99f940d554b4825705c1948d654",
     "scripts/ExecutionOccurrenceControls.lean": "2d58ede6ca1a973d25e56ec1f97c24db3eb52a5068e9557a31ecf834c11b7ab6",
@@ -37,8 +37,8 @@
     "scripts/execution-settlement-lift-manifest.json": "fa966e7a2f858db1f1bdbfc8f719032f249373dddfeb23783ec9d7c2558d322b"
   },
   "jaunePinFiles": {
-    "lake-manifest.json": "fe4e127935cca5088dc75423e8403623e7888924d80da2db61fc41b962e382be",
-    "lakefile.lean": "30bc7f6f1d58f551df67b8525e64d238254aaad00001237eff6c62e80a2da53d"
+    "lake-manifest.json": "d4118c76d9279b3e5f24b6c1a75bfe62186f7e5d4da0442f04c23cafb8cd0cf9",
+    "lakefile.lean": "611ff7f5668e249f13b4dab00a8f546a0037e6832b26e359ffa050d61d78897a"
   },
   "movedDonors": [
     [
@@ -206,5 +206,5 @@
     "Blanc/Weth10StaticSilence.lean",
     "Blanc/Weth10AllowanceArmsPermit.lean"
   ],
-  "wethPublicHeaderAggregate": "24883a0ca9a9db826416f834c8e0a318940c2ce7bc30e52c362c1d5bf243a572"
+  "wethPublicHeaderAggregate": "81d1db9c65ed2ce3fa56caf5d8a3b645881fb4cf0fa63aae22077eab7fde5f2c"
 }
