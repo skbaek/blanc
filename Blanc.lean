@@ -406,10 +406,12 @@ import Blanc.DripStackSafetyCertificate
 -- The deployed solc WETH9, lifted from its runtime bytes (solc-bytecode-v1).
 import Blanc.Lift.Weth9.Solvency
 import Blanc.Lift.Weth9.Live
+import Blanc.Lift.Weth9.Init
 
 -- The deployed beacon deposit contract, lifted from its runtime bytes
 -- (beacon-deposit-bytecode-v1); these two tops reach the whole lift kit.
 import Blanc.Lift.BeaconDeposit.Ladder
+import Blanc.Lift.BeaconDeposit.Init
 import Blanc.Lift.BeaconDeposit.Refines
 import Blanc.Lift.BeaconDeposit.CommittedHistory
 
@@ -443,6 +445,7 @@ import Blanc.Lift.LidoCircuitBreakerDeployed.Foreign
 import Blanc.Lift.LidoCircuitBreakerDeployed.Frame
 import Blanc.Lift.LidoCircuitBreakerDeployed.FrameMem
 import Blanc.Lift.LidoCircuitBreakerDeployed.History
+import Blanc.Lift.LidoCircuitBreakerDeployed.Init
 import Blanc.Lift.LidoCircuitBreakerDeployed.L2
 import Blanc.Lift.LidoCircuitBreakerDeployed.L2Frame
 import Blanc.Lift.LidoCircuitBreakerDeployed.NoHalt
@@ -521,6 +524,7 @@ import Blanc.Curve3Crv.Model
 import Blanc.Curve3Crv.Properties
 import Blanc.Lift.Curve3Crv.Ladder
 import Blanc.Lift.Curve3Crv.CarriedHistory
+import Blanc.Lift.Curve3Crv.Init
 import Blanc.Lift.Curve3Crv.Exec
 
 namespace Blanc
