@@ -1994,6 +1994,13 @@ consumer needs canonical interpreter ingress as one conjunct:
   theorem through their exact retained wrappers.  Each carrier has a matching
   `FrameAdmitted` predicate, so admission is required only for interpreter
   frames that the concrete trace actually entered.
+- To derive structural admission directly from an independently checked predicate
+  over the actual raw entries, use `ConfiguredHistoryTrace.frameAdmitted_iff_rawFrames`
+  in [`Blanc/ExecutionTraceAdmission.lean`](../Blanc/ExecutionTraceAdmission.lean).
+  The same equivalence is available for every carrier from `RetainedXlot` through
+  configured history. It selects only roots targeting the named address and
+  keeps failed and later rolled-back entries; it neither supplies an invariant
+  nor filters by settlement.
 - Every retained carrier from `ProcessMessageTrace` through
   `ConfiguredHistoryTrace` has `freshFrameAdmitted`; its matching
   `FrameAdmitted.and` combines that trace-derived fact with another admission
@@ -2677,6 +2684,12 @@ its general form: the deeper-frame hypothesis need only cover frames at the
 caller's `benvStat`, which is what a trace-admitted consumer whose entry
 condition reads the block environment can discharge (DRIP's
 `soundAdmitted_of_stepClosedAt`).
+
+For deployed bytecode with a certified `CodeSem`, use `ContractSpecSem.ofStorageOnly`
+in the same module. Its `ofStorageOnly_preInv_iff` and `ofStorageOnly_postInv_iff`
+reduce semantic frame invariants to the supplied storage predicate. These adapters
+supply only balance/transfer transport; the caller still proves concrete frame
+preservation from the incoming invariant and independently established admission.
 
 ### C8. A `decide +kernel` over a committed artifact reports kernel deep recursion
 

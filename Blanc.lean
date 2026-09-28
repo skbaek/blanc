@@ -45,6 +45,7 @@ import Blanc.ExecutionDirectCode
 import Blanc.CallSpawnExact
 import Blanc.StaticCallStorage
 import Blanc.ExecutionTraceFrames
+import Blanc.ExecutionTraceAdmission
 import Blanc.ExecutionTraceSettledFrames
 import Blanc.ExecutionAccountingObserved
 import Blanc.DeploymentOccurrence
@@ -519,6 +520,7 @@ import Blanc.Composition.Weth9WethGas
 import Blanc.Curve3Crv.Model
 import Blanc.Curve3Crv.Properties
 import Blanc.Lift.Curve3Crv.Ladder
+import Blanc.Lift.Curve3Crv.CarriedHistory
 import Blanc.Lift.Curve3Crv.Exec
 
 namespace Blanc
