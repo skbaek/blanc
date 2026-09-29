@@ -120,7 +120,7 @@ import tomllib
 
 SHARED = ["Basic", "Semantics", "CommonCore", "MachineDataFacts", "CreationArtifact", "RlpConcrete",
           "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs", "Ladder", "Upgrade",
-          "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "OffsetPricing", "ProrataAccounting",
+          "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "SlotFootprint", "OffsetPricing", "ProrataAccounting",
           "ProrataAttackModel", "ProrataAttackPath", "WordArithmetic", "MemoryImage", "BytesWrite", "MemoryLayout",
           "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward",
           "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256",
@@ -159,7 +159,7 @@ SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
 SHARED += ["LadderBase", "LadderSem", "ContractAdmissionSem", "ExecutionAdmissionSem",
            "Lift.Basic", "Lift.Check", "Lift.Transfer", "Lift.Sound", "Lift.Exact",
            "Lift.ExactWalk", "Lift.Silent", "Lift.BalSilent",
-           "Lift.Hoare", "Lift.BookedSpec"]
+           "Lift.Hoare", "Lift.BookedSpec", "Lift.BookedSupportSpec"]
 # Loops, kernel-economical checking, walk kits and solc idioms (beacon-deposit-bytecode-v1):
 # contract-neutral, no contract name in any of them.
 SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.ExactWalkOps",
@@ -334,7 +334,7 @@ CONTRACTS = {
                             "ProrataWethVaultViews"],
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],
     # The deployed solc 0.4.19 WETH9 runtime, lifted from its bytes.
-    "weth9": ["Lift.Weth9.Cert", "Lift.Weth9.Check", "Lift.Weth9.Lift", "Lift.Weth9.Spec", "Lift.Weth9.Jumps", "Lift.Weth9.Words", "Lift.Weth9.Step", "Lift.Weth9.Walks", "Lift.Weth9.Booked", "Lift.Weth9.Premise", "Lift.Weth9.Shape", "Lift.Weth9.Contract", "Lift.Weth9.Deposit", "Lift.Weth9.Withdraw", "Lift.Weth9.Approve", "Lift.Weth9.TransferFrom", "Lift.Weth9.Frame", "Lift.Weth9.Solvency", "Lift.Weth9.Live", "Lift.Weth9.Init"],
+    "weth9": ["Lift.Weth9.Cert", "Lift.Weth9.Check", "Lift.Weth9.Lift", "Lift.Weth9.Spec", "Lift.Weth9.Jumps", "Lift.Weth9.Words", "Lift.Weth9.Step", "Lift.Weth9.Walks", "Lift.Weth9.Booked", "Lift.Weth9.Premise", "Lift.Weth9.Shape", "Lift.Weth9.Contract", "Lift.Weth9.Deposit", "Lift.Weth9.Withdraw", "Lift.Weth9.Approve", "Lift.Weth9.TransferFrom", "Lift.Weth9.Frame", "Lift.Weth9.Solvency", "Lift.Weth9.Live", "Lift.Weth9.Init", "Lift.Weth9.Footprint", "Lift.Weth9.FootFrame", "Lift.Weth9.FootHistory"],
     "fmint": ["Fmint", "FmintCode", "Conserved", "FlashSpec", "FmintLive",
               "FmintReverts", "FmintGas", "FmintSettles"],
     "weth10": ["Weth10TemplateCode", "Weth10Core", "Weth10Backed", "Weth10Spec", "Weth10",

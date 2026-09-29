@@ -321,16 +321,17 @@ private theorem wrap_line_stack {sevm : Sevm} {s s' : Devm}
   have hp23 := prefix_of_pop (of_run_pop h23) (prefix_of_pop (of_run_pop h22) hp21)
   exact ⟨_, v, [r], prefix_of_push (of_run_push h24) hp23⟩
 
-/-- **Entry 27 wrapper spec.**  Under the local allowance-collision premise,
-the `approve` selector wrapper turns solvency with the callvalue in flight into
-solvency with nothing in flight, on both its revert and its call branch. -/
-theorem approve_wrapper_solvent {sevm : Sevm} {d : Devm} {o : Outcome} {w : SFunc}
-    (hw : prog[27]? = some w) (hadm : AllowAdmitted sevm)
-    (h : Solvent (Devm.getStor d sevm.currentTarget) sevm.value
-      (Devm.getBal d sevm.currentTarget))
-    (run : SFunc.Run prog sevm d w o) :
-    Solvent (Devm.getStor (Outcome.devm o) sevm.currentTarget) 0
-      (Devm.getBal (Outcome.devm o) sevm.currentTarget) := by
+/-- **Entry 27 wrapper effect.**  The `approve` selector wrapper leaves every balance alone, and
+either leaves the contract's storage alone (its state-silent revert branch) or writes exactly one
+word at the allowance slot `allowance[caller][spender]`, `spender` the address-masked first
+argument. -/
+theorem approve_wrapper_effect {sevm : Sevm} {d : Devm} {o : Outcome} {w : SFunc}
+    (hw : prog[27]? = some w) (run : SFunc.Run prog sevm d w o) :
+    (Outcome.devm o).getBal = d.getBal ∧
+      (Devm.getStor (Outcome.devm o) sevm.currentTarget = Devm.getStor d sevm.currentTarget ∨
+        ∃ v, Devm.getStor (Outcome.devm o) sevm.currentTarget =
+          (Devm.getStor d sevm.currentTarget).set
+            (allowKey sevm.caller.toB256 (allowArg sevm)) v) := by
   have hw' : w = t_0147_c27 := by
     simpa [prog, Cert.prog, cert] using hw.symm
   subst w
@@ -344,51 +345,60 @@ theorem approve_wrapper_solvent {sevm : Sevm} {d : Devm} {o : Outcome} {w : SFun
   cases r with
   | next h3 r =>
   rename_i d0 d1 d2 d3
-  have hs3 : Solvent (Devm.getStor d3 sevm.currentTarget) sevm.value
-      (Devm.getBal d3 sevm.currentTarget) := by
-    refine solvent_transport (d := d0) ⟨?_, ?_⟩ (solvent_transport (d := d) (d' := d0) ⟨?_, ?_⟩ h)
-    · exact (Line.of_inv Devm.getStor (by line_inv) (.cons h1 (.cons h2 (.cons h3 .nil)))).symm
-    · exact (Line.of_inv Devm.getBal (by line_inv) (.cons h1 (.cons h2 (.cons h3 .nil)))).symm
-    · funext a; exact Devm.Burn.getStor burn a
-    · funext a; exact Devm.Burn.getBal burn a
+  have s03 : Same d d3 := (Same.of_state burn.state).trans
+    ⟨Line.of_inv Devm.getStor (by line_inv) (.cons h1 (.cons h2 (.cons h3 .nil))),
+      Line.of_inv Devm.getBal (by line_inv) (.cons h1 (.cons h2 (.cons h3 .nil)))⟩
   cases r with
   | zero x pop r =>
     rename_i d4
-    have hs4 := solvent_transport (d := d3) (d' := d4)
-      (Same.of_state pop.state.symm) hs3
     have hst := SFunc.Run.state_of_silent (S := []) rfl (by decide) (by decide) r
-    exact solvent_zero (solvent_transport (Same.of_state hst) hs4)
+    have hs : Same d (Outcome.devm o) :=
+      (s03.trans (Same.of_state pop.state)).trans (Same.of_state hst.symm)
+    exact ⟨hs.bal.symm, Or.inl (congrFun hs.stor _).symm⟩
   | succ x ww hnz pop r =>
     rename_i d4
-    have hs4 := solvent_transport (d := d3) (d' := d4)
-      (Same.of_state pop.state.symm) hs3
+    have s04 : Same d d4 := s03.trans (Same.of_state pop.state)
     rw [wrap_tree_eq] at r
     cases r with
     | dest burn2 r =>
     rename_i d5
-    have hs5 := solvent_transport (d := d4) (d' := d5)
-      (Same.of_state burn2.state.symm) hs4
+    have s05 : Same d d5 := s04.trans (Same.of_state burn2.state)
     rcases run_chain_prefix wrapLine [] r with ⟨d6, hl, r⟩
-    have hs6 : Solvent (Devm.getStor d6 sevm.currentTarget) sevm.value
-        (Devm.getBal d6 sevm.currentTarget) :=
-      solvent_transport ⟨(Line.of_inv Devm.getStor (by line_inv) hl).symm,
-        (Line.of_inv Devm.getBal (by line_inv) hl).symm⟩ hs5
+    have s06 : Same d d6 := s05.trans
+      ⟨Line.of_inv Devm.getStor (by line_inv) hl, Line.of_inv Devm.getBal (by line_inv) hl⟩
     obtain ⟨t, v, ys, hstk⟩ := wrap_line_stack hl
-    have hoff : ∀ a, balSlot a ≠
-        allowKey sevm.caller.toB256 (allowArg sevm &&& ~~~ addressMask) := by
-      rw [allowArg_mask]; exact hadm.1
     change SFunc.Run prog sevm d6 (.callNext 11 t_0187_c27) o at r
     cases r with
     | @callHalt _ d7 _ _ _ g x lookup pop2 rc =>
-      have hs7 := solvent_transport (d := d6) (d' := d7)
-        (Same.of_state pop2.state.symm) hs6
-      exact approve_solvent lookup (popBurn_pref pop2 hstk).2 hoff hs7 rc
+      have s07 : Same d d7 := s06.trans (Same.of_state pop2.state)
+      obtain ⟨hs, hb⟩ := approve_effect lookup (popBurn_pref pop2 hstk).2 rc
+      rw [allowArg_mask] at hs
+      refine ⟨hb.trans s07.bal.symm, Or.inr ⟨v, hs.trans ?_⟩⟩
+      rw [s07.stor]
     | @callRet _ d7 d8 _ _ g _ x lookup pop2 rc tail =>
-      have hs7 := solvent_transport (d := d6) (d' := d7)
-        (Same.of_state pop2.state.symm) hs6
-      have hc := approve_solvent lookup (popBurn_pref pop2 hstk).2 hoff hs7 rc
+      have s07 : Same d d7 := s06.trans (Same.of_state pop2.state)
+      obtain ⟨hs, hb⟩ := approve_effect lookup (popBurn_pref pop2 hstk).2 rc
+      rw [allowArg_mask] at hs
       have hst := SFunc.Run.state_of_silent (S := []) rfl (by decide) (by decide) tail
-      exact solvent_transport (Same.of_state hst) hc
+      have s8o : Same d8 (Outcome.devm o) := Same.of_state hst.symm
+      refine ⟨s8o.bal.symm.trans (hb.trans s07.bal.symm),
+        Or.inr ⟨v, (congrFun s8o.stor.symm _).trans (hs.trans ?_)⟩⟩
+      rw [s07.stor]
+
+/-- **Entry 27 wrapper spec.**  Under the local allowance-collision premise,
+the `approve` selector wrapper turns solvency with the callvalue in flight into
+solvency with nothing in flight, on both its revert and its call branch. -/
+theorem approve_wrapper_solvent {sevm : Sevm} {d : Devm} {o : Outcome} {w : SFunc}
+    (hw : prog[27]? = some w) (hadm : AllowAdmitted sevm)
+    (h : Solvent (Devm.getStor d sevm.currentTarget) sevm.value
+      (Devm.getBal d sevm.currentTarget))
+    (run : SFunc.Run prog sevm d w o) :
+    Solvent (Devm.getStor (Outcome.devm o) sevm.currentTarget) 0
+      (Devm.getBal (Outcome.devm o) sevm.currentTarget) := by
+  obtain ⟨hb, hs | ⟨v, hs⟩⟩ := approve_wrapper_effect hw run
+  · rw [hs, hb]
+    exact solvent_zero h
+  · exact solvent_of_off_write hs hb hadm.1 h
 
 end Weth9
 

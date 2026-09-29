@@ -199,17 +199,19 @@ variable {c : ContractSpecSem}
 /-- **WETH9 `withdraw(wad)` (entry 8) establishes the frame postcondition.**
 
 Stated over any `ContractSpecSem` whose invariant admits the debit
-(`hstep`: from `Inv s v b` and `wad ≤ balanceOf[a]`, the ether covers `wad`
+(`hstep`: from `Inv s v b` and `wad ≤ balanceOf[caller]`, the ether covers `wad`
 and the invariant holds at the debited storage and balance).  The run is
 over any step relation `P` that refines Jaune's; `hcallPost` discharges the
 one `CALL` (sending `wad` to the caller) from its `P`-step, and `hpre` is the
 frame precondition at the entry's pre-state. -/
 theorem Weth9.withdraw_post_gen {P : Sevm → Devm → Ninst → Devm → Prop}
     (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {ca : Adr}
-    (hstep : ∀ {s : Stor} {v b : B256} {a : Adr} {wad : B256},
-      c.Inv s v b → wad ≤ s.get (balSlot a) →
-      wad ≤ b ∧ c.Inv (s.set (balSlot a) (s.get (balSlot a) - wad)) 0 (b - wad))
-    {sevm : Sevm} {devm : Devm} {o : Outcome} {g : SFunc}
+    {sevm : Sevm}
+    (hstep : ∀ {s : Stor} {v b : B256} {wad : B256},
+      c.Inv s v b → wad ≤ s.get (balSlot sevm.caller) →
+      wad ≤ b ∧ c.Inv (s.set (balSlot sevm.caller) (s.get (balSlot sevm.caller) - wad)) 0
+        (b - wad))
+    {devm : Devm} {o : Outcome} {g : SFunc}
     (hfork : CoveredFork sevm.benvStat.fork) (hca : sevm.currentTarget = ca)
     (hcallPost : ∀ {s sf : Devm} {gas dst value : B256} {xs : Stack},
         P sevm s (.exec .call) sf → gas :: dst :: value :: xs <<+ s.stack →
@@ -344,15 +346,17 @@ theorem Weth9.withdraw_post_gen {P : Sevm → Devm → Ninst → Devm → Prop}
 /-- **WETH9 `withdraw(wad)` (entry 8) establishes the frame postcondition.**
 
 Stated over any `ContractSpecSem` whose invariant admits the debit
-(`hstep`: from `Inv s v b` and `wad ≤ balanceOf[a]`, the ether covers `wad`
+(`hstep`: from `Inv s v b` and `wad ≤ balanceOf[caller]`, the ether covers `wad`
 and the invariant holds at the debited storage and balance).  `ih` is the
 deeper-frame hypothesis of `ContractSpecSem.Sound`, verbatim; `hpre` is the
 frame precondition at the entry's pre-state. -/
 theorem Weth9.withdraw_post {ca : Adr}
-    (hstep : ∀ {s : Stor} {v b : B256} {a : Adr} {wad : B256},
-      c.Inv s v b → wad ≤ s.get (balSlot a) →
-      wad ≤ b ∧ c.Inv (s.set (balSlot a) (s.get (balSlot a) - wad)) 0 (b - wad))
-    {sevm : Sevm} {devm : Devm} {o : Outcome} {g : SFunc}
+    {sevm : Sevm}
+    (hstep : ∀ {s : Stor} {v b : B256} {wad : B256},
+      c.Inv s v b → wad ≤ s.get (balSlot sevm.caller) →
+      wad ≤ b ∧ c.Inv (s.set (balSlot sevm.caller) (s.get (balSlot sevm.caller) - wad)) 0
+        (b - wad))
+    {devm : Devm} {o : Outcome} {g : SFunc}
     (hfork : CoveredFork sevm.benvStat.fork) (hca : sevm.currentTarget = ca)
     (ih : ∀ pc' sevm' pre' post',
         Exec pc' sevm' pre' (.ok post') →
@@ -375,10 +379,12 @@ derivation lies among `R`'s raw frame roots; given `R`'s frame admission, the
 child is admitted, which is all the `ContractSpecSem.SoundAdmitted` form of the
 deeper-frame hypothesis asks. -/
 theorem Weth9.withdraw_post_in {R : Exec.Deriv} {entry : Sevm → Devm → Prop} {ca : Adr}
-    (hstep : ∀ {s : Stor} {v b : B256} {a : Adr} {wad : B256},
-      c.Inv s v b → wad ≤ s.get (balSlot a) →
-      wad ≤ b ∧ c.Inv (s.set (balSlot a) (s.get (balSlot a) - wad)) 0 (b - wad))
-    {sevm : Sevm} {devm : Devm} {o : Outcome} {g : SFunc}
+    {sevm : Sevm}
+    (hstep : ∀ {s : Stor} {v b : B256} {wad : B256},
+      c.Inv s v b → wad ≤ s.get (balSlot sevm.caller) →
+      wad ≤ b ∧ c.Inv (s.set (balSlot sevm.caller) (s.get (balSlot sevm.caller) - wad)) 0
+        (b - wad))
+    {devm : Devm} {o : Outcome} {g : SFunc}
     (hfork : CoveredFork sevm.benvStat.fork) (hca : sevm.currentTarget = ca)
     (hadm : Exec.FrameAdmitted ca entry R.exc)
     (ih : ∀ pc' sevm' pre' post' (child : Exec pc' sevm' pre' (.ok post')),
@@ -428,10 +434,11 @@ theorem Weth9.withdraw_solvent {ca : Adr}
     (hg : prog[8]? = some g) (run : SFunc.Run prog sevm devm g o)
     (hpre : c.Pre ca sevm devm) :
     Solvent (Devm.getStor (Outcome.devm o) ca) 0 ((Outcome.devm o).getBal ca) := by
-  have hstep : ∀ {s : Stor} {v b : B256} {a : Adr} {wad : B256},
-      c.Inv s v b → wad ≤ s.get (balSlot a) →
-      wad ≤ b ∧ c.Inv (s.set (balSlot a) (s.get (balSlot a) - wad)) 0 (b - wad) := by
-    intro s v b a wad h hle
+  have hstep : ∀ {s : Stor} {v b : B256} {wad : B256},
+      c.Inv s v b → wad ≤ s.get (balSlot sevm.caller) →
+      wad ≤ b ∧ c.Inv (s.set (balSlot sevm.caller) (s.get (balSlot sevm.caller) - wad)) 0
+        (b - wad) := by
+    intro s v b wad h hle
     obtain ⟨h1, h2⟩ := Weth9.solvent_withdraw_step ((hInv _ _ _).mp h) hle
     exact ⟨h1, (hInv _ _ _).mpr h2⟩
   exact (hInv _ _ _).mp (Weth9.withdraw_post hstep hfork hca ih hg run hpre).inv
