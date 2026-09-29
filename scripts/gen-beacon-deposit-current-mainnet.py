@@ -41,7 +41,7 @@ EVALUATOR = SCRIPT_DIR / "eval-beacon-deposit-differential-code.lean"
 PROFILE_PATH = SCRIPT_DIR / "current-mainnet-target.json"
 SHARED_HELPER = SCRIPT_DIR / "current_mainnet.py"
 WRAPPER = SCRIPT_DIR / "check-beacon-deposit-current-mainnet.sh"
-REGISTRY = REPO / "BEACON_DEPOSIT_DEVIATIONS.md"
+REGISTRY = REPO / "docs/registers/BEACON_DEPOSIT_DEVIATIONS.md"
 MANIFEST_PATH = (
     SCRIPT_DIR / "fixtures" / "beacon-deposit-current-mainnet" / "manifest.json"
 )
@@ -178,7 +178,7 @@ CACHE_REPOSITORY_FILES = (
     "scripts/reference/beacon-deposit/inputs/deposit_contract.sol",
     "scripts/reference/beacon-deposit/inputs/deposit_contract.json",
     "scripts/reference/beacon-deposit/inputs/deployed-runtime.norm.hex",
-    "BEACON_DEPOSIT_DEVIATIONS.md",
+    "docs/registers/BEACON_DEPOSIT_DEVIATIONS.md",
 )
 CACHE_RUNTIME_LOCK = "scripts/current-mainnet-runtime-lock.json"
 CACHE_RUNTIME_PLATFORMS = ("macos-arm64", "linux-x86_64")
@@ -1352,7 +1352,7 @@ def compose_runtime(rows: Sequence[RuntimeRow], reference: Mapping[str, object],
             "allRowsRecorded": True,
             "positiveDeltas": increases,
             "deviationMarkerVersion": DEVIATION_MARKER_VERSION,
-            "registryFile": "BEACON_DEPOSIT_DEVIATIONS.md",
+            "registryFile": "docs/registers/BEACON_DEPOSIT_DEVIATIONS.md",
             "registrySha256": registry_sha,
             "obligation": (
                 "a positive Blanc delta fails before manifest acceptance unless one "
@@ -1769,7 +1769,7 @@ def validate_manifest_semantics(document: Mapping[str, object]) -> None:
             or gas_policy.get("allRowsRecorded") is not True \
             or gas_policy.get("positiveDeltas") != increases \
             or gas_policy.get("deviationMarkerVersion") != DEVIATION_MARKER_VERSION \
-            or gas_policy.get("registryFile") != "BEACON_DEPOSIT_DEVIATIONS.md" \
+            or gas_policy.get("registryFile") != "docs/registers/BEACON_DEPOSIT_DEVIATIONS.md" \
             or not is_sha256(gas_policy.get("registrySha256")):
         die("current-mainnet manifest runtime gas policy differs")
     returndata = runtime.get("returndataBoundary")

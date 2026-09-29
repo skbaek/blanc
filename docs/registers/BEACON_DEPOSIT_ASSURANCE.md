@@ -63,7 +63,7 @@ inventing an observation that does not exist.
 - **Gate:** `scripts/check.sh`, `scripts/check-claims.sh`, `scripts/check-beacon-deposit-differential.sh`
 - **Differential channel:** all eight `guard-01` through `guard-08` tags, `guard-precedence`, malformed ABI rows, accepted noncanonical controls, empty and unknown fallback rows, byte-exact revert channels, failed/short SHA responses, and bounded OOG rows.
 - **Non-claims:** the malformed matrix is finite agreement, not universal Solidity-decoder equivalence.  Empty calldata is a distinct proved route, and rolled-back writes are not misreported as absence of raw instruction occurrence.
-- **Source:** `Blanc/BeaconDepositCorrectness.lean`, `Blanc/BeaconDepositErrors.lean`, `Blanc/BeaconDepositSelectorMiss.lean`, `BEACON_DEPOSIT_DEVIATIONS.md`
+- **Source:** `Blanc/BeaconDepositCorrectness.lean`, `Blanc/BeaconDepositErrors.lean`, `Blanc/BeaconDepositSelectorMiss.lean`, `docs/registers/BEACON_DEPOSIT_DEVIATIONS.md`
 
 #### P4 — ERC-165 and both views return their exact interface encodings without raw or retained storage writes on the named successful routes
 

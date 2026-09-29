@@ -20,7 +20,7 @@ inherits every choice that compiler made — its dispatcher, its stack
 discipline, its bugs — and can justify nothing beyond "same as before."
 Reading deployed artifacts as *evidence* is a different matter and is
 routine (see the disassembly provenance note in
-[WETH_DEVIATIONS.md](WETH_DEVIATIONS.md)); what is excluded is making their
+[WETH_DEVIATIONS.md](docs/registers/WETH_DEVIATIONS.md)); what is excluded is making their
 bytes the compilation target. Directly verifying a reference artifact is a
 third thing again — worth doing, and a project someone should undertake, but
 not one a Blanc port undertakes or claims (principle 5).
@@ -59,7 +59,7 @@ nothing more:
 - **Differential agreement on a stated corpus.** The port is tested
   against the reference under a published per-contract coverage criterion
   (WETH10's: 147 rows over all 27 selectors and the receive path, frozen
-  in [WETH10_COMPATIBILITY.md](WETH10_COMPATIBILITY.md)). Fixture
+  in [WETH10_COMPATIBILITY.md](docs/registers/WETH10_COMPATIBILITY.md)). Fixture
   agreement is specification-checked differential testing on chosen
   inputs — not a proof, and not a liveness result (principle 5).
 - **Proved specifications, each offered as intent.** Parts of that
@@ -109,7 +109,7 @@ under a flat keyspace it entails writing through a third party's balance
 slot on a hash collision, and Blanc's refusal instead is defended as a
 priced design trade — the flat keyspace bought verifiability and size,
 and fail-loud beat fail-silent — recorded in
-[WETH_DEVIATIONS.md](WETH_DEVIATIONS.md), not as a claim that users
+[WETH_DEVIATIONS.md](docs/registers/WETH_DEVIATIONS.md), not as a claim that users
 secretly wanted refusals.
 
 The test is a heuristic for judgment, not a court. Asked in advance, it
@@ -138,7 +138,7 @@ caller bound to one — a code-hash pin, a storage proof against WETH9's
 slot scheme — has bound itself to the artifact rather than the contract,
 and no reimplementation can or should satisfy it. (Precedent: the Blanc
 WETH's balance slots are deliberately not WETH9's;
-[WETH_DEVIATIONS.md](WETH_DEVIATIONS.md) records the choice and declines
+[WETH_DEVIATIONS.md](docs/registers/WETH_DEVIATIONS.md) records the choice and declines
 any storage-layout compatibility claim.)
 
 The labels are presumptions, not verdicts: they settle the routine cases
@@ -156,11 +156,11 @@ improvement. The freedom is paid for in bookkeeping:
 
 - Every known observable deviation is recorded in a per-contract registry —
   reference semantics, Blanc semantics, observable consequence, project
-  stance, evidence. [WETH_DEVIATIONS.md](WETH_DEVIATIONS.md),
-  [WETH10_DEVIATIONS.md](WETH10_DEVIATIONS.md) and
-  [FMINT_DEVIATIONS.md](FMINT_DEVIATIONS.md) are the practice this policy
-  canonizes; every later port keeps one too — `BEACON_DEPOSIT_DEVIATIONS.md`,
-  `LIDO_CIRCUIT_BREAKER_DEVIATIONS.md`,
+  stance, evidence. [WETH_DEVIATIONS.md](docs/registers/WETH_DEVIATIONS.md),
+  [WETH10_DEVIATIONS.md](docs/registers/WETH10_DEVIATIONS.md) and
+  [FMINT_DEVIATIONS.md](docs/registers/FMINT_DEVIATIONS.md) are the practice this policy
+  canonizes; every later port keeps one too, beside them in `docs/registers/` —
+  `BEACON_DEPOSIT_DEVIATIONS.md`, `LIDO_CIRCUIT_BREAKER_DEVIATIONS.md`,
   `LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md`,
   `OSSIFIABLE_PROXY_DEVIATIONS.md` and `PRORATA_WETH_VAULT_DEVIATIONS.md`.
 - An observable difference, once discovered, is dispositioned or it is a
@@ -211,7 +211,7 @@ of the Blanc artifact, the behaviors differentially tested against the
 reference, and the recorded deviations. State what was checked; stop there.
 Where the stakes warrant it, the public boundary itself is frozen in a
 compatibility contract with differential evidence
-([WETH10_COMPATIBILITY.md](WETH10_COMPATIBILITY.md)).
+([WETH10_COMPATIBILITY.md](docs/registers/WETH10_COMPATIBILITY.md)).
 
 WETH10's deployment root follows the same boundary. Its theorem establishes
 the freshly generated Blanc runtime and `Weth10.Stable` after one strict,
@@ -312,9 +312,9 @@ block enters only when total wei plus that block's withdrawals stays below
 state" — a restriction the Registry invariant itself never consults. It does
 not verify the deployed Solidity runtime; agreement with the pinned v1.0.0
 reference rests on
-[LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md](LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md)
+[LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md](docs/registers/LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md)
 and
-[LIDO_CIRCUIT_BREAKER_DEVIATIONS.md](LIDO_CIRCUIT_BREAKER_DEVIATIONS.md).
+[LIDO_CIRCUIT_BREAKER_DEVIATIONS.md](docs/registers/LIDO_CIRCUIT_BREAKER_DEVIATIONS.md).
 The exact Blanc root is stated in
 [LidoCircuitBreakerDeploymentRoot.lean](Blanc/LidoCircuitBreakerDeploymentRoot.lean).
 A temporary pinned-EELS/Jaune replay checks one synthetic strict singleton
@@ -369,7 +369,7 @@ actor, not by the account a credit came from. The attack carrier's inhabitant
 is model-level; no executed chain history satisfying the attack premises is
 exhibited. Agreement with OpenZeppelin v5.7.0 rests on finite evidence — the
 vendored-reference, oracle and differential gates — and on
-`PRORATA_WETH_VAULT_DEVIATIONS.md`; none of it enters a theorem, and nothing
+`docs/registers/PRORATA_WETH_VAULT_DEVIATIONS.md`; none of it enters a theorem, and nothing
 here certifies ERC-4626 conformance. `docs/PRORATA_WETH_VAULT_CLAIM_MAP.md`
 maps each sentence to its theorems.
 
@@ -440,7 +440,7 @@ discipline with its publish-when-discovered norm, and principle 5's rule
 that claims end where evidence ends — a rule the wager, a standing
 commitment of burden with no evidence behind it, always sat uneasily
 beside. Adjudications recorded while the wager stood (the 2026-08-09
-value-rejection row in [WETH_DEVIATIONS.md](WETH_DEVIATIONS.md)) remain
+value-rejection row in [WETH_DEVIATIONS.md](docs/registers/WETH_DEVIATIONS.md)) remain
 valid records of their day and are marked where they cite it. The full
 former text is in git history — this file as of commit `30f3f99`.
 
@@ -450,7 +450,7 @@ The Blanc WETH is several times smaller than the deployed WETH9 and cheaper
 on the call paths measured, and where its simpler storage scheme introduces
 a key-collision possibility WETH9's layout cannot express, it refuses the
 operation rather than silently overwriting a balance (the fail-on-collision
-row in [WETH_DEVIATIONS.md](WETH_DEVIATIONS.md)). Each of these is a
+row in [WETH_DEVIATIONS.md](docs/registers/WETH_DEVIATIONS.md)). Each of these is a
 deviation from the letter of the reference, and each is a feature: no user
 wants larger code, dearer calls, or silent writes through a collision.
 Rejecting them for the sake of resemblance would have been an error. That

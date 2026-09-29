@@ -1004,7 +1004,7 @@ statements and probes no axioms of its own.
 - **Gate:** `scripts/check-lido-circuit-breaker-reference.sh`
 - **Differential channel:** the full manifest, whose green verdict is what makes an empty deviation registry meaningful rather than merely empty
 - **Non-claims:** an empty deviation registry records that no deviation was **accepted**, not that none could exist outside the finite matrix. Storage representation may still differ from the original by design; `PORTING.md` owns that boundary.
-- **Source:** `LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md`, `LIDO_CIRCUIT_BREAKER_DEVIATIONS.md`
+- **Source:** `docs/registers/LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md`, `docs/registers/LIDO_CIRCUIT_BREAKER_DEVIATIONS.md`
 
 ---
 
@@ -1065,4 +1065,4 @@ semantic descendant-write noninterference, not by an assumed callback equality:
 - **Gate:** `scripts/check-lido-twg-pinned-target-current-mainnet.sh`
 - **Differential channel:** four scenario rows and eight BPO2 state-test transitions: six positive family/composed transitions cover the finite duration and `2^256 - 1` sentinel with exact projected storage, ordered logs, empty pause output and canonical-true query output; the STOP-code/query mutant executes to status `0x0` with rollback, and the reentrant noninterference mutant executes to status `0x1` while changing `heartbeatIntervalSlot` from `2592000` to `31536000`. No semantic or control mismatch is accepted.
 - **Non-claims:** this is finite, dated 2026-09-02 model-boundary evidence and never a premise of any theorem. It is **not a live-chain role/state attestation**, does not identify either compiler-owned runtime with code currently installed on mainnet, and states no universal gas, liveness or post-BPO2 claim. A future applicability-ledger flip requires Jaune pin-movement adjudication rather than a local lane patch.
-- **Source:** `LIDO_TWG_PRAGUE_TO_OSAKA_APPLICABILITY.md`; `scripts/fixtures/lido-twg-current-mainnet/results.json`; `scripts/GATES.md`
+- **Source:** `docs/registers/LIDO_TWG_PRAGUE_TO_OSAKA_APPLICABILITY.md`; `scripts/fixtures/lido-twg-current-mainnet/results.json`; `scripts/GATES.md`

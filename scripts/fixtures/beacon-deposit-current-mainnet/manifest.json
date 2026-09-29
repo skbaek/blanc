@@ -35,13 +35,13 @@
   },
   "cacheInputs": {
     "repositoryFiles": {
-      "BEACON_DEPOSIT_DEVIATIONS.md": "1b275ccaade91617cbd974a8383c38e1b9d699af0c12cc141581ae6808ab90ec",
-      "scripts/check-beacon-deposit-current-mainnet.sh": "c69234bb75b79038fea3588766ecbf40c59d2f53219d288d13008012779bed7e",
+      "docs/registers/BEACON_DEPOSIT_DEVIATIONS.md": "55a56aea732b4008065841e3890f2a84db03be1389c025cabc4bff2409f0d842",
+      "scripts/check-beacon-deposit-current-mainnet.sh": "64bc607f29dbbf474539694d2b9da3b7f86815effb2d677f6273fc2b448d2aaa",
       "scripts/current-mainnet-runtime-lock.json": "5fa857e4a898e2d1e8fb12e2dccbbc952cad95919ca27fc2c40992793ea7bcbf",
       "scripts/current-mainnet-target.json": "740868487ec0fdd4f1d88c3ba624a5bda2bed2b6e3c78c8f78841178efc9394b",
       "scripts/current_mainnet.py": "c1cfaa965127bb7b86c47dccc0d465bf89c04b07cb81f288926c2a75d33238bf",
       "scripts/eval-beacon-deposit-differential-code.lean": "72794ddd1d076c6e0551169f4ef4df791ebdcb2521ad024147422136328da103",
-      "scripts/gen-beacon-deposit-current-mainnet.py": "365eed8304642f56214134e8931650714dc45437c1e95e6e643618ffb5d640ea",
+      "scripts/gen-beacon-deposit-current-mainnet.py": "c427dda38fba7e24cb1a3247f78a747f44fb12e8215255cb8569447122a03c3c",
       "scripts/gen-current-mainnet-runtime-lock.py": "6f52d1a38d80d11e2871d7eff57f7f527556d4e93ada43ee1874a601b1303d0f",
       "scripts/reference/beacon-deposit/inputs/deployed-runtime.norm.hex": "867e261f9811c5227ff0e2ec5d7803156f1af3428e49d6ffc041102da3050432",
       "scripts/reference/beacon-deposit/inputs/deposit_contract.json": "fbb573648e4fe96a6b731768cbf5165f5037d7bd29f43359c5316eeb9edc78e6",
@@ -884,8 +884,8 @@
       "deviationMarkerVersion": "beacon-deposit-current-mainnet-gas-v1",
       "obligation": "a positive Blanc delta fails before manifest acceptance unless one exact marker exists on a completed non-PENDING deviation table row; the generator never auto-admits or edits a deviation",
       "positiveDeltas": [],
-      "registryFile": "BEACON_DEPOSIT_DEVIATIONS.md",
-      "registrySha256": "1b275ccaade91617cbd974a8383c38e1b9d699af0c12cc141581ae6808ab90ec"
+      "registryFile": "docs/registers/BEACON_DEPOSIT_DEVIATIONS.md",
+      "registrySha256": "55a56aea732b4008065841e3890f2a84db03be1389c025cabc4bff2409f0d842"
     },
     "returndataBoundary": {
       "creditedOnBpo2Rows": false,

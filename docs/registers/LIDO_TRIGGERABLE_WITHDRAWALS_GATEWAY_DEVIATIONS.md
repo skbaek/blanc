@@ -7,7 +7,7 @@
 > drift, any unknown mismatch allowlist, or any future known difference that
 > is not repaired or entered here.
 
-This is the per-contract registry required by [`PORTING.md`](PORTING.md) for
+This is the per-contract registry required by [`PORTING.md`](../../PORTING.md) for
 Blanc's port of Lido's `TriggerableWithdrawalsGateway`. A known observable
 difference from the pinned reference that is neither repaired nor entered and
 defended here is a defect. Passing a finite differential does not prove that no

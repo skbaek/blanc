@@ -14,7 +14,7 @@ it is not an audit. In particular:
 - **A port is not the original.** Where a Blanc contract reimplements a
   deployed one, it observably diverges from it. What a port does and does not
   claim is governed by [`PORTING.md`](PORTING.md), and every known divergence
-  is registered in the `*_DEVIATIONS.md` files at this repository's root. Read
+  is registered in the `*_DEVIATIONS.md` files in [`docs/registers/`](docs/registers/). Read
   the registry for the contract before comparing it to anything deployed.
 - **The proofs inherit Jaune's trust base**, plus the pinned Jaune revision,
   the axiom audit, and the imported-source trust gate. See

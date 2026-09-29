@@ -959,7 +959,7 @@ NAMED_ROOTS = {
     "t8n_target": T8N_TARGET_ROOT,
     "weth10ref": ("WETH10_REFERENCE_DIR", "scripts/reference/weth10"),
     "weth10lock": ("WETH10_REFERENCE_LOCK", "scripts/weth10-reference.json"),
-    "weth10doc": ("WETH10_COMPATIBILITY_DOC", "WETH10_COMPATIBILITY.md"),
+    "weth10doc": ("WETH10_COMPATIBILITY_DOC", "docs/registers/WETH10_COMPATIBILITY.md"),
     "lidoref": ("LIDO_CIRCUIT_BREAKER_REFERENCE_DIR",
                 "scripts/reference/lido-circuit-breaker"),
     "lidolock": ("LIDO_CIRCUIT_BREAKER_REFERENCE_LOCK",
@@ -972,7 +972,7 @@ NAMED_ROOTS = {
     "ossifiablelock": ("LIDO_OSSIFIABLE_PROXY_REFERENCE_LOCK",
                         "scripts/lido-ossifiable-proxy-reference.json"),
     "ossifiabledoc": ("LIDO_OSSIFIABLE_PROXY_COMPATIBILITY_DOC",
-                       "OSSIFIABLE_PROXY_COMPATIBILITY.md"),
+                       "docs/registers/OSSIFIABLE_PROXY_COMPATIBILITY.md"),
     "ossifiableperfroot": ("LIDO_OSSIFIABLE_PROXY_PERFORMANCE_ROOT", "."),
     "ossifiableperfmanifest": (
         "LIDO_OSSIFIABLE_PROXY_PERFORMANCE_MANIFEST",

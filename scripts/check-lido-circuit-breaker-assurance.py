@@ -106,7 +106,7 @@ import axiom_audit
 
 VERDICT_SUBJECT = "lido-circuit-breaker-assurance"
 
-REGISTER_RELATIVE = "LIDO_CIRCUIT_BREAKER_ASSURANCE.md"
+REGISTER_RELATIVE = "docs/registers/LIDO_CIRCUIT_BREAKER_ASSURANCE.md"
 AXIOM_CHECK_RELATIVE = "scripts/AxiomCheck.lean"
 DEPLOYMENT_RELATIVE = "scripts/check-lido-circuit-breaker-deployment.py"
 FIXTURES_RELATIVE = (

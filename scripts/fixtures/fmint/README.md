@@ -143,7 +143,7 @@ success specification (`Blanc.Fmint.fmint_flashLoan_spec` and its seven
 correctness rather than liveness. Nothing here is a liveness result.
 
 The expectations above are written from `Blanc/Fmint.lean`'s semantics and
-[`FMINT_DEVIATIONS.md`](../../../FMINT_DEVIATIONS.md) — never read off an
+[`FMINT_DEVIATIONS.md`](../../../docs/registers/FMINT_DEVIATIONS.md) — never read off an
 observed post-state, per the same discipline the WETH suite's README states.
 `FMINT_DEVIATIONS.md`'s `Fixture evidence` column cites specific cases in this
 directory by name; where it instead says "no case in this suite," that is a
@@ -464,7 +464,7 @@ the log sequence D6 says that case must produce — per transaction, in
 emission order — and generation aborts, writing nothing, if it disagrees with
 what the oracle executed. What makes it evidence rather than a second copy of
 the golden is the **direction of derivation**: the sequences are written from
-proposal D6 as adjudicated in [`FMINT_DEVIATIONS.md`](../../../FMINT_DEVIATIONS.md)
+proposal D6 as adjudicated in [`FMINT_DEVIATIONS.md`](../../../docs/registers/FMINT_DEVIATIONS.md)
 rows 12–14 and from each case's own scenario, never decoded out of a
 committed fixture, never read back from the `t8n` result, never obtained from
 a second oracle run. A case that declares nothing fails generation, so the

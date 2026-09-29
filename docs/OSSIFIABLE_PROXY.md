@@ -19,7 +19,7 @@ and the selected WithdrawalQueueERC721 proxy creation transaction. Independent
 source/compiler and transaction/deployed-runtime routes reproduce the same
 2,497-byte Solidity runtime.
 
-[`OSSIFIABLE_PROXY_COMPATIBILITY.md`](../OSSIFIABLE_PROXY_COMPATIBILITY.md)
+[`OSSIFIABLE_PROXY_COMPATIBILITY.md`](registers/OSSIFIABLE_PROXY_COMPATIBILITY.md)
 freezes the constructor, seven named selectors, fallback and receive paths,
 events, errors, ABI boundaries, authorization precedence, delegation behavior,
 and both functional ERC-1967 slots. The reference gate keeps that document
@@ -142,7 +142,7 @@ The BPO2 replay does not alter or double-count the primary Prague score.
 
 ## Deviations and claim boundary
 
-[`OSSIFIABLE_PROXY_DEVIATIONS.md`](../OSSIFIABLE_PROXY_DEVIATIONS.md) records
+[`OSSIFIABLE_PROXY_DEVIATIONS.md`](registers/OSSIFIABLE_PROXY_DEVIATIONS.md) records
 the constructor memory schedule, redundant Solidity implementation-code check,
 discarded successful setup returndata, intrinsic direct/delegated context
 delta, and the reference-versus-Blanc forwarded-child gas difference. That

@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 LOCK = Path(os.environ.get("WETH10_REFERENCE_LOCK", ROOT / "scripts" / "weth10-reference.json"))
-DOCUMENT = Path(os.environ.get("WETH10_COMPATIBILITY_DOC", ROOT / "WETH10_COMPATIBILITY.md"))
+DOCUMENT = Path(os.environ.get("WETH10_COMPATIBILITY_DOC", ROOT / "docs/registers/WETH10_COMPATIBILITY.md"))
 
 CROSS_CUTTING_KEYS = [
     "receive-vs-unknown",

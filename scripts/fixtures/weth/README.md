@@ -54,7 +54,7 @@ Why the first is needed: the expectations are asserted at *generation* time by
 a Python script. They say what WETH ought to do; they do not execute the EVM.
 
 The expectations are written from `Blanc/Weth.lean`'s semantics and
-[`WETH_DEVIATIONS.md`](../../../WETH_DEVIATIONS.md), never read off an
+[`WETH_DEVIATIONS.md`](../../../docs/registers/WETH_DEVIATIONS.md), never read off an
 observed post-state — an expectation transcribed from output can never fail,
 and it reads like a specification. They cover the WETH-semantic part only: the
 contract's ether balance, the storage slots WETH's semantics determines,
@@ -91,13 +91,13 @@ transaction at gas price 10.
 | `07-view-dynamic.json` | `name()`, `symbol()` | the two entry points whose ABI *return* encoding WETH does by hand, through the same prober | both calls return; each payload is exactly 96 bytes; and all three words of each are the ABI's: the head offset `0x20`, then the byte length (13 / 4), then the UTF-8 bytes of `"Wrapped Ether"` / `"WETH"` padded on the right to a whole word. The expected words are derived from the ABI rule and the strings, *not* from `Weth.lean`'s `256 − 8·len` shift constants — whether that hand-rolling produces the ABI's layout is the question the case asks |
 | `08-guard-balance.json` | `transfer` and `withdraw` over the caller's balance | the two balance guards refusing, through the same prober (see [On refusals](#on-refusals)) | both calls are **refused** — a zero success flag beside a set executed-marker, so the refusal is *observed*, not inferred from "nothing changed"; WETH holds 5 wad of ether against the prober's 2, so the refused `withdraw(3 wad)` is a contract that will not pay rather than one that cannot; a `transfer` of the whole 2 wad, same selector and same gas cap, is honoured and ABI-returns `true`; WETH ends with only the recipient's credit, its ether untouched, and the prober with no ether at all |
 | `09-guard-allowance.json` | `transferFrom` with no / too little / enough allowance | the allowance guard, and the **write** side of `keccak256(src ‖ dst)` | three owners with identical 5-wad balances differing only in what they approved the prober: the first two `transferFrom`s are refused, the third honoured; owner B's balance reads back whole afterwards, and `transferFrom` debits the source *before* it checks the allowance — so the refusal rolled back a debit already made in that frame; owner C's 5-wad allowance minus the 2 wad spent leaves a **nonzero 3 wad at that key** in the committed post-state, which the `allowance` view then reads back through its own independent derivation of the same key |
-| `10-deviation-address.json` | dirty address words — [`WETH_DEVIATIONS.md`](../../../WETH_DEVIATIONS.md) **claim 1** | mutating paths rejecting a word with nonzero upper 96 bits, and views *not* rejecting it | `transfer`, `approve`, and `transferFrom` in **both** address positions all refuse the dirty word, while the same calls on the canonical address it aliases to, at the same gas cap, are honoured; `balanceOf` of the dirty word answers 4 wad — the value at the dirty word's *own* slot — while `balanceOf` of the address it aliases to answers 6, so the view demonstrably neither masks to 160 bits nor applies the mutators' check; the four refusals leave no slot anywhere, under either key |
-| `11-agreement-value.json` | value at recognized selectors vs the fallback — [`WETH_DEVIATIONS.md`](../../../WETH_DEVIATIONS.md) **row 4, an agreement since the `nonpayable` wrap** | the per-selector value guard refusing, on a mutator and on a view, and the fallback staying payable | a `transfer` carrying 1 wad is **refused** — the transaction reverts, the value returns, no slot moves — while the same `transfer` from the same sender at the same gas cap with no value is honoured, so the refusal is the guard and nothing else; calldata carrying `deposit()`'s own selector plus 1 wad is honoured *as a deposit* through the payable fallback, crediting its sender; the prober's `balanceOf` carrying a single wei is refused (flag `0`, marker `1`) while the identical zero-value probe at the same cap is honoured; `totalSupply()` then reads 6 wad against internal balances `3 + 2 + 1` — **exactly backed**, where this same scenario against the pre-change artifact ended with an unbacked wad (this file was `11-deviation-value.json` then, and asserted that outcome) |
+| `10-deviation-address.json` | dirty address words — [`WETH_DEVIATIONS.md`](../../../docs/registers/WETH_DEVIATIONS.md) **claim 1** | mutating paths rejecting a word with nonzero upper 96 bits, and views *not* rejecting it | `transfer`, `approve`, and `transferFrom` in **both** address positions all refuse the dirty word, while the same calls on the canonical address it aliases to, at the same gas cap, are honoured; `balanceOf` of the dirty word answers 4 wad — the value at the dirty word's *own* slot — while `balanceOf` of the address it aliases to answers 6, so the view demonstrably neither masks to 160 bits nor applies the mutators' check; the four refusals leave no slot anywhere, under either key |
+| `11-agreement-value.json` | value at recognized selectors vs the fallback — [`WETH_DEVIATIONS.md`](../../../docs/registers/WETH_DEVIATIONS.md) **row 4, an agreement since the `nonpayable` wrap** | the per-selector value guard refusing, on a mutator and on a view, and the fallback staying payable | a `transfer` carrying 1 wad is **refused** — the transaction reverts, the value returns, no slot moves — while the same `transfer` from the same sender at the same gas cap with no value is honoured, so the refusal is the guard and nothing else; calldata carrying `deposit()`'s own selector plus 1 wad is honoured *as a deposit* through the payable fallback, crediting its sender; the prober's `balanceOf` carrying a single wei is refused (flag `0`, marker `1`) while the identical zero-value probe at the same cap is honoured; `totalSupply()` then reads 6 wad against internal balances `3 + 2 + 1` — **exactly backed**, where this same scenario against the pre-change artifact ended with an unbacked wad (this file was `11-deviation-value.json` then, and asserted that outcome) |
 
 Balances are keyed by the **raw 256-bit address word**, not a Solidity mapping
 slot, and an allowance by `keccak256(src ‖ dst)`; both are deliberate
 divergences from deployed WETH9, catalogued in
-[`WETH_DEVIATIONS.md`](../../../WETH_DEVIATIONS.md). The storage keys asserted
+[`WETH_DEVIATIONS.md`](../../../docs/registers/WETH_DEVIATIONS.md). The storage keys asserted
 above are exactly those layouts, so every case is also standing evidence for
 that document's "balance storage layout" row.
 
@@ -179,7 +179,7 @@ that cannot be derived from the specification is dropped rather than weakened.
 
 **Since 2026-08-05 the payload *is* determined** — `Blanc.Func.rev` is
 `PUSH0 PUSH0 REVERT`, so every guard failure returns exactly zero bytes and
-hands back the frame's unused gas ([`WETH_DEVIATIONS.md`](../../../WETH_DEVIATIONS.md)'s
+hands back the frame's unused gas ([`WETH_DEVIATIONS.md`](../../../docs/registers/WETH_DEVIATIONS.md)'s
 fifth row) — **but this suite still does not assert it**, deliberately: the
 shape belongs to a definition `Blanc/CommonCore.lean` shares with fmint, and
 the discriminating assertions were added once, to the fmint suite, rather than
@@ -229,7 +229,7 @@ one keeps a cap and that one has none.)
 
 ### Known limits of these expectations
 
-Of [`WETH_DEVIATIONS.md`](../../../WETH_DEVIATIONS.md)'s three remaining
+Of [`WETH_DEVIATIONS.md`](../../../docs/registers/WETH_DEVIATIONS.md)'s three remaining
 catalogued deviations, one is discharged by a dedicated case — claim 1 by
 `10-deviation-address.json` — and two are not, for the reasons below. (That
 registry's rows 4 and 5 are *agreements*, not claims: row 4 became one with
@@ -238,7 +238,7 @@ agreement witness, and row 5's evidence lives in the fmint suite — see [On
 refusals](#on-refusals).)
 
 - **Deviation claim 3 is untestable by construction.**
-  [`WETH_DEVIATIONS.md`](../../../WETH_DEVIATIONS.md)'s third row records that
+  [`WETH_DEVIATIONS.md`](../../../docs/registers/WETH_DEVIATIONS.md)'s third row records that
   `approve` and allowance-consuming `transferFrom` revert when the allowance
   key `keccak256(src ‖ dst)` is itself a valid address word, where WETH9
   would write through the collision. Exercising it needs a `(src, dst)` pair
@@ -251,7 +251,7 @@ refusals](#on-refusals).)
   `09-guard-allowance.json` respectively (see [On the view
   prober](#on-the-view-prober) and case `09` above).
 - **Deviation claim 2 has no case of its own, by design.**
-  [`WETH_DEVIATIONS.md`](../../../WETH_DEVIATIONS.md)'s second row, the
+  [`WETH_DEVIATIONS.md`](../../../docs/registers/WETH_DEVIATIONS.md)'s second row, the
   balance storage layout — the raw 256-bit address word as the slot — is
   structural, and every case above asserts storage at exactly those keys,
   including the complete-storage checks. It is witnessed by the whole suite

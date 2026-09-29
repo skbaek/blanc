@@ -1,6 +1,6 @@
 # Beacon deposit deviation and claim-boundary registry
 
-This is the per-contract registry required by [`PORTING.md`](PORTING.md) for
+This is the per-contract registry required by [`PORTING.md`](../../PORTING.md) for
 the Blanc port of the pinned Ethereum beacon deposit contract. It records
 known implementation differences, interface rulings, pending behavioral
 questions, and explicit claim exclusions. A passing finite differential is
@@ -9,11 +9,11 @@ equivalence nor a liveness result. A known observable difference may not be
 left out merely because this registry is non-exhaustive.
 
 The comparison target is the vendored source
-[`deposit_contract.sol`](scripts/reference/beacon-deposit/inputs/deposit_contract.sol)
+[`deposit_contract.sol`](../../scripts/reference/beacon-deposit/inputs/deposit_contract.sol)
 (SHA-256
 `2a8db249155e8502e1132f14410b8d7b2a924512723ed07a08167477d8f8c073`)
 and the vendored deployed-runtime anchor under
-[`scripts/reference/beacon-deposit/`](scripts/reference/beacon-deposit/).
+[`scripts/reference/beacon-deposit/`](../../scripts/reference/beacon-deposit/).
 The source algorithm is re-derived in the opening report's §B1.7. Raw source,
 storage, instruction, and byte identity are not comparison targets.
 

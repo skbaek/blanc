@@ -25,7 +25,7 @@ LOCK = Path(os.environ.get(
 ))
 DOCUMENT = Path(os.environ.get(
     "LIDO_OSSIFIABLE_PROXY_COMPATIBILITY_DOC",
-    ROOT / "OSSIFIABLE_PROXY_COMPATIBILITY.md",
+    ROOT / "docs/registers/OSSIFIABLE_PROXY_COMPATIBILITY.md",
 ))
 
 CROSSCUTS = [

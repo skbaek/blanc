@@ -28,7 +28,7 @@ import axiom_audit  # noqa: E402
 
 
 SUBJECT = "beacon-deposit-assurance"
-REGISTER = "BEACON_DEPOSIT_ASSURANCE.md"
+REGISTER = "docs/registers/BEACON_DEPOSIT_ASSURANCE.md"
 AXIOM_CHECK = "scripts/AxiomCheck.lean"
 CATALOGUE = "scripts/GATES.md"
 

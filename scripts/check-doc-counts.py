@@ -564,7 +564,7 @@ CLAIMS = [
     {
         "name": "Lido CircuitBreaker assurance register row count",
         "producer": (
-            "LIDO_CIRCUIT_BREAKER_ASSURANCE.md",
+            "docs/registers/LIDO_CIRCUIT_BREAKER_ASSURANCE.md",
             # One `####` heading per register row. The assurance gate parses
             # rows with its own grammar and pins the total as
             # EXPECTED_TOTAL_ROWS; this counting rule is written independently
@@ -572,7 +572,7 @@ CLAIMS = [
             # two is self-detecting, as with the claim-pin count above. The
             # cell's other figures are named in UNCHECKED_PUBLISHED_NUMBERS.
             lambda root: count_matches(
-                root, "LIDO_CIRCUIT_BREAKER_ASSURANCE.md", re.compile(r"^####\s", re.M)
+                root, "docs/registers/LIDO_CIRCUIT_BREAKER_ASSURANCE.md", re.compile(r"^####\s", re.M)
             ),
         ),
         "consumers": [

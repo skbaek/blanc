@@ -53,7 +53,7 @@ SOURCE = INPUT / "deposit_contract.sol"
 ARTIFACT = INPUT / "deposit_contract.json"
 DEPLOYED_RUNTIME = INPUT / "deployed-runtime.norm.hex"
 MANIFEST_PATH = REPO / "scripts" / "fixtures" / "beacon-deposit" / "manifest.json"
-REGISTRY_PATH = REPO / "BEACON_DEPOSIT_DEVIATIONS.md"
+REGISTRY_PATH = REPO / "docs/registers/BEACON_DEPOSIT_DEVIATIONS.md"
 
 MANIFEST_SCHEMA = 3
 MANIFEST_FALSIFIER_COUNT = 16
@@ -2345,7 +2345,7 @@ def build_manifest(cases: Sequence[Case], artifacts: Mapping[str, object],
             "allTransactionsRecorded": True,
             "equalityClaim": False,
             "publicPathIncreases": increases,
-            "registryFile": "BEACON_DEPOSIT_DEVIATIONS.md",
+            "registryFile": "docs/registers/BEACON_DEPOSIT_DEVIATIONS.md",
             "registryFileSha256": registry_sha256,
             "registryProtocol": "one exact beacon-deposit-gas-v1 marker on one non-PENDING table row per positive delta; no stale markers",
             "registryObligation": "every positive public-path delta is linked to a completed BEACON_DEPOSIT_DEVIATIONS.md row",
@@ -2418,7 +2418,7 @@ def validate_manifest_semantics(document: Mapping[str, object]) -> None:
     } or gas_evidence.get("allTransactionsRecorded") is not True \
             or gas_evidence.get("equalityClaim") is not False \
             or gas_evidence.get("registryFile") \
-            != "BEACON_DEPOSIT_DEVIATIONS.md" \
+            != "docs/registers/BEACON_DEPOSIT_DEVIATIONS.md" \
             or not re.fullmatch(
                 r"[0-9a-f]{64}", str(gas_evidence.get("registryFileSha256", ""))) \
             or gas_evidence.get("registryProtocol") != (

@@ -52,7 +52,7 @@
           A port never claims byte identity —
           <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md" style="text-decoration:underline;text-underline-offset:3px">PORTING.md</a>
           governs what is claimed and what never is. What makes this port distinctive is the
-          <a href="https://github.com/skbaek/blanc/blob/main/LIDO_CIRCUIT_BREAKER_ASSURANCE.md" style="text-decoration:underline;text-underline-offset:3px">assurance register</a>:
+          <a href="https://github.com/skbaek/blanc/blob/main/docs/registers/LIDO_CIRCUIT_BREAKER_ASSURANCE.md" style="text-decoration:underline;text-underline-offset:3px">assurance register</a>:
           75 rows mapping every quotable claim onto the exact declarations that carry it, the
           premises they require, the axioms they depend on, the gate that owns them — and, in
           every row without exception, what the row does <em>not</em> claim.
@@ -234,7 +234,7 @@ chainUsing_preserves_registryStable    <span class="c">-- the theorem above</spa
     <h2 style="max-width:30ch">A claim map, and evidence that answers to it.</h2>
     <p class="lede" style="margin-top:18px">
       “Right” was written down before it was argued:
-      <a href="https://github.com/skbaek/blanc/blob/main/LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md" style="text-decoration:underline;text-underline-offset:3px">LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/docs/registers/LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md" style="text-decoration:underline;text-underline-offset:3px">LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md</a>
       freezes the reference’s public conformance boundary endpoint by endpoint, and the
       assurance register maps every claim onto its evidence — with the axiom column checked
       transitively against Lean and every load-bearing non-claim pinned, so a quoted sentence
@@ -314,7 +314,7 @@ runtimeWriteAuthority_of_rawFrameRoot <span class="c">-- every raw SSTORE in an 
     <p class="eyebrow">Deviations</p>
     <h2 style="max-width:26ch">Zero accepted — and what that does and doesn’t mean.</h2>
     <p class="lede" style="margin-top:18px">
-      <a href="https://github.com/skbaek/blanc/blob/main/LIDO_CIRCUIT_BREAKER_DEVIATIONS.md" style="text-decoration:underline;text-underline-offset:3px">LIDO_CIRCUIT_BREAKER_DEVIATIONS.md</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/docs/registers/LIDO_CIRCUIT_BREAKER_DEVIATIONS.md" style="text-decoration:underline;text-underline-offset:3px">LIDO_CIRCUIT_BREAKER_DEVIATIONS.md</a>
       accepts <b>no behavioral deviations</b>: zero accepted rows, zero pending, and no
       unknown-mismatch allowlist. Agreement on the finite matrix is recorded as evidence, not
       inflated into a proof that no mismatch exists, and the registry’s standing rule does the
@@ -441,7 +441,7 @@ runtimeWriteAuthority_of_rawFrameRoot <span class="c">-- every raw SSTORE in an 
       bound, external submission, or current deployed-chain state; outside those worlds a target’s
       canonical <span class="mono">true</span> still means only that it <em>reported</em> success.
       The full boundary — fourteen pinned non-claim phrases — lives in the
-      <a href="https://github.com/skbaek/blanc/blob/main/LIDO_CIRCUIT_BREAKER_ASSURANCE.md" style="text-decoration:underline;text-underline-offset:3px">assurance register</a>,
+      <a href="https://github.com/skbaek/blanc/blob/main/docs/registers/LIDO_CIRCUIT_BREAKER_ASSURANCE.md" style="text-decoration:underline;text-underline-offset:3px">assurance register</a>,
       in the honest register.
     </p>
   </div>
@@ -461,9 +461,9 @@ runtimeWriteAuthority_of_rawFrameRoot <span class="c">-- every raw SSTORE in an 
     <div class="footlinks">
       <a href="../index.html#portfolio">all implementations →</a>
       <a href="weth10.html">the WETH10 port →</a>
-      <a href="https://github.com/skbaek/blanc/blob/main/LIDO_CIRCUIT_BREAKER_ASSURANCE.md" target="_blank" rel="noopener">assurance register →</a>
-      <a href="https://github.com/skbaek/blanc/blob/main/LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md" target="_blank" rel="noopener">frozen boundary →</a>
-      <a href="https://github.com/skbaek/blanc/blob/main/LIDO_CIRCUIT_BREAKER_DEVIATIONS.md" target="_blank" rel="noopener">deviation registry →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/docs/registers/LIDO_CIRCUIT_BREAKER_ASSURANCE.md" target="_blank" rel="noopener">assurance register →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/docs/registers/LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md" target="_blank" rel="noopener">frozen boundary →</a>
+      <a href="https://github.com/skbaek/blanc/blob/main/docs/registers/LIDO_CIRCUIT_BREAKER_DEVIATIONS.md" target="_blank" rel="noopener">deviation registry →</a>
       <a href="https://github.com/skbaek/blanc/issues" target="_blank" rel="noopener">found an overclaim? →</a>
     </div>
   </div>

@@ -116,7 +116,7 @@ strictly cheaper in Blanc, two shared-gas OOG thresholds are equal, and none
 is more expensive. The median Blanc-minus-reference delta is -1,131 gas and
 the largest saving is 18,090. The exact per-row values, artifact digests, and
 finite-evidence boundary are owned by the differential manifest and
-`BEACON_DEPOSIT_DEVIATIONS.md`.
+[`BEACON_DEPOSIT_DEVIATIONS.md`](registers/BEACON_DEPOSIT_DEVIATIONS.md).
 
 Constructor gas is deliberately measured separately as total direct creation-
 message gas, runtime code-deposit gas, and constructor-execution gas. Closure

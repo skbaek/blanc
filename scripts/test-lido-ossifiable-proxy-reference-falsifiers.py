@@ -28,7 +28,7 @@ LOCK = ROOT / "scripts" / "lido-ossifiable-proxy-reference.json"
 GENERATOR = ROOT / "scripts" / "lido-ossifiable-proxy-reference.py"
 COMPATIBILITY = ROOT / "scripts" / "lido-ossifiable-proxy-compatibility.py"
 REFERENCE = ROOT / "scripts" / "reference" / "lido-ossifiable-proxy"
-DOCUMENT = ROOT / "OSSIFIABLE_PROXY_COMPATIBILITY.md"
+DOCUMENT = ROOT / "docs/registers/OSSIFIABLE_PROXY_COMPATIBILITY.md"
 
 
 def canonical(value: Any) -> bytes:

@@ -18,8 +18,8 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-DOCUMENT = ROOT / "LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md"
-DEVIATIONS = ROOT / "LIDO_CIRCUIT_BREAKER_DEVIATIONS.md"
+DOCUMENT = ROOT / "docs/registers/LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md"
+DEVIATIONS = ROOT / "docs/registers/LIDO_CIRCUIT_BREAKER_DEVIATIONS.md"
 DEFAULT_LOCK = ROOT / "scripts" / "lido-circuit-breaker-reference.json"
 DEFAULT_MANIFEST = ROOT / "scripts" / "fixtures" / "lido-circuit-breaker" / "manifest.json"
 

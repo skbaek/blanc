@@ -80,9 +80,9 @@ repository-specific commands and pass criteria remain in `scripts/GATES.md`.
 
 The TriggerableWithdrawalsGateway port's finite differential boundary and
 known observable differences are recorded in
-[`LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_COMPATIBILITY.md`](LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_COMPATIBILITY.md)
+[`LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_COMPATIBILITY.md`](docs/registers/LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_COMPATIBILITY.md)
 and
-[`LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md`](LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md).
+[`LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md`](docs/registers/LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md).
 
 This repo contains the following files:
 
@@ -466,17 +466,17 @@ ERC-4626 vault) and three études (FMINT, PRORATA, DRIP) — has a page of
 receipts under [`docs/contracts/`](docs/contracts/).
 
 Blanc's WETH is a reimplementation; observable deviations from deployed WETH9
-are catalogued in [`WETH_DEVIATIONS.md`](WETH_DEVIATIONS.md). FMINT's
+are catalogued in [`WETH_DEVIATIONS.md`](docs/registers/WETH_DEVIATIONS.md). FMINT's
 deviations from OpenZeppelin's `ERC20FlashMint` are catalogued in
-[`FMINT_DEVIATIONS.md`](FMINT_DEVIATIONS.md). WETH10's implementation
+[`FMINT_DEVIATIONS.md`](docs/registers/FMINT_DEVIATIONS.md). WETH10's implementation
 freedoms, exclusions, deployed quirks, and current-main drift are catalogued in
-[`WETH10_DEVIATIONS.md`](WETH10_DEVIATIONS.md); no true in-scope deviation is
+[`WETH10_DEVIATIONS.md`](docs/registers/WETH10_DEVIATIONS.md); no true in-scope deviation is
 accepted. The later ports keep the same kind of register:
-[`BEACON_DEPOSIT_DEVIATIONS.md`](BEACON_DEPOSIT_DEVIATIONS.md),
-[`LIDO_CIRCUIT_BREAKER_DEVIATIONS.md`](LIDO_CIRCUIT_BREAKER_DEVIATIONS.md),
-[`LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md`](LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md),
-[`OSSIFIABLE_PROXY_DEVIATIONS.md`](OSSIFIABLE_PROXY_DEVIATIONS.md) and
-[`PRORATA_WETH_VAULT_DEVIATIONS.md`](PRORATA_WETH_VAULT_DEVIATIONS.md).
+[`BEACON_DEPOSIT_DEVIATIONS.md`](docs/registers/BEACON_DEPOSIT_DEVIATIONS.md),
+[`LIDO_CIRCUIT_BREAKER_DEVIATIONS.md`](docs/registers/LIDO_CIRCUIT_BREAKER_DEVIATIONS.md),
+[`LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md`](docs/registers/LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md),
+[`OSSIFIABLE_PROXY_DEVIATIONS.md`](docs/registers/OSSIFIABLE_PROXY_DEVIATIONS.md) and
+[`PRORATA_WETH_VAULT_DEVIATIONS.md`](docs/registers/PRORATA_WETH_VAULT_DEVIATIONS.md).
 
 Every module is wrapped in `namespace Blanc`, and Blanc's Jaune imports are
 wrapped in `namespace Jaune`, so downstream code writes qualified names or
@@ -1415,8 +1415,8 @@ current receipts; the recorded figures are proof-engineering snapshots, not
 runtime-gas measurements or an industry deployment-verification standard.
 
 The precise behavior contract, evidence ownership, and non-claims are in
-[`WETH10_COMPATIBILITY.md`](WETH10_COMPATIBILITY.md) and
-[`WETH10_DEVIATIONS.md`](WETH10_DEVIATIONS.md). No arbitrary-borrower
+[`WETH10_COMPATIBILITY.md`](docs/registers/WETH10_COMPATIBILITY.md) and
+[`WETH10_DEVIATIONS.md`](docs/registers/WETH10_DEVIATIONS.md). No arbitrary-borrower
 settlement theorem is established, and no such claim is implied here.
 
 ## Contact

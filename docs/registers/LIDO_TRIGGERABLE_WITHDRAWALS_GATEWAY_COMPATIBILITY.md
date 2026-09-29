@@ -6,7 +6,7 @@
 > deviations, or a mismatch with either evidence source.
 
 This document freezes the public conformance boundary for Blanc's port of
-Lido's `TriggerableWithdrawalsGateway`. It is read with [`PORTING.md`](PORTING.md):
+Lido's `TriggerableWithdrawalsGateway`. It is read with [`PORTING.md`](../../PORTING.md):
 the port does not claim Solidity bytecode, code hash, raw storage layout, or
 gas identity. It claims only the behavior stated here, the properties proved
 of the exact compiled Blanc runtime, finite agreement on the published corpus,
@@ -17,7 +17,7 @@ The source authority is
 `contracts/0.8.9/TriggerableWithdrawalsGateway.sol` and its inherited bases at
 `lidofinance/core` commit
 `17005714f151e5502c559932319a3f2f74ac2436`. The source-derived census in
-[`scripts/lido-twg-census.json`](scripts/lido-twg-census.json) freezes 24
+[`scripts/lido-twg-census.json`](../../scripts/lido-twg-census.json) freezes 24
 selectors, six event families, 14 custom-error families, six role/slot hashes,
 and the exact `whenResumed` surface. The B1 lock and B2 manifest, not this
 prose, own artifact identities and finite observations.

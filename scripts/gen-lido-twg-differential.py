@@ -1241,8 +1241,8 @@ def compatibility_contract() -> Mapping[str, object]:
     contract = value["documentFill"]
     current_templates = contract["templates"]
     if current_templates != PLACEHOLDER_TEMPLATE_DIGESTS:
-        compatibility = (REPO / "LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_COMPATIBILITY.md").read_text()
-        deviations = (REPO / "LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md").read_text()
+        compatibility = (REPO / "docs/registers/LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_COMPATIBILITY.md").read_text()
+        deviations = (REPO / "docs/registers/LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md").read_text()
         expect("{{MACHINE:" not in compatibility + deviations,
                "claim templates drifted before their one-way document fill")
         contract["templates"] = dict(PLACEHOLDER_TEMPLATE_DIGESTS)
