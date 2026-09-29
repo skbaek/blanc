@@ -279,7 +279,8 @@ theorem runFactsC :
     pwalkH .refuse fwdTries eTop.sta okAny 1 cTop3 = .halt (.ok dTop) := by
   kernel_rfl_and
 
-/-- The forwarder's entry, and the pre- and post-state the shadows show. -/
+/-- The forwarder's entry, the pre- and post-state the shadows show, and the code addresses of
+the spawned frames. -/
 theorem runFactsD :
     (eTop.pc, eTop.sta.currentTarget, eTop.sta.code, eTop.sta.benvStat.fork) =
       (0, proxyAddress, fwdCode, .prague) ∧
@@ -290,7 +291,15 @@ theorem runFactsD :
     lookupS cTop3.stor proxyAddress 0 = (3 : Nat).toB256 ∧
     (lookupA cTop.acs proxyAddress).bal.toNat = 1000 ∧
     (lookupA cTop.acs receiverAddress).bal.toNat = 0 ∧
-    lookupS cTop.stor proxyAddress 0 = (3 : Nat).toB256 := by
+    lookupS cTop.stor proxyAddress 0 = (3 : Nat).toB256 ∧
+    -- the code addresses of the six spawned frames (none is `MODEXP` or `P256VERIFY`, so
+    -- every spawn transports to any covered fork: `Frames.lean`)
+    cpTop.f.inner.codeAddress = some curvePlainImpl847e ∧
+    cpBal.f.inner.codeAddress = some receiverAddress ∧
+    cpEth.f.inner.codeAddress = some receiverAddress ∧
+    cpCb.f.inner.codeAddress = some proxyAddress ∧
+    cpRe.f.inner.codeAddress = some curvePlainImpl847e ∧
+    cpXf.f.inner.codeAddress = some receiverAddress := by
   kernel_rfl_and
 
 /-- **Control: the hash policy bites in this run.**  The last walk of the pool body executes one

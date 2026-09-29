@@ -773,12 +773,19 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   [`Blanc/Lift/NodeWalkFork.lean`](../Blanc/Lift/NodeWalkFork.lean): `pwalk_withFork`
   (`pwalkH_withFork`) leaves a walk unchanged from `s.withFork g` for covered forks when
   `s.benvStat.excessBlobGas = 0` (walks never run `CLZ`: it is not an `ninstAccKeeps`
-  instruction), `scallPrep_withFork` spawns the same frame with its fork changed,
-  `frameEnterS_withFork` commutes with the change for a `Frame.PrecompNeutral` frame, and
-  `scallPrep_stat`/`frameEnterS_stat` carry the block environment into children. Generalize
-  the run lemma over `S = e0.sta.withFork g` and derive the fixed-fork statement at Prague;
-  worked example `vplus_run_at`/`vplus_witness_covered` in
-  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Witness/Top.lean`. The message-level layer
+  instruction), `scallPrep_withFork`/`callPrepP_withFork`/`dcallPrep_withFork` spawn the same
+  frame with its fork changed, `frameEnterS_withFork` commutes with the change for a
+  `Frame.PrecompNeutral` frame (`Frame.precompNeutral_of_codeAddress` from a kernel fact on the
+  frame's `codeAddress`), and `scallPrep_stat`/`callPrepP_stat`/`dcallPrep_stat`/
+  `frameEnterS_stat` carry the block environment into children. The bundles
+  `scallSpawn_withFork`/`callSpawn_withFork`/`dcallSpawn_withFork` give a whole spawn (the
+  preparation and the entry) under any covered fork from the Prague facts, and
+  `settle_withFork_of_stat` a child's settle. Generalize the run lemma over
+  `S = e0.sta.withFork g` and derive the fixed-fork statement at Prague; worked examples
+  `vplus_run_at`/`vplus_witness_covered` in
+  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Witness/Top.lean` (one nesting level) and
+  `vplus_run2_at`/`vplus_witness2_covered` in `.../Fixed/Witness2/{Frames,Top}.lean` (the
+  frame lemmas take the fork, six spawns of all three call kinds). The message-level layer
   underneath is [`Blanc/ForkUniform.lean`](../Blanc/ForkUniform.lean) (see the root's
   *Fork coverage* entry).
 - Determinism of execution witnesses:
