@@ -321,8 +321,7 @@ canonicalDeploymentStep_…_root       <span class="c">-- the tx/block crossing 
           <span class="mono">maxFlashLoan</span> — is proved uniformly over deployment
           parameters in
           <a href="https://github.com/skbaek/blanc/blob/main/Blanc/Weth10Live.lean" style="text-decoration:underline;text-underline-offset:3px"><span class="mono">Weth10Live.lean</span></a>.
-          Every audited theorem sits in the repository-wide axiom audit, pinned to its exact
-          axiom set in CI, and <span class="mono">check-claims.sh</span> additionally pins the
+          Every theorem is covered by the repository-wide union axiom walk, which checks that nothing in Blanc reaches an axiom beyond <span class="mono">propext</span>, <span class="mono">Classical.choice</span>, and <span class="mono">Quot.sound</span>, run in CI, and <span class="mono">check-claims.sh</span> additionally pins the
           redeemability family’s exact <em>statements</em>.
         </p>
       </div>

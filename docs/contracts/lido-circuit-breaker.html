@@ -298,8 +298,8 @@ runtimeWriteAuthority_of_rawFrameRoot <span class="c">-- every raw SSTORE in an 
           Registry invariant, deployment root, and open-contract history family that stand
           <em>on</em> them are stated in full in the
           <a href="#results" style="text-decoration:underline;text-underline-offset:3px">results section</a>
-          at the top of this page. The port’s 290 audited theorems sit in the repository-wide
-          axiom audit, and <span class="mono">check-claims.sh</span> pins the exact
+          at the top of this page. Every theorem of the port is covered by the repository-wide union axiom walk, which checks that nothing in Blanc reaches an axiom beyond <span class="mono">propext</span>, <span class="mono">Classical.choice</span>, and <span class="mono">Quot.sound</span>,
+          and <span class="mono">check-claims.sh</span> pins the exact
           <em>statements</em> of the protected Registry-mutation, enumeration, observability, and
           deployment boundaries.
         </p>

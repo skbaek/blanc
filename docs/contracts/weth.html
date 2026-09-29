@@ -242,8 +242,8 @@ chainUsing_preserves_solvent           <span class="c">   selects only Prague, O
           statements, and the <span class="mono">wethGas</span> closed forms and maxima as lemmas
           beside the code they price. What they establish is functional: the returned word is the
           stored balance, the constant is the constant — the hand-rolled ABI encoding doing, in a
-          proved execution, what the view probes show the oracle expects. All of it sits in the
-          repository-wide axiom audit, each theorem pinned to its exact axiom set in CI.
+          proved execution, what the view probes show the oracle expects. All of it is covered by
+          the repository-wide union axiom walk, which checks that nothing in Blanc reaches an axiom beyond <span class="mono">propext</span>, <span class="mono">Classical.choice</span>, and <span class="mono">Quot.sound</span>, run in CI.
         </p>
       </div>
     </details>

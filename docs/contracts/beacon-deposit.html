@@ -328,7 +328,7 @@ DeploymentRoot.future_count_root      <span class="c">-- exact count, strictness
     </details>
 
     <details class="fold">
-      <summary><span class="twist">▸</span><span class="foldtitle">Proven functional specifications — the quantified layer</span><span class="foldsub">OPEN-1 · P1–P8 · 89 audited theorems</span></summary>
+      <summary><span class="twist">▸</span><span class="foldtitle">Proven functional specifications — the quantified layer</span><span class="foldsub">OPEN-1 · P1–P8</span></summary>
       <div class="foldbody">
         <p class="dim">
           Where the lanes sample, the theorems quantify — always about the exact compiled bytes:
@@ -342,7 +342,7 @@ DeploymentRoot.future_count_root      <span class="c">-- exact count, strictness
           <a href="#results" style="text-decoration:underline;text-underline-offset:3px">results section</a>.
         </p>
         <p class="dim" style="margin-bottom:6px">
-          The port’s 89 audited theorems sit in the repository-wide axiom audit, and
+          Every theorem of the port is covered by the repository-wide union axiom walk, which checks that nothing in Blanc reaches an axiom beyond <span class="mono">propext</span>, <span class="mono">Classical.choice</span>, and <span class="mono">Quot.sound</span>, and
           <span class="mono">check-claims.sh</span> pins the exact <em>statements</em> of the
           compiled P1–P6 boundaries and the P7/P8 deployment, frame, history, and count-root
           headlines. Two register rows are deliberately proof-only — the open-frame theorem and
