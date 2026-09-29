@@ -240,6 +240,86 @@ namespace Exec.CoreAccounting
 
 variable {ca : Adr} {sem : CodeSem} {entry : Sevm → Devm → Prop} {I : Stor → Prop}
 
+/-- **The child of a spawning node of a successful target frame.**  What every consumer of the
+target-parent chain needs at a `runOk` node: the node decodes an external instruction, its fork is
+covered, the contract's code is installed there, the balance total only fell along the chain, the child's
+fork is covered, a static frame spawns a static child, and the lower-depth hypothesis gives the child's
+accounting (its code is at `ca`, a same-target child runs the same code, and it is admitted). -/
+theorem spawnChild {C : ReplayCarrier ca} {V : ReplayObservation C}
+    (kinds : SpawnKinds ca sem)
+    {sevm₀ : Sevm} {pre₀ post₀ : Devm} (root : Exec 0 sevm₀ pre₀ (.ok post₀))
+    (hrun : sem.Run sevm₀ pre₀ post₀) (target : sevm₀.currentTarget = ca)
+    (fork : CoveredFork sevm₀.benvStat.fork) (installed : sem.At ca 0 sevm₀ pre₀)
+    (admitted : Exec.FrameAdmitted ca entry root)
+    (deeper : ForallDeeperAtSem sevm₀.depth ca sem
+      (fun pc s d e _ => Exec.CoreAccounting ca sem entry C V pc s d e))
+    {nodePc : Nat} {nodeSevm : Sevm} {nodePre : Devm} {out : Execution} {frame : Jaune.Frame}
+    {rsm : Resume} {nextPc : Nat} {cevm : Evm} {raw : Execution} {inter : Devm}
+    (step : Evm.step ⟨nodePc, nodeSevm, nodePre⟩ = .spawn frame rsm nextPc)
+    (enter : frame.enter = .run cevm) (child : Exec cevm.pc cevm.sta cevm.dyna raw)
+    (resume : rsm.run (frame.settle raw) = .ok inter) (next : Exec nextPc nodeSevm inter out)
+    (chain : Exec.Deriv.ParentPrefix ⟨0, sevm₀, pre₀, .ok post₀, root⟩
+      ⟨nodePc, nodeSevm, nodePre, out, .runOk step enter child resume next⟩) :
+    ∃ x : Xinst, Ninst.At nodeSevm.code nodePc (.exec x) ∧
+      CoveredFork nodeSevm.benvStat.fork ∧ nodePre.getCode ca ≠ .empty ∧
+      sum nodePre.state.bal ≤ sum pre₀.state.bal ∧ CoveredFork cevm.sta.benvStat.fork ∧
+      (nodeSevm.isStatic = true → cevm.sta.isStatic = true) ∧
+      ∀ committed : Execution.commits raw = true,
+        (cevm.sta.isStatic = true → (Exec.committedFrames child).flatMap V.frameObs = []) ∧
+        (sum cevm.dyna.state.bal < 2 ^ 256 → ∃ steps,
+          C.Replay (C.frameEntry cevm.sta cevm.dyna.state) steps
+            (C.ofState (Execution.committedPost raw committed).state) ∧
+          V.obs steps = (Exec.committedFrames child).flatMap V.frameObs) := by
+  have sevmEq : nodeSevm = sevm₀ := Blanc.Exec.Deriv.ParentPrefix.sevm_eq chain
+  obtain ⟨x, instruction, spawnStep, _⟩ := Evm.step_spawn_inv step
+  have kind := kinds root hrun target fork installed _ chain x instruction
+  obtain ⟨balLe, codeEq⟩ := Blanc.Exec.Deriv.ParentPrefix.balSum_le_getCode chain
+  have codeNe : (pre₀.getCode ca).toList ≠ [] := fun empty =>
+    sem.ne_nil (installed.1.symm.trans (congrArg some empty)) rfl
+  have nodeInstalled : some (nodePre.getCode ca).toList = sem.image := by
+    rw [show nodePre.getCode ca = pre₀.getCode ca from codeEq ca codeNe]
+    exact installed.1
+  have nodeCodeNe : nodePre.getCode ca ≠ .empty := fun empty => by
+    rw [empty] at nodeInstalled
+    exact sem.ne_nil nodeInstalled.symm (by simp)
+  have nodeFork : CoveredFork nodeSevm.benvStat.fork := by rw [sevmEq]; exact fork
+  have childFork := Evm.step_spawn_child_fork step enter nodeFork
+  have childDepth : cevm.sta.depth < sevm₀.depth := by
+    rw [Frame.enter_run_depth enter, ← sevmEq]
+    exact Step.spawn_depth_lt step
+  have childAt : sem.At ca cevm.pc cevm.sta cevm.dyna := by
+    obtain ⟨pcZero, getCode, _⟩ := Evm.step_spawn_child step enter
+    refine ⟨?_, fun selected => ⟨?_, pcZero⟩⟩
+    · rw [getCode ca]
+      exact nodeInstalled
+    · have sameTarget : frame.inner.currentTarget = nodeSevm.currentTarget := by
+        rw [← Frame.enter_run_currentTarget enter, selected, sevmEq, target]
+      have notDel : ¬ isValidDelegation (nodePre.getCode frame.inner.currentTarget) := by
+        rw [← Frame.enter_run_currentTarget enter, selected]
+        exact sem.not_delegation nodeInstalled
+      have directCode : frame.inner.code = nodePre.getCode frame.inner.currentTarget := by
+        rcases kind with rfl | rfl
+        · exact Xinst.step_call_sameTarget_code spawnStep sameTarget notDel
+        · exact Xinst.step_staticcall_sameTarget_code spawnStep sameTarget notDel
+      rw [Frame.enter_run_code enter, directCode, ← Frame.enter_run_currentTarget enter,
+        selected]
+      exact nodeInstalled
+  have childAdmitted : Exec.FrameAdmitted ca entry child := by
+    intro childRoot member selected
+    apply admitted childRoot _ selected
+    apply List.mem_cons_of_mem
+    apply Exec.mem_rawFrameDescendants_of_parentPrefix chain
+    simp only [Exec.rawFrameDescendants, List.mem_cons, List.mem_append]
+    simp only [Exec.rawFrameRoots, List.mem_cons] at member
+    rcases member with rfl | member
+    · exact Or.inl rfl
+    · exact Or.inr (Or.inl member)
+  have childCore := deeper cevm.pc cevm.sta cevm.dyna raw child childDepth childAt
+  exact ⟨x, instruction, nodeFork, nodeCodeNe, balLe, childFork,
+    fun static => (Frame.enter_run_isStatic enter).trans
+      (Xinst.step_spawn_isStatic spawnStep static),
+    fun committed => childCore child committed childFork childAt childAdmitted⟩
+
 /-- The chain of a successful target frame: every committed descendant frame
 observed below any of its same-frame nodes is `EntryGood`, and none is observed
 when the frame is static. -/
@@ -272,51 +352,9 @@ private theorem entryChain (kinds : SpawnKinds ca sem) (spawn : SpawnEntry ca se
   | runOk step enter child resume next childIH nextIH =>
     rename_i nodePc nodeSevm nodePre frame rsm nextPc cevm raw inter final
     intro chain
-    have sevmEq : nodeSevm = sevm₀ := Blanc.Exec.Deriv.ParentPrefix.sevm_eq chain
-    obtain ⟨x, instruction, spawnStep, _⟩ := Evm.step_spawn_inv step
-    have kind := kinds root hrun target fork installed _ chain x instruction
-    obtain ⟨balLe, codeEq⟩ := Blanc.Exec.Deriv.ParentPrefix.balSum_le_getCode chain
-    have codeNe : (pre₀.getCode ca).toList ≠ [] := fun empty =>
-      sem.ne_nil (installed.1.symm.trans (congrArg some empty)) rfl
-    have nodeInstalled : some (nodePre.getCode ca).toList = sem.image := by
-      rw [show nodePre.getCode ca = pre₀.getCode ca from codeEq ca codeNe]
-      exact installed.1
-    have nodeCodeNe : nodePre.getCode ca ≠ .empty := fun empty => by
-      rw [empty] at nodeInstalled
-      exact sem.ne_nil nodeInstalled.symm (by simp)
-    have nodeFork : CoveredFork nodeSevm.benvStat.fork := by rw [sevmEq]; exact fork
-    have childFork := Evm.step_spawn_child_fork step enter nodeFork
-    have childDepth : cevm.sta.depth < sevm₀.depth := by
-      rw [Frame.enter_run_depth enter, ← sevmEq]
-      exact Step.spawn_depth_lt step
-    have childAt : sem.At ca cevm.pc cevm.sta cevm.dyna := by
-      obtain ⟨pcZero, getCode, _⟩ := Evm.step_spawn_child step enter
-      refine ⟨?_, fun selected => ⟨?_, pcZero⟩⟩
-      · rw [getCode ca]
-        exact nodeInstalled
-      · have sameTarget : frame.inner.currentTarget = nodeSevm.currentTarget := by
-          rw [← Frame.enter_run_currentTarget enter, selected, sevmEq, target]
-        have notDel : ¬ isValidDelegation (nodePre.getCode frame.inner.currentTarget) := by
-          rw [← Frame.enter_run_currentTarget enter, selected]
-          exact sem.not_delegation nodeInstalled
-        have directCode : frame.inner.code = nodePre.getCode frame.inner.currentTarget := by
-          rcases kind with rfl | rfl
-          · exact Xinst.step_call_sameTarget_code spawnStep sameTarget notDel
-          · exact Xinst.step_staticcall_sameTarget_code spawnStep sameTarget notDel
-        rw [Frame.enter_run_code enter, directCode, ← Frame.enter_run_currentTarget enter,
-          selected]
-        exact nodeInstalled
-    have childAdmitted : Exec.FrameAdmitted ca entry child := by
-      intro childRoot member selected
-      apply admitted childRoot _ selected
-      apply List.mem_cons_of_mem
-      apply Exec.mem_rawFrameDescendants_of_parentPrefix chain
-      simp only [Exec.rawFrameDescendants, List.mem_cons, List.mem_append]
-      simp only [Exec.rawFrameRoots, List.mem_cons] at member
-      rcases member with rfl | member
-      · exact Or.inl rfl
-      · exact Or.inr (Or.inl member)
-    have childCore := deeper cevm.pc cevm.sta cevm.dyna raw child childDepth childAt
+    obtain ⟨x, instruction, nodeFork, nodeCodeNe, balLe, childFork, childStaticOf, childCore⟩ :=
+      spawnChild kinds root hrun target fork installed admitted deeper step enter child resume
+        next chain
     obtain ⟨nextStatic, nextGood⟩ := nextIH (chain.snoc (.runOk step enter child resume next))
     have split : (Exec.descendantFrames (Exec.runOk step enter child resume next)).flatMap
           (entryObservation ca sem entry I).frameObs =
@@ -334,14 +372,11 @@ private theorem entryChain (kinds : SpawnKinds ca sem) (spawn : SpawnEntry ca se
         simp [settles]
     rw [split]
     refine ⟨fun static => ?_, fun bound hI => ?_⟩
-    · have childStatic : cevm.sta.isStatic = true :=
-        (Frame.enter_run_isStatic enter).trans
-          (Xinst.step_spawn_isStatic spawnStep static)
-      rw [nextStatic static, List.append_nil]
+    · rw [nextStatic static, List.append_nil]
       split
       · rename_i settles
-        exact (childCore child (Frame.raw_commits_of_settlementCommits settles) childFork
-          childAt childAdmitted).1 childStatic
+        exact (childCore (Frame.raw_commits_of_settlementCommits settles)).1
+          (childStaticOf static)
       · rfl
     · intro f member
       rcases List.mem_append.mp member with member | member
@@ -352,8 +387,8 @@ private theorem entryChain (kinds : SpawnKinds ca sem) (spawn : SpawnEntry ca se
           obtain ⟨childStor, childBal⟩ :=
             Evm.step_spawn_child_world nodeFork step enter nodeCodeNe
           obtain ⟨steps, replay, observed⟩ :=
-            (childCore child (Frame.raw_commits_of_settlementCommits settles) childFork childAt
-              childAdmitted).2 (Nat.lt_of_le_of_lt (childBal.trans balLe) bound)
+            (childCore (Frame.raw_commits_of_settlementCommits settles)).2
+              (Nat.lt_of_le_of_lt (childBal.trans balLe) bound)
           have childI : I (cevm.dyna.state.getStor ca) := by
             rw [childStor]
             exact nodeI
