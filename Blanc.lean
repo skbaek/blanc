@@ -48,6 +48,7 @@ import Blanc.StaticCallStorage
 import Blanc.ExecutionTraceFrames
 import Blanc.ExecutionTraceAdmission
 import Blanc.ExecutionTraceSettledFrames
+import Blanc.ExecutionTraceEntry
 import Blanc.ExecutionAccountingObserved
 import Blanc.DeploymentOccurrence
 import Blanc.RootedExecution
@@ -476,6 +477,7 @@ import Blanc.Lift.VyperNonreentrantDeployed.Concrete.ProxyConcrete
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Cert
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Check
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exclusion
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.ExclusionTrace
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.LockAnn
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.LockCheck
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.LockDominance
