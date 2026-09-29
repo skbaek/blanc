@@ -3,6 +3,7 @@ import Blanc.Lift.LidoCircuitBreakerDeployed.Creation.Walk
 import Blanc.Lift.LidoCircuitBreakerDeployed.Init
 import Blanc.Lift.LidoCircuitBreakerDeployed.Foreign
 import Blanc.Lift.Deploy
+import Blanc.ForkUniform
 
 /-!
 # Deploying the Lido CircuitBreaker from its actual creation input
@@ -34,7 +35,7 @@ of at least 1,000,000 suffices (the constructor costs at most 55,177 and the cod
 
 namespace Blanc.Lift.LidoCircuitBreakerDeployed.Creation
 
-open Jaune Blanc Blanc.Lift Blanc.LidoCircuitBreaker
+open Jaune Blanc Blanc.Lift Blanc.LidoCircuitBreaker Blanc.ForkUniform
 
 /-! ## The deployed storage and the checkpoint premise -/
 
@@ -206,6 +207,40 @@ theorem lido_deploy_init (hfa0 : ForeignApart 0 0) (hfa1 : ForeignApart 0 1) :
       lidoSpec.StateInv breakerAddress post.state := by
   obtain ⟨post, h1, h2, h3⟩ := lido_create deployMsg rfl rfl rfl (by decide)
     CoveredFork.prague rfl (by decide)
+  have h3' : Devm.getStor post breakerAddress = deployedStor := h3
+  have h2' : (post.state.getCode breakerAddress).toList =
+      Blanc.Lift.LidoCircuitBreakerDeployed.code.toList := h2
+  have hz : RegistryZeroRaw (Devm.getStor post breakerAddress) := by
+    rw [h3']; exact registryZeroRaw_deployedStor hfa0 hfa1
+  exact ⟨post, h1, h2, hz, stateInv_of_registryZeroRaw (by rw [h2']; rfl) hz⟩
+
+/-- **The recorded Lido CircuitBreaker deployment under every covered fork.**  The same
+conclusion as `lido_deploy` for `deployMsg.withFork f`, by instantiating `lido_create` at the
+fork-replaced message; the code-size premise discharges by cases on `hf`. -/
+theorem lido_deploy_covered (f : Fork) (hf : CoveredFork f) :
+    breakerAddress = computeContractAddress deployer 0 ∧
+    ∃ post, processCreateMessage (deployMsg.withFork f) = .ok post ∧
+      (post.getCode breakerAddress).toList = Blanc.Lift.LidoCircuitBreakerDeployed.code.toList ∧
+      Devm.getStor post breakerAddress = deployedStor := by
+  refine ⟨breakerAddress_eq, ?_⟩
+  exact lido_create (deployMsg.withFork f) rfl rfl rfl (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) hf rfl
+    (hf.cases (motive := fun f =>
+      4584 ≤ (deployMsg.withFork f).benv.stat.rules.code.maxCodeSize)
+      (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide))
+
+/-- **The checkpoint premise under every covered fork.**  The same conclusion as
+`lido_deploy_init` for `deployMsg.withFork f`. -/
+theorem lido_deploy_init_covered (f : Fork) (hf : CoveredFork f)
+    (hfa0 : ForeignApart 0 0) (hfa1 : ForeignApart 0 1) :
+    ∃ post, processCreateMessage (deployMsg.withFork f) = .ok post ∧
+      (post.getCode breakerAddress).toList = Blanc.Lift.LidoCircuitBreakerDeployed.code.toList ∧
+      RegistryZeroRaw (Devm.getStor post breakerAddress) ∧
+      lidoSpec.StateInv breakerAddress post.state := by
+  obtain ⟨post, h1, h2, h3⟩ := lido_create (deployMsg.withFork f) rfl rfl rfl (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide)
+    hf rfl
+    (hf.cases (motive := fun f =>
+      4584 ≤ (deployMsg.withFork f).benv.stat.rules.code.maxCodeSize)
+      (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide))
   have h3' : Devm.getStor post breakerAddress = deployedStor := h3
   have h2' : (post.state.getCode breakerAddress).toList =
       Blanc.Lift.LidoCircuitBreakerDeployed.code.toList := h2

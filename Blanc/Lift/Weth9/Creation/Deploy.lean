@@ -3,6 +3,7 @@ import Blanc.Lift.Weth9.Creation.Walk
 import Blanc.Lift.Weth9.Spec
 import Blanc.Lift.Deploy
 import Blanc.BalanceAlgebra
+import Blanc.ForkUniform
 
 /-!
 # Deploying WETH9 from its actual creation input
@@ -28,7 +29,7 @@ Gas: any message gas in `[720000, 2^64)` suffices.
 
 namespace Blanc.Lift.Weth9.Creation
 
-open Jaune Blanc.Lift
+open Jaune Blanc.Lift Blanc.ForkUniform
 
 /-- The storage the constructor leaves in a fresh account. -/
 def deployedStor : Stor := ctorStor Stor.empty
@@ -179,5 +180,20 @@ theorem weth9_deploy :
       Devm.getStor post weth9Address = deployedStor :=
   ⟨weth9Address_eq, weth9_create deployMsg rfl rfl rfl (by decide) (by decide)
     CoveredFork.prague rfl (by decide)⟩
+
+/-- **The recorded WETH9 deployment under every covered fork.**  The same conclusion as
+`weth9_deploy` for `deployMsg.withFork f`, by instantiating `weth9_create` at the
+fork-replaced message; the code-size premise discharges by cases on `hf`. -/
+theorem weth9_deploy_covered (f : Fork) (hf : CoveredFork f) :
+    weth9Address = computeContractAddress deployer 446 ∧
+    ∃ post, processCreateMessage (deployMsg.withFork f) = .ok post ∧
+      (post.getCode weth9Address).toList = Blanc.Lift.Weth9.code.toList ∧
+      Devm.getStor post weth9Address = deployedStor := by
+  refine ⟨weth9Address_eq, ?_⟩
+  exact weth9_create (deployMsg.withFork f) rfl rfl rfl (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide)
+    hf rfl
+    (hf.cases (motive := fun f =>
+      3124 ≤ (deployMsg.withFork f).benv.stat.rules.code.maxCodeSize)
+      (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide))
 
 end Blanc.Lift.Weth9.Creation

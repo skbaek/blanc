@@ -3,6 +3,7 @@ import Blanc.Lift.Curve3Crv.Creation.Walk
 import Blanc.Lift.Curve3Crv.Init
 import Blanc.Lift.Deploy
 import Blanc.BalanceAlgebra
+import Blanc.ForkUniform
 
 /-!
 # Deploying the 3Crv LP token from its actual creation input
@@ -27,7 +28,7 @@ Gas: any message gas in `[860000, 2^64)` suffices.
 
 namespace Blanc.Lift.Curve3Crv.Creation
 
-open Jaune Blanc.Lift Blanc.Lift.Curve3Crv
+open Jaune Blanc.Lift Blanc.Lift.Curve3Crv Blanc.ForkUniform
 
 /-! ## The stored words -/
 
@@ -310,6 +311,24 @@ theorem curve_deploy :
   refine ⟨tokenAddress_eq, ?_⟩
   obtain ⟨post, h1, h2, h3⟩ := curve_create deployMsg rfl rfl rfl rfl (by decide) (by decide)
     CoveredFork.prague rfl (by decide)
+  have h3' : Devm.getStor post tokenAddress = deployedStor deployer.toB256 := h3
+  exact ⟨post, h1, h2, h3', by rw [h3']; exact deployedStor_vyInv deployer deployer_balSlot⟩
+
+/-- **The recorded 3Crv deployment under every covered fork.**  The same conclusion as
+`curve_deploy` for `deployMsg.withFork f`, by instantiating `curve_create` at the
+fork-replaced message; the code-size premise discharges by cases on `hf`. -/
+theorem curve_deploy_covered (f : Fork) (hf : CoveredFork f) :
+    tokenAddress = computeContractAddress deployer 42 ∧
+    ∃ post, processCreateMessage (deployMsg.withFork f) = .ok post ∧
+      (post.getCode tokenAddress).toList = Blanc.Lift.Curve3Crv.code.toList ∧
+      Devm.getStor post tokenAddress = deployedStor deployer.toB256 ∧
+      VyInv (Devm.getStor post tokenAddress) (curveDeployedState deployer) (fun _ => False) := by
+  refine ⟨tokenAddress_eq, ?_⟩
+  obtain ⟨post, h1, h2, h3⟩ := curve_create (deployMsg.withFork f) rfl rfl rfl rfl
+    (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) hf rfl
+    (hf.cases (motive := fun f =>
+      2276 ≤ (deployMsg.withFork f).benv.stat.rules.code.maxCodeSize)
+      (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide))
   have h3' : Devm.getStor post tokenAddress = deployedStor deployer.toB256 := h3
   exact ⟨post, h1, h2, h3', by rw [h3']; exact deployedStor_vyInv deployer deployer_balSlot⟩
 
