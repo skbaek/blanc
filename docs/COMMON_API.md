@@ -732,16 +732,33 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   `Nonempty (Exec …)`), use [`Blanc/Lift/NodeWalk.lean`](../Blanc/Lift/NodeWalk.lean).
   `Exec.Deriv.step_cont`, `step_halt` and `step_spawn` pin any node's same-frame
   successor, outcome and spawned child (`LockExclusion.Spawns`) from one driver step.
-  `pwalk` is a kernel-evaluable pc-level walk over a `CodeTries` of the code with the
-  witness engine's shadows (`PAgree`); `pstep_cont`/`pstep_halt` make each walk step the
-  real `Evm.step`. `pwalk_cont` and `pwalk_halt` then hold for *any* derivation node at the
-  start configuration: a `ParentPrefix` successor at the end configuration, every node in
-  between passing a pc check and executing no `KECCAK256` (`NodeOK`), unchanged
-  `Exec.rawFrameDescendants`, and for a halting walk the frame's outcome.
-  `scallPrep`/`staticcall_node` cross a `STATICCALL` spawn and `resume_agree_ok`/
-  `resume_agree_error` its resume; `parentPrefix_total` and `hashAvoid_of_noKeccak`
-  (trace-local `HashAvoid`) close chain arguments. Worked example:
-  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Witness/Top.lean`.
+  `pwalkH` is a kernel-evaluable pc-level walk over a `CodeTries` of the code with the
+  witness engine's shadows (`PAgree`) and a hash policy `HashPol` (`.refuse`: stop at
+  `KECCAK256`; `.avoid slot`: run it through `keccakStep` and refuse a digest equal to
+  `slot`); `pwalk` is the `.refuse` walk. `pstepH_cont`/`pstepH_halt` make each walk step
+  the real `Evm.step`. `pwalkH_cont` and `pwalkH_halt` then hold for *any* derivation node
+  at the start configuration: a `ParentPrefix` successor at the end configuration, every
+  node in between passing a pc check and satisfying the policy (`NodeOKH`; at `.refuse` it
+  is `NodeOK`: no `KECCAK256`), unchanged `Exec.rawFrameDescendants`, and for a halting
+  walk the frame's outcome (`pwalk_cont`/`pwalk_halt` are the `.refuse` cases).
+  `hashAvoid_of_hashOK` (trace-local `HashAvoid` from `.avoid slot` nodes) and
+  `hashAvoid_of_noKeccak` close chain arguments with `parentPrefix_total`.
+  `scallPrep`/`staticcall_node`, `callPrepP`/`call_node` and `dcallPrep`/`delegatecall_node`
+  (over `spawn_node`) cross a call-family spawn; `PrepFacts` supplies the settle
+  (`PrepFacts.settle_ok`/`settle_error`) and resume (`resume_agree_ok_of`/
+  `resume_agree_error_of`; `resume_agree_ok`/`_error` for `STATICCALL`) facts.
+  [`Blanc/Lift/NodeWalkFrames.lean`](../Blanc/Lift/NodeWalkFrames.lean) builds on it:
+  `spawn_resume_ok`/`spawn_resume_err` cross a spawn on any derivation (the child's node, the
+  resumed same-frame successor with its agreement, the descendants list), `leaf_frame`/
+  `leaf_frame_ok` a frame that walks and halts, `halt1_childAgree` a successful halt's shadows,
+  and `chain_trans`, `chain_step`, `interval_trans`, `interval_step` assemble a same-frame chain
+  from its walk segments. `RETURNDATACOPY` runs by Jaune's own step (`returndatacopy_accKeep`).
+  To decide many closed walk equalities in one kernel check (each boundary evaluated once, not
+  once per equality), close a conjunction of them with `kernel_rfl_and`
+  ([`Blanc/Lift/KernelBatch.lean`](../Blanc/Lift/KernelBatch.lean)).
+  Worked examples: `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Witness/Top.lean` (a read-only
+  spawn) and `.../Fixed/Witness2/{Run,Frames,Top}.lean` (an ETH-paying body, a nested reentry
+  through an EIP-1167 forwarder, a committing run).
 - Determinism of execution witnesses:
   [`Blanc/ExecDeterminism.lean`](../Blanc/ExecDeterminism.lean).
 - Identifying an execution's descendant frames across one step (`Exec.descendantFrames_eq_of_nextNone`, `_of_jump`,

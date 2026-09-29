@@ -13,19 +13,29 @@ from a concrete machine, whatever its outcome:
 
 * `Exec.Deriv.step_cont`, `step_halt`, `step_spawn`: one driver step pins the shape of
   any derivation node (its same-frame successor, its outcome, its spawned child);
-* `pstep`/`pwalk`: a pc-level kernel interpreter over a `CodeTries` of the code, with the
+* `pstepH`/`pwalkH`: a pc-level kernel interpreter over a `CodeTries` of the code, with the
   witness engine's shadows (`Agree`): the instruction is decoded from the trie and checked
   against the bytes (`bytesAtT`), jumps are checked by `jumpdestOkT`, `SLOAD`/`SSTORE`
   go through the forward lemmas on the key shadow, `SELFBALANCE` reads the account
-  shadow, every other instruction runs by Jaune's own `Ninst.step`.  `KECCAK256` and the
-  frame-entering instructions stop a walk.  Each walk step is the real `Evm.step`
-  (`pstep_cont`, `pstep_halt`);
-* `pwalk_cont`, `pwalk_halt`: any derivation node at a walk's start configuration has a
-  same-frame successor at its end, every node strictly between passes the walk's pc
-  check and executes no `KECCAK256`, and the raw frame descendants are unchanged; a
-  halting walk pins the frame's outcome and shows it enters no child frame.
+  shadow, `RETURNDATACOPY` by Jaune's own step (`returndatacopy_accKeep`), every other
+  instruction through the witness engine's `wstep`, and `KECCAK256` by its `keccakStep`.  The hash policy `HashPol` says what a walk does at
+  `KECCAK256`: `.refuse` stops there, `.avoid slot` runs it and refuses a step whose digest
+  is `slot`.  The frame-entering instructions stop a walk.  Each walk step is the real
+  `Evm.step` (`pstepH_cont`, `pstepH_halt`).  `pstep`/`pwalk` are the `.refuse` walks;
+* `pwalkH_cont`, `pwalkH_halt`: any derivation node at a walk's start configuration has a
+  same-frame successor at its end, every node strictly between passes the walk's pc check
+  and satisfies the hash policy (`NodeOKH`: no `KECCAK256` under `.refuse`; under
+  `.avoid slot` every `KECCAK256` leaves a digest other than `slot`, so a whole frame
+  chain is `HashAvoid slot`, `hashAvoid_of_hashOK`), and the raw frame descendants are
+  unchanged; a halting walk pins the frame's outcome and shows it enters no child frame.
+  `pwalk_cont`, `pwalk_halt` are the `.refuse` specialisations;
+* `staticcall_node`, `call_node`, `delegatecall_node` (over `spawn_node`): the frame a
+  call-family instruction spawns and its child's start configuration; `PrepFacts` gives the
+  settle (`PrepFacts.settle_ok`, `.settle_error`) and resume (`resume_agree_ok_of`,
+  `resume_agree_error_of`) facts.
 
-Nothing here is contract-specific.
+The chain and frame layer over these (`chain_trans`, `spawn_resume_ok`, `leaf_frame`, …) is
+`Blanc/Lift/NodeWalkFrames.lean`.  Nothing here is contract-specific.
 -/
 
 namespace Blanc.Lift.NodeWalk
@@ -234,21 +244,39 @@ inductive PRes
   | halt : Execution → PRes
   | stuck : PRes
 
-/-- One instruction.  `KECCAK256`, `SELFDESTRUCT` and the frame-entering instructions
-are not run (the walk is stuck there). -/
-def pstep {code : ByteArray} {d : Nat} (T : CodeTries code d) (sevm : Sevm) (c : PCfg) :
-    PRes :=
+/-- What a walk does at `KECCAK256`: `refuse` stops there (the walk is stuck), `avoid slot`
+runs it and is stuck if the digest it leaves on the stack is `slot`. -/
+inductive HashPol
+  | refuse
+  | avoid (slot : B256)
+
+/-- The instruction `n`, run to the machine `d'`, is allowed by `pol`: only `KECCAK256` is
+ever refused. -/
+def HashPol.allows : HashPol → Ninst → Devm → Bool
+  | .refuse, .reg .keccak256, _ => false
+  | .avoid s, .reg .keccak256, d' => decide (d'.stack.head? ≠ some s)
+  | _, _, _ => true
+
+/-- One instruction under the hash policy `pol`.  `SELFDESTRUCT` and the frame-entering
+instructions are not run (the walk is stuck there); `KECCAK256` runs through the witness
+engine's `keccakStep` unless `pol` refuses it. -/
+def pstepH (pol : HashPol) {code : ByteArray} {d : Nat} (T : CodeTries code d) (sevm : Sevm)
+    (c : PCfg) : PRes :=
   match decodeT d T.bytes c.pc with
   | none => .stuck
   | some (.next (.exec _)) => .stuck
-  | some (.next (.reg .keccak256)) => .stuck
   | some (.next (.reg .selfbalance)) =>
     match selfbalanceP sevm c with
     | some d' => .cont { c with pc := c.pc + 1, devm := d' }
     | none => .stuck
+  | some (.next (.reg .returndatacopy)) =>
+    match Ninst.step ⟨c.pc, sevm, c.devm⟩ (.reg .returndatacopy) with
+    | .cont pc' d' => .cont { c with pc := pc', devm := d' }
+    | _ => .stuck
   | some (.next n) =>
     match wstep [] sevm (c.cfg (.next n (.last .stop))) with
-    | .cont ⟨d1, .last .stop, [], k1, a1, s1, ac1⟩ => .cont ⟨c.pc + n.size, d1, k1, a1, s1, ac1⟩
+    | .cont ⟨d1, .last .stop, [], k1, a1, s1, ac1⟩ =>
+      if pol.allows n d1 then .cont ⟨c.pc + n.size, d1, k1, a1, s1, ac1⟩ else .stuck
     | _ => .stuck
   | some (.jump j) =>
     match jrunT T c.pc c.devm j with
@@ -257,16 +285,26 @@ def pstep {code : ByteArray} {d : Nat} (T : CodeTries code d) (sevm : Sevm) (c :
   | some (.last .selfdestruct) => .stuck
   | some (.last l) => .halt (l.run sevm c.devm)
 
-/-- At most `n` steps, each first checking `ok` at its pc. -/
-def pwalk {code : ByteArray} {d : Nat} (T : CodeTries code d) (sevm : Sevm) (ok : Nat → Bool) :
-    Nat → PCfg → PRes
+/-- One instruction, `KECCAK256` refused (`pstepH .refuse`). -/
+def pstep {code : ByteArray} {d : Nat} (T : CodeTries code d) (sevm : Sevm) (c : PCfg) :
+    PRes :=
+  pstepH .refuse T sevm c
+
+/-- At most `n` steps under the hash policy `pol`, each first checking `ok` at its pc. -/
+def pwalkH (pol : HashPol) {code : ByteArray} {d : Nat} (T : CodeTries code d) (sevm : Sevm)
+    (ok : Nat → Bool) : Nat → PCfg → PRes
   | 0, c => .cont c
   | n + 1, c =>
     if ok c.pc then
-      match pstep T sevm c with
-      | .cont c' => pwalk T sevm ok n c'
+      match pstepH pol T sevm c with
+      | .cont c' => pwalkH pol T sevm ok n c'
       | r => r
     else .stuck
+
+/-- At most `n` steps, each first checking `ok` at its pc, `KECCAK256` refused. -/
+def pwalk {code : ByteArray} {d : Nat} (T : CodeTries code d) (sevm : Sevm) (ok : Nat → Bool) :
+    Nat → PCfg → PRes :=
+  pwalkH .refuse T sevm ok
 
 /-! ## One walk step is one driver step -/
 
@@ -379,17 +417,57 @@ theorem jrunT_accKeep {code : ByteArray} {d : Nat} (T : CodeTries code d) {pc pc
             · cases h
             · cases h; exact hk
 
+/-- `RETURNDATACOPY` touches neither the accessed sets nor the world. -/
+theorem returndatacopy_accKeep {pc : Nat} {sevm : Sevm} {devm devm' : Devm}
+    (h : Rinst.runCore pc devm sevm .returndatacopy = .ok devm') : AccKeep devm devm' := by
+  simp only [Rinst.runCore] at h
+  obtain ⟨⟨i, d1⟩, h1, e1⟩ := Except.bind_eq_ok h
+  obtain ⟨⟨j, d2⟩, h2, e2⟩ := Except.bind_eq_ok e1
+  obtain ⟨⟨n, d3⟩, h3, e3⟩ := Except.bind_eq_ok e2
+  obtain ⟨d4, h4, h5⟩ := Except.bind_eq_ok e3
+  split at h5
+  · cases h5
+  · cases h5
+    exact (accKeep_popToNat h1).trans ((accKeep_popToNat h2).trans
+      ((accKeep_popToNat h3).trans ((accKeep_chargeGas h4).trans ⟨rfl, rfl, rfl⟩)))
+
+/-- One `RETURNDATACOPY` step touches neither the accessed sets nor the world. -/
+theorem returndatacopy_step_accKeep {pc pc' : Nat} {sevm : Sevm} {devm devm' : Devm}
+    (h : Ninst.step ⟨pc, sevm, devm⟩ (.reg .returndatacopy) = .cont pc' devm') :
+    AccKeep devm devm' := by
+  rw [Ninst.step_reg] at h
+  unfold Step.ofExecution at h
+  split at h
+  · cases h
+  · cases h
+    rename_i hd
+    exact returndatacopy_accKeep hd
+
 /-- The code does not execute `KECCAK256` at `pc`. -/
 def NoKeccakAt (code : ByteArray) (pc : Nat) : Prop := ¬ Ninst.At code pc (.reg .keccak256)
 
-/-- **A continuing walk step is the real driver step**, and keeps the shadows. -/
-theorem pstep_cont {code : ByteArray} {d : Nat} (T : CodeTries code d) {sevm : Sevm}
-    (hcode : sevm.code = code) {c c' : PCfg} (hag : PAgree c)
-    (h : pstep T sevm c = .cont c') :
-    Evm.step ⟨c.pc, sevm, c.devm⟩ = .cont c'.pc c'.devm ∧ PAgree c' ∧ NoKeccakAt code c.pc := by
-  unfold pstep at h
+/-- `pol` accepts the step at `pc` of `code` that leaves the machine `d'`: a refusing policy
+means no `KECCAK256` at `pc`; an avoiding one means that a `KECCAK256` at `pc` left a digest
+other than `slot`. -/
+def HashPol.StepOK (code : ByteArray) (pc : Nat) (d' : Devm) : HashPol → Prop
+  | .refuse => NoKeccakAt code pc
+  | .avoid slot => Ninst.At code pc (.reg .keccak256) → d'.stack.head? ≠ some slot
+
+theorem HashPol.stepOK_of_noKeccak {code : ByteArray} {pc : Nat} {d' : Devm}
+    (pol : HashPol) (h : NoKeccakAt code pc) : pol.StepOK code pc d' := by
+  cases pol with
+  | refuse => exact h
+  | avoid s => exact fun hk => absurd hk h
+
+/-- **A continuing walk step is the real driver step**, keeps the shadows, and `pol` accepts
+it (a `KECCAK256` step under `.avoid slot` leaves a digest other than `slot`). -/
+theorem pstepH_cont {pol : HashPol} {code : ByteArray} {d : Nat} (T : CodeTries code d)
+    {sevm : Sevm} (hcode : sevm.code = code) {c c' : PCfg} (hag : PAgree c)
+    (h : pstepH pol T sevm c = .cont c') :
+    Evm.step ⟨c.pc, sevm, c.devm⟩ = .cont c'.pc c'.devm ∧ PAgree c' ∧
+      pol.StepOK code c.pc c'.devm := by
+  unfold pstepH at h
   split at h
-  · cases h
   · cases h
   · cases h
   · rename_i hdec
@@ -401,25 +479,48 @@ theorem pstep_cont {code : ByteArray} {d : Nat} (T : CodeTries code d) {sevm : S
     · rename_i d' hs
       cases h
       obtain ⟨hr, hk⟩ := selfbalanceP_sound hag hs c.pc
-      refine ⟨?_, agree_accKeep hag hk, hnk⟩
+      refine ⟨?_, agree_accKeep hag hk, pol.stepOK_of_noKeccak hnk⟩
       rw [Evm.step_next hat]
       simp only [Ninst.step, Rinst.run, hr]
       rfl
     · cases h
-  · rename_i n hne hnk' hnsb hdec
-    have hat : Ninst.At sevm.code c.pc n := by rw [hcode]; exact decodeT_sound T hdec
+  · rename_i hdec
+    have hat : Ninst.At sevm.code c.pc (.reg .returndatacopy) := by
+      rw [hcode]; exact decodeT_sound T hdec
     have hnk : NoKeccakAt code c.pc := by
-      intro hk; rw [← hcode, Ninst.At, hat] at hk; cases hk; exact hnk' rfl
+      intro hk; rw [← hcode, Ninst.At, hat] at hk; cases hk
+    split at h
+    · rename_i pc' d' hs
+      cases h
+      refine ⟨?_, agree_accKeep hag (returndatacopy_step_accKeep hs), pol.stepOK_of_noKeccak hnk⟩
+      rw [Evm.step_next hat]; exact hs
+    · cases h
+  · rename_i n hne hnsb hnrd hdec
+    have hat : Ninst.At sevm.code c.pc n := by rw [hcode]; exact decodeT_sound T hdec
     split at h
     · rename_i d1 k1 a1 s1 ac1 hw
-      cases h
-      have hok := wstep_cont hw
-      have hag1 : Agree ⟨d1, .last .stop, [], k1, a1, s1, ac1⟩ := hok.1 (hag.cfg _)
-      have hrc := runCompiled_of_stepOk (c := c.cfg (.next n (.last .stop)))
-        (c' := ⟨d1, .last .stop, [], k1, a1, s1, ac1⟩) rfl rfl rfl rfl hok (hag.cfg _)
-      refine ⟨?_, hag1, hnk⟩
-      rw [Evm.step_next hat]
-      exact ninst_step_of_runCompiled (fun x hx => hne x hx) hrc c.pc
+      split at h
+      · rename_i hal
+        cases h
+        have hok := wstep_cont hw
+        have hag1 : Agree ⟨d1, .last .stop, [], k1, a1, s1, ac1⟩ := hok.1 (hag.cfg _)
+        have hrc := runCompiled_of_stepOk (c := c.cfg (.next n (.last .stop)))
+          (c' := ⟨d1, .last .stop, [], k1, a1, s1, ac1⟩) rfl rfl rfl rfl hok (hag.cfg _)
+        refine ⟨?_, hag1, ?_⟩
+        · rw [Evm.step_next hat]
+          exact ninst_step_of_runCompiled (fun x hx => hne x hx) hrc c.pc
+        · cases pol with
+          | refuse =>
+            intro hk
+            rw [← hcode, Ninst.At, hat] at hk
+            cases hk
+            simp [HashPol.allows] at hal
+          | avoid s =>
+            intro hk
+            rw [← hcode, Ninst.At, hat] at hk
+            cases hk
+            simpa [HashPol.allows] using hal
+      · cases h
     · cases h
   · rename_i j hdec
     have hat : Jinst.At sevm.code c.pc j := by rw [hcode]; exact decodeT_sound T hdec
@@ -428,7 +529,7 @@ theorem pstep_cont {code : ByteArray} {d : Nat} (T : CodeTries code d) {sevm : S
     split at h
     · rename_i pc' d' hj
       cases h
-      refine ⟨?_, agree_accKeep hag (jrunT_accKeep T hj), hnk⟩
+      refine ⟨?_, agree_accKeep hag (jrunT_accKeep T hj), pol.stepOK_of_noKeccak hnk⟩
       rw [Evm.step_jump hat]
       show Step.ofJump (Jinst.runCore c.pc c.devm sevm j) = _
       rw [← jrunT_eq T hcode, hj]; rfl
@@ -436,18 +537,21 @@ theorem pstep_cont {code : ByteArray} {d : Nat} (T : CodeTries code d) {sevm : S
   · cases h
   · cases h
 
-/-- **A halting walk step is the real driver step.** -/
-theorem pstep_halt {code : ByteArray} {d : Nat} (T : CodeTries code d) {sevm : Sevm}
-    (hcode : sevm.code = code) {c : PCfg} {ex : Execution}
-    (h : pstep T sevm c = .halt ex) :
+/-- **A halting walk step is the real driver step** (under any hash policy: a halting
+instruction is never `KECCAK256`). -/
+theorem pstepH_halt {pol : HashPol} {code : ByteArray} {d : Nat} (T : CodeTries code d)
+    {sevm : Sevm} (hcode : sevm.code = code) {c : PCfg} {ex : Execution}
+    (h : pstepH pol T sevm c = .halt ex) :
     Evm.step ⟨c.pc, sevm, c.devm⟩ = .halt ex ∧ NoKeccakAt code c.pc := by
-  unfold pstep at h
+  unfold pstepH at h
   split at h
   · cases h
   · cases h
-  · cases h
   · split at h <;> cases h
   · split at h <;> cases h
+  · split at h
+    · split at h <;> cases h
+    · cases h
   · rename_i j hdec
     have hat : Jinst.At sevm.code c.pc j := by rw [hcode]; exact decodeT_sound T hdec
     have hnk : NoKeccakAt code c.pc := by
@@ -468,15 +572,61 @@ theorem pstep_halt {code : ByteArray} {d : Nat} (T : CodeTries code d) {sevm : S
       intro hk; rw [← hcode, Ninst.At, hat] at hk; cases hk
     exact ⟨Evm.step_last hat, hnk⟩
 
+/-- **A continuing walk step is the real driver step**, and keeps the shadows
+(`pstepH_cont` at `.refuse`). -/
+theorem pstep_cont {code : ByteArray} {d : Nat} (T : CodeTries code d) {sevm : Sevm}
+    (hcode : sevm.code = code) {c c' : PCfg} (hag : PAgree c)
+    (h : pstep T sevm c = .cont c') :
+    Evm.step ⟨c.pc, sevm, c.devm⟩ = .cont c'.pc c'.devm ∧ PAgree c' ∧ NoKeccakAt code c.pc :=
+  pstepH_cont T hcode hag h
+
+/-- **A halting walk step is the real driver step** (`pstepH_halt` at `.refuse`). -/
+theorem pstep_halt {code : ByteArray} {d : Nat} (T : CodeTries code d) {sevm : Sevm}
+    (hcode : sevm.code = code) {c : PCfg} {ex : Execution}
+    (h : pstep T sevm c = .halt ex) :
+    Evm.step ⟨c.pc, sevm, c.devm⟩ = .halt ex ∧ NoKeccakAt code c.pc :=
+  pstepH_halt T hcode h
+
 /-! ## Walks over derivation nodes -/
 
 /-- The derivation node `x` sits at the configuration `c` of a frame running `sevm`. -/
 def NodeAt (sevm : Sevm) (c : PCfg) (x : Exec.Deriv) : Prop :=
   x.pc = c.pc ∧ x.sevm = sevm ∧ x.devm = c.devm
 
+/-- The node `y` satisfies the hash policy: under `.refuse` it executes no `KECCAK256`; under
+`.avoid slot`, if it executes one, its every same-frame successor has a digest other than
+`slot` on top of its stack. -/
+def HashPol.NodeOK (code : ByteArray) (y : Exec.Deriv) : HashPol → Prop
+  | .refuse => NoKeccakAt code y.pc
+  | .avoid slot =>
+    Ninst.At code y.pc (.reg .keccak256) →
+      ∀ y', ParentStep y' y → y'.devm.stack.head? ≠ some slot
+
 /-- The node passes the walk's pc check and executes no `KECCAK256`. -/
 def NodeOK (code : ByteArray) (ok : Nat → Bool) (y : Exec.Deriv) : Prop :=
   ok y.pc = true ∧ NoKeccakAt code y.pc
+
+/-- The node passes the walk's pc check and satisfies the hash policy `pol`
+(`NodeOKH code ok .refuse = NodeOK code ok`). -/
+def NodeOKH (code : ByteArray) (ok : Nat → Bool) (pol : HashPol) (y : Exec.Deriv) : Prop :=
+  ok y.pc = true ∧ pol.NodeOK code y
+
+theorem HashPol.nodeOK_of_noKeccak {code : ByteArray} {y : Exec.Deriv} (pol : HashPol)
+    (h : NoKeccakAt code y.pc) : pol.NodeOK code y := by
+  cases pol with
+  | refuse => exact h
+  | avoid s => exact fun hk => absurd hk h
+
+/-- A node whose same-frame successor `x1` is the step `pol` accepts satisfies `pol`. -/
+theorem HashPol.nodeOK_of_stepOK {code : ByteArray} {pol : HashPol} {x x1 : Exec.Deriv}
+    (e1 : ParentStep x1 x) (h : pol.StepOK code x.pc x1.devm) : pol.NodeOK code x := by
+  cases pol with
+  | refuse => exact h
+  | avoid s =>
+    intro hk y' hy'
+    have := Jaune.Exec.Deriv.ParentStep.unique hy' e1
+    subst this
+    exact h hk
 
 theorem step_eq_of_nodeAt {sevm : Sevm} {c : PCfg} {x : Exec.Deriv} (hx : NodeAt sevm c x) :
     Evm.step ⟨x.pc, x.sevm, x.devm⟩ = Evm.step ⟨c.pc, sevm, c.devm⟩ := by
@@ -485,29 +635,29 @@ theorem step_eq_of_nodeAt {sevm : Sevm} {c : PCfg} {x : Exec.Deriv} (hx : NodeAt
 /-- **A continuing walk, on any derivation.**  Every node at the start configuration has a
 same-frame successor at the end configuration, with the same outcome and raw frame
 descendants; every node from the start up to (excluding) that successor passes the check
-and executes no `KECCAK256`. -/
-theorem pwalk_cont {code : ByteArray} {d : Nat} (T : CodeTries code d) {sevm : Sevm}
-    (hcode : sevm.code = code) (ok : Nat → Bool) :
-    ∀ (n : Nat) (c c' : PCfg), PAgree c → pwalk T sevm ok n c = .cont c' →
+and satisfies the hash policy `pol`. -/
+theorem pwalkH_cont (pol : HashPol) {code : ByteArray} {d : Nat} (T : CodeTries code d)
+    {sevm : Sevm} (hcode : sevm.code = code) (ok : Nat → Bool) :
+    ∀ (n : Nat) (c c' : PCfg), PAgree c → pwalkH pol T sevm ok n c = .cont c' →
       PAgree c' ∧ ∀ x, NodeAt sevm c x → ∃ x', NodeAt sevm c' x' ∧ ParentPrefix x x' ∧
         x'.exn = x.exn ∧ Exec.rawFrameDescendants x'.exc = Exec.rawFrameDescendants x.exc ∧
-        ∀ y, ParentPrefix x y → ParentPrefix y x' → y ≠ x' → NodeOK code ok y
+        ∀ y, ParentPrefix x y → ParentPrefix y x' → y ≠ x' → NodeOKH code ok pol y
   | 0, c, c', hag, h => by
-    simp only [pwalk, PRes.cont.injEq] at h
+    simp only [pwalkH, PRes.cont.injEq] at h
     subst h
     refine ⟨hag, fun x hx => ⟨x, hx, .refl _, rfl, rfl, fun y h1 h2 hne => ?_⟩⟩
     exact absurd (Blanc.Exec.Deriv.ParentPrefix.antisymm h2 h1) hne
   | n + 1, c, c', hag, h => by
-    simp only [pwalk] at h
+    simp only [pwalkH] at h
     split at h
     · rename_i hok
-      cases h1 : pstep T sevm c with
+      cases h1 : pstepH pol T sevm c with
       | stuck => rw [h1] at h; cases h
       | halt ex' => rw [h1] at h; cases h
       | cont c1 =>
         rw [h1] at h
-        obtain ⟨hs, hag1, hnk⟩ := pstep_cont T hcode hag h1
-        obtain ⟨hag', ih⟩ := pwalk_cont T hcode ok n c1 c' hag1 h
+        obtain ⟨hs, hag1, hst⟩ := pstepH_cont T hcode hag h1
+        obtain ⟨hag', ih⟩ := pwalkH_cont pol T hcode ok n c1 c' hag1 h
         refine ⟨hag', fun x hx => ?_⟩
         obtain ⟨x1, e1, hp1, hs1, hd1, hex1, hdesc1⟩ :=
           Exec.Deriv.step_cont ((step_eq_of_nodeAt hx).trans hs)
@@ -516,7 +666,8 @@ theorem pwalk_cont {code : ByteArray} {d : Nat} (T : CodeTries code d) {sevm : S
         refine ⟨x', hx', .step e1 hpp, hex'.trans hex1, hdesc'.trans hdesc1,
           fun y hy1 hy2 hne => ?_⟩
         cases hy1 with
-        | refl => exact ⟨hx.1 ▸ hok, hx.1 ▸ hnk⟩
+        | refl =>
+          exact ⟨hx.1 ▸ hok, HashPol.nodeOK_of_stepOK e1 (by rw [hx.1, hd1]; exact hst)⟩
         | step head rest =>
           have := Jaune.Exec.Deriv.ParentStep.unique head e1
           subst this
@@ -525,30 +676,31 @@ theorem pwalk_cont {code : ByteArray} {d : Nat} (T : CodeTries code d) {sevm : S
 
 /-- **A halting walk, on any derivation.**  Every node at the start configuration has
 the walk's outcome and no raw frame descendant, and every node of its same-frame chain
-passes the check and executes no `KECCAK256`. -/
-theorem pwalk_halt {code : ByteArray} {d : Nat} (T : CodeTries code d) {sevm : Sevm}
-    (hcode : sevm.code = code) (ok : Nat → Bool) :
-    ∀ (n : Nat) (c : PCfg) (ex : Execution), PAgree c → pwalk T sevm ok n c = .halt ex →
+passes the check and satisfies the hash policy `pol`. -/
+theorem pwalkH_halt (pol : HashPol) {code : ByteArray} {d : Nat} (T : CodeTries code d)
+    {sevm : Sevm} (hcode : sevm.code = code) (ok : Nat → Bool) :
+    ∀ (n : Nat) (c : PCfg) (ex : Execution), PAgree c → pwalkH pol T sevm ok n c = .halt ex →
       ∀ x, NodeAt sevm c x → x.exn = ex ∧ Exec.rawFrameDescendants x.exc = [] ∧
-        ∀ y, ParentPrefix x y → NodeOK code ok y
-  | 0, c, ex, _, h => by simp [pwalk] at h
+        ∀ y, ParentPrefix x y → NodeOKH code ok pol y
+  | 0, c, ex, _, h => by simp [pwalkH] at h
   | n + 1, c, ex, hag, h => by
-    simp only [pwalk] at h
+    simp only [pwalkH] at h
     split at h
     · rename_i hok
-      cases h1 : pstep T sevm c with
+      cases h1 : pstepH pol T sevm c with
       | stuck => rw [h1] at h; cases h
       | cont c1 =>
         rw [h1] at h
-        obtain ⟨hs, hag1, hnk⟩ := pstep_cont T hcode hag h1
-        have ih := pwalk_halt T hcode ok n c1 ex hag1 h
+        obtain ⟨hs, hag1, hst⟩ := pstepH_cont T hcode hag h1
+        have ih := pwalkH_halt pol T hcode ok n c1 ex hag1 h
         intro x hx
         obtain ⟨x1, e1, hp1, hs1, hd1, hex1, hdesc1⟩ :=
           Exec.Deriv.step_cont ((step_eq_of_nodeAt hx).trans hs)
         obtain ⟨hex, hdesc, hall⟩ := ih x1 ⟨hp1, hs1.trans hx.2.1, hd1⟩
         refine ⟨hex1 ▸ hex, hdesc1 ▸ hdesc, fun y hy => ?_⟩
         cases hy with
-        | refl => exact ⟨hx.1 ▸ hok, hx.1 ▸ hnk⟩
+        | refl =>
+          exact ⟨hx.1 ▸ hok, HashPol.nodeOK_of_stepOK e1 (by rw [hx.1, hd1]; exact hst)⟩
         | step head rest =>
           have := Jaune.Exec.Deriv.ParentStep.unique head e1
           subst this
@@ -556,13 +708,31 @@ theorem pwalk_halt {code : ByteArray} {d : Nat} (T : CodeTries code d) {sevm : S
       | halt ex' =>
         rw [h1] at h
         cases h
-        obtain ⟨hs, hnk⟩ := pstep_halt T hcode h1
+        obtain ⟨hs, hnk⟩ := pstepH_halt T hcode h1
         intro x hx
         obtain ⟨hex, hno, hdesc⟩ := Exec.Deriv.step_halt ((step_eq_of_nodeAt hx).trans hs)
         refine ⟨hex, hdesc, fun y hy => ?_⟩
         rw [hno y hy]
-        exact ⟨hx.1 ▸ hok, hx.1 ▸ hnk⟩
+        exact ⟨hx.1 ▸ hok, pol.nodeOK_of_noKeccak (hx.1 ▸ hnk)⟩
     · cases h
+
+/-- **A continuing walk, on any derivation** (`pwalkH_cont` at `.refuse`): every node
+passes the check and executes no `KECCAK256`. -/
+theorem pwalk_cont {code : ByteArray} {d : Nat} (T : CodeTries code d) {sevm : Sevm}
+    (hcode : sevm.code = code) (ok : Nat → Bool) :
+    ∀ (n : Nat) (c c' : PCfg), PAgree c → pwalk T sevm ok n c = .cont c' →
+      PAgree c' ∧ ∀ x, NodeAt sevm c x → ∃ x', NodeAt sevm c' x' ∧ ParentPrefix x x' ∧
+        x'.exn = x.exn ∧ Exec.rawFrameDescendants x'.exc = Exec.rawFrameDescendants x.exc ∧
+        ∀ y, ParentPrefix x y → ParentPrefix y x' → y ≠ x' → NodeOK code ok y :=
+  fun n c c' hag h => pwalkH_cont .refuse T hcode ok n c c' hag h
+
+/-- **A halting walk, on any derivation** (`pwalkH_halt` at `.refuse`). -/
+theorem pwalk_halt {code : ByteArray} {d : Nat} (T : CodeTries code d) {sevm : Sevm}
+    (hcode : sevm.code = code) (ok : Nat → Bool) :
+    ∀ (n : Nat) (c : PCfg) (ex : Execution), PAgree c → pwalk T sevm ok n c = .halt ex →
+      ∀ x, NodeAt sevm c x → x.exn = ex ∧ Exec.rawFrameDescendants x.exc = [] ∧
+        ∀ y, ParentPrefix x y → NodeOK code ok y :=
+  fun n c ex hag h => pwalkH_halt .refuse T hcode ok n c ex hag h
 
 /-! ## `STATICCALL` up to its spawn, and back -/
 
@@ -652,6 +822,50 @@ def childCfg (cevm : Evm) (f : Frame) (keys : List (Adr × B256)) (adrs : List A
     (stor : StorShadow) (acs : AcctShadow) : PCfg :=
   ⟨cevm.pc, cevm.dyna, keys, adrs, stor, acsTransfer f.inner acs⟩
 
+/-- What a call-family preparation `cp` (`scallPrep`, `callPrepP`, `dcallPrep`) at the
+configuration `c` fixes: the suspended parent's accessed sets, the entry frame's message
+(accessed sets those of the parent, its world the caller's, not a create, no state gas). -/
+structure PrepFacts (c : PCfg) (cp : CallPrep) : Prop where
+  adrs : ∀ a, a ∈ cp.p.accessedAddresses ↔ a ∈ cp.adrs
+  keys : cp.p.accessedStorageKeys = c.devm.accessedStorageKeys
+  entryAdrs : cp.f.inner.accessedAddresses = cp.p.accessedAddresses
+  entryKeys : cp.f.inner.accessedStorageKeys = cp.p.accessedStorageKeys
+  create : cp.f.isCreate = false
+  stateGas : cp.f.inner.benv.stat.rules.stateGas = none
+  state : cp.f.inner.benv.state = c.devm.state
+
+/-- **Any call-family spawn node, on any derivation.**  At a node sitting at an agreeing
+configuration whose code has the frame-entering instruction `x` at its pc, if the
+instruction spawns the prepared frame `cp.f` (resumed by `.call`), the frame is entered
+with the machine `frameEnterS` computes and the child's start configuration agrees. -/
+theorem spawn_node {sevm : Sevm} {c : PCfg} {cp : CallPrep} {cevm : Evm} {x : Xinst}
+    (hag : PAgree c) (hat : Ninst.At sevm.code c.pc (.exec x))
+    (hstep : Xinst.step sevm c.devm x = .spawn cp.f (.call cp.p cp.oi cp.os))
+    (hF : PrepFacts c cp) (he : frameEnterS cp.f c.acs = .run cevm) :
+    Evm.step ⟨c.pc, sevm, c.devm⟩ = .spawn cp.f (.call cp.p cp.oi cp.os) (c.pc + 1) ∧
+      cp.f.enter = .run cevm ∧ cevm.pc = 0 ∧
+      PAgree (childCfg cevm cp.f c.keys cp.adrs c.stor c.acs) := by
+  have hC : AcctAgree cp.f.inner.benv.state c.acs := by rw [hF.state]; exact hag.2.2.2
+  refine ⟨?_, by rw [frame_enter_eq_B, frameEnterB_eq_S hC]; exact he, ?_, ?_⟩
+  · rw [Evm.step_next hat]
+    simp only [Ninst.step, hstep]
+    rfl
+  · obtain ⟨benv, -, rfl⟩ := frameEnterS_run he
+    rfl
+  · exact frameStart_agree .undefined he
+      (fun y => by rw [hF.entryKeys, hF.keys]; exact hag.1 y)
+      (fun a => by rw [hF.entryAdrs]; exact hF.adrs a)
+      (fun a k => by rw [hF.state]; exact hag.2.2.1 a k)
+      (by rw [hF.state]; exact hag.2.2.2)
+
+/-- `scallPrep`'s instruction and frame facts. -/
+theorem scallPrep_node_facts {sevm : Sevm} {c : PCfg} {cp : CallPrep}
+    (hag : PAgree c) (hp : scallPrep sevm c.devm c.adrs c.acs = some cp) :
+    Xinst.step sevm c.devm .staticcall = .spawn cp.f (.call cp.p cp.oi cp.os) ∧
+      PrepFacts c cp := by
+  obtain ⟨hstep, hpa, hpk, hcr, hia, hik, hsg, hst, -⟩ := scallPrep_spec hp hag.2.1 hag.2.2.2
+  exact ⟨hstep, ⟨hpa, hpk, hia, hik, hcr, hsg, hst⟩⟩
+
 /-- **A `STATICCALL` node, on any derivation.**  At a node sitting at an agreeing
 configuration whose code has a `STATICCALL` at its pc, the call spawns the frame
 `scallPrep` computes, entered with the machine `frameEnterS` computes; the child's start
@@ -662,18 +876,57 @@ theorem staticcall_node {sevm : Sevm} {c : PCfg} {cp : CallPrep} {cevm : Evm}
     (he : frameEnterS cp.f c.acs = .run cevm) :
     Evm.step ⟨c.pc, sevm, c.devm⟩ = .spawn cp.f (.call cp.p cp.oi cp.os) (c.pc + 1) ∧
       cp.f.enter = .run cevm ∧ cevm.pc = 0 ∧
-      PAgree (childCfg cevm cp.f c.keys cp.adrs c.stor c.acs) := by
-  obtain ⟨hstep, hpa, hpk, -, hia, hik, -, hst, -⟩ := scallPrep_spec hp hag.2.1 hag.2.2.2
-  have hC : AcctAgree cp.f.inner.benv.state c.acs := by rw [hst]; exact hag.2.2.2
-  refine ⟨?_, by rw [frame_enter_eq_B, frameEnterB_eq_S hC]; exact he, ?_, ?_⟩
-  · rw [Evm.step_next hat]
-    simp only [Ninst.step, hstep]
-    rfl
-  · obtain ⟨benv, -, rfl⟩ := frameEnterS_run he
-    rfl
-  · exact frameStart_agree .undefined he (fun x => by rw [hik, hpk]; exact hag.1 x)
-      (fun a => by rw [hia]; exact hpa a) (fun a k => by rw [hst]; exact hag.2.2.1 a k)
-      (by rw [hst]; exact hag.2.2.2)
+      PAgree (childCfg cevm cp.f c.keys cp.adrs c.stor c.acs) :=
+  let ⟨hstep, hF⟩ := scallPrep_node_facts hag hp
+  spawn_node hag hat hstep hF he
+
+/-- `CALL` up to its spawn at a walk configuration (`callPrep` at its witness-engine
+configuration). -/
+def callPrepP (sevm : Sevm) (c : PCfg) : Option CallPrep := callPrep sevm (c.cfg .undefined)
+
+/-- `callPrepP`'s instruction and frame facts. -/
+theorem callPrepP_node_facts {sevm : Sevm} {c : PCfg} {cp : CallPrep}
+    (hag : PAgree c) (hp : callPrepP sevm c = some cp) :
+    Xinst.step sevm c.devm .call = .spawn cp.f (.call cp.p cp.oi cp.os) ∧ PrepFacts c cp := by
+  obtain ⟨hstep, hpa, hpk, hcr, hia, hik, hsg, hst⟩ := callPrep_spec hp hag.2.1 hag.2.2.2
+  exact ⟨hstep, ⟨hpa, hpk, hia, hik, hcr, hsg, hst⟩⟩
+
+/-- **A `CALL` node, on any derivation** (value or not): at a node sitting at an agreeing
+configuration whose code has a `CALL` at its pc, the call spawns the frame `callPrepP`
+computes, entered with the machine `frameEnterS` computes (the value transfer applied to
+the account shadow); the child's start configuration agrees.  `PrepFacts` gives the settle
+and resume hypotheses (`PrepFacts.settle_ok`, `PrepFacts.settle_error`,
+`resume_agree_ok_of`, `resume_agree_error_of`). -/
+theorem call_node {sevm : Sevm} {c : PCfg} {cp : CallPrep} {cevm : Evm}
+    (hag : PAgree c) (hat : Ninst.At sevm.code c.pc (.exec .call))
+    (hp : callPrepP sevm c = some cp) (he : frameEnterS cp.f c.acs = .run cevm) :
+    Evm.step ⟨c.pc, sevm, c.devm⟩ = .spawn cp.f (.call cp.p cp.oi cp.os) (c.pc + 1) ∧
+      cp.f.enter = .run cevm ∧ cevm.pc = 0 ∧
+      PAgree (childCfg cevm cp.f c.keys cp.adrs c.stor c.acs) ∧ PrepFacts c cp :=
+  let ⟨hstep, hF⟩ := callPrepP_node_facts hag hp
+  let ⟨h1, h2, h3, h4⟩ := spawn_node hag hat hstep hF he
+  ⟨h1, h2, h3, h4, hF⟩
+
+/-- `dcallPrep`'s instruction and frame facts. -/
+theorem dcallPrep_node_facts {sevm : Sevm} {c : PCfg} {cp : CallPrep}
+    (hag : PAgree c) (hp : dcallPrep sevm c.devm c.adrs c.acs = some cp) :
+    Xinst.step sevm c.devm .delegatecall = .spawn cp.f (.call cp.p cp.oi cp.os) ∧
+      PrepFacts c cp := by
+  obtain ⟨hstep, hpa, hpk, hcr, hia, hik, hsg, hst, -⟩ := dcallPrep_spec hp hag.2.1 hag.2.2.2
+  exact ⟨hstep, ⟨hpa, hpk, hia, hik, hcr, hsg, hst⟩⟩
+
+/-- **A `DELEGATECALL` node, on any derivation**: as `call_node`, for the frame `dcallPrep`
+computes (the callee's code run in the caller's context, no value transfer). -/
+theorem delegatecall_node {sevm : Sevm} {c : PCfg} {cp : CallPrep} {cevm : Evm}
+    (hag : PAgree c) (hat : Ninst.At sevm.code c.pc (.exec .delegatecall))
+    (hp : dcallPrep sevm c.devm c.adrs c.acs = some cp)
+    (he : frameEnterS cp.f c.acs = .run cevm) :
+    Evm.step ⟨c.pc, sevm, c.devm⟩ = .spawn cp.f (.call cp.p cp.oi cp.os) (c.pc + 1) ∧
+      cp.f.enter = .run cevm ∧ cevm.pc = 0 ∧
+      PAgree (childCfg cevm cp.f c.keys cp.adrs c.stor c.acs) ∧ PrepFacts c cp :=
+  let ⟨hstep, hF⟩ := dcallPrep_node_facts hag hp
+  let ⟨h1, h2, h3, h4⟩ := spawn_node hag hat hstep hF he
+  ⟨h1, h2, h3, h4, hF⟩
 
 /-- A reverted or halted call child settles to a machine with an error, the world
 rolled back to the frame's message world. -/
@@ -697,45 +950,75 @@ theorem frame_settle_error {f : Frame} {e : EvmError} {d : Devm} (hcr : f.isCrea
 
 /-- A failed child: the parent resumes with its own shadows (the child's world was rolled
 back to the parent's, and its accessed sets are dropped). -/
-theorem resume_agree_error {sevm : Sevm} {c : PCfg} {cp : CallPrep} {child d : Devm}
-    (hag : PAgree c) (hp : scallPrep sevm c.devm c.adrs c.acs = some cp)
+theorem resume_agree_error_of {c : PCfg} {cp : CallPrep} {child d : Devm}
+    (hag : PAgree c) (hF : PrepFacts c cp)
     (hce : child.error.isSome = true) (hst : child.state = cp.f.inner.benv.state)
     (hr : resumeCallB cp.p cp.oi cp.os (.ok child) = some d) :
     PAgree ⟨c.pc + 1, d, c.keys, cp.adrs, c.stor, c.acs⟩ := by
-  obtain ⟨-, hpa, hpk, -, -, -, -, hfs, -⟩ := scallPrep_spec hp hag.2.1 hag.2.2.2
   obtain ⟨hda, hdk⟩ := resumeCallB_acc hr
-  have hds : d.state = c.devm.state := (resumeCallB_state hr).trans (hst.trans hfs)
+  have hds : d.state = c.devm.state := (resumeCallB_state hr).trans (hst.trans hF.state)
   refine ⟨fun x => ?_, fun a => ?_, fun a k => ?_, fun a => ?_⟩
   · show x ∈ d.accessedStorageKeys ↔ x ∈ c.keys
-    rw [hdk x, hce, hpk]; simp only [Bool.true_eq_false, false_and, or_false]; exact hag.1 x
+    rw [hdk x, hce, hF.keys]; simp only [Bool.true_eq_false, false_and, or_false]; exact hag.1 x
   · show a ∈ d.accessedAddresses ↔ a ∈ cp.adrs
-    rw [hda a, hce]; simp only [Bool.true_eq_false, false_and, or_false]; exact hpa a
+    rw [hda a, hce]; simp only [Bool.true_eq_false, false_and, or_false]; exact hF.adrs a
   · show storOf d.state a k = lookupS c.stor a k
     rw [hds]; exact hag.2.2.1 a k
   · show acctView (d.state.get a) = lookupA c.acs a
     rw [hds]; exact hag.2.2.2 a
 
 /-- A successful child whose world and accessed sets the shadows describe. -/
-theorem resume_agree_ok {sevm : Sevm} {c : PCfg} {cp : CallPrep} {child d : Devm}
+theorem resume_agree_ok_of {c : PCfg} {cp : CallPrep} {child d : Devm}
     {ckeys : List (Adr × B256)} {cadrs : List Adr} {cstor : StorShadow} {cacs : AcctShadow}
-    (hag : PAgree c) (hp : scallPrep sevm c.devm c.adrs c.acs = some cp)
+    (hag : PAgree c) (hF : PrepFacts c cp)
     (hce : child.error.isSome = false) (hca : ChildAgree child ckeys cadrs cstor cacs)
     (hr : resumeCallB cp.p cp.oi cp.os (.ok child) = some d) :
     PAgree ⟨c.pc + 1, d, c.keys ++ ckeys, cp.adrs ++ cadrs, cstor, cacs⟩ := by
-  obtain ⟨-, hpa, hpk, -⟩ := scallPrep_spec hp hag.2.1 hag.2.2.2
   obtain ⟨hda, hdk⟩ := resumeCallB_acc hr
   refine ⟨fun x => ?_, fun a => ?_, fun a k => ?_, fun a => ?_⟩
   · show x ∈ d.accessedStorageKeys ↔ x ∈ c.keys ++ ckeys
-    rw [hdk x, hce, hpk, show x ∈ c.devm.accessedStorageKeys ↔ x ∈ c.keys from hag.1 x,
+    rw [hdk x, hce, hF.keys, show x ∈ c.devm.accessedStorageKeys ↔ x ∈ c.keys from hag.1 x,
       hca.2.1 x, List.mem_append]
     simp
   · show a ∈ d.accessedAddresses ↔ a ∈ cp.adrs ++ cadrs
-    rw [hda a, hce, hpa a, hca.1 a, List.mem_append]
+    rw [hda a, hce, hF.adrs a, hca.1 a, List.mem_append]
     simp
   · show storOf d.state a k = lookupS cstor a k
     rw [resumeCallB_state hr]; exact hca.2.2.1 a k
   · show acctView (d.state.get a) = lookupA cacs a
     rw [resumeCallB_state hr]; exact hca.2.2.2 a
+
+/-- A failed child: the parent resumes with its own shadows (`resume_agree_error_of` for a
+`STATICCALL`). -/
+theorem resume_agree_error {sevm : Sevm} {c : PCfg} {cp : CallPrep} {child d : Devm}
+    (hag : PAgree c) (hp : scallPrep sevm c.devm c.adrs c.acs = some cp)
+    (hce : child.error.isSome = true) (hst : child.state = cp.f.inner.benv.state)
+    (hr : resumeCallB cp.p cp.oi cp.os (.ok child) = some d) :
+    PAgree ⟨c.pc + 1, d, c.keys, cp.adrs, c.stor, c.acs⟩ :=
+  resume_agree_error_of hag (scallPrep_node_facts hag hp).2 hce hst hr
+
+/-- A successful child whose world and accessed sets the shadows describe
+(`resume_agree_ok_of` for a `STATICCALL`). -/
+theorem resume_agree_ok {sevm : Sevm} {c : PCfg} {cp : CallPrep} {child d : Devm}
+    {ckeys : List (Adr × B256)} {cadrs : List Adr} {cstor : StorShadow} {cacs : AcctShadow}
+    (hag : PAgree c) (hp : scallPrep sevm c.devm c.adrs c.acs = some cp)
+    (hce : child.error.isSome = false) (hca : ChildAgree child ckeys cadrs cstor cacs)
+    (hr : resumeCallB cp.p cp.oi cp.os (.ok child) = some d) :
+    PAgree ⟨c.pc + 1, d, c.keys ++ ckeys, cp.adrs ++ cadrs, cstor, cacs⟩ :=
+  resume_agree_ok_of hag (scallPrep_node_facts hag hp).2 hce hca hr
+
+/-- A failed (reverted or halted) call child settles to a machine with an error, the world
+rolled back to the frame's message world (`frame_settle_error` for a prepared frame). -/
+theorem PrepFacts.settle_error {c : PCfg} {cp : CallPrep} {e : EvmError} {d : Devm}
+    (hF : PrepFacts c cp) (hk : e = .revert ∨ ∃ r, e = .halt r) :
+    ∃ child, cp.f.settle (.error (e, d)) = .ok child ∧ child.error.isSome = true ∧
+      child.state = cp.f.inner.benv.state :=
+  frame_settle_error hF.create hF.stateGas hk
+
+/-- A successful call child settles to itself (`frame_settle_ok` for a prepared frame). -/
+theorem PrepFacts.settle_ok {c : PCfg} {cp : CallPrep} {post : Devm}
+    (hF : PrepFacts c cp) (he : post.error = none) : cp.f.settle (.ok post) = .ok post :=
+  frame_settle_ok hF.create hF.stateGas he
 
 /-- An agreeing configuration's shadows describe its machine as a child. -/
 theorem childAgree_of_pagree {c : PCfg} (h : PAgree c) :
@@ -764,5 +1047,45 @@ theorem hashAvoid_of_noKeccak {F : Exec.Deriv} {code : ByteArray} {slot : B256}
   intro x y hx _ hat
   rw [Blanc.Exec.Deriv.ParentPrefix.sevm_eq hx, hcode] at hat
   exact absurd hat (h x hx)
+
+/-- **Trace-local hash avoidance from a walk.**  A frame whose same-frame chain satisfies
+`.avoid slot` (every `KECCAK256` it executes leaves a digest other than `slot`) is
+`HashAvoid slot`. -/
+theorem hashAvoid_of_hashOK {F : Exec.Deriv} {code : ByteArray} {slot : B256}
+    (hcode : F.sevm.code = code)
+    (h : ∀ x, ParentPrefix F x → (HashPol.avoid slot).NodeOK code x) :
+    Blanc.LockExclusion.HashAvoid slot F := by
+  intro x y hx hy hat
+  rw [Blanc.Exec.Deriv.ParentPrefix.sevm_eq hx, hcode] at hat
+  exact h x hx hat y hy
+
+/-! ## Controls: the hash policy bites at `KECCAK256`
+
+The code `KECCAK256` alone, at a machine with `0 0` on the stack and gas: the walk stops
+under `.refuse`, and under `.avoid slot` it runs exactly when the digest of the empty input
+is not `slot`. -/
+
+/-- The one-instruction code `KECCAK256`. -/
+def keccakCode : ByteArray := ⟨#[0x20]⟩
+
+/-- Its tries. -/
+def keccakTries : CodeTries keccakCode 1 :=
+  CodeTries.ofCode keccakCode 1 (by decide) (by decide)
+
+/-- A machine about to hash the empty input, with gas. -/
+def keccakStart : PCfg :=
+  ⟨0, (default : Devm).setMach ⟨[0, 0], (default : Devm).memory, 1000, (default : Devm).stateGas⟩,
+    [], [], [], []⟩
+
+/-- The walk step continued. -/
+def PRes.isCont : PRes → Bool
+  | .cont _ => true
+  | _ => false
+
+theorem hashPol_bites :
+    (pstepH .refuse keccakTries default keccakStart).isCont = false ∧
+    (pstepH (.avoid 0) keccakTries default keccakStart).isCont = true ∧
+    (pstepH (.avoid (Bytes.keccak [])) keccakTries default keccakStart).isCont = false := by
+  refine ⟨?_, ?_, ?_⟩ <;> decide +kernel
 
 end Blanc.Lift.NodeWalk
