@@ -605,8 +605,6 @@ def accountingLadder (ca : Adr) :
       committed ⟨runReady, callerNe⟩ hfork blockIndex transactionIndex
   preserves := prorataSpec_preserves ca
 
-open _root_.Blanc.ExecutionTrace in
-
 end Prorata
 
 end Blanc

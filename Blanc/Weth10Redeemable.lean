@@ -1030,8 +1030,6 @@ lemma sstoreNewRefundCounter_nonnegative_of_original_eq_current
 
 /-! ## Constructive withdrawal body up to the value call -/
 
-set_option maxRecDepth 607 in
-
 /-- A successful internal call flag makes the withdrawal's post-call guard take
 the `STOP` branch. -/
 lemma callSuccessTail_runCompiled {fs : List Func} {e : Sevm} {d : Devm}

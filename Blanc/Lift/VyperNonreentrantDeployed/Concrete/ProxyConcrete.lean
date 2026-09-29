@@ -26,6 +26,4 @@ def proxyAtCall : Devm :=
     ⟨[(proxyGas - 54).toB256, implementationAddress.toB256, 0, (132 : Nat).toB256,
       0, 0, 0], Mem.empty.write 0 removeCalldata, proxyGas - 54, .zero⟩
 
-set_option profiler true in
-
 end Blanc.Lift.VyperNonreentrantDeployed.Concrete

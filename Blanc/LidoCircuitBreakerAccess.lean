@@ -63,8 +63,6 @@ theorem CheckedHeartbeatExtension.add_eq
 
 def checkedHeartbeatExpiryGasWarm : Nat := 132
 
-set_option maxRecDepth 4096 in
-
 def heartbeatBodySuccessGasWarmUpdate : Nat := 4693
 
 /-- The strict-live heartbeat boundary rules out the zero-current branch of
