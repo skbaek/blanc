@@ -2124,6 +2124,24 @@ consumer needs canonical interpreter ingress as one conjunct:
   ([`Blanc/ExecutionTraceSystem.lean`](../Blanc/ExecutionTraceSystem.lean)) confine
   system-message frames to the four system addresses when their code spawns
   nothing. `Lift.BeaconDeposit.beaconEntry_of_env` is the worked consumer.
+  `SpawnFree` decodes at every offset, so it is false of the canonical EIP-7002
+  code (`0xF4` bytes inside `PUSH` data): for real system code use
+  `SpawnFreeReach` (no spawning instruction at a position an execution reaches;
+  `Evm.step_cont_noPush` shows every executed pc is one no `PUSH` immediate covers,
+  `Exec.rawFrameDescendants_eq_nil_of_reach`) and decide it for concrete bytes with
+  `spawnFreeReach_of_check` over the linear walk `spawnFreeCheck`
+  ([`Blanc/ExecutionReachable.lean`](../Blanc/ExecutionReachable.lean)). The four
+  canonical system contracts, their checked `SpawnFreeReach`, and
+  `SystemCodeInstalled` are in
+  [`Blanc/SystemContracts.lean`](../Blanc/SystemContracts.lean).
+  `TransactionTrace.codeAt_keep` and `ApplyTransactionsTrace.codeAt_keep`
+  ([`Blanc/ExecutionTraceCodeKeep.lean`](../Blanc/ExecutionTraceCodeKeep.lean)) keep
+  *nonempty* non-delegating code through transactions (the empty-code
+  `codeAt_empty` cannot), and `ConfiguredHistoryTrace.systemFrames_of_installed`
+  ([`Blanc/ExecutionTraceSystemCode.lean`](../Blanc/ExecutionTraceSystemCode.lean))
+  shows that with the canonical code installed at the checkpoint every system
+  message enters no frame but its own. `Lift.BeaconDeposit.configuredHistory_solInv_sys`
+  (and `_count_`/`_root_`) is the worked consumer.
 - To discharge the per-frame premise `sevm.data.length < 2 ^ 256` for every raw
   frame of a configured history with no premise at all:
   `ConfiguredHistoryTrace.calldata_bound` and

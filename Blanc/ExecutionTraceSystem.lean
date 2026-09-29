@@ -3,17 +3,24 @@ import Blanc.ExecutionTraceWarmth
 /-!
 # Frames entered by code that never spawns
 
-A frame whose code contains no CALL-family or CREATE-family instruction enters no child.  The
-system contracts (EIP-4788 beacon roots, EIP-2935 history storage, EIP-7002 withdrawal requests,
-EIP-7251 consolidation requests) are such code, so the only frame a system message enters is its
-own: the one targeting the system address.  This module states that as an execution fact.
+A frame whose code contains no CALL-family or CREATE-family instruction enters no child, so the
+only frame a system message enters is its own: the one targeting the system address.  This module
+states that as an execution fact for code that is `SpawnFree`, the offset-blind notion.
+
+`SpawnFree` decodes at every offset, including inside `PUSH` immediates, so it is false of the
+canonical EIP-7002 withdrawal-request code (four `0xF4` bytes inside `PUSH` data, none ever
+executed; the other three system contracts contain no call-type byte at all).  For the four system
+contracts use the reachability-aware `SpawnFreeReach` (`Blanc/ExecutionReachable.lean`) and
+`Blanc/ExecutionTraceSystemCode.lean`.
 -/
 
 namespace Blanc
 
 open Jaune
 
-/-- The code has no instruction that could spawn a child frame. -/
+/-- The code has no instruction that could spawn a child frame, read at every offset (see the
+module doc: false of the canonical EIP-7002 code; `SpawnFreeReach` is the reachable-position
+notion). -/
 def SpawnFree (code : ByteArray) : Prop := ∀ pc x, ¬ Xinst.At code pc x
 
 /-- A run of spawn-free code enters no descendant frame. -/
