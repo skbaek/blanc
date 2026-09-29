@@ -190,6 +190,9 @@ SHARED += ["Lift.MemMap", "Lift.CheckMem", "Lift.CodeTriesData", "Lift.WitnessAr
 SHARED += ["Lift.WitnessBoundary", "TransactionForward"]
 # Generic warmth / code-at-address / system-frame execution facts (beacon-env-v1): contract-neutral.
 SHARED += ["ExecutionWarmth", "ExecutionTraceWarmth", "ExecutionCodeAt", "ExecutionTraceCodeAt", "ExecutionTraceSystem"]
+# Reachable program counters, the canonical consensus system-contract code and system frames that
+# run it (beacon-env-v2): contract-neutral (the four system contracts are protocol, not a Blanc contract).
+SHARED += ["ExecutionReachable", "SystemContracts", "ExecutionTraceCodeKeep", "ExecutionTraceSystemCode"]
 # Generic per-frame calldata-length bound of a configured history (calldata-bound-v1): contract-neutral.
 SHARED += ["ExecutionTraceCalldata", "ForkUniform", "Lift.NodeWalkFork", "Lift.WitnessFork", "TransactionFork"]
 

@@ -3,6 +3,7 @@ import Blanc.ExecutionTraceWarmth
 import Blanc.ExecutionTraceCodeAt
 import Blanc.ExecutionTraceSystem
 import Blanc.ExecutionTraceCalldata
+import Blanc.ExecutionTraceSystemCode
 
 /-!
 # The Beacon committed-history headlines without per-frame environment premises
@@ -205,5 +206,126 @@ theorem configuredHistory_root_envDerived {ca : Adr} {cfg : ChainConfig}
       BeaconDeposit.mixedRootOf Bytes.sha256 (initialHistory ++ committedNodes ca trace) :=
   configuredHistory_root_env trace trace.frameAdmitted_calldata systemSpawnFree notSystem
     checkpointEmpty noAuthority noFrame installed invariant
+
+/-! ### The system frames run the canonical code
+
+`systemSpawnFree` (`SpawnFree` of the code of every system frame) is false of the canonical
+EIP-7002 code (`withdrawalRequestCode_not_spawnFree`), so the `_env` and `_envDerived` headlines
+above are vacuous on mainnet.  The `_sys` headlines replace it by premises a real chain can meet:
+
+* the checkpoint holds the canonical code at the four system addresses
+  (`SystemCodeInstalled`, `Blanc/SystemContracts.lean`);
+* no authorization of the trace recovers to one of them and no CREATE frame the trace enters
+  targets one, the same trace-local form as for the SHA-256 precompile.
+
+From these, `ConfiguredHistoryTrace.systemFrames_of_installed` shows that the code every system
+message starts from is still the canonical code, which spawns nothing at any position an
+execution reaches (`SpawnFreeReach`), so a system message enters no frame but its own and the
+deposit contract is not among its targets.  That the deposit contract is not itself a system
+address is derived too: its installed code is not a canonical system code. -/
+
+/-- The deposit contract's runtime is 6358 bytes, more than any canonical system contract. -/
+theorem code_size : code.size = 6358 := by decide +kernel
+
+theorem not_mem_systemTargets_of_installed {w : State} {ca : Adr}
+    (installed : w.getCode ca = code) (system : SystemCodeInstalled w) :
+    ca ∉ systemTargets := by
+  intro hmem
+  simp only [systemTargets, List.mem_cons, List.not_mem_nil, or_false] at hmem
+  have hsize : ∀ p ∈ systemContracts, p.1 = ca → False := by
+    intro p hp hca
+    have h := system p hp
+    rw [hca, installed] at h
+    have := congrArg ByteArray.size h
+    rw [code_size] at this
+    simp only [systemContracts, List.mem_cons, List.not_mem_nil, or_false] at hp
+    rcases hp with rfl | rfl | rfl | rfl <;> revert this <;> decide +kernel
+  rcases hmem with rfl | rfl | rfl | rfl
+  · exact hsize (beaconRootsAddress, beaconRootsCode) (by simp [systemContracts]) rfl
+  · exact hsize (historyStorageAddress, historyStorageCode) (by simp [systemContracts]) rfl
+  · exact hsize (withdrawalRequestPredeployAddress, withdrawalRequestCode)
+      (by simp [systemContracts]) rfl
+  · exact hsize (consolidationRequestPredeployAddress, consolidationRequestCode)
+      (by simp [systemContracts]) rfl
+
+/-- **The system exclusion is derived** from the canonical system code being installed at the
+checkpoint. -/
+theorem system_of_installed {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future) {ca : Adr}
+    (systemInstalled : SystemCodeInstalled checkpoint.state)
+    (systemNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
+    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
+    (installed : checkpoint.state.getCode ca = code) :
+    ∀ root ∈ trace.systemRawFrames, root.sevm.currentTarget ≠ ca := by
+  intro root member h
+  obtain ⟨hframes, -⟩ := trace.systemFrames_of_installed systemInstalled systemNoAuthority
+    systemNoFrame
+  exact not_mem_systemTargets_of_installed installed systemInstalled
+    (h ▸ hframes root member)
+
+/-- **Committed-history soundness on mainnet.**  `configuredHistory_solInv_envDerived` with the
+unsatisfiable system-code premise replaced by the canonical system code installed at the
+checkpoint plus trace-local exclusions of EIP-7702 authorizations and CREATE frames at the four
+system addresses. -/
+theorem configuredHistory_solInv_sys {ca : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {initialHistory : List B256}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (systemInstalled : SystemCodeInstalled checkpoint.state)
+    (systemNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
+    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
+    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
+    (noAuthority : trace.NoAuthorityAt 2)
+    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ 2)
+    (installed : checkpoint.state.getCode ca = code)
+    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
+    SolInv (future.state.getStor ca) (initialHistory ++ committedNodes ca trace) :=
+  configuredHistory_solInv trace
+    (beaconEntry_of_env trace trace.frameAdmitted_calldata
+      (system_of_installed trace systemInstalled systemNoAuthority systemNoFrame installed)
+      checkpointEmpty noAuthority noFrame)
+    installed invariant
+
+/-- The final deployed count word is the length of the same exact history. -/
+theorem configuredHistory_count_sys {ca : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {initialHistory : List B256}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (systemInstalled : SystemCodeInstalled checkpoint.state)
+    (systemNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
+    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
+    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
+    (noAuthority : trace.NoAuthorityAt 2)
+    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ 2)
+    (installed : checkpoint.state.getCode ca = code)
+    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
+    (future.state.getStor ca).get solCountSlot =
+      Nat.toB256 (initialHistory ++ committedNodes ca trace).length ∧
+      (initialHistory ++ committedNodes ca trace).length < 2 ^ 32 :=
+  solCount_eq_of_solInv (configuredHistory_solInv_sys trace systemInstalled systemNoAuthority
+    systemNoFrame checkpointEmpty noAuthority noFrame installed invariant)
+
+/-- The final mixed root belongs to the same exact extracted node sequence. -/
+theorem configuredHistory_root_sys {ca : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {initialHistory : List B256}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (systemInstalled : SystemCodeInstalled checkpoint.state)
+    (systemNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
+    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
+    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
+    (noAuthority : trace.NoAuthorityAt 2)
+    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ 2)
+    (installed : checkpoint.state.getCode ca = code)
+    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
+    BeaconDeposit.Acc.root Bytes.sha256 (solAcc (future.state.getStor ca)) =
+      BeaconDeposit.mixedRootOf Bytes.sha256 (initialHistory ++ committedNodes ca trace) :=
+  BeaconDeposit.root_correct _ _ _
+    (configuredHistory_solInv_sys trace systemInstalled systemNoAuthority systemNoFrame
+      checkpointEmpty noAuthority noFrame installed invariant).2
 
 end Blanc.Lift.BeaconDeposit
