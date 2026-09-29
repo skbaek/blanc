@@ -33,7 +33,7 @@ proved by ``rfl``, so the census alone would call such a lemma a leaf.
 Command line (from the repository root)::
 
     python3 scripts/leaf_audit.py check
-    python3 scripts/leaf_audit.py generate [--ledger]
+    python3 scripts/leaf_audit.py generate [--ledger [--unreviewed FILE]]
     python3 scripts/leaf_audit.py review
     python3 scripts/leaf_audit.py self-test
 """
@@ -41,6 +41,7 @@ Command line (from the repository root)::
 from __future__ import annotations
 
 import bisect
+import hashlib
 import json
 import os
 import re
@@ -660,7 +661,7 @@ def compare_count(committed: dict, counts: dict) -> List[str]:
 
 
 def ledger_document(toolchain: str, leaves: List[dict],
-                    exempt: Sequence[dict] = ()) -> str:
+                    exempt: Sequence[dict] = (), unreviewed: Optional[dict] = None) -> str:
     """The ledger. ``exempt`` are the attribute-exempt (``rfl`` simp) lemmas: kept, recorded beside
     the leaves for the record, and never part of the new/changed comparison."""
 
@@ -668,7 +669,8 @@ def ledger_document(toolchain: str, leaves: List[dict],
                        "toolchain": toolchain,
                        "leaves": {leaf_key(r): r["fp"] for r in sorted(leaves, key=leaf_key)},
                        "attribute_exempt": {leaf_key(r): r["fp"]
-                                            for r in sorted(exempt, key=leaf_key)}},
+                                            for r in sorted(exempt, key=leaf_key)},
+                       **({"unreviewed_excluded": unreviewed} if unreviewed else {})},
                       indent=1, sort_keys=True) + "\n"
 
 
@@ -766,7 +768,7 @@ def cmd_check(root: Path) -> int:
     return 0
 
 
-def cmd_generate(root: Path, ledger: bool) -> int:
+def cmd_generate(root: Path, ledger: bool, unreviewed_path: Optional[Path] = None) -> int:
     try:
         census, result = production_result(root)
     except LeafAuditError as exc:
@@ -777,10 +779,29 @@ def cmd_generate(root: Path, ledger: bool) -> int:
     print(f"wrote {COUNT_RELATIVE}: {counts['leaves']} leaves ({counts['public']} public, "
           f"{counts['private']} private)")
     if ledger:
+        reviewed = list(result["leaves"])
+        unreviewed = None
+        if unreviewed_path is not None:
+            # Leaves the closing sweep never classified (e.g. theorems that became leaves because
+            # their only users were deleted) stay OUT of the ledger, so the next review lists them
+            # as new instead of treating them as judged.
+            text = unreviewed_path.read_text()
+            wanted = [line.strip() for line in text.splitlines() if line.strip()]
+            current = {leaf_key(r) for r in reviewed}
+            stray = sorted(set(wanted) - current)
+            if stray:
+                print(f"REGRESSION — leaf audit: --unreviewed names {len(stray)} non-leaves, e.g. {stray[:3]}")
+                return 1
+            reviewed = [r for r in reviewed if leaf_key(r) not in set(wanted)]
+            unreviewed = {"count": len(set(wanted)),
+                          "sha256": hashlib.sha256(text.encode()).hexdigest(),
+                          "source": unreviewed_path.name}
         (root / LEDGER_RELATIVE).write_text(ledger_document(
-            toolchain_of(root), result["leaves"], result["attribute_exempt_rows"]))
-        print(f"wrote {LEDGER_RELATIVE}: {counts['leaves']} reviewed leaves and "
-              f"{len(result['attribute_exempt_rows'])} attribute-exempt `rfl` simp lemmas")
+            toolchain_of(root), reviewed, result["attribute_exempt_rows"], unreviewed))
+        print(f"wrote {LEDGER_RELATIVE}: {len(reviewed)} reviewed leaves"
+              + (f" ({unreviewed['count']} unreviewed leaves left out, listed as new by `review`)"
+                 if unreviewed else "")
+              + f" and {len(result['attribute_exempt_rows'])} attribute-exempt `rfl` simp lemmas")
     return 0
 
 
@@ -1157,6 +1178,8 @@ def main(argv: List[str]) -> int:
             return cmd_check(root)
         if argv[0] == "generate" and (len(argv) == 1 or argv[1:] == ["--ledger"]):
             return cmd_generate(root, ledger=len(argv) == 2)
+        if argv[0] == "generate" and len(argv) == 4 and argv[1:3] == ["--ledger", "--unreviewed"]:
+            return cmd_generate(root, ledger=True, unreviewed_path=Path(argv[3]))
         if argv[0] == "review" and len(argv) == 1:
             return cmd_review(root)
         if argv[0] == "self-test" and len(argv) == 1:
