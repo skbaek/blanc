@@ -355,26 +355,35 @@ theorem executeCode_enter_withFork {m : Msg} {g : Fork} (hf : CoveredFork m.benv
         have hr : ¬ m.benv.stat.rules.isPrecomp adr := hpre
         simp [hr, hpre']
 
-/-- **Frame entry commutes with the fork change** between covered forks, for a frame that
-does not enter `MODEXP` or `P256VERIFY`. -/
-theorem frame_enter_withFork {f : Frame} {g : Fork} (ho : CoveredFork f.outer.benv.stat.fork)
-    (hi : CoveredFork f.inner.benv.stat.fork) (hg : CoveredFork g) (hp : f.PrecompNeutral) :
-    (f.withFork g).enter = f.enter.withFork g := by
-  unfold Frame.enter
-  show (match (f.inner.withFork g).benvAfterTransfer with
-    | .error e => FrameEntry.done ((f.withFork g).settleMsg (.error e))
-    | .ok benv =>
-      match executeCode.enter ((f.inner.withFork g).withBenv benv) with
-      | .inl evm => .run evm
-      | .inr raw => .done ((f.withFork g).settle raw)) = _
-  rw [benvAfterTransfer_withFork]
-  cases hb : f.inner.benvAfterTransfer with
+/-- Frame entry through any value-transfer function that commutes with the fork change and
+keeps the block environment's static part: the shape shared by `Frame.enter` and the
+witness engine's shadow entries. -/
+theorem enterVia_withFork {T : Msg → Except (EvmError × State × AdrSet × Tra) Benv}
+    {f : Frame} {g : Fork}
+    (hT : T (f.inner.withFork g) = (T f.inner).map (·.withFork g))
+    (hstat : ∀ b, T f.inner = .ok b → b.stat = f.inner.benv.stat)
+    (ho : CoveredFork f.outer.benv.stat.fork) (hi : CoveredFork f.inner.benv.stat.fork)
+    (hg : CoveredFork g) (hp : f.PrecompNeutral) :
+    (match T (f.inner.withFork g) with
+      | .error e => FrameEntry.done ((f.withFork g).settleMsg (.error e))
+      | .ok benv =>
+        match executeCode.enter ((f.inner.withFork g).withBenv benv) with
+        | .inl evm => .run evm
+        | .inr raw => .done ((f.withFork g).settle raw)) =
+    (match T f.inner with
+      | .error e => FrameEntry.done (f.settleMsg (.error e))
+      | .ok benv =>
+        match executeCode.enter (f.inner.withBenv benv) with
+        | .inl evm => .run evm
+        | .inr raw => .done (f.settle raw)).withFork g := by
+  rw [hT]
+  cases hb : T f.inner with
   | error e =>
     show FrameEntry.done ((f.withFork g).settleMsg (.error e)) = _
     rw [settleMsg_withFork ho hg]
     rfl
   | ok benv =>
-    have hstat := benvAfterTransfer_stat hb
+    have hstat := hstat benv hb
     have hm : (f.inner.withFork g).withBenv (benv.withFork g) = (f.inner.withBenv benv).withFork g :=
       rfl
     have hcov : CoveredFork (f.inner.withBenv benv).benv.stat.fork := by
@@ -389,6 +398,14 @@ theorem frame_enter_withFork {f : Frame} {g : Fork} (ho : CoveredFork f.outer.be
       rfl
     · simp only [he, Sum.map_inr, id, settle_withFork ho hi hg]
       rfl
+
+/-- **Frame entry commutes with the fork change** between covered forks, for a frame that
+does not enter `MODEXP` or `P256VERIFY`. -/
+theorem frame_enter_withFork {f : Frame} {g : Fork} (ho : CoveredFork f.outer.benv.stat.fork)
+    (hi : CoveredFork f.inner.benv.stat.fork) (hg : CoveredFork g) (hp : f.PrecompNeutral) :
+    (f.withFork g).enter = f.enter.withFork g :=
+  enterVia_withFork (T := Msg.benvAfterTransfer) (benvAfterTransfer_withFork _ _)
+    (fun _ hb => benvAfterTransfer_stat hb) ho hi hg hp
 
 /-! ### Complete derivations -/
 
