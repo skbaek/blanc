@@ -14,8 +14,11 @@ frame-level liveness of `LiveWriters.lean` needs:
   the footprint backs the ether the send needs;
 * `weth9_history_deposit_live`, `weth9_history_transfer_live`: likewise `deposit()` (any value) and
   `transfer` of a tracked balance;
-* `weth9_history_model_live`: any writer the model accepts at the extended footprint realises the
-  model's step.
+* `weth9_history_withdraw_live_deployed`: the withdraw case from a deployment-shaped checkpoint.
+
+No history-level wrapper is stated for the model-accepted writers (`approve`, `transferFrom`): the
+frame-level `weth9_*_model_live` (`LiveModel.lean`) apply at the future state with the footprint
+`weth9_history_footprint_universe` supplies.
 
 The frame is a fresh entry at the future state (`pre.state = future.state`), executing the deployed code
 of the contract (`sevm.code` is the code at `ca`).
