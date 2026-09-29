@@ -1,5 +1,6 @@
 import Blanc.Lift.Curve3Crv.Lift
 import Blanc.Lift.Curve3Crv.SafeBodies
+import Blanc.Lift.Curve3Crv.SafeViewBodies
 import Blanc.Lift.Curve3Crv.SafeViews
 import Blanc.ExecutionFrameEntry
 
