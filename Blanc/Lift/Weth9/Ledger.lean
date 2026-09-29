@@ -90,6 +90,37 @@ theorem ledger_set_allow (hK : KeyInj K) {o p : Adr} (h : K (.allow o p)) (w : B
         exact hoo (Key.allow.inj this).1.symm
       · rw [trackedAllow_of_not hK', trackedAllow_of_not hK']
 
+/-- **The ledger reads storage only through its words.** -/
+theorem ledger_congr_get {K : Key → Prop} {s s' : Stor} (h : ∀ x, s.get x = s'.get x) :
+    ledger K s = ledger K s' := by
+  unfold ledger tracked trackedAllow
+  simp only [Ledger.mk.injEq]
+  constructor <;> funext a <;> try funext b
+  · simp only [h]
+  · simp only [h]
+
+/-- **Touching fresh keys leaves the ledger alone**: a fresh, untracked key reads zero, so the tracked
+ledger over the extended keys is the ledger over the old ones. -/
+theorem ledger_extend {K : Key → Prop} {s : Stor} {b : B256} {ks : List Key}
+    (h : FootInv K s b) (hf : KeysFresh K ks) : ledger (Key.extend K ks) s = ledger K s := by
+  unfold ledger
+  simp only [Ledger.mk.injEq]
+  constructor
+  · funext a
+    by_cases hK : K (.bal a)
+    · rw [tracked_self hK, tracked_self (Or.inl hK)]
+    · by_cases hks : Key.bal a ∈ ks
+      · rw [tracked_self (Or.inr hks), tracked_of_not hK]
+        exact h.support.get_eq_zero (hf.1 _ hks) hK
+      · rw [tracked_of_not hK, tracked_of_not (fun hh => hh.elim hK hks)]
+  · funext o p
+    by_cases hK : K (.allow o p)
+    · rw [trackedAllow_self hK, trackedAllow_self (Or.inl hK)]
+    · by_cases hks : Key.allow o p ∈ ks
+      · rw [trackedAllow_self (Or.inr hks), trackedAllow_of_not hK]
+        exact h.support.get_eq_zero (hf.1 _ hks) hK
+      · rw [trackedAllow_of_not hK, trackedAllow_of_not (fun hh => hh.elim hK hks)]
+
 end Ledger
 
 end Blanc.Lift.Weth9
