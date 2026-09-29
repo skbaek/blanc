@@ -520,6 +520,7 @@ import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Locks
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.SubtreeRun
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Token.Cert
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxTop
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.WitnessCerts
 
 -- The COMPOSITION stratum is strictly downstream of every contract family, so

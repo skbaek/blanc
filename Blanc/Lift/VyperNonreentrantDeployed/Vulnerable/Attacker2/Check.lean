@@ -9,7 +9,7 @@ namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Attacker2
 
 open Jaune
 
-/-- Depth 8 covers all 184 runtime byte positions. -/
+/-- Depth 8 covers all 186 runtime byte positions. -/
 def codeTries : CodeTries code 8 :=
   CodeTries.ofCode code 8 (by decide +kernel) (by decide +kernel)
 
