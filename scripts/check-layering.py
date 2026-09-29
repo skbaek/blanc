@@ -259,7 +259,7 @@ CONTRACTS = {
                    "Lift.Curve3Crv.Lift", "Lift.Curve3Crv.Prog", "Lift.Curve3Crv.Layout",
                    "Lift.Curve3Crv.Decode", "Lift.Curve3Crv.Spec", "Lift.Curve3Crv.ViewBodies",
                    "Lift.Curve3Crv.Dispatch", "Lift.Curve3Crv.Refine", "Lift.Curve3Crv.SafeBodies",
-                   "Lift.Curve3Crv.SafeViews", "Lift.Curve3Crv.LiveBodies", "Lift.Curve3Crv.Safe",
+                   "Lift.Curve3Crv.SafeViewBodies", "Lift.Curve3Crv.SafeViews", "Lift.Curve3Crv.LiveBodies", "Lift.Curve3Crv.Safe",
                    "Lift.Curve3Crv.Exec", "Lift.Curve3Crv.Slots", "Lift.Curve3Crv.Ladder",
                    "Lift.Curve3Crv.HistoryKeys", "Lift.Curve3Crv.CarriedHistory",
                    "Lift.Curve3Crv.CommittedReplay", "Lift.Curve3Crv.CommittedExec",
