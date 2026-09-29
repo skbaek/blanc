@@ -1,5 +1,6 @@
 import Blanc.ExecutionTrace
 import Blanc.MessageExecution
+import Blanc.DeploymentMessage
 
 /-!
 # The forward direction of a successful transaction
@@ -596,5 +597,39 @@ theorem sender_net_toNat {b0 wad : B256} {F R : Nat} (hF : F ≤ b0.toNat) (hR :
   have h2 : (b0 - F.toB256 + wad).toNat = b0.toNat - F + wad.toNat := by
     rw [B256.toNat_add_eq_of_nof _ _ (by unfold B256.Nof; omega), h1]
   rw [B256.toNat_add_eq_of_nof _ _ (by unfold B256.Nof; omega), h2, hRt]
+
+/-! ### The same quantities under the deployment vocabulary
+
+`Blanc/DeploymentMessage.lean` names the settlement of a transaction for the deployment corridor
+(`deploymentEffectiveGasPrice`, `deploymentUsedGasFromMessage`, `deploymentFinalState`).  They are the
+quantities of `processTransaction_call_of_exec` for a type-2 transaction; these equations tie the two
+vocabularies together so that a consumer of either can use the other's lemmas. -/
+
+theorem deploymentEffectiveGasPrice_two {benv : Benv} {tx : Tx} {chainId : UInt64}
+    {maxPriorityFee maxFee : Nat} {receiver : Option Adr} {accessList : AccessList}
+    (htype : tx.type = .two chainId maxPriorityFee maxFee receiver accessList) :
+    deploymentEffectiveGasPrice benv tx =
+      min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas := by
+  unfold deploymentEffectiveGasPrice
+  rw [htype]
+
+theorem deploymentUsedGasFromMessage_eq_txGasUsed (benv : Benv) (tx : Tx) (sender : Adr)
+    (out : MsgCallOutput) :
+    deploymentUsedGasFromMessage benv tx sender out =
+      txGasUsed tx.gas (deploymentCalldataFloorGas benv tx sender) out.gasLeft
+        out.refundCounter.toNat := rfl
+
+/-- The state a settled type-2 transaction leaves, as `deploymentFinalState` (the sender's refund and
+the coinbase's priority fee credited to the message's world). -/
+theorem deploymentFinalState_two {benv : Benv} {tx : Tx} {sender : Adr} {chainId : UInt64}
+    {maxPriorityFee maxFee : Nat} {receiver : Option Adr} {accessList : AccessList}
+    (htype : tx.type = .two chainId maxPriorityFee maxFee receiver accessList)
+    (messagePost : State) (usedGas : Nat) :
+    deploymentFinalState benv tx sender messagePost usedGas =
+      (messagePost.addBal sender ((tx.gas - usedGas) *
+          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)).toB256).addBal
+        benv.stat.coinbase (usedGas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas))).toB256 := by
+  unfold deploymentFinalState
+  rw [deploymentEffectiveGasPrice_two htype, Nat.add_sub_cancel]
 
 end Blanc
