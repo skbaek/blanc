@@ -31,7 +31,8 @@ theorem RetainedXlot.codeAt_of_runFrame
     {out : Except (EvmError × State × AdrSet × Tra) Devm} {a : Adr}
     (retained : RetainedXlot slot) (hrun : RunFrame frame slot out)
     (hfork : CoveredFork frame.inner.benv.stat.fork)
-    (avoid : ∀ root ∈ retained.rawFrames, root.sevm.currentTarget ≠ a) :
+    (avoid : ∀ root ∈ retained.rawFrames, root.sevm.codeAddress = Option.none →
+      root.sevm.currentTarget ≠ a) :
     Xlot.InvAt a slot ∧
       ∀ root ∈ retained.rawFrames, root.devm.getCode a = frame.inner.benv.state.getCode a := by
   cases retained with
@@ -151,7 +152,8 @@ theorem ProcessMessageTrace.codeAt
     {a : Adr} {msg : Msg} {post : Devm}
     (trace : ProcessMessageTrace msg (.ok post))
     (hfork : CoveredFork msg.benv.stat.fork)
-    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.currentTarget ≠ a) :
+    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ a) :
     post.getCode a = msg.benv.state.getCode a ∧
       ∀ root ∈ trace.rawFrames, root.devm.getCode a = msg.benv.state.getCode a := by
   obtain ⟨inv, hroots⟩ := RetainedXlot.codeAt_of_runFrame trace.retained trace.run hfork avoid
@@ -161,7 +163,8 @@ theorem ProcessCreateMessageTrace.codeAt
     {a : Adr} {msg : Msg} {post : Devm}
     (trace : ProcessCreateMessageTrace msg (.ok post))
     (hfork : CoveredFork msg.benv.stat.fork) (hca : msg.codeAddress = none)
-    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.currentTarget ≠ a) :
+    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ a) :
     post.getCode a = msg.benv.state.getCode a ∧
       ∀ root ∈ trace.rawFrames, root.devm.getCode a = msg.benv.state.getCode a := by
   obtain ⟨inv, hroots⟩ := RetainedXlot.codeAt_of_runFrame trace.retained trace.run hfork avoid
@@ -177,7 +180,11 @@ theorem ProcessCreateMessageTrace.codeAt
         have hself := avoid ⟨pc, sevm, pre, execution, run⟩
           (by simp [ProcessCreateMessageTrace.rawFrames, RetainedXlot.rawFrames,
             Exec.rawFrameRoots])
-        exact hself ((Frame.enter_run_currentTarget henter).trans h.symm)
+        have hcode : sevm.codeAddress = none := by
+          obtain ⟨benv, -, hevm⟩ := Frame.enter_run_inv henter
+          have := congrArg (fun e : Evm => e.sta.codeAddress) hevm
+          exact this.trans hca
+        exact hself hcode ((Frame.enter_run_currentTarget henter).trans h.symm)
       exact ProcessCreateMessage.codeAt hne inv hrun
 
 /-- **A settled message call keeps the code at `a`, and so does every frame it enters**, when it
@@ -189,7 +196,8 @@ theorem MessageCallTrace.codeAt
     (hca : msg.target.isNone = true → msg.codeAddress = none)
     (hauth : ∀ auth ∈ msg.tenv.stat.auths, ∀ authority,
       recoverAuthority auth = .ok authority → authority ≠ a)
-    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.currentTarget ≠ a) :
+    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ a) :
     state.getCode a = msg.benv.state.getCode a ∧
       ∀ root ∈ trace.rawFrames, root.devm.getCode a = msg.benv.state.getCode a := by
   cases trace with
@@ -256,7 +264,8 @@ theorem TransactionTrace.codeAt_empty
     (hfork : CoveredFork benv.stat.fork) {a : Adr}
     (hauth : ∀ auth ∈ tx.auths, ∀ authority, recoverAuthority auth = .ok authority →
       authority ≠ a)
-    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.currentTarget ≠ a)
+    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ a)
     (hempty : benv.state.getCode a = ByteArray.empty) :
     (∀ root ∈ trace.rawFrames, root.devm.getCode a = ByteArray.empty) ∧
       state.getCode a = ByteArray.empty := by
@@ -292,7 +301,8 @@ theorem ApplyTransactionsTrace.codeAt_empty
     (hfork : CoveredFork benv.stat.fork) {a : Adr}
     (hauth : ∀ p ∈ txs, ∀ auth ∈ p.2.auths, ∀ authority,
       recoverAuthority auth = .ok authority → authority ≠ a)
-    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.currentTarget ≠ a)
+    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ a)
     (hempty : benv.state.getCode a = ByteArray.empty) :
     (∀ root ∈ trace.rawFrames, root.devm.getCode a = ByteArray.empty) ∧
       finalBenv.state.getCode a = ByteArray.empty := by
@@ -322,7 +332,8 @@ theorem SystemMessageTrace.codeAt
     {benv : Benv} {target : Adr} {data : Bytes} {state : State} {out : MsgCallOutput}
     (trace : SystemMessageTrace benv target data state out)
     (hfork : CoveredFork benv.stat.fork) {a : Adr}
-    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.currentTarget ≠ a) :
+    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ a) :
     state.getCode a = benv.state.getCode a ∧
       ∀ root ∈ trace.rawFrames, root.devm.getCode a = benv.state.getCode a := by
   have hmsgFork : CoveredFork (systemTransactionMessage benv target data).benv.stat.fork := by
@@ -353,7 +364,8 @@ theorem RequestsTrace.codeAt
     {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
     (trace : RequestsTrace benv bout state bout')
     (hfork : CoveredFork benv.stat.fork) {a : Adr}
-    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.currentTarget ≠ a) :
+    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ a) :
     state.getCode a = benv.state.getCode a := by
   obtain ⟨hw, -⟩ := trace.withdrawal.codeAt hfork (fun root member => avoid root (by
     simp only [RequestsTrace.rawFrames, List.mem_append]
@@ -375,23 +387,28 @@ theorem AppliedBodyTrace.codeAt_empty
     (hfork : CoveredFork benv.stat.fork) {a : Adr}
     (hauth : ∀ p ∈ trace.decodedTxs.putIndex, ∀ auth ∈ p.2.auths, ∀ authority,
       recoverAuthority auth = .ok authority → authority ≠ a)
-    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.currentTarget ≠ a)
+    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ a)
     (hempty : benv.state.getCode a = ByteArray.empty) :
     (∀ root ∈ trace.transactions.rawFrames, root.devm.getCode a = ByteArray.empty) ∧
       state.getCode a = ByteArray.empty := by
-  have avoidBeacon : ∀ root ∈ trace.beacon.rawFrames, root.sevm.currentTarget ≠ a :=
+  have avoidBeacon : ∀ root ∈ trace.beacon.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a :=
     fun root member => avoid root (by
       simp only [AppliedBodyTrace.rawFrames, List.mem_append]
       exact Or.inl (Or.inl (Or.inl member)))
-  have avoidHistory : ∀ root ∈ trace.history.rawFrames, root.sevm.currentTarget ≠ a :=
+  have avoidHistory : ∀ root ∈ trace.history.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a :=
     fun root member => avoid root (by
       simp only [AppliedBodyTrace.rawFrames, List.mem_append]
       exact Or.inl (Or.inl (Or.inr member)))
-  have avoidTx : ∀ root ∈ trace.transactions.rawFrames, root.sevm.currentTarget ≠ a :=
+  have avoidTx : ∀ root ∈ trace.transactions.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a :=
     fun root member => avoid root (by
       simp only [AppliedBodyTrace.rawFrames, List.mem_append]
       exact Or.inl (Or.inr member))
-  have avoidRequests : ∀ root ∈ trace.requests.rawFrames, root.sevm.currentTarget ≠ a :=
+  have avoidRequests : ∀ root ∈ trace.requests.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a :=
     fun root member => avoid root (by
       simp only [AppliedBodyTrace.rawFrames, List.mem_append]
       exact Or.inr member)
@@ -428,7 +445,8 @@ theorem ConfiguredBlockTrace.codeAt_empty
     (trace : ConfiguredBlockTrace cfg pre post) {a : Adr}
     (hauth : ∀ p ∈ trace.bodyTrace.decodedTxs.putIndex, ∀ auth ∈ p.2.auths, ∀ authority,
       recoverAuthority auth = .ok authority → authority ≠ a)
-    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.currentTarget ≠ a)
+    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ a)
     (hempty : pre.state.getCode a = ByteArray.empty) :
     (∀ root ∈ trace.bodyTrace.transactions.rawFrames, root.devm.getCode a = ByteArray.empty) ∧
       post.state.getCode a = ByteArray.empty := by
@@ -454,7 +472,8 @@ theorem ConfiguredHistoryTrace.codeAt_empty
     {cfg : ChainConfig} {checkpoint future : BlockChain}
     (trace : ConfiguredHistoryTrace cfg checkpoint future) {a : Adr}
     (hauth : trace.NoAuthorityAt a)
-    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.currentTarget ≠ a)
+    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ a)
     (hempty : checkpoint.state.getCode a = ByteArray.empty) :
     (∀ root ∈ trace.txRawFrames, root.devm.getCode a = ByteArray.empty) ∧
       future.state.getCode a = ByteArray.empty := by

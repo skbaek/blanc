@@ -287,6 +287,45 @@ theorem genericCreate.step_spawn_isCreate
   all_goals obtain ⟨rfl, -⟩ := hs
   rfl
 
+theorem genericCreate.step_spawn_codeAddress
+    {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
+    {mi ms : Nat} {f : Frame} {rsm : Resume}
+    (hs : genericCreate.step sevm devm endowment newAddress mi ms = .spawn f rsm) :
+    f.inner.codeAddress = none := by
+  simp only [genericCreate.step, Bind.bind, Except.bind, Except.assert,
+    assertDynamic, Pure.pure, Except.pure] at hs
+  repeat' split at hs
+  all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
+  all_goals obtain ⟨rfl, -⟩ := hs
+  rfl
+
+theorem genericCall.step_spawn_isCreate_false
+    {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
+    {caller target codeAddress : Adr} {stv isSt : Bool}
+    {ii isz oi osz : Nat} {code : ByteArray} {dp : Bool}
+    {f : Frame} {rsm : Resume}
+    (hs : genericCall.step sevm devm gas value caller target codeAddress stv isSt ii isz oi osz
+      code dp = .spawn f rsm) :
+    f.isCreate = false := by
+  simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure, Except.pure] at hs
+  repeat' split at hs
+  all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
+  all_goals obtain ⟨rfl, -⟩ := hs
+  rfl
+
+/-- A CREATE-family child frame has no code address. -/
+theorem Xinst.step_spawn_create_codeAddress {sevm : Sevm} {devm : Devm} {x : Xinst}
+    (hfork : CoveredFork sevm.benvStat.fork) {f : Frame} {rsm : Resume}
+    (hs : Xinst.step sevm devm x = .spawn f rsm) (hc : f.isCreate = true) :
+    f.inner.codeAddress = none := by
+  rcases Xinst.step_shapeCovered sevm devm x hfork with ⟨ex, hsh, -⟩ |
+    ⟨d, e, na, mi, ms, hf, hsh⟩ |
+    ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
+      hf, -, -, -, hsh⟩ <;> rw [hsh] at hs
+  · cases hs
+  · exact genericCreate.step_spawn_codeAddress hs
+  · exact absurd hc (by rw [genericCall.step_spawn_isCreate_false hs]; simp)
+
 /-- The CREATE frame this instruction enters, if any, never targets `a`. -/
 def Xinst.AvoidsAt (a : Adr) (sevm : Sevm) (devm : Devm) (x : Xinst) : Prop :=
   ∀ f rsm cevm, Xinst.step sevm devm x = .spawn f rsm → f.enter = .run cevm →
@@ -393,10 +432,12 @@ lemma Xinst.avoidsAt_of_step {a : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
   simp only [Ninst.step, XStep.toStep, hs, Ninst.size]
 
 /-- **An execution keeps the code at `a`, and so does every frame it enters**, when it enters no
-frame targeting `a` (in particular no CREATE frame that could install code there). -/
+CREATE frame targeting `a` (a frame with no code address is a CREATE frame, the only kind that
+installs code). -/
 theorem Exec.codeAt_avoid {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) (hfork : CoveredFork sevm.benvStat.fork)
-    (avoid : ∀ root ∈ Exec.rawFrameRoots run, root.sevm.currentTarget ≠ a) :
+    (avoid : ∀ root ∈ Exec.rawFrameRoots run,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a) :
     Execution.Rel (Devm.CodeAt a) pre out ∧
       ∀ root ∈ Exec.rawFrameRoots run, root.devm.getCode a = pre.getCode a := by
   revert hfork avoid
@@ -414,7 +455,7 @@ theorem Exec.codeAt_avoid {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out :
       rfl
   | @cont pc sevm devm pc' devm' ex hstep next ih =>
       intro hfork avoid
-      have hself : sevm.currentTarget ≠ a :=
+      have hself : sevm.codeAddress = none → sevm.currentTarget ≠ a :=
         avoid ⟨pc, sevm, devm, ex, Exec.cont hstep next⟩ (List.mem_cons_self ..)
       have hc : Devm.CodeAt a _ _ := Evm.step_codeAt (xl := .none) (out := .ok _) hfork
         (Xinst.avoidsAt_of_step (fun f rsm pc' cevm h => by rw [hstep] at h; cases h))
@@ -445,7 +486,7 @@ theorem Exec.codeAt_avoid {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out :
       rfl
   | @doneOk pc sevm devm f rsm pc' r devm' ex hstep henter hresume next ih =>
       intro hfork avoid
-      have hself : sevm.currentTarget ≠ a :=
+      have hself : sevm.codeAddress = none → sevm.currentTarget ≠ a :=
         avoid ⟨pc, sevm, devm, ex, Exec.doneOk hstep henter hresume next⟩
           (List.mem_cons_self ..)
       have hc : Devm.CodeAt a _ _ := Evm.step_codeAt (xl := .none) (out := .ok _) hfork
@@ -468,9 +509,14 @@ theorem Exec.codeAt_avoid {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out :
       intro hfork avoid
       have hfork_c := Evm.step_spawn_child_fork hstep henter hfork
       have hstart := (Evm.step_spawn_child hstep henter).2.1 a
-      have hcavoid : cevm.sta.currentTarget ≠ a :=
+      have hcavoid : cevm.sta.codeAddress = none → cevm.sta.currentTarget ≠ a :=
         avoid ⟨cevm.pc, cevm.sta, cevm.dyna, raw, child⟩
           (by simp [Exec.rawFrameRoots, Exec.rawFrameDescendants])
+      have hcode : cevm.sta.codeAddress = f.inner.codeAddress := by
+        obtain ⟨benv, -, h⟩ := Frame.enter_run_inv henter
+        rw [h]
+        rfl
+      obtain ⟨x, -, hxs, -⟩ := Evm.step_spawn_inv hstep
       obtain ⟨hrel, hroots⟩ := ih hfork_c (by
         intro root member
         exact avoid root (by
@@ -479,7 +525,8 @@ theorem Exec.codeAt_avoid {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out :
       have hc := Evm.step_codeAt (a := a) (xl := .some ⟨_, _⟩) (out := .error _) hfork
         (Xinst.avoidsAt_of_step (fun f' rsm' pc'' cevm' h hen hcr => by
           rw [hstep] at h; cases h; rw [henter] at hen; cases hen
-          rw [← Frame.enter_run_currentTarget henter]; exact hcavoid))
+          rw [← Frame.enter_run_currentTarget henter]
+          exact hcavoid (hcode.trans (Xinst.step_spawn_create_codeAddress hfork hxs hcr))))
         hrel (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hresume.symm⟩)
       refine ⟨hc, ?_⟩
       intro root member
@@ -491,14 +538,19 @@ theorem Exec.codeAt_avoid {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out :
   | @runOk pc sevm devm f rsm pc' cevm raw devm' ex hstep henter child hresume next
       ihChild ihNext =>
       intro hfork avoid
-      have hself : sevm.currentTarget ≠ a :=
+      have hself : sevm.codeAddress = none → sevm.currentTarget ≠ a :=
         avoid ⟨pc, sevm, devm, ex, Exec.runOk hstep henter child hresume next⟩
           (List.mem_cons_self ..)
       have hfork_c := Evm.step_spawn_child_fork hstep henter hfork
       have hstart := (Evm.step_spawn_child hstep henter).2.1 a
-      have hcavoid : cevm.sta.currentTarget ≠ a :=
+      have hcavoid : cevm.sta.codeAddress = none → cevm.sta.currentTarget ≠ a :=
         avoid ⟨cevm.pc, cevm.sta, cevm.dyna, raw, child⟩
           (by simp [Exec.rawFrameRoots, Exec.rawFrameDescendants])
+      have hcode : cevm.sta.codeAddress = f.inner.codeAddress := by
+        obtain ⟨benv, -, h⟩ := Frame.enter_run_inv henter
+        rw [h]
+        rfl
+      obtain ⟨x, -, hxs, -⟩ := Evm.step_spawn_inv hstep
       obtain ⟨hrelChild, hrootsChild⟩ := ihChild hfork_c (by
         intro root member
         exact avoid root (by
@@ -510,7 +562,8 @@ theorem Exec.codeAt_avoid {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out :
       have hc : Devm.CodeAt a _ _ := Evm.step_codeAt (xl := .some ⟨_, _⟩) (out := .ok _) hfork
         (Xinst.avoidsAt_of_step (fun f' rsm' pc'' cevm' h hen hcr => by
           rw [hstep] at h; cases h; rw [henter] at hen; cases hen
-          rw [← Frame.enter_run_currentTarget henter]; exact hcavoid))
+          rw [← Frame.enter_run_currentTarget henter]
+          exact hcavoid (hcode.trans (Xinst.step_spawn_create_codeAddress hfork hxs hcr))))
         hrelChild (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hresume.symm⟩)
       obtain ⟨hrel, hroots⟩ := ihNext hfork (by
         intro root member
