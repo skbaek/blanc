@@ -179,6 +179,9 @@ SHARED += ["Lift.Cursor", "Lift.CallRestriction", "LockExclusion", "OwnerDiscipl
 # engine with its child runs and spawn facts (deployed-lido-vyper-v1, V-): contract-neutral.
 SHARED += ["Lift.MemMap", "Lift.CheckMem", "Lift.CodeTriesData", "Lift.WitnessArms", "Lift.Witness",
            "Lift.WitnessChild", "Lift.WitnessSpawn", "Lift.NodeWalk"]
+# Chunk boundaries and stage composition of a witness run, the literal-free scaffolding the
+# V- witness's heavy frames instantiate (vminus-tx-v1): contract-neutral.
+SHARED += ["Lift.WitnessBoundary"]
 
 CONTRACTS = {
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",

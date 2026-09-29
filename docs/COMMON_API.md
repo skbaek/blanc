@@ -2888,7 +2888,13 @@ contract-neutral.
   [`Blanc/Lift/WitnessChild.lean`](../Blanc/Lift/WitnessChild.lean); the frame-level spawn
   fact `SpawnedBy sevm devm x child` (`Xinst.step` spawns a frame entering as `child`) and
   `spawnedBy_of_callPrep`, `spawnedBy_of_childStart`, `spawnedBy_of_dcallPrep` in
-  [`Blanc/Lift/WitnessSpawn.lean`](../Blanc/Lift/WitnessSpawn.lean). Code tries given as
+  [`Blanc/Lift/WitnessSpawn.lean`](../Blanc/Lift/WitnessSpawn.lean); the literal-free
+  scaffolding for deciding a long `wrun` as kernel chunks between literal boundaries
+  (`Boundary.Bnd`/`obsB`/`cfgOf`/`obsD`/`obsDOk`, their composition `obsD_chain`,
+  `obsD_chain3`, `obsB_of_obsD`, `run_of_obsB`; the refund-free `Bnd1`/`cfgOf1`/`obsD1`/
+  `obsDOk1`; and a two-code-child frame's staging `callPairFrom`/`callPairA`/`callPairB`/
+  `callPairFrom_stages`) in
+  [`Blanc/Lift/WitnessBoundary.lean`](../Blanc/Lift/WitnessBoundary.lean). Code tries given as
   generated literals (checked once by kernel `rfl`): `CodeTries.ofData` in
   [`Blanc/Lift/CodeTriesData.lean`](../Blanc/Lift/CodeTriesData.lean). Worked use:
   `Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Top.lean` (`vminus_witness`).

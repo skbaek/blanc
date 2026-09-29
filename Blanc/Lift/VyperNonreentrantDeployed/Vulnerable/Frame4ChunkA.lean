@@ -10,7 +10,7 @@ language server. -/
 
 namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree
 
-open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.ConcreteRun
+open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.Witness.Boundary Blanc.ConcreteRun
 open Blanc.Lift.VyperNonreentrantDeployed Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
 
 /-- Frame 4's machine at step 880. -/
@@ -217,17 +217,8 @@ theorem chunkA3 : ∀ (m : Meta) (w : World),
   kernel_forall_rfl
 
 theorem chunkA : obsB (wrun fs1 e4.sta 2625 c4) = obsBEELS := by
-  have h : obsD bnd2625 (wrun fs1 sta4 2625 c4) = obsDOk bnd2625 := by
-    rw [show (2625 : Nat) = 880 + 873 + 872 from rfl]
-    rw [c4_eq]
-    exact obsD_chain (P := fun r => obsD bnd2625 r = obsDOk bnd2625)
-      (obsD_chain (P := fun r => obsD bnd1753 r = obsDOk bnd1753) (chunkA1 _ _) chunkA2) chunkA3
   rw [e4_sta_eq]
-  generalize wrun fs1 sta4 2625 c4 = r at h ⊢
-  rcases r with c | _ | _
-  · rw [cfg_of_obsD h]
-    exact obsB_cfgOf rfl _ _
-  · simp [obsD, obsDOk, bnd2625] at h
-  · simp [obsD, obsDOk, bnd2625] at h
+  exact obsB_of_obsD (obsD_chain3 (n1 := 880) (n2 := 873) (n3 := 872) c4_eq chunkA1 chunkA2 chunkA3)
+    rfl
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree

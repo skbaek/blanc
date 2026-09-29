@@ -13,7 +13,7 @@ the attacker child.
 
 namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
 
-open Jaune Blanc.Lift Blanc.Lift.Witness
+open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.Witness.Boundary
 open Blanc.Lift.VyperNonreentrantDeployed
 
 theorem fs1_zero : fs1[0]? = some t_0000_c0 := by kernel_rfl
@@ -34,7 +34,7 @@ theorem frame1_full (d1 : Devm)
       (storOf post.state proxyAddress (2 : Nat).toB256).toNat = 0 ∧ post.error = none := by
   have hk := frame1_kernel d1
   rw [childObs_eq g1 o1 e1] at hk
-  unfold run1 run1From at hk
+  unfold run1 run1From callPairFrom at hk
   split at hk
   · rename_i c1 h1
     have hc1 : cfg339 = c1 := by unfold cfg339; rw [h1]

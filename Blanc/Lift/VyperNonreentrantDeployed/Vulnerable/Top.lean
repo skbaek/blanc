@@ -25,7 +25,7 @@ execution, not transaction admission.
 
 namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top
 
-open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.ConcreteRun
+open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.Witness.Boundary Blanc.ConcreteRun
 open Blanc.Lift.VyperNonreentrantDeployed Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
 open Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree
 
@@ -221,7 +221,7 @@ theorem vminus_witness :
     have hA' := chunkA
     generalize hr : wrun fs1 e4.sta 2625 c4 = r at hA'
     rcases r with c | _ | _
-    · have hc := cfgB_of_obsB hA'
+    · have hc : c = cfgB c.devm.meta c.devm.world := cfg_of_obsB hA' rfl
       have hagc : Agree c := (wrun_cont hr).1 hag4
       refine ⟨c, rfl, hagc, (congrArg Cfg.f hc).trans rfl, ?_, ?_⟩
       · rw [hagc.2.2.1, congrArg Cfg.stor hc]; rfl

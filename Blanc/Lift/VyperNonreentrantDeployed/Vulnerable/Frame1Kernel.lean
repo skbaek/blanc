@@ -1,4 +1,5 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1Run
+import Blanc.Lift.WitnessBoundary
 
 /-!
 V- witness, frame 1 whole, the kernel decisions: for every settled attacker child with the
@@ -21,95 +22,8 @@ only, so the kernel evaluates nothing outside the four decisions.  Kernel only
 
 namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
 
-open Jaune Blanc.Lift Blanc.Lift.Witness
+open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.Witness.Boundary
 open Blanc.Lift.VyperNonreentrantDeployed
-
-/-! ### Boundaries without the refund counter -/
-
-/-- A frame-1 boundary: machine, node, pending returns, the four shadows, output and return
-data. -/
-abbrev Bnd1 := Mach × SFunc × List SFunc × List (Adr × B256) × List Adr × StorShadow ×
-  AcctShadow × Bytes × Bytes
-
-/-- The configuration at boundary `x` (with no error), over a free world and free
-bookkeeping (the refund counter included). -/
-def cfgOf1 : Bnd1 → Meta → World → Cfg
-  | (mach, f, K, keys, adrs, stor, acs, out, rd), m, w =>
-    ⟨⟨mach, { m with output := out, returnData := rd, error := none }, w⟩, f, K, keys, adrs, stor,
-      acs⟩
-
-/-- An account-shadow entry's address, nonce and balance: what a boundary decides. -/
-def acctKey (p : Adr × Acct) : Adr × UInt64 × B256 := (p.1, p.2.nonce, p.2.bal)
-
-/-- An account-shadow entry's storage and code: what a boundary compares as terms. -/
-def acctRest (p : Adr × Acct) : Stor × ByteArray := (p.2.stor, p.2.code)
-
-/-- `acctRest` of a boundary's literal shadow, by its own recursion: were both sides of a
-boundary's comparison `List.map acctRest`, the kernel would first compare the two shadows
-themselves as terms. -/
-def restsOf : AcctShadow → List (Stor × ByteArray)
-  | [] => []
-  | p :: l => (p.2.stor, p.2.code) :: restsOf l
-
-theorem restsOf_eq : ∀ l : AcctShadow, restsOf l = l.map acctRest
-  | [] => rfl
-  | _ :: l => by rw [restsOf, List.map_cons, restsOf_eq l]; rfl
-
-theorem acs_eq_of_views : ∀ {l l' : AcctShadow}, l.map acctKey = l'.map acctKey →
-    l.map acctRest = l'.map acctRest → l = l'
-  | [], [], _, _ => rfl
-  | [], _ :: _, h, _ => by simp at h
-  | _ :: _, [], h, _ => by simp at h
-  | (_, ⟨_, _, _, _⟩) :: _, (_, ⟨_, _, _, _⟩) :: _, h1, h2 => by
-    simp only [List.map_cons, List.cons.injEq, acctKey, acctRest, Prod.mk.injEq] at h1 h2
-    obtain ⟨⟨rfl, rfl, rfl⟩, h1⟩ := h1
-    obtain ⟨⟨rfl, rfl⟩, h2⟩ := h2
-    rw [acs_eq_of_views h1 h2]
-
-/-- A chunk's end decided against boundary `x`: the machine, the storage-key, address and
-storage shadows, each account's address, nonce and balance, the output and the return data by
-`decide`; the node, the pending returns and each account's storage and code as terms.  After
-the token's `CALL` some accounts' addresses are computed from stack words, and comparing such
-a shadow to a literal as a term exhausts the kernel. -/
-def obsD1 : Bnd1 → Res → Option (Bool × SFunc × List SFunc × List (Stor × ByteArray))
-  | (mach, _, _, keys, adrs, stor, acs, out, rd), .cont c =>
-    some (decide (c.devm.mach.stack = mach.stack) &&
-      decide (c.devm.mach.memory.data.toList = mach.memory.data.toList) &&
-      decide (c.devm.mach.memory.size = mach.memory.size) &&
-      decide (c.devm.mach.gasLeft = mach.gasLeft) &&
-      decide (c.devm.mach.stateGas = mach.stateGas) && decide (c.keys = keys) &&
-      decide (c.adrs = adrs) && decide (c.stor = stor) &&
-      decide (c.acs.map acctKey = acs.map acctKey) && decide (c.devm.output = out) &&
-      decide (c.devm.returnData = rd) && c.devm.error.isNone, c.f, c.K, c.acs.map acctRest)
-  | _, _ => none
-
-/-- What `obsD1` shows at boundary `x`. -/
-def obsDOk1 : Bnd1 → Option (Bool × SFunc × List SFunc × List (Stor × ByteArray))
-  | (_, f, K, _, _, _, acs, _, _) => some (true, f, K, restsOf acs)
-
-/-- A configuration decided at boundary `x` is `cfgOf1 x` at its own world and bookkeeping. -/
-theorem cfg_of_obsD1 {c : Cfg} {x : Bnd1} (h : obsD1 x (.cont c) = obsDOk1 x) :
-    c = cfgOf1 x c.devm.meta c.devm.world := by
-  rcases x with ⟨⟨s, ⟨data, size⟩, g, sg⟩, f, K, keys, adrs, stor, acs, out, rd⟩
-  rcases c with ⟨⟨⟨s', ⟨data', size'⟩, g', sg'⟩, m, w⟩, f', K', keys', adrs', stor', acs'⟩
-  simp only [obsD1, obsDOk1, Option.some.injEq, Prod.mk.injEq, Bool.and_eq_true,
-    decide_eq_true_eq, and_assoc] at h
-  obtain ⟨hs, hd, hsz, hg, hsg, hk, ha, hst, hca, ho, hrd, he, hf, hK, hcv⟩ := h
-  have hd' : data' = data := Array.toList_inj.mp hd
-  have hc : acs' = acs := acs_eq_of_views hca (hcv.trans (restsOf_eq acs))
-  subst hs hd' hsz hg hsg hk ha hst hf hK hc
-  rcases m with ⟨_, _, _, _, _, _, _, _, _, _, _⟩
-  simp only [Devm.output, Devm.returnData, Devm.error, Option.isNone_iff_eq_none] at ho hrd he
-  subst ho hrd he
-  rfl
-
-/-- A result decided at boundary `x` is `cfgOf1 x` at some world and bookkeeping. -/
-theorem obsD1_cont {x : Bnd1} {r : Res} (h : obsD1 x r = obsDOk1 x) :
-    ∃ m w, r = .cont (cfgOf1 x m w) := by
-  rcases r with c | _ | _
-  · exact ⟨_, _, congrArg Res.cont (cfg_of_obsD1 h)⟩
-  · rcases x with ⟨_, _, _, _, _, _, _, _, _⟩; simp [obsD1, obsDOk1] at h
-  · rcases x with ⟨_, _, _, _, _, _, _, _, _⟩; simp [obsD1, obsDOk1] at h
 
 /-! ### The boundaries -/
 
@@ -359,26 +273,11 @@ def bnd578 : Bnd1 := (mach578, t_1d27_c53, [], keys578, adrs578, stor578, acs578
 
 /-- Frame 1 from the result `r` of its first 339 steps to step 343: the attacker child's
 resume, three steps. -/
-def run1a (r : Res) (d1 : Devm) : Res :=
-  match r with
-  | .cont c1 =>
-    match callResume sevm1 c1 d1 keysA adrsA storA acsA with
-    | some c2 => wrun fs1 sevm1 3 c2
-    | none => .stuck
-  | _ => .stuck
+def run1a (r : Res) (d1 : Devm) : Res := callPairA fs1 sevm1 keysA adrsA storA acsA 3 r d1
 
 /-- Frame 1 from step 563 to step 578: to the token's `CALL`, the token child, its resume,
 three steps. -/
-def run1b (c : Cfg) : Res :=
-  match wrun fs1 sevm1 11 c with
-  | .cont c3 =>
-    match childRun fsT Token.code sevm1 23 c3 with
-    | .done (.halted d2) cl =>
-      match callResume sevm1 c3 d2 cl.keys cl.adrs cl.stor cl.acs with
-      | some c4 => wrun fs1 sevm1 3 c4
-      | none => .stuck
-    | _ => .stuck
-  | _ => .stuck
+def run1b (c : Cfg) : Res := callPairB fs1 sevm1 fsT Token.code 11 23 3 c
 
 theorem frame1_k1 : ∀ d1 : Devm,
     obsD1 bnd343 (run1a (wrun fs1 sevm1 339 c0) (childObs gasA [] d1)) = obsDOk1 bnd343 := by
@@ -398,48 +297,17 @@ theorem frame1_k4 : ∀ (m : Meta) (w : World),
 
 /-! ### The whole of frame 1 -/
 
-/-- The four stages compose, over any boundaries and any prefix result: every configuration
-the proof cases on is a variable, so the kernel evaluates nothing here. -/
+/-- The four stages compose (`Boundary.callPairFrom_stages`), over any boundaries and any
+prefix result: every configuration the proof cases on is a variable, so the kernel evaluates
+nothing here. -/
 theorem run1From_stages {r0 : Res} {d : Devm} {x1 x2 x3 : Bnd1}
     (h1 : obsD1 x1 (run1a r0 d) = obsDOk1 x1)
     (h2 : ∀ m w, obsD1 x2 (wrun fs1 sevm1 220 (cfgOf1 x1 m w)) = obsDOk1 x2)
     (h3 : ∀ m w, obsD1 x3 (run1b (cfgOf1 x2 m w)) = obsDOk1 x3)
     (h4 : ∀ m w, obs1 (wrun fs1 sevm1 185 (cfgOf1 x3 m w)) = obs1EELS) :
-    obs1 (run1From r0 d) = obs1EELS := by
-  unfold run1a at h1
-  unfold run1From
-  rcases r0 with c1 | _ | _
-  · dsimp only at h1 ⊢
-    generalize callResume sevm1 c1 d keysA adrsA storA acsA = o at h1 ⊢
-    rcases o with _ | c2
-    · obtain ⟨_, _, e⟩ := obsD1_cont h1; cases e
-    · dsimp only at h1 ⊢
-      obtain ⟨m, w, e⟩ := obsD1_cont h1
-      rw [show (234 : Nat) = 3 + (220 + 11) from rfl, wrun_add, e]
-      dsimp only
-      obtain ⟨m', w', e'⟩ := obsD1_cont (h2 m w)
-      rw [wrun_add, e']
-      dsimp only
-      have h3' := h3 m' w'
-      unfold run1b at h3'
-      generalize wrun fs1 sevm1 11 (cfgOf1 x2 m' w') = r4 at h3' ⊢
-      rcases r4 with c3 | _ | _
-      · dsimp only at h3' ⊢
-        generalize childRun fsT Token.code sevm1 23 c3 = r5 at h3' ⊢
-        rcases r5 with _ | ⟨d2 | d2, cl⟩ | _
-        all_goals try (dsimp only at h3'; obtain ⟨_, _, e⟩ := obsD1_cont h3'; cases e)
-        dsimp only at h3' ⊢
-        generalize callResume sevm1 c3 d2 cl.keys cl.adrs cl.stor cl.acs = o4 at h3' ⊢
-        rcases o4 with _ | c4
-        · obtain ⟨_, _, e⟩ := obsD1_cont h3'; cases e
-        · dsimp only at h3' ⊢
-          obtain ⟨m'', w'', e''⟩ := obsD1_cont h3'
-          rw [show (188 : Nat) = 3 + 185 from rfl, wrun_add, e'']
-          exact h4 m'' w''
-      · obtain ⟨_, _, e⟩ := obsD1_cont h3'; cases e
-      · obtain ⟨_, _, e⟩ := obsD1_cont h3'; cases e
-  · obtain ⟨_, _, e⟩ := obsD1_cont h1; cases e
-  · obtain ⟨_, _, e⟩ := obsD1_cont h1; cases e
+    obs1 (run1From r0 d) = obs1EELS :=
+  callPairFrom_stages (P := fun r => obs1 r = obs1EELS) (n1 := 3) (n2 := 220) (n3 := 11)
+    (n4 := 3) (n5 := 185) rfl rfl h1 h2 h3 h4
 
 theorem frame1_kernel : ∀ d1 : Devm, obs1 (run1 (childObs gasA [] d1)) = obs1EELS := fun d1 =>
   run1From_stages (frame1_k1 d1) frame1_k2 frame1_k3 frame1_k4

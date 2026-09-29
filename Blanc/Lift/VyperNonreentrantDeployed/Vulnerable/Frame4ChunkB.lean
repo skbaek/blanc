@@ -9,7 +9,7 @@ file in the language server. -/
 
 namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree
 
-open Jaune Blanc.Lift Blanc.Lift.Witness
+open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.Witness.Boundary
 open Blanc.Lift.VyperNonreentrantDeployed Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
 
 /-- Frame 4's machine at step 3563. -/
