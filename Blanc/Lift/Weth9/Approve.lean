@@ -245,7 +245,8 @@ private theorem wrap_tree_eq :
 
 private theorem wrap_line_stack {sevm : Sevm} {s s' : Devm}
     (run : Line.Run sevm s wrapLine s') :
-    ∃ t v : B256, ∃ ys : Stack, t :: v :: allowArg sevm :: ys <<+ s'.stack := by
+    ∃ t : B256, ∃ ys : Stack,
+      t :: Sevm.dataWord sevm 36 :: allowArg sevm :: ys <<+ s'.stack := by
   unfold wrapLine pF at run
   obtain ⟨s1, h1, run⟩ := Line.of_run_cons run
   obtain ⟨s2, h2, run⟩ := Line.of_run_cons run
@@ -302,8 +303,11 @@ private theorem wrap_line_stack {sevm : Sevm} {s s' : Devm}
       (of_run_swap h13) hp12
   have hp14 : [(32 : B256) + 4, (32 : B256) + 4, 4, allowArg sevm, r] <<+ s14.stack :=
     prefix_of_dup_val h14 (by show_nth) hp13
-  obtain ⟨v, hp15⟩ : ∃ v : B256, [v, (32 : B256) + 4, 4, allowArg sevm, r] <<+ s15.stack :=
-    ⟨_, prefix_of_calldataload_val h15 hp14⟩
+  have h36 : (32 : B256) + 4 = 36 := by decide
+  have hp15 : [Sevm.dataWord sevm 36, (32 : B256) + 4, 4, allowArg sevm, r] <<+ s15.stack := by
+    have := prefix_of_calldataload_val h15 hp14
+    rwa [h36] at this
+  generalize Sevm.dataWord sevm 36 = v at hp15 ⊢
   have hp16 : [(32 : B256) + 4, v, 4, allowArg sevm, r] <<+ s16.stack :=
     Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
       (of_run_swap h16) hp15
@@ -319,19 +323,17 @@ private theorem wrap_line_stack {sevm : Sevm} {s s' : Devm}
     Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
       (of_run_swap h21) hp20
   have hp23 := prefix_of_pop (of_run_pop h23) (prefix_of_pop (of_run_pop h22) hp21)
-  exact ⟨_, v, [r], prefix_of_push (of_run_push h24) hp23⟩
+  exact ⟨_, [r], prefix_of_push (of_run_push h24) hp23⟩
 
-/-- **Entry 27 wrapper effect.**  The `approve` selector wrapper leaves every balance alone, and
-either leaves the contract's storage alone (its state-silent revert branch) or writes exactly one
-word at the allowance slot `allowance[caller][spender]`, `spender` the address-masked first
-argument. -/
-theorem approve_wrapper_effect {sevm : Sevm} {d : Devm} {o : Outcome} {w : SFunc}
+/-- **Entry 27 wrapper effect, exactly.**  A successful run of the `approve` selector wrapper leaves
+every balance alone and writes exactly one word: `calldata[36:68]` at the allowance slot
+`allowance[caller][spender]`, `spender` the address-masked first argument. -/
+theorem approve_wrapper_ok {sevm : Sevm} {d : Devm} {o : Outcome} {w : SFunc}
     (hw : prog[27]? = some w) (run : SFunc.Run prog sevm d w o) :
     (Outcome.devm o).getBal = d.getBal ∧
-      (Devm.getStor (Outcome.devm o) sevm.currentTarget = Devm.getStor d sevm.currentTarget ∨
-        ∃ v, Devm.getStor (Outcome.devm o) sevm.currentTarget =
-          (Devm.getStor d sevm.currentTarget).set
-            (allowKey sevm.caller.toB256 (allowArg sevm)) v) := by
+      Devm.getStor (Outcome.devm o) sevm.currentTarget =
+        (Devm.getStor d sevm.currentTarget).set
+          (allowSlot sevm.caller (Sevm.dataWord sevm 4).toAdr) (Sevm.dataWord sevm 36) := by
   have hw' : w = t_0147_c27 := by
     simpa [prog, Cert.prog, cert] using hw.symm
   subst w
@@ -348,13 +350,12 @@ theorem approve_wrapper_effect {sevm : Sevm} {d : Devm} {o : Outcome} {w : SFunc
   have s03 : Same d d3 := (Same.of_state burn.state).trans
     ⟨Line.of_inv Devm.getStor (by line_inv) (.cons h1 (.cons h2 (.cons h3 .nil))),
       Line.of_inv Devm.getBal (by line_inv) (.cons h1 (.cons h2 (.cons h3 .nil)))⟩
+  have hkey : allowKey sevm.caller.toB256 (allowArg sevm) =
+      allowSlot sevm.caller (Sevm.dataWord sevm 4).toAdr := by
+    rw [allowArg, and_mask_word]
+    rfl
   cases r with
-  | zero x pop r =>
-    rename_i d4
-    have hst := SFunc.Run.state_of_silent (S := []) rfl (by decide) (by decide) r
-    have hs : Same d (Outcome.devm o) :=
-      (s03.trans (Same.of_state pop.state)).trans (Same.of_state hst.symm)
-    exact ⟨hs.bal.symm, Or.inl (congrFun hs.stor _).symm⟩
+  | zero x pop r => exact absurd r not_run_revert_tail
   | succ x ww hnz pop r =>
     rename_i d4
     have s04 : Same d d4 := s03.trans (Same.of_state pop.state)
@@ -366,24 +367,44 @@ theorem approve_wrapper_effect {sevm : Sevm} {d : Devm} {o : Outcome} {w : SFunc
     rcases run_chain_prefix wrapLine [] r with ⟨d6, hl, r⟩
     have s06 : Same d d6 := s05.trans
       ⟨Line.of_inv Devm.getStor (by line_inv) hl, Line.of_inv Devm.getBal (by line_inv) hl⟩
-    obtain ⟨t, v, ys, hstk⟩ := wrap_line_stack hl
+    obtain ⟨t, ys, hstk⟩ := wrap_line_stack hl
     change SFunc.Run prog sevm d6 (.callNext 11 t_0187_c27) o at r
     cases r with
     | @callHalt _ d7 _ _ _ g x lookup pop2 rc =>
       have s07 : Same d d7 := s06.trans (Same.of_state pop2.state)
       obtain ⟨hs, hb⟩ := approve_effect lookup (popBurn_pref pop2 hstk).2 rc
-      rw [allowArg_mask] at hs
-      refine ⟨hb.trans s07.bal.symm, Or.inr ⟨v, hs.trans ?_⟩⟩
+      rw [allowArg_mask, hkey] at hs
+      refine ⟨hb.trans s07.bal.symm, hs.trans ?_⟩
       rw [s07.stor]
     | @callRet _ d7 d8 _ _ g _ x lookup pop2 rc tail =>
       have s07 : Same d d7 := s06.trans (Same.of_state pop2.state)
       obtain ⟨hs, hb⟩ := approve_effect lookup (popBurn_pref pop2 hstk).2 rc
-      rw [allowArg_mask] at hs
+      rw [allowArg_mask, hkey] at hs
       have hst := SFunc.Run.state_of_silent (S := []) rfl (by decide) (by decide) tail
       have s8o : Same d8 (Outcome.devm o) := Same.of_state hst.symm
       refine ⟨s8o.bal.symm.trans (hb.trans s07.bal.symm),
-        Or.inr ⟨v, (congrFun s8o.stor.symm _).trans (hs.trans ?_)⟩⟩
+        (congrFun s8o.stor.symm _).trans (hs.trans ?_)⟩
       rw [s07.stor]
+
+/-- **Entry 27 wrapper effect.**  The `approve` selector wrapper leaves every balance alone, and
+either leaves the contract's storage alone (its state-silent revert branch) or writes exactly one
+word at the allowance slot `allowance[caller][spender]`, `spender` the address-masked first
+argument. -/
+theorem approve_wrapper_effect {sevm : Sevm} {d : Devm} {o : Outcome} {w : SFunc}
+    (hw : prog[27]? = some w) (run : SFunc.Run prog sevm d w o) :
+    (Outcome.devm o).getBal = d.getBal ∧
+      (Devm.getStor (Outcome.devm o) sevm.currentTarget = Devm.getStor d sevm.currentTarget ∨
+        ∃ v, Devm.getStor (Outcome.devm o) sevm.currentTarget =
+          (Devm.getStor d sevm.currentTarget).set
+            (allowKey sevm.caller.toB256 (allowArg sevm)) v) := by
+  obtain ⟨hb, hs⟩ := approve_wrapper_ok hw run
+  refine ⟨hb, Or.inr ⟨Sevm.dataWord sevm 36, ?_⟩⟩
+  have hkey : allowKey sevm.caller.toB256 (allowArg sevm) =
+      allowSlot sevm.caller (Sevm.dataWord sevm 4).toAdr := by
+    rw [allowArg, and_mask_word]
+    rfl
+  rw [hkey]
+  exact hs
 
 /-- **Entry 27 wrapper spec.**  Under the local allowance-collision premise,
 the `approve` selector wrapper turns solvency with the callvalue in flight into
