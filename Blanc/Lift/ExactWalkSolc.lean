@@ -283,6 +283,58 @@ charges (no arithmetic on their, possibly large, definitions). -/
 macro "rsent" : tactic => `(tactic| (repeat (first | assumption | refine Nat.lt_add_right _ ?_)))
 macro "rsstoreC" : tactic => `(tactic|
   refine rx_sstoreC (by assumption) (by assumption) (by rsent) (by assumption) ?_)
+/-! ## What a selected `SLOAD` and `SSTORE` leave of an account -/
+
+theorem afterSload_getAcct {sevm : Sevm} {b : Devm} {key : B256} (a : Adr) :
+    (afterSload sevm b key).getAcct a = b.getAcct a := by
+  unfold afterSload; split <;> rfl
+
+/-- A selected `SSTORE` changes the storage of the executing account and nothing else of any account:
+nonce, balance and code stay. -/
+theorem afterSstore_getAcct {sevm : Sevm} {b : Devm} {key value : B256} (a : Adr) :
+    ∃ st, (afterSstore sevm b key value).getAcct a = { b.getAcct a with stor := st } := by
+  have core : ∀ (d : Devm) (rc : Int),
+      ∃ st, ((d.withRefundCounter rc).setStorVal sevm.currentTarget key value).getAcct a =
+        { d.getAcct a with stor := st } := by
+    intro d rc
+    show ∃ st, ((d.withRefundCounter rc).state.setStorVal sevm.currentTarget key value).get a =
+      { d.state.get a with stor := st }
+    unfold State.setStorVal
+    by_cases h : sevm.currentTarget = a
+    · subst h
+      rw [State.get_set_self]
+      exact ⟨_, rfl⟩
+    · rw [State.get_set_ne _ h]
+      exact ⟨(d.state.get a).stor, rfl⟩
+  unfold afterSstore
+  split
+  · exact core _ _
+  · obtain ⟨st, h⟩ := core (addAccessedStorageKey b sevm.currentTarget key) _
+    exact ⟨st, h⟩
+
+theorem afterSstore_getBal {sevm : Sevm} {b : Devm} {key value : B256} (a : Adr) :
+    (afterSstore sevm b key value).getBal a = b.getBal a := by
+  obtain ⟨st, h⟩ := afterSstore_getAcct (sevm := sevm) (b := b) (key := key) (value := value) a
+  show ((afterSstore sevm b key value).getAcct a).bal = (b.getAcct a).bal
+  rw [h]
+
+theorem afterSstore_empty {sevm : Sevm} {b : Devm} {key value : B256} (a : Adr) :
+    ((afterSstore sevm b key value).getAcct a).Empty ↔ (b.getAcct a).Empty := by
+  obtain ⟨st, h⟩ := afterSstore_getAcct (sevm := sevm) (b := b) (key := key) (value := value) a
+  rw [h]
+  rfl
+
+theorem ltCheck_zero_of_le {x y : B256} (h : y ≤ x) : B256.ltCheck x y = 0 := by
+  simp [B256.ltCheck, B256.not_lt.mpr h]
+
+/-- `require(x >= y)` on a value just read from storage: the comparison, its three `ISZERO`s and the
+jump (taken).  The hypothesis `h : y ≤ x` is named (a search of the context could compare
+unrelated hashes). -/
+macro "rreq " h:ident : tactic => `(tactic|
+  (refine rx_lt (v := 0) (ltCheck_zero_of_le ?_) (by rroom) ?_
+   · first | (simp only [getStorVal_afterSload]; exact $h) | exact $h
+   riszero; riszero; riszero; rpush
+   refine rx_branch_succ (by decide) ?_))
 macro "rlog3" : tactic => `(tactic|
   refine rx_log3W (by assumption) (by assumption) (by decide) (by decide) ?_)
 macro "rlog2" : tactic => `(tactic|

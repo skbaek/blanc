@@ -57,20 +57,10 @@ abbrev pT0 : Devm := afterSstore sevm (pA3 sevm b src) (allowSlot src sevm.calle
 
 end PathChain
 
-theorem ltCheck_zero_of_le {x y : B256} (h : y ≤ x) : B256.ltCheck x y = 0 := by
-  simp [B256.ltCheck, B256.not_lt.mpr h]
-
-/-- `require(x >= wad)` on a value read from storage: the comparison, its three `ISZERO`s, the jump. -/
-macro "rxf_lt " h:ident : tactic => `(tactic|
-  (refine rx_lt (v := 0) (ltCheck_zero_of_le ?_) (by rroom) ?_
-   · first | (simp only [getStorVal_afterSload]; exact $h) | exact $h
-   riszero; riszero; riszero; rpush
-   refine rx_branch_succ (by decide) ?_))
-
 /-- The `transferFrom` body's opening: the hash of `src`'s balance slot, its `SLOAD`, and the
 `require(balanceOf[src] >= wad)` branch (taken). -/
 macro "rxf_head " h:ident : tactic => `(tactic|
-  (rdest; rpush; rdup; rpush; rpush; rdup; rhash; rsloadC; rxf_lt $h; rdest))
+  (rdest; rpush; rdup; rpush; rpush; rdup; rhash; rsloadC; rreq $h; rdest))
 
 /-- The `transferFrom` body's tail (entry `0x08cf`) from the balance `SLOAD`s on: the two balance
 updates, the `Transfer` event, `true`, up to the return jump.  The charges are named atoms
@@ -313,7 +303,7 @@ theorem xfer_allowance {sevm : Sevm} {a1 : Devm} {G : Nat} {S : List B256} {M : 
   refine rx_caller (by rroom) ?_
   rhash
   rsloadC
-  rxf_lt hal
+  rreq hal
   rdest
   rdup
   rpush
