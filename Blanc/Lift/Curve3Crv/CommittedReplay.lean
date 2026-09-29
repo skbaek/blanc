@@ -40,7 +40,9 @@ def frameInvocation (frame : Exec.Frame) : WriterInvocation :=
   ⟨frame.sevm, frame.pre, frame.post, ownerWordOf frame.sevm⟩
 
 /-- A settled frame contributes its invocation exactly when it runs a writer
-selector at the selected address. -/
+selector at the selected address.
+
+The `currentTarget = ca` filter is the storage owner, so frames running Curve's code at another address (e.g. entered by `DELEGATECALL` from another contract, which touch that contract's storage) are correctly excluded; the certified runtime itself only spawns `STATICCALL`, so no frame with `currentTarget = ca` runs other code. -/
 def committedFrameInvocations (ca : Adr) (frame : Exec.Frame) : List WriterInvocation :=
   if frame.sevm.currentTarget = ca ∧ IsWriter (decodeCall frame.sevm) then
     [frameInvocation frame] else []

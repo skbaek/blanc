@@ -145,7 +145,9 @@ theorem weth9_block_preserves_solvent {ca : Adr} {cfg : ChainConfig}
 
 /-- History rung, counterpart of `chain_preserves_solvent`: a configured
 history of blocks whose entered WETH9 frames are admitted preserves the WETH9
-state invariant. -/
+state invariant.
+
+For holder-level backing with only trace-local hash premises see `weth9_history_footprint`; this theorem concerns the deduplicated booked-slot ledger under the universal `AllowAdmitted` premise. -/
 theorem weth9_history_preserves_solvent {ca : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)

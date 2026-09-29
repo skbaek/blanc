@@ -158,7 +158,9 @@ theorem c3crvSpec_preservesAdmitted (ca : Adr) :
 
 /-- **History rung**: a configured history whose entered 3Crv frames satisfy `c3crvEntry`
 preserves the 3Crv state invariant (the deployed code, and a storage abstraction of some
-conserving model state). -/
+conserving model state).
+
+Superseded as a headline by `c3crv_history_committed`: that theorem carries the invariant from one checkpoint and identifies the final model state with the model run over exactly the committed writer calls, whereas this theorem re-assumes a conserving abstraction (`c3crvEntry`) at every entered frame. -/
 theorem c3crv_history_preserves_inv {ca : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)

@@ -98,7 +98,9 @@ the frame's final storage, the removal effects of its first argument `t`
 index cleared and `t` absent from the post witness, and (found) the vacated
 tail's address cleared, length `n - 1`, the moved element at the hole with its
 index repaired unless hole = tail, or (absent) the pushed slot cleared and the
-length unchanged. -/
+length unchanged.
+
+Superseded as a headline by `l2_registerPauser_zero` (a pc-zero concrete execution of the installed runtime) and, at history level, `lido_history_l2_committed`. -/
 theorem l2_registerPauser_zero_wrapper {sevm : Sevm} {d : Devm} {o : Outcome} {w : SFunc}
     {entries : List Entry}
     (hfork : CoveredFork sevm.benvStat.fork) (hw : prog[59]? = some w)

@@ -99,7 +99,9 @@ theorem frame_solInv {sevm : Sevm} {pre post : Devm} {history : List B256}
 
 /-- **P8 counterpart: an admitted history of frames.**  From the storage abstraction for `h₀`,
 a chain of successful frames ends in the abstraction for `h₀` extended by exactly the nodes of
-its `deposit`-selector frames, in order. -/
+its `deposit`-selector frames, in order.
+
+Superseded as a headline by `configuredHistory_solInv`, which derives the frame chaining from an actual configured history instead of taking a `FrameHistory` premise. -/
 theorem frameHistory_solInv {ca : Adr} {stor₀ stor : Stor} {accepted h₀ : List B256}
     (hh : FrameHistory ca stor₀ accepted stor) (hinv : SolInv stor₀ h₀) :
     SolInv stor (h₀ ++ accepted) := by
@@ -111,7 +113,9 @@ theorem frameHistory_solInv {ca : Adr} {stor₀ stor : Stor} {accepted h₀ : Li
     exact ih (frame_solInv hcode hfork hcd hstack hmem hsha hinv exc)
 
 /-- **P8-READ counterpart (root).**  After a frame history from the abstraction for `h₀`, the
-deployed `get_deposit_root()` returns the mixed root of `h₀` extended by the accepted nodes. -/
+deployed `get_deposit_root()` returns the mixed root of `h₀` extended by the accepted nodes.
+
+Superseded as a headline by `configuredHistory_root_view`, which derives the frame chaining from an actual configured history instead of taking a `FrameHistory` premise. -/
 theorem frameHistory_root_view {stor₀ stor : Stor} {accepted h₀ : List B256}
     (sevm : Sevm) (base : Devm) (G : Nat)
     (hh : FrameHistory sevm.currentTarget stor₀ accepted stor) (hinv : SolInv stor₀ h₀)
@@ -139,7 +143,9 @@ theorem frameHistory_root_view {stor₀ stor : Stor} {accepted h₀ : List B256}
 
 /-- **P8-READ counterpart (count).**  After a frame history from the abstraction for `h₀`, the
 deployed warm `get_deposit_count()` returns the little-endian length of `h₀` extended by the
-accepted nodes. -/
+accepted nodes.
+
+Superseded as a headline by `configuredHistory_count_view`, which derives the frame chaining from an actual configured history instead of taking a `FrameHistory` premise. -/
 theorem frameHistory_count_view {stor₀ stor : Stor} {accepted h₀ : List B256}
     (sevm : Sevm) (base : Devm) (G : Nat)
     (hh : FrameHistory sevm.currentTarget stor₀ accepted stor) (hinv : SolInv stor₀ h₀)

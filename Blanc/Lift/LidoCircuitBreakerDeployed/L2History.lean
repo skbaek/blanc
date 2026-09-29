@@ -39,7 +39,9 @@ open Blanc.ExecutionTrace
 every witness of the frame's entry storage.**  The frame is any raw root `root` at the
 contract (a top-level message frame or a frame entered below one, whatever it does later);
 the history supplies pc zero, the covered fork, fresh entry and `EntryAt lidoA`
-(`hadmitted`), and the frame's own code identity and calldata are stated per frame. -/
+(`hadmitted`), and the frame's own code identity and calldata are stated per frame.
+
+Superseded as a headline by `lido_history_l2_committed`, which derives the entry registry witness at every committed non-static `registerPauser(t, 0)` frame instead of assuming it. -/
 theorem lido_history_l2_frame
     {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
@@ -69,7 +71,9 @@ theorem lido_history_l2_frame
 
 /-- The existential form: given the Registry invariant at the frame's entry storage, a
 witness `entries` of it exists and the frame's final storage satisfies `L2Post` relative to
-it.  `hinv` is the one premise the history does not derive (see the module docstring). -/
+it.  `hinv` is the one premise the history does not derive (see the module docstring).
+
+Superseded as a headline by `lido_history_l2_committed`, which derives the entry registry witness at every committed non-static `registerPauser(t, 0)` frame instead of assuming it. -/
 theorem lido_history_l2_frame_of_inv
     {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)

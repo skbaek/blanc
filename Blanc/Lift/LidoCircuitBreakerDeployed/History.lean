@@ -29,7 +29,9 @@ theorem lidoWriterSpecsM : LidoWriterSpecsM lidoA :=
 entered CircuitBreaker frames satisfy `lidoEntry lidoA` (`LocalApart`, and the
 `lidoA` collision premise over every witness of the frame-entry storage)
 preserves the state invariant: the deployed code and some Registry witness of
-the contract's storage. -/
+the contract's storage.
+
+Superseded as a headline by `lido_history_l1_l3`, which states the raw-slot L1/L3 registry facts of the future storage. -/
 theorem lido_history_preserves_inv_concrete
     {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)

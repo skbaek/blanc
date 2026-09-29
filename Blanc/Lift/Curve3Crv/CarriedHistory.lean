@@ -169,7 +169,9 @@ refinement at every step. It is not identified with an exact list extracted
 from the history (see `c3crv_history_committed` for that identification).
 Interpreter ingress, non-target movements and rollback
 are discharged by the configured-history ladder. Initial storage/code
-authentication and the truth of collision separation remain premises. -/
+authentication and the truth of collision separation remain premises.
+
+Superseded as a headline by `c3crv_history_committed`, which names the replayed invocations (the settlement-committed writer frames of the trace) instead of an existential replay. -/
 theorem c3crv_history_carried {ca : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {initial : Blanc.Curve3Crv.State}
     {initialKeys : Key → Prop}
