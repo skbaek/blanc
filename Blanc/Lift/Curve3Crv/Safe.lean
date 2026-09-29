@@ -25,6 +25,10 @@ the kernel-decided quiet sets (`view_world`) and their inversion segments (`safe
 use the length bound `VyInv.name`/`symbol` supplies); writers by their inversion segments
 (`SafeBodies.lean`); both through the pure refinement (`refine_at`).
 
+`c3crv_writer_nonstatic`: a successful writer frame is never static (`set_minter` and
+`set_name` complete an `SSTORE`, `ri_sstore_nonstatic`; the other five append a `LOG3`,
+which a static frame cannot, `Exec.logs_eq_of_static_ok`).
+
 `c3crv_frame_refines_raw` keeps Jaune's exact `STOP` output preservation over
 an arbitrary base. `c3crv_frame_refines` specializes to empty entry output;
 `c3crv_entered_frame_refines` derives that freshness from actual frame entry.
@@ -138,10 +142,10 @@ theorem c3crv_frame_refines_raw {sevm : Sevm} {pre post : Devm} {s : Curve3Crv.S
   all_goals simp only [bodies, List.getElem?_cons_zero, List.getElem?_cons_succ,
     Option.some.injEq, List.getElem?_nil, reduceCtorEq] at hk
   all_goals try subst hk
-  · exact ⟨fun _ => writer none none_ok (safe_setMinter hfork G' post runB),
+  · exact ⟨fun _ => writer none none_ok (safe_setMinter hfork G' post runB).2,
       fun h => absurd trivial h⟩
   · refine ⟨fun _ => ?_, fun h => absurd trivial h⟩
-    obtain ⟨w, hw, r, hr, hl⟩ := safe_setName hfork runB
+    obtain ⟨-, w, hw, r, hr, hl⟩ := safe_setName hfork runB
     have hm : (stor.get vyMinterSlot).toAdr = s.minter := by
       rw [hinv.minter, toAdr_toB256]
     rw [hm] at hw
@@ -168,6 +172,70 @@ theorem c3crv_frame_refines_raw {sevm : Sevm} {pre post : Devm} {s : Curve3Crv.S
       fun _ => view (by simp [viewKs]) (safe_decimals hfork G' post runB)⟩
   · exact ⟨fun h => False.elim h,
       fun _ => view (by simp [viewKs]) (safe_balanceOf hfork G' post runB)⟩
+
+/-- A raw effect that appends a log contradicts an unchanged log list. -/
+private theorem lands_logs_nil {sevm : Sevm} {pre post : Devm} {r : Raw}
+    (hl : Lands sevm pre post r) (same : post.logs = pre.logs) : r.2.1 = [] := by
+  have h := hl.logs
+  rw [same] at h
+  simpa using h.symm
+
+/-- A guarded raw effect that was produced is the guarded value. -/
+private theorem eq_of_ite_some {p : Prop} [Decidable p] {x r : Raw}
+    (h : (if p then some x else none) = some r) : r = x := by
+  split at h
+  · exact (Option.some.inj h).symm
+  · cases h
+
+/-- **Every successful writer frame is non-static.** A successful execution of the deployed
+runtime on a writer selector reaches an `SSTORE` (`set_minter`, `set_name`) or a `LOG3` (the
+other five), and Jaune halts both with `writeInStaticContext` in a static frame. No storage
+abstraction is assumed: the frame's own run decides it. -/
+theorem c3crv_writer_nonstatic {sevm : Sevm} {pre post : Devm}
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcd : sevm.data.length < 2 ^ 256) (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty)
+    (exc : Exec 0 sevm pre (.ok post)) (hwriter : IsWriter (decodeCall sevm)) :
+    sevm.isStatic = false := by
+  cases hs : sevm.isStatic with
+  | false => rfl
+  | true =>
+  exfalso
+  have same : post.logs = pre.logs := Exec.logs_eq_of_static_ok exc hs hfork post rfl
+  obtain ⟨f0, hf0, run⟩ := lift_sound cert_check hcode hfork exc
+  rw [show (Cert.prog cert)[0]? = some t_0000_c0 from rfl] at hf0
+  cases hf0
+  rw [St.self hstack hmem] at run
+  obtain ⟨k, f, sel, G', hk, hs', hsel, hlen, runB⟩ := safe_dispatch hcd run
+  rw [decodeCall_at hs' hsel hlen] at hwriter
+  rcases k with _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | k
+  all_goals simp only [bodies, List.getElem?_cons_zero, List.getElem?_cons_succ,
+    Option.some.injEq, List.getElem?_nil, reduceCtorEq] at hk
+  all_goals try subst hk
+  · rw [(safe_setMinter hfork G' post runB).1] at hs; cases hs
+  · rw [(safe_setName hfork runB).1] at hs; cases hs
+  · exact hwriter
+  · exact hwriter
+  · obtain ⟨r, hr, hl⟩ := safe_transfer hfork G' post runB
+    have := lands_logs_nil hl same
+    simp only [rawTransfer] at hr
+    rw [eq_of_ite_some hr] at this; cases this
+  · obtain ⟨r, hr, hl⟩ := safe_transferFrom hfork G' post runB
+    have := lands_logs_nil hl same
+    simp only [rawTransferFrom] at hr
+    rw [eq_of_ite_some hr] at this; cases this
+  · obtain ⟨r, hr, hl⟩ := safe_approve hfork G' post runB
+    have := lands_logs_nil hl same
+    simp only [rawApprove] at hr
+    rw [eq_of_ite_some hr] at this; cases this
+  · obtain ⟨r, hr, hl⟩ := safe_mint hfork G' post runB
+    have := lands_logs_nil hl same
+    simp only [rawMint] at hr
+    rw [eq_of_ite_some hr] at this; cases this
+  · obtain ⟨r, hr, hl⟩ := safe_burnFrom hfork G' post runB
+    have := lands_logs_nil hl same
+    simp only [rawBurnFrom] at hr
+    rw [eq_of_ite_some hr] at this; cases this
+  all_goals exact hwriter
 
 /-- Fresh entry makes the exact raw output relation the model's return bytes. -/
 theorem c3crv_frame_refines {sevm : Sevm} {pre post : Devm} {s : Curve3Crv.State}

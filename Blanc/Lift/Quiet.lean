@@ -806,66 +806,74 @@ private theorem staticStep_cont_logs
                 exact (Rinst.log_not_ok_of_static static rrun).elim
               · exact Rinst.logs_of_ok (fun n h => hlog ⟨n, h⟩) rrun
 
-/-- A committing halted node of a static frame on a covered fork keeps the log list. -/
+/-- A successfully halted node of a static frame on a covered fork keeps the log list. -/
 private theorem staticHalt_logs
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (step : Evm.step ⟨pc, sevm, pre⟩ = .halt out)
-    (static : sevm.isStatic = true) (hfork : CoveredFork sevm.benvStat.fork)
-    (committed : Execution.commits out = true) :
+    (static : sevm.isStatic = true) (hfork : CoveredFork sevm.benvStat.fork) :
+    ∀ post, out = .ok post → post.logs = pre.logs := by
+  intro post hout
+  subst hout
+  cases decoded : Evm.getInst ⟨pc, sevm, pre⟩ with
+  | none =>
+      unfold Evm.step at step
+      rw [decoded] at step
+      cases step
+  | some instruction =>
+      cases instruction with
+      | next next =>
+          rw [Evm.step_next decoded] at step
+          exact (Ninst.step_ne_halt_ok step).elim
+      | jump jumpInst =>
+          rw [Evm.step_jump decoded] at step
+          cases jumpEq : Jinst.run ⟨pc, sevm, pre⟩ jumpInst <;>
+            rw [jumpEq] at step <;> cases step
+      | last last =>
+          rw [Evm.step_last decoded] at step
+          have run : Linst.Run sevm pre last (.ok post) := Step.halt.inj step
+          change post.logs = pre.logs
+          cases last with
+          | stop => exact (Linst.Hinv.inv run).symm
+          | return_ => exact (Linst.Hinv.inv run).symm
+          | revert => exact (Linst.revert_not_ok run).elim
+          | selfdestruct =>
+              exact (Linst.selfdestruct_not_ok_of_static hfork static run).elim
+
+/-- A log fact about every successful outcome holds for the committed post. -/
+private theorem Execution.committedPost_logs_of_ok {out : Execution} {pre : Devm}
+    (h : ∀ post, out = .ok post → post.logs = pre.logs) (committed : Execution.commits out = true) :
     (Execution.committedPost out committed).logs = pre.logs := by
   cases out with
-  | error error => simp [Execution.commits] at committed
-  | ok post =>
-      cases decoded : Evm.getInst ⟨pc, sevm, pre⟩ with
-      | none =>
-          unfold Evm.step at step
-          rw [decoded] at step
-          cases step
-      | some instruction =>
-          cases instruction with
-          | next next =>
-              rw [Evm.step_next decoded] at step
-              exact (Ninst.step_ne_halt_ok step).elim
-          | jump jumpInst =>
-              rw [Evm.step_jump decoded] at step
-              cases jumpEq : Jinst.run ⟨pc, sevm, pre⟩ jumpInst <;>
-                rw [jumpEq] at step <;> cases step
-          | last last =>
-              rw [Evm.step_last decoded] at step
-              have run : Linst.Run sevm pre last (.ok post) := Step.halt.inj step
-              change post.logs = pre.logs
-              cases last with
-              | stop => exact (Linst.Hinv.inv run).symm
-              | return_ => exact (Linst.Hinv.inv run).symm
-              | revert => exact (Linst.revert_not_ok run).elim
-              | selfdestruct =>
-                  exact (Linst.selfdestruct_not_ok_of_static hfork static run).elim
+  | error _ => simp [Execution.commits] at committed
+  | ok post => exact h post rfl
 
-/-- **Static execution keeps the log list.**  A committing execution of a static frame on
-a covered fork ends with exactly its entry log list: `LOG` cannot complete in a static
-frame, every other step keeps the list, and every child is static and merges its (empty)
-log list only on success. -/
-theorem Exec.logs_committedPost_eq_of_static
+/-- **Static execution keeps the log list.**  A successful execution (`.ok post`, committing
+or not) of a static frame on a covered fork ends with exactly its entry log list: `LOG`
+cannot complete in a static frame, every other step keeps the list, and every child is
+static and merges its (empty) log list only on success. -/
+theorem Exec.logs_eq_of_static_ok
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) (static : sevm.isStatic = true)
-    (committed : Execution.commits out = true)
     (hfork : CoveredFork sevm.benvStat.fork) :
-    (Execution.committedPost out committed).logs = pre.logs := by
+    ∀ post, out = .ok post → post.logs = pre.logs := by
   induction run with
-  | halt step => exact staticHalt_logs step static hfork committed
+  | halt step => exact staticHalt_logs step static hfork
   | cont step _ ih =>
-      exact (ih static committed hfork).trans (staticStep_cont_logs step static hfork)
-  | doneErr _ _ _ => simp [Execution.commits] at committed
+      intro post hout
+      exact (ih static hfork post hout).trans (staticStep_cont_logs step static hfork)
+  | doneErr _ _ _ => intro post hout; cases hout
   | @doneOk _ nodeSevm nodePre _ _ _ _ nodePost _ step enter resumeRun _ ih =>
+      intro post hout
       rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
       have xrun : Xinst.Run nodeSevm nodePre x .none (.ok nodePost) := by
         unfold Xinst.Run XStep.Run
         rw [spawn]
         exact ⟨_, RunFrame.of_done enter, resumeRun.symm⟩
-      exact (ih static committed hfork).trans
+      exact (ih static hfork post hout).trans
         (Xinst.logs_of_ok hfork (Or.inl static) xrun trivial)
-  | runErr _ _ _ _ _ => simp [Execution.commits] at committed
+  | runErr _ _ _ _ _ => intro post hout; cases hout
   | runOk step enter _ resumeRun _ childIH nextIH =>
+      intro post hout
       rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
       have xrun := (show Xinst.Run _ _ x (.some ⟨_, _⟩) (.ok _) by
         unfold Xinst.Run XStep.Run
@@ -873,9 +881,21 @@ theorem Exec.logs_committedPost_eq_of_static
         exact ⟨_, RunFrame.of_run enter, resumeRun.symm⟩)
       have childStatic := Evm.step_run_isStatic step enter static
       have childFork := Evm.step_spawn_child_fork step enter hfork
-      exact (nextIH static committed hfork).trans
+      exact (nextIH static hfork post hout).trans
         (Xinst.logs_of_ok hfork (Or.inl static) xrun
-          (fun childCommitted => childIH childStatic childCommitted childFork))
+          (fun childCommitted => Execution.committedPost_logs_of_ok
+            (childIH childStatic childFork) childCommitted))
+
+/-- **Static execution keeps the log list**, committed form: a committing execution of a
+static frame on a covered fork ends with exactly its entry log list
+(`Exec.logs_eq_of_static_ok`). -/
+theorem Exec.logs_committedPost_eq_of_static
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (static : sevm.isStatic = true)
+    (committed : Execution.commits out = true)
+    (hfork : CoveredFork sevm.benvStat.fork) :
+    (Execution.committedPost out committed).logs = pre.logs :=
+  Execution.committedPost_logs_of_ok (Exec.logs_eq_of_static_ok run static hfork) committed
 
 -- SEGMENT: ninstWorldOfQuiet
 /-- **A quiet step keeps every storage map and the log list.**

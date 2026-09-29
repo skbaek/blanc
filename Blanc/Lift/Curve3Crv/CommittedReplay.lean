@@ -7,17 +7,17 @@ import Blanc.ExecutionTraceSettledFrames
 
 Extraction is definitional and mentions no model: a settlement-retained frame at
 the contract address contributes one `WriterInvocation` exactly when it executes
-a writer selector in a non-static frame. The invocation records the frame's own
+a writer selector. The invocation records the frame's own
 message data and machines. `ownerWordOf` is the owner answer the model needs in
 order to accept the call at all: `set_name` succeeds only if `owner()` answered
 the caller, and every other call ignores the owner. The frame's actual static
 `owner()` call is tied to that word by the `OwnerAnswer` evidence carried in each
 `InvRun` step, not by choice.
 
-A committed static frame cannot change storage
-(`Exec.storageView_committedPost_eq_of_static`), and the model's own acceptance
-does not exclude one (`set_minter` to the current minter is model-legal), so the
-static filter in `committedFrameInvocations` removes no observable state change.
+No static filter is needed: a writer frame of the deployed runtime cannot succeed
+in a static context at all (`c3crv_writer_nonstatic`: every writer body reaches an
+`SSTORE` or a `LOG3`, which Jaune halts with `writeInStaticContext`), so every
+extracted frame is non-static by the execution itself, not by the extraction.
 -/
 
 namespace Blanc.Lift.Curve3Crv
@@ -40,10 +40,10 @@ def frameInvocation (frame : Exec.Frame) : WriterInvocation :=
   ⟨frame.sevm, frame.pre, frame.post, ownerWordOf frame.sevm⟩
 
 /-- A settled frame contributes its invocation exactly when it runs a writer
-selector at the selected address in a non-static frame. -/
+selector at the selected address. -/
 def committedFrameInvocations (ca : Adr) (frame : Exec.Frame) : List WriterInvocation :=
-  if frame.sevm.currentTarget = ca ∧ IsWriter (decodeCall frame.sevm) ∧
-      frame.sevm.isStatic = false then [frameInvocation frame] else []
+  if frame.sevm.currentTarget = ca ∧ IsWriter (decodeCall frame.sevm) then
+    [frameInvocation frame] else []
 
 /-- Writer invocations extracted in execution order from the settlement-retained
 frames of a configured history; interpreter and message settlement prune rolled-back
@@ -54,21 +54,20 @@ def committedInvocations {cfg : ChainConfig} {checkpoint future : BlockChain}
   trace.settledFrames.flatMap (committedFrameInvocations ca)
 
 /-- Every extracted invocation is the record of a settlement-committed frame at the
-contract address that runs a writer selector in a non-static frame; a rolled-back
+contract address that runs a writer selector; a rolled-back
 frame is never in `settledFrames`, so it is never extracted. -/
 theorem mem_committedInvocations {cfg : ChainConfig} {checkpoint future : BlockChain}
     {ca : Adr} {trace : ConfiguredHistoryTrace cfg checkpoint future}
     {inv : WriterInvocation} (member : inv ∈ committedInvocations ca trace) :
     ∃ frame ∈ trace.settledFrames, Execution.commits frame.out = true ∧
       frame.sevm.currentTarget = ca ∧ IsWriter (decodeCall frame.sevm) ∧
-      frame.sevm.isStatic = false ∧ inv = frameInvocation frame := by
+      inv = frameInvocation frame := by
   obtain ⟨frame, settled, selected⟩ := List.mem_flatMap.mp member
   refine ⟨frame, settled, frame.committed, ?_⟩
   unfold committedFrameInvocations at selected
   split at selected
   · rename_i selectedFrame
-    exact ⟨selectedFrame.1, selectedFrame.2.1, selectedFrame.2.2,
-      List.mem_singleton.mp selected⟩
+    exact ⟨selectedFrame.1, selectedFrame.2, List.mem_singleton.mp selected⟩
   · cases selected
 
 /-- The mapping keys touched by a list of invocations. -/

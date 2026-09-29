@@ -1200,7 +1200,7 @@ theorem ric_vyStoreIter (hfork : CoveredFork sevm.benvStat.fork) {C : List Nat} 
       (vyStoreLoopTree e0 e1 x0 x1 r0 r1 j k exitT) r) :
     (lp.toNat < 32 * i ∧
       ∃ G', SFunc.RunCut fs sevm C (St b (vyStoreStack cap lp base src R) M G') gj r) ∨
-    (32 * i ≤ lp.toNat ∧ ∃ G', SFunc.RunCut fs sevm C
+    (32 * i ≤ lp.toNat ∧ sevm.isStatic = false ∧ ∃ G', SFunc.RunCut fs sevm C
       (St (afterSstore sevm b (base + Nat.toB256 i) (Bytes.toB256 (M.read (sn + 32 * i) 32).1))
         (vyStoreStack cap lp base src R) (M.write 0x120 (Nat.toB256 (i + 1)).toBytes) G')
       (if cap = Nat.toB256 (i + 1) then exitT else gk) r) := by
@@ -1266,7 +1266,9 @@ theorem ric_vyStoreIter (hfork : CoveredFork sevm.benvStat.fork) {C : List Nat} 
   rw [h120, hM, hi'] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_dup (n := 5) rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_add s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G23, rfl⟩ := ri_sstore hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  refine ⟨ri_sstore_nonstatic hfork s1, ?_⟩
+  obtain ⟨G23, rfl⟩ := ri_sstore hfork s1
   obtain ⟨G24, run⟩ := ric_dest run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_dup (n := 1) rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_mload s1

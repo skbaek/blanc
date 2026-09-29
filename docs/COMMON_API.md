@@ -2830,7 +2830,8 @@ contract-neutral.
 - Successful lifted run to facts (safety, the inversion walk): per-node `ric_*`
   (control, over `SFunc.RunCut`; `SFunc.Run.cut`/`SFunc.RunCut.uncut` for uncut
   runs) and per-instruction `ri_*` (successor as an `St`, `ri_xor` among them; numeral-offset forms
-  `ri_mstore_nat`/`ri_calldatacopy_nat`, and `ri_val` to name a successor's top word) in
+  `ri_mstore_nat`/`ri_calldatacopy_nat`, `ri_val` to name a successor's top word, and
+  `ri_sstore_nonstatic`: a completed `SSTORE` proves the frame non-static) in
   [`Blanc/Lift/InvWalk.lean`](../Blanc/Lift/InvWalk.lean) and
   [`Blanc/Lift/InvWalkOps.lean`](../Blanc/Lift/InvWalkOps.lean), which also holds the
   solc word-copy loop inverted (`ric_copy_step`, `ric_copy_exit`, the converses of
@@ -2907,7 +2908,8 @@ contract-neutral.
   (`B256.xor_zero`, `B256.xor_eq_zero_iff`, `B256.toAdr_toB256_of_lt`), the `String` copy
   loops with the counter in memory at `0x120`: storage to memory (`vyLoadLoopTree`,
   `rx_vyLoadStep`, `rx_vyLoadLast`, `rx_vyLoadExit`) and memory to storage (`vyStoreLoopTree`,
-  `rx_vyStoreStep`, `rx_vyStoreLast`, `rx_vyStoreExit`, one pass inverted `ric_vyStoreIter`,
+  `rx_vyStoreStep`, `rx_vyStoreLast`, `rx_vyStoreExit`, one pass inverted `ric_vyStoreIter`
+  (a storing pass also proves the frame non-static),
   and the set-up `vyStoreHead` with `rx_`/`ric_vyStoreHead`), unrolled per pass since the cap
   bounds the count, the load loop's pass inverted (`ric_vyLoadIter`), a stored-`String` view's
   body up to its load loop (`vyStrView`) with the join's `ceil32_eq` and the zero-fill read
@@ -2938,7 +2940,10 @@ contract-neutral.
   [`Blanc/Lift/BalSilent.lean`](../Blanc/Lift/BalSilent.lean), a quiet entry set
   that may make static calls (the SHA-256 precompile) but writes no storage and
   emits no log (`QuietSet`, `SFunc.Run.world_of_quiet`) in
-  [`Blanc/Lift/Quiet.lean`](../Blanc/Lift/Quiet.lean), and Hoare-style
+  [`Blanc/Lift/Quiet.lean`](../Blanc/Lift/Quiet.lean), which also proves that a static
+  frame on a covered fork keeps its log list on every successful outcome, committing or
+  not (`Exec.logs_eq_of_static_ok`; committed form `Exec.logs_committedPost_eq_of_static`),
+  and Hoare-style
   composition across one internal call or an ABI wrapper
   (`SFunc.RunP.hoare_single_call`, `hoare_single_call_with_gotos`,
   `hoare_wrapper`) in [`Blanc/Lift/Hoare.lean`](../Blanc/Lift/Hoare.lean).

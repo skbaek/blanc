@@ -301,6 +301,27 @@ theorem ri_sstore {k v : B256} {d : Devm} (hfork : CoveredFork sevm.benvStat.for
   · simp only [St.accessedStorageKeys, hw, not_false_eq_true, ite_false, ite_true]
     rfl
 
+/-- A successful `SSTORE` runs in a non-static frame: Jaune's `assertDynamic`
+guard halts it with `writeInStaticContext` otherwise. -/
+theorem ri_sstore_nonstatic {k v : B256} {d : Devm} (hfork : CoveredFork sevm.benvStat.fork)
+    (h : Ninst.Run sevm (St b (k :: v :: S) M G) (.reg .sstore) d) :
+    sevm.isStatic = false := by
+  cases hs : sevm.isStatic with
+  | false => rfl
+  | true =>
+    exfalso
+    rcases of_run_reg h with ⟨pc, run⟩
+    simp only [Rinst.run, Rinst.runCore, hfork.rules_stateGas_none,
+      Devm.balReadStorage_of_bal_none (CoveredFork.rules_bal_none hfork),
+      Devm.balReadAccount_of_bal_none (CoveredFork.rules_bal_none hfork)] at run
+    rw [show (St b (k :: v :: S) M G).pop = .ok (k, St b (v :: S) M G) from rfl] at run
+    simp only [Except.bind_ok] at run
+    rw [show (St b (v :: S) M G).pop = .ok (v, St b S M G) from rfl] at run
+    simp only [Except.bind_ok] at run
+    rcases Except.bind_eq_ok run with ⟨_, -, run₃⟩
+    rcases Except.bind_eq_ok run₃ with ⟨_, -, run₇⟩
+    simp [Bind.bind, Except.bind, Except.assert, assertDynamic, hs] at run₇
+
 end World
 
 end Blanc.Lift

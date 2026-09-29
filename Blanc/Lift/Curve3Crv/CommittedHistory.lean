@@ -8,9 +8,9 @@ import Blanc.ExecutionAccountingCore
 Curve is the second consumer of the generic accounting ladder
 (`Exec.coreAccounting`, `AccountingLadderAdmitted.configuredHistory`), after the
 beacon deposit contract. The replay boundary is the contract's storage; the
-observation is the ordered list of committed non-static writer invocations at the
-contract address. Frame chaining, interpreter ingress, foreign movements and
-rollback are derived by the ladder; only the target frame's refinement
+observation is the ordered list of committed writer invocations at the contract
+address (each non-static by `c3crv_writer_nonstatic`, not by filtering). Frame
+chaining, interpreter ingress, foreign movements and rollback are derived by the ladder; only the target frame's refinement
 (`c3crv_frame_refines_raw`) and the static-only spawn restriction are Curve's own.
 -/
 
@@ -73,19 +73,21 @@ private theorem target_replay {ca : Adr} {U : Key → Prop}
         (Exec.committedFrames run).flatMap (committedFrameInvocations ca)) := by
   obtain ⟨⟨hstack, hmem⟩, hcd, touched⟩ := admitted.root target
   have self : committedFrameInvocations ca (Exec.Frame.ofRun run committed) =
-      if IsWriter (decodeCall sevm) ∧ sevm.isStatic = false then
-        [⟨sevm, pre, post, ownerWordOf sevm⟩] else [] := by
-    show (if sevm.currentTarget = ca ∧ IsWriter (decodeCall sevm) ∧ sevm.isStatic = false then
+      if IsWriter (decodeCall sevm) then [⟨sevm, pre, post, ownerWordOf sevm⟩] else [] := by
+    show (if sevm.currentTarget = ca ∧ IsWriter (decodeCall sevm) then
         [frameInvocation (Exec.Frame.ofRun run committed)] else []) = _
-    by_cases h : IsWriter (decodeCall sevm) ∧ sevm.isStatic = false
+    by_cases h : IsWriter (decodeCall sevm)
     · simp only [target, h, and_self, ↓reduceIte]
       rfl
     · simp only [h, and_false, ↓reduceIte]
   refine ⟨fun static => ?_, fun _ => ?_⟩
-  · rw [nodes, self]
-    simp [static]
-  · by_cases writer : IsWriter (decodeCall sevm) ∧ sevm.isStatic = false
-    · refine ⟨[⟨sevm, pre, post, ownerWordOf sevm⟩], ?_, by rw [nodes, self]; simp only [writer, and_self, ↓reduceIte]; rfl⟩
+  · have quiet : ¬ IsWriter (decodeCall sevm) := fun writer => by
+      rw [c3crv_writer_nonstatic hcode fork hcd hstack hmem run writer] at static
+      cases static
+    rw [nodes, self]
+    simp [quiet]
+  · by_cases writer : IsWriter (decodeCall sevm)
+    · refine ⟨[⟨sevm, pre, post, ownerWordOf sevm⟩], ?_, by rw [nodes, self]; simp only [writer, ↓reduceIte]; rfl⟩
       change CurveReplay U (Devm.getStor pre ca)
         ([⟨sevm, pre, post, ownerWordOf sevm⟩] : List WriterInvocation) (Devm.getStor post ca)
       refine ⟨?_, fun s K included invariant => ?_⟩
@@ -95,7 +97,7 @@ private theorem target_replay {ca : Adr} {U : Key → Prop}
       · subst target
         have fresh := FreshKeys.of_universe injective apart included touched
         obtain ⟨ow, owner, out, accepted, invariant', _⟩ :=
-          (c3crv_frame_refines_raw hcode fork hcd hstack hmem invariant fresh run).1 writer.1
+          (c3crv_frame_refines_raw hcode fork hcd hstack hmem invariant fresh run).1 writer
         obtain ⟨accepted', canonical⟩ := step_ownerWordOf accepted
         refine ⟨out.1, ⟨out, ⟨accepted', fun w h => ?_⟩, rfl⟩, ?_⟩
         · have := canonical w h
@@ -105,18 +107,11 @@ private theorem target_replay {ca : Adr} {U : Key → Prop}
       change CurveReplay U (Devm.getStor pre ca) [] (Devm.getStor post ca)
       refine ⟨by simp [invocationKeys], fun s K included invariant => ⟨s, rfl, ?_⟩⟩
       simp only [invocationKeys, List.flatMap_nil, Key.extend_nil]
-      by_cases isWriter : IsWriter (decodeCall sevm)
-      · have static : sevm.isStatic = true := by
-          cases h : sevm.isStatic with
-          | true => rfl
-          | false => exact (writer ⟨isWriter, h⟩).elim
-        have view := Exec.storageView_committedPost_eq_of_static run static committed fork
-        exact invariant.of_get_eq fun x => congrFun (congrFun view ca) x
-      · subst target
-        have fresh := FreshKeys.of_universe injective apart included touched
-        have refinement := c3crv_frame_refines_raw hcode fork hcd hstack hmem invariant fresh run
-        exact invariant.of_get_eq fun x => by
-          rw [(refinement.2 isWriter).1 sevm.currentTarget]
+      subst target
+      have fresh := FreshKeys.of_universe injective apart included touched
+      have refinement := c3crv_frame_refines_raw hcode fork hcd hstack hmem invariant fresh run
+      exact invariant.of_get_eq fun x => by
+        rw [(refinement.2 writer).1 sevm.currentTarget]
 
 private theorem curve_core (ca : Adr) (U : Key → Prop)
     (injective : ∀ k k', U k → U k' → k.slot = k'.slot → k = k')
@@ -159,9 +154,10 @@ private def curveAccountingLadder (ca : Adr) (U : Key → Prop)
 deployed 3Crv runtime's final storage abstracts the model state obtained by running
 `Curve3Crv.step`, from the initial model state, over exactly the writer invocations
 of the settlement-committed frames at the contract address, in trace order
-(`committedInvocations`): rolled-back frames do not appear, and views and static
-frames contribute nothing. Each invocation carries its frame's own caller and calldata
-(`c3ctx`, `decodeCall`), and each step is accepted by the model with the owner word
+(`committedInvocations`): rolled-back frames do not appear, views contribute
+nothing, and no static frame is filtered out, because a writer cannot succeed in a
+static frame (`c3crv_writer_nonstatic`). Each invocation carries its frame's own
+caller and calldata (`c3ctx`, `decodeCall`), and each step is accepted by the model with the owner word
 the frame's actual `owner()` static call answered (`ModelStep`). The live keys are the
 initial keys plus the keys of exactly those invocations. The list is definitional, not
 chosen; the model state is its fold (`runInvocations`).
