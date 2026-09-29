@@ -7,7 +7,7 @@
 # planning record outside this repository): the repository axiom
 # audit this gate used to rerun is the `axiom-audit` row's (`check.sh
 # --no-build`, one union walk over the whole library), which the deployment
-# checker ties to by freezing the five stricter axiom claims. The 66 source
+# checker ties to by freezing the four stricter axiom claims. The 66 source
 # falsifiers mutate temporary copies and run
 # only the Python checker, so they run under `--self-test`, when the harness
 # changes; the two compiled Lean controls stay here.
@@ -101,4 +101,4 @@ if ! "$JAUNE_BIN" "$FIXTURE" --network Prague >"$LOG" 2>&1; then
   fail "strict Jaune replay of the pinned-EELS fixture failed"
 fi
 
-echo "OK — Lido CircuitBreaker direct deployment root (21 pins; 13 reduction certificates; 213 fragments; 164 public theorems under the union walk; 5 stricter claims; 2 Lean controls; 18 finite assertions + 26 finite mutants; 1 strict block)"
+echo "OK — Lido CircuitBreaker direct deployment root (21 pins; 13 reduction certificates; 213 fragments; 163 public theorems under the union walk; 4 stricter claims; 2 Lean controls; 18 finite assertions + 26 finite mutants; 1 strict block)"
