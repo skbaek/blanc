@@ -10,7 +10,8 @@ consolidation-request contract.
 
 **Provenance.**  The bytes below are the `code` fields of the four entries of
 `scripts/t8n/amsterdam-system-alloc.json` in Jaune at the pinned commit
-`dc21abb04c885f9660072aa634ab8a028703eee6`, at the four addresses
+`b019bbf54eedb4f29398a80ba7b49daa664bb52a` (byte-identical at `dc21abb04c885f9660072aa634ab8a028703eee6`, where
+they were read), at the four addresses
 `beaconRootsAddress`, `historyStorageAddress`, `withdrawalRequestPredeployAddress` and
 `consolidationRequestPredeployAddress` (Jaune's `Machine.lean`), which are the addresses
 `processUncheckedSystemTransaction` is called with in Jaune's `applyBody` and
