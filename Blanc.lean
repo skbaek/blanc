@@ -412,6 +412,7 @@ import Blanc.Lift.Weth9.Init
 -- (beacon-deposit-bytecode-v1); these two tops reach the whole lift kit.
 import Blanc.Lift.BeaconDeposit.Ladder
 import Blanc.Lift.BeaconDeposit.Init
+import Blanc.Lift.BeaconDeposit.Creation.Deploy
 import Blanc.Lift.BeaconDeposit.Refines
 import Blanc.Lift.BeaconDeposit.CommittedHistory
 

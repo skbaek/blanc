@@ -2910,6 +2910,15 @@ contract-neutral.
   [`Blanc/Lift/PackedSha.lean`](../Blanc/Lift/PackedSha.lean), and the corollary
   over memory that already covers the destination (`copy_sha_covered`) in
   [`Blanc/Lift/PackedShaCovered.lean`](../Blanc/Lift/PackedShaCovered.lean).
+  The same site as solc emits it under its size-favouring constant optimiser
+  (creation code: `-32` as `PUSH1 0x1f NOT`, the all-ones mask as `PUSH1 0 NOT`;
+  `mcpyTreeN`, `mergeTreeN`, `copy_shaN_gen`, `copy_shaN`, `packed_sha_pairN`) in
+  [`Blanc/Lift/PackedShaSize.lean`](../Blanc/Lift/PackedShaSize.lean).
+- Deploying lifted creation code: a gas-exact run of a checked creation certificate's
+  constructor from the creation frame's start state settles through Jaune's
+  `processCreateMessage`, installing the constructor's output and keeping its storage
+  (`liftCreate_ok`, with the creation frame `createSeed`) in
+  [`Blanc/Lift/Deploy.lean`](../Blanc/Lift/Deploy.lean).
 - Jump destinations: Jaune's own `jumpable_eq_jumpdestOk` (`Jaune/Machine.lean`)
   replaces its exponential `jumpable` by the linear `jumpdestOk` scan, for every
   byte string; Blanc keeps no copy.
