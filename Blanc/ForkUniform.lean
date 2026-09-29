@@ -52,6 +52,13 @@ disabled, or its code address is neither `MODEXP` (0x05, EIP-7823/7883) nor `P25
 def Frame.PrecompNeutral (f : Frame) : Prop :=
   f.inner.disablePrecompiles = true ∨ ∀ a, f.inner.codeAddress = some a → a ≠ 5 ∧ a ≠ 0x100
 
+theorem Frame.precompNeutral_of_codeAddress {f : Frame} {a : Adr}
+    (h : f.inner.codeAddress = some a) (h5 : a ≠ 5) (h100 : a ≠ 0x100) : f.PrecompNeutral :=
+  Or.inr fun b hb => by
+    rw [h] at hb
+    cases hb
+    exact ⟨h5, h100⟩
+
 def FrameEntry.withFork (g : Fork) : FrameEntry → FrameEntry
   | .done r => .done r
   | .run e => .run (e.withFork g)

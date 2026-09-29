@@ -11,9 +11,15 @@ machine under any covered fork (`Blanc/ForkUniform.lean`), with no new evaluatio
 * `pwalkH_withFork`: a pc-level walk is unchanged.  A walk never runs `CLZ` (it is not an
   `ninstAccKeeps` instruction, so every walk is stuck there under every fork) and never enters
   a frame; `BLOBBASEFEE` is unchanged when the block carries no excess blob gas;
-* `scallPrep_withFork`: a `STATICCALL` preparation spawns the same frame with its fork changed;
+* `scallPrep_withFork`, `callPrepP_withFork`, `dcallPrep_withFork`: a `STATICCALL`, `CALL` or
+  `DELEGATECALL` preparation spawns the same frame with its fork changed
+  (`*_stat`: the frame carries the caller's block environment);
 * `frameEnterS_withFork`: the shadow frame entry commutes with the fork change for a frame
   that does not enter `MODEXP` or `P256VERIFY`;
+* `scallSpawn_withFork`, `callSpawn_withFork`, `dcallSpawn_withFork`: a whole spawn (the
+  preparation and the entry of its frame) transported from the Prague facts, given a kernel
+  fact on the frame's `codeAddress` (`Frame.precompNeutral_of_codeAddress`);
+  `settle_withFork_of_stat` is the child's settle;
 * `childCfg_withFork`: a child's start configuration is unchanged.
 
 A closed witness built from these facts therefore replays under any covered fork by
@@ -152,6 +158,52 @@ theorem scallPrep_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork 
         rfl
       · rfl
 
+/-- A `DELEGATECALL` preparation spawns the same frame with its fork changed. -/
+theorem dcallPrep_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g)
+    (d : Devm) (adrs : List Adr) (acs : AcctShadow) :
+    dcallPrep (s.withFork g) d adrs acs = (dcallPrep s d adrs acs).map (·.withFork g) := by
+  unfold dcallPrep
+  generalize d.stack = st
+  rcases st with _ | ⟨gw, _ | ⟨cw, _ | ⟨iiw, _ | ⟨isw, _ | ⟨oiw, _ | ⟨osw, rest⟩⟩⟩⟩⟩⟩ <;> try rfl
+  simp only [Sevm.withFork_fork, Sevm.withFork_depth, hg, hf, decide_true, true_and]
+  by_cases hd : s.depth = 0
+  · simp [hd]
+  · simp only [hd, ne_eq, not_false_eq_true, ↓reduceIte]
+    split
+    · rfl
+    · split
+      · simp only [Option.map_some]
+        rfl
+      · rfl
+
+/-- A `CALL` preparation (with or without value) spawns the same frame with its fork
+changed. -/
+theorem callPrep_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g) (c : Cfg) :
+    callPrep (s.withFork g) c = (callPrep s c).map (·.withFork g) := by
+  unfold callPrep
+  generalize c.devm.stack = st
+  rcases st with _ | ⟨gw, _ | ⟨cw, _ | ⟨vw, _ | ⟨iiw, _ | ⟨isw, _ | ⟨oiw, _ | ⟨osw, rest⟩⟩⟩⟩⟩⟩⟩ <;>
+    try rfl
+  simp only [Sevm.withFork_fork, Sevm.withFork_depth, hg, hf, decide_true, true_and]
+  by_cases hd : s.depth = 0
+  · simp [hd]
+  · simp only [hd, ne_eq, not_false_eq_true, ↓reduceIte]
+    split
+    · rfl
+    · split
+      · split
+        · simp only [Option.map_some]
+          rfl
+        · rfl
+      · simp only [Sevm.withFork_isStatic, Sevm.withFork_currentTarget,
+          apply_ite (Option.map (fun x : CallPrep => x.withFork g)), Option.map_some,
+          Option.map_none]
+        exact if_congr Iff.rfl rfl rfl
+
+theorem callPrepP_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g) (c : PCfg) :
+    callPrepP (s.withFork g) c = (callPrepP s c).map (·.withFork g) :=
+  callPrep_withFork hf hg _
+
 theorem benvAfterTransferS_withFork (m : Msg) (g : Fork) (acs : AcctShadow) :
     benvAfterTransferS (m.withFork g) acs = (benvAfterTransferS m acs).map (·.withFork g) := by
   unfold benvAfterTransferS
@@ -206,6 +258,49 @@ theorem scallPrep_stat {d : Devm} {adrs : List Adr} {acs : AcctShadow} {cp : Cal
         · simp at h
     · simp at h
 
+/-- A `DELEGATECALL` preparation's frame carries the caller's block environment. -/
+theorem dcallPrep_stat {d : Devm} {adrs : List Adr} {acs : AcctShadow} {cp : CallPrep}
+    (h : dcallPrep s d adrs acs = some cp) :
+    cp.f.outer.benv.stat = s.benvStat ∧ cp.f.inner.benv.stat = s.benvStat := by
+  unfold dcallPrep at h
+  generalize d.stack = st at h
+  match st, h with
+  | _ :: _ :: _ :: _ :: _ :: _ :: _, h =>
+    simp only at h
+    split at h
+    · split at h
+      · simp at h
+      · split at h
+        · simp only [Option.some.injEq] at h
+          subst h
+          exact ⟨rfl, rfl⟩
+        · simp at h
+    · simp at h
+
+/-- A `CALL` preparation's frame carries the caller's block environment. -/
+theorem callPrepP_stat {c : PCfg} {cp : CallPrep} (h : callPrepP s c = some cp) :
+    cp.f.outer.benv.stat = s.benvStat ∧ cp.f.inner.benv.stat = s.benvStat := by
+  unfold callPrepP callPrep at h
+  generalize (c.cfg .undefined).devm.stack = st at h
+  match st, h with
+  | _ :: _ :: _ :: _ :: _ :: _ :: _ :: _, h =>
+    simp only at h
+    split at h
+    · split at h
+      · simp at h
+      · split at h
+        · split at h
+          · simp only [Option.some.injEq] at h
+            subst h
+            exact ⟨rfl, rfl⟩
+          · simp at h
+        · split at h
+          · simp only [Option.some.injEq] at h
+            subst h
+            exact ⟨rfl, rfl⟩
+          · simp at h
+    · simp at h
+
 theorem executeCode_enter_stat {m : Msg} {e : Evm} (h : executeCode.enter m = .inl e) :
     e.sta.benvStat = m.benv.stat := by
   unfold executeCode.enter at h
@@ -227,5 +322,56 @@ theorem frameEnterS_stat {f : Frame} {acs : AcctShadow} {e : Evm}
       cases h
       exact (executeCode_enter_stat he).trans (benvAfterTransferS_stat hb)
     · cases h
+
+/-! ## A spawn under any covered fork -/
+
+/-- The shadow frame entry of a frame carrying the caller's block environment commutes with
+the fork change. -/
+theorem frameEnterS_withFork_of_stat {f : Frame} (hf : CoveredFork s.benvStat.fork)
+    (hg : CoveredFork g) (hst : f.outer.benv.stat = s.benvStat ∧ f.inner.benv.stat = s.benvStat)
+    (hp : f.PrecompNeutral) (acs : AcctShadow) :
+    frameEnterS (f.withFork g) acs = (frameEnterS f acs).withFork g :=
+  frameEnterS_withFork (by rw [hst.1]; exact hf) (by rw [hst.2]; exact hf) hg hp acs
+
+/-- Settling a frame carrying the caller's block environment ignores the fork change. -/
+theorem settle_withFork_of_stat {f : Frame} (hf : CoveredFork s.benvStat.fork)
+    (hg : CoveredFork g) (hst : f.outer.benv.stat = s.benvStat ∧ f.inner.benv.stat = s.benvStat)
+    (raw : Execution) : (f.withFork g).settle raw = f.settle raw :=
+  settle_withFork (by rw [hst.1]; exact hf) (by rw [hst.2]; exact hf) hg raw
+
+/-- **A `STATICCALL` spawn transports to any covered fork**: the preparation and the entry of
+the prepared frame, with only the fork changed. -/
+theorem scallSpawn_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g)
+    {d : Devm} {adrs : List Adr} {acs : AcctShadow} {cp : CallPrep} {e : Evm}
+    (hp : scallPrep s d adrs acs = some cp) (hN : cp.f.PrecompNeutral)
+    (he : frameEnterS cp.f acs = .run e) :
+    scallPrep (s.withFork g) d adrs acs = some (cp.withFork g) ∧
+      frameEnterS (cp.withFork g).f acs = .run (e.withFork g) := by
+  refine ⟨by rw [scallPrep_withFork hf hg, hp]; rfl, ?_⟩
+  show frameEnterS (cp.f.withFork g) acs = _
+  rw [frameEnterS_withFork_of_stat hf hg (scallPrep_stat hp) hN, he]; rfl
+
+/-- **A `CALL` spawn transports to any covered fork** (`scallSpawn_withFork` for `callPrepP`). -/
+theorem callSpawn_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g)
+    {c : PCfg} {cp : CallPrep} {e : Evm}
+    (hp : callPrepP s c = some cp) (hN : cp.f.PrecompNeutral)
+    (he : frameEnterS cp.f c.acs = .run e) :
+    callPrepP (s.withFork g) c = some (cp.withFork g) ∧
+      frameEnterS (cp.withFork g).f c.acs = .run (e.withFork g) := by
+  refine ⟨by rw [callPrepP_withFork hf hg, hp]; rfl, ?_⟩
+  show frameEnterS (cp.f.withFork g) c.acs = _
+  rw [frameEnterS_withFork_of_stat hf hg (callPrepP_stat hp) hN, he]; rfl
+
+/-- **A `DELEGATECALL` spawn transports to any covered fork**
+(`scallSpawn_withFork` for `dcallPrep`). -/
+theorem dcallSpawn_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g)
+    {d : Devm} {adrs : List Adr} {acs : AcctShadow} {cp : CallPrep} {e : Evm}
+    (hp : dcallPrep s d adrs acs = some cp) (hN : cp.f.PrecompNeutral)
+    (he : frameEnterS cp.f acs = .run e) :
+    dcallPrep (s.withFork g) d adrs acs = some (cp.withFork g) ∧
+      frameEnterS (cp.withFork g).f acs = .run (e.withFork g) := by
+  refine ⟨by rw [dcallPrep_withFork hf hg, hp]; rfl, ?_⟩
+  show frameEnterS (cp.f.withFork g) acs = _
+  rw [frameEnterS_withFork_of_stat hf hg (dcallPrep_stat hp) hN, he]; rfl
 
 end Blanc.Lift.NodeWalk
