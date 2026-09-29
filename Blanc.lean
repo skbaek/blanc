@@ -451,6 +451,7 @@ import Blanc.Lift.LidoCircuitBreakerDeployed.Foreign
 import Blanc.Lift.LidoCircuitBreakerDeployed.Frame
 import Blanc.Lift.LidoCircuitBreakerDeployed.FrameMem
 import Blanc.Lift.LidoCircuitBreakerDeployed.History
+import Blanc.Lift.LidoCircuitBreakerDeployed.L2History
 import Blanc.Lift.LidoCircuitBreakerDeployed.Init
 import Blanc.Lift.LidoCircuitBreakerDeployed.L2
 import Blanc.Lift.LidoCircuitBreakerDeployed.L2Frame

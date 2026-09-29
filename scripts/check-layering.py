@@ -428,7 +428,7 @@ CONTRACTS = {
                              "Lift.LidoCircuitBreakerDeployed.Foreign",
                              "Lift.LidoCircuitBreakerDeployed.Frame",
                              "Lift.LidoCircuitBreakerDeployed.FrameMem",
-                             "Lift.LidoCircuitBreakerDeployed.History",
+                             "Lift.LidoCircuitBreakerDeployed.History", "Lift.LidoCircuitBreakerDeployed.L2History",
                              "Lift.LidoCircuitBreakerDeployed.Init",
                              "Lift.LidoCircuitBreakerDeployed.L2",
                              "Lift.LidoCircuitBreakerDeployed.L2Frame",
