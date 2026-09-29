@@ -3162,7 +3162,8 @@ contract-neutral.
   `rdup`, `rswap`, `rpop`, `radd`, `rsub`, `riszero`, `rmask`, `rmst`, `rmld`, `rkec`, `rhash`, `rsloadC`,
   `rsstoreC`, `rsent`, `rlog2`, `rlog3`, `rreq`) in [`Blanc/Lift/ExactWalkSolc.lean`](../Blanc/Lift/ExactWalkSolc.lean);
   a value-bearing (`callNZ_ex`, `rx_callNZ`) or zero-value (`callZ_ex`, `rx_callZ`) `CALL` to a recipient without
-  code, at its net charge `callNet`, with what it leaves (`CallPost`, `CallPost.getStor`) in
+  code, at its net charge `callNet`, with what it leaves (`CallPost`: output, logs, error, refund counter, emptiness of
+  the accounts to delete and the moved balances; `CallPost.getStor`) in
   [`Blanc/Lift/ExactWalkCall.lean`](../Blanc/Lift/ExactWalkCall.lean).  Worked use: the deployed WETH9's writers,
   `Blanc/Lift/Weth9/LiveApprove.lean` … `LiveHistory.lean`.
 - Jump destinations: Jaune's own `jumpable_eq_jumpdestOk` (`Jaune/Machine.lean`)

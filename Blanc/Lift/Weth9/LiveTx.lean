@@ -41,6 +41,24 @@ theorem dataWord_withdrawCalldata {sevm : Sevm} {wad : B256}
   rw [List.drop_left' hl, List.takeD_eq_take _ (by omega), List.take_of_length_le (by omega),
     B256.toB256_toBytes]
 
+/-- The intrinsic gas of a `withdraw(wad)` transaction: the base cost and four gas per calldata token. -/
+def withdrawIntrinsicGas (wad : B256) : Nat := 21000 + 4 * calldataTokens (withdrawCalldata wad)
+
+/-- **What the `withdraw(wad)` frame costs** at a transaction's entry (the balance slot cold, the caller
+warm and non-empty, the slot's original value its current one): for `wad ≠ 0` it is
+`2040 + 2100 + 100 + 2900 + 6800 = 13940` (the dispatch and the rest, the cold balance `SLOAD`, the warm
+one, the `SSTORE` of a changed nonzero original, the ether send to the warm caller); for `wad = 0`
+`2040 + 2100 + 100 + 100 + 100 = 4440` (a no-op `SSTORE`, and the send is the caller's warm access). -/
+def withdrawFrameGas (wad : B256) : Nat := if wad = 0 then 4440 else 13940
+
+/-- The refund the debit leaves: `4800` when a nonzero `wad` empties the caller's balance. -/
+def withdrawRefund (bal wad : B256) : Nat := if wad ≠ 0 ∧ wad = bal then 4800 else 0
+
+/-- **The gas a `withdraw(wad)` transaction uses** at a state where the caller's balance is `bal`
+(`wad ≤ bal`): the intrinsic gas plus the frame's, less the refund. -/
+def withdrawGasUsed (bal wad : B256) : Nat :=
+  withdrawIntrinsicGas wad + withdrawFrameGas wad - withdrawRefund bal wad
+
 /-! ## What the frame costs, at a transaction's entry
 
 At a transaction's entry the balance slot is cold, the caller (the origin) is warm and not an empty
@@ -111,6 +129,41 @@ theorem withdrawGas_eq {sevm : Sevm} {pre : Devm} {b wad : B256} {E ca : Adr}
   unfold withdrawGas
   omega
 
+/-- The frame's cost for `wad = 0` at a transaction's entry: the cold `SLOAD` (2100), the warm one (100),
+the no-op `SSTORE` (100), the send's warm account access (100), and the fixed 2040. -/
+theorem withdrawZeroGas_eq {sevm : Sevm} {pre : Devm} {b : B256} {E ca : Adr}
+    (hcaller : sevm.caller = E) (hct : sevm.currentTarget = ca)
+    (hcold : (⟨ca, balSlot E⟩ : Adr × B256) ∉ pre.accessedStorageKeys)
+    (hwarm : E ∈ pre.accessedAddresses)
+    (hb : pre.getStorVal ca (balSlot E) = b) (horig : getOrigStorVal sevm ca (balSlot E) = b)
+    (hdw : Sevm.dataWord sevm 4 = 0) : withdrawZeroGas sevm pre = 4440 := by
+  subst hcaller hct
+  have hk1 : (⟨sevm.currentTarget, balSlot sevm.caller⟩ : Adr × B256) ∈
+      (wB1 sevm pre).accessedStorageKeys := mem_afterSload_accessedStorageKeys sevm pre _
+  have hk2 : (⟨sevm.currentTarget, balSlot sevm.caller⟩ : Adr × B256) ∈
+      (wB2 sevm pre).accessedStorageKeys := mem_afterSload_accessedStorageKeys sevm (wB1 sevm pre) _
+  have e1 : sloadCost sevm pre (balSlot sevm.caller) = 2100 := by
+    unfold sloadCost; simp only [hcold, ↓reduceIte]; rfl
+  have e2 : sloadCost sevm (wB1 sevm pre) (balSlot sevm.caller) = 100 := by
+    unfold sloadCost; simp only [hk1, ↓reduceIte]; rfl
+  have hcur : (wB2 sevm pre).getStorVal sevm.currentTarget (balSlot sevm.caller) = b := by
+    rw [← hb]; simp [wB2, wB1, getStorVal_afterSload]
+  have hv : wV sevm pre (Sevm.dataWord sevm 4) = b := by
+    unfold wV
+    simp [wB1, getStorVal_afterSload, hb, hdw, B256.sub_zero]
+  have e3 : sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller)
+      (wV sevm pre (Sevm.dataWord sevm 4)) = 100 := by
+    unfold sstoreCost
+    simp only [hk2, ↓reduceIte, horig, hcur, hv]
+    unfold sstoreValueCost
+    simp [gasWarmAccess]
+  have e4 : accessCost sevm.caller pre.accessedAddresses = 100 := by
+    unfold accessCost
+    simp only [hwarm, ↓reduceIte]
+    rfl
+  unfold withdrawZeroGas
+  omega
+
 /-! ## The frame at a transaction's entry -/
 
 /-- The debit's `SSTORE` changes the storage of the contract and nothing else of any account. -/
@@ -161,15 +214,14 @@ theorem WithdrawPost.acct {sevm : Sevm} {pre post : Devm} {wad : B256} (h : With
 transaction from `E` to `ca` enters -- `withdraw(wad)` calldata, value `0`, not static, not the
 outermost (depth `1024`), the deployed code, the origin an externally owned account that is warm and
 non-empty and not a precompile, the balance slot cold and its original value the current one `b` with
-`0 < wad ≤ b`, the contract holding the ether, and `13940 + G` gas with `811 ≤ G` -- runs to success,
-ending at gas `G` with the debit's refund (`4800` when the balance is emptied), no accounts to delete,
-the balance slot debited by `wad` and no other storage touched, and `wad` ether moved from the contract
-to `E`. -/
+`wad ≤ b`, the contract holding the ether, and `withdrawFrameGas wad + G` gas with `811 ≤ G` -- runs to
+success, ending at gas `G` with the debit's refund (`withdrawRefund`), no accounts to delete, the balance
+slot debited by `wad` and no other storage touched, and `wad` ether moved from the contract to `E`. -/
 theorem weth9_withdraw_entry {sevm : Sevm} {pre : Devm} {E ca : Adr} {b wad : B256} {G : Nat}
     (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
     (hcaller : sevm.caller = E) (hct : sevm.currentTarget = ca)
     (h_static : sevm.isStatic = false) (h_value : sevm.value = 0)
-    (hdata : sevm.data = withdrawCalldata wad) (hwad : wad ≠ 0)
+    (hdata : sevm.data = withdrawCalldata wad)
     (h_stack : pre.stack = []) (h_mem : pre.memory = Mem.empty) (h_depth : sevm.depth ≠ 0)
     (hb : pre.getStorVal ca (balSlot E) = b) (hle : wad ≤ b)
     (horig : getOrigStorVal sevm ca (balSlot E) = b)
@@ -178,9 +230,9 @@ theorem weth9_withdraw_entry {sevm : Sevm} {pre : Devm} {E ca : Adr} {b wad : B2
     (hcold : (⟨ca, balSlot E⟩ : Adr × B256) ∉ pre.accessedStorageKeys)
     (hwarm : E ∈ pre.accessedAddresses) (hne : ¬ (pre.getAcct E).Empty)
     (hEca : E ≠ ca) (h_error : pre.error = none) (h_refund : pre.refundCounter = 0)
-    (h_gas : pre.gasLeft = G + 13940) (hG : 811 ≤ G) :
+    (h_gas : pre.gasLeft = G + withdrawFrameGas wad) (hG : 811 ≤ G) :
     ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧ post.error = none ∧ post.gasLeft = G ∧
-      post.refundCounter = (if wad = b then 4800 else 0) ∧
+      post.refundCounter = ((withdrawRefund b wad : Nat) : Int) ∧
       post.accountsToDelete.isEmpty = pre.accountsToDelete.isEmpty ∧
       post.state.getStor ca = (pre.state.getStor ca).set (balSlot E) (b - wad) ∧
       (∀ a, a ≠ ca → post.state.getStor a = pre.state.getStor a) ∧
@@ -191,27 +243,28 @@ theorem weth9_withdraw_entry {sevm : Sevm} {pre : Devm} {E ca : Adr} {b wad : B2
   have hsel : Sevm.selector sevm = wdSel := selector_withdrawCalldata hdata
   have hlen : sevm.data.length = 36 := by rw [hdata]; exact withdrawCalldata_length wad
   subst hcaller hct
-  have hgas : withdrawGas sevm pre = 13940 :=
-    withdrawGas_eq rfl rfl hcold hwarm hne hb horig hdw hwad hle
-  obtain ⟨post, hex, hg, hp, hs1, hs2⟩ := weth9_withdraw_live_post (G := G) hcode hfork h_static
-    h_value hsel (by omega) (by omega) h_stack h_mem h_depth (by rw [hdw]; exact hwad)
-    (by rw [hdw, hb]; exact hle) h_eoa h_prec (by rw [hdw]; exact h_eth)
-    (by rw [h_gas, hgas]) hG
-  rw [hdw] at hp
-  have hb0 : b ≠ 0 := by
-    intro h0
-    subst h0
-    exact hwad (le_antisymm hle (B256.zero_le _))
-  have hlt : b - wad ≠ b := by
-    intro h
-    apply hwad
-    have h1 := B256.toNat_sub_eq_of_le _ _ hle
-    have h2 := congrArg B256.toNat h
-    rw [h1] at h2
-    have h3 := B256.toNat_le_toNat hle
-    apply B256.toNat_inj
-    show wad.toNat = 0
-    omega
+  obtain ⟨post, hex, hg, hp, hs1, hs2⟩ : ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧ post.gasLeft = G ∧
+      WithdrawPost sevm pre post wad ∧
+      Devm.getStor post sevm.currentTarget = (Devm.getStor pre sevm.currentTarget).set
+        (balSlot sevm.caller)
+        (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) - Sevm.dataWord sevm 4) ∧
+      ∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a := by
+    by_cases hw0 : wad = 0
+    · have hgas : withdrawZeroGas sevm pre = 4440 :=
+        withdrawZeroGas_eq rfl rfl hcold hwarm hb horig (by rw [hdw]; exact hw0)
+      obtain ⟨post, hex, hg, hp, hs1, hs2⟩ := weth9_withdraw_zero_live_post (G := G) hcode hfork
+        h_static h_value hsel (by omega) (by omega) h_stack h_mem h_depth (by rw [hdw]; exact hw0)
+        h_eoa h_prec (by rw [h_gas, withdrawFrameGas, hgas]; simp [hw0]) (by omega)
+      rw [hdw] at hp
+      exact ⟨post, hex, hg, hp, hs1, hs2⟩
+    · have hgas : withdrawGas sevm pre = 13940 :=
+        withdrawGas_eq rfl rfl hcold hwarm hne hb horig hdw hw0 hle
+      obtain ⟨post, hex, hg, hp, hs1, hs2⟩ := weth9_withdraw_live_post (G := G) hcode hfork h_static
+        h_value hsel (by omega) (by omega) h_stack h_mem h_depth (by rw [hdw]; exact hw0)
+        (by rw [hdw, hb]; exact hle) h_eoa h_prec (by rw [hdw]; exact h_eth)
+        (by rw [h_gas, hgas, withdrawFrameGas]; simp [hw0]) hG
+      rw [hdw] at hp
+      exact ⟨post, hex, hg, hp, hs1, hs2⟩
   have hv : wV sevm pre wad = b - wad := by
     unfold wV
     simp [wB1, getStorVal_afterSload, hb]
@@ -219,26 +272,44 @@ theorem weth9_withdraw_entry {sevm : Sevm} {pre : Devm} {E ca : Adr} {b wad : B2
   · rw [hp.error, h_error]
   · rw [hp.refund, h_refund, hv, horig]
     have hcur : pre.getStorVal sevm.currentTarget (balSlot sevm.caller) = b := hb
-    have hne' : b ≠ b - wad := fun h => hlt h.symm
-    have hz : b - wad = 0 ↔ wad = b := by
-      have h1 := B256.toNat_sub_eq_of_le _ _ hle
-      have h3 := B256.toNat_le_toNat hle
-      constructor
-      · intro h
+    by_cases hw0 : wad = 0
+    · subst hw0
+      unfold sstoreNewRefundCounter withdrawRefund
+      simp [hcur, B256.sub_zero]
+    · have hb0 : b ≠ 0 := by
+        intro h0
+        subst h0
+        exact hw0 (le_antisymm hle (B256.zero_le _))
+      have hlt : b - wad ≠ b := by
+        intro h
+        apply hw0
+        have h1 := B256.toNat_sub_eq_of_le _ _ hle
         have h2 := congrArg B256.toNat h
         rw [h1] at h2
+        have h3 := B256.toNat_le_toNat hle
         apply B256.toNat_inj
-        rw [B256.toNat_zero] at h2
+        show wad.toNat = 0
         omega
-      · intro h
-        subst h
-        apply B256.toNat_inj
-        rw [h1, B256.toNat_zero]
-        omega
-    unfold sstoreNewRefundCounter
-    simp only [hcur, CoveredFork.rules_storageClearRefund hfork, hne', ne_eq, not_false_eq_true,
-      ↓reduceIte, hb0, and_false, hz]
-    by_cases h : wad = b <;> simp [h]
+      have hne' : b ≠ b - wad := fun h => hlt h.symm
+      have hz : b - wad = 0 ↔ wad = b := by
+        have h1 := B256.toNat_sub_eq_of_le _ _ hle
+        have h3 := B256.toNat_le_toNat hle
+        constructor
+        · intro h
+          have h2 := congrArg B256.toNat h
+          rw [h1] at h2
+          apply B256.toNat_inj
+          rw [B256.toNat_zero] at h2
+          omega
+        · intro h
+          subst h
+          apply B256.toNat_inj
+          rw [h1, B256.toNat_zero]
+          omega
+      unfold sstoreNewRefundCounter withdrawRefund
+      simp only [hcur, CoveredFork.rules_storageClearRefund hfork, hne', ne_eq, not_false_eq_true,
+        ↓reduceIte, hb0, and_false, hz, hw0, true_and]
+      by_cases h : wad = b <;> simp [h]
   · have h1 := hs1
     rw [hdw, hb] at h1
     exact h1
@@ -249,19 +320,6 @@ theorem weth9_withdraw_entry {sevm : Sevm} {pre : Devm} {E ca : Adr} {b wad : B2
   · exact (hp.acct hEca).2.2
 
 /-! ## The transaction -/
-
-/-- The intrinsic gas of a `withdraw(wad)` transaction: the base cost and four gas per calldata token. -/
-def withdrawIntrinsicGas (wad : B256) : Nat := 21000 + 4 * calldataTokens (withdrawCalldata wad)
-
-/-- The refund the debit leaves: `4800` when the transaction empties the caller's balance. -/
-def withdrawRefund (bal wad : B256) : Nat := if wad = bal then 4800 else 0
-
-/-- **The gas a `withdraw(wad)` transaction uses** at a state where the caller's balance is `bal`
-(`0 < wad ≤ bal`): the intrinsic gas plus the frame's `13940` (the cold balance `SLOAD` 2100, the warm
-one 100, the `SSTORE` 2900, the ether send to the warm caller 6800, the dispatch and the rest 2040),
-less the refund. -/
-def withdrawGasUsed (bal wad : B256) : Nat :=
-  withdrawIntrinsicGas wad + 13940 - withdrawRefund bal wad
 
 theorem withdrawTx_intrinsic (wad : B256) {rules : ForkRules} {tx : Tx} {sender : Adr}
     {chainId : UInt64} {maxPriorityFee maxFee : Nat} {t : Adr}
@@ -287,12 +345,13 @@ theorem getDelegatedCodeAddress_code : getDelegatedCodeAddress code = none := by
 
 /-- **`withdraw(wad)` as a transaction: `processTransaction` succeeds.**  A type-2 transaction `tx` from
 the externally owned account `E` (no code, nonce `tx.nonce`, funds for the maximum fee) to the deployed
-WETH9 `ca`, with value `0` and `withdraw(wad)` calldata (`0 < wad`), no access list and honest fee
+WETH9 `ca`, with value `0` and `withdraw(wad)` calldata, no access list and honest fee
 fields (`maxPriorityFee ≤ maxFee`, the block's base fee at most `maxFee`), is processed by Jaune's
 `processTransaction` at a block whose state carries the footprint invariant `FootInv U` at `ca`, with
 `E`'s balance slot a tracked holder covering `wad`, provided the signature recovers `E`
 (`recoverSender … = .ok E`, the only cryptographic premise), the transaction's gas is at least its
-intrinsic gas plus the frame's `13940` plus `811` (and within the EIP-7825 cap), and the block has room
+intrinsic gas plus the frame's (`withdrawFrameGas`: `13940`, or `4440` for `wad = 0`) plus `811` (and within
+the EIP-7825 cap), and the block has room
 for it.  The gas the receipt records is `withdrawGasUsed`; the world it returns has `E`'s WETH9 balance
 slot debited by `wad`, no other storage touched, the nonce of `E` advanced, `wad` ether moved from `ca`
 to `E` (the fee `tx.gas * effectiveGasPrice` taken from `E` and the unused part refunded), the coinbase
@@ -302,10 +361,11 @@ theorem weth9_tx_withdraw
     {chainId : UInt64} {maxPriorityFee maxFee : Nat} {U : Key → Prop}
     (hfork : CoveredFork benv.stat.fork)
     (htype : tx.type = .two chainId maxPriorityFee maxFee (some ca) [])
-    (hvalue : tx.value = 0) (hdata : tx.data = withdrawCalldata wad) (hwad : wad ≠ 0)
+    (hvalue : tx.value = 0) (hdata : tx.data = withdrawCalldata wad)
     (hchain : chainId = benv.stat.chainId)
     (hprio : maxPriorityFee ≤ maxFee) (hbase : benv.stat.baseFeePerGas ≤ maxFee)
-    (hgas : withdrawIntrinsicGas wad + 13940 + 811 ≤ tx.gas) (hcap : tx.gas ≤ 16777216)
+    (hgas : withdrawIntrinsicGas wad + withdrawFrameGas wad + 811 ≤ tx.gas)
+    (hcap : tx.gas ≤ 16777216)
     (hroom : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
     (hrecover : recoverSender benv.stat.chainId tx = .ok E)
     (hnonce : (benv.state.get E).nonce = tx.nonce) (hnonceMax : tx.nonce ≠ UInt64.max)
@@ -352,6 +412,7 @@ theorem weth9_tx_withdraw
   have hmaxgas : max (withdrawIntrinsicGas wad) (calldataTokens (withdrawCalldata wad) * 10 + 21000) ≤
       tx.gas := by
     have hi : withdrawIntrinsicGas wad = 21000 + 4 * calldataTokens (withdrawCalldata wad) := rfl
+    have hf : 4440 ≤ withdrawFrameGas wad := by unfold withdrawFrameGas; split_ifs <;> omega
     omega
   have hnodeleg : getDelegatedCodeAddress (benv.state.getCode ca) = none := by
     rw [hcode]; exact getDelegatedCodeAddress_code
@@ -366,8 +427,8 @@ theorem weth9_tx_withdraw
       msg.benvAfterTransfer = .ok after →
       ∃ post, exec (initEvm (msg.withBenv after)) = .ok post ∧ post.error = none ∧
         0 ≤ post.refundCounter ∧
-        (post.gasLeft + withdrawIntrinsicGas wad + 13940 = tx.gas ∧
-          post.refundCounter = (if wad = (benv.state.getStor ca).get (balSlot E) then 4800 else 0) ∧
+        (post.gasLeft + withdrawIntrinsicGas wad + withdrawFrameGas wad = tx.gas ∧
+          post.refundCounter = ((withdrawRefund ((benv.state.getStor ca).get (balSlot E)) wad : Nat) : Int) ∧
           post.accountsToDelete.isEmpty = true ∧
           post.state.getStor ca = (benv.state.getStor ca).set (balSlot E)
             ((benv.state.getStor ca).get (balSlot E) - wad) ∧
@@ -425,10 +486,10 @@ theorem weth9_tx_withdraw
     obtain ⟨post, hex, herr, hgl, hrf, hatd, hst, hso, hbE, hnE, hbC⟩ := weth9_withdraw_entry
       (sevm := initSevm (msg.withBenv after)) (pre := initDevm (msg.withBenv after))
       (E := E) (ca := ca) (b := (benv.state.getStor ca).get (balSlot E)) (wad := wad)
-      (G := tx.gas - withdrawIntrinsicGas wad - 13940)
+      (G := tx.gas - withdrawIntrinsicGas wad - withdrawFrameGas wad)
       (by show msg.code = code; rw [hm_code, State.getCode, hd_ne ca hEca]; exact hcode)
       (by show CoveredFork after.stat.fork; rw [hstat]; exact hfork)
-      hm_caller hm_ct hm_static hm_value (by show msg.data = _; rw [hm_data]; exact hdata) hwad
+      hm_caller hm_ct hm_static hm_value (by show msg.data = _; rw [hm_data]; exact hdata)
       rfl rfl (by show msg.depth ≠ 0; rw [hm_depth]; decide)
       (by show (after.state.get ca).stor.get _ = _; rw [hpre_ca]; rfl) hbal
       (by show ((after.stat.origState.get ca).stor).get _ = _; rw [hstat]; rfl)
@@ -456,7 +517,7 @@ theorem weth9_tx_withdraw
     have hE' : (initDevm (msg.withBenv after)).state.get E = after.state.get E := rfl
     have hC' : (initDevm (msg.withBenv after)).state.get ca = after.state.get ca := rfl
     refine ⟨post, hex, herr, ?_, by omega, hrf, ?_, ?_, ?_, ?_, ?_, ?_⟩
-    · rw [hrf]; split_ifs <;> decide
+    · rw [hrf]; exact Int.natCast_nonneg _
     · rw [hatd]; rfl
     · have h1 := hst
       rw [show (initDevm (msg.withBenv after)).state.getStor ca = benv.state.getStor ca from
@@ -471,8 +532,8 @@ theorem weth9_tx_withdraw
     · rw [hbC, hC', hpre_ca]
       rfl
   obtain ⟨debit, post, bout', hQ, hproc, hcum, hblk⟩ := processTransaction_call_of_exec
-    (E := E) (t := ca) (Q := fun _ post => post.gasLeft + withdrawIntrinsicGas wad + 13940 = tx.gas ∧
-          post.refundCounter = (if wad = (benv.state.getStor ca).get (balSlot E) then 4800 else 0) ∧
+    (E := E) (t := ca) (Q := fun _ post => post.gasLeft + withdrawIntrinsicGas wad + withdrawFrameGas wad = tx.gas ∧
+          post.refundCounter = ((withdrawRefund ((benv.state.getStor ca).get (balSlot E)) wad : Nat) : Int) ∧
           post.accountsToDelete.isEmpty = true ∧
           post.state.getStor ca = (benv.state.getStor ca).set (balSlot E)
             ((benv.state.getStor ca).get (balSlot E) - wad) ∧
@@ -493,15 +554,21 @@ theorem weth9_tx_withdraw
     exact hatd
   have hrfn : post.refundCounter.toNat = withdrawRefund ((benv.state.getStor ca).get (balSlot E)) wad := by
     rw [hrf]
-    unfold withdrawRefund
-    split_ifs <;> rfl
+    exact Int.toNat_natCast _
   have hU : txGasUsed tx.gas (calldataTokens (withdrawCalldata wad) * 10 + 21000) post.gasLeft
       post.refundCounter.toNat = withdrawGasUsed ((benv.state.getStor ca).get (balSlot E)) wad := by
     unfold txGasUsed withdrawGasUsed
     rw [hrfn]
     have hi : withdrawIntrinsicGas wad = 21000 + 4 * calldataTokens (withdrawCalldata wad) := rfl
-    unfold withdrawRefund
-    split_ifs <;> omega
+    by_cases hw0 : wad = 0
+    · have h1 : withdrawFrameGas wad = 4440 := by simp [withdrawFrameGas, hw0]
+      have h2 : withdrawRefund ((benv.state.getStor ca).get (balSlot E)) wad = 0 := by
+        simp [withdrawRefund, hw0]
+      omega
+    · have h1 : withdrawFrameGas wad = 13940 := by simp [withdrawFrameGas, hw0]
+      have h2 : withdrawRefund ((benv.state.getStor ca).get (balSlot E)) wad ≤ 4800 := by
+        unfold withdrawRefund; split_ifs <;> omega
+      omega
   rw [hU, hdel] at hproc
   rw [hU] at hcum hblk
   refine ⟨((post.state.addBal E ((tx.gas - withdrawGasUsed ((benv.state.getStor ca).get (balSlot E)) wad) *
@@ -527,7 +594,7 @@ theorem weth9_tx_withdraw
     rw [hbalE]
     have hused : withdrawGasUsed ((benv.state.getStor ca).get (balSlot E)) wad ≤ tx.gas := by
       have hu : withdrawGasUsed ((benv.state.getStor ca).get (balSlot E)) wad ≤
-          withdrawIntrinsicGas wad + 13940 := by unfold withdrawGasUsed; omega
+          withdrawIntrinsicGas wad + withdrawFrameGas wad := by unfold withdrawGasUsed; omega
       omega
     have heff : min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas ≤
         maxFee := by omega
@@ -563,10 +630,11 @@ theorem weth9_history_tx_withdraw
     (hstate : benv.state = future.state)
     (hfork : CoveredFork benv.stat.fork)
     (htype : tx.type = .two chainId maxPriorityFee maxFee (some ca) [])
-    (hvalue : tx.value = 0) (hdata : tx.data = withdrawCalldata wad) (hwad : wad ≠ 0)
+    (hvalue : tx.value = 0) (hdata : tx.data = withdrawCalldata wad)
     (hchain : chainId = benv.stat.chainId)
     (hprio : maxPriorityFee ≤ maxFee) (hbase : benv.stat.baseFeePerGas ≤ maxFee)
-    (hgas : withdrawIntrinsicGas wad + 13940 + 811 ≤ tx.gas) (hcap : tx.gas ≤ 16777216)
+    (hgas : withdrawIntrinsicGas wad + withdrawFrameGas wad + 811 ≤ tx.gas)
+    (hcap : tx.gas ≤ 16777216)
     (hroom : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
     (hrecover : recoverSender benv.stat.chainId tx = .ok E)
     (hnonce : (benv.state.get E).nonce = tx.nonce) (hnonceMax : tx.nonce ≠ UInt64.max)
@@ -585,7 +653,17 @@ theorem weth9_history_tx_withdraw
         ((future.state.getStor ca).get (balSlot E) - wad) ∧
       (∀ a, a ≠ ca → st.getStor a = future.state.getStor a) ∧
       (st.get E).nonce = tx.nonce + 1 ∧
-      (st.get ca).bal = future.state.bal ca - wad := by
+      (st.get E).bal = future.state.bal E -
+          (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+            benv.stat.baseFeePerGas)).toB256 + wad +
+        ((tx.gas - withdrawGasUsed ((future.state.getStor ca).get (balSlot E)) wad) *
+          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+            benv.stat.baseFeePerGas)).toB256 ∧
+      (st.get ca).bal = future.state.bal ca - wad ∧
+      ((future.state.bal E).toNat + wad.toNat < 2 ^ 256 →
+        (st.get E).bal.toNat + withdrawGasUsed ((future.state.getStor ca).get (balSlot E)) wad *
+          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas) =
+          (future.state.bal E).toNat + wad.toNat) := by
   obtain ⟨hc, -, hfoot⟩ := weth9_history_footprint_universe trace installed sumNof initial fresh
   have hcode : benv.state.getCode ca = code := by
     rw [hstate]
@@ -593,10 +671,10 @@ theorem weth9_history_tx_withdraw
   have hbal' : wad ≤ (benv.state.getStor ca).get (balSlot E) := by rw [hstate]; exact hbal
   have hinv : FootInv (historyKeyUniverse ca trace K₀) (benv.state.getStor ca) (benv.state.bal ca) := by
     rw [hstate]; exact hfoot
-  obtain ⟨st, bout', hproc, hcum, hblk, hst, hoth, hnE, -, hbC, -⟩ := weth9_tx_withdraw hfork htype
-    hvalue hdata hwad hchain hprio hbase hgas hcap hroom hrecover hnonce hnonceMax hnocode hfunds
+  obtain ⟨st, bout', hproc, hcum, hblk, hst, hoth, hnE, hbE, hbC, hnet⟩ := weth9_tx_withdraw hfork htype
+    hvalue hdata hchain hprio hbase hgas hcap hroom hrecover hnonce hnonceMax hnocode hfunds
     hprecE hprecCa hcode hinv hholder hbal' hcbE hcbCa
-  rw [hstate] at hcum hblk hst hoth hbC
-  exact ⟨st, bout', hproc, hcum, hblk, hst, hoth, hnE, hbC⟩
+  rw [hstate] at hcum hblk hst hoth hbE hbC hnet
+  exact ⟨st, bout', hproc, hcum, hblk, hst, hoth, hnE, hbE, hbC, hnet⟩
 
 end Blanc.Lift.Weth9

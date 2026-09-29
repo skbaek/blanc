@@ -470,6 +470,37 @@ theorem accessCost_ge (a : Adr) (s : AdrSet) : 100 ≤ accessCost a s := by
   have e3 : gasColdAccountAccess = 2600 := rfl
   split_ifs <;> omega
 
+/-- **`withdraw(0)` to an externally owned account is live, gas-exact** (`643 ≤ G`), with the final
+machine (`WithdrawPost`). -/
+theorem weth9_withdraw_zero_live_post {sevm : Sevm} {pre : Devm} {G : Nat}
+    (h_code : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (h_static : sevm.isStatic = false) (h_value : sevm.value = 0)
+    (h_sel : Sevm.selector sevm = wdSel)
+    (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
+    (h_stack : pre.stack = []) (h_mem : pre.memory = Mem.empty) (h_depth : sevm.depth ≠ 0)
+    (hw0 : Sevm.dataWord sevm 4 = 0)
+    (h_eoa : (pre.getCode sevm.caller).size = 0)
+    (h_prec : sevm.benvStat.rules.isPrecomp sevm.caller = false)
+    (h_gas : pre.gasLeft = G + withdrawZeroGas sevm pre) (hG : 643 ≤ G) :
+    ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧ post.gasLeft = G ∧
+      WithdrawPost sevm pre post (Sevm.dataWord sevm 4) ∧
+      Devm.getStor post sevm.currentTarget = (Devm.getStor pre sevm.currentTarget).set
+        (balSlot sevm.caller)
+        (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) - Sevm.dataWord sevm 4) ∧
+      ∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a := by
+  have hac := accessCost_ge sevm.caller pre.accessedAddresses
+  obtain ⟨post, hrun, hg, ho, hs1, hs2⟩ := weth9_withdraw_zero_runExact_post hfork h_static h_value h_sel
+    h_len h_len' h_stack h_mem h_depth hw0 h_eoa h_prec h_gas
+    (by
+      have e : gCallStipend = 2300 := rfl
+      generalize accessCost sevm.caller pre.accessedAddresses = x at hac ⊢
+      generalize sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller)
+        (wV sevm pre (Sevm.dataWord sevm 4)) = y
+      omega)
+  exact ⟨post, (exec_iff_exec_eq 0 sevm pre (.ok post)).mp (exec_of_runExact h_code hfork hrun), hg,
+    ho, hs1, hs2⟩
+
+
 /-- **`withdraw(0)` to an externally owned account is live, gas-exact** (`643 ≤ G`). -/
 theorem weth9_withdraw_zero_live {sevm : Sevm} {pre : Devm} {G : Nat}
     (h_code : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
@@ -486,18 +517,9 @@ theorem weth9_withdraw_zero_live {sevm : Sevm} {pre : Devm} {G : Nat}
         (balSlot sevm.caller)
         (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) - Sevm.dataWord sevm 4) ∧
       ∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a := by
-  have hac := accessCost_ge sevm.caller pre.accessedAddresses
-  obtain ⟨post, hrun, hg, ho, hs1, hs2⟩ := weth9_withdraw_zero_runExact hfork h_static h_value h_sel
-    h_len h_len' h_stack h_mem h_depth hw0 h_eoa h_prec h_gas
-    (by
-      have e : gCallStipend = 2300 := rfl
-      generalize accessCost sevm.caller pre.accessedAddresses = x at hac ⊢
-      generalize sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller)
-        (wV sevm pre (Sevm.dataWord sevm 4)) = y
-      omega)
-  exact ⟨post, (exec_iff_exec_eq 0 sevm pre (.ok post)).mp (exec_of_runExact h_code hfork hrun), hg,
-    ho, hs1, hs2⟩
-
+  obtain ⟨post, hex, hg, hp, hs1, hs2⟩ := weth9_withdraw_zero_live_post h_code hfork h_static h_value
+    h_sel h_len h_len' h_stack h_mem h_depth hw0 h_eoa h_prec h_gas hG
+  exact ⟨post, hex, hg, hp.output, hs1, hs2⟩
 
 /-- **`withdraw(wad)` to an externally owned account is live, gas-exact, for every `wad`** (`811 ≤ G`),
 at the cost of its case. -/

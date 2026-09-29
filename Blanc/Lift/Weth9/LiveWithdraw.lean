@@ -587,9 +587,9 @@ def withdrawZeroGas (sevm : Sevm) (pre : Devm) : Nat :=
     sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller) (wV sevm pre (Sevm.dataWord sevm 4)) +
     accessCost sevm.caller pre.accessedAddresses
 
-/-- **Liveness of `withdraw(0)` to an externally owned account, gas-exact.**  (`h_sentry`: the debit's
-no-op `SSTORE` runs with more than `gCallStipend` gas.) -/
-theorem weth9_withdraw_zero_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
+/-- **Liveness of `withdraw(0)` to an externally owned account, gas-exact, with the final machine.**
+(`h_sentry`: the debit's no-op `SSTORE` runs with more than `gCallStipend` gas.) -/
+theorem weth9_withdraw_zero_runExact_post {sevm : Sevm} {pre : Devm} {G : Nat}
     (hfork : CoveredFork sevm.benvStat.fork) (h_static : sevm.isStatic = false)
     (h_value : sevm.value = 0) (h_sel : Sevm.selector sevm = wdSel)
     (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
@@ -600,7 +600,8 @@ theorem weth9_withdraw_zero_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
     (h_gas : pre.gasLeft = G + withdrawZeroGas sevm pre)
     (h_sentry : gCallStipend < G + 1 + 1488 + accessCost sevm.caller pre.accessedAddresses + 69 +
       sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller) (wV sevm pre (Sevm.dataWord sevm 4))) :
-    ∃ post, SProg.RunExact prog sevm pre post ∧ post.gasLeft = G ∧ post.output = pre.output ∧
+    ∃ post, SProg.RunExact prog sevm pre post ∧ post.gasLeft = G ∧
+      WithdrawPost sevm pre post (Sevm.dataWord sevm 4) ∧
       Devm.getStor post sevm.currentTarget = (Devm.getStor pre sevm.currentTarget).set
         (balSlot sevm.caller)
         (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) - Sevm.dataWord sevm 4) ∧
@@ -621,7 +622,7 @@ theorem weth9_withdraw_zero_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
     (by simpa [wB3, wB2, wB1] using h_code) h_prec
   obtain ⟨postW, hw, hpe⟩ := withdraw_wrapper (sevm := sevm) (b := pre) (G := G) (X := _)
     (sel := Sevm.selector sevm) h_value hbody
-  refine ⟨postW, ⟨_, rfl, ?_⟩, ?_, ?_, ?_, ?_⟩
+  refine ⟨postW, ⟨_, rfl, ?_⟩, ?_, ⟨?_, ?_, ?_, ?_, ?_, ?_⟩, ?_, ?_⟩
   · have h0 := dispatch_withdraw (b := pre) h_len h_len' hsel hw
     rw [pre_eq_St h_stack h_mem hg] at h0
     exact h0
@@ -631,6 +632,26 @@ theorem weth9_withdraw_zero_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
     rw [hcp.output]
     simp [wB3, wB2, wB1]
   · rw [hpe]
+    show post.error = pre.error
+    rw [hcp.error]
+    simp [wB3, wB2, wB1]
+  · rw [hpe]
+    show post.logs ++ _ = pre.logs ++ _
+    rw [hcp.logs]
+    simp [wB3, wB2, wB1]
+  · rw [hpe]
+    show post.refundCounter = _
+    rw [hcp.refund]
+    simp [wB3, wB2, wB1, wV, getStorVal_afterSload, afterSload_refundCounter]
+  · rw [hpe]
+    show post.accountsToDelete.isEmpty = _
+    rw [hcp.accountsToDelete]
+    simp [wB3, wB2, wB1, afterSload_accountsToDelete]
+  · rw [hpe]
+    obtain ⟨stmid, hsub, hst⟩ := hcp.state
+    rw [hw0] at hsub ⊢
+    exact ⟨stmid, hsub, hst⟩
+  · rw [hpe]
     show Devm.getStor post sevm.currentTarget = _
     rw [hcp.getStor]
     simp [wB3, wB2, wB1, wV, getStorVal_afterSload]
@@ -639,5 +660,27 @@ theorem weth9_withdraw_zero_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
     show Devm.getStor post a = _
     rw [hcp.getStor]
     simp [wB3, wB2, wB1, ha.symm]
+
+/-- **Liveness of `withdraw(0)` to an externally owned account, gas-exact.**  (`h_sentry`: the debit's
+no-op `SSTORE` runs with more than `gCallStipend` gas.) -/
+theorem weth9_withdraw_zero_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork) (h_static : sevm.isStatic = false)
+    (h_value : sevm.value = 0) (h_sel : Sevm.selector sevm = wdSel)
+    (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
+    (h_stack : pre.stack = []) (h_mem : pre.memory = Mem.empty) (h_depth : sevm.depth ≠ 0)
+    (hw0 : Sevm.dataWord sevm 4 = 0)
+    (h_code : (pre.getCode sevm.caller).size = 0)
+    (h_prec : sevm.benvStat.rules.isPrecomp sevm.caller = false)
+    (h_gas : pre.gasLeft = G + withdrawZeroGas sevm pre)
+    (h_sentry : gCallStipend < G + 1 + 1488 + accessCost sevm.caller pre.accessedAddresses + 69 +
+      sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller) (wV sevm pre (Sevm.dataWord sevm 4))) :
+    ∃ post, SProg.RunExact prog sevm pre post ∧ post.gasLeft = G ∧ post.output = pre.output ∧
+      Devm.getStor post sevm.currentTarget = (Devm.getStor pre sevm.currentTarget).set
+        (balSlot sevm.caller)
+        (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) - Sevm.dataWord sevm 4) ∧
+      ∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a := by
+  obtain ⟨post, hrun, hg, hp, hs1, hs2⟩ := weth9_withdraw_zero_runExact_post hfork h_static h_value
+    h_sel h_len h_len' h_stack h_mem h_depth hw0 h_code h_prec h_gas h_sentry
+  exact ⟨post, hrun, hg, hp.output, hs1, hs2⟩
 
 end Blanc.Lift.Weth9
