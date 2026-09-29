@@ -577,6 +577,18 @@ The table lookups below are discharged by the CircuitBreaker's own program, so
 the statements are about *whatever* the table binds at those slots and a
 witness settles it against the program actually running. -/
 
+/-- The CircuitBreaker's table binds `emptyRevertSlot` to the zero-length
+revert. -/
+theorem runtime_emptyRevertSlot (dp : DeployParams) :
+    ((runtime dp).main :: (runtime dp).aux)[emptyRevertSlot]? =
+      some Func.revert := rfl
+
+/-- The CircuitBreaker's table binds `pauseFailedErrorSlot` to
+`PauseFailed()`'s named-error reverter. -/
+theorem runtime_pauseFailedErrorSlot (dp : DeployParams) :
+    ((runtime dp).main :: (runtime dp).aux)[pauseFailedErrorSlot]? =
+      some pauseFailedError := rfl
+
 /-- **Outcome 4: an answer shorter than a word reverts empty.**
 
 D3 in its plain form: the hypothesis is `out.length < 32` and nothing else.

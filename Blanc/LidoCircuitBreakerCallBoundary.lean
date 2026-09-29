@@ -890,6 +890,13 @@ is what `pauseCall_flag_dichotomy` shows takes exactly the two values and
 split C6 asks for, not a premise about the callee: the sibling theorem below
 states the other case, and neither is assumed away. -/
 
+/-- The CircuitBreaker's own table binds `bubbleRevertSlot` to
+`Func.revertReturnData`, so the lookup premise the bubble theorems carry is
+discharged by the program itself rather than left to a consumer. -/
+theorem runtime_bubbleRevertSlot (dp : DeployParams) :
+    ((runtime dp).main :: (runtime dp).aux)[bubbleRevertSlot]? =
+      some Func.revertReturnData := rfl
+
 /-- **The CALL's failure arm reaches the bubble, holding the callee's
 returndata.**  When the flag the CALL pushed is `0` the branch's nonzero arm is
 taken, that arm is the internal `.call` to `bubbleRevertSlot`, and the state

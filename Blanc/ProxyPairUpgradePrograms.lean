@@ -196,6 +196,14 @@ theorem v1_v2_code_ne : v1Code ≠ v2Code := by
   simp only [v1Code, v2Code, ByteArray.toList_eq_toList_data] at lists
   exact v1_v2_bytes_ne lists
 
+/-- The two shared v2 entries are syntactically fixed over S2; neither reads
+the marker nor branches between storage layouts. -/
+theorem v2_shared_entries_exact :
+    v2Entries.take 2 =
+      [ (valueSelector, nonpayable (loadScalar v2ValueSlot)),
+        (setValueSelector, nonpayable (storeScalar v2ValueSlot)) ] := by
+  rfl
+
 theorem marker_selector_new_surface :
     migrationMarkerSelector ∉ v1Entries.map Prod.fst ∧
       migrationMarkerSelector ∈ v2Entries.map Prod.fst := by

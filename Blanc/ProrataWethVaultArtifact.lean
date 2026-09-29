@@ -50,6 +50,8 @@ theorem withdrawEvent_exact :
       0xfbde797d201c681b91056529119e0b02407c7bb96a4a2c75c01fc9667232c8db := by
   decide +kernel
 
+theorem fallback_exact : revertSlot = 1 := rfl
+
 theorem auxLayout_exact :
     vaultAux =
       [ Func.revert,

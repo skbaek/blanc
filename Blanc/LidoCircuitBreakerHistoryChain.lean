@@ -1280,6 +1280,56 @@ theorem processMessageCall_preserves_registryStable (dp : DeployParams)
     (ContractSpec.processMessageCall_preserves_inv hfork (registrySpec_preserves dp ca)
       h_run h_inv).1
 
+theorem processTransaction_preserves_registryStable (dp : DeployParams)
+    (ca : Adr) (benv : Benv) (bout bout' : BlockOutput) (tx : Tx) (i : Nat)
+    (st : Jaune.State)
+    (h_run : processTransaction benv bout tx i = .ok ⟨st, bout'⟩)
+    (h_sum : sum benv.state.bal < 2 ^ 256)
+    (h_fresh : ca ∉ benv.createdAccounts)
+    (h_stable : RegistryStable dp ca benv.state)
+    (hfork : CoveredFork benv.stat.fork) :
+    RegistryStable dp ca st :=
+  (registryStable_iff_stateInv dp ca st).mpr
+    (ContractSpec.processTransaction_preserves_inv ca (registrySpec_preserves dp ca) benv bout
+      bout' tx i st h_run h_sum
+      ⟨(registryStable_iff_stateInv dp ca benv.state).mp h_stable, h_fresh⟩ hfork).state
+
+theorem applyTransactions_preserves_registryStable (dp : DeployParams)
+    (ca : Adr) (txis : List (Nat × Tx)) (benv benv' : Benv)
+    (bout bout' : BlockOutput)
+    (h_run : applyTransactions txis benv bout = .ok ⟨benv', bout'⟩)
+    (h_sum : sum benv.state.bal < 2 ^ 256)
+    (h_fresh : ca ∉ benv.createdAccounts)
+    (h_stable : RegistryStable dp ca benv.state)
+    (hfork : CoveredFork benv.stat.fork) :
+    RegistryStable dp ca benv'.state :=
+  (registryStable_iff_stateInv dp ca benv'.state).mpr
+    (ContractSpec.applyTransactions_preserves_inv ca (registrySpec_preserves dp ca) txis benv
+      benv' bout bout' h_run h_sum
+      ⟨(registryStable_iff_stateInv dp ca benv.state).mp h_stable, h_fresh⟩ hfork).state
+
+theorem stateTransitionAt_preserves_registryStable (dp : DeployParams)
+    (ca : Adr) (f : Fork) (ch ch' : BlockChain) (block : Block)
+    (h_run : stateTransitionAt f ch block = .ok ch')
+    (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_stable : RegistryStable dp ca ch.state)
+    (hfork : CoveredFork f) :
+    RegistryStable dp ca ch'.state :=
+  (registryStable_iff_stateInv dp ca ch'.state).mpr
+    (ContractSpec.stateTransitionAt_preserves_inv ca (registrySpec_preserves dp ca) f ch
+      ch' block h_run h_wds ((registryStable_iff_stateInv dp ca ch.state).mp h_stable) hfork)
+
+theorem stateTransitionUsing_preserves_registryStable (dp : DeployParams)
+    (ca : Adr) (cfg : ChainConfig) (ch ch' : BlockChain) (block : Block)
+    (h_run : stateTransitionUsing cfg ch block = .ok ch')
+    (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
+    (h_stable : RegistryStable dp ca ch.state)
+    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
+    RegistryStable dp ca ch'.state :=
+  (registryStable_iff_stateInv dp ca ch'.state).mpr
+    (ContractSpec.stateTransitionUsing_preserves_inv ca (registrySpec_preserves dp ca) cfg ch
+      ch' block h_run h_wds ((registryStable_iff_stateInv dp ca ch.state).mp h_stable) hcov)
+
 theorem stateTransition_preserves_registryStable (dp : DeployParams)
     (ca : Adr) (ch ch' : BlockChain) (block : Block)
     (h_run : stateTransition ch block = .ok ch')
@@ -1502,6 +1552,63 @@ theorem chainUsing_future_countConservation (dp : DeployParams) (ca : Adr)
           entries.length :=
   (chainUsing_preserves_registryStable dp ca cfg checkpoint future reach
     stable hcov).countConservation
+
+/-- The Prague instance of `chainUsing_future_installedCode`. -/
+theorem chain_future_installedCode (dp : DeployParams) (ca : Adr)
+    (checkpoint future : BlockChain)
+    (reach : BlockChain.Reach checkpoint future)
+    (stable : RegistryStable dp ca checkpoint.state) :
+    (future.state.getCode ca).toList = lidoCircuitBreakerCode dp :=
+  (chain_preserves_registryStable dp ca checkpoint future reach
+    stable).installedCode
+
+/-- The Prague instance of `chainUsing_future_witness`. -/
+theorem chain_future_witness (dp : DeployParams) (ca : Adr)
+    (checkpoint future : BlockChain)
+    (reach : BlockChain.Reach checkpoint future)
+    (stable : RegistryStable dp ca checkpoint.state) :
+    ∃ entries,
+      RegistryWitness (logicalStorageOfStor (future.state.getStor ca)) entries :=
+  (chain_preserves_registryStable dp ca checkpoint future reach stable).witness
+
+/-- The Prague instance of `chainUsing_future_membership`. -/
+theorem chain_future_membership (dp : DeployParams) (ca : Adr)
+    (checkpoint future : BlockChain)
+    (reach : BlockChain.Reach checkpoint future)
+    (stable : RegistryStable dp ca checkpoint.state)
+    {target : B256} (htarget : canonicalAddress target) :
+    ∃ entries,
+      RegistryWitness (logicalStorageOfStor (future.state.getStor ca)) entries ∧
+      ((future.state.getStor ca).get (assignmentSlot target) ≠ 0 ↔
+        target ∈ entries.map Prod.fst) ∧
+      ((future.state.getStor ca).get (indexSlot target) ≠ 0 ↔
+        target ∈ entries.map Prod.fst) ∧
+      ∀ index pauser, findEntry entries target = some (index, pauser) →
+        (future.state.getStor ca).get (assignmentSlot target) = pauser ∧
+        (future.state.getStor ca).get (indexSlot target) =
+          Nat.toB256 (index + 1) ∧
+        targetAt entries index = target ∧
+        ∀ otherIndex, otherIndex < entries.length →
+          targetAt entries otherIndex = target → otherIndex = index :=
+  (chain_preserves_registryStable dp ca checkpoint future reach
+    stable).membership htarget
+
+/-- The Prague instance of `chainUsing_future_countConservation`. -/
+theorem chain_future_countConservation (dp : DeployParams) (ca : Adr)
+    (checkpoint future : BlockChain)
+    (reach : BlockChain.Reach checkpoint future)
+    (stable : RegistryStable dp ca checkpoint.state) :
+    ∃ entries,
+      RegistryWitness (logicalStorageOfStor (future.state.getStor ca)) entries ∧
+      (∀ pauser, canonicalAddress pauser →
+        (future.state.getStor ca).get (countSlot pauser) =
+          Nat.toB256 (assignmentCount entries pauser)) ∧
+      (future.state.getStor ca).get (countSlot 0) = 0 ∧
+      (∑ pauser ∈ (entries.map Prod.snd).toFinset,
+        ((future.state.getStor ca).get (countSlot pauser)).toNat) =
+          entries.length :=
+  (chain_preserves_registryStable dp ca checkpoint future reach
+    stable).countConservation
 
 /-! ## Narrowing controls on the shared reachability vocabulary
 

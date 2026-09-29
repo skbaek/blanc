@@ -3627,6 +3627,27 @@ theorem setHeartbeatInterval_success_settled_effects
   · intro pauser hcanonical
     simpa [initSevm, howner] using hexpiries pauser hcanonical
 
+/-- Any settled error of an exact direct heartbeat-interval message restores
+the complete owner storage and transient storage from message entry.  The
+error kind is established by the separate exact compiled error paths; message
+settlement intentionally erases that distinction. -/
+theorem setHeartbeatInterval_settled_error_restores_owner
+    (dp : DeployParams) {msg : Msg} {slot : Xlot} {post : Devm}
+    {ca : Adr} {newInterval : B256}
+    (_htarget : msg.target = some ca)
+    (_howner : msg.currentTarget = ca)
+    (_hcodeAddress : msg.codeAddress = some ca)
+    (_hcode : msg.code.toList = lidoCircuitBreakerCode dp)
+    (_hvalue : msg.value = 0)
+    (_hdata : msg.data = setHeartbeatIntervalCalldata newInterval)
+    (hprocess : ProcessMessage msg slot (.ok post))
+    (herror : post.error.isSome) :
+    Devm.getStor post ca = msg.benv.state.getStor ca ∧
+      post.transientStorage = msg.tenv.transientStorage := by
+  have hrollback := ProcessMessage.rollback_of_error hprocess herror
+  exact ⟨congrArg (fun state : State => state.getStor ca) hrollback.1,
+    hrollback.2⟩
+
 /-! ## Heartbeat transition -/
 
 /-- Entry-count failure has source precedence over liveness and arithmetic:
@@ -4213,5 +4234,24 @@ theorem heartbeat_success_settled_effects
   refine ⟨hgas, ?_, ?_⟩
   · simpa [initSevm, howner] using hstore
   · simpa [initSevm, howner] using hlogs
+
+/-- Any settled error of an exact direct heartbeat message restores the
+complete owner storage and transient storage from message entry. -/
+theorem heartbeat_settled_error_restores_owner
+    (dp : DeployParams) {msg : Msg} {slot : Xlot} {post : Devm}
+    {ca : Adr}
+    (_htarget : msg.target = some ca)
+    (_howner : msg.currentTarget = ca)
+    (_hcodeAddress : msg.codeAddress = some ca)
+    (_hcode : msg.code.toList = lidoCircuitBreakerCode dp)
+    (_hvalue : msg.value = 0)
+    (_hdata : msg.data = heartbeatCalldata)
+    (hprocess : ProcessMessage msg slot (.ok post))
+    (herror : post.error.isSome) :
+    Devm.getStor post ca = msg.benv.state.getStor ca ∧
+      post.transientStorage = msg.tenv.transientStorage := by
+  have hrollback := ProcessMessage.rollback_of_error hprocess herror
+  exact ⟨congrArg (fun state : State => state.getStor ca) hrollback.1,
+    hrollback.2⟩
 
 end Blanc.LidoCircuitBreaker
