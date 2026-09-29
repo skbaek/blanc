@@ -16,15 +16,14 @@ retained by an admitted configured history, and what the history determines is d
 * `EntryAt lidoA` (from the history's admission `trace.FrameAdmitted ca (lidoEntry lidoA)` at
   the raw root, `frameAdmitted_iff_rawFrames`).
 
-What the history does **not** hand over is the incoming Registry invariant at the frame's own
-entry.  The configured-history ladder (`ConfiguredHistoryTrace.stateInv_admitted`) transports
-`lidoSpec.StateInv` between block boundaries; inside a transaction, the invariant at a nested
-frame's entry is the parent's state at its `CALL`, and neither the frame-level ladder nor the
-accounting ladder (`Exec.coreAccounting`, whose target handler sees only `sem.At`) exports it
-for a frame entered below another Lido frame or below a frame that later fails.  So the
-statement is relative to every witness of the entry storage (`lido_history_l2_frame`), and the
-existential form takes the entry invariant as its one open premise
-(`lido_history_l2_frame_of_inv`).
+The raw-root wrapper `lido_history_l2_frame` still takes a witness of that frame's entry
+registry; `lido_history_l2_frame_of_inv` takes its entry invariant as a premise.  The committed
+history result below closes this gap for settlement-committed non-static frames:
+`lido_history_l2_committed` derives the entry witness from the checkpoint's `StateInv` and the
+actual execution, including reentry from `pause`.  It uses the configured-history entry
+accounting and the Lido spawn obligation, while retaining the history-wide `lidoEntry lidoA`
+admission premise.  Frames rolled back by an ancestor and static frames remain outside the
+committed theorem's stated scope.
 -/
 
 namespace Blanc.Lift.LidoCircuitBreakerDeployed

@@ -23,7 +23,7 @@ Lean, in the file the map cites, before it is relied on.
   qualified is defined in Section 9.
 - **Statement kinds.** *Safety* is a refinement or an invariant. *Live* is
   constructive: a successful `Exec` exists and its gas is exact. *Witness* is
-  a closed existence statement. *Deploy* is a modeled deployment (Section 7).
+  an existence statement; a conditional witness lists its premises. *Deploy* is a modeled deployment (Section 7).
   Levels are *frame*, *message*, *transaction* and *history*.
 - **Configured history.** `ConfiguredHistoryTrace cfg checkpoint future`
   [`Blanc.ExecutionTrace.ConfiguredHistoryTrace` (`Blanc/ExecutionHistory.lean:86`)] is a retained replay of validated
@@ -89,21 +89,21 @@ reader (41 bytes) and a receiver (86 bytes).
 | Runtime identity | That the lifted bytes are the mainnet bytes | Recorded in each certificate's `provenance`: `eth_getCode` agreement across independent public providers (two for WETH9, five for 3Crv); the creation inputs of WETH9, the Beacon deposit contract and 3Crv fetched from two providers and equal byte for byte; the Lido creation input equal to the frozen reference template plus its constructor arguments; the two pool implementations taken from Sourcify v2 records. The codehashes in Section 2 are recomputed from the lifted files by the checker |
 | Fork scope | — | `CoveredFork` is Prague, Osaka, BPO1, BPO2. Amsterdam is not covered |
 | Chain arithmetic | Model bound | Configured traces carry total ETH plus withdrawals below 2^256 (`SumNof` at the checkpoint) |
-| Signature recovery | Premise, not proved | `recoverSender … = .ok E` is the only cryptographic premise of the transaction-level theorems (secp256k1 is not kernel-reducible) |
+| Signature recovery | Premise, not proved | `recoverSender … = .ok E` is a transaction-admission premise (secp256k1 is not kernel-reducible) |
 
 ## 4. Premise classes
 
-Every premise below is one of these classes. The table also says whether the
-class is acceptable in a headline and whether a deployment theorem establishes
-the INIT premise.
+Every theorem hypothesis below has one of these classes; these are not Lean
+logical axioms, and a clean axiom audit does not discharge them. The table says
+whether a class is acceptable and whether deployment establishes INIT.
 
 | Class | Meaning | Acceptable in a headline? | INIT established by a deployment theorem? |
 |---|---|---|---|
 | CODE | Installed code and fork identity | Yes | — |
-| INIT | Stated once, at the checkpoint | Yes, if shown inhabited, ideally by deployment | **WETH9** footprint `FootInv ∅`: yes, no hash premise [`Blanc.Lift.Weth9.Creation.weth9_deploy_init_covered` (`Blanc/Lift/Weth9/Creation/DeployInit.lean:22`)]. **Beacon** `SolInv []`: yes, no hash premise [`Blanc.Lift.BeaconDeposit.Creation.beacon_deploy_covered` (`Blanc/Lift/BeaconDeposit/Creation/Deploy.lean:144`)]. **Curve** `VyInv … ∅`: yes, no hash premise [`Blanc.Lift.Curve3Crv.Creation.curve_deploy_covered` (`Blanc/Lift/Curve3Crv/Creation/Deploy.lean:286`)]. **Lido** `RegistryZeroRaw` and `StateInv`: only under two hash premises `ForeignApart 0 0` and `ForeignApart 0 1` [`Blanc.Lift.LidoCircuitBreakerDeployed.Creation.lido_deploy_init_covered` (`Blanc/Lift/LidoCircuitBreakerDeployed/Creation/Deploy.lean:203`)]. **V±**: synthetic prestates, none |
+| INIT | Stated once, at the checkpoint | Yes, if shown inhabited, ideally by deployment | **WETH9** footprint `FootInv ∅`: yes, no hash premise [`Blanc.Lift.Weth9.Creation.weth9_deploy_init_covered` (`Blanc/Lift/Weth9/Creation/DeployInit.lean:22`)]. **Beacon** `SolInv []`: yes, no hash premise [`Blanc.Lift.BeaconDeposit.Creation.beacon_deploy_covered` (`Blanc/Lift/BeaconDeposit/Creation/Deploy.lean:144`)]. **Curve** `VyInv … ∅`: yes, no hash premise [`Blanc.Lift.Curve3Crv.Creation.curve_deploy_covered` (`Blanc/Lift/Curve3Crv/Creation/Deploy.lean:286`)]. **Lido** `RegistryZeroRaw` and `StateInv`: only under two hash premises `ForeignApart 0 0` and `ForeignApart 0 1` (bound zero still quantifies address mapping keys) [`Blanc.Lift.LidoCircuitBreakerDeployed.Creation.lido_deploy_init_covered` (`Blanc/Lift/LidoCircuitBreakerDeployed/Creation/Deploy.lean:203`)]. **V±**: synthetic prestates, none |
 | ENTRY | Required at every entered frame | Only if environmental, never invariant-shaped | — |
-| HASH-T | Collision-freedom for the hashes and keys actually computed or touched in the trace | Yes: implied by collision resistance | — |
-| HASH-U | Separation quantified over all 2^160 addresses or indices | Needs justification. Not implied by collision resistance; under a random-function model of Keccak it fails with probability about q·2^-94 per frame (q = written slots), a **heuristic bound, not a theorem**. It can never be inhabited by a proof | — |
+| HASH-T | Exact separation of the hashes and keys actually computed or touched in the trace, including avoidance of fixed slots where stated | Yes when stated; narrower and amenable to finite checking with a concrete initial footprint. Computational collision resistance does not entail this exact fact; fixed-slot avoidance also concerns target/preimage behavior. No cryptographic reduction is proved | — |
+| HASH-U | Exact separation quantified over all 2^160 addresses or indices | Needs justification; not established here. The finite domain does not make proof impossible. Under a random-function model of Keccak the estimated failure probability is about q·2^-94 per frame (q = written slots): **heuristic only, with no reduction or bound proved** | — |
 | ENV | Gas, warmth, depth, static flag, callee behaviour, trace-local exclusions (no authorization or CREATE at given addresses) | Yes when stated; better derived | — |
 | ARITH | Numeric bounds | Yes | — |
 
@@ -226,7 +226,7 @@ honest form of the environment: trace-local and finite, but
 |---|---|---|---|---|
 | **History:** the final storage abstracts the model state reached by `Curve3Crv.step` over **exactly the settlement-committed writer invocations** at the contract, in trace order, and that model state is conserving (`totalSupply = Σ balances`) | `Blanc.Lift.Curve3Crv.c3crv_history_committed_derived` (`Blanc/Lift/Curve3Crv/CommittedHistory.lean:210`); base form `Blanc.Lift.Curve3Crv.c3crv_history_committed` (`Blanc/Lift/Curve3Crv/CommittedHistory.lean:171`) (takes the calldata bound as a hypothesis) | History / safety, exact extraction | CODE; INIT `VyInv … initialKeys`; **HASH-T** `FreshKeys initialKeys (historyTouchedKeys ca trace)` (rolled-back frames included); the calldata bound is derived | No static filter: `Blanc.Lift.Curve3Crv.c3crv_writer_nonstatic` (`Blanc/Lift/Curve3Crv/Safe.lean:195`) proves a writer cannot succeed in a static frame |
 | A successful frame from a fresh entry is exactly the model step: writers (events, storage abstraction, owner answer for `set_name`, empty STOP output), **and views (storage and logs unchanged, return bytes equal the model output)** | `Blanc.Lift.Curve3Crv.c3crv_frame_refines` (`Blanc/Lift/Curve3Crv/Safe.lean:242`); raw form `Blanc.Lift.Curve3Crv.c3crv_frame_refines_raw` (`Blanc/Lift/Curve3Crv/Safe.lean:83`) (output stated relative to the entry output) | Frame / safety | CODE; covered fork; calldata bound below 2^256 (a frame-level hypothesis); **fresh entry as explicit premises** `pre.stack = []`, `pre.memory = Mem.empty`, `pre.output = []`; INIT-shaped `VyInv pre`; HASH-T `FreshKeys` (call keys); a successful `Exec 0 sevm pre (.ok post)` | Every successful selector is covered (misses and short calldata have no successful run). The fresh-entry facts are hypotheses here, not derived from a `Frame.enter` equation |
-| Token-model properties: `step` preserves conservation; the initial state is conserving; supply and minter change only by the minter; `transferFrom` spends allowance (maximum allowance exempt); zero-first approve; authorized allowance and balance changes | `Blanc.Curve3Crv.step_conserved` (`Blanc/Curve3Crv/Properties.lean:160`), `Blanc.Curve3Crv.init_conserved` (`Blanc/Curve3Crv/Properties.lean:165`), `Blanc.Curve3Crv.supply_change_by_minter` (`Blanc/Curve3Crv/Properties.lean:182`), `Blanc.Curve3Crv.minter_change_by_minter` (`Blanc/Curve3Crv/Properties.lean:201`), `Blanc.Curve3Crv.transferFrom_spends_allowance` (`Blanc/Curve3Crv/Properties.lean:223`), `Blanc.Curve3Crv.approve_zero_first` (`Blanc/Curve3Crv/Properties.lean:258`), `Blanc.Curve3Crv.allowance_change_authorized` (`Blanc/Curve3Crv/Properties.lean:267`), `Blanc.Curve3Crv.balance_debit_authorized` (`Blanc/Curve3Crv/Properties.lean:304`) | Model / safety | the model only | bridged to the bytes by the two rows above |
+| Token-model properties: `step` preserves conservation; the initial state is conserving; supply and minter change only by the minter; non-minter `transferFrom` spends allowance even at the maximum value, while the minter retains allowances; zero-first approve; authorized allowance and balance changes | `Blanc.Curve3Crv.step_conserved` (`Blanc/Curve3Crv/Properties.lean:160`), `Blanc.Curve3Crv.init_conserved` (`Blanc/Curve3Crv/Properties.lean:165`), `Blanc.Curve3Crv.supply_change_by_minter` (`Blanc/Curve3Crv/Properties.lean:182`), `Blanc.Curve3Crv.minter_change_by_minter` (`Blanc/Curve3Crv/Properties.lean:201`), `Blanc.Curve3Crv.transferFrom_spends_allowance` (`Blanc/Curve3Crv/Properties.lean:223`), `Blanc.Curve3Crv.transferFrom_spends_max_allowance` (`Blanc/Curve3Crv/Properties.lean:233`), `Blanc.Curve3Crv.transferFrom_minter_keeps_allowances` (`Blanc/Curve3Crv/Properties.lean:249`), `Blanc.Curve3Crv.approve_zero_first` (`Blanc/Curve3Crv/Properties.lean:258`), `Blanc.Curve3Crv.allowance_change_authorized` (`Blanc/Curve3Crv/Properties.lean:267`), `Blanc.Curve3Crv.balance_debit_authorized` (`Blanc/Curve3Crv/Properties.lean:304`) | Model / safety | the model only | bridged to the bytes by the two rows above |
 
 **Liveness.** Frame: `Blanc.Lift.Curve3Crv.c3crv_step_exec` (`Blanc/Lift/Curve3Crv/Exec.lean:53`). A model-accepted call (every selector
 except `set_name`) executes with **an exact but existentially quantified
@@ -261,8 +261,8 @@ owner-call premise.
 ### 5.4 Lido CircuitBreaker: registry integrity (not "targets are paused")
 
 The Lido headlines keep **universal (HASH-U) premises** with the explicit
-random-oracle bound of Section 4 (about q·2^-94 per frame; a heuristic bound,
-no theorem derives it). `lidoEntry lidoA` [`Blanc.Lift.LidoCircuitBreakerDeployed.lidoEntry` (`Blanc/Lift/LidoCircuitBreakerDeployed/Frame.lean:63`)] states, at
+random-function heuristic of Section 4 (about q·2^-94 per frame; no reduction
+or probability bound is proved). `lidoEntry lidoA` [`Blanc.Lift.LidoCircuitBreakerDeployed.lidoEntry` (`Blanc/Lift/LidoCircuitBreakerDeployed/Frame.lean:63`)] states, at
 every entered frame, `LocalApart` (`ForeignApart (2^160)` for the three
 fixed and written slots) and `EntryAt lidoA` (for every witness of the
 frame-entry storage, the registry keys the calldata addresses touch are
@@ -272,7 +272,7 @@ faithful at bound 2^160).
 |---|---|---|---|---|
 | After any configured history there is a registry witness of the future storage: assignment and index agree with membership, counts equal assignments, pauser 0 has count 0, and live counts sum to the length word | `Blanc.Lift.LidoCircuitBreakerDeployed.lido_history_l1_l3` (`Blanc/Lift/LidoCircuitBreakerDeployed/History.lean:56`) | History / safety | CODE; INIT `RegistryZeroRaw`; ENTRY plus **HASH-U** `FrameAdmitted ca (lidoEntry lidoA)` | selector-insensitive |
 | `registerPauser(t, 0)` from a real pc-0 entry removes `t` with the correct swap-and-pop repair (`L2Post`) | `Blanc.Lift.LidoCircuitBreakerDeployed.l2_registerPauser_zero` (`Blanc/Lift/LidoCircuitBreakerDeployed/L2Frame.lean:249`) | Frame / safety | CODE; fresh entry; **HASH-U** `EntryAt lidoA`; INIT-shaped `RegistryWitness` of the pre-storage | |
-| **The pre-storage witness is derived:** every settlement-committed non-static `registerPauser(t, 0)` frame (including one re-entered from inside `pause`'s CALL) has a witness of its entry storage and `L2Post` | `Blanc.Lift.LidoCircuitBreakerDeployed.lido_history_l2_committed` (`Blanc/Lift/LidoCircuitBreakerDeployed/L2History.lean:97`) | History / safety | CODE via `StateInv` INIT; `FrameAdmitted ca (lidoEntry lidoA)` (HASH-U); per-frame call shape only. Uses the generic `Blanc.ExecutionTrace.ConfiguredHistoryTrace.entryGood_settled` (`Blanc/ExecutionEntryAccounting.lean:488`), `Blanc.Lift.LidoCircuitBreakerDeployed.lido_spawnEntry` (`Blanc/Lift/LidoCircuitBreakerDeployed/Reentry.lean:440`) and `Blanc.Lift.reach_of_parentPrefix` (`Blanc/Lift/Cursor.lean:705`) | static committed frames and frames under a rolled-back ancestor are **not claimed** |
+| **The pre-storage witness is derived:** every settlement-committed non-static `registerPauser(t, 0)` frame (including one re-entered from inside `pause`'s CALL) has a witness of its entry storage and `L2Post` | `Blanc.Lift.LidoCircuitBreakerDeployed.lido_history_l2_committed` (`Blanc/Lift/LidoCircuitBreakerDeployed/L2History.lean:96`) | History / safety | CODE via `StateInv` INIT; `FrameAdmitted ca (lidoEntry lidoA)` (HASH-U); per-frame call shape only. Uses the generic `Blanc.ExecutionTrace.ConfiguredHistoryTrace.entryGood_settled` (`Blanc/ExecutionEntryAccounting.lean:488`), `Blanc.Lift.LidoCircuitBreakerDeployed.lido_spawnEntry` (`Blanc/Lift/LidoCircuitBreakerDeployed/Reentry.lean:440`) and `Blanc.Lift.reach_of_parentPrefix` (`Blanc/Lift/Cursor.lean:705`) | static committed frames and frames under a rolled-back ancestor are **not claimed** |
 
 **Liveness.** None. There is **no Lido liveness claim of any level**.
 
@@ -328,7 +328,7 @@ The vulnerable implementation 0x6326, called through its proxy.
 | Claim | Theorem | Level / kind | Premises | Notes |
 |---|---|---|---|---|
 | Message level: a successful message execution in which `remove_liquidity` holds lock slot 2, its ETH callback reenters `add_liquidity` (lock slot 0) through the proxy, and the final ledger has `totalSupply = 1800 < 1906 = balanceOf[attacker]`. The two guards are on different slots (bytes 6900-6911 versus 88-99) | `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top.vminus_witness` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Top.lean:155`); all covered forks `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top.vminus_witness_covered` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/ForkTop.lean:159`) | Message / closed witness | none (closed) | synthetic prestate (Section 7); stated for Prague, other covered forks by transport |
-| **Transaction level, all covered forks:** Jaune's `processTransaction` accepts a fixed signed type-2 transaction (zero fee and value, 16,043,200 gas, below 2^24, an access list of 19 addresses), and the returned world has `totalSupply = 1800 < 1906` in the pool | `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.vminus_txC_process` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/TxC/Envelope.lean:137`); message part `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.vminus_txC_message` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/TxC/Closed.lean:49`) (gas 15,822,837 left, refund 42,600, `accountsToDelete` empty) | Transaction / closed witness | `hrecover : recoverSender … = .ok E` (**true by an interpreter `#guard` in `TxTopC.lean`, not a kernel fact**); block room `hroom` | every other admission check is kernel-evaluated on the concrete transaction and block |
+| **Transaction level, all covered forks:** conditional on signature recovery and block room, Jaune's `processTransaction` accepts a fixed signed type-2 transaction (zero fee and value, 16,043,200 gas, below 2^24, an access list of 19 addresses), and the returned world has `totalSupply = 1800 < 1906` in the pool | `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.vminus_txC_process` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/TxC/Envelope.lean:137`); closed message part `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.vminus_txC_message` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/TxC/Closed.lean:49`) (gas 15,822,837 left, refund 42,600, `accountsToDelete` empty) | Transaction / conditional witness | `hrecover : recoverSender … = .ok E` (**true by an interpreter `#guard` in `TxTopC.lean`, not a kernel fact**); block room `hroom` | every other admission check is kernel-evaluated on the concrete transaction and block |
 
 **Fork coverage.** `vminus_witness_covered`, `vminus_txC_message` and
 `vminus_txC_process` quantify `g` with `CoveredFork g`. A Prague-only message
@@ -383,7 +383,8 @@ body. [l] A fixed signed transaction; the recovery premise is true by `#guard`.
    quantifies over registry-observable keys below 2^160. Under a random-oracle
    model of Keccak the failure probability is about q·2^-94 per frame (four
    registry key families × 2^160 / 2^256 per written slot). This is a
-   **heuristic bound**, not a theorem, and it cannot be inhabited by a proof.
+   **heuristic bound estimate**, with no reduction or bound proved; the exact
+   separation hypotheses remain unproved here.
 2. **Two things are not claimed:** an explicit closed Curve cost formula
    (Curve's cost is exact but existential), and Lido liveness (there is none).
 3. **Deployments are modeled, not historical inclusion.** WETH9 (block
@@ -411,9 +412,11 @@ body. [l] A fixed signed transaction; the recovery premise is true by `#guard`.
    MODEXP or P-256 frame; that is what makes the runs fork-uniform. The V+ walks
    expose spawns as explicit nodes and execute no CLZ and no MODEXP or
    P256VERIFY.
-6. **Every closed witness and deployment theorem cited is stated for all of
-   Prague, Osaka, BPO1 and BPO2:** `vplus_witness_covered`,
-   `vplus_witness2_covered`, `vminus_witness_covered`,
+6. **The following witness and deployment forms cover Prague, Osaka,
+   BPO1 and BPO2:** the listed V± message witnesses are closed;
+   `vminus_txC_message` is closed, while `vminus_txC_process` requires
+   signature recovery and block room. The forms are
+   `vplus_witness_covered`, `vplus_witness2_covered`, `vminus_witness_covered`,
    `vminus_txC_{message,process}`, `weth9_deploy_covered`,
    `weth9_deploy_init_covered`, `beacon_deploy_covered`,
    `curve_deploy_covered`, `lido_deploy_covered`, `lido_deploy_init_covered`.
@@ -435,9 +438,12 @@ body. [l] A fixed signed transaction; the recovery premise is true by `#guard`.
    and every other function need no callee premise.
 10. **Static frames are not claimed** where the committed list filters them:
     WETH9 (the filter is a statement-level choice) and Lido (a `nonstatic`
-    per-frame premise; a static `registerPauser(t,0)` of an absent `t` can
-    succeed since it writes nothing). Beacon and Curve prove that
-    statically-committed writers produce nothing.
+    per-frame premise). An absent-target `registerPauser(t,0)` may leave the
+    final registry unchanged, but its successful path has nine writes
+    [`Blanc.Lift.LidoCircuitBreakerDeployed.absentZeroWrites` (`Blanc/Lift/LidoCircuitBreakerDeployed/RegistryLayout.lean:814`),
+    `Blanc.Lift.LidoCircuitBreakerDeployed.setPauser_absentZero_inv` (`Blanc/Lift/LidoCircuitBreakerDeployed/SetPauserFresh.lean:440`)].
+    An unchanged final registry does not make the path write-free. Beacon and
+    Curve prove that statically-committed writers produce nothing.
 11. **Rolled-back frames are not claimed.** History invariants hold of the
     final storage regardless; per-frame committed claims
     (`lido_history_l2_committed`, the committed invocation lists) say nothing of

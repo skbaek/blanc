@@ -9,7 +9,7 @@ import Blanc.ExecutionTraceAdmission
 `weth9_history_preserves_solvent` (`Solvency.lean`) proves backing of a *deduplicated* booked ledger
 and needs, at every entered frame, `AllowAdmitted`: the allowance slots that frame could write avoid
 **every** address's balance slot — a universal statement over all addresses, which no collision
-resistance implies and no proof can inhabit.
+resistance alone entails; no proof of this exact separation premise is supplied here.
 
 `weth9_history_footprint` replaces it by the Curve-style footprint form:
 
