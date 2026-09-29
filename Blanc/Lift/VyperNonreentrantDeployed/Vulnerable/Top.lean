@@ -25,7 +25,7 @@ execution, not transaction admission.
 
 namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top
 
-open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.ConcreteRun
+open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.Witness.Boundary Blanc.ConcreteRun
 open Blanc.Lift.VyperNonreentrantDeployed Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
 open Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree
 
@@ -218,10 +218,11 @@ theorem vminus_witness :
   have hB : ∃ cB : Cfg, wrun fs1 e4.sta 2625 c4 = .cont cB ∧ Agree cB ∧ cB.f = t_0370_c63 ∧
       storOf cB.devm.state proxyAddress (0 : Nat).toB256 = (1 : Nat).toB256 ∧
       storOf cB.devm.state proxyAddress (2 : Nat).toB256 = (1 : Nat).toB256 := by
-    have hA' := chunkA
-    generalize hr : wrun fs1 e4.sta 2625 c4 = r at hA'
+    have hA' := chunkA.1
+    have hT := chunkA.2
+    generalize hr : wrun fs1 e4.sta 2625 c4 = r at hA' hT
     rcases r with c | _ | _
-    · have hc := cfgB_of_obsB hA'
+    · have hc : c = cfgB c.devm.meta c.devm.world := cfg_of_obsB hA' rfl (atdClean_cont.mp hT)
       have hagc : Agree c := (wrun_cont hr).1 hag4
       refine ⟨c, rfl, hagc, (congrArg Cfg.f hc).trans rfl, ?_, ?_⟩
       · rw [hagc.2.2.1, congrArg Cfg.stor hc]; rfl

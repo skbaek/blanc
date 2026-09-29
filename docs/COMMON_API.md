@@ -2267,6 +2267,16 @@ use `ExecutionTrace.TransactionStateChronology`,
 `ExecutionTrace.TransactionStateChronology.stateReplay` in
 [`Blanc/ExecutionTransactionStateTrace.lean`](../Blanc/ExecutionTransactionStateTrace.lean).
 
+For the converse (a transaction *succeeds*, and I have its stages) use
+[`Blanc/TransactionForward.lean`](../Blanc/TransactionForward.lean):
+`checkTransactionGasLimits_ok_of_room` and `checkTransaction_ok_of_parts` assemble the
+admission check from its parts, `processMessageCall_call_of_message` settles a call message
+(no authorizations, no delegation) over a successful `processMessage`, and
+`processTransaction_of_stages` is `processTransaction` from the validation, admission, debit,
+prepared message and message-call outcome, with the exact settled state (gas refund and coinbase
+fee credited, accounts deleted).  Worked use:
+`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Tx/Envelope.lean` (`vminus_tx_process`).
+
 ### T4. The wrapper is a message call and I must see through delegation
 
 Use
@@ -2927,7 +2937,14 @@ contract-neutral.
   [`Blanc/Lift/WitnessChild.lean`](../Blanc/Lift/WitnessChild.lean); the frame-level spawn
   fact `SpawnedBy sevm devm x child` (`Xinst.step` spawns a frame entering as `child`) and
   `spawnedBy_of_callPrep`, `spawnedBy_of_childStart`, `spawnedBy_of_dcallPrep` in
-  [`Blanc/Lift/WitnessSpawn.lean`](../Blanc/Lift/WitnessSpawn.lean). Code tries given as
+  [`Blanc/Lift/WitnessSpawn.lean`](../Blanc/Lift/WitnessSpawn.lean); the literal-free
+  scaffolding for deciding a long `wrun` as kernel chunks between literal boundaries
+  (`Boundary.Bnd`/`obsB`/`cfgOf`/`obsD`/`obsDOk`, their composition `obsD_chain`,
+  `obsD_chain3`, `obsB_of_obsD`, `run_of_obsB` (every boundary also records that the frame's
+  accounts to delete are still empty, `AtdClean`); `Bnd1`/`cfgOf1`/`obsD1`/
+  `obsDOk1` with the refund counter and the accounts to delete optional; and a two-code-child frame's staging `callPairFrom`/`callPairA`/`callPairB`/
+  `callPairFrom_stages`) in
+  [`Blanc/Lift/WitnessBoundary.lean`](../Blanc/Lift/WitnessBoundary.lean). Code tries given as
   generated literals (checked once by kernel `rfl`): `CodeTries.ofData` in
   [`Blanc/Lift/CodeTriesData.lean`](../Blanc/Lift/CodeTriesData.lean). Worked use:
   `Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Top.lean` (`vminus_witness`).

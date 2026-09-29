@@ -1,28 +1,30 @@
-import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame4Chunks
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5Chunks
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame4ChunkA
 
-/-! V- witness, frame 4's first chunk (2,625 steps from the real spawn to the boundary), in
-three kernel decisions of about 875 steps each, all over a free world and free bookkeeping:
-from the spawn (`c4_eq`) to a boundary at `t_35a9_c84` (step 880), from there to one at
-`t_3467_c84` (step 1753) and from there to `cfgB`'s.  Each decision is its own declaration, so
+/-! V- as an admitted transaction, frame 5's first chunk (2,625 steps from the real spawn to the
+boundary), in three kernel decisions of about 875 steps each, all over a free world and free
+bookkeeping: from the spawn (`c5T_eq`) to a boundary at `t_35a9_c84` (step 880), from there to one
+at `t_3467_c84` (step 1753) and from there to `cfgB5`'s.  Each decision is its own declaration, so
 the kernel's caches do not outlive it.  The boundary literals were printed by an untrusted
 scratch evaluation; the decisions check them.  Kernel only; do not open this file in the
 language server. -/
 
-namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree
+namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx
 
 open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.Witness.Boundary Blanc.ConcreteRun
 open Blanc.Lift.VyperNonreentrantDeployed Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
+open Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxTop
+open Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree
 
-/-- Frame 4's machine at step 880. -/
-def mach880 : Mach :=
-  ⟨[(729239000 : Nat).toB256, (1900 : Nat).toB256, (383810 : Nat).toB256, (255 : Nat).toB256,
-    (544 : Nat).toB256, (1000 : Nat).toB256, (900 : Nat).toB256, (269 : Nat).toB256,
-    (10000 : Nat).toB256, (1000 : Nat).toB256, (900 : Nat).toB256,
-    (1000000000000000000 : Nat).toB256, (1000000000000000000 : Nat).toB256, (0 : Nat).toB256,
-    (1000000000000000000 : Nat).toB256, (1000000000000000000 : Nat).toB256,
-    (1000 : Nat).toB256, (900 : Nat).toB256, (10000 : Nat).toB256,
-    (974319557723802925053695531332006914196284377617 : Nat).toB256,
-    (205409108 : Nat).toB256], ⟨#[
+/-- Frame 5's machine at step 880. -/
+def machT880 : Mach :=
+  ⟨[(729239000 : Nat).toB256, (1900 : Nat).toB256, (383810 : Nat).toB256,
+    (255 : Nat).toB256, (544 : Nat).toB256, (1000 : Nat).toB256,
+    (900 : Nat).toB256, (269 : Nat).toB256, (10000 : Nat).toB256,
+    (1000 : Nat).toB256, (900 : Nat).toB256, (1000000000000000000 : Nat).toB256,
+    (1000000000000000000 : Nat).toB256, (0 : Nat).toB256, (1000000000000000000 : Nat).toB256,
+    (1000000000000000000 : Nat).toB256, (1000 : Nat).toB256, (900 : Nat).toB256,
+    (10000 : Nat).toB256, a2Address.toNat.toB256, (205409108 : Nat).toB256], ⟨#[
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x27, 0x10,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -74,18 +76,18 @@ def mach880 : Mach :=
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x84,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0xe8], 832⟩, 28080767, .zero⟩
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0xe8], 832⟩, 27645286, .zero⟩
 
-/-- Frame 4's machine at step 1753. -/
-def mach1753 : Mach :=
-  ⟨[(1000 : Nat).toB256, (1000 : Nat).toB256, (448 : Nat).toB256, (2 : Nat).toB256,
-    (512 : Nat).toB256, (1000 : Nat).toB256, (1000 : Nat).toB256, (566 : Nat).toB256,
-    (10000 : Nat).toB256, (1000 : Nat).toB256, (1000 : Nat).toB256,
-    (1000000000000000000 : Nat).toB256, (1000000000000000000 : Nat).toB256, (2 : Nat).toB256,
-    (1000 : Nat).toB256, (1000 : Nat).toB256, (2000 : Nat).toB256, (1899 : Nat).toB256,
-    (1000000000000000000 : Nat).toB256, (1000000000000000000 : Nat).toB256,
-    (1000 : Nat).toB256, (900 : Nat).toB256, (10000 : Nat).toB256,
-    (974319557723802925053695531332006914196284377617 : Nat).toB256,
+/-- Frame 5's machine at step 1753. -/
+def machT1753 : Mach :=
+  ⟨[(1000 : Nat).toB256, (1000 : Nat).toB256, (448 : Nat).toB256,
+    (2 : Nat).toB256, (512 : Nat).toB256, (1000 : Nat).toB256,
+    (1000 : Nat).toB256, (566 : Nat).toB256, (10000 : Nat).toB256,
+    (1000 : Nat).toB256, (1000 : Nat).toB256, (1000000000000000000 : Nat).toB256,
+    (1000000000000000000 : Nat).toB256, (2 : Nat).toB256, (1000 : Nat).toB256,
+    (1000 : Nat).toB256, (2000 : Nat).toB256, (1899 : Nat).toB256,
+    (1000000000000000000 : Nat).toB256, (1000000000000000000 : Nat).toB256, (1000 : Nat).toB256,
+    (900 : Nat).toB256, (10000 : Nat).toB256, a2Address.toNat.toB256,
     (205409108 : Nat).toB256], ⟨#[
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0x6b,
@@ -138,27 +140,15 @@ def mach1753 : Mach :=
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0xe8,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0xe8], 832⟩, 28077819, .zero⟩
-
-/-- The storage-key shadow at steps 880 and 1753. -/
-def keysA1 : List (Adr × B256) :=
-  [(proxyAddress, (16 : Nat).toB256),
-   (proxyAddress, (15 : Nat).toB256),
-   (proxyAddress, (9 : Nat).toB256),
-   (proxyAddress, (12 : Nat).toB256),
-   (proxyAddress, (14 : Nat).toB256),
-   (proxyAddress, (0 : Nat).toB256),
-   (proxyAddress, (8 : Nat).toB256),
-   (proxyAddress, (26 : Nat).toB256),
-   (proxyAddress, (2 : Nat).toB256)]
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0xe8], 832⟩, 27642338, .zero⟩
 
 /-- The storage shadow at steps 880 and 1753. -/
-def storA1 : StorShadow :=
+def storT880 : StorShadow :=
   [((proxyAddress, (0 : Nat).toB256), (1 : Nat).toB256),
    ((proxyAddress, (8 : Nat).toB256), (900 : Nat).toB256),
    ((proxyAddress, (2 : Nat).toB256), (1 : Nat).toB256),
    ((tokenAddress, proxyAddress.toNat.toB256), (1000 : Nat).toB256),
-   ((proxyAddress, balanceOfASlot.toB256), (2000 : Nat).toB256),
+   ((proxyAddress, balanceOfA2Slot.toB256), (2000 : Nat).toB256),
    ((proxyAddress, (26 : Nat).toB256), (2000 : Nat).toB256),
    ((proxyAddress, (16 : Nat).toB256), (1000000000000000000 : Nat).toB256),
    ((proxyAddress, (15 : Nat).toB256), (1000000000000000000 : Nat).toB256),
@@ -167,23 +157,23 @@ def storA1 : StorShadow :=
    ((proxyAddress, (8 : Nat).toB256), (1000 : Nat).toB256),
    ((proxyAddress, (7 : Nat).toB256), tokenAddress.toNat.toB256)]
 
-def bnd880 : Bnd :=
-  (mach880, t_35a9_c84, [t_37a9_c44, t_010d_c1], keysA1, adrs2625, storA1, acsA, 0, [], [], none)
+def bndT880 : Bnd :=
+  (machT880, t_35a9_c84, [t_37a9_c44, t_010d_c1], keysA1, adrs5T, storT880, acsAT, 0, [], [], none)
 
-def bnd1753 : Bnd :=
-  (mach1753, t_3467_c84, [t_37a9_c44, t_0236_c45], keysA1, adrs2625, storA1, acsA, 0, [], [],
+def bndT1753 : Bnd :=
+  (machT1753, t_3467_c84, [t_37a9_c44, t_0236_c45], keysA1, adrs5T, storT880, acsAT, 0, [], [],
     none)
 
-/-- `obsBEELS`'s boundary. -/
-def bnd2625 : Bnd :=
-  (mach2625, t_0370_c63, [], keys2625, adrs2625, stor2625, acsA, 2800, [], [], none)
+/-- `obsB5EELS`'s boundary. -/
+def bndT2625 : Bnd :=
+  (machT2625, t_0370_c63, [], keys2625, adrs5T, storT2625, acsAT, 2800, [], [], none)
 
-/-- Frame 4's start storage shadow (`aCall.stor`, newest first). -/
-def stor0 : StorShadow :=
+/-- Frame 5's start storage shadow (`aCallT.stor`, newest first). -/
+def storT0 : StorShadow :=
   [((proxyAddress, (8 : Nat).toB256), (900 : Nat).toB256),
    ((proxyAddress, (2 : Nat).toB256), (1 : Nat).toB256),
    ((tokenAddress, proxyAddress.toNat.toB256), (1000 : Nat).toB256),
-   ((proxyAddress, balanceOfASlot.toB256), (2000 : Nat).toB256),
+   ((proxyAddress, balanceOfA2Slot.toB256), (2000 : Nat).toB256),
    ((proxyAddress, (26 : Nat).toB256), (2000 : Nat).toB256),
    ((proxyAddress, (16 : Nat).toB256), (1000000000000000000 : Nat).toB256),
    ((proxyAddress, (15 : Nat).toB256), (1000000000000000000 : Nat).toB256),
@@ -192,33 +182,33 @@ def stor0 : StorShadow :=
    ((proxyAddress, (8 : Nat).toB256), (1000 : Nat).toB256),
    ((proxyAddress, (7 : Nat).toB256), tokenAddress.toNat.toB256)]
 
-/-- Frame 4's entry as a boundary: an empty machine with the spawn's gas at the certificate's
-entry 0, the shadows of frame 2's `CALL` with the implementation added. -/
-def bnd0 : Bnd :=
-  (⟨[], Mem.empty, 28116400, .zero⟩, t_0000_c0, [],
+/-- Frame 5's entry as a boundary: an empty machine with the spawn's gas at the certificate's
+entry 0, the shadows of frame 3's `CALL` with the implementation added. -/
+def bndT0 : Bnd :=
+  (⟨[], Mem.empty, 27680919, .zero⟩, t_0000_c0, [],
     [(proxyAddress, (8 : Nat).toB256), (proxyAddress, (26 : Nat).toB256),
      (proxyAddress, (2 : Nat).toB256)],
-    adrs2625, stor0, acsA, 0, [], [], none)
+    adrs5T, storT0, acsAT, 0, [], [], none)
 
-/-- `c4` is its boundary at its own world and bookkeeping (the one evaluation of the spawn
+/-- `c5T` is its boundary at its own world and bookkeeping (the one evaluation of the spawn
 chain in this file). -/
-theorem c4_eq : c4 = cfgOf bnd0 c4.devm.meta c4.devm.world := by kernel_rfl
+theorem c5T_eq : c5T = cfgOf bndT0 c5T.devm.meta c5T.devm.world := by kernel_rfl
 
-theorem chunkA1 : ∀ (m : Meta) (w : World),
-    obsD bnd880 (wrun fs1 sta4 880 (cfgOf bnd0 m w)) = obsDOk bnd880 := by
+theorem chunkT1 : ∀ (m : Meta) (w : World),
+    obsD bndT880 (wrun fs1 sta5T 880 (cfgOf bndT0 m w)) = obsDOk bndT880 := by
   kernel_forall_rfl
 
-theorem chunkA2 : ∀ (m : Meta) (w : World),
-    obsD bnd1753 (wrun fs1 sta4 873 (cfgOf bnd880 m w)) = obsDOk bnd1753 := by
+theorem chunkT2 : ∀ (m : Meta) (w : World),
+    obsD bndT1753 (wrun fs1 sta5T 873 (cfgOf bndT880 m w)) = obsDOk bndT1753 := by
   kernel_forall_rfl
 
-theorem chunkA3 : ∀ (m : Meta) (w : World),
-    obsD bnd2625 (wrun fs1 sta4 872 (cfgOf bnd1753 m w)) = obsDOk bnd2625 := by
+theorem chunkT3 : ∀ (m : Meta) (w : World),
+    obsD bndT2625 (wrun fs1 sta5T 872 (cfgOf bndT1753 m w)) = obsDOk bndT2625 := by
   kernel_forall_rfl
 
-theorem chunkA : obsB (wrun fs1 e4.sta 2625 c4) = obsBEELS ∧ AtdClean (wrun fs1 e4.sta 2625 c4) := by
-  rw [e4_sta_eq]
-  exact obsB_of_obsD (obsD_chain3 (n1 := 880) (n2 := 873) (n3 := 872) c4_eq chunkA1 chunkA2 chunkA3)
+theorem chunk5A : obsB (wrun fs1 e5T.sta 2625 c5T) = obsB5EELS ∧ AtdClean (wrun fs1 e5T.sta 2625 c5T) := by
+  rw [e5T_sta_eq]
+  exact obsB_of_obsD (obsD_chain3 (n1 := 880) (n2 := 873) (n3 := 872) c5T_eq chunkT1 chunkT2 chunkT3)
     rfl
 
-end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree
+end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx

@@ -1,4 +1,5 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame4
+import Blanc.Lift.WitnessBoundary
 
 /-!
 V- witness, frame 4 in two kernel chunks (W7): the boundary at step 2625, where frame 4
@@ -7,13 +8,13 @@ call.  The boundary configuration's machine and shadows are literals (printed by
 untrusted scratch evaluation; each chunk's kernel decision checks them); its world and its
 accessed sets, logs and the other bookkeeping fields are free in the second chunk: the
 interpreter never inspects them.  Each chunk is itself checked as a few kernel decisions of
-about 900 steps between further literal boundaries (`Bnd`, `obsD_chain`), which bounds the
+about 900 steps between further literal boundaries (`Boundary.Bnd`, `Boundary.obsD_chain`, from `Blanc.Lift.WitnessBoundary`), which bounds the
 kernel's peak memory per decision.
 -/
 
 namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree
 
-open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.ConcreteRun
+open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.Witness.Boundary Blanc.ConcreteRun
 open Blanc.Lift.VyperNonreentrantDeployed Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
 
 /-- Frame 4's machine at step 2625. -/
@@ -108,93 +109,10 @@ def stor2625 : StorShadow :=
    ((proxyAddress, (8 : Nat).toB256), (1000 : Nat).toB256),
    ((proxyAddress, (7 : Nat).toB256), tokenAddress.toNat.toB256)]
 
-/-- The first chunk's observation: the configuration reached, all but its world and
-bookkeeping. -/
-def obsB : Res → Option (Mach × SFunc × List SFunc × List (Adr × B256) × List Adr × StorShadow ×
-    AcctShadow × Int × Bytes × Bytes × Option SettledHalt)
-  | .cont c => some (c.devm.mach, c.f, c.K, c.keys, c.adrs, c.stor, c.acs, c.devm.refundCounter,
-      c.devm.output, c.devm.returnData, c.devm.error)
-  | _ => none
-
-def obsBEELS : Option (Mach × SFunc × List SFunc × List (Adr × B256) × List Adr × StorShadow ×
-    AcctShadow × Int × Bytes × Bytes × Option SettledHalt) :=
+/-- The first chunk's observation (`Boundary.obsB`): the configuration reached, all but its
+world and bookkeeping. -/
+def obsBEELS : Option Bnd :=
   some (mach2625, t_0370_c63, [], keys2625, adrs2625, stor2625, acsA, 2800, [], [], none)
-
-/-! ### Chunk boundaries in general
-
-A boundary is what `obsB` observes.  A chunk ending at a boundary is decided by `obsD`,
-which compares the machine and shadows by `decide` (so the kernel evaluates them) and the
-node, the pending returns and the account shadow as terms; comparing the lazily computed
-machine to a literal as a term instead exhausts the kernel's recursion once the world and
-bookkeeping are free.  A configuration so observed is `cfgOf` of the boundary at its own
-world and bookkeeping, so a run through a boundary is a chunk up to it followed by one from
-it over any world and bookkeeping. -/
-
-/-- What `obsB` observes of a configuration. -/
-abbrev Bnd := Mach × SFunc × List SFunc × List (Adr × B256) × List Adr × StorShadow ×
-  AcctShadow × Int × Bytes × Bytes × Option SettledHalt
-
-/-- The configuration at boundary `x` (with no error), over a free world and free
-bookkeeping. -/
-def cfgOf : Bnd → Meta → World → Cfg
-  | (mach, f, K, keys, adrs, stor, acs, rc, out, rd, _), m, w =>
-    ⟨⟨mach, { m with refundCounter := rc, output := out, returnData := rd, error := none }, w⟩,
-      f, K, keys, adrs, stor, acs⟩
-
-/-- A chunk's end decided against boundary `x`. -/
-def obsD : Bnd → Res → Option (Bool × SFunc × List SFunc × AcctShadow)
-  | (mach, _, _, keys, adrs, stor, _, rc, out, rd, err), .cont c =>
-    some (decide (c.devm.mach.stack = mach.stack) &&
-      decide (c.devm.mach.memory.data.toList = mach.memory.data.toList) &&
-      decide (c.devm.mach.memory.size = mach.memory.size) &&
-      decide (c.devm.mach.gasLeft = mach.gasLeft) &&
-      decide (c.devm.mach.stateGas = mach.stateGas) && decide (c.keys = keys) &&
-      decide (c.adrs = adrs) && decide (c.stor = stor) && decide (c.devm.refundCounter = rc) &&
-      decide (c.devm.output = out) && decide (c.devm.returnData = rd) &&
-      c.devm.error.isNone && err.isNone, c.f, c.K, c.acs)
-  | _, _ => none
-
-/-- What `obsD` shows at boundary `x`. -/
-def obsDOk : Bnd → Option (Bool × SFunc × List SFunc × AcctShadow)
-  | (_, f, K, _, _, _, acs, _, _, _, _) => some (true, f, K, acs)
-
-/-- A configuration decided at boundary `x` is `cfgOf x` at its own world and bookkeeping. -/
-theorem cfg_of_obsD {c : Cfg} {x : Bnd} (h : obsD x (.cont c) = obsDOk x) :
-    c = cfgOf x c.devm.meta c.devm.world := by
-  rcases x with ⟨⟨s, ⟨data, size⟩, g, sg⟩, f, K, keys, adrs, stor, acs, rc, out, rd, err⟩
-  rcases c with ⟨⟨⟨s', ⟨data', size'⟩, g', sg'⟩, m, w⟩, f', K', keys', adrs', stor', acs'⟩
-  simp only [obsD, obsDOk, Option.some.injEq, Prod.mk.injEq, Bool.and_eq_true,
-    decide_eq_true_eq, and_assoc] at h
-  obtain ⟨hs, hd, hsz, hg, hsg, hk, ha, hst, hrc, ho, hrd, he, -, hf, hK, hc⟩ := h
-  have hd' : data' = data := Array.toList_inj.mp hd
-  subst hs hd' hsz hg hsg hk ha hst hf hK hc
-  rcases m with ⟨_, _, _, _, _, _, _, _, _, _, _⟩
-  simp only [Devm.refundCounter, Devm.output, Devm.returnData, Devm.error,
-    Option.isNone_iff_eq_none] at hrc ho hrd he
-  subst hrc ho hrd he
-  rfl
-
-/-- `obsB` of a boundary's configuration is the boundary (when it records no error). -/
-theorem obsB_cfgOf {x : Bnd} (hx : x.2.2.2.2.2.2.2.2.2.2 = none) (m : Meta) (w : World) :
-    obsB (.cont (cfgOf x m w)) = some x := by
-  rcases x with ⟨mach, f, K, keys, adrs, stor, acs, rc, out, rd, err⟩
-  cases hx
-  rfl
-
-/-- A run through boundary `x`: a chunk of `n` steps decided at `x`, then one of `k` steps
-from `x` over any world and bookkeeping. -/
-theorem obsD_chain {P : Res → Prop} {sta : Sevm} {n k : Nat} {c : Cfg} {x : Bnd}
-    (h1 : obsD x (wrun fs1 sta n c) = obsDOk x) (h2 : ∀ m w, P (wrun fs1 sta k (cfgOf x m w))) :
-    P (wrun fs1 sta (n + k) c) := by
-  rw [wrun_add]
-  generalize wrun fs1 sta n c = r at h1 ⊢
-  rcases r with c' | _ | _
-  · rw [cfg_of_obsD h1]
-    exact h2 _ _
-  · rcases x with ⟨_, _, _, _, _, _, _, _, _, _, _⟩
-    simp [obsD, obsDOk] at h1
-  · rcases x with ⟨_, _, _, _, _, _, _, _, _, _, _⟩
-    simp [obsD, obsDOk] at h1
 
 /-- The static machine of frame 4 with the fields its interpreter reads as literals (the
 code, which it never reads, stays `e4`'s), so that a chunk from a boundary does not
@@ -212,7 +130,8 @@ theorem e4_sta_eq : e4.sta = sta4 := by kernel_rfl
 
 /-- The boundary configuration over a free world and free bookkeeping. -/
 def cfgB (m : Meta) (w : World) : Cfg :=
-  ⟨⟨mach2625, { m with refundCounter := 2800, output := [], returnData := [], error := none }, w⟩,
+  ⟨⟨mach2625, { { m with refundCounter := 2800, output := [], returnData := [], error := none } with
+    accountsToDelete := .emptyWithCapacity }, w⟩,
     t_0370_c63, [], keys2625, adrs2625, stor2625, acsA⟩
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree

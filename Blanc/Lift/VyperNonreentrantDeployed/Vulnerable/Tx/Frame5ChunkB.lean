@@ -1,29 +1,31 @@
-import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame4Chunks
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5Chunks
 
-/-! V- witness, frame 4's second chunk (from the boundary, over a free world and free
-bookkeeping, to the `RETURN`), in two kernel decisions: 938 steps to a boundary at
-`t_3467_c62` (step 3563 of the frame), then 942 steps to the `RETURN`.  Each decision is its
-own declaration, so the kernel's caches do not outlive it.  The boundary literal was printed
-by an untrusted scratch evaluation; the decisions check it.  Kernel only; do not open this
-file in the language server. -/
+/-! V- as an admitted transaction, frame 5's second chunk (from the boundary, over a free world
+and free bookkeeping, to the `RETURN`), in two kernel decisions: 938 steps to a boundary at
+`t_3467_c62` (step 3563 of the frame), then 942 steps to the `RETURN`.  Each decision is its own
+declaration, so the kernel's caches do not outlive it.  The boundary literal was printed by an
+untrusted scratch evaluation; the decisions check it.  Kernel only; do not open this file in the
+language server. -/
 
-namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree
+namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx
 
-open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.Witness.Boundary
+open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.Witness.Boundary Blanc.ConcreteRun
 open Blanc.Lift.VyperNonreentrantDeployed Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
+open Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxTop
+open Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree
 
-/-- Frame 4's machine at step 3563. -/
-def mach3563 : Mach :=
-  ⟨[(1000 : Nat).toB256, (0 : Nat).toB256, (448 : Nat).toB256, (2 : Nat).toB256,
-    (512 : Nat).toB256, (1000 : Nat).toB256, (1000 : Nat).toB256, (1236 : Nat).toB256,
-    (10000 : Nat).toB256, (1000 : Nat).toB256, (1000 : Nat).toB256,
-    (1000000000000000000 : Nat).toB256, (1000000000000000000 : Nat).toB256, (2 : Nat).toB256,
-    (0 : Nat).toB256, (0 : Nat).toB256, (0 : Nat).toB256, (0 : Nat).toB256,
-    (2000 : Nat).toB256, (1000 : Nat).toB256, (1000 : Nat).toB256, (2000 : Nat).toB256,
-    (1899 : Nat).toB256, (1000000000000000000 : Nat).toB256,
+/-- Frame 5's machine at step 3563. -/
+def machT3563 : Mach :=
+  ⟨[(1000 : Nat).toB256, (0 : Nat).toB256, (448 : Nat).toB256,
+    (2 : Nat).toB256, (512 : Nat).toB256, (1000 : Nat).toB256,
+    (1000 : Nat).toB256, (1236 : Nat).toB256, (10000 : Nat).toB256,
+    (1000 : Nat).toB256, (1000 : Nat).toB256, (1000000000000000000 : Nat).toB256,
+    (1000000000000000000 : Nat).toB256, (2 : Nat).toB256, (0 : Nat).toB256,
+    (0 : Nat).toB256, (0 : Nat).toB256, (0 : Nat).toB256,
+    (2000 : Nat).toB256, (1000 : Nat).toB256, (1000 : Nat).toB256,
+    (2000 : Nat).toB256, (1899 : Nat).toB256, (1000000000000000000 : Nat).toB256,
     (1000000000000000000 : Nat).toB256, (1000 : Nat).toB256, (900 : Nat).toB256,
-    (10000 : Nat).toB256, (974319557723802925053695531332006914196284377617 : Nat).toB256,
-    (205409108 : Nat).toB256], ⟨#[
+    (10000 : Nat).toB256, a2Address.toNat.toB256, (205409108 : Nat).toB256], ⟨#[
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0xd0,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -87,16 +89,16 @@ def mach3563 : Mach :=
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0xe8,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x27, 0x10], 1024⟩, 28069427, .zero⟩
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x27, 0x10], 1024⟩, 27633946, .zero⟩
 
-def stor3563 : StorShadow :=
+def storT3563 : StorShadow :=
   [((proxyAddress, (9 : Nat).toB256), (1000 : Nat).toB256),
    ((proxyAddress, (8 : Nat).toB256), (1000 : Nat).toB256),
    ((proxyAddress, (0 : Nat).toB256), (1 : Nat).toB256),
    ((proxyAddress, (8 : Nat).toB256), (900 : Nat).toB256),
    ((proxyAddress, (2 : Nat).toB256), (1 : Nat).toB256),
    ((tokenAddress, proxyAddress.toNat.toB256), (1000 : Nat).toB256),
-   ((proxyAddress, balanceOfASlot.toB256), (2000 : Nat).toB256),
+   ((proxyAddress, balanceOfA2Slot.toB256), (2000 : Nat).toB256),
    ((proxyAddress, (26 : Nat).toB256), (2000 : Nat).toB256),
    ((proxyAddress, (16 : Nat).toB256), (1000000000000000000 : Nat).toB256),
    ((proxyAddress, (15 : Nat).toB256), (1000000000000000000 : Nat).toB256),
@@ -105,21 +107,21 @@ def stor3563 : StorShadow :=
    ((proxyAddress, (8 : Nat).toB256), (1000 : Nat).toB256),
    ((proxyAddress, (7 : Nat).toB256), tokenAddress.toNat.toB256)]
 
-def bnd3563 : Bnd :=
-  (mach3563, t_3467_c62, [t_37a9_c44, t_04d4_c152], keys2625, adrs2625, stor3563, acsA, 2800, [],
+def bndT3563 : Bnd :=
+  (machT3563, t_3467_c62, [t_37a9_c44, t_04d4_c152], keys2625, adrs5T, storT3563, acsAT, 2800, [],
     [], none)
 
-theorem chunkB1 : ∀ (m : Meta) (w : World),
-    obsD bnd3563 (wrun fs1 sta4 938 (cfgB m w)) = obsDOk bnd3563 := by
+theorem chunkTB1 : ∀ (m : Meta) (w : World),
+    obsD bndT3563 (wrun fs1 sta5T 938 (cfgB5 m w)) = obsDOk bndT3563 := by
   kernel_forall_rfl
 
-theorem chunkB2 : ∀ (m : Meta) (w : World),
-    obs4 (wrun fs1 sta4 942 (cfgOf bnd3563 m w)) = obs4EELS := by
+theorem chunkTB2 : ∀ (m : Meta) (w : World),
+    obs5 (wrun fs1 sta5T 942 (cfgOf bndT3563 m w)) = obs5EELS := by
   kernel_forall_rfl
 
-theorem chunkB : ∀ (m : Meta) (w : World), obs4 (wrun fs1 e4.sta 1880 (cfgB m w)) = obs4EELS := by
+theorem chunk5B : ∀ (m : Meta) (w : World), obs5 (wrun fs1 e5T.sta 1880 (cfgB5 m w)) = obs5EELS := by
   intro m w
-  rw [e4_sta_eq, show (1880 : Nat) = 938 + 942 from rfl]
-  exact obsD_chain (P := fun r => obs4 r = obs4EELS) (chunkB1 m w) chunkB2
+  rw [e5T_sta_eq, show (1880 : Nat) = 938 + 942 from rfl]
+  exact obsD_chain (P := fun r => obs5 r = obs5EELS) (chunkTB1 m w) chunkTB2
 
-end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree
+end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx

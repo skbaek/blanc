@@ -1,6 +1,7 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.WitnessCerts
 import Blanc.Lift.WitnessChild
+import Blanc.Lift.WitnessBoundary
 
 /-!
 V- witness, frame 1 whole: the run of `remove_liquidity(200, [0, 0], A)` from `c0` to its
@@ -18,7 +19,7 @@ run by its own lifted certificate.
 
 namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
 
-open Jaune Blanc.Lift Blanc.Lift.Witness
+open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.Witness.Boundary
 open Blanc.Lift.VyperNonreentrantDeployed
 
 /-! ### The attacker child (step 339): its settled shadows -/
@@ -100,21 +101,7 @@ supplied; the token child (step 574) is run by its own certificate (`childRun`) 
 from with the shadows of its halting configuration.  Taking the prefix's result as an
 argument lets a proof about the rest case on it without the kernel evaluating the prefix. -/
 def run1From (r : Res) (d1 : Devm) : Res :=
-  match r with
-  | .cont c1 =>
-    match callResume sevm1 c1 d1 keysA adrsA storA acsA with
-    | some c2 =>
-      match wrun fs1 sevm1 234 c2 with
-      | .cont c3 =>
-        match childRun fsT Token.code sevm1 23 c3 with
-        | .done (.halted d2) cl =>
-          match callResume sevm1 c3 d2 cl.keys cl.adrs cl.stor cl.acs with
-          | some c4 => wrun fs1 sevm1 188 c4
-          | none => .stuck
-        | _ => .stuck
-      | _ => .stuck
-    | none => .stuck
-  | _ => .stuck
+  callPairFrom fs1 sevm1 fsT Token.code 234 23 188 keysA adrsA storA acsA r d1
 
 /-- The whole of frame 1, from `c0`, with the attacker child `d1` supplied. -/
 def run1 (d1 : Devm) : Res := run1From (wrun fs1 sevm1 339 c0) d1
