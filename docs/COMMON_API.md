@@ -747,7 +747,18 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   (over `spawn_node`) cross a call-family spawn; `PrepFacts` supplies the settle
   (`PrepFacts.settle_ok`/`settle_error`) and resume (`resume_agree_ok_of`/
   `resume_agree_error_of`; `resume_agree_ok`/`_error` for `STATICCALL`) facts.
-  Worked example: `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Witness/Top.lean`.
+  [`Blanc/Lift/NodeWalkFrames.lean`](../Blanc/Lift/NodeWalkFrames.lean) builds on it:
+  `spawn_resume_ok`/`spawn_resume_err` cross a spawn on any derivation (the child's node, the
+  resumed same-frame successor with its agreement, the descendants list), `leaf_frame`/
+  `leaf_frame_ok` a frame that walks and halts, `halt1_childAgree` a successful halt's shadows,
+  and `chain_trans`, `chain_step`, `interval_trans`, `interval_step` assemble a same-frame chain
+  from its walk segments. `RETURNDATACOPY` runs by Jaune's own step (`returndatacopy_accKeep`).
+  To decide many closed walk equalities in one kernel check (each boundary evaluated once, not
+  once per equality), close a conjunction of them with `kernel_rfl_and`
+  ([`Blanc/Lift/KernelBatch.lean`](../Blanc/Lift/KernelBatch.lean)).
+  Worked examples: `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Witness/Top.lean` (a read-only
+  spawn) and `.../Fixed/Witness2/{Run,Frames,Top}.lean` (an ETH-paying body, a nested reentry
+  through an EIP-1167 forwarder, a committing run).
 - Determinism of execution witnesses:
   [`Blanc/ExecDeterminism.lean`](../Blanc/ExecDeterminism.lean).
 - Identifying an execution's descendant frames across one step (`Exec.descendantFrames_eq_of_nextNone`, `_of_jump`,

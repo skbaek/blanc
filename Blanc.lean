@@ -444,6 +444,9 @@ import Blanc.Lift.WitnessChild
 import Blanc.Lift.WitnessSpawn
 -- Node-exposing concrete walks (vplus-witness-v1): shared.
 import Blanc.Lift.NodeWalk
+import Blanc.Lift.NodeWalkFrames
+-- One kernel check for a conjunction of closed equalities (vplus-witness-v2): shared.
+import Blanc.Lift.KernelBatch
 
 -- The deployed Lido CircuitBreaker, lifted from its runtime bytes (deployed-lido-vyper-v1).
 import Blanc.Lift.LidoCircuitBreakerDeployed.Cert
@@ -501,6 +504,13 @@ import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness.Setup
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness.RunF
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness.RunRest
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness.Top
+-- V+ nonvacuity, committing: the synthetic receiver fixture and the ETH-paying body's refused
+-- reentry through the ETH/stETH forwarder (vplus-witness-v2).
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Receiver.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness2.Setup
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness2.Run
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness2.Frames
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness2.Top
 
 -- The vulnerable Vyper comparator 0x6326, its token and attacker, and the witnessed
 -- reentry vminus_witness (deployed-lido-vyper-v1, V-).

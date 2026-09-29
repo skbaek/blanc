@@ -17,8 +17,8 @@ from a concrete machine, whatever its outcome:
   witness engine's shadows (`Agree`): the instruction is decoded from the trie and checked
   against the bytes (`bytesAtT`), jumps are checked by `jumpdestOkT`, `SLOAD`/`SSTORE`
   go through the forward lemmas on the key shadow, `SELFBALANCE` reads the account
-  shadow, every other instruction runs by Jaune's own `Ninst.step`, and `KECCAK256` by the
-  witness engine's `keccakStep`.  The hash policy `HashPol` says what a walk does at
+  shadow, `RETURNDATACOPY` by Jaune's own step (`returndatacopy_accKeep`), every other
+  instruction through the witness engine's `wstep`, and `KECCAK256` by its `keccakStep`.  The hash policy `HashPol` says what a walk does at
   `KECCAK256`: `.refuse` stops there, `.avoid slot` runs it and refuses a step whose digest
   is `slot`.  The frame-entering instructions stop a walk.  Each walk step is the real
   `Evm.step` (`pstepH_cont`, `pstepH_halt`).  `pstep`/`pwalk` are the `.refuse` walks;
@@ -34,7 +34,8 @@ from a concrete machine, whatever its outcome:
   settle (`PrepFacts.settle_ok`, `.settle_error`) and resume (`resume_agree_ok_of`,
   `resume_agree_error_of`) facts.
 
-Nothing here is contract-specific.
+The chain and frame layer over these (`chain_trans`, `spawn_resume_ok`, `leaf_frame`, …) is
+`Blanc/Lift/NodeWalkFrames.lean`.  Nothing here is contract-specific.
 -/
 
 namespace Blanc.Lift.NodeWalk
@@ -268,6 +269,10 @@ def pstepH (pol : HashPol) {code : ByteArray} {d : Nat} (T : CodeTries code d) (
     match selfbalanceP sevm c with
     | some d' => .cont { c with pc := c.pc + 1, devm := d' }
     | none => .stuck
+  | some (.next (.reg .returndatacopy)) =>
+    match Ninst.step ⟨c.pc, sevm, c.devm⟩ (.reg .returndatacopy) with
+    | .cont pc' d' => .cont { c with pc := pc', devm := d' }
+    | _ => .stuck
   | some (.next n) =>
     match wstep [] sevm (c.cfg (.next n (.last .stop))) with
     | .cont ⟨d1, .last .stop, [], k1, a1, s1, ac1⟩ =>
@@ -412,6 +417,32 @@ theorem jrunT_accKeep {code : ByteArray} {d : Nat} (T : CodeTries code d) {pc pc
             · cases h
             · cases h; exact hk
 
+/-- `RETURNDATACOPY` touches neither the accessed sets nor the world. -/
+theorem returndatacopy_accKeep {pc : Nat} {sevm : Sevm} {devm devm' : Devm}
+    (h : Rinst.runCore pc devm sevm .returndatacopy = .ok devm') : AccKeep devm devm' := by
+  simp only [Rinst.runCore] at h
+  obtain ⟨⟨i, d1⟩, h1, e1⟩ := Except.bind_eq_ok h
+  obtain ⟨⟨j, d2⟩, h2, e2⟩ := Except.bind_eq_ok e1
+  obtain ⟨⟨n, d3⟩, h3, e3⟩ := Except.bind_eq_ok e2
+  obtain ⟨d4, h4, h5⟩ := Except.bind_eq_ok e3
+  split at h5
+  · cases h5
+  · cases h5
+    exact (accKeep_popToNat h1).trans ((accKeep_popToNat h2).trans
+      ((accKeep_popToNat h3).trans ((accKeep_chargeGas h4).trans ⟨rfl, rfl, rfl⟩)))
+
+/-- One `RETURNDATACOPY` step touches neither the accessed sets nor the world. -/
+theorem returndatacopy_step_accKeep {pc pc' : Nat} {sevm : Sevm} {devm devm' : Devm}
+    (h : Ninst.step ⟨pc, sevm, devm⟩ (.reg .returndatacopy) = .cont pc' devm') :
+    AccKeep devm devm' := by
+  rw [Ninst.step_reg] at h
+  unfold Step.ofExecution at h
+  split at h
+  · cases h
+  · cases h
+    rename_i hd
+    exact returndatacopy_accKeep hd
+
 /-- The code does not execute `KECCAK256` at `pc`. -/
 def NoKeccakAt (code : ByteArray) (pc : Nat) : Prop := ¬ Ninst.At code pc (.reg .keccak256)
 
@@ -453,7 +484,18 @@ theorem pstepH_cont {pol : HashPol} {code : ByteArray} {d : Nat} (T : CodeTries 
       simp only [Ninst.step, Rinst.run, hr]
       rfl
     · cases h
-  · rename_i n hne hnsb hdec
+  · rename_i hdec
+    have hat : Ninst.At sevm.code c.pc (.reg .returndatacopy) := by
+      rw [hcode]; exact decodeT_sound T hdec
+    have hnk : NoKeccakAt code c.pc := by
+      intro hk; rw [← hcode, Ninst.At, hat] at hk; cases hk
+    split at h
+    · rename_i pc' d' hs
+      cases h
+      refine ⟨?_, agree_accKeep hag (returndatacopy_step_accKeep hs), pol.stepOK_of_noKeccak hnk⟩
+      rw [Evm.step_next hat]; exact hs
+    · cases h
+  · rename_i n hne hnsb hnrd hdec
     have hat : Ninst.At sevm.code c.pc n := by rw [hcode]; exact decodeT_sound T hdec
     split at h
     · rename_i d1 k1 a1 s1 ac1 hw
@@ -505,6 +547,7 @@ theorem pstepH_halt {pol : HashPol} {code : ByteArray} {d : Nat} (T : CodeTries 
   split at h
   · cases h
   · cases h
+  · split at h <;> cases h
   · split at h <;> cases h
   · split at h
     · split at h <;> cases h
