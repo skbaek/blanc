@@ -521,34 +521,34 @@ Names that the tables above write unqualified.
 |---|---|---|
 | `CoveredFork` | `Blanc.CoveredFork` (`Blanc/Semantics.lean:167`) | the covered forks: Prague, Osaka, BPO1, BPO2 |
 | `ConfiguredHistoryTrace` | `Blanc.ExecutionTrace.ConfiguredHistoryTrace` (`Blanc/ExecutionHistory.lean:86`) | a retained replay of validated blocks under a valid chain configuration |
-| `FrameAdmitted` | `Blanc.ExecutionTrace.ConfiguredHistoryTrace.FrameAdmitted` (`Blanc/ExecutionHistoryAdmission.lean:27`) | a per-frame admission predicate over a configured history |
+| `FrameAdmitted` | `Blanc.ExecutionTrace.ConfiguredHistoryTrace.FrameAdmitted` (`Blanc/ExecutionHistoryAdmission.lean:27`) | pointwise admission of every interpreter execution retained by a configured history, against a per-frame entry predicate |
 | `SumNof` | `Blanc.SumNof` (`Blanc/LadderBase.lean:7`) | a total below 2^256 |
 | `SystemCodeInstalled` | `Blanc.SystemCodeInstalled` (`Blanc/SystemContracts.lean:165`) | the canonical system-contract bytes are installed at their addresses |
-| `NoAuthorityAt` | `Blanc.ExecutionTrace.ConfiguredHistoryTrace.NoAuthorityAt` (`Blanc/ExecutionTraceCodeAt.lean:460`) | no authorization at the given addresses |
-| `SpawnFree` | `Blanc.SpawnFree` (`Blanc/ExecutionTraceSystem.lean:24`) | the code spawns no call-type frames |
-| `FootInv` | `Blanc.Lift.Weth9.FootInv` (`Blanc/Lift/Weth9/Footprint.lean:79`) | WETH9's footprint invariant |
-| `KeysFresh` | `Blanc.Lift.Weth9.KeysFresh` (`Blanc/Lift/Weth9/Footprint.lean:59`) | trace-local freshness of the tracked keys (HASH-T) |
-| `KeyInj` | `Blanc.Lift.Weth9.KeyInj` (`Blanc/Lift/Weth9/Footprint.lean:53`) | injectivity of the key slots |
-| `frameKeys` | `Blanc.Lift.Weth9.frameKeys` (`Blanc/Lift/Weth9/FootFrame.lean:57`) | the uniform five-key set of a frame |
-| `Weth9.historyTouchedKeys` | `Blanc.Lift.Weth9.historyTouchedKeys` (`Blanc/Lift/Weth9/FootHistory.lean:61`) | the keys a history touches, rolled-back frames included |
-| `SendOk` | `Blanc.Lift.Weth9.SendOk` (`Blanc/Lift/Weth9/LiveWriters.lean:564`) | the callee premise of WETH9 `withdraw` to a contract |
-| `AllowAdmitted` | `Blanc.Lift.Weth9.AllowAdmitted` (`Blanc/Lift/Weth9/Premise.lean:24`) | WETH9's universal (HASH-U) per-frame premise |
-| `SolInv` | `Blanc.Lift.BeaconDeposit.SolInv` (`Blanc/Lift/BeaconDeposit/Layout.lean:42`) | Beacon's storage invariant: the accumulator of a deposit history |
-| `beaconEntry` | `Blanc.Lift.BeaconDeposit.beaconEntry` (`Blanc/Lift/BeaconDeposit/Ladder.lean:130`) | Beacon's per-frame environmental premise (`0x02` warm, undelegated) |
-| `DepositDecodable` | `Blanc.Lift.BeaconDeposit.DepositDecodable` (`Blanc/Lift/BeaconDeposit/DepositArgs.lean:55`) | the calldata of a deposit decodes |
-| `ShaReady` | `Blanc.Lift.ShaReady` (`Blanc/Lift/ExactWalkCutOps.lean:77`) | the SHA-256 precompile behaves as the model requires |
-| `VyInv` | `Blanc.Lift.Curve3Crv.VyInv` (`Blanc/Lift/Curve3Crv/Layout.lean:95`) | Curve 3Crv's storage-abstraction invariant |
-| `FreshKeys` | `Blanc.Lift.Curve3Crv.FreshKeys` (`Blanc/Lift/Curve3Crv/Layout.lean:115`) | trace-local freshness of Curve's keys (HASH-T) |
+| `NoAuthorityAt` | `Blanc.ExecutionTrace.ConfiguredHistoryTrace.NoAuthorityAt` (`Blanc/ExecutionTraceCodeAt.lean:460`) | no authorization of any transaction of a configured history recovers to the given address |
+| `SpawnFree` | `Blanc.SpawnFree` (`Blanc/ExecutionTraceSystem.lean:24`) | the code has no instruction that could spawn a child frame, read at every offset (false of the canonical EIP-7002 code) |
+| `FootInv` | `Blanc.Lift.Weth9.FootInv` (`Blanc/Lift/Weth9/Footprint.lean:79`) | WETH9's footprint invariant: support, injective and apart tracked slots, and the tracked ledger backed by the contract's ether |
+| `KeysFresh` | `Blanc.Lift.Weth9.KeysFresh` (`Blanc/Lift/Weth9/Footprint.lean:59`) | each touched key is tracked or on an unused slot, and keys sharing a slot are one key (HASH-T) |
+| `KeyInj` | `Blanc.Lift.Weth9.KeyInj` (`Blanc/Lift/Weth9/Footprint.lean:53`) | tracked slots are pairwise distinct |
+| `frameKeys` | `Blanc.Lift.Weth9.frameKeys` (`Blanc/Lift/Weth9/FootFrame.lean:57`) | the decode-free five-key over-approximation of the keys a frame's call may touch |
+| `Weth9.historyTouchedKeys` | `Blanc.Lift.Weth9.historyTouchedKeys` (`Blanc/Lift/Weth9/FootHistory.lean:61`) | the keys a WETH9 history touches, rolled-back frames included |
+| `SendOk` | `Blanc.Lift.Weth9.SendOk` (`Blanc/Lift/Weth9/LiveWriters.lean:564`) | the callee premise of WETH9 `withdraw` to a contract: the CALL to the caller succeeds, leaves at least 1489 gas, and changes no storage of the contract |
+| `AllowAdmitted` | `Blanc.Lift.Weth9.AllowAdmitted` (`Blanc/Lift/Weth9/Premise.lean:24`) | both allowance images written by the allowance entry points are off the balance image for this frame (a local HASH-U premise) |
+| `SolInv` | `Blanc.Lift.BeaconDeposit.SolInv` (`Blanc/Lift/BeaconDeposit/Layout.lean:42`) | Beacon's storage abstraction: an intact zero-hash table and the model invariant for a deposit history |
+| `beaconEntry` | `Blanc.Lift.BeaconDeposit.beaconEntry` (`Blanc/Lift/BeaconDeposit/Ladder.lean:130`) | Beacon's carried entry condition: calldata length below 2^256, the SHA-256 precompile account (`0x02`) not a delegation, and warm |
+| `DepositDecodable` | `Blanc.Lift.BeaconDeposit.DepositDecodable` (`Blanc/Lift/BeaconDeposit/DepositArgs.lean:55`) | the deployed decoder accepts the deposit calldata |
+| `ShaReady` | `Blanc.Lift.ShaReady` (`Blanc/Lift/ExactWalkCutOps.lean:77`) | the SHA-256 precompile premises of a frame's world: address 2 undelegated and warm, a precompile of the fork |
+| `VyInv` | `Blanc.Lift.Curve3Crv.VyInv` (`Blanc/Lift/Curve3Crv/Layout.lean:95`) | Curve 3Crv's storage abstraction over the live keys |
+| `FreshKeys` | `Blanc.Lift.Curve3Crv.FreshKeys` (`Blanc/Lift/Curve3Crv/Layout.lean:115`) | the frame-local premise for the keys a Curve frame touches: each is fresh and their slots are pairwise distinct (HASH-T) |
 | `Curve3Crv.historyTouchedKeys` | `Blanc.Lift.Curve3Crv.historyTouchedKeys` (`Blanc/Lift/Curve3Crv/CarriedHistory.lean:27`) | the keys a Curve history touches |
-| `OwnerCallOk` | `Blanc.Lift.Curve3Crv.OwnerCallOk` (`Blanc/Lift/Curve3Crv/LiveBodies.lean:1570`) | the callee premise of Curve `set_name` |
-| `RegistryZeroRaw` | `Blanc.Lift.LidoCircuitBreakerDeployed.RegistryZeroRaw` (`Blanc/Lift/LidoCircuitBreakerDeployed/L2.lean:46`) | the registry's raw storage is zero |
+| `OwnerCallOk` | `Blanc.Lift.Curve3Crv.OwnerCallOk` (`Blanc/Lift/Curve3Crv/LiveBodies.lean:1570`) | the callee premise of Curve `set_name`: its static `owner()` call answers whenever it is given enough gas, and leaves at least `R` gas |
+| `RegistryZeroRaw` | `Blanc.Lift.LidoCircuitBreakerDeployed.RegistryZeroRaw` (`Blanc/Lift/LidoCircuitBreakerDeployed/L2.lean:46`) | the raw-slot form of an empty registry: the array length word is zero and every canonical address has zero assignment, index and count words |
 | `StateInv` | `Blanc.ContractSpecSem.StateInv` (`Blanc/LadderSem.lean:86`) | the state invariant of a semantic contract spec (`lidoSpec.StateInv`) |
-| `ForeignApart` | `Blanc.Lift.LidoCircuitBreakerDeployed.ForeignApart` (`Blanc/Lift/LidoCircuitBreakerDeployed/Foreign.lean:21`) | separation of foreign slots from the registry's, at a bound (HASH-U) |
-| `LocalApart` | `Blanc.Lift.LidoCircuitBreakerDeployed.LocalApart` (`Blanc/Lift/LidoCircuitBreakerDeployed/Frame.lean:52`) | the three fixed and written slots are apart |
-| `EntryAt` | `Blanc.Lift.LidoCircuitBreakerDeployed.EntryAt` (`Blanc/Lift/LidoCircuitBreakerDeployed/Frame.lean:58`) | the registry keys touched by calldata are faithful at a bound (HASH-U) |
-| `L2Post` | `Blanc.Lift.LidoCircuitBreakerDeployed.L2Post` (`Blanc/Lift/LidoCircuitBreakerDeployed/L2Frame.lean:32`) | the postcondition of `registerPauser(t, 0)` |
+| `ForeignApart` | `Blanc.Lift.LidoCircuitBreakerDeployed.ForeignApart` (`Blanc/Lift/LidoCircuitBreakerDeployed/Foreign.lean:21`) | a raw slot is disjoint from the storage slots of every logical key the registry observes up to a bound (HASH-U) |
+| `LocalApart` | `Blanc.Lift.LidoCircuitBreakerDeployed.LocalApart` (`Blanc/Lift/LidoCircuitBreakerDeployed/Frame.lean:52`) | the three non-registry slots a frame can write are off the registry layout |
+| `EntryAt` | `Blanc.Lift.LidoCircuitBreakerDeployed.EntryAt` (`Blanc/Lift/LidoCircuitBreakerDeployed/Frame.lean:58`) | the registry-writer premise holds of every registry witness of the frame's entry storage (HASH-U at bound 2^160 for `lidoA`) |
+| `L2Post` | `Blanc.Lift.LidoCircuitBreakerDeployed.L2Post` (`Blanc/Lift/LidoCircuitBreakerDeployed/L2Frame.lean:32`) | the removal effects of the L2 frame theorem, relative to the pre-call witness |
 | `RegistryWitness` | `Blanc.LidoCircuitBreaker.RegistryWitness` (`Blanc/LidoCircuitBreakerRegistryModel.lean:254`) | a witness that a storage is a well-formed registry |
-| `HashAvoidIn` | `Blanc.LockExclusion.LockSpec.HashAvoidIn` (`Blanc/LockExclusion.lean:316`) | executed Keccak digests differ from the lock slot (HASH-T) |
+| `HashAvoidIn` | `Blanc.LockExclusion.LockSpec.HashAvoidIn` (`Blanc/LockExclusion.lean:316`) | every frame of the pool running the lock code avoids the lock slot with its executed hashes (HASH-T) |
 | `VplusExcludes` | `Blanc.Lift.VyperNonreentrantDeployed.Fixed.VplusExcludes` (`Blanc/Lift/VyperNonreentrantDeployed/Fixed/ExclusionTrace.lean:44`) | the statement form of the V+ exclusion |
 
 ## 10. Checking this document
