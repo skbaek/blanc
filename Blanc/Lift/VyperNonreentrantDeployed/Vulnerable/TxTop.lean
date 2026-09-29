@@ -31,9 +31,11 @@ open Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
 
 /-! ### Addresses -/
 
-/-- The EOA sender `E` of the vminus-tx-v1 witness: nonce 0, no code, no balance (the
-transaction's fees and value are both zero, so none is needed). -/
-def eAddress : Adr := 0xeeee0000000000000000000000000000000000e0
+/-- The EOA sender `E` of the vminus-tx-v1 witness: the address of the secp256k1 key
+`sha256("blanc vminus-tx-v1 test key")`, so that the transaction's signature (`tx0`) is a real
+one: nonce 0, no code, no balance before the transaction (its fees and value are both zero, so
+none is needed). -/
+def eAddress : Adr := 0xb6dfb16cb35911fc3a23d35f434acfd84fba6a96
 
 /-- The tx-level dispatcher attacker `A'` (the address baked into `Attacker2.code`'s own
 `receiver` literals; a byte list, not a hand-typed hex string -- see
@@ -43,15 +45,19 @@ def a2Address : Adr := 0xaaaa0000000000000000000000000000a2a2a2a2
 
 /-! ### The pre-state -/
 
-/-- The pre-state's accounts without storage: the proxy, the implementation and the honest
-token exactly as in the message-level witness (`Vulnerable.Frame1`), `A'` holding the
-registered `Attacker2` certificate's bytes, and `E` (an EOA, nonce 0, no code). -/
-def acctsTx : List (Adr × Acct) :=
+/-- The accounts of the block's pre-state without storage: the proxy, the implementation and the
+honest token exactly as in the message-level witness (`Vulnerable.Frame1`), and `A'` holding the
+registered `Attacker2` certificate's bytes.  `E` (an EOA: nonce 0, no code, no balance) is the
+nil account, so it is absent. -/
+def acctsPre : List (Adr × Acct) :=
   [(proxyAddress, ⟨1, (1000 : Nat).toB256, .empty, proxyCode⟩),
    (implementationAddress, ⟨1, 0, .empty, code⟩),
    (a2Address, ⟨1, 0, .empty, Attacker2.code⟩),
-   (tokenAddress, ⟨1, 0, .empty, tokenCode⟩),
-   (eAddress, ⟨0, 0, .empty, .empty⟩)]
+   (tokenAddress, ⟨1, 0, .empty, tokenCode⟩)]
+
+/-- The accounts of the state the transaction's message runs in: `acctsPre` and `E` after the
+transaction's nonce increment (nonce 1; its zero fee debit changes nothing). -/
+def acctsTx : List (Adr × Acct) := acctsPre ++ [(eAddress, ⟨1, 0, .empty, .empty⟩)]
 
 def worldTx_base : State := stateFoldAcct default acctsTx
 
@@ -79,7 +85,17 @@ def poolWritesTx : List ((Adr × B256) × B256) :=
   poolStorageTx.map (fun (k, v) => ((proxyAddress, k.toB256), v.toB256)) ++
     [((tokenAddress, proxyAddress.toNat.toB256), (1000 : Nat).toB256)]
 
+/-- The world state the transaction's message runs in (after the sender's nonce increment and
+zero fee debit). -/
 def worldTx : State := stateFoldStor worldTx_base poolWritesTx
+
+/-- The block's pre-state: `worldTx` before the transaction (`E` is the nil account, nonce 0). -/
+def worldPre : State := stateFoldStor (stateFoldAcct default acctsPre) poolWritesTx
+
+/-- **The transaction's debit**: `processTransaction` increments `E`'s nonce and debits the
+(zero) maximum fee, and the result is the world `worldTx` the message runs in. -/
+theorem worldPre_debit : (worldPre.incrNonce eAddress).subBal eAddress 0 = some worldTx := by
+  kernel_rfl
 
 theorem acctAgree_worldTx : AcctAgree worldTx acsTx0 :=
   acctAgree_stateFoldStor poolWritesTx acctAgree_worldTx_base
@@ -94,27 +110,51 @@ receiver `A'` instead of the message-level witness's old attacker. -/
 def removeCalldata2 : Bytes :=
   [0x3e, 0xb1, 0x71, 0x9f] ++ word 200 ++ word 0 ++ word 0 ++ word a2Address.toNat
 
+/-- The signature `(r, s)` of `tx0` under `E`'s key over `tx0`'s signing hash (`v = 0`,
+low `s`), computed outside Lean; that it recovers `E` is checked by the `#guard` below (evaluation, not the kernel:
+`secp256k1.recover` is not kernel-reducible). -/
+def sigR : Bytes :=
+  [142, 12, 103, 253, 92, 30, 144, 150, 144, 11, 166, 180, 175, 215, 101, 117, 89, 113, 106, 20,
+    203, 5, 242, 84, 72, 89, 111, 62, 244, 85, 188, 130]
+
+def sigS : Bytes :=
+  [34, 177, 95, 35, 81, 141, 107, 130, 213, 84, 240, 219, 206, 48, 27, 177, 247, 175, 175, 172,
+    225, 116, 173, 202, 183, 159, 207, 170, 7, 60, 138, 153]
+
 /-- A type-2 (EIP-1559), zero-fee, zero-value transaction from `E` to `A'`: `chainId = 0`,
 `maxPriorityFee = maxFee = 0` (legal since `baseFeePerGas = 0`), empty access list, nonce 0
-(matching `E`'s nonce), 30,000,000 gas, calldata `START`. -/
+(matching `E`'s nonce), calldata `START`, and 30,021,064 gas: the 21,064 the intrinsic cost of
+the calldata takes, plus the 30,000,000 the message runs with. -/
 def tx0 : Tx :=
-  { nonce := 0, gas := 30000000, value := 0, data := START, v := 0, r := [], s := [],
+  { nonce := 0, gas := 30021064, value := 0, data := START, v := 0, r := sigR, s := sigS,
     type := .two (0 : UInt64) 0 0 (some a2Address) [] }
 
+#guard (recoverSender 0 tx0).toOption == some eAddress
+
+/-- The block: Prague, chain id 0, base fee 0, the sender `E` as coinbase (so the coinbase is
+already among the warm addresses), room for `tx0`'s gas, `worldPre` as the state the block
+started from. -/
 def benvStatTx : BenvStat :=
-  { fork := .prague, chainId := 0, origState := worldTx, blockGasLimit := 30000000,
-    blockHashes := [], coinbase := 0, number := 0, baseFeePerGas := 0, time := 0,
+  { fork := .prague, chainId := 0, origState := worldPre, blockGasLimit := 60000000,
+    blockHashes := [], coinbase := eAddress, number := 0, baseFeePerGas := 0, time := 0,
     prevRandao := 0, excessBlobGas := 0, parentBeaconBlockRoot := 0 }
 
+/-- The block environment before the transaction. -/
+def benvPre : Benv :=
+  { state := worldPre, createdAccounts := .emptyWithCapacity, stat := benvStatTx }
+
+/-- The block environment `prepareMessage` sees: after the sender's debit (`worldPre_debit`). -/
 def benv0 : Benv :=
   { state := worldTx, createdAccounts := .emptyWithCapacity, stat := benvStatTx }
 
+/-- The transaction environment `processTransaction` builds (index 0 in the block). -/
 def tenvStat0 : TenvStat :=
   { origin := eAddress, gasPrice := 0, gas := 30000000, stateGasReservoir := 0,
-    accessListAddresses := .emptyWithCapacity, accessListStorageKeys := .emptyWithCapacity,
-    blobVersionedHashes := [], auths := [], indexInBlock := some 0, txHash := none }
+    accessListAddresses := Std.HashSet.ofList [eAddress],
+    accessListStorageKeys := Std.HashSet.ofList [],
+    blobVersionedHashes := [], auths := [], indexInBlock := some 0, txHash := some (getTxHash tx0) }
 
-def tenv0 : Tenv := { transientStorage := default, stat := tenvStat0 }
+def tenv0 : Tenv := { transientStorage := .empty, stat := tenvStat0 }
 
 /-! ### `prepareMessage` really succeeds, with the real EIP-2929 warm set -/
 
@@ -130,16 +170,22 @@ theorem msg0tx_eq : prepareMessage benv0 tenv0 tx0 = .ok msg0tx := by kernel_rfl
 `E` (the origin) and `A'` (the target) -- not the empty set the message-level witness used.
 This is the one fact that makes this an honest transaction-shaped entry. -/
 theorem msg0tx_adrs_eq : msg0tx.accessedAddresses =
-    (Std.HashSet.emptyWithCapacity : AdrSet).insertMany
+    (Std.HashSet.ofList [eAddress] : AdrSet).insertMany
       (praguePrecompiles ++ [eAddress, a2Address]) := by kernel_rfl
 
 theorem msg0tx_adrs : ∀ a, a ∈ msg0tx.accessedAddresses ↔
     a ∈ (praguePrecompiles ++ [eAddress, a2Address]) := by
   intro a
   rw [msg0tx_adrs_eq, Std.HashSet.mem_insertMany_list]
-  simp
+  simp only [Std.HashSet.mem_ofList, List.mem_cons, List.not_mem_nil, or_false, List.contains_eq_mem,
+    decide_eq_true_eq, List.mem_append]
+  constructor
+  · rintro (h | h)
+    · exact Or.inr (Or.inl h)
+    · exact h
+  · exact Or.inr
 
-theorem msg0tx_keys_empty : msg0tx.accessedStorageKeys = (Std.HashSet.emptyWithCapacity : KeySet) := by
+theorem msg0tx_keys_empty : msg0tx.accessedStorageKeys = (Std.HashSet.ofList [] : KeySet) := by
   kernel_rfl
 
 theorem msg0tx_facts : (msg0tx.caller, msg0tx.currentTarget, msg0tx.code, msg0tx.data,
