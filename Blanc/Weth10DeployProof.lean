@@ -11,6 +11,7 @@
 import Blanc.Weth10Backed
 import Blanc.Weth10DeployExec
 import Blanc.DeploymentMessage
+import Blanc.TransactionForward
 
 namespace Blanc
 
@@ -64,40 +65,6 @@ must not be cited as a proved transaction-execution bound until that bytecode
 execution crossing is supplied.
 -/
 
-private def calldataTokens : Bytes → Nat
-  | [] => 0
-  | byte :: rest =>
-      (if byte = 0 then 1 else 4) + calldataTokens rest
-
-private theorem calldataTokens_foldl (data : Bytes) (acc : Nat) :
-    data.foldl (fun n byte => n + if byte = 0 then 1 else 4) acc =
-      acc + calldataTokens data := by
-  induction data generalizing acc with
-  | nil => rfl
-  | cons byte rest ih =>
-      simp only [List.foldl_cons, calldataTokens]
-      rw [ih]
-      exact Nat.add_assoc acc (if byte = 0 then 1 else 4)
-        (calldataTokens rest)
-
-private theorem calldataTokens_le (data : Bytes) :
-    calldataTokens data ≤ 4 * data.length := by
-  induction data with
-  | nil => simp [calldataTokens]
-  | cons byte rest ih =>
-      simp only [calldataTokens, List.length_cons]
-      split
-      · rw [Nat.mul_add, Nat.mul_one, Nat.add_comm (4 * rest.length) 4]
-        exact Nat.add_le_add (by decide) ih
-      · rw [Nat.mul_add, Nat.mul_one, Nat.add_comm (4 * rest.length) 4]
-        exact Nat.add_le_add (Nat.le_refl 4) ih
-
-private theorem calldataTokens_foldl_le (data : Bytes) :
-    data.foldl (fun n byte => n + if byte = 0 then 1 else 4) 0 ≤
-      4 * data.length := by
-  rw [calldataTokens_foldl]
-  simpa only [Nat.zero_add] using calldataTokens_le data
-
 /-- The exact EIP-7623 token count used by Jaune's transaction intrinsic-gas
 formula for this initcode. -/
 def weth10InitCodeCalldataTokens : Nat :=
@@ -108,7 +75,7 @@ def weth10InitCodeCalldataTokens : Nat :=
 theorem weth10InitCodeCalldataTokens_le :
     weth10InitCodeCalldataTokens ≤ 4 * weth10InitCode.length := by
   unfold weth10InitCodeCalldataTokens
-  exact calldataTokens_foldl_le weth10InitCode
+  exact calldataTokens_le weth10InitCode
 
 /-- Successful-prefix schedule: nonpayability branch, runtime `CODECOPY`,
 three chain-word patches, five EIP-712 scratch words, `KECCAK256`, two domain

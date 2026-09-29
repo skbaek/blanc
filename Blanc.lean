@@ -437,6 +437,7 @@ import Blanc.Lift.Weth9.LiveWithdraw
 import Blanc.Lift.Weth9.LiveWriters
 import Blanc.Lift.Weth9.LiveModel
 import Blanc.Lift.Weth9.LiveHistory
+import Blanc.Lift.Weth9.LiveTx
 import Blanc.Lift.Weth9.Init
 import Blanc.Lift.Weth9.Creation.Deploy
 

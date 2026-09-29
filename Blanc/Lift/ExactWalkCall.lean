@@ -14,7 +14,7 @@ caller's gas falls by exactly the fixed part of the charge less the stipend:
   new-account charge, the value-transfer charge, less the stipend);
 
 The step exposes the state the `CALL` leaves (`CallPost`): the balances moved, storage kept, output,
-logs and error kept.
+logs, error and refund counter kept and the emptiness of the accounts to delete kept.
 
 Nothing here mentions a contract.
 -/
@@ -35,6 +35,8 @@ structure CallPost (sevm : Sevm) (b post : Devm) (a : Adr) (v : B256) : Prop whe
   output : post.output = b.output
   logs : post.logs = b.logs
   error : post.error = b.error
+  refund : post.refundCounter = b.refundCounter
+  accountsToDelete : post.accountsToDelete.isEmpty = b.accountsToDelete.isEmpty
   state : ∃ stmid, b.state.subBal sevm.currentTarget v = some stmid ∧ post.state = stmid.addBal a v
 
 /-- A `CALL` to a code-free recipient keeps every account's storage: the balances move and nothing
@@ -147,7 +149,7 @@ theorem callNZ_ex {gw cw vw iiw isw oiw osw : B256} {c : Nat}
   have hpost : post = St post (1 :: S) M G := by
     have := St.self hstk hmem'
     rwa [hgas''] at this
-  exact ⟨post, hrun, ⟨hout, hlogs, herr, ⟨stmid, hsub, hstate⟩⟩, hpost⟩
+  exact ⟨post, hrun, ⟨hout, hlogs, herr, hrefund, hdelete, ⟨stmid, hsub, hstate⟩⟩, hpost⟩
 
 /-- The step form of `callNZ_ex`. -/
 theorem rx_callNZ {gw cw vw iiw isw oiw osw : B256} {c : Nat}
@@ -236,7 +238,7 @@ theorem callZ_ex {gw cw iiw isw oiw osw : B256} {c : Nat}
   have hpost : post = St post (1 :: S) M G := by
     have := St.self hstk hmem'
     rwa [hgas''] at this
-  exact ⟨post, hrun, ⟨hout, hlogs, herr, ⟨stmid, hsub, hstate⟩⟩, hpost⟩
+  exact ⟨post, hrun, ⟨hout, hlogs, herr, hrefund, hdelete, ⟨stmid, hsub, hstate⟩⟩, hpost⟩
 
 /-- The step form of `callZ_ex`. -/
 theorem rx_callZ {gw cw iiw isw oiw osw : B256} {c : Nat}

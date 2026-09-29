@@ -2386,6 +2386,22 @@ admission check from its parts, `processMessageCall_call_of_message` settles a c
 prepared message and message-call outcome, with the exact settled state (gas refund and coinbase
 fee credited, accounts deleted).  Worked use:
 `Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Tx/Envelope.lean` (`vminus_tx_process`).
+For a *symbolic* type-2 call to a contract (no concrete transaction to evaluate) the same module discharges
+the whole envelope from field-level facts: `processTransaction_call_of_exec` takes the fee, nonce, funds,
+code-free sender, gas and signature facts (`hrecover` the only cryptographic premise) and the message's
+interpreter run `hexec` (a success with no frame error and a non-negative refund counter, for the debited
+state, `callMessage` and its entry environment), and returns `processTransaction`'s settled state and the
+block's gas counters (`txGasUsed`); its parts are `checkTransactionGasFee_two`, `checkTransactionChainId_two`,
+`checkTransactionBlobData_two`, `checkTransactionReceiver_two`, `checkTransactionAuthorizationList_two`,
+`checkTransactionSenderAccount_ok_of_noCode`, `validateTransaction_ok_of_facts`,
+`calculateIntrinsicCost_two_call` (with `calldataTokens` and the covered-fork constants
+`CoveredFork.rules_txBase`, `rules_floorTokenCost`, `rules_storageClearRefund`,
+`CoveredFork.checkTransactionGasCap_ok`), `prepareMessage_call`/`callMessage`,
+`benvAfterTransfer_get_of_value_zero`, `processMessage_call_of_exec`, `debit_get_ne`/`debit_get_self`,
+`addBal_get_self`/`addBal_get_ne`, `sender_net_toNat`, and `processTransaction_of_stages_gasUsed` (the
+stage lemma with the block output's gas counters).  Worked use: the deployed WETH9's
+`Blanc/Lift/Weth9/LiveTx.lean` (`weth9_tx_withdraw`, `weth9_history_tx_withdraw`), which feeds it the frame of
+`weth9_withdraw_live_post`.
 
 ### T4. The wrapper is a message call and I must see through delegation
 
@@ -3146,7 +3162,8 @@ contract-neutral.
   `rdup`, `rswap`, `rpop`, `radd`, `rsub`, `riszero`, `rmask`, `rmst`, `rmld`, `rkec`, `rhash`, `rsloadC`,
   `rsstoreC`, `rsent`, `rlog2`, `rlog3`, `rreq`) in [`Blanc/Lift/ExactWalkSolc.lean`](../Blanc/Lift/ExactWalkSolc.lean);
   a value-bearing (`callNZ_ex`, `rx_callNZ`) or zero-value (`callZ_ex`, `rx_callZ`) `CALL` to a recipient without
-  code, at its net charge `callNet`, with what it leaves (`CallPost`, `CallPost.getStor`) in
+  code, at its net charge `callNet`, with what it leaves (`CallPost`: output, logs, error, refund counter, emptiness of
+  the accounts to delete and the moved balances; `CallPost.getStor`) in
   [`Blanc/Lift/ExactWalkCall.lean`](../Blanc/Lift/ExactWalkCall.lean).  Worked use: the deployed WETH9's writers,
   `Blanc/Lift/Weth9/LiveApprove.lean` … `LiveHistory.lean`.
 - Jump destinations: Jaune's own `jumpable_eq_jumpdestOk` (`Jaune/Machine.lean`)
