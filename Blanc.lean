@@ -48,6 +48,11 @@ import Blanc.CallSpawnExact
 import Blanc.StaticCallStorage
 import Blanc.ExecutionTraceFrames
 import Blanc.ExecutionTraceAdmission
+import Blanc.ExecutionWarmth
+import Blanc.ExecutionTraceWarmth
+import Blanc.ExecutionCodeAt
+import Blanc.ExecutionTraceCodeAt
+import Blanc.ExecutionTraceSystem
 import Blanc.ExecutionTraceSettledFrames
 import Blanc.ExecutionTraceEntry
 import Blanc.ExecutionAccountingObserved
@@ -421,6 +426,7 @@ import Blanc.Lift.BeaconDeposit.Init
 import Blanc.Lift.BeaconDeposit.Creation.Deploy
 import Blanc.Lift.BeaconDeposit.Refines
 import Blanc.Lift.BeaconDeposit.CommittedHistory
+import Blanc.Lift.BeaconDeposit.BeaconEnv
 
 -- The certificate cursor, the reentrancy-lock exclusion kit with its bytecode checker,
 -- owner discipline, and concrete-run evaluation (deployed-lido-vyper-v1): shared.
