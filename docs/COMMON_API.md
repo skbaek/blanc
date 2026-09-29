@@ -2033,6 +2033,22 @@ consumer needs canonical interpreter ingress as one conjunct:
   configured history. It selects only roots targeting the named address and
   keeps failed and later rolled-back entries; it neither supplies an invariant
   nor filters by settlement.
+- To derive per-frame environment facts from trace-level premises instead of
+  demanding them per frame: `Exec.rawFrameRoots_warm` and
+  `ConfiguredHistoryTrace.txRawFrames_warm`
+  ([`Blanc/ExecutionWarmth.lean`](../Blanc/ExecutionWarmth.lean),
+  [`Blanc/ExecutionTraceWarmth.lean`](../Blanc/ExecutionTraceWarmth.lean)) show an
+  address warm in every transaction-entered frame, including reverted subtrees,
+  when it is a precompile of every covered fork (the accessed set only grows).
+  `Exec.codeAt_avoid` and `ConfiguredHistoryTrace.codeAt_empty`
+  ([`Blanc/ExecutionCodeAt.lean`](../Blanc/ExecutionCodeAt.lean),
+  [`Blanc/ExecutionTraceCodeAt.lean`](../Blanc/ExecutionTraceCodeAt.lean)) keep the
+  code at an address empty through a trace given no CREATE frame targets it and no
+  authorization recovers to it (`NoAuthorityAt`). `SpawnFree` and
+  `ConfiguredHistoryTrace.systemRawFrames_target_of_spawnFree`
+  ([`Blanc/ExecutionTraceSystem.lean`](../Blanc/ExecutionTraceSystem.lean)) confine
+  system-message frames to the four system addresses when their code spawns
+  nothing. `Lift.BeaconDeposit.beaconEntry_of_env` is the worked consumer.
 - Every retained carrier from `ProcessMessageTrace` through
   `ConfiguredHistoryTrace` has `freshFrameAdmitted`; its matching
   `FrameAdmitted.and` combines that trace-derived fact with another admission
