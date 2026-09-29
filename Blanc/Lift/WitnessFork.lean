@@ -127,22 +127,6 @@ theorem callResume_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork
 
 /-! ## The two-call frame kit -/
 
-theorem callPairA_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g)
-    (hx : s.benvStat.excessBlobGas = 0) (fs : List SFunc) (ck : List (Adr × B256))
-    (ca : List Adr) (cs : StorShadow) (cacc : AcctShadow) (n1 : Nat) (r : Res) (d : Devm) :
-    callPairA fs (s.withFork g) ck ca cs cacc n1 r d = callPairA fs s ck ca cs cacc n1 r d := by
-  unfold callPairA
-  cases r with
-  | cont c1 => simp only [callResume_withFork hf hg, wrun_withFork hf hg hx]
-  | _ => rfl
-
-theorem callPairB_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g)
-    (hx : s.benvStat.excessBlobGas = 0) (fs fsT : List SFunc) (tcode : ByteArray)
-    (n3 nT n4 : Nat) (c : Cfg) :
-    callPairB fs (s.withFork g) fsT tcode n3 nT n4 c = callPairB fs s fsT tcode n3 nT n4 c := by
-  unfold callPairB
-  simp only [wrun_withFork hf hg hx, childRun_withFork hf hg hx, callResume_withFork hf hg]
-
 theorem callPairFrom_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g)
     (hx : s.benvStat.excessBlobGas = 0) (fs fsT : List SFunc) (tcode : ByteArray)
     (nA nT nB : Nat) (ck : List (Adr × B256)) (ca : List Adr) (cs : StorShadow)

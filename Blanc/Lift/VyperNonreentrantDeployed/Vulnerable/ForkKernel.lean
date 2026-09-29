@@ -28,9 +28,4 @@ theorem spawned_codeAddresses :
       some implementationAddress) := by
   kernel_rfl
 
-/-- The block environment every frame of the witness inherits: Prague, and no excess blob
-gas. -/
-theorem sevm1_block : sevm1.benvStat.fork = .prague ∧ sevm1.benvStat.excessBlobGas = 0 :=
-  ⟨rfl, rfl⟩
-
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top

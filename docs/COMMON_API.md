@@ -793,7 +793,7 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   rewrite its kernel facts with `wrun_withFork`
   ([`Blanc/Lift/NodeWalkFork.lean`](../Blanc/Lift/NodeWalkFork.lean)) and the child-machinery
   lemmas `childStart_withFork`, `childRun_withFork`, `callResume_withFork`,
-  `callPairA_withFork`/`callPairB_withFork`/`callPairFrom_withFork` and `stepN_withFork` (a
+  `callPairFrom_withFork` and `stepN_withFork` (a
   Prague machine's `stepN` run, in which `CLZ` is invalid) in
   [`Blanc/Lift/WitnessFork.lean`](../Blanc/Lift/WitnessFork.lean): the interpreter's
   synchronous precompile children and code children run only frames that avoid `MODEXP` and
@@ -803,6 +803,20 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   `frameEnterS_withFork_of_stat`, a kernel fact on the spawned frame's `codeAddress`); worked
   example `vminus_witness_covered` in
   `Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/{ForkKernel,ForkFrames,ForkTop}.lean`.
+- To state a transaction-level witness under every covered fork, give the transaction an access
+  list that already names every precompile of every covered fork (`osakaPrecompiles`), the
+  target and (via the coinbase) the sender: `prepareMessage` pre-warms the fork's own precompiles
+  (Osaka adds `P256VERIFY`) and re-inserting an address already in a `Std.HashSet` returns the same
+  set (`hashSet_insert_of_mem`, `hashSet_insertMany_of_subset`), so the prepared message is the
+  Prague one with its fork changed (`prepareMessage_withFork` in
+  [`Blanc/TransactionFork.lean`](../Blanc/TransactionFork.lean)); `Std.HashSet` insertion does not
+  evaluate in the kernel, so a kernel `rfl` cannot show it. The per-transaction gas cap of EIP-7825
+  (2^24, Osaka and later) needs a transaction with less gas. The admission checks and the
+  `processTransaction` envelope are then per-fork kernel evaluations (`hg.cases`) feeding
+  `processTransaction_of_stages`. Worked example
+  `Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/{TxTopC,TxC/*}.lean`
+  (`vminus_txC_message`, `vminus_txC_process`: a 16,043,200-gas transaction, one kernel run of the
+  Prague chain, every frame lemma restated for `withFork g`).
 - Determinism of execution witnesses:
   [`Blanc/ExecDeterminism.lean`](../Blanc/ExecDeterminism.lean).
 - Identifying an execution's descendant frames across one step (`Exec.descendantFrames_eq_of_nextNone`, `_of_jump`,
