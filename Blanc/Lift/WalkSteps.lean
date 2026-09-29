@@ -307,6 +307,9 @@ structure StorStep (sevm : Sevm) (b b' : Devm) (s : Stor) : Prop where
   other : ∀ a, a ≠ sevm.currentTarget → Devm.getStor b' a = Devm.getStor b a
   logs : b'.logs = b.logs
 
+theorem getStorVal_eq_getStor (d : Devm) (a : Adr) (k : B256) :
+    d.getStorVal a k = (Devm.getStor d a).get k := rfl
+
 /-- Any chain of selected loads and stores is a `StorStep` from its base, with
 the contract storage read off the chain. -/
 theorem StorStep.of_getStor {sevm : Sevm} {b b' : Devm}

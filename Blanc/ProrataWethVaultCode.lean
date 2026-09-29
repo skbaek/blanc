@@ -5545,6 +5545,10 @@ private theorem aux_redeemBurn_size : compsize ProrataWethVault.redeemBurn = 230
   rw [← Func.CompileShape.byteSize_compileShape]
   decide +kernel
 
+private theorem aux_maxMintAfterAssetCap_size : compsize ProrataWethVault.maxMintAfterAssetCap = 102 := by
+  rw [← Func.CompileShape.byteSize_compileShape]
+  decide +kernel
+
 private theorem vault_table_mintAfterQuote :
     vaultTable[ProrataWethVault.mintAfterQuoteSlot]? = some (16012, ProrataWethVault.mintAfterQuote) := by
   have hmain : compsize ProrataWethVault.vault.main = 15662 := by

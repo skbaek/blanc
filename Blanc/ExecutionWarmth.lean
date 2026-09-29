@@ -445,6 +445,14 @@ theorem XStep.AccGrow.spawn_create {devm d : Devm} (h : Devm.AccGrow devm d)
   ⟨fun a ha => h a ha, fun r => Except.OkOn.mono (Resume.run_create_accGrow d na r)
     (fun _ hx => Devm.AccGrow.trans h hx)⟩
 
+theorem Devm.AccGrow.accessDelegation {pre d : Devm} (h : Devm.AccGrow pre d) (adr : Adr) :
+    Devm.AccGrow pre (Jaune.accessDelegation d adr).2.2.2.2 := by
+  unfold Jaune.accessDelegation
+  dsimp only
+  split
+  · exact h.warm _
+  · exact h
+
 theorem Devm.AccGrow.gasAccessDelegation {pre d : Devm} (h : Devm.AccGrow pre d)
     (gas : GasSchedule) (adr : Adr) :
     Devm.AccGrow pre (gas.accessDelegation d adr).2.2.2.2 := by
