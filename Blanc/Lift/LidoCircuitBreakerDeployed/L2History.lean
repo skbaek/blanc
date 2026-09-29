@@ -111,9 +111,11 @@ re-entered from inside `pause`'s `CALL` — has a Registry witness `entries` of 
 entry storage, and its final storage satisfies `L2Post` relative to it.  The
 per-frame premises are only the call shape: membership among the settled frames,
 the target, non-static entry, the selector word and the zero pauser word.  Code
-identity, pc `0`, the covered fork, fresh entry, `EntryAt lidoA` and the entry
-witness come from the history (`ConfiguredHistoryTrace.entryGood_settled`, with
-the Lido spawn obligation `lido_spawnEntry`).  Frames rolled back by an ancestor
+identity, pc `0`, the covered fork, fresh entry and the entry witness come from
+the history (`ConfiguredHistoryTrace.entryGood_settled`, with the Lido spawn
+obligation `lido_spawnEntry`); `EntryAt lidoA` comes from the admission hypothesis
+`admitted`, which states it at every raw frame at the contract (re-entered ones
+included), as for `lido_history_l2_frame`.  Frames rolled back by an ancestor
 are not claimed; static frames are not observed by the accounting ladder. -/
 theorem lido_history_l2_committed
     {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
