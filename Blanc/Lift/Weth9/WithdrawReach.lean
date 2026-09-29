@@ -253,4 +253,116 @@ theorem weth9_withdraw_reach {P : Sevm → Devm → Ninst → Devm → Prop}
     obtain ⟨d8, -, run''⟩ := Reach.dest run' hT
     exact Reach.not_last run'' hT
 
+/-! ## The big-step walk of the wrapper -/
+
+/-- **The `withdraw` wrapper's run, in full.**  A run of entry 24 decodes `wad = calldata[4:36]`, the
+balance `require` holds, the storage at the `CALL` is the debited storage, and the run's final state is
+the resumed state of the `CALL` (everything after it is state-silent). -/
+theorem wrapper24_walk {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {sevm : Sevm} {d : Devm} {o : Outcome}
+    (run : SFunc.RunP P prog sevm d t_0243_c24 o) :
+    ∃ (d10 sf : Devm),
+      Sevm.dataWord sevm 4 ≤ (Devm.getStor d sevm.currentTarget).get (balSlot sevm.caller) ∧
+      Devm.getStor d10 sevm.currentTarget =
+        (Devm.getStor d sevm.currentTarget).set (balSlot sevm.caller)
+          ((Devm.getStor d sevm.currentTarget).get (balSlot sevm.caller) -
+            Sevm.dataWord sevm 4) ∧
+      P sevm d10 (.exec .call) sf ∧ (Outcome.devm o).state = sf.state := by
+  have h24 : t_0243_c24 = .dest (chain [.reg .callvalue, .reg .iszero,
+      .push [0x02, 0x4e] (by decide)] (.branch t_024a_c24 t_024e_c24)) := rfl
+  have h24e : t_024e_c24 = .dest (chain wdLine (.callNext 8 t_0264_c24)) := rfl
+  rw [h24] at run
+  cases run with
+  | dest burn run =>
+  rename_i d0
+  obtain ⟨d1, hl, run⟩ := run_chain_prefixP [.reg .callvalue, .reg .iszero,
+    .push [0x02, 0x4e] (by decide)] [] run
+  change SFunc.RunP P prog sevm d1 (.branch t_024a_c24 t_024e_c24) o at run
+  cases run with
+  | zero _ _ run => exact absurd run not_run_revert_tail
+  | succ dw w hwnz pop run =>
+  rename_i d2
+  rw [h24e] at run
+  cases run with
+  | dest burn' run =>
+  rename_i d3
+  obtain ⟨d4, hl2, run⟩ := run_chain_prefixP wdLine [] run
+  obtain ⟨s34, t9, r9, hp4⟩ := wdLine_walk (hl2.toRun hP)
+  change SFunc.RunP P prog sevm d4 (.callNext 8 t_0264_c24) o at run
+  have s01 : Same d d1 :=
+    (Same.of_state burn.state).trans ⟨Line.of_inv Devm.getStor (by line_inv) (hl.toRun hP),
+      Line.of_inv Devm.getBal (by line_inv) (hl.toRun hP)⟩
+  have s02 : Same d d2 := s01.trans (Same.of_state pop.state)
+  have s03 : Same d d3 := s02.trans (Same.of_state burn'.state)
+  have s04 : Same d d4 := s03.trans s34
+  cases run with
+  | @callHalt _ dd _ _ _ _ tj lookup pop2 crun =>
+    have s05 : Same d dd := s04.trans (Same.of_state pop2.state)
+    have hp5 : [Sevm.dataWord sevm 4, r9] <<+ dd.stack := prefix_of_popBurn1 hp4 pop2
+    obtain ⟨wad, rest, d10, sf, gw, cw, ys, hstk, hle, hstor, -, -, -, hcall, hstate⟩ :=
+      Weth9.withdraw_walk_gen hP lookup crun
+    obtain ⟨tl, htl⟩ := hp5
+    have h1 : dd.stack = Sevm.dataWord sevm 4 :: r9 :: tl := htl
+    rw [h1] at hstk
+    have hwad : wad = Sevm.dataWord sevm 4 := (List.cons.inj hstk).1.symm
+    subst hwad
+    rw [← s05.stor] at hle hstor
+    exact ⟨d10, sf, hle, hstor, hcall, hstate⟩
+  | @callRet _ dd dd2 _ _ _ _ tj lookup pop2 crun tail =>
+    have s05 : Same d dd := s04.trans (Same.of_state pop2.state)
+    have hp5 : [Sevm.dataWord sevm 4, r9] <<+ dd.stack := prefix_of_popBurn1 hp4 pop2
+    obtain ⟨wad, rest, d10, sf, gw, cw, ys, hstk, hle, hstor, -, -, -, hcall, hstate⟩ :=
+      Weth9.withdraw_walk_gen hP lookup crun
+    obtain ⟨tl, htl⟩ := hp5
+    have h1 : dd.stack = Sevm.dataWord sevm 4 :: r9 :: tl := htl
+    rw [h1] at hstk
+    have hwad : wad = Sevm.dataWord sevm 4 := (List.cons.inj hstk).1.symm
+    subst hwad
+    rw [← s05.stor] at hle hstor
+    refine ⟨d10, sf, hle, hstor, hcall, ?_⟩
+    have hst := SFunc.RunP.state_of_silent hP silentSet_nil (f := t_0264_c24) (by decide)
+      (by decide) tail
+    simp only [Outcome.devm] at hstate
+    rw [hst]
+    exact hstate
+
+/-- **The frame of a `withdraw` call, up to its `CALL`.**  A successful frame that decodes as `withdraw`
+debits the caller's balance word (the storage-level effect of the call) before its ETH send, and ends in
+the state the send resumes to. -/
+theorem weth9_withdraw_frame {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {sevm : Sevm} {pre post : Devm}
+    (hrun : SProg.RunP P prog sevm pre post)
+    (hdec : ∃ who w, decodeCall sevm = some (.withdraw who w)) :
+    ∃ d10 sf : Devm,
+      Call.stor (Devm.getStor pre sevm.currentTarget)
+          (.withdraw sevm.caller (Sevm.dataWord sevm 4)) =
+        some (Devm.getStor d10 sevm.currentTarget) ∧
+      P sevm d10 (.exec .call) sf ∧ post.state = sf.state := by
+  obtain ⟨who, w, hd⟩ := hdec
+  rcases weth9_route hP hrun with ⟨hmiss, d', hs, run⟩ | ⟨l, hl, hshort, hsel, g, d', hg, hs, run⟩
+  · rw [decode_miss hmiss] at hd
+    cases hd
+  · rcases decode_hit hshort hl hsel with ⟨hk, hd'⟩ | ⟨hk, hd'⟩ | ⟨hk, hd'⟩ | ⟨hk, hd'⟩ |
+        ⟨hk, hd'⟩ | ⟨hk, hd'⟩
+    · rw [hd'] at hd
+      cases hd
+    · rw [hk] at hg
+      have hg' : g = t_0243_c24 := Option.some.inj (hg.symm.trans wrapper24_lookup)
+      subst hg'
+      obtain ⟨d10, sf, hle, hstor, hcall, hstate⟩ := wrapper24_walk hP run
+      refine ⟨d10, sf, ?_, hcall, hstate⟩
+      rw [← hs.stor] at hle hstor
+      have hnlt : ¬ (Devm.getStor pre sevm.currentTarget).get (balSlot sevm.caller) <
+          Sevm.dataWord sevm 4 := B256.not_lt.mpr hle
+      simp only [Call.stor, hnlt, ↓reduceIte]
+      rw [hstor]
+    · rw [hd'] at hd
+      cases hd
+    · rw [hd'] at hd
+      cases hd
+    · rw [hd'] at hd
+      cases hd
+    · rw [hd'] at hd
+      cases hd
+
 end Blanc.Lift.Weth9
