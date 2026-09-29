@@ -437,6 +437,7 @@ import Blanc.Lift.BeaconDeposit.Creation.Deploy
 import Blanc.Lift.BeaconDeposit.Refines
 import Blanc.Lift.BeaconDeposit.CommittedHistory
 import Blanc.Lift.BeaconDeposit.BeaconEnv
+import Blanc.Lift.BeaconDeposit.Liveness
 
 -- The certificate cursor, the reentrancy-lock exclusion kit with its bytecode checker,
 -- owner discipline, and concrete-run evaluation (deployed-lido-vyper-v1): shared.
@@ -600,6 +601,7 @@ import Blanc.Lift.Curve3Crv.CommittedHistory
 import Blanc.Lift.Curve3Crv.Init
 import Blanc.Lift.Curve3Crv.Creation.Deploy
 import Blanc.Lift.Curve3Crv.Exec
+import Blanc.Lift.Curve3Crv.Liveness
 
 namespace Blanc
 
