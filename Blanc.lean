@@ -48,6 +48,7 @@ import Blanc.CallSpawnExact
 import Blanc.StaticCallStorage
 import Blanc.ExecutionTraceFrames
 import Blanc.ExecutionTraceAdmission
+import Blanc.ExecutionWarmth
 import Blanc.ExecutionTraceSettledFrames
 import Blanc.ExecutionTraceEntry
 import Blanc.ExecutionAccountingObserved
