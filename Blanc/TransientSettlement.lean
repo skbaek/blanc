@@ -152,15 +152,6 @@ theorem tstore_run_cell
     · simp [hs] at ha
     · exact finish hc (Bool.eq_false_iff.mpr hs) hpost
 
-/-- Writing zero clears only the selected cell's read. The accompanying
-`tstore_run_cell` theorem retains every unrelated cell. -/
-theorem tstore_run_zero
-    {sevm : Sevm} {pre post : Devm} {key : B256} {tail : List B256}
-    (run : Ninst.Run sevm pre (.reg .tstore) post)
-    (stack : pre.stack = key :: 0 :: tail) :
-    post.getTransVal sevm.currentTarget key = 0 :=
-  (tstore_run_cell run stack).2.1
-
 /-- An actual successful TLOAD pushes the selected `(currentTarget, key)`
 read and preserves the entire transient and persistent worlds. -/
 theorem tload_run_cell
@@ -638,14 +629,5 @@ theorem processMessageCall_error_logs_eq_nil
   split at run
   · exact processMessageCall_create_error_logs run herr
   · exact processMessageCall_call_error_logs run herr
-
-/-- The observable-log consequence attached to the message output retained by
-a successful transaction-prefix witness. -/
-theorem PreparedTransactionMessage.error_logs_eq_nil
-    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    {state : State} {bout' : BlockOutput}
-    (w : PreparedTransactionMessage benv bout tx index state bout')
-    (herr : w.output.error.isSome) : w.output.logs = [] :=
-  processMessageCall_error_logs_eq_nil w.messageRun herr
 
 end Blanc

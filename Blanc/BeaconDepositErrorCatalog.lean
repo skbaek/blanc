@@ -61,30 +61,6 @@ theorem reachableError_lookup (error : ReachableReason) :
       some (Func.revertWith (reasonString error.reason)) := by
   cases error <;> rfl
 
-/-- Contract specialization of the shared constant-error guard walk. -/
-theorem reachableErrorGuard_runCompiledTo
-    {sevm : Sevm} {devm : Devm} {G : Nat} {w : B256}
-    {stack : List B256} {img : Bytes} {otherwise : Func}
-    (error : ReachableReason)
-    (h_ne : w ≠ 0) (h_stack : devm.stack = w :: stack)
-    (hwf : Mem.Wf devm.memory) (hr : Mem.Reads devm.memory img)
-    (halign : devm.memory.size % 32 = 0)
-    (h_blob : (errorData (reasonString error.reason)).length < 2 ^ 256)
-    (h_words : 32 *
-      (bytesWords (errorData (reasonString error.reason))).length < 2 ^ 256)
-    (h_gas : devm.gasLeft =
-      G + errorGuardCost devm (reasonString error.reason))
-    (h_room : devm.stack.length < 1024) :
-    Func.RunCompiledTo (runtime.main :: runtime.aux) sevm devm
-      ((.call error.slot) <?> otherwise)
-      (.error (.revert,
-        (devm.setMach ⟨stack,
-          Mem.writeStoresRev devm.memory
-            (bytesWords (errorData (reasonString error.reason))).zipIdx,
-          G, devm.stateGas⟩).withOutput (errorData (reasonString error.reason)))) := by
-  exact Func.runCompiledTo_errorGuard (reachableError_lookup error)
-    h_ne h_stack hwf hr halign h_blob h_words h_gas h_room
-
 /-- Gas-normalized form of `reachableErrorGuard_runCompiledTo` for a guard
 entered from an ordinary `setMach` state.  The arbitrary `otherwise` arm is
 unreachable on the nonzero flag. -/

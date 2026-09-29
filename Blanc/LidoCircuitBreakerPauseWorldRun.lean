@@ -81,12 +81,6 @@ private theorem temporalSloadBase_output (sevm : Sevm) (base : Devm)
   unfold temporalSloadBase
   split <;> rfl
 
-private theorem temporalSloadBase_transientStorage (sevm : Sevm) (base : Devm)
-    (key : B256) : (temporalSloadBase sevm base key).transientStorage =
-      base.transientStorage := by
-  unfold temporalSloadBase
-  split <;> rfl
-
 private theorem temporalSloadBase_accessedAddresses (sevm : Sevm) (base : Devm)
     (key : B256) : (temporalSloadBase sevm base key).accessedAddresses =
       base.accessedAddresses := by
@@ -141,12 +135,6 @@ private theorem lengthWritePost_logs (sevm : Sevm) (base : Devm) (ol : B256) :
 private theorem lengthWritePost_accessedAddresses (sevm : Sevm) (base : Devm)
     (ol : B256) : (lengthWritePost sevm base ol).accessedAddresses =
       base.accessedAddresses := rfl
-
-private theorem lengthWritePost_getStorVal_other (sevm : Sevm) (base : Devm)
-    (ol : B256) {a : Adr} {key : B256}
-    (h : (a, key) ≠ (sevm.currentTarget, arrayLengthSlot)) :
-    (lengthWritePost sevm base ol).getStorVal a key = base.getStorVal a key :=
-  temporalSstorePost_other sevm base arrayLengthSlot ol a key h
 
 private theorem keyPairNe {a₁ a₂ : Adr} {k₁ k₂ : B256} (h : k₂ ≠ k₁) :
     (a₁, k₁) ≠ (a₂, k₂) := fun hp => h (congrArg Prod.snd hp).symm

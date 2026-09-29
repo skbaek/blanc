@@ -39,11 +39,6 @@ def accOfStor (stor : Stor) : Acc :=
     (accOfStor stor).branch height = stor.get (branchSlot height) := by
   simp [accOfStor, h]
 
-@[simp] theorem accOfStor_branch_of_ge (stor : Stor) (height : Nat)
-    (h : 32 ≤ height) :
-    (accOfStor stor).branch height = 0 := by
-  simp [accOfStor, Nat.not_lt.mpr h]
-
 @[simp] theorem accOfStor_count (stor : Stor) :
     (accOfStor stor).count = (stor.get depositCountSlot).toNat := rfl
 
@@ -135,29 +130,6 @@ structure DepositAbiDecodable
   withdrawalCredentials_eq : dynamicPayload data 1 = withdrawalCredentials
   signature_eq : dynamicPayload data 2 = signature
   root_eq : calldataWord data 100 = depositDataRoot
-
-/-- Forget the chosen payload and root witnesses while retaining the exact ABI
-structure accepted by the compiled validator. -/
-theorem DepositAbiDecodable.structure
-    {data pubkey withdrawalCredentials signature : Bytes}
-    {depositDataRoot : B256}
-    (h : DepositAbiDecodable data pubkey withdrawalCredentials signature
-      depositDataRoot) :
-    DepositAbiStructureDecodable data :=
-  ⟨h.head, h.pubkeyTail, h.withdrawalCredentialsTail, h.signatureTail⟩
-
-/-- Choose the canonical payload and root projections from a structurally
-decodable deposit call.  Together with `DepositAbiDecodable.structure`, this
-is the exact decoded-versus-malformed exhaustiveness bridge. -/
-theorem DepositAbiStructureDecodable.toDepositAbiDecodable
-    {data : Bytes} (h : DepositAbiStructureDecodable data) :
-    DepositAbiDecodable data
-      (dynamicPayload data 0)
-      (dynamicPayload data 1)
-      (dynamicPayload data 2)
-      (calldataWord data 100) :=
-  ⟨h.head, h.pubkeyTail, h.withdrawalCredentialsTail, h.signatureTail,
-    rfl, rfl, rfl, rfl⟩
 
 def firstDepositTailOffset : Nat := 4 * 32
 

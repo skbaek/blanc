@@ -158,24 +158,6 @@ structure DepositDecodedMemoryCarrier
   length1_read : image.sliceD 128 32 0 = (depositLengthWord data 1).toBytes
   length2_read : image.sliceD 160 32 0 = (depositLengthWord data 2).toBytes
 
-theorem DepositDecodedMemoryCarrier.read_offset0
-    {memory : Mem} {data : Bytes}
-    (h : DepositDecodedMemoryCarrier memory data) :
-    (memory.read 0 32).1 = (depositOffsetWord data 0).toBytes := by
-  rw [Mem.Reads.read h.reads, h.offset0_read]
-
-theorem DepositDecodedMemoryCarrier.read_offset1
-    {memory : Mem} {data : Bytes}
-    (h : DepositDecodedMemoryCarrier memory data) :
-    (memory.read 32 32).1 = (depositOffsetWord data 1).toBytes := by
-  rw [Mem.Reads.read h.reads, h.offset1_read]
-
-theorem DepositDecodedMemoryCarrier.read_offset2
-    {memory : Mem} {data : Bytes}
-    (h : DepositDecodedMemoryCarrier memory data) :
-    (memory.read 64 32).1 = (depositOffsetWord data 2).toBytes := by
-  rw [Mem.Reads.read h.reads, h.offset2_read]
-
 theorem DepositDecodedMemoryCarrier.read_length0
     {memory : Mem} {data : Bytes}
     (h : DepositDecodedMemoryCarrier memory data) :

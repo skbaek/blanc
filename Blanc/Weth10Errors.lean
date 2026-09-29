@@ -268,26 +268,6 @@ locked flash-failure guard. -/
 def flashCallbackHeadBase (base : Devm) (stack : List B256) : Devm :=
   base.setMach ⟨stack, flashCallbackHeadMemory base, 0, base.stateGas⟩
 
-/-- Flash callback failure uses the same byte-for-byte bubble auxiliary as
-typed Boolean callbacks. -/
-theorem flashCallback_childRevert_runCompiledTo {dp : DeployParams}
-    {sevm : Sevm} {base : Devm} {G : Nat} {stack : List B256} {img : Bytes}
-    (hwf : Mem.Wf base.memory) (hr : Mem.Reads base.memory img)
-    (halign : base.memory.size % 32 = 0)
-    (h_len : base.returnData.length < 2 ^ 256)
-    (h_room : stack.length < 1021) :
-    Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach
-        ⟨0 :: stack, base.memory, G + bubbleContinuationCost base,
-          base.stateGas⟩)
-      flashCallbackReturn
-      (.error (.revert,
-        (base.setMach
-          ⟨stack, base.memory.write 0 base.returnData, G, base.stateGas⟩).withOutput
-            base.returnData)) := by
-  simpa only [flashCallbackReturn] using
-    callbackBubble_runCompiledTo hwf hr halign h_len h_room
-
 /-- Exact cost of accepting a successful child-call flag, detecting returndata
 shorter than one word and empty-reverting. -/
 def shortReturnCost : Nat :=
@@ -341,19 +321,6 @@ theorem boolReturn_short_runCompiledTo {dp : DeployParams} {sevm : Sevm}
       (.error (.revert,
         (base.setMach ⟨stack, base.memory, G, base.stateGas⟩).withOutput [])) := by
   simpa only [boolReturn] using
-    callbackShort_runCompiledTo h_short h_room
-
-theorem flashCallback_short_runCompiledTo {dp : DeployParams}
-    {sevm : Sevm} {base : Devm} {G : Nat} {stack : List B256}
-    (h_short : base.returnData.length < 32)
-    (h_room : stack.length < 1020) :
-    Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach ⟨1 :: stack, base.memory, G + shortReturnCost,
-        base.stateGas⟩)
-      flashCallbackReturn
-      (.error (.revert,
-        (base.setMach ⟨stack, base.memory, G, base.stateGas⟩).withOutput [])) := by
-  simpa only [flashCallbackReturn] using
     callbackShort_runCompiledTo h_short h_room
 
 /-- The successful-call/full-word prefix costs exactly 37 gas before entering
@@ -832,28 +799,6 @@ theorem rollback_revert_of_weth10_runCompiledTo
       out.transientStorage = msg.tenv.transientStorage := by
   exact rollback_revert_of_runCompiledTo h_pm h_fill h_bt h_prec h_code h_run
 
-/-- Empty-data WETH10 reverts, including nonpayability and short/codeless
-callback failures, restore the message frame and expose exactly `[]`. -/
-theorem rollback_empty_of_weth10_runCompiledTo
-    {dp : DeployParams} {msg : Msg} {benv : Benv} {xl : Xlot}
-    {out d : Devm}
-    (h_pm : ProcessMessage msg xl (.ok out))
-    (h_fill : Xlot.Filled xl)
-    (h_bt : msg.benvAfterTransfer = .ok benv)
-    (h_prec : ∀ adr, msg.codeAddress = some adr →
-      ¬ (!msg.disablePrecompiles &&
-        decide (benv.stat.rules.isPrecomp adr)) = true)
-    (h_code : some (initSevm (msg.withBenv benv)).code.toList =
-      (weth10 dp).compile)
-    (h_run : Prog.RunCompiledTo (initSevm (msg.withBenv benv))
-      (initDevm (msg.withBenv benv)) (weth10 dp)
-      (.error (.revert, d.withOutput []))) :
-    out.error = some .revert ∧ out.output = [] ∧
-      out.state = msg.benv.state ∧
-      out.transientStorage = msg.tenv.transientStorage := by
-  exact rollback_revert_of_weth10_runCompiledTo
-    h_pm h_fill h_bt h_prec h_code h_run
-
 /-- A WETH10 `Error(string)` walk restores the frame and exposes precisely the
 ABI payload of the selected reason. -/
 theorem rollback_errorData_of_weth10_runCompiledTo
@@ -871,28 +816,6 @@ theorem rollback_errorData_of_weth10_runCompiledTo
       (initDevm (msg.withBenv benv)) (weth10 dp)
       (.error (.revert, d.withOutput (errorData reason)))) :
     out.error = some .revert ∧ out.output = errorData reason ∧
-      out.state = msg.benv.state ∧
-      out.transientStorage = msg.tenv.transientStorage := by
-  exact rollback_revert_of_weth10_runCompiledTo
-    h_pm h_fill h_bt h_prec h_code h_run
-
-/-- A bubbled callback revert restores the WETH10 message frame while
-preserving every byte chosen by the child. -/
-theorem rollback_bubbledChild_of_weth10_runCompiledTo
-    {dp : DeployParams} {msg : Msg} {benv : Benv} {xl : Xlot}
-    {out d : Devm} {childData : Bytes}
-    (h_pm : ProcessMessage msg xl (.ok out))
-    (h_fill : Xlot.Filled xl)
-    (h_bt : msg.benvAfterTransfer = .ok benv)
-    (h_prec : ∀ adr, msg.codeAddress = some adr →
-      ¬ (!msg.disablePrecompiles &&
-        decide (benv.stat.rules.isPrecomp adr)) = true)
-    (h_code : some (initSevm (msg.withBenv benv)).code.toList =
-      (weth10 dp).compile)
-    (h_run : Prog.RunCompiledTo (initSevm (msg.withBenv benv))
-      (initDevm (msg.withBenv benv)) (weth10 dp)
-      (.error (.revert, d.withOutput childData))) :
-    out.error = some .revert ∧ out.output = childData ∧
       out.state = msg.benv.state ∧
       out.transientStorage = msg.tenv.transientStorage := by
   exact rollback_revert_of_weth10_runCompiledTo

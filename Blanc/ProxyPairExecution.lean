@@ -46,59 +46,6 @@ private theorem proxyRootedRun_next
   exact rootedRunCompiledTo.next (step := step) (tail := tailRun)
     (ninstAllChildRoots_of_not_exec nonExec.notExec) tailRooted
 
-private theorem proxyRootedRun_branch_zero
-    {FS : List Func} {sevm : Sevm} {devm : Devm}
-    {f g : Func} {ex : Execution} {stack : List B256} {gas : Nat}
-    (stackEq : devm.stack = 0 :: stack)
-    (room : devm.stack.length < 1024)
-    (gasEq : devm.gasLeft = gas + (gVerylow + gHigh))
-    (arm : proxyRootedRun FS sevm
-      (devm.setMach ⟨stack, devm.memory, gas, devm.stateGas⟩) f ex) :
-    proxyRootedRun FS sevm devm (.branch f g) ex := by
-  rcases arm with ⟨armRun, armRooted⟩
-  let pop := Devm.popBurnBy_setMach stackEq gasEq
-  let run : Func.RunCompiledTo FS sevm devm (.branch f g) ex :=
-    .zero room pop armRun
-  refine ⟨run, ?_⟩
-  exact rootedRunCompiledTo.zero (g := g) (room := room)
-    (pop := pop) (tail := armRun) armRooted
-
-private theorem proxyRootedRun_branch_succ
-    {FS : List Func} {sevm : Sevm} {devm : Devm}
-    {f g : Func} {ex : Execution} {word : B256}
-    {stack : List B256} {gas : Nat}
-    (nonzero : word ≠ 0)
-    (stackEq : devm.stack = word :: stack)
-    (room : devm.stack.length < 1024)
-    (gasEq : devm.gasLeft = gas + (gVerylow + gHigh + gJumpdest))
-    (arm : proxyRootedRun FS sevm
-      (devm.setMach ⟨stack, devm.memory, gas, devm.stateGas⟩) g ex) :
-    proxyRootedRun FS sevm devm (.branch f g) ex := by
-  rcases arm with ⟨armRun, armRooted⟩
-  let pop := Devm.popBurnBy_setMach stackEq gasEq
-  let run : Func.RunCompiledTo FS sevm devm (.branch f g) ex :=
-    .succ nonzero room pop armRun
-  refine ⟨run, ?_⟩
-  exact rootedRunCompiledTo.succ (f := f) (hne := nonzero)
-    (room := room) (pop := pop) (tail := armRun) armRooted
-
-private theorem proxyRootedRun_call
-    {FS : List Func} {sevm : Sevm} {devm : Devm}
-    {index : Nat} {f : Func} {ex : Execution} {gas : Nat}
-    (found : FS[index]? = some f)
-    (room : devm.stack.length < 1024)
-    (gasEq : devm.gasLeft = gas + (gVerylow + gMid + gJumpdest))
-    (body : proxyRootedRun FS sevm
-      (devm.setMach ⟨devm.stack, devm.memory, gas, devm.stateGas⟩) f ex) :
-    proxyRootedRun FS sevm devm (.call index) ex := by
-  rcases body with ⟨bodyRun, bodyRooted⟩
-  let burn := Devm.burnBy_setMach_gas gasEq
-  let run : Func.RunCompiledTo FS sevm devm (.call index) ex :=
-    .call found room burn bodyRun
-  refine ⟨run, ?_⟩
-  exact rootedRunCompiledTo.call (found := found) (room := room)
-    (burn := burn) (tail := bodyRun) bodyRooted
-
 private def proxyRootedRunSpec : Blanc.Forward.RelSpec where
   head := ``proxyRootedRun
   next := ``proxyRootedRun_next
@@ -167,11 +114,6 @@ theorem pairState_proxySlot :
   rw [implementationSlot_val]
   rw [Stor.get_set_self]
 
-theorem pairState_implSlot_zero :
-    (pairState.get implAdr).stor.get implSlot = 0 := by
-  rw [pairState_implAcct]
-  rfl
-
 theorem pairState_proxyImplSlot_zero :
     (pairState.get proxyAdr).stor.get implSlot = 0 := by
   rw [pairState_proxyAcct]
@@ -187,9 +129,6 @@ def revertData : Bytes := (0 : B256).toBytes
 
 theorem successData_length : successData.length = 32 := by
   simp [successData, B256.length_toBytes]
-
-theorem revertData_length : revertData.length = 32 := by
-  simp [revertData, B256.length_toBytes]
 
 def pairBenv : Benv :=
   { (default : Benv) with
@@ -228,38 +167,10 @@ def proxyMsgSuccess : Msg :=
 def proxyMsgRevert : Msg :=
   { proxyMsgSuccess with data := revertData }
 
-theorem proxyMsgSuccess_code : proxyMsgSuccess.code = proxyCode := rfl
-
-theorem proxyMsgRevert_code : proxyMsgRevert.code = proxyCode := rfl
-
-theorem proxyMsgSuccess_data : proxyMsgSuccess.data = successData := rfl
-
-theorem proxyMsgRevert_data : proxyMsgRevert.data = revertData := rfl
-
-theorem proxyMsgSuccess_gas : proxyMsgSuccess.gas = 27224 := rfl
-
-theorem proxyMsgRevert_gas : proxyMsgRevert.gas = 27224 := rfl
-
-theorem proxyMsgSuccess_target : proxyMsgSuccess.currentTarget = proxyAdr := rfl
-
-theorem proxyMsgRevert_target : proxyMsgRevert.currentTarget = proxyAdr := rfl
-
-theorem proxyMsgSuccess_caller : proxyMsgSuccess.caller = callerAdr := rfl
-
-theorem proxyMsgRevert_caller : proxyMsgRevert.caller = callerAdr := rfl
-
 /-! The continuation after the actual delegatecall.  Keeping this as a local
 function lets the prefix walk be checked independently of the child resume. -/
 def proxySuccessTail : Func :=
   proxyReturnTail
-
-theorem proxyFallback_eq_prefix :
-    proxyFallback =
-      (calldatasize ::: pushB256 0 ::: pushB256 0 ::: calldatacopy :::
-        pushB256 0 ::: pushB256 0 ::: calldatasize ::: pushB256 0 :::
-        pushB256 implementationSlotLit ::: sload ::: gas ::: delegatecall :::
-        proxySuccessTail) := by
-  rfl
 
 private lemma proxy_stateGas_addAccessedStorageKey
     {base : Devm} {target : Adr} {key : B256} :
@@ -271,18 +182,6 @@ private lemma proxy_empty_extCost (S : List B256) (G : Nat) :
   rw [show (initDevm proxyMsgSuccess).memory = Mem.empty by rfl]
   simpa [initDevm, proxyMsgSuccess] using
     (Devm.extCost_empty_word (devm := initDevm proxyMsgSuccess) (S := S) (G := G))
-
-private lemma proxy_copy_cost (S : List B256) (G : Nat) :
-    gVerylow + gasCopy * ceilDiv 32 32 +
-      ((initDevm proxyMsgSuccess).setMach
-        ⟨S, (initDevm proxyMsgSuccess).memory, G, (initDevm proxyMsgSuccess).stateGas⟩).extCost [⟨0, 32⟩] = 9 := by
-  rw [proxy_empty_extCost]
-  decide
-
-private lemma proxy_empty_extCost' (S : List B256) (G : Nat) :
-    ((initDevm proxyMsgSuccess).setMach
-      ⟨S, Mem.empty, G, (initDevm proxyMsgSuccess).stateGas⟩).extCost [⟨0, 32⟩] = gMemory := by
-  exact Devm.extCost_empty_word
 
 private def proxyCallPreSuccess : Devm :=
   let mem := (initDevm proxyMsgSuccess).memory.write (B256.toNat 0)

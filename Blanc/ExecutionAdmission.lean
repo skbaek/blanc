@@ -23,32 +23,6 @@ def ForallSubExecAdmitted (k : Nat) (ca : Adr) (p : Prog)
     (R : Sevm → Devm → Devm → Prop) : Prop :=
   ForallSubExecAdmittedSem k ca p.codeSem entry R
 
-/-- The target-frame case of `lift_admitted`: the concrete derivation supplies
-the selected root's entry condition, while lower-depth executions retain their
-own trace-local admission premises. -/
-private lemma lift_admitted.atTarget
-    {entry : Sevm → Devm → Prop}
-    {R : Sevm → Devm → Devm → Prop}
-    {ca : Adr} {p : Prog}
-    (depth_ind :
-      ∀ {sevm pre post} (run : Exec 0 sevm pre (.ok post)),
-        Prog.Run sevm pre p post →
-        sevm.currentTarget = ca →
-        Exec.FrameAdmitted ca entry run →
-        ForallSubExecAdmitted sevm.depth ca p entry R →
-        R sevm pre post)
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out)
-    (h_fa : ForallDeeperAt sevm.depth ca p
-      (fun _ sevm' pre' out' run' =>
-        Exec.FrameAdmitted ca entry run' → ifOk (R sevm' pre') out'))
-    (h_at : p.At ca pc sevm pre)
-    (target : sevm.currentTarget = ca) :
-    Exec.FrameAdmitted ca entry run → ifOk (R sevm pre) out := by
-  simpa [Prog.codeSem, CodeSem.At, Prog.At, ForallDeeperAtSem, ForallDeeperAt,
-    ForallSubExecAdmittedSem, ForallSubExecAdmitted] using
-    (lift_admitted_sem.atTarget (sem := p.codeSem) depth_ind run h_fa h_at target)
-
 /-- Trace-admitted counterpart of `lift`. It preserves the existing driver
 decomposition, but keeps the concrete execution proof in the induction motive
 so an entry premise can be restricted to actual child-frame roots. -/

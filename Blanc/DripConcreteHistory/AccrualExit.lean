@@ -1112,19 +1112,6 @@ theorem concreteDripped_values :
   · rw [Stor.get_set_ne _ (by decide +kernel), Stor.get_set_ne _ (by decide +kernel)]
     exact concreteJoined_values.2.2.2
 
-theorem concreteDrip_receiptSucceeded :
-    (concreteDripTransactionBout.receiptsTrie[deploymentReceiptKey 0]?).map
-      (fun entry => entry.2.succeeded) = some true := by
-  rw [concreteDrip_receiptEntry]
-  rfl
-
-theorem concreteDrip_observations :
-    concreteDripMessageOutput.returnData = concreteDripChi.toBytes ∧
-    concreteDripTransactionBout.blockGasUsed = 32075 ∧
-    concreteDripTransactionBout.blockLogs = [] ∧
-    concreteDripBlock.header.timestamp = 5 := by
-  exact ⟨rfl, rfl, rfl, rfl⟩
-
 private theorem concreteDripMessageState_sender :
     concreteDripMessageState.get concreteCreateSender = concreteDripEntry.state.get concreteCreateSender := by
   unfold concreteDripMessageState concreteDripRuntimePost
@@ -1231,15 +1218,6 @@ def concreteExitPayload : Bytes :=
 
 def concreteExitTxRlp : Bytes := [2, 0xf8, 0x87] ++ concreteExitPayload
 
-theorem concreteExitBLT : concreteExitTx.toBLT = .list concreteExitFields := by
-  have hc : (UInt64.toBytes 1).sig = [1] := by decide +kernel
-  have hn : (UInt64.toBytes 3).sig = [3] := by decide +kernel
-  have hr : trimZero concreteExitTx.r = concreteExitTx.r := by decide +kernel
-  have hs : trimZero concreteExitTx.s = concreteExitTx.s := by decide +kernel
-  simp only [Tx.toBLT, concreteExitTx, hc, AccessList.toBLT, List.map_nil]
-  simp [concreteExitFields, concreteExitTx, Nat.toBytes, Nat.toBytes.aux]
-  exact ⟨hr, hs⟩
-
 theorem concreteExitPayloadParse (k : Nat) :
     Bytes.toBLTs? (k + 12) concreteExitPayload = some concreteExitFields := by
   unfold concreteExitPayload concreteExitFields
@@ -1328,11 +1306,6 @@ theorem concreteExitSenderChecked :
   have hc : (concreteDripped.state.get concreteCreateSender).code = ByteArray.empty :=
     concreteDrippedSenderCode
   simp only [checkTransactionSenderAccount, hn, hb, checkTransactionSenderCode, hc]
-  decide +kernel
-
-theorem concreteExitValidated :
-    validateTransaction pragueRules concreteExitTx 0 =
-      .ok (calculateIntrinsicCost pragueRules concreteExitTx 0) := by
   decide +kernel
 
 theorem concreteExitChecked :
@@ -3190,31 +3163,6 @@ theorem concreteExit_observations :
     concreteExitTransactionBout.blockLogs = [] ∧
     concreteExitBlock.header.timestamp = 6 ∧ concreteExitBlock.header.number = 4 := by
   exact ⟨rfl, rfl, rfl, rfl, rfl⟩
-
-/-- One actual configured exit block, its funded child payment, and its observable accounting. -/
-theorem concreteExit_checkpoint :
-    stateTransitionUsing concreteConfig concreteDripped concreteExitBlock = .ok concreteExited ∧
-    concreteExitMessageState = (concreteExitTotalBase.state.setBal concreteCreateTarget 60).addBal
-      concreteCreateSender 40 ∧
-    concreteExited.state.getStor concreteCreateTarget =
-      ((((concreteDripped.state.getStor concreteCreateTarget).set chiSlot concreteExitChi).set rhoSlot 6).set
-        concreteCreateSender.toB256 59).set totalUnitsSlot 59 ∧
-    ((concreteExited.state.getStor concreteCreateTarget).get chiSlot = concreteExitChi ∧
-      (concreteExited.state.getStor concreteCreateTarget).get rhoSlot = 6 ∧
-      (concreteExited.state.getStor concreteCreateTarget).get concreteCreateSender.toB256 = 59 ∧
-      (concreteExited.state.getStor concreteCreateTarget).get totalUnitsSlot = 59) ∧
-    concreteExited.state.bal concreteCreateTarget = 60 ∧
-    concreteExited.state.bal concreteCreateSender = 999999999998725850 ∧
-    concreteExited.state.getNonce concreteCreateSender = 4 ∧
-    (concreteExitTransactionBout.receiptsTrie[deploymentReceiptKey 0]?).map
-      (fun entry => entry.2.succeeded) = some true ∧
-    (concreteExitMessageOutput.returnData = (40 : B256).toBytes ∧
-      concreteExitTransactionBout.blockGasUsed = 48917 ∧
-      concreteExitTransactionBout.blockLogs = [] ∧
-      concreteExitBlock.header.timestamp = 6 ∧ concreteExitBlock.header.number = 4) :=
-  ⟨concreteExit_step, concreteExitMessageState_paid, concreteExited_storage, concreteExited_values,
-    concreteExitedTargetBalance, concreteExitedSenderBalance, concreteExitedSenderNonce,
-    concreteExit_receiptSucceeded, concreteExit_observations⟩
 
 end Drip
 end Blanc

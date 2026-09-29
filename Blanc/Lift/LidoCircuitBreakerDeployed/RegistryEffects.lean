@@ -390,21 +390,6 @@ theorem rawRemoval_tail_address_zero
   exact rawRemovalPost_tail_address_zero before entries target oldPauser index
     hlength hremoved
 
-/-- A later execution proof needs only pointwise equality with the seven
-stores; the local correspondences already discharge every read equation. -/
-theorem rawRemovalReadEffect_of_local_keys_and_writes
-    {before after : Stor} {entries : List Entry}
-    {target oldPauser : B256} {index : Nat}
-    (hw : RegistryWitness (solRegistryStorage before) entries)
-    (htarget : nonzeroCanonicalAddress target)
-    (hfind : findEntry entries target = some (index, oldPauser))
-    (hkeys : LocalRemovalKeys entries target oldPauser index)
-    (hwrites : ∀ key, after.get key =
-      (rawRemovalPost before entries target oldPauser index).get key) :
-    RawRemovalReadEffect before after entries target oldPauser index := by
-  let heffect := rawRemovalReadEffect_of_local_keys hw htarget hfind hkeys
-  exact { heffect with writes := hwrites }
-
 /-! ## `LocalRemovalKeys` is an instance of the unified premise
 
 Everything above this point is unchanged.  `LocalRemovalKeys` remains the

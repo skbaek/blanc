@@ -414,11 +414,6 @@ theorem weth10InitPreHashMemory_reads (sevm : Sevm) :
   rw [← weth10PreHashMemory_eq, ← weth10PreHashImage_eq]
   exact (weth10PreHashStage_wf_reads sevm).2
 
-theorem weth10InitPreHashMemory_wf (sevm : Sevm) :
-    Mem.Wf (weth10InitPreHashMemory sevm) := by
-  rw [← weth10PreHashMemory_eq]
-  exact (weth10PreHashStage_wf_reads sevm).1
-
 private lemma Bytes.length_writeAt_of_le
     {bs xs : Bytes} {n : Nat} (h : n + xs.length ≤ bs.length) :
     (Bytes.writeAt bs n xs).length = bs.length := by

@@ -1062,15 +1062,6 @@ theorem OssifiableFallbackPrefixBudget.rejects_insufficient_prefix
 
 /-! ## Selector-miss witnesses -/
 
-/-- A census-level non-membership fact has exactly the orientation required by
-the linear dispatcher fallback route. -/
-theorem runtimeSelectors_miss_of_not_mem (sevm : Sevm)
-    (miss : Sevm.selector sevm ∉ runtimeSelectors) :
-    ∀ selector ∈ runtimeSelectors, selector ≠ Sevm.selector sevm := by
-  intro selector member equal
-  apply miss
-  rwa [← equal]
-
 private theorem runtimeSelectors_miss_of_selector_lowByte_zero
     (sevm : Sevm)
     (lowByte : (Sevm.selector sevm).2.2.toUInt8 = 0) :
@@ -1357,18 +1348,6 @@ structure OssifiableForwardingRoute.ValidInstallation
     (route : OssifiableForwardingRoute outer afterTransfer callPre d) : Prop where
   canonicalSlotWord : d.codeWord = d.codeWord.toAdr.toB256
   executedCodeNonempty : d.code.toList ≠ []
-
-/-- The old address-shaped slot equation is a consequence of the exact loaded
-word plus the narrower canonical-installation premise. -/
-theorem OssifiableForwardingRoute.implementationSlotValue_of_validInstallation
-    {outer : Msg} {afterTransfer : Benv} {callPre : Devm}
-    {d : DelegatecallSpawnDescriptor
-      (initSevm (outer.withBenv afterTransfer)) callPre}
-    (route : OssifiableForwardingRoute outer afterTransfer callPre d)
-    (valid : route.ValidInstallation) :
-    (afterTransfer.state.get outer.currentTarget).stor.get
-        implementationSlot = d.codeWord.toAdr.toB256 := by
-  exact route.implementationSlotWord.trans valid.canonicalSlotWord
 
 /-- The implementation-specific property transport left deliberately open by
 the generic envelope.  Its context is the exact direct/delegated delta carried

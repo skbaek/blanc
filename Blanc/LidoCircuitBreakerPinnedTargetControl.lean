@@ -71,21 +71,6 @@ theorem stubProgram_compile : Prog.compile stubProgram = some stubBytes :=
 theorem stubProgram_pcFree : Prog.pcFree stubProgram = true := by
   decide
 
-/-- The source map contains no frame-entering instruction. -/
-theorem stubProgram_sourceSites_no_exec :
-    ∀ site ∈ stubProgram.sourceSites, ∀ x : Xinst,
-      site.instruction ≠ .exec x := by
-  intro site member x
-  have allClean : stubProgram.sourceSites.all
-      (fun sourceSite =>
-        match sourceSite.instruction with
-        | .exec _ => false
-        | _ => true) = true := by
-    decide +kernel
-  have clean := (List.all_eq_true.mp allClean) site member
-  cases instructionEq : site.instruction <;>
-    simp [instructionEq] at clean ⊢
-
 /-- The selected stub main has no source `.exec` and no internal call edge.
 This is the route-local certificate used by the generic noninterference
 bridge; it does not require inspecting unrelated program entries. -/
@@ -307,67 +292,6 @@ theorem stub_pauseFor_effect
       pauseForProjection sevm.benvStat.time duration
     rw [← stopStor, effect, Stor.get_set_self,
       compact_pause_word_eq_projection]
-
-/-- The Lido one-word return fragment returns the stack head and preserves the
-entry error field.  Its full overwrite makes the initial memory image
-irrelevant, while `Mem.Wf` rules out truncation in `Mem.write`. -/
-private lemma error_eq_of_eq
-    {sevm : Sevm} {pre post : Devm}
-    (run : Ninst.Run sevm pre Ninst.eq post) :
-    pre.error = post.error := by
-  rcases of_run_reg run with ⟨pc, instructionRun⟩
-  simp only [Rinst.run, Rinst.runCore] at instructionRun
-  rcases Devm.diffBurn_of_applyBinary instructionRun with
-    ⟨left, right, relation⟩
-  exact relation.error
-
-private lemma error_eq_of_lt
-    {sevm : Sevm} {pre post : Devm}
-    (run : Ninst.Run sevm pre Ninst.lt post) :
-    pre.error = post.error := by
-  rcases of_run_reg run with ⟨pc, instructionRun⟩
-  simp only [Rinst.run, Rinst.runCore] at instructionRun
-  rcases Devm.diffBurn_of_applyBinary instructionRun with
-    ⟨left, right, relation⟩
-  exact relation.error
-
-private lemma error_eq_of_timestamp
-    {sevm : Sevm} {pre post : Devm}
-    (run : Ninst.Run sevm pre Ninst.timestamp post) :
-    pre.error = post.error := by
-  change Ninst.Run sevm pre (.reg .timestamp) post at run
-  rcases of_run_reg run with ⟨pc, instructionRun⟩
-  simp only [Rinst.run, Rinst.runCore] at instructionRun
-  exact (Devm.pushBurn_of_pushItem instructionRun).error
-
-private lemma error_eq_of_sload
-    {sevm : Sevm} {pre post : Devm}
-    (run : Ninst.Run sevm pre Ninst.sload post) :
-    pre.error = post.error := by
-  rcases of_run_reg run with ⟨pc, instructionRun⟩
-  simp only [Rinst.run, Rinst.runCore] at instructionRun
-  rcases Except.bind_eq_ok instructionRun with
-    ⟨⟨key, afterKey⟩, popKey, instructionRun⟩
-  have popError := (Devm.pop_of_pop popKey).error
-  split at instructionRun
-  · rcases Except.bind_eq_ok instructionRun with
-      ⟨charged, charge, push⟩
-    have readError : charged.error =
-        (Devm.balReadStorage sevm.benvStat.rules sevm.currentTarget key charged).error := by
-      unfold Devm.balReadStorage; split <;> rfl
-    exact popError.trans
-      ((Devm.burn_of_chargeGas charge).error.trans
-        (readError.trans (Devm.push_of_push push).error))
-  · rcases Except.bind_eq_ok instructionRun with
-      ⟨charged, charge, push⟩
-    have accessError : afterKey.error =
-        (addAccessedStorageKey afterKey sevm.currentTarget key).error := rfl
-    have readError : charged.error =
-        (Devm.balReadStorage sevm.benvStat.rules sevm.currentTarget key charged).error := by
-      unfold Devm.balReadStorage; split <;> rfl
-    exact popError.trans (accessError.trans
-      ((Devm.burn_of_chargeGas charge).error.trans
-        (readError.trans (Devm.push_of_push push).error)))
 
 private lemma error_eq_of_mstore
     {sevm : Sevm} {pre post : Devm}
@@ -1501,9 +1425,6 @@ theorem wrongBoolProgram_compile :
     Prog.compile wrongBoolProgram = some wrongBoolBytes :=
   Prog.compile_eq_some_getD_of_compiles _ wrongBoolProgram_compiles
 
-theorem wrongBoolProgram_pcFree : Prog.pcFree wrongBoolProgram = true := by
-  decide
-
 def wrongBoolCircuitBreaker : Adr := 0x300
 
 def wrongBoolPauser : Adr := 0x301
@@ -1800,11 +1721,6 @@ theorem retainedWriteChildProgram_compiles :
 theorem retainedWriteProgram_compiles :
     retainedWriteProgram.compiles = true := by
   decide +kernel
-
-theorem retainedWriteChildProgram_compile :
-    Prog.compile retainedWriteChildProgram = some retainedWriteChildBytes :=
-  Prog.compile_eq_some_getD_of_compiles _
-    retainedWriteChildProgram_compiles
 
 theorem retainedWriteProgram_compile :
     Prog.compile retainedWriteProgram = some retainedWriteBytes :=

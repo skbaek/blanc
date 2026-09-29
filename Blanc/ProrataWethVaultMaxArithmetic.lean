@@ -21,10 +21,6 @@ theorem le_maxWithdrawN_iff (amount balance assets supply : Nat) :
 
 /-! The burn side of `maxWithdraw`'s attainability: withdrawing the advertised
 maximum burns at most the owner's balance. -/
-theorem previewWithdrawN_maxWithdrawN_le (balance assets supply : Nat) :
-    previewWithdrawN (maxWithdrawN balance assets supply) assets supply ≤
-      balance := by
-  exact (le_maxWithdrawN_iff _ balance assets supply).mp le_rfl
 
 /-! At a stable supply and a nonzero receiver the public `maxDeposit` view is
 the bare capacity formula. -/

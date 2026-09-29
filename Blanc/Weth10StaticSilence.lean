@@ -486,16 +486,6 @@ theorem AllowanceRegionEffect.append_writeFree
   rw [applyAllowanceLedger_append_writeFree _ left key hfree]
   exact h.storage key hregion
 
-/-- Cons form: a frame whose own record already transports the region keeps
-transporting it once a write-free descendant stream is appended. -/
-theorem AllowanceRegionEffect.cons_writeFree
-    {ca : Adr} {pre post : Devm} {own : CountedFrame}
-    {rest : List CountedFrame}
-    (h : AllowanceRegionEffect ca pre post [own])
-    (hfree : WriteFreeLedger rest) :
-    AllowanceRegionEffect ca pre post (own :: rest) := by
-  simpa using h.append_writeFree hfree
-
 /-- Prepending a write-free segment leaves an allowance-region transport
 unchanged. -/
 theorem AllowanceRegionEffect.writeFree_append
@@ -599,19 +589,6 @@ theorem writeFreeLedger_staticcallCrossing
   · exact writeFreeLedger_frameContribution hstatic
       (Exec.attributionInner_writeFree_of_static child hstatic)
   · exact writeFreeLedger_nil
-
-/-- Stream form of the crossing: a committed `STATICCALL` child's whole
-attribution stream is write-free. -/
-theorem Exec.attributionStream_writeFree_of_staticcallChild
-    {dp : DeployParams} {ca : Adr}
-    {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
-    {f : Jaune.Frame} {rsm : Resume} {cevm : Evm} {raw : Execution}
-    (hspawn : Ninst.step ⟨pc, sevm, pre⟩ Ninst.staticcall = .spawn f rsm pc')
-    (henter : f.enter = .run cevm)
-    (child : Exec cevm.pc cevm.sta cevm.dyna raw) :
-    WriteFreeLedger (Exec.attributionStream dp ca child) :=
-  Exec.attributionStream_writeFree_of_static child
-    (Blanc.Ninst.step_staticcall_run_isStatic hspawn henter)
 
 end Weth10
 

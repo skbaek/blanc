@@ -27,12 +27,5 @@ def proxyAtCall : Devm :=
       0, 0, 0], Mem.empty.write 0 removeCalldata, proxyGas - 54, .zero⟩
 
 set_option profiler true in
-/-- Eleven continuing steps, as an equation on the full machine state (kernel
-`rfl`). -/
-theorem proxy_prefix_concrete_eq :
-    stepN 11 proxyEntryW = some ⟨31, proxySevm removeCalldata, proxyAtCall⟩ := by
-  kernel_rfl
-
-theorem removeCalldata_length : removeCalldata.length = 132 := by decide +kernel
 
 end Blanc.Lift.VyperNonreentrantDeployed.Concrete

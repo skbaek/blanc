@@ -141,12 +141,4 @@ theorem cp5T_spec :
   dcallPrep_spec cp5T_eq (fun a => by rw [e4T31_acc]; exact e4T_adrs a)
     (by rw [e4T31_state]; exact e4T_world.2)
 
-/-- **Frame 5 starts in agreement.** -/
-theorem c5T_agree : Agree c5T := by
-  obtain ⟨-, hpa, hpk, -, hia, hik, -, hst, -⟩ := cp5T_spec
-  exact frameStart_agree t_0000_c0 e5T_eq
-    (fun x => by rw [hik, hpk, e4T31_keys]; exact e4T_keys x) (fun a => by rw [hia]; exact hpa a)
-    (fun a k => by rw [hst, e4T31_state]; exact e4T_world.1 a k)
-    (by rw [hst, e4T31_state]; exact e4T_world.2)
-
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx

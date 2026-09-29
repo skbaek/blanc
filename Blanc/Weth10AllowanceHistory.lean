@@ -535,12 +535,6 @@ def AllowanceTransportedSound (ca : Adr) (pre post : State)
   AllowanceTransported ca pre post ledger ∧
     AllowanceEntryReadSound (pre.getStor ca) ledger
 
-/-- The read-sound carrier downgrades to the landed one. -/
-theorem AllowanceTransportedSound.toAllowanceTransported
-    {ca : Adr} {pre post : State} {ledger : List CountedFrame}
-    (h : AllowanceTransportedSound ca pre post ledger) :
-    AllowanceTransported ca pre post ledger := h.1
-
 /-- Forget machine-local fields after a read-sound operational proof. -/
 theorem AllowanceRegionEffectSound.toState
     {ca : Adr} {pre post : Devm} {ledger : List CountedFrame}
@@ -585,16 +579,6 @@ def CommittedExecAllowanceReadSound (dp : DeployParams) (ca : Adr) : Prop :=
     AllowanceTransportedSound ca msg.benv.state
       (Execution.committedPost out hcommit).state
       (Exec.attributionStream dp ca run)
-
-/-- The read-sound settlement obligation downgrades to the landed one, so a
-`Sound` dispatcher discharges the published claim without that claim ever
-changing what it asserts. -/
-theorem CommittedExecAllowanceReadSound.committedExecAllowanceSound
-    {dp : DeployParams} {ca : Adr}
-    (h : CommittedExecAllowanceReadSound dp ca) :
-    CommittedExecAllowanceSound dp ca :=
-  fun run htransfer hinit hcommit ready hfork =>
-    (h run htransfer hinit hcommit ready hfork).1
 
 /-- The generic interpreter lift reduces raw message allowance transport to
 the exact compiled WETH10 body handler. -/

@@ -762,12 +762,6 @@ cells names all five write keys — `arrayEntrySlot idx0`, `indexSlot last0`,
 `arrayEntrySlot len0`, `arrayLengthSlot` and `indexSlot target` — and five
 disequalities against the caller's count slot close the thread. -/
 
-/-- One image-extension step: a `loadWord` only extends memory. -/
-private theorem memImage_extend {a b : Devm} {img : Bytes} {i n : Nat}
-    (h : b.memory = a.memory.extend i n) (image : MemImage a img) :
-    MemImage b img :=
-  ⟨by rw [h]; exact image.1.extend i n, by rw [h]; exact image.2.extend i n⟩
-
 /-- The caller's count cell across `removeTarget`'s whole span, at any state
 whose Registry cells are pinned: every one of the five `SSTORE` keys is named
 by the entry cells, and each misses the count slot by hypothesis. -/

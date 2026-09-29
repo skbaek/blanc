@@ -21,10 +21,6 @@ open Jaune
 def adminSlotLit : B256 :=
   0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103
 
-theorem adminSlotLit_eq_slot : adminSlotLit = adminSlot := by
-  unfold adminSlotLit
-  rw [adminSlot_val]
-
 /-! ## Seven named runtime selectors -/
 
 def proxyGetAdminSelector : B256 := 0x916f1fd7
@@ -45,22 +41,6 @@ def runtimeSelectors : List B256 :=
     proxyUpgradeToSelector,
     proxyUpgradeToAndCallSelector ]
 
-theorem runtimeSelectors_eq_literals :
-    runtimeSelectors =
-      [ 0x916f1fd7, 0xad729a71, 0x13351258, 0xadcbc237,
-        0x773f5be8, 0x3ebdd0eb, 0xd2f6ed4d ] := by
-  rfl
-
-theorem runtimeSelectors_length : runtimeSelectors.length = 7 := by
-  decide
-
-theorem runtimeSelectors_nodup : runtimeSelectors.Nodup := by
-  decide
-
-theorem runtimeSelectors_pairwise_ne :
-    runtimeSelectors.Pairwise (fun left right => left ≠ right) := by
-  decide
-
 theorem mem_runtimeSelectors_iff (selected : B256) :
     selected ∈ runtimeSelectors ↔
       selected = proxyGetAdminSelector ∨
@@ -71,19 +51,6 @@ theorem mem_runtimeSelectors_iff (selected : B256) :
       selected = proxyUpgradeToSelector ∨
       selected = proxyUpgradeToAndCallSelector := by
   simp [runtimeSelectors]
-
-/-- Literal selectors remain tied to the exact Solidity signatures. -/
-theorem runtimeSelector_literal_ties :
-    proxyGetAdminSelector = selector "proxy__getAdmin" [] ∧
-    proxyGetImplementationSelector =
-      selector "proxy__getImplementation" [] ∧
-    proxyGetIsOssifiedSelector = selector "proxy__getIsOssified" [] ∧
-    proxyOssifySelector = selector "proxy__ossify" [] ∧
-    proxyChangeAdminSelector = selector "proxy__changeAdmin" [.address] ∧
-    proxyUpgradeToSelector = selector "proxy__upgradeTo" [.address] ∧
-    proxyUpgradeToAndCallSelector =
-      selector "proxy__upgradeToAndCall" [.address, .dynBytes, .bool] := by
-  decide +kernel
 
 /-! ## Event topics and exact log shapes -/
 
@@ -98,17 +65,6 @@ def proxyOssifiedEventTopic : B256 :=
 
 def eventTopics : List B256 :=
   [upgradedEventTopic, adminChangedEventTopic, proxyOssifiedEventTopic]
-
-theorem eventTopics_length : eventTopics.length = 3 := by decide
-
-theorem eventTopics_nodup : eventTopics.Nodup := by decide
-
-theorem eventTopic_literal_ties :
-    upgradedEventTopic = signatureHash "Upgraded" [.address] ∧
-    adminChangedEventTopic =
-      signatureHash "AdminChanged" [.address, .address] ∧
-    proxyOssifiedEventTopic = signatureHash "ProxyOssified" [] := by
-  decide +kernel
 
 /-- `Upgraded(address)`: the implementation is indexed and data is empty. -/
 def upgradedLog (proxy implementation : Adr) : Log :=
@@ -154,21 +110,9 @@ def proxyIsOssifiedErrorSelector : B256 := 0xb83646a9
 def customErrorSelectors : List B256 :=
   [notAdminErrorSelector, proxyIsOssifiedErrorSelector]
 
-theorem customErrorSelectors_nodup : customErrorSelectors.Nodup := by decide
-
-theorem customErrorSelector_literal_ties :
-    notAdminErrorSelector = selector "NotAdmin" [] ∧
-    proxyIsOssifiedErrorSelector = selector "ProxyIsOssified" [] := by
-  decide +kernel
-
 def notAdminErrorData : Bytes := abiSelectorBytes notAdminErrorSelector
 def proxyIsOssifiedErrorData : Bytes :=
   abiSelectorBytes proxyIsOssifiedErrorSelector
-
-theorem customErrorData_literals :
-    notAdminErrorData = [0x7b, 0xfa, 0x4b, 0x9f] ∧
-    proxyIsOssifiedErrorData = [0xb8, 0x36, 0x46, 0xa9] := by
-  decide +kernel
 
 def zeroAdminErrorData : Bytes :=
   errorData "ERC1967: new admin is the zero address"
@@ -183,21 +127,6 @@ def emptyDelegatecallErrorData : Bytes :=
 byte-array length exceeds its `uint64` implementation bound. -/
 def allocationPanicData : Bytes :=
   [0x4e, 0x48, 0x7b, 0x71] ++ (0x41 : B256).toBytes
-
-theorem allocationPanicData_eq_signature :
-    allocationPanicData =
-      (signatureHash "Panic" [.uint256]).toBytes.take 4 ++
-        (0x41 : B256).toBytes := by
-  decide +kernel
-
-theorem inheritedErrorData_lengths :
-    zeroAdminErrorData.length = 132 ∧
-    noCodeImplementationErrorData.length = 132 ∧
-    emptyDelegatecallErrorData.length = 132 := by
-  decide +kernel
-
-theorem allocationPanicData_length : allocationPanicData.length = 36 := by
-  decide +kernel
 
 /-! ## Canonical endpoint calldata and return encodings
 

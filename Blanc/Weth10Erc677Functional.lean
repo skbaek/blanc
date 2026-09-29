@@ -1344,31 +1344,6 @@ def RawTokenCallbackIndexedStepBoundary (dp : DeployParams) (e : Sevm)
     Func.Run ((weth10 dp).main :: weth10Aux) e
       callPost (.call boolReturnSlot) post
 
-/-- Forget the explicit indices while preserving the exact same callback
-states and recursive slot. -/
-theorem RawTokenCallbackIndexedStepBoundary.toStepBoundary
-    {dp : DeployParams} {e : Sevm} {self target : Adr}
-    {rawTarget sel value tailLen inputSize : B256} {tail input : Bytes}
-    {pre post callPre callPost parent child : Devm} {xl : Xlot}
-    {pc : Nat}
-    (h : RawTokenCallbackIndexedStepBoundary dp e self target rawTarget sel
-      value tailLen inputSize tail input pre post callPre callPost parent
-      child xl pc) :
-    RawTokenCallbackStepBoundary dp e self target rawTarget sel value
-      tailLen inputSize tail input pre post := by
-  rcases h with
-    ⟨htarget, hsize, delegated, code, gasWord, avail, hstep, hdepth,
-      hstack, hinput, hreads, hstor, hbal, hcode, hlogs, houtput,
-      hparentState, hparentMemory, hparentLogs, hparentOutput,
-      hdelegation, hfilled, hmessage, hclean, hresume, hcallPostState,
-      hreturnData, hmemory, hcallPostStack, hbool⟩
-  exact ⟨htarget, hsize, callPre, callPost, parent, child, xl,
-    delegated, code, gasWord, avail, pc, hstep, hdepth, hstack, hinput,
-    hreads, hstor, hbal, hcode, hlogs, houtput, hparentState,
-    hparentMemory, hparentLogs, hparentOutput, hdelegation, hfilled,
-    hmessage, hclean, hresume, hcallPostState, hreturnData, hmemory,
-    hcallPostStack, hbool⟩
-
 /-- Forgetting only the parent `StepRun` recovers the established raw
 callback API. -/
 theorem RawTokenCallbackStepBoundary.toRaw
@@ -2323,16 +2298,6 @@ def DepositToAndCallRawStepSuccessEffect (dp : DeployParams) (e : Sevm)
       onTokenTransferSelector e.value (Sevm.tailLen e 1) inputSize
       (Sevm.tailBytes e 1) input callbackPre post
 
-theorem DepositToAndCallRawStepSuccessEffect.toRaw
-    {dp : DeployParams} {e : Sevm} {pre post : Devm}
-    (h : DepositToAndCallRawStepSuccessEffect dp e pre post) :
-    DepositToAndCallRawSuccessEffect dp e pre post := by
-  rcases h with
-    ⟨callbackPre, inputSize, input, hstor, hlogs, hbal, hcode,
-      houtput, hboundary⟩
-  exact ⟨callbackPre, inputSize, input, hstor, hlogs, hbal, hcode,
-    houtput, hboundary.toRaw⟩
-
 /-- Selected-body raw `depositToAndCall` effect with exact callback step. -/
 theorem depositToAndCall_rawStepSuccessEffect (dp : DeployParams)
     {e : Sevm} {pre post : Devm}
@@ -2647,22 +2612,6 @@ def TransferAndCallRawStepSuccessEffect (dp : DeployParams) (e : Sevm)
         onTokenTransferSelector (Sevm.argWord e 1)
         (Sevm.tailLen e 2) inputSize (Sevm.tailBytes e 2) input
         callbackPre post)
-
-theorem TransferAndCallRawStepSuccessEffect.toRaw
-    {dp : DeployParams} {e : Sevm} {pre post : Devm}
-    (h : TransferAndCallRawStepSuccessEffect dp e pre post) :
-    TransferAndCallRawSuccessEffect dp e pre post := by
-  rcases h with hzero | hnonzero
-  · rcases hzero with
-      ⟨harg, callPre, callbackPre, inputSize, input, hburn, hcallback⟩
-    exact Or.inl ⟨harg, callPre, callbackPre, inputSize, input, hburn,
-      hcallback.toRaw⟩
-  · rcases hnonzero with
-      ⟨harg, recipient, callbackPre, inputSize, input, hrecipient,
-        htransfer, hflash, hlogs, hbal, hcode, houtput, hcallback⟩
-    exact Or.inr ⟨harg, recipient, callbackPre, inputSize, input,
-      hrecipient, htransfer, hflash, hlogs, hbal, hcode, houtput,
-      hcallback.toRaw⟩
 
 theorem transferAndCall_rawStepSuccessEffect (dp : DeployParams)
     {e : Sevm} {pre post : Devm}
@@ -2997,59 +2946,6 @@ theorem weth10_transferAndCall_successEffect (dp : DeployParams)
       simpa only [hstor, hbal, hcodeFrame, hlogs, houtput] using hnonzero)
 
 /-! ## Shared ERC-677 failure links -/
-
-/-- Any of the three ERC-677 callbacks empty-reverts after its exact
-`EXTCODESIZE` check reports a codeless target; no child `CALL` is reached. -/
-theorem erc677_codelessCallback_runCompiledTo
-    {dp : DeployParams} {e : Sevm} {base : Devm} {G : Nat}
-    {stack : List B256} {sel targetArg dataArg : B256} {value : Line}
-    (h_room : stack.length < 1022) :
-    Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) e
-      (base.setMach ⟨0 :: stack, base.memory,
-        G + codelessCallbackCost, base.stateGas⟩)
-      (iszero ::: Func.revert <?>
-        (pop ::: value +++ storeTokenCallbackHead sel +++
-          pushList [0, 0] +++ forwardArgTail dataArg 4 +++
-          tokenCallbackArgsSize +++
-          pushB256 callbackArgsOffset ::: pushB256 0 :::
-          arg targetArg +++ gas ::: call ::: .call boolReturnSlot))
-      (.error (.revert,
-        (base.setMach ⟨stack, base.memory, G, base.stateGas⟩).withOutput [])) := by
-  exact codelessCallback_runCompiledTo h_room
-
-/-- All three ERC-677 endpoints use the same Boolean auxiliary, so a failed
-child bubbles its returndata byte-for-byte. -/
-theorem erc677_childRevert_runCompiledTo
-    {dp : DeployParams} {e : Sevm} {base : Devm} {G : Nat}
-    {stack : List B256} {img : Bytes}
-    (h_wf : Mem.Wf base.memory) (h_reads : Mem.Reads base.memory img)
-    (h_align : base.memory.size % 32 = 0)
-    (h_len : base.returnData.length < 2 ^ 256)
-    (h_room : stack.length < 1021) :
-    Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) e
-      (base.setMach
-        ⟨0 :: stack, base.memory, G + bubbleContinuationCost base, base.stateGas⟩)
-      boolReturn
-      (.error (.revert,
-        (base.setMach
-          ⟨stack, base.memory.write 0 base.returnData, G, base.stateGas⟩).withOutput
-            base.returnData)) := by
-  exact boolReturn_childRevert_runCompiledTo
-    h_wf h_reads h_align h_len h_room
-
-/-- All three ERC-677 endpoints empty-revert when a successful child returns
-fewer than the Boolean decoder's required 32 bytes. -/
-theorem erc677_shortReturn_runCompiledTo
-    {dp : DeployParams} {e : Sevm} {base : Devm} {G : Nat}
-    {stack : List B256}
-    (h_short : base.returnData.length < 32)
-    (h_room : stack.length < 1020) :
-    Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) e
-      (base.setMach ⟨1 :: stack, base.memory, G + shortReturnCost, base.stateGas⟩)
-      boolReturn
-      (.error (.revert,
-        (base.setMach ⟨stack, base.memory, G, base.stateGas⟩).withOutput [])) := by
-  exact boolReturn_short_runCompiledTo h_short h_room
 
 end Weth10
 

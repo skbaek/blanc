@@ -584,13 +584,6 @@ def pauseWorldDuration : B256 := 1814400
 theorem pauseWorld_pauserAdr_toB256 :
     pauseWorldPauserAdr.toB256 = pauseWorldPauser := by decide
 
-theorem pauseWorld_calleeAdr_toB256 :
-    pauseWorldCallee.toB256 = 0x77 := by decide
-
-/-- The pauser is heartbeat-live at the world's timestamp. -/
-theorem pauseWorld_time_lt_expiry :
-    pauseWorldTime.toNat < pauseWorldExpiry.toNat := by decide
-
 /-- The chosen duration sits inside `officialParams`' immutable bounds, so it
 is a value a deployed CircuitBreaker's configuration cell can actually hold. -/
 theorem pauseWorldDuration_bounds :
@@ -622,9 +615,6 @@ outright; the region machinery (`slot_ne_of_region_ne`,
 `slot_injective_payload`) is reserved for the `_other` lemmas below, whose
 keys are variable. -/
 
-theorem pauseWorld_interval_ne_duration :
-    heartbeatIntervalSlot ≠ pauseDurationSlot := by decide
-
 theorem pauseWorld_interval_ne_length :
     heartbeatIntervalSlot ≠ arrayLengthSlot := by decide
 
@@ -636,9 +626,6 @@ theorem pauseWorld_interval_ne_entryTwo :
 
 theorem pauseWorld_interval_ne_assignCallee :
     heartbeatIntervalSlot ≠ assignmentSlot pauseWorldCallee.toB256 := by decide
-
-theorem pauseWorld_interval_ne_assignT2 :
-    heartbeatIntervalSlot ≠ assignmentSlot pauseWorldT2 := by decide
 
 theorem pauseWorld_interval_ne_indexCallee :
     heartbeatIntervalSlot ≠ indexSlot pauseWorldCallee.toB256 := by decide
@@ -664,9 +651,6 @@ theorem pauseWorld_duration_ne_entryTwo :
 theorem pauseWorld_duration_ne_assignCallee :
     pauseDurationSlot ≠ assignmentSlot pauseWorldCallee.toB256 := by decide
 
-theorem pauseWorld_duration_ne_assignT2 :
-    pauseDurationSlot ≠ assignmentSlot pauseWorldT2 := by decide
-
 theorem pauseWorld_duration_ne_indexCallee :
     pauseDurationSlot ≠ indexSlot pauseWorldCallee.toB256 := by decide
 
@@ -688,14 +672,8 @@ theorem pauseWorld_length_ne_entryTwo :
 theorem pauseWorld_length_ne_assignCallee :
     arrayLengthSlot ≠ assignmentSlot pauseWorldCallee.toB256 := by decide
 
-theorem pauseWorld_length_ne_assignT2 :
-    arrayLengthSlot ≠ assignmentSlot pauseWorldT2 := by decide
-
 theorem pauseWorld_length_ne_indexCallee :
     arrayLengthSlot ≠ indexSlot pauseWorldCallee.toB256 := by decide
-
-theorem pauseWorld_length_ne_indexT2 :
-    arrayLengthSlot ≠ indexSlot pauseWorldT2 := by decide
 
 theorem pauseWorld_length_ne_count :
     arrayLengthSlot ≠ countSlot pauseWorldPauser := by decide
@@ -703,20 +681,11 @@ theorem pauseWorld_length_ne_count :
 theorem pauseWorld_length_ne_expiry :
     arrayLengthSlot ≠ expirySlot pauseWorldPauser := by decide
 
-theorem pauseWorld_entryOne_ne_entryTwo :
-    arrayEntrySlot 1 ≠ arrayEntrySlot 2 := by decide
-
 theorem pauseWorld_entryOne_ne_assignCallee :
     arrayEntrySlot 1 ≠ assignmentSlot pauseWorldCallee.toB256 := by decide
 
-theorem pauseWorld_entryOne_ne_assignT2 :
-    arrayEntrySlot 1 ≠ assignmentSlot pauseWorldT2 := by decide
-
 theorem pauseWorld_entryOne_ne_indexCallee :
     arrayEntrySlot 1 ≠ indexSlot pauseWorldCallee.toB256 := by decide
-
-theorem pauseWorld_entryOne_ne_indexT2 :
-    arrayEntrySlot 1 ≠ indexSlot pauseWorldT2 := by decide
 
 theorem pauseWorld_entryOne_ne_count :
     arrayEntrySlot 1 ≠ countSlot pauseWorldPauser := by decide
@@ -727,14 +696,8 @@ theorem pauseWorld_entryOne_ne_expiry :
 theorem pauseWorld_entryTwo_ne_assignCallee :
     arrayEntrySlot 2 ≠ assignmentSlot pauseWorldCallee.toB256 := by decide
 
-theorem pauseWorld_entryTwo_ne_assignT2 :
-    arrayEntrySlot 2 ≠ assignmentSlot pauseWorldT2 := by decide
-
 theorem pauseWorld_entryTwo_ne_indexCallee :
     arrayEntrySlot 2 ≠ indexSlot pauseWorldCallee.toB256 := by decide
-
-theorem pauseWorld_entryTwo_ne_indexT2 :
-    arrayEntrySlot 2 ≠ indexSlot pauseWorldT2 := by decide
 
 theorem pauseWorld_entryTwo_ne_count :
     arrayEntrySlot 2 ≠ countSlot pauseWorldPauser := by decide
@@ -742,35 +705,14 @@ theorem pauseWorld_entryTwo_ne_count :
 theorem pauseWorld_entryTwo_ne_expiry :
     arrayEntrySlot 2 ≠ expirySlot pauseWorldPauser := by decide
 
-theorem pauseWorld_assignCallee_ne_assignT2 :
-    assignmentSlot pauseWorldCallee.toB256 ≠ assignmentSlot pauseWorldT2 := by decide
-
 theorem pauseWorld_assignCallee_ne_indexCallee :
     assignmentSlot pauseWorldCallee.toB256 ≠ indexSlot pauseWorldCallee.toB256 := by decide
-
-theorem pauseWorld_assignCallee_ne_indexT2 :
-    assignmentSlot pauseWorldCallee.toB256 ≠ indexSlot pauseWorldT2 := by decide
 
 theorem pauseWorld_assignCallee_ne_count :
     assignmentSlot pauseWorldCallee.toB256 ≠ countSlot pauseWorldPauser := by decide
 
 theorem pauseWorld_assignCallee_ne_expiry :
     assignmentSlot pauseWorldCallee.toB256 ≠ expirySlot pauseWorldPauser := by decide
-
-theorem pauseWorld_assignT2_ne_indexCallee :
-    assignmentSlot pauseWorldT2 ≠ indexSlot pauseWorldCallee.toB256 := by decide
-
-theorem pauseWorld_assignT2_ne_indexT2 :
-    assignmentSlot pauseWorldT2 ≠ indexSlot pauseWorldT2 := by decide
-
-theorem pauseWorld_assignT2_ne_count :
-    assignmentSlot pauseWorldT2 ≠ countSlot pauseWorldPauser := by decide
-
-theorem pauseWorld_assignT2_ne_expiry :
-    assignmentSlot pauseWorldT2 ≠ expirySlot pauseWorldPauser := by decide
-
-theorem pauseWorld_indexCallee_ne_indexT2 :
-    indexSlot pauseWorldCallee.toB256 ≠ indexSlot pauseWorldT2 := by decide
 
 theorem pauseWorld_indexCallee_ne_count :
     indexSlot pauseWorldCallee.toB256 ≠ countSlot pauseWorldPauser := by decide
@@ -947,30 +889,6 @@ theorem pauseLastStor_count_other {p : B256}
   · exact slot_ne_of_region_ne (by decide) (by decide) (by decide) hp
       (by decide)
 
-/-- Every canonical pauser other than `9` has a zero heartbeat expiry in row
-19's world. -/
-theorem pauseLastStor_expiry_other {p : B256}
-    (hcanonical : canonicalAddress p) (hne : p ≠ pauseWorldPauser) :
-    pauseLastWorldStor.get (expirySlot p) = 0 := by
-  have hp : p.toNat < 2 ^ 252 := pauseWorld_payload_of_canonical hcanonical
-  refine pauseLastStor_zero ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
-  · exact slot_ne_of_region_ne (by decide) (by decide) (by decide) hp
-      (by decide)
-  · exact slot_ne_of_region_ne (by decide) (by decide) (by decide) hp
-      (by decide)
-  · exact slot_ne_of_region_ne (by decide) (by decide) (by decide) hp
-      (by decide)
-  · exact slot_ne_of_region_ne (by decide) (by decide) (by decide) hp
-      (by decide)
-  · exact slot_ne_of_region_ne (by decide) (by decide) (by decide) hp
-      (by decide)
-  · exact slot_ne_of_region_ne (by decide) (by decide) (by decide) hp
-      (by decide)
-  · exact slot_ne_of_region_ne (by decide) (by decide) (by decide) hp
-      (by decide)
-  · intro heq
-    exact hne (slot_injective_payload (by decide) (by decide) hp heq).symm
-
 /-! ### Row 18's storage, read cell by cell -/
 
 theorem pauseRetainedStor_interval :
@@ -993,10 +911,6 @@ theorem pauseRetainedStor_entryTwo :
 
 theorem pauseRetainedStor_assignment :
     pauseRetainedWorldStor.get (assignmentSlot pauseWorldCallee.toB256) =
-      pauseWorldPauser := by decide
-
-theorem pauseRetainedStor_assignmentT2 :
-    pauseRetainedWorldStor.get (assignmentSlot pauseWorldT2) =
       pauseWorldPauser := by decide
 
 theorem pauseRetainedStor_index :
@@ -1127,36 +1041,6 @@ theorem pauseRetainedStor_count_other {p : B256}
     exact hne (slot_injective_payload (by decide) (by decide) hp heq).symm
   · exact slot_ne_of_region_ne (by decide) (by decide) (by decide) hp
       (by decide)
-
-/-- Every canonical pauser other than `9` has a zero heartbeat expiry in row
-18's world. -/
-theorem pauseRetainedStor_expiry_other {p : B256}
-    (hcanonical : canonicalAddress p) (hne : p ≠ pauseWorldPauser) :
-    pauseRetainedWorldStor.get (expirySlot p) = 0 := by
-  have hp : p.toNat < 2 ^ 252 := pauseWorld_payload_of_canonical hcanonical
-  refine pauseRetainedStor_zero ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
-  · exact slot_ne_of_region_ne (by decide) (by decide) (by decide) hp
-      (by decide)
-  · exact slot_ne_of_region_ne (by decide) (by decide) (by decide) hp
-      (by decide)
-  · exact slot_ne_of_region_ne (by decide) (by decide) (by decide) hp
-      (by decide)
-  · exact slot_ne_of_region_ne (by decide) (by decide) (by decide) hp
-      (by decide)
-  · exact slot_ne_of_region_ne (by decide) (by decide) (by decide) hp
-      (by decide)
-  · exact slot_ne_of_region_ne (by decide) (by decide) (by decide) hp
-      (by decide)
-  · exact slot_ne_of_region_ne (by decide) (by decide) (by decide) hp
-      (by decide)
-  · exact slot_ne_of_region_ne (by decide) (by decide) (by decide) hp
-      (by decide)
-  · exact slot_ne_of_region_ne (by decide) (by decide) (by decide) hp
-      (by decide)
-  · exact slot_ne_of_region_ne (by decide) (by decide) (by decide) hp
-      (by decide)
-  · intro heq
-    exact hne (slot_injective_payload (by decide) (by decide) hp heq).symm
 
 /-! ### The Registry witnesses
 
@@ -1300,23 +1184,6 @@ The swap-pop facts a walk composition consumes at each world: the paused
 target sits at model index `0`, and removing it leaves the empty Registry
 (row 19) or the singleton `[(0x88, 9)]` (row 18). -/
 
-theorem pauseLastWorld_find :
-    findEntry [(pauseWorldCallee.toB256, pauseWorldPauser)]
-      pauseWorldCallee.toB256 = some (0, pauseWorldPauser) := by decide
-
-theorem pauseLastWorld_swapPop :
-    swapPop [(pauseWorldCallee.toB256, pauseWorldPauser)] 0 = [] := by decide
-
-theorem pauseRetainedWorld_find :
-    findEntry [(pauseWorldCallee.toB256, pauseWorldPauser),
-      (pauseWorldT2, pauseWorldPauser)] pauseWorldCallee.toB256 =
-      some (0, pauseWorldPauser) := by decide
-
-theorem pauseRetainedWorld_swapPop :
-    swapPop [(pauseWorldCallee.toB256, pauseWorldPauser),
-      (pauseWorldT2, pauseWorldPauser)] 0 =
-      [(pauseWorldT2, pauseWorldPauser)] := by decide
-
 /-! ### World state: the two accounts
 
 The CircuitBreaker deployment carries the entry storage and the production
@@ -1324,9 +1191,6 @@ runtime; the pause target carries the responder callee.  World 18's second
 target `t2` deliberately has **no** account. -/
 
 theorem pauseWorld_callee_ne_owner : pauseWorldCallee ≠ configWorldOwner := by
-  decide
-
-theorem pauseWorld_owner_ne_callee : configWorldOwner ≠ pauseWorldCallee := by
   decide
 
 /-- World state: the CircuitBreaker deployment plus the responder callee. -/
@@ -1353,9 +1217,6 @@ theorem pauseWorldState_calleeCode (stor : Stor) :
     (pauseWorldState stor).getCode pauseWorldCallee = calleeCode := by
   show ((pauseWorldState stor).get pauseWorldCallee).code = calleeCode
   rw [pauseWorldState_get_callee]
-
-/-- The responder account is nonempty code: its `EXTCODESIZE` is `9`. -/
-theorem pauseWorld_calleeCodeSize : calleeCode.size = 9 := by decide
 
 /-- The responder bytes are not an EIP-7702 delegation designator, so the
 delegation resolution answers `none` at the callee. -/
@@ -1442,9 +1303,6 @@ theorem pauseWorld_codeAddress_currentTarget (stor : Stor) (gas : Nat) :
 theorem pauseWorld_time (stor : Stor) (gas : Nat) :
     (pauseWorldSevm stor gas).benvStat.time = pauseWorldTime := rfl
 
-theorem pauseWorld_caller (stor : Stor) (gas : Nat) :
-    (pauseWorldSevm stor gas).caller = pauseWorldPauserAdr := rfl
-
 /-- The `CALLER` word the route's guards compare against the target's
 assignment cell. -/
 theorem pauseWorld_callerWord (stor : Stor) (gas : Nat) :
@@ -1454,23 +1312,8 @@ theorem pauseWorld_callerWord (stor : Stor) (gas : Nat) :
 theorem pauseWorld_depth (stor : Stor) (gas : Nat) :
     (pauseWorldSevm stor gas).depth = 1024 := rfl
 
-theorem pauseWorld_gas (stor : Stor) (gas : Nat) :
-    (pauseWorldSevm stor gas).gas = gas := rfl
-
 theorem pauseWorld_memory (stor : Stor) (gas : Nat) :
     (pauseWorldPre stor gas).memory = Mem.empty := rfl
-
-theorem pauseWorld_logs (stor : Stor) (gas : Nat) :
-    (pauseWorldPre stor gas).logs = [] := rfl
-
-/-- Both accessed sets are empty at entry: a cold-realistic start. -/
-theorem pauseWorld_accessedStorageKeys (stor : Stor) (gas : Nat) :
-    (pauseWorldPre stor gas).accessedStorageKeys =
-      Std.HashSet.emptyWithCapacity := rfl
-
-theorem pauseWorld_accessedAddresses (stor : Stor) (gas : Nat) :
-    (pauseWorldPre stor gas).accessedAddresses =
-      Std.HashSet.emptyWithCapacity := rfl
 
 theorem pauseWorld_codeBytes (stor : Stor) (gas : Nat) :
     (pauseWorldSevm stor gas).code.toList =
@@ -1484,21 +1327,6 @@ theorem pauseWorld_frameEntry (stor : Stor) (gas : Nat) :
       .run ⟨0, pauseWorldSevm stor gas, pauseWorldPre stor gas⟩ := rfl
 
 /-! ### The same facts at the `Msg` itself -/
-
-theorem pauseWorld_msgTarget (stor : Stor) (gas : Nat) :
-    (pauseWorldMsg stor gas).target = some configWorldOwner := rfl
-
-theorem pauseWorld_msgOwner (stor : Stor) (gas : Nat) :
-    (pauseWorldMsg stor gas).currentTarget = configWorldOwner := rfl
-
-theorem pauseWorld_msgCodeAddress (stor : Stor) (gas : Nat) :
-    (pauseWorldMsg stor gas).codeAddress = some configWorldOwner := rfl
-
-theorem pauseWorld_msgValue (stor : Stor) (gas : Nat) :
-    (pauseWorldMsg stor gas).value = 0 := rfl
-
-theorem pauseWorld_msgData (stor : Stor) (gas : Nat) :
-    (pauseWorldMsg stor gas).data = pauseWorldCalldata := rfl
 
 theorem pauseWorld_msgCode (stor : Stor) (gas : Nat) :
     (pauseWorldMsg stor gas).code.toList =
@@ -1579,11 +1407,6 @@ theorem pauseWorld_lastAssignment (gas : Nat) :
     (pauseWorldPre pauseLastWorldStor gas).getStorVal configWorldOwner
       (assignmentSlot pauseWorldCallee.toB256) = pauseWorldPauser := by
   rw [pauseWorld_getStorVal, pauseLastStor_assignment]
-
-theorem pauseWorld_retainedAssignment (gas : Nat) :
-    (pauseWorldPre pauseRetainedWorldStor gas).getStorVal configWorldOwner
-      (assignmentSlot pauseWorldCallee.toB256) = pauseWorldPauser := by
-  rw [pauseWorld_getStorVal, pauseRetainedStor_assignment]
 
 /-- The Registry witnesses, transported to the two entry prestates. -/
 theorem pauseWorld_lastPreWitness (gas : Nat) :

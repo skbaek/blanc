@@ -39,12 +39,6 @@ structure RootPairMemoryCarrier
   shaInput :
     memory.data.sliceD 0 64 0 = left.toBytes ++ right.toBytes
 
-theorem RootMemoryCarrier.read_oldCount
-    {memory : Mem} {oldCount shiftedSize node : B256}
-    (h : RootMemoryCarrier memory oldCount shiftedSize node) :
-    (memory.read 576 32).1 = oldCount.toBytes := by
-  rw [Mem.Reads.read h.reads, h.oldCount_read]
-
 theorem RootMemoryCarrier.read_shiftedSize
     {memory : Mem} {oldCount shiftedSize node : B256}
     (h : RootMemoryCarrier memory oldCount shiftedSize node) :

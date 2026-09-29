@@ -33,13 +33,6 @@ constructor execution followed by runtime code deposit. -/
 def constructorCreateMessageGasAccounting : Nat :=
   constructorProgramGas + constructorCodeDepositGas
 
-theorem constructorProgramGas_eq : constructorProgramGas = 698373 := by
-  decide +kernel
-
-theorem constructorCreateMessageGasAccounting_eq :
-    constructorCreateMessageGasAccounting = 1276573 := by
-  decide +kernel
-
 theorem constructorCodeDepositGas_loopBound :
     constructorLoopGas constructorCodeDepositGas 31 < 2 ^ 256 := by
   decide +kernel
@@ -107,31 +100,6 @@ theorem constructorMain_storageEffectRun_withSlack
     unfold constructorMainGas constructorLoopGas
     omega
   simpa only [constructorProgram, constructorProgramAt, hgas] using mainRun
-
-/-- Backward-compatible zero-slack specialization of the constructor main. -/
-theorem constructorMain_storageEffectRun
-    {sevm : Sevm} {base : Devm}
-    (hvalue : sevm.value = 0)
-    (world : ConstructorLoopWorld sevm base 0)
-    (hstatic : sevm.isStatic = false)
-    (hdepth : sevm.depth ≠ 0)
-    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (hcode : sevm.code.toList = creationCode) :
-    ∃ post,
-      post.output = code ∧
-      post.error = none ∧
-      Devm.getStor post sevm.currentTarget = constructorFinalStorage ∧
-      Func.StorageEffectRun
-        (constructorProgram.main :: constructorProgram.aux) sevm
-        (base.setMach ⟨[], Mem.empty, constructorMainGas, base.stateGas⟩)
-        constructorProgram.main (.ok post)
-        (constructorStorageEffectTriples sevm.currentTarget) := by
-  obtain ⟨post, postOutput, postError, _, _postLogs, _postDelete,
-      _postRefund, postStorage, run⟩ :=
-    constructorMain_storageEffectRun_withSlack 0 (by decide +kernel)
-      hvalue world hstatic hdepth hpre hfork hcode
-  exact ⟨post, postOutput, postError, postStorage, by simpa using run⟩
 
 /-- Slack-preserving constructor flagship: the compiled creation prefix
 executes against the full initcode image, commits exactly the public

@@ -138,16 +138,6 @@ theorem Func.WalkInv.succ_branch_of_prefix
     rw [← hburn.stack]
     exact (popBurn_pref hpop hp).2
 
-/-- The zero arm of a guard whose nonzero arm reverts. -/
-theorem Func.WalkInv.branch_revert
-    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
-    {fs : List Func} {sevm : Sevm} {pre post : Devm} {f : Func}
-    (h : R fs sevm pre (Func.revert <?> f) post) :
-    ∃ mid, Devm.PopBurn [0] pre mid ∧ R fs sevm mid f post := by
-  rcases Func.WalkInv.branch h with ⟨mid, hpop, hrun⟩ | ⟨w, mid, mid', _, _, _, hrun⟩
-  · exact ⟨mid, hpop, hrun⟩
-  · exact absurd hrun Func.WalkInv.noRevert
-
 /-- `Func.RunCompiledTo` at a `.next` node. -/
 theorem runCompiledTo_next_inv {fs : List Func} {sevm : Sevm}
     {devm : Devm} {i : Ninst} {f : Func} {ex : Execution}

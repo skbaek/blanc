@@ -315,9 +315,6 @@ def funcs : List (B256 × Func) :=
     (getDepositCountSelector, nonpayableEndpoint getDepositCountEndpoint),
     (getDepositRootSelector, nonpayableEndpoint getDepositRootEndpoint) ]
 
-theorem funcs_sorted : DispatchTree.sorted funcs = true := by
-  decide +kernel
-
 def tree : DispatchTree :=
   .fork
     (.leaf supportsInterfaceSelector
@@ -329,28 +326,6 @@ def tree : DispatchTree :=
           (nonpayableEndpoint getDepositCountEndpoint))
         (.leaf getDepositRootSelector
           (nonpayableEndpoint getDepositRootEndpoint))))
-
-theorem tree_funcs_exact :
-    tree =
-      .fork
-        (.leaf supportsInterfaceSelector
-          (nonpayableEndpoint supportsInterfaceEndpoint))
-        (.fork
-          (.leaf depositSelector depositEndpoint)
-          (.fork
-            (.leaf getDepositCountSelector
-              (nonpayableEndpoint getDepositCountEndpoint))
-            (.leaf getDepositRootSelector
-              (nonpayableEndpoint getDepositRootEndpoint)))) ∧
-    funcs =
-      [ (supportsInterfaceSelector,
-          nonpayableEndpoint supportsInterfaceEndpoint),
-        (depositSelector, depositEndpoint),
-        (getDepositCountSelector,
-          nonpayableEndpoint getDepositCountEndpoint),
-        (getDepositRootSelector,
-          nonpayableEndpoint getDepositRootEndpoint) ] := by
-  exact ⟨rfl, rfl⟩
 
 def aux : List Func :=
   [ Func.revert,

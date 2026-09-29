@@ -43,17 +43,6 @@ theorem Stor.Weth10Silent.set {s : Stor} {k value : B256}
   simp only [Stor.rest, Function.comp_apply]
   exact (Stor.get_set_ne _ (fun h => h_not_balance ⟨a, h.symm⟩) _).symm
 
-theorem Stor.Weth10Silent.set_nonce (s : Stor) (a : Adr) (value : B256) :
-    Stor.Weth10Silent s (s.set (nonceKey a) value) :=
-  Stor.Weth10Silent.set (nonceKey_not_valid a) (nonceKey_ne_flashMintedSlot a)
-
-theorem Stor.Weth10Silent.set_allowance
-    (s : Stor) (owner spender : Adr) (value : B256) :
-    Stor.Weth10Silent s (s.set (allowanceKey owner spender) value) :=
-  Stor.Weth10Silent.set
-    (allowanceKey_not_valid owner spender)
-    (allowanceKey_ne_flashMintedSlot owner spender)
-
 /-- Silent storage writes preserve backing and the flash-mint cap. -/
 theorem Stor.Weth10Inv.silent {s s' : Stor} {v b : B256}
     (h : Stor.Weth10Inv s v b)

@@ -265,30 +265,4 @@ theorem c3crv_frame_refines {sevm : Sevm} {pre post : Devm} {s : Curve3Crv.State
   obtain ⟨ow, how, o, hok, hinv', hother, hlogs, hret⟩ := h.1 hw
   exact ⟨ow, how, o, hok, hinv', hother, hlogs, hret.of_empty houtput⟩
 
-/-- Refinement from a genuinely entered frame; initialization supplies all
-three freshness facts, including empty output, rather than assuming a final result. -/
-theorem c3crv_entered_frame_refines {sevm : Sevm} {pre post : Devm} {s : Curve3Crv.State}
-    {K : Key → Prop} {frame : Jaune.Frame}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
-    (hcd : sevm.data.length < 2 ^ 256)
-    (henter : frame.enter = .run ⟨0, sevm, pre⟩)
-    (hinv : VyInv (Devm.getStor pre sevm.currentTarget) s K)
-    (hfresh : FreshKeys K (callKeys sevm.caller (decodeCall sevm)))
-    (exc : Exec 0 sevm pre (.ok post)) :
-    (IsWriter (decodeCall sevm) →
-      ∃ ow : Option B256, (∀ w, ow = some w → OwnerAnswer sevm pre s.minter w) ∧
-        ∃ o, Curve3Crv.step (c3ctx sevm ow) (decodeCall sevm) s = .ok o ∧
-          VyInv (Devm.getStor post sevm.currentTarget) o.1
-            (Key.extend K (callKeys sevm.caller (decodeCall sevm))) ∧
-          (∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a) ∧
-          post.logs = pre.logs ++ o.2.1.map (eventLog sevm.currentTarget) ∧
-          RetOut post.output o.2.2) ∧
-    (¬ IsWriter (decodeCall sevm) →
-      (∀ a, Devm.getStor post a = Devm.getStor pre a) ∧ post.logs = pre.logs ∧
-        ∃ o, Curve3Crv.step (c3ctx sevm none) (decodeCall sevm) s = .ok o ∧
-          RetOut post.output o.2.2) := by
-  obtain ⟨hstack, hmem⟩ := Frame.enter_run_fresh henter
-  exact c3crv_frame_refines hcode hfork hcd hstack hmem
-    (Frame.enter_run_output_empty henter) hinv hfresh exc
-
 end Blanc.Lift.Curve3Crv

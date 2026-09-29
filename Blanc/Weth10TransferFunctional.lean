@@ -2875,45 +2875,6 @@ theorem weth10_withdrawFrom_successEffect (dp : DeployParams)
 
 /-! ## Failure-order audit links -/
 
-theorem transfer_effect_failureOrder :
-    lockedGuardChain (transferZeroThen returnTrue) =
-        [burnBalanceErrorSlot, ethTransferErrorSlot] ++
-          lockedGuardChain returnTrue ∧
-    lockedGuardChain (transferNonzeroThen returnTrue) =
-        [transferBalanceErrorSlot] ++ lockedGuardChain returnTrue :=
-  transfer_lockedGuardOrder returnTrue
-
-theorem transferFrom_effect_failureOrder :
-    lockedGuardChain transferFromZero =
-        [burnBalanceErrorSlot, ethTransferErrorSlot] ∧
-    lockedGuardChain transferFromNonzero = [transferBalanceErrorSlot] :=
-  transferFromCore_lockedGuardOrder
-
-theorem withdrawal_effect_failureOrder :
-    lockedGuardChain withdraw =
-        [burnBalanceErrorSlot, ethTransferErrorSlot] ∧
-    lockedGuardChain withdrawTo =
-        [burnBalanceErrorSlot, ethTransferErrorSlot] ∧
-    lockedGuardChain withdrawFromCore =
-        [burnBalanceErrorSlot, etherTransferErrorSlot] :=
-  withdraw_lockedGuardOrder
-
-theorem delegatedAllowance_effect_precedence (nextSlot : Nat) :
-    ∃ finite,
-      spendCallerAllowanceThen 2 nextSlot =
-        (arg 0 +++ caller ::: eq :::
-          (.call nextSlot) <?>
-          (arg 0 +++ mstoreAt 0 +++ caller ::: mstoreAt 1 +++
-            allowanceKeyFromMemory +++ dup 0 ::: sload ::: dup 0 ::: isMax +++
-            (pop ::: pop ::: .call nextSlot) <?> finite)) ∧
-      finite =
-        (arg 2 +++ swap 0 ::: balanceTooSmall +++
-          (.call allowanceErrorSlot) <?>
-          (sub ::: dup 0 ::: swap 1 ::: sstore :::
-            arg 0 +++ swap 0 ::: caller ::: emitApproval +++
-            pop ::: pop ::: .call nextSlot)) :=
-  spendCallerAllowanceThen_finitePrecedence 2 nextSlot
-
 end Weth10
 
 end Blanc

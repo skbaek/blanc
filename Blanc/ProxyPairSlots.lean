@@ -130,33 +130,9 @@ theorem implementationSlot_ne_beaconSlot : implementationSlot ≠ beaconSlot := 
 theorem adminSlot_ne_beaconSlot : adminSlot ≠ beaconSlot := by
   rw [adminSlot_val, beaconSlot_val]; decide
 
-/-- `implementationSlot_ne_adminSlot`, read in the other direction. -/
-theorem adminSlot_ne_implementationSlot : adminSlot ≠ implementationSlot :=
-  implementationSlot_ne_adminSlot.symm
-
-/-- `implementationSlot_ne_beaconSlot`, read in the other direction. -/
-theorem beaconSlot_ne_implementationSlot : beaconSlot ≠ implementationSlot :=
-  implementationSlot_ne_beaconSlot.symm
-
-/-- `adminSlot_ne_beaconSlot`, read in the other direction. -/
-theorem beaconSlot_ne_adminSlot : beaconSlot ≠ adminSlot :=
-  adminSlot_ne_beaconSlot.symm
-
 /-! ## Nonzero
 
 Stated separately from the pairwise separations, since a slot being distinct
 from `0` is wanted in contexts that name no other slot. -/
-
-/-- The logic slot is not the zero word. -/
-theorem implementationSlot_ne_zero : implementationSlot ≠ (0 : B256) := by
-  rw [implementationSlot_val]; decide
-
-/-- The admin slot is not the zero word. -/
-theorem adminSlot_ne_zero : adminSlot ≠ (0 : B256) := by
-  rw [adminSlot_val]; decide
-
-/-- The beacon slot is not the zero word. -/
-theorem beaconSlot_ne_zero : beaconSlot ≠ (0 : B256) := by
-  rw [beaconSlot_val]; decide
 
 end Blanc.ProxyPair

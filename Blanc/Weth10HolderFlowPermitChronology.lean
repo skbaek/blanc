@@ -27,10 +27,6 @@ structure PermitOwnObservations (e : Sevm) (pre post : Devm) : Prop where
   balance : Devm.getBal pre = Devm.getBal post
   code : Devm.getCode pre = Devm.getCode post
 
-private theorem PermitOwnObservations.refl
-    (e : Sevm) (pre : Devm) : PermitOwnObservations e pre pre :=
-  ⟨Stor.Weth10Silent.of_eq rfl, rfl, rfl⟩
-
 private theorem PermitOwnObservations.trans
     {e : Sevm} {pre mid post : Devm}
     (left : PermitOwnObservations e pre mid)

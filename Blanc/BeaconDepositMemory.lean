@@ -35,12 +35,6 @@ private def storeLowBytesImage : Nat → Bytes → Nat → B256 → Bytes
         (Bytes.writeAt image base [word.2.2.toUInt8])
         (base + 1) (word >>> 8)
 
-@[simp] private theorem lowBytes_length (n : Nat) (word : B256) :
-    (lowBytes n word).length = n := by
-  induction n generalizing word with
-  | zero => rfl
-  | succ n ih => simp [lowBytes, ih]
-
 private lemma bytesWriteAt_length (bs : Bytes) (n : Nat) (xs : Bytes) :
     (Bytes.writeAt bs n xs).length = max bs.length (n + xs.length) := by
   simp only [Bytes.writeAt, List.length_append, List.takeD_length,

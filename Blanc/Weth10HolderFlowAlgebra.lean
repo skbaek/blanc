@@ -101,13 +101,6 @@ theorem sum_increase_add_creditLoss {k v} {f g : Adr → B256}
     (Adr.toNat_lt_size _)
     (Nat.succ_le_of_lt <| Adr.toNat_lt_size _)
 
-/-- Exact `balSum` form of a single unchecked credit. -/
-theorem balSum_increase_add_creditLoss {s s' : Stor} {k : Adr} {v : B256}
-    (inc : Increase k v (Stor.rest s) (Stor.rest s')) :
-    balSum s + v.toNat =
-      balSum s' + creditLoss (Stor.rest s k) v :=
-  sum_increase_add_creditLoss inc
-
 /-- Pointwise Nat form of a checked debit. -/
 theorem decrease_toNat_add {k v} {f g : Adr → B256}
     (dec : Decrease k v f g) (h_le : v ≤ f k) :
@@ -123,13 +116,6 @@ theorem sum_decrease_add {k v} {f g : Adr → B256}
   have h_v_sum : v.toNat ≤ sum f :=
     Nat.le_trans (B256.toNat_le_toNat h_le) le_sum
   omega
-
-/-- Exact `balSum` form of a checked debit. -/
-theorem balSum_decrease_add {s s' : Stor} {k : Adr} {v : B256}
-    (dec : Decrease k v (Stor.rest s) (Stor.rest s'))
-    (h_le : v ≤ Stor.rest s k) :
-    balSum s' + v.toNat = balSum s :=
-  sum_decrease_add dec h_le
 
 /-- Exact sum equation for the debit and credit steps underlying a transfer.
 The only possible discrepancy is the credit's explicitly retained loss. -/
@@ -155,16 +141,6 @@ theorem transfer_exists_sum_add_creditLoss
   rcases tr with ⟨h_le, c, dec, inc⟩
   exact ⟨c, dec, inc, transfer_steps_sum_add_creditLoss h_le dec inc⟩
 
-/-- Exact `balSum` specialization of `transfer_exists_sum_add_creditLoss`. -/
-theorem balSum_transfer_exists_add_creditLoss
-    {s s' : Stor} {kd ki : Adr} {v : B256}
-    (tr : Transfer (Stor.rest s) kd v ki (Stor.rest s')) :
-    ∃ c : Adr → B256,
-      Decrease kd v (Stor.rest s) c ∧
-      Increase ki v c (Stor.rest s') ∧
-      balSum s = balSum s' + creditLoss (c ki) v := by
-  simpa only [balSum] using transfer_exists_sum_add_creditLoss tr
-
 /-- Under the usual global no-overflow bound, a checked transfer's recipient
 credit cannot discard a modulus. -/
 theorem transfer_steps_creditLoss_eq_zero_of_sumNof
@@ -178,18 +154,6 @@ theorem transfer_steps_creditLoss_eq_zero_of_sumNof
   have h_preserved :=
     transfer_preserves_sum h_sumNof ⟨h_le, c, dec, inc⟩
   omega
-
-/-- Predicate form of transfer-credit no-overflow, for callers that need to
-rewrite the resulting word addition without mentioning the diagnostic loss. -/
-theorem transfer_steps_nof_of_sumNof
-    {b c d : Adr → B256} {kd ki : Adr} {v : B256}
-    (h_sumNof : SumNof b)
-    (h_le : v ≤ b kd)
-    (dec : Decrease kd v b c)
-    (inc : Increase ki v c d) :
-    B256.Nof (c ki) v :=
-  (creditLoss_eq_zero_iff (c ki) v).mp
-    (transfer_steps_creditLoss_eq_zero_of_sumNof h_sumNof h_le dec inc)
 
 end Weth10
 

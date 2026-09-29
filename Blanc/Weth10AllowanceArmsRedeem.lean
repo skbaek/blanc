@@ -954,9 +954,6 @@ private theorem Exec.Frame.CountedCursor.redeemAllowanceStorage
 def redeemReturnTrueLine : Line :=
   [pushB256 1] ++ mstoreAt 0 ++ pushList [32, 0]
 
-theorem returnTrue_eq_redeemReturnTrueLine :
-    returnTrue = redeemReturnTrueLine +++ Func.last .return_ := rfl
-
 /-- `withdraw` transports the allowance region.  Its own record has no
 allowance event, so the frame's record replays transparently; the caller-key
 debit is address-shaped; and the committed send child's counted stream is
@@ -1433,15 +1430,6 @@ def SuccessAllowanceCloserSound (dp : DeployParams) (ca : Adr)
             (Exec.attributionInner dp ca continuation) key) ∧
       AllowanceEntryReadSound (Devm.getStor entry ca)
         (Exec.attributionInner dp ca continuation)
-
-/-- The read-sound closer discharges the landed one. -/
-theorem SuccessAllowanceCloserSound.successAllowanceCloser
-    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame} {img : Bytes}
-    {success : Func}
-    (h : SuccessAllowanceCloserSound dp ca frame img success) :
-    SuccessAllowanceCloser dp ca frame img success :=
-  fun entryPc entry continuation hrun hsub hbound hwf hreads hcode =>
-    (h entryPc entry continuation hrun hsub hbound hwf hreads hcode).1
 
 /-- A childless success continuation retains no counted record, so its
 segment is entry-read sound for free: the empty ledger admits no split. -/

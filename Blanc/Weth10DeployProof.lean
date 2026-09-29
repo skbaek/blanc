@@ -203,16 +203,6 @@ memory-extension term and the instructions used to place initcode in memory. -/
 def weth10CreateOpcodeCoreGasAccounting : Nat :=
   gasCreate + weth10Eip3860InitCodeGas + weth10CreateMessageGasAccounting
 
-theorem weth10CreateOpcodeCoreGasAccounting_eq :
-    weth10CreateOpcodeCoreGasAccounting = 1296477 := by
-  calc
-    weth10CreateOpcodeCoreGasAccounting =
-        gasCreate + 406 + 1264071 := by
-      unfold weth10CreateOpcodeCoreGasAccounting
-      rw [weth10Eip3860InitCodeGas_eq,
-        weth10CreateMessageGasAccounting_eq]
-    _ = 1296477 := by rfl
-
 /-- Exact closed accounting expression for a zero-access-list top-level
 creation transaction followed by the successful direct creation-message path. -/
 def weth10TopLevelDeploymentGasAccounting : Nat :=

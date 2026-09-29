@@ -345,116 +345,6 @@ theorem Exec.Frame.NinstOccurrence.toCommon
   rw [decomposition]
   exact List.mem_append.mpr (Or.inr (Jaune.Exec.mem_rawNodes_self current))
 
-/-- An instruction occurrence exposes the exact chronological split of the
-enclosing frame's proper-descendant ledger: all earlier settled children,
-the selected instruction's settled child (or `[]`), then the continuation. -/
-theorem Exec.Frame.NinstOccurrence.chronological_descendantFlowActions
-    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    {n : Ninst} {stepPre stepPost : Devm} {xl : Xlot}
-    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame n stepPre stepPost xl) :
-    ∃ (pc : Nat)
-        (current : Exec pc frame.sevm stepPre frame.out)
-        (continuation : Exec (pc + n.size) frame.sevm stepPost frame.out)
-        (before selected : List FlowAction),
-      Exec.Deriv.ParentPrefixActions dp ca
-        ⟨frame.pc, frame.sevm, frame.pre, frame.out, frame.run⟩
-        ⟨pc, frame.sevm, stepPre, frame.out, current⟩ before ∧
-      Ninst.At frame.sevm.code pc n ∧
-      Xlot.Filled xl ∧
-      Ninst.StepRun pc frame.sevm stepPre n xl (.ok stepPost) ∧
-      Exec.Deriv.Prec
-        ⟨pc + n.size, frame.sevm, stepPost, frame.out, continuation⟩
-        ⟨pc, frame.sevm, stepPre, frame.out, current⟩ ∧
-      Exec.Deriv.ParentStepActions dp ca
-        ⟨pc + n.size, frame.sevm, stepPost, frame.out, continuation⟩
-        ⟨pc, frame.sevm, stepPre, frame.out, current⟩ selected ∧
-      Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
-        before ++ selected ++
-          Exec.Deriv.descendantFlowActions dp ca
-            ⟨pc + n.size, frame.sevm, stepPost, frame.out, continuation⟩ := by
-  rcases occurrence with
-    ⟨pc, current, continuation, before, selected, hprefix, hat,
-      hfilled, hstep, hprec, hedge⟩
-  refine ⟨pc, current, continuation, before, selected, hprefix, hat,
-    hfilled, hstep, hprec, hedge, ?_⟩
-  have hp := hprefix.descendantFlowActions_eq
-  have hs := hedge.descendantFlowActions_eq
-  change Exec.Deriv.descendantFlowActions dp ca
-    ⟨frame.pc, frame.sevm, frame.pre, frame.out, frame.run⟩ = _
-  rw [hp, hs, List.append_assoc]
-
-/-- Combine a classified root label with an occurrence's chronological
-proper-descendant split. -/
-theorem Exec.Frame.ClassifiedActionLedger.flowActions_eq_chronological
-    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    {action : FlowAction}
-    (ledger : Blanc.Weth10.Exec.Frame.ClassifiedActionLedger dp ca frame action)
-    {before selected suffix : List FlowAction}
-    (hdesc : Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
-      before ++ selected ++ suffix) :
-    Exec.flowActions dp ca frame.run =
-      action :: (before ++ selected ++ suffix) := by
-  rw [ledger.actions_eq, hdesc]
-
-/-- Locating a nonterminal instruction on the original same-frame execution
-path constructs a rich occurrence with the *same* recursive slot and child
-proof used by that `Exec` step. -/
-theorem Exec.Frame.exists_ninstOccurrence_of_parentPrefix
-    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    {pc : Nat} {stepPre : Devm} {n : Ninst}
-    {before : List FlowAction}
-    (current : Exec pc frame.sevm stepPre frame.out)
-    (hprefix : Exec.Deriv.ParentPrefixActions dp ca
-      ⟨frame.pc, frame.sevm, frame.pre, frame.out, frame.run⟩
-      ⟨pc, frame.sevm, stepPre, frame.out, current⟩ before)
-    (hat : Ninst.At frame.sevm.code pc n) :
-    ∃ (stepPost : Devm) (xl : Xlot),
-      Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame n stepPre stepPost xl := by
-  rcases frame with ⟨rootPc, sevm, rootPre, out, rootRun, committed⟩
-  cases out with
-  | error err => simp [Execution.commits] at committed
-  | ok final =>
-      have hstepEq : Evm.step ⟨pc, sevm, stepPre⟩ =
-          Ninst.step ⟨pc, sevm, stepPre⟩ n :=
-        Evm.step_next hat
-      cases current with
-      | halt h =>
-          exact (Ninst.step_ne_halt_ok (hstepEq.symm.trans h)).elim
-      | cont h next =>
-          rename_i pc' stepPost
-          have hs := hstepEq.symm.trans h
-          cases Ninst.step_cont_pc hs
-          have hrun : Ninst.StepRun pc sevm stepPre n .none
-              (.ok stepPost) := by
-            simp only [Ninst.StepRun, hs, Step.Run]
-            exact ⟨trivial, trivial⟩
-          refine ⟨_, .none, pc, .cont h next, next, before, [],
-            hprefix, hat, trivial, hrun, .cont h next, .cont h next⟩
-      | doneOk h henter hresume next =>
-          rename_i f rsm pc' r stepPost
-          have hs := hstepEq.symm.trans h
-          cases Ninst.step_spawn_pc hs
-          have hrun : Ninst.StepRun pc sevm stepPre n .none
-              (.ok stepPost) := by
-            simp only [Ninst.StepRun, hs, Step.Run]
-            exact ⟨_, RunFrame.of_done henter, hresume.symm⟩
-          refine ⟨_, .none, pc, .doneOk h henter hresume next, next,
-            before, [], hprefix, hat, trivial, hrun,
-            .doneOk h henter hresume next,
-            .doneOk h henter hresume next⟩
-      | runOk h henter child hresume next =>
-          rename_i f rsm pc' childEvm raw stepPost
-          have hs := hstepEq.symm.trans h
-          cases Ninst.step_spawn_pc hs
-          have hrun : Ninst.StepRun pc sevm stepPre n
-              (.some ⟨childEvm, raw⟩) (.ok stepPost) := by
-            simp only [Ninst.StepRun, hs, Step.Run]
-            exact ⟨_, RunFrame.of_run henter, hresume.symm⟩
-          refine ⟨stepPost, .some ⟨childEvm, raw⟩, pc,
-            .runOk h henter child hresume next, next, before, _, hprefix,
-            hat, ⟨child⟩, hrun, .runOkCont h henter child hresume next,
-            .runOk h henter child hresume next⟩
-
 /-- Slot and outcome uniqueness for a pc-free external instruction, allowing
 the two witnesses to name different program counters. -/
 theorem Ninst.StepRun.unique_exec_of_filled
@@ -771,10 +661,6 @@ structure Devm.DispatchSilent (pre post : Devm) : Prop where
   logs : pre.logs = post.logs
   output : pre.output = post.output
 
-theorem Devm.DispatchSilent.refl (pre : Devm) :
-    Devm.DispatchSilent pre pre :=
-  ⟨rfl, rfl, rfl, rfl⟩
-
 theorem Devm.DispatchSilent.trans
     {pre mid post : Devm}
     (h₁ : Devm.DispatchSilent pre mid)
@@ -793,18 +679,6 @@ theorem Devm.DispatchSilent.of_burnBy
     {cost : Nat} {pre post : Devm}
     (h : Devm.BurnBy cost pre post) : Devm.DispatchSilent pre post :=
   ⟨h.state, h.memory, h.logs, h.output⟩
-
-theorem Devm.DispatchSilent.of_line
-    {e : Sevm} {pre post : Devm} {line : Line}
-    (hstate : Line.Inv Devm.state line)
-    (hmemory : Line.Inv Devm.memory line)
-    (hlogs : Line.Inv Devm.logs line)
-    (houtput : Line.Inv Devm.output line)
-    (run : Line.Run e pre line post) : Devm.DispatchSilent pre post :=
-  ⟨Line.of_inv Devm.state hstate run,
-    Line.of_inv Devm.memory hmemory run,
-    Line.of_inv Devm.logs hlogs run,
-    Line.of_inv Devm.output houtput run⟩
 
 theorem Devm.DispatchSilent.of_pushEq
     {e : Sevm} {pre post : Devm} {word : B256}
@@ -908,43 +782,6 @@ theorem Devm.DispatchSilent.of_fsig
     (of_run_pushB256 q₁).output.trans
       ((Ninst.Hinv.inv (f := Devm.output) q₂).trans
         ((of_run_pushB256 q₃).output.trans hshrBurn.output))⟩
-
-/-- Peel a source line at a proof-indexed compiled cursor. -/
-theorem Exec.Frame.CompiledCursor.peelLine
-    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    {fs : List Func} {table : List (Nat × Func)}
-    {line : Line} {tail : Func} {final : Devm}
-    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table (line +++ tail) final) :
-    ∃ tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table tail final,
-      Line.Run frame.sevm cursor.pre line tailCursor.pre := by
-  rcases Blanc.Weth10.Exec.Frame.advance_runCompiled_prepend (frame := frame) cursor.current cursor.parentPrefix
-      cursor.run cursor.codeSlice cursor.codeBoundary with
-    ⟨tailPc, tailPre, tailExec, crossed, htailPrefix, hline,
-      htailRun, htailSub, htailBoundary⟩
-  let tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table tail final :=
-    ⟨tailPc, tailPre, tailExec, cursor.actions ++ crossed, htailPrefix,
-      htailRun, htailSub, htailBoundary⟩
-  exact ⟨tailCursor, hline⟩
-
-/-- Select the actual branch arm at a proof-indexed compiled cursor. -/
-theorem Exec.Frame.CompiledCursor.selectBranch
-    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    {fs : List Func} {table : List (Nat × Func)}
-    {left right : Func} {final : Devm}
-    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
-      (.branch left right) final) :
-    Nonempty (Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table left final) ∨
-      Nonempty (Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table right final) := by
-  rcases Blanc.Weth10.Exec.Frame.advance_runCompiled_branch (frame := frame) cursor.current cursor.parentPrefix
-      cursor.run cursor.codeSlice cursor.codeBoundary with hleft | hright
-  · rcases hleft with
-      ⟨armPc, armPre, armExec, hpArm, hrun, hsub, hbound⟩
-    exact Or.inl ⟨⟨armPc, armPre, armExec, cursor.actions, hpArm,
-      hrun, hsub, hbound⟩⟩
-  · rcases hright with
-      ⟨armPc, armPre, armExec, hpArm, hrun, hsub, hbound⟩
-    exact Or.inr ⟨⟨armPc, armPre, armExec, cursor.actions, hpArm,
-      hrun, hsub, hbound⟩⟩
 
 /-- Select the actual branch arm and retain the definitional fact that hidden
 compiler jumps cross no recursive child actions. -/
@@ -1139,31 +976,6 @@ private theorem Exec.Frame.CompiledCursor.selectBranchSuccSilent
         ⟨loc + 1, _, armExec, cursor.actions, hpArm,
           hright, hsubRight, hboundRight⟩
       exact ⟨arm, hw.2, rfl, Devm.DispatchSilent.of_popBurnBy hpop⟩
-
-/-- Select the head instruction of a cursor and retain both its exact
-occurrence and the proof-indexed cursor immediately after it. -/
-theorem Exec.Frame.CompiledCursor.selectNext
-    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    {fs : List Func} {table : List (Nat × Func)}
-    {n : Ninst} {tail : Func} {final : Devm}
-    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table (.next n tail) final) :
-    ∃ stepPre stepPost xl,
-      Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame n stepPre stepPost xl ∧
-      Nonempty (Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table tail final) := by
-  have compiled := cursor.run
-  cases compiled with
-  | next hcompiled htail =>
-      have hat : Ninst.At frame.sevm.code cursor.pc n :=
-        ninstAt_of_subcode_next cursor.codeSlice
-      rcases Blanc.Weth10.Exec.Frame.advance_runCompiled_next (frame := frame) cursor.current
-          cursor.parentPrefix hat hcompiled with
-        ⟨xl, continuation, selected, occurrence, hedge, hnextPrefix⟩
-      obtain ⟨nextBoundary, nextSub⟩ :=
-        Func.noPushBefore_next cursor.codeSlice cursor.codeBoundary
-      exact ⟨cursor.pre, _, xl, occurrence,
-        ⟨⟨cursor.pc + n.size, _, continuation,
-          cursor.actions ++ selected, hnextPrefix, htail, nextSub,
-          nextBoundary⟩⟩⟩
 
 /-- Select the head instruction while retaining the exact settled child list
 crossed by that instruction.  This is the chronological strengthening of
@@ -1963,24 +1775,6 @@ private theorem Exec.Frame.CompiledCursor.reachDispatchWith_build :
           exact ⟨bodyCursor, hbodyStack,
             hbodyActions.trans (hrightActions.trans hbranchActions)⟩
 
-/-- Public cursor form of sorted dispatch reachability.  Unlike the functional
-reachability theorem, the returned body cursor remains an exact continuation
-of the input frame's original `Exec` proof. -/
-theorem Exec.Frame.CompiledCursor.reachDispatchWith
-    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    {fs : List Func} {table : List (Nat × Func)} {final : Devm}
-    {funcs : List (B256 × Func)} {sig : B256} {f : Func}
-    {k : Nat} {stack : Stack}
-    (hsorted : DispatchTree.sorted funcs = true)
-    (hmem : (sig, f) ∈ funcs)
-    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
-      (dispatchWith k (DispatchTree.ofSorted funcs)) final)
-    (hstack : sig :: stack <<+ cursor.pre.stack) :
-    ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table f final,
-      stack <<+ bodyCursor.pre.stack ∧
-      bodyCursor.actions = cursor.actions :=
-  cursor.reachDispatchWith_build hsorted (Nat.le_succ _) hmem hstack
-
 /-- A matching dispatch leaf with its exact entry-observation silence. -/
 private theorem Exec.Frame.CompiledCursor.reachDispatchLeafSilent
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
@@ -2424,78 +2218,6 @@ theorem Exec.Frame.CompiledCursor.enterCall
         ⟨loc + 1, _, bodyExec, cursor.actions, hprefixBody,
           hbody, hsub, hjumpable.2⟩
       exact ⟨_, hget, bodyCursor, rfl⟩
-
-/-- Reach the exact external `CALL` instruction in a successful generated
-ERC-677 callback body.  Every source instruction before the call is
-childless, so the returned cursor has crossed no retained child actions. -/
-theorem Exec.Frame.CompiledCursor.reachCallBoolCallback
-    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    {f₀ : Func} {aux : List Func} {table : List (Nat × Func)}
-    {sel targetArg dataArg : B256} {value : Line} {final : Devm}
-    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux) table
-      (callBoolCallback sel targetArg dataArg value) final)
-    (hvalue : ∀ n ∈ value, NinstIsChildless n) :
-    ∃ callCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux) table
-        (.next Ninst.call (.call boolReturnSlot)) final,
-      callCursor.actions = cursor.actions := by
-  unfold callBoolCallback at cursor
-  rcases cursor.peelChildlessLine
-      (line := arg targetArg ++
-        [Ninst.dup 0, Ninst.extcodesize, Ninst.iszero])
-      (by simp [arg, cdl, NinstIsChildless, Ninst.pushB256]) with
-    ⟨branchCursor, _hcheck, hcheckActions⟩
-  rcases branchCursor.selectBranchWithActions with hsuccess | hrev
-  · rcases hsuccess with ⟨successCursor, hbranchActions⟩
-    rcases successCursor.selectNextChildless (by
-        simp [NinstIsChildless]) with
-      ⟨valueCursor, _, _hpop, _, hpopActions⟩
-    rcases valueCursor.peelChildlessLine hvalue with
-      ⟨headCursor, _hvalueRun, hvalueActions⟩
-    rcases headCursor.peelChildlessLine
-        (line := storeTokenCallbackHead sel)
-        (by simp [storeTokenCallbackHead, mstoreAt,
-          NinstIsChildless, Ninst.pushB256]) with
-      ⟨zerosCursor, _hhead, hheadActions⟩
-    rcases zerosCursor.peelChildlessLine
-        (line := pushList [0, 0])
-        (by simp [pushList, NinstIsChildless, Ninst.pushB256]) with
-      ⟨tailCursor, _hzeros, hzerosActions⟩
-    rcases tailCursor.peelChildlessLine
-        (line := forwardArgTail dataArg 4)
-        (by simp [forwardArgTail, arg, cdl, mstoreAt,
-          NinstIsChildless, Ninst.pushB256]) with
-      ⟨sizeCursor, _htail, htailActions⟩
-    rcases sizeCursor.peelChildlessLine
-        (line := tokenCallbackArgsSize)
-        (by simp [tokenCallbackArgsSize, NinstIsChildless,
-          Ninst.pushB256]) with
-      ⟨offsetCursor, _hsize, hsizeActions⟩
-    rcases offsetCursor.peelChildlessLine
-        (line := [Ninst.pushB256 callbackArgsOffset, Ninst.pushB256 0])
-        (by simp [NinstIsChildless, Ninst.pushB256]) with
-      ⟨targetCursor, _hoffsets, hoffsetsActions⟩
-    rcases targetCursor.peelChildlessLine
-        (line := arg targetArg)
-        (by simp [arg, cdl, NinstIsChildless, Ninst.pushB256]) with
-      ⟨gasCursor, _htarget, htargetActions⟩
-    rcases gasCursor.selectNextChildless (by
-        simp [NinstIsChildless]) with
-      ⟨callCursor, _, _hgas, _, hgasActions⟩
-    refine ⟨callCursor, ?_⟩
-    calc
-      callCursor.actions = gasCursor.actions := hgasActions
-      _ = targetCursor.actions := htargetActions
-      _ = offsetCursor.actions := hoffsetsActions
-      _ = sizeCursor.actions := hsizeActions
-      _ = tailCursor.actions := htailActions
-      _ = zerosCursor.actions := hzerosActions
-      _ = headCursor.actions := hheadActions
-      _ = valueCursor.actions := hvalueActions
-      _ = successCursor.actions := hpopActions
-      _ = branchCursor.actions := hbranchActions
-      _ = cursor.actions := hcheckActions
-  · rcases hrev with ⟨revertCursor, _⟩
-    exact absurd (Func.Run.of_runCompiled revertCursor.run) not_run_revert
 
 /-- Reach the ERC-677 `CALL` while retaining the exact successful source
 prefix facts at the returned cursor state.  In particular, the

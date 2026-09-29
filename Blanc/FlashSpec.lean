@@ -877,80 +877,6 @@ lemma callbackWindow (sel cal slf amt : B256) (payload : Bytes) :
   · simp only [List.length_append, List.length_drop, hlen]
     omega
 
-/-- **The callback's calldata image**, and this step's closing statement.
-
-`of_flashLoan_toCall`'s conclusion with its universally quantified memory
-conjunct discharged: the window `[0x1c, 0x1c + argsSize)` that the `CALL` hands
-the callback *is* `onFlashLoan(caller, this, amount, 0, data)`, canonically
-encoded.
-
-**Three premises, each of them real.**
-
-* `h_dec` — the calldata is a canonical encoding of
-  `flashLoan(receiver, token, amount, data)`.  Fixed decision 1c: a
-  non-canonical encoding is decodable by this contract, which validates no
-  offset, but is out of scope here and this theorem says nothing about it.
-* `h_size` — `196 + ceil32 data.length < 2 ^ 256`.  The same family as
-  `tailBytes_three_of_decodes`'s bound: `List.length` is an unbounded `Nat`
-  while the machine word is 256 bits, so a longer payload would not round-trip
-  through any encoder and its `argsSize` would not be its length.
-* `h_wf` and `h_fresh` — **frame freshness**, and it is a premise rather than a
-  fact about the walk.  `Exec 0 sevm pre` quantifies `pre` freely and does not
-  know it came from Jaune's `initDevm`, which is where `memory := .empty`
-  actually comes from; `Mem.wf_empty` and `Mem.reads_empty` discharge both at
-  the frame boundary.  Zero-*initialisation* is not assumed here — that is
-  `Mem.Reads`'s `getD`-on-both-sides shape, and it is what makes the padding a
-  theorem.  What is assumed is only that no earlier writer of *this frame* left
-  bytes above the payload.
-
-Note what is *not* premised: nothing here says a `flashLoan` call ever
-succeeds.  The run is a hypothesis and this reads facts off it. -/
-theorem flashLoan_callback_image {sevm : Sevm} {s r : Devm}
-    {receiver token amount : B256} {data : Bytes}
-    (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
-      [receiver, token, amount] data)
-    (h_size : 196 + ceil32 data.length < 2 ^ 256)
-    (h_wf : Mem.Wf s.memory) (h_fresh : Mem.Reads s.memory [])
-    (h_run : Func.Run (fmint.main :: fmintAux) sevm s flashLoan r) :
-    token = sevm.currentTarget.toB256 ∧
-    B256.Nof ((Devm.getStor s sevm.currentTarget).get supplySlot) amount ∧
-    ∃ (a : Adr) (sc : Devm) (g : B256),
-      receiver = a.toB256 ∧
-      Devm.getCode s = Devm.getCode sc ∧
-      Devm.getStor sc sevm.currentTarget =
-        ((Devm.getStor s sevm.currentTarget).set a.toB256
-            (amount + (Devm.getStor s sevm.currentTarget).get a.toB256)).set
-          supplySlot (amount + (Devm.getStor s sevm.currentTarget).get supplySlot) ∧
-      (g :: a.toB256 :: (0 : B256) :: callbackArgsOffset ::
-        Nat.toB256 (196 + ceil32 data.length) ::
-        (0 : B256) :: (0 : B256) :: [amount, a.toB256] <<+ sc.stack) ∧
-      (sc.memory.read callbackArgsOffset.toNat (196 + ceil32 data.length)).1
-        = abiCallWithTail onFlashLoanSelector
-            [sevm.caller.toB256, sevm.currentTarget.toB256, amount, 0] data ∧
-      Func.Run (fmint.main :: fmintAux) sevm sc flashLoanFromCall r := by
-  have hdlen : data.length < 2 ^ 256 := by
-    have := Nat.le_ceil32 data.length
-    omega
-  have h0 : Sevm.argWord sevm 0 = receiver := argWord_zero_of_decodes h_dec
-  have h1 : Sevm.argWord sevm 1 = token := argWord_one_of_decodes h_dec
-  have h2 : Sevm.argWord sevm 2 = amount := argWord_two_of_decodes h_dec
-  have htl : Sevm.tailLen sevm 3 = Nat.toB256 data.length := tailLen_three_of_decodes h_dec
-  have htb : Sevm.tailBytes sevm 3 = data := tailBytes_three_of_decodes hdlen h_dec
-  have hsize : (0xc4 : B256) + ((~~~ (31 : B256)) &&& (31 + Nat.toB256 data.length))
-      = Nat.toB256 (196 + ceil32 data.length) := by
-    rw [← toB256_toNat ((0xc4 : B256) + _), toNat_callbackArgsSize h_size]
-  obtain ⟨h_token, h_nof, a, sc, g, h_recv, h_code, h_stor, h_stack, h_mem, h_res⟩ :=
-    of_flashLoan_toCall h_run
-  rw [h0] at h_recv
-  rw [h1] at h_token
-  rw [h2] at h_nof h_stor h_stack h_mem
-  rw [htl, hsize] at h_stack
-  refine ⟨h_token, h_nof, a, sc, g, h_recv, h_code, h_stor, h_stack, ?_, h_res⟩
-  obtain ⟨-, h_reads⟩ := h_mem [] h_wf h_fresh
-  rw [htl, htb, callbackImage_nil] at h_reads
-  rw [show callbackArgsOffset.toNat = 28 from rfl, Mem.Reads.read h_reads,
-    callbackWindow]
-
 /-! ## The callback boundary
 
 The relation the proposal names (the flash-mint proposal, headline 2):
@@ -1026,74 +952,6 @@ def CallbackBoundary (sevm : Sevm) (fa receiver : Adr) (amount : B256)
     mid.state = child.state ∧
     mid.returnData = child.output ∧
     mid.stack = (1 : B256) :: parent.stack
-
-/-- **The two entry modes, the precompile case explicit.**  The frame the
-boundary names was answered either by a precompile — possible only when the
-receiver is a precompile address and its code is not a delegation designator,
-since a delegated callee runs with precompiles disabled — or by an actual
-sub-execution of the resolved code on the encoded `onFlashLoan` calldata, in
-the receiver's own storage context, from `fa`, with value `0`.
-
-The plan requires this case split to be explicit rather than buried in
-`ProcessMessage`: a precompile receiver *can* satisfy the magic-word check as
-far as this relation knows (proving otherwise would force `String.keccak`,
-which is barred), so it is carried, not excluded. -/
-lemma CallbackBoundary.entry_modes {sevm : Sevm} {fa receiver : Adr}
-    {amount : B256} {data : Bytes} {pre mid : Devm}
-    (h : CallbackBoundary sevm fa receiver amount data pre mid) :
-    (sevm.benvStat.rules.isPrecomp receiver ∧
-      getDelegatedCodeAddress (pre.getCode receiver) = none) ∨
-    (∃ (evm : Evm) (ex : Execution),
-      Nonempty (Exec evm.pc evm.sta evm.dyna ex) ∧
-      evm.sta.currentTarget = receiver ∧
-      evm.sta.caller = fa ∧
-      evm.sta.value = 0 ∧
-      evm.sta.data = abiCallWithTail onFlashLoanSelector
-        [sevm.caller.toB256, fa.toB256, amount, 0] data) := by
-  obtain ⟨parent, child, xl, dp, na, code, gw, avail, -, -, h_del, h_fill,
-    run_pm, -, -, -, -, -, -, -⟩ := h
-  obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp run_pm
-  unfold FrameBody at hbody
-  rcases eq_bt : Msg.benvAfterTransfer
-      (callMsg sevm parent (min gw.toNat (except64th avail)) 0 fa receiver
-        na true false
-        (abiCallWithTail onFlashLoanSelector
-          [sevm.caller.toB256, fa.toB256, amount, 0] data)
-        code dp) with e | benv' <;>
-    rw [eq_bt] at hbody
-  · rw [hbody.2, processMessage.settle_error] at hset
-    cases hset
-  have run_ec : ExecuteCode _ xl r0 := hbody
-  rcases of_executeCode_someCode (adr := na) rfl run_ec with
-    ⟨h_prec, h_xl_none, -⟩ | ⟨-, ex', h_xl_some, -⟩
-  · -- answered by a precompile
-    left
-    rcases of_benvAfterTransfer rfl eq_bt with ⟨st_mid, -, hB⟩
-    rcases Bool.and_eq_true_iff.mp h_prec with ⟨hdp, hpre⟩
-    have hstat : benv'.stat = sevm.benvStat := by
-      rw [hB]
-      rfl
-    rcases h_del with ⟨hnone, hna, -, -⟩ | ⟨d, -, -, -, hdp_true⟩
-    · refine ⟨?_, hnone⟩
-      have := of_decide_eq_true hpre
-      rw [show ((callMsg sevm parent (min gw.toNat (except64th avail)) 0 fa
-          receiver na true false
-          (abiCallWithTail onFlashLoanSelector
-            [sevm.caller.toB256, fa.toB256, amount, 0] data)
-          code dp).withBenv benv').benv = benv' from rfl, hstat] at this
-      rw [← hna]
-      exact this
-    · rw [show ((callMsg sevm parent (min gw.toNat (except64th avail)) 0 fa
-          receiver na true false
-          (abiCallWithTail onFlashLoanSelector
-            [sevm.caller.toB256, fa.toB256, amount, 0] data)
-          code dp).withBenv benv').disablePrecompiles = dp from rfl,
-        hdp_true] at hdp
-      cases hdp
-  · -- answered by an actual sub-execution of the resolved code
-    right
-    rw [h_xl_some] at h_fill
-    refine ⟨_, ex', h_fill, rfl, rfl, rfl, rfl⟩
 
 /-- **Restoration at the borrower's callback frame.**  The `CALL` at
 `flashLoanFromCall`'s callback site pushed the failure flag `0`, so whatever
@@ -1965,9 +1823,8 @@ side is an honest subtraction and not a wrap.
 The supply side is stated in `B256` arithmetic and is *not* claimed
 wrap-free here: the contract carries no supply-underflow guard, deliberately
 (`Blanc/Fmint.lean`, `burnAndReturn`), and the bound that rules the wrap out
-comes from the conservation invariant rather than from the code.  That is
-`of_burnAndReturn_bound` below, which takes the invariant as an explicit
-premise.
+comes from the conservation invariant rather than from the code, so it is
+not derived here.
 
 D5: the two `SSTORE`s are adjacent in the walk — nothing between them but the
 `pushSupplySlot`/`SLOAD`/`DUP`/`SUB` that computes the second value, no
@@ -2349,53 +2206,6 @@ lemma of_burnAndReturn_val {fs : List Func} {sevm : Sevm} {s r : Devm}
   rw [← congr_fun h_tail sevm.currentTarget, ← congr_fun hg3 sevm.currentTarget]
   exact h_stor18
 
-/-- **The invariant-dependent strengthening of the burn** — the arc's
-predeclared decision gate, written out so the two options can be compared
-rather than argued about.
-
-`of_burnAndReturn_val` states the supply write in `B256` arithmetic and claims
-nothing about wrap-around, because the contract carries no supply-underflow
-guard.  With the conservation invariant *at the burn's entry state* as an
-explicit premise the wrap is ruled out: `wad ≤ rbal` is the code's own balance
-check, `rbal ≤ Σ balances = supply` is `Stor.Conserved.le_supply`, and the
-supply side becomes an honest subtraction.  Arc B's `of_burnAndReturn` supplies
-the third conjunct unchanged.
-
-**Where the premise can and cannot be discharged.**  It is a genuine invariant
-of every reachable state (`fmint_preserves_conserved`), so *assuming* it is
-honest.  But it is a premise about the state entering the *repayment*, which
-sits on the far side of an arbitrary borrower frame: `of_flashLoanFromCall`
-relates that state to the state at the `CALL` through `CallbackBoundary`
-alone, and carries no conservation fact across it.  So a headline premised on
-conservation at `flashLoan`'s *entry* does not reach here without a further
-theorem carrying the invariant across the callback — which is why the arc's
-storage postcondition takes the wrap-tolerant form and this lemma stands
-beside it rather than inside it.  Whatever consumes this lemma is a statement
-about conserved states, and that qualification travels with it. -/
-lemma of_burnAndReturn_bound {fs : List Func} {sevm : Sevm} {s r : Devm}
-    {wad : B256} {a : Adr} {bs : Bytes}
-    (hs : [wad, a.toB256] <<+ s.stack)
-    (h_wf : Mem.Wf s.memory) (h_reads : Mem.Reads s.memory bs)
-    (h_cons : Stor.Conserved (Devm.getStor s sevm.currentTarget))
-    (h_run : Func.Run fs sevm s burnAndReturn r) :
-    wad ≤ (Devm.getStor s sevm.currentTarget).get supplySlot ∧
-    ((Devm.getStor s sevm.currentTarget).get supplySlot - wad).toNat
-      = ((Devm.getStor s sevm.currentTarget).get supplySlot).toNat - wad.toNat ∧
-    Stor.Conserved (Devm.getStor r sevm.currentTarget) := by
-  obtain ⟨h_le, -, -, -⟩ := of_burnAndReturn_val hs h_wf h_reads h_run
-  have h_bound : wad ≤ (Devm.getStor s sevm.currentTarget).get supplySlot := by
-    rcases B256.le_or_gt wad ((Devm.getStor s sevm.currentTarget).get supplySlot)
-      with h | h
-    · exact h
-    · exfalso
-      have h1 := B256.toNat_lt_toNat h
-      have h2 := B256.toNat_le_toNat h_le
-      have h3 := h_cons.le_supply a
-      simp only [Stor.rest, Function.comp_apply] at h3
-      omega
-  exact ⟨h_bound, B256.toNat_sub_eq_of_le _ _ h_bound,
-    of_burnAndReturn ⟨a, rfl⟩ hs h_cons h_run⟩
-
 /-- **The repayment, end to end** — the allowance spend and the burn composed,
 which is the shape Step 6's headline consumes.
 
@@ -2469,11 +2279,10 @@ description of it:
 
 The storage postcondition is **wrap-tolerant `B256` arithmetic and carries no
 `Stor.Conserved` premise**, so the headline is *not* a statement about states
-satisfying the conservation invariant.  (That qualification attaches only to
-consumers of `of_burnAndReturn_bound`, whose docstring carries it.)  The
-reason is recorded there: conservation at `flashLoan`'s entry does not reach
-the repayment's entry state, because `CallbackBoundary` deliberately carries no
-storage relation across the borrower's frame.
+satisfying the conservation invariant.  The reason: conservation at
+`flashLoan`'s entry does not reach the repayment's entry state, because
+`CallbackBoundary` deliberately carries no storage relation across the
+borrower's frame.
 
 **`h_sel` and `h_dec` are jointly satisfiable, and not by accident.**  The
 canonical encoding *begins* with `flashLoanSelector`'s four bytes, so `h_sel` is
@@ -2974,71 +2783,6 @@ premise is in hypothesis position.  Nothing here asserts that any `flashLoan`
 call is ever made, ever fails, or ever runs at all.  As everywhere in this
 module, these are partial correctness: they say what *would* be handed back,
 not that anything happens. -/
-
-/-- **A frame that cannot succeed settles with an error, and rolled back.**
-Given a `processMessage` frame that settled `.ok out`, a filled slot, the
-frame's post-transfer environment `benv`, the exclusion of the precompile entry
-mode, and the fact that *no* successful `Exec` starts from this frame's entry
-machine, the settled result carries an error flag and its world is exactly
-`msg`'s entry world.
-
-The shared core is stated **once**, over the abstract premise `h_none`; each of
-the seven `no_success_of_*` corollaries below instantiates it in a single line.
-
-**Why `h_fill` is a premise.**  `ProcessMessage msg xl (.ok out)` leaves the raw
-execution result in the slot entirely unconstrained, so without
-`Xlot.Filled xl` there is no derivation for `h_none` to contradict, the
-clean-success branch cannot be refuted, and the statement would be false as
-written.  The premise is idiomatic rather than a patch — `CallbackBoundary`
-carries one too — and `rollback_of_no_success_total` below discharges it once
-and for all for a caller who holds the total function's equation instead.
-
-**Why `h_prec` is a premise.**  Frame entry splits into a precompile answer and
-an interpreted-code execution.  In the precompile branch there is no `Exec` at
-all for `h_none` to contradict, and the frame demonstrably *can* settle cleanly
-there, so the conclusion `out.error.isSome` is simply **false** in that branch.
-`CallbackBoundary.entry_modes` set this module's precedent of carrying the
-precompile case explicitly rather than assuming it away; carrying it is
-impossible here, so it is excluded by an honest, checkable premise instead.  A
-precompile address holding fmint's code is not the situation this theorem is
-about, and `h_prec` says so out loud.  Note its shape: it is
-`of_executeCode_someCode`'s guard, and it is demanded only of a `codeAddress`
-that is `some` — a frame with no code address has no precompile branch to
-exclude, and is asked for nothing.
-
-**Contract-agnostic.**  Nothing above `h_none` mentions fmint, so the proof
-lives in the shared `Blanc/Ladder.lean` layer.  This declaration preserves the
-original `Blanc.Fmint` API while the seven consumers below call the shared core
-directly. -/
-theorem rollback_of_no_success {msg : Msg} {benv : Benv} {xl : Xlot} {out : Devm}
-    (h_pm : ProcessMessage msg xl (.ok out))
-    (h_fill : Xlot.Filled xl)
-    (h_bt : msg.benvAfterTransfer = .ok benv)
-    (h_prec : ∀ adr, msg.codeAddress = some adr →
-      ¬ (!msg.disablePrecompiles && decide (benv.stat.rules.isPrecomp adr)) = true)
-    (h_none : ∀ post, Exec 0 (initSevm (msg.withBenv benv))
-        (initDevm (msg.withBenv benv)) (.ok post) → False) :
-    out.error.isSome ∧
-      out.state = msg.benv.state ∧
-      out.transientStorage = msg.tenv.transientStorage := by
-  exact Blanc.rollback_of_no_success h_pm h_fill h_bt h_prec h_none
-
-/-- **The same statement off the total function.**  `of_processMessage` produces
-the slot *and* its `Filled` proof from `processMessage msg = .ok out`, so a
-caller holding the equation supplies neither.  Same frame — `msg`'s own — same
-absence of an error kind, and still not liveness: the equation is a hypothesis
-about a run that is given, not a claim that one occurs. -/
-theorem rollback_of_no_success_total {msg : Msg} {benv : Benv} {out : Devm}
-    (h_run : processMessage msg = .ok out)
-    (h_bt : msg.benvAfterTransfer = .ok benv)
-    (h_prec : ∀ adr, msg.codeAddress = some adr →
-      ¬ (!msg.disablePrecompiles && decide (benv.stat.rules.isPrecomp adr)) = true)
-    (h_none : ∀ post, Exec 0 (initSevm (msg.withBenv benv))
-        (initDevm (msg.withBenv benv)) (.ok post) → False) :
-    out.error.isSome ∧
-      out.state = msg.benv.state ∧
-      out.transientStorage = msg.tenv.transientStorage := by
-  exact Blanc.rollback_of_no_success_total h_run h_bt h_prec h_none
 
 /-- **Wrong magic word ⇒ the frame settled with an error, rolled back.**  The
 restoration form of `no_success_of_callback_never_magic`, at the frame

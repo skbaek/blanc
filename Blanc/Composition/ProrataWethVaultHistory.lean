@@ -216,20 +216,6 @@ def Exec.CorePairReplay (vault : Adr) (pc : Nat) (sevm : Sevm) (pre : Devm)
         (PairBoundary.ofState vault pre.state)
         (PairBoundary.ofState vault (Execution.committedPost out committed).state)
 
-/-- The core's conclusion without its frame witnesses. -/
-theorem Exec.CorePairReplay.toBetween {vault : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm}
-    {out : Execution} {run : Exec pc sevm pre out} {committed : Execution.commits out = true}
-    {blockIndex : Nat} {transactionIndex : Option Nat} {framePath : List Nat}
-    (replay : PairReplayWith vault
-      (fun r => PairProvenanceOk blockIndex transactionIndex framePath r ∧
-        PairStepRecord.OwnIn vault (Exec.rawFrameRoots run) r)
-      (PairBoundary.ofState vault pre.state)
-      (PairBoundary.ofState vault (Execution.committedPost out committed).state)) :
-    PairReplayBetween vault blockIndex transactionIndex framePath
-      (PairBoundary.ofState vault pre.state)
-      (PairBoundary.ofState vault (Execution.committedPost out committed).state) :=
-  replay.mono fun _ h => h.1
-
 /-! ## The three segment hypotheses -/
 
 /-- **Segment hypothesis (vault frame).**  A committed compiled vault run entered by a caller
@@ -681,37 +667,6 @@ variable {vault : Adr} {blockIndex : Nat} {transactionIndex : Option Nat}
 theorem nil_of_eq {pre post : PairBoundary} (eq : post = pre) :
     PairReplayBetween vault blockIndex transactionIndex framePath pre post :=
   ⟨[], PairReplay.nil_of_eq eq, by simp⟩
-
-theorem append {pre mid post : PairBoundary}
-    (first : PairReplayBetween vault blockIndex transactionIndex framePath pre mid)
-    (second : PairReplayBetween vault blockIndex transactionIndex framePath mid post) :
-    PairReplayBetween vault blockIndex transactionIndex framePath pre post := by
-  obtain ⟨left, leftReplay, leftOk⟩ := first
-  obtain ⟨right, rightReplay, rightOk⟩ := second
-  refine ⟨left ++ right, leftReplay.append rightReplay, fun r member => ?_⟩
-  rcases List.mem_append.mp member with inLeft | inRight
-  · exact leftOk r inLeft
-  · exact rightOk r inRight
-
-theorem of_child {child : Nat} {pre post : PairBoundary}
-    (replay : PairReplayBetween vault blockIndex transactionIndex (framePath ++ [child])
-      pre post) :
-    PairReplayBetween vault blockIndex transactionIndex framePath pre post := by
-  obtain ⟨steps, stepsReplay, ok⟩ := replay
-  exact ⟨steps, stepsReplay, fun r member => (ok r member).of_child⟩
-
-theorem of_tagged {provenance : Blanc.Prorata.ProrataAccountingProvenance}
-    {pre post : PairBoundary}
-    (block : provenance.blockIndex = blockIndex)
-    (tx : provenance.transactionIndex = transactionIndex)
-    (path : provenance.framePath = framePath)
-    (tagged : ∃ steps : List (PairStepRecord vault), PairReplay vault pre steps post ∧
-      ∀ r ∈ steps, r.provenance = provenance) :
-    PairReplayBetween vault blockIndex transactionIndex framePath pre post := by
-  obtain ⟨steps, replay, tags⟩ := tagged
-  refine ⟨steps, replay, fun r member => ?_⟩
-  have tag := tags r member
-  exact ⟨by rw [tag, block], by rw [tag, tx], by rw [tag, path]⟩
 
 end PairReplayBetween
 

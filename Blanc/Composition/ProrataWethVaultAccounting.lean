@@ -2367,26 +2367,6 @@ theorem dust_telescope {vault : Adr} (path : FourQuotePath vault) :
   intro i hi
   simpa only [Nat.add_assoc] using path.step_exact_at hi
 
-/-- The same telescope with rounding, retained-asset, and external-credit
-terms exposed as three separately weighted sums. -/
-theorem dust_telescope_separate {vault : Adr} (path : FourQuotePath vault) :
-    let n := path.steps.length
-    path.xAt n * (∏ j ∈ Finset.range n, path.dAt j) =
-      path.xAt 0 * (∏ j ∈ Finset.Icc 1 n, path.dAt j) +
-        (∑ i ∈ Finset.range n,
-          path.roundingAt i * (∏ j ∈ Finset.range i, path.dAt j) *
-            (∏ j ∈ Finset.Icc (i + 2) n, path.dAt j)) +
-        (∑ i ∈ Finset.range n,
-          path.retainedAt i * (∏ j ∈ Finset.range i, path.dAt j) *
-            (∏ j ∈ Finset.Icc (i + 2) n, path.dAt j)) +
-        ∑ i ∈ Finset.range n,
-          path.creditAt i * (∏ j ∈ Finset.range i, path.dAt j) *
-            (∏ j ∈ Finset.Icc (i + 2) n, path.dAt j) := by
-  dsimp only
-  rw [dust_telescope]
-  simp only [Nat.add_mul, Finset.sum_add_distrib]
-  ac_rfl
-
 end FourQuotePath
 
 end FourQuote

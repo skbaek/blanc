@@ -191,35 +191,6 @@ lemma Pre.of_eqs {wa : Adr} {sevm : Sevm} {pre inter : Devm}
     c.Pre wa sevm inter := by
   exact pre_ofSem (ContractSpecSem.Pre.of_eqs (c := c.toSem) (pre_toSem h_pc) h_code h_bal h_stor)
 
-lemma Pre.transfer_state {ca : Adr} {sevm : Sevm} {pre inter : Devm}
-    {caller callee : Adr} {wad : B256} {st_mid : Jaune.State}
-    (h_pc : c.Pre ca sevm pre)
-    (h_ne : caller ≠ ca)
-    (h_sub : pre.state.subBal caller wad = some st_mid)
-    (h_state : inter.state = st_mid.addBal callee wad) :
-    c.Pre ca sevm inter := by
-  exact pre_ofSem (ContractSpecSem.Pre.transfer_state (c := c.toSem)
-    (pre_toSem h_pc) h_ne h_sub h_state)
-
-lemma GenericCall.none_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm}
-    {gas : Nat} {value : B256} {caller target codeAddress : Adr}
-    {stv isStatic : Bool} {ii is oi os : Nat} {code : ByteArray} {dp : Bool}
-    (h_run : GenericCall sevm devm gas value caller target codeAddress stv
-      isStatic ii is oi os code dp .none (.ok inter))
-    (h_ne : stv = true → caller ≠ wa)
-    (h_pc : c.Pre wa sevm devm) :
-    c.Pre wa sevm inter := by
-  exact pre_ofSem (ContractSpecSem.GenericCall.none_preserves_precond (c := c.toSem) h_run h_ne (pre_toSem h_pc))
-
-lemma GenericCreate.none_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm}
-    {endowment : B256} {newAddress : Adr} {memoryIndex memorySize : Nat}
-    (h_run : GenericCreate sevm devm endowment newAddress memoryIndex memorySize
-      .none (.ok inter))
-    (h_pc : c.Pre wa sevm devm) :
-    c.Pre wa sevm inter := by
-  exact pre_ofSem (ContractSpecSem.GenericCreate.none_preserves_precond
-    (c := c.toSem) h_run (pre_toSem h_pc))
-
 lemma Xinst.none_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm} {x : Xinst}
     (hfork : CoveredFork sevm.benvStat.fork)
     (h_run : Xinst.Run sevm devm x .none (.ok inter))
@@ -238,22 +209,6 @@ lemma Ninst.none_preserves_precond
   exact pre_ofSem (ContractSpecSem.Ninst.none_preserves_precond
     (c := c.toSem) hfork run target_ne (pre_toSem precondition))
 
-lemma Pre.child_of_transfer {ca : Adr} {sevm sevm' : Sevm} {devm devm' : Devm}
-    {st st_mid : Jaune.State} {caller target : Adr} {value : B256}
-    (h_pc : c.Pre ca sevm devm)
-    (h_ct_ne : sevm.currentTarget ≠ ca)
-    (h_ne : caller ≠ ca)
-    (h_stor : (st.get ca).stor = (devm.state.get ca).stor)
-    (h_code : (st.get ca).code = (devm.state.get ca).code)
-    (h_bal : ∀ a, (st.get a).bal = (devm.state.get a).bal)
-    (h_sub : st.subBal caller value = some st_mid)
-    (h_state : devm'.state = st_mid.addBal target value)
-    (h_ct' : sevm'.currentTarget = target)
-    (h_val : sevm'.currentTarget = ca → sevm'.value = value) :
-    c.Pre ca sevm' devm' := by
-  exact pre_ofSem (ContractSpecSem.Pre.child_of_transfer (c := c.toSem)
-    (pre_toSem h_pc) h_ct_ne h_ne h_stor h_code h_bal h_sub h_state h_ct' h_val)
-
 lemma Pre.child_of_outbound_transfer
     {ca target : Adr} {sevm' : Sevm} {devm' : Devm}
     {st st_mid : Jaune.State} {value : B256}
@@ -269,66 +224,6 @@ lemma Pre.child_of_outbound_transfer
     (by simpa [ContractSpec.toSem, Prog.codeSem] using h_code)
     h_side h_inv h_sub h_state h_ct h_value)
 
-lemma Pre.child_of_eqs {wa : Adr} {sevm sevm' : Sevm} {devm devm' : Devm}
-    (h_pc : c.Pre wa sevm devm)
-    (h_ct_ne : sevm.currentTarget ≠ wa)
-    (h_state : devm'.state = devm.state)
-    (h_val : sevm'.currentTarget = wa → sevm'.value = 0) :
-    c.Pre wa sevm' devm' := by
-  exact pre_ofSem (ContractSpecSem.Pre.child_of_eqs (c := c.toSem)
-    (pre_toSem h_pc) h_ct_ne h_state h_val)
-
-lemma Pre.of_postcond {wa : Adr} {sevm sevm' : Sevm} {child inter devm' : Devm}
-    (h_post : c.Post wa sevm' child)
-    (h_ct_ne : sevm.currentTarget ≠ wa)
-    (h_code_pre : some (devm'.getCode wa).toList = Prog.compile c.prog)
-    (h_code_eq : child.getCode wa = devm'.getCode wa)
-    (h_stor : (inter.state.get wa).stor = (child.state.get wa).stor)
-    (h_code : (inter.state.get wa).code = (child.state.get wa).code)
-    (h_bal : ∀ a, (inter.state.get a).bal = (child.state.get a).bal) :
-    c.Pre wa sevm inter := by
-  exact pre_ofSem (ContractSpecSem.Pre.of_postcond (c := c.toSem)
-    (post_toSem h_post) h_ct_ne
-    (by simpa [ContractSpec.toSem, Prog.codeSem] using h_code_pre)
-    h_code_eq h_stor h_code h_bal)
-
-lemma GenericCall.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm}
-    {gas : Nat} {value : B256} {caller target codeAddress : Adr}
-    {stv isStatic : Bool} {ii is oi os : Nat} {code : ByteArray} {dp : Bool}
-    {evm' : Evm} {exn' : Execution}
-    (h_run : GenericCall sevm devm gas value caller target codeAddress stv
-      isStatic ii is oi os code dp (.some ⟨evm', exn'⟩) (.ok inter))
-    (ex_sub : Exec evm'.pc evm'.sta evm'.dyna exn')
-    (h_ct_ne : sevm.currentTarget ≠ wa)
-    (h_ne : stv = true → caller ≠ wa)
-    (h_tv : stv = false → target = wa → value = 0)
-    (h_pc : c.Pre wa sevm devm) :
-    c.Pre wa evm'.sta evm'.dyna ∧
-      (ifOk (c.Post wa evm'.sta) exn' → c.Pre wa sevm inter) := by
-  rcases ContractSpecSem.GenericCall.some_preserves_precond (c := c.toSem)
-      h_run ex_sub h_ct_ne h_ne h_tv (pre_toSem h_pc) with ⟨hpre, hpost⟩
-  exact ⟨pre_ofSem hpre, fun hp => by
-    cases exn' with
-    | error e => exact pre_ofSem (hpost trivial)
-    | ok out => exact pre_ofSem (hpost (post_toSem hp))⟩
-
-
-lemma GenericCreate.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm}
-    {endowment : B256} {newAddress : Adr} {memoryIndex memorySize : Nat}
-    {evm' : Evm} {exn' : Execution}
-    (h_run : GenericCreate sevm devm endowment newAddress memoryIndex memorySize
-      (.some ⟨evm', exn'⟩) (.ok inter))
-    (ex_sub : Exec evm'.pc evm'.sta evm'.dyna exn')
-    (h_ct_ne : sevm.currentTarget ≠ wa)
-    (h_pc : c.Pre wa sevm devm) :
-    c.Pre wa evm'.sta evm'.dyna ∧
-      (ifOk (c.Post wa evm'.sta) exn' → c.Pre wa sevm inter) := by
-  rcases ContractSpecSem.GenericCreate.some_preserves_precond (c := c.toSem)
-      h_run ex_sub h_ct_ne (pre_toSem h_pc) with ⟨hpre, hpost⟩
-  exact ⟨pre_ofSem hpre, fun hp => by
-    cases exn' with
-    | error e => exact pre_ofSem (hpost trivial)
-    | ok out => exact pre_ofSem (hpost (post_toSem hp))⟩
 
 
 lemma Xinst.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm} {x : Xinst}
@@ -347,12 +242,6 @@ lemma Xinst.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm} 
     | error e => exact pre_ofSem (hpost trivial)
     | ok out => exact pre_ofSem (hpost (post_toSem hp))⟩
 
-
-lemma Post.selfdestruct_delete {ca : Adr} {sevm : Sevm} {devm : Devm}
-    (h_ne : sevm.currentTarget ≠ ca) (h_pc : c.Pre ca sevm devm) :
-    c.Post ca sevm
-      (addAccountToDelete (devm.setBal sevm.currentTarget 0) sevm.currentTarget) := by
-  exact post_ofSem (ContractSpecSem.Post.selfdestruct_delete (c := c.toSem) h_ne (pre_toSem h_pc))
 
 lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
     (hfork : CoveredFork sevm.benvStat.fork)
@@ -548,50 +437,6 @@ frame gets `Mem.Wf` outright from `Xinst.some_child_wf`.  So the three
 transport hypotheses below are everything `σ` has to expose, and there is one
 ladder proof rather than one per memory discipline. -/
 
-theorem preserves_lift (c : ContractSpec) (ca : Adr)
-    (σ : Sevm → Devm → Prop)
-    (σ_pre : ∀ {e : Sevm} {d : Devm}, σ e d → c.Pre ca e d)
-    (σ_of_ne : ∀ {e : Sevm} {d : Devm},
-      e.currentTarget ≠ ca → c.Pre ca e d → σ e d)
-    (σ_of_wf : ∀ {e : Sevm} {d : Devm},
-      Mem.Wf d.memory → c.Pre ca e d → σ e d)
-    ( body :
-      ∀ {sevm pre post},
-        Prog.Run sevm pre c.prog post →
-        sevm.currentTarget = ca →
-        ( ∀ pc' sevm' pre' post',
-            Exec pc' sevm' pre' (.ok post') →
-            sevm'.depth < sevm.depth →
-            Prog.At c.prog ca pc' sevm' pre' →
-            σ sevm' pre' ∧ CoveredFork sevm'.benvStat.fork →
-            c.Post ca sevm' post' ) →
-        σ sevm pre ∧ CoveredFork sevm.benvStat.fork →
-        c.Post ca sevm post ) :
-    ∀ sevm pre post,
-      CoveredFork sevm.benvStat.fork →
-      Exec 0 sevm pre (.ok post) →
-      (sevm.currentTarget = ca → some sevm.code.toList = Prog.compile c.prog) →
-      σ sevm pre →
-      c.Post ca sevm post := by
-  intro sevm pre post hfork exc h_code hσ
-  apply post_ofSem
-  apply ContractSpecSem.preserves_lift_sem c.toSem ca σ
-    (fun h => pre_toSem (σ_pre h))
-    (fun hne h => σ_of_ne hne (pre_ofSem h))
-    (fun hwf h => σ_of_wf hwf (pre_ofSem h))
-  · intro sevmg preg postg h_rung h_eqg h_ihg h_preg
-    exact post_toSem (body h_rung h_eqg
-      (fun pcg sevmg2 preg2 postg2 hex hd hat hpair =>
-        post_ofSem (h_ihg pcg sevmg2 preg2 postg2 hex hd
-          (by simpa [Prog.codeSem, CodeSem.At, Prog.At, ContractSpec.toSem] using hat)
-          hpair))
-      h_preg)
-  · exact hfork
-  · exact exc
-  · intro hca
-    simpa [ContractSpec.toSem, Prog.codeSem] using h_code hca
-  · exact hσ
-
 theorem preserves_inv (c : ContractSpec) (ca : Adr) (body : c.Sound ca) :
     c.Preserves ca :=
   preserves_ofSem (ContractSpecSem.preserves_inv_sem c.toSem ca
@@ -607,19 +452,6 @@ theorem preserves_noMem (c : ContractSpec) (ca : Adr) (body : c.SoundNoMem ca) :
   preservesNoMem_ofSem (ContractSpecSem.preserves_noMem_sem c.toSem ca
     (soundNoMem_toSem body))
 
-/-- The `exec` counterpart: with sufficiency proved in Jaune there is no fuel
-to quantify away, so the hypothesis is a plain equation about the interpreter. -/
-theorem exec_preserves_inv (c : ContractSpec) (ca : Adr) (hp : c.Preserves ca)
-    (sevm : Sevm) (pre post : Devm)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (h_run : exec ⟨0, sevm, pre⟩ = .ok post)
-    (h_code : sevm.currentTarget = ca → some sevm.code.toList = Prog.compile c.prog)
-    (h_wf : sevm.currentTarget = ca → Mem.Wf pre.memory)
-    (h_pc : c.Pre ca sevm pre) : c.Post ca sevm post :=
-  post_ofSem (ContractSpecSem.exec_preserves_inv_sem c.toSem ca
-    (preserves_toSem hp) sevm pre post hfork h_run
-    (by simpa [ContractSpec.toSem, Prog.codeSem] using h_code) h_wf
-    (pre_toSem h_pc))
 /-- The `exec` counterpart of `PreservesNoMem`, with no memory premise. -/
 theorem exec_preserves_noMem (c : ContractSpec) (ca : Adr)
     (hp : c.PreservesNoMem ca)
@@ -814,26 +646,6 @@ theorem post_of_run_dispatch_with {c : ContractSpec} {ca : Adr} {k : Nat}
   · intro e s r wf h_mem ⟨h_ct, hp, hmw, hih, hfork_e⟩ hrun
     exact h_funcs wf (DispatchTree.mem_of_mem_ofSorted h_ne h_mem)
       hfork_e h_ct hp hmw hih hrun
-
-/-- The memory-carrying instance of `post_of_run_dispatch_with`. -/
-theorem post_of_run_dispatch {c : ContractSpec} {ca : Adr} {k : Nat}
-    {funcs : List (B256 × Func)} {aux : List Func} {fallback : Func}
-    (h_ne : funcs ≠ [])
-    (h_fb : (c.prog.main :: aux)[k]? = some fallback)
-    (h_funcs : ∀ p ∈ funcs, FuncSound c ca aux p.2)
-    (h_fall : FuncSound c ca aux fallback)
-    {sevm : Sevm} {s r : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (h_ca : sevm.currentTarget = ca)
-    (h_pre : c.Pre ca sevm s)
-    (h_wf : Mem.Wf s.memory)
-    (h_ih : Exec.InvDepth sevm.depth ca c.prog (c.PreWf ca) (c.Post ca))
-    (h_run :
-      Func.Run (c.prog.main :: aux) sevm s
-        (dispatchWith k (DispatchTree.ofSorted funcs)) r) :
-    c.Post ca sevm r :=
-  post_of_run_dispatch_with (mw := Mem.Wf) h_ne h_fb (fun p hp => h_funcs p hp)
-    h_fall hfork h_ca h_pre h_wf h_ih h_run
 
 /-- `SoundWith` for a dispatcher-shaped program, reduced to one per-target
 obligation plus one for the fallback.  `h_fb` locates the fallback at the
@@ -1042,58 +854,18 @@ theorem StateInv.incrNonce {wa a : Adr} {w : Jaune.State}
     (h : c.StateInv wa w) : c.StateInv wa (w.incrNonce a) := by
   exact stateInv_ofSem (ContractSpecSem.StateInv.incrNonce (c := c.toSem) (stateInv_toSem h))
 
-theorem StateInv.addBal {ca a : Adr} {val : B256} {w : Jaune.State}
-    (hsum : sum w.bal + val.toNat < 2 ^ 256)
-    (h : c.StateInv ca w) : c.StateInv ca (w.addBal a val) := by
-  exact stateInv_ofSem (ContractSpecSem.StateInv.addBal (c := c.toSem) hsum (stateInv_toSem h))
-
 theorem StateInv.subBal {ca a : Adr} {val : B256} {w w' : Jaune.State}
     (hne : a ≠ ca) (h_sub : w.subBal a val = some w')
     (h : c.StateInv ca w) : c.StateInv ca w' := by
   exact stateInv_ofSem (ContractSpecSem.StateInv.subBal (c := c.toSem) hne h_sub (stateInv_toSem h))
 
-theorem StateInv.destroyAccount {ca a : Adr} {w : Jaune.State}
-    (hne : a ≠ ca) (h : c.StateInv ca w) : c.StateInv ca (destroyAccount w a) := by
-  exact stateInv_ofSem (ContractSpecSem.StateInv.destroyAccount (c := c.toSem) hne (stateInv_toSem h))
-
-theorem StateInv.foldl_destroyAccount {wa : Adr} :
-    ∀ {as : List Adr} {w : Jaune.State},
-      (∀ a ∈ as, a ≠ wa) → c.StateInv wa w →
-        c.StateInv wa (as.foldl Jaune.destroyAccount w)
-  | [], _, _, h => h
-  | a :: as, w, hne, h => by
-    exact stateInv_ofSem (ContractSpecSem.StateInv.foldl_destroyAccount
-      (c := c.toSem) hne (stateInv_toSem h))
-
 -- `Devm.get{Bal,Stor,Code}` are by definition the corresponding `State.*`
 -- projections of `devm.state`, so a `Post` plus code-preservation is exactly
 -- `StateInv` on the underlying state.
-lemma StateInv.of_postcond {ca : Adr} {sevm : Sevm} {devm : Devm}
-    (h_post : c.Post ca sevm devm)
-    (h_code : some (devm.state.getCode ca).toList = Prog.compile c.prog) :
-    c.StateInv ca devm.state := by
-  exact stateInv_ofSem (ContractSpecSem.StateInv.of_postcond (c := c.toSem) (post_toSem h_post) (by simpa [ContractSpec.toSem, Prog.codeSem] using h_code))
-
-lemma Pre.of_inv_transfer {ca : Adr} {sevm' : Sevm} {devm' : Devm}
-    {st st_mid : Jaune.State} {caller target : Adr} {value : B256}
-    (h_inv : c.StateInv ca st)
-    (h_ne : caller ≠ ca)
-    (h_sub : st.subBal caller value = some st_mid)
-    (h_state : devm'.state = st_mid.addBal target value)
-    (h_ct' : sevm'.currentTarget = target)
-    (h_val : sevm'.currentTarget = ca → sevm'.value = value) :
-    c.Pre ca sevm' devm' := by
-  exact pre_ofSem (ContractSpecSem.Pre.of_inv_transfer (c := c.toSem)
-    (stateInv_toSem h_inv) h_ne h_sub h_state h_ct' h_val)
 
 -- No-transfer counterpart of `Pre.of_inv_transfer`: when no value moves,
 -- the pre-state is the invariant state itself, and `PreSolvent` reduces to the
 -- value-free solvency provided `value = 0` whenever the frame targets `wa`.
-lemma Pre.of_inv_eqs {wa : Adr} {sevm : Sevm} {devm : Devm}
-    (h_inv : c.StateInv wa devm.state)
-    (h_val0 : sevm.currentTarget = wa → sevm.value = 0) :
-    c.Pre wa sevm devm := by
-  exact pre_ofSem (ContractSpecSem.Pre.of_inv_eqs (c := c.toSem) (stateInv_toSem h_inv) h_val0)
 
 lemma Pre.of_inv_benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
     (h_ne : msg.shouldTransferValue = true → msg.caller ≠ wa)
@@ -1107,42 +879,14 @@ lemma Pre.of_inv_benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
 -- The post-transfer state itself still satisfies `StateInv`: the transfer only
 -- credits `ca` or moves value between accounts other than `ca`, which is
 -- exactly what `side_transfer` and `inv_transfer` say.
-lemma StateInv.of_benvAfterTransfer {ca : Adr} {msg : Msg} {benv : Benv}
-    (h_ne : msg.shouldTransferValue = true → msg.caller ≠ ca)
-    (hb : msg.benvAfterTransfer = .ok benv)
-    (h_inv : c.StateInv ca msg.benv.state) :
-    c.StateInv ca benv.state := by
-  exact stateInv_ofSem (ContractSpecSem.StateInv.of_benvAfterTransfer
-    (c := c.toSem) h_ne hb (stateInv_toSem h_inv))
 
 lemma StateInv.setStor_ne {wa a : Adr} {s : Stor} {w : Jaune.State}
     (hne : a ≠ wa) (h : c.StateInv wa w) : c.StateInv wa (w.setStor a s) := by
   exact stateInv_ofSem (ContractSpecSem.StateInv.setStor_ne (c := c.toSem) hne (stateInv_toSem h))
 
-lemma StateInv.setCode_ne {wa a : Adr} {cd : ByteArray} {w : Jaune.State}
-    (hne : a ≠ wa) (h : c.StateInv wa w) : c.StateInv wa (w.setCode a cd) := by
-  exact stateInv_ofSem (ContractSpecSem.StateInv.setCode_ne (c := c.toSem) hne (stateInv_toSem h))
-
 end ContractSpec
 
 namespace ContractSpec
-
-/-- **The quantified open-contract statement**: the invariant of any
-dispatcher-shaped program all of whose targets satisfy `FuncSound` is
-preserved by arbitrary executions — including arbitrary reentrant callback
-code, which is what `FuncSound`'s deeper-frame hypothesis carries.
-`sound_of_dispatch` composed with `preserves_inv`; fmint instantiates it
-(`Blanc/Conserved.lean`, `fmintSpec_preserves`) with twelve discharged
-obligations and a vacuous fallback. -/
-theorem preserves_of_dispatch {c : ContractSpec} {ca : Adr}
-    {k : Nat} {funcs : List (B256 × Func)} {aux : List Func} {fallback : Func}
-    (h_shape : c.prog = ⟨Func.mainWith k (DispatchTree.ofSorted funcs), aux⟩)
-    (h_ne : funcs ≠ [])
-    (h_fb : (c.prog.main :: aux)[k]? = some fallback)
-    (h_funcs : ∀ p ∈ funcs, c.FuncSound ca aux p.2)
-    (h_fall : c.FuncSound ca aux fallback) :
-    c.Preserves ca :=
-  c.preserves_inv ca (sound_of_dispatch h_shape h_ne h_fb h_funcs h_fall)
 
 /-- The premise-free counterpart of `preserves_of_dispatch`: with every target
 stated at `FuncSoundNoMem`, the frame theorem carries no memory premise at
@@ -1278,40 +1022,6 @@ theorem processMessage_preserves_inv {wa : Adr} {msg : Msg} {evm : Devm}
     (by simpa [ContractSpec.toSem, Prog.codeSem] using h_code) h_ne h_val0
     (stateInv_toSem h_inv))
 
-theorem processCreateMessage_preserves_inv {wa : Adr} {msg : Msg} {evm : Devm}
-    (hfork : CoveredFork msg.benv.stat.fork)
-    (hp : c.Preserves wa)
-    (h_run : processCreateMessage msg = .ok evm)
-    (h_ct_ne : msg.currentTarget ≠ wa)
-    (h_ne : msg.shouldTransferValue = true → msg.caller ≠ wa)
-    (h_inv : c.StateInv wa msg.benv.state) :
-    c.StateInv wa evm.state := by
-  exact stateInv_ofSem (ContractSpecSem.processCreateMessage_preserves_inv (c := c.toSem)
-    hfork (preserves_toSem hp) h_run h_ct_ne h_ne (stateInv_toSem h_inv))
-
-lemma setDelegationStep_preserves_inv {wa : Adr} {auth : Auth} {msg msg' : Msg}
-    {refund refund' : B256}
-    (h_run : setDelegationStep auth msg refund = .ok (msg', refund'))
-    (h_inv : c.StateInv wa msg.benv.state) :
-    c.StateInv wa msg'.benv.state := by
-  exact stateInv_ofSem (ContractSpecSem.setDelegationStep_preserves_inv (c := c.toSem)
-    h_run (stateInv_toSem h_inv))
-
-lemma setDelegationLoop_preserves_inv {wa : Adr} {auths : List Auth} {msg msg' : Msg}
-    {refund refund' : B256}
-    (h_run : setDelegationLoop auths msg refund = .ok (msg', refund'))
-    (h_inv : c.StateInv wa msg.benv.state) :
-    c.StateInv wa msg'.benv.state := by
-  exact stateInv_ofSem (ContractSpecSem.setDelegationLoop_preserves_inv (c := c.toSem)
-    h_run (stateInv_toSem h_inv))
-
-lemma setDelegation_preserves_inv {wa : Adr} {msg msg' : Msg} {v : B256}
-    (h_run : setDelegation msg = .ok ⟨msg', v⟩)
-    (h_inv : c.StateInv wa msg.benv.state) :
-    c.StateInv wa msg'.benv.state := by
-  exact stateInv_ofSem (ContractSpecSem.setDelegation_preserves_inv (c := c.toSem)
-    h_run (stateInv_toSem h_inv))
-
 lemma MsgInv.pc {wa : Adr} {msg : Msg} {codeSrc : Adr → ByteArray}
     (h : c.MsgInv wa msg) :
     c.MsgInv wa
@@ -1366,51 +1076,6 @@ lemma prepareMessage_preserves_inv {wa : Adr}
   exact msgInv_ofSem (ContractSpecSem.prepareMessage_preserves_inv (c := c.toSem)
     h_prep (stateInv_toSem h_state) h_ca h_origin_ne)
 
-lemma StateInv.add_transaction_gas_credits {wa : Adr}
-    {baseState debitState postMsgState : Jaune.State}
-    {benv : Benv} {tx : Tx}
-    {sender : Adr} {effectiveGasPrice : Nat}
-    {validationSender : Adr}
-    {intrinsicGas calldataFloorGasCost refundCounter : Nat}
-    {txOutput : MsgCallOutput}
-    (h_validate :
-      validateTransaction benv.stat.rules tx validationSender =
-        .ok ⟨intrinsicGas, calldataFloorGasCost⟩)
-    -- the upfront-fee modulus bound, in `benv` form: the caller derives it
-    -- from `checkTransaction_upfront_lt_modulus` (whose `beginTransaction`
-    -- environment is only defeq) and ascribes it here.
-    (h_fee_lt :
-      tx.gas * effectiveGasPrice +
-        (if tx.isTypeThree = true then
-          calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx
-        else 0) < 2 ^ 256)
-    (h_debit :
-      (baseState.incrNonce sender).subBal sender
-        (tx.gas * effectiveGasPrice +
-          if tx.isTypeThree = true then
-            calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx
-          else
-            0).toB256 =
-        some debitState)
-    (h_msg_sum : sum postMsgState.bal ≤ sum debitState.bal)
-    (h_base_sum : sum baseState.bal < 2 ^ 256)
-    (h_post : c.StateInv wa postMsgState) :
-    c.StateInv wa
-      ((postMsgState.addBal sender
-          ((tx.gas -
-              max (tx.gas - txOutput.gasLeft -
-                min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
-                calldataFloorGasCost) *
-            effectiveGasPrice).toB256).addBal
-        benv.stat.coinbase
-          (max (tx.gas - txOutput.gasLeft -
-              min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
-              calldataFloorGasCost *
-            (effectiveGasPrice - benv.stat.baseFeePerGas)).toB256) := by
-  exact stateInv_ofSem (ContractSpecSem.StateInv.add_transaction_gas_credits
-    (c := c.toSem) h_validate h_fee_lt h_debit h_msg_sum h_base_sum
-    (stateInv_toSem h_post))
-
 theorem processTransaction_preserves_inv (wa : Adr)
     (hp : c.Preserves wa)
     (benv : Benv) (bout bout' : BlockOutput) (tx : Tx) (i : Nat) (st : Jaune.State)
@@ -1455,20 +1120,6 @@ lemma processWithdrawalsState_preserves_inv (wa : Adr)
   exact stateInv_ofSem (ContractSpecSem.processWithdrawalsState_preserves_inv
     (c := c.toSem) (wa := wa) (h_bound := h_bound)
     (h_inv := stateInv_toSem h_inv))
-
-lemma runRequestContracts_preserves_inv_sum_le (wa : Adr)
-    (hp : c.Preserves wa)
-    (idx : Nat) (contracts : List (UInt8 × Adr))
-    (benv : Benv) (acc : List Bytes) (bal : BalBuilder)
-    {st : Jaune.State} {acc' : List Bytes} {bal' : BalBuilder}
-    (h_run : runRequestContracts idx contracts benv acc bal = .ok ⟨st, acc', bal'⟩)
-    (h_inv : c.BenvInv wa benv)
-    (hfork : CoveredFork benv.stat.fork) :
-    c.StateInv wa st ∧ sum st.bal ≤ sum benv.state.bal := by
-  have h := ContractSpecSem.runRequestContracts_preserves_inv_sum_le
-    (c := c.toSem) (wa := wa) (hp := preserves_toSem hp)
-    (h_run := h_run) (h_inv := benvInv_toSem h_inv) (hfork := hfork)
-  exact ⟨stateInv_ofSem h.1, h.2⟩
 
 lemma processGeneralPurposeRequests_preserves_inv_sum_le (wa : Adr)
     (hp : c.Preserves wa)

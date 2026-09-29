@@ -99,17 +99,6 @@ theorem freshNat_mono (chi k : Nat) : chi ≤ freshNat chi k := by
   exact Jaune.le_floor_compose scaleNat_ne_zero
     (factorNat_base_preserved k) chi
 
-/-- The outer composition is an exact quotient/remainder identity. -/
-theorem freshNat_composition_exact (chi k : Nat) :
-    chi * factorNat k =
-      scale.toNat * freshNat chi k + compositionResidue chi k := by
-  simpa only [freshNat, compositionResidue, Nat.add_comm] using
-    (Nat.mod_add_div (chi * factorNat k) scale.toNat).symm
-
-theorem compositionResidue_lt (chi k : Nat) :
-    compositionResidue chi k < scale.toNat := by
-  exact Nat.mod_lt _ (Nat.pos_of_ne_zero scaleNat_ne_zero)
-
 /-- The frozen certified comparison of any two partitions with the same total
 elapsed time. -/
 theorem drip_segment_certified
@@ -183,16 +172,8 @@ theorem drip_rpow_runtime_ops_le_62 {k : Nat}
 
 /-! ## Frozen attained witnesses -/
 
-theorem factorNat_two_exact :
-    factorNat 2 = 1000000003094251918120023625 := by
-  decide +kernel
-
 theorem factorNat_three_exact :
     factorNat 3 = 1000000004641377880770433536 := by
-  decide +kernel
-
-theorem factorNat_year_exact :
-    factorNat 31536000 = 1049999999999999999961070145 := by
   decide +kernel
 
 /-- At `k = 2`, the square's rounded result lies below its exact scaled
@@ -233,12 +214,6 @@ arithmetic, not by a special case. -/
 theorem drip_factorNat_zero : factorNat 0 = scale.toNat :=
   Jaune.rpow_exponent_zero _ _ _
 
-/-- At `k = 0` the outer composition is the identity on any index. -/
-theorem drip_freshNat_zero (chi : Nat) : freshNat chi 0 = chi := by
-  unfold freshNat
-  rw [drip_factorNat_zero]
-  exact Nat.mul_div_cancel _ (Nat.pos_of_ne_zero scaleNat_ne_zero)
-
 /-- The frozen base word is nonzero. -/
 theorem drip_rate_ne_zero : rate ≠ 0 := by
   decide +kernel
@@ -251,41 +226,6 @@ theorem drip_word_rpow_unfold_nonzero {k : Nat} (hk : k ≠ 0) :
         (k / 2) := by
   unfold B256.rpow
   rw [if_neg drip_rate_ne_zero, if_neg hk]
-
-/-- Nat-side low-bit initialization at the frozen constants. -/
-theorem drip_nat_rpow_unfold_nonzero {k : Nat} (hk : k ≠ 0) :
-    factorNat k =
-      Jaune.rpowLoop scale.toNat half.toNat
-        (if k % 2 = 1 then rate.toNat else scale.toNat) rate.toNat (k / 2) := by
-  unfold factorNat Jaune.rpow
-  rw [if_neg rateNat_ne_zero, if_neg hk]
-
-/-- Zero-base degenerate cases, characterized outright (SF §5): `0^0` is the
-scale, `0^(n+1)` is zero. -/
-theorem drip_rpow_zero_zero (s c : Nat) : Jaune.rpow s c 0 0 = s :=
-  Jaune.rpow_zero_zero s c
-
-theorem drip_rpow_zero_succ (s c n : Nat) :
-    Jaune.rpow s c 0 (n + 1) = 0 :=
-  Jaune.rpow_zero_succ s c n
-
-theorem drip_word_rpow_zero_zero (s c : B256) : B256.rpow s c 0 0 = s := by
-  unfold B256.rpow
-  rw [if_pos rfl, if_pos rfl]
-
-theorem drip_word_rpow_zero_succ (s c : B256) (n : Nat) :
-    B256.rpow s c 0 (n + 1) = 0 := by
-  unfold B256.rpow
-  rw [if_pos rfl, if_neg (by omega)]
-
-/-- Word-side exponent-zero: the factor word is the scale word. -/
-theorem drip_word_factor_zero : B256.rpow scale half rate 0 = scale := by
-  unfold B256.rpow
-  rw [if_neg drip_rate_ne_zero, if_pos rfl]
-
-/-- No rounded multiplications run at `k = 0`. -/
-theorem drip_rpow_ops_zero : rpowOps rate.toNat 0 = 0 := by
-  rw [drip_rpow_runtime_ops_exact, if_pos rfl]
 
 end Drip
 

@@ -151,26 +151,6 @@ theorem ossifiableConstructorDelegateSetup_boundary
           (inputOffsetPush.logs.trans
             (logsImplementation.trans gasPush.logs))))
 
-/-- Expose the exact call states and retain whichever child actually settled
-the compiled setup step. -/
-theorem OssifiableConstructorDelegateBoundary.settled_child
-    {fs : List Func} {sevm : Sevm} {pre : Devm} {tail : Stack}
-    {decodedImage : Bytes} {implementation : B256}
-    {setupData : Bytes} {out : Execution}
-    (boundary : OssifiableConstructorDelegateBoundary fs sevm pre tail
-      decodedImage implementation setupData out) :
-    ∃ callPre callPost,
-      Ninst.RunCompiled sevm callPre (.exec .delegatecall) callPost ∧
-      Func.RunCompiledTo fs sevm callPost
-        ossifiableConstructorDelegateTail out ∧
-      ∀ spawn : DelegatecallSpawnDescriptor sevm callPre,
-        spawn.parent.stack.length < 1024 →
-          ∃ child, DelegatecallSettledBoundary spawn child callPost := by
-  rcases boundary with
-    ⟨_, callPre, callPost, callRun, tailRun, _, _, _, _, _⟩
-  exact ⟨callPre, callPost, callRun, tailRun,
-    fun spawn room => spawn.settled_of_runCompiled callRun room⟩
-
 /-- Operand- and data-exact strengthening of `settled_child`.  Any descriptor
 for the retained call state must carry the six words read by the compiled
 step; its child input is consequently the decoded setup bytes, and its zero
@@ -522,63 +502,6 @@ theorem OssifiableConstructorDecodeRoute.prepare_of_ok
       (ossifiableConstructorFunctions_allocationPanic runtimeOffset
         runtimeLength) panicRun).elim
 
-/-- Specialize a prepared successful decoder to empty setup bytes.  The clean
-ABI address guard supplies the exact `B256 → Adr → B256` round trip required
-by the post-setup proof. -/
-theorem OssifiableConstructorPreparedSuccess.empty_afterSetup_success
-    {runtimeOffset runtimeLength argsOffset : Nat}
-    {sevm : Sevm} {entry post : Devm} {tail : Stack}
-    {image runtimeBytes setupData : Bytes}
-    {implementation requestedAdmin : B256} {bodyPre : Devm}
-    (success : OssifiableConstructorPreparedSuccess runtimeOffset
-      runtimeLength argsOffset sevm entry post tail image implementation
-      requestedAdmin setupData bodyPre)
-    (setupDataEmpty : setupData = [])
-    (hruntime :
-      sevm.code.sliceD runtimeOffset runtimeLength
-        (Linst.toUInt8 .stop) = runtimeBytes)
-    (hruntimeLength : runtimeBytes.length = runtimeLength)
-    (hruntimeNonempty : runtimeBytes ≠ [])
-    (hoffsetBound : runtimeOffset < 2 ^ 256)
-    (hlengthBound : runtimeLength < 2 ^ 256) :
-    requestedAdmin.toAdr ≠ 0 ∧
-      Devm.getStor post sevm.currentTarget =
-        ((Devm.getStor bodyPre sevm.currentTarget).set
-          implementationSlotLit
-          (addressSlotUpdateRaw bodyPre sevm.currentTarget
-            implementationSlotLit implementation)).set adminSlotLit
-          (addressSlotWriteWord
-            (((Devm.getStor bodyPre sevm.currentTarget).set
-              implementationSlotLit
-              (addressSlotUpdateRaw bodyPre sevm.currentTarget
-                implementationSlotLit implementation)).get
-                  adminSlotLit)
-            requestedAdmin.toAdr.toB256) ∧
-      post.logs = bodyPre.logs ++
-        [rawUpgradedLog sevm.currentTarget implementation] ++
-          [ossifiableConstructorAdminChangedLog sevm.currentTarget
-            (((Devm.getStor bodyPre sevm.currentTarget).set
-              implementationSlotLit
-              (addressSlotUpdateRaw bodyPre sevm.currentTarget
-                implementationSlotLit implementation)).get
-                  adminSlotLit)
-            requestedAdmin.toAdr] ∧
-      post.output = runtimeBytes := by
-  have lengthZero : Nat.toB256 setupData.length = (0 : B256) := by
-    rw [setupDataEmpty]
-    decide
-  have requestedCanonical :
-      requestedAdmin.toAdr.toB256 = requestedAdmin :=
-    toB256_toAdr (validAdr_iff.mpr success.requestedAdminClean)
-  have requestedImage :
-      Bytes.toB256
-        ((ossifiableConstructorDecodedImage image sevm.code.toList
-          argsOffset).sliceD 32 32 0) =
-        requestedAdmin.toAdr.toB256 :=
-    success.requestedAdminImage.trans requestedCanonical.symm
-  exact success.prepared.empty_afterSetup_success lengthZero requestedImage
-    hruntime hruntimeLength hruntimeNonempty hoffsetBound hlengthBound
-
 /-! ## Settled child outcome -/
 
 /-- Exact source outcomes after the constructor's setup child returns.  The
@@ -630,118 +553,6 @@ inductive OssifiableConstructorDelegateOutcome
         (∃ d, out = .error (.halt (.outOfGas .none), d)) ∨
           (∃ post, out = .error (.revert, post) ∧
             post.output = child.output))
-
-/-- Classify the actual constructor setup tail from a retained settled child.
-The output-length bound is the exact round-trip premise used by the nonempty
-`RETURNDATACOPY`/`REVERT` bubble. -/
-theorem ossifiableConstructorDelegateTail_outcome
-    {fs : List Func} {sevm : Sevm} {callPre callPost child : Devm}
-    {image : Bytes} {out : Execution}
-    (hEmpty : fs[3]? = some (Func.revertData emptyDelegatecallErrorData))
-    (spawn : DelegatecallSpawnDescriptor sevm callPre)
-    (settled : DelegatecallSettledBoundary spawn child callPost)
-    (outputLength : child.output.length < 2 ^ 256)
-    (memoryWf : Mem.Wf callPost.memory)
-    (memoryReads : Mem.Reads callPost.memory image)
-    (run : Func.RunCompiledTo fs sevm callPost
-      ossifiableConstructorDelegateTail out) :
-    OssifiableConstructorDelegateOutcome (callPost := callPost)
-      fs spawn child image out := by
-  rcases settled with
-    ⟨certificate, resume, returnData, stack, callState, callTransient,
-      callLogs⟩
-  obtain ⟨childCertificate⟩ := certificate
-  unfold ossifiableConstructorDelegateTail at run
-  cases status : child.error.isSome with
-  | false =>
-      have pOne : (1 : B256) :: spawn.parent.stack <<+ callPost.stack :=
-        ⟨[], by simpa [Split, status] using stack⟩
-      obtain ⟨afterPre, _, _, branchPop, afterRun, pAfter⟩ :=
-        Func.RunCompiledTo.succ_branch_of_prefix
-          (by decide : (1 : B256) ≠ 0) pOne run
-      exact .success afterPre ⟨childCertificate⟩ status returnData afterRun
-        pAfter (by rw [← branchPop.memory]; exact memoryWf)
-        (by rw [← branchPop.memory]; exact memoryReads)
-        (branchPop.state.symm.trans callState)
-        (branchPop.transientStorage.symm.trans callTransient)
-        (branchPop.logs.symm.trans (by simpa [status] using callLogs))
-  | true =>
-      have pZero : (0 : B256) :: spawn.parent.stack <<+ callPost.stack :=
-        ⟨[], by simpa [Split, status] using stack⟩
-      obtain ⟨failedPre, failedPop, failedRun, _⟩ :=
-        Func.RunCompiledTo.zero_branch_of_prefix pZero run
-      obtain ⟨sizePost, sizeRun, payloadBranch⟩ :=
-        runCompiledTo_next_inv failedRun
-      have sizePush := of_run_returndatasize_val
-        (Ninst.Run.of_runCompiled sizeRun)
-      have failedReturnData : failedPre.returnData = child.output :=
-        failedPop.returnData.symm.trans returnData
-      have childRollback := childCertificate.rollback_of_error status
-      have rolledState : callPost.state = spawn.parent.state :=
-        callState.trans (childRollback.1.trans rfl)
-      have rolledTransient :
-          callPost.transientStorage = spawn.parent.transientStorage :=
-        callTransient.trans (childRollback.2.trans rfl)
-      have rolledLogs : callPost.logs = spawn.parent.logs := by
-        simpa [status] using callLogs
-      by_cases outputEmpty : child.output = []
-      · have pLengthZero : (0 : B256) :: failedPre.stack <<+
-            sizePost.stack :=
-          ⟨[], by
-            simpa [Split, Stack.Push, failedReturnData, outputEmpty,
-              show Nat.toB256 0 = (0 : B256) by decide]
-              using sizePush.stack⟩
-        obtain ⟨errorPre, errorPop, errorRun, _⟩ :=
-          Func.RunCompiledTo.zero_branch_of_prefix pLengthZero payloadBranch
-        have errorMemory : errorPre.memory = callPost.memory :=
-          errorPop.memory.symm.trans
-            (sizePush.memory.symm.trans failedPop.memory.symm)
-        have errorState : errorPre.state = callPost.state :=
-          errorPop.state.symm.trans
-            (sizePush.state.symm.trans failedPop.state.symm)
-        have errorWf : Mem.Wf errorPre.memory := by
-          rw [errorMemory]
-          exact memoryWf
-        have errorReads : Mem.Reads errorPre.memory image := by
-          rw [errorMemory]
-          exact memoryReads
-        exact .emptyFailure errorPre ⟨childCertificate⟩ status outputEmpty
-          returnData rolledState rolledTransient rolledLogs errorState
-          (by
-            simpa only [ControlErrorOutcome] using
-              runCompiledTo_call_revertData_frame_inv hEmpty errorWf errorReads
-                (by decide +kernel) (by decide +kernel) errorRun)
-      · have lengthWordNonzero :
-            Nat.toB256 child.output.length ≠ 0 := by
-          intro hzero
-          have hnat := congrArg B256.toNat hzero
-          rw [B256.toNat_toB256_of_lt outputLength,
-            B256.toNat_zero] at hnat
-          exact outputEmpty (List.length_eq_zero_iff.mp hnat)
-        have pLength : Nat.toB256 child.output.length :: failedPre.stack <<+
-            sizePost.stack :=
-          ⟨[], by
-            simpa [Split, Stack.Push, failedReturnData] using sizePush.stack⟩
-        obtain ⟨bubblePre, _, _, bubblePop, bubbleRun, _⟩ :=
-          Func.RunCompiledTo.succ_branch_of_prefix
-            lengthWordNonzero pLength payloadBranch
-        have bubbleReturnData : bubblePre.returnData = child.output :=
-          bubblePop.returnData.symm.trans
-            (sizePush.returnData.symm.trans failedReturnData)
-        have bubbleState : bubblePre.state = callPost.state :=
-          bubblePop.state.symm.trans
-            (sizePush.state.symm.trans failedPop.state.symm)
-        rcases Func.runCompiledTo_revertReturnData_inv bubbleRun with
-          outOfGas | ⟨post, postOutcome, postOutput⟩
-        · exact .bubbledFailure bubblePre ⟨childCertificate⟩ status
-            outputEmpty returnData rolledState rolledTransient rolledLogs
-            bubbleState (Or.inl outOfGas)
-        · have exactOutput : post.output = child.output := by
-            rw [postOutput, bubbleReturnData,
-              B256.toNat_toB256_of_lt outputLength, List.take_length]
-          exact .bubbledFailure bubblePre ⟨childCertificate⟩ status
-            outputEmpty returnData rolledState rolledTransient rolledLogs
-            bubbleState (Or.inr ⟨post, postOutcome, exactOutput⟩)
 
 /-! ## Successful child into the post-setup constructor phase -/
 

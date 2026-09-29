@@ -31,13 +31,6 @@ def Func.CompiledInv {ξ : Type}
 
 namespace Func.CompiledInv
 
-theorem of_run {ξ : Type} {fs : List Func} {entry exit : Devm → ξ}
-    {body : Func} {sevm : Sevm} {pre post : Devm}
-    (invariant : Func.CompiledInv fs entry exit body)
-    (run : Func.RunCompiledTo fs sevm pre body (.ok post)) :
-    entry pre = exit post :=
-  invariant run
-
 theorem last {ξ : Type} {fs : List Func} {entry exit : Devm → ξ}
     {terminal : Linst}
     (invariant : Linst.Inv entry exit terminal) :

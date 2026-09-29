@@ -78,15 +78,6 @@ def rebasedTriggerRoleFailureSlot : Nat :=
 def rebasedTriggerAfterValidationSlot : Nat :=
   integratedTriggerSlot Trigger.afterValidationSlot
 
-theorem rebasedTriggerResumedExpectedSlot_eq :
-    rebasedTriggerResumedExpectedSlot = resumedExpectedSlot := rfl
-
-theorem rebasedTriggerRoleFailureSlot_eq :
-    rebasedTriggerRoleFailureSlot = missingRoleSlot := rfl
-
-theorem rebasedTriggerAfterValidationSlot_eq :
-    rebasedTriggerAfterValidationSlot = 27 := rfl
-
 theorem runtime_rebasedTriggerResumedExpected_get (dp : DeployParams) :
     ((runtime dp).main :: (runtime dp).aux)[rebasedTriggerResumedExpectedSlot]?
       = some (runtimeError "ResumedExpected") := by
@@ -269,10 +260,6 @@ theorem triggerEmptyAuthorization_arrayLength
   · rw [hdata, triggerEmptyAuthorizationCalldata]
     simp [List.append_assoc]
     rfl
-
-theorem triggerEmptyAuthorization_refundRecipient_valid
-    (refundRecipient : Adr) : ValidAdr refundRecipient.toB256 :=
-  ⟨refundRecipient, rfl⟩
 
 /-! These two helpers expose only the concrete effects of the trigger's fixed
 scratch-word accessors.  The read value remains a caller-supplied equality

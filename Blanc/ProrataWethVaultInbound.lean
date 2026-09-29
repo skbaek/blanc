@@ -1444,15 +1444,6 @@ theorem mint_shape :
                   mulDiv (loadWord amountWord) stagedAssetFactor
                     stagedDenominator .up mintAfterQuoteSlot))) := rfl
 
-/-- The three operation words each inbound flow settles with satisfy the
-offset premises of `inboundTail_effect`. -/
-theorem inboundSettlementWords_bounds :
-    arithmeticScratchEnd ≤ (quoteWord * 32).toNat ∧
-      (quoteWord * 32).toNat + 32 ≤ (balanceWord * 32).toNat ∧
-      arithmeticScratchEnd ≤ (amountWord * 32).toNat ∧
-      (amountWord * 32).toNat + 32 ≤ (balanceWord * 32).toNat := by
-  refine ⟨?_, ?_, ?_, ?_⟩ <;> decide +kernel
-
 end ProrataWethVault
 
 end Blanc

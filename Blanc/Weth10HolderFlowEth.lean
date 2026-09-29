@@ -89,14 +89,6 @@ def flowActionBodyEthActions : Option FlowAction → List FlowAction
   | none => []
   | some action => action.bodyEthActions
 
-theorem flowActionEntryEthActions_append_bodyEthActions
-    (action : Option FlowAction) :
-    flowActionEntryEthActions action ++ flowActionBodyEthActions action =
-      action.toList := by
-  cases action with
-  | none => rfl
-  | some action => exact action.entryEthActions_append_bodyEthActions
-
 theorem flowActionsEthRedemption_entryEthActions_eq_zero
     (action : Option FlowAction) :
     flowActionsEthRedemption (flowActionEntryEthActions action) = 0 := by
@@ -344,49 +336,7 @@ inductive EthChain (ca : Adr) :
       (rest : EthChain ca tail middle last) :
       EthChain ca (head ++ tail) first last
 
-theorem EthChain.bound
-    {ca : Adr} {actions : List FlowAction} {pre post : State}
-    (chain : EthChain ca actions pre post) :
-    EthBound ca pre post actions := by
-  induction chain with
-  | nil state => exact EthBound.refl ca state
-  | cons step rest ih => exact step.bound.trans ih
-
 /-! ## Message-entry constructors -/
-
-theorem EthStep.of_benvAfterTransfer_unrelated
-    {ca : Adr} {msg : Msg} {post : Benv}
-    (htransfer : msg.shouldTransferValue = true)
-    (hcaller : msg.caller ≠ ca) (htarget : msg.currentTarget ≠ ca)
-    (hrun : msg.benvAfterTransfer = .ok post) :
-    EthStep ca msg.benv.state [] post.state := by
-  rcases of_benvAfterTransfer htransfer hrun with ⟨debit, hsub, rfl⟩
-  exact .unrelatedTransfer hcaller htarget hsub rfl
-
-theorem EthStep.of_benvAfterTransfer_unclassifiedInward
-    {ca : Adr} {msg : Msg} {post : Benv}
-    (htransfer : msg.shouldTransferValue = true)
-    (hcaller : msg.caller ≠ ca) (htarget : msg.currentTarget = ca)
-    (hsum : sum msg.benv.state.bal < 2 ^ 256)
-    (hrun : msg.benvAfterTransfer = .ok post) :
-    EthStep ca msg.benv.state [] post.state := by
-  rcases of_benvAfterTransfer htransfer hrun with ⟨debit, hsub, rfl⟩
-  subst ca
-  exact .unclassifiedInward hcaller hsub rfl hsum
-
-theorem EthStep.of_benvAfterTransfer_ordinaryMint
-    {ca : Adr} {msg : Msg} {post : Benv} {action : FlowAction}
-    {rawRecipient : B256} {recipient : Adr}
-    (htransfer : msg.shouldTransferValue = true)
-    (hcaller : msg.caller ≠ ca) (htarget : msg.currentTarget = ca)
-    (hsum : sum msg.benv.state.bal < 2 ^ 256)
-    (hatom : action.atom =
-      .ordinaryMint rawRecipient recipient msg.value.toNat)
-    (hrun : msg.benvAfterTransfer = .ok post) :
-    EthStep ca msg.benv.state [action] post.state := by
-  rcases of_benvAfterTransfer htransfer hrun with ⟨debit, hsub, rfl⟩
-  subst ca
-  exact .ordinaryMint hcaller hsub rfl hsum hatom
 
 theorem EthStep.of_benvAfterTransfer_redemption
     {ca : Adr} {msg : Msg} {post : Benv} {action : FlowAction}
@@ -400,34 +350,6 @@ theorem EthStep.of_benvAfterTransfer_redemption
   rcases of_benvAfterTransfer htransfer hrun with ⟨debit, hsub, rfl⟩
   subst ca
   exact .redemption htarget hsub rfl hatom
-
-theorem EthStep.of_benvAfterTransfer_selfRedemptionMint
-    {ca : Adr} {msg : Msg} {post : Benv}
-    {redemption mint : FlowAction}
-    {rawSource : B256} {source ethRecipient : Adr}
-    {rawRecipient : B256} {recipient : Adr}
-    (htransfer : msg.shouldTransferValue = true)
-    (hcaller : msg.caller = ca) (htarget : msg.currentTarget = ca)
-    (hredemption : redemption.atom =
-      .redemption rawSource source ethRecipient msg.value.toNat)
-    (hmint : mint.atom =
-      .ordinaryMint rawRecipient recipient msg.value.toNat)
-    (hrun : msg.benvAfterTransfer = .ok post) :
-    EthStep ca msg.benv.state [redemption, mint] post.state := by
-  rcases of_benvAfterTransfer htransfer hrun with ⟨debit, hsub, rfl⟩
-  subst ca
-  exact .selfRedemptionMint hsub (by rw [htarget]; rfl)
-    hredemption hmint
-
-theorem EthStep.of_benvAfterTransfer_noTransfer
-    {ca : Adr} {msg : Msg} {post : Benv}
-    (htransfer : msg.shouldTransferValue = false)
-    (hrun : msg.benvAfterTransfer = .ok post) :
-    EthStep ca msg.benv.state [] post.state := by
-  unfold Msg.benvAfterTransfer at hrun
-  rw [htransfer] at hrun
-  cases hrun
-  exact .silent rfl
 
 /-- Contract-neutral entry accounting for the root action of an interpreted
 frame.  A selected ordinary mint is bounded by the frame's actual call value;
@@ -1192,12 +1114,6 @@ theorem ne_ca_of_messageCreateCollision_false
   ContractSpec.StateInv.ne_of_messageCreateCollision_false
     ready.backed.state hcollision
 
-theorem processCreateMessage.chargeCodeGas_bal_eq
-    {rules : ForkRules} {pre post : Devm}
-    (h : processCreateMessage.chargeCodeGas rules pre = .ok post) :
-    post.state.bal = pre.state.bal :=
-  _root_.Jaune.processCreateMessage.chargeCodeGas_bal_eq h
-
 theorem ProcessCreateMessage.ok_state_eq_inner_of_no_error
     {msg : Msg} {slot : Xlot} {post : Devm}
     (hprocess : ProcessCreateMessage msg slot (.ok post))
@@ -1207,20 +1123,6 @@ theorem ProcessCreateMessage.ok_state_eq_inner_of_no_error
       post.state.bal = inner.state.bal :=
   _root_.Jaune.ProcessCreateMessage.ok_state_eq_inner_of_no_error
     hprocess herror
-
-/-- CREATE settlement around a no-interpreter-slot constructor is also ETH
-sound under the explicit foreign-caller entry conditions.  Code-deposit
-failure and errored constructor settlement roll back; successful code deposit
-does not alter balances. -/
-theorem ProcessCreateMessage.ethBound_of_none_conditions
-    {ca : Adr} {msg : Msg} {post : Devm}
-    (hprocess : ProcessCreateMessage msg .none (.ok post))
-    (hcaller : msg.shouldTransferValue = true → msg.caller ≠ ca)
-    (hsum : sum msg.benv.state.bal < 2 ^ 256) :
-    EthBound ca msg.benv.state post.state [] := by
-  simpa [EthBound, flowActionsEthMint, flowActionsEthRedemption] using
-    (_root_.Blanc.ProcessCreateMessage.targetBalanceMono_of_none
-      hprocess hcaller hsum)
 
 /-- Create settlement contributes retained raw actions only when code-deposit
 settlement also commits.  The error arm proves the outer rollback exactly. -/
@@ -1528,19 +1430,6 @@ theorem TransactionTrace.messageReady
     ExecutionTrace.TransactionTrace.msgInv (c := flashExactSpec dp 0) trace
       ⟨hstable.code, trivial, hstable.flashZero⟩ hnotCreated⟩
 
-theorem TransactionTrace.message_stable_and_safe
-    {dp : DeployParams} {ca : Adr}
-    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    {state : State} {bout' : BlockOutput}
-    (trace : TransactionTrace benv bout tx index state bout')
-    (hstable : Stable dp ca benv.state)
-    (hnotCreated : ca ∉ benv.createdAccounts) :
-    Stable dp ca trace.msg.benv.state ∧
-      ca ∉ trace.msg.benv.createdAccounts ∧
-      (trace.msg.shouldTransferValue = true → trace.msg.caller ≠ ca) := by
-  have ready := TransactionTrace.messageReady trace hstable hnotCreated
-  exact ⟨ready.stable, ready.backed.nodel.ca, ready.backed.ne⟩
-
 /-- The actual transaction wrapper contributes only its exact message
 actions.  Its up-front debit is from a non-contract sender; refund, fee-tip,
 and deletion settlement are handled by `postMessage_ethBound`. -/
@@ -1710,22 +1599,6 @@ theorem RequestsTrace.ethBound
   have hboth := hwithdrawal.trans hconsolidation
   simpa [RequestsTrace.flowActions, Benv.withState,
     ExecutionTrace.RequestsTrace.state_eq_consolidationState trace] using hboth
-
-theorem RequestsTrace.stable_and_sum_le
-    {dp : DeployParams} {ca : Adr}
-    {benv : Benv} {bout : BlockOutput}
-    {state : State} {bout' : BlockOutput}
-    (trace : RequestsTrace benv bout state bout')
-    (hstable : Stable dp ca benv.state)
-    (hnotCreated : ca ∉ benv.createdAccounts)
-    (hfork : CoveredFork benv.stat.fork) :
-    Stable dp ca state ∧ sum state.bal ≤ sum benv.state.bal := by
-  have hbacked := trace.stateInv_and_sum_le (backedSpec_preserves dp ca)
-    ⟨⟨hstable.code, hstable.sumNof, hstable.backed⟩, hnotCreated⟩ hfork
-  have hflash := trace.stateInv_and_sum_le (flashExactSpec_preserves dp ca 0)
-    ⟨⟨hstable.code, trivial, hstable.flashZero⟩, hnotCreated⟩ hfork
-  exact ⟨⟨hbacked.1.code, hbacked.1.side, hbacked.1.inv,
-    hflash.1.inv⟩, hbacked.2⟩
 
 /-! ## Block-body and history lifts -/
 

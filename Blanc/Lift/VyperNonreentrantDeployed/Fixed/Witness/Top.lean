@@ -33,7 +33,6 @@ theorem e0_target : e0.sta.currentTarget = poolAddress :=
   (Prod.mk.inj (Prod.mk.inj e0_facts).2).1
 theorem hcodeF : e0.sta.code = code := (Prod.mk.inj (Prod.mk.inj (Prod.mk.inj e0_facts).2).2).1
 theorem e0_fork : e0.sta.benvStat.fork = .prague := (Prod.mk.inj (Prod.mk.inj (Prod.mk.inj e0_facts).2).2).2
-theorem eT_pc : eT.pc = 0 := (Prod.mk.inj eT_facts).1
 theorem eT_target : eT.sta.currentTarget = readerAddress := (Prod.mk.inj (Prod.mk.inj eT_facts).2).1
 theorem hcodeT : eT.sta.code = Reader.code := (Prod.mk.inj (Prod.mk.inj eT_facts).2).2
 theorem eG_pc : eG.pc = 0 := (Prod.mk.inj eG_facts).1
@@ -244,20 +243,6 @@ theorem vplus_run_at {S : Sevm} (hS : ∃ g, CoveredFork g ∧ S = e0.sta.withFo
     have := (allG x hx).1
     simpa [okBody] using this
 
-/-- **The run, on every derivation** (Prague).  Whatever derivation `R` of the pool frame's
-machine is taken, it reverts, and it has the nodes the V+ antecedent names. -/
-theorem vplus_run {out : Execution} (R : Exec 0 e0.sta e0.dyna out) :
-    out = .error (.revert, dF) ∧
-    ∃ h c G : Exec.Deriv,
-      ActiveRel poolAddress ⟨0, e0.sta, e0.dyna, out, R⟩ h ∧ Spawns h c ∧
-      lockL.HashAvoidIn poolAddress R ∧
-      h.pc = 0x337a ∧ Ninst.At h.sevm.code h.pc (.exec .staticcall) ∧
-      c.sevm.currentTarget = readerAddress ∧ c.sevm.code = Reader.code ∧
-      G ∈ Exec.rawFrameRoots c.exc ∧ CPFrame poolAddress code G ∧
-      G.sevm.data = [0xbb, 0x7b, 0x8b, 0x80] ∧ G.exn = .error (.revert, dG) ∧
-      (∀ x, ParentPrefix G x → x.pc ∉ lockBodies) :=
-  vplus_run_at ⟨.prague, CoveredFork.prague, e0_withFork_prague.symm⟩ R
-
 
 /-- **V+ nonvacuity under every covered fork.**  `vplus_witness` with the block environment's
 fork changed to any covered fork `g` (Prague, Osaka, BPO1, BPO2): the top-level message
@@ -313,52 +298,5 @@ theorem vplus_witness_covered (g : Fork) (hg : CoveredFork g) :
     hG, cpG, hdG, exG, nb, ?_⟩
   exact vplus_exclusion_impl R hfork e0_getCode hroot hash (Exec.mem_rawFrameRoots_self R)
     act sp hG
-
-/-- **V+ nonvacuity (Prague semantics): a mutating guarded body of the deployed comparator,
-active, spawns a child; the child's read-only reentry into a guarded view is refused.**
-
-The top-level message `msg0` (`S` calls the pool `I = 0x847e…ed9` with
-`remove_liquidity(100, [0, 0], S)`, value 0, 1,000,000 gas, Prague) enters with the machine
-`e0` (`f0.enter = .run e0`, pc 0).  Every execution `R` of that machine has outcome
-`REVERT` (with machine `dF`), and there is one; for it:
-
-* the antecedent of `vplus_exclusion` holds for `F`, `R`'s root: `F ∈ Exec.rawFrameRoots R`,
-  `ActiveRel I F h` (the body start `0x1bae` of `remove_liquidity` was reached after the lock
-  was set, and no release pc lies between it and `h`), and `Spawns h c`, where `h` is the
-  `STATICCALL` at `0x337a` (`coins[1].balanceOf(self)` in `_balances`) and `c` is the frame
-  of the synthetic coin `R` (`Reader.code`);
-* the premises of `vplus_exclusion_impl` hold for `R`: covered fork, the comparator at `I`,
-  the root running `I`'s code, and `HashAvoidIn` (no frame of `I` in `R` executes
-  `KECCAK256`);
-* the reentry: `G ∈ Exec.rawFrameRoots c.exc` is a frame of `I` running the comparator
-  (`CPFrame`), called with `get_virtual_price()`; it reverts, no node of it is at a guarded
-  body start, and `vplus_exclusion_impl` itself concludes `¬ lockL.Enters I G`. -/
-theorem vplus_witness :
-    msg0.benv.stat.fork = .prague ∧ f0.enter = .run e0 ∧ e0.pc = 0 ∧
-    (∀ out, Exec 0 e0.sta e0.dyna out → out = .error (.revert, dF)) ∧
-    ∃ (out : Execution) (R : Exec 0 e0.sta e0.dyna out) (h c G : Exec.Deriv),
-      -- the antecedent of `vplus_exclusion`, for `F` the root of `R`
-      (⟨0, e0.sta, e0.dyna, out, R⟩ : Exec.Deriv) ∈ Exec.rawFrameRoots R ∧
-      ActiveRel curvePlainImpl847e ⟨0, e0.sta, e0.dyna, out, R⟩ h ∧ Spawns h c ∧
-      -- the premises of `vplus_exclusion_impl`, for this `R`
-      CoveredFork e0.sta.benvStat.fork ∧ e0.dyna.getCode curvePlainImpl847e = code ∧
-      (e0.sta.currentTarget = curvePlainImpl847e →
-        e0.sta.code = e0.dyna.getCode curvePlainImpl847e) ∧
-      lockL.HashAvoidIn curvePlainImpl847e R ∧
-      -- the spawn: `remove_liquidity`'s `STATICCALL` of the coin `R`
-      h.pc = 0x337a ∧ Ninst.At h.sevm.code h.pc (.exec .staticcall) ∧
-      c.sevm.currentTarget = readerAddress ∧ c.sevm.code = Reader.code ∧
-      -- the reentry into `get_virtual_price()`, refused
-      G ∈ Exec.rawFrameRoots c.exc ∧ CPFrame curvePlainImpl847e code G ∧
-      G.sevm.data = [0xbb, 0x7b, 0x8b, 0x80] ∧ G.exn = .error (.revert, dG) ∧
-      (∀ x, ParentPrefix G x → x.pc ∉ lockBodies) ∧
-      ¬ lockL.Enters curvePlainImpl847e G := by
-  have hE : e0.withFork .prague = e0 := by
-    show ({ e0 with sta := e0.sta.withFork .prague } : Evm) = e0
-    rw [e0_withFork_prague]
-  have hF : f0.withFork .prague = f0 := rfl
-  have hw := vplus_witness_covered .prague CoveredFork.prague
-  rw [hE, hF] at hw
-  exact ⟨rfl, hw.2⟩
 
 end Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness

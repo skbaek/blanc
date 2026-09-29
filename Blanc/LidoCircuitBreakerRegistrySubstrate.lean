@@ -2345,41 +2345,6 @@ theorem registerPauser_success_settles_cleanly
   rw [if_neg hnotError] at hsettle
   exact Except.ok.inj hsettle
 
-/-- Any settled error of an exact direct registration message restores the
-complete owner storage and transient storage from message entry. -/
-theorem registerPauser_settled_error_restores_owner
-    (dp : DeployParams) {msg : Msg} {slot : Xlot} {post : Devm}
-    {ca : Adr} {target newPauser : B256}
-    (_htarget : msg.target = some ca)
-    (_howner : msg.currentTarget = ca)
-    (_hcodeAddress : msg.codeAddress = some ca)
-    (_hcode : msg.code.toList = lidoCircuitBreakerCode dp)
-    (_hvalue : msg.value = 0)
-    (_hdata : msg.data = registerPauserCalldata target newPauser)
-    (hprocess : ProcessMessage msg slot (.ok post))
-    (herror : post.error.isSome) :
-    Devm.getStor post ca = msg.benv.state.getStor ca ∧
-      post.transientStorage = msg.tenv.transientStorage := by
-  have hrollback := ProcessMessage.rollback_of_error hprocess herror
-  exact ⟨congrArg (fun state : State => state.getStor ca) hrollback.1,
-    hrollback.2⟩
-
-/-- At the exact top-level call boundary, an errored direct registration
-message exposes no receipt log.  This does not claim raw `Devm.logs` erasure. -/
-theorem registerPauser_settled_error_logs_eq_nil
-    (dp : DeployParams) {msg : Msg} {state : State} {out : MsgCallOutput}
-    {ca : Adr} {target newPauser : B256}
-    (_htarget : msg.target = some ca)
-    (_howner : msg.currentTarget = ca)
-    (_hcodeAddress : msg.codeAddress = some ca)
-    (_hcode : msg.code.toList = lidoCircuitBreakerCode dp)
-    (_hvalue : msg.value = 0)
-    (_hdata : msg.data = registerPauserCalldata target newPauser)
-    (hrun : processMessageCall msg = .ok (state, out))
-    (herror : out.error.isSome) :
-    out.logs = [] :=
-  processMessageCall_error_logs_eq_nil hrun herror
-
 theorem pushZero_targetIndexKey_prepend_runCompiled
     {fs : List Func} {sevm : Sevm} {base : Devm} {M : Mem}
     {target : B256} {stack : List B256} {G : Nat}
@@ -2629,24 +2594,9 @@ peeling one named layer at a time by rewrite keeps every term small.  Use
 these instead of `exact`/`change` across a tower or a `simp only` that
 unfolds several `absentZero*Post` definitions at once. -/
 
-theorem entryWritePost_accessedStorageKeys
-    (sevm : Sevm) (base : Devm) (target next : B256) :
-    (entryWritePost sevm base target next).accessedStorageKeys =
-      base.accessedStorageKeys := rfl
-
-theorem indexWritePost_accessedStorageKeys
-    (sevm : Sevm) (base : Devm) (target next : B256) :
-    (indexWritePost sevm base target next).accessedStorageKeys =
-      base.accessedStorageKeys := rfl
-
 theorem entryClearPost_accessedStorageKeys
     (sevm : Sevm) (base : Devm) (target next : B256) :
     (entryClearPost sevm base target next).accessedStorageKeys =
-      base.accessedStorageKeys := rfl
-
-theorem lengthWritePost_accessedStorageKeys
-    (sevm : Sevm) (base : Devm) (oldLength : B256) :
-    (lengthWritePost sevm base oldLength).accessedStorageKeys =
       base.accessedStorageKeys := rfl
 
 theorem indexClearPost_accessedStorageKeys
@@ -3828,20 +3778,6 @@ def swapPopClearPost (sevm : Sevm) (base : Devm)
   temporalSstorePost sevm
     (indexWritePost sevm base lastTarget idx)
     (arrayEntrySlot len) 0
-
-theorem swapPopClearPost_eq_entryClearPost
-    (sevm : Sevm) (base : Devm) (target next : B256) :
-    swapPopClearPost sevm base target next next =
-      entryClearPost sevm base target next := rfl
-
-theorem swapPopClearPost_accessedStorageKeys
-    (sevm : Sevm) (base : Devm) (lastTarget idx len : B256) :
-    (swapPopClearPost sevm base lastTarget idx len).accessedStorageKeys =
-      base.accessedStorageKeys := rfl
-
-theorem swapPopClearPost_logs
-    (sevm : Sevm) (base : Devm) (lastTarget idx len : B256) :
-    (swapPopClearPost sevm base lastTarget idx len).logs = base.logs := rfl
 
 /-- The five stores of a general swap-pop, from the scratch words already
 holding the removed index, the array length and the moved target. -/
@@ -5064,66 +5000,6 @@ theorem removeTarget_swapPop_runCompiled
     htailOrig hindexOrig hlengthOrig hholeCost hmovedIndexCost htailClearCost
     hlengthRestoreCost hindexClearCost hwarmHole hwarmMoved hwarmTail
     hwarmIndex hwarmLength hsub hgasFinal hstatic _ hfinish
-
-/-- The three Registry cells mutated by append/remove are restored exactly to
-their append-entry values. -/
-private theorem appendTarget_absentZero_registry_cells_restored
-    (sevm : Sevm) (base : Devm) (target oldLength next : B256)
-    (htargetValid : canonicalAddress target)
-    (hnextNonzero : next ≠ 0)
-    (hnextBound : next.toNat < 2 ^ 252)
-    (harray : base.getStorVal sevm.currentTarget
-      (arrayEntrySlot next) = 0)
-    (hindex : base.getStorVal sevm.currentTarget
-      (indexSlot target) = 0)
-    (hlength : base.getStorVal sevm.currentTarget
-      arrayLengthSlot = oldLength) :
-    let lengthBase := temporalSloadBase sevm base arrayLengthSlot
-    let arrayPost := temporalSstorePost sevm lengthBase
-      (arrayEntrySlot next) target
-    let indexPost := temporalSstorePost sevm arrayPost
-      (indexSlot target) next
-    let lengthPost := temporalSstorePost sevm indexPost arrayLengthSlot next
-    let finalStorage := indexClearPost sevm
-      (entryClearPost sevm lengthPost target next)
-      target oldLength
-    finalStorage.getStorVal sevm.currentTarget (arrayEntrySlot next) =
-        base.getStorVal sevm.currentTarget (arrayEntrySlot next) ∧
-      finalStorage.getStorVal sevm.currentTarget (indexSlot target) =
-        base.getStorVal sevm.currentTarget (indexSlot target) ∧
-      finalStorage.getStorVal sevm.currentTarget arrayLengthSlot =
-        base.getStorVal sevm.currentTarget arrayLengthSlot := by
-  dsimp only
-  let arrayKey := arrayEntrySlot next
-  let indexKey := indexSlot target
-  have harrayFamilies := registryAddressFamilies_ne_arrayEntrySlot
-    htargetValid htargetValid hnextBound
-  have hlengthFamilies := registryAddressFamilies_ne_arrayLengthSlot
-    htargetValid htargetValid
-  have hlengthArray :=
-    arrayLengthSlot_ne_arrayEntrySlot_of_pos_lt hnextNonzero hnextBound
-  have pairNe {left right : B256} (h : left ≠ right) :
-      (sevm.currentTarget, left) ≠ (sevm.currentTarget, right) := by
-    intro hp
-    exact h (congrArg Prod.snd hp)
-  constructor
-  · simp only [indexClearPost, lengthWritePost,
-      entryClearPost, indexWritePost, entryWritePost]
-    rw [temporalSstorePost_other _ _ indexKey 0 _ arrayKey
-        (pairNe (Ne.symm harrayFamilies.2.1)),
-      temporalSstorePost_other _ _ arrayLengthSlot oldLength _ arrayKey
-        (pairNe (Ne.symm hlengthArray)),
-      temporalSstorePost_self]
-    exact harray.symm
-  constructor
-  · simp only [indexClearPost]
-    rw [temporalSstorePost_self]
-    exact hindex.symm
-  · simp only [indexClearPost, lengthWritePost]
-    rw [temporalSstorePost_other _ _ indexKey 0 _ arrayLengthSlot
-        (pairNe (Ne.symm hlengthFamilies.2.1)),
-      temporalSstorePost_self]
-    exact hlength.symm
 
 /-- The four scratch writes `registerPauser`'s body performs before entering
 the kernel: the two decoded arguments and the two zero words.

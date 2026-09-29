@@ -295,10 +295,4 @@ theorem cp0_spec :
       cp0.f.inner.benv.stat.rules.stateGas = none ∧ cp0.f.inner.benv.state = callCfg.devm.state :=
   callPrep_spec cp0_eq callCfg_agree.2.1 callCfg_agree.2.2.2
 
-/-- **The spawn is the intended call**: `A'`'s `CALL` spawns a message to `P` with
-`remove_liquidity(200, [0, 0], A')` calldata, value 0. -/
-theorem cp0_facts : (cp0.f.inner.currentTarget, cp0.f.inner.target, cp0.f.inner.data,
-    cp0.f.inner.value, cp0.f.inner.isStatic, cp0.f.isCreate) =
-    (proxyAddress, some proxyAddress, removeCalldata2, 0, false, false) := by kernel_rfl
-
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxTop

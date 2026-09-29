@@ -194,9 +194,6 @@ theorem wethSpec_pre_eq : wethSpec.Pre = Precond := by
 theorem wethSpec_post_eq : wethSpec.Post = Postcond := by
   funext ca sevm devm; exact propext wethSpec_post_iff
 
-theorem wethSpec_stateInv_eq : wethSpec.StateInv = State.Inv := by
-  funext ca w; exact propext wethSpec_stateInv_iff
-
 /-! ### WETH instances of the hoisted frame-level ladder
 
 Each is the corresponding `ContractSpec` lemma at `wethSpec`, transported by the
@@ -1519,11 +1516,6 @@ theorem wethSpec_soundNoMem (wa : Adr) : wethSpec.SoundNoMem wa := by
     · exact wethSpec_funcSound_nonpayable (wethSpec_funcSound allowance allowance_preserves_solvent)
   · exact wethSpec_funcSound deposit deposit_preserves_solvent
 
-/-- The memory-carrying obligation, for any consumer that wants it: dropping a
-premise WETH never used. -/
-theorem wethSpec_sound (wa : Adr) : wethSpec.Sound wa :=
-  ContractSpec.SoundNoMem.sound (wethSpec_soundNoMem wa)
-
 /-- WETH's frame-level result, with no memory premise. -/
 theorem wethSpec_preservesNoMem (wa : Adr) : wethSpec.PreservesNoMem wa :=
   wethSpec.preserves_noMem wa (wethSpec_soundNoMem wa)
@@ -1545,15 +1537,6 @@ theorem weth_preserves_solvent (wa : Adr) :
 -- Counterpart of `weth_preserves_solvent` for the total executable `exec`.  With
 -- sufficiency proved in Jaune there is no fuel to quantify away: the
 -- hypothesis is a plain equation about the interpreter.
-theorem exec_preserves_solvent (wa : Adr)
-    (sevm : Sevm) (pre post : Devm)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (h_run : exec ⟨0, sevm, pre⟩ = .ok post)
-    (h_code : sevm.currentTarget = wa → some sevm.code.toList = Prog.compile weth)
-    (h_pc : Precond wa sevm pre) : Postcond wa sevm post := by
-  exact wethSpec_post_iff.mp
-    (wethSpec.exec_preserves_noMem wa (wethSpec_preservesNoMem wa) sevm pre post hfork h_run h_code
-      (wethSpec_pre_iff.mpr h_pc))
 
 /-! ### Bridge to the frame-level invariant
 
@@ -1565,18 +1548,6 @@ block-level rungs above it).  Each of those rungs consumes the frame-level
 result as a `c.Preserves ca` hypothesis; for WETH that hypothesis is
 `wethSpec_preserves`, and the instances below are what feed it in. -/
 
-/-- The block-level state transition at WETH, for an explicitly covered fork.
-The generic parent receives `CoveredFork f`; the configured-chain theorems
-below retain that coverage condition for every fork selected by their schedule. -/
-theorem stateTransitionAt_preserves_solvent (wa : Adr) (f : Fork)
-    (ch ch' : BlockChain) (block : Block)
-    (h_run : stateTransitionAt f ch block = .ok ch')
-    (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (h_inv : State.Inv wa ch.state)
-    (hfork : CoveredFork f) : State.Inv wa ch'.state :=
-  wethSpec_stateInv_iff.mp
-    (ContractSpec.stateTransitionAt_preserves_inv wa (wethSpec_preserves wa)
-      f ch ch' block h_run h_wds (wethSpec_stateInv_iff.mpr h_inv) hfork)
 -- The explicit-fork theorem keeps its `CoveredFork` witness in the statement.
 
 -- On a configured chain the block's timestamp selects the fork. The caller
@@ -1621,16 +1592,6 @@ theorem chain_preserves_solvent (wa : Adr) (ch ch' : BlockChain)
 
 -- Preservation through RLP decoding and block hash checks at an explicitly
 -- covered fork.
-theorem addBlockToChainAt_preserves_solvent (wa : Adr) (f : Fork)
-    (ch ch' : BlockChain) (rlp : Bytes)
-    (h_run : addBlockToChainAt f ch rlp = .ok (.inl ch'))
-    (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
-      sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (h_inv : State.Inv wa ch.state)
-    (hfork : CoveredFork f) : State.Inv wa ch'.state :=
-  wethSpec_stateInv_iff.mp
-    (ContractSpec.addBlockToChainAt_preserves_inv wa (wethSpec_preserves wa)
-      f ch ch' rlp h_run h_wds (wethSpec_stateInv_iff.mpr h_inv) hfork)
 
 -- Block import at an explicitly covered named fork.
 

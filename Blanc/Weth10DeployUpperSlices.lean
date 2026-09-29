@@ -1768,27 +1768,6 @@ theorem weth10DispatchByteAt_eq_zero_556_679
       apply dispatch24_21_3ByteAt_eq_zero_0_113
       omega
 
-theorem weth10DispatchByteAt_chainWord_691
-    (locations : List Nat) (n : Nat) (dp : DeployParams)
-    (j : Nat) (hj : j < 32) :
-    Func.byteAtByShape locations n
-        (dispatchWith fallbackSlot
-          (weth10Tree (⟨0, 0⟩ : DeployParams))).compileShape
-        (dispatchWith fallbackSlot (weth10Tree dp)) (679 + j) 0 =
-      dp.deploymentChainId.toBytes.getD j 0 := by
-  have hdispatch24Size :
-      (dispatch24_21_3
-        (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 391 :=
-        dispatch24_21_3_size
-  rw [weth10DispatchByteAt_to_dispatch24_21_3
-      locations n dp (679 + j) 0 (by omega) (by
-        rw [hdispatch24Size]
-        omega)]
-  have hi : 679 + j - 566 = 113 + j := by omega
-  rw [hi]
-  exact dispatch24_21_3ByteAt_chainWord
-    locations (n + 566) dp j hj
-
 end Weth10
 
 end Blanc

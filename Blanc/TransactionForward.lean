@@ -487,11 +487,6 @@ theorem calldataTokens_foldl (l : Bytes) (n : Nat) :
     simp only [List.foldl_cons, ih (n + _), ih (0 + _)]
     omega
 
-theorem calldataTokens_append (a b : Bytes) :
-    calldataTokens (a ++ b) = calldataTokens a + calldataTokens b := by
-  unfold calldataTokens
-  rw [List.foldl_append, calldataTokens_foldl b, calldataTokens]
-
 theorem calldataTokens_le (data : Bytes) : calldataTokens data ≤ 4 * data.length := by
   induction data with
   | nil => simp [calldataTokens]
@@ -612,12 +607,6 @@ theorem deploymentEffectiveGasPrice_two {benv : Benv} {tx : Tx} {chainId : UInt6
       min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas := by
   unfold deploymentEffectiveGasPrice
   rw [htype]
-
-theorem deploymentUsedGasFromMessage_eq_txGasUsed (benv : Benv) (tx : Tx) (sender : Adr)
-    (out : MsgCallOutput) :
-    deploymentUsedGasFromMessage benv tx sender out =
-      txGasUsed tx.gas (deploymentCalldataFloorGas benv tx sender) out.gasLeft
-        out.refundCounter.toNat := rfl
 
 /-- The state a settled type-2 transaction leaves, as `deploymentFinalState` (the sender's refund and
 the coinbase's priority fee credited to the message's world). -/

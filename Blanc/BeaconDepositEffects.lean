@@ -25,28 +25,6 @@ def supportsInterfaceWord (word : B256) : Bool :=
 def supportsInterfaceArg (sevm : Sevm) : Bool :=
   supportsInterfaceWord (Sevm.argWord sevm 0 >>> 224)
 
-@[simp] theorem supportsInterfaceWord_eq_true_iff (word : B256) :
-    supportsInterfaceWord word = true ↔
-      word = erc165InterfaceId ∨ word = depositInterfaceId := by
-  simp [supportsInterfaceWord]
-
-@[simp] theorem supportsInterfaceWord_eq_false_iff (word : B256) :
-    supportsInterfaceWord word = false ↔
-      word ≠ erc165InterfaceId ∧ word ≠ depositInterfaceId := by
-  simp [supportsInterfaceWord]
-
-@[simp] theorem supportsInterfaceArg_eq_true_iff (sevm : Sevm) :
-    supportsInterfaceArg sevm = true ↔
-      Sevm.argWord sevm 0 >>> 224 = erc165InterfaceId ∨
-        Sevm.argWord sevm 0 >>> 224 = depositInterfaceId := by
-  simp [supportsInterfaceArg]
-
-@[simp] theorem supportsInterfaceArg_eq_false_iff (sevm : Sevm) :
-    supportsInterfaceArg sevm = false ↔
-      Sevm.argWord sevm 0 >>> 224 ≠ erc165InterfaceId ∧
-        Sevm.argWord sevm 0 >>> 224 ≠ depositInterfaceId := by
-  simp [supportsInterfaceArg]
-
 @[simp] theorem supportsInterfaceWord_erc165 :
     supportsInterfaceWord erc165InterfaceId = true := by
   simp
@@ -54,12 +32,6 @@ def supportsInterfaceArg (sevm : Sevm) : Bool :=
 @[simp] theorem supportsInterfaceWord_deposit :
     supportsInterfaceWord depositInterfaceId = true := by
   simp
-
-theorem supportsInterfaceWord_other {word : B256}
-    (herc165 : word ≠ erc165InterfaceId)
-    (hdeposit : word ≠ depositInterfaceId) :
-    supportsInterfaceWord word = false := by
-  simp [herc165, hdeposit]
 
 @[simp] theorem supportsInterfaceWord_ffffffff :
     supportsInterfaceWord (0xffffffff : B256) = false := by
@@ -1168,41 +1140,6 @@ theorem supportsInterface_runCompiled_noRawSstore
 
 def supportsInterfaceNonzeroValueRuntimeGas : Nat := 91
 
-/-- A value-carrying interface query is rejected before the endpoint can
-inspect calldata beyond selector dispatch. -/
-theorem supportsInterface_nonzero_value_runCompiledTo
-    (sevm : Sevm) (base : Devm) (G : Nat)
-    (hnonempty : sevm.data.length.toB256 ≠ 0)
-    (hvalue : sevm.value ≠ 0)
-    (hselector : Sevm.selector sevm = supportsInterfaceSelector)
-    (hcode : sevm.code.toList = code) :
-    Prog.RunCompiledTo sevm
-      (base.setMach
-        ⟨[], Mem.empty, G + supportsInterfaceNonzeroValueRuntimeGas, base.stateGas⟩)
-      runtime
-      (.error (.revert,
-        (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) ∧
-    some sevm.code.toList = Prog.compile runtime := by
-  let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft, base.stateGas⟩
-  have hbody := nonpayableEndpoint_nonzero_runCompiledTo
-    (fs := runtime.main :: runtime.aux) (sevm := sevm)
-    (base := routeBase) (G := G)
-    (body := supportsInterfaceEndpoint) hvalue
-    (by simp only [routeBase, Devm.stack_setMach, List.length_nil]; omega)
-  have hroute := supportsInterfaceRoute_runCompiledTo
-    (base := base) (K := G + nonpayableEndpointRevertGas)
-    hnonempty hselector (by
-      simpa only [routeBase, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
-        Devm.memory_setMach] using hbody)
-  constructor
-  · have hboundary :
-        G + nonpayableEndpointRevertGas + supportsInterfaceRouteGas =
-          G + supportsInterfaceNonzeroValueRuntimeGas := by
-      simp only [nonpayableEndpointRevertGas, supportsInterfaceRouteGas,
-        supportsInterfaceNonzeroValueRuntimeGas]
-    simpa only [hboundary] using hroute
-  · rw [hcode, code_compile]
-
 /-- The selected nonpayable-revert route has no raw SSTORE and retains no
 storage effect. -/
 theorem supportsInterface_nonzero_value_runCompiledTo_noRawSstore
@@ -1421,73 +1358,6 @@ theorem supportsInterface_erc165_runCompiled
       post.logs = base.logs ∧
       some sevm.code.toList = Prog.compile runtime := by
   apply supportsInterfaceAnswer_runCompiled sevm base G true
-    hdataLength hdataBound hvalue hselector hcode
-  simp [supportsInterfaceArg, harg]
-
-theorem supportsInterface_deposit_runCompiled
-    (sevm : Sevm) (base : Devm) (G : Nat)
-    (hdataLength : 36 ≤ sevm.data.length)
-    (hdataBound : sevm.data.length < 2 ^ 256)
-    (hvalue : sevm.value = 0)
-    (hselector : Sevm.selector sevm = supportsInterfaceSelector)
-    (harg : Sevm.argWord sevm 0 >>> 224 = depositInterfaceId)
-    (hcode : sevm.code.toList = code) :
-    ∃ post,
-      Prog.RunCompiled sevm
-        (base.setMach
-          ⟨[], Mem.empty, G + supportsInterfaceRuntimeGas, base.stateGas⟩)
-        runtime post ∧
-      post.gasLeft = G ∧
-      Devm.output post = abiBoolReturn true ∧
-      Devm.WorldEq base post ∧
-      post.logs = base.logs ∧
-      some sevm.code.toList = Prog.compile runtime := by
-  apply supportsInterfaceAnswer_runCompiled sevm base G true
-    hdataLength hdataBound hvalue hselector hcode
-  simp [supportsInterfaceArg, harg]
-
-theorem supportsInterface_other_runCompiled
-    (sevm : Sevm) (base : Devm) (G : Nat)
-    (hdataLength : 36 ≤ sevm.data.length)
-    (hdataBound : sevm.data.length < 2 ^ 256)
-    (hvalue : sevm.value = 0)
-    (hselector : Sevm.selector sevm = supportsInterfaceSelector)
-    (herc165 : Sevm.argWord sevm 0 >>> 224 ≠ erc165InterfaceId)
-    (hdeposit : Sevm.argWord sevm 0 >>> 224 ≠ depositInterfaceId)
-    (hcode : sevm.code.toList = code) :
-    ∃ post,
-      Prog.RunCompiled sevm
-        (base.setMach
-          ⟨[], Mem.empty, G + supportsInterfaceRuntimeGas, base.stateGas⟩)
-        runtime post ∧
-      post.gasLeft = G ∧
-      Devm.output post = abiBoolReturn false ∧
-      Devm.WorldEq base post ∧
-      post.logs = base.logs ∧
-      some sevm.code.toList = Prog.compile runtime := by
-  apply supportsInterfaceAnswer_runCompiled sevm base G false
-    hdataLength hdataBound hvalue hselector hcode
-  simp [supportsInterfaceArg, herc165, hdeposit]
-
-theorem supportsInterface_ffffffff_runCompiled
-    (sevm : Sevm) (base : Devm) (G : Nat)
-    (hdataLength : 36 ≤ sevm.data.length)
-    (hdataBound : sevm.data.length < 2 ^ 256)
-    (hvalue : sevm.value = 0)
-    (hselector : Sevm.selector sevm = supportsInterfaceSelector)
-    (harg : Sevm.argWord sevm 0 >>> 224 = (0xffffffff : B256))
-    (hcode : sevm.code.toList = code) :
-    ∃ post,
-      Prog.RunCompiled sevm
-        (base.setMach
-          ⟨[], Mem.empty, G + supportsInterfaceRuntimeGas, base.stateGas⟩)
-        runtime post ∧
-      post.gasLeft = G ∧
-      Devm.output post = abiBoolReturn false ∧
-      Devm.WorldEq base post ∧
-      post.logs = base.logs ∧
-      some sevm.code.toList = Prog.compile runtime := by
-  apply supportsInterfaceAnswer_runCompiled sevm base G false
     hdataLength hdataBound hvalue hselector hcode
   simp [supportsInterfaceArg, harg]
 

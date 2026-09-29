@@ -341,20 +341,6 @@ private theorem of_run_roundedMulRecovery_prefix {fs : List Func} {e : Sevm}
           (Func.RunPrefix.trans hpre5 (Func.RunPrefix.trans hpre6 hpre7))))),
       run⟩
 
-private theorem of_run_roundedMulRecovery {fs : List Func} {e : Sevm}
-    {entry s r : Devm} {image : Bytes} {tail : Stack}
-    {leftWord rightWord : B256} {next : Func}
-    (frame : Frame image entry s) (hp : tail <<+ s.stack)
-    (run : Func.Run fs e s (roundedMulRecovery leftWord rightWord +++ next) r) :
-    ∃ t, Frame image entry t ∧
-      (((scratch image leftWord =?
-        ((scratch image rightWord * scratch image leftWord) / scratch image rightWord)) =? 0) ::
-        scratch image rightWord * scratch image leftWord :: tail <<+ t.stack) ∧
-      Func.Run fs e t next r := by
-  obtain ⟨t, _, frt, hpt, _, run⟩ :=
-    of_run_roundedMulRecovery_prefix (path := ⟨0, []⟩) frame hp run
-  exact ⟨t, frt, hpt, run⟩
-
 theorem of_run_guardedRoundedMul_prefix {fs : List Func} {e : Sevm}
     {entry s r : Devm} {image : Bytes} {tail : Stack}
     {leftWord rightWord outputWord : B256} {next : Func}
@@ -539,14 +525,6 @@ private theorem of_run_call_of_lookup_prefix {fs : List Func} {e : Sevm}
       exact ⟨t, hburn,
         Func.RunPrefix.call hlookup hburn Func.RunPrefix.refl, hbody⟩
 
-private theorem of_run_call_of_lookup {fs : List Func} {e : Sevm} {s r : Devm}
-    {k : Nat} {f : Func} (hlookup : fs[k]? = some f)
-    (run : Func.Run fs e s (.call k) r) :
-    ∃ t, Devm.Burn s t ∧ Func.Run fs e t f r := by
-  obtain ⟨t, hburn, _, hrun⟩ :=
-    of_run_call_of_lookup_prefix (path := ⟨k, []⟩) hlookup run
-  exact ⟨t, hburn, hrun⟩
-
 /-! ## What the loop may touch
 
 The rpow loop writes only its exponent, base, accumulator and rounding
@@ -579,21 +557,12 @@ theorem LoopOnly.accumulator (image : Bytes) (v : B256) :
     LoopOnly image (setScratch image accumulatorWord v) :=
   fun _ _ _ h _ => scratch_setScratch_of_disjoint image v h
 
-theorem LoopOnly.rounded (image : Bytes) (v : B256) :
-    LoopOnly image (setScratch image roundedWord v) :=
-  fun _ _ _ _ h => scratch_setScratch_of_disjoint image v h
-
 /-! ## The frozen slot separations the loop consumes -/
 
 theorem exponent_base : SlotsDisjoint exponentWord baseWord := by decide +kernel
 theorem exponent_accumulator : SlotsDisjoint exponentWord accumulatorWord := by
   decide +kernel
-theorem exponent_rounded : SlotsDisjoint exponentWord roundedWord := by
-  decide +kernel
 theorem base_accumulator : SlotsDisjoint baseWord accumulatorWord := by
-  decide +kernel
-theorem base_rounded : SlotsDisjoint baseWord roundedWord := by decide +kernel
-theorem accumulator_rounded : SlotsDisjoint accumulatorWord roundedWord := by
   decide +kernel
 theorem storedChi_now : SlotsDisjoint storedChiWord nowWord := by decide +kernel
 theorem storedChi_exponent : SlotsDisjoint storedChiWord exponentWord := by
@@ -605,40 +574,18 @@ theorem storedChi_accumulator : SlotsDisjoint storedChiWord accumulatorWord := b
 theorem accumulator_exponent : SlotsDisjoint accumulatorWord exponentWord := by
   decide +kernel
 theorem base_exponent : SlotsDisjoint baseWord exponentWord := by decide +kernel
-theorem accumulator_base : SlotsDisjoint accumulatorWord baseWord := by
-  decide +kernel
 theorem now_exponent : SlotsDisjoint nowWord exponentWord := by decide +kernel
 theorem now_base : SlotsDisjoint nowWord baseWord := by decide +kernel
 theorem now_accumulator : SlotsDisjoint nowWord accumulatorWord := by
   decide +kernel
-theorem now_freshChi : SlotsDisjoint nowWord freshChiWord := by decide +kernel
 theorem argument_route : SlotsDisjoint argumentWord routeWord := by
   decide +kernel
-theorem row_result : SlotsDisjoint rowWord resultWord := by decide +kernel
-theorem total_result : SlotsDisjoint totalWord resultWord := by decide +kernel
-theorem total_newRow : SlotsDisjoint totalWord newRowWord := by decide +kernel
-theorem result_newRow : SlotsDisjoint resultWord newRowWord := by decide +kernel
-theorem freshChi_newTotal : SlotsDisjoint freshChiWord newTotalWord := by
-  decide +kernel
-theorem now_newTotal : SlotsDisjoint nowWord newTotalWord := by decide +kernel
-theorem newRow_newTotal : SlotsDisjoint newRowWord newTotalWord := by
-  decide +kernel
-theorem result_newTotal : SlotsDisjoint resultWord newTotalWord := by
-  decide +kernel
-theorem freshChi_newRow : SlotsDisjoint freshChiWord newRowWord := by
-  decide +kernel
-theorem freshChi_result : SlotsDisjoint freshChiWord resultWord := by
-  decide +kernel
-theorem now_newRow : SlotsDisjoint nowWord newRowWord := by decide +kernel
-theorem now_result : SlotsDisjoint nowWord resultWord := by decide +kernel
 theorem argument_row : SlotsDisjoint argumentWord rowWord := by decide +kernel
 theorem argument_total : SlotsDisjoint argumentWord totalWord := by
   decide +kernel
 theorem row_route : SlotsDisjoint rowWord routeWord := by decide +kernel
 theorem row_total : SlotsDisjoint rowWord totalWord := by decide +kernel
 theorem total_route : SlotsDisjoint totalWord routeWord := by decide +kernel
-theorem argument_result : SlotsDisjoint argumentWord resultWord := by
-  decide +kernel
 
 /-! ## What the whole machine may touch
 
@@ -653,9 +600,6 @@ def MachineOnly (image image' : Bytes) : Prop :=
     scratch image' argumentWord = scratch image argumentWord ∧
     scratch image' rowWord = scratch image rowWord ∧
     scratch image' totalWord = scratch image totalWord
-
-theorem MachineOnly.rfl' (image : Bytes) : MachineOnly image image :=
-  ⟨Eq.refl _, Eq.refl _, Eq.refl _, Eq.refl _⟩
 
 theorem MachineOnly.trans {a b c : Bytes} (hab : MachineOnly a b)
     (hbc : MachineOnly b c) : MachineOnly a c :=
@@ -695,11 +639,6 @@ theorem MachineOnly.base (image : Bytes) (v : B256) :
 theorem MachineOnly.accumulator (image : Bytes) (v : B256) :
     MachineOnly image (Drip.setScratch image accumulatorWord v) :=
   MachineOnly.setScratch image accumulatorWord v (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) (by decide +kernel)
-
-theorem MachineOnly.freshChi (image : Bytes) (v : B256) :
-    MachineOnly image (Drip.setScratch image freshChiWord v) :=
-  MachineOnly.setScratch image freshChiWord v (by decide +kernel) (by decide +kernel)
     (by decide +kernel) (by decide +kernel)
 
 theorem LoopOnly.toMachineOnly {a b : Bytes} (h : LoopOnly a b) :
@@ -799,19 +738,6 @@ private theorem of_run_rpowAdvance_prefix {fs : List Func}
     Func.RunPrefix.trans hpre0 (Func.RunPrefix.trans hpre1
       (Func.RunPrefix.trans hpre2 hpre3)), run⟩
 
-private theorem of_run_rpowAdvance {fs : List Func} (hlookup : AuxLookup fs)
-    {e : Sevm} {entry s r : Devm} {image : Bytes} {tail : Stack}
-    (frame : Frame image entry s) (hp : tail <<+ s.stack)
-    (run : Func.Run fs e s (.call rpowAdvanceSlot) r) :
-    ∃ t, (tail <<+ t.stack) ∧
-      Frame (setScratch image exponentWord (scratch image exponentWord / 2))
-        entry t ∧
-      Func.Run fs e t (.call rpowLoopSlot) r := by
-  obtain ⟨t, _, hpt, frt, _, run⟩ :=
-    of_run_rpowAdvance_prefix (path := ⟨rpowAdvanceSlot, []⟩) hlookup frame hp
-      run
-  exact ⟨t, hpt, frt, run⟩
-
 private theorem of_run_rpowAfterSquare_prefix {fs : List Func}
     (hlookup : AuxLookup fs)
     {e : Sevm} {entry s r : Devm} {image : Bytes} {tail : Stack}
@@ -907,30 +833,6 @@ private theorem of_run_rpowAfterSquare_prefix {fs : List Func}
     · rw [scratch_setScratch_self,
         scratch_setScratch_of_disjoint _ _ exponent_accumulator]
     · exact (LoopOnly.accumulator image _).trans (LoopOnly.exponent _ _)
-
-private theorem of_run_rpowAfterSquare {fs : List Func} (hlookup : AuxLookup fs)
-    {e : Sevm} {entry s r : Devm} {image : Bytes} {tail : Stack}
-    (frame : Frame image entry s) (hp : tail <<+ s.stack)
-    (run : Func.Run fs e s (.call rpowAfterSquareSlot) r) :
-    ∃ t image',
-      (if (scratch image exponentWord).toNat % 2 = 1 then
-          B256.Nofm (scratch image accumulatorWord) (scratch image baseWord) ∧
-          B256.Nof (scratch image baseWord * scratch image accumulatorWord) half
-        else True) ∧
-      scratch image' accumulatorWord =
-        (if (scratch image exponentWord).toNat % 2 = 1 then
-            B256.mulr scale half (scratch image accumulatorWord)
-              (scratch image baseWord)
-          else scratch image accumulatorWord) ∧
-      scratch image' baseWord = scratch image baseWord ∧
-      scratch image' exponentWord = scratch image exponentWord / 2 ∧
-      LoopOnly image image' ∧
-      Frame image' entry t ∧ (tail <<+ t.stack) ∧
-      Func.Run fs e t (.call rpowLoopSlot) r := by
-  obtain ⟨t, image', _, hcond, hacc, hbase, hexp, hloop, frt, hpt, _, run⟩ :=
-    of_run_rpowAfterSquare_prefix (path := ⟨rpowAfterSquareSlot, []⟩) hlookup
-      frame hp run
-  exact ⟨t, image', hcond, hacc, hbase, hexp, hloop, frt, hpt, run⟩
 
 /-! ## The square-and-multiply loop
 
@@ -1231,23 +1133,6 @@ theorem of_run_composeFresh_prefix {fs : List Func} (hlookup : AuxLookup fs)
               (Func.RunPrefix.trans hpre11 hpre12)))))))))),
     run⟩
 
-theorem of_run_composeFresh {fs : List Func} (hlookup : AuxLookup fs)
-    {e : Sevm} {entry s r : Devm} {image : Bytes} {tail : Stack}
-    (frame : Frame image entry s) (hp : tail <<+ s.stack)
-    (run : Func.Run fs e s (.call composeFreshSlot) r) :
-    ∃ t,
-      B256.Nofm (scratch image storedChiWord) (scratch image accumulatorWord) ∧
-      ¬ maxChi <
-        (scratch image accumulatorWord * scratch image storedChiWord) / scale ∧
-      (((scratch image accumulatorWord * scratch image storedChiWord) / scale) ::
-        tail <<+ t.stack) ∧
-      Frame image entry t ∧
-      Func.Run fs e t (.call freshRouteSlot) r := by
-  obtain ⟨t, _, hnofm, hcap, hpt, frt, _, run⟩ :=
-    of_run_composeFresh_prefix (path := ⟨composeFreshSlot, []⟩) hlookup frame
-      hp run
-  exact ⟨t, hnofm, hcap, hpt, frt, run⟩
-
 /-- The exponent-halving tail shared by both initialization arms: halve the
 staged exponent, run the loop, and arrive at index composition with the
 realized factor in the accumulator slot. -/
@@ -1329,35 +1214,6 @@ private theorem of_run_halveExponent_prefix {fs : List Func}
   · rw [hloopF.now, scratch_setScratch_of_disjoint _ _ now_exponent, hnowImg]
   · exact hmachineImg.trans
       ((MachineOnly.exponent img _).trans hloopF.toMachineOnly)
-
-private theorem of_run_halveExponent {fs : List Func} (hlookup : AuxLookup fs)
-    {e : Sevm} {entry s' r : Devm} {image img : Bytes} {tail : Stack}
-    {acc k chi now : B256}
-    (hkNat : k.toNat ≠ 0)
-    (hacc : acc = (if k.toNat % 2 = 1 then rate else scale))
-    (hexpImg : scratch img exponentWord = k)
-    (haccImg : scratch img accumulatorWord = acc)
-    (hbaseImg : scratch img baseWord = rate)
-    (hchiImg : scratch img storedChiWord = chi)
-    (hnowImg : scratch img nowWord = now)
-    (hmachineImg : MachineOnly image img)
-    (frameImg : Frame img entry s') (hpImg : tail <<+ s'.stack)
-    (run : Func.Run fs e s'
-      (loadWord exponentWord +++ pushB256 2 ::: swap 0 ::: div :::
-        mstoreAt exponentWord +++ Func.call rpowLoopSlot) r) :
-    ∃ tm imageM,
-      B256.RPowGuards scale half rate k.toNat ∧
-      scratch imageM accumulatorWord = B256.rpow scale half rate k.toNat ∧
-      scratch imageM storedChiWord = chi ∧
-      scratch imageM nowWord = now ∧
-      MachineOnly image imageM ∧
-      Frame imageM entry tm ∧ (tail <<+ tm.stack) ∧
-      Func.Run fs e tm (.call composeFreshSlot) r := by
-  obtain ⟨tm, imageM, _, hguards, haccF, hchi, hnow, hmachine, frt, hpt,
-    _, run⟩ :=
-    of_run_halveExponent_prefix hlookup (path := ⟨freshStartSlot, []⟩) hkNat hacc
-      hexpImg haccImg hbaseImg hchiImg hnowImg hmachineImg frameImg hpImg run
-  exact ⟨tm, imageM, hguards, haccF, hchi, hnow, hmachine, frt, hpt, run⟩
 
 /-! ## The machine's entry: guards, initialization, loop, composition
 
@@ -2026,23 +1882,6 @@ private theorem of_run_routeTest_prefix {fs : List Func} {e : Sevm}
     exact ⟨s4, mid4, frame4,
       prefix_of_pop (of_run_pop (of_run_singleton hline4)) hp3,
       Func.RunPrefix.trans hpre1 (Func.RunPrefix.trans hpreB hpre4), run⟩
-
-private theorem of_run_routeTest {fs : List Func} {e : Sevm}
-    {entry s r : Devm} {image : Bytes} {tail : Stack}
-    {c : B256} {body next : Func}
-    (frame : Frame image entry s)
-    (hp : scratch image routeWord :: tail <<+ s.stack)
-    (run : Func.Run fs e s
-      (dup 0 ::: pushB256 c ::: eq ::: ((pop ::: body) <?> next)) r) :
-    (scratch image routeWord = c ∧ ∃ t, Frame image entry t ∧
-        (tail <<+ t.stack) ∧ Func.Run fs e t body r) ∨
-      (∃ t, Frame image entry t ∧
-        (scratch image routeWord :: tail <<+ t.stack) ∧
-        Func.Run fs e t next r) := by
-  rcases of_run_routeTest_prefix (path := ⟨freshRouteSlot, []⟩) frame hp run with
-    ⟨htag, t, _, frt, hpt, _, run⟩ | ⟨t, _, frt, hpt, _, run⟩
-  · exact Or.inl ⟨htag, t, frt, hpt, run⟩
-  · exact Or.inr ⟨t, frt, hpt, run⟩
 
 theorem of_run_freshRoute_prefix {fs : List Func} (hlookup : AuxLookup fs)
     {e : Sevm} {entry s r : Devm} {image : Bytes} {tail : Stack}

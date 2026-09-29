@@ -476,24 +476,12 @@ private theorem stepStatcall_spawn_resume
     | cases spawn
     | exact ⟨_, _, _, (genericCall_step_spawn_exact spawn).2⟩
 
-private theorem stubCode_nonempty :
-    PinnedTargetControl.stubCode ≠ .empty := by
-  decide +kernel
-
-private theorem stubCode_not_delegation :
-    ¬ isValidDelegation PinnedTargetControl.stubCode := by
-  decide +kernel
-
 private theorem stubProgram_compile_toList :
     Prog.compile PinnedTargetControl.stubProgram =
       some PinnedTargetControl.stubCode.toList := by
   rw [PinnedTargetControl.stubProgram_compile]
   simp [PinnedTargetControl.stubCode, PinnedTargetControl.stubBytes,
     ByteArray.toList_eq_toList_data]
-
-private theorem stubCode_toList_nonempty :
-    PinnedTargetControl.stubCode.toList ≠ [] := by
-  decide +kernel
 
 /-- Directly installed code is not a delegation designator, so at a state with
 that code at `target` the resolved code address a spawned call carries is

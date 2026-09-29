@@ -74,19 +74,6 @@ theorem pragueOnly_history_extends
       ArtifactInv (future.state.getStor ca) (baseline ++ suffix) :=
   reachUsing_history_extends reach native installed artifact
 
-/-- Deployment-root specialization: the constructor's empty history can only
-grow by a suffix along the exact Prague-only continuation. -/
-theorem DeploymentRoot.future_history_extends
-    {chainId : UInt64} {base deployed future : BlockChain} {ca : Adr}
-    (root : DeploymentRoot chainId base deployed ca)
-    (reach : BlockChain.ReachUsing (ChainConfig.pragueOnly chainId)
-      deployed future)
-    (native : ReachNativeShaAdmitted reach ca) :
-    ∃ suffix, ArtifactInv (future.state.getStor ca) suffix := by
-  simpa only [List.nil_append] using
-    pragueOnly_history_extends chainId reach native root.installed_compile
-      root.artifact
-
 /-- Reader-facing content of a baseline-relative history witness: concrete
 count equality and monotonicity, strictness exactly for a nonempty suffix, and
 the model mixed-root equation.  The suffix is existential and is not claimed

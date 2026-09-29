@@ -1200,18 +1200,6 @@ theorem getIsOssified_exact_of_program
       func_inv) bodySource
   exact ⟨hvalue, hword, bodyStor.trans bodyPreserves⟩
 
-theorem getIsOssified_true_of_program
-    {sevm : Sevm} {entry post : Devm}
-    (hprog : Prog.RunCompiledTo sevm entry runtimeBaseline (.ok post))
-    (hentryStack : entry.stack = [])
-    (hdata : sevm.data = proxyGetIsOssifiedCalldata)
-    (adminZero : storedAdminWord entry sevm.currentTarget = 0) :
-    post.output = proxyIsOssifiedReturnData true := by
-  have exactResult :=
-    getIsOssified_exact_of_program hprog hentryStack hdata
-  simpa [ReturnsWord, proxyIsOssifiedReturnData, adminZero, B256.eqCheck]
-    using exactResult.2.1
-
 theorem changeAdmin_activeAdminRoute_of_program
     {sevm : Sevm} {entry : Devm} {out : Execution} {newAdmin : Adr}
     (hprog : Prog.RunCompiledTo sevm entry runtimeBaseline out)
@@ -1352,27 +1340,6 @@ theorem changeAdmin_authorized_reaches_mutation
   · rwa [← hadmin]
   · rwa [← hadmin]
 
-theorem changeAdmin_same_value_reaches_mutation
-    {sevm : Sevm} {entry : Devm} {out : Execution} {newAdmin : Adr}
-    (hprog : Prog.RunCompiledTo sevm entry runtimeBaseline out)
-    (hentryStack : entry.stack = []) (hvalue : sevm.value = 0)
-    (hdata : sevm.data = proxyChangeAdminCalldata newAdmin)
-    (adminNonzero : storedAdminWord entry sevm.currentTarget ≠ 0)
-    (adminEqCaller : storedAdminWord entry sevm.currentTarget =
-      sevm.caller.toB256)
-    (sameValue : newAdmin.toB256 =
-      storedAdminWord entry sevm.currentTarget) :
-    ∃ mutationPre,
-      Func.RunCompiledTo
-        (runtimeBaseline.main :: runtimeBaseline.aux)
-        sevm mutationPre changeAdminMutation out ∧
-      Sevm.argWord sevm 0 = storedAdminWord entry sevm.currentTarget := by
-  obtain ⟨mutationPre, mutationRun, _⟩ :=
-    changeAdmin_authorized_reaches_mutation hprog hentryStack hvalue hdata
-      adminNonzero adminEqCaller
-  exact ⟨mutationPre, mutationRun,
-    (proxyChangeAdminCalldata_arg0 hdata).trans sameValue⟩
-
 /-- A live authorized `upgradeTo` reaches the exact implementation code check.
 The schedule has no old/new comparison, so same-value implementations are
 checked, written, and announced along the same route as different values. -/
@@ -1397,29 +1364,6 @@ theorem upgradeTo_authorized_reaches_code_check
   apply ActiveAdminRoute.authorized_of_live_caller (route := route)
   · rwa [← hadmin]
   · rwa [← hadmin]
-
-theorem upgradeTo_same_value_reaches_code_check
-    {sevm : Sevm} {entry : Devm} {out : Execution}
-    {newImplementation : Adr}
-    (hprog : Prog.RunCompiledTo sevm entry runtimeBaseline out)
-    (hentryStack : entry.stack = []) (hvalue : sevm.value = 0)
-    (hdata : sevm.data = proxyUpgradeToCalldata newImplementation)
-    (adminNonzero : storedAdminWord entry sevm.currentTarget ≠ 0)
-    (adminEqCaller : storedAdminWord entry sevm.currentTarget =
-      sevm.caller.toB256)
-    (sameValue : newImplementation.toB256 =
-      storedImplementationWord entry sevm.currentTarget) :
-    ∃ checkPre,
-      Func.RunCompiledTo
-        (runtimeBaseline.main :: runtimeBaseline.aux)
-        sevm checkPre (upgradeImplementationControl Func.stop) out ∧
-      Sevm.argWord sevm 0 =
-        storedImplementationWord entry sevm.currentTarget := by
-  obtain ⟨checkPre, checkRun, _⟩ :=
-    upgradeTo_authorized_reaches_code_check hprog hentryStack hvalue hdata
-      adminNonzero adminEqCaller
-  exact ⟨checkPre, checkRun,
-    (proxyUpgradeToCalldata_arg0 hdata).trans sameValue⟩
 
 /-- The public ossify entry reaches the exact authorization classification
 directly from its compiled-program run. -/

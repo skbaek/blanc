@@ -445,14 +445,6 @@ theorem XStep.AccGrow.spawn_create {devm d : Devm} (h : Devm.AccGrow devm d)
   ⟨fun a ha => h a ha, fun r => Except.OkOn.mono (Resume.run_create_accGrow d na r)
     (fun _ hx => Devm.AccGrow.trans h hx)⟩
 
-theorem Devm.AccGrow.accessDelegation {pre d : Devm} (h : Devm.AccGrow pre d) (adr : Adr) :
-    Devm.AccGrow pre (Jaune.accessDelegation d adr).2.2.2.2 := by
-  unfold Jaune.accessDelegation
-  dsimp only
-  split
-  · exact h.warm _
-  · exact h
-
 theorem Devm.AccGrow.gasAccessDelegation {pre d : Devm} (h : Devm.AccGrow pre d)
     (gas : GasSchedule) (adr : Adr) :
     Devm.AccGrow pre (gas.accessDelegation d adr).2.2.2.2 := by
@@ -653,12 +645,5 @@ theorem Exec.rawFrameRoots_warm (a : Adr) {pc : Nat} {sevm : Sevm} {pre : Devm}
       · exact ihChild hsgc (hgrow a ha) root (by simp [Exec.rawFrameRoots, member])
       · exact ihNext hsg (Evm.step_resume_accGrow hsg hstep hresume a ha) root
           (by simp [Exec.rawFrameRoots, member])
-
-/-- The admission form: a warm start warms every entered frame. -/
-theorem Exec.frameAdmitted_warm (a ca : Adr) {pc : Nat} {sevm : Sevm} {pre : Devm}
-    {out : Execution} (run : Exec pc sevm pre out)
-    (hsg : sevm.benvStat.rules.stateGas = none) (ha : a ∈ pre.accessedAddresses) :
-    Exec.FrameAdmitted ca (fun _ d => a ∈ d.accessedAddresses) run :=
-  fun root member _ => Exec.rawFrameRoots_warm a run hsg ha root member
 
 end Blanc

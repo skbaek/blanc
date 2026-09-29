@@ -1989,75 +1989,6 @@ theorem GenericCreate.storageSegmentEffect_none
         of_executeCode_noneCode hcodeAddress hbody
       cases hslot
 
-/-- Contract-neutral recursive transport for the concrete filled slot of any
-CALL/CREATE-family instruction.  Instruction prefixes preserve the installed
-code and holder storage separately; the exact spawned frame supplies the
-settlement-pruned child label. -/
-theorem Xinst.storageSegmentEffect_some
-    {dp : DeployParams} {ca : Adr} {depth : Nat}
-    {sevm : Sevm} {pre post : Devm} {x : Xinst}
-    {frame : Frame} {resume : Resume}
-    {cevm : Evm} {raw : Execution} {settled : Devm}
-    (hspawn : Xinst.step sevm pre x = .spawn frame resume)
-    (hframe : RunFrame frame (.some ⟨cevm, raw⟩) (.ok settled))
-    (hresume : resume.run (.ok settled) = .ok post)
-    (child : Exec cevm.pc cevm.sta cevm.dyna raw)
-    (hdepth : cevm.sta.depth < depth)
-    (hcode : some (pre.getCode ca).toList =
-      Prog.compile (weth10 dp))
-    (htargetCode : frame.inner.currentTarget = ca →
-      some frame.inner.code.toList = Prog.compile (weth10 dp))
-    (hbelow : StorageSegmentTraceBelow dp ca depth)
-    (hfork : CoveredFork sevm.benvStat.fork) :
-    Nonempty (StorageSegmentEffect ca pre post
-      (if Blanc.Frame.settlementCommits frame raw = true
-       then Exec.flowActions dp ca child else [])) := by
-  rcases Xinst.step_shapeCovered sevm pre x hfork with
-    ⟨ex, hs, hprefix⟩ |
-    ⟨d, endowment, newAddress, mi, ms, hprefix, hs⟩ |
-    ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
-      ii, isz, oi, osz, code, disablePrecompiles, hprefix, _, _, _, hs⟩ <;>
-    rw [hs] at hspawn
-  · cases hspawn
-  · rcases genericCreate_step_spawn_exact hspawn with
-      ⟨rfl, rfl⟩
-    have grun : GenericCreate sevm d endowment newAddress mi ms
-        (.some ⟨cevm, raw⟩) (.ok post) := by
-      unfold GenericCreate XStep.Run
-      rw [hspawn]
-      exact ⟨.ok settled, hframe, hresume.symm⟩
-    have hcodeD : some (d.getCode ca).toList =
-        Prog.compile (weth10 dp) := by
-      rw [← hprefix.getCode ca]
-      exact hcode
-    rcases GenericCreate.storageSegmentEffect_some grun child hdepth
-        hcodeD hbelow with ⟨effect⟩
-    exact ⟨by
-      simpa only [List.nil_append] using
-        (StorageSegmentEffect.of_getStorCode_eq
-          (hprefix.getStor ca) (hprefix.getCode ca)).append effect⟩
-  · rcases genericCall_step_spawn_exact hspawn with
-      ⟨rfl, rfl⟩
-    have grun : GenericCall sevm d gas value caller target codeAddress
-        stv isStatic ii isz oi osz code disablePrecompiles
-        (.some ⟨cevm, raw⟩) (.ok post) := by
-      unfold GenericCall XStep.Run
-      rw [hspawn]
-      exact ⟨.ok settled, hframe, hresume.symm⟩
-    have hcodeD : some (d.getCode ca).toList =
-        Prog.compile (weth10 dp) := by
-      rw [← hprefix.getCode ca]
-      exact hcode
-    have hcalleeCode : target = ca →
-        some code.toList = Prog.compile (weth10 dp) := by
-      simpa [Frame.ofCall, callMsg] using htargetCode
-    rcases GenericCall.storageSegmentDelta_some grun child hdepth
-        hcodeD hcalleeCode hbelow with ⟨effect⟩
-    exact ⟨by
-      simpa only [List.nil_append] using
-        (StorageSegmentEffect.of_getStorCode_eq
-          (hprefix.getStor ca) (hprefix.getCode ca)).append effect⟩
-
 /-- Proof-indexed contract-neutral recursive transport.  The exact child
 effect is threaded through the concrete filled interpreter slot. -/
 theorem Xinst.storageSegmentEffect_some_of_bodyEffect
@@ -2421,87 +2352,6 @@ theorem callbackCode_eq_compiled_of_target_eq
       exact hvalid
     · cases hdelegated
 
-/-- Exact storage effect of a retained ERC-677 callback boundary.  The
-existential `RetainedXlot` is for the very same slot named by the boundary's
-parent `StepRun`, so selector chronology can identify its child label without
-reconstructing an unrelated execution. -/
-theorem RawTokenCallbackStepBoundary.storageSegmentEffect
-    {dp : DeployParams} {ca : Adr} {e : Sevm}
-    {self target : Adr}
-    {rawTarget sel value tailLen inputSize : B256} {tail input : Bytes}
-    {pre post : Devm}
-    (callback : RawTokenCallbackStepBoundary dp e self target rawTarget sel
-      value tailLen inputSize tail input pre post)
-    (hself : e.currentTarget = ca)
-    (installed : some (pre.getCode ca).toList =
-      Prog.compile (weth10 dp))
-    (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
-      (fun pc sevm childPre out _ =>
-        Exec.CoreStorageSound dp ca pc sevm childPre out))
-    (hfork : CoveredFork e.benvStat.fork) :
-    ∃ (pc : Nat) (callPre callPost : Devm) (xl : Xlot)
-        (retained : RetainedXlot xl),
-      Ninst.StepRun pc e callPre Ninst.call xl (.ok callPost) ∧
-      Nonempty (StorageSegmentEffect ca pre post
-        (retained.flowActions dp ca)) := by
-  rcases callback with
-    ⟨targetEq, inputSizeEq, callPre, callPost, parent, child, xl,
-      delegated, code, gasWord, avail, pc, hstep, hdepth, hstack,
-      hinput, himage, hstorPre, hbalPre, hcodePre, hlogsPre,
-      houtputPre, hparentState, hparentMemory, hparentLogs,
-      hparentOutput, hdelegation, hfilled, hprocess, hclean,
-      hresume, hcallPostState, hreturnData, hcallPostMemory,
-      hcallPostStack, hcontinuation⟩
-  obtain ⟨retained⟩ := exists_retainedXlot_of_filled hfilled
-  let msg := callMsg e parent (min gasWord.toNat (except64th avail)) 0
-    self target
-    ((getDelegatedCodeAddress (callPre.getCode target)).getD target)
-    true false input code delegated
-  let trace : ProcessMessageTrace msg (.ok child) :=
-    ⟨xl, retained, by simpa only [msg] using hprocess⟩
-  have hcallPreCode : some (callPre.getCode ca).toList =
-      Prog.compile (weth10 dp) := by
-    rw [← congrFun hcodePre ca]
-    exact installed
-  have hparent : callPre.state = msg.benv.state := by
-    simpa only [msg, callMsg] using hparentState.symm
-  have hmsgDepth : msg.depth < e.depth := by
-    dsimp only [msg, callMsg]
-    omega
-  have htargetCode : msg.currentTarget = ca →
-      some msg.code.toList = Prog.compile (weth10 dp) := by
-    intro htarget
-    have htargetCa : target = ca := by
-      simpa only [msg, callMsg] using htarget
-    exact callbackCode_eq_compiled_of_target_eq hcallPreCode htargetCa
-      hdelegation
-  have htargetDirect : msg.currentTarget = ca →
-      msg.codeAddress = some ca := by
-    intro htarget
-    have htargetCa : target = ca := by
-      simpa only [msg, callMsg] using htarget
-    have hnodel : getDelegatedCodeAddress (callPre.getCode ca) = none := by
-      dsimp only [getDelegatedCodeAddress]
-      rw [if_neg (not_delegation_of_compile hcallPreCode)]
-    simp [msg, callMsg, htargetCa, hnodel]
-  rcases trace.storageSegmentDelta_of_forallDeeperAt hparent hmsgDepth
-      hcallPreCode htargetCode htargetDirect hdeeper hfork with ⟨childEffect⟩
-  have hprefix := StorageSegmentEffect.of_getStorCode_eq
-    (congrFun hstorPre ca) (congrFun hcodePre ca)
-  have hchildToCallPost := StorageSegmentEffect.of_getStorCode_eq
-    (congrArg (fun state : State => state.getStor ca)
-      hcallPostState.symm)
-    (congrArg (fun state : State => state.getCode ca)
-      hcallPostState.symm)
-  obtain ⟨htailStor, _, htailCode⟩ :=
-    of_run_call_boolReturn_preserves_fields dp hcontinuation
-  have hsuffix := StorageSegmentEffect.of_getStorCode_eq
-    (congrFun htailStor ca) (by simpa only [hself] using htailCode)
-  have combined := hprefix.append
-    (childEffect.append (hchildToCallPost.append hsuffix))
-  exact ⟨pc, callPre, callPost, xl, retained, hstep, ⟨by
-    simpa only [List.nil_append, List.append_nil, trace] using combined⟩⟩
-
 /-- Indexed form of callback storage accounting.  The supplied retained
 witness is the one selected by the enclosing compiled execution, so the
 result keeps the callback ledger definitionally tied to that exact slot. -/
@@ -2580,83 +2430,6 @@ theorem RawTokenCallbackIndexedStepBoundary.storageSegmentEffect
   exact ⟨by
     simpa only [List.nil_append, List.append_nil, trace] using combined⟩
 
-/-- Exact storage effect of the retained flash-borrower callback, ending at
-the concrete parent state immediately after CALL resume. -/
-theorem RawFlashCallbackStepBoundary.storageSegmentEffect
-    {dp : DeployParams} {ca : Adr} {e : Sevm}
-    {self receiver : Adr} {amount inputSize : B256}
-    {callbackInput : Bytes} {pre mid : Devm}
-    (callback : RawFlashCallbackStepBoundary e self receiver amount inputSize
-      callbackInput pre mid)
-    (_hself : e.currentTarget = ca)
-    (installed : some (pre.getCode ca).toList =
-      Prog.compile (weth10 dp))
-    (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
-      (fun pc sevm childPre out _ =>
-        Exec.CoreStorageSound dp ca pc sevm childPre out))
-    (hfork : CoveredFork e.benvStat.fork) :
-    ∃ (pc : Nat) (xl : Xlot) (retained : RetainedXlot xl),
-      Ninst.StepRun pc e pre Ninst.call xl (.ok mid) ∧
-      Nonempty (StorageSegmentEffect ca pre mid
-        (retained.flowActions dp ca)) := by
-  rcases callback with
-    ⟨parent, child, xl, delegated, na, code, gasWord, avail, pc, hstep,
-      hdepth, hstack, hpref, hparentState, hparentMemory, hparentLogs,
-      hparentOutput, hdelegation, hfilled, hprocess, hclean, hlength,
-      hmagic, hresume, hmidState, hreturnData, hmidStack, hmidLogs,
-      hmidOutput⟩
-  obtain ⟨retained⟩ := exists_retainedXlot_of_filled hfilled
-  let msg := callMsg e parent (min gasWord.toNat (except64th avail)) 0
-    self receiver na true false callbackInput code delegated
-  let trace : ProcessMessageTrace msg (.ok child) :=
-    ⟨xl, retained, by simpa only [msg] using hprocess⟩
-  have hparent : pre.state = msg.benv.state := by
-    simpa only [msg, callMsg] using hparentState.symm
-  have hmsgDepth : msg.depth < e.depth := by
-    dsimp only [msg, callMsg]
-    omega
-  have hdelegation' :
-      (getDelegatedCodeAddress (pre.getCode receiver) = none ∧
-          code = pre.getCode receiver ∧ delegated = false) ∨
-      (∃ delegatedTarget,
-        getDelegatedCodeAddress (pre.getCode receiver) =
-          some delegatedTarget ∧
-        code = pre.getCode delegatedTarget ∧ delegated = true) := by
-    rcases hdelegation with ⟨hnone, _, hcode, hdel⟩ |
-      ⟨delegatedTarget, hsome, _, hcode, hdel⟩
-    · exact Or.inl ⟨hnone, hcode, hdel⟩
-    · exact Or.inr ⟨delegatedTarget, hsome, hcode, hdel⟩
-  have hresolved : receiver = ca → na = ca := by
-    intro hreceiver
-    have hnone : getDelegatedCodeAddress (pre.getCode receiver) = none := by
-      rw [hreceiver]
-      dsimp only [getDelegatedCodeAddress]
-      rw [if_neg (not_delegation_of_compile installed)]
-    rcases hdelegation with ⟨_, hna, _, _⟩ | ⟨_, hsome, _, _, _⟩
-    · exact hna.trans hreceiver
-    · simp [hnone] at hsome
-  have htargetCode : msg.currentTarget = ca →
-      some msg.code.toList = Prog.compile (weth10 dp) := by
-    intro htarget
-    have hreceiver : receiver = ca := by
-      simpa only [msg, callMsg] using htarget
-    exact callbackCode_eq_compiled_of_target_eq installed hreceiver
-      hdelegation'
-  have htargetDirect : msg.currentTarget = ca →
-      msg.codeAddress = some ca := by
-    intro htarget
-    have hreceiver : receiver = ca := by
-      simpa only [msg, callMsg] using htarget
-    simp [msg, callMsg, hresolved hreceiver]
-  rcases trace.storageSegmentDelta_of_forallDeeperAt hparent hmsgDepth
-      installed htargetCode htargetDirect hdeeper hfork with ⟨childEffect⟩
-  have hchildToMid := StorageSegmentEffect.of_getStorCode_eq
-    (congrArg (fun state : State => state.getStor ca) hmidState.symm)
-    (congrArg (fun state : State => state.getCode ca) hmidState.symm)
-  have combined := childEffect.append hchildToMid
-  exact ⟨pc, xl, retained, hstep, ⟨by
-    simpa only [List.append_nil, trace] using combined⟩⟩
-
 /-- Indexed flash-callback storage accounting using the exact retained child
 selected by the enclosing compiled chronology. -/
 theorem RawFlashCallbackIndexedStepBoundary.storageSegmentEffect
@@ -2717,111 +2490,6 @@ theorem RawFlashCallbackIndexedStepBoundary.storageSegmentEffect
   exact ⟨by
     simpa only [List.append_nil, trace] using
       childEffect.append hchildToMid⟩
-
-/-- Exact storage effect of the accepted value-CALL inside a redemption
-prefix, including the `iszero` success guard and final stack burn. -/
-theorem BurnCallPrefix.storageSegmentEffect
-    {dp : DeployParams} {ca : Adr} {e : Sevm}
-    {pre callPre guardPost : Devm}
-    {owner : Adr} {amount target : B256}
-    (burn : BurnCallPrefix e pre callPre guardPost owner amount target)
-    (_hself : e.currentTarget = ca)
-    (installed : some (callPre.getCode ca).toList =
-      Prog.compile (weth10 dp))
-    (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
-      (fun pc sevm childPre out _ =>
-        Exec.CoreStorageSound dp ca pc sevm childPre out))
-    (hfork : CoveredFork e.benvStat.fork) :
-    ∃ (pc : Nat) (callPost : Devm) (xl : Xlot)
-        (retained : RetainedXlot xl),
-      Ninst.StepRun pc e callPre Ninst.call xl (.ok callPost) ∧
-      Nonempty (StorageSegmentEffect ca callPre guardPost
-        (retained.flowActions dp ca)) := by
-  rcases burn.2.2.2.2.2.2.2 with
-    ⟨gasWord, callPost, testPost, hstack, hcall, hiszero, hpop⟩
-  rcases of_run_call_val_with_depth_frame hstack hcall hfork with
-      hfailed | hsuccess
-  · exfalso
-    have htest := prefix_of_iszero hiszero hfailed.1
-    have hpopStack := hpop.stack
-    simp only [Stack.Pop, Split, List.nil_append,
-      List.cons_append] at hpopStack
-    rw [hpopStack] at htest
-    have hzero : ((0 : B256) =? 0) = 0 :=
-      pref_head_unique htest (pref_append [(0 : B256)] guardPost.stack)
-    rw [show ((0 : B256) =? 0) = 1 from by
-      simp [B256.eqCheck]] at hzero
-    exact B256.zero_ne_one hzero.symm
-  · rcases hsuccess with
-      ⟨parent, child, xl, delegated, na, code, availableGas, pc, hstep,
-        hdepth, hcallStack, hparentState, hparentMemory, hparentLogs,
-        hparentOutput, hdelegation, hfilled, hprocess, hclean,
-        hresume, hcallPostState, hreturnData, hcallPostMemory,
-        hcallPostStack⟩
-    obtain ⟨retained⟩ := exists_retainedXlot_of_filled hfilled
-    let msg := callMsg e parent
-      (min gasWord.toNat (except64th availableGas) +
-        (if amount.toNat = 0 then 0 else gCallStipend))
-      amount e.currentTarget target.toAdr na true false
-      ((callPre.memory.read (0 : B256).toNat (0 : B256).toNat).1)
-      code delegated
-    let trace : ProcessMessageTrace msg (.ok child) :=
-      ⟨xl, retained, by simpa only [msg] using hprocess⟩
-    have hparent : callPre.state = msg.benv.state := by
-      simpa only [msg, callMsg] using hparentState.symm
-    have hmsgDepth : msg.depth < e.depth := by
-      dsimp only [msg, callMsg]
-      omega
-    have hdelegation' :
-        (getDelegatedCodeAddress (callPre.getCode target.toAdr) = none ∧
-            code = callPre.getCode target.toAdr ∧ delegated = false) ∨
-        (∃ delegatedTarget,
-          getDelegatedCodeAddress (callPre.getCode target.toAdr) =
-            some delegatedTarget ∧
-          code = callPre.getCode delegatedTarget ∧ delegated = true) := by
-      rcases hdelegation with ⟨hnone, _, hcode, hdel⟩ |
-        ⟨delegatedTarget, hsome, _, hcode, hdel⟩
-      · exact Or.inl ⟨hnone, hcode, hdel⟩
-      · exact Or.inr ⟨delegatedTarget, hsome, hcode, hdel⟩
-    have hresolved : target.toAdr = ca → na = ca := by
-      intro htargetCa
-      have hnone :
-          getDelegatedCodeAddress (callPre.getCode target.toAdr) = none := by
-        rw [htargetCa]
-        dsimp only [getDelegatedCodeAddress]
-        rw [if_neg (not_delegation_of_compile installed)]
-      rcases hdelegation with ⟨_, hna, _, _⟩ | ⟨_, hsome, _, _, _⟩
-      · exact hna.trans htargetCa
-      · simp [hnone] at hsome
-    have htargetCode : msg.currentTarget = ca →
-        some msg.code.toList = Prog.compile (weth10 dp) := by
-      intro htarget
-      have htargetCa : target.toAdr = ca := by
-        simpa only [msg, callMsg] using htarget
-      exact callbackCode_eq_compiled_of_target_eq installed htargetCa
-        hdelegation'
-    have htargetDirect : msg.currentTarget = ca →
-        msg.codeAddress = some ca := by
-      intro htarget
-      have htargetCa : target.toAdr = ca := by
-        simpa only [msg, callMsg] using htarget
-      simp [msg, callMsg, hresolved htargetCa]
-    rcases trace.storageSegmentDelta_of_forallDeeperAt hparent hmsgDepth
-        installed htargetCode htargetDirect hdeeper hfork with ⟨childEffect⟩
-    have hguardState : guardPost.state = child.state := by
-      calc
-        guardPost.state = testPost.state := hpop.state.symm
-        _ = callPost.state :=
-          (Ninst.Hinv.inv (f := Devm.state) hiszero).symm
-        _ = child.state := hcallPostState
-    have hchildToGuard := StorageSegmentEffect.of_getStorCode_eq
-      (congrArg (fun state : State => state.getStor ca)
-        hguardState.symm)
-      (congrArg (fun state : State => state.getCode ca)
-        hguardState.symm)
-    have combined := childEffect.append hchildToGuard
-    exact ⟨pc, callPost, xl, retained, hstep, ⟨by
-      simpa only [List.append_nil, trace] using combined⟩⟩
 
 /-- Exact storage accounting for the particular retained child named by an
 accepted value-call trace.  Unlike the existential burn-prefix adapter, this
@@ -4174,15 +3842,6 @@ def CompiledStorageAccountingProvider
       (fun pc sevm pre out _ =>
         Exec.CoreStorageSound dp ca pc sevm pre out) →
     Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame
-
-/-- A concrete proof-indexed selector chronology provider is exactly the
-remaining compiled-frame handler needed by the generic interpreter lift. -/
-theorem CompiledStorageAccountingProvider.compiledFrameStorageHandler
-    {dp : DeployParams} {ca : Adr}
-    (provider : CompiledStorageAccountingProvider dp ca) :
-    CompiledFrameStorageHandler dp ca := by
-  intro frame context hdeeper
-  exact (provider frame context hdeeper).storageSegmentEffect
 
 /-- Exact proof-indexed accounting for the childless receive mint. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_receive
@@ -6238,40 +5897,6 @@ def InstalledStorageSegmentTraceSound
       CoveredFork sevm.benvStat.fork →
       Nonempty (Blanc.Weth10.Exec.StorageSegmentTrace dp ca run)
 
-/-- The generic recursive lift turns a concrete compiled-body handler into the
-public exact installed-execution trace theorem. -/
-theorem CompiledBodyStorageHandler.installedStorageSegmentTraceSound
-    {dp : DeployParams} {ca : Adr}
-    (handler : CompiledBodyStorageHandler dp ca) :
-    InstalledStorageSegmentTraceSound dp ca := by
-  intro pc sevm pre post run committed installed root direct hcovered
-  have hfa := Exec.coreStorageSound_of_compiledBodyStorageHandler handler
-  have hcore := hfa pc sevm pre (.ok post) run installed
-  exact hcore run committed installed (fun _ => ⟨root, direct⟩) hcovered
-
-/-- Discharging the exact operational trace seam yields the requested full
-per-holder and aggregate accounting statement immediately. -/
-theorem Exec.storageFlowAccounting_of_installedTraceSound
-    {dp : DeployParams} {ca : Adr}
-    (sound : InstalledStorageSegmentTraceSound dp ca)
-    {pc : Nat} {sevm : Sevm} {pre post : Devm}
-    (run : Exec pc sevm pre (.ok post))
-    (installed : Prog.At (weth10 dp) ca pc sevm pre)
-    (committed : Execution.commits (.ok post) = true)
-    (root : Exec.Frame.IsRoot (Exec.Frame.ofRun run committed))
-    (direct : sevm.codeAddress = some ca)
-    (hfork : CoveredFork sevm.benvStat.fork) :
-    StorageFlowAccounting ca pre post (Exec.flowActions dp ca run) := by
-  rcases sound run committed installed root direct hfork with ⟨trace⟩
-  exact trace.storageFlowAccounting
-
-/-- Empty action segments account for an unchanged WETH10 storage map. -/
-theorem StorageFlowAccounting.refl (ca : Adr) (state : Devm) :
-    StorageFlowAccounting ca state state [] := by
-  constructor <;>
-    simp [holderFlowOfActions, HolderFlow.zero, supplyFlowOfActions,
-      SupplyFlow.zero, holderCreditLossOfActions, creditLossOfActions]
-
 /-- Equality of the public holder map is the empty-action accounting unit;
 allowance and auxiliary-slot writes may still occur outside `Stor.rest`. -/
 theorem StorageFlowAccounting.of_rest_eq
@@ -6283,13 +5908,6 @@ theorem StorageFlowAccounting.of_rest_eq
     simp [holderFlowOfActions, HolderFlow.zero, supplyFlowOfActions,
       SupplyFlow.zero, holderCreditLossOfActions, creditLossOfActions,
       balSum, h]
-
-/-- Full storage equality is a convenient specialization for foreign steps. -/
-theorem StorageFlowAccounting.of_getStor_eq
-    {ca : Adr} {pre post : Devm}
-    (h : Devm.getStor pre ca = Devm.getStor post ca) :
-    StorageFlowAccounting ca pre post [] :=
-  StorageFlowAccounting.of_rest_eq (congrArg Stor.rest h)
 
 /-- Sequential accounting composes by appending the exact action labels. -/
 theorem StorageFlowAccounting.append
@@ -6311,15 +5929,6 @@ theorem StorageFlowAccounting.append
     rw [supplyFlowOfActions_append, creditLossOfActions_append]
     simp only [SupplyFlow.add]
     omega
-
-/-- Relation-style spelling of chronological append composition. -/
-theorem StorageFlowAccounting.trans
-    {ca : Adr} {pre middle post : Devm}
-    {left right : List FlowAction}
-    (hleft : StorageFlowAccounting ca pre middle left)
-    (hright : StorageFlowAccounting ca middle post right) :
-    StorageFlowAccounting ca pre post (left ++ right) :=
-  hleft.append hright
 
 end Weth10
 

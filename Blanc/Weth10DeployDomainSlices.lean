@@ -376,10 +376,6 @@ private theorem domainSeparatorByteAt_eq_zero_199_205
   · omega
   · omega
 
-private theorem domainSeparator_size :
-    (domainSeparator (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 205 := by
-  decide +kernel
-
 /-! ## DOMAIN_SEPARATOR leaf and balanced low-dispatch path -/
 
 private def treeSlice (dp : DeployParams) (fuel lo len : Nat) : DispatchTree :=
@@ -888,77 +884,6 @@ private theorem dispatch26ByteAt_to_domainLeaf
     omega
   rw [hn, hindex]
 
-private theorem dispatch26ByteAt_eq_zero_1054_1082
-    (locations : List Nat) (n : Nat) (dp : DeployParams)
-    (i : Nat) (hlo : 1054 ≤ i) (hi : i < 1082) :
-    Func.byteAtByShape locations n
-        (dispatch26_0_14 (⟨0, 0⟩ : DeployParams)).compileShape
-        (dispatch26_0_14 dp) i 0 =
-      Func.byteAtByShape locations n
-        (dispatch26_0_14 (⟨0, 0⟩ : DeployParams)).compileShape
-        (dispatch26_0_14 (⟨0, 0⟩ : DeployParams)) i 0 := by
-  rw [dispatch26ByteAt_to_domainLeaf locations n dp i hlo (by omega),
-    dispatch26ByteAt_to_domainLeaf locations n
-      (⟨0, 0⟩ : DeployParams) i hlo (by omega)]
-  apply domainLeafByteAt_eq_zero_0_28
-  omega
-
-private theorem dispatch26ByteAt_deploymentWord_1082_1114
-    (locations : List Nat) (n : Nat) (dp : DeployParams)
-    (i : Nat) (hlo : 1082 ≤ i) (hi : i < 1114) :
-    Func.byteAtByShape locations n
-        (dispatch26_0_14 (⟨0, 0⟩ : DeployParams)).compileShape
-        (dispatch26_0_14 dp) i 0 =
-      dp.deploymentChainId.toBytes.getD (i - 1082) 0 := by
-  rw [dispatch26ByteAt_to_domainLeaf locations n dp i (by omega) (by omega)]
-  have hword := domainLeafByteAt_deploymentWord_28_60
-    locations (n + 1054) dp (i - 1054) (by omega) (by omega)
-  have hout : i - 1054 - 28 = i - 1082 := by omega
-  rw [hout] at hword
-  exact hword
-
-private theorem dispatch26ByteAt_eq_zero_1114_1246
-    (locations : List Nat) (n : Nat) (dp : DeployParams)
-    (i : Nat) (hlo : 1114 ≤ i) (hi : i < 1246) :
-    Func.byteAtByShape locations n
-        (dispatch26_0_14 (⟨0, 0⟩ : DeployParams)).compileShape
-        (dispatch26_0_14 dp) i 0 =
-      Func.byteAtByShape locations n
-        (dispatch26_0_14 (⟨0, 0⟩ : DeployParams)).compileShape
-        (dispatch26_0_14 (⟨0, 0⟩ : DeployParams)) i 0 := by
-  rw [dispatch26ByteAt_to_domainLeaf locations n dp i (by omega) (by omega),
-    dispatch26ByteAt_to_domainLeaf locations n
-      (⟨0, 0⟩ : DeployParams) i (by omega) (by omega)]
-  apply domainLeafByteAt_eq_zero_60_192 <;> omega
-
-private theorem dispatch26ByteAt_cachedWord_1246_1278
-    (locations : List Nat) (n : Nat) (dp : DeployParams)
-    (i : Nat) (hlo : 1246 ≤ i) (hi : i < 1278) :
-    Func.byteAtByShape locations n
-        (dispatch26_0_14 (⟨0, 0⟩ : DeployParams)).compileShape
-        (dispatch26_0_14 dp) i 0 =
-      dp.cachedDomainSeparator.toBytes.getD (i - 1246) 0 := by
-  rw [dispatch26ByteAt_to_domainLeaf locations n dp i (by omega) (by omega)]
-  have hword := domainLeafByteAt_cachedWord_192_224
-    locations (n + 1054) dp (i - 1054) (by omega) (by omega)
-  have hout : i - 1054 - 192 = i - 1246 := by omega
-  rw [hout] at hword
-  exact hword
-
-private theorem dispatch26ByteAt_eq_zero_1278_1284
-    (locations : List Nat) (n : Nat) (dp : DeployParams)
-    (i : Nat) (hlo : 1278 ≤ i) (hi : i < 1284) :
-    Func.byteAtByShape locations n
-        (dispatch26_0_14 (⟨0, 0⟩ : DeployParams)).compileShape
-        (dispatch26_0_14 dp) i 0 =
-      Func.byteAtByShape locations n
-        (dispatch26_0_14 (⟨0, 0⟩ : DeployParams)).compileShape
-        (dispatch26_0_14 (⟨0, 0⟩ : DeployParams)) i 0 := by
-  rw [dispatch26ByteAt_to_domainLeaf locations n dp i (by omega) (by omega),
-    dispatch26ByteAt_to_domainLeaf locations n
-      (⟨0, 0⟩ : DeployParams) i (by omega) (by omega)]
-  apply domainLeafByteAt_eq_zero_224_230 <;> omega
-
 private theorem fullDispatchByteAt_to_low
     (locations : List Nat) (n : Nat) (dp : DeployParams)
     (i : Nat) (hlo : 1781 ≤ i) :
@@ -998,24 +923,6 @@ private theorem fullDispatchByteAt_to_domainLeaf
   have hn : n + 1781 + 1054 = n + 2835 := by omega
   have hindex : i - 1781 - 1054 = i - 2835 := by omega
   rw [hn, hindex]
-
-private theorem fullDispatchByteAt_eq_zero_2835_2863
-    (locations : List Nat) (n : Nat) (dp : DeployParams)
-    (i : Nat) (hlo : 2835 ≤ i) (hi : i < 2863) :
-    Func.byteAtByShape locations n
-        (dispatchWith fallbackSlot
-          (weth10Tree (⟨0, 0⟩ : DeployParams))).compileShape
-        (dispatchWith fallbackSlot (weth10Tree dp)) i 0 =
-      Func.byteAtByShape locations n
-        (dispatchWith fallbackSlot
-          (weth10Tree (⟨0, 0⟩ : DeployParams))).compileShape
-        (dispatchWith fallbackSlot
-          (weth10Tree (⟨0, 0⟩ : DeployParams))) i 0 := by
-  rw [fullDispatchByteAt_to_domainLeaf locations n dp i hlo (by omega),
-    fullDispatchByteAt_to_domainLeaf locations n
-      (⟨0, 0⟩ : DeployParams) i hlo (by omega)]
-  apply domainLeafByteAt_eq_zero_0_28
-  omega
 
 theorem fullDispatchByteAt_deploymentWord_2863_2895
     (locations : List Nat) (n : Nat) (dp : DeployParams)
@@ -1063,23 +970,6 @@ theorem fullDispatchByteAt_cachedWord_3027_3059
   have hout : i - 2835 - 192 = i - 3027 := by omega
   rw [hout] at hword
   exact hword
-
-private theorem fullDispatchByteAt_eq_zero_3059_3065
-    (locations : List Nat) (n : Nat) (dp : DeployParams)
-    (i : Nat) (hlo : 3059 ≤ i) (hi : i < 3065) :
-    Func.byteAtByShape locations n
-        (dispatchWith fallbackSlot
-          (weth10Tree (⟨0, 0⟩ : DeployParams))).compileShape
-        (dispatchWith fallbackSlot (weth10Tree dp)) i 0 =
-      Func.byteAtByShape locations n
-        (dispatchWith fallbackSlot
-          (weth10Tree (⟨0, 0⟩ : DeployParams))).compileShape
-        (dispatchWith fallbackSlot
-          (weth10Tree (⟨0, 0⟩ : DeployParams))) i 0 := by
-  rw [fullDispatchByteAt_to_domainLeaf locations n dp i (by omega) (by omega),
-    fullDispatchByteAt_to_domainLeaf locations n
-      (⟨0, 0⟩ : DeployParams) i (by omega) (by omega)]
-  apply domainLeafByteAt_eq_zero_224_230 <;> omega
 
 /-! ## Equality before and after the parameterized DOMAIN leaf -/
 

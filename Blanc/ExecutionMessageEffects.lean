@@ -14,12 +14,6 @@ open Jaune
 
 namespace ExecutionTrace
 
-private theorem State.setBal_getStor_eq
-    (state : State) (address : Adr) (value : B256) :
-    (state.setBal address value).getStor = state.getStor := by
-  funext target
-  exact State.setBal_get_stor
-
 /-- A successful message-entry value transfer preserves the complete storage
 map. -/
 theorem benvAfterTransfer_getStor_eq

@@ -217,19 +217,6 @@ noncomputable def concreteConfiguredHistory :
     concreteDeploymentBlockTrace) concreteJoinBlockTrace)
     concreteDripBlockTrace) concreteExitBlockTrace
 
-/-- Expose the literal constructor spine and its four block identities. -/
-theorem concreteConfiguredHistory_exact :
-    concreteConfiguredHistory =
-      .step (.step (.step (.step
-        (.refl (ChainConfig.pragueOnly_valid 1) concreteBase_validContext rfl)
-        concreteDeploymentBlockTrace) concreteJoinBlockTrace)
-        concreteDripBlockTrace) concreteExitBlockTrace ∧
-    (concreteDeploymentBlockTrace.block = concreteDeploymentEnvelope.block ∧
-      concreteJoinBlockTrace.block = concreteJoinBlock ∧
-      concreteDripBlockTrace.block = concreteDripBlock ∧
-      concreteExitBlockTrace.block = concreteExitBlock) :=
-  ⟨rfl, concreteBlockTraces_blocks⟩
-
 /-- The linked configured history ends at the proved exit storage, balances,
 receipt and return/gas observations. Family accounting realization is separate. -/
 theorem concreteHistory_checkpoint :

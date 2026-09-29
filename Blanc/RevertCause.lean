@@ -91,15 +91,6 @@ theorem Prog.RunCompiledToVisiting.toRunCompiledTo
   rcases h with ⟨mid, h_burn, h_run⟩
   exact ⟨mid, h_burn, h_run.toRunCompiledTo⟩
 
-/-- A visiting walk of the deployed code is the frame's actual execution. -/
-theorem Prog.RunCompiledToVisiting.exec_eq
-    {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {pre : Devm}
-    {p : Prog} {ex : Execution}
-    (h : Prog.RunCompiledToVisiting P sevm pre p ex)
-    (h_eq : some sevm.code.toList = p.compile) :
-    exec ⟨0, sevm, pre⟩ = ex := by
-  exact Prog.exec_of_runCompiledTo h.toRunCompiledTo h_eq
-
 /-! ## G1: the exec-to-walk inversion for reverting frames
 
 Jaune's `EvmError.revert` has exactly one producer, `Linst.run .revert`.  The

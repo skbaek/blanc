@@ -23,14 +23,6 @@ abbrev DripTraceRealizes {cfg : ChainConfig} {base deployed : BlockChain}
     (coalition : Finset Adr) : List RealizedStep → BlockChain → Prop :=
   (ladder coalition ca).TraceRealizes cfg deployed
 
-theorem DripTraceRealizes.toReachUsing
-    {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
-    {root : DeploymentRoot cfg base deployed ca} {coalition : Finset Adr}
-    {steps : List RealizedStep}
-    (realizes : DripTraceRealizes root coalition steps future) :
-    BlockChain.ReachUsing cfg deployed future :=
-  AccountingLadder.TraceRealizes.toReachUsing root.reflReach realizes
-
 theorem DripTraceRealizes.toRealizedChain
     {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
     {root : DeploymentRoot cfg base deployed ca} {coalition : Finset Adr}
@@ -39,26 +31,6 @@ theorem DripTraceRealizes.toRealizedChain
     RealizedChain (snapshot coalition ca deployed.state) steps
       (snapshot coalition ca future.state) :=
   AccountingLadder.TraceRealizes.toReplay realizes
-
-theorem dripTraceRealizes_of_configuredHistoryTrace
-    {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
-    (root : DeploymentRoot cfg base deployed ca) (coalition : Finset Adr)
-    (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
-    ∃ steps, DripTraceRealizes root coalition steps future :=
-  AccountingLadder.TraceRealizes.of_configuredHistoryTrace (ladder coalition ca)
-    root.stateInv history hcov
-
-theorem dripTraceRealizes_exists_of_reachUsing
-    {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
-    (root : DeploymentRoot cfg base deployed ca) (coalition : Finset Adr)
-    (reach : BlockChain.ReachUsing cfg deployed future)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
-    ∃ steps, DripTraceRealizes root coalition steps future :=
-  AccountingLadder.TraceRealizes.exists_of_reachUsing (ladder coalition ca)
-    root.stateInv reach hcov
 
 /-! ## T13 — root snapshot and the actual-history telescopes -/
 

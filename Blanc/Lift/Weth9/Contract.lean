@@ -57,8 +57,4 @@ def weth9Sem : CodeSem where
 /-- **The WETH9 frame contract**: booked-sum solvency over the lifted runtime. -/
 noncomputable def weth9Spec : ContractSpecSem := ContractSpecSem.ofBookedSum weth9Sem bookedSum
 
-theorem weth9Spec_inv : weth9Spec.Inv = Solvent := rfl
-
-theorem weth9Spec_side : weth9Spec.Side = SumNof := rfl
-
 end Blanc.Lift.Weth9

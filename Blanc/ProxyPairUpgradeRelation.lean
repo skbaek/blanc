@@ -58,12 +58,6 @@ def architecture (proxyProg : Prog) (proxy : Adr) :
     migration := migration proxy
     relation := upgradeRelation proxy }
 
-theorem migration_reads_v1 (proxy : Adr) (state : State) :
-    storageWord (migration proxy state) proxy v1ValueSlot =
-      storageWord state proxy v1ValueSlot := by
-  simp [migration, v1ValueSlot_ne_migrationMarkerSlot.symm,
-    v1ValueSlot_ne_v2ValueSlot.symm]
-
 theorem migration_writes_v2 (proxy : Adr) (state : State) :
     storageWord (migration proxy state) proxy v2ValueSlot =
       storageWord state proxy v1ValueSlot := by
@@ -102,14 +96,6 @@ deriving DecidableEq
 def sharedCalldata : SharedCall → Bytes
   | .value => valueCalldata
   | .setValue word => setValueCalldata word
-
-theorem sharedCalldata_selector (call : SharedCall) :
-    match call with
-    | .value => (sharedCalldata call).take 4 = valueCalldata
-    | .setValue _ => (sharedCalldata call).take 4 =
-        abiSelectorBytes setValueSelector := by
-  cases call <;> simp [sharedCalldata, valueCalldata, setValueCalldata,
-    abiSelectorBytes_length]
 
 def sharedInput (_call : SharedCall) : Prop := True
 

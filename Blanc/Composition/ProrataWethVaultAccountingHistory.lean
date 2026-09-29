@@ -273,19 +273,6 @@ def PairStepRecord.fourQuoteSteps {vault : Adr} (steps : List (PairStepRecord va
   steps.filterMap PairStepRecord.fourQuoteStep?
 -- shape of `PairStepRecord.ledger` (History.lean:65).
 
-theorem PairStepRecord.fourQuoteSteps_length_le {vault : Adr}
-    (steps : List (PairStepRecord vault)) :
-    (PairStepRecord.fourQuoteSteps steps).length ≤ steps.length :=
-  List.length_filterMap_le _ _
-
-/-- Every kept operation is a record of the history, with that record's endpoints (U9's hook). -/
-theorem PairStepRecord.mem_fourQuoteSteps {vault : Adr} {steps : List (PairStepRecord vault)}
-    {q : FourQuote.FourQuoteStep vault} (member : q ∈ PairStepRecord.fourQuoteSteps steps) :
-    ∃ r ∈ steps, r.step.fourQuoteStep? = some q ∧ q.before = r.before ∧ q.after = r.after := by
-  obtain ⟨r, rMember, hq⟩ := List.mem_filterMap.mp member
-  obtain ⟨hb, ha⟩ := PairStep.fourQuoteStep?_eq_some hq
-  exact ⟨r, rMember, hq, hb, ha⟩
-
 /-! ## 3. The path of a realized history -/
 
 /-- **The list-to-path construction.**  A connected pair replay whose steps debit nothing carries a

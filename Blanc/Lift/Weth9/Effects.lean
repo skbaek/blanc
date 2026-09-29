@@ -76,8 +76,6 @@ def Call.stor (s : Stor) : Call → Option Stor
   | .transferFrom who src dst w => xferStorStep s who src dst w
   | .approve who g w => some (s.set (allowSlot who g) w)
 
-theorem allowSlot_eq_allowKey (o p : Adr) : allowSlot o p = allowKey o.toB256 p.toB256 := rfl
-
 theorem toB256_inj {a b : Adr} (h : a.toB256 = b.toB256) : a = b := by
   have := congrArg B256.toAdr h
   rwa [toAdr_toB256, toAdr_toB256] at this

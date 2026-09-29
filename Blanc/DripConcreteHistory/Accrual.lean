@@ -4,11 +4,6 @@ namespace Blanc
 open Jaune
 namespace Drip
 
-theorem concreteDripValidated :
-    validateTransaction pragueRules concreteDripTx 0 =
-      .ok (calculateIntrinsicCost pragueRules concreteDripTx 0) := by
-  decide +kernel
-
 theorem concreteDripChecked :
     checkTransaction (initBenv .prague concreteJoined concreteDripExecutionHeader).beginTransaction
       (deploymentTxPreludeBout .init concreteDripTx 0) concreteDripTx =

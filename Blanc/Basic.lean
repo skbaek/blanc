@@ -19,9 +19,6 @@ open Jaune Jaune.List Jaune.B256
 instance : @Zero Bool := ⟨false⟩
 instance : @One Bool := ⟨true⟩
 
-theorem Bool.zero : 0 = false := rfl
-theorem Bool.one : 1 = true := rfl
-
 def Split {α} [HAppend α α α] : α → α → α → Prop
   | a, ab, b => ab = a ++ b
 
@@ -125,11 +122,5 @@ def Lean.Expr.apply (x : Lean.Expr) : Lean.Elab.Tactic.TacticM Unit := do
     Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
     replaceMainGoal mvarIds'
 
-
-theorem Bool.lt_or_ge (x y : Bool) : x < y ∨ x ≥ y := by
-  cases x <;> cases y <;> simp
-
-theorem Bool.lt_or_eq_of_le {x y : Bool} : x ≤ y → (x < y ∨ x = y) := by
-  cases x <;> cases y <;> simp
 
 end Blanc

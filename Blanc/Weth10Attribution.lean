@@ -60,16 +60,6 @@ theorem projectedAllowanceKey_region (owner spender : B256) :
     InRegion .allowance (projectedAllowanceKey owner spender) :=
   runtimeAllowanceKey_region _
 
-/-- A projected allowance key is never an address-shaped balance key. -/
-theorem projectedAllowanceKey_not_valid (owner spender : B256) :
-    ¬ ValidAdr (projectedAllowanceKey owner spender) :=
-  runtimeAllowanceKey_not_valid _
-
-/-- A projected allowance key is never the flash counter slot. -/
-theorem projectedAllowanceKey_ne_flash (owner spender : B256) :
-    projectedAllowanceKey owner spender ≠ flashMintedSlot :=
-  runtimeAllowanceKey_ne_flash _
-
 /-! ## Allowance-region visits -/
 
 /-- The exact site and data of one committed visit to the tagged allowance
@@ -256,16 +246,6 @@ theorem isFlashInvocation_eq_false_of_ownRecordLast {e : Sevm}
   | false => rfl
   | true =>
       rw [ownRecordLast, hflash, Bool.true_or] at h
-      exact Bool.noConfusion h
-
-/-- A frame that records its own contribution first is not a `permit`
-invocation. -/
-theorem isPermitInvocation_eq_false_of_ownRecordLast {e : Sevm}
-    (h : ownRecordLast e = false) : isPermitInvocation e = false := by
-  cases hpermit : isPermitInvocation e with
-  | false => rfl
-  | true =>
-      rw [ownRecordLast, hpermit, Bool.or_true] at h
       exact Bool.noConfusion h
 
 /-! ## Chronological attribution stream -/
@@ -688,44 +668,6 @@ private def spendFrame60 (u w : Adr) (ow sp : B256) : CountedFrame :=
 private def approveDecrementLedger (u w : Adr) (ow sp : B256) : List CountedFrame :=
   [approveFrame1 u ow sp, spendFrame40 u w ow sp, spendFrame60 u w ow sp]
 
-theorem approveDecrementLedger_root_before_spend40 (u : Adr) (ow sp : B256) :
-    attributionRootAt [approveFrame1 u ow sp] (projectedAllowanceKey ow sp) =
-      .approve u := by
-  simp [approveFrame1, fixtureFrame, attributionRootAt, AllowanceEvent.key]
-
-theorem approveDecrementLedger_root_before_spend60 (u w : Adr) (ow sp : B256) :
-    attributionRootAt [spendFrame40 u w ow sp, approveFrame1 u ow sp]
-        (projectedAllowanceKey ow sp) =
-      .approve u := by
-  simp [spendFrame40, approveFrame1, fixtureFrame, attributionRootAt, AllowanceEvent.key]
-
-theorem spend40Debit_hardenedFor (u : Adr) (ow sp : B256) :
-    (spend40Debit u ow sp).hardenedFor [approveFrame1 u ow sp] u = true := by
-  simp [spend40Debit, DebitProvenance.hardenedFor, approveFrame1, fixtureFrame,
-    attributionRootAt, AllowanceEvent.key, AttributionRoot.attributedTo]
-
-theorem spend60Debit_hardenedFor (u w : Adr) (ow sp : B256) :
-    (spend60Debit u ow sp).hardenedFor [spendFrame40 u w ow sp, approveFrame1 u ow sp] u =
-      true := by
-  simp [spend60Debit, DebitProvenance.hardenedFor, spendFrame40, approveFrame1, fixtureFrame,
-    attributionRootAt, AllowanceEvent.key, AttributionRoot.attributedTo]
-
-theorem approveDecrementLedger_hardenedOutflow_eq_permanentOutflow
-    (u w : Adr) (ow sp : B256) (hne : u ≠ w) :
-    hardenedOutflowGo u [] (approveDecrementLedger u w ow sp) = 100 ∧
-    (approveFrame1 u ow sp).permanentOutflow u +
-        (spendFrame40 u w ow sp).permanentOutflow u +
-        (spendFrame60 u w ow sp).permanentOutflow u =
-      100 := by
-  constructor
-  · simp [approveDecrementLedger, hardenedOutflowGo, approveFrame1, spendFrame40,
-      spendFrame60, CountedFrame.hardenedContribution, CountedFrame.permanentOutflow,
-      FlowAtom.holderFlow, HolderFlow.zero, fixtureFrame, spend40Debit, spend60Debit,
-      DebitProvenance.hardenedFor, attributionRootAt, AllowanceEvent.key,
-      AttributionRoot.attributedTo, hne.symm]
-  · simp [approveFrame1, spendFrame40, spendFrame60, fixtureFrame,
-      CountedFrame.permanentOutflow, FlowAtom.holderFlow, HolderFlow.zero, hne.symm]
-
 /-! ### Permit-rooted third-party spend
 
 A relayer submits a `permit` whose owner word normalizes to `u`; a later
@@ -766,16 +708,6 @@ private def permitSpendFrame (u w : Adr) (ow sp : B256) : CountedFrame :=
         codeAddress := some 0
         depth := 1 })
 
-theorem permitFrame1_root (relayer : Adr) (ow sp : B256) :
-    attributionRootAt [permitFrame1 relayer ow sp] (projectedAllowanceKey ow sp) =
-      .permit ow := by
-  simp [permitFrame1, fixtureFrame, attributionRootAt, AllowanceEvent.key]
-
-theorem permitSpendDebit_hardenedFor (relayer u : Adr) (ow sp : B256) (how : ow.toAdr = u) :
-    (permitSpendDebit u ow sp).hardenedFor [permitFrame1 relayer ow sp] u = true := by
-  simp [permitSpendDebit, DebitProvenance.hardenedFor, permitFrame1, fixtureFrame,
-    attributionRootAt, AllowanceEvent.key, AttributionRoot.attributedTo, how]
-
 /-! ### Checkpoint root
 
 A spend at a key with no preceding counted write in the ledger roots at the
@@ -804,15 +736,6 @@ private def checkpointSpendFrame (u w : Adr) (ow sp : B256) : CountedFrame :=
         currentTarget := 0
         codeAddress := some 0
         depth := 1 })
-
-theorem checkpointSpendDebit_root_at_empty (ow sp : B256) :
-    attributionRootAt [] (projectedAllowanceKey ow sp) = .checkpoint := by
-  simp [attributionRootAt]
-
-theorem checkpointSpendDebit_hardenedFor (u : Adr) (ow sp : B256) :
-    (checkpointSpendDebit u ow sp).hardenedFor [] u = true := by
-  simp [checkpointSpendDebit, DebitProvenance.hardenedFor, attributionRootAt,
-    AttributionRoot.attributedTo]
 
 /-! ### Max-allowance transparency
 
@@ -852,16 +775,6 @@ private def maxSpendFrame (u w : Adr) (ow sp : B256) : CountedFrame :=
         currentTarget := 0
         codeAddress := some 0
         depth := 1 })
-
-theorem maxApproveFrame_root (u : Adr) (ow sp : B256) :
-    attributionRootAt [maxApproveFrame u ow sp] (projectedAllowanceKey ow sp) =
-      .approve u := by
-  simp [maxApproveFrame, fixtureFrame, attributionRootAt, AllowanceEvent.key]
-
-theorem maxSpendDebit_hardenedFor (u : Adr) (ow sp : B256) :
-    (maxSpendDebit u ow sp).hardenedFor [maxApproveFrame u ow sp] u = true := by
-  simp [maxSpendDebit, DebitProvenance.hardenedFor, maxApproveFrame, fixtureFrame,
-    attributionRootAt, AllowanceEvent.key, AttributionRoot.attributedTo]
 
 /-! ### Flash decrement link
 
@@ -907,17 +820,6 @@ private def flashSpendDebit (u : Adr) (ow sp : B256) : DebitProvenance :=
     source := u
     branch := .delegated (.finite (projectedAllowanceKey ow sp) 3 0) }
 
-theorem flashSpendDebit_root (u : Adr) (ow sp : B256) :
-    attributionRootAt [flashFrame u ow sp, flashApproveFrame u ow sp]
-        (projectedAllowanceKey ow sp) =
-      .approve u := by
-  simp [flashFrame, flashApproveFrame, fixtureFrame, attributionRootAt, AllowanceEvent.key]
-
-theorem flashFrame_permanentOutflow_zero (u : Adr) (ow sp : B256) :
-    (flashFrame u ow sp).permanentOutflow u = 0 := by
-  simp [flashFrame, fixtureFrame, CountedFrame.permanentOutflow, FlowAtom.holderFlow,
-    HolderFlow.zero]
-
 /-! ### Read-only and infinite-allowance flash visits
 
 The two remaining `AllowanceVisit` constructors.  `.viewRead` is the
@@ -943,19 +845,6 @@ theorem viewReadVisit_reads_without_writing (value : B256) :
     (AllowanceVisit.viewRead value).read? = some value ∧
       (AllowanceVisit.viewRead value).written? = none :=
   ⟨rfl, rfl⟩
-
-theorem viewReadFrame_root_transparent (u viewer : Adr) (ow sp value : B256) :
-    attributionRootAt [viewReadFrame viewer ow sp value, approveFrame1 u ow sp]
-        (projectedAllowanceKey ow sp) =
-      .approve u := by
-  simp [viewReadFrame, approveFrame1, fixtureFrame, attributionRootAt, AllowanceEvent.key]
-
-theorem viewReadFrame_lastWrite_transparent (u viewer : Adr) (ow sp value : B256) :
-    lastAllowanceWriteAt [viewReadFrame viewer ow sp value, approveFrame1 u ow sp]
-        (projectedAllowanceKey ow sp) =
-      some 100 := by
-  simp [viewReadFrame, approveFrame1, fixtureFrame, lastAllowanceWriteAt, AllowanceEvent.key,
-    AllowanceVisit.written?]
 
 /-- A view read moves nothing and is not an effectful authorization; it
 touches a pair without ever entering the hardened fold. -/
@@ -1003,24 +892,6 @@ theorem flashMaxVisit_reads_without_writing :
     AllowanceVisit.flashMax.read? = some B256.max ∧
       AllowanceVisit.flashMax.written? = none :=
   ⟨rfl, rfl⟩
-
-theorem flashMaxFrame_root_transparent (u borrower : Adr) (ow sp : B256) :
-    attributionRootAt [flashMaxFrame borrower ow sp, maxApproveFrame u ow sp]
-        (projectedAllowanceKey ow sp) =
-      .approve u := by
-  simp [flashMaxFrame, maxApproveFrame, fixtureFrame, attributionRootAt, AllowanceEvent.key]
-
-theorem flashMaxFrame_lastWrite_transparent (u borrower : Adr) (ow sp : B256) :
-    lastAllowanceWriteAt [flashMaxFrame borrower ow sp, maxApproveFrame u ow sp]
-        (projectedAllowanceKey ow sp) =
-      some B256.max := by
-  simp [flashMaxFrame, maxApproveFrame, fixtureFrame, lastAllowanceWriteAt, AllowanceEvent.key,
-    AllowanceVisit.written?]
-
-theorem flashMaxDebit_hardenedFor (u borrower : Adr) (ow sp : B256) :
-    (flashMaxDebit borrower ow sp).hardenedFor [maxApproveFrame u ow sp] u = true := by
-  simp [flashMaxDebit, DebitProvenance.hardenedFor, maxApproveFrame, fixtureFrame,
-    attributionRootAt, AllowanceEvent.key, AttributionRoot.attributedTo]
 
 /-- The max flash arm's pair cancels just as the finite arm's does, so its
 hardened contribution is zero however the chain roots. -/
@@ -1106,15 +977,6 @@ theorem dirtyPair_pairwise :
       (cleanOwnerWord, fixtureSpenderWord)].Pairwise
       (fun p q => p ≠ q → projectedAllowanceKey p.1 p.2 ≠ projectedAllowanceKey q.1 q.2) :=
   List.pairwise_pair.mpr fun _ => dirtyPair_projectedAllowanceKey_ne
-
-/-- `dirtySpendDebit_root_checkpoint` with its separation hypothesis
-discharged by computation: an `approve` stored at the dirty alias governs
-nothing at the clean pair's key. -/
-theorem dirtySpendDebit_root_checkpoint_computed (u : Adr) :
-    attributionRootAt [dirtyApproveFrame u dirtyOwnerWord fixtureSpenderWord]
-        (projectedAllowanceKey cleanOwnerWord fixtureSpenderWord) =
-      .checkpoint :=
-  dirtySpendDebit_root_checkpoint u _ _ _ _ dirtyPair_projectedAllowanceKey_ne
 
 /-! ### Dormant vs. non-dormant
 
@@ -1265,22 +1127,6 @@ theorem nonDormantApproveFrameByU_authorizes (u : Adr) (owU spU : B256) :
     (nonDormantApproveFrameByU u owU spU).authorizes u = true := by
   simp [nonDormantApproveFrameByU, fixtureFrame, CountedFrame.authorizes]
 
-theorem dormantSpendFrame_root_dormant (other u w : Adr) (spW : B256) :
-    attributionRootAt [dormantApproveFrame w spW, dormantMintFrame other u]
-        (projectedAllowanceKey w.toB256 spW) =
-      .approve w := by
-  simp [dormantApproveFrame, fixtureFrame, attributionRootAt, AllowanceEvent.key]
-
-theorem dormantSpendFrame_root_nonDormant (other u w : Adr) (spW owU spU : B256)
-    (hk : projectedAllowanceKey owU spU ≠ projectedAllowanceKey w.toB256 spW) :
-    attributionRootAt
-        [nonDormantApproveFrameByU u owU spU, dormantApproveFrame w spW,
-          dormantMintFrame other u]
-        (projectedAllowanceKey w.toB256 spW) =
-      .approve w := by
-  simp [nonDormantApproveFrameByU, dormantApproveFrame, fixtureFrame,
-    attributionRootAt, AllowanceEvent.key, hk]
-
 /-! ### Self-bypass and direct debits
 
 A direct-caller redemption and a raw-word self-bypass transfer both carry a
@@ -1321,90 +1167,15 @@ private def selfBypassTransferFrame (u w : Adr) : CountedFrame :=
         codeAddress := some 0
         depth := 1 })
 
-theorem directRedeemDebit_hardenedFor (u : Adr) :
-    (directRedeemDebit u).hardenedFor [] u = true := by
-  simp [directRedeemDebit, DebitProvenance.hardenedFor]
-
-theorem selfBypassDebit_hardenedFor (u : Adr) :
-    (selfBypassDebit u).hardenedFor [] u = true := by
-  simp [selfBypassDebit, DebitProvenance.hardenedFor]
-
-theorem directRedeemFrame_hardenedContribution_eq_outflow (u : Adr) :
-    (directRedeemFrame u).hardenedContribution [] u =
-        (directRedeemFrame u).permanentOutflow u ∧
-      (directRedeemFrame u).permanentOutflow u = 4 := by
-  simp [directRedeemFrame, fixtureFrame, CountedFrame.hardenedContribution,
-    CountedFrame.permanentOutflow, FlowAtom.holderFlow, HolderFlow.zero, directRedeemDebit,
-    DebitProvenance.hardenedFor]
-
-theorem selfBypassTransferFrame_hardenedContribution_eq_outflow (u w : Adr) (hne : u ≠ w) :
-    (selfBypassTransferFrame u w).hardenedContribution [] u =
-        (selfBypassTransferFrame u w).permanentOutflow u ∧
-      (selfBypassTransferFrame u w).permanentOutflow u = 2 := by
-  simp [selfBypassTransferFrame, fixtureFrame, CountedFrame.hardenedContribution,
-    CountedFrame.permanentOutflow, FlowAtom.holderFlow, HolderFlow.zero, selfBypassDebit,
-    DebitProvenance.hardenedFor, hne.symm]
-
 /-! ### Duplicate-pair `Pairwise` shape -/
 
-/-- Two identical touched pairs trivially satisfy the pairwise
-non-collision shape: the antecedent `p ≠ q` is refutable by `rfl` since both
-list elements are literally the same pair, so no keccak evaluation is
-needed.  This fixture therefore pins the duplicate-pair shape only; the
-computed distinct-key evidence for genuinely *different* touched pairs is
-`dirtyPair_pairwise` above, which discharges the same shape through the
-kernel-evaluated separation `dirtyPair_projectedAllowanceKey_ne`. -/
-theorem duplicatePair_pairwise (ow sp : B256) :
-    [(ow, sp), (ow, sp)].Pairwise
-      (fun p q => p ≠ q → projectedAllowanceKey p.1 p.2 ≠ projectedAllowanceKey q.1 q.2) :=
-  List.pairwise_pair.mpr fun h => absurd rfl h
-
 /-! ### Last-committed-write walk -/
-
-theorem approveDecrementLedger_lastWrite_after_approve (u : Adr) (ow sp : B256) :
-    lastAllowanceWriteAt [approveFrame1 u ow sp] (projectedAllowanceKey ow sp) =
-      some 100 := by
-  simp [approveFrame1, fixtureFrame, lastAllowanceWriteAt, AllowanceEvent.key,
-    AllowanceVisit.written?]
-
-theorem approveDecrementLedger_lastWrite_after_spend40 (u w : Adr) (ow sp : B256) :
-    lastAllowanceWriteAt [spendFrame40 u w ow sp, approveFrame1 u ow sp]
-        (projectedAllowanceKey ow sp) =
-      some 60 := by
-  simp [spendFrame40, fixtureFrame, lastAllowanceWriteAt, AllowanceEvent.key,
-    AllowanceVisit.written?]
-
-theorem maxSpend_lastWrite_transparent (u w : Adr) (ow sp : B256) :
-    lastAllowanceWriteAt [maxSpendFrame u w ow sp, maxApproveFrame u ow sp]
-        (projectedAllowanceKey ow sp) =
-      some B256.max := by
-  simp [maxSpendFrame, maxApproveFrame, fixtureFrame, lastAllowanceWriteAt, AllowanceEvent.key,
-    AllowanceVisit.written?]
-
-theorem flashFrame_lastWrite (u : Adr) (ow sp : B256) :
-    lastAllowanceWriteAt [flashFrame u ow sp, flashApproveFrame u ow sp]
-        (projectedAllowanceKey ow sp) =
-      some 3 := by
-  simp [flashFrame, fixtureFrame, lastAllowanceWriteAt, AllowanceEvent.key,
-    AllowanceVisit.written?]
-
-theorem emptyLedger_lastWrite_none (k : B256) :
-    lastAllowanceWriteAt [] k = none := by
-  simp [lastAllowanceWriteAt]
 
 theorem dirtyPair_lastWrite_none (u : Adr) (ow1 sp1 ow2 sp2 : B256)
     (hk : projectedAllowanceKey ow1 sp1 ≠ projectedAllowanceKey ow2 sp2) :
     lastAllowanceWriteAt [dirtyApproveFrame u ow1 sp1] (projectedAllowanceKey ow2 sp2) =
       none := by
   simp [dirtyApproveFrame, fixtureFrame, lastAllowanceWriteAt, AllowanceEvent.key, hk]
-
-/-- The same walk with the separation hypothesis discharged by computation:
-the dirty alias's stored word is invisible at the clean pair's key. -/
-theorem dirtyPair_lastWrite_none_computed (u : Adr) :
-    lastAllowanceWriteAt [dirtyApproveFrame u dirtyOwnerWord fixtureSpenderWord]
-        (projectedAllowanceKey cleanOwnerWord fixtureSpenderWord) =
-      none :=
-  dirtyPair_lastWrite_none u _ _ _ _ dirtyPair_projectedAllowanceKey_ne
 
 /-! ## Fixtures lifted to the history-altitude premise shapes
 

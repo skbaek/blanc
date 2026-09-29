@@ -234,25 +234,6 @@ theorem frame_post_gen {P : Sevm → Devm → Ninst → Devm → Prop}
       (approve_wrapper_solvent hg hadm (hd.inv.left rfl) r))
     hwithdraw hpre
 
-/-- **The WETH9 frame postcondition** under the deeper-frame hypothesis in the
-form `ContractSpecSem.Sound` supplies it. -/
-theorem frame_post {pre post : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (hrun : SProg.Run prog sevm pre post)
-    (hadm : AllowAdmitted sevm)
-    (ih : ∀ pc' sevm' pre' post',
-        Exec pc' sevm' pre' (.ok post') →
-        sevm'.depth < sevm.depth →
-        CodeSem.At weth9Spec.sem sevm.currentTarget pc' sevm' pre' →
-        CoveredFork sevm'.benvStat.fork →
-        weth9Spec.PreWf sevm.currentTarget sevm' pre' →
-        weth9Spec.Post sevm.currentTarget sevm' post')
-    (hpre : weth9Spec.Pre sevm.currentTarget sevm pre) :
-    weth9Spec.Post sevm.currentTarget sevm post :=
-  frame_post_gen id hfork hrun hadm
-    (fun h8 hd r => Weth9.withdraw_post (c := weth9Spec)
-      (fun h hle => Weth9.solvent_withdraw_step h hle) hfork rfl ih h8 r hd) hpre
-
 /-- **The WETH9 frame postcondition inside a root derivation**, under the
 deeper-frame hypothesis in the form `ContractSpecSem.SoundAdmitted` supplies
 it: the lifted run is a `StepIn R` run and `R` is admitted. -/

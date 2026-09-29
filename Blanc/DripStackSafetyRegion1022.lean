@@ -363,14 +363,4 @@ theorem subtree1022_layout_checked :
   · exact region1022_subtree1097_layout_checked
   · decide +kernel
 
-/-- PC 1165 lies in subtree1022; its taken successor PC 1212 is outside subtree1022. -/
-theorem row1165_cross_region_checked :
-    checkRow code.toByteArray table 8 1165 [some 1212, none, none] = true := by
-  decide +kernel
-
-/-- Strict ordering and the exact region population are checked independently. -/
-theorem subtree1022_order_and_size_checked :
-    subtree1022.checkOrder = true ∧ subtree1022.size = 183 := by
-  decide +kernel
-
 end Blanc.Drip.StackSafety

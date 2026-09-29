@@ -74,11 +74,6 @@ open Blanc.Prorata
 def ceilClaimN (o shares supply balance : Nat) : Nat :=
   Jaune.ceilDiv (shares * (balance + 1)) (supply + o)
 
-theorem claimN_mono_shares {o c c' supply balance : Nat} (h : c ≤ c') :
-    claimN o c supply balance ≤ claimN o c' supply balance := by
-  unfold claimN payN
-  exact Nat.div_le_div_right (Nat.mul_le_mul_right _ h)
-
 /-- Floor claims are superadditive: splitting a holding never raises its claim. -/
 theorem claimN_add_ge (o c m supply balance : Nat) :
     claimN o c supply balance + claimN o m supply balance ≤
@@ -954,11 +949,6 @@ theorem victim_loss_bound_of_pairAttackPath (ho : 2 ≤ o)
   apply victim_loss_le_div_add_one (by omega) deposit.minted_eq ?_ exit.payout_eq
   simpa only [VictimDeposit.post] using hvictim
 
-/-- The fixed WETH port's offset discharges the guard. -/
-theorem claimBound_offsetN {state : PairAttackState Blanc.ProrataWethVault.offsetN}
-    (path : PairAttackPath Blanc.ProrataWethVault.offsetN state) : state.ClaimBound :=
-  path.claimBound Blanc.ProrataWethVault.two_le_offsetN
-
 end PairAttackPath
 
 /-! ## PRORATA is the same-role fragment -/
@@ -998,15 +988,5 @@ theorem PairAttackEffect.ofProrata {o : Nat} {pre post : ProrataAttackState o}
       exact .victimExit ⟨pre, sharesIn, sharesOut⟩ deposit
         ⟨pre.accounting, paid, hpaid⟩ hphase rfl
   | silent => exact .silent _
-
-/-- Every PRORATA attack path is a pair attack path with no priced crossing. -/
-theorem PairAttackPath.ofProrata {o : Nat} {state : ProrataAttackState o}
-    (path : ProrataAttackPath o state) : PairAttackPath o ⟨state, 0, 0⟩ := by
-  induction path with
-  | genesis => exact .genesis
-  | snoc step path ih =>
-      exact .snoc
-        ⟨⟨step.pre, 0, 0⟩, ⟨step.post, 0, 0⟩, .ofProrata step.kind, step.provenance,
-          .ofProrata step.effect 0 0⟩ ih
 
 end Blanc.Composition.ProrataWethVault

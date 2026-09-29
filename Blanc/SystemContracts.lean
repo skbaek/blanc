@@ -128,9 +128,6 @@ theorem withdrawalRequestCode_spawnFreeReach : SpawnFreeReach withdrawalRequestC
 
 theorem consolidationRequestCode_spawnFreeReach : SpawnFreeReach consolidationRequestCode :=
   spawnFreeReach_of_check (by decide +kernel)
-
-/-- Offset-blind spawn-freedom is the special case of `SpawnFreeReach`. -/
-theorem SpawnFree.reach {code : ByteArray} (h : SpawnFree code) : SpawnFreeReach code :=
   fun pc x _ => h pc x
 
 /-- **`SpawnFree` is false of the canonical EIP-7002 code**: the `0xF4` at offset `67` decodes as

@@ -253,9 +253,6 @@ def runtimeBaselineAux : List Func :=
     emptyDelegatecallError,
     Func.revertData allocationPanicData ]
 
-theorem runtimeBaselineAux_length : runtimeBaselineAux.length = 15 := by
-  rfl
-
 def runtimeBaselineMain : Func :=
   fsig +++ linearDispatchWith fallbackSlot runtimeBaselineEntries
 

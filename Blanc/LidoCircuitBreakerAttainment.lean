@@ -292,25 +292,6 @@ theorem runtimeMain_routeTo_dispatch (dp : DeployParams)
     simp [runtimeMainEntryPrefix]
   exact pathEq ▸ dispatchRoute body arm
 
-/-- The `.call setPauserSlot` crossing, on top of the leg above.
-
-An internal `.call` restarts the source position at the callee's root, so the
-target path is `setPauserAssignmentPath` regardless of where in the dispatcher
-or in `registerPauser`'s body the call was reached: **no dispatcher path
-arithmetic survives the call**.  Only the branch words do. -/
-theorem call_setPauserSlot_routeTo_assignment
-    {fs : List Func} {sevm : Sevm} {devm : Devm} {out : Execution}
-    {current : Prog.SourcePath}
-    (lookup : fs[setPauserSlot]? = some setPauserKernel)
-    (h : Func.RunCompiledTo fs sevm devm (.call setPauserSlot) out)
-    (nonzeroTarget : ∀ kernelStart zeroCheck : Devm,
-      Line.Run sevm kernelStart setPauserKernelZeroCheck zeroCheck →
-      ∀ (w : B256) (rest : Stack), zeroCheck.stack = w :: rest → w = 0) :
-    Func.RunCompiledTo.RouteTo current h setPauserAssignmentPath
-      (.reg .sstore) :=
-  routeTo_call h lookup fun kernelStart _burn tail =>
-    setPauserKernel_routeTo_assignment tail (nonzeroTarget kernelStart)
-
 /-- A crossing that leaves the world state alone leaves storage alone.  Every
 `Devm.PopBurnBy` and `Devm.BurnBy` the route kit hands back is `Devm.Rels.eq`
 at the `state` field, so this is the whole content of "a branch and a call

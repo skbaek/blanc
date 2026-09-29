@@ -238,10 +238,6 @@ theorem RuntimePersistentWrite.all_length :
     RuntimePersistentWrite.all.length = 20 := by
   decide
 
-theorem RuntimePersistentWrite.all_nodup :
-    RuntimePersistentWrite.all.Nodup := by
-  decide
-
 /-- The semantic label order is definitionally aligned with the frozen literal
 inventory, independently of compiler structural source order. -/
 theorem RuntimePersistentWrite.inventory_exact :
@@ -938,14 +934,6 @@ theorem runtimeExternalCallSourceSites_instructions (dp : DeployParams) :
     runtime_persistentProgramShape_eq]
   exact runtimeExternalCallInstructions_official
 
-theorem runtimeTransientSourceSites_length (dp : DeployParams) :
-    (runtimeTransientSourceSites dp).length = 3 := by
-  simpa using congrArg List.length (runtimeTransientSourceSites_pcs dp)
-
-theorem runtimeExternalCallSourceSites_length (dp : DeployParams) :
-    (runtimeExternalCallSourceSites dp).length = 2 := by
-  simpa using congrArg List.length (runtimeExternalCallSourceSites_pcs dp)
-
 theorem runtimeTransientSourceSite_instruction
     {dp : DeployParams} {site : Prog.SourceSite}
     (member : site ∈ runtimeTransientSourceSites dp) :
@@ -1039,11 +1027,5 @@ theorem runtimePersistent_effectDomains_separate
       ⟨externalInstruction, externalEq⟩
     rw [externalEq] at instruction
     cases instruction
-
-/-- Constructor effects are a separate 2/0/0 program domain, not members of
-the runtime's 20/3/2 source map. -/
-theorem constructorProgramSiteCounts_exact :
-    constructorProgramSiteCounts = (2, 0, 0) :=
-  constructor_program_site_counts_exact
 
 end Blanc.LidoCircuitBreaker

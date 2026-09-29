@@ -136,21 +136,6 @@ theorem decimals_gas_exact {sevm : Sevm} {pre : Devm}
     decimals_runCompiled h_sel h_stack h_mem h_gas
   exact ⟨post, Prog.exec_of_runCompiled h_run h_code, h_gas_eq, h_out⟩
 
-/-- **`fmint`'s `decimals()` call succeeds**, and returns `0x12`. The
-`fmint_totalSupply_succeeds`-shaped statement for this target, with the gas
-conjunct dropped. -/
-theorem fmint_decimals_succeeds {sevm : Sevm} {pre : Devm}
-    (h_code : some sevm.code.toList = Prog.compile fmint)
-    (h_sel : Sevm.selector sevm = dcSel)
-    (h_stack : pre.stack = [])
-    (h_mem : pre.memory = Mem.empty)
-    (h_gas : decimalsGas ≤ pre.gasLeft) :
-    ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧
-      Devm.output post = (0x12 : B256).toBytes := by
-  obtain ⟨post, h_exec, _, h_out⟩ :=
-    decimals_gas_exact h_code h_sel h_stack h_mem h_gas
-  exact ⟨post, h_exec, h_out⟩
-
 /-- **`fmint`'s `decimals()` call costs exactly `decimalsGas`, from an
 arbitrary `Prog.RunCompiled` witness.** By determinism; see
 `Blanc.weth_balanceOf_gas_of_runCompiled`. -/
@@ -214,31 +199,6 @@ theorem totalSupply_gas_exact {sevm : Sevm} {pre : Devm}
       ?_, rfl⟩
   simp only [Devm.gasLeft_withOutput, Devm.gasLeft_memRead_snd, Devm.gasLeft_setMach,
     totalSupplyGas_eq]
-  omega
-
-/-- **`fmint`'s `totalSupply()` call costs exactly `totalSupplyGas`, from an
-arbitrary `Prog.RunCompiled` witness.**
-
-The hypothesis-position shape, by determinism rather than inversion — same
-route as `weth_balanceOf_gas_of_runCompiled`; see that theorem's docstring. -/
-theorem totalSupply_gas_of_runCompiled {sevm : Sevm} {pre post : Devm}
-    (h_code : some sevm.code.toList = Prog.compile fmint)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (h_sel : Sevm.selector sevm = tsSel)
-    (h_stack : pre.stack = [])
-    (h_mem : pre.memory = Mem.empty)
-    (h_cold : (⟨sevm.currentTarget, supplySlot⟩ : Adr × B256)
-      ∉ pre.accessedStorageKeys)
-    (h_gas : totalSupplyGas ≤ pre.gasLeft)
-    (h_run : Prog.RunCompiled sevm pre fmint post) :
-    pre.gasLeft = post.gasLeft + totalSupplyGas := by
-  obtain ⟨post', h_exec', h_gas_eq, _⟩ :=
-    totalSupply_gas_exact h_code hfork h_sel h_stack h_mem h_cold h_gas
-  have h_exec : exec ⟨0, sevm, pre⟩ = .ok post :=
-    Prog.exec_of_runCompiled h_run h_code
-  rw [h_exec] at h_exec'
-  injection h_exec' with h_eq
-  subst h_eq
   omega
 
 /-! ## Dropping the coldness assumption
@@ -406,11 +366,6 @@ schedule.** Message-call altitude; these two selectors only; exact under
 def fmintGas : B256 → Sevm → Devm → Option Nat :=
   fmintGasWith gJumpdest gBase gVerylow gHigh gMemory gasColdSload gasWarmAccess
 
-/-- The schedule-symbolic bridge, definitional. -/
-theorem fmintGas_eq_with :
-    fmintGas = fmintGasWith gJumpdest gBase gVerylow gHigh gMemory gasColdSload
-      gasWarmAccess := rfl
-
 set_option maxRecDepth 589 in
 /-- The two priced entrypoints are distinct, which is what makes
 `fmintGasWith`'s second branch reachable. Proved once: deciding it forces both
@@ -434,20 +389,6 @@ the pre-state argument is doing work the selector argument cannot. -/
   · rw [if_neg h]
     simp only [fmintGas, fmintGasWith, if_neg h]
     rfl
-
-/-- `fmintGas` at `totalSupply()` on a cold `supplySlot`. -/
-theorem fmintGas_tsSel_cold {sevm : Sevm} {pre : Devm}
-    (h_cold : (⟨sevm.currentTarget, supplySlot⟩ : Adr × B256)
-      ∉ pre.accessedStorageKeys) :
-    fmintGas tsSel sevm pre = some totalSupplyGas := by
-  rw [fmintGas_tsSel, if_neg h_cold]
-
-/-- `fmintGas` at `totalSupply()` on a warm `supplySlot`. -/
-theorem fmintGas_tsSel_warm {sevm : Sevm} {pre : Devm}
-    (h_warm : (⟨sevm.currentTarget, supplySlot⟩ : Adr × B256)
-      ∈ pre.accessedStorageKeys) :
-    fmintGas tsSel sevm pre = some totalSupplyGasWarm := by
-  rw [fmintGas_tsSel, if_pos h_warm]
 
 /-- `fmintGas` at `decimals()`, for every state: it reads no storage. -/
 @[simp] theorem fmintGas_dcSel {sevm : Sevm} {pre : Devm} :
@@ -489,66 +430,6 @@ theorem totalSupply_gas_exact_fmintGas {sevm : Sevm} {pre : Devm} {cost : Nat}
     subst h_cost
     exact totalSupply_gas_exact h_code hfork h_sel h_stack h_mem h h_gas
 
-/-- **`decimals()` costs exactly what `fmintGas` says it does.** The same
-restatement, on the second target; the two new arguments are supplied and
-ignored, which is what "reads no storage" looks like at this altitude. -/
-theorem decimals_gas_exact_fmintGas {sevm : Sevm} {pre : Devm} {cost : Nat}
-    (h_code : some sevm.code.toList = Prog.compile fmint)
-    (h_sel : Sevm.selector sevm = dcSel)
-    (h_stack : pre.stack = [])
-    (h_mem : pre.memory = Mem.empty)
-    (h_cost : fmintGas (Sevm.selector sevm) sevm pre = some cost)
-    (h_gas : cost ≤ pre.gasLeft) :
-    ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧
-      post.gasLeft + cost = pre.gasLeft ∧
-      Devm.output post = (0x12 : B256).toBytes := by
-  rw [h_sel, fmintGas_dcSel] at h_cost
-  injection h_cost with h_cost
-  subst h_cost
-  exact decimals_gas_exact h_code h_sel h_stack h_mem h_gas
-
-/-- **`totalSupply()` costs what `fmintGas` says, from an arbitrary
-`Prog.RunCompiled` witness, with no assumption about `supplySlot`.** The
-hypothesis-position altitude restated through the widened cost function; see
-`Blanc.weth_balanceOf_gas_of_runCompiled_wethGas` for why both altitudes get one
-and why this goes by determinism off the combined exec-altitude theorem. -/
-theorem totalSupply_gas_of_runCompiled_fmintGas {sevm : Sevm} {pre post : Devm}
-    {cost : Nat}
-    (h_code : some sevm.code.toList = Prog.compile fmint)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (h_sel : Sevm.selector sevm = tsSel)
-    (h_stack : pre.stack = [])
-    (h_mem : pre.memory = Mem.empty)
-    (h_cost : fmintGas (Sevm.selector sevm) sevm pre = some cost)
-    (h_gas : cost ≤ pre.gasLeft)
-    (h_run : Prog.RunCompiled sevm pre fmint post) :
-    pre.gasLeft = post.gasLeft + cost := by
-  obtain ⟨post', h_exec', h_gas_eq, _⟩ :=
-    totalSupply_gas_exact_fmintGas h_code hfork h_sel h_stack h_mem h_cost h_gas
-  have h_exec : exec ⟨0, sevm, pre⟩ = .ok post :=
-    Prog.exec_of_runCompiled h_run h_code
-  rw [h_exec] at h_exec'
-  injection h_exec' with h_eq
-  subst h_eq
-  omega
-
-/-- **`decimals()` costs what `fmintGas` says, from an arbitrary
-`Prog.RunCompiled` witness.** The same restatement, on the second target. -/
-theorem decimals_gas_of_runCompiled_fmintGas {sevm : Sevm} {pre post : Devm}
-    {cost : Nat}
-    (h_code : some sevm.code.toList = Prog.compile fmint)
-    (h_sel : Sevm.selector sevm = dcSel)
-    (h_stack : pre.stack = [])
-    (h_mem : pre.memory = Mem.empty)
-    (h_cost : fmintGas (Sevm.selector sevm) sevm pre = some cost)
-    (h_gas : cost ≤ pre.gasLeft)
-    (h_run : Prog.RunCompiled sevm pre fmint post) :
-    pre.gasLeft = post.gasLeft + cost := by
-  rw [h_sel, fmintGas_dcSel] at h_cost
-  injection h_cost with h_cost
-  subst h_cost
-  exact decimals_gas_of_runCompiled h_code h_sel h_stack h_mem h_gas h_run
-
 /-! ## The bound: no state can make these calls dearer
 
 fmint's half of what `Blanc/WethGas.lean`'s *The bound* section describes; read
@@ -570,11 +451,6 @@ def fmintGasMaxWith (jd base vl hi mem cold : Nat) : B256 → Option Nat := fun 
 schedule. -/
 def fmintGasMax : B256 → Option Nat :=
   fmintGasMaxWith gJumpdest gBase gVerylow gHigh gMemory gasColdSload
-
-/-- The schedule-symbolic bridge for the bound, definitional. -/
-theorem fmintGasMax_eq_with :
-    fmintGasMax = fmintGasMaxWith gJumpdest gBase gVerylow gHigh gMemory
-      gasColdSload := rfl
 
 /-- **No calldata and no accessed-key state can make a priced `fmint`
 entrypoint cost more than `fmintGasMax`.** The DoS-freedom statement,

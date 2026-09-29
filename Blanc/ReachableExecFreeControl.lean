@@ -34,18 +34,6 @@ def routeControlProgram : Prog :=
 def stopEntry : Func :=
   .call 2
 
-/-- The failing entry structurally selects function-table index one. -/
-theorem routeControlProgram_main_call :
-    routeControlProgram.main = .call 1 := by
-  rfl
-
-/-- The selected member for the main route really contains `Ninst.exec`; this
-rules out an unresolved-lookup explanation for the negative checker result. -/
-theorem routeControlProgram_selected_exec :
-    routeControlProgram.function? 1 =
-      some (.next (.exec .call) (.last .stop)) := by
-  rfl
-
 /-- Biting control: following the main entry to its closed component reaches
 the executable `CALL`, so the Boolean certificate rejects the route. -/
 theorem routeControlProgram_reachableExecFree_false :

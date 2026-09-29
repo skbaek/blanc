@@ -71,12 +71,6 @@ theorem implSlot_ne_beaconSlot : implSlot ≠ beaconSlot := by
 theorem implementationSlot_ne_implSlot : implementationSlot ≠ implSlot :=
   implSlot_ne_implementationSlot.symm
 
-theorem adminSlot_ne_implSlot : adminSlot ≠ implSlot :=
-  implSlot_ne_adminSlot.symm
-
-theorem beaconSlot_ne_implSlot : beaconSlot ≠ implSlot :=
-  implSlot_ne_beaconSlot.symm
-
 /-! ## Exact body and entry charges -/
 
 def implBodyGas : Nat :=
@@ -118,71 +112,6 @@ The storage premises are exactly those needed to select the cold, zero-to-one
 so callers can add the frame projections they need without importing a
 contract-specific execution theorem.
 -/
-
-theorem implSuccess_runCompiledTo (fs : List Func) (sevm : Sevm) (base : Devm)
-    (G : Nat) (hfork : CoveredFork sevm.benvStat.fork) (h_static : sevm.isStatic = false)
-    (h_cold : (⟨sevm.currentTarget, implSlot⟩ : Adr × B256) ∉
-      base.accessedStorageKeys)
-    (h_orig : getOrigStorVal sevm sevm.currentTarget implSlot = 0)
-    (h_cur : Devm.getStorVal base sevm.currentTarget implSlot = 0) :
-    ∃ post,
-      Func.RunCompiledTo fs sevm
-          (base.setMach ⟨[], Mem.empty, G + implBodyGas, base.stateGas⟩)
-          implSuccess (.ok post) ∧
-      post.error = base.error ∧
-      post.output = implReturnWord.toBytes ∧
-      post.gasLeft = G ∧
-      post.state = base.state.setStorVal sevm.currentTarget implSlot 1 ∧
-      Devm.getStorVal post sevm.currentTarget implSlot = 1 ∧
-      post.transientStorage = base.transientStorage ∧
-      post.logs = base.logs := by
-  apply Exists.intro
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · unfold implSuccess mstoreAt
-    func_run [22100, 3]
-    case h_legacy => exact hfork.rules_stateGas_none
-    case h_cost =>
-      rw [Devm.getStorVal_setMach, h_orig, h_cur]
-      decide
-    case h_ext =>
-      rw [show ((0 : B256) * 32).toNat = 0 by decide]
-      exact Devm.extCost_empty_word
-    case a =>
-      apply Func.runCompiledTo_return_word (i := 0) (sz := 32) (s := [])
-        (e := 0) (G := G) (out := implReturnWord.toBytes)
-      · rfl
-      · rw [show ((0 : B256)).toNat = 0 by decide,
-          show ((32 : B256)).toNat = 32 by decide,
-          show ((0 : B256) * 32).toNat = 0 by decide]
-        exact Devm.extCost_word_word Mem.size_write_word
-      · rw [Devm.gasLeft_setMach]
-        dsimp only
-        have hbody : implBodyGas = 22122 := implBodyGas_eq
-        omega
-      · rw [show ((0 : B256)).toNat = 0 by decide,
-          show ((32 : B256)).toNat = 32 by decide]
-        exact Devm.memRead_word_fst
-          (by rw [show ((0 : B256) * 32).toNat = 0 by decide]; rfl)
-    all_goals
-      rw [Devm.gasLeft_setMach]
-      dsimp only
-      have hbody : implBodyGas = 22122 := implBodyGas_eq
-      have hverylow : gVerylow = 3 := rfl
-      have hhigh : gHigh = 10 := rfl
-      have hstipend : gCallStipend = 2300 := rfl
-      omega
-  · rw [Devm.withOutput_error, Devm.memRead_error, Devm.setMach_error,
-      Devm.setMach_error, Devm.sstoreBase_error, Devm.setMach_error]
-  · rfl
-  · rfl
-  · rw [Devm.withOutput_state, Devm.memRead_state, Devm.setMach_state,
-      Devm.setMach_state, Devm.sstoreBase_state, Devm.setMach_state]
-  · rw [Devm.returnPost_getStorVal]
-    rw [Devm.getStorVal_setMach, Devm.getStorVal_setStorVal_self]
-  · rw [Devm.returnPost_transientStorage, Devm.setMach_transientStorage,
-      Devm.sstoreBase_transientStorage, Devm.setMach_transientStorage]
-  · rw [Devm.withOutput_logs, Devm.memRead_logs, Devm.setMach_logs,
-      Devm.setMach_logs, Devm.sstoreBase_logs, Devm.setMach_logs]
 
 /-! ## Guard selection
 

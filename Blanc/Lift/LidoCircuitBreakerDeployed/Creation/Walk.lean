@@ -274,7 +274,6 @@ theorem mem28_size : mem28.size = 4608 := by
 
 def mem29 : Mem := mem28.write 2260 (0x3e40d73eb977dc6a537af587d48316fee66e9c8c : B256).toBytes
 def img29 : Bytes := Bytes.writeAt img28 2260 (0x3e40d73eb977dc6a537af587d48316fee66e9c8c : B256).toBytes
-theorem mem29_wf : Mem.Wf mem29 := mem28_wf.write _ _
 theorem mem29_reads : Mem.Reads mem29 img29 := Mem.Reads.write mem28_wf mem28_reads _ _
 theorem mem29_size : mem29.size = 4608 := by
   rw [mem29, Mem.size_write_of_size mem28_size (by decide) (B256.length_toBytes _)]; decide

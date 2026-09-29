@@ -1182,27 +1182,6 @@ theorem DeploymentRoot.reachable_stable
     Stable dp ca future.state :=
   chainUsing_preserves_stable dp ca _ deployed future hreach hroot.stable hcov
 
-theorem DeploymentRoot.reachable_code
-    (hroot : DeploymentRoot cfg base deployed dp ca)
-    (hreach : BlockChain.ReachUsing cfg deployed future)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
-    some (future.state.getCode ca).toList = Prog.compile (weth10 dp) :=
-  (hroot.reachable_stable hreach hcov).code
-
-theorem DeploymentRoot.reachable_flashZero
-    (hroot : DeploymentRoot cfg base deployed dp ca)
-    (hreach : BlockChain.ReachUsing cfg deployed future)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
-    (future.state.getStor ca).get flashMintedSlot = 0 :=
-  (hroot.reachable_stable hreach hcov).flashZero
-
-theorem DeploymentRoot.reachable_solvent
-    (hroot : DeploymentRoot cfg base deployed dp ca)
-    (hreach : BlockChain.ReachUsing cfg deployed future)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
-    balSum (future.state.getStor ca) ≤ (future.state.bal ca).toNat :=
-  (hroot.reachable_stable hreach hcov).solvent
-
 end Weth10
 
 end Blanc

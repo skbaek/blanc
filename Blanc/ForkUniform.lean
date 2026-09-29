@@ -137,9 +137,6 @@ theorem except_map_bind {ε α β γ : Type} (m : Except ε α) (k : α → Exce
 theorem except_map_pure {ε α β : Type} (f : α → β) (a : α) :
     Except.map f (pure a : Except ε α) = pure (f a) := rfl
 
-theorem except_map_ok {ε α β : Type} (f : α → β) (a : α) :
-    Except.map f (Except.ok a : Except ε α) = Except.ok (f a) := rfl
-
 theorem except_map_error {ε α β : Type} (f : α → β) (e : ε) :
     Except.map f (Except.error e : Except ε α) = Except.error e := rfl
 

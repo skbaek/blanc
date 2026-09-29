@@ -1035,36 +1035,6 @@ theorem Prog.exec_of_runCompiledTo_routeTo {sevm : Sevm} {pre mid : Devm}
     site, hpath, hmem, hpc, hinstr, hinstrTarget,
     Exec.Deriv.parentPrefix_cont h1 _ hprefix⟩
 
-/-- The `.ok` embedding: a routed `Func.RunCompiled` walk, decorated through
-`Func.RunCompiledTo.of_runCompiled`, yields the same package with the outcome
-pinned to `.ok`. -/
-theorem Func.exec_of_runCompiled_routeTo_core {f₀ : Func} {fs' : List Func}
-    {sevm : Sevm} {FS : List Func} {devm devm' : Devm} {p : Func}
-    {path target : Prog.SourcePath} {instruction : Ninst}
-    {h_run : Func.RunCompiled FS sevm devm p devm'}
-    (h_route : Func.RunCompiledTo.RouteTo path
-      (Func.RunCompiledTo.of_runCompiled h_run) target instruction)
-    (h_eq : some sevm.code.toList = Prog.compile ⟨f₀, fs'⟩)
-    (hFS : FS = f₀ :: fs') :
-    ∀ pc,
-      subcode sevm.code.toList pc
-        (Func.compile (table 0 (f₀ :: fs')) pc p) →
-      noPushBefore sevm.code pc 32 = true →
-      (∀ site ∈ Func.sourceSites path.functionIndex path.steps pc p,
-        site ∈ Prog.sourceSites ⟨f₀, fs'⟩) →
-      ∃ exc : Exec pc sevm devm (.ok devm'),
-        ∃ occurrence : Exec.NinstOccurrence ⟨pc, sevm, devm, .ok devm', exc⟩,
-          ∃ site : Prog.SourceSite,
-            site.path = target ∧
-            site ∈ Prog.sourceSites ⟨f₀, fs'⟩ ∧
-            occurrence.node.pc = site.pc ∧
-            occurrence.instruction = site.instruction ∧
-            site.instruction = instruction ∧
-            Exec.Deriv.ParentPrefix
-              (⟨pc, sevm, devm, .ok devm', exc⟩ : Exec.Deriv)
-              occurrence.node :=
-  Func.exec_of_runCompiledTo_routeTo_core h_route h_eq hFS
-
 /-! ## Same-frame packaging
 
 The routed bridge above already returns
@@ -1135,30 +1105,5 @@ theorem Exec.NinstOccurrence.parentPrefix_of_no_sameFrame_xinstAt
   exact ⟨descendants, by rw [Exec.rawFrameRoots, descendants],
     Exec.Deriv.parentPrefix_of_mem_rawNodes_of_rawFrameDescendants_eq_nil
       descendants occurrence.reached⟩
-
-/-- The same transport from the occurrence-shaped certificate: no occurrence
-of the root decodes a frame-entering instruction.  This is the stronger
-hypothesis — it ranges over every reached node, not only over the root frame's
-own prefix — so prefer `parentPrefix_of_no_sameFrame_xinstAt` where a
-same-frame fact is what is available. -/
-theorem Exec.NinstOccurrence.parentPrefix_of_no_execOccurrence
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    {run : Exec pc sevm pre out}
-    (occurrence : Exec.NinstOccurrence (⟨pc, sevm, pre, out, run⟩ :
-      Exec.Deriv))
-    (childless : ∀ other : Exec.NinstOccurrence
-        (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv),
-      ∀ x : Xinst, other.instruction ≠ .exec x) :
-    Exec.rawFrameDescendants run = [] ∧
-      Exec.rawFrameRoots run = [⟨pc, sevm, pre, out, run⟩] ∧
-      Exec.Deriv.ParentPrefix (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv)
-        occurrence.node :=
-  occurrence.parentPrefix_of_no_sameFrame_xinstAt
-    fun node prefixed x decoded => by
-      rcases Exec.exists_ninstOccurrence_of_mem_rawNodes
-          (root := (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv))
-          (Exec.mem_rawNodes_of_parentPrefix_root prefixed) decoded with
-        ⟨other, -, instructionEq⟩
-      exact childless other x instructionEq
 
 end Blanc

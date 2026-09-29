@@ -193,9 +193,4 @@ theorem subtree214_layout_checked :
   · exact subtree286_layout_checked
   · decide +kernel
 
-/-- Strict ordering and the exact region population are checked independently. -/
-theorem subtree214_order_and_size_checked :
-    subtree214.checkOrder = true ∧ subtree214.size = 183 := by
-  decide +kernel
-
 end Blanc.Drip.StackSafety

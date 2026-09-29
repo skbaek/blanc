@@ -126,37 +126,6 @@ theorem weth9_history_withdraw_live {ca : Adr} {cfg : ChainConfig} {checkpoint f
     rw [hother a ha, e1]
 
 
-/-- **The same from a deployment-shaped checkpoint**: the checkpoint's contract storage holds only its
-metadata words, and the keys the trace touches are fresh against the empty footprint (they avoid the fixed
-slots and keys sharing a slot are one key); the holder is one of the trace's touched keys. -/
-theorem weth9_history_withdraw_live_deployed {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (installed : some (checkpoint.state.getCode ca).toList = weth9Sem.image)
-    (sumNof : SumNof checkpoint.state.bal)
-    (metadata : ∀ x, (checkpoint.state.getStor ca).get x ≠ 0 → x ∈ fixedSlots)
-    (fresh : KeysFresh (fun _ => False) (historyTouchedKeys ca trace))
-    {sevm : Sevm} {pre : Devm} {G : Nat}
-    (hca : sevm.currentTarget = ca) (hpre : pre.state = future.state)
-    (hcode : sevm.code = future.state.getCode ca)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (h_static : sevm.isStatic = false) (h_value : sevm.value = 0)
-    (h_sel : Sevm.selector sevm = wdSel)
-    (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
-    (h_stack : pre.stack = []) (h_mem : pre.memory = Mem.empty) (h_depth : sevm.depth ≠ 0)
-    (hholder : Key.bal sevm.caller ∈ historyTouchedKeys ca trace)
-    (hbal : Sevm.dataWord sevm 4 ≤ (future.state.getStor ca).get (balSlot sevm.caller))
-    (h_eoa : (pre.getCode sevm.caller).size = 0)
-    (h_prec : sevm.benvStat.rules.isPrecomp sevm.caller = false)
-    (h_gas : pre.gasLeft = G + withdrawAnyGas sevm pre) (hG : 811 ≤ G) :
-    ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧ post.gasLeft = G ∧ post.output = pre.output ∧
-      Devm.getStor post ca = (future.state.getStor ca).set (balSlot sevm.caller)
-        ((future.state.getStor ca).get (balSlot sevm.caller) - Sevm.dataWord sevm 4) ∧
-      ∀ a, a ≠ ca → Devm.getStor post a = future.state.getStor a :=
-  weth9_history_withdraw_live trace installed sumNof (FootInv.deployed metadata) fresh hca hpre hcode
-    hfork h_static h_value h_sel h_len h_len' h_stack h_mem h_depth (Or.inr hholder) hbal h_eoa
-    h_prec h_gas hG
-
 /-- **After any configured history, `deposit()` is live, gas-exact, at the future state.** -/
 theorem weth9_history_deposit_live {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     {K₀ : Key → Prop}

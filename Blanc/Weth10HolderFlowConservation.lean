@@ -154,15 +154,6 @@ theorem holderFlow_credited_strict_of_cancelled
     initial < final := by
   omega
 
-/-- Natural subtraction truncates exactly to zero when recorded permanent
-outflow is at least the checkpoint balance. -/
-theorem holderFlow_over_total_outflow_truncates
-    {u : Adr} {initial : Nat} (flow : HolderFlow u)
-    (covered : initial ≤
-      flow.redeemed + flow.externalTransferredOut) :
-    initial - (flow.redeemed + flow.externalTransferredOut) = 0 := by
-  omega
-
 /-! ## Aggregate supply and wrap loss -/
 
 /-- Aggregate quantities needed only for the no-wrap argument.  Ordinary

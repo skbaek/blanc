@@ -387,12 +387,6 @@ def CountedFrame.HasRootedOrigin (dp : DeployParams) (ca : Adr)
     Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame ∧
     CoveredFork frame.sevm.benvStat.fork
 
-theorem CountedFrame.HasRootedOrigin.hasFrameOrigin
-    {dp : DeployParams} {ca : Adr} {record : CountedFrame}
-    (h : record.HasRootedOrigin dp ca) : record.HasFrameOrigin dp ca := by
-  obtain ⟨frame, hrecord, -, -, -⟩ := h
-  exact ⟨frame, hrecord⟩
-
 /-- Every record of a counted ledger carries its producing frame's root
 context. -/
 def RootedLedger (dp : DeployParams) (ca : Adr)

@@ -122,9 +122,6 @@ private theorem enumLoopSlot_closed (dp : DeployParams) :
     Option.some.inj ((get_enumLoopSlot dp).symm.trans hget)
   exact silentIn_enumLoop
 
-theorem storFixed_enumLoop (dp : DeployParams) : StorFixed dp enumLoop :=
-  storFixed_of_silentIn (enumLoopSlot_closed dp) silentIn_enumLoop
-
 theorem storFixed_getPausables (dp : DeployParams) : StorFixed dp getPausables :=
   storFixed_of_silentIn (enumLoopSlot_closed dp) silentIn_getPausables
 

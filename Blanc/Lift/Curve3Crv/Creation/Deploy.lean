@@ -236,23 +236,6 @@ theorem curve_create (msg : Msg) (hvalue : msg.value = 0)
   rw [hst]
   exact ctor_stor sevm b hempty
 
-/-- **The checkpoint predicate after deployment.**  With the deployer's balance slot off the
-fixed slots, the deployed storage satisfies `VyInv` over no live keys for the deployed-shaped
-state whose minter is the deployer. -/
-theorem curve_create_vyInv (msg : Msg) (hvalue : msg.value = 0)
-    (hcodeAddress : msg.codeAddress = .none) (hcode : msg.code = Blanc.Lift.Curve3Crv.Creation.code)
-    (hdata : msg.data = []) (hgas : 860000 ≤ msg.gas) (hgasb : msg.gas < 2 ^ 64)
-    (hfork : CoveredFork msg.benv.stat.fork) (hstatic : msg.isStatic = false)
-    (hmax : 2276 ≤ msg.benv.stat.rules.code.maxCodeSize)
-    (hbal : balSlotOf msg.caller.toB256 ∉ vyFixedSlots) :
-    ∃ post, processCreateMessage msg = .ok post ∧
-      (post.getCode msg.currentTarget).toList = Blanc.Lift.Curve3Crv.code.toList ∧
-      VyInv (Devm.getStor post msg.currentTarget) (curveDeployedState msg.caller)
-        (fun _ => False) := by
-  obtain ⟨post, h1, h2, h3⟩ :=
-    curve_create msg hvalue hcodeAddress hcode hdata hgas hgasb hfork hstatic hmax
-  exact ⟨post, h1, h2, by rw [h3]; exact deployedStor_vyInv msg.caller hbal⟩
-
 /-! ## The recorded deployment, closed -/
 
 /-- The recorded deployer of the 3Crv LP token (creation transaction `0xa7d90e46…053694f8`, block
@@ -296,23 +279,6 @@ def deployMsg : Msg where
   accessedAddresses := .emptyWithCapacity
   accessedStorageKeys := .emptyWithCapacity
   disablePrecompiles := false
-
-/-- **The recorded 3Crv deployment, closed.**  The token's address is the deployer's nonce-42
-CREATE address, and executing the recorded creation input from the deployer as a Prague CREATE
-message succeeds, installs exactly the certified deployed runtime there, and leaves storage
-satisfying the history theorem's checkpoint predicate `VyInv … (fun _ => False)` for the
-deployed-shaped state whose minter is the deployer. -/
-theorem curve_deploy :
-    tokenAddress = computeContractAddress deployer 42 ∧
-    ∃ post, processCreateMessage deployMsg = .ok post ∧
-      (post.getCode tokenAddress).toList = Blanc.Lift.Curve3Crv.code.toList ∧
-      Devm.getStor post tokenAddress = deployedStor deployer.toB256 ∧
-      VyInv (Devm.getStor post tokenAddress) (curveDeployedState deployer) (fun _ => False) := by
-  refine ⟨tokenAddress_eq, ?_⟩
-  obtain ⟨post, h1, h2, h3⟩ := curve_create deployMsg rfl rfl rfl rfl (by decide) (by decide)
-    CoveredFork.prague rfl (by decide)
-  have h3' : Devm.getStor post tokenAddress = deployedStor deployer.toB256 := h3
-  exact ⟨post, h1, h2, h3', by rw [h3']; exact deployedStor_vyInv deployer deployer_balSlot⟩
 
 /-- **The recorded 3Crv deployment under every covered fork.**  The same conclusion as
 `curve_deploy` for `deployMsg.withFork f`, by instantiating `curve_create` at the

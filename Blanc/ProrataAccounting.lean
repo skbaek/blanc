@@ -188,31 +188,6 @@ theorem dust_exact {o : Nat} (ho : o ≠ 0) (step : ProrataAccountingStep o) :
   | silent snapshot =>
       simp only [X, D, rho, kappa, Nat.add_zero]
 
-/-- The syntactic residue carried by a step is its Euclidean pricing residue. -/
-theorem rho_eq_residue {o : Nat} (step : ProrataAccountingStep o) :
-    match step.kind with
-    | .deposit amount _ =>
-        rho step = depositResidueN o amount step.pre.supply step.pre.balance
-    | .withdraw shares _ =>
-        rho step = withdrawResidueN o shares step.pre.supply step.pre.balance
-    | .externalCredit _ | .silent => rho step = 0 := by
-  rcases step with ⟨pre, post, kind, provenance, effect⟩
-  cases effect with
-  | deposit supply balance amount minted hquote =>
-      subst minted
-      have hres := mintN_residue_eq o amount supply balance
-      simp only [rho, D, X]
-      omega
-  | withdraw supply balance shares paid hshares hquote =>
-      subst paid
-      have hres := payN_residue_eq o shares supply balance
-      simp only [rho, D, X]
-      omega
-  | externalCredit supply balance amount hpositive =>
-      rfl
-  | silent snapshot =>
-      rfl
-
 /-- Deposit and withdrawal rounding residues lie below their priced divisor. -/
 theorem rho_lt_price_divisor {o : Nat} (ho : o ≠ 0)
     (step : ProrataAccountingStep o) :

@@ -278,10 +278,6 @@ theorem prorataSpec_soundNoMem (ca : Adr) :
       ⟨bodyPre, hbodyPre, hbodyRun⟩
     exact donate_post hbodyPre hbodyRun
 
-/-- The memory-carrying soundness form for downstream generic consumers. -/
-theorem prorataSpec_sound (ca : Adr) : prorataSpec.Sound ca :=
-  ContractSpec.SoundNoMem.sound (prorataSpec_soundNoMem ca)
-
 /-- Every successful PRORATA subexecution preserves the invariant without an
 entry-memory premise. -/
 theorem prorataSpec_preservesNoMem (ca : Adr) :

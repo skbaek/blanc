@@ -131,13 +131,6 @@ def Stor.Silent (s s' : Stor) : Prop :=
 
 theorem Stor.Silent.rfl {s : Stor} : Stor.Silent s s := ⟨Eq.refl _, Eq.refl _⟩
 
-theorem Stor.Silent.of_eq {s s' : Stor} (h : s = s') : Stor.Silent s s' :=
-  h ▸ Stor.Silent.rfl
-
-theorem Stor.Silent.trans {s s' s'' : Stor}
-    (h : Stor.Silent s s') (h' : Stor.Silent s' s'') : Stor.Silent s s'' :=
-  ⟨h.1.trans h'.1, h'.2.trans h.2⟩
-
 /-- The guarded allowance write.  `checkSlotCollides` yields exactly these two
 hypotheses, and they are exactly what silence needs. -/
 theorem Stor.Silent.set {s : Stor} {k v : B256}
@@ -189,11 +182,6 @@ theorem Stor.Conserved.of_get_eq_zero {s : Stor} (h : ∀ k, s.get k = 0) :
   have h_rest : Stor.rest s = fun _ => (0 : B256) := funext fun a => h _
   rw [h, balSum, sum, h_rest, sumBelow_zero]
   rfl
-
-/-- **Genesis, at the canonical empty map.**  An account created with no storage
-entries at all satisfies the invariant before it has run. -/
-theorem Stor.Conserved.of_empty : Stor.Conserved Stor.empty :=
-  Stor.Conserved.of_get_eq_zero fun _ => rfl
 
 /-! ### The four preservation combinators
 
@@ -350,20 +338,12 @@ is `Iff.rfl` — which is the evidence that this instance adds no restatement. -
 
 theorem fmintSpec_prog_eq : fmintSpec.prog = Fmint.fmint := rfl
 
-theorem fmintSpec_pre_iff {ca : Adr} {sevm : Sevm} {devm : Devm} :
-    fmintSpec.Pre ca sevm devm ↔ PrecondC ca sevm devm := Iff.rfl
-
-theorem fmintSpec_post_iff {ca : Adr} {sevm : Sevm} {devm : Devm} :
-    fmintSpec.Post ca sevm devm ↔ PostcondC ca sevm devm := Iff.rfl
-
 theorem fmintSpec_stateInv_iff {ca : Adr} {w : Jaune.State} :
     fmintSpec.StateInv ca w ↔ StateInvC ca w := Iff.rfl
 
 theorem fmintSpec_pre_eq : fmintSpec.Pre = PrecondC := rfl
 
 theorem fmintSpec_post_eq : fmintSpec.Post = PostcondC := rfl
-
-theorem fmintSpec_stateInv_eq : fmintSpec.StateInv = StateInvC := rfl
 
 /-- The frame-entry bundle collapses.  `fmintSpec.Inv` ignores both the
 callvalue and the ETH balance, so `PreInv`'s two branches — target and
@@ -374,9 +354,6 @@ conjunction. -/
 theorem fmintSpec_preInv_iff {ca : Adr} {sevm : Sevm} {devm : Devm} :
     fmintSpec.PreInv devm ca sevm ↔ Stor.Conserved (Devm.getStor devm ca) :=
   ContractSpec.ofStorageOnly_preInv_iff
-
-theorem fmintSpec_postInv_iff {ca : Adr} {devm : Devm} :
-    fmintSpec.PostInv devm ca ↔ Stor.Conserved (Devm.getStor devm ca) := Iff.rfl
 
 /-- fmint's dispatch targets, in the form
 `ContractSpec.soundNoMem_of_dispatch` consumes — the counterpart of
@@ -2218,11 +2195,6 @@ theorem fmintSpec_soundNoMem (fa : Adr) : fmintSpec.SoundNoMem fa :=
     rfl (List.cons_ne_nil _ _) rfl (fmintSpec_funcSound_all fa)
     fmintSpec_funcSound_revert
 
-/-- The memory-carrying obligation, for any consumer that wants it: dropping a
-premise fmint never used. -/
-theorem fmintSpec_sound (fa : Adr) : fmintSpec.Sound fa :=
-  ContractSpec.SoundNoMem.sound (fmintSpec_soundNoMem fa)
-
 /-- fmint's own result, as the instantiation of the quantified open-contract
 statement (`ContractSpec.preservesNoMem_of_dispatch`, `Blanc/Ladder.lean`): the
 same twelve obligations and the same vacuous fallback, consumed by the named
@@ -2384,24 +2356,5 @@ theorem fmint_core_stable (fs : List Func) :
   · exact Func.Core.of_callFree rfl transfer_preserves_conserved
   · exact Func.Core.of_callFree rfl flashFee_preserves_conserved
   · exact Func.Core.of_callFree rfl allowance_preserves_conserved
-
-/-- The reuse path an extension arc takes, closed generically: any
-storage-only spec whose invariant is `Stor.Conserved` — in particular, an
-extended fmint with a new `main`, an appended aux, and the same invariant —
-inherits fmint's eleven non-reentrant `FuncSound` obligations verbatim,
-whatever its program and aux context.  No re-walk; the original walk lemmas
-are consumed as they stand.  `flashLoan` and any new target remain that
-spec's own obligations. -/
-theorem fmint_funcSound_stable (c' : ContractSpec) (fa : Adr) (aux' : List Func)
-    (h_side : ∀ bal, c'.Side bal)
-    (h_inv : ∀ s v b, c'.Inv s v b ↔ Stor.Conserved s) :
-    ∀ p ∈ Fmint.fmintFuncs, p.2 ≠ Fmint.flashLoan →
-      c'.FuncSound fa aux' p.2 := by
-  intro p h_mem h_ne
-  apply ContractSpec.funcSound_of_core h_side
-    (fun h => (h_inv _ _ _).mpr ((h_inv _ _ _).mp h))
-  intro sevm s r h_run h
-  exact (h_inv _ _ _).mpr
-    (fmint_core_stable _ p h_mem h_ne h_run ((h_inv _ _ _).mp h))
 
 end Blanc

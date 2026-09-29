@@ -140,12 +140,6 @@ theorem denominatorN_le_maxWord
     norm_num
   omega
 
-theorem maxSupplyN_add_offsetN : maxSupplyN + offsetN = maxWordN := by
-  unfold maxSupplyN
-  exact Nat.sub_add_cancel (by
-    unfold maxWordN wordModulusN offsetN
-    norm_num)
-
 theorem supply_add_shareRoomN
     {supply : Nat} (stable : supply ≤ maxSupplyN) :
     supply + shareRoomN supply = maxSupplyN := by
@@ -181,13 +175,6 @@ theorem maxWord_mul_denominator_div_assetFactor_maxWord
   rw [assetFactorN_maxWord]
   exact maxWord_mul_div_wordModulus (denominatorN_pos supply)
     (denominatorN_le_maxWord stable)
-
-theorem maxMintN_at_maxAssets
-    {supply : Nat} (stable : supply ≤ maxSupplyN) :
-    maxMintN maxWordN supply =
-      min (shareRoomN supply) (denominatorN supply - 1) := by
-  unfold maxMintN
-  rw [maxWord_mul_denominator_div_assetFactor_maxWord stable]
 
 /-! ## Exact rounding directions -/
 
@@ -267,14 +254,6 @@ theorem withdraw_never_overpays (amount assets supply : Nat) :
   rw [Nat.le_div_iff_mul_le (denominatorN_pos supply)]
   exact previewWithdrawN_covers amount assets supply
 
-theorem previewDepositN_eq_convertToSharesN (amount assets supply : Nat) :
-    previewDepositN amount assets supply = convertToSharesN amount assets supply :=
-  rfl
-
-theorem previewRedeemN_eq_convertToAssetsN (shares assets supply : Nat) :
-    previewRedeemN shares assets supply = convertToAssetsN shares assets supply :=
-  rfl
-
 /-! ## Exact capacity characterizations -/
 
 private theorem lt_ceilDiv_iff_mul_lt
@@ -333,10 +312,6 @@ theorem min_shareRoomN_min_maxWord (supply cap : Nat) :
     _ = min (shareRoomN supply) cap := by
       rw [Nat.min_eq_left roomLe]
 
-theorem previewMintN_maxMintN_le_maxWord (assets supply : Nat) :
-    previewMintN (maxMintN assets supply) assets supply ≤ maxWordN :=
-  (le_maxMintN_iff (maxMintN assets supply) assets supply).mp le_rfl |>.2
-
 theorem maxDepositN_le_maxWord (assets supply : Nat) :
     maxDepositN assets supply ≤ maxWordN := by
   exact Nat.min_le_left _ _
@@ -381,8 +356,6 @@ theorem convertToSharesN_maxDepositN_le_shareRoom (assets supply : Nat) :
       shareRoomN supply := by
   exact (le_maxDepositN_iff (maxDepositN_le_maxWord assets supply)).mp le_rfl
 
-theorem maxRedeemN_exact (balance : Nat) : maxRedeemN balance = balance := rfl
-
 theorem maxWithdrawN_le_assets
     {balance assets supply : Nat} (balance_le : balance ≤ supply) :
     maxWithdrawN balance assets supply ≤ assets := by
@@ -410,22 +383,6 @@ theorem maxWithdrawN_le_assets
   omega
 
 /-! ## Zero-amount behavior -/
-
-theorem convertToSharesN_zero (assets supply : Nat) :
-    convertToSharesN 0 assets supply = 0 := by
-  simp [convertToSharesN]
-
-theorem convertToAssetsN_zero (assets supply : Nat) :
-    convertToAssetsN 0 assets supply = 0 := by
-  simp [convertToAssetsN]
-
-theorem previewMintN_zero (assets supply : Nat) :
-    previewMintN 0 assets supply = 0 := by
-  simp [previewMintN, ceilDiv_zero_dividend]
-
-theorem previewWithdrawN_zero (assets supply : Nat) :
-    previewWithdrawN 0 assets supply = 0 := by
-  simp [previewWithdrawN, ceilDiv_zero_dividend]
 
 
 /-! ## The port is the same pricing, at the same offset

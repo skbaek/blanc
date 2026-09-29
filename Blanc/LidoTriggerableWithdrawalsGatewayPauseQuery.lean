@@ -29,79 +29,7 @@ def pauseUntilProjection (expiry : B256) : B256 :=
 def isPausedProjection (timestamp resumeSince : B256) : B256 :=
   timestamp <? resumeSince
 
-theorem pauseUntilProjection_sentinel :
-    pauseUntilProjection pauseInfinitely = pauseInfinitely := by
-  simp [pauseUntilProjection]
-
-theorem pauseUntilProjection_finite {expiry : B256}
-    (hfinite : expiry ≠ pauseInfinitely) :
-    pauseUntilProjection expiry = expiry + 1 := by
-  simp [pauseUntilProjection, hfinite]
-
-theorem isPausedProjection_effect (timestamp resumeSince : B256) :
-    isPausedProjection timestamp resumeSince = timestamp <? resumeSince := rfl
-
 /-! ## Exact public selector routes -/
-
-theorem pauseFor_selected_body_of_prog_run
-    {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
-    (hprog : Prog.RunCompiledTo sevm entry (runtime dp) out)
-    (hentryStack : entry.stack = [])
-    (hvalue : sevm.value = 0)
-    (hguard : B256.ltCheck sevm.data.length.toB256 (4 : B256) = 0)
-    (hselector : Sevm.selector sevm = selPauseFor) :
-    ∃ bodyPre,
-      Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
-        sevm bodyPre pauseFor out ∧
-      bodyPre.stack = [] ∧
-      Devm.DispatchFramePreserved entry bodyPre := by
-  exact dispatcher_body_of_prog_run_empty_frame hprog hentryStack hvalue
-    hguard hselector (by decide) (by simp [sharedNonpayableFuncs])
-
-theorem pauseUntil_selected_body_of_prog_run
-    {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
-    (hprog : Prog.RunCompiledTo sevm entry (runtime dp) out)
-    (hentryStack : entry.stack = [])
-    (hvalue : sevm.value = 0)
-    (hguard : B256.ltCheck sevm.data.length.toB256 (4 : B256) = 0)
-    (hselector : Sevm.selector sevm = selPauseUntil) :
-    ∃ bodyPre,
-      Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
-        sevm bodyPre pauseUntil out ∧
-      bodyPre.stack = [] ∧
-      Devm.DispatchFramePreserved entry bodyPre := by
-  exact dispatcher_body_of_prog_run_empty_frame hprog hentryStack hvalue
-    hguard hselector (by decide) (by simp [sharedNonpayableFuncs])
-
-theorem resume_selected_body_of_prog_run
-    {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
-    (hprog : Prog.RunCompiledTo sevm entry (runtime dp) out)
-    (hentryStack : entry.stack = [])
-    (hvalue : sevm.value = 0)
-    (hguard : B256.ltCheck sevm.data.length.toB256 (4 : B256) = 0)
-    (hselector : Sevm.selector sevm = selResume) :
-    ∃ bodyPre,
-      Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
-        sevm bodyPre resume out ∧
-      bodyPre.stack = [] ∧
-      Devm.DispatchFramePreserved entry bodyPre := by
-  exact dispatcher_body_of_prog_run_empty_frame hprog hentryStack hvalue
-    hguard hselector (by decide) (by simp [sharedNonpayableFuncs])
-
-theorem isPaused_selected_body_of_prog_run
-    {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
-    (hprog : Prog.RunCompiledTo sevm entry (runtime dp) out)
-    (hentryStack : entry.stack = [])
-    (hvalue : sevm.value = 0)
-    (hguard : B256.ltCheck sevm.data.length.toB256 (4 : B256) = 0)
-    (hselector : Sevm.selector sevm = selIsPaused) :
-    ∃ bodyPre,
-      Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
-        sevm bodyPre isPaused out ∧
-      bodyPre.stack = [] ∧
-      Devm.DispatchFramePreserved entry bodyPre := by
-  exact dispatcher_body_of_prog_run_empty_frame hprog hentryStack hvalue
-    hguard hselector (by decide) (by simp [sharedNonpayableFuncs])
 
 /-! ## Exact instruction-level storage boundary -/
 

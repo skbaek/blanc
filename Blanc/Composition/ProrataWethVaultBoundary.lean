@@ -58,15 +58,6 @@ theorem DirectWethConfiguration.notDelegated
   apply not_delegation_of_compile (p := Blanc.weth)
   rw [config.code, Blanc.wethCode_compile]
 
-theorem DirectWethConfiguration.resolvedCodeAddress
-    {vault : Adr} {sevm : Sevm} {pre : Devm}
-    (config : DirectWethConfiguration vault sevm pre) :
-    (getDelegatedCodeAddress (pre.getCode wethAccount)).getD wethAccount =
-      wethAccount := by
-  unfold getDelegatedCodeAddress
-  rw [if_neg config.notDelegated]
-  rfl
-
 /-! ## Independent calldata encoders -/
 
 /-- Canonical `balanceOf(vault)` calldata, 36 bytes. -/
@@ -83,20 +74,6 @@ def transferFromCalldata (owner vault : Adr) (assets : B256) : Bytes :=
 def transferCalldata (receiver : Adr) (assets : B256) : Bytes :=
   abiSelectorBytes (selector "transfer" [.address, .uint256]) ++
     receiver.toB256.toBytes ++ assets.toBytes
-
-@[simp] theorem balanceOfCalldata_length (vault : Adr) :
-    (balanceOfCalldata vault).length = 36 := by
-  simp [balanceOfCalldata, abiSelectorBytes_length, B256.length_toBytes]
-
-@[simp] theorem transferFromCalldata_length
-    (owner vault : Adr) (assets : B256) :
-    (transferFromCalldata owner vault assets).length = 100 := by
-  simp [transferFromCalldata, abiSelectorBytes_length,
-    B256.length_toBytes]
-
-@[simp] theorem transferCalldata_length (receiver : Adr) (assets : B256) :
-    (transferCalldata receiver assets).length = 68 := by
-  simp [transferCalldata, abiSelectorBytes_length, B256.length_toBytes]
 
 /-- Selector and argument facts for the canonical asset query. -/
 theorem balanceOfCalldata_facts {sevm : Sevm} {vault : Adr}

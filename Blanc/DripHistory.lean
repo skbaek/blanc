@@ -29,15 +29,6 @@ theorem DeploymentRoot.reachable_stateInv
   dripSpec.chainUsing_preserves_inv ca (dripSpec_preserves ca)
     cfg deployed future reach root.stateInv hcov
 
-/-- The storage projection of configured DRIP continuation preservation. -/
-theorem DeploymentRoot.reachable_accountingInv
-    (root : DeploymentRoot cfg base deployed ca)
-    (reach : BlockChain.ReachUsing cfg deployed future)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
-    AccountingInv (future.state.getStor ca) :=
-  (root.reachable_stateInv reach hcov).inv
-
 end Drip
 
 end Blanc

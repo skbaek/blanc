@@ -641,49 +641,6 @@ theorem insertionLoop_deadThenLive_exists_storageEffectRun
   exact ⟨finalBase, finalMemory, ⟨finalCarrier⟩,
     by simpa only [terminalGas, final] using run⟩
 
-/-- Fixed-outcome compatibility corollary of the existential CPS carrier. -/
-theorem insertionLoop_dead_iterations_runCompiledTo
-    {fs : List Func} {sevm : Sevm} {origin base : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    {memory : Mem} {oldCount : B256} {s : InsertionLoopState}
-    {stor : Stor} {n K : Nat} {ex : Execution}
-    (carrier : InsertionLoopCarrier origin base memory oldCount s)
-    (horiginStor : Devm.getStor origin sevm.currentTarget = stor)
-    (hdead : InsertionLoopDead sevm.currentTarget stor n s)
-    (hnodeleg : getDelegatedCodeAddress (origin.getCode 2) = none)
-    (hwarm : (2 : Adr) ∈ origin.accessedAddresses)
-    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hdepth : sevm.depth ≠ 0)
-    (hbound :
-      K + insertionDeadGas sevm.currentTarget stor n s < 2 ^ 256)
-    (hinsertionContinuation :
-      fs[insertionContinuationSlot]? = some insertionContinuation)
-    (hinsertionLoop : fs[insertionLoopSlot]? = some insertionLoop)
-    (htail :
-      ∀ {base' : Devm} {memory' : Mem},
-        InsertionLoopCarrier origin base' memory' oldCount
-          (insertionLoopIter sevm.currentTarget stor n s) →
-        Func.RunCompiledTo fs sevm
-          (base'.setMach
-            ⟨[(insertionLoopIter sevm.currentTarget stor n s).height],
-              memory', K, base'.stateGas⟩)
-          insertionLoop ex) :
-    Func.RunCompiledTo fs sevm
-      (base.setMach
-        ⟨[s.height], memory,
-          K + insertionDeadGas sevm.currentTarget stor n s, base.stateGas⟩)
-      insertionLoop ex := by
-  obtain ⟨ex', hex, hrun⟩ :=
-    insertionLoop_dead_iterations_exists_runCompiledTo (hfork := hfork)
-      (P := fun ex' => ex' = ex) carrier horiginStor hdead
-      hnodeleg hwarm hpre hdepth hbound
-      hinsertionContinuation hinsertionLoop
-      (by
-        intro base' memory' hcarrier
-        exact ⟨ex, rfl, htail hcarrier⟩)
-  subst ex'
-  exact hrun
-
 /-- Compose a dead prefix with its terminal live store.  The final carrier is
 exposed so downstream proofs can classify the one branch write exactly. -/
 theorem insertionLoop_deadThenLive_exists_runCompiledTo

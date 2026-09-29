@@ -192,25 +192,6 @@ def ghostRecord {vault : Adr} (w : State) (caller : Adr) (call : WethAllowanceIn
   provenance := provenance
   actor := actor
 
-/-- The carrier accepts a ghost at the opening of any realized block. -/
-theorem pairTraceRealizes_admits_ghost {cfg : ChainConfig} {deployed current future : BlockChain}
-    {vault : Adr} {root : PairRoot cfg deployed vault}
-    {priorSteps blockSteps : List (PairStepRecord vault)}
-    (prior : PairTraceRealizes root priorSteps current)
-    (block : ConfiguredBlockTrace cfg current future)
-    (replay : PairReplay vault (PairBoundary.ofState vault current.state) blockSteps
-      (PairBoundary.ofState vault future.state))
-    (tagged : ∀ r ∈ blockSteps, PairInBlock block.block.header.number r)
-    (ghost : PairStepRecord vault) (before : ghost.before = current.state)
-    (after : ghost.after = current.state)
-    (ghostTag : PairInBlock block.block.header.number ghost) :
-    PairTraceRealizes root (priorSteps ++ (ghost :: blockSteps)) future :=
-  .step prior block (.cons ghost (by rw [before]) (by rw [after]) replay)
-    (fun r member => by
-      rcases List.mem_cons.mp member with rfl | inBlock
-      · exact ghostTag
-      · exact tagged r inBlock)
-
 /-- The faithfulness predicate rejects any list owning an unexecuted visit. -/
 theorem not_pairLedgerFaithful_of_ghost {cfg : ChainConfig} {deployed future : BlockChain}
     {vault : Adr} {history : ConfiguredHistoryTrace cfg deployed future}

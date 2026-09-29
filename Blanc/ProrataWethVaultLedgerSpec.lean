@@ -167,15 +167,6 @@ and its backing asset is WETH. -/
 def vaultSpec : ContractSpec :=
   ContractSpec.ofStorageOnly vault Conserved
 
-/-- Reduce a dispatch target's obligation to the bare storage implication. -/
-theorem vaultSpec_funcSound {ca : Adr} (f : Func)
-    (h_cons : ∀ {sevm : Sevm} {s r : Devm},
-      Func.Run (vault.main :: vaultAux) sevm s f r →
-      Conserved (Devm.getStor s sevm.currentTarget) →
-      Conserved (Devm.getStor r sevm.currentTarget)) :
-    vaultSpec.FuncSoundNoMem ca vaultAux f :=
-  ContractSpec.ofStorageOnly_funcSound f h_cons
-
 /-- The eighteen dispatch targets that write no storage.  Listed here rather
 than filtered out of `vaultFuncs` so that the obligation below is one `rcases`
 over a literal, exactly as fmint's is. -/
@@ -317,36 +308,6 @@ at `Func.Run`, after `of_routed` strips the dispatch wrapper.  The body proofs
 are shared with the compiled effect theorems rather than restated: they are
 written over `Func.WalkInv`, so one proof text answers both. -/
 
-theorem source_approve_preserves_conserved {sevm : Sevm} {s r : Devm}
-    (memoryWf : Mem.Wf s.memory)
-    (run : Func.Run (vault.main :: vaultAux) sevm s (routed 2 approve) r)
-    (h : Conserved (Devm.getStor s sevm.currentTarget)) :
-    Conserved (Devm.getStor r sevm.currentTarget) := by
-  obtain ⟨mid, hstor, hmem, bodyRun⟩ := of_routed run
-  rw [hstor] at h
-  exact approve_body_preserves_conserved (R := Func.Run) (hmem ▸ memoryWf)
-    nil_pref bodyRun h
-
-theorem source_transfer_preserves_conserved {sevm : Sevm} {s r : Devm}
-    (memoryWf : Mem.Wf s.memory)
-    (run : Func.Run (vault.main :: vaultAux) sevm s (routed 2 transfer) r)
-    (h : Conserved (Devm.getStor s sevm.currentTarget)) :
-    Conserved (Devm.getStor r sevm.currentTarget) := by
-  obtain ⟨mid, hstor, hmem, bodyRun⟩ := of_routed run
-  rw [hstor] at h
-  exact transfer_body_preserves_conserved (R := Func.Run) (hmem ▸ memoryWf)
-    transferStaged_lookup nil_pref bodyRun h
-
-theorem source_transferFrom_preserves_conserved {sevm : Sevm} {s r : Devm}
-    (memoryWf : Mem.Wf s.memory)
-    (run : Func.Run (vault.main :: vaultAux) sevm s (routed 3 transferFrom) r)
-    (h : Conserved (Devm.getStor s sevm.currentTarget)) :
-    Conserved (Devm.getStor r sevm.currentTarget) := by
-  obtain ⟨mid, hstor, hmem, bodyRun⟩ := of_routed run
-  rw [hstor] at h
-  exact transferFrom_body_preserves_conserved (R := Func.Run) (hmem ▸ memoryWf)
-    transferStaged_lookup nil_pref bodyRun h
-
 /-- The fallback is `Func.revert`, which no `Func.Run` witnesses, so the
 obligation is vacuous: an unrecognized selector cannot move the ledger. -/
 theorem vaultSpec_funcSound_revert {ca : Adr} :
@@ -417,18 +378,6 @@ macro_rules
   `(tactic| first
       | exact StoresOrHalts.call (by rfl) (by stores_structure with flow_slot)
       | exact StoresOrHalts.never not_run_revert)
-
-theorem transferStaged_storesOrHalts :
-    StoresOrHalts (vault.main :: vaultAux) transferStaged := by
-  stores_structure
-
-theorem withdrawBurn_storesOrHalts :
-    StoresOrHalts (vault.main :: vaultAux) withdrawBurn := by
-  stores_structure
-
-theorem redeemBurn_storesOrHalts :
-    StoresOrHalts (vault.main :: vaultAux) redeemBurn := by
-  stores_structure
 
 /-- The WETH child's staging reaches its body, so a storing body makes the
 whole call storing.
@@ -537,24 +486,6 @@ theorem depositAfterQuote_storesOrHalts {fs : List Func} :
 theorem mintAfterQuote_storesOrHalts {fs : List Func} :
     StoresOrHalts fs mintAfterQuote :=
   inboundAfterQuote_storesOrHalts _ _ _
-
-/-- A `deposit` continuation that runs at all ran in a non-static frame.
-
-This is `isStatic = false` **derived from the run having succeeded**, rather
-than assumed as a premise. It is one of the three components of the resource
-bundle that `lift_inv_admitted`'s `with_depth_ind` obligation needs at an
-arbitrary re-entrant vault frame, and the one the rely rung could not supply
-from `σ`, since it is a fact about a frame rather than about the world. The
-outbound flows already had their witnesses; these two were blocked only by the
-elaboration cost documented above. -/
-theorem depositAfterQuote_not_static {fs : List Func} {e : Sevm} {s r : Devm}
-    (run : Func.Run fs e s depositAfterQuote r) : e.isStatic = false :=
-  depositAfterQuote_storesOrHalts.isStatic_eq_false run
-
-/-- A `mint` continuation that runs at all ran in a non-static frame. -/
-theorem mintAfterQuote_not_static {fs : List Func} {e : Sevm} {s r : Devm}
-    (run : Func.Run fs e s mintAfterQuote r) : e.isStatic = false :=
-  mintAfterQuote_storesOrHalts.isStatic_eq_false run
 
 end ProrataWethVault
 

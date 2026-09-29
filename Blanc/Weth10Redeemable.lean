@@ -156,166 +156,6 @@ def redemptionSstoreCharge
   (if cold then gasColdSload else 0) +
     sstoreValueCost original current new
 
-theorem AddressAccessCase.accessCost_le
-    {accessed : AdrSet} {a : Adr}
-    (h : AddressAccessCase accessed a) :
-    accessCost a accessed ≤ gasColdAccountAccess := by
-  cases h with
-  | warm hw => simp [accessCost, hw, gasWarmAccess, gasColdAccountAccess]
-  | cold hc => simp [accessCost, hc]
-
-theorem StorageAccessCase.readCharge_le
-    {accessed : KeySet} {ca owner : Adr}
-    (h : StorageAccessCase accessed ca owner.toB256) :
-    redemptionStorageReadCharge accessed ca owner ≤ gasColdSload := by
-  cases h with
-  | warm hw =>
-      simp [redemptionStorageReadCharge, hw, gasWarmAccess, gasColdSload]
-  | cold hc => simp [redemptionStorageReadCharge, hc]
-
-theorem RecipientAccountCase.creationCharge_le
-    {w : State} {recipient : Adr} {q : Nat}
-    (h : RecipientAccountCase w recipient) :
-    redemptionRecipientCreationCharge w recipient q ≤ gNewAccount := by
-  cases h with
-  | empty he =>
-      simp only [redemptionRecipientCreationCharge, he, not_true_eq_false,
-        false_or]
-      split <;> simp [gNewAccount]
-  | existing he => simp [redemptionRecipientCreationCharge, he]
-
-theorem redemptionCallCharge_le
-    {accessed : AdrSet} {w : State} {recipient : Adr} {q : Nat}
-    (ha : AddressAccessCase accessed recipient)
-    (he : RecipientAccountCase w recipient) :
-    redemptionCallCharge accessed w recipient q ≤ redemptionCallWorstGas q := by
-  cases ha <;> cases he <;>
-    simp_all [redemptionCallCharge, redemptionCallWorstGas, accessCost,
-      redemptionRecipientCreationCharge, redemptionValueCallCharge,
-      gasWarmAccess, gasColdAccountAccess, gNewAccount, gasCallValue]
-  all_goals split <;> simp_all
-
-theorem redemptionCallCharge_warm_existing_of_ne
-    {accessed : AdrSet} {w : State} {recipient : Adr} {q : Nat}
-    (ha : recipient ∈ accessed) (he : ¬ (w.get recipient).Empty)
-    (hq : q ≠ 0) :
-    redemptionCallCharge accessed w recipient q = 9100 := by
-  simp [redemptionCallCharge, redemptionRecipientCreationCharge,
-    redemptionValueCallCharge, accessCost, ha, he, hq,
-    gasWarmAccess, gasCallValue]
-
-theorem redemptionCallCharge_cold_existing_of_ne
-    {accessed : AdrSet} {w : State} {recipient : Adr} {q : Nat}
-    (ha : recipient ∉ accessed) (he : ¬ (w.get recipient).Empty)
-    (hq : q ≠ 0) :
-    redemptionCallCharge accessed w recipient q = 11600 := by
-  simp [redemptionCallCharge, redemptionRecipientCreationCharge,
-    redemptionValueCallCharge, accessCost, ha, he, hq,
-    gasColdAccountAccess, gasCallValue]
-
-theorem redemptionCallCharge_warm_empty_of_ne
-    {accessed : AdrSet} {w : State} {recipient : Adr} {q : Nat}
-    (ha : recipient ∈ accessed) (he : (w.get recipient).Empty)
-    (hq : q ≠ 0) :
-    redemptionCallCharge accessed w recipient q = 34100 := by
-  simp [redemptionCallCharge, redemptionRecipientCreationCharge,
-    redemptionValueCallCharge, accessCost, ha, he, hq,
-    gasWarmAccess, gNewAccount, gasCallValue]
-
-theorem redemptionCallCharge_cold_empty_of_ne
-    {accessed : AdrSet} {w : State} {recipient : Adr} {q : Nat}
-    (ha : recipient ∉ accessed) (he : (w.get recipient).Empty)
-    (hq : q ≠ 0) :
-    redemptionCallCharge accessed w recipient q = 36600 := by
-  simp [redemptionCallCharge, redemptionRecipientCreationCharge,
-    redemptionValueCallCharge, accessCost, ha, he, hq,
-    gasColdAccountAccess, gNewAccount, gasCallValue]
-
-theorem redemptionCallCharge_warm_zero
-    {accessed : AdrSet} {w : State} {recipient : Adr}
-    (ha : recipient ∈ accessed) :
-    redemptionCallCharge accessed w recipient 0 = 100 := by
-  simp [redemptionCallCharge, redemptionRecipientCreationCharge,
-    redemptionValueCallCharge, accessCost, ha, gasWarmAccess]
-
-theorem redemptionCallCharge_cold_zero
-    {accessed : AdrSet} {w : State} {recipient : Adr}
-    (ha : recipient ∉ accessed) :
-    redemptionCallCharge accessed w recipient 0 = 2600 := by
-  simp [redemptionCallCharge, redemptionRecipientCreationCharge,
-    redemptionValueCallCharge, accessCost, ha, gasColdAccountAccess]
-
-theorem redemptionSstoreCharge_warm_clean_zero
-    {new : B256} (hne : new ≠ 0) :
-    redemptionSstoreCharge false 0 0 new = 20000 := by
-  have hz : (0 : B256) ≠ new := Ne.symm hne
-  simp [redemptionSstoreCharge, sstoreValueCost, hz, gasStorageSet]
-
-theorem redemptionSstoreCharge_cold_clean_zero
-    {new : B256} (hne : new ≠ 0) :
-    redemptionSstoreCharge true 0 0 new = 22100 := by
-  have hz : (0 : B256) ≠ new := Ne.symm hne
-  simp [redemptionSstoreCharge, sstoreValueCost, hz, gasColdSload,
-    gasStorageSet]
-
-theorem redemptionSstoreCharge_warm_clean_nonzero
-    {original new : B256} (ho : original ≠ 0) (hne : original ≠ new) :
-    redemptionSstoreCharge false original original new = 2900 := by
-  simp [redemptionSstoreCharge, sstoreValueCost, ho, hne,
-    gasStorageUpdate, gasColdSload]
-
-theorem redemptionSstoreCharge_cold_clean_nonzero
-    {original new : B256} (ho : original ≠ 0) (hne : original ≠ new) :
-    redemptionSstoreCharge true original original new = 5000 := by
-  simp [redemptionSstoreCharge, sstoreValueCost, ho, hne,
-    gasStorageUpdate, gasColdSload]
-
-theorem redemptionSstoreCharge_warm_noop
-    {original current : B256} :
-    redemptionSstoreCharge false original current current = 100 := by
-  simp [redemptionSstoreCharge, sstoreValueCost, gasWarmAccess]
-
-theorem redemptionSstoreCharge_cold_noop
-    {original current : B256} :
-    redemptionSstoreCharge true original current current = 2200 := by
-  simp [redemptionSstoreCharge, sstoreValueCost, gasWarmAccess,
-    gasColdSload]
-
-theorem redemptionSstoreCharge_warm_dirty
-    {original current new : B256} (hdirty : original ≠ current) :
-    redemptionSstoreCharge false original current new = 100 := by
-  simp [redemptionSstoreCharge, sstoreValueCost, hdirty, gasWarmAccess]
-
-theorem redemptionSstoreCharge_cold_dirty
-    {original current new : B256} (hdirty : original ≠ current) :
-    redemptionSstoreCharge true original current new = 2200 := by
-  simp [redemptionSstoreCharge, sstoreValueCost, hdirty, gasWarmAccess,
-    gasColdSload]
-
-theorem redemptionSstoreCharge_le
-    (cold : Bool) (original current new : B256) :
-    redemptionSstoreCharge cold original current new ≤
-      redemptionStorageWriteWorstGas := by
-  unfold redemptionSstoreCharge redemptionStorageWriteWorstGas
-    sstoreValueCost
-  split_ifs <;>
-    norm_num [gasWarmAccess, gasColdSload, gasStorageSet, gasStorageUpdate]
-
-@[simp] theorem redemptionChildSupplement_zero :
-    redemptionChildSupplement 0 = 0 := by
-  simp [redemptionChildSupplement]
-
-theorem redemptionChildSupplement_of_ne {q : Nat} (hq : q ≠ 0) :
-    redemptionChildSupplement q = 2300 := by
-  simp [redemptionChildSupplement, hq, gCallStipend]
-
-theorem redemptionChildSupplement_le_valueCharge (q : Nat) :
-    redemptionChildSupplement q ≤ redemptionValueCallCharge q := by
-  by_cases hq : q = 0
-  · simp [hq, redemptionChildSupplement, redemptionValueCallCharge]
-  · simp [hq, redemptionChildSupplement, redemptionValueCallCharge,
-      gCallStipend, gasCallValue]
-
 theorem redemptionModeledRuntime_zero :
     redemptionModeledRuntime 0 = 36998 := by
   decide
@@ -544,23 +384,6 @@ def redemptionPreparedMessage
 EIP-7702 delegation designators are admitted; non-delegation code is not. -/
 def TransactionSenderAdmissible (w : State) (owner : Adr) : Prop :=
   (w.getCode owner).isEmpty ∨ isValidDelegation (w.getCode owner)
-
-theorem transactionSenderAdmissible_of_code_free
-    {w : State} {owner : Adr}
-    (hcode : (w.getCode owner).toList = []) :
-    TransactionSenderAdmissible w owner := by
-  left
-  unfold ByteArray.isEmpty
-  have hsize : (w.getCode owner).size = 0 := by
-    rw [ByteArray.size_eq_length_toList, hcode]
-    rfl
-  simp [hsize]
-
-theorem transactionSenderAdmissible_of_delegation
-    {w : State} {owner : Adr}
-    (hcode : isValidDelegation (w.getCode owner)) :
-    TransactionSenderAdmissible w owner :=
-  Or.inr hcode
 
 /-- Jaune's sender-code check accepts exactly the boundary recorded by
 `TransactionSenderAdmissible`. -/
@@ -1208,93 +1031,6 @@ lemma sstoreNewRefundCounter_nonnegative_of_original_eq_current
 /-! ## Constructive withdrawal body up to the value call -/
 
 set_option maxRecDepth 607 in
-/-- The real `withdrawTo` body reaches its internal `CALL` after debiting the
-caller's booked balance and emitting the burn log.  Balance/code observations
-are transported to this exact point, which is where stable backing discharges
-the call sender-affordability branch. -/
-theorem withdrawTo_runCompiledTo_callPrefix
-    {fs : List Func} {e : Sevm} {pre : Devm} {out : Execution}
-    (h_amount : Sevm.argWord e 1 ≤
-      pre.getStorVal e.currentTarget e.caller.toB256)
-    (h_static : e.isStatic = false)
-    (h_gas : 100000 ≤ pre.gasLeft)
-    (h_cont : ∀ (b : Devm) (G : Nat),
-      b.getStorVal e.currentTarget e.caller.toB256 =
-          pre.getStorVal e.currentTarget e.caller.toB256 - Sevm.argWord e 1 →
-      (∀ (a : Adr) (k : B256),
-        (a, k) ≠ (e.currentTarget, e.caller.toB256) →
-          b.getStorVal a k = pre.getStorVal a k) →
-      (∀ a : Adr, b.getBal a = pre.getBal a) →
-      (∀ a : Adr, b.getCode a = pre.getCode a) →
-      b.logs = pre.logs ++
-        [ordinaryTransferLog e e.caller.toB256 0 (Sevm.argWord e 1)] →
-      50000 ≤ G → G ≤ pre.gasLeft →
-      Func.RunCompiledTo fs e
-        (b.setMach ⟨[
-          Nat.toB256 G, Sevm.argWord e 0, Sevm.argWord e 1,
-          0, 0, 0, 0],
-          Mem.empty.write 0 (Sevm.argWord e 1).toBytes, G, b.stateGas⟩)
-        (Ninst.call ::: (Ninst.iszero :::
-          (.call ethTransferErrorSlot) <?> Func.stop)) out)
-    (h_fork : CoveredFork e.benvStat.fork) :
-    Func.RunCompiledTo fs e
-      (pre.setMach ⟨[], Mem.empty, pre.gasLeft, pre.stateGas⟩) withdrawTo out := by
-  simp only [withdrawTo]
-  func_run (2)
-  refine Func.runCompiledTo_sload_step h_fork rfl (by simp)
-    (v := pre.getStorVal e.currentTarget e.caller.toB256) rfl
-    (M := Mem.empty) ?_ ?_ ?_
-  · rfl
-  · simp only [Devm.gasLeft_setMach, gasColdSload]
-    omega
-  · intro b₁ c₁ G₁ hw₁ hacc₁ hstor₁ hbal₁ hcode₁ hrc₁ hlog₁ hlo₁ hhi₁ hG₁
-    simp only [Devm.gasLeft_setMach, gasWarmAccess, gasColdSload]
-      at hG₁ hlo₁ hhi₁
-    func_run (9) [0]
-    · show (if pre.getStorVal e.currentTarget e.caller.toB256 <
-          Sevm.argWord e 1 then (1 : B256) else 0) = 0
-      rw [if_neg (not_lt_of_ge h_amount)]
-    refine Func.runCompiledTo_sstore_warm_step h_fork rfl hw₁ h_static
-      (M := Mem.empty) rfl
-      (by simp only [Devm.gasLeft_setMach, gasStorageSet]; omega) ?_
-    intro b₂ c₂ G₂ hkey₂ hoth₂ hbal₂ hcode₂ hacc₂ hlog₂ hc₂ hG₂
-    simp only [Devm.gasLeft_setMach, gasStorageSet] at hG₂ hc₂
-    func_run (11) [gMemory]
-    · exact Devm.extCost_empty_word
-    refine Func.runCompiledTo_log_step
-      (topics := [transferEvent, e.caller.toB256, 0])
-      (s := [Sevm.argWord e 1, e.caller.toB256]) rfl rfl h_static
-      (M := Mem.empty.write 0 (Sevm.argWord e 1).toBytes) rfl
-      (c := 1756) (payload := (Sevm.argWord e 1).toBytes)
-      (M' := Mem.empty.write 0 (Sevm.argWord e 1).toBytes) ?_ ?_ ?_
-      (by simp only [Devm.gasLeft_setMach]; omega) ?_
-    · exact Devm.extCost_add_of_size Mem.size_write_word (by decide)
-    · exact Mem.read_write_word
-    · exact Mem.read_snd_eq_self (by rw [Mem.size_write_word]; decide)
-    · intro b₃ G₃ hlogs₃ hstor₃ hbal₃ hcode₃ hacc₃ hG₃
-      simp only [Devm.gasLeft_setMach] at hG₃
-      func_run (20)
-      rw [← Sevm.argWord_eq_dataWord]
-      simp only [prepend]
-      refine h_cont b₃ (G₃ - 24) ?_ ?_ ?_ ?_ ?_ (by omega) (by omega)
-      · simp only [hstor₃, Devm.getStorVal_setMach, hkey₂,
-          ← Sevm.argWord_eq_dataWord]
-      · intro a k hne
-        simp only [hstor₃, Devm.getStorVal_setMach, hoth₂ _ _ hne,
-          hstor₁]
-      · intro a
-        exact (hbal₃ a).trans ((hbal₂ a).trans (hbal₁ a))
-      · intro a
-        exact (hcode₃ a).trans ((hcode₂ a).trans (hcode₁ a))
-      · let l : Log :=
-          ⟨e.currentTarget, [transferEvent, e.caller.toB256, 0],
-            (Sevm.argWord e 1).toBytes⟩
-        calc
-          b₃.logs = b₂.logs ++ [l] := hlogs₃
-          _ = b₁.logs ++ [l] := congrArg (fun xs => xs ++ [l]) hlog₂
-          _ = pre.logs ++ [l] := congrArg (fun xs => xs ++ [l]) hlog₁
-          _ = pre.logs ++
-              [ordinaryTransferLog e e.caller.toB256 0 (Sevm.argWord e 1)] := rfl
 
 /-- A successful internal call flag makes the withdrawal's post-call guard take
 the `STOP` branch. -/
@@ -3891,12 +3627,6 @@ theorem Stable.selfTransactionRedemption_enabled_of_le
 
 /-! ## Boundary and anti-vacuity witnesses -/
 
-theorem bookedBalance_insufficient_not_admitted
-    {w : State} {ca owner : Adr} {q : Nat}
-    (hinsufficient : bookedBalanceNat w ca owner < q) :
-    ¬ q ≤ bookedBalanceNat w ca owner := by
-  omega
-
 theorem activeFlash_not_stable
     {dp : DeployParams} {ca : Adr} {w : State}
     (hactive : (w.getStor ca).get flashMintedSlot ≠ 0) :
@@ -4066,46 +3796,6 @@ theorem outerOkWithFailedReceipt_not_redemptionEnabled
   cases hp
   rw [heffect.receiptSucceeded] at hfailed
   contradiction
-
-theorem Stable.zeroMessageRedemption_enabled
-    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr}
-    {w : State} {msg : Msg}
-    (hstable : Stable dp ca w)
-    (henv : AdmissibleRedemptionMessage
-      rules dp ca owner recipient 0 w msg) :
-    MessageRedemptionEnabled dp ca owner recipient 0 w msg := by
-  exact hstable.messageRedemption_enabled_of_le (Nat.zero_le _) henv
-
-theorem Stable.unitMessageRedemption_enabled
-    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr}
-    {w : State} {msg : Msg}
-    (hstable : Stable dp ca w)
-    (hbooked : 1 ≤ bookedBalanceNat w ca owner)
-    (henv : AdmissibleRedemptionMessage
-      rules dp ca owner recipient 1 w msg) :
-    MessageRedemptionEnabled dp ca owner recipient 1 w msg := by
-  exact hstable.messageRedemption_enabled_of_le hbooked henv
-
-theorem Stable.zeroTransactionRedemption_enabled
-    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr}
-    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    (hstable : Stable dp ca benv.state)
-    (henv : AdmissibleRedemptionTx
-      rules dp ca owner recipient 0 benv bout tx index) :
-    TransactionRedemptionEnabled
-      dp ca owner recipient 0 benv bout tx index := by
-  exact hstable.transactionRedemption_enabled_of_le (Nat.zero_le _) henv
-
-theorem Stable.unitTransactionRedemption_enabled
-    {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr}
-    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    (hstable : Stable dp ca benv.state)
-    (hbooked : 1 ≤ bookedBalanceNat benv.state ca owner)
-    (henv : AdmissibleRedemptionTx
-      rules dp ca owner recipient 1 benv bout tx index) :
-    TransactionRedemptionEnabled
-      dp ca owner recipient 1 benv bout tx index := by
-  exact hstable.transactionRedemption_enabled_of_le hbooked henv
 
 end Weth10
 end Blanc

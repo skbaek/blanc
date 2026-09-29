@@ -1046,46 +1046,6 @@ theorem rootLoop_iterations_exists_storageEffectRun
         rw [hgas] at hstage
         exact ⟨ex, hP, hstage⟩
 
-/-- Fixed-outcome compatibility corollary of the existential exact-effect
-root-fold carrier. -/
-theorem rootLoop_iterations_storageEffectRun
-    {sevm : Sevm} {origin base : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    {memory : Mem} {oldCount : B256} {s : RootLoopState}
-    {stor : Stor} {n K : Nat} {ex : Execution}
-    (carrier : RootLoopCarrier origin base memory oldCount s)
-    (horiginStor : Devm.getStor origin sevm.currentTarget = stor)
-    (hactive : RootLoopActive sevm.currentTarget stor n s)
-    (hnodeleg : getDelegatedCodeAddress (origin.getCode 2) = none)
-    (hwarm : (2 : Adr) ∈ origin.accessedAddresses)
-    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hdepth : sevm.depth ≠ 0)
-    (hbound :
-      K + rootLoopGas sevm.currentTarget stor n s < 2 ^ 256)
-    (htail :
-      ∀ {base' : Devm} {memory' : Mem},
-        RootLoopCarrier origin base' memory' oldCount
-          (rootLoopIter sevm.currentTarget stor n s) →
-        Func.StorageEffectRun (runtime.main :: runtime.aux) sevm
-          (base'.setMach
-            ⟨[(rootLoopIter sevm.currentTarget stor n s).height],
-              memory', K, base'.stateGas⟩)
-          rootLoop ex []) :
-    Func.StorageEffectRun (runtime.main :: runtime.aux) sevm
-      (base.setMach
-        ⟨[s.height], memory,
-          K + rootLoopGas sevm.currentTarget stor n s, base.stateGas⟩)
-      rootLoop ex [] := by
-  obtain ⟨ex', hex, hrun⟩ :=
-    rootLoop_iterations_exists_storageEffectRun (hfork := hfork)
-      (P := fun ex' => ex' = ex) carrier horiginStor hactive
-      hnodeleg hwarm hpre hdepth hbound
-      (by
-        intro base' memory' hcarrier
-        exact ⟨ex, rfl, htail hcarrier⟩)
-  subst ex'
-  exact hrun
-
 /-- The finishing return suffix is source-local, childless, and retains no
 storage effect. -/
 private theorem rootFinishReturn_storageEffectRun
@@ -2606,41 +2566,6 @@ def getDepositRootRuntimeGas
     getDepositRootRouteGas
 
 def getDepositRootNonzeroValueRuntimeGas : Nat := 134
-
-/-- A value-carrying root query is rejected before the endpoint reads the
-count slot or invokes SHA-256. -/
-theorem getDepositRoot_nonzero_value_runCompiledTo
-    (sevm : Sevm) (base : Devm) (G : Nat)
-    (hnonempty : sevm.data.length.toB256 ≠ 0)
-    (hvalue : sevm.value ≠ 0)
-    (hselector : Sevm.selector sevm = getDepositRootSelector)
-    (hcode : sevm.code.toList = code) :
-    Prog.RunCompiledTo sevm
-      (base.setMach
-        ⟨[], Mem.empty, G + getDepositRootNonzeroValueRuntimeGas, base.stateGas⟩)
-      runtime
-      (.error (.revert,
-        (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) ∧
-    some sevm.code.toList = Prog.compile runtime := by
-  let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft, base.stateGas⟩
-  have hbody := nonpayableEndpoint_nonzero_runCompiledTo
-    (fs := runtime.main :: runtime.aux) (sevm := sevm)
-    (base := routeBase) (G := G)
-    (body := getDepositRootEndpoint) hvalue
-    (by simp only [routeBase, Devm.stack_setMach, List.length_nil]; omega)
-  have hroute := getDepositRoot_route_runCompiledTo
-    (base := base) (K := G + nonpayableEndpointRevertGas)
-    hnonempty hselector (by
-      simpa only [routeBase, Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
-        Devm.memory_setMach] using hbody)
-  constructor
-  · have hboundary :
-        G + nonpayableEndpointRevertGas + getDepositRootRouteGas =
-          G + getDepositRootNonzeroValueRuntimeGas := by
-      simp only [nonpayableEndpointRevertGas, getDepositRootRouteGas,
-        getDepositRootNonzeroValueRuntimeGas]
-    simpa only [hboundary] using hroute
-  · rw [hcode, code_compile]
 
 /-- The selected value-rejecting root route has no raw SSTORE and retains no
 storage effect. -/

@@ -134,15 +134,4 @@ theorem e4C31_acc : e4C31.dyna.accessedAddresses = e4C.dyna.accessedAddresses :=
 theorem e4C31_keys : e4C31.dyna.accessedStorageKeys = e4C.dyna.accessedStorageKeys := rfl
 theorem e4C31_state : e4C31.dyna.state = e4C.dyna.state := rfl
 
-theorem cp5C_spec :
-    Xinst.step e4C31.sta e4C31.dyna .delegatecall = .spawn cp5C.f (.call cp5C.p cp5C.oi cp5C.os) ∧
-      (∀ a, a ∈ cp5C.p.accessedAddresses ↔ a ∈ cp5C.adrs) ∧
-      cp5C.p.accessedStorageKeys = e4C31.dyna.accessedStorageKeys ∧
-      cp5C.f.isCreate = false ∧ cp5C.f.inner.accessedAddresses = cp5C.p.accessedAddresses ∧
-      cp5C.f.inner.accessedStorageKeys = cp5C.p.accessedStorageKeys ∧
-      cp5C.f.inner.benv.stat.rules.stateGas = none ∧ cp5C.f.inner.benv.state = e4C31.dyna.state ∧
-      cp5C.p.state = e4C31.dyna.state :=
-  dcallPrep_spec cp5C_eq (fun a => by rw [e4C31_acc]; exact e4C_adrs a)
-    (by rw [e4C31_state]; exact e4C_world.2)
-
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC

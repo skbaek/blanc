@@ -12,10 +12,6 @@ theorem RetainedXlot.eq_of_same {xl : Xlot}
   cases left <;> cases right <;> simp_all
   apply Exec.unique
 
-instance RetainedXlot.instSubsingleton {xl : Xlot} :
-    Subsingleton (RetainedXlot xl) :=
-  ⟨RetainedXlot.eq_of_same⟩
-
 /-- A filled retained slot satisfying the deterministic frame wrapper is
 uniquely indexed, even though `RunFrame` itself existentially names the raw
 child outcome. -/
@@ -55,11 +51,6 @@ theorem ProcessMessageTrace.eq_of_same
   subst rightRetained
   rfl
 
-instance ProcessMessageTrace.instSubsingleton
-    {msg : Msg} {out : Except (EvmError × State × AdrSet × Tra) Devm} :
-    Subsingleton (ProcessMessageTrace msg out) :=
-  ⟨ProcessMessageTrace.eq_of_same⟩
-
 theorem ProcessCreateMessageTrace.eq_of_same
     {msg : Msg} {out : Except (EvmError × State × AdrSet × Tra) Devm}
     (left right : ProcessCreateMessageTrace msg out) : left = right := by
@@ -73,11 +64,6 @@ theorem ProcessCreateMessageTrace.eq_of_same
   have hretained := RetainedXlot.eq_of_same leftRetained rightRetained
   subst rightRetained
   rfl
-
-instance ProcessCreateMessageTrace.instSubsingleton
-    {msg : Msg} {out : Except (EvmError × State × AdrSet × Tra) Devm} :
-    Subsingleton (ProcessCreateMessageTrace msg out) :=
-  ⟨ProcessCreateMessageTrace.eq_of_same⟩
 
 theorem MessageCallTrace.toResult
     {msg : Msg} {state : State} {out : MsgCallOutput}
@@ -112,11 +98,6 @@ theorem MessageCallTrace.index_eq_and_heq_of_same_input
     ⟨rfl, rfl⟩
   exact ⟨rfl, rfl, heq_of_eq (MessageCallTrace.eq_of_same left right)⟩
 
-instance MessageCallTrace.instSubsingleton
-    {msg : Msg} {state : State} {out : MsgCallOutput} :
-    Subsingleton (MessageCallTrace msg state out) :=
-  ⟨MessageCallTrace.eq_of_same⟩
-
 theorem SystemMessageTrace.index_eq_of_same_input
     {benv : Benv} {target : Adr} {data : Bytes}
     {leftState rightState : State} {leftOut rightOut : MsgCallOutput}
@@ -147,12 +128,6 @@ theorem SystemMessageTrace.index_eq_and_heq_of_same_input
   rcases SystemMessageTrace.index_eq_of_same_input left right with
     ⟨rfl, rfl⟩
   exact ⟨rfl, rfl, heq_of_eq (SystemMessageTrace.eq_of_same left right)⟩
-
-instance SystemMessageTrace.instSubsingleton
-    {benv : Benv} {target : Adr} {data : Bytes}
-    {state : State} {out : MsgCallOutput} :
-    Subsingleton (SystemMessageTrace benv target data state out) :=
-  ⟨SystemMessageTrace.eq_of_same⟩
 
 theorem TransactionTrace.index_eq_of_same_input
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
@@ -204,12 +179,6 @@ theorem TransactionTrace.index_eq_and_heq_of_same_input
     ⟨rfl, rfl⟩
   exact ⟨rfl, rfl, heq_of_eq (TransactionTrace.eq_of_same left right)⟩
 
-instance TransactionTrace.instSubsingleton
-    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    {state : State} {bout' : BlockOutput} :
-    Subsingleton (TransactionTrace benv bout tx index state bout') :=
-  ⟨TransactionTrace.eq_of_same⟩
-
 theorem ApplyTransactionsTrace.toRun
     {txs : List (Nat × Tx)} {benv finalBenv : Benv}
     {bout finalBout : BlockOutput}
@@ -250,24 +219,6 @@ theorem ApplyTransactionsTrace.eq_of_same
           cases hhead
           rw [ih rightTail]
 
-theorem ApplyTransactionsTrace.index_eq_and_heq_of_same_input
-    {txs : List (Nat × Tx)} {benv : Benv} {bout : BlockOutput}
-    {leftBenv rightBenv : Benv} {leftBout rightBout : BlockOutput}
-    (left : ApplyTransactionsTrace txs benv bout leftBenv leftBout)
-    (right : ApplyTransactionsTrace txs benv bout rightBenv rightBout) :
-    leftBenv = rightBenv ∧ leftBout = rightBout ∧ HEq left right := by
-  rcases ApplyTransactionsTrace.index_eq_of_same_input left right with
-    ⟨rfl, rfl⟩
-  exact ⟨rfl, rfl,
-    heq_of_eq (ApplyTransactionsTrace.eq_of_same left right)⟩
-
-instance ApplyTransactionsTrace.instSubsingleton
-    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
-    {bout finalBout : BlockOutput} :
-    Subsingleton (ApplyTransactionsTrace txs benv bout
-      finalBenv finalBout) :=
-  ⟨ApplyTransactionsTrace.eq_of_same⟩
-
 theorem RequestsTrace.index_eq_of_same_input
     {benv : Benv} {bout : BlockOutput}
     {leftState rightState : State}
@@ -298,23 +249,6 @@ theorem RequestsTrace.index_eq_and_heq_of_same_input
   rcases RequestsTrace.index_eq_of_same_input left right with
     ⟨rfl, rfl⟩
   exact ⟨rfl, rfl, heq_of_eq (RequestsTrace.eq_of_same left right)⟩
-
-instance RequestsTrace.instSubsingleton
-    {benv : Benv} {bout : BlockOutput}
-    {state : State} {bout' : BlockOutput} :
-    Subsingleton (RequestsTrace benv bout state bout') :=
-  ⟨RequestsTrace.eq_of_same⟩
-
-theorem AppliedBodyTrace.index_eq_of_same_input
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
-    {leftState rightState : State}
-    {leftBout rightBout : BlockOutput}
-    (left : AppliedBodyTrace benv txs wds leftState leftBout)
-    (right : AppliedBodyTrace benv txs wds rightState rightBout) :
-    leftState = rightState ∧ leftBout = rightBout := by
-  have hpair : (leftState, leftBout) = (rightState, rightBout) :=
-    Except.ok.inj (left.run.symm.trans right.run)
-  exact ⟨congrArg Prod.fst hpair, congrArg Prod.snd hpair⟩
 
 theorem AppliedBodyTrace.eq_of_same
     {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
@@ -363,12 +297,6 @@ theorem AppliedBodyTrace.eq_of_same
   cases hRequestBout
   cases hRequests
   rfl
-
-instance AppliedBodyTrace.instSubsingleton
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
-    {state : State} {bout : BlockOutput} :
-    Subsingleton (AppliedBodyTrace benv txs wds state bout) :=
-  ⟨AppliedBodyTrace.eq_of_same⟩
 
 /-- For fixed endpoints, the applied block determines all retained replay and
 flow data. -/

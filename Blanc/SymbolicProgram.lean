@@ -276,44 +276,6 @@ theorem Func.erase_toSymbolic (f : Func) (sym : SymbolicFunc Label)
   | call n =>
     simp [Func.toSymbolic?] at h
 
-/-- `Func.toSymbolic?` succeeds if and only if `Func.isCallFree` is true. -/
-theorem Func.isSome_toSymbolic (Label : Type) (f : Func) :
-    (f.toSymbolic? Label).isSome = f.isCallFree := by
-  induction f with
-  | last o => rfl
-  | next i f ih =>
-    simp only [Func.toSymbolic?, Func.isCallFree]
-    cases hf : f.toSymbolic? Label with
-    | none =>
-      rw [hf] at ih
-      simp only [Option.isSome_none] at ih
-      simp [ih]
-    | some s =>
-      rw [hf] at ih
-      simp only [Option.isSome_some] at ih
-      simp [ih]
-  | branch f g ihf ihg =>
-    simp only [Func.toSymbolic?, Func.isCallFree]
-    cases hf : f.toSymbolic? Label with
-    | none =>
-      rw [hf] at ihf
-      simp only [Option.isSome_none] at ihf
-      simp [ihf]
-    | some sf =>
-      rw [hf] at ihf
-      simp only [Option.isSome_some] at ihf
-      cases hg : g.toSymbolic? Label with
-      | none =>
-        rw [hg] at ihg
-        simp only [Option.isSome_none] at ihg
-        simp [ihf, ihg]
-      | some sg =>
-        rw [hg] at ihg
-        simp only [Option.isSome_some] at ihg
-        rw [← ihf, ← ihg]
-        rfl
-  | call n => rfl
-
 /-- Lift a call-free `Func` into `SymbolicFunc Label`. Fails at compile time if `f` contains calls. -/
 def Func.liftCallFree (Label : Type) (f : Func) (h : (f.toSymbolic? Label).isSome = true := by decide) :
     SymbolicFunc Label :=
@@ -701,10 +663,6 @@ the erased bodies, with the fallback label at its assigned coordinate. -/
 
 /-! ## Unique label lookup properties -/
 
-theorem findLabel?_root [DecidableEq Label] (p : SymbolicProg Label) :
-    p.findLabel? p.root = some 0 := by
-  simp [SymbolicProg.findLabel?]
-
 theorem findAux_ne_zero [DecidableEq Label] (target : Label) (idx : Nat)
     (aux : List (Label × SymbolicFunc Label)) :
     findAux target idx aux ≠ some 0 := by
@@ -718,18 +676,6 @@ theorem findAux_ne_zero [DecidableEq Label] (target : Label) (idx : Nat)
       injection h with h
       omega
     · exact ih (idx + 1)
-
-theorem findLabel?_eq_zero_iff [DecidableEq Label] (p : SymbolicProg Label) (lbl : Label) :
-    p.findLabel? lbl = some 0 ↔ lbl = p.root := by
-  simp only [SymbolicProg.findLabel?]
-  split <;> rename_i h
-  · simp [h]
-  · have h_ne := findAux_ne_zero lbl 0 p.aux
-    constructor
-    · intro h_zero
-      exact False.elim (h_ne h_zero)
-    · intro h_root
-      exact False.elim (h h_root)
 
 /-! ## Checked linking and certificates -/
 

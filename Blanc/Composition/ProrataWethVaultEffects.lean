@@ -647,24 +647,6 @@ theorem WethAllowanceLocatedEvent.classification_sound
       exact ⟨rfl, by simpa [WethAllowanceLocatedEvent.toEvent] using frame_eq,
         exact⟩
 
-/-- Erasing stable retained paths recovers the earlier allowance-event list in
-the identical list order. -/
-theorem retainedWethAllowanceLocatedEvents_erase
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out) :
-    (retainedWethAllowanceLocatedEvents run).map WethAllowanceLocatedEvent.toEvent =
-      retainedWethAllowanceEvents run := by
-  unfold retainedWethAllowanceLocatedEvents retainedWethAllowanceEvents
-  rw [List.map_filterMap]
-  rw [← Exec.committedFramePaths_map_frame]
-  rw [List.filterMap_map]
-  apply List.filterMap_congr
-  intro located _
-  simp only [Function.comp_apply]
-  unfold WethAllowanceLocatedEvent.classify?
-    WethAllowanceLocatedEvent.toEvent
-  cases WethAllowanceEvent.classify? located.frame <;> rfl
-
 /-- A path-preserving projected event retains its exact original path member,
 the frame alignment with that path, and the existing WETH allowance
 classification. -/
@@ -679,80 +661,12 @@ theorem retainedWethAllowanceLocatedEvents_sound
     WethAllowanceLocatedEvent.classification_sound classified
   exact ⟨by simpa only [sameLocated] using locatedMember, aligned, exact⟩
 
-/-- The first path-aware WETH consumer invokes the common parent-entry bridge
-on the event's actual retained occurrence.  The root case stays an explicit
-configured-envelope obligation; it is not inferred from a raw message trace. -/
-theorem retainedWethAllowanceLocatedEvent_enteringOccurrence
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out) {event : WethAllowanceLocatedEvent}
-    (member : event ∈ retainedWethAllowanceLocatedEvents run)
-    (nonroot : event.located.path ≠ []) :
-    Nonempty (Exec.LocatedFrame.EnteringOccurrence run event.located) :=
-  Exec.LocatedFrame.exists_enteringOccurrence run event.located
-    (retainedWethAllowanceLocatedEvents_sound run member).1 nonroot
-
 /-! ### Entry freshness for extracted committed frames
 
 `committedFrames` is a settlement projection while `FrameAdmitted` ranges over
 raw entered roots.  The common `ExecutionFrames` membership bridge carries a
 committed invocation root back to that all-outcome traversal; it deliberately
 does not claim same-frame prefix or resumed-parent storage chronology. -/
-
-/-- The event projection does not reorder committed frame roots.  It does not
-claim that `committedFrames` includes same-frame instruction prefixes or the
-resumed parent suffix after a child. -/
-theorem retainedWethAllowanceEvents_frame_sublist
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out) :
-    List.Sublist ((retainedWethAllowanceEvents run).map WethAllowanceEvent.frame)
-      (Exec.committedFrames run) := by
-  unfold retainedWethAllowanceEvents
-  induction Exec.committedFrames run with
-  | nil => exact .slnil
-  | cons frame tail ih =>
-      cases hclassified : WethAllowanceEvent.classify? frame with
-      | none =>
-          simpa only [List.filterMap_cons_none hclassified, List.map] using ih.cons frame
-      | some event =>
-          have source := WethAllowanceEvent.classification_sound hclassified
-          simpa only [List.filterMap_cons_some hclassified, List.map, source.1] using
-            (List.Sublist.cons_cons frame ih)
-
-/-- Every selected event is an actual committed frame with the exact WETH
-identity and allowance selector that classified it. -/
-theorem retainedWethAllowanceEvents_sound
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out) {event : WethAllowanceEvent}
-    (member : event ∈ retainedWethAllowanceEvents run) :
-    event.frame ∈ Exec.committedFrames run ∧ event.Classified := by
-  rcases List.mem_filterMap.mp member with ⟨frame, frameMember, classified⟩
-  obtain ⟨sameFrame, exact⟩ := WethAllowanceEvent.classification_sound classified
-  exact ⟨by simpa only [sameFrame] using frameMember, exact⟩
-
-/-- Conversely, every committed frame with an exact approve or transferFrom
-root is retained as the corresponding event. -/
-theorem retainedWethAllowanceEvents_complete
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out) {frame : Exec.Frame} {approval : Bool}
-    (member : frame ∈ Exec.committedFrames run)
-    (classified : (⟨frame, approval⟩ : WethAllowanceEvent).Classified) :
-    ⟨frame, approval⟩ ∈ retainedWethAllowanceEvents run :=
-  List.mem_filterMap.mpr
-    ⟨frame, member, WethAllowanceEvent.classification_complete classified⟩
-
-/-- The storage endpoint of a classified allowance frame is its settlement-
-retained SSTORE replay. This is the execution chronology used by the history
-adapter: a nested callback's writes occur before the resumed parent suffix,
-not merely after the parent frame in an invocation-root projection. -/
-theorem WethAllowanceEvent.storageReplay
-    (event : WethAllowanceEvent)
-    (hfork : CoveredFork event.frame.sevm.benvStat.fork) (key : B256) :
-    (Devm.getStor event.frame.post wethAccount).get key =
-      Exec.StorageWrite.replayCell wethAccount key
-        ((Devm.getStor event.frame.pre wethAccount).get key)
-        (Exec.retainedStorageWrites event.frame.run) := by
-  exact Exec.storageReplay_committedPost event.frame.run event.frame.committed
-    hfork wethAccount key
 
 /-- Every extracted event has well-formed entry memory when its concrete
 execution is admitted as freshly entered.  This derives the side condition
@@ -839,18 +753,6 @@ theorem retainedXlot_wethAllowanceEvents_toInvocations
       have fresh : Exec.FrameAdmitted wethAccount Exec.FreshEntry run := by
         simpa only [_root_.Blanc.ExecutionTrace.RetainedXlot.FrameAdmitted] using fresh
       exact retainedWethAllowanceEvent_toInvocation run fresh member
-
-/-- An actual retained call-message trace supplies the fresh-entry admission
-needed by the allowance projection.  This is a source fact of the entering
-frame, not an additional history premise.  A slot-free message has no raw
-execution and therefore no projected events. -/
-theorem processMessageTrace_retainedWethAllowanceEvents_toInvocations
-    {msg : Msg} {messageOut : Except (EvmError × State × AdrSet × Tra) Devm}
-    (trace : _root_.Blanc.ExecutionTrace.ProcessMessageTrace msg messageOut) :
-    RetainedWethAllowanceEventInvocations trace.retained :=
-  retainedXlot_wethAllowanceEvents_toInvocations trace.retained
-    (_root_.Blanc.ExecutionTrace.ProcessMessageTrace.freshFrameAdmitted
-      trace wethAccount)
 
 /-- Raw words, without address normalization. A self `transferFrom` bypasses
 allowance hashing; all other successful allowance invocations visit one pair.

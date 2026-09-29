@@ -204,10 +204,6 @@ theorem AllowanceRegionEffect.of_getStorCode_eq
     AllowanceRegionEffect ca pre post [] :=
   ⟨fun key _ => by rw [applyAllowanceLedger_nil, hstor], hcode⟩
 
-theorem AllowanceRegionEffect.refl {ca : Adr} {pre : Devm} :
-    AllowanceRegionEffect ca pre pre [] :=
-  .of_getStorCode_eq rfl rfl
-
 /-- Chronological composition of two transported segments. -/
 theorem AllowanceRegionEffect.append
     {ca : Adr} {pre mid post : Devm}
@@ -373,10 +369,6 @@ theorem AllowanceRegionEffectSound.of_getStorCode_eq
     AllowanceRegionEffectSound ca pre post [] :=
   { AllowanceRegionEffect.of_getStorCode_eq hstor hcode with
     entryRead := .nil _ }
-
-theorem AllowanceRegionEffectSound.refl {ca : Adr} {pre : Devm} :
-    AllowanceRegionEffectSound ca pre pre [] :=
-  .of_getStorCode_eq rfl rfl
 
 /-- A segment that records nothing is read-sound for free: the empty ledger
 admits no split, so the clause is vacuous.  Every contract-neutral step of

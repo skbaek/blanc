@@ -41,19 +41,6 @@ def roleGatedEntries (dp : DeployParams) :
     (selGrantRole, defaultAdminRole, grantRole),
     (selRevokeRole, defaultAdminRole, revokeRole) ]
 
-theorem roleGatedEntries_exact (dp : DeployParams) :
-    roleGatedEntries dp =
-      [ (selPauseFor, pauseRole, pauseFor),
-        (selPauseUntil, pauseRole, pauseUntil),
-        (selResume, resumeRole, resume),
-        (selSetExitRequestLimit, twExitLimitManagerRole,
-          setExitRequestLimit),
-        (selTriggerFullWithdrawals, addFullWithdrawalRequestRole,
-          triggerFullWithdrawals dp),
-        (selGrantRole, defaultAdminRole, grantRole),
-        (selRevokeRole, defaultAdminRole, revokeRole) ] :=
-  rfl
-
 /-- The same census at the actual `funcs` dispatcher boundary.  In particular,
 the payable trigger is not wrapped in `nonpayable`; every other protected entry
 is. -/
@@ -68,19 +55,6 @@ def roleGatedDispatchEntries (dp : DeployParams) :
       triggerFullWithdrawals dp),
     (selGrantRole, defaultAdminRole, nonpayable grantRole),
     (selRevokeRole, defaultAdminRole, nonpayable revokeRole) ]
-
-theorem roleGatedDispatchEntries_exact (dp : DeployParams) :
-    roleGatedDispatchEntries dp =
-      [ (selPauseFor, pauseRole, nonpayable pauseFor),
-        (selPauseUntil, pauseRole, nonpayable pauseUntil),
-        (selResume, resumeRole, nonpayable resume),
-        (selSetExitRequestLimit, twExitLimitManagerRole,
-          nonpayable setExitRequestLimit),
-        (selTriggerFullWithdrawals, addFullWithdrawalRequestRole,
-          triggerFullWithdrawals dp),
-        (selGrantRole, defaultAdminRole, nonpayable grantRole),
-        (selRevokeRole, defaultAdminRole, nonpayable revokeRole) ] :=
-  rfl
 
 /-! ## Exact authorization calldata
 
@@ -259,22 +233,6 @@ theorem revokeRole_role_gate_exact :
 
 /-! The trigger's role guard is inside the compiled local trigger body. -/
 
-theorem trigger_role_precedes_pause_exact (dp : DeployParams) :
-    Trigger.afterValidation =
-      (Trigger.coreFlatRoleGuard (.call Trigger.roleFailureBoundarySlot) <|
-        callvalue ::: selfbalance ::: lt :::
-          ((.call Trigger.arithmeticPanicSlot) <?>
-            (callvalue ::: selfbalance ::: sub :::
-              Trigger.storeWord Trigger.balanceBeforeWord +++
-              pushB256 resumeSinceSlot ::: sload ::: timestamp ::: lt :::
-                ((.call Trigger.resumedExpectedSlot) <?>
-                  (callvalue ::: iszero :::
-                    ((.call Trigger.zeroMsgValueSlot) <?>
-                      (Trigger.loadWord Trigger.requestsCountWord +++ iszero :::
-                        ((.call Trigger.zeroValidatorsDataSlot) <?>
-                          .call Trigger.consumeQuotaSlot)))))))) :=
-  rfl
-
 /-! ## Exact auxiliary failure outcomes -/
 
 /-- Compatibility name for the retired flat-record collision continuation.
@@ -300,11 +258,6 @@ or account uses collision refusal. -/
 def AbsentRoleFailure (out : Execution) : Prop :=
   MissingRoleFailure out ∨ CollisionRoleFailure out
 
-/-- The trigger's flat guard reaches the same shared AccessControl boundary as
-every other role gate, so its outcome is exactly `MissingRoleFailure`. -/
-theorem triggerRoleFailure_eq_missingRole :
-    TriggerRoleFailure = MissingRoleFailure := rfl
-
 theorem collisionRefusal_call_reverts_exact
     {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
     (hcall : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
@@ -321,35 +274,12 @@ theorem collisionRefusal_call_reverts_exact
    visible prevents accidental laundering through a model or mere inhabitation.
    Every one of the seven public gates uses one of these two conclusions. -/
 
-theorem zeroIndex_role_failure_of_route
-    {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
-    (hroute : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
-      sevm entry (.call missingRoleSlot) out) :
-    (∃ d, out = .error (.halt (.outOfGas .none), d)) ∨
-      (∃ post, out = .error (.revert, post) ∧
-        post.output = customErrorData "AccessControlUnauthorizedAccount") :=
-  missingRole_call_reverts_exact hroute
-
 theorem zeroIndex_role_failure_outcome_of_route
     {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
     (hroute : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
       sevm entry (.call missingRoleSlot) out) :
     MissingRoleFailure out := by
   simpa [MissingRoleFailure] using missingRole_call_reverts_exact hroute
-
-theorem collision_role_failure_of_route
-    {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
-    (hroute : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
-      sevm entry (.call collisionRefusalSlot) out) :
-    ∃ post, out = .error (.revert, post) ∧ post.output = [] :=
-  collisionRefusal_call_reverts_exact hroute
-
-theorem collision_role_failure_outcome_of_route
-    {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
-    (hroute : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
-      sevm entry (.call collisionRefusalSlot) out) :
-    CollisionRoleFailure out := by
-  simpa [CollisionRoleFailure] using collisionRefusal_call_reverts_exact hroute
 
 /-! ## From an `onlyRole` route to the exact absent-role outcome -/
 

@@ -226,27 +226,9 @@ def pauseUntilSourceProjection (_timestamp expiry : B256) : B256 :=
 
 def resumeSourceProjection (timestamp : B256) : B256 := timestamp
 
-theorem pauseUntilSourceProjection_sentinel (timestamp : B256) :
-    pauseUntilSourceProjection timestamp pauseInfinitely = pauseInfinitely := by
-  simp [pauseUntilSourceProjection]
-
-theorem pauseUntilSourceProjection_finite {timestamp expiry : B256}
-    (hfinite : expiry ≠ pauseInfinitely) :
-    pauseUntilSourceProjection timestamp expiry = expiry + 1 := by
-  simp [pauseUntilSourceProjection, hfinite]
-
-theorem resumeSourceProjection_effect (timestamp : B256) :
-    resumeSourceProjection timestamp = timestamp := rfl
-
 /-! Exact compiled route packaging.  The dispatcher walk is obtained by
    inverting the program's own entry guard and selector prefix; it is not an
    extra premise disguised as a route witness. -/
-
-private theorem prefix_head_eq {x : B256} {xs : Stack} {devm : Devm}
-    (hp : x :: xs <<+ devm.stack) {w : B256} {rest : Stack}
-    (hs : devm.stack = w :: rest) : x = w := by
-  have hp' : (w :: []) <<+ devm.stack := ⟨rest, by simpa [Split] using hs⟩
-  exact pref_head_unique hp hp'
 
 /-! The optimized runtime selects the payable trigger before a single shared
 nonpayable guard and the remaining selector table.  The route lemmas below

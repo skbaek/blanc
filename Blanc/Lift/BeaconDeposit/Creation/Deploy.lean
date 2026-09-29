@@ -138,18 +138,6 @@ def deployMsg : Msg where
   accessedStorageKeys := .emptyWithCapacity
   disablePrecompiles := false
 
-/-- **The recorded deployment, closed.**  The deposit address is the deployer's nonce-0 CREATE
-address, and executing the recorded creation input from the deployer as a Prague CREATE
-message succeeds, installs exactly the certified deployed runtime there, and leaves storage
-satisfying the history theorem's checkpoint premise over the empty deposit history. -/
-theorem beacon_deploy :
-    depositAddress = computeContractAddress deployer 0 ∧
-    ∃ post, processCreateMessage deployMsg = .ok post ∧
-      (post.getCode depositAddress).toList = Blanc.Lift.BeaconDeposit.code.toList ∧
-      SolInv (Devm.getStor post depositAddress) [] :=
-  ⟨depositAddress_eq, beacon_create deployMsg rfl rfl rfl (by decide) (by decide) rfl
-    (Std.HashSet.mem_insert_self) (by decide) CoveredFork.prague rfl (by decide) (by decide)⟩
-
 /-- **The recorded deployment under every covered fork.**  The same conclusion as
 `beacon_deploy` for `deployMsg.withFork f`: the address equality plus the `beacon_create`
 instance at the fork-replaced message.  Fork-sensitive premises discharge by cases on `hf`. -/

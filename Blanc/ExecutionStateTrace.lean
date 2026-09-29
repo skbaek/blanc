@@ -157,13 +157,6 @@ def Exec.committedStateBoundaries
     Exec.stateBoundariesOfCommits [] 0 run h
   else []
 
-@[simp] theorem Exec.committedStateBoundaries_eq_nil_of_not_commits
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out)
-    (notCommitted : Execution.commits out ≠ true) :
-    Exec.committedStateBoundaries run = [] := by
-  simp [Exec.committedStateBoundaries, notCommitted]
-
 private theorem Exec.stateReplay_of_commits
     (framePath : List Nat) (nextChild : Nat)
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}

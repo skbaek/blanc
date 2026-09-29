@@ -101,12 +101,6 @@ theorem exec_of_stepN_spawn_runOk {n : Nat} {evm evm' : Evm}
   rw [hsta]
   exact ⟨Exec.runOk (by rw [← hsta]; exact hspawn) henter child hsettle rest⟩
 
-/-- A kernel-decidable success test yields the run equation with the end state
-named by `stepN` itself. -/
-theorem stepN_eq_get {n : Nat} {evm : Evm} (h : (stepN n evm).isSome = true) :
-    stepN n evm = some ((stepN n evm).get h) :=
-  (Option.some_get h).symm
-
 open Lean Meta Elab Tactic in
 /-- Close `a = b` with `Eq.refl a`, checked by the kernel alone (the way
 `decide +kernel` checks its proof): no elaborator unification of `a` with `b`

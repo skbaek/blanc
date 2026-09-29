@@ -1039,15 +1039,6 @@ lemma le_retained_of_calculateMsgCallGas_zero {gas gl ext acc mcc mcs : Nat}
   have h_div : (gl - ext - acc) / 64 ≤ gl - ext - acc := Nat.div_le_self _ _
   omega
 
-/-- The `min` collapses when the operand asked for at least the cap — which is
-what a frame that pushed its own `GAS` and forwarded it does, since the cap is
-strictly below the account the push read. -/
-lemma calculateMsgCallGas_zero_of_cap_le {gas gl ext acc : Nat}
-    (h : acc + ext ≤ gl) (h_cap : except64th (gl - ext - acc) ≤ gas) :
-    calculateMsgCallGas 0 gas gl ext acc =
-      ⟨except64th (gl - ext - acc) + acc, except64th (gl - ext - acc)⟩ := by
-  rw [calculateMsgCallGas_zero h, Nat.min_eq_right h_cap]
-
 /-! ## `genericCall.step`
 
 Two arms, and the depth test is the whole difference.  At `sevm.depth = 0` no

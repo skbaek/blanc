@@ -269,11 +269,6 @@ private theorem constructorInstructionEffectCounts_push
     constructorInstructionEffectCounts (.push bytes bound) = (0, 0, 0) := by
   rfl
 
-private theorem constructorInstructionEffectCounts_pushDeployWord
-    (word : B256) :
-    constructorInstructionEffectCounts (pushDeployWord word) = (0, 0, 0) := by
-  exact constructorInstructionEffectCounts_push _ _
-
 private theorem constructorInstructionEffectCounts_pushB256
     (word : B256) :
     constructorInstructionEffectCounts (pushB256 word) = (0, 0, 0) := by

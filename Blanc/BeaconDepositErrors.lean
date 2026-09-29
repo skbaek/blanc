@@ -144,9 +144,6 @@ def noMatchSelector : B256 := 0xffffffff
 /-- Exact public gas for the selected rightmost dispatcher miss. -/
 def noMatchSelectorRuntimeGas : Nat := 117
 
-theorem noMatchSelectorRuntimeGas_eq : noMatchSelectorRuntimeGas = 117 := by
-  rfl
-
 /-- The rightmost leaf rejects `noMatchSelector` and enters its inline empty
 revert.  The paired certificate is indexed by the identical compiled walk. -/
 private theorem noMatchLeaf_runCompiledTo_with_path

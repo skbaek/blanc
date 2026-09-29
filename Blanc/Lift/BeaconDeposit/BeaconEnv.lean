@@ -158,57 +158,6 @@ theorem configuredHistory_root_env {ca : Adr} {cfg : ChainConfig}
 the per-frame calldata premise from the retained transaction and header validation, so the
 headlines below carry no per-frame premise at all.  The variants above keep their statements. -/
 
-/-- `configuredHistory_solInv_env` without the calldata premise. -/
-theorem configuredHistory_solInv_envDerived {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {initialHistory : List B256}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (systemSpawnFree : ∀ root ∈ trace.systemRawFrames, SpawnFree root.sevm.code)
-    (notSystem : ca ∉ systemTargets)
-    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.NoAuthorityAt 2)
-    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ 2)
-    (installed : checkpoint.state.getCode ca = code)
-    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
-    SolInv (future.state.getStor ca) (initialHistory ++ committedNodes ca trace) :=
-  configuredHistory_solInv_env trace trace.frameAdmitted_calldata systemSpawnFree notSystem
-    checkpointEmpty noAuthority noFrame installed invariant
-
-/-- `configuredHistory_count_env` without the calldata premise. -/
-theorem configuredHistory_count_envDerived {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {initialHistory : List B256}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (systemSpawnFree : ∀ root ∈ trace.systemRawFrames, SpawnFree root.sevm.code)
-    (notSystem : ca ∉ systemTargets)
-    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.NoAuthorityAt 2)
-    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ 2)
-    (installed : checkpoint.state.getCode ca = code)
-    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
-    (future.state.getStor ca).get solCountSlot =
-      Nat.toB256 (initialHistory ++ committedNodes ca trace).length ∧
-      (initialHistory ++ committedNodes ca trace).length < 2 ^ 32 :=
-  configuredHistory_count_env trace trace.frameAdmitted_calldata systemSpawnFree notSystem
-    checkpointEmpty noAuthority noFrame installed invariant
-
-/-- `configuredHistory_root_env` without the calldata premise. -/
-theorem configuredHistory_root_envDerived {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {initialHistory : List B256}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (systemSpawnFree : ∀ root ∈ trace.systemRawFrames, SpawnFree root.sevm.code)
-    (notSystem : ca ∉ systemTargets)
-    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.NoAuthorityAt 2)
-    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ 2)
-    (installed : checkpoint.state.getCode ca = code)
-    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
-    BeaconDeposit.Acc.root Bytes.sha256 (solAcc (future.state.getStor ca)) =
-      BeaconDeposit.mixedRootOf Bytes.sha256 (initialHistory ++ committedNodes ca trace) :=
-  configuredHistory_root_env trace trace.frameAdmitted_calldata systemSpawnFree notSystem
-    checkpointEmpty noAuthority noFrame installed invariant
-
 /-! ### The system frames run the canonical code
 
 `systemSpawnFree` (`SpawnFree` of the code of every system frame) is false of the canonical

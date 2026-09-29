@@ -117,24 +117,6 @@ theorem proxyIsOssified_call_exact
   · decide +kernel
   · exact run
 
-theorem zeroAdmin_call_exact
-    {sevm : Sevm} {pre : Devm} {image : Bytes} {out : Execution}
-    (hwf : Mem.Wf pre.memory) (hreads : Mem.Reads pre.memory image)
-    (run : Func.RunCompiledTo
-      (runtimeBaseline.main :: runtimeBaseline.aux)
-      sevm pre (.call zeroAdminErrorSlot) out) :
-    ControlErrorOutcome pre zeroAdminErrorData out := by
-  apply controlErrorCall_exact
-      (slot := zeroAdminErrorSlot) (blob := zeroAdminErrorData)
-      (image := image) (out := out)
-  · simp [runtimeBaseline, runtimeBaselineAux, zeroAdminErrorSlot,
-      zeroAdminError]
-  · exact hwf
-  · exact hreads
-  · decide +kernel
-  · decide +kernel
-  · exact run
-
 theorem noCodeImplementation_call_exact
     {sevm : Sevm} {pre : Devm} {image : Bytes} {out : Execution}
     (hwf : Mem.Wf pre.memory) (hreads : Mem.Reads pre.memory image)
@@ -1500,21 +1482,6 @@ theorem upgradeImplementationControl_success
       have hempty : (topicPost.memory.read 0 0).1 = [] := by rfl
       simp [rawUpgradedLog, hzero, hempty]
 
-theorem upgradeImplementationControl_same_value_logs
-    {fs : List Func} {sevm : Sevm} {pre post : Devm} {tail : Stack}
-    (hNoCode : fs[noCodeImplementationErrorSlot]? =
-      some (Func.revertData noCodeImplementationErrorData))
-    (hp : tail <<+ pre.stack)
-    (sameValue : Sevm.argWord sevm 0 =
-      storedImplementationWord pre sevm.currentTarget)
-    (run : Func.RunCompiledTo fs sevm pre
-      (upgradeImplementationControl Func.stop) (.ok post)) :
-    post.logs = pre.logs ++
-      [rawUpgradedLog sevm.currentTarget
-        (storedImplementationWord pre sevm.currentTarget)] := by
-  have effect := upgradeImplementationControl_success hNoCode hp run
-  simpa [sameValue] using effect.2.2
-
 /-! ## changeAdmin mutation -/
 
 /-- A successful change-admin mutation rejects the zero word, performs the
@@ -1648,23 +1615,6 @@ theorem changeAdminMutation_success
               Sevm.argWord sevm 0)
       rw [← congrFun preToStoreStor sevm.currentTarget]
     · rw [postEq, hstoreLogs, ← logToStoreLogs, hlogs]
-
-theorem changeAdminMutation_same_value_logs
-    {fs : List Func} {sevm : Sevm} {pre post : Devm}
-    {tail : Stack} {image : Bytes}
-    (hZeroAdmin : fs[zeroAdminErrorSlot]? =
-      some (Func.revertData zeroAdminErrorData))
-    (hwf : Mem.Wf pre.memory) (hreads : Mem.Reads pre.memory image)
-    (hp : tail <<+ pre.stack)
-    (sameValue : Sevm.argWord sevm 0 =
-      storedAdminWord pre sevm.currentTarget)
-    (run : Func.RunCompiledTo fs sevm pre changeAdminMutation (.ok post)) :
-    post.logs = pre.logs ++
-      [rawAdminChangedLog sevm.currentTarget
-        (storedAdminWord pre sevm.currentTarget)
-        (storedAdminWord pre sevm.currentTarget)] := by
-  have effect := changeAdminMutation_success hZeroAdmin hwf hreads hp run
-  simpa [sameValue] using effect.2.2
 
 /-! ## ossify mutation and irreversible control precedence -/
 

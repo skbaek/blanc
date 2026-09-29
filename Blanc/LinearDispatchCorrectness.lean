@@ -227,31 +227,6 @@ private theorem stack_of_dup {e : Sevm} {a b : Devm} {x : B256}
   subst v
   exact stack_of_pushBurn hpush ha
 
-private theorem stack_of_popRun {e : Sevm} {a b : Devm} {x : B256}
-    {xs : Stack} (h : Ninst.Run e a Ninst.pop b)
-    (ha : a.stack = x :: xs) : b.stack = xs := by
-  rcases of_run_pop h with ⟨v, hpop⟩
-  have hv : v = x := by
-    have : a.stack = v :: b.stack := by
-      simpa [Devm.PopBurn, Stack.Pop, Split] using hpop.stack
-    rw [ha] at this
-    exact (List.cons.inj this).1.symm
-  subst v
-  simpa [Devm.PopBurn, Stack.Pop, Split, ha] using hpop.stack.symm
-
-private theorem stack_of_diffBurn {x y z : B256} {a b : Devm} {xs : Stack}
-    (h : Devm.DiffBurn [x, y] [z] a b)
-    (ha : a.stack = x :: y :: xs) : b.stack = z :: xs := by
-  rcases h.stack with ⟨mid, hpop, hpush⟩
-  simp only [Stack.Pop, Stack.Push, Split] at hpop hpush
-  rw [ha] at hpop
-  have hpop' : x :: y :: xs = x :: y :: mid := by
-    simpa [List.cons_append, List.nil_append] using hpop
-  have htail : xs = mid := by
-    exact (List.cons.inj (List.cons.inj hpop').2).2
-  subst mid
-  simpa [List.cons_append, List.nil_append] using hpush
-
 private theorem stack_of_eqRun {e : Sevm} {a b : Devm}
     {x y : B256} {xs : Stack} (h : Ninst.Run e a Ninst.eq b)
     (ha : a.stack = x :: y :: xs) : b.stack = (x =? y) :: xs := by

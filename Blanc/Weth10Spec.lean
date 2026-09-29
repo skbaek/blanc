@@ -124,38 +124,6 @@ def backedSpec
 /-! Statement bridges make the adapter's exact parameterization and ladder
 meanings explicit without starting any selector-level soundness proof. -/
 
-theorem backedSpec_prog_eq
-    (mkProg : Weth10.DeployParams → Prog) (dp : Weth10.DeployParams) :
-    (backedSpec mkProg dp).prog = mkProg dp := rfl
-
-theorem backedSpec_inv_eq
-    (mkProg : Weth10.DeployParams → Prog) (dp : Weth10.DeployParams) :
-    (backedSpec mkProg dp).Inv = Stor.Weth10Inv := rfl
-
-theorem backedSpec_side_eq
-    (mkProg : Weth10.DeployParams → Prog) (dp : Weth10.DeployParams) :
-    (backedSpec mkProg dp).Side = SumNof := rfl
-
-theorem backedSpec_preInv_iff
-    (mkProg : Weth10.DeployParams → Prog) (dp : Weth10.DeployParams)
-    {ca : Adr} {sevm : Sevm} {devm : Devm} :
-    (backedSpec mkProg dp).PreInv devm ca sevm ↔
-      (sevm.currentTarget = ca →
-        Stor.Weth10Inv (Devm.getStor devm ca) sevm.value (devm.getBal ca)) ∧
-      (sevm.currentTarget ≠ ca →
-        Stor.Weth10Inv (Devm.getStor devm ca) 0 (devm.getBal ca)) := Iff.rfl
-
-theorem backedSpec_postInv_iff
-    (mkProg : Weth10.DeployParams → Prog) (dp : Weth10.DeployParams)
-    {ca : Adr} {devm : Devm} :
-    (backedSpec mkProg dp).PostInv devm ca ↔
-      Stor.Weth10Inv (Devm.getStor devm ca) 0 (devm.getBal ca) := Iff.rfl
-
-theorem backedSpec_empty
-    (mkProg : Weth10.DeployParams → Prog) (dp : Weth10.DeployParams) :
-    (backedSpec mkProg dp).Inv Stor.empty 0 0 :=
-  Stor.Weth10Inv.of_empty
-
 end Weth10
 
 end Blanc

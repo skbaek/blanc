@@ -212,12 +212,6 @@ theorem CurveReplay.nil (U : Key → Prop) (stor : Stor) : CurveReplay U stor []
   refine ⟨by simp [invocationKeys], fun s K _ h => ⟨s, rfl, ?_⟩⟩
   simpa only [invocationKeys, List.flatMap_nil, Key.extend_nil] using h
 
-/-- A storage boundary with the same `Stor.get` observation replays no invocation. -/
-theorem CurveReplay.of_get_eq {U : Key → Prop} {pre post : Stor}
-    (same : ∀ x, post.get x = pre.get x) : CurveReplay U pre [] post := by
-  refine ⟨by simp [invocationKeys], fun s K _ h => ⟨s, rfl, ?_⟩⟩
-  simpa only [invocationKeys, List.flatMap_nil, Key.extend_nil] using h.of_get_eq same
-
 theorem CurveReplay.append {U : Key → Prop} {a b c : Stor} {xs ys : List WriterInvocation}
     (first : CurveReplay U a xs b) (second : CurveReplay U b ys c) :
     CurveReplay U a (xs ++ ys) c := by

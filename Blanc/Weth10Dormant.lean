@@ -77,14 +77,6 @@ theorem primaryDebitProvenance_actualCaller {e : Sevm} {pre post : Devm}
   simp only [primaryDebitProvenance] at hdebit
   split_ifs at hdebit <;> (cases hdebit; rfl)
 
-/-- Every recorded allowance event records the visiting frame's caller. -/
-theorem frameAllowanceEvent_caller {e : Sevm} {pre post : Devm}
-    {event : AllowanceEvent}
-    (hevent : frameAllowanceEvent e pre post = some event) :
-    event.caller = e.caller := by
-  simp only [frameAllowanceEvent] at hevent
-  split_ifs at hevent <;> (cases hevent; rfl)
-
 /-! ## The entry read behind a delegated debit
 
 A record's rooted origin is what turns the ledger's recorded allowance word
@@ -487,35 +479,6 @@ theorem AccountedHistory.permanentOutflow_eq_zero_of_dormant
     history.attributionLedger [] (by simp)
   rw [← touchedAllowancePairs_eq_touchedPairs history]
   exact hnc
-
-/-- The dormant-holder corollary, reduced to its checkpoint-rooted residual:
-a dormant holder's booked balance never decreases across an authentic
-collision-free history.
-
-`_hquiet` is the premise the residual hypothesis consumes — a
-checkpoint-governed allowance debit reads the checkpoint value, which
-`AllowanceQuiescent` forces to zero — and so is unused in this reduction
-itself.  The residual-free `dormant_holder_balance_monotone` below consumes
-it for real. -/
-theorem dormant_holder_balance_monotone_of_checkpointRooted
-    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
-    {checkpoint future : BlockChain}
-    (hstable : Weth10.Stable dp ca checkpoint.state)
-    (history : AccountedHistory cfg dp ca checkpoint future)
-    (hnc : NoAllowanceKeyCollision history)
-    (_hquiet : AllowanceQuiescent ca u checkpoint.state)
-    (hdormant : NoAuthorizingActBy u history)
-    (hcheckpoint : ∀ earlier record later,
-      history.attributionLedger = earlier ++ record :: later →
-      ∀ event, record.allowance = some event → event.owner.toAdr = u →
-        attributionRootAt earlier.reverse event.key = .checkpoint →
-        record.permanentOutflow u = 0) :
-    bookedBalanceNat checkpoint.state ca u <=
-      bookedBalanceNat future.state ca u := by
-  have hzero :=
-    history.permanentOutflow_eq_zero_of_dormant hnc hdormant hcheckpoint
-  have hfloor := holderFlow_residual_floor (u := u) hstable history
-  omega
 
 /-! ## The reduction to counted entry reads
 

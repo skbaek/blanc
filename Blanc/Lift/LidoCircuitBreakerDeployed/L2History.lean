@@ -69,29 +69,6 @@ theorem lido_history_l2_frame
   intro entries hwit
   exact l2_registerPauser_zero fork hinstalled hcode freshEntry hsig entry.2 hwit hnp0 run
 
-/-- The existential form: given the Registry invariant at the frame's entry storage, a
-witness `entries` of it exists and the frame's final storage satisfies `L2Post` relative to
-it.  `hinv` is the one premise the history does not derive (see the module docstring).
-
-Superseded as a headline by `lido_history_l2_committed`, which derives the entry registry witness at every committed non-static `registerPauser(t, 0)` frame instead of assuming it. -/
-theorem lido_history_l2_frame_of_inv
-    {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (admitted : trace.FrameAdmitted ca (lidoEntry lidoA))
-    (root : Exec.Deriv) (member : root ∈ trace.rawFrames)
-    (target : root.sevm.currentTarget = ca)
-    (hinstalled : Devm.getCode root.devm ca = code)
-    (hcode : root.sevm.code = Devm.getCode root.devm ca)
-    (hsig : Sevm.dataWord root.sevm 0 >>> 224 = selector "registerPauser" [.address, .address])
-    (hnp0 : Sevm.dataWord root.sevm 36 = 0)
-    {post : Devm} (ok : root.exn = .ok post)
-    (hinv : RegInv (Devm.getStor root.devm ca)) :
-    ∃ entries, RegistryWitness (solRegistryStorage (Devm.getStor root.devm ca)) entries ∧
-      L2Post entries (Sevm.dataWord root.sevm 4) (Devm.getStor post ca) := by
-  obtain ⟨entries, hwit⟩ := hinv
-  exact ⟨entries, hwit, lido_history_l2_frame trace admitted root member target hinstalled
-    hcode hsig hnp0 ok entries hwit⟩
-
 /-- A byte array whose list is the deployed image is the deployed code. -/
 theorem eq_code_of_image {b : ByteArray} (h : some b.toList = lidoSpec.sem.image) :
     b = code := by

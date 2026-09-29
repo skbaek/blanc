@@ -572,21 +572,6 @@ theorem pstepH_halt {pol : HashPol} {code : ByteArray} {d : Nat} (T : CodeTries 
       intro hk; rw [← hcode, Ninst.At, hat] at hk; cases hk
     exact ⟨Evm.step_last hat, hnk⟩
 
-/-- **A continuing walk step is the real driver step**, and keeps the shadows
-(`pstepH_cont` at `.refuse`). -/
-theorem pstep_cont {code : ByteArray} {d : Nat} (T : CodeTries code d) {sevm : Sevm}
-    (hcode : sevm.code = code) {c c' : PCfg} (hag : PAgree c)
-    (h : pstep T sevm c = .cont c') :
-    Evm.step ⟨c.pc, sevm, c.devm⟩ = .cont c'.pc c'.devm ∧ PAgree c' ∧ NoKeccakAt code c.pc :=
-  pstepH_cont T hcode hag h
-
-/-- **A halting walk step is the real driver step** (`pstepH_halt` at `.refuse`). -/
-theorem pstep_halt {code : ByteArray} {d : Nat} (T : CodeTries code d) {sevm : Sevm}
-    (hcode : sevm.code = code) {c : PCfg} {ex : Execution}
-    (h : pstep T sevm c = .halt ex) :
-    Evm.step ⟨c.pc, sevm, c.devm⟩ = .halt ex ∧ NoKeccakAt code c.pc :=
-  pstepH_halt T hcode h
-
 /-! ## Walks over derivation nodes -/
 
 /-- The derivation node `x` sits at the configuration `c` of a frame running `sevm`. -/

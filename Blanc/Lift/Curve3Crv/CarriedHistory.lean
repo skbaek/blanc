@@ -69,21 +69,6 @@ inductive WriterReplay (ca : Adr) (initial : Blanc.Curve3Crv.State) (initialKeys
       WriterReplay ca initial initialKeys (frames ++ [frame]) out.1
         (Key.extend K (callKeys frame.sevm.caller (decodeCall frame.sevm)))
 
-/-- The live keys are exactly the initial keys plus keys touched by the
-returned replay's writers. This identifies the replay's key carrier, not
-its list with a trace-extracted list. -/
-theorem WriterReplay.keys {ca : Adr} {initial : Blanc.Curve3Crv.State}
-    {initialKeys : Key → Prop} {frames : List WriterInvocation}
-    {s : Blanc.Curve3Crv.State} {K : Key → Prop}
-    (replay : WriterReplay ca initial initialKeys frames s K) (k : Key) :
-    K k ↔ initialKeys k ∨ k ∈ frames.flatMap
-      (fun frame => callKeys frame.sevm.caller (decodeCall frame.sevm)) := by
-  induction replay with
-  | nil => simp
-  | snoc prior execution target deployed covered writer owner before after accepted ih =>
-      simp only [Key.extend, SlotFootprint.extendBy, List.flatMap_append, List.flatMap_cons,
-        List.flatMap_nil, List.append_nil, List.mem_append, ih, or_assoc]
-
 /-- Carried state, reachable from one fixed initial checkpoint. The incoming
 invariant supplies the witness at each later frame; admission supplies none. -/
 def CarriedInvariant (ca : Adr) (initial : Blanc.Curve3Crv.State) (initialKeys U : Key → Prop)
@@ -157,49 +142,5 @@ theorem c3crvCarriedSpec_preservesAdmitted (ca : Adr) (initial : Blanc.Curve3Crv
     (c3crvCarriedSpec ca initial initialKeys U).PreservesAdmitted ca (carriedFrameEntry U) :=
   (c3crvCarriedSpec ca initial initialKeys U).preserves_inv_admitted ca (carriedFrameEntry U)
     (c3crvCarriedSpec_soundAdmitted ca initial initialKeys U injective apart)
-
-/-- A configured history carries one initial model and dynamically extends
-its live keys. No later entry admits a storage abstraction or conservation.
-The collision premise covers the initial keys and all actual raw target
-entries, including rolled-back branches; it is conservative across rollback.
-
-The returned writer list proves reachability from `initial`, with actual
-successful target executions, owner-answer evidence, and pre/post storage
-refinement at every step. It is not identified with an exact list extracted
-from the history (see `c3crv_history_committed` for that identification).
-Interpreter ingress, non-target movements and rollback
-are discharged by the configured-history ladder. Initial storage/code
-authentication and the truth of collision separation remain premises.
-
-Superseded as a headline by `c3crv_history_committed`, which names the replayed invocations (the settlement-committed writer frames of the trace) instead of an existential replay. -/
-theorem c3crv_history_carried {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {initial : Blanc.Curve3Crv.State}
-    {initialKeys : Key → Prop}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (installed : some (checkpoint.state.getCode ca).toList = c3crvSem.image)
-    (invariant : VyInv (checkpoint.state.getStor ca) initial initialKeys)
-    (calldata : trace.FrameAdmitted ca (fun sevm _ => sevm.data.length < 2 ^ 256))
-    (fresh : FreshKeys initialKeys (historyTouchedKeys ca trace)) :
-    some (future.state.getCode ca).toList = c3crvSem.image ∧
-      ∃ frames s K, WriterReplay ca initial initialKeys frames s K ∧
-        (∀ k, K k → historyKeyUniverse ca trace initialKeys k) ∧
-        VyInv (future.state.getStor ca) s K ∧ Blanc.Curve3Crv.Conserved s := by
-  let U := historyKeyUniverse ca trace initialKeys
-  have topology : VyInv (checkpoint.state.getStor ca) initial U := invariant.extend fresh
-  have touched : trace.FrameAdmitted ca
-      (fun sevm _ => ∀ k ∈ callKeys sevm.caller (decodeCall sevm), U k) := by
-    apply (trace.frameAdmitted_iff_rawFrames ca _).2
-    intro root member target k hk
-    exact Or.inr (touchedKeys_mem member target hk)
-  have admitted : trace.FrameAdmitted ca (carriedFrameEntry U) :=
-    (trace.freshFrameAdmitted ca).and (calldata.and touched)
-  have start : (c3crvCarriedSpec ca initial initialKeys U).StateInv ca checkpoint.state := by
-    refine ⟨installed, trivial, ?_⟩
-    exact ⟨[], initial, initialKeys, WriterReplay.nil, fun _ hk => Or.inl hk, invariant⟩
-  have finish := trace.stateInv_admitted_sem
-    (c3crvCarriedSpec_preservesAdmitted ca initial initialKeys U topology.inj topology.apart)
-    admitted start
-  obtain ⟨frames, s, K, replay, included, final⟩ := finish.inv
-  exact ⟨finish.code, frames, s, K, replay, included, final, final.conserved⟩
 
 end Blanc.Lift.Curve3Crv

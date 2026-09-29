@@ -119,12 +119,6 @@ theorem balSum_empty : balSum Stor.empty = 0 := by
           B256.toNat_zero]
   exact step _
 
-/-- The asset's clauses, in the shape the generic ladder consumes. -/
-theorem PairStable.wethInv {vault : Adr} {rules : ForkRules} {w : Jaune.State}
-    (h : PairStable vault rules w) : State.Inv wethAccount w := by
-  refine ⟨?_, h.sumNof, h.wethSolvent⟩
-  rw [h.wethInstalled, Blanc.wethCode_compile]
-
 /-- The asset's booked-balance sum cannot overflow, because it is bounded by
 the ETH the asset actually holds.  This is the `wethSumNof` that
 `vault_message_preserves_backed` does *not* take as a premise. -/
@@ -729,69 +723,6 @@ transported. -/
 def PairStage.settles : PairStage → Prop
   | .reverting => False
   | _ => True
-
-/-- A settling stage reads only the two storage maps and the log frame, so it
-travels across any prefix that leaves those alone.  This is what moves a stage
-taken at a flow's `finishInbound`/`finishOutbound` boundary back to the message
-entry the history carrier holds: the argument staging, the quote snapshot, each
-flow's own arithmetic, and every guard in front of the stage are quiet in
-exactly this sense — and the quote snapshot is quiet in exactly this sense and
-no stronger. -/
-theorem PairInFlight.of_quiet_entry {vault : Adr} {sevm : Sevm}
-    {entry entry' cur : Devm} {stage : PairStage}
-    (settles : stage.settles)
-    (storage : Devm.getStor entry' = Devm.getStor entry)
-    (logs : entry'.logs = entry.logs)
-    (h : PairInFlight vault sevm entry stage cur) :
-    PairInFlight vault sevm entry' stage cur := by
-  have vaultStor : Devm.getStor entry' vault = Devm.getStor entry vault :=
-    congrFun storage vault
-  have wethStor : Devm.getStor entry' wethAccount =
-      Devm.getStor entry wethAccount :=
-    congrFun storage wethAccount
-  have vaultVal : ∀ k, Devm.getStorVal entry' vault k =
-      Devm.getStorVal entry vault k := by
-    intro k
-    show (Devm.getStor entry' vault).get k = (Devm.getStor entry vault).get k
-    rw [vaultStor]
-  have snap : vaultSnapshot vault entry' = vaultSnapshot vault entry := by
-    unfold vaultSnapshot
-    rw [vaultVal, wethStor]
-  cases h with
-  | inboundQuoted stable quote storageEq logsEq =>
-      refine .inboundQuoted ?_ ?_ ?_ ?_
-      · rw [vaultStor]
-        exact stable
-      · rw [snap]
-        exact quote
-      · rw [storageEq, storage]
-      · rw [logsEq, logs]
-  | inboundSettled credited vaultUntouched conserved strengthened capped =>
-      refine .inboundSettled ?_ ?_ conserved ?_ ?_
-      · rw [wethStor]
-        exact credited
-      · rw [vaultStor]
-        exact vaultUntouched
-      · rw [vaultStor]
-        exact strengthened
-      · rw [vaultStor]
-        exact capped
-  | outboundBurned burned supplyDown wethUntouched conserved capped
-      strengthened =>
-      refine .outboundBurned ?_ ?_ ?_ conserved capped ?_
-      · rw [vaultVal]
-        exact burned
-      · rw [vaultStor]
-        exact supplyDown
-      · rw [wethStor]
-        exact wethUntouched
-      · rw [wethStor]
-        exact strengthened
-  | outboundSettled debited backedAfter =>
-      refine .outboundSettled ?_ backedAfter
-      rw [wethStor]
-      exact debited
-  | reverting rollback => exact settles.elim
 
 /-! ### Exiting a stage -/
 

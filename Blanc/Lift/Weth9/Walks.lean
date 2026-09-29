@@ -245,8 +245,6 @@ structure SameCode (a b : Devm) : Prop where
   bal : a.getBal = b.getBal
   code : a.getCode = b.getCode
 
-theorem SameCode.toSame {a b : Devm} (h : SameCode a b) : Same a b := ⟨h.stor, h.bal⟩
-
 theorem SameCode.of_state {a b : Devm} (h : a.state = b.state) : SameCode a b :=
   ⟨funext (getStor_eq_of_state_eq h), funext (getBal_eq_of_state_eq h),
     funext (getCode_eq_of_state_eq h)⟩

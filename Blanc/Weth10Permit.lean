@@ -158,20 +158,6 @@ lemma argWord_six_of_decodesPermit {e : Sevm} {owner spender : Adr}
         B256.length_toBytes]
       rfl) hd
 
-theorem argWords_of_decodesPermit {e : Sevm} {owner spender : Adr}
-    {value deadline : B256} {v : UInt8} {r s : B256}
-    (h : DecodesPermit e owner spender value deadline v r s) :
-    Sevm.argWord e 0 = owner.toB256 ∧
-    Sevm.argWord e 1 = spender.toB256 ∧
-    Sevm.argWord e 2 = value ∧
-    Sevm.argWord e 3 = deadline ∧
-    Sevm.argWord e 4 = Nat.toB256 v.toNat ∧
-    Sevm.argWord e 5 = r ∧ Sevm.argWord e 6 = s :=
-  ⟨argWord_zero_of_decodesPermit h, argWord_one_of_decodesPermit h,
-    argWord_two_of_decodesPermit h, argWord_three_of_decodesPermit h,
-    argWord_four_of_decodesPermit h, argWord_five_of_decodesPermit h,
-    argWord_six_of_decodesPermit h⟩
-
 /-! ## Exact EIP-712 images
 
 These are the byte strings consumed by the two KECCAK256 instructions and by
@@ -266,10 +252,6 @@ def permitDigestValue (domain structHash : B256) : B256 :=
 
 def permitEcrecoverImage (digest : B256) (v : UInt8) (r s : B256) : Bytes :=
   digest.toBytes ++ (Nat.toB256 v.toNat).toBytes ++ r.toBytes ++ s.toBytes
-
-theorem permitStructImage_length (owner spender : Adr) (value nonce deadline : B256) :
-    (permitStructImage owner spender value nonce deadline).length = 192 := by
-  simp [permitStructImage, B256.length_toBytes]
 
 lemma permitStruct_window (img : Bytes) (owner spender : Adr)
     (value nonce deadline : B256) :
@@ -378,10 +360,6 @@ lemma permitAllowanceRuntimeKey_eq (owner spender : Adr) :
     ⟨⟨a, b⟩, ⟨c, d⟩⟩
   apply Prod.ext <;> apply Prod.ext <;> exact UInt64.and_comm _ _
 
-theorem permitDomainImage_length (chainId : B256) (verifyingContract : Adr) :
-    (permitDomainImage chainId verifyingContract).length = 160 := by
-  simp [permitDomainImage, B256.length_toBytes]
-
 lemma permitDomain_window (img : Bytes) (chainId : B256)
     (verifyingContract : Adr) :
     (permitDomainMemoryImage img chainId verifyingContract).sliceD 0 160 0 =
@@ -470,14 +448,6 @@ lemma permitDomain_window (img : Bytes) (chainId : B256)
       verifyingContract.toB256.toBytes
   rw [List.take_length_append' (by
     simp only [List.length_append, ht, hn, hv, hc, ha])]
-
-theorem permitDigestImage_length (domain structHash : B256) :
-    (permitDigestImage domain structHash).length = 66 := by
-  simp [permitDigestImage, B256.length_toBytes]
-
-theorem permitEcrecoverImage_length (digest : B256) (v : UInt8) (r s : B256) :
-    (permitEcrecoverImage digest v r s).length = 128 := by
-  simp [permitEcrecoverImage, B256.length_toBytes]
 
 /-- Reader-level scratch image immediately before WETH10 executes its permit
 `STATICCALL`: four ECRECOVER input words followed by the pre-zeroed output
@@ -768,28 +738,6 @@ theorem executePrecomp_one_permitImage {evm : Evm} {digest : B256}
   unfold executePrecomp
   change applyPrecompResult evm (executeEcrecover evm) = _
   rw [executeEcrecover_permitImage hdata hgas]
-
-/-- The synchronous frame-level crossing used by WETH10's `STATICCALL`.
-The hypotheses are precisely the generic frame facts: transfer preparation,
-address-1 precompile selection, the canonical child input, and its fixed gas
-charge.  No claim that signature recovery succeeds is assumed. -/
-theorem Frame.enter_permitEcrecover {f : Frame} {benv : Benv}
-    {digest : B256} {v : UInt8} {r s : B256}
-    (h_bt : f.inner.benvAfterTransfer = .ok benv)
-    (h_ca : (f.inner.withBenv benv).codeAddress = some 1)
-    (h_pre :
-      (!((f.inner.withBenv benv).disablePrecompiles) &&
-        decide ((f.inner.withBenv benv).benv.stat.rules.isPrecomp 1)) = true)
-    (hdata : (initEvm (f.inner.withBenv benv)).sta.data =
-      permitEcrecoverImage digest v r s)
-    (hgas : gasEcrecover ≤
-      (initEvm (f.inner.withBenv benv)).dyna.gasLeft) :
-    f.enter = .done
-      (f.settle
-        (applyPrecompResult (initEvm (f.inner.withBenv benv))
-          (permitEcrecoverResult digest v r s))) := by
-  rw [Frame.enter_eq_done_executePrecomp h_bt h_ca h_pre,
-    executePrecomp_one_permitImage hdata hgas]
 
 /-- On a covered fork the child-frame error handler is the no-state-gas one. -/
 private theorem handleErrorWith_withBenv_of_covered
@@ -2719,9 +2667,6 @@ private lemma output_eq_of_timestamp {e : Sevm} {s s' : Devm}
   simp only [Rinst.run, Rinst.runCore] at run
   exact (Devm.pushBurn_of_pushItem run).output
 
-lemma permitDeadlineFlag_eq (t : B256) : (t >? t) = 0 := by
-  simp [B256.gtCheck]
-
 lemma permitDeadlineFlag_expired {timestamp deadline : B256}
     (h : timestamp > deadline) : (timestamp >? deadline) = 1 := by
   simp [B256.gtCheck, h]
@@ -3089,22 +3034,6 @@ theorem of_permitSignerGuards_frame (dp : DeployParams)
       simpa [weth10Aux, invalidPermitErrorSlot] using hget.symm
     subst f
     exact absurd hrev Func.not_run_revertWith
-
-/-- Compatibility projection of `of_permitSignerGuards_frame`. -/
-theorem of_permitSignerGuards (dp : DeployParams)
-    {sevm : Sevm} {s r : Devm}
-    {owner spender : Adr} {value deadline : B256}
-    {v : UInt8} {sigR sigS signer : B256} {xs : Stack}
-    (hdec : DecodesPermit sevm owner spender value deadline v sigR sigS)
-    (hp : signer :: xs <<+ s.stack)
-    (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
-      permitSignerGuards r) :
-    signer ≠ 0 ∧ signer = owner.toB256 ∧
-      ∃ t, xs <<+ t.stack ∧
-        Func.Run ((weth10 dp).main :: weth10Aux) sevm t approvePermit r := by
-  rcases of_permitSignerGuards_frame dp hdec hp run with
-    ⟨hsigner, howner, t, hpT, _, _, _, _, happrove⟩
-  exact ⟨hsigner, howner, t, hpT, happrove⟩
 
 /-! ## Canonical approval tail -/
 
@@ -3844,186 +3773,6 @@ theorem permit_exec_invalid_no_success (dp : DeployParams)
   · simpa only [hnonce] using hinvalid
   · exact hfork
   · exact run
-
-/-- The reached expiry guard has the exact locked ABI payload and gas delta. -/
-theorem permitExpiredGuard_runCompiledTo {dp : DeployParams} {sevm : Sevm}
-    {base : Devm} {G : Nat} {w : B256} {stack : List B256} {img : Bytes}
-    {otherwise : Func}
-    (h_ne : w ≠ 0)
-    (hwf : Mem.Wf base.memory) (hr : Mem.Reads base.memory img)
-    (halign : base.memory.size % 32 = 0)
-    (h_blob : (errorData "WETH: Expired permit").length < 2 ^ 256)
-    (h_words : 32 *
-      (bytesWords (errorData "WETH: Expired permit")).length < 2 ^ 256)
-    (h_room : stack.length < 1022) :
-    Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach ⟨w :: stack, base.memory,
-        G + errorGuardCost base "WETH: Expired permit", base.stateGas⟩)
-      ((.call expiredPermitErrorSlot) <?> otherwise)
-      (.error (.revert,
-        (base.setMach ⟨stack,
-          Mem.writeStoresRev base.memory
-            (bytesWords (errorData "WETH: Expired permit")).zipIdx,
-          G, base.stateGas⟩).withOutput (errorData "WETH: Expired permit"))) := by
-  simpa only [LockedError.reason, LockedError.slot] using
-    (lockedErrorGuard_runCompiledTo (dp := dp) (sevm := sevm)
-      (base := base) (G := G) (w := w) (stack := stack) (img := img)
-      (otherwise := otherwise) .expiredPermit h_ne hwf hr halign
-      h_blob h_words h_room)
-
-/-- Either reached signer guard has the exact locked invalid-permit ABI
-payload and gas delta. -/
-theorem permitInvalidGuard_runCompiledTo {dp : DeployParams} {sevm : Sevm}
-    {base : Devm} {G : Nat} {w : B256} {stack : List B256} {img : Bytes}
-    {otherwise : Func}
-    (h_ne : w ≠ 0)
-    (hwf : Mem.Wf base.memory) (hr : Mem.Reads base.memory img)
-    (halign : base.memory.size % 32 = 0)
-    (h_blob : (errorData "WETH: invalid permit").length < 2 ^ 256)
-    (h_words : 32 *
-      (bytesWords (errorData "WETH: invalid permit")).length < 2 ^ 256)
-    (h_room : stack.length < 1022) :
-    Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach ⟨w :: stack, base.memory,
-        G + errorGuardCost base "WETH: invalid permit", base.stateGas⟩)
-      ((.call invalidPermitErrorSlot) <?> otherwise)
-      (.error (.revert,
-        (base.setMach ⟨stack,
-          Mem.writeStoresRev base.memory
-            (bytesWords (errorData "WETH: invalid permit")).zipIdx,
-          G, base.stateGas⟩).withOutput (errorData "WETH: invalid permit"))) := by
-  simpa only [LockedError.reason, LockedError.slot] using
-    (lockedErrorGuard_runCompiledTo (dp := dp) (sevm := sevm)
-      (base := base) (G := G) (w := w) (stack := stack) (img := img)
-      (otherwise := otherwise) .invalidPermit h_ne hwf hr halign
-      h_blob h_words h_room)
-
-/-- From the selected `permit` body entry, an expired canonical deadline
-reaches the locked expiry reason before the nonce prefix.  The final world is
-therefore the entry world; only error-payload memory, output, and the stated
-gas delta differ.  Dispatcher and nonpayable-prefix cost are intentionally not
-included in this selected-body theorem. -/
-theorem permitExpired_selected_runCompiledTo
-    {dp : DeployParams} {sevm : Sevm} {base : Devm}
-    {owner spender : Adr} {value deadline : B256}
-    {v : UInt8} {sigR sigS : B256}
-    {G : Nat} {stack : List B256} {img : Bytes}
-    (hdec : DecodesPermit sevm owner spender value deadline v sigR sigS)
-    (hexpired : sevm.benvStat.time > deadline)
-    (hwf : Mem.Wf base.memory) (hr : Mem.Reads base.memory img)
-    (halign : base.memory.size % 32 = 0)
-    (h_blob : (errorData "WETH: Expired permit").length < 2 ^ 256)
-    (h_words : 32 *
-      (bytesWords (errorData "WETH: Expired permit")).length < 2 ^ 256)
-    (h_room : stack.length < 1020) :
-    Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach ⟨stack, base.memory,
-        (G + errorGuardCost base "WETH: Expired permit") + 11, base.stateGas⟩)
-      (permit dp)
-      (.error (.revert,
-        (base.setMach ⟨stack,
-          Mem.writeStoresRev base.memory
-            (bytesWords (errorData "WETH: Expired permit")).zipIdx,
-          G, base.stateGas⟩).withOutput (errorData "WETH: Expired permit"))) := by
-  rw [permit_eq_deadlineGuard]
-  func_run (4) [1]
-  all_goals try {
-    simp only [Devm.stack_setMach, List.length_cons] at *
-    omega }
-  all_goals try omega
-  · change sevm.benvStat.time >? Sevm.argWord sevm 3 = 1
-    rw [argWord_three_of_decodesPermit hdec]
-    exact permitDeadlineFlag_expired hexpired
-  · exact Func.runCompiledTo_errorGuard (expiredPermitError_lookup dp)
-      (by decide) rfl hwf hr halign h_blob h_words (by
-        simp only [Devm.gasLeft_setMach, errorGuardCost, errorCallCost,
-          errorBodyCost, Devm.extCost, Devm.memory_setMach]
-        omega) (by
-        simp only [Devm.stack_setMach, List.length_cons]
-        omega)
-
-/-- At the selected signer-policy tail, a zero ECRECOVER word takes the first
-invalid-permit guard with the exact locked payload.  The earlier digest,
-precompile, and nonce prefix are outside this tail theorem. -/
-theorem permitSignerZero_runCompiledTo
-    {dp : DeployParams} {sevm : Sevm} {base : Devm}
-    {G : Nat} {stack : List B256} {img : Bytes}
-    (hwf : Mem.Wf base.memory) (hr : Mem.Reads base.memory img)
-    (halign : base.memory.size % 32 = 0)
-    (h_blob : (errorData "WETH: invalid permit").length < 2 ^ 256)
-    (h_words : 32 *
-      (bytesWords (errorData "WETH: invalid permit")).length < 2 ^ 256)
-    (h_room : stack.length < 1021) :
-    Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach ⟨0 :: stack, base.memory,
-        (G + errorGuardCost base "WETH: invalid permit") + 6, base.stateGas⟩)
-      permitSignerGuards
-      (.error (.revert,
-        (base.setMach ⟨0 :: stack,
-          Mem.writeStoresRev base.memory
-            (bytesWords (errorData "WETH: invalid permit")).zipIdx,
-          G, base.stateGas⟩).withOutput (errorData "WETH: invalid permit"))) := by
-  unfold permitSignerGuards
-  func_run (2) [1]
-  all_goals try {
-    simp only [Devm.stack_setMach, List.length_cons] at *
-    omega }
-  · exact Func.runCompiledTo_errorGuard (invalidPermitError_lookup dp)
-      (by decide) rfl hwf hr halign h_blob h_words (by
-        simp only [Devm.gasLeft_setMach, errorGuardCost, errorCallCost,
-          errorBodyCost, Devm.extCost, Devm.memory_setMach]
-        omega) (by
-        simp only [Devm.stack_setMach, List.length_cons]
-        omega)
-
-/-- An exact full-program expiry walk settles with the locked payload and
-restores persistent and transient state. -/
-theorem permitExpired_rollback_of_runCompiledTo
-    {dp : DeployParams} {msg : Msg} {benv : Benv} {xl : Xlot}
-    {out d : Devm}
-    (h_pm : ProcessMessage msg xl (.ok out))
-    (h_fill : Xlot.Filled xl)
-    (h_bt : msg.benvAfterTransfer = .ok benv)
-    (h_prec : ∀ adr, msg.codeAddress = some adr →
-      ¬ (!msg.disablePrecompiles &&
-        decide (benv.stat.rules.isPrecomp adr)) = true)
-    (h_code : some (initSevm (msg.withBenv benv)).code.toList =
-      (weth10 dp).compile)
-    (h_run : Prog.RunCompiledTo (initSevm (msg.withBenv benv))
-      (initDevm (msg.withBenv benv)) (weth10 dp)
-      (.error (.revert,
-        d.withOutput (errorData "WETH: Expired permit")))) :
-    out.error = some .revert ∧
-      out.output = errorData "WETH: Expired permit" ∧
-      out.state = msg.benv.state ∧
-      out.transientStorage = msg.tenv.transientStorage := by
-  exact rollback_errorData_of_weth10_runCompiledTo
-    h_pm h_fill h_bt h_prec h_code h_run
-
-/-- An exact full-program invalid-signature walk rolls back the tentative
-nonce increment and every other persistent/transient change, while retaining
-the locked invalid-permit payload. -/
-theorem permitInvalid_rollback_of_runCompiledTo
-    {dp : DeployParams} {msg : Msg} {benv : Benv} {xl : Xlot}
-    {out d : Devm}
-    (h_pm : ProcessMessage msg xl (.ok out))
-    (h_fill : Xlot.Filled xl)
-    (h_bt : msg.benvAfterTransfer = .ok benv)
-    (h_prec : ∀ adr, msg.codeAddress = some adr →
-      ¬ (!msg.disablePrecompiles &&
-        decide (benv.stat.rules.isPrecomp adr)) = true)
-    (h_code : some (initSevm (msg.withBenv benv)).code.toList =
-      (weth10 dp).compile)
-    (h_run : Prog.RunCompiledTo (initSevm (msg.withBenv benv))
-      (initDevm (msg.withBenv benv)) (weth10 dp)
-      (.error (.revert,
-        d.withOutput (errorData "WETH: invalid permit")))) :
-    out.error = some .revert ∧
-      out.output = errorData "WETH: invalid permit" ∧
-      out.state = msg.benv.state ∧
-      out.transientStorage = msg.tenv.transientStorage := by
-  exact rollback_errorData_of_weth10_runCompiledTo
-    h_pm h_fill h_bt h_prec h_code h_run
 
 end Weth10
 

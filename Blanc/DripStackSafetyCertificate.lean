@@ -62,10 +62,6 @@ theorem table_rows_checked :
     table.all (checkRow code.toByteArray table 8) = true := by
   exact subtree839_rows_checked
 
-theorem table_layout_checked :
-    table.checkLayout code.toByteArray 0 1762 = true := by
-  exact subtree839_layout_checked
-
 /-- Strict ordering and the exact whole-table population are checked independently. -/
 theorem table_order_and_size_checked :
     table.checkOrder = true ∧ table.size = 735 := by

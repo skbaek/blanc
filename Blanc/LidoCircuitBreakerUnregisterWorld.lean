@@ -199,12 +199,6 @@ theorem unregWorld_expiry_ne_length :
     unregWorld_payload_pauser unregWorld_payload_zero
     (by norm_num [expiryRegion, arrayRegion])
 
-theorem unregWorld_expiry_ne_interval :
-    expirySlot unregWorldPauser ≠ heartbeatIntervalSlot :=
-  slot_ne_of_region_ne (by norm_num [expiryRegion])
-    (by norm_num [configRegion]) unregWorld_payload_pauser
-    unregWorld_payload_one (by norm_num [expiryRegion, configRegion])
-
 theorem unregWorld_count_ne_index :
     countSlot unregWorldPauser ≠ indexSlot unregWorldTarget :=
   slot_ne_of_region_ne (by norm_num [countRegion]) (by norm_num [indexRegion])
@@ -536,10 +530,6 @@ def unregWorldBodyGas : Nat := 22152
 /-- The exact message gas: dispatch prefix plus body reserve, leaving `0`. -/
 def unregWorldGas : Nat := 22327
 
-theorem unregWorldGas_split :
-    unregWorldGas = registerPauserDispatchGas + unregWorldBodyGas := by
-  norm_num [unregWorldGas, unregWorldBodyGas, registerPauserDispatchGas]
-
 /-! ## The message -/
 
 /-- The concrete admin `registerPauser(7, 0)` call: an unregistration of
@@ -596,14 +586,10 @@ theorem unregWorld_codeAddress :
 theorem unregWorld_codeAddress_currentTarget :
     unregWorldSevm.codeAddress = some unregWorldSevm.currentTarget := rfl
 
-theorem unregWorld_time : unregWorldSevm.benvStat.time = unregWorldTime := rfl
-
 theorem unregWorld_admin :
     unregWorldSevm.caller.toB256 = officialParams.admin := rfl
 
 theorem unregWorld_memory : unregWorldPre.memory = Mem.empty := rfl
-
-theorem unregWorld_logs : unregWorldPre.logs = [] := rfl
 
 theorem unregWorld_codeBytes :
     unregWorldSevm.code.toList = lidoCircuitBreakerCode officialParams := by
@@ -680,11 +666,6 @@ theorem unregWorld_argNew : Sevm.argWord unregWorldSevm 1 = 0 := by
   rw [Sevm.argWord, h]
   exact unregWorld_dataWord_new
 
-theorem unregWorld_dataLength : unregWorldSevm.data.length = 68 := by
-  show (registerPauserCalldata unregWorldTarget 0).length = 68
-  simp only [registerPauserCalldata, List.length_append,
-    abiSelectorBytes_length, B256.length_toBytes]
-
 /-! ## Storage at message entry -/
 
 theorem unregWorld_getStor :
@@ -714,12 +695,6 @@ theorem unregWorld_adminCanonical :
     canonicalAddress unregWorldAdmin.toB256 := by
   unfold canonicalAddress unregWorldAdmin
   decide
-
-theorem unregWorld_expiry_admin_zero :
-    Devm.getStorVal unregWorldPre unregWorldOwner
-      (expirySlot unregWorldAdmin.toB256) = 0 := by
-  rw [unregWorld_getStorVal]
-  exact unregWorld_stor_expiry_other unregWorld_adminCanonical (by decide)
 
 theorem unregWorld_preWitness :
     RegistryWitness

@@ -85,11 +85,6 @@ private theorem creationState_target_fresh :
 /-- Exact constructor-plus-code-deposit cost of this both-slot fixture. -/
 def bothSlotCreateMessageGas : Nat := 488282
 
-/-- The total is the 50,682-gas constructor plus 437,600-gas deposit. -/
-theorem bothSlotCreateMessageGas_eq :
-    bothSlotCreateMessageGas = 50682 + ossifiableRuntimeCodeDepositGas := by
-  rfl
-
 /-- Settled observations retained by the concrete both-slot CREATE. -/
 structure CreateResult (post : Devm) : Prop where
   run : processCreateMessage creationMessage = .ok post

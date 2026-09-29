@@ -228,10 +228,6 @@ def freshWorldBodyGas : Nat := 128283
 /-- The exact message gas: dispatch prefix plus body reserve, leaving `0`. -/
 def freshWorldGas : Nat := 128458
 
-private theorem freshWorldGas_split :
-    freshWorldGas = registerPauserDispatchGas + freshWorldBodyGas := by
-  norm_num [freshWorldGas, freshWorldBodyGas, registerPauserDispatchGas]
-
 /-- The staged registration image extends memory by one word beyond the
 scratch frame: six gas. -/
 private theorem freshWorld_memoryCost :
@@ -311,10 +307,6 @@ theorem freshWorld_data :
 
 theorem freshWorld_find : findEntry ([] : List Entry) freshWorldTarget = none :=
   rfl
-
-private theorem freshWorld_one : Nat.toB256 1 = (1 : B256) := by decide
-
-private theorem freshWorld_zero : Nat.toB256 0 = (0 : B256) := by decide
 
 /-! ## Storage facts -/
 

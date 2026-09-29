@@ -311,73 +311,6 @@ theorem inboundAfterQuote_effect_linked
       (tailForeign wethAccount (Ne.symm vaultNe))
   · exact ⟨guardPre, guardRun⟩
 
-/-- Exact effect of an inbound flow from its auxiliary continuation onward.
-
-The two word parameters are the operation words each flow settles with:
-`deposit` supplies `(quote, amount)` and `mint` supplies `(amount, quote)`.
-Everything after the quote is shared, including the exact WETH `transferFrom`
-child, so both flows reach this one theorem. -/
-theorem inboundAfterQuote_effect
-    {fs : List Func} {sevm : Sevm} {entry post : Devm} {image : Bytes}
-    {sharesWord assetsSourceWord : B256}
-    {receiver quote supply shares assets : B256}
-    (config : DirectWethConfiguration sevm.currentTarget sevm entry)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (memoryWf : Mem.Wf entry.memory)
-    (memoryReads : Mem.Reads entry.memory image)
-    (receiverAt : Bytes.toB256
-      (image.sliceD (Blanc.ProrataWethVault.receiverWord * 32).toNat 32 0) =
-        receiver)
-    (supplyAt : Bytes.toB256
-      (image.sliceD (Blanc.ProrataWethVault.supplyWord * 32).toNat 32 0) =
-        supply)
-    (sharesAt : Bytes.toB256
-      ((Bytes.writeAt image
-          (Blanc.ProrataWethVault.quoteWord * 32).toNat quote.toBytes).sliceD
-        (sharesWord * 32).toNat 32 0) = shares)
-    (assetsAt : Bytes.toB256
-      ((Bytes.writeAt image
-          (Blanc.ProrataWethVault.quoteWord * 32).toNat quote.toBytes).sliceD
-        (assetsSourceWord * 32).toNat 32 0) = assets)
-    (sharesAbove : 896 ≤ (sharesWord * 32).toNat)
-    (sharesBelow : (sharesWord * 32).toNat + 32 ≤
-      (Blanc.ProrataWethVault.balanceWord * 32).toNat)
-    (assetsAbove : 896 ≤ (assetsSourceWord * 32).toNat)
-    (assetsBelow : (assetsSourceWord * 32).toNat + 32 ≤
-      (Blanc.ProrataWethVault.balanceWord * 32).toNat)
-    (supplyStorage :
-      supply = Devm.getStorVal entry sevm.currentTarget
-        Blanc.ProrataWethVault.supplySlot)
-    (stable : supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN)
-    (stack : quote :: [] <<+ entry.stack)
-    (run : Func.RunCompiledTo fs sevm entry
-      (mstoreAt Blanc.ProrataWethVault.quoteWord +++
-        Blanc.ProrataWethVault.nonzeroCaller
-          (Blanc.ProrataWethVault.nonzeroStagedAddress
-            Blanc.ProrataWethVault.receiverWord
-            (Blanc.ProrataWethVault.finishInbound
-              (Blanc.ProrataWethVault.loadWord sharesWord)
-              (Blanc.ProrataWethVault.loadWord assetsSourceWord)
-              (Blanc.ProrataWethVault.loadWord
-                Blanc.ProrataWethVault.quoteWord)))) (.ok post)) :
-    sevm.caller.toB256 ≠ 0 ∧
-      ValidAdr receiver ∧
-      receiver ≠ 0 ∧
-      shares.toNat ≤ Blanc.ProrataWethVault.shareRoomN supply.toNat ∧
-      InboundEffect sevm receiver assets shares quote entry post ∧
-      ∃ bodyPre,
-        Func.RunCompiledTo fs sevm bodyPre
-          (Blanc.ProrataWethVault.finishInbound
-            (Blanc.ProrataWethVault.loadWord sharesWord)
-            (Blanc.ProrataWethVault.loadWord assetsSourceWord)
-            (Blanc.ProrataWethVault.loadWord Blanc.ProrataWethVault.quoteWord))
-          (.ok post) := by
-  obtain ⟨callerNonzero, receiverValid, receiverNonzero, roomFits, effect, -,
-    finish⟩ := inboundAfterQuote_effect_linked (hfork := hfork) config memoryWf memoryReads
-      receiverAt supplyAt sharesAt assetsAt sharesAbove sharesBelow assetsAbove
-      assetsBelow supplyStorage stable stack run
-  exact ⟨callerNonzero, receiverValid, receiverNonzero, roomFits, effect, finish⟩
-
 /-- Shared inbound prefix: stage the two ABI arguments, price the quote from
 the booked WETH balance *before* the transfer, stage the exact share supply,
 and discharge the stable-supply guard.  The result is the state at which each
@@ -620,77 +553,6 @@ theorem inboundBody_effect_linked
   · exact linked.of_weth_eq
       ((congrFun entryStorage wethAccount).trans
         (congrFun quoteStorage wethAccount)) rfl
-
-/-- Join one flow's quote arithmetic to the shared settlement.
-
-`sharesWord` and `assetsSourceWord` are the operation words the flow settles
-with, `quote` is the word its arithmetic produced, and `quoteFrame` is that
-arithmetic's frame: it left the world and the log alone, so the settlement's
-conclusions can be stated against the endpoint entry rather than against some
-mid-body state. -/
-theorem inboundBody_effect
-    {fs : List Func} {sevm : Sevm} {entry quotePre afterPre post : Devm}
-    {image afterImage : Bytes}
-    {sharesWord assetsSourceWord receiver quote supply shares assets : B256}
-    (config : DirectWethConfiguration sevm.currentTarget sevm entry)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (entryStorage : Devm.getStor entry = Devm.getStor quotePre)
-    (entryLogs : entry.logs = quotePre.logs)
-    (entryCode : quotePre.getCode wethAccount = entry.getCode wethAccount)
-    (supplyProjection :
-      Devm.getStorVal entry sevm.currentTarget
-        Blanc.ProrataWethVault.supplySlot =
-      Devm.getStorVal quotePre sevm.currentTarget
-        Blanc.ProrataWethVault.supplySlot)
-    (supplyEq : supply = Devm.getStorVal entry sevm.currentTarget
-      Blanc.ProrataWethVault.supplySlot)
-    (stable : supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN)
-    (receiverAt : Bytes.toB256
-      (image.sliceD (Blanc.ProrataWethVault.receiverWord * 32).toNat 32 0) =
-        receiver)
-    (supplyAt : Bytes.toB256
-      (image.sliceD (Blanc.ProrataWethVault.supplyWord * 32).toNat 32 0) =
-        supply)
-    (afterMemImage : MemImage afterPre afterImage)
-    (afterFrame : Bytes.WordFrameFrom image afterImage
-      Blanc.ProrataWethVault.arithmeticScratchEnd)
-    (quoteFrame : Devm.QuietFrame quotePre afterPre)
-    (afterStack : quote :: [] <<+ afterPre.stack)
-    (sharesAt : Bytes.toB256
-      ((Bytes.writeAt afterImage
-          (Blanc.ProrataWethVault.quoteWord * 32).toNat quote.toBytes).sliceD
-        (sharesWord * 32).toNat 32 0) = shares)
-    (assetsAt : Bytes.toB256
-      ((Bytes.writeAt afterImage
-          (Blanc.ProrataWethVault.quoteWord * 32).toNat quote.toBytes).sliceD
-        (assetsSourceWord * 32).toNat 32 0) = assets)
-    (sharesAbove : 896 ≤ (sharesWord * 32).toNat)
-    (sharesBelow : (sharesWord * 32).toNat + 32 ≤
-      (Blanc.ProrataWethVault.balanceWord * 32).toNat)
-    (assetsAbove : 896 ≤ (assetsSourceWord * 32).toNat)
-    (assetsBelow : (assetsSourceWord * 32).toNat + 32 ≤
-      (Blanc.ProrataWethVault.balanceWord * 32).toNat)
-    (afterRun : Func.RunCompiledTo fs sevm afterPre
-      (mstoreAt Blanc.ProrataWethVault.quoteWord +++
-        Blanc.ProrataWethVault.nonzeroCaller
-          (Blanc.ProrataWethVault.nonzeroStagedAddress
-            Blanc.ProrataWethVault.receiverWord
-            (Blanc.ProrataWethVault.finishInbound
-              (Blanc.ProrataWethVault.loadWord sharesWord)
-              (Blanc.ProrataWethVault.loadWord assetsSourceWord)
-              (Blanc.ProrataWethVault.loadWord
-                Blanc.ProrataWethVault.quoteWord)))) (.ok post)) :
-    sevm.caller.toB256 ≠ 0 ∧
-      ValidAdr receiver ∧
-      receiver ≠ 0 ∧
-      shares.toNat ≤ Blanc.ProrataWethVault.shareRoomN supply.toNat ∧
-      InboundEffect sevm receiver assets shares quote entry post := by
-  obtain ⟨callerNonzero, receiverValid, receiverNonzero, roomFits, effect, -⟩ :=
-    inboundBody_effect_linked (hfork := hfork) config entryStorage entryLogs entryCode
-      supplyProjection supplyEq stable receiverAt supplyAt afterMemImage
-      afterFrame quoteFrame afterStack sharesAt assetsAt sharesAbove sharesBelow
-      assetsAbove assetsBelow afterRun
-  exact ⟨callerNonzero, receiverValid, receiverNonzero, roomFits, effect⟩
 
 /-- `deposit_body_effect` together with the flow's linked WETH child. -/
 theorem deposit_body_effect_linked
@@ -1230,42 +1092,6 @@ Each is `inboundEffect_preserves_conserved` after the compiled effect.  The
 supply before the WETH child and writes it after, so conservation across the
 frame depends on that child not re-entering the vault, which is exactly what
 pinning the asset's code buys.  See `Blanc/ProrataWethVaultLedgerSpec.lean`. -/
-
-theorem deposit_preserves_conserved
-    {sevm : Sevm} {pre post : Devm}
-    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (memoryWf : Mem.Wf pre.memory)
-    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
-    (selectorEq :
-      Sevm.selector sevm = selector "deposit" [.uint256, .address])
-    (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
-      (Devm.getStor pre sevm.currentTarget)) :
-    LedgerConserved Blanc.ProrataWethVault.supplySlot
-      (Devm.getStor post sevm.currentTarget) := by
-  obtain ⟨-, supply, supplyEq, stable, -, -, receiverValid, -, roomFits,
-      effect⟩ :=
-    deposit_compiled_effect (hfork := hfork) config memoryWf run selectorEq
-  exact inboundEffect_preserves_conserved receiverValid supplyEq stable
-    roomFits effect conserved
-
-theorem mint_preserves_conserved
-    {sevm : Sevm} {pre post : Devm}
-    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (memoryWf : Mem.Wf pre.memory)
-    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
-    (selectorEq :
-      Sevm.selector sevm = selector "mint" [.uint256, .address])
-    (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
-      (Devm.getStor pre sevm.currentTarget)) :
-    LedgerConserved Blanc.ProrataWethVault.supplySlot
-      (Devm.getStor post sevm.currentTarget) := by
-  obtain ⟨-, supply, supplyEq, stable, -, -, receiverValid, -, roomFits,
-      effect⟩ :=
-    mint_compiled_effect (hfork := hfork) config memoryWf run selectorEq
-  exact inboundEffect_preserves_conserved receiverValid supplyEq stable
-    roomFits effect conserved
 
 /-- `deposit_compiled_effect` with the quoted share count *named*.
 

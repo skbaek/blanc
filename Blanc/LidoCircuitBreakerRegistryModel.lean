@@ -633,20 +633,6 @@ theorem last_mem_of_last
           simp only [last?] at h
           exact List.mem_cons_of_mem _ (ih h)
 
-theorem dropLast_mem
-    (entries : List Entry) {candidate : Entry}
-    (h : candidate ∈ dropLast entries) : candidate ∈ entries := by
-  induction entries with
-  | nil => simp [dropLast] at h
-  | cons entry rest ih =>
-      cases rest with
-      | nil => simp [dropLast] at h
-      | cons head tail =>
-          simp only [dropLast, List.mem_cons] at h ⊢
-          rcases h with h | h
-          · exact Or.inl h
-          · exact Or.inr (by simpa using ih h)
-
 theorem targetAt_last_of_last
     (entries : List Entry) {last : Entry}
     (h : last? entries = some last) :

@@ -68,30 +68,6 @@ def RawFlashCallbackIndexedStepBoundary
     mid.logs = pre.logs ++ child.logs ∧
     mid.output = pre.output
 
-/-- Forget only the exposed indices of an indexed flash callback boundary. -/
-theorem RawFlashCallbackIndexedStepBoundary.toStepBoundary
-    {sevm : Sevm} {self receiver : Adr} {amount inputSize : B256}
-    {callbackInput : Bytes} {pre mid parent child : Devm}
-    {xl : Xlot} {pc : Nat}
-    (h : RawFlashCallbackIndexedStepBoundary sevm self receiver amount
-      inputSize callbackInput pre mid parent child xl pc) :
-    RawFlashCallbackStepBoundary sevm self receiver amount inputSize
-      callbackInput pre mid := by
-  rcases h with
-    ⟨delegated, code, gasWord, avail, hstep, hdepth, hstack, hpref,
-      hstate, hmemory, hlogs, houtput, hdelegation, hfilled, hprocess,
-      hclean, hlength, hmagic, hresume, hmidState, hreturndata,
-      hmidStack, hmidLogs, hmidOutput⟩
-  refine ⟨parent, child, xl, delegated,
-    (getDelegatedCodeAddress (pre.getCode receiver)).getD receiver, code,
-    gasWord, avail, pc, hstep, hdepth, hstack, hpref, hstate, hmemory,
-    hlogs, houtput, ?_, hfilled, hprocess, hclean, hlength, hmagic,
-    hresume, hmidState, hreturndata, hmidStack, hmidLogs, hmidOutput⟩
-  rcases hdelegation with ⟨hnone, hcode, hdel⟩ |
-    ⟨target, hsome, hcode, hdel⟩
-  · exact Or.inl ⟨hnone, by simp [hnone], hcode, hdel⟩
-  · exact Or.inr ⟨target, hsome, by simp [hsome], hcode, hdel⟩
-
 /-- A source-level internal jump cannot return when its selected auxiliary
 body cannot return. -/
 theorem Func.not_run_call_of
@@ -258,10 +234,6 @@ def flashLoanAfterCallback : Func :=
       (checkReturnDataHead CALLBACK_SUCCESS 0 +++ Ninst.iszero :::
         (.call flashFailedErrorSlot) <?>
         ([Ninst.pop, Ninst.pop] +++ .call flashSettleSlot)))
-
-theorem flashLoanSuccessTail_shape :
-    flashLoanSuccessTail = Ninst.call ::: flashLoanAfterCallback := by
-  rfl
 
 /-- The callback's successful decoder and repayment suffix cross no further
 external child.  All failure alternatives are fixed nonreturning bodies. -/

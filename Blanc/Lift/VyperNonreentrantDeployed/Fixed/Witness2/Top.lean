@@ -199,23 +199,6 @@ theorem vplus_run2_at {S : Sevm} (hS : ∃ g, CoveredFork g ∧ S = eTop.sta.wit
     (by rw [hg.2.1]; exact eRe_static.2.2.2), hre.1, fun x hx => (hashG x hx).2, hre.2.2⟩
   exact List.mem_cons_of_mem _ (by rw [hdescR]; simp)
 
-/-- **The run, on every derivation** (Prague).  Whatever derivation `R` of the forwarder frame's
-machine is taken, it succeeds with `dTop`, and it has the nodes the V+ antecedent names. -/
-theorem vplus_run2 {out : Execution} (R : Exec 0 eTop.sta eTop.dyna out) :
-    out = .ok dTop ∧ ChildAgree dTop cTop3.keys cTop3.adrs cTop3.stor cTop3.acs ∧
-    ∃ F h c q G : Exec.Deriv,
-      F ∈ Exec.rawFrameRoots R ∧ ActiveRel proxyAddress F h ∧ Spawns h c ∧
-      lockL.HashAvoidIn proxyAddress R ∧
-      h.pc = 7427 ∧ Ninst.At h.sevm.code h.pc (.exec .call) ∧
-      c.sevm.currentTarget = receiverAddress ∧ c.sevm.code = Receiver.code ∧
-      c.sevm.value.toNat = 100 ∧
-      q ∈ Exec.rawFrameRoots c.exc ∧ q.sevm.currentTarget = proxyAddress ∧
-      q.sevm.code = fwdCode ∧ G ∈ Exec.rawFrameRoots q.exc ∧ G ∈ Exec.rawFrameRoots c.exc ∧
-      CPFrame proxyAddress code G ∧ G.sevm.data = reentryCall ∧
-      G.exn = .error (.revert, dRe) ∧ (∀ x, ParentPrefix G x → x.pc ∉ lockBodies) ∧
-      (∃ y y', ParentPrefix G y ∧ y.pc = 0x53 ∧ ParentPrefix y y' ∧ y'.pc = 0x477e) :=
-  vplus_run2_at ⟨.prague, CoveredFork.prague, eTop_withFork_prague.symm⟩ R
-
 /-! ### The closed theorem -/
 
 theorem eTop_getCode_proxy : eTop.dyna.getCode proxyAddress = fwdCode := by
@@ -313,70 +296,5 @@ theorem vplus_witness2_covered (g : Fork) (hg : CoveredFork g) :
   · rw [getBal_of_agree hca.2.2.2]; exact hxpost
   · exact (hpreStor curveStethPool847e 0).trans hlockpre
   · exact (hca.2.2.1 curveStethPool847e 0).trans hlockpost
-
-/-- **V+ nonvacuity, committing (Prague semantics): a mutating guarded body of the deployed
-comparator, entered through the ETH/stETH forwarder, pays ETH; the receiver's reentry attempt
-into a mutating guarded function is refused at the lock check, and the transaction succeeds.**
-
-The top-level message `msgTop` (`S` calls the pool `curveStethPool847e`, the 45-byte EIP-1167
-forwarder to the comparator, with `remove_liquidity(100, [0, 0], X)`, value 0, 1,000,000 gas,
-Prague) enters with the machine `eTop` (`frameTop.enter = .run eTop`, pc 0).  Every execution of
-that machine succeeds with `dTop`, and there is one; for it:
-
-* the antecedent of `vplus_exclusion_stethPool` holds for `F`, the comparator frame the
-  forwarder `DELEGATECALL`s: `F ∈ Exec.rawFrameRoots R`, `ActiveRel P F h` (the body start
-  `0x1bae` of `remove_liquidity` was reached after the lock was set, with no release pc between it
-  and `h`), and `Spawns h c`, where `h` is the ETH `CALL` at pc 7427 and `c` the frame of the
-  receiver `X` (`Receiver.code`), sent 100 wei; its premises hold for `R`: the covered fork, the
-  forwarder and the comparator in the pre-state, the root running the forwarder's code, and
-  `HashAvoidIn` — every frame of `P` running `code` in `R` executes its `KECCAK256`s (the
-  `balanceOf[S]` slot in `F`, none in `G`) with digests other than the lock slot, decided by the
-  walks and combined by `hashAvoid_of_hashOK`;
-* the reentry: `X` calls the pool through the forwarder (`q`, running the forwarder's code, in
-  `c`'s frames) with `add_liquidity`'s selector; `G ∈ Exec.rawFrameRoots q.exc` is the comparator
-  frame it `DELEGATECALL`s (`CPFrame`), which reaches the lock check (pc 0x53), lands on the
-  revert pad 0x477e and reverts; no node of it is at a guarded body start, and
-  `vplus_exclusion_stethPool` itself concludes `¬ lockL.Enters P G`;
-* the transaction commits: the outcome is `.ok dTop`; the pool's balance fell from 1000 to 900 wei,
-  `X`'s rose from 0 to 100, and the lock (slot 0) reads the released word 3 before and after. -/
-theorem vplus_witness2 :
-    msgTop.benv.stat.fork = .prague ∧ frameTop.enter = .run eTop ∧ eTop.pc = 0 ∧
-    (∀ out, Exec 0 eTop.sta eTop.dyna out → out = .ok dTop) ∧
-    ∃ (out : Execution) (R : Exec 0 eTop.sta eTop.dyna out) (F h c q G : Exec.Deriv),
-      -- the premises of `vplus_exclusion_stethPool`, for this `R`
-      CoveredFork eTop.sta.benvStat.fork ∧
-      eTop.dyna.getCode curveStethPool847e = forwarderCode curvePlainImpl847e ∧
-      eTop.dyna.getCode curvePlainImpl847e = code ∧
-      (eTop.sta.currentTarget = curveStethPool847e →
-        eTop.sta.code = eTop.dyna.getCode curveStethPool847e) ∧
-      lockL.HashAvoidIn curveStethPool847e R ∧
-      -- its antecedent: the pool body, active, spawns the receiver with the ETH payment
-      F ∈ Exec.rawFrameRoots R ∧ ActiveRel curveStethPool847e F h ∧ Spawns h c ∧
-      h.pc = 7427 ∧ Ninst.At h.sevm.code h.pc (.exec .call) ∧
-      c.sevm.currentTarget = receiverAddress ∧ c.sevm.code = Receiver.code ∧
-      c.sevm.value.toNat = 100 ∧
-      -- the reentry through the forwarder, refused at the lock check
-      q ∈ Exec.rawFrameRoots c.exc ∧ q.sevm.currentTarget = curveStethPool847e ∧
-      q.sevm.code = forwarderCode curvePlainImpl847e ∧ G ∈ Exec.rawFrameRoots q.exc ∧
-      G ∈ Exec.rawFrameRoots c.exc ∧ CPFrame curveStethPool847e code G ∧
-      G.sevm.data = reentryCall ∧ G.exn = .error (.revert, dRe) ∧
-      (∀ x, ParentPrefix G x → x.pc ∉ lockBodies) ∧
-      (∃ y y', ParentPrefix G y ∧ y.pc = 0x53 ∧ ParentPrefix y y' ∧ y'.pc = 0x477e) ∧
-      ¬ lockL.Enters curveStethPool847e G ∧
-      -- the transaction commits
-      out = .ok dTop ∧
-      (eTop.dyna.getBal curveStethPool847e).toNat = 1000 ∧
-      (dTop.getBal curveStethPool847e).toNat = 900 ∧
-      (eTop.dyna.getBal receiverAddress).toNat = 0 ∧
-      (dTop.getBal receiverAddress).toNat = 100 ∧
-      lockAt curveStethPool847e 0 eTop.dyna = (3 : Nat).toB256 ∧
-      lockAt curveStethPool847e 0 dTop = (3 : Nat).toB256 := by
-  have hE : eTop.withFork .prague = eTop := by
-    show ({ eTop with sta := eTop.sta.withFork .prague } : Evm) = eTop
-    rw [eTop_withFork_prague]
-  have hF : frameTop.withFork .prague = frameTop := rfl
-  have hw := vplus_witness2_covered .prague CoveredFork.prague
-  rw [hE, hF] at hw
-  exact ⟨rfl, hw.2⟩
 
 end Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness2

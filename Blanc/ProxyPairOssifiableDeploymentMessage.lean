@@ -26,11 +26,6 @@ def ossifiableRuntimeCodeDepositGas : Nat := 437600
 /-- Direct CREATE-message execution plus runtime code deposit. -/
 def ossifiableCreateMessageGas : Nat := 487814
 
-theorem ossifiableCreateMessageGas_eq :
-    ossifiableCreateMessageGas =
-      ossifiableConstructorExecutionGas + ossifiableRuntimeCodeDepositGas := by
-  rfl
-
 private theorem runtimeBaselineBytes_length_exact :
     runtimeBaselineBytes.length = 2188 := by
   have heq : runtimeBaselineArtifactBytes = runtimeBaselineBytes :=

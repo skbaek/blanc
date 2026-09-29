@@ -191,16 +191,6 @@ theorem credited_of_transfer {b d : Adr → B256} {kd ki : Adr} {v : B256}
   have credited : c ki + v = d ki := (increase ki).1 rfl
   rw [middle, credited]
 
-/-- The debited side of a transfer between two distinct accounts. -/
-theorem debited_of_transfer {b d : Adr → B256} {kd ki : Adr} {v : B256}
-    (h : Transfer b kd v ki d) (distinct : kd ≠ ki) :
-    b kd = d kd + v := by
-  obtain ⟨-, c, decrease, increase⟩ := h
-  have debited : b kd - v = c kd := (decrease kd).1 rfl
-  have untouched : c kd = d kd := (increase kd).2 (Ne.symm distinct)
-  have expand : (b kd - v) + v = b kd := B256.sub_add_cancel
-  rw [← untouched, ← debited, expand]
-
 /-- The debited side of a transfer, in subtraction form. -/
 theorem debitedSub_of_transfer {b d : Adr → B256} {kd ki : Adr} {v : B256}
     (h : Transfer b kd v ki d) (distinct : kd ≠ ki) :

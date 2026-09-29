@@ -195,40 +195,6 @@ private theorem Exec.Deriv.SourceCursor.Toward.atTargetData
       · exact ⟨finalPath, finalTail, finalCursor, targetEq, sourceMember,
           Or.inr deeperCut⟩
 
-/-- Either the target lies in a different function, or the route contains the
-exact internal call to the nominated target function. -/
-private theorem Exec.Deriv.SourceCursor.Toward.callCut_of_targetFunction
-    {root target : Exec.Deriv} {program : Prog}
-    {initialPath path : Prog.SourcePath} {initialSource source : Func}
-    {targetInstruction : Ninst}
-    {initial : Exec.Deriv.SourceCursor root program
-      initialPath initialSource}
-    {cursor : Exec.Deriv.SourceCursor root program path source}
-    (route : Exec.Deriv.SourceCursor.Toward
-      initial target targetInstruction cursor)
-    (targetFunction : Nat)
-    (currentNe : path.functionIndex ≠ targetFunction) :
-    (∃ finalPath finalTail,
-      ∃ finalCursor : Exec.Deriv.SourceCursor root program finalPath
-          (.next targetInstruction finalTail),
-        finalCursor.node = target ∧
-        ({ path := finalPath, pc := finalCursor.pc,
-            instruction := targetInstruction } : Prog.SourceSite) ∈
-          program.sourceSites ∧
-        finalPath.functionIndex ≠ targetFunction) ∨
-      Exec.Deriv.SourceCursor.Toward.CallCut
-        (target := target) (targetInstruction := targetInstruction)
-        initial targetFunction := by
-  rcases Exec.Deriv.SourceCursor.Toward.atTargetData route with
-    ⟨finalPath, finalTail, finalCursor, targetEq, sourceMember,
-      sameFunction | targetCut⟩
-  · exact Or.inl ⟨finalPath, finalTail, finalCursor, targetEq, sourceMember,
-      fun finalEq => currentNe (sameFunction.trans finalEq)⟩
-  · by_cases finalEq : finalPath.functionIndex = targetFunction
-    · exact Or.inr (finalEq ▸ targetCut)
-    · exact Or.inl ⟨finalPath, finalTail, finalCursor, targetEq,
-        sourceMember, finalEq⟩
-
 /-- Frozen source function index per row.  Public because the attainment
 consumers need it to refute a role at a row whose write sits in a different
 compiled function; see `RuntimeWriteAuthority`'s `writeSite` conjuncts. -/
@@ -859,59 +825,6 @@ private theorem splitDispatch_bodyCutStorage
       prefixStorage.trans branchStorage⟩
   · exact Or.inl ⟨_, leftCursor, leftRoute,
       prefixStorage.trans branchStorage⟩
-
-private theorem hybridDispatchWith_bodyCut
-    {dp : DeployParams} {root target : Exec.Deriv}
-    {initialPath path : Prog.SourcePath} {initialSource : Func}
-    {initial : Exec.Deriv.SourceCursor root (runtime dp)
-      initialPath initialSource}
-    (compiled : some root.sevm.code.toList = (runtime dp).compile)
-    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
-    (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
-      (hybridDispatchWith fallbackSlot (funcs dp)))
-    (route : Exec.Deriv.SourceCursor.Toward
-      initial target (.reg .sstore) cursor) :
-    ∃ word body,
-      (word, body) ∈ funcs dp ∧
-        ∃ bodyPath,
-          ∃ bodyCursor : Exec.Deriv.SourceCursor root (runtime dp)
-              bodyPath body,
-            Exec.Deriv.SourceCursor.Toward
-              initial target (.reg .sstore) bodyCursor := by
-  unfold hybridDispatchWith at cursor
-  rcases splitDispatch_bodyCut cursor route with
-    ⟨leftPath, leftCursor, leftRoute⟩ |
-      ⟨rightPath, rightCursor, rightRoute⟩
-  · rcases splitDispatch_bodyCut leftCursor leftRoute with
-      ⟨firstPath, firstCursor, firstRoute⟩ |
-        ⟨secondPath, secondCursor, secondRoute⟩
-    · rcases linearDispatchWith_bodyCut compiled targetAt
-          ((funcs dp).take 5) firstCursor firstRoute with
-        ⟨word, body, member, bodyPath, bodyCursor, bodyRoute⟩
-      exact ⟨word, body, List.mem_of_mem_take member,
-        bodyPath, bodyCursor, bodyRoute⟩
-    · rcases linearDispatchWith_bodyCut compiled targetAt
-          ((funcs dp).drop 5 |>.take 4) secondCursor secondRoute with
-        ⟨word, body, member, bodyPath, bodyCursor, bodyRoute⟩
-      have memberDrop : (word, body) ∈ (funcs dp).drop 5 :=
-        List.mem_of_mem_take member
-      exact ⟨word, body, List.mem_of_mem_drop memberDrop,
-        bodyPath, bodyCursor, bodyRoute⟩
-  · rcases splitDispatch_bodyCut rightCursor rightRoute with
-      ⟨thirdPath, thirdCursor, thirdRoute⟩ |
-        ⟨fourthPath, fourthCursor, fourthRoute⟩
-    · rcases linearDispatchWith_bodyCut compiled targetAt
-          ((funcs dp).drop 9 |>.take 4) thirdCursor thirdRoute with
-        ⟨word, body, member, bodyPath, bodyCursor, bodyRoute⟩
-      have memberDrop : (word, body) ∈ (funcs dp).drop 9 :=
-        List.mem_of_mem_take member
-      exact ⟨word, body, List.mem_of_mem_drop memberDrop,
-        bodyPath, bodyCursor, bodyRoute⟩
-    · rcases linearDispatchWith_bodyCut compiled targetAt
-          ((funcs dp).drop 13) fourthCursor fourthRoute with
-        ⟨word, body, member, bodyPath, bodyCursor, bodyRoute⟩
-      exact ⟨word, body, List.mem_of_mem_drop member,
-        bodyPath, bodyCursor, bodyRoute⟩
 
 private theorem hybridDispatchWith_bodyCutStorage
     {dp : DeployParams} {root target : Exec.Deriv}

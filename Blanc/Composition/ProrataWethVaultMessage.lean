@@ -558,14 +558,6 @@ theorem ConfiguredRoot.backed {vault : Adr} {sevm : Sevm} {pre : Devm}
       (Devm.getStor pre wethAccount) :=
   PairBacked.of_vault_empty root.untouched
 
-/-- The vault's own code at the root is the compiled program, in the form the
-frame-level obligations consume. -/
-theorem ConfiguredRoot.vaultInstalled {vault : Adr} {sevm : Sevm} {pre : Devm}
-    (root : ConfiguredRoot vault sevm pre) :
-    ProgramInstalledAt pre.state vault Blanc.ProrataWethVault.vault := by
-  unfold ProgramInstalledAt
-  exact root.installed
-
 
 
 /-! ## Chained messages

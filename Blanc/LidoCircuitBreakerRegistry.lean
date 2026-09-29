@@ -130,15 +130,6 @@ theorem RegistryWitness.fresh_length_lt_2pow256
   norm_num at hlength ⊢
   omega
 
-theorem RegistryWitness.oneBasedIndexAt_lt_2pow252
-    {storage : LogicalStorage} {entries : List Entry}
-    (h : RegistryWitness storage entries) (target : B256) :
-    oneBasedIndexAt entries target < 2 ^ 252 := by
-  have hindex := oneBasedIndexAt_le_length entries target
-  have hlength := h.entries_length_le
-  norm_num at hlength ⊢
-  omega
-
 theorem RegistryWitness.assignmentCount_lt_2pow256
     {storage : LogicalStorage} {entries : List Entry}
     (h : RegistryWitness storage entries) (pauser : B256) :
@@ -3396,19 +3387,6 @@ def setPauserSourceTrace (entries : List Entry) (target newPauser : B256) :
       let writes := Option.getD (setPauserSourceWrites entries target newPauser) []
       some { postEntries, writes }
 
-theorem setPauserSourceTrace_postEntries
-    (entries : List Entry) (target newPauser : B256) :
-    Option.map SetPauserSourceTrace.postEntries
-      (setPauserSourceTrace entries target newPauser) =
-      setPauser entries target newPauser := by
-  cases h : setPauser entries target newPauser <;>
-    simp [setPauserSourceTrace, h]
-
-theorem setPauserSourceWrites_target_zero
-    (entries : List Entry) (newPauser : B256) :
-    setPauserSourceWrites entries 0 newPauser = none := by
-  simp [setPauserSourceWrites]
-
 theorem setPauserSourceTrace_target_zero
     (entries : List Entry) (newPauser : B256) :
     setPauserSourceTrace entries 0 newPauser = none := by
@@ -4352,46 +4330,6 @@ theorem finishSetPauser_run_split_continuation
           rw [howner]
           exact (congrFun hstorBody ca).symm,
         hcodeBody, hbody⟩
-
-private theorem revertData_not_run
-    {fs : List Func} {sevm : Sevm} {pre final : Devm} {blob : Bytes} :
-    ¬ Func.Run fs sevm pre (Func.revertData blob) final := by
-  have no_last : ∀ {s r : Devm},
-      ¬ Func.Run fs sevm s (.last .revert) r := by
-    intro s r run
-    cases run with
-    | last hrun =>
-      simp only [Linst.Run, Linst.run] at hrun
-      rcases Except.bind_eq_ok hrun with ⟨v1, h1, h2⟩
-      rcases Except.bind_eq_ok h2 with ⟨v2, h3, h4⟩
-      rcases Except.bind_eq_ok h4 with ⟨v3, h5, h6⟩
-      contradiction
-  have no_stores :
-      ∀ (iws : List (B256 × Nat)) (rest : Func),
-        (∀ {s r : Devm}, ¬ Func.Run fs sevm s rest r) →
-        ∀ {s r : Devm},
-          ¬ Func.Run fs sevm s (prependStoresRev iws rest) r := by
-    intro iws
-    induction iws with
-    | nil =>
-      intro rest h s r run
-      exact h run
-    | cons iw iws ih =>
-      intro rest h
-      simp only [prependStoresRev]
-      apply ih
-      intro s r run
-      unfold prependStore at run
-      rcases of_run_next run with ⟨s1, h1, run1⟩
-      rcases of_run_next run1 with ⟨s2, h2, run2⟩
-      rcases of_run_next run2 with ⟨s3, h3, run3⟩
-      exact h run3
-  unfold Func.revertData
-  apply no_stores
-  intro s r run
-  rcases of_run_next run with ⟨s1, h1, run1⟩
-  rcases of_run_next run1 with ⟨s2, h2, run2⟩
-  exact no_last run2
 
 private inductive Func.RunTo :
     List Func → Sevm → Devm → Func → Execution → Prop
@@ -5748,134 +5686,6 @@ private theorem directPausePath_prepend_tagTop
     ⟨run, path⟩
   exact ⟨run, by simpa only [tagTop, prepend] using path⟩
 
-/-- `SLOAD` as a CPS direct-pause path step.  The warmth-dependent base and
-charge are exposed to the continuation together with every state projection
-needed by later source code. -/
-private theorem directPausePath_sload_step
-    {ca : Adr} {target : B256} {phase : DirectPausePhase}
-    {fs : List Func} {sevm : Sevm} {devm : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    {k v : B256} {s : List B256} {M : Mem} {rest : Func}
-    {out : Execution}
-    (hstack : devm.stack = k :: s)
-    (hroom : s.length < 1024)
-    (hvalue : devm.getStorVal sevm.currentTarget k = v)
-    (hmemory : devm.memory = M)
-    (hgas : gasColdSload ≤ devm.gasLeft)
-    (hnext : ∀ (base : Devm) (c G : Nat),
-      (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈
-        base.accessedStorageKeys →
-      (∀ p : Adr × B256, p ∈ devm.accessedStorageKeys →
-        p ∈ base.accessedStorageKeys) →
-      (∀ (a : Adr) (k' : B256),
-        base.getStorVal a k' = devm.getStorVal a k') →
-      (∀ a : Adr, base.getBal a = devm.getBal a) →
-      (∀ a : Adr, base.getCode a = devm.getCode a) →
-      base.accessedAddresses = devm.accessedAddresses →
-      base.refundCounter = devm.refundCounter →
-      base.logs = devm.logs →
-      gasWarmAccess ≤ c → c ≤ gasColdSload →
-      devm.gasLeft = G + c →
-      ∃ tail : Func.RunCompiledTo fs sevm
-          (base.setMach ⟨v :: s, M, G, base.stateGas⟩) rest out,
-        Func.RunCompiledTo.DirectPausePath ca target
-          (phase := phase) tail) :
-    ∃ run : Func.RunCompiledTo fs sevm devm
-        (Func.next Ninst.sload rest) out,
-      Func.RunCompiledTo.DirectPausePath ca target
-        (phase := phase) run := by
-  subst hvalue
-  subst M
-  set base : Devm :=
-    if (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈
-      devm.accessedStorageKeys
-    then devm else addAccessedStorageKey devm sevm.currentTarget k with hbase
-  set c : Nat :=
-    if (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈
-      devm.accessedStorageKeys
-    then gasWarmAccess else gasColdSload with hcost
-  let G := devm.gasLeft - c
-  have hkeyAccess :
-      (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈
-        base.accessedStorageKeys :=
-    mem_accessedStorageKeys_sload_of hbase.symm
-  have haccessSubset : ∀ p : Adr × B256,
-      p ∈ devm.accessedStorageKeys → p ∈ base.accessedStorageKeys :=
-    fun _ hp => mem_accessedStorageKeys_sload_of_mem hbase.symm hp
-  have hstorage : ∀ (a : Adr) (k' : B256),
-      base.getStorVal a k' = devm.getStorVal a k' :=
-    fun _ _ => getStorVal_sload_of hbase.symm
-  have hbalances : ∀ a : Adr, base.getBal a = devm.getBal a := by
-    intro a
-    rw [hbase]
-    split <;> rfl
-  have hcode : ∀ a : Adr, base.getCode a = devm.getCode a := by
-    intro a
-    rw [hbase]
-    split <;> rfl
-  have haddresses : base.accessedAddresses = devm.accessedAddresses := by
-    rw [hbase]
-    split <;> rfl
-  have hrefund : base.refundCounter = devm.refundCounter :=
-    refundCounter_sload_of hbase.symm
-  have hlogs : base.logs = devm.logs := logs_sload_of hbase.symm
-  have hlower : gasWarmAccess ≤ c := (le_sload_cost_of hcost.symm).1
-  have hupper : c ≤ gasColdSload := (le_sload_cost_of hcost.symm).2
-  have hgasEq : devm.gasLeft = G + c := by
-    dsimp only [G]
-    omega
-  rcases hnext base c G hkeyAccess haccessSubset hstorage hbalances
-      hcode haddresses hrefund hlogs hlower hupper hgasEq with
-    ⟨tail, tailPath⟩
-  have instructionRun : Ninst.RunCompiled sevm devm Ninst.sload
-      (base.setMach ⟨devm.getStorVal sevm.currentTarget k :: s,
-        devm.memory, G, base.stateGas⟩) := by
-    exact Ninst.runCompiled_sload_of (base := base) (c := c) (G := G)
-      hstack hfork hbase.symm hcost.symm rfl (by omega) hroom
-  let run : Func.RunCompiledTo fs sevm devm
-      (Func.next Ninst.sload rest) out := .next instructionRun tail
-  exact ⟨run, .next (instructionRun := instructionRun) (tail := tail)
-    (by simp) tailPath⟩
-
-/-- `MSTORE` as a CPS direct-pause path step, exposing the named written image
-and successor gas account. -/
-private theorem directPausePath_mstore_step
-    {ca : Adr} {target : B256} {phase : DirectPausePhase}
-    {fs : List Func} {sevm : Sevm} {devm : Devm}
-    {i v : B256} {s : List B256} {c : Nat} {M : Mem} {rest : Func}
-    {out : Execution}
-    (hstack : devm.stack = i :: v :: s)
-    (hmemory : devm.memory = M)
-    (hcost : gVerylow + devm.extCost [⟨i.toNat, 32⟩] = c)
-    (hgas : c ≤ devm.gasLeft)
-    (hnext : ∀ (M' : Mem) (G : Nat),
-      M.write i.toNat v.toBytes = M' →
-      devm.gasLeft = G + c →
-      ∃ tail : Func.RunCompiledTo fs sevm
-          (devm.setMach ⟨s, M', G, devm.stateGas⟩) rest out,
-        Func.RunCompiledTo.DirectPausePath ca target
-          (phase := phase) tail) :
-    ∃ run : Func.RunCompiledTo fs sevm devm
-        (Func.next Ninst.mstore rest) out,
-      Func.RunCompiledTo.DirectPausePath ca target
-        (phase := phase) run := by
-  subst M
-  let M' := devm.memory.write i.toNat v.toBytes
-  let G := devm.gasLeft - c
-  have hwrite : devm.memory.write i.toNat v.toBytes = M' := rfl
-  have hgasEq : devm.gasLeft = G + c := by
-    dsimp only [G]
-    omega
-  rcases hnext M' G hwrite hgasEq with ⟨tail, tailPath⟩
-  have instructionRun : Ninst.RunCompiled sevm devm Ninst.mstore
-      (devm.setMach ⟨s, M', G, devm.stateGas⟩) := by
-    exact Ninst.runCompiled_mstore_of (G := G)
-      (e := devm.extCost [⟨i.toNat, 32⟩]) hstack rfl (by omega) rfl
-  let run : Func.RunCompiledTo fs sevm devm
-      (Func.next Ninst.mstore rest) out := .next instructionRun tail
-  exact ⟨run, .next (instructionRun := instructionRun) (tail := tail)
-    (by simp) tailPath⟩
-
 /-- Existential-output companion for `SLOAD`, used when the continuation
 chooses the eventual revert state. -/
 private theorem directPausePath_sload_revert_step
@@ -6009,135 +5819,6 @@ private theorem directPausePath_mstore_revert_step
   exact ⟨raw, run, rawOutput,
     .next (instructionRun := instructionRun) (tail := tail)
       (by simp) tailPath⟩
-
-/-- Warm `SSTORE` in construction direction.  Its successor is written out so
-the caller can continue in CPS without an execution premise. -/
-private theorem directPausePath_prepend_warm_sstore
-    {ca : Adr} {target k v : B256} {phase : DirectPausePhase}
-    {fs : List Func} {sevm : Sevm} {devm : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    {s : List B256} {c G : Nat} {rc : Int}
-    {body : Func} {out : Execution}
-    (hstack : devm.stack = k :: v :: s)
-    (hwarm : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈
-      devm.accessedStorageKeys)
-    (hsentry : gCallStipend < devm.gasLeft)
-    (hstatic : sevm.isStatic = false)
-    (hcost : sstoreValueCost (getOrigStorVal sevm sevm.currentTarget k)
-      (devm.getStorVal sevm.currentTarget k) v = c)
-    (hrefund : sstoreNewRefundCounter sevm.benvStat.rules.gas v
-      (getOrigStorVal sevm sevm.currentTarget k)
-      (devm.getStorVal sevm.currentTarget k) devm.refundCounter = rc)
-    (hgas : devm.gasLeft = G + c)
-    (tail : Func.RunCompiledTo fs sevm
-      (((devm.withRefundCounter rc).setStorVal sevm.currentTarget k v).setMach
-        ⟨s, devm.memory, G, ((devm.withRefundCounter rc).setStorVal sevm.currentTarget k v).stateGas⟩) body out)
-    (tailPath : Func.RunCompiledTo.DirectPausePath ca target
-      (phase := phase) tail) :
-    ∃ run : Func.RunCompiledTo fs sevm devm (.reg .sstore ::: body) out,
-      Func.RunCompiledTo.DirectPausePath ca target (phase := phase) run := by
-  apply directPausePath_prepend_sstore
-    (ca := ca) (target := target)
-    (Ninst.runCompiled_sstore_warm hfork.rules_stateGas_none hstack hwarm hsentry hstatic
-      hcost hrefund hgas) tail tailPath
-
-/-- `SSTORE` on a warm key as a CPS direct-pause path step. -/
-private theorem directPausePath_sstore_warm_step
-    {ca : Adr} {target : B256} {phase : DirectPausePhase}
-    {fs : List Func} {sevm : Sevm} {devm : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    {k v : B256} {s : List B256} {M : Mem} {rest : Func}
-    {out : Execution}
-    (hstack : devm.stack = k :: v :: s)
-    (hwarm : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈
-      devm.accessedStorageKeys)
-    (hstatic : sevm.isStatic = false)
-    (hmemory : devm.memory = M)
-    (hgas : gasStorageSet ≤ devm.gasLeft)
-    (hnext : ∀ (base : Devm) (c G : Nat),
-      base.getStorVal sevm.currentTarget k = v →
-      (∀ (a : Adr) (k' : B256), (a, k') ≠ (sevm.currentTarget, k) →
-        base.getStorVal a k' = devm.getStorVal a k') →
-      (∀ a : Adr, base.getBal a = devm.getBal a) →
-      (∀ a : Adr, base.getCode a = devm.getCode a) →
-      base.accessedStorageKeys = devm.accessedStorageKeys →
-      base.accessedAddresses = devm.accessedAddresses →
-      base.logs = devm.logs →
-      c ≤ gasStorageSet →
-      devm.gasLeft = G + c →
-      ∃ tail : Func.RunCompiledTo fs sevm
-          (base.setMach ⟨s, M, G, base.stateGas⟩) rest out,
-        Func.RunCompiledTo.DirectPausePath ca target
-          (phase := phase) tail) :
-    ∃ run : Func.RunCompiledTo fs sevm devm
-        (Func.next Ninst.sstore rest) out,
-      Func.RunCompiledTo.DirectPausePath ca target
-        (phase := phase) run := by
-  subst M
-  have hbound : sstoreValueCost
-      (getOrigStorVal sevm sevm.currentTarget k)
-      (devm.getStorVal sevm.currentTarget k) v ≤ gasStorageSet := by
-    rw [sstoreValueCost]
-    split_ifs <;> decide
-  let base :=
-    (devm.withRefundCounter (sstoreNewRefundCounter sevm.benvStat.rules.gas v
-      (getOrigStorVal sevm sevm.currentTarget k)
-      (devm.getStorVal sevm.currentTarget k)
-      devm.refundCounter)).setStorVal sevm.currentTarget k v
-  have hkey : base.getStorVal sevm.currentTarget k = v := by
-    show (Devm.getStor _ sevm.currentTarget).get k = v
-    rw [setStorVal_getStor_self, Stor.get_set_self]
-  have hother : ∀ (a : Adr) (k' : B256),
-      (a, k') ≠ (sevm.currentTarget, k) →
-      base.getStorVal a k' = devm.getStorVal a k' := by
-    intro a k' hne
-    by_cases hadr : sevm.currentTarget = a
-    · subst hadr
-      have hkey' : k ≠ k' := fun h => hne (by rw [h])
-      show (Devm.getStor _ sevm.currentTarget).get k' = _
-      rw [setStorVal_getStor_self, Stor.get_set_ne _ hkey']
-      rfl
-    · show (Devm.getStor _ a).get k' = _
-      have hoff : Devm.getStor base a = Devm.getStor devm a := by
-        simp only [base, Devm.getStor, Devm.getAcct, Devm.setStorVal,
-          Devm.withState, Devm.setWorld, State.setStorVal]
-        simp only [Devm.state, State.get_set_ne _ hadr]
-        rfl
-      rw [hoff]
-      rfl
-  have hbalances : ∀ a : Adr, base.getBal a = devm.getBal a := by
-    intro a
-    have hbc := State.setStorVal_balCodeEq
-      devm.state sevm.currentTarget k v
-    exact (congrArg Prod.fst (congrFun hbc a)).symm
-  have hcode : ∀ a : Adr, base.getCode a = devm.getCode a := by
-    intro a
-    have hbc := State.setStorVal_balCodeEq
-      devm.state sevm.currentTarget k v
-    exact (congrArg Prod.snd (congrFun hbc a)).symm
-  have hkeys : base.accessedStorageKeys = devm.accessedStorageKeys := rfl
-  have haddresses : base.accessedAddresses = devm.accessedAddresses := rfl
-  have hlogs : base.logs = devm.logs := rfl
-  let c := sstoreValueCost
-    (getOrigStorVal sevm sevm.currentTarget k)
-    (devm.getStorVal sevm.currentTarget k) v
-  let G := devm.gasLeft - c
-  have hgasEq : devm.gasLeft = G + c := by
-    dsimp only [G, c]
-    omega
-  rcases hnext base c G hkey hother hbalances hcode hkeys haddresses hlogs
-      hbound hgasEq with ⟨tail, tailPath⟩
-  have instructionRun : Ninst.RunCompiled sevm devm (.reg .sstore)
-      (base.setMach ⟨s, devm.memory, G, base.stateGas⟩) := by
-    dsimp only [base, G, c]
-    exact Ninst.runCompiled_sstore_warm hfork.rules_stateGas_none hstack hwarm
-      (by simp only [gCallStipend, gasStorageSet] at *; omega)
-      hstatic rfl rfl (by omega)
-  let run : Func.RunCompiledTo fs sevm devm
-      (Func.next Ninst.sstore rest) out :=
-    .next instructionRun tail
-  exact ⟨run, .next (instructionRun := instructionRun) (tail := tail)
-    (by simp) tailPath⟩
 
 /-- Existential-output companion used when the successor itself determines the
 revert state. -/
@@ -6351,28 +6032,6 @@ private theorem directPausePath_assignment_zero_warm_revert_step
   exact ⟨raw, run, rawOutput,
     .write (instructionRun := instructionRun) (tail := tail)
       howner hpopped tailPath⟩
-
-/-- Prepend the distinguished assignment-clear write.  Unlike ordinary removal
-writes, this is the unique transition that changes the certificate phase. -/
-private theorem directPausePath_prepend_assignment_zero_sstore
-    {ca : Adr} {target : B256} {fs : List Func} {sevm : Sevm} {pre post : Devm}
-    {body : Func} {out : Execution}
-    (instructionRun : Ninst.RunCompiled sevm pre (.reg .sstore) post)
-    (howner : sevm.currentTarget = ca)
-    (hpopped : Stack.Pop [assignmentSlot target, 0] pre.stack post.stack)
-    (tail : Func.RunCompiledTo fs sevm post body out)
-    (tailPath : Func.RunCompiledTo.DirectPausePath ca target
-      (phase := .beforeZeroCode) tail) :
-    ∃ run : Func.RunCompiledTo fs sevm pre (.reg .sstore ::: body) out,
-      Func.RunCompiledTo.DirectPausePath ca target
-        (phase := .beforeWrite) run := by
-  let run : Func.RunCompiledTo fs sevm pre (.reg .sstore ::: body) out :=
-    .next instructionRun tail
-  have path : Func.RunCompiledTo.DirectPausePath ca target
-      (phase := .beforeWrite) run :=
-    .write (instructionRun := instructionRun) (tail := tail)
-      howner hpopped tailPath
-  exact ⟨run, path⟩
 
 set_option linter.unusedVariables false in
 private inductive Exec.DirectPausePath (ca : Adr) (target : B256) :
@@ -6924,45 +6583,6 @@ private theorem Exec.DirectPausePath.beforeWriteEvidence
         occurrence.instruction ≠ .exec .staticcall :=
   ⟨exists_writeBeforeZeroCode_of_eq path rfl,
     path.noCallOrStaticcall⟩
-
-/-- Compiler-facing transport of the complete direct-pause raw evidence. -/
-private theorem Func.RunCompiledTo.exists_exec_directPauseEvidence
-    {f₀ : Func} {fs' : List Func} {sevm : Sevm} {fs : List Func}
-    {pre : Devm} {body : Func} {out : Execution}
-    {ca : Adr} {target : B256}
-    (run : Func.RunCompiledTo fs sevm pre body out)
-    (path : Func.RunCompiledTo.DirectPausePath ca target
-      (phase := .beforeWrite) run)
-    (compiled : some sevm.code.toList = Prog.compile ⟨f₀, fs'⟩)
-    (tableEq : fs = f₀ :: fs')
-    (pc : Nat)
-    (sub : subcode sevm.code.toList pc
-      (Func.compile (table 0 (f₀ :: fs')) pc body))
-    (noPush : noPushBefore sevm.code pc 32 = true) :
-    ∃ execution : Exec pc sevm pre out,
-      ((∃ write : Exec.SuccessfulSstoreOccurrence
-          (⟨pc, sevm, pre, out, execution⟩ : Exec.Deriv),
-        write.storageOwner = ca ∧
-        write.key = assignmentSlot target ∧
-        write.value = 0 ∧
-        ∃ zeroCode : Exec.NinstOccurrence
-            (⟨pc, sevm, pre, out, execution⟩ : Exec.Deriv),
-          zeroCode.instruction = .reg .extcodesize ∧
-          (∃ rest, zeroCode.node.devm.stack = target :: rest) ∧
-          (zeroCode.node.devm.getCode target.toAdr).size = 0 ∧
-          Exec.RawBefore
-            (root := ⟨pc, sevm, pre, out, execution⟩)
-            write.occurrence.node zeroCode.node) ∧
-        ∀ occurrence : Exec.NinstOccurrence
-            (⟨pc, sevm, pre, out, execution⟩ : Exec.Deriv),
-          occurrence.instruction ≠ .exec .call ∧
-          occurrence.instruction ≠ .exec .staticcall) := by
-  rcases Func.RunCompiledTo.exists_exec_directPausePath run path compiled
-      tableEq pc sub noPush with ⟨execution, executionPath⟩
-  exact ⟨execution,
-    ⟨Exec.DirectPausePath.exists_writeBeforeZeroCode_of_eq
-        executionPath rfl,
-      executionPath.noCallOrStaticcall⟩⟩
 
 /-- A raw top-level revert forces the settled direct-message result to carry an
 error flag.  This exposes the premise used by the existing rollback theorem. -/

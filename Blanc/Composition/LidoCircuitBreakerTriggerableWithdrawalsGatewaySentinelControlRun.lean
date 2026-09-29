@@ -20,19 +20,6 @@ open Blanc.Composition.LidoCircuitBreakerTwg
 namespace LidoCircuitBreakerTwgSentinel
 
 
-/-- Both arms of `temporalSloadBase` return the base world with at most the
-accessed-key set changed, so the error, output, accessed-address and code
-fields all pass through; the named projections below read this one case
-split. -/
-
-private theorem temporalSloadBase_error (sevm : Sevm) (base : Devm)
-    (key : B256) : (temporalSloadBase sevm base key).error = base.error :=
-  (temporalSloadBase_carriers sevm base key).1
-
-private theorem temporalSloadBase_output (sevm : Sevm) (base : Devm)
-    (key : B256) : (temporalSloadBase sevm base key).output = base.output :=
-  (temporalSloadBase_carriers sevm base key).2.1
-
 private theorem temporalSloadBase_accessedAddresses (sevm : Sevm) (base : Devm)
     (key : B256) : (temporalSloadBase sevm base key).accessedAddresses =
       base.accessedAddresses :=
@@ -805,242 +792,6 @@ private theorem gatewayRunStor_B6_other {key : B256}
     temporalSstorePost_other _ _ _ _ _ _ (keyPairNe hr)]
   exact gatewayRunStor_removeBase3_other ha hc
 
-private theorem gatewayRunStor_B6_index :
-    (indexClearPost sentinelGatewayPauseWorldSevm (entryClearPost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0).getStorVal configWorldOwner (indexSlot pauseWorldCallee.toB256) = 0 := by
-  rw [show (indexClearPost sentinelGatewayPauseWorldSevm (entryClearPost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0) = temporalSstorePost sentinelGatewayPauseWorldSevm
-      (lengthWritePost sentinelGatewayPauseWorldSevm (entryClearPost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0) (indexSlot pauseWorldCallee.toB256) 0 from rfl]
-  exact temporalSstorePost_self _ _ _ _
-
-private theorem gatewayRunStor_B6_length :
-    (indexClearPost sentinelGatewayPauseWorldSevm (entryClearPost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0).getStorVal configWorldOwner arrayLengthSlot = 0 := by
-  rw [show (indexClearPost sentinelGatewayPauseWorldSevm (entryClearPost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0) = temporalSstorePost sentinelGatewayPauseWorldSevm
-      (lengthWritePost sentinelGatewayPauseWorldSevm (entryClearPost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0) (indexSlot pauseWorldCallee.toB256) 0 from rfl,
-    temporalSstorePost_other _ _ _ _ _ _
-      (keyPairNe pauseWorld_length_ne_indexCallee.symm),
-    show lengthWritePost sentinelGatewayPauseWorldSevm (entryClearPost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0 = temporalSstorePost sentinelGatewayPauseWorldSevm (entryClearPost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1)
-      arrayLengthSlot 0 from rfl]
-  exact temporalSstorePost_self _ _ _ _
-
-private theorem gatewayRunStor_B6_entry :
-    (indexClearPost sentinelGatewayPauseWorldSevm (entryClearPost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0).getStorVal configWorldOwner (arrayEntrySlot 1) = 0 := by
-  rw [show (indexClearPost sentinelGatewayPauseWorldSevm (entryClearPost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0) = temporalSstorePost sentinelGatewayPauseWorldSevm
-      (lengthWritePost sentinelGatewayPauseWorldSevm (entryClearPost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0) (indexSlot pauseWorldCallee.toB256) 0 from rfl,
-    temporalSstorePost_other _ _ _ _ _ _
-      (keyPairNe pauseWorld_entryOne_ne_indexCallee.symm),
-    show lengthWritePost sentinelGatewayPauseWorldSevm (entryClearPost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0 = temporalSstorePost sentinelGatewayPauseWorldSevm (entryClearPost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1)
-      arrayLengthSlot 0 from rfl,
-    temporalSstorePost_other _ _ _ _ _ _
-      (keyPairNe pauseWorld_length_ne_entryOne),
-    show (entryClearPost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) = temporalSstorePost sentinelGatewayPauseWorldSevm
-      (indexWritePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) (arrayEntrySlot 1) 0 from rfl]
-  exact temporalSstorePost_self _ _ _ _
-
-private theorem gatewayRunStor_B6_assign :
-    (indexClearPost sentinelGatewayPauseWorldSevm (entryClearPost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0).getStorVal configWorldOwner (assignmentSlot pauseWorldCallee.toB256) = 0 := by
-  rw [show (indexClearPost sentinelGatewayPauseWorldSevm (entryClearPost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0) = temporalSstorePost sentinelGatewayPauseWorldSevm
-      (lengthWritePost sentinelGatewayPauseWorldSevm (entryClearPost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0) (indexSlot pauseWorldCallee.toB256) 0 from rfl,
-    temporalSstorePost_other _ _ _ _ _ _
-      (keyPairNe pauseWorld_assignCallee_ne_indexCallee.symm),
-    show lengthWritePost sentinelGatewayPauseWorldSevm (entryClearPost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0 = temporalSstorePost sentinelGatewayPauseWorldSevm (entryClearPost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1)
-      arrayLengthSlot 0 from rfl,
-    temporalSstorePost_other _ _ _ _ _ _
-      (keyPairNe pauseWorld_length_ne_assignCallee),
-    show (entryClearPost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) = temporalSstorePost sentinelGatewayPauseWorldSevm
-      (indexWritePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) (arrayEntrySlot 1) 0 from rfl,
-    temporalSstorePost_other _ _ _ _ _ _
-      (keyPairNe pauseWorld_entryOne_ne_assignCallee),
-    show indexWritePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1 = temporalSstorePost sentinelGatewayPauseWorldSevm
-      (entryWritePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) (indexSlot pauseWorldCallee.toB256) 1 from rfl,
-    temporalSstorePost_other _ _ _ _ _ _
-      (keyPairNe pauseWorld_assignCallee_ne_indexCallee.symm),
-    show entryWritePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1 = temporalSstorePost sentinelGatewayPauseWorldSevm
-      (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) (arrayEntrySlot 1) pauseWorldCallee.toB256 from rfl,
-    temporalSstorePost_other _ _ _ _ _ _
-      (keyPairNe pauseWorld_entryOne_ne_assignCallee)]
-  exact gatewayRunStor_removeBase3_assign
-
 private theorem gatewayRunStor_B6_count :
     (indexClearPost sentinelGatewayPauseWorldSevm (entryClearPost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
       (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
@@ -1159,10 +910,6 @@ private theorem temporalSloadBase_getCode (sevm : Sevm) (base : Devm)
 private theorem addAccessedStorageKey_getCode (devm : Devm) (a : Adr)
     (k : B256) (x : Adr) :
     (addAccessedStorageKey devm a k).getCode x = devm.getCode x := rfl
-
-private theorem lengthWritePost_getCode (sevm : Sevm) (base : Devm) (ol : B256)
-    (x : Adr) : (lengthWritePost sevm base ol).getCode x = base.getCode x :=
-  temporalSstorePost_getCode sevm base arrayLengthSlot ol x
 
 private theorem gatewayRunAddrs_B7 :
     ((indexClearPost sentinelGatewayPauseWorldSevm (entryClearPost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
@@ -1761,17 +1508,6 @@ theorem sentinelRunMem_dur8 :
 
 /-! ## The composed run -/
 
-/-- The row-19 master composition: the boundary walk with its dichotomy
-interface facts, and the complete message run with its settled effects. -/
-
-private theorem sentinelGatewayPauseWorld_targetPausedZero :
-    sentinelGatewayPauseWorldPre.getStorVal pauseWorldCallee
-      LidoTriggerableWithdrawalsGateway.resumeSinceSlot = 0 := by
-  change (sentinelGatewayPauseWorldState.get pauseWorldCallee).stor.get
-      LidoTriggerableWithdrawalsGateway.resumeSinceSlot = 0
-  rw [sentinelGatewayPauseWorldState_get_target]
-  decide +kernel
-
 private theorem sentinelGatewayPauseWorld_targetPausedOrigZero :
     getOrigStorVal sentinelGatewayPauseWorldSevm pauseWorldCallee
       LidoTriggerableWithdrawalsGateway.resumeSinceSlot = 0 := by
@@ -1779,13 +1515,6 @@ private theorem sentinelGatewayPauseWorld_targetPausedOrigZero :
       LidoTriggerableWithdrawalsGateway.resumeSinceSlot = 0
   rw [sentinelGatewayPauseWorldState_get_target]
   decide +kernel
-
-private theorem sentinelGatewayPauseWorld_targetPausedCold :
-    (pauseWorldCallee, LidoTriggerableWithdrawalsGateway.resumeSinceSlot) ∉
-      sentinelGatewayPauseWorldPre.accessedStorageKeys := by
-  rw [show sentinelGatewayPauseWorldPre.accessedStorageKeys =
-      Std.HashSet.emptyWithCapacity from rfl]
-  exact Std.HashSet.not_mem_emptyWithCapacity
 
 private theorem gatewayRunAfterSetBase_code :
     gatewayRunAfterSetBase.getCode pauseWorldCallee.toB256.toAdr =
@@ -1867,18 +1596,6 @@ private theorem gatewayRunAfterSetBase_count :
   rw [gatewayRunAfterSetBase, addLog_getStorVal]
   simpa only [gatewayRunRemoveBase3, gatewayRunCountPost, gatewayRunKernelBase] using
     hcount
-
-private theorem gatewayRunAfterSetBase_interval :
-    gatewayRunAfterSetBase.getStorVal configWorldOwner heartbeatIntervalSlot =
-      pauseWorldInterval := by
-  rw [gatewayRunAfterSetBase, addLog_getStorVal]
-  have h := (gatewayRunStor_B6_other
-    pauseWorld_interval_ne_assignCallee.symm
-    pauseWorld_interval_ne_count.symm
-    pauseWorld_interval_ne_entryOne.symm
-    pauseWorld_interval_ne_indexCallee.symm
-    pauseWorld_interval_ne_length.symm).trans sentinelPauseLastStor_interval
-  simpa only [gatewayRunRemoveBase3, gatewayRunCountPost, gatewayRunKernelBase] using h
 
 private theorem gatewayRunAfterSetBase_expiry :
     gatewayRunAfterSetBase.getStorVal configWorldOwner

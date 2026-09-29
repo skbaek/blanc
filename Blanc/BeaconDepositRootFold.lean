@@ -553,48 +553,6 @@ theorem rootLoop_iterations_exists_runCompiledTo
         rw [hgas] at hstage
         exact ⟨ex, hP, hstage⟩
 
-/-- Fixed-outcome compatibility corollary of the existential CPS carrier. -/
-theorem rootLoop_iterations_runCompiledTo
-    {fs : List Func} {sevm : Sevm} {origin base : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    {memory : Mem} {oldCount : B256} {s : RootLoopState}
-    {stor : Stor} {n K : Nat} {ex : Execution}
-    (carrier : RootLoopCarrier origin base memory oldCount s)
-    (horiginStor : Devm.getStor origin sevm.currentTarget = stor)
-    (hactive : RootLoopActive sevm.currentTarget stor n s)
-    (hnodeleg : getDelegatedCodeAddress (origin.getCode 2) = none)
-    (hwarm : (2 : Adr) ∈ origin.accessedAddresses)
-    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hdepth : sevm.depth ≠ 0)
-    (hbound :
-      K + rootLoopGas sevm.currentTarget stor n s < 2 ^ 256)
-    (hrootContinuation :
-      fs[rootContinuationSlot]? = some rootContinuation)
-    (hrootLoop : fs[rootLoopSlot]? = some rootLoop)
-    (htail :
-      ∀ {base' : Devm} {memory' : Mem},
-        RootLoopCarrier origin base' memory' oldCount
-          (rootLoopIter sevm.currentTarget stor n s) →
-        Func.RunCompiledTo fs sevm
-          (base'.setMach
-            ⟨[(rootLoopIter sevm.currentTarget stor n s).height],
-              memory', K, base'.stateGas⟩)
-          rootLoop ex) :
-    Func.RunCompiledTo fs sevm
-      (base.setMach
-        ⟨[s.height], memory,
-          K + rootLoopGas sevm.currentTarget stor n s, base.stateGas⟩)
-      rootLoop ex := by
-  obtain ⟨ex', hex, hrun⟩ :=
-    rootLoop_iterations_exists_runCompiledTo (hfork := hfork)
-      (P := fun ex' => ex' = ex) carrier horiginStor hactive
-      hnodeleg hwarm hpre hdepth hbound hrootContinuation hrootLoop
-      (by
-        intro base' memory' hcarrier
-        exact ⟨ex, rfl, htail hcarrier⟩)
-  subst ex'
-  exact hrun
-
 /-! ## Machine-word trace to the pure root model -/
 
 private def rootNatState (height size : Nat) (node : B256)
@@ -675,14 +633,6 @@ private theorem rootNatState_key_of_even
   unfold RootLoopState.key
   rw [if_neg hdead]
   exact zeroHashBase_add_toB256 height hheight
-
-private theorem lowShift (n : Nat) (hn : n < 2 ^ 64) :
-    n.toUInt64 >>> (1 : Nat).toUInt64 = (n / 2).toUInt64 :=
-  Blanc.toUInt64_shiftRight_one n hn
-
-private theorem shift128 (n : Nat) (hn : n < 2 ^ 64) :
-    Nat.toB128 n >>> 1 = Nat.toB128 (n / 2) :=
-  Blanc.toB128_shiftRight_one n hn
 
 private theorem shift256_32 (n : Nat) (hn : n < 2 ^ 32) :
     Nat.toB256 n >>> 1 = Nat.toB256 (n / 2) :=

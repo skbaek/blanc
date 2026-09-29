@@ -202,12 +202,6 @@ theorem m7_size : m7.size = 192 := by decide +kernel
 theorem m8_size : m8.size = 224 := by decide +kernel
 theorem m9_size : m9.size = 224 := by decide +kernel
 
-theorem m1_fp : Bytes.toB256 (m1.read 64 32).1 = Nat.toB256 96 := by decide +kernel
-theorem m3_len : Bytes.toB256 (m4.read 96 32).1 = Nat.toB256 13 := by decide +kernel
-theorem m5_name : Bytes.toB256 (m5.read 128 32).1 = nameWord := by decide +kernel
-theorem m5_fp : Bytes.toB256 (m5.read 64 32).1 = Nat.toB256 160 := by decide +kernel
-theorem m8_len : Bytes.toB256 (m8.read 160 32).1 = Nat.toB256 4 := by decide +kernel
-theorem m9_symbol : Bytes.toB256 (m9.read 192 32).1 = symbolWord := by decide +kernel
 theorem nameWord_mask : (~~~ Bytes.toB256 [0xff]) &&& nameWord = nameWord := by decide +kernel
 theorem symbolWord_mask : (~~~ Bytes.toB256 [0xff]) &&& symbolWord = symbolWord := by
   decide +kernel

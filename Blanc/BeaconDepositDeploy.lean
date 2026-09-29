@@ -143,13 +143,6 @@ private theorem provisionalConstructorProgram_compiles :
     Prog.compiles provisionalConstructorProgram = true := by
   decide +kernel
 
-private theorem provisionalConstructorPrefix_compile :
-    Prog.compile provisionalConstructorProgram =
-      some provisionalConstructorPrefix := by
-  unfold provisionalConstructorPrefix
-  exact Prog.compile_eq_some_getD_of_compiles _
-    provisionalConstructorProgram_compiles
-
 theorem constructorProgram_compiles :
     Prog.compiles constructorProgram = true := by
   decide +kernel
@@ -182,14 +175,6 @@ theorem constructorAppendedRuntime_length_exact :
     code.length = 2891 := by
   simpa [codeSize] using codeSize_exact
 
-theorem creationCode_eq_prefix_append_runtime :
-    creationCode = constructorInitPrefix ++ code := by
-  rfl
-
-theorem constructorCreationCode_eq_creationCode :
-    constructorCreationCode = creationCode := by
-  rfl
-
 theorem creationCode_length_exact :
     creationCode.length = 3037 := by
   simp [creationCode, constructorInitPrefix_length_exact,
@@ -207,11 +192,6 @@ theorem creationCode_eip3860 :
 theorem creationCode_drop_prefix :
     creationCode.drop constructorInitPrefix.length = code := by
   simp [creationCode]
-
-theorem creationCode_drop_runtimeOffset :
-    creationCode.drop constructorRuntimeOffset = code := by
-  rw [← constructorInitPrefix_length_eq_provisionalOffset]
-  exact creationCode_drop_prefix
 
 /-- The constructor's CODECOPY window is exactly the appended runtime. -/
 theorem creationCode_slice_runtime :
@@ -290,10 +270,6 @@ private theorem constructorSourceSiteFacts :
     Prog.SourceSite.pcs constructorExternalExecutionSourceSites = [98] := by
   decide +kernel
 
-theorem constructorSstoreSourceSites_length :
-    constructorSstoreSourceSites.length = 1 :=
-  constructorSourceSiteFacts.1
-
 theorem constructorSstoreSourceSites_pcs :
     Prog.SourceSite.pcs constructorSstoreSourceSites = [137] :=
   constructorSourceSiteFacts.2.1
@@ -327,38 +303,5 @@ theorem constructorSstoreSourceSite_coordinate
 theorem constructorStaticcallSourceSites_length :
     constructorStaticcallSourceSites.length = 1 :=
   constructorSourceSiteFacts.2.2.1
-
-theorem constructorStaticcallSourceSites_pcs :
-    Prog.SourceSite.pcs constructorStaticcallSourceSites = [98] :=
-  constructorSourceSiteFacts.2.2.2.1
-
-theorem constructorCodecopySourceSites_length :
-    constructorCodecopySourceSites.length = 1 :=
-  constructorSourceSiteFacts.2.2.2.2.1
-
-theorem constructorCodecopySourceSites_pcs :
-    Prog.SourceSite.pcs constructorCodecopySourceSites = [57] :=
-  constructorSourceSiteFacts.2.2.2.2.2.1
-
-theorem constructorExternalExecutionSourceSites_all_staticcall :
-    (constructorExternalExecutionSourceSites.all fun site =>
-      match site.instruction with
-      | .exec .staticcall => true
-      | _ => false) = true :=
-  constructorSourceSiteFacts.2.2.2.2.2.2.1
-
-theorem constructorExternalExecutionSourceSites_length :
-    constructorExternalExecutionSourceSites.length = 1 :=
-  constructorSourceSiteFacts.2.2.2.2.2.2.2.1
-
-theorem constructorExternalExecutionSourceSites_pcs :
-    Prog.SourceSite.pcs constructorExternalExecutionSourceSites = [98] :=
-  constructorSourceSiteFacts.2.2.2.2.2.2.2.2
-
-theorem runtimeAndConstructorStaticcallSourceSites_length :
-    runtimeAndConstructorStaticcallSourceSites.length = 12 := by
-  simp [runtimeAndConstructorStaticcallSourceSites,
-    runtimeStaticcallSourceSites_length,
-    constructorStaticcallSourceSites_length]
 
 end Blanc.BeaconDeposit

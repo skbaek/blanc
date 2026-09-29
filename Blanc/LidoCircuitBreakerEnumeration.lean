@@ -29,10 +29,6 @@ theorem abiAddressArray_offset_word (entries : List Entry) :
       (ys := (Nat.toB256 entries.length).toBytes ++
         (entries.map Prod.fst).flatMap B256.toBytes))
 
-theorem abiAddressArray_offset (entries : List Entry) :
-    Bytes.toB256 ((abiAddressArray entries).sliceD 0 32 0) = Nat.toB256 32 := by
-  rw [abiAddressArray_offset_word, B256.toB256_toBytes]
-
 theorem abiAddressArray_length_word (entries : List Entry) :
     (abiAddressArray entries).sliceD 32 32 0 =
       (Nat.toB256 entries.length).toBytes := by
@@ -45,11 +41,6 @@ theorem abiAddressArray_length_word (entries : List Entry) :
   simpa only [B256.length_toBytes] using
     (List.take_length_append (xs := (Nat.toB256 entries.length).toBytes)
       (ys := (entries.map Prod.fst).flatMap B256.toBytes))
-
-theorem abiAddressArray_length_word_value (entries : List Entry) :
-    Bytes.toB256 ((abiAddressArray entries).sliceD 32 32 0) =
-      Nat.toB256 entries.length := by
-  rw [abiAddressArray_length_word, B256.toB256_toBytes]
 
 private theorem abiAddressWords_target_word (entries : List Entry)
     {i : Nat} (hi : i < entries.length) :
@@ -91,23 +82,11 @@ theorem abiAddressArray_target_word (entries : List Entry)
     List.drop_length_add_append, List.drop_length_add_append]
   exact abiAddressWords_target_word entries hi
 
-theorem abiAddressArray_target (entries : List Entry)
-    {i : Nat} (hi : i < entries.length) :
-    Bytes.toB256 ((abiAddressArray entries).sliceD (64 + 32 * i) 32 0) =
-      entries[i].1 := by
-  rw [abiAddressArray_target_word entries hi, B256.toB256_toBytes]
-
 theorem RegistryWitness.entry_target_canonical
     {storage : LogicalStorage} {entries : List Entry}
     (h : RegistryWitness storage entries) {i : Nat} (hi : i < entries.length) :
     canonicalAddress entries[i].1 :=
   (h.targetsValid entries[i] (by simp)).2
-
-theorem RegistryWitness.entry_target_lt_2pow160
-    {storage : LogicalStorage} {entries : List Entry}
-    (h : RegistryWitness storage entries) {i : Nat} (hi : i < entries.length) :
-    entries[i].1.toNat < 2 ^ 160 :=
-  h.entry_target_canonical hi
 
 theorem RegistryWitness.enumeration_offsets_lt_2pow256
     {storage : LogicalStorage} {entries : List Entry}
@@ -175,27 +154,6 @@ theorem RegistryWitness.enumeration_word_arithmetic
       B256.toNat_toB256_of_lt htarget]
     omega
 
-theorem RegistryWitness.enumeration_covered_window
-    {storage : LogicalStorage} {entries : List Entry}
-    (h : RegistryWitness storage entries) {i : Nat} (hi : i < entries.length) :
-    96 + 32 * i ≤ 64 + 32 * entries.length ∧
-      64 + 32 * entries.length < 2 ^ 256 := by
-  have hlength := h.entries_length_le
-  norm_num at hlength ⊢
-  omega
-
-theorem RegistryWitness.enumeration_next_word_roundtrips
-    {storage : LogicalStorage} {entries : List Entry}
-    (h : RegistryWitness storage entries) {i : Nat} (hi : i < entries.length) :
-    (Nat.toB256 (32 * (i + 1))).toNat = 32 * (i + 1) ∧
-      (Nat.toB256 (64 + 32 * i)).toNat = 64 + 32 * i := by
-  have hlength := h.entries_length_le
-  have hnext : 32 * (i + 1) < 2 ^ 256 := by
-    norm_num at hlength ⊢
-    omega
-  exact ⟨B256.toNat_toB256_of_lt hnext,
-    B256.toNat_toB256_of_lt (h.enumeration_offsets_lt_2pow256 hi).2.1⟩
-
 theorem RegistryWitness.enumeration_total_toB256_toNat
     {storage : LogicalStorage} {entries : List Entry}
     (h : RegistryWitness storage entries) :
@@ -251,12 +209,6 @@ def enumHeaderImage (entries : List Entry) : Bytes :=
 def enumPrefixImage (entries done : List Entry) : Bytes :=
   done.foldl (fun image entry => Bytes.writeAt image image.length entry.1.toBytes)
     (enumHeaderImage entries)
-
-theorem enumPrefixImage_append (entries done : List Entry) (entry : Entry) :
-    enumPrefixImage entries (done ++ [entry]) =
-      Bytes.writeAt (enumPrefixImage entries done)
-        (enumPrefixImage entries done).length entry.1.toBytes := by
-  simp [enumPrefixImage]
 
 /-- The concrete memory recurrence, rooted at `Mem.empty`, for the same stores. -/
 def enumPrefixMemory (entries done : List Entry) : Mem :=
@@ -608,11 +560,6 @@ private theorem prewarmStorage_transientStorage
       rw [List.foldl_cons, ih]
       rfl
 
-theorem prepareEnumerationStorage_mach (sevm : Sevm) (base : Devm)
-    (entries : List Entry) :
-    (prepareEnumerationStorage sevm base entries).mach = base.mach :=
-  prewarmStorage_mach sevm _ base
-
 theorem prepareEnumerationStorage_logs (sevm : Sevm) (base : Devm)
     (entries : List Entry) :
     (prepareEnumerationStorage sevm base entries).logs = base.logs :=
@@ -705,11 +652,6 @@ def getPausablesGasWarm (entries : List Entry) : Nat :=
           calculateMemoryGasCost (64 + 32 * i)) +
         enumLoopGasWarmFrom (i + 1) rest := rfl
 
-theorem getPausablesGasWarm_nil : getPausablesGasWarm [] = 186 := rfl
-
-theorem getPausablesGasWarm_singleton (entry : Entry) :
-    getPausablesGasWarm [entry] = 368 := rfl
-
 /-- Explicit source-body resources for enumeration.  Warmth is stated for the
 ordered source read-set, so it can be reused at every recursive loop step. -/
 structure EnumerationResources (sevm : Sevm) (pre : Devm)
@@ -725,57 +667,12 @@ def preparedEnumerationState (sevm : Sevm) (base : Devm)
   (prepareEnumerationStorage sevm base entries).setMach
     ⟨[], Mem.empty, getPausablesGasWarm entries, (prepareEnumerationStorage sevm base entries).stateGas⟩
 
-theorem enumerationResources_prepared (sevm : Sevm) (base : Devm)
-    (entries : List Entry) :
-    EnumerationResources sevm (preparedEnumerationState sevm base entries) entries := by
-  refine ⟨rfl, rfl, ?_, Nat.le_refl _⟩
-  intro key hkey
-  change (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
-    (prepareEnumerationStorage sevm base entries).accessedStorageKeys
-  exact prepareEnumerationStorage_warm sevm base entries hkey
-
-theorem EnumerationResources.length_warm {sevm : Sevm} {pre : Devm}
-    {entries : List Entry} (h : EnumerationResources sevm pre entries) :
-    (⟨sevm.currentTarget, arrayLengthSlot⟩ : Adr × B256) ∈
-      pre.accessedStorageKeys :=
-  h.warm _ (arrayLengthSlot_mem_enumerationStorageKeys entries)
-
-theorem EnumerationResources.entry_warm {sevm : Sevm} {pre : Devm}
-    {entries : List Entry} (h : EnumerationResources sevm pre entries)
-    (i : Nat) (hi : i < entries.length) :
-    (⟨sevm.currentTarget, arrayEntrySlot (Nat.toB256 (i + 1))⟩ : Adr × B256) ∈
-      pre.accessedStorageKeys :=
-  h.warm _ (arrayEntrySlot_mem_enumerationStorageKeys entries i hi)
-
 theorem preparedEnumerationState_worldEq (sevm : Sevm) (base : Devm)
     (entries : List Entry) :
     Devm.WorldEq base (preparedEnumerationState sevm base entries) := by
   rcases prepareEnumerationStorage_worldEq sevm base entries with
     ⟨hstate, htransient⟩
   exact ⟨hstate, htransient⟩
-
-theorem preparedEnumerationState_logs (sevm : Sevm) (base : Devm)
-    (entries : List Entry) :
-    (preparedEnumerationState sevm base entries).logs = base.logs := by
-  change (prepareEnumerationStorage sevm base entries).logs = base.logs
-  exact prepareEnumerationStorage_logs sevm base entries
-
-theorem preparedEnumerationState_getCode (sevm : Sevm) (base : Devm)
-    (entries : List Entry) (address : Adr) :
-    (preparedEnumerationState sevm base entries).getCode address =
-      base.getCode address :=
-  (preparedEnumerationState_worldEq sevm base entries).getCode address |>.symm
-
-theorem preparedEnumerationState_getStor (sevm : Sevm) (base : Devm)
-    (entries : List Entry) (address : Adr) :
-    Devm.getStor (preparedEnumerationState sevm base entries) address =
-      Devm.getStor base address :=
-  (preparedEnumerationState_worldEq sevm base entries).getStor address |>.symm
-
-theorem enumLoop_pre_stack_height (base : Devm) (entries done rest : List Entry)
-    (G : Nat) :
-    ((base.setMach ⟨[Nat.toB256 done.length], enumPrefixMemory entries done,
-      G + enumLoopGasWarmFrom done.length rest, base.stateGas⟩).stack).length = 1 := rfl
 
 theorem enumLoop_pre_memory_independent_of_cursor (base : Devm)
     (entries done : List Entry) (cursor cursor' G : Nat) :
@@ -1185,18 +1082,6 @@ theorem EnumerationRuntimeResources.getPausables_runCompiled
       (pre.gasLeft - getPausablesRuntimeGas entries)
       hdata hvalue hselector hcodeAddress hcode hw resources.warm
 
-theorem getPausables_post_worldEq (base : Devm) (entries : List Entry)
-    (G : Nat) :
-    Devm.WorldEq base
-      ((base.setMach ⟨[], enumPrefixMemory entries entries, G, base.stateGas⟩).withOutput
-        (abiAddressArray entries)) := by
-  exact ⟨rfl, rfl⟩
-
-theorem getPausables_post_logs (base : Devm) (entries : List Entry)
-    (G : Nat) :
-    ((base.setMach ⟨[], enumPrefixMemory entries entries, G, base.stateGas⟩).withOutput
-      (abiAddressArray entries)).logs = base.logs := rfl
-
 /-- The landed finite component certificate excludes every owned same-frame
 SSTORE occurrence on every raw derivation below the exact public enumeration
 source cursor.  This is deliberately an occurrence theorem, not a termination
@@ -1384,37 +1269,6 @@ structure RegistrySnapshotCoherence (entries : List Entry)
   count_eq_multiplicity :
     assignmentCount entries pauser = (entries.map Prod.snd).count pauser
   zero_count : assignmentCount entries 0 = 0
-
-/-- Every stable concrete Registry witness induces the model-facing coherence
-facts used by the exact three-view family. -/
-theorem RegistryWitness.snapshotCoherence
-    {base : Devm} {ca : Adr} {entries : List Entry}
-    (hw : RegistryWitness
-      (logicalStorageOfStor (Devm.getStor base ca)) entries)
-    (target pauser : B256) (htarget : canonicalAddress target) :
-    RegistrySnapshotCoherence entries target pauser := by
-  have hassignment :
-      (Devm.getStor base ca).get (assignmentSlot target) =
-        assignmentAt entries target := by
-    simpa only [logicalStorageOfStor] using hw.assignments target htarget
-  have hmember :=
-    (membershipEquivalence_registerPauser
-      (post := base) (ca := ca) hw htarget).1
-  rw [hassignment] at hmember
-  have hzeroCanonical : canonicalAddress (0 : B256) := by
-    unfold canonicalAddress
-    rw [B256.toNat_zero]
-    norm_num
-  have hzeroWord : Nat.toB256 (assignmentCount entries 0) = 0 := by
-    have hcount := hw.counts 0 hzeroCanonical
-    exact hcount.symm.trans hw.zeroCount
-  have hzeroCount : assignmentCount entries 0 = 0 := by
-    have hnat := congrArg B256.toNat hzeroWord
-    rw [B256.toNat_toB256_of_lt (hw.assignmentCount_lt_2pow256 0),
-      B256.toNat_zero] at hnat
-    exact hnat
-  exact ⟨hmember, hw.targetsValid, hw.targetsNodup,
-    assignmentCount_eq_multiplicity entries pauser, hzeroCount⟩
 
 /-- Exact successful body runs for the three Registry views over one prepared
 stable snapshot, including their outputs and state/log silence. -/

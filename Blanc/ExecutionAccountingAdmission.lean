@@ -133,16 +133,6 @@ theorem ofAddBal_observed (C : ReplayCarrier ca) (V : ReplayObservation C)
     exact le_of_eq (congrArg B256.toNat balance_eq.symm)
 
 
-/-- A direct world-state balance credit is one positive credit at `ca` or no
-step at all. -/
-theorem ofAddBal (C : ReplayCarrier ca) (tag : C.Tag)
-    {target : Adr} {pre : State} {value : B256}
-    (sum_nof : sum pre.bal + value.toNat < 2 ^ 256) :
-    ∃ steps, C.Replay (C.ofState pre) steps
-      (C.ofState (pre.addBal target value)) := by
-  exact (C.ofAddBal_observed (ReplayObservation.trivial C) tag sum_nof).imp
-    fun _ replay => replay.1
-
 end ReplayCarrier
 
 /-- An observed account-local replay ladder under admission at concrete frame roots.

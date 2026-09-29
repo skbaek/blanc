@@ -8,9 +8,6 @@ open Jaune Blanc.Lift
 def depMem (M : Mem) (C v : B256) : Mem :=
   ((M.write 0 C.toBytes).write 32 (3 : B256).toBytes).write 96 v.toBytes
 
-theorem depMem_fp {M : Mem} (h : FpMem 96 M) (C v : B256) : FpMem 128 (depMem M C v) :=
-  (((h.write 0 C (by omega) (by omega)).write 32 _ (by omega) (by omega))).write_out v
-
 /-- The `deposit` body (entry 1, `0x0440`), from the stack `return, …`: `balanceOf[caller] += callvalue`
 (the slot's `SLOAD` and `SSTORE`) and the `Deposit` event.  `104` gas before the `SLOAD`, `16` between it
 and the `SSTORE`, `1456` after it (`1381` for the `LOG2`, one word of expansion included). -/

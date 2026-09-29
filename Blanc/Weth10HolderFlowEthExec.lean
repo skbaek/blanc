@@ -764,25 +764,6 @@ theorem RawFlashCallbackStepBoundary.zeroValueCallEthSegment
   exact ⟨⟨pc, msg, child, trace,
     by simpa only [trace] using hstep, hclean, hboundPost⟩⟩
 
-/-- Whole-boundary form of the flash callback segment. -/
-theorem RawFlashCallbackStepBoundary.zeroValueCallbackEthSegment
-    {dp : DeployParams} {ca self receiver : Adr}
-    {e : Sevm} {amount inputSize : B256} {input : Bytes}
-    {pre post : Devm}
-    (callback : RawFlashCallbackStepBoundary e self receiver amount
-      inputSize input pre post)
-    (hinstalled : some (pre.getCode ca).toList =
-      Prog.compile (weth10 dp))
-    (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
-      (fun pc sevm childPre out _ =>
-        Exec.CoreEthSound dp ca pc sevm childPre out))
-    (hsum : sum pre.state.bal < 2 ^ 256)
-    (hfork : CoveredFork e.benvStat.fork) :
-    Nonempty (ZeroValueCallbackEthSegment dp ca e pre post) := by
-  rcases callback.zeroValueCallEthSegment hinstalled hdeeper hsum hfork with
-    ⟨call⟩
-  exact ⟨⟨pre, post, call, rfl, rfl⟩⟩
-
 /-- Indexed flash-callback ETH accounting using the exact retained child
 selected by the enclosing compiled chronology. -/
 theorem RawFlashCallbackIndexedStepBoundary.zeroValueCallbackEthSegment
@@ -850,85 +831,6 @@ theorem RawFlashCallbackIndexedStepBoundary.zeroValueCallbackEthSegment
     ⟨pc, msg, child, trace, by simpa only [trace] using hstep,
       hclean, hboundPost⟩
   exact ⟨⟨pre, post, callSegment, rfl, rfl⟩, rfl⟩
-
-/-- The raw ERC-677 callback, including its Boolean-return continuation, is
-an exact zero-value callback ETH segment. -/
-theorem RawTokenCallbackStepBoundary.zeroValueCallbackEthSegment
-    {dp : DeployParams} {ca self target : Adr}
-    {e : Sevm} {rawTarget sel value tailLen inputSize : B256}
-    {tail input : Bytes} {pre post : Devm}
-    (callback : RawTokenCallbackStepBoundary dp e self target rawTarget
-      sel value tailLen inputSize tail input pre post)
-    (hinstalled : some (pre.getCode ca).toList =
-      Prog.compile (weth10 dp))
-    (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
-      (fun pc sevm childPre out _ =>
-        Exec.CoreEthSound dp ca pc sevm childPre out))
-    (hsum : sum pre.state.bal < 2 ^ 256)
-    (hfork : CoveredFork e.benvStat.fork) :
-    Nonempty (ZeroValueCallbackEthSegment dp ca e pre post) := by
-  rcases callback with
-    ⟨_htarget, _hsize, callPre, callPost, parent, child, xl,
-      delegated, code, gasWord, avail, pc, hstep, hdepth, _hstack,
-      _hinput, _hreads, _hstor, hpreBalance, hpreCode, _hlogs,
-      _houtput, hparentState, _hparentMemory, _hparentLogs,
-      _hparentOutput, hresolution, hfilled, hprocess, hclean,
-      _hresume, hcallPostState, _hreturnData, _hmemory,
-      _hcallPostStack, hbool⟩
-  let msg :=
-    callMsg e parent (min gasWord.toNat (except64th avail)) 0
-      self target
-      ((getDelegatedCodeAddress (callPre.getCode target)).getD target)
-      true false input code delegated
-  rcases exists_retainedXlot_of_filled hfilled with ⟨retained⟩
-  let trace : ProcessMessageTrace msg (.ok child) :=
-    ⟨xl, retained, by simpa only [msg] using hprocess⟩
-  have hinstalledCall : some (callPre.getCode ca).toList =
-      Prog.compile (weth10 dp) := by
-    rw [← congrFun hpreCode ca]
-    exact hinstalled
-  have hparent : callPre.state = msg.benv.state := by
-    simpa only [msg, callMsg] using hparentState.symm
-  have hmsgDepth : msg.depth < e.depth := by
-    simp only [msg, callMsg]
-    omega
-  have htargetCode : msg.currentTarget = ca →
-      some msg.code.toList = Prog.compile (weth10 dp) := by
-    intro htarget
-    have htarget' : target = ca := by
-      simpa only [msg, callMsg] using htarget
-    simpa only [msg, callMsg] using
-      resolvedCallCode_eq_installed_of_target_eq
-        hinstalledCall hresolution htarget'
-  have htargetAddress : msg.currentTarget = ca →
-      msg.codeAddress = some ca := by
-    intro htarget
-    have htarget' : target = ca := by
-      simpa only [msg, callMsg] using htarget
-    have hnodel : getDelegatedCodeAddress (callPre.getCode ca) = none := by
-      dsimp only [getDelegatedCodeAddress]
-      rw [if_neg (not_delegation_of_compile hinstalledCall)]
-    simp only [msg, callMsg, htarget', hnodel, Option.getD_none]
-  have hzero : msg.value = 0 := by
-    simp only [msg, callMsg]
-  have hsumCall : sum callPre.state.bal < 2 ^ 256 := by
-    change sum (Devm.getBal callPre) < 2 ^ 256
-    rw [← hpreBalance]
-    exact hsum
-  have hbound := trace.ethBound_of_zeroDeeper hparent hmsgDepth
-    hinstalledCall htargetCode htargetAddress hzero hdeeper hsumCall hfork
-  have hboundCall : EthBound ca callPre.state callPost.state
-      (trace.retained.flowActions dp ca) := by
-    unfold EthBound at hbound ⊢
-    rw [hcallPostState]
-    exact hbound
-  let callSegment : ZeroValueCallEthSegment dp ca e callPre callPost :=
-    ⟨pc, msg, child, trace, by simpa only [trace] using hstep,
-      hclean, hboundCall⟩
-  have hpostBalance : Devm.getBal post = Devm.getBal callPost :=
-    (of_run_call_boolReturn_preserves_fields dp hbool).2.1.symm
-  exact ⟨⟨callPre, callPost, callSegment, hpreBalance,
-    hpostBalance⟩⟩
 
 /-- Indexed ERC-677 callback ETH accounting using the retained child selected
 by the enclosing compiled execution. -/
@@ -1155,34 +1057,6 @@ structure AcceptedRedemptionEthSegment
   bodyActions : action.bodyEthActions = [action]
   bound : EthBound ca callPre.state guardPost.state
     (action :: trace.retained.retained.flowActions dp ca)
-
-/-- A compiled burn prefix yields the exact accepted redemption segment; no
-endpoint equation or conservation premise is supplied. -/
-theorem BurnCallPrefix.acceptedRedemptionEthSegment
-    {dp : DeployParams} {ca : Adr} {e : Sevm}
-    {pre callPre guardPost : Devm}
-    {owner : Adr} {amount target : B256}
-    (burn : BurnCallPrefix e pre callPre guardPost owner amount target)
-    (hself : e.currentTarget = ca)
-    (hinstalled : some (callPre.getCode ca).toList =
-      Prog.compile (weth10 dp))
-    {action : FlowAction} {rawSource : B256}
-    {source ethRecipient : Adr}
-    (hatom : action.atom =
-      .redemption rawSource source ethRecipient amount.toNat)
-    (hdeeper : ForallDeeperAt e.depth ca (weth10 dp)
-      (fun pc sevm childPre out _ =>
-        Exec.CoreEthSound dp ca pc sevm childPre out))
-    (hsum : sum callPre.state.bal < 2 ^ 256)
-    (hfork : CoveredFork e.benvStat.fork) :
-    Nonempty (AcceptedRedemptionEthSegment dp ca e action
-      callPre guardPost) := by
-  rcases exists_burnCallPrefixTrace burn hfork with ⟨trace⟩
-  have witness := trace.redemptionEthBound hself hinstalled hatom hdeeper hsum
-    hfork
-  exact ⟨⟨target, amount, trace,
-    by simp [FlowAction.bodyEthActions, hatom],
-    witness.bound⟩⟩
 
 /-- A complete redemption body segment includes only balance-silent parent
 code before and after the accepted value child. -/
@@ -1693,52 +1567,6 @@ theorem GenericCreate.foreignSomeEthBound
       rw [hstartBal] at hbound
       exact hbound
 
-/-- A CALL-family instruction which finishes without an interpreter child
-cannot decrease `ca` when the executing account is foreign.  Early exits are
-balance-silent; an empty-code or precompile child is accounted through its
-actual `ProcessMessage` entry and settled world. -/
-theorem GenericCall.foreignNoneEthBound
-    {ca : Adr} {sevm : Sevm} {pre : Devm} {gas : Nat} {value : B256}
-    {caller target codeAddress : Adr} {stv istat : Bool}
-    {ii is oi os : Nat} {code : ByteArray} {delegated : Bool}
-    {post : Devm}
-    (run : GenericCall sevm pre gas value caller target codeAddress
-      stv istat ii is oi os code delegated .none (.ok post))
-    (hcaller : stv = true → caller ≠ ca)
-    (hsum : sum pre.state.bal < 2 ^ 256) :
-    EthBound ca pre.state post.state [] := by
-  simpa [EthBound, flowActionsEthMint, flowActionsEthRedemption] using
-    (_root_.Blanc.GenericCall.targetBalanceMono_of_none
-      run hcaller hsum)
-
-/-- CREATE-family no-slot execution has the same foreign-source property.
-Nonce/access preparation and code-deposit settlement are balance-silent; the
-actual endowment entry is handled by the no-slot CREATE theorem. -/
-theorem GenericCreate.foreignNoneEthBound
-    {ca : Adr} {sevm : Sevm} {pre : Devm}
-    {endowment : B256} {newAddress : Adr} {mi ms : Nat}
-    {post : Devm}
-    (run : GenericCreate sevm pre endowment newAddress mi ms
-      .none (.ok post))
-    (hforeign : sevm.currentTarget ≠ ca)
-    (hsum : sum pre.state.bal < 2 ^ 256) :
-    EthBound ca pre.state post.state [] := by
-  simpa [EthBound, flowActionsEthMint, flowActionsEthRedemption] using
-    (_root_.Blanc.GenericCreate.targetBalanceMono_of_none
-      run hforeign hsum)
-
-/-- Contract-neutral no-child bound for any call-type opcode. -/
-theorem Xinst.foreignNoneEthBound
-    {ca : Adr} {sevm : Sevm} {pre post : Devm} {x : Xinst}
-    (run : Xinst.Run sevm pre x .none (.ok post))
-    (hforeign : sevm.currentTarget ≠ ca)
-    (hsum : sum pre.state.bal < 2 ^ 256)
-    (hfork : CoveredFork sevm.benvStat.fork) :
-    EthBound ca pre.state post.state [] := by
-  simpa [EthBound, flowActionsEthMint, flowActionsEthRedemption] using
-    (_root_.Blanc.Xinst.targetBalanceMono_of_none
-      hfork run hforeign hsum)
-
 /-- Contract-neutral recursive transport for an actual filled `Xinst` slot.
 The shape theorem removes the instruction prefix, and the exact-spawn lemmas
 identify the settlement predicate with the frame retained by `Exec`. -/
@@ -1822,19 +1650,6 @@ theorem Ninst.foreignNoneEthBound
   simpa [EthBound, flowActionsEthMint, flowActionsEthRedemption] using
     (_root_.Blanc.Ninst.targetBalanceMono_of_none
       hfork run hforeign hsum)
-
-/-- `SELFDESTRUCT` executed by a foreign account can only leave `ca`
-unchanged or credit it from the foreign source.  The latter is recorded as an
-unclassified inward transfer; the global balance bound rules out wrapping. -/
-theorem Linst.foreignDestEthBound
-    {ca : Adr} {sevm : Sevm} {pre post : Devm}
-    (run : Linst.Run sevm pre .selfdestruct (.ok post))
-    (hforeign : sevm.currentTarget ≠ ca)
-    (hsum : sum pre.state.bal < 2 ^ 256) :
-    EthBound ca pre.state post.state [] := by
-  simpa [EthBound, flowActionsEthMint, flowActionsEthRedemption] using
-    (_root_.Blanc.Linst.targetBalanceMono_of_foreign
-      run hforeign hsum)
 
 /-- Every terminal opcode run by a foreign frame is ETH-sound.  Return is
 balance-silent, revert cannot commit, and selfdestruct is handled above. -/
@@ -4038,28 +3853,6 @@ theorem CompiledBodyEthHandler.committedExecEthSound
     CommittedExecEthSound dp ca :=
   ExecBodyEthSound.committedExecEthSound
     (CompiledBodyEthHandler.execBodyEthSound handler)
-
-/-- Complete call/create/system-message accounting from the sole compiled
-handler. -/
-theorem CompiledBodyEthHandler.messageEthSound
-    {dp : DeployParams} {ca : Adr}
-    (handler : CompiledBodyEthHandler dp ca) :
-    MessageEthSound dp ca :=
-  CommittedExecEthSound.messageEthSound
-    (CompiledBodyEthHandler.committedExecEthSound handler)
-
-/-- Full retained configured-history contract-ETH inequality, conditional only on
-the exact installed compiled-frame handler. -/
-theorem CompiledBodyEthHandler.accountedHistoryEthBound
-    (cfg : ChainConfig) (dp : DeployParams) (ca : Adr)
-    (handler : CompiledBodyEthHandler dp ca) :
-    {checkpoint : BlockChain} → {future : BlockChain} →
-    (history : AccountedHistory cfg dp ca checkpoint future) →
-    Stable dp ca checkpoint.state →
-    EthBound ca checkpoint.state future.state history.flowActions :=
-  AccountedHistory.ethBound_of_committedExecSound
-    cfg dp ca
-      (CompiledBodyEthHandler.committedExecEthSound handler)
 
 end Weth10
 

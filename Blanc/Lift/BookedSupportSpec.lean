@@ -41,16 +41,6 @@ def ofBookedSumWith (sem : CodeSem) (σ : Stor → Nat) (Q : Stor → Prop) : Co
       rw [getStor_addBal]
       exact h.1 }
 
-theorem ofBookedSumWith_inv {sem : CodeSem} {σ : Stor → Nat} {Q : Stor → Prop}
-    {s : Stor} {v b : B256} :
-    (ofBookedSumWith sem σ Q).Inv s v b ↔ Q s ∧ σ s + v.toNat ≤ b.toNat := Iff.rfl
-
-theorem ofBookedSumWith_sem {sem : CodeSem} {σ : Stor → Nat} {Q : Stor → Prop} :
-    (ofBookedSumWith sem σ Q).sem = sem := rfl
-
-theorem ofBookedSumWith_side {sem : CodeSem} {σ : Stor → Nat} {Q : Stor → Prop} :
-    (ofBookedSumWith sem σ Q).Side = SumNof := rfl
-
 end ContractSpecSem
 
 end Blanc

@@ -76,20 +76,8 @@ theorem ofState_snapshot (ca : Adr) (state : State) :
 theorem ofState_ledger (ca : Adr) (state : State) :
     (ofState ca state).ledger = Stor.rest (state.getStor ca) := rfl
 
-theorem beforeCredit_snapshot (ca : Adr) (value : B256) (state : State) :
-    (beforeCredit ca value state).snapshot =
-      ⟨supplyN (state.getStor ca), (state.bal ca).toNat - value.toNat⟩ := rfl
-
 theorem beforeCredit_ledger (ca : Adr) (value : B256) (state : State) :
     (beforeCredit ca value state).ledger = Stor.rest (state.getStor ca) := rfl
-
-/-- Equal PRORATA storage and balance is equal realized boundary.  This is the
-shape almost every projected no-op boundary equality takes. -/
-theorem ofState_congr {ca : Adr} {pre post : State}
-    (hstor : post.getStor ca = pre.getStor ca)
-    (hbal : post.bal ca = pre.bal ca) :
-    ofState ca post = ofState ca pre :=
-  congrArg₂ RealizedSnapshot.mk hstor (congrArg B256.toNat hbal)
 
 /-- A successful EVM message transfer connects its semantic entry boundary
 exactly to the ordinary realized boundary of the pre-transfer state. -/
@@ -219,15 +207,6 @@ theorem LedgerMove.deposit_row {amount minted : Nat} {actor : Option Adr}
   obtain ⟨x', hx, hrow, -⟩ := move
   obtain rfl := Option.some.inj (hactor.symm.trans hx)
   exact hrow
-
-/-- A withdrawal covers its burn from the withdrawing actor's own row. -/
-theorem LedgerMove.withdraw_cover {shares paid : Nat} {actor : Option Adr}
-    {pre post : Adr → B256} {x : Adr}
-    (move : LedgerMove (.withdraw shares paid) actor pre post)
-    (hactor : actor = some x) : shares ≤ (pre x).toNat := by
-  obtain ⟨x', hx, hle, -, -⟩ := move
-  obtain rfl := Option.some.inj (hactor.symm.trans hx)
-  exact hle
 
 /-- A withdrawal debits exactly the withdrawing actor's own ledger row. -/
 theorem LedgerMove.withdraw_row {shares paid : Nat} {actor : Option Adr}

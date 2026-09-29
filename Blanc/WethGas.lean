@@ -264,37 +264,6 @@ theorem weth_balanceOf_gas_exact {sevm : Sevm} {pre : Devm}
     balanceOfGas_eq]
   omega
 
-/-- **`weth`'s `balanceOf(address)` call costs exactly `balanceOfGas`, from an
-arbitrary `Prog.RunCompiled` witness.**
-
-The shape the gas-cost proposal names: the run sits in *hypothesis*
-position rather than being constructed. Not by inversion — there is no
-`Func.RunCompiled` inversion walk in this repository, and building one is out
-of this arc's budget (correction C2) — but by **determinism**: `exec` is a
-function, so `weth_balanceOf_gas_exact`'s constructed post-state and this
-theorem's hypothesised one both come from `exec ⟨0, sevm, pre⟩`, hence are
-equal, and the gas equation transports across `injection`. -/
-theorem weth_balanceOf_gas_of_runCompiled {sevm : Sevm} {pre post : Devm}
-    (h_code : some sevm.code.toList = Prog.compile weth)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (h_value : sevm.value = 0)
-    (h_sel : Sevm.selector sevm = boSel)
-    (h_stack : pre.stack = [])
-    (h_mem : pre.memory = Mem.empty)
-    (h_cold : (⟨sevm.currentTarget, Sevm.dataWord sevm 4⟩ : Adr × B256)
-      ∉ pre.accessedStorageKeys)
-    (h_gas : balanceOfGas ≤ pre.gasLeft)
-    (h_run : Prog.RunCompiled sevm pre weth post) :
-    pre.gasLeft = post.gasLeft + balanceOfGas := by
-  obtain ⟨post', h_exec', h_gas_eq, _⟩ :=
-    weth_balanceOf_gas_exact h_code hfork h_value h_sel h_stack h_mem h_cold h_gas
-  have h_exec : exec ⟨0, sevm, pre⟩ = .ok post :=
-    Prog.exec_of_runCompiled h_run h_code
-  rw [h_exec] at h_exec'
-  injection h_exec' with h_eq
-  subst h_eq
-  omega
-
 /-! ## Dropping the coldness assumption
 
 Every statement above assumes the storage key `balanceOf(address)` reads is
@@ -519,11 +488,6 @@ schedule.** Message-call altitude; these two selectors only; exact under
 def wethGas : B256 → Sevm → Devm → Option Nat :=
   wethGasWith gJumpdest gBase gVerylow gHigh gMemory gasColdSload gasWarmAccess
 
-/-- The schedule-symbolic bridge, definitional. -/
-theorem wethGas_eq_with :
-    wethGas = wethGasWith gJumpdest gBase gVerylow gHigh gMemory gasColdSload
-      gasWarmAccess := rfl
-
 set_option maxRecDepth 612 in
 /-- The two entrypoints are distinct, which is what makes `wethGasWith`'s
 second branch reachable. Proved once here rather than at each use: deciding it
@@ -547,21 +511,6 @@ run. -/
   · rw [if_neg h]
     simp only [wethGas, wethGasWith, if_neg h]
     rfl
-
-/-- `wethGas` at `balanceOf(address)` on a cold key — the value every statement
-before this arc's Step 3 assumed. -/
-theorem wethGas_boSel_cold {sevm : Sevm} {pre : Devm}
-    (h_cold : (⟨sevm.currentTarget, Sevm.dataWord sevm 4⟩ : Adr × B256)
-      ∉ pre.accessedStorageKeys) :
-    wethGas boSel sevm pre = some balanceOfGas := by
-  rw [wethGas_boSel, if_neg h_cold]
-
-/-- `wethGas` at `balanceOf(address)` on a warm key. -/
-theorem wethGas_boSel_warm {sevm : Sevm} {pre : Devm}
-    (h_warm : (⟨sevm.currentTarget, Sevm.dataWord sevm 4⟩ : Adr × B256)
-      ∈ pre.accessedStorageKeys) :
-    wethGas boSel sevm pre = some balanceOfGasWarm := by
-  rw [wethGas_boSel, if_pos h_warm]
 
 /-- `wethGas` at `decimals()`, for every state: it reads no storage. -/
 @[simp] theorem wethGas_dcSel {sevm : Sevm} {pre : Devm} :
@@ -714,11 +663,6 @@ def wethGasMaxWith (jd base vl hi mem cold : Nat) : B256 → Option Nat := fun s
 schedule. -/
 def wethGasMax : B256 → Option Nat :=
   wethGasMaxWith gJumpdest gBase gVerylow gHigh gMemory gasColdSload
-
-/-- The schedule-symbolic bridge for the bound, definitional. -/
-theorem wethGasMax_eq_with :
-    wethGasMax = wethGasMaxWith gJumpdest gBase gVerylow gHigh gMemory
-      gasColdSload := rfl
 
 /-- **No calldata and no accessed-key state can make a priced `weth` entrypoint
 cost more than `wethGasMax`.**

@@ -28,16 +28,6 @@ def upgradeWitnessSelectors : List B256 :=
   [valueSelector, setValueSelector, initializeV2Selector,
     migrationMarkerSelector]
 
-theorem selector_literal_ties :
-    valueSelector = selector "value" [] ∧
-    setValueSelector = selector "setValue" [.uint256] ∧
-    initializeV2Selector = selector "initializeV2" [] ∧
-    migrationMarkerSelector = selector "migrationMarker" [] := by
-  decide +kernel
-
-theorem upgradeWitnessSelectors_nodup : upgradeWitnessSelectors.Nodup := by
-  decide
-
 theorem upgradeWitnessSelectors_disjoint_proxy_surface :
     ∀ selected ∈ upgradeWitnessSelectors, selected ∉ runtimeSelectors := by
   decide
@@ -51,16 +41,6 @@ def initializeV2Calldata : Bytes := abiSelectorBytes initializeV2Selector
 
 def migrationMarkerCalldata : Bytes :=
   abiSelectorBytes migrationMarkerSelector
-
-theorem canonical_calldata_literals :
-    valueCalldata = [0x3f, 0xa4, 0xf2, 0x45] ∧
-    initializeV2Calldata = [0x5c, 0xd8, 0xa7, 0x6b] ∧
-    migrationMarkerCalldata = [0x8d, 0x8a, 0x34, 0x6e] := by
-  decide +kernel
-
-theorem setValueCalldata_length (word : B256) :
-    (setValueCalldata word).length = 36 := by
-  simp [setValueCalldata, abiSelectorBytes, B256.length_toBytes]
 
 theorem initializeV2Calldata_nonempty : initializeV2Calldata ≠ [] := by
   decide +kernel
@@ -101,8 +81,6 @@ def migrationMarkerValue : B256 := 1
 def scalarSlots : List B256 :=
   [v1ValueSlot, v2ValueSlot, migrationMarkerSlot]
 
-theorem scalarSlots_nodup : scalarSlots.Nodup := by decide
-
 theorem scalarSlots_erc1967_separated :
     v1ValueSlot ≠ implementationSlot ∧
     v1ValueSlot ≠ adminSlot ∧
@@ -138,11 +116,6 @@ def v2Implementation : Adr :=
 
 def upgradeAdmin : Adr :=
   0x00000000000000000000000000000000000c0003
-
-theorem fixture_addresses_pairwise :
-    [upgradeProxy, v1Implementation, v2Implementation,
-      upgradeAdmin].Nodup := by
-  decide
 
 /-! ## Exact source programs and artifacts -/
 
@@ -222,14 +195,6 @@ theorem v1_v2_code_ne : v1Code ≠ v2Code := by
   have lists := congrArg ByteArray.toList equal
   simp only [v1Code, v2Code, ByteArray.toList_eq_toList_data] at lists
   exact v1_v2_bytes_ne lists
-
-/-- The two shared v2 entries are syntactically fixed over S2; neither reads
-the marker nor branches between storage layouts. -/
-theorem v2_shared_entries_exact :
-    v2Entries.take 2 =
-      [ (valueSelector, nonpayable (loadScalar v2ValueSlot)),
-        (setValueSelector, nonpayable (storeScalar v2ValueSlot)) ] := by
-  rfl
 
 theorem marker_selector_new_surface :
     migrationMarkerSelector ∉ v1Entries.map Prod.fst ∧

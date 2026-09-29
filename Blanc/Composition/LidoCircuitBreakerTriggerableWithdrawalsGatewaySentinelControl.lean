@@ -288,22 +288,6 @@ and both hypotheses are now consequences of the compiler witness and the
 successful run. What remains falsifiable is the ABI agreement, which is a real
 check between two independently defined encoders rather than a derived fact. -/
 
-/-- **ABI independence.**  The two families define their selectors on separate
-evidence — the CircuitBreaker computes `selector "pauseFor" [.uint256]`, the
-gateway carries the census-derived literal — so the C2 agreement is a real
-check.  Substituting the gateway's *other* public selector makes the two
-calldata builders disagree at every duration, which is what a genuine check
-looks like and what a tautology could not exhibit. -/
-theorem pauseForSelector_ne_triggerSelector :
-    LidoCircuitBreaker.pauseForSelector ≠
-      LidoTriggerableWithdrawalsGateway.selTriggerFullWithdrawals := by
-  decide +kernel
-
-theorem isPausedSelector_ne_pauseForSelector :
-    LidoCircuitBreaker.isPausedSelector ≠
-      LidoTriggerableWithdrawalsGateway.selPauseFor := by
-  decide +kernel
-
 end LidoCircuitBreakerTwgSentinel
 
 end Blanc.Composition

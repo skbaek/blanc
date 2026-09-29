@@ -53,14 +53,6 @@ def exitPayoutOf (scale units chi : Nat) : Nat := units * chi / scale
 /-- The rounding residue that exit floor leaves behind. -/
 def exitResidueOf (scale units chi : Nat) : Nat := units * chi % scale
 
-theorem joinResidueOf_lt {scale assets chi : Nat} (hchi : chi ≠ 0) :
-    joinResidueOf scale assets chi < chi :=
-  Nat.mod_lt _ (Nat.pos_of_ne_zero hchi)
-
-theorem exitResidueOf_lt {scale units chi : Nat} (hscale : scale ≠ 0) :
-    exitResidueOf scale units chi < scale :=
-  Nat.mod_lt _ (Nat.pos_of_ne_zero hscale)
-
 /-! ## The adjacent-step carrier -/
 
 /-- The exact effect of one realized adjacent step.  `drip`, `join` and `exit`
@@ -508,22 +500,6 @@ namespace Step
 
 variable {scale : Nat} {fresh : Nat → Nat → Nat}
 
-/-- A step's own join residue is strictly below the index it converted at. -/
-theorem joinResidue_lt (step : Step scale fresh)
-    (hchi : 0 < step.post.chi) : step.joinResidue < step.post.chi := by
-  unfold joinResidue
-  split
-  · exact Nat.mod_lt _ hchi
-  · exact hchi
-
-/-- A step's own exit residue is strictly below the scale. -/
-theorem exitResidue_lt (step : Step scale fresh)
-    (hscale : 0 < scale) : step.exitResidue < scale := by
-  unfold exitResidue
-  split
-  · exact Nat.mod_lt _ hscale
-  · exact hscale
-
 end Step
 
 /-! ## The frozen DRIP instance
@@ -574,14 +550,6 @@ private theorem dripSteps_chain_chi (s : Snapshot) (ks : List Nat)
 
 /-! ## G5 — pure segmentation -/
 
-/-- A chain of pure DRIP steps computes Jaune's segment index. -/
-theorem chain_drips_eq_segmentIndex {chi rho cu tu b : Nat} {ks : List Nat}
-    {t : Snapshot}
-    (chain : RealizedChain ⟨chi, rho, cu, tu, b⟩
-      (dripSteps ⟨chi, rho, cu, tu, b⟩ ks) t) :
-    t.chi = segmentIndex scale.toNat half.toNat rate.toNat chi ks :=
-  dripSteps_chain_chi ⟨chi, rho, cu, tu, b⟩ ks chain
-
 theorem realized_freshNat_mono : ∀ chi k, chi ≤ freshNat chi k :=
   fun chi k => freshNat_mono chi k
 
@@ -610,13 +578,6 @@ theorem coalition_entitlement {s t : Snapshot} {steps : List RealizedStep}
       Chain.joinedSum steps + Chain.accrualSum steps / scale.toNat :=
   Chain.entitlement realized_freshNat_mono
     (Nat.pos_of_ne_zero scaleNat_ne_zero) chain fresh_start
-
-/-- The `scale`-denominated form of the same bound. -/
-theorem coalition_scaled_entitlement {s t : Snapshot} {steps : List RealizedStep}
-    (chain : RealizedChain s steps t) (fresh_start : s.coalitionUnits = 0) :
-    scale.toNat * Chain.paidSum steps ≤
-      Chain.accrualSum steps + scale.toNat * Chain.joinedSum steps :=
-  Chain.scaled_entitlement realized_freshNat_mono chain fresh_start
 
 /-- R4's realized-index projection at the frozen DRIP constants. -/
 theorem realized_chi_mono {s t : Snapshot} {steps : List RealizedStep}

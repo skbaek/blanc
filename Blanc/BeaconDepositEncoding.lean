@@ -30,42 +30,10 @@ theorem getDepositRootSelector_eq :
     getDepositRootSelector = (0xc5f2892f : B256) := by
   decide +kernel
 
-theorem beaconSelectors_eq_literals :
-    beaconSelectors =
-      [(0x01ffc9a7 : B256), 0x22895118, 0x621fd130, 0xc5f2892f] := by
-  decide +kernel
-
-theorem beaconSelectors_pairwise :
-    beaconSelectors.Pairwise (fun left right => left < right) := by
-  decide +kernel
-
 theorem depositEventTopic_eq :
     depositEventTopic =
       (0x649bbc62d0e31342afea4e5cd82d4049e7e1ee912fc0889aa790803be39038c5 :
         B256) := by
-  decide +kernel
-
-theorem erc165InterfaceIdBytes_length : erc165InterfaceIdBytes.length = 4 := by
-  decide +kernel
-
-theorem depositInterfaceIdBytes_length :
-    depositInterfaceIdBytes.length = 4 := by
-  decide +kernel
-
-theorem erc165InterfaceIdBytes_toB256 :
-    Bytes.toB256 erc165InterfaceIdBytes = erc165InterfaceId := by
-  decide +kernel
-
-theorem depositInterfaceIdBytes_toB256 :
-    Bytes.toB256 depositInterfaceIdBytes = depositInterfaceId := by
-  decide +kernel
-
-theorem erc165InterfaceId_abiBytes :
-    abiSelectorBytes erc165InterfaceId = erc165InterfaceIdBytes := by
-  decide +kernel
-
-theorem depositInterfaceId_abiBytes :
-    abiSelectorBytes depositInterfaceId = depositInterfaceIdBytes := by
   decide +kernel
 
 /-! ## Small ABI length and read lemmas -/
@@ -76,38 +44,6 @@ theorem abiBytesTail_length (data : Bytes) :
     List.length_replicate]
   have hle := Nat.le_ceil32 data.length
   omega
-
-theorem canonicalSupportsInterfaceCalldata_length
-    {data interfaceId : Bytes}
-    (h : CanonicalSupportsInterfaceCalldata data interfaceId) :
-    data.length = 36 := by
-  rcases h with ⟨hlen, rfl⟩
-  simp [abiSupportsInterfaceCall, abiSelectorBytes_length, hlen]
-
-theorem canonicalSupportsInterfaceCalldata_bytes4
-    {data interfaceId : Bytes}
-    (h : CanonicalSupportsInterfaceCalldata data interfaceId) :
-    data.sliceD 4 4 0 = interfaceId := by
-  rcases h with ⟨hlen, rfl⟩
-  unfold abiSupportsInterfaceCall
-  rw [List.append_assoc, List.sliceD,
-    List.drop_length_append' (abiSelectorBytes_length _).symm,
-    List.takeD_eq_take _ (by simp [hlen]),
-    List.take_length_append' hlen.symm]
-
-theorem canonicalSupportsInterfaceCalldata_word
-    {data interfaceId : Bytes}
-    (h : CanonicalSupportsInterfaceCalldata data interfaceId) :
-    calldataWord data 4 =
-      Bytes.toB256 (interfaceId ++ List.replicate 28 0) := by
-  rcases h with ⟨hlen, rfl⟩
-  unfold calldataWord abiSupportsInterfaceCall
-  apply congrArg Bytes.toB256
-  rw [List.append_assoc, List.sliceD,
-    List.drop_length_append' (abiSelectorBytes_length _).symm,
-    List.takeD_eq_take _ (by simp [hlen]),
-    List.take_of_length_le (by simp [hlen])]
-  simp [hlen]
 
 /-! ## Dynamic return and event images -/
 
@@ -123,22 +59,6 @@ theorem abiDynamicBytesReturn_le64_length (n : Nat) :
     (abiDynamicBytesReturn (le64 n)).length = 96 := by
   rw [abiDynamicBytesReturn_le64_eq]
   simp [le64, B256.length_toBytes]
-
-theorem abiDepositEvent_mk
-    (pubkey withdrawalCredentials amount signature index : Bytes) :
-    abiDepositEvent
-        ⟨pubkey, withdrawalCredentials, amount, signature, index⟩ =
-      (160 : B256).toBytes ++
-      (256 : B256).toBytes ++
-      (320 : B256).toBytes ++
-      (384 : B256).toBytes ++
-      (512 : B256).toBytes ++
-      abiBytesTail pubkey ++
-      abiBytesTail withdrawalCredentials ++
-      abiBytesTail amount ++
-      abiBytesTail signature ++
-      abiBytesTail index := by
-  rfl
 
 theorem abiDepositEvent_length
     (event : DepositEvent)
@@ -612,15 +532,6 @@ theorem abiDepositCall_length
         (32 + ceil32 signature.length) := by
   simp only [abiDepositCall, List.length_append, abiSelectorBytes_length,
     B256.length_toBytes, abiBytesTail_length]
-
-theorem canonicalDepositCalldata_dataBound
-    {data pubkey withdrawalCredentials signature : Bytes}
-    {depositDataRoot : B256}
-    (hcanonical : CanonicalDepositCalldata data pubkey
-      withdrawalCredentials signature depositDataRoot) :
-    data.length < 2 ^ 256 := by
-  rcases hcanonical with ⟨rfl, hbound⟩
-  omega
 
 theorem canonicalDepositCalldata_decodable
     {data pubkey withdrawalCredentials signature : Bytes}

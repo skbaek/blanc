@@ -20,56 +20,6 @@ structure AccountingMessageReady (ca : Adr) (msg : Msg) : Prop where
   runReady : prorataSpec.MessageRunReady ca msg
   caller_ne : msg.currentTarget = ca → msg.caller ≠ ca
 
-/-- Settlement-aware accounting replay for one retained CALL message.  A
-committing child contributes its recursively proved body; a noncommitting
-child rolls back to the message's pre-transfer world and contributes nothing. -/
-theorem ProcessMessage.accountingReplay_of_body
-    {ca : Adr} {msg : Msg} {post : Devm}
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (process : ProcessMessage msg
-      (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
-    (caller_ne : msg.shouldTransferValue = true → msg.caller ≠ ca)
-    (value_zero : msg.shouldTransferValue = false →
-      msg.currentTarget = ca → msg.value = 0)
-    (sum_nof : sum msg.benv.state.bal < 2 ^ 256)
-    (body : ∀ committed : Execution.commits out = true, ∃ steps,
-      ProrataAccountingReplay offset.toNat
-        (RealizedSnapshot.execEntry ca sevm pre.state) steps
-        (RealizedSnapshot.ofState ca
-          (Execution.committedPost out committed).state)) :
-    ∃ steps,
-      ProrataAccountingReplay offset.toNat
-        (RealizedSnapshot.ofState ca msg.benv.state) steps
-        (RealizedSnapshot.ofState ca post.state) :=
-  (ProrataAccountingReplay.carrier ca).processMessage_of_body process
-    caller_ne value_zero sum_nof body
-
-/-- Settlement-aware accounting replay for one retained CREATE constructor.
-Fresh-account preparation is silent in the PRORATA projection; clean code
-deposit preserves the constructor endpoint, while every failed settlement
-rolls back to the outer CREATE-message world. -/
-theorem ProcessCreateMessage.accountingReplay_of_body
-    {ca : Adr} {msg : Msg} {post : Devm}
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (process : ProcessCreateMessage msg
-      (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
-    (caller_ne : msg.shouldTransferValue = true → msg.caller ≠ ca)
-    (value_zero : msg.shouldTransferValue = false →
-      msg.currentTarget = ca → msg.value = 0)
-    (fresh : msg.benv.state.getStor msg.currentTarget = .empty)
-    (sum_nof : sum msg.benv.state.bal < 2 ^ 256)
-    (body : ∀ committed : Execution.commits out = true, ∃ steps,
-      ProrataAccountingReplay offset.toNat
-        (RealizedSnapshot.execEntry ca sevm pre.state) steps
-        (RealizedSnapshot.ofState ca
-          (Execution.committedPost out committed).state)) :
-    ∃ steps,
-      ProrataAccountingReplay offset.toNat
-        (RealizedSnapshot.ofState ca msg.benv.state) steps
-        (RealizedSnapshot.ofState ca post.state) :=
-  (ProrataAccountingReplay.carrier ca).processCreateMessage_of_body process
-    caller_ne value_zero fresh sum_nof body
-
 /-- Recursive accounting transport for one actual filled executable slot in a
 foreign frame.  CALL and CREATE share the same settlement-aware child replay;
 their distinct instruction prefixes and resumptions are projection-silent. -/
@@ -655,64 +605,7 @@ def accountingLadder (ca : Adr) :
       committed ⟨runReady, callerNe⟩ hfork blockIndex transactionIndex
   preserves := prorataSpec_preserves ca
 
-/-- A retained raw message realizes a complete PRORATA accounting replay from
-the wrapper's pre-transfer world to its settled post-state.  A no-slot message
-is classified directly; an interpreted slot consumes the generic recursive
-execution theorem with root frame provenance. -/
-theorem retainedProcessMessageAccountingReplay
-    {ca : Adr} {msg : Msg} {post : Devm}
-    (trace : _root_.Blanc.ExecutionTrace.ProcessMessageTrace msg (.ok post))
-    (ready : AccountingMessageReady ca msg)
-    (hfork : CoveredFork msg.benv.stat.fork)
-    (blockIndex : Nat) (transactionIndex : Option Nat) :
-    ∃ steps,
-      ProrataAccountingReplay offset.toNat
-        (RealizedSnapshot.ofState ca msg.benv.state) steps
-        (RealizedSnapshot.ofState ca post.state) :=
-  (accountingLadder ca).processMessage trace ready.runReady ready.caller_ne hfork
-    ready.runReady.ready.state.side blockIndex transactionIndex
-
-/-- CREATE counterpart of `retainedProcessMessageAccountingReplay`.  Fresh
-account preparation and code-deposit settlement are interpreted once around
-the same retained recursive constructor execution. -/
-theorem retainedProcessCreateMessageAccountingReplay
-    {ca : Adr} {msg : Msg} {post : Devm}
-    (trace :
-      _root_.Blanc.ExecutionTrace.ProcessCreateMessageTrace msg (.ok post))
-    (ready : AccountingMessageReady ca msg)
-    (hfork : CoveredFork msg.benv.stat.fork)
-    (targetNone : msg.target.isNone = true)
-    (targetNe : msg.currentTarget ≠ ca)
-    (fresh : msg.benv.state.getStor msg.currentTarget = .empty)
-    (blockIndex : Nat) (transactionIndex : Option Nat) :
-    ∃ steps,
-      ProrataAccountingReplay offset.toNat
-        (RealizedSnapshot.ofState ca msg.benv.state) steps
-        (RealizedSnapshot.ofState ca post.state) :=
-  (accountingLadder ca).processCreateMessage trace ready.runReady hfork
-    ready.runReady.ready.state.side targetNone targetNe fresh blockIndex
-    transactionIndex
-
 open _root_.Blanc.ExecutionTrace in
-/-- The settled message-call wrapper realizes a complete PRORATA accounting
-replay from its pre-transfer world to the wrapper's settled world state.  A
-create collision runs no code at all; a CREATE execution reuses the create
-rung with the freshness its own collision test already certifies; an ordinary
-call transports readiness and the accounting projection across the EIP-7702
-delegation prefix and delegated-code resolution before reusing the message
-rung. -/
-theorem retainedMessageCallAccountingReplay
-    {ca : Adr} {msg : Msg} {state : State} {out : MsgCallOutput}
-    (trace : _root_.Blanc.ExecutionTrace.MessageCallTrace msg state out)
-    (ready : AccountingMessageReady ca msg)
-    (hfork : CoveredFork msg.benv.stat.fork)
-    (blockIndex : Nat) (transactionIndex : Option Nat) :
-    ∃ steps,
-      ProrataAccountingReplay offset.toNat
-        (RealizedSnapshot.ofState ca msg.benv.state) steps
-        (RealizedSnapshot.ofState ca state) :=
-  (accountingLadder ca).messageCall trace ready.runReady ready.caller_ne
-    ready.runReady.ready.state.side hfork blockIndex transactionIndex
 
 end Prorata
 

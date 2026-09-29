@@ -52,13 +52,6 @@ structure ExactTransferWitness (pre post : HolderBalances)
   decrease : Decrease source amountWord pre intermediate
   increase : Increase recipient amountWord intermediate post
 
-theorem ExactTransferWitness.toTransfer
-    {pre post : HolderBalances} {source recipient : Adr} {amountWord : B256}
-    (witness : ExactTransferWitness pre post source amountWord recipient) :
-    Transfer pre source amountWord recipient post :=
-  ⟨witness.amount_le, witness.intermediate,
-    witness.decrease, witness.increase⟩
-
 /-- Pointwise wrap-aware equation for an unchecked credit. -/
 theorem increase_holder_eq
     {pre post : HolderBalances} {recipient u : Adr} {amountWord : B256}

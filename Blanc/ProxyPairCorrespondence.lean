@@ -1797,28 +1797,6 @@ def PreservedByProxying (target : Adr)
     SettledObservableAt target direct proxied →
       P m direct → P m proxied
 
-/-- Any account-level property that explicitly respects the directional
-settled observable transports from the direct implementation execution to the
-proxy execution. -/
-theorem processMessage_property_transport
-    (P : Msg → TargetMessageResult → Prop)
-    (respects : PreservedByProxying proxyAdr P)
-    (m : Msg)
-    (proxyInstalled :
-      (m.benv.state.get proxyAdr).code = proxyCode)
-    (implementationInstalled :
-      (m.benv.state.get implAdr).code = implGuardedCode)
-    (slotNamesImplementation :
-      (m.benv.state.get proxyAdr).stor.get implementationSlot =
-        implAdr.toB256)
-    (premises : CorrespondencePremises m)
-    (direct : P m (processMessage (directCounterfactual m))) :
-    P m (processMessage m) :=
-  respects m _ _
-    (processMessage_correspondence m proxyInstalled implementationInstalled
-      slotNamesImplementation premises)
-    direct
-
 /-! ## Biting controls for the directional relation -/
 
 theorem settledObservable_rejects_direct_clean_proxy_error

@@ -174,10 +174,6 @@ at both stores — and exact everywhere else. -/
 def flashLoanPreCallGas (dataLen : Nat) : Nat :=
   flashLoanMintGas + flashLoanLogGas + flashLoanCallbackGas dataLen
 
-/-- 46 451 gas on an empty payload: 44 523 to the end of the mint, 1 780 for the
-log, and 148 for the argument build. -/
-theorem flashLoanPreCallGas_zero : flashLoanPreCallGas 0 = 46451 := by decide
-
 /-! ## The supply slot is not a balance slot
 
 The mint writes two keys and the statement below says what each holds

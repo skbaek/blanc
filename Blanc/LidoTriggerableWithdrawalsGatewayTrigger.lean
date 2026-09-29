@@ -167,18 +167,6 @@ def compositeSlotOf (baseCount : Nat) : CompositeLabel → Nat
   | .base slot => slot
   | .trigger lbl => baseCount + localSlotOf lbl
 
-theorem compositeSlotOf_malformedAbi :
-    compositeSlotOf 17 (.trigger .malformedAbi) = 18 :=
-  rfl
-
-theorem compositeSlotOf_validateArrayLoop :
-    compositeSlotOf 17 (.trigger .validateArrayLoop) = 29 :=
-  rfl
-
-theorem compositeSlotOf_afterNestedValidation :
-    compositeSlotOf 17 (.trigger .afterNestedValidation) = 39 :=
-  rfl
-
 -- There was a `compositeSlotOf_malformedAbi_off_by_one : … ≠ 19` here, removed
 -- as a control that could not fail: `compositeSlotOf_malformedAbi` three lines
 -- above proves the same application equals 18, so `≠ 19` is its logical
@@ -879,14 +867,6 @@ theorem rebaseLocalCalls_prependStoresRev (delta : Nat)
       rw [ih]
       rfl
 
-/-- Constant-data reverters contain no local calls, so rebasing is the
-identity on them. -/
-theorem rebaseLocalCalls_revertData (delta : Nat) (blob : Bytes) :
-    rebaseLocalCalls delta (Func.revertData blob) = Func.revertData blob := by
-  unfold Func.revertData
-  rw [rebaseLocalCalls_prependStoresRev]
-  rfl
-
 def rebasedTrigger (delta : Nat) (dp : DeployParams) : Func :=
   rebaseLocalCalls delta (triggerFullWithdrawals dp)
 
@@ -900,17 +880,6 @@ def packet (dp : DeployParams) : Prog :=
 def packetCode (dp : DeployParams) : Bytes :=
   (Prog.compile (packet dp)).getD []
 
-theorem localAux_length (dp : DeployParams) :
-    (localAux dp).length = localAuxSlotCount := by
-  rfl
-
-theorem rebasedLocalAuxWithRoleFailure_length
-    (delta : Nat) (dp : DeployParams) (roleFailure : Func) :
-    (rebasedLocalAuxWithRoleFailure delta dp roleFailure).length =
-      localAuxSlotCount := by
-  simp [rebasedLocalAuxWithRoleFailure, localAuxWithRoleFailure,
-    localAuxSlotCount]
-
 theorem packet_compileShape_eq_zero (dp : DeployParams) :
     (packet dp).compileShape = (packet ⟨0⟩).compileShape := by
   rfl
@@ -923,11 +892,6 @@ theorem packet_compiles (dp : DeployParams) :
     Prog.compiles (packet dp) = true := by
   rw [Prog.compiles_eq_of_compileShape (packet_compileShape_eq_zero dp)]
   exact packetCompilesZero
-
-theorem packet_compile (dp : DeployParams) :
-    Prog.compile (packet dp) = some (packetCode dp) := by
-  simpa [packetCode] using
-    Prog.compile_eq_some_getD_of_compiles (packet dp) (packet_compiles dp)
 
 def triggerLabels : List TriggerLabel :=
   [ .malformedAbi, .zeroMsgValue, .zeroValidatorsData, .resumedExpected,
@@ -955,26 +919,6 @@ def triggerAuxSkeleton : List (TriggerLabel × SymbolicFunc CompositeLabel) :=
 def composite17TriggerProg (main : SymbolicFunc CompositeLabel) :
     SymbolicProg CompositeLabel :=
   ⟨.root, main, standardCompositeAux base17AuxSkeleton triggerAuxSkeleton⟩
-
-/-- Local slot 1 (malformedAbi) resolves to global slot 18 in the 17-base composition. -/
-theorem findLabel?_composite17_malformedAbi (main : SymbolicFunc CompositeLabel) :
-    (composite17TriggerProg main).findLabel? (.trigger .malformedAbi) = some 18 :=
-  rfl
-
-/-- Local slot 12 (validateArrayLoop) resolves to global slot 29 in the 17-base composition. -/
-theorem findLabel?_composite17_validateArrayLoop (main : SymbolicFunc CompositeLabel) :
-    (composite17TriggerProg main).findLabel? (.trigger .validateArrayLoop) = some 29 :=
-  rfl
-
-/-- Local slot 22 (afterNestedValidation) resolves to global slot 39 in the 17-base composition. -/
-theorem findLabel?_composite17_afterNestedValidation (main : SymbolicFunc CompositeLabel) :
-    (composite17TriggerProg main).findLabel? (.trigger .afterNestedValidation) = some 39 :=
-  rfl
-
-/-- All 22 Trigger auxiliary slots resolve without manual offset rebasing. -/
-theorem findLabel?_composite17_all_trigger (main : SymbolicFunc CompositeLabel) (lbl : TriggerLabel) :
-    (composite17TriggerProg main).findLabel? (.trigger lbl) = some (17 + localSlotOf lbl) := by
-  cases lbl <;> rfl
 
 /-- Convert a Trigger `Func` with local slot calls into a `SymbolicFunc
 CompositeLabel` by naming each call target.  The structural recursion is the
@@ -1017,11 +961,6 @@ theorem callTargets_triggerFullWithdrawals (dp : DeployParams) :
     (triggerFullWithdrawals dp).callTargets = (triggerFullWithdrawals ⟨0⟩).callTargets :=
   rfl
 
-theorem flatMap_callTargets_localAuxWithRoleFailure (dp : DeployParams) (roleFailure : Func) :
-    (localAuxWithRoleFailure dp roleFailure).flatMap Func.callTargets =
-      (localAuxWithRoleFailure ⟨0⟩ roleFailure).flatMap Func.callTargets :=
-  rfl
-
 /-- Symbolic representation of Trigger auxiliary functions with qualified labels. -/
 def symbolicLocalAuxWithRoleFailure (dp : DeployParams) (roleFailure : Func) :
     List (CompositeLabel × SymbolicFunc CompositeLabel) :=
@@ -1047,33 +986,6 @@ def symbolicLocalAuxWithRoleFailure (dp : DeployParams) (roleFailure : Func) :
     (.trigger .refundCall, toCompositeSymbolic refundCall),
     (.trigger .balanceCheck, toCompositeSymbolic balanceCheck),
     (.trigger .afterNestedValidation, toCompositeSymbolic afterNestedValidation) ]
-
-/-- Control: the symbolic Trigger table is the numeric table lifted body by
-body, labelled in `triggerLabels` order.  Erasure discards labels, so this is the
-only fact that stops the two hand-written lists from drifting in their labelling
-or their order. -/
-theorem symbolicLocalAuxWithRoleFailure_eq_map (dp : DeployParams) (roleFailure : Func) :
-    symbolicLocalAuxWithRoleFailure dp roleFailure =
-      (triggerLabels.zip (localAuxWithRoleFailure dp roleFailure)).map
-        (fun entry => (CompositeLabel.trigger entry.1, toCompositeSymbolic entry.2)) :=
-  rfl
-
-/-- Erasure of the symbolic Trigger auxiliary table is the rebased numeric
-table. -/
-theorem erase_symbolicLocalAuxWithRoleFailure (baseCount : Nat) (dp : DeployParams)
-    (roleFailure : Func)
-    (h : ∀ n ∈ (localAuxWithRoleFailure dp roleFailure).flatMap Func.callTargets,
-      (labelOfLocalSlot? n).isSome) :
-    (symbolicLocalAuxWithRoleFailure dp roleFailure).map
-        (fun (_, body) => body.erase (compositeSlotOf baseCount)) =
-      rebasedLocalAuxWithRoleFailure baseCount dp roleFailure :=
-  erase_map_toCompositeSymbolic baseCount (localAuxWithRoleFailure dp roleFailure) h
-
-theorem erase_toCompositeSymbolic_trigger (baseCount : Nat) (dp : DeployParams) :
-    (toCompositeSymbolic (triggerFullWithdrawals dp)).erase (compositeSlotOf baseCount) =
-      rebasedTrigger baseCount dp :=
-  erase_toCompositeSymbolic baseCount (triggerFullWithdrawals dp)
-    (by rw [callTargets_triggerFullWithdrawals]; decide +kernel)
 
 end Trigger
 end LidoTriggerableWithdrawalsGateway

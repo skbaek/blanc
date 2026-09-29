@@ -58,12 +58,6 @@ theorem InsertionStartMemoryCarrier.readNode
     Bytes.toB256 (memory.read 640 32).1 = node := by
   rw [Mem.Reads.read h.reads, h.node_read, B256.toB256_toBytes]
 
-theorem InsertionMemoryCarrier.readOldCount
-    {memory : Mem} {oldCount shiftedSize node : B256}
-    (h : InsertionMemoryCarrier memory oldCount shiftedSize node) :
-    Bytes.toB256 (memory.read 576 32).1 = oldCount := by
-  rw [Mem.Reads.read h.reads, h.oldCount_read, B256.toB256_toBytes]
-
 theorem InsertionMemoryCarrier.readShiftedSize
     {memory : Mem} {oldCount shiftedSize node : B256}
     (h : InsertionMemoryCarrier memory oldCount shiftedSize node) :

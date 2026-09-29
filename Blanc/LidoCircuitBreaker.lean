@@ -882,11 +882,6 @@ theorem funcs_selectors_eq_runtimeEndpoints (dp : DeployParams) :
     (funcs dp).map Prod.fst = runtimeEndpoints.map AbiEndpoint.selector := by
   rfl
 
-theorem funcs_sorted (dp : DeployParams) :
-    DispatchTree.sorted (funcs dp) = true := by
-  change DispatchTree.sorted (funcs ⟨0, 0, 0, 0, 0⟩) = true
-  decide +kernel
-
 /-! ## Parameter-independent compiler shape
 
 The deployed words change instruction payloads but not widths.  The following
@@ -1098,26 +1093,11 @@ table-lookup sites stall. -/
 def runtime (dp : DeployParams) : Prog :=
   (symbolicLinkCert dp).resolved
 
-theorem runtime_eq_legacyRuntime (dp : DeployParams) :
-    runtime dp = legacyRuntime dp :=
-  rfl
-
 /-- Pair form of the production runtime, for walk idioms that cannot see
 through the certificate projection. -/
 theorem runtime_eq_mk (dp : DeployParams) :
     runtime dp = ⟨runtimeMain dp, aux⟩ :=
   rfl
-
-/-- Exact resolution theorem relating the symbolic runtime to the production runtime. -/
-theorem resolve_symbolicRuntime_eq_runtime (dp : DeployParams) :
-    resolve (symbolicRuntime dp) = .ok (runtime dp) :=
-  resolve_symbolicRuntime_eq dp
-
-/-- All deployment parameters occupy fixed-width PUSH32 instructions. -/
-theorem runtime_compileShape_eq_zero (dp : DeployParams) :
-    (runtime dp).compileShape =
-      (runtime ⟨0, 0, 0, 0, 0⟩).compileShape :=
-  legacyRuntime_compileShape_eq_zero dp
 
 /-- Fixed-width deployment parameters cannot change compiler success. -/
 theorem runtime_compiles (dp : DeployParams) :
@@ -1126,14 +1106,6 @@ theorem runtime_compiles (dp : DeployParams) :
 
 def runtimeCode (dp : DeployParams) : Bytes :=
   (Prog.compile (runtime dp)).getD []
-
-theorem symbolicRuntime_compile_eq (dp : DeployParams) :
-    Prog.compile (runtime dp) = some (runtimeCode dp) :=
-  (symbolicLinkCert dp).compile_eq
-
-theorem symbolicRuntime_bytes_eq (dp : DeployParams) :
-    (symbolicLinkCert dp).bytes = runtimeCode dp :=
-  rfl
 
 def sourceSstoreSiteCount : Func → Nat :=
   Func.sourceSiteCount fun

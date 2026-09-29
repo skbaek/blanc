@@ -36,8 +36,6 @@ noncomputable def footSpec (U : Key → Prop) : ContractSpecSem :=
 theorem footSpec_inv {U : Key → Prop} {s : Stor} {v b : B256} :
     (footSpec U).Inv s v b ↔ Support U s ∧ trackedSum U s + v.toNat ≤ b.toNat := Iff.rfl
 
-theorem footSpec_side {U : Key → Prop} : (footSpec U).Side = SumNof := rfl
-
 theorem footSpec_stateInv_iff {U : Key → Prop} {ca : Adr} {w : State} :
     (footSpec U).StateInv ca w ↔
       (some (w.getCode ca).toList = some code.toList ∧ SumNof w.bal ∧

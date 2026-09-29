@@ -157,34 +157,6 @@ theorem Exec.Deriv.ParentStepCounted.unique
     nextLeft = nextRight ∧ leftCounted = rightCounted := by
   cases left <;> cases right <;> simp_all
 
-/-- Counted same-frame prefixes from one concrete `Exec` proof form a linear
-chain, mirroring `Exec.Deriv.ParentPrefixActions.linear`. -/
-theorem Exec.Deriv.ParentPrefixCounted.linear
-    {dp : DeployParams} {ca : Adr}
-    {root leftTail rightTail : Exec.Deriv}
-    {leftCounted rightCounted : List CountedFrame}
-    (left : Exec.Deriv.ParentPrefixCounted dp ca
-      root leftTail leftCounted)
-    (right : Exec.Deriv.ParentPrefixCounted dp ca
-      root rightTail rightCounted) :
-    (∃ suffix, Exec.Deriv.ParentPrefixCounted dp ca
-      leftTail rightTail suffix) ∨
-    (∃ suffix, Exec.Deriv.ParentPrefixCounted dp ca
-      rightTail leftTail suffix) := by
-  induction left generalizing rightTail rightCounted with
-  | refl =>
-      exact Or.inl ⟨rightCounted, right⟩
-  | @step root next leftTail headCounted leftCounted head rest ih =>
-      cases right with
-      | refl =>
-          exact Or.inr ⟨headCounted ++ leftCounted, .step head rest⟩
-      | @step _ rightNext rightTail rightHeadCounted rightCounted
-          rightHead rightRest =>
-          have unique := head.unique rightHead
-          cases unique.1
-          cases unique.2
-          exact ih rightRest
-
 /-! ## Relabelling bridges from the action-labelled chronology -/
 
 /-- Every action-labelled same-frame continuation edge admits a counted
@@ -200,20 +172,6 @@ theorem Exec.Deriv.ParentStepActions.exists_counted
       exact ⟨[], .doneOk hstep henter hresume next⟩
   | runOk hstep henter child hresume next =>
       exact ⟨_, .runOk hstep henter child hresume next⟩
-
-/-- Every action-labelled chronological prefix admits a counted relabelling
-along the same derivation path. -/
-theorem Exec.Deriv.ParentPrefixActions.exists_counted
-    {dp : DeployParams} {ca : Adr}
-    {root tail : Exec.Deriv} {actions : List FlowAction}
-    (path : Exec.Deriv.ParentPrefixActions dp ca root tail actions) :
-    ∃ counted, Exec.Deriv.ParentPrefixCounted dp ca root tail counted := by
-  induction path with
-  | refl root => exact ⟨[], .refl root⟩
-  | step head rest ih =>
-      rcases head.exists_counted with ⟨headCounted, headEdge⟩
-      rcases ih with ⟨tailCounted, tailPath⟩
-      exact ⟨headCounted ++ tailCounted, .step headEdge tailPath⟩
 
 /-! ## Generic nil transfer from the frames traversal -/
 

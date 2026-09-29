@@ -270,16 +270,6 @@ def ossifiableImplementationValidation
     (code : ByteArray) : OssifiableImplementationValidation :=
   if code.size.toB256 = 0 then .noCode else .accepted
 
-@[simp] theorem ossifiableImplementationValidation_noCode
-    {code : ByteArray} (h : code.size.toB256 = 0) :
-    ossifiableImplementationValidation code = .noCode := by
-  simp [ossifiableImplementationValidation, h]
-
-@[simp] theorem ossifiableImplementationValidation_accepted
-    {code : ByteArray} (h : code.size.toB256 ≠ 0) :
-    ossifiableImplementationValidation code = .accepted := by
-  simp [ossifiableImplementationValidation, h]
-
 /-- The exact raw word produced by Solidity address assignment. -/
 def ossifiableConstructorAddressWrite
     (raw : B256) (newAddress : Adr) : B256 :=
@@ -301,16 +291,6 @@ structure OssifiableConstructorImplementationEffect
     rawAfter = ossifiableConstructorAddressWrite rawBefore implementation
   upgradedAppended :
     logsAfter = logsBefore ++ [upgradedLog proxy implementation]
-
-theorem ossifiableConstructorImplementationEffect_intro
-    (proxy implementation : Adr) (implementationCode : ByteArray)
-    (rawBefore : B256) (logsBefore : List Log)
-    (codeSizeWordNonzero : implementationCode.size.toB256 ≠ 0) :
-    OssifiableConstructorImplementationEffect proxy implementation
-      implementationCode rawBefore
-      (ossifiableConstructorAddressWrite rawBefore implementation)
-      logsBefore (logsBefore ++ [upgradedLog proxy implementation]) := by
-  exact ⟨codeSizeWordNonzero, rfl, rfl⟩
 
 /-! ## Empty/nonempty setup split -/
 
@@ -366,30 +346,6 @@ structure OssifiableConstructorSetupCertificate
   childData_eq : childMessage.data = setupData
   childCertificate : DelegatedChildCertificate childMessage out
 
-theorem OssifiableConstructorSetupCertificate.child_process
-    {sevm : Sevm} {callPre : Devm} {out : MessageResult}
-    (certificate :
-      OssifiableConstructorSetupCertificate sevm callPre out) :
-    ProcessMessage certificate.childMessage
-      certificate.childCertificate.trace.slot out :=
-  certificate.childCertificate.process
-
-@[simp] theorem OssifiableConstructorSetupCertificate.child_currentTarget
-    {sevm : Sevm} {callPre : Devm} {out : MessageResult}
-    (certificate :
-      OssifiableConstructorSetupCertificate sevm callPre out) :
-    certificate.childMessage.currentTarget = sevm.currentTarget := by
-  rw [certificate.childMessage_eq]
-  exact certificate.spawn.child_currentTarget
-
-@[simp] theorem OssifiableConstructorSetupCertificate.child_transfer
-    {sevm : Sevm} {callPre : Devm} {out : MessageResult}
-    (certificate :
-      OssifiableConstructorSetupCertificate sevm callPre out) :
-    certificate.childMessage.shouldTransferValue = false := by
-  rw [certificate.childMessage_eq]
-  exact certificate.spawn.child_transfer
-
 /-! ## Post-setup admin read/log/write specification -/
 
 /-- Event emitted from the exact cleaned post-setup slot word. -/
@@ -415,25 +371,6 @@ structure OssifiableConstructorAdminEffect
     logsAfter = logsBefore ++
       [ossifiableConstructorAdminChangedLog
         proxy postSetupRaw requestedAdmin]
-
-theorem ossifiableConstructorAdminEffect_intro
-    (proxy requestedAdmin : Adr) (postSetupRaw : B256)
-    (logsBefore : List Log) (requestedNonzero : requestedAdmin ≠ 0) :
-    OssifiableConstructorAdminEffect proxy requestedAdmin postSetupRaw
-      (ossifiableConstructorAddressWrite postSetupRaw requestedAdmin)
-      logsBefore
-      (logsBefore ++
-        [ossifiableConstructorAdminChangedLog
-          proxy postSetupRaw requestedAdmin]) := by
-  exact ⟨requestedNonzero, rfl, rfl⟩
-
-/-- Dirty high bits from the post-setup raw word are present verbatim in the
-constructor's write formula; they are not replaced by a full-word SSTORE. -/
-theorem ossifiableConstructorAdminWrite_preservesDirtyUpper_formula
-    (postSetupRaw : B256) (requestedAdmin : Adr) :
-    ossifiableConstructorAddressWrite postSetupRaw requestedAdmin =
-      addressSlotWriteWord postSetupRaw requestedAdmin.toB256 := by
-  rfl
 
 /-- The event reads the post-setup word and cleans it before encoding. -/
 @[simp] theorem ossifiableConstructorAdminChangedLog_data

@@ -64,41 +64,6 @@ theorem CheckedHeartbeatExtension.add_eq
 def checkedHeartbeatExpiryGasWarm : Nat := 132
 
 set_option maxRecDepth 4096 in
-/-- The successful arm of the checked heartbeat addition is an exact compiled
-walk.  Its result remains on the stack for the caller's store-and-log tail. -/
-theorem checkedHeartbeatExpiry_runCompiled
-    (fs : List Func) (sevm : Sevm) (base : Devm)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (timestamp interval expiry : B256) (G : Nat)
-    (htime : sevm.benvStat.time = timestamp)
-    (hinterval : Devm.getStorVal base sevm.currentTarget
-      heartbeatIntervalSlot = interval)
-    (hwarm : (⟨sevm.currentTarget, heartbeatIntervalSlot⟩ : Adr × B256) ∈
-      base.accessedStorageKeys)
-    (extension : CheckedHeartbeatExtension timestamp interval expiry) :
-    Func.RunCompiled fs sevm
-      (base.setMach ⟨[], Mem.empty, G + checkedHeartbeatExpiryGasWarm, base.stateGas⟩)
-      (checkedHeartbeatExpiry Func.stop)
-      (base.setMach ⟨[expiry], Mem.empty, G, base.stateGas⟩) := by
-  rcases extension with ⟨bound, hexpiry⟩
-  have hsum : timestamp + interval = expiry :=
-    CheckedHeartbeatExtension.add_eq ⟨bound, hexpiry⟩
-  have hle : timestamp ≤ expiry := by
-    rw [B256.le_iff_toNat_le_toNat, hexpiry,
-      B256.toNat_toB256_of_lt bound]
-    omega
-  unfold checkedHeartbeatExpiry checkedHeartbeatExpiryGasWarm
-  func_run [expiry, 0]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  case h_val =>
-    simp only [Devm.getStorVal_setMach, hinterval, htime]
-    rw [B256.add_comm]
-    exact hsum
-  case h_val =>
-    rw [htime]
-    simp only [B256.ltCheck, if_neg (not_lt_of_ge hle)]
-  case h_arm =>
-    exact Func.RunCompiled.last rfl
 
 def heartbeatBodySuccessGasWarmUpdate : Nat := 4693
 
@@ -290,23 +255,6 @@ private theorem heartbeat_registeredGuard_runCompiled_then
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     exact htail
 
-private theorem heartbeat_registeredGuard_runCompiled
-    (fs : List Func) (sevm : Sevm) (base : Devm)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (count : B256) (G : Nat)
-    (hcountNonzero : count ≠ 0) :
-    Func.RunCompiled fs sevm
-      ((heartbeatAfterCountLoad sevm base).setMach
-        ⟨[count], Mem.empty, G + 16, (heartbeatAfterCountLoad sevm base).stateGas⟩)
-      (Ninst.iszero :::
-        ((.call senderNotPauserErrorSlot) <?> Func.stop))
-      ((heartbeatAfterCountLoad sevm base).setMach
-        ⟨[], Mem.empty, G, (heartbeatAfterCountLoad sevm base).stateGas⟩) := by
-  apply heartbeat_registeredGuard_runCompiled_then (hfork := hfork) fs sevm base count G
-    hcountNonzero
-  apply Func.RunCompiled.last
-  simp [Linst.Run, Linst.run]
-
 def heartbeatAfterExpiryLoad (sevm : Sevm) (base : Devm) : Devm :=
   heartbeatSloadBase sevm (heartbeatAfterCountLoad sevm base)
     (expirySlot sevm.caller.toB256)
@@ -413,24 +361,6 @@ private theorem heartbeat_liveGuard_runCompiled_then
     func_run (1)
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     exact htail
-
-private theorem heartbeat_liveGuard_runCompiled
-    (fs : List Func) (sevm : Sevm) (base : Devm)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (oldExpiry timestamp : B256) (G : Nat)
-    (htime : sevm.benvStat.time = timestamp)
-    (holdLive : timestamp < oldExpiry) :
-    Func.RunCompiled fs sevm
-      ((heartbeatAfterExpiryLoad sevm base).setMach
-        ⟨[oldExpiry], Mem.empty, G + 19, (heartbeatAfterExpiryLoad sevm base).stateGas⟩)
-      (Ninst.timestamp ::: Ninst.lt :::
-        (Func.stop <?> (.call heartbeatExpiredErrorSlot)))
-      ((heartbeatAfterExpiryLoad sevm base).setMach
-        ⟨[], Mem.empty, G, (heartbeatAfterExpiryLoad sevm base).stateGas⟩) := by
-  apply heartbeat_liveGuard_runCompiled_then (hfork := hfork) fs sevm base oldExpiry
-    timestamp G htime holdLive
-  apply Func.RunCompiled.last
-  simp [Linst.Run, Linst.run]
 
 def heartbeatAfterIntervalLoad (sevm : Sevm) (base : Devm) : Devm :=
   heartbeatSloadBase sevm (heartbeatAfterExpiryLoad sevm base)
@@ -570,27 +500,6 @@ private theorem heartbeat_checkedExpiry_runCompiled_then
     omega
   rw [hgas]
   simpa [tail] using hload
-
-private theorem heartbeat_checkedExpiry_runCompiled
-    (fs : List Func) (sevm : Sevm) (base : Devm)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (timestamp interval expiry : B256) (G : Nat)
-    (htime : sevm.benvStat.time = timestamp)
-    (hinterval : base.getStorVal sevm.currentTarget
-      heartbeatIntervalSlot = interval)
-    (extension : CheckedHeartbeatExtension timestamp interval expiry) :
-    Func.RunCompiled fs sevm
-      ((heartbeatAfterExpiryLoad sevm base).setMach ⟨[], Mem.empty,
-        G + 32 + heartbeatSloadCost sevm
-          (heartbeatAfterExpiryLoad sevm base)
-          heartbeatIntervalSlot, (heartbeatAfterExpiryLoad sevm base).stateGas⟩)
-      (checkedHeartbeatExpiry Func.stop)
-      ((heartbeatAfterIntervalLoad sevm base).setMach
-        ⟨[expiry], Mem.empty, G, (heartbeatAfterIntervalLoad sevm base).stateGas⟩) := by
-  apply heartbeat_checkedExpiry_runCompiled_then (hfork := hfork) fs sevm base timestamp
-    interval expiry G htime hinterval extension
-  apply Func.RunCompiled.last
-  simp [Linst.Run, Linst.run]
 
 theorem heartbeatAfterIntervalLoad_expiry_warm
     (sevm : Sevm) (base : Devm) :
@@ -3720,44 +3629,6 @@ theorem setHeartbeatInterval_success_settled_effects
   · intro pauser hcanonical
     simpa [initSevm, howner] using hexpiries pauser hcanonical
 
-/-- Any settled error of an exact direct heartbeat-interval message restores
-the complete owner storage and transient storage from message entry.  The
-error kind is established by the separate exact compiled error paths; message
-settlement intentionally erases that distinction. -/
-theorem setHeartbeatInterval_settled_error_restores_owner
-    (dp : DeployParams) {msg : Msg} {slot : Xlot} {post : Devm}
-    {ca : Adr} {newInterval : B256}
-    (_htarget : msg.target = some ca)
-    (_howner : msg.currentTarget = ca)
-    (_hcodeAddress : msg.codeAddress = some ca)
-    (_hcode : msg.code.toList = lidoCircuitBreakerCode dp)
-    (_hvalue : msg.value = 0)
-    (_hdata : msg.data = setHeartbeatIntervalCalldata newInterval)
-    (hprocess : ProcessMessage msg slot (.ok post))
-    (herror : post.error.isSome) :
-    Devm.getStor post ca = msg.benv.state.getStor ca ∧
-      post.transientStorage = msg.tenv.transientStorage := by
-  have hrollback := ProcessMessage.rollback_of_error hprocess herror
-  exact ⟨congrArg (fun state : State => state.getStor ca) hrollback.1,
-    hrollback.2⟩
-
-/-- At the exact top-level call boundary, an errored direct
-`setHeartbeatInterval` message exposes no receipt log.  This deliberately does
-not claim that raw `Devm.logs` are erased by `ProcessMessage`. -/
-theorem setHeartbeatInterval_settled_error_logs_eq_nil
-    (dp : DeployParams) {msg : Msg} {state : State} {out : MsgCallOutput}
-    {ca : Adr} {newInterval : B256}
-    (_htarget : msg.target = some ca)
-    (_howner : msg.currentTarget = ca)
-    (_hcodeAddress : msg.codeAddress = some ca)
-    (_hcode : msg.code.toList = lidoCircuitBreakerCode dp)
-    (_hvalue : msg.value = 0)
-    (_hdata : msg.data = setHeartbeatIntervalCalldata newInterval)
-    (hrun : processMessageCall msg = .ok (state, out))
-    (herror : out.error.isSome) :
-    out.logs = [] :=
-  processMessageCall_error_logs_eq_nil hrun herror
-
 /-! ## Heartbeat transition -/
 
 /-- Entry-count failure has source precedence over liveness and arithmetic:
@@ -4344,41 +4215,5 @@ theorem heartbeat_success_settled_effects
   refine ⟨hgas, ?_, ?_⟩
   · simpa [initSevm, howner] using hstore
   · simpa [initSevm, howner] using hlogs
-
-/-- Any settled error of an exact direct heartbeat message restores the
-complete owner storage and transient storage from message entry. -/
-theorem heartbeat_settled_error_restores_owner
-    (dp : DeployParams) {msg : Msg} {slot : Xlot} {post : Devm}
-    {ca : Adr}
-    (_htarget : msg.target = some ca)
-    (_howner : msg.currentTarget = ca)
-    (_hcodeAddress : msg.codeAddress = some ca)
-    (_hcode : msg.code.toList = lidoCircuitBreakerCode dp)
-    (_hvalue : msg.value = 0)
-    (_hdata : msg.data = heartbeatCalldata)
-    (hprocess : ProcessMessage msg slot (.ok post))
-    (herror : post.error.isSome) :
-    Devm.getStor post ca = msg.benv.state.getStor ca ∧
-      post.transientStorage = msg.tenv.transientStorage := by
-  have hrollback := ProcessMessage.rollback_of_error hprocess herror
-  exact ⟨congrArg (fun state : State => state.getStor ca) hrollback.1,
-    hrollback.2⟩
-
-/-- At the exact top-level call boundary, an errored direct heartbeat message
-exposes no receipt log.  This does not claim that raw `Devm.logs` are erased by
-`ProcessMessage`. -/
-theorem heartbeat_settled_error_logs_eq_nil
-    (dp : DeployParams) {msg : Msg} {state : State} {out : MsgCallOutput}
-    {ca : Adr}
-    (_htarget : msg.target = some ca)
-    (_howner : msg.currentTarget = ca)
-    (_hcodeAddress : msg.codeAddress = some ca)
-    (_hcode : msg.code.toList = lidoCircuitBreakerCode dp)
-    (_hvalue : msg.value = 0)
-    (_hdata : msg.data = heartbeatCalldata)
-    (hrun : processMessageCall msg = .ok (state, out))
-    (herror : out.error.isSome) :
-    out.logs = [] :=
-  processMessageCall_error_logs_eq_nil hrun herror
 
 end Blanc.LidoCircuitBreaker

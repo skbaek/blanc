@@ -261,12 +261,6 @@ private theorem deposit_pre_guards
   rcases deposit_guard_prefix run with ⟨-, ha, hb, -⟩
   exact ⟨ha, hb⟩
 
-private theorem deposit_value_guard
-    {fs : List Func} {sevm : Sevm} {pre post : Devm}
-    (run : Func.Run fs sevm pre deposit post) :
-    sevm.value ≤ maxValue :=
-  (deposit_pre_guards run).1
-
 /-- Exact successful `deposit` body effect. -/
 theorem deposit_effect
     {fs : List Func} {sevm : Sevm} {pre post : Devm}

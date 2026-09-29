@@ -161,14 +161,6 @@ theorem pauseMemory_spec (target duration : B256) :
   exact ⟨hwf5, hreads5, hsize5, hlow5, halign5,
     htarget5, hnew5, hprevious5, hcontinuation5, hduration5⟩
 
-/-- The staged pause image is wide enough that every register-side window
-premise stated as a `max` against a smaller anchor collapses to `768`.  The
-`removeTarget` walks anchor at `672` and `704`; `pauseAfterSet` at `736`. -/
-theorem pauseMemory_size_max (target duration : B256) (n : Nat)
-    (h : n ≤ 768) : max (pauseMemory target duration).size n = 768 := by
-  rcases pauseMemory_spec target duration with ⟨-, -, hsize, -⟩
-  omega
-
 /-! ## Transient-storage steps
 
 `Blanc/Forward.lean`'s walk has no rule for `TLOAD` or `TSTORE`, so the two
@@ -183,9 +175,6 @@ theorem setTransVal_setMach {devm : Devm} {adr : Adr} {key value : B256}
     {mach : Mach} :
     (devm.setMach mach).setTransVal adr key value =
       (devm.setTransVal adr key value).setMach mach := rfl
-
-theorem transientStorage_setMach {devm : Devm} {mach : Mach} :
-    (devm.setMach mach).transientStorage = devm.transientStorage := rfl
 
 /-- Exact `TLOAD` step: the key is popped, the transient value pushed, and
 `gasWarmAccess` burned.  Transient reads have no cold arm. -/

@@ -716,23 +716,6 @@ theorem of_recoverPermitSigner_raw
 
 /-! ## The raw permit effect -/
 
-/-- Byte-level shape of the tagged nonce key: `PUSH32 2^254; OR` applied to
-the low-160-bit projection of the raw first argument word. -/
-theorem permitRuntimeNonceKey_eq (e : Sevm) :
-    permitRuntimeNonceKey e =
-      nonceTagWord ||| ((~~~ addressMask) &&& Sevm.argWord e 0) := rfl
-
-/-- Byte-level shape of the tagged allowance key: the two raw argument words
-copied into memory words 0 and 1, hashed, masked and tagged.  This is
-definitionally `projectedAllowanceKey (Sevm.argWord e 0) (Sevm.argWord e 1)`,
-which is the key the allowance attribution ledger projects. -/
-theorem permitRuntimeAllowanceKey_eq (e : Sevm) :
-    permitRuntimeAllowanceKey e =
-      allowanceTagWord |||
-        (allowancePayloadMask &&&
-          Bytes.keccak
-            ((Sevm.argWord e 0).toBytes ++ (Sevm.argWord e 1).toBytes)) := rfl
-
 theorem permitRuntimeNonceKey_region (e : Sevm) :
     InRegion .nonce (permitRuntimeNonceKey e) := by
   have hvalid : ValidAdr ((~~~ addressMask) &&& Sevm.argWord e 0) :=
@@ -743,10 +726,6 @@ theorem permitRuntimeNonceKey_region (e : Sevm) :
   rw [← howner]
   simpa only [nonceTagWord, ← nonceKey_formula] using
     nonceKey_region (((~~~ addressMask) &&& Sevm.argWord e 0).toAdr)
-
-theorem permitRuntimeAllowanceKey_region (e : Sevm) :
-    InRegion .allowance (permitRuntimeAllowanceKey e) :=
-  runtimeAllowanceKey_region _
 
 /-- The tentative nonce write can never land on a tagged allowance key, so
 the two writes below are independent whatever the raw argument words are. -/

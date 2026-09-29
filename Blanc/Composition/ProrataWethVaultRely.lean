@@ -237,25 +237,6 @@ theorem vault_rely_preserves_conserved (vault : Adr) :
   · intro pc sevm pre l post h_at h_run h_ne inv
     exact ContractSpec.Linst.inv_postcond inv.2 h_run h_ne inv.1.preWf.pre
 
-/-- The rung at a message boundary, in the form `Blanc/Ladder.lean`'s
-`ContractSpec.Preserves` states it: the execution starts at pc `0` in a frame
-whose code is the vault's whenever the frame is the vault's, the vault's own
-frame has well-formed memory, and the storage-only precondition and the
-configuration hold. -/
-theorem vault_rely_preserves {vault : Adr} {sevm : Sevm} {pre post : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (run : Exec 0 sevm pre (.ok post))
-    (code : sevm.currentTarget = vault →
-      some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault)
-    (memoryWf : sevm.currentTarget = vault → Mem.Wf pre.memory)
-    (pre_ : Blanc.ProrataWethVault.vaultSpec.Pre vault sevm pre)
-    (config : DirectWethConfiguration vault sevm pre) :
-    LedgerConserved Blanc.ProrataWethVault.supplySlot (Devm.getStor post vault) :=
-  (ContractSpec.ofStorageOnly_postInv_iff).mp
-    (vault_rely_preserves_conserved vault 0 sevm pre post run hfork
-      ⟨pre_.code, fun target => ⟨code target, rfl⟩⟩
-      ⟨⟨pre_, memoryWf⟩, config, code⟩).inv
-
 /-! ## Vault-frame configuration over actual retained frames
 
 `VaultFrameInv` carries the ledger, the memory well-formedness, and the
@@ -283,21 +264,6 @@ structure VaultFrameConfiguration (vault : Adr) (sevm : Sevm) (pre : Devm) :
   /-- A frame at the vault runs the vault's code. -/
   code : sevm.currentTarget = vault →
     some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault
-
-/-- The rung's frame invariant carries the configuration. -/
-theorem VaultFrameInv.configuration {vault : Adr} {sevm : Sevm} {pre : Devm}
-    (inv : VaultFrameInv vault sevm pre) :
-    VaultFrameConfiguration vault sevm pre :=
-  ⟨inv.config, inv.preWf.pre.code, inv.code⟩
-
-/-- The configured root supplies the configuration of a frame at that state
-whose own code is the vault's whenever the frame is the vault's. -/
-theorem ConfiguredRoot.configuration {vault : Adr} {sevm : Sevm} {pre : Devm}
-    (root : ConfiguredRoot vault sevm pre)
-    (code : sevm.currentTarget = vault →
-      some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault) :
-    VaultFrameConfiguration vault sevm pre :=
-  ⟨root.configured, root.installed, code⟩
 
 /-- The installed vault runtime is nonempty. -/
 private theorem vaultCode_toList_ne_nil {vault : Adr} {pre : Devm}
@@ -376,55 +342,6 @@ theorem VaultFrameConfiguration.childEntry {vault : Adr}
     · rw [← targetEq] at source
       rw [source (not_delegation_of_compile configuration.installed)]
       exact configuration.installed
-
-/-- **Retained-frame transport.**  The configuration at a retained parent
-frame's root holds at the parent's actual spawning occurrence, at the entered
-child's root, and at the parent's resumed continuation, for every retained
-child that `Exec.LocatedFrame.EnteringOccurrence` exhibits.  The resumed
-continuation is re-exported in the shape of `EnteringOccurrence.spawns` so a
-consumer keeps the exact `runOk` equations. -/
-theorem VaultFrameConfiguration.enteringOccurrence {vault : Adr}
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    {run : Exec pc sevm pre out} {child : Exec.LocatedFrame}
-    (entering : Exec.LocatedFrame.EnteringOccurrence run child)
-    (configuration : VaultFrameConfiguration vault
-      entering.parent.frame.sevm entering.parent.frame.pre)
-    (foreign : entering.parent.frame.sevm.currentTarget ≠ vault ∨
-      child.frame.sevm.currentTarget ≠ vault) :
-    VaultFrameConfiguration vault
-        entering.occurrence.node.sevm entering.occurrence.node.devm ∧
-      VaultFrameConfiguration vault child.frame.sevm child.frame.pre ∧
-      ∃ (frame : Jaune.Frame) (resume : Resume) (nextPc : Nat) (post : Devm)
-          (step : Evm.step ⟨entering.occurrence.node.pc,
-            entering.occurrence.node.sevm, entering.occurrence.node.devm⟩ =
-              .spawn frame resume nextPc)
-          (entered : frame.enter = .run
-            ⟨child.frame.pc, child.frame.sevm, child.frame.pre⟩)
-          (resumed : resume.run (frame.settle child.frame.out) = .ok post)
-          (next : Exec nextPc entering.occurrence.node.sevm post
-            entering.occurrence.node.exn),
-        entering.occurrence.node.exc =
-            .runOk step entered child.frame.run resumed next ∧
-          VaultFrameConfiguration vault entering.occurrence.node.sevm post := by
-  have nodeConfiguration := configuration.parentPrefix entering.sameFrame
-  have frameEq := (Blanc.Exec.Deriv.ParentPrefix.sevm_eq entering.sameFrame)
-  obtain ⟨frame, resume, nextPc, post, step, entered, resumed, next, exc⟩ :=
-    entering.spawns
-  refine ⟨nodeConfiguration, ?_, frame, resume, nextPc, post, step, entered,
-    resumed, next, exc, ?_⟩
-  · refine nodeConfiguration.childEntry step entered ?_
-    rw [frameEq]
-    exact foreign
-  · refine nodeConfiguration.of_codePreserve ?_
-    intro a nonempty
-    exact lift_core.stepCode
-      (xl := .some ⟨⟨child.frame.pc, child.frame.sevm, child.frame.pre⟩,
-        child.frame.out⟩)
-      (Exec.effect codePreserve_refl_trans.1 codePreserve_refl_trans.2
-        Ninst.codePreserve_effectRec Jinst.codePreserve_effect
-        Linst.codePreserve_effect child.frame.run)
-      (by rw [step]; exact ⟨_, RunFrame.of_run entered, resumed.symm⟩)
-      a nonempty
 
 /-! ## Allowance-debit authorization
 
@@ -718,103 +635,6 @@ theorem VaultStagedCalldata.not_approve {call : WethAllowanceInvocation}
     exact absurd selected selNe
   | false => rfl
 
-/-- The Staging adapter's data-level conclusion is exactly this predicate's
-content, so a vault-parent provenance result discharges the bridge premise
-without re-deriving any calldata fact. -/
-theorem VaultStagedCalldata.of_stagedWethCalldata
-    {call : WethAllowanceInvocation} {caller vault : Adr}
-    (staged : Source.StagedWethCalldata caller vault call.sevm.data) :
-    VaultStagedCalldata call := by
-  rcases staged with data | ⟨assets, data⟩ | ⟨receiver, assets, data⟩
-  · exact Or.inl ⟨vault, data⟩
-  · exact Or.inr (Or.inl ⟨caller, vault, assets, data⟩)
-  · exact Or.inr (Or.inr ⟨receiver, assets, data⟩)
-
-/-- **Vault-parent child provenance over the retained frame tree.**  At a
-retained entering occurrence whose parent frame is an exact invocation of the
-vault runtime, the entered child is the configured asset: its target is
-`wethAccount`, it carries one of the three staged calldata shapes with the
-vault frame's own caller, and the configuration transports into it.
-
-This is the vault-parent discharge of `childEntry`'s `foreign` disjunction:
-the parent frame *is* the vault, so the arm that has to hold is the child's,
-and it holds because the staged child targets the asset.  The `foreign`
-premise therefore never escapes into a history-level statement. -/
-theorem VaultFrameConfiguration.exactWethChild_of_enteringOccurrence
-    {vault codeAddress : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm}
-    {out : Execution} {run : Exec pc sevm pre out} {child : Exec.LocatedFrame}
-    (entering : Exec.LocatedFrame.EnteringOccurrence run child)
-    (invocation : (Blanc.Exec.Deriv.exactInvocation
-      Blanc.ProrataWethVault.vault vault codeAddress (Blanc.Exec.Frame.rootDeriv entering.parent.frame)))
-    (hfork : CoveredFork (Blanc.Exec.Frame.rootDeriv entering.parent.frame).sevm.benvStat.fork)
-    (configuration : VaultFrameConfiguration vault
-      entering.parent.frame.sevm entering.parent.frame.pre)
-    (source : Source.StagedSourceFrame entering.occurrence.node.sevm
-      entering.occurrence.node.devm)
-    (dynamic : entering.occurrence.instruction = Ninst.call →
-      entering.occurrence.node.sevm.isStatic = false) :
-    child.frame.sevm.currentTarget = wethAccount ∧
-      VaultFrameConfiguration vault child.frame.sevm child.frame.pre ∧
-      ∃ (calldata : Bytes) (static : Bool) (post : Devm),
-        ExactWethChildOccurrence entering.occurrence.node.sevm
-            entering.occurrence.node.devm post entering.occurrence.instruction
-            calldata static ∧
-          Source.StagedWethCalldata entering.occurrence.node.sevm.caller vault
-            calldata := by
-  have nodeConfiguration := configuration.parentPrefix entering.sameFrame
-  obtain ⟨frame, resume, nextPc, post, step, entered, resumed, next, exc⟩ :=
-    entering.spawns
-  obtain ⟨x, instructionAt, spawn, -⟩ := Evm.step_spawn_inv step
-  have decoded : entering.occurrence.instruction = .exec x :=
-    Ninst.at_unique entering.occurrence.decoded instructionAt
-  obtain ⟨calldata, static, occurrence, staged⟩ :=
-    Source.vault_exactWethChild_of_occurrence invocation entering.occurrence
-      entering.sameFrame decoded hfork nodeConfiguration.config source
-      (fun h => dynamic (decoded.trans h)) spawn entered child.frame.run resumed
-  have childTarget : child.frame.sevm.currentTarget = wethAccount := by
-    obtain ⟨msg, xl, childDevm, spawnPc, spawnNextPc, spawnResume, target, -, -,
-      -, spawnEq, -⟩ := occurrence
-    rw [Ninst.step_exec, spawn] at spawnEq
-    simp only [XStep.toStep, Step.spawn.injEq] at spawnEq
-    rw [Frame.enter_run_currentTarget entered, spawnEq.1]
-    exact target.currentTarget
-  have distinct : wethAccount ≠ vault := nodeConfiguration.config.distinct
-  refine ⟨childTarget, nodeConfiguration.childEntry step entered
-    (Or.inr ?_), calldata, static, post, ?_, staged⟩
-  · rw [childTarget]
-    exact distinct
-  · rw [decoded]
-    exact occurrence
-
-/-- A committing interpreted message replays its WETH storage from the
-settlement-retained SSTORE chronology of the actual recursive execution.
-This preserves child-before-parent-continuation order, including writes made
-by a withdrawal callback; it is deliberately not a projection of frame-root
-order. -/
-theorem processMessage_weth_storageReplay
-    {msg : Msg} {parent post : Devm}
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out)
-    (process : ProcessMessage msg
-      (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
-    (parentState : parent.state = msg.benv.state)
-    (committed : Execution.commits out = true)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (key : B256) :
-    (Devm.getStor post wethAccount).get key =
-      Exec.StorageWrite.replayCell wethAccount key
-        ((Devm.getStor parent wethAccount).get key)
-        (Exec.retainedStorageWrites run) := by
-  have settles : Frame.settlementCommits (Frame.ofCall msg) out = true :=
-    Frame.settlementCommits_ofCall_of_raw_commits committed
-  have replay : Exec.StorageReplay parent post
-      (Exec.retainedStorageWrites run) := by
-    simpa only [if_pos settles] using
-      ProcessMessage.storageReplay_of_body process parentState
-        (fun rawCommitted =>
-          Exec.storageReplay_committedPost run rawCommitted hfork)
-  exact replay wethAccount key
-
 /-- A rooted allowance history over the full invocation list, processing `done`
 from WETH storage `s` to WETH storage `t`. The root starts from empty WETH
 storage; `invoked` links one listed call; `silent` covers every other settled
@@ -985,44 +805,6 @@ theorem foreign_debit_excluded_rooted
 Each rollback substrate fact restated as WETH-storage preservation, the form
 in which `silent` chain steps consume it. -/
 
-/-- A failed WETH child settles its parent's WETH storage to the call-time
-value: the occurrence-level rollback in chain currency. -/
-theorem weth_child_failure_preserves_weth_storage
-    {sevm : Sevm} {pre post : Devm} {instruction : Ninst} {calldata : Bytes}
-    {static : Bool}
-    (occurrence : ExactWethChildOccurrence sevm pre post instruction calldata
-      static)
-    (failureFlag : ∃ tail, post.stack = (0 : B256) :: tail) :
-    (Devm.getStor post wethAccount) = (Devm.getStor pre wethAccount) := by
-  have h := occurrence.rollback_of_post failureFlag
-  show (post.state.getStor wethAccount) = (pre.state.getStor wethAccount)
-  rw [h]
-
-/-- A failed top-level message restores its entry world's WETH storage. -/
-theorem failed_message_preserves_weth_storage
-    {msg : Msg} {xl : Xlot} {out : Devm}
-    (run : ProcessMessage msg xl (.ok out)) (failed : out.error.isSome) :
-    (Devm.getStor out wethAccount) = (msg.benv.state.getStor wethAccount) := by
-  have h := (ProcessMessage.rollback_of_error run failed).1
-  show (out.state.getStor wethAccount) = (msg.benv.state.getStor wethAccount)
-  rw [h]
-
-/-- A message with no successful interpreted execution settles to its entry
-world's WETH storage: the Ladder generic in chain currency. -/
-theorem no_success_message_preserves_weth_storage
-    {msg : Msg} {benv : Benv} {xl : Xlot} {out : Devm}
-    (h_pm : ProcessMessage msg xl (.ok out))
-    (h_fill : Xlot.Filled xl)
-    (h_bt : msg.benvAfterTransfer = .ok benv)
-    (h_prec : ∀ adr, msg.codeAddress = some adr →
-      ¬ (!msg.disablePrecompiles && decide (benv.stat.rules.isPrecomp adr)) = true)
-    (h_none : ∀ post, Exec 0 (initSevm (msg.withBenv benv))
-        (initDevm (msg.withBenv benv)) (.ok post) → False) :
-    (Devm.getStor out wethAccount) = (msg.benv.state.getStor wethAccount) := by
-  have h := (Blanc.rollback_of_no_success h_pm h_fill h_bt h_prec h_none).2.1
-  show (out.state.getStor wethAccount) = (msg.benv.state.getStor wethAccount)
-  rw [h]
-
 
 /-! ## WETH environment rungs
 
@@ -1040,24 +822,6 @@ theorems there; the `withdraw` one is a pre-call *split*, because WETH's
 execution of its compiled code is a gas-exact `Prog.RunCompiled`. -/
 theorem weth_pcFree : Prog.pcFree Blanc.weth = true := by
   decide +kernel
-
-/-- **WETH run packages an approve invocation.**  From a projected WETH
-run with the approve selector equation. -/
-theorem weth_run_mkApproveInvocation
-    {childSevm : Sevm} {childPre rawPost : Devm}
-    (target : childSevm.currentTarget = wethAccount)
-    (memEmpty : childPre.memory = Mem.empty)
-    (run : Prog.RunCompiled childSevm childPre Blanc.weth rawPost)
-    (selected : Sevm.selector childSevm =
-      selector "approve" [.address, .uint256]) :
-    ∃ call : WethAllowanceInvocation,
-      call.approval = true ∧ call.sevm = childSevm ∧
-        call.pre = childPre ∧ call.post = rawPost := by
-  refine ⟨⟨childSevm, childPre, rawPost, true, target, ?_, run, ?_⟩,
-    rfl, rfl, rfl, rfl⟩
-  · rw [memEmpty]
-    exact Mem.wf_empty
-  · simpa using selected
 
 /-- **WETH run packages a transferFrom invocation.**  From a projected
 WETH run with the transferFrom selector equation. -/

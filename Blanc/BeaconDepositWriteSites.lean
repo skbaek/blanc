@@ -96,27 +96,6 @@ theorem constructorStorageEffectTriplesFrom_initial (owner : Adr) :
   intro index _
   rw [show 0 + index + 1 = index + 1 by omega]
 
-theorem depositStorageEffectTriples_length
-    (owner : Adr) (stor : Stor) (height : Nat) (depositDataRoot : B256) :
-    (depositStorageEffectTriples owner stor height depositDataRoot).length = 2 :=
-  rfl
-
-theorem constructorStorageEffectTriples_length (owner : Adr) :
-    (constructorStorageEffectTriples owner).length = 31 := by
-  simp [constructorStorageEffectTriples]
-
-/-- The compiler and creation-byte witnesses package the constructor as an
-exact compiled prefix of the full creation code. -/
-theorem Exec.Deriv.beaconConstructor_exactProgramPrefix
-    {root : Exec.Deriv}
-    (entryPc : root.pc = 0)
-    (codeIdentity : root.sevm.code.toList = creationCode) :
-    (Blanc.Exec.Deriv.exactProgramPrefix
-      constructorProgram constructorInitPrefix code root) := by
-  refine ⟨entryPc, ?_⟩
-  exact ⟨constructorInitPrefix_compile.symm, by
-    simpa only [creationCode] using codeIdentity⟩
-
 /-- Every same-frame raw runtime SSTORE belongs to one of the compiler's two
 exact persistent-write source sites. -/
 theorem Exec.Deriv.beaconRuntime_sstore_pc
@@ -138,28 +117,6 @@ theorem Exec.Deriv.beaconRuntime_sstore_pc
   · right
     rw [← sitePc]
     exact branchPc
-
-/-- Role-preserving source coordinate classification.  Function-table entry
-zero is the inlined main/deposit count write; entry thirteen is the insertion
-loop's first-live branch write. -/
-theorem Exec.Deriv.beaconRuntime_sstore_coordinate
-    {root target : Exec.Deriv}
-    {storageTarget codeAddress : Adr}
-    (invocation : (Blanc.Exec.Deriv.exactInvocation runtime storageTarget codeAddress root))
-    (sameFrame : Exec.Deriv.ParentPrefix root target)
-    (storeAt : Ninst.At target.sevm.code target.pc (.reg .sstore)) :
-    ∃ site : Prog.SourceSite,
-      site ∈ runtimeSstoreSourceSites ∧
-      site.pc = target.pc ∧
-      ((site.path.functionIndex = 0 ∧ site.pc = 1070) ∨
-        (site.path.functionIndex = 13 ∧ site.pc = 2869)) := by
-  rcases (Blanc.Exec.Deriv.sstore_sourceSite (root := root)) invocation sameFrame storeAt with
-    ⟨site, sourceMember, sitePc, siteInstruction⟩
-  have inventoryMember : site ∈ runtimeSstoreSourceSites :=
-    mem_runtimeSstoreSourceSites_iff.mpr
-      ⟨sourceMember, siteInstruction⟩
-  exact ⟨site, inventoryMember, sitePc,
-    runtimeSstoreSourceSite_coordinate inventoryMember⟩
 
 /-- Global-occurrence form: once an actual raw frame root is identified as an
 exact Beacon runtime invocation, every SSTORE it owns has one of the two
@@ -187,21 +144,6 @@ theorem Exec.NinstOccurrence.beaconRuntime_sstore_pc_of_rawFrameRoot
   · right
     rw [← sitePc]
     exact branchPc
-
-/-- Successful-step specialization of the complete same-frame runtime source
-classification.  The enclosing runtime may still revert later. -/
-theorem Exec.Deriv.beaconRuntime_successfulSstore_pc
-    {root : Exec.Deriv} {storageTarget codeAddress : Adr}
-    (invocation : (Blanc.Exec.Deriv.exactInvocation runtime storageTarget codeAddress root))
-    (write : Exec.SuccessfulSstoreOccurrence root)
-    (sameFrame : Exec.Deriv.ParentPrefix root write.occurrence.node) :
-    write.occurrence.node.pc = 1070 ∨
-      write.occurrence.node.pc = 2869 := by
-  have storeAt : Ninst.At write.occurrence.node.sevm.code
-      write.occurrence.node.pc (.reg .sstore) := by
-    rw [← write.instruction_eq]
-    exact write.occurrence.decoded
-  exact Exec.Deriv.beaconRuntime_sstore_pc invocation sameFrame storeAt
 
 /-- Every same-frame raw constructor SSTORE belongs to the unique recursive
 zero-hash write site in the compiled creation prefix. -/
@@ -239,20 +181,5 @@ theorem Exec.Deriv.beaconConstructor_sstore_coordinate
       ⟨sourceMember, siteInstruction⟩
   exact ⟨site, inventoryMember, sitePc,
     constructorSstoreSourceSite_coordinate inventoryMember⟩
-
-/-- Successful-step specialization of the exact appended-constructor source
-classification.  The one source site may execute once per loop iteration. -/
-theorem Exec.Deriv.beaconConstructor_successfulSstore_pc
-    {root : Exec.Deriv}
-    (identity : (Blanc.Exec.Deriv.exactProgramPrefix
-      constructorProgram constructorInitPrefix code root))
-    (write : Exec.SuccessfulSstoreOccurrence root)
-    (sameFrame : Exec.Deriv.ParentPrefix root write.occurrence.node) :
-    write.occurrence.node.pc = 137 := by
-  have storeAt : Ninst.At write.occurrence.node.sevm.code
-      write.occurrence.node.pc (.reg .sstore) := by
-    rw [← write.instruction_eq]
-    exact write.occurrence.decoded
-  exact Exec.Deriv.beaconConstructor_sstore_pc identity sameFrame storeAt
 
 end Blanc.BeaconDeposit

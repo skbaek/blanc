@@ -648,13 +648,6 @@ lemma ByteArray.toList_eq_toList_data {xs : ByteArray} :
         simp [ByteArray.size]
   rcases xs with ⟨⟨xs⟩⟩; apply gen [] xs
 
-lemma ByteArray.of_getElem?_eq_some {xs : ByteArray} {n} {x} :
-    xs.toList[n]? = .some x → xs.get! n = x := by
-  rw [ByteArray.toList_eq_toList_data]
-  simp only [ByteArray.get!, Array.getElem?_toList]
-  rw [Array.getElem!_eq_getD, Array.getD_eq_getD_getElem?]
-  intro h; rw [h]; simp
-
 lemma ByteArray.lt_size_of_getElem?_eq_some {xs : ByteArray} {n} {x}
     (eq : xs.toList[n]? = some x) : n < xs.size := by
   simp only [ByteArray.size, Array.size]
@@ -773,20 +766,6 @@ lemma toNat_pushToB8_eq {xs : Bytes} (le : xs.length ≤ 32) :
     (pushToB8 xs).toNat = xs.length + 95:= by
   simp only [pushToB8]; rw [UInt8.toNat_add_lo, Nat.lo_eq_of_lt] <;>
   {simp [UInt8.toNat_ofNat, UInt8.toNat_ofNat', Nat.toUInt8]; omega}
-
-lemma ByteArray.get!_eq_getElem!_toList
-    (xs : ByteArray) (i : Nat) : xs.get! i = xs.toList[i]! := by
-  simp only [ByteArray.get!]
-  rw [List.getElem!_eq_getElem?_getD, Array.getElem!_eq_getD]
-  rw [Array.getD_eq_getD_getElem?, ByteArray.toList_eq_toList_data]
-  rcases Nat.lt_or_ge i xs.data.size with lt | ge
-  · rw [Array.getElem?_eq_getElem lt, List.getElem?_eq_getElem lt]; rfl
-  · rw [Array.getElem?_eq_none ge, List.getElem?_eq_none ge]
-
-lemma List.getD_eq_getElem!_of_lt_length {ξ} [Inhabited ξ]
-    {xs : List ξ} {i : Nat} {d : ξ} : i < xs.length → xs.getD i d = xs[i]! := by
-  intro lt; rw [List.getD_eq_getElem?_getD, List.getElem!_eq_getElem?_getD]
-  rw [List.getElem?_eq_getElem lt]; rfl
 
 lemma ByteArray.size_eq_length_toList (xs : ByteArray) :
     xs.size = xs.toList.length := by

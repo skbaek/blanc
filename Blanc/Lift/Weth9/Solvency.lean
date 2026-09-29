@@ -84,65 +84,6 @@ theorem weth9_preserves_solvent (ca : Adr) (sevm : Sevm) (pre post : Devm)
     (hpre : weth9Spec.Pre ca sevm pre) : weth9Spec.Post ca sevm post :=
   weth9Spec_preservesAdmitted ca sevm pre post hfork execution admitted hcode hwf hpre
 
-/-- Counterpart of `exec_preserves_solvent`, for the total executable `exec`.
-The admission is stated for the execution's derivation (unique up to
-`Exec.unique`). -/
-theorem weth9_exec_preserves_solvent (ca : Adr) (sevm : Sevm) (pre post : Devm)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (hrun : exec ⟨0, sevm, pre⟩ = .ok post)
-    (admitted : ∀ execution : Exec 0 sevm pre (.ok post),
-      Exec.FrameAdmitted ca weth9Entry execution)
-    (hcode : sevm.currentTarget = ca → some sevm.code.toList = weth9Sem.image)
-    (hwf : sevm.currentTarget = ca → Mem.Wf pre.memory)
-    (hpre : weth9Spec.Pre ca sevm pre) : weth9Spec.Post ca sevm post := by
-  obtain ⟨execution⟩ := (exec_iff_exec_eq 0 sevm pre (.ok post)).mpr hrun
-  exact weth9_preserves_solvent ca sevm pre post hfork execution (admitted execution)
-    hcode hwf hpre
-
-/-- Message-call rung: an admitted message call preserves the WETH9 state
-invariant (and deletes no WETH9 account). -/
-theorem weth9_messageCall_preserves_solvent {ca : Adr} {msg : Msg} {state : State}
-    {out : MsgCallOutput} (trace : MessageCallTrace msg state out)
-    (hfork : CoveredFork msg.benv.stat.fork)
-    (admitted : trace.FrameAdmitted ca weth9Entry)
-    (ready : weth9Spec.MsgInv ca msg) :
-    weth9Spec.StateInv ca state ∧
-      (∀ address ∈ out.accountsToDelete.toList, address ≠ ca) :=
-  trace.stateInv_admitted_sem (weth9Spec_preservesAdmitted ca) hfork admitted ready
-
-/-- Transaction-list rung. -/
-theorem weth9_applyTransactions_preserves_solvent {ca : Adr}
-    {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
-    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
-    (hfork : CoveredFork benv.stat.fork)
-    (admitted : trace.FrameAdmitted ca weth9Entry)
-    (sumNof : sum benv.state.bal < 2 ^ 256)
-    (inv : weth9Spec.BenvInv ca benv) :
-    weth9Spec.BenvInv ca finalBenv :=
-  trace.benvInv_admitted_sem (weth9Spec_preservesAdmitted ca) hfork admitted sumNof inv
-
-/-- Block-body rung: system messages, transactions, withdrawals and requests. -/
-theorem weth9_appliedBody_preserves_solvent {ca : Adr}
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
-    {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
-    (hfork : CoveredFork benv.stat.fork)
-    (admitted : trace.FrameAdmitted ca weth9Entry)
-    (bound : sum benv.state.bal + wdsum wds < 2 ^ 256)
-    (inv : weth9Spec.BenvInv ca benv) :
-    weth9Spec.StateInv ca state :=
-  trace.stateInv_admitted_sem (weth9Spec_preservesAdmitted ca) hfork admitted bound inv
-
-/-- Block rung, counterpart of `stateTransition_preserves_solvent`: one
-configured block whose entered WETH9 frames are admitted preserves the WETH9
-state invariant. -/
-theorem weth9_block_preserves_solvent {ca : Adr} {cfg : ChainConfig}
-    {pre post : BlockChain} (trace : ConfiguredBlockTrace cfg pre post)
-    (admitted : trace.FrameAdmitted ca weth9Entry)
-    (inv : weth9Spec.StateInv ca pre.state) :
-    weth9Spec.StateInv ca post.state :=
-  trace.stateInv_admitted_sem (weth9Spec_preservesAdmitted ca) admitted inv
-
 /-- History rung, counterpart of `chain_preserves_solvent`: a configured
 history of blocks whose entered WETH9 frames are admitted preserves the WETH9
 state invariant.

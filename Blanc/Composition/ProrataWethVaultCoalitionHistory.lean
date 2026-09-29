@@ -587,32 +587,6 @@ theorem VictimOpenAdmits.moves {vault victim : Adr} {locked : Nat} :
         simp only [victimMoves] at hnone
         simp only [victimMoves, List.filter_cons, hm, ↓reduceIte, hnone]
 
-theorem VictimSchedule.moves {vault victim : Adr} :
-    ∀ {steps : List (PairStepRecord vault)}, VictimSchedule victim steps →
-      ∃ (deposit : PairStepRecord vault) (amount minted : Nat),
-        deposit.flow = .inbound victim victim amount minted true ∧
-          (victimMoves victim steps = [deposit] ∨
-            ∃ (exit : PairStepRecord vault) (paid : Nat),
-              exit.flow = .outbound victim victim minted paid true false ∧
-                victimMoves victim steps = [deposit, exit])
-  | [], h => h.elim
-  | r :: rest, h => by
-      cases hm : victimMove victim r
-      · simp only [VictimSchedule, hm, Bool.false_eq_true, ↓reduceIte] at h
-        simpa only [victimMoves, List.filter_cons, hm, Bool.false_eq_true, ↓reduceIte] using
-          VictimSchedule.moves h
-      · simp only [VictimSchedule, hm, ↓reduceIte] at h
-        obtain ⟨amount, minted, hflow, hopen⟩ := h
-        refine ⟨r, amount, minted, hflow, ?_⟩
-        rcases VictimOpenAdmits.moves hopen with hnone | ⟨exit, paid, hexit, hone⟩
-        · left
-          simp only [victimMoves] at hnone
-          simp only [victimMoves, List.filter_cons, hm, ↓reduceIte, hnone]
-        · right
-          refine ⟨exit, paid, hexit, ?_⟩
-          simp only [victimMoves] at hone
-          simp only [victimMoves, List.filter_cons, hm, ↓reduceIte, hone]
-
 /-! ### 5.6 Two model facts the adapter needs -/
 
 /-- The genesis price anchor holds along every pair path. -/
@@ -1042,19 +1016,6 @@ theorem pair_victim_loss_bound {cfg : ChainConfig} {deployed future : BlockChain
   rw [hpost] at hprice
   exact Blanc.Prorata.victim_loss_le_div_add_one offsetN_ne_zero (hquote rfl) hprice (hpaid rfl)
 
-/-- **`pair_victim_loss_bound_of_trace`** (SF §9, P4).  The trace-shaped corollary supplies the realized pair
-history and D9 collision witness used by the premise-minimal victim loss bound. -/
-theorem pair_victim_loss_bound_of_trace {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
-    {root : PairRoot cfg deployed vault} {coalition : Finset Adr} {victim : Adr}
-    {charge : PairStepRecord vault → Blanc.Prorata.AttackAttribution}
-    {steps : List (PairStepRecord vault)}
-    (trace : PairOpenAttackTrace root coalition victim charge steps future)
-    {deposit exit : PairStepRecord vault} {v m p : Nat}
-    (hmoves : victimMoves victim steps = [deposit, exit])
-    (hdeposit : deposit.flow = .inbound victim victim v m true)
-    (hexit : exit.flow = .outbound victim victim m p true false) :
-    v - p ≤ Nat.div (deposit.pre.balance + 1) (deposit.pre.supply + offsetN) + 1 := by
-  exact pair_victim_loss_bound trace.realizes trace.collision hmoves hdeposit hexit
 -- T:736–757 (`victim_loss_bound`) line for line: `deposit_inv`/`withdraw_inv` → `accounts` at the two flows.
 
 

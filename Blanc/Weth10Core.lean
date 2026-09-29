@@ -160,14 +160,6 @@ theorem regions_disjoint {x y : KeyRegion} (hne : x ≠ y) :
 
 theorem balanceKey_valid (a : Adr) : ValidAdr (balanceKey a) := ⟨a, rfl⟩
 
-theorem nonceKey_injective : Function.Injective nonceKey := by
-  intro a b h
-  have hh : a.1.toUInt64 = b.1.toUInt64 :=
-    congrArg (fun w : B256 => w.1.2) h
-  have hl : a.2 = b.2 := congrArg (fun w : B256 => w.2) h
-  apply Adr.toB256_inj
-  exact Prod.ext (Prod.ext rfl hh) hl
-
 theorem nonceKey_not_valid (a : Adr) : ¬ ValidAdr (nonceKey a) := by
   rintro ⟨b, hb⟩
   exact regions_disjoint (x := .balance) (y := .nonce) (by decide)
@@ -185,28 +177,11 @@ theorem flashMintedSlot_not_valid : ¬ ValidAdr flashMintedSlot := by
   exact regions_disjoint (x := .balance) (y := .flash) (by decide)
     flashMintedSlot (ha ▸ balanceKey_region a) flashMintedSlot_region
 
-theorem balanceKey_ne_nonceKey (a b : Adr) : balanceKey a ≠ nonceKey b := by
-  intro h
-  exact regions_disjoint (x := .balance) (y := .nonce) (by decide)
-    _ (balanceKey_region a) (h ▸ nonceKey_region b)
-
-theorem balanceKey_ne_allowanceKey (a owner spender : Adr) :
-    balanceKey a ≠ allowanceKey owner spender := by
-  intro h
-  exact regions_disjoint (x := .balance) (y := .allowance) (by decide)
-    _ (balanceKey_region a) (h ▸ allowanceKey_region owner spender)
-
 theorem balanceKey_ne_flashMintedSlot (a : Adr) :
     balanceKey a ≠ flashMintedSlot := by
   intro h
   exact regions_disjoint (x := .balance) (y := .flash) (by decide)
     _ (balanceKey_region a) (h ▸ flashMintedSlot_region)
-
-theorem nonceKey_ne_allowanceKey (a owner spender : Adr) :
-    nonceKey a ≠ allowanceKey owner spender := by
-  intro h
-  exact regions_disjoint (x := .nonce) (y := .allowance) (by decide)
-    _ (nonceKey_region a) (h ▸ allowanceKey_region owner spender)
 
 theorem nonceKey_ne_flashMintedSlot (a : Adr) : nonceKey a ≠ flashMintedSlot := by
   intro h
@@ -258,21 +233,6 @@ private theorem rest_set_of_not_valid {s : Stor} {k v : B256}
   rw [Stor.get_set_ne]
   intro heq
   exact h ⟨a, heq.symm⟩
-
-theorem balSum_set_nonce (s : Stor) (a : Adr) (v : B256) :
-    balSum (s.set (nonceKey a) v) = balSum s := by
-  unfold balSum
-  rw [rest_set_of_not_valid (nonceKey_not_valid a)]
-
-theorem balSum_set_allowance (s : Stor) (owner spender : Adr) (v : B256) :
-    balSum (s.set (allowanceKey owner spender) v) = balSum s := by
-  unfold balSum
-  rw [rest_set_of_not_valid (allowanceKey_not_valid owner spender)]
-
-theorem balSum_set_flashMinted (s : Stor) (v : B256) :
-    balSum (s.set flashMintedSlot v) = balSum s := by
-  unfold balSum
-  rw [rest_set_of_not_valid flashMintedSlot_not_valid]
 
 /-! ## Logical projection
 

@@ -1050,14 +1050,6 @@ def concreteJoinPayload : Bytes :=
 
 def concreteJoinTxRlp : Bytes := [2, 0xf8, 0x67] ++ concreteJoinPayload
 
-theorem concreteJoinBLT : concreteJoinTx.toBLT = .list concreteJoinFields := by
-  have hc : (UInt64.toBytes 1).sig = [1] := by decide +kernel
-  have hr : trimZero concreteJoinTx.r = concreteJoinTx.r := by decide +kernel
-  have hs : trimZero concreteJoinTx.s = concreteJoinTx.s := by decide +kernel
-  simp only [Tx.toBLT, concreteJoinTx, hc, AccessList.toBLT, List.map_nil]
-  simp [concreteJoinFields, concreteJoinTx, Nat.toBytes, Nat.toBytes.aux]
-  exact ⟨hr, hs⟩
-
 theorem concreteJoinPayloadParse (k : Nat) :
     Bytes.toBLTs? (k + 12) concreteJoinPayload = some concreteJoinFields := by
   unfold concreteJoinPayload concreteJoinFields

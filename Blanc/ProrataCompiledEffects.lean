@@ -57,20 +57,6 @@ theorem classify_prorata_exec_route
   · exact .convertToAssets hvalue (BodyEntry.of_burn hburn hassets)
   · exact .donate (BodyEntry.of_burn hburn hdonate)
 
-/-- Compatibility projection for consumers that only need the five-way
-persistent-state body classification. -/
-theorem classify_prorata_exec_success
-    {sevm : Sevm} {pre post : Devm}
-    (exc : Exec 0 sevm pre (.ok post))
-    (h_code : sevm.code.toList = prorataCode) :
-    ProrataMainSuccess (prorata.main :: prorata.aux) sevm pre post := by
-  cases classify_prorata_exec_route exc h_code with
-  | deposit entry => exact .deposit entry
-  | withdraw _ entry => exact .withdraw entry
-  | convertToShares _ entry => exact .convertToShares entry
-  | convertToAssets _ entry => exact .convertToAssets entry
-  | donate entry => exact .donate entry
-
 theorem prorata_deposit_exec_effect
     {sevm : Sevm} {pre post : Devm}
     (exc : Exec 0 sevm pre (.ok post))

@@ -490,21 +490,4 @@ theorem Exec.Deriv.sstore_sourceSite_appended
       site.instruction = .reg .sstore := by
   exact (Blanc.Exec.Deriv.nonPush_sourceSite_appended (root := root)) identity sameFrame (by trivial) storeAt
 
-/-- Successful-SSTORE specialization for an arbitrary-outcome root whose
-compiled program occupies an exact prefix of the full code image. -/
-theorem Exec.Deriv.successfulSstore_sourceSite_appended
-    {root : Exec.Deriv} {program : Prog} {pfxCode sfxData : Bytes}
-    (identity : (Blanc.Exec.Deriv.exactProgramPrefix program pfxCode sfxData root))
-    (write : Exec.SuccessfulSstoreOccurrence root)
-    (sameFrame : Exec.Deriv.ParentPrefix root write.occurrence.node) :
-    ∃ site : Prog.SourceSite,
-      site ∈ program.sourceSites ∧
-      site.pc = write.occurrence.node.pc ∧
-      site.instruction = .reg .sstore := by
-  have storeAt : Ninst.At write.occurrence.node.sevm.code
-      write.occurrence.node.pc (.reg .sstore) := by
-    rw [← write.instruction_eq]
-    exact write.occurrence.decoded
-  exact (Blanc.Exec.Deriv.sstore_sourceSite_appended (root := root)) identity sameFrame storeAt
-
 end Blanc

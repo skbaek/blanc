@@ -111,11 +111,6 @@ def recipientClaimTotal (cs : List RedemptionClaim) (r : Adr) : Nat :=
       (if c.recipient = r then c.amount else 0) +
         recipientClaimTotal cs r := rfl
 
-theorem ownerClaimTotal_append (cs ds : List RedemptionClaim) (u : Adr) :
-    ownerClaimTotal (cs ++ ds) u =
-      ownerClaimTotal cs u + ownerClaimTotal ds u :=
-  claimSum_append _ cs ds
-
 theorem claimTotal_perm {cs ds : List RedemptionClaim} (h : cs.Perm ds) :
     claimTotal cs = claimTotal ds := claimSum_perm h _
 
@@ -178,12 +173,6 @@ theorem overbooked_not_admissible {rules : ForkRules} {ca : Adr} {w : State}
     (h : bookedBalanceNat w ca u < ownerClaimTotal cs u) :
     ¬ ClaimsAdmissible rules ca w cs := fun hadm =>
   absurd (hadm.budget u) (Nat.not_le_of_lt h)
-
-/-- Two claims on one owner are admissible only against their **sum**. -/
-theorem ownerClaimTotal_repeated_owner
-    (u r₁ r₂ : Adr) (a₁ a₂ : Nat) :
-    ownerClaimTotal [⟨u, a₁, r₁⟩, ⟨u, a₂, r₂⟩] u = a₁ + a₂ := by
-  simp [ownerClaimTotal]
 
 /-- Admission is order-insensitive, which is what lets a single admission
 record serve every permutation. -/
@@ -528,35 +517,6 @@ theorem redeemClaims_order_independent
         rw [← recipientClaimTotal_perm hd a, recipientClaimTotal_perm he a]
       omega
 
-/-- The two opposite orders of one admissible list, side by side. -/
-theorem redeemClaims_reverse_order
-    {rules : ForkRules} {dp : DeployParams} {ca : Adr}
-    {w : State} {cs : List RedemptionClaim}
-    (hca : ¬ rules.isPrecomp ca)
-    (hsel : ∃ f, CoveredFork f ∧ Fork.ruleSet f = rules)
-    (hstable : Stable dp ca w)
-    (hadm : ClaimsAdmissible rules ca w cs) :
-    ∃ post post',
-      RedemptionOutcome rules dp ca cs w post ∧
-      RedemptionOutcome rules dp ca cs.reverse w post' ∧
-      (∀ v : Adr, bookedBalanceNat post ca v = bookedBalanceNat post' ca v) ∧
-      (∀ a : Adr, (post.bal a).toNat = (post'.bal a).toNat) :=
-  redeemClaims_order_independent hca hsel hstable hadm (List.Perm.refl cs)
-    (List.reverse_perm cs).symm
-
-/-- Both orders of a two-claim list execute. -/
-theorem redeemClaims_twoOrders
-    {rules : ForkRules} {dp : DeployParams} {ca : Adr}
-    {w : State} {c₁ c₂ : RedemptionClaim}
-    (hca : ¬ rules.isPrecomp ca)
-    (hsel : ∃ f, CoveredFork f ∧ Fork.ruleSet f = rules)
-    (hstable : Stable dp ca w)
-    (hadm : ClaimsAdmissible rules ca w [c₁, c₂]) :
-    (∃ post, RedemptionOutcome rules dp ca [c₁, c₂] w post) ∧
-      (∃ post, RedemptionOutcome rules dp ca [c₂, c₁] w post) :=
-  ⟨redeemClaims_anyOrder hca hsel hstable hadm (List.Perm.refl _),
-    redeemClaims_anyOrder hca hsel hstable hadm (List.Perm.swap c₂ c₁ [])⟩
-
 /-- Two claims on the *same* owner are admissible exactly against their sum;
 `redeemClaims_twoOrders` then pays them in either order. -/
 theorem repeatedOwner_admissible
@@ -644,17 +604,6 @@ theorem redeemEveryoneList_anyOrder
 /-- A holder redeeming to itself: the recipient is the equally qualified
 owner. -/
 def selfClaim (u : Adr) (a : Nat) : RedemptionClaim := ⟨u, a, u⟩
-
-/-- A self-paying claim is admissible on exactly the holder's own qualifying
-facts. -/
-theorem ClaimAdmissible.self {rules : ForkRules} {ca : Adr}
-    {w : State} {u : Adr} {a : Nat}
-    (hzero : u ≠ 0) (hprecomp : ¬ rules.isPrecomp u)
-    (hcode : (w.getCode u).toList = []) :
-    ClaimAdmissible rules ca w (selfClaim u a) where
-  recipient_ne_zero := hzero
-  recipient_not_precompile := hprecomp
-  recipient_code_free := hcode
 
 /-- A configured rule lookup on a covered schedule selects a covered fork's own
 rule set. -/

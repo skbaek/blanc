@@ -19,19 +19,6 @@ open Blanc.LidoTriggerableWithdrawalsGateway
 namespace LidoCircuitBreakerTwg
 
 
-/-- Both arms of `temporalSloadBase` return the base world with at most the
-accessed-key set changed, so the error, output, accessed-address and code
-fields all pass through; the named projections below read this one case
-split. -/
-
-private theorem temporalSloadBase_error (sevm : Sevm) (base : Devm)
-    (key : B256) : (temporalSloadBase sevm base key).error = base.error :=
-  (temporalSloadBase_carriers sevm base key).1
-
-private theorem temporalSloadBase_output (sevm : Sevm) (base : Devm)
-    (key : B256) : (temporalSloadBase sevm base key).output = base.output :=
-  (temporalSloadBase_carriers sevm base key).2.1
-
 private theorem temporalSloadBase_accessedAddresses (sevm : Sevm) (base : Devm)
     (key : B256) : (temporalSloadBase sevm base key).accessedAddresses =
       base.accessedAddresses :=
@@ -804,242 +791,6 @@ private theorem gatewayRunStor_B6_other {key : B256}
     temporalSstorePost_other _ _ _ _ _ _ (keyPairNe hr)]
   exact gatewayRunStor_removeBase3_other ha hc
 
-private theorem gatewayRunStor_B6_index :
-    (indexClearPost gatewayPauseWorldSevm (entryClearPost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0).getStorVal configWorldOwner (indexSlot pauseWorldCallee.toB256) = 0 := by
-  rw [show (indexClearPost gatewayPauseWorldSevm (entryClearPost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0) = temporalSstorePost gatewayPauseWorldSevm
-      (lengthWritePost gatewayPauseWorldSevm (entryClearPost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0) (indexSlot pauseWorldCallee.toB256) 0 from rfl]
-  exact temporalSstorePost_self _ _ _ _
-
-private theorem gatewayRunStor_B6_length :
-    (indexClearPost gatewayPauseWorldSevm (entryClearPost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0).getStorVal configWorldOwner arrayLengthSlot = 0 := by
-  rw [show (indexClearPost gatewayPauseWorldSevm (entryClearPost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0) = temporalSstorePost gatewayPauseWorldSevm
-      (lengthWritePost gatewayPauseWorldSevm (entryClearPost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0) (indexSlot pauseWorldCallee.toB256) 0 from rfl,
-    temporalSstorePost_other _ _ _ _ _ _
-      (keyPairNe pauseWorld_length_ne_indexCallee.symm),
-    show lengthWritePost gatewayPauseWorldSevm (entryClearPost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0 = temporalSstorePost gatewayPauseWorldSevm (entryClearPost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1)
-      arrayLengthSlot 0 from rfl]
-  exact temporalSstorePost_self _ _ _ _
-
-private theorem gatewayRunStor_B6_entry :
-    (indexClearPost gatewayPauseWorldSevm (entryClearPost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0).getStorVal configWorldOwner (arrayEntrySlot 1) = 0 := by
-  rw [show (indexClearPost gatewayPauseWorldSevm (entryClearPost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0) = temporalSstorePost gatewayPauseWorldSevm
-      (lengthWritePost gatewayPauseWorldSevm (entryClearPost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0) (indexSlot pauseWorldCallee.toB256) 0 from rfl,
-    temporalSstorePost_other _ _ _ _ _ _
-      (keyPairNe pauseWorld_entryOne_ne_indexCallee.symm),
-    show lengthWritePost gatewayPauseWorldSevm (entryClearPost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0 = temporalSstorePost gatewayPauseWorldSevm (entryClearPost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1)
-      arrayLengthSlot 0 from rfl,
-    temporalSstorePost_other _ _ _ _ _ _
-      (keyPairNe pauseWorld_length_ne_entryOne),
-    show (entryClearPost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) = temporalSstorePost gatewayPauseWorldSevm
-      (indexWritePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) (arrayEntrySlot 1) 0 from rfl]
-  exact temporalSstorePost_self _ _ _ _
-
-private theorem gatewayRunStor_B6_assign :
-    (indexClearPost gatewayPauseWorldSevm (entryClearPost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0).getStorVal configWorldOwner (assignmentSlot pauseWorldCallee.toB256) = 0 := by
-  rw [show (indexClearPost gatewayPauseWorldSevm (entryClearPost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0) = temporalSstorePost gatewayPauseWorldSevm
-      (lengthWritePost gatewayPauseWorldSevm (entryClearPost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0) (indexSlot pauseWorldCallee.toB256) 0 from rfl,
-    temporalSstorePost_other _ _ _ _ _ _
-      (keyPairNe pauseWorld_assignCallee_ne_indexCallee.symm),
-    show lengthWritePost gatewayPauseWorldSevm (entryClearPost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0 = temporalSstorePost gatewayPauseWorldSevm (entryClearPost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1)
-      arrayLengthSlot 0 from rfl,
-    temporalSstorePost_other _ _ _ _ _ _
-      (keyPairNe pauseWorld_length_ne_assignCallee),
-    show (entryClearPost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) = temporalSstorePost gatewayPauseWorldSevm
-      (indexWritePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) (arrayEntrySlot 1) 0 from rfl,
-    temporalSstorePost_other _ _ _ _ _ _
-      (keyPairNe pauseWorld_entryOne_ne_assignCallee),
-    show indexWritePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1 = temporalSstorePost gatewayPauseWorldSevm
-      (entryWritePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) (indexSlot pauseWorldCallee.toB256) 1 from rfl,
-    temporalSstorePost_other _ _ _ _ _ _
-      (keyPairNe pauseWorld_assignCallee_ne_indexCallee.symm),
-    show entryWritePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1 = temporalSstorePost gatewayPauseWorldSevm
-      (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
-      (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)) (arrayEntrySlot 1) pauseWorldCallee.toB256 from rfl,
-    temporalSstorePost_other _ _ _ _ _ _
-      (keyPairNe pauseWorld_entryOne_ne_assignCallee)]
-  exact gatewayRunStor_removeBase3_assign
-
 private theorem gatewayRunStor_B6_count :
     (indexClearPost gatewayPauseWorldSevm (entryClearPost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
       (pauseKernelBase gatewayPauseWorldSevm gatewayPauseWorldPre
@@ -1158,10 +909,6 @@ private theorem temporalSloadBase_getCode (sevm : Sevm) (base : Devm)
 private theorem addAccessedStorageKey_getCode (devm : Devm) (a : Adr)
     (k : B256) (x : Adr) :
     (addAccessedStorageKey devm a k).getCode x = devm.getCode x := rfl
-
-private theorem lengthWritePost_getCode (sevm : Sevm) (base : Devm) (ol : B256)
-    (x : Adr) : (lengthWritePost sevm base ol).getCode x = base.getCode x :=
-  temporalSstorePost_getCode sevm base arrayLengthSlot ol x
 
 private theorem gatewayRunAddrs_B7 :
     ((indexClearPost gatewayPauseWorldSevm (entryClearPost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (temporalSstorePost gatewayPauseWorldSevm (temporalSloadBase gatewayPauseWorldSevm (assignmentPost gatewayPauseWorldSevm
@@ -1443,17 +1190,6 @@ private abbrev gatewayRunImageLast : Bytes :=
 
 /-! ## The composed run -/
 
-/-- The row-19 master composition: the boundary walk with its dichotomy
-interface facts, and the complete message run with its settled effects. -/
-
-private theorem gatewayPauseWorld_targetPausedZero :
-    gatewayPauseWorldPre.getStorVal pauseWorldCallee
-      LidoTriggerableWithdrawalsGateway.resumeSinceSlot = 0 := by
-  change (gatewayPauseWorldState.get pauseWorldCallee).stor.get
-      LidoTriggerableWithdrawalsGateway.resumeSinceSlot = 0
-  rw [gatewayPauseWorldState_get_target]
-  decide +kernel
-
 private theorem gatewayPauseWorld_targetPausedOrigZero :
     getOrigStorVal gatewayPauseWorldSevm pauseWorldCallee
       LidoTriggerableWithdrawalsGateway.resumeSinceSlot = 0 := by
@@ -1461,13 +1197,6 @@ private theorem gatewayPauseWorld_targetPausedOrigZero :
       LidoTriggerableWithdrawalsGateway.resumeSinceSlot = 0
   rw [gatewayPauseWorldState_get_target]
   decide +kernel
-
-private theorem gatewayPauseWorld_targetPausedCold :
-    (pauseWorldCallee, LidoTriggerableWithdrawalsGateway.resumeSinceSlot) ∉
-      gatewayPauseWorldPre.accessedStorageKeys := by
-  rw [show gatewayPauseWorldPre.accessedStorageKeys =
-      Std.HashSet.emptyWithCapacity from rfl]
-  exact Std.HashSet.not_mem_emptyWithCapacity
 
 private theorem gatewayRunAfterSetBase_code :
     gatewayRunAfterSetBase.getCode pauseWorldCallee.toB256.toAdr =
@@ -1543,18 +1272,6 @@ private theorem gatewayRunAfterSetBase_count :
   rw [gatewayRunAfterSetBase, addLog_getStorVal]
   simpa only [gatewayRunRemoveBase3, gatewayRunCountPost, gatewayRunKernelBase] using
     gatewayRunStor_B6_count
-
-private theorem gatewayRunAfterSetBase_interval :
-    gatewayRunAfterSetBase.getStorVal configWorldOwner heartbeatIntervalSlot =
-      pauseWorldInterval := by
-  rw [gatewayRunAfterSetBase, addLog_getStorVal]
-  have h := (gatewayRunStor_B6_other
-    pauseWorld_interval_ne_assignCallee.symm
-    pauseWorld_interval_ne_count.symm
-    pauseWorld_interval_ne_entryOne.symm
-    pauseWorld_interval_ne_indexCallee.symm
-    pauseWorld_interval_ne_length.symm).trans pauseLastStor_interval
-  simpa only [gatewayRunRemoveBase3, gatewayRunCountPost, gatewayRunKernelBase] using h
 
 private theorem gatewayRunAfterSetBase_expiry :
     gatewayRunAfterSetBase.getStorVal configWorldOwner

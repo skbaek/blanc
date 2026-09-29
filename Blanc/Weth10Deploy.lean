@@ -440,38 +440,6 @@ private theorem weth10TreeRight_leftmost_eq (dp : DeployParams) :
       leftmostFsig (weth10TreeRight (⟨0, 0⟩ : DeployParams)) := by
   simp [weth10TreeRight, weth10Funcs, DispatchTree.build, leftmostFsig]
 
-private theorem weth10DispatchByteAt_eq_zero_0_11
-    (locations : List Nat) (n : Nat) (chainId domainSeparator : B256)
-    (i : Nat) (hi : i < 11) :
-    Func.byteAtByShape locations n
-        (dispatchWith fallbackSlot
-          (weth10Tree (⟨0, 0⟩ : DeployParams))).compileShape
-        (dispatchWith fallbackSlot
-          (weth10Tree ⟨chainId, domainSeparator⟩)) i 0 =
-      Func.byteAtByShape locations n
-        (dispatchWith fallbackSlot
-          (weth10Tree (⟨0, 0⟩ : DeployParams))).compileShape
-        (dispatchWith fallbackSlot
-          (weth10Tree (⟨0, 0⟩ : DeployParams))) i 0 := by
-  rw [weth10Tree_eq_fork, weth10Tree_eq_fork]
-  apply dispatchForkByteAt_eq_prefix
-  · exact weth10TreeRight_leftmost_eq _
-  · decide +kernel
-  · exact hi
-
-private theorem noncesSel_eq :
-    selector "nonces" [.address] = (0x7ecebe00 : B256) := by
-  decide +kernel
-
-private theorem approveAndCallSel_eq :
-    selector "approveAndCall" [.address, .uint256, .dynBytes] =
-      (0xcae9ca51 : B256) := by
-  decide +kernel
-
-private theorem flashFeeSel_eq :
-    selector "flashFee" [.address, .uint256] = (0xd9d98ce4 : B256) := by
-  decide +kernel
-
 private theorem allowanceSel_eq :
     selector "allowance" [.address, .address] = (0xdd62ed3e : B256) := by
   decide +kernel
@@ -544,19 +512,9 @@ private theorem approveAndCallLeaf_size :
     approveAndCallLeaf.compileShape.byteSize = 239 := by
   decide +kernel
 
-private theorem dispatch22_24_1_size :
-    (dispatch22_24_1 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
-      351 := by
-  decide +kernel
-
 private theorem dispatch23_26_1_size :
     (dispatch23_26_1 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
       110 := by
-  decide +kernel
-
-private theorem dispatch25_14_7_size :
-    (dispatch25_14_7 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
-      822 := by
   decide +kernel
 
 private theorem deploymentPairDispatch_size :
@@ -573,22 +531,6 @@ private theorem deploymentDispatch_size :
   unfold deploymentDispatch
   rw [dispatchNode_size _ _ _ (by decide +kernel),
     depositLeaf_size, deploymentPairDispatch_size]
-
-private theorem dispatch24_21_3_size :
-    (dispatch24_21_3 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
-      391 := by
-  rw [dispatch24_21_3_eq_deploymentDispatch]
-  exact deploymentDispatch_size
-
-private theorem dispatch26_0_14_size :
-    (dispatch26_0_14 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =
-      2158 := by
-  have hfull := fullDispatch_size
-  rw [flashFeeDispatch_eq (⟨0, 0⟩ : DeployParams)] at hfull
-  unfold flashFeeDispatch at hfull
-  rw [dispatchNode_size _ _ _ (by decide +kernel), dispatchCae9_size]
-    at hfull
-  omega
 
 private lemma byteAt_main_to_dispatch
     (locations : List Nat) (n : Nat) (p q : Func) (i : Nat) (d : UInt8)
@@ -736,19 +678,6 @@ private theorem weth10MainByteAt_to_dispatch_inside
   apply weth10MainByteAt_to_dispatch locations n dp i d hlo
   change i - 1 - 1 - 4 < _
   omega
-
-private theorem compileShapeByteSize_prepend (l : Line) (p : Func) :
-    (l +++ p).compileShape.byteSize =
-      prefixByteSize l + p.compileShape.byteSize := by
-  induction l with
-  | nil =>
-      change p.compileShape.byteSize = 0 + p.compileShape.byteSize
-      omega
-  | cons inst rest ih =>
-      change (rest +++ p).compileShape.byteSize + inst.size =
-        (inst.size + prefixByteSize rest) + p.compileShape.byteSize
-      rw [ih]
-      omega
 
 private def permitDynamicPath : Func :=
   Ninst.swap 0 ::: calculateDomainSeparator +++ .call permitRecoverSlot

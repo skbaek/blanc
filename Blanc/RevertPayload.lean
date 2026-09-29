@@ -208,19 +208,6 @@ def Func.revertSelector (data : Bytes) (h : data.length = 4) : Func :=
         (.next (Ninst.pushB256 4)
           (.next (Ninst.pushB256 28) (.last .revert)))))
 
-/-- The compact selector reverter is exactly twelve bytes. -/
-lemma Func.compsize_revertSelector (data : Bytes) (h : data.length = 4) :
-    compsize (Func.revertSelector data h) = 12 := by
-  have h0 : (Ninst.toBytes (Ninst.pushB256 0)).length = 1 := by
-    rfl
-  have h4 : (Ninst.toBytes (Ninst.pushB256 4)).length = 2 := by
-    rfl
-  have h28 : (Ninst.toBytes (Ninst.pushB256 28)).length = 2 := by
-    rfl
-  simp only [Func.revertSelector, compsize]
-  rw [h0, h4, h28]
-  simp [Ninst.toBytes, pushToB8L, h]
-
 /-- `Func.revertData` specialized to ABI `Error(string)` returndata. -/
 def Func.revertWith (s : String) : Func := .revertData (errorData s)
 

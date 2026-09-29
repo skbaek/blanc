@@ -1072,42 +1072,6 @@ empty ledger admits no split.  The blocks that follow re-run the composing
 proofs against the strengthened carrier; they are the same term structure,
 with `AllowanceRegionEffectSound` in place of `AllowanceRegionEffect`. -/
 
-/-- Read-sound form of `ProcessMessage.allowanceRegionEffect_none`. -/
-theorem ProcessMessage.allowanceRegionEffectSound_none
-    {ca : Adr} {msg : Msg} {post parent : Devm}
-    (hprocess : ProcessMessage msg .none (.ok post))
-    (hparent : parent.state = msg.benv.state) :
-    AllowanceRegionEffectSound ca parent post [] :=
-  .of_nilLedger (ProcessMessage.allowanceRegionEffect_none hprocess hparent)
-
-/-- Read-sound form of `GenericCall.allowanceRegionEffect_none`. -/
-theorem GenericCall.allowanceRegionEffectSound_none
-    {ca : Adr} {sevm : Sevm} {pre post : Devm}
-    {gas : Nat} {value : B256} {caller target codeAddress : Adr}
-    {stv isStatic : Bool} {ii is oi os : Nat} {code : ByteArray}
-    {disablePrecompiles : Bool}
-    (hrun : GenericCall sevm pre gas value caller target codeAddress stv
-      isStatic ii is oi os code disablePrecompiles .none (.ok post)) :
-    AllowanceRegionEffectSound ca pre post [] :=
-  .of_nilLedger (GenericCall.allowanceRegionEffect_none hrun)
-
-/-- Read-sound form of `GenericCreate.allowanceRegionEffect_none`. -/
-theorem GenericCreate.allowanceRegionEffectSound_none
-    {ca : Adr} {sevm : Sevm} {pre post : Devm}
-    {endowment : B256} {newAddress : Adr} {mi ms : Nat}
-    (hrun : GenericCreate sevm pre endowment newAddress mi ms
-      .none (.ok post)) :
-    AllowanceRegionEffectSound ca pre post [] :=
-  .of_nilLedger (GenericCreate.allowanceRegionEffect_none hrun)
-
-/-- Read-sound form of `Xinst.allowanceRegionEffect_none`. -/
-theorem Xinst.allowanceRegionEffectSound_none
-    {ca : Adr} {sevm : Sevm} {pre post : Devm} {x : Xinst}
-    (hrun : Xinst.Run sevm pre x .none (.ok post))
-    (hfork : CoveredFork sevm.benvStat.fork) :
-    AllowanceRegionEffectSound ca pre post [] :=
-  .of_nilLedger (Xinst.allowanceRegionEffect_none hrun hfork)
-
 /-- Read-sound form of `Ninst.foreignNoneAllowanceRegionEffect`. -/
 theorem Ninst.foreignNoneAllowanceRegionEffectSound
     {ca : Adr} {pc : Nat} {sevm : Sevm} {pre post : Devm} {n : Ninst}

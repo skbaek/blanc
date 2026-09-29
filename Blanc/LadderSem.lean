@@ -152,19 +152,6 @@ def PreservesNoMem (c : ContractSpecSem) (ca : Adr) : Prop :=
     c.Pre ca sevm pre →
     c.Post ca sevm post
 
-theorem SoundNoMem.sound {c : ContractSpecSem} {ca : Adr}
-    (h : c.SoundNoMem ca) : c.Sound ca :=
-  fun hfork h_run h_ca h_ih _ h_pre => h hfork h_run h_ca h_ih h_pre
-
-theorem SoundWith.soundNoMem {c : ContractSpecSem} {ca : Adr}
-    (h : c.SoundWith ca (fun _ => True)) : c.SoundNoMem ca :=
-  fun hfork h_run h_ca h_ih h_pre => h hfork h_run h_ca h_ih trivial h_pre
-
-theorem PreservesNoMem.preserves {c : ContractSpecSem} {ca : Adr}
-    (h : c.PreservesNoMem ca) : c.Preserves ca :=
-  fun sevm pre post hfork exc h_code _ h_pre =>
-    h sevm pre post hfork exc h_code h_pre
-
 variable {c : ContractSpecSem}
 
 /-- Once the frame has terminated the callvalue is no longer in flight.  This

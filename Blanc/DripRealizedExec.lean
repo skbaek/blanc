@@ -631,22 +631,6 @@ def TargetReplay (coalition : Finset Adr) (ca : Adr) (sevm : Sevm)
     op.kind = opTag coalition sevm pre ∧
     RealizedChain op.post nested (snapshot coalition ca post.state)
 
-theorem TargetReplay.chain {coalition : Finset Adr} {ca : Adr} {sevm : Sevm}
-    {pre post : Devm} (replay : TargetReplay coalition ca sevm pre post) :
-    ∃ steps, RealizedChain (execEntrySnapshot coalition ca sevm pre.state) steps
-      (snapshot coalition ca post.state) := by
-  rcases replay with ⟨op, nested, preEq, _, tail⟩
-  exact ⟨op :: nested, Chain.cons preEq tail⟩
-
-/-- A head step with no nested callback. -/
-theorem TargetReplay.single {coalition : Finset Adr} {ca : Adr} {sevm : Sevm}
-    {pre post : Devm}
-    (effect : Effect scale.toNat freshNat
-      (execEntrySnapshot coalition ca sevm pre.state) (opTag coalition sevm pre)
-      (snapshot coalition ca post.state)) :
-    TargetReplay coalition ca sevm pre post :=
-  ⟨⟨_, _, _, effect⟩, [], rfl, rfl, Chain.nil _⟩
-
 theorem execEntrySnapshot_of_value_zero {coalition : Finset Adr} {ca : Adr}
     {sevm : Sevm} {state : State} (value : sevm.value = 0) :
     execEntrySnapshot coalition ca sevm state = snapshot coalition ca state := by

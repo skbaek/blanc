@@ -32,14 +32,6 @@ theorem HistoryExtends.base {baseline : List B256} {stor : Stor}
     (artifact : ArtifactInv stor baseline) : HistoryExtends baseline stor := by
   exact ⟨[], by simpa using artifact⟩
 
-theorem HistoryExtends.transAppend
-    {baseline suffix : List B256} {stor : Stor}
-    (history : HistoryExtends (baseline ++ suffix) stor) :
-    HistoryExtends baseline stor := by
-  rcases history with ⟨tail, artifact⟩
-  refine ⟨suffix ++ tail, ?_⟩
-  simpa only [List.append_assoc] using artifact
-
 /-- Baseline history validity is extensional in observable storage words. -/
 theorem HistoryExtends.of_get_eq
     {baseline : List B256} {before after : Stor}
@@ -115,13 +107,6 @@ def Exec.NativeShaAdmitted
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (ca : Adr) (run : Exec pc sevm pre out) : Prop :=
   Exec.FrameAdmitted ca NativeShaEntry run
-
-theorem Exec.NativeShaAdmitted.root
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    {ca : Adr} {run : Exec pc sevm pre out}
-    (admitted : Exec.NativeShaAdmitted ca run)
-    (target : sevm.currentTarget = ca) : NativeShaEntry sevm pre := by
-  exact Exec.FrameAdmitted.root admitted target
 
 /-- Native SHA admission combined with the fresh machine state supplied by
 the concrete frame-entry trace. -/

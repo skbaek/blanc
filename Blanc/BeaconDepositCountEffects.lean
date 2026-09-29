@@ -1739,41 +1739,6 @@ theorem getDepositCount_cold_runCompiled_noRawSstore
 
 def getDepositCountNonzeroValueRuntimeGas : Nat := 135
 
-/-- A value-carrying count query is rejected before the endpoint reads the
-count slot. -/
-theorem getDepositCount_nonzero_value_runCompiledTo
-    (sevm : Sevm) (base : Devm) (G : Nat)
-    (hnonempty : sevm.data.length.toB256 ≠ 0)
-    (hvalue : sevm.value ≠ 0)
-    (hselector : Sevm.selector sevm = getDepositCountSelector)
-    (hcode : sevm.code.toList = code) :
-    Prog.RunCompiledTo sevm
-      (base.setMach
-        ⟨[], Mem.empty, G + getDepositCountNonzeroValueRuntimeGas, base.stateGas⟩)
-      runtime
-      (.error (.revert,
-        (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) ∧
-    some sevm.code.toList = Prog.compile runtime := by
-  let routeBase := base.setMach ⟨[], Mem.empty, base.gasLeft, base.stateGas⟩
-  have hbody := nonpayableEndpoint_nonzero_runCompiledTo
-    (fs := runtime.main :: runtime.aux) (sevm := sevm)
-    (base := routeBase) (G := G)
-    (body := getDepositCountEndpoint) hvalue
-    (by simp only [routeBase, Devm.stack_setMach, List.length_nil]; omega)
-  have hroute := getDepositCount_route_runCompiledTo
-    (base := base) (K := G + nonpayableEndpointRevertGas)
-    hnonempty hselector (by
-      simpa only [routeBase, Devm.setMach_setMach, Devm.stateGas_setMach, count_stateGas_addAccessedStorageKey, Devm.stack_setMach,
-        Devm.memory_setMach] using hbody)
-  constructor
-  · have hboundary :
-        G + nonpayableEndpointRevertGas + getDepositCountRouteGas =
-          G + getDepositCountNonzeroValueRuntimeGas := by
-      simp only [nonpayableEndpointRevertGas, getDepositCountRouteGas,
-        getDepositCountNonzeroValueRuntimeGas]
-    simpa only [hboundary] using hroute
-  · rw [hcode, code_compile]
-
 /-- The selected value-rejecting count route has no raw SSTORE and retains no
 storage effect. -/
 theorem getDepositCount_nonzero_value_runCompiledTo_noRawSstore

@@ -97,21 +97,6 @@ def directCreateMessageOutputOf (post : Devm) : MsgCallOutput :=
 
 /-! ## Contract-neutral protocol-deployment plumbing -/
 
-/-- Jaune's list comparator is the standard lexicographic comparator.  This
-bridge lets local trie instances share the proof without exporting those
-instances beyond their existing scopes. -/
-theorem jauneListCompare_eq_compareLex {α : Type u} [Ord α]
-    (xs ys : List α) :
-    Jaune.List.compare xs ys = List.compareLex compare xs ys := by
-  induction xs generalizing ys with
-  | nil => cases ys <;> rfl
-  | cons x xs ih =>
-      cases ys with
-      | nil => rfl
-      | cons y ys =>
-          cases h : compare x y <;>
-            simp [Jaune.List.compare, List.compareLex, h, ih]
-
 /-- The small nonempty program used at mandatory protocol system addresses in
 strict private-chain deployment anchors. -/
 def deploymentSystemProgram : Prog := ⟨Func.stop, []⟩

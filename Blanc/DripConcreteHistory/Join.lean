@@ -4,11 +4,6 @@ namespace Blanc
 open Jaune
 namespace Drip
 
-theorem concreteJoinValidated :
-    validateTransaction pragueRules concreteJoinTx 0 =
-      .ok (calculateIntrinsicCost pragueRules concreteJoinTx 0) := by
-  decide +kernel
-
 theorem concreteJoinChecked :
     checkTransaction (initBenv .prague concreteDeployed concreteJoinExecutionHeader).beginTransaction
       (deploymentTxPreludeBout .init concreteJoinTx 0) concreteJoinTx =
@@ -282,10 +277,6 @@ theorem concreteJoinDevm_cold (k : B256) :
     (concreteCreateTarget, k) ∉ concreteJoinDevm.accessedStorageKeys := by
   change (concreteCreateTarget, k) ∉ (∅ : Std.HashSet (Adr × B256))
   simp
-
-theorem concreteJoin_factor_one : B256.rpow scale half rate 1 = rate := by
-  rw [drip_word_rpow_unfold_nonzero (by decide : (1 : Nat) ≠ 0)]
-  decide +kernel
 
 /-- The exponent-one initialization leaves exponent zero at the loop entry. -/
 private theorem concreteJoin_rpowZero (base post : Devm) (M : Mem) (G : Nat)
@@ -1569,12 +1560,6 @@ theorem concreteJoined_values :
   · rw [Stor.get_set_ne _ (by decide +kernel), Stor.get_set_self]
   · exact Stor.get_set_self _ _ _
 
-theorem concreteJoin_receiptSucceeded :
-    (concreteJoinTransactionBout.receiptsTrie[deploymentReceiptKey 0]?).map
-      (fun entry => entry.2.succeeded) = some true := by
-  rw [concreteJoin_receiptEntry]
-  rfl
-
 private theorem concreteJoinMessageState_sender :
     concreteJoinMessageState.get concreteCreateSender = concreteJoinEntry.state.get concreteCreateSender := by
   unfold concreteJoinMessageState concreteJoinRuntimePost
@@ -1679,15 +1664,6 @@ def concreteDripPayload : Bytes :=
   [0xa0] ++ concreteDripTx.s
 
 def concreteDripTxRlp : Bytes := [2, 0xf8, 0x67] ++ concreteDripPayload
-
-theorem concreteDripBLT : concreteDripTx.toBLT = .list concreteDripFields := by
-  have hc : (UInt64.toBytes 1).sig = [1] := by decide +kernel
-  have hn : (UInt64.toBytes 2).sig = [2] := by decide +kernel
-  have hr : trimZero concreteDripTx.r = concreteDripTx.r := by decide +kernel
-  have hs : trimZero concreteDripTx.s = concreteDripTx.s := by decide +kernel
-  simp only [Tx.toBLT, concreteDripTx, hc, AccessList.toBLT, List.map_nil]
-  simp [concreteDripFields, concreteDripTx, Nat.toBytes, Nat.toBytes.aux]
-  exact ⟨hr, hs⟩
 
 theorem concreteDripPayloadParse (k : Nat) :
     Bytes.toBLTs? (k + 12) concreteDripPayload = some concreteDripFields := by

@@ -105,12 +105,6 @@ private theorem ProcessMessageTrace.frameAdmitted_benvStat_of
     trace.FrameAdmitted ca (fun sevm _ => Q sevm.benvStat) :=
   RetainedXlot.frameAdmitted_benvStat_of_runFrame trace.retained trace.run hQ ca
 
-theorem ProcessMessageTrace.frameAdmitted_benvStat
-    {msg : Msg} {out : Except (EvmError × State × AdrSet × Tra) Devm}
-    (trace : ProcessMessageTrace msg out) (ca : Adr) :
-    trace.FrameAdmitted ca (fun sevm _ => sevm.benvStat = msg.benv.stat) :=
-  trace.frameAdmitted_benvStat_of (Q := fun stat => stat = msg.benv.stat) rfl ca
-
 /-- The block time, read through the statics of the frames a settled message
 call actually entered. -/
 private theorem MessageCallTrace.frameAdmitted_time

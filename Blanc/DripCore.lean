@@ -33,17 +33,6 @@ theorem scale_literal :
     scale = 1000000000000000000000000000 := by
   rfl
 
-theorem rate_literal :
-    rate = 1000000001547125957863212448 := by
-  rfl
-
-theorem half_literal :
-    half = 500000000000000000000000000 := by
-  rfl
-
-theorem maxElapsed_literal : maxElapsed = 4294967295 := by
-  decide +kernel
-
 theorem maxChi_literal :
     maxChi = 340282366920938463463374607431768211455 := by
   decide +kernel
@@ -83,11 +72,6 @@ def selectors : List B256 :=
   [convertToAssetsSelector, exitSelector, convertToUnitsSelector,
     dripSelector, joinSelector]
 
-theorem selectors_literal :
-    selectors =
-      [0x07a2d13a, 0x7f8661a1, 0x9227149a, 0x9f678cca, 0xb688a363] := by
-  decide +kernel
-
 /-! ## Frozen storage coordinates and total projection -/
 
 /-- `chi` occupies `2^256 - 1`. -/
@@ -101,21 +85,6 @@ def totalUnitsSlot : B256 := B256.max - 2
 
 /-- A holder's normalized balance `pie[holder]` is keyed by the raw address. -/
 def pieSlot (holder : Adr) : B256 := holder.toB256
-
-theorem chiSlot_literal :
-    chiSlot =
-      0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff := by
-  decide +kernel
-
-theorem rhoSlot_literal :
-    rhoSlot =
-      0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe := by
-  decide +kernel
-
-theorem totalUnitsSlot_literal :
-    totalUnitsSlot =
-      0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd := by
-  decide +kernel
 
 theorem scalarSlots_distinct :
     chiSlot ≠ rhoSlot ∧ chiSlot ≠ totalUnitsSlot ∧

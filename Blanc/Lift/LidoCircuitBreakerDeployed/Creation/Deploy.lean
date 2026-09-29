@@ -184,36 +184,6 @@ def deployMsg : Msg where
   accessedStorageKeys := .emptyWithCapacity
   disablePrecompiles := false
 
-/-- **The recorded Lido CircuitBreaker deployment, closed.**  The CircuitBreaker's address is the
-deployer's nonce-0 CREATE address, and executing the recorded creation input from the deployer as
-a Prague CREATE message succeeds, installs exactly the certified deployed runtime there, and
-leaves storage `deployedStor`. -/
-theorem lido_deploy :
-    breakerAddress = computeContractAddress deployer 0 ∧
-    ∃ post, processCreateMessage deployMsg = .ok post ∧
-      (post.getCode breakerAddress).toList = Blanc.Lift.LidoCircuitBreakerDeployed.code.toList ∧
-      Devm.getStor post breakerAddress = deployedStor :=
-  ⟨breakerAddress_eq, lido_create deployMsg rfl rfl rfl (by decide) CoveredFork.prague rfl
-    (by decide)⟩
-
-/-- **The recorded deployment establishes the history theorems' checkpoint premise.**  Under the
-two bounded hash premises (the constructor's slots 0 and 1 are off the Registry's raw slots), the
-closed deployment leaves storage satisfying `RegistryZeroRaw`, and the deployed world satisfies
-`lidoSpec.StateInv`. -/
-theorem lido_deploy_init (hfa0 : ForeignApart 0 0) (hfa1 : ForeignApart 0 1) :
-    ∃ post, processCreateMessage deployMsg = .ok post ∧
-      (post.getCode breakerAddress).toList = Blanc.Lift.LidoCircuitBreakerDeployed.code.toList ∧
-      RegistryZeroRaw (Devm.getStor post breakerAddress) ∧
-      lidoSpec.StateInv breakerAddress post.state := by
-  obtain ⟨post, h1, h2, h3⟩ := lido_create deployMsg rfl rfl rfl (by decide)
-    CoveredFork.prague rfl (by decide)
-  have h3' : Devm.getStor post breakerAddress = deployedStor := h3
-  have h2' : (post.state.getCode breakerAddress).toList =
-      Blanc.Lift.LidoCircuitBreakerDeployed.code.toList := h2
-  have hz : RegistryZeroRaw (Devm.getStor post breakerAddress) := by
-    rw [h3']; exact registryZeroRaw_deployedStor hfa0 hfa1
-  exact ⟨post, h1, h2, hz, stateInv_of_registryZeroRaw (by rw [h2']; rfl) hz⟩
-
 /-- **The recorded Lido CircuitBreaker deployment under every covered fork.**  The same
 conclusion as `lido_deploy` for `deployMsg.withFork f`, by instantiating `lido_create` at the
 fork-replaced message; the code-size premise discharges by cases on `hf`. -/

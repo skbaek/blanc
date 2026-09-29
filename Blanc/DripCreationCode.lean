@@ -191,13 +191,4 @@ theorem creationCode_eq_literal : creationCode = creationCodeLiteral := by
 theorem creationCodeLiteral_length : creationCodeLiteral.length = 2001 := by
   decide +kernel
 
-theorem creationCodeLiteral_eip3860 :
-    creationCodeLiteral.length <= eip3860InitcodeLimit := by
-  rw [creationCodeLiteral_length, eip3860InitcodeLimit_exact]
-  decide
-
-theorem creationCodeLiteral_headroom :
-    eip3860InitcodeLimit - creationCodeLiteral.length = 47151 := by
-  rw [creationCodeLiteral_length, eip3860InitcodeLimit_exact]
-
 end Blanc.Drip

@@ -243,7 +243,4 @@ theorem weth9_approve_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
   rw [pre_eq_St h_stack h_mem hg] at h0
   exact h0
 
-theorem tail_0229 : t_0229_c25 = t_0187_c27 := rfl
-theorem tail_03b0 : t_03b0_c20 = t_0187_c27 := rfl
-
 end Blanc.Lift.Weth9

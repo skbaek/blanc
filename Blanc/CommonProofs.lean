@@ -819,23 +819,6 @@ theorem Func.observe_eq_of_run_silentAt
   | call hget hburn _ ih =>
       exact (ih (hclosed _ _ silent hget)).trans (Burn.Inv.inv hburn).symm
 
-/-- A `SilentIn` body preserves its observation in a fixed function context
-closed under permitted tail calls.  Recursion is on the successful run, so a
-closed set of mutually recursive slots needs no fuel premise. -/
-theorem Func.observe_eq_of_run_silentIn
-    {Observation : Type} {observe : Devm → Observation}
-    {P : Nat → Prop} {fs : List Func}
-    [PopBurn.Inv observe] [Burn.Inv observe]
-    (hclosed : ∀ k g, P k → fs[k]? = some g → Func.SilentIn observe P g)
-    {sevm : Sevm} {s r : Devm} {f : Func}
-    (run : Func.Run fs sevm s f r)
-    (silent : Func.SilentIn observe P f) :
-    observe r = observe s := by
-  apply Func.observe_eq_of_run_silentAt (sevm := sevm) (run := run)
-    (silent := silent.toSilentAt)
-  intro k g permitted lookup
-  exact (hclosed k g permitted lookup).toSilentAt
-
 /-- A fixed-context syntactic certificate that a function cannot change
 persistent storage.  Tail calls are admitted only at indices selected by
 `P`; the companion theorem below checks that every such lookup resolves to a
@@ -3176,53 +3159,6 @@ def Xinst.ShapeCovered (sevm : Sevm) (devm : Devm) (s : XStep) : Prop :=
       s = genericCall.step sevm d gas value caller target codeAddress stv isSt
             ii isz oi osz code dp)
 
-theorem Xinst.ShapeCovered.toShape {sevm : Sevm} {devm : Devm} {s : XStep}
-    (h : Xinst.ShapeCovered sevm devm s) : Xinst.Shape sevm devm s := by
-  rcases h with ⟨ex, rfl, hex⟩ | ⟨d, e, na, mi, ms, hf, rfl⟩ |
-    ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
-      hf, hf₀, hcal, hsrc, rfl⟩
-  · exact Or.inl ⟨ex, rfl, hex⟩
-  · exact Or.inr (Or.inl ⟨d, e, na, mi, ms, hf, rfl⟩)
-  · exact Or.inr (Or.inr (Or.inl ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz,
-      oi, osz, code, dp, hf, hf₀, hcal, hsrc, rfl⟩))
-
-lemma Xinst.ShapeCovered.trans_left {sevm : Sevm} {a b : Devm} {s : XStep}
-    (hab : Devm.InstructionFrame a b) (h : Xinst.ShapeCovered sevm b s) :
-    Xinst.ShapeCovered sevm a s := by
-  rcases h with ⟨ex, rfl, hex⟩ | ⟨d, e, na, mi, ms, hf, rfl⟩ |
-    ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
-      hf, hf₀, hcal, hsrc, rfl⟩
-  · exact Or.inl ⟨ex, rfl,
-      Execution.Rel.trans_left Devm.instructionFrame_trans hab hex⟩
-  · exact Or.inr (Or.inl ⟨d, e, na, mi, ms,
-      Devm.instructionFrame_trans hab hf, rfl⟩)
-  · exact Or.inr (Or.inr ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz,
-      oi, osz, code, dp, Devm.instructionFrame_trans hab hf,
-      Devm.instructionFrame_trans hab hf₀, hcal, hsrc, rfl⟩)
-
-lemma Xinst.Shape.trans_left {sevm : Sevm} {a b : Devm} {s : XStep}
-    (hab : Devm.InstructionFrame a b) (h : Xinst.Shape sevm b s) :
-    Xinst.Shape sevm a s := by
-  rcases h with ⟨ex, rfl, hex⟩ | ⟨d, e, na, mi, ms, hf, rfl⟩ |
-    ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
-      hf, hf₀, hcal, hsrc, rfl⟩ |
-    ⟨d, st, e, na, mi, ms, hf, rfl⟩ |
-    ⟨d, d₀, st, g, r, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
-      nac, ib, hf, hf₀, hcal, hsrc, rfl⟩
-  · exact Or.inl ⟨ex, rfl,
-      Execution.Rel.trans_left Devm.instructionFrame_trans hab hex⟩
-  · exact Or.inr (Or.inl ⟨d, e, na, mi, ms,
-      Devm.instructionFrame_trans hab hf, rfl⟩)
-  · exact Or.inr (Or.inr (Or.inl ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz,
-      oi, osz, code, dp, Devm.instructionFrame_trans hab hf,
-      Devm.instructionFrame_trans hab hf₀, hcal, hsrc, rfl⟩))
-  · exact Or.inr (Or.inr (Or.inr (Or.inl ⟨d, st, e, na, mi, ms,
-      Devm.instructionFrame_trans hab hf, rfl⟩)))
-  · exact Or.inr (Or.inr (Or.inr (Or.inr ⟨d, d₀, st, g, r, v, c, t, cadr, stv,
-      isSt, ii, isz, oi, osz, code, dp, nac, ib,
-      Devm.instructionFrame_trans hab hf,
-      Devm.instructionFrame_trans hab hf₀, hcal, hsrc, rfl⟩)))
-
 lemma Xinst.shape_done {sevm : Sevm} {devm : Devm} {ex : Execution}
     (h : Execution.Rel Devm.InstructionFrame devm ex) :
     Xinst.Shape sevm devm (.done ex) := Or.inl ⟨ex, rfl, h⟩
@@ -3403,14 +3339,6 @@ lemma Xinst.shapeCovered_assert {sevm : Sevm} {devm : Devm} {p : Prop} [Decidabl
   split
   · exact hf
   · exact Xinst.shapeCovered_error herr
-
-lemma Xinst.shapeCovered_assertDynamic {sevm : Sevm} {devm : Devm}
-    {f : Unit → Except (EvmError × Devm) XStep}
-    (hf : Xinst.ShapeCovered sevm devm (XStep.ofExcept (f ()))) :
-    Xinst.ShapeCovered sevm devm
-      (XStep.ofExcept (assertDynamic sevm devm >>= f)) := by
-  simp only [assertDynamic]
-  exact Xinst.shapeCovered_assert (Devm.instructionFrame_refl devm) hf
 
 lemma Xinst.shapeCovered_shortfall {sevm : Sevm} {devm d : Devm} {stipend : Nat}
     (hf : Devm.InstructionFrame devm d) :
@@ -4221,14 +4149,6 @@ lemma Xinst.step_spawn_getCode {sevm : Sevm} {devm : Devm} {x : Xinst}
   · rw [(genericCreateAmsterdam.step_spawn_frame hs).1 a, hf.getCode a]
   · rw [(genericCallAmsterdam.step_spawn_frame hs).1 a, hf.getCode a]
 
-/-- Delegation resolution is the identity on an address whose code carries no
-EIP-7702 designator, so the resolved code address is the queried address. -/
-private lemma accessDelegation_codeAddress_of_none {d : Devm} {adr : Adr}
-    (h : getDelegatedCodeAddress (d.getCode adr) = none) :
-    (accessDelegation d adr).2.1 = adr := by
-  dsimp only [accessDelegation]
-  rw [show getDelegatedCodeAddress (d.state.getCode adr) = none from h]
-
 private lemma GasSchedule.accessDelegation_codeAddress_of_none
     {gas : GasSchedule} {d : Devm} {adr : Adr}
     (h : getDelegatedCodeAddress (d.getCode adr) = none) :
@@ -4599,14 +4519,6 @@ lemma Rinst.preserves_getCode_gen
     (_ne : (devm.getCode a).toList ≠ []) :
     Execution.getCode exn a = devm.getCode a := by
   cases exn <;> first | exact Rinst.preserves_getCode_err run a | exact Rinst.preserves_getCode run a
-
-lemma Jinst.preserves_getCode
-    {pc sevm devm j pc' devm'}
-    (run : Jinst.Run ⟨pc, sevm, devm⟩ j (.ok ⟨pc', devm'⟩)) (a : Adr) :
-    devm'.getCode a = devm.getCode a := by
-  have hf := Jinst.run_instructionFrame ⟨pc, sevm, devm⟩ j
-  rw [run] at hf
-  exact (hf.getCode a).symm
 
 def JumpResult.getCode (ex : Except (EvmError × Devm) (Nat × Devm)) (a : Adr) : ByteArray :=
   match ex with
@@ -5110,21 +5022,6 @@ lemma Xinst.codePreserve_effectRec (x : Xinst) :
   · exact lift hf (GenericCreateAmsterdam.codePreserve inv run)
   -- dispatched to the Amsterdam CALL family
   · exact lift hf (GenericCallAmsterdam.codePreserve inv run)
-
-/-- Compatibility projection: the legacy observation theorem, now derived from
-the relational master `Xinst.codePreserve_effectRec` through the
-`Xlot.rel_of_invGetCode` bridge.  Statement unchanged. -/
-lemma Xinst.preserves_getCode_gen
-    {sevm devm x xl exn}
-    (inv : (Blanc.Xlot.InvGetCode xl))
-    (run : Xinst.Run sevm devm x xl exn) :
-    ∀ a : Adr,
-      (devm.getCode a).toList ≠ [] →
-      Execution.getCode exn a = devm.getCode a := by
-  have h := Xinst.codePreserve_effectRec x (Xlot.rel_of_invGetCode inv) run
-  cases exn with
-  | error e => exact fun a ha => h a ha
-  | ok d => exact fun a ha => h a ha
 
 lemma Ninst.push_instructionFrame_effectRec
     {xs : Bytes} {hxs : xs.length ≤ 32} :
@@ -5773,30 +5670,6 @@ lemma lift_inv_sem
   · intro pc sevm pre l post h_at h_run h_ne h_pi
     exact last h_at h_run h_ne h_pi
 
-/-- The "we are inside the contract" case, shared by every driver outcome:
-either the run failed (nothing to prove) or it completed a program run at
-`pc = 0`, which the depth induction turns into the contract-level invariant. -/
-private lemma lift_core.atTarget
-    {ε : Nat → Sevm → Devm → Execution → Prop} {π : Sevm → Devm → Devm → Prop}
-    {ca : Adr} {p : Prog}
-    (analog : ∀ {sevm pre post}, π sevm pre post → ε 0 sevm pre (.ok post))
-    ( depth_ind :
-      ∀ {sevm pre post},
-        Prog.Run sevm pre p post →
-        sevm.currentTarget = ca →
-        ForallDeeperAt sevm.depth ca p (fun pc s d e _ => ε pc s d e) →
-        π sevm pre post )
-    ( errAtTarget :
-      ∀ {pc sevm devm err devm'},
-        sevm.currentTarget = ca → ε pc sevm devm (.error ⟨err, devm'⟩) )
-    {pc : Nat} {sevm : Sevm} {devm : Devm} {exn : Execution}
-    (ex : Exec pc sevm devm exn)
-    (h_fa : ForallDeeperAt sevm.depth ca p (fun pc s d e _ => ε pc s d e))
-    (h_at_p : p.At ca pc sevm devm) (h_eq : sevm.currentTarget = ca) :
-    ε pc sevm devm exn := by
-  simpa [Prog.codeSem, CodeSem.At, Prog.At, ForallDeeperAtSem, ForallDeeperAt] using
-    (lift_core_sem.atTarget (sem := p.codeSem) analog depth_ind errAtTarget ex h_fa h_at_p h_eq)
-
 /-- Code preservation across one driver step, in the form the `Prog.At`
 bookkeeping needs. -/
 lemma lift_core.stepCode {pc : Nat} {sevm : Sevm} {devm devm' : Devm}
@@ -5941,60 +5814,6 @@ lemma lift
     ForallDeeperAtSem, ForallDeeperAt] using
     (lift_sem R ca p.codeSem depth_ind nextNone nextSome jump last)
 
-
-lemma lift_inv
-    (ca : Adr) (p : Prog)
-    (σ : Sevm → Devm → Prop)
-    (ρ : Sevm → Devm → Prop)
-    ( with_depth_ind :
-      ∀ {sevm pre post},
-        Prog.Run sevm pre p post →
-        sevm.currentTarget = ca →
-        ( ∀ pc' sevm' pre' post',
-            Exec pc' sevm' pre' (.ok post') →
-            sevm'.depth < sevm.depth →
-            Prog.At p ca pc' sevm' pre' →
-            σ sevm' pre' →
-            ρ sevm' post' ) →
-        σ sevm pre →
-        ρ sevm post )
-    ( nextNone :
-      ∀ {pc} {sevm} {pre} {n} {inter},
-        Ninst.At sevm.code pc n →
-        Ninst.StepRun pc sevm pre n .none (.ok inter) →
-        sevm.currentTarget ≠ ca →
-        σ sevm pre →
-        σ sevm inter )
-    ( nextSome :
-      ∀ {pc} {sevm} {pre} {n} {evm'} {exn'} {inter},
-        Ninst.At sevm.code pc n →
-        Ninst.StepRun pc sevm pre n (.some ⟨evm', exn'⟩) (.ok inter) →
-        Exec evm'.pc evm'.sta evm'.dyna exn' →
-        sevm.currentTarget ≠ ca →
-        σ sevm pre →
-        σ evm'.sta evm'.dyna ∧ (ifOk (ρ evm'.sta) exn' → σ sevm inter) )
-    ( jump :
-      ∀ {pc} {sevm} {pre} {j} {pc'} {inter},
-        Jinst.At sevm.code pc j →
-        Jinst.Run ⟨pc, sevm, pre⟩ j (.ok ⟨pc', inter⟩) →
-        sevm.currentTarget ≠ ca →
-        σ sevm pre →
-        σ sevm inter )
-    ( last :
-      ∀ {pc} {sevm} {pre} {l} {post},
-        Linst.At sevm.code pc l →
-        Linst.Run sevm pre l (.ok post) →
-        sevm.currentTarget ≠ ca →
-        σ sevm pre →
-        ρ sevm post ) :
-    ∀ pc sevm devm post,
-      Exec pc sevm devm (.ok post) →
-      Prog.At p ca pc sevm devm →
-      σ sevm devm →
-      ρ sevm post := by
-  simpa [Prog.codeSem, CodeSem.At, Prog.At, ForallSubExecSem, ForallSubExec,
-    ForallDeeperAtSem, ForallDeeperAt] using
-    (lift_inv_sem ca p.codeSem σ ρ with_depth_ind nextNone nextSome jump last)
 
 
 syntax "show_prefix_zero" : tactic
@@ -11452,17 +11271,6 @@ lemma GenericCall.balanceEffect
     unfold MessageExecution.Rel at h
     rwa [callMsg_benv_state] at h
 
-lemma GenericCall.balance_effect
-    {sevm : Sevm} {pre : Devm} {gas : Nat} {value : B256}
-    {caller target codeAddress : Adr} {stv istat : Bool}
-    {ii is oi os : Nat} {code : ByteArray} {dp : Bool}
-    {xl : Xlot} {out : Execution}
-    (hxl : Xlot.Rel Devm.BalNoninc xl)
-    (run : GenericCall sevm pre gas value caller target codeAddress
-      stv istat ii is oi os code dp xl out) :
-    Execution.Rel Devm.BalNoninc pre out :=
-  GenericCall.balanceEffect hxl run
-
 lemma GenericCallAmsterdam.balanceEffect
     {sevm : Sevm} {state : StateGasRules} {pre : Devm} {gas reservoir : Nat}
     {value : B256} {caller target codeAddress : Adr} {stv istat : Bool}
@@ -11499,17 +11307,6 @@ lemma GenericCallAmsterdam.balanceEffect
       have h := ProcessMessage.balance_effect hxl hframe
       unfold MessageExecution.Rel at h
       rwa [callMsgAmsterdam_benv_state] at h
-
-lemma GenericCallAmsterdam.balance_effect
-    {sevm : Sevm} {state : StateGasRules} {pre : Devm} {gas reservoir : Nat}
-    {value : B256} {caller target codeAddress : Adr} {stv istat : Bool}
-    {ii is oi os : Nat} {code : ByteArray}
-    {dp nac ib : Bool} {xl : Xlot} {out : Execution}
-    (hxl : Xlot.Rel Devm.BalNoninc xl)
-    (run : GenericCallAmsterdam sevm state pre gas reservoir value caller
-      target codeAddress stv istat ii is oi os code dp nac ib xl out) :
-    Execution.Rel Devm.BalNoninc pre out :=
-  GenericCallAmsterdam.balanceEffect hxl run
 
 /-- Canonical balance-effect master for generic creates.  Unlike calls, its
 prefix contains the sender nonce write and its child path performs fresh
@@ -11580,14 +11377,6 @@ lemma GenericCreate.balanceEffect
     have h := ProcessCreateMessage.balance_effect hxl hframe
     unfold MessageExecution.Rel at h
     rwa [createMsg_benv_state] at h
-
-lemma GenericCreate.balance_effect
-    {sevm : Sevm} {pre : Devm} {endowment : B256} {newAddress : Adr}
-    {mi ms : Nat} {xl : Xlot} {out : Execution}
-    (hxl : Xlot.Rel Devm.BalNoninc xl)
-    (run : GenericCreate sevm pre endowment newAddress mi ms xl out) :
-    Execution.Rel Devm.BalNoninc pre out :=
-  GenericCreate.balanceEffect hxl run
 
 lemma GenericCreateAmsterdam.balanceEffect
     {sevm : Sevm} {state : StateGasRules} {pre : Devm} {endowment : B256}
@@ -11754,15 +11543,6 @@ lemma GenericCreateAmsterdam.balanceEffect
     unfold MessageExecution.Rel at h
     rw [createMsgAmsterdam_benv_state] at h
     exact h
-
-lemma GenericCreateAmsterdam.balance_effect
-    {sevm : Sevm} {state : StateGasRules} {pre : Devm} {endowment : B256}
-    {newAddress : Adr} {mi ms : Nat} {xl : Xlot} {out : Execution}
-    (hxl : Xlot.Rel Devm.BalNoninc xl)
-    (run : GenericCreateAmsterdam sevm state pre endowment newAddress mi ms
-      xl out) :
-    Execution.Rel Devm.BalNoninc pre out :=
-  GenericCreateAmsterdam.balanceEffect hxl run
 
 lemma Xinst.balance_effectRec (x : Xinst) :
     Xinst.EffectRec Devm.BalNoninc x := by
@@ -12782,10 +12562,6 @@ lemma of_transferTestLt {sevm : Sevm} {s s' : Devm} {dst}
 
 /-! ### Balance sums do not overflow across a run -/
 
-lemma sum_getBal_state {d : Devm} : sum d.getBal = sum d.state.bal := by
-  have h : d.getBal = d.state.bal := funext (fun _ => rfl)
-  rw [h]
-
 
 lemma Exec.preserves_nof {pc : Nat} {sevm : Sevm} {devm : Devm} {exn : Execution}
     (run : Exec pc sevm devm exn) :
@@ -12883,15 +12659,6 @@ lemma Array.getD_setIfInBounds {ξ : Type} (a : Array ξ) (k : Nat) (x : ξ)
     (a.setIfInBounds k x).getD i d = if i = k then x else a.getD i d := by
   simp only [Array.setIfInBounds, dif_pos hk]
   exact Array.getD_set a k x hk i d
-
-lemma Array.foldl_setIfInBounds_size {ξ : Type} :
-    ∀ (l : List ξ) (a : Array ξ) (k : Nat),
-      (List.foldl (fun (ysn : Array ξ × Nat) x =>
-        (ysn.fst.setIfInBounds ysn.snd x, ysn.snd + 1)) (a, k) l).fst.size = a.size := by
-  intro l
-  induction l with
-  | nil => intro a k; rfl
-  | cons x l ih => intro a k; simp [ih]
 
 lemma Array.foldl_setIfInBounds_getD {ξ : Type} (d : ξ) :
     ∀ (l : List ξ) (a : Array ξ) (k i : Nat), k + l.length ≤ a.size →

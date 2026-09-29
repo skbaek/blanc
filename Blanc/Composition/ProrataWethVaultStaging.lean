@@ -350,22 +350,6 @@ theorem stagedWethSelectors_complete :
       allowedWethSelectors := by
   rfl
 
-theorem approveSelector_not_staged :
-    selector "approve" [.address, .uint256] ∉
-      [ Blanc.ProrataWethVault.wethBalanceOfSelector,
-        Blanc.ProrataWethVault.wethTransferFromSelector,
-        Blanc.ProrataWethVault.wethTransferSelector ] := by
-  rw [stagedWethSelectors_complete]
-  exact approveSelector_not_allowed
-
-theorem withdrawSelector_not_staged :
-    selector "withdraw" [.uint256] ∉
-      [ Blanc.ProrataWethVault.wethBalanceOfSelector,
-        Blanc.ProrataWethVault.wethTransferFromSelector,
-        Blanc.ProrataWethVault.wethTransferSelector ] := by
-  rw [stagedWethSelectors_complete]
-  exact withdrawSelector_not_allowed
-
 /-! ## Proof-carrying source memory -/
 
 abbrev MemoryImage (devm : Devm) (image : Bytes) : Prop :=
@@ -2899,47 +2883,6 @@ structure StagedSourceFrame (sevm : Sevm) (callPre : Devm) : Prop where
       ∃ receiver : Adr,
         ImageWordAt entry.memory.data.toList
           Blanc.ProrataWethVault.receiverWord receiver.toB256
-
-/-- **`receiverShaped` is a fact about the crossing, not about the entry.**
-The direct-transfer staging prefix rewrites only the three calldata words below
-byte 96 (`Blanc.MemWordAt.acrossTransferStaging`), and the receiver word sits at
-byte 1056, so the word the field asserts a shape for is the same word at the
-staging entry and at the CALL edge.
-
-This is the reduction a provider of `StagedSourceFrame` needs: it replaces the
-field's quantification over hypothetical staging entries with one obligation at
-`occurrence.node.devm`, the state the source traversal actually names.  It does
-not discharge that obligation; see the structure's own documentation for what
-blocks it. -/
-theorem receiverShaped_of_crossing
-    {sevm : Sevm} {entry callPre : Devm} {assetsWord : B256}
-    (memoryWf : Mem.Wf entry.memory)
-    (staging : Line.Run sevm entry
-      (transferStaging Blanc.ProrataWethVault.receiverWord assetsWord) callPre)
-    (crossing : ∃ receiver : Adr,
-      MemWordAt callPre (Blanc.ProrataWethVault.receiverWord * 32).toNat
-        receiver.toB256) :
-    ∃ receiver : Adr,
-      ImageWordAt entry.memory.data.toList
-        Blanc.ProrataWethVault.receiverWord receiver.toB256 := by
-  obtain ⟨receiver, crossingAt⟩ := crossing
-  have image : MemoryImage entry entry.memory.data.toList := by
-    refine ⟨memoryWf, ?_⟩
-    intro index
-    simp
-  set word := Bytes.toB256 (entry.memory.data.toList.sliceD
-    (Blanc.ProrataWethVault.receiverWord * 32).toNat 32 0) with wordDef
-  have entryAt : MemWordAt entry
-      (Blanc.ProrataWethVault.receiverWord * 32).toNat word :=
-    MemWordAt.of_memImage image (sliceBytes_of_toB256 rfl)
-  have transported : MemWordAt callPre
-      (Blanc.ProrataWethVault.receiverWord * 32).toNat word :=
-    Blanc.MemWordAt.acrossTransferStaging (by decide +kernel) staging entryAt
-  have equal : word = receiver.toB256 := by
-    rw [← transported.readWord, ← crossingAt.readWord]
-  refine ⟨receiver, ?_⟩
-  rw [ImageWordAt, ← equal, wordDef]
-  exact sliceBytes_of_toB256 rfl
 
 /-- A step that actually spawned a child frame ran at nonzero call depth: every
 spawning step function is depth-guarded. -/

@@ -31,13 +31,6 @@ theorem exists_balRep (a : Adr) : ∃ r, BalRep r ∧ balSlot r = balSlot a := b
   have hb : p b.toNat := ⟨b, rfl, hsame.trans hslot⟩
   exact hmin b.toNat (hrn ▸ hlt) hb
 
-theorem balRep_unique {r r' : Adr} (hr : BalRep r) (hr' : BalRep r')
-    (hslot : balSlot r = balSlot r') : r = r' := by
-  rcases Nat.lt_trichotomy r.toNat r'.toNat with hlt | heq | hlt
-  · exact False.elim (hr' r hlt hslot)
-  · exact adr_eq_of_toNat_eq heq
-  · exact False.elim (hr r' hlt hslot.symm)
-
 theorem booked_set_off (s : Stor) (k w : B256) (hk : ∀ a, balSlot a ≠ k) :
     booked (s.set k w) = booked s := by
   classical

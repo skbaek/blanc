@@ -120,11 +120,6 @@ theorem victimMoves_cons_of_silent {o : Nat} {victim : Adr}
     victimMoves victim (step :: steps) = victimMoves victim steps := by
   simp [victimMoves, victimMove, hkind]
 
-theorem mem_of_mem_victimMoves {o : Nat} {victim : Adr}
-    {step : ProrataAccountingStep o} {steps : List (ProrataAccountingStep o)}
-    (mem : step ∈ victimMoves victim steps) : step ∈ steps :=
-  List.mem_of_mem_filter mem
-
 /-- The SF-frozen victim schedule.
 
 The trace contains exactly one successful victim deposit, and at most one later
@@ -333,18 +328,6 @@ theorem outsideSubsidy_coalitionCharge {o : Nat} (victim : Adr)
   | nil => rfl
   | cons s ss ih => simp [outsideSubsidy, coalitionCharge,
       AttackAttribution.outsideAmount]
-
-/-- At the closed charge the coalition's input is exactly the sum of every
-settled non-victim deposit value and positive target credit. -/
-theorem inA_coalitionCharge {o : Nat} (victim : Adr)
-    (steps : List (ProrataAccountingStep o)) :
-    inA victim coalitionCharge steps = (steps.map (stepCredit victim)).sum := rfl
-
-/-- At the closed charge the coalition's take is exactly the sum of every
-settled non-victim withdrawal payout. -/
-theorem outA_coalitionCharge {o : Nat} (victim : Adr)
-    (steps : List (ProrataAccountingStep o)) :
-    outA victim coalitionCharge steps = (steps.map (stepPayout victim)).sum := rfl
 
 /-! ## The SF-frozen attack trace -/
 

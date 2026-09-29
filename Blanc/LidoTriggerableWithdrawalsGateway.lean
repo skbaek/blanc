@@ -555,13 +555,6 @@ owner `Blanc.Func.mapCalls`; the base arm of `CompositeLabel` is the naming. -/
 def toBaseSymbolic (f : Func) : SymbolicFunc Trigger.CompositeLabel :=
   f.mapCalls Trigger.CompositeLabel.base
 
-/-- Base naming is totally inverted by the composite coordinate map, for any base
-count, so this needs no membership side condition. -/
-theorem toBaseSymbolic_erase (baseCount : Nat) (f : Func) :
-    (toBaseSymbolic f).erase (Trigger.compositeSlotOf baseCount) = f :=
-  Func.erase_mapCalls_of_inverse Trigger.CompositeLabel.base
-    (Trigger.compositeSlotOf baseCount) (fun _ => rfl) f
-
 /-- Name a Trigger-local call target in the integrated table: the three
 deduplicated bodies resolve to their shared family slots, every other local
 slot keeps its semantic `TriggerLabel`.  This mirrors `integratedTriggerSlot`
@@ -688,16 +681,6 @@ theorem symbolicBaseAux_labels :
       (List.range 17).map (fun i => Trigger.CompositeLabel.base (i + 1)) :=
   rfl
 
-/-- The 17-entry resolution skeleton in `Blanc.LidoTriggerableWithdrawalsGateway.Trigger`
-carries the real table's labels, so the composite resolution controls stated over
-it are controls about this program. -/
-theorem symbolicBaseAux_labels_eq_skeleton :
-    symbolicBaseAux.map Prod.fst = Trigger.base17AuxSkeleton.map Prod.fst := by
-  rw [symbolicBaseAux_labels]
-  rfl
-
-theorem symbolicBaseAux_length : symbolicBaseAux.length = 17 := rfl
-
 /-- The 19 kept Trigger labels, in local order: the deduplicated
 `resumedExpected`, `arithmeticPanic` and `roleFailureBoundary` bodies live in
 the family table instead of here. -/
@@ -736,15 +719,6 @@ def symbolicTriggerAux (dp : DeployParams) :
     List (Trigger.CompositeLabel × SymbolicFunc Trigger.CompositeLabel) :=
   (integratedTriggerLabels.zip (integratedTriggerLocalBodies dp)).map
     (fun entry => (.trigger entry.1, toIntegratedSymbolic entry.2))
-
-/-- Control: the symbolic Trigger table is the integrated numeric table lifted
-body by body, labelled in `integratedTriggerLabels` order. -/
-theorem symbolicTriggerAux_labels (dp : DeployParams) :
-    (symbolicTriggerAux dp).map Prod.fst =
-      integratedTriggerLabels.map Trigger.CompositeLabel.trigger := rfl
-
-theorem symbolicTriggerAux_length (dp : DeployParams) :
-    (symbolicTriggerAux dp).length = 19 := rfl
 
 theorem flatMap_callTargets_integratedTriggerLocalBodies (dp : DeployParams) :
     (integratedTriggerLocalBodies dp).flatMap Func.callTargets =
@@ -840,15 +814,6 @@ def symbolicRuntimeMain (dp : DeployParams) : SymbolicFunc Trigger.CompositeLabe
 def symbolicRuntime (dp : DeployParams) : SymbolicProg Trigger.CompositeLabel :=
   ⟨.root, symbolicRuntimeMain dp, symbolicAux dp⟩
 
-theorem symbolicRuntime_findLabel_root (dp : DeployParams) :
-    (symbolicRuntime dp).findLabel? .root = some 0 :=
-  rfl
-
-theorem symbolicRuntime_findLabel_trigger (dp : DeployParams) (lbl : Trigger.TriggerLabel)
-    (h : lbl ≠ .resumedExpected ∧ lbl ≠ .arithmeticPanic ∧ lbl ≠ .roleFailureBoundary) :
-    (symbolicRuntime dp).findLabel? (.trigger lbl) = some (integratedSlotOf (.trigger lbl)) := by
-  cases lbl <;> simp_all <;> rfl
-
 /-- Negative control for the deduplication: the three Trigger bodies that live
 in the family table resolve nowhere in the Trigger half. -/
 theorem symbolicRuntime_findLabel_trigger_dropped (dp : DeployParams) :
@@ -857,38 +822,11 @@ theorem symbolicRuntime_findLabel_trigger_dropped (dp : DeployParams) :
       (symbolicRuntime dp).findLabel? (.trigger .roleFailureBoundary) = none :=
   ⟨rfl, rfl, rfl⟩
 
-/-- The 17 base slots resolve to themselves.  `CompositeLabel.base` carries an
-unbounded `Nat`, so this is *not* total: `findLabel? (.base 0)` and
-`findLabel? (.base 18)` are `none` while `integratedSlotOf` still answers `0`
-and `18`.  That is why the composite program cannot discharge
-`Blanc.resolve_eq_erase` with a single `cases target <;> rfl` the way a finite
-label type does, and why the agreement has to be restricted to the call targets
-that occur. -/
-theorem symbolicRuntime_findLabel_base (dp : DeployParams) (k : Nat)
-    (h1 : 1 ≤ k) (h2 : k ≤ 17) :
-    (symbolicRuntime dp).findLabel? (.base k) = some k := by
-  have hk : k = 1 ∨ k = 2 ∨ k = 3 ∨ k = 4 ∨ k = 5 ∨ k = 6 ∨
-      k = 7 ∨ k = 8 ∨ k = 9 ∨ k = 10 ∨ k = 11 ∨ k = 12 ∨
-      k = 13 ∨ k = 14 ∨ k = 15 ∨ k = 16 ∨ k = 17 := by omega
-  rcases hk with rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl <;> rfl
-
 /-- Negative control for the bound above: the table really does stop at 17. -/
 theorem symbolicRuntime_findLabel_base_out_of_range (dp : DeployParams) :
     (symbolicRuntime dp).findLabel? (.base 0) = none ∧
       (symbolicRuntime dp).findLabel? (.base 18) = none :=
   ⟨rfl, rfl⟩
-
-theorem symbolicRuntime_findLabel_malformedAbi (dp : DeployParams) :
-    (symbolicRuntime dp).findLabel? (.trigger .malformedAbi) = some 18 :=
-  rfl
-
-theorem symbolicRuntime_findLabel_validateArrayLoop (dp : DeployParams) :
-    (symbolicRuntime dp).findLabel? (.trigger .validateArrayLoop) = some 26 :=
-  rfl
-
-theorem symbolicRuntime_findLabel_afterNestedValidation (dp : DeployParams) :
-    (symbolicRuntime dp).findLabel? (.trigger .afterNestedValidation) = some 36 :=
-  rfl
 
 -- There was a `symbolicRuntime_findLabel_malformedAbi_off_by_one : … ≠ some 19`
 -- here, removed for the same reason as its Trigger counterpart:
@@ -916,11 +854,6 @@ theorem erase_toIntegratedSymbolic_triggerMain (dp : DeployParams) :
   rw [triggerFullWithdrawals]
   exact erase_toIntegratedSymbolic _
     (by rw [Trigger.callTargets_triggerFullWithdrawals]; decide +kernel)
-
-theorem erase_symbolicFuncs (dp : DeployParams) :
-    (symbolicFuncs dp).map (fun (s, f) => (s, f.erase integratedSlotOf)) = funcs dp := by
-  simp only [symbolicFuncs, List.map_cons, List.map_nil, toBaseSymbolic_integrated_erase,
-    erase_toIntegratedSymbolic_triggerMain, funcs, triggerFullWithdrawals]
 
 theorem erase_symbolicRuntimeMain (dp : DeployParams) :
     (symbolicRuntimeMain dp).erase integratedSlotOf = runtimeMain dp := by
@@ -984,12 +917,6 @@ theorem resolve_symbolicRuntime_eq (dp : DeployParams) :
     (symbolicRuntime_validateDefinitions dp) (symbolicRuntime_callsOk dp)
   rwa [erase_symbolicRuntime dp] at h
 
-theorem funcs_selector_census (dp : DeployParams) :
-    List.Perm ((funcs dp).map Prod.fst)
-      (selectorCensus.map SelectorEntry.selector) := by
-  simp only [funcs, List.map_cons, List.map_nil]
-  decide
-
 theorem runtime_compileShape_eq_zero (dp : DeployParams) :
     (runtime dp).compileShape =
       (runtime ⟨0⟩).compileShape := by
@@ -1017,15 +944,6 @@ def symbolicLinkCert (dp : DeployParams) : LinkCertificate (symbolicRuntime dp) 
   resolve_eq := resolve_symbolicRuntime_eq dp
   compiles := runtime_compiles dp
 
-theorem symbolicLinkCert_resolved (dp : DeployParams) :
-    (symbolicLinkCert dp).resolved = runtime dp :=
-  rfl
-
-/-- The certificate's compiled bytes are the production runtime bytes. -/
-theorem symbolicLinkCert_bytes (dp : DeployParams) :
-    (symbolicLinkCert dp).bytes = runtimeCode dp :=
-  rfl
-
 /-- Structural length of the compiled runtime, evaluated in the kernel through
 `Prog.length_compile` so that the 8,094 emitted bytes are never materialised.
 This is the first proof of this number: the published compatibility figure was
@@ -1033,11 +951,6 @@ previously quoted with no Lean theorem behind it. -/
 private theorem runtimeStructuralLengthZero :
     (((runtime ⟨0⟩).main :: (runtime ⟨0⟩).aux).map fun f => 1 + compsize f).sum = 8094 := by
   decide +kernel
-
-/-- The zero-parameter member — the constructor's runtime template — compiles to
-exactly 8,094 bytes. -/
-theorem runtimeCode_length_zero : (runtimeCode ⟨0⟩).length = 8094 :=
-  (Prog.length_compile (runtime_compile ⟨0⟩)).trans runtimeStructuralLengthZero
 
 /-- The structural length is the same for every deployment parameter: each one
 occupies a fixed-width PUSH32 immediate, which is exactly what

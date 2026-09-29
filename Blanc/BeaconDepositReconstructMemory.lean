@@ -210,24 +210,6 @@ theorem ReconstructSourceMemoryCarrier.readSignatureTail
     Bytes.toB256 (memory.read 480 32).1 = Bytes.toB256 signatureTail := by
   rw [Mem.Reads.read h.reads, h.signatureTail_read]
 
-theorem ReconstructSourceMemoryCarrier.readOldCount
-    {memory : Mem}
-    {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
-    {oldCount amount : B256} {size : Nat}
-    (h : ReconstructSourceMemoryCarrier memory pubkeyInput signatureFirst
-      signatureTail withdrawal amountPadded oldCount amount size) :
-    Bytes.toB256 (memory.read 576 32).1 = oldCount := by
-  rw [Mem.Reads.read h.reads, h.oldCount_read, B256.toB256_toBytes]
-
-theorem ReconstructSourceMemoryCarrier.readAmount
-    {memory : Mem}
-    {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
-    {oldCount amount : B256} {size : Nat}
-    (h : ReconstructSourceMemoryCarrier memory pubkeyInput signatureFirst
-      signatureTail withdrawal amountPadded oldCount amount size) :
-    Bytes.toB256 (memory.read 672 32).1 = amount := by
-  rw [Mem.Reads.read h.reads, h.amount_read, B256.toB256_toBytes]
-
 /-- The two memory windows touched by one contract `sha64` call. -/
 def reconstructionShaWindows (inputWord outputWord : B256) :
     List (Nat × Nat) :=

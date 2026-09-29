@@ -443,27 +443,6 @@ theorem Exec.Deriv.SourceCursor.noExec_of_reachableExecFree
   exact Exec.Deriv.SourceCursor.noExec_core cursor.node cursor rfl
     compiled members sourceFree sourceClosed component target reached x execAt
 
-/-- An instruction occurrence owned by an accepted same-frame source cursor
-cannot be a source-level `.exec`. Child-frame occurrences require their own
-cursor and certificate. -/
-theorem Exec.NinstOccurrence.instruction_ne_exec_of_reachableExecFree
-    {root : Exec.Deriv} {program : Prog}
-    {path : Prog.SourcePath} {source : Func}
-    (cursor : Exec.Deriv.SourceCursor root program path source)
-    (compiled : some root.sevm.code.toList = program.compile)
-    (members : List Nat)
-    (accepted : program.reachableExecFree source members = true)
-    (occurrence : Exec.NinstOccurrence root)
-    (owned : Exec.Deriv.ParentPrefix cursor.node occurrence.node)
-    (x : Xinst) :
-    occurrence.instruction ≠ .exec x := by
-  intro instructionEq
-  have execAt :
-      Ninst.At occurrence.node.sevm.code occurrence.node.pc (.exec x) := by
-    simpa [instructionEq] using occurrence.decoded
-  exact cursor.noExec_of_reachableExecFree compiled members accepted
-    owned x execAt
-
 /-- Raw exact-main specialization. Exact compiled invocation plus an accepted
 main-entry/component certificate rules out every reached same-frame source
 `.exec` on the supplied finite arbitrary-outcome prefix. -/

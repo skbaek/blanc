@@ -51,9 +51,5 @@ theorem pauseFor_projection_eq (timestamp duration : B256) :
       pauseForProjection timestamp duration := by
   rfl
 
-theorem protectedSurface_membership {selected : B256} :
-    selected ∈ protectedSurface ↔ selected = selTriggerFullWithdrawals := by
-  simp [protectedSurface]
-
 end LidoTriggerableWithdrawalsGateway
 end Blanc

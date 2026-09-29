@@ -146,25 +146,6 @@ def PairStep.debitAmount {vault : Adr} {before after : State} :
   | .authorizedDebit call _ _ _ _ _ => (Sevm.argWord call.sevm 2).toNat
   | _ => 0
 
-/-- A step of positive debit amount is a runtime-authorized debit of that amount (the design's
-constructor-shaped disjunct, recovered from the `Nat` one). -/
-theorem PairStep.eq_authorizedDebit_of_debitAmount_pos {vault : Adr} {before after : State}
-    (step : PairStep vault before after) (positive : 0 < step.debitAmount) :
-    ∃ (call : WethAllowanceInvocation) (foreign : call.sevm.caller ≠ vault)
-      (owner : Sevm.argWord call.sevm 0 = vault.toB256)
-      (pair : call.pair? = some (vault.toB256, call.sevm.caller.toB256))
-      (moved : Transfer (Stor.rest (before.getStor wethAccount)) vault
-        (Sevm.argWord call.sevm 2) (Sevm.argWord call.sevm 1).toAdr
-        (Stor.rest (after.getStor wethAccount)))
-      (vaultKept : after.getStor vault = before.getStor vault),
-      step = .authorizedDebit call foreign owner pair moved vaultKept ∧
-        0 < (Sevm.argWord call.sevm 2).toNat := by
-  cases step with
-  | operation t evidence => exact absurd positive (Nat.lt_irrefl 0)
-  | silent caller vaultKept rowKept => exact absurd positive (Nat.lt_irrefl 0)
-  | authorizedDebit call foreign owner pair moved vaultKept =>
-      exact ⟨call, foreign, owner, pair, moved, vaultKept, rfl, positive⟩
-
 /-! ## 4. Every step keeps the supply cap -/
 
 /-- An inbound flow lands at or below the cap: it mints at most the room its own quote retained. -/
@@ -533,18 +514,6 @@ theorem rootedAllowanceHistory {steps : List (PairStepRecord vault)} {future : B
   have chain := realizes.toReplay.rootedAllowanceHistory start (fun _ member => member)
   simpa only [List.nil_append, PairBoundary.ofState] using chain
 
-/-- The rooted foreign-debit exclusion over a realized trace (cell altitude). -/
-theorem foreign_debit_excluded {steps : List (PairStepRecord vault)} {future : BlockChain}
-    (realizes : PairTraceRealizes root steps future)
-    (collision : NoVaultAllowanceKeyCollision (PairStepRecord.ledger steps) vault)
-    (call : WethAllowanceInvocation) (member : call ∈ PairStepRecord.ledger steps)
-    (foreign : call.sevm.caller ≠ vault)
-    (p : B256 × B256) (touched : p ∈ touchedWethAllowancePairs (PairStepRecord.ledger steps))
-    (owner : p.1 = vault.toB256) :
-    call.post.getStorVal wethAccount (wethAllowanceKey p.1 p.2) =
-      call.pre.getStorVal wethAccount (wethAllowanceKey p.1 p.2) :=
-  foreign_debit_excluded_rooted realizes.rootedAllowanceHistory collision call member foreign
-    p touched owner
 -- R:957–969 at the realized ledger.
 
 /-- **Hardened no-foreign-debit at row altitude** (goal control 4; SF §6).  Under D9, every

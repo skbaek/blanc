@@ -79,11 +79,4 @@ theorem runtime_window :
   apply eq_of_beq
   decide +kernel
 
-/-- The converse bridge at the creation bytes: a gas-exact synthetic run of the lifted
-constructor is a real Jaune execution of the creation code. -/
-theorem exec_of_runExact {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork) (hrun : SProg.RunExact (Cert.prog cert) sevm pre post) :
-    Nonempty (Exec 0 sevm pre (.ok post)) :=
-  lift_exact cert_check jumps_ok hcode hfork hrun
-
 end Blanc.Lift.BeaconDeposit.Creation

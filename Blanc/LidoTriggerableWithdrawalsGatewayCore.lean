@@ -56,39 +56,6 @@ abbrev regionWord (region : Nat) : B256 := TaggedStorage.regionWord region
 abbrev taggedSlot (region : Nat) (payload : B256) : B256 :=
   TaggedStorage.encode region payload
 
-/-- TWG's retained slot vocabulary is the shared bounded tagged-key encoder. -/
-theorem taggedSlot_eq_encode (region : Nat) (payload : B256) :
-    taggedSlot region payload = TaggedStorage.encode region payload := rfl
-
-/-- A bounded payload is retained verbatim by a TWG tagged key.  This is a
-statement about payload words only; `roleLookupPayload` can still deliberately
-identify distinct role/account inputs after its family-local masking. -/
-theorem taggedSlot_eq_of_payload_lt {region : Nat} {payload : B256}
-    (hpayload : payload.toNat < 2 ^ 252) :
-    taggedSlot region payload = B256.or (regionWord region) payload :=
-  TaggedStorage.encode_eq_of_payload_lt hpayload
-
-/-- At one bounded tag, equality of TWG keys recovers equality of bounded
-payload words.  It does not assert injection for role/account pairs. -/
-theorem taggedSlot_injective_of_payload_lt
-    {region : Nat} {left right : B256}
-    (hregion : region < 16)
-    (hleft : left.toNat < 2 ^ 252)
-    (hright : right.toNat < 2 ^ 252)
-    (hslot : taggedSlot region left = taggedSlot region right) :
-    left = right :=
-  TaggedStorage.encode_injective_of_payload_lt hregion hleft hright hslot
-
-/-- Distinct bounded TWG regions remain separated for bounded payload words. -/
-theorem taggedSlot_ne_of_region_ne
-    {leftRegion rightRegion : Nat} {left right : B256}
-    (hlr : leftRegion < 16) (hrr : rightRegion < 16)
-    (hleft : left.toNat < 2 ^ 252)
-    (hright : right.toNat < 2 ^ 252)
-    (hne : leftRegion ≠ rightRegion) :
-    taggedSlot leftRegion left ≠ taggedSlot rightRegion right :=
-  TaggedStorage.encode_ne_of_region_ne hlr hrr hleft hright hne
-
 def configRegion : Nat := 1
 def roleLookupRoleRegion : Nat := 2
 def roleLookupAccountRegion : Nat := 3
@@ -267,22 +234,6 @@ def twrLimitPosition : B256 :=
 def pauseInfinitely : B256 := B256.max
 def version : B256 := 1
 
-theorem defaultAdminRole_literal :
-    defaultAdminRole =
-      0x0000000000000000000000000000000000000000000000000000000000000000 := by
-  rfl
-theorem pauseRole_hash : pauseRole = Blanc.String.keccak "PAUSE_ROLE" := by decide +kernel
-theorem resumeRole_hash : resumeRole = Blanc.String.keccak "RESUME_ROLE" := by decide +kernel
-theorem addFullWithdrawalRequestRole_hash :
-    addFullWithdrawalRequestRole =
-      Blanc.String.keccak "ADD_FULL_WITHDRAWAL_REQUEST_ROLE" := by decide +kernel
-theorem twExitLimitManagerRole_hash :
-    twExitLimitManagerRole = Blanc.String.keccak "TW_EXIT_LIMIT_MANAGER_ROLE" := by decide +kernel
-theorem twrLimitPosition_hash :
-    twrLimitPosition =
-      Blanc.String.keccak "lido.TriggerableWithdrawalsGateway.maxExitRequestLimit" := by
-  decide +kernel
-
 def publicConstantNames : List String :=
   [ "ADD_FULL_WITHDRAWAL_REQUEST_ROLE", "DEFAULT_ADMIN_ROLE",
     "PAUSE_INFINITELY", "PAUSE_ROLE", "RESUME_ROLE", "TWR_LIMIT_POSITION",
@@ -328,9 +279,6 @@ def customErrorSelectors : List B256 :=
    0x3261c792, 0xaea5046a, 0xbbdd2da3, 0x528f4863, 0x6765a75d,
    0xad58bfc7, 0xb047186b, 0x14378398, 0x73c5d8a6]
 
-theorem custom_error_selector_census_length : customErrorSelectors.length = 14 := by
-  decide
-
 structure EventMetadata where
   name : String
   args : List ArgType
@@ -355,8 +303,6 @@ def eventTopics : List B256 :=
     0xbd79b86ffe0ab8e8776151514217cd7cacd52c909f66475c3af44e129f0b00ff,
     0x2f8788117e7eff1d82e926ec794901d17c78024a50270940304540a733656f0d,
     0xf6391f5c32d9c69d2a47ea670b442974b53935d1edc7fd64eb21e047a839171b ]
-
-theorem event_topic_census_length : eventTopics.length = 6 := by decide
 
 structure SelectorEntry where
   name : String
@@ -395,37 +341,6 @@ def selRevokeRole : B256 := 0xd547741f
 def selRenounceRole : B256 := 0x36568abe
 def selGetRoleMember : B256 := 0x9010d07c
 def selGetRoleMemberCount : B256 := 0xca15c873
-
-theorem selector_literal_ties :
-    selPauseRole = selector "PAUSE_ROLE" [] ∧
-    selResumeRole = selector "RESUME_ROLE" [] ∧
-    selAddFullWithdrawalRequestRole = selector "ADD_FULL_WITHDRAWAL_REQUEST_ROLE" [] ∧
-    selTwExitLimitManagerRole = selector "TW_EXIT_LIMIT_MANAGER_ROLE" [] ∧
-    selTwrLimitPosition = selector "TWR_LIMIT_POSITION" [] ∧
-    selVersion = selector "VERSION" [] ∧
-    selResume = selector "resume" [] ∧
-    selPauseFor = selector "pauseFor" [.uint256] ∧
-    selPauseUntil = selector "pauseUntil" [.uint256] ∧
-    selSetExitRequestLimit = selector "setExitRequestLimit" [.uint256, .uint256, .uint256] ∧
-    selGetExitRequestLimitFullInfo = selector "getExitRequestLimitFullInfo" [] ∧
-    selPauseInfinitely = selector "PAUSE_INFINITELY" [] ∧
-    selIsPaused = selector "isPaused" [] ∧
-    selGetResumeSinceTimestamp = selector "getResumeSinceTimestamp" [] ∧
-    selDefaultAdminRole = selector "DEFAULT_ADMIN_ROLE" [] ∧
-    selSupportsInterface = selector "supportsInterface" [.bytes 4] ∧
-    selHasRole = selector "hasRole" [.bytes 32, .address] ∧
-    selGetRoleAdmin = selector "getRoleAdmin" [.bytes 32] ∧
-    selGrantRole = selector "grantRole" [.bytes 32, .address] ∧
-    selRevokeRole = selector "revokeRole" [.bytes 32, .address] ∧
-    selRenounceRole = selector "renounceRole" [.bytes 32, .address] ∧
-    selGetRoleMember = selector "getRoleMember" [.bytes 32, .uint256] ∧
-    selGetRoleMemberCount = selector "getRoleMemberCount" [.bytes 32] := by
-  decide +kernel
-
-theorem selector_trigger_literal_tie :
-    selTriggerFullWithdrawals =
-      rawSelector "triggerFullWithdrawals((uint256,uint256,bytes)[],address,uint256)" := by
-  decide +kernel
 
 def entry (name signature : String) (args : List ArgType) (payable : Bool) : SelectorEntry :=
   { name, signature, selector := selector name args, payable }
@@ -472,12 +387,6 @@ def selectorCensus : List SelectorEntry :=
     entryLiteral "renounceRole" "renounceRole(bytes32,address)" selRenounceRole false,
     entryLiteral "getRoleMember" "getRoleMember(bytes32,uint256)" selGetRoleMember false,
     entryLiteral "getRoleMemberCount" "getRoleMemberCount(bytes32)" selGetRoleMemberCount false ]
-
-theorem selector_census_length : selectorCensus.length = 24 := by decide
-theorem public_constant_census_length : publicConstantNames.length = 8 := by decide
-theorem custom_error_census_length : customErrors.length = 14 := by decide
-theorem event_census_length : events.length = 6 := by decide
-theorem role_constant_census_length : roleConstants.length = 5 := by decide
 
 /-! ## Source inventory vocabulary -/
 

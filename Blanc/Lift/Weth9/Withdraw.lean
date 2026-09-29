@@ -470,31 +470,6 @@ theorem Weth9.solvent_withdraw_step {s : Stor} {v b : B256} {a : Adr} {wad : B25
   rw [B256.toNat_sub_eq_of_le _ _ hle', B256.toNat_zero]
   omega
 
-/-- **WETH9 `withdraw(wad)` preserves solvency**, for a `ContractSpecSem` whose
-invariant is WETH9 solvency. -/
-theorem Weth9.withdraw_solvent {ca : Adr}
-    (hInv : ∀ s v b, c.Inv s v b ↔ Solvent s v b)
-    {sevm : Sevm} {devm : Devm} {o : Outcome} {g : SFunc}
-    (hfork : CoveredFork sevm.benvStat.fork) (hca : sevm.currentTarget = ca)
-    (ih : ∀ pc' sevm' pre' post',
-        Exec pc' sevm' pre' (.ok post') →
-        sevm'.depth < sevm.depth →
-        CodeSem.At c.sem ca pc' sevm' pre' →
-        CoveredFork sevm'.benvStat.fork →
-        c.PreWf ca sevm' pre' →
-        c.Post ca sevm' post')
-    (hg : prog[8]? = some g) (run : SFunc.Run prog sevm devm g o)
-    (hpre : c.Pre ca sevm devm) :
-    Solvent (Devm.getStor (Outcome.devm o) ca) 0 ((Outcome.devm o).getBal ca) := by
-  have hstep : ∀ {s : Stor} {v b : B256} {wad : B256},
-      c.Inv s v b → wad ≤ s.get (balSlot sevm.caller) →
-      wad ≤ b ∧ c.Inv (s.set (balSlot sevm.caller) (s.get (balSlot sevm.caller) - wad)) 0
-        (b - wad) := by
-    intro s v b wad h hle
-    obtain ⟨h1, h2⟩ := Weth9.solvent_withdraw_step ((hInv _ _ _).mp h) hle
-    exact ⟨h1, (hInv _ _ _).mpr h2⟩
-  exact (hInv _ _ _).mp (Weth9.withdraw_post hstep hfork hca ih hg run hpre).inv
-
 end Withdraw
 
 end Blanc.Lift

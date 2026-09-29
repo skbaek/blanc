@@ -46,12 +46,4 @@ theorem Weth9.entry0_callRefs :
     t_0000_c0.callRefs.all (· ∈ [1]) = true := by
   decide +kernel
 
-theorem Weth9.wrapper_entries_silentCalls :
-    Weth9.wrapperSpecs.all (fun p =>
-      match Weth9.prog[p.1]? with
-      | some g => g.silentCallsWith Weth9.silentSet Weth9.wrapperSet 1 &&
-          g.callRefs.all (· ∈ [p.2])
-      | none => false) = true := by
-  decide +kernel
-
 end Blanc.Lift

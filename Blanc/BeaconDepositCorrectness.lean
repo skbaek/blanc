@@ -297,11 +297,6 @@ theorem root_correct (H : Bytes → B256) (s : Acc) (ls : List B256)
   unfold Acc.root mixedRootOf rootOf
   rw [hc, hclimb]
 
-/-- The fresh contract's root is the reference empty mixed root. -/
-theorem empty_root (H : Bytes → B256) :
-    Acc.root H Acc.empty = mixedRootOf H [] :=
-  root_correct H Acc.empty [] (empty_inv H)
-
 /-! ## The insertion walk: liveness and the cap boundary -/
 
 theorem div_two_div_pow (size j : Nat) : size / 2 / 2 ^ j = size / 2 ^ (j + 1) := by
@@ -844,44 +839,5 @@ theorem le64_length (n : Nat) : (le64 n).length = 8 := rfl
 
 theorem zeros_length (n : Nat) : (zeros n).length = n :=
   List.length_replicate
-
-theorem le64_zero : le64 0 = zeros 8 := rfl
-
-/-- Tree combine (source lines 77, 85, 87, 130, 134): 32 + 32 bytes. -/
-theorem hashPair_input_length (a b : B256) :
-    (a.toBytes ++ b.toBytes).length = 64 := by
-  rw [List.length_append, B256.length_toBytes, B256.length_toBytes]
-
-/-- Count mix-in (source lines 90–94): 32 + 8 + 24 bytes. -/
-theorem mixIn_input_length (root : B256) (n : Nat) :
-    (root.toBytes ++ le64 n ++ zeros 24).length = 64 := by
-  simp [B256.length_toBytes, le64_length, zeros_length]
-
-/-- Pubkey root (source line 129): 48 + 16 bytes under the length guard. -/
-theorem pubkeyRoot_input_length (pubkey : Bytes) (h : pubkey.length = 48) :
-    (pubkey ++ zeros 16).length = 64 := by
-  simp [zeros_length, h]
-
-/-- Signature root (source lines 130–133): 64 and 32 + 32 bytes under the
-length guard. -/
-theorem signatureRoot_input_lengths (signature : Bytes)
-    (h : signature.length = 96) :
-    (signature.take 64).length = 64 ∧
-    (signature.drop 64 ++ zeros 32).length = 64 := by
-  constructor
-  · rw [List.length_take]
-    omega
-  · simp [zeros_length]
-    omega
-
-/-- Deposit-data node (source lines 134–137): 32 + 32 and 8 + 24 + 32 bytes
-under the guards. -/
-theorem depositDataNode_input_lengths (H : Bytes → B256)
-    (pubkey withdrawal_credentials signature amountLE : Bytes)
-    (hwc : withdrawal_credentials.length = 32) (ha : amountLE.length = 8) :
-    ((pubkeyRoot H pubkey).toBytes ++ withdrawal_credentials).length = 64 ∧
-    (amountLE ++ zeros 24 ++ (signatureRoot H signature).toBytes).length
-      = 64 := by
-  constructor <;> simp [B256.length_toBytes, zeros_length, hwc, ha]
 
 end Blanc.BeaconDeposit

@@ -223,11 +223,6 @@ theorem Weth9.XferEffX.toEff {sevm : Sevm} {d : Devm} {o : Outcome} {wad dst src
   · exact ⟨hb, Or.inl hs⟩
   · exact ⟨hb, Or.inr ⟨hne, _, hs⟩⟩
 
-theorem Weth9.XferDebit.toEff {sevm : Sevm} {d : Devm} {o : Outcome} {wad dst src : B256}
-    (hne : src.toAdr.toB256 ≠ sevm.caller.toB256) (e : XferDebit sevm d o wad dst src) :
-    XferEff sevm d o wad dst src :=
-  ⟨e.1, Or.inr ⟨hne, _, e.2⟩⟩
-
 theorem eq_zero_of_isz_ne {x : B256} (h : (x =? 0) ≠ 0) : x = 0 := by
   unfold B256.eqCheck at h
   split at h
@@ -689,20 +684,6 @@ def Weth9.XferOk (sevm : Sevm) (d : Devm) (o : Outcome) (wad dst src : B256) : P
   XferEff sevm d o wad dst src ∧
     wad ≤ (Devm.getStor d sevm.currentTarget).get (balSlot src.toAdr)
 
-theorem Weth9.XferOk.of_same {sevm : Sevm} {d d' : Devm} {o : Outcome} {wad dst src : B256}
-    (h : Same d d') (e : Weth9.XferOk sevm d' o wad dst src) : Weth9.XferOk sevm d o wad dst src :=
-  ⟨Weth9.XferEff.of_same h e.1, by rw [h.stor]; exact e.2⟩
-
-theorem Weth9.XferOk.of_same_out {sevm : Sevm} {d : Devm} {o o' : Outcome} {wad dst src : B256}
-    (h : Same (Outcome.devm o) (Outcome.devm o')) (e : Weth9.XferOk sevm d o wad dst src) :
-    Weth9.XferOk sevm d o' wad dst src := by
-  obtain ⟨⟨hb, hs⟩, hle⟩ := e
-  refine ⟨⟨?_, ?_⟩, hle⟩
-  · rw [← h.bal]
-    exact hb
-  · rw [← h.stor]
-    exact hs
-
 theorem Weth9.XferEffX.of_same_out {sevm : Sevm} {d : Devm} {o o' : Outcome} {wad dst src : B256}
     (h : Same (Outcome.devm o) (Outcome.devm o')) (e : XferEffX sevm d o wad dst src) :
     XferEffX sevm d o' wad dst src := by
@@ -840,20 +821,6 @@ theorem Weth9.transferFrom_solvent_of_prefix {sevm : Sevm} {d : Devm} {o : Outco
   obtain ⟨e, hle⟩ := Weth9.transferFrom_ok_of_prefix hg hp run
   exact solvent_of_xfer hoff e hle h
 
-/-- **WETH9 `transferFrom` (entry 9) preserves solvency** (callee form). -/
-theorem Weth9.transferFrom_solvent {sevm : Sevm} {d : Devm} {o : Outcome}
-    {g : SFunc} {wad dst src : B256} {rest : Stack}
-    (hg : prog[9]? = some g) (hstack : d.stack = wad :: dst :: src :: rest)
-    (hoff : (src &&& ~~~ addressMask) ≠ sevm.caller.toB256 →
-      ∀ a, balSlot a ≠ allowKey (src &&& ~~~ addressMask) sevm.caller.toB256)
-    (h : Solvent (Devm.getStor d sevm.currentTarget) sevm.value
-      (d.getBal sevm.currentTarget))
-    (run : SFunc.Run prog sevm d g o) :
-    Solvent (Devm.getStor (Outcome.devm o) sevm.currentTarget) 0
-      ((Outcome.devm o).getBal sevm.currentTarget) := by
-  have hp : wad :: dst :: src :: rest <<+ d.stack := ⟨[], by simp [Split, hstack]⟩
-  exact Weth9.transferFrom_solvent_of_prefix hg hp hoff h run
-
 /-- Entry 9 as a callee: a `callNext 9` from a frame whose stack starts with
 `wad, dst, src`, continued by a state-silent tree, preserves solvency. -/
 private theorem call9_solvent {sevm : Sevm} {d : Devm} {o : Outcome} {f : SFunc}
@@ -914,14 +881,6 @@ theorem Weth9.transfer_okX {sevm : Sevm} {d : Devm} {o : Outcome} {g : SFunc}
     exact ⟨_, _, _, prefix_of_push (of_run_push h6) q5⟩
   obtain ⟨p, q, z, hp1⟩ := hp1
   exact (call9_okX (by decide) (by decide) hp1 run).of_same s01
-
-/-- **Entry 3 (`transfer`) as a callee**, for a frame whose stack starts `wad, dst`: it is
-`transferFrom(msg.sender, dst, wad)`. -/
-theorem Weth9.transfer_ok {sevm : Sevm} {d : Devm} {o : Outcome} {g : SFunc}
-    {wad dst : B256} {rest : Stack} (hg : prog[3]? = some g)
-    (hstk : wad :: dst :: rest <<+ d.stack) (run : SFunc.Run prog sevm d g o) :
-    Weth9.XferOk sevm d o wad dst sevm.caller.toB256 :=
-  (Weth9.transfer_okX hg hstk run).toOk
 
 /-- **WETH9 `transfer` (entry 3) preserves solvency**, unconditionally: it is
 `transferFrom(msg.sender, dst, wad)`, which never writes an allowance. -/

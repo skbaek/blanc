@@ -169,9 +169,6 @@ theorem code_compile : Prog.compile runtime = some code := by
 
 def compiledSelectors : List B256 := funcs.map Prod.fst
 
-theorem compiledSelectors_eq_selectors : compiledSelectors = selectors := by
-  rfl
-
 def codeSize : Nat := code.length
 
 def eip170RuntimeLimit : Nat := pragueCodeLimits.maxCodeSize
@@ -187,9 +184,5 @@ theorem eip170RuntimeLimit_exact : eip170RuntimeLimit = 24576 := by
 theorem code_eip170 : codeSize <= eip170RuntimeLimit := by
   rw [codeSize_exact, eip170RuntimeLimit_exact]
   decide
-
-theorem codeHeadroom_exact : codeHeadroom = 22814 := by
-  unfold codeHeadroom
-  rw [codeSize_exact, eip170RuntimeLimit_exact]
 
 end Blanc.Drip

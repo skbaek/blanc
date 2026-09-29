@@ -57,10 +57,6 @@ hashes the mapping's slot (20) and the key (`remove_liquidity` prints this preim
 def balanceSlot : B256 :=
   12011451804723886938623838408310629856121848711978705641980654444407945751542
 
-theorem balanceSlot_eq :
-    balanceSlot = Bytes.keccak (Witness.word 20 ++ Witness.word senderAddress.toNat) := by
-  decide +kernel
-
 /-- The pool's storage: lock released (3), `coins[1] = X`, `totalSupply = 1000`, and the
 caller's liquidity balance (`balanceOf[S] = 500`). -/
 def poolInit : List ((Adr × B256) × B256) :=

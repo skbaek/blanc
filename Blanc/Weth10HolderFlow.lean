@@ -141,17 +141,6 @@ def FlashAllowanceAccepted (e : Sevm) (settle burn : Devm)
     (branch : AllowanceBranch) : Prop :=
   FlashAllowanceOutcome e settle burn ∧ FlashAllowanceTag e settle branch
 
-theorem exists_flashAllowanceAccepted
-    {e : Sevm} {settle burn : Devm}
-    (h : FlashAllowanceOutcome e settle burn) :
-    ∃ branch, FlashAllowanceAccepted e settle burn branch := by
-  rcases h.1 with hmax | hfinite
-  · exact ⟨.maximum (flashAllowanceRuntimeKey e), h, rfl, hmax.1⟩
-  · rcases hfinite with ⟨allowance, hnotmax, hle, hget, _⟩
-    exact ⟨.finite (flashAllowanceRuntimeKey e) allowance
-      (allowance - Sevm.argWord e 2), h,
-      rfl, hget, hnotmax, hle, rfl⟩
-
 /-- One committed WETH10 invocation's balance-flow category.  A successful
 flash invocation is one paired atom, so its exact receiver/principal pairing
 is retained rather than reconstructed by matching lookalike burn logs. -/
@@ -358,15 +347,6 @@ private theorem holderFlowOfObservations_from_eq_add
       rw [ih (initial := (HolderFlow.zero u).add
         (observation.atom.holderFlow u))]
       rw [HolderFlow.zero_add, HolderFlow.add_assoc]
-
-theorem holderFlowOfObservations_append
-    (left right : List FlowObservation) (u : Adr) :
-    holderFlowOfObservations (left ++ right) u =
-      (holderFlowOfObservations left u).add
-        (holderFlowOfObservations right u) := by
-  unfold holderFlowOfObservations
-  rw [List.foldl_append]
-  exact holderFlowOfObservations_from_eq_add right u _
 
 theorem holderFlowOfObservations_map_observation
     (actions : List FlowAction) (u : Adr) :
@@ -642,10 +622,6 @@ abbrev some {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     Blanc.Weth10.RetainedXlot (.some ⟨⟨pc, sevm, pre⟩, out⟩) :=
   ExecutionTrace.RetainedXlot.some run
 
-theorem toFilled {xl : Xlot} :
-    Blanc.Weth10.RetainedXlot xl → xl.Filled :=
-  ExecutionTrace.RetainedXlot.toFilled
-
 end RetainedXlot
 
 abbrev ProcessMessageTrace := ExecutionTrace.ProcessMessageTrace
@@ -660,65 +636,6 @@ abbrev AppliedBodyTrace := ExecutionTrace.AppliedBodyTrace
 theorem exists_retainedXlot_of_filled {xl : Xlot}
     (h : xl.Filled) : Nonempty (RetainedXlot xl) :=
   ExecutionTrace.exists_retainedXlot_of_filled h
-
-theorem exists_processMessageTrace
-    (msg : Msg) (out : Except (EvmError × State × AdrSet × Tra) Devm)
-    (h : processMessage msg = out) :
-    Nonempty (ProcessMessageTrace msg out) :=
-  ExecutionTrace.exists_processMessageTrace msg out h
-
-theorem exists_processCreateMessageTrace
-    (msg : Msg) (out : Except (EvmError × State × AdrSet × Tra) Devm)
-    (h : processCreateMessage msg = out) :
-    Nonempty (ProcessCreateMessageTrace msg out) :=
-  ExecutionTrace.exists_processCreateMessageTrace msg out h
-
-theorem exists_messageCallTrace {msg : Msg} {state : State}
-    {out : MsgCallOutput}
-    (h : processMessageCall msg = .ok ⟨state, out⟩)
-    (hfork : CoveredFork msg.benv.stat.fork) :
-    Nonempty (MessageCallTrace msg state out) :=
-  ExecutionTrace.exists_messageCallTrace h hfork
-
-theorem exists_transactionTrace
-    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    {state : State} {bout' : BlockOutput}
-    (h : processTransaction benv bout tx index = .ok (state, bout'))
-    (hfork : CoveredFork benv.stat.fork) :
-    Nonempty (TransactionTrace benv bout tx index state bout') :=
-  ExecutionTrace.exists_transactionTrace h hfork
-
-theorem exists_applyTransactionsTrace
-    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
-    {bout finalBout : BlockOutput}
-    (h : applyTransactions txs benv bout = .ok (finalBenv, finalBout))
-    (hfork : CoveredFork benv.stat.fork) :
-    Nonempty (ApplyTransactionsTrace txs benv bout finalBenv finalBout) :=
-  ExecutionTrace.exists_applyTransactionsTrace h hfork
-
-theorem exists_systemMessageTrace
-    {benv : Benv} {target : Adr} {data : Bytes}
-    {state : State} {out : MsgCallOutput}
-    (h : processUncheckedSystemTransaction benv target data =
-      .ok (state, out))
-    (hfork : CoveredFork benv.stat.fork) :
-    Nonempty (SystemMessageTrace benv target data state out) :=
-  ExecutionTrace.exists_systemMessageTrace h hfork
-
-theorem exists_requestsTrace
-    {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
-    (h : processGeneralPurposeRequests benv bout = .ok (state, bout'))
-    (hfork : CoveredFork benv.stat.fork) :
-    Nonempty (RequestsTrace benv bout state bout') :=
-  ExecutionTrace.exists_requestsTrace h hfork
-
-theorem exists_appliedBodyTrace
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
-    {state : State} {bout : BlockOutput}
-    (h : applyBody benv txs wds = .ok (state, bout))
-    (hfork : CoveredFork benv.stat.fork) :
-    Nonempty (AppliedBodyTrace benv txs wds state bout) :=
-  ExecutionTrace.exists_appliedBodyTrace h hfork
 
 def RetainedXlot.flowActions (dp : DeployParams) (ca : Adr)
     {xl : Xlot} : RetainedXlot xl → List FlowAction
@@ -923,19 +840,6 @@ theorem AccountedBlock.toConfiguredBlockTrace_ofConfiguredBlockTrace
   cases trace
   rfl
 
-theorem AccountedBlock.exists_of_transition
-    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
-    {pre post : BlockChain} {block : Block}
-    (bound : sum pre.state.bal + wdsum block.wds < 2 ^ 256)
-    (h : stateTransitionUsing cfg pre block = .ok post)
-    (hcovered : ∀ {fork}, cfg.forkAt block.header.timestamp = .ok fork →
-      CoveredFork fork) :
-    Nonempty (AccountedBlock cfg dp ca pre post) := by
-  rcases ExecutionTrace.exists_configuredBlockTrace_of_transition bound h hcovered with
-    ⟨trace⟩
-  exact ⟨AccountedBlock.ofConfiguredBlockTrace
-    (dp := dp) (ca := ca) trace⟩
-
 /-- A proof-carrying configured replay from a checkpoint to an endpoint. -/
 inductive AccountedHistory
     (cfg : ChainConfig) (dp : DeployParams) (ca : Adr)
@@ -1017,19 +921,6 @@ def AccountedHistory.ofConfiguredHistoryTrace
         (dp := dp) (ca := ca) prior)
         (AccountedBlock.ofConfiguredBlockTrace
           (dp := dp) (ca := ca) block)
-
-theorem AccountedHistory.toConfiguredHistoryTrace_ofConfiguredHistoryTrace
-    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
-    {checkpoint future : BlockChain}
-    (history : ExecutionTrace.ConfiguredHistoryTrace cfg checkpoint future) :
-    (AccountedHistory.ofConfiguredHistoryTrace
-      (dp := dp) (ca := ca) history).toConfiguredHistoryTrace = history := by
-  induction history with
-  | refl => rfl
-  | step prior block ih =>
-      simp only [AccountedHistory.ofConfiguredHistoryTrace,
-        AccountedHistory.toConfiguredHistoryTrace,
-        AccountedBlock.toConfiguredBlockTrace_ofConfiguredBlockTrace, ih]
 
 theorem exists_accountedHistory_of_configuredHistoryTrace
     {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}

@@ -94,40 +94,4 @@ theorem msg0tx_call_shape : msg0tx.benv.stat.rules.stateGas = none ∧
 
 /-! ### The transaction -/
 
-/-- **V- as an admitted transaction.**  Jaune's `processTransaction` accepts `tx0` -- a type-2,
-zero-fee, zero-value transaction signed by the EOA `E` (nonce 0, no code) -- over the block
-`benvPre`, and in the world it returns the pool `P`'s ledger is corrupted: `totalSupply = 1800 <
-1906 = balanceOf[A']`, `A'` being the attacker contract the transaction calls (the reentrant
-`add_liquidity` inside `remove_liquidity`).  Every admission check (validation and intrinsic gas,
-chain id, fee rules with base fee 0, nonce, balance against fee and value, EIP-3607 sender code,
-receiver, authorization list) is discharged above by evaluation; the premises are the signature
-(`hrecover`, true by evaluation: the `#guard` in `TxTop`) and that the block has the room
-(`hroom`).  The settlement (the sender's gas refund and the coinbase's priority fee, both zero,
-and the message's empty set of accounts to delete) leaves `P`'s storage alone. -/
-theorem vminus_tx_process (bout : BlockOutput) (hroom : bout.blockGasUsed + tx0.gas ≤ 60000000)
-    (hrecover : recoverSender benvPre.stat.chainId tx0 = .ok eAddress) :
-    ∃ (st : State) (bout' : BlockOutput), processTransaction benvPre bout tx0 0 = .ok (st, bout') ∧
-      (storOf st proxyAddress (26 : Nat).toB256).toNat = 1800 ∧
-      (storOf st proxyAddress balanceOfA2Slot.toB256).toNat = 1906 ∧
-      (storOf st proxyAddress (26 : Nat).toB256).toNat <
-        (storOf st proxyAddress balanceOfA2Slot.toB256).toNat := by
-  obtain ⟨-, -, -, -, post, -, hpm, herr, -, -, hrf, hatd, h26, hA, hlt⟩ := vminus_tx_message
-  obtain ⟨hsg, htarget, hauths, hdeleg⟩ := msg0tx_call_shape
-  have hrefund : Int.toNat? post.refundCounter = some 42600 := by rw [hrf]; rfl
-  have hcall := processMessageCall_call_of_message hsg htarget hauths hdeleg hpm herr hrefund
-  obtain ⟨bout', hproc⟩ := processTransaction_of_stages (benv := benvPre) (bout := bout)
-    (tx := tx0) (index := 0) (intrinsicGas := 21064) (calldataFloorGas := 21160)
-    (sender := eAddress) (effectiveGasPrice := 0) (blobVersionedHashes := []) (txBlobGasUsed := 0)
-    (debit := worldTx) (msg := msg0tx) benvPre_stateGas benvPre_bal tx0_validated
-    (tx0_checked bout hroom hrecover) tx0_debit tx0_prepared hcall (by rfl)
-  refine ⟨_, bout', hproc, ?_⟩
-  have hlist : Std.HashSet.toList post.accountsToDelete = [] := by rw [hatd]; simp
-  have hst : ∀ (v₁ v₂ : B256) (a : Adr) (k : B256),
-      storOf ((post.state.addBal eAddress v₁).addBal benvPre.stat.coinbase v₂) a k =
-        storOf post.state a k := by
-    intro v₁ v₂ a k
-    simp only [State.addBal, storOf_setBal]
-  simp only [hlist, List.foldl_nil, hst]
-  exact ⟨h26, hA, hlt⟩
-
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx

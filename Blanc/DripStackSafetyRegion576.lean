@@ -363,14 +363,4 @@ theorem subtree576_layout_checked :
   · exact subtree716_layout_checked
   · decide +kernel
 
-/-- PC 686 lies in subtree716; its taken successor PC 947 is outside subtree576. -/
-theorem row686_cross_region_checked :
-    checkRow code.toByteArray table 8 686 [some 947, none] = true := by
-  decide +kernel
-
-/-- Strict ordering and the exact region population are checked independently. -/
-theorem subtree576_order_and_size_checked :
-    subtree576.checkOrder = true ∧ subtree576.size = 183 := by
-  decide +kernel
-
 end Blanc.Drip.StackSafety

@@ -19,12 +19,6 @@ open Weth9
 
 namespace Weth9
 
-/-- The storage/balance pair a solvency statement reads at the contract. -/
-private theorem solvent_transport {ca : Adr} {v : B256} {d d' : Devm}
-    (hs : Same d' d) (h : Solvent (Devm.getStor d ca) v (Devm.getBal d ca)) :
-    Solvent (Devm.getStor d' ca) v (Devm.getBal d' ca) := by
-  rw [hs.stor, hs.bal]; exact h
-
 /-! ## Entry 11: the approve body -/
 
 private def approveA : List Ninst :=
@@ -180,22 +174,6 @@ theorem approve_effect {sevm : Sevm} {d : Devm} {o : Outcome} {g : SFunc}
         rfl
       · show Devm.getBal dd = _
         rw [hretBal, ← b7, ← b6, ← b5, ← b4, ← b3, ← b2, ← b1, hburnBal]
-
-/-- **Entry 11 callee spec.**  From a frame whose stack starts
-`value :: spender`, if the allowance key `(caller, spender & mask)` is off the
-balance image, solvency with the callvalue in flight becomes solvency with
-nothing in flight. -/
-theorem approve_solvent {sevm : Sevm} {d : Devm} {o : Outcome} {g : SFunc}
-    {value spender : B256} {xs : Stack}
-    (hg : prog[11]? = some g) (hstk : value :: spender :: xs <<+ d.stack)
-    (hoff : ∀ a, balSlot a ≠ allowKey sevm.caller.toB256 (spender &&& ~~~ addressMask))
-    (h : Solvent (Devm.getStor d sevm.currentTarget) sevm.value
-      (Devm.getBal d sevm.currentTarget))
-    (run : SFunc.Run prog sevm d g o) :
-    Solvent (Devm.getStor (Outcome.devm o) sevm.currentTarget) 0
-      (Devm.getBal (Outcome.devm o) sevm.currentTarget) := by
-  obtain ⟨hs, hb⟩ := approve_effect hg hstk run
-  exact solvent_of_off_write hs hb hoff h
 
 /-! ## O4 control: the collision premise is necessary -/
 

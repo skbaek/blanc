@@ -332,20 +332,6 @@ theorem ossifiableConstructorInitializeImplementation_shape :
             ((.call 6) <?> (.call 5)))) := by
   rfl
 
-theorem ossifiableConstructorDelegateSetup_shape :
-    ossifiableConstructorDelegateSetup =
-      pushB256 0 :::
-        pushB256 0 :::
-        [pushB256 128, mload] +++
-        pushB256 0x100 :::
-        [pushB256 0, mload] +++
-        gas :::
-        delegatecall :::
-        ((.call 5) <?>
-          (returndatasize :::
-            (Func.revertReturnData <?> (.call 3)))) := by
-  rfl
-
 theorem ossifiableConstructorAfterSetup_shape
     (runtimeOffset runtimeLength : Nat) :
     ossifiableConstructorAfterSetup runtimeOffset runtimeLength =

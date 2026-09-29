@@ -338,12 +338,6 @@ theorem deployment_reachable_future_redeemable_allHolders_mainnet
   deployment_reachable_future_redeemable_allHolders
     hroot mainnetChainConfig_covered hcheckpoint hfuture
 
-theorem deploymentRoot_allowanceQuiescent_mainnet
-    {dp : DeployParams} {ca u : Adr} {base deployed : BlockChain}
-    (hroot : MainnetDeploymentRoot base deployed dp ca) :
-    AllowanceQuiescent ca u deployed.state :=
-  deploymentRoot_allowanceQuiescent hroot
-
 theorem deployment_fullWindow_future_redeemable_mainnet
     {dp : DeployParams} {ca u : Adr}
     {base deployed future : BlockChain}
@@ -353,61 +347,6 @@ theorem deployment_fullWindow_future_redeemable_mainnet
       ∃ history, FutureRedemptionGuarantee
         mainnetChainConfig dp ca u deployed future history :=
   deployment_fullWindow_future_redeemable hroot mainnetChainConfig_covered hfuture
-
-theorem deployment_fullWindow_attributionRootAt_ne_checkpoint_mainnet
-    {dp : DeployParams} {ca u : Adr} {base deployed future : BlockChain}
-    (hroot : MainnetDeploymentRoot base deployed dp ca)
-    (history : AccountedHistory mainnetChainConfig dp ca deployed future)
-    {earlier later : List CountedFrame} {record : CountedFrame}
-    {action : FlowAction} {debit : DebitProvenance} {event : AllowanceEvent}
-    (hsplit : history.attributionLedger = earlier ++ record :: later)
-    (hout : record.permanentOutflow u ≠ 0)
-    (haction : record.action = some action)
-    (hdebit : action.debit = some debit)
-    (hevent : record.allowance = some event)
-    (hkey : delegatedKey? debit.branch = some event.key) :
-    attributionRootAt earlier.reverse event.key ≠ .checkpoint :=
-  deployment_fullWindow_attributionRootAt_ne_checkpoint
-    hroot history hsplit hout haction hdebit hevent hkey
-
-theorem deployment_fullWindow_permanentOutflowAuthorization_mainnet
-    {dp : DeployParams} {ca u : Adr} {base deployed future : BlockChain}
-    (hroot : MainnetDeploymentRoot base deployed dp ca)
-    (history : AccountedHistory mainnetChainConfig dp ca deployed future)
-    (hnc : NoAllowanceKeyCollision history)
-    {earlier later : List CountedFrame} {record : CountedFrame}
-    (hsplit : history.attributionLedger = earlier ++ record :: later)
-    (hout : record.permanentOutflow u ≠ 0) :
-    PermanentOutflowAuthorization record earlier.reverse u :=
-  deployment_fullWindow_permanentOutflowAuthorization
-    hroot history hnc hsplit hout
-
-theorem
-    deployment_fullWindow_hardenedOutflow_only_authorizingRoots_mainnet
-    {dp : DeployParams} {ca u : Adr} {base deployed future : BlockChain}
-    (hroot : MainnetDeploymentRoot base deployed dp ca)
-    (history : AccountedHistory mainnetChainConfig dp ca deployed future)
-    (hnc : NoAllowanceKeyCollision history) :
-    ((history.weth10Flow u).redeemed +
-        (history.weth10Flow u).externalTransferredOut =
-      hardenedOutflow history u) ∧
-      ∀ earlier record later,
-        history.attributionLedger = earlier ++ record :: later →
-        record.permanentOutflow u ≠ 0 →
-        PermanentOutflowAuthorization record earlier.reverse u :=
-  deployment_fullWindow_hardenedOutflow_only_authorizingRoots
-    hroot history hnc
-
-theorem deployment_fullWindow_dormant_holder_balance_monotone_mainnet
-    {dp : DeployParams} {ca u : Adr} {base deployed future : BlockChain}
-    (hroot : MainnetDeploymentRoot base deployed dp ca)
-    (history : AccountedHistory mainnetChainConfig dp ca deployed future)
-    (hnc : NoAllowanceKeyCollision history)
-    (hdormant : NoAuthorizingActBy u history) :
-    bookedBalanceNat deployed.state ca u ≤
-      bookedBalanceNat future.state ca u :=
-  deployment_fullWindow_dormant_holder_balance_monotone
-    hroot history hnc hdormant
 
 theorem deployment_reachable_dormant_holder_balance_monotone_mainnet
     {dp : DeployParams} {ca u : Adr} {base deployed future : BlockChain}
@@ -450,94 +389,6 @@ theorem deployment_reachable_redeemEveryoneList_anyOrder_mainnet
     hroot hfuture mainnetChainConfig_covered hrules hnodup hrecipients hperm
 
 /-! The schedule-indexed conservation, no-wrap, and determinism pins. -/
-
-theorem AccountedHistory.flash_pair_totals_eq_mainnet
-    {dp : DeployParams} {ca u : Adr} {checkpoint future : BlockChain}
-    (history : AccountedHistory mainnetChainConfig dp ca checkpoint future) :
-    (history.weth10Flow u).flashCredit =
-      (history.weth10Flow u).flashRepayment :=
-  history.flash_pair_totals_eq
-
-theorem AccountedHistory.weth10Flow_eq_of_appliedBlocks_eq_mainnet
-    {dp : DeployParams} {ca u : Adr} {checkpoint future : BlockChain}
-    (history₁ history₂ :
-      AccountedHistory mainnetChainConfig dp ca checkpoint future)
-    (hblocks : history₁.appliedBlocks = history₂.appliedBlocks) :
-    history₁.weth10Flow u = history₂.weth10Flow u :=
-  AccountedHistory.weth10Flow_eq_of_appliedBlocks_eq history₁ history₂ hblocks
-
-theorem AccountedHistory.noCommittedCreditWrap_mainnet
-    {dp : DeployParams} {ca : Adr} {checkpoint future : BlockChain}
-    (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory mainnetChainConfig dp ca checkpoint future) :
-    FlowActionsCreditNof history.flowActions :=
-  history.noCommittedCreditWrap hstable
-
-theorem AccountedHistory.holderCreditLoss_eq_zero_mainnet
-    {dp : DeployParams} {ca u : Adr} {checkpoint future : BlockChain}
-    (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory mainnetChainConfig dp ca checkpoint future) :
-    holderCreditLossOfActions history.flowActions u = 0 :=
-  history.holderCreditLoss_eq_zero hstable
-
-theorem holderFlow_conserved_mainnet
-    {dp : DeployParams} {ca u : Adr} {checkpoint future : BlockChain}
-    (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory mainnetChainConfig dp ca checkpoint future) :
-    bookedBalanceNat checkpoint.state ca u +
-        (history.weth10Flow u).ordinaryIn +
-        (history.weth10Flow u).selfTransfer +
-        (history.weth10Flow u).flashCredit =
-      bookedBalanceNat future.state ca u +
-        (history.weth10Flow u).redeemed +
-        (history.weth10Flow u).externalTransferredOut +
-        (history.weth10Flow u).selfTransfer +
-        (history.weth10Flow u).flashRepayment :=
-  holderFlow_conserved hstable history
-
-theorem holderFlow_flash_cancelled_mainnet
-    {dp : DeployParams} {ca u : Adr} {checkpoint future : BlockChain}
-    (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory mainnetChainConfig dp ca checkpoint future) :
-    (history.weth10Flow u).flashCredit =
-        (history.weth10Flow u).flashRepayment ∧
-      bookedBalanceNat checkpoint.state ca u +
-          (history.weth10Flow u).ordinaryIn =
-        bookedBalanceNat future.state ca u +
-          (history.weth10Flow u).redeemed +
-          (history.weth10Flow u).externalTransferredOut :=
-  holderFlow_flash_cancelled hstable history
-
-theorem holderFlow_residual_floor_mainnet
-    {dp : DeployParams} {ca u : Adr} {checkpoint future : BlockChain}
-    (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory mainnetChainConfig dp ca checkpoint future) :
-    bookedBalanceNat checkpoint.state ca u ≤
-      bookedBalanceNat future.state ca u +
-        ((history.weth10Flow u).redeemed +
-          (history.weth10Flow u).externalTransferredOut) :=
-  holderFlow_residual_floor hstable history
-
-theorem holderFlow_truncated_floor_mainnet
-    {dp : DeployParams} {ca u : Adr} {checkpoint future : BlockChain}
-    (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory mainnetChainConfig dp ca checkpoint future) :
-    bookedBalanceNat checkpoint.state ca u -
-        ((history.weth10Flow u).redeemed +
-          (history.weth10Flow u).externalTransferredOut) ≤
-      bookedBalanceNat future.state ca u :=
-  holderFlow_truncated_floor hstable history
-
-theorem holderFlow_withdrawal_floor_mainnet
-    {dp : DeployParams} {ca u : Adr} {checkpoint future : BlockChain}
-    (hstable : Stable dp ca checkpoint.state)
-    (history : AccountedHistory mainnetChainConfig dp ca checkpoint future)
-    (hnoExternalTransfer :
-      (history.weth10Flow u).externalTransferredOut = 0) :
-    bookedBalanceNat checkpoint.state ca u ≤
-      (history.weth10Flow u).redeemed +
-        bookedBalanceNat future.state ca u :=
-  holderFlow_withdrawal_floor hstable history hnoExternalTransfer
 
 end Weth10
 

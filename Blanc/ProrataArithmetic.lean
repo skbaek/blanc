@@ -140,54 +140,11 @@ theorem withdraw_quote_toNat
 
 
 
-/-- Rounding the required share burn upward makes the withdrawal cover the
-requested asset amount. -/
-theorem withdraw_ceil_shares_covers_assets
-    {o supply balance assets : Nat} (ho : o ≠ 0) :
-    assets ≤
-      ceilDiv (assets * (supply + o)) (balance + 1) *
-        (balance + 1) / (supply + o) := by
-  exact Nat.le_ceilDiv_mul_div (by omega) (by omega) assets
-
-/-- The ceil-valued assets of a floor-priced deposit never exceed the
-deposited asset amount. -/
-theorem deposit_floor_shares_ceil_assets_le
-    {o supply balance assets : Nat} (ho : o ≠ 0) :
-    ceilDiv (mintN o assets supply balance * (balance + 1))
-      (supply + o) ≤ assets := by
-  simpa only [mintN] using
-    (ceilDiv_mul_div_mul_le (p := supply + o) (by omega)
-      assets (balance + 1))
 
 
 
 
 
-
-
-/-- The two exact pricing residues telescope even though both the numerator
-and denominator change between deposit and immediate withdrawal. -/
-theorem roundtrip_dust_eq
-    {amount D X minted paid rhoDeposit rhoWithdraw : Nat}
-    (h_deposit : amount * D = minted * X + rhoDeposit)
-    (h_withdraw :
-      minted * (X + amount) = paid * (D + minted) + rhoWithdraw) :
-    amount * (D + minted) =
-      paid * (D + minted) + rhoDeposit + rhoWithdraw := by
-  calc
-    amount * (D + minted) = amount * D + amount * minted := by
-      rw [Nat.mul_add]
-    _ = (minted * X + rhoDeposit) + amount * minted := by
-      rw [h_deposit]
-    _ = minted * X + minted * amount + rhoDeposit := by
-      rw [Nat.mul_comm amount minted]
-      omega
-    _ = minted * (X + amount) + rhoDeposit := by
-      rw [Nat.mul_add]
-    _ = (paid * (D + minted) + rhoWithdraw) + rhoDeposit := by
-      rw [h_withdraw]
-    _ = paid * (D + minted) + rhoDeposit + rhoWithdraw := by
-      omega
 
 
 

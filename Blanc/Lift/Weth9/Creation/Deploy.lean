@@ -94,37 +94,6 @@ theorem weth9_create (msg : Msg) (hvalue : msg.value = 0)
   rw [hst, hempty]
   rfl
 
-/-- **The footprint reading's initial premise.**  After the deployment every nonzero storage word
-of the new account sits at a fixed slot (`name`, `symbol`, `decimals`). -/
-theorem weth9_create_metadata (msg : Msg) (hvalue : msg.value = 0)
-    (hcodeAddress : msg.codeAddress = .none) (hcode : msg.code = Blanc.Lift.Weth9.Creation.code)
-    (hgas : 720000 ≤ msg.gas) (hgasb : msg.gas < 2 ^ 64)
-    (hfork : CoveredFork msg.benv.stat.fork) (hstatic : msg.isStatic = false)
-    (hmax : 3124 ≤ msg.benv.stat.rules.code.maxCodeSize) :
-    ∃ post, processCreateMessage msg = .ok post ∧
-      (post.getCode msg.currentTarget).toList = Blanc.Lift.Weth9.code.toList ∧
-      ∀ x, (Devm.getStor post msg.currentTarget).get x ≠ 0 → x ∈ ([0, 1, 2] : List B256) := by
-  obtain ⟨post, h1, h2, h3⟩ :=
-    weth9_create msg hvalue hcodeAddress hcode hgas hgasb hfork hstatic hmax
-  exact ⟨post, h1, h2, by rw [h3]; exact deployedStor_metadata⟩
-
-/-- **The solvency invariant at deployment**, under the explicit hash premise that no address's
-balance slot is a fixed slot: nothing is booked, so any balance covers it. -/
-theorem deployedStor_solvent (hslots : ∀ a : Adr, balSlot a ∉ ([0, 1, 2] : List B256))
-    (bal : B256) : Solvent deployedStor 0 bal := by
-  have hbooked : booked deployedStor = fun _ => 0 := by
-    funext a
-    unfold booked
-    split_ifs
-    · by_contra hne
-      exact hslots a (deployedStor_metadata _ hne)
-    · rfl
-  have hsum : sum (fun _ : Adr => (0 : B256)) = 0 := sumBelow_zero _
-  have hb : bookedSum deployedStor = 0 := by rw [bookedSum, hbooked, hsum]
-  have h0 : (0 : B256).toNat = 0 := rfl
-  rw [Solvent, hb, h0]
-  exact Nat.zero_le _
-
 /-! ## The recorded deployment, closed -/
 
 /-- The recorded deployer of WETH9 (creation transaction `0xb9534341…c5b8442fa3`, block

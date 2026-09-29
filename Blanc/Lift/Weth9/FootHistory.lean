@@ -145,22 +145,4 @@ theorem weth9_history_backed {ca : Adr} {cfg : ChainConfig}
   exact ⟨hfoot.backed, fun a ha => hfoot.balance_le ha,
     fun a hfix hK => hfoot.balance_eq_zero hfix hK⟩
 
-/-- **Deployment-shaped start, no hash fact in the initial invariant.**  If the checkpoint's
-contract storage holds only its metadata words (slots 0–2) — no balance, no allowance — the initial
-footprint is empty, and the only hash premise left is the freshness of the keys the trace itself
-touches: they avoid the fixed slots and touched keys sharing a slot are one key. -/
-theorem weth9_history_footprint_deployed {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (installed : some (checkpoint.state.getCode ca).toList = weth9Sem.image)
-    (sumNof : SumNof checkpoint.state.bal)
-    (metadata : ∀ x, (checkpoint.state.getStor ca).get x ≠ 0 → x ∈ fixedSlots)
-    (fresh : KeysFresh (fun _ => False) (historyTouchedKeys ca trace)) :
-    some (future.state.getCode ca).toList = weth9Sem.image ∧
-      ∃ K : Key → Prop, (∀ k, K k → k ∈ historyTouchedKeys ca trace) ∧
-        FootInv K (future.state.getStor ca) (future.state.bal ca) := by
-  obtain ⟨hcode, K, hK, hfoot⟩ := weth9_history_footprint trace installed sumNof
-    (FootInv.deployed metadata) fresh
-  exact ⟨hcode, K, fun k hk => (hK k hk).resolve_left id, hfoot⟩
-
 end Blanc.Lift.Weth9

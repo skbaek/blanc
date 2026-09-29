@@ -73,32 +73,6 @@ def Exec.Frame.BalanceSstoreOccurrence
     key = holder.toB256 ∧
     ∃ tail : Stack, key :: value :: tail <<+ stepPre.stack
 
-/-- Any arbitrary instruction occurrence and any compiled cursor in the same
-retained frame are comparable along the unique same-frame continuation chain.
-The first arm is the source-recursion case (the occurrence is in the cursor's
-remaining body); the second identifies the finite prefix that must be ruled
-out when entering a source body through hidden compiler instructions. -/
-theorem Exec.Frame.NinstOccurrence.comparable_with_cursor
-    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    {fs : List Func} {table : List (Nat × Func)}
-    {body : Func} {final : Devm}
-    {n : Ninst} {stepPre stepPost : Devm} {slot : Xlot}
-    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame n stepPre stepPost slot)
-    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table body final) :
-    ∃ (pc : Nat) (current : Exec pc frame.sevm stepPre frame.out),
-      Ninst.At frame.sevm.code pc n ∧
-      ((∃ suffix, Exec.Deriv.ParentPrefixActions dp ca
-          ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩
-          ⟨pc, frame.sevm, stepPre, frame.out, current⟩ suffix) ∨
-       (∃ suffix, Exec.Deriv.ParentPrefixActions dp ca
-          ⟨pc, frame.sevm, stepPre, frame.out, current⟩
-          ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩
-          suffix)) := by
-  rcases occurrence with
-    ⟨pc, current, _continuation, _before, _selected, hprefix, hat,
-      _filled, _step, _prec, _edge⟩
-  exact ⟨pc, current, hat, cursor.parentPrefix.linear hprefix⟩
-
 /-- The same occurrence data as `NinstOccurrence`, but with its chronological
 prefix starting at an arbitrary same-frame derivation. -/
 def Exec.Frame.NinstOccurrenceFromDeriv
@@ -132,33 +106,6 @@ def Exec.Frame.NinstOccurrenceFromCursor
   Blanc.Weth10.Exec.Frame.NinstOccurrenceFromDeriv dp ca frame
     ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩
     n stepPre stepPost slot
-
-/-- Strengthened cursor comparison: either the arbitrary occurrence belongs
-to the cursor's remaining same-frame execution, or it lies in the finite
-compiler prefix before that cursor. -/
-theorem Exec.Frame.NinstOccurrence.fromCursor_or_before
-    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    {fs : List Func} {table : List (Nat × Func)}
-    {body : Func} {final : Devm}
-    {n : Ninst} {stepPre stepPost : Devm} {slot : Xlot}
-    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrence dp ca frame n stepPre stepPost slot)
-    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table body final) :
-    Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor n stepPre stepPost slot ∨
-      ∃ (pc : Nat) (current : Exec pc frame.sevm stepPre frame.out)
-          (before : List FlowAction),
-        Ninst.At frame.sevm.code pc n ∧
-        Exec.Deriv.ParentPrefixActions dp ca
-          ⟨pc, frame.sevm, stepPre, frame.out, current⟩
-          ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩
-          before := by
-  rcases occurrence with
-    ⟨pc, current, continuation, _rootBefore, selected, rootPrefix, hat,
-      filled, step, prec, edge⟩
-  rcases cursor.parentPrefix.linear rootPrefix with
-    ⟨crossed, after⟩ | ⟨beforeActions, before⟩
-  · exact Or.inl ⟨pc, current, continuation, crossed, selected, after,
-      hat, filled, step, prec, edge⟩
-  · exact Or.inr ⟨pc, current, beforeActions, hat, before⟩
 
 /-- Generic source-membership step for a `.next` node.  An arbitrary actual
 occurrence in the cursor suffix is either the cursor's exact source head or
@@ -1232,45 +1179,6 @@ private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_nonpayable_
   exact bodyCursor.no_balanceSstoreOccurrence_of_free
     hcode free insideBody
 
-private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_nonpayable_of_noCalls
-    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    {f₀ : Func} {aux : List Func} {body : Func}
-    {final stepPre stepPost : Devm} {slot : Xlot} {fuel : Nat}
-    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
-      (table 0 (f₀ :: aux)) (nonpayable body) final)
-    (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩)
-    (noCalls : body.NoCalls)
-    (nilFree : Func.sstoreFreeWithin fuel [] body = true)
-    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
-      (.reg .sstore) stepPre stepPost slot) : False := by
-  have free : Func.sstoreFreeWithin fuel (f₀ :: aux) body = true := by
-    calc
-      Func.sstoreFreeWithin fuel (f₀ :: aux) body =
-          Func.sstoreFreeWithin fuel [] body :=
-        Func.sstoreFreeWithin_eq_of_noCalls noCalls _ _
-      _ = true := nilFree
-  exact cursor.no_balanceSstoreOccurrence_nonpayable_of_free
-    hcode free occurrence
-
-private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_of_noCalls
-    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    {f₀ : Func} {aux : List Func} {body : Func}
-    {final stepPre stepPost : Devm} {slot : Xlot} {fuel : Nat}
-    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux)
-      (table 0 (f₀ :: aux)) body final)
-    (hcode : some frame.sevm.code.toList = Prog.compile ⟨f₀, aux⟩)
-    (noCalls : body.NoCalls)
-    (nilFree : Func.sstoreFreeWithin fuel [] body = true)
-    (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
-      (.reg .sstore) stepPre stepPost slot) : False := by
-  have free : Func.sstoreFreeWithin fuel (f₀ :: aux) body = true := by
-    calc
-      Func.sstoreFreeWithin fuel (f₀ :: aux) body =
-          Func.sstoreFreeWithin fuel [] body :=
-        Func.sstoreFreeWithin_eq_of_noCalls noCalls _ _
-      _ = true := nilFree
-  exact cursor.no_balanceSstoreOccurrence_of_free hcode free occurrence
-
 /-- Exhaustive structural view of the exact 27-entry WETH10 dispatcher.
 Keeping the selected selector and body as indices lets later occurrence proofs
 case-split without losing their dependent body cursor. -/
@@ -1338,41 +1246,6 @@ inductive Weth10BodyCase (dp : DeployParams) : B256 → Func → Prop
       (selector "flashFee" [.address, .uint256]) (nonpayable flashFee)
   | allowanceCase : Weth10BodyCase dp
       (selector "allowance" [.address, .address]) (nonpayable allowance)
-
-private theorem Weth10BodyCase.of_mem
-    {dp : DeployParams} {sig : B256} {body : Func}
-    (member : (sig, body) ∈ weth10Funcs dp) :
-    Weth10BodyCase dp sig body := by
-  simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false] at member
-  rcases member with h | h | h | h | h | h | h | h | h | h | h | h | h |
-      h | h | h | h | h | h | h | h | h | h | h | h | h | h
-  · cases h; exact .nameCase
-  · cases h; exact .approveCase
-  · cases h; exact .totalSupplyCase
-  · cases h; exact .withdrawToCase
-  · cases h; exact .transferFromCase
-  · cases h; exact .withdrawCase
-  · cases h; exact .permitTypehashCase
-  · cases h; exact .decimalsCase
-  · cases h; exact .domainSeparatorCase
-  · cases h; exact .transferAndCallCase
-  · cases h; exact .flashLoanCase
-  · cases h; exact .depositToAndCallCase
-  · cases h; exact .maxFlashLoanCase
-  · cases h; exact .balanceOfCase
-  · cases h; exact .noncesCase
-  · cases h; exact .callbackSuccessCase
-  · cases h; exact .flashMintedCase
-  · cases h; exact .withdrawFromCase
-  · cases h; exact .symbolCase
-  · cases h; exact .transferCase
-  · cases h; exact .depositToCase
-  · cases h; exact .approveAndCallCase
-  · cases h; exact .deploymentChainIdCase
-  · cases h; exact .depositCase
-  · cases h; exact .permitCase
-  · cases h; exact .flashFeeCase
-  · cases h; exact .allowanceCase
 
 /-- The exact local role of one balance-region stored word.  Transfer and
 flash actions have separate debit and credit constructors; for a self
@@ -1497,28 +1370,6 @@ theorem Exec.Frame.BalanceSstoreOccurrence.classify_of_primary_role
         occurrence.classify_of_role context classified ?_⟩
       rw [atomEq]
       exact role
-
-/-- A compiled cursor whose next source instruction is `SSTORE` produces an
-occurrence in the original retained `Exec`, including when `value` is already
-stored at `key`. -/
-theorem Exec.Frame.CompiledCursor.exists_balanceSstoreOccurrence
-    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    {fs : List Func} {table : List (Nat × Func)}
-    {tail : Func} {final : Devm}
-    {key value : B256} {stack : Stack}
-    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
-      (.next (.reg .sstore) tail) final)
-    (valid : ValidAdr key)
-    (stackPrefix : key :: value :: stack <<+ cursor.pre.stack) :
-    ∃ (tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table tail final)
-        (slot : Xlot) (holder : Adr),
-      Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame cursor.pre tailCursor.pre slot
-        key value holder := by
-  rcases valid with ⟨holder, holderKey⟩
-  rcases cursor.selectNextChildless (by simp [NinstIsChildless]) with
-    ⟨tailCursor, slot, _run, occurrence, _actions⟩
-  exact ⟨tailCursor, slot, holder, occurrence, ⟨holder, holderKey⟩,
-    holderKey.symm, stack, stackPrefix⟩
 
 /-- Skip an actually executed `SSTORE` whose immediate stack key is proved
 outside the address-shaped balance region.  This is the reusable boundary for
@@ -5171,35 +5022,6 @@ theorem Exec.Frame.exists_balanceSstoreOccurrence_of_receive
     balanceKey_valid frame.sevm.caller, rfl, [], ?_⟩
   rw [← storedWord]
   exact storePrefix
-
-/-- The concrete receive write is classified as the ordinary-mint credit of
-the same frame action, with rich storage, genuine emitter, and accepted-debit
-evidence attached. -/
-theorem Exec.Frame.exists_balanceSstoreClassification_of_receive
-    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    {action : FlowAction}
-    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
-    (empty : frame.sevm.data.length.toB256 = 0)
-    (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
-    ∃ (storePre storePost : Devm) (slot : Xlot),
-      Blanc.Weth10.Exec.Frame.BalanceSstoreClassification dp ca frame storePre storePost slot
-        frame.sevm.caller.toB256
-        (Stor.rest (Devm.getStor storePre ca) frame.sevm.caller +
-          Nat.toB256 frame.sevm.value.toNat)
-        frame.sevm.caller action := by
-  rcases Blanc.Weth10.Exec.Frame.exists_balanceSstoreOccurrence_of_receive (frame := frame) context empty with
-    ⟨storePre, storePost, slot, occurrence⟩
-  have atomEq : action.atom =
-      .ordinaryMint frame.sevm.caller.toB256 frame.sevm.caller
-        frame.sevm.value.toNat := by
-    have selected :=
-      Blanc.Weth10.Exec.Frame.primaryFlowAtom_eq_some_of_flowAction_eq_some (frame := frame) context classified
-    simpa [primaryFlowAtom, empty] using selected.symm
-  refine ⟨storePre, storePost, slot,
-    occurrence.classify_of_role context classified ?_⟩
-  rw [atomEq]
-  exact BalanceSstoreRole.ordinaryMintCredit
-    frame.sevm.caller.toB256 frame.sevm.caller frame.sevm.value.toNat
 
 private theorem name_sstoreFree (fs : List Func) :
     Func.sstoreFreeWithin 64 fs name = true := by

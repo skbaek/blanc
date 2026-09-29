@@ -126,11 +126,6 @@ private theorem decodeForwardPointerMemory_size (sevm : Sevm) :
   rw [Mem.size_write_of_lt hne hlt, hlength]
   decide
 
-private theorem decodeForwardPointerMemory_wf (sevm : Sevm) :
-    Mem.Wf (decodeForwardPointerMemory sevm) := by
-  exact Mem.Wf.write (decodeForwardHeadMemory_wf sevm) 96
-    (Nat.toB256 3533).toBytes
-
 private theorem decodeForwardPointerMemory_reads (sevm : Sevm) :
     Mem.Reads (decodeForwardPointerMemory sevm)
       (decodeForwardPointerImage sevm) := by
@@ -1394,65 +1389,6 @@ private theorem ossifiableEmptyDataCreateInput_length
       (B256.length_toBytes _).symm,
     List.take_length_append]
   exact B256.toB256_toBytes _
-
-private theorem ossifiableEmptyDataCreateInput_decodeSpec
-    (implementation admin : Adr) :
-    ossifiableConstructorDecodeSpec
-        (ossifiableEmptyDataCreateInput implementation admin) 3437 =
-      .accepted implementation.toB256 admin.toB256 [] := by
-  have himplementationClean :
-      addressMask &&& implementation.toB256 = 0 :=
-    validAdr_iff.mp ⟨implementation, rfl⟩
-  have hadminClean : addressMask &&& admin.toB256 = 0 :=
-    validAdr_iff.mp ⟨admin, rfl⟩
-  have hpointer :
-      (ossifiableConstructorDataPointer 3437 (96 : B256)).toNat = 3533 := by
-    decide +kernel
-  have hstart :
-      (ossifiableConstructorDataStart 3437 (96 : B256)).toNat = 3565 := by
-    decide +kernel
-  have hfinish :
-      (ossifiableConstructorDataEnd 3437 (96 : B256) 0).toNat = 3565 := by
-    decide +kernel
-  have haccepted := ossifiableConstructorDecodeSpec_accepted
-    (code := ossifiableEmptyDataCreateInput implementation admin)
-    (argsOffset := 3437)
-    (by rw [ossifiableEmptyDataCreateInput_length_exact]; omega)
-    (by
-      rw [ossifiableEmptyDataCreateInput_implementation]
-      exact himplementationClean)
-    (by
-      rw [show 3437 + 32 = 3469 by omega,
-        ossifiableEmptyDataCreateInput_admin]
-      exact hadminClean)
-    (by
-      rw [show 3437 + 64 = 3501 by omega,
-        ossifiableEmptyDataCreateInput_offset]
-      decide +kernel)
-    (by
-      rw [show 3437 + 64 = 3501 by omega,
-        ossifiableEmptyDataCreateInput_offset]
-      change
-        (ossifiableConstructorDataStart 3437 (96 : B256)).toNat ≤
-          (ossifiableEmptyDataCreateInput implementation admin).length
-      rw [hstart, ossifiableEmptyDataCreateInput_length_exact])
-    (by
-      rw [show 3437 + 64 = 3501 by omega,
-        ossifiableEmptyDataCreateInput_offset, hpointer,
-        ossifiableEmptyDataCreateInput_length]
-      decide +kernel)
-    (by
-      rw [show 3437 + 64 = 3501 by omega,
-        ossifiableEmptyDataCreateInput_offset, hpointer,
-        ossifiableEmptyDataCreateInput_length, hfinish,
-        ossifiableEmptyDataCreateInput_length_exact])
-  rw [ossifiableEmptyDataCreateInput_implementation,
-    show 3437 + 32 = 3469 by omega,
-    ossifiableEmptyDataCreateInput_admin,
-    show 3437 + 64 = 3501 by omega,
-    ossifiableEmptyDataCreateInput_offset, hpointer,
-    ossifiableEmptyDataCreateInput_length, hstart] at haccepted
-  simpa only [List.sliceD, B256.toNat_zero, List.takeD_zero] using haccepted
 
 /-- Specialize the forward constructor theorem to the exact complete
 `creation-template ++ abi.encode(implementation, admin, bytes(""))` input.

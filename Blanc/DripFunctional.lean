@@ -201,20 +201,6 @@ theorem run_main_of_exec {sevm : Sevm} {pre post : Devm}
   cases heq
   exact ⟨entry, burn.state, burn.memory, burn.logs, burn.output, run⟩
 
-/-- Prefix twin of `run_main_of_exec`: the Exec-to-source handoff crosses no
-source steps, so the exposed prefix is reflexivity at the entry state. -/
-theorem main_prefix_of_exec {sevm : Sevm} {pre post : Devm}
-    {path : Prog.SourcePath}
-    (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code.toList = code) :
-    ∃ entry, pre.state = entry.state ∧ pre.memory = entry.memory ∧
-      pre.logs = entry.logs ∧ pre.output = entry.output ∧
-      Func.Run (runtime.main :: runtime.aux) sevm entry main post ∧
-      Func.RunPrefix (runtime.main :: runtime.aux) sevm path entry main path
-        entry main := by
-  rcases run_main_of_exec exc hcode with ⟨entry, hst, hmm, hlg, hou, run⟩
-  exact ⟨entry, hst, hmm, hlg, hou, run, Func.RunPrefix.refl⟩
-
 /-- Deployed-byte receive: an empty-calldata call to the installed runtime
 leaves world state, memory, logs and output exactly as it found them. -/
 theorem exec_receive {sevm : Sevm} {pre post : Devm}

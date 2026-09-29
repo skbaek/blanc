@@ -585,10 +585,6 @@ def weth9Gas : B256 → Sevm → Devm → Option Nat :=
   weth9GasWith gJumpdest gBase gVerylow gLow gHigh gMid gExp gMemory gKeccak256 gasKeccak256Word
     gasColdSload gasWarmAccess
 
-theorem weth9Gas_eq_with :
-    weth9Gas = weth9GasWith gJumpdest gBase gVerylow gLow gHigh gMid gExp gMemory gKeccak256
-      gasKeccak256Word gasColdSload gasWarmAccess := rfl
-
 theorem weth9Gas_boSel {sevm : Sevm} {pre : Devm} :
     weth9Gas boSel sevm pre =
       some (if boKey sevm ∈ pre.accessedStorageKeys then balanceOfGas9Warm else balanceOfGas9) := by
@@ -784,50 +780,5 @@ theorem weth9_decimals_gas_exact {sevm : Sevm} {pre : Devm} {cost : Nat}
     weth9_decimals_runExact hfork h_value h_sel h_len h_len' h_stack h_mem h_cost h_gas
   exact ⟨post, (exec_iff_exec_eq 0 sevm pre (.ok post)).mp (exec_of_runExact h_code hfork hrun),
     hg, ho⟩
-
-/-- **P2: the deployed WETH9's `balanceOf(address)` call succeeds** and returns
-the argument's balance slot (the counterpart of `weth_balanceOf_succeeds`, with
-the same cold-key premise).  Unlike Blanc-WETH, whose `balanceOf` indexes by the
-raw calldata word, WETH9 masks the argument to an address first, so the slot is
-`balSlot` of that address. -/
-theorem weth9_balanceOf_succeeds {sevm : Sevm} {pre : Devm}
-    (h_code : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (h_value : sevm.value = 0)
-    (h_sel : Sevm.selector sevm = boSel)
-    (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
-    (h_stack : pre.stack = [])
-    (h_mem : pre.memory = Mem.empty)
-    (h_cold : (⟨sevm.currentTarget, balSlot (Sevm.dataWord sevm 4).toAdr⟩ : Adr × B256)
-      ∉ pre.accessedStorageKeys)
-    (h_gas : balanceOfGas9 ≤ pre.gasLeft) :
-    ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧
-      post.output = (Devm.getStorVal pre sevm.currentTarget
-        (balSlot (Sevm.dataWord sevm 4).toAdr)).toBytes := by
-  have h_cost : weth9Gas (Sevm.selector sevm) sevm pre = some balanceOfGas9 := by
-    rw [h_sel, weth9Gas_boSel, if_neg (show boKey sevm ∉ pre.accessedStorageKeys from h_cold)]
-  obtain ⟨post, hexec, _, ho⟩ :=
-    weth9_balanceOf_gas_exact h_code hfork h_value h_sel h_len h_len' h_stack h_mem h_cost h_gas
-  exact ⟨post, hexec, ho⟩
-
-/-- **P2, `decimals()`: the call succeeds** and returns the low byte of slot 2,
-with the slot's key cold. -/
-theorem weth9_decimals_succeeds {sevm : Sevm} {pre : Devm}
-    (h_code : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (h_value : sevm.value = 0)
-    (h_sel : Sevm.selector sevm = dcSel)
-    (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
-    (h_stack : pre.stack = [])
-    (h_mem : pre.memory = Mem.empty)
-    (h_cold : (⟨sevm.currentTarget, 2⟩ : Adr × B256) ∉ pre.accessedStorageKeys)
-    (h_gas : decimalsGas9 ≤ pre.gasLeft) :
-    ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧
-      post.output = (Devm.getStorVal pre sevm.currentTarget 2 &&& 0xff).toBytes := by
-  have h_cost : weth9Gas (Sevm.selector sevm) sevm pre = some decimalsGas9 := by
-    rw [h_sel, weth9Gas_dcSel, if_neg (show dcKey sevm ∉ pre.accessedStorageKeys from h_cold)]
-  obtain ⟨post, hexec, _, ho⟩ :=
-    weth9_decimals_gas_exact h_code hfork h_value h_sel h_len h_len' h_stack h_mem h_cost h_gas
-  exact ⟨post, hexec, ho⟩
 
 end Blanc.Lift.Weth9

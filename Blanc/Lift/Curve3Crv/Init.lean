@@ -91,27 +91,4 @@ theorem get_ne_zero_mem_set {s : Stor} {l : List B256} (h : ∀ x, s.get x ≠ 0
   · simp only [e, ↓reduceIte] at hx
     exact List.mem_cons_of_mem _ (h x hx)
 
-theorem curve_shaped_vyInv : VyInv curveShapedStor curveShapedState (fun _ => False) where
-  decimals := by decide +kernel
-  supply := by decide +kernel
-  minter := by decide +kernel
-  name := by unfold VyStr; decide +kernel
-  symbol := by unfold VyStr; decide +kernel
-  known := fun _ h => h.elim
-  unknown := fun k _ => by cases k <;> rfl
-  support := fun x hx => by
-    have h0 : ∀ x, Stor.empty.get x ≠ 0 → x ∈ ([] : List B256) := fun x hx =>
-      absurd (by simp [Stor.get, Stor.empty]) hx
-    have h := get_ne_zero_mem_set (get_ne_zero_mem_set (get_ne_zero_mem_set
-      (get_ne_zero_mem_set (get_ne_zero_mem_set (get_ne_zero_mem_set h0 _ _) _ _) _ _) _ _) _ _)
-      _ _ x hx
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at h
-    rcases h with rfl | rfl | rfl | rfl | rfl | rfl <;>
-      simp only [vyFixedSlots, List.mem_cons, true_or, or_true]
-  inj := fun _ _ h => h.elim
-  apart := fun _ h => h.elim
-  conserved := by
-    show (0 : B256).toNat = sum (fun _ : Adr => (0 : B256))
-    rw [sum, sumBelow_zero, B256.toNat_zero]
-
 end Blanc.Lift.Curve3Crv

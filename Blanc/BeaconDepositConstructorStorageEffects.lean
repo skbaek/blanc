@@ -426,20 +426,6 @@ private theorem constructorZeroHashLoop_succ_dispatch_storageEffectRun
     simpa only [Devm.setMach_setMach, Devm.memory_setMach,
       Devm.stateGas_setMach] using tail
 
-private theorem constructorZeroHashBase_add_toB256
-    (height : Nat) (hheight : height < 32) :
-    zeroHashBase + Nat.toB256 height = zeroHashSlot height := by
-  apply B256.toNat_inj
-  rw [B256.toNat_add_eq_of_nof]
-  · rw [B256.toNat_toB256_of_lt (by omega : height < 2 ^ 256)]
-    unfold zeroHashSlot
-    rw [B256.toNat_toB256_of_lt (by omega : 0x300 + height < 2 ^ 256)]
-    rfl
-  · unfold B256.Nof zeroHashBase
-    rw [B256.toNat_toB256_of_lt (by omega : height < 2 ^ 256)]
-    change 768 + height < 2 ^ 256
-    omega
-
 /-- The constructor continuation loads the new digest, retains its exact
 SSTORE effect, increments the model height, and tail-calls the loop. -/
 private theorem constructorZeroHashContinuation_storageEffectRun
@@ -1577,35 +1563,6 @@ theorem constructorZeroHashLoop_storageEffectRun_withSlack
     postRefund, postStorage, by
     simpa only [constructorStorageEffectTriplesFrom_initial,
       show Nat.toB256 0 = 0 by decide +kernel] using run⟩
-
-/-- Backward-compatible zero-slack specialization. -/
-theorem constructorZeroHashLoop_storageEffectRun
-    {fs : List Func} {sevm : Sevm} {base : Devm}
-    (world : ConstructorLoopWorld sevm base 0)
-    (hstatic : sevm.isStatic = false)
-    (hdepth : sevm.depth ≠ 0)
-    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (hcontinuation : fs[constructorZeroHashContinuationSlot]? =
-      some constructorZeroHashContinuation)
-    (hloop : fs[constructorZeroHashLoopSlot]? = some
-      (constructorZeroHashLoop constructorRuntimeOffset codeSize))
-    (hcode : sevm.code.toList = creationCode) :
-    ∃ post,
-      post.output = code ∧
-      post.error = none ∧
-      Devm.getStor post sevm.currentTarget = constructorFinalStorage ∧
-      Func.StorageEffectRun fs sevm
-        (base.setMach
-          ⟨[0], constructorInitialMemory, constructorLoopGas 0 31, base.stateGas⟩)
-        (constructorZeroHashLoop constructorRuntimeOffset codeSize)
-        (.ok post) (constructorStorageEffectTriples sevm.currentTarget) := by
-  obtain ⟨post, postOutput, postError, _, _postLogs, _postDelete,
-      _postRefund, postStorage, run⟩ :=
-    constructorZeroHashLoop_storageEffectRun_withSlack 0 (by decide +kernel)
-      world hstatic
-      hdepth hpre hfork hcontinuation hloop hcode
-  exact ⟨post, postOutput, postError, postStorage, run⟩
 
 /-- Initialize the constructor's scratch word and enter the exact zero-hash
 loop.  The prefix costs 33 gas including the internal-call boundary. -/

@@ -436,15 +436,6 @@ private theorem convertToShares_tail_effect
     ((Line.of_inv Devm.getCode (by line_inv) hlineInv).trans
       ((funext fun a => getCode_eq_of_state_eq hpop.state a).trans hword.2))⟩
 
-/-- Compatibility projection of the shares guard-prefix certificate. -/
-theorem convertToShares_pre_guards
-    {fs : List Func} {sevm : Sevm} {pre post : Devm}
-    (run : Func.Run fs sevm pre convertToShares post) :
-    Sevm.argWord sevm 0 ≤ maxValue ∧
-      Devm.getBal pre sevm.currentTarget ≤ maxBalance := by
-  exact ⟨(convertToShares_guardPrefix_effect run).1,
-    (convertToShares_guardPrefix_effect run).2.1⟩
-
 /-- Exact successful-body effect of `convertToShares(uint256)`. -/
 theorem convertToShares_effect
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
@@ -652,15 +643,6 @@ private theorem convertToAssets_guardPrefix_effect
         exact getCode_eq_of_state_eq hpop.state a
   refine ⟨B256.not_lt.mp ha, B256.not_lt.mp hb, after, ?_, hp', hmem, hcode⟩
   simpa only [convertToAssetsTail] using hsuccess
-
-/-- A successful `convertToAssets` body has both of its pre-arithmetic guards. -/
-theorem convertToAssets_pre_guards
-    {fs : List Func} {sevm : Sevm} {pre post : Devm}
-    (run : Func.Run fs sevm pre convertToAssets post) :
-    Sevm.argWord sevm 0 ≤ maxSupply ∧
-      Devm.getBal pre sevm.currentTarget ≤ maxBalance := by
-  exact ⟨(convertToAssets_guardPrefix_effect run).1,
-    (convertToAssets_guardPrefix_effect run).2.1⟩
 
 private theorem convertToAssets_tail_effect
     {fs : List Func} {sevm : Sevm} {mid post : Devm}

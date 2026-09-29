@@ -106,18 +106,9 @@ theorem creationCode_eq_prefix_append_runtime :
     creationCode = constructorInitPrefix ++ code := by
   rfl
 
-theorem constructorCreationCode_eq_creationCode :
-    constructorCreationCode = creationCode := by
-  rfl
-
 theorem creationCode_drop_prefix :
     creationCode.drop constructorInitPrefix.length = code := by
   simp [creationCode]
-
-theorem creationCode_drop_runtimeOffset :
-    creationCode.drop constructorRuntimeOffset = code := by
-  rw [← constructorInitPrefix_length_eq_runtimeOffset]
-  exact creationCode_drop_prefix
 
 /-- The constructor's CODECOPY window is exactly the appended runtime. -/
 theorem creationCode_slice_runtime :
@@ -139,10 +130,6 @@ theorem creationCode_eip3860 :
     creationCodeSize <= eip3860InitcodeLimit := by
   rw [creationCodeSize_exact, eip3860InitcodeLimit_exact]
   decide
-
-theorem creationCodeHeadroom_exact : creationCodeHeadroom = 47151 := by
-  unfold creationCodeHeadroom
-  rw [eip3860InitcodeLimit_exact, creationCodeSize_exact]
 
 /-! ## F4a: constructor source run
 

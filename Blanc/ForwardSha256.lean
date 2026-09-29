@@ -155,60 +155,6 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64
       (by simpa only [p, msg, h64, h32] using hres)
   simpa only [p, msg, cev, child, post] using hrun
 
-/-- Ordinary compiled-step projection of
-`childlessRunCompiled_staticcall_sha256_64`. -/
-theorem Ninst.runCompiled_staticcall_sha256_64
-    {sevm : Sevm} {devm parent : Devm} {benv : Benv}
-    {gw iiw oiw : B256} {s : List B256}
-    {code : ByteArray} {dgc : Nat} {d1 : Devm}
-    {ext acc mcc mcs : Nat}
-    (h_stk : devm.stack =
-      gw :: (2 : B256) :: iiw :: (64 : B256) ::
-        oiw :: (32 : B256) :: s)
-    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
-      [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = ext)
-    (h_del : accessDelegation
-      (addAccessedAddress
-        (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) 2) 2 =
-        ⟨false, 2, code, dgc, d1⟩)
-    (h_acc : accessCost 2
-      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses +
-        dgc = acc)
-    (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc =
-      ⟨mcc, mcs⟩)
-    (h_gas : mcc + ext ≤ d1.gasLeft)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (h_depth : sevm.depth ≠ 0)
-    (h_parent : parent = callSpawnParent d1 (mcc + ext)
-      iiw.toNat 64 oiw.toNat 32)
-    (h_bt : (staticcallSpawnMsg sevm parent mcs 2 2
-      iiw.toNat 64 code false).benvAfterTransfer = .ok benv)
-    (h_pre :
-      (!((staticcallSpawnMsg sevm parent mcs 2 2
-          iiw.toNat 64 code false).withBenv benv).disablePrecompiles &&
-        decide (((staticcallSpawnMsg sevm parent mcs 2 2
-          iiw.toNat 64 code false).withBenv benv).benv.stat.rules.isPrecomp 2)) =
-        true)
-    (h_len : (initEvm ((staticcallSpawnMsg sevm parent mcs 2 2
-      iiw.toNat 64 code false).withBenv benv)).sta.data.length = 64)
-    (h_shaGas : 84 ≤ mcs)
-    (h_room : parent.stack.length < 1024) :
-    let msg := staticcallSpawnMsg sevm parent mcs 2 2
-      iiw.toNat 64 code false
-    let cev := initEvm (msg.withBenv benv)
-    let child :=
-      (cev.dyna.withGasLeft (cev.dyna.gasLeft - 84)).withOutput
-        (Bytes.sha256 cev.sta.data).toBytes
-    let post :=
-      (((incorporateChildOnSuccess parent child child.output).setMach
-        ⟨1 :: parent.stack, parent.memory,
-          parent.gasLeft + child.gasLeft, parent.stateGas⟩).memWrite
-            oiw.toNat (child.output.take 32))
-    Ninst.RunCompiled sevm devm (.exec .staticcall) post := by
-  exact (Ninst.childlessRunCompiled_staticcall_sha256_64
-    h_stk h_ext h_del h_acc h_split h_gas hfork h_depth h_parent h_bt h_pre
-    h_len h_shaGas h_room).toRunCompiled
-
 /-- Changing an account balance leaves every account's storage untouched. -/
 lemma State.setBal_get_stor_direct
     (st : State) (changed queried : Adr) (value : B256) :
