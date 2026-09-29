@@ -31,6 +31,12 @@ control `approve_collision_control` (`Approve.lean`): with an admitted
 collision an approve run ends insolvent.  (`TransferFrom.lean` has no control
 lemma of its own.)
 
+`AllowAdmitted` is *universal* over addresses (the allowance slots avoid every address's balance
+slot, even at frames that write no allowance), which no collision resistance implies.  The history
+headline `weth9_history_footprint` (`FootHistory.lean`) replaces it by a footprint over the finitely
+many keys the trace touches, with only trace-local hash premises; this module's rows are kept as they
+are (`weth9_history_preserves_solvent` states backing of the deduplicated booked ledger).
+
 **Block and chain rows.**  The admission chain's block and history rungs are
 stated over retained traces (`ConfiguredBlockTrace`, `ConfiguredHistoryTrace`),
 which carry the frame roots the admission talks about; Blanc-WETH's

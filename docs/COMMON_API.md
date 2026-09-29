@@ -1503,6 +1503,18 @@ write at any other non-address key is invisible to the balances.
 names a contract; `Blanc/Conserved.lean` proves the same algebra for fmint's
 own supply slot and predates this module.
 
+A ledger keyed by *hashed* slots (a Solidity or Vyper mapping) cannot claim "every key's slot holds
+its value": two keys may share a slot, and a history touches a tiny fraction of the key space.  State
+the ledger over a set `K` of **tracked keys** instead, with
+[`Blanc/SlotFootprint.lean`](../Blanc/SlotFootprint.lean): `Support` (every nonzero word is at a fixed
+slot or a tracked key's slot), `Inj`/`Apart` (tracked slots pairwise distinct and off the fixed slots),
+`Fresh`/`FreshKeys`/`extendBy` (a frame's or trace's touched keys are tracked or on slots in no use, and
+extend the footprint), `Support.get_eq_zero`/`Support.set`/`Inj.extend`/`Apart.extend`, and
+`FreshKeys.of_universe`, which turns injectivity and apartness of one *trace-fixed universe* into the
+freshness of every touched key.  The key type, its slot function and the fixed slots are parameters.
+WETH9's `Blanc/Lift/Weth9/Footprint.lean` is the first consumer (with `tracked`/`trackedSum` over
+`sum`); Curve's `Layout.lean` keeps its own copy of the same notions.
+
 ### S8. I need Nat-level PRORATA pricing, accounting effects, or coalition-attack bounds
 
 Four modules carry the offset-priced proportional economics both PRORATA
@@ -2961,6 +2973,10 @@ contract-neutral.
   hashed Solidity mapping needs) with its slot obligations proved once:
   `BookedInv` and `ContractSpecSem.ofBookedSum` in
   [`Blanc/Lift/BookedSpec.lean`](../Blanc/Lift/BookedSpec.lean).
+- The same with a storage-only conjunct (for example a footprint's `Support`):
+  `ContractSpecSem.ofBookedSumWith` in
+  [`Blanc/Lift/BookedSupportSpec.lean`](../Blanc/Lift/BookedSupportSpec.lean), whose obligations are
+  those of `ofBookedSum` plus the fact that ether movements leave the contract's storage alone.
 
 There is no recipe: the entry points are whole-contract theorems, not goal
 shapes a trigger could match.

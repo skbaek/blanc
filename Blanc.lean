@@ -9,6 +9,7 @@ import Blanc.OffsetPricing
 import Blanc.LedgerConservation
 import Blanc.LedgerUpdate
 import Blanc.StorageOnlySpec
+import Blanc.SlotFootprint
 import Blanc.StaticStores
 import Blanc.WordArithmetic
 import Blanc.MemoryImage
@@ -405,6 +406,7 @@ import Blanc.DripStackSafetyCertificate
 
 -- The deployed solc WETH9, lifted from its runtime bytes (solc-bytecode-v1).
 import Blanc.Lift.Weth9.Solvency
+import Blanc.Lift.Weth9.FootHistory
 import Blanc.Lift.Weth9.Live
 
 -- The deployed beacon deposit contract, lifted from its runtime bytes
