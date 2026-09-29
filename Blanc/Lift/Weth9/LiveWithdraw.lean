@@ -151,6 +151,116 @@ theorem withdraw_body {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {M : Me
   refine rx_ret (d := ret) (b := ?_) (M := ?_)
 
 
+/-- **The `withdraw` body around an abstract send.**  The `CALL` to the caller is any step `hsend` says
+succeeds from the state the debit leaves, entering at gas `X` and leaving `post` (stack `1`, memory kept)
+at gas `G + 1488`; `Q post` is what the callee's run guarantees.  This is the body for a recipient
+*with* code: nothing is assumed of the callee except `hsend`. -/
+theorem withdraw_body_send {sevm : Sevm} {b : Devm} {G X : Nat} {S : List B256} {M : Mem}
+    {wad ret : B256} {cH c2 cS : Nat} {Q : Devm → Prop}
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hM : FpMem 96 M) (hroom : S.length < 1000) (hwad : wad ≠ 0)
+    (hle : wad ≤ b.getStorVal sevm.currentTarget (balSlot sevm.caller))
+    (h0 : cH = sloadCost sevm b (balSlot sevm.caller))
+    (h1 : c2 = sloadCost sevm (wB1 sevm b) (balSlot sevm.caller))
+    (hS : cS = sstoreCost sevm (wB2 sevm b) (balSlot sevm.caller) (wV sevm b wad))
+    (hsentry : gCallStipend < X + 69 + cS)
+    (hsend : ∃ post, Ninst.RunCompiled sevm
+        (St (wB3 sevm b wad) (0 :: sevm.caller.toB256 :: wad :: 96 :: (96 - 96) :: 96 :: 0 :: 96 ::
+          wad :: 0 :: sevm.caller.toB256 :: wad :: ret :: S)
+          (scratchW (scratchW M sevm.caller.toB256 3) sevm.caller.toB256 3) X) (.exec .call) post ∧
+      post = St post (1 :: 96 :: wad :: 0 :: sevm.caller.toB256 :: wad :: ret :: S)
+        (scratchW (scratchW M sevm.caller.toB256 3) sevm.caller.toB256 3) (G + 1488) ∧ Q post) :
+    ∃ post, Q post ∧
+      SFunc.RunExact prog sevm (St b (wad :: ret :: S) M
+        (X + 69 + cS + 16 + c2 + 130 + cH + 96)) t_09d9_c8
+        (.returned (St (post.addLog ⟨sevm.currentTarget, [wdTopic, sevm.caller.toB256],
+          wad.toBytes⟩) S (wdMem M sevm.caller.toB256 wad) G)) := by
+  obtain ⟨post, hrunc, hSt, hQ⟩ := hsend
+  refine ⟨post, hQ, ?_⟩
+  rdest
+  rdup
+  rpush
+  rpush
+  refine rx_caller (by rroom) ?_
+  rhash
+  rsloadC
+  rreq hle
+  rdest
+  rdup
+  rpush
+  rpush
+  refine rx_caller (by rroom) ?_
+  rhash
+  rpush
+  rdup
+  rdup
+  rsloadC
+  rsub
+  rswap
+  rpop
+  rpop
+  rdup
+  rswap
+  rsstoreC
+  rpop
+  refine rx_caller (by rroom) ?_
+  rmask
+  rpush
+  rdup
+  rswap
+  rdup
+  refine rx_iszero (v := 0) (by simp [B256.eqCheck, hwad]) (by rroom) ?_
+  refine rx_mul (v := 0) (by decide) (by rroom) ?_
+  rswap
+  rpush
+  rmld
+  rpush
+  rpush
+  rmld
+  rdup
+  rdup
+  rsub
+  rdup
+  rdup
+  rdup
+  rdup
+  refine .next hrunc ?_
+  rw [hSt]
+  rswap
+  rpop
+  rpop
+  rpop
+  rpop
+  riszero
+  riszero
+  rpush
+  refine rx_branch_succ (by decide) ?_
+  rdest
+  refine rx_caller (by rroom) ?_
+  rmask
+  rpush
+  rdup
+  rpush
+  rmld
+  rdup
+  rdup
+  rdup
+  refine rx_mstoreOut (by assumption) (by decide) (fun _ => ?_)
+  rpush
+  radd
+  rswap
+  rpop
+  rpop
+  rpush
+  rmld
+  rdup
+  rswap
+  rsub
+  rswap
+  rlog2
+  rpop
+  refine rx_ret (d := ret) (b := ?_) (M := ?_)
+
 /-- The `withdraw` body for `wad = 0`: the send is a zero-value `CALL` with the stipend as its gas
 argument (`0x08fc · iszero(0)`); the callee returns it, so the send costs the account access alone.
 Same walk as `withdraw_body`. -/

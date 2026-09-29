@@ -503,4 +503,108 @@ theorem weth9_withdraw_any_live {sevm : Sevm} {pre : Devm} {G : Nat}
     exact weth9_withdraw_live h_code hfork h_static h_value h_sel h_len h_len' h_stack h_mem h_depth
       hw hle h_eoa h_prec h_eth h_gas hG
 
+
+/-! ## Withdrawing to a contract
+
+The recipient may have code.  Its run is then the callee's business, so `SendOk` is the premise: the
+`CALL` the body makes to the caller, entered at gas `X ≥ Xmin` from the state the debit leaves, succeeds
+(stack `1`, memory kept), leaves at least `1489` gas (the rest of the body needs `1488`, and the wrapper
+one more), and changes no storage of the contract.  Everything else — the dispatcher, the checks, the debit,
+the event — is proved as for an externally owned account. -/
+
+/-- The callee premise for a send of `wad` to the caller, from the state `pre`. -/
+def SendOk (sevm : Sevm) (pre : Devm) (wad sel : B256) (Xmin : Nat) : Prop :=
+  ∀ X, Xmin ≤ X → ∃ post : Devm, ∃ r : Nat, 1489 ≤ r ∧
+    Ninst.RunCompiled sevm
+      (St (wB3 sevm pre wad) (0 :: sevm.caller.toB256 :: wad :: 96 :: (96 - 96) :: 96 :: 0 :: 96 ::
+        wad :: 0 :: sevm.caller.toB256 :: wad :: Bytes.toB256 [2, 100] :: [sel])
+        (scratchW (scratchW memFp sevm.caller.toB256 3) sevm.caller.toB256 3) X) (.exec .call) post ∧
+    post = St post (1 :: 96 :: wad :: 0 :: sevm.caller.toB256 :: wad :: Bytes.toB256 [2, 100] :: [sel])
+      (scratchW (scratchW memFp sevm.caller.toB256 3) sevm.caller.toB256 3) r ∧
+    Devm.getStor post sevm.currentTarget = Devm.getStor (wB3 sevm pre wad) sevm.currentTarget ∧
+    post.output = (wB3 sevm pre wad).output
+
+/-- The gas `withdraw` spends before the `CALL` (`X` is what is left at it): the dispatcher, the wrapper,
+the body up to the send, and the balance charges. -/
+def withdrawSendPre (sevm : Sevm) (pre : Devm) : Nat :=
+  551 + sloadCost sevm pre (balSlot sevm.caller) +
+    sloadCost sevm (wB1 sevm pre) (balSlot sevm.caller) +
+    sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller) (wV sevm pre (Sevm.dataWord sevm 4))
+
+/-- **`withdraw(wad)` to a contract that answers the send is live** (`wad ≠ 0`, `wad ≤ balanceOf[caller]`):
+given `SendOk`, at call-entry gas `X ≥ Xmin` the deployed code executes `withdraw` to success; the frame
+ends with `r - 1489` gas, `r` the gas the callee's run leaves at the call, debiting the caller's balance
+slot; nothing is claimed of other accounts' storage (the callee's is its own business). -/
+theorem weth9_withdraw_send_live {sevm : Sevm} {pre : Devm} {X Xmin : Nat}
+    (h_code : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (h_static : sevm.isStatic = false) (h_value : sevm.value = 0)
+    (h_sel : Sevm.selector sevm = wdSel)
+    (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
+    (h_stack : pre.stack = []) (h_mem : pre.memory = Mem.empty)
+    (hwad : Sevm.dataWord sevm 4 ≠ 0)
+    (hle : Sevm.dataWord sevm 4 ≤ pre.getStorVal sevm.currentTarget (balSlot sevm.caller))
+    (hsend : SendOk sevm pre (Sevm.dataWord sevm 4) (Sevm.selector sevm) Xmin) (hX : Xmin ≤ X)
+    (h_gas : pre.gasLeft = X + withdrawSendPre sevm pre)
+    (h_sentry : gCallStipend < X + 69 +
+      sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller) (wV sevm pre (Sevm.dataWord sevm 4))) :
+    ∃ post r, exec ⟨0, sevm, pre⟩ = .ok post ∧ 1489 ≤ r ∧ post.gasLeft + 1489 = r ∧
+      post.output = pre.output ∧
+      Devm.getStor post sevm.currentTarget = (Devm.getStor pre sevm.currentTarget).set
+        (balSlot sevm.caller)
+        (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) - Sevm.dataWord sevm 4) := by
+  have hsel : Sevm.selector sevm = 0x2e1a7d4d := h_sel.trans wdSel_eq
+  obtain ⟨cp, r, hr, hrun, hSt, hstor, hout⟩ := hsend X hX
+  obtain ⟨G, rfl⟩ : ∃ G, r = G + 1489 := ⟨r - 1489, by omega⟩
+  have hSt' : cp = St cp (1 :: 96 :: Sevm.dataWord sevm 4 :: 0 :: sevm.caller.toB256 ::
+      Sevm.dataWord sevm 4 :: Bytes.toB256 [2, 100] :: [Sevm.selector sevm])
+      (scratchW (scratchW memFp sevm.caller.toB256 3) sevm.caller.toB256 3) (G + 1 + 1488) := hSt
+  obtain ⟨cp', hQ, hbody⟩ := withdraw_body_send (sevm := sevm) (b := pre) (G := G + 1) (X := X)
+    (S := [Sevm.selector sevm]) (M := memFp) (wad := Sevm.dataWord sevm 4)
+    (ret := Bytes.toB256 [2, 100]) (cH := sloadCost sevm pre (balSlot sevm.caller))
+    (c2 := sloadCost sevm (wB1 sevm pre) (balSlot sevm.caller))
+    (cS := sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller) (wV sevm pre (Sevm.dataWord sevm 4)))
+    (Q := fun p => Devm.getStor p sevm.currentTarget =
+        Devm.getStor (wB3 sevm pre (Sevm.dataWord sevm 4)) sevm.currentTarget ∧
+      p.output = (wB3 sevm pre (Sevm.dataWord sevm 4)).output)
+    hfork h_static fp_memFp (by simp) hwad hle rfl rfl rfl h_sentry
+    ⟨cp, hrun, hSt', hstor, hout⟩
+  have hg : X + 69 + sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller)
+      (wV sevm pre (Sevm.dataWord sevm 4)) + 16 + sloadCost sevm (wB1 sevm pre) (balSlot sevm.caller) +
+      130 + sloadCost sevm pre (balSlot sevm.caller) + 96 + 68 + 172 = pre.gasLeft := by
+    rw [h_gas]; unfold withdrawSendPre; omega
+  obtain ⟨postW, hw, hpe⟩ := withdraw_wrapper (sevm := sevm) (b := pre) (G := G) (X := _)
+    (sel := Sevm.selector sevm) h_value hbody
+  have hrunP : SProg.RunExact prog sevm pre postW := by
+    refine ⟨_, rfl, ?_⟩
+    have h0 := dispatch_withdraw (b := pre) h_len h_len' hsel hw
+    rw [pre_eq_St h_stack h_mem hg] at h0
+    exact h0
+  refine ⟨postW, G + 1489, (exec_iff_exec_eq 0 sevm pre (.ok postW)).mp
+    (exec_of_runExact h_code hfork hrunP), by omega, ?_, ?_, ?_⟩
+  · rw [hpe]; rfl
+  · rw [hpe]
+    show cp'.output = pre.output
+    rw [hQ.2]
+    simp [wB3, wB2, wB1]
+  · rw [hpe]
+    show Devm.getStor cp' sevm.currentTarget = _
+    rw [hQ.1]
+    simp [wB3, wB2, wB1, wV, getStorVal_afterSload]
+
+
+/-- **A worked cost**: `approve` of a nonzero amount over a cold, never-written allowance slot costs
+`2320` plus the cold surcharge `2100` plus the storage-set charge `20000`. -/
+theorem approveGas_cold_set {sevm : Sevm} {pre : Devm}
+    (hcold : (⟨sevm.currentTarget, allowSlot sevm.caller (Sevm.dataWord sevm 4).toAdr⟩ :
+      Adr × B256) ∉ pre.accessedStorageKeys)
+    (horig : getOrigStorVal sevm sevm.currentTarget
+      (allowSlot sevm.caller (Sevm.dataWord sevm 4).toAdr) = 0)
+    (hcur : pre.getStorVal sevm.currentTarget
+      (allowSlot sevm.caller (Sevm.dataWord sevm 4).toAdr) = 0)
+    (hw : Sevm.dataWord sevm 36 ≠ 0) : approveGas sevm pre = 24420 := by
+  unfold approveGas sstoreCost sstoreValueCost
+  simp only [hcold, horig, hcur, ite_false]
+  simp [Ne.symm hw]
+  decide
+
 end Blanc.Lift.Weth9
