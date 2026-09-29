@@ -527,6 +527,7 @@ import Blanc.Curve3Crv.Properties
 import Blanc.Lift.Curve3Crv.Ladder
 import Blanc.Lift.Curve3Crv.CarriedHistory
 import Blanc.Lift.Curve3Crv.Init
+import Blanc.Lift.Curve3Crv.Creation.Deploy
 import Blanc.Lift.Curve3Crv.Exec
 
 namespace Blanc

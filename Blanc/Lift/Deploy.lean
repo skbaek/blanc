@@ -53,6 +53,13 @@ theorem rxc_callvalue (hroom : S.length < 1024)
   .next (Ninst.runCompiled_pushItem (devm := St b S M (G + 2)) (G := G) (cost := gBase)
     (by rintro ⟨⟩) rfl rfl hroom) k
 
+/-- `St` keeps the world's error and storage. -/
+theorem St_error (b : Devm) (S : List B256) (M : Mem) (G : Nat) : (St b S M G).error = b.error :=
+  rfl
+
+theorem St_getStor (b : Devm) (S : List B256) (M : Mem) (G : Nat) (a : Adr) :
+    Devm.getStor (St b S M G) a = Devm.getStor b a := rfl
+
 /-- The state `RETURN` leaves (stated over a variable state, so nothing reduces a concrete
 memory image). -/
 def returnPost (d : Devm) (i sz : B256) (S : List B256) : Devm :=

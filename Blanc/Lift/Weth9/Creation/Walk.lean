@@ -257,12 +257,6 @@ theorem ctorCost_le (sevm : Sevm) (b : Devm) : ctorCost sevm b ≤ 80000 := by
 
 /-! ## The whole constructor -/
 
-theorem St_error (b : Devm) (S : List B256) (M : Mem) (G : Nat) : (St b S M G).error = b.error :=
-  rfl
-
-theorem St_getStor (b : Devm) (S : List B256) (M : Mem) (G : Nat) (a : Adr) :
-    Devm.getStor (St b S M G) a = Devm.getStor b a := rfl
-
 /-- The constructor's storage: the fresh storage with name, symbol and decimals written. -/
 def ctorStor (s : Stor) : Stor := ((s.set 0 nameSlotWord).set 1 symbolSlotWord).set 2 18
 
