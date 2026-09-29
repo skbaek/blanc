@@ -92,14 +92,14 @@ section Frame
 
 variable {sevm : Sevm}
 
-private theorem stable0 {d d' : Devm} (hs : d.state = d'.state)
-    (h : weth9Spec.Pre sevm.currentTarget sevm d) :
-    weth9Spec.Pre sevm.currentTarget sevm d' :=
+private theorem stable0 (c : ContractSpecSem) {d d' : Devm} (hs : d.state = d'.state)
+    (h : c.Pre sevm.currentTarget sevm d) :
+    c.Pre sevm.currentTarget sevm d' :=
   h.state_eq hs.symm
 
-private theorem stable1 {d d' : Devm} (hs : d.state = d'.state)
-    (h : weth9Spec.Post sevm.currentTarget sevm d) :
-    weth9Spec.Post sevm.currentTarget sevm d' :=
+private theorem stable1 (c : ContractSpecSem) {d d' : Devm} (hs : d.state = d'.state)
+    (h : c.Post sevm.currentTarget sevm d) :
+    c.Post sevm.currentTarget sevm d' :=
   ContractSpecSem.Post.of_state_eq h hs.symm
 
 /-- A solvency conclusion over a balance-preserving run is the frame
@@ -119,6 +119,94 @@ theorem deposit_post {d : Devm} {o : Outcome} {g : SFunc}
   post_of_solvent hpre (Weth9.deposit_effect hg hfork run).2
     (Weth9.deposit_solvent hg hfork run (hpre.inv.left rfl))
 
+/-- **The WETH9 frame postcondition for any frame contract, over any step relation, from its
+per-entry obligations.**  The dispatcher, the state-silent view wrappers, and the wrapper of
+`deposit` are common to every contract over the lifted program; a contract supplies what its
+invariant needs of the five state-changing entries: `deposit` (entry 1) as a callee, the
+wrappers of `transfer` (20), `transferFrom` (25) and `approve` (27), and `withdraw` (the one entry
+with a `CALL`), at the step relation `P`.  `frame_post_gen` is the solvency instance and
+`FootFrame.lean` the footprint one. -/
+theorem frame_post_of (c : ContractSpecSem) {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {pre post : Devm}
+    (hrun : SProg.RunP P prog sevm pre post)
+    (hdeposit : ∀ {d : Devm} {o : Outcome} {g : SFunc}, prog[1]? = some g →
+      c.Pre sevm.currentTarget sevm d → SFunc.Run prog sevm d g o →
+      c.Post sevm.currentTarget sevm (Outcome.devm o))
+    (htransfer : ∀ {d : Devm} {o : Outcome} {g : SFunc}, prog[20]? = some g →
+      c.Pre sevm.currentTarget sevm d → SFunc.Run prog sevm d g o →
+      c.Post sevm.currentTarget sevm (Outcome.devm o))
+    (htransferFrom : ∀ {d : Devm} {o : Outcome} {g : SFunc}, prog[25]? = some g →
+      c.Pre sevm.currentTarget sevm d → SFunc.Run prog sevm d g o →
+      c.Post sevm.currentTarget sevm (Outcome.devm o))
+    (happrove : ∀ {d : Devm} {o : Outcome} {g : SFunc}, prog[27]? = some g →
+      c.Pre sevm.currentTarget sevm d → SFunc.Run prog sevm d g o →
+      c.Post sevm.currentTarget sevm (Outcome.devm o))
+    (hwithdraw : ∀ {d : Devm} {o : Outcome} {g : SFunc}, prog[8]? = some g →
+      c.Pre sevm.currentTarget sevm d → SFunc.RunP P prog sevm d g o →
+      c.Post sevm.currentTarget sevm (Outcome.devm o))
+    (hpre : c.Pre sevm.currentTarget sevm pre) :
+    c.Post sevm.currentTarget sevm post := by
+  obtain ⟨f, hf, run⟩ := hrun
+  rw [entry0_lookup] at hf
+  cases hf
+  have hsc : t_0000_c0.silentCallsWith silentSet wrapperSet 1 = true :=
+    entry0_silentCalls
+  refine SFunc.RunP.hoare_single_call_with_gotos hP (K := [1])
+    (Φ₀ := c.Pre sevm.currentTarget sevm)
+    (Φ₁ := c.Post sevm.currentTarget sevm)
+    silentSet_closed hzero (fun _ h => ContractSpecSem.post_of_pre h)
+    (stable0 c) (stable1 c) ?_ ?_ hsc entry0_callRefs run hpre
+  · intro k g hk hg d o hd r
+    simp only [List.mem_singleton] at hk
+    subst hk
+    exact hdeposit hg hd (r.mono hP)
+  · intro k g hk hg d o hd r
+    simp only [wrapperSet, List.mem_cons, List.not_mem_nil, or_false] at hk
+    -- the state-silent view wrappers
+    have silentCase : k ∈ [18, 21, 22, 23, 26, 28] →
+        c.Post sevm.currentTarget sevm (Outcome.devm o) := by
+      intro hk'
+      obtain ⟨hs, hr⟩ := closed_of (P := SFunc.silent) viewWrappers_silent
+        (List.mem_append_right _ hk') hg
+      exact stable1 c (SFunc.RunP.state_of_silent hP viewWrappers_silent hs hr r).symm
+        (ContractSpecSem.post_of_pre hd)
+    rcases hk with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+    · exact silentCase (by simp)
+    · -- 19: deposit wrapper
+      have hshape := wrapper19_shape
+      rw [hg] at hshape
+      simp only [Bool.and_eq_true] at hshape
+      have h1 : prog[1]? = some t_0440_c1 := by simp [prog, Cert.prog, cert]
+      exact SFunc.RunP.hoare_wrapper hP silentSet_closed hzero
+        (fun _ h => ContractSpecSem.post_of_pre h) (stable0 c) (stable1 c) h1
+        (fun hd' r' => hdeposit h1 hd' (r'.mono hP)) hshape.1 hshape.2 r hd
+    · exact htransfer hg hd (r.mono hP)
+    · exact silentCase (by simp)
+    · exact silentCase (by simp)
+    · exact silentCase (by simp)
+    · -- 24: withdraw wrapper
+      have hshape := wrapper24_shape
+      rw [hg] at hshape
+      simp only [Bool.and_eq_true] at hshape
+      have h8 : prog[8]? = some t_09d9_c8 := by simp [prog, Cert.prog, cert]
+      exact SFunc.RunP.hoare_wrapper hP silentSet_closed hzero
+        (fun _ h => ContractSpecSem.post_of_pre h) (stable0 c) (stable1 c) h8
+        (fun hd' r' => hwithdraw h8 hd' r')
+        hshape.1 hshape.2 r hd
+    · exact htransferFrom hg hd (r.mono hP)
+    · exact silentCase (by simp)
+    · exact happrove hg hd (r.mono hP)
+    · exact silentCase (by simp)
+
+/-- The token wrappers (20, 25, 27) leave every balance alone. -/
+theorem tokenWrapper_getBal {k : Nat} (hk : k ∈ [20, 25, 27]) {d o : Devm} {g : SFunc}
+    {oc : Outcome} (hg : prog[k]? = some g) (run : SFunc.Run prog sevm d g oc)
+    (ho : o = Outcome.devm oc) : o.getBal = d.getBal := by
+  subst ho
+  obtain ⟨hs, hr⟩ := closed_of (P := SFunc.balSilent) tokenWrappers_balSilent
+    (List.mem_append_right _ (by simp at hk ⊢; omega)) hg
+  exact SFunc.RunP.getBal_of_balSilent id tokenWrappers_balSilent hs hr run
+
 /-- **The WETH9 frame postcondition, over any step relation.**  Every run of
 the lifted program from a frame precondition ends in the frame postcondition,
 given the frame's local collision premise and a postcondition for `withdraw`
@@ -132,71 +220,19 @@ theorem frame_post_gen {P : Sevm → Devm → Ninst → Devm → Prop}
       weth9Spec.Pre sevm.currentTarget sevm d → SFunc.RunP P prog sevm d g o →
       weth9Spec.Post sevm.currentTarget sevm (Outcome.devm o))
     (hpre : weth9Spec.Pre sevm.currentTarget sevm pre) :
-    weth9Spec.Post sevm.currentTarget sevm post := by
-  obtain ⟨f, hf, run⟩ := hrun
-  rw [entry0_lookup] at hf
-  cases hf
-  have hsc : t_0000_c0.silentCallsWith silentSet wrapperSet 1 = true :=
-    entry0_silentCalls
-  refine SFunc.RunP.hoare_single_call_with_gotos hP (K := [1])
-    (Φ₀ := weth9Spec.Pre sevm.currentTarget sevm)
-    (Φ₁ := weth9Spec.Post sevm.currentTarget sevm)
-    silentSet_closed hzero (fun _ h => ContractSpecSem.post_of_pre h)
-    stable0 stable1 ?_ ?_ hsc entry0_callRefs run hpre
-  · intro k g hk hg d o hd r
-    simp only [List.mem_singleton] at hk
-    subst hk
-    exact deposit_post hfork hg hd (r.mono hP)
-  · intro k g hk hg d o hd r
-    simp only [wrapperSet, List.mem_cons, List.not_mem_nil, or_false] at hk
-    -- the state-silent view wrappers
-    have silentCase : k ∈ [18, 21, 22, 23, 26, 28] →
-        weth9Spec.Post sevm.currentTarget sevm (Outcome.devm o) := by
-      intro hk'
-      obtain ⟨hs, hr⟩ := closed_of (P := SFunc.silent) viewWrappers_silent
-        (List.mem_append_right _ hk') hg
-      exact stable1 (SFunc.RunP.state_of_silent hP viewWrappers_silent hs hr r).symm
-        (ContractSpecSem.post_of_pre hd)
-    -- the balance-silent token wrappers
-    have balOf : k ∈ [20, 25, 27] → (Outcome.devm o).getBal = d.getBal := by
-      intro hk'
-      obtain ⟨hs, hr⟩ := closed_of (P := SFunc.balSilent) tokenWrappers_balSilent
-        (List.mem_append_right _ (by simp at hk' ⊢; omega)) hg
-      exact SFunc.RunP.getBal_of_balSilent hP tokenWrappers_balSilent hs hr r
-    rcases hk with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
-    · exact silentCase (by simp)
-    · -- 19: deposit wrapper
-      have hshape := wrapper19_shape
-      rw [hg] at hshape
-      simp only [Bool.and_eq_true] at hshape
-      have h1 : prog[1]? = some t_0440_c1 := by simp [prog, Cert.prog, cert]
-      exact SFunc.RunP.hoare_wrapper hP silentSet_closed hzero
-        (fun _ h => ContractSpecSem.post_of_pre h) stable0 stable1 h1
-        (fun hd' r' => deposit_post hfork h1 hd' (r'.mono hP)) hshape.1 hshape.2 r hd
-    · -- 20: transfer wrapper
-      exact post_of_solvent hd (balOf (by simp))
-        (Weth9.transfer_wrapper_solvent hg (hd.inv.left rfl) (r.mono hP))
-    · exact silentCase (by simp)
-    · exact silentCase (by simp)
-    · exact silentCase (by simp)
-    · -- 24: withdraw wrapper
-      have hshape := wrapper24_shape
-      rw [hg] at hshape
-      simp only [Bool.and_eq_true] at hshape
-      have h8 : prog[8]? = some t_09d9_c8 := by simp [prog, Cert.prog, cert]
-      exact SFunc.RunP.hoare_wrapper hP silentSet_closed hzero
-        (fun _ h => ContractSpecSem.post_of_pre h) stable0 stable1 h8
-        (fun hd' r' => hwithdraw h8 hd' r')
-        hshape.1 hshape.2 r hd
-    · -- 25: transferFrom wrapper
-      exact post_of_solvent hd (balOf (by simp))
-        (Weth9.transferFrom_wrapper_solvent hg hadm (hd.inv.left rfl) (r.mono hP))
-    · exact silentCase (by simp)
-    · -- 27: approve wrapper
-      exact post_of_solvent hd (balOf (by simp))
-        (approve_wrapper_solvent hg hadm (hd.inv.left rfl) (r.mono hP))
-    · exact silentCase (by simp)
-
+    weth9Spec.Post sevm.currentTarget sevm post :=
+  frame_post_of weth9Spec hP hrun
+    (fun hg hd r => deposit_post hfork hg hd r)
+    (fun hg hd r => post_of_solvent hd
+      (tokenWrapper_getBal (k := 20) (by simp) hg r rfl)
+      (Weth9.transfer_wrapper_solvent hg (hd.inv.left rfl) r))
+    (fun hg hd r => post_of_solvent hd
+      (tokenWrapper_getBal (k := 25) (by simp) hg r rfl)
+      (Weth9.transferFrom_wrapper_solvent hg hadm (hd.inv.left rfl) r))
+    (fun hg hd r => post_of_solvent hd
+      (tokenWrapper_getBal (k := 27) (by simp) hg r rfl)
+      (approve_wrapper_solvent hg hadm (hd.inv.left rfl) r))
+    hwithdraw hpre
 
 /-- **The WETH9 frame postcondition** under the deeper-frame hypothesis in the
 form `ContractSpecSem.Sound` supplies it. -/

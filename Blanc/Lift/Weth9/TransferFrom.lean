@@ -160,7 +160,7 @@ private theorem xfer_08cf {sevm : Sevm} {d : Devm} {o : Outcome}
 /-- What every block from `0x6dc` on does to the persistent state: balances are
 untouched, and the storage is the two balance writes, possibly preceded by an
 allowance write that happens only when `src ≠ caller`. -/
-private def XferEff (sevm : Sevm) (d : Devm) (o : Outcome) (wad dst src : B256) : Prop :=
+def Weth9.XferEff (sevm : Sevm) (d : Devm) (o : Outcome) (wad dst src : B256) : Prop :=
   (Outcome.devm o).getBal = d.getBal ∧
     (Devm.getStor (Outcome.devm o) sevm.currentTarget =
         xferStor (Devm.getStor d sevm.currentTarget) src.toAdr dst.toAdr wad ∨
@@ -169,7 +169,7 @@ private def XferEff (sevm : Sevm) (d : Devm) (o : Outcome) (wad dst src : B256) 
           xferStor ((Devm.getStor d sevm.currentTarget).set
             (allowKey src.toAdr.toB256 sevm.caller.toB256) w) src.toAdr dst.toAdr wad))
 
-private theorem XferEff.of_same {sevm : Sevm} {d d' : Devm} {o : Outcome} {wad dst src : B256}
+theorem Weth9.XferEff.of_same {sevm : Sevm} {d d' : Devm} {o : Outcome} {wad dst src : B256}
     (h : Same d d') (e : XferEff sevm d' o wad dst src) : XferEff sevm d o wad dst src := by
   unfold XferEff at *
   rw [h.1, h.2]
@@ -580,6 +580,62 @@ private theorem xfer_068c {sevm : Sevm} {d : Devm} {o : Outcome}
   rw [hv] at hle
   exact hle
 
+/-! ### The effect of entry 9 -/
+
+/-- **What a run of entry 9 does**, for a frame whose stack starts `wad, dst, src`: the effect
+`XferEff` (balances untouched; the two balance writes, possibly after an allowance write), and the
+balance `require`. -/
+def Weth9.XferOk (sevm : Sevm) (d : Devm) (o : Outcome) (wad dst src : B256) : Prop :=
+  XferEff sevm d o wad dst src ∧
+    wad ≤ (Devm.getStor d sevm.currentTarget).get (balSlot src.toAdr)
+
+theorem Weth9.XferOk.of_same {sevm : Sevm} {d d' : Devm} {o : Outcome} {wad dst src : B256}
+    (h : Same d d') (e : Weth9.XferOk sevm d' o wad dst src) : Weth9.XferOk sevm d o wad dst src :=
+  ⟨Weth9.XferEff.of_same h e.1, by rw [h.stor]; exact e.2⟩
+
+theorem Weth9.XferOk.of_same_out {sevm : Sevm} {d : Devm} {o o' : Outcome} {wad dst src : B256}
+    (h : Same (Outcome.devm o) (Outcome.devm o')) (e : Weth9.XferOk sevm d o wad dst src) :
+    Weth9.XferOk sevm d o' wad dst src := by
+  obtain ⟨⟨hb, hs⟩, hle⟩ := e
+  refine ⟨⟨?_, ?_⟩, hle⟩
+  · rw [← h.bal]
+    exact hb
+  · rw [← h.stor]
+    exact hs
+
+/-- **Entry 9 (`transferFrom`) as a callee**, for any frame whose stack starts with the three
+arguments. -/
+theorem Weth9.transferFrom_ok_of_prefix {sevm : Sevm} {d : Devm} {o : Outcome}
+    {g : SFunc} {wad dst src : B256} {rest : Stack}
+    (hg : prog[9]? = some g) (hp : wad :: dst :: src :: rest <<+ d.stack)
+    (run : SFunc.Run prog sevm d g o) : Weth9.XferOk sevm d o wad dst src := by
+  have hg' : g = t_068c_c9 := by
+    simpa [prog, Cert.prog, cert] using hg.symm
+  subst g
+  exact xfer_068c hp run
+
+/-- Entry 9 as a callee: a `callNext 9` from a frame whose stack starts with the three arguments
+below a return address, continued by a state-silent tree. -/
+private theorem call9_ok {sevm : Sevm} {d : Devm} {o : Outcome} {f : SFunc}
+    {p wad dst src : B256} {rest : Stack}
+    (hf : f.silent = true) (hrefs : f.refs.all (· ∈ ([] : List Nat)) = true)
+    (hp : p :: wad :: dst :: src :: rest <<+ d.stack)
+    (run : SFunc.Run prog sevm d (.callNext 9 f) o) : Weth9.XferOk sevm d o wad dst src := by
+  cases run with
+  | callHalt dd lookup pop run =>
+    rename_i d1 _
+    have hp1 := prefix_of_pop ⟨_, pop⟩ hp
+    exact (Weth9.transferFrom_ok_of_prefix lookup hp1 run).of_same (Same.of_state pop.state)
+  | callRet dd lookup pop run tail =>
+    rename_i d1 d2 _
+    have hp1 := prefix_of_pop ⟨_, pop⟩ hp
+    have hc := (Weth9.transferFrom_ok_of_prefix lookup hp1 run).of_same
+      (Same.of_state pop.state)
+    have hst := SFunc.Run.state_of_silent silentSet_nil hf hrefs tail
+    have hsame : Same (Outcome.devm (Outcome.returned d2)) (Outcome.devm o) :=
+      Same.of_state hst.symm
+    exact hc.of_same_out hsame
+
 /-! ### Solvency -/
 
 private theorem solvent_of_same {sevm : Sevm} {a b : Devm} {v : B256} (h : Same a b)
@@ -633,11 +689,8 @@ theorem Weth9.transferFrom_solvent_of_prefix {sevm : Sevm} {d : Devm} {o : Outco
     (run : SFunc.Run prog sevm d g o) :
     Solvent (Devm.getStor (Outcome.devm o) sevm.currentTarget) 0
       ((Outcome.devm o).getBal sevm.currentTarget) := by
-  have hg' : g = t_068c_c9 := by
-    simpa [prog, Cert.prog, cert] using hg.symm
-  subst g
   rw [and_mask_word] at hoff
-  obtain ⟨e, hle⟩ := xfer_068c hp run
+  obtain ⟨e, hle⟩ := Weth9.transferFrom_ok_of_prefix hg hp run
   exact solvent_of_xfer hoff e hle h
 
 /-- **WETH9 `transferFrom` (entry 9) preserves solvency** (callee form). -/
@@ -667,24 +720,53 @@ private theorem call9_solvent {sevm : Sevm} {d : Devm} {o : Outcome} {f : SFunc}
     (run : SFunc.Run prog sevm d (.callNext 9 f) o) :
     Solvent (Devm.getStor (Outcome.devm o) sevm.currentTarget) 0
       ((Outcome.devm o).getBal sevm.currentTarget) := by
-  cases run with
-  | callHalt dd lookup pop run =>
-    rename_i d1 _
-    have hp1 := prefix_of_pop ⟨_, pop⟩ hp
-    exact Weth9.transferFrom_solvent_of_prefix lookup hp1 hoff
-      (solvent_of_same (Same.of_state pop.state) h) run
-  | callRet dd lookup pop run tail =>
-    rename_i d1 d2 _
-    have hp1 := prefix_of_pop ⟨_, pop⟩ hp
-    have hc := Weth9.transferFrom_solvent_of_prefix lookup hp1 hoff
-      (solvent_of_same (Same.of_state pop.state) h) run
-    have hst := SFunc.Run.state_of_silent silentSet_nil hf hrefs tail
-    exact solvent_of_same (Same.of_state hst.symm) hc
+  rw [and_mask_word] at hoff
+  obtain ⟨e, hle⟩ := call9_ok hf hrefs hp run
+  exact solvent_of_xfer hoff e hle h
 
 private theorem tree_0bce :
     t_0bce_c3 = .dest (chain [.push [0x00] (by decide), .push [0x0b, 0xdb] (by decide),
       .reg .caller, .reg (.dup 4), .reg (.dup 4), .push [0x06, 0x8c] (by decide)]
       (.callNext 9 t_0bdb_c3)) := rfl
+
+/-- **Entry 3 (`transfer`) as a callee**, for a frame whose stack starts `wad, dst`: it is
+`transferFrom(msg.sender, dst, wad)`. -/
+theorem Weth9.transfer_ok {sevm : Sevm} {d : Devm} {o : Outcome} {g : SFunc}
+    {wad dst : B256} {rest : Stack} (hg : prog[3]? = some g)
+    (hstk : wad :: dst :: rest <<+ d.stack) (run : SFunc.Run prog sevm d g o) :
+    Weth9.XferOk sevm d o wad dst sevm.caller.toB256 := by
+  have hg' : g = t_0bce_c3 := by
+    simpa [prog, Cert.prog, cert] using hg.symm
+  subst g
+  rw [tree_0bce] at run
+  cases run with
+  | dest burn run =>
+  rename_i d0
+  obtain ⟨d1, r1, run⟩ := run_chain_prefix [.push [0x00] (by decide),
+    .push [0x0b, 0xdb] (by decide), .reg .caller, .reg (.dup 4), .reg (.dup 4),
+    .push [0x06, 0x8c] (by decide)] [] run
+  have s01 : Same d d1 := Same.trans (Same.of_state burn.state)
+    ⟨Line.of_inv Devm.getStor (by line_inv) r1, Line.of_inv Devm.getBal (by line_inv) r1⟩
+  have hp1 : ∃ p q z : B256, p :: wad :: dst :: sevm.caller.toB256 :: q :: z :: wad :: dst ::
+      rest <<+ d1.stack := by
+    obtain ⟨a1, h1, r1⟩ := Line.of_run_cons r1
+    obtain ⟨a2, h2, r1⟩ := Line.of_run_cons r1
+    obtain ⟨a3, h3, r1⟩ := Line.of_run_cons r1
+    obtain ⟨a4, h4, r1⟩ := Line.of_run_cons r1
+    obtain ⟨a5, h5, r1⟩ := Line.of_run_cons r1
+    obtain ⟨a6, h6, r1⟩ := Line.of_run_cons r1
+    cases r1
+    have q0 : wad :: dst :: rest <<+ d0.stack := by
+      rw [← burn.stack]
+      exact hstk
+    have q1 := prefix_of_push (of_run_push h1) q0
+    have q2 := prefix_of_push (of_run_push h2) q1
+    have q3 := prefix_of_push (of_run_caller h3) q2
+    have q4 := prefix_of_dup_val h4 (by show_nth) q3
+    have q5 := prefix_of_dup_val h5 (by show_nth) q4
+    exact ⟨_, _, _, prefix_of_push (of_run_push h6) q5⟩
+  obtain ⟨p, q, z, hp1⟩ := hp1
+  exact (call9_ok (by decide) (by decide) hp1 run).of_same s01
 
 /-- **WETH9 `transfer` (entry 3) preserves solvency**, unconditionally: it is
 `transferFrom(msg.sender, dst, wad)`, which never writes an allowance. -/
@@ -787,7 +869,7 @@ private def argU : List Ninst :=
 
 private theorem argM_walk {sevm : Sevm} {s s' : Devm} {o b : B256} {ys : Stack}
     (hp : o :: b :: ys <<+ s.stack) (run : Line.Run sevm s argM s') :
-    (∃ o', o' :: b :: (Sevm.dataWord sevm o).toAdr.toB256 :: ys <<+ s'.stack) ∧
+    (((32 : B256) + o) :: b :: (Sevm.dataWord sevm o).toAdr.toB256 :: ys <<+ s'.stack) ∧
       Same s s' := by
   unfold argM at run
   refine ⟨?_, Line.of_inv Devm.getStor (by line_inv) run,
@@ -811,20 +893,24 @@ private theorem argM_walk {sevm : Sevm} {s s' : Devm} {o b : B256} {ys : Stack}
   have q5 : o :: (Sevm.dataWord sevm o).toAdr.toB256 :: b :: ys <<+ a5.stack :=
     Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
       (of_run_swap h5) q4
-  obtain ⟨o', q7⟩ : ∃ o' : B256, o' :: (Sevm.dataWord sevm o).toAdr.toB256 :: b :: ys
-      <<+ a7.stack := ⟨_, prefix_of_add h7 (prefix_of_push (of_run_push h6) q5)⟩
-  have q8 : (Sevm.dataWord sevm o).toAdr.toB256 :: o' :: b :: ys <<+ a8.stack :=
+  have q7 : ((32 : B256) + o) :: (Sevm.dataWord sevm o).toAdr.toB256 :: b :: ys
+      <<+ a7.stack := by
+    have := prefix_of_add h7 (prefix_of_push (of_run_push h6) q5)
+    rwa [w20_eq] at this
+  have q8 : (Sevm.dataWord sevm o).toAdr.toB256 :: ((32 : B256) + o) :: b :: ys
+      <<+ a8.stack :=
     Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
       (of_run_swap h8) q7
-  have q9 : b :: o' :: (Sevm.dataWord sevm o).toAdr.toB256 :: ys <<+ a9.stack :=
+  have q9 : b :: ((32 : B256) + o) :: (Sevm.dataWord sevm o).toAdr.toB256 :: ys
+      <<+ a9.stack :=
     Stack.prefix_of_swap (n := 1) (by simp [Stack.Swap, Stack.SwapCore])
       (of_run_swap h9) q8
-  exact ⟨o', Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
-      (of_run_swap h10) q9⟩
+  exact Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+      (of_run_swap h10) q9
 
 private theorem argU_walk {sevm : Sevm} {s s' : Devm} {o b : B256} {ys : Stack}
     (hp : o :: b :: ys <<+ s.stack) (run : Line.Run sevm s argU s') :
-    (∃ o', o' :: b :: Sevm.dataWord sevm o :: ys <<+ s'.stack) ∧ Same s s' := by
+    (((32 : B256) + o) :: b :: Sevm.dataWord sevm o :: ys <<+ s'.stack) ∧ Same s s' := by
   unfold argU at run
   refine ⟨?_, Line.of_inv Devm.getStor (by line_inv) run,
     Line.of_inv Devm.getBal (by line_inv) run⟩
@@ -843,16 +929,17 @@ private theorem argU_walk {sevm : Sevm} {s s' : Devm} {o b : B256} {ys : Stack}
   have q3 : o :: Sevm.dataWord sevm o :: b :: ys <<+ a3.stack :=
     Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
       (of_run_swap h3) q2
-  obtain ⟨o', q5⟩ : ∃ o' : B256, o' :: Sevm.dataWord sevm o :: b :: ys <<+ a5.stack :=
-    ⟨_, prefix_of_add h5 (prefix_of_push (of_run_push h4) q3)⟩
-  have q6 : Sevm.dataWord sevm o :: o' :: b :: ys <<+ a6.stack :=
+  have q5 : ((32 : B256) + o) :: Sevm.dataWord sevm o :: b :: ys <<+ a5.stack := by
+    have := prefix_of_add h5 (prefix_of_push (of_run_push h4) q3)
+    rwa [w20_eq] at this
+  have q6 : Sevm.dataWord sevm o :: ((32 : B256) + o) :: b :: ys <<+ a6.stack :=
     Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
       (of_run_swap h6) q5
-  have q7 : b :: o' :: Sevm.dataWord sevm o :: ys <<+ a7.stack :=
+  have q7 : b :: ((32 : B256) + o) :: Sevm.dataWord sevm o :: ys <<+ a7.stack :=
     Stack.prefix_of_swap (n := 1) (by simp [Stack.Swap, Stack.SwapCore])
       (of_run_swap h7) q6
-  exact ⟨o', Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
-      (of_run_swap h8) q7⟩
+  exact Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+      (of_run_swap h8) q7
 
 private def head01d5 : List Ninst :=
   [.push [0x02, 0x29] (by decide), .push [0x04] (by decide), .reg (.dup 0)]
@@ -868,15 +955,14 @@ private theorem tree_01ca :
     t_01ca_c25 = .dest (chain [.reg .callvalue, .reg .iszero, .push [0x01, 0xd5] (by decide)]
       (.branch t_01d1_c25 t_01d5_c25)) := rfl
 
-/-- **The `transferFrom(address,address,uint256)` selector wrapper (entry 25)
-preserves solvency** under the frame's allowance-collision premise. -/
-theorem Weth9.transferFrom_wrapper_solvent {sevm : Sevm} {d : Devm} {o : Outcome}
-    {g : SFunc} (hg : prog[25]? = some g) (hadm : AllowAdmitted sevm)
-    (h : Solvent (Devm.getStor d sevm.currentTarget) sevm.value
-      (d.getBal sevm.currentTarget))
-    (run : SFunc.Run prog sevm d g o) :
-    Solvent (Devm.getStor (Outcome.devm o) sevm.currentTarget) 0
-      ((Outcome.devm o).getBal sevm.currentTarget) := by
+theorem Weth9.w32_add_4 : (32 : B256) + 4 = 36 := by decide
+
+/-- **The `transferFrom(address,address,uint256)` selector wrapper (entry 25)** decodes
+`src = calldata[4:36]`, `dst = calldata[36:68]` (both address-masked) and `wad`, and runs entry 9. -/
+theorem Weth9.transferFrom_wrapper_ok {sevm : Sevm} {d : Devm} {o : Outcome}
+    {g : SFunc} (hg : prog[25]? = some g) (run : SFunc.Run prog sevm d g o) :
+    ∃ wad : B256, Weth9.XferOk sevm d o wad (Sevm.dataWord sevm 36).toAdr.toB256
+      (Sevm.dataWord sevm 4).toAdr.toB256 := by
   have hg' : g = t_01ca_c25 := by
     simpa [prog, Cert.prog, cert] using hg.symm
   subst g
@@ -922,12 +1008,12 @@ theorem Weth9.transferFrom_wrapper_solvent {sevm : Sevm} {d : Devm} {o : Outcome
       rwa [w04_eq] at this
     exact ⟨r, prefix_of_dup_val h3 (by show_nth) q2⟩
   obtain ⟨r, hp4⟩ := hp4
-  obtain ⟨⟨o5, hp5⟩, s45⟩ := argM_walk hp4 r5
-  obtain ⟨⟨o6, hp6⟩, s56⟩ := argM_walk hp5 r6
-  obtain ⟨⟨o7, hp7⟩, s67⟩ := argU_walk hp6 r7
-  have hp8 : ∃ p : B256, p :: Sevm.dataWord sevm o6 ::
-      (Sevm.dataWord sevm o5).toAdr.toB256 :: (Sevm.dataWord sevm 4).toAdr.toB256 ::
-      r :: d3.stack <<+ d8.stack := by
+  obtain ⟨hp5, s45⟩ := argM_walk hp4 r5
+  obtain ⟨hp6, s56⟩ := argM_walk hp5 r6
+  obtain ⟨hp7, s67⟩ := argU_walk hp6 r7
+  have hp8 : ∃ p : B256, p :: Sevm.dataWord sevm ((32 : B256) + ((32 : B256) + 4)) ::
+      (Sevm.dataWord sevm ((32 : B256) + 4)).toAdr.toB256 ::
+      (Sevm.dataWord sevm 4).toAdr.toB256 :: r :: d3.stack <<+ d8.stack := by
     unfold tail01d5 at r8
     obtain ⟨a1, h1, r8⟩ := Line.of_run_cons r8
     obtain ⟨a2, h2, r8⟩ := Line.of_run_cons r8
@@ -936,17 +1022,124 @@ theorem Weth9.transferFrom_wrapper_solvent {sevm : Sevm} {d : Devm} {o : Outcome
     exact ⟨_, prefix_of_push (of_run_push h3)
       (prefix_of_pop (of_run_pop h2) (prefix_of_pop (of_run_pop h1) hp7))⟩
   obtain ⟨p, hp8⟩ := hp8
-  have hoff : ((Sevm.dataWord sevm 4).toAdr.toB256 &&& ~~~ addressMask) ≠
-        sevm.caller.toB256 →
-      ∀ a, balSlot a ≠ allowKey ((Sevm.dataWord sevm 4).toAdr.toB256 &&& ~~~ addressMask)
+  have s08 : Same d d8 :=
+    s03.trans (s34.trans (s45.trans (s56.trans (s67.trans s78))))
+  have hok := (call9_ok (by decide) (by decide) hp8 run).of_same s08
+  rw [Weth9.w32_add_4] at hok
+  exact ⟨_, hok⟩
+
+/-- **The `transferFrom(address,address,uint256)` selector wrapper (entry 25)
+preserves solvency** under the frame's allowance-collision premise. -/
+theorem Weth9.transferFrom_wrapper_solvent {sevm : Sevm} {d : Devm} {o : Outcome}
+    {g : SFunc} (hg : prog[25]? = some g) (hadm : AllowAdmitted sevm)
+    (h : Solvent (Devm.getStor d sevm.currentTarget) sevm.value
+      (d.getBal sevm.currentTarget))
+    (run : SFunc.Run prog sevm d g o) :
+    Solvent (Devm.getStor (Outcome.devm o) sevm.currentTarget) 0
+      ((Outcome.devm o).getBal sevm.currentTarget) := by
+  obtain ⟨wad, e, hle⟩ := Weth9.transferFrom_wrapper_ok hg run
+  have hoff : ((Sevm.dataWord sevm 4).toAdr.toB256).toAdr.toB256 ≠ sevm.caller.toB256 →
+      ∀ a, balSlot a ≠ allowKey ((Sevm.dataWord sevm 4).toAdr.toB256).toAdr.toB256
         sevm.caller.toB256 := by
     intro _
     have h2 := hadm.2
     rw [allowArg, and_mask_word] at h2
-    rw [and_mask_word, toAdr_toB256]
+    rw [toAdr_toB256]
     exact h2
-  have s08 : Same d d8 :=
-    s03.trans (s34.trans (s45.trans (s56.trans (s67.trans s78))))
-  exact call9_solvent (by decide) (by decide) hp8 hoff (solvent_of_same s08 h) run
+  exact solvent_of_xfer hoff e hle h
+
+/-! ### The `transfer(address,uint256)` selector wrapper -/
+
+private def head037b : List Ninst :=
+  [.push [0x03, 0xb0] (by decide), .push [0x04] (by decide), .reg (.dup 0)]
+
+private def tail037b : List Ninst :=
+  [.reg .pop, .reg .pop, .push [0x0b, 0xce] (by decide)]
+
+private theorem tree_037b :
+    t_037b_c20 = .dest (chain (head037b ++ argM ++ argU ++ tail037b)
+      (.callNext 3 t_03b0_c20)) := rfl
+
+private theorem tree_0370 :
+    t_0370_c20 = .dest (chain [.reg .callvalue, .reg .iszero, .push [0x03, 0x7b] (by decide)]
+      (.branch t_0377_c20 t_037b_c20)) := rfl
+
+/-- **The `transfer(address,uint256)` selector wrapper (entry 20)** decodes
+`dst = calldata[4:36]` (address-masked) and `wad`, and runs entry 3 with `src = msg.sender`. -/
+theorem Weth9.transfer_wrapper_ok {sevm : Sevm} {d : Devm} {o : Outcome} {g : SFunc}
+    (hg : prog[20]? = some g) (run : SFunc.Run prog sevm d g o) :
+    ∃ wad : B256, Weth9.XferOk sevm d o wad (Sevm.dataWord sevm 4).toAdr.toB256
+      sevm.caller.toB256 := by
+  have hg' : g = t_0370_c20 := by
+    simpa [prog, Cert.prog, cert] using hg.symm
+  subst g
+  rw [tree_0370] at run
+  cases run with
+  | dest burn run =>
+  rename_i d0
+  obtain ⟨d1, r1, run⟩ := run_chain_prefix [.reg .callvalue, .reg .iszero,
+    .push [0x03, 0x7b] (by decide)] [] run
+  have s01 : Same d d1 := Same.trans (Same.of_state burn.state)
+    ⟨Line.of_inv Devm.getStor (by line_inv) r1, Line.of_inv Devm.getBal (by line_inv) r1⟩
+  change SFunc.Run prog sevm d1 (.branch t_0377_c20 t_037b_c20) o at run
+  cases run with
+  | zero _ _ run => exact absurd run not_run_revert_tail
+  | succ dw w hwnz pop run =>
+  rename_i d2
+  have s02 := s01.trans (Same.of_state pop.state)
+  rw [tree_037b] at run
+  cases run with
+  | dest burn' run =>
+  rename_i d3
+  have s03 := s02.trans (Same.of_state burn'.state)
+  obtain ⟨d4, r4, run⟩ := run_chain_prefix head037b _ run
+  obtain ⟨d5, r5, run⟩ := run_chain_prefix argM _ run
+  obtain ⟨d6, r6, run⟩ := run_chain_prefix argU _ run
+  obtain ⟨d7, r7, run⟩ := run_chain_prefix tail037b [] run
+  have s34 : Same d3 d4 :=
+    ⟨Line.of_inv Devm.getStor (by line_inv) r4, Line.of_inv Devm.getBal (by line_inv) r4⟩
+  have s67 : Same d6 d7 :=
+    ⟨Line.of_inv Devm.getStor (by line_inv) r7, Line.of_inv Devm.getBal (by line_inv) r7⟩
+  have hp4 : ∃ r : B256, (4 : B256) :: (4 : B256) :: r :: d3.stack <<+ d4.stack := by
+    unfold head037b at r4
+    obtain ⟨a1, h1, r4⟩ := Line.of_run_cons r4
+    obtain ⟨a2, h2, r4⟩ := Line.of_run_cons r4
+    obtain ⟨a3, h3, r4⟩ := Line.of_run_cons r4
+    cases r4
+    have q0 : d3.stack <<+ d3.stack := ⟨[], (List.append_nil _).symm⟩
+    obtain ⟨r, q1⟩ : ∃ r : B256, r :: d3.stack <<+ a1.stack :=
+      ⟨_, prefix_of_push (of_run_push h1) q0⟩
+    have q2 : (4 : B256) :: r :: d3.stack <<+ a2.stack := by
+      have := prefix_of_push (of_run_push h2) q1
+      rwa [w04_eq] at this
+    exact ⟨r, prefix_of_dup_val h3 (by show_nth) q2⟩
+  obtain ⟨r, hp4⟩ := hp4
+  obtain ⟨hp5, s45⟩ := argM_walk hp4 r5
+  obtain ⟨hp6, s56⟩ := argU_walk hp5 r6
+  have hp7 : ∃ p : B256, p :: Sevm.dataWord sevm ((32 : B256) + 4) ::
+      (Sevm.dataWord sevm 4).toAdr.toB256 :: r :: d3.stack <<+ d7.stack := by
+    unfold tail037b at r7
+    obtain ⟨a1, h1, r7⟩ := Line.of_run_cons r7
+    obtain ⟨a2, h2, r7⟩ := Line.of_run_cons r7
+    obtain ⟨a3, h3, r7⟩ := Line.of_run_cons r7
+    cases r7
+    exact ⟨_, prefix_of_push (of_run_push h3)
+      (prefix_of_pop (of_run_pop h2) (prefix_of_pop (of_run_pop h1) hp6))⟩
+  obtain ⟨p, hp7⟩ := hp7
+  have s07 : Same d d7 := s03.trans (s34.trans (s45.trans (s56.trans s67)))
+  refine ⟨Sevm.dataWord sevm ((32 : B256) + 4), ?_⟩
+  change SFunc.Run prog sevm d7 (.callNext 3 t_03b0_c20) o at run
+  cases run with
+  | @callHalt _ d8 _ _ _ _ dd lookup pop2 crun =>
+    have hp8 := prefix_of_pop ⟨_, pop2⟩ hp7
+    exact (Weth9.transfer_ok lookup hp8 crun).of_same (s07.trans (Same.of_state pop2.state))
+  | @callRet _ d8 d9 _ _ _ _ dd lookup pop2 crun tail =>
+    have hp8 := prefix_of_pop ⟨_, pop2⟩ hp7
+    have hc := (Weth9.transfer_ok lookup hp8 crun).of_same
+      (s07.trans (Same.of_state pop2.state))
+    have hst := SFunc.Run.state_of_silent silentSet_nil (by decide) (by decide) tail
+    have hsame : Same (Outcome.devm (Outcome.returned d9)) (Outcome.devm o) :=
+      Same.of_state hst.symm
+    exact hc.of_same_out hsame
 
 end Blanc.Lift
