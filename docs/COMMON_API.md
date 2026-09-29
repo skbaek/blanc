@@ -2066,6 +2066,18 @@ consumer needs canonical interpreter ingress as one conjunct:
   ([`Blanc/ExecutionTraceSystem.lean`](../Blanc/ExecutionTraceSystem.lean)) confine
   system-message frames to the four system addresses when their code spawns
   nothing. `Lift.BeaconDeposit.beaconEntry_of_env` is the worked consumer.
+- To discharge the per-frame premise `sevm.data.length < 2 ^ 256` for every raw
+  frame of a configured history with no premise at all:
+  `ConfiguredHistoryTrace.calldata_bound` and
+  `ConfiguredHistoryTrace.frameAdmitted_calldata`
+  ([`Blanc/ExecutionTraceCalldata.lean`](../Blanc/ExecutionTraceCalldata.lean)).
+  Transaction roots satisfy `4 * data.length ≤ tx.gas` (intrinsic gas) and
+  `tx.gas ≤ blockGasLimit < 2 ^ 63` (`checkTransaction`, `checkGasLimit` via
+  `ConfiguredBlockTrace.header_gasLimit_lt`); child frames carry a memory slice
+  sized by a popped word (`Evm.step_spawn_child_data`), and system messages
+  fixed data. `Exec.rawFrameRoots_data_bound` is the execution-level form. Worked
+  consumers: `Lift.BeaconDeposit.configuredHistory_solInv_envDerived` (and
+  `_count_`/`_root_`) and `Lift.Curve3Crv.c3crv_history_committed_derived`.
 - Every retained carrier from `ProcessMessageTrace` through
   `ConfiguredHistoryTrace` has `freshFrameAdmitted`; its matching
   `FrameAdmitted.and` combines that trace-derived fact with another admission
