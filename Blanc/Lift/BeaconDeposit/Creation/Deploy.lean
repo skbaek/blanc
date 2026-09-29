@@ -1,6 +1,7 @@
 import Blanc.Lift.BeaconDeposit.Creation.Check
 import Blanc.Lift.BeaconDeposit.Creation.Walk
 import Blanc.Lift.Deploy
+import Blanc.ForkUniform
 
 /-!
 # Deploying the Beacon deposit contract from its actual creation input
@@ -23,7 +24,7 @@ input, not a statement about historical inclusion.  Gas: any message gas in
 
 namespace Blanc.Lift.BeaconDeposit.Creation
 
-open Jaune Blanc.BeaconDeposit Blanc.Lift.BeaconDeposit
+open Jaune Blanc.BeaconDeposit Blanc.Lift.BeaconDeposit Blanc.ForkUniform
 
 /-- The constructor's table is the checkpoint premise's zero-hash table over an empty
 accumulator. -/
@@ -148,5 +149,24 @@ theorem beacon_deploy :
       SolInv (Devm.getStor post depositAddress) [] :=
   ⟨depositAddress_eq, beacon_create deployMsg rfl rfl rfl (by decide) (by decide) rfl
     (Std.HashSet.mem_insert_self) (by decide) CoveredFork.prague rfl (by decide) (by decide)⟩
+
+/-- **The recorded deployment under every covered fork.**  The same conclusion as
+`beacon_deploy` for `deployMsg.withFork f`: the address equality plus the `beacon_create`
+instance at the fork-replaced message.  Fork-sensitive premises discharge by cases on `hf`. -/
+theorem beacon_deploy_covered (f : Fork) (hf : CoveredFork f) :
+    depositAddress = computeContractAddress deployer 0 ∧
+    ∃ post, processCreateMessage (deployMsg.withFork f) = .ok post ∧
+      (post.getCode depositAddress).toList = Blanc.Lift.BeaconDeposit.code.toList ∧
+      SolInv (Devm.getStor post depositAddress) [] := by
+  refine ⟨depositAddress_eq, ?_⟩
+  exact beacon_create (deployMsg.withFork f) rfl rfl rfl (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) rfl
+    (Std.HashSet.mem_insert_self)
+    (hf.cases (motive := fun f =>
+      decide ((deployMsg.withFork f).benv.stat.rules.isPrecomp 2) = true)
+      (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide))
+    hf rfl (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide)
+    (hf.cases (motive := fun f =>
+      6358 ≤ (deployMsg.withFork f).benv.stat.rules.code.maxCodeSize)
+      (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide))
 
 end Blanc.Lift.BeaconDeposit.Creation
