@@ -169,6 +169,9 @@ SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.ExactWalkOps",
 # Creation code (deploy-init-v1): the size-optimised packed-hash site and the CREATE bridge
 # for lifted creation code; contract-neutral.
 SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps"]
+# Solc-0.4 scratch-memory walk kit and the value-bearing CALL to a code-free recipient
+# (weth9-liveness-v1): contract-neutral.
+SHARED += ["Lift.ExactWalkSolc", "Lift.ExactWalkCall"]
 # Pure-model ledger updates (vyper-3crv-bytecode-v1): contract-neutral.
 SHARED += ["LedgerUpdate"]
 # Walk steps for arbitrary static calls, CALLER/KECCAK256/LOG3/SSTORE, hashed slots and the
@@ -344,7 +347,7 @@ CONTRACTS = {
                             "ProrataWethVaultViews"],
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],
     # The deployed solc 0.4.19 WETH9 runtime, lifted from its bytes.
-    "weth9": ["Lift.Weth9.Cert", "Lift.Weth9.Check", "Lift.Weth9.Lift", "Lift.Weth9.Spec", "Lift.Weth9.Jumps", "Lift.Weth9.Words", "Lift.Weth9.Step", "Lift.Weth9.Walks", "Lift.Weth9.Booked", "Lift.Weth9.Premise", "Lift.Weth9.Shape", "Lift.Weth9.Contract", "Lift.Weth9.Deposit", "Lift.Weth9.Withdraw", "Lift.Weth9.Approve", "Lift.Weth9.TransferFrom", "Lift.Weth9.Frame", "Lift.Weth9.Solvency", "Lift.Weth9.Live", "Lift.Weth9.Init", "Lift.Weth9.Footprint", "Lift.Weth9.FootFrame", "Lift.Weth9.FootHistory", "Lift.Weth9.Model", "Lift.Weth9.Ledger", "Lift.Weth9.Route", "Lift.Weth9.RouteCheck", "Lift.Weth9.Effects", "Lift.Weth9.WithdrawReach", "Lift.Weth9.CommittedReplay", "Lift.Weth9.CommittedSpawn", "Lift.Weth9.CommittedHistory", "Lift.Weth9.Creation.Cert", "Lift.Weth9.Creation.Check", "Lift.Weth9.Creation.Deploy", "Lift.Weth9.Creation.Walk"],
+    "weth9": ["Lift.Weth9.Cert", "Lift.Weth9.Check", "Lift.Weth9.Lift", "Lift.Weth9.Spec", "Lift.Weth9.Jumps", "Lift.Weth9.Words", "Lift.Weth9.Step", "Lift.Weth9.Walks", "Lift.Weth9.Booked", "Lift.Weth9.Premise", "Lift.Weth9.Shape", "Lift.Weth9.Contract", "Lift.Weth9.Deposit", "Lift.Weth9.Withdraw", "Lift.Weth9.Approve", "Lift.Weth9.TransferFrom", "Lift.Weth9.Frame", "Lift.Weth9.Solvency", "Lift.Weth9.Live", "Lift.Weth9.LiveApprove", "Lift.Weth9.LiveDeposit", "Lift.Weth9.LiveTransfer", "Lift.Weth9.LiveWithdraw", "Lift.Weth9.LiveWriters", "Lift.Weth9.LiveModel", "Lift.Weth9.LiveHistory", "Lift.Weth9.Init", "Lift.Weth9.Footprint", "Lift.Weth9.FootFrame", "Lift.Weth9.FootHistory", "Lift.Weth9.Model", "Lift.Weth9.Ledger", "Lift.Weth9.Route", "Lift.Weth9.RouteCheck", "Lift.Weth9.Effects", "Lift.Weth9.WithdrawReach", "Lift.Weth9.CommittedReplay", "Lift.Weth9.CommittedSpawn", "Lift.Weth9.CommittedHistory", "Lift.Weth9.Creation.Cert", "Lift.Weth9.Creation.Check", "Lift.Weth9.Creation.Deploy", "Lift.Weth9.Creation.Walk"],
     "fmint": ["Fmint", "FmintCode", "Conserved", "FlashSpec", "FmintLive",
               "FmintReverts", "FmintGas", "FmintSettles"],
     "weth10": ["Weth10TemplateCode", "Weth10Core", "Weth10Backed", "Weth10Spec", "Weth10",

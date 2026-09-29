@@ -428,6 +428,15 @@ import Blanc.Lift.Weth9.CommittedReplay
 import Blanc.Lift.Weth9.CommittedSpawn
 import Blanc.Lift.Weth9.CommittedHistory
 import Blanc.Lift.Weth9.Live
+import Blanc.Lift.ExactWalkSolc
+import Blanc.Lift.ExactWalkCall
+import Blanc.Lift.Weth9.LiveApprove
+import Blanc.Lift.Weth9.LiveDeposit
+import Blanc.Lift.Weth9.LiveTransfer
+import Blanc.Lift.Weth9.LiveWithdraw
+import Blanc.Lift.Weth9.LiveWriters
+import Blanc.Lift.Weth9.LiveModel
+import Blanc.Lift.Weth9.LiveHistory
 import Blanc.Lift.Weth9.Init
 import Blanc.Lift.Weth9.Creation.Deploy
 
