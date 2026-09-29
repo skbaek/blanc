@@ -1,5 +1,4 @@
 import Blanc.Lift.Weth9.LiveApprove
-import Blanc.Lift.Weth9.LiveDebug
 
 namespace Blanc.Lift.Weth9
 

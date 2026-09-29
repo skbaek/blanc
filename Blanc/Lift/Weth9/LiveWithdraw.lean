@@ -1,7 +1,6 @@
 import Blanc.Lift.Weth9.LiveDeposit
 import Blanc.Lift.ExactWalkCall
 import Blanc.ForwardStorageAccess
-import Blanc.Lift.Weth9.LiveDebug
 
 namespace Blanc.Lift.Weth9
 

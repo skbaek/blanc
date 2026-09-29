@@ -3095,6 +3095,19 @@ contract-neutral.
   constructors need (`rx_push0`, `rx_slt`, `rx_codesize`, `rx_log2`, and `read_covered_len`, a
   window of any length inside an aligned image) in
   [`Blanc/Lift/CreationOps.lean`](../Blanc/Lift/CreationOps.lean).
+- Gas-exact writer walks for solc-0.4-style runtimes: the scratch-memory invariant `FpMem n M` (word-aligned,
+  free pointer `0x60`, kept for an arbitrary `M`; `FpMem.init`, `FpMem.write`, `FpMem.write_out`,
+  `FpMem.readback`, `scratchW`), its steps (`rx_mstoreF`, `rx_mstoreOut`, `rx_mloadFp`, `rx_keccakF`,
+  `rx_log2W`, `rx_log3W`, `rx_returnW`, `rx_stop`, `rx_mask20`, `rx_mask20_adr`, `rx_swap4`), `SLOAD`/`SSTORE` with
+  named charges (`rx_sload_selC`, `rx_sstoreC`), the account facts after a selected `SSTORE`
+  (`afterSstore_getAcct`, `afterSstore_getBal`, `afterSstore_empty`, `afterSload_getAcct`), `require(x >= y)`
+  (`ltCheck_zero_of_le`) and the tactic macros that apply one step to the head instruction (`rdest`, `rpush`,
+  `rdup`, `rswap`, `rpop`, `radd`, `rsub`, `riszero`, `rmask`, `rmst`, `rmld`, `rkec`, `rhash`, `rsloadC`,
+  `rsstoreC`, `rsent`, `rlog2`, `rlog3`, `rreq`) in [`Blanc/Lift/ExactWalkSolc.lean`](../Blanc/Lift/ExactWalkSolc.lean);
+  a value-bearing (`callNZ_ex`, `rx_callNZ`) or zero-value (`callZ_ex`, `rx_callZ`) `CALL` to a recipient without
+  code, at its net charge `callNet`, with what it leaves (`CallPost`, `CallPost.getStor`) in
+  [`Blanc/Lift/ExactWalkCall.lean`](../Blanc/Lift/ExactWalkCall.lean).  Worked use: the deployed WETH9's writers,
+  `Blanc/Lift/Weth9/LiveApprove.lean` … `LiveHistory.lean`.
 - Jump destinations: Jaune's own `jumpable_eq_jumpdestOk` (`Jaune/Machine.lean`)
   replaces its exponential `jumpable` by the linear `jumpdestOk` scan, for every
   byte string; Blanc keeps no copy.

@@ -1,6 +1,5 @@
 import Blanc.Lift.Weth9.Live
 import Blanc.Lift.ExactWalkSolc
-import Blanc.Lift.Weth9.LiveDebug
 
 namespace Blanc.Lift.Weth9
 
