@@ -1,6 +1,9 @@
 Elsewhere.headline_open
+LeafFixture.Pt.ext_fx
 LeafFixture.dup
 LeafFixture.fp_binder
 LeafFixture.headline_calls
 LeafFixture.headline_one
 LeafFixture.headline_two
+LeafFixture.instNonemptyPt
+LeafFixture.simp_nonrfl_fact

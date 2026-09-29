@@ -9,11 +9,14 @@ a one-line change to this text and must move exactly the leaf set the control na
 * `headline_one`, `headline_two`, `headline_calls`, `Elsewhere.headline_open`, `fp_binder`, `dup`:
   leaves. (`fp_binder` carries the binder-name
   fingerprint control; `dup` shares its last component with `Sub.dup`, which is used.)
+* `simp_nonrfl_fact` (`@[simp]`, proved by `omega`), `Pt.ext_fx` (`@[ext]`) and `instNonemptyPt`
+  (an instance): used by no term. An attribute is a use only for an `rfl`-proved simp lemma, so
+  these three are leaves.
 * `base_fact`: used by `headline_one` (a plain term use), so not a leaf.
 * `bound_fact`: used only inside the proof of the definition `picked` (a compiler-abstracted
   `picked._proof_N` auxiliary, attributed to its parent), so not a leaf.
-* `simp_only_fact`, `Pt.ext_fx`: used by no term, but an `@[simp]` / `@[ext]` theorem (attribute
-  use), so not leaves; `instNonemptyPt` is used by no term but is an instance (attribute use).
+* `simp_only_fact`: used by no term, but an `rfl`-proved `@[simp]` theorem, whose only possible use
+  leaves no term trace (attribute-exempt), so not a leaf.
 * The compiler-generated theorems of `Pt` and `Qt` (`Qt.mk.injEq`, `Qt.mk.inj`,
   `Qt.mk.sizeOf_spec`, ...) are auxiliaries attributed to their structure, not population, so
   they are not leaves (`Qt.mk.inj` is used by nothing and would be one if it counted).
@@ -33,6 +36,8 @@ theorem bound_fact : 2 < 3 := by decide
 def picked : Fin 3 := ⟨2, Nat.lt_of_lt_of_le bound_fact (Nat.le_refl 3)⟩
 
 @[simp] theorem simp_only_fact (n : Nat) : step n = n + 1 := rfl
+
+@[simp] theorem simp_nonrfl_fact (n : Nat) : n + 0 + 0 = n := by omega
 
 structure Pt where
   x : Nat

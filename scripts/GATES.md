@@ -861,7 +861,8 @@ independently valuable, and every leaf is checked for axioms — by the ONE unio
 **What is a leaf.** A theorem of a `Blanc.*` module that nothing uses. It is *used* when a Blanc
 declaration's type or value mentions it (auxiliaries — `_proof_N`, `match_N`, `eq_def`, `injEq`,
 recursors, constructors and projections of a structure — attributed to their parent declaration),
-when it belongs to a registered simp set, `@[ext]` or instance attribute, or when its name is
+when it is an `rfl`-proved lemma in a registered simp set (the one attribute use a proof term cannot
+show: `simp`/`dsimp` apply it by definitional unfolding and leave no trace), or when its name is
 written where the environment records no trace: in the lemma list of a `simp`, `simp only`,
 `dsimp`, `simpa`, `rw`, `norm_num`, `grind`, ... call, anywhere in a `macro`, `macro_rules`,
 `syntax`, `elab` or `notation` command, or in an `attribute [..]` command, of any
@@ -869,7 +870,15 @@ written where the environment records no trace: in the lemma list of a `simp`, `
 a token is resolved like an identifier, innermost enclosing namespace first and then the active
 `open`s, and counts only if it names a Blanc theorem). An `rfl`-proved lemma named only in a
 `simp only [..]` leaves no term in the proof, so the census alone would call it a leaf; the source
-scan is what says it is used. Whether a leaf is worth keeping is a human judgement made by a
+scan is what says it is used. **Attribute membership is not otherwise a use.** An instance that
+instance synthesis selects, an `@[ext]` lemma that `ext` applies and a non-`rfl` simp lemma that
+`simp` rewrites with each appear in the term of the declaration that used them, so one that no term
+mentions is unused and is a leaf, whatever attributes it carries; an `rfl` simp lemma nothing
+mentions is the only "attribute-exempt" case (its census key stays `attribute_only`). The
+self-test controls this on the fixture: an unused non-`rfl` `@[simp]` lemma, `@[ext]` lemma and
+instance are leaves; the unused `rfl` `@[simp]` lemma is exempt; proving the first by `rfl` exempts
+it, and a term that uses the instance or the `@[ext]` lemma removes it from the leaf set; a driver
+mutation restoring the old blanket rule loses all three. Whether a leaf is worth keeping is a human judgement made by a
 periodic sweep; nothing here decides it.
 
 **The count.** `scripts/check.sh` prints `LEAF-COUNT N` and requires `N`, with its public and
@@ -885,7 +894,9 @@ a sweep reviews only leaves that are new or whose statement changed. It is gener
 `python3 scripts/leaf_audit.py generate --ledger` at the close of a sweep, never edited by hand, and
 is not an input of any gate verdict: `check.sh` prints the informational line `LEAF-REVIEW: N leaves
 new or changed since the last review` (or that the ledger is not yet seeded) and never fails on it.
-`python3 scripts/leaf_audit.py review` lists them. A toolchain bump changes the fingerprints; the
+`python3 scripts/leaf_audit.py review` lists them. The ledger also records, under
+`attribute_exempt`, the `rfl` simp lemmas that are kept without being leaves (they are not part of
+the new/changed comparison; the queued goal `make-simps-explicit-v1` is what would remove them). A toolchain bump changes the fingerprints; the
 next sweep regenerates the ledger.
 
 **Fail-closed.** An empty, unparseable or inconsistent census, an attribute the census cannot count

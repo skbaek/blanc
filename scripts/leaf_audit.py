@@ -25,8 +25,8 @@ and the published claims need:
 
 What counts as use is documented in ``scripts/GATES.md`` ("Leaf audit") and in the header of
 ``scripts/LeafCensus.lean``. In short: a term mention in any Blanc declaration, a registered simp
-set / ``@[ext]`` / instance attribute, or a name written in the lemma list of a rewriting tactic
-call (``simp``, ``simp only``, ``dsimp``, ``simpa``, ``rw``, ...) or anywhere in a tactic macro of
+set (an ``rfl``-proved simp lemma only: the one use a proof term cannot show), or a name written
+in the lemma list of a rewriting tactic call (``simp``, ``simp only``, ``dsimp``, ``simpa``, ``rw``, ...) or anywhere in a tactic macro of
 any ``Blanc/**/*.lean`` file. The last kind leaves no trace in the environment when the lemma is
 proved by ``rfl``, so the census alone would call such a lemma a leaf.
 
@@ -64,8 +64,10 @@ LEDGER_SCHEMA = 1
 GENERATOR_COUNT = "python3 scripts/leaf_audit.py generate"
 GENERATOR_LEDGER = "python3 scripts/leaf_audit.py generate --ledger"
 
-# Attribute heads whose use is decided by the driver from the environment ("attribute use counts as
-# use"): a `simp` (any registered simp set), `ext` or `instance` theorem is used without a term trace.
+# Attribute heads the driver reads from the environment. Only membership in a registered simp set of
+# an `rfl`-proved lemma counts as a use (it leaves no term trace); an `ext` lemma, an instance or a
+# non-`rfl` simp lemma that no term mentions is unused and a leaf. They stay classified here so that
+# a new attribute head is refused until someone decides what it does.
 USE_ATTRIBUTES = frozenset({"simp", "ext", "instance"})
 # Attribute heads that cannot make a theorem used. Anything else found in the source is refused
 # until it is classified here and, if it uses a theorem, taught to the driver.
@@ -572,11 +574,9 @@ def validate_census(census: dict) -> None:
     if len(census["leaves"]) + len(census["attribute_only"]) > population:
         fail("more leaves than theorems")
     for row in census["attribute_only"]:
-        if not row.get("attributes"):
-            fail(f"{row['name']}: listed as attribute-used with no attribute")
-    for row in census["leaves"]:
-        if row.get("attributes"):
-            fail(f"{row['name']}: listed as a leaf although it carries an attribute")
+        if not any(isinstance(a, str) and a.startswith("simp-set:")
+                   for a in row.get("attributes", [])):
+            fail(f"{row['name']}: listed as attribute-exempt without a simp-set attribute")
 
 
 def leaf_key(row: dict) -> str:
@@ -606,6 +606,7 @@ def analyze(census: dict, sources: Dict[str, str]) -> dict:
         "census_leaves": len(census["leaves"]),
         "removed_by_source_use": removed,
         "attribute_only": len(census["attribute_only"]),
+        "attribute_exempt_rows": sorted(census["attribute_only"], key=leaf_key),
         "population": census["population"],
     }
 
@@ -652,10 +653,16 @@ def compare_count(committed: dict, counts: dict) -> List[str]:
         f"`{GENERATOR_COUNT}`, then update the surfaces that quote it"]
 
 
-def ledger_document(toolchain: str, leaves: List[dict]) -> str:
+def ledger_document(toolchain: str, leaves: List[dict],
+                    exempt: Sequence[dict] = ()) -> str:
+    """The ledger. ``exempt`` are the attribute-exempt (``rfl`` simp) lemmas: kept, recorded beside
+    the leaves for the record, and never part of the new/changed comparison."""
+
     return json.dumps({"schema": LEDGER_SCHEMA, "generator": GENERATOR_LEDGER,
                        "toolchain": toolchain,
-                       "leaves": {leaf_key(r): r["fp"] for r in sorted(leaves, key=leaf_key)}},
+                       "leaves": {leaf_key(r): r["fp"] for r in sorted(leaves, key=leaf_key)},
+                       "attribute_exempt": {leaf_key(r): r["fp"]
+                                            for r in sorted(exempt, key=leaf_key)}},
                       indent=1, sort_keys=True) + "\n"
 
 
@@ -730,8 +737,8 @@ def summary_line(result: dict) -> str:
     return (f"{c['leaves']} leaves ({c['public']} public, {c['private']} private) among "
             f"{result['population']} theorems; {len(result['removed_by_source_use'])} of the "
             f"{result['census_leaves']} census leaves are used by a rewriting tactic call or macro "
-            f"and are not leaves; {result['attribute_only']} more theorems are used only by an "
-            f"attribute")
+            f"and are not leaves; {result['attribute_only']} more theorems are `rfl` simp lemmas "
+            f"exempt because their simp-set membership is their only possible use")
 
 
 def cmd_check(root: Path) -> int:
@@ -764,8 +771,10 @@ def cmd_generate(root: Path, ledger: bool) -> int:
     print(f"wrote {COUNT_RELATIVE}: {counts['leaves']} leaves ({counts['public']} public, "
           f"{counts['private']} private)")
     if ledger:
-        (root / LEDGER_RELATIVE).write_text(ledger_document(toolchain_of(root), result["leaves"]))
-        print(f"wrote {LEDGER_RELATIVE}: {counts['leaves']} reviewed leaves")
+        (root / LEDGER_RELATIVE).write_text(ledger_document(
+            toolchain_of(root), result["leaves"], result["attribute_exempt_rows"]))
+        print(f"wrote {LEDGER_RELATIVE}: {counts['leaves']} reviewed leaves and "
+              f"{len(result['attribute_exempt_rows'])} attribute-exempt `rfl` simp lemmas")
     return 0
 
 
@@ -911,20 +920,46 @@ def self_test(root: Path) -> int:
                            "⟨2, by decide⟩", "bound_fact user"),
                   expected_base_leaves + [ns + "bound_fact"])
 
-    # Attribute use: an `@[simp]`, `@[ext]` or instance theorem is not a leaf; removing only the
-    # attribute makes it one.
-    expect_leaves("@[simp] removed from the attribute-only theorem",
+    # Attribute use is narrow: only an `rfl`-proved simp lemma is exempt (its use leaves no term
+    # trace). The compliant fixture holds one exempt lemma (`simp_only_fact`, not a leaf) and three
+    # attribute-carrying leaves that nothing uses: a non-`rfl` `@[simp]` lemma, an `@[ext]` lemma and
+    # an instance. Each control below flips exactly one of them.
+    checks += 1
+    exempt = [r["name"] for r in base_census["attribute_only"]]
+    if exempt != [ns + "simp_only_fact"]:
+        failures.append(f"attribute-exempt lemma: expected only {ns}simp_only_fact, got {exempt}")
+    else:
+        print(f"OK — attribute-exempt: {exempt} (an unused `rfl` `@[simp]` lemma is not a leaf)")
+    expect_leaves("@[simp] removed from the `rfl` simp lemma",
                   replaced(base, "@[simp] theorem simp_only_fact", "theorem simp_only_fact",
                            "simp attribute"),
                   expected_base_leaves + [ns + "simp_only_fact"])
-    expect_leaves("@[ext] removed from the attribute-only theorem",
-                  replaced(base, "@[ext (iff := false)] theorem Pt.ext_fx", "theorem Pt.ext_fx",
-                           "ext attribute"),
-                  expected_base_leaves + [ns + "Pt.ext_fx"])
-    expect_leaves("instance replaced by a theorem",
-                  replaced(base, "instance : Nonempty Pt := ⟨⟨0⟩⟩",
-                           "theorem instNonemptyPt : Nonempty Pt := ⟨⟨0⟩⟩", "instance"),
-                  expected_base_leaves + [ns + "instNonemptyPt"])
+    expect_leaves("non-`rfl` simp lemma proved by `rfl` becomes attribute-exempt",
+                  replaced(base, "n + 0 + 0 = n := by omega", "n + 0 + 0 = n := rfl",
+                           "non-rfl simp lemma"),
+                  [n for n in expected_base_leaves if n != ns + "simp_nonrfl_fact"])
+    expect_leaves("unused instance used by a term",
+                  replaced(base, "end LeafFixture\n\nnamespace Elsewhere",
+                           "def ptWitness : Nonempty Pt := inferInstance\n\n"
+                           "end LeafFixture\n\nnamespace Elsewhere", "instance user"),
+                  [n for n in expected_base_leaves if n != ns + "instNonemptyPt"])
+    expect_leaves("unused `@[ext]` lemma applied by a term",
+                  replaced(base, "end LeafFixture\n\nnamespace Elsewhere",
+                           "def ptExtUse (a b : Pt) (h : a.x = b.x) : a = b := Pt.ext_fx h\n\n"
+                           "end LeafFixture\n\nnamespace Elsewhere", "ext user"),
+                  [n for n in expected_base_leaves if n != ns + "Pt.ext_fx"])
+    # The driver's rule itself bites: with the old blanket rule (any attribute exempts) the three
+    # attribute-carrying leaves vanish from the leaf set.
+    checks += 1
+    blanket = run_census(root, source=fixture_source(
+        root, base, ("if rflSimp then attrOnly", "if !ks.isEmpty then attrOnly")))
+    lost = sorted(set(r["name"] for r in base_census["leaves"])
+                  - set(r["name"] for r in blanket["leaves"]))
+    if lost != [ns + "Pt.ext_fx", ns + "instNonemptyPt", ns + "simp_nonrfl_fact"]:
+        failures.append(f"blanket-attribute control: expected three leaves to vanish, got {lost}")
+    else:
+        print(f"OK — blanket attribute rule in the driver: {lost} would vanish from the leaf set; "
+              f"the shared driver keeps them")
 
     # Auxiliary attribution in the driver: without it the generated theorems (`Qt.mk.injEq`, ...)
     # join the population, which is the failure the rule exists to prevent (in the real

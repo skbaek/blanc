@@ -26,17 +26,25 @@ A theorem is USED when
   auxiliaries (`_proof_N`, `match_N`, `eq_def`, `eq_N`, `_private` prefixes, recursors, constructors
   of a structure...) being attributed to their parent declaration and a parentless auxiliary being
   looked through to its own users; or
-* it carries an attribute that uses it without leaving a term trace: membership in any registered
-  simp set (`@[simp]`, `attribute [simp]`, `@[simp ←]`, every other `register_simp_attr` set),
-  `@[ext]`, or instance membership.
+* it is an `rfl`-proved lemma (`isRflTheorem`) that belongs to a registered simp set (`@[simp]`,
+  `attribute [simp]`, `@[simp ←]`, every other `register_simp_attr` set). Only such a lemma can be
+  used by `simp`/`dsimp` without leaving any trace in a proof term, so its attribute membership is
+  the one use this driver can and must count ("attribute-exempt").
+
+Every other attribute is deliberately NOT a use. A non-`rfl` simp lemma that `simp` applies is a
+propositional rewrite and appears in the proof term of the theorem it helps prove; an instance that
+instance synthesis selects appears in the term of the declaration that needed it; an `@[ext]` lemma
+that `ext` applies appears in that proof term. So an instance, `@[ext]` lemma or non-`rfl` simp
+lemma that no term mentions is unused, whatever attributes it carries, and is a leaf. The
+attributes a leaf carries are recorded in its row for the reader only.
 
 A use that leaves no trace in the environment at all (an `rfl`-proved lemma named in a `simp only
 [..]`, `rw [..]`, `dsimp` or `simpa` call, or in a tactic macro) cannot be seen here: the Python
 side reads those from the sources and removes the theorems they name from the leaf set.
 
-A LEAF (of this census) is a used-by-nothing theorem: no term user and no attribute. Each leaf row
-carries a fingerprint of its statement, the hash of the theorem's TYPE (never its proof), so that a
-later review can tell a new or changed leaf from one already reviewed.
+A LEAF (of this census) is a used-by-nothing theorem: no term user and not attribute-exempt. Each
+leaf row carries a fingerprint of its statement, the hash of the theorem's TYPE (never its proof),
+so that a later review can tell a new or changed leaf from one already reviewed.
 
 Input (environment, so the file is byte-identical in every mode): `BLANC_LEAF_OUT`, the JSON file
 written.
@@ -154,7 +162,7 @@ run_cmd do
         else if u != t then
           return true
     return false
-  -- Attribute state: every registered simp set, `@[ext]`, instances.
+  -- Attribute state (recorded on every row; only an `rfl` simp lemma is exempt from being a leaf).
   let simpMap ← simpExtensionMapRef.get
   let simpSets : Array (Name × SimpTheorems) := simpMap.toArray.map fun (k, ext) =>
     (k, ext.getState env)
@@ -179,10 +187,12 @@ run_cmd do
     let m := moduleOf env t
     let ks := attrKinds t
     unless hasTermUser t do
+      let rflSimp ← if ks.any (·.startsWith "simp-set:") then liftCoreM (isRflTheorem t)
+        else pure false
       let row := Json.mkObj [("name", toJson (showName user)), ("module", toJson (showName m)),
         ("private", toJson (isPrivateName t)), ("attributes", toJson ks),
         ("fp", toJson (fingerprint ci))]
-      if ks.isEmpty then leaves := leaves.push row else attrOnly := attrOnly.push row
+      if rflSimp then attrOnly := attrOnly.push row else leaves := leaves.push row
   IO.FS.writeFile outPath
     ((Json.mkObj [
       ("schema", toJson (2 : Nat)),
