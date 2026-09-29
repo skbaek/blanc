@@ -459,6 +459,12 @@ This repo contains the following files:
   `Drip*` family: DRIP, the accrual-index savings ledger étude — fail-closed
   ingress, one shared fresh-index machine, a checked Maker-shaped `rpow`, and a
   checks-effects-interactions exit.
+- [`Blanc/Lift/`](Blanc/Lift/): kernel-checked lifts of bytecode already on
+  mainnet — WETH9, the Beacon deposit contract, Curve's 3Crv token, Lido's
+  CircuitBreaker and the fixed and vulnerable Vyper pool pair.
+  [`docs/DEPLOYED_BYTECODE_CLAIM_MAP.md`](docs/DEPLOYED_BYTECODE_CLAIM_MAP.md)
+  maps each claim to its theorem, premises and non-claims, and states the
+  deployment caveats.
 
 Each of the ten contracts — seven ports (WETH, WETH10, BeaconDeposit, Lido's
 CircuitBreaker, TriggerableWithdrawalsGateway and OssifiableProxy, and the

@@ -36,6 +36,16 @@
    "historical_catches": []
   },
   {
+   "id": "deployed-claim-map",
+   "work": [
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
    "id": "layering",
    "work": [
     "static-corpus",

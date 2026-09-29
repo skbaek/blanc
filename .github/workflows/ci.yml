@@ -67,6 +67,8 @@ jobs:
         run: scripts/check-lido-circuit-breaker-assurance.sh
       - name: BeaconDeposit assurance register
         run: scripts/check-beacon-deposit-assurance.sh
+      - name: Deployed-bytecode claim map
+        run: scripts/check-deployed-claim-map.sh
       - name: Proof-resource ceiling debt
         run: scripts/check-proof-debt.sh
       - name: Proof-duplication ratchet
