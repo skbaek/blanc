@@ -6,13 +6,14 @@ import Blanc.ExecutionWarmth
 
 `Blanc/CommonProofs.lean` shows that every execution keeps the code of every nonempty-code
 address.  This module is its counterpart for one address `a` whose code may be empty: an
-execution keeps the code at `a` unless a CREATE derives `a`.  The address of a CREATE is a hash of
-the creator and a nonce or salt, so a fixed address such as a precompile's is never derived
-(`NoCreateAt`, an explicit cryptographic premise, never an axiom).
+execution keeps the code at `a` unless a CREATE frame it enters targets `a`, and then so does
+every frame it enters (`Exec.codeAt_avoid`).  The hypothesis is trace-local: it names the frames
+the execution actually enters (`Exec.rawFrameRoots`), not a property of the CREATE address
+function, which no fixed address can be assumed to avoid.
 
 The proofs follow the nonempty-code masters step for step; the only place they used the
 nonemptiness of the code was to conclude that a child's CREATE target differs from the address
-watched, which `NoCreateAt` now states.
+watched, which the hypothesis now states for the frames that are entered.
 -/
 
 namespace Blanc
@@ -21,11 +22,6 @@ open Jaune Jaune.List Jaune.Except _root_.List _root_.Nat
 
 /-- The code at `a` is the same. -/
 def Devm.CodeAt (a : Adr) (d d' : Devm) : Prop := d'.getCode a = d.getCode a
-
-/-- No CREATE or CREATE2 derives the address `a`. -/
-def NoCreateAt (a : Adr) : Prop :=
-  (∀ creator nonce, computeContractAddress creator nonce ≠ a) ∧
-    (∀ creator salt code, create2NewAddress creator salt code ≠ a)
 
 /-- A suspended child keeps the code at `a`. -/
 def Xlot.InvAt (a : Adr) : Xlot → Prop
@@ -131,6 +127,38 @@ lemma ProcessCreateMessage.codeAt
     · rename_i h_some
       exact Devm.rollback_getCode evm msg.benv.state msg.tenv.transientStorage a
 
+/-- A frame with no interpreter slot whose message has no code address is a value-transfer
+failure, so it ends in an error. -/
+lemma ProcessMessage.none_error {msg : Msg}
+    {ex : Except (EvmError × State × AdrSet × Tra) Devm}
+    (hca : msg.codeAddress = none) (run : ProcessMessage msg .none ex) :
+    ∃ e, ex = .error e := by
+  rcases RunFrame.decompose run with ⟨e, -, -, hr⟩ | ⟨benv, r', -, hec, hr⟩
+  · exact ⟨e, hr⟩
+  · unfold ExecuteCode at hec
+    have hca' : ((Frame.ofCall msg).inner.withBenv benv).codeAddress = none := hca
+    have hen : executeCode.enter ((Frame.ofCall msg).inner.withBenv benv) =
+        .inl (initEvm ((Frame.ofCall msg).inner.withBenv benv)) := by
+      unfold executeCode.enter
+      simp only [hca']
+    rw [hen] at hec
+    obtain ⟨raw, hx, -⟩ := hec
+    cases hx
+
+lemma ProcessCreateMessage.codeAt_none
+    {a : Adr} {msg : Msg}
+    {exn : Except (EvmError × State × AdrSet × Tra) Devm}
+    (hca : msg.codeAddress = none) (run : ProcessCreateMessage msg .none exn) :
+    MsgResult.getCode exn a = msg.benv.state.getCode a := by
+  have h_benv_code := processCreateMessage.msg_getCode msg a
+  obtain ⟨ex', h_exec, rfl⟩ := ProcessCreateMessage.iff_processMessage.mp run
+  have hca' : (processCreateMessage.msg msg).codeAddress = none := hca
+  obtain ⟨e, rfl⟩ := ProcessMessage.none_error hca' h_exec
+  have h_exec_cond := ProcessMessage.codeAt (a := a) (xl := .none) trivial h_exec
+  rw [h_benv_code] at h_exec_cond
+  unfold processCreateMessage.settle
+  exact h_exec_cond
+
 lemma GenericCall.codeAt
     {a : Adr} {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
     {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
@@ -165,8 +193,8 @@ lemma GenericCall.codeAt
 lemma GenericCreate.codeAt
     {a : Adr} {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
     {memoryIndex memorySize : Nat} {xl : Xlot} {exn : Execution}
-    (hne : ∀ f rsm, genericCreate.step sevm devm endowment newAddress memoryIndex memorySize =
-      .spawn f rsm → a ≠ newAddress)
+    (hne : ∀ f rsm cevm, genericCreate.step sevm devm endowment newAddress memoryIndex
+        memorySize = .spawn f rsm → f.enter = .run cevm → a ≠ newAddress)
     (inv : Xlot.InvAt a xl)
     (run : GenericCreate sevm devm endowment newAddress memoryIndex memorySize xl exn) :
     Execution.getCode exn a = devm.getCode a := by
@@ -217,94 +245,35 @@ lemma GenericCreate.codeAt
       intro b
       rw [addAccessedAddress_getCode]
       exact Devm.incrNonce_getCode
-    have hne' : a ≠ newAddress := by
-      refine hne (Frame.ofCreate (createMsg sevm
-        (addAccessedAddress
-          (((devm.withGasLeft (devm.gasLeft - except64th devm.gasLeft)).withReturnData
-            []).incrNonce sevm.currentTarget) newAddress)
-        (except64th devm.gasLeft) endowment newAddress
-        (Array.sliceD devm.memory.data memoryIndex memorySize 0)))
-        (Resume.create (addAccessedAddress
-          (((devm.withGasLeft (devm.gasLeft - except64th devm.gasLeft)).withReturnData
-            []).incrNonce sevm.currentTarget) newAddress) newAddress) ?_
-      unfold genericCreate.step
-      simp only [Bind.bind, Except.bind, Except.assert, assertDynamic, Pure.pure, Except.pure]
-      repeat' split
-      all_goals first | rfl | simp_all
+    have hmsg : MsgResult.getCode r a =
+        (createMsg sevm
+          (addAccessedAddress
+            (((devm.withGasLeft (devm.gasLeft - except64th devm.gasLeft)).withReturnData
+              []).incrNonce sevm.currentTarget) newAddress)
+          (except64th devm.gasLeft) endowment newAddress
+          (Array.sliceD devm.memory.data memoryIndex memorySize 0)).benv.state.getCode a := by
+      rcases xl with _ | ⟨cevm, raw⟩
+      · exact ProcessCreateMessage.codeAt_none rfl hframe
+      · have henter := (RunFrame.some_inv hframe).1
+        have hne' : a ≠ newAddress := by
+          refine hne (Frame.ofCreate (createMsg sevm
+            (addAccessedAddress
+              (((devm.withGasLeft (devm.gasLeft - except64th devm.gasLeft)).withReturnData
+                []).incrNonce sevm.currentTarget) newAddress)
+            (except64th devm.gasLeft) endowment newAddress
+            (Array.sliceD devm.memory.data memoryIndex memorySize 0)))
+            (Resume.create (addAccessedAddress
+              (((devm.withGasLeft (devm.gasLeft - except64th devm.gasLeft)).withReturnData
+                []).incrNonce sevm.currentTarget) newAddress) newAddress) cevm ?_ henter
+          unfold genericCreate.step
+          simp only [Bind.bind, Except.bind, Except.assert, assertDynamic, Pure.pure,
+            Except.pure]
+          repeat' split
+          all_goals first | rfl | simp_all
+        exact ProcessCreateMessage.codeAt hne' inv hframe
     rw [Resume.create_getCode ?_, h_parent a]
-    exact ProcessCreateMessage.codeAt hne' inv hframe |>.trans
-      (by rw [createMsg_benv_state_getCode, h_parent a])
+    exact hmsg.trans (by rw [createMsg_benv_state_getCode, h_parent a])
 
-/-! ### The address a CREATE-family spawn writes -/
-
-/-- A CREATE-family spawn never targets `a`. -/
-def XStep.SpawnNe (a : Adr) : XStep → Prop
-  | .done _ => True
-  | .spawn f _ => f.isCreate = true → f.inner.currentTarget ≠ a
-
-theorem XStep.SpawnNe.ofExcept {a : Adr} {e : Except (EvmError × Devm) XStep}
-    (h : Except.OkOn (XStep.SpawnNe a) e) : XStep.SpawnNe a (XStep.ofExcept e) := by
-  cases e with
-  | error e => trivial
-  | ok st => exact h st rfl
-
-theorem XStep.SpawnNe.done {a : Adr} {ex : Execution} : XStep.SpawnNe a (.done ex) := trivial
-
-theorem XStep.SpawnNe.spawn {a : Adr} {f : Frame} {rsm : Resume}
-    (h : f.isCreate = true → f.inner.currentTarget ≠ a) : XStep.SpawnNe a (.spawn f rsm) := h
-
-theorem Except.OkOn.triv {ε α : Type} (x : Except ε α) : Except.OkOn (fun _ => True) x :=
-  fun _ _ => trivial
-
-/-- Walk a do-block that returns a call-type outcome: every intermediate value is irrelevant, and
-each leaf is a `done` or one of the generic steps whose lemma `leaf` closes. -/
-macro "sp_walk " leaf:tacticSeq : tactic =>
-  `(tactic| repeat (first
-      | with_reducible exact Except.OkOn.error
-      | (with_reducible refine Except.OkOn.bind_ok ?_)
-      | (with_reducible refine Except.OkOn.bind (P := fun _ => True) (Except.OkOn.triv _) ?_; intro _ _)
-      | focus ((with_reducible apply Except.OkOn.ok); ($leaf))
-      | focus ((with_reducible apply Except.OkOn.pure); ($leaf))
-      | split))
-
-theorem genericCall.step_spawnNe {a : Adr} (sevm : Sevm) (devm : Devm) (gas : Nat)
-    (value : B256) (caller target codeAddress : Adr) (stv isSt : Bool) (ii isz oi osz : Nat)
-    (code : ByteArray) (dp : Bool) :
-    XStep.SpawnNe a
-      (genericCall.step sevm devm gas value caller target codeAddress stv isSt ii isz oi osz
-        code dp) := by
-  unfold genericCall.step
-  dsimp only
-  split
-  · refine XStep.SpawnNe.ofExcept ?_
-    sp_walk exact XStep.SpawnNe.done
-  · intro h
-    exact absurd h (by simp [Frame.ofCall])
-
-theorem genericCreate.step_spawnNe {a : Adr} (sevm : Sevm) (devm : Devm) (endowment : B256)
-    (newAddress : Adr) (mi ms : Nat) (h : newAddress ≠ a) :
-    XStep.SpawnNe a (genericCreate.step sevm devm endowment newAddress mi ms) := by
-  unfold genericCreate.step
-  dsimp only
-  refine XStep.SpawnNe.ofExcept ?_
-  sp_walk (first | exact XStep.SpawnNe.done | (refine XStep.SpawnNe.spawn ?_; intro _; exact h))
-
-set_option hygiene false in
-/-- The leaves of `Xinst.step`. -/
-macro "sp_leaf" : tactic =>
-  `(tactic| first
-      | (with_reducible exact XStep.SpawnNe.done)
-      | (with_reducible apply genericCall.step_spawnNe)
-      | ((with_reducible apply genericCreate.step_spawnNe)
-         first | (with_reducible exact hn1 _ _) | (with_reducible exact hn2 _ _ _)))
-
-theorem Xinst.step_spawnNe {a : Adr} (hno : NoCreateAt a) (sevm : Sevm) (devm : Devm) (x : Xinst)
-    (hsg : sevm.benvStat.rules.stateGas = none) :
-    XStep.SpawnNe a (Xinst.step sevm devm x) := by
-  obtain ⟨hn1, hn2⟩ := hno
-  cases x <;> simp only [Xinst.step, hsg]
-  all_goals refine XStep.SpawnNe.ofExcept ?_
-  all_goals sp_walk sp_leaf
 
 theorem genericCreate.step_spawn_isCreate
     {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
@@ -318,15 +287,21 @@ theorem genericCreate.step_spawn_isCreate
   all_goals obtain ⟨rfl, -⟩ := hs
   rfl
 
-/-- **The code at `a` along one call-type instruction**, given that its child keeps it. -/
-lemma Xinst.codeAt_effectRecFork {a : Adr} (hno : NoCreateAt a) (x : Xinst) :
+/-- The CREATE frame this instruction enters, if any, never targets `a`. -/
+def Xinst.AvoidsAt (a : Adr) (sevm : Sevm) (devm : Devm) (x : Xinst) : Prop :=
+  ∀ f rsm cevm, Xinst.step sevm devm x = .spawn f rsm → f.enter = .run cevm →
+    f.isCreate = true → f.inner.currentTarget ≠ a
+
+/-- **The code at `a` along one call-type instruction**, given that its child keeps it and that
+the instruction enters no CREATE frame at `a`. -/
+lemma Xinst.codeAt_effectRecAvoid {a : Adr} (x : Xinst) :
     ∀ {sevm : Sevm} {pre : Devm} {xl : Xlot} {out : Execution},
-      CoveredFork sevm.benvStat.fork → Xlot.Rel (Devm.CodeAt a) xl →
+      CoveredFork sevm.benvStat.fork → Xinst.AvoidsAt a sevm pre x →
+      Xlot.Rel (Devm.CodeAt a) xl →
       Xinst.Run sevm pre x xl out → Execution.Rel (Devm.CodeAt a) pre out := by
-  intro sevm devm xl exn hfork hxl run
+  intro sevm devm xl exn hfork havoid hxl run
   have inv := Xlot.invAt_of_rel hxl
   unfold Xinst.Run at run
-  have hsp := Xinst.step_spawnNe hno sevm devm x hfork.rules_stateGas_none
   have lift : ∀ {d : Devm}, Devm.InstructionFrame devm d →
       Execution.getCode exn a = d.getCode a → Execution.Rel (Devm.CodeAt a) devm exn := by
     intro d hf h
@@ -336,18 +311,17 @@ lemma Xinst.codeAt_effectRecFork {a : Adr} (hno : NoCreateAt a) (x : Xinst) :
   rcases Xinst.step_shapeCovered sevm devm x hfork with ⟨ex, hs, hframe⟩ |
     ⟨d, e, na, mi, ms, hf, hs⟩ |
     ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
-      hf, -, -, -, hs⟩ <;> rw [hs] at run hsp
+      hf, -, -, -, hs⟩ <;> rw [hs] at run
   · obtain ⟨-, rfl⟩ := run
     cases exn with
     | error e => exact (hframe.getCode a).symm
     | ok d' => exact (hframe.getCode a).symm
   · refine lift hf (GenericCreate.codeAt ?_ inv run)
-    intro f rsm hsf
+    intro f rsm cevm hsf henter
     have hc := genericCreate.step_spawn_frame hsf
     have hcreate := genericCreate.step_spawn_isCreate hsf
-    rw [hsf] at hsp
     intro h
-    exact hsp hcreate (hc.2.1.trans h.symm)
+    exact havoid f rsm cevm (hs.trans hsf) henter hcreate (hc.2.1.trans h.symm)
   · exact lift hf (GenericCall.codeAt inv run)
 
 theorem Devm.codeAt_refl (a : Adr) : ReflexiveRel (Devm.CodeAt a) := fun _ => rfl
@@ -372,110 +346,189 @@ lemma Linst.codeAt_effect (a : Adr) (l : Linst) : Linst.Effect (Devm.CodeAt a) l
   have hf := Linst.run_codeFrame hrun
   cases out <;> exact hf a
 
-lemma Ninst.effectRecFork_exec {R : Devm → Devm → Prop} {x : Xinst}
-    (hx : ∀ {sevm : Sevm} {pre : Devm} {xl : Xlot} {out : Execution},
-      CoveredFork sevm.benvStat.fork → Xlot.Rel R xl → Xinst.Run sevm pre x xl out →
-        Execution.Rel R pre out) :
-    Ninst.EffectRecFork R (.exec x) := by
-  intro pc sevm pre xl out hfork hxl hrun
-  simp only [Ninst.StepRun, Ninst.step_exec] at hrun
-  exact hx hfork hxl (XStep.run_toStep.mp hrun)
-
-lemma Ninst.codeAt_effectRecFork {a : Adr} (hno : NoCreateAt a) (n : Ninst) :
-    Ninst.EffectRecFork (Devm.CodeAt a) n := by
+/-- **One interpreter step keeps the code at `a`**, given that its child keeps it and that it
+enters no CREATE frame at `a`. -/
+lemma Evm.step_codeAt {a : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm} {xl : Xlot}
+    {out : Execution} (hfork : CoveredFork sevm.benvStat.fork)
+    (hav : ∀ x, Xinst.At sevm.code pc x → Xinst.AvoidsAt a sevm devm x)
+    (hxl : Xlot.Rel (Devm.CodeAt a) xl)
+    (hrun : Step.Run (Evm.step ⟨pc, sevm, devm⟩) xl out) :
+    Execution.Rel (Devm.CodeAt a) devm out := by
   have hIR : ∀ ⦃d d' : Devm⦄, Devm.InstructionFrame d d' → Devm.CodeAt a d d' :=
     fun _ _ hf => (hf.getCode a).symm
-  cases n with
-  | reg r =>
-    intro pc sevm pre xl out hfork hxl hrun
-    exact Ninst.effectRec_reg (Rinst.codeAt_effect a r) hxl hrun
-  | exec x =>
-    intro pc sevm pre xl out hfork hxl hrun
-    exact Ninst.effectRecFork_exec (Xinst.codeAt_effectRecFork hno x) hfork hxl hrun
-  | push xs hxs =>
-    intro pc sevm pre xl out hfork hxl hrun
-    exact Ninst.push_effectRec_of_instructionFrame hIR hxl hrun
-  | dupn imm =>
-    intro pc sevm pre xl out hfork hxl hrun
-    exact Ninst.dupn_effectRec_of_instructionFrame hIR hxl hrun
-  | swapn imm =>
-    intro pc sevm pre xl out hfork hxl hrun
-    exact Ninst.swapn_effectRec_of_instructionFrame hIR hxl hrun
-  | exchange imm =>
-    intro pc sevm pre xl out hfork hxl hrun
-    exact Ninst.exchange_effectRec_of_instructionFrame hIR hxl hrun
+  rcases hgi : (Evm.getInst ⟨pc, sevm, devm⟩) with _ | i
+  · rw [Evm.step_invOp hgi] at hrun
+    obtain ⟨-, rfl⟩ := hrun
+    exact Devm.codeAt_refl a _
+  · cases i with
+    | next n =>
+      rw [Evm.step_next (n := n) hgi] at hrun
+      cases n with
+      | reg r => exact Ninst.effectRec_reg (Rinst.codeAt_effect a r) hxl hrun
+      | exec x =>
+        simp only [Ninst.step_exec] at hrun
+        exact Xinst.codeAt_effectRecAvoid x hfork (hav x hgi) hxl (XStep.run_toStep.mp hrun)
+      | push xs hxs => exact Ninst.push_effectRec_of_instructionFrame hIR hxl hrun
+      | dupn imm => exact Ninst.dupn_effectRec_of_instructionFrame hIR hxl hrun
+      | swapn imm => exact Ninst.swapn_effectRec_of_instructionFrame hIR hxl hrun
+      | exchange imm => exact Ninst.exchange_effectRec_of_instructionFrame hIR hxl hrun
+    | jump j =>
+      rw [Evm.step_jump (j := j) hgi] at hrun
+      obtain ⟨-, hcase⟩ := Step.run_ofJump hrun
+      have hjr := Jinst.codeAt_effect a j (evm := ⟨pc, sevm, devm⟩)
+        (out := j.run ⟨pc, sevm, devm⟩) rfl
+      rcases hcase with ⟨e, hje, rfl⟩ | ⟨pc', d, hje, rfl⟩ <;> rw [hje] at hjr <;> exact hjr
+    | last l =>
+      rw [Evm.step_last (l := l) hgi] at hrun
+      obtain ⟨-, rfl⟩ := hrun
+      exact Linst.codeAt_effect a l rfl
 
-/-- **An execution keeps the code at `a`** (on the covered forks, when no CREATE derives `a`). -/
-theorem Exec.codeAt_effect {a : Adr} (hno : NoCreateAt a)
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec pc sevm pre out)
-    (hfork : CoveredFork sevm.benvStat.fork) :
-    Execution.Rel (Devm.CodeAt a) pre out :=
-  Exec.effectFork (Devm.codeAt_refl a) (Devm.codeAt_trans a) (Ninst.codeAt_effectRecFork hno)
-    (Jinst.codeAt_effect a) (Linst.codeAt_effect a) run hfork
+lemma Xinst.avoidsAt_of_step {a : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
+    (H : ∀ f rsm pc' cevm, Evm.step ⟨pc, sevm, devm⟩ = .spawn f rsm pc' →
+      f.enter = .run cevm → f.isCreate = true → f.inner.currentTarget ≠ a) :
+    ∀ x, Xinst.At sevm.code pc x → Xinst.AvoidsAt a sevm devm x := by
+  intro x hx f rsm cevm hs henter hc
+  refine H f rsm (pc + 1) cevm ?_ henter hc
+  rw [Evm.step_next hx]
+  simp only [Ninst.step, XStep.toStep, hs, Ninst.size]
 
-/-- **Every frame an execution enters starts with the code at `a` it started with**, including
-the frames of subtrees that later revert. -/
-theorem Exec.rawFrameRoots_codeAt {a : Adr} (hno : NoCreateAt a)
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec pc sevm pre out)
-    (hfork : CoveredFork sevm.benvStat.fork) :
-    ∀ root ∈ Exec.rawFrameRoots run, root.devm.getCode a = pre.getCode a := by
-  have step := fun {pc : Nat} {sevm : Sevm} {devm : Devm} {xl : Xlot} {out : Execution}
-      (hfork : CoveredFork sevm.benvStat.fork) (hxl : Xlot.Rel (Devm.CodeAt a) xl)
-      (hrun : Step.Run (Evm.step ⟨pc, sevm, devm⟩) xl out) =>
-    Evm.step_effectFork (Devm.codeAt_refl a) (Ninst.codeAt_effectRecFork hno)
-      (Jinst.codeAt_effect a) (Linst.codeAt_effect a) hfork hxl hrun
-  revert hfork
+/-- **An execution keeps the code at `a`, and so does every frame it enters**, when it enters no
+frame targeting `a` (in particular no CREATE frame that could install code there). -/
+theorem Exec.codeAt_avoid {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (hfork : CoveredFork sevm.benvStat.fork)
+    (avoid : ∀ root ∈ Exec.rawFrameRoots run, root.sevm.currentTarget ≠ a) :
+    Execution.Rel (Devm.CodeAt a) pre out ∧
+      ∀ root ∈ Exec.rawFrameRoots run, root.devm.getCode a = pre.getCode a := by
+  revert hfork avoid
   induction run with
   | halt hstep =>
-      intro hfork root member
+      intro hfork avoid
+      have hc := Evm.step_codeAt (a := a) (xl := .none) hfork
+        (Xinst.avoidsAt_of_step (fun f rsm pc' cevm h => by rw [hstep] at h; cases h))
+        trivial (by rw [hstep]; exact ⟨rfl, rfl⟩)
+      refine ⟨hc, ?_⟩
+      intro root member
       simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons,
         List.not_mem_nil, or_false] at member
       subst member
       rfl
-  | cont hstep next ih =>
-      intro hfork root member
-      have hc : Devm.CodeAt a _ _ := step (xl := .none) (out := .ok _) hfork trivial
-        (by rw [hstep]; exact ⟨rfl, rfl⟩)
+  | @cont pc sevm devm pc' devm' ex hstep next ih =>
+      intro hfork avoid
+      have hself : sevm.currentTarget ≠ a :=
+        avoid ⟨pc, sevm, devm, ex, Exec.cont hstep next⟩ (List.mem_cons_self ..)
+      have hc : Devm.CodeAt a _ _ := Evm.step_codeAt (xl := .none) (out := .ok _) hfork
+        (Xinst.avoidsAt_of_step (fun f rsm pc' cevm h => by rw [hstep] at h; cases h))
+        trivial (by rw [hstep]; exact ⟨rfl, rfl⟩)
+      obtain ⟨hrel, hroots⟩ := ih hfork (by
+        intro root member
+        simp only [Exec.rawFrameRoots, List.mem_cons] at member
+        rcases member with rfl | member
+        · exact hself
+        · exact avoid root (by simp [Exec.rawFrameRoots, Exec.rawFrameDescendants, member]))
+      refine ⟨Execution.Rel.trans_left (Devm.codeAt_trans a) hc hrel, ?_⟩
+      intro root member
       simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons] at member
       rcases member with rfl | member
       · rfl
-      · exact (ih hfork root (by simp [Exec.rawFrameRoots, member])).trans hc
+      · exact (hroots root (by simp [Exec.rawFrameRoots, member])).trans hc
   | doneErr hstep henter hresume =>
-      intro hfork root member
+      intro hfork avoid
+      have hc := Evm.step_codeAt (a := a) (xl := .none) (out := .error _) hfork
+        (Xinst.avoidsAt_of_step (fun f' rsm' pc' cevm h hen => by
+          rw [hstep] at h; cases h; rw [henter] at hen; cases hen))
+        trivial (by rw [hstep]; exact ⟨_, RunFrame.of_done henter, hresume.symm⟩)
+      refine ⟨hc, ?_⟩
+      intro root member
       simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons,
         List.not_mem_nil, or_false] at member
       subst member
       rfl
-  | doneOk hstep henter hresume next ih =>
-      intro hfork root member
-      have hc : Devm.CodeAt a _ _ := step (xl := .none) (out := .ok _) hfork trivial
-        (by rw [hstep]; exact ⟨_, RunFrame.of_done henter, hresume.symm⟩)
+  | @doneOk pc sevm devm f rsm pc' r devm' ex hstep henter hresume next ih =>
+      intro hfork avoid
+      have hself : sevm.currentTarget ≠ a :=
+        avoid ⟨pc, sevm, devm, ex, Exec.doneOk hstep henter hresume next⟩
+          (List.mem_cons_self ..)
+      have hc : Devm.CodeAt a _ _ := Evm.step_codeAt (xl := .none) (out := .ok _) hfork
+        (Xinst.avoidsAt_of_step (fun f' rsm' pc' cevm h hen => by
+          rw [hstep] at h; cases h; rw [henter] at hen; cases hen))
+        trivial (by rw [hstep]; exact ⟨_, RunFrame.of_done henter, hresume.symm⟩)
+      obtain ⟨hrel, hroots⟩ := ih hfork (by
+        intro root member
+        simp only [Exec.rawFrameRoots, List.mem_cons] at member
+        rcases member with rfl | member
+        · exact hself
+        · exact avoid root (by simp [Exec.rawFrameRoots, Exec.rawFrameDescendants, member]))
+      refine ⟨Execution.Rel.trans_left (Devm.codeAt_trans a) hc hrel, ?_⟩
+      intro root member
       simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons] at member
       rcases member with rfl | member
       · rfl
-      · exact (ih hfork root (by simp [Exec.rawFrameRoots, member])).trans hc
-  | runErr hstep henter child hresume ih =>
-      intro hfork root member
+      · exact (hroots root (by simp [Exec.rawFrameRoots, member])).trans hc
+  | @runErr pc sevm devm f rsm pc' cevm raw e hstep henter child hresume ih =>
+      intro hfork avoid
       have hfork_c := Evm.step_spawn_child_fork hstep henter hfork
       have hstart := (Evm.step_spawn_child hstep henter).2.1 a
+      have hcavoid : cevm.sta.currentTarget ≠ a :=
+        avoid ⟨cevm.pc, cevm.sta, cevm.dyna, raw, child⟩
+          (by simp [Exec.rawFrameRoots, Exec.rawFrameDescendants])
+      obtain ⟨hrel, hroots⟩ := ih hfork_c (by
+        intro root member
+        exact avoid root (by
+          simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons] at member ⊢
+          exact Or.inr member))
+      have hc := Evm.step_codeAt (a := a) (xl := .some ⟨_, _⟩) (out := .error _) hfork
+        (Xinst.avoidsAt_of_step (fun f' rsm' pc'' cevm' h hen hcr => by
+          rw [hstep] at h; cases h; rw [henter] at hen; cases hen
+          rw [← Frame.enter_run_currentTarget henter]; exact hcavoid))
+        hrel (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hresume.symm⟩)
+      refine ⟨hc, ?_⟩
+      intro root member
       simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons] at member
       rcases member with rfl | rfl | member
       · rfl
       · exact hstart
-      · exact (ih hfork_c root (by simp [Exec.rawFrameRoots, member])).trans hstart
-  | runOk hstep henter child hresume next ihChild ihNext =>
-      intro hfork root member
+      · exact (hroots root (by simp [Exec.rawFrameRoots, member])).trans hstart
+  | @runOk pc sevm devm f rsm pc' cevm raw devm' ex hstep henter child hresume next
+      ihChild ihNext =>
+      intro hfork avoid
+      have hself : sevm.currentTarget ≠ a :=
+        avoid ⟨pc, sevm, devm, ex, Exec.runOk hstep henter child hresume next⟩
+          (List.mem_cons_self ..)
       have hfork_c := Evm.step_spawn_child_fork hstep henter hfork
       have hstart := (Evm.step_spawn_child hstep henter).2.1 a
-      have hchild := Exec.codeAt_effect hno child hfork_c
-      have hc : Devm.CodeAt a _ _ := step (xl := .some ⟨_, _⟩) (out := .ok _) hfork hchild
-        (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hresume.symm⟩)
+      have hcavoid : cevm.sta.currentTarget ≠ a :=
+        avoid ⟨cevm.pc, cevm.sta, cevm.dyna, raw, child⟩
+          (by simp [Exec.rawFrameRoots, Exec.rawFrameDescendants])
+      obtain ⟨hrelChild, hrootsChild⟩ := ihChild hfork_c (by
+        intro root member
+        exact avoid root (by
+          simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons,
+            List.mem_append] at member ⊢
+          rcases member with h | h
+          · exact Or.inr (Or.inl h)
+          · exact Or.inr (Or.inr (Or.inl h))))
+      have hc : Devm.CodeAt a _ _ := Evm.step_codeAt (xl := .some ⟨_, _⟩) (out := .ok _) hfork
+        (Xinst.avoidsAt_of_step (fun f' rsm' pc'' cevm' h hen hcr => by
+          rw [hstep] at h; cases h; rw [henter] at hen; cases hen
+          rw [← Frame.enter_run_currentTarget henter]; exact hcavoid))
+        hrelChild (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hresume.symm⟩)
+      obtain ⟨hrel, hroots⟩ := ihNext hfork (by
+        intro root member
+        simp only [Exec.rawFrameRoots, List.mem_cons] at member
+        rcases member with rfl | member
+        · exact hself
+        · exact avoid root (by
+            simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons,
+              List.mem_append]
+            exact Or.inr (Or.inr (Or.inr member))))
+      refine ⟨Execution.Rel.trans_left (Devm.codeAt_trans a) hc hrel, ?_⟩
+      intro root member
       simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons,
         List.mem_append] at member
       rcases member with rfl | rfl | member | member
       · rfl
       · exact hstart
-      · exact (ihChild hfork_c root (by simp [Exec.rawFrameRoots, member])).trans hstart
-      · exact (ihNext hfork root (by simp [Exec.rawFrameRoots, member])).trans hc
+      · exact (hrootsChild root (by simp [Exec.rawFrameRoots, member])).trans hstart
+      · exact (hroots root (by simp [Exec.rawFrameRoots, member])).trans hc
 
 end Blanc
