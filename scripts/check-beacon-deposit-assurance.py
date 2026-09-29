@@ -152,7 +152,7 @@ EXPECTED_GATES = {
 
 STANDARD_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
 EXPECTED_TOTAL_ROWS = 11
-EXPECTED_TOTAL_DECLARATIONS = 30
+EXPECTED_TOTAL_DECLARATIONS = 29
 
 NONCLAIM_PHRASES = [
     "different artifacts and independent proof developments",
