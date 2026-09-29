@@ -173,7 +173,7 @@ SHARED += ["LedgerUpdate"]
 SHARED += ["Lift.StaticCall", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper"]
 # The frame cursor, the reentrancy-lock exclusion kit and its bytecode checker, owner
 # discipline, and concrete-run evaluation (deployed-lido-vyper-v1): contract-neutral.
-SHARED += ["Lift.Reach", "Lift.Cursor", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
+SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.Cursor", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
            "Lift.LockCheck", "Lift.LockCheckSound", "Lift.LockCheckFlow"]
 # The constant memory map and its checker, code tries as data, and the executable-witness
 # engine with its child runs and spawn facts (deployed-lido-vyper-v1, V-): contract-neutral.
@@ -429,6 +429,7 @@ CONTRACTS = {
                              "Lift.LidoCircuitBreakerDeployed.Frame",
                              "Lift.LidoCircuitBreakerDeployed.FrameMem",
                              "Lift.LidoCircuitBreakerDeployed.History", "Lift.LidoCircuitBreakerDeployed.L2History",
+                             "Lift.LidoCircuitBreakerDeployed.Reentry", "Lift.LidoCircuitBreakerDeployed.ReentryCheck",
                              "Lift.LidoCircuitBreakerDeployed.Init",
                              "Lift.LidoCircuitBreakerDeployed.L2",
                              "Lift.LidoCircuitBreakerDeployed.L2Frame",

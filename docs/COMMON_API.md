@@ -2843,7 +2843,15 @@ contract-neutral.
   returning callee into an ordinary big-step `SFunc.RunP … (.returned d)` so the
   big-step callee specs are reused) are in
   [`Blanc/Lift/Reach.lean`](../Blanc/Lift/Reach.lean). Use them for a prefix
-  fact of a certified frame, e.g. a storage invariant at a spawning node. Use it for safety facts
+  fact of a certified frame, e.g. a storage invariant at a spawning node.
+  The walk kit over the state `St b S M G` (`rr_next`, `rr_dest`, `rr_branch`,
+  `rr_callOver` for an exec-free callee crossed as a big-step run, `rr_callInto`
+  when the target lies inside the callee), the exec-free region refutation
+  `Reach.false_of_execFree` with its decidable `ExecFreeSet`/`SFunc.execFreeIn`,
+  the dispatcher lemma `Reach.gotoTree` and `Reach.lastExec` (register steps up
+  to the last external instruction, `regSilent`) are in
+  [`Blanc/Lift/ReachWalk.lean`](../Blanc/Lift/ReachWalk.lean); worked use: Lido
+  `lido_spawnEntry` in `Blanc/Lift/LidoCircuitBreakerDeployed/Reentry.lean`. Use it for safety facts
   about reverting or out-of-gas frames, which `lift_sound` cannot see.
 - Restrict external instruction families along a checked certificate cursor:
   [`Blanc/Lift/CallRestriction.lean`](../Blanc/Lift/CallRestriction.lean) defines
