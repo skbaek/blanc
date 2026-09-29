@@ -55,6 +55,7 @@ import Blanc.ExecutionNoninterference
 import Blanc.CycleWriteFree
 import Blanc.ReachableExecFree
 import Blanc.ReachableExecFreeControl
+import Blanc.TransactionForward
 import Blanc.TransientSettlement
 import Blanc.TransientInvariance
 import Blanc.LidoCircuitBreakerCore
@@ -525,6 +526,7 @@ import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxTop
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.WitnessCerts
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Closed
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Entry
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Envelope
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame1
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame2Full
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame2Kernel
