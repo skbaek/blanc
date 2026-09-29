@@ -46,6 +46,59 @@ private theorem proxyRootedRun_next
   exact rootedRunCompiledTo.next (step := step) (tail := tailRun)
     (ninstAllChildRoots_of_not_exec nonExec.notExec) tailRooted
 
+private theorem proxyRootedRun_branch_zero
+    {FS : List Func} {sevm : Sevm} {devm : Devm}
+    {f g : Func} {ex : Execution} {stack : List B256} {gas : Nat}
+    (stackEq : devm.stack = 0 :: stack)
+    (room : devm.stack.length < 1024)
+    (gasEq : devm.gasLeft = gas + (gVerylow + gHigh))
+    (arm : proxyRootedRun FS sevm
+      (devm.setMach ⟨stack, devm.memory, gas, devm.stateGas⟩) f ex) :
+    proxyRootedRun FS sevm devm (.branch f g) ex := by
+  rcases arm with ⟨armRun, armRooted⟩
+  let pop := Devm.popBurnBy_setMach stackEq gasEq
+  let run : Func.RunCompiledTo FS sevm devm (.branch f g) ex :=
+    .zero room pop armRun
+  refine ⟨run, ?_⟩
+  exact rootedRunCompiledTo.zero (g := g) (room := room)
+    (pop := pop) (tail := armRun) armRooted
+
+private theorem proxyRootedRun_branch_succ
+    {FS : List Func} {sevm : Sevm} {devm : Devm}
+    {f g : Func} {ex : Execution} {word : B256}
+    {stack : List B256} {gas : Nat}
+    (nonzero : word ≠ 0)
+    (stackEq : devm.stack = word :: stack)
+    (room : devm.stack.length < 1024)
+    (gasEq : devm.gasLeft = gas + (gVerylow + gHigh + gJumpdest))
+    (arm : proxyRootedRun FS sevm
+      (devm.setMach ⟨stack, devm.memory, gas, devm.stateGas⟩) g ex) :
+    proxyRootedRun FS sevm devm (.branch f g) ex := by
+  rcases arm with ⟨armRun, armRooted⟩
+  let pop := Devm.popBurnBy_setMach stackEq gasEq
+  let run : Func.RunCompiledTo FS sevm devm (.branch f g) ex :=
+    .succ nonzero room pop armRun
+  refine ⟨run, ?_⟩
+  exact rootedRunCompiledTo.succ (f := f) (hne := nonzero)
+    (room := room) (pop := pop) (tail := armRun) armRooted
+
+private theorem proxyRootedRun_call
+    {FS : List Func} {sevm : Sevm} {devm : Devm}
+    {index : Nat} {f : Func} {ex : Execution} {gas : Nat}
+    (found : FS[index]? = some f)
+    (room : devm.stack.length < 1024)
+    (gasEq : devm.gasLeft = gas + (gVerylow + gMid + gJumpdest))
+    (body : proxyRootedRun FS sevm
+      (devm.setMach ⟨devm.stack, devm.memory, gas, devm.stateGas⟩) f ex) :
+    proxyRootedRun FS sevm devm (.call index) ex := by
+  rcases body with ⟨bodyRun, bodyRooted⟩
+  let burn := Devm.burnBy_setMach_gas gasEq
+  let run : Func.RunCompiledTo FS sevm devm (.call index) ex :=
+    .call found room burn bodyRun
+  refine ⟨run, ?_⟩
+  exact rootedRunCompiledTo.call (found := found) (room := room)
+    (burn := burn) (tail := bodyRun) bodyRooted
+
 private def proxyRootedRunSpec : Blanc.Forward.RelSpec where
   head := ``proxyRootedRun
   next := ``proxyRootedRun_next
