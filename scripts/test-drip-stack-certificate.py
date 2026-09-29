@@ -133,15 +133,9 @@ class StackCertificateTests(unittest.TestCase):
         for part in parts:
             stem = theorem_stem(part)
             expected_names.extend([f"{stem}_rows_checked", f"{stem}_layout_checked"])
-        expected_names.extend(witness.name for witness in spec.witnesses)
-        expected_names.append(f"{spec.root}_order_and_size_checked")
         self.assertEqual(re.findall(r"^theorem (\w+)\s*:", text, re.M), expected_names)
-        for witness in spec.witnesses:
-            self.assertIn(
-                f"checkRow code.toByteArray table 8 {witness.pc} {GEN.pattern(self.states[witness.pc])}",
-                text,
-                "witness must use the complete table",
-            )
+        for table in re.findall(r"checkRow code\.toByteArray (\S+) 8", text):
+            self.assertEqual(table, "table", "every row check must use the complete table")
 
         tables = re.findall(
             r"^    subtree\d+\.all \(checkRow code\.toByteArray (\w+) 8\) = true := by$",
@@ -185,11 +179,11 @@ class StackCertificateTests(unittest.TestCase):
                 self.assertIn(f"  · exact {theorem_stem(part.left)}_layout_checked\n"
                               f"  · exact {theorem_stem(part.right)}_layout_checked", text)
 
-        self.assertIn(
-            f"theorem {spec.root}_order_and_size_checked :\n"
-            f"    {spec.root}.checkOrder = true ∧ {spec.root}.size = {spec.rows} := by",
-            text,
-        )
+        # The per-region order/size theorem and the cross-region witness theorems were leaves
+        # (the whole-table `table_order_and_size_checked` and `table_rows_checked` cover them).
+        self.assertNotIn(f"theorem {spec.root}_order_and_size_checked", text)
+        self.assertNotIn("cross_region_checked", text)
+        self.assertNotIn("cross_pack_checked", text)
         self.assertEqual(text.count("import Blanc.DripStackSafety"), 1)
 
     def test_region_proof_renderer_reproduces_and_extends_structure(self):
@@ -198,12 +192,8 @@ class StackCertificateTests(unittest.TestCase):
         self.assert_proof_structure(accepted, GEN.REGION576)
         region1022 = self.proofs[GEN.REGION1022_OUTPUT]
         self.assert_proof_structure(region1022, GEN.REGION1022)
-        self.assertIn("row1165_cross_region_checked", region1022)
-        self.assertIn("checkRow code.toByteArray table 8 1165 [some 1212, none, none]", region1022)
         region1459 = self.proofs[GEN.REGION1459_OUTPUT]
         self.assert_proof_structure(region1459, GEN.REGION1459)
-        self.assertIn("row1227_cross_pack_checked", region1459)
-        self.assertIn("checkRow code.toByteArray table 8 1227 [some 1735, none, none, none]", region1459)
         by_name = {part.name: part for part in self.parts}
         self.assertNotIn(1735, {pc for pc, _ in by_name["subtree1221"].rows})
         self.assertIn(1735, {pc for pc, _ in by_name["subtree1730"].rows})
@@ -220,11 +210,11 @@ class StackCertificateTests(unittest.TestCase):
             "subtree371_rows_checked", "subtree371_layout_checked",
             "subtree1182_rows_checked", "subtree1182_layout_checked",
             "subtree839_rows_checked", "subtree839_layout_checked",
-            "table_rows_checked", "table_layout_checked", "table_order_and_size_checked",
+            "table_rows_checked", "table_order_and_size_checked",
             "table_checked", "entry_invariant", "actual_entry_safe",
         ])
         self.assertIn("table.size = 735", facade)
-        self.assertIn("table.checkLayout code.toByteArray 0 1762 = true", facade)
+        self.assertIn("subtree839.checkLayout code.toByteArray 0 1762 = true", facade)
         self.assertIn("checkTable code.toByteArray table 8 = true", facade)
         self.assertIn("(hprefix : Exec.Deriv.ParentPrefix root node)", facade)
         self.assertIn("(entryPc : root.pc = 0)", facade)
@@ -241,17 +231,6 @@ class StackCertificateTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "complete table"):
             self.assert_proof_structure(mutated, GEN.REGION1022)
         self.assert_proof_structure(rendered, GEN.REGION1022)
-
-    def test_cross_pack_witness_rejects_local_table_substitution(self):
-        rendered = self.proofs[GEN.REGION1459_OUTPUT]
-        mutated = rendered.replace(
-            "checkRow code.toByteArray table 8 1227",
-            "checkRow code.toByteArray subtree1221 8 1227",
-            1,
-        )
-        with self.assertRaisesRegex(AssertionError, "complete table"):
-            self.assert_proof_structure(mutated, GEN.REGION1459)
-        self.assert_proof_structure(rendered, GEN.REGION1459)
 
     def test_runtime_underflow_mutation_and_restore(self):
         raw = bytearray(self.raw)

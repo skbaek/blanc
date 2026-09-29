@@ -87,15 +87,6 @@ class Subtree:
 
 
 @dataclass(frozen=True)
-class RowWitness:
-    name: str
-    pc: int
-    external_successor: int
-    comment: str
-    local_root: str | None = None
-
-
-@dataclass(frozen=True)
 class RegionSpec:
     root: str
     rows: int
@@ -103,7 +94,6 @@ class RegionSpec:
     stop: int
     module_doc: tuple[str, ...]
     internal_theorem_prefix: str = ""
-    witnesses: tuple[RowWitness, ...] = ()
 
 
 REGION576 = RegionSpec(
@@ -116,12 +106,6 @@ REGION576 = RegionSpec(
         "uses the complete 735-row table, including the conditional jump from PC 686",
         "to PC 947 outside this region.",
     ),
-    witnesses=(RowWitness(
-        name="row686_cross_region_checked",
-        pc=686,
-        external_successor=947,
-        comment="PC 686 lies in subtree716; its taken successor PC 947 is outside subtree576.",
-    ),),
 )
 
 REGION1022 = RegionSpec(
@@ -135,12 +119,6 @@ REGION1022 = RegionSpec(
         "to PC 1212 outside this region.",
     ),
     internal_theorem_prefix="region1022_",
-    witnesses=(RowWitness(
-        name="row1165_cross_region_checked",
-        pc=1165,
-        external_successor=1212,
-        comment="PC 1165 lies in subtree1022; its taken successor PC 1212 is outside subtree1022.",
-    ),),
 )
 
 REGION1459 = RegionSpec(
@@ -154,13 +132,6 @@ REGION1459 = RegionSpec(
         "in subtree1221 to PC 1735 in subtree1730.",
     ),
     internal_theorem_prefix="region1459_",
-    witnesses=(RowWitness(
-        name="row1227_cross_pack_checked",
-        pc=1227,
-        external_successor=1735,
-        comment="PC 1227 lies in subtree1221; its taken successor PC 1735 lies in subtree1730.",
-        local_root="subtree1221",
-    ),),
 )
 
 PROOF_OUTPUTS = {
@@ -268,31 +239,7 @@ def render_proof_region(raw: bytes, states: dict[int, Pattern], spec: RegionSpec
             ])
         output.append("")
 
-    for witness in spec.witnesses:
-        require(witness.pc in region_pcs, f"witness PC outside {spec.root}")
-        successors = transfer(decoded, witness.pc, states[witness.pc])
-        require(any(pc == witness.external_successor for pc, _ in successors),
-                f"missing witness successor {witness.external_successor} from {witness.pc}")
-        local_root = spec.root if witness.local_root is None else witness.local_root
-        require(local_root in by_name, f"unknown witness boundary {local_root}")
-        local_pcs = {pc for pc, _ in by_name[local_root].rows}
-        require(witness.pc in local_pcs, f"witness PC outside {local_root}")
-        require(witness.external_successor not in local_pcs,
-                f"witness successor is local to {local_root}")
-        output.extend([
-            f"/-- {witness.comment} -/",
-            f"theorem {witness.name} :",
-            f"    checkRow code.toByteArray table {MAXIMUM} {witness.pc} {pattern(states[witness.pc])} = true := by",
-            "  decide +kernel",
-            "",
-        ])
-
     output.extend([
-        "/-- Strict ordering and the exact region population are checked independently. -/",
-        f"theorem {spec.root}_order_and_size_checked :",
-        f"    {spec.root}.checkOrder = true ∧ {spec.root}.size = {spec.rows} := by",
-        "  decide +kernel",
-        "",
         "end Blanc.Drip.StackSafety",
         "",
     ])
@@ -385,10 +332,6 @@ def render_certificate_facade(raw: bytes, states: dict[int, Pattern]) -> str:
         "theorem table_rows_checked :",
         "    table.all (checkRow code.toByteArray table 8) = true := by",
         "  exact subtree839_rows_checked",
-        "",
-        "theorem table_layout_checked :",
-        "    table.checkLayout code.toByteArray 0 1762 = true := by",
-        "  exact subtree839_layout_checked",
         "",
         "/-- Strict ordering and the exact whole-table population are checked independently. -/",
         "theorem table_order_and_size_checked :",

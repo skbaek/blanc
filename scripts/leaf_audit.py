@@ -26,7 +26,7 @@ and the published claims need:
 What counts as use is documented in ``scripts/GATES.md`` ("Leaf audit") and in the header of
 ``scripts/LeafCensus.lean``. In short: a term mention in any Blanc declaration, a registered simp
 set (an ``rfl``-proved simp lemma only: the one use a proof term cannot show), or a name written
-in the lemma list of a rewriting tactic call (``simp``, ``simp only``, ``dsimp``, ``simpa``, ``rw``, ...) or anywhere in a tactic macro of
+in the lemma list of a rewriting tactic call (``simp``, ``simp only``, ``dsimp``, ``simpa``, ``rw``, ...), a double-backtick name literal, or anywhere in a tactic macro of
 any ``Blanc/**/*.lean`` file. The last kind leaves no trace in the environment when the lemma is
 proved by ``rfl``, so the census alone would call such a lemma a leaf.
 
@@ -313,7 +313,8 @@ def scan_uses(sources: Dict[str, str], population: Set[str]) -> Dict[str, Tuple[
     element of the bracketed lemma list of a rewriting tactic call (``simp only [..]``, ``rw [..]``,
     ``dsimp``, ``simpa``, ...; an element written ``-foo`` erases and is not a use), (b) anywhere in
     the body of a ``macro``/``macro_rules``/``syntax``/``elab``/``notation`` command, or (c) in the
-    name list of an ``attribute [..]`` command whose attributes are not all neutral. Comments and
+    name list of an ``attribute [..]`` command whose attributes are not all neutral, or (d) written as a
+    double-backtick name literal (``foo``). Comments and
     string contents are stripped first. A token is resolved like Lean resolves an identifier: the
     innermost enclosing namespace first, then the active ``open``s, and it counts only if the
     resolved name is a Blanc theorem, so a short name that happens to match a theorem of another
@@ -390,6 +391,11 @@ def scan_uses(sources: Dict[str, str], population: Set[str]) -> Dict[str, Tuple[
             if any(h not in NEUTRAL_ATTRIBUTES for h in heads):
                 for tok in IDENT.finditer(m.group(2)):
                     credit(tok.group(0), m.start(2) + tok.start(), "attribute command")
+        # (d) double-backtick name literals (``foo``): resolved and checked by the elaborator, and a
+        # data value, not a constant of the term, so the census cannot see it (a rule table naming
+        # its lemmas, a tactic spec). A single backtick is unresolved text and is not a use.
+        for m in re.finditer(r"(?<!`)``(" + IDENT.pattern + r")", code):
+            credit(m.group(1), m.start(1), "name literal")
     return used
 
 
@@ -844,6 +850,8 @@ def scan_controls() -> List[str]:
          "end A\n", set()),
         ("attribute command names a theorem", "attribute [local simp] foo\n", {"foo"}),
         ("neutral attribute command", "attribute [local irreducible] foo\n", set()),
+        ("name literal", "namespace A\ndef spec : Lean.Name := ``B.bar\nend A\n", {"A.B.bar"}),
+        ("single-backtick name is not a use", "def spec : Lean.Name := `foo\n", set()),
     ]
     failures: List[str] = []
     for label, text, expected in cases:
