@@ -530,4 +530,71 @@ theorem calculateIntrinsicCost_two_call {rules : ForkRules} {tx : Tx} {sender : 
   unfold calculateIntrinsicCost calldataTokens
   simp [hsg, htype, TxType.receiver?]
 
+/-- **The per-transaction gas cap on the covered forks**: no cap at Prague, the EIP-7825 cap `2 ^ 24`
+from Osaka; a transaction whose gas is at most `2 ^ 24` passes on every covered fork. -/
+theorem CoveredFork.checkTransactionGasCap_ok {s : BenvStat} (h : CoveredFork s.fork) {gas : Nat}
+    (hgas : gas ≤ 16777216) : checkTransactionGasCap s.rules.tx gas = .ok () := by
+  have hcap : s.rules.tx.maxGas = none ∨ s.rules.tx.maxGas = some 16777216 :=
+    h.cases (motive := fun f => (Fork.ruleSet f).tx.maxGas = none ∨
+      (Fork.ruleSet f).tx.maxGas = some 16777216) (Or.inl rfl) (Or.inr rfl) (Or.inr rfl) (Or.inr rfl)
+  unfold checkTransactionGasCap
+  rcases hcap with hc | hc <;> rw [hc]
+  simp [Nat.not_lt.mpr hgas]
+
+/-- The sender's debit (nonce bump and balance write) leaves every other account alone. -/
+theorem debit_get_ne {st : State} {E a : Adr} {v : B256} (h : E ≠ a) :
+    ((st.incrNonce E).setBal E v).get a = st.get a := by
+  rw [State.setBal_get_ne h]
+  unfold State.incrNonce
+  rw [State.get_set_ne _ h]
+
+/-- The sender's debit: the account keeps its storage and code, gains one in its nonce, and takes
+the written balance. -/
+theorem debit_get_self {st : State} {E : Adr} {v : B256} :
+    ((st.incrNonce E).setBal E v).get E =
+      { st.get E with nonce := (st.get E).nonce + 1, bal := v } := by
+  rw [State.setBal_get_self]
+  unfold State.incrNonce
+  rw [State.get_set_self]
+  rfl
+
+/-- A nonce that is not the maximal one can be incremented without wrapping. -/
+theorem UInt64.add_one_ne_zero {n : UInt64} (h : n ≠ UInt64.max) : n + 1 ≠ 0 := by
+  intro h'
+  apply h
+  have h2 := congrArg UInt64.toNat h'
+  rw [UInt64.toNat_add] at h2
+  have h3 : n.toNat < 2 ^ 64 := UInt64.toNat_lt_size n
+  have h4 : (1 : UInt64).toNat = 1 := rfl
+  have h5 : (0 : UInt64).toNat = 0 := rfl
+  rw [h4, h5] at h2
+  apply UInt64.toNat_inj.mp
+  have h6 : UInt64.max.toNat = 2 ^ 64 - 1 := by decide
+  rw [h6]
+  omega
+
+/-- A credit reads back as the account with the raised balance. -/
+theorem addBal_get_self (st : State) (a : Adr) (v : B256) :
+    (st.addBal a v).get a = (st.get a).withBal (st.bal a + v) :=
+  State.setBal_get_self
+
+/-- A credit leaves every other account alone. -/
+theorem addBal_get_ne {st : State} {a b : Adr} (v : B256) (h : a ≠ b) :
+    (st.addBal a v).get b = st.get b :=
+  State.setBal_get_ne h
+
+/-- **The sender's balance across a transaction, in naturals**: pay the up-front fee `F`, receive `wad`,
+get back the refund `R ≤ F`; when the balance plus `wad` fits a word nothing wraps. -/
+theorem sender_net_toNat {b0 wad : B256} {F R : Nat} (hF : F ≤ b0.toNat) (hR : R ≤ F)
+    (hnof : b0.toNat + wad.toNat < 2 ^ 256) :
+    (b0 - F.toB256 + wad + R.toB256).toNat = b0.toNat - F + wad.toNat + R := by
+  have hb0 := B256.toNat_lt b0
+  have hFt : F.toB256.toNat = F := B256.toNat_toB256_of_lt (by omega)
+  have hRt : R.toB256.toNat = R := B256.toNat_toB256_of_lt (by omega)
+  have h1 : (b0 - F.toB256).toNat = b0.toNat - F := by
+    rw [B256.toNat_sub_eq_of_le _ _ (by rw [B256.le_iff_toNat_le_toNat, hFt]; exact hF), hFt]
+  have h2 : (b0 - F.toB256 + wad).toNat = b0.toNat - F + wad.toNat := by
+    rw [B256.toNat_add_eq_of_nof _ _ (by unfold B256.Nof; omega), h1]
+  rw [B256.toNat_add_eq_of_nof _ _ (by unfold B256.Nof; omega), h2, hRt]
+
 end Blanc
