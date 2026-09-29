@@ -233,7 +233,7 @@ CLAIMS = [
                 ],
             ),
         ],
-        "census": {"README.md": 4, "scripts/GATES.md": 1, "docs/index.html": 4},
+        "census": {"README.md": 3, "scripts/GATES.md": 1, "docs/index.html": 4},
         "foreign": [
             "jaune: docs/index.html (3 quotations of the former audited-theorem "
             "count, spelled with a thousands separator, e.g. 1,396; not yet "
