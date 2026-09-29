@@ -216,24 +216,31 @@ def AppliedBodyTrace.systemRawFrames
     (trace : AppliedBodyTrace benv txs wds state bout) : List Exec.Deriv :=
   trace.beacon.rawFrames ++ trace.history.rawFrames ++ trace.requests.rawFrames
 
-/-- Every frame of a body is either entered by a system message or is a transaction frame that
-starts with `a` warm. -/
-theorem AppliedBodyTrace.rawFrames_system_or_warm
+/-- Every frame of a body is entered by a system message or by a transaction. -/
+theorem AppliedBodyTrace.rawFrames_system_or_tx
     {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
-    (hfork : CoveredFork benv.stat.fork) {a : Adr}
-    (ha : a ∈ benv.stat.rules.precompiles) :
+    (trace : AppliedBodyTrace benv txs wds state bout) :
     ∀ root ∈ trace.rawFrames,
-      root ∈ trace.systemRawFrames ∨ a ∈ root.devm.accessedAddresses := by
+      root ∈ trace.systemRawFrames ∨ root ∈ trace.transactions.rawFrames := by
   intro root member
   simp only [AppliedBodyTrace.rawFrames, AppliedBodyTrace.systemRawFrames,
     List.mem_append] at member ⊢
   rcases member with ((member | member) | member) | member
   · exact Or.inl (Or.inl (Or.inl member))
   · exact Or.inl (Or.inl (Or.inr member))
-  · exact Or.inr (trace.transactions.rawFrames_precompile_warm hfork ha root member)
+  · exact Or.inr member
   · exact Or.inl (Or.inr member)
+
+/-- The transaction frames of a body start with `a` warm, when `a` is a precompile. -/
+theorem AppliedBodyTrace.transactions_rawFrames_warm
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs wds state bout)
+    (hfork : CoveredFork benv.stat.fork) {a : Adr}
+    (ha : a ∈ benv.stat.rules.precompiles) :
+    ∀ root ∈ trace.transactions.rawFrames, a ∈ root.devm.accessedAddresses :=
+  trace.transactions.rawFrames_precompile_warm hfork ha
 
 def ConfiguredBlockTrace.systemRawFrames
     (trace : ConfiguredBlockTrace cfg pre post) : List Exec.Deriv :=
@@ -244,29 +251,47 @@ def ConfiguredHistoryTrace.systemRawFrames :
   | .refl _ _ _ => []
   | .step prior block => prior.systemRawFrames ++ block.systemRawFrames
 
-/-- Every frame of a configured history is either entered by a system message or is a
-transaction frame that starts with `a` warm, whenever `a` is a precompile of every covered
-fork. -/
-theorem ConfiguredHistoryTrace.rawFrames_system_or_warm
+/-- The frames of the transactions of a configured history. -/
+def ConfiguredHistoryTrace.txRawFrames :
+    ConfiguredHistoryTrace cfg checkpoint future → List Exec.Deriv
+  | .refl _ _ _ => []
+  | .step prior block => prior.txRawFrames ++ block.bodyTrace.transactions.rawFrames
+
+/-- Every frame of a configured history is entered by a system message or by a transaction. -/
+theorem ConfiguredHistoryTrace.rawFrames_system_or_tx
     {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future) {a : Adr}
-    (ha : ∀ f, CoveredFork f → a ∈ (Fork.ruleSet f).precompiles) :
-    ∀ root ∈ trace.rawFrames,
-      root ∈ trace.systemRawFrames ∨ a ∈ root.devm.accessedAddresses := by
+    (trace : ConfiguredHistoryTrace cfg checkpoint future) :
+    ∀ root ∈ trace.rawFrames, root ∈ trace.systemRawFrames ∨ root ∈ trace.txRawFrames := by
   induction trace with
   | refl => intro root member; simp [ConfiguredHistoryTrace.rawFrames] at member
   | step prior block ih =>
       intro root member
       simp only [ConfiguredHistoryTrace.rawFrames, ConfiguredHistoryTrace.systemRawFrames,
-        List.mem_append] at member ⊢
+        ConfiguredHistoryTrace.txRawFrames, List.mem_append] at member ⊢
       rcases member with member | member
       · rcases ih root member with h | h
         · exact Or.inl (Or.inl h)
-        · exact Or.inr h
-      · rcases block.bodyTrace.rawFrames_system_or_warm block.covered (ha _ block.covered)
-          root member with h | h
+        · exact Or.inr (Or.inl h)
+      · rcases block.bodyTrace.rawFrames_system_or_tx root member with h | h
         · exact Or.inl (Or.inr h)
-        · exact Or.inr h
+        · exact Or.inr (Or.inr h)
+
+/-- **Every transaction frame of a configured history starts with `a` warm**, whenever `a` is a
+precompile of every covered fork. -/
+theorem ConfiguredHistoryTrace.txRawFrames_warm
+    {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future) {a : Adr}
+    (ha : ∀ f, CoveredFork f → a ∈ (Fork.ruleSet f).precompiles) :
+    ∀ root ∈ trace.txRawFrames, a ∈ root.devm.accessedAddresses := by
+  induction trace with
+  | refl => intro root member; simp [ConfiguredHistoryTrace.txRawFrames] at member
+  | step prior block ih =>
+      intro root member
+      simp only [ConfiguredHistoryTrace.txRawFrames, List.mem_append] at member
+      rcases member with member | member
+      · exact ih root member
+      · exact block.bodyTrace.transactions_rawFrames_warm block.covered
+          (ha _ block.covered) root member
 
 end ExecutionTrace
 

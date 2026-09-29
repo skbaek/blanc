@@ -51,6 +51,7 @@ import Blanc.ExecutionTraceAdmission
 import Blanc.ExecutionWarmth
 import Blanc.ExecutionTraceWarmth
 import Blanc.ExecutionCodeAt
+import Blanc.ExecutionTraceCodeAt
 import Blanc.ExecutionTraceSettledFrames
 import Blanc.ExecutionTraceEntry
 import Blanc.ExecutionAccountingObserved
