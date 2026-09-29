@@ -128,7 +128,6 @@ theorem withdrawalRequestCode_spawnFreeReach : SpawnFreeReach withdrawalRequestC
 
 theorem consolidationRequestCode_spawnFreeReach : SpawnFreeReach consolidationRequestCode :=
   spawnFreeReach_of_check (by decide +kernel)
-  fun pc x _ => h pc x
 
 /-- **`SpawnFree` is false of the canonical EIP-7002 code**: the `0xF4` at offset `67` decodes as
 `DELEGATECALL` when read at that offset, though it is `PUSH` data.  This is why the system
