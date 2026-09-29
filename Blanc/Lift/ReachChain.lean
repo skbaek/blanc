@@ -240,4 +240,32 @@ theorem getStor_post_of_silent {code : ByteArray} {c : Cert} (hc : Cert.check co
   funext a
   exact getStor_eq_of_state_eq hstate a
 
+/-! ## A childless external step -/
+
+/-- **An external step of a frame with no raw descendants keeps storage.**  The child of a lifted external
+step lies among the frame's raw roots, which are the frame itself alone, and a child is strictly shallower
+than its parent; so the step has no child, and a childless step keeps persistent storage (it is not an
+`SSTORE`). -/
+theorem StepIn.exec_getStor_eq_of_noDescendants {R : Exec.Deriv}
+    (hdesc : Exec.rawFrameDescendants R.exc = []) {d d' : Devm} {x : Xinst}
+    (h : StepIn R R.sevm d (.exec x) d') : Devm.getStor d' = Devm.getStor d := by
+  obtain ⟨xl, hf, pc, hr⟩ := h
+  cases xl with
+  | none => exact Ninst.none_getStor_eq_of_ne_sstore hr (by intro h; cases h)
+  | some p =>
+    obtain ⟨evm, exn⟩ := p
+    obtain ⟨e, he⟩ := hf
+    exfalso
+    have hxr : Xinst.Run R.sevm d x (.some ⟨evm, exn⟩) (.ok d') := by
+      rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at hr
+      exact hr
+    have hlt := Xinst.depth_lt hxr
+    have hmem := he _ (Exec.mem_rawFrameRoots_self e)
+    have hroots : Exec.rawFrameRoots R.exc = [R] := by
+      rw [Exec.rawFrameRoots, hdesc]
+    rw [hroots, List.mem_singleton] at hmem
+    have hs : evm.sta = R.sevm := congrArg Exec.Deriv.sevm hmem
+    rw [hs] at hlt
+    exact Nat.lt_irrefl _ hlt
+
 end Blanc.Lift
