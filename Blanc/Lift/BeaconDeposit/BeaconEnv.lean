@@ -24,10 +24,12 @@ This module derives (2) and (3) from premises about the trace as a whole.  The `
   starts with `2` warm, including the frames of subtrees that later revert.  A system message
   starts with an empty set, so its frames are not covered: the headlines therefore exclude them.
   `systemSpawnFree` says the code every system frame runs contains no CALL-family or
-  CREATE-family instruction (true of the canonical EIP-4788, EIP-2935, EIP-7002 and EIP-7251
-  code, a static property of bytes), so such a frame enters no child and its only frame targets
-  the system address; `notSystem` says the deposit contract is not one of the four system
+  CREATE-family instruction at any offset, so such a frame enters no child and its only frame
+  targets the system address; `notSystem` says the deposit contract is not one of the four system
   addresses.  Together they give `system`, the exclusion `beaconEntry_of_env` consumes.
+  **`systemSpawnFree` is false of the canonical EIP-7002 code** (`0xF4` bytes inside `PUSH`
+  data, `withdrawalRequestCode_not_spawnFree`), so the `_env` and `_envDerived` headlines are
+  vacuous on mainnet; the `_sys` headlines at the end of this file are the satisfiable form.
 * **No delegation** (`Blanc/ExecutionTraceCodeAt.lean`).  A transaction can install a code
   designator at an account only through an EIP-7702 authorization that recovers to it or
   through a frame that CREATEs it.  `checkpointEmpty` (the precompile account is empty at the
