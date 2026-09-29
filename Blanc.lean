@@ -492,6 +492,8 @@ import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness.Top
 -- The vulnerable Vyper comparator 0x6326, its token and attacker, and the witnessed
 -- reentry vminus_witness (deployed-lido-vyper-v1, V-).
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Attacker.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Attacker2.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Attacker2.Check
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Cert
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Check
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.CheckPart0
