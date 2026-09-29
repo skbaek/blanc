@@ -472,6 +472,7 @@ import Blanc.Lift.LidoCircuitBreakerDeployed.SetPauserRemoval
 import Blanc.Lift.LidoCircuitBreakerDeployed.Silent
 import Blanc.Lift.LidoCircuitBreakerDeployed.Wrappers
 import Blanc.Lift.LidoCircuitBreakerDeployed.Writers
+import Blanc.Lift.LidoCircuitBreakerDeployed.Creation.Deploy
 
 -- The deployed Vyper 0.3.7 nonreentrant comparator 0x847e and its proxy (deployed-lido-vyper-v1).
 import Blanc.Lift.VyperNonreentrantDeployed.Code

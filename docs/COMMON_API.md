@@ -2993,7 +2993,10 @@ contract-neutral.
   (`liftCreate_ok`, with the creation frame `createSeed`), and the constructor walk steps
   the shared kits lack (`rx_codecopy`, `rxc_sstore`, `rxc_callvalue`, `rx_return_any` and
   `rxc_return_any`, with the halting state `returnPost` named over a variable state) in
-  [`Blanc/Lift/Deploy.lean`](../Blanc/Lift/Deploy.lean).
+  [`Blanc/Lift/Deploy.lean`](../Blanc/Lift/Deploy.lean); and the further steps solc 0.8
+  constructors need (`rx_push0`, `rx_slt`, `rx_codesize`, `rx_log2`, and `read_covered_len`, a
+  window of any length inside an aligned image) in
+  [`Blanc/Lift/CreationOps.lean`](../Blanc/Lift/CreationOps.lean).
 - Jump destinations: Jaune's own `jumpable_eq_jumpdestOk` (`Jaune/Machine.lean`)
   replaces its exponential `jumpable` by the linear `jumpdestOk` scan, for every
   byte string; Blanc keeps no copy.

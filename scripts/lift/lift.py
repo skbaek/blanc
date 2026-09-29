@@ -173,7 +173,7 @@ LEAN_REG: Dict[int, str] = {
     0x1c: ".reg .shr", 0x20: ".reg .keccak256", 0x30: ".reg .address",
     0x31: ".reg .balance", 0x32: ".reg .origin", 0x33: ".reg .caller",
     0x34: ".reg .callvalue", 0x35: ".reg .calldataload", 0x36: ".reg .calldatasize",
-    0x37: ".reg .calldatacopy", 0x39: ".reg .codecopy", 0x3b: ".reg .extcodesize",
+    0x37: ".reg .calldatacopy", 0x38: ".reg .codesize", 0x39: ".reg .codecopy", 0x3b: ".reg .extcodesize",
     0x3d: ".reg .returndatasize", 0x3e: ".reg .returndatacopy", 0x42: ".reg .timestamp",
     0x46: ".reg .chainid", 0x47: ".reg .selfbalance", 0x50: ".reg .pop",
     0x51: ".reg .mload", 0x52: ".reg .mstore", 0x53: ".reg .mstore8",

@@ -168,7 +168,7 @@ SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.ExactWalkOps",
            "Lift.InvWalkWorld", "Lift.InvWalkSha"]
 # Creation code (deploy-init-v1): the size-optimised packed-hash site and the CREATE bridge
 # for lifted creation code; contract-neutral.
-SHARED += ["Lift.PackedShaSize", "Lift.Deploy"]
+SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps"]
 # Pure-model ledger updates (vyper-3crv-bytecode-v1): contract-neutral.
 SHARED += ["LedgerUpdate"]
 # Walk steps for arbitrary static calls, CALLER/KECCAK256/LOG3/SSTORE, hashed slots and the
@@ -430,6 +430,10 @@ CONTRACTS = {
                              "Lift.LidoCircuitBreakerDeployed.Cert",
                              "Lift.LidoCircuitBreakerDeployed.Check",
                              "Lift.LidoCircuitBreakerDeployed.Contract",
+                             "Lift.LidoCircuitBreakerDeployed.Creation.Cert",
+                             "Lift.LidoCircuitBreakerDeployed.Creation.Check",
+                             "Lift.LidoCircuitBreakerDeployed.Creation.Deploy",
+                             "Lift.LidoCircuitBreakerDeployed.Creation.Walk",
                              "Lift.LidoCircuitBreakerDeployed.Corollaries",
                              "Lift.LidoCircuitBreakerDeployed.Foreign",
                              "Lift.LidoCircuitBreakerDeployed.Frame",
