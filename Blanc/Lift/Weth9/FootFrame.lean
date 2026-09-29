@@ -193,6 +193,39 @@ theorem foot_approve {U : Key → Prop} (hinj : KeyInj U) {sevm : Sevm} {d : Dev
     · rw [hs]; exact (footSpec_inv.mp (hpre.inv.left rfl)).1.set hallow _
     · rw [hs, trackedSum_set_allow hinj hallow]; omega
 
+/-! ## The hash premise is necessary -/
+
+/-- **Control.**  If a tracked balance row's slot is the slot an `SSTORE` writes, storing a value
+above the contract's ether breaks the backing of the tracked ledger, whatever the rest of storage:
+the injectivity of the tracked slots (the trace-local hash premise) is not a proof convenience. -/
+theorem trackedSum_collision_breaks_backing {K : Key → Prop} {s : Stor} {a : Adr}
+    (ha : K (.bal a)) {k value b : B256} (hk : balSlot a = k) (hlt : b.toNat < value.toNat) :
+    ¬ trackedSum K (s.set k value) ≤ b.toNat := by
+  intro h
+  have h1 : tracked K (s.set k value) a = value := by
+    rw [tracked_self ha, hk, Stor.get_set_self]
+  have h2 : (tracked K (s.set k value) a).toNat ≤ trackedSum K (s.set k value) := le_sum
+  rw [h1] at h2
+  omega
+
+/-- **Machine-level control.**  A run of entry 11 whose allowance key collides with a tracked
+balance slot and whose `value` exceeds the contract's ether ends outside the footprint invariant,
+from any pre-state. -/
+theorem approve_collision_breaks_footprint {K : Key → Prop} {sevm : Sevm} {d : Devm}
+    {o : Outcome} {g : SFunc} {value spender : B256} {xs : Stack} {a : Adr}
+    (hg : prog[11]? = some g) (hstk : value :: spender :: xs <<+ d.stack)
+    (ha : K (.bal a))
+    (hcol : allowKey sevm.caller.toB256 (spender &&& ~~~ addressMask) = balSlot a)
+    (hlt : (Devm.getBal d sevm.currentTarget).toNat < value.toNat)
+    (run : SFunc.Run prog sevm d g o) :
+    ¬ FootInv K (Devm.getStor (Outcome.devm o) sevm.currentTarget)
+      (Devm.getBal (Outcome.devm o) sevm.currentTarget) := by
+  obtain ⟨hs, hb⟩ := approve_effect hg hstk run
+  intro h
+  have hback := h.backed
+  rw [hs, hb] at hback
+  exact trackedSum_collision_breaks_backing ha hcol.symm hlt hback
+
 /-! ## The frame -/
 
 section Frame
