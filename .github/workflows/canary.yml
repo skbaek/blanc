@@ -74,4 +74,4 @@ jobs:
         run: |
           lake update jaune          # re-resolve the manifest to the re-pinned HEAD
           lake exe cache get || true  # mathlib olean cache (best effort)
-          scripts/check.sh            # lake build + the AxiomCheck.lean exact-set axiom audit
+          scripts/check.sh            # lake build + the union axiom walk (AxiomCheck.lean) + the leaf search

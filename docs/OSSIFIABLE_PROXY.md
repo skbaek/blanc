@@ -75,8 +75,8 @@ The main proof owners are:
   storage, both-slot mutation, exact runtime return, direct-CREATE settlement,
   and whole-CREATE rollback.
 
-Public headline theorems are individually pinned by the repository claim and
-axiom audits. Their admitted trust surface is limited to `propext`,
+Public headline theorems are individually pinned by the repository claim audit and
+covered by the union axiom walk. Their admitted trust surface is limited to `propext`,
 `Classical.choice`, and `Quot.sound`; fixed Keccak decisions use the existing
 separate kernel route.
 

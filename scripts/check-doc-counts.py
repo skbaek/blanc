@@ -55,7 +55,7 @@ THREE PROPERTIES MATTER AS MUCH AS THE EQUALITY CHECK
 
   * It owns only this repository's tree, following `scripts/GATES.md`'s rule
     that a gate lives in the repository whose tree it checks. Jaune's site
-    quotes the audited-theorem count too and no gate in either repository can
+    quotes the published count too (as the audited-theorem count until 2026-09-29) and no gate in either repository can
     see across the boundary, so a successful run prints the cross-repository
     reminder rather than pretending the surface does not exist.
 
@@ -88,6 +88,14 @@ import sys
 def count_matches(root: pathlib.Path, rel: str, pattern: re.Pattern) -> int:
     """Number of lines in `rel` matching `pattern`."""
     return len(pattern.findall((root / rel).read_text(encoding="utf-8")))
+
+
+def read_json_int(root: pathlib.Path, rel: str, key: str) -> int:
+    """The integer `key` of the generated JSON artifact `rel`."""
+    value = json.loads((root / rel).read_text(encoding="utf-8"))[key]
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise TypeError(f"{rel}:{key} is not an integer")
+    return value
 
 
 def count_json_list(root: pathlib.Path, rel: str, path: tuple) -> int:
@@ -157,7 +165,7 @@ def count_deployment_public_theorems(root: pathlib.Path) -> int:
 #                      consumers independently check every captured value. Missing
 #                      or duplicated quotations still fail the exact census.
 #
-# Anti-vacuity is per PATTERN, not per file: README.md's three audited-theorem
+# Anti-vacuity is per PATTERN, not per file: README.md's three leaf-count
 # patterns yield four captured groups, so a file-level floor of three still
 # passes after a surface is reworded out of sight. Reword a surface freely, then
 # update its pattern here; deleting a pattern means a public surface stopped
@@ -183,56 +191,53 @@ TRUST_CLOSURE_MODULE_CELL = re.compile(
 
 CLAIMS = [
     {
-        "name": "audited-theorem count",
+        "name": "leaf count",
         "producer": (
-            "scripts/AxiomCheck.lean",
-            # One '#full_axioms' row per audited theorem is the definition of
-            # the count, and scripts/check.sh's N/N summary is derived from the
-            # same file. (The rows were '#print axioms' lines until 2026-09-24,
-            # when the audit stopped taking Lean's report as its verdict; the
-            # population and the count did not change.)
-            lambda root: count_matches(
-                root, "scripts/AxiomCheck.lean", re.compile(r"^#full_axioms\b", re.M)
-            ),
+            "scripts/leaf-count.json (leaves)",
+            # The number of leaf theorems the leaf search finds (independently
+            # valuable results, each covered by check.sh's one union axiom walk).
+            # The file is written by `python3 scripts/leaf_audit.py generate` and
+            # never by hand; scripts/check.sh fails unless the freshly computed
+            # count equals it, so this static reader and the search agree by
+            # construction. (The published count was the number of
+            # `#full_axioms` rows of scripts/AxiomCheck.lean until 2026-09-29,
+            # when the per-theorem audit rows were replaced by that one walk.)
+            lambda root: read_json_int(root, "scripts/leaf-count.json", "leaves"),
         ),
         "consumers": [
             (
                 "README.md",
                 [
-                    re.compile(r"(\d{2,5})\s+named results"),
-                    re.compile(r"`(\d{2,5})/(\d{2,5})`\s+summary"),
-                    re.compile(r"\*\*(\d{2,5})\*\*\s+top theorems"),
+                    re.compile(r"the\s+(\d{2,5})\s+leaf\s+results"),
+                    re.compile(r"`(\d{2,5}) leaf results`\s+summary"),
+                    re.compile(r"\*\*(\d{2,5})\*\*\s+leaf\s+results"),
                 ],
             ),
             (
                 "scripts/GATES.md",
-                [
-                    re.compile(r"\|\s*(\d{2,5})\s+theorems\s*\|"),
-                    re.compile(r"repository audit\s+(\d{2,5})\s+pins"),
-                ],
+                [re.compile(r"\|\s*(\d{2,5})\s+leaves;")],
             ),
             (
                 "docs/index.html",
                 [
-                    re.compile(r"axiom audit:\s*(\d{2,5})/(\d{2,5})\s+audited theorems"),
-                    re.compile(r"(\d{2,5})-theorem(?:\s+exact-axiom)?\s+audit"),
+                    re.compile(r"axiom audit: one union walk over Blanc reaches only the standard axioms; (\d{2,5}) leaf results"),
+                    re.compile(r'<span class="pill"><span class="d"></span>(\d{2,5}) leaf results'),
                     # The fact tile. The trailing label is part of the pattern on
                     # purpose: the sibling tile four lines down has identical markup
                     # carrying 147/147 differential rows, and a pattern keyed on markup
                     # alone matches it and reports a spurious disagreement.
                     re.compile(
-                        r'<span class="n">(\d{2,5})<span class="dimmer"[^>]*>/(\d{2,5})</span>'
-                        r"</span>\s*\n?\s*<span class=\"l\">audited theorems"
+                        r'<span class="n">(\d{2,5})</span>\s*\n?\s*<span class=\"l\">leaf results'
                     ),
-                    re.compile(r"audits all\s+(\d{2,5})\s+theorems"),
+                    re.compile(r"finds the\s+(\d{2,5})\s+leaf results"),
                 ],
             ),
         ],
-        "census": {"README.md": 4, "scripts/GATES.md": 2, "docs/index.html": 6},
+        "census": {"README.md": 4, "scripts/GATES.md": 1, "docs/index.html": 4},
         "foreign": [
-            "jaune: docs/index.html (3 quotations, spelled with a thousands "
-            "separator as 1,331; read and confirmed in agreement at jaune 9d49257 "
-            "on 2026-09-25)"
+            "jaune: docs/index.html (3 quotations of the former audited-theorem "
+            "count, spelled with a thousands separator, e.g. 1,396; not yet "
+            "moved to the leaf count, which this gate cannot see)"
         ],
     },
     {
@@ -327,7 +332,7 @@ CLAIMS = [
                 [
                     re.compile(r"OK — WETH10 differential: (\d{2,5})/(\d{2,5}) rows agree"),
                     # The fact tile, keyed on its own label for the same reason
-                    # the audited-theorem tile is.
+                    # the leaf-count tile is.
                     re.compile(
                         r'<span class="n">(\d{2,5})<span class="dimmer"[^>]*>/(\d{2,5})</span>'
                         r"</span>\s*\n?\s*<span class=\"l\">differential rows agreeing with the "
@@ -517,7 +522,7 @@ CLAIMS = [
                 "scripts/GATES.md",
                 [
                     re.compile(r"the exact (\d{2,5})-name public theorem inventory"),
-                    re.compile(r"semantic fragments; (\d{2,5}) exact axiom probes"),
+                    re.compile(r"semantic fragments; (\d{2,5}) public theorems under the union walk"),
                     re.compile(r"derives all (\d{2,5}) public theorem names"),
                 ],
             ),
@@ -525,7 +530,7 @@ CLAIMS = [
         "census": {"scripts/GATES.md": 3},
         "census_patterns": {"scripts/GATES.md": re.compile(
             r"the exact \d{2,5}-name public theorem inventory|"
-            r"semantic fragments; \d{2,5} exact axiom probes|"
+            r"semantic fragments; \d{2,5} public theorems under the union walk|"
             r"derives all \d{2,5} public theorem names"
         )},
         "foreign": [],
@@ -627,7 +632,7 @@ CLAIMS = [
 # Only gates whose verdict line is fully determined by a format string and a
 # claim this gate already produces can be pinned this way. The check.sh
 # axiom-audit line qualifies: its OK wording prints only when both halves equal
-# the audited-theorem count. The other transcripts in the same figures
+# the leaf count. The other transcripts in the same figures
 # interpolate values that only a live run produces; they are named in
 # UNCHECKED_PUBLISHED_NUMBERS rather than half-checked here.
 
@@ -656,13 +661,11 @@ TRANSCRIPTS = [
     {
         "name": "scripts/check.sh axiom-audit line",
         "script": "scripts/check.sh",
-        # check.sh prints its OK line only after NEXACT == NTOTAL, so both
-        # halves are the audited-theorem count this gate already produces.
+        # check.sh prints its OK line only after the leaf search has reported
+        # exactly one positive count that equals scripts/leaf-count.json, so the
+        # figure is the leaf count this gate already produces.
         "format": re.compile(r'^echo "(OK — axiom audit: .*)"\s*$', re.M),
-        "substitutions": {
-            "$NEXACT": "audited-theorem count",
-            "$NTOTAL": "audited-theorem count",
-        },
+        "substitutions": {"$NLEAVES": "leaf count"},
         "surfaces": [
             (
                 "docs/index.html",
@@ -779,19 +782,20 @@ UNCHECKED_PUBLISHED_NUMBERS = [
     },
     {
         "number": "the Lido CircuitBreaker assurance scale cell's figures other than its "
-        "row count: 9 gate-owned rows, 7 rows naming two gates, 158 cited declarations "
-        "and 158 axiom expectations matched, 82 gate paths, 14 pinned non-claim phrases",
+        "row count: 9 gate-owned rows, 158 cited declarations and 158 axiom "
+        "expectations matched, 10 stricter claims, 82 gate paths, 14 pinned non-claim "
+        "phrases, 5 mutation controls",
         "surfaces": "scripts/GATES.md (the check-lido-circuit-breaker-assurance.sh row)",
         "producer": "scripts/check-lido-circuit-breaker-assurance.sh's verdict line -- "
-        "static by default. 9, 7 and 14 are pinned in that checker as "
-        "EXPECTED_GATE_OWNED_ROWS, EXPECTED_MULTI_GATE_ROWS and NONCLAIM_PHRASES; 158 "
-        "and 82 are counted inline in its main() while resolving the register "
-        "against five axiom authorities",
-        "blocker": "9, 7 and 14 are not distinctive on scripts/GATES.md: each occurs "
+        "static. 9 and 14 are pinned in that checker as "
+        "EXPECTED_GATE_OWNED_ROWS and NONCLAIM_PHRASES; 158 "
+        "and 82 are counted inline in evaluate() while resolving the register "
+        "against the audit source",
+        "blocker": "9, 10, 5 and 14 are not distinctive on scripts/GATES.md: each occurs "
         "more than ten times there in unrelated rows, so no census is computable. 82 "
         "also counts the CircuitBreaker resource row's CALL/STATICCALL traces. 158 is "
         "distinctive, but no callable in the assurance checker returns it or 82: "
-        "both are tallied inside main(), and re-deriving them here would be a "
+        "both are tallied inside evaluate(), and re-deriving them here would be a "
         "second, unowned producer. The row count, the one figure in the cell with "
         "an independent static producer and an enumerable census, is registered "
         "above. The rest become checkable when the assurance checker exposes its "

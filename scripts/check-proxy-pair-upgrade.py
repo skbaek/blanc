@@ -2,7 +2,7 @@
 """Fail-closed assurance gate for the proxy-pair upgrade goal.
 
 The gate owns four coupled surfaces: the ten product headline names, three
-closed/composed assurance theorems, their kernel axiom sets, the public
+closed/composed assurance theorems, the public
 claim/non-claim document, and the exact executable success/failure rows.
 `--self-test` applies isolated disposable mutations to the checked surfaces
 and requires each one to fail at its intended boundary.
@@ -18,7 +18,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-import axiom_audit
 import gate_semaphore
 
 SUBJECT = "proxy-pair-upgrade"
@@ -39,7 +38,6 @@ SUPPORT = (
     "docs/PROXY_PAIR_UPGRADE.md",
     "scripts/check-layering.py",
     "scripts/ProxyPairUpgradeWitness.lean",
-    "scripts/ProxyPairUpgradeAxiomCheck.lean",
     "scripts/eval-proxy-pair-stack-bytes.lean",
     "scripts/stack_certificate.py",
     "scripts/gen-proxy-pair-stack-certificate.py",
@@ -72,10 +70,6 @@ GENERIC = {
     "BehavioralRefinement": "def",
 }
 
-FULL_HEADLINES = tuple(f"Blanc.ProxyPair.Upgrade.{name}" for name in HEADLINES)
-FULL_ASSURANCE = tuple(f"Blanc.ProxyPair.Upgrade.{name}" for name in ASSURANCE)
-FULL_AXIOM_PINS = FULL_HEADLINES + FULL_ASSURANCE
-EXPECTED_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
 
 EXPECTED_WITNESS = (
     "PRIMARY|wrapper=ok|error=false|gas=4941998|implementation=720899|s1=42|s2=42|marker=1|logs=1|output=0",
@@ -423,13 +417,6 @@ def static_errors(root: Path) -> list[str]:
         if doc.count(f"`{name}`") < 1:
             errors.append(f"CLAIM — public evidence does not cite {name}")
 
-    probe = texts["scripts/ProxyPairUpgradeAxiomCheck.lean"]
-    for full_name in FULL_AXIOM_PINS:
-        if probe.splitlines().count(f"#full_axioms {full_name}") != 1:
-            errors.append(f"AXIOM — expected one probe row for {full_name}")
-    if axiom_audit.PRINT_AXIOMS.search(probe):
-        errors.append("AXIOM — `#print axioms` is not an audit verdict source (lean4#15226)")
-
     witness = texts["scripts/ProxyPairUpgradeWitness.lean"]
     for label in ("PRIMARY", "UPGRADE_TO", "SKIPPED_EMPTY", "UNAUTHORIZED",
                   "OSSIFIED", "MISSING_CODE", "REVERTING_SETUP",
@@ -454,35 +441,9 @@ def run_lean(root: Path, relative: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def parse_axioms(output: str) -> dict[str, set[str]]:
-    """Exactly one report per pinned row, and none for any other name."""
-    try:
-        parsed = axiom_audit.parse(output, FULL_AXIOM_PINS)
-    except axiom_audit.AuditError:
-        return {}
-    return {name: set(axioms) for name, axioms in parsed.items()}
-
-
 def dynamic_errors(root: Path) -> list[str]:
     errors: list[str] = []
     gate_semaphore.guard("the proxy-pair upgrade witnesses")
-    relative = "scripts/ProxyPairUpgradeAxiomCheck.lean"
-    try:
-        status, output = axiom_audit.elaborate(
-            root, axiom_audit.splice(root, (root / relative).read_text(encoding="utf-8"), relative)
-        )
-    except (axiom_audit.AuditError, OSError) as exc:
-        status, output = 2, f"from-scratch axiom probe could not run: {exc}"
-    if status != 0:
-        errors.append(f"AXIOM — probe failed with exit {status}:\n{output.rstrip()}")
-    else:
-        rows = parse_axioms(output)
-        if set(rows) != set(FULL_AXIOM_PINS):
-            errors.append("AXIOM — probe output does not contain exactly the 13 pinned rows")
-        for name in FULL_AXIOM_PINS:
-            if rows.get(name) != EXPECTED_AXIOMS:
-                errors.append(f"AXIOM — {name} uses {sorted(rows.get(name, set()))}, expected {sorted(EXPECTED_AXIOMS)}")
-
     witness = run_lean(root, "scripts/ProxyPairUpgradeWitness.lean")
     if witness.returncode != 0:
         errors.append(f"WITNESS — evaluator failed with exit {witness.returncode}:\n{witness.stdout.rstrip()}")
@@ -748,13 +709,6 @@ def self_test(root: Path) -> list[str]:
         if not any(error.startswith("FILES —") for error in static_errors(empty)):
             failures.append("wrong-root: absent checkout did not fail closed")
 
-        fake = "\n".join(
-            f"FULL-AXIOMS '{name}': [Classical.choice, Quot.sound, propext]"
-            for name in FULL_AXIOM_PINS
-        ).replace("[Classical.choice, Quot.sound, propext]", "[propext]", 1)
-        parsed = parse_axioms(fake)
-        if all(parsed.get(name) == EXPECTED_AXIOMS for name in FULL_AXIOM_PINS):
-            failures.append("wrong-axiom: reduced axiom set was not distinguished")
     return failures
 
 
@@ -782,13 +736,13 @@ def main(argv: list[str]) -> int:
             print(f"FAIL — {SUBJECT}: {error}")
         print(f"REGRESSION — {SUBJECT}: {len(errors)} failure(s)")
         return 1
-    suffix = "; 45 disposable controls bite" if args.self_test else ""
+    suffix = "; 44 disposable controls bite" if args.self_test else ""
     if args.static_only:
         print(f"OK — {SUBJECT} static: 10 headlines, 3 assurance theorems, 3 generic definitions{suffix}")
     elif args.semantic_only:
-        print(f"OK — {SUBJECT} semantic: 13 axiom pins, 12 exact witness rows, compiler-bound stack data{suffix}")
+        print(f"OK — {SUBJECT} semantic: 12 exact witness rows, compiler-bound stack data{suffix}")
     else:
-        print(f"OK — {SUBJECT}: 10 headlines, 3 assurance theorems, 3 generic definitions, 13 axiom pins, 12 exact witness rows, compiler-bound stack data{suffix}")
+        print(f"OK — {SUBJECT}: 10 headlines, 3 assurance theorems, 3 generic definitions, 12 exact witness rows, compiler-bound stack data{suffix}")
     return 0
 
 

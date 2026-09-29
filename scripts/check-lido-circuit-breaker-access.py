@@ -2,7 +2,9 @@
 """Fail-closed local assurance for access/temporal-authority S5 controls.
 
 It owns the gate fixture, exact public-role headers, trust/deletion/mutation
-controls, and exact axiom expectations for the landed S5 theorem family: the
+controls for the landed S5 theorem family (its theorems' axioms are covered by the repository's
+one union axiom walk, `scripts/check.sh`; the three inventories that state a smaller set are
+`#expect_axioms` rows of `scripts/AxiomCheck.lean`): the
 AT4 structural twenty-site classifier, the AT2 temporal views, the AT3
 interval/heartbeat transitions, AT5 raw all-frame write authority, and the AT6
 owner-closure/retained-last-writer settlement bridge.
@@ -16,7 +18,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-import axiom_audit
 import gate_semaphore
 from lean_header import HeaderError, header_before_definition, parser_controls
 
@@ -44,7 +45,7 @@ OWNERS = {
     # of these is now in `Blanc.lean`'s import closure and so is reached by
     # `check-trust-surface.sh` as well; they were not when this block was
     # written, and carrying them here is still what puts their exact headers
-    # under a pin and an axiom probe.
+    # under a pin.
     "pauseSuffix": ROOT / "Blanc/LidoCircuitBreakerPauseSuffix.lean",
     "sourceAttainment": ROOT / "Blanc/SourceAttainment.lean",
     "attainment": ROOT / "Blanc/LidoCircuitBreakerAttainment.lean",
@@ -61,8 +62,8 @@ OWNERS = {
     # by exactly one downstream module whose own public statement is pinned
     # here, and `pauseWorld` is a concrete witness world, not a claim.  They are
     # therefore registered pin-free, on the same footing as `registrationWorld`
-    # and `sourceAttainment`: the trust scan, the compiled-owner guard and the
-    # axiom probe's import list all reach them.
+    # and `sourceAttainment`: the trust scan and the compiled-owner guard
+    # both reach them.
     "pauseWalk": ROOT / "Blanc/LidoCircuitBreakerPauseWalk.lean",
     "pauseWorld": ROOT / "Blanc/LidoCircuitBreakerPauseWorld.lean",
     "pauseSuffixWalk": ROOT / "Blanc/LidoCircuitBreakerPauseSuffixWalk.lean",
@@ -99,7 +100,7 @@ OWNERS = {
 }
 FIXTURE = ROOT / "scripts/LidoCircuitBreakerAccessControls.lean"
 
-# Lean module names, used by the compiled-owner guard and the axiom probe.
+# Lean module names, used by the compiled-owner guard.
 MODULES = {
     "sites": "Blanc.LidoCircuitBreakerSites",
     "access": "Blanc.LidoCircuitBreakerAccess",
@@ -1077,34 +1078,6 @@ ROLES = {
     },
 }
 
-# Per-pin axiom expectations, on the contract `scripts/check.sh` already uses
-# for its audited rows: an EMPTY expectation means the theorem must depend
-# on NO axioms at all, passing on an empty from-scratch `#full_axioms` report
-# and failing on any axiom whatsoever.
-#
-# A flat set cannot express that, and this gate probes every pin rather than a
-# hand-picked few, so the flat form was not merely imprecise here - it could not
-# pass. Three of the 52 pins are decision procedures depending on nothing, and
-# Lean's report for them does not match the "depends on axioms: [...]" shape at
-# all, so the gate failed with "unrecognised #print axioms output" rather than
-# with an axiom comparison. That was invisible because the missing-fixture check
-# aborts this gate long before the axiom probe runs.
-#
-# Every expectation is MEASURED, not inferred from the proof. Do not guess from
-# the tactic: `runtimeSourceEffectPcs_official` is `by decide +kernel` and still
-# reports all three, because the definitions it references carry them.
-STANDARD_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
-
-# Pins whose expectation is not STANDARD_AXIOMS. A pin absent from this table
-# must report exactly STANDARD_AXIOMS, so a new pin depending on nothing fails
-# until it is declared here, and a listed pin that acquires an axiom fails at
-# once.
-AXIOM_EXCEPTIONS: dict = {
-    "RuntimePersistentWrite.all_length": set(),
-    "RuntimePersistentWrite.inventory_exact": set(),
-    "constructor_inventory_cardinalities": set(),
-}
-
 def fail(message: str) -> None:
     raise SystemExit(f"REGRESSION — S5 access assurance: {message}")
 
@@ -1133,8 +1106,8 @@ def no_trust_shortcut(path: Path) -> None:
 
 
 def pin_role_headers(key: str, source: str) -> None:
-    # An owner may be carried for its trust scan, compiled-owner guard and axiom
-    # probe without pinning any header -- contract-neutral route machinery whose
+    # An owner may be carried for its trust scan and compiled-owner guard
+    # without pinning any header -- contract-neutral route machinery whose
     # consumers pin what matters, and concrete worlds, which are not claims.
     for name, expected in ROLES.get(key, {}).items():
         actual = hashlib.sha256(header_before_definition(source, name).encode()).hexdigest()
@@ -1576,34 +1549,6 @@ def compile_fixture() -> None:
     if run.returncode:
         fail("fixture failed to compile:\n" + run.stdout)
 
-def qualified_role_name(key: str, name: str) -> str:
-    """Return the declaration's actual namespace for the owner being probed."""
-    namespace = "Blanc" if key == "compiledWalk" else "Blanc.LidoCircuitBreaker"
-    return namespace + "." + name
-
-def axiom_checks() -> None:
-    gate_semaphore.guard("the Lido access-control axiom probe")
-    names = [
-        qualified_role_name(key, name)
-        for key, role_names in ROLES.items() for name in role_names
-    ]
-    try:
-        reports = axiom_audit.audit(ROOT, list(MODULES.values()), names)
-    except axiom_audit.AuditError as error:
-        fail(f"from-scratch axiom probe failed: {error}")
-    for key, role_names in ROLES.items():
-        for name in role_names:
-            qualified = qualified_role_name(key, name)
-            expected = AXIOM_EXCEPTIONS.get(name, STANDARD_AXIOMS)
-            # `#full_axioms` reports an axiom-free theorem as `[]`, so an empty
-            # expectation means "no axioms at all" with no second output shape.
-            actual = set(reports[qualified])
-            if actual != expected:
-                fail(
-                    f"{qualified}: axioms {sorted(actual)}, "
-                    f"expected {sorted(expected) if expected else 'none'}"
-                )
-
 def main() -> None:
     try:
         parser_controls()
@@ -1626,11 +1571,10 @@ def main() -> None:
     deletion_control(fixture)
     # Lean subprocesses last.
     compile_fixture()
-    axiom_checks()
     pinned = sum(len(names) for names in ROLES.values())
     controls = sum(len(mutations) for mutations in MUTATIONS.values())
     print(f"OK — S5 access assurance: {len(REQUIRED)} Lean controls; "
-          f"{pinned} exact public headers and axiom pins across "
+          f"{pinned} exact public headers across "
           f"{len(OWNERS)} owners; "
           "AT4 twenty-site classifier uniqueness/inverse-coverage/exact-PC and "
           "three-domain separation; AT2 strict-liveness boundary, interval and "

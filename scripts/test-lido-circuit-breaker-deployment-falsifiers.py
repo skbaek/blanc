@@ -39,7 +39,6 @@ SOURCES = (
     "Blanc/LidoCircuitBreakerDeploymentBlock.lean",
     "Blanc/LidoCircuitBreakerDeploymentRoot.lean",
     "scripts/AxiomCheck.lean",
-    "scripts/check.sh",
 )
 
 ROOT_LEAN_CONTROL = r'''example
@@ -160,6 +159,7 @@ def temporary_tree() -> tuple[tempfile.TemporaryDirectory[str], Path, Path]:
     checker = root / "scripts" / CHECKER.name
     checker.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(CHECKER, checker)
+    shutil.copy2(ROOT / "scripts" / "axiom_audit.py", root / "scripts" / "axiom_audit.py")
     return temp, root, checker
 
 
@@ -294,7 +294,9 @@ def main(argv: list[str]) -> int:
         ("dr7-reach", "Blanc/LidoCircuitBreakerDeploymentRoot.lean", "chainUsing_preserves_registryStable", "assume_registryStable", "missing required semantic fragment 'chainUsing_preserves_registryStable'", "DeploymentRoot.reachable_registryStable", False),
         ("public-theorem-demotion", "Blanc/LidoCircuitBreakerDeploymentRoot.lean", "theorem DeploymentRoot.reachable_code", "private theorem DeploymentRoot.reachable_code", "public theorem inventory changed", "DeploymentRoot.reachable_code", False),
         ("public-theorem-addition", "Blanc/LidoCircuitBreakerDeploymentRoot.lean", "-- LidoCircuitBreakerDeploymentRoot.lean", "theorem injectedPublicAxiomSurface : True := by trivial\n-- LidoCircuitBreakerDeploymentRoot.lean", "public theorem inventory changed", None, False),
-        ("axiom-expectation", "scripts/check.sh", "Blanc.LidoCircuitBreaker.officialConstructorEventScratch_eq|", "Blanc.LidoCircuitBreaker.officialConstructorEventScratch_eq|propext", "deployment public axiom expectations changed", None, False),
+        ("axiom-claim-weakened", "scripts/AxiomCheck.lean", "#expect_axioms Blanc.LidoCircuitBreaker.officialConstructorEventScratch_eq []", "#expect_axioms Blanc.LidoCircuitBreaker.officialConstructorEventScratch_eq [propext]", "deployment stricter axiom claims changed", None, False),
+        ("axiom-claim-dropped", "scripts/AxiomCheck.lean", "#expect_axioms Blanc.jauneListCompare_eq_compareLex [propext]\n", "", "deployment stricter axiom claims changed", None, False),
+        ("axiom-claim-added", "scripts/AxiomCheck.lean", "#expect_axioms Blanc.jauneListCompare_eq_compareLex [propext]\n", "#expect_axioms Blanc.jauneListCompare_eq_compareLex [propext]\n#expect_axioms Blanc.LidoCircuitBreaker.officialConstructorDecodedMemory_read_argument [propext]\n", "deployment stricter axiom claims changed", None, False),
         ("no-weth-import", "Blanc/LidoCircuitBreakerDeploymentRoot.lean", "import Blanc.LidoCircuitBreakerDeploymentBlock", "import Blanc.Weth10DeploymentRoot", "imports or names WETH", "DeploymentRoot", False),
         ("no-sorry-trust", "Blanc/LidoCircuitBreakerDeploymentRoot.lean", "-- LidoCircuitBreakerDeploymentRoot.lean", "-- sorry LidoCircuitBreakerDeploymentRoot.lean", "forbidden trust token 'sorry'", None, False),
         ("no-opaque-trust", "Blanc/LidoCircuitBreakerDeploymentRoot.lean", "-- LidoCircuitBreakerDeploymentRoot.lean", "-- opaque LidoCircuitBreakerDeploymentRoot.lean", "forbidden trust token 'opaque'", None, False),

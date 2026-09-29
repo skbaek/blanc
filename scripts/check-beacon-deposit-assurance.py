@@ -2,10 +2,13 @@
 """Fail-closed checker for BEACON_DEPOSIT_ASSURANCE.md.
 
 The register is a claim index, not an independent theorem authority.  This
-checker therefore resolves every cited declaration through the repository's
-existing axiom audit (`scripts/AxiomCheck.lean` plus `scripts/check.sh`) and
-requires the register's axiom column to agree with that audit exactly.  It also
-pins the protected row population, owning gates, and load-bearing non-claims.
+checker therefore requires every cited declaration to still resolve, fully
+qualified, to a public declaration in Blanc's sources, and the register's axiom
+column to agree with the repository's axiom audit: the standard triple that the
+one union walk (`scripts/check.sh`, `scripts/AxiomCheck.lean`) bounds every Blanc
+constant by, or the explicit stricter claim `scripts/AxiomCheck.lean` states for
+that name.  It also pins the protected row population, owning gates, and
+load-bearing non-claims.
 
 Default operation is static and writes nothing.  `--self-test` additionally
 runs the required misspelled-declaration and wrong-axiom mutants in memory.
@@ -18,12 +21,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import re
 import sys
+from functools import lru_cache
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import axiom_audit  # noqa: E402
 
 
 SUBJECT = "beacon-deposit-assurance"
 REGISTER = "BEACON_DEPOSIT_ASSURANCE.md"
 AXIOM_CHECK = "scripts/AxiomCheck.lean"
-AXIOM_PINS = "scripts/check.sh"
 CATALOGUE = "scripts/GATES.md"
 
 FIELD_ORDER = [
@@ -251,56 +257,20 @@ def parse_register(text: str) -> tuple[list[Row], list[str], list[str]]:
     return rows, pillars, errors
 
 
-def load_axiom_authority(root: Path) -> tuple[dict[str, set[str]], list[str]]:
-    errors: list[str] = []
-    axiom_path = root / AXIOM_CHECK
-    pins_path = root / AXIOM_PINS
+@lru_cache(maxsize=None)
+def _declared(root: str) -> dict:
+    return axiom_audit.declared_names(Path(root))
+
+
+def load_axiom_authority(root: Path) -> tuple[dict[str, tuple[str, bool]], dict[str, frozenset], list[str]]:
+    """The declarations Blanc's sources write, and the stricter axiom claims of the audit."""
+
     try:
-        axiom_text = axiom_path.read_text()
-        pins_text = pins_path.read_text()
-    except OSError as exc:
-        return {}, [f"cannot read axiom authority: {exc}"]
-
-    printed_list = re.findall(
-        r"^#full_axioms\s+([A-Za-z0-9_.'?]+)\s*$", axiom_text, re.MULTILINE
-    )
-    if len(printed_list) != len(set(printed_list)):
-        errors.append("scripts/AxiomCheck.lean contains duplicate axiom probes")
-    printed = set(printed_list)
-
-    standard_match = re.search(r'^STANDARD="([^"]*)"$', pins_text, re.MULTILINE)
-    start_marker = 'ROWS="\\\n'
-    start = pins_text.find(start_marker)
-    end = pins_text.find('"\n# Secondary net only:', start + len(start_marker))
-    if standard_match is None or start < 0 or end < 0:
-        return {}, errors + ["scripts/check.sh axiom table is unparseable"]
-    standard = {part.strip() for part in standard_match.group(1).split(",") if part.strip()}
-    if standard != STANDARD_AXIOMS:
-        errors.append(
-            "repository STANDARD axiom set drifted: " + ", ".join(sorted(standard))
-        )
-
-    pins: dict[str, set[str]] = {}
-    block = pins_text[start + len(start_marker):end]
-    for line_no, raw in enumerate(block.splitlines(), 1):
-        if not raw:
-            continue
-        if "|" not in raw:
-            errors.append(f"scripts/check.sh axiom row {line_no} is unparseable")
-            continue
-        name, expected = raw.split("|", 1)
-        if name in pins:
-            errors.append(f"scripts/check.sh duplicates axiom row {name}")
-            continue
-        if expected == "$STANDARD":
-            axioms = set(standard)
-        else:
-            axioms = {part.strip() for part in expected.split(",") if part.strip()}
-        pins[name] = axioms
-
-    if set(pins) != printed:
-        errors.append("scripts/AxiomCheck.lean and scripts/check.sh audited sets disagree")
-    return pins, errors
+        stricter = axiom_audit.stricter_claims(root, AXIOM_CHECK)
+        declared = _declared(str(root))
+    except axiom_audit.AuditError as exc:
+        return {}, {}, [f"cannot read axiom authority: {exc}"]
+    return declared, stricter, []
 
 
 def check_text(root: Path, text: str) -> tuple[list[str], dict[str, int]]:
@@ -310,7 +280,7 @@ def check_text(root: Path, text: str) -> tuple[list[str], dict[str, int]]:
 
     rows, pillars, parse_errors = parse_register(text)
     errors.extend(parse_errors)
-    authority, authority_errors = load_axiom_authority(root)
+    declared, stricter, authority_errors = load_axiom_authority(root)
     errors.extend(authority_errors)
     catalogue_path = root / CATALOGUE
     try:
@@ -368,8 +338,11 @@ def check_text(root: Path, text: str) -> tuple[list[str], dict[str, int]]:
             seen_declarations.append(name)
             if not FQ_DECL_RE.fullmatch(name):
                 errors.append(f"{row.row_id}: declaration is not fully qualified: {name}")
-            if name not in authority:
-                errors.append(f"{row.row_id}: unresolved or unaudited declaration: {name}")
+            found = declared.get(name)
+            if found is None:
+                errors.append(f"{row.row_id}: unresolved declaration: {name}")
+            elif found[1]:
+                errors.append(f"{row.row_id}: declaration is private: {name}")
 
         axioms = set(code_spans(row.fields.get("Axioms", "")))
         if axioms != STANDARD_AXIOMS:
@@ -378,11 +351,12 @@ def check_text(root: Path, text: str) -> tuple[list[str], dict[str, int]]:
                 f"{sorted(STANDARD_AXIOMS)!r}, found {sorted(axioms)!r}"
             )
         for name in declarations:
-            if name in authority and authority[name] != axioms:
+            claim = stricter.get(name)
+            if claim is not None and set(claim) != axioms:
                 errors.append(
                     f"{row.row_id}: axiom expectation for {name} disagrees with "
-                    f"scripts/check.sh: register={sorted(axioms)!r}, "
-                    f"authority={sorted(authority[name])!r}"
+                    f"{AXIOM_CHECK}: register={sorted(axioms)!r}, "
+                    f"authority={sorted(claim)!r}"
                 )
 
         gates = code_spans(row.fields.get("Gate", ""))
@@ -432,7 +406,7 @@ def run_self_tests(root: Path, text: str) -> list[str]:
     misspelled_errors, _ = check_text(root, misspelled)
     if not any(
         "declaration population differs" in error
-        or "unresolved or unaudited declaration" in error
+        or "unresolved declaration" in error
         for error in misspelled_errors
     ):
         failures.append("misspelled-declaration mutant was not rejected")

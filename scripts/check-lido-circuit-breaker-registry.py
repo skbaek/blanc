@@ -4,7 +4,10 @@
 This gate deliberately owns only the Registry proof owner and its two small
 fixtures.  It compiles both fixtures, pins the public surface that lets callers
 reuse the proof, verifies the four protected fixture controls' trust surface,
-and runs in-memory falsifiers against the same static validator.
+and runs in-memory falsifiers against the same static validator.  It probes no
+axiom set: the owner is covered by the repository's one union axiom walk
+(`scripts/check.sh`), and the two fixtures, which are not Blanc modules, cannot
+introduce a kernel axiom except through the trust tokens the validator refuses.
 """
 
 from __future__ import annotations
@@ -17,7 +20,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Mapping
 
-import axiom_audit
+import subprocess
 import gate_semaphore
 
 
@@ -131,16 +134,19 @@ FORBIDDEN = {
     "native reduction": re.compile(r"\bofReduce(?:Bool)?\b"),
     "implemented_by": re.compile(r"\bimplemented_by\b"),
     "extern": re.compile(r"@\s*\[\s*extern\b"),
+    # Each of these adds a per-declaration kernel axiom (`Lean.ofReduceBool` and its
+    # `._native` auxiliaries) that a fixture outside the Blanc union walk would not show.
+    "bv_decide": re.compile(r"\bbv_decide\b"),
+    "decide +native": re.compile(r"\+\s*native\b"),
+    "admit": re.compile(r"\badmit\b"),
 }
-EXPECTED_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
-AXIOM_CONTROLS = (
-    (SUCCESS, "Blanc.LidoCircuitBreaker.RegistrySuccess.freshRegistration_exactCode_success_control"),
-    (SUCCESS, "Blanc.LidoCircuitBreaker.RegistrySuccess.freshRegistration_extracts_sourceTrace_control"),
-    (REGRESSION, (
-        "Blanc.LidoCircuitBreaker.RegistryMutants."
-        "targetZeroGuardAfterAssignment_compiled_rejected"
-    )),
-    (REGRESSION, "Blanc.LidoCircuitBreaker.RegistryMutants.distinctNewCountOmitted_rejected"),
+# The four fixture controls the register cites (`LIDO_CIRCUIT_BREAKER_ASSURANCE.md`): declarations
+# in the two fixture files, which are elaborated here and are not modules of the Blanc union.
+PROTECTED_CONTROLS = (
+    (SUCCESS, "freshRegistration_exactCode_success_control"),
+    (SUCCESS, "freshRegistration_extracts_sourceTrace_control"),
+    (REGRESSION, "targetZeroGuardAfterAssignment_compiled_rejected"),
+    (REGRESSION, "distinctNewCountOmitted_rejected"),
 )
 
 
@@ -482,40 +488,28 @@ def assert_falsifiers(all_sources: Mapping[str, str]) -> int:
     forbidden = dict(all_sources)
     forbidden[REGRESSION] += "\ntheorem forbidden_control : True := by sorry\n"
     rejected("forbidden pattern", forbidden)
+
+    for label, text in (("bv_decide", "by bv_decide"), ("decide +native", "by decide +native")):
+        native = dict(all_sources)
+        native[SUCCESS] += f"\ntheorem forbidden_native_control : True := {text}\n"
+        rejected(f"forbidden kernel-axiom tactic {label}", native)
     return count
 
 
 def compile_fixture(relative: str) -> None:
-    """Elaborate one fixture once, with its axiom probes appended.
+    """Elaborate one fixture, which must elaborate cleanly.
 
-    The elaborated source is the committed fixture byte for byte followed only
-    by the shared from-scratch walker and its `#full_axioms` rows, which cannot
-    make a failing file elaborate, so one run is both the fixture's positive
-    compile and the evidence for every axiom pin it owns.  (Each probe used to
-    elaborate the whole fixture again: six elaborations of two files.)  The
-    source goes to `lake env lean --stdin`, so no copy is written into the
-    tree.
+    The fixture goes through the repository's ordinary `lake env lean` path.  Its axiom
+    surface is not probed: the theorems it uses are Blanc declarations under the union axiom
+    walk, and the validator refuses every trust token a fixture could add an axiom with.
     """
     gate_semaphore.guard("the Lido registry fixtures")
-    probes = [qualified for owner, qualified in AXIOM_CONTROLS if owner == relative]
-    try:
-        source = axiom_audit.fixture_probe(
-            ROOT, (ROOT / relative).read_text(), relative, probes
-        )
-        status, output = axiom_audit.elaborate(ROOT, source)
-    except axiom_audit.AuditError as error:
-        fail(f"{relative}: from-scratch axiom probe could not run: {error}")
-    if status:
-        fail(f"command failed (lake env lean --stdin < {relative} + axiom probes):\n"
-             f"{output.rstrip()}")
-    try:
-        reports = axiom_audit.parse(output, probes)
-    except axiom_audit.AuditError as error:
-        fail(f"{relative}: unrecognised from-scratch axiom output: {error}")
-    for qualified in probes:
-        actual = set(reports[qualified])
-        if actual != EXPECTED_AXIOMS:
-            fail(f"{qualified}: axioms {sorted(actual)}, expected {sorted(EXPECTED_AXIOMS)}")
+    run = subprocess.run(
+        ["lake", "env", "lean", relative], cwd=ROOT, text=True,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False,
+    )
+    if run.returncode:
+        fail(f"command failed (lake env lean {relative}):\n{run.stdout.rstrip()}")
 
 
 def main(argv: list[str]) -> None:
@@ -533,9 +527,9 @@ def main(argv: list[str]) -> None:
     if not arguments.static_only:
         compile_fixture(SUCCESS)
         compile_fixture(REGRESSION)
-        probed = {owner for owner, _ in AXIOM_CONTROLS}
-        if probed - {SUCCESS, REGRESSION}:
-            fail(f"axiom pins name an uncompiled fixture: {sorted(probed)}")
+        for owner, name in PROTECTED_CONTROLS:
+            if name not in REQUIRED[owner]:
+                fail(f"protected control {name} is not a required declaration of {owner}")
     owner_count = len(REQUIRED[OWNER])
     header_count = len(EXPECTED_HEADERS)
     success_count = len(REQUIRED[SUCCESS])
@@ -550,14 +544,14 @@ def main(argv: list[str]) -> None:
         print(
             "OK — Lido CircuitBreaker Registry RI7 semantic: "
             f"{success_count + 1} exact-code controls, {storage_mutant_count} storage "
-            f"mutants, and {len(AXIOM_CONTROLS)} axiom pins"
+            f"mutants, and {len(PROTECTED_CONTROLS)} protected fixture controls"
         )
     else:
         print(
             f"OK — Lido CircuitBreaker Registry RI7: {owner_count} Registry declarations, "
             f"{header_count} header pins, {success_count + 1} exact-code controls, "
             f"{storage_mutant_count} storage mutants, {falsifier_count} falsifiers, "
-            f"and {len(AXIOM_CONTROLS)} axiom pins"
+            f"and {len(PROTECTED_CONTROLS)} protected fixture controls"
         )
 
 

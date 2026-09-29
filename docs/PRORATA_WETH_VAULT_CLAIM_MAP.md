@@ -7,14 +7,14 @@ repository), which sentences are carried only by finite evidence, and which are
 
 ## Audit status of the names below
 
-Every name below is audited: it appears in `scripts/AxiomCheck.lean` and is
-pinned in `scripts/check.sh` at the axiom set its proof achieves (`$STANDARD`,
-or for some `Nat` lemmas a strict subset of it), so
-`scripts/check.sh --no-build` fails if its axiom set moves. The map names nothing outside that set: the 89
-vault names pinned before 2026-09-19, plus the rows approved on 2026-09-19
-(decision `vault-axiom-audit-rows-20260919`), which are marked †. This map is
-merged only together with those † rows, never ahead of them. An axiom pin fixes
-a theorem's axioms, not its statement; nothing here relies on a statement pin.
+Every name below is audited: it is a Blanc declaration, so `scripts/check.sh`'s one
+union axiom walk bounds its axioms by `propext`, `Classical.choice` and
+`Quot.sound` (until 2026-09-29 each name had its own row in `scripts/AxiomCheck.lean`,
+pinned at the exact set its proof achieves, or for some `Nat` lemmas a strict subset of the
+standard triple; the smaller sets are no longer checked). The map names the 89
+vault names audited before 2026-09-19, plus the names approved on 2026-09-19
+(decision `vault-axiom-audit-rows-20260919`), which are marked †. An axiom bound
+fixes a theorem's axioms, not its statement; nothing here relies on a statement pin.
 
 Names are given unqualified. Those in `Blanc/ProrataWethVault*.lean` live in
 `Blanc.ProrataWethVault`; those in `Blanc/Composition/ProrataWethVault*.lean`

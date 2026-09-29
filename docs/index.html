@@ -67,7 +67,7 @@
       <div>
         <div class="term" id="heroterm"><span class="p">$</span> lake build
 <span class="p">$</span> scripts/check.sh --no-build
-<span class="ok">OK — axiom audit: 1396/1396 audited theorems depend on exactly their pinned axiom sets</span>
+<span class="ok">OK — axiom audit: one union walk over Blanc reaches only the standard axioms; @N@ leaf results</span>
 <span class="p">$</span> scripts/check-weth10-differential.sh
 <span class="ok">OK — WETH10 differential: 147/147 rows agree; 28 runtime entries (27 selectors + receive), 2 identity worlds …</span></div>
         <p class="cap"><b>Fig. 1</b> — two of the repository’s gates: the axiom-audit line is that
@@ -79,7 +79,7 @@
         <div class="pills">
           <span class="pill"><span class="d"></span>0 sorry — CI-enforced</span>
           <span class="pill"><span class="d"></span>axioms: propext · choice · quot</span>
-          <span class="pill"><span class="d"></span>1396-theorem audit in CI</span>
+          <span class="pill"><span class="d"></span>@N@ leaf results, one axiom walk in CI</span>
           <span class="pill">Jaune pinned by commit</span>
         </div>
       </div>
@@ -90,7 +90,7 @@
       Machine that adds as little to the machine as its authors could manage — four constructors
       over the raw instruction set, a compiler into deployable bytecode, and a machine-checked
       proof that the compiler is correct — and asks its user to give up as little: theorems land
-      on the exact bytes that deploy; every audited theorem is pinned to its exact axiom set,
+      on the exact bytes that deploy; every declaration is walked for axioms in CI,
       within Lean’s three canonical axioms; and the semantics underneath, Jaune, is executable and
       passes the ecosystem’s own fixture corpus. Ten contracts are in — seven ports and three
       études, each with a page of receipts — among them a WETH10 whose every holder is proved
@@ -109,8 +109,8 @@
     <div class="factbar">
       <div class="fact"><span class="n">4</span>
         <span class="l">constructors in the whole language — branch, last, next, call. The name is the syntax</span></div>
-      <div class="fact"><span class="n">1396<span class="dimmer" style="font-size:1.05rem">/1396</span></span>
-        <span class="l">audited theorems, each pinned to its exact axiom set — checked in CI, on every commit</span></div>
+      <div class="fact"><span class="n">@N@</span>
+        <span class="l">leaf results — independently valuable theorems, all axiom-checked by one walk of the whole library, in CI on every commit</span></div>
       <div class="fact"><span class="n">10</span>
         <span class="l">contracts in — seven ports, three études, from a WETH to the eth2 deposit contract — each with a page of receipts</span></div>
       <div class="fact"><span class="n">147<span class="dimmer" style="font-size:1.05rem">/147</span></span>
@@ -211,13 +211,12 @@
       <div class="panel">
         <span class="tick">the trust base, exhaustively</span>
         <p class="dim" style="font-size:.94rem;margin-bottom:0">
-          <strong>Three axioms at most, no oracle.</strong> Every audited theorem’s axiom closure is
-          pinned in CI to its own exact expected set, drawn from <span class="mono">propext</span>,
+          <strong>Three axioms at most, no oracle.</strong> One from-scratch walk in CI follows every
+          constant of the library, and fails unless the union of the axioms it reaches is drawn
+          from <span class="mono">propext</span>,
           <span class="mono">Classical.choice</span>, and <span class="mono">Quot.sound</span> —
           Lean’s three canonical axioms, the same ground ordinary classical mathematics stands
-          on; most rows use all three, and the rest pin smaller sets, down to none.
-          The audit fails on an extra axiom <em>or a missing
-          one</em>, on <span class="mono">sorryAx</span>, and on any
+          on. The audit fails on any other axiom, on <span class="mono">sorryAx</span>, and on any
           <span class="mono">native_decide</span>-style escape into compiled evaluation. Nothing
           out-of-kernel stands between a statement and its checking.
         </p>
@@ -1490,8 +1489,8 @@
 <span class="p">$</span> scripts/check.sh --no-build
 <span class="p">$</span> scripts/check-claims.sh</div>
         <p class="dim" style="font-size:.88rem;margin:14px 0 0">
-          <span class="mono">check.sh</span> audits all 1396 theorems against their pinned axiom
-          sets — failing on an extra <em>or missing</em> axiom, on <span class="mono">sorryAx</span>,
+          <span class="mono">check.sh</span> walks every constant of the library once for axioms,
+          and finds the @N@ leaf results — failing on any axiom beyond the three, on <span class="mono">sorryAx</span>,
           and on any <span class="mono">native_decide</span>-style escape.
           <span class="mono">check-claims.sh</span> then Lean-checks the exact <em>statements</em> of
           the protected WETH10 redeemability set, the Lido Registry mutation,

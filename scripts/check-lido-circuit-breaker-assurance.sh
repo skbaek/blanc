@@ -12,55 +12,39 @@
 #
 # This gate checks five things, all fail-closed: the seven-field row structure
 # with pinned per-pillar, total and gate-owned row counts; that every cited
-# declaration is pinned -- fully qualified, never by last component -- by the
-# authority the row's OWN Gate field names; that every Axioms field equals that
-# authority's expectation, order-insensitively and in both directions, with an
-# empty expectation required to be written `none`; that every named gate exists
-# and is catalogued in scripts/GATES.md; and that every load-bearing non-claim
-# phrase is still written somewhere. It is anti-vacuous: those counts live in
-# the checker's own source, so a row deleted, renamed, reworded out of the
-# gate's sight, quietly converted into a gate-owned row, or quietly given a
-# second gate to resolve a mis-attributed name against, FAILS rather than
-# shrinking a green count. Both escape hatches are counted, in both directions.
-#
-# Blanc has SEVERAL axiom-expectation authorities, not one. This gate reads
-# every one of their pin tables and writes none of them: scripts/check.sh's
-# ROWS table over scripts/AxiomCheck.lean (which also backs
-# check-lido-circuit-breaker-deployment.sh), and the access, enumeration and
-# registry gates' own tables; and the history gate's uniform expectation over
-# the public theorems its own probe covers, a population derived from its owner
-# modules by the same rule that gate selects by. That coupling is the point --
-# when a gate's pin table moves, this gate's answer moves with it. Two
-# authorities that pin one name and disagree are reported as a repository
-# inconsistency and resolved in neither direction, including when one row names
-# both of them.
+# declaration still resolves -- fully qualified, never by last component -- to a
+# public declaration in Blanc's sources; that every Axioms field is the standard
+# triple the repository's ONE union axiom walk bounds every Blanc constant by,
+# or, for a declaration scripts/AxiomCheck.lean explicitly claims a smaller set
+# for, exactly that claim (an empty claim written `none`), with every such claim
+# in turn stated by a row here or frozen by the deployment gate; that every
+# named gate exists and is catalogued in scripts/GATES.md; and that every
+# load-bearing non-claim phrase is still written somewhere. It is anti-vacuous:
+# the counts live in the checker's own source, so a row deleted, renamed,
+# reworded out of the gate's sight, or quietly converted into a gate-owned row
+# FAILS rather than shrinking a green count. Every run also executes the
+# in-memory mutation controls (a misspelled and an unqualified declaration, a
+# wrong axiom field, a stricter claim moved away from the register, a stricter
+# claim nothing states), each of which must be rejected.
 #
 # What it deliberately does not own: it does not elaborate Lean and re-derives
-# no axiom set. Its DEFAULT MODE IS STATIC, and its authority over the axiom
-# column is exactly that of the gates whose pin tables it reads -- each of which
-# verifies its own expectations against Lean by elaborating. This gate makes the
-# register faithful to them; it is not evidence that any theorem holds. Nor does
-# it judge whether a row's prose is a fair summary, whether Premises are
+# no axiom set. Its authority over the axiom column is scripts/AxiomCheck.lean,
+# which scripts/check.sh verifies against Lean by elaborating; this gate makes
+# the register faithful to it and is not evidence that any theorem holds. Nor
+# does it judge whether a row's prose is a fair summary, whether Premises are
 # complete, or whether a differential channel names a real oracle case -- those
 # are review obligations, and mechanising a pretence of them would be the
 # vacuity this gate exists to prevent.
 #
-# In its default mode this gate needs no Lean toolchain, no build and no
-# network -- it reads committed files only -- so it is instant, takes no report
-# or heavy lock (it writes nothing), and runs identically here and in CI.
+# It needs no Lean toolchain, no build and no network -- it reads committed
+# files only -- so it is instant, takes no report or heavy lock (it writes
+# nothing), and runs identically here and in CI.
 #
-# Usage: scripts/check-lido-circuit-breaker-assurance.sh [--root DIR] [--probe]
+# Usage: scripts/check-lido-circuit-breaker-assurance.sh [--root DIR]
 #
 # --root overrides the repository root; it exists so a negative control can
 # point the gate at a mutated copy of the tree without touching the committed
 # one.
-#
-# --probe is an OPTIONAL NON-DEFAULT mode that closes the axiom loop directly
-# rather than transitively: it regenerates a from-scratch `#full_axioms` probe from the
-# register's own citations and elaborates it with `lake env lean`. It REQUIRES
-# the Lean toolchain and a built dependency graph, is not what CI or the cheap
-# catalogue row runs, and must not be run beside a measurement that owns the
-# host.
 #
 # CLI contract: exit 0 if and only if the gate passes; output ends with one
 # unambiguous verdict line.
@@ -75,4 +59,4 @@ if ! command -v "$PY" >/dev/null 2>&1; then
   exit 2
 fi
 
-exec "$PY" "$SCRIPT_DIR/check-lido-circuit-breaker-assurance.py" "$@"
+exec "$PY" "$SCRIPT_DIR/check-lido-circuit-breaker-assurance.py" --self-test "$@"

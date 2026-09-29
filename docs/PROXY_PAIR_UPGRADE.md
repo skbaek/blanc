@@ -97,9 +97,9 @@ composition:
 | `fixture_throughProxy_value_refinement` | That closed package produces a concrete settled through-proxy refinement result. |
 | `upgradeToAndCall_primary_throughProxy_refinement` | One exact primary upgrade execution supplies its own initialized-domain and R2 facts to the later through-proxy theorem. |
 
-Every headline and assurance theorem's kernel axiom set is pinned to exactly
-`propext`, `Classical.choice`, and `Quot.sound` by
-`scripts/ProxyPairUpgradeAxiomCheck.lean` and the goal gate.
+Every headline and assurance theorem's kernel axiom set is bounded by
+`propext`, `Classical.choice`, and `Quot.sound`: the repository's one union axiom
+walk (`scripts/check.sh`) covers every Blanc constant.
 
 ## Execution premises retained by the statements
 

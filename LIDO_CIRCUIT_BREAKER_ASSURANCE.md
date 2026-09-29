@@ -24,9 +24,9 @@ Every row is a `####` block carrying seven labelled fields:
 
 | Field | Meaning |
 |---|---|
-| **Declarations** | The exact declaration(s) the claim rests on. Every name here is inside the pin table of the authority this row's **Gate** field names — either the repository axiom audit (`scripts/AxiomCheck.lean`) or the family gate's own from-scratch `#full_axioms` probe — so every name is one the kernel has checked and one whose axiom set a gate pins. Blanc has several such authorities and they do not overlap; a name in one is usually not in the others. |
+| **Declarations** | The exact declaration(s) the claim rests on. Every name here is written fully qualified and still resolves to a public declaration in Blanc's sources (or, for the four Registry fixture controls, in the two Registry fixtures); every one is covered by the repository's one union axiom walk (`scripts/check.sh`, `scripts/AxiomCheck.lean`), so every name is one the kernel has checked and one whose axioms are bounded by that walk. |
 | **Premises** | The load-bearing hypotheses. A row whose premises are unstated is a row that overclaims, so "none beyond the statement" is written out rather than left blank. |
-| **Axioms** | The exact axiom set the declaration depends on. `propext`, `Classical.choice`, `Quot.sound` are the three standard logical axioms the rest of the repository uses; anything else would appear here. |
+| **Axioms** | The axiom bound the declaration is checked against. `propext`, `Classical.choice`, `Quot.sound` are the three standard logical axioms the rest of the repository uses, and the union walk fails on any other axiom that any declaration reaches; a row states a smaller set only where `scripts/AxiomCheck.lean` explicitly claims it (`#expect_axioms`, checked in both directions), and writes `none` for a claim of no axioms at all. |
 | **Gate** | The gate that owns the row's evidence and would fail if it moved. |
 | **Differential channel** | The independent Solidity-oracle case that corroborates the row, or the explicit words `no direct oracle channel` where none exists. The differential campaign is finite evidence and is **never** a Lean premise. |
 | **Non-claims** | What this row does not say. These travel with the claims; a row quoted without its non-claims is a row misquoted. |
@@ -39,30 +39,32 @@ The verifier is static and fail-closed. It reads this file and requires that:
 1. every row carries all seven fields, and the pillar and total row counts match
    the numbers the gate pins — a row reworded out of the gate's sight fails
    rather than passing silently;
-2. every name in a **Declarations** field is **pinned by an authority that the
-   row's own `Gate` field names**. There are several such authorities and they
-   do not overlap: the repository axiom audit (`scripts/AxiomCheck.lean` with
-   the expectation table in `scripts/check.sh`), and the per-family pin tables
-   inside the access, enumeration, registry, and history gates. A name pinned
-   by a different authority than the row names, or pinned by none at all, is a
-   failure — so the `Gate` field is load-bearing rather than decorative;
-3. every **Axioms** field equals, exactly and order-insensitively, that
-   authority's expectation for that name, with the single word `none` meaning
-   "depends on no axioms at all" in both directions. Where two authorities pin
-   the same name, they must agree with each other, and a disagreement is
-   reported as a repository inconsistency rather than resolved in either
-   direction;
+2. every name in a **Declarations** field still resolves, fully qualified, to a
+   public declaration written in Blanc's sources (`scripts/axiom_audit.py`'s
+   lexical resolver; for the four Registry fixture controls, the two
+   fixtures). A misspelled, renamed, deleted, private or unqualified name is a
+   failure;
+3. every **Axioms** field is the standard triple that the one union axiom walk
+   bounds every Blanc constant by, or — for a declaration
+   `scripts/AxiomCheck.lean` explicitly claims a smaller set for — exactly that
+   claim, order-insensitively, with the single word `none` meaning "depends on
+   no axioms at all". Every such stricter claim in `scripts/AxiomCheck.lean`
+   must in turn be stated by a row here (REG-2, REG-12 and ACC-3 today) or be
+   one of the five frozen deployment names of
+   `scripts/check-lido-circuit-breaker-deployment.py`: a smaller axiom set that
+   nothing states is not kept;
 4. every **Gate** path exists and is registered in `scripts/GATES.md`; and
 5. every load-bearing non-claim phrase still appears somewhere in this file.
 
-Channels 2 and 3 are static comparisons against expectations that the
-authorities themselves verify against Lean by elaborating a from-scratch
-`#full_axioms` probe (the shared walker, the pinned Jaune's `AxiomAudit` module; Lean's
-own `#print axioms` report is not a verdict source, lean4#15226) — so this
-register's axiom column is Lean-checked transitively, through gates whose own
-verdicts are recorded on the completion candidate. Running this gate with
-`--probe` closes that loop directly: it regenerates a `#full_axioms` probe from
-this register's own citations and elaborates it.
+Channels 2 and 3 are static: the verifier elaborates no Lean. The axiom column is
+Lean-checked transitively, by `scripts/check.sh`, whose one union walk (the pinned
+Jaune's `AxiomAudit` module; Lean's own `#print axioms` report is not a verdict
+source, lean4#15226) bounds every Blanc constant by the standard triple and
+checks each stricter claim in both directions — gates whose own verdicts are
+recorded on the completion candidate. Every run of this verifier also executes
+five in-memory mutation controls (a misspelled and an unqualified declaration, a
+wrong axiom field, a stricter claim moved away from this register, and a
+stricter claim nothing states), each of which must be rejected.
 
 A row may legitimately have **no** audited declaration behind it — the emitted
 error table and the finite differential matrix are owned by gates, not by
@@ -459,11 +461,13 @@ register never lets the pillar's name imply otherwise.
 
 ## Pillar — Access-control completeness
 
-The axiom expectations for this pillar and the three that follow are pinned and
-probed by `scripts/check-lido-circuit-breaker-access.sh`, which runs its own
-from-scratch `#full_axioms` pass over its own pin set. Rows are **axiom-homogeneous**: where
-a fact depends on no axioms at all it gets its own row rather than being averaged
-into a neighbour's.
+The axiom column for this pillar and the three that follow is the repository's
+one union axiom walk (`scripts/check.sh`), which bounds every declaration by the
+standard triple; `scripts/check-lido-circuit-breaker-access.sh` pins the public
+headers of these theorems and probes no axioms of its own. Rows are
+**axiom-homogeneous**: where a fact depends on no axioms at all it gets its own
+row (with an explicit `#expect_axioms` claim in `scripts/AxiomCheck.lean`) rather
+than being averaged into a neighbour's.
 
 #### ACC-1 — Every raw `SSTORE` occurrence in a same-frame descendant of an exactly-invoking frame root is assigned to a unique one of twenty frozen source sites, at its own pc, carrying a permitted role with an actual earlier guard occurrence and the entry-state fact that guard establishes
 
@@ -493,7 +497,7 @@ into a neighbour's.
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** no direct oracle channel
 - **Non-claims:** cardinality and membership of a frozen structural inventory. Not a statement about any execution.
-- **Source:** `Blanc/LidoCircuitBreakerSites.lean`, `Blanc/LidoCircuitBreakerDeploy.lean:472`; axiom expectations pinned in `scripts/check-lido-circuit-breaker-access.py`
+- **Source:** `Blanc/LidoCircuitBreakerSites.lean`, `Blanc/LidoCircuitBreakerDeploy.lean:472`; the `none` claims in `scripts/AxiomCheck.lean`
 
 #### ACC-4 — Every cell of the contract's own storage that differs between a message's entry state and its clean settled poststate carries owner-cell authority derived from an exact retained last writer
 
@@ -823,10 +827,10 @@ discharges that "if" — for exactly one official direct deployment, and for
 nothing else. Read either layer without the other and the result is an
 overclaim in one direction or an understatement in the other.
 
-Deployment rows are audited by `scripts/check.sh --no-build`; history rows are
-pinned and probed by `scripts/check-lido-circuit-breaker-history.sh`, which
-requires every public theorem in the family to report exactly the standard three
-axioms and admits no exception table.
+Deployment and history rows are covered by the union axiom walk of
+`scripts/check.sh --no-build`, which bounds every declaration by the standard
+three axioms; `scripts/check-lido-circuit-breaker-history.sh` pins the family's
+statements and probes no axioms of its own.
 
 #### DEP-1 — For the exact official constructor input, a successful configured Prague-only transition over the strict singleton envelope establishes the deployment root
 

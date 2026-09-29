@@ -236,8 +236,8 @@ This repo contains the following files:
   compiled runtime is installed at an address and that address's storage carries
   a `RegistryWitness`, every state reachable by the configured valid-chain
   relation still has that runtime installed and still admits a witness. The
-  family is discharged in full — no `sorry` anywhere in it, and every public
-  theorem depends on exactly `propext`, `Classical.choice` and `Quot.sound`. The
+  family is discharged in full — no `sorry` anywhere in it, and every theorem
+  depends on nothing beyond `propext`, `Classical.choice` and `Quot.sound`. The
   reach is in what the premises decline to say — the frame theorem quantifies
   over arbitrary successful runs of the exact runtime and over arbitrary callee
   bytecode, including code that re-enters this very instance, and the transport
@@ -989,11 +989,13 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
 
 1. **the pinned Jaune revision** below — trusting a Blanc theorem is trusting
    that specific Jaune, not the sibling checkout on your disk;
-2. **the axiom audit** below, which is stricter than Jaune's own gates: its
-   current source inventory pins the exact axiom set of 1396 named results and
-   fails on an extra *or* missing axiom.
-   Run `scripts/check.sh --no-build`; its `1396/1396` summary belongs to the
-   source identity printed by `git rev-parse HEAD`;
+2. **the axiom audit** below, which is stricter than Jaune's own gates: one
+   from-scratch walk over every constant of the library fails on any axiom
+   outside `propext`, `Classical.choice` and `Quot.sound`, and the leaf search
+   finds the @N@ leaf results — the independently valuable theorems no other
+   theorem uses — that this one walk covers.
+   Run `scripts/check.sh --no-build`; its `@N@ leaf results` summary belongs to
+   the source identity printed by `git rev-parse HEAD`;
 3. **Blanc's own source**, guarded by
    [`scripts/check-trust-surface.sh`](scripts/check-trust-surface.sh). The gate
    traverses the exact transitive local import closure of `Blanc.lean` and
@@ -1014,22 +1016,25 @@ about whether they are the right theorems. Read the statements in
 a theorem's name.
 
 Blanc builds against a **pinned revision** of
-[Jaune](https://github.com/skbaek/jaune) — `require jaune from git … @ c326e3f9…`
+[Jaune](https://github.com/skbaek/jaune) — `require jaune from git … @ b019bbf5…`
 in [`lakefile.lean`](lakefile.lean) — so a fresh clone builds reproducibly
 without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 
 CI builds the library and runs an
-**axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)) whose
-current source inventory contains **1396** top theorems. `scripts/check.sh`'s
-row list is the authority on membership; run `scripts/check.sh --no-build` and
-bind its exact-set verdict to
+**axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)): one
+union walk over every constant of the library, then a leaf search that finds
+the **@N@** leaf results — the independently valuable theorems no other theorem
+uses, each covered by that walk. The leaf search is the authority on
+membership and its number is the generated
+[`scripts/leaf-count.json`](scripts/leaf-count.json), never edited by hand; run
+`scripts/check.sh --no-build` and bind its verdict to
 `git rev-parse HEAD`. The separate `scripts/check-claims.sh` Lean-checks the
 exact statements of the WETH10 flagship set; the protected Lido Registry
 mutation, enumeration, view-coherence, observability, exact official
 constructor/message/transaction/block, direct-root, and rooted-future
 boundaries; the proxy-pair, PRORATA, PRORATA WETH vault and BeaconDeposit
 headlines; the CircuitBreaker × gateway composition closure; and DRIP's R1–R4
-headlines; the axiom audit itself pins dependency closures, not theorem
+headlines; the axiom audit itself checks dependency closures, not theorem
 statements. The families follow. Seven are WETH's
 headline solvency theorems:
 
@@ -1161,16 +1166,17 @@ are catalogued here by family:
   altitude. A trichotomy over outcomes, not a success theorem: nothing in
   this repository says a `flashLoan` call ever succeeds.
 
-Each audited theorem carries its **own pinned expected axiom set** in
-`scripts/check.sh`, and the audit fails if a theorem's axiom closure differs
-from its pin in either direction — extra or missing. In particular it fails on
-`sorryAx`, `ofReduceBool`, or `ofReduceNat` — no `sorry` and no
-`native_decide`-style axiom in the trusted path of these results. It also fails
-if `AxiomCheck.lean` and `check.sh` disagree about which theorems are audited,
-so a row cannot be dropped silently from either side. Every permitted pin is
-an exact subset of `[propext, Classical.choice, Quot.sound]`; most use all
-three, and the rest pin a strictly smaller set: `[propext, Quot.sound]`,
-`[propext]`, or no axiom at all.
+Every constant of the library is covered by one union walk in
+`scripts/check.sh`: it fails on any axiom other than `propext`,
+`Classical.choice` and `Quot.sound` that any declaration reaches — in
+particular on `sorryAx`, `ofReduceBool`, `ofReduceNat` and the `native_decide`
+and `bv_decide` auxiliary axioms — so no `sorry` and no `native_decide`-style
+axiom is in the trusted path of these results. There is no list of audited
+theorems to keep in step: the walk's population is what
+[`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean) imports, and the audit
+refuses a Blanc module that its imports do not reach. A smaller axiom set is
+checked only where a register or a gate states one — ten such claims, the
+`#expect_axioms` rows of `AxiomCheck.lean`, each checked in both directions.
 
 ## WETH fixture suite — execution evidence
 
@@ -1203,7 +1209,7 @@ direct fallback, are reached against a shrink-only budget currently empty.
 See [the fixtures
 README](scripts/fixtures/weth/README.md#what-the-suite-establishes) for what
 this is worth and what it is not: specification-checked differential testing
-on chosen inputs, not a liveness proof — the audited theorems above
+on chosen inputs, not a liveness proof — the theorems above
 remain pure safety statements.
 
 It is a local gate (CI does not get the Jaune executable for free from the

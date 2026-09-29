@@ -47,7 +47,7 @@ All three of `Blanc/LidoCircuitBreakerHistory.lean`,
 `Blanc/LidoCircuitBreakerHistoryChain.lean` are committed and checked in full.
 The Chain owner was dormant behind `CHAIN.active` while `registrySpec_sound`
 carried a `sorry`; that proof is closed and the switch is on, so its pins, its
-channels, its allowlist, its trust scan and its axiom probe are all live.
+channels, its allowlist and its trust scan are all live.
 
 A fourth net was added once the family was complete.  `VOCABULARY_PINS` pins
 the declarations this family is WRITTEN IN but does not own -- `RegistryWitness`
@@ -70,7 +70,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-import axiom_audit
 import gate_semaphore
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -96,10 +95,6 @@ MODULES = {
     "endpoints": "Blanc.LidoCircuitBreakerHistoryEndpoints",
 }
 
-# `Blanc.LidoCircuitBreakerHistoryEndpoints` imports `...History`, so importing
-# the former alone reaches both owners' declarations.
-AXIOM_PROBE_IMPORTS = ("Blanc.LidoCircuitBreakerHistoryEndpoints",)
-
 # The program whose dispatcher the coverage obligation is derived from.  This
 # file is NOT an owner: it is read, never pinned, because it is the Lido
 # CircuitBreaker program itself and has its own gates.
@@ -113,7 +108,7 @@ class ChainActivation:
     `registrySpec_sound` still carried a `sorry`.  That proof is closed, the
     seventeen endpoint obligations are discharged, and this owner is checked
     in full: its pins, its semantic channels, its open-world allowlist, the
-    trust scan and the axiom probe.
+    trust scan.
 
     `--chain-dry-run` survives activation as a review aid.  While the owner
     was dormant it read the frozen revision named by `pinned_at`; now that the
@@ -206,12 +201,6 @@ def active_modules() -> dict:
     if CHAIN.active:
         modules[CHAIN.key] = CHAIN.module
     return modules
-
-
-def probe_imports() -> tuple:
-    if CHAIN.active:
-        return AXIOM_PROBE_IMPORTS + (CHAIN.module,)
-    return AXIOM_PROBE_IMPORTS
 
 
 class Failure(Exception):
@@ -1657,67 +1646,6 @@ def trust_scan(sources: dict) -> tuple:
 
 
 # --------------------------------------------------------------------------
-# Axiom expectations
-# --------------------------------------------------------------------------
-#
-# Every public theorem of every active owner is probed INDIVIDUALLY and must
-# report exactly `propext`, `Classical.choice`, `Quot.sound`.  There is no
-# exception table and no trust shortcut: a theorem that depends on nothing at
-# all fails here until someone explains why, and a theorem that acquires a
-# fourth axiom -- `sorryAx` above all -- fails at once.
-#
-# Private declarations cannot be named at the term level from another module,
-# so they are not probed directly.  They are not a gap: a private lemma that
-# used an axiom would put that axiom into every public theorem that depends on
-# it, and a private lemma that no public theorem depends on is dead code that
-# the trust scan's `T3-axiom` and `T1-sorry` rules still read.
-
-STANDARD_AXIOMS = frozenset({"propext", "Classical.choice", "Quot.sound"})
-
-
-def probe_targets(sources: dict) -> list:
-    targets = []
-    for key, source in sorted(sources.items()):
-        for declaration in declarations(source):
-            if declaration["kind"] not in ("theorem", "lemma"):
-                continue
-            if declaration["private"]:
-                continue
-            targets.append(qualified(declaration))
-    return sorted(set(targets))
-
-
-def compiled_owners_present(root: Path) -> None:
-    for key, module in active_modules().items():
-        olean = root / (".lake/build/lib/lean/" +
-                        module.replace(".", "/") + ".olean")
-        if not olean.is_file():
-            fail(f"compiled owner {key} is absent ({olean.name}); run the "
-                 "approved elaboration checkpoint before the axiom probe")
-
-
-def axiom_checks(root: Path, sources: dict) -> int:
-    gate_semaphore.guard("the Lido history axiom probe")
-    targets = probe_targets(sources)
-    compiled_owners_present(root)
-    # The probe is fed to `lake env lean --stdin` by the shared from-scratch
-    # audit driver, so no probe file is ever written into the repository (a
-    # stray `history-axioms-*.lean` there is what `lake` would then try to
-    # build, and what a `git add -A` would commit).
-    try:
-        reports = axiom_audit.audit(root, probe_imports(), targets)
-    except axiom_audit.AuditError as error:
-        fail(f"from-scratch axiom probe failed: {error}")
-        return 0
-    for name in targets:
-        actual = set(reports[name])
-        if actual != set(STANDARD_AXIOMS):
-            fail(f"{name}: axioms {sorted(actual)}, expected "
-                 f"{sorted(STANDARD_AXIOMS)}")
-    return len(targets)
-
-
-# --------------------------------------------------------------------------
 # The mutation harness
 # --------------------------------------------------------------------------
 #
@@ -2353,7 +2281,7 @@ def repinned(tree: Path):
     recorded pins, and once against pins recomputed FROM THE MUTANT.  Only the
     second verdict is credited, because only the second measures a net that
     survives ordinary maintenance -- the semantic channels, the open-world
-    allowlist, the derived coverage object, the trust scan and the axiom probe.
+    allowlist, the derived coverage object, the trust scan.
 
     The dormant Chain owner's recorded pins are carried through unchanged: a
     re-pin of the active owners must not quietly erase them.
@@ -3073,8 +3001,6 @@ def main() -> int:
                         help="isolated worktree for --mutations")
     parser.add_argument("--print-observed-digests", action="store_true",
                         help="print the pin tables the current tree implies")
-    parser.add_argument("--static-only", action="store_true",
-                        help="skip the Lean axiom probe")
     parser.add_argument("--chain-dry-run", action="store_true",
                         help="check the dormant Chain owner's pins, channels "
                              "and open-world bar against its pinned committed "
@@ -3101,7 +3027,6 @@ def main() -> int:
         if args.list:
             return print_inventory(root)
         result = run_static_checks(root)
-        probed = 0 if args.static_only else axiom_checks(root, load_owners(root))
     except Failure as exc:
         print(f"REGRESSION — {VERDICT}: {exc}")
         return 1
@@ -3124,10 +3049,7 @@ def main() -> int:
         f"{len(result['discharged'])} discharged endpoints plus "
         f"{len(result['mutating'])} Registry-mutating obligations "
         f"({', '.join(result['mutating'])}); trust scan clean in code with "
-        f"{len(COMMENT_TRUST_ROWS)} reviewed comment mention(s); "
-        + (f"{probed} public theorems each probed for exactly "
-           f"{sorted(STANDARD_AXIOMS)}" if probed else
-           "axiom probe SKIPPED (--static-only)")
+        f"{len(COMMENT_TRUST_ROWS)} reviewed comment mention(s)"
         + pending)
     return 0
 

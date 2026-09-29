@@ -7,7 +7,7 @@ axioms that declaration leans on, which gate owns the evidence, which
 differential channel corroborates it, and where the claim stops. A register
 like that is only worth its ink while every one of those columns is still true
 of the tree. Prose does not re-derive itself, so a register drifts silently the
-moment a declaration is renamed, an axiom pin moves, a gate is retired, or a
+moment a declaration is renamed, an axiom claim moves, a gate is retired, or a
 non-claim is quietly edited out of a row -- and a register that has drifted is
 worse than none, because it is read as authority.
 
@@ -17,37 +17,35 @@ each fail-closed:
   1. Structure and anti-vacuity. Every `####` row under a `## Pillar —`
      heading carries all seven labelled fields, exactly once each, in the
      frozen order, non-empty; ROWIDs are unique; every pinned pillar is
-     present; and the per-pillar row counts, the total, the number of gate-owned
-     rows and the number of rows naming more than one gate all equal the numbers
-     pinned in this file. A row deleted, renamed, or reworded out of this gate's
-     sight FAILS rather than shrinking a green count -- the anti-vacuity
-     contract `check-doc-counts.py` states for quotations, restated for rows.
-     The last two counts pin the two escape hatches: a row can decline the axiom
-     check by becoming gate-owned, and a row can rescue a mis-attributed
-     declaration by naming a second authority for it to resolve against.
-     Neither may widen without someone deciding to widen it.
+     present; and the per-pillar row counts, the total and the number of
+     gate-owned rows all equal the numbers pinned in this file. A row deleted,
+     renamed, or reworded out of this gate's sight FAILS rather than shrinking
+     a green count -- the anti-vacuity contract `check-doc-counts.py` states
+     for quotations, restated for rows. The gate-owned count pins the escape
+     hatch: a row can decline the axiom check by becoming gate-owned.
 
-  2. Declaration resolution, against the authority the ROW ITSELF names. A
-     row's **Gate** field is not decorative: it names the gate that must pin
-     the row's declarations. Blanc has several axiom-expectation authorities,
-     not one -- the repository audit pins one population, and the Lido access,
-     enumeration, registry and history gates each pin their own family with
-     their own `#full_axioms` probe -- so "is this name audited?" is only
-     answerable relative to a gate. Names are matched FULLY QUALIFIED:
-     `Blanc.Weth10.canonicalDeploymentStep_establishes_root` and
-     `Blanc.LidoCircuitBreaker.canonicalDeploymentStep_establishes_root` are
-     different theorems sharing a last component, and a checker matching on
-     the short name would credit a citation no gate ever made.
+  2. Declaration resolution. Every name in a **Declarations** field must still
+     resolve to a public declaration written in Blanc's sources (or, for the
+     four Registry fixture controls, in the two Registry fixtures), spelled
+     FULLY QUALIFIED: `Blanc.Weth10.canonicalDeploymentStep_establishes_root`
+     and `Blanc.LidoCircuitBreaker.canonicalDeploymentStep_establishes_root`
+     are different theorems sharing a last component, and a checker matching on
+     the short name would credit a citation no gate ever made. The resolver is
+     `scripts/axiom_audit.py`'s lexical `declared_names`, a namespace-stack scan
+     of the sources; it never elaborates Lean.
 
-  3. Axiom-expectation agreement with that authority. The register's **Axioms**
-     field must equal, exactly and order-insensitively, the expectation the
-     row's authority states for that declaration. An empty expectation means
-     "depends on no axioms at all", which the register must write as the single
-     word `none`; both directions are checked, so neither a fabricated axiom
-     list nor a fabricated `none` passes. Where a name is pinned by two
-     authorities, THE TWO MUST AGREE WITH EACH OTHER: a disagreement is
-     reported as a repository inconsistency and never quietly resolved in
-     either direction, because either answer is a real finding.
+  3. Axiom-expectation agreement. There is one authority: the repository's
+     union axiom walk (`scripts/check.sh`, `scripts/AxiomCheck.lean`), which
+     bounds the axioms of EVERY Blanc constant by `propext`, `Classical.choice`
+     and `Quot.sound`. The register's **Axioms** field must therefore be that
+     standard triple, except for a declaration that `scripts/AxiomCheck.lean`
+     explicitly claims a smaller set for (`#expect_axioms`, checked in both
+     directions by the same walker), where it must equal that claim exactly. An
+     empty claim is written as the single word `none`. Conversely every
+     stricter claim in `scripts/AxiomCheck.lean` must be stated by a row here or
+     be one of the five frozen deployment names of
+     `scripts/check-lido-circuit-breaker-deployment.py`: a smaller set that no
+     register or gate states is not kept.
 
   4. Gate existence and registration. Every path in a **Gate** field exists
      under the repository root and is catalogued in `scripts/GATES.md`.
@@ -59,14 +57,11 @@ each fail-closed:
 WHAT THIS GATE DOES NOT OWN
 ---------------------------
 
-It does not elaborate Lean and does not re-derive any axiom set. Its DEFAULT
-MODE IS STATIC: it checks that the register agrees with the pin tables of the
-authorities listed below, and its authority over the axiom column is exactly
-theirs -- `scripts/check.sh --no-build` for the repository audit, and each
-family gate's own from-scratch `#full_axioms` probe for the family it pins. Those gates
-verify their expectations against Lean by elaborating; this gate makes the
-register faithful to them. Neither substitutes for the other, and this gate is
-not evidence that any theorem holds.
+It does not elaborate Lean and does not re-derive any axiom set. Its authority
+over the axiom column is the audit source it reads; `scripts/check.sh` verifies
+that source against Lean by elaborating, and this gate makes the register
+faithful to it. Neither substitutes for the other, and this gate is not
+evidence that any theorem holds.
 
 It does not check that a row's prose is a fair summary of its declaration, that
 the **Premises** field is complete, or that a **Differential channel** name
@@ -91,60 +86,6 @@ and a real registered gate. Channels 2 and 3 skip those rows and nothing else,
 and the gate-owned COUNT is pinned and printed, so converting a normal row into
 a gate-owned one to dodge the axiom check moves the count and FAILS.
 
-A name that resolves in the tree but is pinned by no authority is NOT
-tolerated. Several real declarations are deliberately outside every pin table;
-the register cites those in **Premises** prose only. Channel 2 fails on them by
-design, and says so specifically, because the fix is to move the name to
-**Premises** or to make the row gate-owned -- never to widen an audit.
-
-THE AUTHORITIES
----------------
-
-This gate READS other gates' pin tables and never writes them. That coupling is
-the point: when a gate's pin table moves, this gate's answer moves with it. The
-tables are read with `ast`, never imported or executed.
-
-  * `scripts/check.sh` + `scripts/AxiomCheck.lean` -- the repository axiom
-    audit. Resolves every `#full_axioms` name; expectation from the `ROWS`
-    table, with an empty expectation meaning no axioms at all.
-  * `scripts/check-lido-circuit-breaker-deployment.sh` -- that gate's axiom
-    section verifies its public inventory against `scripts/AxiomCheck.lean` and
-    `scripts/check.sh` themselves, so its authority IS the repository audit and
-    it is registered as an alias for it.
-  * `scripts/check-lido-circuit-breaker-access.sh` -- `ROLES`, expectation
-    `AXIOM_EXCEPTIONS.get(name, STANDARD_AXIOMS)`. Names are written short,
-    relative to `Blanc.LidoCircuitBreaker.`.
-  * `scripts/check-lido-circuit-breaker-enumeration.sh` -- `ROLES`, uniform
-    `EXPECTED_AXIOMS`. Short names.
-  * `scripts/check-lido-circuit-breaker-registry.sh` -- resolves the names in
-    `REQUIRED` and `EXPECTED_HEADERS`; states a per-name axiom expectation only
-    for the four fixture controls in `AXIOM_CONTROLS`. Every other name it
-    pins therefore takes its axioms from the repository audit.
-  * `scripts/check-lido-circuit-breaker-history.sh` -- expectation uniformly
-    `STANDARD_AXIOMS`, over a population DERIVED from its owner modules rather
-    than read from a table: every public `theorem`/`lemma` its probe covers.
-    The uniformity is not an absence of an expectation, and the absence of an
-    exception table is not an absence of exceptions being possible -- it means
-    there are none. `HEADER_PINS` is a DIGEST population, not that one: it also
-    covers the `def`/`structure` layer (`RegistryStable`, `Coherent`,
-    `registrySpec`), which is pinned by digest and never probed. Those names
-    stay RESOLUTION-ONLY, which is what keeps them out of **Declarations**
-    while the register goes on citing them as premise vocabulary.
-
-A gate that is not in that list is not an authority. A row naming such a gate
-may still carry evidence -- it just may not cite declarations, so it is a
-gate-owned row.
-
-`--probe`
----------
-
-An optional, non-default mode that closes the loop directly instead of
-transitively: it regenerates a from-scratch `#full_axioms` probe from the
-register's own citations, elaborates it with `lake env lean`, and compares the
-reported axiom sets against the register's fields. It REQUIRES the Lean
-toolchain and a built dependency graph, is not what CI or the cheap catalogue
-row runs, and must not be run beside a measurement that owns the host.
-
 The default mode needs no Lean toolchain, no build and no network -- it reads
 committed files only -- so it is instant, takes no report or heavy lock (it
 writes nothing), and runs identically here and in CI.
@@ -162,13 +103,16 @@ import re
 import sys
 
 import axiom_audit
-import gate_semaphore
 
 VERDICT_SUBJECT = "lido-circuit-breaker-assurance"
 
 REGISTER_RELATIVE = "LIDO_CIRCUIT_BREAKER_ASSURANCE.md"
 AXIOM_CHECK_RELATIVE = "scripts/AxiomCheck.lean"
-AXIOM_PINS_RELATIVE = "scripts/check.sh"
+DEPLOYMENT_RELATIVE = "scripts/check-lido-circuit-breaker-deployment.py"
+FIXTURES_RELATIVE = (
+    "scripts/LidoCircuitBreakerRegistrySuccess.lean",
+    "scripts/LidoCircuitBreakerRegistryRegression.lean",
+)
 CATALOGUE_RELATIVE = "scripts/GATES.md"
 
 # ---------------------------------------------------------------------------
@@ -209,24 +153,6 @@ EXPECTED_TOTAL_ROWS = 75
 # Rows whose Declarations field is the gate-owned literal. Pinned so the
 # escape hatch cannot widen quietly: convert one normal row and this fails.
 EXPECTED_GATE_OWNED_ROWS = 9
-
-# Rows whose Gate field names more than one gate.
-#
-# Naming two gates is legitimate and seven rows do it: one gate owns the row's
-# evidence and the other pins its axioms, and both really would fail if the row
-# moved. But a second gate name is also the one edit that can make a
-# MIS-ATTRIBUTED declaration resolve. A name pinned by the access authority,
-# sitting on a row whose Gate says enumeration, is a real error this gate
-# catches -- until someone appends `scripts/check.sh` to that row, at which
-# point the name resolves against the repository audit and the mis-attribution
-# is rescued rather than reported. Discipline is not a mechanism, so the count
-# is pinned in both directions.
-#
-# A future editor who genuinely needs an eighth multi-gate row bumps this number
-# in the same commit as the row, having decided that the row's second gate is
-# an authority it really depends on rather than padding. That is a decision.
-# Bumping it to clear a red gate is Rule 1 in `scripts/GATES.md`.
-EXPECTED_MULTI_GATE_ROWS = 7
 
 # Load-bearing non-claims. Each must still appear somewhere in the register.
 # Matched case-insensitively against the register with all whitespace runs
@@ -311,24 +237,8 @@ ROW_HEADING = re.compile(r"^####\s+(.+?)\s+—\s+(.+?)\s*$")
 ROWID = re.compile(r"^[A-Z]+-[0-9]+$")
 FIELD_ITEM = re.compile(r"^\s*-\s+\*\*([^*]+?):\*\*\s*(.*)$")
 
-# Same character class scripts/check.sh uses to read the audit's own inventory,
-# so the two gates agree on what a name is.
-PRINT_AXIOMS = re.compile(r"^#full_axioms[ \t]+([A-Za-z0-9_.?']+)", re.M)
-
 # A cited name must be fully qualified; see the module docstring.
 DECL_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_.?'!]*$")
-
-# Belt and braces, mirroring scripts/check.sh: these must never appear in a
-# probe's Lean output.
-FORBIDDEN_AXIOMS = re.compile(r"sorryAx|ofReduceBool|ofReduceNat|_native\.")
-
-# Declaration keywords recognised by the advisory tree scan. See resolve_tree().
-TREE_DECL = re.compile(
-    r"^(?:(?:private|protected|noncomputable|partial|unsafe|scoped)\s+)*"
-    r"(?:theorem|lemma|def|abbrev|structure|inductive|instance|opaque|axiom|class)"
-    r"\s+([A-Za-z_][A-Za-z0-9_.?'!]*)"
-)
-
 
 def squeeze(text: str) -> str:
     """Collapse every whitespace run to one space."""
@@ -452,161 +362,13 @@ def parse_register(text: str) -> tuple[list[Register], list[str], list[str]]:
     return rows, pillars, failures
 
 
-def parse_axiom_pins(text: str) -> tuple[dict[str, list[str]], list[str]]:
-    """Extract scripts/check.sh's ROWS table.
+# --- the one axiom authority -------------------------------------------------
 
-    The block opens with a line that is exactly `ROWS="\\` and closes with the
-    double quote that ends the shell string -- which today sits at the end of
-    the final row rather than on a line of its own, so both spellings are
-    accepted. `$STANDARD` (and `${STANDARD}`) is expanded from the assignment
-    immediately above the block, which is the only expansion the table uses.
-
-    A row this parser cannot read is an error, never a skip: check.sh's own
-    loop would treat such a line as a theorem name with no expectation, and a
-    gate that silently dropped it would credit a register column nothing
-    pinned.
-    """
-
-    pins: dict[str, list[str]] = {}
-    problems: list[str] = []
-
-    standard_match = re.search(r'^STANDARD="([^"]*)"\s*$', text, re.M)
-    if standard_match is None:
-        problems.append(
-            f"{AXIOM_PINS_RELATIVE}: no `STANDARD=\"...\"` assignment; the pinned "
-            "expectations cannot be expanded"
-        )
-        return pins, problems
-    standard = standard_match.group(1)
-
-    lines = text.splitlines()
-    try:
-        start = next(i for i, line in enumerate(lines) if line.rstrip() == 'ROWS="\\')
-    except StopIteration:
-        problems.append(
-            f"{AXIOM_PINS_RELATIVE}: no `ROWS=\"\\` table; this gate has no pinned "
-            "axiom expectations to compare the register against"
-        )
-        return pins, problems
-
-    for offset, raw in enumerate(lines[start + 1 :], start=start + 2):
-        line = raw
-        closed = False
-        if line.rstrip() == '"':
-            break
-        if line.rstrip().endswith('"') and not line.rstrip().endswith('\\"'):
-            line = line.rstrip()[:-1]
-            closed = True
-        if line.strip():
-            if "|" not in line:
-                problems.append(
-                    f"{AXIOM_PINS_RELATIVE}:{offset}: row has no `|` separator: "
-                    f"{squeeze(line)}"
-                )
-            else:
-                name, _, expectation = line.partition("|")
-                name = name.strip()
-                expectation = expectation.replace("${STANDARD}", standard)
-                expectation = expectation.replace("$STANDARD", standard)
-                axioms = [
-                    part.strip() for part in expectation.split(",") if part.strip()
-                ]
-                if name in pins:
-                    problems.append(
-                        f"{AXIOM_PINS_RELATIVE}:{offset}: duplicate pin for {name}"
-                    )
-                pins[name] = axioms
-        if closed:
-            break
-    else:
-        problems.append(
-            f"{AXIOM_PINS_RELATIVE}: the `ROWS` table is never closed by a `\"`"
-        )
-
-    if not pins:
-        problems.append(
-            f"{AXIOM_PINS_RELATIVE}: the `ROWS` table parsed to zero pins"
-        )
-    return pins, problems
-
-
-def resolve_tree(root: pathlib.Path) -> set[str]:
-    """Fully qualified declaration names visible in Blanc's own sources.
-
-    ADVISORY ONLY. This is a lexical scan with a namespace stack, not Lean's
-    elaborator: it recognises the declaration shapes this repository actually
-    writes and nothing else. It is used exclusively to make a Channel 2 failure
-    message more useful -- "this name exists but is unaudited, so cite it in
-    **Premises**" rather than "unknown name". It can never make a row pass, so
-    an under-approximation costs a sharper message and nothing else.
-    """
-
-    names: set[str] = set()
-    for path in sorted((root / "Blanc").rglob("*.lean")):
-        try:
-            source = path.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        stack: list[str] = []
-        for line in source.splitlines():
-            stripped = line.strip()
-            if stripped.startswith("namespace "):
-                stack.append(stripped.split()[1])
-                continue
-            if stripped.startswith("end "):
-                closing = stripped.split()[1]
-                if stack and stack[-1] == closing:
-                    stack.pop()
-                continue
-            match = TREE_DECL.match(line)
-            if match is not None:
-                names.add(".".join(stack + [match.group(1)]))
-    return names
-
-
-# --- axiom-expectation authorities -----------------------------------------
-
-LIDO_NAMESPACE = "Blanc.LidoCircuitBreaker."
-
-AUDIT_KEY = "audit"
-
-# Gate path -> the key of the authority whose pin table decides that gate's
-# rows. A gate absent from this map is not an authority; see the docstring.
-AUTHORITY_BY_GATE = {
-    AXIOM_PINS_RELATIVE: AUDIT_KEY,
-    "scripts/check-lido-circuit-breaker-deployment.sh": AUDIT_KEY,
-    "scripts/check-lido-circuit-breaker-access.sh": "access",
-    "scripts/check-lido-circuit-breaker-enumeration.sh": "enumeration",
-    "scripts/check-lido-circuit-breaker-registry.sh": "registry",
-    "scripts/check-lido-circuit-breaker-history.sh": "history",
-}
-
-# The checker source each non-audit authority's pin table is read from.
-AUTHORITY_SOURCE = {
-    "access": "scripts/check-lido-circuit-breaker-access.py",
-    "enumeration": "scripts/check-lido-circuit-breaker-enumeration.py",
-    "registry": "scripts/check-lido-circuit-breaker-registry.py",
-    "history": "scripts/check-lido-circuit-breaker-history.py",
-}
+STANDARD_AXIOMS = frozenset(axiom_audit.STANDARD_AXIOMS)
 
 
 class Unreadable(Exception):
     """A constant in another gate's source this reader will not guess at."""
-
-
-class Authority:
-    """One gate's pin table, as this gate reads it.
-
-    `resolves` is the set of fully qualified names the authority pins at all.
-    `expects` maps a name to the axiom set the authority states for it; a name
-    in `resolves` but not in `expects` is one the authority pins without
-    stating an expectation, which sends the row to the repository audit.
-    """
-
-    def __init__(self, key: str, resolves: set[str], expects: dict[str, frozenset[str]]) -> None:
-        self.key = key
-        self.resolves = resolves
-        self.expects = expects
 
 
 def python_constants(path: pathlib.Path, wanted: list[str]) -> dict[str, object]:
@@ -677,479 +439,34 @@ def python_constants(path: pathlib.Path, wanted: list[str]) -> dict[str, object]
     return values
 
 
-def python_class_constants(
-    path: pathlib.Path, class_name: str, wanted: list[str]
-) -> dict[str, object]:
-    """Read literal attributes off a top-level class in another gate's source.
+def deployment_frozen_names(root: pathlib.Path) -> set[str]:
+    """The five deployment names whose smaller axiom sets the deployment gate freezes.
 
-    The history gate holds its Chain owner's activation switch, path and module
-    as class attributes of `ChainActivation`, so the module-level reader above
-    cannot see them. Same restricted evaluator, same refusal to import.
+    Read with `ast` from that gate's own source, never imported: the table is
+    `STRICTER_CLAIMS` in `scripts/check-lido-circuit-breaker-deployment.py`.
     """
 
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    for node in tree.body:
-        if isinstance(node, ast.ClassDef) and node.name == class_name:
-            break
-    else:
-        raise Unreadable(f"{path.name}: no class {class_name}")
-
-    values: dict[str, object] = {}
-    for statement in node.body:
-        target = None
-        if isinstance(statement, ast.Assign) and len(statement.targets) == 1:
-            if isinstance(statement.targets[0], ast.Name):
-                target = statement.targets[0].id
-        elif isinstance(statement, ast.AnnAssign) and isinstance(
-            statement.target, ast.Name
-        ):
-            target = statement.target.id
-        if target is None or target not in wanted or statement.value is None:
-            continue
-        if isinstance(statement.value, ast.Constant):
-            values[target] = statement.value.value
-
-    for name in wanted:
-        if name not in values:
-            raise Unreadable(f"{path.name}: cannot read {class_name}.{name}")
-    return values
+    read = python_constants(root / DEPLOYMENT_RELATIVE, ["STRICTER_CLAIMS"])
+    return set(read["STRICTER_CLAIMS"])  # type: ignore[arg-type]
 
 
-# Reproduced from `scripts/check-lido-circuit-breaker-history.py`, whose
-# `declarations()` decides which names its axiom probe covers. Kept
-# deliberately identical in the two decisions that matter -- declaration KIND
-# and PRIVATENESS -- because this gate must never admit a name that gate would
-# not probe. Everything that function does beyond those two (slicing a
-# declaration's exact text for digests) is irrelevant here and is not copied.
-LEAN_DECL_KINDS = (
-    r"(?:theorem|lemma|def|abbrev|structure|inductive|instance|class|example)"
-)
-LEAN_DECL_HEAD = re.compile(
-    r"^(?P<mods>(?:private\s+|protected\s+|noncomputable\s+|partial\s+|unsafe\s+)*)"
-    r"(?P<kind>" + LEAN_DECL_KINDS + r")\s+(?P<name>[^\s({\[:]+)"
-)
-
-
-def strip_lean_comments(source: str) -> str:
-    """Blank every Lean comment, preserving offsets, newlines and strings.
-
-    Reproduced from the history gate's `strip_comments`. Nesting is honoured,
-    `--` inside a string literal is not a comment, and string contents survive.
-    An unterminated block comment raises rather than returning a text whose
-    comment/code separation is unsafe -- guessing there could hide or invent a
-    declaration, and both directions are wrong.
-    """
-
-    out: list[str] = []
-    index, size, depth = 0, len(source), 0
-    while index < size:
-        char = source[index]
-        if depth == 0 and char == '"':
-            out.append(char)
-            index += 1
-            while index < size:
-                out.append(source[index])
-                if source[index] == "\\" and index + 1 < size:
-                    out.append(source[index + 1])
-                    index += 2
-                    continue
-                if source[index] == '"':
-                    index += 1
-                    break
-                index += 1
-            continue
-        if source.startswith("/-", index):
-            depth += 1
-            out.append("  ")
-            index += 2
-            continue
-        if depth > 0 and source.startswith("-/", index):
-            depth -= 1
-            out.append("  ")
-            index += 2
-            continue
-        if depth > 0:
-            out.append("\n" if char == "\n" else " ")
-            index += 1
-            continue
-        if source.startswith("--", index):
-            end = source.find("\n", index)
-            end = size if end < 0 else end
-            out.append(" " * (end - index))
-            index = end
-            continue
-        out.append(char)
-        index += 1
-    if depth:
-        raise Unreadable("unterminated Lean block comment")
-    return "".join(out)
-
-
-def lean_public_theorems(source: str) -> set[str]:
-    """Fully qualified public `theorem`/`lemma` names declared in one module.
-
-    The same rule the history gate's axiom probe selects by: kind is `theorem`
-    or `lemma`, the declaration is not `private`, and the name is qualified by
-    the namespace stack it sits in. Anything this scan cannot classify is
-    simply not matched, which excludes it -- the safe direction, since a name
-    this gate admits but that gate never probes would be an expectation nobody
-    checks.
-    """
-
-    code = strip_lean_comments(source)
-    namespaces: list[str] = []
-    names: set[str] = set()
-    for line in code.split("\n"):
-        opened = re.match(r"^namespace\s+(\S+)", line)
-        if opened:
-            namespaces.append(opened.group(1))
-            continue
-        closed = re.match(r"^end\s+(\S+)", line)
-        if closed:
-            if namespaces and namespaces[-1] == closed.group(1):
-                namespaces.pop()
-            continue
-        head = LEAN_DECL_HEAD.match(line)
-        if head is None:
-            continue
-        if head.group("kind") not in ("theorem", "lemma"):
-            continue
-        if "private" in head.group("mods"):
-            continue
-        names.add(".".join(namespaces) + "." + head.group("name"))
-    return names
-
-
-def qualify(names) -> set[str]:
-    """Short Lido names as the register writes them: fully qualified."""
-
-    return {LIDO_NAMESPACE + name for name in names}
-
-
-def load_authorities(
-    root: pathlib.Path, audited: set[str], pins: dict[str, list[str]]
-) -> tuple[dict[str, Authority], list[str]]:
-    """Build every authority's pin table. Reads; never writes."""
-
-    problems: list[str] = []
-    authorities: dict[str, Authority] = {
-        AUDIT_KEY: Authority(
-            AUDIT_KEY,
-            set(audited),
-            {name: frozenset(axioms) for name, axioms in pins.items()},
-        )
-    }
-
-    def source(key: str) -> pathlib.Path:
-        return root / AUTHORITY_SOURCE[key]
-
-    # --- access: ROLES, with AXIOM_EXCEPTIONS over STANDARD_AXIOMS ----------
-    try:
-        read = python_constants(
-            source("access"), ["ROLES", "AXIOM_EXCEPTIONS", "STANDARD_AXIOMS"]
-        )
-        standard = frozenset(read["STANDARD_AXIOMS"])  # type: ignore[arg-type]
-        exceptions = read["AXIOM_EXCEPTIONS"]
-        names: set[str] = set()
-        for role in read["ROLES"].values():  # type: ignore[union-attr]
-            names |= set(role)
-        expects = {
-            LIDO_NAMESPACE + name: frozenset(
-                exceptions[name] if name in exceptions else standard  # type: ignore[operator]
-            )
-            for name in names
-        }
-        authorities["access"] = Authority("access", qualify(names), expects)
-    except (Unreadable, OSError, TypeError, AttributeError) as exc:
-        problems.append(f"cannot read the access gate's pin table: {exc}")
-
-    # --- enumeration: ROLES, uniform EXPECTED_AXIOMS ------------------------
-    try:
-        read = python_constants(source("enumeration"), ["ROLES", "EXPECTED_AXIOMS"])
-        expected = frozenset(read["EXPECTED_AXIOMS"])  # type: ignore[arg-type]
-        names = set(read["ROLES"])  # type: ignore[arg-type]
-        authorities["enumeration"] = Authority(
-            "enumeration",
-            qualify(names),
-            {LIDO_NAMESPACE + name: expected for name in names},
-        )
-    except (Unreadable, OSError, TypeError, AttributeError) as exc:
-        problems.append(f"cannot read the enumeration gate's pin table: {exc}")
-
-    # --- registry: resolves REQUIRED/EXPECTED_HEADERS; states an expectation
-    # --- only for the four fixture controls in AXIOM_CONTROLS ---------------
-    try:
-        read = python_constants(
-            source("registry"),
-            ["REQUIRED", "EXPECTED_HEADERS", "AXIOM_CONTROLS", "EXPECTED_AXIOMS"],
-        )
-        expected = frozenset(read["EXPECTED_AXIOMS"])  # type: ignore[arg-type]
-        names = set(read["EXPECTED_HEADERS"])  # type: ignore[arg-type]
-        for required in read["REQUIRED"].values():  # type: ignore[union-attr]
-            names |= set(required)
-        resolves = qualify(names)
-        expects = {}
-        for control in read["AXIOM_CONTROLS"]:  # type: ignore[union-attr]
-            qualified = control[1]
-            resolves.add(qualified)
-            expects[qualified] = expected
-        authorities["registry"] = Authority("registry", resolves, expects)
-    except (Unreadable, OSError, TypeError, AttributeError, IndexError) as exc:
-        problems.append(f"cannot read the registry gate's pin table: {exc}")
-
-    # --- history: the axiom population is DERIVED from its owner modules ----
-    #
-    # This authority states a per-name expectation for every public
-    # theorem/lemma in its owners; it simply happens to be constant, and
-    # carries no exception table because there are no exceptions. Its
-    # population is therefore reproduced from the owner sources by the same
-    # rule its probe uses, not read from `HEADER_PINS` -- that table is a
-    # DIGEST population and includes the `def`/`structure` layer
-    # (`RegistryStable`, `Coherent`, `registrySpec`), which is pinned by digest
-    # and never probed. Those names stay RESOLUTION-ONLY, so the register may
-    # keep citing them as premise vocabulary and may not put them in
-    # **Declarations**.
-    try:
-        read = python_constants(
-            source("history"), ["OWNERS", "STANDARD_AXIOMS", "HEADER_PINS"]
-        )
-        standard = frozenset(read["STANDARD_AXIOMS"])  # type: ignore[arg-type]
-        owners = dict(read["OWNERS"])  # type: ignore[arg-type]
-        chain = python_class_constants(
-            source("history"), "ChainActivation", ["active", "key", "path"]
-        )
-        if chain["active"]:
-            owners[str(chain["key"])] = str(chain["path"])
-
-        probed: set[str] = set()
-        for relative in sorted(owners.values()):
-            owner_path = root / str(relative)
-            if not owner_path.is_file():
-                raise Unreadable(f"history owner {relative} is missing")
-            probed |= lean_public_theorems(
-                owner_path.read_text(encoding="utf-8")
-            )
-
-        if not probed:
-            raise Unreadable(
-                "history's owner modules yielded no public theorems; the "
-                "declaration scan no longer matches"
-            )
-
-        digest_only: set[str] = set()
-        for owner in read["HEADER_PINS"].values():  # type: ignore[union-attr]
-            digest_only |= set(owner)
-
-        authorities["history"] = Authority(
-            "history",
-            probed | qualify(digest_only),
-            {name: standard for name in probed},
-        )
-    except (Unreadable, OSError, TypeError, AttributeError) as exc:
-        problems.append(f"cannot read the history gate's pin table: {exc}")
-
-    return authorities, problems
-
-
-# Owner modules `--probe` must import that no readable constant carries.
-# Empty today: the history gate's chain owner is read off `ChainActivation`
-# and every other owner comes from a module table. Kept as the declared place
-# for the next one rather than deleted.
-PROBE_EXTRA_IMPORTS: tuple[str, ...] = ()
-
-
-def probe_import_modules(root: pathlib.Path, axiom_check_text: str) -> list[str]:
-    """The import union `--probe` needs to see every cited declaration.
-
-    The register cites names from several families, and no single existing
-    probe imports all of them: the repository audit's own import list covers the
-    audited population, the access gate's `MODULES` covers the access/temporal
-    family, and the history gate's `MODULES` plus `AXIOM_PROBE_IMPORTS` cover
-    the Registry-history owners. Reusing only `scripts/AxiomCheck.lean`'s
-    imports -- the obvious thing -- would leave every access-family name
-    unresolvable, so the union is taken deliberately.
-
-    Order is deterministic: the audit's imports first, in their own order, then
-    the additions sorted, so a probe file is reproducible.
-    """
-
-    modules: list[str] = []
-    seen: set[str] = set()
-
-    def add(module: str) -> None:
-        if module not in seen:
-            seen.add(module)
-            modules.append(module)
-
-    for line in axiom_check_text.splitlines():
-        if line.startswith("import "):
-            add(line[len("import ") :].strip())
-
-    extra: set[str] = set(PROBE_EXTRA_IMPORTS)
-    for relative, wanted in (
-        (AUTHORITY_SOURCE["access"], ["MODULES"]),
-        (AUTHORITY_SOURCE["history"], ["MODULES", "AXIOM_PROBE_IMPORTS"]),
-    ):
-        try:
-            read = python_constants(root / relative, wanted)
-        except (Unreadable, OSError):
-            continue
-        for value in read.values():
-            if isinstance(value, dict):
-                extra |= {str(item) for item in value.values()}
-            elif isinstance(value, (list, tuple, set)):
-                extra |= {str(item) for item in value}
-    try:
-        chain = python_class_constants(
-            root / AUTHORITY_SOURCE["history"],
-            "ChainActivation",
-            ["active", "module"],
-        )
-        if chain["active"]:
-            extra.add(str(chain["module"]))
-    except (Unreadable, OSError):
-        pass
-    for module in sorted(extra):
-        add(module)
-    return modules
-
-
-def probe_axioms(
-    root: pathlib.Path, names: list[str], axiom_check_text: str
-) -> tuple[dict[str, list[str] | None], list[str]]:
-    """`--probe`: ask Lean directly what the cited declarations depend on.
-
-    Builds a probe carrying the import union above, the shared from-scratch
-    walker (Jaune's `AxiomAudit` module) and one `#full_axioms` row per cited
-    declaration, elaborates it with `lake env lean --stdin` from the repository
-    root through `scripts/axiom_audit.py`, and reports the axiom set per name
-    (None where the walk found no axiom at all). Lean's own `#print axioms` is
-    not asked: it can under-report an imported inductive (lean4#15226).
-
-    Nothing is written into the tree: the probe goes to Lean on standard
-    input, and `lake env` only sets the environment, so `lean` finds the owners
-    through LEAN_PATH.
-
-    Requires the Lean toolchain and a built dependency graph. It is not the
-    default mode and is not what CI runs.
-    """
-
-    problems: list[str] = []
-    reports: dict[str, list[str] | None] = {}
-
-    imports = probe_import_modules(root, axiom_check_text)
-    if not imports:
-        problems.append(
-            f"{AXIOM_CHECK_RELATIVE}: no import lines to reuse; --probe cannot build "
-            "an equivalent environment"
-        )
-        return reports, problems
-
-    gate_semaphore.guard("the Lido assurance axiom probe")
-    try:
-        status, output = axiom_audit.elaborate(
-            root, axiom_audit.probe_source(root, imports, names)
-        )
-    except axiom_audit.AuditError as exc:
-        problems.append(f"--probe: {exc}")
-        return reports, problems
-
-    if status != 0:
-        problems.append(
-            f"--probe: `lake env lean` exited {status}; "
-            f"output follows:\n{output.strip()}"
-        )
-        return reports, problems
-    if FORBIDDEN_AXIOMS.search(output):
-        problems.append(
-            "--probe: a forbidden axiom name appears in the Lean output "
-            "(sorryAx / ofReduceBool / ofReduceNat / _native.)"
-        )
-
-    try:
-        parsed = axiom_audit.parse(output, names)
-    except axiom_audit.AuditError as exc:
-        problems.append(
-            f"--probe: the from-scratch reports do not match the cited names ({exc}). "
-            "The usual cause is that a declaration's owner module is not in the "
-            f"probe's import union ({len(names)} names over {len(imports)} imports); "
-            "add it to the authority's own module table, or to PROBE_EXTRA_IMPORTS here"
-        )
-        return reports, problems
-    for name in names:
-        reports[name] = sorted(parsed[name]) or None
-    return reports, problems
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--root",
-        default=None,
-        help="repository root override; exists so a negative control can point "
-        "the gate at a mutated copy of the tree",
-    )
-    parser.add_argument(
-        "--probe",
-        action="store_true",
-        help="ALSO elaborate a generated from-scratch `#full_axioms` probe for every cited "
-        "declaration and compare Lean's answer against the register directly. "
-        "Requires the Lean toolchain and a built dependency graph; not the "
-        "default and not what CI runs.",
-    )
-    args = parser.parse_args()
-
-    root = (
-        pathlib.Path(args.root)
-        if args.root
-        else pathlib.Path(__file__).resolve().parent.parent
-    )
-
-    def regression(message: str) -> int:
-        print(f"REGRESSION — {VERDICT_SUBJECT}: {message}", file=sys.stderr)
-        return 2
-
-    register_path = root / REGISTER_RELATIVE
-    if not register_path.is_file():
-        return regression(f"missing register {REGISTER_RELATIVE}")
-    register_text = register_path.read_text(encoding="utf-8")
-
-    axiom_check_path = root / AXIOM_CHECK_RELATIVE
-    if not axiom_check_path.is_file():
-        return regression(f"missing audit inventory {AXIOM_CHECK_RELATIVE}")
-    axiom_check_text = axiom_check_path.read_text(encoding="utf-8")
-    audited = set(PRINT_AXIOMS.findall(axiom_check_text))
-    if not audited:
-        return regression(
-            f"{AXIOM_CHECK_RELATIVE} yielded zero `#full_axioms` names; the "
-            "producer pattern no longer matches"
-        )
-
-    pins_path = root / AXIOM_PINS_RELATIVE
-    if not pins_path.is_file():
-        return regression(f"missing axiom pins {AXIOM_PINS_RELATIVE}")
-    pins, pin_problems = parse_axiom_pins(pins_path.read_text(encoding="utf-8"))
-    if pin_problems:
-        for problem in pin_problems:
-            print(f"FAIL — {VERDICT_SUBJECT}: {problem}", file=sys.stderr)
-        return regression(
-            f"could not read the pinned axiom expectations out of {AXIOM_PINS_RELATIVE}"
-        )
-
-    catalogue_path = root / CATALOGUE_RELATIVE
-    if not catalogue_path.is_file():
-        return regression(f"missing gate catalogue {CATALOGUE_RELATIVE}")
-    catalogue_text = catalogue_path.read_text(encoding="utf-8")
+def evaluate(
+    root: pathlib.Path,
+    register_text: str,
+    catalogue_text: str,
+    stricter: dict,
+    frozen_deployment: set,
+    declared: dict,
+) -> tuple[list[str], str]:
+    """Every channel over one register text: (failures, summary)."""
 
     rows, pillars, failures = parse_register(register_text)
 
     if not rows:
-        for failure in failures:
-            print(f"FAIL — {VERDICT_SUBJECT}: {failure}", file=sys.stderr)
-        return regression(
+        return failures + [
             f"{REGISTER_RELATIVE} parsed to zero rows; a register with nothing in "
             "it can never be reported green"
-        )
+        ], ""
 
     # --- Channel 1: structure and anti-vacuity ------------------------------
 
@@ -1219,23 +536,10 @@ def main() -> int:
 
     # --- Channels 2 and 3: declarations and axiom expectations --------------
 
-    authorities, authority_problems = load_authorities(root, audited, pins)
-    if authority_problems:
-        for problem in authority_problems:
-            print(f"FAIL — {VERDICT_SUBJECT}: {problem}", file=sys.stderr)
-        return regression(
-            "could not read one or more axiom-expectation authorities; this gate "
-            "will not check a register against a pin table it could not read"
-        )
-    audit_authority = authorities[AUDIT_KEY]
-
-    tree_names: set[str] | None = None
     declarations_checked = 0
     expectations_matched = 0
     gate_owned = 0
-    resolved_by: dict[str, int] = {}
-    probe_names: list[str] = []
-    probe_expect: dict[str, tuple[str, list[str] | None]] = {}
+    stated_stricter: set[str] = set()
 
     for row in rows:
         raw_declarations = clean_field(row.fields.get("Declarations", ""))
@@ -1280,7 +584,7 @@ def main() -> int:
             )
             continue
 
-        expected_axioms: set[str] | None
+        expected_axioms: set[str]
         if raw_axioms.lower() == NO_AXIOMS_WORD:
             expected_axioms = set()
         else:
@@ -1294,21 +598,6 @@ def main() -> int:
                     f"or the single word `{NO_AXIOMS_WORD}`"
                 )
                 continue
-
-        # The row's own **Gate** field names the authority that must pin its
-        # declarations. That is what makes the field load-bearing rather than
-        # decorative, and it is why a row's evidence owner cannot drift away
-        # from the theorems it claims to own.
-        row_gates = [
-            part.strip()
-            for part in clean_field(row.fields.get("Gate", "")).split(",")
-            if part.strip()
-        ]
-        row_authorities = [
-            authorities[AUTHORITY_BY_GATE[gate]]
-            for gate in row_gates
-            if gate in AUTHORITY_BY_GATE and AUTHORITY_BY_GATE[gate] in authorities
-        ]
 
         for name in names:
             declarations_checked += 1
@@ -1327,160 +616,51 @@ def main() -> int:
                 )
                 continue
 
-            # --- Channel 2: does the row's own authority pin this name? -----
-            if not row_authorities:
-                failures.append(
-                    f"{REGISTER_RELATIVE}:{row.line}: row {row.rowid} cites {name} but "
-                    f"its **Gate** field ({', '.join(row_gates) or 'empty'}) names no "
-                    "axiom-expectation authority. A row may cite declarations only "
-                    "under a gate that pins them — "
-                    f"{', '.join(sorted(AUTHORITY_BY_GATE))} — otherwise it is a "
-                    "gate-owned row"
-                )
-                continue
-
-            resolving = [a for a in row_authorities if name in a.resolves]
-            authority = resolving[0] if resolving else None
-            if authority is None:
-                if tree_names is None:
-                    tree_names = resolve_tree(root)
-                pinned_elsewhere = sorted(
-                    other.key
-                    for other in authorities.values()
-                    if name in other.resolves
-                )
-                if pinned_elsewhere:
-                    detail = (
-                        "it is pinned by the "
-                        + "/".join(pinned_elsewhere)
-                        + " authority instead, so either the row names the wrong gate "
-                        "or it cites the wrong declaration"
-                    )
-                elif name in tree_names:
-                    detail = (
-                        "it exists in Blanc's sources but no gate pins it, so it has "
-                        "no checked axiom expectation. Cite it in **Premises** prose, "
-                        "or make this a gate-owned row"
-                    )
-                else:
-                    detail = (
-                        "it does not resolve anywhere in Blanc's sources — check the "
-                        "spelling and the namespace"
-                    )
+            # --- Channel 2: the name still resolves, spelled in full --------
+            found = declared.get(name)
+            if found is None:
                 failures.append(
                     f"{REGISTER_RELATIVE}:{row.line}: row {row.rowid} cites {name}, "
-                    f"which gate {', '.join(row_gates)} does not pin: {detail}"
+                    "which does not resolve to a declaration in Blanc's sources — "
+                    "check the spelling and the namespace"
                 )
                 continue
-
-            # --- Channel 3: the authority's expectation for this name -------
-            #
-            # A row may name several gates -- the one that owns its evidence
-            # and the one that pins its axioms. Where more than one of them
-            # states an expectation for this name, ALL of them must agree; a
-            # first-match-wins rule would let a row that named two authorities
-            # quietly select the more permissive of them.
-            stated = {
-                other.key: other.expects[name]
-                for other in resolving
-                if name in other.expects
-            }
-            if len(set(stated.values())) > 1:
+            if found[1]:
                 failures.append(
-                    f"REPOSITORY INCONSISTENCY: row {row.rowid} names gates whose "
-                    f"authorities disagree about {name} — "
-                    + "; ".join(
-                        f"{key} [{', '.join(sorted(value)) or 'none'}]"
-                        for key, value in sorted(stated.items())
-                    )
-                    + ". This gate will not resolve the disagreement in either "
-                    "direction"
+                    f"{REGISTER_RELATIVE}:{row.line}: row {row.rowid} cites {name}, "
+                    "which is private; a register may cite only public declarations"
                 )
                 continue
 
-            pinned_frozen = next(iter(stated.values())) if stated else None
-            source_key = (
-                next(iter(sorted(stated))) if stated else authority.key
-            )
-            if pinned_frozen is None:
-                # An authority that pins the name but states no expectation
-                # sends the row to the repository audit.
-                if name in audit_authority.expects:
-                    pinned_frozen = audit_authority.expects[name]
-                    source_key = AUDIT_KEY
-                elif name in audit_authority.resolves:
-                    failures.append(
-                        f"{REGISTER_RELATIVE}:{row.line}: row {row.rowid} cites {name}, "
-                        f"which is audited but has no pinned expectation in "
-                        f"{AXIOM_PINS_RELATIVE}'s ROWS table; an unpinned name is a "
-                        "gap, not a row this gate may skip"
-                    )
-                    continue
-                else:
-                    failures.append(
-                        f"{REGISTER_RELATIVE}:{row.line}: row {row.rowid} cites {name}. "
-                        f"Gate {', '.join(row_gates)} pins the name but states no "
-                        "axiom expectation for it, and the repository audit does not "
-                        "carry it either. Move the name into **Premises** prose, or "
-                        "make this a gate-owned row"
-                    )
-                    continue
-
-            # Two authorities pinning one name must agree with each other.
-            if (
-                source_key != AUDIT_KEY
-                and name in audit_authority.expects
-                and audit_authority.expects[name] != pinned_frozen
-            ):
-                failures.append(
-                    f"REPOSITORY INCONSISTENCY: {name} is pinned by both the "
-                    f"{source_key} authority [{', '.join(sorted(pinned_frozen)) or 'none'}] "
-                    f"and {AXIOM_PINS_RELATIVE} "
-                    f"[{', '.join(sorted(audit_authority.expects[name])) or 'none'}]. "
-                    f"Row {row.rowid} cannot be checked until the two gates agree; "
-                    "this gate will not resolve the disagreement in either direction"
+            # --- Channel 3: the one authority's expectation for this name ---
+            claim = stricter.get(name)
+            authority = set(claim) if claim is not None else set(STANDARD_AXIOMS)
+            if expected_axioms != authority:
+                where = (
+                    f"the stricter claim in {AXIOM_CHECK_RELATIVE}"
+                    if claim is not None
+                    else f"the union axiom walk's bound (no stricter claim for it in "
+                    f"{AXIOM_CHECK_RELATIVE})"
                 )
-                continue
-
-            pinned = set(pinned_frozen)
-            if pinned != expected_axioms:
-                if not pinned:
-                    detail = (
-                        f"the {source_key} authority pins no axioms at all, so the "
-                        f"register must write the single word `{NO_AXIOMS_WORD}`; it "
-                        f"writes [{', '.join(sorted(expected_axioms))}]"
-                    )
-                elif not expected_axioms:
-                    detail = (
-                        f"the register writes `{NO_AXIOMS_WORD}` but the "
-                        f"{source_key} authority pins "
-                        f"[{', '.join(sorted(pinned))}]"
-                    )
-                else:
-                    extra = sorted(expected_axioms - pinned)
-                    missing = sorted(pinned - expected_axioms)
-                    detail = (
-                        f"register [{', '.join(sorted(expected_axioms))}] vs "
-                        f"{source_key} authority [{', '.join(sorted(pinned))}]"
-                    )
-                    if extra:
-                        detail += "; register claims: " + " ".join(extra)
-                    if missing:
-                        detail += "; register omits: " + " ".join(missing)
                 failures.append(
                     f"{REGISTER_RELATIVE}:{row.line}: row {row.rowid} — axiom "
-                    f"expectation for {name} disagrees: {detail}"
+                    f"expectation for {name} disagrees: register "
+                    f"[{', '.join(sorted(expected_axioms)) or NO_AXIOMS_WORD}] vs {where} "
+                    f"[{', '.join(sorted(authority)) or NO_AXIOMS_WORD}]"
                 )
                 continue
-
+            if claim is not None:
+                stated_stricter.add(name)
             expectations_matched += 1
-            resolved_by[authority.key] = resolved_by.get(authority.key, 0) + 1
-            if name not in probe_expect:
-                probe_names.append(name)
-                probe_expect[name] = (
-                    row.rowid,
-                    None if not expected_axioms else sorted(expected_axioms),
-                )
+
+    # Every stricter claim must be stated by a row above or frozen by the deployment
+    # gate: a smaller axiom set that nothing states is not kept.
+    for name in sorted(set(stricter) - stated_stricter - frozen_deployment):
+        failures.append(
+            f"{AXIOM_CHECK_RELATIVE}: the stricter axiom claim for {name} is stated by no "
+            f"register row and is not one of the deployment gate's frozen names; drop it "
+            "(the union walk already bounds it) or state it"
+        )
 
     if gate_owned != EXPECTED_GATE_OWNED_ROWS:
         failures.append(
@@ -1492,14 +672,11 @@ def main() -> int:
     # --- Channel 4: gate existence and registration -------------------------
 
     gates_checked = 0
-    multi_gate_rows = 0
     for row in rows:
         raw_gates = clean_field(row.fields.get("Gate", ""))
         if not raw_gates:
             continue
         named = [part.strip() for part in raw_gates.split(",") if part.strip()]
-        if len(named) > 1:
-            multi_gate_rows += 1
         for gate in named:
             gates_checked += 1
             if not (root / gate).is_file():
@@ -1514,14 +691,6 @@ def main() -> int:
                     f"{gate}, which exists but is not catalogued in "
                     f"{CATALOGUE_RELATIVE}"
                 )
-
-    if multi_gate_rows != EXPECTED_MULTI_GATE_ROWS:
-        failures.append(
-            f"{REGISTER_RELATIVE}: {multi_gate_rows} row(s) name more than one gate, "
-            f"pinned at {EXPECTED_MULTI_GATE_ROWS}. A second gate name is the one "
-            "edit that can rescue a mis-attributed declaration by giving it another "
-            "authority to resolve against, so this count is part of the contract"
-        )
 
     # --- Channel 5: non-claim coverage --------------------------------------
 
@@ -1550,71 +719,129 @@ def main() -> int:
                 "restore the sentence, or retire the phrase here deliberately"
             )
 
-    # --- optional probe -----------------------------------------------------
-
-    probed = 0
-    if args.probe:
-        print(
-            "note: --probe elaborates Lean. The DEFAULT mode is static and derives "
-            "its authority over the axiom column from the gates that own the pin "
-            f"tables — `{AXIOM_PINS_RELATIVE} --no-build` and the Lido family "
-            "gates — each of which verifies its own expectations against Lean."
-        )
-        # The registry gate's four axiom pins are declarations in fixture FILES
-        # (`scripts/LidoCircuitBreaker*.lean`), which it probes by appending to a
-        # copy of the fixture rather than by importing a module. There is no
-        # module to import here, so --probe cannot reach them and says so rather
-        # than reporting a missing report as a disagreement.
-        fixture_only = sorted(
-            name
-            for name in probe_names
-            if name in authorities["registry"].expects
-        )
-        if fixture_only:
-            print(
-                "note: --probe cannot reach "
-                + ", ".join(fixture_only)
-                + " — the registry gate pins these in fixture files, not in an "
-                "importable module; the static check above still covers them."
-            )
-        probe_names = [name for name in probe_names if name not in fixture_only]
-        reports, probe_problems = probe_axioms(root, probe_names, axiom_check_text)
-        failures.extend(probe_problems)
-        for name in probe_names:
-            if name not in reports:
-                continue
-            rowid, expected = probe_expect[name]
-            actual = reports[name]
-            actual_set = set(actual or [])
-            expected_set = set(expected or [])
-            if actual_set == expected_set:
-                probed += 1
-                print(f"  ok  {rowid} {name}: {', '.join(sorted(actual_set)) or 'none'}")
-            else:
-                failures.append(
-                    f"--probe: row {rowid} — Lean reports "
-                    f"[{', '.join(sorted(actual_set)) or 'none'}] for {name}; the "
-                    f"register writes [{', '.join(sorted(expected_set)) or 'none'}]"
-                )
-
     # --- verdict ------------------------------------------------------------
 
-    breakdown = ", ".join(
-        f"{count} {key}" for key, count in sorted(resolved_by.items())
-    )
     summary = (
         f"{len(rows)} rows across {len(pillars)} pillars, "
-        f"{gate_owned} gate-owned row(s), {multi_gate_rows} multi-gate row(s), "
-        f"{declarations_checked} declarations resolved"
-        + (f" ({breakdown})" if breakdown else "")
-        + f", {expectations_matched} axiom expectations matched, "
+        f"{gate_owned} gate-owned row(s), "
+        f"{declarations_checked} declarations resolved, "
+        f"{expectations_matched} axiom expectations matched ({len(stricter)} stricter "
+        f"claims), "
         f"{gates_checked} gate paths registered, "
         f"{phrases_present}/{len(NONCLAIM_PHRASES)} non-claim phrases present, "
         f"{shape_present}/{len(SHARED_SHAPE_CLAUSES)} shared-shape clauses present"
     )
-    if args.probe:
-        summary += f", {probed} declarations probed against Lean"
 
+    return failures, summary
+
+
+SELF_TEST_CASES = 5
+
+
+def self_test(
+    root: pathlib.Path,
+    register_text: str,
+    catalogue_text: str,
+    stricter: dict,
+    frozen_deployment: set,
+    declared: dict,
+) -> list[str]:
+    """In-memory mutants of the register and of the stricter claims; each must FAIL here."""
+
+    problems: list[str] = []
+
+    def rejected(label: str, expect: str, register: str, claims: dict) -> None:
+        failures, _ = evaluate(
+            root, register, catalogue_text, claims, frozen_deployment, declared
+        )
+        if not any(expect in failure for failure in failures):
+            problems.append(f"{label}: expected a failure mentioning {expect!r}, got {failures[:2]}")
+
+    cited = "Blanc.LidoCircuitBreaker.RegistryWitness.entries_length_le"
+    if cited not in register_text:
+        problems.append(f"the self-test's cited declaration {cited} is no longer in the register")
+    rejected("misspelled declaration", "does not resolve",
+             register_text.replace(cited, cited + "_typo", 1), stricter)
+    rejected("unqualified declaration", "not fully qualified",
+             register_text.replace(cited, "entries_length_le", 1), stricter)
+    standard_row = "- **Axioms:** `propext`, `Classical.choice`, `Quot.sound`"
+    rejected("wrong axiom field", "axiom expectation",
+             register_text.replace(standard_row, "- **Axioms:** `propext`, `Classical.choice`", 1),
+             stricter)
+    claim = "Blanc.LidoCircuitBreaker.emptyWitness"
+    weakened = dict(stricter)
+    weakened[claim] = frozenset({"propext"})
+    rejected("stricter claim moved away from the register", "axiom expectation", register_text,
+             weakened)
+    orphan = dict(stricter)
+    orphan["Blanc.LidoCircuitBreaker.RegistryWitness.entries_length_le"] = frozenset({"propext"})
+    rejected("stricter claim stated by nothing", "stated by no register row", register_text,
+             orphan)
+    return problems
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--root",
+        default=None,
+        help="repository root override; exists so a negative control can point "
+        "the gate at a mutated copy of the tree",
+    )
+    parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help="ALSO run the in-memory mutation controls: a misspelled declaration, an "
+        "unqualified one, a wrong axiom field, a stricter claim moved away from the "
+        "register and an orphan stricter claim must each be rejected",
+    )
+    args = parser.parse_args()
+
+    root = (
+        pathlib.Path(args.root)
+        if args.root
+        else pathlib.Path(__file__).resolve().parent.parent
+    )
+
+    def regression(message: str) -> int:
+        print(f"REGRESSION — {VERDICT_SUBJECT}: {message}", file=sys.stderr)
+        return 2
+
+    register_path = root / REGISTER_RELATIVE
+    if not register_path.is_file():
+        return regression(f"missing register {REGISTER_RELATIVE}")
+    register_text = register_path.read_text(encoding="utf-8")
+
+    axiom_check_path = root / AXIOM_CHECK_RELATIVE
+    if not axiom_check_path.is_file():
+        return regression(f"missing audit source {AXIOM_CHECK_RELATIVE}")
+    try:
+        stricter = axiom_audit.stricter_claims(root, AXIOM_CHECK_RELATIVE)
+    except axiom_audit.AuditError as exc:
+        return regression(f"{AXIOM_CHECK_RELATIVE} is not a valid audit source: {exc}")
+    try:
+        frozen_deployment = deployment_frozen_names(root)
+    except (Unreadable, OSError, TypeError, AttributeError) as exc:
+        return regression(f"cannot read the deployment gate's frozen claims: {exc}")
+    try:
+        declared = axiom_audit.declared_names(root, FIXTURES_RELATIVE)
+    except axiom_audit.AuditError as exc:
+        return regression(f"cannot scan Blanc's sources for declarations: {exc}")
+
+    catalogue_path = root / CATALOGUE_RELATIVE
+    if not catalogue_path.is_file():
+        return regression(f"missing gate catalogue {CATALOGUE_RELATIVE}")
+    catalogue_text = catalogue_path.read_text(encoding="utf-8")
+
+    failures, summary = evaluate(
+        root, register_text, catalogue_text, stricter, frozen_deployment, declared
+    )
+    if args.self_test:
+        problems = self_test(
+            root, register_text, catalogue_text, stricter, frozen_deployment, declared
+        )
+        failures = failures + [f"self-test: {problem}" for problem in problems]
+        summary += f", {SELF_TEST_CASES} mutation controls"
     if failures:
         for failure in failures:
             print(f"FAIL — {VERDICT_SUBJECT}: {failure}", file=sys.stderr)

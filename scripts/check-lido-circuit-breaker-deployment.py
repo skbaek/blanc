@@ -14,6 +14,9 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import axiom_audit  # noqa: E402
+
 DEFAULT_ROOT = Path(__file__).resolve().parent.parent
 VERDICT = "S9 Lido CircuitBreaker deployment-root assurance"
 
@@ -43,14 +46,26 @@ SOURCES = {
 }
 
 AXIOM_CHECK = "scripts/AxiomCheck.lean"
-AXIOM_GATE = "scripts/check.sh"
 PUBLIC_THEOREM_COUNT = 164
 PUBLIC_THEOREM_INVENTORY_SHA256 = (
     "66d0702ed365bee6306f65a786fab7389b9bc8592371c1997091596a3fc264a6"
 )
-AXIOM_EXPECTATIONS_SHA256 = (
-    "570d28ec69708eb9f47747ffb5e9a06ee66dad26a12d8627f40ff4b6fac331f5"
-)
+# The whole axiom claim of this family. Every public deployment theorem is covered by the
+# repository's one union walk (`scripts/AxiomCheck.lean`, `scripts/check.sh`), which bounds the
+# axioms of every Blanc constant by `propext`, `Classical.choice` and `Quot.sound`. These five
+# public names are the ones whose axiom sets this gate has always frozen as SMALLER than that
+# bound; they stay explicit `#expect_axioms` rows of `scripts/AxiomCheck.lean`, checked in both
+# directions, and this table is the copy this gate compares them against, so a claim cannot be
+# dropped, weakened or added there without this gate noticing. An empty set is "no axioms at all".
+STRICTER_CLAIMS = {
+    "Blanc.jauneListCompare_eq_compareLex": frozenset({"propext"}),
+    "Blanc.LidoCircuitBreaker.officialConstructorEventScratch_eq": frozenset(),
+    "Blanc.LidoCircuitBreaker.officialConstructorDecodedMemory_size": frozenset({"propext"}),
+    "Blanc.LidoCircuitBreaker.officialConstructorDecodedMemory_read_memory":
+        frozenset({"propext", "Quot.sound"}),
+    "Blanc.LidoCircuitBreaker.ConstructorPatchInvariant.read_memory":
+        frozenset({"propext", "Quot.sound"}),
+}
 
 # Kept as digests rather than copies to make this executable readable.  The
 # digest is over comment-free, whitespace-normalised *complete declarations*,
@@ -421,10 +436,12 @@ def public_theorem_names(sources: dict[str, str]) -> list[str]:
 
 
 def require_axiom_inventory(root: Path, sources: dict[str, str]) -> None:
-    """Tie this source family to its exact repository-wide axiom probes."""
-    # The constructor owner is included only to enforce the private-to-proof
-    # façade below.  Its pre-existing theorem inventory is outside the nine
-    # deployment proof owners and therefore outside this exact 164-name set.
+    """Tie this source family to the repository's axiom audit.
+
+    The constructor owner is included only to enforce the private-to-proof
+    façade below.  Its pre-existing theorem inventory is outside the nine
+    deployment proof owners and therefore outside this exact 164-name set.
+    """
     names = public_theorem_names({
         owner: source for owner, source in sources.items()
         if owner != "constructor"
@@ -439,39 +456,16 @@ def require_axiom_inventory(root: Path, sources: dict[str, str]) -> None:
     if hashlib.sha256(inventory.encode()).hexdigest() != PUBLIC_THEOREM_INVENTORY_SHA256:
         fail("public theorem inventory changed")
 
-    axiom_path, gate_path = root / AXIOM_CHECK, root / AXIOM_GATE
-    if not axiom_path.is_file() or not gate_path.is_file():
-        fail("deployment axiom inventory or exact-set gate is missing")
-    axiom_text, gate_text = axiom_path.read_text(), gate_path.read_text()
-    if axiom_text.count("import Blanc.LidoCircuitBreakerDeploymentRoot") != 1:
-        fail("axiom inventory must import the final deployment-root owner exactly once")
-    printed = re.findall(r"^#full_axioms\s+([^\s]+)", axiom_text, re.M)
-    for name in names:
-        if printed.count(name) != 1:
-            fail(f"{name}: expected exactly one public axiom probe")
-
-    standard = re.search(r'^STANDARD="([^"]*)"$', gate_text, re.M)
-    marker = 'ROWS="\\\n'
-    if standard is None or marker not in gate_text or '"\n# Secondary' not in gate_text:
-        fail("cannot parse the repository exact-set axiom gate")
-    row_block = gate_text.split(marker, 1)[1].split('"\n# Secondary', 1)[0]
-    rows: dict[str, list[str]] = {}
-    for row in row_block.splitlines():
-        if "|" not in row:
-            continue
-        name, expected = row.split("|", 1)
-        rows.setdefault(name, []).append(
-            expected.replace("$STANDARD", standard.group(1))
-        )
-    expectations: list[str] = []
-    for name in names:
-        values = rows.get(name, [])
-        if len(values) != 1:
-            fail(f"{name}: expected exactly one pinned axiom expectation")
-        expectations.append(name + "|" + values[0])
-    canonical = "\n".join(sorted(expectations)) + "\n"
-    if hashlib.sha256(canonical.encode()).hexdigest() != AXIOM_EXPECTATIONS_SHA256:
-        fail("deployment public axiom expectations changed")
+    if not (root / AXIOM_CHECK).is_file():
+        fail("the repository axiom audit source is missing")
+    try:
+        claims = axiom_audit.stricter_claims(root, AXIOM_CHECK)
+    except axiom_audit.AuditError as exc:
+        fail(f"the repository axiom audit source is not valid: {exc}")
+    family = set(names) | set(STRICTER_CLAIMS)
+    observed = {name: axioms for name, axioms in claims.items() if name in family}
+    if observed != STRICTER_CLAIMS:
+        fail("deployment stricter axiom claims changed")
 
 
 def require_channels(decls: dict[str, str]) -> None:
@@ -643,7 +637,8 @@ def main(argv: list[str]) -> int:
         f"{VERDICT}: PASS ({len(PINS)} full pins, "
         f"{len(REDUCTION_CERTIFICATE_PINS)} reduction certificates, "
         f"{sum(map(len, CHANNELS.values()))} semantic fragments, "
-        f"{PUBLIC_THEOREM_COUNT} axiom-pinned public theorems)"
+        f"{PUBLIC_THEOREM_COUNT} public theorems under the union axiom walk, "
+        f"{len(STRICTER_CLAIMS)} stricter claims)"
     )
     return 0
 

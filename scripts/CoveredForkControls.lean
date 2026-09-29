@@ -20,8 +20,9 @@ The file is elaborated by `scripts/check-claims.sh`.  It holds:
 * the Amsterdam-negative control, in both forms;
 * an exact pin of the covered list.
 
-The witnesses are deliberately not in `scripts/AxiomCheck.lean`, so the
-published audited-theorem count is unchanged (master decision E8-A).
+The witnesses are deliberately not modules of the Blanc library (this is a script elaborated
+by `scripts/check-claims.sh`), so they are outside the union axiom walk and the published leaf
+count is unchanged (master decision E8-A).
 
 Bite, shown once in a disposable mutation worktree and recorded in the Plans
 B2 evidence: removing `.osaka` from `Blanc.coveredForks` breaks the Osaka

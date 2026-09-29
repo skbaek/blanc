@@ -2,8 +2,8 @@
 
 This is the fail-closed claim map for Blanc's BeaconDeposit opening model,
 compiled port, exact direct deployment, and admitted open history.  It does not
-create evidence.  Every declaration below is independently elaborated by the
-repository axiom audit and statement-pinned by the claims gate; the finite
+create evidence.  Every declaration below is covered by the repository's one union
+axiom walk and statement-pinned by the claims gate; the finite
 channels are corroboration at named concrete cases, not premises of the Lean
 theorems.
 

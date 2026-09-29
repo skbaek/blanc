@@ -128,11 +128,12 @@ jobs:
           execution-specs/venv/bin/python -m pip install --disable-pip-version-check -e execution-specs
       - name: Build the Jaune fixture runner
         run: lake build jaune/jaune
-      # The proof-recipe authoring leaf is deliberately unreachable from
-      # Blanc.lean, so the default build never produces its oleans, but
-      # scripts/check.sh --no-build elaborates
-      # scripts/ProofRecipeSuggestions.lean, which imports it. Build it
-      # explicitly here, ahead of every --no-build axiom consumer below.
+      # The proof-recipe authoring leaf (which imports its generated registry)
+      # is deliberately unreachable from Blanc.lean, so the default build never
+      # produces their oleans, but scripts/check.sh --no-build elaborates
+      # scripts/ProofRecipeSuggestions.lean, which imports the leaf, and its
+      # union axiom walk imports both. Build it explicitly here, ahead of
+      # every --no-build axiom consumer below.
       - name: Build the proof-recipe authoring leaf
         run: lake build Blanc.ProofRecipeTactic
       - name: Certify checked build artifacts
@@ -165,13 +166,15 @@ jobs:
         run: scripts/check-transient-settlement.sh --semantic-only
       - name: Error(string) payload cross-derivation (offline)
         run: scripts/check-error-data.sh
-      - name: Audit headline theorem axioms
+      - name: One union axiom walk over the whole library, and the leaf search
         run: scripts/check.sh --no-build
+      - name: Leaf-search bite controls
+        run: scripts/check-leaf-audit.sh --self-test
       - name: Pin WETH10/Lido artifact statements
         run: scripts/check-claims.sh
       - name: Proxy-pair upgrade static migration and R2 assurance
         run: scripts/check-proxy-pair-upgrade.sh --static-only
-      - name: Proxy-pair upgrade compiled witnesses and axioms
+      - name: Proxy-pair upgrade compiled witnesses
         run: scripts/check-proxy-pair-upgrade.sh --semantic-only --composed-prerequisites
       - name: WETH fixture suite (Jaune vs frozen EELS on the witnessed bytes)
         run: scripts/check-weth.sh --no-build

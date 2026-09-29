@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Fail-closed local assurance for enumeration-observability S3 controls.
 
-It owns the gate fixture, exact public-role headers, trust/deletion/mutation
-controls, and exact axiom expectations for the landed S3 theorem family.
+It owns the gate fixture, exact public-role headers, and trust/deletion/mutation
+controls for the landed S3 theorem family. Its theorems' axioms are not probed
+here: every Blanc constant is covered by the repository's one union axiom walk
+(`scripts/check.sh`, `scripts/AxiomCheck.lean`).
 """
 from __future__ import annotations
 
@@ -13,7 +15,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-import axiom_audit
 import gate_semaphore
 from lean_header import HeaderError, header_before_definition, parser_controls
 
@@ -48,7 +49,6 @@ ROLES = {
     "pauserSet_settled_error_not_observable": "fc87de212f62e2e7eed74b6cefe6bd6cbeaa5e5b1f098c997f70b5543a5423b1",
     "registryObservation_sound": "8ced8cd9fb603f195d86180c6860ba7cdfca19e7f301a0ba43bab636993cc951",
 }
-EXPECTED_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
 
 def fail(message: str) -> None:
     raise SystemExit(f"REGRESSION — S3 enumeration assurance: {message}")
@@ -94,23 +94,6 @@ def compile_fixture() -> None:
     )
     if run.returncode:
         fail("fixture failed to compile:\n" + run.stdout)
-
-def axiom_checks() -> None:
-    gate_semaphore.guard("the Lido enumeration axiom probe")
-    names = ["Blanc.LidoCircuitBreaker." + name for name in ROLES]
-    try:
-        reports = axiom_audit.audit(
-            ROOT, ["Blanc.LidoCircuitBreakerEnumeration"], names
-        )
-    except axiom_audit.AuditError as error:
-        fail(f"from-scratch axiom probe failed: {error}")
-    for qualified in names:
-        actual = set(reports[qualified])
-        if actual != EXPECTED_AXIOMS:
-            fail(
-                f"{qualified}: axioms {sorted(actual)}, "
-                f"expected {sorted(EXPECTED_AXIOMS)}"
-            )
 
 def deletion_control(source: str) -> None:
     # Mutate a required declaration name in a temporary copy: the parser must
@@ -196,8 +179,7 @@ def main() -> None:
     deletion_control(fixture)
     header_mutation_controls(text(OWNER))
     compile_fixture()
-    axiom_checks()
-    print("OK — S3 enumeration assurance: 18 Lean controls; 10 exact public/auxiliary headers and axiom pins; exact-code Registry witnesses at empty/singleton/64; ABI/order/padding/wrap, cursor independence and collision rejection, writer certificate rejection, cap, no-op model/event-omission and event-shape controls; header mutation, deletion and trust controls")
+    print("OK — S3 enumeration assurance: 18 Lean controls; 10 exact public/auxiliary headers; exact-code Registry witnesses at empty/singleton/64; ABI/order/padding/wrap, cursor independence and collision rejection, writer certificate rejection, cap, no-op model/event-omission and event-shape controls; header mutation, deletion and trust controls")
 
 if __name__ == "__main__":
     main()

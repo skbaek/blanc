@@ -301,14 +301,11 @@
   {
    "id": "lido-history",
    "work": [
-    "candidate-positive",
     "static-corpus",
     "harness-self-test"
    ],
-   "resource_class": "elaboration",
-   "prerequisites": [
-    "lake-build"
-   ],
+   "resource_class": "light",
+   "prerequisites": [],
    "historical_catches": []
   },
   {
@@ -619,6 +616,15 @@
    "prerequisites": [
     "lake-build"
    ],
+   "historical_catches": []
+  },
+  {
+   "id": "leaf-audit-self-test",
+   "work": [
+    "harness-self-test"
+   ],
+   "resource_class": "elaboration",
+   "prerequisites": [],
    "historical_catches": []
   },
   {
