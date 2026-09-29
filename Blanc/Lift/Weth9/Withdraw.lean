@@ -196,37 +196,31 @@ section Withdraw
 
 variable {c : ContractSpecSem}
 
-/-- **Walk of WETH9 `withdraw(wad)` (entry 8)**, over any step relation refining Jaune's.  A run of the
-entry from a state with `wad` on top of the stack: the balance `require` holds, the storage at the `CALL`
-is the debited storage (with unchanged balances and code), the `CALL` sends `wad` (the stack there starts
-`gas, callee, wad`), and everything after the `CALL` is state-silent, so the run's final state is the
-`CALL`'s resumed state. -/
-theorem Weth9.withdraw_walk_gen {P : Sevm → Devm → Ninst → Devm → Prop}
-    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {sevm : Sevm}
-    {devm : Devm} {o : Outcome} {g : SFunc}
-    (hg : prog[8]? = some g) (run : SFunc.RunP P prog sevm devm g o) :
-    ∃ (wad : B256) (rest : Stack) (d10 sf : Devm) (gw cw : B256) (ys : Stack),
+/-- **The facts of a `withdraw(wad)` run up to its `CALL`**, from the runs of its straight lines: the balance
+`require` holds, the storage at the `CALL` is the debited storage (balances and code unchanged), and the
+stack there starts `gas, callee, wad`.  Shared by the big-step walk `Weth9.withdraw_walk_gen` and the
+reach walk to the `CALL`. -/
+theorem Weth9.withdraw_prefix {sevm : Sevm}
+    {devm d0 d1 d2 d3 d4 d5 d6 d7 d8 d9 d10 : Devm} {dw w : B256}
+    (burn0 : Devm.Burn devm d0)
+    (hdup : Line.Run sevm d0 [.reg (.dup 0)] d1)
+    (hslot : Line.Run sevm d1 slotLine d2)
+    (hcheck : Line.Run sevm d2 checkTail d3)
+    (hwnz : w ≠ 0) (pop : Devm.PopBurn [dw, w] d3 d4)
+    (burn1 : Devm.Burn d4 d5)
+    (hdup' : Line.Run sevm d5 [.reg (.dup 0)] d6)
+    (hslot' : Line.Run sevm d6 slotLine d7)
+    (hdebit : Line.Run sevm d7 (updLine (.reg .sub)) d8)
+    (hsstore : Line.Run sevm d8 [Ninst.sstore] d9)
+    (hsend : Line.Run sevm d9 sendLine d10) :
+    ∃ (wad : B256) (rest : Stack) (gw cw : B256) (ys : Stack),
       devm.stack = wad :: rest ∧
       wad ≤ (Devm.getStor devm sevm.currentTarget).get (balSlot sevm.caller) ∧
       Devm.getStor d10 sevm.currentTarget =
         (Devm.getStor devm sevm.currentTarget).set (balSlot sevm.caller)
           ((Devm.getStor devm sevm.currentTarget).get (balSlot sevm.caller) - wad) ∧
       d10.getBal = devm.getBal ∧ d10.getCode = devm.getCode ∧
-      gw :: cw :: wad :: ys <<+ d10.stack ∧
-      P sevm d10 (.exec .call) sf ∧ (Outcome.devm o).state = sf.state := by
-  have hg' : g = t_09d9_c8 := by
-    simpa [prog, Cert.prog, cert] using hg.symm
-  subst g
-  rw [withdraw_tree_eq] at run
-  cases run with
-  | dest burn0 run =>
-  rename_i d0
-  obtain ⟨d1, hdup, run⟩ := run_chain_prefixP [.reg (.dup 0)] (slotLine ++ checkTail) run
-  replace hdup := hdup.toRun hP
-  obtain ⟨d2, hslot, run⟩ := run_chain_prefixP slotLine checkTail run
-  replace hslot := hslot.toRun hP
-  obtain ⟨d3, hcheck, run⟩ := run_chain_prefixP checkTail [] run
-  replace hcheck := hcheck.toRun hP
+      gw :: cw :: wad :: ys <<+ d10.stack := by
   have hdup1 := of_run_singleton hdup
   obtain ⟨wad, hw, hpush⟩ := of_run_dup hdup1
   obtain ⟨rest, hrest⟩ : ∃ rest, d0.stack = wad :: rest := by
@@ -247,36 +241,10 @@ theorem Weth9.withdraw_walk_gen {P : Sevm → Devm → Ninst → Devm → Prop}
   have same23 : SameCode d2 d3 := ⟨Line.of_inv Devm.getStor (by line_inv) hcheck,
       Line.of_inv Devm.getBal (by line_inv) hcheck,
       Line.of_inv Devm.getCode (by line_inv) hcheck⟩
-  change SFunc.RunP P prog sevm d3 (.branch t_0a23_c8 t_0a27_c8) o at run
-  cases run with
-  | zero _ _ run => exact absurd run not_run_revert_tail
-  | succ dw w hwnz pop run =>
-  rename_i d4
   obtain ⟨-, hcond, hp4⟩ := prefix_of_popBurn2 hp3 pop
   subst hcond
   have hle := le_of_check hwnz
   have same34 : SameCode d3 d4 := SameCode.of_state pop.state
-  rw [debit_tree_eq] at run
-  cases run with
-  | dest burn1 run =>
-  rename_i d5
-  obtain ⟨d6, hdup', run⟩ := run_chain_prefixP [.reg (.dup 0)]
-    (slotLine ++ updLine (.reg .sub) ++ [Ninst.sstore] ++ sendLine ++ [.exec .call]) run
-  replace hdup' := hdup'.toRun hP
-  obtain ⟨d7, hslot', run⟩ := run_chain_prefixP slotLine
-    (updLine (.reg .sub) ++ [Ninst.sstore] ++ sendLine ++ [.exec .call]) run
-  replace hslot' := hslot'.toRun hP
-  obtain ⟨d8, hdebit, run⟩ := run_chain_prefixP (updLine (.reg .sub))
-    ([Ninst.sstore] ++ sendLine ++ [.exec .call]) run
-  replace hdebit := hdebit.toRun hP
-  obtain ⟨d9, hsstore, run⟩ := run_chain_prefixP [Ninst.sstore]
-    (sendLine ++ [.exec .call]) run
-  replace hsstore := hsstore.toRun hP
-  obtain ⟨d10, hsend, run⟩ := run_chain_prefixP sendLine [.exec .call] run
-  replace hsend := hsend.toRun hP
-  obtain ⟨d11, hcall, run⟩ := run_chain_prefixP [.exec .call] [] run
-  change SFunc.RunP P prog sevm d11 afterCall o at run
-  -- the debit walk
   have same45 : SameCode d4 d5 := SameCode.of_state burn1.state
   have hdup'1 := of_run_singleton hdup'
   have hp5 : wad :: rest <<+ d5.stack := by
@@ -325,7 +293,68 @@ theorem Weth9.withdraw_walk_gen {P : Sevm → Devm → Ninst → Devm → Prop}
     rw [← same910.bal, ← hbal89, ← same08.bal]
   have hcode10 : d10.getCode = devm.getCode := by
     rw [← same910.code, ← hcode89, ← same08.code]
-  refine ⟨wad, rest, d10, d11, gw, cw, ys, burn0.stack.trans hrest, hle, hstor10, hbal10,
+  exact ⟨wad, rest, gw, cw, ys, burn0.stack.trans hrest, hle, hstor10, hbal10,
+    hcode10, hp10⟩
+
+/-- **Walk of WETH9 `withdraw(wad)` (entry 8)**, over any step relation refining Jaune's.  A run of the
+entry from a state with `wad` on top of the stack: the balance `require` holds, the storage at the `CALL`
+is the debited storage (with unchanged balances and code), the `CALL` sends `wad` (the stack there starts
+`gas, callee, wad`), and everything after the `CALL` is state-silent, so the run's final state is the
+`CALL`'s resumed state. -/
+theorem Weth9.withdraw_walk_gen {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {sevm : Sevm}
+    {devm : Devm} {o : Outcome} {g : SFunc}
+    (hg : prog[8]? = some g) (run : SFunc.RunP P prog sevm devm g o) :
+    ∃ (wad : B256) (rest : Stack) (d10 sf : Devm) (gw cw : B256) (ys : Stack),
+      devm.stack = wad :: rest ∧
+      wad ≤ (Devm.getStor devm sevm.currentTarget).get (balSlot sevm.caller) ∧
+      Devm.getStor d10 sevm.currentTarget =
+        (Devm.getStor devm sevm.currentTarget).set (balSlot sevm.caller)
+          ((Devm.getStor devm sevm.currentTarget).get (balSlot sevm.caller) - wad) ∧
+      d10.getBal = devm.getBal ∧ d10.getCode = devm.getCode ∧
+      gw :: cw :: wad :: ys <<+ d10.stack ∧
+      P sevm d10 (.exec .call) sf ∧ (Outcome.devm o).state = sf.state := by
+  have hg' : g = t_09d9_c8 := by
+    simpa [prog, Cert.prog, cert] using hg.symm
+  subst g
+  rw [withdraw_tree_eq] at run
+  cases run with
+  | dest burn0 run =>
+  rename_i d0
+  obtain ⟨d1, hdup, run⟩ := run_chain_prefixP [.reg (.dup 0)] (slotLine ++ checkTail) run
+  replace hdup := hdup.toRun hP
+  obtain ⟨d2, hslot, run⟩ := run_chain_prefixP slotLine checkTail run
+  replace hslot := hslot.toRun hP
+  obtain ⟨d3, hcheck, run⟩ := run_chain_prefixP checkTail [] run
+  replace hcheck := hcheck.toRun hP
+  change SFunc.RunP P prog sevm d3 (.branch t_0a23_c8 t_0a27_c8) o at run
+  cases run with
+  | zero _ _ run => exact absurd run not_run_revert_tail
+  | succ dw w hwnz pop run =>
+  rename_i d4
+  rw [debit_tree_eq] at run
+  cases run with
+  | dest burn1 run =>
+  rename_i d5
+  obtain ⟨d6, hdup', run⟩ := run_chain_prefixP [.reg (.dup 0)]
+    (slotLine ++ updLine (.reg .sub) ++ [Ninst.sstore] ++ sendLine ++ [.exec .call]) run
+  replace hdup' := hdup'.toRun hP
+  obtain ⟨d7, hslot', run⟩ := run_chain_prefixP slotLine
+    (updLine (.reg .sub) ++ [Ninst.sstore] ++ sendLine ++ [.exec .call]) run
+  replace hslot' := hslot'.toRun hP
+  obtain ⟨d8, hdebit, run⟩ := run_chain_prefixP (updLine (.reg .sub))
+    ([Ninst.sstore] ++ sendLine ++ [.exec .call]) run
+  replace hdebit := hdebit.toRun hP
+  obtain ⟨d9, hsstore, run⟩ := run_chain_prefixP [Ninst.sstore]
+    (sendLine ++ [.exec .call]) run
+  replace hsstore := hsstore.toRun hP
+  obtain ⟨d10, hsend, run⟩ := run_chain_prefixP sendLine [.exec .call] run
+  replace hsend := hsend.toRun hP
+  obtain ⟨d11, hcall, run⟩ := run_chain_prefixP [.exec .call] [] run
+  change SFunc.RunP P prog sevm d11 afterCall o at run
+  obtain ⟨wad, rest, gw, cw, ys, hstk, hle, hstor10, hbal10, hcode10, hp10⟩ :=
+    Weth9.withdraw_prefix burn0 hdup hslot hcheck hwnz pop burn1 hdup' hslot' hdebit hsstore hsend
+  refine ⟨wad, rest, d10, d11, gw, cw, ys, hstk, hle, hstor10, hbal10,
     hcode10, hp10, hcall.singleton, ?_⟩
   exact SFunc.RunP.state_of_silent hP silentSet_nil afterCall_silent afterCall_refs run
 
