@@ -21,7 +21,7 @@
   "frozenAssuranceFiles": {
     "Blanc/CycleWriteFree.lean": "3262e96081c30e3e712183d8a902327ae331265e5575ac73f90280539a73dd6a",
     "Blanc/ExecutionFrames.lean": "1da68cd39d9038c49748b65d10026411336cbf1d2ab2464280e3e7305c0c1963",
-    "Blanc/ExecutionOccurrence.lean": "ffb07bf224012d23dbac60cb7065a67bb906f14d33b537ec304355ec20165c37",
+    "Blanc/ExecutionOccurrence.lean": "9e09ae7d44406fcb9e9c3b4ebfaf3c9bca25895d6176d2e46317701b4209b285",
     "Blanc/ExecutionSettlement.lean": "a812568df48e78a953f28639a99413809379f45a20f4b6b0fc9b6d257cb3cfce",
     "scripts/CycleWriteFreeRegression.lean": "598ac1819b04fdb45304033d8fb7b70f401fc99f940d554b4825705c1948d654",
     "scripts/ExecutionOccurrenceControls.lean": "2d58ede6ca1a973d25e56ec1f97c24db3eb52a5068e9557a31ecf834c11b7ab6",
@@ -190,11 +190,11 @@
   },
   "touchedConsumerHashes": {
     "Blanc/Weth10AllowanceArmsPermit.lean": "7eb10689c547fe601fdc0d630a93f888b4a9230872d54959c7b82d9d9bacacaf",
-    "Blanc/Weth10StaticSilence.lean": "33baaeb9b942d9c813deff2cab4c1f7e6b2fc66bd09c761582eefbaf3494de22"
+    "Blanc/Weth10StaticSilence.lean": "9564d2d722de7e2a07a0cacce0e2f10227a62a23b9b6c2ee0ff5a021398df1a5"
   },
   "touchedConsumers": [
     "Blanc/Weth10StaticSilence.lean",
     "Blanc/Weth10AllowanceArmsPermit.lean"
   ],
-  "wethPublicHeaderAggregate": "81d1db9c65ed2ce3fa56caf5d8a3b645881fb4cf0fa63aae22077eab7fde5f2c"
+  "wethPublicHeaderAggregate": "0d4e75b8cefb7dcd17a221fdf7cef9cad38146977c8173cb934f9bb795a43760"
 }
