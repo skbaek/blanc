@@ -445,6 +445,7 @@ import Blanc.Lift.Weth9.LiveHistory
 import Blanc.Lift.Weth9.LiveTx
 import Blanc.Lift.Weth9.Init
 import Blanc.Lift.Weth9.Creation.Deploy
+import Blanc.Lift.Weth9.Creation.DeployInit
 
 -- The deployed beacon deposit contract, lifted from its runtime bytes
 -- (beacon-deposit-bytecode-v1); these two tops reach the whole lift kit.
