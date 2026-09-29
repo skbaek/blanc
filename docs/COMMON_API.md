@@ -68,6 +68,15 @@ registry has identified the likely vocabulary.
   where a per-fork case split is unavoidable, `CoveredFork.cases`. Discharge a
   schedule premise with `mainnetChainConfig_covered` or a concrete config lemma
   such as `Drip.concreteConfig_covered`.
+  To move an execution *between* covered forks, use
+  [`Blanc/ForkUniform.lean`](../Blanc/ForkUniform.lean): `withFork` replaces the fork on
+  `Sevm`/`Evm`/`Msg`/`Frame`; `evm_step_withFork` (one step commutes at an
+  `InstNeutralAt` node: not `CLZ`, and `BLOBBASEFEE` only at zero excess blob gas),
+  `frame_enter_withFork` (a `Frame.PrecompNeutral` frame: no `MODEXP`/`P256VERIFY`),
+  `settle_withFork`, `Exec.withFork` (an `ExecNeutral` derivation, node for node) and
+  `exec_withFork`, `exec_out_withFork`, `runFrame_withFork`, `processMessage_withFork`,
+  `processCreateMessage_withFork` (same outcome). A closed `*_deploy` instance needs none of
+  this when its general `*_create` already quantifies `CoveredFork`.
 
 ## E — execution
 
@@ -759,6 +768,19 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   Worked examples: `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Witness/Top.lean` (a read-only
   spawn) and `.../Fixed/Witness2/{Run,Frames,Top}.lean` (an ETH-paying body, a nested reentry
   through an EIP-1167 forwarder, a committing run).
+- To state a closed walk witness under every covered fork rather than the one its machine
+  fixes, transport its kernel facts with
+  [`Blanc/Lift/NodeWalkFork.lean`](../Blanc/Lift/NodeWalkFork.lean): `pwalk_withFork`
+  (`pwalkH_withFork`) leaves a walk unchanged from `s.withFork g` for covered forks when
+  `s.benvStat.excessBlobGas = 0` (walks never run `CLZ`: it is not an `ninstAccKeeps`
+  instruction), `scallPrep_withFork` spawns the same frame with its fork changed,
+  `frameEnterS_withFork` commutes with the change for a `Frame.PrecompNeutral` frame, and
+  `scallPrep_stat`/`frameEnterS_stat` carry the block environment into children. Generalize
+  the run lemma over `S = e0.sta.withFork g` and derive the fixed-fork statement at Prague;
+  worked example `vplus_run_at`/`vplus_witness_covered` in
+  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Witness/Top.lean`. The message-level layer
+  underneath is [`Blanc/ForkUniform.lean`](../Blanc/ForkUniform.lean) (see the root's
+  *Fork coverage* entry).
 - Determinism of execution witnesses:
   [`Blanc/ExecDeterminism.lean`](../Blanc/ExecDeterminism.lean).
 - Identifying an execution's descendant frames across one step (`Exec.descendantFrames_eq_of_nextNone`, `_of_jump`,

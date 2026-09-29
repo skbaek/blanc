@@ -187,6 +187,9 @@ SHARED += ["Lift.MemMap", "Lift.CheckMem", "Lift.CodeTriesData", "Lift.WitnessAr
 SHARED += ["Lift.WitnessBoundary", "TransactionForward"]
 # Generic warmth / code-at-address / system-frame execution facts (beacon-env-v1): contract-neutral.
 SHARED += ["ExecutionWarmth", "ExecutionTraceWarmth", "ExecutionCodeAt", "ExecutionTraceCodeAt", "ExecutionTraceSystem"]
+# Fork uniformity between covered forks: message-level transport and its node-walk
+# counterpart (fork-uniformity-v1): contract-neutral.
+SHARED += ["ForkUniform", "Lift.NodeWalkFork"]
 
 CONTRACTS = {
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",
