@@ -31,18 +31,18 @@ open Weth9
 
 /-- `mstore(0, caller); mstore(32, 3); keccak256(0, 64)`: the balance slot of
 the caller, pushed above the current stack. -/
-private def slotLine : List Ninst :=
+def slotLine : List Ninst :=
   [.push [0x03] (by decide), .push [0x00] (by decide), .reg .caller] ++ hashLine
 
 /-- The `require` test: `iszero(iszero(iszero(lt(bal, wad))))`, then the jump
 destination. -/
-private def checkTail : List Ninst :=
+def checkTail : List Ninst :=
   [.reg .sload, .reg .lt, .reg .iszero, .reg .iszero, .reg .iszero,
    .push [0x0a, 0x27] (by decide)]
 
 /-- From the `SSTORE` to the `CALL`: gas `2300 * (wad = 0)`, callee `caller`,
 value `wad`, and the memory windows. -/
-private def sendLine : List Ninst :=
+def sendLine : List Ninst :=
   [.reg .pop, .reg .caller,
    .push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
@@ -53,27 +53,27 @@ private def sendLine : List Ninst :=
    .reg .sub, .reg (.dup 1), .reg (.dup 5), .reg (.dup 8), .reg (.dup 8)]
 
 /-- After the `CALL`: the success check, the `Withdrawal` event, the return. -/
-private def afterCall : SFunc :=
+def afterCall : SFunc :=
   chain [.reg (.swap 3), .reg .pop, .reg .pop, .reg .pop, .reg .pop, .reg .iszero,
     .reg .iszero, .push [0x0a, 0xb4] (by decide)] (.branch t_0ab0_c8 t_0ab4_c8)
 
-private theorem withdraw_tree_eq :
+theorem withdraw_tree_eq :
     t_09d9_c8 = .dest (chain ([.reg (.dup 0)] ++ slotLine ++ checkTail)
       (.branch t_0a23_c8 t_0a27_c8)) := by
   simp [t_09d9_c8, slotLine, hashLine, hashBlock, checkTail, chain]
 
-private theorem debit_tree_eq :
+theorem debit_tree_eq :
     t_0a27_c8 = .dest (chain ([.reg (.dup 0)] ++ slotLine ++ updLine (.reg .sub) ++
       [Ninst.sstore] ++ sendLine ++ [.exec .call]) afterCall) := by
   simp [t_0a27_c8, slotLine, hashLine, hashBlock, updLine, sendLine, afterCall, chain]
 
-private theorem afterCall_silent : afterCall.silent = true := by decide
+theorem afterCall_silent : afterCall.silent = true := by decide
 
-private theorem afterCall_refs : afterCall.refs.all (· ∈ ([] : List Nat)) = true := by
+theorem afterCall_refs : afterCall.refs.all (· ∈ ([] : List Nat)) = true := by
   decide
 
 /-- The slot walk: pushes `balSlot caller` and leaves the persistent state alone. -/
-private theorem slot_walk {sevm : Sevm} {s s' : Devm} {ys : Stack}
+theorem slot_walk {sevm : Sevm} {s s' : Devm} {ys : Stack}
     (hp0 : ys <<+ s.stack) (run : Line.Run sevm s slotLine s') :
     balSlot sevm.caller :: ys <<+ s'.stack ∧
       Devm.getStor s' = Devm.getStor s ∧ s'.getBal = s.getBal ∧
@@ -101,7 +101,7 @@ private theorem slot_walk {sevm : Sevm} {s s' : Devm} {ys : Stack}
   exact ⟨hp, hs.trans hs3.symm, hb.trans hb3.symm, hcode.symm⟩
 
 /-- The `require` test. -/
-private theorem check_walk {sevm : Sevm} {s s' : Devm} {slot wad : B256} {xs : Stack}
+theorem check_walk {sevm : Sevm} {s s' : Devm} {slot wad : B256} {xs : Stack}
     (hp : slot :: wad :: wad :: xs <<+ s.stack) (run : Line.Run sevm s checkTail s') :
     ∃ d, d :: ((((s.getStorVal sevm.currentTarget slot <? wad) =? 0) =? 0) =? 0) ::
       wad :: xs <<+ s'.stack := by
@@ -119,7 +119,7 @@ private theorem check_walk {sevm : Sevm} {s s' : Devm} {slot wad : B256} {xs : S
     (prefix_of_iszero h3 (prefix_of_lt h2 hp1))))⟩
 
 /-- From the `SSTORE` to the `CALL`: the value word is `wad`. -/
-private theorem send_walk {sevm : Sevm} {s s' : Devm} {y wad : B256} {xs : Stack}
+theorem send_walk {sevm : Sevm} {s s' : Devm} {y wad : B256} {xs : Stack}
     (hp : y :: wad :: xs <<+ s.stack) (run : Line.Run sevm s sendLine s') :
     ∃ g c ys, g :: c :: wad :: ys <<+ s'.stack := by
   unfold sendLine at run
@@ -196,31 +196,24 @@ section Withdraw
 
 variable {c : ContractSpecSem}
 
-/-- **WETH9 `withdraw(wad)` (entry 8) establishes the frame postcondition.**
-
-Stated over any `ContractSpecSem` whose invariant admits the debit
-(`hstep`: from `Inv s v b` and `wad ≤ balanceOf[caller]`, the ether covers `wad`
-and the invariant holds at the debited storage and balance).  The run is
-over any step relation `P` that refines Jaune's; `hcallPost` discharges the
-one `CALL` (sending `wad` to the caller) from its `P`-step, and `hpre` is the
-frame precondition at the entry's pre-state. -/
-theorem Weth9.withdraw_post_gen {P : Sevm → Devm → Ninst → Devm → Prop}
-    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {ca : Adr}
-    {sevm : Sevm}
-    (hstep : ∀ {s : Stor} {v b : B256} {wad : B256},
-      c.Inv s v b → wad ≤ s.get (balSlot sevm.caller) →
-      wad ≤ b ∧ c.Inv (s.set (balSlot sevm.caller) (s.get (balSlot sevm.caller) - wad)) 0
-        (b - wad))
+/-- **Walk of WETH9 `withdraw(wad)` (entry 8)**, over any step relation refining Jaune's.  A run of the
+entry from a state with `wad` on top of the stack: the balance `require` holds, the storage at the `CALL`
+is the debited storage (with unchanged balances and code), the `CALL` sends `wad` (the stack there starts
+`gas, callee, wad`), and everything after the `CALL` is state-silent, so the run's final state is the
+`CALL`'s resumed state. -/
+theorem Weth9.withdraw_walk_gen {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {sevm : Sevm}
     {devm : Devm} {o : Outcome} {g : SFunc}
-    (hfork : CoveredFork sevm.benvStat.fork) (hca : sevm.currentTarget = ca)
-    (hcallPost : ∀ {s sf : Devm} {gas dst value : B256} {xs : Stack},
-        P sevm s (.exec .call) sf → gas :: dst :: value :: xs <<+ s.stack →
-        some (s.getCode ca).toList = c.sem.image → c.Side s.getBal →
-        value ≤ s.getBal ca → c.Inv (Devm.getStor s ca) 0 (s.getBal ca - value) →
-        c.Post ca sevm sf)
-    (hg : prog[8]? = some g) (run : SFunc.RunP P prog sevm devm g o)
-    (hpre : c.Pre ca sevm devm) :
-    c.Post ca sevm (Outcome.devm o) := by
+    (hg : prog[8]? = some g) (run : SFunc.RunP P prog sevm devm g o) :
+    ∃ (wad : B256) (rest : Stack) (d10 sf : Devm) (gw cw : B256) (ys : Stack),
+      devm.stack = wad :: rest ∧
+      wad ≤ (Devm.getStor devm sevm.currentTarget).get (balSlot sevm.caller) ∧
+      Devm.getStor d10 sevm.currentTarget =
+        (Devm.getStor devm sevm.currentTarget).set (balSlot sevm.caller)
+          ((Devm.getStor devm sevm.currentTarget).get (balSlot sevm.caller) - wad) ∧
+      d10.getBal = devm.getBal ∧ d10.getCode = devm.getCode ∧
+      gw :: cw :: wad :: ys <<+ d10.stack ∧
+      P sevm d10 (.exec .call) sf ∧ (Outcome.devm o).state = sf.state := by
   have hg' : g = t_09d9_c8 := by
     simpa [prog, Cert.prog, cert] using hg.symm
   subst g
@@ -314,7 +307,6 @@ theorem Weth9.withdraw_post_gen {P : Sevm → Devm → Ninst → Devm → Prop}
     same02.trans (same23.trans (same34.trans (same45.trans same56)))
   have same08 : SameCode devm d8 := same07.trans same78
   -- the debit, in terms of the entry state
-  subst hca
   have hold2 : d2.getStorVal sevm.currentTarget (balSlot sevm.caller) =
       (Devm.getStor devm sevm.currentTarget).get (balSlot sevm.caller) := by
     show (Devm.getStor d2 sevm.currentTarget).get (balSlot sevm.caller) = _
@@ -325,7 +317,6 @@ theorem Weth9.withdraw_post_gen {P : Sevm → Devm → Ninst → Devm → Prop}
     rw [← same07.stor]
   rw [hold2] at hle
   rw [hold7] at hset
-  obtain ⟨hleb, hinv⟩ := hstep (hpre.inv.left rfl) hle
   have hstor10 : Devm.getStor d10 sevm.currentTarget =
       (Devm.getStor devm sevm.currentTarget).set (balSlot sevm.caller)
         ((Devm.getStor devm sevm.currentTarget).get (balSlot sevm.caller) - wad) := by
@@ -334,14 +325,46 @@ theorem Weth9.withdraw_post_gen {P : Sevm → Devm → Ninst → Devm → Prop}
     rw [← same910.bal, ← hbal89, ← same08.bal]
   have hcode10 : d10.getCode = devm.getCode := by
     rw [← same910.code, ← hcode89, ← same08.code]
-  have hpost : c.Post sevm.currentTarget sevm d11 := by
-    refine hcallPost hcall.singleton hp10 ?_ ?_ ?_ ?_
+  refine ⟨wad, rest, d10, d11, gw, cw, ys, burn0.stack.trans hrest, hle, hstor10, hbal10,
+    hcode10, hp10, hcall.singleton, ?_⟩
+  exact SFunc.RunP.state_of_silent hP silentSet_nil afterCall_silent afterCall_refs run
+
+/-- **WETH9 `withdraw(wad)` (entry 8) establishes the frame postcondition.**
+
+Stated over any `ContractSpecSem` whose invariant admits the debit
+(`hstep`: from `Inv s v b` and `wad ≤ balanceOf[caller]`, the ether covers `wad`
+and the invariant holds at the debited storage and balance).  The run is
+over any step relation `P` that refines Jaune's; `hcallPost` discharges the
+one `CALL` (sending `wad` to the caller) from its `P`-step, and `hpre` is the
+frame precondition at the entry's pre-state. -/
+theorem Weth9.withdraw_post_gen {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {ca : Adr}
+    {sevm : Sevm}
+    (hstep : ∀ {s : Stor} {v b : B256} {wad : B256},
+      c.Inv s v b → wad ≤ s.get (balSlot sevm.caller) →
+      wad ≤ b ∧ c.Inv (s.set (balSlot sevm.caller) (s.get (balSlot sevm.caller) - wad)) 0
+        (b - wad))
+    {devm : Devm} {o : Outcome} {g : SFunc}
+    (hfork : CoveredFork sevm.benvStat.fork) (hca : sevm.currentTarget = ca)
+    (hcallPost : ∀ {s sf : Devm} {gas dst value : B256} {xs : Stack},
+        P sevm s (.exec .call) sf → gas :: dst :: value :: xs <<+ s.stack →
+        some (s.getCode ca).toList = c.sem.image → c.Side s.getBal →
+        value ≤ s.getBal ca → c.Inv (Devm.getStor s ca) 0 (s.getBal ca - value) →
+        c.Post ca sevm sf)
+    (hg : prog[8]? = some g) (run : SFunc.RunP P prog sevm devm g o)
+    (hpre : c.Pre ca sevm devm) :
+    c.Post ca sevm (Outcome.devm o) := by
+  obtain ⟨wad, rest, d10, sf, gw, cw, ys, -, hle, hstor10, hbal10, hcode10, hp10, hcall, hstate⟩ :=
+    Weth9.withdraw_walk_gen hP hg run
+  subst hca
+  obtain ⟨hleb, hinv⟩ := hstep (hpre.inv.left rfl) hle
+  have hpost : c.Post sevm.currentTarget sevm sf := by
+    refine hcallPost hcall hp10 ?_ ?_ ?_ ?_
     · rw [hcode10]; exact hpre.code
     · rw [hbal10]; exact hpre.side
     · rw [hbal10]; exact hleb
     · rw [hstor10, hbal10]; exact hinv
-  exact ContractSpecSem.Post.of_state_eq hpost
-    (SFunc.RunP.state_of_silent hP silentSet_nil afterCall_silent afterCall_refs run)
+  exact ContractSpecSem.Post.of_state_eq hpost hstate
 
 /-- **WETH9 `withdraw(wad)` (entry 8) establishes the frame postcondition.**
 
