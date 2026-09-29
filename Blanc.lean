@@ -523,6 +523,21 @@ import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Outer
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxTop
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.WitnessCerts
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Closed
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Entry
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame1
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame2Full
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame2Kernel
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame2Run
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame3
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame4
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5Child
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5ChunkA
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5ChunkB
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5Chunks
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5Full
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Run
 
 -- The COMPOSITION stratum is strictly downstream of every contract family, so
 -- it is aggregated last. Roots aggregate composition; nothing imports back.
