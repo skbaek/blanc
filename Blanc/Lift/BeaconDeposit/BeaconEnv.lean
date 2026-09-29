@@ -2,6 +2,7 @@ import Blanc.Lift.BeaconDeposit.CommittedHistory
 import Blanc.ExecutionTraceWarmth
 import Blanc.ExecutionTraceCodeAt
 import Blanc.ExecutionTraceSystem
+import Blanc.ExecutionTraceCalldata
 
 /-!
 # The Beacon committed-history headlines without per-frame environment premises
@@ -13,8 +14,9 @@ import Blanc.ExecutionTraceSystem
 2. the SHA-256 precompile's account holds no EIP-7702 delegation designator,
 3. the SHA-256 precompile is warm.
 
-This module derives (2) and (3) from premises about the trace as a whole, and keeps (1) as the
-per-frame premise it was.
+This module derives (2) and (3) from premises about the trace as a whole.  The `_env` headlines keep
+(1) as the per-frame premise it was; the `_envDerived` headlines discharge it from
+`Blanc/ExecutionTraceCalldata.lean`.
 
 * **Warmth** (`Blanc/ExecutionTraceWarmth.lean`).  A transaction pre-warms every precompile
   (EIP-2929) and the accessed set of a frame only grows, so every frame a transaction enters
@@ -146,5 +148,62 @@ theorem configuredHistory_root_env {ca : Adr} {cfg : ChainConfig}
     (beaconEntry_of_env trace calldata (system_of_spawnFree trace systemSpawnFree notSystem)
       checkpointEmpty noAuthority noFrame)
     installed invariant
+
+/-! ### The calldata bound is derived too
+
+`ConfiguredHistoryTrace.frameAdmitted_calldata` (`Blanc/ExecutionTraceCalldata.lean`) discharges
+the per-frame calldata premise from the retained transaction and header validation, so the
+headlines below carry no per-frame premise at all.  The variants above keep their statements. -/
+
+/-- `configuredHistory_solInv_env` without the calldata premise. -/
+theorem configuredHistory_solInv_envDerived {ca : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {initialHistory : List B256}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (systemSpawnFree : ∀ root ∈ trace.systemRawFrames, SpawnFree root.sevm.code)
+    (notSystem : ca ∉ systemTargets)
+    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
+    (noAuthority : trace.NoAuthorityAt 2)
+    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ 2)
+    (installed : checkpoint.state.getCode ca = code)
+    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
+    SolInv (future.state.getStor ca) (initialHistory ++ committedNodes ca trace) :=
+  configuredHistory_solInv_env trace trace.frameAdmitted_calldata systemSpawnFree notSystem
+    checkpointEmpty noAuthority noFrame installed invariant
+
+/-- `configuredHistory_count_env` without the calldata premise. -/
+theorem configuredHistory_count_envDerived {ca : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {initialHistory : List B256}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (systemSpawnFree : ∀ root ∈ trace.systemRawFrames, SpawnFree root.sevm.code)
+    (notSystem : ca ∉ systemTargets)
+    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
+    (noAuthority : trace.NoAuthorityAt 2)
+    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ 2)
+    (installed : checkpoint.state.getCode ca = code)
+    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
+    (future.state.getStor ca).get solCountSlot =
+      Nat.toB256 (initialHistory ++ committedNodes ca trace).length ∧
+      (initialHistory ++ committedNodes ca trace).length < 2 ^ 32 :=
+  configuredHistory_count_env trace trace.frameAdmitted_calldata systemSpawnFree notSystem
+    checkpointEmpty noAuthority noFrame installed invariant
+
+/-- `configuredHistory_root_env` without the calldata premise. -/
+theorem configuredHistory_root_envDerived {ca : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {initialHistory : List B256}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (systemSpawnFree : ∀ root ∈ trace.systemRawFrames, SpawnFree root.sevm.code)
+    (notSystem : ca ∉ systemTargets)
+    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
+    (noAuthority : trace.NoAuthorityAt 2)
+    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ 2)
+    (installed : checkpoint.state.getCode ca = code)
+    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
+    BeaconDeposit.Acc.root Bytes.sha256 (solAcc (future.state.getStor ca)) =
+      BeaconDeposit.mixedRootOf Bytes.sha256 (initialHistory ++ committedNodes ca trace) :=
+  configuredHistory_root_env trace trace.frameAdmitted_calldata systemSpawnFree notSystem
+    checkpointEmpty noAuthority noFrame installed invariant
 
 end Blanc.Lift.BeaconDeposit

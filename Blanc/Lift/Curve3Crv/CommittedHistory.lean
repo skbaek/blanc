@@ -1,6 +1,7 @@
 import Blanc.Lift.Curve3Crv.CommittedExec
 import Blanc.ExecutionAccountingAdmission
 import Blanc.ExecutionAccountingCore
+import Blanc.ExecutionTraceCalldata
 
 /-!
 # Curve history identified with its committed writer invocations
@@ -201,5 +202,24 @@ theorem c3crv_history_committed {ca : Adr} {cfg : ChainConfig}
   subst observed
   obtain ⟨s, run, final⟩ := replay.2 initial initialKeys (fun _ hk => Or.inl hk) invariant
   exact ⟨finish.code, s, run, run.runInvocations_eq, final, final.conserved⟩
+
+/-- **`c3crv_history_committed` without the calldata premise.**  The per-frame calldata bound
+follows from the retained transaction and header validation
+(`ConfiguredHistoryTrace.frameAdmitted_calldata`), so the headline keeps only the collision
+premise. -/
+theorem c3crv_history_committed_derived {ca : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {initial : Blanc.Curve3Crv.State}
+    {initialKeys : Key → Prop}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode ca).toList = c3crvSem.image)
+    (invariant : VyInv (checkpoint.state.getStor ca) initial initialKeys)
+    (fresh : FreshKeys initialKeys (historyTouchedKeys ca trace)) :
+    some (future.state.getCode ca).toList = c3crvSem.image ∧
+      ∃ s, InvRun initial (committedInvocations ca trace) s ∧
+        runInvocations initial (committedInvocations ca trace) = some s ∧
+        VyInv (future.state.getStor ca) s
+          (Key.extend initialKeys (invocationKeys (committedInvocations ca trace))) ∧
+        Blanc.Curve3Crv.Conserved s :=
+  c3crv_history_committed trace installed invariant trace.frameAdmitted_calldata fresh
 
 end Blanc.Lift.Curve3Crv
