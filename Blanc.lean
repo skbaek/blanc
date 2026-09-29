@@ -17,6 +17,7 @@ import Blanc.BytesWrite
 import Blanc.MemoryLayout
 import Blanc.ExecutionSettlement
 import Blanc.MessageExecution
+import Blanc.ForkUniform
 import Blanc.MessageResult
 import Blanc.MessageExecutionInversion
 import Blanc.ExecutionPath
@@ -467,6 +468,7 @@ import Blanc.Lift.WitnessSpawn
 -- Node-exposing concrete walks (vplus-witness-v1): shared.
 import Blanc.Lift.NodeWalk
 import Blanc.Lift.NodeWalkFrames
+import Blanc.Lift.NodeWalkFork
 -- One kernel check for a conjunction of closed equalities (vplus-witness-v2): shared.
 import Blanc.Lift.KernelBatch
 

@@ -188,7 +188,7 @@ SHARED += ["Lift.WitnessBoundary", "TransactionForward"]
 # Generic warmth / code-at-address / system-frame execution facts (beacon-env-v1): contract-neutral.
 SHARED += ["ExecutionWarmth", "ExecutionTraceWarmth", "ExecutionCodeAt", "ExecutionTraceCodeAt", "ExecutionTraceSystem"]
 # Generic per-frame calldata-length bound of a configured history (calldata-bound-v1): contract-neutral.
-SHARED += ["ExecutionTraceCalldata"]
+SHARED += ["ExecutionTraceCalldata", "ForkUniform", "Lift.NodeWalkFork"]
 
 CONTRACTS = {
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",
