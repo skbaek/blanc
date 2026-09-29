@@ -13,7 +13,9 @@ premises for this `R`: the covered fork, the code at `I`, the root, and `HashAvo
 (no frame of `I` in `R` executes `KECCAK256` at all).  Then it applies `vplus_exclusion_impl`
 to the reentrant frame `G` the child opens: `G` is a frame of `I` running the comparator,
 entered by `get_virtual_price()` (a guarded view: read-only reentry) while `F` holds the
-lock; it reverts at the lock check, and never reaches a guarded body start.
+lock; the theorem states that `G` reverts and that no node of `G` is at a guarded body start
+(the kernel walk passes through the lock check, but the pcs it visits are not exported here;
+`vplus_witness2` does export them).
 
 Every node is a node of `R` itself: the walks of `Blanc/Lift/NodeWalk.lean` apply to any
 derivation from the concrete machines, so no particular derivation is constructed.
