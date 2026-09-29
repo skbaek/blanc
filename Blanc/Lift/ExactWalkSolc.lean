@@ -230,6 +230,24 @@ theorem rx_log2W {M0 : Mem} {v i sz t1 t2 : B256} (hstatic : sevm.isStatic = fal
   · rw [hi, hsz]; exact hM0.readback 96 v
   · rw [hi, hsz]; exact (hM0.write_out v).read_self (by omega)
 
+/-- `SLOAD` with its charge named: `c` is `sloadCost` at this state.  A walk over several storage
+operations keeps each charge as a variable with such an equation, so that arithmetic on the
+gas expression never sees the (large) states the charges depend on. -/
+theorem rx_sload_selC {k' : B256} {c : Nat} (hfork : CoveredFork sevm.benvStat.fork)
+    (hc : c = sloadCost sevm b k') (hroom : S.length < 1024)
+    (k : SFunc.RunExact fs sevm
+      (St (afterSload sevm b k') (b.getStorVal sevm.currentTarget k' :: S) M G) f o) :
+    SFunc.RunExact fs sevm (St b (k' :: S) M (G + c)) (.next (.reg .sload) f) o := by
+  subst hc; exact rx_sload_sel hfork hroom k
+
+/-- `SSTORE` with its charge named (see `rx_sload_selC`). -/
+theorem rx_sstoreC {k' v : B256} {c : Nat} (hfork : CoveredFork sevm.benvStat.fork)
+    (hc : c = sstoreCost sevm b k' v) (hsentry : gCallStipend < G + c)
+    (hstatic : sevm.isStatic = false)
+    (k : SFunc.RunExact fs sevm (St (afterSstore sevm b k' v) S M G) f o) :
+    SFunc.RunExact fs sevm (St b (k' :: v :: S) M (G + c)) (.next (.reg .sstore) f) o := by
+  subst hc; exact rx_sstore hfork hsentry hstatic k
+
 /-- `STOP`: the state is kept. -/
 theorem rx_stop {D : Devm} : SFunc.RunExact fs sevm D (.last .stop) (.halted D) := .last rfl
 
@@ -258,6 +276,13 @@ macro "rsstore" : tactic => `(tactic|
   refine rx_sstore (by assumption) (by assumption) (by assumption) ?_)
 macro "rsstoreO" : tactic => `(tactic|
   refine rx_sstore (by assumption) (by unfold gCallStipend at *; omega) (by assumption) ?_)
+macro "rsloadC" : tactic => `(tactic|
+  refine rx_sload_selC (by assumption) (by assumption) (by rroom) ?_)
+/-- A sentry goal `gCallStipend < g + c₁ + …` follows from a hypothesis about a prefix `g`: peel the
+charges (no arithmetic on their, possibly large, definitions). -/
+macro "rsent" : tactic => `(tactic| (repeat (first | assumption | refine Nat.lt_add_right _ ?_)))
+macro "rsstoreC" : tactic => `(tactic|
+  refine rx_sstoreC (by assumption) (by assumption) (by rsent) (by assumption) ?_)
 macro "rlog3" : tactic => `(tactic|
   refine rx_log3W (by assumption) (by assumption) (by decide) (by decide) ?_)
 macro "rlog2" : tactic => `(tactic|
