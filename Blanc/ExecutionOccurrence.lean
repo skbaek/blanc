@@ -3334,6 +3334,16 @@ def Prog.SourceSite.matchesSstore
     | .reg .sstore => true
     | _ => false
 
+@[simp] theorem Prog.SourceSite.matchesSstore_eq_true
+    {site : Prog.SourceSite} {path : Prog.SourcePath} {pc : Nat} :
+    site.matchesSstore path pc = true ↔
+      site.path = path ∧ site.pc = pc ∧
+        site.instruction = .reg .sstore := by
+  rcases site with ⟨sitePath, sitePc, instruction⟩
+  cases instruction <;> simp [Prog.SourceSite.matchesSstore]
+  rename_i regular
+  cases regular <;> simp
+
 /-- Decide whether a structural path and compiled PC name a source SSTORE. -/
 def Prog.acceptsSstoreSite
     (program : Prog) (path : Prog.SourcePath) (pc : Nat) : Bool :=
