@@ -1,0 +1,138 @@
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxTop
+
+/-!
+V- as an admitted transaction (O10, best effort), the outer transaction frame.
+
+The tx-level dispatcher attacker `A'` (`Attacker2`), entered from the real transaction-shaped
+message `msg0tx` (`TxTop`: `prepareMessage` under real EIP-2929 pre-warming, EOA `E` -> `A'`),
+runs its own certificate to its `CALL` into the pool proxy `P`
+(`TxTop.callCfg`/`TxTop.cp0`), spawns `P`'s frame, and -- **given** that child frame settles
+(the deep reentrancy chain, EELS frames 1-6 of the tx trace: `A' -> P -> impl remove -> A'
+callback -> P -> impl add reentry`) with its observed gas, return data, success and world --
+`A'` resumes, drops the success flag and `STOP`s.  The whole outer frame is then an `Exec` of
+`A'`'s real bytes (`lift_exact` over the registered `Attacker2` certificate), and Jaune's
+`processMessage msg0tx` returns that settled machine, whose world is the child's.
+
+This is the transaction-entry analog of `Vulnerable.Top.frame0_of_child`: there the top
+frame was the proxy `P` (raw bytes, `stepN`); here it is the lifted dispatcher `A'` (its
+certificate, `wrun`), and the top-level settlement is Jaune's `processMessage`.  The child --
+`P`'s frame at `A'`'s `CALL` -- is taken as a hypothesis (`ChildOk`/`ChildAgree` at
+`TxTop.callCfg`), exactly as `Frame2.attacker_of_child` takes the proxy child; producing that
+child is the remaining deep-chain regeneration (Plans `state/vminus-tx-v1.md`).
+
+Kernel-only boundary facts (`kernel_forall_rfl`); do not open this file in the language server
+alongside the deep chain.
+-/
+
+namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx
+
+open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.ConcreteRun
+open Blanc.Lift.VyperNonreentrantDeployed
+open Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
+open Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxTop
+
+/-- The EELS gas at `A'`'s `STOP` (tx trace, frame 0): 29,846,301. -/
+def gas0out : Nat := 29846301
+
+/-- `P`'s frame's return data as `A'`'s child sees it (tx trace, frame 1): the removed
+amounts `[100, 100]`.  `A'`'s `CALL` uses `retLen = 0`, so this is never read; it is pinned
+here only to match the trace. -/
+def childOut : Bytes := word 100 ++ word 100
+
+/-- The gas `A'`'s child frame (`P` running `remove_liquidity`) returns with (tx trace,
+frame 1): 29,377,596. -/
+def childGas : Nat := 29377596
+
+/-- `A'`'s frame after its `CALL` to `P`, from a settled child `d1` and the child's shadows:
+resume the `CALL` (dropping its output, `retLen = 0`), then `POP`; `STOP` (two nodes). -/
+def run0 (d1 : Devm) (ck : List (Adr × B256)) (ca : List Adr)
+    (cs : StorShadow) (cc : AcctShadow) : Res :=
+  match callResume e0tx.sta callCfg d1 ck ca cs cc with
+  | some c => wrun fs2 e0tx.sta 2 c
+  | none => .stuck
+
+/-- `A'`'s halt: gas, return data (empty), success, and the halting configuration's storage
+shadow (which is the child's, since `POP`; `STOP` change no storage).  Reading `P`'s
+`totalSupply` (slot 26) and the attacker's LP balance from that shadow is what carries the
+corruption up from the child. -/
+def obs0 : Res → Option (Nat × List Nat × Bool × StorShadow)
+  | .done (.halted d) cl => some (d.gasLeft, d.output.map UInt8.toNat, d.error.isNone, cl.stor)
+  | _ => none
+
+/-- **`A'`'s outer frame halts, for any settled child** with the tx trace's gas and return
+data (all its other parts free): `A'` drops the success flag and `STOP`s with its own gas and
+empty output, no error, leaving the child's storage shadow `cs` untouched. -/
+theorem frame0tx_kernel : ∀ (d1 : Devm) (ck : List (Adr × B256)) (ca : List Adr)
+    (cs : StorShadow) (cc : AcctShadow),
+    obs0 (run0 (childObs childGas childOut d1) ck ca cs cc) = some (gas0out, [], true, cs) := by
+  kernel_forall_rfl
+
+theorem fs2_zero : fs2[0]? = some Attacker2.t_0000_c0 := by kernel_rfl
+
+theorem e0tx_code : e0tx.sta.code = Attacker2.code := by
+  have h := e0tx_facts; simp only [Prod.mk.injEq] at h; exact h.2.1
+
+theorem e0tx_pc : e0tx.pc = 0 := by
+  have h := e0tx_facts; simp only [Prod.mk.injEq] at h; exact h.1
+
+theorem e0tx_fork : CoveredFork e0tx.sta.benvStat.fork := by
+  have h := e0tx_facts; simp only [Prod.mk.injEq] at h; rw [h.2.2.2]; exact CoveredFork.prague
+
+/-- **The outer transaction frame of the V- tx witness, given its child.**
+
+`A'`'s frame -- entered from the real transaction-shaped message `msg0tx` (`TxTop`) -- with
+`P`'s frame supplied as the settled child `d1` of its `CALL` (`ChildOk` at `TxTop.callCfg`;
+its gas, return data and success from the tx trace; its world shadows `ChildAgree`), is an
+`Exec` of `A'`'s real bytes, Jaune's `processMessage msg0tx` returns its settled machine, and
+that machine's storage is the child's (`cs`) -- so any corruption the child leaves in `P`'s
+storage is the corruption of the whole transaction message. -/
+theorem tx_message_of_child (d1 : Devm)
+    (ck : List (Adr × B256)) (ca : List Adr) (cs : StorShadow) (cc : AcctShadow)
+    (hg : d1.gasLeft = childGas) (ho : d1.output = childOut) (he : d1.error = none)
+    (hok : ChildOk e0tx.sta callCfg d1) (ha : ChildAgree d1 ck ca cs cc) :
+    ∃ post, Nonempty (Exec e0tx.pc e0tx.sta e0tx.dyna (.ok post)) ∧
+      processMessage msg0tx = .ok post ∧ post.error = none ∧
+      post.gasLeft = gas0out ∧ post.output = [] ∧
+      (∀ a k, storOf post.state a k = lookupS cs a k) := by
+  have hk := frame0tx_kernel d1 ck ca cs cc
+  rw [show childObs childGas childOut d1 = d1 from childObs_eq hg ho he] at hk
+  unfold run0 at hk
+  split at hk
+  · rename_i c hc
+    have s : StepOk fs2 e0tx.sta c0tx c :=
+      (wrun_cont callCfg_eq).trans (callResume_cont hc hok ha)
+    generalize hr : wrun fs2 e0tx.sta 2 c = r at hk
+    rcases r with c' | ⟨post | post, cl⟩ | _
+    · simp [obs0] at hk
+    · simp only [obs0, Option.some.injEq, Prod.mk.injEq] at hk
+      obtain ⟨hgas, hout, herr, hstor⟩ := hk
+      obtain ⟨run, hagcl, hstate⟩ := wrun_done hr (s.1 c0tx_agree)
+      have hrunexact : SProg.RunExact fs2 e0tx.sta e0tx.dyna post :=
+        ⟨Attacker2.t_0000_c0, fs2_zero, s.2 _ c0tx_agree run⟩
+      have hexec : Nonempty (Exec 0 e0tx.sta e0tx.dyna (.ok post)) :=
+        lift_exact Attacker2.cert_check Attacker2.cert_jumpsOk e0tx_code e0tx_fork hrunexact
+      have hexec' : Nonempty (Exec e0tx.pc e0tx.sta e0tx.dyna (.ok post)) := by
+        rw [e0tx_pc]; exact hexec
+      have hpost_state : post.state = cl.devm.state := hstate post rfl
+      have hstoreq : ∀ a k, storOf post.state a k = lookupS cs a k := by
+        intro a k
+        rw [hpost_state, hagcl.2.2.1 a k, hstor]
+      have herr' : post.error = none := Option.isNone_iff_eq_none.mp herr
+      refine ⟨post, hexec', ?_, herr', hgas,
+        List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) hout, hstoreq⟩
+      -- processMessage settlement
+      have hsg0 : f0tx.inner.benv.stat.rules.stateGas = none := by
+        show msg0tx.benv.stat.rules.stateGas = none
+        exact (CoveredFork.prague).rules_stateGas_none
+      have hex := (exec_iff_exec_eq _ _ _ _).mp hexec'
+      show runFrame f0tx = _
+      unfold runFrame
+      rw [f0tx_enter]
+      show f0tx.settle (exec ⟨e0tx.pc, e0tx.sta, e0tx.dyna⟩) = _
+      rw [hex]
+      exact frame_settle_ok rfl hsg0 herr'
+    · simp [obs0] at hk
+    · simp [obs0] at hk
+  · simp [obs0] at hk
+
+end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx
