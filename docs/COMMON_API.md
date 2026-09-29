@@ -2234,6 +2234,24 @@ descendant of a target frame from that restriction and the ladder's lower-depth
 hypothesis. The static callee may be the contract itself; it is then a static
 lower-depth target frame closed by the same hypothesis.
 
+A target frame whose children may be non-static and may re-enter the contract
+(Lido `pause`'s `CALL`, WETH9 `withdraw`'s ETH send) uses the entry carrier of
+[`Blanc/ExecutionEntryAccounting.lean`](../Blanc/ExecutionEntryAccounting.lean):
+`entryCarrier`/`entryObservation` observe every non-static committed frame at
+`ca` with `EntryGood` (pc 0, covered fork, contract code, admission, the storage
+invariant `I` at entry); `Exec.CoreAccounting.entryTarget` is the target handler
+(target-parent spawn accounting) from three per-contract obligations —
+`FramePreserves` (the frame theorem), `SpawnKinds` (only `CALL`/`STATICCALL`
+along the frame's own chain) and `SpawnEntry` (`I` at each spawning node of a
+successful target frame, a prefix fact); `entryLadder` and
+`ConfiguredHistoryTrace.entryGood_settled` give the history form. Its generic
+supports: `Evm.step_spawn_child_world` (a child opens on its parent's storage at
+code-bearing accounts, balance total not growing), `Xinst.step_spawn_world`,
+`Exec.Deriv.ParentStep.balSum_le`, `Exec.Deriv.ParentPrefix.balSum_le_getCode`.
+The same-target direct-code facts are `Xinst.step_call_sameTarget_code` and
+`Xinst.step_staticcall_sameTarget_code` in
+[`Blanc/ExecutionDirectCode.lean`](../Blanc/ExecutionDirectCode.lean).
+
 ### T3. The wrapper is a transaction and the fact is about an installed contract
 
 Use
@@ -2824,7 +2842,26 @@ contract-neutral.
   including a `CALL` over a child of any outcome, is one `SStep`) and
   `cursor_of_parentPrefix`, with `CursorOK.exec_call_or_staticcall` (a reached
   node spawns only by `CALL`/`STATICCALL`), in
-  [`Blanc/Lift/Cursor.lean`](../Blanc/Lift/Cursor.lean). Use it for safety facts
+  [`Blanc/Lift/Cursor.lean`](../Blanc/Lift/Cursor.lean).
+- Every same-frame node with its machine state (all outcomes): the stateful
+  prefix lift `reach_of_parentPrefix` (from `cursor_stepS`, which adds one
+  `ConfStep` to each `cursor_step`) places the node at a `Reach (StepIn R)` from
+  entry `0`, and `CursorOK.tree_of_exec` puts an external instruction at its
+  `next` node, in `Blanc/Lift/Cursor.lean`. The configurations, steps and walk
+  inversions (`Conf`, `ConfStep`, `Reach`, `AtExec`, `Reach.next`/`exec`/`dest`/
+  `branch`/`branchTo`/`jump`/`call`/`pcAt`, and `Reach.split`, which turns a
+  returning callee into an ordinary big-step `SFunc.RunP … (.returned d)` so the
+  big-step callee specs are reused) are in
+  [`Blanc/Lift/Reach.lean`](../Blanc/Lift/Reach.lean). Use them for a prefix
+  fact of a certified frame, e.g. a storage invariant at a spawning node.
+  The walk kit over the state `St b S M G` (`rr_next`, `rr_dest`, `rr_branch`,
+  `rr_callOver` for an exec-free callee crossed as a big-step run, `rr_callInto`
+  when the target lies inside the callee), the exec-free region refutation
+  `Reach.false_of_execFree` with its decidable `ExecFreeSet`/`SFunc.execFreeIn`,
+  the dispatcher lemma `Reach.gotoTree` and `Reach.lastExec` (register steps up
+  to the last external instruction, `regSilent`) are in
+  [`Blanc/Lift/ReachWalk.lean`](../Blanc/Lift/ReachWalk.lean); worked use: Lido
+  `lido_spawnEntry` in `Blanc/Lift/LidoCircuitBreakerDeployed/Reentry.lean`. Use it for safety facts
   about reverting or out-of-gas frames, which `lift_sound` cannot see.
 - Restrict external instruction families along a checked certificate cursor:
   [`Blanc/Lift/CallRestriction.lean`](../Blanc/Lift/CallRestriction.lean) defines

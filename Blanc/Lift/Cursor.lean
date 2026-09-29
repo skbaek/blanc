@@ -1,4 +1,5 @@
 import Blanc.Lift.Sound
+import Blanc.Lift.Reach
 import Jaune.ExecChronology
 
 /-!
@@ -142,11 +143,17 @@ theorem parentStep_jinst {n' n : Exec.Deriv} {j : Jinst}
   | runOk hstep _ _ _ _ =>
     exact ((Step.ofJump_ne_spawn ((Evm.step_jump hat).symm.trans hstep))).elim
 
+/-- The child predicate of a same-frame step out of `n`: every raw frame root of
+the child derivation is a raw frame descendant of `n`. -/
+def DescOf (n : Exec.Deriv) : ∀ pc sevm devm exn, Exec pc sevm devm exn → Prop :=
+  fun _ _ _ _ e => ∀ r ∈ Exec.rawFrameRoots e, r ∈ Exec.rawFrameDescendants n.exc
+
 /-- A same-frame edge out of a non-jump instruction is one `Ninst.Run` to the
-next pc, over the child frame (of any outcome) if the instruction spawned one. -/
-theorem parentStep_ninst {n' n : Exec.Deriv} {i : Ninst}
+next pc, over the child frame (of any outcome) if the instruction spawned one;
+the child lies among the node's raw frame descendants. -/
+theorem parentStep_ninstIn {n' n : Exec.Deriv} {i : Ninst}
     (edge : Exec.Deriv.ParentStep n' n) (hat : Ninst.At n.sevm.code n.pc i) :
-    n'.pc = n.pc + i.size ∧ Ninst.Run n.sevm n.devm i n'.devm := by
+    n'.pc = n.pc + i.size ∧ Ninst.RunWith (DescOf n) n.sevm n.devm i n'.devm := by
   rcases n with ⟨pc, sevm, pre, out, run⟩
   dsimp only at hat ⊢
   cases edge with
@@ -162,9 +169,22 @@ theorem parentStep_ninst {n' n : Exec.Deriv} {i : Ninst}
     exact ⟨_, RunFrame.of_done henter, hresume.symm⟩
   | runOk hstep henter child hresume next =>
     have hs := (Evm.step_next hat).symm.trans hstep
-    refine ⟨Ninst.step_spawn_pc hs, .some ⟨_, _⟩, ⟨child⟩, pc, ?_⟩
-    simp only [Ninst.StepRun, hs, Step.Run]
-    exact ⟨_, RunFrame.of_run henter, hresume.symm⟩
+    refine ⟨Ninst.step_spawn_pc hs, .some ⟨_, _⟩, ⟨child, ?_⟩, pc, ?_⟩
+    · intro r hr
+      simp only [Exec.rawFrameRoots, List.mem_cons] at hr
+      simp only [Exec.rawFrameDescendants, List.mem_cons, List.mem_append]
+      rcases hr with rfl | hr
+      · exact Or.inl rfl
+      · exact Or.inr (Or.inl hr)
+    · simp only [Ninst.StepRun, hs, Step.Run]
+      exact ⟨_, RunFrame.of_run henter, hresume.symm⟩
+
+/-- A same-frame edge out of a non-jump instruction is one `Ninst.Run` to the
+next pc, over the child frame (of any outcome) if the instruction spawned one. -/
+theorem parentStep_ninst {n' n : Exec.Deriv} {i : Ninst}
+    (edge : Exec.Deriv.ParentStep n' n) (hat : Ninst.At n.sevm.code n.pc i) :
+    n'.pc = n.pc + i.size ∧ Ninst.Run n.sevm n.devm i n'.devm :=
+  (parentStep_ninstIn edge hat).imp_right Ninst.RunWith.toRun
 
 /-- A same-frame edge out of a `PC` is the `PC` step at the node's own pc. -/
 theorem parentStep_pc {n' n : Exec.Deriv}
@@ -320,14 +340,21 @@ theorem cursor_start {code : ByteArray} {c : Cert} (hc : Cert.check code c = tru
     · simpa [Cursor.start, hepc, hef] using hf
     · intro hm; simp [Cursor.start] at hm
 
-/-- **One same-frame edge is one synthetic step.**  If `n` sits at the
-checked cursor `κ`, its same-frame continuation `n'` — after a plain step, an
-immediately completed spawn, or a child frame of any outcome — sits at a
-cursor `κ'` one synthetic step after `κ`. -/
-theorem cursor_step {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
+/-- The stateful image of a cursor: the node's state, the cursor's tree, and
+its pending continuation trees. -/
+abbrev Cursor.conf (d : Devm) (κ : Cursor) : Conf := ⟨d, κ.f, κ.K.map Cont.f⟩
+
+/-- **One same-frame edge is one synthetic step, with state.**  If `n` sits at
+the checked cursor `κ`, its same-frame continuation `n'` — after a plain step,
+an immediately completed spawn, or a child frame of any outcome — sits at a
+cursor `κ'` one synthetic step after `κ`, and the stateful images are one
+`ConfStep` apart (a spawning step's child lies among `n`'s raw descendants). -/
+theorem cursor_stepS {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
     {n n' : Exec.Deriv} {κ : Cursor} (ok : CursorOK code c n κ)
     (edge : Exec.Deriv.ParentStep n' n) (hfork : CoveredFork n.sevm.benvStat.fork) :
-    ∃ κ', SStep c κ κ' ∧ CursorOK code c n' κ' := by
+    ∃ κ', SStep c κ κ' ∧
+      ConfStep (Ninst.RunWith (Cursor.DescOf n)) c.prog n.sevm (κ.conf n.devm) (κ'.conf n'.devm) ∧
+      CursorOK code c n' κ' := by
   obtain ⟨hcode, hpc, hcheck, hret, S, rest, hstack, hframe, hK⟩ := ok
   obtain ⟨f, pc, a, m, K⟩ := κ
   dsimp only at hpc hcheck hret hframe hK
@@ -343,9 +370,9 @@ theorem cursor_step {code : ByteArray} {c : Cert} (hc : Cert.check code c = true
       have hat : Ninst.At n.sevm.code n.pc i := by
         rw [hcode, hpc]
         exact Ninst.at_of_slice (bytesAt_slice (ninst_bytes_ne_nil i) hbytes)
-      obtain ⟨hpc', run⟩ := Cursor.parentStep_ninst edge hat
-      obtain ⟨S', hst', hfr'⟩ := Cursor.absNinst_run_stack hfork habs hstack hframe run
-      exact ⟨_, .next habs, hcode', by simp [hpc', hpc], hrest,
+      obtain ⟨hpc', runIn⟩ := Cursor.parentStep_ninstIn edge hat
+      obtain ⟨S', hst', hfr'⟩ := Cursor.absNinst_run_stack hfork habs hstack hframe runIn.toRun
+      exact ⟨_, .next habs, .next runIn, hcode', by simp [hpc', hpc], hrest,
         fun hm => hret (Cursor.ret_mem_of_absNinst habs hm), S', rest, hst', hfr', hK⟩
   | dest f =>
     have h' : byteAt code pc = some (Jinst.toUInt8 .jumpdest) ∧
@@ -354,7 +381,7 @@ theorem cursor_step {code : ByteArray} {c : Cert} (hc : Cert.check code c = true
     have hat : Jinst.At n.sevm.code n.pc .jumpdest := by
       rw [hcode, hpc]; exact byteAt_jinst_at h'.1
     obtain ⟨hpc', burn⟩ := of_jumpdest_run (Cursor.parentStep_jinst edge hat)
-    refine ⟨_, .dest, hcode', by simp [hpc', hpc], h'.2, hret, S, rest, ?_, hframe, hK⟩
+    refine ⟨_, .dest, .dest burn, hcode', by simp [hpc', hpc], h'.2, hret, S, rest, ?_, hframe, hK⟩
     rw [← burn.stack, hstack]
   | branch f g =>
     match a, hcheck, hret, hframe with
@@ -370,13 +397,13 @@ theorem cursor_step {code : ByteArray} {c : Cert} (hc : Cert.check code c = true
       rcases of_jumpi_run (Cursor.parentStep_jinst edge hat) with
         ⟨x, hpc', pop⟩ | ⟨x, y, hpc', pop, _, hy⟩
       · obtain ⟨_, S1, hst, hfr⟩ := Cursor.pop_two_frame hstack hframe pop
-        exact ⟨_, .zero, hcode', by simp [hpc', hpc],
+        exact ⟨_, .zero, .zero x pop, hcode', by simp [hpc', hpc],
           live_fall (Cursor.pop_two_second hstack hframe pop) h'.1.2, hret', S1, rest, hst, hfr, hK⟩
       · have hv := Cursor.pop_two_second hstack hframe pop
         obtain ⟨hx, S1, hst, hfr⟩ := Cursor.pop_two_frame hstack hframe pop
         have hx : x = t := hx
         subst hx
-        exact ⟨_, .succ, hcode', hpc', live_taken hy hv h'.2, hret', S1, rest, hst, hfr, hK⟩
+        exact ⟨_, .succ, .succ _ y hy pop, hcode', hpc', live_taken hy hv h'.2, hret', S1, rest, hst, hfr, hK⟩
     | [], hcheck, _, _ => simp [checkNode] at hcheck
     | [.const _], hcheck, _, _ => simp [checkNode] at hcheck
     | .ret :: _, hcheck, _, _ => simp [checkNode] at hcheck
@@ -397,15 +424,15 @@ theorem cursor_step {code : ByteArray} {c : Cert} (hc : Cert.check code c = true
         have hret' : RetOK a' m K := fun hm =>
           hret (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ hm))
         rcases of_jumpi_run (Cursor.parentStep_jinst edge hat) with
-          ⟨x, hpc', pop⟩ | ⟨x, y, hpc', pop, _, _⟩
+          ⟨x, hpc', pop⟩ | ⟨x, y, hpc', pop, _, hy⟩
         · obtain ⟨_, S1, hst, hfr⟩ := Cursor.pop_two_frame hstack hframe pop
-          exact ⟨_, .toZero, hcode', by simp [hpc', hpc],
+          exact ⟨_, .toZero, .toZero x pop, hcode', by simp [hpc', hpc],
             live_fall (Cursor.pop_two_second hstack hframe pop) h'.2, hret', S1, rest, hst, hfr, hK⟩
         · obtain ⟨hx, S1, hst, hfr⟩ := Cursor.pop_two_frame hstack hframe pop
           have hx : x = t := hx
           subst hx
           obtain ⟨g, hg⟩ := cert_prog_of_entry c k e hk
-          refine ⟨_, .toSucc hk hg, hcode', by simp [hpc', h'.1.1.1.2], ?_, ?_, S1, rest, hst,
+          refine ⟨_, .toSucc hk hg, .toSucc _ y hy hg pop, hcode', by simp [hpc', h'.1.1.1.2], ?_, ?_, S1, rest, hst,
             frameMatches_gotoCompat h'.1.2 hfr, hK⟩
           · exact cert_check_at hc k e g hk hg
           · intro hm
@@ -432,7 +459,7 @@ theorem cursor_step {code : ByteArray} {c : Cert} (hc : Cert.check code c = true
         have hx : x = t := hx
         subst hx
         obtain ⟨g, hg⟩ := cert_prog_of_entry c k e hk
-        refine ⟨_, .jump hk hg, hcode', by simp [hpc', h'.1.1.2], ?_, ?_, S1, rest, hst,
+        refine ⟨_, .jump hk hg, .jump _ hg pop, hcode', by simp [hpc', h'.1.1.2], ?_, ?_, S1, rest, hst,
           frameMatches_gotoCompat h'.2 hfr, hK⟩
         · exact cert_check_at hc k e g hk hg
         · intro hm
@@ -464,7 +491,7 @@ theorem cursor_step {code : ByteArray} {c : Cert} (hc : Cert.check code c = true
           simp only [hi] at hmatch
           obtain ⟨sf, sr, hS0, hsf, hsr⟩ := frameMatches_callCompat hmatch hfr
           let κc : Cont := ⟨.dest f0, 0, a'.drop e.frame.length, m, e.rets, false⟩
-          refine ⟨_, .call κc hk hg rfl rfl rfl rfl, hcode', by simp [hpc', hepc], hentry,
+          refine ⟨_, .call κc hk hg rfl rfl rfl rfl, .call _ hg pop, hcode', by simp [hpc', hepc], hentry,
             ?_, sf, sr ++ rest, by rw [hst, hS0, List.append_assoc], hsf,
             .cons hsr hretDrop (fun h => by cases h) hK⟩
           intro hm
@@ -482,7 +509,7 @@ theorem cursor_step {code : ByteArray} {c : Cert} (hc : Cert.check code c = true
               obtain ⟨hcall, hcont⟩ := hmatch
               obtain ⟨sf, sr, hS0, hsf, hsr⟩ := frameMatches_callCompat hcall hfr
               let κc : Cont := ⟨.dest f0, r, a'.drop e.frame.length, m, e.rets, true⟩
-              refine ⟨_, .call κc hk hg rfl rfl rfl rfl, hcode', by simp [hpc', hepc], hentry,
+              refine ⟨_, .call κc hk hg rfl rfl rfl rfl, .call _ hg pop, hcode', by simp [hpc', hepc], hentry,
                 fun _ => ⟨κc, K, rfl, rfl, rfl⟩, sf, sr ++ rest,
                 by rw [hst, hS0, List.append_assoc], hsf,
                 .cons hsr hretDrop (fun _ => by
@@ -517,7 +544,7 @@ theorem cursor_step {code : ByteArray} {c : Cert} (hc : Cert.check code c = true
         subst hx
         have hlenS : S'.length = k.rets := by
           rw [← List.Forall₂.length_eq hfr, h'.2, hrets]
-        refine ⟨_, .ret, hcode', hpc', hchk hlive, ?_, S' ++ S1, rest1,
+        refine ⟨_, .ret, .ret k.tag pop, hcode', hpc', hchk hlive, ?_, S' ++ S1, rest1,
           by rw [hst, List.append_assoc], ?_, hK'⟩
         · intro hm
           rcases List.mem_append.mp hm with hm | hm
@@ -543,7 +570,7 @@ theorem cursor_step {code : ByteArray} {c : Cert} (hc : Cert.check code c = true
       exact Ninst.at_of_slice (bytesAt_slice (ninst_bytes_ne_nil _) hbytes)
     obtain ⟨hpc', hrun⟩ := Cursor.parentStep_pc edge hat
     rw [hpc] at hrun
-    refine ⟨_, .pcAt, hcode', by simp [hpc', hpc], hrest,
+    refine ⟨_, .pcAt, .pcAt ⟨.none, trivial, _, hrun⟩ hrun, hcode', by simp [hpc', hpc], hrest,
       fun hm => hret (by simpa using hm), Nat.toB256 p :: S, rest, ?_,
       List.Forall₂.cons rfl hframe, hK⟩
     rw [pc_stepRun_stack hrun, hstack]
@@ -552,6 +579,14 @@ theorem cursor_step {code : ByteArray} {c : Cert} (hc : Cert.check code c = true
     have hnone : n.sevm.code.getInst n.pc = none := by
       rw [hcode, hpc]; simpa [checkNode, Option.isNone_iff_eq_none] using hcheck
     exact (Cursor.parentStep_false_of_none edge hnone).elim
+
+/-- **One same-frame edge is one synthetic step.**  `cursor_stepS` without the
+state. -/
+theorem cursor_step {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
+    {n n' : Exec.Deriv} {κ : Cursor} (ok : CursorOK code c n κ)
+    (edge : Exec.Deriv.ParentStep n' n) (hfork : CoveredFork n.sevm.benvStat.fork) :
+    ∃ κ', SStep c κ κ' ∧ CursorOK code c n' κ' :=
+  (cursor_stepS hc ok edge hfork).imp fun _ h => ⟨h.1, h.2.2⟩
 
 /-- **The prefix form of the lift.**  Every node reached along the
 same-frame chain of a frame entered at pc `0` of certified bytes — whatever
@@ -574,15 +609,15 @@ theorem cursor_of_parentPrefix {code : ByteArray} {c : Cert} (hc : Cert.check co
     obtain ⟨κ, hreach, ok'⟩ := ih κ₁ ok₁ (by rw [Cursor.parentStep_sevm head]; exact hfork)
     exact ⟨κ, .head hstep hreach, ok'⟩
 
-/-- A cursor-placed node decodes only the frame-spawning instructions the
-checker admits: `CALL` and `STATICCALL` (never `DELEGATECALL`, `CALLCODE`,
-`CREATE` or `CREATE2`). -/
-theorem CursorOK.exec_call_or_staticcall {code : ByteArray} {c : Cert} {n : Exec.Deriv}
+/-- A cursor-placed node decoding an external instruction sits at that
+instruction's `next` node. -/
+theorem CursorOK.tree_of_exec {code : ByteArray} {c : Cert} {n : Exec.Deriv}
     {κ : Cursor} (ok : CursorOK code c n κ) {x : Xinst}
-    (hat : Ninst.At n.sevm.code n.pc (.exec x)) : x = .call ∨ x = .staticcall := by
+    (hat : Ninst.At n.sevm.code n.pc (.exec x)) :
+    ∃ g, κ.f = .next (.exec x) g ∧ checkNode code c.entries κ.m κ.pc κ.a κ.f = true := by
   obtain ⟨hcode, hpc, hcheck, -, -⟩ := ok
   obtain ⟨f, pc, a, m, K⟩ := κ
-  dsimp only at hpc hcheck
+  dsimp only at hpc hcheck ⊢
   rw [hcode, hpc] at hat
   have hjump : ∀ j : Jinst, byteAt code pc = some j.toUInt8 → False := fun j hb => by
     have hj := byteAt_jinst_at hb
@@ -592,17 +627,14 @@ theorem CursorOK.exec_call_or_staticcall {code : ByteArray} {c : Cert} {n : Exec
     cases hj
   cases f with
   | next i g =>
+    have hcheck' := hcheck
     simp only [checkNode, Bool.and_eq_true] at hcheck
-    obtain ⟨⟨hbytes, _⟩, hrest⟩ := hcheck
+    obtain ⟨⟨hbytes, _⟩, _⟩ := hcheck
     have hi := Ninst.at_of_slice (bytesAt_slice (ninst_bytes_ne_nil i) hbytes)
     unfold Ninst.At at hi hat
     rw [hat] at hi
     cases hi
-    cases habs : absNinst (.exec x) a with
-    | none => simp [habs] at hrest
-    | some a' =>
-      obtain ⟨_, out, _, htrans, _⟩ := absNinst_nonpush_spec (fun _ _ h => by cases h) habs
-      cases x <;> simp [ninstTransfer] at htrans ⊢
+    exact ⟨g, rfl, hcheck'⟩
   | last l =>
     have hl := byteAt_linst_at (show byteAt code pc = some l.toUInt8 by
       simpa [checkNode] using hcheck)
@@ -648,5 +680,57 @@ theorem CursorOK.exec_call_or_staticcall {code : ByteArray} {c : Cert} {n : Exec
     unfold Ninst.At at hi hat
     rw [hat] at hi
     cases hi
+
+/-- A cursor-placed node decodes only the frame-spawning instructions the
+checker admits: `CALL` and `STATICCALL` (never `DELEGATECALL`, `CALLCODE`,
+`CREATE` or `CREATE2`). -/
+theorem CursorOK.exec_call_or_staticcall {code : ByteArray} {c : Cert} {n : Exec.Deriv}
+    {κ : Cursor} (ok : CursorOK code c n κ) {x : Xinst}
+    (hat : Ninst.At n.sevm.code n.pc (.exec x)) : x = .call ∨ x = .staticcall := by
+  obtain ⟨g, hf, hcheck⟩ := ok.tree_of_exec hat
+  rw [hf] at hcheck
+  simp only [checkNode, Bool.and_eq_true] at hcheck
+  obtain ⟨_, hrest⟩ := hcheck
+  cases habs : absNinst (.exec x) κ.a with
+  | none => simp [habs] at hrest
+  | some a' =>
+    obtain ⟨_, out, _, htrans, _⟩ := absNinst_nonpush_spec (fun _ _ h => by cases h) habs
+    cases x <;> simp [ninstTransfer] at htrans ⊢
+
+/-- **The stateful prefix form of the lift.**  Every node `N` of the same-frame
+chain of a frame `R` entered at pc `0` of certified bytes — whatever `R`'s
+eventual outcome — is reached from entry `0` in `R`'s own state by synthetic
+steps whose children lie among `R`'s raw frame roots (`StepIn R`); the target is
+the stateful image of a cursor placing `N`. -/
+theorem reach_of_parentPrefix {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
+    {R N : Exec.Deriv} (hpc : R.pc = 0) (hcode : R.sevm.code = code)
+    (hfork : CoveredFork R.sevm.benvStat.fork) (hp : Exec.Deriv.ParentPrefix R N) :
+    ∃ κ, Reach (StepIn R) c.prog R.sevm ((Cursor.start c).conf R.devm) (κ.conf N.devm) ∧
+      CursorOK code c N κ := by
+  suffices h : ∀ {F n : Exec.Deriv}, Exec.Deriv.ParentPrefix F n →
+      ∀ κ₀, CursorOK code c F κ₀ → CoveredFork F.sevm.benvStat.fork → F.sevm = R.sevm →
+      (∀ r ∈ Exec.rawFrameDescendants F.exc, r ∈ Exec.rawFrameRoots R.exc) →
+      ∃ κ, Reach (StepIn R) c.prog R.sevm (κ₀.conf F.devm) (κ.conf n.devm) ∧
+        CursorOK code c n κ from
+    h hp _ (cursor_start hc hpc hcode) hfork rfl (fun r hr => List.mem_cons_of_mem _ hr)
+  intro F n hp
+  induction hp with
+  | refl root => exact fun κ₀ ok _ _ _ => ⟨κ₀, .refl, ok⟩
+  | step head _ ih =>
+    intro κ₀ ok hfork hsevm hdesc
+    obtain ⟨κ₁, -, hstep, ok₁⟩ := cursor_stepS hc ok head hfork
+    have hsevm₁ := Cursor.parentStep_sevm head
+    obtain ⟨κ, hreach, ok'⟩ := ih κ₁ ok₁ (by rw [hsevm₁]; exact hfork)
+      (hsevm₁.trans hsevm)
+      (fun r hr => hdesc r (by
+        cases head with
+        | cont => simpa only [Exec.rawFrameDescendants] using hr
+        | doneOk => simpa only [Exec.rawFrameDescendants] using hr
+        | runOk =>
+          simp only [Exec.rawFrameDescendants, List.mem_cons, List.mem_append]
+          exact Or.inr (Or.inr hr)))
+    refine ⟨κ, .head ?_ hreach, ok'⟩
+    rw [← hsevm]
+    exact hstep.mono fun h => h.mono fun _ _ _ _ _ he r hr => hdesc r (he r hr)
 
 end Blanc.Lift
