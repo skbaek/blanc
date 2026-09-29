@@ -2000,6 +2000,12 @@ consumer needs canonical interpreter ingress as one conjunct:
   `doneOk_of_ne`, `runErr_child`, `runOk_child`, and `runOk_next_of_ne`
   theorems are the supported restriction interface; do not reconstruct list
   membership inside a contract proof.
+- `ExecutionTrace.RootEntry` in
+  [`Blanc/ExecutionTraceEntry.lean`](../Blanc/ExecutionTraceEntry.lean) is the pair
+  "pc zero on a covered fork"; every carrier from `ProcessMessageTrace` through
+  `ConfiguredHistoryTrace` derives it for all its `rawFrames` (`.rootEntry`, from the
+  fork of the carrier's opening benv). Use it to apply an execution-level theorem
+  stated for `Exec 0 …` and `CoveredFork` to a raw frame of a retained trace.
 - `Exec.FreshEntry sevm pre` records only `pre.stack = []` and
   `pre.memory = Mem.empty`. `Exec.FrameAdmitted.fresh_of_enter` derives it
   from one actual frame entry, and `Exec.FrameAdmitted.and` combines it with
@@ -2835,7 +2841,11 @@ contract-neutral.
   `Blanc/Lift/VyperNonreentrantDeployed/Fixed/LockDominance.lean`; the full
   `lock_exclusion` instance (dominance, `ownerDiscipline_of_world` for a
   forwarder owner, `NoDelegateFrom` from the cursor, release-pc activity) is
-  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Exclusion.lean`.
+  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Exclusion.lean`; its transaction
+  and history forms (`vplus_excludes`, `TransactionTrace.vplus`,
+  `ConfiguredHistoryTrace.vplus`: the well-formed-root premise derived from the
+  prepared message, every raw root of a history covered) are
+  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/ExclusionTrace.lean`.
 - Lifted run to execution (liveness, exact gas): `SFunc.RunExact`,
   `Cert.jumpsOk` and `lift_exact` in [`Blanc/Lift/Exact.lean`](../Blanc/Lift/Exact.lean);
   the per-instruction walk steps (`rx_push`, `rx_sload_cold`, `rx_callRet`, …)

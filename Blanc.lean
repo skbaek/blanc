@@ -48,6 +48,7 @@ import Blanc.StaticCallStorage
 import Blanc.ExecutionTraceFrames
 import Blanc.ExecutionTraceAdmission
 import Blanc.ExecutionTraceSettledFrames
+import Blanc.ExecutionTraceEntry
 import Blanc.ExecutionAccountingObserved
 import Blanc.DeploymentOccurrence
 import Blanc.RootedExecution
@@ -450,6 +451,7 @@ import Blanc.Lift.LidoCircuitBreakerDeployed.Foreign
 import Blanc.Lift.LidoCircuitBreakerDeployed.Frame
 import Blanc.Lift.LidoCircuitBreakerDeployed.FrameMem
 import Blanc.Lift.LidoCircuitBreakerDeployed.History
+import Blanc.Lift.LidoCircuitBreakerDeployed.L2History
 import Blanc.Lift.LidoCircuitBreakerDeployed.Init
 import Blanc.Lift.LidoCircuitBreakerDeployed.L2
 import Blanc.Lift.LidoCircuitBreakerDeployed.L2Frame
@@ -476,6 +478,7 @@ import Blanc.Lift.VyperNonreentrantDeployed.Concrete.ProxyConcrete
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Cert
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Check
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exclusion
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.ExclusionTrace
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.LockAnn
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.LockCheck
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.LockDominance
