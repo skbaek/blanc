@@ -228,19 +228,19 @@ theorem Weth9.XferDebit.toEff {sevm : Sevm} {d : Devm} {o : Outcome} {wad dst sr
     XferEff sevm d o wad dst src :=
   ⟨e.1, Or.inr ⟨hne, _, e.2⟩⟩
 
-private theorem eq_zero_of_isz_ne {x : B256} (h : (x =? 0) ≠ 0) : x = 0 := by
+theorem eq_zero_of_isz_ne {x : B256} (h : (x =? 0) ≠ 0) : x = 0 := by
   unfold B256.eqCheck at h
   split at h
   · assumption
   · exact absurd rfl h
 
-private theorem ne_zero_of_isz_eq {x : B256} (h : (x =? 0) = 0) : x ≠ 0 := by
+theorem ne_zero_of_isz_eq {x : B256} (h : (x =? 0) = 0) : x ≠ 0 := by
   intro hx
   subst hx
   revert h
   decide
 
-private theorem ne_of_eqc_eq {x y : B256} (h : (x =? y) = 0) : x ≠ y := by
+theorem ne_of_eqc_eq {x y : B256} (h : (x =? y) = 0) : x ≠ y := by
   intro hx
   subst hx
   unfold B256.eqCheck at h
@@ -248,7 +248,7 @@ private theorem ne_of_eqc_eq {x y : B256} (h : (x =? y) = 0) : x ≠ y := by
   revert h
   decide
 
-private theorem eq_of_eqc_ne {x y : B256} (h : (x =? y) ≠ 0) : x = y := by
+theorem eq_of_eqc_ne {x y : B256} (h : (x =? y) ≠ 0) : x = y := by
   unfold B256.eqCheck at h
   split at h
   · assumption
