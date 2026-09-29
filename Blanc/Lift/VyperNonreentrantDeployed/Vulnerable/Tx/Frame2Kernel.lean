@@ -84,7 +84,7 @@ def adrsT343 : List Adr :=
   [a2Address, (4 : Adr), implementationAddress, proxyAddress] ++ praguePrecompiles ++
     [eAddress, a2Address] ++ adrsAT
 
-def bndT343 : Bnd1 := (machT343, t_1c73_c23, [], keysT343, adrsT343, storAT, acsAT, [], [])
+def bndT343 : Bnd1 := (machT343, t_1c73_c23, [], keysT343, adrsT343, storAT, acsAT, [], [], none, false)
 
 /-- Frame 2's machine at step 563. -/
 def machT563 : Mach :=
@@ -177,7 +177,7 @@ def rdT563 : Bytes :=
    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
    0x00, 0x00, 0x00, 0x64]
 
-def bndT563 : Bnd1 := (machT563, t_1d0d_c53, [], keysT343, adrsT563, storT563, acsT563, [], rdT563)
+def bndT563 : Bnd1 := (machT563, t_1d0d_c53, [], keysT343, adrsT563, storT563, acsT563, [], rdT563, none, false)
 
 /-- Frame 2's machine at step 578. -/
 def machT578 : Mach :=
@@ -272,7 +272,7 @@ def acsT578 : AcctShadow :=
    (proxyAddress, ⟨1, (1000 : Nat).toB256, .empty, proxyCode⟩)] ++ acsT563
 
 /-- Step 578, whose return data is the token's `true`. -/
-def bndT578 : Bnd1 := (machT578, t_1d27_c53, [], keysT578, adrsT578, storT578, acsT578, [], word 1)
+def bndT578 : Bnd1 := (machT578, t_1d27_c53, [], keysT578, adrsT578, storT578, acsT578, [], word 1, none, false)
 
 /-! ### The stages -/
 

@@ -79,7 +79,7 @@ def keys343 : List (Adr × B256) :=
 
 def adrs343 : List Adr := [attackerAddress, (4 : Adr), implementationAddress] ++ adrsA
 
-def bnd343 : Bnd1 := (mach343, t_1c73_c23, [], keys343, adrs343, storA, acsA, [], [])
+def bnd343 : Bnd1 := (mach343, t_1c73_c23, [], keys343, adrs343, storA, acsA, [], [], none, false)
 
 /-- Frame 1's machine at step 563. -/
 def mach563 : Mach :=
@@ -172,7 +172,7 @@ def rd563 : Bytes :=
    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
    0x00, 0x00, 0x00, 0x64]
 
-def bnd563 : Bnd1 := (mach563, t_1d0d_c53, [], keys343, adrs563, stor563, acs563, [], rd563)
+def bnd563 : Bnd1 := (mach563, t_1d0d_c53, [], keys343, adrs563, stor563, acs563, [], rd563, none, false)
 
 /-- Frame 1's machine at step 578. -/
 def mach578 : Mach :=
@@ -267,7 +267,7 @@ def acs578 : AcctShadow :=
    (proxyAddress, ⟨1, (1000 : Nat).toB256, .empty, proxyCode⟩)] ++ acs563
 
 /-- Step 578, whose return data is the token's `true`. -/
-def bnd578 : Bnd1 := (mach578, t_1d27_c53, [], keys578, adrs578, stor578, acs578, [], word 1)
+def bnd578 : Bnd1 := (mach578, t_1d27_c53, [], keys578, adrs578, stor578, acs578, [], word 1, none, false)
 
 /-! ### The stages -/
 

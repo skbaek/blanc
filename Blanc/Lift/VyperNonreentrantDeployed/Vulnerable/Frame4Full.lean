@@ -17,7 +17,7 @@ open Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
 
 /-- **Frame 4 whole, from the chunks.** -/
 theorem frame4_kernel : obs4 r4 = obs4EELS :=
-  run_of_obsB (P := fun r => obs4 r = obs4EELS) (n := 2625) (k := 1880) chunkA rfl
+  run_of_obsB (P := fun r => obs4 r = obs4EELS) (n := 2625) (k := 1880) chunkA.1 chunkA.2 rfl
     (fun m w => chunkB m w)
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree

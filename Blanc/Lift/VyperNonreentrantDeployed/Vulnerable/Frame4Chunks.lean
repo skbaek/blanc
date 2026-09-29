@@ -130,7 +130,8 @@ theorem e4_sta_eq : e4.sta = sta4 := by kernel_rfl
 
 /-- The boundary configuration over a free world and free bookkeeping. -/
 def cfgB (m : Meta) (w : World) : Cfg :=
-  ⟨⟨mach2625, { m with refundCounter := 2800, output := [], returnData := [], error := none }, w⟩,
+  ⟨⟨mach2625, { { m with refundCounter := 2800, output := [], returnData := [], error := none } with
+    accountsToDelete := .emptyWithCapacity }, w⟩,
     t_0370_c63, [], keys2625, adrs2625, stor2625, acsA⟩
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree

@@ -19,10 +19,13 @@ parameters.  Nothing here is contract-specific.
   configuration so decided is `cfgOf` of its boundary at its own world and bookkeeping
   (`cfg_of_obsD`), so a run through a boundary is a chunk up to it followed by one from it
   over any world and bookkeeping (`obsD_chain`, `obsD_chain3`, `obsB_of_obsD`,
-  `run_of_obsB`).
-* `Bnd1`, `obsD1`, `obsDOk1`, `cfgOf1`: the same without the refund counter, deciding the
-  account shadow by its address, nonce and balance (`acctKey`) and comparing each account's
-  storage and code as terms (`acctRest`).  After a child's `CALL` some accounts' addresses
+  `run_of_obsB`).  Every boundary also records that the set of accounts to delete is still the
+  empty one a frame starts with (compared as a term), so a run through boundaries shows the
+  frame deletes nothing.
+* `Bnd1`, `obsD1`, `obsDOk1`, `cfgOf1`: the same with the refund counter optional (`none`:
+  free), deciding the account shadow by its address, nonce and balance (`acctKey`) and
+  comparing each account's storage and code as terms (`acctRest`), and the set of accounts to
+  delete against the empty set when the boundary records it.  After a child's `CALL` some accounts' addresses
   are computed from stack words, and comparing such a shadow to a literal as a term
   exhausts the kernel.
 * `callPairFrom`, `callPairA`, `callPairB`, `callPairFrom_stages`: a frame that makes two
@@ -50,14 +53,16 @@ def obsB : Res → Option Bnd
   | _ => none
 
 /-- The configuration at boundary `x` (with no error), over a free world and free
-bookkeeping. -/
+bookkeeping; the set of accounts to delete is the empty one a frame starts with (a boundary
+records it as a term, `obsD`). -/
 def cfgOf : Bnd → Meta → World → Cfg
   | (mach, f, K, keys, adrs, stor, acs, rc, out, rd, _), m, w =>
-    ⟨⟨mach, { m with refundCounter := rc, output := out, returnData := rd, error := none }, w⟩,
-      f, K, keys, adrs, stor, acs⟩
+    ⟨⟨mach, { { m with refundCounter := rc, output := out, returnData := rd, error := none } with
+      accountsToDelete := .emptyWithCapacity }, w⟩, f, K, keys, adrs, stor, acs⟩
 
-/-- A chunk's end decided against boundary `x`. -/
-def obsD : Bnd → Res → Option (Bool × SFunc × List SFunc × AcctShadow)
+/-- A chunk's end decided against boundary `x`: the last component is the set of accounts to
+delete, compared as a term against the empty set. -/
+def obsD : Bnd → Res → Option (Bool × SFunc × List SFunc × AcctShadow × AdrSet)
   | (mach, _, _, keys, adrs, stor, _, rc, out, rd, err), .cont c =>
     some (decide (c.devm.mach.stack = mach.stack) &&
       decide (c.devm.mach.memory.data.toList = mach.memory.data.toList) &&
@@ -66,12 +71,21 @@ def obsD : Bnd → Res → Option (Bool × SFunc × List SFunc × AcctShadow)
       decide (c.devm.mach.stateGas = mach.stateGas) && decide (c.keys = keys) &&
       decide (c.adrs = adrs) && decide (c.stor = stor) && decide (c.devm.refundCounter = rc) &&
       decide (c.devm.output = out) && decide (c.devm.returnData = rd) &&
-      c.devm.error.isNone && err.isNone, c.f, c.K, c.acs)
+      c.devm.error.isNone && err.isNone, c.f, c.K, c.acs, c.devm.accountsToDelete)
   | _, _ => none
 
 /-- What `obsD` shows at boundary `x`. -/
-def obsDOk : Bnd → Option (Bool × SFunc × List SFunc × AcctShadow)
-  | (_, f, K, _, _, _, acs, _, _, _, _) => some (true, f, K, acs)
+def obsDOk : Bnd → Option (Bool × SFunc × List SFunc × AcctShadow × AdrSet)
+  | (_, f, K, _, _, _, acs, _, _, _, _) => some (true, f, K, acs, .emptyWithCapacity)
+
+/-- A result whose configuration (if it is one) has the empty set of accounts to delete.
+Irreducible: the elaborator must not evaluate the run it is stated about. -/
+@[irreducible] def AtdClean : Res → Prop
+  | .cont c => c.devm.accountsToDelete = .emptyWithCapacity
+  | _ => True
+
+theorem atdClean_cont {c : Cfg} : AtdClean (.cont c) ↔ c.devm.accountsToDelete = .emptyWithCapacity := by
+  unfold AtdClean; exact Iff.rfl
 
 /-- A configuration decided at boundary `x` is `cfgOf x` at its own world and bookkeeping. -/
 theorem cfg_of_obsD {c : Cfg} {x : Bnd} (h : obsD x (.cont c) = obsDOk x) :
@@ -80,19 +94,20 @@ theorem cfg_of_obsD {c : Cfg} {x : Bnd} (h : obsD x (.cont c) = obsDOk x) :
   rcases c with ⟨⟨⟨s', ⟨data', size'⟩, g', sg'⟩, m, w⟩, f', K', keys', adrs', stor', acs'⟩
   simp only [obsD, obsDOk, Option.some.injEq, Prod.mk.injEq, Bool.and_eq_true,
     decide_eq_true_eq, and_assoc] at h
-  obtain ⟨hs, hd, hsz, hg, hsg, hk, ha, hst, hrc, ho, hrd, he, -, hf, hK, hc⟩ := h
+  obtain ⟨hs, hd, hsz, hg, hsg, hk, ha, hst, hrc, ho, hrd, he, -, hf, hK, hc, hat⟩ := h
   have hd' : data' = data := Array.toList_inj.mp hd
   subst hs hd' hsz hg hsg hk ha hst hf hK hc
   rcases m with ⟨_, _, _, _, _, _, _, _, _, _, _⟩
   simp only [Devm.refundCounter, Devm.output, Devm.returnData, Devm.error,
-    Option.isNone_iff_eq_none] at hrc ho hrd he
-  subst hrc ho hrd he
+    Option.isNone_iff_eq_none, Devm.accountsToDelete] at hrc ho hrd he hat
+  subst hrc ho hrd he hat
   rfl
 
-/-- A configuration observed as boundary `x` (which records no error) is `cfgOf x` at its
-own world and bookkeeping. -/
+/-- A configuration observed as boundary `x` (which records no error) with the empty set of
+accounts to delete is `cfgOf x` at its own world and bookkeeping. -/
 theorem cfg_of_obsB {c : Cfg} {x : Bnd} (h : obsB (.cont c) = some x)
-    (hx : x.2.2.2.2.2.2.2.2.2.2 = none) : c = cfgOf x c.devm.meta c.devm.world := by
+    (hx : x.2.2.2.2.2.2.2.2.2.2 = none) (hat : c.devm.accountsToDelete = .emptyWithCapacity) :
+    c = cfgOf x c.devm.meta c.devm.world := by
   rcases x with ⟨mach, f, K, keys, adrs, stor, acs, rc, out, rd, err⟩
   cases hx
   rcases c with ⟨⟨mach', m, w⟩, f', K', keys', adrs', stor', acs'⟩
@@ -100,8 +115,9 @@ theorem cfg_of_obsB {c : Cfg} {x : Bnd} (h : obsB (.cont c) = some x)
   obtain ⟨hm, hf, hK, hk, ha, hs, hc, hrc, ho, hrd, he⟩ := h
   subst hm hf hK hk ha hs hc
   rcases m with ⟨_, _, _, _, _, _, _, _, _, _, _⟩
-  simp only [Devm.refundCounter, Devm.output, Devm.returnData, Devm.error] at hrc ho hrd he
-  subst hrc ho hrd he
+  simp only [Devm.refundCounter, Devm.output, Devm.returnData, Devm.error,
+    Devm.accountsToDelete] at hrc ho hrd he hat
+  subst hrc ho hrd he hat
   rfl
 
 /-- `obsB` of a boundary's configuration is the boundary (when it records no error). -/
@@ -139,45 +155,64 @@ theorem obsD_chain3 {fs : List SFunc} {sta : Sevm} {n1 n2 n3 : Nat} {c : Cfg} {x
   exact obsD_chain (P := fun r => obsD x3 r = obsDOk x3)
     (obsD_chain (P := fun r => obsD x2 r = obsDOk x2) (h1 _ _) h2) h3
 
-/-- A run decided at boundary `x` (which records no error) is observed as `x`. -/
+/-- A run decided at boundary `x` (which records no error) is observed as `x`, with the empty
+set of accounts to delete. -/
 theorem obsB_of_obsD {fs : List SFunc} {sta : Sevm} {n : Nat} {c : Cfg} {x : Bnd}
     (h : obsD x (wrun fs sta n c) = obsDOk x) (hx : x.2.2.2.2.2.2.2.2.2.2 = none) :
-    obsB (wrun fs sta n c) = some x := by
+    obsB (wrun fs sta n c) = some x ∧ AtdClean (wrun fs sta n c) := by
   generalize wrun fs sta n c = r at h ⊢
   rcases r with c' | _ | _
   · rw [cfg_of_obsD h]
-    exact obsB_cfgOf hx _ _
+    exact ⟨obsB_cfgOf hx _ _, atdClean_cont.mpr rfl⟩
   · rcases x with ⟨_, _, _, _, _, _, _, _, _, _, _⟩
     simp [obsD, obsDOk] at h
   · rcases x with ⟨_, _, _, _, _, _, _, _, _, _, _⟩
     simp [obsD, obsDOk] at h
 
-/-- A run observed as boundary `x` (which records no error), followed by `k` steps decided
-from `x` over any world and bookkeeping. -/
+/-- A run observed as boundary `x` (which records no error) with the empty set of accounts to
+delete, followed by `k` steps decided from `x` over any world and bookkeeping. -/
 theorem run_of_obsB {P : Res → Prop} {fs : List SFunc} {sta : Sevm} {n k : Nat} {c : Cfg}
-    {x : Bnd} (hA : obsB (wrun fs sta n c) = some x) (hx : x.2.2.2.2.2.2.2.2.2.2 = none)
+    {x : Bnd} (hA : obsB (wrun fs sta n c) = some x) (hat : AtdClean (wrun fs sta n c))
+    (hx : x.2.2.2.2.2.2.2.2.2.2 = none)
     (hB : ∀ m w, P (wrun fs sta k (cfgOf x m w))) : P (wrun fs sta (n + k) c) := by
   rw [wrun_add]
-  generalize wrun fs sta n c = r at hA ⊢
+  generalize wrun fs sta n c = r at hA hat ⊢
   rcases r with c' | _ | _
-  · rw [cfg_of_obsB hA hx]
+  · rw [cfg_of_obsB hA hx (atdClean_cont.mp hat)]
     exact hB _ _
   · simp [obsB] at hA
   · simp [obsB] at hA
 
-/-! ### Boundaries without the refund counter -/
+/-! ### Boundaries with an optional refund counter -/
 
-/-- A boundary without the refund counter: machine, node, pending returns, the four
-shadows, output and return data. -/
+/-- A boundary: machine, node, pending returns, the four shadows, output and return data, the
+refund counter when it is recorded (`none`: free), and whether it records that the set of
+accounts to delete is the empty one a frame starts with (`false`: free). -/
 abbrev Bnd1 := Mach × SFunc × List SFunc × List (Adr × B256) × List Adr × StorShadow ×
-  AcctShadow × Bytes × Bytes
+  AcctShadow × Bytes × Bytes × Option Int × Bool
+
+/-- `m` with the refund counter `rc` when one is recorded. -/
+def setRc : Option Int → Meta → Meta
+  | none, m => m
+  | some r, m => { m with refundCounter := r }
+
+/-- `m` with the empty set of accounts to delete when the boundary records it. -/
+def setAtd : Bool → Meta → Meta
+  | false, m => m
+  | true, m => { m with accountsToDelete := .emptyWithCapacity }
+
+/-- The set of accounts to delete a boundary compares (the empty set when it records none). -/
+def atdOf1 : Bool → AdrSet → AdrSet
+  | false, _ => .emptyWithCapacity
+  | true, a => a
 
 /-- The configuration at boundary `x` (with no error), over a free world and free
-bookkeeping (the refund counter included). -/
+bookkeeping (the refund counter included unless the boundary records it, and likewise the set
+of accounts to delete). -/
 def cfgOf1 : Bnd1 → Meta → World → Cfg
-  | (mach, f, K, keys, adrs, stor, acs, out, rd), m, w =>
-    ⟨⟨mach, { m with output := out, returnData := rd, error := none }, w⟩, f, K, keys, adrs, stor,
-      acs⟩
+  | (mach, f, K, keys, adrs, stor, acs, out, rd, rc, atd), m, w =>
+    ⟨⟨mach, setAtd atd (setRc rc { m with output := out, returnData := rd, error := none }), w⟩,
+      f, K, keys, adrs, stor, acs⟩
 
 /-- An account-shadow entry's address, nonce and balance: what a boundary decides. -/
 def acctKey (p : Adr × Acct) : Adr × UInt64 × B256 := (p.1, p.2.nonce, p.2.bal)
@@ -209,9 +244,11 @@ theorem acs_eq_of_views : ∀ {l l' : AcctShadow}, l.map acctKey = l'.map acctKe
 
 /-- A chunk's end decided against boundary `x`: the machine, the storage-key, address and
 storage shadows, each account's address, nonce and balance, the output and the return data by
-`decide`; the node, the pending returns and each account's storage and code as terms. -/
-def obsD1 : Bnd1 → Res → Option (Bool × SFunc × List SFunc × List (Stor × ByteArray))
-  | (mach, _, _, keys, adrs, stor, acs, out, rd), .cont c =>
+`decide`; the node, the pending returns and each account's storage and code as terms; the refund counter by `decide` when the boundary records it, and
+the set of accounts to delete as a term against the empty set. -/
+def obsD1 : Bnd1 → Res →
+    Option (Bool × SFunc × List SFunc × List (Stor × ByteArray) × AdrSet)
+  | (mach, _, _, keys, adrs, stor, acs, out, rd, rc, atd), .cont c =>
     some (decide (c.devm.mach.stack = mach.stack) &&
       decide (c.devm.mach.memory.data.toList = mach.memory.data.toList) &&
       decide (c.devm.mach.memory.size = mach.memory.size) &&
@@ -219,36 +256,50 @@ def obsD1 : Bnd1 → Res → Option (Bool × SFunc × List SFunc × List (Stor �
       decide (c.devm.mach.stateGas = mach.stateGas) && decide (c.keys = keys) &&
       decide (c.adrs = adrs) && decide (c.stor = stor) &&
       decide (c.acs.map acctKey = acs.map acctKey) && decide (c.devm.output = out) &&
-      decide (c.devm.returnData = rd) && c.devm.error.isNone, c.f, c.K, c.acs.map acctRest)
+      decide (c.devm.returnData = rd) && c.devm.error.isNone &&
+      (match rc with | none => true | some r => decide (c.devm.refundCounter = r)),
+      c.f, c.K, c.acs.map acctRest, atdOf1 atd c.devm.accountsToDelete)
   | _, _ => none
 
 /-- What `obsD1` shows at boundary `x`. -/
-def obsDOk1 : Bnd1 → Option (Bool × SFunc × List SFunc × List (Stor × ByteArray))
-  | (_, f, K, _, _, _, acs, _, _) => some (true, f, K, restsOf acs)
+def obsDOk1 : Bnd1 → Option (Bool × SFunc × List SFunc × List (Stor × ByteArray) × AdrSet)
+  | (_, f, K, _, _, _, acs, _, _, _, _) => some (true, f, K, restsOf acs, .emptyWithCapacity)
 
 /-- A configuration decided at boundary `x` is `cfgOf1 x` at its own world and bookkeeping. -/
 theorem cfg_of_obsD1 {c : Cfg} {x : Bnd1} (h : obsD1 x (.cont c) = obsDOk1 x) :
     c = cfgOf1 x c.devm.meta c.devm.world := by
-  rcases x with ⟨⟨s, ⟨data, size⟩, g, sg⟩, f, K, keys, adrs, stor, acs, out, rd⟩
+  rcases x with ⟨⟨s, ⟨data, size⟩, g, sg⟩, f, K, keys, adrs, stor, acs, out, rd, rc, atd⟩
   rcases c with ⟨⟨⟨s', ⟨data', size'⟩, g', sg'⟩, m, w⟩, f', K', keys', adrs', stor', acs'⟩
   simp only [obsD1, obsDOk1, Option.some.injEq, Prod.mk.injEq, Bool.and_eq_true,
     decide_eq_true_eq, and_assoc] at h
-  obtain ⟨hs, hd, hsz, hg, hsg, hk, ha, hst, hca, ho, hrd, he, hf, hK, hcv⟩ := h
+  obtain ⟨hs, hd, hsz, hg, hsg, hk, ha, hst, hca, ho, hrd, he, hrc, hf, hK, hcv, hat⟩ := h
   have hd' : data' = data := Array.toList_inj.mp hd
   have hc : acs' = acs := acs_eq_of_views hca (hcv.trans (restsOf_eq acs))
   subst hs hd' hsz hg hsg hk ha hst hf hK hc
   rcases m with ⟨_, _, _, _, _, _, _, _, _, _, _⟩
   simp only [Devm.output, Devm.returnData, Devm.error, Option.isNone_iff_eq_none] at ho hrd he
   subst ho hrd he
-  rfl
+  rcases rc with _ | r
+  · rcases atd with _ | _
+    · rfl
+    · simp only [atdOf1, Devm.accountsToDelete] at hat
+      subst hat
+      rfl
+  · have hrc' := of_decide_eq_true hrc
+    subst hrc'
+    rcases atd with _ | _
+    · rfl
+    · simp only [atdOf1, Devm.accountsToDelete] at hat
+      subst hat
+      rfl
 
 /-- A result decided at boundary `x` is `cfgOf1 x` at some world and bookkeeping. -/
 theorem obsD1_cont {x : Bnd1} {r : Res} (h : obsD1 x r = obsDOk1 x) :
     ∃ m w, r = .cont (cfgOf1 x m w) := by
   rcases r with c | _ | _
   · exact ⟨_, _, congrArg Res.cont (cfg_of_obsD1 h)⟩
-  · rcases x with ⟨_, _, _, _, _, _, _, _, _⟩; simp [obsD1, obsDOk1] at h
-  · rcases x with ⟨_, _, _, _, _, _, _, _, _⟩; simp [obsD1, obsDOk1] at h
+  · rcases x with ⟨_, _, _, _, _, _, _, _, _, _, _⟩; simp [obsD1, obsDOk1] at h
+  · rcases x with ⟨_, _, _, _, _, _, _, _, _, _, _⟩; simp [obsD1, obsDOk1] at h
 
 /-! ### A frame with two code-child calls -/
 

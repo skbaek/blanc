@@ -206,7 +206,7 @@ theorem chunkT3 : ∀ (m : Meta) (w : World),
     obsD bndT2625 (wrun fs1 sta5T 872 (cfgOf bndT1753 m w)) = obsDOk bndT2625 := by
   kernel_forall_rfl
 
-theorem chunk5A : obsB (wrun fs1 e5T.sta 2625 c5T) = obsB5EELS := by
+theorem chunk5A : obsB (wrun fs1 e5T.sta 2625 c5T) = obsB5EELS ∧ AtdClean (wrun fs1 e5T.sta 2625 c5T) := by
   rw [e5T_sta_eq]
   exact obsB_of_obsD (obsD_chain3 (n1 := 880) (n2 := 873) (n3 := 872) c5T_eq chunkT1 chunkT2 chunkT3)
     rfl
