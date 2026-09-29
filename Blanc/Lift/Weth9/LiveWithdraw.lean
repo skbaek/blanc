@@ -447,13 +447,28 @@ def withdrawGas (sevm : Sevm) (pre : Devm) : Nat :=
     sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller) (wV sevm pre (Sevm.dataWord sevm 4)) +
     callNet pre sevm.caller
 
-/-- **Liveness of `withdraw(wad)` to an externally owned account, gas-exact.**  A frame entering
+/-- What a successful `withdraw(wad)` frame leaves of its final machine besides the gas, stack and
+memory: the output, the frame error, the refund counter the debit's `SSTORE` leaves, the emptiness of the
+accounts to delete, the `Withdrawal` event appended to the logs, and the world: the debited state with
+`wad` ether moved from the contract to the caller. -/
+structure WithdrawPost (sevm : Sevm) (pre post : Devm) (wad : B256) : Prop where
+  output : post.output = pre.output
+  error : post.error = pre.error
+  logs : post.logs = pre.logs ++ [⟨sevm.currentTarget, [wdTopic, sevm.caller.toB256], wad.toBytes⟩]
+  refund : post.refundCounter = sstoreNewRefundCounter sevm.benvStat.rules.gas (wV sevm pre wad)
+    (getOrigStorVal sevm sevm.currentTarget (balSlot sevm.caller))
+    (pre.getStorVal sevm.currentTarget (balSlot sevm.caller)) pre.refundCounter
+  accountsToDelete : post.accountsToDelete.isEmpty = pre.accountsToDelete.isEmpty
+  state : ∃ stmid, (wB3 sevm pre wad).state.subBal sevm.currentTarget wad = some stmid ∧
+    post.state = stmid.addBal sevm.caller wad
+
+/-- **Liveness of `withdraw(wad)` to an externally owned account, gas-exact, with the final machine.**  A frame entering
 `withdraw(wad)` with `0 < wad ≤ balanceOf[caller]`, whose caller has no code and is no precompile, and
 whose contract holds the ether, succeeds at exactly `withdrawGas` (the recipient's empty code returns
 the whole stipend, so the send is a single step); it debits the caller's balance slot and touches no
 other storage.  (`h_sentry`: the debit's `SSTORE` runs with more than `gCallStipend` gas;
 `h_callgas`: the `CALL` leaves the frame at least the stipend the callee returns.) -/
-theorem weth9_withdraw_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
+theorem weth9_withdraw_runExact_post {sevm : Sevm} {pre : Devm} {G : Nat}
     (hfork : CoveredFork sevm.benvStat.fork) (h_static : sevm.isStatic = false)
     (h_value : sevm.value = 0) (h_sel : Sevm.selector sevm = wdSel)
     (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
@@ -467,7 +482,8 @@ theorem weth9_withdraw_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
     (h_sentry : gCallStipend < G + 1 + 1488 + callNet pre sevm.caller + 69 +
       sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller) (wV sevm pre (Sevm.dataWord sevm 4)))
     (h_callgas : gCallStipend ≤ G + 1 + 1488) :
-    ∃ post, SProg.RunExact prog sevm pre post ∧ post.gasLeft = G ∧ post.output = pre.output ∧
+    ∃ post, SProg.RunExact prog sevm pre post ∧ post.gasLeft = G ∧
+      WithdrawPost sevm pre post (Sevm.dataWord sevm 4) ∧
       Devm.getStor post sevm.currentTarget = (Devm.getStor pre sevm.currentTarget).set
         (balSlot sevm.caller)
         (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) - Sevm.dataWord sevm 4) ∧
@@ -495,7 +511,7 @@ theorem weth9_withdraw_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
       rw [e]; exact h_eth)
   obtain ⟨postW, hw, hpe⟩ := withdraw_wrapper (sevm := sevm) (b := pre) (G := G) (X := _)
     (sel := Sevm.selector sevm) h_value hbody
-  refine ⟨postW, ⟨_, rfl, ?_⟩, ?_, ?_, ?_, ?_⟩
+  refine ⟨postW, ⟨_, rfl, ?_⟩, ?_, ⟨?_, ?_, ?_, ?_, ?_, ?_⟩, ?_, ?_⟩
   · have h0 := dispatch_withdraw (b := pre) h_len h_len' hsel hw
     rw [pre_eq_St h_stack h_mem hg] at h0
     exact h0
@@ -504,6 +520,25 @@ theorem weth9_withdraw_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
     show post.output = pre.output
     rw [hcp.output]
     simp [wB3, wB2, wB1]
+  · rw [hpe]
+    show post.error = pre.error
+    rw [hcp.error]
+    simp [wB3, wB2, wB1]
+  · rw [hpe]
+    show post.logs ++ _ = pre.logs ++ _
+    rw [hcp.logs]
+    simp [wB3, wB2, wB1]
+  · rw [hpe]
+    show post.refundCounter = _
+    rw [hcp.refund]
+    simp [wB3, wB2, wB1, wV, getStorVal_afterSload, afterSload_refundCounter]
+  · rw [hpe]
+    show post.accountsToDelete.isEmpty = _
+    rw [hcp.accountsToDelete]
+    simp [wB3, wB2, wB1, afterSload_accountsToDelete]
+  · rw [hpe]
+    obtain ⟨stmid, hsub, hst⟩ := hcp.state
+    exact ⟨stmid, hsub, hst⟩
   · rw [hpe]
     show Devm.getStor post sevm.currentTarget = _
     rw [hcp.getStor]
@@ -514,6 +549,35 @@ theorem weth9_withdraw_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
     rw [hcp.getStor]
     simp [wB3, wB2, wB1, ha.symm]
 
+
+/-- **Liveness of `withdraw(wad)` to an externally owned account, gas-exact.**  A frame entering
+`withdraw(wad)` with `0 < wad ≤ balanceOf[caller]`, whose caller has no code and is no precompile, and
+whose contract holds the ether, succeeds at exactly `withdrawGas` (the recipient's empty code returns
+the whole stipend, so the send is a single step); it debits the caller's balance slot and touches no
+other storage.  (`h_sentry`: the debit's `SSTORE` runs with more than `gCallStipend` gas;
+`h_callgas`: the `CALL` leaves the frame at least the stipend the callee returns.) -/
+theorem weth9_withdraw_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork) (h_static : sevm.isStatic = false)
+    (h_value : sevm.value = 0) (h_sel : Sevm.selector sevm = wdSel)
+    (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
+    (h_stack : pre.stack = []) (h_mem : pre.memory = Mem.empty) (h_depth : sevm.depth ≠ 0)
+    (hwad : Sevm.dataWord sevm 4 ≠ 0)
+    (hle : Sevm.dataWord sevm 4 ≤ pre.getStorVal sevm.currentTarget (balSlot sevm.caller))
+    (h_code : (pre.getCode sevm.caller).size = 0)
+    (h_prec : sevm.benvStat.rules.isPrecomp sevm.caller = false)
+    (h_eth : ¬ (pre.getAcct sevm.currentTarget).bal < Sevm.dataWord sevm 4)
+    (h_gas : pre.gasLeft = G + withdrawGas sevm pre)
+    (h_sentry : gCallStipend < G + 1 + 1488 + callNet pre sevm.caller + 69 +
+      sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller) (wV sevm pre (Sevm.dataWord sevm 4)))
+    (h_callgas : gCallStipend ≤ G + 1 + 1488) :
+    ∃ post, SProg.RunExact prog sevm pre post ∧ post.gasLeft = G ∧ post.output = pre.output ∧
+      Devm.getStor post sevm.currentTarget = (Devm.getStor pre sevm.currentTarget).set
+        (balSlot sevm.caller)
+        (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) - Sevm.dataWord sevm 4) ∧
+      ∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a := by
+  obtain ⟨post, hrun, hg, hp, hs1, hs2⟩ := weth9_withdraw_runExact_post hfork h_static h_value h_sel
+    h_len h_len' h_stack h_mem h_depth hwad hle h_code h_prec h_eth h_gas h_sentry h_callgas
+  exact ⟨post, hrun, hg, hp.output, hs1, hs2⟩
 
 /-- **What `withdraw(0)` costs** for a code-free caller: as `withdrawGas` with the send at the account
 access alone (the zero-value `CALL` forwards the stipend and gets it all back). -/

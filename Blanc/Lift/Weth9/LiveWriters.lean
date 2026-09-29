@@ -287,6 +287,41 @@ theorem callNet_ge (b : Devm) (a : Adr) : 6800 ≤ callNet b a := by
   have e3 : gasColdAccountAccess = 2600 := rfl
   split_ifs <;> omega
 
+/-- **`withdraw(wad)` to an externally owned account is live, gas-exact, with the final machine.**  The
+hypotheses of `weth9_withdraw_live`; besides the gas, output and storage it exposes what the frame
+leaves of its final machine (`WithdrawPost`): the frame error, the refund counter, the accounts to
+delete, the `Withdrawal` event, and the ether moved from the contract to the caller. -/
+theorem weth9_withdraw_live_post {sevm : Sevm} {pre : Devm} {G : Nat}
+    (h_code : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (h_static : sevm.isStatic = false) (h_value : sevm.value = 0)
+    (h_sel : Sevm.selector sevm = wdSel)
+    (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
+    (h_stack : pre.stack = []) (h_mem : pre.memory = Mem.empty) (h_depth : sevm.depth ≠ 0)
+    (hwad : Sevm.dataWord sevm 4 ≠ 0)
+    (hle : Sevm.dataWord sevm 4 ≤ pre.getStorVal sevm.currentTarget (balSlot sevm.caller))
+    (h_eoa : (pre.getCode sevm.caller).size = 0)
+    (h_prec : sevm.benvStat.rules.isPrecomp sevm.caller = false)
+    (h_eth : ¬ (pre.getAcct sevm.currentTarget).bal < Sevm.dataWord sevm 4)
+    (h_gas : pre.gasLeft = G + withdrawGas sevm pre) (hG : 811 ≤ G) :
+    ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧ post.gasLeft = G ∧
+      WithdrawPost sevm pre post (Sevm.dataWord sevm 4) ∧
+      Devm.getStor post sevm.currentTarget = (Devm.getStor pre sevm.currentTarget).set
+        (balSlot sevm.caller)
+        (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) - Sevm.dataWord sevm 4) ∧
+      ∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a := by
+  have hcn := callNet_ge pre sevm.caller
+  obtain ⟨post, hrun, hg, hp, hs1, hs2⟩ := weth9_withdraw_runExact_post hfork h_static h_value h_sel
+    h_len h_len' h_stack h_mem h_depth hwad hle h_eoa h_prec h_eth h_gas
+    (by
+      have e : gCallStipend = 2300 := rfl
+      generalize callNet pre sevm.caller = x at hcn ⊢
+      generalize sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller)
+        (wV sevm pre (Sevm.dataWord sevm 4)) = y
+      omega)
+    (by have e : gCallStipend = 2300 := rfl; omega)
+  exact ⟨post, (exec_iff_exec_eq 0 sevm pre (.ok post)).mp (exec_of_runExact h_code hfork hrun), hg,
+    hp, hs1, hs2⟩
+
 /-- **`withdraw(wad)` to an externally owned account is live, gas-exact.**  With `0 < wad ≤
 balanceOf[caller]`, a caller without code that is no precompile, the contract holding the ether and the
 frame not the outermost, at gas `G + withdrawGas` with `811 ≤ G` the call succeeds ending at gas `G`;
@@ -308,18 +343,9 @@ theorem weth9_withdraw_live {sevm : Sevm} {pre : Devm} {G : Nat}
         (balSlot sevm.caller)
         (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) - Sevm.dataWord sevm 4) ∧
       ∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a := by
-  have hcn := callNet_ge pre sevm.caller
-  obtain ⟨post, hrun, hg, ho, hs1, hs2⟩ := weth9_withdraw_runExact hfork h_static h_value h_sel h_len
-    h_len' h_stack h_mem h_depth hwad hle h_eoa h_prec h_eth h_gas
-    (by
-      have e : gCallStipend = 2300 := rfl
-      generalize callNet pre sevm.caller = x at hcn ⊢
-      generalize sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller)
-        (wV sevm pre (Sevm.dataWord sevm 4)) = y
-      omega)
-    (by have e : gCallStipend = 2300 := rfl; omega)
-  exact ⟨post, (exec_iff_exec_eq 0 sevm pre (.ok post)).mp (exec_of_runExact h_code hfork hrun), hg,
-    ho, hs1, hs2⟩
+  obtain ⟨post, hex, hg, hp, hs1, hs2⟩ := weth9_withdraw_live_post h_code hfork h_static h_value h_sel
+    h_len h_len' h_stack h_mem h_depth hwad hle h_eoa h_prec h_eth h_gas hG
+  exact ⟨post, hex, hg, hp.output, hs1, hs2⟩
 
 
 /-! ## From the model's acceptance to the storage-level premises -/

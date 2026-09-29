@@ -289,6 +289,16 @@ theorem afterSload_getAcct {sevm : Sevm} {b : Devm} {key : B256} (a : Adr) :
     (afterSload sevm b key).getAcct a = b.getAcct a := by
   unfold afterSload; split <;> rfl
 
+/-- A selected `SLOAD` leaves the refund counter alone. -/
+theorem afterSload_refundCounter {sevm : Sevm} {b : Devm} {key : B256} :
+    (afterSload sevm b key).refundCounter = b.refundCounter := by
+  unfold afterSload; split <;> rfl
+
+/-- A selected `SLOAD` leaves the accounts to delete alone. -/
+theorem afterSload_accountsToDelete {sevm : Sevm} {b : Devm} {key : B256} :
+    (afterSload sevm b key).accountsToDelete = b.accountsToDelete := by
+  unfold afterSload; split <;> rfl
+
 /-- A selected `SSTORE` changes the storage of the executing account and nothing else of any account:
 nonce, balance and code stay. -/
 theorem afterSstore_getAcct {sevm : Sevm} {b : Devm} {key value : B256} (a : Adr) :
