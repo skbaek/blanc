@@ -49,6 +49,7 @@ import Blanc.StaticCallStorage
 import Blanc.ExecutionTraceFrames
 import Blanc.ExecutionTraceAdmission
 import Blanc.ExecutionWarmth
+import Blanc.ExecutionTraceWarmth
 import Blanc.ExecutionTraceSettledFrames
 import Blanc.ExecutionTraceEntry
 import Blanc.ExecutionAccountingObserved
