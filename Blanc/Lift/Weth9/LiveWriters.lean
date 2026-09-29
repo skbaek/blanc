@@ -321,4 +321,186 @@ theorem weth9_withdraw_live {sevm : Sevm} {pre : Devm} {G : Nat}
   exact ⟨post, (exec_iff_exec_eq 0 sevm pre (.ok post)).mp (exec_of_runExact h_code hfork hrun), hg,
     ho, hs1, hs2⟩
 
+
+/-! ## From the model's acceptance to the storage-level premises -/
+
+/-- **A call the model accepts at the tracked keys has a storage effect**: the model's `require`s at the
+tracked words are the runtime's at the stored words. -/
+theorem Call.stor_ne_none_of_step {K : Key → Prop} {s : Stor} {c : Call} {l' : Ledger}
+    (hkeys : ∀ k ∈ c.keys, K k) (h : (ledger K s).step c = some l') :
+    c.stor s ≠ none := by
+  cases c with
+  | deposit who v => simp [Call.stor]
+  | approve who g w => simp [Call.stor]
+  | withdraw who w =>
+    have hw : K (.bal who) := hkeys _ (by simp [Call.keys])
+    have hb : (ledger K s).bal who = s.get (balSlot who) := tracked_self hw
+    rw [Ledger.step_withdraw, hb] at h
+    by_cases hlt : s.get (balSlot who) < w
+    · simp [hlt] at h
+    · simp [Call.stor, hlt]
+  | transfer who dst w =>
+    have hw : K (.bal who) := hkeys _ (by simp [Call.keys])
+    have hb : (ledger K s).bal who = s.get (balSlot who) := tracked_self hw
+    rw [Ledger.step_transfer] at h
+    unfold Ledger.transferFrom at h
+    rw [hb] at h
+    by_cases hlt : s.get (balSlot who) < w
+    · simp [hlt] at h
+    · simp [Call.stor, xferStorStep, hlt]
+  | transferFrom who src dst w =>
+    have hsrc : K (.bal src) := hkeys _ (by simp [Call.keys])
+    have hal : K (.allow src who) := hkeys _ (by simp [Call.keys])
+    have hb : (ledger K s).bal src = s.get (balSlot src) := tracked_self hsrc
+    have ha : (ledger K s).allow src who = s.get (allowSlot src who) := trackedAllow_self hal
+    rw [Ledger.step_transferFrom] at h
+    unfold Ledger.transferFrom at h
+    rw [hb, ha] at h
+    by_cases hlt : s.get (balSlot src) < w
+    · simp [hlt] at h
+    · simp only [hlt, ↓reduceIte] at h
+      by_cases hc : src ≠ who ∧ s.get (allowSlot src who) ≠ B256.max
+      · have hc' : src ≠ who ∧ s.get (allowSlot src who) ≠ maxAllowance := hc
+        simp only [hc'.1, ne_eq, not_false_eq_true, hc'.2, and_self, ↓reduceIte] at h
+        by_cases hl2 : s.get (allowSlot src who) < w
+        · simp [hl2] at h
+        · simp [Call.stor, xferStorStep, hlt, hc, hl2]
+      · simp [Call.stor, xferStorStep, hlt, hc]
+
+
+/-- What `xferStorStep` succeeding says about the words it reads. -/
+theorem xferStorStep_ok {s s' : Stor} {who src dst : Adr} {wad : B256}
+    (h : xferStorStep s who src dst wad = some s') :
+    wad ≤ s.get (balSlot src) ∧
+      (src = who ∨ s.get (allowSlot src who) = B256.max ∨ wad ≤ s.get (allowSlot src who)) := by
+  unfold xferStorStep at h
+  by_cases hlt : s.get (balSlot src) < wad
+  · simp [hlt] at h
+  · refine ⟨B256.not_lt.mp hlt, ?_⟩
+    simp only [hlt, ↓reduceIte] at h
+    by_cases hc : src ≠ who ∧ s.get (allowSlot src who) ≠ B256.max
+    · simp only [hc.1, ne_eq, not_false_eq_true, hc.2, and_self, ↓reduceIte] at h
+      by_cases hl2 : s.get (allowSlot src who) < wad
+      · simp [hl2] at h
+      · exact Or.inr (Or.inr (B256.not_lt.mp hl2))
+    · by_cases hs : src = who
+      · exact Or.inl hs
+      · exact Or.inr (Or.inl (by
+          by_contra hne
+          exact hc ⟨hs, hne⟩))
+
+/-- **What `transferFrom(src, dst, wad)` costs**, by the allowance case the caller is in. -/
+def transferFromGas (sevm : Sevm) (pre : Devm) : Nat :=
+  if sevm.caller = (Sevm.dataWord sevm 4).toAdr then transferFromGasSelf sevm pre
+  else if pre.getStorVal sevm.currentTarget (allowSlot (Sevm.dataWord sevm 4).toAdr sevm.caller) =
+      B256.max then transferFromGasMax sevm pre
+  else transferFromGasAllow sevm pre
+
+/-- **`transferFrom(src, dst, wad)` is live, gas-exact, whenever its storage effect exists** (the
+runtime's `require`s: `wad ≤ balanceOf[src]` and, unless the caller is `src` or the allowance is the
+maximal word, `wad ≤ allowance`), at `transferFromGas`.  The three cases of the code are one theorem. -/
+theorem weth9_transferFrom_live {sevm : Sevm} {pre : Devm} {G : Nat} {s' : Stor}
+    (h_code : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (h_static : sevm.isStatic = false) (h_value : sevm.value = 0)
+    (h_sel : Sevm.selector sevm = tfSel)
+    (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
+    (h_stack : pre.stack = []) (h_mem : pre.memory = Mem.empty)
+    (hok : xferStorStep (Devm.getStor pre sevm.currentTarget) sevm.caller
+      (Sevm.dataWord sevm 4).toAdr (Sevm.dataWord sevm 36).toAdr (Sevm.dataWord sevm 68) = some s')
+    (h_gas : pre.gasLeft = G + transferFromGas sevm pre) (hG : 377 ≤ G) :
+    ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧ post.gasLeft = G ∧
+      post.output = (1 : B256).toBytes ∧
+      xferStorStep (Devm.getStor pre sevm.currentTarget) sevm.caller (Sevm.dataWord sevm 4).toAdr
+        (Sevm.dataWord sevm 36).toAdr (Sevm.dataWord sevm 68) =
+        some (Devm.getStor post sevm.currentTarget) := by
+  obtain ⟨hle, hcases⟩ := xferStorStep_ok hok
+  have hle' : Sevm.dataWord sevm 68 ≤
+      pre.getStorVal sevm.currentTarget (balSlot (Sevm.dataWord sevm 4).toAdr) := hle
+  unfold transferFromGas at h_gas
+  by_cases hcs : sevm.caller = (Sevm.dataWord sevm 4).toAdr
+  · simp only [hcs, ↓reduceIte] at h_gas
+    exact weth9_transferFrom_self_live h_code hfork h_static h_value h_sel h_len h_len' h_stack h_mem
+      hcs hle' h_gas hG
+  · simp only [hcs, ↓reduceIte] at h_gas
+    by_cases hmax : pre.getStorVal sevm.currentTarget
+        (allowSlot (Sevm.dataWord sevm 4).toAdr sevm.caller) = B256.max
+    · simp only [hmax, ↓reduceIte] at h_gas
+      exact weth9_transferFrom_max_live h_code hfork h_static h_value h_sel h_len h_len' h_stack
+        h_mem hcs hle' hmax h_gas hG
+    · simp only [hmax, ↓reduceIte] at h_gas
+      have hal : Sevm.dataWord sevm 68 ≤ pre.getStorVal sevm.currentTarget
+          (allowSlot (Sevm.dataWord sevm 4).toAdr sevm.caller) := by
+        rcases hcases with h | h | h
+        · exact absurd h.symm hcs
+        · exact absurd h hmax
+        · exact h
+      exact weth9_transferFrom_allow_live h_code hfork h_static h_value h_sel h_len h_len' h_stack
+        h_mem hcs hle' hmax hal h_gas hG
+
+
+theorem accessCost_ge (a : Adr) (s : AdrSet) : 100 ≤ accessCost a s := by
+  unfold accessCost
+  have e2 : gasWarmAccess = 100 := rfl
+  have e3 : gasColdAccountAccess = 2600 := rfl
+  split_ifs <;> omega
+
+/-- **`withdraw(0)` to an externally owned account is live, gas-exact** (`643 ≤ G`). -/
+theorem weth9_withdraw_zero_live {sevm : Sevm} {pre : Devm} {G : Nat}
+    (h_code : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (h_static : sevm.isStatic = false) (h_value : sevm.value = 0)
+    (h_sel : Sevm.selector sevm = wdSel)
+    (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
+    (h_stack : pre.stack = []) (h_mem : pre.memory = Mem.empty) (h_depth : sevm.depth ≠ 0)
+    (hw0 : Sevm.dataWord sevm 4 = 0)
+    (h_eoa : (pre.getCode sevm.caller).size = 0)
+    (h_prec : sevm.benvStat.rules.isPrecomp sevm.caller = false)
+    (h_gas : pre.gasLeft = G + withdrawZeroGas sevm pre) (hG : 643 ≤ G) :
+    ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧ post.gasLeft = G ∧ post.output = pre.output ∧
+      Devm.getStor post sevm.currentTarget = (Devm.getStor pre sevm.currentTarget).set
+        (balSlot sevm.caller)
+        (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) - Sevm.dataWord sevm 4) ∧
+      ∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a := by
+  have hac := accessCost_ge sevm.caller pre.accessedAddresses
+  obtain ⟨post, hrun, hg, ho, hs1, hs2⟩ := weth9_withdraw_zero_runExact hfork h_static h_value h_sel
+    h_len h_len' h_stack h_mem h_depth hw0 h_eoa h_prec h_gas
+    (by
+      have e : gCallStipend = 2300 := rfl
+      generalize accessCost sevm.caller pre.accessedAddresses = x at hac ⊢
+      generalize sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller)
+        (wV sevm pre (Sevm.dataWord sevm 4)) = y
+      omega)
+  exact ⟨post, (exec_iff_exec_eq 0 sevm pre (.ok post)).mp (exec_of_runExact h_code hfork hrun), hg,
+    ho, hs1, hs2⟩
+
+
+/-- **`withdraw(wad)` to an externally owned account is live, gas-exact, for every `wad`** (`811 ≤ G`),
+at the cost of its case. -/
+def withdrawAnyGas (sevm : Sevm) (pre : Devm) : Nat :=
+  if Sevm.dataWord sevm 4 = 0 then withdrawZeroGas sevm pre else withdrawGas sevm pre
+
+theorem weth9_withdraw_any_live {sevm : Sevm} {pre : Devm} {G : Nat}
+    (h_code : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (h_static : sevm.isStatic = false) (h_value : sevm.value = 0)
+    (h_sel : Sevm.selector sevm = wdSel)
+    (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
+    (h_stack : pre.stack = []) (h_mem : pre.memory = Mem.empty) (h_depth : sevm.depth ≠ 0)
+    (hle : Sevm.dataWord sevm 4 ≤ pre.getStorVal sevm.currentTarget (balSlot sevm.caller))
+    (h_eoa : (pre.getCode sevm.caller).size = 0)
+    (h_prec : sevm.benvStat.rules.isPrecomp sevm.caller = false)
+    (h_eth : ¬ (pre.getAcct sevm.currentTarget).bal < Sevm.dataWord sevm 4)
+    (h_gas : pre.gasLeft = G + withdrawAnyGas sevm pre) (hG : 811 ≤ G) :
+    ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧ post.gasLeft = G ∧ post.output = pre.output ∧
+      Devm.getStor post sevm.currentTarget = (Devm.getStor pre sevm.currentTarget).set
+        (balSlot sevm.caller)
+        (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) - Sevm.dataWord sevm 4) ∧
+      ∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a := by
+  unfold withdrawAnyGas at h_gas
+  by_cases hw : Sevm.dataWord sevm 4 = 0
+  · simp only [hw, ↓reduceIte] at h_gas
+    exact weth9_withdraw_zero_live h_code hfork h_static h_value h_sel h_len h_len' h_stack h_mem
+      h_depth hw h_eoa h_prec h_gas (by omega)
+  · simp only [hw, ↓reduceIte] at h_gas
+    exact weth9_withdraw_live h_code hfork h_static h_value h_sel h_len h_len' h_stack h_mem h_depth
+      hw hle h_eoa h_prec h_eth h_gas hG
+
 end Blanc.Lift.Weth9

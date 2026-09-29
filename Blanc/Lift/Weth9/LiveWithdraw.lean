@@ -152,6 +152,121 @@ theorem withdraw_body {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {M : Me
   refine rx_ret (d := ret) (b := ?_) (M := ?_)
 
 
+/-- The `withdraw` body for `wad = 0`: the send is a zero-value `CALL` with the stipend as its gas
+argument (`0x08fc · iszero(0)`); the callee returns it, so the send costs the account access alone.
+Same walk as `withdraw_body`. -/
+theorem withdraw_body_zero {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {M : Mem}
+    {wad ret : B256} {cH c2 cS cC : Nat} (hw0 : wad = 0)
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hdepth : sevm.depth ≠ 0)
+    (hM : FpMem 96 M) (hroom : S.length < 1000)
+    (hle : wad ≤ b.getStorVal sevm.currentTarget (balSlot sevm.caller))
+    (h0 : cH = sloadCost sevm b (balSlot sevm.caller))
+    (h1 : c2 = sloadCost sevm (wB1 sevm b) (balSlot sevm.caller))
+    (hS : cS = sstoreCost sevm (wB2 sevm b) (balSlot sevm.caller) (wV sevm b wad))
+    (hC : cC = accessCost sevm.caller (wB3 sevm b wad).accessedAddresses)
+    (hsentry : gCallStipend < G + 1488 + cC + 69 + cS)
+    (hcode : ((wB3 sevm b wad).getCode sevm.caller).size = 0)
+    (hprec : sevm.benvStat.rules.isPrecomp sevm.caller = false) :
+    ∃ post, CallPost sevm (wB3 sevm b wad) post sevm.caller 0 ∧
+      SFunc.RunExact prog sevm (St b (wad :: ret :: S) M
+        (G + 1488 + cC + 69 + cS + 16 + c2 + 130 + cH + 96)) t_09d9_c8
+        (.returned (St (post.addLog ⟨sevm.currentTarget, [wdTopic, sevm.caller.toB256],
+          wad.toBytes⟩) S (wdMem M sevm.caller.toB256 wad) G)) := by
+  subst hw0
+  obtain ⟨post, hrunc, hpost, hSt⟩ := callZ_ex (sevm := sevm) (b := wB3 sevm b 0)
+    (M := scratchW (scratchW M sevm.caller.toB256 3) sevm.caller.toB256 3)
+    (S := 96 :: 0 :: 2300 :: sevm.caller.toB256 :: 0 :: ret :: S) (G := G + 1488) (c := cC)
+    (gw := 2300) (cw := sevm.caller.toB256) (iiw := 96) (isw := 96 - 96) (oiw := 96)
+    (osw := 0) hfork (by decide) (by decide) (by decide)
+    (by simpa [toAdr_toB256] using hcode) (by simpa [toAdr_toB256] using hprec) hdepth
+    (by simp; omega) (by rw [toAdr_toB256]; exact hC)
+  rw [toAdr_toB256] at hpost
+  refine ⟨post, hpost, ?_⟩
+  rdest
+  rdup
+  rpush
+  rpush
+  refine rx_caller (by rroom) ?_
+  rhash
+  rsloadC
+  rreq hle
+  rdest
+  rdup
+  rpush
+  rpush
+  refine rx_caller (by rroom) ?_
+  rhash
+  rpush
+  rdup
+  rdup
+  rsloadC
+  rsub
+  rswap
+  rpop
+  rpop
+  rdup
+  rswap
+  rsstoreC
+  rpop
+  refine rx_caller (by rroom) ?_
+  rmask
+  rpush
+  rdup
+  rswap
+  rdup
+  refine rx_iszero (v := 1) (by simp [B256.eqCheck]) (by rroom) ?_
+  refine rx_mul (v := 2300) (by decide) (by rroom) ?_
+  rswap
+  rpush
+  rmld
+  rpush
+  rpush
+  rmld
+  rdup
+  rdup
+  rsub
+  rdup
+  rdup
+  rdup
+  rdup
+  refine .next hrunc ?_
+  rw [hSt]
+  rswap
+  rpop
+  rpop
+  rpop
+  rpop
+  riszero
+  riszero
+  rpush
+  refine rx_branch_succ (by decide) ?_
+  rdest
+  refine rx_caller (by rroom) ?_
+  rmask
+  rpush
+  rdup
+  rpush
+  rmld
+  rdup
+  rdup
+  rdup
+  refine rx_mstoreOut (by assumption) (by decide) (fun _ => ?_)
+  rpush
+  radd
+  rswap
+  rpop
+  rpop
+  rpush
+  rmld
+  rdup
+  rswap
+  rsub
+  rswap
+  rlog2
+  rpop
+  refine rx_ret (d := ret) (b := ?_) (M := ?_)
+
 /-- The ether send's net charge does not see the debit's storage writes. -/
 theorem callNet_wB3 {sevm : Sevm} {b : Devm} {wad : B256} (a : Adr) :
     callNet (wB3 sevm b wad) a = callNet b a := by
@@ -269,6 +384,68 @@ theorem weth9_withdraw_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
           (value := wV sevm pre (Sevm.dataWord sevm 4)) sevm.currentTarget
         simpa [Devm.getBal, wB3, wB2, wB1, afterSload_getAcct] using h1
       rw [e]; exact h_eth)
+  obtain ⟨postW, hw, hpe⟩ := withdraw_wrapper (sevm := sevm) (b := pre) (G := G) (X := _)
+    (sel := Sevm.selector sevm) h_value hbody
+  refine ⟨postW, ⟨_, rfl, ?_⟩, ?_, ?_, ?_, ?_⟩
+  · have h0 := dispatch_withdraw (b := pre) h_len h_len' hsel hw
+    rw [pre_eq_St h_stack h_mem hg] at h0
+    exact h0
+  · rw [hpe]; rfl
+  · rw [hpe]
+    show post.output = pre.output
+    rw [hcp.output]
+    simp [wB3, wB2, wB1]
+  · rw [hpe]
+    show Devm.getStor post sevm.currentTarget = _
+    rw [hcp.getStor]
+    simp [wB3, wB2, wB1, wV, getStorVal_afterSload]
+  · intro a ha
+    rw [hpe]
+    show Devm.getStor post a = _
+    rw [hcp.getStor]
+    simp [wB3, wB2, wB1, ha.symm]
+
+
+/-- **What `withdraw(0)` costs** for a code-free caller: as `withdrawGas` with the send at the account
+access alone (the zero-value `CALL` forwards the stipend and gets it all back). -/
+def withdrawZeroGas (sevm : Sevm) (pre : Devm) : Nat :=
+  2040 + sloadCost sevm pre (balSlot sevm.caller) +
+    sloadCost sevm (wB1 sevm pre) (balSlot sevm.caller) +
+    sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller) (wV sevm pre (Sevm.dataWord sevm 4)) +
+    accessCost sevm.caller pre.accessedAddresses
+
+/-- **Liveness of `withdraw(0)` to an externally owned account, gas-exact.**  (`h_sentry`: the debit's
+no-op `SSTORE` runs with more than `gCallStipend` gas.) -/
+theorem weth9_withdraw_zero_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork) (h_static : sevm.isStatic = false)
+    (h_value : sevm.value = 0) (h_sel : Sevm.selector sevm = wdSel)
+    (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
+    (h_stack : pre.stack = []) (h_mem : pre.memory = Mem.empty) (h_depth : sevm.depth ≠ 0)
+    (hw0 : Sevm.dataWord sevm 4 = 0)
+    (h_code : (pre.getCode sevm.caller).size = 0)
+    (h_prec : sevm.benvStat.rules.isPrecomp sevm.caller = false)
+    (h_gas : pre.gasLeft = G + withdrawZeroGas sevm pre)
+    (h_sentry : gCallStipend < G + 1 + 1488 + accessCost sevm.caller pre.accessedAddresses + 69 +
+      sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller) (wV sevm pre (Sevm.dataWord sevm 4))) :
+    ∃ post, SProg.RunExact prog sevm pre post ∧ post.gasLeft = G ∧ post.output = pre.output ∧
+      Devm.getStor post sevm.currentTarget = (Devm.getStor pre sevm.currentTarget).set
+        (balSlot sevm.caller)
+        (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) - Sevm.dataWord sevm 4) ∧
+      ∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a := by
+  have hsel : Sevm.selector sevm = 0x2e1a7d4d := h_sel.trans wdSel_eq
+  have hg : G + 1 + 1488 + accessCost sevm.caller pre.accessedAddresses + 69 +
+      sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller) (wV sevm pre (Sevm.dataWord sevm 4)) + 16 +
+      sloadCost sevm (wB1 sevm pre) (balSlot sevm.caller) + 130 +
+      sloadCost sevm pre (balSlot sevm.caller) + 96 + 68 + 172 = pre.gasLeft := by
+    rw [h_gas]; unfold withdrawZeroGas; omega
+  obtain ⟨post, hcp, hbody⟩ := withdraw_body_zero (S := [Sevm.selector sevm])
+    (ret := Bytes.toB256 [2, 100]) (G := G + 1) (b := pre) (wad := Sevm.dataWord sevm 4) (M := memFp)
+    (cH := sloadCost sevm pre (balSlot sevm.caller))
+    (c2 := sloadCost sevm (wB1 sevm pre) (balSlot sevm.caller))
+    (cS := sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller) (wV sevm pre (Sevm.dataWord sevm 4)))
+    (cC := accessCost sevm.caller pre.accessedAddresses) hw0 hfork h_static h_depth fp_memFp
+    (by simp) (by rw [hw0]; exact B256.zero_le _) rfl rfl rfl (by simp [wB3, wB2, wB1]) h_sentry
+    (by simpa [wB3, wB2, wB1] using h_code) h_prec
   obtain ⟨postW, hw, hpe⟩ := withdraw_wrapper (sevm := sevm) (b := pre) (G := G) (X := _)
     (sel := Sevm.selector sevm) h_value hbody
   refine ⟨postW, ⟨_, rfl, ?_⟩, ?_, ?_, ?_, ?_⟩
