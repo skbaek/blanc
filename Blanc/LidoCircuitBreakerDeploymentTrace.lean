@@ -973,6 +973,11 @@ def officialConstructorHeartbeatImage : Bytes :=
     (officialConstructorEventScratch + 32)
     officialConstructorArgs.initialHeartbeatInterval.toBytes
 
+theorem officialConstructorHeartbeatMemory_wf :
+    Mem.Wf officialConstructorHeartbeatMemory := by
+  unfold officialConstructorHeartbeatMemory
+  exact Mem.Wf.write officialConstructorHeartbeatZeroMemory_wf _ _
+
 theorem officialConstructorHeartbeatMemory_reads :
     Mem.Reads officialConstructorHeartbeatMemory
       officialConstructorHeartbeatImage := by
@@ -2780,6 +2785,12 @@ theorem officialConstructorPauseScratchLine_runCompiled
   exact officialConstructorPauseScratchZero_runCompiled hvalue
 
 /-! Consolidated from `LidoCircuitBreakerDeploymentTraceEffectsConfigurationSuffix.lean`. -/
+
+theorem officialConstructorConfigurationSuffix_eq_prefix :
+    officialConstructorConfigurationSuffix =
+      officialConstructorConfigurationPrefix +++
+        officialConstructorHeartbeatSuffix := by
+  rfl
 
 theorem officialConstructorConfigurationSuffix_runCompiled
     {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}

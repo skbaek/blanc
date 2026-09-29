@@ -46,9 +46,9 @@ SOURCES = {
 }
 
 AXIOM_CHECK = "scripts/AxiomCheck.lean"
-PUBLIC_THEOREM_COUNT = 164
+PUBLIC_THEOREM_COUNT = 163
 PUBLIC_THEOREM_INVENTORY_SHA256 = (
-    "66d0702ed365bee6306f65a786fab7389b9bc8592371c1997091596a3fc264a6"
+    "0840e08eb738944185bd1a73888f2b6689ed4f3fc3ddf3af7dd8e07f9c808d0f"
 )
 # The whole axiom claim of this family. Every public deployment theorem is covered by the
 # repository's one union walk (`scripts/AxiomCheck.lean`, `scripts/check.sh`), which bounds the
@@ -439,7 +439,7 @@ def require_axiom_inventory(root: Path, sources: dict[str, str]) -> None:
 
     The constructor owner is included only to enforce the private-to-proof
     façade below.  Its pre-existing theorem inventory is outside the nine
-    deployment proof owners and therefore outside this exact 164-name set.
+    deployment proof owners and therefore outside this exact 163-name set.
     """
     names = public_theorem_names({
         owner: source for owner, source in sources.items()
