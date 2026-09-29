@@ -38,9 +38,11 @@ theorem spawnedBy_of_childStart {sevm : Sevm} {c cc : Cfg} {f0 : SFunc} {cevm : 
   · rename_i cp hp
     split at hs
     · rename_i cevm' he
-      simp only [Option.some.injEq, Prod.mk.injEq] at hs
-      obtain ⟨rfl, -⟩ := hs
-      exact spawnedBy_of_callPrep hagree hp he
+      split at hs
+      · simp only [Option.some.injEq, Prod.mk.injEq] at hs
+        obtain ⟨rfl, -⟩ := hs
+        exact spawnedBy_of_callPrep hagree hp he
+      · cases hs
     · cases hs
   · cases hs
 

@@ -400,7 +400,8 @@ theorem callStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
     split at h
     · rename_i child he
       split at h
-      · rename_i hce
+      · rename_i hce'
+        have hce : child.error.isSome = false := hce'.1
         split at h
         · rename_i d hr
           cases h
@@ -792,7 +793,7 @@ def callResume (sevm : Sevm) (c : Cfg) (child : Devm) (ckeys : List (Adr × B256
     | some cp =>
       match frameEnterS cp.f c.acs with
       | .run _ =>
-        if child.error.isSome = false then
+        if child.error.isSome = false ∧ frameEntryForkFree cp.f = true then
           match resumeCallB cp.p cp.oi cp.os (.ok child) with
           | some d => some ⟨d, g, c.K, c.keys ++ ckeys, cp.adrs ++ cadrs, cstor, cacs⟩
           | none => none
@@ -819,7 +820,8 @@ theorem callResume_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {child : De
       split at h
       · rename_i cevm he
         split at h
-        · rename_i hce
+        · rename_i hce'
+          have hce : child.error.isSome = false := hce'.1
           split at h
           · rename_i d hr
             cases h

@@ -478,6 +478,7 @@ import Blanc.Lift.WitnessSpawn
 import Blanc.Lift.NodeWalk
 import Blanc.Lift.NodeWalkFrames
 import Blanc.Lift.NodeWalkFork
+import Blanc.Lift.WitnessFork
 -- One kernel check for a conjunction of closed equalities (vplus-witness-v2): shared.
 import Blanc.Lift.KernelBatch
 
@@ -577,6 +578,9 @@ import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame4Full
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Locks
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.SubtreeRun
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Token.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.ForkFrames
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.ForkKernel
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.ForkTop
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Outer
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxTop

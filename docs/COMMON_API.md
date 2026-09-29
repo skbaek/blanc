@@ -788,6 +788,21 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   frame lemmas take the fork, six spawns of all three call kinds). The message-level layer
   underneath is [`Blanc/ForkUniform.lean`](../Blanc/ForkUniform.lean) (see the root's
   *Fork coverage* entry).
+- To state a closed *frame-level* witness (the certificate interpreter `wrun`, code children by
+  `childStart`/`callResume`/`callPairFrom`, proxy frames by `stepN`) under every covered fork,
+  rewrite its kernel facts with `wrun_withFork`
+  ([`Blanc/Lift/NodeWalkFork.lean`](../Blanc/Lift/NodeWalkFork.lean)) and the child-machinery
+  lemmas `childStart_withFork`, `childRun_withFork`, `callResume_withFork`,
+  `callPairA_withFork`/`callPairB_withFork`/`callPairFrom_withFork` and `stepN_withFork` (a
+  Prague machine's `stepN` run, in which `CLZ` is invalid) in
+  [`Blanc/Lift/WitnessFork.lean`](../Blanc/Lift/WitnessFork.lean): the interpreter's
+  synchronous precompile children and code children run only frames that avoid `MODEXP` and
+  `P256VERIFY` (`frameEntryForkFree`), so a run is unchanged by the fork with no side
+  condition beyond zero excess blob gas. Restate each frame lemma for the machines
+  `X.withFork g`, taking the Prague kernel fact and the spawn facts (`callPrep_withFork`,
+  `frameEnterS_withFork_of_stat`, a kernel fact on the spawned frame's `codeAddress`); worked
+  example `vminus_witness_covered` in
+  `Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/{ForkKernel,ForkFrames,ForkTop}.lean`.
 - Determinism of execution witnesses:
   [`Blanc/ExecDeterminism.lean`](../Blanc/ExecDeterminism.lean).
 - Identifying an execution's descendant frames across one step (`Exec.descendantFrames_eq_of_nextNone`, `_of_jump`,

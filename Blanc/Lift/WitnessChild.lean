@@ -195,7 +195,9 @@ def childStart (sevm : Sevm) (c : Cfg) (f0 : SFunc) : Option (Evm × Cfg) :=
   | some cp =>
     match frameEnterS cp.f c.acs with
     | .run cevm =>
-      some (cevm, ⟨cevm.dyna, f0, [], c.keys, cp.adrs, c.stor, acsTransfer cp.f.inner c.acs⟩)
+      if frameEntryForkFree cp.f = true then
+        some (cevm, ⟨cevm.dyna, f0, [], c.keys, cp.adrs, c.stor, acsTransfer cp.f.inner c.acs⟩)
+      else none
     | .done _ => none
   | none => none
 
@@ -207,12 +209,14 @@ theorem childStart_agree {sevm : Sevm} {c cc : Cfg} {f0 : SFunc} {cevm : Evm} (h
   · rename_i cp hp
     split at hs
     · rename_i cevm' he
-      simp only [Option.some.injEq, Prod.mk.injEq] at hs
-      obtain ⟨-, rfl⟩ := hs
-      obtain ⟨-, hpa, hpk, -, hia, hik, -, hst⟩ := callPrep_spec hp hagree.2.1 hagree.2.2.2
-      exact frameStart_agree f0 he (fun x => by rw [hik, hpk]; exact hagree.1 x)
-        (fun a => by rw [hia]; exact hpa a) (fun a k => by rw [hst]; exact hagree.2.2.1 a k)
-        (by rw [hst]; exact hagree.2.2.2)
+      split at hs
+      · simp only [Option.some.injEq, Prod.mk.injEq] at hs
+        obtain ⟨-, rfl⟩ := hs
+        obtain ⟨-, hpa, hpk, -, hia, hik, -, hst⟩ := callPrep_spec hp hagree.2.1 hagree.2.2.2
+        exact frameStart_agree f0 he (fun x => by rw [hik, hpk]; exact hagree.1 x)
+          (fun a => by rw [hia]; exact hpa a) (fun a k => by rw [hst]; exact hagree.2.2.1 a k)
+          (by rw [hst]; exact hagree.2.2.2)
+      · cases hs
     · cases hs
   · cases hs
 
@@ -254,22 +258,24 @@ theorem childOk_of_start {fs : List SFunc} {code : ByteArray} {sevm : Sevm} {n :
   · rename_i cp hp
     split at hs
     · rename_i cevm' he
-      simp only [Option.some.injEq, Prod.mk.injEq] at hs
-      obtain ⟨h1, h2⟩ := hs
-      subst h1 h2
-      obtain ⟨-, hpa, hpk, hcr, hia, hik, hsg, hst⟩ := callPrep_spec hp hagree.2.1 hagree.2.2.2
-      have hC : AcctAgree cp.f.inner.benv.state c.acs := by rw [hst]; exact hagree.2.2.2
-      obtain ⟨hx, hs, ha⟩ := frame_of_wrun he
-        (fun x => by rw [hik, hpk]; exact hagree.1 x)
-        (fun a => by rw [hia]; exact hpa a)
-        (fun a k => by rw [hst]; exact hagree.2.2.1 a k) hC hcr hsg
-        (hexact hcode hfork) h0 hstep hrun herr
-      refine ⟨fun cp' cevm'' hp' he' => ?_, ha⟩
-      rw [hp] at hp'
-      cases hp'
-      rw [he] at he'
-      cases he'
-      exact ⟨.ok post, hx, hs⟩
+      split at hs
+      · simp only [Option.some.injEq, Prod.mk.injEq] at hs
+        obtain ⟨h1, h2⟩ := hs
+        subst h1 h2
+        obtain ⟨-, hpa, hpk, hcr, hia, hik, hsg, hst⟩ := callPrep_spec hp hagree.2.1 hagree.2.2.2
+        have hC : AcctAgree cp.f.inner.benv.state c.acs := by rw [hst]; exact hagree.2.2.2
+        obtain ⟨hx, hs, ha⟩ := frame_of_wrun he
+          (fun x => by rw [hik, hpk]; exact hagree.1 x)
+          (fun a => by rw [hia]; exact hpa a)
+          (fun a k => by rw [hst]; exact hagree.2.2.1 a k) hC hcr hsg
+          (hexact hcode hfork) h0 hstep hrun herr
+        refine ⟨fun cp' cevm'' hp' he' => ?_, ha⟩
+        rw [hp] at hp'
+        cases hp'
+        rw [he] at he'
+        cases he'
+        exact ⟨.ok post, hx, hs⟩
+      · cases hs
     · cases hs
   · cases hs
 
@@ -307,7 +313,7 @@ theorem callResume_error {sevm : Sevm} {c c' : Cfg} {child : Devm} {ckeys : List
         · rename_i hce
           cases he : child.error
           · rfl
-          · rw [he] at hce; cases hce
+          · have := hce.1; rw [he] at this; cases this
         · cases h
       · cases h
     · cases h

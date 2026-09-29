@@ -278,10 +278,10 @@ theorem dcallPrep_stat {d : Devm} {adrs : List Adr} {acs : AcctShadow} {cp : Cal
     · simp at h
 
 /-- A `CALL` preparation's frame carries the caller's block environment. -/
-theorem callPrepP_stat {c : PCfg} {cp : CallPrep} (h : callPrepP s c = some cp) :
+theorem callPrep_stat {c : Cfg} {cp : CallPrep} (h : callPrep s c = some cp) :
     cp.f.outer.benv.stat = s.benvStat ∧ cp.f.inner.benv.stat = s.benvStat := by
-  unfold callPrepP callPrep at h
-  generalize (c.cfg .undefined).devm.stack = st at h
+  unfold callPrep at h
+  generalize c.devm.stack = st at h
   match st, h with
   | _ :: _ :: _ :: _ :: _ :: _ :: _ :: _, h =>
     simp only at h
@@ -300,6 +300,10 @@ theorem callPrepP_stat {c : PCfg} {cp : CallPrep} (h : callPrepP s c = some cp) 
             exact ⟨rfl, rfl⟩
           · simp at h
     · simp at h
+
+theorem callPrepP_stat {c : PCfg} {cp : CallPrep} (h : callPrepP s c = some cp) :
+    cp.f.outer.benv.stat = s.benvStat ∧ cp.f.inner.benv.stat = s.benvStat :=
+  callPrep_stat h
 
 theorem executeCode_enter_stat {m : Msg} {e : Evm} (h : executeCode.enter m = .inl e) :
     e.sta.benvStat = m.benv.stat := by
@@ -373,5 +377,83 @@ theorem dcallSpawn_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork
   refine ⟨by rw [dcallPrep_withFork hf hg, hp]; rfl, ?_⟩
   show frameEnterS (cp.f.withFork g) acs = _
   rw [frameEnterS_withFork_of_stat hf hg (dcallPrep_stat hp) hN, he]; rfl
+
+/-! ## The interpreter under any covered fork -/
+
+theorem precompNeutral_of_frameEntryForkFree {f : Frame} (h : frameEntryForkFree f = true) :
+    f.PrecompNeutral := by
+  refine Or.inr fun a ha => ?_
+  unfold frameEntryForkFree at h
+  rw [ha] at h
+  simpa using h
+
+/-- **A synchronous precompile `CALL` is unchanged by the fork.**  The interpreter runs only
+frames that avoid `MODEXP` and `P256VERIFY` (`frameEntryForkFree`). -/
+theorem callStep_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g) (c : Cfg)
+    (k : SFunc) : callStep (s.withFork g) c k = callStep s c k := by
+  unfold callStep
+  rw [callPrep_withFork hf hg]
+  cases hp : callPrep s c with
+  | none => rfl
+  | some cp =>
+    simp only [Option.map_some]
+    by_cases hN : frameEntryForkFree cp.f = true
+    · have hfe : frameEnterS (cp.withFork g).f c.acs = (frameEnterS cp.f c.acs).withFork g :=
+        frameEnterS_withFork_of_stat hf hg (callPrep_stat hp)
+          (precompNeutral_of_frameEntryForkFree hN) _
+      rw [hfe]
+      cases hr : frameEnterS cp.f c.acs with
+      | run e => rfl
+      | done r => cases r <;> rfl
+    · have h1 : frameEntryForkFree cp.f = false := by simpa using hN
+      have h2 : frameEntryForkFree (cp.withFork g).f = false := h1
+      simp only [h1, h2, Bool.false_eq_true, and_false, ↓reduceIte]
+      split <;> split <;> rfl
+
+/-- **One interpreter step is unchanged by the fork** between covered forks, when the block
+carries no excess blob gas. -/
+theorem wstep_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g)
+    (hx : s.benvStat.excessBlobGas = 0) (fs : List SFunc) (c : Cfg) :
+    wstep fs (s.withFork g) c = wstep fs s c := by
+  rcases c with ⟨d, f, K, keys, adrs, stor, acs⟩
+  cases f with
+  | dest _ => rfl
+  | jump _ => rfl
+  | branch _ _ => rfl
+  | branchTo _ _ => rfl
+  | callNext _ _ => rfl
+  | ret => rfl
+  | undefined => rfl
+  | pcAt p k =>
+    simp only [wstep]
+    rw [ninst_step_reg_withFork hf hg hx p d (by decide : Rinst.pc ≠ .clz)]
+  | last l =>
+    cases l <;> simp only [wstep, linst_run_withFork hf hg]
+  | next n k =>
+    cases n with
+    | push xs h => rfl
+    | dupn _ => rfl
+    | swapn _ => rfl
+    | exchange _ => rfl
+    | exec x =>
+      cases x <;> first | rfl | simp only [wstep, callStep_withFork hf hg]
+    | reg r =>
+      by_cases hc : r = .clz
+      · subst hc; rfl
+      · cases r <;> first
+          | exact absurd rfl hc
+          | simp only [wstep, sloadStep_withFork hf hg, sstoreStep_withFork hf hg,
+              calldatacopyStep_withFork, logStep_withFork,
+              ninst_step_reg_withFork hf hg hx _ _ hc]
+
+/-- **A run of the certificate interpreter is unchanged by the fork** between covered forks,
+when the block carries no excess blob gas: every kernel fact `wrun fs s n c = r` is the same
+fact for `s.withFork g`. -/
+theorem wrun_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g)
+    (hx : s.benvStat.excessBlobGas = 0) (fs : List SFunc) :
+    ∀ (n : Nat) (c : Cfg), wrun fs (s.withFork g) n c = wrun fs s n c
+  | 0, _ => rfl
+  | n + 1, c => by
+    simp only [wrun, wstep_withFork hf hg hx, wrun_withFork hf hg hx fs n]
 
 end Blanc.Lift.NodeWalk
