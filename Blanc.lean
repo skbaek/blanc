@@ -407,6 +407,7 @@ import Blanc.DripStackSafetyCertificate
 import Blanc.Lift.Weth9.Solvency
 import Blanc.Lift.Weth9.Live
 import Blanc.Lift.Weth9.Init
+import Blanc.Lift.Weth9.Creation.Deploy
 
 -- The deployed beacon deposit contract, lifted from its runtime bytes
 -- (beacon-deposit-bytecode-v1); these two tops reach the whole lift kit.

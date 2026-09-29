@@ -2,6 +2,7 @@ import Blanc.Lift.BeaconDeposit.Creation.Cert
 import Blanc.Lift.BeaconDeposit.Init
 import Blanc.Lift.PackedShaSize
 import Blanc.Lift.WalkSteps
+import Blanc.Lift.Deploy
 
 /-!
 # The Beacon deposit constructor, walked
@@ -100,32 +101,6 @@ theorem ctorStor_succ {i : Nat} {s : Stor} (h : CtorStor i s) (hi : i < 1000) :
     by_cases hlo : 33 ≤ x.toNat ∧ x.toNat ≤ 33 + i
     · rw [if_pos hlo, if_pos ⟨hlo.1, by omega⟩]
     · rw [if_neg hlo, if_neg (by omega)]
-
-/-! ## The cut `SSTORE` step -/
-
-section Steps
-
-variable {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm} {f : SFunc} {r : Seg}
-  {S : List B256} {M : Mem} {G : Nat}
-
-/-- `SSTORE` at its selected cost, in a cut run. -/
-theorem rxc_sstore {k' v : B256} (hfork : CoveredFork sevm.benvStat.fork)
-    (hsentry : gCallStipend < G + sstoreCost sevm b k' v) (hstatic : sevm.isStatic = false)
-    (k : SFunc.RunExactCut fs sevm C (St (afterSstore sevm b k' v) S M G) f r) :
-    SFunc.RunExactCut fs sevm C (St b (k' :: v :: S) M (G + sstoreCost sevm b k' v))
-      (.next (.reg .sstore) f) r := by
-  refine .next (Ninst.runCompiled_sstore_selected_setMach hfork hsentry hstatic) ?_
-  rw [← afterSstore_stateGas (sevm := sevm) (devm := b) (key := k') (value := v)]
-  exact k
-
-/-- `CALLVALUE`, in a cut run. -/
-theorem rxc_callvalue (hroom : S.length < 1024)
-    (k : SFunc.RunExactCut fs sevm C (St b (sevm.value :: S) M G) f r) :
-    SFunc.RunExactCut fs sevm C (St b S M (G + 2)) (.next (.reg .callvalue) f) r :=
-  .next (Ninst.runCompiled_pushItem (devm := St b S M (G + 2)) (G := G) (cost := gBase)
-    (by rintro ⟨⟩) rfl rfl hroom) k
-
-end Steps
 
 /-! ## One iteration -/
 
@@ -300,28 +275,6 @@ def exitCost : Nat := 3 + copyCost + 41
 theorem exitCost_eq : exitCost = 999 := by decide
 
 theorem memAt_31 : memAt 31 = 3200 := by decide
-
-/-- The state `RETURN` leaves (stated over a variable state, so nothing reduces a concrete
-memory image). -/
-def returnPost (d : Devm) (i sz : B256) (S : List B256) : Devm :=
-  ((d.setMach ⟨S, d.memory, d.gasLeft, d.stateGas⟩).memRead i.toNat sz.toNat).2.withOutput
-    (d.memory.read i.toNat sz.toNat).1
-
-theorem returnPost_facts (d : Devm) (i sz : B256) (S : List B256) :
-    (returnPost d i sz S).output = (d.memory.read i.toNat sz.toNat).1 ∧
-      (returnPost d i sz S).error = d.error ∧
-      (∀ a, Devm.getStor (returnPost d i sz S) a = Devm.getStor d a) ∧
-      (returnPost d i sz S).gasLeft = d.gasLeft :=
-  ⟨rfl, rfl, fun _ => rfl, rfl⟩
-
-/-- `RETURN` of a window that needs no expansion, in a cut run. -/
-theorem rxc_return_any {fs : List SFunc} {sevm : Sevm} {C : List Nat} {d : Devm} {i sz : B256}
-    {S : List B256} (hstk : d.stack = i :: sz :: S) (hext : d.extCost [⟨i.toNat, sz.toNat⟩] = 0) :
-    SFunc.RunExactCut fs sevm C d (.last .return_) (.done (.halted (returnPost d i sz S))) := by
-  refine .last ?_
-  show Linst.run sevm _ .return_ = _
-  exact Linst.run_return_eq_ok hstk (by rw [hext]; exact Nat.zero_le _)
-    (by rw [hext, Nat.sub_zero]; rfl)
 
 /-- **The last pass** (`i = 31`): the loop test fails, the constructor copies the appended
 runtime to memory `0` and returns it. -/

@@ -2917,7 +2917,9 @@ contract-neutral.
 - Deploying lifted creation code: a gas-exact run of a checked creation certificate's
   constructor from the creation frame's start state settles through Jaune's
   `processCreateMessage`, installing the constructor's output and keeping its storage
-  (`liftCreate_ok`, with the creation frame `createSeed`) in
+  (`liftCreate_ok`, with the creation frame `createSeed`), and the constructor walk steps
+  the shared kits lack (`rx_codecopy`, `rxc_sstore`, `rxc_callvalue`, `rx_return_any` and
+  `rxc_return_any`, with the halting state `returnPost` named over a variable state) in
   [`Blanc/Lift/Deploy.lean`](../Blanc/Lift/Deploy.lean).
 - Jump destinations: Jaune's own `jumpable_eq_jumpdestOk` (`Jaune/Machine.lean`)
   replaces its exponential `jumpable` by the linear `jumpdestOk` scan, for every
