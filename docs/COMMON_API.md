@@ -728,6 +728,20 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   function body (`Func.straightGasFree`, no table call) turns any successful
   `Func.Run` into such a walk to a terminal instruction with
   `Func.RunPrefix.toLast_of_run`.
+- To name the *nodes* of every derivation from a concrete machine (not only a
+  `Nonempty (Exec …)`), use [`Blanc/Lift/NodeWalk.lean`](../Blanc/Lift/NodeWalk.lean).
+  `Exec.Deriv.step_cont`, `step_halt` and `step_spawn` pin any node's same-frame
+  successor, outcome and spawned child (`LockExclusion.Spawns`) from one driver step.
+  `pwalk` is a kernel-evaluable pc-level walk over a `CodeTries` of the code with the
+  witness engine's shadows (`PAgree`); `pstep_cont`/`pstep_halt` make each walk step the
+  real `Evm.step`. `pwalk_cont` and `pwalk_halt` then hold for *any* derivation node at the
+  start configuration: a `ParentPrefix` successor at the end configuration, every node in
+  between passing a pc check and executing no `KECCAK256` (`NodeOK`), unchanged
+  `Exec.rawFrameDescendants`, and for a halting walk the frame's outcome.
+  `scallPrep`/`staticcall_node` cross a `STATICCALL` spawn and `resume_agree_ok`/
+  `resume_agree_error` its resume; `parentPrefix_total` and `hashAvoid_of_noKeccak`
+  (trace-local `HashAvoid`) close chain arguments. Worked example:
+  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Witness/Top.lean`.
 - Determinism of execution witnesses:
   [`Blanc/ExecDeterminism.lean`](../Blanc/ExecDeterminism.lean).
 - Identifying an execution's descendant frames across one step (`Exec.descendantFrames_eq_of_nextNone`, `_of_jump`,

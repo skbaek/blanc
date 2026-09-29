@@ -438,6 +438,8 @@ import Blanc.Lift.WitnessArms
 import Blanc.Lift.Witness
 import Blanc.Lift.WitnessChild
 import Blanc.Lift.WitnessSpawn
+-- Node-exposing concrete walks (vplus-witness-v1): shared.
+import Blanc.Lift.NodeWalk
 
 -- The deployed Lido CircuitBreaker, lifted from its runtime bytes (deployed-lido-vyper-v1).
 import Blanc.Lift.LidoCircuitBreakerDeployed.Cert
@@ -484,6 +486,14 @@ import Blanc.Lift.VyperNonreentrantDeployed.Fixed.CheckPart1
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.CheckPart2
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.CheckPart3
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.CheckTries
+
+-- V+ nonvacuity: the synthetic reader fixture and the witnessed refused reentry
+-- vplus_witness (vplus-witness-v1).
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reader.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness.Setup
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness.RunF
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness.RunRest
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness.Top
 
 -- The vulnerable Vyper comparator 0x6326, its token and attacker, and the witnessed
 -- reentry vminus_witness (deployed-lido-vyper-v1, V-).
