@@ -189,12 +189,12 @@ theorem VyInv.of_get_eq {stor stor' : Stor} {s : Blanc.Curve3Crv.State} {K : Key
 
 theorem Key.extend_nil (K : Key → Prop) : Key.extend K [] = K := by
   funext k
-  simp [Key.extend]
+  simp [Key.extend, SlotFootprint.extendBy]
 
 theorem Key.extend_append (K : Key → Prop) (xs ys : List Key) :
     Key.extend (Key.extend K xs) ys = Key.extend K (xs ++ ys) := by
   funext k
-  simp [Key.extend, or_assoc]
+  simp [Key.extend, SlotFootprint.extendBy, or_assoc]
 
 /-- The connected replay of committed writer invocations over one storage
 boundary of the contract. It is stated for every model abstraction of the opening

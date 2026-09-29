@@ -1,5 +1,6 @@
 import Blanc.Curve3Crv.Properties
 import Blanc.Lift.MapSlot
+import Blanc.SlotFootprint
 
 /-!
 # The deployed 3Crv storage layout and its storage abstraction
@@ -105,17 +106,18 @@ structure VyInv (stor : Stor) (s : Curve3Crv.State) (K : Key → Prop) : Prop wh
   conserved : Conserved s
 
 /-- The frame-local premise for a key a frame touches: it is live, or its slot is none of the
-slots in use. -/
-def Fresh (K : Key → Prop) (k : Key) : Prop :=
-  K k ∨ (k.slot ∉ vyFixedSlots ∧ ∀ k', K k' → k'.slot ≠ k.slot)
+slots in use. (Abbreviates the shared `SlotFootprint.Fresh` at Curve's slot function.) -/
+abbrev Fresh (K : Key → Prop) (k : Key) : Prop :=
+  SlotFootprint.Fresh Key.slot vyFixedSlots K k
 
 /-- The frame-local premise for the keys `ks` a frame touches: each is `Fresh`, and their slots
-are pairwise distinct. -/
-def FreshKeys (K : Key → Prop) (ks : List Key) : Prop :=
-  (∀ k ∈ ks, Fresh K k) ∧ ∀ k ∈ ks, ∀ k' ∈ ks, k.slot = k'.slot → k = k'
+are pairwise distinct. (Abbreviates the shared `SlotFootprint.FreshKeys`.) -/
+abbrev FreshKeys (K : Key → Prop) (ks : List Key) : Prop :=
+  SlotFootprint.FreshKeys Key.slot vyFixedSlots K ks
 
-/-- The live keys after touching `ks`. -/
-def Key.extend (K : Key → Prop) (ks : List Key) : Key → Prop := fun k => K k ∨ k ∈ ks
+/-- The live keys after touching `ks`. (Abbreviates the shared `SlotFootprint.extendBy`.) -/
+abbrev Key.extend (K : Key → Prop) (ks : List Key) : Key → Prop :=
+  SlotFootprint.extendBy K ks
 
 /-- A fresh key reads its model value. -/
 theorem VyInv.get_slot {stor : Stor} {s : Curve3Crv.State} {K : Key → Prop} (h : VyInv stor s K) {k : Key}

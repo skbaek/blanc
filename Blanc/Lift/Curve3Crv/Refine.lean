@@ -328,7 +328,7 @@ theorem refine_setMinter (hinv : VyInv stor s K)
   · rintro ⟨-, hm, -⟩
     refine ⟨?_, rfl, rfl⟩
     have hext : Key.extend K (callKeys sevm.caller (callAt sevm 0)) = K := by
-      funext k; simp [Key.extend, callKeys, callAt]
+      funext k; simp [Key.extend, SlotFootprint.extendBy, callKeys, callAt]
     rw [hext]
     refine hinv.of_set_word (by simp [vyWordSlots]) rfl rfl rfl rfl ?_ ?_ ?_ hinv.conserved
     · rw [Stor.get_set_ne _ (by decide)]; exact hinv.decimals
@@ -462,7 +462,7 @@ theorem refine_setName (hinv : VyInv stor s K)
         ← sliceD_zero_take _ (by rw [List.length_sliceD]; omega),
         Bytes.sliceD_sliceD_of_le _ _ _ _ _ (by omega), Nat.add_zero, hsl s1 64 L1 (by omega)]
       rfl
-  · have hK : K k := by simpa [Key.extend] using hk
+  · have hK : K k := by simpa [Key.extend, SlotFootprint.extendBy] using hk
     rw [hoff _ (fun hs => hinv.apart k hK (hfix _ hs))]
     cases k <;> exact hinv.known _ hK
   · have hK : ¬ K k := fun h => hk (.inl h)
@@ -474,10 +474,10 @@ theorem refine_setName (hinv : VyInv stor s K)
       · exact .inl hx
       · exact .inr ⟨k, .inl hK, he⟩
   · intro k k' hk hk' he
-    simp only [Key.extend, List.not_mem_nil, or_false] at hk hk'
+    simp only [Key.extend, SlotFootprint.extendBy, List.not_mem_nil, or_false] at hk hk'
     exact hinv.inj k k' hk hk' he
   · intro k hk
-    simp only [Key.extend, List.not_mem_nil, or_false] at hk
+    simp only [Key.extend, SlotFootprint.extendBy, List.not_mem_nil, or_false] at hk
     exact hinv.apart k hk
 
 -- SEGMENT: refineWordViews (pure, short; four views)

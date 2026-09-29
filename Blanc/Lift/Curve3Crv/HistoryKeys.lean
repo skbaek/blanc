@@ -17,16 +17,8 @@ theorem FreshKeys.of_universe {U K : Key → Prop} {ks : List Key}
     (injective : ∀ k k', U k → U k' → k.slot = k'.slot → k = k')
     (apart : ∀ k, U k → k.slot ∉ vyFixedSlots)
     (included : ∀ k, K k → U k)
-    (touched : ∀ k ∈ ks, U k) : FreshKeys K ks := by
-  constructor
-  · intro k hk
-    by_cases hK : K k
-    · exact Or.inl hK
-    · right
-      refine ⟨apart k (touched k hk), ?_⟩
-      intro k' hk' heq
-      exact hK ((injective k' k (included k' hk') (touched k hk) heq) ▸ hk')
-  · intro k hk k' hk' heq
-    exact injective k k' (touched k hk) (touched k' hk') heq
+    (touched : ∀ k ∈ ks, U k) : FreshKeys K ks :=
+  SlotFootprint.FreshKeys.of_universe (slot := Key.slot) (fixed := vyFixedSlots)
+    injective apart included touched
 
 end Blanc.Lift.Curve3Crv

@@ -81,7 +81,7 @@ theorem WriterReplay.keys {ca : Adr} {initial : Blanc.Curve3Crv.State}
   induction replay with
   | nil => simp
   | snoc prior execution target deployed covered writer owner before after accepted ih =>
-      simp only [Key.extend, List.flatMap_append, List.flatMap_cons,
+      simp only [Key.extend, SlotFootprint.extendBy, List.flatMap_append, List.flatMap_cons,
         List.flatMap_nil, List.append_nil, List.mem_append, ih, or_assoc]
 
 /-- Carried state, reachable from one fixed initial checkpoint. The incoming
