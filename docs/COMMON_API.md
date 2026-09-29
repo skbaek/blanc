@@ -185,8 +185,7 @@ registry has identified the likely vocabulary.
   one-write primitive is `setStorVal_getStor_ne` in
   [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean).
 - For TWG trigger packets, local-call rebasing commutes with constant-store
-  prefixes by `Trigger.rebaseLocalCalls_prependStoresRev` and is the identity
-  on constant-data reverters by `Trigger.rebaseLocalCalls_revertData` in
+  prefixes by `Trigger.rebaseLocalCalls_prependStoresRev` in
   [`Blanc/LidoTriggerableWithdrawalsGatewayTrigger.lean`](../Blanc/LidoTriggerableWithdrawalsGatewayTrigger.lean).
 - Invert an existing arbitrary-outcome compiled walk:
   [`Blanc/CompiledWalkInversion.lean`](../Blanc/CompiledWalkInversion.lean).
@@ -1985,8 +1984,7 @@ Blanc's [`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean):
   from final storage equality.
 - `ProcessMessage.clean_input_state_of_settle` exposes the clean raw input and
   exact state retained by a successful settlement.
-- `processCreateMessage.chargeCodeGas_bal_eq` and
-  `ProcessCreateMessage.ok_state_eq_inner_of_no_error` expose the
+- `ProcessCreateMessage.ok_state_eq_inner_of_no_error` exposes the
   balance-neutral CREATE settlement seam; `processCheckedSystemTransaction_to_unchecked`
   recovers the unchecked successful system-message result.
 - [`Blanc/MessageResult.lean`](../Blanc/MessageResult.lean) supplies the
@@ -2063,8 +2061,8 @@ consumer needs canonical interpreter ingress as one conjunct:
   `Exec.frameAdmitted_benvStat` gives the block-environment statics inherited
   by every admitted frame from the execution root; use it with
   `Exec.FrameAdmitted.root` when lifting a root `benvStat` fact.
-  For retained traces, `ExecutionTrace.ProcessMessageTrace.frameAdmitted_benvStat`
-  admits every retained frame at the message's `benv.stat`, and
+  For retained traces, `ExecutionTrace.RetainedXlot.frameAdmitted_benvStat_of_runFrame`
+  admits every retained frame at the message's `benv.stat` (take `Q := (· = msg.benv.stat)`), and
   `ExecutionTrace.ConfiguredBlockTrace.frameAdmitted_time` admits every frame of
   a configured block at `block.header.timestamp.toB256`.  The same module fixes
   the new chain tip (`ConfiguredBlockTrace.post_blocks_getLast`) and orders a
@@ -2152,8 +2150,8 @@ consumer needs canonical interpreter ingress as one conjunct:
   `ConfiguredBlockTrace.header_gasLimit_lt`); child frames carry a memory slice
   sized by a popped word (`Evm.step_spawn_child_data`), and system messages
   fixed data. `Exec.rawFrameRoots_data_bound` is the execution-level form. Worked
-  consumers: `Lift.BeaconDeposit.configuredHistory_solInv_envDerived` (and
-  `_count_`/`_root_`) and `Lift.Curve3Crv.c3crv_history_committed_derived`.
+  consumers: `Lift.BeaconDeposit.configuredHistory_solInv_env` (and
+  `_count_env`/`_root_env`) and `Lift.Curve3Crv.c3crv_history_committed_derived`.
 - Every retained carrier from `ProcessMessageTrace` through
   `ConfiguredHistoryTrace` has `freshFrameAdmitted`; its matching
   `FrameAdmitted.and` combines that trace-derived fact with another admission
@@ -2253,7 +2251,7 @@ rather than climbing it again:
   it, `.toReachUsing` projects configured reachability (given the root's
   reflexive reach), and `of_configuredHistoryTrace` / `exists_of_reachUsing`
   realize every retained history or reach from an `S.StateInv` root.
-- Small additions it needed: `ReplayCarrier.ofAddBal` (a direct balance credit
+- Small additions it needed: `ReplayCarrier.ofAddBal_observed` (a direct balance credit
   is one positive credit at `ca` or no step) and the word-bound transports
   `ExecutionTrace.TransactionTrace.msg_sum_nof` and
   `ExecutionTrace.processWithdrawalsState_sum_nof`.  Four more wrapper facts
@@ -2273,7 +2271,7 @@ is the ledger-shaped instance, whose `tag` records block and transaction
 position.  Import `Blanc.ExecutionAccountingLadder`.
 
 Boundary: the ladder classifies nothing as a deposit, withdrawal or attack
-step and adds no step beyond `root`, `credit` and `ofAddBal`.  It is
+step and adds no step beyond `root`, `credit` and `ofAddBal_observed`.  It is
 account-local: a boundary over several accounts (a `SettlementCarrier`), a
 replay indexed by position, or an invariant that is not `S.StateInv` (for
 example one threaded by fork rules) does not fit it; such a consumer reuses the
@@ -2324,7 +2322,7 @@ fork coverage from each retained block. Admission remains an entry premise,
 never a supplied storage chain or endpoint condition. The legacy
 `AccountingLadder.Observed.toAdmitted` adapter derives fresh entry from retained
 traces and preserves the existing compiled API. Shared wrapper bounds and
-`ReplayCarrier.ofAddBal_observed` / `ofAddBal` now live in the admitted module;
+`ReplayCarrier.ofAddBal_observed` now lives in the admitted module;
 the old ladder reexports them by import.
 
 The single-execution bridge is
@@ -2432,7 +2430,7 @@ admission check from its parts, `processMessageCall_call_of_message` settles a c
 `processTransaction_of_stages` is `processTransaction` from the validation, admission, debit,
 prepared message and message-call outcome, with the exact settled state (gas refund and coinbase
 fee credited, accounts deleted).  Worked use:
-`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Tx/Envelope.lean` (`vminus_tx_process`).
+`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Tx/Envelope.lean`.
 For a *symbolic* type-2 call to a contract (no concrete transaction to evaluate) the same module discharges
 the whole envelope from field-level facts: `processTransaction_call_of_exec` takes the fee, nonce, funds,
 code-free sender, gas and signature facts (`hrecover` the only cryptographic premise) and the message's
@@ -2644,8 +2642,7 @@ the consumer instead of adding a premise that assumes the new semantics away.
   `benvAfterTransfer_stat` preserves the complete static block environment
   across a successful message-entry transfer.
   The same module owns the shared receipt key, intrinsic/calldata gas
-  projections, type-2 effective gas price and the
-  `jauneListCompare_eq_compareLex` list-comparator bridge;
+  projections and type-2 effective gas price;
   `deploymentTxPreludeBout` delegates to the lower
   `ExecutionTrace.transactionPreludeBout`.  Redemption and deployment owners
   should retain compatibility names only as thin aliases to these primitives.
@@ -2658,8 +2655,7 @@ the consumer instead of adding a premise that assumes the new semantics away.
   and the arbitrary suffix are explicit identities) and
   `Exec.Deriv.exactProgramPrefix`, `SourceCursor.mainToward_appended`,
   `callToward_appended`, `toward_appended`, `sourceSite_appended`,
-  `nonPush_sourceSite_appended`, `sstore_sourceSite_appended` and
-  `successfulSstore_sourceSite_appended` carry the cursor and source-site
+  `nonPush_sourceSite_appended` and `sstore_sourceSite_appended` carry the cursor and source-site
   facts the whole-code bridge cannot, because it requires whole-code equality.
   Bytes in the appended suffix are deliberately granted no source authority
   even when they decode as an instruction also present in the prefix.

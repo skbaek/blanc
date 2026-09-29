@@ -934,6 +934,14 @@ theorem runtimeExternalCallSourceSites_instructions (dp : DeployParams) :
     runtime_persistentProgramShape_eq]
   exact runtimeExternalCallInstructions_official
 
+theorem runtimeTransientSourceSites_length (dp : DeployParams) :
+    (runtimeTransientSourceSites dp).length = 3 := by
+  simpa using congrArg List.length (runtimeTransientSourceSites_pcs dp)
+
+theorem runtimeExternalCallSourceSites_length (dp : DeployParams) :
+    (runtimeExternalCallSourceSites dp).length = 2 := by
+  simpa using congrArg List.length (runtimeExternalCallSourceSites_pcs dp)
+
 theorem runtimeTransientSourceSite_instruction
     {dp : DeployParams} {site : Prog.SourceSite}
     (member : site ∈ runtimeTransientSourceSites dp) :

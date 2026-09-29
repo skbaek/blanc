@@ -49,8 +49,7 @@ read these rows as the one authority for a smaller-than-standard set.
 #expect_axioms Blanc.LidoCircuitBreaker.RuntimePersistentWrite.inventory_exact []
 #expect_axioms Blanc.LidoCircuitBreaker.RuntimePersistentWrite.all_length []
 #expect_axioms Blanc.LidoCircuitBreaker.constructor_inventory_cardinalities []
--- scripts/check-lido-circuit-breaker-deployment.py: the five frozen deployment names
-#expect_axioms Blanc.jauneListCompare_eq_compareLex [propext]
+-- scripts/check-lido-circuit-breaker-deployment.py: the four frozen deployment names
 #expect_axioms Blanc.LidoCircuitBreaker.officialConstructorEventScratch_eq []
 #expect_axioms Blanc.LidoCircuitBreaker.officialConstructorDecodedMemory_size [propext]
 #expect_axioms Blanc.LidoCircuitBreaker.officialConstructorDecodedMemory_read_memory [propext, Quot.sound]

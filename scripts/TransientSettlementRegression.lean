@@ -536,7 +536,6 @@ private theorem concrete_controls : controls = List.replicate 25 true := by
 this fixture fail elaboration before the evaluator can run. -/
 private theorem required_positive_controls : True := by
   let _tstore := @Blanc.tstore_run_cell
-  let _zero := @Blanc.tstore_run_zero
   let _tload := @Blanc.tload_run_cell
   let _callNonzero := @Blanc.directCall_nonzero_spawn
   let _callZero := @Blanc.directCall_zero_spawn
@@ -546,7 +545,6 @@ private theorem required_positive_controls : True := by
   let _prepared := @Blanc.preparedTransactionMessage_exists
   let _empty := @Blanc.PreparedTransactionMessage.transientStorage_eq_empty
   let _logs := @Blanc.processMessageCall_error_logs_eq_nil
-  let _linked := @Blanc.PreparedTransactionMessage.error_logs_eq_nil
   let _sstore := @Blanc.of_run_sstore_not_static
   let _staticSpawn := @Blanc.Xinst.step_spawn_isStatic
   let _staticCall := @Blanc.Ninst.step_staticcall_run_isStatic

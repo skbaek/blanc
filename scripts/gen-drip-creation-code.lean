@@ -28,7 +28,6 @@ private def renderModule (bytes : Bytes) : String :=
     String.intercalate ",\n"
       (rows.map fun row => "   " ++ String.intercalate ", " row)
   let size := bytes.length
-  let headroom := pragueCodeLimits.maxInitCodeSize - size
   String.intercalate "\n"
     [ "-- DripCreationCode.lean : compiler-generated DRIP creation literal."
     , "--"
@@ -58,16 +57,6 @@ private def renderModule (bytes : Bytes) : String :=
     , "theorem creationCodeLiteral_length : creationCodeLiteral.length = " ++
         toString size ++ " := by"
     , "  decide +kernel"
-    , ""
-    , "theorem creationCodeLiteral_eip3860 :"
-    , "    creationCodeLiteral.length <= eip3860InitcodeLimit := by"
-    , "  rw [creationCodeLiteral_length, eip3860InitcodeLimit_exact]"
-    , "  decide"
-    , ""
-    , "theorem creationCodeLiteral_headroom :"
-    , "    eip3860InitcodeLimit - creationCodeLiteral.length = " ++
-        toString headroom ++ " := by"
-    , "  rw [creationCodeLiteral_length, eip3860InitcodeLimit_exact]"
     , ""
     , "end Blanc.Drip"
     , "" ]

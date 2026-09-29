@@ -9,6 +9,9 @@ a one-line change to this text and must move exactly the leaf set the control na
 * `headline_one`, `headline_two`, `headline_calls`, `Elsewhere.headline_open`, `fp_binder`, `dup`:
   leaves. (`fp_binder` carries the binder-name
   fingerprint control; `dup` shares its last component with `Sub.dup`, which is used.)
+* `uses_gq`: a leaf. `gq_iff` (a non-`rfl` `@[simp]` iff lemma) is used by `uses_gq`'s `by simp`,
+  whose proof term mentions the generated `gq_iff._simp_1`, never `gq_iff` itself: an auxiliary is
+  a use of its parent, so `gq_iff` is not a leaf.
 * `simp_nonrfl_fact` (`@[simp]`, proved by `omega`), `Pt.ext_fx` (`@[ext]`) and `instNonemptyPt`
   (an instance): used by no term. An attribute is a use only for an `rfl`-proved simp lemma, so
   these three are leaves.
@@ -38,6 +41,12 @@ def picked : Fin 3 := ⟨2, Nat.lt_of_lt_of_le bound_fact (Nat.le_refl 3)⟩
 @[simp] theorem simp_only_fact (n : Nat) : step n = n + 1 := rfl
 
 @[simp] theorem simp_nonrfl_fact (n : Nat) : n + 0 + 0 = n := by omega
+
+def gq (w : Nat) : Bool := decide (w = 1 ∨ w = 2)
+
+@[simp] theorem gq_iff (w : Nat) : gq w = true ↔ w = 1 ∨ w = 2 := by simp [gq]
+
+theorem uses_gq : gq 1 = true := by simp
 
 structure Pt where
   x : Nat

@@ -122,10 +122,6 @@
       "theorem"
     ],
     [
-      "tstore_run_zero",
-      "theorem"
-    ],
-    [
       "tload_run_cell",
       "theorem"
     ],
@@ -168,10 +164,6 @@
     [
       "processMessageCall_error_logs_eq_nil",
       "theorem"
-    ],
-    [
-      "PreparedTransactionMessage.error_logs_eq_nil",
-      "theorem"
     ]
   ],
   "requiredPositiveTheorems": [
@@ -184,7 +176,6 @@
   "schema": 1,
   "signatureHashes": {
     "PreparedTransactionMessage": "d92806014cf4eaa06f9da3e8f9f3573dbde610b8e037c5438f1ed58ba376e471",
-    "PreparedTransactionMessage.error_logs_eq_nil": "ed63197f8695d4de8f3915898808d5ac18bdb36da22dc6c737fd376039b5feff",
     "PreparedTransactionMessage.transientStorage_eq_empty": "2a6c809bb75a4c04a4667efbab003cf5c6084676cf8e2a70be500aea8bd27cd3",
     "caughtCall_childSettlement": "0e3051d226a55f24b232086be865c0abea4b561037cbebf181843465e7709738",
     "cleanCall_childSettlement": "6fad9951db50be664cf79858c4c8a5d8a2dfe7096bcc7a054de6dcf9f6c5f1b7",
@@ -195,8 +186,7 @@
     "preparedTransactionMessage_exists": "466320301a1e39053c7be80b5e56b7b387d840cf4c4d9d4edd4dfd05d96d6b59",
     "processMessageCall_error_logs_eq_nil": "1721d1a3eb0d897da612cc3d3115fe0e4f7916c7d8103e9991d4554b3d6ffab6",
     "tload_run_cell": "74852521f83dbb2f0fff4fa5bdcd0d39d637a9d5f56a3f2d50090f1acf0d43fc",
-    "tstore_run_cell": "6877e3c99880c1eec12c9d675bf123364d7f07fc18527de4f4de64b9bcc16db5",
-    "tstore_run_zero": "1089beb9e6cdbef48a63c5bae7447b1638e40411969686992ea8fb4ec8fb673b"
+    "tstore_run_cell": "6877e3c99880c1eec12c9d675bf123364d7f07fc18527de4f4de64b9bcc16db5"
   },
   "touchedConsumerHashes": {
     "Blanc/Weth10AllowanceArmsPermit.lean": "7eb10689c547fe601fdc0d630a93f888b4a9230872d54959c7b82d9d9bacacaf",

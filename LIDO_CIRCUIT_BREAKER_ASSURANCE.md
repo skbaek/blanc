@@ -50,7 +50,7 @@ The verifier is static and fail-closed. It reads this file and requires that:
    claim, order-insensitively, with the single word `none` meaning "depends on
    no axioms at all". Every such stricter claim in `scripts/AxiomCheck.lean`
    must in turn be stated by a row here (REG-2, REG-12 and ACC-3 today) or be
-   one of the five frozen deployment names of
+   one of the four frozen deployment names of
    `scripts/check-lido-circuit-breaker-deployment.py`: a smaller axiom set that
    nothing states is not kept;
 4. every **Gate** path exists and is registered in `scripts/GATES.md`; and
@@ -386,7 +386,7 @@ register never lets the pillar's name imply otherwise.
 #### ABI-5 — The emitted runtime's error table is an instruction-aligned table whose compact selector reverters are independently reconstructed from the locked ABI
 
 - **Declarations:** no audited declaration — gate-owned row
-- **Premises:** the locked ABI reference and the emitted runtime bytes. The slot-binding theorems `runtime_emptyRevertSlot`, `runtime_pauseFailedErrorSlot`, and `runtime_bubbleRevertSlot` exist in the tree but are outside the axiom audit, so they are named here as context rather than cited as this row's declarations.
+- **Premises:** the locked ABI reference and the emitted runtime bytes.
 - **Axioms:** not applicable
 - **Gate:** `scripts/check-lido-circuit-breaker-runtime-errors.sh`
 - **Differential channel:** the differential matrix's constructor error and precedence cases, plus `scripts/check-error-data.sh`'s exact reason payloads

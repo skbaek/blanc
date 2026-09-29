@@ -72,7 +72,7 @@ Accordingly the five head offsets are `0xa0`, `0x100`, `0x140`, `0x180`, and
 deviation. Event shape and byte-exact encoding are interface.
 `Blanc/BeaconDepositCore.lean` defines `abiDepositEvent` and
 `CanonicalDepositEventData`; `Blanc/BeaconDepositEncoding.lean` proves
-`abiDepositEvent_mk` and `abiDepositEvent_length`.  The compiled success and
+`abiDepositEvent_length`.  The compiled success and
 settlement witnesses are `deposit_success_runCompiled` and
 `deposit_success_settled_effects`; the latter exposes the retained successful
 effects in the settlement substrate.  The exact-event differential rows and

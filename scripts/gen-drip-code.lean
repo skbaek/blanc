@@ -27,7 +27,6 @@ private def renderModule (bytes : Bytes) : String :=
     String.intercalate ",\n"
       (rows.map fun row => "   " ++ String.intercalate ", " row)
   let size := bytes.length
-  let headroom := pragueCodeLimits.maxCodeSize - size
   String.intercalate "\n"
     [ "-- DripCode.lean : compiler-generated DRIP runtime literal and witness."
     , "--"
@@ -55,9 +54,6 @@ private def renderModule (bytes : Bytes) : String :=
     , ""
     , "def compiledSelectors : List B256 := funcs.map Prod.fst"
     , ""
-    , "theorem compiledSelectors_eq_selectors : compiledSelectors = selectors := by"
-    , "  rfl"
-    , ""
     , "def codeSize : Nat := code.length"
     , ""
     , "def eip170RuntimeLimit : Nat := pragueCodeLimits.maxCodeSize"
@@ -73,10 +69,6 @@ private def renderModule (bytes : Bytes) : String :=
     , "theorem code_eip170 : codeSize <= eip170RuntimeLimit := by"
     , "  rw [codeSize_exact, eip170RuntimeLimit_exact]"
     , "  decide"
-    , ""
-    , "theorem codeHeadroom_exact : codeHeadroom = " ++ toString headroom ++ " := by"
-    , "  unfold codeHeadroom"
-    , "  rw [codeSize_exact, eip170RuntimeLimit_exact]"
     , ""
     , "end Blanc.Drip"
     , "" ]

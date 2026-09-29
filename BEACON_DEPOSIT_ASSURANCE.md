@@ -119,8 +119,8 @@ inventing an observation that does not exist.
 
 #### P8-HISTORY — Every admitted Prague-only future extends the same baseline by one existential suffix, with an empty-baseline specialization rooted at deployment
 
-- **Declarations:** `Blanc.BeaconDeposit.pragueOnly_history_extends`, `Blanc.BeaconDeposit.DeploymentRoot.future_history_extends`
-- **Premises:** actual `BlockChain.ReachUsing` under the exact Prague-only schedule, a retained `ConfiguredHistoryTrace` projecting to that same reach witness, pointwise fresh/native-SHA frame admission, installed compiled runtime at the checkpoint, and its `ArtifactInv stor baseline`; the deployment specialization supplies installed code and `ArtifactInv _ []` from P7.
+- **Declarations:** `Blanc.BeaconDeposit.pragueOnly_history_extends`
+- **Premises:** actual `BlockChain.ReachUsing` under the exact Prague-only schedule, a retained `ConfiguredHistoryTrace` projecting to that same reach witness, pointwise fresh/native-SHA frame admission, installed compiled runtime at the checkpoint, and its `ArtifactInv stor baseline`; the deployment-rooted specialization, which supplies installed code and `ArtifactInv _ []` from P7, is stated through `DeploymentRoot.future_count_root` (P8-READ).
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check.sh`, `scripts/check-claims.sh`
 - **Differential channel:** no direct finite channel — arbitrary finite configured reachability and hostile outer frames are theorem scope, not extrapolated from the bounded Prague/BPO2 matrices.

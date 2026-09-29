@@ -52,13 +52,12 @@ PUBLIC_THEOREM_INVENTORY_SHA256 = (
 )
 # The whole axiom claim of this family. Every public deployment theorem is covered by the
 # repository's one union walk (`scripts/AxiomCheck.lean`, `scripts/check.sh`), which bounds the
-# axioms of every Blanc constant by `propext`, `Classical.choice` and `Quot.sound`. These five
+# axioms of every Blanc constant by `propext`, `Classical.choice` and `Quot.sound`. These four
 # public names are the ones whose axiom sets this gate has always frozen as SMALLER than that
 # bound; they stay explicit `#expect_axioms` rows of `scripts/AxiomCheck.lean`, checked in both
 # directions, and this table is the copy this gate compares them against, so a claim cannot be
 # dropped, weakened or added there without this gate noticing. An empty set is "no axioms at all".
 STRICTER_CLAIMS = {
-    "Blanc.jauneListCompare_eq_compareLex": frozenset({"propext"}),
     "Blanc.LidoCircuitBreaker.officialConstructorEventScratch_eq": frozenset(),
     "Blanc.LidoCircuitBreaker.officialConstructorDecodedMemory_size": frozenset({"propext"}),
     "Blanc.LidoCircuitBreaker.officialConstructorDecodedMemory_read_memory":

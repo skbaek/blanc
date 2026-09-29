@@ -97,7 +97,6 @@ EXPECTED_DECLARATIONS = {
     ],
     "P8-HISTORY": [
         "Blanc.BeaconDeposit.pragueOnly_history_extends",
-        "Blanc.BeaconDeposit.DeploymentRoot.future_history_extends",
     ],
     "P8-READ": [
         "Blanc.BeaconDeposit.DeploymentRoot.future_count_root",

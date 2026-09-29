@@ -1070,8 +1070,8 @@ neither family says anything about liveness.
 Preservation needs the invariant to hold *once* before it can carry it forward,
 and for a genesis-installed FMINT it does: storage that reads zero at every key
 is conserved, because both sides of the equality are then zero
-(`Blanc.Stor.Conserved.of_get_eq_zero`, with `Blanc.Stor.Conserved.of_empty`
-for the canonical empty map). That covers the genesis case and only the genesis
+(`Blanc.Stor.Conserved.of_get_eq_zero`, which covers the canonical empty map
+as well). That covers the genesis case and only the genesis
 case — FMINT compiles one runtime and has no constructor, so **no
 initcode/`CREATE` deployment theorem exists**, and nothing here says an FMINT
 deployed by a transaction starts conserved. That remains a declared non-claim;
@@ -1125,23 +1125,25 @@ Four are the **compile-witness declarations**:
 The longstanding restoration, liveness, gas, error-genre and settlement rows
 are catalogued here by family:
 
-- **Frame-level state restoration** (eleven rows, in
+- **Frame-level state restoration** (nine rows, in
   [`Blanc/FlashSpec.lean`](Blanc/FlashSpec.lean), with the shared
-  `Blanc.ProcessMessage.rollback_of_error` in `CommonProofs.lean`):
+  `Blanc.ProcessMessage.rollback_of_error` in `CommonProofs.lean` and the shared
+  `Blanc.rollback_of_no_success` with its `_total` form in `LadderBase.lean`):
   `rollback_of_callback_failure` at the borrower's frame, and
-  `rollback_of_no_success` with its `_total` form and seven per-guard
-  instantiations at fmint's own message frame — a frame that cannot succeed
+  seven per-guard instantiations of the shared `rollback_of_no_success`
+  at fmint's own message frame — a frame that cannot succeed
   comes back with its world state restored. Every claim names a frame, never
   a transaction.
-- **View-call liveness and exact gas** (the longstanding 37 WETH/FMINT rows
+- **View-call liveness and exact gas** (the longstanding 27 WETH/FMINT rows
   plus eight WETH10 compiled-walk rows, in
   [`Blanc/FmintLive.lean`](Blanc/FmintLive.lean),
   [`Blanc/WethLive.lean`](Blanc/WethLive.lean),
   [`Blanc/FmintGas.lean`](Blanc/FmintGas.lean) and
   [`Blanc/WethGas.lean`](Blanc/WethGas.lean), with the three
   `Prog.runCompiled`-to-`exec` bridge rows): `fmint_totalSupply_succeeds`,
-  `fmint_decimals_succeeds`, `weth_balanceOf_succeeds` and
-  `weth_decimals_succeeds` construct successful message-call executions,
+  `weth_balanceOf_succeeds` and `weth_decimals_succeeds` construct successful
+  message-call executions (for FMINT's `decimals`, `decimals_gas_exact` carries
+  the same premises and a stronger conclusion),
   together with exact cold and warm gas and the `fmintGas`/`wethGas` closed
   forms and maxima. [`Blanc/Weth10Live.lean`](Blanc/Weth10Live.lean) adds
   successful compiled walks and exact cold/warm gas for `flashFee`,

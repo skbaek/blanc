@@ -132,7 +132,7 @@ chain_preserves_conserved                <span class="c">-- every reachable stat
 stateTransitionUsing_preserves_conserved <span class="c">-- …and the same three again on a</span>
 addBlockToChainUsing_preserves_conserved <span class="c">   *configured* chain, across scheduled</span>
 chainUsing_preserves_conserved           <span class="c">   activations of the covered forks</span>
-Stor.Conserved.of_empty                  <span class="c">-- the base case: all-zero storage conserved</span></pre>
+Stor.Conserved.of_get_eq_zero            <span class="c">-- the base case: all-zero storage conserved</span></pre>
     </div>
 
     <div class="dev" style="margin-top:26px">
@@ -159,7 +159,7 @@ Stor.Conserved.of_empty                  <span class="c">-- the base case: all-z
     </div>
     <div class="dev">
       <div class="devhead"><h3>Where does the invariant start? There is no constructor.</h3><span class="devtag">pushback</span></div>
-      <p><span class="mono">Stor.Conserved.of_empty</span> closes the genesis-installed case:
+      <p><span class="mono">Stor.Conserved.of_get_eq_zero</span> closes the genesis-installed case:
         all-zero storage is conserved because both sides are zero. It closes exactly that gap and
         leaves the other one open, in so many words: no initcode/<span class="mono">CREATE</span>
         deployment theorem exists, and nothing says an FMINT deployed by a transaction starts
@@ -247,7 +247,7 @@ Stor.Conserved.of_empty                  <span class="c">-- the base case: all-z
 <pre>fmint_flashLoan_spec            <span class="c">-- the headline: factors a given successful</span>
                                 <span class="c">   execution through the canonical callback window</span>
 no_success_of_*                 <span class="c">-- 7 corollaries ruling executions out</span>
-rollback_of_no_success (+10)    <span class="c">-- frame-level state restoration, 11 rows</span>
+rollback_of_callback_failure (+8) <span class="c">-- frame-level state restoration, 9 rows</span>
 settles_with_error_of_* (+6)    <span class="c">-- error genre, 13 rows: 7 name the error channel,</span>
                                 <span class="c">   6 construct .revert with no data, exactly</span></pre>
         </div>

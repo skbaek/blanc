@@ -23,9 +23,10 @@ never population, users or dependencies.
 A theorem is USED when
 
 * some Blanc declaration's type or value mentions it (a "term user"), compiler and elaborator
-  auxiliaries (`_proof_N`, `match_N`, `eq_def`, `eq_N`, `_private` prefixes, recursors, constructors
-  of a structure...) being attributed to their parent declaration and a parentless auxiliary being
-  looked through to its own users; or
+  auxiliaries (`_proof_N`, `match_N`, `eq_def`, `eq_N`, `_simp_N`, `_private` prefixes, recursors,
+  constructors of a structure...) being attributed to their parent declaration, on the user side
+  and on the used side alike (a `simp` proof mentions `X._simp_1`, never `X`, when it uses the simp
+  lemma `X`), and a parentless auxiliary being looked through to its own users; or
 * it is an `rfl`-proved lemma (`isRflTheorem`) that belongs to a registered simp set (`@[simp]`,
   `attribute [simp]`, `@[simp ←]`, every other `register_simp_attr` set). Only such a lemma can be
   used by `simp`/`dsimp` without leaving any trace in a proof term, so its attribute membership is
@@ -145,8 +146,13 @@ run_cmd do
     let userKey : Name := own.getD n
     if own.isNone then orphanOwners := orphanOwners.insert n
     for u in constantsOf ci do
-      if u != n then
-        rev := rev.insert u ((rev.getD u {}).insert userKey)
+      -- The used side is attributed to its parent declaration too: `simp` proofs mention the
+      -- generated `X._simp_1` of a simp lemma `X`, never `X` itself, and a use of an auxiliary is
+      -- a use of the declaration it belongs to. A parentless auxiliary keeps its own key and is
+      -- looked through by `hasTermUser`.
+      let usedKey : Name := (owner env u).getD u
+      if usedKey != userKey then
+        rev := rev.insert usedKey ((rev.getD usedKey {}).insert userKey)
   -- The term users of `t`, looking through parentless auxiliaries.
   let hasTermUser (t : Name) : Bool := Id.run do
     let mut seen : NameSet := {}

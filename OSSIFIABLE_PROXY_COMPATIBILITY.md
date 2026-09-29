@@ -48,7 +48,7 @@ candidate and immutable-result identities live in the Plans completion report.
 | Field | Frozen Solidity boundary | Blanc port evidence |
 |---|---|---|
 | Selector / dispatch key | `0x13351258` | `getIsOssified_body_of_program`; G05, G06 |
-| State mutability | `view` | `getIsOssified_exact_of_program` / `getIsOssified_true_of_program`; G05, G06 |
+| State mutability | `view` | `getIsOssified_exact_of_program`; G05, G06 |
 | Nonzero call value | rejected before endpoint body behavior | `getIsOssified_with_value_reverts`; V03 |
 | Classification | functional interface | exact false/true word from the functional admin slot; G05, G06 |
 

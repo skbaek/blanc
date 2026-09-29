@@ -663,6 +663,10 @@ the erased bodies, with the fallback label at its assigned coordinate. -/
 
 /-! ## Unique label lookup properties -/
 
+theorem findLabel?_root [DecidableEq Label] (p : SymbolicProg Label) :
+    p.findLabel? p.root = some 0 := by
+  simp [SymbolicProg.findLabel?]
+
 theorem findAux_ne_zero [DecidableEq Label] (target : Label) (idx : Nat)
     (aux : List (Label × SymbolicFunc Label)) :
     findAux target idx aux ≠ some 0 := by

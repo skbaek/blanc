@@ -81,7 +81,7 @@ These apply to every row below and to any sentence quoted from this map.
 | Under D9, foreign debits of the vault's WETH row are excluded, and the pair invariant and WETH's solvency hold at every configured pair state | `pair_history_backed`, `pair_history_stable` (real-chain D9, conclusions about the reached state itself); over a realized trace, `pair_reachable_backed`, `pair_reachable_stable`, `PairTraceRealizes.authorizedDebit_zero` |
 | Donations are accounted rather than minted against | `wethFrame_vaultRow_classified` (a third-party credit to the vault row is its credit arm) and `pair_history_realized_dust_trace_exact`, whose equality carries credits as their own term. `donationStep` and `PairBacked.donation` are standalone model-level lemmas that no headline uses |
 | P3 — exact whole-history residue, as an equality, for some realization faithful to the chain | `pair_history_realized_dust_trace_exact` (real-chain D9); `pair_realized_dust_trace_exact` over a realized trace |
-| P4 — open context, no profit and victim loss, for some realization faithful to the chain | `pair_history_attacker_open_context`, `pair_history_victim_loss_bound` (real-chain D9); over a realized trace, `pair_attacker_open_context`, `pair_attacker_no_profit`, `pair_attacker_no_profit_of_no_share_gifts`, `pair_victim_loss_bound`, `pair_victim_loss_bound_of_trace` |
+| P4 — open context, no profit and victim loss, for some realization faithful to the chain | `pair_history_attacker_open_context`, `pair_history_victim_loss_bound` (real-chain D9); over a realized trace, `pair_attacker_open_context`, `pair_attacker_no_profit`, `pair_attacker_no_profit_of_no_share_gifts`, `pair_victim_loss_bound` |
 | The attack carrier is inhabited | `pair_attack_carrier_inhabited`, a **model-level** inhabitant (the user's inhabitant rule): a concrete `PairAttackPath` with the frozen transcript's numbers. No executed-chain history is exhibited that satisfies the P4 trace premises (review F5, open) |
 
 **How P4 is priced.** The closed no-profit form takes a `PairAttackTrace`: every
@@ -134,8 +134,7 @@ carry none of the chain-level sentences above.
   `transferFromEffect_accountingStep`, `SteppedMessages.toPath`,
   `SteppedMessages.victim_loss_le`, `ConfiguredRoot.conserved`,
   `ConfiguredRoot.backed`, `ConfiguredMessages.preserves_conserved`,
-  `ConfiguredRoot.chain_conserved`, `vault_rely_preserves`,
-  `vault_rely_preserves_conserved`.
+  `ConfiguredRoot.chain_conserved`, `vault_rely_preserves_conserved`.
 
 The 2026-09-04 gaps this map used to list are closed on the chain-level route:
 - the history rely is `wethFrame_vaultRow_classified` together with the

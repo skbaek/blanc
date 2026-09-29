@@ -43,7 +43,7 @@ each fail-closed:
      directions by the same walker), where it must equal that claim exactly. An
      empty claim is written as the single word `none`. Conversely every
      stricter claim in `scripts/AxiomCheck.lean` must be stated by a row here or
-     be one of the five frozen deployment names of
+     be one of the four frozen deployment names of
      `scripts/check-lido-circuit-breaker-deployment.py`: a smaller set that no
      register or gate states is not kept.
 

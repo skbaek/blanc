@@ -946,6 +946,10 @@ def self_test(root: Path) -> int:
                   replaced(base, "n + 0 + 0 = n := by omega", "n + 0 + 0 = n := rfl",
                            "non-rfl simp lemma"),
                   [n for n in expected_base_leaves if n != ns + "simp_nonrfl_fact"])
+    expect_leaves("simp lemma no longer used by the `simp` call that mentions its `_simp_1`",
+                  replaced(base, "theorem uses_gq : gq 1 = true := by simp",
+                           "theorem uses_gq : gq 1 = true := by decide", "gq user"),
+                  expected_base_leaves + [ns + "gq_iff"])
     expect_leaves("unused instance used by a term",
                   replaced(base, "end LeafFixture\n\nnamespace Elsewhere",
                            "def ptWitness : Nonempty Pt := inferInstance\n\n"
@@ -968,6 +972,19 @@ def self_test(root: Path) -> int:
     else:
         print(f"OK — blanket attribute rule in the driver: {lost} would vanish from the leaf set; "
               f"the shared driver keeps them")
+
+    # The used side is attributed to the parent as well: without it `gq_iff` (used only through its
+    # generated `gq_iff._simp_1`) is a leaf although the `simp` call in `uses_gq` needs it.
+    checks += 1
+    unattributed = run_census(root, source=fixture_source(
+        root, base, ("let usedKey : Name := (owner env u).getD u", "let usedKey : Name := u")))
+    gained = sorted(set(r["name"] for r in unattributed["leaves"])
+                    - set(r["name"] for r in base_census["leaves"]))
+    if gained != [ns + "gq_iff"]:
+        failures.append(f"used-side attribution control: expected only gq_iff to become a leaf, got {gained}")
+    else:
+        print(f"OK — used-side attribution disabled in the driver: {gained} becomes a leaf although "
+              f"a `simp` call uses it; the shared driver attributes `_simp_1` to its parent")
 
     # Auxiliary attribution in the driver: without it the generated theorems (`Qt.mk.injEq`, ...)
     # join the population, which is the failure the rule exists to prevent (in the real

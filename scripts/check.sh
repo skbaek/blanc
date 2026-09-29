@@ -16,7 +16,7 @@
 # the canonical execution layer's axiom sets; Blanc keeps no copy of those.
 #
 # The only per-declaration checks left are the STRICTER CLAIMS: a smaller-than-standard axiom set
-# that a register or a gate states for a named declaration (the five frozen Lido deployment names
+# that a register or a gate states for a named declaration (the four frozen Lido deployment names
 # and the Registry / access-inventory rows of LIDO_CIRCUIT_BREAKER_ASSURANCE.md). They are the
 # `#expect_axioms` rows of `scripts/AxiomCheck.lean`; the register gates read them from there.
 # `scripts/axiom_audit.py` validates that file (imports, exactly one union command, only claim rows)

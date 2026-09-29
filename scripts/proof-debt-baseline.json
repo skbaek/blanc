@@ -201,17 +201,6 @@
       "ceiling": 800000
     },
     {
-      "id": "Blanc/LidoCircuitBreakerAccess.lean::Blanc.LidoCircuitBreaker.checkedHeartbeatExpiry_runCompiled#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerAccess.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.checkedHeartbeatExpiry_runCompiled",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 4096,
-      "ceiling": 4096
-    },
-    {
       "id": "Blanc/LidoCircuitBreakerAccess.lean::Blanc.LidoCircuitBreaker.heartbeatExpiry_body_runCompiled#1::local_scoped::-::maxRecDepth#1",
       "file": "Blanc/LidoCircuitBreakerAccess.lean",
       "declaration": "Blanc.LidoCircuitBreaker.heartbeatExpiry_body_runCompiled",
@@ -947,17 +936,6 @@
       "option": "maxRecDepth",
       "value": 568,
       "ceiling": 568
-    },
-    {
-      "id": "Blanc/Weth10Redeemable.lean::Blanc.Weth10.withdrawTo_runCompiledTo_callPrefix#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/Weth10Redeemable.lean",
-      "declaration": "Blanc.Weth10.withdrawTo_runCompiledTo_callPrefix",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 607,
-      "ceiling": 607
     },
     {
       "id": "Blanc/Weth10Redeemable.lean::Blanc.Weth10.withdraw_execSat#1::command_scoped::-::maxRecDepth#1",

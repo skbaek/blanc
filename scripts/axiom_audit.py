@@ -13,7 +13,7 @@ no copy of the walker: this driver checks the pinned walker's source under
 ``.lake/packages/jaune`` before every elaboration.
 
 What is left of the per-theorem audit is exactly the *stricter claims*: a register or a gate that
-states a smaller-than-standard axiom set for a declaration (five frozen Lido deployment names, the
+states a smaller-than-standard axiom set for a declaration (four frozen Lido deployment names, the
 Registry and access-inventory rows of ``LIDO_CIRCUIT_BREAKER_ASSURANCE.md``). Each is an explicit
 ``#expect_axioms NAME [ax, …]`` row in the audit source, checked in both directions by the same
 walker. Every other axiom set is not stated anywhere and is not checked more tightly than the union.

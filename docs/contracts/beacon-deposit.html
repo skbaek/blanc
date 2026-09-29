@@ -120,9 +120,8 @@
       it is entry evidence about actual frames, never a poststate or a result: a retained history
       trace whose frames at <span class="mono">ca</span> enter fresh and find native SHA-256 at
       address <span class="mono">0x2</span>. From the deployment root,
-      <span class="mono">DeploymentRoot.future_history_extends</span> supplies the installed code
-      and the empty baseline, and <span class="mono">DeploymentRoot.future_count_root</span> reads
-      the consequences off one suffix: the concrete count equals
+      <span class="mono">DeploymentRoot.future_count_root</span> supplies the installed code
+      and the empty baseline, and reads the consequences off one suffix: the concrete count equals
       <span class="mono">baseline.length + suffix.length</span>, it grew strictly if and only if the
       suffix is nonempty, and the concrete root equals
       <span class="mono">mixedRootOf Bytes.sha256 (baseline ++ suffix)</span>. The suffix is
