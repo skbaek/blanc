@@ -63,10 +63,20 @@ def acsTx0 : AcctShadow := acctShadowOf acctsTx
 theorem acctAgree_worldTx_base : AcctAgree worldTx_base acsTx0 :=
   acctAgree_stateFoldAcct acctsTx
 
-/-- Concrete storage writes of the pre-state: the pool's, exactly as in the message-level
-witness, and the token's `balanceOf[P] = 1000`. -/
+/-- `balanceOf[A']`'s slot: `keccak256(bytes32(24) ++ bytes32(A'))` (the message-level
+witness's `balanceOfASlot` for the tx-level attacker). -/
+def balanceOfA2Slot : Nat := 0xd503c45cbfd97f185c03a69695cc9899459132cd7cbbd96039c9b73b3b40ca8f
+
+/-- The pool's nonzero storage at `P`: as in the message-level witness (`Frame1.poolStorage`),
+with the LP balance credited to `A'` (slot `balanceOfA2Slot`) rather than to the old attacker. -/
+def poolStorageTx : List (Nat × Nat) :=
+  [(7, tokenAddress.toNat), (8, 1000), (9, 1000), (12, 10000),
+   (15, 10 ^ 18), (16, 10 ^ 18), (26, 2000), (balanceOfA2Slot, 2000)]
+
+/-- Concrete storage writes of the pre-state: the pool's (`poolStorageTx`) and the token's
+`balanceOf[P] = 1000`. -/
 def poolWritesTx : List ((Adr × B256) × B256) :=
-  poolStorage.map (fun (k, v) => ((proxyAddress, k.toB256), v.toB256)) ++
+  poolStorageTx.map (fun (k, v) => ((proxyAddress, k.toB256), v.toB256)) ++
     [((tokenAddress, proxyAddress.toNat.toB256), (1000 : Nat).toB256)]
 
 def worldTx : State := stateFoldStor worldTx_base poolWritesTx
