@@ -152,7 +152,7 @@ SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "ChargeGas", "CallOutOfGas", "SourceSiteCount", "CompiledShape",
            "SymbolicProgram",
            "ExecutionTraceFrames", "ExecutionTraceAdmission", "ExecutionTraceSettledFrames", "ExecutionTraceEntry",
-           "ExecutionAccountingObserved", "ExecutionAccountingAdmission", "ExecutionAccountingCore", "ExecutionEntryAccounting", "ExecutionDirectCode", "FuncMainPrefix",
+           "ExecutionAccountingObserved", "ExecutionAccountingAdmission", "ExecutionAccountingCore", "ExecutionEntryAccounting", "ExecutionModelAccounting", "ExecutionDirectCode", "FuncMainPrefix",
            "ChunkedDecide"]
 # The ladder over arbitrary code images and the generic bytecode lift
 # (solc-bytecode-v1): contract-neutral, no WETH9 name in any of them.
@@ -176,7 +176,7 @@ SHARED += ["LedgerUpdate"]
 SHARED += ["Lift.StaticCall", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper"]
 # The frame cursor, the reentrancy-lock exclusion kit and its bytecode checker, owner
 # discipline, and concrete-run evaluation (deployed-lido-vyper-v1): contract-neutral.
-SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.Cursor", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
+SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachChain", "Lift.Cursor", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
            "Lift.LockCheck", "Lift.LockCheckSound", "Lift.LockCheckFlow"]
 # The constant memory map and its checker, code tries as data, and the executable-witness
 # engine with its child runs and spawn facts (deployed-lido-vyper-v1, V-): contract-neutral.
@@ -340,7 +340,7 @@ CONTRACTS = {
                             "ProrataWethVaultViews"],
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],
     # The deployed solc 0.4.19 WETH9 runtime, lifted from its bytes.
-    "weth9": ["Lift.Weth9.Cert", "Lift.Weth9.Check", "Lift.Weth9.Lift", "Lift.Weth9.Spec", "Lift.Weth9.Jumps", "Lift.Weth9.Words", "Lift.Weth9.Step", "Lift.Weth9.Walks", "Lift.Weth9.Booked", "Lift.Weth9.Premise", "Lift.Weth9.Shape", "Lift.Weth9.Contract", "Lift.Weth9.Deposit", "Lift.Weth9.Withdraw", "Lift.Weth9.Approve", "Lift.Weth9.TransferFrom", "Lift.Weth9.Frame", "Lift.Weth9.Solvency", "Lift.Weth9.Live", "Lift.Weth9.Init", "Lift.Weth9.Footprint", "Lift.Weth9.FootFrame", "Lift.Weth9.FootHistory", "Lift.Weth9.Creation.Cert", "Lift.Weth9.Creation.Check", "Lift.Weth9.Creation.Deploy", "Lift.Weth9.Creation.Walk"],
+    "weth9": ["Lift.Weth9.Cert", "Lift.Weth9.Check", "Lift.Weth9.Lift", "Lift.Weth9.Spec", "Lift.Weth9.Jumps", "Lift.Weth9.Words", "Lift.Weth9.Step", "Lift.Weth9.Walks", "Lift.Weth9.Booked", "Lift.Weth9.Premise", "Lift.Weth9.Shape", "Lift.Weth9.Contract", "Lift.Weth9.Deposit", "Lift.Weth9.Withdraw", "Lift.Weth9.Approve", "Lift.Weth9.TransferFrom", "Lift.Weth9.Frame", "Lift.Weth9.Solvency", "Lift.Weth9.Live", "Lift.Weth9.Init", "Lift.Weth9.Footprint", "Lift.Weth9.FootFrame", "Lift.Weth9.FootHistory", "Lift.Weth9.Model", "Lift.Weth9.Ledger", "Lift.Weth9.Route", "Lift.Weth9.RouteCheck", "Lift.Weth9.Effects", "Lift.Weth9.WithdrawReach", "Lift.Weth9.CommittedReplay", "Lift.Weth9.CommittedSpawn", "Lift.Weth9.CommittedHistory", "Lift.Weth9.Creation.Cert", "Lift.Weth9.Creation.Check", "Lift.Weth9.Creation.Deploy", "Lift.Weth9.Creation.Walk"],
     "fmint": ["Fmint", "FmintCode", "Conserved", "FlashSpec", "FmintLive",
               "FmintReverts", "FmintGas", "FmintSettles"],
     "weth10": ["Weth10TemplateCode", "Weth10Core", "Weth10Backed", "Weth10Spec", "Weth10",

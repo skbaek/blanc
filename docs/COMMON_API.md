@@ -2269,6 +2269,24 @@ The same-target direct-code facts are `Xinst.step_call_sameTarget_code` and
 `Xinst.step_staticcall_sameTarget_code` in
 [`Blanc/ExecutionDirectCode.lean`](../Blanc/ExecutionDirectCode.lean).
 
+When the same target frame must be *replayed by a pure model* — its own model step
+taken before the steps of the children it settles, as in WETH9 `withdraw`, which
+debits and then sends ETH to a caller that may re-enter — use
+[`Blanc/ExecutionModelAccounting.lean`](../Blanc/ExecutionModelAccounting.lean).
+The carrier's boundary reads the target's storage only through its words
+(`ofStateGet`); the contract supplies `Exec.CoreAccounting.SpawnReplay` (its own
+steps `own`, and where they sit against the frame's chain nodes that decode an
+external instruction: taken at each such node, only silent steps and no further
+external instruction after it), plus `SpawnKinds`.
+`Exec.CoreAccounting.spawnReplayTarget` composes `own` with the settled
+children's replays using the ladder's lower-depth hypothesis and
+`Exec.spawn_seam` (the storage across a spawning step, from
+`Xinst.storageReplay_some_of_body`); `ExecutionAccountingReplay.modelLadder`
+turns it into an `AccountingLadderAdmitted`. `Exec.Deriv.FirstExec` and
+`Exec.Deriv.exists_firstExec_or_none` split a chain at its first external
+instruction. Worked use: WETH9,
+`Blanc/Lift/Weth9/CommittedSpawn.lean`, `CommittedHistory.lean`.
+
 ### T3. The wrapper is a transaction and the fact is about an installed contract
 
 Use
@@ -2880,6 +2898,16 @@ contract-neutral.
   [`Blanc/Lift/ReachWalk.lean`](../Blanc/Lift/ReachWalk.lean); worked use: Lido
   `lido_spawnEntry` in `Blanc/Lift/LidoCircuitBreakerDeployed/Reentry.lean`. Use it for safety facts
   about reverting or out-of-gas frames, which `lift_sound` cannot see.
+- From a cursor-placed node to *later* nodes of the same frame:
+  [`Blanc/Lift/ReachChain.lean`](../Blanc/Lift/ReachChain.lean).
+  `reach_between` is `reach_of_parentPrefix` started at any cursor-placed node;
+  `noExec_after_of_cursor` says no later node decodes an external instruction
+  when the tree from the cursor on is exec-free; `getStor_post_of_silent` says the
+  frame's post storage is the node's storage when the tree from the cursor on is
+  state-silent (`Reach.silentTo`, `SFunc.silentTree`).
+  `StepIn.exec_getStor_eq_of_noDescendants`: in a frame with no raw descendants a
+  lifted external step keeps storage (its child would be the frame itself, and a
+  child is shallower). Worked use: WETH9 `weth9_exec_node`.
 - Restrict external instruction families along a checked certificate cursor:
   [`Blanc/Lift/CallRestriction.lean`](../Blanc/Lift/CallRestriction.lean) defines
   `SFunc.execsSatisfy` and `Cursor.ExecsSatisfy` (active function and pending
