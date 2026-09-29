@@ -36,15 +36,17 @@ data `[100, 100]` and no error, and the storage shadow of its halting configurat
 `totalSupply = 1800 < 1906 = balanceOf[A']` and the remove-lock released. -/
 theorem frame2_child (d3 : Devm)
     (g3 : d3.gasLeft = gasAT) (o3 : d3.output = []) (e3' : d3.error = none)
+    (r3 : d3.refundCounter = refund3) (t3 : d3.accountsToDelete = .emptyWithCapacity)
     (k3 : ChildOk e2T.sta cfg339T d3) (a3 : ChildAgree d3 keysAT adrsAT storAT acsAT) :
     ∃ (post : Devm) (cl : Cfg), Nonempty (Exec e2T.pc e2T.sta e2T.dyna (.ok post)) ∧
       cp2T.f.settle (.ok post) = .ok post ∧ ChildAgree post cl.keys cl.adrs cl.stor cl.acs ∧
       post.gasLeft = 28916293 ∧ post.output = word 100 ++ word 100 ∧ post.error = none ∧
       (lookupS cl.stor proxyAddress (26 : Nat).toB256).toNat = 1800 ∧
       (lookupS cl.stor proxyAddress balanceOfA2Slot.toB256).toNat = 1906 ∧
-      (lookupS cl.stor proxyAddress (2 : Nat).toB256).toNat = 0 := by
+      (lookupS cl.stor proxyAddress (2 : Nat).toB256).toNat = 0 ∧
+      post.refundCounter = refund2 ∧ post.accountsToDelete = .emptyWithCapacity := by
   have hk := frame2_kernel d3
-  rw [childObs_eq g3 o3 e3'] at hk
+  rw [childObsX_eq g3 o3 e3' r3 t3] at hk
   unfold run2T run2From callPairFrom at hk
   rw [← e2T_sta_eq] at hk
   split at hk
@@ -67,8 +69,9 @@ theorem frame2_child (d3 : Devm)
             generalize hr : wrun fs1 e2T.sta 188 c4 = r at hk
             rcases r with c | ⟨post | post, cl'⟩ | _
             · simp [obs2T, obs2TEELS] at hk
-            · simp only [obs2T, obs2TEELS, Option.some.injEq, Prod.mk.injEq] at hk
-              obtain ⟨hg, ho, h26, hA, h2', he⟩ := hk
+            · simp only [obs2T, obs2TEELS, Option.some.injEq, Prod.mk.injEq, Bool.and_eq_true,
+                decide_eq_true_eq] at hk
+              obtain ⟨hg, ho, h26, hA, h2', ⟨he, hrf⟩, hatd⟩ := hk
               obtain ⟨-, hpa, hpk, hcr, hia, hik, hsg, hst, -⟩ := cp2T_spec
               have herr : post.error = none := Option.isNone_iff_eq_none.mp he
               obtain ⟨hx, hs, ha⟩ := frame_of_wrun (fs := fs1) (f := cp2T.f) (acs := acs1T)
@@ -81,7 +84,8 @@ theorem frame2_child (d3 : Devm)
                 (fun hr => lift_exactM cert_checkM cert_jumpsOkM e2T_code e2T_fork hr) fs1_zero
                 s hr herr
               exact ⟨post, cl', hx, hs, ha, hg,
-                List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) ho, herr, h26, hA, h2'⟩
+                List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) ho, herr, h26, hA, h2', hrf,
+                hatd⟩
             · simp [obs2T, obs2TEELS] at hk
             · simp [obs2T, obs2TEELS] at hk
           · simp [obs2T, obs2TEELS] at hk

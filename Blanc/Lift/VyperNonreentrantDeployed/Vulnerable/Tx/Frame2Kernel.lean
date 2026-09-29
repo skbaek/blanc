@@ -84,7 +84,7 @@ def adrsT343 : List Adr :=
   [a2Address, (4 : Adr), implementationAddress, proxyAddress] ++ praguePrecompiles ++
     [eAddress, a2Address] ++ adrsAT
 
-def bndT343 : Bnd1 := (machT343, t_1c73_c23, [], keysT343, adrsT343, storAT, acsAT, [], [], none, false)
+def bndT343 : Bnd1 := (machT343, t_1c73_c23, [], keysT343, adrsT343, storAT, acsAT, [], [], some refund3, true)
 
 /-- Frame 2's machine at step 563. -/
 def machT563 : Mach :=
@@ -177,7 +177,7 @@ def rdT563 : Bytes :=
    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
    0x00, 0x00, 0x00, 0x64]
 
-def bndT563 : Bnd1 := (machT563, t_1d0d_c53, [], keysT343, adrsT563, storT563, acsT563, [], rdT563, none, false)
+def bndT563 : Bnd1 := (machT563, t_1d0d_c53, [], keysT343, adrsT563, storT563, acsT563, [], rdT563, some refund3, true)
 
 /-- Frame 2's machine at step 578. -/
 def machT578 : Mach :=
@@ -272,7 +272,7 @@ def acsT578 : AcctShadow :=
    (proxyAddress, ⟨1, (1000 : Nat).toB256, .empty, proxyCode⟩)] ++ acsT563
 
 /-- Step 578, whose return data is the token's `true`. -/
-def bndT578 : Bnd1 := (machT578, t_1d27_c53, [], keysT578, adrsT578, storT578, acsT578, [], word 1, none, false)
+def bndT578 : Bnd1 := (machT578, t_1d27_c53, [], keysT578, adrsT578, storT578, acsT578, [], word 1, some refund3, true)
 
 /-! ### The stages -/
 
@@ -285,7 +285,7 @@ three steps. -/
 def run2Tb (c : Cfg) : Res := callPairB fs1 sta2T fsT Token.code 11 23 3 c
 
 theorem frame2_k1 : ∀ d1 : Devm,
-    obsD1 bndT343 (run2Ta (wrun fs1 sta2T 339 c2T) (childObs gasAT [] d1)) = obsDOk1 bndT343 := by
+    obsD1 bndT343 (run2Ta (wrun fs1 sta2T 339 c2T) (childObsX gasAT [] refund3 d1)) = obsDOk1 bndT343 := by
   kernel_forall_rfl
 
 theorem frame2_k2 : ∀ (m : Meta) (w : World),
@@ -314,7 +314,7 @@ theorem run2From_stages {r0 : Res} {d : Devm} {x1 x2 x3 : Bnd1}
   callPairFrom_stages (P := fun r => obs2T r = obs2TEELS) (n1 := 3) (n2 := 220) (n3 := 11)
     (n4 := 3) (n5 := 185) rfl rfl h1 h2 h3 h4
 
-theorem frame2_kernel : ∀ d1 : Devm, obs2T (run2T (childObs gasAT [] d1)) = obs2TEELS := fun d1 =>
+theorem frame2_kernel : ∀ d1 : Devm, obs2T (run2T (childObsX gasAT [] refund3 d1)) = obs2TEELS := fun d1 =>
   run2From_stages (frame2_k1 d1) frame2_k2 frame2_k3 frame2_k4
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx

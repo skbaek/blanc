@@ -28,13 +28,15 @@ theorem vminus_tx_message :
       msg0tx.currentTarget = a2Address ∧ msg0tx.benv.stat.fork = .prague ∧
       ∃ post : Devm, Nonempty (Exec e0tx.pc e0tx.sta e0tx.dyna (.ok post)) ∧
         processMessage msg0tx = .ok post ∧ post.error = none ∧ post.gasLeft = gas0out ∧
-        post.output = [] ∧
+        post.output = [] ∧ post.refundCounter = refund0 ∧
+        post.accountsToDelete = .emptyWithCapacity ∧
         (storOf post.state proxyAddress (26 : Nat).toB256).toNat = 1800 ∧
         (storOf post.state proxyAddress balanceOfA2Slot.toB256).toNat = 1906 ∧
         (storOf post.state proxyAddress (26 : Nat).toB256).toNat <
           (storOf post.state proxyAddress balanceOfA2Slot.toB256).toNat := by
-  obtain ⟨d1, ck, ca, cs, cc, hg, ho, he, hok, ha, h26, hA⟩ := frame1_child
-  obtain ⟨post, hx, hpm, herr, hgas, hout, hst⟩ := tx_message_of_child d1 ck ca cs cc hg ho he hok ha
+  obtain ⟨d1, ck, ca, cs, cc, hg, ho, he, hok, ha, h26, hA, hr, hd⟩ := frame1_child
+  obtain ⟨post, hx, hpm, herr, hgas, hout, hrf, hatd, hst⟩ :=
+    tx_message_of_child d1 ck ca cs cc hg ho he hr hd hok ha
   have hf := msg0tx_facts
   simp only [Prod.mk.injEq] at hf
   obtain ⟨hcaller, htarget, -, -, -, -, hfork⟩ := hf
@@ -42,7 +44,7 @@ theorem vminus_tx_message :
     rw [hst]; exact h26
   have hA' : (storOf post.state proxyAddress balanceOfA2Slot.toB256).toNat = 1906 := by
     rw [hst]; exact hA
-  exact ⟨msg0tx_eq, hcaller, htarget, hfork, post, hx, hpm, herr, hgas, hout, h26', hA',
+  exact ⟨msg0tx_eq, hcaller, htarget, hfork, post, hx, hpm, herr, hgas, hout, hrf, hatd, h26', hA',
     by rw [h26', hA']; decide⟩
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx

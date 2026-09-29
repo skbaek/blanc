@@ -35,7 +35,7 @@ def post1TF (d : Devm) : Devm :=
   | _ => default
 
 /-- Frame 2's settled machine as the proxy's child, its observed parts as literals. -/
-abbrev obsChild2 (d : Devm) : Devm := childObs 28916293 childOut d
+abbrev obsChild2 (d : Devm) : Devm := childObsX 28916293 childOut refund2 d
 
 theorem resume1T_eq : ∀ d : Devm,
     resumeCallB cp2T.p cp2T.oi cp2T.os (.ok (obsChild2 d)) = some (d2T (obsChild2 d)) := by
@@ -51,7 +51,9 @@ theorem return1T_eq : ∀ d : Devm,
 
 theorem post1T_obs : ∀ d : Devm,
     ((post1TF (obsChild2 d)).gasLeft, (post1TF (obsChild2 d)).output.map UInt8.toNat,
-      (post1TF (obsChild2 d)).error.isNone) = (childGas, childOut.map UInt8.toNat, true) := by
+      (post1TF (obsChild2 d)).error.isNone, (post1TF (obsChild2 d)).refundCounter,
+      (post1TF (obsChild2 d)).accountsToDelete) =
+    (childGas, childOut.map UInt8.toNat, true, refund1, .emptyWithCapacity) := by
   kernel_forall_rfl
 
 theorem post1T_keep : ∀ d : Devm,
@@ -71,10 +73,12 @@ theorem frame1_child : ∃ (d1 : Devm) (ck : List (Adr × B256)) (ca : List Adr)
     (cc : AcctShadow), d1.gasLeft = childGas ∧ d1.output = childOut ∧ d1.error = none ∧
       ChildOk e0tx.sta callCfg d1 ∧ ChildAgree d1 ck ca cs cc ∧
       (lookupS cs proxyAddress (26 : Nat).toB256).toNat = 1800 ∧
-      (lookupS cs proxyAddress balanceOfA2Slot.toB256).toNat = 1906 := by
-  obtain ⟨k3, a3, g3, o3, e3'⟩ := callback_child
-  obtain ⟨post2, cl, hx2, hs2, ha2, hg2, ho2, he2, h26, hA, -⟩ := frame2_child post3T g3 o3 e3' k3 a3
-  have hobs : obsChild2 post2 = post2 := childObs_eq hg2 (by rw [ho2]; rfl) he2
+      (lookupS cs proxyAddress balanceOfA2Slot.toB256).toNat = 1906 ∧
+      d1.refundCounter = refund0 ∧ d1.accountsToDelete = .emptyWithCapacity := by
+  obtain ⟨k3, a3, g3, o3, e3', r3, t3⟩ := callback_child
+  obtain ⟨post2, cl, hx2, hs2, ha2, hg2, ho2, he2, h26, hA, -, hr2, ht2⟩ :=
+    frame2_child post3T g3 o3 e3' r3 t3 k3 a3
+  have hobs : obsChild2 post2 = post2 := childObsX_eq hg2 (by rw [ho2]; rfl) he2 hr2 ht2
   have hr := resume1T_eq post2
   have ht := tail1T_eq post2
   have hh := return1T_eq post2
@@ -82,7 +86,7 @@ theorem frame1_child : ∃ (d1 : Devm) (ck : List (Adr × B256)) (ca : List Adr)
   have hk := post1T_keep post2
   rw [hobs] at hr ht hh ho hk
   simp only [Prod.mk.injEq] at ho hk
-  obtain ⟨hg, hout, he⟩ := ho
+  obtain ⟨hg, hout, he, hrf, hatd⟩ := ho
   obtain ⟨hka, hkk, hks⟩ := hk
   have herr : (post1TF post2).error = none := Option.isNone_iff_eq_none.mp he
   obtain ⟨hstep2, hpa, hpk, -, -, -, -, hst2, -⟩ := cp2T_spec
@@ -106,7 +110,7 @@ theorem frame1_child : ∃ (d1 : Devm) (ck : List (Adr × B256)) (ca : List Adr)
   have hpe : post2.error.isSome = false := by rw [he2]; rfl
   refine ⟨post1TF post2, callCfg.keys ++ cl.keys, cp2T.adrs ++ cl.adrs, cl.stor, cl.acs, hg,
     List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) hout, herr, ?_,
-    ⟨fun a => ?_, fun x => ?_, fun a k => ?_, fun a => ?_⟩, h26, hA⟩
+    ⟨fun a => ?_, fun x => ?_, fun a k => ?_, fun a => ?_⟩, h26, hA, hrf, hatd⟩
   · intro cp cevm hp he'
     rw [cp0_eq] at hp; cases hp
     rw [e1T_eq] at he'; cases he'

@@ -48,7 +48,7 @@ def adrsAT : List Adr :=
 
 /-- The proxy frame's settled machine as the attacker's child, its observed parts as
 literals. -/
-abbrev obsChild4 (d : Devm) : Devm := childObs gas4T (word 106) d
+abbrev obsChild4 (d : Devm) : Devm := childObsX gas4T (word 106) refund4 d
 
 /-- The attacker frame after its `CALL`, from a settled proxy frame `d3`. -/
 def run3T (d3 : Devm) : Res :=
@@ -57,13 +57,15 @@ def run3T (d3 : Devm) : Res :=
   | none => .stuck
 
 /-- The attacker's halt: gas, output, and success with the shadows `keysAT`/`adrsAT`/
-`storAT`/`acsAT`. -/
-def obs3 : Res → Option (Nat × List Nat × Bool × AcctShadow)
+`storAT`/`acsAT` and the refund counter; its accounts and set of accounts to delete as terms. -/
+def obs3 : Res → Option (Nat × List Nat × Bool × AcctShadow × AdrSet)
   | .done (.halted d) cl => some (d.gasLeft, d.output.map UInt8.toNat, d.error.isNone &&
-      decide (cl.keys = keysAT) && decide (cl.adrs = adrsAT) && decide (cl.stor = storAT), cl.acs)
+      decide (cl.keys = keysAT) && decide (cl.adrs = adrsAT) && decide (cl.stor = storAT) &&
+      decide (d.refundCounter = refund3), cl.acs, d.accountsToDelete)
   | _ => none
 
-theorem frame3_kernel : ∀ d : Devm, obs3 (run3T (obsChild4 d)) = some (gasAT, [], true, acsAT) := by
+theorem frame3_kernel : ∀ d : Devm,
+    obs3 (run3T (obsChild4 d)) = some (gasAT, [], true, acsAT, .emptyWithCapacity) := by
   kernel_forall_rfl
 
 theorem fs3_zero : fs3[0]? = some Attacker2.t_0000_c0 := by kernel_rfl
@@ -79,13 +81,15 @@ def post3T : Devm := haltedOf (run3T post4T)
 the proxy frame's gas, output, success and shadows. -/
 theorem callback_of_child (d3 : Devm) (k3 : ChildOk e3T.sta aCallT d3)
     (a3 : ChildAgree d3 keysH4T adrsH4T storAT acsAT) (g3 : d3.gasLeft = gas4T)
-    (o3 : d3.output = word 106) (e4T' : d3.error = none) :
+    (o3 : d3.output = word 106) (e4T' : d3.error = none) (r3 : d3.refundCounter = refund4)
+    (t3 : d3.accountsToDelete = .emptyWithCapacity) :
     ChildOk e2T.sta cfg339T (haltedOf (run3T d3)) ∧
       ChildAgree (haltedOf (run3T d3)) keysAT adrsAT storAT acsAT ∧
       (haltedOf (run3T d3)).gasLeft = gasAT ∧ (haltedOf (run3T d3)).output = [] ∧
-      (haltedOf (run3T d3)).error = none := by
+      (haltedOf (run3T d3)).error = none ∧ (haltedOf (run3T d3)).refundCounter = refund3 ∧
+      (haltedOf (run3T d3)).accountsToDelete = .emptyWithCapacity := by
   have hk := frame3_kernel d3
-  rw [show obsChild4 d3 = d3 from childObs_eq g3 o3 e4T'] at hk
+  rw [show obsChild4 d3 = d3 from childObsX_eq g3 o3 e4T' r3 t3] at hk
   unfold run3T at hk ⊢
   split at hk
   · rename_i c hc
@@ -94,7 +98,7 @@ theorem callback_of_child (d3 : Devm) (k3 : ChildOk e3T.sta aCallT d3)
     · simp [obs3] at hk
     · simp only [obs3, Option.some.injEq, Prod.mk.injEq, Bool.and_eq_true,
         decide_eq_true_eq] at hk
-      obtain ⟨hg, ho, ⟨⟨⟨he, hkk⟩, hka⟩, hks⟩, hkc⟩ := hk
+      obtain ⟨hg, ho, ⟨⟨⟨⟨he, hkk⟩, hka⟩, hks⟩, hrf⟩, hkc, hatd⟩ := hk
       have herr : d.error = none := Option.isNone_iff_eq_none.mp he
       have hstep := (wrun_cont aCallT_eq).trans (callResume_cont hc k3 a3)
       obtain ⟨hok, hag⟩ := childOk_of_start
@@ -102,16 +106,17 @@ theorem callback_of_child (d3 : Devm) (k3 : ChildOk e3T.sta aCallT d3)
         agree_cfg339T fs3_zero start3T_eq e3T_fork e3T_code hstep hr herr
       rw [hkk, hka, hks, hkc] at hag
       exact ⟨hok, hag, hg, List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) ho,
-        herr⟩
+        herr, hrf, hatd⟩
     · simp [obs3] at hk
     · simp [obs3] at hk
   · simp [obs3] at hk
 
 /-- **The callback subtree as frame 2's child** (tx frames 3-5). -/
 theorem callback_child : ChildOk e2T.sta cfg339T post3T ∧ ChildAgree post3T keysAT adrsAT storAT acsAT ∧
-    post3T.gasLeft = gasAT ∧ post3T.output = [] ∧ post3T.error = none :=
-  let ⟨k3, a3, g3, o3, e4T'⟩ := frame4_child
-  callback_of_child post4T k3 a3 g3 o3 e4T'
+    post3T.gasLeft = gasAT ∧ post3T.output = [] ∧ post3T.error = none ∧
+    post3T.refundCounter = refund3 ∧ post3T.accountsToDelete = .emptyWithCapacity :=
+  let ⟨k3, a3, g3, o3, e4T', r4, t4⟩ := frame4_child
+  callback_of_child post4T k3 a3 g3 o3 e4T' r4 t4
 
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx

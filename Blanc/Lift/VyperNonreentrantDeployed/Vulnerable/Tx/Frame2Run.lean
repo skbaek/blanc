@@ -50,18 +50,19 @@ def run2From (r : Res) (d : Devm) : Res :=
 def run2T (d : Devm) : Res := run2From (wrun fs1 sta2T 339 c2T) d
 
 /-- What frame 2's halt shows: gas, return data, and `P`'s `totalSupply` (slot 26),
-`balanceOf[A']` and remove-lock (slot 2) in the halting configuration's storage shadow, and
-success (no error). -/
-def obs2T : Res → Option (Nat × List Nat × Nat × Nat × Nat × Bool)
+`balanceOf[A']` and remove-lock (slot 2) in the halting configuration's storage shadow, success
+(no error) with the refund counter, and its set of accounts to delete as a term. -/
+def obs2T : Res → Option (Nat × List Nat × Nat × Nat × Nat × Bool × AdrSet)
   | .done (.halted d) cl => some (d.gasLeft, d.output.map UInt8.toNat,
       (lookupS cl.stor proxyAddress (26 : Nat).toB256).toNat,
       (lookupS cl.stor proxyAddress balanceOfA2Slot.toB256).toNat,
-      (lookupS cl.stor proxyAddress (2 : Nat).toB256).toNat, d.error.isNone)
+      (lookupS cl.stor proxyAddress (2 : Nat).toB256).toNat,
+      d.error.isNone && decide (d.refundCounter = refund2), d.accountsToDelete)
   | _ => none
 
 /-- The EELS observation at frame 2's `RETURN`: gas 28,916,293, return data `[100, 100]`,
 `totalSupply = 1800 < 1906 = balanceOf[A']`, lock released, success. -/
-def obs2TEELS : Option (Nat × List Nat × Nat × Nat × Nat × Bool) :=
-  some (28916293, (word 100 ++ word 100).map UInt8.toNat, 1800, 1906, 0, true)
+def obs2TEELS : Option (Nat × List Nat × Nat × Nat × Nat × Bool × AdrSet) :=
+  some (28916293, (word 100 ++ word 100).map UInt8.toNat, 1800, 1906, 0, true, .emptyWithCapacity)
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx

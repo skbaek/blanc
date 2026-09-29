@@ -31,6 +31,47 @@ open Blanc.Lift.VyperNonreentrantDeployed
 open Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
 open Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxTop
 
+/-- `d` with its refund counter and its set of accounts to delete replaced by a literal and the
+empty set: a settled child's other observed parts (its refund counter and that it deletes
+nothing) as literals, so that a parent's run over it evaluates them. -/
+def pinRA (r : Int) (d : Devm) : Devm :=
+  ⟨d.mach, { d.meta with refundCounter := r, accountsToDelete := .emptyWithCapacity }, d.world⟩
+
+theorem pinRA_eq {d : Devm} {r : Int} (hr : d.refundCounter = r)
+    (ha : d.accountsToDelete = .emptyWithCapacity) : pinRA r d = d := by
+  rcases d with ⟨⟨_, _, _, _⟩, ⟨_, _, _, _, _, _, _, _, _, _, _⟩, _⟩
+  simp only [Devm.refundCounter, Devm.accountsToDelete] at hr ha
+  subst hr ha
+  rfl
+
+/-- A settled child with its gas, output, success, refund counter and (empty) accounts to delete
+as literals. -/
+def childObsX (g : Nat) (out : Bytes) (r : Int) (d : Devm) : Devm := pinRA r (childObs g out d)
+
+theorem childObsX_eq {d : Devm} {g : Nat} {out : Bytes} {r : Int} (hg : d.gasLeft = g)
+    (ho : d.output = out) (he : d.error = none) (hr : d.refundCounter = r)
+    (ha : d.accountsToDelete = .emptyWithCapacity) : childObsX g out r d = d := by
+  unfold childObsX
+  rw [pinRA_eq (d := childObs g out d) hr ha]
+  exact childObs_eq hg ho he
+
+/-- The refund counters of the chain's frames, by evaluation of the interpreter over the real
+chain (each frame's observation decides its own): frame 5 (the reentrant `add_liquidity`)
+22,700, frames 4 (the proxy) and 3 (`A'`'s callback) inherit it, frame 2 (`remove_liquidity`)
+adds its own lock release to make 42,600, which frames 1 and 0 inherit. -/
+def refund5 : Int := 22700
+def refund4 : Int := 22700
+def refund3 : Int := 22700
+def refund2 : Int := 42600
+
+/-- The refund counter of `P`'s frame (and so of `A'`'s, whose own code refunds nothing):
+42,600 (the remove-lock's release and the reentrant frames' refunds, by evaluation of the
+interpreter over the real chain; the observations of every frame decide it). -/
+def refund0 : Int := refund2
+
+/-- Frame 1's (the proxy's) refund counter: its child's. -/
+def refund1 : Int := refund2
+
 /-- The EELS gas at `A'`'s `STOP` (tx trace, frame 0): 29,846,301. -/
 def gas0out : Nat := 29846301
 
@@ -55,8 +96,9 @@ def run0 (d1 : Devm) (ck : List (Adr × B256)) (ca : List Adr)
 shadow (which is the child's, since `POP`; `STOP` change no storage).  Reading `P`'s
 `totalSupply` (slot 26) and the attacker's LP balance from that shadow is what carries the
 corruption up from the child. -/
-def obs0 : Res → Option (Nat × List Nat × Bool × StorShadow)
-  | .done (.halted d) cl => some (d.gasLeft, d.output.map UInt8.toNat, d.error.isNone, cl.stor)
+def obs0 : Res → Option (Nat × List Nat × Bool × StorShadow × AdrSet)
+  | .done (.halted d) cl => some (d.gasLeft, d.output.map UInt8.toNat,
+      d.error.isNone && decide (d.refundCounter = refund0), cl.stor, d.accountsToDelete)
   | _ => none
 
 /-- **`A'`'s outer frame halts, for any settled child** with the tx trace's gas and return
@@ -64,7 +106,8 @@ data (all its other parts free): `A'` drops the success flag and `STOP`s with it
 empty output, no error, leaving the child's storage shadow `cs` untouched. -/
 theorem frame0tx_kernel : ∀ (d1 : Devm) (ck : List (Adr × B256)) (ca : List Adr)
     (cs : StorShadow) (cc : AcctShadow),
-    obs0 (run0 (childObs childGas childOut d1) ck ca cs cc) = some (gas0out, [], true, cs) := by
+    obs0 (run0 (childObsX childGas childOut refund0 d1) ck ca cs cc) =
+      some (gas0out, [], true, cs, .emptyWithCapacity) := by
   kernel_forall_rfl
 
 theorem fs2_zero : fs2[0]? = some Attacker2.t_0000_c0 := by kernel_rfl
@@ -89,13 +132,15 @@ storage is the corruption of the whole transaction message. -/
 theorem tx_message_of_child (d1 : Devm)
     (ck : List (Adr × B256)) (ca : List Adr) (cs : StorShadow) (cc : AcctShadow)
     (hg : d1.gasLeft = childGas) (ho : d1.output = childOut) (he : d1.error = none)
+    (hr : d1.refundCounter = refund0) (hd : d1.accountsToDelete = .emptyWithCapacity)
     (hok : ChildOk e0tx.sta callCfg d1) (ha : ChildAgree d1 ck ca cs cc) :
     ∃ post, Nonempty (Exec e0tx.pc e0tx.sta e0tx.dyna (.ok post)) ∧
       processMessage msg0tx = .ok post ∧ post.error = none ∧
-      post.gasLeft = gas0out ∧ post.output = [] ∧
+      post.gasLeft = gas0out ∧ post.output = [] ∧ post.refundCounter = refund0 ∧
+      post.accountsToDelete = .emptyWithCapacity ∧
       (∀ a k, storOf post.state a k = lookupS cs a k) := by
   have hk := frame0tx_kernel d1 ck ca cs cc
-  rw [show childObs childGas childOut d1 = d1 from childObs_eq hg ho he] at hk
+  rw [childObsX_eq hg ho he hr hd] at hk
   unfold run0 at hk
   split at hk
   · rename_i c hc
@@ -104,8 +149,9 @@ theorem tx_message_of_child (d1 : Devm)
     generalize hr : wrun fs2 e0tx.sta 2 c = r at hk
     rcases r with c' | ⟨post | post, cl⟩ | _
     · simp [obs0] at hk
-    · simp only [obs0, Option.some.injEq, Prod.mk.injEq] at hk
-      obtain ⟨hgas, hout, herr, hstor⟩ := hk
+    · simp only [obs0, Option.some.injEq, Prod.mk.injEq, Bool.and_eq_true,
+        decide_eq_true_eq] at hk
+      obtain ⟨hgas, hout, ⟨herr, hrf⟩, hstor, hatd⟩ := hk
       obtain ⟨run, hagcl, hstate⟩ := wrun_done hr (s.1 c0tx_agree)
       have hrunexact : SProg.RunExact fs2 e0tx.sta e0tx.dyna post :=
         ⟨Attacker2.t_0000_c0, fs2_zero, s.2 _ c0tx_agree run⟩
@@ -119,7 +165,7 @@ theorem tx_message_of_child (d1 : Devm)
         rw [hpost_state, hagcl.2.2.1 a k, hstor]
       have herr' : post.error = none := Option.isNone_iff_eq_none.mp herr
       refine ⟨post, hexec', ?_, herr', hgas,
-        List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) hout, hstoreq⟩
+        List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) hout, hrf, hatd, hstoreq⟩
       -- processMessage settlement
       have hsg0 : f0tx.inner.benv.stat.rules.stateGas = none := by
         show msg0tx.benv.stat.rules.stateGas = none

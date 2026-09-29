@@ -34,7 +34,7 @@ def post4TF (d : Devm) : Devm :=
   | _ => default
 
 /-- Frame 5's settled machine as the proxy's child, its observed parts as literals. -/
-abbrev obsChild5 (d : Devm) : Devm := childObs gas5T (word 106) d
+abbrev obsChild5 (d : Devm) : Devm := childObsX gas5T (word 106) refund5 d
 
 theorem resume4T_eq : ∀ d : Devm,
     resumeCallB cp5T.p cp5T.oi cp5T.os (.ok (obsChild5 d)) = some (d4T (obsChild5 d)) := by
@@ -52,7 +52,9 @@ def gas4T : Nat := 28057683
 
 theorem post4T_obs : ∀ d : Devm,
     ((post4TF (obsChild5 d)).gasLeft, (post4TF (obsChild5 d)).output.map UInt8.toNat,
-      (post4TF (obsChild5 d)).error.isNone) = (gas4T, (word 106).map UInt8.toNat, true) := by
+      (post4TF (obsChild5 d)).error.isNone, (post4TF (obsChild5 d)).refundCounter,
+      (post4TF (obsChild5 d)).accountsToDelete) =
+    (gas4T, (word 106).map UInt8.toNat, true, refund4, .emptyWithCapacity) := by
   kernel_forall_rfl
 
 theorem post4T_keep : ∀ d : Devm,
@@ -66,8 +68,8 @@ theorem post4T_keep : ∀ d : Devm,
 def post4T : Devm := post4TF post5T
 
 theorem obsChild5_post5T : obsChild5 post5T = post5T := by
-  obtain ⟨-, hg, ho, he, -⟩ := r5_facts
-  exact childObs_eq hg ho he
+  obtain ⟨-, hg, ho, he, -, -, -, -, hr, ha⟩ := r5_facts
+  exact childObsX_eq hg ho he hr ha
 
 theorem e4T_code : e4T.sta.code = proxyCode := by kernel_rfl
 
@@ -78,7 +80,8 @@ def adrsH4T : List Adr := cp5T.adrs ++ adrs5T
 
 /-- **Frame 4 (the proxy) as `A'`'s child.** -/
 theorem frame4_child : ChildOk e3T.sta aCallT post4T ∧ ChildAgree post4T keysH4T adrsH4T storAT acsAT ∧
-    post4T.gasLeft = gas4T ∧ post4T.output = word 106 ∧ post4T.error = none := by
+    post4T.gasLeft = gas4T ∧ post4T.output = word 106 ∧ post4T.error = none ∧
+    post4T.refundCounter = refund4 ∧ post4T.accountsToDelete = .emptyWithCapacity := by
   obtain ⟨hx4, hs4, ha4⟩ := frame5_child
   obtain ⟨hstep4, hpa, hpk, -, -, -, -, hst4, -⟩ := cp5T_spec
   obtain ⟨-, -, -, hcr3, -, -, hsg3, -⟩ := cp4T_spec
@@ -89,7 +92,7 @@ theorem frame4_child : ChildOk e3T.sta aCallT post4T ∧ ChildAgree post4T keysH
   have hk := post4T_keep post5T
   rw [obsChild5_post5T] at hr ht hh ho hk
   simp only [Prod.mk.injEq] at ho hk
-  obtain ⟨hg, hout, he⟩ := ho
+  obtain ⟨hg, hout, he, hrf, hatd⟩ := ho
   obtain ⟨hka, hkk, hks⟩ := hk
   have herr : post4T.error = none := Option.isNone_iff_eq_none.mp he
   -- the proxy frame's `Exec`
@@ -111,7 +114,7 @@ theorem frame4_child : ChildOk e3T.sta aCallT post4T ∧ ChildAgree post4T keysH
   have hacc := resumeCallB_acc hr
   have hpe : post5T.error.isSome = false := by rw [r5_facts.2.2.2.1]; rfl
   refine ⟨fun cp cevm hp he' => ?_, ⟨fun a => ?_, fun x => ?_, fun a k => ?_, fun a => ?_⟩,
-    hg, List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) hout, herr⟩
+    hg, List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) hout, herr, hrf, hatd⟩
   · rw [cp4T_eq] at hp; cases hp
     rw [e4T_eq] at he'; cases he'
     exact ⟨.ok post4T, hx3, frame_settle_ok hcr3 hsg3 herr⟩
