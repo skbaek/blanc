@@ -1,5 +1,31 @@
 import Blanc.Semantics
 
+/-!
+# Fork uniformity between covered forks
+
+Jaune's machines carry a fork identity and read rule data only through
+`BenvStat.rules = Fork.ruleSet fork`.  Between the covered forks (Prague, Osaka, BPO1, BPO2)
+the rule records differ only in the fork label, the blob schedule, transaction and block
+limits, the `MODEXP` rules, `op.clz` and the precompile set (Osaka adds `P256VERIFY` at
+0x100).  At message level exactly four reads see a difference: `CLZ` (`op.clz`),
+`BLOBBASEFEE` (the blob schedule), frame entry (`isPrecomp`) and `MODEXP` (`rules.modexp`).
+
+`withFork g` replaces the fork and nothing else.  Under covered forks:
+
+* `evm_step_withFork`: one driver step commutes with the change at a node whose instruction
+  is not `CLZ` (and is `BLOBBASEFEE` only at zero excess blob gas): same outcome, the spawned
+  frame with its fork changed;
+* `frame_enter_withFork`, `settle_withFork`: entry commutes for a frame that avoids `MODEXP`
+  and `P256VERIFY`; settlement is unchanged;
+* `Exec.withFork`: a derivation satisfying `ExecNeutral` is, node for node, a derivation under
+  the other fork with the same outcome; `exec_withFork`, `exec_out_withFork`,
+  `runFrame_withFork`, `processMessage_withFork`, `processCreateMessage_withFork` state the
+  consequences for the total interpreter and for messages.
+
+The walk-engine counterpart that transports closed witnesses is
+`Blanc/Lift/NodeWalkFork.lean`.
+-/
+
 namespace Jaune
 
 /-- Replace the fork, nothing else. -/
