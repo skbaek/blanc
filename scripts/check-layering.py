@@ -166,6 +166,9 @@ SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.ExactWalkOps",
            "Lift.ExactWalkCut", "Lift.ExactWalkCutOps", "Lift.CopyLoop", "Lift.PackedSha",
            "Lift.PackedShaCovered", "Lift.Quiet", "Lift.InvWalk", "Lift.InvWalkOps",
            "Lift.InvWalkWorld", "Lift.InvWalkSha"]
+# Creation code (deploy-init-v1): the size-optimised packed-hash site and the CREATE bridge
+# for lifted creation code; contract-neutral.
+SHARED += ["Lift.PackedShaSize", "Lift.Deploy"]
 # Pure-model ledger updates (vyper-3crv-bytecode-v1): contract-neutral.
 SHARED += ["LedgerUpdate"]
 # Walk steps for arbitrary static calls, CALLER/KECCAK256/LOG3/SSTORE, hashed slots and the
@@ -186,7 +189,7 @@ SHARED += ["Lift.WitnessBoundary", "TransactionForward"]
 CONTRACTS = {
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",
                        # the deployed runtime, lifted (decision beacon-lift-layering-family-20260926)
-                       "Lift.BeaconDeposit.Body", "Lift.BeaconDeposit.BodyCount", "Lift.BeaconDeposit.BodyEvent", "Lift.BeaconDeposit.BodyEventHead", "Lift.BeaconDeposit.BodyEventKit", "Lift.BeaconDeposit.BodyEventLoop", "Lift.BeaconDeposit.BodyEventSig", "Lift.BeaconDeposit.BodyGuards", "Lift.BeaconDeposit.BodyInsertDead", "Lift.BeaconDeposit.BodyInsertLive", "Lift.BeaconDeposit.BodyNode", "Lift.BeaconDeposit.BodyPubkeyRoot", "Lift.BeaconDeposit.BodyShaKit", "Lift.BeaconDeposit.BodySignatureRoot", "Lift.BeaconDeposit.BodySpec", "Lift.BeaconDeposit.Cert", "Lift.BeaconDeposit.Check", "Lift.BeaconDeposit.CountView", "Lift.BeaconDeposit.DepositArgs", "Lift.BeaconDeposit.DepositDecode", "Lift.BeaconDeposit.DepositExec", "Lift.BeaconDeposit.Erc165", "Lift.BeaconDeposit.Jumps", "Lift.BeaconDeposit.Ladder", "Lift.BeaconDeposit.Layout", "Lift.BeaconDeposit.Init", "Lift.BeaconDeposit.Lift", "Lift.BeaconDeposit.LittleEndian", "Lift.BeaconDeposit.Prog", "Lift.BeaconDeposit.Refines", "Lift.BeaconDeposit.CommittedReplay", "Lift.BeaconDeposit.CommittedExec", "Lift.BeaconDeposit.CommittedHistory", "Lift.BeaconDeposit.RootLoop", "Lift.BeaconDeposit.RootView", "Lift.BeaconDeposit.Safe", "Lift.BeaconDeposit.SafeCount", "Lift.BeaconDeposit.SafeDecoder", "Lift.BeaconDeposit.SafeDispatch", "Lift.BeaconDeposit.SafeEvent", "Lift.BeaconDeposit.SafeGuards", "Lift.BeaconDeposit.SafeInsertDead", "Lift.BeaconDeposit.SafeInsertLive", "Lift.BeaconDeposit.SafeLittleEndian", "Lift.BeaconDeposit.SafeNode", "Lift.BeaconDeposit.SafePubkeyRoot", "Lift.BeaconDeposit.SafeSignatureRoot", "Lift.BeaconDeposit.SafeViews", "Lift.BeaconDeposit.Views",
+                       "Lift.BeaconDeposit.Body", "Lift.BeaconDeposit.BodyCount", "Lift.BeaconDeposit.BodyEvent", "Lift.BeaconDeposit.BodyEventHead", "Lift.BeaconDeposit.BodyEventKit", "Lift.BeaconDeposit.BodyEventLoop", "Lift.BeaconDeposit.BodyEventSig", "Lift.BeaconDeposit.BodyGuards", "Lift.BeaconDeposit.BodyInsertDead", "Lift.BeaconDeposit.BodyInsertLive", "Lift.BeaconDeposit.BodyNode", "Lift.BeaconDeposit.BodyPubkeyRoot", "Lift.BeaconDeposit.BodyShaKit", "Lift.BeaconDeposit.BodySignatureRoot", "Lift.BeaconDeposit.BodySpec", "Lift.BeaconDeposit.Cert", "Lift.BeaconDeposit.Check", "Lift.BeaconDeposit.Creation.Cert", "Lift.BeaconDeposit.Creation.Check", "Lift.BeaconDeposit.Creation.Deploy", "Lift.BeaconDeposit.Creation.Walk", "Lift.BeaconDeposit.CountView", "Lift.BeaconDeposit.DepositArgs", "Lift.BeaconDeposit.DepositDecode", "Lift.BeaconDeposit.DepositExec", "Lift.BeaconDeposit.Erc165", "Lift.BeaconDeposit.Jumps", "Lift.BeaconDeposit.Ladder", "Lift.BeaconDeposit.Layout", "Lift.BeaconDeposit.Init", "Lift.BeaconDeposit.Lift", "Lift.BeaconDeposit.LittleEndian", "Lift.BeaconDeposit.Prog", "Lift.BeaconDeposit.Refines", "Lift.BeaconDeposit.CommittedReplay", "Lift.BeaconDeposit.CommittedExec", "Lift.BeaconDeposit.CommittedHistory", "Lift.BeaconDeposit.RootLoop", "Lift.BeaconDeposit.RootView", "Lift.BeaconDeposit.Safe", "Lift.BeaconDeposit.SafeCount", "Lift.BeaconDeposit.SafeDecoder", "Lift.BeaconDeposit.SafeDispatch", "Lift.BeaconDeposit.SafeEvent", "Lift.BeaconDeposit.SafeGuards", "Lift.BeaconDeposit.SafeInsertDead", "Lift.BeaconDeposit.SafeInsertLive", "Lift.BeaconDeposit.SafeLittleEndian", "Lift.BeaconDeposit.SafeNode", "Lift.BeaconDeposit.SafePubkeyRoot", "Lift.BeaconDeposit.SafeSignatureRoot", "Lift.BeaconDeposit.SafeViews", "Lift.BeaconDeposit.Views",
                        "BeaconDepositCore", "BeaconDepositEncoding",
                        "BeaconDeposit", "BeaconDepositErrorCatalog",
                        "BeaconDepositErrorModel",
@@ -242,7 +245,7 @@ CONTRACTS = {
                        "BeaconDepositHistoryChain"],
     # The 3Crv LP token (CurveTokenV2.vy, Vyper 0.2.4): the model from source and the deployed runtime,
     # lifted (vyper-3crv-bytecode-v1).
-    "curve-3crv": ["Curve3Crv.Model", "Curve3Crv.Properties", "Lift.Curve3Crv.Cert", "Lift.Curve3Crv.Check", "Lift.Curve3Crv.Jumps",
+    "curve-3crv": ["Curve3Crv.Model", "Curve3Crv.Properties", "Lift.Curve3Crv.Cert", "Lift.Curve3Crv.Check", "Lift.Curve3Crv.Creation.Cert", "Lift.Curve3Crv.Creation.Check", "Lift.Curve3Crv.Creation.Deploy", "Lift.Curve3Crv.Creation.Walk", "Lift.Curve3Crv.Jumps",
                    "Lift.Curve3Crv.Lift", "Lift.Curve3Crv.Prog", "Lift.Curve3Crv.Layout",
                    "Lift.Curve3Crv.Decode", "Lift.Curve3Crv.Spec", "Lift.Curve3Crv.ViewBodies",
                    "Lift.Curve3Crv.Dispatch", "Lift.Curve3Crv.Refine", "Lift.Curve3Crv.SafeBodies",
@@ -337,7 +340,7 @@ CONTRACTS = {
                             "ProrataWethVaultViews"],
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],
     # The deployed solc 0.4.19 WETH9 runtime, lifted from its bytes.
-    "weth9": ["Lift.Weth9.Cert", "Lift.Weth9.Check", "Lift.Weth9.Lift", "Lift.Weth9.Spec", "Lift.Weth9.Jumps", "Lift.Weth9.Words", "Lift.Weth9.Step", "Lift.Weth9.Walks", "Lift.Weth9.Booked", "Lift.Weth9.Premise", "Lift.Weth9.Shape", "Lift.Weth9.Contract", "Lift.Weth9.Deposit", "Lift.Weth9.Withdraw", "Lift.Weth9.Approve", "Lift.Weth9.TransferFrom", "Lift.Weth9.Frame", "Lift.Weth9.Solvency", "Lift.Weth9.Live", "Lift.Weth9.Init", "Lift.Weth9.Footprint", "Lift.Weth9.FootFrame", "Lift.Weth9.FootHistory"],
+    "weth9": ["Lift.Weth9.Cert", "Lift.Weth9.Check", "Lift.Weth9.Lift", "Lift.Weth9.Spec", "Lift.Weth9.Jumps", "Lift.Weth9.Words", "Lift.Weth9.Step", "Lift.Weth9.Walks", "Lift.Weth9.Booked", "Lift.Weth9.Premise", "Lift.Weth9.Shape", "Lift.Weth9.Contract", "Lift.Weth9.Deposit", "Lift.Weth9.Withdraw", "Lift.Weth9.Approve", "Lift.Weth9.TransferFrom", "Lift.Weth9.Frame", "Lift.Weth9.Solvency", "Lift.Weth9.Live", "Lift.Weth9.Init", "Lift.Weth9.Footprint", "Lift.Weth9.FootFrame", "Lift.Weth9.FootHistory", "Lift.Weth9.Creation.Cert", "Lift.Weth9.Creation.Check", "Lift.Weth9.Creation.Deploy", "Lift.Weth9.Creation.Walk"],
     "fmint": ["Fmint", "FmintCode", "Conserved", "FlashSpec", "FmintLive",
               "FmintReverts", "FmintGas", "FmintSettles"],
     "weth10": ["Weth10TemplateCode", "Weth10Core", "Weth10Backed", "Weth10Spec", "Weth10",

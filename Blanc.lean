@@ -411,11 +411,13 @@ import Blanc.Lift.Weth9.Solvency
 import Blanc.Lift.Weth9.FootHistory
 import Blanc.Lift.Weth9.Live
 import Blanc.Lift.Weth9.Init
+import Blanc.Lift.Weth9.Creation.Deploy
 
 -- The deployed beacon deposit contract, lifted from its runtime bytes
 -- (beacon-deposit-bytecode-v1); these two tops reach the whole lift kit.
 import Blanc.Lift.BeaconDeposit.Ladder
 import Blanc.Lift.BeaconDeposit.Init
+import Blanc.Lift.BeaconDeposit.Creation.Deploy
 import Blanc.Lift.BeaconDeposit.Refines
 import Blanc.Lift.BeaconDeposit.CommittedHistory
 
@@ -563,6 +565,7 @@ import Blanc.Lift.Curve3Crv.Ladder
 import Blanc.Lift.Curve3Crv.CarriedHistory
 import Blanc.Lift.Curve3Crv.CommittedHistory
 import Blanc.Lift.Curve3Crv.Init
+import Blanc.Lift.Curve3Crv.Creation.Deploy
 import Blanc.Lift.Curve3Crv.Exec
 
 namespace Blanc
