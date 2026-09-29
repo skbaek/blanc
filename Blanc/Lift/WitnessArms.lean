@@ -924,14 +924,26 @@ theorem frameEnterB_done_ok_state {f : Frame} {child : Devm} (hf : f.isCreate = 
             split at h <;> cases h <;> first | rfl | (exfalso; simp_all [Devm.rollback, Devm.setWorld, Devm.error])
         · cases he
 
+/-- A frame whose entry is the same under every covered fork: its code address is neither
+`MODEXP` (0x05, EIP-7823/7883 change it) nor `P256VERIFY` (0x100, a precompile from Osaka).
+The interpreter's synchronous precompile children are restricted to such frames, so that a
+run of `wrun` is unchanged by the fork (`Blanc.Lift.NodeWalk.wrun_withFork`). -/
+def frameEntryForkFree (f : Frame) : Bool :=
+  match f.inner.codeAddress with
+  | some a => a != 5 && a != 0x100
+  | none => true
+
 /-- A `CALL` whose child answers synchronously (a precompile) and succeeds, run to
-the parent's resumed state; the account shadow takes the value transfer. -/
+the parent's resumed state; the account shadow takes the value transfer.  A call into
+`MODEXP` or `P256VERIFY` (`frameEntryForkFree`) is not run: those two precompiles are the
+only ones whose behaviour depends on the covered fork, and a run that avoids them holds under
+every covered fork. -/
 def callStep (sevm : Sevm) (c : Cfg) (g : SFunc) : Option Cfg :=
   match callPrep sevm c with
   | some cp =>
     match frameEnterS cp.f c.acs with
     | .done (.ok child) =>
-      if child.error.isSome = false then
+      if child.error.isSome = false ∧ frameEntryForkFree cp.f = true then
         match resumeCallB cp.p cp.oi cp.os (.ok child) with
         | some d => some ⟨d, g, c.K, c.keys, cp.adrs, c.stor, acsTransfer cp.f.inner c.acs⟩
         | none => none

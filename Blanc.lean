@@ -18,6 +18,7 @@ import Blanc.MemoryLayout
 import Blanc.ExecutionSettlement
 import Blanc.MessageExecution
 import Blanc.ForkUniform
+import Blanc.TransactionFork
 import Blanc.MessageResult
 import Blanc.MessageExecutionInversion
 import Blanc.ExecutionPath
@@ -479,6 +480,7 @@ import Blanc.Lift.WitnessSpawn
 import Blanc.Lift.NodeWalk
 import Blanc.Lift.NodeWalkFrames
 import Blanc.Lift.NodeWalkFork
+import Blanc.Lift.WitnessFork
 -- One kernel check for a conjunction of closed equalities (vplus-witness-v2): shared.
 import Blanc.Lift.KernelBatch
 
@@ -578,6 +580,30 @@ import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame4Full
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Locks
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.SubtreeRun
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Token.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.ForkFrames
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.ForkKernel
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.ForkTop
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxTopC
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Run
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Entry
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Outer
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.OuterAt
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Fork
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.ForkKernel
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame1
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame2Full
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame2Kernel
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame2Run
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame3
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame4
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame5
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame5Child
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame5ChunkA
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame5ChunkB
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame5Chunks
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame5Full
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Closed
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Envelope
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Outer
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxTop
