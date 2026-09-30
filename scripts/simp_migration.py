@@ -183,7 +183,8 @@ def _observed_union(family: str, suggestions: List[Dict[str, Any]]) -> Tuple[str
     """
     names: List[str] = []
     shape = re.compile(rf"\s*{re.escape(family)}\s+only(?:\s*\[([^\[\]]*)\])?(?:\s+at\s+(.+?))?\s*", re.S)
-    identifier = re.compile(r"[A-Za-z_][A-Za-z_0-9'.]*")
+    identifier = re.compile(r"[A-Za-z_][A-Za-z_0-9'.?]*")
+    lemma_name = re.compile(r"↓?[A-Za-z_][A-Za-z_0-9'.?]*")
     location = None
     for suggestion in suggestions:
         match = shape.fullmatch(suggestion['newText'])
@@ -197,7 +198,7 @@ def _observed_union(family: str, suggestions: List[Dict[str, Any]]) -> Tuple[str
             raise MigrationError('Observed union requires identical actual locations')
         location = actual_location
         for name in ([n.strip() for n in match.group(1).split(',')] if match.group(1) else []):
-            if identifier.fullmatch(name) is None:
+            if lemma_name.fullmatch(name) is None:
                 raise MigrationError(f'Observed union rejects non-name simplifier {name!r}')
             if name not in names:
                 names.append(name)

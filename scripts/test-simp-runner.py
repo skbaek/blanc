@@ -40,6 +40,57 @@ def test_partial():
     q['edits'].append(f.make_edit(inst.plan['sites'][0],'simp only [different]'))
     assert not r.reconcile(original,inst,q)['resolved']
 
+def test_no_using_alternate():
+    text='example : True := by simpa [a]\nexample : True := by simpa [b] using h\n'
+    original=text.encode()
+    sites=[f.make_site(text,'simpa [a]','simpa',family='simpa'),
+           f.make_site(text,'simpa [b] using h','simpa',family='simpa')]
+    inst=r.instrument(original,f.make_baseline(original,sites))
+    alternate,expected,selected=r.alternate_no_using(inst)
+    assert alternate==b'example : True := by simp? [a]\nexample : True := by simpa? [b] using h\n'
+    assert len(selected)==1 and expected[0]['family']=='simp' and expected[1]['family']=='simpa'
+    site=expected[0]
+    edit={'range':site['range'],'referenceRange':site['headRange'],
+          'commandRange':site['commandRange'],'newText':'simp only [A]','parentDeclaration':'Fixture.t'}
+    payload={'inventory':copy.deepcopy(expected),'edits':[edit]}
+    recovered=r.recover_no_using(inst,payload,expected,selected)
+    assert len(recovered)==1 and recovered[0]['newText']=='simpa only [A]'
+    candidate,final=r.proposal(original,inst,recovered)
+    assert candidate==b'example : True := by simpa only [A]\nexample : True := by simpa [b] using h\n'
+    assert final[0]['family']=='simpa' and recovered[0]['native_edits']==[edit]
+    bad=copy.deepcopy(payload);bad['inventory'][0]['headRange']=expected[1]['headRange']
+    fails(lambda:r.recover_no_using(inst,bad,expected,selected))
+    bad=copy.deepcopy(payload);bad['edits'][0]['commandRange']=expected[1]['commandRange']
+    assert not r.recover_no_using(inst,bad,expected,selected)
+
+    bad=copy.deepcopy(payload);bad['edits'][0]['referenceRange']=expected[1]['headRange']
+    assert not r.recover_no_using(inst,bad,expected,selected)
+    bad=copy.deepcopy(payload);bad['edits'][0]['newText']='simp [A]'
+    assert not r.recover_no_using(inst,bad,expected,selected)
+    bad=copy.deepcopy(payload);bad['edits'].append({**edit,'newText':'simp only [B]'})
+    recovered=r.recover_no_using(inst,bad,expected,selected)
+    assert recovered[0]['used_lemma_union']==['A','B'] and recovered[0]['replay_required']
+    bad['edits'][1]['newText']='simp only [f x]'
+    assert not r.recover_no_using(inst,bad,expected,selected)
+
+def test_original_arguments():
+    text='example : True := by simpa [localLet, f h] using fact\n'
+    original=text.encode();site=f.make_site(text,'simpa [localLet, f h] using fact','simpa',family='simpa')
+    inst=r.instrument(original,f.make_baseline(original,[site]))
+    q=f.make_q_col(inst.plan,edits=[f.make_edit(inst.plan['sites'][0],'simpa only [observed] using fact')])
+    edit=r.reconcile(original,inst,q)['resolved'][0]
+    repair=r.retain_original_args(inst,edit)
+    assert repair['newText']=='simpa only [localLet, f h, observed] using fact'
+    assert repair['original_argument_source']=='[localLet, f h]'
+    assert repair['failed_native_proposal']==edit and repair['replay_required']
+    assert r.proposal(original,inst,[repair])[0]==b'example : True := by simpa only [localLet, f h, observed] using fact\n'
+    for body in ['simpa (config := {}) [localLet] using fact','simpa ["a]"] using fact',
+                 'simpa [localLet,] using fact','simpa using fact']:
+        source=('example : True := by '+body+'\n').encode()
+        other=r.instrument(source,f.make_baseline(source,[f.make_site(source.decode(),body,'simpa',family='simpa')]))
+        e={**edit,'site_id':'site_0','mapped_range':other.plan['sites'][0]['mapped_range']}
+        assert r.retain_original_args(other,e) is None
+
 def test_outputs_and_apply():
     with tempfile.TemporaryDirectory() as tmp:
         root=Path(tmp);(root/'Blanc').mkdir();p=root/'Blanc/A.lean';p.write_bytes(b'original')
@@ -161,6 +212,6 @@ def test_native_stage_bindings():
         assert original.read_bytes()==b'original'
 
 if __name__=='__main__':
-    for test in [test_partial,test_outputs_and_apply,test_routing_and_renewal,test_census,test_resume,test_batch_preflight,test_executable_inputs,test_native_stage_bindings]:
+    for test in [test_partial,test_no_using_alternate,test_original_arguments,test_outputs_and_apply,test_routing_and_renewal,test_census,test_resume,test_batch_preflight,test_executable_inputs,test_native_stage_bindings]:
         test();print('PASS '+test.__name__)
-    print('PASS8 runner control groups; mocks are integrity evidence only')
+    print('PASS10 runner control groups; mocks are integrity evidence only')

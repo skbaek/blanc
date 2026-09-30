@@ -317,10 +317,16 @@ def test_observed_per_site_union() -> None:
         ['simp only [A] at h; trivial','simp only [B] at h'],
         ['simp only [A,]','simp only [B]'],
         ['simpa only [A] using h','simpa only [B] using h'],
-        ['simp only [↓A]','simp only [B]']]:
+        ['simp only [↓↓A]','simp only [B]'],
+        ['simp only [↓(A)]','simp only [B]'],
+        ['simp only [←A]','simp only [B]']]:
         try: _observed_union(alternatives[0].split()[0],[{'newText':t} for t in alternatives])
         except MigrationError: pass
         else: raise AssertionError('Union accepted incompatible tail or non-name')
+    text,names=_observed_union('simp_all',[{'newText':'simp_all only [↓reduceIte, getElem?_pos]'},
+                                        {'newText':'simp_all only [head?_nil,\n getElem?_pos]'}])
+    assert names==['↓reduceIte','getElem?_pos','head?_nil']
+    assert text=='simp_all only [↓reduceIte, getElem?_pos, head?_nil]'
 
 
 # --- Test 9: Wrong command and reference range ownership

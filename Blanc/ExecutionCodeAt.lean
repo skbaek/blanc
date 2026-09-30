@@ -269,7 +269,7 @@ lemma GenericCreate.codeAt
           simp only [Bind.bind, Except.bind, Except.assert, assertDynamic, Pure.pure,
             Except.pure]
           repeat' split
-          all_goals first | rfl | simp_all
+          all_goals first | rfl | simp_all only [ne_eq, reduceCtorEq, Bool.not_eq_eq_eq_not, Bool.not_true, ite_eq_left_iff, Bool.not_eq_false, imp_false, Bool.not_eq_true, not_or, not_lt, ByteArray.size_eq_zero_iff, Decidable.not_not, ExceptT.stM_eq, not_le, Bool.not_false, ↓reduceIte, not_true_eq_false]
         exact ProcessCreateMessage.codeAt hne' inv hframe
     rw [Resume.create_getCode ?_, h_parent a]
     exact hmsg.trans (by rw [createMsg_benv_state_getCode, h_parent a])

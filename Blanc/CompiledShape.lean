@@ -319,8 +319,7 @@ theorem dispatchNodeByteAt_eq_prefix
   have hdup : (Ninst.dup 0).size = 1 := by decide +kernel
   have hgt : Ninst.gt.size = 1 := by decide +kernel
   interval_cases i <;>
-    simp [dispatchNode, Func.byteAtByShape, Func.compileShape,
-      hdup, hgt, hpush]
+    simp only [dispatchNode, Fin.isValue, Func.compileShape, hdup, hpush, hgt, Func.byteAtByShape, zero_lt_one, ↓reduceIte, List.takeD_succ, List.takeD_zero, List.getD_eq_getElem?_getD, List.length_cons, List.length_nil, zero_add, getElem?_pos, List.getElem_cons_zero, Option.getD_some, lt_self_iff_false, tsub_self, Nat.ofNat_pos, List.head?_tail, List.getElem?_tail, Nat.reduceAdd, Nat.not_ofNat_lt_one, Nat.add_one_sub_one, Nat.one_lt_ofNat, List.getElem_cons_succ, Nat.reduceLT, Nat.lt_add_one, Nat.reduceSub, Nat.toUInt8_eq, UInt8.ofNat_add, UInt8.ofNat_one, UInt8.reduceOfNat]
 lemma dispatchNodeByteAt_jumpdest
     (locations : List Nat) (n : Nat) (selector : B256)
     (off0 on0 off on : Func)

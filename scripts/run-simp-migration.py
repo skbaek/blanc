@@ -22,6 +22,7 @@ from module_path_policy import resolve_module_file
 from simp_migration import (MigrationError, instrument, reconcile, parse_lean_lines,
                             _validate_lsp_range, codepoint_to_lsp_pos, _json_equal)
 from simp_migration import _observed_union
+from explicit_simp import balanced_end, split_top_level
 from simp_edits import SimpEditError, preview
 from leaf_audit import strip_comments_and_strings
 
@@ -139,6 +140,101 @@ def verify_inventory(payload, expected):
         for key in ('range','commandRange','source','family','only'):
             if not _json_equal(actual.get(key),want[key]):
                 raise RunnerError('final inventory ownership mismatch: '+want['site_id']+' '+key)
+
+def alternate_no_using(inst):
+    """Change only inspected, disjoint no-using simpa heads for native extraction.
+
+    No source application happens here. The alternate owner and every mapped
+    inventory span are retained separately from the original simpa site.
+    """
+    selected=[s for s in inst.plan['sites'] if s['target'] and s['family']=='simpa'
+              and s['instrumented_head']=='simpa?'
+              and not re.search(r'\busing\b',s['original_source'])]
+    changes=[(s['mapped_head_range'],'simp?') for s in selected]
+    alternate,mapper=splice(inst.instrumented_bytes,changes)
+    lines=parse_lean_lines(alternate.decode());ids={s['site_id'] for s in selected};expected=[]
+    for s in inst.plan['sites']:
+        rng=mapper(s['mapped_range']);a,b=_validate_lsp_range(rng,'alternate range',lines)
+        expected.append({'site_id':s['site_id'],'range':rng,'headRange':mapper(s['mapped_head_range']),
+                         'commandRange':mapper(s['mapped_command_range']),
+                         'source':alternate.decode()[a:b],
+                         'family':'simp' if s['site_id'] in ids else s['family'],'only':s['only']})
+    return alternate,expected,selected
+
+def recover_no_using(inst, payload, expected, selected):
+    """Map only actual exact-owner native simp edits to original simpa proposals."""
+    verify_inventory(payload,expected)
+    for actual,want in zip(payload['inventory'],expected):
+        if not _json_equal(actual.get('headRange'),want['headRange']):
+            raise RunnerError('alternate head ownership mismatch')
+    by_id={s['site_id']:s for s in expected};recovered=[]
+    for original in selected:
+        actual=by_id[original['site_id']]
+        suggestions=[e for e in payload['edits'] if
+                     _json_equal(e.get('range'),actual['range']) and
+                     _json_equal(e.get('commandRange'),actual['commandRange']) and
+                     ( _json_equal(e.get('referenceRange'),actual['headRange']) or
+                       _json_equal(e.get('referenceRange'),actual['range'])) and
+                     type(e.get('newText')) is str and e['newText'].startswith('simp only')]
+        if not suggestions: continue
+        texts=[e['newText'] for e in suggestions]
+        text=texts[0];union={}
+        if len(set(texts))>1:
+            try: text,names=_observed_union('simp',suggestions)
+            except MigrationError: continue
+            union={'used_lemma_union':names,'alternatives':texts}
+        proposal_text='simpa'+text[len('simp'):]
+        # Faithful original-family preview; alternate success alone proves nothing.
+        preview(inst.instrumented_bytes,{'schema':1,'source_sha256':inst.source_sha256,
+                'edits':[{'range':original['mapped_range'],'newText':proposal_text}]})
+        recovered.append({'site_id':original['site_id'],'range':original['mapped_range'],
+                          'mapped_range':original['mapped_range'],'original_range':original['original_range'],
+                          'newText':proposal_text,'resolution':'native_no_using_alternate',
+                          'original_family':'simpa','alternate_family':'simp',
+                          'alternate_site':actual,'native_edits':suggestions,
+                          'replay_required':True,'duplicate_count':len(suggestions),**union})
+    return recovered
+
+def retain_original_args(inst, edit):
+    """Recover native omitted local unfoldings using only exact source arguments.
+
+    Deliberately restricted to direct argument-list forms. Configurations,
+    strings/comments and nested ownership groups are left for their owner.
+    The result is a proposal; the surrounding declaration must replay green.
+    """
+    site=next(s for s in inst.plan['sites'] if s['site_id']==edit['site_id'])
+    source=site['original_source'];head=site['head'];native=edit['newText']
+    if site.get('nested_blocked') or site['only'] or source[len(head):].lstrip()[:1]!='[':
+        return None
+    if any(token in source+native for token in ('"','/-','--')): return None
+    start=len(head)+len(source[len(head):])-len(source[len(head):].lstrip())
+    end=balanced_end(source,start,'[',']')
+    if end<0: return None
+    original_body=source[start+1:end].strip()
+    if not original_body or original_body.endswith(','): return None
+    prefix=site['family']+' only'
+    if not native.startswith(prefix): return None
+    rest=native[len(prefix):];offset=len(prefix)+len(rest)-len(rest.lstrip())
+    if native[offset:offset+1]=='[':
+        close=balanced_end(native,offset,'[',']')
+        if close<0: return None
+        observed_body=native[offset+1:close].strip();tail=native[close+1:]
+    else: observed_body='';tail=native[len(prefix):]
+    if observed_body.endswith(','): return None
+    arguments=[];keys=set()
+    for body in [original_body,observed_body]:
+        if not body: continue
+        for _,_,term in split_top_level(body):
+            key=' '.join(term.split())
+            if not key: return None
+            if key not in keys: arguments.append(term.strip());keys.add(key)
+    combined=prefix+' ['+', '.join(arguments)+']'+tail
+    if combined==native: return None
+    preview(inst.instrumented_bytes,{'schema':1,'source_sha256':inst.source_sha256,
+            'edits':[{'range':edit['mapped_range'],'newText':combined}]})
+    return {**edit,'newText':combined,'resolution':'retained_exact_original_arguments',
+            'original_argument_source':source[start:end+1],
+            'failed_native_proposal':edit,'replay_required':True}
 
 def error_lines(log, raw):
     found=[]
@@ -261,12 +357,25 @@ class Runner:
                 union_rejected.append({'site_id':sid,'reason':str(e)})
         new_json(directory/'observed-union-selection.json',{'sites':unions,'rejected':union_rejected})
         if unions: res=reconcile(original,inst,question,observed_union_sites=unions)
+        alternate,expected_alt,selected_alt=alternate_no_using(inst)
+        if selected_alt:
+            buffer=directory/'no-using-question.lean';new_bytes(buffer,alternate)
+            new_json(directory/'no-using-owners.json',{'selected_original_sites':selected_alt,
+                                                     'expected_alternate_sites':expected_alt})
+            payload=self.collect(raw,buffer,setup,directory,'no_using_question')
+            if payload is not None:
+                recovered=recover_no_using(inst,payload,expected_alt,selected_alt)
+                new_json(directory/'no-using-recovered.json',recovered)
+                ids={s['site_id'] for s in recovered}
+                res['resolved']=[s for s in res['resolved'] if s['site_id'] not in ids]+recovered
+                res['unresolved']=[s for s in res['unresolved'] if s.get('site_id') not in ids]
         new_json(directory/'reconciliation.json',{k:v for k,v in res.items() if k!='candidate_bytes'})
         if any(u['reason']=='inventory_mismatch' for u in res['unresolved']):
             return {**row,'status':'inventory_mismatch','complete':False}
         resolved=list(res['resolved']);rejected=[]
         # Replay failures conservatively restore entire affected declarations.
-        for attempt in range(3):
+        retained=set()
+        for attempt in range(4):
             if not resolved: return {**row,'status':'unresolved','complete':False,'rejected':rejected}
             candidate,expected=proposal(original,inst,resolved)
             stage='candidate_'+str(attempt);buffer=directory/(stage+'.lean');new_bytes(buffer,candidate)
@@ -284,6 +393,14 @@ class Runner:
             bad={s['site_id'] for s in expected if any(s['commandRange']['start']['line']<=l<=s['commandRange']['end']['line'] for l in lines)}
             remove=[e for e in resolved if e['site_id'] in bad]
             if not remove: return {**row,'status':'replay_failed','complete':False,'rejected':rejected}
+            repairs={e['site_id']:retain_original_args(inst,e) for e in remove
+                     if e['site_id'] not in retained}
+            repairs={sid:e for sid,e in repairs.items() if e is not None}
+            if repairs:
+                retained.update(repairs)
+                new_json(directory/(stage+'-original-argument-recovery.json'),list(repairs.values()))
+                resolved=[repairs.get(e['site_id'],e) for e in resolved]
+                continue
             rejected.extend({'site_id':e['site_id'],'reason':'failed_declaration_replay','proposal':e} for e in remove)
             resolved=[e for e in resolved if e['site_id'] not in bad]
         return {**row,'status':'replay_failed','complete':False,'rejected':rejected}

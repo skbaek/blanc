@@ -126,17 +126,17 @@ theorem Ninst.step_cont_immAccepted {evm : Evm} {n : Ninst} {pc' : Nat} {devm' :
   · have hex := (Step.ofExecution_cont h).2
     simp only [Ninst.immAccepted, decide_eq_true_eq]
     intro hnone
-    split at hex <;> simp_all [Bind.bind, Except.bind]
+    split at hex <;> simp_all only [↓reduceIte, bind, Except.bind, ExceptT.stM_eq, Bool.false_eq_true, Bool.not_eq_true, reduceCtorEq]
     split at hex <;> simp_all only [ExceptT.stM_eq, reduceCtorEq]
   · have hex := (Step.ofExecution_cont h).2
     simp only [Ninst.immAccepted, decide_eq_true_eq]
     intro hnone
-    split at hex <;> simp_all [Bind.bind, Except.bind]
+    split at hex <;> simp_all only [↓reduceIte, bind, Except.bind, ExceptT.stM_eq, Bool.false_eq_true, Bool.not_eq_true, reduceCtorEq]
     split at hex <;> simp_all only [ExceptT.stM_eq, reduceCtorEq]
   · have hex := (Step.ofExecution_cont h).2
     simp only [Ninst.immAccepted, decide_eq_true_eq]
     intro hnone
-    split at hex <;> simp_all [Bind.bind, Except.bind]
+    split at hex <;> simp_all only [↓reduceIte, bind, Except.bind, ExceptT.stM_eq, Bool.false_eq_true, Bool.not_eq_true, reduceCtorEq]
     split at hex <;> simp_all only [ExceptT.stM_eq, reduceCtorEq]
 
 /-- A jump destination the interpreter accepts is a position no `PUSH` immediate covers. -/

@@ -131,7 +131,8 @@ theorem ApplyTransactionsTrace.sum_le
   | cons head tail ih =>
       have hhead := processTransaction_sum_le head.result hfork.rules_stateGas_none
       exact le_trans
-        (by simpa [Benv.withState] using ih (by simpa [Benv.withState] using hfork))
+        (by simpa only [Benv.withState] using
+          ih (by simpa only [Benv.withState] using hfork))
         hhead
 
 /-- A transaction list threads its block environment by state alone, so the
@@ -194,7 +195,7 @@ theorem withdrawalCredit_bounds
       sum (st.addBal wd.recipient (wd.amount * (10 ^ 9).toB256)).bal +
         wdsum wds < 2 ^ 256 := by
   have cons : wdsum (wd :: wds) = wd.amount.toNat * 10 ^ 9 + wdsum wds := by
-    simp only [wdsum, Nat.reducePow, List.map_cons, List.sum_cons, Nat.add_left_cancel_iff]
+    simp only [wdsum, Nat.reducePow, List.map_cons, List.sum_cons]
   rw [cons] at bound
   have value := withdrawalCredit_toNat (wd := wd) (by omega)
   have head : sum st.bal + (wd.amount * (10 ^ 9).toB256).toNat < 2 ^ 256 := by

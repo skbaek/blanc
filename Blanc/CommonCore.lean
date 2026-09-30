@@ -646,7 +646,7 @@ lemma ByteArray.toList_eq_toList_data {xs : ByteArray} :
             add_pos_iff, zero_lt_one, or_true, getElem!_pos, getElem_toArray, Std.le_refl,
             getElem_append_right, tsub_self, getElem_cons_zero]
         have rw' : xs.length + 1 = (xs ++ [y]).length := by simp only [length_append, length_cons,
-          length_nil, zero_add, Nat.add_left_cancel_iff]
+          length_nil, zero_add]
         have rw'' : y :: xs.reverse = (xs ++ [y]).reverse := by simp only [reverse_append,
           reverse_cons, reverse_nil, nil_append, cons_append]
         rw [if_pos _, rw, List.append_cons, rw', rw'', ih]
@@ -835,7 +835,7 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
     Ninst.At code pc n := by
   cases n
   case reg r =>
-    simp [Ninst.toBytes] at slice
+    simp only [Ninst.toBytes] at slice
     have eq := List.get?_eq_of_slice slice
     simp only [Ninst.At, ByteArray.getInst]
     rw [dif_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
@@ -852,12 +852,12 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
     have hsome := toUInt8_toRinst (i := r)
     simp only [rw]
     split
-    · simp_all
-    · simp_all
-    · simp_all
+    · simp_all only [reduceCtorEq]
+    · simp_all only [reduceCtorEq]
+    · simp_all only [reduceCtorEq]
     · rw [toUInt8_toRinst]; rfl
   case exec x =>
-    simp [Ninst.toBytes] at slice
+    simp only [Ninst.toBytes] at slice
     have eq := List.get?_eq_of_slice slice
     simp only [Ninst.At, ByteArray.getInst]
     rw [dif_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
@@ -891,8 +891,10 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
           rw [hbyte0, hR] at h; cases h }
     split
     · simp only [hD]
-    · simp_all
-    · simp_all
+    · have hfalse : (230 : UInt8) = 231 := hbyte0.symm.trans (by assumption)
+      exact False.elim ((by decide : (230 : UInt8) ≠ 231) hfalse)
+    · have hfalse : (230 : UInt8) = 232 := hbyte0.symm.trans (by assumption)
+      exact False.elim ((by decide : (230 : UInt8) ≠ 232) hfalse)
     · simp only [hbyte0, hmapnone]
       rename_i hne230 hne231 hne232
       have hEq : ∀ (p : UInt8.toInstType code[pc] = InstType.R), p ≍ hR :=
@@ -921,9 +923,11 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
     try { rename (UInt8.toInstType _ = _) => h
           rw [hbyte0, hR] at h; cases h }
     split
-    · simp_all
+    · have hfalse : (231 : UInt8) = 230 := hbyte0.symm.trans (by assumption)
+      exact False.elim ((by decide : (231 : UInt8) ≠ 230) hfalse)
     · simp only [hD]
-    · simp_all
+    · have hfalse : (231 : UInt8) = 232 := hbyte0.symm.trans (by assumption)
+      exact False.elim ((by decide : (231 : UInt8) ≠ 232) hfalse)
     · simp only [hbyte0, hmapnone]
       rename_i hne230 hne231 hne232
       have hEq : ∀ (p : UInt8.toInstType code[pc] = InstType.R), p ≍ hR :=
@@ -952,8 +956,10 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
     try { rename (UInt8.toInstType _ = _) => h
           rw [hbyte0, hR] at h; cases h }
     split
-    · simp_all
-    · simp_all
+    · have hfalse : (232 : UInt8) = 230 := hbyte0.symm.trans (by assumption)
+      exact False.elim ((by decide : (232 : UInt8) ≠ 230) hfalse)
+    · have hfalse : (232 : UInt8) = 231 := hbyte0.symm.trans (by assumption)
+      exact False.elim ((by decide : (232 : UInt8) ≠ 231) hfalse)
     · simp only [hD]
     · simp only [hbyte0, hmapnone]
       rename_i hne230 hne231 hne232
@@ -1528,10 +1534,9 @@ private def Func.CompileShape.compsize : Func.CompileShape → Nat
   induction p with
   | last => rfl
   | next i p ih =>
-      simp only [compileShape, size_eq_length_toBytes, CompileShape.compsize, ih, compsize,
-        Nat.add_left_cancel_iff]
+      simp only [compileShape, size_eq_length_toBytes, CompileShape.compsize, ih, compsize]
   | branch p q ihp ihq =>
-      simp only [compileShape, CompileShape.compsize, ihp, ihq, compsize, Nat.add_left_cancel_iff]
+      simp only [compileShape, CompileShape.compsize, ihp, ihq, compsize]
   | call => rfl
 
 private theorem Func.compsize_eq_of_compileShape {p q : Func}
@@ -1557,7 +1562,7 @@ private theorem Table.getElem?_locations (l : List (Nat × Func)) (k : Nat) :
   induction l generalizing k with
   | nil => simp only [locations, map_nil, length_nil, _root_.not_lt_zero, not_false_eq_true,
     getElem?_neg, Option.map_none]
-  | cons x xs ih => cases k <;> simp [Table.locations]
+  | cons x xs ih => cases k <;> simp only [locations, map_cons, length_cons, length_map, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos, getElem_cons_zero, Option.map_some, getElem?_cons_succ, getElem?_map]
 
 private def Func.compileDecision (l : List (Nat × Func)) (n : Nat) :
     Func → Bool × Nat
@@ -1587,9 +1592,9 @@ def Func.compiles (l : List (Nat × Func)) (n : Nat) (p : Func) : Bool :=
   induction p generalizing n with
   | last => rfl
   | next i p ih =>
-      simp only [compileDecision, size_eq_length_toBytes, ih, compsize, Nat.add_left_cancel_iff]
+      simp only [compileDecision, size_eq_length_toBytes, ih, compsize]
   | branch p q ihp ihq =>
-      simp only [compileDecision, ihp, reducePow, ihq, compsize, Nat.add_left_cancel_iff]
+      simp only [compileDecision, ihp, reducePow, ihq, compsize]
   | call => rfl
 
 private theorem Func.compileDecision_eq_of_compileShape
@@ -1914,7 +1919,7 @@ lemma of_get?_table_eq_some {f fs} {bs} {m n : ℕ} {p : Func}
         rw [h_get]; refine ⟨_, rfl⟩
     rcases h with ⟨rgt', h_rgt'⟩
     refine' ⟨rgt', _, _, _⟩
-    · simp only [length_append, h_lft, length, zero_add, Nat.add_left_cancel_iff]
+    · simp only [length_append, h_lft, length, zero_add]
     · simp only [Split, append_assoc, cons_append, nil_append]; rw [← h_rgt', h_split]
     · rcases Table.compile_cons_eq_some h_sfx.symm with
         ⟨cq, cl, h_cq, h_cl, h_sfx'⟩

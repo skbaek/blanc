@@ -49,7 +49,7 @@ private theorem Exec.StorageWrite.foldlCell_eq_of_noRetainedWriteTo
   | nil => rfl
   | cons head tail ih =>
       simp only [List.foldl_cons]
-      simp only [if_neg (none head (by simp))]
+      simp only [if_neg (none head (by simp only [List.mem_cons_self]))]
       apply ih initial
       intro write member
       exact none write (by

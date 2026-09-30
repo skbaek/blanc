@@ -2547,7 +2547,7 @@ lemma ProcessCreateMessage.codePreserve
             · rfl
             · rfl
         | _ =>
-            simp only [MsgResult.getCode, processCreateMessage.exceptionalHalt]
+            simp only [MsgResult.getCode]
             rw [h_getCode]; exact h_exec_cond
       | ok devm_charge =>
         dsimp only [MsgResult.getCode]
@@ -2724,8 +2724,7 @@ lemma GenericCreateAmsterdam.codePreserve
     Execution.CodePreserve devm exn := by
   intro a ha
   unfold GenericCreateAmsterdam genericCreateAmsterdam.step at run
-  simp only [Bind.bind, Except.bind, Except.assert, assertDynamic,
-    Pure.pure, Except.pure] at run
+  simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at run
   repeat' split at run
   all_goals simp only [XStep.ofExcept, XStep.Run] at run
   all_goals first
@@ -6141,7 +6140,7 @@ lemma Devm.pop_of_popN {n : Nat} {devm devm' : Devm} {l : List B256}
     injection eq with eq1 eq2
     subst eq1; subst eq2
     rcases ih hp3 with ⟨h_len, h_pop⟩
-    refine ⟨by simp only [length_cons, h_len, Nat.add_left_cancel_iff], Devm.pop_append (Devm.pop_of_pop hp1) h_pop⟩
+    refine ⟨by simp only [length_cons, h_len], Devm.pop_append (Devm.pop_of_pop hp1) h_pop⟩
 
 lemma of_run_sstore {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sstore s') :
     ∃ x y, Stack.Pop [x, y] s.stack s'.stack := by
@@ -6317,8 +6316,7 @@ lemma of_run_log {e : Sevm} {s s' : Devm} {n : Fin 5} (h : Ninst.Run e s (log n)
     rw [h_read] at h_mem
     injection h_mem with _ h_devm
     rw [← h_devm]; rfl
-  refine ⟨x :: y :: topics, by simp only [length_cons, h_len, Nat.add_right_cancel_iff,
-    Nat.add_left_cancel_iff], ?_⟩
+  refine ⟨x :: y :: topics, by simp only [length_cons, h_len], ?_⟩
   have hp := (Devm.pop_append p1 (Devm.pop_append p2 p3)).stack
   rw [← eq]
   show Stack.Pop (x :: y :: topics) s.stack s₅.stack
@@ -11460,8 +11458,7 @@ lemma GenericCreateAmsterdam.balanceEffect
         sevm.currentTarget) :=
     Devm.incrNonce_balance_effect _ sevm.currentTarget
   unfold GenericCreateAmsterdam genericCreateAmsterdam.step at run
-  simp only [Bind.bind, Except.bind, Except.assert, assertDynamic,
-    Pure.pure, Except.pure] at run
+  simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at run
   repeat' split at run
   all_goals simp only [XStep.ofExcept, XStep.Run] at run
   -- preflight abort, push failed
@@ -12122,7 +12119,7 @@ lemma validAdr_iff {w : B256} :
     rfl
   · refine' ⟨w.toAdr, _⟩
     rcases w with ⟨⟨wz, wh⟩, wl⟩
-    simp only [addressMask, B256.and_eq_and_prod_and, B128.and_eq_and_prod_and] at h
+    simp only [addressMask] at h
     have hz := congrArg (fun x : B256 => x.1.1) h
     have hm := congrArg (fun x : B256 => x.1.2) h
     change UInt64.max &&& wz = 0 at hz
@@ -12845,13 +12842,13 @@ lemma List.getD_takeD {ξ : Type} (d : ξ) :
     intro l i
     rw [List.takeD_succ]
     cases i with
-    | zero => cases l <;> simp
+    | zero => cases l <;> simp only [head?_nil, Option.getD_none, tail_nil, takeD_nil, getD_eq_getElem?_getD, length_cons, length_replicate, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos, getElem_cons_zero, Option.getD_some, ↓reduceIte, length_nil, lt_self_iff_false, not_false_eq_true, getElem?_neg, head?_cons, tail_cons, takeD_length]
     | succ i =>
       rw [show ((l.head?.getD d :: List.takeD n l.tail d).getD (i + 1) d)
             = (List.takeD n l.tail d).getD i d from rfl, ih l.tail i]
       by_cases hi : i < n
       · rw [if_pos hi, if_pos (by omega)]
-        cases l <;> simp
+        cases l <;> simp only [tail_nil, getD_eq_getElem?_getD, length_nil, _root_.not_lt_zero, not_false_eq_true, getElem?_neg, Option.getD_none, tail_cons, getElem?_cons_succ]
       · rw [if_neg hi, if_neg (by omega)]
 
 lemma List.takeD_nil_eq_replicate {ξ} (d : ξ) :
@@ -13322,8 +13319,7 @@ lemma Mem.read_write_zero (μ : Mem) {ys : Bytes} (hne : ys ≠ []) :
     · split
       · simp only [Mem.read, Array.sliceD_eq_map]
         apply List.ext_get
-        · simp only [zero_add, Array.getD_eq_getD_getElem?, length_cons, length_map, length_range,
-          Nat.add_left_cancel_iff]
+        · simp only [zero_add, Array.getD_eq_getD_getElem?, length_cons, length_map, length_range]
         · intro n h1 h2
           simp only [List.length_map, List.length_range] at h1
           simp only [List.get_eq_getElem, List.getElem_map,
@@ -13334,8 +13330,7 @@ lemma Mem.read_write_zero (μ : Mem) {ys : Bytes} (hne : ys ≠ []) :
             Option.getD_some]
       · simp only [Mem.read, Array.sliceD_eq_map]
         apply List.ext_get
-        · simp only [length_cons, zero_add, Array.getD_eq_getD_getElem?, length_map, length_range,
-          Nat.add_left_cancel_iff]
+        · simp only [length_cons, zero_add, Array.getD_eq_getD_getElem?, length_map, length_range]
         · intro n h1 h2
           simp only [List.length_map, List.length_range] at h1
           simp only [List.get_eq_getElem, List.getElem_map,
@@ -13348,8 +13343,7 @@ lemma Mem.read_write_zero (μ : Mem) {ys : Bytes} (hne : ys ≠ []) :
             Option.getD_some]
     · simp only [Mem.read, Array.sliceD_eq_map]
       apply List.ext_get
-      · simp only [length_cons, zero_add, Array.getD_eq_getD_getElem?, length_map, length_range,
-        Nat.add_left_cancel_iff]
+      · simp only [length_cons, zero_add, Array.getD_eq_getD_getElem?, length_map, length_range]
       · intro n h1 h2
         simp only [List.length_map, List.length_range] at h1
         simp only [List.get_eq_getElem, List.getElem_map,
@@ -14204,8 +14198,7 @@ lemma of_logWith_val {e : Sevm} {s s' : Devm} {k : Fin 4}
       ⟨xs, rfl⟩ (by simpa only [cons_append] using hp₂)
   have heq : ((x * 32) :: (y * 32) :: topics) =
       mi :: sz :: actualTopics :=
-    List.pref_unique (by simp only [length_cons, hlen, hactualLen, Fin.val_succ,
-      Nat.add_left_cancel_iff]) hknown
+    List.pref_unique (by simp only [length_cons, hlen, hactualLen, Fin.val_succ]) hknown
       (pref_of_split hpop)
   simp only [List.cons.injEq] at heq
   rcases heq with ⟨rfl, rfl, rfl⟩

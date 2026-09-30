@@ -358,7 +358,7 @@ theorem Rinst.balanceCore_acc (rules : ForkRules) (world : World) (mach : Mach) 
         simp only [Except.ok.injEq, Prod.mk.injEq] at h
         obtain ⟨-, -, rfl⟩ := h
         intro a ha
-        split <;> (try split) <;> simp_all [Meta.readAccount, Meta.addAccessedAddress]
+        split <;> (try split) <;> simp_all only [ExceptT.stM_eq, ↓reduceIte, Meta.readAccount, Meta.addAccessedAddress, Std.HashSet.mem_insert, beq_iff_eq, or_true, Bool.not_eq_true, Option.isSome_eq_false_iff, Option.isNone_iff_eq_none]
 
 theorem Rinst.balance_okOn (rules : ForkRules) (devm : Devm) :
     Except.OkOn (Devm.AccGrow devm) (liftMachMetaWorldExecution (Rinst.balanceCore rules) devm) :=

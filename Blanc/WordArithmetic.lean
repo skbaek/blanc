@@ -43,17 +43,16 @@ theorem applyTernary_def
         | error err =>
           rcases err with ⟨msg, mach'⟩
           cases mach'
-          simp only [applyTernary, Mach.applyTernary, Mach.pop, pushItem,
-            liftMachExecution, liftMach, Footprint.toExecution,
-            Footprint.liftOutcome, Devm.pop_def, Devm.stack, Devm.setMach,
-            bind, Except.bind, h]
+          simp only [applyTernary, Mach.applyTernary, Mach.pop, pushItem, liftMachExecution,
+            liftMach, Footprint.toExecution, Footprint.liftOutcome, Devm.pop_def, Devm.stack,
+            Devm.setMach, bind, Except.bind]
         | ok out =>
           rcases out with ⟨_, mach'⟩
           cases mach'
           simp only [applyTernary, Mach.applyTernary, Mach.pop, pushItem,
             liftMachExecution, liftMach, Footprint.toExecution,
             Footprint.liftOutcome, Devm.pop_def, Devm.stack, Devm.setMach,
-            bind, Except.bind, h]
+            bind, Except.bind]
 
 /-- A successful generic ternary word instruction pops its three operands and
 pushes their exact result while preserving every non-machine observation. -/
@@ -996,7 +995,7 @@ floor quotient. -/
 theorem ceilDiv_sub_one_le_div (n d : Nat) :
     ceilDiv n d - 1 ≤ n / d := by
   by_cases exactDivision : n % d = 0 <;>
-    simp [ceilDiv, exactDivision]
+    simp only [ceilDiv, exactDivision, ↓reduceIte, add_zero, tsub_le_iff_right, le_add_iff_nonneg_right, zero_le, add_tsub_cancel_right, Std.le_refl]
 
 /-- Rounding the reconstructed high word upward exactly implements division
 of the unbounded product by `2^256`. -/
@@ -1581,7 +1580,7 @@ theorem wideQuotientWord_toNat
     have factored := Nat.sub_mod_div_factor
       (n := wideNumeratorN high low) (d := denominator.toNat)
       (twos := twos) twosSpec.1 twosSpec.2.1
-    simpa [twos, reducedDenominator, quotient,
+    simpa only [twos, reducedDenominator, quotient,
       wideReducedNumeratorN, wideRemainderWord_toNat nonzero,
       removeLowestSetBitWord_toNat nonzero] using factored
   have foldedMod :
@@ -1608,7 +1607,7 @@ theorem wideQuotientWord_toNat
         ring
       _ ≡ quotient * 1 [MOD wordModulusN] :=
         (Nat.ModEq.refl quotient).mul inverseCorrect
-      _ = quotient := by simp
+      _ = quotient := by simp only [mul_one]
   have outputMod :
       (wideQuotientWord high low denominator).toNat ≡
         quotient [MOD wordModulusN] := by
@@ -1620,7 +1619,7 @@ theorem wideQuotientWord_toNat
       (B256.toNat_lt low) (B256.toNat_lt_toNat noOverflow)
   have outputBound :
       (wideQuotientWord high low denominator).toNat < wordModulusN := by
-    simpa [wordModulusN] using
+    simpa only [wordModulusN, Nat.reducePow] using
       B256.toNat_lt (wideQuotientWord high low denominator)
   exact Nat.ModEq.eq_of_lt_of_lt outputMod outputBound quotientBound
 
