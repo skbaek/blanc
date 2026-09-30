@@ -24,7 +24,7 @@ from simp_migration import (MigrationError, instrument, reconcile, parse_lean_li
 from simp_edits import SimpEditError, preview
 from leaf_audit import strip_comments_and_strings
 
-CREME = Path('/Users/agent/creme')
+CREME = Path.home() / 'creme'
 SEMAPHORE = CREME / '.semaphore/semaphore'
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -46,7 +46,7 @@ def file_sha(path):
 def environment_identity(root, setup):
     """Upfront bytes of the executable and exact Lake-selected import artifacts."""
     toolchain=(root/'lean-toolchain').read_text().strip()
-    toolroot=Path('/Users/agent/.elan/toolchains')/toolchain.replace('/','--').replace(':','---')
+    toolroot=Path(os.environ.get('ELAN_HOME',str(Path.home()/'.elan')))/'toolchains'/toolchain.replace('/','--').replace(':','---')
     files={root/'.lake/build/bin/simpCollector',root/'scripts/SimpCollector.lean',
            root/'lean-toolchain',root/'lakefile.lean',root/'lake-manifest.json',toolroot/'bin/lean'}
     for groups in setup['importArts'].values():

@@ -144,7 +144,23 @@ def test_executable_inputs():
     for source in [b'#eval IO.println "write"',b'#run risky',b'def x := IO.println "write"']:
         fails(lambda:r.guard_input(source,'Blanc/A.lean'))
 
+def test_native_stage_bindings():
+    with tempfile.TemporaryDirectory() as tmp:
+        root=Path(tmp);(root/'Blanc').mkdir();original=root/'Blanc/A.lean';original.write_bytes(b'original')
+        setup=root/'setup.json';setup.write_bytes(b'{}');ev=root/'evidence';ev.mkdir()
+        runner=r.Runner(root,ev,'goal');runner.held=True;runner.renew=lambda *a:None
+        runner.execute=lambda *a,**k:SimpleNamespace(returncode=0)
+        fails(lambda:runner.collect('Blanc/A.lean',original,setup,ev,'missing'))
+        payload={'schema':1,'source_sha256':r.file_sha(original),'original_sha256':r.file_sha(original),'setup_sha256':r.file_sha(setup),'original_path':'Blanc/Wrong.lean','setup_path':str(setup),'module':'Blanc.A','inventory':[]}
+        def wrong(argv,**kwargs):
+            Path(argv[-1]).write_text(json.dumps(payload));return SimpleNamespace(returncode=0)
+        runner.execute=wrong;fails(lambda:runner.collect('Blanc/A.lean',original,setup,ev,'wrong_owner'))
+        def failed(argv,**kwargs):
+            Path(argv[-1]).write_text(json.dumps(payload));return SimpleNamespace(returncode=1)
+        runner.execute=failed;assert runner.collect('Blanc/A.lean',original,setup,ev,'failed') is None
+        assert original.read_bytes()==b'original'
+
 if __name__=='__main__':
-    for test in [test_partial,test_outputs_and_apply,test_routing_and_renewal,test_census,test_resume,test_batch_preflight,test_executable_inputs]:
+    for test in [test_partial,test_outputs_and_apply,test_routing_and_renewal,test_census,test_resume,test_batch_preflight,test_executable_inputs,test_native_stage_bindings]:
         test();print('PASS '+test.__name__)
-    print('PASS7 runner control groups; mocks are integrity evidence only')
+    print('PASS8 runner control groups; mocks are integrity evidence only')
