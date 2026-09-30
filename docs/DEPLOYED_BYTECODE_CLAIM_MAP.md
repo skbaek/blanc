@@ -440,7 +440,7 @@ body. [l] A fixed signed transaction; the recovery premise is true by `#guard`.
     WETH9 (the filter is a statement-level choice) and Lido (a `nonstatic`
     per-frame premise). An absent-target `registerPauser(t,0)` may leave the
     final registry unchanged, but its successful path has nine writes
-    [`Blanc.Lift.LidoCircuitBreakerDeployed.absentZeroWrites` (`Blanc/Lift/LidoCircuitBreakerDeployed/RegistryLayout.lean:814`),
+    [`Blanc.Lift.LidoCircuitBreakerDeployed.absentZeroWrites` (`Blanc/Lift/LidoCircuitBreakerDeployed/RegistryLayout.lean:827`),
     `Blanc.Lift.LidoCircuitBreakerDeployed.setPauser_absentZero_inv` (`Blanc/Lift/LidoCircuitBreakerDeployed/SetPauserFresh.lean:440`)].
     An unchanged final registry does not make the path write-free. Beacon and
     Curve prove that statically-committed writers produce nothing.
