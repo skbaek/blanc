@@ -514,6 +514,7 @@ import Blanc.Lift.LidoCircuitBreakerDeployed.FiniteRegistry
 import Blanc.Lift.LidoCircuitBreakerDeployed.FiniteUpdate
 import Blanc.Lift.LidoCircuitBreakerDeployed.FiniteInit
 import Blanc.Lift.LidoCircuitBreakerDeployed.FiniteFrame
+import Blanc.Lift.LidoCircuitBreakerDeployed.FiniteExample
 import Blanc.Lift.LidoCircuitBreakerDeployed.Removal
 import Blanc.Lift.LidoCircuitBreakerDeployed.SetPauserCalls
 import Blanc.Lift.LidoCircuitBreakerDeployed.SetPauserFresh
