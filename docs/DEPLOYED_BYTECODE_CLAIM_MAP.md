@@ -102,7 +102,7 @@ whether a class is acceptable and whether deployment establishes INIT.
 | CODE | Installed code and fork identity | Yes | — |
 | INIT | Stated once, at the checkpoint | Yes, if shown inhabited, ideally by deployment | **WETH9** footprint `FootInv ∅`: yes, no hash premise [`Blanc.Lift.Weth9.Creation.weth9_deploy_init_covered` (`Blanc/Lift/Weth9/Creation/DeployInit.lean:22`)]. **Beacon** `SolInv []`: yes, no hash premise [`Blanc.Lift.BeaconDeposit.Creation.beacon_deploy_covered` (`Blanc/Lift/BeaconDeposit/Creation/Deploy.lean:144`)]. **Curve** `VyInv … ∅`: yes, no hash premise [`Blanc.Lift.Curve3Crv.Creation.curve_deploy_covered` (`Blanc/Lift/Curve3Crv/Creation/Deploy.lean:286`)]. **Lido** `RegistryZeroRaw` and `StateInv`: only under two hash premises `ForeignApart 0 0` and `ForeignApart 0 1` (bound zero still quantifies address mapping keys) [`Blanc.Lift.LidoCircuitBreakerDeployed.Creation.lido_deploy_init_covered` (`Blanc/Lift/LidoCircuitBreakerDeployed/Creation/Deploy.lean:203`)]. **V±**: synthetic prestates, none |
 | ENTRY | Required at every entered frame | Only if environmental, never invariant-shaped | — |
-| HASH-T | Exact separation of the hashes and keys actually computed or touched in the trace, including avoidance of fixed slots where stated | Yes when stated; narrower and amenable to finite checking with a concrete initial footprint. Computational collision resistance does not entail this exact fact; fixed-slot avoidance also concerns target/preimage behavior. No cryptographic reduction is proved | — |
+| HASH-T | Exact separation of the hashes and keys actually computed or touched in the trace, including avoidance of fixed slots where stated | Yes when stated; narrower and amenable to finite checking with a concrete initial footprint. Computational collision resistance does not entail this exact fact; fixed-slot avoidance also concerns target/preimage behavior. No cryptographic reduction is proved. The Lido finite tier (Section 5.4) states its instances as decidable checks on explicit key lists, so a concrete instance is closed by kernel evaluation | — |
 | HASH-U | Exact separation quantified over all 2^160 addresses or indices | Needs justification; not established here. The finite domain does not make proof impossible. Under a random-function model of Keccak the estimated failure probability is about q·2^-94 per frame (q = written slots): **heuristic only, with no reduction or bound proved** | — |
 | ENV | Gas, warmth, depth, static flag, callee behaviour, trace-local exclusions (no authorization or CREATE at given addresses) | Yes when stated; better derived | — |
 | ARITH | Numeric bounds | Yes | — |
@@ -260,9 +260,50 @@ owner-call premise.
 
 ### 5.4 Lido CircuitBreaker: registry integrity (not "targets are paused")
 
-The Lido headlines keep **universal (HASH-U) premises** with the explicit
+The Lido results come in two tiers. The **finite tier** (frame and deployment
+level) states registry agreement over an explicit, caller-supplied list of
+address probes, and every hash-separation premise it takes is a decidable check
+on concrete key lists, evaluable by the kernel; it claims nothing about an
+address outside the probe list and proves nothing at history level. The
+**history tier** keeps **universal (HASH-U) premises** with the explicit
 random-function heuristic of Section 4 (about q·2^-94 per frame; no reduction
-or probability bound is proved). `lidoEntry lidoA` [`Blanc.Lift.LidoCircuitBreakerDeployed.lidoEntry` (`Blanc/Lift/LidoCircuitBreakerDeployed/Frame.lean:63`)] states, at
+or probability bound is proved).
+
+**Finite tier (frame and deployment).** The observation is `RegistryOn storage
+entries probes` [`Blanc.Lift.LidoCircuitBreakerDeployed.RegistryOn` (`Blanc/Lift/LidoCircuitBreakerDeployed/FiniteRegistry.lean:24`)]: the entry list is valid
+(below 2^252 entries, targets without repetition, nonzero canonical targets and
+pausers, canonical probes), the length word and every live array cell agree
+with the list, and for each probe the assignment, index and count words agree
+with the list. `checkRegistryOn` [`Blanc.Lift.LidoCircuitBreakerDeployed.checkRegistryOn` (`Blanc/Lift/LidoCircuitBreakerDeployed/FiniteRegistry.lean:39`)] decides it
+[`Blanc.Lift.LidoCircuitBreakerDeployed.checkRegistryOn_eq_true` (`Blanc/Lift/LidoCircuitBreakerDeployed/FiniteRegistry.lean:55`)]; `checkLiveCovered`
+[`Blanc.Lift.LidoCircuitBreakerDeployed.checkLiveCovered` (`Blanc/Lift/LidoCircuitBreakerDeployed/FiniteRegistry.lean:74`)] decides that every listed target and
+pauser is a probe. The separation checks are the shared `checkFaithfulOn`
+[`Blanc.SlotFootprint.checkFaithfulOn` (`Blanc/SlotFootprint.lean:133`)] (each written key and
+each observed key with the same slot are the same key) and `checkApartOn`
+[`Blanc.SlotFootprint.checkApartOn` (`Blanc/SlotFootprint.lean:145`)] (no observed key sits on a
+given raw slot), each with its exact soundness theorem
+[`Blanc.SlotFootprint.checkFaithfulOn_eq_true` (`Blanc/SlotFootprint.lean:138`),
+`Blanc.SlotFootprint.checkApartOn_eq_true` (`Blanc/SlotFootprint.lean:150`)], applied to the
+finite query list `registryQueries probes length`
+[`Blanc.Lift.LidoCircuitBreakerDeployed.registryQueries` (`Blanc/Lift/LidoCircuitBreakerDeployed/FiniteRegistry.lean:17`)]: the length key, the live array keys and
+the three mapping keys of each probe.
+
+| Claim | Theorem | Level / kind | Premises | Notes |
+|---|---|---|---|---|
+| A successful pc-0 `Exec` of the installed runtime at `registerPauser(target, p)`, for an existing `target` and a nonzero new pauser `p`, takes a storage on which `checkRegistryOn entries probes` holds to one on which it holds for `setEntryAt index (target, p) entries`, and live coverage is retained | `Blanc.Lift.LidoCircuitBreakerDeployed.registerPauser_nonzero_finite` (`Blanc/Lift/LidoCircuitBreakerDeployed/FiniteFrame.lean:97`); the body from the entry-32 subroutine `Blanc.Lift.LidoCircuitBreakerDeployed.registerPauser_body_finite` (`Blanc/Lift/LidoCircuitBreakerDeployed/FiniteFrame.lean:43`) | Frame / safety | CODE (installed code, covered fork); a fresh pc-0 entry and the selector; `checkRegistryOn` and `checkLiveCovered` true of the pre-storage; `target`, its old pauser and `p` in `probes`; `findEntry entries target`; two decidable checks: `checkFaithfulOn solKey (registryQueries probes entries.length)` over the keys of `nonzeroWrites`, and `checkApartOn` of the two heartbeat expiry slots `mapSlot oldPauser 2`, `mapSlot p 2` | **No universal premise**: neither `RegistryWitness`, `EntryAt`, `ForeignApart` nor `lidoEntry` occurs. Derived from the raw execution through the dispatcher, the ABI wrapper, the entry-32 update and both heartbeat continuations |
+| The entry-32 update subroutine, entered from its exact caller stack, establishes `RegistryOn` for the updated entries and returns to that stack | `Blanc.Lift.LidoCircuitBreakerDeployed.setPauser_nonzero_finite` (`Blanc/Lift/LidoCircuitBreakerDeployed/FiniteUpdate.lean:203`) | Frame / safety | CODE; well-formed memory; `RegistryOn` of the pre-storage; the same membership, `findEntry` and `checkFaithfulOn` premises | Supporting; the synthetic logical completion it uses internally is a proof device, not a premise on EVM storage |
+| Modeled deployment: the recorded creation input, run as a CREATE message, succeeds, installs the certified runtime, and leaves a storage satisfying `RegistryOn [] probes` for every list of canonical probes | `Blanc.Lift.LidoCircuitBreakerDeployed.lido_create_finite_init` (`Blanc/Lift/LidoCircuitBreakerDeployed/FiniteInit.lean:59`), through `Blanc.Lift.LidoCircuitBreakerDeployed.registryOn_deployedStor` (`Blanc/Lift/LidoCircuitBreakerDeployed/FiniteInit.lean:27`) | Deploy / INIT (finite) | the `lido_create` message premises (value 0, code address none, 1,000,000 gas, covered fork, non-static, code-size limit at least 4,584); `checkApartOn solKey (registryQueries probes 0) [0, 1] = true` (the constructor's two slots are off the probes' query keys) | No `ForeignApart`; still a modeled deployment (Section 7) |
+| Premise satisfiability: a constructed five-write raw pre-state with entries `[(1, 2)]` and probes `[0, 1, 2, 3]` satisfies every premise of the nonzero update at once (state check, coverage, `findEntry`, membership, nonzero, both separation checks), each closed by kernel evaluation | `Blanc.Lift.LidoCircuitBreakerDeployed.exampleApplicable` (`Blanc/Lift/LidoCircuitBreakerDeployed/FiniteExample.lean:93`); the checker evaluations `Blanc.Lift.LidoCircuitBreakerDeployed.exampleInitialCheck` (`Blanc/Lift/LidoCircuitBreakerDeployed/FiniteExample.lean:73`), `Blanc.Lift.LidoCircuitBreakerDeployed.exampleSeparationChecks` (`Blanc/Lift/LidoCircuitBreakerDeployed/FiniteExample.lean:81`) | Witness (premises) | none (closed) | Not a successful call and not a history; the reserved address 0 is probed explicitly |
+
+**What the finite tier does not say.** Nothing about an address outside
+`probes`: no assignment, index or count word is constrained there, and address
+0 is included only when probed. Nothing about inserting or removing a target.
+Nothing at history level: there is no finite history theorem, and the
+constructor state is not shown to precede the example's pre-state. Admitting
+another address means extending the probe list and re-checking the actual raw
+cells with `checkRegistryOn` for the extended list.
+
+**History tier (universal premises).** `lidoEntry lidoA` [`Blanc.Lift.LidoCircuitBreakerDeployed.lidoEntry` (`Blanc/Lift/LidoCircuitBreakerDeployed/Frame.lean:63`)] states, at
 every entered frame, `LocalApart` (`ForeignApart (2^160)` for the three
 fixed and written slots) and `EntryAt lidoA` (for every witness of the
 frame-entry storage, the registry keys the calldata addresses touch are
@@ -274,7 +315,8 @@ faithful at bound 2^160).
 | `registerPauser(t, 0)` from a real pc-0 entry removes `t` with the correct swap-and-pop repair (`L2Post`) | `Blanc.Lift.LidoCircuitBreakerDeployed.l2_registerPauser_zero` (`Blanc/Lift/LidoCircuitBreakerDeployed/L2Frame.lean:249`) | Frame / safety | CODE; fresh entry; **HASH-U** `EntryAt lidoA`; INIT-shaped `RegistryWitness` of the pre-storage | |
 | **The pre-storage witness is derived:** every settlement-committed non-static `registerPauser(t, 0)` frame (including one re-entered from inside `pause`'s CALL) has a witness of its entry storage and `L2Post` | `Blanc.Lift.LidoCircuitBreakerDeployed.lido_history_l2_committed` (`Blanc/Lift/LidoCircuitBreakerDeployed/L2History.lean:96`) | History / safety | CODE via `StateInv` INIT; `FrameAdmitted ca (lidoEntry lidoA)` (HASH-U); per-frame call shape only. Uses the generic `Blanc.ExecutionTrace.ConfiguredHistoryTrace.entryGood_settled` (`Blanc/ExecutionEntryAccounting.lean:488`), `Blanc.Lift.LidoCircuitBreakerDeployed.lido_spawnEntry` (`Blanc/Lift/LidoCircuitBreakerDeployed/Reentry.lean:440`) and `Blanc.Lift.reach_of_parentPrefix` (`Blanc/Lift/Cursor.lean:705`) | static committed frames and frames under a rolled-back ancestor are **not claimed** |
 
-**Liveness.** None. There is **no Lido liveness claim of any level**.
+**Liveness.** None. There is **no Lido liveness claim of any level**, at
+either tier.
 
 **Deployment / INIT.** `Blanc.Lift.LidoCircuitBreakerDeployed.Creation.lido_deploy_covered` (`Blanc/Lift/LidoCircuitBreakerDeployed/Creation/Deploy.lean:190`), for every covered fork
 `f`: a nonce-0 CREATE from the recorded deployer with 1,000,000 gas installs
@@ -283,7 +325,9 @@ the certified runtime and leaves storage exactly `deployedStor`
 `Blanc.Lift.LidoCircuitBreakerDeployed.Creation.lido_deploy_init_covered` (`Blanc/Lift/LidoCircuitBreakerDeployed/Creation/Deploy.lean:203`) adds `RegistryZeroRaw` and
 `lidoSpec.StateInv` **under `ForeignApart 0 0` and `ForeignApart 0 1`** (two
 bounded hash premises: the constructor's slots 0 and 1 are off the registry's
-raw slots). General forms `Blanc.Lift.LidoCircuitBreakerDeployed.Creation.lido_create` (`Blanc/Lift/LidoCircuitBreakerDeployed/Creation/Deploy.lean:75`),
+raw slots). The finite tier above replaces those two premises by one decidable
+check per probe list, for the finite observation `RegistryOn [] probes` in place
+of `RegistryZeroRaw`. General forms `Blanc.Lift.LidoCircuitBreakerDeployed.Creation.lido_create` (`Blanc/Lift/LidoCircuitBreakerDeployed/Creation/Deploy.lean:75`),
 `Blanc.Lift.LidoCircuitBreakerDeployed.Creation.lido_create_registryZeroRaw` (`Blanc/Lift/LidoCircuitBreakerDeployed/Creation/Deploy.lean:115`), `Blanc.Lift.LidoCircuitBreakerDeployed.Creation.lido_create_stateInv` (`Blanc/Lift/LidoCircuitBreakerDeployed/Creation/Deploy.lean:129`).
 Satisfiability: `Blanc.Lift.LidoCircuitBreakerDeployed.registryZeroRaw_empty` (`Blanc/Lift/LidoCircuitBreakerDeployed/Init.lean:35`), `Blanc.Lift.LidoCircuitBreakerDeployed.lido_init_stateInv` (`Blanc/Lift/LidoCircuitBreakerDeployed/Init.lean:46`). The gas of the
 modeled constructor matches the mainnet receipt exactly; that comparison was
@@ -294,7 +338,9 @@ over covered forks. See Section 7: this deployment is post-Prague.
 
 **Non-claims.** Authorization completeness; setter effects and events;
 pause-call liveness; that a target is actually paused; static committed
-frames; frames under rolled-back ancestors; any liveness.
+frames; frames under rolled-back ancestors; any liveness; at the finite tier,
+any address outside the probe list, target insertion or removal, and any
+history-level statement.
 
 ### 5.5 Vyper V+: guarded-body reentrancy exclusion
 
@@ -354,7 +400,7 @@ applicable.
 | WETH9 (footprint) | ✓ | ✓ | ✓ | ✓ HASH-T [a] | ✓ [b] | ~ [c] | ~ [d] | ✓ |
 | Beacon (`_sys`) | ✓ | ✓ | ~ [e] | ✓ none | ✓ [b] | ~ [f] | ✗ | ✓ |
 | Curve | ✓ | ✓ | ✓ | ✓ HASH-T | ✓ [b] | ~ [g] | ✗ | ✓ |
-| Lido | ✓ | ✓ (L1/L3) | ✗ [h] | ✗ HASH-U | ~ [i] | ✗ | ✗ | ✓ |
+| Lido | ✓ | ✓ (L1/L3) | ~ [h] | ~ [h] | ~ [i] | ✗ | ✗ | ✓ |
 | V+ | ✓ | ~ [j] | ~ [j] | ✓ HASH-T (per execution) | — | ✓ nonvacuity (witnesses) | ~ [k] | ✓ |
 | V− | ✓ | — | — | — | — synthetic | — | ✓ [l] | ✓ |
 
@@ -369,8 +415,12 @@ level; `approve` and `transferFrom` at frame and model level only. [d]
 (chain-level bytes); the view and live theorems still take per-frame
 `beaconEntry`. [f] Deposit at a reachable state; views need per-frame
 `beaconEntry`. [g] `set_name` needs the `OwnerCallOk` callee premise; the cost
-is existential. [h] `lidoEntry lidoA` at every frame (ENTRY and HASH-U). [i]
-`lido_deploy_init_covered` needs two hash premises. [j] Message, transaction
+is existential. [h] History tier: `lidoEntry lidoA` at every frame (ENTRY and HASH-U). Finite
+tier (frame and deployment, Section 5.4): decidable separation checks on
+explicit probe lists, no universal premise, and no history theorem. [i]
+`lido_deploy_init_covered` needs two hash premises; `lido_create_finite_init`
+replaces them by one decidable check per probe list, for the finite observation
+`RegistryOn [] probes` rather than `RegistryZeroRaw`. [j] Message, transaction
 and history corollaries exist; per retained execution the world premises `hP`
 and `hI`, the root code identity and `HashAvoidIn` are not derivable from the
 trace (the transaction form derives `hroot`). [k] A transaction form exists
@@ -379,8 +429,11 @@ body. [l] A fixed signed transaction; the recovery premise is true by `#guard`.
 
 ## 7. Disclosures and limits
 
-1. **Lido keeps universal (HASH-U) premises.** The per-frame premise
-   quantifies over registry-observable keys below 2^160. Under a random-oracle
+1. **Lido keeps universal (HASH-U) premises at the history level.** The
+   per-frame premise quantifies over registry-observable keys below 2^160.
+   The finite tier of Section 5.4 uses none of them and proves nothing at
+   history level; its separation premises are decidable checks on explicit
+   probe lists. Under a random-oracle
    model of Keccak the failure probability is about q·2^-94 per frame (four
    registry key families × 2^160 / 2^256 per written slot). This is a
    **heuristic bound estimate**, with no reduction or bound proved; the exact
@@ -554,6 +607,16 @@ Names that the tables above write unqualified.
 | `EntryAt` | `Blanc.Lift.LidoCircuitBreakerDeployed.EntryAt` (`Blanc/Lift/LidoCircuitBreakerDeployed/Frame.lean:58`) | the registry-writer premise holds of every registry witness of the frame's entry storage (HASH-U at bound 2^160 for `lidoA`) |
 | `L2Post` | `Blanc.Lift.LidoCircuitBreakerDeployed.L2Post` (`Blanc/Lift/LidoCircuitBreakerDeployed/L2Frame.lean:32`) | the removal effects of the L2 frame theorem, relative to the pre-call witness |
 | `RegistryWitness` | `Blanc.LidoCircuitBreaker.RegistryWitness` (`Blanc/LidoCircuitBreakerRegistryModel.lean:254`) | a witness that a storage is a well-formed registry |
+| `RegistryOn` | `Blanc.Lift.LidoCircuitBreakerDeployed.RegistryOn` (`Blanc/Lift/LidoCircuitBreakerDeployed/FiniteRegistry.lean:24`) | finite registry agreement: valid entry list, exact length word and live array cells, and assignment/index/count words for each supplied probe (finite tier) |
+| `checkRegistryOn` | `Blanc.Lift.LidoCircuitBreakerDeployed.checkRegistryOn` (`Blanc/Lift/LidoCircuitBreakerDeployed/FiniteRegistry.lean:39`) | the executable decision of `RegistryOn` |
+| `checkLiveCovered` | `Blanc.Lift.LidoCircuitBreakerDeployed.checkLiveCovered` (`Blanc/Lift/LidoCircuitBreakerDeployed/FiniteRegistry.lean:74`) | every listed target and pauser is a probe |
+| `registryQueries` | `Blanc.Lift.LidoCircuitBreakerDeployed.registryQueries` (`Blanc/Lift/LidoCircuitBreakerDeployed/FiniteRegistry.lean:17`) | the finite logical keys a registry observation reads: the length key, the live array keys, and the three mapping keys of each probe |
+| `checkFaithfulOn` | `Blanc.SlotFootprint.checkFaithfulOn` (`Blanc/SlotFootprint.lean:133`) | decidable: each written key and each observed key with the same slot are the same key (a HASH-T instance on explicit lists) |
+| `checkApartOn` | `Blanc.SlotFootprint.checkApartOn` (`Blanc/SlotFootprint.lean:145`) | decidable: no observed key has a slot in the given raw-slot list |
+| `solKey` | `Blanc.Lift.LidoCircuitBreakerDeployed.solKey` (`Blanc/Lift/LidoCircuitBreakerDeployed/RegistryLayout.lean:139`) | the raw storage slot of a logical registry key (Solidity mapping and array layout) |
+| `nonzeroWrites` | `Blanc.Lift.LidoCircuitBreakerDeployed.nonzeroWrites` (`Blanc/Lift/LidoCircuitBreakerDeployed/RegistryLayout.lean:753`) | the logical writes of a nonzero `registerPauser` update of an existing target |
+| `mapSlot` | `Blanc.Lift.mapSlot` (`Blanc/Lift/MapSlot.lean:19`) | the Solidity mapping slot `keccak(key ++ base)` |
+| `findEntry` | `Blanc.LidoCircuitBreaker.findEntry` (`Blanc/LidoCircuitBreakerRegistryModel.lean:12`) | the index and pauser of a target in an entry list |
 | `HashAvoidIn` | `Blanc.LockExclusion.LockSpec.HashAvoidIn` (`Blanc/LockExclusion.lean:316`) | every frame of the pool running the lock code avoids the lock slot with its executed hashes (HASH-T) |
 | `VplusExcludes` | `Blanc.Lift.VyperNonreentrantDeployed.Fixed.VplusExcludes` (`Blanc/Lift/VyperNonreentrantDeployed/Fixed/ExclusionTrace.lean:44`) | the statement form of the V+ exclusion |
 
