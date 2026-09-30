@@ -7,6 +7,10 @@ Offline two-stage planner:
 2. `reconcile(original_bytes, plan, question_collector)`: Reconstructs baseline from plan, re-runs
    instrument for deterministic equivalence, compares all mapped inventory metadata, associates
    TryThis edits by exact tactic/command/ref ownership, applies preview if complete, returns ReconcileResult.
+
+An explicitly requested observed per-site union can reconcile divergent simple-name
+alternatives. It preserves all native rows/attributions and remains a proposal
+requiring whole-file Lean replay before source application.
 """
 
 from __future__ import annotations
@@ -171,6 +175,27 @@ def _rng_key(rng: Any) -> Optional[Tuple[int, int, int, int]]:
     return None
 
 
+def _observed_union(family: str, suggestions: List[Dict[str, Any]]) -> Tuple[str, List[str]]:
+    """Propose a per-span union of actual simple-name suggestions, never a global set.
+
+    This narrow shape deliberately rejects configs, local terms, erasures, stars,
+    and more elaborate suggestions. A successful preview still needs Lean replay.
+    """
+    names: List[str] = []
+    shape = re.compile(rf"{re.escape(family)} only(?: \[([^\[\]\n]+)\])?")
+    identifier = re.compile(r"[A-Za-z_][A-Za-z_0-9'.]*")
+    for suggestion in suggestions:
+        match = shape.fullmatch(suggestion['newText'])
+        if match is None:
+            raise MigrationError('Observed union requires plain explicit simple-name suggestions')
+        for name in (match.group(1).split(', ') if match.group(1) else []):
+            if identifier.fullmatch(name) is None:
+                raise MigrationError(f'Observed union rejects non-name simplifier {name!r}')
+            if name not in names:
+                names.append(name)
+    return family + ' only' + (' [' + ', '.join(names) + ']' if names else ''), names
+
+
 def instrument(
     original_bytes: bytes,
     baseline_collector: Union[Dict[str, Any], str, bytes],
@@ -305,6 +330,7 @@ def reconcile(
     original_bytes: bytes,
     plan: Union[Dict[str, Any], InstrumentResult, str, bytes],
     question_collector: Union[Dict[str, Any], str, bytes],
+    *, observed_union_sites: Sequence[str] = (),
 ) -> ReconcileResult:
     """Stage 2: Reconstruct baseline from plan, verify determinism and inventory, reconcile edits."""
     if not isinstance(original_bytes, bytes):
@@ -403,6 +429,13 @@ def reconcile(
             unresolved.append({"reason": "inventory_mismatch", "details": f"Unexpected inventory item at range {rk}"})
 
     target_sites = [s for s in derived_res.plan["sites"] if s["target"]]
+    if (isinstance(observed_union_sites, (str, bytes)) or
+            any(type(site) is not str for site in observed_union_sites) or
+            len(set(observed_union_sites)) != len(observed_union_sites)):
+        raise MigrationError('Observed union site IDs must be distinct strings')
+    union_sites = set(observed_union_sites)
+    if not union_sites <= {s['site_id'] for s in target_sites}:
+        raise MigrationError('Observed union names an unknown or already explicit site')
     suggs_by_target: Dict[str, List[Dict[str, Any]]] = {s["site_id"]: [] for s in target_sites}
 
     for edit_idx, ed in enumerate(q_edits):
@@ -441,11 +474,21 @@ def reconcile(
             unresolved.append({"reason": "missing_site", "site_id": s_id, "details": f"Target site {s_id} received 0 suggestions", "range": t["mapped_range"]})
             continue
         first_text, first_rng = s_list[0]["newText"], s_list[0]["range"]
-        if any(e["newText"] != first_text or e["range"] != first_rng for e in s_list):
-            unresolved.append({"reason": "divergent_alternatives", "site_id": s_id, "details": f"Target site {s_id} received divergent suggestions", "alternatives": [e["newText"] for e in s_list]})
-            continue
+        divergent = any(e["newText"] != first_text or e["range"] != first_rng for e in s_list)
+        union_metadata = {}
+        if divergent:
+            if s_id not in union_sites:
+                unresolved.append({"reason": "divergent_alternatives", "site_id": s_id, "details": f"Target site {s_id} received divergent suggestions", "alternatives": [e["newText"] for e in s_list]})
+                continue
+            first_text, union_names = _observed_union(t['family'], s_list)
+            union_metadata = {
+                'resolution': 'observed_per_site_union', 'used_lemma_union': union_names,
+                'alternatives': [e['newText'] for e in s_list], 'replay_required': True,
+            }
+        elif s_id in union_sites:
+            raise MigrationError('Observed union requested for a nondivergent site')
         attributions = [{"parentDeclaration": e.get("parentDeclaration"), "referenceRange": e.get("referenceRange"), "commandRange": e.get("commandRange")} for e in s_list]
-        resolved_edits.append({"site_id": s_id, "range": first_rng, "newText": first_text, "original_range": t["original_range"], "mapped_range": t["mapped_range"], "attributions": attributions, "duplicate_count": len(s_list)})
+        resolved_edits.append({"site_id": s_id, "range": first_rng, "newText": first_text, "original_range": t["original_range"], "mapped_range": t["mapped_range"], "attributions": attributions, "duplicate_count": len(s_list), **union_metadata})
         preview_edits_payload.append({"range": first_rng, "newText": first_text})
 
     is_complete = (len(unresolved) == 0)
@@ -480,6 +523,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     p_rec.add_argument("source", type=Path, help="Path to original Lean source file.")
     p_rec.add_argument("plan", type=Path, help="Path to migration plan JSON file.")
     p_rec.add_argument("collector", type=Path, help="Path to question collector JSON file.")
+    p_rec.add_argument('--observed-union', action='append', default=[], metavar='SITE_ID',
+                       help='Propose a union of actual simple-name alternatives at this span; requires Lean replay.')
 
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
@@ -494,7 +539,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 0
         elif args.subcommand == "reconcile":
             orig_b, plan_b, col_b = args.source.read_bytes(), args.plan.read_bytes(), args.collector.read_bytes()
-            res = reconcile(orig_b, plan_b, col_b)
+            res = reconcile(orig_b, plan_b, col_b, observed_union_sites=args.observed_union)
             print(json.dumps({k: v for k, v in res.items() if k != "candidate_bytes"}, indent=2))
             return 0 if res["complete"] else 1
     except MigrationError as exc:

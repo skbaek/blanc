@@ -25,7 +25,7 @@ theorem List.sliceD_add {ξ : Type} (xs : List ξ) (d : ξ) :
   induction a with
   | zero =>
       intro m b
-      simp [List.sliceD, List.takeD]
+      simp only [List.sliceD, zero_add, List.takeD, add_zero, List.nil_append]
   | succ a ih =>
       intro m b
       rw [show a + 1 + b = (a + b) + 1 by omega,
@@ -86,7 +86,7 @@ lemma Bytes.sliceD_append_middle
   simp only [List.sliceD]
   rw [List.append_assoc,
     List.drop_length_append' rfl,
-    List.takeD_eq_take _ (by simp),
+    List.takeD_eq_take _ (by simp only [List.length_append, le_add_iff_nonneg_right, zero_le]),
     List.take_length_append' rfl]
 
 /-- Equality of a padded region transfers to every window contained in that
@@ -123,9 +123,12 @@ lemma Bytes.writeAt_append_middle_at
       pre ++ replacement ++ suffix := by
   subst offset
   unfold Bytes.writeAt
-  rw [List.takeD_eq_take _ (by simp)]
+  rw [List.takeD_eq_take _ (by simp only [List.append_assoc, List.length_append,
+    le_add_iff_nonneg_right, zero_le])]
   simp only [List.append_assoc]
   rw [List.take_left]
-  simp [List.drop_append, hlen]
+  simp (discharger := omega) only [List.drop_append, List.drop_eq_nil_of_le, add_tsub_cancel_left,
+    List.nil_append]
+  rw [show replacement.length - old.length = 0 by omega, List.drop_zero]
 
 end Blanc

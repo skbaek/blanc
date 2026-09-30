@@ -16,6 +16,8 @@ Tests:
 12. Existing question forms handled faithfully.
 13. Overlapping site ranges rejected.
 14. CLI execution for instrument and reconcile.
+15. Explicit per-site observed unions preserve native alternatives and reject
+    malformed selections, complex terms, and wrong ownership.
 
 Run with: PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-simp-migration.py
 """
@@ -272,6 +274,40 @@ def test_same_span_duplicate_vs_alternative() -> None:
     assert not rec_alt.complete and any(u["reason"] == "divergent_alternatives" for u in rec_alt.unresolved)
 
 
+def test_observed_per_site_union() -> None:
+    text = 'theorem t : True := by simp_all\n'
+    original = text.encode()
+    inst = instrument(original, make_baseline(original, [make_site(text, 'simp_all', 'simp_all', family='simp_all')]))
+    site = inst.plan['sites'][0]
+    edits = [make_edit(site, s) for s in ['simp_all only', 'simp_all only [A, B]', 'simp_all only [B, C]']]
+    collector = make_q_col(inst.plan, edits=edits)
+    assert not reconcile(original, inst.plan, collector).complete
+    result = reconcile(original, inst.plan, collector, observed_union_sites=['site_0'])
+    assert result.complete and result.candidate_source.endswith('simp_all only [A, B, C]\n')
+    resolved = result.resolved[0]
+    assert resolved['used_lemma_union'] == ['A', 'B', 'C']
+    assert resolved['alternatives'] == [e['newText'] for e in edits]
+    assert resolved['replay_required'] is True and len(resolved['attributions']) == 3
+    for bad_text in ['simp_all only [*]', 'simp_all only [f x]', 'simp_all (config := {}) only [A]']:
+        bad = make_q_col(inst.plan, edits=[edits[0], make_edit(site, bad_text)])
+        try:
+            reconcile(original, inst.plan, bad, observed_union_sites=['site_0'])
+        except MigrationError:
+            pass
+        else:
+            raise AssertionError('Union accepted non-simple-name alternatives')
+    for request in [['site_99'], ['site_0', 'site_0'], [True], 'site_0']:
+        try:
+            reconcile(original, inst.plan, collector, observed_union_sites=request)
+        except MigrationError:
+            pass
+        else:
+            raise AssertionError('Union accepted malformed/unknown site selection')
+    wrong_owner = copy.deepcopy(collector)
+    wrong_owner['edits'][1]['referenceRange'] = {'start': {'line': 0, 'character': 0}, 'end': {'line': 0, 'character': 3}}
+    assert not reconcile(original, inst.plan, wrong_owner, observed_union_sites=['site_0']).complete
+
+
 # --- Test 9: Wrong command and reference range ownership
 def test_wrong_command_reference_ownership() -> None:
     text = "theorem t1 : True := by simp\ntheorem t2 : True := by simp\n"
@@ -384,6 +420,7 @@ def run_all_tests() -> int:
         ("test_unrelated_action", test_unrelated_action),
         ("test_missing_site", test_missing_site),
         ("test_same_span_duplicate_vs_alternative", test_same_span_duplicate_vs_alternative),
+        ("test_observed_per_site_union", test_observed_per_site_union),
         ("test_wrong_command_reference_ownership", test_wrong_command_reference_ownership),
         ("test_quoted_dormant_site_unresolved", test_quoted_dormant_site_unresolved),
         ("test_unsupported_bang_heads", test_unsupported_bang_heads),
