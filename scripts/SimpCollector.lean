@@ -26,30 +26,54 @@ def textOf (map : FileMap) (stx : Syntax) : String :=
   | some r => String.Pos.Raw.extract map.source r.start r.stop
   | none => ""
 
-/-- Parser-kind classification; identifiers and strings are never tactic sites. -/
-def simpFamily? (kind : Name) : Option String :=
-  if #[``Lean.Parser.Tactic.simp, ``Lean.Parser.Tactic.simpTrace].contains kind then
+/-- Pinned parser shapes, including compact macro wrappers; never lexical names. -/
+def simpFamily? (stx : Syntax) : Option String :=
+  let kind := stx.getKind
+  if #[``Lean.Parser.Tactic.simp, ``Lean.Parser.Tactic.simpTrace,
+      ``Lean.Parser.Tactic.simpAutoUnfold].contains kind then
     some "simp"
-  else if #[``Lean.Parser.Tactic.simpAll, ``Lean.Parser.Tactic.simpAllTrace].contains kind then
+  else if #[``Lean.Parser.Tactic.simpAll, ``Lean.Parser.Tactic.simpAllTrace,
+      ``Lean.Parser.Tactic.simpAllAutoUnfold].contains kind then
     some "simp_all"
-  else if #[``Lean.Parser.Tactic.dsimp, ``Lean.Parser.Tactic.dsimpTrace].contains kind then
+  else if #[``Lean.Parser.Tactic.dsimp, ``Lean.Parser.Tactic.dsimpTrace,
+      ``Lean.Parser.Tactic.dsimpAutoUnfold].contains kind then
     some "dsimp"
   else if #[``Lean.Parser.Tactic.simpa, ``Lean.Parser.Tactic.simpaUsingBang].contains kind then
     some "simpa"
+  else if stx.getArgs.size == 2 then
+    let head := stx[0].getAtomVal
+    let rest := stx[1].getKind
+    if head == "simp?!" && rest == ``Lean.Parser.Tactic.simpTraceArgsRest then some "simp"
+    else if head == "simp_all?!" && rest == ``Lean.Parser.Tactic.simpAllTraceArgsRest then some "simp_all"
+    else if head == "dsimp?!" && rest == ``Lean.Parser.Tactic.dsimpTraceArgsRest then some "dsimp"
+    else if #["simpa!", "simpa?", "simpa?!"].contains head &&
+        #[``Lean.Parser.Tactic.simpaArgsRest, ``Lean.Parser.Tactic.simpaUsingBangArgsRest].contains rest then
+      some "simpa"
+    else none
   else none
+
+/-- Exact optional keyword slots in Init/Tactics.lean and Init/Meta.lean.
+No config, term, discharger, or location descendant can set this flag. -/
+def onlyNode (stx : Syntax) : Syntax :=
+  let kind := stx.getKind
+  if #[``Lean.Parser.Tactic.simpTrace, ``Lean.Parser.Tactic.simpAllTrace].contains kind then stx[2][2]
+  else if kind == ``Lean.Parser.Tactic.dsimpTrace then stx[2][1]
+  else if #[``Lean.Parser.Tactic.simpa, ``Lean.Parser.Tactic.simpaUsingBang].contains kind then stx[3][2]
+  else if stx.getArgs.size == 2 then
+    if stx[1].getKind == ``Lean.Parser.Tactic.dsimpTraceArgsRest then stx[1][1]
+    else stx[1][2]
+  else stx[3]
 
 partial def sites (map : FileMap) (command : Syntax) (stx : Syntax) : Array Json := Id.run do
   let mut rows := #[]
-  if let some family := simpFamily? stx.getKind then
+  if let some family := simpFamily? stx then
     let head := stx[0].getAtomVal
-    -- For inventory purposes the parsed optional `only` node is authoritative.
-    -- Simpa's shape differs from simp's; read its direct keyword child instead.
-    let only := stx.getArgs.any fun child =>
-      child.getAtomVal == "only" ||
-      child.getArgs.any (fun grandchild => grandchild.getAtomVal == "only")
+    let only := !(onlyNode stx).isNone
     rows := rows.push <| object [
       ("family", toJson family), ("head", toJson head),
       ("kind", toJson stx.getKind.toString), ("only", toJson only),
+      ("onlyRange", rangeJson map (onlyNode stx)),
+      ("argumentKinds", toJson (stx.getArgs.map (·.getKind.toString))),
       ("range", rangeJson map stx), ("headRange", rangeJson map stx[0]),
       ("commandRange", rangeJson map command), ("source", toJson (textOf map stx))]
   for child in stx.getArgs do
@@ -115,7 +139,8 @@ def setupImports (setup : ModuleSetup) (header : Elab.HeaderSyntax) :
     imports := setup.imports?.getD header.imports, opts,
     importArts := setup.importArts, plugins := setup.plugins }
 
-unsafe def collect (original buffer setupPath output : System.FilePath) : IO Unit := do
+unsafe def collectInto (original buffer setupPath : System.FilePath)
+    (output : IO.FS.Handle) : IO Unit := do
   let source ← IO.FS.readFile buffer
   let sourceHash ← sha256 source.toUTF8
   let originalSource ← IO.FS.readFile original
@@ -152,7 +177,19 @@ unsafe def collect (original buffer setupPath output : System.FilePath) : IO Uni
     ("setup_options", toJson setup.options),
     ("instrumentation", toJson #["internal.cmdlineSnapshots=false", "Elab.async default=true"]),
     ("inventory", toJson inventory), ("edits", toJson replacements)]
-  IO.FS.writeFile output (result.pretty ++ "\n")
+  output.putStr (result.pretty ++ "\n")
+  output.flush
+
+/-- Exclusive reservation precedes all frontend work and refuses even dangling
+symlinks. Only our own fresh reservation is removed after a failed collection. -/
+unsafe def collect (original buffer setupPath output : System.FilePath) : IO Unit := do
+  let handle ← try IO.FS.Handle.mk output .writeNew catch error =>
+    throw <| IO.userError s!"COLLECTOR fresh output required: {output}: {error}"
+  try
+    collectInto original buffer setupPath handle
+  catch error =>
+    IO.FS.removeFile output
+    throw error
 
 end BlancSimpCollector
 

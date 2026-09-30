@@ -8,6 +8,10 @@ if [ "$#" -ne 4 ]; then
   echo "usage: scripts/run-simp-collector.sh ORIGINAL BUFFER CANDIDATE_SETUP OUTPUT_JSON" >&2
   exit 2
 fi
+if [ -e "$4" ] || [ -L "$4" ]; then
+  echo "COLLECTOR output already exists: $4" >&2
+  exit 1
+fi
 if [ ! -x "$ROOT/.lake/build/bin/simpCollector" ]; then
   echo "REFUSED — build simpCollector through the owned build wrapper first" >&2
   exit 2
