@@ -1115,11 +1115,7 @@ lemma Devm.pushBurn_of_run {x : B256} {pre inter : Devm} {cost : Nat} :
       split at run; {cases run}
       injection run with eq_inter; subst eq_inter
       constructor <;>
-        simp [Stack.Push, Split, Devm.Rels.eq, Devm.setMach, Devm.stack,
-          Devm.memory, Devm.gasLeft, Devm.logs, Devm.refundCounter, Devm.output,
-          Devm.accountsToDelete, Devm.returnData, Devm.error, Devm.accessedAddresses,
-          Devm.accessedStorageKeys, Devm.state, Devm.createdAccounts,
-          Devm.transientStorage, Devm.stateGas]
+        simp only [Stack.Push, Split, Devm.stack, Devm.setMach, Devm.gasLeft, cons_append, nil_append, Devm.Rels.eq, Devm.memory, ge_iff_le, tsub_le_iff_right, le_add_iff_nonneg_right, _root_.zero_le, Devm.logs, Devm.refundCounter, Devm.output, Devm.accountsToDelete, Devm.returnData, Devm.error, Devm.accessedAddresses, Devm.accessedStorageKeys, Devm.state, Devm.createdAccounts, Devm.transientStorage, Devm.stateGas]
     · contradiction
 
 lemma Devm.pop_of_pop {x : B256} {devm devm' : Devm} :
@@ -1603,7 +1599,7 @@ private theorem Func.compileDecision_eq_of_compileShape
     Func.compileDecision l n p = Func.compileDecision l' n q := by
   induction p generalizing n q with
   | last o =>
-      cases q <;> simp [Func.compileShape] at hp
+      cases q <;> simp only [compileShape, reduceCtorEq] at hp
       rfl
   | next i p ih =>
       cases q with
@@ -1654,7 +1650,7 @@ private theorem Table.compiles_eq_of_compileShape
     Table.compiles l t = Table.compiles l' t' := by
   induction t generalizing t' with
   | nil =>
-      cases t' <;> simp [Table.compileShape, Table.compiles] at ht ⊢
+      cases t' <;> simp only [compileShape, map_nil, compiles, map_cons, nil_eq, reduceCtorEq] at ht ⊢
   | cons np t ih =>
       cases t' with
       | nil => simp only [compileShape, map_cons, map_nil, reduceCtorEq] at ht
@@ -1674,7 +1670,7 @@ private theorem Table.compileShape_table
     Table.compileShape (table k ps) = Table.compileShape (table k qs) := by
   induction ps generalizing qs k with
   | nil =>
-      cases qs <;> simp [Table.compileShape, table] at h ⊢
+      cases qs <;> simp only [map_nil, compileShape, table, map_cons, nil_eq, reduceCtorEq] at h ⊢
   | cons p ps ih =>
       cases qs with
       | nil => simp only [map_cons, map_nil, reduceCtorEq] at h
@@ -1925,10 +1921,10 @@ lemma of_get?_table_eq_some {f fs} {bs} {m n : ℕ} {p : Func}
       refine' ⟨pfx ++ ([Jinst.jumpdest.toUInt8] ++ cq), cl, _, _, _⟩
       · have hn : n = k + compsize q + 1 := by
           rcases table_suffix h_split with
-            ⟨k', _ | ⟨q', c'⟩, h⟩ <;> simp [table] at h
+            ⟨k', _ | ⟨q', c'⟩, h⟩ <;> simp only [table, reduceCtorEq, cons.injEq, Prod.mk.injEq] at h
           rcases h with ⟨⟨⟨_⟩,⟨_⟩⟩, h⟩
           rw [h_rgt'] at h
-          cases c' <;> simp [table] at h
+          cases c' <;> simp only [table, reduceCtorEq, cons.injEq, Prod.mk.injEq] at h
           apply h.left.left
         simp only [cons_append, nil_append, length_append, length]
         rw [h_pfx, hn, Func.length_compile h_cq]

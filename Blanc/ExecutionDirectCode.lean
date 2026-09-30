@@ -15,22 +15,22 @@ theorem Xinst.step_staticcall_sameTarget_code
     f.inner.code = devm.getCode f.inner.currentTarget := by
   rcases h1 : devm.pop with err | ⟨gas, d1⟩
   · cases hsg : sevm.benvStat.rules.stateGas <;>
-      simp [Jaune.Xinst.step, hsg, h1, Jaune.XStep.ofExcept] at spawn
+      simp only [Xinst.step, hsg, XStep.ofExcept, h1, bind_pure_comp, Except.bind_error, reduceCtorEq, add_zero, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft] at spawn
   rcases h2 : d1.popToAdr with err | ⟨callee, d2⟩
   · cases hsg : sevm.benvStat.rules.stateGas <;>
-      simp [Jaune.Xinst.step, hsg, h1, h2, Jaune.XStep.ofExcept] at spawn
+      simp only [Xinst.step, hsg, XStep.ofExcept, h1, bind_pure_comp, Except.bind_ok, h2, Except.bind_error, reduceCtorEq, add_zero, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft] at spawn
   rcases h3 : d2.popToNat with err | ⟨ii, d3⟩
   · cases hsg : sevm.benvStat.rules.stateGas <;>
-      simp [Jaune.Xinst.step, hsg, h1, h2, h3, Jaune.XStep.ofExcept] at spawn
+      simp only [Xinst.step, hsg, XStep.ofExcept, h1, bind_pure_comp, Except.bind_ok, h2, h3, Except.bind_error, reduceCtorEq, add_zero, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft] at spawn
   rcases h4 : d3.popToNat with err | ⟨isz, d4⟩
   · cases hsg : sevm.benvStat.rules.stateGas <;>
-      simp [Jaune.Xinst.step, hsg, h1, h2, h3, h4, Jaune.XStep.ofExcept] at spawn
+      simp only [Xinst.step, hsg, XStep.ofExcept, h1, bind_pure_comp, Except.bind_ok, h2, h3, h4, Except.bind_error, reduceCtorEq, add_zero, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft] at spawn
   rcases h5 : d4.popToNat with err | ⟨oi, d5⟩
   · cases hsg : sevm.benvStat.rules.stateGas <;>
-      simp [Jaune.Xinst.step, hsg, h1, h2, h3, h4, h5, Jaune.XStep.ofExcept] at spawn
+      simp only [Xinst.step, hsg, XStep.ofExcept, h1, bind_pure_comp, Except.bind_ok, h2, h3, h4, h5, Except.bind_error, reduceCtorEq, add_zero, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft] at spawn
   rcases h6 : d5.popToNat with err | ⟨osz, d6⟩
   · cases hsg : sevm.benvStat.rules.stateGas <;>
-      simp [Jaune.Xinst.step, hsg, h1, h2, h3, h4, h5, h6, Jaune.XStep.ofExcept] at spawn
+      simp only [Xinst.step, hsg, XStep.ofExcept, h1, bind_pure_comp, Except.bind_ok, h2, h3, h4, h5, h6, Except.bind_error, reduceCtorEq, add_zero, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft] at spawn
   have hcode : (addAccessedAddress d6 callee).getCode callee =
       devm.getCode callee := by
     rw [addAccessedAddress_getCode]
@@ -78,25 +78,25 @@ theorem Xinst.step_call_sameTarget_code
     f.inner.code = devm.getCode f.inner.currentTarget := by
   rcases h1 : devm.pop with err | ⟨gas, d1⟩
   · cases hsg : sevm.benvStat.rules.stateGas <;>
-      simp [Jaune.Xinst.step, hsg, h1, Jaune.XStep.ofExcept] at spawn
+      simp only [Xinst.step, hsg, XStep.ofExcept, h1, Bool.not_eq_eq_eq_not, Bool.not_true, bind_pure_comp, Except.bind_error, reduceCtorEq, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft, ne_eq, Bool.decide_and, decide_not, Except.bind_ok] at spawn
   rcases h2 : d1.popToAdr with err | ⟨callee, d2⟩
   · cases hsg : sevm.benvStat.rules.stateGas <;>
-      simp [Jaune.Xinst.step, hsg, h1, h2, Jaune.XStep.ofExcept] at spawn
+      simp only [Xinst.step, hsg, XStep.ofExcept, h1, Bool.not_eq_eq_eq_not, Bool.not_true, bind_pure_comp, Except.bind_ok, h2, Except.bind_error, reduceCtorEq, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft, ne_eq, Bool.decide_and, decide_not] at spawn
   rcases h3 : d2.pop with err | ⟨value, d3⟩
   · cases hsg : sevm.benvStat.rules.stateGas <;>
-      simp [Jaune.Xinst.step, hsg, h1, h2, h3, Jaune.XStep.ofExcept] at spawn
+      simp only [Xinst.step, hsg, XStep.ofExcept, h1, Bool.not_eq_eq_eq_not, Bool.not_true, bind_pure_comp, Except.bind_ok, h2, h3, Except.bind_error, reduceCtorEq, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft, ne_eq, Bool.decide_and, decide_not] at spawn
   rcases h4 : d3.popToNat with err | ⟨ii, d4⟩
   · cases hsg : sevm.benvStat.rules.stateGas <;>
-      simp [Jaune.Xinst.step, hsg, h1, h2, h3, h4, Jaune.XStep.ofExcept] at spawn
+      simp only [Xinst.step, hsg, XStep.ofExcept, h1, Bool.not_eq_eq_eq_not, Bool.not_true, bind_pure_comp, Except.bind_ok, h2, h3, h4, Except.bind_error, reduceCtorEq, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft, ne_eq, Bool.decide_and, decide_not] at spawn
   rcases h5 : d4.popToNat with err | ⟨isz, d5⟩
   · cases hsg : sevm.benvStat.rules.stateGas <;>
-      simp [Jaune.Xinst.step, hsg, h1, h2, h3, h4, h5, Jaune.XStep.ofExcept] at spawn
+      simp only [Xinst.step, hsg, XStep.ofExcept, h1, Bool.not_eq_eq_eq_not, Bool.not_true, bind_pure_comp, Except.bind_ok, h2, h3, h4, h5, Except.bind_error, reduceCtorEq, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft, ne_eq, Bool.decide_and, decide_not] at spawn
   rcases h6 : d5.popToNat with err | ⟨oi, d6⟩
   · cases hsg : sevm.benvStat.rules.stateGas <;>
-      simp [Jaune.Xinst.step, hsg, h1, h2, h3, h4, h5, h6, Jaune.XStep.ofExcept] at spawn
+      simp only [Xinst.step, hsg, XStep.ofExcept, h1, Bool.not_eq_eq_eq_not, Bool.not_true, bind_pure_comp, Except.bind_ok, h2, h3, h4, h5, h6, Except.bind_error, reduceCtorEq, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft, ne_eq, Bool.decide_and, decide_not] at spawn
   rcases h7 : d6.popToNat with err | ⟨osz, d7⟩
   · cases hsg : sevm.benvStat.rules.stateGas <;>
-      simp [Jaune.Xinst.step, hsg, h1, h2, h3, h4, h5, h6, h7, Jaune.XStep.ofExcept] at spawn
+      simp only [Xinst.step, hsg, XStep.ofExcept, h1, Bool.not_eq_eq_eq_not, Bool.not_true, bind_pure_comp, Except.bind_ok, h2, h3, h4, h5, h6, h7, Except.bind_error, reduceCtorEq, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft, ne_eq, Bool.decide_and, decide_not] at spawn
   have hcode : (addAccessedAddress d7 callee).getCode callee =
       devm.getCode callee := by
     rw [addAccessedAddress_getCode]

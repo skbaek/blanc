@@ -404,7 +404,7 @@ theorem compile_prepend
       simp only [prepend, Func.compile, ih _ hxs, CompiledShape.prefixByteSize,
         List.flatMap_cons, Nat.add_assoc, hi, guard, eq_self_iff_true, ite_true]
       cases Func.compile l (n + (i.size + CompiledShape.prefixByteSize xs)) p <;>
-        simp [List.append_assoc]
+        simp only [Option.pure_def, Option.bind_eq_bind, Option.bind_none, Option.bind_fun_none, List.append_assoc, Option.bind_some]
 
 /-- A successful continuation compiles after any accepted instruction prefix. -/
 theorem compile_prepend_of {entries : List (Nat × Func)}

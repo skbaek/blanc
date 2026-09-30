@@ -21,6 +21,7 @@ import sys
 from module_path_policy import resolve_module_file
 from simp_migration import (MigrationError, instrument, reconcile, parse_lean_lines,
                             _validate_lsp_range, codepoint_to_lsp_pos, _json_equal)
+from simp_migration import _observed_union
 from simp_edits import SimpEditError, preview
 from leaf_audit import strip_comments_and_strings
 
@@ -243,11 +244,23 @@ class Runner:
              'environment_path':str(environment),'environment_sha256':sha(environment.read_bytes()),
              'environment_capture':'upfront before baseline'}
         if not implicit: return {**row,'status':'already_explicit','complete':True}
-        inst=instrument(original,baseline);new_json(directory/'plan.json',inst.plan)
+        inst=instrument(original,baseline,preserve_nested=True);new_json(directory/'plan.json',inst.plan)
         new_bytes(directory/'question.lean',inst.instrumented_bytes)
         question=self.collect(raw,directory/'question.lean',setup,directory,'question')
         if question is None: return {**row,'status':'question_failed','complete':False}
         res=reconcile(original,inst,question)
+        unions=[];union_rejected=[]
+        families={s['site_id']:s['family'] for s in inst.plan['sites']}
+        for unresolved in res['unresolved']:
+            if unresolved['reason']!='divergent_alternatives': continue
+            sid=unresolved['site_id']
+            try:
+                _observed_union(families[sid],[{'newText':t} for t in unresolved['alternatives']])
+                unions.append(sid)
+            except MigrationError as e:
+                union_rejected.append({'site_id':sid,'reason':str(e)})
+        new_json(directory/'observed-union-selection.json',{'sites':unions,'rejected':union_rejected})
+        if unions: res=reconcile(original,inst,question,observed_union_sites=unions)
         new_json(directory/'reconciliation.json',{k:v for k,v in res.items() if k!='candidate_bytes'})
         if any(u['reason']=='inventory_mismatch' for u in res['unresolved']):
             return {**row,'status':'inventory_mismatch','complete':False}

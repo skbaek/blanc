@@ -182,23 +182,32 @@ def _observed_union(family: str, suggestions: List[Dict[str, Any]]) -> Tuple[str
     and more elaborate suggestions. A successful preview still needs Lean replay.
     """
     names: List[str] = []
-    shape = re.compile(rf"{re.escape(family)} only(?: \[([^\[\]\n]+)\])?")
+    shape = re.compile(rf"\s*{re.escape(family)}\s+only(?:\s*\[([^\[\]]*)\])?(?:\s+at\s+(.+?))?\s*", re.S)
     identifier = re.compile(r"[A-Za-z_][A-Za-z_0-9'.]*")
+    location = None
     for suggestion in suggestions:
         match = shape.fullmatch(suggestion['newText'])
         if match is None:
             raise MigrationError('Observed union requires plain explicit simple-name suggestions')
-        for name in (match.group(1).split(', ') if match.group(1) else []):
+        actual_location = ' '.join((match.group(2) or '').split())
+        if actual_location and (family not in ('simp', 'dsimp') or
+                not all(identifier.fullmatch(n) or n in ('*', '⊢') for n in actual_location.split())):
+            raise MigrationError('Observed union rejects complex location')
+        if location is not None and actual_location != location:
+            raise MigrationError('Observed union requires identical actual locations')
+        location = actual_location
+        for name in ([n.strip() for n in match.group(1).split(',')] if match.group(1) else []):
             if identifier.fullmatch(name) is None:
                 raise MigrationError(f'Observed union rejects non-name simplifier {name!r}')
             if name not in names:
                 names.append(name)
-    return family + ' only' + (' [' + ', '.join(names) + ']' if names else ''), names
+    return family + ' only' + (' [' + ', '.join(names) + ']' if names else '') + (' at ' + location if location else ''), names
 
 
 def instrument(
     original_bytes: bytes,
     baseline_collector: Union[Dict[str, Any], str, bytes],
+    *, preserve_nested: bool = False,
 ) -> InstrumentResult:
     """Stage 1: Validate baseline and instrument unproven implicit simp heads to question heads."""
     if not isinstance(original_bytes, bytes):
@@ -273,13 +282,18 @@ def instrument(
             "source": src_text, "s_cp": s_cp, "e_cp": e_cp, "h_s": h_s, "h_e": h_e, "c_s": c_s, "c_e": c_e,
         })
 
+    if type(preserve_nested) is not bool:
+        raise MigrationError('preserve_nested must be a strict boolean')
     parsed_sites.sort(key=lambda s: s["s_cp"])
-    for i in range(len(parsed_sites) - 1):
-        if parsed_sites[i]["e_cp"] > parsed_sites[i + 1]["s_cp"]:
-            raise MigrationError(f"Overlapping site ranges between [{parsed_sites[i]['s_cp']}, {parsed_sites[i]['e_cp']}] and [{parsed_sites[i+1]['s_cp']}, {parsed_sites[i+1]['e_cp']}]")
+    for i, left in enumerate(parsed_sites):
+        for right in parsed_sites[i+1:]:
+            if right['s_cp'] >= left['e_cp']: break
+            if not preserve_nested or right['e_cp'] > left['e_cp'] or right['s_cp'] == left['s_cp']:
+                raise MigrationError(f"Overlapping site ranges between [{left['s_cp']}, {left['e_cp']}] and [{right['s_cp']}, {right['e_cp']}]")
+            left['nested_blocked'] = right['nested_blocked'] = True
 
     for s in parsed_sites:
-        if s["only"]:
+        if s["only"] or s.get('nested_blocked'):
             s["target"], s["instr_head"] = False, s["head"]
         else:
             s["target"] = True
@@ -308,6 +322,7 @@ def instrument(
         {
             "site_id": f"site_{idx}", "family": s["family"], "head": s["head"], "instrumented_head": s["instr_head"],
             "only": s["only"], "target": s["target"],
+            **({'nested_blocked': True} if s.get('nested_blocked') else {}),
             "original_range": s["range"], "original_head_range": s["headRange"], "original_command_range": s["commandRange"], "original_source": s["source"],
             "mapped_range": {"start": codepoint_to_lsp_pos(instr_lines, map_cp(s["s_cp"])), "end": codepoint_to_lsp_pos(instr_lines, map_cp(s["e_cp"]))},
             "mapped_head_range": {"start": codepoint_to_lsp_pos(instr_lines, map_cp(s["h_s"])), "end": codepoint_to_lsp_pos(instr_lines, map_cp(s["h_e"]))},
@@ -323,6 +338,7 @@ def instrument(
         "target_count": sum(1 for s in site_plans if s["target"]), "only_count": sum(1 for s in site_plans if s["only"]),
         "sites": site_plans,
     }
+    if preserve_nested: plan['preserve_nested'] = True
     return InstrumentResult(instr_bytes, instr_sha, plan)
 
 
@@ -370,7 +386,8 @@ def reconcile(
         "inventory": reconstructed_inv,
     }
 
-    derived_res = instrument(original_bytes, reconstructed_baseline)
+    derived_res = instrument(original_bytes, reconstructed_baseline,
+                             preserve_nested=plan_dict.get('preserve_nested', False))
     if not _json_equal(derived_res.plan, plan_dict):
         raise MigrationError("Supplied plan does not match deterministically derived plan")
 
@@ -390,6 +407,9 @@ def reconcile(
         raise MigrationError("Missing or non-list 'inventory' or 'edits' in question collector")
 
     unresolved: List[Dict[str, Any]] = []
+    unresolved.extend({'reason': 'preserved_nested_group', 'site_id': s['site_id'],
+                       'range': s['original_range']} for s in derived_res.plan['sites']
+                      if s.get('nested_blocked') and not s['only'])
 
     if len(q_inventory) != len(derived_res.plan["sites"]):
         unresolved.append({"reason": "inventory_mismatch", "details": f"Question collector inventory count ({len(q_inventory)}) != plan sites ({len(derived_res.plan['sites'])})"})

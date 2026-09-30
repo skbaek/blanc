@@ -83,7 +83,7 @@ theorem resume_call_safe
         rw [run] at result
         cases result
         apply continuation _ _ _ stack
-        split <;> simp
+        split <;> simp only [true_or, or_true]
       · intro err actual result fault
         rw [run] at result
         cases result

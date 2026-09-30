@@ -198,7 +198,7 @@ theorem exists_messageCallTrace {msg : Msg} {state : State}
         evm hcore trace h_result⟩
   · rename_i htarget
     have htargetFalse : msg.target.isNone = false := by
-      cases ht : msg.target.isNone <;> simp_all
+      cases ht : msg.target.isNone <;> simp_all only [Bool.false_eq_true, not_false_eq_true, Option.isNone_eq_false_iff, not_true_eq_false]
     unfold processMessageCall.call at h
     rw [hsg] at h
     dsimp only at h

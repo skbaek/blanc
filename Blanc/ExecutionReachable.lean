@@ -101,8 +101,8 @@ theorem noPushBefore_next {cd : ByteArray} {pc : Nat} {n : Ninst}
           subst hn
           exact noPushBefore_succ_of_ne_p hpc hb (by rename_i hty; rw [hty]; simp only [ne_eq,
             reduceCtorEq, not_false_eq_true])
-    · cases hj : UInt8.toJinst cd[pc] <;> simp [Functor.mapRev, hj] at h
-    · cases hl : UInt8.toLinst cd[pc] <;> simp [Functor.mapRev, hl] at h
+    · cases hj : UInt8.toJinst cd[pc] <;> simp only [Functor.mapRev, hj, Option.map_eq_map, Option.map_none, reduceCtorEq, Option.map_some, Option.some.injEq] at h
+    · cases hl : UInt8.toLinst cd[pc] <;> simp only [Functor.mapRev, hl, Option.map_eq_map, Option.map_none, reduceCtorEq, Option.map_some, Option.some.injEq] at h
     · rename_i hty
       have hle := le_of_toInstType_eq_p _ hty
       cases Option.some.inj h
@@ -163,12 +163,12 @@ theorem getInst_jump_inv {cd : ByteArray} {pc : Nat} {j : Jinst}
       · cases h
       · cases h
       · cases h
-      · cases hr : UInt8.toRinst cd[pc] <;> simp [Functor.mapRev, hr] at h
+      · cases hr : UInt8.toRinst cd[pc] <;> simp only [Functor.mapRev, hr, Option.map_eq_map, Option.map_none, reduceCtorEq, Option.map_some, Function.comp_apply, Option.some.injEq] at h
     · exfalso
-      cases hx : UInt8.toXinst cd[pc] <;> simp [Functor.mapRev, hx] at h
+      cases hx : UInt8.toXinst cd[pc] <;> simp only [Functor.mapRev, hx, Option.map_eq_map, Option.map_none, reduceCtorEq, Option.map_some, Function.comp_apply, Option.some.injEq] at h
     · assumption
     · exfalso
-      cases hl : UInt8.toLinst cd[pc] <;> simp [Functor.mapRev, hl] at h
+      cases hl : UInt8.toLinst cd[pc] <;> simp only [Functor.mapRev, hl, Option.map_eq_map, Option.map_none, reduceCtorEq, Option.map_some, Option.some.injEq] at h
     · exfalso
       cases h
   · simp only [hpc, ↓reduceDIte] at h
@@ -295,12 +295,12 @@ theorem getInst_exec_inv {cd : ByteArray} {pc : Nat} {x : Xinst}
       · cases h
       · cases h
       · cases h
-      · cases hr : UInt8.toRinst cd[pc] <;> simp [Functor.mapRev, hr] at h
+      · cases hr : UInt8.toRinst cd[pc] <;> simp only [Functor.mapRev, hr, Option.map_eq_map, Option.map_none, reduceCtorEq, Option.map_some, Function.comp_apply, Option.some.injEq, Inst.next.injEq] at h
     · assumption
     · exfalso
-      cases hj : UInt8.toJinst cd[pc] <;> simp [Functor.mapRev, hj] at h
+      cases hj : UInt8.toJinst cd[pc] <;> simp only [Functor.mapRev, hj, Option.map_eq_map, Option.map_none, reduceCtorEq, Option.map_some, Option.some.injEq] at h
     · exfalso
-      cases hl : UInt8.toLinst cd[pc] <;> simp [Functor.mapRev, hl] at h
+      cases hl : UInt8.toLinst cd[pc] <;> simp only [Functor.mapRev, hl, Option.map_eq_map, Option.map_none, reduceCtorEq, Option.map_some, Option.some.injEq] at h
     · exfalso
       cases h
   · simp only [hpc, ↓reduceDIte] at h

@@ -2301,7 +2301,7 @@ theorem executeCode.handle_precompile_ok_state
     cases hpre : precompileRun (initEvm msg) address with
     | error error cost =>
         simp only [hpre] at h
-        cases error <;> simp [executeCode.handleError] at h
+        cases error <;> simp only [executeCode.handleError, Except.ok.injEq, reduceCtorEq] at h
         · exact (congrArg Devm.state h).symm.trans rfl
         · exact (congrArg Devm.state h).symm.trans rfl
     | ok cost output =>
@@ -2312,7 +2312,7 @@ theorem executeCode.handle_precompile_ok_state
     cases hpre : precompileRun (initEvm msg) address with
     | error error cost =>
         simp only [hpre] at h
-        cases error <;> simp [executeCode.handleErrorAmsterdam] at h
+        cases error <;> simp only [executeCode.handleErrorAmsterdam, Except.ok.injEq, reduceCtorEq] at h
         · exact (congrArg Devm.state h).symm.trans rfl
         · exact (congrArg Devm.state h).symm.trans rfl
     | ok cost output =>
@@ -2401,7 +2401,7 @@ theorem ProcessCreateMessage.rollback_of_error
             have hchargedError :=
               processCreateMessage.chargeCodeGas_error_eq hcharge
             cases hinner : inner.error <;>
-              simp [hinner] at hinnerNone hchargedError
+              simp only [hinner, Option.isNone_none, Option.isNone_some, Bool.false_eq_true] at hinnerNone hchargedError
             rw [hsettle] at herror
             change charged.error.isSome = true at herror
             simp only [hchargedError, Option.isSome_none, Bool.false_eq_true] at herror
@@ -5884,7 +5884,7 @@ lemma Devm.push_of_push {x : B256} {s s' : Devm} (h : Devm.push x s = .ok s') :
   · cases h
   · injection h with eq; subst eq
     constructor <;>
-      simp [Devm.Rels.eq, Stack.Push, Split, Devm.setMach]
+      simp only [Stack.Push, Split, Devm.setMach, cons_append, nil_append, Devm.Rels.eq]
     all_goals rfl
 
 lemma Devm.pushBurn_of_burn_of_push {xs : List B256} {s s' s'' : Devm}
@@ -5961,7 +5961,7 @@ lemma Devm.pop_of_popToNat {k : Nat} {devm devm' : Devm}
     ∃ x, Devm.Pop [x] devm devm' := by
   rw [Devm.popToNat_def] at h
   dsimp only [Functor.mapRev, Functor.map, Except.map] at h
-  rcases hp : devm.pop with _ | ⟨x, devm1⟩ <;> simp [hp] at h
+  rcases hp : devm.pop with _ | ⟨x, devm1⟩ <;> simp only [hp, reduceCtorEq, Except.ok.injEq] at h
   rcases h with ⟨_, rfl⟩
   exact ⟨x, Devm.pop_of_pop hp⟩
 
@@ -5978,7 +5978,7 @@ lemma Devm.pop_of_popToNat_val {k : Nat} {devm devm' : Devm}
     ∃ x, Devm.Pop [x] devm devm' ∧ k = x.toNat := by
   rw [Devm.popToNat_def] at h
   dsimp only [Functor.mapRev, Functor.map, Except.map] at h
-  rcases hp : devm.pop with _ | ⟨x, devm1⟩ <;> simp [hp] at h
+  rcases hp : devm.pop with _ | ⟨x, devm1⟩ <;> simp only [hp, reduceCtorEq, Except.ok.injEq] at h
   rcases h with ⟨rfl, rfl⟩
   exact ⟨x, Devm.pop_of_pop hp, rfl⟩
 
@@ -6048,7 +6048,7 @@ lemma of_run_pop {e : Sevm} {s s' : Devm} (h : Ninst.Run e s pop s') :
   simp only [Rinst.run, Rinst.runCore] at run
   rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
   simp only [Functor.mapRev, Functor.map, Except.map] at h1
-  rcases hp : Devm.pop s with _ | ⟨x, s₂⟩ <;> simp [hp] at h1
+  rcases hp : Devm.pop s with _ | ⟨x, s₂⟩ <;> simp only [hp, reduceCtorEq, Except.ok.injEq] at h1
   subst h1
   exact ⟨x, Devm.popBurn_of_pop_of_burn (Devm.pop_of_pop hp) (Devm.burn_of_chargeGas h2)⟩
 
@@ -6132,7 +6132,7 @@ lemma Devm.pop_of_popN {n : Nat} {devm devm' : Devm} {l : List B256}
     injection eq with eq1 eq2
     subst eq1; subst eq2
     refine ⟨rfl, ?_⟩
-    constructor <;> simp [Devm.Rels.eq, Stack.Pop, Split]
+    constructor <;> simp only [Stack.Pop, Split, nil_append, Devm.Rels.eq]
   | succ n ih =>
     rw [Devm.popN_def] at hp
     rcases Except.bind_eq_ok hp with ⟨⟨x, devm1⟩, hp1, hp2⟩
@@ -6808,7 +6808,7 @@ lemma prefix_of_extcodesize_val
   rw [Devm.popToAdr_def] at hpopAdr
   dsimp only [Functor.mapRev, Functor.map, Except.map] at hpopAdr
   rcases hpop : Devm.pop s with _ | ⟨word, d0⟩ <;>
-    simp [hpop] at hpopAdr
+    simp only [hpop, reduceCtorEq, Except.ok.injEq] at hpopAdr
   rcases hpopAdr with ⟨rfl, rfl⟩
   have hpop' := Devm.pop_of_pop hpop
   have hx : x = word :=
@@ -8031,7 +8031,7 @@ instance : Rinst.Hinv Devm.memory Rinst.pop := ⟨by
   simp only [Rinst.run, Rinst.runCore] at run
   rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
   simp only [Functor.mapRev, Functor.map, Except.map] at h1
-  rcases hp : Devm.pop pre with _ | ⟨x, s₂⟩ <;> simp [hp] at h1
+  rcases hp : Devm.pop pre with _ | ⟨x, s₂⟩ <;> simp only [hp, reduceCtorEq, Except.ok.injEq] at h1
   subst h1
   exact (Devm.popBurn_of_pop_of_burn (Devm.pop_of_pop hp)
     (Devm.burn_of_chargeGas h2)).memory⟩
@@ -8304,7 +8304,7 @@ scoped instance : Rinst.Hinv Devm.logs Rinst.pop := ⟨by
   simp only [Rinst.run, Rinst.runCore] at run
   rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
   simp only [Functor.mapRev, Functor.map, Except.map] at h1
-  rcases hp : Devm.pop pre with _ | ⟨x, s₂⟩ <;> simp [hp] at h1
+  rcases hp : Devm.pop pre with _ | ⟨x, s₂⟩ <;> simp only [hp, reduceCtorEq, Except.ok.injEq] at h1
   subst h1
   exact (Devm.popBurn_of_pop_of_burn (Devm.pop_of_pop hp)
     (Devm.burn_of_chargeGas h2)).logs⟩
@@ -8314,7 +8314,7 @@ scoped instance : Rinst.Hinv Devm.output Rinst.pop := ⟨by
   simp only [Rinst.run, Rinst.runCore] at run
   rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
   simp only [Functor.mapRev, Functor.map, Except.map] at h1
-  rcases hp : Devm.pop pre with _ | ⟨x, s₂⟩ <;> simp [hp] at h1
+  rcases hp : Devm.pop pre with _ | ⟨x, s₂⟩ <;> simp only [hp, reduceCtorEq, Except.ok.injEq] at h1
   subst h1
   exact (Devm.popBurn_of_pop_of_burn (Devm.pop_of_pop hp)
     (Devm.burn_of_chargeGas h2)).output⟩
@@ -8370,7 +8370,7 @@ scoped instance : Rinst.Hinv Devm.logs Rinst.extcodesize := ⟨by
   rw [Devm.popToAdr_def] at h1
   dsimp only [Functor.mapRev, Functor.map, Except.map] at h1
   rcases hp : Devm.pop pre with _ | ⟨word, d0⟩ <;>
-    simp [hp] at h1
+    simp only [hp, reduceCtorEq, Except.ok.injEq] at h1
   rcases h1 with ⟨rfl, rfl⟩
   have hpop := Devm.pop_of_pop hp
   split at run₁
@@ -8389,7 +8389,7 @@ scoped instance : Rinst.Hinv Devm.output Rinst.extcodesize := ⟨by
   rw [Devm.popToAdr_def] at h1
   dsimp only [Functor.mapRev, Functor.map, Except.map] at h1
   rcases hp : Devm.pop pre with _ | ⟨word, d0⟩ <;>
-    simp [hp] at h1
+    simp only [hp, reduceCtorEq, Except.ok.injEq] at h1
   rcases h1 with ⟨rfl, rfl⟩
   have hpop := Devm.pop_of_pop hp
   split at run₁

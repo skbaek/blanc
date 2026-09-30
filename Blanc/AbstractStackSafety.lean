@@ -41,7 +41,7 @@ theorem WordMatches.eq_of_some {expected actual : B256}
 theorem Matches.length {words : Pattern} {values : Stack}
     (matched : Matches words values) : values.length = words.length := by
   induction words generalizing values with
-  | nil => cases values <;> simp_all [Matches]
+  | nil => cases values <;> simp_all only [Matches, List.length_nil]
   | cons word words ih =>
       cases values with
       | nil => exact False.elim matched
@@ -231,7 +231,7 @@ theorem Matches.set {words : Pattern} {values : Stack}
     {word : Option B256} {value : B256} (head : WordMatches word value) :
     Matches (words.set index word) (values.set index value) := by
   induction words generalizing values index with
-  | nil => cases values <;> simp_all [Matches]
+  | nil => cases values <;> simp_all only [Matches, List.set_nil, matches_nil]
   | cons first words ih =>
       cases values with
       | nil => exact False.elim matched

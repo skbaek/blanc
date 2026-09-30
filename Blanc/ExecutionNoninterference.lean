@@ -35,7 +35,7 @@ theorem Exec.noRetainedWriteTo_of_not_commits
   intro write member
   have nodes := Exec.retainedNodes_eq_nil_of_not_commits run notCommitted
   exact False.elim (by
-    simp [Exec.retainedStorageWrites, nodes] at member)
+    simp only [retainedStorageWrites, nodes, List.filterMap_nil, List.not_mem_nil] at member)
 
 private theorem Exec.StorageWrite.foldlCell_eq_of_noRetainedWriteTo
     {owner : Adr} {key : B256} {writes : List Exec.StorageWrite}
@@ -53,7 +53,7 @@ private theorem Exec.StorageWrite.foldlCell_eq_of_noRetainedWriteTo
       apply ih initial
       intro write member
       exact none write (by
-        simp [member])
+        simp only [List.mem_cons, member, or_true])
 
 /-- Absence of a retained successful write to one cell preserves that cell in
 every committing outcome of the invocation frame closure. -/

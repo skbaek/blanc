@@ -306,6 +306,21 @@ def test_observed_per_site_union() -> None:
     wrong_owner = copy.deepcopy(collector)
     wrong_owner['edits'][1]['referenceRange'] = {'start': {'line': 0, 'character': 0}, 'end': {'line': 0, 'character': 3}}
     assert not reconcile(original, inst.plan, wrong_owner, observed_union_sites=['site_0']).complete
+    from simp_migration import _observed_union
+    text, names = _observed_union('simp', [
+        {'newText':'simp only [A,\n  B] at h ⊢'},
+        {'newText':'simp only [B,C] at\n h   ⊢'}])
+    assert text == 'simp only [A, B, C] at h ⊢' and names == ['A','B','C']
+    for alternatives in [
+        ['simp only [A] at h','simp only [B] at k'],
+        ['simp only [A] at h','simp only [B]'],
+        ['simp only [A] at h; trivial','simp only [B] at h'],
+        ['simp only [A,]','simp only [B]'],
+        ['simpa only [A] using h','simpa only [B] using h'],
+        ['simp only [↓A]','simp only [B]']]:
+        try: _observed_union(alternatives[0].split()[0],[{'newText':t} for t in alternatives])
+        except MigrationError: pass
+        else: raise AssertionError('Union accepted incompatible tail or non-name')
 
 
 # --- Test 9: Wrong command and reference range ownership
@@ -389,6 +404,19 @@ def test_overlapping_site_ranges() -> None:
         assert False, "Expected MigrationError for overlapping ranges"
     except MigrationError as exc:
         assert "overlapping" in str(exc).lower()
+    try: instrument(b, make_baseline(b, [s1, s2]),preserve_nested=True)
+    except MigrationError: pass
+    else: raise AssertionError('Crossing ranges accepted')
+    text='example : True := by simp only [if_neg (by simp)]\nexample : True := by simp\n'
+    outer=make_site(text,'simp only [if_neg (by simp)]','simp',only=True)
+    inner=make_site(text,'simp)','simp'); inner['source']='simp'; inner['range']['end']['character']-=1
+    other=make_site(text,'simp\n','simp'); other['source']='simp'; other['range']['end']={'line':1,'character':25}
+    original=text.encode()
+    inst=instrument(original,make_baseline(original,[outer,inner,other]),preserve_nested=True)
+    assert inst.instrumented_bytes == original[:-5]+b'simp?\n'
+    assert inst.plan['target_count']==1
+    rec=reconcile(original,inst,make_q_col(inst.plan,edits=[make_edit(inst.plan['sites'][2],'simp only')]))
+    assert rec['resolved_count']==1 and rec['unresolved'][0]['reason']=='preserved_nested_group'
 
 
 # --- Test 14: CLI execution for instrument and reconcile

@@ -227,7 +227,7 @@ theorem assert_safe (condition : Prop) [Decidable condition]
     SafeResult (fun _ : Unit => True)
       (Except.assert condition (error, pre)) := by
   unfold Except.assert
-  split <;> simp [SafeResult, notFault]
+  split <;> simp only [SafeResult, notFault, not_false_eq_true]
 
 /-- A successful assertion exposes the proposition it checked, while its
 supplied failure remains a permitted non-stack error. -/
@@ -236,7 +236,7 @@ theorem assert_true_safe (condition : Prop) [Decidable condition]
     SafeResult (fun _ : Unit => condition)
       (Except.assert condition (error, pre)) := by
   unfold Except.assert
-  split <;> simp_all [SafeResult]
+  split <;> simp_all only [SafeResult, not_false_eq_true]
 
 theorem assertDynamic_safe (sevm : Sevm) (pre : Devm) :
     SafeResult (fun _ : Unit => True) (assertDynamic sevm pre) := by

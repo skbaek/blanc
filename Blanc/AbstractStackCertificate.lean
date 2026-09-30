@@ -22,7 +22,7 @@ theorem Matches.covered {actual expected : Pattern} {values : Stack}
     (matched : Matches actual values) (checked : covers actual expected = true) :
     Matches expected values := by
   induction actual generalizing expected values with
-  | nil => cases expected <;> cases values <;> simp_all [covers, Matches]
+  | nil => cases expected <;> cases values <;> simp_all only [covers, Matches, Bool.false_eq_true]
   | cons word rest ih =>
       cases expected with
       | nil => simp only [covers, Bool.false_eq_true] at checked
@@ -188,7 +188,7 @@ theorem checkInstruction_safe {evm : Evm} {table : Table} {maximum : Nat}
               obtain ⟨rfl, postMatch⟩ := result
               exact checkSuccessor_safe checked postMatch
       | exec instruction =>
-          cases instruction <;> try simp [checkInstruction] at checked
+          cases instruction <;> try simp only [checkInstruction, Bool.false_eq_true] at checked
           cases transferred : callTransfer input with
           | none => simp only [transferred, Bool.false_eq_true] at checked
           | some output =>
