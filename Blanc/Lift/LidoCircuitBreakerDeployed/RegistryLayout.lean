@@ -773,6 +773,32 @@ def rawNonzeroPost (raw : Stor) (entries : List Entry)
     (target newPauser oldPauser : B256) : Stor :=
   applyRegistryRawWrites raw (nonzeroWrites entries target newPauser oldPauser)
 
+/-- Observable keys and clean packed values of the finite three-write update. -/
+theorem nonzeroWrites_wellFormed {entries : List Entry} {target newPauser oldPauser : B256}
+    (hlen : entries.length < 2 ^ 252)
+    (htarget : nonzeroCanonicalAddress target) (hnew : nonzeroCanonicalAddress newPauser)
+    (hold : nonzeroCanonicalAddress oldPauser) :
+    (∀ w ∈ nonzeroWrites entries target newPauser oldPauser,
+      RegistryObservable entries.length w.1) ∧
+    (∀ w ∈ nonzeroWrites entries target newPauser oldPauser,
+      RegistryAddressFamily entries.length w.1 → addressSlotReadWord w.2 = w.2) := by
+  constructor
+  · intro w hw'
+    simp only [nonzeroWrites, List.mem_cons, List.not_mem_nil, or_false] at hw'
+    rcases hw' with rfl | rfl | rfl
+    · exact Or.inl ⟨target, htarget.2, rfl⟩
+    · exact Or.inr (Or.inr (Or.inl ⟨oldPauser, hold.2, rfl⟩))
+    · exact Or.inr (Or.inr (Or.inl ⟨newPauser, hnew.2, rfl⟩))
+  · intro w hw' hfam
+    simp only [nonzeroWrites, List.mem_cons, List.not_mem_nil, or_false] at hw'
+    rcases hw' with rfl | rfl | rfl
+    · exact addressSlotReadWord_eq_self_of_lt hnew.2
+    · exact absurd hfam
+        (not_registryAddressFamily_countSlot hold.2 hlen)
+    · exact absurd hfam
+        (not_registryAddressFamily_countSlot hnew.2 hlen)
+
+
 /-- Concrete application of the shared logical three-write preservation
 theorem to the deployed Solidity storage projection: the found-target,
 nonzero-new-pauser reassignment. -/
@@ -799,24 +825,10 @@ theorem rawNonzero_preservesRegistry
     apply RegistryWitness.applyFoundNonzeroWritesOfReadEffect hw htarget hnew hfind
     intro key
     rfl
+  have hwell := nonzeroWrites_wellFormed hw.entries_length_lt_2pow252 htarget hnew hold
   refine RegistryWitness.ofRawRegistryWrites
-    hw.entries_length_lt_2pow252 ?_ hfaithful ?_ ?_ hwrites hlogical
+    hw.entries_length_lt_2pow252 ?_ hfaithful hwell.1 hwell.2 hwrites hlogical
   · rw [setEntryAt_length_of_findEntry hfind]
-  · intro w hw'
-    simp only [nonzeroWrites, List.mem_cons, List.not_mem_nil, or_false] at hw'
-    rcases hw' with rfl | rfl | rfl
-    · exact Or.inl ⟨target, htarget.2, rfl⟩
-    · exact Or.inr (Or.inr (Or.inl ⟨oldPauser, hold.2, rfl⟩))
-    · exact Or.inr (Or.inr (Or.inl ⟨newPauser, hnew.2, rfl⟩))
-  · intro w hw' hfam
-    simp only [nonzeroWrites, List.mem_cons, List.not_mem_nil, or_false] at hw'
-    rcases hw' with rfl | rfl | rfl
-    · exact addressSlotReadWord_eq_self_of_lt hnew.2
-    · exact absurd hfam
-        (not_registryAddressFamily_countSlot hold.2 hw.entries_length_lt_2pow252)
-    · exact absurd hfam
-        (not_registryAddressFamily_countSlot hnew.2 hw.entries_length_lt_2pow252)
-
 /-- The nine chronological logical writes for an absent-target,
 zero-new-pauser call: exactly `applyAbsentZeroWritesOfReadEffect`'s write
 list (`Blanc/LidoCircuitBreakerRegistry.lean`).  A fresh push immediately
