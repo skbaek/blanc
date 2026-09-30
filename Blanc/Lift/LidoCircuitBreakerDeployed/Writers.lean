@@ -492,11 +492,11 @@ theorem t044b_ret {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {x y z ra : B256}
 /-- A call of entry 22 writing `v` at `mapSlot p 2`, for a canonical `p` whose
 slot is off the Registry: it returns to the caller's stack below its three
 words, keeping any storage predicate `Φ` stable under such writes. -/
-theorem call22_foreign {Φ : Stor → Prop}
-    (hΦ : ∀ {s : Stor} {w v : B256}, ForeignApart (2 ^ 160) w → Φ s → Φ (s.set w v))
+theorem call22_preserves {Apart : B256 → Prop} {Φ : Stor → Prop}
+    (hΦ : ∀ {s : Stor} {w v : B256}, Apart w → Φ s → Φ (s.set w v))
     {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {v p ra : B256}
     {xs : List B256} {f : SFunc} {r : Seg} (hfork : CoveredFork sevm.benvStat.fork)
-    (hp : canonicalAddress p) (hfa : ForeignApart (2 ^ 160) (mapSlot p 2))
+    (hp : canonicalAddress p) (hfa : Apart (mapSlot p 2))
     (hinv : Φ (Devm.getStor b sevm.currentTarget))
     (run : SFunc.RunCut prog sevm [] (St b (Bytes.toB256 [0x0c, 0xd5] :: v :: p :: ra :: xs) M G)
       (.callNext 22 f) r)
@@ -515,13 +515,27 @@ theorem call22_foreign {Φ : Stor → Prop}
     getStor_St, B256.toAdr_toB256_of_lt hp]
   exact hΦ hfa hinv
 
+/- The universal-registry interface remains a corollary. -/
+theorem call22_foreign {Φ : Stor → Prop}
+    (hΦ : ∀ {s : Stor} {w v : B256}, ForeignApart (2 ^ 160) w → Φ s → Φ (s.set w v))
+    {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {v p ra : B256}
+    {xs : List B256} {f : SFunc} {r : Seg} (hfork : CoveredFork sevm.benvStat.fork)
+    (hp : canonicalAddress p) (hfa : ForeignApart (2 ^ 160) (mapSlot p 2))
+    (hinv : Φ (Devm.getStor b sevm.currentTarget))
+    (run : SFunc.RunCut prog sevm [] (St b (Bytes.toB256 [0x0c, 0xd5] :: v :: p :: ra :: xs) M G)
+      (.callNext 22 f) r)
+    (hr : ∀ D, r ≠ .done (.halted D)) :
+    ∃ b' M' G', Φ (Devm.getStor b' sevm.currentTarget) ∧
+      SFunc.RunCut prog sevm [] (St b' xs M' G') f r := by
+  exact call22_preserves hΦ hfork hp hfa hinv run hr
+
 /-- `t_0418_c2`: when the new pauser is nonzero, `_setHeartbeatExpiry(np, now +
 heartbeatInterval)`; then pop and return.  Keeps any `Φ` stable under off-Registry writes. -/
-theorem t0418_foreign {Φ : Stor → Prop}
-    (hΦ : ∀ {s : Stor} {w v : B256}, ForeignApart (2 ^ 160) w → Φ s → Φ (s.set w v))
+theorem t0418_preserves {Apart : B256 → Prop} {Φ : Stor → Prop}
+    (hΦ : ∀ {s : Stor} {w v : B256}, Apart w → Φ s → Φ (s.set w v))
     {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {p0 np t ra : B256}
     {xs : List B256} {D : Devm} (hfork : CoveredFork sevm.benvStat.fork)
-    (hnp : canonicalAddress np) (hfa : np ≠ 0 → ForeignApart (2 ^ 160) (mapSlot np 2))
+    (hnp : canonicalAddress np) (hfa : np ≠ 0 → Apart (mapSlot np 2))
     (hinv : Φ (Devm.getStor b sevm.currentTarget))
     (run : SFunc.RunCut prog sevm [] (St b (p0 :: np :: t :: ra :: xs) M G) t_0418_c2
       (.done (.returned D))) :
@@ -579,21 +593,33 @@ theorem t0418_foreign {Φ : Stor → Prop}
     obtain ⟨G18, run⟩ := ric_dest run
     obtain ⟨d1, s1, run⟩ := ric_next run
     obtain ⟨G19, rfl⟩ := ri_push s1
-    obtain ⟨b', M', G', hinv', run⟩ := call22_foreign hΦ hfork hnp (hfa hnp0) hinv23 run
+    obtain ⟨b', M', G', hinv', run⟩ := call22_preserves hΦ hfork hnp (hfa hnp0) hinv23 run
       (fun _ h => by cases h)
     exact (t044b_ret run) ▸ hinv'
   · exact (t044b_ret run) ▸ hinv
 
+/- The universal-registry interface remains a corollary. -/
+theorem t0418_foreign {Φ : Stor → Prop}
+    (hΦ : ∀ {s : Stor} {w v : B256}, ForeignApart (2 ^ 160) w → Φ s → Φ (s.set w v))
+    {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {p0 np t ra : B256}
+    {xs : List B256} {D : Devm} (hfork : CoveredFork sevm.benvStat.fork)
+    (hnp : canonicalAddress np) (hfa : np ≠ 0 → ForeignApart (2 ^ 160) (mapSlot np 2))
+    (hinv : Φ (Devm.getStor b sevm.currentTarget))
+    (run : SFunc.RunCut prog sevm [] (St b (p0 :: np :: t :: ra :: xs) M G) t_0418_c2
+      (.done (.returned D))) :
+    Φ (Devm.getStor D sevm.currentTarget) := by
+  exact t0418_preserves hΦ hfork hnp hfa hinv run
+
 /-- `t_0409_c2` (entry 2's head, also inlined in `t_03e2_c21`): on a nonzero
 flag `c` (the previous pauser has no pausables left), `_setHeartbeatExpiry(p0,
 0)`, then the new pauser's heartbeat. -/
-theorem t0409_foreign {Φ : Stor → Prop}
-    (hΦ : ∀ {s : Stor} {w v : B256}, ForeignApart (2 ^ 160) w → Φ s → Φ (s.set w v))
+theorem t0409_preserves {Apart : B256 → Prop} {Φ : Stor → Prop}
+    (hΦ : ∀ {s : Stor} {w v : B256}, Apart w → Φ s → Φ (s.set w v))
     {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {c p0 np t ra : B256}
     {xs : List B256} {D : Devm} (hfork : CoveredFork sevm.benvStat.fork)
     (hp0 : canonicalAddress p0) (hnp : canonicalAddress np)
-    (hc : c ≠ 0 → ForeignApart (2 ^ 160) (mapSlot p0 2))
-    (hfa : np ≠ 0 → ForeignApart (2 ^ 160) (mapSlot np 2))
+    (hc : c ≠ 0 → Apart (mapSlot p0 2))
+    (hfa : np ≠ 0 → Apart (mapSlot np 2))
     (hinv : Φ (Devm.getStor b sevm.currentTarget))
     (run : SFunc.RunCut prog sevm [] (St b (c :: p0 :: np :: t :: ra :: xs) M G) t_0409_c2
       (.done (.returned D))) :
@@ -616,10 +642,24 @@ theorem t0409_foreign {Φ : Stor → Prop}
     obtain ⟨G7, rfl⟩ := ri_push s1
     obtain ⟨d1, s1, run⟩ := ric_next run
     obtain ⟨G8, rfl⟩ := ri_push s1
-    obtain ⟨b', M', G', hinv', run⟩ := call22_foreign hΦ hfork hp0 (hc hc0) hinv run
+    obtain ⟨b', M', G', hinv', run⟩ := call22_preserves hΦ hfork hp0 (hc hc0) hinv run
       (fun _ h => by cases h)
-    exact t0418_foreign hΦ hfork hnp hfa hinv' run
-  · exact t0418_foreign hΦ hfork hnp hfa hinv run
+    exact t0418_preserves hΦ hfork hnp hfa hinv' run
+  · exact t0418_preserves hΦ hfork hnp hfa hinv run
+
+/- The universal-registry interface remains a corollary. -/
+theorem t0409_foreign {Φ : Stor → Prop}
+    (hΦ : ∀ {s : Stor} {w v : B256}, ForeignApart (2 ^ 160) w → Φ s → Φ (s.set w v))
+    {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {c p0 np t ra : B256}
+    {xs : List B256} {D : Devm} (hfork : CoveredFork sevm.benvStat.fork)
+    (hp0 : canonicalAddress p0) (hnp : canonicalAddress np)
+    (hc : c ≠ 0 → ForeignApart (2 ^ 160) (mapSlot p0 2))
+    (hfa : np ≠ 0 → ForeignApart (2 ^ 160) (mapSlot np 2))
+    (hinv : Φ (Devm.getStor b sevm.currentTarget))
+    (run : SFunc.RunCut prog sevm [] (St b (c :: p0 :: np :: t :: ra :: xs) M G) t_0409_c2
+      (.done (.returned D))) :
+    Φ (Devm.getStor D sevm.currentTarget) := by
+  exact t0409_preserves hΦ hfork hp0 hnp hc hfa hinv run
 
 /-! ## Entry 21: the `registerPauser` body -/
 

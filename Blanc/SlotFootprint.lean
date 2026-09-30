@@ -124,4 +124,33 @@ theorem FreshKeys.of_universe {U : κ → Prop} {ks : List κ}
 
 end Lemmas
 
+/-! ## Executable finite separation checks
+
+The two lists are explicit data. The checks do not enumerate the key type,
+and do not require nonzero-storage support or a pristine untracked cell. -/
+
+/-- Check that each written key aliases only itself among the requested observations. -/
+def checkFaithfulOn {κ : Type} [DecidableEq κ] (slot : κ → B256)
+    (observed written : List κ) : Bool :=
+  written.all fun t => observed.all fun k => decide (slot k = slot t → k = t)
+
+/-- The finite check's exact soundness boundary, including repeated written keys. -/
+theorem checkFaithfulOn_eq_true {κ : Type} [DecidableEq κ] {slot : κ → B256}
+    {observed written : List κ} :
+    checkFaithfulOn slot observed written = true ↔
+      ∀ t ∈ written, ∀ k ∈ observed, slot k = slot t → k = t := by
+  simp only [checkFaithfulOn, List.all_eq_true, decide_eq_true_eq]
+
+/-- Check that each raw foreign slot misses every requested key's slot. -/
+def checkApartOn {κ : Type} (slot : κ → B256)
+    (observed : List κ) (foreign : List B256) : Bool :=
+  foreign.all fun w => observed.all fun k => decide (slot k ≠ w)
+
+/-- Exact soundness of the finite foreign-slot check. -/
+theorem checkApartOn_eq_true {κ : Type} {slot : κ → B256}
+    {observed : List κ} {foreign : List B256} :
+    checkApartOn slot observed foreign = true ↔
+      ∀ w ∈ foreign, ∀ k ∈ observed, slot k ≠ w := by
+  simp only [checkApartOn, List.all_eq_true, decide_eq_true_eq]
+
 end Blanc.SlotFootprint
