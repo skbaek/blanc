@@ -459,6 +459,7 @@ CONTRACTS = {
                              "Lift.LidoCircuitBreakerDeployed.Prog",
                              "Lift.LidoCircuitBreakerDeployed.RegistryEffects",
                              "Lift.LidoCircuitBreakerDeployed.RegistryLayout",
+                             "Lift.LidoCircuitBreakerDeployed.FiniteRegistry",
                              "Lift.LidoCircuitBreakerDeployed.Removal",
                              "Lift.LidoCircuitBreakerDeployed.SetPauserCalls",
                              "Lift.LidoCircuitBreakerDeployed.SetPauserFresh",
