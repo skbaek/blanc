@@ -267,11 +267,6 @@ Keccak injectivity. -/
 def RegistryKeysFaithful (bound : Nat) (T : List B256) : Prop :=
   ∀ t ∈ T, ∀ k, RegistryObservable bound k → solKey k = solKey t → k = t
 
-theorem RegistryKeysFaithful.mono {bound : Nat} {T T' : List B256}
-    (h : RegistryKeysFaithful bound T) (hsub : ∀ t ∈ T', t ∈ T) :
-    RegistryKeysFaithful bound T' :=
-  fun t ht k hk heq => h t (hsub t ht) k hk heq
-
 /-- The actual raw `Stor.set` value for a logical write: packed through the
 address mask for the two address-shaped families (assignment, populated
 array entries), verbatim otherwise (index, count, array length). -/

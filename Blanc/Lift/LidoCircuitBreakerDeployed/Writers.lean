@@ -598,18 +598,6 @@ theorem t0418_preserves {Apart : B256 → Prop} {Φ : Stor → Prop}
     exact (t044b_ret run) ▸ hinv'
   · exact (t044b_ret run) ▸ hinv
 
-/- The universal-registry interface remains a corollary. -/
-theorem t0418_foreign {Φ : Stor → Prop}
-    (hΦ : ∀ {s : Stor} {w v : B256}, ForeignApart (2 ^ 160) w → Φ s → Φ (s.set w v))
-    {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {p0 np t ra : B256}
-    {xs : List B256} {D : Devm} (hfork : CoveredFork sevm.benvStat.fork)
-    (hnp : canonicalAddress np) (hfa : np ≠ 0 → ForeignApart (2 ^ 160) (mapSlot np 2))
-    (hinv : Φ (Devm.getStor b sevm.currentTarget))
-    (run : SFunc.RunCut prog sevm [] (St b (p0 :: np :: t :: ra :: xs) M G) t_0418_c2
-      (.done (.returned D))) :
-    Φ (Devm.getStor D sevm.currentTarget) := by
-  exact t0418_preserves hΦ hfork hnp hfa hinv run
-
 /-- `t_0409_c2` (entry 2's head, also inlined in `t_03e2_c21`): on a nonzero
 flag `c` (the previous pauser has no pausables left), `_setHeartbeatExpiry(p0,
 0)`, then the new pauser's heartbeat. -/
@@ -646,20 +634,6 @@ theorem t0409_preserves {Apart : B256 → Prop} {Φ : Stor → Prop}
       (fun _ h => by cases h)
     exact t0418_preserves hΦ hfork hnp hfa hinv' run
   · exact t0418_preserves hΦ hfork hnp hfa hinv run
-
-/- The universal-registry interface remains a corollary. -/
-theorem t0409_foreign {Φ : Stor → Prop}
-    (hΦ : ∀ {s : Stor} {w v : B256}, ForeignApart (2 ^ 160) w → Φ s → Φ (s.set w v))
-    {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {c p0 np t ra : B256}
-    {xs : List B256} {D : Devm} (hfork : CoveredFork sevm.benvStat.fork)
-    (hp0 : canonicalAddress p0) (hnp : canonicalAddress np)
-    (hc : c ≠ 0 → ForeignApart (2 ^ 160) (mapSlot p0 2))
-    (hfa : np ≠ 0 → ForeignApart (2 ^ 160) (mapSlot np 2))
-    (hinv : Φ (Devm.getStor b sevm.currentTarget))
-    (run : SFunc.RunCut prog sevm [] (St b (c :: p0 :: np :: t :: ra :: xs) M G) t_0409_c2
-      (.done (.returned D))) :
-    Φ (Devm.getStor D sevm.currentTarget) := by
-  exact t0409_preserves hΦ hfork hp0 hnp hc hfa hinv run
 
 /-! ## Entry 21: the `registerPauser` body -/
 
