@@ -113,18 +113,19 @@ theorem Exec.NinstOccurrence.exists_root_call_child
     have localMember : child ∈ Exec.descendantFramePaths [] index
         occurrence.node.exc := by
       rw [nodeEq]
-      simp [Exec.descendantFramePaths, child, childSettles]
+      simp only [descendantFramePaths, childSettles, ↓reduceDIte, List.nil_append, List.cons_append,
+        List.mem_cons, List.mem_append, true_or, child]
     have member := embedMember child localMember
-    simp [Exec.committedFramePaths, rootCommitted, member]
+    simp only [committedFramePaths, rootCommitted, ↓reduceDIte, List.mem_cons, member, or_true]
   have parentMember :
       ⟨[], Exec.Frame.ofRun root rootCommitted⟩ ∈
         Exec.committedFramePaths root := by
-    simp [Exec.committedFramePaths, rootCommitted]
+    simp only [committedFramePaths, rootCommitted, ↓reduceDIte, List.mem_cons, true_or]
   have retained : occurrence.Retained := by
     apply (Exec.mem_retainedNodes_iff_committedFrame_parentPrefix
       root occurrence.node).mpr
     exact ⟨Exec.Frame.ofRun root rootCommitted,
-      by simp [Exec.committedFrames, rootCommitted], sameFrame⟩
+      by simp only [committedFrames, rootCommitted, ↓reduceDIte, List.mem_cons, true_or], sameFrame⟩
   let entering : Exec.LocatedFrame.EnteringOccurrence root child :=
     { parent := ⟨[], Exec.Frame.ofRun root rootCommitted⟩
       parentMember := parentMember

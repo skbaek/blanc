@@ -152,9 +152,7 @@ theorem TransactionTrace.exists_stateChronology
   rcases trace.exists_finalStateForm hfork with
     ⟨refundCounter, refundCounterEq, finalStateEq⟩
   refine ⟨⟨refundCounter, refundCounterEq, ?_⟩⟩
-  simpa [TransactionTrace.coinbaseState,
-    TransactionTrace.refundedState, TransactionTrace.refundValue,
-    TransactionTrace.coinbaseValue, TransactionTrace.chargedGas] using
+  simpa only [coinbaseState, refundedState, refundValue, chargedGas, coinbaseValue] using
     finalStateEq
 
 /-- The retained deletion suffix replays its `foldl` exactly. -/

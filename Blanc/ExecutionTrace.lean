@@ -58,8 +58,7 @@ private theorem runFrame_result_of_retained
       rw [slotEq] at filled
       simp only [Xlot.Filled] at filled
       have execResult : exec evm = raw := by
-        simpa using
-          (exec_iff_exec_eq evm.pc evm.sta evm.dyna raw).mp filled
+        simpa only using (exec_iff_exec_eq evm.pc evm.sta evm.dyna raw).mp filled
       unfold runFrame
       rw [henter]
       simp only
@@ -187,14 +186,15 @@ theorem exists_messageCallTrace {msg : Msg} {state : State}
     split at h
     · rename_i hcollision
       exact ⟨.createCollision htarget (by
-        simpa [messageCreateCollision] using hcollision) h_result⟩
+        simpa only [messageCreateCollision, Bool.or_eq_true] using hcollision) h_result⟩
     · rename_i hcollision
       obtain ⟨evm, hevm, _⟩ := Except.bind_eq_ok h
       have hcore := Except.bimap_id_eq_ok hevm
       rcases exists_processCreateMessageTrace msg (.ok evm) hcore with
         ⟨trace⟩
       exact ⟨.createRun htarget (by
-        simpa [messageCreateCollision] using hcollision)
+        simpa only [messageCreateCollision, Bool.or_eq_false_iff, Bool.or_eq_true, not_or,
+          Bool.not_eq_true] using hcollision)
         evm hcore trace h_result⟩
   · rename_i htarget
     have htargetFalse : msg.target.isNone = false := by
@@ -213,20 +213,20 @@ theorem exists_messageCallTrace {msg : Msg} {state : State}
         have hcore0 := Except.bimap_id_eq_ok hevm
         have hcore :
             processMessage (messageCallExecutionMessage msg) = .ok evm := by
-          simpa [messageCallExecutionMessage, hcode] using hcore0
+          simpa only [messageCallExecutionMessage, hcode] using hcore0
         rcases exists_processMessageTrace _ (.ok evm) hcore with ⟨trace⟩
         exact ⟨.callRun htargetFalse msg 0 (by
-          simp [messageCallDelegation, hauth])
+          simp only [messageCallDelegation, hauth, ↓reduceIte])
           (messageCallExecutionMessage msg) rfl evm hcore trace h_result⟩
       · rename_i hcode
         obtain ⟨evm, hevm, _⟩ := Except.bind_eq_ok h
         have hcore0 := Except.bimap_id_eq_ok hevm
         have hcore :
             processMessage (messageCallExecutionMessage msg) = .ok evm := by
-          simpa [messageCallExecutionMessage, hcode] using hcore0
+          simpa only [messageCallExecutionMessage, hcode] using hcore0
         rcases exists_processMessageTrace _ (.ok evm) hcore with ⟨trace⟩
         exact ⟨.callRun htargetFalse msg 0 (by
-          simp [messageCallDelegation, hauth])
+          simp only [messageCallDelegation, hauth, ↓reduceIte])
           (messageCallExecutionMessage msg) rfl evm hcore trace h_result⟩
     · rename_i hauth
       obtain ⟨w, hw, h⟩ := Except.bind_eq_ok h
@@ -240,7 +240,7 @@ theorem exists_messageCallTrace {msg : Msg} {state : State}
         have hcore0 := Except.bimap_id_eq_ok hevm
         have hcore : processMessage
             (messageCallExecutionMessage delegated) = .ok evm := by
-          simpa [messageCallExecutionMessage, hcode] using hcore0
+          simpa only [messageCallExecutionMessage, hcode] using hcore0
         rcases exists_processMessageTrace _ (.ok evm) hcore with ⟨trace⟩
         exact ⟨.callRun htargetFalse delegated refundWord.toNat (by
           unfold messageCallDelegation
@@ -252,7 +252,7 @@ theorem exists_messageCallTrace {msg : Msg} {state : State}
         have hcore0 := Except.bimap_id_eq_ok hevm
         have hcore : processMessage
             (messageCallExecutionMessage delegated) = .ok evm := by
-          simpa [messageCallExecutionMessage, hcode] using hcore0
+          simpa only [messageCallExecutionMessage, hcode] using hcore0
         rcases exists_processMessageTrace _ (.ok evm) hcore with ⟨trace⟩
         exact ⟨.callRun htargetFalse delegated refundWord.toNat (by
           unfold messageCallDelegation
@@ -368,7 +368,7 @@ theorem exists_transactionTrace
     Nonempty (TransactionTrace benv bout tx index state bout') := by
   have h_result := h
   have hsg : benv.stat.fork.ruleSet.stateGas = none := by
-    simpa [BenvStat.rules] using hfork.rules_stateGas_none
+    simpa only [BenvStat.rules] using hfork.rules_stateGas_none
   unfold processTransaction at h
   dsimp only at h
   obtain ⟨prelude, hprelude, h⟩ := Except.bind_eq_ok h
@@ -393,12 +393,12 @@ theorem exists_transactionTrace
   exact ⟨⟨validationSender, intrinsicGas, calldataFloorGasCost, sender,
     effectiveGasPrice, blobVersionedHashes, txBlobGasUsed, debitState,
     msg, messageState, messageOut,
-    by simpa [Benv.beginTransaction, BenvStat.rules] using hvalidated,
-    by simpa [transactionPreludeBout] using hchecked,
-    by simpa [transactionBlobGasFee, Benv.beginTransaction, BenvStat.rules] using hdebit',
+    by simpa only [BenvStat.rules, Benv.beginTransaction] using hvalidated,
+    by simpa only [transactionPreludeBout] using hchecked,
+    by simpa only [transactionBlobGasFee, BenvStat.rules, Benv.beginTransaction] using hdebit',
     by
-      simpa [transactionTenv, Benv.beginTransaction, BenvStat.rules,
-        allocateEvmGas, hsg] using hprepared,
+      simpa only [Benv.beginTransaction, transactionTenv, Std.TreeMap.empty_eq_emptyc,
+        allocateEvmGas, BenvStat.rules, hsg] using hprepared,
     messageTrace, h_result, hrec⟩⟩
 
 /-- Exact post-message transaction settlement form.  This exposes the two
@@ -447,7 +447,7 @@ theorem TransactionTrace.exists_finalStateForm
       validateTransaction_sender_congr_none hsg
     have hvalidated' : validateTransaction benv.stat.rules tx validationSender =
         .ok ⟨intrinsicGas, calldataFloorGasCost⟩ := by
-      simpa [BenvStat.rules] using hvalidated
+      simpa only [BenvStat.rules] using hvalidated
     rw [hcong] at hvalidated'
     exact Prod.mk.inj (Except.ok.inj (hvalidated'.symm.trans trace.validation))
   rcases hvalidatedEq with ⟨rfl, rfl⟩
@@ -461,7 +461,7 @@ theorem TransactionTrace.exists_finalStateForm
   have hdebitSome := Option.toExcept_eq_ok hdebit
   have hdebitEq : debitState = trace.debitState := by
     exact Option.some.inj (hdebitSome.symm.trans
-      (by simpa [transactionBlobGasFee, BenvStat.rules] using trace.debit))
+      (by simpa only [transactionBlobGasFee, BenvStat.rules] using trace.debit))
   subst debitState
   rcases Except.bind_eq_ok hrun with ⟨msg, hprepared, hrun⟩
   simp only [allocateEvmGas, hsg] at hprepared
@@ -512,7 +512,7 @@ theorem ApplyTransactionsTrace.stat_eq
     finalBenv.stat = benv.stat := by
   induction trace with
   | nil => rfl
-  | cons _ tail ih => simpa [Benv.withState] using ih
+  | cons _ tail ih => simpa only [Benv.withState] using ih
 
 theorem exists_applyTransactionsTrace
     {txs : List (Nat × Tx)} {benv finalBenv : Benv}
@@ -560,8 +560,8 @@ theorem exists_systemMessageTrace
     Nonempty (SystemMessageTrace benv target data state out) := by
   have hmessage : processMessageCall
       (systemTransactionMessage benv target data) = .ok (state, out) := by
-    simpa [processUncheckedSystemTransaction, processSystemTransaction,
-      systemTransactionMessage] using h
+    simpa only [systemTransactionMessage, processUncheckedSystemTransaction,
+      processSystemTransaction] using h
   have hfork_msg :
       CoveredFork (systemTransactionMessage benv target data).benv.stat.fork := by
     unfold systemTransactionMessage processSystemTransactionMsg
@@ -614,7 +614,7 @@ theorem exists_requestsTrace
       withdrawalRequestPredeployAddress [] with
   | error err =>
       have impossible : False := by
-        simp [runRequestContracts, Except.bind, bind, hwithdrawal] at h
+        simp only [bind, Except.bind, runRequestContracts, hwithdrawal, reduceCtorEq] at h
       exact impossible.elim
   | ok withdrawal =>
       cases hconsolidation : processCheckedSystemTransaction
@@ -622,8 +622,8 @@ theorem exists_requestsTrace
           consolidationRequestPredeployAddress [] with
       | error err =>
           have impossible : False := by
-            simp [runRequestContracts, Except.bind, bind, hwithdrawal,
-              hconsolidation] at h
+            simp only [bind, Except.bind, runRequestContracts, hwithdrawal, hconsolidation,
+              reduceCtorEq] at h
           exact impossible.elim
       | ok consolidation =>
           obtain ⟨withdrawalState, withdrawalOut⟩ := withdrawal
@@ -661,9 +661,10 @@ theorem RequestsTrace.state_eq_consolidationState
   unfold processGeneralPurposeRequests processGeneralPurposeRequestsAt at hrun
   rw [trace.parsed] at hrun
   rw [trace.requestShape] at hrun
-  simp [runRequestContracts, Except.bind, bind, trace.withdrawalRun,
-    hconsolidation'] at hrun
-  simpa [Benv.withState] using hrun.1.symm
+  simp only [bind, Except.bind, runRequestContracts, trace.withdrawalRun, hconsolidation',
+    gt_iff_lt, List.cons_append, List.nil_append, Benv.withState_stat, Except.ok.injEq,
+    Prod.mk.injEq] at hrun
+  simpa only [Benv.withState] using hrun.1.symm
 
 /-- Complete retained execution evidence for a successful body under Jaune's
 currently modelled body semantics.  This includes the two pre-transaction
@@ -741,7 +742,7 @@ theorem exists_appliedBodyTrace
   rcases exists_systemMessageTrace hhistory hfork with ⟨historyTrace⟩
   rcases exists_applyTransactionsTrace htransactions hfork with
     ⟨transactionsTrace⟩
-  dsimp [processWithdrawals] at hrequests
+  dsimp only [processWithdrawals] at hrequests
   rcases Except.bind_eq_ok hrequests with
     ⟨⟨requestState, requestBout⟩, hrequests, hfinal⟩
   have hfork_requests : CoveredFork
@@ -750,11 +751,11 @@ theorem exists_appliedBodyTrace
     have hfork_transactions : CoveredFork transactionBenv.stat.fork := by
       rw [transactionsTrace.stat_eq]
       exact hfork
-    simpa [Benv.withState] using hfork_transactions
+    simpa only [Benv.withState] using hfork_transactions
   rcases exists_requestsTrace hrequests hfork_requests with ⟨requestsTrace⟩
   have hfinal' : requestState = state ∧
       {requestBout with blockAccessList := []} = bout := by
-    simpa [Except.bind, bind] using hfinal
+    simpa only [bind, Except.bind, Except.ok.injEq, Prod.mk.injEq] using hfinal
   exact ⟨⟨h_result, beaconState, beaconOut, beaconTrace,
     lastHash, hlastHash, historyState, historyOut, historyTrace,
     decodedTxs, hdecoded, transactionBenv, transactionBout,

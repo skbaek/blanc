@@ -112,7 +112,7 @@ theorem applyImage_sliceD_of_avoids
         rw [Bytes.getD_writeAt, if_neg]
         omega
       · subst width
-        simp [List.sliceD]
+        simp only [List.sliceD, List.takeD_zero]
       · exact Bytes.sliceD_writeAt_before _ _ _ _ _ after
       · exact Bytes.sliceD_writeAt_after _ _ _ _ _ before
 
@@ -126,7 +126,7 @@ theorem applyImage_slices_of_avoidsAll
         image.sliceD window.1 window.2 0 := by
   intro window hmem
   induction windows with
-  | nil => simp at hmem
+  | nil => simp only [List.not_mem_nil] at hmem
   | cons first rest ih =>
       simp only [avoidsAll, List.all_cons, Bool.and_eq_true] at h
       rcases List.mem_cons.mp hmem with rfl | later
@@ -186,14 +186,14 @@ theorem applyMemory_size_of_covered
   induction stage generalizing memory with
   | nil => rfl
   | cons write stage ih =>
-      have hhead := hcovered write (by simp)
+      have hhead := hcovered write (by simp only [List.mem_cons, true_or])
       have hone : (memory.write write.1 write.2).size = memory.size :=
         Mem.size_write_of_le hhead
       rw [applyMemory_cons, ih]
       · exact hone
       · intro later hlater
         rw [hone]
-        exact hcovered later (by simp [hlater])
+        exact hcovered later (by simp only [List.mem_cons, hlater, or_true])
 
 /-- Turn an ordered list of word stores into an exact byte stage. -/
 def words (writes : List (Nat × B256)) : MemoryStage :=
@@ -201,8 +201,7 @@ def words (writes : List (Nat × B256)) : MemoryStage :=
 
 @[simp] theorem footprint_words (writes : List (Nat × B256)) :
     (words writes).footprint = writes.map fun write => (write.1, 32) := by
-  simp [words, footprint, List.map_map, Function.comp_def,
-    B256.length_toBytes]
+  simp only [footprint, words, List.map_map, Function.comp_def, B256.length_toBytes]
 
 /-- Word stages expose allocation directly as 32-byte windows. -/
 theorem applyMemory_words_size (writes : List (Nat × B256)) (memory : Mem)

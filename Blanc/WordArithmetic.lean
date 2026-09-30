@@ -141,7 +141,7 @@ def wordModulusN : Nat := 2 ^ 256
 def maxWordN : Nat := wordModulusN - 1
 
 theorem wordModulusN_pos : 0 < wordModulusN := by
-  simp [wordModulusN]
+  simp only [wordModulusN, Nat.reducePow, Nat.ofNat_pos]
 
 theorem maxWordN_lt_wordModulusN : maxWordN < wordModulusN := by
   unfold maxWordN
@@ -214,7 +214,7 @@ private theorem product_mod_pred_eq_quotient_add_remainder_mod
       rw [← hmSplit]
     _ = (p / m * (m - 1) + (p / m + p % m)) % (m - 1) := by
       simp only [Nat.mul_add, Nat.mul_one, Nat.add_assoc]
-    _ = (p / m + p % m) % (m - 1) := by simp
+    _ = (p / m + p % m) % (m - 1) := by simp only [Nat.mul_add_mod_self_right]
 
 /-- The staged high and low words recombine to the exact, untruncated product.
 There is no single-word product or magnitude premise. -/
@@ -320,7 +320,7 @@ theorem productHighWord_toNat (x y : B256) :
     (productHighWord x y).toNat =
       x.toNat * y.toNat / wordModulusN := by
   have hlow : (productLowWord x y).toNat < wordModulusN := by
-    simpa [wordModulusN] using B256.toNat_lt (productLowWord x y)
+    simpa only [wordModulusN, Nat.reducePow] using B256.toNat_lt (productLowWord x y)
   have hquotient :
       ((productHighWord x y).toNat * wordModulusN +
           (productLowWord x y).toNat) / wordModulusN =
@@ -452,9 +452,9 @@ executed comparison to an exact natural bound. -/
 theorem wordAdd_lt_left_iff (x y : B256) :
     x + y < x ↔ wordModulusN ≤ x.toNat + y.toNat := by
   have xLt : x.toNat < wordModulusN := by
-    simpa [wordModulusN] using B256.toNat_lt (x := x)
+    simpa only [wordModulusN, Nat.reducePow] using B256.toNat_lt (x := x)
   have yLt : y.toNat < wordModulusN := by
-    simpa [wordModulusN] using B256.toNat_lt (x := y)
+    simpa only [wordModulusN, Nat.reducePow] using B256.toNat_lt (x := y)
   rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_add, Nat.lo_eq,
     show (2 : Nat) ^ 256 = wordModulusN from rfl]
   by_cases wraps : wordModulusN ≤ x.toNat + y.toNat
@@ -621,7 +621,7 @@ theorem wideSubWords_reconstruct
     have remainderLeModLow :
         remainder.toNat ≤ wordModulusN + low.toNat := by
       have remainderLt : remainder.toNat < wordModulusN := by
-        simpa [wordModulusN] using B256.toNat_lt remainder
+        simpa only [wordModulusN, Nat.reducePow] using B256.toNat_lt remainder
       exact (Nat.le_of_lt remainderLt).trans (Nat.le_add_right _ _)
     rw [highSub, lowSub]
     calc
@@ -673,7 +673,7 @@ def Nat.lowestSetBit (width n : Nat) : Nat :=
 
 private theorem Nat.and_two_mul (a b : Nat) :
     (2 * a) &&& (2 * b) = 2 * (a &&& b) := by
-  simpa [Nat.bit_false_apply] using Nat.land_bit false a false b
+  simpa only [Nat.bit_false_apply, Bool.and_self] using Nat.land_bit false a false b
 
 private theorem Nat.lowestSetBit_eq_one_of_odd
     {width n : Nat} (positive : 0 < n) (bound : n < 2 ^ width)
@@ -699,10 +699,12 @@ private theorem Nat.lowestSetBit_eq_one_of_odd
       have predEven : (n - 1) % 2 = 0 := by omega
       have predBit : (n - 1).testBit 0 = false :=
         Nat.mod_two_eq_zero_iff_testBit_zero.mp predEven
-      simp [nBit, predBit, widthPositive]
+      simp only [nBit, widthPositive, decide_true, predBit, Bool.not_false, Bool.and_self,
+        Nat.testBit_zero, Nat.mod_succ]
   | succ i =>
       have halves : (n - 1) / 2 = n / 2 := by omega
-      simp [Nat.testBit_succ, halves]
+      simp only [Nat.testBit_succ, halves, Nat.reduceDiv, Nat.zero_testBit, Bool.and_eq_false_imp,
+        decide_eq_true_eq, Bool.not_eq_eq_eq_not, Bool.not_false]
       tauto
 
 private theorem Nat.lowestSetBit_succ_of_even
@@ -758,7 +760,7 @@ theorem Nat.lowestSetBit_spec
           halfTwosDvdModulus, halfQuotientOdd⟩
         have lowBitEq :
             Nat.lowestSetBit (width + 1) n = 2 * halfTwos := by
-          simpa [halfTwos] using Nat.lowestSetBit_succ_of_even bound even
+          simpa only using Nat.lowestSetBit_succ_of_even bound even
         have nEq : n = 2 * (n / 2) := by omega
         refine ⟨?_, ?_, ?_, ?_⟩
         · rw [lowBitEq]
@@ -766,14 +768,13 @@ theorem Nat.lowestSetBit_spec
         · rw [lowBitEq, nEq]
           exact Nat.mul_dvd_mul_left 2 halfTwosDvdN
         · rw [lowBitEq, Nat.pow_succ]
-          simpa [Nat.mul_comm] using
-            Nat.mul_dvd_mul_left 2 halfTwosDvdModulus
+          simpa only [Nat.mul_comm] using Nat.mul_dvd_mul_left 2 halfTwosDvdModulus
         · rw [lowBitEq, nEq,
             Nat.mul_div_mul_left _ _ (by omega : 0 < 2)]
           exact halfQuotientOdd
       · have lowBitEq : Nat.lowestSetBit (width + 1) n = 1 :=
           Nat.lowestSetBit_eq_one_of_odd positive bound odd
-        simp [lowBitEq, odd]
+        simp only [lowBitEq, zero_lt_one, isUnit_iff_eq_one, IsUnit.dvd, Nat.div_one, odd, and_self]
 
 /-- The exact word operation used to isolate the largest power of two dividing
 a nonzero word. -/
@@ -815,7 +816,7 @@ theorem lowestSetBitWord_spec
     exact B256.toNat_inj x B256.zero
       (xNatZero.trans (show 0 = B256.zero.toNat by rfl))
   have spec := Nat.lowestSetBit_spec xNatPositive (B256.toNat_lt x)
-  simpa [lowestSetBitWord_toNat nonzero, wordModulusN] using spec
+  simpa only [lowestSetBitWord_toNat nonzero, wordModulusN, Nat.reducePow] using spec
 
 theorem lowestSetBitWord_ne_zero
     {x : B256} (nonzero : x ≠ B256.zero) :
@@ -906,10 +907,10 @@ theorem roundedQuotientWord_eq_toB256_ceilDiv
       Nat.toB256 (ceilDiv n d) := by
   by_cases exactDivision : n % d = 0
   · rw [if_pos (remainderZero.mpr exactDivision), quotientEq]
-    simp [ceilDiv, exactDivision]
+    simp only [ceilDiv, exactDivision, ↓reduceIte, add_zero]
   · rw [if_neg (fun h => exactDivision (remainderZero.mp h)), quotientEq,
       toB256_add_one]
-    simp [ceilDiv, exactDivision]
+    simp only [ceilDiv, exactDivision, ↓reduceIte]
 
 /-- Ceiling division fits in one EVM word when its floor quotient fits and a
 nonzero remainder cannot round the largest word upward.  The second premise
@@ -921,9 +922,9 @@ theorem ceilDiv_lt_wordModulusN_of_floor_lt
     (roundingFits : n % d ≠ 0 → n / d ≠ maxWordN) :
     ceilDiv n d < wordModulusN := by
   by_cases exactDivision : n % d = 0
-  · simpa [ceilDiv, exactDivision] using floorFits
+  · simpa only [ceilDiv, exactDivision, ↓reduceIte, add_zero] using floorFits
   · have notMax := roundingFits exactDivision
-    simp [ceilDiv, exactDivision]
+    simp only [ceilDiv, exactDivision, ↓reduceIte, gt_iff_lt]
     unfold maxWordN wordModulusN at *
     omega
 
@@ -938,12 +939,12 @@ theorem minWord_eq_toB256_min
   by_cases less : a < b.toNat
   · have wordLess : Nat.toB256 a < b := by
       rw [B256.lt_iff_toNat_lt_toNat,
-        B256.toNat_toB256_of_lt (by simpa [wordModulusN] using aFits)]
+        B256.toNat_toB256_of_lt (by simpa only [Nat.reducePow, wordModulusN] using aFits)]
       exact less
     rw [if_pos wordLess, Nat.min_eq_left (Nat.le_of_lt less)]
   · have wordNotLess : ¬ Nat.toB256 a < b := by
       rw [B256.lt_iff_toNat_lt_toNat,
-        B256.toNat_toB256_of_lt (by simpa [wordModulusN] using aFits)]
+        B256.toNat_toB256_of_lt (by simpa only [Nat.reducePow, wordModulusN] using aFits)]
       exact less
     rw [if_neg wordNotLess, Nat.min_eq_right (Nat.le_of_not_gt less),
       Jaune.toB256_toNat]
@@ -976,7 +977,7 @@ theorem ceilPredQuotientWord_eq_toB256
       by_contra quotientNotPositive
       have quotientZero : n / d = 0 := Nat.eq_zero_of_not_pos quotientNotPositive
       rw [quotientZero] at division
-      simp at division
+      simp only [mul_zero, add_zero] at division
       omega
     have oneLe : (1 : B256) ≤ Nat.toB256 (n / d) := by
       rw [B256.le_iff_toNat_le_toNat,
@@ -986,9 +987,9 @@ theorem ceilPredQuotientWord_eq_toB256
     rw [if_pos (remainderZero.mpr exactDivision), quotientEq,
       wordSub_eq_toB256_sub_of_le oneLe,
       B256.toNat_toB256_of_lt quotientBound, B256.toNat_one]
-    simp [ceilDiv, exactDivision]
+    simp only [ceilDiv, exactDivision, ↓reduceIte, add_zero]
   · rw [if_neg (fun h => exactDivision (remainderZero.mp h)), quotientEq]
-    simp [ceilDiv, exactDivision]
+    simp only [ceilDiv, exactDivision, ↓reduceIte, add_tsub_cancel_right]
 
 /-- Removing one from a ceiling quotient never exceeds the corresponding
 floor quotient. -/
@@ -1090,8 +1091,8 @@ theorem Nat.or_or_shiftLeft {a b c d k : Nat}
       Nat.pow_le_pow_right (by omega) hi
     rw [Nat.testBit_lt_two_pow (Nat.lt_of_lt_of_le hb hpow),
       Nat.testBit_lt_two_pow (Nat.lt_of_lt_of_le hd hpow)]
-    simp [hi]
-  · simp [hi]
+    simp only [ge_iff_le, hi, decide_true, Bool.true_and, Bool.or_false, Bool.or_self]
+  · simp only [ge_iff_le, hi, decide_false, Bool.false_and, Bool.false_or]
 
 theorem B128.toNat_or (x y : B128) :
     (x ||| y).toNat = x.toNat ||| y.toNat := by
@@ -1122,8 +1123,8 @@ theorem Nat.xor_or_shiftLeft {a b c d k : Nat}
       Nat.pow_le_pow_right (by omega) hi
     rw [Nat.testBit_lt_two_pow (Nat.lt_of_lt_of_le hb hpow),
       Nat.testBit_lt_two_pow (Nat.lt_of_lt_of_le hd hpow)]
-    simp [hi]
-  · simp [hi]
+    simp only [ge_iff_le, hi, decide_true, Bool.true_and, Bool.or_false, bne_self_eq_false]
+  · simp only [ge_iff_le, hi, decide_false, Bool.false_and, Bool.false_or]
 
 theorem B128.toNat_xor (x y : B128) :
     (x ^^^ y).toNat = x.toNat ^^^ y.toNat := by
@@ -1156,7 +1157,7 @@ theorem Nat.fold_divided_words
   let factor := modulus / twos
   let lowQuotient := low / twos
   have modulusPositive : 0 < modulus := by
-    simp [modulus]
+    simp only [Nat.ofNat_pos, pow_pos, modulus]
   have factorPositive : 0 < factor := by
     unfold factor
     exact Nat.div_pos
@@ -1168,7 +1169,7 @@ theorem Nat.fold_divided_words
   obtain ⟨shift, -, factorEq⟩ :=
     (Nat.dvd_prime_pow Nat.prime_two).mp
       (show factor ∣ 2 ^ width by
-        simpa [modulus] using factorDvdModulus)
+        simpa only [modulus] using factorDvdModulus)
   have lowQuotientLtFactor : lowQuotient < factor := by
     exact (Nat.div_lt_div_right (Nat.ne_of_gt twosPositive)
       twosDvdModulus).2 lowBound
@@ -1200,7 +1201,7 @@ theorem Nat.fold_divided_words
       _ = 2 ^ shift * shiftedHigh ||| lowQuotient := by rw [factorEq]
       _ = 2 ^ shift * shiftedHigh + lowQuotient :=
         (Nat.two_pow_add_eq_or_of_lt
-          (by simpa [factorEq] using lowQuotientLtFactor)
+          (by simpa only [factorEq] using lowQuotientLtFactor)
           shiftedHigh).symm
       _ = shifted + lowQuotient := by rw [shiftedEq, factorEq]
   have quotientEq :
@@ -1241,10 +1242,10 @@ theorem foldDividedWords_toNat
   have folded := Nat.fold_divided_words
     (width := 256) (high := high.toNat) (low := low.toNat)
     (twos := twos.toNat) twosPositive
-    (by simpa [wordModulusN] using twosDvdModulus)
+    (by simpa only [Nat.reducePow, wordModulusN] using twosDvdModulus)
     twosDvdLow (B256.toNat_lt low)
-  simpa [wideNumeratorN, wordModulusN, Nat.mul_mod,
-    Nat.mod_mod] using folded
+  simpa only [wordModulusN, Nat.reducePow, Nat.mul_mod, dvd_refl, Nat.mod_mod_of_dvd,
+    wideNumeratorN] using folded
 
 /-- Low word of the exact numerator after subtracting its denominator
 remainder. -/
@@ -1377,7 +1378,7 @@ theorem b256_sub_modEq_wordModulus (x y : B256) :
   by_cases h : y ≤ x
   · have hnat : y.toNat ≤ x.toNat := B256.toNat_le_toNat h
     rw [B256.toNat_sub_eq_of_le x y h, Nat.cast_sub hnat]
-    simp
+    simp only [sub_self, dvd_zero]
   · have hltWord : x < y := B256.not_le.mp h
     have hlt : x.toNat < y.toNat := B256.toNat_lt_toNat hltWord
     have hsum : y.toNat ≤ wordModulusN + x.toNat := by
@@ -1436,9 +1437,8 @@ theorem inverseNewtonStepWord_modEq_square
   have lifted :=
     (Int.ModEq.refl (denominator.toNat : Int)).mul stepCongruence
   apply lifted.trans
-  simpa [Int.mul_comm (inverse.toNat : Int) (denominator.toNat : Int)] using
-    newtonStep_modEq_square (denominator.toNat : Int)
-      (inverse.toNat : Int) modulus inverseCorrect
+  simpa only [Int.mul_comm (inverse.toNat : Int) (denominator.toNat : Int)] using
+    newtonStep_modEq_square (denominator.toNat : Int) (inverse.toNat : Int) modulus inverseCorrect
 
 /-- Six word-level Newton refinements lift a four-bit inverse seed to a full
 inverse modulo `2^256`. -/
@@ -1484,7 +1484,8 @@ theorem inverseNewtonIter_six_modEq
             (inverseNewtonStepWord denominator seed)))))
     (modulus := 340282366920938463463374607431768211456)
     (by norm_num [wordModulusN]) h5
-  simpa [inverseNewtonIter, wordModulusN] using h6
+  simpa only [wordModulusN, Nat.reducePow, Nat.cast_ofNat, inverseNewtonIter, Int.reduceMul] using
+    h6
 
 private theorem inverseSeedNat_mod_sixteen
     (n : Nat) (odd : n % 2 = 1) :

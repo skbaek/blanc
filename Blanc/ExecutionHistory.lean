@@ -61,7 +61,7 @@ theorem exists_configuredBlockTrace_of_transition
   obtain ⟨_, _, hFinal⟩ := Except.bind_eq_ok hWith
   obtain ⟨_, _, hFinal⟩ := Except.bind_eq_ok hFinal
   have hRules : cfg.rulesAt block.header.timestamp = .ok fork.ruleSet := by
-    simp [ChainConfig.rulesAt, hFork, Fork.rules]
+    simp only [ChainConfig.rulesAt, hFork, Fork.rules, Except.bind_ok, Except.mapError_eq_ok_iff]
   have hcoveredFork : CoveredFork fork := hcovered hFork
   rcases exists_appliedBodyTrace hBody hcoveredFork with ⟨bodyTrace⟩
   exact ⟨{

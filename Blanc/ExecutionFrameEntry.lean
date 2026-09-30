@@ -42,13 +42,13 @@ theorem Exec.rawFrameDescendants_fresh
   induction run with
   | halt hstep =>
       intro root member
-      simp [Exec.rawFrameDescendants] at member
+      simp only [rawFrameDescendants, not_mem_nil] at member
   | cont hstep next ih =>
       intro root member
       exact ih root (by simpa only [Exec.rawFrameDescendants] using member)
   | doneErr hstep henter hresume =>
       intro root member
-      simp [Exec.rawFrameDescendants] at member
+      simp only [rawFrameDescendants, not_mem_nil] at member
   | doneOk hstep henter hresume next ih =>
       intro root member
       exact ih root (by simpa only [Exec.rawFrameDescendants] using member)

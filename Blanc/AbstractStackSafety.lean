@@ -83,7 +83,7 @@ theorem chargeGas_safe (cost : Nat) {pre : Devm} {words : Pattern}
     SafeResult (fun post => Matches words post.stack) (chargeGas cost pre) := by
   rw [chargeGas_def]
   split
-  · simp [SafeResult, StackFault]
+  · simp only [SafeResult, StackFault, not_false_eq_true]
   · exact matched
 
 /-- Actual bounded push, including its overflow check. -/
@@ -105,7 +105,7 @@ theorem pop_safe {pre : Devm} {word : Option B256} {words : Pattern}
       Matches words result.2.stack) pre.pop := by
   rw [Devm.pop_def]
   cases stackEq : pre.stack with
-  | nil => simp [stackEq, Matches] at matched
+  | nil => simp only [stackEq, Matches] at matched
   | cons value values =>
       simpa only [stackEq, SafeResult, Devm.stack_setMach, Matches] using matched
 
@@ -210,7 +210,8 @@ theorem Matches.getElem? {words : Pattern} {values : Stack}
     (lookup : words[index]? = some word) :
     ∃ value, values[index]? = some value ∧ WordMatches word value := by
   induction words generalizing values index with
-  | nil => simp at lookup
+  | nil => simp only [List.length_nil, not_lt_zero, not_false_eq_true, getElem?_neg,
+    reduceCtorEq] at lookup
   | cons head words ih =>
       cases values with
       | nil => exact False.elim matched
@@ -254,11 +255,12 @@ theorem dup_safe {evm : Evm} {words : Pattern} {index : Fin 16}
   apply (push_safe value chargedMatch room).mono
   intro post pushed
   cases stackEq : post.stack with
-  | nil => simp [stackEq, Matches] at pushed
+  | nil => simp only [stackEq, Matches] at pushed
   | cons actual tail =>
       rw [stackEq] at pushed
       obtain ⟨head, rest⟩ := pushed
-      have equal : value = actual := by simpa [WordMatches] using head
+      have equal : value = actual := by simpa only [WordMatches, reduceCtorEq, Option.some.injEq,
+        false_or] using head
       subst actual
       exact ⟨valueMatch, rest⟩
 
@@ -269,14 +271,15 @@ theorem Matches.swap {words output : Pattern} {values : Stack}
     (checked : Jaune.List.swap words index = some output) :
     ∃ actual, Jaune.List.swap values index = some actual ∧ Matches output actual := by
   cases words with
-  | nil => simp [Jaune.List.swap] at checked
+  | nil => simp only [Jaune.List.swap, reduceCtorEq] at checked
   | cons head words =>
       cases values with
       | nil => exact False.elim matched
       | cons value values =>
           obtain ⟨headMatch, rest⟩ := matched
           cases lookup : words[index]? with
-          | none => simp [Jaune.List.swap, lookup] at checked
+          | none => simp only [Jaune.List.swap, lookup, Option.bind_eq_bind, Option.bind_none,
+            reduceCtorEq] at checked
           | some selected =>
               obtain ⟨actual, actualLookup, selectedMatch⟩ := rest.getElem? lookup
               simp only [Jaune.List.swap, lookup, bind, Option.bind,
@@ -284,7 +287,7 @@ theorem Matches.swap {words output : Pattern} {values : Stack}
               subst output
               refine ⟨actual :: values.set index value, ?_,
                 selectedMatch, rest.set index headMatch⟩
-              simp [Jaune.List.swap, actualLookup]
+              simp only [Jaune.List.swap, actualLookup, Option.bind_eq_bind, Option.bind_some]
 
 /-- Actual gas-charged SWAP, including the otherwise possible underflow arm. -/
 theorem swap_safe {evm : Evm} {words output : Pattern} {index : Fin 16}

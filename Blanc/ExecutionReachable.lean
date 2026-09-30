@@ -43,7 +43,8 @@ theorem noPushBefore_succ_of_imm {cd : ByteArray} {k : Nat} {a : UInt8}
     rw [hbyte hk]; exact not_push_byte_of_ne_p ha, rfl⟩) hb
 
 theorem byteD_succ_eq {cd : ByteArray} {k : Nat} :
-    ∀ hk : k < cd.size, cd[k] = cd.byteD k := fun hk => by simp [ByteArray.byteD, hk]
+    ∀ hk : k < cd.size, cd[k] = cd.byteD k := fun hk => by simp only [ByteArray.byteD, hk,
+      ↓reduceDIte]
 
 /-- One instruction of the boundary walk: stepping over an accepted ordinary instruction from a
 position no `PUSH` immediate covers lands on such a position again. -/
@@ -58,38 +59,48 @@ theorem noPushBefore_next {cd : ByteArray} {pc : Nat} {n : Ninst}
       split at h
       · cases Option.some.inj h
         have hd : decodeSingle (cd.byteD (pc + 1)) ≠ none := by
-          simpa [Ninst.immAccepted] using hacc
-        have h1 := noPushBefore_succ_of_ne_p hpc hb (by rw [hty]; simp)
+          simpa only [ne_eq, Ninst.immAccepted, decide_not, Bool.not_eq_eq_eq_not, Bool.not_true,
+            decide_eq_false_iff_not] using hacc
+        have h1 := noPushBefore_succ_of_ne_p hpc hb (by rw [hty]; simp only [ne_eq, reduceCtorEq,
+          not_false_eq_true])
         exact noPushBefore_succ_of_imm h1 (toInstType_ne_p_of_decodeSingle hd) byteD_succ_eq
       · cases Option.some.inj h
         have hd : decodeSingle (cd.byteD (pc + 1)) ≠ none := by
-          simpa [Ninst.immAccepted] using hacc
-        have h1 := noPushBefore_succ_of_ne_p hpc hb (by rw [hty]; simp)
+          simpa only [ne_eq, Ninst.immAccepted, decide_not, Bool.not_eq_eq_eq_not, Bool.not_true,
+            decide_eq_false_iff_not] using hacc
+        have h1 := noPushBefore_succ_of_ne_p hpc hb (by rw [hty]; simp only [ne_eq, reduceCtorEq,
+          not_false_eq_true])
         exact noPushBefore_succ_of_imm h1 (toInstType_ne_p_of_decodeSingle hd) byteD_succ_eq
       · cases Option.some.inj h
         have hd : decodePair (cd.byteD (pc + 1)) ≠ none := by
-          simpa [Ninst.immAccepted] using hacc
-        have h1 := noPushBefore_succ_of_ne_p hpc hb (by rw [hty]; simp)
+          simpa only [ne_eq, Ninst.immAccepted, decide_not, Bool.not_eq_eq_eq_not, Bool.not_true,
+            decide_eq_false_iff_not] using hacc
+        have h1 := noPushBefore_succ_of_ne_p hpc hb (by rw [hty]; simp only [ne_eq, reduceCtorEq,
+          not_false_eq_true])
         exact noPushBefore_succ_of_imm h1 (toInstType_ne_p_of_decodePair hd) byteD_succ_eq
       · cases hr : UInt8.toRinst cd[pc] with
-        | none => simp [Functor.mapRev, hr] at h
+        | none => simp only [Functor.mapRev, hr, Option.map_eq_map, Option.map_none,
+          reduceCtorEq] at h
         | some r =>
             simp only [Functor.mapRev, hr] at h
             have hn : n = .reg r := by
               have := Option.some.inj h
-              simpa using this.symm
+              simpa only [Function.comp_apply, Inst.next.injEq] using this.symm
             subst hn
-            exact noPushBefore_succ_of_ne_p hpc hb (by rw [hty]; simp)
+            exact noPushBefore_succ_of_ne_p hpc hb (by rw [hty]; simp only [ne_eq, reduceCtorEq,
+              not_false_eq_true])
     · -- `X`
       cases hx : UInt8.toXinst cd[pc] with
-      | none => simp [Functor.mapRev, hx] at h
+      | none => simp only [Functor.mapRev, hx, Option.map_eq_map, Option.map_none,
+        reduceCtorEq] at h
       | some x =>
           simp only [Functor.mapRev, hx] at h
           have hn : n = .exec x := by
             have := Option.some.inj h
-            simpa using this.symm
+            simpa only [Function.comp_apply, Inst.next.injEq] using this.symm
           subst hn
-          exact noPushBefore_succ_of_ne_p hpc hb (by rename_i hty; rw [hty]; simp)
+          exact noPushBefore_succ_of_ne_p hpc hb (by rename_i hty; rw [hty]; simp only [ne_eq,
+            reduceCtorEq, not_false_eq_true])
     · cases hj : UInt8.toJinst cd[pc] <;> simp [Functor.mapRev, hj] at h
     · cases hl : UInt8.toLinst cd[pc] <;> simp [Functor.mapRev, hl] at h
     · rename_i hty
@@ -116,17 +127,17 @@ theorem Ninst.step_cont_immAccepted {evm : Evm} {n : Ninst} {pc' : Nat} {devm' :
     simp only [Ninst.immAccepted, decide_eq_true_eq]
     intro hnone
     split at hex <;> simp_all [Bind.bind, Except.bind]
-    split at hex <;> simp_all
+    split at hex <;> simp_all only [ExceptT.stM_eq, reduceCtorEq]
   · have hex := (Step.ofExecution_cont h).2
     simp only [Ninst.immAccepted, decide_eq_true_eq]
     intro hnone
     split at hex <;> simp_all [Bind.bind, Except.bind]
-    split at hex <;> simp_all
+    split at hex <;> simp_all only [ExceptT.stM_eq, reduceCtorEq]
   · have hex := (Step.ofExecution_cont h).2
     simp only [Ninst.immAccepted, decide_eq_true_eq]
     intro hnone
     split at hex <;> simp_all [Bind.bind, Except.bind]
-    split at hex <;> simp_all
+    split at hex <;> simp_all only [ExceptT.stM_eq, reduceCtorEq]
 
 /-- A jump destination the interpreter accepts is a position no `PUSH` immediate covers. -/
 theorem noPushBefore_of_jumpable {cd : ByteArray} {k : Nat} (h : jumpable cd k = true) :
@@ -170,7 +181,7 @@ theorem Evm.step_cont_noPush {pc : Nat} {sevm : Sevm} {devm : Devm} {pc' : Nat} 
     (hb : noPushBefore sevm.code pc 32 = true) : noPushBefore sevm.code pc' 32 = true := by
   unfold Evm.step at h
   cases hg : Evm.getInst ⟨pc, sevm, devm⟩ with
-  | none => simp [hg] at h
+  | none => simp only [hg, reduceCtorEq] at h
   | some inst =>
       rw [hg] at h
       have hg' : sevm.code.getInst pc = some inst := hg
@@ -187,42 +198,48 @@ theorem Evm.step_cont_noPush {pc : Nat} {sevm : Sevm} {devm : Devm} {pc' : Nat} 
           have hsucc : ∀ pc'' : Nat, pc'' = pc + 1 → noPushBefore sevm.code pc'' 32 = true := by
             intro pc'' e
             subst e
-            exact noPushBefore_succ_of_ne_p hlt hb (by rw [hty]; simp)
+            exact noPushBefore_succ_of_ne_p hlt hb (by rw [hty]; simp only [ne_eq, reduceCtorEq,
+              not_false_eq_true])
           cases j
           case jumpdest =>
             simp only [Jinst.run, Jinst.runCore] at hj
             rcases hc : chargeGas gJumpdest devm with e | d1
-            · simp [hc, Bind.bind, Except.bind] at hj
-            · simp [hc, Bind.bind, Except.bind] at hj
+            · simp only [bind, Except.bind, hc, reduceCtorEq] at hj
+            · simp only [bind, Except.bind, hc, Except.ok.injEq, Prod.mk.injEq] at hj
               exact hsucc _ hj.1.symm
           case jump =>
             simp only [Jinst.run, Jinst.runCore] at hj
             rcases hp : devm.pop with e | ⟨x, d1⟩
-            · simp [hp, Bind.bind, Except.bind] at hj
+            · simp only [bind, Except.bind, hp, reduceCtorEq] at hj
             · rcases hc : chargeGas gMid d1 with e | d2
-              · simp [hp, hc, Bind.bind, Except.bind] at hj
+              · simp only [bind, Except.bind, hp, hc, reduceCtorEq] at hj
               · by_cases hjp : jumpable sevm.code x.toNat = true
-                · simp [hp, hc, hjp, Except.assert, Bind.bind, Except.bind] at hj
+                · simp only [bind, Except.bind, hp, hc, Except.assert, hjp, ↓reduceIte,
+                  Except.ok.injEq, Prod.mk.injEq] at hj
                   rw [← hj.1]
                   exact noPushBefore_of_jumpable hjp
-                · simp [hp, hc, hjp, Except.assert, Bind.bind, Except.bind] at hj
+                · simp only [bind, Except.bind, hp, hc, Except.assert, hjp, Bool.false_eq_true,
+                  ↓reduceIte, reduceCtorEq] at hj
           case jumpi =>
             simp only [Jinst.run, Jinst.runCore] at hj
             rcases hp : devm.pop with e | ⟨x, d1⟩
-            · simp [hp, Bind.bind, Except.bind] at hj
+            · simp only [bind, Except.bind, hp, reduceCtorEq] at hj
             · rcases hp2 : d1.pop with e | ⟨y, d2⟩
-              · simp [hp, hp2, Bind.bind, Except.bind] at hj
+              · simp only [bind, Except.bind, hp, hp2, reduceCtorEq] at hj
               · rcases hc : chargeGas gHigh d2 with e | d3
-                · simp [hp, hp2, hc, Bind.bind, Except.bind] at hj
+                · simp only [bind, Except.bind, hp, hp2, hc, reduceCtorEq] at hj
                 · by_cases hy : y = 0
-                  · simp [hp, hp2, hc, hy, Bind.bind, Except.bind] at hj
+                  · simp only [bind, Except.bind, hp, hp2, hy, hc, ↓reduceIte, Except.ok.injEq,
+                    Prod.mk.injEq] at hj
                     exact hsucc _ hj.1.symm
                   · by_cases hjp : jumpable sevm.code x.toNat = true
-                    · simp [hp, hp2, hc, hy, hjp, Except.assert, Bind.bind, Except.bind] at hj
+                    · simp only [bind, Except.bind, hp, hp2, hc, hy, ↓reduceIte, Except.assert,
+                      hjp, Except.ok.injEq, Prod.mk.injEq] at hj
                       rw [← hj.1]
                       exact noPushBefore_of_jumpable hjp
-                    · simp [hp, hp2, hc, hy, hjp, Except.assert, Bind.bind, Except.bind] at hj
-      | last l => simp at h
+                    · simp only [bind, Except.bind, hp, hp2, hc, hy, ↓reduceIte, Except.assert,
+                      hjp, Bool.false_eq_true, reduceCtorEq] at hj
+      | last l => simp only [reduceCtorEq] at h
 
 /-! ### Spawn-freedom at reachable positions -/
 
@@ -241,10 +258,10 @@ theorem Exec.rawFrameDescendants_eq_nil_of_reach {pc : Nat} {sevm : Sevm} {pre :
     Exec.rawFrameDescendants run = [] := by
   revert hb h
   induction run with
-  | halt hstep => intro _ _; simp [Exec.rawFrameDescendants]
+  | halt hstep => intro _ _; simp only [rawFrameDescendants]
   | cont hstep next ih =>
       intro hb h
-      simpa [Exec.rawFrameDescendants] using ih (Evm.step_cont_noPush hstep hb) h
+      simpa only [rawFrameDescendants] using ih (Evm.step_cont_noPush hstep hb) h
   | doneErr hstep henter hresume =>
       intro hb h
       obtain ⟨x, hx, -⟩ := Evm.step_spawn_inv hstep
@@ -318,9 +335,9 @@ theorem PushReach.of_noPushBefore (cd : ByteArray) :
         have := noPushBefore_add (cd := cd) (k := p) (s := 1 + pushWidth cd[p]) (fun hk' => by
           unfold pushWidth
           by_cases hr : 0x60 ≤ cd[p].toNat ∧ cd[p].toNat ≤ 0x7f
-          · exact Or.inl ⟨by omega, by omega, by simp [hr]; omega⟩
-          · exact Or.inr ⟨by omega, by simp [hr]⟩) hP
-        simpa [Nat.add_assoc] using this
+          · exact Or.inl ⟨by omega, by omega, by simp only [hr, and_self, ↓reduceIte]; omega⟩
+          · exact Or.inr ⟨by omega, by simp only [hr, ↓reduceIte, add_zero]⟩) hP
+        simpa only [Nat.add_assoc] using this
       have hge : k ≤ p + 1 + pushWidth cd[p] := by
         by_contra hlt
         exact hmax _ (by omega) (by omega) hspan
@@ -329,8 +346,9 @@ theorem PushReach.of_noPushBefore (cd : ByteArray) :
         have hw : 0 < pushWidth cd[p] := by omega
         have hr : 0x60 ≤ cd[p].toNat ∧ cd[p].toNat ≤ 0x7f := by
           by_contra hr
-          simp [pushWidth, hr] at hw
-        have hw' : pushWidth cd[p] = cd[p].toNat - 0x5f := by simp [pushWidth, hr]
+          simp only [pushWidth, hr, ↓reduceIte, lt_self_iff_false] at hw
+        have hw' : pushWidth cd[p] = cd[p].toNat - 0x5f := by simp only [pushWidth, hr, and_self,
+          ↓reduceIte]
         have hfalse := (noPushBefore_eq_true_iff cd k 32 (le_refl 32)).mp hb p
           (by omega) hpk hpsz (by omega) (by omega) (by omega)
         rw [hfalse] at hP
@@ -378,6 +396,6 @@ theorem spawnFreeReach_of_check {cd : ByteArray} (h : spawnFreeCheck cd = true) 
     | zero => exact ⟨cd.size, by omega, h⟩
     | step hp _ ih => exact (spawnScan_good ih hp).2
   have := (spawnScan_good (key pc hreach) hpc).1
-  simp [spawnByte, hty] at this
+  simp only [spawnByte, hty, decide_true, Bool.true_eq_false] at this
 
 end Blanc

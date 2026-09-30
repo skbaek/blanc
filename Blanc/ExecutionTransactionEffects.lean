@@ -37,8 +37,8 @@ theorem TransactionTrace.sender_ne
     trace.sender ≠ ca := by
   have beginInv : c.BenvInv ca benv.beginTransaction := by
     refine ⟨?_, ?_⟩
-    · simpa [Benv.beginTransaction] using inv
-    · simpa [Benv.beginTransaction] using notCreated
+    · simpa only [Benv.beginTransaction] using inv
+    · simpa only [Benv.beginTransaction] using notCreated
   exact ContractSpec.checkTransaction_sender_ne_of_inv trace.checked beginInv
 
 /-- The nonce bump and up-front gas debit leave a non-sender account's
@@ -87,9 +87,9 @@ theorem TransactionTrace.msgInv
       (transactionTenv benv.beginTransaction tx index trace.sender
         trace.effectiveGasPrice trace.intrinsicGas
         trace.blobVersionedHashes).stat.origin ≠ ca := by
-    simpa [transactionTenv] using senderNe
+    simpa only [transactionTenv, Std.TreeMap.empty_eq_emptyc, ne_eq] using senderNe
   exact ContractSpec.prepareMessage_preserves_inv trace.prepared debitInv
-    (by simpa [Benv.beginTransaction] using notCreated) origin
+    (by simpa only [Benv.beginTransaction] using notCreated) origin
 
 /-- A transaction message always transfers its value. -/
 theorem TransactionTrace.msg_shouldTransferValue
@@ -136,7 +136,7 @@ theorem TransactionTrace.accountsToDelete_ne
     ∀ address ∈ trace.messageOut.accountsToDelete.toList, address ≠ ca :=
   (ContractSpec.processMessageCall_preserves_inv (by
     rw [prepareMessage_benv trace.prepared]
-    simpa [Benv.beginTransaction] using hfork) preserves
+    simpa only [Benv.beginTransaction] using hfork) preserves
     trace.message.result (trace.msgInv inv notCreated)).2
 
 /-- An account the deletion fold never names survives the fold untouched. -/
@@ -148,9 +148,9 @@ theorem foldl_destroyAccount_get_eq
   | nil => rfl
   | cons address addresses ih =>
       rw [List.foldl_cons, ih]
-      · exact State.get_erase_ne (Ne.symm (hne address (by simp)))
+      · exact State.get_erase_ne (Ne.symm (hne address (by simp only [List.mem_cons, true_or])))
       · intro tail htail
-        exact hne tail (by simp [htail])
+        exact hne tail (by simp only [List.mem_cons, htail, or_true])
 
 /-- The two settlement credits are funded by the transaction's own up-front
 debit, so neither can wrap the global balance sum.  Proving this from the
@@ -171,7 +171,7 @@ theorem TransactionTrace.settlement_sum_bounds
       (if tx.isTypeThree = true then
         calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx
       else 0) < 2 ^ 256 := by
-    simpa [Benv.beginTransaction, BenvStat.rules] using
+    simpa only [BenvStat.rules, Nat.reducePow, Benv.beginTransaction] using
       checkTransaction_upfront_lt_modulus trace.checked
   have floor := validateTransaction_calldataFloorGasCost_le_gas trace.validation
   have usedLe : trace.chargedGas refundCounter ≤ tx.gas := by
@@ -202,7 +202,7 @@ theorem TransactionTrace.settlement_sum_bounds
   have messageSum := processMessageCall_sum_le
     (by
       rw [prepareMessage_benv trace.prepared]
-      simpa [Benv.beginTransaction, BenvStat.rules] using hfork.rules_stateGas_none)
+      simpa only [BenvStat.rules, Benv.beginTransaction] using hfork.rules_stateGas_none)
     trace.message.result
   rw [prepareMessage_benv trace.prepared] at messageSum
   change sum trace.messageState.bal ≤ sum trace.debitState.bal at messageSum

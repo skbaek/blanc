@@ -21,7 +21,7 @@ theorem byteAt_prepend_eq_prefix
       Func.byteAtByShape locations n (l +++ p0).compileShape
         (l +++ p0) i d := by
   induction l generalizing n i with
-  | nil => simp [prefixByteSize] at hi
+  | nil => simp only [prefixByteSize, not_lt_zero] at hi
   | cons inst rest ih =>
       change
         Func.byteAtByShape locations n
@@ -47,7 +47,7 @@ theorem byteAt_prepend_to_tail
       Func.byteAtByShape locations (n + prefixByteSize l) p0.compileShape
         p (i - prefixByteSize l) d := by
   induction l generalizing n i with
-  | nil => simp [prefixByteSize, prepend]
+  | nil => simp only [prepend, prefixByteSize, add_zero, tsub_zero]
   | cons inst rest ih =>
       have hinst : inst.size ≤ i := by
         simp only [prefixByteSize] at hlo
@@ -189,8 +189,12 @@ theorem pushFullWord_opcode_eq
           p0).compileShape
         (Ninst.push (0 : B256).toBytes (by rw [B256.length_toBytes]) :::
           p0) 0 0 := by
-  simp [Func.byteAtByShape, Func.compileShape,
-    Ninst.toBytes, Ninst.size, pushToB8L, pushToB8, B256.length_toBytes]
+  simp only [Func.compileShape, Ninst.size, B256.length_toBytes, Nat.reduceAdd, Func.byteAtByShape,
+    Nat.ofNat_pos, ↓reduceIte, Ninst.toBytes, pushToB8L, pushToB8, Nat.toUInt8_eq,
+    UInt8.reduceOfNat, UInt8.reduceAdd, List.takeD_succ, List.head?_cons, Option.getD_some,
+    List.tail_cons, List.head?_tail, List.length_tail, Nat.add_one_sub_one, Nat.one_lt_ofNat,
+    getElem?_pos, List.getElem_tail, List.takeD_zero, List.getD_eq_getElem?_getD, List.length_cons,
+    List.length_nil, zero_add, List.getElem_cons_zero]
 theorem byteAt_pushFullWord_data
     (locations : List Nat) (n : Nat) (p0 p : Func) (w : B256)
     (j : Nat) (hj : j < 32) :
@@ -391,11 +395,12 @@ theorem compile_prepend
         let bs ← Func.compile l (n + CompiledShape.prefixByteSize xs) p
         pure (xs.flatMap Ninst.toBytes ++ bs)) := by
   induction xs generalizing n with
-  | nil => simp [prepend, CompiledShape.prefixByteSize]
+  | nil => simp only [prepend, prefixByteSize, add_zero, List.flatMap_nil, List.nil_append,
+    Option.pure_def, Option.bind_eq_bind, Option.bind_fun_some]
   | cons i xs ih =>
-      have hi : Ninst.immAccepted i = true := hacc i (by simp)
+      have hi : Ninst.immAccepted i = true := hacc i (by simp only [List.mem_cons, true_or])
       have hxs : ∀ j ∈ xs, Ninst.immAccepted j = true :=
-        fun j hj => hacc j (by simp [hj])
+        fun j hj => hacc j (by simp only [List.mem_cons, hj, or_true])
       simp only [prepend, Func.compile, ih _ hxs, CompiledShape.prefixByteSize,
         List.flatMap_cons, Nat.add_assoc, hi, guard, eq_self_iff_true, ite_true]
       cases Func.compile l (n + (i.size + CompiledShape.prefixByteSize xs)) p <;>
@@ -439,7 +444,7 @@ theorem dispatchLeaf_size (s : B256) (k n : Nat) (p : Func)
     exact hpush
   have heqBytes : (Ninst.toBytes Ninst.eq).length = 1 := rfl
   rw [Func.CompileShape.byteSize_compileShape]
-  simp [compsize, hbody', hpushBytes, heqBytes]
+  simp only [compsize, hbody', heqBytes, hpushBytes, Nat.add_right_cancel_iff]
   omega
 
 /-- The standard function-selector prefix occupies five bytes. -/

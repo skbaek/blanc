@@ -25,7 +25,7 @@ theorem Matches.covered {actual expected : Pattern} {values : Stack}
   | nil => cases expected <;> cases values <;> simp_all [covers, Matches]
   | cons word rest ih =>
       cases expected with
-      | nil => simp [covers] at checked
+      | nil => simp only [covers, Bool.false_eq_true] at checked
       | cons wanted tail =>
           cases values with
           | nil => exact False.elim matched
@@ -114,7 +114,7 @@ theorem checkSuccessor_safe {table : Table} {maximum pc : Nat}
     (matched : Matches output post.stack) : table.Invariant pc post := by
   unfold checkSuccessor at checked
   cases found : table.lookup pc with
-  | none => simp [found] at checked
+  | none => simp only [found, Bool.false_eq_true] at checked
   | some expected =>
       simp only [found, Bool.and_eq_true, decide_eq_true_eq] at checked
       exact ⟨expected, found, matched.covered checked.2⟩
@@ -180,7 +180,7 @@ theorem checkInstruction_safe {evm : Evm} {table : Table} {maximum : Nat}
           exact checkSuccessor_safe checked postMatch
       | reg instruction =>
           cases transferred : regularTransfer instruction input with
-          | none => simp [checkInstruction, transferred] at checked
+          | none => simp only [checkInstruction, transferred, Bool.false_eq_true] at checked
           | some output =>
               simp only [checkInstruction, transferred] at checked
               apply stepSafe_mono (ninst_regularTransfer_safe matched bound transferred)
@@ -190,16 +190,16 @@ theorem checkInstruction_safe {evm : Evm} {table : Table} {maximum : Nat}
       | exec instruction =>
           cases instruction <;> try simp [checkInstruction] at checked
           cases transferred : callTransfer input with
-          | none => simp [transferred] at checked
+          | none => simp only [transferred, Bool.false_eq_true] at checked
           | some output =>
               simp only [transferred] at checked
               apply stepSafe_mono (ninst_callTransfer_safe matched bound transferred)
               intro pc post result
               obtain ⟨rfl, postMatch⟩ := result
               exact checkSuccessor_safe checked postMatch
-      | dupn _ => simp [checkInstruction] at checked
-      | swapn _ => simp [checkInstruction] at checked
-      | exchange _ => simp [checkInstruction] at checked
+      | dupn _ => simp only [checkInstruction, Bool.false_eq_true] at checked
+      | swapn _ => simp only [checkInstruction, Bool.false_eq_true] at checked
+      | exchange _ => simp only [checkInstruction, Bool.false_eq_true] at checked
   | jump instruction =>
       cases instruction with
       | jumpdest =>
@@ -209,7 +209,7 @@ theorem checkInstruction_safe {evm : Evm} {table : Table} {maximum : Nat}
           exact checkSuccessor_safe checked postMatch
       | jump =>
           cases transferred : jumpTransfer input with
-          | none => simp [checkInstruction, transferred] at checked
+          | none => simp only [checkInstruction, transferred, Bool.false_eq_true] at checked
           | some pair =>
               obtain ⟨destination, output⟩ := pair
               simp only [checkInstruction, transferred, Bool.and_eq_true] at checked
@@ -219,7 +219,7 @@ theorem checkInstruction_safe {evm : Evm} {table : Table} {maximum : Nat}
               exact checkSuccessor_safe checked.2 postMatch
       | jumpi =>
           cases transferred : jumpiTransfer input with
-          | none => simp [checkInstruction, transferred] at checked
+          | none => simp only [checkInstruction, transferred, Bool.false_eq_true] at checked
           | some triple =>
               obtain ⟨destination, condition, output⟩ := triple
               simp only [checkInstruction, transferred, Bool.and_eq_true] at checked
@@ -231,7 +231,7 @@ theorem checkInstruction_safe {evm : Evm} {table : Table} {maximum : Nat}
               · exact checkSuccessor_safe checked.1.2 postMatch
   | last instruction =>
       cases transferred : terminalTransfer instruction input with
-      | none => simp [checkInstruction, transferred] at checked
+      | none => simp only [checkInstruction, transferred, Bool.false_eq_true] at checked
       | some output =>
           exact (terminalTransfer_safe matched transferred).noStackFault
 
@@ -258,7 +258,7 @@ theorem checkRow_safe {sevm : Sevm} {table : Table} {maximum pc : Nat}
   simp only [checkRow, Bool.and_eq_true, decide_eq_true_eq] at checked
   have bound : input.length ≤ 8 := Nat.le_trans checked.1.1 limit
   cases decoded : sevm.code.getInst pc with
-  | none => simp [decoded] at checked
+  | none => simp only [decoded, Bool.false_eq_true, and_false] at checked
   | some instruction =>
       simp only [decoded, Bool.and_eq_true, decide_eq_true_eq] at checked
       have safe := checkInstruction_safe (evm := ⟨pc, sevm, pre⟩)
@@ -318,7 +318,7 @@ theorem Table.lookup_of_row {table : Table} (ordered : table.Ordered)
   | empty => exact False.elim row
   | node key words left right ihLeft ihRight =>
       rcases row with ⟨rfl, rfl⟩ | row | row
-      · simp [Table.lookup]
+      · simp only [lookup, lt_self_iff_false, ↓reduceIte]
       · have before := ordered.1 _ _ row
         simp only [Table.lookup, if_pos before]
         exact ihLeft ordered.2.2.1 row
@@ -381,7 +381,7 @@ theorem Table.checkLayout_sound {code : ByteArray} {start stop : Nat}
   | empty => simpa only [Table.checkLayout, Table.Layout, decide_eq_true_eq] using checked
   | node pc input left right ihLeft ihRight =>
       cases decoded : code.getInst pc with
-      | none => simp [Table.checkLayout, decoded] at checked
+      | none => simp only [checkLayout, decoded, Bool.false_eq_true] at checked
       | some instruction =>
           simp only [Table.checkLayout, decoded, Bool.and_eq_true,
             decide_eq_true_eq] at checked
@@ -398,7 +398,7 @@ theorem Table.checkLayout_node {code : ByteArray} {start stop pc next : Nat}
     (bound : next ≤ stop) :
     (Table.node pc input left right).checkLayout code start stop = true := by
   cases decoded : code.getInst pc with
-  | none => simp [Table.checkLayout, decoded] at single
+  | none => simp only [checkLayout, decoded, Bool.false_eq_true] at single
   | some instruction =>
       simp only [Table.checkLayout, decoded, Bool.and_eq_true, decide_eq_true_eq] at single
       have width : pc + instructionWidth instruction = next := single.2

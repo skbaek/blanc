@@ -31,7 +31,7 @@ theorem RetainedXlot.rootEntry_of_runFrame {frame : Frame} {slot : Xlot}
     (hfork : CoveredFork frame.inner.benv.stat.fork) :
     ∀ root ∈ retained.rawFrames, RootEntry root := by
   cases retained with
-  | none => intro root member; simp [RetainedXlot.rawFrames] at member
+  | none => intro root member; simp only [rawFrames, List.not_mem_nil] at member
   | @some pc sevm pre execution run =>
       have pcZero : pc = 0 := Frame.enter_run_pc (RunFrame.some_inv hrun).1
       subst pcZero
@@ -59,7 +59,7 @@ theorem MessageCallTrace.rootEntry {msg : Msg} {state : State} {out : MsgCallOut
     (trace : MessageCallTrace msg state out) (hfork : CoveredFork msg.benv.stat.fork) :
     ∀ root ∈ trace.rawFrames, RootEntry root := by
   cases trace with
-  | createCollision => intro root member; simp [MessageCallTrace.rawFrames] at member
+  | createCollision => intro root member; simp only [rawFrames, List.not_mem_nil] at member
   | createRun target collision evm core coreTrace result =>
       exact coreTrace.rootEntry hfork
   | callRun target delegated refund delegation execMsg execMsgEq evm core coreTrace result =>
@@ -75,7 +75,7 @@ theorem TransactionTrace.rootEntry {benv : Benv} {bout : BlockOutput} {tx : Tx} 
     ∀ root ∈ trace.rawFrames, RootEntry root :=
   trace.message.rootEntry (by
     rw [prepareMessage_benv trace.prepared]
-    simpa [Benv.beginTransaction] using hfork)
+    simpa only [Benv.beginTransaction] using hfork)
 
 theorem ApplyTransactionsTrace.rootEntry {txs : List (Nat × Tx)} {benv finalBenv : Benv}
     {bout finalBout : BlockOutput}
@@ -83,13 +83,13 @@ theorem ApplyTransactionsTrace.rootEntry {txs : List (Nat × Tx)} {benv finalBen
     (hfork : CoveredFork benv.stat.fork) :
     ∀ root ∈ trace.rawFrames, RootEntry root := by
   induction trace with
-  | nil => intro root member; simp [ApplyTransactionsTrace.rawFrames] at member
+  | nil => intro root member; simp only [rawFrames, List.not_mem_nil] at member
   | cons head tail ih =>
       intro root member
       simp only [ApplyTransactionsTrace.rawFrames, List.mem_append] at member
       rcases member with member | member
       · exact head.rootEntry hfork root member
-      · exact ih (by simpa [Benv.withState] using hfork) root member
+      · exact ih (by simpa only [Benv.withState] using hfork) root member
 
 theorem SystemMessageTrace.rootEntry {benv : Benv} {target : Adr} {data : Bytes}
     {state : State} {out : MsgCallOutput}
@@ -97,8 +97,8 @@ theorem SystemMessageTrace.rootEntry {benv : Benv} {target : Adr} {data : Bytes}
     (hfork : CoveredFork benv.stat.fork) :
     ∀ root ∈ trace.rawFrames, RootEntry root :=
   trace.message.rootEntry (by
-    simpa [systemTransactionMessage, processSystemTransactionMsg,
-      Benv.beginTransaction] using hfork)
+    simpa only [systemTransactionMessage, processSystemTransactionMsg, Benv.beginTransaction] using
+      hfork)
 
 theorem RequestsTrace.rootEntry {benv : Benv} {bout : BlockOutput} {state : State}
     {bout' : BlockOutput} (trace : RequestsTrace benv bout state bout')
@@ -108,7 +108,7 @@ theorem RequestsTrace.rootEntry {benv : Benv} {bout : BlockOutput} {state : Stat
   simp only [RequestsTrace.rawFrames, List.mem_append] at member
   rcases member with member | member
   · exact trace.withdrawal.rootEntry hfork root member
-  · exact trace.consolidation.rootEntry (by simpa [Benv.withState] using hfork) root member
+  · exact trace.consolidation.rootEntry (by simpa only [Benv.withState] using hfork) root member
 
 theorem AppliedBodyTrace.rootEntry {benv : Benv} {txs : List (Bytes ⊕ Tx)}
     {wds : List Withdrawal} {state : State} {bout : BlockOutput}
@@ -119,13 +119,13 @@ theorem AppliedBodyTrace.rootEntry {benv : Benv} {txs : List (Bytes ⊕ Tx)}
   simp only [AppliedBodyTrace.rawFrames, List.mem_append] at member
   rcases member with ((member | member) | member) | member
   · exact trace.beacon.rootEntry hfork root member
-  · exact trace.history.rootEntry (by simpa [Benv.withState] using hfork) root member
-  · exact trace.transactions.rootEntry (by simpa [Benv.withState] using hfork) root member
+  · exact trace.history.rootEntry (by simpa only [Benv.withState] using hfork) root member
+  · exact trace.transactions.rootEntry (by simpa only [Benv.withState] using hfork) root member
   · refine trace.requests.rootEntry ?_ root member
     have transactionFork : CoveredFork trace.transactionBenv.stat.fork := by
       rw [trace.transactions.stat_eq]
-      simpa [Benv.withState] using hfork
-    simpa [Benv.withState] using transactionFork
+      simpa only [Benv.withState] using hfork
+    simpa only [Benv.withState] using transactionFork
 
 theorem ConfiguredBlockTrace.rootEntry {cfg : ChainConfig} {pre post : BlockChain}
     (trace : ConfiguredBlockTrace cfg pre post) :
@@ -138,7 +138,7 @@ theorem ConfiguredHistoryTrace.rootEntry {cfg : ChainConfig} {checkpoint future 
     (trace : ConfiguredHistoryTrace cfg checkpoint future) :
     ∀ root ∈ trace.rawFrames, RootEntry root := by
   induction trace with
-  | refl => intro root member; simp [ConfiguredHistoryTrace.rawFrames] at member
+  | refl => intro root member; simp only [rawFrames, List.not_mem_nil] at member
   | step prior block ih =>
       intro root member
       simp only [ConfiguredHistoryTrace.rawFrames, List.mem_append] at member
