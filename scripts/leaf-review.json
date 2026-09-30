@@ -674,10 +674,13 @@
   "Blanc.Lift.LidoCircuitBreakerDeployed.Creation.lido_create_stateInv": "00000000bd556b45",
   "Blanc.Lift.LidoCircuitBreakerDeployed.Creation.lido_deploy_covered": "0000000005b385a6",
   "Blanc.Lift.LidoCircuitBreakerDeployed.Creation.lido_deploy_init_covered": "000000006712433f",
+  "Blanc.Lift.LidoCircuitBreakerDeployed.exampleApplicable": "000000008acf2754",
   "Blanc.Lift.LidoCircuitBreakerDeployed.lidoSpec_soundAdmitted": "000000004d7be976",
+  "Blanc.Lift.LidoCircuitBreakerDeployed.lido_create_finite_init": "00000000ed59cc71",
   "Blanc.Lift.LidoCircuitBreakerDeployed.lido_history_l1_l3": "00000000ff3f96cd",
   "Blanc.Lift.LidoCircuitBreakerDeployed.lido_history_l2_committed": "000000005928c3e4",
   "Blanc.Lift.LidoCircuitBreakerDeployed.lido_init_stateInv": "00000000b861254d",
+  "Blanc.Lift.LidoCircuitBreakerDeployed.registerPauser_nonzero_finite": "000000000e52d514",
   "Blanc.Lift.NodeWalk.childCfg_withFork": "00000000f8b9bca4",
   "Blanc.Lift.NodeWalk.hashPol_bites": "00000000bf1f32ea",
   "Blanc.Lift.Reach.mono": "00000000cc17f108",
@@ -1171,6 +1174,6 @@
  "unreviewed_excluded": {
   "count": 350,
   "sha256": "655fae32358a86560ecf365aa9f304c29bdb96e1616a98eda1003e0d39a0f0d5",
-  "source": "unreviewed-leaves-in-ledger.txt"
+  "source": "inherited-unreviewed-leaves.txt"
  }
 }

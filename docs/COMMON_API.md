@@ -1600,6 +1600,12 @@ slot or a tracked key's slot), `Inj`/`Apart` (tracked slots pairwise distinct an
 extend the footprint), `Support.get_eq_zero`/`Support.set`/`Inj.extend`/`Apart.extend`, and
 `FreshKeys.of_universe`, which turns injectivity and apartness of one *trace-fixed universe* into the
 freshness of every touched key.  The key type, its slot function and the fixed slots are parameters.
+For an explicit query list and write list, `checkFaithfulOn slot observed written`
+checks that a written key shares its raw slot only with itself among the requested
+observations; `checkFaithfulOn_eq_true` gives its exact finite soundness statement.
+`checkApartOn slot observed foreign` and `checkApartOn_eq_true` check raw foreign
+slots against those same explicit observations. These require neither a
+`Support` premise nor zero values for keys outside the observation list.
 WETH9's `Blanc/Lift/Weth9/Footprint.lean` is the first consumer (with `tracked`/`trackedSum` over
 `sum`); Curve's `Layout.lean` keeps its own copy of the same notions.
 

@@ -492,11 +492,11 @@ theorem t044b_ret {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {x y z ra : B256}
 /-- A call of entry 22 writing `v` at `mapSlot p 2`, for a canonical `p` whose
 slot is off the Registry: it returns to the caller's stack below its three
 words, keeping any storage predicate `Φ` stable under such writes. -/
-theorem call22_foreign {Φ : Stor → Prop}
-    (hΦ : ∀ {s : Stor} {w v : B256}, ForeignApart (2 ^ 160) w → Φ s → Φ (s.set w v))
+theorem call22_preserves {Apart : B256 → Prop} {Φ : Stor → Prop}
+    (hΦ : ∀ {s : Stor} {w v : B256}, Apart w → Φ s → Φ (s.set w v))
     {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {v p ra : B256}
     {xs : List B256} {f : SFunc} {r : Seg} (hfork : CoveredFork sevm.benvStat.fork)
-    (hp : canonicalAddress p) (hfa : ForeignApart (2 ^ 160) (mapSlot p 2))
+    (hp : canonicalAddress p) (hfa : Apart (mapSlot p 2))
     (hinv : Φ (Devm.getStor b sevm.currentTarget))
     (run : SFunc.RunCut prog sevm [] (St b (Bytes.toB256 [0x0c, 0xd5] :: v :: p :: ra :: xs) M G)
       (.callNext 22 f) r)
@@ -515,13 +515,27 @@ theorem call22_foreign {Φ : Stor → Prop}
     getStor_St, B256.toAdr_toB256_of_lt hp]
   exact hΦ hfa hinv
 
+/- The universal-registry interface remains a corollary. -/
+theorem call22_foreign {Φ : Stor → Prop}
+    (hΦ : ∀ {s : Stor} {w v : B256}, ForeignApart (2 ^ 160) w → Φ s → Φ (s.set w v))
+    {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {v p ra : B256}
+    {xs : List B256} {f : SFunc} {r : Seg} (hfork : CoveredFork sevm.benvStat.fork)
+    (hp : canonicalAddress p) (hfa : ForeignApart (2 ^ 160) (mapSlot p 2))
+    (hinv : Φ (Devm.getStor b sevm.currentTarget))
+    (run : SFunc.RunCut prog sevm [] (St b (Bytes.toB256 [0x0c, 0xd5] :: v :: p :: ra :: xs) M G)
+      (.callNext 22 f) r)
+    (hr : ∀ D, r ≠ .done (.halted D)) :
+    ∃ b' M' G', Φ (Devm.getStor b' sevm.currentTarget) ∧
+      SFunc.RunCut prog sevm [] (St b' xs M' G') f r := by
+  exact call22_preserves hΦ hfork hp hfa hinv run hr
+
 /-- `t_0418_c2`: when the new pauser is nonzero, `_setHeartbeatExpiry(np, now +
 heartbeatInterval)`; then pop and return.  Keeps any `Φ` stable under off-Registry writes. -/
-theorem t0418_foreign {Φ : Stor → Prop}
-    (hΦ : ∀ {s : Stor} {w v : B256}, ForeignApart (2 ^ 160) w → Φ s → Φ (s.set w v))
+theorem t0418_preserves {Apart : B256 → Prop} {Φ : Stor → Prop}
+    (hΦ : ∀ {s : Stor} {w v : B256}, Apart w → Φ s → Φ (s.set w v))
     {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {p0 np t ra : B256}
     {xs : List B256} {D : Devm} (hfork : CoveredFork sevm.benvStat.fork)
-    (hnp : canonicalAddress np) (hfa : np ≠ 0 → ForeignApart (2 ^ 160) (mapSlot np 2))
+    (hnp : canonicalAddress np) (hfa : np ≠ 0 → Apart (mapSlot np 2))
     (hinv : Φ (Devm.getStor b sevm.currentTarget))
     (run : SFunc.RunCut prog sevm [] (St b (p0 :: np :: t :: ra :: xs) M G) t_0418_c2
       (.done (.returned D))) :
@@ -579,7 +593,7 @@ theorem t0418_foreign {Φ : Stor → Prop}
     obtain ⟨G18, run⟩ := ric_dest run
     obtain ⟨d1, s1, run⟩ := ric_next run
     obtain ⟨G19, rfl⟩ := ri_push s1
-    obtain ⟨b', M', G', hinv', run⟩ := call22_foreign hΦ hfork hnp (hfa hnp0) hinv23 run
+    obtain ⟨b', M', G', hinv', run⟩ := call22_preserves hΦ hfork hnp (hfa hnp0) hinv23 run
       (fun _ h => by cases h)
     exact (t044b_ret run) ▸ hinv'
   · exact (t044b_ret run) ▸ hinv
@@ -587,13 +601,13 @@ theorem t0418_foreign {Φ : Stor → Prop}
 /-- `t_0409_c2` (entry 2's head, also inlined in `t_03e2_c21`): on a nonzero
 flag `c` (the previous pauser has no pausables left), `_setHeartbeatExpiry(p0,
 0)`, then the new pauser's heartbeat. -/
-theorem t0409_foreign {Φ : Stor → Prop}
-    (hΦ : ∀ {s : Stor} {w v : B256}, ForeignApart (2 ^ 160) w → Φ s → Φ (s.set w v))
+theorem t0409_preserves {Apart : B256 → Prop} {Φ : Stor → Prop}
+    (hΦ : ∀ {s : Stor} {w v : B256}, Apart w → Φ s → Φ (s.set w v))
     {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {c p0 np t ra : B256}
     {xs : List B256} {D : Devm} (hfork : CoveredFork sevm.benvStat.fork)
     (hp0 : canonicalAddress p0) (hnp : canonicalAddress np)
-    (hc : c ≠ 0 → ForeignApart (2 ^ 160) (mapSlot p0 2))
-    (hfa : np ≠ 0 → ForeignApart (2 ^ 160) (mapSlot np 2))
+    (hc : c ≠ 0 → Apart (mapSlot p0 2))
+    (hfa : np ≠ 0 → Apart (mapSlot np 2))
     (hinv : Φ (Devm.getStor b sevm.currentTarget))
     (run : SFunc.RunCut prog sevm [] (St b (c :: p0 :: np :: t :: ra :: xs) M G) t_0409_c2
       (.done (.returned D))) :
@@ -616,31 +630,33 @@ theorem t0409_foreign {Φ : Stor → Prop}
     obtain ⟨G7, rfl⟩ := ri_push s1
     obtain ⟨d1, s1, run⟩ := ric_next run
     obtain ⟨G8, rfl⟩ := ri_push s1
-    obtain ⟨b', M', G', hinv', run⟩ := call22_foreign hΦ hfork hp0 (hc hc0) hinv run
+    obtain ⟨b', M', G', hinv', run⟩ := call22_preserves hΦ hfork hp0 (hc hc0) hinv run
       (fun _ h => by cases h)
-    exact t0418_foreign hΦ hfork hnp hfa hinv' run
-  · exact t0418_foreign hΦ hfork hnp hfa hinv run
+    exact t0418_preserves hΦ hfork hnp hfa hinv' run
+  · exact t0418_preserves hΦ hfork hnp hfa hinv run
 
 /-! ## Entry 21: the `registerPauser` body -/
 
-/-- **The `registerPauser(t, np)` body (entry 21)**, from well-formed memory and
-the frame-entry witness, given `registerPauser`'s collision premise for that
-witness: any storage predicate `Φ` stable under off-Registry writes that holds
-after every successful entry-32 run from the call state holds at the end. -/
-theorem entry21_foreign {Φ : Stor → Prop}
-    (hΦ : ∀ {s : Stor} {w v : B256}, ForeignApart (2 ^ 160) w → Φ s → Φ (s.set w v))
+/-- Lift a registry-run postcondition through the exact heartbeat continuation,
+using an arbitrary explicitly supplied set of apart raw slots. -/
+theorem entry21_preserves {Apart : B256 → Prop} {Φ : Stor → Prop}
+    (hΦ : ∀ {s : Stor} {w v : B256}, Apart w → Φ s → Φ (s.set w v))
     {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {np t ra : B256}
-    {xs : List B256} {D : Devm} {entries : List Entry}
+    {xs : List B256} {D : Devm}
     (hfork : CoveredFork sevm.benvStat.fork) (hmem : MemOK M)
-    (hw : RegistryWitness (solRegistryStorage (Devm.getStor b sevm.currentTarget)) entries)
     (ht : canonicalAddress t) (hnp : canonicalAddress np)
-    (hA : t ≠ 0 → RegisterPauserApart entries t np)
-    (hmid : ∀ {b' : Devm} {M' : Mem} {G' : Nat} {post : Devm},
+    (hfa0 : t ≠ 0 → addressSlotReadWord (b.getStorVal sevm.currentTarget (mapSlot t 3)) ≠ 0 →
+      Apart (mapSlot (addressSlotReadWord (b.getStorVal sevm.currentTarget (mapSlot t 3))) 2))
+    (hfanp : t ≠ 0 → np ≠ 0 → Apart (mapSlot np 2))
+    (hmid : t ≠ 0 → ∀ {b' : Devm} {M' : Mem} {G' : Nat} {post : Devm},
       Devm.getStor b' sevm.currentTarget = Devm.getStor b sevm.currentTarget → MemOK M' →
       SFunc.Run prog sevm (St b' (np :: t :: 3 :: 0x3c2 ::
         addressSlotReadWord (b.getStorVal sevm.currentTarget (mapSlot t 3)) :: np :: t :: ra :: xs)
         M' G') t_0934_c32 (.returned post) →
-      Φ (Devm.getStor post sevm.currentTarget))
+      Φ (Devm.getStor post sevm.currentTarget) ∧
+      ∃ b2 M2 G2, post = St b2
+        (addressSlotReadWord (b.getStorVal sevm.currentTarget (mapSlot t 3)) :: np :: t :: ra :: xs)
+        M2 G2)
     (run : SFunc.Run prog sevm (St b (np :: t :: ra :: xs) M G) t_031c_c21 (.returned D)) :
     Φ (Devm.getStor D sevm.currentTarget) := by
   have run := run.cut
@@ -734,24 +750,13 @@ theorem entry21_foreign {Φ : Stor → Prop}
     show (Bytes.toB256 [0x03, 0xc2] : B256) = 0x3c2 from rfl] at r32
   by_cases ht0 : t = 0
   · subst ht0; exact (entry32_zero_false r32).elim
-  have hA' := hA ht0
-  have hw1 : RegistryWitness (solRegistryStorage
-      (Devm.getStor (afterSload sevm b (mapSlot t 3)) sevm.currentTarget)) entries := by
-    rw [afterSload_getStor]; exact hw
-  have hinv2 := hmid (afterSload_getStor _ _ _ _) ⟨hscr.2.2.1, hscr.2.2.2⟩ r32
-  obtain ⟨-, b2, M2, G36, rfl⟩ :=
-    setPauser_step hfork ⟨hscr.2.2.1, hscr.2.2.2⟩ hw1 ht hnp (fun _ => hA'.1) r32
-  -- the previous pauser, as read, is the witness's assignment
+  obtain ⟨hinv2, b2, M2, G36, rfl⟩ :=
+    hmid ht0 (afterSload_getStor _ _ _ _) ⟨hscr.2.2.1, hscr.2.2.2⟩ r32
   set p0 := addressSlotReadWord (b.getStorVal sevm.currentTarget (mapSlot t 3)) with hp0def
-  have hp0 : p0 = assignmentAt entries t := by
-    have h := hw.assignments t ht
-    rw [solRegistryStorage_assignment _ _ ht] at h
-    exact h
   have hp0c : canonicalAddress p0 := by
     rw [hp0def, addressSlotReadWord_eq_toAdr_toB256]
     exact canonical_toAdr_toB256 _
-  have hfa0 : p0 ≠ 0 → ForeignApart (2 ^ 160) (mapSlot p0 2) := by
-    intro h; rw [hp0] at h ⊢; exact hA'.2.1 h
+  have hfaOld : p0 ≠ 0 → Apart (mapSlot p0 2) := hfa0 ht0
   -- `t_03c2_c21`: test the previous pauser
   unfold t_03c2_c21 at run
   obtain ⟨G37, run⟩ := ric_dest run
@@ -813,13 +818,52 @@ theorem entry21_foreign {Φ : Stor → Prop}
     obtain ⟨G61, rfl⟩ := ri_sload hfork s1
     obtain ⟨d1, s1, run⟩ := ric_next run
     obtain ⟨G62, rfl⟩ := ri_iszero s1
-    refine t0409_foreign hΦ hfork hp0c hnp (fun _ => hfa0 hp0nz) hA'.2.2 ?_ run
+    refine t0409_preserves hΦ hfork hp0c hnp (fun _ => hfaOld hp0nz) (hfanp ht0) ?_ run
     rw [afterSload_getStor]
     exact hinv2
   · -- no previous pauser: entry 2 skips its heartbeat
     have hp00 : p0 = 0 := eq_of_eqCheck_ne hnz
-    refine t0409_foreign hΦ hfork hp0c hnp (fun h => absurd ?_ h) hA'.2.2 hinv2 run
+    refine t0409_preserves hΦ hfork hp0c hnp (fun h => absurd ?_ h) (hfanp ht0) hinv2 run
     rw [hp00]; decide
+
+/-- **The `registerPauser(t, np)` body (entry 21)**, from well-formed memory and
+the frame-entry witness, given `registerPauser`'s collision premise for that
+witness: any storage predicate `Φ` stable under off-Registry writes that holds
+after every successful entry-32 run from the call state holds at the end. -/
+theorem entry21_foreign {Φ : Stor → Prop}
+    (hΦ : ∀ {s : Stor} {w v : B256}, ForeignApart (2 ^ 160) w → Φ s → Φ (s.set w v))
+    {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {np t ra : B256}
+    {xs : List B256} {D : Devm} {entries : List Entry}
+    (hfork : CoveredFork sevm.benvStat.fork) (hmem : MemOK M)
+    (hw : RegistryWitness (solRegistryStorage (Devm.getStor b sevm.currentTarget)) entries)
+    (ht : canonicalAddress t) (hnp : canonicalAddress np)
+    (hA : t ≠ 0 → RegisterPauserApart entries t np)
+    (hmid : ∀ {b' : Devm} {M' : Mem} {G' : Nat} {post : Devm},
+      Devm.getStor b' sevm.currentTarget = Devm.getStor b sevm.currentTarget → MemOK M' →
+      SFunc.Run prog sevm (St b' (np :: t :: 3 :: 0x3c2 ::
+        addressSlotReadWord (b.getStorVal sevm.currentTarget (mapSlot t 3)) :: np :: t :: ra :: xs)
+        M' G') t_0934_c32 (.returned post) →
+      Φ (Devm.getStor post sevm.currentTarget))
+    (run : SFunc.Run prog sevm (St b (np :: t :: ra :: xs) M G) t_031c_c21 (.returned D)) :
+    Φ (Devm.getStor D sevm.currentTarget) := by
+  refine entry21_preserves hΦ hfork hmem ht hnp ?_ ?_ ?_ run
+  · intro ht0 hp0
+    have heq : addressSlotReadWord (b.getStorVal sevm.currentTarget (mapSlot t 3)) =
+        assignmentAt entries t := by
+      have h := hw.assignments t ht
+      rw [solRegistryStorage_assignment _ _ ht] at h
+      exact h
+    rw [heq] at hp0 ⊢
+    exact (hA ht0).2.1 hp0
+  · intro ht0
+    exact (hA ht0).2.2
+  · intro ht0 b' M' G' post hs hm r
+    have hw1 : RegistryWitness (solRegistryStorage (Devm.getStor b' sevm.currentTarget)) entries := by
+      rw [hs]; exact hw
+    have h := hmid hs hm r
+    obtain ⟨-, b2, M2, G2, hpost⟩ :=
+      setPauser_step hfork hm hw1 ht hnp (fun _ => (hA ht0).1) r
+    exact ⟨h, b2, M2, G2, hpost⟩
 
 /-! ## The `registerPauser` selector wrapper (entry 59) -/
 
@@ -829,24 +873,17 @@ private instance : Inhabited SFunc := ⟨.undefined⟩
 predicate `Φ` stable under off-Registry writes that every successful entry-32
 run of `setPauser(t, np)` (from the frame's storage and well-formed memory)
 establishes. -/
-theorem registerPauser_wrapper_foreign {Φ : Stor → Prop}
-    (hΦ : ∀ {s : Stor} {w v : B256}, ForeignApart (2 ^ 160) w → Φ s → Φ (s.set w v))
-    {sevm : Sevm} {d : Devm} {o : Outcome} {w : SFunc} {entries : List Entry}
-    (hfork : CoveredFork sevm.benvStat.fork) (hw : prog[59]? = some w)
-    (hA : EntryAt lidoA sevm d) (hmem : MemOK d.memory)
-    (hwit : RegistryWitness (solRegistryStorage (Devm.getStor d sevm.currentTarget)) entries)
-    (hmid : canonicalAddress (Sevm.dataWord sevm 4) → canonicalAddress (Sevm.dataWord sevm 36) →
-      Sevm.dataWord sevm 4 ≠ 0 → ∀ {b' : Devm} {M' : Mem} {G' : Nat} {base : List B256}
-      {post : Devm},
-      Devm.getStor b' sevm.currentTarget = Devm.getStor d sevm.currentTarget → MemOK M' →
-      SFunc.Run prog sevm (St b' (Sevm.dataWord sevm 36 :: Sevm.dataWord sevm 4 :: 3 :: 0x3c2 ::
-        base) M' G') t_0934_c32 (.returned post) →
-      Φ (Devm.getStor post sevm.currentTarget))
+theorem registerPauser_wrapper_of_body {Φ : Stor → Prop}
+    {sevm : Sevm} {d : Devm} {o : Outcome} {w : SFunc}
+    (hw : prog[59]? = some w)
+    (hbody : canonicalAddress (Sevm.dataWord sevm 4) → canonicalAddress (Sevm.dataWord sevm 36) →
+      ∀ G D, SFunc.Run prog sevm
+        (St d (Sevm.dataWord sevm 36 :: Sevm.dataWord sevm 4 :: Bytes.toB256 [0x01, 0xba] :: d.stack)
+          d.memory G) t_031c_c21 (.returned D) → Φ (Devm.getStor D sevm.currentTarget))
     (run : SFunc.Run prog sevm d w o) :
     Φ (Devm.getStor (Outcome.devm o) sevm.currentTarget) := by
   rw [show prog[59]? = some t_01a7_c59 from rfl] at hw
   cases hw
-  have hAe := hA entries hwit
   rw [St.self (d := d) rfl rfl] at run
   have run := run.cut
   unfold t_01a7_c59 at run
@@ -875,14 +912,34 @@ theorem registerPauser_wrapper_foreign {Φ : Stor → Prop}
   rcases hcall with ⟨D21, r21, run⟩ | ⟨D21, r21, -⟩
   swap
   · exact (SFunc.RunP.not_halted_entry writerNoHalt_set (k := 21) (by decide) rfl r21 rfl).elim
-  have hinv := entry21_foreign hΦ hfork hmem hwit ht hnp (fun ht0 => hAe.1 ⟨ht0, ht⟩ hnp)
+  have hinv := hbody ht hnp G11 D21 r21
+  have hst := SFunc.Run.state_of_silent (S := []) rfl (by decide) (by decide) run.uncut
+  rw [getStor_eq_of_state_eq hst]
+  exact hinv
+
+theorem registerPauser_wrapper_foreign {Φ : Stor → Prop}
+    (hΦ : ∀ {s : Stor} {w v : B256}, ForeignApart (2 ^ 160) w → Φ s → Φ (s.set w v))
+    {sevm : Sevm} {d : Devm} {o : Outcome} {w : SFunc} {entries : List Entry}
+    (hfork : CoveredFork sevm.benvStat.fork) (hw : prog[59]? = some w)
+    (hA : EntryAt lidoA sevm d) (hmem : MemOK d.memory)
+    (hwit : RegistryWitness (solRegistryStorage (Devm.getStor d sevm.currentTarget)) entries)
+    (hmid : canonicalAddress (Sevm.dataWord sevm 4) → canonicalAddress (Sevm.dataWord sevm 36) →
+      Sevm.dataWord sevm 4 ≠ 0 → ∀ {b' : Devm} {M' : Mem} {G' : Nat} {base : List B256}
+      {post : Devm},
+      Devm.getStor b' sevm.currentTarget = Devm.getStor d sevm.currentTarget → MemOK M' →
+      SFunc.Run prog sevm (St b' (Sevm.dataWord sevm 36 :: Sevm.dataWord sevm 4 :: 3 :: 0x3c2 ::
+        base) M' G') t_0934_c32 (.returned post) →
+      Φ (Devm.getStor post sevm.currentTarget))
+    (run : SFunc.Run prog sevm d w o) :
+    Φ (Devm.getStor (Outcome.devm o) sevm.currentTarget) := by
+  have hAe := hA entries hwit
+  refine registerPauser_wrapper_of_body hw ?_ run
+  intro ht hnp G D r21
+  exact entry21_foreign hΦ hfork hmem hwit ht hnp (fun ht0 => hAe.1 ⟨ht0, ht⟩ hnp)
     (fun hs hm r => by
       by_cases ht0 : Sevm.dataWord sevm 4 = 0
       · rw [ht0] at r; exact (entry32_zero_false r).elim
       exact hmid ht hnp ht0 hs hm r) r21
-  have hst := SFunc.Run.state_of_silent (S := []) rfl (by decide) (by decide) run.uncut
-  rw [getStor_eq_of_state_eq hst]
-  exact hinv
 
 /-- **`registerPauser(address,address)` (wrapper 59) establishes the frame
 postcondition**: the `registerPauser` field of `LidoWriterSpecsM lidoA`. -/

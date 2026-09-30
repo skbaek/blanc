@@ -267,11 +267,6 @@ Keccak injectivity. -/
 def RegistryKeysFaithful (bound : Nat) (T : List B256) : Prop :=
   ∀ t ∈ T, ∀ k, RegistryObservable bound k → solKey k = solKey t → k = t
 
-theorem RegistryKeysFaithful.mono {bound : Nat} {T T' : List B256}
-    (h : RegistryKeysFaithful bound T) (hsub : ∀ t ∈ T', t ∈ T) :
-    RegistryKeysFaithful bound T' :=
-  fun t ht k hk heq => h t (hsub t ht) k hk heq
-
 /-- The actual raw `Stor.set` value for a logical write: packed through the
 address mask for the two address-shaped families (assignment, populated
 array entries), verbatim otherwise (index, count, array length). -/
@@ -400,8 +395,7 @@ private theorem solRegistryStorage_step
     (hkeyObs : RegistryObservable bound logicalKey)
     (hclean : RegistryAddressFamily bound logicalKey → addressSlotReadWord value = value)
     {key : B256} (hkey : RegistryObservable bound key)
-    (hfaithfulOne : ∀ k, RegistryObservable bound k →
-      solKey k = solKey logicalKey → k = logicalKey) :
+    (hfaithfulOne : solKey key = solKey logicalKey → key = logicalKey) :
     (solRegistryStorage
       (before.set (solKey logicalKey)
         (registryRawValue logicalKey (before.get (solKey logicalKey)) value))
@@ -414,7 +408,7 @@ private theorem solRegistryStorage_step
   · simp only [if_neg heq]
     have hne : solKey logicalKey ≠ solKey key := by
       intro hcontra
-      exact heq (hfaithfulOne key hkey hcontra.symm).symm
+      exact heq (hfaithfulOne hcontra.symm).symm
     apply solRegistryStorage_read_congr hlength hkey
     rw [Stor.get_set_ite, if_neg hne]
 
@@ -426,21 +420,21 @@ observed logical key's Solidity-decoded value after the chain agrees with
 the logical fold of the writes — the single fact each of the four native
 transitions' raw analogues now consumes, in place of a bespoke
 key-correspondence bundle. -/
-theorem solRegistryStorage_applyRegistryRawWrites
-    {bound : Nat} {before : Stor} {writes : List (B256 × B256)}
+theorem solRegistryStorage_applyRegistryRawWrites_at
+    {bound : Nat} {before : Stor} {writes : List (B256 × B256)} {key : B256}
     (hlength : bound < 2 ^ 252)
-    (hfaithful : RegistryKeysFaithful bound (writes.map Prod.fst))
+    (hfaithful : ∀ t ∈ writes.map Prod.fst, solKey key = solKey t → key = t)
     (hobservable : ∀ w ∈ writes, RegistryObservable bound w.1)
     (hclean : ∀ w ∈ writes, RegistryAddressFamily bound w.1 → addressSlotReadWord w.2 = w.2)
-    {key : B256} (hkey : RegistryObservable bound key) :
+    (hkey : RegistryObservable bound key) :
     (solRegistryStorage (applyRegistryRawWrites before writes)).read key =
       writes.foldl (fun cur w => if w.1 = key then w.2 else cur)
         ((solRegistryStorage before).read key) := by
   induction writes generalizing before with
   | nil => rfl
   | cons w rest ih =>
-    have hfaithfulRest : RegistryKeysFaithful bound (rest.map Prod.fst) :=
-      hfaithful.mono (fun t ht => List.mem_cons_of_mem _ ht)
+    have hfaithfulRest : ∀ t ∈ rest.map Prod.fst, solKey key = solKey t → key = t :=
+      fun t ht => hfaithful t (List.mem_cons_of_mem _ ht)
     have hobservableRest : ∀ w' ∈ rest, RegistryObservable bound w'.1 :=
       fun w' hw' => hobservable w' (List.mem_cons_of_mem _ hw')
     have hcleanRest : ∀ w' ∈ rest, RegistryAddressFamily bound w'.1 → addressSlotReadWord w'.2 = w'.2 :=
@@ -449,9 +443,8 @@ theorem solRegistryStorage_applyRegistryRawWrites
       hobservable w List.mem_cons_self
     have hw1clean : RegistryAddressFamily bound w.1 → addressSlotReadWord w.2 = w.2 :=
       hclean w List.mem_cons_self
-    have hfaithfulOne : ∀ k, RegistryObservable bound k →
-        solKey k = solKey w.1 → k = w.1 :=
-      fun k hk heq => hfaithful w.1 List.mem_cons_self k hk heq
+    have hfaithfulOne : solKey key = solKey w.1 → key = w.1 :=
+      hfaithful w.1 List.mem_cons_self
     have hstep :
         (solRegistryStorage
           (before.set (solKey w.1) (registryRawValue w.1 (before.get (solKey w.1)) w.2))
@@ -467,6 +460,19 @@ theorem solRegistryStorage_applyRegistryRawWrites
     rw [← hstep]
     exact ih hfaithfulRest hobservableRest hcleanRest
       (before := before.set (solKey w.1) (registryRawValue w.1 (before.get (solKey w.1)) w.2))
+
+theorem solRegistryStorage_applyRegistryRawWrites
+    {bound : Nat} {before : Stor} {writes : List (B256 × B256)}
+    (hlength : bound < 2 ^ 252)
+    (hfaithful : RegistryKeysFaithful bound (writes.map Prod.fst))
+    (hobservable : ∀ w ∈ writes, RegistryObservable bound w.1)
+    (hclean : ∀ w ∈ writes, RegistryAddressFamily bound w.1 → addressSlotReadWord w.2 = w.2)
+    {key : B256} (hkey : RegistryObservable bound key) :
+    (solRegistryStorage (applyRegistryRawWrites before writes)).read key =
+      writes.foldl (fun cur w => if w.1 = key then w.2 else cur)
+        ((solRegistryStorage before).read key) := by
+  exact solRegistryStorage_applyRegistryRawWrites_at hlength
+    (fun t ht => hfaithful t ht key hkey) hobservable hclean hkey
 
 /-- Combine the unified transport lemma with pointwise raw equality (the
 form a later bytecode-walk proof supplies) to conclude the deployed
@@ -762,6 +768,32 @@ def rawNonzeroPost (raw : Stor) (entries : List Entry)
     (target newPauser oldPauser : B256) : Stor :=
   applyRegistryRawWrites raw (nonzeroWrites entries target newPauser oldPauser)
 
+/-- Observable keys and clean packed values of the finite three-write update. -/
+theorem nonzeroWrites_wellFormed {entries : List Entry} {target newPauser oldPauser : B256}
+    (hlen : entries.length < 2 ^ 252)
+    (htarget : nonzeroCanonicalAddress target) (hnew : nonzeroCanonicalAddress newPauser)
+    (hold : nonzeroCanonicalAddress oldPauser) :
+    (∀ w ∈ nonzeroWrites entries target newPauser oldPauser,
+      RegistryObservable entries.length w.1) ∧
+    (∀ w ∈ nonzeroWrites entries target newPauser oldPauser,
+      RegistryAddressFamily entries.length w.1 → addressSlotReadWord w.2 = w.2) := by
+  constructor
+  · intro w hw'
+    simp only [nonzeroWrites, List.mem_cons, List.not_mem_nil, or_false] at hw'
+    rcases hw' with rfl | rfl | rfl
+    · exact Or.inl ⟨target, htarget.2, rfl⟩
+    · exact Or.inr (Or.inr (Or.inl ⟨oldPauser, hold.2, rfl⟩))
+    · exact Or.inr (Or.inr (Or.inl ⟨newPauser, hnew.2, rfl⟩))
+  · intro w hw' hfam
+    simp only [nonzeroWrites, List.mem_cons, List.not_mem_nil, or_false] at hw'
+    rcases hw' with rfl | rfl | rfl
+    · exact addressSlotReadWord_eq_self_of_lt hnew.2
+    · exact absurd hfam
+        (not_registryAddressFamily_countSlot hold.2 hlen)
+    · exact absurd hfam
+        (not_registryAddressFamily_countSlot hnew.2 hlen)
+
+
 /-- Concrete application of the shared logical three-write preservation
 theorem to the deployed Solidity storage projection: the found-target,
 nonzero-new-pauser reassignment. -/
@@ -788,24 +820,10 @@ theorem rawNonzero_preservesRegistry
     apply RegistryWitness.applyFoundNonzeroWritesOfReadEffect hw htarget hnew hfind
     intro key
     rfl
+  have hwell := nonzeroWrites_wellFormed hw.entries_length_lt_2pow252 htarget hnew hold
   refine RegistryWitness.ofRawRegistryWrites
-    hw.entries_length_lt_2pow252 ?_ hfaithful ?_ ?_ hwrites hlogical
+    hw.entries_length_lt_2pow252 ?_ hfaithful hwell.1 hwell.2 hwrites hlogical
   · rw [setEntryAt_length_of_findEntry hfind]
-  · intro w hw'
-    simp only [nonzeroWrites, List.mem_cons, List.not_mem_nil, or_false] at hw'
-    rcases hw' with rfl | rfl | rfl
-    · exact Or.inl ⟨target, htarget.2, rfl⟩
-    · exact Or.inr (Or.inr (Or.inl ⟨oldPauser, hold.2, rfl⟩))
-    · exact Or.inr (Or.inr (Or.inl ⟨newPauser, hnew.2, rfl⟩))
-  · intro w hw' hfam
-    simp only [nonzeroWrites, List.mem_cons, List.not_mem_nil, or_false] at hw'
-    rcases hw' with rfl | rfl | rfl
-    · exact addressSlotReadWord_eq_self_of_lt hnew.2
-    · exact absurd hfam
-        (not_registryAddressFamily_countSlot hold.2 hw.entries_length_lt_2pow252)
-    · exact absurd hfam
-        (not_registryAddressFamily_countSlot hnew.2 hw.entries_length_lt_2pow252)
-
 /-- The nine chronological logical writes for an absent-target,
 zero-new-pauser call: exactly `applyAbsentZeroWritesOfReadEffect`'s write
 list (`Blanc/LidoCircuitBreakerRegistry.lean`).  A fresh push immediately

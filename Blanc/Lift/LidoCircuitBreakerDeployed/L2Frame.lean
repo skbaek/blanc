@@ -146,7 +146,7 @@ private theorem registerPauser_selector_eq :
 
 /-- Recover wrapper 59 from the actual deployed dispatcher. Its prefix changes
 only the operand stack, gas and the free-memory-pointer word. -/
-private theorem registerPauser_dispatch {sevm : Sevm} {pre post : Devm}
+theorem registerPauser_dispatch {sevm : Sevm} {pre post : Devm}
     (hsig : Sevm.dataWord sevm 0 >>> 224 = selector "registerPauser" [.address, .address])
     (hfresh : Exec.FreshEntry sevm pre)
     (run : SFunc.Run prog sevm pre t_0000_c0 (.halted post)) :

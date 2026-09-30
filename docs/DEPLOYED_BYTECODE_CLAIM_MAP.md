@@ -440,7 +440,7 @@ body. [l] A fixed signed transaction; the recovery premise is true by `#guard`.
     WETH9 (the filter is a statement-level choice) and Lido (a `nonstatic`
     per-frame premise). An absent-target `registerPauser(t,0)` may leave the
     final registry unchanged, but its successful path has nine writes
-    [`Blanc.Lift.LidoCircuitBreakerDeployed.absentZeroWrites` (`Blanc/Lift/LidoCircuitBreakerDeployed/RegistryLayout.lean:814`),
+    [`Blanc.Lift.LidoCircuitBreakerDeployed.absentZeroWrites` (`Blanc/Lift/LidoCircuitBreakerDeployed/RegistryLayout.lean:827`),
     `Blanc.Lift.LidoCircuitBreakerDeployed.setPauser_absentZero_inv` (`Blanc/Lift/LidoCircuitBreakerDeployed/SetPauserFresh.lean:440`)].
     An unchanged final registry does not make the path write-free. Beacon and
     Curve prove that statically-committed writers produce nothing.
@@ -514,7 +514,7 @@ leaf theorems: theorems of a `Blanc.*` module that no other Blanc declaration
 uses (`scripts/leaf_audit.py`, `scripts/GATES.md` "Leaf audit"), the
 independently valuable results, each covered by the union walk. It is generated
 into `scripts/leaf-count.json` (never hand-edited) and quoted by the README and
-the sites. At this commit it is 1381 leaf results (1236 public, 145 private).
+the sites. At this commit it is 1384 leaf results (1239 public, 145 private).
 The count is a property of the library at a commit, not of any cited theorem;
 a cited theorem that another theorem uses is simply not a leaf. Bind any
 quoted figure to `git rev-parse HEAD`, as the README does.

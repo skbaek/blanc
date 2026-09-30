@@ -264,6 +264,87 @@ theorem solKey_ne_of_faithful {bound : Nat} {T : List B256} {t k : B256}
 
 /-! ## The found-target, nonzero-new-pauser branch -/
 
+/-- The deployed existing-target update needs three pre-state reads and
+three finite raw-slot comparisons. No all-address registry witness is required. -/
+theorem setPauser_nonzero_inv_of_reads {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
+    {newPauser target : B256} {ra : B256} {base : List B256} {post : Devm}
+    {entries : List LidoCircuitBreaker.Entry} {index : Nat} {oldPauser : B256}
+    (hfork : CoveredFork sevm.benvStat.fork) (hmem : Mem.Wf M) (halign : M.size % 32 = 0)
+    (htarget : nonzeroCanonicalAddress target) (hnew : nonzeroCanonicalAddress newPauser)
+    (hfind : findEntry entries target = some (index, oldPauser))
+    (hold : nonzeroCanonicalAddress oldPauser)
+    (hlenLt : entries.length < 2 ^ 252)
+    (hassign : addressSlotReadWord
+      (b.getStorVal sevm.currentTarget (mapSlot target 3)) = oldPauser)
+    (hcountOld : b.getStorVal sevm.currentTarget (mapSlot oldPauser 6) =
+      Nat.toB256 (assignmentCount entries oldPauser))
+    (hcountNew : b.getStorVal sevm.currentTarget (mapSlot newPauser 6) =
+      Nat.toB256 (assignmentCount entries newPauser))
+    (hk3c6 : mapSlot target 3 ≠ mapSlot oldPauser 6)
+    (hk3cN : mapSlot target 3 ≠ mapSlot newPauser 6)
+    (hcountsApart : oldPauser ≠ newPauser → mapSlot oldPauser 6 ≠ mapSlot newPauser 6)
+    (run : SFunc.Run prog sevm (St b (newPauser :: target :: 3 :: ra :: base) M G)
+      t_0934_c32 (.returned post)) :
+    (∀ key, (Devm.getStor post sevm.currentTarget).get key =
+      (rawNonzeroPost (Devm.getStor b sevm.currentTarget) entries target newPauser
+        oldPauser).get key) ∧
+    (∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor b a) ∧
+    ∃ (b' : Devm) (data : Bytes) (M' : Mem) (G' : Nat), post = St (b'.addLog
+      ⟨sevm.currentTarget, [pauserSetTopic, target, oldPauser, newPauser], data⟩) base M' G' ∧
+      b'.logs = b.logs := by
+  -- The walk.
+  obtain ⟨G1, run⟩ := entry32_target_guard_inv htarget run
+  obtain ⟨G2, run⟩ := entry32_assignment_inv hfork htarget.2 hmem halign hnew.2
+    (by rw [hassign]; exact hold.1) run
+  rw [hassign] at run
+  obtain ⟨-, -, hwf1, hal1⟩ := scratch_mapSlot hmem halign target 3
+  obtain ⟨-, G3, run⟩ := t09da_inv hfork hold.2 hwf1 hal1 run
+  obtain ⟨-, -, hwf2, hal2⟩ := scratch_mapSlot hwf1 hal1 oldPauser 6
+  rcases entry4_inv hnew.2 run with ⟨-, G4, run⟩ | ⟨h0, -⟩
+  swap
+  · exact absurd h0 hnew.1
+  obtain ⟨-, G5, run⟩ := t0a9e_inv hfork hnew.2 hwf2 hal2 run
+  obtain ⟨data, M', G6, rfl⟩ := entry5_inv hold.2 hnew.2 htarget.2 run
+  refine ⟨?_, ?_, _, data, M', G6, rfl, ?_⟩
+  · intro key
+    rw [getStor_St_addLog, getStor_afterStore, getStorVal_afterStore, getStor_afterStore, getStorVal_afterStore,
+      getStor_afterStore]
+    have hc6 : ((Devm.getStor b sevm.currentTarget).set (mapSlot target 3)
+        (addressSlotWriteWord (b.getStorVal sevm.currentTarget (mapSlot target 3))
+          newPauser)).get (mapSlot oldPauser 6) =
+        Nat.toB256 (assignmentCount entries oldPauser) := by
+      rw [Stor.get_set_ne _ hk3c6]
+      exact hcountOld
+    have hpos := assignmentCount_pos_of_findEntry hfind
+    have hltOld : assignmentCount entries oldPauser < 2 ^ 256 := by
+      have := assignmentCount_le_length entries oldPauser
+      omega
+    have hcntLe := assignmentCount_le_length entries newPauser
+    rw [hc6, ffWord_add_natToB256 hpos hltOld]
+    have hcN : (((Devm.getStor b sevm.currentTarget).set (mapSlot target 3)
+        (addressSlotWriteWord (b.getStorVal sevm.currentTarget (mapSlot target 3))
+          newPauser)).set (mapSlot oldPauser 6)
+          (Nat.toB256 (assignmentCount entries oldPauser - 1))).get (mapSlot newPauser 6) =
+        Nat.toB256 (assignmentCount entries newPauser -
+          (if oldPauser = newPauser then 1 else 0)) := by
+      by_cases heq : oldPauser = newPauser
+      · subst heq
+        simp only [ite_true, Stor.get_set_self]
+      · have hc6cN : mapSlot oldPauser 6 ≠ mapSlot newPauser 6 := by
+          exact hcountsApart heq
+        rw [Stor.get_set_ne _ hc6cN, Stor.get_set_ne _ hk3cN]
+        simp only [heq, ite_false, Nat.sub_zero]
+        exact hcountNew
+    rw [hcN, one_add_natToB256 (by omega)]
+    simp only [rawNonzeroPost, applyRegistryRawWrites, nonzeroWrites, List.foldl,
+      solKey_assignmentSlot htarget.2, solKey_countSlot hold.2, solKey_countSlot hnew.2,
+      registryRawValue_assignmentSlot htarget.2, registryRawValue_countSlot hold.2,
+      registryRawValue_countSlot hnew.2]
+    rfl
+  · intro a ha
+    rw [getStor_St_addLog, getStor_afterStore_ne ha, getStor_afterStore_ne ha, getStor_afterStore_ne ha]
+  · rw [logs_afterStore, logs_afterStore, logs_afterStore]
+
 /-- Every successful run of `setPauser` (entry 32) on a found target with a
 nonzero new pauser returns to its caller's `base` stack, having emitted the
 `PauserSet` log, with the contract's storage pointwise equal to
@@ -318,62 +399,15 @@ theorem setPauser_nonzero_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     exact solKey_ne_of_faithful hfaithful (hmemT _ (.inr (.inr rfl)))
       (Or.inl ⟨target, htarget.2, rfl⟩)
       (registryAddressFamilies_pairwise htarget.2 htarget.2 hnew.2).2.1
-  -- The walk.
-  obtain ⟨G1, run⟩ := entry32_target_guard_inv htarget run
-  obtain ⟨G2, run⟩ := entry32_assignment_inv hfork htarget.2 hmem halign hnew.2
-    (by rw [hassign]; exact hold.1) run
-  rw [hassign] at run
-  obtain ⟨-, -, hwf1, hal1⟩ := scratch_mapSlot hmem halign target 3
-  obtain ⟨-, G3, run⟩ := t09da_inv hfork hold.2 hwf1 hal1 run
-  obtain ⟨-, -, hwf2, hal2⟩ := scratch_mapSlot hwf1 hal1 oldPauser 6
-  rcases entry4_inv hnew.2 run with ⟨-, G4, run⟩ | ⟨h0, -⟩
-  swap
-  · exact absurd h0 hnew.1
-  obtain ⟨-, G5, run⟩ := t0a9e_inv hfork hnew.2 hwf2 hal2 run
-  obtain ⟨data, M', G6, rfl⟩ := entry5_inv hold.2 hnew.2 htarget.2 run
-  refine ⟨?_, ?_, _, data, M', G6, rfl, ?_⟩
-  · intro key
-    rw [getStor_St_addLog, getStor_afterStore, getStorVal_afterStore, getStor_afterStore, getStorVal_afterStore,
-      getStor_afterStore]
-    have hc6 : ((Devm.getStor b sevm.currentTarget).set (mapSlot target 3)
-        (addressSlotWriteWord (b.getStorVal sevm.currentTarget (mapSlot target 3))
-          newPauser)).get (mapSlot oldPauser 6) =
-        Nat.toB256 (assignmentCount entries oldPauser) := by
-      rw [Stor.get_set_ne _ hk3c6]
-      exact hcountOld
-    have hpos := assignmentCount_pos_of_findEntry hfind
-    have hltOld := hw.assignmentCount_lt_2pow256 oldPauser
-    have hltNew := hw.assignmentCount_lt_2pow256 newPauser
-    have hlenLt := hw.entries_length_lt_2pow252
-    have hcntLe := assignmentCount_le_length entries newPauser
-    rw [hc6, ffWord_add_natToB256 hpos hltOld]
-    have hcN : (((Devm.getStor b sevm.currentTarget).set (mapSlot target 3)
-        (addressSlotWriteWord (b.getStorVal sevm.currentTarget (mapSlot target 3))
-          newPauser)).set (mapSlot oldPauser 6)
-          (Nat.toB256 (assignmentCount entries oldPauser - 1))).get (mapSlot newPauser 6) =
-        Nat.toB256 (assignmentCount entries newPauser -
-          (if oldPauser = newPauser then 1 else 0)) := by
-      by_cases heq : oldPauser = newPauser
-      · subst heq
-        simp only [ite_true, Stor.get_set_self]
-      · have hc6cN : mapSlot oldPauser 6 ≠ mapSlot newPauser 6 := by
-          rw [← solKey_countSlot hold.2, ← solKey_countSlot hnew.2]
-          refine solKey_ne_of_faithful hfaithful (hmemT _ (.inr (.inr rfl)))
-            (Or.inr (Or.inr (Or.inl ⟨oldPauser, hold.2, rfl⟩))) ?_
-          intro h
-          exact heq (countSlot_injective hold.2 hnew.2 h)
-        rw [Stor.get_set_ne _ hc6cN, Stor.get_set_ne _ hk3cN]
-        simp only [heq, ite_false, Nat.sub_zero]
-        exact hcountNew
-    rw [hcN, one_add_natToB256 (by omega)]
-    simp only [rawNonzeroPost, applyRegistryRawWrites, nonzeroWrites, List.foldl,
-      solKey_assignmentSlot htarget.2, solKey_countSlot hold.2, solKey_countSlot hnew.2,
-      registryRawValue_assignmentSlot htarget.2, registryRawValue_countSlot hold.2,
-      registryRawValue_countSlot hnew.2]
-    rfl
-  · intro a ha
-    rw [getStor_St_addLog, getStor_afterStore_ne ha, getStor_afterStore_ne ha, getStor_afterStore_ne ha]
-  · rw [logs_afterStore, logs_afterStore, logs_afterStore]
+  have hcountsApart : oldPauser ≠ newPauser → mapSlot oldPauser 6 ≠ mapSlot newPauser 6 := by
+    intro hne
+    rw [← solKey_countSlot hold.2, ← solKey_countSlot hnew.2]
+    refine solKey_ne_of_faithful hfaithful (hmemT _ (.inr (.inr rfl)))
+      (Or.inr (Or.inr (Or.inl ⟨oldPauser, hold.2, rfl⟩))) ?_
+    intro h
+    exact hne (countSlot_injective hold.2 hnew.2 h)
+  exact setPauser_nonzero_inv_of_reads hfork hmem halign htarget hnew hfind hold
+    hw.entries_length_lt_2pow252 hassign hcountOld hcountNew hk3c6 hk3cN hcountsApart run
 
 end Blocks
 
