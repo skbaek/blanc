@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Mocked controls for check-elab.sh's full-measurement warm-up branch.
+"""Mocked controls for check-elab.sh's full-measurement warm-up branch and its
+calibration admission routing.
 
 The test copies the production shell script unchanged into a temporary miniature
 repository. Its Lake, selector, locks, and admission are local stubs, so it
@@ -46,7 +47,7 @@ from pathlib import Path
 
 args = sys.argv[1:]
 with open(os.environ['MOCK_LAKE_LOG'], 'a') as log:
-    log.write('selector ' + args[0] + '\\n')
+    log.write('selector ' + ' '.join(args) + '\\n')
 def value(name):
     return args[args.index(name) + 1]
 if args[0] == 'modules':
@@ -56,14 +57,32 @@ elif args[0] == 'plan':
 elif args[0] == 'files':
     if '--affected' in args:
         print(os.environ['MOCK_AFFECTED'])
+    elif '--controls' in args:
+        print(os.environ.get('MOCK_CONTROLS', ''))
+    elif '--candidates' in args:
+        print(os.environ.get('MOCK_CANDIDATES', ''))
     elif '--shared' not in args:
-        print('Blanc/A.lean\\nBlanc/B.lean')
+        print(os.environ.get('MOCK_FILES', 'Blanc/A.lean\\nBlanc/B.lean'))
 elif args[0] == 'merge':
-    Path(value('--report')).write_text(
-        'OK\\t' + os.environ['MOCK_A_TIME'] + '\\tBlanc/A.lean\\tMEASURED\\n'
-        'OK\\t1.000\\tBlanc/B.lean\\tMEASURED\\n', encoding='utf-8'
-    )
-elif args[0] in {'commit', 'publish'}:
+    mapping = os.environ.get('MOCK_MERGE_TIMES')
+    if mapping:
+        lines = []
+        for item in mapping.split():
+            path, _, elapsed = item.partition('=')
+            lines.append(f'OK\\t{elapsed}\\t{path}\\tMEASURED')
+        Path(value('--report')).write_text('\\n'.join(lines) + '\\n', encoding='utf-8')
+    else:
+        Path(value('--report')).write_text(
+            'OK\\t' + os.environ['MOCK_A_TIME'] + '\\tBlanc/A.lean\\tMEASURED\\n'
+            'OK\\t1.000\\tBlanc/B.lean\\tMEASURED\\n', encoding='utf-8'
+        )
+elif args[0] == 'calibrate-verdict':
+    Path(value('--block-out')).write_text('stub calibration block\\n', encoding='utf-8')
+    raise SystemExit(int(os.environ.get('MOCK_CAL_RC', '0')))
+elif args[0] == 'admit-calibration':
+    print('NOTE — elab: calibration admission: admitted (stub)')
+    raise SystemExit(int(os.environ.get('MOCK_ADMIT_RC', '0')))
+elif args[0] in {'commit', 'publish', 'validate'}:
     pass
 else:
     raise SystemExit('unexpected selector invocation: ' + ' '.join(args))
@@ -161,6 +180,122 @@ def plan_before_hold_controls(root: Path) -> None:
     assert first(events, "selector publish") >= 0, "a measuring run publishes"
 
 
+def make_cal_root(base: Path) -> Path:
+    """Miniature git repository for --calibrate routing: two baseline rows and
+    one candidate without a row, so a green run admits exactly one new row."""
+    root = base / "calroot"
+    scripts = root / "scripts"
+    scripts.mkdir(parents=True)
+    (root / "Blanc").mkdir()
+    for name in ("A", "B", "C"):
+        (root / f"Blanc/{name}.lean").write_text("import Init\n", encoding="utf-8")
+    shutil.copy2(CHECK_ELAB, scripts / "check-elab.sh")
+    (scripts / "gate-lock.sh").write_text(LOCK_STUB, encoding="utf-8")
+    (scripts / "gate-semaphore.sh").write_text(SEMAPHORE_STUB, encoding="utf-8")
+    selector = scripts / "check-elab-selection.py"
+    selector.write_text(SELECTOR_STUB, encoding="utf-8")
+    selector.chmod(0o755)
+    (scripts / "baseline-elab.txt").write_text(
+        "OK\t1.000\tBlanc/A.lean\nOK\t1.000\tBlanc/B.lean\n", encoding="utf-8"
+    )
+    fake_bin = base / "calbin"
+    fake_bin.mkdir()
+    lake = fake_bin / "lake"
+    lake.write_text(LAKE_STUB, encoding="utf-8")
+    lake.chmod(0o755)
+    identity = {"user.email": "elab-test@local", "user.name": "elab-test"}
+    for args in (["init", "-b", "main"], ["add", "-A"], ["commit", "-m", "genesis"]):
+        command = ["git"]
+        for key, val in identity.items():
+            command.extend(["-c", f"{key}={val}"])
+        command.extend(args)
+        subprocess.run(command, cwd=root, check=True, capture_output=True)
+    (root / ".lake").mkdir(exist_ok=True)
+    (root / ".lake/check-elab-state.json").write_text('{"stub": true}\n', encoding="utf-8")
+    return root
+
+
+def run_calibration(root: Path, cal_rc: str, admit_rc: str):
+    log = root.parent / f"lake-cal-{cal_rc}-{admit_rc}.log"
+    if log.exists():
+        log.unlink()
+    environment = dict(os.environ)
+    environment.update({
+        "MOCK_FILES": "Blanc/A.lean\nBlanc/B.lean\nBlanc/C.lean",
+        "MOCK_AFFECTED": "Blanc/A.lean\nBlanc/B.lean\nBlanc/C.lean",
+        "MOCK_CONTROLS": "Blanc/A.lean",
+        "MOCK_CANDIDATES": "Blanc/C.lean",
+        "MOCK_MERGE_TIMES": (
+            "Blanc/A.lean=1.000 Blanc/B.lean=1.000 Blanc/C.lean=1.000"
+        ),
+        "MOCK_CAL_RC": cal_rc,
+        "MOCK_ADMIT_RC": admit_rc,
+        "MOCK_LAKE_LOG": str(log),
+        "PATH": str(root.parent / "calbin") + os.pathsep + environment["PATH"],
+        "PYTHONDONTWRITEBYTECODE": "1",
+    })
+    result = subprocess.run(
+        [str(root / "scripts/check-elab.sh"), "--calibrate", "--no-build"],
+        cwd=root, env=environment, text=True, capture_output=True, check=False,
+    )
+    return result, log.read_text(encoding="utf-8").splitlines()
+
+
+def calibration_routing_controls(root: Path) -> None:
+    """A green calibration is admitted through admit-calibration carrying the
+    gate thresholds; a refused one writes nothing and never reaches
+    admit/commit/publish, so the retry draws the same sample."""
+
+    baseline = root / "scripts/baseline-elab.txt"
+    state = root / ".lake/check-elab-state.json"
+    baseline_before = baseline.read_bytes()
+    state_before = state.read_bytes()
+
+    refused, events = run_calibration(root, "1", "0")
+    assert refused.returncode == 1, refused.stdout
+    assert refused.stdout.strip().splitlines()[-1].startswith(
+        "REGRESSION — elab: a drawn control is at or above"
+    ), refused.stdout
+    assert first(events, "selector admit-calibration") == -1, events
+    assert first(events, "selector commit") == -1, events
+    assert first(events, "selector publish") == -1, events
+    assert baseline.read_bytes() == baseline_before
+    assert state.read_bytes() == state_before
+
+    blocked, events = run_calibration(root, "0", "1")
+    assert blocked.returncode == 1, blocked.stdout
+    assert blocked.stdout.strip().splitlines()[-1].startswith(
+        "REGRESSION — elab: calibration admission refused"
+    ), blocked.stdout
+    assert len([line for line in events if line.startswith("selector admit-calibration")]) == 1
+    assert first(events, "selector commit") == -1, events
+    assert first(events, "selector publish") == -1, events
+    assert baseline.read_bytes() == baseline_before
+    assert state.read_bytes() == state_before
+
+    green, events = run_calibration(root, "0", "0")
+    assert green.returncode == 0, green.stdout
+    lines = green.stdout.strip().splitlines()
+    assert lines[-1].startswith("OK — elab calibration:"), green.stdout
+    assert "admitted to the local cache and baseline" in lines[-1], green.stdout
+    assert [line for line in lines if line.startswith("OK —")] == [lines[-1]], (
+        "the nested admission stays NOTE-level; the shell owns the one terminal verdict: "
+        + green.stdout
+    )
+    admitted = [
+        line for line in events if line.startswith("selector admit-calibration")
+    ]
+    assert len(admitted) == 1, events
+    for flag in ("--baseline", "--fail-factor 2.0", "--warn-factor 1.5", "--floor 1.0"):
+        assert flag in admitted[0], admitted
+    assert first(events, "selector commit") == -1, events
+    assert first(events, "selector publish") == -1, events
+    merged = baseline.read_text(encoding="utf-8")
+    assert "OK\t1.000\tBlanc/C.lean\n" in merged, merged
+    assert merged.count("Blanc/A.lean") == 1 and "OK\t1.000\tBlanc/A.lean" in merged
+    assert merged.count("Blanc/B.lean") == 1 and "OK\t1.000\tBlanc/B.lean" in merged
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="blanc-elab-warmup-") as directory:
         root = make_root(Path(directory))
@@ -191,9 +326,14 @@ def main() -> int:
 
         plan_before_hold_controls(root)
 
+    with tempfile.TemporaryDirectory(prefix="blanc-elab-calibrate-") as directory:
+        calibration_routing_controls(make_cal_root(Path(directory)))
+
     print("OK — elab warm-up and plan-before-hold controls: full slowdown/refusal, restored green, "
           "partial unchanged, no-op plan takes no heavy boundary, measuring plan takes it "
-          "before elaborating and re-plans inside it (mocked)")
+          "before elaborating and re-plans inside it; calibration refusal writes nothing and "
+          "never reaches admit/commit/publish, green calibration admits through admit-calibration "
+          "with the gate thresholds and initializes exactly one baseline row (mocked)")
     return 0
 
 

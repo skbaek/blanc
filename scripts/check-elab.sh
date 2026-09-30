@@ -128,15 +128,25 @@
 # nearly half the tree — so a uniform draw would almost never reach the tail,
 # which is exactly where sustained throughput and thermal anomalies show.
 #
-# A calibration run measures and reports but does not update the selection
-# cache. The draw is a
+# A failed or refused calibration run measures and reports but writes nothing:
+# the draw is a
 # function of which modules this run believes are unaffected, and that belief
 # comes from the local cache; a run that wrote to it would move the ground under
-# its own successors, because the module it just measured would become
-# cache-valid and therefore drawable. The next run of the same measurement
-# triple would then draw a different sample, and a refusal could be retried away
-# without changing anything. So the cache is left exactly as the triple found
-# it, and the selector refuses a calibration run that tries to advance it.
+# its own successor, because the module it just measured would become
+# cache-valid and therefore drawable. A retry at the same commit would then
+# draw a different sample, and a refusal could be retried away without changing
+# anything. So a refused run leaves cache, shared evidence,
+# and baseline byte-identical, and the selector refuses any unvalidated attempt
+# to advance the cache from a calibration plan.
+#
+# A fully successful calibration is instead admitted through the selector's
+# validated admit-calibration path, which recomputes every comparison, the
+# control verdict, the draw identity, and the current source/environment
+# fingerprints from the plan, report, and tree rather than trusting this
+# script's verdict. Only that path updates the local cache and publishes the
+# measured rows to shared same-host evidence, after which the new rows join
+# the ignored baseline with existing values preserved — so an unchanged
+# subsequent run reuses the admitted measurements instead of remeasuring them.
 #
 # A drawn control is held to the row threshold below, and a control that
 # breaches it REFUSES the run. A host that far out is not an environment in
@@ -833,13 +843,22 @@ if [ "$CALIBRATE" -eq 1 ] && [ "$CAL_RC" -eq 1 ]; then
 fi
 
 if [ "$CALIBRATE" -eq 1 ]; then
-  if ! python3 "$SELECTOR" validate --plan "$PLANFILE" --report "$REPORT"; then
-    echo "REGRESSION — elab: calibration measurements became stale before local rows could be initialized"
-    exit 2
+  # Validated admission for a green calibration: the selector recomputes the
+  # draw identity, every row comparison, the control verdict, and current
+  # source/environment fingerprints, then updates the local cache and
+  # publishes the measured rows. A refusal writes nothing anywhere, so the
+  # retry draws the same sample. Failure paths above already exited without
+  # writing.
+  if ! python3 "$SELECTOR" admit-calibration --plan "$PLANFILE" --report "$REPORT" \
+      --state "$STATE" --baseline "$BASELINE" --fail-factor "$DRIFT_FACTOR" \
+      --warn-factor "$CALIBRATE_WARN_FACTOR" --floor "$DRIFT_FLOOR" \
+      --exclude-file "$EXCLUDEFILE"; then
+    echo "REGRESSION — elab: calibration admission refused; local cache, shared evidence and baseline left unchanged"
+    exit 1
   fi
+else
+  maybe_cache_results "$EXCLUDEFILE" || exit 2
 fi
-
-maybe_cache_results "$EXCLUDEFILE" || exit 2
 
 if [ "$NNEW" -gt 0 ]; then
   MERGED_ROWS="$({
@@ -855,9 +874,9 @@ fi
 
 if [ "$CALIBRATE" -eq 1 ]; then
   if [ "$NCONTROL" -eq 0 ]; then
-    echo "OK — elab calibration: $NCANDIDATE local row(s) initialized; no control was drawn because every module carrying a baseline row was measured and compared outright; $NMEASURE measured in $TOTAL s vs $BASE_TOTAL s full baseline"
+    echo "OK — elab calibration: $NCANDIDATE local row(s) admitted to the local cache and baseline; no control was drawn because every module carrying a baseline row was measured and compared outright; $NMEASURE measured in $TOTAL s vs $BASE_TOTAL s full baseline"
   else
-    echo "OK — elab calibration: $NCANDIDATE local row(s) initialized, $NCONTROL drawn control(s) below ${DRIFT_FACTOR}x; $NMEASURE measured in $TOTAL s vs $BASE_TOTAL s full baseline"
+    echo "OK — elab calibration: $NCANDIDATE local row(s) admitted to the local cache and baseline, $NCONTROL drawn control(s) below ${DRIFT_FACTOR}x; $NMEASURE measured in $TOTAL s vs $BASE_TOTAL s full baseline"
   fi
   exit 0
 fi

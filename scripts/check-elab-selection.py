@@ -575,11 +575,13 @@ def make_plan(
                 affected.append(relative)
             cached.pop(relative, None)
         # Drawable means the fingerprint proves this file cannot have moved.
-        # That is exactly the set this run is not measuring, which is why a
-        # calibration run may not write to the cache: caching the module it just
-        # measured would make that module drawable next time, so a retry of a
-        # refused calibration would not agree on what it measured and the
-        # refusal could be retried away. See commit_state's refusal.
+        # That is exactly the set this run is not measuring, which is why an
+        # unvalidated calibration run may not write to the cache: caching the
+        # module it just measured would make that module drawable next time, so
+        # a retry of a refused calibration would not agree on what it measured
+        # and the refusal could be retried away. See commit_state's refusal;
+        # only admit_calibration may advance the cache, after revalidating the
+        # draw it depended on.
         drawable = set(cached)
         calibration = draw_calibration(
             baseline,
@@ -773,8 +775,10 @@ def commit_state(
         # and that belief comes from this cache. A calibration run that wrote to
         # it would move the ground under its own successors: the module it just
         # measured would become cache-valid, hence drawable, and a retry of the
-        # same refused calibration would draw a different sample. A calibration
-        # run therefore never advances the selection cache.
+        # same refused calibration would draw a different sample. An unvalidated
+        # calibration run therefore never advances the selection cache; only
+        # admit_calibration below may do so, after independently revalidating
+        # the draw, every comparison, and the current tree.
         raise SelectionError(
             "a calibration run must not advance the cache its own draw depends on"
         )
@@ -1833,6 +1837,324 @@ exit "${FAKE_LAKE_RC-0}"
             code = function(*args)
         return code, sink.getvalue()
 
+    # --- validated calibration admission ------------------------------------
+    # A fully successful calibration is admitted to the local cache and the
+    # shared store through admit_calibration, which recomputes every check
+    # from the plan, report, and current tree. Anything else leaves state,
+    # store, and baseline byte-identical, so a retry draws the same sample.
+    with tempfile.TemporaryDirectory(prefix="blanc-elab-admission-") as directory:
+        root = Path(directory)
+        (root / "Blanc").mkdir()
+        (root / "scripts").mkdir()
+        for relative, body in {
+            "lean-toolchain": "leanprover/lean4:v-test\n",
+            "lakefile.lean": "import Lake\n",
+            "lake-manifest.json": "{}\n",
+            "scripts/check-elab.sh": "gate-v1\n",
+            "scripts/check-elab-selection.py": "selector-v1\n",
+            "Blanc/A.lean": "import Init\ndef a := 1\n",
+            "Blanc/B.lean": "import Blanc.A\ndef b := a\n",
+            "Blanc/C.lean": "import Init\ndef c := 3\n",
+            "Blanc/D.lean": "import Init\ndef d := 4\n",
+            "Blanc/E.lean": "import Init\ndef e := 5\n",
+            "Blanc/F.lean": "import Init\ndef f := 6\n",
+            "Blanc/G.lean": "import Init\ndef g := 7\n",
+            "Blanc.lean": "import Blanc.A Blanc.B Blanc.C\n",
+            "Main.lean": "import Init\n",
+        }.items():
+            (root / relative).write_text(body, encoding="utf-8")
+        run_git(root, "init", "-b", "main")
+        run_git(root, "add", "-A")
+        run_git(root, "commit", "-m", "genesis")
+
+        # Blanc/C.lean is the admission candidate: it carries no baseline row.
+        # Blanc/A.lean's 2.000s row is the anti-reroll boundary — a control at
+        # exactly 2.0x refuses calibration yet passes the ordinary row rule.
+        # The cheap band holds five drawable rows for four drawn controls, so
+        # exactly one baseline row stays unsampled and cached.
+        reference = {
+            "Blanc.lean": 0.500,
+            "Blanc/A.lean": 2.000,
+            "Blanc/B.lean": 1.200,
+            "Blanc/D.lean": 0.600,
+            "Blanc/E.lean": 0.700,
+            "Blanc/F.lean": 0.800,
+            "Blanc/G.lean": 1.100,
+            "Main.lean": 0.900,
+        }
+        baseline_path = root / "scripts/baseline-elab.txt"
+        baseline_path.write_text(
+            "".join(
+                f"OK\t{seconds:.3f}\t{path}\n"
+                for path, seconds in sorted(reference.items())
+            ),
+            encoding="utf-8",
+        )
+        state_path = root / ".lake/check-elab-state.json"
+        report_path = root / "report.tsv"
+        plan_path = root / "plan.json"
+        exclude_path = root / "exclude.txt"
+
+        warm = make_plan(root, state_path, "Lean test")
+        write_rows(report_path, fake_rows(warm))
+        commit_state(warm, report_path, state_path)
+
+        b_path = root / "Blanc/B.lean"
+        original_b = b_path.read_text(encoding="utf-8")
+        b_path.write_text(original_b.replace("a\n", "a + 1\n"), encoding="utf-8")
+        plan = make_plan(
+            root, state_path, "Lean test",
+            baseline_path=baseline_path, calibration_commit=commit_a,
+        )
+        calibration = plan["calibration"]
+        assert calibration["candidates"] == ["Blanc/C.lean"]
+        assert calibration["compared"] == ["Blanc.lean", "Blanc/B.lean"]
+        assert "Blanc/A.lean" in calibration["selected"]
+        assert "Blanc/C.lean" not in calibration["selected"]
+        assert len(calibration["selected"]) == 5
+        cheap = [
+            "Blanc/D.lean", "Blanc/E.lean", "Blanc/F.lean",
+            "Blanc/G.lean", "Main.lean",
+        ]
+        unsampled = [relative for relative in cheap if relative not in calibration["selected"]]
+        assert len(unsampled) == 1
+        left_cached = unsampled[0]
+        write_plan(plan_path, plan)
+
+        def admission_rows(overrides=None):
+            rows = {}
+            for relative in plan["files"]:
+                if relative in plan["affected"]:
+                    rows[relative] = {
+                        "status": "OK",
+                        "time": f"{reference.get(relative, 1.0):.3f}",
+                        "provenance": "MEASURED",
+                    }
+                else:
+                    rows[relative] = {
+                        "status": "OK",
+                        "time": plan["cached"][relative]["time"],
+                        "provenance": "CACHED",
+                    }
+            for relative, row in (overrides or {}).items():
+                rows[relative] = row
+            return rows
+
+        def quiet_admit(rows, excluded=None):
+            write_rows(report_path, rows)
+            sink = io.StringIO()
+            with contextlib.redirect_stdout(sink):
+                outcome = admit_calibration(
+                    read_plan(plan_path), report_path, state_path,
+                    baseline_path, 2.0, 1.5, 1.0, excluded,
+                )
+            return outcome
+
+        def admit_command(exclude_file=None):
+            return quiet_call(
+                command_admit_calibration,
+                argparse.Namespace(
+                    plan=plan_path, report=report_path, state=state_path,
+                    baseline=baseline_path, fail_factor=2.0, warn_factor=1.5,
+                    floor=1.0, exclude_file=exclude_file,
+                ),
+            )
+
+        green = admission_rows()
+        write_rows(report_path, green)
+        report_before = report_path.read_bytes()
+        state_before = state_path.read_bytes()
+        baseline_before = baseline_path.read_bytes()
+
+        loud = "Blanc/A.lean"
+        breached = admission_rows(
+            {loud: {
+                "status": "OK",
+                "time": f"{reference[loud] * 2.4:.3f}",
+                "provenance": "MEASURED",
+            }}
+        )
+        ok, message = quiet_admit(breached)
+        assert not ok and loud in message
+        assert state_path.read_bytes() == state_before
+        assert baseline_path.read_bytes() == baseline_before
+        assert not shared_store_path(root).exists()
+        controls += 1  # a breaching control refuses admission naming the control, writing nothing
+        repeat = make_plan(
+            root, state_path, "Lean test",
+            baseline_path=baseline_path, calibration_commit=commit_a,
+        )
+        assert repeat["calibration"]["selected"] == calibration["selected"]
+        controls += 1  # a refused calibration redraws the identical sample
+
+        boundary = admission_rows(
+            {loud: {"status": "OK", "time": "4.000", "provenance": "MEASURED"}}
+        )
+        ok, message = quiet_admit(boundary)
+        assert not ok and loud in message
+        assert not row_drifts(4.0, 2.0, 2.0, 1.0)
+        assert state_path.read_bytes() == state_before
+        assert baseline_path.read_bytes() == baseline_before
+        assert not shared_store_path(root).exists()
+        controls += 1  # a control at exactly 2.0x refuses calibration yet passes the row rule, and is never published
+
+        write_rows(report_path, breached)
+        code, out = admit_command()
+        assert code == 1 and "admission refused" in out and loud in out
+        controls += 1  # the command surface refuses with a named diagnostic and exit 1
+        report_path.write_bytes(report_before)
+        assert report_path.read_bytes() == report_before
+
+        regressed = admission_rows(
+            {"Blanc/B.lean": {
+                "status": "OK", "time": "3.000", "provenance": "MEASURED",
+            }}
+        )
+        ok, message = quiet_admit(regressed)
+        assert not ok and "ordinary regression" in message
+        assert "Blanc/B.lean" in message
+        controls += 1  # a drifted compared row refuses admission as a regression
+
+        errored = admission_rows(
+            {"Blanc/C.lean": {
+                "status": "ERROR", "time": "0.500", "provenance": "MEASURED",
+            }}
+        )
+        ok, message = quiet_admit(errored)
+        assert not ok and "elaboration errors" in message
+        controls += 1  # an error row refuses admission
+
+        dropped = {key: row for key, row in green.items() if key != "Blanc/C.lean"}
+        ok, message = quiet_admit(dropped)
+        assert not ok and "does not match" in message
+        controls += 1  # an incomplete report refuses admission
+
+        baseline_path.write_text(
+            baseline_before.decode("utf-8") + "# concurrent rebase\n",
+            encoding="utf-8",
+        )
+        ok, message = quiet_admit(green)
+        assert not ok and "baseline changed" in message
+        baseline_path.write_bytes(baseline_before)
+        controls += 1  # a baseline that moved after the draw refuses admission
+
+        a_path = root / "Blanc/A.lean"
+        original_a = a_path.read_text(encoding="utf-8")
+        a_path.write_text(original_a + "\n-- concurrent edit\n", encoding="utf-8")
+        ok, _message = quiet_admit(green)
+        assert not ok
+        assert state_path.read_bytes() == state_before
+        a_path.write_text(original_a, encoding="utf-8")
+        controls += 1  # source drift during measurement refuses admission
+
+        toolchain = root / "lean-toolchain"
+        original_toolchain = toolchain.read_text(encoding="utf-8")
+        toolchain.write_text("leanprover/lean4:v-other\n", encoding="utf-8")
+        ok, _message = quiet_admit(green)
+        assert not ok
+        assert state_path.read_bytes() == state_before
+        toolchain.write_text(original_toolchain, encoding="utf-8")
+        controls += 1  # environment drift refuses admission
+
+        exclude_path.write_text("Blanc/B.lean\n", encoding="utf-8")
+        code, out = admit_command(exclude_file=exclude_path)
+        assert code == 1 and "exclusions" in out
+        controls += 1  # exclusions refuse admission: errors stay invalid, never admitted around
+
+        tampered = json.loads(plan_path.read_text(encoding="utf-8"))
+        tampered["calibration"]["selected"] = ["Blanc/Main.lean"]
+        plan_before = plan_path.read_bytes()
+        plan_path.write_text(
+            json.dumps(tampered, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        # The boundary report: at exactly 2.0x the dropped control would pass
+        # the row rule, so only the draw-identity check can refuse it.
+        ok, message = quiet_admit(boundary)
+        assert not ok and "drawn control set" in message
+        plan_path.write_bytes(plan_before)
+        assert plan_path.read_bytes() == plan_before
+        controls += 1  # dropping a breaching control from the recorded draw is refused
+
+        widened = json.loads(plan_path.read_text(encoding="utf-8"))
+        widened["calibration"]["compared"] = [
+            "Blanc.lean", "Blanc/B.lean", "Blanc/A.lean",
+        ]
+        plan_path.write_text(
+            json.dumps(widened, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        ok, message = quiet_admit(green)
+        assert not ok and "compared set" in message
+        plan_path.write_bytes(plan_before)
+        controls += 1  # a mutated compared record is refused
+
+        reseeded = json.loads(plan_path.read_text(encoding="utf-8"))
+        reseeded["calibration"]["seed"] = "0" * 64
+        plan_path.write_text(
+            json.dumps(reseeded, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        ok, message = quiet_admit(green)
+        assert not ok and "draw seed" in message
+        plan_path.write_bytes(plan_before)
+        assert plan_path.read_bytes() == plan_before
+        controls += 1  # a mutated seed record is refused
+
+        shifted = admission_rows(
+            {left_cached: {"status": "OK", "time": "0.950", "provenance": "CACHED"}}
+        )
+        ok, message = quiet_admit(shifted)
+        assert not ok and "recorded cache entry" in message
+        assert state_path.read_bytes() == state_before
+        controls += 1  # a cached row carrying a substituted time is refused
+
+        inflated = json.loads(plan_path.read_text(encoding="utf-8"))
+        inflated["cached"][left_cached]["time"] = "3.000"
+        plan_path.write_text(
+            json.dumps(inflated, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        drifted = admission_rows(
+            {left_cached: {"status": "OK", "time": "3.000", "provenance": "CACHED"}}
+        )
+        ok, message = quiet_admit(drifted)
+        assert not ok and "ordinary regression" in message
+        assert left_cached in message
+        plan_path.write_bytes(plan_before)
+        report_path.write_bytes(report_before)
+        assert plan_path.read_bytes() == plan_before
+        assert report_path.read_bytes() == report_before
+        controls += 1  # a cached row is held to the row threshold like the shell holds it
+
+        try:
+            commit_state(read_plan(plan_path), report_path, state_path)
+        except SelectionError as error:
+            assert "must not advance the cache" in str(error)
+        else:
+            raise AssertionError("a calibration run advanced the cache")
+        controls += 1  # the unvalidated commit path still refuses calibration plans
+
+        code, out = quiet_call(
+            command_publish,
+            argparse.Namespace(
+                plan=plan_path, report=report_path, exclude_file=None
+            ),
+        )
+        assert code == 0 and "only through admit-calibration" in out
+        assert not shared_store_path(root).exists()
+        controls += 1  # the plain publish path never carries calibration measurements
+
+        # The restored byte-identical green report admits with no re-measurement.
+        report_path.write_bytes(report_before)
+        code, out = admit_command()
+        assert code == 0 and "admission" in out
+        controls += 1  # a fully validated green calibration is admitted to cache and store
+        fresh = make_plan(root, state_path, "Lean test")
+        assert fresh["affected"] == []
+        controls += 1  # admitted rows are reused by a normal plan with nothing measured
+        state_path.unlink()
+        shared = make_plan(root, state_path, "Lean test")
+        assert shared["affected"] == [left_cached]
+        assert sorted(shared["shared_credited"]) == sorted(plan["affected"])
+        controls += 1  # admitted measurements are credited from shared evidence on an empty cache
+
     with tempfile.TemporaryDirectory(prefix="blanc-elab-shared-measure-") as directory:
         root = git_tree(directory)
         state_path = root / ".lake/check-elab-state.json"
@@ -2433,6 +2755,244 @@ def command_calibrate_verdict(args: argparse.Namespace) -> int:
     return 1 if summary["refused"] else 0
 
 
+def row_drifts(current: float, reference: float, factor: float, floor: float) -> bool:
+    """The ordinary row rule: a file fails strictly above both thresholds.
+
+    This is deliberately not the control rule: a control refuses at or above
+    the factor (see calibration_verdict), so a control at exactly factor x is
+    refused as a control yet would pass as a row. The two inequalities must
+    stay distinct; unifying them would let a refused host's measurement be
+    relabelled as an ordinary passing row.
+    """
+    return current > reference * factor and current > reference + floor
+
+
+def admit_calibration(
+    plan: dict[str, Any],
+    report_path: Path,
+    state_path: Path,
+    baseline_path: Path,
+    fail_factor: float,
+    warn_factor: float,
+    floor: float,
+    excluded: set[str] | None = None,
+) -> tuple[bool, str]:
+    """Admit a fully successful calibration's measurements to cache and store.
+
+    The only path by which a calibration run may advance the selection cache
+    or publish shared same-host evidence. Every check the shell gate applied
+    is recomputed here from the plan, report, and current tree — never from a
+    caller-provided success flag — so a refused, failed, stale, or incomplete
+    calibration cannot be admitted by skipping the gate. On any refusal the
+    local cache, shared store, and baseline are left byte-identical.
+    Setup problems (unreadable inputs) raise SelectionError; check failures
+    return (False, reason) and write nothing.
+    """
+    excluded = excluded or set()
+    calibration = plan.get("calibration")
+    if not isinstance(calibration, dict):
+        raise SelectionError("plan carries no calibration draw")
+    for key in ("commit", "seed", "baseline_digest", "source_digest"):
+        if not calibration.get(key):
+            raise SelectionError(f"calibration draw carries no {key}")
+    selected = calibration.get("selected")
+    candidates = calibration.get("candidates")
+    compared = calibration.get("compared")
+    if not isinstance(selected, list) or not isinstance(candidates, list):
+        raise SelectionError("calibration draw carries no control/candidate set")
+    if not isinstance(compared, list):
+        raise SelectionError("calibration draw carries no compared set")
+    if excluded:
+        return False, f"result exclusions are present: {sorted(excluded)}"
+
+    rows = read_result_rows(report_path)
+    files = set(plan["files"])
+    if set(rows) != files:
+        missing = sorted(files - set(rows))
+        extra = sorted(set(rows) - files)
+        return False, (
+            "complete result set does not match the current Lean source set; "
+            f"missing={missing}, extra={extra}"
+        )
+    errors = sorted(
+        relative for relative, row in rows.items() if row["status"] != "OK"
+    )
+    if errors:
+        return False, f"refusing a result set containing elaboration errors: {errors}"
+
+    baseline = read_baseline(baseline_path)
+    try:
+        baseline_digest = file_digest(baseline_path)
+    except OSError as error:
+        raise SelectionError(f"cannot digest baseline {baseline_path}: {error}") from error
+    if baseline_digest != calibration["baseline_digest"]:
+        return False, "baseline changed since the draw; refusing stale measurements"
+
+    root = Path(plan["root"])
+    current_files = discover_files(root)
+    if current_files != plan["files"]:
+        return False, (
+            "Lean sources changed during measurement; refusing stale results"
+        )
+    if source_set_digest(root, current_files) != calibration["source_digest"]:
+        return False, "source set changed since the draw; refusing stale results"
+    try:
+        validate_results(plan, report_path, set())
+    except SelectionError as error:
+        return False, str(error)
+
+    # The report must show exactly what the plan measured: affected files
+    # re-measured here, everything else read back from a valid cache.
+    affected = set(plan["affected"])
+    for relative in plan["files"]:
+        want = "MEASURED" if relative in affected else "CACHED"
+        if rows[relative]["provenance"] != want:
+            return False, (
+                f"result provenance does not match the plan for {relative}: "
+                f"expected {want}"
+            )
+
+    # The plan's own record must be internally consistent: drawn controls are
+    # measured files, the cached set is exactly the unmeasured remainder, the
+    # recorded compared set is exactly the measured baseline rows that are
+    # not controls, and a cached row's time is the recorded cache entry —
+    # not a substituted value.
+    if not set(selected) <= affected:
+        return False, (
+            "drawn control set is not measured by this plan: "
+            f"{sorted(set(selected) - affected)}"
+        )
+    if set(plan["cached"]) != files - affected:
+        return False, "cached set does not match the unmeasured files"
+    if sorted(compared) != sorted(
+        relative
+        for relative in affected
+        if relative in baseline and relative not in selected
+    ):
+        return False, "recorded compared set does not match the measured rows"
+    for relative in plan["files"]:
+        if relative not in affected:
+            recorded = plan["cached"][relative]["time"]
+            if rows[relative]["time"] != recorded:
+                return False, (
+                    f"cached row does not match the recorded cache entry: "
+                    f"{relative}"
+                )
+
+    # The ordinary row comparisons, recomputed for every non-control file: the
+    # shell holds every represented row — measured or cached — to the row
+    # threshold, and admission does the same. Controls are adjudicated below
+    # as controls, never as rows.
+    for relative in plan["files"]:
+        if relative in selected:
+            continue
+        row = rows[relative]
+        if relative in baseline:
+            if row_drifts(float(row["time"]), baseline[relative], fail_factor, floor):
+                return False, (
+                    f"ordinary regression: {relative}: {row['time']}s vs "
+                    f"baseline {baseline[relative]:.3f}s"
+                )
+        elif relative not in candidates or row["provenance"] != "MEASURED":
+            return False, f"admission candidate was not measured: {relative}"
+
+    # The draw itself must still be the draw: recomputed from the validated
+    # baseline and the eligible population, so a plan that drops a breaching
+    # control from its selected set is refused rather than admitted on a
+    # friendlier sample. The eligible population is every present baseline row
+    # the run did not measure and compare outright: make_plan pops the drawn
+    # controls out of the cached set after drawing, so the final cached set
+    # alone describes a smaller population and recomputing from it would
+    # reject every nonempty valid draw. The recorded compared set is what the
+    # run measured instead of drawing, which is exactly the complement.
+    expected = draw_calibration(
+        baseline,
+        [
+            relative
+            for relative in plan["files"]
+            if relative in baseline and relative not in compared
+        ],
+        calibration["commit"],
+        calibration["baseline_digest"],
+        calibration["source_digest"],
+    )
+    if (
+        calibration["seed"] != expected["seed"]
+        or calibration["domain"] != expected["domain"]
+    ):
+        return False, "recorded draw seed does not match the recomputed draw"
+    if sorted(expected["selected"]) != sorted(selected):
+        return False, "drawn control set does not match the recorded draw"
+    if sorted(
+        relative for relative in plan["files"] if relative not in baseline
+    ) != sorted(candidates):
+        return False, "admission candidates do not match the recorded draw"
+
+    try:
+        summary = calibration_verdict(
+            plan, baseline, rows, fail_factor, warn_factor, floor
+        )
+    except SelectionError as error:
+        return False, str(error)
+    if summary["refused"]:
+        refused = sorted(row["path"] for row in summary["refused"])
+        return False, f"drawn control(s) refused the run: {refused}"
+
+    state = {
+        "version": STATE_VERSION,
+        "environment": plan["environment"],
+        "files": {
+            relative: {
+                "fingerprint": plan["fingerprints"][relative],
+                "status": "OK",
+                "time": rows[relative]["time"],
+            }
+            for relative in plan["files"]
+        },
+    }
+    atomic_json(state_path, state)
+
+    # Publication reuses the shared-evidence transaction, but only for rows this
+    # run actually measured: re-stamping cache-valid rows is left to the runs
+    # that measured them. Best-effort and loud: it can never turn an admitted
+    # calibration red.
+    head = git_output(root, ["rev-parse", "HEAD"]) or "unknown"
+    entries = {
+        plan["fingerprints"][relative]: {"time": rows[relative]["time"], "commit": head}
+        for relative in plan["files"]
+        if rows[relative]["provenance"] == "MEASURED"
+    }
+    published = publish_entries_to_shared(root, plan["environment"], entries)
+    return True, (
+        f"admitted {len(candidates)} new row(s) and {len(selected)} control(s); "
+        f"local cache updated, {published} shared measurement(s) recorded "
+        f"({len(entries)} presented)"
+    )
+
+
+def command_admit_calibration(args: argparse.Namespace) -> int:
+    plan = read_plan(args.plan)
+    ok, message = admit_calibration(
+        plan,
+        args.report,
+        args.state,
+        args.baseline,
+        args.fail_factor,
+        args.warn_factor,
+        args.floor,
+        set(args.exclude_file.read_text(encoding="utf-8").splitlines())
+        if args.exclude_file
+        else None,
+    )
+    if ok:
+        # Informational only: the shell gate owns the run's single terminal
+        # verdict, so a nested admission command never prints its own OK line.
+        print(f"NOTE — elab: calibration admission: {message}")
+        return 0
+    print(f"REGRESSION — elab calibration admission refused: {message}")
+    return 1
+
+
 def command_adopt_baseline(args: argparse.Namespace) -> int:
     """Adopt a provenance-checked shared reference, or explain why not.
 
@@ -2499,6 +3059,51 @@ def command_adopt_baseline(args: argparse.Namespace) -> int:
     return 0
 
 
+def publish_entries_to_shared(
+    root: Path,
+    environment: str,
+    entries: dict[str, dict[str, str]],
+) -> int:
+    """Publish fingerprint-keyed measurements to the shared same-host store.
+
+    Shared by normal command_publish and validated calibration admission: both
+    present only rows their own validation already approved, so this helper
+    owns just the store transaction. Best-effort and loud — every skip says
+    why, and publication never fails its caller. Returns the changed-record
+    count.
+    """
+    if not entries:
+        print("NOTE — elab: shared publication skipped: no publishable measurements")
+        return 0
+    try:
+        host = load_shared_host_identity()
+        path = shared_store_path(root)
+        store, reason, writable = read_shared_store(path, host)
+        if not writable:
+            print(
+                "NOTE — elab: shared publication skipped: "
+                f"preserving existing store ({reason})"
+            )
+            return 0
+        if reason is not None and reason != "no prior shared timing evidence":
+            print(f"NOTE — elab: shared store reset: {reason}")
+        changed = publish_shared_measurements(
+            store, environment, entries, shared_utc_now()
+        )
+        atomic_json(path, store)
+    except SelectionError as error:
+        print(f"NOTE — elab: shared publication skipped: {error}")
+        return 0
+    except OSError as error:
+        print(f"NOTE — elab: shared publication skipped: cannot write store ({error})")
+        return 0
+    print(
+        f"elab shared publish: {changed} measurement(s) recorded "
+        f"({len(entries)} presented)"
+    )
+    return changed
+
+
 def command_publish(args: argparse.Namespace) -> int:
     """Publish this run's OK measurements to the shared store.
 
@@ -2512,6 +3117,17 @@ def command_publish(args: argparse.Namespace) -> int:
         rows = read_result_rows(args.report)
     except SelectionError as error:
         print(f"NOTE — elab: shared publication skipped: {error}")
+        return 0
+    if plan.get("calibration") is not None:
+        # A failed calibration must never reach the shared store through this
+        # path: its controls may carry refused-host measurements that the
+        # ordinary row rule would pass (a control refuses at exactly 2.0x,
+        # a row only above it). Calibration measurements enter the store only
+        # through validated admit-calibration.
+        print(
+            "NOTE — elab: shared publication skipped: "
+            "calibration measurements are published only through admit-calibration"
+        )
         return 0
     excluded = (
         set(args.exclude_file.read_text(encoding="utf-8").splitlines())
@@ -2530,38 +3146,10 @@ def command_publish(args: argparse.Namespace) -> int:
         if not isinstance(fingerprint, str):
             continue
         entries[fingerprint] = {"time": row["time"], "commit": "unknown"}
-    if not entries:
-        print("NOTE — elab: shared publication skipped: no publishable measurements")
-        return 0
     head = git_output(root, ["rev-parse", "HEAD"]) or "unknown"
     for record in entries.values():
         record["commit"] = head
-    try:
-        host = load_shared_host_identity()
-        path = shared_store_path(root)
-        store, reason, writable = read_shared_store(path, host)
-        if not writable:
-            print(
-                "NOTE — elab: shared publication skipped: "
-                f"preserving existing store ({reason})"
-            )
-            return 0
-        if reason is not None and reason != "no prior shared timing evidence":
-            print(f"NOTE — elab: shared store reset: {reason}")
-        changed = publish_shared_measurements(
-            store, plan["environment"], entries, shared_utc_now()
-        )
-        atomic_json(path, store)
-    except SelectionError as error:
-        print(f"NOTE — elab: shared publication skipped: {error}")
-        return 0
-    except OSError as error:
-        print(f"NOTE — elab: shared publication skipped: cannot write store ({error})")
-        return 0
-    print(
-        f"elab shared publish: {changed} measurement(s) recorded "
-        f"({len(entries)} presented)"
-    )
+    publish_entries_to_shared(root, plan["environment"], entries)
     return 0
 
 
@@ -2781,6 +3369,17 @@ def build_parser() -> argparse.ArgumentParser:
     verdict.add_argument("--floor", type=float, required=True)
     verdict.add_argument("--block-out", type=Path)
     verdict.set_defaults(function=command_calibrate_verdict)
+
+    admit = subparsers.add_parser("admit-calibration")
+    admit.add_argument("--plan", type=Path, required=True)
+    admit.add_argument("--report", type=Path, required=True)
+    admit.add_argument("--state", type=Path, required=True)
+    admit.add_argument("--baseline", type=Path, required=True)
+    admit.add_argument("--fail-factor", type=float, required=True)
+    admit.add_argument("--warn-factor", type=float, required=True)
+    admit.add_argument("--floor", type=float, required=True)
+    admit.add_argument("--exclude-file", type=Path)
+    admit.set_defaults(function=command_admit_calibration)
 
     adopt = subparsers.add_parser("adopt-baseline")
     adopt.add_argument("--root", type=Path, required=True)
