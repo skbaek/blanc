@@ -139,15 +139,6 @@ theorem RegistryOn.set_foreign {s : Stor} {entries : List Entry} {probes : List 
   exact Stor.get_set_ne _ ((Blanc.SlotFootprint.checkApartOn_eq_true.mp hapart)
     w (by simp) key hk).symm _
 
-/-- Initialization of finite observations from empty logical storage. -/
-theorem registryOn_empty {probes : List B256}
-    (hp : ∀ p ∈ probes, canonicalAddress p) : RegistryOn emptyStorage [] probes := by
-  refine ⟨by simp, by simp, by simp, by simp, hp, rfl, ?_, ?_, ?_, ?_⟩
-  · intro i hi; simp at hi
-  · intro p hp; rfl
-  · intro p hp; rfl
-  · intro p hp; rfl
-
 /-- The raw empty storage has the finite empty-registry observation for any
 finite canonical probe list. This theorem assumes no hash separation. -/
 theorem registryOn_empty_raw {probes : List B256}

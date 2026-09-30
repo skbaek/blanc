@@ -21,30 +21,6 @@ namespace Blanc.Lift.LidoCircuitBreakerDeployed
 
 open Jaune Blanc Blanc.Lift Blanc.LidoCircuitBreaker Blanc.ForkUniform
 
-/-- The combined constructor-slot apart check yields the slot-0 fact. -/
-theorem checkApartOn_slot0_of_combined {probes : List B256}
-    (h : Blanc.SlotFootprint.checkApartOn solKey
-      (registryQueries probes 0) [0, 1] = true) :
-    Blanc.SlotFootprint.checkApartOn solKey
-      (registryQueries probes 0) [0] = true := by
-  rw [Blanc.SlotFootprint.checkApartOn_eq_true] at h ⊢
-  intro w hw k hk
-  simp only [List.mem_singleton] at hw
-  subst hw
-  exact h 0 (by simp) k hk
-
-/-- The combined constructor-slot apart check yields the slot-1 fact. -/
-theorem checkApartOn_slot1_of_combined {probes : List B256}
-    (h : Blanc.SlotFootprint.checkApartOn solKey
-      (registryQueries probes 0) [0, 1] = true) :
-    Blanc.SlotFootprint.checkApartOn solKey
-      (registryQueries probes 0) [1] = true := by
-  rw [Blanc.SlotFootprint.checkApartOn_eq_true] at h ⊢
-  intro w hw k hk
-  simp only [List.mem_singleton] at hw
-  subst hw
-  exact h 1 (by simp) k hk
-
 /-- The constructor's storage satisfies the finite empty-registry observation:
 `registryOn_empty_raw` at `Stor.empty`, preserved across the two foreign writes
 by `RegistryOn.set_foreign`. No hash premise beyond the finite checker. -/
@@ -53,14 +29,22 @@ theorem registryOn_deployedStor {probes : List B256}
     (hapart : Blanc.SlotFootprint.checkApartOn solKey
       (registryQueries probes 0) [0, 1] = true) :
     RegistryOn (solRegistryStorage Creation.deployedStor) [] probes := by
+  have hsingle : ∀ w ∈ ([0, 1] : List B256),
+      Blanc.SlotFootprint.checkApartOn solKey (registryQueries probes 0) [w] = true := by
+    intro w hw
+    rw [Blanc.SlotFootprint.checkApartOn_eq_true]
+    intro x hx k hk
+    simp only [List.mem_singleton] at hx
+    subst x
+    exact Blanc.SlotFootprint.checkApartOn_eq_true.mp hapart w hw k hk
   have h0 : RegistryOn (solRegistryStorage Stor.empty) [] probes :=
     registryOn_empty_raw hp
   have h1 : RegistryOn
       (solRegistryStorage (Stor.empty.set 0 1814400)) [] probes :=
-    h0.set_foreign (checkApartOn_slot0_of_combined hapart)
+    h0.set_foreign (hsingle 0 (by simp))
   have h2 : RegistryOn
       (solRegistryStorage ((Stor.empty.set 0 1814400).set 1 31536000)) [] probes :=
-    h1.set_foreign (checkApartOn_slot1_of_combined hapart)
+    h1.set_foreign (hsingle 1 (by simp))
   have hdep : Creation.deployedStor =
       (Stor.empty.set 0 1814400).set 1 31536000 := rfl
   rw [hdep]
