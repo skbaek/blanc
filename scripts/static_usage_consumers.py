@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
-from pathlib import PurePosixPath
+from module_path_policy import _raw_components, validate_source_path
 
 
 class StaticConsumerError(ValueError):
@@ -16,12 +16,22 @@ class StaticConsumerError(ValueError):
 
 
 def relative_path(value: str) -> str:
-    if not isinstance(value, str) or not value:
-        raise StaticConsumerError("nonempty repository-relative path required")
-    path = PurePosixPath(value)
-    if path.is_absolute() or any(p in ("..", ".") for p in value.split("/")):
-        raise StaticConsumerError(f"unsafe repository-relative path: {value!r}")
-    return path.as_posix()
+    try:
+        _raw_components(value, module=False)
+    except ValueError as error:
+        raise StaticConsumerError(str(error)) from error
+    return value
+
+
+def target_source_path(value: str) -> str:
+    """Production targets use the shared source language; scripts use bound syntax."""
+    relative_path(value)
+    if value == "Blanc.lean" or value.split("/")[0].casefold() == "blanc":
+        try:
+            validate_source_path(value)
+        except ValueError as error:
+            raise StaticConsumerError(str(error)) from error
+    return value
 
 
 def _span(node: ast.AST, raw: bytes) -> list[int]:
@@ -37,7 +47,7 @@ def literal_requests(path: str, raw: bytes, descriptor: dict) -> list[dict]:
     does not establish semantic consumer intent. Missing/dynamic collections fail.
     """
     path = relative_path(path)
-    target = relative_path(descriptor["target_source"])
+    target = target_source_path(descriptor["target_source"])
     binding, function = descriptor["binding"], descriptor["function"]
     kind = descriptor["kind"]
     if kind not in {"checked-name", "checked-type", "checked-axioms", "script-check"}:

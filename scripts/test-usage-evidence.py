@@ -72,6 +72,7 @@ class Controls(unittest.TestCase):
             "outside command": lambda r: r["sources"][0]["references"][0].update(span=[42, 46]),
             "boolean offset": lambda r: r["sources"][0]["references"][0].update(span=[True, 4]),
             "unknown reference kind": lambda r: r["sources"][0]["references"][0].update(kind="lexical"),
+            "missing parent": lambda r: r["sources"][0]["references"][0].pop("parent"),
             "unknown parent": lambda r: r["sources"][0]["references"][0].update(parent="missing"),
             "unanswered static request": lambda r: r.update(static_resolutions=[]),
             "wrong static name": lambda r: r["static_resolutions"][0].update(requested_name="Blanc.inert"),
@@ -127,6 +128,32 @@ class Controls(unittest.TestCase):
                     b'CHECKS = {"x"}\ndef require_names(CHECKS): return CHECKS\n'):
             with self.subTest(raw=raw), self.assertRaises(StaticConsumerError):
                 literal_requests("scripts/check.py", raw, descriptor)
+
+    def test_shared_raw_path_language_bites(self):
+        bad_paths = ["Blanc//X.lean", "Blanc\\X.lean", "blanc/X.lean", "Blanc/e\u0301.lean"]
+        for bad in bad_paths:
+            with self.subTest(path=bad):
+                receipt = copy.deepcopy(self.receipt)
+                expected = {bad: self.sources["Blanc/X.lean"]}
+                receipt["source_hashes"] = expected
+                receipt["sources"][0]["path"] = bad
+                with self.assertRaises(UsageEvidenceError):
+                    validate_and_index(self.root, receipt, expected, self.bindings, self.requests)
+        descriptor = {"binding": "CHECKS", "function": "require_names", "target_source": "Blanc/Bad-name.lean",
+                      "kind": "checked-name", "rationale": "control"}
+        with self.assertRaises(StaticConsumerError):
+            literal_requests("scripts/check.py", self.consumer, descriptor)
+        for bad in ["scripts//check.py", "scripts\\check.py", "scripts/e\u0301.py"]:
+            with self.subTest(path=bad), self.assertRaises(StaticConsumerError):
+                literal_requests(bad, self.consumer, {**descriptor, "target_source": "scripts/Fixture.lean"})
+
+    def test_internal_symlink_alias_bites(self):
+        local = self.root / "Blanc/X.lean"
+        target = self.root / "Blanc/Real.lean"
+        local.rename(target)
+        local.symlink_to(target)
+        with self.assertRaisesRegex(UsageEvidenceError, "symbolic-link"):
+            self.run_receipt()
 
     def test_external_symlink_bites(self):
         with tempfile.TemporaryDirectory() as outside:

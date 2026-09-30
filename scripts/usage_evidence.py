@@ -9,7 +9,7 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from static_usage_consumers import relative_path
+from module_path_policy import resolve_bound_file
 
 SCHEMA = "blanc-resolved-usage-v1"
 KINDS = {"term-reference", "rewrite-positive", "rewrite-remove", "checked-name",
@@ -27,10 +27,8 @@ def _require(condition: bool, message: str) -> None:
 
 def _read(root: Path, path: str) -> bytes:
     try:
-        relative_path(path)
-        resolved = (root / path).resolve(strict=True)
-        resolved.relative_to(root)
-        return resolved.read_bytes()
+        return resolve_bound_file(root, path, allow_missing=False,
+                                  site="usage-evidence-candidate-input").read_bytes()
     except (OSError, ValueError, RuntimeError) as error:
         raise UsageEvidenceError(f"unsafe/unreadable evidence input {path}: {error}") from error
 
@@ -121,7 +119,8 @@ def validate_and_index(root: Path, receipt: dict, expected_sources: dict[str, st
             lo, hi = command_index[cid]
             _require(lo <= start < end <= hi, f"reference outside owner command: {path}")
             _require(reference.get("kind") in KINDS, f"unknown reference kind: {path}")
-            parent = reference.get("parent")
+            _require("parent" in reference, f"missing explicit parent attribution: {path}")
+            parent = reference["parent"]
             _require(parent is None or parent in declarations, f"unknown parent identity: {path}")
             owner = declarations[target]["owner"]
             if owner is not None and declarations[owner]["theorem"]:
