@@ -171,6 +171,32 @@ SAFE_EXPLICIT_TESTS = [
     TestCase("explicit_simp_all_zeta_only_list", "example : True := by simp_all +zeta only [foo]", False),
 ]
 
+AESOP_TESTS = [
+    TestCase("aesop_bare", "example : True := by aesop", True, "implicit-aesop-simp", "implicit-tactic"),
+    TestCase("aesop_question", "example : True := by aesop?", True, "implicit-aesop-simp", "implicit-tactic"),
+    TestCase("aesop_terminal", "example : True := by aesop!", True, "implicit-aesop-simp", "implicit-tactic"),
+    TestCase("aesop_true", "example : True := by aesop (config := { enableSimp := true })", True, "implicit-aesop-simp"),
+    TestCase("aesop_other_field", "example : True := by aesop (config := { maxRuleApplications := 200 })", True, "implicit-aesop-simp"),
+    TestCase("aesop_config_variable", "example : True := by aesop (config := cfg)", True, "implicit-aesop-simp"),
+    TestCase("aesop_nested_false", "example : True := by aesop (config := { other := { enableSimp := false } })", True, "implicit-aesop-simp"),
+    TestCase("aesop_false_expression", "example : True := by aesop (config := { enableSimp := false || true })", True, "implicit-aesop-simp"),
+    TestCase("aesop_duplicate_field", "example : True := by aesop (config := { enableSimp := false, enableSimp := true })", True, "implicit-aesop-simp"),
+    TestCase("aesop_later_override", "example : True := by aesop (config := { enableSimp := false }) (config := { enableSimp := true })", True, "implicit-aesop-simp"),
+    TestCase("aesop_parenthesized_false", "example : True := by aesop (config := { enableSimp := (false) })", True, "implicit-aesop-simp"),
+    TestCase("aesop_quote", "macro \"t\" : tactic => `(tactic| aesop)", True, "implicit-aesop-simp"),
+    TestCase("aesop_literal_false", "example : True := by aesop (config := { enableSimp := false })", False),
+    TestCase("aesop_false_with_fields", "example : True := by aesop (config := { maxRuleApplications := 200, enableSimp := false, terminal := true })", False),
+    TestCase("aesop_false_newline_fields", "example : True := by aesop (config := { enableSimp := false\n maxRuleApplications := 200 })", False),
+    TestCase("aesop_false_rules", "example : True := by aesop (config := { enableSimp := false }) (add safe apply h)", False),
+    TestCase("aesop_false_comments", "example : True := by aesop (config := { enableSimp /- flag -/ := false })", False),
+    TestCase("aesop_false_quote", "macro \"t\" : tactic => `(tactic| aesop (config := { enableSimp := false }))", False),
+    TestCase("aesop_comments_strings", '-- aesop\ndef text : String := \"aesop\"', False),
+    TestCase("aesop_qualified", "def value := Aesop.aesop", False),
+    TestCase("aesop_attribute", "@[aesop safe] theorem t : True := trivial", False),
+    TestCase("aesop_namespace", "namespace aesop\ndef t := 0\nend aesop", False),
+]
+
+
 NEARBY_TRICKY_TESTS = [
     TestCase("negated_attr_cmd", "attribute [-simp] foo", False),
     TestCase("other_decl_attr_inline", "@[inline] def f : Nat := 0", False),
@@ -213,6 +239,7 @@ def test_suite_tables() -> None:
         ("Registrations", REGISTRATION_TESTS),
         ("Implicit Tactics", IMPLICIT_TACTIC_TESTS),
         ("Safe Explicit Forms", SAFE_EXPLICIT_TESTS),
+        ("Aesop Normalization", AESOP_TESTS),
         ("Nearby Tricky Syntax", NEARBY_TRICKY_TESTS),
     )
 
@@ -279,6 +306,7 @@ def test_bite_and_restore_by_byte_identity() -> None:
         ("mutant_implicit_simp_all", "  have : True := by simp_all\n", "implicit-simp_all"),
         ("mutant_implicit_dsimp", "  have : True := by dsimp [testIncrement]\n", "implicit-dsimp"),
         ("mutant_implicit_simp_question", "  have : True := by simp?\n", "implicit-simp?"),
+        ("mutant_implicit_aesop", "  have : True := by aesop\n", "implicit-aesop-simp"),
     ]
 
     for label, injection, expected_kind in mutants:

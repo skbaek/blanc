@@ -58,6 +58,15 @@
    ]
   },
   {
+   "id": "explicit-simp",
+   "work": [
+    "static-corpus"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
    "id": "proof-recipes",
    "work": [
     "static-corpus",

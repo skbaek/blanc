@@ -14,6 +14,9 @@ Scans Blanc Lean sources (every Blanc/**/*.lean and Blanc.lean) for:
       `only` (e.g. `simp (config := ...) only [...]`), config flags (e.g. `simp +zeta only [...]`,
       `simp -zeta only [...]`), and locations after lists (`at h`, `using ...`).
     - Macro quotation bodies (e.g. `(tactic| simp)`) are inspected and caught.
+(c) Aesop builtin simplification:
+    - Retained aesop calls must start with a literal config whose top-level
+      enableSimp field is exactly false. Duplicate config arguments refuse.
 
 Inventory and control aid scope (limits and unresolved lexical ambiguity):
 This scanner is a bounded pure-Python inventory and control aid for the Lean parser
@@ -135,6 +138,76 @@ TACTIC_HEAD_RE = re.compile(
 )
 
 # Simp configuration flag: +zeta, -zeta, +proj, -proj, etc.
+AESOP_HEAD_RE = re.compile(r"(?<![\w.'!?])aesop(?:[?!]+)?(?![\w.'!?])")
+CONFIG_FIELD_RE = re.compile(r"([A-Za-z_][\w']*)\s*:=")
+
+
+def aesop_simp_disabled(code: str, start: int) -> bool:
+    """Recognize the house form, not arbitrary Lean config computation.
+
+    Comment/string masking has already preserved offsets. A literal top-level
+    false field disables the pinned builtin normalization rule; nested fields,
+    Boolean expressions, and later config overrides grant no lexical credit.
+    Actual elaboration and custom-rule coverage are separate migration evidence.
+    """
+    pos = start
+    while pos < len(code) and code[pos].isspace():
+        pos += 1
+    if pos >= len(code) or code[pos] != "(":
+        return False
+    end = balanced_end(code, pos, "(", ")")
+    if end < 0:
+        return False
+    config = code[pos + 1:end]
+    prefix = re.match(r"\s*config\s*:=\s*\{", config)
+    if prefix is None:
+        return False
+    opening = prefix.end() - 1
+    closing = balanced_end(config, opening, "{", "}")
+    if closing < 0 or config[closing + 1:].strip():
+        return False
+    fields = config[opening + 1:closing]
+    assignments = []
+    stack = []
+    offset = 0
+    while offset < len(fields):
+        char = fields[offset]
+        if char in _PAIRS:
+            stack.append(_PAIRS[char])
+        elif stack and char == stack[-1]:
+            stack.pop()
+        elif not stack:
+            match = CONFIG_FIELD_RE.match(fields, offset)
+            if match:
+                assignments.append((match.group(1), offset, match.end()))
+                offset = match.end()
+                continue
+        offset += 1
+    if stack or not assignments or fields[:assignments[0][1]].strip(" \t\r\n,"):
+        return False
+    values = []
+    for index, (name, _, value_start) in enumerate(assignments):
+        value_end = assignments[index + 1][1] if index + 1 < len(assignments) else len(fields)
+        if name == "enableSimp":
+            values.append(fields[value_start:value_end].strip(" \t\r\n,"))
+    if values != ["false"]:
+        return False
+    # A later config could override the first one. Other parenthesized Aesop
+    # rule arguments are allowed, with their actual rules reviewed separately.
+    pos = end + 1
+    while True:
+        while pos < len(code) and code[pos].isspace():
+            pos += 1
+        if pos >= len(code) or code[pos] != "(":
+            return True
+        end = balanced_end(code, pos, "(", ")")
+        if end < 0:
+            return False
+        if re.match(r"\s*config\s*:=", code[pos + 1:end]):
+            return False
+        pos = end + 1
+
+
 CONFIG_FLAG_RE = re.compile(r"[+-]\s*[A-Za-z_][\w.]*")
 
 # Explicit 'only' keyword immediately following tactic or config
@@ -314,6 +387,22 @@ def scan_source(code_raw: str, path: str) -> List[Finding]:
             kind=f"implicit-{tactic_name}",
             category="implicit-tactic",
             snippet=snippet_at(tactic_start),
+        ))
+
+    for match in AESOP_HEAD_RE.finditer(code):
+        if is_inside_attr(match.start()):
+            continue
+        line, _ = _line_col_of(line_starts, match.start())
+        context = code[line_starts[line - 1]:].lstrip()
+        if context.startswith(("import ", "namespace ", "end ")):
+            continue
+        if aesop_simp_disabled(code, match.end()):
+            continue
+        line, column = _line_col_of(line_starts, match.start())
+        findings.append(Finding(
+            path=path, line=line, column=column,
+            kind="implicit-aesop-simp", category="implicit-tactic",
+            snippet=snippet_at(match.start()),
         ))
 
     # Sort findings by (line, column, kind) deterministically
