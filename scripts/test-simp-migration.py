@@ -444,6 +444,82 @@ def test_cli() -> None:
         assert migration_main(["reconcile", str(sf), str(pf), str(qf)]) == 0
 
 
+def nested_fixture(outer_only=True):
+    """Synthetic native-shaped inventory; no claim of Lean elaboration."""
+    outer=('simpa only [outer]' if outer_only else 'simpa [outer]') + ' using (by simpa [middle] using (by simp [leaf]); simp [sibling])'
+    text='example (𝔸 : Type) : True := by '+outer+'\r\n'
+    bodies=[outer,'simpa [middle] using (by simp [leaf])','simp [leaf]','simp [sibling]']
+    sites=[make_site(text,body,'simpa' if i<2 else 'simp',
+                     family='simpa' if i<2 else 'simp',only=outer_only and i==0)
+           for i,body in enumerate(bodies)]
+    return text.encode(),make_baseline(text.encode(),sites)
+
+
+def test_innermost_selection() -> None:
+    for outer_only in (True,False):
+        original,baseline=nested_fixture(outer_only)
+        legacy=instrument(original,baseline,preserve_nested=True)
+        assert legacy.plan['target_count']==0
+        inst=instrument(original,baseline,preserve_nested=True,innermost_nested=True)
+        assert [s['target'] for s in inst.plan['sites']]==[False,False,True,True]
+        assert inst.plan['innermost_nested'] is True
+        assert inst.instrumented_bytes==original.replace(b'simp [leaf]',b'simp? [leaf]').replace(b'simp [sibling]',b'simp? [sibling]')
+        edits=[make_edit(inst.plan['sites'][i], 'simp only ['+name+']','Fixture.nested')
+               for i,name in ((2,'leaf'),(3,'sibling'))]
+        result=reconcile(original,inst,make_q_col(inst.plan,edits=edits))
+        assert [e['site_id'] for e in result['resolved']]==['site_2','site_3']
+        assert {u['site_id'] for u in result['unresolved']}==({'site_1'} if outer_only else {'site_0','site_1'})
+
+
+def test_innermost_plan_and_owner_refusal() -> None:
+    original,baseline=nested_fixture()
+    inst=instrument(original,baseline,preserve_nested=True,innermost_nested=True)
+    q=make_q_col(inst.plan,edits=[make_edit(inst.plan['sites'][2],'simp only [leaf]')])
+    for change in ('target','container','mode','count'):
+        p=copy.deepcopy(inst.plan)
+        if change=='target':p['sites'][1]['target']=True
+        elif change=='container':p['sites'][1].pop('nested_container')
+        elif change=='mode':p['innermost_nested']=1
+        else:p['target_count']=3
+        try:reconcile(original,p,q)
+        except MigrationError:pass
+        else:raise AssertionError('innermost plan mutation admitted: '+change)
+    for owner in ('range','referenceRange','commandRange'):
+        bad=copy.deepcopy(q);bad['edits'][0][owner]=inst.plan['sites'][3]['mapped_range']
+        assert not reconcile(original,inst,bad)['resolved']
+    for mode,preserve in ((True,False),(1,True),('true',True)):
+        try:instrument(original,baseline,preserve_nested=preserve,innermost_nested=mode)
+        except MigrationError:pass
+        else:raise AssertionError('invalid innermost mode admitted')
+    bad=copy.deepcopy(baseline)
+    bad['inventory'][2]['commandRange']=bad['inventory'][2]['range']
+    try:instrument(original,bad,preserve_nested=True,innermost_nested=True)
+    except MigrationError as exc:assert 'command owner' in str(exc)
+    else:raise AssertionError('nested command owner drift admitted')
+    bad=copy.deepcopy(baseline);bad['inventory'].append(copy.deepcopy(bad['inventory'][0]))
+    try:instrument(original,bad,preserve_nested=True,innermost_nested=True)
+    except MigrationError as exc:assert 'Overlapping' in str(exc)
+    else:raise AssertionError('equal-start nested range admitted')
+
+
+def test_innermost_quotation_refusal() -> None:
+    for text in ('macro "quoted" : tactic => `(tactic| simp only [outer (by simp [leaf])])\n',
+                 'def quoted := s!"{(← `(tactic| simp only [outer (by simp [leaf])]))}"\n',
+                 'def «/-escaped» := `(tactic| simp only [outer (by simp [leaf])])\n'):
+        original=text.encode();outer='simp only [outer (by simp [leaf])]';inner='simp [leaf]'
+        baseline=make_baseline(original,[make_site(text,outer,'simp',only=True),make_site(text,inner,'simp')])
+        inst=instrument(original,baseline,preserve_nested=True,innermost_nested=True)
+        assert inst.instrumented_bytes==original and inst.plan['target_count']==0
+        q=make_q_col(inst.plan,edits=[make_edit(inst.plan['sites'][1],'simp only [leaf]','Fixture.expansion')])
+        res=reconcile(original,inst,q)
+        assert not res['resolved'] and any(u['reason']=='quotation_owner_requires_expansion_evidence' for u in res['unresolved'])
+    # Literal bytes are never masked, and raw comment backticks conservatively
+    # over-refuse. These are named unresolved owners, not completeness credit.
+    text='/- `conservative` -/ example : True := by simp only [outer (by simp [leaf])]\n'
+    original=text.encode();baseline=make_baseline(original,[make_site(text,'simp only [outer (by simp [leaf])]','simp',only=True),make_site(text,'simp [leaf]','simp')])
+    assert instrument(original,baseline,preserve_nested=True,innermost_nested=True).plan['target_count']==0
+
+
 def run_all_tests() -> int:
     tests = [
         ("test_basic_shape_synthetic", test_basic_shape_synthetic),
@@ -461,6 +537,9 @@ def run_all_tests() -> int:
         ("test_existing_question_forms", test_existing_question_forms),
         ("test_overlapping_site_ranges", test_overlapping_site_ranges),
         ("test_cli", test_cli),
+        ("test_innermost_selection", test_innermost_selection),
+        ("test_innermost_plan_and_owner_refusal", test_innermost_plan_and_owner_refusal),
+        ("test_innermost_quotation_refusal", test_innermost_quotation_refusal),
     ]
 
     passed, failed = 0, 0

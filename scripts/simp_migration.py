@@ -208,7 +208,7 @@ def _observed_union(family: str, suggestions: List[Dict[str, Any]]) -> Tuple[str
 def instrument(
     original_bytes: bytes,
     baseline_collector: Union[Dict[str, Any], str, bytes],
-    *, preserve_nested: bool = False,
+    *, preserve_nested: bool = False, innermost_nested: bool = False,
 ) -> InstrumentResult:
     """Stage 1: Validate baseline and instrument unproven implicit simp heads to question heads."""
     if not isinstance(original_bytes, bytes):
@@ -285,6 +285,8 @@ def instrument(
 
     if type(preserve_nested) is not bool:
         raise MigrationError('preserve_nested must be a strict boolean')
+    if type(innermost_nested) is not bool or (innermost_nested and not preserve_nested):
+        raise MigrationError('innermost_nested requires a strict boolean and preserve_nested')
     parsed_sites.sort(key=lambda s: s["s_cp"])
     for i, left in enumerate(parsed_sites):
         for right in parsed_sites[i+1:]:
@@ -292,9 +294,22 @@ def instrument(
             if not preserve_nested or right['e_cp'] > left['e_cp'] or right['s_cp'] == left['s_cp']:
                 raise MigrationError(f"Overlapping site ranges between [{left['s_cp']}, {left['e_cp']}] and [{right['s_cp']}, {right['e_cp']}]")
             left['nested_blocked'] = right['nested_blocked'] = True
+            if innermost_nested:
+                left['nested_container'] = True
+                if not _json_equal(left['commandRange'], right['commandRange']):
+                    raise MigrationError('Nested sites disagree on enclosing command owner')
 
     for s in parsed_sites:
-        if s["only"] or s.get('nested_blocked'):
+        if innermost_nested:
+            # Keep literal bytes: even a quote inside an interpolated string is
+            # excluded. This deliberately over-refuses comments/quoted names;
+            # it is a conservative source-owner guard, not a Lean lexer.
+            owner = original_text[s['c_s']:s['c_e']]
+            if '`' in owner:
+                s['quotation_owner_blocked'] = True
+        blocked = (s.get('nested_container') or s.get('quotation_owner_blocked')
+                   if innermost_nested else s.get('nested_blocked'))
+        if s["only"] or blocked:
             s["target"], s["instr_head"] = False, s["head"]
         else:
             s["target"] = True
@@ -324,6 +339,8 @@ def instrument(
             "site_id": f"site_{idx}", "family": s["family"], "head": s["head"], "instrumented_head": s["instr_head"],
             "only": s["only"], "target": s["target"],
             **({'nested_blocked': True} if s.get('nested_blocked') else {}),
+            **({'nested_container': True} if s.get('nested_container') else {}),
+            **({'quotation_owner_blocked': True} if s.get('quotation_owner_blocked') else {}),
             "original_range": s["range"], "original_head_range": s["headRange"], "original_command_range": s["commandRange"], "original_source": s["source"],
             "mapped_range": {"start": codepoint_to_lsp_pos(instr_lines, map_cp(s["s_cp"])), "end": codepoint_to_lsp_pos(instr_lines, map_cp(s["e_cp"]))},
             "mapped_head_range": {"start": codepoint_to_lsp_pos(instr_lines, map_cp(s["h_s"])), "end": codepoint_to_lsp_pos(instr_lines, map_cp(s["h_e"]))},
@@ -340,6 +357,7 @@ def instrument(
         "sites": site_plans,
     }
     if preserve_nested: plan['preserve_nested'] = True
+    if innermost_nested: plan['innermost_nested'] = True
     return InstrumentResult(instr_bytes, instr_sha, plan)
 
 
@@ -388,7 +406,8 @@ def reconcile(
     }
 
     derived_res = instrument(original_bytes, reconstructed_baseline,
-                             preserve_nested=plan_dict.get('preserve_nested', False))
+                             preserve_nested=plan_dict.get('preserve_nested', False),
+                             innermost_nested=plan_dict.get('innermost_nested', False))
     if not _json_equal(derived_res.plan, plan_dict):
         raise MigrationError("Supplied plan does not match deterministically derived plan")
 
@@ -408,9 +427,12 @@ def reconcile(
         raise MigrationError("Missing or non-list 'inventory' or 'edits' in question collector")
 
     unresolved: List[Dict[str, Any]] = []
-    unresolved.extend({'reason': 'preserved_nested_group', 'site_id': s['site_id'],
+    unresolved.extend({'reason': ('quotation_owner_requires_expansion_evidence'
+                                  if s.get('quotation_owner_blocked') else 'preserved_nested_group'),
+                       'site_id': s['site_id'],
                        'range': s['original_range']} for s in derived_res.plan['sites']
-                      if s.get('nested_blocked') and not s['only'])
+                      if not s['target'] and not s['only'] and
+                      (s.get('nested_blocked') or s.get('quotation_owner_blocked')))
 
     if len(q_inventory) != len(derived_res.plan["sites"]):
         unresolved.append({"reason": "inventory_mismatch", "details": f"Question collector inventory count ({len(q_inventory)}) != plan sites ({len(derived_res.plan['sites'])})"})

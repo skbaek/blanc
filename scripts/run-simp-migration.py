@@ -117,20 +117,109 @@ def proposal(original, inst, resolved):
     # Existing applier validates family, only, overlap and faithful source heads.
     preview(inst.instrumented_bytes, {'schema':1,'source_sha256':inst.source_sha256,
             'edits':[{'range':e['mapped_range'],'newText':e['newText']} for e in resolved]})
+    original_lines = parse_lean_lines(original.decode())
     for e in resolved:
         s = ids.get(e['site_id'])
         if not s or not s['target'] or not _json_equal(e['original_range'],s['original_range']):
             raise RunnerError('resolved site ownership mismatch')
+        if inst.plan.get('innermost_nested'):
+            if not _json_equal(e.get('mapped_range'),s['mapped_range']):
+                raise RunnerError('innermost mapped site ownership mismatch')
+            start,end = _validate_lsp_range(s['original_range'],'selected leaf',original_lines)
+            ca,cb = _validate_lsp_range(s['original_command_range'],'leaf command',original_lines)
+            if '`' in original.decode()[ca:cb]:
+                raise RunnerError('innermost quotation owner requires expansion evidence')
+            for child in inst.plan['sites']:
+                cs,ce = _validate_lsp_range(child['original_range'],'child',original_lines)
+                if start < cs and ce <= end:
+                    raise RunnerError('innermost proposal contains a child site')
+            if direct_site_shell(s['original_source'],s['family']) != direct_site_shell(e['newText'],s['family']):
+                raise RunnerError('innermost proposal changes configuration/location/tail')
     result, mapper = splice(original, [(e['original_range'],e['newText']) for e in resolved])
+    result_text=result.decode();result_lines=parse_lean_lines(result_text)
     expected = []
     by_id = {e['site_id']:e for e in resolved}
     for s in inst.plan['sites']:
         e = by_id.get(s['site_id'])
-        expected.append({'site_id':s['site_id'],'range':mapper(s['original_range']),
+        mapped_range = mapper(s['original_range'])
+        source = e['newText'] if e else s['original_source']
+        if inst.plan.get('innermost_nested'):
+            # Containing sites have changed source, but exactly the same owner,
+            # family and only flag. Derive their text from the precise mapped
+            # span, never from a replay-supplied inventory or substring match.
+            a,b = _validate_lsp_range(mapped_range,'candidate site',result_lines)
+            source = result_text[a:b]
+            if e and source != e['newText']:
+                raise RunnerError('innermost replacement source mismatch')
+        expected.append({'site_id':s['site_id'],'range':mapped_range,
                          'commandRange':mapper(s['original_command_range']),
-                         'source':e['newText'] if e else s['original_source'],
+                         'source':source,
                          'family':s['family'],'only':True if e else s['only']})
     return result, expected
+
+def direct_site_shell(source, family):
+    """Exact configs and tail of a bounded direct tactic, excluding its list.
+
+    Literal/comment/escaped syntax needs a native parser extension; do not
+    normalize it with a lightweight text masker. No names or terms are added
+    here: the replacement list remains the exact recorded native action.
+    """
+    if (any(t in source for t in ('"','\\','`','«','»','/-','--')) or
+            re.search(r"(?<![\w'])'(?:[^'\\\r\n])'",source)):
+        raise RunnerError('innermost direct shell requires literal-free syntax')
+    head = re.match(r'(simp_all|simpa|dsimp|simp)(?:\?)?(?![\w!?])',source)
+    if not head or head[1] != family:
+        raise RunnerError('innermost direct shell family mismatch')
+    pos=head.end();parts=[]
+    while True:
+        while pos<len(source) and source[pos].isspace():pos+=1
+        if source[pos:pos+1]=='(':
+            end=balanced_end(source,pos,'(',')')
+            if end<0:raise RunnerError('unbalanced direct shell configuration')
+            parts.append(source[pos:end+1]);pos=end+1
+        elif source[pos:pos+1] in ('+','-'):
+            flag=re.match(r'[+-]\s*[A-Za-z_][A-Za-z_0-9.]*',source[pos:])
+            if not flag:raise RunnerError('unsupported direct shell flag')
+            parts.append(flag[0]);pos+=len(flag[0])
+        else:break
+    only=re.match(r'only(?![\w!?])',source[pos:])
+    if only:pos+=only.end()
+    while pos<len(source) and source[pos].isspace():pos+=1
+    if source[pos:pos+1]=='[':
+        end=balanced_end(source,pos,'[',']')
+        if end<0:raise RunnerError('unbalanced direct shell list')
+        pos=end+1
+    return parts,source[pos:].strip()
+
+def native_reconciliation(original, inst, question):
+    """Derive conservative unions solely from exact associated native actions."""
+    res=reconcile(original,inst,question)
+    unions=[];rejected=[]
+    families={s['site_id']:s['family'] for s in inst.plan['sites']}
+    for unresolved in res['unresolved']:
+        if unresolved['reason']!='divergent_alternatives':continue
+        sid=unresolved['site_id']
+        try:
+            _observed_union(families[sid],[{'newText':t} for t in unresolved['alternatives']])
+            unions.append(sid)
+        except MigrationError as exc:
+            rejected.append({'site_id':sid,'reason':str(exc)})
+    if unions:res=reconcile(original,inst,question,observed_union_sites=unions)
+    return res,{'sites':unions,'rejected':rejected}
+
+def validate_innermost_scalars(row, inst, accepted):
+    """Completion is an exact source-inventory count, never row metadata."""
+    parsed=len(inst.plan['sites']);implicit=sum(not s['only'] for s in inst.plan['sites'])
+    counts={'parsed':parsed,'implicit':implicit,'accepted':len(accepted),
+            'remaining':implicit-len(accepted)}
+    if len(accepted)>implicit or any(type(row.get(k)) is not int or row[k]!=v for k,v in counts.items()):
+        raise RunnerError('resume innermost source/action scalar mismatch')
+    complete=counts['remaining']==0
+    status=('already_explicit' if implicit==0 else
+            'verified_complete' if complete else 'verified_partial')
+    if (type(row.get('complete')) is not bool or row['complete']!=complete or
+            row['status']!=status or (implicit and not accepted)):
+        raise RunnerError('resume innermost completion/status mismatch')
 
 def verify_inventory(payload, expected):
     inv = payload.get('inventory')
@@ -314,9 +403,10 @@ def apply_candidate(root, raw, original_sha, candidate):
         handle.seek(0);handle.write(candidate);handle.truncate()
 
 class Runner:
-    def __init__(self, root, evidence, goal, execute=subprocess.run):
+    def __init__(self, root, evidence, goal, execute=subprocess.run, *, innermost_nested=False):
+        if type(innermost_nested) is not bool:raise RunnerError('innermost mode must be boolean')
         self.root=root;self.evidence=evidence;self.goal=goal;self.execute=execute
-        self.held=False;self.journal=[]
+        self.held=False;self.journal=[];self.innermost_nested=innermost_nested
 
     def command(self, argv, log, output=None, *, stdout_output=False):
         if log.exists() or log.is_symlink() or (output and (output.exists() or output.is_symlink())):
@@ -395,26 +485,17 @@ class Runner:
              'parsed':len(baseline['inventory']),'implicit':implicit,'accepted':0,'remaining':implicit,
              'environment_path':str(environment),'environment_sha256':sha(environment.read_bytes()),
              'environment_capture':'upfront before baseline'}
+        if self.innermost_nested:row['innermost_nested']=True
         if not implicit: return {**row,'status':'already_explicit','complete':True}
-        inst=instrument(original,baseline,preserve_nested=True);new_json(directory/'plan.json',inst.plan)
+        inst=instrument(original,baseline,preserve_nested=True,innermost_nested=self.innermost_nested)
+        new_json(directory/'plan.json',inst.plan)
         new_bytes(directory/'question.lean',inst.instrumented_bytes)
         question=self.collect(raw,directory/'question.lean',setup,directory,'question')
         if question is None: return {**row,'status':'question_failed','complete':False}
-        res=reconcile(original,inst,question)
-        unions=[];union_rejected=[]
-        families={s['site_id']:s['family'] for s in inst.plan['sites']}
-        for unresolved in res['unresolved']:
-            if unresolved['reason']!='divergent_alternatives': continue
-            sid=unresolved['site_id']
-            try:
-                _observed_union(families[sid],[{'newText':t} for t in unresolved['alternatives']])
-                unions.append(sid)
-            except MigrationError as e:
-                union_rejected.append({'site_id':sid,'reason':str(e)})
-        new_json(directory/'observed-union-selection.json',{'sites':unions,'rejected':union_rejected})
-        if unions: res=reconcile(original,inst,question,observed_union_sites=unions)
-        alternate,expected_alt,selected_alt=alternate_no_using(inst)
-        if selected_alt:
+        res,union_selection=native_reconciliation(original,inst,question)
+        new_json(directory/'observed-union-selection.json',union_selection)
+        alternate,expected_alt,selected_alt=(None,None,[]) if self.innermost_nested else alternate_no_using(inst)
+        if selected_alt and not self.innermost_nested:
             buffer=directory/'no-using-question.lean';new_bytes(buffer,alternate)
             new_json(directory/'no-using-owners.json',{'selected_original_sites':selected_alt,
                                                      'expected_alternate_sites':expected_alt})
@@ -438,7 +519,7 @@ class Runner:
             payload=self.collect(raw,buffer,setup,directory,stage)
             if payload is not None:
                 verify_inventory(payload,expected)
-                for omission_attempt in range(3):
+                for omission_attempt in range(0 if self.innermost_nested else 3):
                     repairs=native_omissions(payload,expected,resolved,directory/(stage+'.log'),raw)
                     if not repairs: break
                     omission_stage=stage+'_omit_'+str(omission_attempt)
@@ -468,8 +549,8 @@ class Runner:
             bad={s['site_id'] for s in expected if any(s['commandRange']['start']['line']<=l<=s['commandRange']['end']['line'] for l in lines)}
             remove=[e for e in resolved if e['site_id'] in bad]
             if not remove: return {**row,'status':'replay_failed','complete':False,'rejected':rejected}
-            repairs={e['site_id']:retain_original_args(inst,e) for e in remove
-                     if e['site_id'] not in retained}
+            repairs={} if self.innermost_nested else {
+                e['site_id']:retain_original_args(inst,e) for e in remove if e['site_id'] not in retained}
             repairs={sid:e for sid,e in repairs.items() if e is not None}
             if repairs:
                 retained.update(repairs)
@@ -481,6 +562,9 @@ class Runner:
         return {**row,'status':'replay_failed','complete':False,'rejected':rejected}
 
     def run(self, selection):
+        mode=selection.get('innermost_nested',False)
+        if type(mode) is not bool or mode != self.innermost_nested:
+            raise RunnerError('collection selection/mode mismatch')
         self.acquire()
         try:
             for item in selection['modules']:
@@ -499,11 +583,17 @@ class Runner:
 
 def validate_resume(root, evidence, selection):
     """Resume only terminal verified records; no interrupted/failed output reuse."""
+    mode=selection.get('innermost_nested',False)
+    if type(mode) is not bool:raise RunnerError('selection mode must be boolean')
+    if mode and len({i['path'] for i in selection['modules']})!=len(selection['modules']):
+        raise RunnerError('innermost selection has duplicate paths')
     records=[]
     index=read_json(evidence/'collection-index.json')
     for item in selection['modules']:
         raw=item['path'];result=evidence/(raw[:-5].replace('/','.')+'.result.json')
         row=read_json(result)
+        if type(row.get('innermost_nested',False)) is not bool or row.get('innermost_nested',False)!=mode:
+            raise RunnerError('resume selection/mode mismatch')
         if index.get(result.name)!=sha(result.read_bytes()): raise RunnerError('resume result hash mismatch')
         if row.get('path')!=raw or row.get('original_sha256')!=item['original_sha256']:
             raise RunnerError('resume module/source metadata mismatch')
@@ -530,6 +620,15 @@ def validate_resume(root, evidence, selection):
                 raise RunnerError('resume artifact hash/path mismatch')
         if sha((directory/'original.lean').read_bytes())!=item['original_sha256']:
             raise RunnerError('resume original hash mismatch')
+        if mode:
+            original=(directory/'original.lean').read_bytes()
+            inst=instrument(original,read_json(directory/'baseline.json'),preserve_nested=True,innermost_nested=True)
+            accepted=row.get('accepted_sites',[])
+            if not isinstance(accepted,list) or any(not isinstance(e,dict) or not isinstance(e.get('site_id'),str) for e in accepted):
+                raise RunnerError('resume innermost accepted action shape mismatch')
+            if len({e['site_id'] for e in accepted})!=len(accepted):
+                raise RunnerError('resume innermost duplicate accepted actions')
+            validate_innermost_scalars(row,inst,accepted)
         if row['status']!='already_explicit':
             candidate=Path(row['candidate'])
             if candidate.parent!=directory or sha(candidate.read_bytes())!=row['candidate_sha256']:
@@ -538,6 +637,22 @@ def validate_resume(root, evidence, selection):
             if Path(row['replay']).parent!=directory or replay['source_sha256']!=row['candidate_sha256'] or replay['setup_sha256']!=row['setup_sha256']:
                 raise RunnerError('resume replay mismatch')
             verify_inventory(replay,read_json(directory/'expected-final-sites.json'))
+            if mode:
+                if not _json_equal(inst.plan,read_json(directory/'plan.json')):
+                    raise RunnerError('resume innermost plan derivation mismatch')
+                native,union_selection=native_reconciliation(original,inst,read_json(directory/'question.json'))
+                if not _json_equal(union_selection,read_json(directory/'observed-union-selection.json')):
+                    raise RunnerError('resume innermost union derivation mismatch')
+                if any(u['reason']=='inventory_mismatch' for u in native['unresolved']):
+                    raise RunnerError('resume innermost question inventory mismatch')
+                genuine={e['site_id']:e for e in native['resolved']}
+                accepted=row['accepted_sites']
+                if (len({e['site_id'] for e in accepted})!=len(accepted) or
+                        any(e['site_id'] not in genuine or not _json_equal(e,genuine[e['site_id']]) for e in accepted)):
+                    raise RunnerError('resume innermost action not a genuine question resolution')
+                derived,expected=proposal(original,inst,row['accepted_sites'])
+                if derived!=candidate.read_bytes() or not _json_equal(expected,read_json(directory/'expected-final-sites.json')):
+                    raise RunnerError('resume innermost candidate derivation mismatch')
         records.append(row)
     return records
 
@@ -548,11 +663,14 @@ def apply_batch(root, evidence, selection, *, attempt='application', execute=sub
     unchanged imported artifact bytes without asking Lake to rebuild sources.
     """
     if not attempt.isidentifier(): raise RunnerError('invalid application attempt')
+    mode=selection.get('innermost_nested',False)
+    if type(mode) is not bool:raise RunnerError('selection mode must be boolean')
+    validated={row['path']:row for row in validate_resume(root,evidence,selection)} if mode else {}
     records=[]
     for item in selection['modules']:
         raw=item['path'];row=read_json(evidence/(raw[:-5].replace('/','.')+'.result.json'))
         if row.get('status') not in ('verified_complete','verified_partial'): continue
-        row=validate_resume(root,evidence,{'modules':[item]})[0]
+        row=validated[raw] if mode else validate_resume(root,evidence,{'modules':[item]})[0]
         current=sha(source_path(root,raw).read_bytes())
         if current not in (item['original_sha256'],row['candidate_sha256']):
             raise RunnerError('source preflight drift')
@@ -604,7 +722,7 @@ def main():
     if ROOT.name!=args.goal or ROOT.parent.name!='.worktrees': raise RunnerError('goal/worktree mismatch')
     if args.mode=='collect':
         args.evidence.mkdir();new_json(args.evidence/'selection.json',selection)
-        Runner(ROOT,args.evidence,args.goal).run(selection)
+        Runner(ROOT,args.evidence,args.goal,innermost_nested=selection.get('innermost_nested',False)).run(selection)
     else:
         apply_batch(ROOT,args.evidence,selection,attempt=args.application_id)
     return 0

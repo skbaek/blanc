@@ -260,7 +260,219 @@ def test_native_stage_bindings():
         runner.execute=failed;assert runner.collect('Blanc/A.lean',original,setup,ev,'failed') is None
         assert original.read_bytes()==b'original'
 
+def innermost_fixture():
+    original,baseline=f.nested_fixture()
+    inst=r.instrument(original,baseline,preserve_nested=True,innermost_nested=True)
+    question=f.make_q_col(inst.plan,edits=[f.make_edit(inst.plan['sites'][i],'simp only ['+name+']','Fixture.nested')
+                                         for i,name in ((2,'leaf'),(3,'sibling'))])
+    res,unions=r.native_reconciliation(original,inst,question)
+    return original,baseline,inst,question,res,unions
+
+def test_innermost_parent_sources():
+    original,baseline,inst,question,res,unions=innermost_fixture()
+    candidate,expected=r.proposal(original,inst,res['resolved'])
+    wanted=original.replace(b'simp [leaf]',b'simp only [leaf]').replace(b'simp [sibling]',b'simp only [sibling]')
+    assert candidate==wanted and candidate.endswith(b'\r\n')
+    assert expected[0]['only'] is True and expected[1]['only'] is False
+    assert expected[0]['source']=='simpa only [outer] using (by simpa [middle] using (by simp only [leaf]); simp only [sibling])'
+    assert expected[1]['source']=='simpa [middle] using (by simp only [leaf])'
+    text=candidate.decode()
+    actual=[f.make_site(text,s['source'],s['family'],family=s['family'],only=s['only']) for s in expected]
+    r.verify_inventory({'inventory':actual},expected)
+    for mutation in ('parent_source','parent_only','parent_owner','child_drop','child_order','child_range'):
+        bad=copy.deepcopy(actual)
+        if mutation=='parent_source':bad[0]['source']=inst.plan['sites'][0]['original_source']
+        elif mutation=='parent_only':bad[1]['only']=True
+        elif mutation=='parent_owner':bad[0]['commandRange']=bad[0]['range']
+        elif mutation=='child_drop':bad.pop()
+        elif mutation=='child_order':bad[2],bad[3]=bad[3],bad[2]
+        else:bad[2]['range']['end']['character']+=1
+        fails(lambda:r.verify_inventory({'inventory':bad},expected))
+    bad=copy.deepcopy(res['resolved']);bad[0]['mapped_range']=inst.plan['sites'][3]['mapped_range']
+    fails(lambda:r.proposal(original,inst,bad))
+    bad=copy.deepcopy(inst);bad.plan['sites'][1]['target']=True
+    outer=f.make_edit(bad.plan['sites'][1],'simpa only [middle] using (by simp [leaf])')
+    outer.update(site_id='site_1',original_range=bad.plan['sites'][1]['original_range'],mapped_range=bad.plan['sites'][1]['mapped_range'])
+    fails(lambda:r.proposal(original,bad,[outer]))
+    # Even an explicit child prevents a containing parent replacement.
+    changed=[f.make_site(text,s['source'],s['family'],family=s['family'],only=s['only']) for s in expected]
+    next_inst=r.instrument(candidate,f.make_baseline(candidate,changed),preserve_nested=True,innermost_nested=True)
+    assert next_inst.plan['target_count']==0
+    # Removing only the corrupted synthetic inventory leaves its exact green
+    # bytes; no second verification run is needed after restoration.
+    assert json.dumps(actual,sort_keys=True)==json.dumps([f.make_site(text,s['source'],s['family'],family=s['family'],only=s['only']) for s in expected],sort_keys=True)
+
+def test_innermost_shell_and_quotation():
+    text='example : True := by simp only [outer (by simp (disch := omega) +zeta [a] at h)]\n'
+    original=text.encode();bodies=['simp only [outer (by simp (disch := omega) +zeta [a] at h)]','simp (disch := omega) +zeta [a] at h']
+    baseline=f.make_baseline(original,[f.make_site(text,bodies[0],'simp',only=True),f.make_site(text,bodies[1],'simp')])
+    inst=r.instrument(original,baseline,preserve_nested=True,innermost_nested=True)
+    q=f.make_q_col(inst.plan,edits=[f.make_edit(inst.plan['sites'][1],'simp (disch := omega) +zeta only [b] at h')])
+    edit=r.reconcile(original,inst,q)['resolved'][0]
+    assert r.proposal(original,inst,[edit])[0]==original.replace(b'+zeta [a]',b'+zeta only [b]')
+    for new in ['simp only [b] at h','simp (disch := decide) +zeta only [b] at h',
+                'simp (disch := omega) -zeta only [b] at h','simp (disch := omega) +zeta only [b] at other',
+                'simpa (disch := omega) +zeta only [b] at h','simp (disch := omega) +zeta only [b] at h; omega']:
+        fails(lambda:r.proposal(original,inst,[{**edit,'newText':new}]))
+    for unsupported in ['simp only ["["]','simp only [\'a\']','simp only [/- comment -/ a]',
+                        'simp only [«escaped»]','simp only [a\\b]']:
+        fails(lambda:r.direct_site_shell(unsupported,'simp'))
+    assert r.direct_site_shell("simpa only [a'] using h'",'simpa')==([],"using h'")
+    for text in ('macro "quoted" : tactic => `(tactic| simp [leaf])\n',
+                 'def quoted := s!"{(← `(tactic| simp [leaf]))}"\n'):
+        original=text.encode();baseline=f.make_baseline(original,[f.make_site(text,'simp [leaf]','simp')])
+        inst=r.instrument(original,baseline,preserve_nested=True,innermost_nested=True)
+        bad=copy.deepcopy(inst);bad.plan['sites'][0]['target']=True;bad.plan['sites'][0].pop('quotation_owner_blocked')
+        # Forge all proposal ownership fields but retain the real source owner.
+        e={'site_id':'site_0','original_range':bad.plan['sites'][0]['original_range'],
+           'mapped_range':bad.plan['sites'][0]['mapped_range'],'newText':'simp only [leaf]'}
+        fails(lambda:r.proposal(original,bad,[e]))
+
+def test_innermost_resume_and_before_write():
+    with tempfile.TemporaryDirectory() as tmp:
+        root=Path(tmp);(root/'Blanc').mkdir();ev=root/'evidence';ev.mkdir();directory=ev/'Blanc.A';directory.mkdir()
+        original,baseline,inst,question,res,unions=innermost_fixture();raw='Blanc/A.lean'
+        source=root/raw;source.write_bytes(original);setup=b'dummy_setup'
+        candidate,expected=r.proposal(original,inst,res['resolved'])
+        for name,payload in [('baseline.json',baseline),('plan.json',inst.plan),('question.json',question),
+                             ('observed-union-selection.json',unions),('expected-final-sites.json',expected),
+                             ('candidate.json',{'source_sha256':r.sha(candidate),'setup_sha256':r.sha(setup),'inventory':expected})]:
+            r.new_json(directory/name,payload)
+        (directory/'original.lean').write_bytes(original);(directory/'candidate.lean').write_bytes(candidate)
+        imported=root/'import.olean';imported.write_bytes(b'exact current import')
+        r.new_json(directory/'environment.json',{'schema':1,'collector_schema':1,'root':str(root),
+                                                'file_sha256':{str(imported):r.file_sha(imported)}})
+        row={'path':raw,'original_sha256':r.sha(original),'status':'verified_partial','innermost_nested':True,
+             'candidate':str(directory/'candidate.lean'),'candidate_sha256':r.sha(candidate),
+             'replay':str(directory/'candidate.json'),'setup_sha256':r.sha(setup),'parsed':4,'implicit':3,'accepted':2,'remaining':1,'complete':False,
+             'accepted_sites':res['resolved'],'environment_path':str(directory/'environment.json'),
+             'environment_sha256':r.file_sha(directory/'environment.json')}
+        result=ev/'Blanc.A.result.json';index=ev/'collection-index.json'
+        def rebind(value):
+            value['artifacts']={p.name:r.file_sha(p) for p in directory.iterdir() if p.is_file()}
+            result.write_text(json.dumps(value));index.write_text(json.dumps({result.name:r.file_sha(result)}))
+        rebind(row);selection={'innermost_nested':True,'modules':[{'path':raw,'original_sha256':r.sha(original)}]}
+        r.validate_resume(root,ev,selection)
+        saved={p:p.read_bytes() for p in directory.iterdir()};saved.update({result:result.read_bytes(),index:index.read_bytes(),source:source.read_bytes()})
+        setup_calls=[]
+        def setup_transport(argv,**kwargs):setup_calls.append(argv);return SimpleNamespace(returncode=0,stdout=setup,stderr=b'')
+        for mutation in ('forged_candidate','forged_action','duplicate_action','stale_plan','wrong_owner','wrong_union','mode_drift','stale_import','stale_source',
+                         'parsed','implicit','accepted','remaining','bool_count','bool_complete','false_complete','false_already','wrong_status'):
+            mutant=copy.deepcopy(row)
+            if mutation in ('forged_candidate','forged_action'):
+                actions=copy.deepcopy(res['resolved']);actions[0]['newText']='simp only [FABRICATED]'
+                forged,forged_expected=r.proposal(original,inst,actions)
+                (directory/'candidate.lean').write_bytes(forged)
+                (directory/'expected-final-sites.json').write_text(json.dumps(forged_expected))
+                (directory/'candidate.json').write_text(json.dumps({'source_sha256':r.sha(forged),'setup_sha256':r.sha(setup),'inventory':forged_expected}))
+                mutant['candidate_sha256']=r.sha(forged)
+                if mutation=='forged_action':mutant['accepted_sites']=actions
+            elif mutation=='duplicate_action':mutant['accepted_sites']=res['resolved']*2
+            elif mutation=='stale_plan':
+                bad=copy.deepcopy(inst.plan);bad['sites'][1]['target']=True;(directory/'plan.json').write_text(json.dumps(bad))
+            elif mutation=='wrong_owner':
+                bad=copy.deepcopy(question);bad['edits'][0]['commandRange']=inst.plan['sites'][2]['mapped_range'];(directory/'question.json').write_text(json.dumps(bad))
+            elif mutation=='wrong_union':(directory/'observed-union-selection.json').write_text(json.dumps({'sites':['site_2'],'rejected':[]}))
+            elif mutation=='mode_drift':mutant['innermost_nested']=False
+            elif mutation=='stale_import':imported.write_bytes(b'drifted import')
+            elif mutation=='stale_source':source.write_bytes(b'drifted source')
+            elif mutation in ('parsed','implicit','accepted','remaining'):mutant[mutation]+=1
+            elif mutation=='bool_count':mutant['remaining']=True
+            elif mutation=='bool_complete':mutant['complete']=0
+            elif mutation=='false_complete':mutant.update(implicit=2,remaining=0,complete=True,status='verified_complete')
+            elif mutation=='false_already':mutant.update(implicit=0,accepted=0,remaining=0,complete=True,status='already_explicit',accepted_sites=[])
+            else:mutant.update(status='verified_complete')
+            rebind(mutant)
+            fails(lambda:r.apply_batch(root,ev,selection,attempt='reject_'+mutation,execute=setup_transport))
+            assert not setup_calls and not list(ev.glob('*-ready.json'))
+            assert source.read_bytes()==(b'drifted source' if mutation=='stale_source' else original)
+            for path,data in saved.items():path.write_bytes(data)
+            imported.write_bytes(b'exact current import')
+            assert all(path.read_bytes()==data for path,data in saved.items())
+        # Valid actual-question subset can apply only after current setup.
+        r.apply_batch(root,ev,selection,attempt='accepted',execute=setup_transport)
+        assert len(setup_calls)==1 and source.read_bytes()==candidate
+
+def test_innermost_already_explicit_scalars():
+    with tempfile.TemporaryDirectory() as tmp:
+        root=Path(tmp);ev=root/'evidence';ev.mkdir();directory=ev/'Blanc.A';directory.mkdir()
+        original=b'example : True := by simp only [known]\n';text=original.decode()
+        baseline=f.make_baseline(original,[f.make_site(text,'simp only [known]','simp',only=True)])
+        (directory/'original.lean').write_bytes(original);r.new_json(directory/'baseline.json',baseline)
+        r.new_json(directory/'environment.json',{'schema':1,'collector_schema':1,'root':str(root),'file_sha256':{}})
+        row={'path':'Blanc/A.lean','original_sha256':r.sha(original),'status':'already_explicit','innermost_nested':True,
+             'parsed':1,'implicit':0,'accepted':0,'remaining':0,'complete':True,
+             'environment_path':str(directory/'environment.json'),'environment_sha256':r.file_sha(directory/'environment.json'),
+             'artifacts':{p.name:r.file_sha(p) for p in directory.iterdir()}}
+        result=ev/'Blanc.A.result.json';index=ev/'collection-index.json'
+        selection={'innermost_nested':True,'modules':[{'path':row['path'],'original_sha256':row['original_sha256']}]}
+        def save(value):result.write_text(json.dumps(value));index.write_text(json.dumps({result.name:r.file_sha(result)}))
+        save(row);r.validate_resume(root,ev,selection);green=(result.read_bytes(),index.read_bytes())
+        for fields in [{'parsed':True},{'implicit':1},{'accepted':1},{'remaining':1},{'complete':False},
+                       {'status':'verified_complete'}, {'accepted_sites':[{'site_id':'fake'}],'accepted':1,'remaining':-1,'complete':False}]:
+            save({**row,**fields});fails(lambda:r.validate_resume(root,ev,selection))
+            result.write_bytes(green[0]);index.write_bytes(green[1])
+            assert (result.read_bytes(),index.read_bytes())==green
+
+def test_innermost_file_routing_and_replay_failure():
+    original,baseline=f.nested_fixture()
+    old_environment=r.environment_identity
+    old_alternate,old_retain,old_omissions=r.alternate_no_using,r.retain_original_args,r.native_omissions
+    def forbidden(*args,**kwargs):raise AssertionError('non-native-action transformation ran in innermost mode')
+    r.alternate_no_using=r.retain_original_args=r.native_omissions=forbidden
+    try:
+        for fail_replay in (False,True):
+            with tempfile.TemporaryDirectory() as tmp:
+                root=Path(tmp);(root/'Blanc').mkdir();source=root/'Blanc/A.lean';source.write_bytes(original)
+                ev=root/'evidence';ev.mkdir();stages=[]
+                r.environment_identity=lambda root,setup:{'schema':1,'collector_schema':1,'root':str(root),'file_sha256':{}}
+                def setup(argv,**kwargs):
+                    assert argv==['lake','setup-file','Blanc/A.lean','--no-build','--no-cache']
+                    kwargs['stdout'].write(json.dumps({'name':'Blanc.A','package':'blanc','importArts':{}}).encode())
+                    kwargs['stderr'].write(b'')
+                    return SimpleNamespace(returncode=0)
+                class ControlledRunner(r.Runner):
+                    def renew(self,directory,stage):assert self.held
+                    def collect(self,raw,buffer,setup,directory,stage):
+                        stages.append(stage)
+                        if stage=='baseline':
+                            payload=copy.deepcopy(baseline);payload.update(setup_sha256=r.file_sha(setup),module='Blanc.A',original_path=raw,setup_path=str(setup))
+                        elif stage=='question':
+                            p=r.read_json(directory/'plan.json')
+                            payload=f.make_q_col(p,edits=[f.make_edit(p['sites'][i],'simp only ['+name+']','Fixture.nested')
+                                                         for i,name in ((2,'leaf'),(3,'sibling'))])
+                        else:
+                            assert stage=='candidate_0'
+                            if fail_replay:
+                                (directory/(stage+'.log')).write_text(json.dumps({'fileName':raw,'severity':'error','pos':{'line':1,'column':0},'message':'synthetic replay refusal'})+'\n')
+                                return None
+                            text=buffer.read_text();wanted=original.replace(b'simp [leaf]',b'simp only [leaf]').replace(b'simp [sibling]',b'simp only [sibling]')
+                            assert buffer.read_bytes()==wanted
+                            bodies=['simpa only [outer] using (by simpa [middle] using (by simp only [leaf]); simp only [sibling])',
+                                    'simpa [middle] using (by simp only [leaf])','simp only [leaf]','simp only [sibling]']
+                            inv=[f.make_site(text,body,'simpa' if i<2 else 'simp',family='simpa' if i<2 else 'simp',only=i!=1)
+                                 for i,body in enumerate(bodies)]
+                            payload={'inventory':inv,'edits':[]}
+                        r.new_json(directory/(stage+'.json'),payload);return payload
+                runner=ControlledRunner(root,ev,'goal',execute=setup,innermost_nested=True);runner.held=True
+                row=runner.file('Blanc/A.lean',{'original_sha256':r.sha(original)})
+                assert stages==['baseline','question','candidate_0'] and source.read_bytes()==original
+                assert row['innermost_nested'] is True
+                if fail_replay:
+                    assert row['status']=='unresolved' and row['accepted']==0 and len(row['rejected'])==2
+                else:
+                    assert row['status']=='verified_partial' and row['accepted']==2 and row['remaining']==1
+                    assert row['accepted_sites']==r.reconcile(original,r.instrument(original,r.read_json(ev/'Blanc.A/baseline.json'),preserve_nested=True,innermost_nested=True),r.read_json(ev/'Blanc.A/question.json'))['resolved']
+                # The mode is checked before admission or a setup/frontend call.
+                calls=[];plain=r.Runner(root,ev,'goal',execute=lambda *a,**k:calls.append(a),innermost_nested=True)
+                fails(lambda:plain.run({'modules':[]}));assert not calls
+                fails(lambda:r.Runner(root,ev,'goal',innermost_nested=1))
+    finally:
+        r.environment_identity=old_environment
+        r.alternate_no_using,r.retain_original_args,r.native_omissions=old_alternate,old_retain,old_omissions
+    assert r.environment_identity is old_environment and r.alternate_no_using is old_alternate
+
 if __name__=='__main__':
-    for test in [test_partial,test_no_using_alternate,test_original_arguments,test_native_omissions,test_outputs_and_apply,test_routing_and_renewal,test_census,test_resume,test_batch_preflight,test_executable_inputs,test_aggregate_source_paths,test_native_stage_bindings]:
+    for test in [test_partial,test_no_using_alternate,test_original_arguments,test_native_omissions,test_outputs_and_apply,test_routing_and_renewal,test_census,test_resume,test_batch_preflight,test_executable_inputs,test_aggregate_source_paths,test_native_stage_bindings,test_innermost_parent_sources,test_innermost_shell_and_quotation,test_innermost_resume_and_before_write,test_innermost_already_explicit_scalars,test_innermost_file_routing_and_replay_failure]:
         test();print('PASS '+test.__name__)
-    print('PASS12 runner control groups; mocks are integrity evidence only')
+    print('PASS17 runner control groups; mocks are integrity evidence only')
