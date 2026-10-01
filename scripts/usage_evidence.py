@@ -15,6 +15,7 @@ from module_path_policy import resolve_bound_file
 
 SCHEMA = "blanc-resolved-usage-v1"
 NATIVE_SCHEMA = "blanc-resolved-usage-v2"
+IMPORTED_SCHEMA = "blanc-resolved-usage-v3"
 REQUEST_DIGEST_SCHEME = "json-sort-compact-ascii-sha256"
 KINDS = {"term-reference", "rewrite-positive", "rewrite-remove", "checked-name",
          "checked-type", "checked-axioms", "macro-reference", "script-check"}
@@ -195,6 +196,77 @@ def _request_id(value: object) -> tuple[type, object]:
     return type(value), value
 
 
+def _digest(value):
+    return hashlib.sha256(_json_identity(value)).hexdigest()
+
+
+def _native_capture(value, bindings, environment):
+    _require(isinstance(value, dict) and value.get("adapter") in bindings
+             and value.get("environment") == environment
+             and isinstance(value.get("context_id"), str) and value["context_id"],
+             "unbound independent native capture")
+
+
+def _range_attachment(value, raw, owner):
+    _require(isinstance(value, dict) and value.get("kind") in {"direct", "owner", "absent"}
+             and "span" in value and "owner" in value, "missing honest range provenance")
+    if value["kind"] == "absent":
+        _require(value["span"] is None and value["owner"] is None, "fabricated absent range")
+    else:
+        _span(value["span"], len(raw))
+        _require((value["kind"] == "direct" and value["owner"] is None) or
+                 (value["kind"] == "owner" and owner is not None and value["owner"] == owner),
+                 "range owner differs from actual canonical owner")
+
+
+def _imported_origin(row, environments, raw, bindings):
+    imported = row.get("imported")
+    _require(row.get("population") == "nonproduction" and "origin_role" not in row
+             and isinstance(imported, dict), "foreign origin bypasses production/local command coverage")
+    eid = row["environment"]
+    _native_capture(imported.get("capture"), bindings, eid)
+    setup = environments[eid]["setup"]
+    parts = setup.get("importArts", {}).get(row["module"])
+    _require(parts is not None and _same_json(imported.get("parts"), parts)
+             and imported.get("module") == row["module"]
+             and isinstance(parts, list) and parts
+             and all(isinstance(g, list) and all(isinstance(p, str) for p in g) for g in parts)
+             and any(parts),
+             "unbound imported module key/ordered artifact parts")
+    hashes = environments[eid]["identity"]["file_sha256"]
+    _require(all(p in hashes for g in parts for p in g), "imported part missing environment byte identity")
+    package = imported.get("package")
+    _require(isinstance(package, dict) and all(isinstance(package.get(k), str) and package[k]
+             for k in ("name", "rev", "source_root", "manifest_path", "manifest_sha256"))
+             and "module_source" in package and package["manifest_path"] in raw
+             and hashlib.sha256(raw[package["manifest_path"]]).hexdigest() == package["manifest_sha256"],
+             "unbound actual imported package/pin witness")
+    try:
+        manifest = json.loads(raw[package["manifest_path"]])
+        matches = [p for p in manifest["packages"] if p.get("name") == package["name"]]
+    except (ValueError, KeyError, TypeError) as error:
+        raise UsageEvidenceError(f"invalid bound dependency manifest: {error}") from error
+    _require(len(matches) == 1 and matches[0].get("type") == "git"
+             and matches[0].get("rev") == package["rev"], "imported package pin differs from bound manifest")
+    # Native capture must establish the actual checkout/artifact relationship;
+    # matching the manifest's requested revision alone cannot establish it.
+    attachment = row.get("source")
+    _require("source" in row, "missing explicit foreign source attachment/absence")
+    if attachment is not None:
+        _require(isinstance(attachment, dict) and attachment.get("path") in raw
+                 and attachment.get("sha256") == hashlib.sha256(raw[attachment["path"]]).hexdigest()
+                 and isinstance(package["module_source"], str) and package["module_source"]
+                 and attachment["path"] == package["source_root"] + "/" + package["module_source"],
+                 "unbound actual Lake source/artifact relation")
+        _range_attachment(attachment.get("range"), raw[attachment["path"]], row["owner"])
+    _require("defining_kind" in row and (row["defining_kind"] is None or row["defining_kind"] in
+             {"theorem", "def", "opaque", "axiom", "constructor", "recursor", "inductive", "instance"}),
+             "missing honest imported defining-kind provenance")
+    _require(row["defining_kind"] is None or row["defining_kind"] == row["kind"] or
+             (row["kind"] == "axiom" and row["defining_kind"] == "theorem"),
+             "imported defining/observed kind contradiction")
+
+
 def validate_native_and_index(
         root: Path, receipt: dict, expected_sources: dict[str, str],
         expected_bindings: dict[str, str], expected_roles: list[dict],
@@ -209,9 +281,41 @@ def validate_native_and_index(
     fails acceptance. IDs distinguish declarations across source environments;
     a kernel-name string alone is not an identity. V1 remains preparation only.
     """
+    return _validate_native(root, receipt, expected_sources, expected_bindings, expected_roles,
+                            expected_declarations, expected_environments, expected_visibility,
+                            requests, static_contexts, static_provenance)
+
+
+def validate_imported_and_index(
+        root: Path, receipt: dict, expected_sources: dict[str, str],
+        expected_bindings: dict[str, str], expected_roles: list[dict],
+        expected_declarations: list[dict], expected_environments: dict[str, dict],
+        expected_visibility: list[dict], expected_observations: list[dict],
+        requests: list[dict] = (), static_contexts: list[dict] = (),
+        static_provenance: list[dict] = (), owner_supplements: list[dict] = ()) -> dict:
+    """Opt-in v3 transport, not native capture or proof of complete resolution.
+
+    Expected origins, observations and owner supplements must come independently
+    from actual saved contexts/compiled graph and bound adapters. In particular,
+    native Expr.equal plus ordered levelParams, selected Lake artifact/source/pin
+    relations and operation semantics cannot be established by Python receipt
+    metadata or fingerprints. Unsupported native capture remains unresolved.
+    """
+    return _validate_native(root, receipt, expected_sources, expected_bindings, expected_roles,
+                            expected_declarations, expected_environments, expected_visibility,
+                            requests, static_contexts, static_provenance, v3=True,
+                            expected_observations=expected_observations,
+                            owner_supplements=owner_supplements)
+
+
+def _validate_native(root, receipt, expected_sources, expected_bindings, expected_roles,
+                     expected_declarations, expected_environments, expected_visibility,
+                     requests, static_contexts, static_provenance, *, v3=False,
+                     expected_observations=(), owner_supplements=()):
     root = root.resolve(strict=True)
-    _require(isinstance(receipt, dict) and receipt.get("schema") == NATIVE_SCHEMA,
-             "native transport requires v2; v1 is preparation only")
+    schema = IMPORTED_SCHEMA if v3 else NATIVE_SCHEMA
+    _require(isinstance(receipt, dict) and receipt.get("schema") == schema,
+             f"native transport requires {schema}; v1 is preparation only")
     _require(bool(expected_sources) and bool(expected_bindings), "empty native input inventories")
     _require(_same_json(receipt.get("source_hashes"), expected_sources)
              and _same_json(receipt.get("bindings"), expected_bindings),
@@ -295,22 +399,34 @@ def validate_native_and_index(
         # Reuse the v1 metadata language without conflating repeated public names.
         declaration_index([{**row, "owner": row.get("name")}])
         _require(row["theorem"] == (row["kind"] == "theorem"), "inconsistent native theorem/kind metadata")
-        _require(row.get("environment") in identities and row.get("origin_role") in roles
+        _require(row.get("environment") in identities
                  and row.get("population") in {"production", "nonproduction"}, "unbound declaration origin")
         environment_name = (row["environment"], row["name"])
         _require(environment_name not in environment_names, "conflicting same-name declaration in one environment")
         environment_names.add(environment_name)
-        origin_role = roles[row["origin_role"]]
-        source = row.get("source")
-        _require(isinstance(source, dict) and source.get("path") == origin_role["path"]
-                 and source.get("sha256") == expected_sources[origin_role["path"]]
-                 and row["environment"] == origin_role["environment"], "declaration source/environment impostor")
-        _span(source.get("span"), len(raw[source["path"]]))
-        _require(origin_role["coverage"] == "commands" and any(
-            c["span"][0] <= source["span"][0] < source["span"][1] <= c["span"][1]
-            for c in origin_role["commands"]), "declaration missing from original command inventory")
-        _require(row["population"] != "production" or origin_role["role"] == "production",
-                 "nonproduction source impersonates production declaration")
+        if v3:
+            _require(row.get("origin_kind") in {"analysis-source", "imported-module"}, "missing tagged native origin")
+            levels = row.get("level_params")
+            _require(isinstance(levels, list) and all(isinstance(n, str) and n for n in levels)
+                     and len(set(levels)) == len(levels), "missing ordered native universe parameters")
+        if v3 and row["origin_kind"] == "imported-module":
+            _imported_origin(row, expected_environments, raw, expected_bindings)
+        else:
+            _require(row.get("origin_role") in roles, "unbound declaration origin")
+            origin_role = roles[row["origin_role"]]
+            source = row.get("source")
+            _require(isinstance(source, dict) and source.get("path") == origin_role["path"]
+                     and source.get("sha256") == expected_sources[origin_role["path"]]
+                     and row["environment"] == origin_role["environment"], "declaration source/environment impostor")
+            _span(source.get("span"), len(raw[source["path"]]))
+            _require(origin_role["coverage"] == "commands" and any(
+                c["span"][0] <= source["span"][0] < source["span"][1] <= c["span"][1]
+                for c in origin_role["commands"]), "declaration missing from original command inventory")
+            _require(row["population"] != "production" or origin_role["role"] == "production",
+                     "nonproduction source impersonates production declaration")
+            if v3:
+                _require("imported" not in row, "local origin carries foreign exemption")
+                _range_attachment(source.get("range"), raw[source["path"]], row["owner"])
         fingerprint = row.get("type_identity")
         _require(isinstance(fingerprint, dict) and fingerprint.get("scheme") == "lean4.34-expr-hash64"
                  and isinstance(fingerprint.get("value"), str) and len(fingerprint["value"]) == 16
@@ -323,6 +439,48 @@ def validate_native_and_index(
         if owner is not None:
             _require(declarations[owner]["owner"] == owner and
                      declarations[owner]["population"] == row["population"], "noncanonical/cross-population owner")
+
+    observations = {}
+    if v3:
+        _require(isinstance(expected_observations, list) and bool(expected_observations)
+                 and _same_json(receipt.get("observations"), expected_observations),
+                 "missing/mismatched independent saved-context observations")
+        for observation in expected_observations:
+            _require(isinstance(observation, dict), "malformed native observation")
+            oid, rid, did = observation.get("id"), observation.get("role"), observation.get("declaration")
+            _require(isinstance(oid, str) and oid and oid not in observations and rid in roles
+                     and did in declarations, "unknown/duplicate native observation")
+            role = roles[rid]
+            command = observation.get("command")
+            _require("command" in observation and (command is None or command in {c["id"] for c in role["commands"]})
+                     and observation.get("environment") == role["environment"]
+                     and observation.get("scope") in {"use", "defining-metadata"}, "unbound native observation context")
+            _native_capture(observation.get("capture"), expected_bindings, role["environment"])
+            origin = declarations[did]
+            binding = observation.get("origin_binding")
+            setup = expected_environments[role["environment"]]["setup"]
+            _require(isinstance(binding, dict) and binding.get("module") == origin["module"],
+                     "missing actual observation module/artifact binding")
+            if binding.get("kind") == "local":
+                _require(origin["origin_kind"] == "analysis-source" and origin["environment"] == role["environment"]
+                         and setup.get("name") == origin["module"] and binding.get("parts") is None,
+                         "observation substituted local defining context")
+            else:
+                parts = setup.get("importArts", {}).get(origin["module"])
+                _require(binding.get("kind") == "imported-module" and parts is not None
+                         and _same_json(binding.get("parts"), parts),
+                         "observation target absent from actual imported module/artifacts")
+            _require(observation.get("observed_kind") in {"theorem", "def", "opaque", "axiom", "constructor", "recursor", "inductive", "instance"}
+                     and _same_json(observation.get("level_params"), origin["level_params"])
+                     and _same_json(observation.get("type_identity"), origin["type_identity"])
+                     and observation.get("type_comparison") == "lean4.34-expr.equal+ordered-levelParams",
+                     "missing bound native full-type/universe comparison")
+            same_kind = observation["observed_kind"] == origin["kind"]
+            _require((same_kind and observation.get("view_relation") == "same-kind") or
+                     (not same_kind and {observation["observed_kind"], origin["kind"]} == {"theorem", "axiom"}
+                      and observation.get("view_relation") == "theorem-axiom-export"),
+                     "unbound observed/defining-kind view relation")
+            observations[oid] = observation
 
     _require(isinstance(expected_visibility, list) and bool(expected_visibility),
              "missing independent native visibility/origin capture")
@@ -342,6 +500,15 @@ def validate_native_and_index(
         # One actual Environment cannot contain two different constants at one Name.
         _require(len({declarations[d]["name"] for d in visible}) == len(visible),
                  "conflicting same-name origins in native visibility context")
+        if v3:
+            observed = context.get("observations")
+            _require(isinstance(observed, list) and all(isinstance(o, str) for o in observed)
+                     and len(set(observed)) == len(observed)
+                     and all(o in observations and observations[o]["role"] == rid
+                             and observations[o]["command"] == context["command"] for o in observed)
+                     and len(observed) == len(visible)
+                     and {observations[o]["declaration"] for o in observed} == set(visible),
+                     "visibility lacks exact independent observation/origin mapping")
         visibility[vid] = context
 
     uses = {}
@@ -364,12 +531,17 @@ def validate_native_and_index(
                      and visibility[vid]["command"] == ref["command"]
                      and ref["declaration"] in visibility[vid]["declarations"],
                      "resolved declaration invisible in actual native reference context")
+            if v3:
+                oid = ref.get("observation")
+                _require(oid in visibility[vid]["observations"]
+                         and observations[oid]["declaration"] == ref["declaration"]
+                         and observations[oid]["scope"] == "use", "reference substituted metadata/use observation")
             _require(ref.get("kind") in KINDS and "parent" in ref,
                      "missing native reference kind/explicit parent")
             parent = ref["parent"]
             _require(parent is None or parent in declarations, "unknown native parent origin")
             if parent is not None:
-                _require(declarations[parent]["origin_role"] == role["id"], "parent from a different source context")
+                _require(declarations[parent].get("origin_role") == role["id"], "parent from a different source context")
             lo, hi = _span(ref.get("span"), len(raw[role["path"]]))
             command = commands[ref["command"]]
             _require(command["span"][0] <= lo < hi <= command["span"][1], "native reference outside command")
@@ -407,6 +579,15 @@ def validate_native_and_index(
                  and vid in visibility and visibility[vid]["role"] == context["context"]
                  and did in declarations and did in visibility[vid]["declarations"],
                  "unknown/duplicate/unresolved independent static context")
+        if v3:
+            oid = context.get("observation")
+            _require(oid in visibility[vid]["observations"] and observations[oid]["declaration"] == did
+                     and context.get("owner_requirement") in {"source", "compiled-origin"}
+                     and type(context.get("requires_defining_kind")) is bool,
+                     "missing exact static observation/operation owner requirements")
+            if context["requires_defining_kind"] and declarations[did]["origin_kind"] == "imported-module":
+                _require(declarations[did]["defining_kind"] is not None,
+                         "required actual imported defining kind unresolved")
         contexts[key] = context
     _require(set(contexts) == set(request_index), "missing actual resolved static contexts")
     provenance = {}
@@ -437,10 +618,47 @@ def validate_native_and_index(
         _require(type(lo) is int and type(hi) is int and
                  1 <= lo <= hi <= len(raw[operation["path"]].splitlines()), "effective operation span outside source")
         did = contexts[key]["declaration"]
-        _require(declarations[did]["source"]["path"] in witness.get("effective_owner_candidates", []),
-                 "actual static target outside validated effective owner candidates")
+        if not v3:
+            _require(declarations[did]["source"]["path"] in witness.get("effective_owner_candidates", []),
+                     "actual static target outside validated effective owner candidates")
         provenance[key] = captured
     _require(set(provenance) == set(request_index), "missing validated static provenance witness")
+    supplements = {}
+    if v3:
+        _require(isinstance(owner_supplements, list) and
+                 _same_json(receipt.get("owner_supplements"), owner_supplements),
+                 "missing/mismatched independent native owner supplements")
+        for supplement in owner_supplements:
+            _require(isinstance(supplement, dict), "malformed native owner supplement")
+            key = _request_id(supplement.get("id"))
+            _require(key in contexts and key not in supplements, "unknown/duplicate owner supplement ID")
+            context, prepared = contexts[key], provenance[key]
+            did, oid = context["declaration"], context["observation"]
+            origin = declarations[did]
+            _require(supplement.get("request_digest_scheme") == REQUEST_DIGEST_SCHEME
+                     and supplement.get("request_sha256") == _digest(request_index[key])
+                     and supplement.get("overlay_sha256") == prepared["overlay_sha256"]
+                     and supplement.get("overlay_row_sha256") == _digest(prepared["witness"])
+                     and supplement.get("declaration") == did and supplement.get("observation") == oid
+                     and "owner" in supplement and supplement["owner"] == origin["owner"],
+                     "owner supplement lost immutable lineage/exact target")
+            _native_capture(supplement.get("capture"), expected_bindings, observations[oid]["environment"])
+            owner = declarations[origin["owner"]] if origin["owner"] is not None else origin
+            source = owner.get("source")
+            actual_path = source["path"] if source is not None else None
+            witness = supplement.get("owner_witness")
+            _require(isinstance(witness, dict) and witness.get("declaration") == owner["id"]
+                     and witness.get("module") == owner["module"]
+                     and "source_path" in witness and witness["source_path"] == actual_path,
+                     "owner supplement lacks actual canonical source/module witness")
+            if context["owner_requirement"] == "source":
+                _require(actual_path is not None, "required actual source owner unresolved")
+            hints = prepared["witness"].get("effective_owner_candidates")
+            _require(isinstance(hints, list), "missing unchanged preparation owner hints")
+            relation = "confirmed" if actual_path is not None and actual_path in hints else "discovered-outside-hints"
+            _require(supplement.get("hint_relation") == relation, "owner supplement rewrites/prejudges hint relation")
+            supplements[key] = supplement
+        _require(set(supplements) == set(request_index), "missing independently resolved owner supplement")
     responses = receipt.get("static_resolutions")
     _require(isinstance(responses, list) and len(responses) == len(request_index),
              "unanswered/duplicate native static requests")
@@ -458,6 +676,10 @@ def validate_native_and_index(
                  and response.get("request_sha256") == hashlib.sha256(_json_identity(request)).hexdigest()
                  and response.get("provenance_sha256") == hashlib.sha256(_json_identity(provenance[key])).hexdigest(),
                  "static request provenance/resolved-context mismatch")
+        if v3:
+            _require(response.get("observation") == expected_context["observation"]
+                     and response.get("supplement_sha256") == _digest(supplements[key]),
+                     "static response substituted owner supplement/observation")
         credit(response["declaration"], {"kind": "script-check", "request": request,
                                        "provenance": provenance[key], **response})
     # Recheck actual bytes at acceptance, not only before indexing.
@@ -468,7 +690,7 @@ def validate_native_and_index(
             raise UsageEvidenceError(f"native environment changed during acceptance: {error}") from error
     for path, data in raw.items():
         _require(_read(root, path) == data, f"native input changed during acceptance: {path}")
-    return {"schema": NATIVE_SCHEMA, "scope": "transport-only; native resolution controls required",
+    return {"schema": schema, "scope": "transport-only; native resolution controls required",
             "declarations": declarations, "uses": uses}
 
 
