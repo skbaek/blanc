@@ -44,16 +44,12 @@ theorem mintAmount_product {amount0 amount1 supply : B256} {reserve0 reserve1 li
   rw [(mintAmount_later_spec positiveSupply accepted).1]
   exact AMMArithmetic.mint_product_bound reserve0 reserve1 amount0.toNat amount1.toNat supply.toNat
 
-/-- Successful burn floors imply the share law under precisely transfer-aware backing. -/
-theorem burnAmounts_product {liquidity balance0 balance1 supply : B256}
-    {reserve0 reserve1 final0 final1 amount0 amount1 : Nat}
-    (accepted : burnAmounts liquidity balance0 balance1 supply = .ok (amount0, amount1))
-    (backing0 : reserve0 ≤ balance0.toNat) (backing1 : reserve1 ≤ balance1.toNat)
-    (covered : liquidity.toNat ≤ supply.toNat)
-    (debit0 : balance0.toNat ≤ final0 + amount0)
-    (debit1 : balance1.toNat ≤ final1 + amount1) :
-    reserve0 * reserve1 * (supply.toNat - liquidity.toNat) ^ 2 ≤
-      final0 * final1 * supply.toNat ^ 2 := by
+/-- Accepted burn prices are both exact floors and fit the transfer words. -/
+theorem burnAmounts_spec {liquidity balance0 balance1 supply : B256} {amount0 amount1 : Nat}
+    (accepted : burnAmounts liquidity balance0 balance1 supply = .ok (amount0, amount1)) :
+    amount0 = AMMArithmetic.burnPayment liquidity.toNat balance0.toNat supply.toNat ∧
+      amount1 = AMMArithmetic.burnPayment liquidity.toNat balance1.toNat supply.toNat ∧
+      amount0 < 2 ^ 256 ∧ amount1 < 2 ^ 256 := by
   rw [burnAmounts] at accepted
   by_cases product0 : liquidity.toNat * balance0.toNat < 2 ^ 256
   · rw [ite_eq_left product0] at accepted
@@ -67,15 +63,34 @@ theorem burnAmounts_product {liquidity balance0 balance1 supply : B256}
           congrArg Prod.fst (Except.ok.inj accepted)
         have payout1 : AMMArithmetic.burnPayment liquidity.toNat balance1.toNat supply.toNat = amount1 :=
           congrArg Prod.snd (Except.ok.inj accepted)
-        apply AMMArithmetic.burn_product_bound backing0 backing1 covered
-        · rw [payout0]
-          exact debit0
-        · rw [payout1]
-          exact debit1
+        refine ⟨payout0.symm, payout1.symm, ?_, ?_⟩
+        · rw [← payout0]
+          change liquidity.toNat * balance0.toNat / supply.toNat < 2 ^ 256
+          exact Nat.lt_of_le_of_lt (Nat.div_le_self _ _) product0
+        · rw [← payout1]
+          change liquidity.toNat * balance1.toNat / supply.toNat < 2 ^ 256
+          exact Nat.lt_of_le_of_lt (Nat.div_le_self _ _) product1
       · rw [ite_eq_right product1] at accepted
         cases accepted
   · rw [ite_eq_right product0] at accepted
     cases accepted
+
+/-- Successful burn floors imply the share law under precisely transfer-aware backing. -/
+theorem burnAmounts_product {liquidity balance0 balance1 supply : B256}
+    {reserve0 reserve1 final0 final1 amount0 amount1 : Nat}
+    (accepted : burnAmounts liquidity balance0 balance1 supply = .ok (amount0, amount1))
+    (backing0 : reserve0 ≤ balance0.toNat) (backing1 : reserve1 ≤ balance1.toNat)
+    (covered : liquidity.toNat ≤ supply.toNat)
+    (debit0 : balance0.toNat ≤ final0 + amount0)
+    (debit1 : balance1.toNat ≤ final1 + amount1) :
+    reserve0 * reserve1 * (supply.toNat - liquidity.toNat) ^ 2 ≤
+      final0 * final1 * supply.toNat ^ 2 := by
+  have prices := burnAmounts_spec accepted
+  apply AMMArithmetic.burn_product_bound backing0 backing1 covered
+  · rw [← prices.1]
+    exact debit0
+  · rw [← prices.2.1]
+    exact debit1
 
 /-- The accepted checked adjusted-product guard implies growth without an answer premise. -/
 theorem swapCheck_product {balance0 balance1 : B256} {amount0In amount1In reserve0 reserve1 : Nat}
@@ -219,12 +234,6 @@ theorem driveTurns_static_frame (fuel : Nat) (frame : Frame) (request : Request)
         simpa only [childCurrent] using ih frame (turn + 1) tail staticExternal
       | failed failure =>
         simpa only [childCurrent] using ih frame (turn + 1) tail staticExternal
-
-/-- Static external execution cannot change storage, logs, or oracle receipts. -/
-theorem driveTurns_static_current (fuel : Nat) (frame : Frame) (request : Request)
-    (turn : Nat) (turns : Transcript) (staticExternal : externalStatic frame request = true) :
-    (driveTurns fuel frame request turn turns).frame.current = frame.current := by
-  exact congrArg Frame.current (driveTurns_static_frame fuel frame request turn turns staticExternal)
 
 /-- The liquidity and oracle fields protected while an invocation holds the lock. -/
 def State.economicCore (st : State) :
@@ -505,10 +514,10 @@ theorem driveTurns_locked_core (fuel : Nat) (frame : Frame) (request : Request)
       | failed failure => exact tailCore.trans childCore
 
 
-/-- Checked LP minting adds the exact natural supply without word wrap. -/
-theorem State.mintLP_supply {st post : State} {recipient : Adr} {value : B256}
+/-- Checked LP minting adds exact supply while preserving the held lock. -/
+theorem State.mintLP_supply_unlocked {st post : State} {recipient : Adr} {value : B256}
     {events : List Event} (accepted : st.mintLP recipient value = .ok (post, events)) :
-    post.totalSupply.toNat = st.totalSupply.toNat + value.toNat := by
+    post.totalSupply.toNat = st.totalSupply.toNat + value.toNat ∧ post.unlocked = st.unlocked := by
   rw [State.mintLP] at accepted
   by_cases supplyBound : st.totalSupply.toNat + value.toNat < 2 ^ 256
   · rw [ite_eq_left supplyBound] at accepted
@@ -516,17 +525,26 @@ theorem State.mintLP_supply {st post : State} {recipient : Adr} {value : B256}
     · rw [ite_eq_left balanceBound] at accepted
       have supplyEq := congrArg (fun result : State × List Event => result.1.totalSupply.toNat)
         (Except.ok.inj accepted)
-      exact supplyEq.symm.trans (B256.toNat_add_eq_of_nof st.totalSupply value supplyBound)
+      have lockEq := congrArg (fun result : State × List Event => result.1.unlocked)
+        (Except.ok.inj accepted)
+      exact ⟨supplyEq.symm.trans (B256.toNat_add_eq_of_nof st.totalSupply value supplyBound),
+        lockEq.symm⟩
     · rw [ite_eq_right balanceBound] at accepted
       cases accepted
   · rw [ite_eq_right supplyBound] at accepted
     cases accepted
 
-/-- Checked LP burning covers its debit and subtracts the exact natural supply. -/
-theorem State.burnLP_supply {st post : State} {source : Adr} {value : B256}
+/-- Successful LP minting exposes its exact checked supply increase. -/
+theorem State.mintLP_supply {st post : State} {recipient : Adr} {value : B256}
+    {events : List Event} (accepted : st.mintLP recipient value = .ok (post, events)) :
+    post.totalSupply.toNat = st.totalSupply.toNat + value.toNat := by
+  exact (State.mintLP_supply_unlocked accepted).1
+
+/-- Checked LP burning covers its debit, subtracts exact supply and preserves the lock. -/
+theorem State.burnLP_supply_unlocked {st post : State} {source : Adr} {value : B256}
     {events : List Event} (accepted : st.burnLP source value = .ok (post, events)) :
     value.toNat ≤ st.totalSupply.toNat ∧
-      post.totalSupply.toNat = st.totalSupply.toNat - value.toNat := by
+      post.totalSupply.toNat = st.totalSupply.toNat - value.toNat ∧ post.unlocked = st.unlocked := by
   rw [State.burnLP] at accepted
   by_cases balanceCovered : value ≤ st.balanceOf source
   · rw [ite_eq_left balanceCovered] at accepted
@@ -534,31 +552,55 @@ theorem State.burnLP_supply {st post : State} {source : Adr} {value : B256}
     · rw [ite_eq_left supplyCovered] at accepted
       have supplyEq := congrArg (fun result : State × List Event => result.1.totalSupply.toNat)
         (Except.ok.inj accepted)
+      have lockEq := congrArg (fun result : State × List Event => result.1.unlocked)
+        (Except.ok.inj accepted)
       exact ⟨B256.toNat_le_toNat supplyCovered,
-        supplyEq.symm.trans (B256.toNat_sub_eq_of_le st.totalSupply value supplyCovered)⟩
+        supplyEq.symm.trans (B256.toNat_sub_eq_of_le st.totalSupply value supplyCovered), lockEq.symm⟩
     · rw [ite_eq_right supplyCovered] at accepted
       cases accepted
   · rw [ite_eq_right balanceCovered] at accepted
     cases accepted
 
 
-/-- Successful fee minting fixes the post-fee supply to the exact minted amount. -/
-theorem mintFee_supply {st : State} {feeTo : Adr} {reserve0 reserve1 : Nat}
+/-- Successful LP burning exposes cover and the exact checked supply decrease. -/
+theorem State.burnLP_supply {st post : State} {source : Adr} {value : B256}
+    {events : List Event} (accepted : st.burnLP source value = .ok (post, events)) :
+    value.toNat ≤ st.totalSupply.toNat ∧
+      post.totalSupply.toNat = st.totalSupply.toNat - value.toNat := by
+  have spec := State.burnLP_supply_unlocked accepted
+  exact ⟨spec.1, spec.2.1⟩
+
+/-- The exact separately-floored-root integer fee, with source fee-off and kLast branches. -/
+def feeAmount (st : State) (feeTo : Adr) (reserve0 reserve1 : Nat) : Nat :=
+  if feeTo = 0 ∨ st.kLast = 0 then 0
+  else if Nat.sqrt st.kLast.toNat < Nat.sqrt (reserve0 * reserve1) then
+    st.totalSupply.toNat * (Nat.sqrt (reserve0 * reserve1) - Nat.sqrt st.kLast.toNat) /
+      (Nat.sqrt (reserve0 * reserve1) * 5 + Nat.sqrt st.kLast.toNat)
+  else 0
+
+/-- Successful fee minting fixes supply, retains the lock and realizes the exact fee formula. -/
+theorem mintFee_spec {st : State} {feeTo : Adr} {reserve0 reserve1 : Nat}
     {fee : FeeResult} (accepted : mintFee st feeTo reserve0 reserve1 = .ok fee) :
-    fee.state.totalSupply.toNat = st.totalSupply.toNat + fee.minted := by
+    fee.state.totalSupply.toNat = st.totalSupply.toNat + fee.minted ∧
+      fee.state.unlocked = st.unlocked ∧ fee.minted = feeAmount st feeTo reserve0 reserve1 := by
   rw [mintFee] at accepted
   by_cases feeOff : feeTo = 0
   · rw [ite_eq_left feeOff] at accepted
     rw [← Except.ok.inj accepted]
-    exact (Nat.add_zero st.totalSupply.toNat).symm
+    rw [feeAmount, ite_eq_left (Or.inl feeOff)]
+    exact ⟨(Nat.add_zero st.totalSupply.toNat).symm, rfl, rfl⟩
   · rw [ite_eq_right feeOff] at accepted
     by_cases noLast : st.kLast = 0
     · rw [ite_eq_left noLast] at accepted
       rw [← Except.ok.inj accepted]
-      exact (Nat.add_zero st.totalSupply.toNat).symm
+      rw [feeAmount, ite_eq_left (Or.inr noLast)]
+      exact ⟨(Nat.add_zero st.totalSupply.toNat).symm, rfl, rfl⟩
     · rw [ite_eq_right noLast] at accepted
+      have noShortcut : ¬(feeTo = 0 ∨ st.kLast = 0) := fun h => h.elim feeOff noLast
+      rw [feeAmount, ite_eq_right noShortcut]
       by_cases growing : Nat.sqrt st.kLast.toNat < Nat.sqrt (reserve0 * reserve1)
       · rw [ite_eq_left growing] at accepted
+        rw [ite_eq_left growing]
         by_cases numeratorBound :
             st.totalSupply.toNat * (Nat.sqrt (reserve0 * reserve1) - Nat.sqrt st.kLast.toNat) < 2 ^ 256
         · rw [ite_eq_left numeratorBound] at accepted
@@ -576,13 +618,14 @@ theorem mintFee_supply {st : State} {feeTo : Adr} {reserve0 reserve1 : Nat}
                     (Nat.sqrt (reserve0 * reserve1) - Nat.sqrt st.kLast.toNat) /
                     (Nat.sqrt (reserve0 * reserve1) * 5 + Nat.sqrt st.kLast.toNat) < 2 ^ 256 :=
                   Nat.lt_of_le_of_lt (Nat.div_le_self _ _) numeratorBound
-                have supply := State.mintLP_supply minted
+                have supply := State.mintLP_supply_unlocked minted
                 rw [B256.toNat_toB256_of_lt feeBound] at supply
                 rw [← Except.ok.inj feeEq]
-                exact supply
+                exact ⟨supply.1, supply.2, rfl⟩
               · rw [ite_eq_right positiveFee] at accepted
                 rw [← Except.ok.inj accepted]
-                exact (Nat.add_zero st.totalSupply.toNat).symm
+                exact ⟨(Nat.add_zero st.totalSupply.toNat).symm, rfl,
+                  (Nat.eq_zero_of_not_pos positiveFee).symm⟩
             · rw [ite_eq_right denominatorBound] at accepted
               cases accepted
           · rw [ite_eq_right scaledRootBound] at accepted
@@ -590,9 +633,16 @@ theorem mintFee_supply {st : State} {feeTo : Adr} {reserve0 reserve1 : Nat}
         · rw [ite_eq_right numeratorBound] at accepted
           cases accepted
       · rw [ite_eq_right growing] at accepted
+        rw [ite_eq_right growing]
         rw [← Except.ok.inj accepted]
-        exact (Nat.add_zero st.totalSupply.toNat).symm
+        exact ⟨(Nat.add_zero st.totalSupply.toNat).symm, rfl, rfl⟩
 
+
+/-- Successful fee minting exposes the exact post-fee supply T+F. -/
+theorem mintFee_supply {st : State} {feeTo : Adr} {reserve0 reserve1 : Nat}
+    {fee : FeeResult} (accepted : mintFee st feeTo reserve0 reserve1 = .ok fee) :
+    fee.state.totalSupply.toNat = st.totalSupply.toNat + fee.minted := by
+  exact (mintFee_spec accepted).1
 
 /-- An accepted reserve update retains supply and stores the exact observed balances. -/
 theorem State.update_supply_reserves {st post : State} {ctx : Context}
@@ -652,7 +702,8 @@ theorem Frame.mintAfterFee_product {frame final : Frame} {observed : MintObserve
     observed.reserves.reserve0.val * observed.reserves.reserve1.val *
         final.current.state.totalSupply.toNat ^ 2 ≤
       final.current.state.reserve0.val * final.current.state.reserve1.val *
-        (frame.current.state.totalSupply.toNat + fee.minted) ^ 2 := by
+        (frame.current.state.totalSupply.toNat +
+          feeAmount frame.current.state feeTo observed.reserves.reserve0.val observed.reserves.reserve1.val) ^ 2 := by
   rw [Frame.mintAfterFee] at accepted
   cases priced : mintAmount observed.amount0 observed.amount1 fee.state.totalSupply
       observed.reserves.reserve0.val observed.reserves.reserve1.val with
@@ -678,7 +729,8 @@ theorem Frame.mintAfterFee_product {frame final : Frame} {observed : MintObserve
         have finalSupply : final.current.state.totalSupply.toNat =
             fee.state.totalSupply.toNat + liquidity :=
           (congrArg B256.toNat fields.1).trans issued
-        rw [finalSupply, fields.2.1, fields.2.2, ← mintFee_supply feeAccepted, ← amount0, ← amount1]
+        rw [finalSupply, fields.2.1, fields.2.2, ← (mintFee_spec feeAccepted).2.2,
+          ← mintFee_supply feeAccepted, ← amount0, ← amount1]
         exact pricing
     · simp only [ite_eq_right positive, Frame.fail] at accepted
       cases accepted
@@ -719,30 +771,523 @@ theorem Frame.burnAfterFee_supply {frame final : Frame} {observed : BurnObserved
     · simp only [ite_eq_right positive, Frame.fail] at accepted
       cases accepted
 
-/-- Burn pricing survives actual locked external turns under transfer-aware backing. -/
-theorem Frame.burnAfterFee_external_product {frame final : Frame} {observed : BurnObserved}
-    {fee : FeeResult} {feeTo : Adr} {request : Request} {continuation : Continuation}
-    {amount0 amount1 final0 final1 : Nat}
+/-- A failed owned segment cannot become a successful return at any driver fuel. -/
+theorem drive_failed_not_success (fuel : Nat) (frame : Frame) (failure : Failure)
+    (transcript : Transcript) (returndata : Bytes) :
+    (drive fuel (.failed frame failure) transcript).status ≠ .success returndata := by
+  cases fuel with
+  | zero => intro impossible; cases impossible
+  | succ fuel => cases failure <;> intro impossible <;> cases impossible
+
+/-- The external checkpoint is settled only from the actual nested-turn driver. -/
+def Frame.settleExternal (frame : Frame) (fuel : Nat) (request : Request)
+    (result : ExternalResult) (turns : Transcript) : Frame :=
+  let executed := driveTurns fuel frame request 0 turns
+  if result.success then executed.frame else { executed.frame with current := frame.current }
+
+/-- Every successful suspended driver step exposes its actual complete external execution. -/
+theorem drive_suspended_success {fuel : Nat} {frame : Frame} {request : Request}
+    {continuation : Continuation} {transcript : Transcript} {returndata : Bytes}
+    (successful : (drive (fuel + 1) (.suspended frame request continuation) transcript).status =
+      .success returndata) :
+    ∃ result turns tail, transcript = .next result turns tail ∧
+      (driveTurns fuel frame request 0 turns).complete = true ∧
+      (drive fuel (resumeSegment (frame.settleExternal fuel request result turns)
+        request continuation result) tail).status = .success returndata ∧
+      (drive (fuel + 1) (.suspended frame request continuation) transcript).frame =
+        (drive fuel (resumeSegment (frame.settleExternal fuel request result turns)
+          request continuation result) tail).frame := by
+  cases transcript with
+  | done => cases successful
+  | foreignLog emitter topics data tail => cases successful
+  | invoke sender value isStatic entry child tail => cases successful
+  | next result turns tail =>
+    by_cases missing : (request.requiresCode && !result.codeExists) = true
+    · have failed : resumeSegment frame request continuation result =
+          (frame.beginResume request).fail .emptyRevert := by
+        simp only [resumeSegment, decodeExternal, missing, ite_true]
+      simp only [drive, missing, ite_true, failed, Frame.fail] at successful
+      exact False.elim (drive_failed_not_success fuel _ .emptyRevert tail returndata successful)
+    · by_cases complete : (driveTurns fuel frame request 0 turns).complete = true
+      · refine ⟨result, turns, tail, rfl, complete, ?_, ?_⟩
+        · simpa only [drive, ite_eq_right missing, ite_eq_left complete, Frame.settleExternal] using successful
+        · simp only [drive, ite_eq_right missing, ite_eq_left complete, Frame.settleExternal]
+      · simp only [drive, ite_eq_right missing, ite_eq_right complete] at successful
+        cases successful
+
+/-- External settlement retains the economic core protected by the actual parent lock. -/
+theorem Frame.settleExternal_locked_core {frame : Frame}
+    (locked : frame.current.state.unlocked = 0)
+    (fuel : Nat) (request : Request) (result : ExternalResult) (turns : Transcript) :
+    (frame.settleExternal fuel request result turns).current.state.economicCore =
+      frame.current.state.economicCore := by
+  by_cases successful : result.success = true
+  · rw [Frame.settleExternal, ite_eq_left successful]
+    exact driveTurns_locked_core fuel frame request 0 turns locked
+  · rw [Frame.settleExternal, ite_eq_right successful]
+
+
+/-- A successful terminal driver exposes the same finished Frame and return bytes. -/
+theorem drive_terminal_success {fuel : Nat} {segment : SegmentResult} {transcript : Transcript}
+    {returndata : Bytes} (terminal : segment.Terminal)
+    (successful : (drive fuel segment transcript).status = .success returndata) :
+    ∃ final, segment = .finished final returndata ∧ (drive fuel segment transcript).frame = final := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    cases segment with
+    | finished frame output =>
+      have returned : output = returndata := RunStatus.success.inj successful
+      subst output
+      exact ⟨frame, rfl, rfl⟩
+    | failed frame failure =>
+      exact False.elim (drive_failed_not_success (fuel + 1) frame failure transcript returndata successful)
+    | suspended frame request continuation => cases terminal
+
+/-- Final reserve update, optional owned event and unlock have no further suspension. -/
+theorem Frame.finishUpdated_terminal (frame : Frame) (balance0 balance1 : B256)
+    (reserves : CachedReserves) (feeOn : Bool) (lastEvent : Option Event) (returndata : Bytes) :
+    (frame.finishUpdated balance0 balance1 reserves feeOn lastEvent returndata).Terminal := by
+  cases updated : frame.current.state.update frame.context balance0 balance1
+      reserves.reserve0.val reserves.reserve1.val with
+  | error failure =>
+    simp only [Frame.finishUpdated, updated, Frame.fail, SegmentResult.Terminal]
+  | ok result =>
+    rcases result with ⟨post, event, update⟩
+    cases feeOn <;> cases lastEvent <;>
+      simp only [Frame.finishUpdated, updated, Bool.false_eq_true, ite_false, ite_true,
+        Frame.finishLocked, Frame.finish, SegmentResult.Terminal]
+
+/-- An error decoded at the call boundary cannot later yield a successful Pair return. -/
+theorem resumeSegment_error_not_success {frame : Frame} {request : Request}
+    {continuation : Continuation} {result : ExternalResult} {failure : Failure}
+    (decoded : decodeExternal request result = .error failure)
+    (fuel : Nat) (tail : Transcript) (returndata : Bytes) :
+    (drive fuel (resumeSegment frame request continuation result) tail).status ≠ .success returndata := by
+  rw [resumeSegment, decoded]
+  exact drive_failed_not_success fuel _ failure tail returndata
+
+/-- A successful balance observation is precisely its first returned word. -/
+theorem decodeExternal_balance_word {request : Request} {result : ExternalResult}
+    {owner : Adr} {balance : B256} (operation : request.operation = .balanceOf owner)
+    (accepted : decodeExternal request result = .ok (.word balance)) :
+    balance = Bytes.toB256 (result.returndata.take 32) := by
+  simp only [decodeExternal, operation] at accepted
+  by_cases missing : (request.requiresCode && !result.codeExists) = true
+  · rw [ite_eq_left missing] at accepted
+    cases accepted
+  · rw [ite_eq_right missing] at accepted
+    by_cases success : result.success = true
+    · rw [ite_eq_left success] at accepted
+      by_cases length : 32 ≤ result.returndata.length
+      · rw [ite_eq_left length] at accepted
+        exact (DecodedResult.word.inj (Except.ok.inj accepted)).symm
+      · rw [ite_eq_right length] at accepted
+        cases accepted
+    · rw [ite_eq_right success] at accepted
+      cases accepted
+
+
+/-- Burn's final observed word is stored at the actual successful driver checkpoint. -/
+theorem drive_burnFinalBalance1_values {fuel : Nat} {frame : Frame} {request : Request}
+    {priced : BurnPriced} {balance0 : B256} {owner : Adr} {transcript : Transcript}
+    {returndata : Bytes} (locked : frame.current.state.unlocked = 0)
+    (operation : request.operation = .balanceOf owner)
+    (successful : (drive fuel (.suspended frame request (.burnFinalBalance1 priced balance0))
+      transcript).status = .success returndata) :
+    ∃ result turns tail, transcript = .next result turns tail ∧
+      (drive fuel (.suspended frame request (.burnFinalBalance1 priced balance0))
+        transcript).frame.current.state.totalSupply = frame.current.state.totalSupply ∧
+      (drive fuel (.suspended frame request (.burnFinalBalance1 priced balance0))
+        transcript).frame.current.state.reserve0.val = balance0.toNat ∧
+      (drive fuel (.suspended frame request (.burnFinalBalance1 priced balance0))
+        transcript).frame.current.state.reserve1.val =
+          (Bytes.toB256 (result.returndata.take 32)).toNat := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    obtain ⟨result, turns, tail, shape, complete, resumedSuccess, frameEq⟩ :=
+      drive_suspended_success successful
+    have core := Frame.settleExternal_locked_core locked fuel request result turns
+    have supply : (frame.settleExternal fuel request result turns).current.state.totalSupply =
+        frame.current.state.totalSupply := congrArg (fun core => core.1) core
+    cases decoded : decodeExternal request result with
+    | error failure =>
+      exact False.elim (resumeSegment_error_not_success decoded fuel tail returndata resumedSuccess)
+    | ok decodedResult =>
+      cases decodedResult with
+      | address address =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | unit =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | word balance1 =>
+        have wordEq := decodeExternal_balance_word operation decoded
+        simp only [resumeSegment, decoded] at resumedSuccess frameEq
+        have terminal := Frame.finishUpdated_terminal
+          ((frame.settleExternal fuel request result turns).beginResume request)
+          balance0 balance1 priced.observed.locals.reserves priced.feeOn
+          (some (.burn ((frame.settleExternal fuel request result turns).beginResume request).context.sender
+            priced.amount0 priced.amount1 priced.observed.locals.recipient))
+          (encodeWords [priced.amount0, priced.amount1])
+        obtain ⟨final, finished, finalEq⟩ := drive_terminal_success terminal resumedSuccess
+        have fields := Frame.finishUpdated_supply_reserves finished
+        have outputEq := frameEq.trans finalEq
+        refine ⟨result, turns, tail, shape, ?_, ?_, ?_⟩
+        · rw [outputEq]
+          exact fields.1.trans supply
+        · rw [outputEq]
+          exact fields.2.1
+        · rw [outputEq]
+          exact fields.2.2.trans (congrArg B256.toNat wordEq)
+
+
+/-- Source-ordered final burn balance answers, separate from admission and nested turns. -/
+def burnTailBalances : Continuation → Transcript → Option (B256 × B256)
+  | .burnTransfer0 priced, .next _ _ tail => burnTailBalances (.burnTransfer1 priced) tail
+  | .burnTransfer1 priced, .next _ _ tail => burnTailBalances (.burnFinalBalance0 priced) tail
+  | .burnFinalBalance0 priced, .next result _ tail =>
+      burnTailBalances (.burnFinalBalance1 priced (Bytes.toB256 (result.returndata.take 32))) tail
+  | .burnFinalBalance1 _ balance0, .next result _ _ =>
+      some (balance0, Bytes.toB256 (result.returndata.take 32))
+  | _, _ => none
+
+/-- The actual driver stores the projected burn answers and keeps post-burn supply. -/
+def BurnTailOutcome (fuel : Nat) (frame : Frame) (request : Request)
+    (continuation : Continuation) (transcript : Transcript) : Prop :=
+  ∃ balance0 balance1, burnTailBalances continuation transcript = some (balance0, balance1) ∧
+    (drive fuel (.suspended frame request continuation) transcript).frame.current.state.totalSupply =
+      frame.current.state.totalSupply ∧
+    (drive fuel (.suspended frame request continuation) transcript).frame.current.state.reserve0.val =
+      balance0.toNat ∧
+    (drive fuel (.suspended frame request continuation) transcript).frame.current.state.reserve1.val =
+      balance1.toNat
+
+/-- The last balance call supplies the base of the complete burn observation chain. -/
+theorem drive_burnFinalBalance1_outcome {fuel : Nat} {frame : Frame} {request : Request}
+    {priced : BurnPriced} {balance0 : B256} {owner : Adr} {transcript : Transcript}
+    {returndata : Bytes} (locked : frame.current.state.unlocked = 0)
+    (operation : request.operation = .balanceOf owner)
+    (successful : (drive fuel (.suspended frame request (.burnFinalBalance1 priced balance0))
+      transcript).status = .success returndata) :
+    BurnTailOutcome fuel frame request (.burnFinalBalance1 priced balance0) transcript := by
+  obtain ⟨result, turns, tail, shape, supply, reserve0, reserve1⟩ :=
+    drive_burnFinalBalance1_values locked operation successful
+  refine ⟨balance0, Bytes.toB256 (result.returndata.take 32), ?_, supply, reserve0, reserve1⟩
+  simp only [shape, burnTailBalances]
+
+/-- Burn's first final balance call joins both actual responses to the stored checkpoint. -/
+theorem drive_burnFinalBalance0_outcome {fuel : Nat} {frame : Frame} {request : Request}
+    {priced : BurnPriced} {owner : Adr} {transcript : Transcript} {returndata : Bytes}
+    (locked : frame.current.state.unlocked = 0)
+    (operation : request.operation = .balanceOf owner)
+    (successful : (drive fuel (.suspended frame request (.burnFinalBalance0 priced))
+      transcript).status = .success returndata) :
+    BurnTailOutcome fuel frame request (.burnFinalBalance0 priced) transcript := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    obtain ⟨result, turns, tail, shape, complete, resumedSuccess, frameEq⟩ :=
+      drive_suspended_success successful
+    have core := Frame.settleExternal_locked_core locked fuel request result turns
+    let resumed := (frame.settleExternal fuel request result turns).beginResume request
+    have resumeLocked : resumed.current.state.unlocked = 0 :=
+      (congrArg (fun core => core.2.2.2.2.2) core).trans locked
+    have resumeSupply : resumed.current.state.totalSupply = frame.current.state.totalSupply :=
+      congrArg (fun core => core.1) core
+    cases decoded : decodeExternal request result with
+    | error failure =>
+      exact False.elim (resumeSegment_error_not_success decoded fuel tail returndata resumedSuccess)
+    | ok decodedResult =>
+      cases decodedResult with
+      | address address =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | unit =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | word balance0 =>
+        have wordEq := decodeExternal_balance_word operation decoded
+        simp only [resumeSegment, decoded] at resumedSuccess frameEq
+        obtain ⟨final0, final1, answers, supply, reserve0, reserve1⟩ :=
+          drive_burnFinalBalance1_outcome resumeLocked rfl resumedSuccess
+        refine ⟨final0, final1, ?_, ?_, ?_, ?_⟩
+        · simpa only [shape, burnTailBalances, ← wordEq] using answers
+        · rw [frameEq]
+          exact supply.trans resumeSupply
+        · rw [frameEq]
+          exact reserve0
+        · rw [frameEq]
+          exact reserve1
+
+
+/-- The second transfer resumes into the exact two-answer burn observation chain. -/
+theorem drive_burnTransfer1_outcome {fuel : Nat} {frame : Frame} {request : Request}
+    {priced : BurnPriced} {transcript : Transcript} {returndata : Bytes}
+    (locked : frame.current.state.unlocked = 0)
+    (successful : (drive fuel (.suspended frame request (.burnTransfer1 priced))
+      transcript).status = .success returndata) :
+    BurnTailOutcome fuel frame request (.burnTransfer1 priced) transcript := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    obtain ⟨result, turns, tail, shape, complete, resumedSuccess, frameEq⟩ :=
+      drive_suspended_success successful
+    have core := Frame.settleExternal_locked_core locked fuel request result turns
+    let resumed := (frame.settleExternal fuel request result turns).beginResume request
+    have resumeLocked : resumed.current.state.unlocked = 0 :=
+      (congrArg (fun core => core.2.2.2.2.2) core).trans locked
+    have resumeSupply : resumed.current.state.totalSupply = frame.current.state.totalSupply :=
+      congrArg (fun core => core.1) core
+    cases decoded : decodeExternal request result with
+    | error failure =>
+      exact False.elim (resumeSegment_error_not_success decoded fuel tail returndata resumedSuccess)
+    | ok decodedResult =>
+      cases decodedResult with
+      | address address =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | word balance =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | unit =>
+        simp only [resumeSegment, decoded] at resumedSuccess frameEq
+        obtain ⟨final0, final1, answers, supply, reserve0, reserve1⟩ :=
+          drive_burnFinalBalance0_outcome resumeLocked rfl resumedSuccess
+        refine ⟨final0, final1, ?_, ?_, ?_, ?_⟩
+        · simpa only [shape, burnTailBalances] using answers
+        · rw [frameEq]
+          exact supply.trans resumeSupply
+        · rw [frameEq]
+          exact reserve0
+        · rw [frameEq]
+          exact reserve1
+
+/-- Both actual token transfers lead to the observed final stored reserves. -/
+theorem drive_burnTransfer0_outcome {fuel : Nat} {frame : Frame} {request : Request}
+    {priced : BurnPriced} {transcript : Transcript} {returndata : Bytes}
+    (locked : frame.current.state.unlocked = 0)
+    (successful : (drive fuel (.suspended frame request (.burnTransfer0 priced))
+      transcript).status = .success returndata) :
+    BurnTailOutcome fuel frame request (.burnTransfer0 priced) transcript := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    obtain ⟨result, turns, tail, shape, complete, resumedSuccess, frameEq⟩ :=
+      drive_suspended_success successful
+    have core := Frame.settleExternal_locked_core locked fuel request result turns
+    let resumed := (frame.settleExternal fuel request result turns).beginResume request
+    have resumeLocked : resumed.current.state.unlocked = 0 :=
+      (congrArg (fun core => core.2.2.2.2.2) core).trans locked
+    have resumeSupply : resumed.current.state.totalSupply = frame.current.state.totalSupply :=
+      congrArg (fun core => core.1) core
+    cases decoded : decodeExternal request result with
+    | error failure =>
+      exact False.elim (resumeSegment_error_not_success decoded fuel tail returndata resumedSuccess)
+    | ok decodedResult =>
+      cases decodedResult with
+      | address address =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | word balance =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | unit =>
+        simp only [resumeSegment, decoded] at resumedSuccess frameEq
+        obtain ⟨final0, final1, answers, supply, reserve0, reserve1⟩ :=
+          drive_burnTransfer1_outcome resumeLocked resumedSuccess
+        refine ⟨final0, final1, ?_, ?_, ?_, ?_⟩
+        · simpa only [shape, burnTailBalances] using answers
+        · rw [frameEq]
+          exact supply.trans resumeSupply
+        · rw [frameEq]
+          exact reserve0
+        · rw [frameEq]
+          exact reserve1
+
+
+/-- The four own call boundaries determine the final burn answers before theorem premises. -/
+def burnFinalAnswers : Transcript → Option (B256 × B256)
+  | .next _ _ (.next _ _ (.next result0 _ (.next result1 _ _))) =>
+      some (Bytes.toB256 (result0.returndata.take 32), Bytes.toB256 (result1.returndata.take 32))
+  | _ => none
+
+/-- The continuation projection agrees with the independent four-boundary answer projection. -/
+theorem burnTailBalances_transfer0 (priced : BurnPriced) (transcript : Transcript) :
+    burnTailBalances (.burnTransfer0 priced) transcript = burnFinalAnswers transcript := by
+  cases transcript <;> simp only [burnTailBalances, burnFinalAnswers]
+  case next result0 turns0 tail0 =>
+    cases tail0 <;> simp only [burnTailBalances]
+    case next result1 turns1 tail1 =>
+      cases tail1 <;> simp only [burnTailBalances]
+      case next result2 turns2 tail2 =>
+        cases tail2 <;> simp only [burnTailBalances]
+
+
+/-- Burn backing and actual answer-plus-transfer cover are explicit economic premises. -/
+def BurnNoShrink (observed : BurnObserved) (supply : B256) (transcript : Transcript) : Prop :=
+  observed.locals.reserves.reserve0.val ≤ observed.balance0.toNat ∧
+    observed.locals.reserves.reserve1.val ≤ observed.balance1.toNat ∧
+    ∀ final0 final1, burnFinalAnswers transcript = some (final0, final1) →
+      observed.balance0.toNat ≤ final0.toNat +
+        (Nat.toB256 (AMMArithmetic.burnPayment observed.liquidity.toNat observed.balance0.toNat
+          supply.toNat)).toNat ∧
+      observed.balance1.toNat ≤ final1.toNat +
+        (Nat.toB256 (AMMArithmetic.burnPayment observed.liquidity.toNat observed.balance1.toNat
+          supply.toNat)).toNat
+
+/-- Full burn pricing, transfers, observations and update realize the exact-fee product bound. -/
+theorem Frame.burnAfterFee_driver_product {fuel : Nat} {frame : Frame} {observed : BurnObserved}
+    {fee : FeeResult} {feeTo : Adr} {transcript : Transcript} {returndata : Bytes}
+    (locked : frame.current.state.unlocked = 0)
     (feeAccepted : mintFee frame.current.state feeTo observed.locals.reserves.reserve0.val
       observed.locals.reserves.reserve1.val = .ok fee)
-    (accepted : frame.burnAfterFee observed fee = .suspended final request continuation)
-    (priced : burnAmounts observed.liquidity observed.balance0 observed.balance1
-      fee.state.totalSupply = .ok (amount0, amount1))
-    (backing0 : observed.locals.reserves.reserve0.val ≤ observed.balance0.toNat)
-    (backing1 : observed.locals.reserves.reserve1.val ≤ observed.balance1.toNat)
-    (debit0 : observed.balance0.toNat ≤ final0 + amount0)
-    (debit1 : observed.balance1.toNat ≤ final1 + amount1)
-    (locked : final.current.state.unlocked = 0)
-    (fuel turn : Nat) (turns : Transcript) :
+    (noShrink : BurnNoShrink observed fee.state.totalSupply transcript)
+    (successful : (drive fuel (frame.burnAfterFee observed fee) transcript).status = .success returndata) :
     observed.locals.reserves.reserve0.val * observed.locals.reserves.reserve1.val *
-        (driveTurns fuel final request turn turns).frame.current.state.totalSupply.toNat ^ 2 ≤
-      final0 * final1 * (frame.current.state.totalSupply.toNat + fee.minted) ^ 2 := by
-  have supply := Frame.burnAfterFee_supply feeAccepted accepted
-  have core := driveTurns_locked_core fuel final request turn turns locked
-  have finalSupply : (driveTurns fuel final request turn turns).frame.current.state.totalSupply.toNat =
-      frame.current.state.totalSupply.toNat + fee.minted - observed.liquidity.toNat :=
-    (congrArg (fun core => core.1.toNat) core).trans supply.2
-  rw [finalSupply, ← mintFee_supply feeAccepted]
-  exact burnAmounts_product priced backing0 backing1 supply.1 debit0 debit1
+        (drive fuel (frame.burnAfterFee observed fee) transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
+      (drive fuel (frame.burnAfterFee observed fee) transcript).frame.current.state.reserve0.val *
+        (drive fuel (frame.burnAfterFee observed fee) transcript).frame.current.state.reserve1.val *
+        (frame.current.state.totalSupply.toNat + feeAmount frame.current.state feeTo
+          observed.locals.reserves.reserve0.val observed.locals.reserves.reserve1.val) ^ 2 := by
+  have feeSpec := mintFee_spec feeAccepted
+  simp only [Frame.burnAfterFee] at successful ⊢
+  cases priced : burnAmounts observed.liquidity observed.balance0 observed.balance1 fee.state.totalSupply with
+  | error failure =>
+    simp only [priced, Frame.fail] at successful
+    exact False.elim (drive_failed_not_success fuel _ failure transcript returndata successful)
+  | ok amounts =>
+    rcases amounts with ⟨amount0, amount1⟩
+    simp only [priced] at successful ⊢
+    by_cases positive : amount0 > 0 ∧ amount1 > 0
+    · rw [ite_eq_left positive] at successful ⊢
+      cases burned : fee.state.burnLP frame.context.pair observed.liquidity with
+      | error failure =>
+        simp only [burned, Frame.fail] at successful
+        exact False.elim (drive_failed_not_success fuel _ failure transcript returndata successful)
+      | ok result =>
+        rcases result with ⟨post, events⟩
+        simp only [burned, Frame.suspend] at successful ⊢
+        let pricedState : BurnPriced :=
+          { observed := observed, feeOn := fee.feeOn, feeMinted := fee.minted,
+            supply := fee.state.totalSupply, amount0 := Nat.toB256 amount0, amount1 := Nat.toB256 amount1 }
+        let transferFrame := (frame.withEvents fee.state fee.events).withEvents post events
+        have supplySpec := State.burnLP_supply_unlocked burned
+        have suspension : frame.burnAfterFee observed fee =
+            .suspended transferFrame
+              (requestFor .burnTransfer0 observed.locals.token0
+                (.transfer observed.locals.recipient pricedState.amount0))
+              (.burnTransfer0 pricedState) := by
+          simp only [Frame.burnAfterFee, priced, ite_eq_left positive, burned, Frame.suspend]
+          rfl
+        have entrySupply := Frame.burnAfterFee_supply feeAccepted suspension
+        have transferLocked : transferFrame.current.state.unlocked = 0 :=
+          supplySpec.2.2.trans (feeSpec.2.1.trans locked)
+        obtain ⟨balance0, balance1, projected, supply, reserve0, reserve1⟩ :=
+          drive_burnTransfer0_outcome transferLocked successful
+        have actualAnswers : burnFinalAnswers transcript = some (balance0, balance1) :=
+          (burnTailBalances_transfer0 pricedState transcript).symm.trans projected
+        obtain ⟨debit0, debit1⟩ := noShrink.2.2 balance0 balance1 actualAnswers
+        have prices := burnAmounts_spec priced
+        rw [← prices.1, B256.toNat_toB256_of_lt prices.2.2.1] at debit0
+        rw [← prices.2.1, B256.toNat_toB256_of_lt prices.2.2.2] at debit1
+        have finalSupply :
+            (drive fuel
+              (.suspended transferFrame
+                (requestFor .burnTransfer0 observed.locals.token0
+                  (.transfer observed.locals.recipient pricedState.amount0))
+                (.burnTransfer0 pricedState)) transcript).frame.current.state.totalSupply.toNat =
+              frame.current.state.totalSupply.toNat + fee.minted - observed.liquidity.toNat :=
+          (congrArg B256.toNat supply).trans entrySupply.2
+        rw [finalSupply, reserve0, reserve1, ← feeSpec.2.2, ← feeSpec.1]
+        exact burnAmounts_product priced noShrink.1 noShrink.2.1 entrySupply.1 debit0 debit1
+    · simp only [ite_eq_right positive, Frame.fail] at successful
+      exact False.elim
+        (drive_failed_not_success fuel _ (.sourceGuard "UniswapV2: INSUFFICIENT_LIQUIDITY_BURNED")
+          transcript returndata successful)
+
+
+/-- A later mint completes or rolls back without another owned external call. -/
+theorem Frame.mintAfterFee_terminal_later (frame : Frame) (observed : MintObserved) (fee : FeeResult)
+    (positiveSupply : fee.state.totalSupply ≠ 0) :
+    (frame.mintAfterFee observed fee).Terminal := by
+  rw [Frame.mintAfterFee]
+  cases priced : mintAmount observed.amount0 observed.amount1 fee.state.totalSupply
+      observed.reserves.reserve0.val observed.reserves.reserve1.val with
+  | error failure => simp only [Frame.fail, SegmentResult.Terminal]
+  | ok liquidity =>
+    simp only [ite_eq_right positiveSupply]
+    by_cases positive : liquidity > 0
+    · rw [ite_eq_left positive]
+      cases minted : fee.state.mintLP observed.recipient (Nat.toB256 liquidity) with
+      | error failure => simp only [Frame.fail, SegmentResult.Terminal]
+      | ok result =>
+        rcases result with ⟨post, events⟩
+        exact Frame.finishUpdated_terminal _ observed.balance0 observed.balance1 observed.reserves
+          fee.feeOn (some (.mint frame.context.sender observed.amount0 observed.amount1))
+          (encodeWords [Nat.toB256 liquidity])
+    · simp only [ite_eq_right positive, Frame.fail, SegmentResult.Terminal]
+
+/-- The later-mint actual driver checkpoint obeys the exact integer fee correction. -/
+theorem Frame.mintAfterFee_driver_product {fuel : Nat} {frame : Frame} {observed : MintObserved}
+    {fee : FeeResult} {feeTo : Adr} {transcript : Transcript} {returndata : Bytes}
+    (feeAccepted : mintFee frame.current.state feeTo observed.reserves.reserve0.val
+      observed.reserves.reserve1.val = .ok fee)
+    (positiveSupply : fee.state.totalSupply ≠ 0)
+    (amount0 : observed.reserves.reserve0.val + observed.amount0.toNat = observed.balance0.toNat)
+    (amount1 : observed.reserves.reserve1.val + observed.amount1.toNat = observed.balance1.toNat)
+    (successful : (drive fuel (frame.mintAfterFee observed fee) transcript).status = .success returndata) :
+    observed.reserves.reserve0.val * observed.reserves.reserve1.val *
+        (drive fuel (frame.mintAfterFee observed fee) transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
+      (drive fuel (frame.mintAfterFee observed fee) transcript).frame.current.state.reserve0.val *
+        (drive fuel (frame.mintAfterFee observed fee) transcript).frame.current.state.reserve1.val *
+        (frame.current.state.totalSupply.toNat +
+          feeAmount frame.current.state feeTo observed.reserves.reserve0.val observed.reserves.reserve1.val) ^ 2 := by
+  obtain ⟨final, finished, frameEq⟩ :=
+    drive_terminal_success (Frame.mintAfterFee_terminal_later frame observed fee positiveSupply) successful
+  rw [frameEq]
+  exact Frame.mintAfterFee_product feeAccepted positiveSupply amount0 amount1 finished
+
+/-- Fee-off burn checkpoints satisfy the original supply-scaled product inequality. -/
+theorem Frame.burnAfterFee_feeOff_product {fuel : Nat} {frame : Frame} {observed : BurnObserved}
+    {fee : FeeResult} {transcript : Transcript} {returndata : Bytes}
+    (locked : frame.current.state.unlocked = 0)
+    (feeAccepted : mintFee frame.current.state 0 observed.locals.reserves.reserve0.val
+      observed.locals.reserves.reserve1.val = .ok fee)
+    (noShrink : BurnNoShrink observed fee.state.totalSupply transcript)
+    (successful : (drive fuel (frame.burnAfterFee observed fee) transcript).status = .success returndata) :
+    observed.locals.reserves.reserve0.val * observed.locals.reserves.reserve1.val *
+        (drive fuel (frame.burnAfterFee observed fee) transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
+      (drive fuel (frame.burnAfterFee observed fee) transcript).frame.current.state.reserve0.val *
+        (drive fuel (frame.burnAfterFee observed fee) transcript).frame.current.state.reserve1.val *
+        frame.current.state.totalSupply.toNat ^ 2 := by
+  simpa only [feeAmount, eq_self, true_or, ite_true, Nat.add_zero] using
+    Frame.burnAfterFee_driver_product locked feeAccepted noShrink successful
+
+/-- Fee-off later-mint checkpoints satisfy the original supply-scaled product inequality. -/
+theorem Frame.mintAfterFee_feeOff_product {fuel : Nat} {frame : Frame} {observed : MintObserved}
+    {fee : FeeResult} {transcript : Transcript} {returndata : Bytes}
+    (feeAccepted : mintFee frame.current.state 0 observed.reserves.reserve0.val
+      observed.reserves.reserve1.val = .ok fee)
+    (positiveSupply : fee.state.totalSupply ≠ 0)
+    (amount0 : observed.reserves.reserve0.val + observed.amount0.toNat = observed.balance0.toNat)
+    (amount1 : observed.reserves.reserve1.val + observed.amount1.toNat = observed.balance1.toNat)
+    (successful : (drive fuel (frame.mintAfterFee observed fee) transcript).status = .success returndata) :
+    observed.reserves.reserve0.val * observed.reserves.reserve1.val *
+        (drive fuel (frame.mintAfterFee observed fee) transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
+      (drive fuel (frame.mintAfterFee observed fee) transcript).frame.current.state.reserve0.val *
+        (drive fuel (frame.mintAfterFee observed fee) transcript).frame.current.state.reserve1.val *
+        frame.current.state.totalSupply.toNat ^ 2 := by
+  simpa only [feeAmount, eq_self, true_or, ite_true, Nat.add_zero] using
+    Frame.mintAfterFee_driver_product feeAccepted positiveSupply amount0 amount1 successful
 
 end Blanc.Lift.UniswapV2Pair
