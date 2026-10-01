@@ -1429,6 +1429,19 @@ laws live in [`Blanc/LadderBase.lean`](../Blanc/LadderBase.lean):
 
 ### S6. I need a basic EVM-word identity
 
+For a two-reserve AMM's natural-number share bound, use
+[`Blanc/Lift/AMMArithmetic.lean`](../Blanc/Lift/AMMArithmetic.lean).
+`mintLiquidity` is the minimum of two proportional floors; `burnPayment` is
+a proportional redemption floor. `mint_side_bound` and `burn_side_bound`
+establish the per-reserve inequalities, and `product_share_bound` transports
+two such inequalities to the reserve-product/share-supply bound.
+`mint_product_bound` and `burn_product_bound` provide their composed forms;
+burn requires initial backing, liquidity covered by supply, and a final answer
+plus the floored payout covering the initial answer. `swap_product_bound`
+cancels a positive scale from an accepted adjusted product bounded above by
+the scaled observed balances. These are unbounded Nat facts; callers supply
+word-overflow, source-local/observation and callee-acceptance connections.
+
 Use the primitive word facts in
 [`Blanc/MachineDataFacts.lean`](../Blanc/MachineDataFacts.lean) before
 destructing a `B256`: `B256.mul_comm` covers word multiplication, including

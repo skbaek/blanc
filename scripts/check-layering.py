@@ -174,6 +174,8 @@ SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps"]
 SHARED += ["Lift.ExactWalkSolc", "Lift.ExactWalkCall"]
 # Pure-model ledger updates (vyper-3crv-bytecode-v1): contract-neutral.
 SHARED += ["LedgerUpdate"]
+# Floor share bounds for two-reserve AMMs: contract-neutral.
+SHARED += ["Lift.AMMArithmetic"]
 # Walk steps for arbitrary static calls, CALLER/KECCAK256/LOG3/SSTORE, hashed slots and the
 # Vyper 0.2.x front end (vyper-3crv-bytecode-v1): contract-neutral.
 SHARED += ["Lift.StaticCall", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper"]
@@ -197,6 +199,19 @@ SHARED += ["ExecutionReachable", "SystemContracts", "ExecutionTraceCodeKeep", "E
 SHARED += ["ExecutionTraceCalldata", "ForkUniform", "Lift.NodeWalkFork", "Lift.WitnessFork", "TransactionFork"]
 
 CONTRACTS = {
+    "uniswap-v2-pair": [
+        "Lift.UniswapV2Pair.Cert",
+        "Lift.UniswapV2Pair.Check",
+        "Lift.UniswapV2Pair.CheckPart0",
+        "Lift.UniswapV2Pair.CheckPart1",
+        "Lift.UniswapV2Pair.CheckPart2",
+        "Lift.UniswapV2Pair.CheckPart3",
+        "Lift.UniswapV2Pair.CheckTries",
+        "Lift.UniswapV2Pair.Jumps",
+        "Lift.UniswapV2Pair.Model",
+        "Lift.UniswapV2Pair.Execution",
+        "Lift.UniswapV2Pair.Properties",
+    ],
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",
                        # the deployed runtime, lifted (decision beacon-lift-layering-family-20260926)
                        "Lift.BeaconDeposit.Body", "Lift.BeaconDeposit.BodyCount", "Lift.BeaconDeposit.BodyEvent", "Lift.BeaconDeposit.BodyEventHead", "Lift.BeaconDeposit.BodyEventKit", "Lift.BeaconDeposit.BodyEventLoop", "Lift.BeaconDeposit.BodyEventSig", "Lift.BeaconDeposit.BodyGuards", "Lift.BeaconDeposit.BodyInsertDead", "Lift.BeaconDeposit.BodyInsertLive", "Lift.BeaconDeposit.BodyNode", "Lift.BeaconDeposit.BodyPubkeyRoot", "Lift.BeaconDeposit.BodyShaKit", "Lift.BeaconDeposit.BodySignatureRoot", "Lift.BeaconDeposit.BodySpec", "Lift.BeaconDeposit.Cert", "Lift.BeaconDeposit.Check", "Lift.BeaconDeposit.Creation.Cert", "Lift.BeaconDeposit.Creation.Check", "Lift.BeaconDeposit.Creation.Deploy", "Lift.BeaconDeposit.Creation.Walk", "Lift.BeaconDeposit.CountView", "Lift.BeaconDeposit.DepositArgs", "Lift.BeaconDeposit.DepositDecode", "Lift.BeaconDeposit.DepositExec", "Lift.BeaconDeposit.Erc165", "Lift.BeaconDeposit.Jumps", "Lift.BeaconDeposit.Ladder", "Lift.BeaconDeposit.Layout", "Lift.BeaconDeposit.Init", "Lift.BeaconDeposit.Lift", "Lift.BeaconDeposit.LittleEndian", "Lift.BeaconDeposit.Prog", "Lift.BeaconDeposit.Refines", "Lift.BeaconDeposit.CommittedReplay", "Lift.BeaconDeposit.CommittedExec", "Lift.BeaconDeposit.CommittedHistory", "Lift.BeaconDeposit.BeaconEnv", "Lift.BeaconDeposit.Liveness", "Lift.BeaconDeposit.RootLoop", "Lift.BeaconDeposit.RootView", "Lift.BeaconDeposit.Safe", "Lift.BeaconDeposit.SafeCount", "Lift.BeaconDeposit.SafeDecoder", "Lift.BeaconDeposit.SafeDispatch", "Lift.BeaconDeposit.SafeEvent", "Lift.BeaconDeposit.SafeGuards", "Lift.BeaconDeposit.SafeInsertDead", "Lift.BeaconDeposit.SafeInsertLive", "Lift.BeaconDeposit.SafeLittleEndian", "Lift.BeaconDeposit.SafeNode", "Lift.BeaconDeposit.SafePubkeyRoot", "Lift.BeaconDeposit.SafeSignatureRoot", "Lift.BeaconDeposit.SafeViews", "Lift.BeaconDeposit.Views",
