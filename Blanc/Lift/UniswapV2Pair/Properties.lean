@@ -179,4 +179,318 @@ theorem drive_static_current {current : Checkpoint} {ctx : Context} (entry : Ent
   have start := startTyped_static (current := current) entry staticContext
   exact (drive_terminal_current fuel (startTyped current ctx entry) transcript start.1).trans start.2
 
+/-- Static external execution preserves the full checkpoint across every nested turn. -/
+theorem driveTurns_static_frame (fuel : Nat) (frame : Frame) (request : Request)
+    (turn : Nat) (turns : Transcript) (staticExternal : externalStatic frame request = true) :
+    (driveTurns fuel frame request turn turns).frame = frame := by
+  induction fuel generalizing frame turn turns with
+  | zero => rfl
+  | succ fuel ih =>
+    cases turns with
+    | done => rfl
+    | next result children tail => rfl
+    | foreignLog emitter topics data tail =>
+      simp only [driveTurns, staticExternal, ite_true]
+    | invoke sender value isStatic entry transcript tail =>
+      have childStatic :
+          (childContext frame request turn sender value isStatic).isStatic = true := by
+        change (externalStatic frame request || isStatic) = true
+        rw [staticExternal]
+        rfl
+      have childCurrent := drive_static_current (current := frame.current) entry
+        childStatic fuel transcript
+      rw [driveTurns]
+      cases childStatus : (drive fuel
+          (startTyped frame.current (childContext frame request turn sender value isStatic) entry)
+          transcript).status with
+      | incomplete => rfl
+      | success returndata =>
+        simpa only [childCurrent] using ih frame (turn + 1) tail staticExternal
+      | failed failure =>
+        simpa only [childCurrent] using ih frame (turn + 1) tail staticExternal
+
+/-- Static external execution cannot change storage, logs, or oracle receipts. -/
+theorem driveTurns_static_current (fuel : Nat) (frame : Frame) (request : Request)
+    (turn : Nat) (turns : Transcript) (staticExternal : externalStatic frame request = true) :
+    (driveTurns fuel frame request turn turns).frame.current = frame.current := by
+  exact congrArg Frame.current (driveTurns_static_frame fuel frame request turn turns staticExternal)
+
+/-- The liquidity and oracle fields protected while an invocation holds the lock. -/
+def State.economicCore (st : State) :
+    B256 × (Fin (2 ^ 112) × Fin (2 ^ 112)) × UInt32 × (B256 × B256) × B256 × B256 :=
+  (st.totalSupply, (st.reserve0, st.reserve1), st.blockTimestampLast,
+    (st.price0CumulativeLast, st.price1CumulativeLast), st.kLast, st.unlocked)
+
+/-- Recovery either changes only allowance or restores the invocation checkpoint. -/
+theorem resumeSegment_permit_core (prior : Frame) (request : Request)
+    (owner spender : Adr) (value : B256) (result : ExternalResult)
+    (checkpointCore : prior.checkpoint.state.economicCore = prior.current.state.economicCore) :
+    (resumeSegment prior request (.permitRecovery owner spender value) result).Terminal ∧
+      (resumeSegment prior request (.permitRecovery owner spender value) result).frame.current.state.economicCore =
+        prior.current.state.economicCore := by
+  cases decoded : decodeExternal request result with
+  | error failure =>
+    simpa only [resumeSegment, decoded, Frame.beginResume, Frame.fail, SegmentResult.frame, SegmentResult.Terminal] using And.intro True.intro checkpointCore
+  | ok decodedResult =>
+    cases decodedResult with
+    | word recovered =>
+      simpa only [resumeSegment, decoded, Frame.beginResume, Frame.fail, SegmentResult.frame, SegmentResult.Terminal] using And.intro True.intro checkpointCore
+    | unit =>
+      simpa only [resumeSegment, decoded, Frame.beginResume, Frame.fail, SegmentResult.frame, SegmentResult.Terminal] using And.intro True.intro checkpointCore
+    | address recovered =>
+      by_cases signed : recovered ≠ 0 ∧ recovered = owner
+      · by_cases staticContext : prior.context.isStatic = true
+        · simpa only [resumeSegment, decoded, ite_eq_left signed, Frame.beginResume,
+            State.approveLP, staticContext, ite_true, Frame.finishLP, Frame.fail,
+            SegmentResult.frame, SegmentResult.Terminal] using And.intro True.intro checkpointCore
+        · simp only [resumeSegment, decoded, ite_eq_left signed, Frame.beginResume,
+            State.approveLP, staticContext, Frame.finishLP, Frame.withEvents,
+            Frame.finish, SegmentResult.frame, State.economicCore, SegmentResult.Terminal]
+          exact ⟨True.intro, rfl⟩
+      · simpa only [resumeSegment, decoded, ite_eq_right signed, Frame.beginResume,
+          Frame.fail, SegmentResult.frame, SegmentResult.Terminal] using And.intro True.intro checkpointCore
+
+/-- A permit recovery call cannot change the protected liquidity/oracle fields. -/
+theorem drive_permit_core (fuel : Nat) (prior : Frame) (request : Request)
+    (owner spender : Adr) (value : B256) (transcript : Transcript)
+    (staticExternal : externalStatic prior request = true)
+    (checkpointCore : prior.checkpoint.state.economicCore = prior.current.state.economicCore) :
+    (drive fuel (.suspended prior request (.permitRecovery owner spender value))
+      transcript).frame.current.state.economicCore = prior.current.state.economicCore := by
+  cases fuel with
+  | zero => rfl
+  | succ fuel =>
+    cases transcript with
+    | done => rfl
+    | foreignLog emitter topics data tail => rfl
+    | invoke sender callValue isStatic entry child tail => rfl
+    | next result turns tail =>
+      have resumed := resumeSegment_permit_core prior request owner spender value result checkpointCore
+      have resumedCore :
+          (drive fuel (resumeSegment prior request (.permitRecovery owner spender value) result)
+            tail).frame.current.state.economicCore = prior.current.state.economicCore :=
+        (congrArg (fun current : Checkpoint => current.state.economicCore)
+          (drive_terminal_current fuel
+            (resumeSegment prior request (.permitRecovery owner spender value) result) tail resumed.1)).trans resumed.2
+      have staticFrame := driveTurns_static_frame fuel prior request 0 turns staticExternal
+      rw [drive]
+      cases noCode : request.requiresCode && !result.codeExists with
+      | true => exact resumedCore
+      | false =>
+        dsimp only
+        cases complete : (driveTurns fuel prior request 0 turns).complete with
+        | false =>
+          rw [staticFrame]
+          rfl
+        | true =>
+          rw [staticFrame]
+          cases result.success <;> exact resumedCore
+
+/-- Approval changes only the allowance map on success. -/
+theorem State.approveLP_core {st : State} {ctx : Context} {owner spender : Adr}
+    {value : B256} {post : State} {events : List Event}
+    (accepted : st.approveLP ctx owner spender value = .ok (post, events)) :
+    post.economicCore = st.economicCore := by
+  rw [State.approveLP] at accepted
+  cases staticContext : ctx.isStatic with
+  | true =>
+    rw [staticContext] at accepted
+    cases accepted
+  | false =>
+    rw [staticContext] at accepted
+    have postState := congrArg Prod.fst (Except.ok.inj accepted)
+    dsimp only at postState
+    rw [← postState]
+    rfl
+
+/-- LP transfer changes only balances on success, including aliased accounts. -/
+theorem State.transferLP_core {st : State} {ctx : Context} {source recipient : Adr}
+    {value : B256} {post : State} {events : List Event}
+    (accepted : st.transferLP ctx source recipient value = .ok (post, events)) :
+    post.economicCore = st.economicCore := by
+  rw [State.transferLP] at accepted
+  by_cases covered : value ≤ st.balanceOf source
+  · rw [ite_eq_left covered] at accepted
+    cases staticContext : ctx.isStatic with
+    | true =>
+      rw [staticContext] at accepted
+      cases accepted
+    | false =>
+      rw [staticContext] at accepted
+      dsimp only at accepted
+      by_cases credit : (Blanc.ledgerDebit st.balanceOf source value recipient).toNat + value.toNat < 2 ^ 256
+      · rw [ite_eq_left credit] at accepted
+        have postState := congrArg Prod.fst (Except.ok.inj accepted)
+        dsimp only at postState
+        rw [← postState]
+        rfl
+      · rw [ite_eq_right credit] at accepted
+        cases accepted
+  · rw [ite_eq_right covered] at accepted
+    cases accepted
+
+/-- Finite allowance debit and the maximum sentinel both retain the economic core. -/
+theorem State.transferFromLP_core {st : State} {ctx : Context} {source recipient : Adr}
+    {value : B256} {post : State} {events : List Event}
+    (accepted : st.transferFromLP ctx source recipient value = .ok (post, events)) :
+    post.economicCore = st.economicCore := by
+  rw [State.transferFromLP] at accepted
+  by_cases unlimited : st.allowance source ctx.sender = B256.max
+  · rw [ite_eq_left unlimited] at accepted
+    exact State.transferLP_core accepted
+  · rw [ite_eq_right unlimited] at accepted
+    by_cases covered : value ≤ st.allowance source ctx.sender
+    · rw [ite_eq_left covered] at accepted
+      cases staticContext : ctx.isStatic with
+      | true =>
+        rw [staticContext] at accepted
+        cases accepted
+      | false =>
+        rw [staticContext] at accepted
+        let reduced : State := { st with allowance := Function.update st.allowance source (Function.update (st.allowance source) ctx.sender (st.allowance source ctx.sender - value)) }
+        exact State.transferLP_core (st := reduced) accepted
+    · rw [ite_eq_right covered] at accepted
+      cases accepted
+
+/-- Successful LP effects preserve the core; failed effects restore its checkpoint anchor. -/
+theorem Frame.finishLP_core (frame : Frame) (result : Except Failure (State × List Event))
+    (returndata : Bytes)
+    (checkpointCore : frame.checkpoint.state.economicCore = frame.current.state.economicCore)
+    (successfulCore : ∀ post events, result = .ok (post, events) →
+      post.economicCore = frame.current.state.economicCore) :
+    (frame.finishLP result returndata).Terminal ∧
+      (frame.finishLP result returndata).frame.current.state.economicCore = frame.current.state.economicCore := by
+  cases result with
+  | error failure => exact ⟨True.intro, checkpointCore⟩
+  | ok postEvents =>
+    rcases postEvents with ⟨post, events⟩
+    exact ⟨True.intro, successfulCore post events rfl⟩
+
+/-- Every immediate typed entry preserves the liquidity and oracle core. -/
+theorem startImmediate_core {current : Checkpoint} {ctx : Context} (entry : Entry)
+    {result : SegmentResult} (immediate : startImmediate current ctx entry = some result) :
+    result.Terminal ∧ result.frame.current.state.economicCore = current.state.economicCore := by
+  rw [startImmediate] at immediate
+  by_cases paid : ctx.value ≠ 0
+  · rw [ite_eq_left paid] at immediate
+    rw [← Option.some.inj immediate]
+    exact ⟨True.intro, rfl⟩
+  · rw [ite_eq_right paid] at immediate
+    cases getter : getterResult current.state entry with
+    | some returndata =>
+      rw [getter] at immediate
+      rw [← Option.some.inj immediate]
+      exact ⟨True.intro, rfl⟩
+    | none =>
+      rw [getter] at immediate
+      cases entry
+      case approve spender value =>
+        rw [← Option.some.inj immediate]
+        apply Frame.finishLP_core _ _ _ rfl
+        intro post events accepted
+        exact State.approveLP_core accepted
+      case transfer recipient value =>
+        rw [← Option.some.inj immediate]
+        apply Frame.finishLP_core _ _ _ rfl
+        intro post events accepted
+        exact State.transferLP_core accepted
+      case transferFrom source recipient value =>
+        rw [← Option.some.inj immediate]
+        apply Frame.finishLP_core _ _ _ rfl
+        intro post events accepted
+        exact State.transferFromLP_core accepted
+      case «initialize» token0 token1 =>
+        dsimp only at immediate
+        by_cases authorized : ctx.sender = current.state.factory
+        · rw [ite_eq_left authorized] at immediate
+          cases staticContext : ctx.isStatic with
+          | true =>
+            rw [staticContext] at immediate
+            rw [← Option.some.inj immediate]
+            exact ⟨True.intro, rfl⟩
+          | false =>
+            rw [staticContext] at immediate
+            rw [← Option.some.inj immediate]
+            exact ⟨True.intro, rfl⟩
+        · rw [ite_eq_right authorized] at immediate
+          rw [← Option.some.inj immediate]
+          exact ⟨True.intro, rfl⟩
+      all_goals cases immediate
+
+/-- Calls entered while the Pair is locked preserve the liquidity and oracle core. -/
+theorem drive_locked_core {current : Checkpoint} {ctx : Context} (entry : Entry)
+    (fuel : Nat) (transcript : Transcript) (locked : current.state.unlocked = 0) :
+    (drive fuel (startTyped current ctx entry) transcript).frame.current.state.economicCore =
+      current.state.economicCore := by
+  have terminalCore (segment : SegmentResult)
+      (laws : segment.Terminal ∧ segment.frame.current.state.economicCore = current.state.economicCore) :
+      (drive fuel segment transcript).frame.current.state.economicCore = current.state.economicCore :=
+    (congrArg (fun checkpoint : Checkpoint => checkpoint.state.economicCore)
+      (drive_terminal_current fuel segment transcript laws.1)).trans laws.2
+  cases immediate : startImmediate current ctx entry with
+  | some result =>
+    rw [startTyped, immediate]
+    exact terminalCore result (startImmediate_core entry immediate)
+  | none =>
+    have notUnlocked : current.state.unlocked ≠ 1 := by
+      intro opened
+      have impossible : (0 : Nat) = 1 := congrArg B256.toNat (locked.symm.trans opened)
+      cases impossible
+    rw [startTyped, immediate]
+    cases entry
+    case permit owner spender value deadline v r s =>
+      dsimp only
+      by_cases timely : ctx.timestamp ≤ deadline
+      · rw [ite_eq_left timely]
+        cases staticContext : ctx.isStatic with
+        | true =>
+          exact terminalCore _ ⟨True.intro, rfl⟩
+        | false =>
+          apply drive_permit_core
+          · change (ctx.isStatic || true) = true
+            rw [staticContext]
+            rfl
+          · rfl
+      · rw [ite_eq_right timely]
+        exact terminalCore _ ⟨True.intro, rfl⟩
+    all_goals
+      apply terminalCore
+      simp only [Frame.lock, Frame.enter, notUnlocked, ite_false, Frame.fail,
+        SegmentResult.Terminal, SegmentResult.frame, and_self]
+
+/-- Transfer/callback turns retain the locked parent's supply, reserves and oracle core. -/
+theorem driveTurns_locked_core (fuel : Nat) (frame : Frame) (request : Request)
+    (turn : Nat) (turns : Transcript) (locked : frame.current.state.unlocked = 0) :
+    (driveTurns fuel frame request turn turns).frame.current.state.economicCore =
+      frame.current.state.economicCore := by
+  induction fuel generalizing frame turn turns with
+  | zero => rfl
+  | succ fuel ih =>
+    cases turns with
+    | done => rfl
+    | next result children tail => rfl
+    | foreignLog emitter topics data tail =>
+      rw [driveTurns]
+      cases staticExternal : externalStatic frame request with
+      | true => rfl
+      | false => exact ih _ (turn + 1) tail locked
+    | invoke sender value isStatic entry transcript tail =>
+      have childCore := drive_locked_core (current := frame.current)
+        (ctx := childContext frame request turn sender value isStatic) entry fuel transcript locked
+      have childLocked :
+          (drive fuel (startTyped frame.current (childContext frame request turn sender value isStatic) entry)
+            transcript).frame.current.state.unlocked = 0 :=
+        (congrArg (fun core => core.2.2.2.2.2) childCore).trans locked
+      let settled : Frame := { frame with current :=
+        (drive fuel (startTyped frame.current (childContext frame request turn sender value isStatic) entry)
+          transcript).frame.current }
+      have tailCore := ih settled (turn + 1) tail childLocked
+      rw [driveTurns]
+      cases childStatus : (drive fuel
+          (startTyped frame.current (childContext frame request turn sender value isStatic) entry)
+          transcript).status with
+      | incomplete => rfl
+      | success returndata => exact tailCore.trans childCore
+      | failed failure => exact tailCore.trans childCore
+
 end Blanc.Lift.UniswapV2Pair
