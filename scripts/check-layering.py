@@ -175,7 +175,7 @@ SHARED += ["Lift.ExactWalkSolc", "Lift.ExactWalkCall"]
 # Pure-model ledger updates (vyper-3crv-bytecode-v1): contract-neutral.
 SHARED += ["LedgerUpdate"]
 # Floor share bounds for two-reserve AMMs: contract-neutral.
-SHARED += ["Lift.AMMArithmetic"]
+SHARED += ["Lift.AMMArithmetic", "Lift.BabylonianSqrt"]
 # Walk steps for arbitrary static calls, CALLER/KECCAK256/LOG3/SSTORE, hashed slots and the
 # Vyper 0.2.x front end (vyper-3crv-bytecode-v1): contract-neutral.
 SHARED += ["Lift.StaticCall", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper"]

@@ -1429,6 +1429,17 @@ laws live in [`Blanc/LadderBase.lean`](../Blanc/LadderBase.lean):
 
 ### S6. I need a basic EVM-word identity
 
+For the natural-number arithmetic of a Babylonian square-root loop, use
+[`Blanc/Lift/BabylonianSqrt.lean`](../Blanc/Lift/BabylonianSqrt.lean), namespace
+`Blanc.BabylonianSqrt`. `iter_eq_sqrt` reuses the core iterator from any guess
+at or above the root; `sourceResult_eq_sqrt` covers the half-plus-one initial
+guess and both small-input branches. `body_bounds` supplies positive-divisor,
+unchecked-sum and next-candidate bounds for an arbitrary input limit.
+`iterCount` and `sourceCount` expose descending/terminal equations and include
+the mandatory first body on the large source branch. These are natural-number
+result, count and range facts; consumers must still prove their B256 operation,
+certified-loop and opcode-charge correspondences.
+
 For a two-reserve AMM's natural-number share bound, use
 [`Blanc/Lift/AMMArithmetic.lean`](../Blanc/Lift/AMMArithmetic.lean).
 `mintLiquidity` is the minimum of two proportional floors; `burnPayment` is
