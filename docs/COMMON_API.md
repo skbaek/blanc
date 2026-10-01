@@ -186,6 +186,11 @@ registry has identified the likely vocabulary.
   write, refund update, and warm/cold access update.  The lower
   one-write primitive is `setStorVal_getStor_ne` in
   [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean).
+- For exact ordered SLOAD accounting, `SloadSchedule` retains the incoming
+  state and key at each read. `sloadScheduleCost_eq` separates the warm base
+  cost from the cold surcharge, and `sloadColdCount_le` /
+  `sloadScheduleCost_le` bound that schedule in
+  [`Blanc/StorageAccessGas.lean`](../Blanc/StorageAccessGas.lean).
 - For TWG trigger packets, local-call rebasing commutes with constant-store
   prefixes by `Trigger.rebaseLocalCalls_prependStoresRev` in
   [`Blanc/LidoTriggerableWithdrawalsGatewayTrigger.lean`](../Blanc/LidoTriggerableWithdrawalsGatewayTrigger.lean).
@@ -1771,10 +1776,22 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   `intended_overlap_guard_rejected`, `intended_empty_write_inside_observation`,
   `intended_empty_observation_inside_write`,
   `intended_relation_with_memory_shape`).
+- For the selected gas of those ordered primitive writes, use
+  [`Blanc/MemoryStageGas.lean`](../Blanc/MemoryStageGas.lean).
+  `MemoryStage.selectedGas_eq` telescopes the actual expansion charges into
+  the per-write base charge plus the final-minus-initial memory cost, given
+  word-aligned initial allocation. `applyMemory_aligned` preserves that
+  alignment; `memExtsSize_le` and `memExtsSize_ge_window` bound the actual
+  allocation from the access windows. Empty writes retain their base charge.
 - Decode an exact word without losing bytes with
   `Bytes.toBytes_toB256_of_length`; shorten a padded read with
   `List.take_takeD_of_le`. The limb-level codec proofs are private
   implementation details of the public round-trip theorem.
+- For an exact eight-byte big-endian limb, use
+  [`Blanc/WordByteRoundtrip.lean`](../Blanc/WordByteRoundtrip.lean):
+  `Blanc.Bytes.toBytes_toUInt64_of_length` proves that decoding and encoding
+  preserves every byte under the length-eight premise. It derives the result
+  from the public complete-word codec and needs no execution-goal recipe.
 - For fixed-width shift and mask byte images, use
   [`Blanc/WordByteCodecs.lean`](../Blanc/WordByteCodecs.lean), namespace
   `Blanc.WordByteCodecs`. `high128_mask_bytes` identifies the first sixteen
@@ -2196,7 +2213,17 @@ consumer needs canonical interpreter ingress as one conjunct:
   ([`Blanc/ExecutionCodeAt.lean`](../Blanc/ExecutionCodeAt.lean),
   [`Blanc/ExecutionTraceCodeAt.lean`](../Blanc/ExecutionTraceCodeAt.lean)) keep the
   code at an address empty through a trace given no CREATE frame targets it and no
-  authorization recovers to it (`NoAuthorityAt`). `SpawnFree` and
+  authorization recovers to it (`NoAuthorityAt`). For transaction caller
+  exclusion, `Exec.rawFrameRoots_caller_excluded` in
+  [`Blanc/ExecutionCallerExclusion.lean`](../Blanc/ExecutionCallerExclusion.lean)
+  tracks actual CALL/CREATE/DELEGATECALL callers and empty executing code.
+  `ConfiguredHistoryTrace.txRawFrames_caller_excluded` in
+  [`Blanc/ExecutionTraceCallerExclusion.lean`](../Blanc/ExecutionTraceCallerExclusion.lean)
+  derives that exclusion from initially empty code, retained `NoSenderAt`,
+  `NoAuthorityAt`, and trace-local CREATE avoidance. Its `TxFrameAdmitted`
+  corollary selects transaction frames at a consumer address. Calls to the
+  empty-code address remain allowed; system frames are outside the conclusion.
+  `SpawnFree` and
   `ConfiguredHistoryTrace.systemRawFrames_target_of_spawnFree`
   ([`Blanc/ExecutionTraceSystem.lean`](../Blanc/ExecutionTraceSystem.lean)) confine
   system-message frames to the four system addresses when their code spawns
