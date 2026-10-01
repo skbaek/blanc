@@ -216,6 +216,8 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.SqrtWalk",
         "Lift.UniswapV2Pair.GetterMemory",
         "Lift.UniswapV2Pair.GetterWalk",
+        "Lift.UniswapV2Pair.GetterStringMemory",
+        "Lift.UniswapV2Pair.GetterStringWalk",
     ],
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",
                        # the deployed runtime, lifted (decision beacon-lift-layering-family-20260926)
