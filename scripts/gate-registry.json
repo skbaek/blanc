@@ -245,7 +245,7 @@
     ]
    },
    "kind": "cacheable",
-   "note": "Comment/string-aware production text control for explicit simplification, including literal normalization-off Aesop configs. Native parser/replay and actual Aesop caller evidence establish migration completeness. No implicit-call or registration exceptions; missing/unreadable/empty source populations refuse. Scanner imports leaf_audit, module path policy and the semaphore helper; checking source syntax performs no host admission.",
+   "note": "Comment/string-aware production text control for explicit simplification, including norm_num only and literal normalization-off Aesop configs. Native parser/replay and actual Aesop caller evidence establish migration completeness. No implicit-call or registration exceptions; missing/unreadable/empty source populations refuse. Scanner imports leaf_audit, module path policy and the semaphore helper; checking source syntax performs no host admission.",
    "order": 6,
    "verdict": {
     "expect_exit": 0,

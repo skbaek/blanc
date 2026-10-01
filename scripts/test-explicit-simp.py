@@ -197,6 +197,27 @@ AESOP_TESTS = [
 ]
 
 
+
+NORM_NUM_TESTS = [
+    TestCase("norm_num_bare", "example : 1 + 1 = 2 := by norm_num", True, "implicit-norm_num", "implicit-tactic"),
+    TestCase("norm_num_args", "example : P := by norm_num [foo]", True, "implicit-norm_num"),
+    TestCase("norm_num_config", "example : P := by norm_num (config := { zeta := false }) [foo]", True, "implicit-norm_num"),
+    TestCase("norm_num_quote", 'macro "t" : tactic => `(tactic| norm_num)', True, "implicit-norm_num"),
+    TestCase("norm_num_at", "example : P := by norm_num at *", True, "implicit-norm_num"),
+    TestCase("norm_num_only", "example : 1 + 1 = 2 := by norm_num only", False),
+    TestCase("norm_num_only_args", "example : P := by norm_num only [foo]", False),
+    TestCase("norm_num_config_only", "example : P := by norm_num (config := { zeta := false }) only [foo]", False),
+    TestCase("norm_num_only_at", "example : P := by norm_num only [foo] at h", False),
+    TestCase("norm_num_only_quote", 'macro "t" : tactic => `(tactic| norm_num only [foo])', False),
+    TestCase("norm_num1_structural", "example : 1 + 1 = 2 := by norm_num1", False),
+    TestCase("norm_num_longer", "def norm_num_custom := 0", False),
+    TestCase("norm_num_qualified", "def t := Foo.norm_num", False),
+    TestCase("norm_num_attribute", "@[norm_num] def t := 0", False),
+    TestCase("norm_num_comments_strings", '-- norm_num\ndef text : String := "norm_num"', False),
+    TestCase("norm_num_namespace", "namespace norm_num\ndef t := 0\nend norm_num", False),
+]
+
+
 NEARBY_TRICKY_TESTS = [
     TestCase("negated_attr_cmd", "attribute [-simp] foo", False),
     TestCase("other_decl_attr_inline", "@[inline] def f : Nat := 0", False),
@@ -240,6 +261,7 @@ def test_suite_tables() -> None:
         ("Implicit Tactics", IMPLICIT_TACTIC_TESTS),
         ("Safe Explicit Forms", SAFE_EXPLICIT_TESTS),
         ("Aesop Normalization", AESOP_TESTS),
+        ("Numeric Simplification", NORM_NUM_TESTS),
         ("Nearby Tricky Syntax", NEARBY_TRICKY_TESTS),
     )
 
@@ -307,6 +329,7 @@ def test_bite_and_restore_by_byte_identity() -> None:
         ("mutant_implicit_dsimp", "  have : True := by dsimp [testIncrement]\n", "implicit-dsimp"),
         ("mutant_implicit_simp_question", "  have : True := by simp?\n", "implicit-simp?"),
         ("mutant_implicit_aesop", "  have : True := by aesop\n", "implicit-aesop-simp"),
+        ("mutant_implicit_norm_num", "  have : True := by norm_num\n", "implicit-norm_num"),
     ]
 
     for label, injection, expected_kind in mutants:

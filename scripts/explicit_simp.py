@@ -7,8 +7,8 @@ Scans Blanc Lean sources (every Blanc/**/*.lean and Blanc.lean) for:
       @[simp ↓], @[simp ←], @[← simp], @[↓ simp], grouped attributes like @[simp, inline], etc.
     - Attribute commands: attribute [simp] foo, local attribute [simp] foo,
       scoped attribute [simp] foo, attribute [simp high] foo, etc.
-(b) Implicit simp/simpa/simp_all/dsimp tactics and suggestion variants:
-    - Calls to simp, simpa, simp_all, dsimp, simp?, simpa?, simp_all?, dsimp?
+(b) Implicit simp/simpa/simp_all/dsimp/norm_num tactics and suggestion variants:
+    - Calls to simp, simpa, simp_all, dsimp, norm_num and simp-family suggestion variants
       that do NOT use `only`.
     - Exact explicit `only` forms may include optional configuration parentheses before
       `only` (e.g. `simp (config := ...) only [...]`), config flags (e.g. `simp +zeta only [...]`,
@@ -130,14 +130,15 @@ def split_top_level(text: str, start_offset: int = 0) -> List[Tuple[int, int, st
 # Simp registration and implicit tactic detectors
 # ---------------------------------------------------------------------------
 
-# Tactic head pattern: simp_all, simpa, dsimp, simp, plus optional suggestion/bang marks (? or !)
+# Tactic heads including norm_num, whose pinned driver uses the global simp set
+# unless only is supplied. Optional suggestion/bang marks remain lexically inspected.
 # Negative lookbehind and lookahead ensure longer identifiers (simp_rw, simp_arith, simple, etc.)
 # and qualified references or projections (Lean.Meta.simp, ctx.simp, simp.foo) are NOT matched.
 TACTIC_HEAD_RE = re.compile(
-    r"(?<![\w.'!?])(simp_all|simpa|dsimp|simp)(?:[?!]+)?(?![\w.'!?])"
+    r"(?<![\w.'!?])(simp_all|simpa|dsimp|simp|norm_num)(?:[?!]+)?(?![\w.'!?])"
 )
 
-# Simp configuration flag: +zeta, -zeta, +proj, -proj, etc.
+# Retained Aesop must disable builtin simplification.
 AESOP_HEAD_RE = re.compile(r"(?<![\w.'!?])aesop(?:[?!]+)?(?![\w.'!?])")
 CONFIG_FIELD_RE = re.compile(r"([A-Za-z_][\w']*)\s*:=")
 
@@ -349,7 +350,7 @@ def scan_source(code_raw: str, path: str) -> List[Finding]:
         line_num, col_num = _line_col_of(line_starts, tactic_start)
         line_start_off = line_starts[line_num - 1]
         line_str = code[line_start_off:line_starts[line_num] if line_num < len(line_starts) else n_code].lstrip()
-        if line_str.startswith("import ") or line_str.startswith("namespace "):
+        if line_str.startswith(("import ", "namespace ", "end ")):
             continue
 
         # Lookahead after tactic head: consume config parens (...) and config flags (+zeta, -zeta, etc.)
