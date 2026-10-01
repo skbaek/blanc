@@ -91,6 +91,38 @@ def test_original_arguments():
         e={**edit,'site_id':'site_0','mapped_range':other.plan['sites'][0]['mapped_range']}
         assert r.retain_original_args(other,e) is None
 
+def test_native_omissions():
+    text='example : True := by simp only [A, f h, B] at goal\n'
+    original=text.encode();site=f.make_site(text,'simp only [A, f h, B] at goal','simp',only=True)
+    site.update(site_id='site_0')
+    payload={'inventory':[site],'edits':[]}
+    action={'range':site['range'],'commandRange':site['commandRange'],
+            'referenceRange':site['commandRange'],'newText':'simp only [A, B] at goal'}
+    payload['edits']=[action]
+    resolved=[{'site_id':'site_0','newText':site['source']}]
+    with tempfile.TemporaryDirectory() as tmp:
+        log=Path(tmp)/'candidate.log'
+        log.write_text(json.dumps({'fileName':'Blanc/A.lean','severity':'warning',
+                                  'kind':'linter.unusedSimpArgs','pos':{'line':1,'column':33}})+'\n')
+        repairs=r.native_omissions(payload,[site],resolved,log,'Blanc/A.lean')
+        assert len(repairs)==1 and repairs[0]['native_omission']==action
+        assert repairs[0]['previous_green_proposal']==resolved[0]
+        for replacement in ['simp only [A, C, B] at goal','simp only [B, A] at goal',
+                            'simp only [A, B] at other','simpa only [A, B] at goal',
+                            'simp [A, B] at goal','simp only [A, f h, B] at goal',
+                            'simp (config := {}) only [A, B] at goal']:
+            bad=copy.deepcopy(payload);bad['edits'][0]['newText']=replacement
+            assert not r.native_omissions(bad,[site],resolved,log,'Blanc/A.lean')
+        for owner in ['range','commandRange','referenceRange']:
+            bad=copy.deepcopy(payload);bad['edits'][0][owner]={'start':{'line':4,'character':0},'end':{'line':5,'character':0}}
+            assert not r.native_omissions(bad,[site],resolved,log,'Blanc/A.lean')
+        bad=copy.deepcopy(payload);bad['inventory'][0]['source']='simp only [C]'
+        fails(lambda:r.native_omissions(bad,[site],resolved,log,'Blanc/A.lean'))
+        assert not r.native_omissions(payload,[site],resolved,log,'Blanc/B.lean')
+        payload['edits'].append({**action,'newText':'simp only [f h, B] at goal'})
+        repair=r.native_omissions(payload,[site],resolved,log,'Blanc/A.lean')[0]
+        assert repair['newText']==action['newText'] and len(repair['observed_omission_alternatives'])==2
+
 def test_outputs_and_apply():
     with tempfile.TemporaryDirectory() as tmp:
         root=Path(tmp);(root/'Blanc').mkdir();p=root/'Blanc/A.lean';p.write_bytes(b'original')
@@ -212,6 +244,6 @@ def test_native_stage_bindings():
         assert original.read_bytes()==b'original'
 
 if __name__=='__main__':
-    for test in [test_partial,test_no_using_alternate,test_original_arguments,test_outputs_and_apply,test_routing_and_renewal,test_census,test_resume,test_batch_preflight,test_executable_inputs,test_native_stage_bindings]:
+    for test in [test_partial,test_no_using_alternate,test_original_arguments,test_native_omissions,test_outputs_and_apply,test_routing_and_renewal,test_census,test_resume,test_batch_preflight,test_executable_inputs,test_native_stage_bindings]:
         test();print('PASS '+test.__name__)
-    print('PASS10 runner control groups; mocks are integrity evidence only')
+    print('PASS11 runner control groups; mocks are integrity evidence only')

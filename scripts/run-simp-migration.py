@@ -236,6 +236,62 @@ def retain_original_args(inst, edit):
             'original_argument_source':source[start:end+1],
             'failed_native_proposal':edit,'replay_required':True}
 
+def strict_argument_omission(source, replacement, family):
+    """Recognize only a proper, order-preserving direct argument-list subset."""
+    prefix=family+' only'
+    bodies=[];shapes=[]
+    for text in (source,replacement):
+        if not text.startswith(prefix) or any(t in text for t in ('"','/-','--')):
+            return False
+        rest=text[len(prefix):];start=len(prefix)+len(rest)-len(rest.lstrip())
+        if text[start:start+1]!='[': return False
+        end=balanced_end(text,start,'[',']')
+        if end<0: return False
+        body=text[start+1:end].strip()
+        if body.endswith(','): return False
+        args=[' '.join(t.split()) for _,_,t in split_top_level(body)] if body else []
+        if any(not t for t in args): return False
+        bodies.append(args);shapes.append((text[:start],text[end+1:]))
+    if shapes[0]!=shapes[1] or len(bodies[1])>=len(bodies[0]): return False
+    position=0
+    for term in bodies[1]:
+        while position<len(bodies[0]) and bodies[0][position]!=term: position+=1
+        if position==len(bodies[0]): return False
+        position+=1
+    return True
+
+def native_omissions(payload, expected, resolved, log, raw):
+    """Select one actual diagnostic-bound native omission per migrated site."""
+    verify_inventory(payload,expected)
+    warnings=[]
+    for line in log.read_text().splitlines():
+        try: diagnostic=json.loads(line)
+        except ValueError: continue
+        if not isinstance(diagnostic,dict): continue
+        position=diagnostic.get('pos',{})
+        if (diagnostic.get('fileName')==raw and diagnostic.get('severity')=='warning'
+            and diagnostic.get('kind')=='linter.unusedSimpArgs'
+            and type(position) is dict and type(position.get('line')) is int):
+            warnings.append(position['line']-1)
+    by_id={s['site_id']:s for s in expected};repairs=[]
+    for edit in resolved:
+        site=by_id[edit['site_id']]
+        if not any(site['range']['start']['line']<=line<=site['range']['end']['line'] for line in warnings):
+            continue
+        alternatives=[action for action in payload['edits']
+                      if _json_equal(action.get('range'),site['range'])
+                      and _json_equal(action.get('commandRange'),site['commandRange'])
+                      and _json_equal(action.get('referenceRange'),site['commandRange'])
+                      and type(action.get('newText')) is str
+                      and strict_argument_omission(site['source'],action['newText'],site['family'])]
+        if not alternatives: continue
+        action=alternatives[0]
+        repairs.append({**edit,'newText':action['newText'],
+                        'resolution':'native_unused_argument_omission',
+                        'previous_green_proposal':edit,'native_omission':action,
+                        'observed_omission_alternatives':alternatives,'replay_required':True})
+    return repairs
+
 def error_lines(log, raw):
     found=[]
     for line in log.read_text().splitlines():
@@ -382,6 +438,25 @@ class Runner:
             payload=self.collect(raw,buffer,setup,directory,stage)
             if payload is not None:
                 verify_inventory(payload,expected)
+                for omission_attempt in range(3):
+                    repairs=native_omissions(payload,expected,resolved,directory/(stage+'.log'),raw)
+                    if not repairs: break
+                    omission_stage=stage+'_omit_'+str(omission_attempt)
+                    new_json(directory/(omission_stage+'-proposals.json'),repairs)
+                    by_id={e['site_id']:e for e in repairs}
+                    revised=[by_id.get(e['site_id'],e) for e in resolved]
+                    omitted,omitted_expected=proposal(original,inst,revised)
+                    omitted_buffer=directory/(omission_stage+'.lean');new_bytes(omitted_buffer,omitted)
+                    omitted_payload=self.collect(raw,omitted_buffer,setup,directory,omission_stage)
+                    if omitted_payload is None:
+                        new_json(directory/(omission_stage+'-rejected.json'),
+                                 {'reason':'native omission replay failed; preserve previous green bytes',
+                                  'preserved_stage':stage,'preserved_sha256':sha(candidate),
+                                  'rejected_proposals':repairs})
+                        break
+                    verify_inventory(omitted_payload,omitted_expected)
+                    resolved=revised;candidate=omitted;expected=omitted_expected
+                    payload=omitted_payload;buffer=omitted_buffer;stage=omission_stage
                 remaining=sum(not s['only'] for s in payload['inventory'])
                 row.update(status='verified_complete' if not remaining else 'verified_partial',
                            accepted=len(resolved),remaining=remaining,complete=remaining==0,
