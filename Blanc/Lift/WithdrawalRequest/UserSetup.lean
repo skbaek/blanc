@@ -42,7 +42,7 @@ private theorem inhibitor_push :
   simpa only [B256.add_zero, List.replicate_succ, List.replicate_zero] using ones_add_zero
 
 /-- The explicit inhibitor arm is a REVERT tree, hence has no successful Outcome. -/
-private theorem revert_tail_no_run {sevm : Sevm} {d : Devm} {o : Outcome}
+theorem revert_tail_no_run {sevm : Sevm} {d : Devm} {o : Outcome}
     (run : SFunc.Run prog sevm d t_01f4_c0 o) : False := by
   exact run.cut.false_of_noOk rfl
 

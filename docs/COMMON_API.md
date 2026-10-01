@@ -1693,6 +1693,19 @@ and denominator. These theorems establish no equality with the Nat recurrence,
 bytecode refinement, gas bound or history property. This interface has no
 execution-goal recipe.
 
+For a sufficient domain relating these two recurrences, use
+[`Blanc/FakeExponentialWordCorrespondence.lean`](../Blanc/FakeExponentialWordCorrespondence.lean).
+`NoWrap` is indexed by an existing `FakeExponential.Run` and its initial sum
+prefix. It bounds each active prefixed sum, accumulator product and divisor
+product, plus the stopped prefix. `NoWrap.final_sum_lt` gives the final sum
+width; `NoWrap.to_word_run` constructs the word run with the same count;
+`NoWrap.word_result` identifies any word run's count and canonical prefixed
+Nat sum. `NoWrap.fakeExp_eq` gives the canonical value after final division
+under an explicit denominator width. Cast counter increment needs no extra
+width premise. These APIs establish neither a maximal equality domain nor
+reachability, bytecode, gas or history properties. Their namespace is
+`Blanc.FakeExponentialWordCorrespondence`; they have no execution-goal recipe.
+
 ## M — bytes and memory
 
 For concrete RLP encoding and parsing, use
@@ -1762,6 +1775,14 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   `Bytes.toBytes_toB256_of_length`; shorten a padded read with
   `List.take_takeD_of_le`. The limb-level codec proofs are private
   implementation details of the public round-trip theorem.
+- For fixed-width shift and mask byte images, use
+  [`Blanc/WordByteCodecs.lean`](../Blanc/WordByteCodecs.lean), namespace
+  `Blanc.WordByteCodecs`. `high128_mask_bytes` identifies the first sixteen
+  bytes followed by sixteen zeros; `shift96_take20_toAdr_bytes` identifies
+  the leading address bytes after left alignment;
+  `shift64_low_bytes_reverse_slice16` identifies ascending low-byte shifts
+  with the reversed eight-byte lane at offsets 16 through 23. These pure
+  word conversions have no execution-goal recipe.
 - Fixed or padded memory windows: use `Mem.Wf` and `Mem.Reads` before adding a
   local take/drop proof.
 
