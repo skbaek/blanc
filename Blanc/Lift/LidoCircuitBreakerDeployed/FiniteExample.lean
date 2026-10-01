@@ -53,7 +53,10 @@ theorem exampleRegistryOn_of_check
     apply registryQueries_observable exampleProbes_valid
     simp only [exampleInitialWrites, List.mem_cons, List.not_mem_nil, or_false] at hw
     rcases hw with rfl | rfl | rfl | rfl | rfl <;>
-      simp [registryQueries, exampleProbes, show Nat.toB256 1 = (1 : B256) from rfl]
+      simp only [registryQueries, List.range_one, List.map_cons, zero_add,
+        show Nat.toB256 1 = (1 : B256) from rfl, List.map_nil, exampleProbes, List.flatMap_cons,
+        List.flatMap_nil, List.append_nil, List.cons_append, List.nil_append, List.mem_cons,
+        List.not_mem_nil, or_false, true_or, or_true]
   have hclean : ∀ w ∈ exampleInitialWrites,
       RegistryAddressFamily 1 w.1 → addressSlotReadWord w.2 = w.2 := by
     intro w hw _

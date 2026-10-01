@@ -234,10 +234,12 @@ private lemma Bytes.writeAt_append_middle
     Bytes.writeAt (pre ++ old ++ suffix) pre.length replacement =
       pre ++ replacement ++ suffix := by
   unfold Bytes.writeAt
-  rw [List.takeD_eq_take _ (by simp)]
+  rw [List.takeD_eq_take _ (by simp only [List.append_assoc, List.length_append,
+    le_add_iff_nonneg_right, zero_le])]
   simp only [List.append_assoc]
   rw [List.take_left]
-  simp [List.drop_append, hlen]
+  rw [← List.append_assoc pre old suffix,
+    List.drop_left' (by rw [List.length_append, hlen])]
 
 private lemma Bytes.writeAt_append_middle_at
     {pre old suffix replacement : Bytes} {offset : Nat}
@@ -275,7 +277,8 @@ private theorem differingByteOffsets_append
           simp only [List.cons_append, differingByteOffsets]
           rw [ih (index := index + 1) (ys := ys) hlen]
           by_cases hxy : x = y <;>
-            simp [hxy, Nat.add_assoc, Nat.add_comm 1 xs.length]
+            simp only [hxy, ↓reduceIte, Nat.add_assoc, Nat.add_comm 1 xs.length,
+              List.cons_append, List.nil_append, List.length_cons]
 
 private theorem differingByteOffsets_append_same
     (index : Nat) (pre xs ys : Bytes) :

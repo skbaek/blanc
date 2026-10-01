@@ -123,8 +123,8 @@ theorem stubPause_cold_runCompiledTo
       · simp only [Devm.gasLeft_setMach]
         omega
     all_goals try {
-      simp [show (32 * (0 : B256) + 4) = 4 by decide, harg,
-        pauseInfiniteSentinel, B256.eqCheck] }
+      simp only [B256.eqCheck, pauseInfiniteSentinel,
+        show (32 * (0 : B256) + 4) = 4 by decide, harg] }
     all_goals try {
       have hcost' := hcost
       rw [← compact_pause_word_eq_projection] at hcost'

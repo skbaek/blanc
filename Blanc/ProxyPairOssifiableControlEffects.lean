@@ -803,7 +803,8 @@ private theorem upgradeToAndCallDecoder_step_copy
   have p10 := prefix_of_iszero r10 p9
   have p11 := prefix_of_eq r11 p10
   have pOne : (1 : B256) :: tail <<+ s11.stack := by
-    cases forceCall <;> simpa [B256.eqCheck] using p11
+    cases forceCall <;> simpa only [B256.eqCheck, Bool.false_eq_true, ↓reduceIte, ite_eq_right_iff,
+      imp_self] using p11
   obtain ⟨storePathPre, _, _, hpop, storePathRun, pStorePath⟩ :=
     Func.RunCompiledTo.succ_branch_of_prefix
       (by decide : (1 : B256) ≠ 0) pOne branchRun

@@ -1818,8 +1818,9 @@ theorem GenericCreate.storageSegmentEffect_some
         (RunFrame.some_inv trace.run).2.symm
       cases hopt : settled.error <;>
         refine ⟨?_⟩ <;>
-        simpa [msg, createPre, trace, RetainedXlot.flowActions,
-          Frame.settlementCommits, hsettle, hopt]
+        simpa only [msg, createPre, trace, Frame.settlementCommits, hsettle, hopt, Option.isNone_none, ↓reduceIte,
+          Option.isSome_none, Bool.false_eq_true, RetainedXlot.flowActions, List.append_nil,
+          List.nil_append, Option.isNone_some, Option.isSome_some]
           using combined
 
 /-- Proof-indexed CREATE transport through full code-deposit settlement. -/

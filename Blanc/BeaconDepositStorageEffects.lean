@@ -360,7 +360,7 @@ theorem sha64_success_prefix_storageEffectRun
   simpa only [Nat.add_zero, Mem.extends_covered hcovered] using
     (sha64_success_prefix_storageEffectRun_ext (hfork := hfork)
       (ext := 0) (effects := effects) hext hnodeleg hwarm hpre hdepth
-      (by simpa using hbound) hroom)
+      (by simpa only [add_zero, Nat.reducePow] using hbound) hroom)
 
 /-- Shift the insertion size, increment its height, and re-enter the loop
 without adding a retained storage effect. -/

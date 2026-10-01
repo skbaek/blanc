@@ -214,8 +214,11 @@ theorem copyD_replicate_eq_padTo (xs : Array UInt8) (m : Nat) :
     rw [e1]
     by_cases hi : i < xs.size
     · rw [Array.getD_copyD_of_lt _ _ _ _ hi (by simpa only [Array.size_replicate] using h1)]
-      simp [padTo, List.getElem_take, List.getElem_append_left (by simpa using hi : i < xs.toList.length),
-        Array.getD_eq_getD_getElem?, hi]
+      simp only [Array.getD_eq_getD_getElem?, hi, getElem?_pos, Option.getD_some, padTo,
+        List.getElem_toArray, List.getElem_take,
+        List.getElem_append_left
+            (by simpa only [Array.length_toList] using hi : i < xs.toList.length),
+        Array.getElem_toList]
     · rw [Array.getD_copyD_of_size_le _ _ _ _ (by omega)]
       simp only [padTo, List.getElem_toArray, List.getElem_take]
       rw [List.getElem_append_right (by simp only [Array.length_toList]; omega)]
@@ -229,7 +232,7 @@ def spliceD (a : Array UInt8) (n : Nat) (xs : Bytes) : Array UInt8 :=
 theorem writeD_eq_spliceD (a : Array UInt8) (n : Nat) (xs : Bytes) (h : n + xs.length ≤ a.size) :
     Array.writeD a n xs = spliceD a n xs := by
   apply Array.ext
-  · rw [Array.size_writeD]; simp [spliceD]; omega
+  · rw [Array.size_writeD]; simp only [spliceD, List.append_assoc, List.size_toArray, List.length_append, List.length_take, Array.length_toList, List.length_drop]; omega
   · intro i h1 h2
     rw [Array.size_writeD] at h1
     have e1 : (Array.writeD a n xs)[i] = (Array.writeD a n xs).getD i 0 := by
@@ -238,16 +241,20 @@ theorem writeD_eq_spliceD (a : Array UInt8) (n : Nat) (xs : Bytes) (h : n + xs.l
     simp only [spliceD, List.getElem_toArray]
     by_cases hi : i < n
     · simp only [show ¬(n ≤ i ∧ i < n + xs.length) from by omega, ↓reduceIte]
-      rw [List.getElem_append_left (by simp; omega), List.getElem_append_left (by simp; omega)]
-      simp [Array.getD_eq_getD_getElem?, h1]
+      rw [List.getElem_append_left (by simp only [List.length_append, List.length_take, Array.length_toList]; omega), List.getElem_append_left (by simp only [List.length_take, Array.length_toList, lt_min_iff]; omega)]
+      simp only [Array.getD_eq_getD_getElem?, h1, getElem?_pos, Option.getD_some, List.getElem_take,
+        Array.getElem_toList]
     · by_cases hj : i < n + xs.length
       · simp only [show n ≤ i ∧ i < n + xs.length from ⟨by omega, hj⟩, and_self, ↓reduceIte]
-        rw [List.getElem_append_left (by simp; omega), List.getElem_append_right (by simp; omega)]
-        simp [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem (by omega : i - n < xs.length),
-          Nat.min_eq_left (by omega : n ≤ a.size)]
+        rw [List.getElem_append_left (by simp only [List.length_append, List.length_take, Array.length_toList]; omega), List.getElem_append_right (by simp only [List.length_take, Array.length_toList, min_le_iff]; omega)]
+        simp only [List.getD_eq_getElem?_getD,
+          List.getElem?_eq_getElem (by omega : i - n < xs.length), Option.getD_some,
+          List.length_take, Array.length_toList, Nat.min_eq_left (by omega : n ≤ a.size)]
       · simp only [show ¬(n ≤ i ∧ i < n + xs.length) from by omega, ↓reduceIte]
-        rw [List.getElem_append_right (by simp; omega)]
-        simp [Array.getD_eq_getD_getElem?, h1, Nat.min_eq_left (by omega : n ≤ a.size)]
+        rw [List.getElem_append_right (by simp only [List.length_append, List.length_take, Array.length_toList]; omega)]
+        simp only [Array.getD_eq_getD_getElem?, h1, getElem?_pos, Option.getD_some,
+          List.length_append, List.length_take, Array.length_toList,
+          Nat.min_eq_left (by omega : n ≤ a.size), List.getElem_drop, Array.getElem_toList]
         congr 1; omega
 
 theorem padTo_size (xs : Array UInt8) (m : Nat) : (padTo xs m).size = m := by

@@ -248,7 +248,7 @@ theorem insert_loop {sevm : Sevm} {b₀ : Devm} {G : Nat} {x n : Nat} {node0 : B
       (R := [x₁, x₂, x₃, x₄, y₁, y₂, y₃, y₄, y₅, y₆, y₇, d] ++ rest) (h := h)
       (G := G + (deadRun sevm.currentTarget keys0 (h + 1) m + L))
       (hsha.of_eq hL.code hL.addrs) hdepth hh32
-      (by rw [B256.toNat_toB256_of_lt hxh]; exact hdead h hh) (by simp; omega)
+      (by rw [B256.toNat_toB256_of_lt hxh]; exact hdead h hh) (by simp only [List.cons_append, List.nil_append, List.length_cons, Nat.reduceLeDiff]; omega)
       (by rw [hcostS]; rw [hrun0] at hG; omega) hM
     have hM'' : BodyMem M' (1024 + 96 * (h + 1)) (Nat.toB256 (928 + 96 * (h + 1))) [] := by
       rw [show 1024 + 96 * (h + 1) = 1120 + 96 * h by omega,

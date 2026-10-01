@@ -1602,7 +1602,7 @@ theorem rx_storeSeg (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isS
   have hout2 : d2.output = d.output := by simp only [d2, d1, afterSstore_output]
   have hb0 := sstoreCost_le sevm d (base + Nat.toB256 0) (Bytes.toB256 (M2.read (sn + 32 * 0) 32).1)
   have hb1 := sstoreCost_le sevm d1 (base + Nat.toB256 1) (Bytes.toB256 (M3.read (sn + 32 * 1) 32).1)
-  have hroom : ([srcB] ++ S).length + 12 < 1024 := by simp; omega
+  have hroom : ([srcB] ++ S).length + 12 < 1024 := by simp only [List.cons_append, List.nil_append, List.length_cons]; omega
   have hne1 : cap ≠ Nat.toB256 (0 + 1) := by rcases hcase with ⟨rfl, -⟩ | ⟨rfl, -⟩ <;> decide
   rcases hcase with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
   · -- `name`

@@ -2884,7 +2884,7 @@ theorem setHeartbeatInterval_body_runCompiledTo_error_of_not_admin
   · unfold setHeartbeatInterval requireStaticArgs onlyAdmin pushDeployWord
     func_run (9) [0, 0]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try { simp [B256.eqCheck, Ne.symm hnotAdmin] }
+    all_goals try { simp only [B256.eqCheck, Ne.symm hnotAdmin, ↓reduceIte, Nat.reduceSubDiff] }
     case h_body =>
       apply Func.runCompiledTo_revertSelector (G := G)
       · simp only [customErrorData, List.length_take, B256.length_toBytes, Nat.reduceLeDiff,

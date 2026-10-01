@@ -297,7 +297,7 @@ theorem run_ledger (s : State) (cs : List Call) :
       simp only [run, Ledger.run_cons, step]
       cases hl : s.ledger.step c with
       | none => rfl
-      | some l' => simpa [Option.bind] using ih ⟨l', s.eth + c.inflow - c.outflow⟩
+      | some l' => simpa only [Option.bind, Option.map_some] using ih ⟨l', s.eth + c.inflow - c.outflow⟩
 
 end State
 

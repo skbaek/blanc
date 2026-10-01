@@ -323,7 +323,7 @@ theorem sha64_success_prefix_runCompiledTo
     omega
   simpa only [Nat.add_zero, Mem.extends_covered hcovered] using
     (sha64_success_prefix_runCompiledTo_ext (hfork := hfork)
-      (ext := 0) hext hnodeleg hwarm hpre hdepth (by simpa using hbound) hroom)
+      (ext := 0) hext hnodeleg hwarm hpre hdepth (by simpa only [add_zero, Nat.reducePow] using hbound) hroom)
 
 /-! ## Source-level successful-run inversion -/
 
