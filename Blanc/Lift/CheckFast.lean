@@ -165,8 +165,8 @@ private lemma getElem?_eq_drop_head {α : Type} (xs : List α) (i : Nat) :
   | zero => cases xs <;> rfl
   | succ i ih =>
     cases xs with
-    | nil => simp
-    | cons x xs => simpa using ih xs
+    | nil => simp only [List.length_nil, not_lt_zero, not_false_eq_true, getElem?_neg, List.drop_nil, List.head?_nil]
+    | cons x xs => simpa only [List.getElem?_cons_succ, List.drop_succ_cons] using ih xs
 
 private lemma bytesAtT_eq {code : ByteArray} {d : Nat} {t : LTrie UInt8}
     (ht : ∀ i, LTrie.get? d t i = code.data.toList[i]?) (pc : Nat) (bs : Bytes) :
@@ -206,7 +206,7 @@ theorem checkNodeT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es : 
       constructor
       · intro pc a
         cases h : absNinst n a <;>
-          simp [Q, checkNodeT, checkNode, byteAt, bytesAtT_eq T.bytes_eq, ih.1, h]
+          simp only [checkNodeT, bytesAtT_eq T.bytes_eq, h, Bool.and_false, checkNode, Q, ih.1]
       · simp only
     | last l =>
       constructor
@@ -379,8 +379,7 @@ theorem jumpsOkNodeT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es 
         | nil => rfl
         | cons av a =>
           cases av <;> cases a <;>
-            simp [Q, jumpsOkNodeT, jumpsOkNode, jumpdestOkT_eq T,
-              ihf.1, ihg.1]
+            simp only [jumpsOkNodeT, jumpsOkNode, Q, ihf.1, jumpdestOkT_eq T, ihg.1]
       · simp only
     | branchTo f k ih =>
       constructor
@@ -389,7 +388,7 @@ theorem jumpsOkNodeT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es 
         | nil => rfl
         | cons av a =>
           cases av <;> cases a <;> cases h : es[k]? <;>
-            simp [Q, jumpsOkNodeT, jumpsOkNode, jumpdestOkT_eq T, ih.1, h]
+            simp only [jumpsOkNodeT, jumpsOkNode, Q, h, jumpdestOkT_eq T, ih.1]
       · simp only
     | jump k =>
       constructor
@@ -398,7 +397,7 @@ theorem jumpsOkNodeT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es 
         | nil => rfl
         | cons av a =>
           cases av <;> cases h : es[k]? <;>
-            simp [Q, jumpsOkNodeT, jumpsOkNode, jumpdestOkT_eq T, h]
+            simp only [jumpsOkNodeT, h, jumpsOkNode, jumpdestOkT_eq T]
       · simp only
     | callNext k f ih =>
       constructor
@@ -407,8 +406,7 @@ theorem jumpsOkNodeT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es 
         | nil => rfl
         | cons av a =>
           cases av <;> cases f <;> cases h : es[k]? <;>
-            simp [Q, jumpsOkNodeT, jumpsOkNode, jumpdestOkT_eq T,
-              ih.1, ih.2, h, *] <;> rfl
+            simp only [jumpsOkNodeT, jumpsOkNode, Q, List.cons.injEq, AVal.const.injEq, SFunc.dest.injEq, reduceCtorEq, imp_self, implies_true, h, Option.some.injEq, jumpdestOkT_eq T, ih.2] <;> rfl
       · simp only
     | ret =>
       constructor
@@ -501,7 +499,7 @@ theorem checkNodeMT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es :
     | next n f ih =>
       refine ⟨fun pc a μ => ?_, by simp only⟩
       cases h : absNinst n a <;>
-        simp [Q, checkNodeMT, checkNodeM, byteAt, bytesAtT_eq T.bytes_eq, ih.1, h]
+        simp only [checkNodeMT, bytesAtT_eq T.bytes_eq, h, Bool.and_false, checkNodeM, Q, ih.1]
     | last l => exact ⟨fun pc a μ => by simp only [checkNodeMT, T.bytes_eq,
       Array.getElem?_toList, checkNodeM, byteAt],
         by simp only⟩
@@ -598,19 +596,19 @@ theorem jumpsOkNodeMT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es
     | branch f g ihf ihg =>
       refine ⟨fun a μ => ?_, by simp only⟩
       rcases a with _ | ⟨_ | _ | _, _ | ⟨_, a⟩⟩ <;>
-        simp [Q, jumpsOkNodeMT, jumpsOkNodeM, jumpdestOkT_eq T, ihf.1, ihg.1]
+        simp only [jumpsOkNodeMT, jumpsOkNodeM, Q, ihf.1, jumpdestOkT_eq T, ihg.1]
     | branchTo f k ih =>
       refine ⟨fun a μ => ?_, by simp only⟩
       rcases a with _ | ⟨_ | _ | _, _ | ⟨_, a⟩⟩ <;> cases h : es[k]? <;>
-        simp [Q, jumpsOkNodeMT, jumpsOkNodeM, jumpdestOkT_eq T, ih.1, h]
+        simp only [jumpsOkNodeMT, jumpsOkNodeM, Q, h, jumpdestOkT_eq T, ih.1]
     | jump k =>
       refine ⟨fun a μ => ?_, by simp only⟩
       rcases a with _ | ⟨_ | _ | _, a⟩ <;> cases h : es[k]? <;>
-        simp [Q, jumpsOkNodeMT, jumpsOkNodeM, jumpdestOkT_eq T, h]
+        simp only [jumpsOkNodeMT, jumpsOkNodeM, h, jumpdestOkT_eq T]
     | callNext k f ih =>
       refine ⟨fun a μ => ?_, by simp only⟩
       rcases a with _ | ⟨_ | _ | _, a⟩ <;> cases f <;> cases h : es[k]? <;>
-        simp [Q, jumpsOkNodeMT, jumpsOkNodeM, jumpdestOkT_eq T, ih.1, ih.2, h, *] <;> rfl
+        simp only [jumpsOkNodeMT, jumpsOkNodeM, Q, List.cons.injEq, AVal.const.injEq, SFunc.dest.injEq, reduceCtorEq, imp_self, implies_true, h, Option.some.injEq, jumpdestOkT_eq T, ih.2] <;> rfl
     | ret => exact ⟨fun a μ => rfl, by simp only⟩
     | pcAt p f ih =>
       exact ⟨fun a μ => by simp only [jumpsOkNodeMT, ih.1, jumpsOkNodeM, Q], by simp only⟩

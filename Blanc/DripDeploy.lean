@@ -929,7 +929,10 @@ private theorem chargeCodeGas_drip_output
   obtain ⟨tail, hcons⟩ := code_cons
   have hlen : code.length = 1762 := codeSize_exact
   rw [processCreateMessage.chargeCodeGas_legacy_eq_ok hstateGas
-    (by rw [h_output, hcons]; simp <;> decide) (by rw [h_output, hlen]; exact h_gas)
+    (by
+      rw [h_output, hcons]
+      change (some (91 : UInt8) : Option UInt8) ≠ some 239
+      decide) (by rw [h_output, hlen]; exact h_gas)
     (by rw [h_output, hlen]; exact h_max), h_output, hlen]
   rfl
 
@@ -1919,7 +1922,7 @@ theorem canonicalDeploymentTransaction_succeeds
     rw [hprepare]
     simp only [hmessage.run]
     rw [hrefund]
-    simp only [hdelete, List.foldl_nil]
+    simp only [hdelete]
     simp only [settleSelfdestructs, hforkStateGas]
     have hforkBalNone : (Fork.ruleSet fork).bal = none := by
       rw [← htxRules]

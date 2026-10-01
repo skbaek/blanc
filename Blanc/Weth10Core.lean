@@ -147,8 +147,7 @@ theorem flashMintedSlot_region : InRegion .flash flashMintedSlot := by
 
 theorem regionTag_injective : Function.Injective regionTag := by
   intro x y
-  cases x <;> cases y <;>
-    simp [regionTag, nonceTag, allowanceTag, tagMask] at *
+  cases x <;> cases y <;> decide +kernel
 
 /-- One generic theorem covers all six pairwise region-disjointness cases. -/
 theorem regions_disjoint {x y : KeyRegion} (hne : x ≠ y) :

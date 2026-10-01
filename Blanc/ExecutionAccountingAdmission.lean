@@ -697,8 +697,8 @@ theorem body (L : AccountingLadderAdmitted c ca entry)
       simpa only [Benv.withState] using historyMeta.2
     have htx : sum trace.transactionBenv.state.bal ≤
         sum trace.historyState.bal := by
-      simpa [Benv.withState] using trace.transactions.sum_le
-        (by simpa [Benv.withState] using hfork)
+      simpa only [Benv.withState] using trace.transactions.sum_le
+        (by simpa only [Benv.withState] using hfork)
     omega
   obtain ⟨wdSteps, wdReplay, wdObserved⟩ :=
     L.directWithdrawal trace.transactionBenv.state wds txBound blockIndex

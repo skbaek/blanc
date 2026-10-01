@@ -158,7 +158,7 @@ theorem Mem.memWord_write_word (μ : Mem) (n : Nat) (v : B256) :
     memWord (μ.write n v.toBytes) n = v ∧ n + 32 ≤ (μ.write n v.toBytes).size := by
   have hlen : v.toBytes.length = 32 := B256.length_toBytes v
   have hne : v.toBytes ≠ [] := by
-    intro h; rw [h] at hlen; simp at hlen
+    intro h; rw [h] at hlen; simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
   obtain ⟨A, hdata, hA, _, hfit, _⟩ := Mem.write_base μ n hne
   refine ⟨?_, by rw [← hlen]; exact hfit⟩
   unfold memWord Mem.read
@@ -166,11 +166,13 @@ theorem Mem.memWord_write_word (μ : Mem) (n : Nat) (v : B256) :
   have hmap : (List.range 32).map (fun j => (Array.writeD A n v.toBytes).getD (n + j) 0) =
       v.toBytes := by
     apply List.ext_getElem
-    · simp [hlen]
+    · simp only [Array.getD_eq_getD_getElem?, List.length_map, List.length_range, hlen]
     · intro j h1 h2
       simp only [List.getElem_map, List.getElem_range]
-      rw [Array.getD_writeD 0 _ A n (n + j) hA, if_pos (by simp at h1; omega)]
-      simp [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h2]
+      rw [Array.getD_writeD 0 _ A n (n + j) hA,
+        if_pos (by simp only [Array.getD_eq_getD_getElem?, List.length_map, List.length_range] at h1; omega)]
+      simp only [add_tsub_cancel_left, List.getD_eq_getElem?_getD,
+        List.getElem?_eq_getElem h2, Option.getD_some]
   rw [hmap]
   exact B256.toB256_toBytes v
 
