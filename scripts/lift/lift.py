@@ -2403,18 +2403,28 @@ def check_source() -> Any:
             "",
         ])
     n = len(cert_entries_lines)
-    assembly = [
-        "theorem cert_check : Cert.check code cert = true := by",
-        "  unfold Cert.check",
-        "  rw [Bool.and_eq_true]",
-        "  refine ⟨by decide +kernel, ?_⟩",
-        "  rw [List.all_eq_true]",
-        "  intro p hp",
-        "  simp only [cert, List.mem_cons, List.not_mem_nil, or_false] at hp",
-        "  rcases hp with " + " | ".join(["rfl"] * n),
-    ]
-    assembly.extend(f"  · exact entry_{i}" for i in range(n))
+    if n == 1:
+        # Share the checker/list assembly; the actual node decision stays local.
+        assembly = [
+            "theorem cert_check : Cert.check code cert = true := by",
+            "  exact Cert.check_singleton (by decide +kernel) entry_0",
+        ]
+    else:
+        assembly = [
+            "theorem cert_check : Cert.check code cert = true := by",
+            "  unfold Cert.check",
+            "  rw [Bool.and_eq_true]",
+            "  refine ⟨by decide +kernel, ?_⟩",
+            "  rw [List.all_eq_true]",
+            "  intro p hp",
+            "  simp only [cert, List.mem_cons, List.not_mem_nil, or_false] at hp",
+            "  rcases hp with " + " | ".join(["rfl"] * n),
+        ]
+        assembly.extend(f"  · exact entry_{i}" for i in range(n))
     files = split_check(lines, blocks, assembly)
+    if n == 1:
+        # Add only to the assembly owner, including a split Check if requested.
+        files["Check"] = "import Blanc.Lift.CheckAssembly\n" + files["Check"]
     return files if args.check_parts >= 2 else files["Check"]
 
 

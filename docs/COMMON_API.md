@@ -191,6 +191,11 @@ registry has identified the likely vocabulary.
   cost from the cold surcharge, and `sloadColdCount_le` /
   `sloadScheduleCost_le` bound that schedule in
   [`Blanc/StorageAccessGas.lean`](../Blanc/StorageAccessGas.lean).
+- `sstoreNewRefundCounter_ge_of_original_eq_current` proves an SSTORE whose
+  original and current slot values agree cannot decrease an arbitrary refund
+  counter; `afterSstore_refundCounter_ge_of_original_eq_current` carries this
+  to the selected warm/cold SSTORE state for checked-message settlement.
+  [`Blanc/StorageRefund.lean`](../Blanc/StorageRefund.lean).
 - For TWG trigger packets, local-call rebasing commutes with constant-store
   prefixes by `Trigger.rebaseLocalCalls_prependStoresRev` in
   [`Blanc/LidoTriggerableWithdrawalsGatewayTrigger.lean`](../Blanc/LidoTriggerableWithdrawalsGatewayTrigger.lean).
@@ -2113,7 +2118,12 @@ for `SystemMessageTrace`, `RequestsTrace` and `AppliedBodyTrace`, and
 for `ConfiguredBlockTrace` and `ConfiguredHistoryTrace`.  Each module owns only
 the `FrameAdmitted` predicate of its own carriers and the transport theorem
 through them; withdrawals and other direct state steps keep their ordinary
-invariant proofs.  Import
+invariant proofs. For the exact boundary before request processing, use
+[`Blanc/ExecutionBodyPrefixAdmission.lean`](../Blanc/ExecutionBodyPrefixAdmission.lean):
+`AppliedBodyTrace.requestBenv` names the transaction-plus-withdrawals environment;
+`requestBenv_covered` transports the fork and `requestBenvInv_admitted_sem`
+transports the invariant using the existing admission and opening balance bound.
+Neither request-call outcome is consumed by this prefix proof.  Import
 [`Blanc/ExecutionTraceFresh.lean`](../Blanc/ExecutionTraceFresh.lean) when the
 consumer needs canonical interpreter ingress as one conjunct:
 
@@ -2322,6 +2332,14 @@ rather than restating them:
   `ProcessMessage.targetBalanceCredits_of_body` and
   `targetBalanceCredits_of_balance_mono` are its restated seams, and they are
   what keeps the interface from quietly acquiring a ledger-shaped premise.
+- `signedBalanceCarrier` retains exact message values with an `Int` entry
+  boundary, avoiding a raw-frame value≤balance premise. `SignedBalanceCredit`
+  distinguishes message-frame credits from incidental credits;
+  `signedBalanceEntry_eq_ofState` connects that boundary to actual value transfer
+  and `signedBalanceCarrier_append` composes replay. `SignedBalanceCredit.frames`
+  observes message frames; `signedBalanceCredit_frames_sum_le` bounds their
+  total values by the total recorded credits.
+  [`Blanc/ExecutionAccountingSignedBalance.lean`](../Blanc/ExecutionAccountingSignedBalance.lean).
 
 `Blanc/ProrataRealizedAccounting.lean`'s `ProrataAccountingReplay.carrier` is
 the worked ledger-shaped example.  This module classifies no transition as a
@@ -3076,6 +3094,11 @@ contract-neutral.
   are linear per instruction and a 1,474-node entry of the 6,358-byte beacon
   deposit contract passed 16 GiB, while the trie decides it in 6 s / 3.4 GiB
   (`Blanc/Lift/BeaconDeposit/Check.lean` is the template).
+- Assemble a single-entry non-memory certificate with `Cert.check_singleton` in
+  [`Blanc/Lift/CheckAssembly.lean`](../Blanc/Lift/CheckAssembly.lean). Supply the
+  existing startup Boolean and sole `checkNode` result; the theorem preserves
+  the ordinary `Cert.check` proposition. The registered producer uses it for
+  singleton checks, including the final owner of split check files.
 - Execution to lifted run (safety): `lift_sound`, and `lift_sound_in`, which
   keeps each step's derivation (`StepIn`) for arguments about re-entrant child
   frames, in [`Blanc/Lift/Sound.lean`](../Blanc/Lift/Sound.lean).
