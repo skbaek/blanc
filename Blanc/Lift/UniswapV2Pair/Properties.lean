@@ -2080,4 +2080,346 @@ theorem runTyped_sync_product {st : State} {ctx : Context} {transcript : Transcr
   rw [supply, reserve0, reserve1]
   exact Nat.mul_le_mul_right (st.totalSupply.toNat ^ 2) (Nat.mul_le_mul noShrink.1 noShrink.2)
 
+
+/-- The two economic observations carried through actual swap continuations. -/
+def SwapRunOutcome (supply : B256) (reserves : CachedReserves) (result : RunResult) : Prop :=
+  result.frame.current.state.totalSupply = supply ∧
+    reserves.reserve0.val * reserves.reserve1.val ≤
+      result.frame.current.state.reserve0.val * result.frame.current.state.reserve1.val
+
+/-- Successful swap checking and the real final update preserve supply and grow product. -/
+theorem drive_swapBalance1_outcome {fuel : Nat} {frame : Frame} {request : Request}
+    {locals : SwapLocals} {balance0 : B256} {transcript : Transcript} {returndata : Bytes}
+    (kind : request.kind = .staticCall)
+    (successful : (drive fuel (.suspended frame request (.swapBalance1 locals balance0))
+      transcript).status = .success returndata) :
+    SwapRunOutcome frame.current.state.totalSupply locals.reserves
+      (drive fuel (.suspended frame request (.swapBalance1 locals balance0)) transcript) := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    obtain ⟨result, turns, tail, shape, complete, resumedSuccess, frameEq⟩ :=
+      drive_suspended_success successful
+    have staticExternal : externalStatic frame request = true := by
+      rw [externalStatic, kind]
+      cases frame.context.isStatic <;> rfl
+    have settled := Frame.settleExternal_static_frame frame fuel request result turns staticExternal
+    rw [settled] at resumedSuccess frameEq
+    cases decoded : decodeExternal request result with
+    | error failure =>
+      exact False.elim (resumeSegment_error_not_success decoded fuel tail returndata resumedSuccess)
+    | ok decodedResult =>
+      cases decodedResult with
+      | address address =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | unit =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | word balance1 =>
+        let inputs := swapInputs balance0 balance1 locals.amount0Out locals.amount1Out
+          locals.reserves.reserve0.val locals.reserves.reserve1.val
+        simp only [resumeSegment, decoded] at resumedSuccess frameEq
+        cases checked : swapCheck balance0 balance1 inputs.1 inputs.2
+            locals.reserves.reserve0.val locals.reserves.reserve1.val with
+        | error failure =>
+          dsimp only [inputs] at checked
+          simp only [checked, Frame.fail] at resumedSuccess
+          exact False.elim (drive_failed_not_success fuel _ failure tail returndata resumedSuccess)
+        | ok accepted =>
+          cases accepted
+          dsimp only [inputs] at checked
+          simp only [checked] at resumedSuccess frameEq
+          have terminal := Frame.finishUpdated_terminal (frame.beginResume request)
+            balance0 balance1 locals.reserves false
+            (some (.swap (frame.beginResume request).context.sender
+              (Nat.toB256 inputs.1) (Nat.toB256 inputs.2)
+              locals.amount0Out locals.amount1Out locals.recipient)) []
+          obtain ⟨final, finished, finalEq⟩ := drive_terminal_success terminal resumedSuccess
+          have fields := Frame.finishUpdated_supply_reserves finished
+          rw [SwapRunOutcome, frameEq, finalEq]
+          refine ⟨?_, ?_⟩
+          · simpa only [Frame.beginResume] using fields.1
+          · rw [fields.2.1, fields.2.2]
+            exact swapCheck_product checked
+
+
+/-- Both actual static balance queries consume the successful checked swap update. -/
+theorem drive_swapBalance0_outcome {fuel : Nat} {frame : Frame} {request : Request}
+    {locals : SwapLocals} {transcript : Transcript} {returndata : Bytes}
+    (kind : request.kind = .staticCall)
+    (successful : (drive fuel (.suspended frame request (.swapBalance0 locals))
+      transcript).status = .success returndata) :
+    SwapRunOutcome frame.current.state.totalSupply locals.reserves
+      (drive fuel (.suspended frame request (.swapBalance0 locals)) transcript) := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    obtain ⟨result, turns, tail, shape, complete, resumedSuccess, frameEq⟩ :=
+      drive_suspended_success successful
+    have staticExternal : externalStatic frame request = true := by
+      rw [externalStatic, kind]
+      cases frame.context.isStatic <;> rfl
+    have settled := Frame.settleExternal_static_frame frame fuel request result turns staticExternal
+    rw [settled] at resumedSuccess frameEq
+    cases decoded : decodeExternal request result with
+    | error failure =>
+      exact False.elim (resumeSegment_error_not_success decoded fuel tail returndata resumedSuccess)
+    | ok decodedResult =>
+      cases decodedResult with
+      | address address =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | unit =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | word balance0 =>
+        simp only [resumeSegment, decoded, Frame.suspend] at resumedSuccess frameEq
+        have fields := drive_swapBalance1_outcome (frame := frame.beginResume request) rfl resumedSuccess
+        rw [SwapRunOutcome, frameEq]
+        exact fields
+
+
+/-- Actual callback reentries retain locked supply before the checked observation chain. -/
+theorem drive_swapCallback_outcome {fuel : Nat} {frame : Frame} {request : Request}
+    {locals : SwapLocals} {transcript : Transcript} {returndata : Bytes}
+    (locked : frame.current.state.unlocked = 0)
+    (successful : (drive fuel (.suspended frame request (.swapCallback locals))
+      transcript).status = .success returndata) :
+    SwapRunOutcome frame.current.state.totalSupply locals.reserves
+      (drive fuel (.suspended frame request (.swapCallback locals)) transcript) := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    obtain ⟨result, turns, tail, shape, complete, resumedSuccess, frameEq⟩ :=
+      drive_suspended_success successful
+    have core := Frame.settleExternal_locked_core locked fuel request result turns
+    have supply : (frame.settleExternal fuel request result turns).current.state.totalSupply =
+        frame.current.state.totalSupply := congrArg (fun core => core.1) core
+    cases decoded : decodeExternal request result with
+    | error failure =>
+      exact False.elim (resumeSegment_error_not_success decoded fuel tail returndata resumedSuccess)
+    | ok decodedResult =>
+      cases decodedResult with
+      | address address =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | word balance =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | unit =>
+        simp only [resumeSegment, decoded, Frame.suspend] at resumedSuccess frameEq
+        have fields := drive_swapBalance0_outcome rfl resumedSuccess
+        rw [SwapRunOutcome, frameEq]
+        exact ⟨fields.1.trans supply, fields.2⟩
+
+/-- The actual post-transfer source branch includes the callback precisely when requested. -/
+theorem Frame.afterSwapTransfer1_outcome {fuel : Nat} {frame : Frame}
+    {locals : SwapLocals} {transcript : Transcript} {returndata : Bytes}
+    (locked : frame.current.state.unlocked = 0)
+    (successful : (drive fuel (frame.afterSwapTransfer1 locals) transcript).status = .success returndata) :
+    SwapRunOutcome frame.current.state.totalSupply locals.reserves
+      (drive fuel (frame.afterSwapTransfer1 locals) transcript) := by
+  by_cases callback : locals.data.length > 0
+  · simp only [Frame.afterSwapTransfer1, ite_eq_left callback, Frame.suspend] at successful ⊢
+    exact drive_swapCallback_outcome locked successful
+  · simp only [Frame.afterSwapTransfer1, ite_eq_right callback, Frame.suspend] at successful ⊢
+    exact drive_swapBalance0_outcome rfl successful
+
+
+/-- The second actual transfer preserves locked supply and resumes the callback branch. -/
+theorem drive_swapTransfer1_outcome {fuel : Nat} {frame : Frame} {request : Request}
+    {locals : SwapLocals} {transcript : Transcript} {returndata : Bytes}
+    (locked : frame.current.state.unlocked = 0)
+    (successful : (drive fuel (.suspended frame request (.swapTransfer1 locals))
+      transcript).status = .success returndata) :
+    SwapRunOutcome frame.current.state.totalSupply locals.reserves
+      (drive fuel (.suspended frame request (.swapTransfer1 locals)) transcript) := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    obtain ⟨result, turns, tail, shape, complete, resumedSuccess, frameEq⟩ :=
+      drive_suspended_success successful
+    have core := Frame.settleExternal_locked_core locked fuel request result turns
+    let resumed := (frame.settleExternal fuel request result turns).beginResume request
+    have resumeLocked : resumed.current.state.unlocked = 0 :=
+      (congrArg (fun core => core.2.2.2.2.2) core).trans locked
+    have supply : resumed.current.state.totalSupply = frame.current.state.totalSupply :=
+      congrArg (fun core => core.1) core
+    cases decoded : decodeExternal request result with
+    | error failure =>
+      exact False.elim (resumeSegment_error_not_success decoded fuel tail returndata resumedSuccess)
+    | ok decodedResult =>
+      cases decodedResult with
+      | address address =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | word balance =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | unit =>
+        simp only [resumeSegment, decoded] at resumedSuccess frameEq
+        have fields := Frame.afterSwapTransfer1_outcome resumeLocked resumedSuccess
+        rw [SwapRunOutcome, frameEq]
+        exact ⟨fields.1.trans supply, fields.2⟩
+
+/-- The actual post-first-transfer branch performs the second transfer exactly when nonzero. -/
+theorem Frame.afterSwapTransfer0_outcome {fuel : Nat} {frame : Frame}
+    {locals : SwapLocals} {transcript : Transcript} {returndata : Bytes}
+    (locked : frame.current.state.unlocked = 0)
+    (successful : (drive fuel (frame.afterSwapTransfer0 locals) transcript).status = .success returndata) :
+    SwapRunOutcome frame.current.state.totalSupply locals.reserves
+      (drive fuel (frame.afterSwapTransfer0 locals) transcript) := by
+  by_cases payout1 : locals.amount1Out > 0
+  · simp only [Frame.afterSwapTransfer0, ite_eq_left payout1, Frame.suspend] at successful ⊢
+    exact drive_swapTransfer1_outcome locked successful
+  · simp only [Frame.afterSwapTransfer0, ite_eq_right payout1] at successful ⊢
+    exact Frame.afterSwapTransfer1_outcome locked successful
+
+/-- Both token transfers and arbitrary retained callback turns feed the actual swap check. -/
+theorem drive_swapTransfer0_outcome {fuel : Nat} {frame : Frame} {request : Request}
+    {locals : SwapLocals} {transcript : Transcript} {returndata : Bytes}
+    (locked : frame.current.state.unlocked = 0)
+    (successful : (drive fuel (.suspended frame request (.swapTransfer0 locals))
+      transcript).status = .success returndata) :
+    SwapRunOutcome frame.current.state.totalSupply locals.reserves
+      (drive fuel (.suspended frame request (.swapTransfer0 locals)) transcript) := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    obtain ⟨result, turns, tail, shape, complete, resumedSuccess, frameEq⟩ :=
+      drive_suspended_success successful
+    have core := Frame.settleExternal_locked_core locked fuel request result turns
+    let resumed := (frame.settleExternal fuel request result turns).beginResume request
+    have resumeLocked : resumed.current.state.unlocked = 0 :=
+      (congrArg (fun core => core.2.2.2.2.2) core).trans locked
+    have supply : resumed.current.state.totalSupply = frame.current.state.totalSupply :=
+      congrArg (fun core => core.1) core
+    cases decoded : decodeExternal request result with
+    | error failure =>
+      exact False.elim (resumeSegment_error_not_success decoded fuel tail returndata resumedSuccess)
+    | ok decodedResult =>
+      cases decodedResult with
+      | address address =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | word balance =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | unit =>
+        simp only [resumeSegment, decoded] at resumedSuccess frameEq
+        have fields := Frame.afterSwapTransfer0_outcome resumeLocked resumedSuccess
+        rw [SwapRunOutcome, frameEq]
+        exact ⟨fields.1.trans supply, fields.2⟩
+
+
+/-- Every successful swap entry consumes its actual guarded transfer/callback/update chain. -/
+theorem drive_startTyped_swap_outcome {fuel : Nat} {current : Checkpoint} {ctx : Context}
+    {amount0Out amount1Out : B256} {recipient : Adr} {data : Bytes}
+    {transcript : Transcript} {returndata : Bytes}
+    (successful : (drive fuel (startTyped current ctx (.swap amount0Out amount1Out recipient data))
+      transcript).status = .success returndata) :
+    SwapRunOutcome current.state.totalSupply current.state.cachedReserves
+      (drive fuel (startTyped current ctx (.swap amount0Out amount1Out recipient data)) transcript) := by
+  by_cases paid : ctx.value ≠ 0
+  · simp only [startTyped, startImmediate, ite_eq_left paid, Frame.fail] at successful
+    exact False.elim (drive_failed_not_success fuel _ .emptyRevert transcript returndata successful)
+  · by_cases unlocked : current.state.unlocked = 1
+    · by_cases staticContext : ctx.isStatic = true
+      · simp only [startTyped, startImmediate, ite_eq_right paid, getterResult, Frame.lock,
+          Frame.enter, ite_eq_left unlocked, staticContext, ite_true, Frame.fail] at successful
+        exact False.elim (drive_failed_not_success fuel _ .staticWrite transcript returndata successful)
+      · let lockedFrame : Frame :=
+          { Frame.enter current ctx (.swap amount0Out amount1Out recipient data) with
+            current := { current with state := { current.state with unlocked := 0 } } }
+        let locals : SwapLocals :=
+          { recipient := recipient, reserves := current.state.cachedReserves,
+            token0 := current.state.token0, token1 := current.state.token1,
+            amount0Out := amount0Out, amount1Out := amount1Out, data := data }
+        have enteredUnlocked :
+            (Frame.enter current ctx (.swap amount0Out amount1Out recipient data)).current.state.unlocked = 1 :=
+          unlocked
+        have enteredStatic :
+            ¬(Frame.enter current ctx (.swap amount0Out amount1Out recipient data)).context.isStatic = true :=
+          staticContext
+        have opened : (Frame.enter current ctx (.swap amount0Out amount1Out recipient data)).lock =
+            .ok lockedFrame := by
+          rw [Frame.lock, ite_eq_left enteredUnlocked, ite_eq_right enteredStatic]
+          rfl
+        have stage : startTyped current ctx (.swap amount0Out amount1Out recipient data) =
+            if amount0Out > 0 ∨ amount1Out > 0 then
+              if amount0Out.toNat < current.state.reserve0.val ∧
+                  amount1Out.toNat < current.state.reserve1.val then
+                if recipient ≠ current.state.token0 ∧ recipient ≠ current.state.token1 then
+                  if amount0Out > 0 then
+                    lockedFrame.suspend .swapTransfer0 locals.token0 (.transfer recipient amount0Out)
+                      (.swapTransfer0 locals)
+                  else lockedFrame.afterSwapTransfer0 locals
+                else lockedFrame.fail (.sourceGuard "UniswapV2: INVALID_TO")
+              else lockedFrame.fail (.sourceGuard "UniswapV2: INSUFFICIENT_LIQUIDITY")
+            else lockedFrame.fail (.sourceGuard "UniswapV2: INSUFFICIENT_OUTPUT_AMOUNT") := by
+          simp only [startTyped, startImmediate, ite_eq_right paid, getterResult, opened]
+          rfl
+        rw [stage] at successful ⊢
+        by_cases positiveOutput : amount0Out > 0 ∨ amount1Out > 0
+        · rw [ite_eq_left positiveOutput] at successful ⊢
+          by_cases liquidity : amount0Out.toNat < current.state.reserve0.val ∧
+              amount1Out.toNat < current.state.reserve1.val
+          · rw [ite_eq_left liquidity] at successful ⊢
+            by_cases validRecipient : recipient ≠ current.state.token0 ∧ recipient ≠ current.state.token1
+            · rw [ite_eq_left validRecipient] at successful ⊢
+              by_cases payout0 : amount0Out > 0
+              · rw [ite_eq_left payout0, Frame.suspend] at successful ⊢
+                exact drive_swapTransfer0_outcome rfl successful
+              · rw [ite_eq_right payout0] at successful ⊢
+                exact Frame.afterSwapTransfer0_outcome rfl successful
+            · rw [ite_eq_right validRecipient, Frame.fail] at successful
+              exact False.elim (drive_failed_not_success fuel _
+                (.sourceGuard "UniswapV2: INVALID_TO") transcript returndata successful)
+          · rw [ite_eq_right liquidity, Frame.fail] at successful
+            exact False.elim (drive_failed_not_success fuel _
+              (.sourceGuard "UniswapV2: INSUFFICIENT_LIQUIDITY") transcript returndata successful)
+        · rw [ite_eq_right positiveOutput, Frame.fail] at successful
+          exact False.elim (drive_failed_not_success fuel _
+            (.sourceGuard "UniswapV2: INSUFFICIENT_OUTPUT_AMOUNT") transcript returndata successful)
+    · have enteredLocked :
+          ¬(Frame.enter current ctx (.swap amount0Out amount1Out recipient data)).current.state.unlocked = 1 :=
+        unlocked
+      have closed : (Frame.enter current ctx (.swap amount0Out amount1Out recipient data)).lock =
+          .error (.sourceGuard "UniswapV2: LOCKED") := by
+        rw [Frame.lock, ite_eq_right enteredLocked]
+      simp only [startTyped, startImmediate, ite_eq_right paid, getterResult, closed, Frame.fail] at successful
+      exact False.elim (drive_failed_not_success fuel _
+        (.sourceGuard "UniswapV2: LOCKED") transcript returndata successful)
+
+
+/-- Actual successful swaps grow the supply-scaled reserve product without a NoShrink premise. -/
+theorem runTyped_swap_product {st : State} {ctx : Context} {amount0Out amount1Out : B256}
+    {recipient : Adr} {data : Bytes} {transcript : Transcript} {returndata : Bytes}
+    (successful : (runTyped st ctx (.swap amount0Out amount1Out recipient data) transcript).status =
+      .success returndata) :
+    st.reserve0.val * st.reserve1.val *
+        (runTyped st ctx (.swap amount0Out amount1Out recipient data) transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
+      (runTyped st ctx (.swap amount0Out amount1Out recipient data) transcript).frame.current.state.reserve0.val *
+        (runTyped st ctx (.swap amount0Out amount1Out recipient data) transcript).frame.current.state.reserve1.val *
+        st.totalSupply.toNat ^ 2 := by
+  have fields : SwapRunOutcome st.totalSupply st.cachedReserves
+      (runTyped st ctx (.swap amount0Out amount1Out recipient data) transcript) :=
+    drive_startTyped_swap_outcome (current := { state := st, logs := [], updates := [] })
+      (ctx := ctx) (amount0Out := amount0Out) (amount1Out := amount1Out)
+      (recipient := recipient) (data := data) (fuel := transcript.work + 2)
+      (transcript := transcript) (returndata := returndata) successful
+  rw [fields.1]
+  exact Nat.mul_le_mul_right (st.totalSupply.toNat ^ 2) fields.2
+
 end Blanc.Lift.UniswapV2Pair
