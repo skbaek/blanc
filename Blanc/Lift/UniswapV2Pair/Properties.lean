@@ -1910,4 +1910,174 @@ theorem runTyped_mint_feeOff_product {st : State} {ctx : Context} {recipient : A
     runTyped_mint_product (st := st) (ctx := ctx) (recipient := recipient)
       (transcript := transcript) (returndata := returndata) positiveSupply successful
 
+
+/-- Sync stores its final returned balance word and preserves the pre-query supply. -/
+theorem drive_syncBalance1_values {fuel : Nat} {frame : Frame} {request : Request}
+    {reserves : CachedReserves} {balance0 : B256} {owner : Adr} {transcript : Transcript}
+    {returndata : Bytes} (kind : request.kind = .staticCall)
+    (operation : request.operation = .balanceOf owner)
+    (successful : (drive fuel (.suspended frame request (.syncBalance1 reserves balance0))
+      transcript).status = .success returndata) :
+    (drive fuel (.suspended frame request (.syncBalance1 reserves balance0))
+      transcript).frame.current.state.totalSupply = frame.current.state.totalSupply ∧
+      (drive fuel (.suspended frame request (.syncBalance1 reserves balance0))
+        transcript).frame.current.state.reserve0.val = balance0.toNat ∧
+      (drive fuel (.suspended frame request (.syncBalance1 reserves balance0))
+        transcript).frame.current.state.reserve1.val = transcript.firstWord.toNat := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    obtain ⟨result, turns, tail, shape, complete, resumedSuccess, frameEq⟩ :=
+      drive_suspended_success successful
+    have staticExternal : externalStatic frame request = true := by
+      rw [externalStatic, kind]
+      cases frame.context.isStatic <;> rfl
+    have settled := Frame.settleExternal_static_frame frame fuel request result turns staticExternal
+    rw [settled] at resumedSuccess frameEq
+    cases decoded : decodeExternal request result with
+    | error failure =>
+      exact False.elim (resumeSegment_error_not_success decoded fuel tail returndata resumedSuccess)
+    | ok decodedResult =>
+      cases decodedResult with
+      | address address =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | unit =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | word balance1 =>
+        have wordEq := decodeExternal_balance_word operation decoded
+        simp only [resumeSegment, decoded] at resumedSuccess frameEq
+        have terminal := Frame.finishUpdated_terminal (frame.beginResume request)
+          balance0 balance1 reserves false none []
+        obtain ⟨final, finished, finalEq⟩ := drive_terminal_success terminal resumedSuccess
+        have fields := Frame.finishUpdated_supply_reserves finished
+        rw [frameEq, finalEq]
+        refine ⟨?_, fields.2.1, ?_⟩
+        · simpa only [Frame.beginResume] using fields.1
+        · rw [shape, Transcript.firstWord]
+          exact fields.2.2.trans (congrArg B256.toNat wordEq)
+
+
+/-- Sync's two actual static observations are its final reserves, with unchanged supply. -/
+theorem drive_syncBalance0_values {fuel : Nat} {frame : Frame} {request : Request}
+    {reserves : CachedReserves} {owner : Adr} {transcript : Transcript} {returndata : Bytes}
+    (kind : request.kind = .staticCall) (operation : request.operation = .balanceOf owner)
+    (successful : (drive fuel (.suspended frame request (.syncBalance0 reserves))
+      transcript).status = .success returndata) :
+    (drive fuel (.suspended frame request (.syncBalance0 reserves))
+      transcript).frame.current.state.totalSupply = frame.current.state.totalSupply ∧
+      (drive fuel (.suspended frame request (.syncBalance0 reserves))
+        transcript).frame.current.state.reserve0.val = transcript.firstWord.toNat ∧
+      (drive fuel (.suspended frame request (.syncBalance0 reserves))
+        transcript).frame.current.state.reserve1.val = transcript.ownTail.firstWord.toNat := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    obtain ⟨result, turns, tail, shape, complete, resumedSuccess, frameEq⟩ :=
+      drive_suspended_success successful
+    have staticExternal : externalStatic frame request = true := by
+      rw [externalStatic, kind]
+      cases frame.context.isStatic <;> rfl
+    have settled := Frame.settleExternal_static_frame frame fuel request result turns staticExternal
+    rw [settled] at resumedSuccess frameEq
+    cases decoded : decodeExternal request result with
+    | error failure =>
+      exact False.elim (resumeSegment_error_not_success decoded fuel tail returndata resumedSuccess)
+    | ok decodedResult =>
+      cases decodedResult with
+      | address address =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | unit =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | word balance0 =>
+        have wordEq := decodeExternal_balance_word operation decoded
+        simp only [resumeSegment, decoded, Frame.suspend] at resumedSuccess frameEq
+        have fields := drive_syncBalance1_values (frame := frame.beginResume request)
+          rfl rfl resumedSuccess
+        rw [frameEq]
+        simpa only [shape, Transcript.firstWord, Transcript.ownTail, Frame.beginResume, wordEq]
+          using fields
+
+
+/-- Successful sync derives the entry guards and stores both independent observations. -/
+theorem drive_startTyped_sync_values {fuel : Nat} {current : Checkpoint} {ctx : Context}
+    {transcript : Transcript} {returndata : Bytes}
+    (successful : (drive fuel (startTyped current ctx .sync) transcript).status = .success returndata) :
+    (drive fuel (startTyped current ctx .sync) transcript).frame.current.state.totalSupply =
+        current.state.totalSupply ∧
+      (drive fuel (startTyped current ctx .sync) transcript).frame.current.state.reserve0.val =
+        transcript.firstWord.toNat ∧
+      (drive fuel (startTyped current ctx .sync) transcript).frame.current.state.reserve1.val =
+        transcript.ownTail.firstWord.toNat := by
+  by_cases paid : ctx.value ≠ 0
+  · simp only [startTyped, startImmediate, ite_eq_left paid, Frame.fail] at successful
+    exact False.elim (drive_failed_not_success fuel _ .emptyRevert transcript returndata successful)
+  · by_cases unlocked : current.state.unlocked = 1
+    · by_cases staticContext : ctx.isStatic = true
+      · simp only [startTyped, startImmediate, ite_eq_right paid, getterResult, Frame.lock,
+          Frame.enter, ite_eq_left unlocked, staticContext, ite_true, Frame.fail] at successful
+        exact False.elim (drive_failed_not_success fuel _ .staticWrite transcript returndata successful)
+      · let lockedFrame : Frame :=
+          { Frame.enter current ctx .sync with
+            current := { current with state := { current.state with unlocked := 0 } } }
+        let reserves := current.state.cachedReserves
+        have enteredUnlocked : (Frame.enter current ctx .sync).current.state.unlocked = 1 := unlocked
+        have enteredStatic : ¬(Frame.enter current ctx .sync).context.isStatic = true := staticContext
+        have opened : (Frame.enter current ctx .sync).lock = .ok lockedFrame := by
+          rw [Frame.lock, ite_eq_left enteredUnlocked, ite_eq_right enteredStatic]
+          rfl
+        have stage : startTyped current ctx .sync =
+            lockedFrame.suspend .syncBalance0 current.state.token0 (.balanceOf ctx.pair)
+              (.syncBalance0 reserves) := by
+          simp only [startTyped, startImmediate, ite_eq_right paid, getterResult, opened]
+          rfl
+        have suspendedSuccess :
+            (drive fuel (.suspended lockedFrame
+              (requestFor .syncBalance0 current.state.token0 (.balanceOf ctx.pair))
+              (.syncBalance0 reserves)) transcript).status = .success returndata := by
+          simpa only [stage, Frame.suspend] using successful
+        have fields := drive_syncBalance0_values (frame := lockedFrame) rfl rfl suspendedSuccess
+        rw [stage, Frame.suspend]
+        exact fields
+    · have enteredLocked : ¬(Frame.enter current ctx .sync).current.state.unlocked = 1 := unlocked
+      have closed : (Frame.enter current ctx .sync).lock =
+          .error (.sourceGuard "UniswapV2: LOCKED") := by
+        rw [Frame.lock, ite_eq_right enteredLocked]
+      simp only [startTyped, startImmediate, ite_eq_right paid, getterResult, closed, Frame.fail] at successful
+      exact False.elim (drive_failed_not_success fuel _
+        (.sourceGuard "UniswapV2: LOCKED") transcript returndata successful)
+
+
+/-- Sync's branch-specific environmental premise concerns only its two returned words. -/
+def SyncEntryNoShrink (st : State) (transcript : Transcript) : Prop :=
+  st.reserve0.val ≤ transcript.firstWord.toNat ∧
+    st.reserve1.val ≤ transcript.ownTail.firstWord.toNat
+
+/-- Actual successful sync satisfies the supply-scaled product bound under NoShrink. -/
+theorem runTyped_sync_product {st : State} {ctx : Context} {transcript : Transcript}
+    {returndata : Bytes} (noShrink : SyncEntryNoShrink st transcript)
+    (successful : (runTyped st ctx .sync transcript).status = .success returndata) :
+    st.reserve0.val * st.reserve1.val *
+        (runTyped st ctx .sync transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
+      (runTyped st ctx .sync transcript).frame.current.state.reserve0.val *
+        (runTyped st ctx .sync transcript).frame.current.state.reserve1.val * st.totalSupply.toNat ^ 2 := by
+  have fields :
+      (runTyped st ctx .sync transcript).frame.current.state.totalSupply = st.totalSupply ∧
+        (runTyped st ctx .sync transcript).frame.current.state.reserve0.val = transcript.firstWord.toNat ∧
+        (runTyped st ctx .sync transcript).frame.current.state.reserve1.val =
+          transcript.ownTail.firstWord.toNat :=
+    drive_startTyped_sync_values (current := { state := st, logs := [], updates := [] })
+      (ctx := ctx) (fuel := transcript.work + 2) (transcript := transcript)
+      (returndata := returndata) successful
+  rcases fields with ⟨supply, reserve0, reserve1⟩
+  rw [supply, reserve0, reserve1]
+  exact Nat.mul_le_mul_right (st.totalSupply.toNat ^ 2) (Nat.mul_le_mul noShrink.1 noShrink.2)
+
 end Blanc.Lift.UniswapV2Pair
