@@ -63,7 +63,7 @@ def readBack (frame : List AVal) : Option B256 → Option AVal
 
 /-- The word a folded instruction leaves on top when its operands are known
 constants: Jaune's own operation, top of stack first (`applyBinary f` computes
-`f top second`).  Only these seven instructions fold. -/
+`f top second`).  Only these eight instructions fold. -/
 def foldConst : Ninst → List AVal → Option B256
   | .reg .add, .const x :: .const y :: _ => some (x + y)
   | .reg .mul, .const x :: .const y :: _ => some (x * y)
@@ -71,6 +71,7 @@ def foldConst : Ninst → List AVal → Option B256
   | .reg .lt, .const x :: .const y :: _ => some (B256.ltCheck x y)
   | .reg .gt, .const x :: .const y :: _ => some (B256.gtCheck x y)
   | .reg .eq, .const x :: .const y :: _ => some (B256.eqCheck x y)
+  | .reg .and, .const x :: .const y :: _ => some (B256.and x y)
   | .reg .iszero, .const x :: _ => some (B256.eqCheck x 0)
   | _, _ => none
 

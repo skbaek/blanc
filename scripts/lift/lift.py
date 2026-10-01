@@ -14,7 +14,7 @@ Plans evidence (`solc-bytecode-v1/w3/lift.py`, `beacon-deposit-bytecode-v1/w0/li
 EXTCODESIZE, compatible-join repair, join-aware call continuations).  The two
 exploration differences of the solc-w3 fork are options (`--no-join-entries`,
 `--wrapper-order fall-first`), not code paths per contract.  `--fold` (registry
-option `"fold": true`) folds ADD, MUL, SUB, LT, GT, EQ and ISZERO over constant
+option `"fold": true`) folds ADD, MUL, SUB, LT, GT, EQ, AND and ISZERO over constant
 operands exactly as `foldConst` in `Blanc/Lift/Check.lean`; off by default, so
 every certificate registered without it regenerates byte-identically.  `--pc`
 (registry option `"pc": true`) lifts `PC` as `SFunc.pcAt pc`, pushing the node's
@@ -24,7 +24,7 @@ which `checkNode` does not check (`AVal.jumps?`); off by default.
 `--memret callnext --const-mem --entry-cap K --widen agree` (registry option
 `"memret": "callnext", "const_mem": true, "entry_cap": K`) is the memory-tracking
 mode ported from Plans evidence/deployed-lido-vyper-v1/memret-probe/lift_memret.py:
-PC, the seven folds and decided JUMPIs, a constant memory map whose transfer is
+PC, the eight folds and decided JUMPIs, a constant memory map whose transfer is
 exactly `absMem`/`memTop` (`Blanc/Lift/CheckMem.lean`), entries keyed by constant
 state with at most K per control context (then widened to the constants all agree
 on), a `mems` list beside `cert`, and a generated Check proving `Cert.checkM` and
@@ -401,7 +401,7 @@ parser.add_argument("--decide-jumpi", action="store_true",
 parser.add_argument("--pc", action="store_true",
                     help="lift PC as SFunc.pcAt (pushes the node's own pc)")
 parser.add_argument("--fold", action="store_true",
-                    help="fold ADD/MUL/SUB/LT/GT/EQ/ISZERO over constant operands (mirror of foldConst)")
+                    help="fold ADD/MUL/SUB/LT/GT/EQ/AND/ISZERO over constant operands (mirror of foldConst)")
 parser.add_argument("--lock-spec", type=str, default=None,
                     help="reentrancy-lock spec as JSON {slot, locked, bodies, mutBodies, setPcs, releasePcs}")
 parser.add_argument("--lock-spec-module", type=str, default=None, help="Lean module defining `lockSpec` (hand-written)")
@@ -425,7 +425,7 @@ CONST_MEM = MEMRET and args.const_mem
 if MEMRET:
     args.pc = True     # PC as SFunc.pcAt (the node's own pc)
 if CONST_MEM:
-    args.fold = True   # exactly foldConst's seven ops (Blanc/Lift/Check.lean)
+    args.fold = True   # exactly foldConst's eight ops (Blanc/Lift/Check.lean)
 ENTRY_CAP = args.entry_cap
 JOIN_EXEMPT = args.memret == "inline" and not args.no_callee_join_exempt
 
@@ -505,6 +505,7 @@ FOLD2 = {
     0x10: lambda x, y: 1 if x < y else 0,   # LT
     0x11: lambda x, y: 1 if x > y else 0,   # GT
     0x14: lambda x, y: 1 if x == y else 0,  # EQ
+    0x16: lambda x, y: x & y,               # AND
 }
 def step_inst(op: int, data: bytes, stack: List[Tuple[Any, ...]], cur_pc: Optional[int] = None) -> Optional[List[Tuple[Any, ...]]]:
     if op == 0x58 and args.pc:  # PC: the node's own pc (SFunc.pcAt)
