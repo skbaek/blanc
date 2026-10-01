@@ -1692,6 +1692,17 @@ the finite trace. These statements establish no finite-word no-overflow,
 bytecode refinement, gas cost or history property. This is a theorem-directed
 numeric interface; it has no execution-goal recipe.
 
+For a symbolic lower bound from a finite growing prefix, use
+[`Blanc/FakeExponentialGrowth.lean`](../Blanc/FakeExponentialGrowth.lean).
+`Blanc.FakeExponential.accumulator_mul_pow_le` bounds the canonical series
+below by `accumulator * q^n` when a positive denominator and counter satisfy
+`denominator * (counter + n) * q ≤ numerator`.
+`factor_mul_pow_le` consumes that bound at canonical initialization and final
+division, giving `factor * q^n ≤ fakeExp factor numerator denominator`.
+These are necessary-bound tools for downstream arithmetic domains; they do
+not establish finite-word equality or reachable-state admission. The interface
+uses named arithmetic theorems and has no execution-goal recipe.
+
 For the unsigned B256 recurrence, use
 [`Blanc/WordFakeExponential.lean`](../Blanc/WordFakeExponential.lean).
 `Blanc.WordFakeExponential.Run` carries the initial output prefix, active-body
