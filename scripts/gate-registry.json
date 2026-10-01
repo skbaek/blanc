@@ -3340,7 +3340,15 @@
      "Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Token/Cert.lean",
      "Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Attacker/Cert.lean",
      "Blanc/Lift/Transfer.lean",
-     "Blanc/AbstractStackTransfer.lean"
+     "Blanc/AbstractStackTransfer.lean",
+     "Blanc/Lift/UniswapV2Pair/Cert.lean",
+     "Blanc/Lift/UniswapV2Pair/Check.lean",
+     "Blanc/Lift/UniswapV2Pair/CheckTries.lean",
+     "Blanc/Lift/UniswapV2Pair/CheckPart0.lean",
+     "Blanc/Lift/UniswapV2Pair/CheckPart1.lean",
+     "Blanc/Lift/UniswapV2Pair/CheckPart2.lean",
+     "Blanc/Lift/UniswapV2Pair/CheckPart3.lean",
+     "Blanc/Lift/UniswapV2Pair/Jumps.lean"
     ],
     "populations": [
      {
