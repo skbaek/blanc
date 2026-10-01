@@ -172,6 +172,8 @@ SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps"]
 # Solc-0.4 scratch-memory walk kit and the value-bearing CALL to a code-free recipient
 # (weth9-liveness-v1): contract-neutral.
 SHARED += ["Lift.ExactWalkSolc", "Lift.ExactWalkCall"]
+# Parameterized free-pointer memory for lifted walks.
+SHARED += ["Lift.ExactWalkMemory"]
 # Pure-model ledger updates (vyper-3crv-bytecode-v1): contract-neutral.
 SHARED += ["LedgerUpdate"]
 # Floor share bounds for two-reserve AMMs: contract-neutral.
@@ -212,6 +214,8 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.Execution",
         "Lift.UniswapV2Pair.Properties",
         "Lift.UniswapV2Pair.SqrtWalk",
+        "Lift.UniswapV2Pair.GetterMemory",
+        "Lift.UniswapV2Pair.GetterWalk",
     ],
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",
                        # the deployed runtime, lifted (decision beacon-lift-layering-family-20260926)

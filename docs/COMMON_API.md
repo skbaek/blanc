@@ -3226,6 +3226,14 @@ contract-neutral.
   constructors need (`rx_push0`, `rx_slt`, `rx_codesize`, `rx_log2`, and `read_covered_len`, a
   window of any length inside an aligned image) in
   [`Blanc/Lift/CreationOps.lean`](../Blanc/Lift/CreationOps.lean).
+- Free-pointer memory with a pointer independent of allocation: `PtrMem p n M`
+  in [`Blanc/Lift/ExactWalkMemory.lean`](../Blanc/Lift/ExactWalkMemory.lean)
+  combines aligned size, `Mem.Wf` and the existing `MemMatches` word at offset64.
+  It permits pointer128 with allocated size96. `PtrMem.init`, `word`, `write`,
+  `set` and `read_self` expose initialization, disjoint word writes, pointer
+  replacement and reads within the allocation. The Pair's `GetterMemory` and
+  `GetterWalk` consume it for the actual one-word return at offset128; use this
+  carrier when the fixed pointer96 of `FpMem` does not describe the bytecode.
 - Gas-exact writer walks for solc-0.4-style runtimes: the scratch-memory invariant `FpMem n M` (word-aligned,
   free pointer `0x60`, kept for an arbitrary `M`; `FpMem.init`, `FpMem.write`, `FpMem.write_out`,
   `FpMem.readback`, `scratchW`), its steps (`rx_mstoreF`, `rx_mstoreOut`, `rx_mloadFp`, `rx_keccakF`,
