@@ -6,12 +6,12 @@ namespace Blanc.Lift.UniswapV2Pair
 
 open Jaune
 
-/-- Successful later-mint pricing consumes the exact minimum-of-floors share law. -/
-theorem mintAmount_product {amount0 amount1 supply : B256} {reserve0 reserve1 liquidity : Nat}
-    (positiveSupply : supply ≠ 0)
+/-- A successful later mint has the exact floor formula and a bounded LP amount. -/
+theorem mintAmount_later_spec {amount0 amount1 supply : B256}
+    {reserve0 reserve1 liquidity : Nat} (positiveSupply : supply ≠ 0)
     (accepted : mintAmount amount0 amount1 supply reserve0 reserve1 = .ok liquidity) :
-    reserve0 * reserve1 * (supply.toNat + liquidity) ^ 2 ≤
-      (reserve0 + amount0.toNat) * (reserve1 + amount1.toNat) * supply.toNat ^ 2 := by
+    liquidity = AMMArithmetic.mintLiquidity amount0.toNat amount1.toNat supply.toNat reserve0 reserve1 ∧
+      liquidity < 2 ^ 256 := by
   rw [mintAmount, ite_eq_right positiveSupply] at accepted
   by_cases product0 : amount0.toNat * supply.toNat < 2 ^ 256
   · rw [ite_eq_left product0] at accepted
@@ -25,13 +25,24 @@ theorem mintAmount_product {amount0 amount1 supply : B256} {reserve0 reserve1 li
         · rw [ite_eq_left zero1] at accepted
           cases accepted
         · rw [ite_eq_right zero1] at accepted
+          refine ⟨(Except.ok.inj accepted).symm, ?_⟩
           rw [← Except.ok.inj accepted]
-          exact AMMArithmetic.mint_product_bound reserve0 reserve1 amount0.toNat
-            amount1.toNat supply.toNat
+          change min (amount0.toNat * supply.toNat / reserve0)
+            (amount1.toNat * supply.toNat / reserve1) < 2 ^ 256
+          exact Nat.lt_of_le_of_lt ((min_le_left _ _).trans (Nat.div_le_self _ _)) product0
       · rw [ite_eq_right product1] at accepted
         cases accepted
   · rw [ite_eq_right product0] at accepted
     cases accepted
+
+/-- Successful later-mint pricing consumes the exact minimum-of-floors share law. -/
+theorem mintAmount_product {amount0 amount1 supply : B256} {reserve0 reserve1 liquidity : Nat}
+    (positiveSupply : supply ≠ 0)
+    (accepted : mintAmount amount0 amount1 supply reserve0 reserve1 = .ok liquidity) :
+    reserve0 * reserve1 * (supply.toNat + liquidity) ^ 2 ≤
+      (reserve0 + amount0.toNat) * (reserve1 + amount1.toNat) * supply.toNat ^ 2 := by
+  rw [(mintAmount_later_spec positiveSupply accepted).1]
+  exact AMMArithmetic.mint_product_bound reserve0 reserve1 amount0.toNat amount1.toNat supply.toNat
 
 /-- Successful burn floors imply the share law under precisely transfer-aware backing. -/
 theorem burnAmounts_product {liquidity balance0 balance1 supply : B256}
@@ -492,5 +503,246 @@ theorem driveTurns_locked_core (fuel : Nat) (frame : Frame) (request : Request)
       | incomplete => rfl
       | success returndata => exact tailCore.trans childCore
       | failed failure => exact tailCore.trans childCore
+
+
+/-- Checked LP minting adds the exact natural supply without word wrap. -/
+theorem State.mintLP_supply {st post : State} {recipient : Adr} {value : B256}
+    {events : List Event} (accepted : st.mintLP recipient value = .ok (post, events)) :
+    post.totalSupply.toNat = st.totalSupply.toNat + value.toNat := by
+  rw [State.mintLP] at accepted
+  by_cases supplyBound : st.totalSupply.toNat + value.toNat < 2 ^ 256
+  · rw [ite_eq_left supplyBound] at accepted
+    by_cases balanceBound : (st.balanceOf recipient).toNat + value.toNat < 2 ^ 256
+    · rw [ite_eq_left balanceBound] at accepted
+      have supplyEq := congrArg (fun result : State × List Event => result.1.totalSupply.toNat)
+        (Except.ok.inj accepted)
+      exact supplyEq.symm.trans (B256.toNat_add_eq_of_nof st.totalSupply value supplyBound)
+    · rw [ite_eq_right balanceBound] at accepted
+      cases accepted
+  · rw [ite_eq_right supplyBound] at accepted
+    cases accepted
+
+/-- Checked LP burning covers its debit and subtracts the exact natural supply. -/
+theorem State.burnLP_supply {st post : State} {source : Adr} {value : B256}
+    {events : List Event} (accepted : st.burnLP source value = .ok (post, events)) :
+    value.toNat ≤ st.totalSupply.toNat ∧
+      post.totalSupply.toNat = st.totalSupply.toNat - value.toNat := by
+  rw [State.burnLP] at accepted
+  by_cases balanceCovered : value ≤ st.balanceOf source
+  · rw [ite_eq_left balanceCovered] at accepted
+    by_cases supplyCovered : value ≤ st.totalSupply
+    · rw [ite_eq_left supplyCovered] at accepted
+      have supplyEq := congrArg (fun result : State × List Event => result.1.totalSupply.toNat)
+        (Except.ok.inj accepted)
+      exact ⟨B256.toNat_le_toNat supplyCovered,
+        supplyEq.symm.trans (B256.toNat_sub_eq_of_le st.totalSupply value supplyCovered)⟩
+    · rw [ite_eq_right supplyCovered] at accepted
+      cases accepted
+  · rw [ite_eq_right balanceCovered] at accepted
+    cases accepted
+
+
+/-- Successful fee minting fixes the post-fee supply to the exact minted amount. -/
+theorem mintFee_supply {st : State} {feeTo : Adr} {reserve0 reserve1 : Nat}
+    {fee : FeeResult} (accepted : mintFee st feeTo reserve0 reserve1 = .ok fee) :
+    fee.state.totalSupply.toNat = st.totalSupply.toNat + fee.minted := by
+  rw [mintFee] at accepted
+  by_cases feeOff : feeTo = 0
+  · rw [ite_eq_left feeOff] at accepted
+    rw [← Except.ok.inj accepted]
+    exact (Nat.add_zero st.totalSupply.toNat).symm
+  · rw [ite_eq_right feeOff] at accepted
+    by_cases noLast : st.kLast = 0
+    · rw [ite_eq_left noLast] at accepted
+      rw [← Except.ok.inj accepted]
+      exact (Nat.add_zero st.totalSupply.toNat).symm
+    · rw [ite_eq_right noLast] at accepted
+      by_cases growing : Nat.sqrt st.kLast.toNat < Nat.sqrt (reserve0 * reserve1)
+      · rw [ite_eq_left growing] at accepted
+        by_cases numeratorBound :
+            st.totalSupply.toNat * (Nat.sqrt (reserve0 * reserve1) - Nat.sqrt st.kLast.toNat) < 2 ^ 256
+        · rw [ite_eq_left numeratorBound] at accepted
+          by_cases scaledRootBound : Nat.sqrt (reserve0 * reserve1) * 5 < 2 ^ 256
+          · rw [ite_eq_left scaledRootBound] at accepted
+            by_cases denominatorBound :
+                Nat.sqrt (reserve0 * reserve1) * 5 + Nat.sqrt st.kLast.toNat < 2 ^ 256
+            · rw [ite_eq_left denominatorBound] at accepted
+              by_cases positiveFee : st.totalSupply.toNat *
+                  (Nat.sqrt (reserve0 * reserve1) - Nat.sqrt st.kLast.toNat) /
+                  (Nat.sqrt (reserve0 * reserve1) * 5 + Nat.sqrt st.kLast.toNat) > 0
+              · rw [ite_eq_left positiveFee] at accepted
+                obtain ⟨⟨post, events⟩, minted, feeEq⟩ := Except.bind_eq_ok accepted
+                have feeBound : st.totalSupply.toNat *
+                    (Nat.sqrt (reserve0 * reserve1) - Nat.sqrt st.kLast.toNat) /
+                    (Nat.sqrt (reserve0 * reserve1) * 5 + Nat.sqrt st.kLast.toNat) < 2 ^ 256 :=
+                  Nat.lt_of_le_of_lt (Nat.div_le_self _ _) numeratorBound
+                have supply := State.mintLP_supply minted
+                rw [B256.toNat_toB256_of_lt feeBound] at supply
+                rw [← Except.ok.inj feeEq]
+                exact supply
+              · rw [ite_eq_right positiveFee] at accepted
+                rw [← Except.ok.inj accepted]
+                exact (Nat.add_zero st.totalSupply.toNat).symm
+            · rw [ite_eq_right denominatorBound] at accepted
+              cases accepted
+          · rw [ite_eq_right scaledRootBound] at accepted
+            cases accepted
+        · rw [ite_eq_right numeratorBound] at accepted
+          cases accepted
+      · rw [ite_eq_right growing] at accepted
+        rw [← Except.ok.inj accepted]
+        exact (Nat.add_zero st.totalSupply.toNat).symm
+
+
+/-- An accepted reserve update retains supply and stores the exact observed balances. -/
+theorem State.update_supply_reserves {st post : State} {ctx : Context}
+    {balance0 balance1 : B256} {reserve0 reserve1 : Nat} {event : Event} {update : OracleUpdate}
+    (accepted : st.update ctx balance0 balance1 reserve0 reserve1 = .ok (post, event, update)) :
+    post.totalSupply = st.totalSupply ∧
+      post.reserve0.val = balance0.toNat ∧ post.reserve1.val = balance1.toNat := by
+  rw [State.update] at accepted
+  by_cases bound0 : balance0.toNat < 2 ^ 112
+  · rw [dite_eq_left bound0] at accepted
+    by_cases bound1 : balance1.toNat < 2 ^ 112
+    · rw [dite_eq_left bound1] at accepted
+      have postEq := Except.ok.inj accepted
+      exact ⟨(congrArg (fun result : State × Event × OracleUpdate => result.1.totalSupply) postEq).symm,
+        (congrArg (fun result : State × Event × OracleUpdate => result.1.reserve0.val) postEq).symm,
+        (congrArg (fun result : State × Event × OracleUpdate => result.1.reserve1.val) postEq).symm⟩
+    · rw [dite_eq_right bound1] at accepted
+      cases accepted
+  · rw [dite_eq_right bound0] at accepted
+    cases accepted
+
+/-- Successful update/fee/event/unlock completion preserves supply and exact reserves. -/
+theorem Frame.finishUpdated_supply_reserves {frame final : Frame} {balance0 balance1 : B256}
+    {reserves : CachedReserves} {feeOn : Bool} {lastEvent : Option Event} {returndata output : Bytes}
+    (accepted : frame.finishUpdated balance0 balance1 reserves feeOn lastEvent returndata =
+      .finished final output) :
+    final.current.state.totalSupply = frame.current.state.totalSupply ∧
+      final.current.state.reserve0.val = balance0.toNat ∧
+      final.current.state.reserve1.val = balance1.toNat := by
+  rw [Frame.finishUpdated] at accepted
+  cases updated : frame.current.state.update frame.context balance0 balance1
+      reserves.reserve0.val reserves.reserve1.val with
+  | error failure =>
+    simp only [updated, Frame.fail] at accepted
+    cases accepted
+  | ok result =>
+    rcases result with ⟨post, event, update⟩
+    simp only [updated] at accepted
+    have fields := State.update_supply_reserves updated
+    cases feeOn <;> cases lastEvent <;>
+      simp only [Bool.false_eq_true, ite_false, ite_true, Frame.withUpdate, Frame.withEvents,
+        Frame.finishLocked, Frame.finish, SegmentResult.finished.injEq] at accepted
+    all_goals
+      rw [← accepted.1]
+      exact fields
+
+
+/-- The actual later-mint continuation consumes fee supply, checked issuance and reserve update. -/
+theorem Frame.mintAfterFee_product {frame final : Frame} {observed : MintObserved}
+    {fee : FeeResult} {feeTo : Adr} {returndata : Bytes}
+    (feeAccepted : mintFee frame.current.state feeTo observed.reserves.reserve0.val
+      observed.reserves.reserve1.val = .ok fee)
+    (positiveSupply : fee.state.totalSupply ≠ 0)
+    (amount0 : observed.reserves.reserve0.val + observed.amount0.toNat = observed.balance0.toNat)
+    (amount1 : observed.reserves.reserve1.val + observed.amount1.toNat = observed.balance1.toNat)
+    (accepted : frame.mintAfterFee observed fee = .finished final returndata) :
+    observed.reserves.reserve0.val * observed.reserves.reserve1.val *
+        final.current.state.totalSupply.toNat ^ 2 ≤
+      final.current.state.reserve0.val * final.current.state.reserve1.val *
+        (frame.current.state.totalSupply.toNat + fee.minted) ^ 2 := by
+  rw [Frame.mintAfterFee] at accepted
+  cases priced : mintAmount observed.amount0 observed.amount1 fee.state.totalSupply
+      observed.reserves.reserve0.val observed.reserves.reserve1.val with
+  | error failure =>
+    simp only [priced, Frame.fail] at accepted
+    cases accepted
+  | ok liquidity =>
+    simp only [priced, ite_eq_right positiveSupply] at accepted
+    by_cases positive : liquidity > 0
+    · rw [ite_eq_left positive] at accepted
+      cases minted : fee.state.mintLP observed.recipient (Nat.toB256 liquidity) with
+      | error failure =>
+        simp only [minted, Frame.fail] at accepted
+        cases accepted
+      | ok result =>
+        rcases result with ⟨post, events⟩
+        simp only [minted] at accepted
+        have pricing := mintAmount_product positiveSupply priced
+        have amountBound := (mintAmount_later_spec positiveSupply priced).2
+        have issued := State.mintLP_supply minted
+        rw [B256.toNat_toB256_of_lt amountBound] at issued
+        have fields := Frame.finishUpdated_supply_reserves accepted
+        have finalSupply : final.current.state.totalSupply.toNat =
+            fee.state.totalSupply.toNat + liquidity :=
+          (congrArg B256.toNat fields.1).trans issued
+        rw [finalSupply, fields.2.1, fields.2.2, ← mintFee_supply feeAccepted, ← amount0, ← amount1]
+        exact pricing
+    · simp only [ite_eq_right positive, Frame.fail] at accepted
+      cases accepted
+
+
+/-- The burn continuation's successful transfer suspension fixes its post-burn supply. -/
+theorem Frame.burnAfterFee_supply {frame final : Frame} {observed : BurnObserved}
+    {fee : FeeResult} {feeTo : Adr} {request : Request} {continuation : Continuation}
+    (feeAccepted : mintFee frame.current.state feeTo observed.locals.reserves.reserve0.val
+      observed.locals.reserves.reserve1.val = .ok fee)
+    (accepted : frame.burnAfterFee observed fee = .suspended final request continuation) :
+    observed.liquidity.toNat ≤ fee.state.totalSupply.toNat ∧
+      final.current.state.totalSupply.toNat =
+        frame.current.state.totalSupply.toNat + fee.minted - observed.liquidity.toNat := by
+  rw [Frame.burnAfterFee] at accepted
+  cases priced : burnAmounts observed.liquidity observed.balance0 observed.balance1
+      fee.state.totalSupply with
+  | error failure =>
+    simp only [priced, Frame.fail] at accepted
+    cases accepted
+  | ok amounts =>
+    rcases amounts with ⟨amount0, amount1⟩
+    simp only [priced] at accepted
+    by_cases positive : amount0 > 0 ∧ amount1 > 0
+    · rw [ite_eq_left positive] at accepted
+      cases burned : fee.state.burnLP frame.context.pair observed.liquidity with
+      | error failure =>
+        simp only [burned, Frame.fail] at accepted
+        cases accepted
+      | ok result =>
+        rcases result with ⟨post, events⟩
+        simp only [burned, Frame.withEvents, Frame.suspend, SegmentResult.suspended.injEq] at accepted
+        have supply := State.burnLP_supply burned
+        have finalSupply := congrArg (fun result : Frame => result.current.state.totalSupply.toNat)
+          accepted.1
+        rw [← mintFee_supply feeAccepted]
+        exact ⟨supply.1, finalSupply.symm.trans supply.2⟩
+    · simp only [ite_eq_right positive, Frame.fail] at accepted
+      cases accepted
+
+/-- Burn pricing survives actual locked external turns under transfer-aware backing. -/
+theorem Frame.burnAfterFee_external_product {frame final : Frame} {observed : BurnObserved}
+    {fee : FeeResult} {feeTo : Adr} {request : Request} {continuation : Continuation}
+    {amount0 amount1 final0 final1 : Nat}
+    (feeAccepted : mintFee frame.current.state feeTo observed.locals.reserves.reserve0.val
+      observed.locals.reserves.reserve1.val = .ok fee)
+    (accepted : frame.burnAfterFee observed fee = .suspended final request continuation)
+    (priced : burnAmounts observed.liquidity observed.balance0 observed.balance1
+      fee.state.totalSupply = .ok (amount0, amount1))
+    (backing0 : observed.locals.reserves.reserve0.val ≤ observed.balance0.toNat)
+    (backing1 : observed.locals.reserves.reserve1.val ≤ observed.balance1.toNat)
+    (debit0 : observed.balance0.toNat ≤ final0 + amount0)
+    (debit1 : observed.balance1.toNat ≤ final1 + amount1)
+    (locked : final.current.state.unlocked = 0)
+    (fuel turn : Nat) (turns : Transcript) :
+    observed.locals.reserves.reserve0.val * observed.locals.reserves.reserve1.val *
+        (driveTurns fuel final request turn turns).frame.current.state.totalSupply.toNat ^ 2 ≤
+      final0 * final1 * (frame.current.state.totalSupply.toNat + fee.minted) ^ 2 := by
+  have supply := Frame.burnAfterFee_supply feeAccepted accepted
+  have core := driveTurns_locked_core fuel final request turn turns locked
+  have finalSupply : (driveTurns fuel final request turn turns).frame.current.state.totalSupply.toNat =
+      frame.current.state.totalSupply.toNat + fee.minted - observed.liquidity.toNat :=
+    (congrArg (fun core => core.1.toNat) core).trans supply.2
+  rw [finalSupply, ← mintFee_supply feeAccepted]
+  exact burnAmounts_product priced backing0 backing1 supply.1 debit0 debit1
 
 end Blanc.Lift.UniswapV2Pair
