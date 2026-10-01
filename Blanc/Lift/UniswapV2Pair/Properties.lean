@@ -1290,4 +1290,340 @@ theorem Frame.mintAfterFee_feeOff_product {fuel : Nat} {frame : Frame} {observed
   simpa only [feeAmount, eq_self, true_or, ite_true, Nat.add_zero] using
     Frame.mintAfterFee_driver_product feeAccepted positiveSupply amount0 amount1 successful
 
+
+/-- Static external settlement keeps the exact pre-query Frame, even on call failure. -/
+theorem Frame.settleExternal_static_frame (frame : Frame) (fuel : Nat) (request : Request)
+    (result : ExternalResult) (turns : Transcript)
+    (staticExternal : externalStatic frame request = true) :
+    frame.settleExternal fuel request result turns = frame := by
+  rw [Frame.settleExternal, driveTurns_static_frame fuel frame request 0 turns staticExternal]
+  cases result.success <;> rfl
+
+/-- The fee recipient is the address decoded from the actual first return word. -/
+theorem decodeExternal_feeTo_address {request : Request} {result : ExternalResult}
+    {recipient : Adr} (operation : request.operation = .feeTo)
+    (accepted : decodeExternal request result = .ok (.address recipient)) :
+    recipient = (Bytes.toB256 (result.returndata.take 32)).toAdr := by
+  simp only [decodeExternal, operation] at accepted
+  by_cases missing : (request.requiresCode && !result.codeExists) = true
+  · rw [ite_eq_left missing] at accepted
+    cases accepted
+  · rw [ite_eq_right missing] at accepted
+    by_cases success : result.success = true
+    · rw [ite_eq_left success] at accepted
+      by_cases length : 32 ≤ result.returndata.length
+      · rw [ite_eq_left length] at accepted
+        exact (DecodedResult.address.inj (Except.ok.inj accepted)).symm
+      · rw [ite_eq_right length] at accepted
+        cases accepted
+    · rw [ite_eq_right success] at accepted
+      cases accepted
+
+/-- Own-call projections read input bytes independently of successful execution. -/
+def Transcript.firstWord : Transcript → B256
+  | .next result _ _ => Bytes.toB256 (result.returndata.take 32)
+  | _ => 0
+
+def Transcript.ownTail : Transcript → Transcript
+  | .next _ _ tail => tail
+  | _ => .done
+
+/-- Fee-query-stage backing uses the independently projected recipient and final answers. -/
+def BurnFeeNoShrink (st : State) (observed : BurnObserved) (transcript : Transcript) : Prop :=
+  observed.locals.reserves.reserve0.val ≤ observed.balance0.toNat ∧
+    observed.locals.reserves.reserve1.val ≤ observed.balance1.toNat ∧
+    ∀ final0 final1, burnFinalAnswers transcript.ownTail = some (final0, final1) →
+      observed.balance0.toNat ≤ final0.toNat +
+        (Nat.toB256 (AMMArithmetic.burnPayment observed.liquidity.toNat observed.balance0.toNat
+          (st.totalSupply.toNat + feeAmount st transcript.firstWord.toAdr
+            observed.locals.reserves.reserve0.val observed.locals.reserves.reserve1.val))).toNat ∧
+      observed.balance1.toNat ≤ final1.toNat +
+        (Nat.toB256 (AMMArithmetic.burnPayment observed.liquidity.toNat observed.balance1.toNat
+          (st.totalSupply.toNat + feeAmount st transcript.firstWord.toAdr
+            observed.locals.reserves.reserve0.val observed.locals.reserves.reserve1.val))).toNat
+
+
+/-- Burn's actual fee query connects independent input backing to the completed burn driver. -/
+theorem drive_burnFee_product {fuel : Nat} {frame : Frame} {request : Request}
+    {observed : BurnObserved} {transcript : Transcript} {returndata : Bytes}
+    (locked : frame.current.state.unlocked = 0)
+    (operation : request.operation = .feeTo) (kind : request.kind = .staticCall)
+    (noShrink : BurnFeeNoShrink frame.current.state observed transcript)
+    (successful : (drive fuel (.suspended frame request (.burnFee observed))
+      transcript).status = .success returndata) :
+    observed.locals.reserves.reserve0.val * observed.locals.reserves.reserve1.val *
+        (drive fuel (.suspended frame request (.burnFee observed))
+          transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
+      (drive fuel (.suspended frame request (.burnFee observed))
+        transcript).frame.current.state.reserve0.val *
+        (drive fuel (.suspended frame request (.burnFee observed))
+          transcript).frame.current.state.reserve1.val *
+        (frame.current.state.totalSupply.toNat + feeAmount frame.current.state
+          transcript.firstWord.toAdr observed.locals.reserves.reserve0.val
+          observed.locals.reserves.reserve1.val) ^ 2 := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    obtain ⟨result, turns, tail, shape, complete, resumedSuccess, frameEq⟩ :=
+      drive_suspended_success successful
+    have staticExternal : externalStatic frame request = true := by
+      rw [externalStatic, kind]
+      cases frame.context.isStatic <;> rfl
+    have settled := Frame.settleExternal_static_frame frame fuel request result turns staticExternal
+    rw [settled] at resumedSuccess frameEq
+    cases decoded : decodeExternal request result with
+    | error failure =>
+      exact False.elim (resumeSegment_error_not_success decoded fuel tail returndata resumedSuccess)
+    | ok decodedResult =>
+      cases decodedResult with
+      | word value =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | unit =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | address feeTo =>
+        have recipientEq := decodeExternal_feeTo_address operation decoded
+        cases charged : mintFee (frame.beginResume request).current.state feeTo
+            observed.locals.reserves.reserve0.val observed.locals.reserves.reserve1.val with
+        | error failure =>
+          simp only [resumeSegment, decoded, charged, Frame.fail] at resumedSuccess
+          exact False.elim (drive_failed_not_success fuel _ failure tail returndata resumedSuccess)
+        | ok fee =>
+          simp only [resumeSegment, decoded, charged] at resumedSuccess frameEq
+          have feeSpec := mintFee_spec charged
+          simp only [BurnFeeNoShrink, shape, Transcript.ownTail, Transcript.firstWord,
+            ← recipientEq] at noShrink
+          have backing : BurnNoShrink observed fee.state.totalSupply tail := by
+            simpa only [BurnNoShrink, feeSpec.1, feeSpec.2.2, Frame.beginResume] using noShrink
+          have economic := Frame.burnAfterFee_driver_product (frame := frame.beginResume request)
+            locked charged backing resumedSuccess
+          rw [frameEq]
+          simpa only [shape, Transcript.firstWord, ← recipientEq, Frame.beginResume] using economic
+
+
+/-- The second initial burn balance query supplies the exact observed balance and LP amount. -/
+theorem drive_burnInitialBalance1_product {fuel : Nat} {frame : Frame} {request : Request}
+    {locals : BurnLocals} {balance0 : B256} {owner : Adr} {transcript : Transcript}
+    {returndata : Bytes} (locked : frame.current.state.unlocked = 0)
+    (operation : request.operation = .balanceOf owner) (kind : request.kind = .staticCall)
+    (noShrink : BurnFeeNoShrink frame.current.state
+      { locals := locals, balance0 := balance0, balance1 := transcript.firstWord,
+        liquidity := frame.current.state.balanceOf frame.context.pair } transcript.ownTail)
+    (successful : (drive fuel (.suspended frame request (.burnInitialBalance1 locals balance0))
+      transcript).status = .success returndata) :
+    locals.reserves.reserve0.val * locals.reserves.reserve1.val *
+        (drive fuel (.suspended frame request (.burnInitialBalance1 locals balance0))
+          transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
+      (drive fuel (.suspended frame request (.burnInitialBalance1 locals balance0))
+        transcript).frame.current.state.reserve0.val *
+        (drive fuel (.suspended frame request (.burnInitialBalance1 locals balance0))
+          transcript).frame.current.state.reserve1.val *
+        (frame.current.state.totalSupply.toNat + feeAmount frame.current.state
+          transcript.ownTail.firstWord.toAdr locals.reserves.reserve0.val
+          locals.reserves.reserve1.val) ^ 2 := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    obtain ⟨result, turns, tail, shape, complete, resumedSuccess, frameEq⟩ :=
+      drive_suspended_success successful
+    have staticExternal : externalStatic frame request = true := by
+      rw [externalStatic, kind]
+      cases frame.context.isStatic <;> rfl
+    have settled := Frame.settleExternal_static_frame frame fuel request result turns staticExternal
+    rw [settled] at resumedSuccess frameEq
+    cases decoded : decodeExternal request result with
+    | error failure =>
+      exact False.elim (resumeSegment_error_not_success decoded fuel tail returndata resumedSuccess)
+    | ok decodedResult =>
+      cases decodedResult with
+      | address recipient =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | unit =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | word balance1 =>
+        have wordEq := decodeExternal_balance_word operation decoded
+        simp only [resumeSegment, decoded, Frame.suspend] at resumedSuccess frameEq
+        have backing : BurnFeeNoShrink (frame.beginResume request).current.state
+            { locals := locals, balance0 := balance0, balance1 := balance1,
+              liquidity := (frame.beginResume request).current.state.balanceOf
+                (frame.beginResume request).context.pair } tail := by
+          simpa only [shape, Transcript.ownTail, Transcript.firstWord, ← wordEq, Frame.beginResume] using noShrink
+        have economic := drive_burnFee_product (frame := frame.beginResume request)
+          locked rfl rfl backing resumedSuccess
+        rw [frameEq]
+        simpa only [shape, Transcript.ownTail, Frame.beginResume] using economic
+
+
+/-- Both initial burn observations and the fee query feed the actual completed economic result. -/
+theorem drive_burnInitialBalance0_product {fuel : Nat} {frame : Frame} {request : Request}
+    {locals : BurnLocals} {owner : Adr} {transcript : Transcript} {returndata : Bytes}
+    (locked : frame.current.state.unlocked = 0)
+    (operation : request.operation = .balanceOf owner) (kind : request.kind = .staticCall)
+    (noShrink : BurnFeeNoShrink frame.current.state
+      { locals := locals, balance0 := transcript.firstWord,
+        balance1 := transcript.ownTail.firstWord,
+        liquidity := frame.current.state.balanceOf frame.context.pair }
+      transcript.ownTail.ownTail)
+    (successful : (drive fuel (.suspended frame request (.burnInitialBalance0 locals))
+      transcript).status = .success returndata) :
+    locals.reserves.reserve0.val * locals.reserves.reserve1.val *
+        (drive fuel (.suspended frame request (.burnInitialBalance0 locals))
+          transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
+      (drive fuel (.suspended frame request (.burnInitialBalance0 locals))
+        transcript).frame.current.state.reserve0.val *
+        (drive fuel (.suspended frame request (.burnInitialBalance0 locals))
+          transcript).frame.current.state.reserve1.val *
+        (frame.current.state.totalSupply.toNat + feeAmount frame.current.state
+          transcript.ownTail.ownTail.firstWord.toAdr locals.reserves.reserve0.val
+          locals.reserves.reserve1.val) ^ 2 := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    obtain ⟨result, turns, tail, shape, complete, resumedSuccess, frameEq⟩ :=
+      drive_suspended_success successful
+    have staticExternal : externalStatic frame request = true := by
+      rw [externalStatic, kind]
+      cases frame.context.isStatic <;> rfl
+    have settled := Frame.settleExternal_static_frame frame fuel request result turns staticExternal
+    rw [settled] at resumedSuccess frameEq
+    cases decoded : decodeExternal request result with
+    | error failure =>
+      exact False.elim (resumeSegment_error_not_success decoded fuel tail returndata resumedSuccess)
+    | ok decodedResult =>
+      cases decodedResult with
+      | address recipient =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | unit =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | word balance0 =>
+        have wordEq := decodeExternal_balance_word operation decoded
+        simp only [resumeSegment, decoded, Frame.suspend] at resumedSuccess frameEq
+        have backing : BurnFeeNoShrink (frame.beginResume request).current.state
+            { locals := locals, balance0 := balance0, balance1 := tail.firstWord,
+              liquidity := (frame.beginResume request).current.state.balanceOf
+                (frame.beginResume request).context.pair } tail.ownTail := by
+          simpa only [shape, Transcript.ownTail, Transcript.firstWord, ← wordEq, Frame.beginResume] using noShrink
+        have economic := drive_burnInitialBalance1_product (frame := frame.beginResume request)
+          locked rfl rfl backing resumedSuccess
+        rw [frameEq]
+        simpa only [shape, Transcript.ownTail, Frame.beginResume] using economic
+
+
+/-- Whole-entry burn backing reads the own balance answers and fee answer independently. -/
+def BurnEntryNoShrink (st : State) (pair recipient : Adr) (transcript : Transcript) : Prop :=
+  BurnFeeNoShrink st
+    { locals := { recipient := recipient, reserves := st.cachedReserves, token0 := st.token0, token1 := st.token1 },
+      balance0 := transcript.firstWord, balance1 := transcript.ownTail.firstWord,
+      liquidity := st.balanceOf pair } transcript.ownTail.ownTail
+
+/-- Every successful typed burn entry satisfies the exact-fee economic checkpoint inequality. -/
+theorem drive_startTyped_burn_product {fuel : Nat} {current : Checkpoint} {ctx : Context}
+    {recipient : Adr} {transcript : Transcript} {returndata : Bytes}
+    (noShrink : BurnEntryNoShrink current.state ctx.pair recipient transcript)
+    (successful : (drive fuel (startTyped current ctx (.burn recipient)) transcript).status =
+      .success returndata) :
+    current.state.reserve0.val * current.state.reserve1.val *
+        (drive fuel (startTyped current ctx (.burn recipient)) transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
+      (drive fuel (startTyped current ctx (.burn recipient)) transcript).frame.current.state.reserve0.val *
+        (drive fuel (startTyped current ctx (.burn recipient)) transcript).frame.current.state.reserve1.val *
+        (current.state.totalSupply.toNat + feeAmount current.state
+          transcript.ownTail.ownTail.firstWord.toAdr current.state.reserve0.val
+          current.state.reserve1.val) ^ 2 := by
+  by_cases paid : ctx.value ≠ 0
+  · simp only [startTyped, startImmediate, ite_eq_left paid, Frame.fail] at successful
+    exact False.elim (drive_failed_not_success fuel _ .emptyRevert transcript returndata successful)
+  · by_cases unlocked : current.state.unlocked = 1
+    · by_cases staticContext : ctx.isStatic = true
+      · simp only [startTyped, startImmediate, ite_eq_right paid, getterResult, Frame.lock,
+          Frame.enter, ite_eq_left unlocked, staticContext, ite_true, Frame.fail] at successful
+        exact False.elim (drive_failed_not_success fuel _ .staticWrite transcript returndata successful)
+      · let lockedFrame : Frame :=
+          { Frame.enter current ctx (.burn recipient) with
+            current := { current with state := { current.state with unlocked := 0 } } }
+        let locals : BurnLocals :=
+          { recipient := recipient, reserves := current.state.cachedReserves,
+            token0 := current.state.token0, token1 := current.state.token1 }
+        have enteredUnlocked : (Frame.enter current ctx (.burn recipient)).current.state.unlocked = 1 :=
+          unlocked
+        have enteredStatic : ¬(Frame.enter current ctx (.burn recipient)).context.isStatic = true :=
+          staticContext
+        have opened : (Frame.enter current ctx (.burn recipient)).lock = .ok lockedFrame := by
+          rw [Frame.lock, ite_eq_left enteredUnlocked, ite_eq_right enteredStatic]
+          rfl
+        have stage : startTyped current ctx (.burn recipient) =
+            lockedFrame.suspend .burnInitialBalance0 locals.token0 (.balanceOf ctx.pair)
+              (.burnInitialBalance0 locals) := by
+          simp only [startTyped, startImmediate, ite_eq_right paid, getterResult, opened]
+          rfl
+        have backing : BurnFeeNoShrink lockedFrame.current.state
+            { locals := locals, balance0 := transcript.firstWord,
+              balance1 := transcript.ownTail.firstWord,
+              liquidity := lockedFrame.current.state.balanceOf lockedFrame.context.pair }
+            transcript.ownTail.ownTail := by
+          simpa only [BurnEntryNoShrink, BurnFeeNoShrink, feeAmount, lockedFrame, locals,
+            Frame.enter] using noShrink
+        have suspendedSuccess :
+            (drive fuel (.suspended lockedFrame
+              (requestFor .burnInitialBalance0 locals.token0 (.balanceOf ctx.pair))
+              (.burnInitialBalance0 locals)) transcript).status = .success returndata := by
+          simpa only [stage, Frame.suspend] using successful
+        have economic := drive_burnInitialBalance0_product (frame := lockedFrame)
+          (by rfl) rfl rfl backing suspendedSuccess
+        have initialSupply : lockedFrame.current.state.totalSupply.toNat =
+            current.state.totalSupply.toNat := rfl
+        have initialFee : feeAmount lockedFrame.current.state
+            transcript.ownTail.ownTail.firstWord.toAdr locals.reserves.reserve0.val
+            locals.reserves.reserve1.val =
+            feeAmount current.state transcript.ownTail.ownTail.firstWord.toAdr
+              current.state.reserve0.val current.state.reserve1.val := rfl
+        rw [initialSupply, initialFee] at economic
+        rw [stage, Frame.suspend]
+        simpa only [locals, State.cachedReserves] using economic
+    · have enteredLocked : ¬(Frame.enter current ctx (.burn recipient)).current.state.unlocked = 1 :=
+        unlocked
+      have closed : (Frame.enter current ctx (.burn recipient)).lock =
+          .error (.sourceGuard "UniswapV2: LOCKED") := by
+        rw [Frame.lock, ite_eq_right enteredLocked]
+      simp only [startTyped, startImmediate, ite_eq_right paid, getterResult, closed, Frame.fail] at successful
+      exact False.elim (drive_failed_not_success fuel _
+        (.sourceGuard "UniswapV2: LOCKED") transcript returndata successful)
+
+/-- The public finite typed driver consumes the whole burn-entry economic proof. -/
+theorem runTyped_burn_product {st : State} {ctx : Context} {recipient : Adr}
+    {transcript : Transcript} {returndata : Bytes}
+    (noShrink : BurnEntryNoShrink st ctx.pair recipient transcript)
+    (successful : (runTyped st ctx (.burn recipient) transcript).status = .success returndata) :
+    st.reserve0.val * st.reserve1.val *
+        (runTyped st ctx (.burn recipient) transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
+      (runTyped st ctx (.burn recipient) transcript).frame.current.state.reserve0.val *
+        (runTyped st ctx (.burn recipient) transcript).frame.current.state.reserve1.val *
+        (st.totalSupply.toNat + feeAmount st transcript.ownTail.ownTail.firstWord.toAdr
+          st.reserve0.val st.reserve1.val) ^ 2 := by
+  exact drive_startTyped_burn_product noShrink successful
+
+/-- Successful fee-off typed burns satisfy the original supply-scaled product bound. -/
+theorem runTyped_burn_feeOff_product {st : State} {ctx : Context} {recipient : Adr}
+    {transcript : Transcript} {returndata : Bytes}
+    (feeOff : transcript.ownTail.ownTail.firstWord.toAdr = 0)
+    (noShrink : BurnEntryNoShrink st ctx.pair recipient transcript)
+    (successful : (runTyped st ctx (.burn recipient) transcript).status = .success returndata) :
+    st.reserve0.val * st.reserve1.val *
+        (runTyped st ctx (.burn recipient) transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
+      (runTyped st ctx (.burn recipient) transcript).frame.current.state.reserve0.val *
+        (runTyped st ctx (.burn recipient) transcript).frame.current.state.reserve1.val *
+        st.totalSupply.toNat ^ 2 := by
+  simpa only [feeOff, feeAmount, eq_self, true_or, ite_true, Nat.add_zero] using
+    runTyped_burn_product noShrink successful
+
 end Blanc.Lift.UniswapV2Pair
