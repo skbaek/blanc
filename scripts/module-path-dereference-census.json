@@ -75,7 +75,7 @@
     {
       "id": "simp-migration-runner-source",
       "script": "scripts/run-simp-migration.py",
-      "call": "resolve_module_file",
+      "call": "resolve_source_file",
       "class": "explicit dereference",
       "source": "selected hand-authored module paths and source application identity"
     },

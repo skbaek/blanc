@@ -18,7 +18,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from module_path_policy import resolve_module_file
+from module_path_policy import resolve_source_file
 from simp_migration import (MigrationError, instrument, reconcile, parse_lean_lines,
                             _validate_lsp_range, codepoint_to_lsp_pos, _json_equal)
 from simp_migration import _observed_union
@@ -78,7 +78,7 @@ def new_json(path, data):
     new_bytes(path, (json.dumps(data, indent=2) + '\n').encode())
 
 def source_path(root, raw):
-    return resolve_module_file(root, raw, site='simp-migration-runner-source')
+    return resolve_source_file(root, raw, site='simp-migration-runner-source')
 
 def guard_input(original, raw):
     code=strip_comments_and_strings(original.decode(),raw)

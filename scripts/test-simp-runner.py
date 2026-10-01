@@ -227,6 +227,23 @@ def test_executable_inputs():
     for source in [b'#eval IO.println "write"',b'#run risky',b'def x := IO.println "write"']:
         fails(lambda:r.guard_input(source,'Blanc/A.lean'))
 
+def test_aggregate_source_paths():
+    with tempfile.TemporaryDirectory() as tmp:
+        root=Path(tmp);(root/'Blanc').mkdir()
+        module=root/'Blanc/A.lean';module.write_bytes(b'example : True := by trivial\n')
+        aggregate=root/'Blanc.lean';original=b'def main := IO.print "x"\n';aggregate.write_bytes(original)
+        assert r.source_path(root,'Blanc.lean')==aggregate.resolve()
+        assert r.source_path(root,'Blanc/A.lean')==module.resolve()
+        fails(lambda:r.guard_input(r.source_path(root,'Blanc.lean').read_bytes(),'Blanc.lean'))
+        for raw in ('./Blanc.lean','blanc.lean','Blanc/../Blanc.lean','Blanc.lean/','Main.lean','scripts/A.lean'):
+            fails(lambda:r.source_path(root,raw))
+        aggregate.unlink();fails(lambda:r.source_path(root,'Blanc.lean'))
+        aggregate.symlink_to(module);fails(lambda:r.source_path(root,'Blanc.lean'));aggregate.unlink()
+        wrong_case=root/'blanc.lean';wrong_case.write_bytes(original)
+        fails(lambda:r.source_path(root,'Blanc.lean'));wrong_case.unlink();aggregate.write_bytes(original)
+        assert aggregate.read_bytes()==original
+        module.unlink();module.symlink_to(aggregate);fails(lambda:r.source_path(root,'Blanc/A.lean'))
+
 def test_native_stage_bindings():
     with tempfile.TemporaryDirectory() as tmp:
         root=Path(tmp);(root/'Blanc').mkdir();original=root/'Blanc/A.lean';original.write_bytes(b'original')
@@ -244,6 +261,6 @@ def test_native_stage_bindings():
         assert original.read_bytes()==b'original'
 
 if __name__=='__main__':
-    for test in [test_partial,test_no_using_alternate,test_original_arguments,test_native_omissions,test_outputs_and_apply,test_routing_and_renewal,test_census,test_resume,test_batch_preflight,test_executable_inputs,test_native_stage_bindings]:
+    for test in [test_partial,test_no_using_alternate,test_original_arguments,test_native_omissions,test_outputs_and_apply,test_routing_and_renewal,test_census,test_resume,test_batch_preflight,test_executable_inputs,test_aggregate_source_paths,test_native_stage_bindings]:
         test();print('PASS '+test.__name__)
-    print('PASS11 runner control groups; mocks are integrity evidence only')
+    print('PASS12 runner control groups; mocks are integrity evidence only')
