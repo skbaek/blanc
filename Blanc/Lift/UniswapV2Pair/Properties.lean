@@ -1626,4 +1626,288 @@ theorem runTyped_burn_feeOff_product {st : State} {ctx : Context} {recipient : A
   simpa only [feeOff, feeAmount, eq_self, true_or, ite_true, Nat.add_zero] using
     runTyped_burn_product noShrink successful
 
+
+/-- A successful later-mint fee query preserves the positive-supply branch and exact fee bound. -/
+theorem drive_mintFee_product {fuel : Nat} {frame : Frame} {request : Request}
+    {observed : MintObserved} {transcript : Transcript} {returndata : Bytes}
+    (positiveSupply : 0 < frame.current.state.totalSupply.toNat)
+    (operation : request.operation = .feeTo) (kind : request.kind = .staticCall)
+    (amount0 : observed.reserves.reserve0.val + observed.amount0.toNat = observed.balance0.toNat)
+    (amount1 : observed.reserves.reserve1.val + observed.amount1.toNat = observed.balance1.toNat)
+    (successful : (drive fuel (.suspended frame request (.mintFee observed))
+      transcript).status = .success returndata) :
+    observed.reserves.reserve0.val * observed.reserves.reserve1.val *
+        (drive fuel (.suspended frame request (.mintFee observed))
+          transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
+      (drive fuel (.suspended frame request (.mintFee observed))
+        transcript).frame.current.state.reserve0.val *
+        (drive fuel (.suspended frame request (.mintFee observed))
+          transcript).frame.current.state.reserve1.val *
+        (frame.current.state.totalSupply.toNat + feeAmount frame.current.state
+          transcript.firstWord.toAdr observed.reserves.reserve0.val
+          observed.reserves.reserve1.val) ^ 2 := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    obtain ⟨result, turns, tail, shape, complete, resumedSuccess, frameEq⟩ :=
+      drive_suspended_success successful
+    have staticExternal : externalStatic frame request = true := by
+      rw [externalStatic, kind]
+      cases frame.context.isStatic <;> rfl
+    have settled := Frame.settleExternal_static_frame frame fuel request result turns staticExternal
+    rw [settled] at resumedSuccess frameEq
+    cases decoded : decodeExternal request result with
+    | error failure =>
+      exact False.elim (resumeSegment_error_not_success decoded fuel tail returndata resumedSuccess)
+    | ok decodedResult =>
+      cases decodedResult with
+      | word value =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | unit =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | address feeTo =>
+        have recipientEq := decodeExternal_feeTo_address operation decoded
+        cases charged : mintFee (frame.beginResume request).current.state feeTo
+            observed.reserves.reserve0.val observed.reserves.reserve1.val with
+        | error failure =>
+          simp only [resumeSegment, decoded, charged, Frame.fail] at resumedSuccess
+          exact False.elim (drive_failed_not_success fuel _ failure tail returndata resumedSuccess)
+        | ok fee =>
+          simp only [resumeSegment, decoded, charged] at resumedSuccess frameEq
+          have feeSpec := mintFee_spec charged
+          have feePositive : 0 < fee.state.totalSupply.toNat := by
+            rw [feeSpec.1]
+            exact Nat.add_pos_left positiveSupply fee.minted
+          have feeNonzero : fee.state.totalSupply ≠ 0 := by
+            intro zero
+            have impossible : 0 < 0 := by
+              simpa only [zero, B256.toNat_zero] using feePositive
+            exact Nat.lt_irrefl 0 impossible
+          have economic := Frame.mintAfterFee_driver_product (frame := frame.beginResume request)
+            charged feeNonzero amount0 amount1 resumedSuccess
+          rw [frameEq]
+          simpa only [shape, Transcript.firstWord, ← recipientEq, Frame.beginResume] using economic
+
+
+/-- The checked second mint observation derives both exact amount equations from backing. -/
+theorem drive_mintBalance1_product {fuel : Nat} {frame : Frame} {request : Request}
+    {recipient : Adr} {reserves : CachedReserves} {balance0 : B256}
+    {transcript : Transcript} {returndata : Bytes}
+    (positiveSupply : 0 < frame.current.state.totalSupply.toNat)
+    (kind : request.kind = .staticCall)
+    (successful : (drive fuel (.suspended frame request (.mintBalance1 recipient reserves balance0))
+      transcript).status = .success returndata) :
+    reserves.reserve0.val * reserves.reserve1.val *
+        (drive fuel (.suspended frame request (.mintBalance1 recipient reserves balance0))
+          transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
+      (drive fuel (.suspended frame request (.mintBalance1 recipient reserves balance0))
+        transcript).frame.current.state.reserve0.val *
+        (drive fuel (.suspended frame request (.mintBalance1 recipient reserves balance0))
+          transcript).frame.current.state.reserve1.val *
+        (frame.current.state.totalSupply.toNat + feeAmount frame.current.state
+          transcript.ownTail.firstWord.toAdr reserves.reserve0.val reserves.reserve1.val) ^ 2 := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    obtain ⟨result, turns, tail, shape, complete, resumedSuccess, frameEq⟩ :=
+      drive_suspended_success successful
+    have staticExternal : externalStatic frame request = true := by
+      rw [externalStatic, kind]
+      cases frame.context.isStatic <;> rfl
+    have settled := Frame.settleExternal_static_frame frame fuel request result turns staticExternal
+    rw [settled] at resumedSuccess frameEq
+    cases decoded : decodeExternal request result with
+    | error failure =>
+      exact False.elim (resumeSegment_error_not_success decoded fuel tail returndata resumedSuccess)
+    | ok decodedResult =>
+      cases decodedResult with
+      | address address =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | unit =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | word balance1 =>
+        simp only [resumeSegment, decoded] at resumedSuccess frameEq
+        by_cases backing : reserves.reserve0.val ≤ balance0.toNat ∧
+            reserves.reserve1.val ≤ balance1.toNat
+        · rw [ite_eq_left backing] at resumedSuccess frameEq
+          simp only [Frame.suspend] at resumedSuccess frameEq
+          let observed : MintObserved :=
+            { recipient := recipient, reserves := reserves, balance0 := balance0, balance1 := balance1,
+              amount0 := balance0 - Nat.toB256 reserves.reserve0.val,
+              amount1 := balance1 - Nat.toB256 reserves.reserve1.val }
+          have bound0 : reserves.reserve0.val < 2 ^ 256 :=
+            Nat.lt_trans reserves.reserve0.isLt (by decide)
+          have bound1 : reserves.reserve1.val < 2 ^ 256 :=
+            Nat.lt_trans reserves.reserve1.isLt (by decide)
+          have covered0 : Nat.toB256 reserves.reserve0.val ≤ balance0 :=
+            B256.le_of_toNat_le_toNat (by
+              rw [B256.toNat_toB256_of_lt bound0]
+              exact backing.1)
+          have covered1 : Nat.toB256 reserves.reserve1.val ≤ balance1 :=
+            B256.le_of_toNat_le_toNat (by
+              rw [B256.toNat_toB256_of_lt bound1]
+              exact backing.2)
+          have amount0 : reserves.reserve0.val + observed.amount0.toNat = balance0.toNat := by
+            rw [B256.toNat_sub_eq_of_le _ _ covered0, B256.toNat_toB256_of_lt bound0]
+            exact Nat.add_sub_of_le backing.1
+          have amount1 : reserves.reserve1.val + observed.amount1.toNat = balance1.toNat := by
+            rw [B256.toNat_sub_eq_of_le _ _ covered1, B256.toNat_toB256_of_lt bound1]
+            exact Nat.add_sub_of_le backing.2
+          have economic := drive_mintFee_product (frame := frame.beginResume request)
+            (observed := observed) positiveSupply rfl rfl amount0 amount1 resumedSuccess
+          rw [frameEq]
+          simpa only [observed, shape, Transcript.ownTail, Frame.beginResume] using economic
+        · simp only [ite_eq_right backing, Frame.fail] at resumedSuccess
+          exact False.elim
+            (drive_failed_not_success fuel _ (.sourceGuard "ds-math-sub-underflow")
+              tail returndata resumedSuccess)
+
+
+/-- The first mint balance query feeds the fully checked later-mint observation chain. -/
+theorem drive_mintBalance0_product {fuel : Nat} {frame : Frame} {request : Request}
+    {recipient : Adr} {reserves : CachedReserves} {transcript : Transcript} {returndata : Bytes}
+    (positiveSupply : 0 < frame.current.state.totalSupply.toNat)
+    (kind : request.kind = .staticCall)
+    (successful : (drive fuel (.suspended frame request (.mintBalance0 recipient reserves))
+      transcript).status = .success returndata) :
+    reserves.reserve0.val * reserves.reserve1.val *
+        (drive fuel (.suspended frame request (.mintBalance0 recipient reserves))
+          transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
+      (drive fuel (.suspended frame request (.mintBalance0 recipient reserves))
+        transcript).frame.current.state.reserve0.val *
+        (drive fuel (.suspended frame request (.mintBalance0 recipient reserves))
+          transcript).frame.current.state.reserve1.val *
+        (frame.current.state.totalSupply.toNat + feeAmount frame.current.state
+          transcript.ownTail.ownTail.firstWord.toAdr reserves.reserve0.val reserves.reserve1.val) ^ 2 := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    obtain ⟨result, turns, tail, shape, complete, resumedSuccess, frameEq⟩ :=
+      drive_suspended_success successful
+    have staticExternal : externalStatic frame request = true := by
+      rw [externalStatic, kind]
+      cases frame.context.isStatic <;> rfl
+    have settled := Frame.settleExternal_static_frame frame fuel request result turns staticExternal
+    rw [settled] at resumedSuccess frameEq
+    cases decoded : decodeExternal request result with
+    | error failure =>
+      exact False.elim (resumeSegment_error_not_success decoded fuel tail returndata resumedSuccess)
+    | ok decodedResult =>
+      cases decodedResult with
+      | address address =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | unit =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | word balance0 =>
+        simp only [resumeSegment, decoded, Frame.suspend] at resumedSuccess frameEq
+        have economic := drive_mintBalance1_product (frame := frame.beginResume request)
+          positiveSupply rfl resumedSuccess
+        rw [frameEq]
+        simpa only [shape, Transcript.ownTail, Frame.beginResume] using economic
+
+/-- Every successful later-mint entry derives backing and realizes the exact-fee bound. -/
+theorem drive_startTyped_mint_product {fuel : Nat} {current : Checkpoint} {ctx : Context}
+    {recipient : Adr} {transcript : Transcript} {returndata : Bytes}
+    (positiveSupply : 0 < current.state.totalSupply.toNat)
+    (successful : (drive fuel (startTyped current ctx (.mint recipient)) transcript).status =
+      .success returndata) :
+    current.state.reserve0.val * current.state.reserve1.val *
+        (drive fuel (startTyped current ctx (.mint recipient)) transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
+      (drive fuel (startTyped current ctx (.mint recipient)) transcript).frame.current.state.reserve0.val *
+        (drive fuel (startTyped current ctx (.mint recipient)) transcript).frame.current.state.reserve1.val *
+        (current.state.totalSupply.toNat + feeAmount current.state
+          transcript.ownTail.ownTail.firstWord.toAdr current.state.reserve0.val
+          current.state.reserve1.val) ^ 2 := by
+  by_cases paid : ctx.value ≠ 0
+  · simp only [startTyped, startImmediate, ite_eq_left paid, Frame.fail] at successful
+    exact False.elim (drive_failed_not_success fuel _ .emptyRevert transcript returndata successful)
+  · by_cases unlocked : current.state.unlocked = 1
+    · by_cases staticContext : ctx.isStatic = true
+      · simp only [startTyped, startImmediate, ite_eq_right paid, getterResult, Frame.lock,
+          Frame.enter, ite_eq_left unlocked, staticContext, ite_true, Frame.fail] at successful
+        exact False.elim (drive_failed_not_success fuel _ .staticWrite transcript returndata successful)
+      · let lockedFrame : Frame :=
+          { Frame.enter current ctx (.mint recipient) with
+            current := { current with state := { current.state with unlocked := 0 } } }
+        let reserves := current.state.cachedReserves
+        have enteredUnlocked : (Frame.enter current ctx (.mint recipient)).current.state.unlocked = 1 :=
+          unlocked
+        have enteredStatic : ¬(Frame.enter current ctx (.mint recipient)).context.isStatic = true :=
+          staticContext
+        have opened : (Frame.enter current ctx (.mint recipient)).lock = .ok lockedFrame := by
+          rw [Frame.lock, ite_eq_left enteredUnlocked, ite_eq_right enteredStatic]
+          rfl
+        have stage : startTyped current ctx (.mint recipient) =
+            lockedFrame.suspend .mintBalance0 current.state.token0 (.balanceOf ctx.pair)
+              (.mintBalance0 recipient reserves) := by
+          simp only [startTyped, startImmediate, ite_eq_right paid, getterResult, opened]
+          rfl
+        have suspendedSuccess :
+            (drive fuel (.suspended lockedFrame
+              (requestFor .mintBalance0 current.state.token0 (.balanceOf ctx.pair))
+              (.mintBalance0 recipient reserves)) transcript).status = .success returndata := by
+          simpa only [stage, Frame.suspend] using successful
+        have economic := drive_mintBalance0_product (frame := lockedFrame)
+          positiveSupply rfl suspendedSuccess
+        have initialSupply : lockedFrame.current.state.totalSupply.toNat =
+            current.state.totalSupply.toNat := rfl
+        have initialFee : feeAmount lockedFrame.current.state
+            transcript.ownTail.ownTail.firstWord.toAdr reserves.reserve0.val reserves.reserve1.val =
+            feeAmount current.state transcript.ownTail.ownTail.firstWord.toAdr
+              current.state.reserve0.val current.state.reserve1.val := rfl
+        rw [initialSupply, initialFee] at economic
+        rw [stage, Frame.suspend]
+        simpa only [reserves, State.cachedReserves] using economic
+    · have enteredLocked : ¬(Frame.enter current ctx (.mint recipient)).current.state.unlocked = 1 :=
+        unlocked
+      have closed : (Frame.enter current ctx (.mint recipient)).lock =
+          .error (.sourceGuard "UniswapV2: LOCKED") := by
+        rw [Frame.lock, ite_eq_right enteredLocked]
+      simp only [startTyped, startImmediate, ite_eq_right paid, getterResult, closed, Frame.fail] at successful
+      exact False.elim (drive_failed_not_success fuel _
+        (.sourceGuard "UniswapV2: LOCKED") transcript returndata successful)
+
+/-- The public finite typed driver consumes the complete later-mint economic proof. -/
+theorem runTyped_mint_product {st : State} {ctx : Context} {recipient : Adr}
+    {transcript : Transcript} {returndata : Bytes}
+    (positiveSupply : 0 < st.totalSupply.toNat)
+    (successful : (runTyped st ctx (.mint recipient) transcript).status = .success returndata) :
+    st.reserve0.val * st.reserve1.val *
+        (runTyped st ctx (.mint recipient) transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
+      (runTyped st ctx (.mint recipient) transcript).frame.current.state.reserve0.val *
+        (runTyped st ctx (.mint recipient) transcript).frame.current.state.reserve1.val *
+        (st.totalSupply.toNat + feeAmount st transcript.ownTail.ownTail.firstWord.toAdr
+          st.reserve0.val st.reserve1.val) ^ 2 := by
+  exact drive_startTyped_mint_product
+    (current := { state := st, logs := [], updates := [] }) (ctx := ctx) (recipient := recipient)
+    (fuel := transcript.work + 2) (transcript := transcript) (returndata := returndata)
+    positiveSupply successful
+
+/-- Successful fee-off later mints satisfy the original supply-scaled product bound. -/
+theorem runTyped_mint_feeOff_product {st : State} {ctx : Context} {recipient : Adr}
+    {transcript : Transcript} {returndata : Bytes}
+    (positiveSupply : 0 < st.totalSupply.toNat)
+    (feeOff : transcript.ownTail.ownTail.firstWord.toAdr = 0)
+    (successful : (runTyped st ctx (.mint recipient) transcript).status = .success returndata) :
+    st.reserve0.val * st.reserve1.val *
+        (runTyped st ctx (.mint recipient) transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
+      (runTyped st ctx (.mint recipient) transcript).frame.current.state.reserve0.val *
+        (runTyped st ctx (.mint recipient) transcript).frame.current.state.reserve1.val *
+        st.totalSupply.toNat ^ 2 := by
+  simpa only [feeOff, feeAmount, eq_self, true_or, ite_true, Nat.add_zero] using
+    runTyped_mint_product (st := st) (ctx := ctx) (recipient := recipient)
+      (transcript := transcript) (returndata := returndata) positiveSupply successful
+
 end Blanc.Lift.UniswapV2Pair
