@@ -135,23 +135,27 @@ theorem systemNewExcess_represented (sevm : Sevm) (base : Devm) (memory : Mem)
     (sumBound : effectiveExcess state + state.count < 2 ^ 256) :
     systemNewExcess sevm (systemFramePointers sevm base memory) =
       (WithdrawalRequest.system state).excess.toB256 := by
+  have excessNat : (WithdrawalRequest.system state).excess =
+      effectiveExcess state + state.count - 2 := by
+    simp only [WithdrawalRequest.system, targetPerBlock]
   have sum : systemExcessSum sevm (systemFramePointers sevm base memory) =
       (effectiveExcess state + state.count).toB256 := by
     rw [systemExcessSum, systemPendingCount_represented sevm base memory state rep,
       systemEffectiveExcess_represented sevm base memory state rep,
-      toB256_add_toB256 (by omega : state.count + effectiveExcess state < 2 ^ 256),
+      toB256_add_toB256 (by
+        simpa only [Nat.add_comm state.count] using sumBound),
       Nat.add_comm state.count]
   have sumNat := B256.toNat_toB256_of_lt sumBound
   have branch : (2 : B256) < (effectiveExcess state + state.count).toB256 ↔
       2 < effectiveExcess state + state.count := by
     rw [B256.lt_iff_toNat_lt_toNat, sumNat]
     rfl
-  simp only [systemNewExcess, sum, branch, WithdrawalRequest.system, targetPerBlock]
+  simp only [systemNewExcess, sum, branch, excessNat]
   by_cases positive : 2 < effectiveExcess state + state.count
   · rw [ite_eq_left positive]
     exact toB256_sub_toB256 (a := effectiveExcess state + state.count) (b := 2)
-      (by omega) sumBound
-  · rw [ite_eq_right positive, Nat.sub_eq_zero_of_le (by omega)]
+      (Nat.le_of_lt positive) sumBound
+  · rw [ite_eq_right positive, Nat.sub_eq_zero_of_le (Nat.le_of_not_lt positive)]
     rfl
 
 theorem system_storageBounds (state : WithdrawalRequest.State) (coherent : Coherent state)

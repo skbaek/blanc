@@ -2340,6 +2340,15 @@ rather than restating them:
   observes message frames; `signedBalanceCredit_frames_sum_le` bounds their
   total values by the total recorded credits.
   [`Blanc/ExecutionAccountingSignedBalance.lean`](../Blanc/ExecutionAccountingSignedBalance.lean).
+- `storageFoldCarrier` records a pure storage update for each event, with
+  message transfers and incidental balance credits silent.
+  `GuardedStorageReplay` checks each event's guard against the incoming storage
+  at that occurrence, before applying its update; `.append` composes connected
+  segments and `.fold_eq` gives the exact final storage. The contract supplies
+  the update, guard and event observation; the carrier imposes no queue model.
+  [`Blanc/ExecutionAccountingStorageFold.lean`](../Blanc/ExecutionAccountingStorageFold.lean).
+  The registered recipe triggers do not recognize this custom relation or
+  carrier-construction need, so discovery remains in this branch.
 
 `Blanc/ProrataRealizedAccounting.lean`'s `ProrataAccountingReplay.carrier` is
 the worked ledger-shaped example.  This module classifies no transition as a

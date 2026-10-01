@@ -33,7 +33,7 @@ theorem balanceFrameObservation_foreign (frame : Exec.Frame)
     balanceFrameObservation frame = [] := by
   exact ite_eq_right (fun condition => foreign condition.1)
 
-private theorem canonical_descendants {sevm : Sevm} {pre post : Devm}
+theorem canonical_descendants {sevm : Sevm} {pre post : Devm}
     (run : Exec 0 sevm pre (.ok post))
     (code : sevm.code = Blanc.withdrawalRequestCode) : Exec.descendantFrames run = [] := by
   have free : SpawnFreeReach sevm.code := by
