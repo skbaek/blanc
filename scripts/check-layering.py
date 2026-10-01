@@ -165,7 +165,7 @@ SHARED += ["LadderBase", "LadderSem", "ContractAdmissionSem", "ExecutionAdmissio
 SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.ExactWalkOps",
            "Lift.ExactWalkCut", "Lift.ExactWalkCutOps", "Lift.CopyLoop", "Lift.PackedSha",
            "Lift.PackedShaCovered", "Lift.Quiet", "Lift.InvWalk", "Lift.InvWalkOps",
-           "Lift.InvWalkWorld", "Lift.InvWalkSha"]
+           "Lift.InvWalkWorld", "Lift.InvWalkSha", "Lift.InvWalkDispatch"]
 # Creation code (deploy-init-v1): the size-optimised packed-hash site and the CREATE bridge
 # for lifted creation code; contract-neutral.
 SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps"]
@@ -218,6 +218,10 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.GetterWalk",
         "Lift.UniswapV2Pair.GetterStringMemory",
         "Lift.UniswapV2Pair.GetterStringWalk",
+        "Lift.UniswapV2Pair.GetterScalarCore",
+        "Lift.UniswapV2Pair.GetterScalarWrapper",
+        "Lift.UniswapV2Pair.GetterScalarDispatch",
+        "Lift.UniswapV2Pair.GetterScalarWalk",
     ],
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",
                        # the deployed runtime, lifted (decision beacon-lift-layering-family-20260926)

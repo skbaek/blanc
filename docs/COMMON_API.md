@@ -3120,6 +3120,13 @@ contract-neutral.
   the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA
   site (`ric_copy_sha`, the converse of `copy_sha_gen`) in
   [`Blanc/Lift/InvWalkSha.lean`](../Blanc/Lift/InvWalkSha.lean).
+  Actual dispatcher comparison segments (`DUP1/PUSH4/GT/PUSH2/branch` and
+  `DUP1/PUSH4/EQ/PUSH2/branchTo`) are inverted by `ric_cmp_gt` and
+  `ric_cmp_eq` in
+  [`Blanc/Lift/InvWalkDispatch.lean`](../Blanc/Lift/InvWalkDispatch.lean).
+  They retain an arbitrary stack suffix and cut set, select the actual comparison
+  continuation, and require the real target lookup and non-cut proof for EQ.
+  The Pair scalar getter inversions consume both helpers.
 - A `STATICCALL` to an arbitrary callee, whose code is unknown: its abstract outcome
   (`StaticCallPost`: flag, returned bytes as output window and return data, every storage
   map and the log list kept) and, for a set flag, the successful static child message
