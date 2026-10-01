@@ -373,7 +373,10 @@ private theorem chargeCodeGas_weth10_output
   have hlen : (weth10Code dp).length = 6313 :=
     weth10Code_length dp
   rw [processCreateMessage.chargeCodeGas_legacy_eq_ok h_legacy
-    (by rw [h_output, hcons]; simp <;> decide) (by rw [h_output, hlen]; exact h_gas)
+    (by
+      rw [h_output, hcons]
+      change (some (91 : UInt8) : Option UInt8) ≠ some 239
+      decide) (by rw [h_output, hlen]; exact h_gas)
     (by rw [h_output, hlen]; exact h_max), h_output, hlen]
   rfl
 

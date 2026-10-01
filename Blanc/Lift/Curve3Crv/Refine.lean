@@ -384,7 +384,8 @@ theorem refine_setName (hinv : VyInv stor s K)
     have hl1 : (strArg sevm 1).length = L1 := List.length_sliceD _ _ _ _
     simp only [callAt, Curve3Crv.step, Curve3Crv.body, Curve3Crv.setName, c3ctx, hl0, hl1]
     clear hL0def hL1def
-    rcases ow with _ | w <;> split_ifs <;> simp [*, eq_comm]
+    rcases ow with _ | w <;> split_ifs <;> simp only [and_false, false_and, and_self, ExceptT.stM_eq, eq_comm,
+      Option.some.injEq, true_and, *]
     by_cases hw : w = sevm.caller.toB256 <;> simp only [hw, ↓reduceIte, Except.ok.injEq, true_and, eq_comm, reduceCtorEq, false_and]
   rintro ⟨-, hL0, hL1, -⟩
   refine ⟨?_, rfl, rfl⟩

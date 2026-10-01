@@ -497,8 +497,7 @@ private theorem selfbalance_runCompiled_legacy
         have h_bal := BenvStat.bal_none_of_stateGas_none h_legacy
         have h_core : Rinst.runCore 0 d0 sevm .selfbalance =
             chargeGas gLow d0 >>= fun d => Devm.push (d.getBal sevm.currentTarget) d := by
-          simp [d0, Rinst.runCore, h_bal,
-            Devm.balReadAccount_of_bal_none]
+          simp only [ExceptT.stM_eq, Rinst.runCore, h_bal, Devm.balReadAccount_of_bal_none, d0]
         rw [show base.setMach ⟨[], Mem.empty, g, base.stateGas⟩ = d0 by rfl,
           h_core, pushItem_def]
         cases h_charge : chargeGas gLow d0 with

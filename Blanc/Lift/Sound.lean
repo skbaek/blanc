@@ -208,7 +208,8 @@ lemma frameMatches_gotoCompat {ρ : B256} :
       cases hm with
       | cons hhead htail =>
         cases av <;> cases ev <;>
-          simp_all [gotoCompat, FrameMatches, AVal.Matches]
+          simp_all only [FrameMatches, AVal.Matches, gotoCompat, Bool.and_eq_true, beq_iff_eq,
+            List.forall₂_cons, and_self, Bool.false_eq_true]
 
 lemma ret_mem_of_gotoCompat : ∀ {a e : List AVal},
     gotoCompat a e = true → AVal.ret ∈ e → AVal.ret ∈ a := by
@@ -475,7 +476,8 @@ lemma matches_to_frame {ρ : B256} {a : List AVal} {s : List B256}
     (h : AbstractStackSafety.Matches (a.map (concrete ρ)) s) :
     FrameMatches ρ a s := by
   induction a generalizing s with
-  | nil => cases s <;> simp [FrameMatches, AbstractStackSafety.Matches] at h ⊢
+  | nil => cases s <;> simp only [List.map_nil, matches_nil, FrameMatches, List.forall₂_nil_right_iff,
+    AbstractStackSafety.Matches] at h ⊢
   | cons x a ih =>
     cases s with
     | nil => cases h

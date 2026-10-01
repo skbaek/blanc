@@ -1003,7 +1003,7 @@ lemma Mem.size_write_word {w : B256} :
   · exact absurd (hb ▸ B256.length_toBytes w) (by simp only [List.length_nil,
     OfNat.zero_ne_ofNat, not_false_eq_true])
   · have hlen : (b :: bs).length = 32 := hb ▸ B256.length_toBytes w
-    simp only [Mem.write, Mem.empty, hlen, if_neg (by simp : ¬ (0 + 32 ≤ 0))]
+    simp only [Mem.write, Mem.empty, hlen, if_neg (by decide : ¬ (0 + 32 ≤ 0))]
     rfl
 
 /-- And reading that word back gives it unchanged: `Mem.Reads` carries the image

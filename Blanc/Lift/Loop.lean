@@ -272,7 +272,7 @@ theorem SFunc.RunP.loop {P : Sevm → Devm → Ninst → Devm → Prop}
       | .done o => Q o) (by
       intro d hI r hrun
       have hp := step d hI r hrun
-      cases r <;> simpa [Seg.LoopPost] using hp)
+      cases r <;> simpa only [Seg.LoopPost, ite_self] using hp)
   exact hloop devm (.done o) hI hcut
 
 /-! ## Exact-gas cut runs -/

@@ -250,10 +250,12 @@ private lemma Bytes.writeAt_append_middle
     Bytes.writeAt (pre ++ old ++ post) pre.length new =
       pre ++ new ++ post := by
   unfold Bytes.writeAt
-  rw [List.takeD_eq_take _ (by simp)]
+  rw [List.takeD_eq_take _ (by simp only [List.append_assoc, List.length_append,
+    le_add_iff_nonneg_right, zero_le])]
   simp only [List.append_assoc]
   rw [List.take_left]
-  simp [List.drop_append, hlen]
+  rw [← List.append_assoc pre old post,
+    List.drop_left' (by rw [List.length_append, hlen])]
 
 private lemma Bytes.writeAt_five_spans
     {a0 w1 a1 w2 a2 w3 a3 w4 a4 w5 a5 : Bytes}
@@ -1193,9 +1195,14 @@ private theorem weth10MainByteAt_eq_zero_0_11
   have hp224 : (Ninst.pushB256 224).size = 2 := by decide +kernel
   have hshr : Ninst.shr.size = 1 := by decide +kernel
   interval_cases i <;>
-    simp (disch := omega) [Func.byteAtByShape, Func.compileShape,
-      weth10, weth10Main, fsig, cdl, shiftRight,
-      prepend, hcd, hiz, hp0, hcdl, hp224, hshr]
+    simp (disch := omega) only [weth10, weth10Main, fsig, cdl, shiftRight, List.cons_append, List.nil_append, prepend,
+      Func.compileShape, hcd, hiz, hp0, hcdl, hp224, hshr, Func.byteAtByShape, zero_lt_one,
+      ↓reduceIte, List.takeD_succ, List.takeD_zero, List.getD_eq_getElem?_getD,
+      lt_self_iff_false, tsub_self, Nat.not_ofNat_lt_one, Nat.add_one_sub_one, Nat.toUInt8_eq,
+      UInt8.ofNat_add, UInt8.ofNat_one, UInt8.reduceOfNat, List.length_cons, List.length_nil,
+      zero_add, Nat.reduceAdd, Nat.ofNat_pos, Nat.one_lt_ofNat, List.getElem?_cons_succ,
+      Nat.reduceLT, Nat.lt_add_one, zero_tsub, Nat.reduceSub, tsub_lt_self_iff, true_and,
+      Nat.sub_eq_zero_of_le, List.head?_tail, Nat.lt_one_iff]
 
 private theorem weth10MainByteAt_eq_zero_0_371
     (locations : List Nat) (n : Nat) (chainId domainSeparator : B256)

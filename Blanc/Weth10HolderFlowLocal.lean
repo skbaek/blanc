@@ -255,22 +255,19 @@ theorem LocalActionSegment.holder_eq
       debit_eq increase =>
       unfold FlowAction.ExactCredit at credit_eq
       by_cases hrecipient : recipient = u <;>
-        simpa [LocalSegmentKind.holderIn, LocalSegmentKind.holderOut,
-          LocalSegmentKind.holderLoss, atom_eq, credit_eq,
-          FlowAtom.holderFlow, HolderFlow.zero,
-          FlowAction.holderCreditLoss, CreditOccurrence.loss,
-          hrecipient] using (increase_holder_eq (u := u) increase)
+        simpa only [LocalSegmentKind.holderIn, FlowAtom.holderFlow, atom_eq, hrecipient, ↓reduceIte,
+          HolderFlow.zero, LocalSegmentKind.holderOut, add_zero, LocalSegmentKind.holderLoss,
+          FlowAction.holderCreditLoss, credit_eq, CreditOccurrence.loss] using (increase_holder_eq (u := u) increase)
   | ordinaryTransfer rawSource rawRecipient source recipient amountWord
       atom_eq transfer credit_eq debit_source =>
       unfold FlowAction.ExactCredit at credit_eq
       have exact := transfer.holder_eq (u := u)
       by_cases hsource : source = u <;>
         by_cases hrecipient : recipient = u <;>
-        simpa [LocalSegmentKind.holderIn, LocalSegmentKind.holderOut,
-          LocalSegmentKind.holderLoss, atom_eq, credit_eq,
-          FlowAtom.holderFlow, HolderFlow.zero, FlowAction.holderCreditLoss,
-          CreditOccurrence.loss,
-          hsource, hrecipient] using exact
+        simpa only [LocalSegmentKind.holderIn, FlowAtom.holderFlow, atom_eq, hsource, hrecipient,
+          ↓reduceIte, HolderFlow.zero, zero_add, add_zero, LocalSegmentKind.holderOut,
+          LocalSegmentKind.holderLoss, FlowAction.holderCreditLoss, credit_eq,
+          CreditOccurrence.loss] using exact
   | redemption rawSource source ethRecipient amountWord atom_eq credit_eq
       debit_source amount_le decrease =>
       by_cases hsource : source = u <;>
@@ -281,11 +278,9 @@ theorem LocalActionSegment.holder_eq
       debit_source increase =>
       unfold FlowAction.ExactCredit at credit_eq
       by_cases hreceiver : receiver = u <;>
-        simpa [LocalSegmentKind.holderIn, LocalSegmentKind.holderOut,
-          LocalSegmentKind.holderLoss, atom_eq, credit_eq,
-          FlowAtom.holderFlow, HolderFlow.zero,
-          FlowAction.holderCreditLoss, CreditOccurrence.loss,
-          hreceiver] using (increase_holder_eq (u := u) increase)
+        simpa only [LocalSegmentKind.holderIn, FlowAtom.holderFlow, atom_eq, hreceiver, ↓reduceIte,
+          HolderFlow.zero, LocalSegmentKind.holderOut, add_zero, LocalSegmentKind.holderLoss,
+          FlowAction.holderCreditLoss, credit_eq, CreditOccurrence.loss] using (increase_holder_eq (u := u) increase)
   | flashRepayment rawReceiver receiver amountWord creditBefore atom_eq
       credit_eq debit_source amount_le decrease =>
       by_cases hreceiver : receiver = u <;>
