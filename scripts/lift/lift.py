@@ -7,6 +7,13 @@ frame-relative control structure from raw runtime bytes; it proves nothing.  The
 only trust boundary is Lean: `Cert.check code cert = true`, decided by the kernel
 in the generated or hand-written `Check.lean`, is what a lift theorem consumes.
 
+`--code-import MODULE --code-ref QUALIFIED_NAME` (paired registry options
+`code_import`/`code_ref`) references an existing canonical ByteArray definition
+instead of emitting another byte literal. The hex input is still checked and
+analyzed normally; the kernel certificate checks the referenced definition.
+Both names use unquoted ASCII Lean identifier components; the reference must
+be qualified. Omitting the pair preserves the historical literal output.
+
 Provenance.  This file is the union of the historical producer forks kept as
 Plans evidence (`solc-bytecode-v1/w3/lift.py`, `beacon-deposit-bytecode-v1/w0/lift.py`,
 `vyper-3crv-bytecode-v1/v1/lift.py`) and the deployed Lido adaptation
@@ -263,6 +270,22 @@ def check_lean_transfers(root: Path) -> None:
         raise SystemExit("lift: producer opcode table disagrees with the Lean transfer set:\n  " + "\n  ".join(errors))
 
 
+def code_reference_error(code_import: Any, code_ref: Any) -> Optional[str]:
+    """Validate the paired external-code names before emitting Lean source."""
+    if (code_import is None) != (code_ref is None):
+        return "--code-import and --code-ref must be supplied together"
+    if code_import is None:
+        return None
+    component = r"[A-Za-z_][A-Za-z0-9_']*"
+    for name, value, qualified in (("--code-import", code_import, False),
+                                   ("--code-ref", code_ref, True)):
+        if (not isinstance(value, str)
+                or re.fullmatch(component + r"(?:\." + component + r")*", value) is None
+                or "_" in value.split(".") or (qualified and "." not in value)):
+            return f"{name} must be {'a qualified' if qualified else 'an'} unquoted ASCII Lean name"
+    return None
+
+
 def run_registry(args: argparse.Namespace) -> int:
     """Regenerate every registered certificate and compare with (or write) the committed files."""
     root = args.blanc_root
@@ -278,6 +301,15 @@ def run_registry(args: argparse.Namespace) -> int:
     with tempfile.TemporaryDirectory(prefix="lift-registry-") as tmp:
         for row in rows:
             ident = row["id"]
+            opts = row.get("options", {})
+            supplied = [option for option in ("code_import", "code_ref") if option in opts]
+            error = ("code_import/code_ref registry options must be strings"
+                     if any(not isinstance(opts[option], str) for option in supplied)
+                     else code_reference_error(opts.get("code_import"), opts.get("code_ref")))
+            if error is not None:
+                print(f"FAIL {ident}: {error}")
+                failures += 1
+                continue
             hex_file = root / row["input"]["hex"]
             file_sha = hashlib.sha256(hex_file.read_bytes()).hexdigest()
             if file_sha != row["input"]["file_sha256"]:
@@ -289,7 +321,9 @@ def run_registry(args: argparse.Namespace) -> int:
             argv = [sys.executable, str(SCRIPT), "--blanc-root", str(root),
                     "--hex", str(hex_file), "--sha256", row["input"]["runtime_sha256"],
                     "--namespace", row["namespace"], "--cert-out", str(out / "Cert.lean")]
-            opts = row.get("options", {})
+            for option in ("code_import", "code_ref"):
+                if opts.get(option) is not None:
+                    argv += ["--" + option.replace("_", "-"), opts[option]]
             if opts.get("join_entries") is False:
                 argv.append("--no-join-entries")
             if "wrapper_order" in opts:
@@ -382,6 +416,10 @@ parser.add_argument("--timeout", type=int, default=600, help="registry mode: per
 parser.add_argument("--hex", type=Path, default=None, help="runtime bytecode as hex text")
 parser.add_argument("--sha256", type=str, default=None, help="expected SHA-256 of the runtime bytes")
 parser.add_argument("--namespace", type=str, default=None, help="Lean namespace of the certificate")
+parser.add_argument("--code-import", type=str, default=None,
+                    help="import the module owning an existing ByteArray (paired with --code-ref)")
+parser.add_argument("--code-ref", type=str, default=None,
+                    help="qualified canonical ByteArray reference instead of a byte literal (paired with --code-import)")
 parser.add_argument("--cert-out", type=Path, default=None, help="Cert.lean to write")
 parser.add_argument("--check-out", type=Path, default=None, help="per-entry Check.lean to write (optional)")
 parser.add_argument("--header", type=str, default=DEFAULT_HEADER, help="Cert.lean generator comment")
@@ -419,6 +457,9 @@ parser.add_argument("--widen", choices=("agree", "control"), default="agree", he
 parser.add_argument("--no-callee-join-exempt", action="store_true", help="PROBE (inline): do not exempt joins whose disagreeing positions hold jump destinations")
 
 args = parser.parse_args()
+error = code_reference_error(args.code_import, args.code_ref)
+if error is not None:
+    parser.error(error)
 MEMRET = args.memret != "off"
 FOLD_ADD = MEMRET and not args.no_fold_add
 CONST_MEM = MEMRET and args.const_mem
@@ -1725,6 +1766,8 @@ for e_idx in sorted(trees.keys()):
 # Generate Cert.lean
 lean_lines = []
 lean_lines.append("import Blanc.Lift.CheckMem" if MEMRET else "import Blanc.Lift.Check")
+if args.code_import is not None:
+    lean_lines.append(f"import {args.code_import}")
 lean_lines.append("")
 lean_lines.append(f"/-! {args.header} -/")
 lean_lines.append("")
@@ -1746,7 +1789,9 @@ def byte_lines(data: bytes) -> List[str]:
     return out
 
 
-if len(code) <= CODE_LITERAL_MAX:
+if args.code_ref is not None:
+    lean_lines.append(f"def code : ByteArray := {args.code_ref}")
+elif len(code) <= CODE_LITERAL_MAX:
     lean_lines.append("def code : ByteArray := ⟨#[")
     lean_lines.extend(byte_lines(code))
     lean_lines.append("]⟩")

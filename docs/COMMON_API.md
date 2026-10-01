@@ -20,6 +20,8 @@ registry has identified the likely vocabulary.
   [S — state and machine updates](#s--state-and-machine-updates).
 - Reason about bytes or EVM memory: go to
   [M — bytes and memory](#m--bytes-and-memory).
+- Reason about the integer exponential loop and its iteration count: go to
+  [S9](#s9-i-need-the-integer-exponential-recurrence-or-a-finite-loop-witness).
 - Relate raw execution to message/frame settlement: go to
   [T — settlement](#t--settlement).
 - Relate source programs, compiled code, and deployed artifacts: go to
@@ -1640,6 +1642,30 @@ closed `ProrataAttackPath` yields `attacker_no_profit_of_attackPath` and
 `victim_loss_bound_of_attackPath`.  Nothing here names an asset, a contract,
 or a program; the WETH-backed vault is the second consumer of arithmetic
 first stated for PRORATA's ETH-denominated shares.
+
+### S9. I need the integer exponential recurrence or a finite loop witness
+
+The canonical natural-number definitions already live in the pinned Jaune
+package's `Jaune/Machine.lean`: `Jaune.fakeExpAux` uses a well-founded
+lexicographic measure `(numerator + 1 - i, accumulator)`, and `Jaune.fakeExp`
+starts at index 1 with accumulator `factor * denominator`, then divides the
+sum by the denominator. Consume `Jaune.fakeExpAux_zero`,
+`Jaune.fakeExpAux_succ`, `Jaune.FakeExpSpec`, `Jaune.fakeExpAux_spec` and
+`Jaune.fakeExpAux_spec_unique`; do not duplicate the recurrence or give it a
+guessed fuel bound.
+
+[`Blanc/FakeExponential.lean`](../Blanc/FakeExponential.lean) adds
+`Blanc.FakeExponential.Run`, a finite recurrence trace carrying the iteration
+count and series output. `run_exists` provides a trace for every input and
+`Run.output_eq` identifies every trace's output with the canonical series.
+`accumulator_le` and `factor_le` provide lower bounds; the latter requires a
+positive denominator. `accumulator_zero_numerator` and `value_zero_numerator`
+give the exact zero-numerator boundary, with positivity required for the
+final division. The withdrawal-request model consumes these for positive
+fees and the zero-excess fee, and its later fee-loop/gas refinement can consume
+the finite trace. These statements establish no finite-word no-overflow,
+bytecode refinement, gas cost or history property. This is a theorem-directed
+numeric interface; it has no execution-goal recipe.
 
 ## M — bytes and memory
 
