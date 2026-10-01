@@ -205,6 +205,52 @@ def _observed_union(family: str, suggestions: List[Dict[str, Any]]) -> Tuple[str
     return family + ' only' + (' [' + ', '.join(names) + ']' if names else '') + (' at ' + location if location else ''), names
 
 
+def _parse_native_inventory(original_text, raw_inventory, lines):
+    """Private syntax/range core; caller must validate raw source provenance first."""
+    if not isinstance(raw_inventory,list):
+        raise MigrationError("Missing or non-list native inventory")
+    parsed_sites: List[Dict[str, Any]] = []
+    for idx, item in enumerate(raw_inventory):
+        if not isinstance(item, dict):
+            raise MigrationError(f"Inventory site {idx} is not an object")
+        family = item.get("family")
+        if not isinstance(family, str) or family not in SUPPORTED_FAMILIES:
+            raise MigrationError(f"Inventory site {idx} has unsupported family: {family!r}")
+        head = item.get("head")
+        if not isinstance(head, str):
+            raise MigrationError(f"Inventory site {idx} has missing or non-string 'head'")
+        if "!" in head:
+            raise MigrationError(f"Unsupported bang head '{head}' at site {idx}: unavailable/unproven bang heads are not supported")
+        if EXPECTED_FAMILY_FOR_HEAD.get(head) != family:
+            raise MigrationError(f"Inventory site {idx} head '{head}' is inconsistent with family '{family}'")
+
+        only_val = item.get("only")
+        if not isinstance(only_val, bool):
+            raise MigrationError(f"Inventory site {idx} 'only' must be a strict boolean (got {type(only_val).__name__})")
+
+        s_cp, e_cp = _validate_lsp_range(item.get("range"), f"Site {idx} range", lines)
+        h_s, h_e = _validate_lsp_range(item.get("headRange"), f"Site {idx} headRange", lines)
+        c_s, c_e = _validate_lsp_range(item.get("commandRange"), f"Site {idx} commandRange", lines)
+
+        if h_s != s_cp: raise MigrationError(f"Site {idx} headRange start {h_s} does not align with site start {s_cp}")
+        if h_e > e_cp: raise MigrationError(f"Site {idx} headRange end {h_e} exceeds site end {e_cp}")
+        if not (c_s <= s_cp and e_cp <= c_e): raise MigrationError(f"Site {idx} range [{s_cp}, {e_cp}] is not enclosed within commandRange [{c_s}, {c_e}]")
+
+        src_text = item.get("source")
+        if not isinstance(src_text, str): raise MigrationError(f"Site {idx} has missing or non-string 'source'")
+        if original_text[s_cp:e_cp] != src_text: raise MigrationError(f"Site {idx} source mismatch: expected {src_text!r}, actual is {original_text[s_cp:e_cp]!r}")
+        if original_text[h_s:h_e] != head: raise MigrationError(f"Site {idx} head mismatch: expected {head!r}, actual is {original_text[h_s:h_e]!r}")
+        if only_val != _has_explicit_only(src_text): raise MigrationError(f"Site {idx} 'only' flag ({only_val}) disagrees with source explicit-only syntax")
+
+        parsed_sites.append({
+            "family": family, "head": head, "only": only_val,
+            "range": item["range"], "headRange": item["headRange"], "commandRange": item["commandRange"],
+            "source": src_text, "s_cp": s_cp, "e_cp": e_cp, "h_s": h_s, "h_e": h_e, "c_s": c_s, "c_e": c_e,
+        })
+
+    return parsed_sites
+
+
 def instrument(
     original_bytes: bytes,
     baseline_collector: Union[Dict[str, Any], str, bytes],
@@ -244,44 +290,7 @@ def instrument(
     if not isinstance(raw_inventory, list):
         raise MigrationError("Missing or non-list 'inventory' in baseline collector")
 
-    parsed_sites: List[Dict[str, Any]] = []
-    for idx, item in enumerate(raw_inventory):
-        if not isinstance(item, dict):
-            raise MigrationError(f"Inventory site {idx} is not an object")
-        family = item.get("family")
-        if not isinstance(family, str) or family not in SUPPORTED_FAMILIES:
-            raise MigrationError(f"Inventory site {idx} has unsupported family: {family!r}")
-        head = item.get("head")
-        if not isinstance(head, str):
-            raise MigrationError(f"Inventory site {idx} has missing or non-string 'head'")
-        if "!" in head:
-            raise MigrationError(f"Unsupported bang head '{head}' at site {idx}: unavailable/unproven bang heads are not supported")
-        if EXPECTED_FAMILY_FOR_HEAD.get(head) != family:
-            raise MigrationError(f"Inventory site {idx} head '{head}' is inconsistent with family '{family}'")
-
-        only_val = item.get("only")
-        if not isinstance(only_val, bool):
-            raise MigrationError(f"Inventory site {idx} 'only' must be a strict boolean (got {type(only_val).__name__})")
-
-        s_cp, e_cp = _validate_lsp_range(item.get("range"), f"Site {idx} range", lines)
-        h_s, h_e = _validate_lsp_range(item.get("headRange"), f"Site {idx} headRange", lines)
-        c_s, c_e = _validate_lsp_range(item.get("commandRange"), f"Site {idx} commandRange", lines)
-
-        if h_s != s_cp: raise MigrationError(f"Site {idx} headRange start {h_s} does not align with site start {s_cp}")
-        if h_e > e_cp: raise MigrationError(f"Site {idx} headRange end {h_e} exceeds site end {e_cp}")
-        if not (c_s <= s_cp and e_cp <= c_e): raise MigrationError(f"Site {idx} range [{s_cp}, {e_cp}] is not enclosed within commandRange [{c_s}, {c_e}]")
-
-        src_text = item.get("source")
-        if not isinstance(src_text, str): raise MigrationError(f"Site {idx} has missing or non-string 'source'")
-        if original_text[s_cp:e_cp] != src_text: raise MigrationError(f"Site {idx} source mismatch: expected {src_text!r}, actual is {original_text[s_cp:e_cp]!r}")
-        if original_text[h_s:h_e] != head: raise MigrationError(f"Site {idx} head mismatch: expected {head!r}, actual is {original_text[h_s:h_e]!r}")
-        if only_val != _has_explicit_only(src_text): raise MigrationError(f"Site {idx} 'only' flag ({only_val}) disagrees with source explicit-only syntax")
-
-        parsed_sites.append({
-            "family": family, "head": head, "only": only_val,
-            "range": item["range"], "headRange": item["headRange"], "commandRange": item["commandRange"],
-            "source": src_text, "s_cp": s_cp, "e_cp": e_cp, "h_s": h_s, "h_e": h_e, "c_s": c_s, "c_e": c_e,
-        })
+    parsed_sites = _parse_native_inventory(original_text, raw_inventory, lines)
 
     if type(preserve_nested) is not bool:
         raise MigrationError('preserve_nested must be a strict boolean')
@@ -411,6 +420,11 @@ def reconcile(
     if not _json_equal(derived_res.plan, plan_dict):
         raise MigrationError("Supplied plan does not match deterministically derived plan")
 
+    return _reconcile_native_actions(derived_res, question_collector, observed_union_sites=observed_union_sites)
+
+
+def _reconcile_native_actions(derived_res, question_collector, *, observed_union_sites=()):
+    """Private exact native-action core; derive and validate the supplied plan first."""
     q_dict = _parse_json_dict(question_collector, "question_collector")
     q_schema = q_dict.get("schema")
     if not _is_strict_int(q_schema) or q_schema != 1:
