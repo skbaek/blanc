@@ -78,6 +78,34 @@
       "call": "resolve_module_file",
       "class": "explicit dereference",
       "source": "selected hand-authored module paths and source application identity"
+    },
+    {
+      "id": "explicit-simp-root",
+      "script": "scripts/explicit_simp.py",
+      "call": "resolve_source_file",
+      "class": "explicit dereference",
+      "source": "required static Blanc.lean aggregate"
+    },
+    {
+      "id": "explicit-simp-population",
+      "script": "scripts/explicit_simp.py",
+      "call": "walk_module_files",
+      "class": "walk",
+      "source": "complete production Blanc module population"
+    },
+    {
+      "id": "explicit-simp-target",
+      "script": "scripts/explicit_simp.py",
+      "call": "resolve_bound_file",
+      "class": "generator output binding",
+      "source": "optional explicit repository-relative Lean source targets"
+    },
+    {
+      "id": "usage-evidence-candidate-input",
+      "script": "scripts/usage_evidence.py",
+      "call": "resolve_bound_file",
+      "class": "generator output binding",
+      "source": "hash-bound captured source and runtime adapter inputs"
     }
   ]
 }

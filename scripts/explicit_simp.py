@@ -58,6 +58,9 @@ from typing import Dict, List, Optional, Sequence, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 try:
     from leaf_audit import LeafAuditError, strip_comments_and_strings
+    from module_path_policy import (
+        ModulePathPolicyError, resolve_bound_file, resolve_source_file, walk_module_files,
+    )
 except ImportError as exc:
     raise SystemExit(f"ERROR: cannot import leaf_audit: {exc}")
 
@@ -326,34 +329,24 @@ def discover_lean_files(root: Path, targets: Optional[Sequence[str]] = None) -> 
 
     Fails closed if targets or repository sources cannot be found.
     """
-    if targets:
-        resolved = []
-        for t in targets:
-            p = (root / t).resolve() if not Path(t).is_absolute() else Path(t)
-            if not p.is_file():
-                raise ExplicitSimpError(f"target file does not exist: {t}")
-            resolved.append(p)
-        if not resolved:
-            raise ExplicitSimpError(f"no target Lean files specified or found under {root}")
-        return sorted(resolved)
+    try:
+        if targets:
+            resolved = []
+            for target in targets:
+                if not target.endswith(".lean"):
+                    raise ExplicitSimpError(f"target is not a Lean source: {target}")
+                resolved.append(resolve_bound_file(
+                    root, target, allow_missing=False, site="explicit-simp-target",
+                ))
+            return sorted(set(resolved))
 
-    files: List[Path] = []
-    root_file = root / "Blanc.lean"
-    if root_file.is_file():
-        files.append(root_file)
-
-    blanc_dir = root / "Blanc"
-    if blanc_dir.is_dir():
-        for p in sorted(blanc_dir.rglob("*.lean")):
-            if p.is_file():
-                files.append(p)
-
-    if not files:
-        raise ExplicitSimpError(
-            f"no Lean source files found under {root} (expected Blanc.lean or Blanc/**/*.lean)"
-        )
-
-    return sorted(files)
+        root_file = resolve_source_file(root, "Blanc.lean", site="explicit-simp-root")
+        modules = walk_module_files(root, site="explicit-simp-population")
+        if not modules:
+            raise ExplicitSimpError(f"empty Blanc module population under {root}")
+        return sorted([root_file, *modules])
+    except ModulePathPolicyError as error:
+        raise ExplicitSimpError(str(error)) from error
 
 
 # ---------------------------------------------------------------------------

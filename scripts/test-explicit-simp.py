@@ -325,33 +325,33 @@ def test_cli_and_errors() -> None:
         )
 
         # 1. Test inventory mode on clean file: exit 0
-        code = explicit_simp.main(["inventory", str(clean_file), "--root", str(tmp_path)])
+        code = explicit_simp.main(["inventory", "Blanc/Clean.lean", "--root", str(tmp_path)])
         assert code == 0, f"Expected inventory on clean file to exit 0, got {code}"
 
         # 2. Test inventory mode on dirty file: exits 0 (inventory never fails current population)
-        code = explicit_simp.main(["inventory", str(dirty_file), "--root", str(tmp_path)])
+        code = explicit_simp.main(["inventory", "Blanc/Dirty.lean", "--root", str(tmp_path)])
         assert code == 0, f"Expected inventory on dirty file to exit 0, got {code}"
 
         # 3. Test inventory mode with --json
-        code = explicit_simp.main(["inventory", str(dirty_file), "--root", str(tmp_path), "--json"])
+        code = explicit_simp.main(["inventory", "Blanc/Dirty.lean", "--root", str(tmp_path), "--json"])
         assert code == 0, f"Expected inventory --json to exit 0, got {code}"
 
         # 4. Test check mode on clean file: exits 0
-        code = explicit_simp.main(["check", str(clean_file), "--root", str(tmp_path)])
+        code = explicit_simp.main(["check", "Blanc/Clean.lean", "--root", str(tmp_path)])
         assert code == 0, f"Expected check on clean file to exit 0, got {code}"
 
         # 5. Test check mode on dirty file: exits 1 (fails on violation)
-        code = explicit_simp.main(["check", str(dirty_file), "--root", str(tmp_path)])
+        code = explicit_simp.main(["check", "Blanc/Dirty.lean", "--root", str(tmp_path)])
         assert code == 1, f"Expected check on dirty file to exit 1, got {code}"
 
         # 6. Test parse error handling: unterminated block comment
         bad_comment_file = blanc_dir / "BadComment.lean"
         bad_comment_file.write_text("/- unterminated comment\n", encoding="utf-8")
-        code = explicit_simp.main(["check", str(bad_comment_file), "--root", str(tmp_path)])
+        code = explicit_simp.main(["check", "Blanc/BadComment.lean", "--root", str(tmp_path)])
         assert code == 2, f"Expected parse error on unterminated comment to exit 2, got {code}"
 
         # 7. Test missing file error
-        code = explicit_simp.main(["check", str(blanc_dir / "NonExistent.lean"), "--root", str(tmp_path)])
+        code = explicit_simp.main(["check", "Blanc/NonExistent.lean", "--root", str(tmp_path)])
         assert code == 2, f"Expected missing file error to exit 2, got {code}"
 
         # 8. Test missing source tree fails closed with exit code 2
@@ -365,6 +365,46 @@ def test_cli_and_errors() -> None:
     print("CLI and error handling tests OK.\n")
 
 
+def test_exact_population_and_paths() -> None:
+    """Required populations and raw/filesystem aliases fail at discovery."""
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory).resolve()
+        (root / "Blanc").mkdir()
+        root_file = root / "Blanc.lean"
+        root_file.write_text("import Blanc.Clean\n", encoding="utf-8")
+        source = root / "Blanc/Clean.lean"
+        baseline = b"example : True := by simp only [True.intro]\n"
+        source.write_bytes(baseline)
+        assert discover_lean_files(root) == sorted([root_file, source])
+        assert discover_lean_files(root, ["Blanc/Clean.lean"]) == [source]
+
+        def refuses(targets=None):
+            try:
+                discover_lean_files(root, targets)
+            except ExplicitSimpError:
+                return
+            raise AssertionError(f"unsafe/incomplete discovery passed: {targets}")
+
+        for raw in ("Blanc//Clean.lean", "Blanc/../Blanc/Clean.lean", "Blanc\\Clean.lean",
+                    "blanc/Clean.lean", str(source), "Blanc/Clean.txt"):
+            refuses([raw])
+        root_file.unlink()
+        refuses()
+        root_file.write_text("import Blanc.Clean\n", encoding="utf-8")
+        source.unlink()
+        refuses()
+        source.write_bytes(baseline)
+        target = root / "Blanc/Real.lean"
+        source.rename(target)
+        source.symlink_to(target)
+        refuses()
+        refuses(["Blanc/Clean.lean"])
+        source.unlink()
+        target.rename(source)
+        assert source.read_bytes() == baseline
+    print("Exact population/path controls OK; green bytes restored by identity.\n")
+
+
 def main() -> int:
     print("=================================================================")
     print("Running explicit simp syntax controls and self-tests")
@@ -372,6 +412,7 @@ def main() -> int:
     test_suite_tables()
     test_bite_and_restore_by_byte_identity()
     test_cli_and_errors()
+    test_exact_population_and_paths()
     print("ALL TESTS PASSED SUCCESSFULLY.")
     return 0
 
