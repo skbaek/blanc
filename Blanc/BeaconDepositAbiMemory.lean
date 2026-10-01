@@ -206,7 +206,12 @@ def depositDecodedMemory_carrier (data : Bytes) :
           (160, depositLengthWord data 2),
           (64, depositOffsetWord data 2)]
         [] 0 (depositOffsetWord data 0) (by
-          simp [MemoryStage.words, MemoryStage.avoids]))
+          simp only [MemoryStage.avoids, MemoryStage.words, depositLengthWord_eq_calldataWord,
+            depositOffsetWord_eq_calldataWord, mul_one, Nat.reduceAdd, Nat.reduceMul, List.map_cons,
+            List.map_nil, List.length_eq_zero_iff, OfNat.ofNat_ne_zero, zero_add,
+            nonpos_iff_eq_zero, Nat.add_eq_zero_iff, false_or, Bool.decide_or, Bool.decide_and,
+            List.all_cons, Nat.reduceLeDiff, decide_true, decide_false, Bool.false_and,
+            Bool.or_false, Bool.or_true, Std.le_refl, List.all_nil, Bool.and_self]))
   · simpa only [depositDecodedImage, depositDecodedWrites,
       List.cons_append, List.nil_append] using
       (MemoryStage.read_written_word
@@ -216,8 +221,11 @@ def depositDecodedMemory_carrier (data : Bytes) :
         [(160, depositLengthWord data 2),
           (64, depositOffsetWord data 2)]
         [] 32 (depositOffsetWord data 1) (by
-          simp [MemoryStage.words, MemoryStage.avoids,
-            B256.length_toBytes]))
+          simp only [MemoryStage.avoids, MemoryStage.words, depositLengthWord_eq_calldataWord,
+            depositOffsetWord_eq_calldataWord, Nat.reduceMul, Nat.reduceAdd, List.map_cons,
+            List.map_nil, List.length_eq_zero_iff, OfNat.ofNat_ne_zero, false_or, Bool.decide_or,
+            List.all_cons, Nat.reduceLeDiff, decide_true, B256.length_toBytes, decide_false,
+            Bool.or_false, Bool.or_true, Std.le_refl, List.all_nil, Bool.and_self]))
   · simpa only [depositDecodedImage, depositDecodedWrites,
       List.cons_append, List.nil_append] using
       (MemoryStage.read_written_word
@@ -227,7 +235,8 @@ def depositDecodedMemory_carrier (data : Bytes) :
           (32, depositOffsetWord data 1),
           (160, depositLengthWord data 2)]
         [] [] 64 (depositOffsetWord data 2) (by
-          simp [MemoryStage.words, MemoryStage.avoids]))
+          simp only [MemoryStage.avoids, MemoryStage.words, List.map_nil, List.length_eq_zero_iff,
+            OfNat.ofNat_ne_zero, Nat.reduceAdd, false_or, Bool.decide_or, List.all_nil]))
   · simpa only [depositDecodedImage, depositDecodedWrites,
       List.cons_append, List.nil_append] using
       (MemoryStage.read_written_word
@@ -238,8 +247,12 @@ def depositDecodedMemory_carrier (data : Bytes) :
           (160, depositLengthWord data 2),
           (64, depositOffsetWord data 2)]
         [] 96 (depositLengthWord data 0) (by
-          simp [MemoryStage.words, MemoryStage.avoids,
-            B256.length_toBytes]))
+          simp only [MemoryStage.avoids, MemoryStage.words, depositOffsetWord_eq_calldataWord,
+            mul_zero, add_zero, depositLengthWord_eq_calldataWord, mul_one, Nat.reduceAdd,
+            Nat.reduceMul, List.map_cons, List.map_nil, List.length_eq_zero_iff,
+            OfNat.ofNat_ne_zero, false_or, Bool.decide_or, List.all_cons, nonpos_iff_eq_zero,
+            decide_false, B256.length_toBytes, zero_add, Nat.reduceLeDiff, decide_true,
+            Bool.or_true, Std.le_refl, Bool.or_false, List.all_nil, Bool.and_self]))
   · simpa only [depositDecodedImage, depositDecodedWrites,
       List.cons_append, List.nil_append] using
       (MemoryStage.read_written_word
@@ -249,8 +262,11 @@ def depositDecodedMemory_carrier (data : Bytes) :
           (160, depositLengthWord data 2),
           (64, depositOffsetWord data 2)]
         [] 128 (depositLengthWord data 1) (by
-          simp [MemoryStage.words, MemoryStage.avoids,
-            B256.length_toBytes]))
+          simp only [MemoryStage.avoids, MemoryStage.words, depositOffsetWord_eq_calldataWord,
+            mul_one, Nat.reduceAdd, depositLengthWord_eq_calldataWord, Nat.reduceMul, List.map_cons,
+            List.map_nil, List.length_eq_zero_iff, OfNat.ofNat_ne_zero, false_or, Bool.decide_or,
+            List.all_cons, Nat.reduceLeDiff, decide_false, B256.length_toBytes, decide_true,
+            Bool.or_true, Std.le_refl, Bool.or_false, List.all_nil, Bool.and_self]))
   · simpa only [depositDecodedImage, depositDecodedWrites,
       List.cons_append, List.nil_append] using
       (MemoryStage.read_written_word
@@ -260,7 +276,10 @@ def depositDecodedMemory_carrier (data : Bytes) :
           (32, depositOffsetWord data 1)]
         [(64, depositOffsetWord data 2)]
         [] 160 (depositLengthWord data 2) (by
-          simp [MemoryStage.words, MemoryStage.avoids,
-            B256.length_toBytes]))
+          simp only [MemoryStage.avoids, MemoryStage.words, depositOffsetWord_eq_calldataWord,
+            Nat.reduceMul, Nat.reduceAdd, List.map_cons, List.map_nil, List.length_eq_zero_iff,
+            OfNat.ofNat_ne_zero, false_or, Bool.decide_or, List.all_cons, Nat.reduceLeDiff,
+            decide_false, B256.length_toBytes, decide_true, Bool.or_true, List.all_nil,
+            Bool.and_self]))
 
 end Blanc.BeaconDeposit

@@ -118,8 +118,9 @@ theorem dispatchWith_run_prefix_of_sorted :
       · simpa [DispatchTree.build] using
           (ih (xs := [(w, p)])
             (sig := sig) (f := f) (fs := fs) (k := k) (e := e) (s := s)
-            (r := r) (ws := ws) (path := path) (by simpa using h_sorted)
-            (by simp) h_mem h_pfx (by simpa [DispatchTree.build] using h_run))
+            (r := r) (ws := ws) (path := path) (by simpa only using h_sorted)
+            (by simp only [List.length_cons, List.length_nil, zero_add, le_add_iff_nonneg_left,
+              zero_le]) h_mem h_pfx (by simpa only [DispatchTree.build] using h_run))
       · simp only [List.length_cons] at h_len
         have h_take_len :
             (((w, p) :: y :: ys).take ((((w, p) :: y :: ys).length + 1) / 2)).length

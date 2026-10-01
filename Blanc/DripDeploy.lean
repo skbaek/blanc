@@ -524,7 +524,8 @@ theorem constructorProgram_runCompiled {sevm : Sevm} {pre : Devm} {G : Nat}
       (Ninst.runCompiled_pushItem (sevm := sevm) (devm := mid) (r := .callvalue) (x := sevm.value) (cost := gBase) (G := G + 44608) (by rintro ⟨⟩) rfl (by simp only [mid, Devm.gasLeft_setMach, gBase]) (by simp only [mid, Devm.stack_setMach, List.length_nil]; omega))
   have h2 : Ninst.RunCompiled sevm s1 iszero s2 := by
     simpa only [s2, s1, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
-      (Ninst.runCompiled_unary (sevm := sevm) (devm := s1) (r := .iszero) (cost := gVerylow) (G := G + 44605) (x := sevm.value) (v := 1) (s := []) (by rintro ⟨⟩) rfl (by simp only [s1, Devm.stack_setMach]) (by show B256.eqCheck sevm.value 0 = 1; rw [hvalue]; simp [B256.eqCheck]) (by simp only [s1, Devm.gasLeft_setMach, gVerylow]) (by simp only [List.length_nil]; omega))
+      (Ninst.runCompiled_unary (sevm := sevm) (devm := s1) (r := .iszero) (cost := gVerylow) (G := G + 44605) (x := sevm.value) (v := 1) (s := []) (by rintro ⟨⟩) rfl (by simp only [s1, Devm.stack_setMach]) (by show B256.eqCheck sevm.value 0 = 1; rw [hvalue]; simp only [B256.eqCheck,
+        ↓reduceIte]) (by simp only [s1, Devm.gasLeft_setMach, gVerylow]) (by simp only [List.length_nil]; omega))
   have hpop1 : Devm.PopBurnBy [(1 : B256)] (gVerylow + gHigh + gJumpdest) s2 s3 := by
     simpa only [s3, s2, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       Devm.popBurnBy_setMach (devm := s2) (x := 1) (s := []) (cost := gVerylow + gHigh + gJumpdest) (G := G + 44591) (by simp only [s2, Devm.stack_setMach]) (by simp only [s2, Devm.gasLeft_setMach, gVerylow, gHigh, gJumpdest])
@@ -538,7 +539,8 @@ theorem constructorProgram_runCompiled {sevm : Sevm} {pre : Devm} {G : Nat}
       (Ninst.runCompiled_pushItem (sevm := sevm) (devm := s4) (r := .codesize) (x := sevm.code.size.toB256) (cost := gBase) (G := G + 44586) (by rintro ⟨⟩) rfl (by simp only [s4, Devm.gasLeft_setMach, gBase]) (by simp only [s4, Devm.stack_setMach, List.length_cons, List.length_nil]; omega))
   have h6 : Ninst.RunCompiled sevm s5 eq s6 := by
     simpa only [s6, s5, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
-      (Ninst.runCompiled_binary (sevm := sevm) (devm := s5) (r := .eq) (cost := gVerylow) (G := G + 44583) (x := sevm.code.size.toB256) (y := Nat.toB256 2001) (v := 1) (s := []) (by rintro ⟨⟩) rfl (by simp only [s5, Devm.stack_setMach]) (by show B256.eqCheck sevm.code.size.toB256 (Nat.toB256 2001) = 1; rw [hsize]; simp [B256.eqCheck]) (by simp only [s5, Devm.gasLeft_setMach, gVerylow]) (by simp only [List.length_nil]; omega))
+      (Ninst.runCompiled_binary (sevm := sevm) (devm := s5) (r := .eq) (cost := gVerylow) (G := G + 44583) (x := sevm.code.size.toB256) (y := Nat.toB256 2001) (v := 1) (s := []) (by rintro ⟨⟩) rfl (by simp only [s5, Devm.stack_setMach]) (by show B256.eqCheck sevm.code.size.toB256 (Nat.toB256 2001) = 1; rw [hsize]; simp only [B256.eqCheck,
+        ↓reduceIte]) (by simp only [s5, Devm.gasLeft_setMach, gVerylow]) (by simp only [List.length_nil]; omega))
   have hpop2 : Devm.PopBurnBy [(1 : B256)] (gVerylow + gHigh + gJumpdest) s6 s7 := by
     simpa only [s7, s6, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       Devm.popBurnBy_setMach (devm := s6) (x := 1) (s := []) (cost := gVerylow + gHigh + gJumpdest) (G := G + 44569) (by simp only [s6, Devm.stack_setMach]) (by simp only [s6, Devm.gasLeft_setMach, gVerylow, gHigh, gJumpdest])

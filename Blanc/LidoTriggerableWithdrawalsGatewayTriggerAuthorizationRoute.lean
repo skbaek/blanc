@@ -178,7 +178,8 @@ theorem rebasedTriggerRoleFailure_call_reverts_exact
   simpa [TriggerRoleFailure,
     runtimeError, customErrorData] using
       runCompiledTo_revertSelector_inv
-        (hlen := by simp [customErrorData, B256.length_toBytes]) bodyRun
+        (hlen := by simp only [customErrorData, List.length_take, B256.length_toBytes,
+          Nat.reduceLeDiff, inf_of_le_left]) bodyRun
 
 private theorem resumedExpected_errorData :
     customErrorData "ResumedExpected" =
@@ -195,7 +196,8 @@ theorem rebasedTriggerResumedExpected_call_reverts_exact
   unfold runtimeError at bodyRun
   simpa only [PausedTriggerFailure, resumedExpected_errorData] using
     runCompiledTo_revertSelector_inv
-      (hlen := by simp [customErrorData, B256.length_toBytes]) bodyRun
+      (hlen := by simp only [customErrorData, List.length_take, B256.length_toBytes,
+        Nat.reduceLeDiff, inf_of_le_left]) bodyRun
 
 /-! The canonical empty-array image pins every calldata word used by the
 validator. -/

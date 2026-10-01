@@ -302,8 +302,8 @@ theorem enumPrefixMemory_invariant (entries done : List Entry) :
   simpa [enumPrefixMemory, enumPrefixImage] using
     enumMemory_fold done (enumPrefixMemory entries []) (enumHeaderImage entries) 0
       (enumHeaderMemory_wf entries)
-    (by simpa using enumHeaderMemory_size entries)
-    (by simpa using enumHeaderImage_length entries)
+    (by simpa only [mul_zero, add_zero] using enumHeaderMemory_size entries)
+    (by simpa only [mul_zero, add_zero] using enumHeaderImage_length entries)
     (enumHeaderMemory_reads entries)
 
 private theorem enumImage_fold (done : List Entry) (image : Bytes) :
@@ -954,7 +954,7 @@ theorem getPausables_body_runCompiled
       Devm.memory_setMach, enumPrefixMemory, hzeroOffset, honeOffset,
       hzeroWord, h32Word, List.length_nil, List.foldl_nil] using
       enumLoop_runCompiled (hfork := hfork) fs sevm base entries [] entries G
-        (by simp) hw hwarm hfs
+        (by simp only [List.nil_append]) hw hwarm hfs
 
 /-- Exact cost of the emitted runtime entry and well-formed selector path from
 program counter zero to the `getPausables` body boundary. -/

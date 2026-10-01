@@ -611,7 +611,8 @@ theorem last_some_of_length_pos (entries : List Entry) (h : 0 < entries.length) 
       cases rest with
       | nil => exact ⟨entry, rfl⟩
       | cons head tail =>
-          simpa [last?] using ih (by simp)
+          simpa only [last?, Prod.exists] using ih (by simp only [List.length_cons, lt_add_iff_pos_left, add_pos_iff,
+            zero_lt_one, or_true])
 
 theorem last_some_of_findEntry {entries target index pauser}
     (h : findEntry entries target = some (index, pauser)) :

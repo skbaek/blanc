@@ -1352,7 +1352,7 @@ theorem rootFinishReturn_runCompiled
             intro hnil
             have := B256.length_toBytes digest
             rw [hnil] at this
-            simp at this))
+            simp only [List.length_nil, OfNat.zero_ne_ofNat] at this))
     · change
         base.setMach ⟨[], (Mret.read 0 32).2, G, base.stateGas⟩ =
           base.setMach ⟨[], Mret, G, base.stateGas⟩

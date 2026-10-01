@@ -16481,7 +16481,8 @@ private theorem directPauseControl_registryReads :
       directPauseControlOwner).get (arrayEntrySlot 1) =
         directPauseControlTarget
     simpa [logicalStorageOfStor, targetAt, hone,
-      directPauseControlTarget] using hw.arrayWords 0 (by simp)
+      directPauseControlTarget] using hw.arrayWords 0 (by simp only [List.length_cons,
+        List.length_nil, zero_add, zero_lt_one])
   · change (Devm.getStor directPauseControlPre
       directPauseControlOwner).get
         (countSlot directPauseControlPauser) = 1

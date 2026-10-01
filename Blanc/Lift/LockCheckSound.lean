@@ -279,7 +279,7 @@ theorem forall₂_getElem? {ρ : Nat → B256} :
   | _ :: _, _ :: _, .cons h0 hr, j, s, h => by
     cases j with
     | zero => simp only [List.length_cons, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos, List.getElem_cons_zero, Option.some.injEq] at h ⊢; rw [← h, h0]
-    | succ j => simpa using forall₂_getElem? hr (by simpa using h)
+    | succ j => simpa using forall₂_getElem? hr (by simpa only [List.getElem?_cons_succ] using h)
 
 theorem forall₂_update_of_not_mem {ρ : Nat → B256} {r : Nat} {w : B256} :
     ∀ {kv : List Nat} {S : List B256}, r ∉ kv →

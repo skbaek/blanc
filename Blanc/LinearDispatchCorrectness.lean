@@ -693,7 +693,7 @@ theorem Func.execWitness_linearDispatchWith_fallback
                 (v := (0 : B256)) (s := tail)
                 (G := G + callCost + branchCost)
                 (by rintro ⟨⟩) rfl rfl
-                (by simp [B256.eqCheck, hne]) (by
+                (by simp only [B256.eqCheck, hne, ↓reduceIte]) (by
                   dsimp only [afterPush, branchCost]
                   simp only [Devm.gasLeft_setMach]) (by omega))
           have hfallback : Func.ExecWitness fs sevm afterBranch
@@ -775,7 +775,7 @@ theorem Func.execWitness_linearDispatchWith_fallback
                 (v := (0 : B256)) (s := selector :: tail)
                 (G := G + restCost + branchCost)
                 (by rintro ⟨⟩) rfl rfl
-                (by simp [B256.eqCheck, hne]) (by
+                (by simp only [B256.eqCheck, hne, ↓reduceIte]) (by
                   dsimp only [afterPush, branchCost]
                   simp only [Devm.gasLeft_setMach]) (by
                     simp only [List.length_cons]

@@ -111,11 +111,15 @@ theorem pstepH_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g)
               | exact absurd rfl hrd
               | simp only [hw]
       | push xs h =>
-        simp only [wstep_next_withFork hf hg hx [] c (.push xs h) (.last .stop) (by simp)]
-      | dupn i => simp only [wstep_next_withFork hf hg hx [] c (.dupn i) (.last .stop) (by simp)]
-      | swapn i => simp only [wstep_next_withFork hf hg hx [] c (.swapn i) (.last .stop) (by simp)]
+        simp only [wstep_next_withFork hf hg hx [] c (.push xs h) (.last .stop) (by simp only [ne_eq,
+          reduceCtorEq, not_false_eq_true, implies_true])]
+      | dupn i => simp only [wstep_next_withFork hf hg hx [] c (.dupn i) (.last .stop) (by simp only [ne_eq,
+        reduceCtorEq, not_false_eq_true, implies_true])]
+      | swapn i => simp only [wstep_next_withFork hf hg hx [] c (.swapn i) (.last .stop) (by simp only [ne_eq,
+        reduceCtorEq, not_false_eq_true, implies_true])]
       | exchange i =>
-        simp only [wstep_next_withFork hf hg hx [] c (.exchange i) (.last .stop) (by simp)]
+        simp only [wstep_next_withFork hf hg hx [] c (.exchange i) (.last .stop) (by simp only [ne_eq,
+          reduceCtorEq, not_false_eq_true, implies_true])]
     | jump j => rfl
     | last l =>
       cases l with
