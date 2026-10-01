@@ -98,8 +98,8 @@ theorem receive_runCompiledTo
     .last (show Linst.Run sevm afterBranch .stop out from rfl)
   have hstopSafe : Func.RunCompiledTo.NoRawSstorePath hstop :=
     Func.RunCompiledTo.NoRawSstorePath.of_execFree hstop
-      (by simp [Func.stop, funcExecFree])
-      (by simp [Func.stop, Func.LocalSstoreFree])
+      (by simp only [Func.stop, funcExecFree])
+      (by simp only [Func.stop, Func.LocalSstoreFree])
   have hroom : afterSize.stack.length < 1024 := by
     simp only [afterSize, Devm.stack_setMach, List.length_cons,
       List.length_nil]

@@ -104,7 +104,8 @@ theorem pstepH_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g)
         · by_cases hrd : r = .returndatacopy
           · subst hrd
             simp only [ninst_step_reg_withFork hf hg hx _ _ (by decide : Rinst.returndatacopy ≠ .clz)]
-          · have hw := wstep_next_withFork hf hg hx [] c (.reg r) (.last .stop) (by simp)
+          · have hw := wstep_next_withFork hf hg hx [] c (.reg r) (.last .stop) (by simp only [ne_eq,
+            reduceCtorEq, not_false_eq_true, implies_true])
             cases r <;> first
               | exact absurd rfl hsb
               | exact absurd rfl hrd
@@ -149,7 +150,7 @@ theorem scallPrep_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork 
   rcases st with _ | ⟨gw, _ | ⟨tw, _ | ⟨iiw, _ | ⟨isw, _ | ⟨oiw, _ | ⟨osw, rest⟩⟩⟩⟩⟩⟩ <;> try rfl
   simp only [Sevm.withFork_fork, Sevm.withFork_depth, hg, hf, decide_true, true_and]
   by_cases hd : s.depth = 0
-  · simp [hd]
+  · simp only [hd, ne_eq, not_true_eq_false, ↓reduceIte, Option.map_none]
   · simp only [hd, ne_eq, not_false_eq_true, ↓reduceIte]
     split
     · rfl
@@ -167,7 +168,7 @@ theorem dcallPrep_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork 
   rcases st with _ | ⟨gw, _ | ⟨cw, _ | ⟨iiw, _ | ⟨isw, _ | ⟨oiw, _ | ⟨osw, rest⟩⟩⟩⟩⟩⟩ <;> try rfl
   simp only [Sevm.withFork_fork, Sevm.withFork_depth, hg, hf, decide_true, true_and]
   by_cases hd : s.depth = 0
-  · simp [hd]
+  · simp only [hd, ne_eq, not_true_eq_false, ↓reduceIte, Option.map_none]
   · simp only [hd, ne_eq, not_false_eq_true, ↓reduceIte]
     split
     · rfl
@@ -186,7 +187,7 @@ theorem callPrep_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g
     try rfl
   simp only [Sevm.withFork_fork, Sevm.withFork_depth, hg, hf, decide_true, true_and]
   by_cases hd : s.depth = 0
-  · simp [hd]
+  · simp only [hd, ne_eq, not_true_eq_false, ↓reduceIte, Option.map_none]
   · simp only [hd, ne_eq, not_false_eq_true, ↓reduceIte]
     split
     · rfl
@@ -250,13 +251,13 @@ theorem scallPrep_stat {d : Devm} {adrs : List Adr} {acs : AcctShadow} {cp : Cal
     simp only at h
     split at h
     · split at h
-      · simp at h
+      · simp only [reduceCtorEq] at h
       · split at h
         · simp only [Option.some.injEq] at h
           subst h
           exact ⟨rfl, rfl⟩
-        · simp at h
-    · simp at h
+        · simp only [reduceCtorEq] at h
+    · simp only [reduceCtorEq] at h
 
 /-- A `DELEGATECALL` preparation's frame carries the caller's block environment. -/
 theorem dcallPrep_stat {d : Devm} {adrs : List Adr} {acs : AcctShadow} {cp : CallPrep}
@@ -269,13 +270,13 @@ theorem dcallPrep_stat {d : Devm} {adrs : List Adr} {acs : AcctShadow} {cp : Cal
     simp only at h
     split at h
     · split at h
-      · simp at h
+      · simp only [reduceCtorEq] at h
       · split at h
         · simp only [Option.some.injEq] at h
           subst h
           exact ⟨rfl, rfl⟩
-        · simp at h
-    · simp at h
+        · simp only [reduceCtorEq] at h
+    · simp only [reduceCtorEq] at h
 
 /-- A `CALL` preparation's frame carries the caller's block environment. -/
 theorem callPrep_stat {c : Cfg} {cp : CallPrep} (h : callPrep s c = some cp) :
@@ -287,19 +288,19 @@ theorem callPrep_stat {c : Cfg} {cp : CallPrep} (h : callPrep s c = some cp) :
     simp only at h
     split at h
     · split at h
-      · simp at h
+      · simp only [reduceCtorEq] at h
       · split at h
         · split at h
           · simp only [Option.some.injEq] at h
             subst h
             exact ⟨rfl, rfl⟩
-          · simp at h
+          · simp only [reduceCtorEq] at h
         · split at h
           · simp only [Option.some.injEq] at h
             subst h
             exact ⟨rfl, rfl⟩
-          · simp at h
-    · simp at h
+          · simp only [reduceCtorEq] at h
+    · simp only [reduceCtorEq] at h
 
 theorem callPrepP_stat {c : PCfg} {cp : CallPrep} (h : callPrepP s c = some cp) :
     cp.f.outer.benv.stat = s.benvStat ∧ cp.f.inner.benv.stat = s.benvStat :=
@@ -385,7 +386,7 @@ theorem precompNeutral_of_frameEntryForkFree {f : Frame} (h : frameEntryForkFree
   refine Or.inr fun a ha => ?_
   unfold frameEntryForkFree at h
   rw [ha] at h
-  simpa using h
+  simpa only [ne_eq, Bool.and_eq_true, bne_iff_ne] using h
 
 /-- **A synchronous precompile `CALL` is unchanged by the fork.**  The interpreter runs only
 frames that avoid `MODEXP` and `P256VERIFY` (`frameEntryForkFree`). -/
@@ -405,7 +406,7 @@ theorem callStep_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g
       cases hr : frameEnterS cp.f c.acs with
       | run e => rfl
       | done r => cases r <;> rfl
-    · have h1 : frameEntryForkFree cp.f = false := by simpa using hN
+    · have h1 : frameEntryForkFree cp.f = false := by simpa only [Bool.not_eq_true] using hN
       have h2 : frameEntryForkFree (cp.withFork g).f = false := h1
       simp only [h1, h2, Bool.false_eq_true, and_false, ↓reduceIte]
       split <;> split <;> rfl

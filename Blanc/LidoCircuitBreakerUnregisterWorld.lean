@@ -276,7 +276,7 @@ private theorem unregWorld_stor_zero {key : B256}
     Stor.get_set_ne _ hindex, Stor.get_set_ne _ hassignment,
     Stor.get_set_ne _ hentry, Stor.get_set_ne _ hlength,
     Stor.get_set_ne _ hinterval]
-  simp [Stor.get, Stor.empty]
+  simp only [Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc, Std.TreeMap.getD_emptyc]
 
 theorem unregWorld_stor_expiry :
     unregWorldStor.get (expirySlot unregWorldPauser) =
@@ -440,7 +440,8 @@ private theorem unregWorld_toB256_zero : Nat.toB256 0 = (0 : B256) := by decide
 theorem unregWorldStor_witness :
     RegistryWitness (logicalStorageOfStor unregWorldStor)
       [(unregWorldTarget, unregWorldPauser)] := by
-  refine ⟨by simp, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨by simp only [List.map_cons, List.map_nil, List.nodup_cons, List.not_mem_nil,
+    not_false_eq_true, List.nodup_nil, and_self], ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro entry member
     rw [List.mem_singleton] at member
     subst member
@@ -464,10 +465,10 @@ theorem unregWorldStor_witness :
     by_cases ht : t = unregWorldTarget
     · subst ht
       rw [unregWorld_stor_assignment]
-      simp [assignmentAt]
+      simp only [assignmentAt, ↓reduceIte]
     · rw [unregWorld_stor_assignment_other canonical ht]
       have hne : unregWorldTarget ≠ t := fun h => ht h.symm
-      simp [assignmentAt, hne]
+      simp only [assignmentAt, hne, ↓reduceIte]
   · intro t canonical
     show unregWorldStor.get (indexSlot t) =
       Nat.toB256 (oneBasedIndexAt [(unregWorldTarget, unregWorldPauser)] t)
@@ -520,7 +521,7 @@ private theorem unregWorld_resetCost {orig new : B256} (hnew : orig ≠ new)
 
 private theorem unregWorld_noopCost {orig cur : B256} :
     sstoreValueCost orig cur cur = gasWarmAccess := by
-  rw [sstoreValueCost, if_neg (by simp)]
+  rw [sstoreValueCost, if_neg (by simp only [ne_eq, not_true_eq_false, and_false, not_false_eq_true])]
 
 /-- The exact body reserve of the retiring unregistration at this world: `221`
 decoder/admin prefix and `21931` of kernel walk, staged loads and value
@@ -887,7 +888,7 @@ theorem unregWorld_gasEntry :
 theorem unregWorld_find :
     findEntry [(unregWorldTarget, unregWorldPauser)] unregWorldTarget =
       some (0, unregWorldPauser) := by
-  simp [findEntry]
+  simp only [findEntry, ↓reduceIte]
 
 theorem unregWorld_last :
     0 + 1 = ([(unregWorldTarget, unregWorldPauser)] : List Entry).length := rfl
@@ -1046,7 +1047,7 @@ theorem unregisterWorld_settles :
   refine ⟨post, hexec, ?_⟩
   intro hclean
   have hnot : post.error.isSome ≠ true := by
-    cases herror : post.error <;> simp_all
+    cases herror : post.error <;> simp_all only [ne_eq, Option.isNone_none, Option.isSome_none, Bool.false_eq_true, not_false_eq_true, Option.isNone_some]
   have hprocess := RunFrame.of_run (f := Frame.ofCall unregWorldMsg)
     (raw := (.ok post : Execution)) unregWorld_frameEntry
   have hsettle :

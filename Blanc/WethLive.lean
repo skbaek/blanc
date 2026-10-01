@@ -121,7 +121,7 @@ theorem weth_balanceOf_runCompiled {sevm : Sevm} {pre : Devm}
         (by rw [h_stack, h_mem])
         (by
           have h_value_zero : B256.eqCheck sevm.value 0 = 1 := by
-            simp [B256.eqCheck, h_value]
+            simp only [B256.eqCheck, h_value, ↓reduceIte]
           func_run [boSel, 0, 1, 1, 0, 1, 1, 3]
           · exact Devm.extCost_empty_word
           · exact Func.runCompiled_return_word (G := g - 2260) (e := 0) rfl

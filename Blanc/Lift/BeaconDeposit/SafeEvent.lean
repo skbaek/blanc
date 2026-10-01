@@ -210,7 +210,8 @@ theorem safe_ev_amount {sevm : Sevm} {b : Devm} {R : List B256} {G : Nat} {M : M
   have h_snd : (M.read 160 32).2 = M :=
     Mem.read_snd_eq_self (by rw [hs]; exact memExtSize_of_le (by decide) (by decide))
   have h_fst : (M.read 160 32).1 = X.sliceD 160 32 0 := h0.2.read 160 32
-  obtain ⟨G1, run⟩ := ric_copy_step (by decide) prog_26 (by simp) run
+  obtain ⟨G1, run⟩ := ric_copy_step (by decide) prog_26 (by simp only [List.not_mem_nil,
+    not_false_eq_true]) run
   rw [show (0 + 160 : B256).toNat = 160 by decide,
       show (0 + 608 : B256).toNat = 608 by decide,
       h_snd, h_fst] at run
@@ -232,7 +233,7 @@ theorem safe_ev_amount {sevm : Sevm} {b : Devm} {R : List B256} {G : Nat} {M : M
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_dup rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_val (w := 0) (by decide) (ri_iszero s1)
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_push s1
-  rcases ric_branchTo (by simp) prog_3 run with ⟨-, G19, run⟩ | ⟨hw, -⟩
+  rcases ric_branchTo (by simp only [List.not_mem_nil, not_false_eq_true]) prog_3 run with ⟨-, G19, run⟩ | ⟨hw, -⟩
   swap; · exact absurd rfl hw
   unfold t_065c_c26 at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_dup rfl s1
@@ -371,7 +372,8 @@ theorem safe_ev_index {sevm : Sevm} {b : Devm} {R : List B256} {G : Nat} {M : Me
   have h_snd : (M.read 224 32).2 = M :=
     Mem.read_snd_eq_self (by rw [hs]; exact memExtSize_of_le (by decide) (by decide))
   have h_fst : (M.read 224 32).1 = X.sliceD 224 32 0 := h0.2.read 224 32
-  obtain ⟨G1, run⟩ := ric_copy_step (by decide) prog_11 (by simp) run
+  obtain ⟨G1, run⟩ := ric_copy_step (by decide) prog_11 (by simp only [List.not_mem_nil,
+    not_false_eq_true]) run
   rw [show (0 + 224 : B256).toNat = 224 by decide,
       show (0 + 800 : B256).toNat = 800 by decide,
       h_snd, h_fst] at run
@@ -393,7 +395,7 @@ theorem safe_ev_index {sevm : Sevm} {b : Devm} {R : List B256} {G : Nat} {M : Me
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_dup rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_val (w := 0) (by decide) (ri_iszero s1)
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_push s1
-  rcases ric_branchTo (by simp) prog_4 run with ⟨-, G19, run⟩ | ⟨hw, -⟩
+  rcases ric_branchTo (by simp only [List.not_mem_nil, not_false_eq_true]) prog_4 run with ⟨-, G19, run⟩ | ⟨hw, -⟩
   swap; · exact absurd rfl hw
   unfold t_0703_c11 at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_dup rfl s1
@@ -446,7 +448,8 @@ theorem safe_event {sevm : Sevm} {b : Devm} {sel rt sP wP pP a c : B256} {G : Na
           48, pP, BeaconDeposit.depositEventTopic, 0x80, a, rt, 96, sP, 32, wP, 48, pP, 0x01b8,
           sel] M' G') t_071c_c4 o := by
   obtain ⟨hwf, hs, img, hr, hfp, hf⟩ := hM
-  have h80 : img.sliceD 128 32 0 = (8 : B256).toBytes := hf (0x80, (8 : B256).toBytes) (by simp)
+  have h80 : img.sliceD 128 32 0 = (8 : B256).toBytes := hf (0x80, (8 : B256).toBytes) (by simp only [List.mem_cons,
+    Prod.mk.injEq, Nat.reduceEqDiff, false_and, and_true, List.not_mem_nil, or_self, or_false])
   have h0 : RW M img := ⟨hwf, hr⟩
   obtain ⟨hsA, hsB, hsC, hc0B, hM'⟩ := event_mem (sevm := sevm) (sP := sP) (wP := wP) (pP := pP)
     hwf hs hr hfp hf

@@ -192,12 +192,15 @@ theorem vplus_run2_at {S : Sevm} (hS : ∃ g, CoveredFork g ∧ S = eTop.sta.wit
     (by rw [hF.2.1]; exact eB_static.2.2), hcodeF⟩, ppFb.trans ppbh, b, ppFb, ppbh,
     by rw [hbpc]; decide, hrel⟩, sph, hHash, hhpc, hath,
     (by rw [hxr.2.1]; exact eRcv_static.1), (by rw [hxr.2.1]; exact eRcv_static.2.1),
-    (by rw [hxr.2.1]; exact eRcv_static.2.2), memD xr q (by rw [dsr]; simp),
-    (by rw [hq.2.1]; exact eCb_static.1), hqcode, memD q g (by rw [dsq]; simp),
-    memD xr g (by rw [dsr]; simp),
+    (by rw [hxr.2.1]; exact eRcv_static.2.2), memD xr q (by rw [dsr]; simp only [List.mem_cons,
+      List.not_mem_nil, or_false, true_or]),
+    (by rw [hq.2.1]; exact eCb_static.1), hqcode, memD q g (by rw [dsq]; simp only [List.mem_cons,
+      List.not_mem_nil, or_false]),
+    memD xr g (by rw [dsr]; simp only [List.mem_cons, List.not_mem_nil, or_false, or_true]),
     ⟨(hg.1.trans eRe_static.1), (by rw [hg.2.1]; exact eRe_static.2.1), hcodeG⟩,
     (by rw [hg.2.1]; exact eRe_static.2.2.2), hre.1, fun x hx => (hashG x hx).2, hre.2.2⟩
-  exact List.mem_cons_of_mem _ (by rw [hdescR]; simp)
+  exact List.mem_cons_of_mem _ (by rw [hdescR]; simp only [List.mem_cons, List.not_mem_nil,
+    or_false, true_or])
 
 /-! ### The closed theorem -/
 

@@ -59,7 +59,8 @@ def constructorEventScratchForProof_eq (runtimeLength : Nat) :
 def pushFixedNatForProof_eq (value : Nat) :
     pushFixedNatForProof value =
       if value < 2 ^ 16 then
-        Ninst.push [(value >>> 8).toUInt8, value.toUInt8] (by simp)
+        Ninst.push [(value >>> 8).toUInt8, value.toUInt8] (by simp only [Nat.toUInt8_eq,
+          List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLeDiff])
       else
         pushDeployWord (Nat.toB256 value) := by
   rfl
@@ -80,7 +81,8 @@ def storeByteOffsetForProof_eq (offset : Nat) :
 def constructorErrorForProof_eq (name : String) :
     constructorErrorForProof name =
       Func.revertSelector (customErrorData name) (by
-        simp [customErrorData, B256.length_toBytes]) := by
+        simp only [customErrorData, List.length_take, B256.length_toBytes, Nat.reduceLeDiff,
+          inf_of_le_left]) := by
   rfl
 
 def patchArgumentIndexForProof_eq (field : ImmutableParameter) :
@@ -249,8 +251,8 @@ private lemma Bytes.writeAt_append_middle_at
 private theorem differingByteOffsets_self (index : Nat) (xs : Bytes) :
     differingByteOffsets index xs xs = [] := by
   induction xs generalizing index with
-  | nil => simp [differingByteOffsets]
-  | cons x xs ih => simp [differingByteOffsets, ih]
+  | nil => simp only [differingByteOffsets]
+  | cons x xs ih => simp only [differingByteOffsets, ↓reduceIte, ih, List.append_nil]
 
 private theorem differingByteOffsets_append
     (index : Nat) (xs ys xt yt : Bytes)
@@ -261,11 +263,13 @@ private theorem differingByteOffsets_append
   induction xs generalizing index ys with
   | nil =>
       cases ys with
-      | nil => simp [differingByteOffsets]
-      | cons y ys => simp at hlen
+      | nil => simp only [List.nil_append, differingByteOffsets, List.length_nil, add_zero]
+      | cons y ys => simp only [List.length_nil, List.length_cons, Nat.right_eq_add,
+        Nat.add_eq_zero_iff, List.length_eq_zero_iff, one_ne_zero, and_false] at hlen
   | cons x xs ih =>
       cases ys with
-      | nil => simp at hlen
+      | nil => simp only [List.length_cons, List.length_nil, Nat.add_eq_zero_iff,
+        List.length_eq_zero_iff, one_ne_zero, and_false] at hlen
       | cons y ys =>
           simp only [List.length_cons, Nat.succ.injEq] at hlen
           simp only [List.cons_append, differingByteOffsets]
@@ -287,10 +291,12 @@ private theorem differingByteOffsets_replicate_ne
         (List.replicate length y) =
       (List.range length).map (index + ·) := by
   induction length generalizing index with
-  | zero => simp [differingByteOffsets]
+  | zero => simp only [List.replicate_zero, differingByteOffsets, List.range_zero, List.map_nil]
   | succ length ih =>
-      simp [List.replicate_succ, differingByteOffsets, hxy, ih,
-        List.range_succ_eq_map]
+      simp only [List.replicate_succ, differingByteOffsets, hxy, ↓reduceIte, ih, List.cons_append,
+        List.nil_append, List.range_succ_eq_map, List.map_cons, add_zero, List.map_map,
+        List.cons.injEq, List.map_inj_left, List.mem_range, Function.comp_apply,
+        Nat.succ_eq_add_one, true_and]
       omega
 
 /-! ## Exact runtime size and the compiler-owned marker worlds -/
@@ -405,7 +411,7 @@ private theorem twoWordChunks_eq
     twoWordChunks bs first second = bs := by
   unfold twoWordChunks
   rw [show second = first + 32 + (second - (first + 32)) by omega]
-  simp [← List.take_add]
+  simp only [← List.take_add, add_tsub_cancel_left, List.take_append_drop]
 
 private def twoWordSegments
     (bs : Bytes) (first second : Nat) (word : B256) : Bytes :=
@@ -873,9 +879,8 @@ theorem patchRuntimeTemplate_official :
 /-- Exact code coordinate at which the seven-word constructor head begins. -/
 theorem lidoCircuitBreakerCreationTemplate_length_exact :
     lidoCircuitBreakerCreationTemplate.length = 4898 := by
-  simp [lidoCircuitBreakerCreationTemplate,
-    lidoCircuitBreakerInitPrefix_length_exact,
-    runtimeTemplateCode_length_exact]
+  simp only [lidoCircuitBreakerCreationTemplate, List.length_append,
+    lidoCircuitBreakerInitPrefix_length_exact, runtimeTemplateCode_length_exact, Nat.reduceAdd]
 
 /-- The frozen official input is exactly prefix, neutral runtime, then the
 official seven-word ABI head. -/
@@ -889,9 +894,9 @@ theorem officialFullCreateInput_eq_layout :
 theorem officialFullCreateInput_length_exact :
     officialFullCreateInput.length = 5122 := by
   rw [officialFullCreateInput_eq_layout]
-  simp [lidoCircuitBreakerInitPrefix_length_exact,
-    runtimeTemplateCode_length_exact, abiEncodeConstructorArgs_length,
-    constructorArgumentBytes]
+  simp only [List.append_assoc, List.length_append, lidoCircuitBreakerInitPrefix_length_exact,
+    runtimeTemplateCode_length_exact, abiEncodeConstructorArgs_length, constructorArgumentBytes,
+    Nat.reduceMul, Nat.reduceAdd]
 
 /-- Exact compilation of the provisional constructor program under runtime template length. -/
 private theorem provisionalConstructorProgram_compile :

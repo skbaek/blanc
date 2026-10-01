@@ -141,7 +141,9 @@ private theorem removeTarget_restoreTail_runCompiled
     exact hlengthWord
   let fs := (runtime dp).main :: (runtime dp).aux
   have hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser := by
-    simp [fs, runtime, aux, finishSetPauserSlot]
+    simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      finishSetPauserSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero, fs]
   have hfinishCall : Func.RunCompiled fs sevm
       (removePost.setMach ⟨stack, M, G + finishGas + 12, removePost.stateGas⟩)
       (.call finishSetPauserSlot)

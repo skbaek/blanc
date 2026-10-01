@@ -192,11 +192,9 @@ theorem DelegatecallSpawnDescriptor.step
     (d : DelegatecallSpawnDescriptor sevm callPre) :
     Xinst.step sevm callPre .delegatecall =
       .spawn (Frame.ofCall d.child) d.resume := by
-  simpa [DelegatecallSpawnDescriptor.parent,
-    DelegatecallSpawnDescriptor.child,
-    DelegatecallSpawnDescriptor.resume] using
-    (Xinst.step_delegatecall_spawn d.covered d.stackEq d.extensionEq d.delegationEq
-      d.accessEq d.splitEq d.affordable d.depthHeadroom)
+  simpa only [child, parent, resume] using
+    (Xinst.step_delegatecall_spawn d.covered d.stackEq d.extensionEq d.delegationEq d.accessEq
+      d.splitEq d.affordable d.depthHeadroom)
 
 /-- The shared crossing theorem specialized to the named descriptor. -/
 theorem DelegatecallSpawnDescriptor.crossing
@@ -212,12 +210,9 @@ theorem DelegatecallSpawnDescriptor.crossing
             ((Frame.ofCall d.child).settle
               (exec (initEvm d.child))) = .ok post →
           Ninst.RunCompiled sevm callPre (.exec .delegatecall) post := by
-  simpa [DelegatecallSpawnDescriptor.parent,
-    DelegatecallSpawnDescriptor.child,
-    DelegatecallSpawnDescriptor.resume] using
-    (delegatecall_enters_with_parent_as_storage_owner
-      d.covered d.stackEq d.extensionEq d.delegationEq d.accessEq d.splitEq
-      d.affordable d.depthHeadroom d.resolvedNotPrecompile)
+  simpa only [child, parent, ExceptT.stM_eq, resume] using
+    (delegatecall_enters_with_parent_as_storage_owner d.covered d.stackEq d.extensionEq
+      d.delegationEq d.accessEq d.splitEq d.affordable d.depthHeadroom d.resolvedNotPrecompile)
 
 /-- An explicit retained message-execution certificate.  Instantiate `msg`
 with `d.child` to certify the exact spawned child of a descriptor.  It carries
@@ -283,7 +278,7 @@ theorem DelegatecallSpawnDescriptor.settled_of_runCompiled
         (parent := d.parent)
         (oi := d.outputOffsetWord.toNat)
         (os := d.outputSizeWord.toNat)
-        (by simpa [DelegatecallSpawnDescriptor.resume] using resume)
+        (by simpa only [ExceptT.stM_eq, DelegatecallSpawnDescriptor.resume] using resume)
       exact impossible.elim
   | ok child =>
       cases status : child.error.isSome with
@@ -299,7 +294,7 @@ theorem DelegatecallSpawnDescriptor.settled_of_runCompiled
                   d.parent.gasLeft + child.gasLeft, (incorporateChildOnSuccess d.parent child child.output).stateGas⟩).memWrite
                     d.outputOffsetWord.toNat
                     (child.output.take d.outputSizeWord.toNat)) := by
-            simpa [DelegatecallSpawnDescriptor.resume] using expected
+            simpa only [ExceptT.stM_eq, DelegatecallSpawnDescriptor.resume] using expected
           have postEq := Except.ok.inj (expected'.symm.trans resume)
           refine ⟨child, .intro certificate resume ?_ ?_ ?_ ?_ ?_⟩
           · rw [← postEq]
@@ -324,7 +319,7 @@ theorem DelegatecallSpawnDescriptor.settled_of_runCompiled
                   d.parent.gasLeft + child.gasLeft, (incorporateChildOnError d.parent child child.output).stateGas⟩).memWrite
                     d.outputOffsetWord.toNat
                     (child.output.take d.outputSizeWord.toNat)) := by
-            simpa [DelegatecallSpawnDescriptor.resume] using expected
+            simpa only [ExceptT.stM_eq, DelegatecallSpawnDescriptor.resume] using expected
           have postEq := Except.ok.inj (expected'.symm.trans resume)
           refine ⟨child, .intro certificate resume ?_ ?_ ?_ ?_ ?_⟩
           · rw [← postEq]

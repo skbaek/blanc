@@ -118,7 +118,7 @@ private theorem binaryDepth_le_of_lt_pow_two {n b : Nat}
   | zero =>
       have hn : n = 0 := by omega
       subst n
-      simp [binaryDepth]
+      simp only [binaryDepth, ↓reduceDIte, Std.le_refl]
   | succ b ih =>
       rw [binaryDepth]
       split
@@ -135,7 +135,7 @@ private theorem binaryWeight_le_of_lt_pow_two {n b : Nat}
   | zero =>
       have hn : n = 0 := by omega
       subst n
-      simp [binaryWeight]
+      simp only [binaryWeight, ↓reduceDIte, Std.le_refl]
   | succ b ih =>
       rw [binaryWeight]
       split
@@ -161,7 +161,7 @@ theorem drip_rpow_runtime_ops_le_62 {k : Nat}
   rw [maxElapsedNat_exact] at hk
   by_cases hk0 : k = 0
   · subst k
-    simp [rpowOps]
+    simp only [rpowOps, rateNat_exact, OfNat.ofNat_ne_zero, ↓reduceIte, zero_le]
   · rw [drip_rpow_runtime_ops_exact, if_neg hk0]
     have hhalf : k / 2 < 2 ^ 31 := by
       norm_num

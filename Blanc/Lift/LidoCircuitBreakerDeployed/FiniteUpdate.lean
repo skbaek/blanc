@@ -32,7 +32,7 @@ theorem registryModelStorage_assignment (entries : List LidoCircuitBreaker.Entry
   have h := tagged_region_payload (region := assignmentRegion)
     (by norm_num [assignmentRegion]) (canonicalAddress_payload_lt hp)
   simp only [assignmentSlot, registryModelStorage, h.1, h.2]
-  simp
+  simp only [↓reduceIte]
 
 theorem registryModelStorage_index (entries : List LidoCircuitBreaker.Entry) {p : B256}
     (hp : canonicalAddress p) :
@@ -40,7 +40,7 @@ theorem registryModelStorage_index (entries : List LidoCircuitBreaker.Entry) {p 
   have h := tagged_region_payload (region := indexRegion)
     (by norm_num [indexRegion]) (canonicalAddress_payload_lt hp)
   simp only [indexSlot, registryModelStorage, h.1, h.2]
-  simp [assignmentRegion, indexRegion]
+  simp only [indexRegion, assignmentRegion, Nat.succ_ne_self, ↓reduceIte]
 
 theorem registryModelStorage_count (entries : List LidoCircuitBreaker.Entry) {p : B256}
     (hp : canonicalAddress p) :
@@ -48,14 +48,16 @@ theorem registryModelStorage_count (entries : List LidoCircuitBreaker.Entry) {p 
   have h := tagged_region_payload (region := countRegion)
     (by norm_num [countRegion]) (canonicalAddress_payload_lt hp)
   simp only [countSlot, registryModelStorage, h.1, h.2]
-  simp [assignmentRegion, indexRegion, countRegion]
+  simp only [countRegion, assignmentRegion, Nat.reduceEqDiff, ↓reduceIte, indexRegion,
+    Nat.succ_ne_self]
 
 theorem registryModelStorage_length (entries : List LidoCircuitBreaker.Entry) :
     (registryModelStorage entries).read arrayLengthSlot = Nat.toB256 entries.length := by
   have h := tagged_region_payload (region := arrayRegion) (payload := 0)
     (by norm_num [arrayRegion]) (by change (0 : Nat) < 2 ^ 252; norm_num)
   simp only [arrayLengthSlot, registryModelStorage, h.1, h.2]
-  simp [assignmentRegion, indexRegion, countRegion, arrayRegion]
+  simp only [arrayRegion, assignmentRegion, Nat.reduceEqDiff, ↓reduceIte, indexRegion, countRegion,
+    Nat.succ_ne_self]
 
 theorem registryModelStorage_array (entries : List LidoCircuitBreaker.Entry) {i : Nat}
     (hi : i + 1 < 2 ^ 252) :
@@ -73,8 +75,8 @@ theorem registryModelStorage_array (entries : List LidoCircuitBreaker.Entry) {i 
     simp only [B256.toNat_zero] at hn
     omega
   simp only [arrayEntrySlot, registryModelStorage, h.1, h.2]
-  simp [assignmentRegion, indexRegion, countRegion, arrayRegion, hnz,
-    B256.toNat_toB256_of_lt h256]
+  simp only [arrayRegion, assignmentRegion, Nat.reduceEqDiff, ↓reduceIte, indexRegion, countRegion,
+    Nat.succ_ne_self, hnz, B256.toNat_toB256_of_lt h256, add_tsub_cancel_right]
 
 /-- Finite validity suffices to construct a full witness of the synthetic model. -/
 theorem registryModelWitness {entries : List LidoCircuitBreaker.Entry}
@@ -94,7 +96,7 @@ theorem registryModelWitness {entries : List LidoCircuitBreaker.Entry}
       induction entries with
       | nil => rfl
       | cons e rest ih =>
-        have hne := (hp e (by simp)).1
+        have hne := (hp e (by simp only [List.mem_cons, true_or])).1
         have hr : ∀ e ∈ rest, nonzeroCanonicalAddress e.2 :=
           fun e he => hp e (List.mem_cons_of_mem _ he)
         simp only [assignmentCount, ite_eq_right hne, Nat.zero_add]
@@ -177,13 +179,17 @@ theorem nonzeroSlotsApart_of_check {entries : List LidoCircuitBreaker.Entry}
     (oldPauser ≠ newPauser → mapSlot oldPauser 6 ≠ mapSlot newPauser 6) := by
   have hf := Blanc.SlotFootprint.checkFaithfulOn_eq_true.mp hcheck
   have htq : assignmentSlot target ∈ registryQueries probes entries.length :=
-    mem_registryQueries_mapping ht (by simp)
+    mem_registryQueries_mapping ht (by simp only [List.mem_cons, List.not_mem_nil, or_false,
+      true_or])
   have hoq : countSlot oldPauser ∈ registryQueries probes entries.length :=
-    mem_registryQueries_mapping ho (by simp)
+    mem_registryQueries_mapping ho (by simp only [List.mem_cons, List.not_mem_nil, or_false,
+      or_true])
   have hwo : countSlot oldPauser ∈ (nonzeroWrites entries target newPauser oldPauser).map Prod.fst := by
-    simp [nonzeroWrites]
+    simp only [nonzeroWrites, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil,
+      or_false, true_or, or_true]
   have hwn : countSlot newPauser ∈ (nonzeroWrites entries target newPauser oldPauser).map Prod.fst := by
-    simp [nonzeroWrites]
+    simp only [nonzeroWrites, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil,
+      or_false, or_true]
   refine ⟨?_, ?_, ?_⟩
   · rw [← solKey_assignmentSlot (hp target ht), ← solKey_countSlot (hp oldPauser ho)]
     intro heq

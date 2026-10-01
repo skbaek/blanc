@@ -379,10 +379,12 @@ theorem touchedWethAllowancePairs_keys_nonaddress
       call.memoryWf call.run selected
     dsimp only at effect
     by_cases same : Sevm.argWord call.sevm 0 = call.sevm.caller.toB256
-    · simp [WethAllowanceInvocation.pair?, approval, same] at pairEq
+    · simp only [WethAllowanceInvocation.pair?, approval, Bool.false_eq_true, ↓reduceIte, same,
+      reduceCtorEq] at pairEq
     · simp only [if_neg same] at effect
       obtain ⟨valid, _⟩ := effect
-      simp [WethAllowanceInvocation.pair?, approval, same] at pairEq
+      simp only [WethAllowanceInvocation.pair?, approval, Bool.false_eq_true, ↓reduceIte, same,
+        Option.some.injEq] at pairEq
       cases pairEq
       exact valid
 
@@ -455,18 +457,19 @@ theorem allowance_debit_classification (call : WethAllowanceInvocation) :
     by_cases same : Sevm.argWord call.sevm 0 = call.sevm.caller.toB256
     · simp only [if_pos same] at effect
       refine Or.inr (Or.inl ⟨rfl, same, ?_, effect⟩)
-      simp [WethAllowanceInvocation.writtenPair?,
-        WethAllowanceInvocation.pair?, approval, same]
+      simp only [WethAllowanceInvocation.writtenPair?, approval, Bool.false_eq_true, ↓reduceIte,
+        WethAllowanceInvocation.pair?, same, Option.filter_none]
     · simp only [if_neg same] at effect
       obtain ⟨valid, result⟩ := effect
       rcases result with ⟨maximum, silent⟩ | ⟨finite, covered, stored, witness⟩
       · refine Or.inr (Or.inr (Or.inl ⟨rfl, same, maximum, ?_, silent⟩))
-        simp [WethAllowanceInvocation.writtenPair?,
-          WethAllowanceInvocation.pair?, approval, same, Option.filter, maximum]
+        simp only [WethAllowanceInvocation.writtenPair?, approval, Bool.false_eq_true, ↓reduceIte,
+          Option.filter, WethAllowanceInvocation.pair?, same, maximum, bne_self_eq_false]
       · refine Or.inr (Or.inr
           (Or.inr ⟨rfl, same, finite, covered, ?_, valid, stored, witness⟩))
-        simp [WethAllowanceInvocation.writtenPair?,
-          WethAllowanceInvocation.pair?, approval, same, Option.filter, finite]
+        simp only [WethAllowanceInvocation.writtenPair?, approval, Bool.false_eq_true, ↓reduceIte,
+          Option.filter, WethAllowanceInvocation.pair?, same, bne_iff_ne, ne_eq, finite,
+          not_false_eq_true]
 
 /-- An approval invocation debits no balance row: its exact raw write lands at
 a non-address-shaped key, which the balance view cannot see. Unconditional. -/
@@ -547,9 +550,9 @@ theorem foreign_debit_excluded
               writtenWethAllowancePairs history := by
             apply List.mem_filterMap.mpr
             refine ⟨call, member, ?_⟩
-            simp [WethAllowanceInvocation.writtenPair?,
-              WethAllowanceInvocation.pair?, approval, same, Option.filter,
-              finite]
+            simp only [WethAllowanceInvocation.writtenPair?, approval, Bool.false_eq_true,
+              ↓reduceIte, Option.filter, WethAllowanceInvocation.pair?, same, bne_iff_ne, ne_eq,
+              finite, not_false_eq_true]
           have keys := collision p touched owner _ writer (Ne.symm pairEq)
           have frame := stored _ keyShape
           rw [Stor.get_set_ne _ (Ne.symm keys)] at frame
@@ -608,7 +611,7 @@ theorem VaultStagedCalldata.not_approve {call : WethAllowanceInvocation}
     rcases staged with ⟨v, hdata⟩ | ⟨owner, dst, assets, hdata⟩ | ⟨receiver, assets, hdata⟩
     · have sel := (balanceOfCalldata_facts hdata).1
       have mem : selector "balanceOf" [.address] ∈ allowedWethSelectors := by
-        simp [allowedWethSelectors]
+        simp only [allowedWethSelectors, List.mem_cons, List.not_mem_nil, or_false, true_or]
       rw [sel]
       intro hEq
       rw [hEq] at mem
@@ -616,14 +619,15 @@ theorem VaultStagedCalldata.not_approve {call : WethAllowanceInvocation}
     · have sel := (transferFromCalldata_facts hdata).1
       have mem : selector "transferFrom" [.address, .address, .uint256] ∈
           allowedWethSelectors := by
-        simp [allowedWethSelectors]
+        simp only [allowedWethSelectors, List.mem_cons, List.not_mem_nil, or_false, true_or,
+          or_true]
       rw [sel]
       intro hEq
       rw [hEq] at mem
       exact approveSelector_not_allowed mem
     · have sel := (transferCalldata_facts hdata).1
       have mem : selector "transfer" [.address, .uint256] ∈ allowedWethSelectors := by
-        simp [allowedWethSelectors]
+        simp only [allowedWethSelectors, List.mem_cons, List.not_mem_nil, or_false, or_true]
       rw [sel]
       intro hEq
       rw [hEq] at mem
@@ -678,7 +682,7 @@ theorem RootedAllowanceHistory.all_quiet
       rw [← r.wethEmpty]
       exact h
     · intro call hmem
-      simp at hmem
+      simp only [List.not_mem_nil] at hmem
   | invoked _done _s mid fin call _prev member entry exit staged ih =>
     obtain ⟨zeroT, quietDone⟩ := ih
     have quietPre : ∀ p ∈ touchedWethAllowancePairs full, p.1 = vault.toB256 →
@@ -707,7 +711,7 @@ theorem RootedAllowanceHistory.all_quiet
           | ⟨_, _, _, _, frameMax⟩
           | ⟨_, _, _, covered, writtenEq, _, stored, _⟩
         · rw [approvalFalse] at hAppr
-          simp at hAppr
+          simp only [Bool.false_eq_true] at hAppr
         · apply finish
           have quiet := quietPre p touched owner
           have preEq : (Devm.getStor call.pre wethAccount).get
@@ -839,7 +843,7 @@ theorem weth_run_mkTransferFromInvocation
     rfl, rfl, rfl, rfl⟩
   · rw [memEmpty]
     exact Mem.wf_empty
-  · simpa using selected
+  · simpa only [Bool.false_eq_true, ↓reduceIte] using selected
 
 /-- **Slotless message preserves every cell.**  With no interpreted
 slot the message settles to its entry world or its post-transfer
@@ -901,7 +905,7 @@ theorem weth_static_processMessage_some_preserves_cell
         unfold Frame.settlementCommits
         rw [← settledEq]
         exact clean
-      cases errorEq : post.error <;> simp_all
+      cases errorEq : post.error <;> simp_all only [ExceptT.stM_eq, Bool.not_eq_true, Option.isNone_none, ne_eq, not_true_eq_false, Option.isNone_some, Bool.false_eq_true, not_false_eq_true, Option.isSome_some]
     have rollback := (ProcessMessage.rollback_of_error process postError).1
     rw [rollback]
 

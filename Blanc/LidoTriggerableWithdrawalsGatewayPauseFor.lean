@@ -23,7 +23,9 @@ private theorem panic_call_not_ok
   have hget : ((runtime dp).main :: (runtime dp).aux)[arithmeticPanicSlot]? =
       some (Func.revertData ((signatureHash "Panic" [.uint256]).toBytes.take 4 ++
         (Nat.toB256 0x11).toBytes)) := by
-    simp [runtime, aux, baseAux, arithmeticPanicSlot]
+    simp only [runtime, aux, baseAux, List.cons_append, List.nil_append, List.append_assoc,
+      arithmeticPanicSlot, List.length_cons, lt_add_iff_pos_left, add_pos_iff, Nat.ofNat_pos,
+      or_true, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   exact Func.RunCompiledTo.not_ok_call_revertData hget run
 
 private theorem pauseForSentinel_effect
@@ -95,10 +97,10 @@ private theorem pauseForFinite_effect
     · rcases hzero with ⟨writePre, hstack, hpop, writeRun⟩
       have hflag : (e.benvStat.time >? (duration + e.benvStat.time)) = 0 := by
         have pzero : (0 : B256) :: ([] : Stack) <<+ testPost.stack :=
-          ⟨writePre.stack, by simpa [Split] using hstack⟩
+          ⟨writePre.stack, by simpa only [Split, List.cons_append, List.nil_append] using hstack⟩
         exact pref_head_unique p6 pzero
       have p6' : (0 : B256) :: (duration + e.benvStat.time) ::
-          ([] : Stack) <<+ testPost.stack := by simpa [hflag] using p6
+          ([] : Stack) <<+ testPost.stack := by simpa only [hflag] using p6
       exact ⟨writePre, hpop, writeRun,
         (popBurn_pref (Devm.PopBurn.of_popBurnBy hpop) p6').2⟩
     · rcases hsucc with ⟨_, _, _, -, -, panicRun⟩
@@ -161,16 +163,18 @@ private theorem pauseForGuard_effect
       have hget :
           ((runtime dp).main :: (runtime dp).aux)[resumedExpectedSlot]? =
             some (runtimeError "ResumedExpected") := by
-        simp [runtime, aux, baseAux, resumedExpectedSlot]
+        simp only [runtime, aux, baseAux, List.cons_append, List.nil_append, List.append_assoc,
+          resumedExpectedSlot, List.length_cons, lt_add_iff_pos_left, add_pos_iff, Nat.ofNat_pos,
+          or_true, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
       exact (Func.RunCompiledTo.not_ok_call_revertSelector
-        (by simpa [runtimeError] using hget) errorRun).elim
+        (by simpa only [runtimeError] using hget) errorRun).elim
     · rcases hsucc with
         ⟨word, unpausedPre, -, hstack, hpop, unpausedRun⟩
       have pWord : word :: ([] : Stack) <<+ guardTest.stack :=
-        ⟨unpausedPre.stack, by simpa [Split] using hstack⟩
+        ⟨unpausedPre.stack, by simpa only [Split, List.cons_append, List.nil_append] using hstack⟩
       have hflag := pref_head_unique pGuard pWord
       have pFlag : word :: ([] : Stack) <<+ guardTest.stack := by
-        simpa [hflag] using pGuard
+        simpa only [hflag, List.append_eq, List.append_nil] using pGuard
       exact ⟨unpausedPre, unpausedRun,
         (popBurn_pref (Devm.PopBurn.of_popBurnBy hpop) pFlag).2,
         funext (getStor_eq_of_state_eq hpop.state)⟩
@@ -209,16 +213,17 @@ private theorem pauseForGuard_effect
     rcases runCompiledTo_branch_inv durationBranch with hzero | hsucc
     · rcases hzero with ⟨sentinelTestPre, hstack, hpop, testRun⟩
       have pZero : (0 : B256) :: ([] : Stack) <<+ durationTest.stack :=
-        ⟨sentinelTestPre.stack, by simpa [Split] using hstack⟩
+        ⟨sentinelTestPre.stack, by simpa only [Split, List.cons_append, List.nil_append] using
+          hstack⟩
       have hflag : (duration =? 0) = 0 :=
         pref_head_unique pDurationTest pZero
       have durationNonzero : duration ≠ 0 := by
         intro hz
         subst duration
-        simp [B256.eqCheck, hz] at hflag
+        simp only [B256.eqCheck, hz, ↓reduceIte] at hflag
         exact absurd hflag (by decide)
       have pFlag : (0 : B256) :: ([] : Stack) <<+ durationTest.stack := by
-        simpa [hflag] using pDurationTest
+        simpa only [hflag] using pDurationTest
       exact ⟨sentinelTestPre, testRun,
         (popBurn_pref (Devm.PopBurn.of_popBurnBy hpop) pFlag).2,
         funext (getStor_eq_of_state_eq hpop.state), durationNonzero⟩
@@ -226,9 +231,11 @@ private theorem pauseForGuard_effect
       have hget :
           ((runtime dp).main :: (runtime dp).aux)[zeroPauseDurationSlot]? =
             some (runtimeError "ZeroPauseDuration") := by
-        simp [runtime, aux, baseAux, zeroPauseDurationSlot]
+        simp only [runtime, aux, baseAux, List.cons_append, List.nil_append, List.append_assoc,
+          zeroPauseDurationSlot, List.length_cons, lt_add_iff_pos_left, add_pos_iff, Nat.ofNat_pos,
+          or_true, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
       exact (Func.RunCompiledTo.not_ok_call_revertSelector
-        (by simpa [runtimeError] using hget) errorRun).elim
+        (by simpa only [runtimeError] using hget) errorRun).elim
   have sentinelTestStor :
       Devm.getStor root = Devm.getStor sentinelTestPre :=
     unpausedStor.trans (durationLineStor.trans durationPopStor)
@@ -258,16 +265,16 @@ private theorem pauseForGuard_effect
   rcases runCompiledTo_branch_inv sentinelBranchRun with hfinite | hsentinel
   · rcases hfinite with ⟨finitePre, hstack, hpop, finiteRun⟩
     have pZero : (0 : B256) :: ([] : Stack) <<+ sentinelBranch.stack :=
-      ⟨finitePre.stack, by simpa [Split] using hstack⟩
+      ⟨finitePre.stack, by simpa only [Split, List.cons_append, List.nil_append] using hstack⟩
     have hflag : (pauseInfinitely =? duration) = 0 :=
       pref_head_unique pEq pZero
     have finiteDuration : duration ≠ pauseInfinitely := by
       intro heq
       subst duration
-      simp [B256.eqCheck, heq] at hflag
+      simp only [B256.eqCheck, heq, ↓reduceIte] at hflag
       exact absurd hflag (by decide)
     have pFlag : (0 : B256) :: ([] : Stack) <<+ sentinelBranch.stack := by
-      simpa [hflag] using pEq
+      simpa only [hflag] using pEq
     have pFinite :=
       (popBurn_pref (Devm.PopBurn.of_popBurnBy hpop) pFlag).2
     have finiteStor : Devm.getStor root = Devm.getStor finitePre :=
@@ -279,22 +286,22 @@ private theorem pauseForGuard_effect
           duration + sevm.benvStat.time := effect
       _ = sevm.benvStat.time + duration := B256.add_comm
       _ = (if duration = pauseInfinitely then pauseInfinitely
-          else sevm.benvStat.time + duration) := by simp [finiteDuration]
+          else sevm.benvStat.time + duration) := by simp only [finiteDuration, ↓reduceIte]
       _ = Blanc.pauseForProjection sevm.benvStat.time duration :=
         pauseFor_projection_eq _ _
   · rcases hsentinel with
       ⟨word, sentinelPre, hword, hstack, hpop, sentinelRun⟩
     have pWord : word :: ([] : Stack) <<+ sentinelBranch.stack :=
-      ⟨sentinelPre.stack, by simpa [Split] using hstack⟩
+      ⟨sentinelPre.stack, by simpa only [Split, List.cons_append, List.nil_append] using hstack⟩
     have hflag : (pauseInfinitely =? duration) = word :=
       pref_head_unique pEq pWord
     have durationSentinel : duration = pauseInfinitely := by
       by_contra hne
       have hzero : (pauseInfinitely =? duration) = 0 := by
-        simp [B256.eqCheck, Ne.symm hne]
+        simp only [B256.eqCheck, Ne.symm hne, ↓reduceIte]
       exact hword (hflag.symm.trans hzero)
     have pFlag : word :: ([] : Stack) <<+ sentinelBranch.stack := by
-      simpa [hflag] using pEq
+      simpa only [hflag] using pEq
     have pSentinel :=
       (popBurn_pref (Devm.PopBurn.of_popBurnBy hpop) pFlag).2
     have sentinelStor : Devm.getStor root = Devm.getStor sentinelPre :=
@@ -305,7 +312,7 @@ private theorem pauseForGuard_effect
       post.getStorVal sevm.currentTarget resumeSinceSlot = pauseInfinitely :=
         effect
       _ = (if duration = pauseInfinitely then pauseInfinitely
-          else sevm.benvStat.time + duration) := by simp [durationSentinel]
+          else sevm.benvStat.time + duration) := by simp only [durationSentinel, ↓reduceIte]
       _ = Blanc.pauseForProjection sevm.benvStat.time duration :=
         pauseFor_projection_eq _ _
 
@@ -328,9 +335,10 @@ theorem pauseFor_ok_authorized_effect
     apply selector_eq_of_data_eq_abiSelectorBytes_append
       (selected := selPauseFor) (tail := duration.toBytes)
     · rfl
-    · simpa [pauseForCalldata] using hdata
+    · simpa only [pauseForCalldata] using hdata
   have hmember : (selPauseFor, pauseFor) ∈ sharedNonpayableFuncs := by
-    simp [sharedNonpayableFuncs]
+    simp only [sharedNonpayableFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      true_or]
   have hnotTrigger : selPauseFor ≠ selTriggerFullWithdrawals := by decide
   have valueZero := runtime_value_zero_of_prog_run_ok_of_nontrigger
     run hstack hguard hselector hnotTrigger
@@ -347,7 +355,7 @@ theorem pauseFor_ok_authorized_effect
       (pre := abiSelectorBytes selPauseFor) (post := [])
     · rw [abiSelectorBytes_length]
       rfl
-    · simpa [pauseForCalldata] using hdata
+    · simpa only [List.append_nil, pauseForCalldata] using hdata
 
   have staticGuard : B256.ltCheck sevm.data.length.toB256
       (Nat.toB256 (4 + 32 * 1)) = 0 := by

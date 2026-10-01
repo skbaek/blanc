@@ -86,7 +86,7 @@ theorem maxMintAfterAssetCap_trace
 
   by_cases roomLt : Nat.toB256 room < cap
   · have onePrefix : (1 : B256) :: tail <<+ branchPre.stack := by
-      simpa [room, B256.ltCheck, roomLt] using testPrefix
+      simpa only [room, B256.ltCheck, roomLt, ↓reduceIte] using testPrefix
     obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
       Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
@@ -113,7 +113,7 @@ theorem maxMintAfterAssetCap_trace
     rw [← selected]
     exact returned
   · have zeroPrefix : (0 : B256) :: tail <<+ branchPre.stack := by
-      simpa [room, B256.ltCheck, roomLt] using testPrefix
+      simpa only [room, B256.ltCheck, roomLt, ↓reduceIte] using testPrefix
     obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
       Func.WalkInv.zero_branch_of_prefix zeroPrefix branchRun
     have bodyWf : Mem.Wf bodyPre.memory := by
@@ -194,7 +194,7 @@ theorem maxMint_arithmetic_trace
     have returned := maxMintAfterAssetCap_trace capSupplyWindow stable
       capStack returnLookup capRun
     have denominatorNat : denominator.toNat = denominatorN supply.toNat := by
-      dsimp [denominator]
+      dsimp only [denominator]
       exact stagedDenominator_toNat stable
     have quotientNat :
         (Nat.toB256
@@ -226,10 +226,9 @@ theorem maxMint_arithmetic_trace
         (by decide +kernel)
     have returned := maxMintAfterAssetCap_trace capSupplyWindow stable
       capStack returnLookup capRun
-    simpa [maxMintN, factor, denominator, maxWord_toNat,
-      stagedDenominator_toNat stable,
-      stagedAssetFactor_toNat_of_ne_max assetsNotMax,
-      toNat_toB256_min_maxWord, min_shareRoomN_min_maxWord] using returned
+    simpa only [maxMintN, maxWord_toNat, stagedDenominator_toNat stable,
+      stagedAssetFactor_toNat_of_ne_max assetsNotMax, toNat_toB256_min_maxWord,
+      min_shareRoomN_min_maxWord] using returned
 
 /-- The share-room successor producer remains valid after `mulDiv` stages its
 denominator in the lower arithmetic scratch region. -/
@@ -308,10 +307,9 @@ theorem maxDeposit_arithmetic_trace
         (ProducesWord.stagedDenominator_after_shiftedScratch supplyAt)
         highPositive bodyStack returnLookup bodyRun
     have returned := returnWord_trace quotientStack returnRun
-    simpa [maxDepositN, assetsMax, high, denominator, maxWord_toNat,
-      assetFactorN_maxWord, stagedDenominator_toNat stable,
-      B256.toNat_toB256_of_lt
-        (shareRoomN_add_one_lt_wordModulusN supply.toNat)] using returned
+    simpa only [maxDepositN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
+      B256.toNat_toB256_of_lt (shareRoomN_add_one_lt_wordModulusN supply.toNat),
+      stagedDenominator_toNat stable] using returned
   · rcases ordinaryArm with
       ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, -, bodyRun⟩
     let high := Nat.toB256 (shareRoomN supply.toNat + 1)
@@ -334,11 +332,9 @@ theorem maxDeposit_arithmetic_trace
         (ProducesWord.stagedAssetFactor_after_mulDivScratch assetsAt)
         productPositive bodyStack returnLookup bodyRun
     have returned := returnWord_trace quotientStack returnRun
-    simpa [maxDepositN, high, denominator, factor,
-      stagedDenominator_toNat stable,
-      stagedAssetFactor_toNat_of_ne_max assetsNotMax,
-      B256.toNat_toB256_of_lt
-        (shareRoomN_add_one_lt_wordModulusN supply.toNat)] using returned
+    simpa only [maxDepositN,
+      B256.toNat_toB256_of_lt (shareRoomN_add_one_lt_wordModulusN supply.toNat),
+      stagedAssetFactor_toNat_of_ne_max assetsNotMax, stagedDenominator_toNat stable] using returned
 
 /-- `maxWithdraw` computes the owner's entire asset claim and saturates it at
 the largest return word.  A later exact corollary removes the saturation from
@@ -379,8 +375,7 @@ theorem maxWithdraw_arithmetic_trace
         (ProducesWord.stagedDenominator_after_shiftedScratch supplyAt)
         bodyStack returnLookup bodyRun
     have returned := returnWord_trace quotientStack returnRun
-    simpa [maxWithdrawN, convertToAssetsN, assetsMax, denominator,
-      maxWord_toNat, assetFactorN_maxWord,
+    simpa only [maxWithdrawN, convertToAssetsN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
       stagedDenominator_toNat stable] using returned
   · rcases ordinaryArm with
       ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, -, bodyRun⟩
@@ -393,9 +388,8 @@ theorem maxWithdraw_arithmetic_trace
         (ProducesWord.stagedAssetFactor_after_mulDivScratch assetsAt)
         bodyStack returnLookup bodyRun
     have returned := returnWord_trace quotientStack returnRun
-    simpa [maxWithdrawN, convertToAssetsN, denominator, factor,
-      stagedDenominator_toNat stable,
-      stagedAssetFactor_toNat_of_ne_max assetsNotMax] using returned
+    simpa only [maxWithdrawN, convertToAssetsN, stagedAssetFactor_toNat_of_ne_max assetsNotMax,
+      stagedDenominator_toNat stable] using returned
 
 /-! ## Post-`totalAssets` body effects -/
 
@@ -711,7 +705,7 @@ theorem capacitySupplyStaging_trace
   have storeImage : MemImage storePre storePre.memory.data.toList := by
     refine ⟨storeWf, ?_⟩
     intro index
-    simp
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
 
   obtain ⟨bodyPre, storeRun, bodyRun⟩ :=
     Func.WalkInv.prepend run
@@ -788,7 +782,7 @@ theorem capacityAmountStaging_trace
   have storeImage : MemImage storePre storePre.memory.data.toList := by
     refine ⟨storeWf, ?_⟩
     intro index
-    simp
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
   obtain ⟨bodyPre, storeRun, bodyRun⟩ :=
     Func.WalkInv.prepend run
   obtain ⟨bodyPrefix, storeMemory⟩ :=
@@ -858,7 +852,7 @@ theorem stableCapacityBranch_trace
       (Ninst.Hinv.inv (f := Devm.logs) testSource)
   by_cases unstable : maxSupply < supply
   · have onePrefix : (1 : B256) :: tail <<+ branchPre.stack := by
-      simpa [B256.ltCheck, unstable] using testPrefix
+      simpa only [B256.ltCheck, unstable, ↓reduceIte] using testPrefix
     obtain ⟨zeroPre, zeroPop, zeroRun, zeroPrefix⟩ :=
       Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
@@ -871,7 +865,7 @@ theorem stableCapacityBranch_trace
         (supplyState.trans (suffixState.trans zeroPop.state))
         (supplyLogs.trans (suffixLogs.trans zeroPop.logs)) effect⟩
   · have zeroPrefix : (0 : B256) :: tail <<+ branchPre.stack := by
-      simpa [B256.ltCheck, unstable] using testPrefix
+      simpa only [B256.ltCheck, unstable, ↓reduceIte] using testPrefix
     obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
       Func.WalkInv.zero_branch_of_prefix zeroPrefix branchRun
     have stableWord : supply ≤ maxSupply := B256.not_lt.mp unstable
@@ -929,7 +923,7 @@ theorem zeroArgCapacityBranch_trace
     Ninst.Hinv.inv (f := Devm.logs) zeroSource
   by_cases argZero : Sevm.argWord sevm 0 = 0
   · have onePrefix : (1 : B256) :: tail <<+ branchPre.stack := by
-      simpa [B256.eqCheck, argZero] using testPrefix
+      simpa only [B256.eqCheck, argZero, ↓reduceIte] using testPrefix
     obtain ⟨zeroPre, zeroPop, zeroRun, zeroPrefix⟩ :=
       Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
@@ -939,7 +933,7 @@ theorem zeroArgCapacityBranch_trace
         (argState.trans (zeroState.trans zeroPop.state))
         (argLogs.trans (zeroLogs.trans zeroPop.logs)) effect⟩
   · have zeroPrefix : (0 : B256) :: tail <<+ branchPre.stack := by
-      simpa [B256.eqCheck, argZero] using testPrefix
+      simpa only [B256.eqCheck, argZero, ↓reduceIte] using testPrefix
     obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
       Func.WalkInv.zero_branch_of_prefix zeroPrefix branchRun
     have bodyWf : Mem.Wf bodyPre.memory := by

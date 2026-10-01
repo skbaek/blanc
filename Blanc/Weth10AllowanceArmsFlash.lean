@@ -106,43 +106,49 @@ private theorem Exec.Frame.CountedCursor.reachFlashCallback
   rw [flashLoan_shape] at cursor
   unfold flashLoanBodyShape at cursor
   rcases cursor.peelChildlessLine (line := flashTokenLine) (by
-      simp [flashTokenLine, arg, cdl, NinstIsChildless,
-        Ninst.pushB256]) with
+      simp only [flashTokenLine, arg, cdl, pushB256, List.cons_append, List.nil_append,
+        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
+        and_self]) with
     ⟨tokenBranchCursor, _htoken⟩
   rcases tokenBranchCursor.selectBranchLeftWithBurn
       (not_run_call_revertWith (flashTokenError_lookup dp)) with
     ⟨amountCursor, -⟩
   unfold flashLoanPostAmount at amountCursor
   rcases amountCursor.peelChildlessLine (line := flashAmountLine) (by
-      simp [flashAmountLine, arg, cdl, NinstIsChildless,
-        Ninst.pushB256]) with
+      simp only [flashAmountLine, arg, cdl, pushB256, Fin.isValue, List.cons_append,
+        List.nil_append, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+        forall_eq_or_imp, forall_eq, and_self]) with
     ⟨amountBranchCursor, _hamount⟩
   rcases amountBranchCursor.selectBranchLeftWithBurn
       (not_run_call_revertWith (individualLimitError_lookup dp)) with
     ⟨counterCursor, -⟩
   unfold flashLoanPostCounter at counterCursor
   rcases counterCursor.peelChildlessLine (line := flashCounterLine) (by
-      simp [flashCounterLine, pushFlashMintedSlot, NinstIsChildless,
-        Ninst.pushB256]) with
+      simp only [flashCounterLine, pushFlashMintedSlot, pushB256, Fin.isValue, List.cons_append,
+        List.nil_append, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+        forall_eq_or_imp, forall_eq, and_self]) with
     ⟨totalCursor, _hcounter⟩
   rcases totalCursor.peelChildlessLine (line := flashTotalLine) (by
-      simp [flashTotalLine, pushFlashMintedSlot, NinstIsChildless,
-        Ninst.pushB256]) with
+      simp only [flashTotalLine, pushFlashMintedSlot, pushB256, Fin.isValue, List.cons_append,
+        List.nil_append, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+        forall_eq_or_imp, forall_eq, and_self]) with
     ⟨totalBranchCursor, _htotal⟩
   rcases totalBranchCursor.selectBranchLeftWithBurn
       (not_run_call_revertWith (totalLimitError_lookup dp)) with
     ⟨popCursor, -⟩
   unfold flashLoanPostTotal at popCursor
   rcases popCursor.peelChildlessLine (line := [Ninst.pop])
-      (by simp [NinstIsChildless]) with
+      (by simp only [List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq]) with
     ⟨mintCursor, _hpop⟩
   rcases mintCursor.peelChildlessLine (line := flashMintLine) (by
-      simp [flashMintLine, addressArg, normalizeAddress, pushAddressMask,
-        arg, cdl, NinstIsChildless, Ninst.pushB256]) with
+      simp only [flashMintLine, addressArg, arg, cdl, pushB256, normalizeAddress, pushAddressMask,
+        List.cons_append, List.nil_append, Fin.isValue, List.mem_cons, List.not_mem_nil, or_false,
+        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨eventCursor, _hmint⟩
   rcases eventCursor.peelChildlessLine (line := flashEventCheckLine) (by
-      simp [flashEventCheckLine, mstoreAt, logWith, NinstIsChildless,
-        Ninst.pushB256]) with
+      simp only [flashEventCheckLine, Fin.isValue, mstoreAt, pushB256, List.cons_append,
+        List.nil_append, logWith, Fin.reduceSucc, List.mem_cons, List.not_mem_nil, or_false,
+        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨codeBranchCursor, _hevent⟩
   rcases codeBranchCursor.selectBranchLeftWithBurn
       (fun _ => not_run_revert) with
@@ -150,9 +156,10 @@ private theorem Exec.Frame.CountedCursor.reachFlashCallback
   unfold flashLoanPostCode at setupCursor
   rcases setupCursor.peelChildlessLine (line := flashCallbackSetupLine)
       (by
-        simp [flashCallbackSetupLine, storeFlashCallbackHead, mstoreAt,
-          pushList, forwardArgTail, arg, cdl, flashCallbackArgsSize,
-          NinstIsChildless, Ninst.pushB256]) with
+        simp only [flashCallbackSetupLine, Fin.isValue, storeFlashCallbackHead, pushB256, mstoreAt,
+          List.cons_append, List.nil_append, pushList, List.map_cons, List.map_nil, forwardArgTail,
+          arg, cdl, flashCallbackArgsSize, List.mem_cons, List.not_mem_nil, or_false, or_self_left,
+          NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨callCursor, _hsetup⟩
   exact ⟨callCursor⟩
 
@@ -171,18 +178,20 @@ private theorem Exec.Frame.CountedCursor.finishFlashBurn
     Exec.attributionInner dp ca frame.run = [] := by
   rw [flashBurn_shape] at cursor
   rcases cursor.peelChildlessLine (line := flashBurnGuardLine) (by
-      simp [flashBurnGuardLine, loadArgBalanceAmount, balanceTooSmall,
-        addressArg, normalizeAddress, arg, cdl, pushAddressMask,
-        NinstIsChildless, Ninst.pushB256]) with
+      simp only [flashBurnGuardLine, loadArgBalanceAmount, addressArg, arg, cdl, pushB256,
+        normalizeAddress, pushAddressMask, List.cons_append, List.nil_append, Fin.isValue,
+        balanceTooSmall, List.mem_cons, List.not_mem_nil, or_false, or_self_left, NinstIsChildless,
+        forall_eq_or_imp, forall_eq, and_self]) with
     ⟨branchCursor, _hguard⟩
   rcases branchCursor.selectBranchLeftWithBurn
       (not_run_call_revertWith (burnBalanceError_lookup dp)) with
     ⟨successCursor, -⟩
   rcases successCursor.peelChildlessLine (line := flashBurnSuccessLine) (by
-      simp [flashBurnSuccessLine, debitLoadedBalance, addressArg,
-        normalizeAddress, pushAddressMask, arg, cdl, emitTransfer,
-        Blanc.transferFromLog, mstoreAt, logWith, pushList,
-        pushFlashMintedSlot, NinstIsChildless, Ninst.pushB256]) with
+      simp only [flashBurnSuccessLine, debitLoadedBalance, Fin.isValue, addressArg, arg, cdl,
+        pushB256, normalizeAddress, pushAddressMask, List.cons_append, List.nil_append,
+        emitTransfer, transferFromLog, mstoreAt, logWith, Fin.reduceSucc, pushFlashMintedSlot,
+        pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
+        or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨lastCursor, _hsuccess⟩
   exact lastCursor.finishAttributionInner
 
@@ -197,36 +206,44 @@ private theorem Exec.Frame.CountedCursor.finishFlashSettle
     Exec.attributionInner dp ca frame.run = [] := by
   rw [flashSettle_shape] at cursor
   rcases cursor.peelChildlessLine (line := flashSettleKeyLine) (by
-      simp [flashSettleKeyLine, addressArg, normalizeAddress,
-        pushAddressMask, arg, cdl, mstoreAt, allowanceKeyFromMemory,
-        pushList, isMax, NinstIsChildless, Ninst.pushB256]) with
+      simp only [flashSettleKeyLine, addressArg, arg, cdl, pushB256, normalizeAddress,
+        pushAddressMask, List.cons_append, List.nil_append, mstoreAt, allowanceKeyFromMemory,
+        pushList, List.map_cons, List.map_nil, Fin.isValue, isMax, List.mem_cons, List.not_mem_nil,
+        or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨allowanceBranchCursor, _hkeyLine⟩
   rcases allowanceBranchCursor.selectBranchSplit with hfinite | hmax
   · rcases hfinite with ⟨finiteCursor⟩
     rcases finiteCursor.peelChildlessLine (line := flashSettleGuardLine) (by
-        simp [flashSettleGuardLine, arg, cdl, balanceTooSmall,
-          NinstIsChildless, Ninst.pushB256]) with
+        simp only [flashSettleGuardLine, arg, cdl, pushB256, Fin.isValue, List.cons_append,
+          List.nil_append, balanceTooSmall, List.mem_cons, List.not_mem_nil, or_false, or_self_left,
+          NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
       ⟨guardBranchCursor, _hguard⟩
     rcases guardBranchCursor.selectBranchLeftWithBurn
         (not_run_call_revertWith (allowanceError_lookup dp)) with
       ⟨successCursor, -⟩
     rcases successCursor.peelChildlessLine
         (line := flashSettleFiniteLine) (by
-          simp [flashSettleFiniteLine, emitFlashApproval, arg, cdl,
-            mstoreAt, logWith, NinstIsChildless, Ninst.pushB256]) with
+          simp only [flashSettleFiniteLine, Fin.isValue, emitFlashApproval, mstoreAt, pushB256,
+            List.cons_append, List.nil_append, arg, cdl, logWith, Fin.reduceSucc, List.mem_cons,
+            List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
       ⟨burnCallCursor, _hfiniteLine⟩
     obtain ⟨body, hget, ⟨burnCursor⟩⟩ := burnCallCursor.enterCall hcode
     have hbody : body = flashBurn := by
-      simpa [weth10, weth10Aux, flashBurnSlot] using hget.symm
+      simpa only [weth10, weth10Aux, flashBurnSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst body
     exact burnCursor.finishFlashBurn
   · rcases hmax with ⟨maxCursor⟩
     rcases maxCursor.peelChildlessLine (line := [Ninst.pop, Ninst.pop])
-        (by simp [NinstIsChildless]) with
+        (by simp only [List.mem_cons, List.not_mem_nil, or_false, or_self, NinstIsChildless,
+          forall_eq]) with
       ⟨burnCallCursor, _hpops⟩
     obtain ⟨body, hget, ⟨burnCursor⟩⟩ := burnCallCursor.enterCall hcode
     have hbody : body = flashBurn := by
-      simpa [weth10, weth10Aux, flashBurnSlot] using hget.symm
+      simpa only [weth10, weth10Aux, flashBurnSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst body
     exact burnCursor.finishFlashBurn
 
@@ -241,7 +258,7 @@ private theorem Exec.Frame.CountedCursor.finishFlashLoanAfterCallback
     (hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp)) :
     Exec.attributionInner dp ca frame.run = [] := by
   unfold flashLoanAfterCallback at cursor
-  rcases cursor.selectNextChildless (by simp [NinstIsChildless]) with
+  rcases cursor.selectNextChildless (by simp only [NinstIsChildless]) with
     ⟨callbackBranchCursor, _hiszero⟩
   have hbubble : ∀ pre, ¬ Func.Run ((weth10 dp).main :: weth10Aux)
       frame.sevm pre (.call bubbleRevertSlot) final := by
@@ -249,7 +266,8 @@ private theorem Exec.Frame.CountedCursor.finishFlashLoanAfterCallback
     rcases of_run_call run with ⟨body, bodyPre, hbody, _hburn, hrun⟩
     have hlookup : ((weth10 dp).main :: weth10Aux)[bubbleRevertSlot]? =
         some bubbleRevert := by
-      simp [weth10, weth10Aux, bubbleRevertSlot]
+      simp only [weth10, weth10Aux, bubbleRevertSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
     rw [hlookup] at hbody
     have heq : body = bubbleRevert := Option.some.inj hbody.symm
     subst body
@@ -257,25 +275,30 @@ private theorem Exec.Frame.CountedCursor.finishFlashLoanAfterCallback
   rcases callbackBranchCursor.selectBranchLeftWithBurn hbubble with
     ⟨decodeCursor, -⟩
   rcases decodeCursor.peelChildlessLine (line := returnDataShorterThan 32)
-      (by simp [returnDataShorterThan, NinstIsChildless, Ninst.pushB256]) with
+      (by simp only [returnDataShorterThan, pushB256, List.mem_cons, List.not_mem_nil, or_false,
+        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨lengthBranchCursor, _hlength⟩
   rcases lengthBranchCursor.selectBranchLeftWithBurn
       (fun _ => not_run_revert) with
     ⟨magicCursor, -⟩
   rcases magicCursor.peelChildlessLine
       (line := checkReturnDataHead CALLBACK_SUCCESS 0 ++ [Ninst.iszero]) (by
-        simp [checkReturnDataHead, pushList, NinstIsChildless,
-          Ninst.pushB256]) with
+        simp only [checkReturnDataHead, pushList, List.map_cons, pushB256, List.map_nil,
+          List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false,
+          NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨magicBranchCursor, _hmagicLine⟩
   rcases magicBranchCursor.selectBranchLeftWithBurn
       (not_run_call_revertWith (flashFailedError_lookup dp)) with
     ⟨settlePrefixCursor, -⟩
   rcases settlePrefixCursor.peelChildlessLine
-      (line := [Ninst.pop, Ninst.pop]) (by simp [NinstIsChildless]) with
+      (line := [Ninst.pop, Ninst.pop]) (by simp only [List.mem_cons, List.not_mem_nil, or_false,
+        or_self, NinstIsChildless, forall_eq]) with
     ⟨settleCallCursor, _hpops⟩
   obtain ⟨body, hget, ⟨settleCursor⟩⟩ := settleCallCursor.enterCall hcode
   have hbody : body = flashSettle := by
-    simpa [weth10, weth10Aux, flashSettleSlot] using hget.symm
+    simpa only [weth10, weth10Aux, flashSettleSlot, List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+      Option.some.injEq] using hget.symm
   subst body
   exact settleCursor.finishFlashSettle hcode
 
@@ -309,7 +332,7 @@ private theorem Exec.Frame.CountedCursor.crossFlashCallback
       frame.post := callCursor.run
   rcases frame with ⟨fpc, e, fpre, fout, frun, fcommitted⟩
   cases fout with
-  | error err => simp [Execution.commits] at fcommitted
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at fcommitted
   | ok fpost =>
       cases hrunShape with
       | next hcompiled htailCompiled =>
@@ -330,7 +353,7 @@ private theorem Exec.Frame.CountedCursor.crossFlashCallback
           have hstepAt : Ninst.StepRun callCursor.pc e callCursor.pre
               Ninst.call xl (.ok midD) :=
             Ninst.stepRun_pc_irrel (pc' := callCursor.pc)
-              (by simp [Ninst.pcFree]) ostep
+              (by simp only [pcFree]) ostep
           obtain ⟨retained⟩ := exists_retainedXlot_of_filled ofilled
           have htailNil : Exec.attributionInner dp ca continuation = [] := by
             let tailFrame : Exec.Frame :=
@@ -384,7 +407,8 @@ theorem Exec.Frame.attributionInner_eq_callback_of_flashLoan
   have hmember :
       (Sevm.selector frame.sevm, nonpayable flashLoan) ∈ weth10Funcs dp := by
     rw [hselector]
-    simp [flashLoanSelector, weth10Funcs]
+    simp only [weth10Funcs, flashLoanSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+      or_false, true_or, or_true]
   have hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp) :=
     context.invocation.2.2.2
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCounted (frame := frame) context hnonempty hmember
@@ -461,7 +485,7 @@ theorem flashSettlement_allowanceLedger
       (flashAllowanceRuntimeKey e) = B256.max
   · have hbranch : flashAllowanceBranchFromPost e post =
         .maximum (flashAllowanceRuntimeKey e) := by
-      simp [flashAllowanceBranchFromPost, hafter]
+      simp only [flashAllowanceBranchFromPost, hafter, ↓reduceIte]
     rw [hbranch] at haccept
     obtain ⟨_hkeyEq, hsettleMax⟩ := haccept.2
     have hevent : frameAllowanceEvent e pre post =
@@ -470,11 +494,9 @@ theorem flashSettlement_allowanceLedger
                caller := e.caller
                depth := e.depth
                visit := .flashMax } := by
-      simp [frameAllowanceEvent, hne0, hsel,
-        flashLoanSelector_ne_approveSelector,
-        flashLoanSelector_ne_approveAndCallSelector,
-        flashLoanSelector_ne_permitSelector,
-        flashLoanSelector_ne_transferFromSelector,
+      simp only [frameAllowanceEvent, hne0, ↓reduceIte, hsel, flashLoanSelector_ne_approveSelector,
+        decide_false, flashLoanSelector_ne_approveAndCallSelector, Bool.or_self, Bool.false_eq_true,
+        flashLoanSelector_ne_permitSelector, flashLoanSelector_ne_transferFromSelector,
         flashLoanSelector_ne_withdrawFromSelector, hafter]
     rw [hevent]
     simp only [AllowanceVisit.written?, ite_self]
@@ -491,11 +513,9 @@ theorem flashSettlement_allowanceLedger
                    (flashAllowanceRuntimeKey e) + Sevm.argWord e 2)
                  ((Devm.getStor post e.currentTarget).get
                    (flashAllowanceRuntimeKey e)) } := by
-      simp [frameAllowanceEvent, hne0, hsel,
-        flashLoanSelector_ne_approveSelector,
-        flashLoanSelector_ne_approveAndCallSelector,
-        flashLoanSelector_ne_permitSelector,
-        flashLoanSelector_ne_transferFromSelector,
+      simp only [frameAllowanceEvent, hne0, ↓reduceIte, hsel, flashLoanSelector_ne_approveSelector,
+        decide_false, flashLoanSelector_ne_approveAndCallSelector, Bool.or_self, Bool.false_eq_true,
+        flashLoanSelector_ne_permitSelector, flashLoanSelector_ne_transferFromSelector,
         flashLoanSelector_ne_withdrawFromSelector, hafter]
     rw [hevent]
     unfold AllowanceEvent.key
@@ -605,7 +625,7 @@ private theorem RawFlashCallbackStepBoundary.allowanceRegionEffect
       rw [if_neg (not_delegation_of_compile installed)]
     rcases hdelegation with ⟨_, hna, _, _⟩ | ⟨_, hsome, _, _, _⟩
     · exact hna.trans hreceiver
-    · simp [hnone] at hsome
+    · simp only [hnone, reduceCtorEq] at hsome
   have htargetCode : msg.currentTarget = ca →
       some msg.code.toList = Prog.compile (weth10 dp) := by
     intro hct
@@ -673,43 +693,49 @@ private theorem Exec.Frame.CountedCursor.reachFlashCallbackWitnessed
     flashLoanBodyShape frame.post at cursor
   unfold flashLoanBodyShape at cursor
   rcases cursor.peelChildlessLine (line := flashTokenLine) (by
-      simp [flashTokenLine, arg, cdl, NinstIsChildless,
-        Ninst.pushB256]) with
+      simp only [flashTokenLine, arg, cdl, pushB256, List.cons_append, List.nil_append,
+        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
+        and_self]) with
     ⟨tokenBranchCursor, htoken⟩
   rcases tokenBranchCursor.selectBranchLeftWithBurn
       (not_run_call_revertWith (flashTokenError_lookup dp)) with
     ⟨amountCursor, htokenPop⟩
   unfold flashLoanPostAmount at amountCursor
   rcases amountCursor.peelChildlessLine (line := flashAmountLine) (by
-      simp [flashAmountLine, arg, cdl, NinstIsChildless,
-        Ninst.pushB256]) with
+      simp only [flashAmountLine, arg, cdl, pushB256, Fin.isValue, List.cons_append,
+        List.nil_append, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+        forall_eq_or_imp, forall_eq, and_self]) with
     ⟨amountBranchCursor, hamount⟩
   rcases amountBranchCursor.selectBranchLeftWithBurn
       (not_run_call_revertWith (individualLimitError_lookup dp)) with
     ⟨counterCursor, hamountPop⟩
   unfold flashLoanPostCounter at counterCursor
   rcases counterCursor.peelChildlessLine (line := flashCounterLine) (by
-      simp [flashCounterLine, pushFlashMintedSlot, NinstIsChildless,
-        Ninst.pushB256]) with
+      simp only [flashCounterLine, pushFlashMintedSlot, pushB256, Fin.isValue, List.cons_append,
+        List.nil_append, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+        forall_eq_or_imp, forall_eq, and_self]) with
     ⟨totalCursor, hcounter⟩
   rcases totalCursor.peelChildlessLine (line := flashTotalLine) (by
-      simp [flashTotalLine, pushFlashMintedSlot, NinstIsChildless,
-        Ninst.pushB256]) with
+      simp only [flashTotalLine, pushFlashMintedSlot, pushB256, Fin.isValue, List.cons_append,
+        List.nil_append, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+        forall_eq_or_imp, forall_eq, and_self]) with
     ⟨totalBranchCursor, htotal⟩
   rcases totalBranchCursor.selectBranchLeftWithBurn
       (not_run_call_revertWith (totalLimitError_lookup dp)) with
     ⟨popCursor, htotalPop⟩
   unfold flashLoanPostTotal at popCursor
   rcases popCursor.peelChildlessLine (line := [Ninst.pop])
-      (by simp [NinstIsChildless]) with
+      (by simp only [List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq]) with
     ⟨mintCursor, hpop⟩
   rcases mintCursor.peelChildlessLine (line := flashMintLine) (by
-      simp [flashMintLine, addressArg, normalizeAddress, pushAddressMask,
-        arg, cdl, NinstIsChildless, Ninst.pushB256]) with
+      simp only [flashMintLine, addressArg, arg, cdl, pushB256, normalizeAddress, pushAddressMask,
+        List.cons_append, List.nil_append, Fin.isValue, List.mem_cons, List.not_mem_nil, or_false,
+        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨eventCursor, hmint⟩
   rcases eventCursor.peelChildlessLine (line := flashEventCheckLine) (by
-      simp [flashEventCheckLine, mstoreAt, logWith, NinstIsChildless,
-        Ninst.pushB256]) with
+      simp only [flashEventCheckLine, Fin.isValue, mstoreAt, pushB256, List.cons_append,
+        List.nil_append, logWith, Fin.reduceSucc, List.mem_cons, List.not_mem_nil, or_false,
+        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨codeBranchCursor, hevent⟩
   rcases codeBranchCursor.selectBranchLeftWithBurn
       (fun _ => not_run_revert) with
@@ -717,9 +743,10 @@ private theorem Exec.Frame.CountedCursor.reachFlashCallbackWitnessed
   unfold flashLoanPostCode at setupCursor
   rcases setupCursor.peelChildlessLine (line := flashCallbackSetupLine)
       (by
-        simp [flashCallbackSetupLine, storeFlashCallbackHead, mstoreAt,
-          pushList, forwardArgTail, arg, cdl, flashCallbackArgsSize,
-          NinstIsChildless, Ninst.pushB256]) with
+        simp only [flashCallbackSetupLine, Fin.isValue, storeFlashCallbackHead, pushB256, mstoreAt,
+          List.cons_append, List.nil_append, pushList, List.map_cons, List.map_nil, forwardArgTail,
+          arg, cdl, flashCallbackArgsSize, List.mem_cons, List.not_mem_nil, or_false, or_self_left,
+          NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨callCursor, hsetup⟩
   obtain ⟨gasWord, hstack, hwfCall, hreadsCall, _hcredit, _hbal, hcodeEq,
       hlocal⟩ :=
@@ -755,7 +782,8 @@ theorem Exec.Frame.allowanceRegionEffect_of_flashLoan
   have hmember :
       (Sevm.selector frame.sevm, nonpayable flashLoan) ∈ weth10Funcs dp := by
     rw [hselector]
-    simp [flashLoanSelector, weth10Funcs]
+    simp only [weth10Funcs, flashLoanSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+      or_false, true_or, or_true]
   have hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp) :=
     context.invocation.2.2.2
   have htarget : frame.sevm.currentTarget = ca := context.invocation.2.1
@@ -844,7 +872,8 @@ theorem Exec.Frame.allowanceRegionEffect_of_flashLoan
       houtcome hburn hcodeSettlePost hown
   -- the frame's own record follows its borrower subtree
   have hflash : isFlashInvocation frame.sevm = true := by
-    simp [isFlashInvocation, hselector, hnonempty]
+    simp only [isFlashInvocation, ne_eq, hnonempty, not_false_eq_true, decide_true, hselector,
+      Bool.and_self]
   have hframeEq : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -912,7 +941,7 @@ theorem flashSettlement_allowanceEntryRead
       (flashAllowanceRuntimeKey e) = B256.max
   · have hbranch : flashAllowanceBranchFromPost e post =
         .maximum (flashAllowanceRuntimeKey e) := by
-      simp [flashAllowanceBranchFromPost, hafter]
+      simp only [flashAllowanceBranchFromPost, hafter, ↓reduceIte]
     rw [hbranch] at haccept
     obtain ⟨-, hsettleMax⟩ := haccept.2
     have hextract : frameAllowanceEvent e pre post =
@@ -921,11 +950,9 @@ theorem flashSettlement_allowanceEntryRead
                caller := e.caller
                depth := e.depth
                visit := .flashMax } := by
-      simp [frameAllowanceEvent, hne0, hsel,
-        flashLoanSelector_ne_approveSelector,
-        flashLoanSelector_ne_approveAndCallSelector,
-        flashLoanSelector_ne_permitSelector,
-        flashLoanSelector_ne_transferFromSelector,
+      simp only [frameAllowanceEvent, hne0, ↓reduceIte, hsel, flashLoanSelector_ne_approveSelector,
+        decide_false, flashLoanSelector_ne_approveAndCallSelector, Bool.or_self, Bool.false_eq_true,
+        flashLoanSelector_ne_permitSelector, flashLoanSelector_ne_transferFromSelector,
         flashLoanSelector_ne_withdrawFromSelector, hafter]
     obtain rfl := Option.some.inj (hextract.symm.trans hevent)
     simp only [AllowanceVisit.read?, Option.some.injEq] at hread
@@ -938,7 +965,7 @@ theorem flashSettlement_allowanceEntryRead
             (flashAllowanceRuntimeKey e) + Sevm.argWord e 2)
           ((Devm.getStor post e.currentTarget).get
             (flashAllowanceRuntimeKey e)) := by
-      simp [flashAllowanceBranchFromPost, hafter]
+      simp only [flashAllowanceBranchFromPost, hafter, ↓reduceIte]
     rw [hbranch] at haccept
     obtain ⟨-, hsettleRead, -, -, -⟩ := haccept.2
     have hextract : frameAllowanceEvent e pre post =
@@ -951,11 +978,9 @@ theorem flashSettlement_allowanceEntryRead
                    (flashAllowanceRuntimeKey e) + Sevm.argWord e 2)
                  ((Devm.getStor post e.currentTarget).get
                    (flashAllowanceRuntimeKey e)) } := by
-      simp [frameAllowanceEvent, hne0, hsel,
-        flashLoanSelector_ne_approveSelector,
-        flashLoanSelector_ne_approveAndCallSelector,
-        flashLoanSelector_ne_permitSelector,
-        flashLoanSelector_ne_transferFromSelector,
+      simp only [frameAllowanceEvent, hne0, ↓reduceIte, hsel, flashLoanSelector_ne_approveSelector,
+        decide_false, flashLoanSelector_ne_approveAndCallSelector, Bool.or_self, Bool.false_eq_true,
+        flashLoanSelector_ne_permitSelector, flashLoanSelector_ne_transferFromSelector,
         flashLoanSelector_ne_withdrawFromSelector, hafter]
     obtain rfl := Option.some.inj (hextract.symm.trans hevent)
     simp only [AllowanceVisit.read?, Option.some.injEq] at hread
@@ -1018,7 +1043,7 @@ private theorem RawFlashCallbackStepBoundary.allowanceRegionEffectSound
       rw [if_neg (not_delegation_of_compile installed)]
     rcases hdelegation with ⟨_, hna, _, _⟩ | ⟨_, hsome, _, _, _⟩
     · exact hna.trans hreceiver
-    · simp [hnone] at hsome
+    · simp only [hnone, reduceCtorEq] at hsome
   have htargetCode : msg.currentTarget = ca →
       some msg.code.toList = Prog.compile (weth10 dp) := by
     intro hct
@@ -1062,7 +1087,8 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_flashLoan
   have hmember :
       (Sevm.selector frame.sevm, nonpayable flashLoan) ∈ weth10Funcs dp := by
     rw [hselector]
-    simp [flashLoanSelector, weth10Funcs]
+    simp only [weth10Funcs, flashLoanSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+      or_false, true_or, or_true]
   have hcode : some frame.sevm.code.toList = Prog.compile (weth10 dp) :=
     context.invocation.2.2.2
   have htarget : frame.sevm.currentTarget = ca := context.invocation.2.1
@@ -1153,7 +1179,8 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_flashLoan
       houtcome hburn hcodeSettlePost hown
   -- the frame's own record follows its borrower subtree
   have hflash : isFlashInvocation frame.sevm = true := by
-    simp [isFlashInvocation, hselector, hnonempty]
+    simp only [isFlashInvocation, ne_eq, hnonempty, not_false_eq_true, decide_true, hselector,
+      Bool.and_self]
   have hframeEq : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl

@@ -49,7 +49,7 @@ theorem SFunc.RunCutP.false_of_noOk {P : Sevm → Devm → Ninst → Devm → Pr
       exact Linst.not_run_revert_ok hl
   | next _ _ ih => exact ih h
   | dest _ _ ih => exact ih h
-  | _ => simp [SFunc.noOk] at h
+  | _ => simp only [noOk, Bool.false_eq_true] at h
 
 /-! ## Trees that cannot halt -/
 
@@ -83,7 +83,7 @@ theorem SFunc.RunP.not_halted {P : Sevm → Devm → Ninst → Devm → Prop}
     intro k g hk hget
     have h := (List.all_eq_true.mp hS) k hk
     rw [hget] at h
-    simpa using h
+    simpa only [List.all_eq_true, decide_eq_true_eq, Bool.and_eq_true] using h
   induction run with
   | zero d pop run ih =>
       simp only [SFunc.noHalt, Bool.and_eq_true] at hf
@@ -144,7 +144,7 @@ theorem SFunc.RunP.not_halted_entry {P : Sevm → Devm → Ninst → Devm → Pr
     intro k g hk hget
     have h := (List.all_eq_true.mp hS) k hk
     rw [hget] at h
-    simpa using h
+    simpa only [List.all_eq_true, decide_eq_true_eq, Bool.and_eq_true] using h
   have ht := closed hkS hk
   exact SFunc.RunP.not_halted hS ht.1 ht.2 run ho
 

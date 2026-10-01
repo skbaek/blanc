@@ -32,7 +32,7 @@ private theorem exec_result_unique
 private theorem exec_unique
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (left right : Exec pc sevm pre out) : left = right := by
-  induction left <;> cases right <;> simp_all <;>
+  induction left <;> cases right <;> simp_all only [reduceCtorEq, Exec.cont.injEq, Exec.doneErr.injEq, Exec.doneOk.injEq, Exec.runErr.injEq, ExceptT.stM_eq, Exec.runOk.injEq] <;>
     aesop (add safe forward exec_result_unique)
 
 /-- Proof-indexed retained traversals are independent of which concrete
@@ -150,7 +150,7 @@ theorem LocalActionSegment.creditShape
     (segment : LocalActionSegment kind action pre post) :
     action.CreditShape := by
   cases segment <;>
-    simp_all [FlowAction.CreditShape]
+    simp_all only [FlowAction.CreditShape]
 
 theorem FlowAction.localSegmentsHolderIn_eq
     (action : FlowAction) (u : Adr) :
@@ -161,8 +161,7 @@ theorem FlowAction.localSegmentsHolderIn_eq
   rcases action with ⟨atom, credit, debit, actualCaller, currentTarget,
     codeAddress, depth⟩
   cases atom <;>
-    simp [FlowAction.localSegmentLabels, localSegmentsHolderIn,
-      LocalSegmentKind.holderIn, FlowAtom.holderFlow, HolderFlow.zero] <;>
+    simp only [localSegmentsHolderIn, LocalSegmentKind.holderIn, FlowAtom.holderFlow, HolderFlow.zero, localSegmentLabels, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero, Nat.left_eq_add, Nat.right_eq_add, Nat.add_eq_zero_iff] <;>
     aesop
 
 theorem FlowAction.localSegmentsHolderOut_eq
@@ -175,8 +174,7 @@ theorem FlowAction.localSegmentsHolderOut_eq
   rcases action with ⟨atom, credit, debit, actualCaller, currentTarget,
     codeAddress, depth⟩
   cases atom <;>
-    simp [FlowAction.localSegmentLabels, localSegmentsHolderOut,
-      LocalSegmentKind.holderOut, FlowAtom.holderFlow, HolderFlow.zero] <;>
+    simp only [localSegmentsHolderOut, LocalSegmentKind.holderOut, FlowAtom.holderFlow, HolderFlow.zero, localSegmentLabels, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero, zero_add, Nat.right_eq_add, Nat.add_eq_zero_iff] <;>
     aesop
 
 theorem FlowAction.localSegmentsHolderLoss_eq
@@ -186,9 +184,7 @@ theorem FlowAction.localSegmentsHolderLoss_eq
   rcases action with ⟨atom, credit, debit, actualCaller, currentTarget,
     codeAddress, depth⟩
   cases atom <;> cases credit <;>
-    simp_all [FlowAction.CreditShape, FlowAction.localSegmentLabels,
-      localSegmentsHolderLoss, LocalSegmentKind.holderLoss,
-      FlowAction.holderCreditLoss]
+    simp_all only [CreditShape, localSegmentsHolderLoss, LocalSegmentKind.holderLoss, holderCreditLoss, localSegmentLabels, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero, reduceCtorEq]
 
 theorem FlowAction.localSegmentsBookedIn_eq (action : FlowAction) :
     localSegmentsBookedIn action.localSegmentLabels =
@@ -197,8 +193,7 @@ theorem FlowAction.localSegmentsBookedIn_eq (action : FlowAction) :
   rcases action with ⟨atom, credit, debit, actualCaller, currentTarget,
     codeAddress, depth⟩
   cases atom <;>
-    simp [FlowAction.localSegmentLabels, localSegmentsBookedIn,
-      LocalSegmentKind.bookedIn, FlowAtom.supplyFlow, SupplyFlow.zero]
+    simp only [localSegmentsBookedIn, LocalSegmentKind.bookedIn, localSegmentLabels, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero, FlowAtom.supplyFlow, SupplyFlow.zero, zero_add]
 
 theorem FlowAction.localSegmentsBookedOut_eq (action : FlowAction) :
     localSegmentsBookedOut action.localSegmentLabels =
@@ -207,8 +202,7 @@ theorem FlowAction.localSegmentsBookedOut_eq (action : FlowAction) :
   rcases action with ⟨atom, credit, debit, actualCaller, currentTarget,
     codeAddress, depth⟩
   cases atom <;>
-    simp [FlowAction.localSegmentLabels, localSegmentsBookedOut,
-      LocalSegmentKind.bookedOut, FlowAtom.supplyFlow, SupplyFlow.zero]
+    simp only [localSegmentsBookedOut, LocalSegmentKind.bookedOut, localSegmentLabels, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero, FlowAtom.supplyFlow, SupplyFlow.zero, zero_add]
 
 theorem FlowAction.localSegmentsBookedLoss_eq (action : FlowAction) :
     action.CreditShape →
@@ -218,55 +212,53 @@ theorem FlowAction.localSegmentsBookedLoss_eq (action : FlowAction) :
   rcases action with ⟨atom, credit, debit, actualCaller, currentTarget,
     codeAddress, depth⟩
   cases atom <;> cases credit <;>
-    simp_all [FlowAction.CreditShape, FlowAction.localSegmentLabels,
-      localSegmentsBookedLoss,
-      LocalSegmentKind.bookedLoss, FlowAction.bookedCreditLoss,
-      FlowAction.creditLossTotal]
+    simp_all only [CreditShape, localSegmentsBookedLoss, LocalSegmentKind.bookedLoss, bookedCreditLoss, localSegmentLabels, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero, creditLossTotal, reduceCtorEq]
 
 @[simp] theorem localSegmentsHolderIn_append
     (left right : List (LocalSegmentKind × FlowAction)) (u : Adr) :
     localSegmentsHolderIn (left ++ right) u =
       localSegmentsHolderIn left u + localSegmentsHolderIn right u := by
-  simp [localSegmentsHolderIn]
+  simp only [localSegmentsHolderIn, List.map_append, List.sum_append]
 
 @[simp] theorem localSegmentsHolderOut_append
     (left right : List (LocalSegmentKind × FlowAction)) (u : Adr) :
     localSegmentsHolderOut (left ++ right) u =
       localSegmentsHolderOut left u + localSegmentsHolderOut right u := by
-  simp [localSegmentsHolderOut]
+  simp only [localSegmentsHolderOut, List.map_append, List.sum_append]
 
 @[simp] theorem localSegmentsHolderLoss_append
     (left right : List (LocalSegmentKind × FlowAction)) (u : Adr) :
     localSegmentsHolderLoss (left ++ right) u =
       localSegmentsHolderLoss left u + localSegmentsHolderLoss right u := by
-  simp [localSegmentsHolderLoss]
+  simp only [localSegmentsHolderLoss, List.map_append, List.sum_append]
 
 @[simp] theorem localSegmentsBookedIn_append
     (left right : List (LocalSegmentKind × FlowAction)) :
     localSegmentsBookedIn (left ++ right) =
       localSegmentsBookedIn left + localSegmentsBookedIn right := by
-  simp [localSegmentsBookedIn]
+  simp only [localSegmentsBookedIn, List.map_append, List.sum_append]
 
 @[simp] theorem localSegmentsBookedOut_append
     (left right : List (LocalSegmentKind × FlowAction)) :
     localSegmentsBookedOut (left ++ right) =
       localSegmentsBookedOut left + localSegmentsBookedOut right := by
-  simp [localSegmentsBookedOut]
+  simp only [localSegmentsBookedOut, List.map_append, List.sum_append]
 
 @[simp] theorem localSegmentsBookedLoss_append
     (left right : List (LocalSegmentKind × FlowAction)) :
     localSegmentsBookedLoss (left ++ right) =
       localSegmentsBookedLoss left + localSegmentsBookedLoss right := by
-  simp [localSegmentsBookedLoss]
+  simp only [localSegmentsBookedLoss, List.map_append, List.sum_append]
 
 @[simp] theorem holderFlowOfActions_singleton
     (action : FlowAction) (u : Adr) :
     holderFlowOfActions [action] u = action.atom.holderFlow u := by
-  simp [holderFlowOfActions]
+  simp only [holderFlowOfActions, List.foldl_cons, HolderFlow.zero_add, List.foldl_nil]
 
 @[simp] theorem supplyFlowOfActions_singleton (action : FlowAction) :
     supplyFlowOfActions [action] = action.atom.supplyFlow := by
-  simp [supplyFlowOfActions, SupplyFlow.zero, SupplyFlow.add]
+  simp only [supplyFlowOfActions, SupplyFlow.add, SupplyFlow.zero, List.foldl_cons, zero_add,
+    List.foldl_nil]
 
 theorem localSegmentsHolderIn_labels_eq
     (actions : List FlowAction) (u : Adr) :
@@ -276,8 +268,8 @@ theorem localSegmentsHolderIn_labels_eq
         (holderFlowOfActions actions u).flashCredit := by
   induction actions with
   | nil =>
-      simp [localSegmentLabelsOfActions, localSegmentsHolderIn,
-        holderFlowOfActions, HolderFlow.zero]
+      simp only [localSegmentsHolderIn, localSegmentLabelsOfActions, List.flatMap_nil, List.map_nil,
+        List.sum_nil, holderFlowOfActions, HolderFlow.zero, List.foldl_nil, add_zero]
   | cons action actions ih =>
       rw [show localSegmentLabelsOfActions (action :: actions) =
         action.localSegmentLabels ++ localSegmentLabelsOfActions actions by
@@ -299,8 +291,8 @@ theorem localSegmentsHolderOut_labels_eq
         (holderFlowOfActions actions u).flashRepayment := by
   induction actions with
   | nil =>
-      simp [localSegmentLabelsOfActions, localSegmentsHolderOut,
-        holderFlowOfActions, HolderFlow.zero]
+      simp only [localSegmentsHolderOut, localSegmentLabelsOfActions, List.flatMap_nil,
+        List.map_nil, List.sum_nil, holderFlowOfActions, HolderFlow.zero, List.foldl_nil, add_zero]
   | cons action actions ih =>
       rw [show localSegmentLabelsOfActions (action :: actions) =
         action.localSegmentLabels ++ localSegmentLabelsOfActions actions by
@@ -316,19 +308,19 @@ theorem localSegmentsHolderOut_labels_eq
 @[simp] theorem SupplyFlow.zero_add (flow : SupplyFlow) :
     SupplyFlow.zero.add flow = flow := by
   cases flow
-  simp [SupplyFlow.zero, SupplyFlow.add]
+  simp only [add, zero, _root_.zero_add]
 
 @[simp] theorem SupplyFlow.add_zero (flow : SupplyFlow) :
     flow.add SupplyFlow.zero = flow := by
   cases flow
-  simp [SupplyFlow.zero, SupplyFlow.add]
+  simp only [add, zero, _root_.add_zero]
 
 theorem SupplyFlow.add_assoc (left middle right : SupplyFlow) :
     (left.add middle).add right = left.add (middle.add right) := by
   cases left
   cases middle
   cases right
-  simp [SupplyFlow.add, Nat.add_assoc]
+  simp only [add, Nat.add_assoc]
 
 private theorem supplyFlowOfActions_from_eq_add
     (actions : List FlowAction) (initial : SupplyFlow) :
@@ -337,7 +329,7 @@ private theorem supplyFlowOfActions_from_eq_add
     initial.add (supplyFlowOfActions actions) := by
   unfold supplyFlowOfActions
   induction actions generalizing initial with
-  | nil => simp
+  | nil => simp only [List.foldl_nil, SupplyFlow.add_zero]
   | cons action actions ih =>
       simp only [List.foldl_cons]
       rw [ih]
@@ -356,13 +348,13 @@ theorem supplyFlowOfActions_append (left right : List FlowAction) :
     holderCreditLossOfActions (left ++ right) u =
       holderCreditLossOfActions left u +
         holderCreditLossOfActions right u := by
-  simp [holderCreditLossOfActions]
+  simp only [holderCreditLossOfActions, List.map_append, List.sum_append]
 
 @[simp] theorem creditLossOfActions_append
     (left right : List FlowAction) :
     creditLossOfActions (left ++ right) =
       creditLossOfActions left + creditLossOfActions right := by
-  simp [creditLossOfActions]
+  simp only [creditLossOfActions, List.map_append, List.sum_append]
 
 theorem localSegmentsHolderLoss_labels_eq
     (actions : List FlowAction) (u : Adr)
@@ -371,19 +363,19 @@ theorem localSegmentsHolderLoss_labels_eq
       holderCreditLossOfActions actions u := by
   induction actions with
   | nil =>
-      simp [localSegmentLabelsOfActions, localSegmentsHolderLoss,
-        holderCreditLossOfActions]
+      simp only [localSegmentsHolderLoss, localSegmentLabelsOfActions, List.flatMap_nil,
+        List.map_nil, List.sum_nil, holderCreditLossOfActions]
   | cons action actions ih =>
-      have hhead : action.CreditShape := shape action (by simp)
+      have hhead : action.CreditShape := shape action (by simp only [List.mem_cons, true_or])
       have htail : ∀ tail ∈ actions, tail.CreditShape := by
         intro tail hmem
-        exact shape tail (by simp [hmem])
+        exact shape tail (by simp only [List.mem_cons, hmem, or_true])
       rw [show localSegmentLabelsOfActions (action :: actions) =
         action.localSegmentLabels ++ localSegmentLabelsOfActions actions by
           rfl]
       rw [localSegmentsHolderLoss_append,
         action.localSegmentsHolderLoss_eq u hhead, ih htail]
-      simp [holderCreditLossOfActions]
+      simp only [holderCreditLossOfActions, List.map_cons, List.sum_cons]
 
 theorem localSegmentsBookedIn_labels_eq (actions : List FlowAction) :
     localSegmentsBookedIn (localSegmentLabelsOfActions actions) =
@@ -391,8 +383,8 @@ theorem localSegmentsBookedIn_labels_eq (actions : List FlowAction) :
         (supplyFlowOfActions actions).flashCredit := by
   induction actions with
   | nil =>
-      simp [localSegmentLabelsOfActions, localSegmentsBookedIn,
-        supplyFlowOfActions, SupplyFlow.zero]
+      simp only [localSegmentsBookedIn, localSegmentLabelsOfActions, List.flatMap_nil, List.map_nil,
+        List.sum_nil, supplyFlowOfActions, SupplyFlow.zero, List.foldl_nil, add_zero]
   | cons action actions ih =>
       rw [show localSegmentLabelsOfActions (action :: actions) =
         action.localSegmentLabels ++ localSegmentLabelsOfActions actions by
@@ -411,8 +403,8 @@ theorem localSegmentsBookedOut_labels_eq (actions : List FlowAction) :
         (supplyFlowOfActions actions).flashRepayment := by
   induction actions with
   | nil =>
-      simp [localSegmentLabelsOfActions, localSegmentsBookedOut,
-        supplyFlowOfActions, SupplyFlow.zero]
+      simp only [localSegmentsBookedOut, localSegmentLabelsOfActions, List.flatMap_nil,
+        List.map_nil, List.sum_nil, supplyFlowOfActions, SupplyFlow.zero, List.foldl_nil, add_zero]
   | cons action actions ih =>
       rw [show localSegmentLabelsOfActions (action :: actions) =
         action.localSegmentLabels ++ localSegmentLabelsOfActions actions by
@@ -431,19 +423,19 @@ theorem localSegmentsBookedLoss_labels_eq (actions : List FlowAction)
       creditLossOfActions actions := by
   induction actions with
   | nil =>
-      simp [localSegmentLabelsOfActions, localSegmentsBookedLoss,
-        creditLossOfActions]
+      simp only [localSegmentsBookedLoss, localSegmentLabelsOfActions, List.flatMap_nil,
+        List.map_nil, List.sum_nil, creditLossOfActions]
   | cons action actions ih =>
-      have hhead : action.CreditShape := shape action (by simp)
+      have hhead : action.CreditShape := shape action (by simp only [List.mem_cons, true_or])
       have htail : ∀ tail ∈ actions, tail.CreditShape := by
         intro tail hmem
-        exact shape tail (by simp [hmem])
+        exact shape tail (by simp only [List.mem_cons, hmem, or_true])
       rw [show localSegmentLabelsOfActions (action :: actions) =
         action.localSegmentLabels ++ localSegmentLabelsOfActions actions by
           rfl]
       rw [localSegmentsBookedLoss_append,
         action.localSegmentsBookedLoss_eq hhead, ih htail]
-      simp [creditLossOfActions]
+      simp only [creditLossOfActions, List.map_cons, List.sum_cons]
 
 private theorem sum_map_eq_of_perm {alpha : Type}
     (f : alpha → Nat) {left right : List alpha}
@@ -451,7 +443,7 @@ private theorem sum_map_eq_of_perm {alpha : Type}
     (left.map f).sum = (right.map f).sum := by
   induction h with
   | nil => rfl
-  | cons head perm ih => simp [ih]
+  | cons head perm ih => simp only [List.map_cons, List.sum_cons, ih]
   | swap left right tail =>
       simp only [List.map_cons, List.sum_cons]
       ac_rfl
@@ -482,9 +474,8 @@ theorem StorageFlowAccounting.of_localSegmentChain
         localSegmentsHolderIn segments u =
             localSegmentsHolderIn
               (localSegmentLabelsOfActions actions) u := by
-          simpa [localSegmentsHolderIn] using
-            sum_map_eq_of_perm
-              (fun segment => segment.1.holderIn segment.2 u) labels
+          simpa only [localSegmentsHolderIn] using
+            sum_map_eq_of_perm (fun segment => segment.1.holderIn segment.2 u) labels
         _ = _ := localSegmentsHolderIn_labels_eq actions u
     have hout : localSegmentsHolderOut segments u =
         (holderFlowOfActions actions u).redeemed +
@@ -495,9 +486,8 @@ theorem StorageFlowAccounting.of_localSegmentChain
         localSegmentsHolderOut segments u =
             localSegmentsHolderOut
               (localSegmentLabelsOfActions actions) u := by
-          simpa [localSegmentsHolderOut] using
-            sum_map_eq_of_perm
-              (fun segment => segment.1.holderOut segment.2 u) labels
+          simpa only [localSegmentsHolderOut] using
+            sum_map_eq_of_perm (fun segment => segment.1.holderOut segment.2 u) labels
         _ = _ := localSegmentsHolderOut_labels_eq actions u
     have hloss : localSegmentsHolderLoss segments u =
         holderCreditLossOfActions actions u := by
@@ -505,9 +495,8 @@ theorem StorageFlowAccounting.of_localSegmentChain
         localSegmentsHolderLoss segments u =
             localSegmentsHolderLoss
               (localSegmentLabelsOfActions actions) u := by
-          simpa [localSegmentsHolderLoss] using
-            sum_map_eq_of_perm
-              (fun segment => segment.1.holderLoss segment.2 u) labels
+          simpa only [localSegmentsHolderLoss] using
+            sum_map_eq_of_perm (fun segment => segment.1.holderLoss segment.2 u) labels
         _ = _ := localSegmentsHolderLoss_labels_eq actions u shape
     rw [hin, hout, hloss] at equation
     omega
@@ -520,9 +509,8 @@ theorem StorageFlowAccounting.of_localSegmentChain
         localSegmentsBookedIn segments =
             localSegmentsBookedIn
               (localSegmentLabelsOfActions actions) := by
-          simpa [localSegmentsBookedIn] using
-            sum_map_eq_of_perm
-              (fun segment => segment.1.bookedIn segment.2) labels
+          simpa only [localSegmentsBookedIn] using
+            sum_map_eq_of_perm (fun segment => segment.1.bookedIn segment.2) labels
         _ = _ := localSegmentsBookedIn_labels_eq actions
     have hout : localSegmentsBookedOut segments =
         (supplyFlowOfActions actions).redeemed +
@@ -531,9 +519,8 @@ theorem StorageFlowAccounting.of_localSegmentChain
         localSegmentsBookedOut segments =
             localSegmentsBookedOut
               (localSegmentLabelsOfActions actions) := by
-          simpa [localSegmentsBookedOut] using
-            sum_map_eq_of_perm
-              (fun segment => segment.1.bookedOut segment.2) labels
+          simpa only [localSegmentsBookedOut] using
+            sum_map_eq_of_perm (fun segment => segment.1.bookedOut segment.2) labels
         _ = _ := localSegmentsBookedOut_labels_eq actions
     have hloss : localSegmentsBookedLoss segments =
         creditLossOfActions actions := by
@@ -541,9 +528,8 @@ theorem StorageFlowAccounting.of_localSegmentChain
         localSegmentsBookedLoss segments =
             localSegmentsBookedLoss
               (localSegmentLabelsOfActions actions) := by
-          simpa [localSegmentsBookedLoss] using
-            sum_map_eq_of_perm
-              (fun segment => segment.1.bookedLoss segment.2) labels
+          simpa only [localSegmentsBookedLoss] using
+            sum_map_eq_of_perm (fun segment => segment.1.bookedLoss segment.2) labels
         _ = _ := localSegmentsBookedLoss_labels_eq actions shape
     rw [hin, hout, hloss] at equation
     omega
@@ -572,14 +558,14 @@ structure StorageSegmentDelta (ca : Adr) (pre post : Devm)
 
 def StorageSegmentDelta.refl (ca : Adr) (state : Devm) :
     StorageSegmentDelta ca state state [] :=
-  ⟨[], .nil _, .refl [], by simp⟩
+  ⟨[], .nil _, .refl [], by simp only [List.not_mem_nil, IsEmpty.forall_iff, implies_true]⟩
 
 def StorageSegmentDelta.of_rest_eq
     {ca : Adr} {pre post : Devm}
     (h : Stor.rest (Devm.getStor pre ca) =
       Stor.rest (Devm.getStor post ca)) :
     StorageSegmentDelta ca pre post [] := by
-  refine ⟨[], ?_, .refl [], by simp⟩
+  refine ⟨[], ?_, .refl [], by simp only [List.not_mem_nil, IsEmpty.forall_iff, implies_true]⟩
   rw [h]
   exact .nil _
 
@@ -604,8 +590,8 @@ def StorageSegmentDelta.append
     StorageSegmentDelta ca pre post (leftActions ++ rightActions) := by
   refine ⟨left.segments ++ right.segments,
     left.chain.append right.chain, ?_, ?_⟩
-  · simpa [localSegmentLabelsOfActions] using
-      left.labels.append right.labels
+  · simpa only [localSegmentLabelsOfActions, List.flatMap_append] using
+    left.labels.append right.labels
   · intro action hmem
     rcases List.mem_append.mp hmem with hleft | hright
     · exact left.creditShape action hleft
@@ -636,7 +622,8 @@ def StorageSegmentDelta.singleton
     (label : action.localSegmentLabels = [(kind, action)]) :
     StorageSegmentDelta ca pre post [action] := by
   refine ⟨[(kind, action)], .cons segment (.nil _), ?_, ?_⟩
-  · simp [localSegmentLabelsOfActions, label]
+  · simp only [localSegmentLabelsOfActions, List.flatMap_cons, label, List.flatMap_nil,
+    List.append_nil, List.Perm.refl]
   · intro candidate hmem
     simp only [List.mem_singleton] at hmem
     subst candidate
@@ -652,7 +639,7 @@ def StorageSegmentDelta.ofOrdinaryMint
   cases segment with
   | ordinaryMint rawRecipient recipient amountWord atom_eq credit_eq
       debit_eq increase =>
-      simp [FlowAction.localSegmentLabels, atom_eq]
+      simp only [FlowAction.localSegmentLabels, atom_eq]
 
 def StorageSegmentDelta.ofOrdinaryTransfer
     {ca : Adr} {pre post : Devm} {action : FlowAction}
@@ -664,7 +651,7 @@ def StorageSegmentDelta.ofOrdinaryTransfer
   cases segment with
   | ordinaryTransfer rawSource rawRecipient source recipient amountWord
       atom_eq transfer credit_eq debit_source =>
-      simp [FlowAction.localSegmentLabels, atom_eq]
+      simp only [FlowAction.localSegmentLabels, atom_eq]
 
 def StorageSegmentDelta.ofRedemption
     {ca : Adr} {pre post : Devm} {action : FlowAction}
@@ -676,7 +663,7 @@ def StorageSegmentDelta.ofRedemption
   cases segment with
   | redemption rawSource source ethRecipient amountWord atom_eq credit_eq
       debit_source amount_le decrease =>
-      simp [FlowAction.localSegmentLabels, atom_eq]
+      simp only [FlowAction.localSegmentLabels, atom_eq]
 
 /-- A flash action surrounds the arbitrary committed callback delta with its
 own mint and repayment segments.  The resulting chronological labels are a
@@ -731,7 +718,7 @@ def StorageSegmentDelta.ofFlashSegments
   cases mint with
   | flashCredit rawReceiver receiver amountWord atom_eq credit_eq
       debit_source increase =>
-      simp [FlowAction.localSegmentLabels, atom_eq]
+      simp only [FlowAction.localSegmentLabels, atom_eq]
 
 theorem StorageSegmentDelta.storageFlowAccounting
     {ca : Adr} {pre post : Devm} {actions : List FlowAction}
@@ -964,8 +951,8 @@ theorem processCreateMessage_msg_getStor_eq
     {msg : Msg} {ca : Adr} (htargetNe : msg.currentTarget ≠ ca) :
     (processCreateMessage.msg msg).benv.state.getStor ca =
       msg.benv.state.getStor ca := by
-  dsimp [processCreateMessage.msg, Msg.withBenv,
-    addCreatedAccount, Benv.setStor, Benv.incrNonce, State.getStor]
+  dsimp only [processCreateMessage.msg, Msg.withBenv, Benv.setStor, addCreatedAccount,
+    Benv.incrNonce, State.getStor]
   rw [State.incrNonce_get_stor,
     State.setStor_get_stor_ne htargetNe]
 
@@ -982,7 +969,8 @@ theorem ProcessCreateMessage.ok_getStorCode_eq_inner_of_clean
     ⟨result, hinner, hsettle⟩
   cases result with
   | error error =>
-      simp [processCreateMessage.settle] at hsettle
+      simp only [processCreateMessage.settle, Option.isNone_iff_eq_none, ExceptT.stM_eq,
+        Except.bind_error, reduceCtorEq] at hsettle
   | ok inner =>
       unfold processCreateMessage.settle at hsettle
       simp only [bind, Except.bind] at hsettle
@@ -999,9 +987,7 @@ theorem ProcessCreateMessage.ok_getStorCode_eq_inner_of_clean
                 have heq := Except.ok.inj hsettle
                 rw [heq] at herror
                 split at herror <;>
-                  simp [processCreateMessage.exceptionalHalt,
-                    processCreateMessage.exceptionalHaltAmsterdam,
-                    Devm.error, Devm.setMeta] at herror
+                  simp only [Devm.error, processCreateMessage.exceptionalHalt, Devm.setMeta, Option.isSome_some, Bool.true_eq_false, processCreateMessage.exceptionalHaltAmsterdam] at herror
             | revert => cases hsettle
             | crypto reason => cases hsettle
             | internal reason => cases hsettle
@@ -1036,7 +1022,8 @@ theorem ProcessCreateMessage.ok_getStorCode_eq_inner_of_clean
       · rw [if_neg hinnerNone] at hsettle
         have heq := Except.ok.inj hsettle
         rw [heq] at herror
-        simp [Devm.rollback, Devm.setWorld, Devm.error] at herror
+        simp only [Devm.error, Devm.rollback, Devm.setWorld, Option.isSome_eq_false_iff,
+          Option.isNone_iff_eq_none] at herror
         apply False.elim
         apply hinnerNone
         rw [show inner.error = none from herror]
@@ -1106,11 +1093,11 @@ theorem ProcessMessageTrace.storageSegmentDelta
       have hsevm : sevm = initSevm (msg.withBenv benv) := by
         exact congrArg (fun evm : Evm => evm.sta) hevm
       have hpc : pc = 0 := by
-        simpa [initEvm] using congrArg (fun evm : Evm => evm.pc) hevm
+        simpa only [initEvm] using congrArg (fun evm : Evm => evm.pc) hevm
       have hmemory : pre.memory = Mem.empty := by
         have component := congrArg (fun evm : Evm => evm.dyna.memory) hevm
         change pre.memory = (initEvm (msg.withBenv benv)).dyna.memory
-        simpa [initEvm, initDevm, Msg.withBenv] using component
+        simpa only [initEvm, Msg.withBenv, initDevm] using component
       have hentryStorage : Devm.getStor parent ca = Devm.getStor pre ca := by
         exact (congrArg (fun state : State => state.getStor ca) hparent).trans <|
           (benvAfterTransfer_getStor_eq htransfer ca).symm.trans <|
@@ -1138,17 +1125,17 @@ theorem ProcessMessageTrace.storageSegmentDelta
         intro htarget
         have hmsgTarget : msg.currentTarget = ca := by
           rw [hsevm] at htarget
-          simpa [initSevm, Msg.withBenv] using htarget
+          simpa only [initSevm, Msg.withBenv] using htarget
         refine ⟨?_, hpc⟩
         rw [hsevm]
-        simpa [initSevm, Msg.withBenv] using htargetCode hmsgTarget
+        simpa only [initSevm, Msg.withBenv] using htargetCode hmsgTarget
       by_cases hcommit : Execution.commits out = true
       · cases out with
-        | error err => simp [Execution.commits] at hcommit
+        | error err => simp only [Execution.commits, Bool.false_eq_true] at hcommit
         | ok raw =>
             rcases hbelow run (by
                 rw [hsevm]
-                simpa [initSevm, Msg.withBenv] using hdepth)
+                simpa only [initSevm, Msg.withBenv] using hdepth)
               hat hcommit ⟨hpc, hmemory⟩ with ⟨childEffect⟩
             have hpostState : post.state = raw.state :=
               ProcessMessage.ok_state_eq_committedPost hprocess hcommit
@@ -1214,7 +1201,7 @@ theorem ProcessMessage.storageSegmentEffect_of_settlement
         unfold Jaune.Frame.settlementCommits
         rw [← hset]
         exact hnone
-      cases he : post.error <;> simp_all
+      cases he : post.error <;> simp_all only [ExceptT.stM_eq, Bool.not_eq_true, Option.isNone_none, ne_eq, not_true_eq_false, Option.isNone_some, Bool.false_eq_true, not_false_eq_true, Option.isSome_some]
     have hpostState : post.state = msg.benv.state :=
       (ProcessMessage.rollback_of_error hprocess herr).1
     have hstorage : Devm.getStor parent ca = Devm.getStor post ca :=
@@ -1292,7 +1279,7 @@ theorem ProcessMessage.storageSegmentEffect_of_bodyEffect
         unfold Jaune.Frame.settlementCommits
         rw [← hset]
         exact hnone
-      cases he : post.error <;> simp_all
+      cases he : post.error <;> simp_all only [ExceptT.stM_eq, Bool.not_eq_true, Option.isNone_none, ne_eq, not_true_eq_false, Option.isNone_some, Bool.false_eq_true, not_false_eq_true, Option.isSome_some]
     have hpostState : post.state = msg.benv.state :=
       (ProcessMessage.rollback_of_error hprocess herr).1
     have hstorage : Devm.getStor parent ca = Devm.getStor post ca :=
@@ -1392,7 +1379,7 @@ theorem ProcessCreateMessageTrace.storageSegmentDelta
             rw [hparent]
           _ = _ := hcode
       have hinnerDepth : (processCreateMessage.msg msg).depth < depth := by
-        simpa [processCreateMessage.msg, Msg.withBenv] using hdepth
+        simpa only [processCreateMessage.msg, Msg.withBenv] using hdepth
       have hinnerTargetCode :
           (processCreateMessage.msg msg).currentTarget = ca →
             some (processCreateMessage.msg msg).code.toList =
@@ -1400,7 +1387,7 @@ theorem ProcessCreateMessageTrace.storageSegmentDelta
         intro htarget
         apply False.elim
         apply htargetNe
-        simpa [processCreateMessage.msg, Msg.withBenv] using htarget
+        simpa only [processCreateMessage.msg, Msg.withBenv] using htarget
       rcases innerTrace.storageSegmentDelta (parent := prepared) rfl
           hinnerDepth hpreparedCode hinnerTargetCode hbelow with ⟨effect⟩
       have hsuffixStorage : Devm.getStor inner ca = Devm.getStor post ca :=
@@ -1450,7 +1437,7 @@ theorem ProcessCreateMessage.storageSegmentEffect_of_bodyEffect
       rw [← hset] at hsettle
       exact hsettle
     have herr : post.error.isSome = false := by
-      cases he : post.error <;> simp_all
+      cases he : post.error <;> simp_all only [ExceptT.stM_eq, ne_eq, forall_true_left, Option.isNone_none, Option.isSome_none, Option.isNone_some, Bool.false_eq_true]
     rcases ProcessCreateMessage.ok_getStorCode_eq_inner_of_clean
       hprocess herr htargetNe with
         ⟨inner, hinner, hpostStorage, hpostCode⟩
@@ -1510,7 +1497,7 @@ theorem ProcessCreateMessage.storageSegmentEffect_of_bodyEffect
         unfold Jaune.Frame.settlementCommits
         rw [← hset]
         exact hnone
-      cases he : post.error <;> simp_all
+      cases he : post.error <;> simp_all only [ExceptT.stM_eq, ne_eq, Bool.not_eq_true, Option.isNone_none, not_true_eq_false, Option.isNone_some, Bool.false_eq_true, not_false_eq_true, Option.isSome_some]
     have hpostState : post.state = msg.benv.state :=
       ProcessCreateMessage.rollback_of_error hprocess herr
     have hstorage : Devm.getStor parent ca = Devm.getStor post ca :=
@@ -1607,7 +1594,7 @@ theorem GenericCall.storageSegmentDelta_some
             (callMsg sevm (pre.withReturnData []) gas value caller target
               codeAddress stv isStatic ((pre.memory.read ii is).1) code
               disablePrecompiles)) childOut = true <;>
-        simp [hretain]⟩
+        simp only [hretain, ↓reduceIte, List.append_nil, List.nil_append, Bool.false_eq_true]⟩
 
 /-- Proof-indexed CALL transport: the recursive premise is the effect of this
 exact filled child slot, rather than a depth-wide hypothesis. -/
@@ -1678,7 +1665,7 @@ theorem GenericCall.storageSegmentEffect_some_of_bodyEffect
             (callMsg sevm (pre.withReturnData []) gas value caller target
               codeAddress stv isStatic ((pre.memory.read ii is).1) code
               disablePrecompiles)) childOut = true <;>
-        simp [hretain]⟩
+        simp only [hretain, ↓reduceIte, List.append_nil, List.nil_append, Bool.false_eq_true]⟩
 
 /-- A CALL-family opcode which completes without an interpreter child is
 storage- and code-silent at every address. -/
@@ -1716,7 +1703,8 @@ theorem GenericCall.storageSegmentEffect_none
   · obtain ⟨result, hprocess, hresume⟩ := hrun
     cases result with
     | error error =>
-        simp [Resume.run, liftToExecution] at hresume
+        simp only [ExceptT.stM_eq, Resume.run, liftToExecution, Except.bind_error,
+          reduceCtorEq] at hresume
     | ok child =>
         rcases ProcessMessage.storageSegmentEffect_none
             hprocess (parent := pre.withReturnData []) rfl with ⟨effect⟩
@@ -1775,7 +1763,8 @@ theorem GenericCreate.storageSegmentEffect_some
   obtain ⟨result, hframe, hresume⟩ := hrun
   cases result with
   | error error =>
-      simp [Resume.run, liftToExecution] at hresume
+      simp only [ExceptT.stM_eq, Resume.run, liftToExecution, Except.bind_error,
+        reduceCtorEq] at hresume
   | ok settled =>
       let createPre :=
         addAccessedAddress
@@ -1872,7 +1861,8 @@ theorem GenericCreate.storageSegmentEffect_some_of_bodyEffect
   obtain ⟨result, hframe, hresume⟩ := hrun
   cases result with
   | error error =>
-      simp [Resume.run, liftToExecution] at hresume
+      simp only [ExceptT.stM_eq, Resume.run, liftToExecution, Except.bind_error,
+        reduceCtorEq] at hresume
   | ok settled =>
       let createPre :=
         addAccessedAddress
@@ -1925,7 +1915,7 @@ theorem GenericCreate.storageSegmentEffect_some_of_bodyEffect
                     []).incrNonce sevm.currentTarget) newAddress)
                 (except64th pre.gasLeft) endowment newAddress
                 ((pre.memory.read mi ms).1))) raw = true <;>
-          simp [hretain]⟩
+          simp only [hretain, ↓reduceIte, List.append_nil, List.nil_append, Bool.false_eq_true]⟩
 
 /-- A CREATE-family opcode with no interpreter child performs only
 instruction preparation (and possibly a caller nonce increment), neither of
@@ -2123,8 +2113,8 @@ theorem Exec.flowActions_eq_descendantActions_of_currentTarget_ne
     (hforeign : sevm.currentTarget ≠ ca) :
     Exec.flowActions dp ca run = Exec.descendantActions dp ca run := by
   rw [Exec.flowActions_eq_root_append_descendants run committed]
-  simp [Blanc.Weth10.Exec.Frame.flowAction?, Blanc.Weth10.Exec.Frame.exactInvocation,
-    exactInvocation, Exec.Frame.ofRun, hforeign]
+  simp only [Frame.flowAction?, Frame.exactInvocation, Exec.Frame.ofRun, exactInvocation, hforeign,
+    false_and, and_false, ↓reduceIte, Option.toList_none, List.nil_append]
 
 /-- Proof-indexed storage predicate consumed by `lift_core`.  Root freshness
 and direct code ownership are demanded only when this exact execution is at
@@ -2228,11 +2218,11 @@ theorem ProcessMessageTrace.storageSegmentDelta_of_forallDeeperAt
       have hsevm : sevm = initSevm (msg.withBenv benv) :=
         congrArg (fun evm : Evm => evm.sta) hevm
       have hpc : pc = 0 := by
-        simpa [initEvm] using congrArg (fun evm : Evm => evm.pc) hevm
+        simpa only [initEvm] using congrArg (fun evm : Evm => evm.pc) hevm
       have hmemory : pre.memory = Mem.empty := by
         have component := congrArg (fun evm : Evm => evm.dyna.memory) hevm
         change pre.memory = (initEvm (msg.withBenv benv)).dyna.memory
-        simpa [initEvm, initDevm, Msg.withBenv] using component
+        simpa only [initEvm, Msg.withBenv, initDevm] using component
       have hentryStorage : Devm.getStor parent ca = Devm.getStor pre ca := by
         exact (congrArg (fun state : State => state.getStor ca) hparent).trans <|
           (benvAfterTransfer_getStor_eq htransfer ca).symm.trans <|
@@ -2260,25 +2250,25 @@ theorem ProcessMessageTrace.storageSegmentDelta_of_forallDeeperAt
         intro htarget
         have hmsgTarget : msg.currentTarget = ca := by
           rw [hsevm] at htarget
-          simpa [initSevm, Msg.withBenv] using htarget
+          simpa only [initSevm, Msg.withBenv] using htarget
         refine ⟨?_, hpc⟩
         rw [hsevm]
-        simpa [initSevm, Msg.withBenv] using htargetCode hmsgTarget
+        simpa only [initSevm, Msg.withBenv] using htargetCode hmsgTarget
       have hdirect : sevm.currentTarget = ca →
           sevm.codeAddress = some ca := by
         intro htarget
         have hmsgTarget : msg.currentTarget = ca := by
           rw [hsevm] at htarget
-          simpa [initSevm, Msg.withBenv] using htarget
+          simpa only [initSevm, Msg.withBenv] using htarget
         rw [hsevm]
-        simpa [initSevm, Msg.withBenv] using htargetDirect hmsgTarget
+        simpa only [initSevm, Msg.withBenv] using htargetDirect hmsgTarget
       by_cases hcommit : Execution.commits out = true
       · cases out with
-        | error error => simp [Execution.commits] at hcommit
+        | error error => simp only [Execution.commits, Bool.false_eq_true] at hcommit
         | ok raw =>
             have hchildDepth : sevm.depth < depth := by
               rw [hsevm]
-              simpa [initSevm, Msg.withBenv] using hdepth
+              simpa only [initSevm, Msg.withBenv] using hdepth
             have hcore := hdeeper pc sevm pre (.ok raw) run
               hchildDepth hat
             have hchildFork : CoveredFork sevm.benvStat.fork := by
@@ -2411,7 +2401,7 @@ theorem RawTokenCallbackIndexedStepBoundary.storageSegmentEffect
     have hnodel : getDelegatedCodeAddress (callPre.getCode ca) = none := by
       dsimp only [getDelegatedCodeAddress]
       rw [if_neg (not_delegation_of_compile hcallPreCode)]
-    simp [msg, callMsg, htargetCa, hnodel]
+    simp only [callMsg, htargetCa, hnodel, Option.getD_none, Bool.false_or, msg]
   rcases trace.storageSegmentDelta_of_forallDeeperAt hparent hmsgDepth
       hcallPreCode htargetCode htargetDirect hdeeper hfork with ⟨childEffect⟩
   have hprefix := StorageSegmentEffect.of_getStorCode_eq
@@ -2481,7 +2471,7 @@ theorem RawFlashCallbackIndexedStepBoundary.storageSegmentEffect
     have hnodel : getDelegatedCodeAddress (pre.getCode ca) = none := by
       dsimp only [getDelegatedCodeAddress]
       rw [if_neg (not_delegation_of_compile installed)]
-    simp [msg, callMsg, hreceiver, hnodel]
+    simp only [callMsg, hreceiver, hnodel, Option.getD_none, Bool.false_or, msg]
   rcases trace.storageSegmentDelta_of_forallDeeperAt hparent hmsgDepth
       installed htargetCode htargetDirect hdeeper hfork with ⟨childEffect⟩
   have hchildToMid := StorageSegmentEffect.of_getStorCode_eq
@@ -2675,7 +2665,8 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_receive
     ⟨mainCursor, hmainActions⟩
   rcases mainCursor.peelChildlessLine_of_sourceShape
       (weth10Main_entry_sourceShape dp)
-      (by simp [NinstIsChildless]) with
+      (by simp only [List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp,
+        forall_eq, and_self]) with
     ⟨entryBranchCursor, hentryLine, hentryActions⟩
   have hflagPrefix :
       [frame.sevm.data.length.toB256 =? 0] <<+
@@ -2690,15 +2681,16 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_receive
       prefix_of_push (of_run_calldatasize hsize) nil_pref
     exact prefix_of_iszero hzero hsizePrefix
   rw [hempty] at hflagPrefix
-  have hone : ((0 : B256) =? 0) = 1 := by simp [B256.eqCheck]
+  have hone : ((0 : B256) =? 0) = 1 := by simp only [B256.eqCheck, ↓reduceIte]
   rw [hone] at hflagPrefix
   rcases entryBranchCursor.selectBranchSucc (flag := (1 : B256))
       (by decide) hflagPrefix with
     ⟨receiveCursor, _hstack, hreceiveActions⟩
   have hdesc := receiveCursor.finishChildlessLine_of_sourceShape
     receiveEther_sourceShape
-    (by simp [mintCallerLine, NinstIsChildless, Ninst.pushB256,
-      mstoreAt, logWith])
+    (by simp only [mintCallerLine, mstoreAt, pushB256, List.cons_append, List.nil_append, logWith,
+      Fin.isValue, Fin.reduceSucc, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+      forall_eq_or_imp, forall_eq, and_self])
   exact hdesc.trans (hreceiveActions.trans
     (hentryActions.trans hmainActions))
 
@@ -2712,13 +2704,15 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_deposit
     Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = [] := by
   have hmem : (Sevm.selector frame.sevm, deposit) ∈ weth10Funcs dp := by
     rw [hselector]
-    simp [depositSelector, weth10Funcs]
+    simp only [weth10Funcs, depositSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+      or_false, true_or, or_true]
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursor (frame := frame) context hnonempty hmem with
     ⟨bodyCursor, _hstack, hbodyActions⟩
   have hdesc := bodyCursor.finishChildlessLine_of_sourceShape
     deposit_sourceShape
-    (by simp [mintCallerLine, NinstIsChildless, Ninst.pushB256,
-      mstoreAt, logWith])
+    (by simp only [mintCallerLine, mstoreAt, pushB256, List.cons_append, List.nil_append, logWith,
+      Fin.isValue, Fin.reduceSucc, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+      forall_eq_or_imp, forall_eq, and_self])
   exact hdesc.trans hbodyActions
 
 /-- The payable `depositTo` dispatch body is childless through its terminal
@@ -2731,14 +2725,16 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_depositTo
     Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = [] := by
   have hmem : (Sevm.selector frame.sevm, depositTo) ∈ weth10Funcs dp := by
     rw [hselector]
-    simp [depositToSelector, weth10Funcs]
+    simp only [weth10Funcs, depositToSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+      or_false, true_or, or_true]
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursor (frame := frame) context hnonempty hmem with
     ⟨bodyCursor, _hstack, hbodyActions⟩
   have hdesc := bodyCursor.finishChildlessLine_of_sourceShape
     depositTo_sourceShape
-    (by simp [mintToPrefix, addressArg, arg, cdl,
-      normalizeAddress, pushAddressMask, NinstIsChildless,
-      Ninst.pushB256, mstoreAt, logWith])
+    (by simp only [mintToPrefix, addressArg, arg, cdl, pushB256, normalizeAddress, pushAddressMask,
+      List.cons_append, List.nil_append, mstoreAt, logWith, Fin.isValue, Fin.reduceSucc,
+      List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
+      and_self])
   exact hdesc.trans hbodyActions
 
 /-- Any listed nonpayable selector whose guarded body is a childless line
@@ -2799,15 +2795,17 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_transferNonzero
   have hmem :
       (Sevm.selector frame.sevm, nonpayable transfer) ∈ weth10Funcs dp := by
     rw [hselector]
-    simp [transferSelector, weth10Funcs]
+    simp only [weth10Funcs, transferSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+      or_false, true_or, or_true]
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursor (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor, _hwrapperStack, hwrapperActions⟩
   rcases wrapperCursor.enterNonpayable with
     ⟨transferCursor, _htransferStack, htransferActions⟩
   rcases transferCursor.peelChildlessLine_of_sourceShape
       transfer_sourceShape
-      (by simp [transferSelectLine, arg, cdl, NinstIsChildless,
-        Ninst.pushB256]) with
+      (by simp only [transferSelectLine, arg, cdl, pushB256, List.cons_append, List.nil_append,
+        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
+        and_self]) with
     ⟨targetBranchCursor, htargetLine, htargetActions⟩
   have htargetPrefix :
       [Sevm.argWord frame.sevm 0 =? 0] <<+
@@ -2820,24 +2818,26 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_transferNonzero
     cases hnil
     exact prefix_of_iszero hzero (prefix_of_arg nil_pref harg)
   have htargetCheck : (Sevm.argWord frame.sevm 0 =? 0) = 0 := by
-    simp [B256.eqCheck, hto]
+    simp only [B256.eqCheck, hto, ↓reduceIte]
   rw [htargetCheck] at htargetPrefix
   rcases targetBranchCursor.selectBranchZero htargetPrefix with
     ⟨nonzeroCursor, _hnonzeroStack, hnonzeroActions⟩
   rcases nonzeroCursor.peelChildlessLine_of_sourceShape
       transferNonzeroThen_returnTrue_sourceShape
-      (by simp [transferBalanceCheckLine, loadCallerBalanceAmount,
-        balanceTooSmall, arg, cdl, NinstIsChildless,
-        Ninst.pushB256]) with
+      (by simp only [transferBalanceCheckLine, loadCallerBalanceAmount, Fin.isValue, arg, cdl,
+        pushB256, List.cons_append, List.nil_append, balanceTooSmall, List.mem_cons,
+        List.not_mem_nil, or_false, or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq,
+        and_self]) with
     ⟨balanceBranchCursor, _hbalanceLine, hbalanceActions⟩
   rcases balanceBranchCursor.selectBranchWithActions with
       hsuccess | herror
   · rcases hsuccess with ⟨successCursor, hsuccessActions⟩
     have hdesc := successCursor.finishChildlessLine
-      (by simp [transferNonzeroSuccessLine, debitLoadedBalance,
-        addressArg, arg, cdl, normalizeAddress, pushAddressMask,
-        emitTransfer, Blanc.transferFromLog, NinstIsChildless,
-        Ninst.pushB256, mstoreAt, logWith, pushList])
+      (by simp only [transferNonzeroSuccessLine, debitLoadedBalance, Fin.isValue, addressArg, arg,
+        cdl, pushB256, normalizeAddress, pushAddressMask, List.cons_append, List.nil_append,
+        emitTransfer, transferFromLog, mstoreAt, logWith, Fin.reduceSucc, pushList, List.map_cons,
+        List.map_nil, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp,
+        forall_eq, and_self])
     exact hdesc.trans (hsuccessActions.trans
       (hbalanceActions.trans (hnonzeroActions.trans
         (htargetActions.trans
@@ -2846,7 +2846,9 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_transferNonzero
     rcases errorCursor.enterCall context.invocation.2.2.2 with
       ⟨body, hget, bodyCursor, _hbodyActions⟩
     have hbody : body = transferBalanceError := by
-      simpa [weth10Aux, transferBalanceErrorSlot] using hget.symm
+      simpa only [weth10Aux, transferBalanceErrorSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst body
     exact (Func.not_run_revertWith
       (Func.Run.of_runCompiled bodyCursor.run)).elim
@@ -2893,10 +2895,10 @@ theorem SelectsNoPrimaryFlow.primaryFlowAtom_eq_none
     {e : Sevm} (selected : SelectsNoPrimaryFlow e)
     (hnonempty : e.data.length.toB256 ≠ 0) :
     primaryFlowAtom e = none := by
-  simp [primaryFlowAtom, hnonempty, selected.deposit,
-    selected.depositTo, selected.depositToAndCall, selected.transfer,
-    selected.transferAndCall, selected.transferFrom, selected.withdraw,
-    selected.withdrawTo, selected.withdrawFrom, selected.flashLoan]
+  simp only [primaryFlowAtom, hnonempty, ↓reduceIte, selected.deposit, selected.depositTo,
+    decide_false, selected.depositToAndCall, Bool.or_self, Bool.false_eq_true, selected.transfer,
+    selected.transferAndCall, selected.transferFrom, selected.withdraw, selected.withdrawTo,
+    selected.withdrawFrom, selected.flashLoan]
 
 theorem Exec.Frame.flowAction_eq_none_of_selectsNoPrimaryFlow
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
@@ -2904,8 +2906,8 @@ theorem Exec.Frame.flowAction_eq_none_of_selectsNoPrimaryFlow
     (selected : SelectsNoPrimaryFlow frame.sevm)
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0) :
     Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none := by
-  simp [Blanc.Weth10.Exec.Frame.flowAction?, context.invocation,
-    selected.primaryFlowAtom_eq_none hnonempty]
+  simp only [flowAction?, context.invocation, ↓reduceIte,
+    selected.primaryFlowAtom_eq_none hnonempty, Option.map_none]
 
 /-- The ordinary `approve` body contains no recursive instruction, so a
 successful authentic frame has no proper-descendant WETH flow actions. -/
@@ -2922,9 +2924,10 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_approve
     simp only [weth10Funcs, List.mem_cons]
     exact Or.inr (Or.inl (by rfl))
   have hchildless : ∀ n ∈ approveLine, NinstIsChildless n := by
-    simp [approveLine, approvePrefix, returnTrueLine,
-      argCopy, cdc, arg, cdl, allowanceKeyFromMemory, Blanc.logApprove,
-      NinstIsChildless, Ninst.pushB256, mstoreAt, logWith, pushList]
+    simp only [approveLine, approvePrefix, mstoreAt, pushB256, List.cons_append, List.nil_append,
+      argCopy, cdc, allowanceKeyFromMemory, pushList, List.map_cons, List.map_nil, arg, cdl,
+      Fin.isValue, logApprove, logWith, Fin.reduceSucc, returnTrueLine, List.mem_cons,
+      List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]
   exact Blanc.Weth10.Exec.Frame.descendantFlowActions_eq_nil_of_nonpayableChildless (frame := frame)
     context hnonempty hmem hchildless
 
@@ -2951,7 +2954,7 @@ theorem Exec.installedCodeEq_committed
     pre.getCode ca =
       (Execution.committedPost out committed).getCode ca := by
   cases out with
-  | error error => simp [Execution.commits] at committed
+  | error error => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post => exact Exec.installedCodeEq run installed
 
 /-- Once selector chronology supplies the child deltas, the classified root
@@ -3314,14 +3317,16 @@ def nameLine : Line :=
 
 private theorem name_childlessTerminal : ChildlessTerminal name := by
   exact ⟨nameLine, .return_, rfl, by
-    simp [nameLine, NinstIsChildless, Ninst.pushB256,
-      pushList, mstoreAt]⟩
+    simp only [nameLine, pushB256, pushList, List.map_cons, List.map_nil, List.cons_append,
+      List.nil_append, mstoreAt, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+      forall_eq_or_imp, forall_eq, and_self]⟩
 
 private theorem approve_childlessTerminal : ChildlessTerminal approve := by
   exact ⟨approveLine, .return_, rfl, by
-    simp [approveLine, approvePrefix, returnTrueLine,
-      argCopy, cdc, arg, cdl, allowanceKeyFromMemory, Blanc.logApprove,
-      NinstIsChildless, Ninst.pushB256, mstoreAt, logWith, pushList]⟩
+    simp only [approveLine, approvePrefix, mstoreAt, pushB256, List.cons_append, List.nil_append,
+      argCopy, cdc, allowanceKeyFromMemory, pushList, List.map_cons, List.map_nil, arg, cdl,
+      Fin.isValue, logApprove, logWith, Fin.reduceSucc, returnTrueLine, List.mem_cons,
+      List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]⟩
 
 /-- Exact proof-indexed accounting for the childless `name` view. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_name
@@ -3347,8 +3352,9 @@ private def returnWordLine (w : B256) : Line :=
 private theorem returnWord_childlessTerminal (w : B256) :
     ChildlessTerminal (returnWord w) :=
   ⟨returnWordLine w, .return_, rfl, by
-    simp [returnWordLine, NinstIsChildless, Ninst.pushB256,
-      mstoreAt, pushList]⟩
+    simp only [returnWordLine, pushB256, mstoreAt, List.cons_append, List.nil_append, pushList,
+      List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+      forall_eq_or_imp, forall_eq, and_self]⟩
 
 /-- Exact proof-indexed accounting for the childless `PERMIT_TYPEHASH` view. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_permitTypehash
@@ -3385,8 +3391,9 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_decimals
     simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
     aesop
   · exact ⟨returnWordLine 0x12, .return_, rfl, by
-      simp [returnWordLine, NinstIsChildless, Ninst.pushB256,
-        mstoreAt, pushList]⟩
+      simp only [returnWordLine, pushB256, mstoreAt, List.cons_append, List.nil_append, pushList,
+        List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+        forall_eq_or_imp, forall_eq, and_self]⟩
   · exact decimalsSelector_noPrimaryFlow.selectsNoPrimaryFlow
       (hselector.trans decimalsSelector_word_eq_local)
   · rw [hselector, decimalsSelector_word_eq_local]
@@ -3423,8 +3430,9 @@ private def totalSupplyLine : Line :=
 private theorem totalSupply_childlessTerminal :
     ChildlessTerminal totalSupply :=
   ⟨totalSupplyLine, .return_, rfl, by
-    simp [totalSupplyLine, pushFlashMintedSlot, NinstIsChildless,
-      Ninst.pushB256, mstoreAt, pushList]⟩
+    simp only [totalSupplyLine, pushFlashMintedSlot, pushB256, List.cons_append, List.nil_append,
+      mstoreAt, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
+      NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]⟩
 
 private def balanceOfLine : Line :=
   arg 0 ++ [sload] ++ mstoreAt 0 ++ pushList [32, 0]
@@ -3432,16 +3440,18 @@ private def balanceOfLine : Line :=
 private theorem balanceOf_childlessTerminal :
     ChildlessTerminal balanceOfEndpoint :=
   ⟨balanceOfLine, .return_, rfl, by
-    simp [balanceOfLine, arg, cdl, NinstIsChildless,
-      Ninst.pushB256, mstoreAt, pushList]⟩
+    simp only [balanceOfLine, arg, cdl, pushB256, List.cons_append, List.nil_append, mstoreAt,
+      pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
+      NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]⟩
 
 private def noncesLine : Line :=
   arg 0 ++ tagNonceKey ++ [sload] ++ mstoreAt 0 ++ pushList [32, 0]
 
 private theorem nonces_childlessTerminal : ChildlessTerminal nonces :=
   ⟨noncesLine, .return_, rfl, by
-    simp [noncesLine, arg, cdl, tagNonceKey, NinstIsChildless,
-      Ninst.pushB256, mstoreAt, pushList]⟩
+    simp only [noncesLine, arg, cdl, pushB256, tagNonceKey, List.cons_append, List.nil_append,
+      mstoreAt, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
+      NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]⟩
 
 private def flashMintedLine : Line :=
   pushFlashMintedSlot ++ [sload] ++ mstoreAt 0 ++ pushList [32, 0]
@@ -3449,8 +3459,9 @@ private def flashMintedLine : Line :=
 private theorem flashMinted_childlessTerminal :
     ChildlessTerminal flashMinted :=
   ⟨flashMintedLine, .return_, rfl, by
-    simp [flashMintedLine, pushFlashMintedSlot, NinstIsChildless,
-      Ninst.pushB256, mstoreAt, pushList]⟩
+    simp only [flashMintedLine, pushFlashMintedSlot, pushB256, List.cons_append, List.nil_append,
+      mstoreAt, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
+      NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]⟩
 
 def symbolLine : Line :=
   [pushB256 (Blanc.String.toBytes "WETH10").toB256,
@@ -3460,8 +3471,9 @@ def symbolLine : Line :=
 
 private theorem symbol_childlessTerminal : ChildlessTerminal symbol :=
   ⟨symbolLine, .return_, rfl, by
-    simp [symbolLine, NinstIsChildless, Ninst.pushB256,
-      pushList, mstoreAt]⟩
+    simp only [symbolLine, pushB256, pushList, List.map_cons, List.map_nil, List.cons_append,
+      List.nil_append, mstoreAt, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+      forall_eq_or_imp, forall_eq, and_self]⟩
 
 private def deploymentChainIdLine (dp : DeployParams) : Line :=
   [pushDeployWord dp.deploymentChainId] ++
@@ -3470,8 +3482,9 @@ private def deploymentChainIdLine (dp : DeployParams) : Line :=
 private theorem deploymentChainId_childlessTerminal (dp : DeployParams) :
     ChildlessTerminal (deploymentChainId dp) :=
   ⟨deploymentChainIdLine dp, .return_, rfl, by
-    simp [deploymentChainIdLine, pushDeployWord, NinstIsChildless,
-      Ninst.pushB256, mstoreAt, pushList]⟩
+    simp only [deploymentChainIdLine, pushDeployWord, mstoreAt, pushB256, List.cons_append,
+      List.nil_append, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil,
+      or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]⟩
 
 private def allowanceLine : Line :=
   argCopy 0 0 2 ++ allowanceKeyFromMemory ++ [sload] ++
@@ -3479,8 +3492,9 @@ private def allowanceLine : Line :=
 
 private theorem allowance_childlessTerminal : ChildlessTerminal allowance :=
   ⟨allowanceLine, .return_, rfl, by
-    simp [allowanceLine, argCopy, cdc, allowanceKeyFromMemory,
-      NinstIsChildless, Ninst.pushB256, mstoreAt, pushList]⟩
+    simp only [allowanceLine, argCopy, cdc, pushB256, allowanceKeyFromMemory, pushList,
+      List.map_cons, List.map_nil, List.cons_append, List.nil_append, mstoreAt, List.mem_cons,
+      List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]⟩
 
 /-- Exact proof-indexed accounting for the childless `totalSupply` view. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_totalSupply
@@ -3660,11 +3674,14 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_domainSeparator
     ⟨bodyCursor, _hbodyStack, hbodyActions⟩
   have hdesc := bodyCursor.finishChildlessBranch_of_sourceShape
     (domainSeparator_sourceShape dp)
-    (by simp [domainSelectLine, pushDeployWord, NinstIsChildless])
-    (by simp [domainCachedLine, pushDeployWord, NinstIsChildless,
-      Ninst.pushB256, mstoreAt, pushList])
-    (by simp [domainFreshLine, calculateDomainSeparator,
-      NinstIsChildless, Ninst.pushB256, mstoreAt, pushList])
+    (by simp only [domainSelectLine, Fin.isValue, pushDeployWord, List.mem_cons, List.not_mem_nil,
+      or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+    (by simp only [domainCachedLine, pushDeployWord, mstoreAt, pushB256, List.cons_append,
+      List.nil_append, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil,
+      or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+    (by simp only [domainFreshLine, calculateDomainSeparator, mstoreAt, pushB256, List.cons_append,
+      List.nil_append, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil,
+      or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
   exact hdesc.trans (hbodyActions.trans hwrapperActions)
 
 /-- Exact proof-indexed accounting for both childless domain-separator arms. -/
@@ -3724,12 +3741,15 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_maxFlashLoan
     ⟨bodyCursor, _hbodyStack, hbodyActions⟩
   have hdesc := bodyCursor.finishChildlessBranch_of_sourceShape
     maxFlashLoan_sourceShape
-    (by simp [maxFlashLoanSelectLine, arg, cdl,
-      NinstIsChildless, Ninst.pushB256])
-    (by simp [maxFlashLoanAvailableLine, pushFlashMintedSlot,
-      NinstIsChildless, Ninst.pushB256, mstoreAt, pushList])
-    (by simp [returnWordLine, NinstIsChildless,
-      Ninst.pushB256, mstoreAt, pushList])
+    (by simp only [maxFlashLoanSelectLine, arg, cdl, pushB256, List.cons_append, List.nil_append,
+      List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
+      and_self])
+    (by simp only [maxFlashLoanAvailableLine, pushFlashMintedSlot, pushB256, List.cons_append,
+      List.nil_append, mstoreAt, pushList, List.map_cons, List.map_nil, List.mem_cons,
+      List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+    (by simp only [returnWordLine, pushB256, mstoreAt, List.cons_append, List.nil_append, pushList,
+      List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+      forall_eq_or_imp, forall_eq, and_self])
   exact hdesc.trans (hbodyActions.trans hwrapperActions)
 
 /-- Exact proof-indexed accounting for both `maxFlashLoan` result arms. -/
@@ -3787,21 +3807,25 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_flashFee
     ⟨bodyCursor, _hbodyStack, hbodyActions⟩
   rcases bodyCursor.peelChildlessLine_of_sourceShape
       flashFee_sourceShape
-      (by simp [flashFeeSelectLine, arg, cdl,
-        NinstIsChildless, Ninst.pushB256]) with
+      (by simp only [flashFeeSelectLine, arg, cdl, pushB256, List.cons_append, List.nil_append,
+        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
+        and_self]) with
     ⟨branchCursor, _hline, hbranchActions⟩
   rcases branchCursor.selectBranchWithActions with hsuccess | herror
   · rcases hsuccess with ⟨successCursor, hsuccessActions⟩
     have hdesc := successCursor.finishChildlessLine
-      (by simp [returnWordLine, NinstIsChildless,
-        Ninst.pushB256, mstoreAt, pushList])
+      (by simp only [returnWordLine, pushB256, mstoreAt, List.cons_append, List.nil_append,
+        pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
+        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
     exact hdesc.trans (hsuccessActions.trans
       (hbranchActions.trans (hbodyActions.trans hwrapperActions)))
   · rcases herror with ⟨errorCursor, _herrorActions⟩
     rcases errorCursor.enterCall context.invocation.2.2.2 with
       ⟨body, hget, errorBodyCursor, _herrorBodyActions⟩
     have hbody : body = flashTokenError := by
-      simpa [weth10Aux, flashTokenErrorSlot] using hget.symm
+      simpa only [weth10Aux, flashTokenErrorSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst body
     exact (Func.not_run_revertWith
       (Func.Run.of_runCompiled errorBodyCursor.run)).elim
@@ -3852,12 +3876,12 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_receive
   cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       have hprimary : primaryFlowAtom frame.sevm ≠ none := by
-        simp [primaryFlowAtom, hempty]
+        simp only [primaryFlowAtom, hempty, ↓reduceIte, ne_eq, reduceCtorEq, not_false_eq_true]
       unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation] at haction
       cases hatom : primaryFlowAtom frame.sevm with
       | none => exact (hprimary hatom).elim
-      | some atom => simp [hatom] at haction
+      | some atom => simp only [hatom, Option.map_some, reduceCtorEq] at haction
   | some action =>
       have ledger :=
         Blanc.Weth10.Exec.Frame.hasClassifiedActionLedger_of_flowAction_eq_some (frame := frame)
@@ -3866,7 +3890,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_receive
         Blanc.Weth10.Exec.Frame.descendantFlowActions_eq_nil_of_receive (frame := frame) context hempty
       rcases frame with ⟨pc, e, pre, out, run, committed⟩
       cases out with
-      | error err => simp [Execution.commits] at committed
+      | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
       | ok post =>
           have hpc : pc = 0 := context.root.1
           subst pc
@@ -3877,8 +3901,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_receive
             context.invocation.2.1
           rw [htarget] at hinc
           have haction' := haction
-          simp [Blanc.Weth10.Exec.Frame.flowAction?, context.invocation,
-            primaryFlowAtom, primaryDebitProvenance, hempty] at haction'
+          simp only [flowAction?, context.invocation, ↓reduceIte, primaryDebitProvenance, hempty,
+            primaryFlowAtom, Option.map_some, Option.some.injEq] at haction'
           symm at haction'
           subst action
           apply Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
@@ -3902,10 +3926,10 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_deposit
       have hatom : primaryFlowAtom frame.sevm = some
           (.ordinaryMint frame.sevm.caller.toB256 frame.sevm.caller
             frame.sevm.value.toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector]
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector]
       unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hatom] at haction
-      simp at haction
+      simp only [Option.map_some, reduceCtorEq] at haction
   | some action =>
       have ledger :=
         Blanc.Weth10.Exec.Frame.hasClassifiedActionLedger_of_flowAction_eq_some (frame := frame)
@@ -3915,7 +3939,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_deposit
           context hselector hnonempty
       rcases frame with ⟨pc, e, pre, out, run, committed⟩
       cases out with
-      | error err => simp [Execution.commits] at committed
+      | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
       | ok post =>
           have hpc : pc = 0 := context.root.1
           subst pc
@@ -3927,15 +3951,13 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_deposit
             context.invocation.2.1
           rw [htarget] at hinc
           have haction' := haction
-          simp [Blanc.Weth10.Exec.Frame.flowAction?, context.invocation,
-            primaryFlowAtom, primaryDebitProvenance, hnonempty, hselector,
-            depositSelector_ne_transferSelector,
-            depositSelector_ne_transferAndCallSelector,
-            depositSelector_ne_withdrawSelector,
-            depositSelector_ne_withdrawToSelector,
-            depositSelector_ne_transferFromSelector,
-            depositSelector_ne_withdrawFromSelector,
-            depositSelector_ne_flashLoanSelector] at haction'
+          simp only [flowAction?, context.invocation, ↓reduceIte, primaryDebitProvenance, hnonempty,
+            hselector, depositSelector_ne_transferSelector, decide_false,
+            depositSelector_ne_transferAndCallSelector, Bool.or_self,
+            depositSelector_ne_withdrawSelector, depositSelector_ne_withdrawToSelector,
+            Bool.false_eq_true, depositSelector_ne_transferFromSelector,
+            depositSelector_ne_withdrawFromSelector, depositSelector_ne_flashLoanSelector,
+            primaryFlowAtom, Option.map_some, Option.some.injEq] at haction'
           symm at haction'
           subst action
           apply Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
@@ -3959,11 +3981,11 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_depositTo
       have hatom : primaryFlowAtom frame.sevm = some
           (.ordinaryMint (Sevm.argWord frame.sevm 0)
             (Sevm.argWord frame.sevm 0).toAdr frame.sevm.value.toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector,
-          depositToSelector_ne_depositSelector]
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+          depositToSelector_ne_depositSelector, decide_true, Bool.true_or]
       unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hatom] at haction
-      simp at haction
+      simp only [Option.map_some, reduceCtorEq] at haction
   | some action =>
       have ledger :=
         Blanc.Weth10.Exec.Frame.hasClassifiedActionLedger_of_flowAction_eq_some (frame := frame)
@@ -3973,7 +3995,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_depositTo
           context hselector hnonempty
       rcases frame with ⟨pc, e, pre, out, run, committed⟩
       cases out with
-      | error err => simp [Execution.commits] at committed
+      | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
       | ok post =>
           have hpc : pc = 0 := context.root.1
           subst pc
@@ -3993,8 +4015,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_depositTo
           have hatom : primaryFlowAtom e = some
               (.ordinaryMint (Sevm.argWord e 0)
                 (Sevm.argWord e 0).toAdr e.value.toNat) := by
-            simp [primaryFlowAtom, hnonempty, hselector,
-              depositToSelector_ne_depositSelector]
+            simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+              depositToSelector_ne_depositSelector, decide_true, Bool.true_or]
           have heq := action_eq_of_primaryFlowAtom context hatom haction
           subst action
           apply Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
@@ -4005,14 +4027,12 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_depositTo
                 unfold FlowAction.ExactCredit
                 simp only [FlowAtom.creditOccurrence]
                 rw [toB256_toNat])
-              (by simp [primaryDebitProvenance, hnonempty, hselector,
-                depositToSelector_ne_transferSelector,
-                depositToSelector_ne_transferAndCallSelector,
-                depositToSelector_ne_transferFromSelector,
-                depositToSelector_ne_withdrawSelector,
-                depositToSelector_ne_withdrawToSelector,
-                depositToSelector_ne_withdrawFromSelector,
-                depositToSelector_ne_flashLoanSelector])
+              (by simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector,
+                depositToSelector_ne_transferSelector, decide_false,
+                depositToSelector_ne_transferAndCallSelector, Bool.or_self,
+                depositToSelector_ne_withdrawSelector, depositToSelector_ne_withdrawToSelector,
+                Bool.false_eq_true, depositToSelector_ne_transferFromSelector,
+                depositToSelector_ne_withdrawFromSelector, depositToSelector_ne_flashLoanSelector])
               hincrease
           · exact chronology
 
@@ -4050,14 +4070,14 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_depositToAndCall
   have hatom : primaryFlowAtom frame.sevm = some
       (.ordinaryMint (Sevm.argWord frame.sevm 0)
         (Sevm.argWord frame.sevm 0).toAdr frame.sevm.value.toNat) := by
-    simp [primaryFlowAtom, hnonempty, hselector,
-      depositToAndCallSelector_ne_depositSelector,
-      depositToAndCallSelector_ne_depositToSelector]
+    simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+      depositToAndCallSelector_ne_depositSelector, depositToAndCallSelector_ne_depositToSelector,
+      decide_false, decide_true, Bool.or_true]
   cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hatom] at haction
-      simp at haction
+      simp only [Option.map_some, reduceCtorEq] at haction
   | some action =>
       have ledger :=
         Blanc.Weth10.Exec.Frame.hasClassifiedActionLedger_of_flowAction_eq_some (frame := frame)
@@ -4074,12 +4094,12 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_depositToAndCall
             unfold FlowAction.ExactCredit
             simp only [FlowAtom.creditOccurrence]
             rw [toB256_toNat])
-          (by simp [primaryDebitProvenance, hnonempty, hselector,
-            depositToAndCallSelector_ne_transferSelector,
-            depositToAndCallSelector_ne_transferAndCallSelector,
-            depositToAndCallSelector_ne_transferFromSelector,
+          (by simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector,
+            depositToAndCallSelector_ne_transferSelector, decide_false,
+            depositToAndCallSelector_ne_transferAndCallSelector, Bool.or_self,
             depositToAndCallSelector_ne_withdrawSelector,
-            depositToAndCallSelector_ne_withdrawToSelector,
+            depositToAndCallSelector_ne_withdrawToSelector, Bool.false_eq_true,
+            depositToAndCallSelector_ne_transferFromSelector,
             depositToAndCallSelector_ne_withdrawFromSelector,
             depositToAndCallSelector_ne_flashLoanSelector])
           increase
@@ -4120,7 +4140,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_approveAndCall
   have own := Blanc.Weth10.Exec.Frame.hasNoWethBalanceOwnEffect_of_recognized (frame := frame) context hnone
     ⟨nonpayable Weth10.approveAndCall, by
       rw [hselector]
-      simp [approveAndCallSelector, weth10Funcs]⟩
+      simp only [weth10Funcs, approveAndCallSelector, List.mem_cons, Prod.mk.injEq,
+        List.not_mem_nil, or_false, true_or, or_true]⟩
   apply Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting.noFlow own
   exact NoFlowStorageAccounting.callback hsilent callbackEffect.delta (by
     simpa only [List.nil_append] using chronology)
@@ -4158,21 +4179,17 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_flashLoan
       (.flashPair (Sevm.argWord frame.sevm 0)
         (Sevm.argWord frame.sevm 0).toAdr
         (Sevm.argWord frame.sevm 2).toNat) := by
-    simp [primaryFlowAtom, hnonempty, hselector,
-      flashLoanSelector_ne_depositSelector,
-      flashLoanSelector_ne_depositToSelector,
-      flashLoanSelector_ne_depositToAndCallSelector,
-      flashLoanSelector_ne_transferSelector,
-      flashLoanSelector_ne_transferAndCallSelector,
-      flashLoanSelector_ne_transferFromSelector,
-      flashLoanSelector_ne_withdrawSelector,
-      flashLoanSelector_ne_withdrawToSelector,
-      flashLoanSelector_ne_withdrawFromSelector]
+    simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+      flashLoanSelector_ne_depositSelector, flashLoanSelector_ne_depositToSelector, decide_false,
+      flashLoanSelector_ne_depositToAndCallSelector, Bool.or_self, Bool.false_eq_true,
+      flashLoanSelector_ne_transferSelector, flashLoanSelector_ne_transferAndCallSelector,
+      flashLoanSelector_ne_transferFromSelector, flashLoanSelector_ne_withdrawSelector,
+      flashLoanSelector_ne_withdrawToSelector, flashLoanSelector_ne_withdrawFromSelector]
   cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hprimary] at haction
-      simp at haction
+      simp only [Option.map_some, reduceCtorEq] at haction
   | some action =>
       have ledger :=
         Blanc.Weth10.Exec.Frame.hasClassifiedActionLedger_of_flowAction_eq_some (frame := frame)
@@ -4191,13 +4208,13 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_flashLoan
             rw [toB256_toNat])
           (by
             unfold FlowAction.HasFlashDebitSource
-            simp [primaryDebitProvenance, hnonempty, hselector,
-              flashLoanSelector_ne_transferSelector,
-              flashLoanSelector_ne_transferAndCallSelector,
-              flashLoanSelector_ne_transferFromSelector,
-              flashLoanSelector_ne_withdrawSelector,
-              flashLoanSelector_ne_withdrawToSelector,
-              flashLoanSelector_ne_withdrawFromSelector])
+            simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector,
+              flashLoanSelector_ne_transferSelector, decide_false,
+              flashLoanSelector_ne_transferAndCallSelector, Bool.or_self,
+              flashLoanSelector_ne_withdrawSelector, flashLoanSelector_ne_withdrawToSelector,
+              Bool.false_eq_true, flashLoanSelector_ne_transferFromSelector,
+              flashLoanSelector_ne_withdrawFromSelector, Option.some.injEq, exists_and_left,
+              exists_eq_left', DebitBranch.flash.injEq, exists_eq', and_self])
           hcredit
       · exact callbackEffect.delta
       · exact hcallbackStor
@@ -4215,13 +4232,13 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_flashLoan
             rw [toB256_toNat])
           (by
             unfold FlowAction.HasFlashDebitSource
-            simp [primaryDebitProvenance, hnonempty, hselector,
-              flashLoanSelector_ne_transferSelector,
-              flashLoanSelector_ne_transferAndCallSelector,
-              flashLoanSelector_ne_transferFromSelector,
-              flashLoanSelector_ne_withdrawSelector,
-              flashLoanSelector_ne_withdrawToSelector,
-              flashLoanSelector_ne_withdrawFromSelector])
+            simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector,
+              flashLoanSelector_ne_transferSelector, decide_false,
+              flashLoanSelector_ne_transferAndCallSelector, Bool.or_self,
+              flashLoanSelector_ne_withdrawSelector, flashLoanSelector_ne_withdrawToSelector,
+              Bool.false_eq_true, flashLoanSelector_ne_transferFromSelector,
+              flashLoanSelector_ne_withdrawFromSelector, Option.some.injEq, exists_and_left,
+              exists_eq_left', DebitBranch.flash.injEq, exists_eq', and_self])
           hcover hdecrease
       · simpa only [List.nil_append] using chronology
 
@@ -4333,18 +4350,16 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_withdraw
   have hprimary : primaryFlowAtom frame.sevm = some
       (.redemption frame.sevm.caller.toB256 frame.sevm.caller
         frame.sevm.caller (Sevm.argWord frame.sevm 0).toNat) := by
-    simp [primaryFlowAtom, hnonempty, hselector,
-      withdrawSelector_ne_depositSelector,
-      withdrawSelector_ne_depositToSelector,
-      withdrawSelector_ne_depositToAndCallSelector,
-      withdrawSelector_ne_transferSelector,
-      withdrawSelector_ne_transferAndCallSelector,
+    simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+      withdrawSelector_ne_depositSelector, withdrawSelector_ne_depositToSelector, decide_false,
+      withdrawSelector_ne_depositToAndCallSelector, Bool.or_self, Bool.false_eq_true,
+      withdrawSelector_ne_transferSelector, withdrawSelector_ne_transferAndCallSelector,
       withdrawSelector_ne_transferFromSelector]
   cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hprimary] at haction
-      simp at haction
+      simp only [Option.map_some, reduceCtorEq] at haction
   | some action =>
       have actionEq := action_eq_of_primaryFlowAtom context hprimary haction
       subst action
@@ -4361,7 +4376,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_withdraw
         (callPre := callPre) (guardPost := guardPost)
         context haction rfl rfl ?_ trace burn hguardStor ?_ hdeeper
       · unfold FlowAction.HasDebitSource
-        simp [primaryDebitProvenance, hnonempty, hselector]
+        simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector, decide_true,
+          Bool.or_true, Bool.true_or, Option.some.injEq, exists_eq_left', and_self]
       · simpa only [List.nil_append] using chronology
 
 /-- Premise-free exact proof-indexed storage accounting for
@@ -4379,19 +4395,16 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_withdrawTo
       (.redemption frame.sevm.caller.toB256 frame.sevm.caller
         (Sevm.argWord frame.sevm 0).toAdr
         (Sevm.argWord frame.sevm 1).toNat) := by
-    simp [primaryFlowAtom, hnonempty, hselector,
-      withdrawToSelector_ne_depositSelector,
-      withdrawToSelector_ne_depositToSelector,
-      withdrawToSelector_ne_depositToAndCallSelector,
-      withdrawToSelector_ne_transferSelector,
-      withdrawToSelector_ne_transferAndCallSelector,
-      withdrawToSelector_ne_transferFromSelector,
-      withdrawToSelector_ne_withdrawSelector]
+    simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+      withdrawToSelector_ne_depositSelector, withdrawToSelector_ne_depositToSelector, decide_false,
+      withdrawToSelector_ne_depositToAndCallSelector, Bool.or_self, Bool.false_eq_true,
+      withdrawToSelector_ne_transferSelector, withdrawToSelector_ne_transferAndCallSelector,
+      withdrawToSelector_ne_transferFromSelector, withdrawToSelector_ne_withdrawSelector]
   cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hprimary] at haction
-      simp at haction
+      simp only [Option.map_some, reduceCtorEq] at haction
   | some action =>
       have actionEq := action_eq_of_primaryFlowAtom context hprimary haction
       subst action
@@ -4409,7 +4422,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_withdrawTo
         (callPre := callPre) (guardPost := guardPost)
         context haction rfl rfl ?_ trace burn hguardStor ?_ hdeeper
       · unfold FlowAction.HasDebitSource
-        simp [primaryDebitProvenance, hnonempty, hselector]
+        simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector, decide_true,
+          Bool.or_true, Option.some.injEq, exists_eq_left', and_self]
       · simpa only [List.nil_append] using chronology
 
 /-- Premise-free exact proof-indexed storage accounting for the zero-recipient
@@ -4427,15 +4441,15 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferZero
   have hprimary : primaryFlowAtom frame.sevm = some
       (.redemption frame.sevm.caller.toB256 frame.sevm.caller
         frame.sevm.caller (Sevm.argWord frame.sevm 1).toNat) := by
-    simp [primaryFlowAtom, hnonempty, hselector,
-      transferSelector_ne_depositSelector,
-      transferSelector_ne_depositToSelector,
-      transferSelector_ne_depositToAndCallSelector, hto]
+    simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+      transferSelector_ne_depositSelector, transferSelector_ne_depositToSelector, decide_false,
+      transferSelector_ne_depositToAndCallSelector, Bool.or_self, Bool.false_eq_true, decide_true,
+      Bool.true_or, hto]
   cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hprimary] at haction
-      simp at haction
+      simp only [Option.map_some, reduceCtorEq] at haction
   | some action =>
       have actionEq := action_eq_of_primaryFlowAtom context hprimary haction
       subst action
@@ -4453,7 +4467,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferZero
         (callPre := callPre) (guardPost := guardPost)
         context haction rfl rfl ?_ trace burn hguardStor ?_ hdeeper
       · unfold FlowAction.HasDebitSource
-        simp [primaryDebitProvenance, hnonempty, hselector]
+        simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector, decide_true,
+          Bool.true_or, Option.some.injEq, exists_eq_left', and_self]
       · simpa only [List.nil_append] using chronology
 
 /-- Premise-free exact proof-indexed storage accounting for the zero-recipient
@@ -4472,17 +4487,16 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferFromZero
       (.redemption (Sevm.argWord frame.sevm 0)
         (Sevm.argWord frame.sevm 0).toAdr frame.sevm.caller
         (Sevm.argWord frame.sevm 2).toNat) := by
-    simp [primaryFlowAtom, hnonempty, hselector,
-      transferFromSelector_ne_depositSelector,
-      transferFromSelector_ne_depositToSelector,
-      transferFromSelector_ne_depositToAndCallSelector,
-      transferFromSelector_ne_transferSelector,
+    simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+      transferFromSelector_ne_depositSelector, transferFromSelector_ne_depositToSelector,
+      decide_false, transferFromSelector_ne_depositToAndCallSelector, Bool.or_self,
+      Bool.false_eq_true, transferFromSelector_ne_transferSelector,
       transferFromSelector_ne_transferAndCallSelector, hto]
   cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hprimary] at haction
-      simp at haction
+      simp only [Option.map_some, reduceCtorEq] at haction
   | some action =>
       have actionEq := action_eq_of_primaryFlowAtom context hprimary haction
       subst action
@@ -4507,11 +4521,11 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferFromZero
         (ownPre := ownPre) (callPre := callPre) (guardPost := guardPost)
         context haction rfl rfl ?_ entry trace burn' hguardStor ?_ hdeeper
       · unfold FlowAction.HasDebitSource
-        simp [primaryDebitProvenance, hnonempty, hselector,
-          transferFromSelector_ne_transferSelector,
-          transferFromSelector_ne_transferAndCallSelector,
-          transferFromSelector_ne_withdrawSelector,
-          transferFromSelector_ne_withdrawToSelector]
+        simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector,
+          transferFromSelector_ne_transferSelector, decide_false,
+          transferFromSelector_ne_transferAndCallSelector, Bool.or_self,
+          transferFromSelector_ne_withdrawSelector, transferFromSelector_ne_withdrawToSelector,
+          Bool.false_eq_true, Option.some.injEq, exists_eq_left', and_self]
       · simpa only [List.nil_append] using chronology
 
 /-- Premise-free exact proof-indexed storage accounting for delegated
@@ -4530,20 +4544,17 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_withdrawFrom
         (Sevm.argWord frame.sevm 0).toAdr
         (Sevm.argWord frame.sevm 1).toAdr
         (Sevm.argWord frame.sevm 2).toNat) := by
-    simp [primaryFlowAtom, hnonempty, hselector,
-      withdrawFromSelector_ne_depositSelector,
-      withdrawFromSelector_ne_depositToSelector,
-      withdrawFromSelector_ne_depositToAndCallSelector,
-      withdrawFromSelector_ne_transferSelector,
-      withdrawFromSelector_ne_transferAndCallSelector,
-      withdrawFromSelector_ne_transferFromSelector,
-      withdrawFromSelector_ne_withdrawSelector,
-      withdrawFromSelector_ne_withdrawToSelector]
+    simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+      withdrawFromSelector_ne_depositSelector, withdrawFromSelector_ne_depositToSelector,
+      decide_false, withdrawFromSelector_ne_depositToAndCallSelector, Bool.or_self,
+      Bool.false_eq_true, withdrawFromSelector_ne_transferSelector,
+      withdrawFromSelector_ne_transferAndCallSelector, withdrawFromSelector_ne_transferFromSelector,
+      withdrawFromSelector_ne_withdrawSelector, withdrawFromSelector_ne_withdrawToSelector]
   cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hprimary] at haction
-      simp at haction
+      simp only [Option.map_some, reduceCtorEq] at haction
   | some action =>
       have actionEq := action_eq_of_primaryFlowAtom context hprimary haction
       subst action
@@ -4568,12 +4579,12 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_withdrawFrom
         (ownPre := ownPre) (callPre := callPre) (guardPost := guardPost)
         context haction rfl rfl ?_ entry trace burn' hguardStor ?_ hdeeper
       · unfold FlowAction.HasDebitSource
-        simp [primaryDebitProvenance, hnonempty, hselector,
-          withdrawFromSelector_ne_transferSelector,
-          withdrawFromSelector_ne_transferAndCallSelector,
-          withdrawFromSelector_ne_transferFromSelector,
-          withdrawFromSelector_ne_withdrawSelector,
-          withdrawFromSelector_ne_withdrawToSelector]
+        simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector,
+          withdrawFromSelector_ne_transferSelector, decide_false,
+          withdrawFromSelector_ne_transferAndCallSelector, Bool.or_self,
+          withdrawFromSelector_ne_withdrawSelector, withdrawFromSelector_ne_withdrawToSelector,
+          Bool.false_eq_true, withdrawFromSelector_ne_transferFromSelector, Option.some.injEq,
+          exists_eq_left', and_self]
       · simpa only [List.nil_append] using chronology
 
 /-- Premise-free exact proof-indexed storage accounting for both raw-recipient
@@ -4613,15 +4624,15 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferAndCall
     have hprimary : primaryFlowAtom frame.sevm = some
         (.redemption frame.sevm.caller.toB256 frame.sevm.caller
           frame.sevm.caller (Sevm.argWord frame.sevm 1).toNat) := by
-      simp [primaryFlowAtom, hnonempty, hselector,
-        transferAndCallSelector_ne_depositSelector,
-        transferAndCallSelector_ne_depositToSelector,
-        transferAndCallSelector_ne_depositToAndCallSelector, hraw]
+      simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+        transferAndCallSelector_ne_depositSelector, transferAndCallSelector_ne_depositToSelector,
+        decide_false, transferAndCallSelector_ne_depositToAndCallSelector, Bool.or_self,
+        Bool.false_eq_true, decide_true, Bool.or_true, hraw]
     cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
     | none =>
         unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
         rw [if_pos context.invocation, hprimary] at haction
-        simp at haction
+        simp only [Option.map_some, reduceCtorEq] at haction
     | some action =>
         have actionEq :=
           action_eq_of_primaryFlowAtom context hprimary haction
@@ -4650,7 +4661,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferAndCall
           · rfl
           · rfl
           · unfold FlowAction.HasDebitSource
-            simp [primaryDebitProvenance, hnonempty, hselector]
+            simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector, decide_true,
+              Bool.or_true, Bool.true_or, Option.some.injEq, exists_eq_left', and_self]
           · exact hamountLe
           · exact hdecrease
         have ledger :=
@@ -4686,15 +4698,15 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferAndCall
           (Sevm.argWord frame.sevm 0) frame.sevm.caller
           (Sevm.argWord frame.sevm 0).toAdr
           (Sevm.argWord frame.sevm 1).toNat) := by
-      simp [primaryFlowAtom, hnonempty, hselector,
-        transferAndCallSelector_ne_depositSelector,
-        transferAndCallSelector_ne_depositToSelector,
-        transferAndCallSelector_ne_depositToAndCallSelector, hraw]
+      simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+        transferAndCallSelector_ne_depositSelector, transferAndCallSelector_ne_depositToSelector,
+        decide_false, transferAndCallSelector_ne_depositToAndCallSelector, Bool.or_self,
+        Bool.false_eq_true, decide_true, Bool.or_true, hraw]
     cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
     | none =>
         unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
         rw [if_pos context.invocation, hprimary] at haction
-        simp at haction
+        simp only [Option.map_some, reduceCtorEq] at haction
     | some action =>
         have actionEq :=
           action_eq_of_primaryFlowAtom context hprimary haction
@@ -4721,9 +4733,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferAndCall
             · rw [if_pos hself, hself]
               exact ((hdecrease
                 (Sevm.argWord frame.sevm 0).toAdr).1 hself).symm
-            · simpa [hself] using
-                ((hdecrease
-                  (Sevm.argWord frame.sevm 0).toAdr).2 hself).symm
+            · simpa only [hself, ↓reduceIte] using
+              ((hdecrease (Sevm.argWord frame.sevm 0).toAdr).2 hself).symm
           apply LocalActionSegment.ordinaryTransfer
             frame.sevm.caller.toB256 (Sevm.argWord frame.sevm 0)
             frame.sevm.caller (Sevm.argWord frame.sevm 0).toAdr
@@ -4736,7 +4747,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferAndCall
             simp only [FlowAtom.creditOccurrence, hbefore]
             rw [toB256_toNat]
           · unfold FlowAction.HasDebitSource
-            simp [primaryDebitProvenance, hnonempty, hselector]
+            simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector, decide_true,
+              Bool.or_true, Bool.true_or, Option.some.injEq, exists_eq_left', and_self]
         · exact callbackEffect.delta
         · simpa only [List.nil_append] using chronology
 
@@ -4773,7 +4785,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_permit
     context classified
     ⟨nonpayable (Weth10.permit dp), by
       rw [hselector]
-      simp [permitSelector, weth10Funcs]⟩
+      simp only [weth10Funcs, permitSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true]⟩
   apply Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting.noFlow ownRoot
   cases outcome with
   | none own =>
@@ -4854,13 +4867,13 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferNonzero
             (Sevm.argWord frame.sevm 0) frame.sevm.caller
             (Sevm.argWord frame.sevm 0).toAdr
             (Sevm.argWord frame.sevm 1).toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector,
-          transferSelector_ne_depositSelector,
-          transferSelector_ne_depositToSelector,
-          transferSelector_ne_depositToAndCallSelector, hto]
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+          transferSelector_ne_depositSelector, transferSelector_ne_depositToSelector, decide_false,
+          transferSelector_ne_depositToAndCallSelector, Bool.or_self, Bool.false_eq_true,
+          decide_true, Bool.true_or, hto]
       unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hatom] at haction
-      simp at haction
+      simp only [Option.map_some, reduceCtorEq] at haction
   | some action =>
       have ledger :=
         Blanc.Weth10.Exec.Frame.hasClassifiedActionLedger_of_flowAction_eq_some (frame := frame)
@@ -4870,7 +4883,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferNonzero
           context hselector hnonempty hto
       rcases frame with ⟨pc, e, pre, out, run, committed⟩
       cases out with
-      | error err => simp [Execution.commits] at committed
+      | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
       | ok post =>
           have hpc : pc = 0 := context.root.1
           subst pc
@@ -4896,10 +4909,10 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferNonzero
                 (.transfer e.caller.toB256 (Sevm.argWord e 0) e.caller
                   (Sevm.argWord e 0).toAdr
                   (Sevm.argWord e 1).toNat) := by
-              simp [primaryFlowAtom, hnonempty, hselector,
-                transferSelector_ne_depositSelector,
-                transferSelector_ne_depositToSelector,
-                transferSelector_ne_depositToAndCallSelector, hraw]
+              simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+                transferSelector_ne_depositSelector, transferSelector_ne_depositToSelector,
+                decide_false, transferSelector_ne_depositToAndCallSelector, Bool.or_self,
+                Bool.false_eq_true, decide_true, Bool.true_or, hraw]
             have heq := action_eq_of_primaryFlowAtom context hatom haction
             subst action
             apply Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
@@ -4917,8 +4930,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferNonzero
                 · rw [if_pos hself, hself]
                   exact
                     ((hdecrease (Sevm.argWord e 0).toAdr).1 hself).symm
-                · simpa [hself] using
-                    ((hdecrease (Sevm.argWord e 0).toAdr).2 hself).symm
+                · simpa only [hself, ↓reduceIte] using
+                  ((hdecrease (Sevm.argWord e 0).toAdr).2 hself).symm
               apply LocalActionSegment.ordinaryTransfer
                 e.caller.toB256 (Sevm.argWord e 0) e.caller
                 (Sevm.argWord e 0).toAdr (Sevm.argWord e 1) rfl
@@ -4930,7 +4943,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferNonzero
                 simp only [FlowAtom.creditOccurrence, hbefore]
                 rw [toB256_toNat]
               · unfold FlowAction.HasDebitSource
-                simp [primaryDebitProvenance, hnonempty, hselector]
+                simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector, decide_true,
+                  Bool.true_or, Option.some.injEq, exists_eq_left', and_self]
             · exact chronology
 
 /-- Exact proof-indexed accounting for the childless ordinary `approve`
@@ -4994,22 +5008,21 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferFromNonzero
             (Sevm.argWord frame.sevm 0).toAdr
             (Sevm.argWord frame.sevm 1).toAdr
             (Sevm.argWord frame.sevm 2).toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector,
-          transferFromSelector_ne_depositSelector,
-          transferFromSelector_ne_depositToSelector,
-          transferFromSelector_ne_depositToAndCallSelector,
-          transferFromSelector_ne_transferSelector,
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+          transferFromSelector_ne_depositSelector, transferFromSelector_ne_depositToSelector,
+          decide_false, transferFromSelector_ne_depositToAndCallSelector, Bool.or_self,
+          Bool.false_eq_true, transferFromSelector_ne_transferSelector,
           transferFromSelector_ne_transferAndCallSelector, hto]
       unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
       rw [if_pos context.invocation, hatom] at haction
-      simp at haction
+      simp only [Option.map_some, reduceCtorEq] at haction
   | some action =>
       have ledger :=
         Blanc.Weth10.Exec.Frame.hasClassifiedActionLedger_of_flowAction_eq_some (frame := frame)
           context haction
       rcases frame with ⟨pc, e, pre, out, run, committed⟩
       cases out with
-      | error err => simp [Execution.commits] at committed
+      | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
       | ok post =>
           have hpc : pc = 0 := context.root.1
           subst pc
@@ -5044,13 +5057,11 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferFromNonzero
                   (Sevm.argWord e 0).toAdr
                   (Sevm.argWord e 1).toAdr
                   (Sevm.argWord e 2).toNat) := by
-              simp [primaryFlowAtom, hnonempty, hselector,
-                transferFromSelector_ne_depositSelector,
-                transferFromSelector_ne_depositToSelector,
-                transferFromSelector_ne_depositToAndCallSelector,
-                transferFromSelector_ne_transferSelector,
-                transferFromSelector_ne_transferAndCallSelector,
-                hto]
+              simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+                transferFromSelector_ne_depositSelector, transferFromSelector_ne_depositToSelector,
+                decide_false, transferFromSelector_ne_depositToAndCallSelector, Bool.or_self,
+                Bool.false_eq_true, transferFromSelector_ne_transferSelector,
+                transferFromSelector_ne_transferAndCallSelector, hto]
             have heq := action_eq_of_primaryFlowAtom context hatom haction
             subst action
             apply Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting.flow ledger
@@ -5070,8 +5081,8 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferFromNonzero
                 · rw [if_pos hself, hself]
                   exact
                     ((hdecrease (Sevm.argWord e 1).toAdr).1 hself).symm
-                · simpa [hself] using
-                    ((hdecrease (Sevm.argWord e 1).toAdr).2 hself).symm
+                · simpa only [hself, ↓reduceIte] using
+                  ((hdecrease (Sevm.argWord e 1).toAdr).2 hself).symm
               apply LocalActionSegment.ordinaryTransfer
                 (Sevm.argWord e 0) (Sevm.argWord e 1)
                 (Sevm.argWord e 0).toAdr (Sevm.argWord e 1).toAdr
@@ -5084,11 +5095,12 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferFromNonzero
                 simp only [FlowAtom.creditOccurrence, hbefore]
                 rw [toB256_toNat]
               · unfold FlowAction.HasDebitSource
-                simp [primaryDebitProvenance, hnonempty, hselector,
-                  transferFromSelector_ne_transferSelector,
-                  transferFromSelector_ne_transferAndCallSelector,
+                simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector,
+                  transferFromSelector_ne_transferSelector, decide_false,
+                  transferFromSelector_ne_transferAndCallSelector, Bool.or_self,
                   transferFromSelector_ne_withdrawSelector,
-                  transferFromSelector_ne_withdrawToSelector]
+                  transferFromSelector_ne_withdrawToSelector, Bool.false_eq_true, Option.some.injEq,
+                  exists_eq_left', and_self]
             · exact chronology
 
 /-- Every currently closed non-flow selector.  Each constructor records the
@@ -5478,7 +5490,7 @@ theorem Exec.CoreStorageSound.error
     {error : EvmError × Devm} :
     Exec.CoreStorageSound dp ca pc sevm pre (.error error) := by
   intro run committed
-  simp [Execution.commits] at committed
+  simp only [Execution.commits, Bool.false_eq_true] at committed
 
 /-- Every successful nonrecursive instruction step in a foreign frame is an
 empty storage segment at `ca`.  `SSTORE` is handled explicitly at the foreign
@@ -5658,28 +5670,34 @@ theorem Exec.CoreStorageSound.nextSome
     Exec.CoreStorageSound dp ca pc sevm pre out := by
   cases n with
   | reg r =>
-      simp [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at hstep
+      simp only [StepRun, step_reg, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at hstep
   | push xs hxs =>
-      simp [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hstep
+      simp only [StepRun, step_push, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at hstep
   | dupn imm =>
-      simp [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at hstep
+      simp only [StepRun, step_dupn, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at hstep
   | swapn imm =>
-      simp [Ninst.StepRun, Ninst.step_swapn, Step.run_ofExecution] at hstep
+      simp only [StepRun, step_swapn, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at hstep
   | exchange imm =>
-      simp [Ninst.StepRun, Ninst.step_exchange, Step.run_ofExecution] at hstep
+      simp only [StepRun, step_exchange, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at hstep
   | exec x =>
       intro run committed hatp _ hcov
       have hxrun := XStep.run_toStep.mp hstep
       cases hs : Xinst.step sevm pre x with
       | done execution =>
-          simp [hs, XStep.Run] at hxrun
+          simp only [XStep.Run, hs, ExceptT.stM_eq, reduceCtorEq, false_and] at hxrun
       | spawn frame resume =>
           simp only [hs, XStep.Run] at hxrun
           obtain ⟨result, hframe, hresume⟩ := hxrun
           cases result with
           | error error =>
               cases resume <;>
-                simp [Resume.run, liftToExecution] at hresume
+                simp only [ExceptT.stM_eq, Resume.run, liftToExecution, Except.bind_error,
+                  reduceCtorEq] at hresume
           | ok settled =>
               have henter := (RunFrame.some_inv hframe).1
               have hsettle := (RunFrame.some_inv hframe).2
@@ -5740,7 +5758,7 @@ theorem Exec.CoreStorageSound.nextSome
                         rw [if_neg (not_delegation_of_compile hatp.1)])
                 have hcodeAddressInit :=
                   congrArg (fun evm : Evm => evm.sta.codeAddress) hinit
-                dsimp [initEvm, initSevm, Msg.withBenv] at hcodeAddressInit
+                dsimp only [Msg.withBenv, initEvm, initSevm] at hcodeAddressInit
                 rw [hcodeAddressInit, hcodeAddress, hinnerTarget]
               have hbody : ∀
                   (rawCommitted : Execution.commits raw = true),
@@ -5826,7 +5844,7 @@ theorem Exec.CoreStorageSound.last
   subst run
   cases out with
   | error error =>
-      simp [Execution.commits] at committed
+      simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       rcases Linst.foreignStorageSegmentEffect hstep hforeign with ⟨effect⟩
       rw [Exec.flowActions_eq_descendantActions_of_currentTarget_ne
@@ -5905,9 +5923,7 @@ theorem StorageFlowAccounting.of_rest_eq
       Stor.rest (Devm.getStor post ca)) :
     StorageFlowAccounting ca pre post [] := by
   constructor <;>
-    simp [holderFlowOfActions, HolderFlow.zero, supplyFlowOfActions,
-      SupplyFlow.zero, holderCreditLossOfActions, creditLossOfActions,
-      balSum, h]
+    simp only [h, holderFlowOfActions, HolderFlow.zero, List.foldl_nil, add_zero, holderCreditLossOfActions, List.map_nil, List.sum_nil, implies_true, balSum, supplyFlowOfActions, SupplyFlow.zero, creditLossOfActions]
 
 /-- Sequential accounting composes by appending the exact action labels. -/
 theorem StorageFlowAccounting.append

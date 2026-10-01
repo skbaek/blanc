@@ -163,7 +163,7 @@ theorem rx_sload_sel {k' : B256} (hfork : CoveredFork sevm.benvStat.fork)
   refine .next ?_ k
   have h := Ninst.runCompiled_sload_selected (sevm := sevm) (base := b) (key := k') (stack := S)
     (memory := M) (G := G) hfork rfl hroom
-  simpa [St, afterSload_stateGas] using h
+  simpa only [St, afterSload_stateGas] using h
 
 theorem rx_gas (hroom : S.length < 1024)
     (k : SFunc.RunExact fs sevm (St b (Nat.toB256 G :: S) M G) f o) :
@@ -244,8 +244,9 @@ theorem rxc_exp' {x y : B256} {c : Nat} (hc : gExp + gExpbyte * y.bytecount = c)
   refine .next ?_ k
   have h := Ninst.runCompiled_reg (sevm := sevm) (r := .exp) (by rintro ⟨⟩)
     (Rinst.runCore_exp_eq_ok (devm := St b (x :: y :: S) M (G + (gExp + gExpbyte * y.bytecount)))
-      rfl (by simp) hroom)
-  simpa [St, Devm.setMach_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using h
+      rfl (by simp only [St.gasLeft, le_add_iff_nonneg_left, zero_le]) hroom)
+  simpa only [St, Devm.memory_setMach, Devm.setMach_gasLeft, add_tsub_cancel_right,
+    Devm.stateGas_setMach, Devm.setMach_setMach] using h
 
 theorem rxc_sload_sel {k' : B256} (hfork : CoveredFork sevm.benvStat.fork)
     (hroom : S.length < 1024)
@@ -256,7 +257,7 @@ theorem rxc_sload_sel {k' : B256} (hfork : CoveredFork sevm.benvStat.fork)
   refine .next ?_ k
   have h := Ninst.runCompiled_sload_selected (sevm := sevm) (base := b) (key := k') (stack := S)
     (memory := M) (G := G) hfork rfl hroom
-  simpa [St, afterSload_stateGas] using h
+  simpa only [St, afterSload_stateGas] using h
 
 theorem rxc_gas (hroom : S.length < 1024)
     (k : SFunc.RunExactCut fs sevm C (St b (Nat.toB256 G :: S) M G) f r) :

@@ -113,7 +113,7 @@ private theorem proxy_step_calldatacopy (e : Sevm) (d : Devm)
     decide
   rw [hcost]
   have hgas' : 33 ≤ (d.setMach ⟨[], Mem.empty, d.gasLeft, d.stateGas⟩).gasLeft := by
-    simpa using hgas
+    simpa only [Devm.setMach_gasLeft] using hgas
   rw [chargeGas_eq_ok hgas']
   rw [Bytes.sliceD_zero_length hdata]
   rfl
@@ -335,15 +335,16 @@ private theorem implementationCode_notDelegation :
     have hlen : eoaDelegatedCodeLength = 23 := rfl
     rw [hlen] at hs
     omega
-  simp [getDelegatedCodeAddress, hnot]
+  simp only [getDelegatedCodeAddress, hnot, ↓reduceIte]
 
 private theorem proxy_copied_memory_size {data : Bytes}
     (hdata : data.length = 132) :
     (Mem.empty.write 0 data).size = 160 := by
   cases data with
-  | nil => simp at hdata
+  | nil => simp only [List.length_nil, OfNat.zero_ne_ofNat] at hdata
   | cons b bs =>
-      simp [Mem.write, Mem.empty, hdata, ceil32]
+      simp only [Mem.write, hdata, zero_add, Mem.empty, nonpos_iff_eq_zero, OfNat.ofNat_ne_zero,
+        ↓reduceIte, ceil32, Nat.reduceMod, Nat.reduceAdd, Nat.succ_eq_add_one, Nat.reduceSub]
 
 private theorem proxy_call_extension_zero (pre : Devm) (data : Bytes)
     (hdata : data.length = 132)

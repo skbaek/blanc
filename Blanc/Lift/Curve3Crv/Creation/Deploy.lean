@@ -118,13 +118,14 @@ theorem deployedStor_get (c x : B256) :
 theorem coreStor_support : ∀ x, coreStor.get x ≠ 0 → x ∈ vyFixedSlots := by
   intro x hx
   have h0 : ∀ x, Stor.empty.get x ≠ 0 → x ∈ ([] : List B256) := fun x hx =>
-    absurd (by simp [Stor.get, Stor.empty]) hx
+    absurd (by simp only [Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc,
+      Std.TreeMap.getD_emptyc]) hx
   have h := get_ne_zero_mem_set (get_ne_zero_mem_set (get_ne_zero_mem_set
     (get_ne_zero_mem_set (get_ne_zero_mem_set (get_ne_zero_mem_set h0 _ _) _ _) _ _) _ _) _ _)
     _ _ x hx
   simp only [List.mem_cons, List.not_mem_nil, or_false] at h
   unfold vyFixedSlots vyDecimalsSlot vySupplySlot vyMinterSlot
-  rcases h with rfl | rfl | rfl | rfl | rfl | rfl <;> simp
+  rcases h with rfl | rfl | rfl | rfl | rfl | rfl <;> simp only [List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
 
 theorem vyStr_congr {s t : Stor} {base : B256} {n : Nat} {bs : Bytes}
     (h0 : s.get base = t.get base)
@@ -147,32 +148,40 @@ theorem deployedStor_vyInv (a : Adr) (hbal : balSlotOf a.toB256 ∉ vyFixedSlots
       rw [deployedStor_get, if_neg (Ne.symm h6), if_neg (hne x hx)]
   refine ⟨?_, ?_, ?_, ?_, ?_, fun _ h => h.elim, fun k _ => by cases k <;> rfl, ?_,
     fun _ _ h => h.elim, fun _ h => h.elim, ?_⟩
-  · rw [hfix _ (by simp [vyFixedSlots, vyDecimalsSlot, vySupplySlot, vyMinterSlot]) (by decide)]
+  · rw [hfix _ (by simp only [vyFixedSlots, vyDecimalsSlot, vySupplySlot, vyMinterSlot,
+    List.mem_cons, List.not_mem_nil, or_false, true_or]) (by decide)]
     show coreStor.get 2 = 18
     decide +kernel
-  · rw [hfix _ (by simp [vyFixedSlots, vyDecimalsSlot, vySupplySlot, vyMinterSlot]) (by decide)]
+  · rw [hfix _ (by simp only [vyFixedSlots, vyDecimalsSlot, vySupplySlot, vyMinterSlot,
+    List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]) (by decide)]
     show coreStor.get 5 = 0
     decide +kernel
   · show (deployedStor a.toB256).get 6 = a.toB256
     rw [deployedStor_get, if_pos rfl]
-  · rw [vyStr_congr (t := coreStor) (hfix _ (by simp [vyFixedSlots, vyDecimalsSlot, vySupplySlot, vyMinterSlot]) (by decide +kernel)) ?_]
+  · rw [vyStr_congr (t := coreStor) (hfix _ (by simp only [vyFixedSlots, vyDecimalsSlot,
+    vySupplySlot, vyMinterSlot, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]) (by decide +kernel)) ?_]
     · show VyStr coreStor vyNameBase 2 curveShapedName
       unfold VyStr; decide +kernel
     · intro j hj
       rcases (show j = 0 ∨ j = 1 by omega) with rfl | rfl
-      · exact hfix _ (by simp [vyFixedSlots, vyDecimalsSlot, vySupplySlot, vyMinterSlot]) (by decide +kernel)
-      · exact hfix _ (by simp [vyFixedSlots, vyDecimalsSlot, vySupplySlot, vyMinterSlot]) (by decide +kernel)
-  · rw [vyStr_congr (t := coreStor) (hfix _ (by simp [vyFixedSlots, vyDecimalsSlot, vySupplySlot, vyMinterSlot]) (by decide +kernel)) ?_]
+      · exact hfix _ (by simp only [vyFixedSlots, vyDecimalsSlot, vySupplySlot, vyMinterSlot,
+        zero_add, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]) (by decide +kernel)
+      · exact hfix _ (by simp only [vyFixedSlots, vyDecimalsSlot, vySupplySlot, vyMinterSlot,
+        Nat.reduceAdd, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]) (by decide +kernel)
+  · rw [vyStr_congr (t := coreStor) (hfix _ (by simp only [vyFixedSlots, vyDecimalsSlot,
+    vySupplySlot, vyMinterSlot, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]) (by decide +kernel)) ?_]
     · show VyStr coreStor vySymbolBase 1 curveShapedSymbol
       unfold VyStr; decide +kernel
     · intro j hj
       rcases (show j = 0 by omega) with rfl
-      exact hfix _ (by simp [vyFixedSlots, vyDecimalsSlot, vySupplySlot, vyMinterSlot]) (by decide +kernel)
+      exact hfix _ (by simp only [vyFixedSlots, vyDecimalsSlot, vySupplySlot, vyMinterSlot,
+        zero_add, List.mem_cons, List.not_mem_nil, or_false, or_true]) (by decide +kernel)
   · intro x hx
     left
     rw [deployedStor_get] at hx
     by_cases h6 : (6 : B256) = x
-    · subst h6; simp [vyFixedSlots, vyMinterSlot]
+    · subst h6; simp only [vyFixedSlots, vyMinterSlot, List.mem_cons, List.not_mem_nil, or_false,
+      true_or, or_true]
     · rw [if_neg h6] at hx
       by_cases hb : balSlotOf a.toB256 = x
       · rw [if_pos hb] at hx; exact absurd rfl hx
@@ -251,7 +260,9 @@ theorem tokenAddress_eq : tokenAddress = computeContractAddress deployer 42 := b
   have hnonce : (UInt64.toBytes 42).sig = [0x2a] := by decide +kernel
   have hrlp : BLT.toBytes (.list [.bytes [0xba, 0xbe, 0x61, 0x88, 0x7f, 0x1d, 0xe2, 0x71, 0x3c, 0x6f, 0x97, 0xe5, 0x67, 0x62, 0x34, 0x53, 0xd3, 0xc7, 0x9f, 0x67], .bytes [0x2a]]) =
       [0xd6, 0x94, 0xba, 0xbe, 0x61, 0x88, 0x7f, 0x1d, 0xe2, 0x71, 0x3c, 0x6f, 0x97, 0xe5, 0x67, 0x62, 0x34, 0x53, 0xd3, 0xc7, 0x9f, 0x67, 0x2a] := by
-    simp [BLT.toBytes, BLTs.toBytes, BLTs.toBytesJoin]
+    simp only [BLT.toBytes, BLTs.toBytes, BLTs.toBytesJoin, List.length_cons, List.length_nil,
+      zero_add, Nat.reduceAdd, Nat.reduceLT, ↓reduceIte, Nat.toUInt8_eq, UInt8.reduceOfNat,
+      UInt8.reduceAdd, UInt8.reduceLT, List.append_nil, List.cons_append, List.nil_append]
   unfold computeContractAddress
   simp only [hsender, hnonce, hrlp]
   decide +kernel

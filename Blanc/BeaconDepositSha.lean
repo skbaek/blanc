@@ -410,7 +410,7 @@ theorem sha64_success_of_run
     rw [hpopStack] at hpFlag
     have hbad : (((0 : B256) =? 0) : B256) = 0 :=
       pref_head_unique hpFlag (pref_append [(0 : B256)] afterBranch.stack)
-    rw [show (((0 : B256) =? 0) : B256) = 1 by simp [B256.eqCheck]] at hbad
+    rw [show (((0 : B256) =? 0) : B256) = 1 by simp only [B256.eqCheck, ↓reduceIte]] at hbad
     exact False.elim (B256.zero_ne_one hbad.symm)
   · rcases hsuccess with
       ⟨parent, child, xl, dp, na, code, avail,

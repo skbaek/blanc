@@ -274,10 +274,7 @@ theorem attack_carrier_inhabited :
         (by norm_num [offsetN, Blanc.Prorata.ProrataAttackState.genesis,
           Blanc.Prorata.mintN, Blanc.Prorata.payN])⟩ p3
   refine ⟨_, p4, ?_, ?_, ?_⟩ <;>
-    simp [offsetN, Blanc.Prorata.ProrataAttackState.genesis,
-      Blanc.Prorata.AttackAttribution.coalitionAmount,
-      Blanc.Prorata.AttackAttribution.outsideAmount,
-      Blanc.Prorata.mintN, Blanc.Prorata.payN]
+    simp only [offsetN, Prorata.ProrataAttackState.genesis, Prorata.AttackAttribution.coalitionAmount, zero_add, Nat.reduceAdd, Prorata.AttackAttribution.outsideAmount, add_zero]
 
 end ProrataWethVault
 

@@ -110,14 +110,14 @@ theorem obs4_facts {r : Res} (h : obs4 r = obs4EELS) : ∃ d cl, r = .done (.hal
     d.gasLeft = gas4 ∧ d.output = word 106 ∧ d.error = none ∧ cl.keys = keys4 ∧
     cl.adrs = adrs4 ∧ cl.stor = storA ∧ cl.acs = acsA := by
   rcases r with c | ⟨d | d, cl⟩ | _
-  · simp [obs4, obs4EELS] at h
+  · simp only [obs4, obs4EELS, reduceCtorEq] at h
   · simp only [obs4, obs4EELS, Option.some.injEq, Prod.mk.injEq, Bool.and_eq_true,
       decide_eq_true_eq] at h
     obtain ⟨hg, ho, ⟨⟨⟨he, hk⟩, ha⟩, hs⟩, hc⟩ := h
     exact ⟨d, cl, rfl, hg, List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) ho,
       Option.isNone_iff_eq_none.mp he, hk, ha, hs, hc⟩
-  · simp [obs4, obs4EELS] at h
-  · simp [obs4, obs4EELS] at h
+  · simp only [obs4, obs4EELS, reduceCtorEq] at h
+  · simp only [obs4, obs4EELS, reduceCtorEq] at h
 
 theorem r4_facts : r4 = .done (.halted post4) cl4 ∧ post4.gasLeft = gas4 ∧
     post4.output = word 106 ∧ post4.error = none ∧ cl4.keys = keys4 ∧ cl4.adrs = adrs4 ∧

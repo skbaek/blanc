@@ -73,7 +73,7 @@ theorem chargeCodeGas_runtimeBaseline
   obtain ⟨tail, hcons⟩ := runtimeBaselineBytes_cons
   have hlength := runtimeBaselineBytes_length_exact
   rw [processCreateMessage.chargeCodeGas_legacy_eq_ok hstateGas
-    (by rw [houtput, hcons]; simp <;> decide) (by rw [houtput, hlength]; exact hgas)
+    (by rw [houtput, hcons]; simp only [List.head?_cons, ne_eq, Option.some.injEq] <;> decide) (by rw [houtput, hlength]; exact hgas)
     (by rw [houtput, hlength]; exact hmax), houtput, hlength]
   rfl
 

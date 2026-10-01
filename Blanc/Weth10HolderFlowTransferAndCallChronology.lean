@@ -238,8 +238,9 @@ private theorem Exec.Frame.CompiledCursor.selectTransferArm
       (.branch (transferNonzeroThen next) (transferZeroThen next)))
     final at cursor
   rcases cursor.peelChildlessLine
-      (by simp [transferSelectLine, arg, cdl, NinstIsChildless,
-        Ninst.pushB256]) with
+      (by simp only [transferSelectLine, arg, cdl, Ninst.pushB256, List.cons_append,
+        List.nil_append, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+        forall_eq_or_imp, forall_eq, and_self]) with
     ⟨branchCursor, hselect, hselectActions⟩
   have hflagPrefix :
       [Sevm.argWord frame.sevm 0 =? 0] <<+
@@ -255,7 +256,7 @@ private theorem Exec.Frame.CompiledCursor.selectTransferArm
     dispatchSilent_of_transferSelectLine hselect
   by_cases hraw : Sevm.argWord frame.sevm 0 = 0
   · have hcheck : (Sevm.argWord frame.sevm 0 =? 0) = 1 := by
-      simp [B256.eqCheck, hraw]
+      simp only [B256.eqCheck, hraw, ↓reduceIte]
     rw [hcheck] at hflagPrefix
     rcases branchCursor.selectNonzeroArmSilent (flag := (1 : B256))
         (by decide) hflagPrefix with
@@ -264,7 +265,7 @@ private theorem Exec.Frame.CompiledCursor.selectTransferArm
       hzeroActions.trans hselectActions,
       dispatchSilent_trans hlineSilent hbranchSilent⟩
   · have hcheck : (Sevm.argWord frame.sevm 0 =? 0) = 0 := by
-      simp [B256.eqCheck, hraw]
+      simp only [B256.eqCheck, hraw, ↓reduceIte]
     rw [hcheck] at hflagPrefix
     rcases branchCursor.selectZeroArmSilent hflagPrefix with
       ⟨nonzeroCursor, _hstack, hnonzeroActions, hbranchSilent⟩
@@ -342,8 +343,10 @@ private theorem Exec.Frame.CompiledCursor.reachTransferNonzeroCallback
           transferNonzeroEventPrep +++ emitTransfer +++ next)
         (.call transferBalanceErrorSlot))) final at cursor
   rcases cursor.peelChildlessLine
-      (by simp [transferNonzeroGuardLine, loadCallerBalanceAmount,
-        balanceTooSmall, arg, cdl, NinstIsChildless, Ninst.pushB256]) with
+      (by simp only [transferNonzeroGuardLine, loadCallerBalanceAmount, Fin.isValue, arg, cdl,
+        Ninst.pushB256, List.cons_append, List.nil_append, balanceTooSmall, List.mem_cons,
+        List.not_mem_nil, or_false, or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq,
+        and_self]) with
     ⟨guardCursor, hguard, hguardActions⟩
   rcases of_run_append (loadCallerBalanceAmount 1) hguard with
     ⟨afterLoad, hload, hsmall⟩
@@ -394,14 +397,17 @@ private theorem Exec.Frame.CompiledCursor.reachTransferNonzeroCallback
     rw [hbalance,
       congrFun hstorCursorSuccess frame.sevm.currentTarget]
   rcases successCursor.peelChildlessLine
-      (by simp [debitLoadedBalance, NinstIsChildless]) with
+      (by simp only [debitLoadedBalance, Fin.isValue, List.mem_cons, List.not_mem_nil, or_false,
+        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨creditCursor, hdebit, hdebitActions⟩
   obtain ⟨hdecrease, hcovered, hflashDebit⟩ :=
     debitLoadedBalance_storage (validAdr_toB256 frame.sevm.caller)
       hbalanceSuccess hcover hsuccessPrefix hdebit
   rcases creditCursor.peelChildlessLine
-      (by simp [transferNonzeroCreditLine, addressArg, normalizeAddress,
-        pushAddressMask, arg, cdl, NinstIsChildless, Ninst.pushB256]) with
+      (by simp only [transferNonzeroCreditLine, addressArg, arg, cdl, Ninst.pushB256,
+        normalizeAddress, pushAddressMask, List.cons_append, List.nil_append, Fin.isValue,
+        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
+        and_self]) with
     ⟨eventCursor, hcredit, hcreditActions⟩
   obtain ⟨recipient, hrecipient, hincrease, hflashCredit⟩ :=
     creditAddressArg_storage_at 0 1 hcredit
@@ -417,8 +423,9 @@ private theorem Exec.Frame.CompiledCursor.reachTransferNonzeroCallback
       by simpa only [toAdr_toB256] using hdecrease,
       hincrease⟩
   rcases eventCursor.peelChildlessLine
-      (by simp [transferNonzeroEventPrep, addressArg, normalizeAddress,
-        pushAddressMask, arg, cdl, NinstIsChildless, Ninst.pushB256]) with
+      (by simp only [transferNonzeroEventPrep, arg, cdl, Ninst.pushB256, List.cons_append,
+        List.nil_append, addressArg, normalizeAddress, pushAddressMask, List.mem_cons,
+        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨emitCursor, hevent, heventActions⟩
   have heventRun := hevent
   unfold transferNonzeroEventPrep at hevent
@@ -438,8 +445,9 @@ private theorem Exec.Frame.CompiledCursor.reachTransferNonzeroCallback
     simpa only [normalizedAddressArg] using
       prefix_of_addressArg hpAmount haddress
   rcases emitCursor.peelChildlessLine
-      (by simp [emitTransfer, Blanc.transferFromLog, mstoreAt, logWith,
-        NinstIsChildless, Ninst.pushB256]) with
+      (by simp only [emitTransfer, transferFromLog, Fin.isValue, Ninst.pushB256, mstoreAt, logWith,
+        Fin.reduceSucc, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil,
+        or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨callbackCursor, hemit, hemitActions⟩
   have hmemCursorEmit : cursor.pre.memory = emitCursor.pre.memory := by
     calc
@@ -563,7 +571,8 @@ theorem Exec.Frame.compiledTransferAndCallNonzeroChronology
       (Sevm.selector frame.sevm, nonpayable transferAndCall) ∈
         weth10Funcs dp := by
     rw [hselector]
-    simp [transferAndCallSelector, weth10Funcs]
+    simp only [weth10Funcs, transferAndCallSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+      or_false, true_or, or_true]
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorSilent (frame := frame)
       context hnonempty hmem with
     ⟨wrapperCursor, _hwrapperStack, hwrapperActions, hentrySilent⟩
@@ -596,7 +605,8 @@ theorem Exec.Frame.compiledTransferAndCallNonzeroChronology
       (sel := onTokenTransferSelector) (targetArg := 0) (dataArg := 2)
       (valueWord := Sevm.argWord frame.sevm 1) (value := arg 1)
       (img := (Sevm.argWord frame.sevm 1).toBytes)
-      (by simp [arg, cdl, NinstIsChildless, Ninst.pushB256])
+      (by simp only [arg, cdl, Ninst.pushB256, List.mem_cons, List.not_mem_nil, or_false,
+        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
       (by
         intro a b xs hp hline
         exact prefix_of_arg hp hline)
@@ -650,7 +660,8 @@ theorem Exec.Frame.compiledTransferAndCallZeroChronology
       (Sevm.selector frame.sevm, nonpayable transferAndCall) ∈
         weth10Funcs dp := by
     rw [hselector]
-    simp [transferAndCallSelector, weth10Funcs]
+    simp only [weth10Funcs, transferAndCallSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+      or_false, true_or, or_true]
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorSilent (frame := frame)
       context hnonempty hmem with
     ⟨wrapperCursor, _hwrapperStack, hwrapperActions, hentrySilent⟩
@@ -688,7 +699,8 @@ theorem Exec.Frame.compiledTransferAndCallZeroChronology
       (sel := onTokenTransferSelector) (targetArg := 0) (dataArg := 2)
       (valueWord := Sevm.argWord frame.sevm 1) (value := arg 1)
       (img := (Sevm.argWord frame.sevm 1).toBytes)
-      (by simp [arg, cdl, NinstIsChildless, Ninst.pushB256])
+      (by simp only [arg, cdl, Ninst.pushB256, List.mem_cons, List.not_mem_nil, or_false,
+        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
       (by
         intro a b xs hp hline
         exact prefix_of_arg hp hline)

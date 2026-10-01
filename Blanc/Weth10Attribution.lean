@@ -231,12 +231,12 @@ def ownRecordLast (e : Sevm) : Bool :=
 /-- A `flashLoan` entry context records its own contribution last. -/
 theorem ownRecordLast_of_isFlashInvocation {e : Sevm}
     (h : isFlashInvocation e = true) : ownRecordLast e = true := by
-  simp [ownRecordLast, h]
+  simp only [ownRecordLast, h, Bool.true_or]
 
 /-- A `permit` entry context records its own contribution last. -/
 theorem ownRecordLast_of_isPermitInvocation {e : Sevm}
     (h : isPermitInvocation e = true) : ownRecordLast e = true := by
-  simp [ownRecordLast, h]
+  simp only [ownRecordLast, h, Bool.or_true]
 
 /-- A frame that records its own contribution first is not a `flashLoan`
 invocation. -/
@@ -578,14 +578,14 @@ theorem CountedFrame.hardenedContribution_le
     frame.hardenedContribution recent u ≤ frame.permanentOutflow u := by
   cases hframe : frame.action with
   | none =>
-      simp [CountedFrame.hardenedContribution, hframe]
+      simp only [hardenedContribution, hframe, zero_le]
   | some action =>
       cases hdebit : action.debit with
       | none =>
-          simp [CountedFrame.hardenedContribution, hframe, hdebit]
+          simp only [hardenedContribution, hframe, hdebit, zero_le]
       | some debit =>
           by_cases h : debit.hardenedFor recent u <;>
-            simp [CountedFrame.hardenedContribution, hframe, hdebit, h]
+            simp only [hardenedContribution, hframe, hdebit, h, ↓reduceIte, Std.le_refl, Bool.false_eq_true, zero_le]
 
 /-! ## Executable boundary fixtures
 
@@ -854,14 +854,13 @@ theorem viewReadFrame_inert (u viewer : Adr) (ow sp value : B256)
       (viewReadFrame viewer ow sp value).hardenedContribution [] u = 0 ∧
       (viewReadFrame viewer ow sp value).authorizes u = false := by
   refine ⟨?_, ?_, ?_⟩ <;>
-    simp [viewReadFrame, fixtureFrame, CountedFrame.permanentOutflow,
-      CountedFrame.hardenedContribution, CountedFrame.authorizes]
+    simp only [CountedFrame.permanentOutflow, viewReadFrame, fixtureFrame, CountedFrame.hardenedContribution, CountedFrame.authorizes, Bool.or_self]
 
 /-- Even the holder's own allowance view is not an effectful authorizing act. -/
 theorem viewReadFrame_sameCaller_not_authorizing
     (u : Adr) (ow sp value : B256) :
     (viewReadFrame u ow sp value).authorizes u = false := by
-  simp [viewReadFrame, fixtureFrame, CountedFrame.authorizes]
+  simp only [CountedFrame.authorizes, viewReadFrame, fixtureFrame, Bool.or_self]
 
 private def flashMaxDebit (borrower : Adr) (ow sp : B256) : DebitProvenance :=
   { actualCaller := borrower
@@ -899,8 +898,7 @@ theorem flashMaxFrame_permanentOutflow_zero (u borrower : Adr) (ow sp : B256) :
     (flashMaxFrame borrower ow sp).permanentOutflow u = 0 ∧
       (flashMaxFrame borrower ow sp).hardenedContribution [maxApproveFrame u ow sp] u = 0 := by
   constructor <;> by_cases h : ow.toAdr = u <;>
-    simp [flashMaxFrame, fixtureFrame, CountedFrame.permanentOutflow,
-      CountedFrame.hardenedContribution, FlowAtom.holderFlow, HolderFlow.zero, h]
+    simp only [CountedFrame.permanentOutflow, flashMaxFrame, fixtureFrame, h, FlowAtom.holderFlow, ↓reduceIte, HolderFlow.zero, add_zero, CountedFrame.hardenedContribution, ite_self]
 
 /-! ### Dirty-pair separation
 
@@ -928,7 +926,7 @@ theorem dirtySpendDebit_root_checkpoint (u : Adr) (ow1 sp1 ow2 sp2 : B256)
     (hk : projectedAllowanceKey ow1 sp1 ≠ projectedAllowanceKey ow2 sp2) :
     attributionRootAt [dirtyApproveFrame u ow1 sp1] (projectedAllowanceKey ow2 sp2) =
       .checkpoint := by
-  simp [dirtyApproveFrame, fixtureFrame, attributionRootAt, AllowanceEvent.key, hk]
+  simp only [attributionRootAt, dirtyApproveFrame, fixtureFrame, AllowanceEvent.key, hk, ↓reduceIte]
 
 /-! ### One computed dirty-alias pair
 
@@ -1084,13 +1082,17 @@ theorem dormantLedger_authorizes_false (other u w fl : Adr) (spW caWord : B256)
     (hother : other ≠ u) (hw : w ≠ u) (hsp : spW.toAdr ≠ u) (hfl : fl ≠ u) :
     ∀ frame ∈ dormantLedger other u w fl spW caWord, frame.authorizes u = false := by
   intro frame hframe
-  simp [dormantLedger] at hframe
+  simp only [dormantLedger, List.mem_cons, List.not_mem_nil, or_false] at hframe
   rcases hframe with rfl | rfl | rfl | rfl | rfl
-  · simp [dormantMintFrame, fixtureFrame, CountedFrame.authorizes]
-  · simp [dormantIncomingTransferFrame, fixtureFrame, CountedFrame.authorizes, hother]
-  · simp [dormantApproveFrame, fixtureFrame, CountedFrame.authorizes, hw]
-  · simp [dormantSpendFrame, fixtureFrame, CountedFrame.authorizes, hsp]
-  · simp [dormantFlashFrame, fixtureFrame, CountedFrame.authorizes, hfl]
+  · simp only [CountedFrame.authorizes, dormantMintFrame, fixtureFrame, Bool.or_self]
+  · simp only [CountedFrame.authorizes, dormantIncomingTransferFrame, fixtureFrame, hother,
+    decide_false, Bool.or_self]
+  · simp only [CountedFrame.authorizes, dormantApproveFrame, fixtureFrame, hw, decide_false,
+    Bool.or_self]
+  · simp only [CountedFrame.authorizes, dormantSpendFrame, fixtureFrame, hsp, decide_false,
+    Bool.or_self]
+  · simp only [CountedFrame.authorizes, dormantFlashFrame, fixtureFrame, hfl, decide_false,
+    Bool.or_self]
 
 theorem dormantLedger_permanentOutflow_zero (other u w fl : Adr) (spW caWord : B256)
     (hw : w ≠ u) :
@@ -1100,18 +1102,15 @@ theorem dormantLedger_permanentOutflow_zero (other u w fl : Adr) (spW caWord : B
     (dormantSpendFrame w spW).permanentOutflow u = 0 ∧
     (dormantFlashFrame fl caWord).permanentOutflow u = 0 := by
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
-  · simp [dormantMintFrame, fixtureFrame, CountedFrame.permanentOutflow, FlowAtom.holderFlow,
-      HolderFlow.zero]
+  · simp only [CountedFrame.permanentOutflow, dormantMintFrame, fixtureFrame, FlowAtom.holderFlow,
+    ↓reduceIte, HolderFlow.zero, add_zero]
   · by_cases h : other = u <;>
-      simp [dormantIncomingTransferFrame, fixtureFrame, CountedFrame.permanentOutflow,
-        FlowAtom.holderFlow, HolderFlow.zero, h]
-  · simp [dormantApproveFrame, fixtureFrame, CountedFrame.permanentOutflow]
+      simp only [CountedFrame.permanentOutflow, dormantIncomingTransferFrame, fixtureFrame, h, FlowAtom.holderFlow, ↓reduceIte, HolderFlow.zero, add_zero]
+  · simp only [CountedFrame.permanentOutflow, dormantApproveFrame, fixtureFrame]
   · by_cases h : spW.toAdr = u <;>
-      simp [dormantSpendFrame, fixtureFrame, CountedFrame.permanentOutflow, FlowAtom.holderFlow,
-        HolderFlow.zero, hw, h]
+      simp only [CountedFrame.permanentOutflow, dormantSpendFrame, fixtureFrame, h, FlowAtom.holderFlow, hw, ↓reduceIte, HolderFlow.zero, add_zero]
   · by_cases h : fl = u <;>
-      simp [dormantFlashFrame, fixtureFrame, CountedFrame.permanentOutflow, FlowAtom.holderFlow,
-        HolderFlow.zero, h]
+      simp only [CountedFrame.permanentOutflow, dormantFlashFrame, fixtureFrame, h, FlowAtom.holderFlow, ↓reduceIte, HolderFlow.zero, add_zero]
 
 def nonDormantApproveFrameByU (u : Adr) (owU spU : B256) : CountedFrame :=
   fixtureFrame u
@@ -1125,7 +1124,8 @@ def nonDormantApproveFrameByU (u : Adr) (owU spU : B256) : CountedFrame :=
 
 theorem nonDormantApproveFrameByU_authorizes (u : Adr) (owU spU : B256) :
     (nonDormantApproveFrameByU u owU spU).authorizes u = true := by
-  simp [nonDormantApproveFrameByU, fixtureFrame, CountedFrame.authorizes]
+  simp only [CountedFrame.authorizes, nonDormantApproveFrameByU, fixtureFrame, decide_true,
+    Bool.or_true]
 
 /-! ### Self-bypass and direct debits
 
@@ -1175,7 +1175,8 @@ theorem dirtyPair_lastWrite_none (u : Adr) (ow1 sp1 ow2 sp2 : B256)
     (hk : projectedAllowanceKey ow1 sp1 ≠ projectedAllowanceKey ow2 sp2) :
     lastAllowanceWriteAt [dirtyApproveFrame u ow1 sp1] (projectedAllowanceKey ow2 sp2) =
       none := by
-  simp [dirtyApproveFrame, fixtureFrame, lastAllowanceWriteAt, AllowanceEvent.key, hk]
+  simp only [lastAllowanceWriteAt, dirtyApproveFrame, fixtureFrame, AllowanceEvent.key, hk,
+    ↓reduceIte]
 
 /-! ## Fixtures lifted to the history-altitude premise shapes
 
@@ -1208,7 +1209,10 @@ theorem dirtyPair_noAllowanceKeyCollision
     NoAllowanceKeyCollision history := by
   unfold NoAllowanceKeyCollision touchedAllowancePairs
   rw [hledger]
-  simpa [dirtyApproveFrame, fixtureFrame] using dirtyPair_pairwise
+  simpa only [ne_eq, dirtyApproveFrame, fixtureFrame, Option.map_some, Option.some.injEq,
+    List.filterMap_cons_some, List.filterMap_nil, List.pairwise_cons, List.mem_cons,
+    List.not_mem_nil, or_false, forall_eq, Prod.mk.injEq, and_true, IsEmpty.forall_iff,
+    implies_true, List.Pairwise.nil, and_self] using dirtyPair_pairwise
 
 /-- The dormant fixture lifted to the corollary's dormancy premise: for a
 history whose ledger is the dormant scenario, `NoAuthorizingActBy` holds

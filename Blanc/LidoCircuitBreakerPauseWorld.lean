@@ -151,7 +151,7 @@ theorem callee_exec (m : Msg) (G : Nat)
   have hcompile : some (initSevm m).code.toList = Prog.compile calleeProg := by
     show some m.code.toList = _
     rw [hcode, calleeProg_compile]
-    simp [calleeCode, ByteArray.toList_eq_toList_data]
+    simp only [calleeCode, ByteArray.toList_eq_toList_data]
   exact Prog.exec_of_runCompiledTo hrun hcompile
 
 /-! ## The two responder crossings
@@ -250,7 +250,7 @@ lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
     rw [show exec child = .ok out from hexec,
       Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
     show processMessage.settle _ (.ok out) = .ok out
-    simp [processMessage.settle, herr]
+    simp only [processMessage.settle, herr, Except.bind_ok, Option.isSome_none, Bool.false_eq_true, ↓reduceIte]
   have hdi := accessDelegation_inv h_del
   have hd1stack : d1.stack = s := by
     have h := hdi.1
@@ -282,7 +282,7 @@ lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
     rw [hsettle, Resume.run_call_ok (by rw [herr]; rfl) hpstack]
   have hrun : Ninst.RunCompiled sevm devm (.exec .call) post :=
     Ninst.runCompiled_call_zero_value hfork h_stk h_ext h_del h_acc h_split h_gas
-      h_depth (by simpa [p, msg]) (by simpa [p, msg] using hres)
+      h_depth (by simpa only [p, msg]) (by simpa only [p, msg, ExceptT.stM_eq] using hres)
   have hpask : p.accessedStorageKeys = devm.accessedStorageKeys := hd1wm.2
   have haskOut' : out.accessedStorageKeys = devm.accessedStorageKeys :=
     haskOut.trans hd1wm.2
@@ -326,7 +326,8 @@ lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
       devm.accountsToDelete.isEmpty
     rw [hatdOut]
     rw [show p.accountsToDelete = devm.accountsToDelete from hd1delete]
-    simp
+    simp only [Std.HashSet.union_eq, Std.HashSet.isEmpty_union,
+      Std.HashSet.isEmpty_emptyWithCapacity, Bool.and_true]
   · change out.transientStorage = devm.transientStorage
     rw [show out.transientStorage =
       (initDevm (msg.withBenv benv')).transientStorage from
@@ -346,7 +347,7 @@ lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
       fun h => Std.HashSet.mem_union_iff.mpr (Or.inl h)⟩
   · rw [← hd1state]
     have hsub' : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa [msg, callSpawnMsg, callMsg] using hsub
+      simpa only [msg, callSpawnMsg, callMsg, Bool.false_or] using hsub
     rw [show p.state = d1.state from rfl] at hsub'
     exact hsub'
   · change out.state = stmid.addBal cw.toAdr 0
@@ -424,7 +425,7 @@ lemma runCompiled_staticcall_responder {sevm : Sevm} {devm : Devm}
     rw [show exec child = .ok out from hexec,
       Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
     show processMessage.settle _ (.ok out) = .ok out
-    simp [processMessage.settle, herr]
+    simp only [processMessage.settle, herr, Except.bind_ok, Option.isSome_none, Bool.false_eq_true, ↓reduceIte]
   have hdi := accessDelegation_inv h_del
   have hd1stack : d1.stack = s := by
     have h := hdi.1
@@ -458,7 +459,7 @@ lemma runCompiled_staticcall_responder {sevm : Sevm} {devm : Devm}
     Ninst.runCompiled_exec_run
       (Xinst.step_staticcall_spawn hfork h_stk h_ext h_del h_acc h_split h_gas
         h_depth)
-      (by simpa [p, msg] using henter) (by simpa [p, msg] using hres)
+      (by simpa only [p, msg] using henter) (by simpa only [p, msg, ExceptT.stM_eq] using hres)
   have hpask : p.accessedStorageKeys = devm.accessedStorageKeys := hd1wm.2
   have haskOut' : out.accessedStorageKeys = devm.accessedStorageKeys :=
     haskOut.trans hd1wm.2
@@ -502,7 +503,8 @@ lemma runCompiled_staticcall_responder {sevm : Sevm} {devm : Devm}
       devm.accountsToDelete.isEmpty
     rw [hatdOut]
     rw [show p.accountsToDelete = devm.accountsToDelete from hd1delete]
-    simp
+    simp only [Std.HashSet.union_eq, Std.HashSet.isEmpty_union,
+      Std.HashSet.isEmpty_emptyWithCapacity, Bool.and_true]
   · change out.transientStorage = devm.transientStorage
     rw [show out.transientStorage =
       (initDevm (msg.withBenv benv')).transientStorage from
@@ -522,7 +524,7 @@ lemma runCompiled_staticcall_responder {sevm : Sevm} {devm : Devm}
       fun h => Std.HashSet.mem_union_iff.mpr (Or.inl h)⟩
   · rw [← hd1state]
     have hsub' : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa [msg, staticcallSpawnMsg, callMsg] using hsub
+      simpa only [msg, staticcallSpawnMsg, callMsg, Bool.true_or] using hsub
     rw [show p.state = d1.state from rfl] at hsub'
     exact hsub'
   · change out.state = stmid.addBal tw.toAdr 0
@@ -815,7 +817,7 @@ private theorem pauseLastStor_zero {key : B256}
     Stor.get_set_ne _ hindex, Stor.get_set_ne _ hassignment,
     Stor.get_set_ne _ hentry, Stor.get_set_ne _ hlength,
     Stor.get_set_ne _ hduration, Stor.get_set_ne _ hinterval]
-  simp [Stor.get, Stor.empty]
+  simp only [Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc, Std.TreeMap.getD_emptyc]
 
 /-- Every canonical target other than `0x77` is unassigned in row 19's
 world. -/
@@ -948,7 +950,7 @@ private theorem pauseRetainedStor_zero {key : B256}
     Stor.get_set_ne _ hassignment, Stor.get_set_ne _ hentryTwo,
     Stor.get_set_ne _ hentryOne, Stor.get_set_ne _ hlength,
     Stor.get_set_ne _ hduration, Stor.get_set_ne _ hinterval]
-  simp [Stor.get, Stor.empty]
+  simp only [Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc, Std.TreeMap.getD_emptyc]
 
 /-- Every canonical target other than `0x77` and `0x88` is unassigned in row
 18's world. -/
@@ -1081,7 +1083,7 @@ theorem pauseLastStor_witness :
       decide
     · rw [pauseLastStor_assignment_other canonical ht]
       have hne : pauseWorldCallee.toB256 ≠ t := fun h => ht h.symm
-      simp [assignmentAt, hne]
+      simp only [assignmentAt, hne, ↓reduceIte]
   · intro t canonical
     show pauseLastWorldStor.get (indexSlot t) =
       Nat.toB256 (oneBasedIndexAt
@@ -1148,7 +1150,7 @@ theorem pauseRetainedStor_witness :
       · rw [pauseRetainedStor_assignment_other canonical ht ht2]
         have hne : pauseWorldCallee.toB256 ≠ t := fun h => ht h.symm
         have hne2 : pauseWorldT2 ≠ t := fun h => ht2 h.symm
-        simp [assignmentAt, hne, hne2]
+        simp only [assignmentAt, hne, ↓reduceIte, hne2]
   · intro t canonical
     show pauseRetainedWorldStor.get (indexSlot t) =
       Nat.toB256 (oneBasedIndexAt [(pauseWorldCallee.toB256, pauseWorldPauser),

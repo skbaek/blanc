@@ -73,7 +73,8 @@ theorem pauseCalldata_facts {sevm : Sevm} {target : B256}
     sevm.data.length = 36 ∧ Sevm.argWord sevm 0 = target := by
   refine ⟨?_, ?_⟩
   · rw [hd]
-    simp [pauseCalldata, abiSelectorBytes_length, B256.length_toBytes]
+    simp only [pauseCalldata, List.length_append, abiSelectorBytes_length, B256.length_toBytes,
+      Nat.reduceAdd]
   · show Sevm.dataWord sevm ((32 * 0) + 4) = target
     apply dataWord_of_append
       (pre := abiSelectorBytes (selector "pause" [.address])) (post := [])
@@ -200,7 +201,9 @@ theorem runtimeMain_routeTo_pauseKernel (dp : DeployParams)
   obtain ⟨wT, wN⟩ := pauseStaging_windows
     (MemImage.of_memory_eq (hmem'.trans (hmem.trans mb)) image) staging
   refine routeTo_call (body := setPauserKernel) callTail
-    (by simp [runtime, aux, setPauserSlot]) (fun kernelStart kburn ktail => ?_)
+    (by simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      setPauserSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]) (fun kernelStart kburn ktail => ?_)
   exact kernelRoute kernelStart
     (MemWordAt.of_memory_eq kburn.memory.symm wT)
     (MemWordAt.of_memory_eq kburn.memory.symm wN)
@@ -288,7 +291,7 @@ theorem attainable_pauseRegistry_of_route {row : RuntimePersistentWrite}
   have routedMember : site ∈ runtimePersistentSourceSites officialParams := by
     unfold runtimePersistentSourceSites
     rw [List.mem_filter]
-    exact ⟨hmem, by simp [hinstrTarget, isPersistentWriteInstruction]⟩
+    exact ⟨hmem, by simp only [isPersistentWriteInstruction, hinstrTarget]⟩
   have siteEq : rowSite = site :=
     runtimePersistentSourceSite_eq_of_pc
       (RuntimePersistentWrite.mem_runtimePersistentSourceSites foundSite)
@@ -307,7 +310,7 @@ theorem attainable_pauseRegistry_of_route {row : RuntimePersistentWrite}
   subst rowEq
   have roleEq : role = .pauseRegistry := by
     have alternatives : role = .adminRegistry ∨ role = .pauseRegistry := by
-      simpa [roles] using rolePermitted
+      simpa only [roles, List.mem_cons, List.not_mem_nil, or_false] using rolePermitted
     rcases alternatives with rfl | rfl
     · exfalso
       cases authority with

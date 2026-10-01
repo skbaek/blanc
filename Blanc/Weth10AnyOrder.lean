@@ -63,16 +63,16 @@ theorem claimSum_append (f : RedemptionClaim → Nat)
     (cs ds : List RedemptionClaim) :
     claimSum f (cs ++ ds) = claimSum f cs + claimSum f ds := by
   induction cs with
-  | nil => simp
-  | cons c cs ih => simp [ih, Nat.add_assoc]
+  | nil => simp only [List.nil_append, claimSum_nil, zero_add]
+  | cons c cs ih => simp only [List.cons_append, claimSum_cons, ih, Nat.add_assoc]
 
 /-- Reordering a claim list cannot change any of its aggregates. -/
 theorem claimSum_perm {cs ds : List RedemptionClaim} (h : cs.Perm ds)
     (f : RedemptionClaim → Nat) : claimSum f cs = claimSum f ds := by
   induction h with
   | nil => rfl
-  | cons c _ ih => simp [ih]
-  | swap c d l => simp; omega
+  | cons c _ ih => simp only [claimSum_cons, ih]
+  | swap c d l => simp only [claimSum_cons]; omega
   | trans _ _ ih₁ ih₂ => exact ih₁.trans ih₂
 
 /-- Total ETH the whole list pays out. -/
@@ -156,7 +156,7 @@ theorem ClaimAdmissible.recipient_ne_target
   have hlen := weth10Code_length dp
   rw [hinstalled] at hempty
   rw [hempty] at hlen
-  simp at hlen
+  simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
 
 /-- A whole list is admissible when each claim's recipient is payable and each
 owner's **aggregate** booking fits inside that owner's booked balance. -/
@@ -276,9 +276,9 @@ theorem canonicalRedemptionMessage_admissible
   isStatic_eq := rfl
   auths_eq := rfl
   disablePrecompiles_eq := rfl
-  target_not_precompile := by simp [hca]
+  target_not_precompile := by simp only [hca, Bool.false_eq_true]
   recipient_ne_zero := hadm.recipient_ne_zero
-  recipient_not_precompile := by simp [hadm.recipient_not_precompile]
+  recipient_not_precompile := by simp only [hadm.recipient_not_precompile, Bool.false_eq_true]
   recipient_code_free := hadm.recipient_code_free
   original_storage_eq := rfl
   target_access :=
@@ -407,8 +407,9 @@ theorem redeemClaims_run
   induction cs with
   | nil =>
       intro w hstable hadm
-      exact ⟨w, .nil w, hstable, by simp, by simp, by simp, rfl,
-        fun _ => rfl, fun es h => by simpa using h⟩
+      exact ⟨w, .nil w, hstable, by simp only [ownerClaimTotal_nil, add_zero, implies_true], by simp only [claimTotal_nil, add_zero], by simp only [ne_eq, recipientClaimTotal_nil,
+        add_zero, implies_true], rfl,
+        fun _ => rfl, fun es h => by simpa only [List.nil_append] using h⟩
   | cons c cs ih =>
       intro w hstable hadm
       have hcadm : ClaimAdmissible rules ca w c :=
@@ -535,8 +536,8 @@ theorem repeatedOwner_admissible
   budget v := by
     by_cases hv : u = v
     · subst hv
-      simpa [ownerClaimTotal] using hbudget
-    · simp [ownerClaimTotal, hv]
+      simpa only [ownerClaimTotal, claimSum_cons, ↓reduceIte, claimSum_nil, add_zero] using hbudget
+    · simp only [ownerClaimTotal, claimSum_cons, hv, ↓reduceIte, claimSum_nil, add_zero, zero_le]
 
 /-! ## A supplied everyone-list instance -/
 
@@ -554,7 +555,8 @@ theorem ownerClaimTotal_fullBalanceClaims
     ownerClaimTotal (fullBalanceClaims ca w holders recipient) u =
       if u ∈ holders then bookedBalanceNat w ca u else 0 := by
   induction holders with
-  | nil => simp [fullBalanceClaims, ownerClaimTotal]
+  | nil => simp only [ownerClaimTotal, fullBalanceClaims, List.map_nil, claimSum_nil,
+    List.not_mem_nil, ↓reduceIte]
   | cons v holders ih =>
       have hv : v ∉ holders := (List.nodup_cons.mp hnodup).1
       have htail : holders.Nodup := (List.nodup_cons.mp hnodup).2
@@ -566,9 +568,9 @@ theorem ownerClaimTotal_fullBalanceClaims
       rw [ih htail]
       by_cases hvu : v = u
       · subst v
-        simp [hv]
+        simp only [↓reduceIte, hv, add_zero, List.mem_cons, or_false]
       · have huv : u ≠ v := fun h => hvu h.symm
-        simp [hvu, huv]
+        simp only [hvu, ↓reduceIte, zero_add, List.mem_cons, huv, false_or]
 
 /-- Any permutation of a duplicate-free supplied holder list's full-balance
 claims runs successfully, provided its explicitly chosen recipients are
@@ -595,8 +597,8 @@ theorem redeemEveryoneList_anyOrder
     · intro u
       rw [ownerClaimTotal_fullBalanceClaims hnodup u]
       by_cases hu : u ∈ holders
-      · simp [hu]
-      · simp [hu]
+      · simp only [hu, ↓reduceIte, Std.le_refl]
+      · simp only [hu, ↓reduceIte, zero_le]
   exact redeemClaims_anyOrder hca hsel hstable hadm hperm
 
 /-! ## The deployment-rooted instance -/
@@ -615,9 +617,9 @@ private theorem rulesSelected_of_rulesAt {cfg : ChainConfig} {timestamp : Nat}
   unfold ChainConfig.rulesAt at hrules
   cases hf : cfg.forkAt timestamp with
   | error e =>
-      simp [hf, bind, Except.bind, Except.mapError] at hrules
+      simp only [bind, Except.bind, hf, reduceCtorEq] at hrules
   | ok f =>
-      simp [hf, bind, Except.bind, Except.mapError, Fork.rules] at hrules
+      simp only [bind, Except.bind, hf, Except.mapError, Fork.rules, Except.ok.injEq] at hrules
       exact ⟨f, hcov timestamp f hf, hrules⟩
 
 /-- **The flagship instance.** At any configured future of a verified

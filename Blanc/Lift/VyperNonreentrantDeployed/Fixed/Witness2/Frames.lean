@@ -167,7 +167,8 @@ theorem frameRe {fk : Fork} (hg : CoveredFork fk) (hag : PAgree cRe0) :
   refine ⟨⟨by rw [← ex1, ← ex2]; exact ex3, fun y hy => ?_, x1, x2, hp1, hx1.1.trans pRe1, hp2,
     hx2.1.trans pRe2⟩, by rw [← ds1, ← ds2]; exact ds3⟩
   obtain ⟨hok, hpol⟩ := hall y hy
-  exact ⟨hpol, by simpa [okNoBody] using hok⟩
+  exact ⟨hpol, by simpa only [okNoBody, List.contains_eq_mem, Bool.not_eq_eq_eq_not,
+    Bool.not_true, decide_eq_false_iff_not] using hok⟩
 
 /-- **The callback forwarder frame**, under any covered fork: it forwards the receiver's call by
 `DELEGATECALL`, spawning the reentrant pool frame, resumes from its failure and reverts. -/
@@ -384,7 +385,8 @@ theorem frameB {fk : Fork} (hfk : CoveredFork fk) (hag : PAgree cB0) :
     have := interval_trans (P := fun y => okNoRel y.pc = true) pp12
       (fun y a b c => (bet12 y a b c).1) h2'
       (interval_step e3 h2' (fun y a b c => (bet34 y a b c).1)) y a b c
-    simpa [okNoRel] using this
+    simpa only [okNoRel, List.contains_eq_mem, Bool.not_eq_eq_eq_not, Bool.not_true,
+      decide_eq_false_iff_not] using this
   exact ⟨exF, halt1_childAgree codeTries hag8 wB9, x1, x4, t1, xr, q, g, t2, pp01,
     hx1.1.trans pB1, pp12.trans ((ParentPrefix.step e3 (.refl _)).trans pp34), hx4.1.trans pB4, (by rw [hx4.2.1, hx4.1]; exact hat4), hPr,
     sp2, ht1, hxr, hq, hg, ht2, dsF, dsr, dsq, hre, H0⟩

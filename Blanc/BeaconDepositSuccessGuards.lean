@@ -48,7 +48,7 @@ theorem depositRootGuard_runCompiledTo
   case h_val =>
     change Sevm.argWord sevm 3 =? (memory.read 640 32).1.toB256 = 1
     rw [hroot, hread]
-    simp [B256.eqCheck]
+    simp only [B256.eqCheck, ↓reduceIte]
   case h_arm =>
     rw [show (nodeWord * 32 : B256).toNat = 640 by decide +kernel,
       hmemory]
@@ -161,7 +161,7 @@ theorem reconstructDepositDataNode_successGuards_runCompiledTo
       (amountPadded := amountLE ++ zeros 24)
       (oldCount := oldCount) (amount := amount) (stack := [])
       (success := depositSuccessGuards) (K := G + 59)
-      source hnodeleg hwarm hpre hdepth hbound (by simp)
+      source hnodeleg hwarm hpre hdepth hbound (by simp only [List.length_nil, Nat.ofNat_pos])
   obtain ⟨hcarrier⟩ := hregisters
   refine ⟨finalPost, ⟨?_⟩, ?_, hmeta, ?_⟩
   · rw [← hnodeEq]

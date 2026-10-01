@@ -50,7 +50,7 @@ theorem mem_runtimeSelectors_iff (selected : B256) :
       selected = proxyChangeAdminSelector ∨
       selected = proxyUpgradeToSelector ∨
       selected = proxyUpgradeToAndCallSelector := by
-  simp [runtimeSelectors]
+  simp only [runtimeSelectors, List.mem_cons, List.not_mem_nil, or_false]
 
 /-! ## Event topics and exact log shapes -/
 

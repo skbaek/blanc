@@ -18,7 +18,7 @@ private theorem exec_clock_admitted
     Exec.FrameAdmitted ca (ClockEntry T) run := by
   intro root member target
   have hstat := Exec.frameAdmitted_benvStat run ca root member target
-  dsimp [ClockEntry]
+  dsimp only [ClockEntry]
   rw [hstat]
   exact htime
 
@@ -30,7 +30,7 @@ private theorem processMessage_clock_admitted
   rcases trace with ⟨slot, retained, run⟩
   exact RetainedXlot.frameAdmitted_benvStat_of_runFrame (Q := fun stat =>
     stat.time.toNat ≤ T) retained run (by
-      simpa [Jaune.Frame.ofCall, Msg.withBenv] using htime) ca
+      simpa only [Frame.ofCall] using htime) ca
 
 private theorem processCreateMessage_clock_admitted
     {T : Nat} {ca : Adr} {msg : Msg} {post : Devm}
@@ -40,9 +40,8 @@ private theorem processCreateMessage_clock_admitted
   change trace.retained.FrameAdmitted ca (ClockEntry T)
   exact RetainedXlot.frameAdmitted_benvStat_of_runFrame (Q := fun stat =>
     stat.time.toNat ≤ T) trace.retained trace.run (by
-      simpa [Jaune.Frame.ofCreate, processCreateMessage.msg, Msg.withBenv,
-        addCreatedAccount, Benv.setStor, Benv.incrNonce]
-        using htime) ca
+      simpa only [Frame.ofCreate, processCreateMessage.msg, Msg.withBenv, Benv.incrNonce,
+        addCreatedAccount, Benv.setStor] using htime) ca
 
 private theorem messageCall_clock_admitted
     {T : Nat} {ca : Adr} {msg : Msg} {state : State} {out : MsgCallOutput}
@@ -54,9 +53,8 @@ private theorem messageCall_clock_admitted
   | createRun target collision evm core coreTrace result =>
       exact RetainedXlot.frameAdmitted_benvStat_of_runFrame (Q := fun stat =>
         stat.time.toNat ≤ T) coreTrace.retained coreTrace.run (by
-          simpa [Jaune.Frame.ofCreate, processCreateMessage.msg, Msg.withBenv,
-            addCreatedAccount, Benv.setStor, Benv.incrNonce]
-            using htime) ca
+          simpa only [Frame.ofCreate, processCreateMessage.msg, Msg.withBenv, Benv.incrNonce,
+            addCreatedAccount, Benv.setStor] using htime) ca
   | callRun target delegated refund delegation execMsg execMsgEq evm core
       coreTrace result =>
       subst execMsgEq
@@ -88,7 +86,7 @@ private theorem transactionList_clock_admitted
   | nil => trivial
   | cons head tail ih =>
       refine ⟨transaction_clock_admitted head ?_, ih ?_⟩
-      · simpa [prepareMessage_benv] using htime
+      · simpa only using htime
       · exact htime
 
 private theorem systemMessage_clock_admitted
@@ -136,7 +134,7 @@ theorem configuredBlock_clock
   have admitted : trace.FrameAdmitted ca (ClockEntry T) := by
     change trace.bodyTrace.FrameAdmitted ca (ClockEntry T)
     exact body_clock_admitted trace.bodyTrace (by
-      simpa [initBenv, initBenvStat] using htime)
+      simpa only [initBenv, initBenvStat] using htime)
   exact trace.stateInv_admitted
     (dripClockSpec_preservesAdmitted chi0 rho0 T ca) admitted inv
 
@@ -190,7 +188,7 @@ theorem configuredHistory_has_head_timestamp
         ⟨rules, cb, deploymentTxBytes, deploymentTx, sender, ctx, post, bout,
           hbase, hblock, hcovered, htx, hsuffix, htransition, hbody, hpost, hreceipt⟩
       have hcb := deployed_blocks_getLast_of_transition htransition
-      exact ⟨cb.block.header.timestamp, by simp [hcb]⟩
+      exact ⟨cb.block.header.timestamp, by simp only [hcb, Option.map_some]⟩
   | @step current future prior block ih =>
       exact ⟨block.block.header.timestamp, by
         rw [block.post_blocks_getLast]
@@ -216,7 +214,7 @@ theorem history_clockInv
       have hprevInv := ih tprev hprev
       have hparentExists : ∃ parent, current.blocks.getLast? = some parent := by
         cases h : current.blocks.getLast? with
-        | none => simp [h] at hprev
+        | none => simp only [h, Option.map_none, reduceCtorEq] at hprev
         | some parent => exact ⟨parent, rfl⟩
       obtain ⟨parent, hparent⟩ := hparentExists
       have hprevTime : parent.header.timestamp = tprev := by

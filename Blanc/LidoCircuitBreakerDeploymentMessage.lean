@@ -428,7 +428,7 @@ private theorem chargeCodeGas_official_output
   obtain ⟨tail, hcons⟩ := lidoCircuitBreakerCode_official_cons
   have hlen := lidoCircuitBreakerCode_official_length
   rw [processCreateMessage.chargeCodeGas_legacy_eq_ok hstateGas
-    (by rw [houtput, hcons]; simp <;> decide) (by rw [houtput, hlen]; exact hgas)
+    (by rw [houtput, hcons]; simp only [List.head?_cons, ne_eq, Option.some.injEq] <;> decide) (by rw [houtput, hlen]; exact hgas)
     (by rw [houtput, hlen]; exact hmax), houtput, hlen]
   rfl
 
@@ -1102,13 +1102,14 @@ theorem processMessageCall_establishes_officialRegistryStable
   have hrun :
       processMessageCall msg = .ok (createPost.state, out) := by
     unfold processMessageCall
-    rw [show msg.target.isNone = true by simp [htargetNone]]
+    rw [show msg.target.isNone = true by simp only [htargetNone, Option.isNone_none]]
     unfold processMessageCall.create
     simp only [if_true]
     rw [htarget]
-    simp [hnoCodeOrNonce, hnoStorage, Except.bimap, hcreate'.run,
-      hcreate'.error, htoNat, out, officialMessageOutputOf,
-      directCreateMessageOutputOf, hfork.rules_stateGas_none]
+    simp only [hfork.rules_stateGas_none, hnoCodeOrNonce, hnoStorage, Bool.or_self,
+      Bool.false_eq_true, ↓reduceIte, Except.bimap, hcreate'.run, id_eq, Option.isNone_iff_eq_none,
+      Except.bind_ok, Nat.cast_zero, hcreate'.error, htoNat, officialMessageOutputOf,
+      directCreateMessageOutputOf, out]
     rfl
   refine ⟨createPost.state, out, {
     target_eq := htarget
@@ -1125,10 +1126,8 @@ theorem processMessageCall_establishes_officialRegistryStable
     error := ?_
     accountsToDelete := ?_
     stable := hcreate'.stable }⟩
-  · simpa [Devm.getStorVal, Devm.getAcct, State.getStor] using
-      hcreate'.pauseDuration
-  · simpa [Devm.getStorVal, Devm.getAcct, State.getStor] using
-      hcreate'.heartbeatInterval
+  · simpa only [State.getStor, Devm.getStorVal, Devm.getAcct] using hcreate'.pauseDuration
+  · simpa only [State.getStor, Devm.getStorVal, Devm.getAcct] using hcreate'.heartbeatInterval
   · simpa only [out, officialMessageOutputOf,
       directCreateMessageOutputOf] using hcreate'.logs
   · simpa only [out, officialMessageOutputOf,

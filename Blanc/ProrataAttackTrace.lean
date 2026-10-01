@@ -71,7 +71,7 @@ theorem priceLe_of_filter_pair {o : Nat} (ho : o ≠ 0)
     {p : ProrataAccountingStep o → Bool} {d w : ProrataAccountingStep o} :
     steps.filter p = [d, w] → PriceLe o d.post w.pre := by
   induction replay with
-  | nil boundary => intro h; simp at h
+  | nil boundary => intro h; simp only [List.filter_nil, List.nil_eq, reduceCtorEq] at h
   | @cons pre mid last hd tl pre_eq post_eq move tail ih =>
       intro h
       by_cases hp : p hd = true
@@ -82,7 +82,7 @@ theorem priceLe_of_filter_pair {o : Nat} (ho : o ≠ 0)
           List.mem_of_mem_filter (p := p) (by rw [htl]; exact List.mem_singleton_self w)
         rw [post_eq]
         exact tail.priceLe_of_mem ho hw
-      · rw [List.filter_cons_of_neg (by simpa using hp)] at h
+      · rw [List.filter_cons_of_neg (by simpa only [Bool.not_eq_true] using hp)] at h
         exact ih h
 
 end ProrataAccountingReplay
@@ -106,19 +106,22 @@ theorem victimMoves_cons_of_move {o : Nat} {victim : Adr}
     {step : ProrataAccountingStep o} {steps : List (ProrataAccountingStep o)}
     (hactor : step.provenance.actor = some victim) (hkind : step.kind ≠ .silent) :
     victimMoves victim (step :: steps) = step :: victimMoves victim steps := by
-  simp [victimMoves, victimMove, hactor, hkind]
+  simp only [victimMoves, victimMove, hactor, decide_true, ne_eq, hkind, not_false_eq_true,
+    Bool.and_self, List.filter_cons_of_pos]
 
 theorem victimMoves_cons_of_foreign {o : Nat} {victim : Adr}
     {step : ProrataAccountingStep o} {steps : List (ProrataAccountingStep o)}
     (hactor : ¬ step.provenance.actor = some victim) :
     victimMoves victim (step :: steps) = victimMoves victim steps := by
-  simp [victimMoves, victimMove, hactor]
+  simp only [victimMoves, victimMove, hactor, decide_false, ne_eq, decide_not, Bool.false_and,
+    Bool.false_eq_true, not_false_eq_true, List.filter_cons_of_neg]
 
 theorem victimMoves_cons_of_silent {o : Nat} {victim : Adr}
     {step : ProrataAccountingStep o} {steps : List (ProrataAccountingStep o)}
     (hkind : step.kind = .silent) :
     victimMoves victim (step :: steps) = victimMoves victim steps := by
-  simp [victimMoves, victimMove, hkind]
+  simp only [victimMoves, victimMove, hkind, ne_eq, not_true_eq_false, decide_false, Bool.and_false,
+    Bool.false_eq_true, not_false_eq_true, List.filter_cons_of_neg]
 
 /-- The SF-frozen victim schedule.
 
@@ -195,7 +198,7 @@ theorem victimDeposit_phase {o : Nat} {phase : VictimPhase o} {victim : Adr}
   | «open» dep =>
       exfalso
       rcases hadmits with h | ⟨w, p, hwk, h⟩ <;> rw [hmoves] at h
-      · simp at h
+      · simp only [reduceCtorEq] at h
       · simp only [List.cons.injEq] at h
         obtain ⟨rfl, -⟩ := h
         rw [hkind] at hwk
@@ -204,7 +207,7 @@ theorem victimDeposit_phase {o : Nat} {phase : VictimPhase o} {victim : Adr}
       exfalso
       have h : victimMoves victim (step :: rest) = [] := hadmits
       rw [hmoves] at h
-      simp at h
+      simp only [reduceCtorEq] at h
 
 /-- The optional victim exit is admitted only while the deposit is open, burns
 exactly the balance that deposit minted, and closes the victim's schedule. -/
@@ -230,19 +233,19 @@ theorem victimExit_phase {o : Nat} {phase : VictimPhase o} {victim : Adr}
   | «open» dep =>
       refine ⟨dep, rfl, ?_, ?_⟩ <;>
         rcases hadmits with h | ⟨w, p, hwk, h⟩ <;> rw [hmoves] at h
-      · simp at h
+      · simp only [reduceCtorEq] at h
       · simp only [List.cons.injEq] at h
         obtain ⟨rfl, -⟩ := h
         rw [hkind] at hwk
         injection hwk with hw _
-      · simp at h
+      · simp only [reduceCtorEq] at h
       · simp only [List.cons.injEq] at h
         exact h.2
   | exited dep ex =>
       exfalso
       have h : victimMoves victim (step :: rest) = [] := hadmits
       rw [hmoves] at h
-      simp at h
+      simp only [reduceCtorEq] at h
 
 /-- The victim makes no positive target credit of its own: the schedule admits
 a deposit or a full exit, never a bare credit. -/
@@ -263,7 +266,7 @@ theorem victimCredit_absurd {o : Nat} {phase : VictimPhase o} {victim : Adr}
         exact ProrataAccountingKind.noConfusion hdk
   | «open» dep =>
       rcases hadmits with h | ⟨w, p, hwk, h⟩ <;> rw [hmoves] at h
-      · simp at h
+      · simp only [reduceCtorEq] at h
       · simp only [List.cons.injEq] at h
         obtain ⟨rfl, -⟩ := h
         rw [hkind] at hwk
@@ -271,7 +274,7 @@ theorem victimCredit_absurd {o : Nat} {phase : VictimPhase o} {victim : Adr}
   | exited dep ex =>
       have h : victimMoves victim (step :: rest) = [] := hadmits
       rw [hmoves] at h
-      simp at h
+      simp only [reduceCtorEq] at h
 
 /-! ## Coalition accounting over a realized trace -/
 
@@ -326,8 +329,8 @@ theorem outsideSubsidy_coalitionCharge {o : Nat} (victim : Adr)
     outsideSubsidy victim coalitionCharge steps = 0 := by
   induction steps with
   | nil => rfl
-  | cons s ss ih => simp [outsideSubsidy, coalitionCharge,
-      AttackAttribution.outsideAmount]
+  | cons s ss ih => simp only [outsideSubsidy, AttackAttribution.outsideAmount, coalitionCharge,
+    List.map_cons, List.map_const', List.sum_cons, List.sum_replicate, nsmul_zero, add_zero]
 
 /-! ## The SF-frozen attack trace -/
 
@@ -449,8 +452,8 @@ private theorem attackStep_of_realized
     rw [← pre_eq, ← post_eq]; exact step.effect
   by_cases hactor : step.provenance.actor = some victim
   · -- The victim's own step.
-    have hcredit : stepCredit victim step = 0 := by simp [stepCredit, hactor]
-    have hpayout : stepPayout victim step = 0 := by simp [stepPayout, hactor]
+    have hcredit : stepCredit victim step = 0 := by simp only [stepCredit, hactor, ↓reduceIte]
+    have hpayout : stepPayout victim step = 0 := by simp only [stepPayout, hactor, ↓reduceIte]
     cases hkind : step.kind with
     | deposit amount minted =>
         rw [hkind] at heff move
@@ -469,9 +472,9 @@ private theorem attackStep_of_realized
         · simp only
           rw [hvictim, LedgerMove.deposit_row move hactor]
         · simpa only [VictimPhase.Admits] using hrem
-        · simp [hcredit]
-        · simp [hpayout]
-        · simp [hcredit]
+        · simp only [hcredit, AttackAttribution.coalitionAmount_zero, add_zero]
+        · simp only [hpayout, AttackAttribution.coalitionAmount_zero, add_zero]
+        · simp only [hcredit, AttackAttribution.outsideAmount_zero, add_zero]
     | withdraw shares paid =>
         rw [hkind] at heff move
         have hmoves := victimMoves_cons_of_move (steps := rest) hactor
@@ -491,9 +494,9 @@ private theorem attackStep_of_realized
         · simp only
           rw [hvictim, LedgerMove.withdraw_row move hactor, hshares]
         · simpa only [VictimPhase.Admits] using hrem
-        · simp [hcredit]
-        · simp [hpayout]
-        · simp [hcredit]
+        · simp only [hcredit, AttackAttribution.coalitionAmount_zero, add_zero]
+        · simp only [hpayout, AttackAttribution.coalitionAmount_zero, add_zero]
+        · simp only [hcredit, AttackAttribution.outsideAmount_zero, add_zero]
     | externalCredit amount =>
         exact absurd
           (victimCredit_absurd hadmits
@@ -511,9 +514,9 @@ private theorem attackStep_of_realized
         · rw [hacc, ← hpost]
         · rw [hmove, hvictim]
         · exact hadmits.of_moves_eq hmoves
-        · simp [hcredit]
-        · simp [hpayout]
-        · simp [hcredit]
+        · simp only [hcredit, AttackAttribution.coalitionAmount_zero, add_zero]
+        · simp only [hpayout, AttackAttribution.coalitionAmount_zero, add_zero]
+        · simp only [hcredit, AttackAttribution.outsideAmount_zero, add_zero]
   · -- A step of some actor other than the victim.
     have hrow : mid.ledger victim = pre.ledger victim :=
       LedgerMove.eq_of_ne_actor move hactor
@@ -531,9 +534,10 @@ private theorem attackStep_of_realized
         · simp only
           rw [hvictim, hrow]
         · exact hadmits'
-        · simp [stepCredit, hactor, hkind]
-        · simp [stepPayout, hactor, hkind]
-        · simp [stepCredit, hactor, hkind]
+        · simp only [stepCredit, hactor, ↓reduceIte, hkind]
+        · simp only [stepPayout, hactor, ↓reduceIte, hkind, AttackAttribution.coalitionAmount_zero,
+          add_zero]
+        · simp only [stepCredit, hactor, ↓reduceIte, hkind]
     | withdraw shares paid =>
         rw [hkind] at heff move
         obtain ⟨-, hquote, hpost⟩ := heff.withdraw_inv
@@ -553,9 +557,11 @@ private theorem attackStep_of_realized
         · simp only
           rw [hvictim, hrow]
         · exact hadmits'
-        · simp [stepCredit, hactor, hkind]
-        · simp [stepPayout, hactor, hkind]
-        · simp [stepCredit, hactor, hkind]
+        · simp only [stepCredit, hactor, ↓reduceIte, hkind, AttackAttribution.coalitionAmount_zero,
+          add_zero]
+        · simp only [stepPayout, hactor, ↓reduceIte, hkind]
+        · simp only [stepCredit, hactor, ↓reduceIte, hkind, AttackAttribution.outsideAmount_zero,
+          add_zero]
     | externalCredit amount =>
         rw [hkind] at heff move
         obtain ⟨hpositive, hpost⟩ := heff.externalCredit_inv
@@ -565,9 +571,10 @@ private theorem attackStep_of_realized
         · simp only
           rw [hvictim, hrow]
         · exact hadmits'
-        · simp [stepCredit, hactor, hkind]
-        · simp [stepPayout, hactor, hkind]
-        · simp [stepCredit, hactor, hkind]
+        · simp only [stepCredit, hactor, ↓reduceIte, hkind]
+        · simp only [stepPayout, hactor, ↓reduceIte, hkind, AttackAttribution.coalitionAmount_zero,
+          add_zero]
+        · simp only [stepCredit, hactor, ↓reduceIte, hkind]
     | silent =>
         rw [hkind] at heff move
         have hpost := heff.silent_inv
@@ -576,9 +583,12 @@ private theorem attackStep_of_realized
         · rw [hacc, ← hpost]
         · rw [hmove, hvictim]
         · exact hadmits'
-        · simp [stepCredit, hactor, hkind]
-        · simp [stepPayout, hactor, hkind]
-        · simp [stepCredit, hactor, hkind]
+        · simp only [stepCredit, hactor, ↓reduceIte, hkind, AttackAttribution.coalitionAmount_zero,
+          add_zero]
+        · simp only [stepPayout, hactor, ↓reduceIte, hkind, AttackAttribution.coalitionAmount_zero,
+          add_zero]
+        · simp only [stepCredit, hactor, ↓reduceIte, hkind, AttackAttribution.outsideAmount_zero,
+          add_zero]
 
 /-- The fold: a realized replay extends an actor path by exactly its own steps,
 carrying the coalition accounting along.  The replay is `cons`-shaped from an
@@ -608,7 +618,9 @@ private theorem exists_attackPath_of_replay
   induction replay with
   | nil boundary =>
       intro state path _ _ _ _ _
-      exact ⟨state, path, by simp [inA], by simp [outA], by simp [outsideSubsidy]⟩
+      exact ⟨state, path, by simp only [inA, List.map_nil, List.sum_nil, add_zero], by simp only [outA, List.map_nil, List.sum_nil,
+        add_zero], by simp only [outsideSubsidy,
+        List.map_nil, List.sum_nil, add_zero]⟩
   | @cons pre mid last hd tl pre_eq post_eq move tail ih =>
       intro state path hacc hvictim hledger hprice hadmits
       have hstruct := path.structuralInvariant offset_ne_zero
@@ -626,9 +638,9 @@ private theorem exists_attackPath_of_replay
       obtain ⟨final, hfinal, h1, h2, h3⟩ :=
         ih next path' hacc' hvictim' hledger' hprice' hadmits'
       refine ⟨final, hfinal, ?_, ?_, ?_⟩
-      · rw [h1, hin]; simp [inA]; omega
-      · rw [h2, hout]; simp [outA]; omega
-      · rw [h3, hsub]; simp [outsideSubsidy]; omega
+      · rw [h1, hin]; simp only [inA, List.map_cons, List.sum_cons]; omega
+      · rw [h2, hout]; simp only [outA, List.map_cons, List.sum_cons]; omega
+      · rw [h3, hsub]; simp only [outsideSubsidy, List.map_cons, List.sum_cons]; omega
 
 /-- The adapter of SF §5's P4 subsection: every attack trace over the realized
 history is an actor path from the deployment genesis whose coalition
@@ -665,9 +677,9 @@ theorem exists_attackPath {cfg : ChainConfig} {deployed future : BlockChain}
       hsnapshot.symm hrow hledger
       (by rw [hsnapshot]; exact PriceLe.refl offset.toNat ⟨0, 0⟩)
       trace.schedule
-  exact ⟨final, hfinal, by simpa [ProrataAttackState.genesis] using h1,
-    by simpa [ProrataAttackState.genesis] using h2,
-    by simpa [ProrataAttackState.genesis] using h3⟩
+  exact ⟨final, hfinal, by simpa only [ProrataAttackState.genesis, zero_add] using h1,
+    by simpa only [ProrataAttackState.genesis, zero_add] using h2,
+    by simpa only [ProrataAttackState.genesis, zero_add] using h3⟩
 
 /-! ## The SF-frozen P4 headlines -/
 

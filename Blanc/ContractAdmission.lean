@@ -59,12 +59,12 @@ def soundAdmitted_toSem (c : ContractSpec) (ca : Adr)
     (h : c.SoundAdmitted ca entry) : c.toSem.SoundAdmitted ca entry := by
   intro sevm pre post hfork execution hrun target admitted body hwf hpre
   apply post_toSem
-  apply h hfork execution (by simpa [ContractSpec.toSem, Prog.codeSem] using hrun)
+  apply h hfork execution (by simpa only [toSem, Prog.codeSem] using hrun)
     target admitted
   · intro pc' sevm' pre' post' child depth childAt hfork' childAdmitted hpre'
     exact post_ofSem (body (pc' := pc') (sevm' := sevm') (pre' := pre')
       (post' := post') (child := child) depth
-      (by simpa [ContractSpec.toSem, Prog.codeSem, CodeSem.At, Prog.At] using childAt)
+      (by simpa only [CodeSem.At, toSem, Prog.codeSem, Prog.At] using childAt)
       hfork' childAdmitted (preWf_toSem hpre'))
   · exact hwf
   · exact pre_ofSem hpre
@@ -75,7 +75,7 @@ def preservesAdmitted_ofSem (c : ContractSpec) (ca : Adr)
   intro sevm pre post hfork execution admitted h_code h_wf hpre
   apply post_ofSem
   apply h sevm pre post hfork execution admitted
-    (fun target => by simpa [ContractSpec.toSem, Prog.codeSem] using h_code target)
+    (fun target => by simpa only [toSem, Prog.codeSem] using h_code target)
     h_wf (pre_toSem hpre)
 
 def preservesAdmitted_toSem (c : ContractSpec) (ca : Adr)
@@ -84,7 +84,7 @@ def preservesAdmitted_toSem (c : ContractSpec) (ca : Adr)
   intro sevm pre post hfork execution admitted h_code h_wf hpre
   apply post_toSem
   apply h sevm pre post hfork execution admitted
-    (fun target => by simpa [ContractSpec.toSem, Prog.codeSem] using h_code target)
+    (fun target => by simpa only [toSem, Prog.codeSem] using h_code target)
     h_wf (pre_ofSem hpre)
 
 /-- Generic frame ladder for trace-admitted contract soundness. The ordinary
@@ -125,7 +125,7 @@ theorem preserves_lift_admitted (c : ContractSpec) (ca : Adr)
   intro sevm pre post hfork execution admitted h_code hσ
   refine post_ofSem (ContractSpecSem.preserves_lift_admitted_sem c.toSem ca entry σ
     ?_ ?_ ?_ ?_ sevm pre post hfork execution admitted
-    (fun target => by simpa [ContractSpec.toSem, Prog.codeSem] using h_code target) hσ)
+    (fun target => by simpa only [toSem, Prog.codeSem] using h_code target) hσ)
   · intro e d h
     exact pre_toSem (σ_pre h)
   · intro e d h_ne h
@@ -134,11 +134,11 @@ theorem preserves_lift_admitted (c : ContractSpec) (ca : Adr)
     exact σ_of_wf h_wf (pre_ofSem h)
   · intro sevm pre post hfork execution hrun target admitted ih hσ
     apply post_toSem
-    apply body hfork execution (by simpa [ContractSpec.toSem, Prog.codeSem] using hrun)
+    apply body hfork execution (by simpa only [toSem, Prog.codeSem] using hrun)
       target admitted
     · intro pc' sevm' pre' post' child depth childAt hfork' childAdmitted hσ'
       exact post_ofSem (ih pc' sevm' pre' post' child depth
-        (by simpa [ContractSpec.toSem, Prog.codeSem, CodeSem.At, Prog.At] using childAt)
+        (by simpa only [CodeSem.At, toSem, Prog.codeSem, Prog.At] using childAt)
         hfork' childAdmitted hσ')
     · exact hσ
 /-- The memory-carrying trace-admitted frame theorem. -/

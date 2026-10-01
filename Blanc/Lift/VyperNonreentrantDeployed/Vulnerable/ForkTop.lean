@@ -241,7 +241,7 @@ theorem vminus_witness_covered (g : Fork) (hg : CoveredFork g) :
       refine ⟨c, rfl, hagc, (congrArg Cfg.f hc).trans rfl, ?_, ?_⟩
       · rw [hagc.2.2.1, congrArg Cfg.stor hc]; rfl
       · rw [hagc.2.2.1, congrArg Cfg.stor hc]; rfl
-    all_goals simp [obsB, obsBEELS] at hA'
+    all_goals simp only [obsB, obsBEELS, reduceCtorEq] at hA'
   obtain ⟨cB, hcB, hagB, hfB, hlB0, hlB2⟩ := hB
   have hcBg : wrun fs1 (e4.withFork g).sta 2625 c4 = .cont cB :=
     (wrun_withFork (by rw [e4_block.1]; exact CoveredFork.prague) hg e4_block.2 fs1 2625 c4).trans

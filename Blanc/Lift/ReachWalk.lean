@@ -50,8 +50,9 @@ private theorem execFree_step {E : List Nat} (hE : ExecFreeSet fs E = true) {a b
   cases step with
   | @next d d' n f K _ =>
       refine ⟨?_, hK⟩
-      cases n <;> simp_all [SFunc.execFreeIn, SFunc.execsSatisfy, SFunc.refs]
-  | dest _ => exact ⟨by simpa [SFunc.execFreeIn, SFunc.execsSatisfy, SFunc.refs] using ha, hK⟩
+      cases n <;> simp_all only [SFunc.execFreeIn, SFunc.execsSatisfy, SFunc.refs, Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq, Bool.true_and, decide_true, implies_true, Bool.false_and, Bool.false_eq_true]
+  | dest _ => exact ⟨by simpa only [SFunc.execFreeIn, Bool.and_eq_true, List.all_eq_true,
+    decide_eq_true_eq, SFunc.execsSatisfy, SFunc.refs] using ha, hK⟩
   | zero _ _ =>
       refine ⟨?_, hK⟩
       simp only [SFunc.execFreeIn, SFunc.execsSatisfy, SFunc.refs, List.all_append,
@@ -86,7 +87,8 @@ private theorem execFree_step {E : List Nat} (hE : ExecFreeSet fs E = true) {a b
         exact ⟨ha.1, ha.2.2⟩
       · exact hK s hs
   | ret _ _ => exact ⟨hK _ List.mem_cons_self, fun s hs => hK s (List.mem_cons_of_mem _ hs)⟩
-  | pcAt _ _ => exact ⟨by simpa [SFunc.execFreeIn, SFunc.execsSatisfy, SFunc.refs] using ha, hK⟩
+  | pcAt _ _ => exact ⟨by simpa only [SFunc.execFreeIn, Bool.and_eq_true, List.all_eq_true,
+    decide_eq_true_eq, SFunc.execsSatisfy, SFunc.refs] using ha, hK⟩
 
 /-- **No external instruction in an exec-free region.**  A reach from a tree and
 pending continuations that are all exec-free within a closed exec-free set never
@@ -102,7 +104,7 @@ theorem Reach.false_of_execFree {E : List Nat} (hE : ExecFreeSet fs E = true) {d
   | refl =>
       obtain ⟨x, f', hx⟩ := hT
       rw [hx] at ha
-      simp [SFunc.execFreeIn, SFunc.execsSatisfy] at ha
+      simp only [SFunc.execFreeIn, SFunc.execsSatisfy, Bool.false_and, Bool.false_eq_true] at ha
   | head step _ ih =>
       obtain ⟨hb, hbK⟩ := execFree_step hE step ha hK
       exact ih hb hbK
@@ -143,7 +145,8 @@ theorem rr_callOver {E : List Nat} (hE : ExecFreeSet fs E = true) {k : Nat} {dd 
   · rw [hk] at hk'
     cases hk'
     obtain ⟨T', r', rfl⟩ := inside
-    exact (Reach.false_of_execFree hE r' hT (ExecFreeSet.lookup hE hkE hk) (by simp)).elim
+    exact (Reach.false_of_execFree hE r' hT (ExecFreeSet.lookup hE hkE hk) (by simp only [List.not_mem_nil,
+      IsEmpty.forall_iff, implies_true])).elim
   · rw [hk] at hk'
     cases hk'
     obtain ⟨-, e⟩ := St.of_pop1 pop
@@ -221,10 +224,10 @@ theorem Reach.gotoTree {W : List Nat} {ok : Ninst → Bool} {Ψ : Devm → Prop}
       simp only [SFunc.gotoTree, decide_eq_true_eq] at hf
       obtain ⟨t, g, d', hk, pop, rest⟩ := Reach.jump h hT
       exact ⟨k, hf, g, d', hk, hpop pop hΨ, rest⟩
-  | callNext _ _ _ => intro _ _ _ _ _ hf; simp [SFunc.gotoTree] at hf
-  | ret => intro _ _ _ _ _ hf; simp [SFunc.gotoTree] at hf
-  | pcAt _ _ _ => intro _ _ _ _ _ hf; simp [SFunc.gotoTree] at hf
-  | undefined => intro _ _ _ _ _ hf; simp [SFunc.gotoTree] at hf
+  | callNext _ _ _ => intro _ _ _ _ _ hf; simp only [SFunc.gotoTree, Bool.false_eq_true] at hf
+  | ret => intro _ _ _ _ _ hf; simp only [SFunc.gotoTree, Bool.false_eq_true] at hf
+  | pcAt _ _ _ => intro _ _ _ _ _ hf; simp only [SFunc.gotoTree, Bool.false_eq_true] at hf
+  | undefined => intro _ _ _ _ _ hf; simp only [SFunc.gotoTree, Bool.false_eq_true] at hf
 
 /-- A non-jump instruction that writes no persistent state and spawns nothing: a
 register instruction other than `SSTORE`/`TSTORE`, or a push. -/
@@ -242,10 +245,10 @@ theorem Ninst.Run.state_of_regSilent {s : Sevm} {d d' : Devm} {n : Ninst}
       simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at run
       simp only [regSilent, Bool.and_eq_true, bne_iff_ne, ne_eq] at hn
       exact (Rinst.preserves_state hn.1 hn.2 run.2.symm).symm
-  | exec _ => simp [regSilent] at hn
-  | dupn _ => simp [regSilent] at hn
-  | swapn _ => simp [regSilent] at hn
-  | exchange _ => simp [regSilent] at hn
+  | exec _ => simp only [regSilent, Bool.false_eq_true] at hn
+  | dupn _ => simp only [regSilent, Bool.false_eq_true] at hn
+  | swapn _ => simp only [regSilent, Bool.false_eq_true] at hn
+  | exchange _ => simp only [regSilent, Bool.false_eq_true] at hn
 
 /-- Every path of the tree runs instructions accepted by `ok` (no call or goto)
 up to at most one external instruction, after which it is exec-free in `E`. -/
@@ -311,11 +314,11 @@ theorem Reach.lastExec {ok : Ninst → Bool} {E : List Nat} {Ψ : Devm → Prop}
       intro d K T h hT hf hK hΨ
       obtain ⟨d', burn, rest⟩ := Reach.dest h hT
       exact ih rest hT hf hK (hburn burn hΨ)
-  | branchTo _ _ _ => intro _ _ _ _ _ hf; simp [SFunc.lastExec] at hf
-  | jump _ => intro _ _ _ _ _ hf; simp [SFunc.lastExec] at hf
-  | callNext _ _ _ => intro _ _ _ _ _ hf; simp [SFunc.lastExec] at hf
-  | ret => intro _ _ _ _ _ hf; simp [SFunc.lastExec] at hf
-  | pcAt _ _ _ => intro _ _ _ _ _ hf; simp [SFunc.lastExec] at hf
-  | undefined => intro _ _ _ _ _ hf; simp [SFunc.lastExec] at hf
+  | branchTo _ _ _ => intro _ _ _ _ _ hf; simp only [SFunc.lastExec, Bool.false_eq_true] at hf
+  | jump _ => intro _ _ _ _ _ hf; simp only [SFunc.lastExec, Bool.false_eq_true] at hf
+  | callNext _ _ _ => intro _ _ _ _ _ hf; simp only [SFunc.lastExec, Bool.false_eq_true] at hf
+  | ret => intro _ _ _ _ _ hf; simp only [SFunc.lastExec, Bool.false_eq_true] at hf
+  | pcAt _ _ _ => intro _ _ _ _ _ hf; simp only [SFunc.lastExec, Bool.false_eq_true] at hf
+  | undefined => intro _ _ _ _ _ hf; simp only [SFunc.lastExec, Bool.false_eq_true] at hf
 
 end Blanc.Lift

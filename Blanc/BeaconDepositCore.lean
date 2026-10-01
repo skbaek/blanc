@@ -37,7 +37,7 @@ def accOfStor (stor : Stor) : Acc :=
 @[simp] theorem accOfStor_branch_of_lt (stor : Stor) (height : Nat)
     (h : height < 32) :
     (accOfStor stor).branch height = stor.get (branchSlot height) := by
-  simp [accOfStor, h]
+  simp only [accOfStor, h, ↓reduceIte]
 
 @[simp] theorem accOfStor_count (stor : Stor) :
     (accOfStor stor).count = (stor.get depositCountSlot).toNat := rfl

@@ -229,7 +229,8 @@ theorem vplus_run_at {S : Sevm} (hS : ∃ g, CoveredFork g ∧ S = e0.sta.withFo
   · rw [hxB.1, cB_pc]; decide
   · intro x hbx hxh hne
     have := (betH x hbx hxh hne).1
-    simpa [okRel] using this
+    simpa only [okRel, List.contains_eq_mem, Bool.not_eq_eq_eq_not, Bool.not_true,
+      decide_eq_false_iff_not] using this
   · intro G' hG' hcp
     rcases hroots G' hG' with rfl | rfl | rfl
     · exact hashAvoid_of_noKeccak hcodeF nkF
@@ -238,10 +239,11 @@ theorem vplus_run_at {S : Sevm} (hS : ∃ g, CoveredFork g ∧ S = e0.sta.withFo
   · rw [hxH.2.1, hxH.1]; exact hatH
   · show G ∈ _ :: Exec.rawFrameDescendants c.exc
     rw [← dsTs, dsT1]
-    simp
+    simp only [List.mem_cons, List.mem_append, true_or, or_true]
   · intro x hx
     have := (allG x hx).1
-    simpa [okBody] using this
+    simpa only [okBody, List.contains_eq_mem, Bool.not_eq_eq_eq_not, Bool.not_true,
+      decide_eq_false_iff_not] using this
 
 
 /-- **V+ nonvacuity under every covered fork.**  `vplus_witness` with the block environment's

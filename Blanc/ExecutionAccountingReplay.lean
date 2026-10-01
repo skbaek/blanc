@@ -212,7 +212,7 @@ theorem processMessage_of_body_observed (C : SettlementCarrier ca)
         unfold Frame.settlementCommits
         rw [← settledEq]
         exact clean
-      cases errorEq : post.error <;> simp_all
+      cases errorEq : post.error <;> simp_all only [ExceptT.stM_eq, ne_eq, Nat.reducePow, Bool.not_eq_true, Option.isNone_none, not_true_eq_false, Option.isNone_some, Bool.false_eq_true, not_false_eq_true, Option.isSome_some]
     have rollback :=
       (_root_.Blanc.ProcessMessage.rollback_of_error process postError).1
     exact ⟨[], C.nilOfEq (congrArg C.ofState rollback),
@@ -269,7 +269,7 @@ theorem processCreateMessage_of_body_observed (C : SettlementCarrier ca)
       have settledEq := (RunFrame.some_inv process).2
       unfold Frame.settlementCommits at settles
       rw [← settledEq] at settles
-      cases errorEq : post.error <;> simp_all
+      cases errorEq : post.error <;> simp_all only [ExceptT.stM_eq, ne_eq, Nat.reducePow, Option.isNone_none, Option.isSome_none, Option.isNone_some, Bool.false_eq_true]
     rcases _root_.Blanc.ProcessCreateMessage.ok_getStor_eq_inner_of_clean
         process clean with ⟨inner, innerProcess, postStor, innerClean⟩
     rcases _root_.Jaune.ProcessCreateMessage.ok_state_eq_inner_of_no_error
@@ -313,8 +313,8 @@ theorem processCreateMessage_of_body_observed (C : SettlementCarrier ca)
         apply settles
         unfold Frame.settlementCommits
         rw [← settledEq]
-        cases errorEq : post.error <;> simp_all
-      cases errorEq : post.error <;> simp_all
+        cases errorEq : post.error <;> simp_all only [ExceptT.stM_eq, ne_eq, Nat.reducePow, Bool.not_eq_true, Option.isSome_none, Option.isNone_none, Option.isSome_some, Bool.true_eq_false]
+      cases errorEq : post.error <;> simp_all only [ExceptT.stM_eq, ne_eq, Nat.reducePow, Bool.not_eq_true, Option.isSome_none, not_true_eq_false, Option.isSome_some, Bool.true_eq_false, not_false_eq_true]
     have rollback :=
       _root_.Blanc.ProcessCreateMessage.rollback_of_error process postError
     exact ⟨[], C.nilOfEq (congrArg C.ofState rollback),
@@ -403,10 +403,10 @@ theorem xinstForeignSome_observed (C : SettlementCarrier ca)
       rw [preparedStor]
       exact targetEmpty
     have callerNe : msg.shouldTransferValue = true → msg.caller ≠ ca := by
-      simpa [msg, createMsg] using target_ne
+      simpa only [msg, createMsg, ne_eq, forall_const] using target_ne
     have valueZero : msg.shouldTransferValue = false →
         msg.currentTarget = ca → msg.value = 0 := by
-      simp [msg, createMsg]
+      simp only [msg, createMsg, Bool.true_eq_false, IsEmpty.forall_iff]
     have msgSum : sum msg.benv.state.bal < 2 ^ 256 := by
       change sum createPre.state.bal < 2 ^ 256
       rw [preparedBalance]
@@ -442,10 +442,10 @@ theorem xinstForeignSome_observed (C : SettlementCarrier ca)
       · exact False.elim (target_ne (targetParent.symm.trans target_eq))
     have msgCallerNe :
         msg.shouldTransferValue = true → msg.caller ≠ ca := by
-      simpa [msg, callMsg] using callerNe
+      simpa only [msg, callMsg, ne_eq] using callerNe
     have msgValueZero : msg.shouldTransferValue = false →
         msg.currentTarget = ca → msg.value = 0 := by
-      simpa [msg, callMsg] using valueZero
+      simpa only [msg, callMsg] using valueZero
     have msgSum : sum msg.benv.state.bal < 2 ^ 256 := by
       change sum d.state.bal < 2 ^ 256
       exact dSum
@@ -661,15 +661,15 @@ theorem balanceEntry_eq_ofState {ca : Adr} {msg : Msg} {entry : Benv}
   cases shouldTransfer : msg.shouldTransferValue with
   | false =>
       have noTransfer : ¬ msg.shouldTransferValue = true := by
-        simp [shouldTransfer]
+        simp only [shouldTransfer, Bool.false_eq_true, not_false_eq_true]
       have entry_eq := of_benvAfterTransfer_no noTransfer transfer
       subst entry
       by_cases target_eq : msg.currentTarget = ca
       · have valueNat : msg.value.toNat = 0 := by
           rw [value_zero shouldTransfer target_eq]
           rfl
-        simp [target_eq, valueNat]
-      · simp [target_eq]
+        simp only [target_eq, ↓reduceIte, valueNat, tsub_zero]
+      · simp only [target_eq, ↓reduceIte]
   | true =>
       rcases of_benvAfterTransfer shouldTransfer transfer with
         ⟨debit, sub, rfl⟩
@@ -697,13 +697,13 @@ def balanceCarrier (ca : Adr) : ReplayCarrier ca where
   frameEntry := balanceEntry ca
   nil := by
     intro boundary
-    simp
+    simp only [List.sum_nil, add_zero]
   silent := by
     intro _ _ _ balance_eq
     exact balance_eq
   credit := by
     intro _ _ _ amount _ balance_eq _
-    exact ⟨[amount], by simpa using balance_eq.symm⟩
+    exact ⟨[amount], by simpa only [List.sum_cons, List.sum_nil, add_zero] using balance_eq.symm⟩
   entry_eq_ofState := by
     intro _ _ caller_ne value_zero transfer sum_nof
     exact balanceEntry_eq_ofState caller_ne value_zero transfer sum_nof

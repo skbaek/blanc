@@ -51,7 +51,7 @@ theorem run_body_of_run_nonpayable_frame_logs
     have hvalue : sevm.value = 0 := by
       by_cases hvalue : sevm.value = 0
       · exact hvalue
-      · simp [B256.eqCheck, hvalue] at hflag
+      · simp only [B256.eqCheck, hvalue, ↓reduceIte, ne_eq, not_true_eq_false] at hflag
     refine ⟨s3, hvalue, ?_, ?_, ?_, ?_, hbody⟩
     · exact (Line.of_inv Devm.state (by line_inv) hline).trans
         (hpop.state.trans hburn.state)

@@ -277,7 +277,8 @@ lemma transfer_preserves_sum {kd ki v} {b d : Adr → B256}
       apply Nat.add_le_add_left <| B256.toNat_le_toNat h
 
 lemma B256.le_add_right {xs ys : B256} (h : B256.Nof xs ys) : xs ≤ xs + ys := by
-  rw [B256.le_iff_toNat_le_toNat, B256.toNat_add_eq_of_nof _ _ h]; simp
+  rw [B256.le_iff_toNat_le_toNat, B256.toNat_add_eq_of_nof _ _ h]; simp only [le_add_iff_nonneg_right,
+    zero_le]
 
 -- helper lemmas for reasoning about the balance transfer performed by `call`
 
@@ -467,12 +468,12 @@ lemma Jinst.preserves_state
     · simp only [Jinst.Run, Jinst.run, Jinst.runCore, chargeGas_def, Devm.pop_def,
         Devm.setMach, Devm.stack, Devm.gasLeft, Except.assert, safeSub, bind, Except.bind] at run
       rw [h1] at run
-      dsimp at run
+      dsimp only at run
       contradiction
     · simp only [Jinst.Run, Jinst.run, Jinst.runCore, chargeGas_def, Devm.pop_def,
         Devm.setMach, Devm.stack, Devm.gasLeft, Except.assert, safeSub, bind, Except.bind] at run
       rw [h1] at run
-      dsimp at run
+      dsimp only at run
       contradiction
     · by_cases h_gas : gJumpdest ≤ devm.gasLeft
       · simp only [Jinst.Run, Jinst.run, Jinst.runCore, chargeGas_def, Devm.setMach,
@@ -494,7 +495,7 @@ lemma Jinst.preserves_state
       · simp only [Jinst.Run, Jinst.run, Jinst.runCore, chargeGas_def, Devm.pop_def,
           Devm.setMach, Devm.stack, Devm.gasLeft, bind, Except.bind, safeSub] at run
         rw [h1] at run
-        dsimp at run
+        dsimp only at run
         by_cases h_gas : gMid ≤ devm.gasLeft <;> simp only [Devm.gasLeft] at h_gas
         · simp only [h_gas, if_pos] at run
           by_cases h_jump : jumpable sevm.code x.toNat = true
@@ -510,7 +511,7 @@ lemma Jinst.preserves_state
           Devm.setMach, Devm.stack, Devm.gasLeft, bind, Except.bind, safeSub] at run
         rw [h1] at run
         rw [h2] at run
-        dsimp at run
+        dsimp only at run
         contradiction
       · simp only [Jinst.Run, Jinst.run, Jinst.runCore, chargeGas_def, Devm.setMach,
           bind, Except.bind, safeSub] at run
@@ -528,7 +529,7 @@ lemma Jinst.preserves_state
       · simp only [Jinst.Run, Jinst.run, Jinst.runCore, chargeGas_def, Devm.pop_def,
           Devm.setMach, Devm.stack, Devm.gasLeft, bind, Except.bind, safeSub] at run
         rw [h1] at run
-        dsimp at run
+        dsimp only at run
         by_cases h_gas : gMid ≤ devm.gasLeft <;> simp only [Devm.gasLeft] at h_gas
         · simp only [h_gas, if_pos] at run
           by_cases h_jump : jumpable sevm.code x.toNat = true
@@ -544,7 +545,7 @@ lemma Jinst.preserves_state
           Devm.setMach, Devm.stack, Devm.gasLeft, bind, Except.bind, safeSub] at run
         rw [h1] at run
         rw [h2] at run
-        dsimp at run
+        dsimp only at run
         by_cases h_gas : gHigh ≤ devm.gasLeft <;> simp only [Devm.gasLeft] at h_gas
         · simp only [h_gas, if_pos] at run
           by_cases h_cond : x2 = 0
@@ -990,7 +991,7 @@ lemma Devm.pop_of_popToAdr {a : Adr} {devm devm' : Devm}
   rw [Devm.popToAdr_def] at h
   rcases hp : devm.pop with _ | ⟨x, d⟩ <;> rw [hp] at h
   · cases h
-  · dsimp [Prod.mapFst, Prod.map, id] at h
+  · dsimp only [Prod.mapFst, Except.map_ok, Prod.map_apply, id_eq] at h
     injection h with h'
     have h1 : x.toAdr = a := congrArg Prod.fst h'
     have h2 : d = devm' := congrArg Prod.snd h'
@@ -1096,7 +1097,7 @@ lemma State.get_erase_ne {w : Jaune.State} {a b : Adr} (h : b ≠ a) :
     State.get (w.erase a) b = State.get w b := by
   unfold State.get
   have hc : compare a b ≠ Ordering.eq := fun hcc => h (compare_eq_iff_eq.mp hcc).symm
-  rw [Std.TreeMap.getD_erase]; simp [hc]
+  rw [Std.TreeMap.getD_erase]; simp only [hc, ↓reduceIte]
 
 -- `handleError` only returns a clean (`error = none`) devm when the underlying
 -- execution itself returned `.ok`; the exceptional-halt / revert branches all
@@ -1110,7 +1111,7 @@ lemma exec_ok_of_handleError {sg : Option StateGasRules} {exn : Execution} {evm'
     obtain ⟨err, d⟩ := ee
     rcases of_handleError_err h with ⟨evm2, h_ok, h_some, _⟩ | ⟨e2, h_e2⟩
     · rw [Except.ok.inj h_ok] at herr; exact absurd h_some herr
-    · exact absurd h_e2 (by simp)
+    · exact absurd h_e2 (by simp only [reduceCtorEq, not_false_eq_true])
   | ok e =>
     rw [executeCode.handleErrorWith_ok] at h; rw [Except.ok.inj h]
 
@@ -1359,13 +1360,11 @@ lemma Resume.call_logs {parent child : Devm} {oi os : Nat} {sf : Devm}
   dsimp only [bind, Except.bind] at h
   by_cases herr : child.error.isSome
   · rw [if_pos herr] at h ⊢
-    simpa [if_pos herr] using
-      key (incorporateChildOnError parent child child.output)
-        (by rw [if_pos herr]; rfl) 0 h
+    simpa only [if_pos herr] using
+      key (incorporateChildOnError parent child child.output) (by rw [if_pos herr]; rfl) 0 h
   · rw [if_neg herr] at h ⊢
-    simpa [if_neg herr] using
-      key (incorporateChildOnSuccess parent child child.output)
-        (by rw [if_neg herr]; rfl) 1 h
+    simpa only [if_neg herr] using
+      key (incorporateChildOnSuccess parent child child.output) (by rw [if_neg herr]; rfl) 1 h
 
 /-- The `transientStorage` companion of `Resume.call_state`: on both settled
 paths the CALL-family return installs the child's transient store alongside
@@ -1646,7 +1645,7 @@ lemma returnsWord_of_storeReturn
     intro hnil
     have hlen := B256.length_toBytes w
     rw [hnil] at hlen
-    simp at hlen
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
   have hcode : Devm.getCode s = Devm.getCode s3 :=
     (Line.of_inv Devm.getCode (by line_inv) h2).trans
       (Line.of_inv Devm.getCode (by line_inv) h3)
@@ -1845,32 +1844,32 @@ lemma of_run_call_val_with_depth_frame
   simp only [hp11] at h_run
   have h_st9 : devm9.state = devm7.state := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).state) hp11
-    dsimp at h
+    dsimp only at h
     rw [← h, GasSchedule.accessDelegation_state]
     rfl
   have h_stk9 : devm9.stack = devm7.stack := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).stack) hp11
-    dsimp at h
+    dsimp only at h
     rw [← h, GasSchedule.accessDelegation_stack]
     rfl
   have h_mem9 : devm9.memory = devm7.memory := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).memory) hp11
-    dsimp at h
+    dsimp only at h
     rw [← h, GasSchedule.accessDelegation_memory]
     rfl
   have h_tra9 : devm9.transientStorage = devm7.transientStorage := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).transientStorage) hp11
-    dsimp at h
+    dsimp only at h
     rw [← h, GasSchedule.accessDelegation_transientStorage]
     rfl
   have h_logs9 : devm9.logs = devm7.logs := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).logs) hp11
-    dsimp at h
+    dsimp only at h
     rw [← h, GasSchedule.accessDelegation_logs]
     rfl
   have h_output9 : devm9.output = devm7.output := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).output) hp11
-    dsimp at h
+    dsimp only at h
     rw [← h, GasSchedule.accessDelegation_output]
     rfl
   -- the code the child will run, and the delegation disjunction
@@ -2072,7 +2071,8 @@ lemma of_run_call_val_with_depth_frame
           child, xl, dp, na, code0, avail, pc, h_step,
           by omega, by rw [e_stack, h_stk_par], h_st_par, h_mem_par,
           h_logs_par, h_output_par, h_del, h_fill,
-          run_pm₀, by simpa using herr, h_split.symm,
+          run_pm₀, by simpa only [Option.isSome_eq_false_iff, Option.isNone_iff_eq_none,
+            Bool.not_eq_true] using herr, h_split.symm,
           Resume.call_state h_split.symm, Resume.call_returnData h_split.symm,
           Resume.call_memory h_split.symm,
           by rw [Resume.call_stack_flag h_split.symm, if_neg herr]⟩
@@ -2327,32 +2327,32 @@ lemma of_run_staticcall_val_with_depth_cause
   simp only [hp10] at h_run
   have h_st8 : devm8.state = devm6.state := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).state) hp10
-    dsimp at h
+    dsimp only at h
     rw [← h, GasSchedule.accessDelegation_state]
     rfl
   have h_stk8 : devm8.stack = devm6.stack := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).stack) hp10
-    dsimp at h
+    dsimp only at h
     rw [← h, GasSchedule.accessDelegation_stack]
     rfl
   have h_mem8 : devm8.memory = devm6.memory := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).memory) hp10
-    dsimp at h
+    dsimp only at h
     rw [← h, GasSchedule.accessDelegation_memory]
     rfl
   have h_tra8 : devm8.transientStorage = devm6.transientStorage := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).transientStorage) hp10
-    dsimp at h
+    dsimp only at h
     rw [← h, GasSchedule.accessDelegation_transientStorage]
     rfl
   have h_logs8 : devm8.logs = devm6.logs := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).logs) hp10
-    dsimp at h
+    dsimp only at h
     rw [← h, GasSchedule.accessDelegation_logs]
     rfl
   have h_output8 : devm8.output = devm6.output := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).output) hp10
-    dsimp at h
+    dsimp only at h
     rw [← h, GasSchedule.accessDelegation_output]
     rfl
   have h_gc6 : (addAccessedAddress devm6 t.toAdr).state.getCode t.toAdr
@@ -2522,19 +2522,20 @@ lemma of_run_staticcall_val_with_depth_cause
               [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData [],
             child, xl, dp, na, code0, avail,
             by omega, by rw [e_stack, h_stk_par], h_st_par, h_mem_par,
-            h_del, h_fill, ?_, by simpa using herr, rfl⟩
-          simpa [ProcessMessage] using run_pm₀
+            h_del, h_fill, ?_, by simpa only using herr, rfl⟩
+          simpa only [ProcessMessage, ↓reduceIte, add_zero] using run_pm₀
     · right
       refine ⟨(devm9.memExtends
           [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData [],
         child, xl, dp, na, code0, avail,
         by omega, by rw [e_stack, h_stk_par], h_st_par, h_mem_par,
         h_logs_par, h_output_par, h_del,
-        h_fill, ?_, by simpa using herr, h_split.symm,
+        h_fill, ?_, by simpa only [Option.isSome_eq_false_iff, Option.isNone_iff_eq_none,
+          Bool.not_eq_true] using herr, h_split.symm,
         Resume.call_state h_split.symm, Resume.call_returnData h_split.symm,
         Resume.call_memory h_split.symm,
         by rw [Resume.call_stack_flag h_split.symm, if_neg herr]⟩
-      simpa [ProcessMessage] using run_pm₀
+      simpa only [ProcessMessage, ↓reduceIte, add_zero] using run_pm₀
 
 /-- The compatibility projection of `of_run_staticcall_val_with_depth_cause`.
 Consumers that only need the flag/world/returndata dichotomy do not have to
@@ -2732,7 +2733,7 @@ private lemma resume_callAmsterdam_state
     intro d hd v o hh
     cases hpush : d.push v with
     | error e =>
-        simp [hpush] at hh
+        simp only [hpush, Except.bind_error, reduceCtorEq] at hh
     | ok d' =>
         simp only [hpush, bind, Except.bind] at hh
         have hpushFrame := Devm.push_instructionFrame v d
@@ -3009,7 +3010,7 @@ theorem Linst.getStor_eq
   funext owner
   cases l with
   | stop =>
-      simp [Linst.Run, Linst.run] at run
+      simp only [Linst.Run, Linst.run, Except.ok.injEq] at run
       subst post
       rfl
   | return_ =>
@@ -3017,13 +3018,14 @@ theorem Linst.getStor_eq
       rw [run] at hframe
       exact (hframe.getStor owner).symm
   | revert =>
-      dsimp [Linst.Run, Linst.run] at run
+      dsimp only [Linst.Run, Linst.run, Lean.Elab.WF.paramLet] at run
       rcases Except.bind_eq_ok run with ⟨first, hfirst, rest⟩
       rcases Except.bind_eq_ok rest with ⟨second, hsecond, rest⟩
       rcases Except.bind_eq_ok rest with ⟨third, hthird, rest⟩
       contradiction
   | selfdestruct =>
-      dsimp [Linst.Run, Linst.run] at run
+      dsimp only [Linst.Run, Linst.run, ne_eq, Except.bind_ok, ite_not, Lean.Elab.WF.paramLet,
+        Devm.balReadAccount_accessedAddresses, Devm.balReadAccount_getAcct] at run
       cases hsg : sevm.benvStat.rules.stateGas
       · simp only [hsg] at run
         rcases Except.bind_eq_ok run with
@@ -3046,7 +3048,7 @@ theorem Linst.getStor_eq
             rfl
         have subState : devm2.state.subBal sevm.currentTarget
             (devm1.getAcct sevm.currentTarget).bal = some devm3.state := by
-          dsimp [Devm.subBal, Option.bind] at subSome
+          dsimp only [Devm.subBal, Option.bind_eq_bind, Option.bind] at subSome
           cases eq : devm2.state.subBal sevm.currentTarget
               (devm1.getAcct sevm.currentTarget).bal
           · rw [eq] at subSome
@@ -3107,7 +3109,7 @@ theorem Linst.getStor_eq
             subst equal
             rfl
         have subState : devm2b.state.subBal sevm.currentTarget ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal = some devm3.state := by
-          dsimp [Devm.subBal, Option.bind] at subSome
+          dsimp only [Devm.subBal, Option.bind_eq_bind, Option.bind] at subSome
           cases eq : devm2b.state.subBal sevm.currentTarget ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal
           · rw [eq] at subSome
             contradiction
@@ -3199,7 +3201,7 @@ theorem ProcessMessage.targetBalanceMono_of_none
     cases shouldTransfer : msg.shouldTransferValue with
     | false =>
         have noTransfer : ¬ msg.shouldTransferValue = true := by
-          simp [shouldTransfer]
+          simp only [shouldTransfer, Bool.false_eq_true, not_false_eq_true]
         have entry_eq := of_benvAfterTransfer_no noTransfer transfer
         subst entry
         exact Nat.le_refl _
@@ -3235,7 +3237,7 @@ theorem ProcessCreateMessage.targetBalanceMono_of_none
       have callerSeed :
           (processCreateMessage.msg msg).shouldTransferValue = true →
             (processCreateMessage.msg msg).caller ≠ ca := by
-        simpa [processCreateMessage.msg, Msg.withBenv] using caller_ne
+        simpa only [processCreateMessage.msg, Msg.withBenv, ne_eq] using caller_ne
       have sumSeed :
           sum (processCreateMessage.msg msg).benv.state.bal < 2 ^ 256 := by
         rw [processCreateMessage_msg_bal_eq]
@@ -3276,7 +3278,8 @@ theorem GenericCall.targetBalanceMono_of_none
   · obtain ⟨result, frameRun, resumeRun⟩ := run
     cases result with
     | error error =>
-        simp [Resume.run, liftToExecution] at resumeRun
+        simp only [ExceptT.stM_eq, Resume.run, liftToExecution, Except.bind_error,
+          reduceCtorEq] at resumeRun
     | ok child =>
         have callerNe :
             (callMsg sevm (pre.withReturnData [])
@@ -3287,7 +3290,7 @@ theorem GenericCall.targetBalanceMono_of_none
                 gas value caller target codeAddress stv istat
                 ((pre.memory.read ii is).1) code delegated
               ).caller ≠ ca := by
-          simpa [callMsg] using caller_ne
+          simpa only [callMsg, ne_eq] using caller_ne
         have childMono := ProcessMessage.targetBalanceMono_of_none
           frameRun callerNe sum_nof
         have postState : post.state = child.state :=
@@ -3345,7 +3348,8 @@ theorem GenericCreate.targetBalanceMono_of_none
   · obtain ⟨result, frameRun, resumeRun⟩ := run
     cases result with
     | error error =>
-        simp [Resume.run, liftToExecution] at resumeRun
+        simp only [ExceptT.stM_eq, Resume.run, liftToExecution, Except.bind_error,
+          reduceCtorEq] at resumeRun
     | ok child =>
         have callerNe :
             (createMsg sevm
@@ -3363,7 +3367,7 @@ theorem GenericCreate.targetBalanceMono_of_none
               (except64th pre.gasLeft) endowment newAddress
               ((pre.memory.read mi ms).1)).caller ≠ ca := by
           intro _
-          simpa [createMsg] using target_ne
+          simpa only [createMsg, ne_eq] using target_ne
         have sumParent :
             sum (createMsg sevm
               (addAccessedAddress
@@ -3522,7 +3526,7 @@ theorem Linst.targetBalanceMono_of_foreign
     (pre.state.bal ca).toNat ≤ (post.state.bal ca).toNat := by
   cases l with
   | stop =>
-      simp [Linst.Run, Linst.run] at run
+      simp only [Linst.Run, Linst.run, Except.ok.injEq] at run
       subst post
       exact Nat.le_refl _
   | return_ =>
@@ -3533,17 +3537,18 @@ theorem Linst.targetBalanceMono_of_foreign
   | revert =>
       unfold Linst.Run Linst.run at run
       rcases firstPop : pre.popToNat with error | ⟨index, devm1⟩
-      · simp [firstPop, bind, Except.bind] at run
+      · simp only [bind, Except.bind, firstPop, reduceCtorEq] at run
       · simp only [firstPop, bind, Except.bind] at run
         rcases secondPop : devm1.popToNat with error | ⟨size, devm2⟩
-        · simp [secondPop] at run
+        · simp only [secondPop, reduceCtorEq] at run
         · simp only [secondPop] at run
           rcases charged : chargeGas
               (devm2.extCost [(index, size)]) devm2 with error | devm3
-          · simp [charged] at run
-          · simp [charged] at run
+          · simp only [charged, reduceCtorEq] at run
+          · simp only [charged, reduceCtorEq] at run
   | selfdestruct =>
-      dsimp [Linst.Run, Linst.run] at run
+      dsimp only [Linst.Run, Linst.run, ne_eq, Except.bind_ok, ite_not, Lean.Elab.WF.paramLet,
+        Devm.balReadAccount_accessedAddresses, Devm.balReadAccount_getAcct] at run
       cases hsg : sevm.benvStat.rules.stateGas
       · simp only [hsg] at run
         rcases Except.bind_eq_ok run with
@@ -3566,7 +3571,7 @@ theorem Linst.targetBalanceMono_of_foreign
             rfl
         have subtractedState : devm2.state.subBal sevm.currentTarget
             (devm1.getAcct sevm.currentTarget).bal = some devm3.state := by
-          dsimp [Devm.subBal, Option.bind] at subtractedSome
+          dsimp only [Devm.subBal, Option.bind_eq_bind, Option.bind] at subtractedSome
           cases equal : devm2.state.subBal sevm.currentTarget
               (devm1.getAcct sevm.currentTarget).bal
           · rw [equal] at subtractedSome
@@ -3764,7 +3769,9 @@ theorem genericCreate.step_spawn_not_static
     assertDynamic, Pure.pure, Except.pure] at hs
   repeat' split at hs
   all_goals simp only [XStep.ofExcept, reduceCtorEq] at hs
-  all_goals simp_all
+  all_goals simp_all only [ite_eq_left_iff, not_le, reduceCtorEq, imp_false, not_lt,
+    Bool.not_eq_eq_eq_not, Bool.not_true, Bool.not_eq_false, Bool.not_eq_true, not_or, ne_eq,
+    ByteArray.size_eq_zero_iff, Decidable.not_not, XStep.spawn.injEq]
 
 /-- Every child frame spawned by a recursive instruction from a static
 context is itself static. -/
@@ -3784,7 +3791,8 @@ theorem Xinst.step_spawn_isStatic {sevm : Sevm} {devm : Devm} {x : Xinst}
           (by rw [genericCreate.step_spawn_not_static hs]; exact Bool.noConfusion)
       | exact genericCall.step_spawn_isStatic hs hstatic
       | exact genericCallAmsterdam.step_spawn_isStatic hs hstatic
-      | exact absurd hstatic (by simp_all [assertDynamic, Except.assert])
+      | exact absurd hstatic (by simp_all only [assertDynamic, Except.assert, Bool.not_true,
+        Bool.false_eq_true, ↓reduceIte, reduceCtorEq])
 
 /-- Every child frame spawned by one driver step from a static context is
 itself static. -/
@@ -4085,7 +4093,7 @@ theorem genericCreate_step_spawn_getStor_empty
     (Devm.getStor devm newAddress).isEmpty =
         ((Devm.getStor devm newAddress).size == 0) :=
       Std.TreeMap.isEmpty_eq_size_eq_zero
-    _ = true := by simp [sizeZero]
+    _ = true := by simp only [sizeZero, BEq.rfl]
 
 /-! ### What a spawned child frame starts with in memory
 
@@ -4289,7 +4297,7 @@ lemma ExecuteCode.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
     rw [← h_precomp]
     exact handleError_noDel h_ex_noDel
   · rw [h_xl] at inv
-    dsimp [Xlot.InvNoDel] at inv
+    dsimp only [ExceptT.stM_eq, Xlot.InvNoDel] at inv
     have h_init : Devm.NoDel wa (initDevm msg) := Msg.NoDel.initDevm h
     have h_ex'_noDel : Execution.NoDel wa ex' := inv h_init
     rw [← h_err]
@@ -4737,15 +4745,17 @@ lemma setDelegationStep_benv_equiv {auth : Auth} {msg msg' : Msg} {refund refund
                   (msg.benv.state.get authority).code.isEmpty = true
               · have h_size :
                     (msg.benv.state.get authority).code.size = 0 := by
-                  simpa [ByteArray.isEmpty] using h_empty
+                  simpa only [ByteArray.size_eq_zero_iff, ByteArray.isEmpty, beq_iff_eq] using
+                    h_empty
                 exact (ne_wa_of_code_size_zero ha h_size) rfl
               · have h_valid :
                     isValidDelegation (msg.benv.state.get authority).code := by
-                  simp_all
-                exact h_not_del (by simpa [State.getCode] using h_valid)
+                  simp_all only [Bool.and_eq_true, bne_iff_ne, ne_eq, not_and, Decidable.not_not,
+                    Bool.false_eq_true, false_or, ite_not, Bool.not_eq_true]
+                exact h_not_del (by simpa only [State.getCode] using h_valid)
             change ((_ : Msg).benv.incrNonce authority).state.getCode a = _
             rw [Benv.incrNonce_getCode]
-            dsimp [Msg.setCode, State.getCode]
+            dsimp only [Msg.setCode, Lean.Elab.WF.paramLet, State.getCode]
             rw [State.setCode_get_code_ne h_ne]
 
 lemma setDelegationLoop_benv_equiv {auths : List Auth} {msg msg' : Msg} {refund refund' : B256}
@@ -4766,14 +4776,14 @@ lemma setDelegation_benv_equiv {msg msg' : Msg} {v : B256}
     (h_run : setDelegation msg = .ok ⟨msg', v⟩) :
     Benv.EquivForDelegation msg.benv msg'.benv := by
   unfold setDelegation at h_run
-  dsimp [bind, Except.bind] at h_run
+  dsimp only [Except.bind_error, Except.bind_ok, Lean.Elab.WF.paramLet, bind, Except.bind] at h_run
   apply Except.bind_eq_ok at h_run
   rcases h_run with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
   have h_eq_benv : msg_mid.benv = msg'.benv := by
     dsimp only at h_rest
     split at h_rest
     · contradiction
-    · simpa using congrArg Msg.benv (congrArg Prod.fst (Except.ok.inj h_rest))
+    · simpa only using congrArg Msg.benv (congrArg Prod.fst (Except.ok.inj h_rest))
   rw [← h_eq_benv]
   exact setDelegationLoop_benv_equiv h_loop
 
@@ -4803,28 +4813,28 @@ lemma setDelegationStep_fields {auth : Auth} {msg msg' : Msg}
   split at h_run
   · injection h_run with h1; injection h1 with h_msg h_refund
     subst h_msg
-    simp
+    simp only [and_self]
   · split at h_run
     · injection h_run with h1; injection h1 with h_msg h_refund
       subst h_msg
-      simp
+      simp only [and_self]
     · split at h_run
       · injection h_run with h1; injection h1 with h_msg h_refund
         subst h_msg
-        simp
+        simp only [and_self]
       · contradiction
       · dsimp only at h_run
         split at h_run
         · injection h_run with h1; injection h1 with h_msg h_refund
           subst h_msg
-          simp
+          simp only [and_self]
         · split at h_run
           · injection h_run with h1; injection h1 with h_msg h_refund
             subst h_msg
-            simp
+            simp only [and_self]
           · injection h_run with h1; injection h1 with h_msg h_refund
             subst h_msg
-            simp [Msg.setCode, Msg.incrNonce]
+            simp only [Msg.incrNonce, Msg.setCode, and_self]
 
 lemma setDelegationLoop_fields {auths : List Auth} {msg msg' : Msg}
     {refund refund' : B256}
@@ -4839,7 +4849,7 @@ lemma setDelegationLoop_fields {auths : List Auth} {msg msg' : Msg}
   | nil =>
     injection h_run with h1; injection h1 with h_msg h_refund
     subst h_msg
-    simp
+    simp only [and_self]
   | cons auth auths_tail ih =>
     unfold setDelegationLoop at h_run
     rcases Except.bind_eq_ok h_run with ⟨⟨msg1, refund1⟩, h_step, h_tail⟩
@@ -4856,7 +4866,7 @@ lemma setDelegation_fields {msg msg' : Msg} {v : B256}
     msg'.value = msg.value ∧
     msg'.codeAddress = msg.codeAddress := by
   unfold setDelegation at h_run
-  dsimp [bind, Except.bind] at h_run
+  dsimp only [Except.bind_error, Except.bind_ok, Lean.Elab.WF.paramLet, bind, Except.bind] at h_run
   apply Except.bind_eq_ok at h_run
   rcases h_run with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
   rcases setDelegationLoop_fields h_loop with ⟨hc, htgt, hct, hstv, hv, hca⟩
@@ -4910,10 +4920,11 @@ theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : Jaune.S
             exact h_nodel.atd
         · simp only [id_eq, Except.ok.injEq, Prod.mk.injEq] at h_run
           rcases h_run with ⟨_, rfl⟩
-          simp_all
+          simp_all only [Option.isNone_iff_eq_none, ne_eq, ↓reduceIte,
+            Std.HashSet.not_mem_emptyWithCapacity, not_false_eq_true]
   · rename_i h_target
     have h_target_false : msg.target.isNone = false := by
-      cases ht : msg.target.isNone <;> simp [ht] at h_target ⊢
+      cases ht : msg.target.isNone <;> simp only [ht, Bool.false_eq_true, not_false_eq_true, not_true_eq_false] at h_target ⊢
     unfold processMessageCall.call at h_run
     dsimp only at h_run
     rw [hsg] at h_run
@@ -5257,7 +5268,7 @@ lemma destroyAccount_sum_le (w : Jaune.State) (a : Adr) :
   have h0 : ((Jaune.destroyAccount w a).get a).bal = 0 := by
     show (State.get (w.erase a) a).bal = 0
     unfold State.get
-    rw [Std.TreeMap.getD_erase]; simp [Acct.nil]
+    rw [Std.TreeMap.getD_erase]; simp only [Std.compare_self, ↓reduceIte, Acct.nil]
   have hdec : Decrease a (w.bal a) w.bal (Jaune.destroyAccount w a).bal := by
     intro b; constructor
     · intro heq; subst heq
@@ -5447,7 +5458,7 @@ lemma applyTransactions_benvStat_eq
     rw [applyTransactions] at h_run
     obtain ⟨⟨st, bout''⟩, _, h2⟩ := Except.bind_eq_ok h_run
     have h := ih h2
-    simpa [Benv.withState] using h
+    simpa only [Benv.withState] using h
 
 /-! ## Chain-level reachability
 
@@ -5514,10 +5525,10 @@ theorem ChainConfig.pragueOnly_forkAt (chainId : UInt64) (t : Nat) :
     (ChainConfig.pragueOnly chainId).forkAt t = .ok .prague := by
   have h : (ChainConfig.pragueOnly chainId).forkAt? t = some .prague := by
     unfold ChainConfig.forkAt? ChainConfig.pragueOnly
-    simp
+    simp only [zero_le, decide_true, List.filter_cons_of_pos, List.filter_nil,
+      List.getLast?_singleton, Option.map_some]
   unfold ChainConfig.forkAt
-  simp [ChainConfig.pragueOnly_validate, h, Except.mapError, Bind.bind,
-    Except.bind]
+  simp only [bind, Except.bind, Except.mapError, ChainConfig.pragueOnly_validate, h]
 
 /-- A fork a configured lookup selects is one the schedule activates. -/
 theorem ChainConfig.forkAt_mem {cfg : ChainConfig} {t : Nat} {f : Fork}
@@ -5526,12 +5537,12 @@ theorem ChainConfig.forkAt_mem {cfg : ChainConfig} {t : Nat} {f : Fork}
     unfold ChainConfig.forkAt at h
     cases hv : cfg.validate with
     | error e =>
-      simp [hv, Except.mapError, Bind.bind, Except.bind] at h
+      simp only [bind, Except.bind, Except.mapError, hv, reduceCtorEq] at h
     | ok u =>
       cases hq : cfg.forkAt? t with
-      | none => simp [hv, hq, Except.mapError, Bind.bind, Except.bind] at h
+      | none => simp only [bind, Except.bind, Except.mapError, hv, hq, reduceCtorEq] at h
       | some g =>
-        simp [hv, hq, Except.mapError, Bind.bind, Except.bind] at h
+        simp only [bind, Except.bind, Except.mapError, hv, hq, Except.ok.injEq] at h
         rw [h]
   unfold ChainConfig.forkAt? at hsome
   obtain ⟨a, ha, rfl⟩ := Option.map_eq_some_iff.mp hsome

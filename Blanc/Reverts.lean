@@ -199,7 +199,7 @@ theorem Func.exec_of_runCompiledTo_core :
     rcases of_subcode sub with ⟨cd, h_eq', h_slice⟩
     rcases of_bind_eq_some h_eq' with ⟨cd', h_eq'', h_rw⟩
     rcases of_bind_eq_some h_rw with ⟨p_bts, h_p, h_rw⟩
-    simp [pure] at h_rw
+    simp only [pure, Option.some.injEq] at h_rw
     rw [← h_rw] at h_slice
     rcases h_n with ⟨xl, h_filled, h_step⟩
     exact Ninst.exec_of_stepRun (Ninst.at_of_slice (List.slice_prefix h_slice))
@@ -309,7 +309,7 @@ theorem Func.exec_of_runCompiledTo_subcode
     rcases of_subcode sub with ⟨cd, h_eq', h_slice⟩
     rcases of_bind_eq_some h_eq' with ⟨cd', _h_eq'', h_rw⟩
     rcases of_bind_eq_some h_rw with ⟨p_bts, h_p, h_rw⟩
-    simp [pure] at h_rw
+    simp only [pure, Option.some.injEq] at h_rw
     rw [← h_rw] at h_slice
     rcases h_n with ⟨xl, h_filled, h_step⟩
     exact Ninst.exec_of_stepRun
@@ -334,7 +334,7 @@ theorem Func.exec_of_runCompiledTo_prefix
     rw [h_code]
     exact List.slice_prefix (List.slice_refl (pfx ++ sfx))
   have h_bound : noPushBefore sevm.code 0 32 = true := by
-    simp [noPushBefore]
+    simp only [noPushBefore]
   obtain ⟨h_exec⟩ :=
     Func.exec_of_runCompiledTo_subcode h_run h_noCalls 0 h_sub h_bound
   rw [← exec_iff_exec_eq]
@@ -503,7 +503,7 @@ frame's `output` to `[]`. -/
 whatever is already in memory. -/
 lemma Devm.extCost_empty_window {devm : Devm} {i : Nat} :
     devm.extCost [⟨i, 0⟩] = 0 := by
-  simp [Devm.extCost, memExtsSize, memExtSize]
+  simp only [Devm.extCost, memExtsSize, memExtSize, ↓reduceIte, tsub_self]
 
 /-- Reading an empty window yields no bytes and moves nothing. -/
 lemma Devm.memRead_zero {devm : Devm} {i : Nat} :

@@ -43,7 +43,7 @@ theorem snapshot_eq_of_getStor_bal
     (balance : after.bal ca = before.bal ca) :
     snapshot coalition ca after = snapshot coalition ca before := by
   unfold snapshot coalitionUnits
-  simp [storage, balance]
+  simp only [storage, Finset.sum_map_toList, balance]
 
 /-- The distinct body-level sources that can retain an interpreter-backed
 message call.  The tag stays with a later realized segment: a state-only
@@ -101,7 +101,7 @@ theorem TransactionMessageOccurrence.message_benv_rules_eq
       rw [prepareMessage_benv head.prepared]
       rfl
   | tail head tail occurrence ih =>
-      simpa [Benv.withState] using ih
+      simpa only [Benv.withState] using ih
 
 /-- A selected transaction message keeps the exact fork of the transaction
 list environment that prepared it. -/
@@ -118,7 +118,7 @@ theorem TransactionMessageOccurrence.message_benv_stat_fork_eq
       rw [prepareMessage_benv head.prepared]
       rfl
   | tail head tail occurrence ih =>
-      simpa [Benv.withState] using ih
+      simpa only [Benv.withState] using ih
 
 /-- Every message selected through the transaction-list occurrence comes from
 a prepared transaction and therefore takes the value-transfer branch.  The
@@ -162,9 +162,9 @@ theorem TransactionMessageOccurrence.msg_sum_nof
   | tail head tail occurrence ih =>
       intro sumNof hfork
       exact ih (Nat.lt_of_le_of_lt
-        (by simpa [Benv.withState] using
+        (by simpa only [Benv.withState] using
           processTransaction_sum_le head.result hfork.rules_stateGas_none)
-        sumNof) (by simpa [Benv.withState] using hfork)
+        sumNof) (by simpa only [Benv.withState] using hfork)
 
 /-- The actual beacon and history messages cannot increase total balance, so
 the body-entry withdrawal bound funds the selected transaction prefix. -/
@@ -180,16 +180,16 @@ theorem TransactionMessageOccurrence.msg_sum_nof_of_body
     sum msg.benv.state.bal < 2 ^ 256 := by
   have beacon := processMessageCall_sum_le
     (CoveredFork.rules_stateGas_none (by
-      simpa [ExecutionTrace.systemTransactionMessage, processSystemTransactionMsg,
+      simpa only [ExecutionTrace.systemTransactionMessage, processSystemTransactionMsg,
         Benv.beginTransaction] using hfork))
     body.beacon.message.result
   have history := processMessageCall_sum_le
     (CoveredFork.rules_stateGas_none (by
-      simpa [ExecutionTrace.systemTransactionMessage, processSystemTransactionMsg,
+      simpa only [ExecutionTrace.systemTransactionMessage, processSystemTransactionMsg,
         Benv.beginTransaction, Benv.withState] using hfork))
     body.history.message.result
   rw [ExecutionTrace.systemTransactionMessage_benv_state] at beacon history
-  apply occurrence.msg_sum_nof _ (by simpa [Benv.withState] using hfork)
+  apply occurrence.msg_sum_nof _ (by simpa only [Benv.withState] using hfork)
   simp only [Benv.withState] at history ⊢
   omega
 
@@ -231,10 +231,10 @@ theorem TransactionMessageOccurrence.msgInv
         head.benvInv (dripSpec_preserves ca) sumNof inv hfork
       have nextSum : sum (benv.withState txState).state.bal < 2 ^ 256 := by
         exact Nat.lt_of_le_of_lt
-          (by simpa [Benv.withState] using
+          (by simpa only [Benv.withState] using
             processTransaction_sum_le head.result hfork.rules_stateGas_none)
           sumNof
-      exact ih nextSum headInv (by simpa [Benv.withState] using hfork)
+      exact ih nextSum headInv (by simpa only [Benv.withState] using hfork)
 
 /-- A transaction message selected from a concrete body inherits DRIP's
 invariant from the body entry.  The two system-message traces are traversed in
@@ -255,7 +255,7 @@ theorem TransactionMessageOccurrence.msgInv_of_body
   have beaconInv : dripSpec.BenvInv ca (benv.withState body.beaconState) :=
     body.beacon.benvInv (dripSpec_preserves ca) inv hfork
   have hforkHistory : CoveredFork (benv.withState body.beaconState).stat.fork := by
-    simpa [Benv.withState] using hfork
+    simpa only [Benv.withState] using hfork
   have history := body.history.stateInv_and_sum_le
     (dripSpec_preserves ca) beaconInv hforkHistory
   have historyInv : dripSpec.BenvInv ca
@@ -264,12 +264,12 @@ theorem TransactionMessageOccurrence.msgInv_of_body
   have startSum : sum benv.state.bal < 2 ^ 256 := by
     omega
   have historyLe : sum body.historyState.bal ≤ sum benv.state.bal := by
-    exact le_trans (by simpa [Benv.withState] using history.2) beacon.2
+    exact le_trans (by simpa only [Benv.withState] using history.2) beacon.2
   have historySum : sum ((benv.withState body.beaconState).withState
       body.historyState).state.bal < 2 ^ 256 := by
-    simpa [Benv.withState] using Nat.lt_of_le_of_lt historyLe startSum
+    simpa only [Benv.withState, Nat.reducePow] using Nat.lt_of_le_of_lt historyLe startSum
   exact occurrence.msgInv historySum historyInv (by
-    simpa [Benv.withState] using hfork)
+    simpa only [Benv.withState] using hfork)
 
 /-- A transaction occurrence in an arbitrary actual configured block receives
 the DRIP message invariant from the deployment root and the exact retained
@@ -364,7 +364,7 @@ theorem TransactionMessageOccurrence.exists_selectedTransaction
       rcases head.exists_stateChronology hfork with ⟨chronology⟩
       exact ⟨.head head tail chronology⟩
   | tail head tail occurrence ih =>
-      rcases ih (by simpa [Benv.withState] using hfork) with ⟨selected⟩
+      rcases ih (by simpa only [Benv.withState] using hfork) with ⟨selected⟩
       exact ⟨.tail head tail occurrence selected⟩
 
 /-- A selected transaction message in an arbitrary configured block, coupled
@@ -397,7 +397,7 @@ theorem ConfiguredTransactionEnvelope.covered
     (envelope : ConfiguredTransactionEnvelope root reach block message) :
     CoveredFork msg.benv.stat.fork := by
   rw [envelope.occurrence.message_benv_stat_fork_eq]
-  simpa [Benv.withState, initBenv, initBenvStat] using block.covered
+  simpa only [Benv.withState, initBenv, initBenvStat] using block.covered
 
 /-- Build the configured transaction envelope from recorded block execution.
 The message invariant is obtained from the deployment root and retained block
@@ -564,7 +564,8 @@ theorem TransactionMessageOccurrence.callRun_runtime_of_target
   induction occurrence with
   | head head tail =>
       intro ready target currentTarget
-      simpa using transactionCallRun_runtime_of_target head ready target currentTarget
+      simpa only [exists_and_right] using
+        transactionCallRun_runtime_of_target head ready target currentTarget
   | tail head tail occurrence ih =>
       intro ready target currentTarget
       exact ih ready target currentTarget
@@ -768,7 +769,8 @@ theorem ConfiguredDirectCall.core_slot_some
         change RunFrame (Frame.ofCall call.execMsg) call.core.slot (.ok call.evm) at coreRun
         unfold RunFrame Frame.enter Frame.ofCall at coreRun
         rw [transfer] at coreRun
-        simp [Frame.settleMsg, processMessage.settle] at coreRun
+        simp only [ExceptT.stM_eq, Frame.settleMsg, Bool.false_eq_true, ↓reduceIte,
+          processMessage.settle, Except.bind_error, reduceCtorEq, and_false] at coreRun
     | ok afterTransfer => exact ⟨afterTransfer, rfl⟩
   rcases entry with ⟨afterTransfer, transfer⟩
   have notPrecompile : ¬ afterTransfer.stat.rules.isPrecomp ca := by
@@ -864,7 +866,7 @@ theorem ConfiguredDirectCall.error_no_settlement
   have settledEq := (RunFrame.some_inv process).2
   unfold Frame.settlementCommits at settles
   rw [← settledEq] at settles
-  cases errorEq : call.evm.error <;> simp_all
+  cases errorEq : call.evm.error <;> simp_all only [Option.isSome_none, Bool.false_eq_true, Option.isSome_some, ExceptT.stM_eq, Option.isNone_some]
 
 /-- A clean configured direct core exposes its actual post-transfer raw
 interpreter root, post-state, and output.  The core slot is derived internally
@@ -1220,7 +1222,8 @@ theorem drip_exec_balance_eq {sevm : Sevm} {pre post : Devm}
   let image := entry.memory.data.toList
   have hreads : Mem.Reads entry.memory image := by
     intro i
-    simp [image]
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList,
+      image]
   let hframe : Frame image entry entry := ⟨hwf, hreads, rfl, rfl⟩
   have hsource := of_run_drip_balance_eq auxLookup_runtime hframe nil_pref hrun
   exact (congrFun hsource sevm.currentTarget).trans

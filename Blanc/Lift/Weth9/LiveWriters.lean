@@ -70,7 +70,7 @@ theorem weth9_approve_live {sevm : Sevm} {pre : Devm} {G : Nat}
       (Sevm.dataWord sevm 36)) := by
     have hs : Sevm.selector sevm = 0x095ea7b3 := h_sel.trans apSel_eq
     unfold decodeCall
-    simp (config := {decide := true}) [not_shortCall h_len h_len', hs]
+    simp (config := { decide := true }) only [not_shortCall h_len h_len', ↓reduceIte, hs]
   have heff := writer_effect hfork hrun hdec (by intro who w h; cases h)
   simp only [Call.stor, Option.some.injEq] at heff
   exact ⟨post, (exec_iff_exec_eq 0 sevm pre (.ok post)).mp (exec_of_runExact h_code hfork hrun), hg,
@@ -99,7 +99,7 @@ theorem weth9_deposit_live {sevm : Sevm} {pre : Devm} {G : Nat}
   have hdec : decodeCall sevm = some (.deposit sevm.caller sevm.value) := by
     have hs' : Sevm.selector sevm = 0xd0e30db0 := h_sel.trans dpSel_eq
     unfold decodeCall
-    simp (config := {decide := true}) [not_shortCall h_len h_len', hs']
+    simp (config := { decide := true }) only [not_shortCall h_len h_len', ↓reduceIte, hs']
   have heff := writer_effect hfork hrun hdec (by intro who w h; cases h)
   simp only [Call.stor, Option.some.injEq] at heff
   exact ⟨post, (exec_iff_exec_eq 0 sevm pre (.ok post)).mp (exec_of_runExact h_code hfork hrun), hg,
@@ -122,7 +122,7 @@ theorem weth9_fallback_short_live {sevm : Sevm} {pre : Devm} {G : Nat}
     h_mem h_gas hs
   have hdec : decodeCall sevm = some (.deposit sevm.caller sevm.value) := by
     unfold decodeCall
-    simp [h_short]
+    simp only [h_short, ↓reduceIte]
   have heff := writer_effect hfork hrun hdec (by intro who w h; cases h)
   simp only [Call.stor, Option.some.injEq] at heff
   exact ⟨post, (exec_iff_exec_eq 0 sevm pre (.ok post)).mp (exec_of_runExact h_code hfork hrun), hg,
@@ -179,7 +179,7 @@ theorem weth9_transferFrom_self_live {sevm : Sevm} {pre : Devm} {G : Nat}
       (Sevm.dataWord sevm 36).toAdr (Sevm.dataWord sevm 68)) := by
     have hs : Sevm.selector sevm = 0x23b872dd := h_sel.trans tfSel_eq
     unfold decodeCall
-    simp (config := {decide := true}) [not_shortCall h_len h_len', hs]
+    simp (config := { decide := true }) only [not_shortCall h_len h_len', ↓reduceIte, hs]
   have heff := writer_effect hfork hrun hdec (by intro who w h; cases h)
   simp only [Call.stor] at heff
   exact ⟨post, (exec_iff_exec_eq 0 sevm pre (.ok post)).mp (exec_of_runExact h_code hfork hrun), hg,
@@ -211,7 +211,7 @@ theorem weth9_transferFrom_max_live {sevm : Sevm} {pre : Devm} {G : Nat}
       (Sevm.dataWord sevm 36).toAdr (Sevm.dataWord sevm 68)) := by
     have hs : Sevm.selector sevm = 0x23b872dd := h_sel.trans tfSel_eq
     unfold decodeCall
-    simp (config := {decide := true}) [not_shortCall h_len h_len', hs]
+    simp (config := { decide := true }) only [not_shortCall h_len h_len', ↓reduceIte, hs]
   have heff := writer_effect hfork hrun hdec (by intro who w h; cases h)
   simp only [Call.stor] at heff
   exact ⟨post, (exec_iff_exec_eq 0 sevm pre (.ok post)).mp (exec_of_runExact h_code hfork hrun), hg,
@@ -245,7 +245,7 @@ theorem weth9_transferFrom_allow_live {sevm : Sevm} {pre : Devm} {G : Nat}
       (Sevm.dataWord sevm 36).toAdr (Sevm.dataWord sevm 68)) := by
     have hs : Sevm.selector sevm = 0x23b872dd := h_sel.trans tfSel_eq
     unfold decodeCall
-    simp (config := {decide := true}) [not_shortCall h_len h_len', hs]
+    simp (config := { decide := true }) only [not_shortCall h_len h_len', ↓reduceIte, hs]
   have heff := writer_effect hfork hrun hdec (by intro who w h; cases h)
   simp only [Call.stor] at heff
   exact ⟨post, (exec_iff_exec_eq 0 sevm pre (.ok post)).mp (exec_of_runExact h_code hfork hrun), hg,
@@ -273,7 +273,7 @@ theorem weth9_transfer_live {sevm : Sevm} {pre : Devm} {G : Nat}
       (Sevm.dataWord sevm 36)) := by
     have hs : Sevm.selector sevm = 0xa9059cbb := h_sel.trans trSel_eq
     unfold decodeCall
-    simp (config := {decide := true}) [not_shortCall h_len h_len', hs]
+    simp (config := { decide := true }) only [not_shortCall h_len h_len', ↓reduceIte, hs]
   have heff := writer_effect hfork hrun hdec (by intro who w h; cases h)
   simp only [Call.stor] at heff
   exact ⟨post, (exec_iff_exec_eq 0 sevm pre (.ok post)).mp (exec_of_runExact h_code hfork hrun), hg,
@@ -356,42 +356,48 @@ theorem Call.stor_ne_none_of_step {K : Key → Prop} {s : Stor} {c : Call} {l' :
     (hkeys : ∀ k ∈ c.keys, K k) (h : (ledger K s).step c = some l') :
     c.stor s ≠ none := by
   cases c with
-  | deposit who v => simp [Call.stor]
-  | approve who g w => simp [Call.stor]
+  | deposit who v => simp only [stor, ne_eq, reduceCtorEq, not_false_eq_true]
+  | approve who g w => simp only [stor, ne_eq, reduceCtorEq, not_false_eq_true]
   | withdraw who w =>
-    have hw : K (.bal who) := hkeys _ (by simp [Call.keys])
+    have hw : K (.bal who) := hkeys _ (by simp only [keys, List.mem_cons, List.not_mem_nil,
+      or_false])
     have hb : (ledger K s).bal who = s.get (balSlot who) := tracked_self hw
     rw [Ledger.step_withdraw, hb] at h
     by_cases hlt : s.get (balSlot who) < w
-    · simp [hlt] at h
-    · simp [Call.stor, hlt]
+    · simp only [hlt, ↓reduceIte, reduceCtorEq] at h
+    · simp only [stor, hlt, ↓reduceIte, ne_eq, reduceCtorEq, not_false_eq_true]
   | transfer who dst w =>
-    have hw : K (.bal who) := hkeys _ (by simp [Call.keys])
+    have hw : K (.bal who) := hkeys _ (by simp only [keys, List.mem_cons, Key.bal.injEq,
+      List.not_mem_nil, or_false, true_or])
     have hb : (ledger K s).bal who = s.get (balSlot who) := tracked_self hw
     rw [Ledger.step_transfer] at h
     unfold Ledger.transferFrom at h
     rw [hb] at h
     by_cases hlt : s.get (balSlot who) < w
-    · simp [hlt] at h
-    · simp [Call.stor, xferStorStep, hlt]
+    · simp only [hlt, ↓reduceIte, reduceCtorEq] at h
+    · simp only [stor, xferStorStep, hlt, ↓reduceIte, ne_eq, not_true_eq_false, false_and,
+      reduceCtorEq, not_false_eq_true]
   | transferFrom who src dst w =>
-    have hsrc : K (.bal src) := hkeys _ (by simp [Call.keys])
-    have hal : K (.allow src who) := hkeys _ (by simp [Call.keys])
+    have hsrc : K (.bal src) := hkeys _ (by simp only [keys, List.mem_cons, Key.bal.injEq,
+      reduceCtorEq, List.not_mem_nil, or_self, or_false, true_or])
+    have hal : K (.allow src who) := hkeys _ (by simp only [keys, List.mem_cons, reduceCtorEq,
+      List.not_mem_nil, or_false, or_true])
     have hb : (ledger K s).bal src = s.get (balSlot src) := tracked_self hsrc
     have ha : (ledger K s).allow src who = s.get (allowSlot src who) := trackedAllow_self hal
     rw [Ledger.step_transferFrom] at h
     unfold Ledger.transferFrom at h
     rw [hb, ha] at h
     by_cases hlt : s.get (balSlot src) < w
-    · simp [hlt] at h
+    · simp only [hlt, ↓reduceIte, reduceCtorEq] at h
     · simp only [hlt, ↓reduceIte] at h
       by_cases hc : src ≠ who ∧ s.get (allowSlot src who) ≠ B256.max
       · have hc' : src ≠ who ∧ s.get (allowSlot src who) ≠ maxAllowance := hc
         simp only [hc'.1, ne_eq, not_false_eq_true, hc'.2, and_self, ↓reduceIte] at h
         by_cases hl2 : s.get (allowSlot src who) < w
-        · simp [hl2] at h
-        · simp [Call.stor, xferStorStep, hlt, hc, hl2]
-      · simp [Call.stor, xferStorStep, hlt, hc]
+        · simp only [hl2, ↓reduceIte, reduceCtorEq] at h
+        · simp only [stor, xferStorStep, hlt, ↓reduceIte, ne_eq, hc, not_false_eq_true, and_self,
+          hl2, reduceCtorEq]
+      · simp only [stor, xferStorStep, hlt, ↓reduceIte, ne_eq, hc, reduceCtorEq, not_false_eq_true]
 
 
 /-- What `xferStorStep` succeeding says about the words it reads. -/
@@ -401,13 +407,13 @@ theorem xferStorStep_ok {s s' : Stor} {who src dst : Adr} {wad : B256}
       (src = who ∨ s.get (allowSlot src who) = B256.max ∨ wad ≤ s.get (allowSlot src who)) := by
   unfold xferStorStep at h
   by_cases hlt : s.get (balSlot src) < wad
-  · simp [hlt] at h
+  · simp only [hlt, ↓reduceIte, reduceCtorEq] at h
   · refine ⟨B256.not_lt.mp hlt, ?_⟩
     simp only [hlt, ↓reduceIte] at h
     by_cases hc : src ≠ who ∧ s.get (allowSlot src who) ≠ B256.max
     · simp only [hc.1, ne_eq, not_false_eq_true, hc.2, and_self, ↓reduceIte] at h
       by_cases hl2 : s.get (allowSlot src who) < wad
-      · simp [hl2] at h
+      · simp only [hl2, ↓reduceIte, reduceCtorEq] at h
       · exact Or.inr (Or.inr (B256.not_lt.mp hl2))
     · by_cases hs : src = who
       · exact Or.inl hs
@@ -614,7 +620,8 @@ theorem weth9_withdraw_send_live {sevm : Sevm} {pre : Devm} {X Xmin : Nat}
     (Q := fun p => Devm.getStor p sevm.currentTarget =
         Devm.getStor (wB3 sevm pre (Sevm.dataWord sevm 4)) sevm.currentTarget ∧
       p.output = (wB3 sevm pre (Sevm.dataWord sevm 4)).output)
-    hfork h_static fp_memFp (by simp) hwad hle rfl rfl rfl h_sentry
+    hfork h_static fp_memFp (by simp only [List.length_cons, List.length_nil, zero_add,
+      Nat.one_lt_ofNat]) hwad hle rfl rfl rfl h_sentry
     ⟨cp, hrun, hSt', hstor, hout⟩
   have hg : X + 69 + sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller)
       (wV sevm pre (Sevm.dataWord sevm 4)) + 16 + sloadCost sevm (wB1 sevm pre) (balSlot sevm.caller) +
@@ -633,11 +640,12 @@ theorem weth9_withdraw_send_live {sevm : Sevm} {pre : Devm} {X Xmin : Nat}
   · rw [hpe]
     show cp'.output = pre.output
     rw [hQ.2]
-    simp [wB3, wB2, wB1]
+    simp only [wB3, wB2, wB1, afterSstore_output, afterSload_output]
   · rw [hpe]
     show Devm.getStor cp' sevm.currentTarget = _
     rw [hQ.1]
-    simp [wB3, wB2, wB1, wV, getStorVal_afterSload]
+    simp only [wB3, wB2, wB1, wV, getStorVal_afterSload, afterSstore_getStor_self,
+      afterSload_getStor]
 
 
 /-- **A worked cost**: `approve` of a nonzero amount over a cold, never-written allowance slot costs
@@ -652,7 +660,7 @@ theorem approveGas_cold_set {sevm : Sevm} {pre : Devm}
     (hw : Sevm.dataWord sevm 36 ≠ 0) : approveGas sevm pre = 24420 := by
   unfold approveGas sstoreCost sstoreValueCost
   simp only [hcold, horig, hcur, ite_false]
-  simp [Ne.symm hw]
+  simp only [ne_eq, Ne.symm hw, not_false_eq_true, and_self, ↓reduceIte]
   decide
 
 end Blanc.Lift.Weth9

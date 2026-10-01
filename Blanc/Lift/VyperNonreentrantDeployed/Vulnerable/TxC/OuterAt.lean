@@ -59,7 +59,7 @@ theorem txC_message_of_child_at (hg : CoveredFork g) (d1 : Devm)
     have hrg : wrun fs2 (e0C.withFork g).sta 2 c = r :=
       (wrun_withFork hf0 hg e0C_block.2 fs2 2 c).trans hr'
     rcases r with c' | ⟨post | post, cl⟩ | _
-    · simp [obs0C] at hk
+    · simp only [obs0C, reduceCtorEq] at hk
     · simp only [obs0C, Option.some.injEq, Prod.mk.injEq, Bool.and_eq_true,
         decide_eq_true_eq] at hk
       obtain ⟨hgas0, hout, ⟨herr, hrf⟩, hstor, hatd⟩ := hk
@@ -91,8 +91,8 @@ theorem txC_message_of_child_at (hg : CoveredFork g) (d1 : Devm)
         (e0C.withFork g).dyna⟩) = _
       rw [hex]
       exact frame_settle_ok rfl hsg0 herr'
-    · simp [obs0C] at hk
-    · simp [obs0C] at hk
-  · simp [obs0C] at hk
+    · simp only [obs0C, reduceCtorEq] at hk
+    · simp only [obs0C, reduceCtorEq] at hk
+  · simp only [obs0C, reduceCtorEq] at hk
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC

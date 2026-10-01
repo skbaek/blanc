@@ -163,30 +163,31 @@ theorem checkNode_eq_checkNodeM (code : ByteArray) (es : List Entry) (m : Nat)
     intro f
     induction f with
     | next n f ih =>
-      refine ⟨fun pc a => ?_, by simp [P]⟩
-      cases h : absNinst n a <;> simp [Q, checkNode, checkNodeM, h, ih.1]
-    | last l => exact ⟨fun pc a => by simp [Q, checkNode, checkNodeM], by simp [P]⟩
-    | dest f ih => exact ⟨fun pc a => by simp [Q, checkNode, checkNodeM, ih.1], ih.1⟩
+      refine ⟨fun pc a => ?_, by simp only⟩
+      cases h : absNinst n a <;> simp only [checkNode, h, Bool.and_false, checkNodeM, Q, ih.1, Bool.false_eq_true, ↓reduceIte]
+    | last l => exact ⟨fun pc a => by simp only [checkNode, checkNodeM], by simp only⟩
+    | dest f ih => exact ⟨fun pc a => by simp only [checkNode, ih.1, checkNodeM, Q], ih.1⟩
     | branch f g ihf ihg =>
-      refine ⟨fun pc a => ?_, by simp [P]⟩
-      rcases a with _ | ⟨_ | _ | _, _ | ⟨_, a⟩⟩ <;> simp [Q, checkNode, checkNodeM, ihf.1, ihg.1]
+      refine ⟨fun pc a => ?_, by simp only⟩
+      rcases a with _ | ⟨_ | _ | _, _ | ⟨_, a⟩⟩ <;> simp only [checkNode, checkNodeM, Q, ihf.1, ihg.1]
     | branchTo f k ih =>
-      refine ⟨fun pc a => ?_, by simp [P]⟩
+      refine ⟨fun pc a => ?_, by simp only⟩
       rcases a with _ | ⟨_ | _ | _, _ | ⟨_, a⟩⟩ <;> cases h : es[k]? <;>
-        simp [Q, checkNode, checkNodeM, ih.1, memCompat, h]
+        simp only [checkNode, checkNodeM, Q, h, ih.1, memCompat, List.getD_eq_getElem?_getD, List.length_nil, not_lt_zero, not_false_eq_true, getElem?_neg, Option.getD_none, List.lookup_nil, Option.none_beq_some, List.all_nil, Bool.and_true]
     | jump k =>
-      refine ⟨fun pc a => ?_, by simp [P]⟩
+      refine ⟨fun pc a => ?_, by simp only⟩
       rcases a with _ | ⟨_ | _ | _, a⟩ <;> cases h : es[k]? <;>
-        simp [Q, checkNode, checkNodeM, memCompat, h]
+        simp only [checkNode, checkNodeM, h, memCompat, List.getD_eq_getElem?_getD, List.length_nil, not_lt_zero, not_false_eq_true, getElem?_neg, Option.getD_none, List.lookup_nil, Option.none_beq_some, List.all_nil, Bool.and_true]
     | callNext k f ih =>
-      refine ⟨fun pc a => ?_, by simp [P]⟩
+      refine ⟨fun pc a => ?_, by simp only⟩
       rcases a with _ | ⟨_ | _ | _, a⟩ <;> cases f <;> cases h : es[k]? <;>
-        simp [Q, checkNode, checkNodeM, ih.1, ih.2, h] <;> rfl
-    | ret => exact ⟨fun pc a => by rcases a with _ | ⟨_ | _ | _, a⟩ <;> simp [Q, checkNode, checkNodeM],
-        by simp [P]⟩
+        simp only [checkNode, checkNodeM, Q, h, ih.2, List.getD_eq_getElem?_getD, List.length_nil, not_lt_zero, not_false_eq_true, getElem?_neg, Option.getD_none, List.isEmpty_nil, Bool.and_true] <;> rfl
+    | ret => exact ⟨fun pc a => by rcases a with _ | ⟨_ | _ | _, a⟩ <;> simp only [checkNode,
+      checkNodeM],
+        by simp only⟩
     | pcAt p f ih =>
-      exact ⟨fun pc a => by simp [Q, checkNode, checkNodeM, ih.1], by simp [P]⟩
-    | undefined => exact ⟨fun pc a => by simp [Q, checkNode, checkNodeM], by simp [P]⟩
+      exact ⟨fun pc a => by simp only [checkNode, ih.1, checkNodeM, Q], by simp only⟩
+    | undefined => exact ⟨fun pc a => by simp only [checkNode, checkNodeM], by simp only⟩
   exact (hall f).1 pc a
 
 end Blanc.Lift

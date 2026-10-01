@@ -31,12 +31,17 @@ theorem event_mem {sevm : Sevm} {sP wP pP a c : B256} {M : Mem} {img : Bytes}
     BodyMem (memB (memC (memB (memA M (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)) 608 (Bytes.toB256 ((imgA img (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)).sliceD 160 32 0))) (sevm.data.sliceD sP.toNat 96 0)) 800 (Bytes.toB256 ((imgC (imgB (imgA img (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)) 608 (Bytes.toB256 ((imgA img (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)).sliceD 160 32 0))) (sevm.data.sliceD sP.toNat 96 0)).sliceD 224 32 0))) 832 0x100
       [(0x80, (8 : B256).toBytes), (0xa0, BeaconDeposit.le64 a.toNat),
         (0x100, BeaconDeposit.abiDepositEvent (bodyEvent sevm pP wP sP a c))] := by
-  have h80 : img.sliceD 128 32 0 = (8 : B256).toBytes := hf (0x80, (8 : B256).toBytes) (by simp)
+  have h80 : img.sliceD 128 32 0 = (8 : B256).toBytes := hf (0x80, (8 : B256).toBytes) (by simp only [List.mem_cons,
+    Prod.mk.injEq, Nat.reduceEqDiff, false_and, and_true, List.not_mem_nil, or_self, or_false])
   have ha0 : img.sliceD 160 8 0 = BeaconDeposit.le64 a.toNat :=
-    hf (0xa0, BeaconDeposit.le64 a.toNat) (by simp)
-  have hc0 : img.sliceD 192 32 0 = (8 : B256).toBytes := hf (0xc0, (8 : B256).toBytes) (by simp)
+    hf (0xa0, BeaconDeposit.le64 a.toNat) (by simp only [List.mem_cons, Prod.mk.injEq,
+      Nat.reduceEqDiff, false_and, List.not_mem_nil, or_self, or_false, or_true])
+  have hc0 : img.sliceD 192 32 0 = (8 : B256).toBytes := hf (0xc0, (8 : B256).toBytes) (by simp only [List.mem_cons,
+    Prod.mk.injEq, Nat.reduceEqDiff, and_true, false_and, List.not_mem_nil, or_self, or_false,
+    or_true])
   have he0 : img.sliceD 224 8 0 = BeaconDeposit.le64 c.toNat :=
-    hf (0xe0, BeaconDeposit.le64 c.toNat) (by simp)
+    hf (0xe0, BeaconDeposit.le64 c.toNat) (by simp only [List.mem_cons, Prod.mk.injEq,
+      Nat.reduceEqDiff, false_and, List.not_mem_nil, or_false, or_true])
   have h0 : RW M img := ⟨hwf, hr⟩
   set V := Bytes.toB256 ((imgA img (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)).sliceD 160 32 0) with hV
   set U := Bytes.toB256 ((imgC (imgB (imgA img (sevm.data.sliceD pP.toNat 48 0) (sevm.data.sliceD wP.toNat 32 0)) 608 V) (sevm.data.sliceD sP.toNat 96 0)).sliceD 224 32 0) with hU
@@ -119,7 +124,9 @@ theorem event_mem {sevm : Sevm} {sP wP pP a c : B256} {M : Mem} {img : Bytes}
       ((32 : B256).toBytes ++ ((sevm.data.sliceD wP.toNat 32 0) ++ ((8 : B256).toBytes ++
       ((BeaconDeposit.le64 a.toNat ++ List.replicate 24 0) ++ ((96 : B256).toBytes ++ ((sevm.data.sliceD sP.toNat 96 0) ++
       ((8 : B256).toBytes ++ (BeaconDeposit.le64 c.toNat ++ List.replicate 24 0)))))))))))))))).length = 576 := by
-    simp [List.length_sliceD, B256.length_toBytes, BeaconDeposit.le64, List.length_append]
+    simp only [List.reduceReplicate, BeaconDeposit.le64, Nat.toUInt8_eq, List.cons_append,
+      List.nil_append, List.length_append, B256.length_toBytes, List.length_sliceD,
+      List.length_cons, List.length_nil, zero_add, Nat.reduceAdd]
   refine ⟨hsA, hsB, hsC, hc0B, hD.1, hsD, _, hD.2, ?_, ?_⟩
   · unfold imgB imgC imgA; peel; exact hfp
   · intro p hp
@@ -168,7 +175,8 @@ theorem body_event {sevm : Sevm} {b : Devm} {sel rt sP wP pP a c : B256} {G : Na
           (St b [0xc0, 96, sP, 0x80, 32, wP, 48, pP, BeaconDeposit.depositEventTopic, 0x80, a, rt,
             96, sP, 32, wP, 48, pP, 0x01b8, sel] M (G + 1104)) t_0575_c7 o := by
   obtain ⟨hwf, hs, img, hr, hfp, hf⟩ := hM
-  have h80 : img.sliceD 128 32 0 = (8 : B256).toBytes := hf (0x80, (8 : B256).toBytes) (by simp)
+  have h80 : img.sliceD 128 32 0 = (8 : B256).toBytes := hf (0x80, (8 : B256).toBytes) (by simp only [List.mem_cons,
+    Prod.mk.injEq, Nat.reduceEqDiff, false_and, and_true, List.not_mem_nil, or_self, or_false])
   have h0 : RW M img := ⟨hwf, hr⟩
   obtain ⟨hsA, hsB, hsC, hc0B, hM'⟩ := event_mem (sevm := sevm) (sP := sP) (wP := wP) (pP := pP)
     hwf hs hr hfp hf
@@ -178,7 +186,11 @@ theorem body_event {sevm : Sevm} {b : Devm} {sel rt sP wP pP a c : B256} {G : Na
   have hC := hB.memC (sevm.data.sliceD sP.toNat 96 0)
   refine ⟨b, _, Keep.refl b, hM', fun o k => ?_⟩
   rw [show G + 1104 = G + 263 + 207 + 263 + 371 by omega]
-  exact ev_head (by simp) h0 hs hfp h80 (ev_amount (by simp) hA hsA
-    (ev_sig (by simp) hB hsB hc0B (ev_index (by simp) hC hsC k)))
+  exact ev_head (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLeDiff]) h0 hs hfp h80 (ev_amount (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLeDiff]) hA hsA
+    (ev_sig (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLeDiff]) hB hsB hc0B (ev_index (by simp only [List.length_cons, List.length_nil,
+      zero_add, Nat.reduceAdd, Nat.reduceLeDiff]) hC hsC k)))
 
 end Blanc.Lift.BeaconDeposit

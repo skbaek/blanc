@@ -71,7 +71,7 @@ theorem depositLengthGuard_runCompiledTo
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   func_run (3) [1, 0]
-  case h_val => simp [B256.eqCheck]
+  case h_val => simp only [B256.eqCheck, ↓reduceIte]
   case h_arm =>
     simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Nat.add_sub_cancel] using htail
 
@@ -140,7 +140,7 @@ theorem depositValueLowerGuard_runCompiledTo
       (pushB256 (Nat.toB256 oneEther) ::: callvalue ::: lt :::
         ((.call slot) <?> rest)) ex := by
   func_run (4) [0]
-  case h_val => simp [B256.ltCheck, not_lt_of_ge hlower]
+  case h_val => simp only [B256.ltCheck, not_lt_of_ge hlower, ↓reduceIte]
   case h_arm =>
     simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Nat.add_sub_cancel] using htail
 

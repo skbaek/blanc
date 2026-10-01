@@ -54,7 +54,7 @@ theorem frame1_full (d1 : Devm)
             have s := s3.trans (callResume_cont h4 k2 a2)
             generalize hr : wrun fs1 sevm1 188 c4 = r at hk
             rcases r with c | ⟨post | post, cl⟩ | _
-            · simp [obs1, obs1EELS] at hk
+            · simp only [obs1, obs1EELS, List.map_append, reduceCtorEq] at hk
             · simp only [obs1, obs1EELS, Option.some.injEq, Prod.mk.injEq] at hk
               obtain ⟨hg, ho, h26, hA, h2', he⟩ := hk
               obtain ⟨run, hcl, hst⟩ := wrun_done hr (s.1 c0_agree)
@@ -66,12 +66,12 @@ theorem frame1_full (d1 : Devm)
               · rw [hs]; exact hA
               · rw [hs]; exact h2'
               · exact Option.isNone_iff_eq_none.mp he
-            · simp [obs1, obs1EELS] at hk
-            · simp [obs1, obs1EELS] at hk
-          · simp [obs1, obs1EELS] at hk
-        all_goals simp [obs1, obs1EELS] at hk
-      · simp [obs1, obs1EELS] at hk
-    · simp [obs1, obs1EELS] at hk
-  · simp [obs1, obs1EELS] at hk
+            · simp only [obs1, obs1EELS, List.map_append, reduceCtorEq] at hk
+            · simp only [obs1, obs1EELS, List.map_append, reduceCtorEq] at hk
+          · simp only [obs1, obs1EELS, List.map_append, reduceCtorEq] at hk
+        all_goals simp only [obs1, obs1EELS, List.map_append, reduceCtorEq] at hk
+      · simp only [obs1, obs1EELS, List.map_append, reduceCtorEq] at hk
+    · simp only [obs1, obs1EELS, List.map_append, reduceCtorEq] at hk
+  · simp only [obs1, obs1EELS, List.map_append, reduceCtorEq] at hk
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1

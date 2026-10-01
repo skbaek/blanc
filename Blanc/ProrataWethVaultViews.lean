@@ -119,7 +119,7 @@ private theorem shortString_body_effect
   have reads4 : Mem.Reads s4.memory pre.memory.data.toList := by
     rw [← entryMemory]
     intro index
-    simp
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
   have wf4 : Mem.Wf s4.memory := by
     rw [← entryMemory]
     exact memoryWf
@@ -573,7 +573,7 @@ private theorem allowance_body_effect
     exact Mem.read_two_word_writes
       (image := bodyPre.memory.data.toList) bodyMemoryWf (by
         intro i
-        simp) _ _
+        simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]) _ _
   have keyPrefix :
       allowanceKey (Sevm.argWord sevm 0) (Sevm.argWord sevm 1) :: [] <<+
         afterKec.stack := by
@@ -623,7 +623,8 @@ theorem name_compiled_effect
     (hselector : Sevm.selector sevm = selector "name" []) :
     sevm.value = 0 ∧ BytesViewEffect nameOutput pre post := by
   have hmember : (selector "name" [], routed 0 name) ∈ vaultFuncs := by
-    simp [vaultFuncs]
+    simp only [vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   rcases runCompiled_enters_body_compiled_logs run hselector hmember with
     ⟨bodyPre, hvalue, -, entryState, entryMemory, entryLogs, -, bodyRun⟩
   have bodyMemoryWf : Mem.Wf bodyPre.memory := by
@@ -642,7 +643,8 @@ theorem symbol_compiled_effect
     (hselector : Sevm.selector sevm = selector "symbol" []) :
     sevm.value = 0 ∧ BytesViewEffect symbolOutput pre post := by
   have hmember : (selector "symbol" [], routed 0 symbol) ∈ vaultFuncs := by
-    simp [vaultFuncs]
+    simp only [vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   rcases runCompiled_enters_body_compiled_logs run hselector hmember with
     ⟨bodyPre, hvalue, -, entryState, entryMemory, entryLogs, -, bodyRun⟩
   have bodyMemoryWf : Mem.Wf bodyPre.memory := by
@@ -660,7 +662,8 @@ theorem asset_compiled_effect
     (hselector : Sevm.selector sevm = selector "asset" []) :
     sevm.value = 0 ∧ WordViewEffect assetAddress pre post := by
   have hmember : (selector "asset" [], routed 0 asset) ∈ vaultFuncs := by
-    simp [vaultFuncs]
+    simp only [vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   rcases runCompiled_enters_body_compiled_logs run hselector hmember with
     ⟨bodyPre, hvalue, -, entryState, -, entryLogs, -, bodyRun⟩
   exact ⟨hvalue,
@@ -674,7 +677,8 @@ theorem decimals_compiled_effect
     sevm.value = 0 ∧ WordViewEffect 21 pre post := by
   have hmember :
       (selector "decimals" [], routed 0 decimals) ∈ vaultFuncs := by
-    simp [vaultFuncs]
+    simp only [vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   rcases runCompiled_enters_body_compiled_logs run hselector hmember with
     ⟨bodyPre, hvalue, -, entryState, -, entryLogs, -, bodyRun⟩
   exact ⟨hvalue,
@@ -690,7 +694,8 @@ theorem totalSupply_compiled_effect
         (Devm.getStorVal pre sevm.currentTarget supplySlot) pre post := by
   have hmember :
       (selector "totalSupply" [], routed 0 totalSupply) ∈ vaultFuncs := by
-    simp [vaultFuncs]
+    simp only [vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   rcases runCompiled_enters_body_compiled_logs run hselector hmember with
     ⟨bodyPre, hvalue, -, entryState, -, entryLogs, -, bodyRun⟩
   have effect := totalSupply_body_effect (R := Func.RunOk) bodyRun
@@ -723,7 +728,8 @@ theorem balanceOf_compiled_effect
   have hmember :
       (selector "balanceOf" [.address], routed 1 balanceOf) ∈
         vaultFuncs := by
-    simp [vaultFuncs]
+    simp only [vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   rcases runCompiled_enters_body_compiled_logs run hselector hmember with
     ⟨guardPre, hvalue, -, entryState, -, entryLogs, -, guardRun⟩
   rcases canonicalAddressArg_body_of_ok (R := Func.RunOk) nil_pref guardRun with
@@ -747,7 +753,8 @@ theorem maxRedeem_compiled_effect
   have hmember :
       (selector "maxRedeem" [.address], routed 1 maxRedeem) ∈
         vaultFuncs := by
-    simp [vaultFuncs]
+    simp only [vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   rcases runCompiled_enters_body_compiled_logs run hselector hmember with
     ⟨guardPre, hvalue, -, entryState, -, entryLogs, -, guardRun⟩
   rcases canonicalAddressArg_body_of_ok (R := Func.RunOk) nil_pref guardRun with
@@ -781,7 +788,8 @@ theorem allowance_compiled_effect
   have hmember :
       (selector "allowance" [.address, .address], routed 2 allowance) ∈
         vaultFuncs := by
-    simp [vaultFuncs]
+    simp only [vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   rcases runCompiled_enters_body_compiled_logs run hselector hmember with
     ⟨bodyPre, hvalue, -, entryState, entryMemory, entryLogs, -, bodyRun⟩
   have bodyMemoryWf : Mem.Wf bodyPre.memory := by

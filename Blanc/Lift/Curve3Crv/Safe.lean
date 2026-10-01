@@ -108,7 +108,8 @@ theorem c3crv_frame_refines_raw {sevm : Sevm} {pre post : Devm} {s : Curve3Crv.S
   rw [hdec] at hfresh ⊢
   have hk13 : k < 13 := by
     have := (List.getElem?_eq_some_iff.mp hk).1
-    simpa [bodies] using this
+    simpa only [gt_iff_lt, bodies, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd] using
+      this
   set stor := Devm.getStor pre sevm.currentTarget with hstor
   -- a writer, from its landing
   have writer : ∀ ow : Option B256, (∀ w, ow = some w → OwnerAnswer sevm pre s.minter w) →
@@ -138,7 +139,7 @@ theorem c3crv_frame_refines_raw {sevm : Sevm} {pre post : Devm} {s : Curve3Crv.S
   have hLsym : (stor.get vySymbolBase).toNat ≤ 32 := by
     have h := hinv.symbol; rw [VyStr] at h; omega
   have none_ok : ∀ w, (none : Option B256) = some w → OwnerAnswer sevm pre s.minter w :=
-    fun _ h => absurd h (by simp)
+    fun _ h => absurd h (by simp only [reduceCtorEq, not_false_eq_true])
   rcases k with _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | k
   all_goals simp only [bodies, List.getElem?_cons_zero, List.getElem?_cons_succ,
     Option.some.injEq, List.getElem?_nil, reduceCtorEq] at hk
@@ -152,9 +153,11 @@ theorem c3crv_frame_refines_raw {sevm : Sevm} {pre post : Devm} {s : Curve3Crv.S
     rw [hm] at hw
     exact writer (some w) (fun w' h => by cases h; exact hw) ⟨r, hr, hl⟩
   · exact ⟨fun h => False.elim h,
-      fun _ => view (by simp [viewKs]) (safe_totalSupply hfork G' post runB)⟩
+      fun _ => view (by simp only [viewKs, zero_add, Nat.reduceAdd, List.mem_cons, Nat.reduceEqDiff,
+        List.not_mem_nil, or_self, or_false]) (safe_totalSupply hfork G' post runB)⟩
   · exact ⟨fun h => False.elim h,
-      fun _ => view (by simp [viewKs]) (safe_allowance hfork G' post runB)⟩
+      fun _ => view (by simp only [viewKs, zero_add, Nat.reduceAdd, List.mem_cons, Nat.succ_ne_self,
+        Nat.reduceEqDiff, List.not_mem_nil, or_self, or_false, or_true]) (safe_allowance hfork G' post runB)⟩
   · exact ⟨fun _ => writer none none_ok (safe_transfer hfork G' post runB),
       fun h => absurd trivial h⟩
   · exact ⟨fun _ => writer none none_ok (safe_transferFrom hfork G' post runB),
@@ -166,20 +169,24 @@ theorem c3crv_frame_refines_raw {sevm : Sevm} {pre post : Devm} {s : Curve3Crv.S
   · exact ⟨fun _ => writer none none_ok (safe_burnFrom hfork G' post runB),
       fun h => absurd trivial h⟩
   · exact ⟨fun h => False.elim h,
-      fun _ => view (by simp [viewKs]) (safe_name hfork hcd hLname G' post runB)⟩
+      fun _ => view (by simp only [viewKs, zero_add, Nat.reduceAdd, List.mem_cons, Nat.reduceEqDiff,
+        List.not_mem_nil, or_self, or_false, or_true]) (safe_name hfork hcd hLname G' post runB)⟩
   · exact ⟨fun h => False.elim h,
-      fun _ => view (by simp [viewKs]) (safe_symbol hfork hcd hLsym G' post runB)⟩
+      fun _ => view (by simp only [viewKs, zero_add, Nat.reduceAdd, List.mem_cons, Nat.reduceEqDiff,
+        Nat.succ_ne_self, List.not_mem_nil, or_self, or_false, or_true]) (safe_symbol hfork hcd hLsym G' post runB)⟩
   · exact ⟨fun h => False.elim h,
-      fun _ => view (by simp [viewKs]) (safe_decimals hfork G' post runB)⟩
+      fun _ => view (by simp only [viewKs, zero_add, Nat.reduceAdd, List.mem_cons, Nat.reduceEqDiff,
+        Nat.succ_ne_self, List.not_mem_nil, or_self, or_false, or_true]) (safe_decimals hfork G' post runB)⟩
   · exact ⟨fun h => False.elim h,
-      fun _ => view (by simp [viewKs]) (safe_balanceOf hfork G' post runB)⟩
+      fun _ => view (by simp only [viewKs, zero_add, Nat.reduceAdd, List.mem_cons, Nat.reduceEqDiff,
+        Nat.succ_ne_self, List.not_mem_nil, or_false, or_true]) (safe_balanceOf hfork G' post runB)⟩
 
 /-- A raw effect that appends a log contradicts an unchanged log list. -/
 private theorem lands_logs_nil {sevm : Sevm} {pre post : Devm} {r : Raw}
     (hl : Lands sevm pre post r) (same : post.logs = pre.logs) : r.2.1 = [] := by
   have h := hl.logs
   rw [same] at h
-  simpa using h.symm
+  simpa only [List.append_right_eq_self] using h.symm
 
 /-- A guarded raw effect that was produced is the guarded value. -/
 private theorem eq_of_ite_some {p : Prop} [Decidable p] {x r : Raw}

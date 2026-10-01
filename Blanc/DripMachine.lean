@@ -1279,7 +1279,7 @@ theorem of_run_freshStart_prefix {fs : List Func} (hlookup : AuxLookup fs)
     rw [hyval,
       Devm.getStorVal_of_state
         (frame0.state.trans (of_run_pushB256 hpush).state).symm] at hy
-    simpa using hy
+    simpa only [List.append_eq, List.nil_append] using hy
   rcases run_prefix_prepend (l := (mstoreAt storedChiWord)) (path := mid1)
     (gasFree_mstoreAt storedChiWord) run with
     ⟨s2, mid2, hline2, run, hpre2⟩
@@ -1354,7 +1354,7 @@ theorem of_run_freshStart_prefix {fs : List Func} (hlookup : AuxLookup fs)
     rw [hyval,
       Devm.getStorVal_of_state
         (frame11.state.trans (of_run_pushB256 hpush).state).symm] at hy
-    simpa using hy
+    simpa only [List.append_eq, List.nil_append] using hy
   -- retain rho across the comparison for the subsequent subtraction
   rcases run_prefix_prepend (l := [dup 0]) (path := mid12)
     (by decide : Line.gasFree [dup 0] = true) run with

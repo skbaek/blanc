@@ -73,8 +73,7 @@ theorem canonicalDeploymentStep_establishes_root
     rw [stateTransitionUsing_eq_of_chainId_eq
       (cfg := ChainConfig.pragueOnly chainId) (ch := base)
       (show chainId = base.chainId from hbase.chainId_eq)] at h
-    simpa [ChainConfig.pragueOnly_forkAt, Except.mapError, Bind.bind,
-      Except.bind] using h
+    simpa only [Except.bind, Except.mapError, ChainConfig.pragueOnly_forkAt] using h
   have hstate : post = deployed.state := by
     have hinvert := hwith
     rw [stateTransitionAt_eq_ok_iff, stateTransitionE] at hinvert
@@ -126,7 +125,7 @@ theorem DeploymentRoot.reflReach
       deployed deployed := by
   exact .refl deployed (ChainConfig.pragueOnly_valid chainId)
     hroot.deployed_validContext
-    (by simpa [ChainConfig.pragueOnly] using hroot.deployed_chainId)
+    (by simpa only [ChainConfig.pragueOnly] using hroot.deployed_chainId)
 
 /-- The landed Registry preservation theorem transports the deployment seed
 through every configured Prague-only future. -/

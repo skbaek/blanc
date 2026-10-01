@@ -26,10 +26,11 @@ lemma keep_afterSstore_sload_twice {sevm : Sevm} {b : Devm} {k v : B256} :
   · simp only [afterSstore_accessedStorageKeys, afterSload_accessedStorageKeys]
     unfold sloadAccessedStorageKeys
     by_cases hk : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ b.accessedStorageKeys
-    · simp [hk]
+    · simp only [hk, ↓reduceIte]
     · have hin : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈
-          b.accessedStorageKeys.insert ⟨sevm.currentTarget, k⟩ := by simp
-      simp [hk, hin]
+          b.accessedStorageKeys.insert ⟨sevm.currentTarget, k⟩ := by simp only [Std.HashSet.mem_insert,
+            BEq.rfl, true_or]
+      simp only [hk, ↓reduceIte, hin]
   · simp only [afterSstore_logs, afterSload_logs]
   · simp only [afterSstore_output, afterSload_output]
   · simp only [afterSstore_error, afterSload_error]
@@ -60,7 +61,7 @@ theorem safe_countBump {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR nd : B
   have run_cut := SFunc.Run.cut run
   obtain ⟨hwf, hs, img, hr, hfp, hf⟩ := hM
   have hnd : img.sliceD 928 32 0 = nd.toBytes := by
-    have := hf (928, nd.toBytes) (by simp)
+    have := hf (928, nd.toBytes) (by simp only [List.mem_cons, List.not_mem_nil, or_false])
     rwa [B256.length_toBytes] at this
   have hr1 : Bytes.toB256 (M.read (0x3a0 : B256).toNat 32).1 = nd := by
     rw [show (0x3a0 : B256).toNat = 928 from rfl, hr.read, hnd, B256.toB256_toBytes]
@@ -87,7 +88,7 @@ theorem safe_countBump {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR nd : B
   have hroot : nd = rt := by
     by_contra hne
     apply hroot_ne
-    simp [B256.eqCheck, hne]
+    simp only [B256.eqCheck, hne, ↓reduceIte]
   refine ⟨hroot, ?_⟩
   -- t_0f02_c20: the cap check
   unfold t_0f02_c20 at run_cut
@@ -138,6 +139,7 @@ theorem safe_countBump {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR nd : B
   obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G27, rfl⟩ := ri_sstore hfork s1
   obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G28, rfl⟩ := ri_push s1
   have run_final := SFunc.RunCut.uncut run_cut
-  refine ⟨_, M, G28, keep_afterSstore_sload_twice, ⟨hwf, hs, img, hr, hfp, by simp⟩, run_final⟩
+  refine ⟨_, M, G28, keep_afterSstore_sload_twice, ⟨hwf, hs, img, hr, hfp, by simp only [List.not_mem_nil,
+    IsEmpty.forall_iff, implies_true]⟩, run_final⟩
 
 end Blanc.Lift.BeaconDeposit

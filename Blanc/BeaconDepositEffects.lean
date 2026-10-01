@@ -28,15 +28,15 @@ def supportsInterfaceArg (sevm : Sevm) : Bool :=
 @[simp] theorem supportsInterfaceWord_eq_true_iff (word : B256) :
     supportsInterfaceWord word = true ↔
       word = erc165InterfaceId ∨ word = depositInterfaceId := by
-  simp [supportsInterfaceWord]
+  simp only [supportsInterfaceWord, Bool.decide_or, Bool.or_eq_true, decide_eq_true_eq]
 
 @[simp] theorem supportsInterfaceWord_erc165 :
     supportsInterfaceWord erc165InterfaceId = true := by
-  simp
+  simp only [supportsInterfaceWord_eq_true_iff, true_or]
 
 @[simp] theorem supportsInterfaceWord_deposit :
     supportsInterfaceWord depositInterfaceId = true := by
-  simp
+  simp only [supportsInterfaceWord_eq_true_iff, or_true]
 
 @[simp] theorem supportsInterfaceWord_ffffffff :
     supportsInterfaceWord (0xffffffff : B256) = false := by
@@ -61,8 +61,8 @@ private theorem supportsInterfaceWord_eqCheck_or (word : B256) :
       decide +kernel
     · have herc' : erc165InterfaceId ≠ word := Ne.symm herc
       have hdeposit' : depositInterfaceId ≠ word := Ne.symm hdeposit
-      (simp [supportsInterfaceWord, B256.eqCheck, herc, hdeposit,
-          herc', hdeposit'];
+      (simp only [B256.eqCheck, hdeposit', ↓reduceIte, herc', supportsInterfaceWord, herc, hdeposit,
+        or_self, decide_false, Bool.false_eq_true];
         decide +kernel)
 
 def supportsInterfaceEndpointGas : Nat := 67
@@ -1364,7 +1364,7 @@ theorem supportsInterface_erc165_runCompiled
       some sevm.code.toList = Prog.compile runtime := by
   apply supportsInterfaceAnswer_runCompiled sevm base G true
     hdataLength hdataBound hvalue hselector hcode
-  simp [supportsInterfaceArg, harg]
+  simp only [supportsInterfaceArg, harg, supportsInterfaceWord_erc165]
 
 /-! ## The deposit selector path -/
 

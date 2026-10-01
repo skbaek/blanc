@@ -298,7 +298,7 @@ theorem pauseKernel_previousPauserNonzero {sevm : Sevm} {devm devm' : Devm}
   refine ⟨?_, ?_⟩
   · intro w rest hstack
     rw [head_of_stack_prefix p16 hstack]
-    simp [B256.eqCheck, hnonzero]
+    simp only [B256.eqCheck, hnonzero, ↓reduceIte]
   · exact (((((((windowN8.acrossNinst q9).acrossMload q10).acrossNinst
       q11).acrossMload q12).acrossNinst q13).acrossNinst q14).acrossNinst
       q15).acrossNinst q16
@@ -359,7 +359,7 @@ theorem setPauserKernel_routeTo_oldCountArm (dp : DeployParams)
             Prog.SourceStep.rest) ++ [Prog.SourceStep.branchLeft] ++
           List.replicate pauseKernelAppendPrefix.length Prog.SourceStep.rest) ++
             [Prog.SourceStep.branchLeft] = kernelOldCountSteps := by
-    simp [kernelOldCountSteps]
+    simp only [List.nil_append, List.append_assoc, List.cons_append, kernelOldCountSteps]
   exact pathEq ▸ armRoute c wNc tail3
 
 /-- The `setPauser.oldCount` row: the old-count arm's own straight line. -/
@@ -437,7 +437,9 @@ theorem setPauserKernel_routeTo_removeTarget (dp : DeployParams)
   refine routeTo_next tail2 (fun e erun tail3 => ?_)
   have wNe := wNd.acrossNinst (Ninst.Run.of_runCompiled erun)
   refine routeTo_call (body := afterOldPauser) tail3
-    (by simp [runtime, aux, afterOldPauserSlot]) (fun f fburn tail4 => ?_)
+    (by simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      afterOldPauserSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]) (fun f fburn tail4 => ?_)
   have wNf := MemWordAt.of_memory_eq fburn.memory.symm wNe
   refine routeTo_line (memoryZeroCheck newPauserWord) tail4
     (fun g grun tail5 => ?_)
@@ -447,7 +449,9 @@ theorem setPauserKernel_routeTo_removeTarget (dp : DeployParams)
       decide)
     (fun _armStart arm => ?_)
   exact routeTo_call (body := removeTarget) arm
-    (by simp [runtime, aux, removeTargetSlot])
+    (by simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      removeTargetSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero])
     (fun i _iburn tail6 => bodyRoute i tail6)
 
 /-! ## `removeTarget`'s five writes -/
@@ -570,8 +574,9 @@ theorem setPauserKernel_routeTo_assignment_revert (dp : DeployParams)
           List.replicate setPauserKernelAssignmentPrefix.length
             Prog.SourceStep.rest) =
         setPauserAssignmentPath.steps := by
-    simp [setPauserAssignmentPath, setPauserKernelZeroCheck,
-      setPauserKernelAssignmentPrefix]
+    simp only [setPauserKernelZeroCheck, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      List.reduceReplicate, List.nil_append, List.cons_append, setPauserKernelAssignmentPrefix,
+      Fin.isValue, setPauserAssignmentPath]
   exact pathEq ▸ routeTo_head write setPauserAssignmentPath
 
 /-- The `.call setPauserSlot` crossing on top of the kernel leg. -/
@@ -582,7 +587,9 @@ theorem call_setPauserSlot_routeTo_assignment_revert (dp : DeployParams)
     (emptyOutput : raw.output = []) :
     Func.RunCompiledTo.RouteTo current h setPauserAssignmentPath
       (.reg .sstore) :=
-  routeTo_call h (by simp [runtime, aux, setPauserSlot])
+  routeTo_call h (by simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main,
+    legacyRuntime_aux, aux, setPauserSlot, slotOf, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero])
     fun _kernelStart _burn tail =>
       setPauserKernel_routeTo_assignment_revert dp tail emptyOutput
 

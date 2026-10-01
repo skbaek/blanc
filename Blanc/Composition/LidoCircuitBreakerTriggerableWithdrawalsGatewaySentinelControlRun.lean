@@ -1754,7 +1754,7 @@ private theorem sentinelGatewayPauseWorld_afterSetGatewaySeam :
       (Or.inl gatewayRunAfterSetBase_warmExpiry)), ?_⟩
   intro final hrun
   have h := hclose final hrun
-  simp [gatewayPauseChildCost] at h
+  simp only [gatewayPauseChildCost, ↓reduceIte, Nat.reduceAdd] at h
   simpa only [show (42362 + 25567 + 594 + 2600 : Nat) = 71123 from by
     norm_num] using h
 
@@ -2213,7 +2213,7 @@ theorem sentinelGatewayPauseWorld_storesInfiniteSentinel :
     _ = pauseForProjection sentinelGatewayPauseWorldSevm.benvStat.time
           pauseInfiniteSentinel := by
         simpa only [toAdr_toB256] using hchild
-    _ = pauseInfiniteSentinel := by simp [pauseForProjection]
+    _ = pauseInfiniteSentinel := by simp only [pauseForProjection, ↓reduceIte]
 
 end LidoCircuitBreakerTwgSentinel
 

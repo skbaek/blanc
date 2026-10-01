@@ -29,10 +29,10 @@ variable {K : Key → Prop} {s : Stor}
 
 theorem trackedAllow_self {o p : Adr} (h : K (.allow o p)) :
     trackedAllow K s o p = s.get (allowSlot o p) := by
-  simp [trackedAllow, h]
+  simp only [trackedAllow, h, ↓reduceIte]
 
 theorem trackedAllow_of_not {o p : Adr} (h : ¬ K (.allow o p)) : trackedAllow K s o p = 0 := by
-  simp [trackedAllow, h]
+  simp only [trackedAllow, h, ↓reduceIte]
 
 /-- **A balance write is the ledger's balance write.** -/
 theorem ledger_set_bal (hK : KeyInj K) {a : Adr} (ha : K (.bal a)) (w : B256) :

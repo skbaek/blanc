@@ -12,15 +12,19 @@ open Jaune
 theorem abiAddressArray_length (entries : List Entry) :
     (abiAddressArray entries).length = 64 + 32 * entries.length := by
   induction entries with
-  | nil => simp [abiAddressArray, B256.length_toBytes]
+  | nil => simp only [abiAddressArray, List.length_nil, List.map_nil, List.flatMap_nil,
+    List.append_nil, List.length_append, B256.length_toBytes, Nat.reduceAdd, mul_zero, add_zero]
   | cons entry rest ih =>
-      simp [abiAddressArray, B256.length_toBytes] at ih ⊢
+      simp only [abiAddressArray, List.append_assoc, List.length_append, B256.length_toBytes,
+        List.length_flatMap, List.map_map, List.length_cons, List.map_cons,
+        List.flatMap_cons] at ih ⊢
       omega
 
 theorem abiAddressArray_offset_word (entries : List Entry) :
     (abiAddressArray entries).sliceD 0 32 0 = (Nat.toB256 32).toBytes := by
   unfold abiAddressArray List.sliceD
-  rw [List.drop_zero, List.takeD_eq_take 0 (by simp [B256.length_toBytes])]
+  rw [List.drop_zero, List.takeD_eq_take 0 (by simp only [List.append_assoc, List.length_append,
+    B256.length_toBytes, List.length_flatMap, List.map_map, le_add_iff_nonneg_right, zero_le])]
   change List.take 32 ((Nat.toB256 32).toBytes ++
     ((Nat.toB256 entries.length).toBytes ++
       (entries.map Prod.fst).flatMap B256.toBytes)) = _
@@ -37,7 +41,8 @@ theorem abiAddressArray_length_word (entries : List Entry) :
     ((Nat.toB256 entries.length).toBytes ++
       (entries.map Prod.fst).flatMap B256.toBytes))) 0 = _
   rw [List.drop_length_append' (B256.length_toBytes _).symm,
-    List.takeD_eq_take 0 (by simp [B256.length_toBytes])]
+    List.takeD_eq_take 0 (by simp only [List.length_append, B256.length_toBytes,
+      List.length_flatMap, List.map_map, le_add_iff_nonneg_right, zero_le])]
   simpa only [B256.length_toBytes] using
     (List.take_length_append (xs := (Nat.toB256 entries.length).toBytes)
       (ys := (entries.map Prod.fst).flatMap B256.toBytes))
@@ -47,19 +52,21 @@ private theorem abiAddressWords_target_word (entries : List Entry)
     ((entries.map Prod.fst).flatMap B256.toBytes).sliceD (32 * i) 32 0 =
       (entries[i].1).toBytes := by
   induction entries generalizing i with
-  | nil => simp at hi
+  | nil => simp only [List.length_nil, not_lt_zero] at hi
   | cons entry rest ih =>
       cases i with
       | zero =>
           unfold List.sliceD
           simp only [List.map_cons, List.flatMap_cons, Nat.mul_zero,
             List.drop_zero, List.getElem_cons_zero]
-          rw [List.takeD_eq_take 0 (by simp [B256.length_toBytes])]
+          rw [List.takeD_eq_take 0 (by simp only [List.length_append, B256.length_toBytes,
+            List.length_flatMap, List.map_map, le_add_iff_nonneg_right, zero_le])]
           simpa only [B256.length_toBytes] using
             (List.take_length_append (xs := entry.1.toBytes)
               (ys := (rest.map Prod.fst).flatMap B256.toBytes))
       | succ i =>
-          have hi' : i < rest.length := by simpa using hi
+          have hi' : i < rest.length := by simpa only [List.length_cons, add_lt_add_iff_right] using
+            hi
           unfold List.sliceD
           simp only [List.map_cons, List.flatMap_cons, List.getElem_cons_succ]
           rw [show 32 * (i + 1) = 32 + 32 * i by omega,
@@ -86,7 +93,7 @@ theorem RegistryWitness.entry_target_canonical
     {storage : LogicalStorage} {entries : List Entry}
     (h : RegistryWitness storage entries) {i : Nat} (hi : i < entries.length) :
     canonicalAddress entries[i].1 :=
-  (h.targetsValid entries[i] (by simp)).2
+  (h.targetsValid entries[i] (by simp only [List.getElem_mem])).2
 
 theorem RegistryWitness.enumeration_offsets_lt_2pow256
     {storage : LogicalStorage} {entries : List Entry}
@@ -245,9 +252,9 @@ private theorem enumHeaderMemory_reads (entries : List Entry) :
 private theorem enumHeaderImage_length (entries : List Entry) :
     (enumHeaderImage entries).length = 64 := by
   unfold enumHeaderImage
-  rw [Bytes.writeAt_zero_of_le (by simp),
-    Bytes.writeAt_of_length_eq (by simp [B256.length_toBytes])]
-  simp [B256.length_toBytes]
+  rw [Bytes.writeAt_zero_of_le (by simp only [List.length_nil, zero_le]),
+    Bytes.writeAt_of_length_eq (by simp only [B256.length_toBytes])]
+  simp only [List.length_append, B256.length_toBytes, Nat.reduceAdd]
 
 private theorem enumMemory_write_next_size (memory : Mem) (entry : Entry)
     (n : Nat) (hsize : memory.size = 64 + 32 * n) :
@@ -283,10 +290,10 @@ private theorem enumMemory_fold
           (Bytes.writeAt image image.length entry.1.toBytes) := by
         rw [hsize, ← himage]
         exact Mem.Reads.write hwf hreads image.length entry.1.toBytes
-      simpa [List.foldl, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using
+      simpa only [List.foldl, List.length_cons, Nat.add_comm, Nat.add_left_comm] using
         ih (memory.write memory.size entry.1.toBytes)
-          (Bytes.writeAt image image.length entry.1.toBytes) (n + 1)
-          hnextwf hnextsize himage' hnextreads
+          (Bytes.writeAt image image.length entry.1.toBytes) (n + 1) hnextwf hnextsize himage'
+          hnextreads
 
 theorem enumPrefixMemory_invariant (entries done : List Entry) :
     Mem.Wf (enumPrefixMemory entries done) ∧
@@ -303,7 +310,7 @@ private theorem enumImage_fold (done : List Entry) (image : Bytes) :
     done.foldl (fun bs entry => Bytes.writeAt bs bs.length entry.1.toBytes) image =
       image ++ (done.map Prod.fst).flatMap B256.toBytes := by
   induction done generalizing image with
-  | nil => simp
+  | nil => simp only [List.foldl_nil, List.map_nil, List.flatMap_nil, List.append_nil]
   | cons entry rest ih =>
       rw [List.foldl, ih, Bytes.writeAt_length]
       simp only [List.map_cons, List.flatMap_cons, List.append_assoc]
@@ -318,8 +325,8 @@ theorem enumHeaderImage_closed (entries : List Entry) :
     enumHeaderImage entries =
       (Nat.toB256 32).toBytes ++ (Nat.toB256 entries.length).toBytes := by
   unfold enumHeaderImage
-  rw [Bytes.writeAt_zero_of_le (by simp),
-    Bytes.writeAt_of_length_eq (by simp [B256.length_toBytes])]
+  rw [Bytes.writeAt_zero_of_le (by simp only [List.length_nil, zero_le]),
+    Bytes.writeAt_of_length_eq (by simp only [B256.length_toBytes])]
 
 theorem enumPrefixImage_full (entries : List Entry) :
     enumPrefixImage entries entries = abiAddressArray entries := by
@@ -341,12 +348,12 @@ theorem enumPrefixMemory_append (entries done : List Entry) (entry : Entry) :
     show (List.foldl (fun memory entry => memory.write memory.size entry.1.toBytes)
       ((Mem.empty.write 0 (Nat.toB256 32).toBytes).write 32
         (Nat.toB256 entries.length).toBytes) done).size = 64 + 32 * done.length by
-      simpa [enumPrefixMemory] using (enumPrefixMemory_invariant entries done).2.1]
+      simpa only [enumPrefixMemory] using (enumPrefixMemory_invariant entries done).2.1]
 
 theorem targetAt_append_cons_length (done rest : List Entry) (entry : Entry) :
     targetAt (done ++ entry :: rest) done.length = entry.1 := by
   induction done with
-  | nil => simp [targetAt]
+  | nil => simp only [List.nil_append, List.length_nil, targetAt]
   | cons head done ih =>
       simp only [List.cons_append, List.length_cons, targetAt]
       exact ih
@@ -362,12 +369,13 @@ theorem enumPrefixMemory_read_length_fst (entries done : List Entry) :
     (xs := (Nat.toB256 32).toBytes)
     (ys := (Nat.toB256 entries.length).toBytes ++
       (done.map Prod.fst).flatMap B256.toBytes)
-    (by simp [B256.length_toBytes])]
-  rw [List.takeD_eq_take _ (by simp [B256.length_toBytes])]
+    (by simp only [B256.length_toBytes])]
+  rw [List.takeD_eq_take _ (by simp only [List.length_append, B256.length_toBytes,
+    List.length_flatMap, List.map_map, le_add_iff_nonneg_right, zero_le])]
   rw [List.take_length_append'
     (xs := (Nat.toB256 entries.length).toBytes)
     (ys := (done.map Prod.fst).flatMap B256.toBytes)
-    (by simp [B256.length_toBytes])]
+    (by simp only [B256.length_toBytes])]
 
 theorem enumPrefixMemory_read_length_snd (entries done : List Entry) :
     ((enumPrefixMemory entries done).read 32 32).2 =
@@ -459,7 +467,7 @@ private theorem prewarmStorage_preserves (sevm : Sevm) (keys : List B256) (base 
     pair ∈ (keys.foldl (fun devm key =>
       addAccessedStorageKey devm sevm.currentTarget key) base).accessedStorageKeys := by
   induction keys generalizing base with
-  | nil => simpa
+  | nil => simpa only [List.foldl_nil]
   | cons key rest ih =>
       apply ih
       change pair ∈ base.accessedStorageKeys.insert ⟨sevm.currentTarget, key⟩
@@ -471,7 +479,7 @@ private theorem prewarmStorage_mem (sevm : Sevm) (keys : List B256) (base : Devm
       (keys.foldl (fun devm k =>
         addAccessedStorageKey devm sevm.currentTarget k) base).accessedStorageKeys := by
   induction keys generalizing base with
-  | nil => simp at hkey
+  | nil => simp only [List.not_mem_nil] at hkey
   | cons _ rest ih =>
       simp only [List.mem_cons] at hkey
       rcases hkey with rfl | hkey
@@ -489,7 +497,7 @@ theorem prepareEnumerationStorage_warm (sevm : Sevm) (base : Devm)
 
 theorem arrayLengthSlot_mem_enumerationStorageKeys (entries : List Entry) :
     arrayLengthSlot ∈ enumerationStorageKeys entries := by
-  simp [enumerationStorageKeys]
+  simp only [enumerationStorageKeys, List.mem_cons, true_or]
 
 theorem arrayEntrySlot_mem_enumerationEntryKeysFrom :
     ∀ (entries : List Entry) (start offset : Nat),
@@ -500,7 +508,7 @@ theorem arrayEntrySlot_mem_enumerationEntryKeysFrom :
   induction entries with
   | nil =>
       intro start offset h
-      simp at h
+      simp only [List.length_nil, not_lt_zero] at h
   | cons entry rest ih =>
       intro start offset h
       simp only [List.length_cons] at h
@@ -519,7 +527,7 @@ theorem arrayEntrySlot_mem_enumerationStorageKeys (entries : List Entry)
     (i : Nat) (hi : i < entries.length) :
     arrayEntrySlot (Nat.toB256 (i + 1)) ∈ enumerationStorageKeys entries := by
   simp only [enumerationStorageKeys, List.mem_cons]
-  exact Or.inr (by simpa using
+  exact Or.inr (by simpa only [zero_add] using
     arrayEntrySlot_mem_enumerationEntryKeysFrom entries 0 i hi)
 
 private theorem prewarmStorage_mach (sevm : Sevm) (keys : List B256) (base : Devm) :
@@ -636,7 +644,7 @@ def enumLoopGasWarmFrom : Nat → List Entry → Nat
 
 theorem enumLoopGasWarmFrom_ge (i : Nat) (entries : List Entry) :
     49 ≤ enumLoopGasWarmFrom i entries := by
-  cases entries <;> simp [enumLoopGasWarmFrom]; omega
+  cases entries <;> simp only [enumLoopGasWarmFrom, Std.le_refl]; omega
 
 def getPausablesGasWarm (entries : List Entry) : Nat :=
   131 + calculateMemoryGasCost 64 + enumLoopGasWarmFrom 0 entries
@@ -698,7 +706,7 @@ private theorem enumLoop_done_runCompiled
   · rw [h32, enumPrefixMemory_extCost_length]
     rfl
   · rw [h32, enumPrefixMemory_read_length_fst, B256.toB256_toBytes]
-    simp [B256.ltCheck]
+    simp only [B256.ltCheck, lt_self_iff_false, ↓reduceIte]
   · rw [h32, enumPrefixMemory_read_length_snd, enumPrefixMemory_extCost_length]
     rfl
   · change G + 49 - 36 = G + 49 - 41 + gLow
@@ -792,7 +800,7 @@ theorem enumLoop_runCompiled
         exact hdone
       have hltCheck :
           Nat.toB256 done.length <? Nat.toB256 entries.length = 1 := by
-        simp [B256.ltCheck, hltWord]
+        simp only [B256.ltCheck, hltWord, ↓reduceIte]
       have hrestGas := enumLoopGasWarmFrom_ge (done.length + 1) rest
       func_run (16) [3, 1]
       repeat (case h_legacy => exact hfork.rules_stateGas_none)
@@ -865,7 +873,7 @@ theorem enumLoop_runCompiled
       · simp only [Devm.gasLeft_setMach]
         norm_num [gVerylow, gMid, gJumpdest]
       · have hsplit' : entries = (done ++ [entry]) ++ rest := by
-          simpa [List.append_assoc] using hsplit
+          simpa only [List.append_assoc, List.cons_append, List.nil_append] using hsplit
         simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
           Devm.memory_setMach, List.length_append, List.length_singleton,
           Nat.add_one] using ih (done ++ [entry]) hsplit'
@@ -876,7 +884,8 @@ private theorem enumFirstHeaderMemory_extCost_second
       ⟨stack, Mem.empty.write 0 (Nat.toB256 32).toBytes, G, base.stateGas⟩).extCost
       [⟨32, 32⟩] = 3 := by
   apply Devm.extCost_of_size
-  · rw [Mem.size_write_word_at, if_neg (by simp [Mem.empty])]
+  · rw [Mem.size_write_word_at, if_neg (by simp only [zero_add, Mem.empty, nonpos_iff_eq_zero,
+    OfNat.ofNat_ne_zero, not_false_eq_true])]
   · rfl
 
 /-- The public enumeration body initializes the ABI header and invokes the
@@ -908,7 +917,7 @@ theorem getPausables_body_runCompiled
     (Ninst.runCompiled_sload_warm hfork.rules_stateGas_none
       (v := Nat.toB256 entries.length)
       (G := G + getPausablesGasWarm entries - 114)
-      rfl ?_ ?_ ?_ (by simp)) ?_
+      rfl ?_ ?_ ?_ (by simp only [List.length_nil, Nat.ofNat_pos])) ?_
   · exact hwarm arrayLengthSlot
       (arrayLengthSlot_mem_enumerationStorageKeys entries)
   · rw [Devm.getStorVal_setMach]
@@ -1011,9 +1020,9 @@ theorem getPausables_runCompiled
     · rfl
     · have hdataNonzero :
           B256.eqCheck sevm.data.length.toB256 4 = 1 := by
-        simp [B256.eqCheck, hdata]
+        simp only [B256.eqCheck, hdata, ↓reduceIte]
       have hvalueZero : B256.eqCheck sevm.value 0 = 1 := by
-        simp [B256.eqCheck, hvalue]
+        simp only [B256.eqCheck, hvalue, ↓reduceIte]
       have hlt : sevm.data.length.toB256 <? 4 = 0 := by
         rw [hdata]
         decide
@@ -1250,13 +1259,13 @@ theorem assignmentCount_eq_multiplicity (entries : List Entry)
     assignmentCount entries pauser =
       (entries.map Prod.snd).count pauser := by
   induction entries with
-  | nil => simp [assignmentCount]
+  | nil => simp only [assignmentCount, List.map_nil, List.count_nil]
   | cons entry rest ih =>
       simp only [assignmentCount, List.map_cons, List.count_cons]
       rw [ih]
       by_cases h : entry.2 = pauser
-      · simp [h, Nat.add_comm]
-      · simp [h]
+      · simp only [h, ↓reduceIte, BEq.rfl, Nat.add_comm]
+      · simp only [h, ↓reduceIte, zero_add, beq_iff_eq, add_zero]
 
 /-- Model-level consequences shared by the three exact Registry view runs. -/
 structure RegistrySnapshotCoherence (entries : List Entry)
@@ -1391,21 +1400,23 @@ private theorem of_logWith300_val {e : Sevm} {s s' : Devm}
   have hzeroWord : (0 * 32 : B256) = 0 := rfl
   rw [hzeroWord] at hz₁ hz₂
   have hp₁ : (0 : B256) :: ev :: a :: b :: c :: xs <<+ s₁.stack := by
-    simpa using prefix_of_push hz₁ hp
+    simpa only [List.cons_append, List.nil_append] using prefix_of_push hz₁ hp
   have hp₂ : (0 : B256) :: 0 :: ev :: a :: b :: c :: xs <<+ s₂.stack := by
-    simpa using prefix_of_push hz₂ hp₁
+    simpa only [List.cons_append, List.nil_append] using prefix_of_push hz₂ hp₁
   rcases of_run_log_val hlog with
     ⟨mi, sz, topics, hlen, hpop, hlogs⟩
   have hknown : ([0, 0, ev, a, b, c] : List B256) <<+ s₂.stack := by
     exact @pref_trans _ [0, 0, ev, a, b, c]
-      ([0, 0, ev, a, b, c] ++ xs) _ ⟨xs, rfl⟩ (by simpa using hp₂)
+      ([0, 0, ev, a, b, c] ++ xs) _ ⟨xs, rfl⟩ (by simpa only [List.cons_append,
+        List.nil_append] using hp₂)
   have heq : ([0, 0, ev, a, b, c] : List B256) =
       mi :: sz :: topics :=
-    List.pref_unique (by simp [hlen]) hknown (pref_of_split hpop)
+    List.pref_unique (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      hlen, Fin.isValue, Fin.reduceSucc, Fin.coe_ofNat_eq_mod, Nat.mod_succ]) hknown (pref_of_split hpop)
   simp only [List.cons.injEq] at heq
   rcases heq with ⟨rfl, rfl, rfl⟩
   constructor
-  · exact of_append_pref hpop (by simpa using hp₂)
+  · exact of_append_pref hpop (by simpa only [List.cons_append, List.nil_append] using hp₂)
   · rw [hlogs, ← hz₂.logs, ← hz₁.logs, ← hz₂.memory, ← hz₁.memory]
     rfl
 
@@ -1483,7 +1494,7 @@ private theorem LogsAppend.trans {a b c : Devm}
 private theorem Line.LogsAppend.of_inv {line : Line}
     (h : Line.Inv Devm.logs line) : Line.LogsAppend line := by
   intro sevm pre post run
-  exact ⟨[], by simp [← Line.of_inv Devm.logs h run]⟩
+  exact ⟨[], by simp only [← Line.of_inv Devm.logs h run, List.append_nil]⟩
 
 private theorem Line.logWith_logsAppend (k : Fin 4) (x y : B256) :
     Line.LogsAppend (logWith k x y) := by
@@ -1510,7 +1521,7 @@ private theorem Func.LogsAppend.stop : Func.LogsAppend fs Func.stop := by
       exact ⟨[], by
         have hs : pre.logs = post.logs :=
           Linst.Hinv.inv (f := Devm.logs) (g := Devm.logs) h
-        simp [← hs]⟩
+        simp only [← hs, List.append_nil]⟩
 
 private theorem Func.LogsAppend.prepend {line : Line} {body : Func}
     (hl : Line.LogsAppend line) (hb : Func.LogsAppend fs body) :
@@ -1909,7 +1920,7 @@ theorem pauserSet_local_transition
   refine ⟨trace, postRegistry, postImg, logged, htrace, hmodel, hstorPost,
     hwPost, ?_, hwfLogged, hrLogged, hcontinuationPost,
     hstorLogged, htail, ?_⟩
-  · simpa [howner] using hlogs
+  · simpa only [howner] using hlogs
   · exact hsplit
 
 private theorem registerContinuation_logsAppend
@@ -1946,7 +1957,7 @@ private theorem registerContinuation_logsAppend
   | zero hpop hpause =>
       have hflag := (popBurn_pref hpop hpFlag).1
       rw [hcontinuation] at hflag
-      simp [B256.eqCheck] at hflag
+      simp only [B256.eqCheck, ↓reduceIte] at hflag
       exact ((by decide : (0 : B256) ≠ 1) hflag).elim
   | succ hnz hpop hbranchBurn hregister =>
       rcases of_run_call hregister with
@@ -2066,21 +2077,20 @@ theorem pauserSet_register_success_committed
           [pauserSetEvent, target, assignmentAt entries target, newPauser],
           []⟩] ++ suffix := by
   have hsettle := (RunFrame.some_inv hprocess).2
-  simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-    executeCode.handleErrorWith_ok,
-    executeCode.handleError, processMessage.settle] at hsettle
+  simp only [Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
+    processMessage.settle, executeCode.handleErrorWith_ok, Except.bind_ok] at hsettle
   have hnotError : final.error.isSome ≠ true := by
-    cases herror : final.error <;> simp_all
+    cases herror : final.error <;> simp_all only [ExceptT.stM_eq, Option.isSome_none, Bool.false_eq_true, ↓reduceIte, Option.isNone_none, Except.ok.injEq, ne_eq, not_false_eq_true, Option.isSome_some, Option.isNone_some]
   rw [if_neg hnotError] at hsettle
   have hsettled : settled = final := Except.ok.inj hsettle
   subst settled
   have hinitOwner : (initSevm msg).currentTarget = ca := by
-    simpa [initSevm] using howner
+    simpa only [initSevm] using howner
   have hinitCodeAddress : (initSevm msg).codeAddress = some ca := by
-    simpa [initSevm] using hcodeAddress
+    simpa only [initSevm] using hcodeAddress
   have hinitCode : (initSevm msg).code.toList =
       lidoCircuitBreakerCode dp := by
-    simpa [initSevm] using hcode
+    simpa only [initSevm] using hcode
   exact pauserSet_register_success dp hinitOwner hinitCodeAddress hinitCode
     htable hwf hr htargetRead hnewRead hcontinuationRead hcontinuation
     hw htarget hnew hexec

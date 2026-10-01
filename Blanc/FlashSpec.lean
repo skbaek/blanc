@@ -352,7 +352,7 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
     by_contra hne
     have h0 : (sevm.currentTarget.toB256 =? Sevm.argWord sevm 1) = 0 := by
       simp only [B256.eqCheck]; exact if_neg (fun h => hne h.symm)
-    rw [h0, show ((0 : B256) =? 0) = 1 from by simp [B256.eqCheck]] at h_tokflag
+    rw [h0, show ((0 : B256) =? 0) = 1 from by simp only [B256.eqCheck, ↓reduceIte]] at h_tokflag
     exact B256.zero_ne_one h_tokflag.symm
   rw [h_tokflag] at hs4
   have hs5 : ([] : List B256) <<+ s5.stack := cons_pref_cons_inv hs4
@@ -807,36 +807,41 @@ lemma callbackImage_nil (sel cal slf amt lenw : B256) (payload : Bytes) :
         (0 : B256).toBytes ++ (0xa0 : B256).toBytes ++ lenw.toBytes ++ payload := by
   have hlen : ∀ x : B256, (B256.toBytes x).length = 32 := B256.length_toBytes
   have e0 : Bytes.writeAt ([] : Bytes) 0 amt.toBytes = amt.toBytes :=
-    Bytes.writeAt_zero_of_le (by simp)
+    Bytes.writeAt_zero_of_le (by simp only [List.length_nil, zero_le])
   have e1 : Bytes.writeAt amt.toBytes 0 sel.toBytes = sel.toBytes :=
     Bytes.writeAt_zero_of_le (by rw [hlen, hlen])
   have e2 : Bytes.writeAt sel.toBytes 32 cal.toBytes = sel.toBytes ++ cal.toBytes :=
     Bytes.writeAt_of_length_eq (hlen sel)
   have e3 : Bytes.writeAt (sel.toBytes ++ cal.toBytes) 64 slf.toBytes
       = sel.toBytes ++ cal.toBytes ++ slf.toBytes :=
-    Bytes.writeAt_of_length_eq (by simp [hlen])
+    Bytes.writeAt_of_length_eq (by simp only [List.length_append, hlen, Nat.reduceAdd])
   have e4 : Bytes.writeAt (sel.toBytes ++ cal.toBytes ++ slf.toBytes) 96 amt.toBytes
       = sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes :=
-    Bytes.writeAt_of_length_eq (by simp [hlen])
+    Bytes.writeAt_of_length_eq (by simp only [List.append_assoc, List.length_append, hlen,
+      Nat.reduceAdd])
   have e5 : Bytes.writeAt (sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes)
       128 (0 : B256).toBytes
       = sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes ++ (0 : B256).toBytes :=
-    Bytes.writeAt_of_length_eq (by simp [hlen])
+    Bytes.writeAt_of_length_eq (by simp only [List.append_assoc, List.length_append, hlen,
+      Nat.reduceAdd])
   have e6 : Bytes.writeAt (sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes ++
       (0 : B256).toBytes) 160 (0xa0 : B256).toBytes
       = sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes ++ (0 : B256).toBytes ++
         (0xa0 : B256).toBytes :=
-    Bytes.writeAt_of_length_eq (by simp [hlen])
+    Bytes.writeAt_of_length_eq (by simp only [List.append_assoc, List.length_append, hlen,
+      Nat.reduceAdd])
   have e7 : Bytes.writeAt (sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes ++
       (0 : B256).toBytes ++ (0xa0 : B256).toBytes) 192 lenw.toBytes
       = sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes ++ (0 : B256).toBytes ++
         (0xa0 : B256).toBytes ++ lenw.toBytes :=
-    Bytes.writeAt_of_length_eq (by simp [hlen])
+    Bytes.writeAt_of_length_eq (by simp only [List.append_assoc, List.length_append, hlen,
+      Nat.reduceAdd])
   have e8 : Bytes.writeAt (sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes ++
       (0 : B256).toBytes ++ (0xa0 : B256).toBytes ++ lenw.toBytes) 224 payload
       = sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes ++ (0 : B256).toBytes ++
         (0xa0 : B256).toBytes ++ lenw.toBytes ++ payload :=
-    Bytes.writeAt_of_length_eq (by simp [hlen])
+    Bytes.writeAt_of_length_eq (by simp only [List.append_assoc, List.length_append, hlen,
+      Nat.reduceAdd])
   rw [e0, e1, e2, e3, e4, e5, e6, e7, e8]
 
 /-- **The window equals the encoding.**
@@ -862,7 +867,7 @@ lemma callbackWindow (sel cal slf amt : B256) (payload : Bytes) :
       = sel.toBytes ++ (cal.toBytes ++ slf.toBytes ++ amt.toBytes ++
         (0 : B256).toBytes ++ (0xa0 : B256).toBytes ++
         (Nat.toB256 payload.length).toBytes ++ payload) := by
-    simp [List.append_assoc]
+    simp only [List.append_assoc]
   unfold List.sliceD
   rw [himg, List.drop_append_of_le_length (by rw [hlen]; omega)]
   rw [List.takeD_of_length_le]
@@ -1054,7 +1059,7 @@ theorem of_flashLoanFromCall {sevm : Sevm} {sc r : Devm} {amount : B256}
     rw [hps2] at hp1
     have h01 : ((0 : B256) =? 0) = 0 :=
       pref_head_unique hp1 (pref_append [(0 : B256)] s2.stack)
-    rw [show ((0 : B256) =? 0) = 1 from by simp [B256.eqCheck]] at h01
+    rw [show ((0 : B256) =? 0) = 1 from by simp only [B256.eqCheck, ↓reduceIte]] at h01
     exact B256.zero_ne_one h01.symm
   · rcases h_ok with ⟨parent, child, xl, dp, na, code, avail, hstk_eq, hst_par,
       hmem_par, h_del, h_fill, run_pm, herr, h_resume, h_mid_state, h_mid_rd,
@@ -1147,7 +1152,7 @@ theorem of_flashLoanFromCall {sevm : Sevm} {sc r : Devm} {amount : B256}
           = 0 := by
         simp only [B256.eqCheck]
         exact if_neg (fun h => hne h.symm)
-      rw [h0, show ((0 : B256) =? 0) = 1 from by simp [B256.eqCheck]] at h_flag2
+      rw [h0, show ((0 : B256) =? 0) = 1 from by simp only [B256.eqCheck, ↓reduceIte]] at h_flag2
       exact B256.zero_ne_one h_flag2.symm
     rw [h_flag2] at hp6
     have hp7 : [amount, a.toB256] <<+ s7.stack := cons_pref_cons_inv hp6
@@ -1306,14 +1311,17 @@ lemma repayKey_window (bs : Bytes) (x y : B256) :
       Nat.zero_add]
   have e2 : Bytes.writeAt (x.toBytes ++ bs.drop 32) 32 y.toBytes
       = x.toBytes ++ (y.toBytes ++ (bs.drop 32).drop 32) := by
-    rw [Bytes.writeAt, hy, List.takeD_eq_take _ (by simp [hx]),
+    rw [Bytes.writeAt, hy, List.takeD_eq_take _ (by simp only [List.length_append, hx,
+      List.length_drop, le_add_iff_nonneg_right, zero_le]),
       List.take_left' hx, show (32 + 32) = x.toBytes.length + 32 from by rw [hx],
       List.drop_append, List.append_assoc]
-    simp [hx]
+    simp only [hx, Nat.reduceAdd, Nat.reduceSub, List.drop_drop, List.append_cancel_left_eq,
+      List.append_left_eq_self, List.drop_eq_nil_iff, Nat.reduceLeDiff]
   rw [e1, e2]
   unfold List.sliceD
-  rw [List.drop_zero, List.takeD_eq_take _ (by simp [hx, hy]; omega),
-    ← List.append_assoc, List.take_left' (by simp [hx, hy])]
+  rw [List.drop_zero, List.takeD_eq_take _ (by simp only [List.drop_drop, Nat.reduceAdd,
+    List.length_append, hx, hy, List.length_drop]; omega),
+    ← List.append_assoc, List.take_left' (by simp only [List.length_append, hx, hy, Nat.reduceAdd])]
 
 /-- **The allowance spend, both arms.**
 
@@ -1528,7 +1536,8 @@ lemma of_spendAllowanceThenBurn_val {sevm : Sevm} {s r : Devm} {wad : B256}
       pref_head_unique hs12 (pref_append [0] s13.stack)
     have h_ne_max : allow ≠ B256.max := by
       intro hmax
-      rw [hmax, B256.not_max, show ((0 : B256) =? 0) = 1 from by simp [B256.eqCheck]]
+      rw [hmax, B256.not_max, show ((0 : B256) =? 0) = 1 from by simp only [B256.eqCheck,
+        ↓reduceIte]]
         at h_flag
       exact B256.zero_ne_one h_flag.symm
     rw [h_flag] at hs12

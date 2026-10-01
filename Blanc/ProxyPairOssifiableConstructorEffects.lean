@@ -144,8 +144,9 @@ private theorem ossifiableConstructorAfterSetup_checkpoint
     runCompiledTo_prepend_inv run
   obtain ⟨pLogged, logsRaw⟩ :=
     of_logWith_val (k := 0) (x := 5) (y := 2)
-      (topics := [adminChangedEventTopic]) (by simp)
-      (by simpa using pTopic) logRun
+      (topics := [adminChangedEventTopic]) (by simp only [List.length_cons, List.length_nil,
+        zero_add, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod])
+      (by simpa only [List.cons_append, List.nil_append] using pTopic) logRun
   obtain ⟨logWf, logReads⟩ :=
     of_logWith_image topicWf topicReads logRun
   have logData :
@@ -265,7 +266,7 @@ private theorem ossifiableConstructorAfterSetup_success_of_checkpoint
       hrequested]
   by_cases requestedWordZero : requestedAdmin.toB256 = 0
   · have pOne : (1 : B256) :: tail <<+ testPre.stack := by
-      simpa [requestedWordZero, B256.eqCheck] using pTest
+      simpa only [B256.eqCheck, requestedWordZero, ↓reduceIte] using pTest
     obtain ⟨callPre, _, _, _, callRun, _⟩ :=
       Func.RunCompiledTo.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) pOne branchRun
@@ -275,7 +276,7 @@ private theorem ossifiableConstructorAfterSetup_success_of_checkpoint
       subst requestedAdmin
       exact requestedWordZero (by decide)
     have pZero : (0 : B256) :: tail <<+ testPre.stack := by
-      simpa [requestedWordZero, B256.eqCheck] using pTest
+      simpa only [B256.eqCheck, requestedWordZero, ↓reduceIte] using pTest
     obtain ⟨writePre, branchPop, writeRun, pWrite⟩ :=
       Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
     unfold ossifiableConstructorCommitAndReturn at writeRun
@@ -301,7 +302,7 @@ private theorem ossifiableConstructorAfterSetup_success_of_checkpoint
       (Ninst.Run.of_runCompiled qlength)
     have pLength : Nat.toB256 runtimeLength :: tail <<+
         lengthPost.stack := by
-      simpa [ossifiablePushCreationCoordinate, B256.toB256_toBytes] using
+      simpa only [B256.toB256_toBytes, List.cons_append, List.nil_append] using
         prefix_of_push lengthPush pStored
     obtain ⟨offsetPost, qoffset, writeRun⟩ :=
       runCompiledTo_next_inv writeRun
@@ -309,7 +310,7 @@ private theorem ossifiableConstructorAfterSetup_success_of_checkpoint
       (Ninst.Run.of_runCompiled qoffset)
     have pOffset : Nat.toB256 runtimeOffset ::
         Nat.toB256 runtimeLength :: tail <<+ offsetPost.stack := by
-      simpa [ossifiablePushCreationCoordinate, B256.toB256_toBytes] using
+      simpa only [B256.toB256_toBytes, List.cons_append, List.nil_append] using
         prefix_of_push offsetPush pLength
     obtain ⟨zeroPost, qcopyZero, writeRun⟩ :=
       runCompiledTo_next_inv writeRun
@@ -328,7 +329,7 @@ private theorem ossifiableConstructorAfterSetup_success_of_checkpoint
       (Ninst.Run.of_runCompiled qreturnLength)
     have pReturnLength : Nat.toB256 runtimeLength :: tail <<+
         returnLengthPost.stack := by
-      simpa [ossifiablePushCreationCoordinate, B256.toB256_toBytes] using
+      simpa only [B256.toB256_toBytes, List.cons_append, List.nil_append] using
         prefix_of_push returnLengthPush pCopied
     obtain ⟨returnPre, qreturnZero, returnRun⟩ :=
       runCompiledTo_next_inv writeRun
@@ -418,7 +419,7 @@ theorem ossifiableConstructorAfterSetup_zeroAdmin_exact
   unfold ossifiableConstructorAfterSetupBranch at branchRun
   have zeroWord : (0 : Adr).toB256 = (0 : B256) := by decide
   have pOne : (1 : B256) :: tail <<+ testPre.stack := by
-    simpa [zeroWord, B256.eqCheck] using pTest
+    simpa only [B256.eqCheck, zeroWord, ↓reduceIte] using pTest
   obtain ⟨callPre, _, _, branchPop, callRun, _⟩ :=
     Func.RunCompiledTo.succ_branch_of_prefix
       (by decide : (1 : B256) ≠ 0) pOne branchRun
@@ -465,7 +466,7 @@ theorem ossifiableConstructorProgram_value_rejected
   have pTest := prefix_of_iszero
     (Ninst.Run.of_runCompiled qzero) pValue
   have pZero : (0 : B256) :: tail <<+ testPre.stack := by
-    simpa [B256.eqCheck, valueNonzero] using pTest
+    simpa only [B256.eqCheck, valueNonzero, ↓reduceIte, List.append_eq, List.nil_append] using pTest
   obtain ⟨callPre, _, callRun, _⟩ :=
     Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
   obtain ⟨revertPre, _, revertRun⟩ := runCompiledTo_call_inv

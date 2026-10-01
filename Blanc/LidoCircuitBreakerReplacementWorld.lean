@@ -261,7 +261,7 @@ private theorem replWorld_stor_zero {oldCount key : B256}
     (replWorldStor oldCount).get key = 0 := by
   rw [replWorldStor, Stor.get_set_ne _ hD, Stor.get_set_ne _ hC,
     Stor.get_set_ne _ hB, Stor.get_set_ne _ hA]
-  simp [Stor.get, Stor.empty]
+  simp only [Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc, Std.TreeMap.getD_emptyc]
 
 theorem replWorld_stor_oldExpiry (oldCount : B256) :
     (replWorldStor oldCount).get (expirySlot replWorldOldPauser) =

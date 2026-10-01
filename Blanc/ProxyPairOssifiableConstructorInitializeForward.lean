@@ -148,7 +148,7 @@ private theorem
     exact Mem.read_snd_eq_self
       (memExtSize_of_le halign (by omega))
   have hreadZero : memory.read 0 0 = ([], memory) := by
-    simp [Mem.read, Mem.extend, memExtSize]
+    simp only [Mem.read, Mem.extend, memExtSize, ↓reduceIte, Prod.mk.injEq, and_true]
     rfl
   have hzeroWindow : 0 + 0 ≤ memory.size := by omega
   have himplementationWordNonzero : implementation.toB256 ≠ 0 := by
@@ -161,8 +161,8 @@ private theorem
     Ne.symm himplementationWordNonzero
   have hrefund (rc : Int) :
       sstoreNewRefundCounter sevm.benvStat.rules.gas implementation.toB256 0 0 rc = rc := by
-    simp [sstoreNewRefundCounter, hzeroImplementation,
-      himplementationWordNonzero]
+    simp only [sstoreNewRefundCounter, ne_eq, hzeroImplementation, not_false_eq_true, ↓reduceIte,
+      not_true_eq_false, and_true, himplementationWordNonzero, and_self]
   have hnew :
       ((((fun x y : B256 => y <<< x.toNat) 160
         ((fun x : B256 => ~~~x) 0)).and 0).or implementation.toB256) =
@@ -378,7 +378,7 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
     rw [hsize]
     decide
   have hreadZero : memory.read 0 0 = ([], memory) := by
-    simp [Mem.read, Mem.extend, memExtSize]
+    simp only [Mem.read, Mem.extend, memExtSize, ↓reduceIte, Prod.mk.injEq, and_true]
     rfl
   have halign : memory.size % 32 = 0 := by
     rw [hsize]
@@ -393,8 +393,8 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
     Ne.symm himplementationWordNonzero
   have hrefund (rc : Int) :
       sstoreNewRefundCounter sevm.benvStat.rules.gas implementation.toB256 0 0 rc = rc := by
-    simp [sstoreNewRefundCounter, hzeroImplementation,
-      himplementationWordNonzero]
+    simp only [sstoreNewRefundCounter, ne_eq, hzeroImplementation, not_false_eq_true, ↓reduceIte,
+      not_true_eq_false, and_true, himplementationWordNonzero, and_self]
   have hnew :
       ((((fun x y : B256 => y <<< x.toNat) 160
         ((fun x : B256 => ~~~x) 0)).and 0).or implementation.toB256) =

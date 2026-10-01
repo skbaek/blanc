@@ -133,7 +133,7 @@ private theorem freshWorld_interval_ne
 private theorem freshWorld_stor_get_zero {k : B256}
     (h : heartbeatIntervalSlot ≠ k) : freshWorldStor.get k = 0 := by
   rw [freshWorldStor, Stor.get_set_ne _ h]
-  simp [Stor.get, Stor.empty]
+  simp only [Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc, Std.TreeMap.getD_emptyc]
 
 private theorem freshWorld_stor_assignment {t : B256}
     (h : canonicalAddress t) : freshWorldStor.get (assignmentSlot t) = 0 :=
@@ -183,13 +183,13 @@ private theorem freshWorld_stor_interval :
 interval sits in the config region, which no Registry projection reads. -/
 theorem freshWorldStor_witness :
     RegistryWitness (logicalStorageOfStor freshWorldStor) [] := by
-  refine ⟨by simp, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · intro entry member; simp at member
-  · intro entry member; simp at member
+  refine ⟨by simp only [List.map_nil, List.nodup_nil], ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · intro entry member; simp only [List.not_mem_nil] at member
+  · intro entry member; simp only [List.not_mem_nil] at member
   · show freshWorldStor.get arrayLengthSlot = Nat.toB256 ([] : List Entry).length
     rw [freshWorld_stor_arrayLength]
     rfl
-  · intro index bound; simp at bound
+  · intro index bound; simp only [List.length_nil, not_lt_zero] at bound
   · intro t canonical
     show freshWorldStor.get (assignmentSlot t) = assignmentAt [] t
     rw [freshWorld_stor_assignment canonical]
@@ -807,7 +807,7 @@ theorem freshRegistrationWorld_settles :
   refine ⟨post, hexec, hgas, hexpiry, hlogs, ?_⟩
   intro hclean
   have hnot : post.error.isSome ≠ true := by
-    cases herror : post.error <;> simp_all
+    cases herror : post.error <;> simp_all only [Option.isNone_none, Option.isSome_none, ne_eq, Bool.false_eq_true, not_false_eq_true, Option.isNone_some]
   have hprocess := RunFrame.of_run (f := Frame.ofCall freshWorldMsg)
     (raw := (.ok post : Execution)) freshWorld_frameEntry
   have hsettle :

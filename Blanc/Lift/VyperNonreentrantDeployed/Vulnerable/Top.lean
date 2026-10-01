@@ -227,7 +227,7 @@ theorem vminus_witness :
       refine ⟨c, rfl, hagc, (congrArg Cfg.f hc).trans rfl, ?_, ?_⟩
       · rw [hagc.2.2.1, congrArg Cfg.stor hc]; rfl
       · rw [hagc.2.2.1, congrArg Cfg.stor hc]; rfl
-    all_goals simp [obsB, obsBEELS] at hA'
+    all_goals simp only [obsB, obsBEELS, reduceCtorEq] at hA'
   refine ⟨post0F post1, post1, rfl, CoveredFork.prague, f0_enter, hx0, hpm, he0, ho0,
     prefix0, spawnedBy1, rfl, rfl, rfl, hx1, he1, ?_, cfg339_eq, agree_cfg339, ?_,
     spawnedBy_of_childStart agree_cfg339 start2_eq, h2t, h2c,

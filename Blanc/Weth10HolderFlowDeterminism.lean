@@ -9,7 +9,7 @@ namespace Weth10
 
 theorem RetainedXlot.eq_of_same {xl : Xlot}
     (left right : RetainedXlot xl) : left = right := by
-  cases left <;> cases right <;> simp_all
+  cases left <;> cases right <;> simp_all only [ExceptT.stM_eq, ExecutionTrace.RetainedXlot.some.injEq]
   apply Exec.unique
 
 /-- A filled retained slot satisfying the deterministic frame wrapper is
@@ -84,7 +84,7 @@ theorem MessageCallTrace.index_eq_of_same_input
 theorem MessageCallTrace.eq_of_same
     {msg : Msg} {state : State} {out : MsgCallOutput}
     (left right : MessageCallTrace msg state out) : left = right := by
-  cases left <;> cases right <;> simp_all <;>
+  cases left <;> cases right <;> simp_all only [reduceCtorEq, ExecutionTrace.MessageCallTrace.createRun.injEq, ExecutionTrace.MessageCallTrace.callRun.injEq] <;>
     aesop (add safe forward ProcessMessageTrace.eq_of_same)
       (add safe forward ProcessCreateMessageTrace.eq_of_same)
 
@@ -236,7 +236,7 @@ theorem RequestsTrace.eq_of_same
     (left right : RequestsTrace benv bout state bout') : left = right := by
   cases left
   cases right
-  simp_all
+  simp_all only [ExecutionTrace.RequestsTrace.mk.injEq]
   aesop (add safe forward SystemMessageTrace.index_eq_and_heq_of_same_input)
 
 theorem RequestsTrace.index_eq_and_heq_of_same_input
@@ -307,7 +307,7 @@ theorem AccountedBlock.eq_of_block_eq
     (hblock : left.block = right.block) : left = right := by
   cases left
   cases right
-  simp_all
+  simp_all only [mk.injEq, true_and]
   aesop (add safe forward AppliedBodyTrace.eq_of_same)
 
 theorem AccountedBlock.observations_eq_of_block_eq
@@ -324,7 +324,8 @@ private theorem append_singleton_eq_append_singleton
     leftPrefix = rightPrefix ∧ leftLast = rightLast := by
   have reversed : leftLast :: leftPrefix.reverse =
       rightLast :: rightPrefix.reverse := by
-    simpa using congrArg List.reverse h
+    simpa only [List.cons.injEq, List.reverse_inj, List.reverse_append, List.reverse_cons,
+      List.reverse_nil, List.nil_append, List.cons_append] using congrArg List.reverse h
   exact ⟨List.reverse_injective (List.cons.inj reversed).2,
     (List.cons.inj reversed).1⟩
 
@@ -342,11 +343,12 @@ theorem AccountedHistory.endpoint_eq_of_appliedBlocks_eq
       cases right with
       | refl => rfl
       | step prior accounted =>
-          simp [AccountedHistory.appliedBlocks] at hblocks
+          simp only [appliedBlocks, List.nil_eq, List.append_eq_nil_iff, List.cons_ne_self,
+            and_false] at hblocks
   | step prior leftBlock ih =>
       cases right with
       | refl =>
-          simp [AccountedHistory.appliedBlocks] at hblocks
+          simp only [appliedBlocks, List.append_eq_nil_iff, List.cons_ne_self, and_false] at hblocks
       | step rightPrior rightBlock =>
           change prior.appliedBlocks ++ [leftBlock.block] =
             rightPrior.appliedBlocks ++ [rightBlock.block] at hblocks
@@ -371,11 +373,12 @@ theorem AccountedHistory.flowObservations_eq_of_appliedBlocks_eq
       cases right with
       | refl => rfl
       | step prior accounted =>
-          simp [AccountedHistory.appliedBlocks] at hblocks
+          simp only [appliedBlocks, List.nil_eq, List.append_eq_nil_iff, List.cons_ne_self,
+            and_false] at hblocks
   | step prior leftBlock ih =>
       cases right with
       | refl =>
-          simp [AccountedHistory.appliedBlocks] at hblocks
+          simp only [appliedBlocks, List.append_eq_nil_iff, List.cons_ne_self, and_false] at hblocks
       | step rightPrior rightBlock =>
           change prior.appliedBlocks ++ [leftBlock.block] =
             rightPrior.appliedBlocks ++ [rightBlock.block] at hblocks

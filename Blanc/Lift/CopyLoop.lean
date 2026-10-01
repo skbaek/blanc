@@ -76,7 +76,7 @@ theorem List.ext_getD' {α : Type} {l l' : List α} (d : α) (hlen : l.length = 
   apply List.ext_getElem hlen
   intro i h1 h2
   have := h i
-  simpa [List.getD, h1, h2] using this
+  simpa only [List.getD, h1, getElem?_pos, Option.getD_some, h2] using this
 
 /-- Two adjacent writes are one write of the concatenation. -/
 theorem Bytes.writeAt_writeAt_append (bs : Bytes) (n : Nat) (xs ys : Bytes) :
@@ -97,7 +97,8 @@ theorem Bytes.writeAt_writeAt_append (bs : Bytes) (n : Nat) (xs ys : Bytes) :
 theorem _root_.Blanc.Mem.Reads.writeAt_nil {μ : Mem} {bs : Bytes} (h : Mem.Reads μ bs) (n : Nat) :
     Mem.Reads μ (Bytes.writeAt bs n []) := by
   intro i
-  rw [h i, Bytes.getD_writeAt, ite_eq_right (by simp)]
+  rw [h i, Bytes.getD_writeAt, ite_eq_right (by simp only [List.length_nil, add_zero, not_and,
+    not_lt, imp_self])]
 
 /-! ## The loop's shape -/
 
@@ -106,12 +107,14 @@ def copyBody (r0 r1 : UInt8) (k : Nat) : SFunc :=
   .next (.reg (.dup 1)) (.next (.reg (.dup 1)) (.next (.reg .add) (.next (.reg .mload)
     (.next (.reg (.dup 3)) (.next (.reg (.dup 2)) (.next (.reg .add) (.next (.reg .mstore)
       (.next (.push [0x20] (by decide)) (.next (.reg .add)
-        (.next (.push [r0, r1] (by simp)) (.jump k)))))))))))
+        (.next (.push [r0, r1] (by simp only [List.length_cons, List.length_nil, zero_add,
+          Nat.reduceAdd, Nat.reduceLeDiff])) (.jump k)))))))))))
 
 /-- The copy loop head: the `i < len` test, the body on success, `exit` otherwise. -/
 def copyLoopTree (e0 e1 r0 r1 : UInt8) (k : Nat) (exit : SFunc) : SFunc :=
   .dest (.next (.reg (.dup 3)) (.next (.reg (.dup 1)) (.next (.reg .lt) (.next (.reg .iszero)
-    (.next (.push [e0, e1] (by simp)) (.branch (copyBody r0 r1 k) exit))))))
+    (.next (.push [e0, e1] (by simp only [List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLeDiff])) (.branch (copyBody r0 r1 k) exit))))))
 
 /-! ## The loop's state -/
 
@@ -221,29 +224,29 @@ theorem copy_step {C : List Nat} (hkC : k ∈ C) (h : CopyWf srcB dstB lenB R n 
       - calculateMemoryGasCost (copySize n d j))) + 47 by omega]
   unfold copyLoopTree copyBody copyStack
   refine rxc_dest ?_
-  refine rxc_dup (n := 3) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 1) rfl (by simp; omega) ?_
-  refine rxc_lt hlt (by simp; omega) ?_
-  refine rxc_iszero (v := 0) (by decide) (by simp; omega) ?_
-  refine rxc_push rfl (by simp; omega) ?_
+  refine rxc_dup (n := 3) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_lt hlt (by simp only [List.length_cons]; omega) ?_
+  refine rxc_iszero (v := 0) (by decide) (by simp only [List.length_cons]; omega) ?_
+  refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rxc_branch_zero ?_
-  refine rxc_dup (n := 1) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 1) rfl (by simp; omega) ?_
-  refine rxc_add (by simp; omega) ?_
-  refine rxc_mload (c := 3) (v := w) ?_ ?_ ?_ (by simp; omega) ?_
+  refine rxc_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_add (by simp only [List.length_cons]; omega) ?_
+  refine rxc_mload (c := 3) (v := w) ?_ ?_ ?_ (by simp only [List.length_cons]; omega) ?_
   · rw [St.extCost_eq hs, haddS, memExtSize_of_le (copySize_mod h j) (by unfold copySize; omega)]
     exact congrArg (gVerylow + ·) (Nat.sub_self _)
   · rw [haddS, hread]
   · rw [haddS, hM]
-  refine rxc_dup (n := 3) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 2) rfl (by simp; omega) ?_
-  refine rxc_add (by simp; omega) ?_
+  refine rxc_dup (n := 3) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_dup (n := 2) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_add (by simp only [List.length_cons]; omega) ?_
   refine rxc_mstore (M' := M.write (d + 32 * j) w.toBytes) ?_ (by rw [haddD]) ?_
   · rw [St.extCost_eq hs, haddD, hext]; rfl
-  refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_add (by simp; omega) ?_
+  refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_add (by simp only [List.length_cons]; omega) ?_
   rw [hnext]
-  refine rxc_push rfl (by simp; omega) ?_
+  refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
   exact rxc_jumpCut hkC
 
 /-- **The exit test** (`N` done): 26 gas, then the exit tree. -/
@@ -260,11 +263,11 @@ theorem copy_exit {C : List Nat} (h : CopyWf srcB dstB lenB R n N) {M : Mem} {G 
   unfold copyLoopTree
   unfold copyStack at kx ⊢
   refine rxc_dest ?_
-  refine rxc_dup (n := 3) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 1) rfl (by simp; omega) ?_
-  refine rxc_lt hlt (by simp; omega) ?_
-  refine rxc_iszero (v := 1) (by decide) (by simp; omega) ?_
-  refine rxc_push rfl (by simp; omega) ?_
+  refine rxc_dup (n := 3) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_lt hlt (by simp only [List.length_cons]; omega) ?_
+  refine rxc_iszero (v := 1) (by decide) (by simp only [List.length_cons]; omega) ?_
+  refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
   exact rxc_branch_succ (by decide) kx
 
 /-- **The copy loop**, from the head of iteration `j0` through the exit tree, as
@@ -308,10 +311,11 @@ theorem copy_loop {C : List Nat} (hk : fs[k]? = some (copyLoopTree e0 e1 r0 r1 k
       rw [hN] at hr' hs' hdevm
       obtain ⟨r, hrun, hr0, hR⟩ := hexit M' hwf' hr' hs'
       refine ⟨r, ?_, hr0, hR⟩
-      rw [hdevm, show Gx + copyGas n dstB.toNat N N = Gx + 26 by unfold copyGas; simp]
+      rw [hdevm, show Gx + copyGas n dstB.toNat N N = Gx + 26 by unfold copyGas; simp only [tsub_self,
+        mul_zero, zero_add, add_zero]]
       exact copy_exit h hrun)
     (St b (copyStack srcB dstB lenB R j0) M (Gx + copyGas n dstB.toNat N j0))
-    ⟨M, hwf, by simpa using hr, by simpa using hs, by simp⟩
+    ⟨M, hwf, by simpa only [add_zero] using hr, by simpa only [add_zero] using hs, by simp only [add_zero]⟩
 
 end Copy
 

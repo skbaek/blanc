@@ -180,7 +180,7 @@ theorem xfer_body_self_gen {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {M
   rmask
   rdup
   rmask
-  refine rx_eq (v := 1) (by simp [B256.eqCheck, hcs]) (by rroom) ?_
+  refine rx_eq (v := 1) (by simp only [B256.eqCheck, hcs, ↓reduceIte]) (by rroom) ?_
   riszero
   rdup
   riszero
@@ -204,7 +204,7 @@ theorem w_ff32 : Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0
   decide
 
 theorem toB256_ne_of_ne {a b : Adr} (h : a ≠ b) : a.toB256 ≠ b.toB256 := fun e =>
-  h (by have := congrArg B256.toAdr e; simpa [toAdr_toB256] using this)
+  h (by have := congrArg B256.toAdr e; simpa only [toAdr_toB256] using this)
 
 /-- The allowance's slot and its `SLOAD`: `keccak(src ‖ 4)`, then `keccak(caller ‖ that)`. -/
 macro "rxf_alw" : tactic => `(tactic|
@@ -250,7 +250,7 @@ theorem xfer_body_max_gen {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {M 
   rmask
   rdup
   rmask
-  refine rx_eq (v := 0) (by simp [B256.eqCheck, hne.symm]) (by rroom) ?_
+  refine rx_eq (v := 0) (by simp only [B256.eqCheck, hne.symm, ↓reduceIte]) (by rroom) ?_
   riszero
   rdup
   riszero
@@ -259,7 +259,8 @@ theorem xfer_body_max_gen {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {M 
   rpop
   rpush
   rxf_alw
-  refine rx_eq (v := 1) (by simp [B256.eqCheck, getStorVal_afterSload, hmax, w_ff32]) (by rroom) ?_
+  refine rx_eq (v := 1) (by simp only [B256.eqCheck, getStorVal_afterSload, hmax, w_ff32,
+    ↓reduceIte]) (by rroom) ?_
   riszero
   rdest
   riszero
@@ -376,7 +377,7 @@ theorem xfer_body_allow_gen {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {
   rmask
   rdup
   rmask
-  refine rx_eq (v := 0) (by simp [B256.eqCheck, hne.symm]) (by rroom) ?_
+  refine rx_eq (v := 0) (by simp only [B256.eqCheck, hne.symm, ↓reduceIte]) (by rroom) ?_
   riszero
   rdup
   riszero
@@ -385,7 +386,8 @@ theorem xfer_body_allow_gen {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {
   rpop
   rpush
   rxf_alw
-  refine rx_eq (v := 0) (by simp [B256.eqCheck, getStorVal_afterSload, w_ff32, hmax]) (by rroom) ?_
+  refine rx_eq (v := 0) (by simp only [B256.eqCheck, getStorVal_afterSload, w_ff32, hmax,
+    ↓reduceIte]) (by rroom) ?_
   riszero
   rdest
   riszero
@@ -413,8 +415,9 @@ theorem transferFrom_wrapper {sevm : Sevm} {b b' : Devm} {G X : Nat} {sel : B256
   obtain ⟨post, htail, hg, ho⟩ := bool_tail (sevm := sevm) (b := b') (G := G) (sel := sel) hM'
   refine ⟨post, ?_, hg, ho⟩
   rdest
-  refine rx_callvalue (by simp) ?_
-  refine rx_iszero (v := 1) (by simp [B256.eqCheck, hval]) (by simp) ?_
+  refine rx_callvalue (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_iszero (v := 1) (by simp only [B256.eqCheck, hval, ↓reduceIte]) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
   rpush
   refine rx_branch_succ (by decide) ?_
   rdest
@@ -469,8 +472,9 @@ theorem transfer_wrapper {sevm : Sevm} {b b' : Devm} {G X : Nat} {sel : B256} {M
   obtain ⟨post, htail, hg, ho⟩ := bool_tail (sevm := sevm) (b := b') (G := G) (sel := sel) hM'
   refine ⟨post, ?_, hg, ho⟩
   rdest
-  refine rx_callvalue (by simp) ?_
-  refine rx_iszero (v := 1) (by simp [B256.eqCheck, hval]) (by simp) ?_
+  refine rx_callvalue (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_iszero (v := 1) (by simp only [B256.eqCheck, hval, ↓reduceIte]) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
   rpush
   refine rx_branch_succ (by decide) ?_
   rdest
@@ -670,7 +674,8 @@ theorem weth9_transferFrom_self_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
       (Sevm.dataWord sevm 68) (G + 62) + 128 + 150 = pre.gasLeft := by
     rw [h_gas, xferGasSelf_eq]; unfold transferFromGasSelf; omega
   obtain ⟨b', hb⟩ := xfer_body_self (S := [Sevm.selector sevm]) (ret := Bytes.toB256 [2, 41])
-    (G := G + 62) (b := pre) hfork h_static fp_memFp (by simp) hle hcs h_sentry
+    (G := G + 62) (b := pre) hfork h_static fp_memFp (by simp only [List.length_cons,
+      List.length_nil, zero_add, Nat.one_lt_ofNat]) hle hcs h_sentry
   obtain ⟨post, hw, hpg, hpo⟩ := transferFrom_wrapper (sevm := sevm) (b := pre) (b' := b') (G := G)
     (sel := Sevm.selector sevm) h_value hb
     (((((fp_memFp.scratchW _ _).scratchW _ _).scratchW _ _)).write_out _)
@@ -706,7 +711,8 @@ theorem weth9_transferFrom_max_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
       (Sevm.dataWord sevm 68) (G + 62) + 128 + 150 = pre.gasLeft := by
     rw [h_gas, xferGasMax_eq]; unfold transferFromGasMax; omega
   obtain ⟨b', hb⟩ := xfer_body_max (S := [Sevm.selector sevm]) (ret := Bytes.toB256 [2, 41])
-    (G := G + 62) (b := pre) hfork h_static fp_memFp (by simp) hle hcs hmax h_sentry
+    (G := G + 62) (b := pre) hfork h_static fp_memFp (by simp only [List.length_cons,
+      List.length_nil, zero_add, Nat.one_lt_ofNat]) hle hcs hmax h_sentry
   obtain ⟨post, hw, hpg, hpo⟩ := transferFrom_wrapper (sevm := sevm) (b := pre) (b' := b') (G := G)
     (sel := Sevm.selector sevm) h_value hb
     ((((alwW_fp (fp_memFp.scratchW _ _) _ _).scratchW _ _).scratchW _ _).write_out _)
@@ -743,7 +749,8 @@ theorem weth9_transferFrom_allow_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
       (Sevm.dataWord sevm 68) (G + 62) + 128 + 150 = pre.gasLeft := by
     rw [h_gas, xferGasAllow_eq]; unfold transferFromGasAllow; omega
   obtain ⟨b', hb⟩ := xfer_body_allow (S := [Sevm.selector sevm]) (ret := Bytes.toB256 [2, 41])
-    (G := G + 62) (b := pre) hfork h_static fp_memFp (by simp) hle hcs hmax hal h_sentry
+    (G := G + 62) (b := pre) hfork h_static fp_memFp (by simp only [List.length_cons,
+      List.length_nil, zero_add, Nat.one_lt_ofNat]) hle hcs hmax hal h_sentry
   obtain ⟨post, hw, hpg, hpo⟩ := transferFrom_wrapper (sevm := sevm) (b := pre) (b' := b') (G := G)
     (sel := Sevm.selector sevm) h_value hb
     ((((alwW_fp (alwW_fp (alwW_fp (fp_memFp.scratchW _ _) _ _) _ _) _ _).scratchW _ _).scratchW _ _).write_out _)
@@ -774,7 +781,8 @@ theorem weth9_transfer_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
     rw [h_gas, xferGasSelf_eq]; unfold transferGas; omega
   obtain ⟨b', hb⟩ := xfer_body_self (S := [0, Sevm.dataWord sevm 36, (Sevm.dataWord sevm 4).toAdr.toB256,
       Bytes.toB256 [0x03, 0xb0], Sevm.selector sevm]) (ret := Bytes.toB256 [0x0b, 0xdb])
-    (G := G + 24 + 62) (b := pre) hfork h_static fp_memFp (by simp) hle rfl h_sentry
+    (G := G + 24 + 62) (b := pre) hfork h_static fp_memFp (by simp only [List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) hle rfl h_sentry
   obtain ⟨post, hw, hpg, hpo⟩ := transfer_wrapper (sevm := sevm) (b := pre) (b' := b') (G := G)
     (sel := Sevm.selector sevm) h_value hb
     (((((fp_memFp.scratchW _ _).scratchW _ _).scratchW _ _)).write_out _)

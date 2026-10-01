@@ -40,14 +40,14 @@ theorem obs5C_facts {r : Res} (h : obs5C r = obs5EELSC) : ∃ d cl, r = .done (.
     cl.adrs = adrs5C ∧ cl.stor = storAT ∧ cl.acs = acsAT ∧ d.refundCounter = refund5 ∧
     d.accountsToDelete = .emptyWithCapacity := by
   rcases r with c | ⟨d | d, cl⟩ | _
-  · simp [obs5C, obs5EELSC] at h
+  · simp only [obs5C, obs5EELSC, reduceCtorEq] at h
   · simp only [obs5C, obs5EELSC, Option.some.injEq, Prod.mk.injEq, Bool.and_eq_true,
       decide_eq_true_eq] at h
     obtain ⟨hg, ho, ⟨⟨⟨⟨he, hk⟩, ha⟩, hs⟩, hrf⟩, hc, hatd⟩ := h
     exact ⟨d, cl, rfl, hg, List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) ho,
       Option.isNone_iff_eq_none.mp he, hk, ha, hs, hc, hrf, hatd⟩
-  · simp [obs5C, obs5EELSC] at h
-  · simp [obs5C, obs5EELSC] at h
+  · simp only [obs5C, obs5EELSC, reduceCtorEq] at h
+  · simp only [obs5C, obs5EELSC, reduceCtorEq] at h
 
 theorem r5C_facts : r5C = .done (.halted post5C) cl5C ∧ post5C.gasLeft = gas5C ∧
     post5C.output = word 106 ∧ post5C.error = none ∧ cl5C.keys = keys5T ∧ cl5C.adrs = adrs5C ∧

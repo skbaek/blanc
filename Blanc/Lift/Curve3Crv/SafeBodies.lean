@@ -280,7 +280,7 @@ theorem safe_transferFrom (hfork : CoveredFork sevm.benvStat.fork) :
   have hwf1 : Mem.Wf (vySlotMem (vySlotMem (vyMem Mem.empty (Sevm.dataWord sevm 0))
       (Bytes.toB256 [0x03]) (Sevm.dataWord sevm (Bytes.toB256 [0x04]))) (Bytes.toB256 [0x03])
       (Sevm.dataWord sevm (Bytes.toB256 [0x24]))) := vySlotMem_wf (vySlotMem_wf hwf0 _ _) _ _
-  rcases ric_branchTo (g := t_045b_c3) (by simp) rfl run with ⟨hx, G20, run⟩ | ⟨hx, G20, run⟩
+  rcases ric_branchTo (g := t_045b_c3) (by simp only [List.not_mem_nil, not_false_eq_true]) rfl run with ⟨hx, G20, run⟩ | ⟨hx, G20, run⟩
   · -- the caller is not the minter: the allowance is spent
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_push s1
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_push s1
@@ -307,7 +307,7 @@ theorem safe_transferFrom (hfork : CoveredFork sevm.benvStat.fork) :
         sevm.caller.toB256 := by
       intro he
       rw [he] at hx
-      simp [B256.eqCheck, B256.xor_eq_zero_iff] at hx
+      simp only [B256.eqCheck, B256.xor_eq_zero_iff, ↓reduceIte] at hx
       exact absurd hx (by decide)
     refine ⟨?r, ?raw, ?lands⟩
     case raw =>
@@ -456,12 +456,13 @@ theorem safe_approve (hfork : CoveredFork sevm.benvStat.fork) :
     have hv0 : v = 0 := by
       rw [hv1] at hz
       by_contra hne
-      simp [B256.eqCheck, hne] at hz
+      simp only [B256.eqCheck, hne, ↓reduceIte] at hz
       exact absurd hz (by decide)
     unfold t_04d1_c0 at run
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_push s1
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_push s1
-    obtain ⟨G11, run⟩ := ric_jump (g := t_04f6_c4) (by simp) rfl run
+    obtain ⟨G11, run⟩ := ric_jump (g := t_04f6_c4) (by simp only [List.not_mem_nil,
+      not_false_eq_true]) rfl run
     obtain ⟨-, hl⟩ := tail b _ _ _ hwf0 (fun _ => rfl) rfl run
     exact ⟨_, by simp only [rawApprove]; exact ite_eq_left ⟨hv, hp', .inl hv0⟩, hl⟩
   · -- a nonzero value: the current allowance is read and must be zero
@@ -758,8 +759,8 @@ theorem ric_storeSeg (hfork : CoveredFork sevm.benvStat.fork) {d : Devm} {S : Li
   have hc2 : (M2.read 0x120 32).1 = (Nat.toB256 0).toBytes := Mem.read_write_word_of_wf hwf1 _ _
   set cap := Bytes.toB256 [cp] + Bytes.toB256 [0x00]
   have hne1 : cap ≠ Nat.toB256 (0 + 1) := by rcases hcase with ⟨rfl, -⟩ | ⟨rfl, -⟩ <;> decide
-  have hkC : k ∉ ([] : List Nat) := by simp
-  have hjC : j ∉ ([] : List Nat) := by simp
+  have hkC : k ∉ ([] : List Nat) := by simp only [List.not_mem_nil, not_false_eq_true]
+  have hjC : j ∉ ([] : List Nat) := by simp only [List.not_mem_nil, not_false_eq_true]
   -- iteration 0
   rcases ric_vyStoreIter hfork (i := 0) hs2 (by decide) (by decide) hsn (by omega) (by decide) hc2
     hk hkC hj hjC run with ⟨hlt, -⟩ | ⟨-, hstatic, G2, run⟩
@@ -989,7 +990,7 @@ theorem safe_setName (hfork : CoveredFork sevm.benvStat.fork) {G : Nat} {post : 
   · exact (run.false_of_noOk (by decide)).elim
   have hword : Bytes.toB256 (out.take 32) = sevm.caller.toB256 := by
     by_contra hc
-    exact heq (by simp [B256.eqCheck, hc])
+    exact heq (by simp only [B256.eqCheck, hc, ↓reduceIte])
   obtain ⟨G65, run⟩ := ric_dest run
   -- the two copy loops
   have hL0w : Bytes.toB256 (src0.sliceD 0 32 0) = Sevm.dataWord sevm s0B := by

@@ -52,25 +52,31 @@ theorem Func.localExecFree_iff {body : Func} :
     body.localExecFree = true ↔ body.LocalExecFree := by
   induction body with
   | last outcome =>
-      simp [Func.localExecFree, Func.LocalExecFree]
+      simp only [localExecFree, LocalExecFree]
   | call index =>
-      simp [Func.localExecFree, Func.LocalExecFree]
+      simp only [localExecFree, LocalExecFree]
   | branch left right left_ih right_ih =>
-      simp [Func.localExecFree, Func.LocalExecFree, left_ih, right_ih]
+      simp only [localExecFree, Bool.and_eq_true, left_ih, right_ih, LocalExecFree]
   | next instruction tail tail_ih =>
       cases instruction with
       | reg operation =>
-          simp [Func.localExecFree, Func.LocalExecFree, tail_ih]
+          simp only [localExecFree, tail_ih, LocalExecFree, ne_eq, reduceCtorEq, not_false_eq_true,
+            implies_true, true_and]
       | exec operation =>
-          simp [Func.localExecFree, Func.LocalExecFree]
+          simp only [localExecFree, Bool.false_eq_true, LocalExecFree, ne_eq, Ninst.exec.injEq,
+            forall_eq', false_and]
       | push bytes size =>
-          simp [Func.localExecFree, Func.LocalExecFree, tail_ih]
+          simp only [localExecFree, tail_ih, LocalExecFree, ne_eq, reduceCtorEq, not_false_eq_true,
+            implies_true, true_and]
       | dupn immediate =>
-          simp [Func.localExecFree, Func.LocalExecFree, tail_ih]
+          simp only [localExecFree, tail_ih, LocalExecFree, ne_eq, reduceCtorEq, not_false_eq_true,
+            implies_true, true_and]
       | swapn immediate =>
-          simp [Func.localExecFree, Func.LocalExecFree, tail_ih]
+          simp only [localExecFree, tail_ih, LocalExecFree, ne_eq, reduceCtorEq, not_false_eq_true,
+            implies_true, true_and]
       | exchange immediate =>
-          simp [Func.localExecFree, Func.LocalExecFree, tail_ih]
+          simp only [localExecFree, tail_ih, LocalExecFree, ne_eq, reduceCtorEq, not_false_eq_true,
+            implies_true, true_and]
 
 /-- Logical finite closed-component specification. Every selected index
 resolves through the compiler function table, its body is locally exec-free,
@@ -109,7 +115,7 @@ theorem Prog.componentExecFree_iff
       (List.all_eq_true.mp accepted) index member
     cases lookup : program.function? index with
     | none =>
-        simp [lookup] at selected
+        simp only [lookup, Bool.false_eq_true] at selected
     | some body =>
         simp only [lookup, Bool.and_eq_true] at selected
         exact ⟨body, rfl,
@@ -210,7 +216,7 @@ theorem Exec.Deriv.SourceCursor.Toward.linearDispatchWith_selectedBody
   induction entries with
   | nil =>
       intro unique member
-      simp at member
+      simp only [List.not_mem_nil] at member
   | cons head tail ih =>
       rcases head with ⟨word, candidate⟩
       intro unique member path stack cursor route selectorPrefix
@@ -223,7 +229,8 @@ theorem Exec.Deriv.SourceCursor.Toward.linearDispatchWith_selectedBody
             ([Ninst.pushB256 selector, Ninst.eq] +++
               (body <?> .call fallback)) at cursor
           rcases route.dropLineRun (by
-              simp [Ninst.pushB256]) with
+              simp only [Ninst.pushB256, List.mem_cons, List.not_mem_nil, or_false, ne_eq,
+                forall_eq_or_imp, reduceCtorEq, not_false_eq_true, forall_eq, and_self]) with
             ⟨branchPath, branchCursor, lineRun, branchChronology,
               branchRoute⟩
           rcases Line.of_run_cons lineRun with
@@ -232,13 +239,13 @@ theorem Exec.Deriv.SourceCursor.Toward.linearDispatchWith_selectedBody
             ⟨afterEq, eqRun, nilRun⟩
           cases nilRun
           have pushed : selector :: selector :: stack <<+ afterPush.stack := by
-            simpa using prefix_of_push
-              (of_run_pushB256 pushRun) selectorPrefix
+            simpa only [List.cons_append, List.nil_append] using
+              prefix_of_push (of_run_pushB256 pushRun) selectorPrefix
           have flagPrefix :
               (selector =? selector) :: stack <<+ branchCursor.pre.stack :=
             prefix_of_eq eqRun pushed
           rw [show (selector =? selector) = 1 from by
-            simp [B256.eqCheck]] at flagPrefix
+            simp only [B256.eqCheck, ↓reduceIte]] at flagPrefix
           rcases branchRoute.selectBranchSucc branchCursor compiled
               (by trivial) execAt (by decide) flagPrefix with
             ⟨bodyCursor, bodyRoute, bodyPrefix⟩
@@ -247,9 +254,10 @@ theorem Exec.Deriv.SourceCursor.Toward.linearDispatchWith_selectedBody
           have pairwise :
               ((word, candidate) :: next :: rest).Pairwise
                 (fun a b : B256 × Func => a.1 ≠ b.1) := by
-            simpa [selectorUnique] using unique
+            simpa only [ne_eq, List.pairwise_cons, List.mem_cons, forall_eq_or_imp, Prod.forall,
+              selectorUnique] using unique
           have tailUnique : selectorUnique (next :: rest) := by
-            simpa [selectorUnique] using
+            simpa only [selectorUnique, ne_eq, List.pairwise_cons, Prod.forall] using
               (List.pairwise_cons.mp pairwise).2
           rcases List.mem_cons.mp member with selected | tailMember
           · cases selected
@@ -258,7 +266,8 @@ theorem Exec.Deriv.SourceCursor.Toward.linearDispatchWith_selectedBody
                 ((Ninst.pop ::: body) <?>
                   linearDispatchWith fallback (next :: rest))) at cursor
             rcases route.dropLineRun (by
-                simp [Ninst.pushB256]) with
+                simp only [Fin.isValue, Ninst.pushB256, List.mem_cons, List.not_mem_nil, or_false,
+                  ne_eq, forall_eq_or_imp, reduceCtorEq, not_false_eq_true, forall_eq, and_self]) with
               ⟨branchPath, branchCursor, lineRun, branchChronology,
                 branchRoute⟩
             rcases Line.of_run_cons lineRun with
@@ -273,13 +282,13 @@ theorem Exec.Deriv.SourceCursor.Toward.linearDispatchWith_selectedBody
               prefix_of_dup_val dupRun (by show_nth) selectorPrefix
             have pushed : selector :: selector :: selector :: stack <<+
                 afterPush.stack := by
-              simpa using prefix_of_push
-                (of_run_pushB256 pushRun) duplicated
+              simpa only [List.cons_append, List.nil_append] using
+                prefix_of_push (of_run_pushB256 pushRun) duplicated
             have flagPrefix : (selector =? selector) :: selector :: stack <<+
                 branchCursor.pre.stack :=
               prefix_of_eq eqRun pushed
             rw [show (selector =? selector) = 1 from by
-              simp [B256.eqCheck]] at flagPrefix
+              simp only [B256.eqCheck, ↓reduceIte]] at flagPrefix
             rcases branchRoute.selectBranchSucc branchCursor compiled
                 (by trivial) execAt (by decide) flagPrefix with
               ⟨selectedCursor, selectedRoute, selectedPrefix⟩
@@ -299,7 +308,8 @@ theorem Exec.Deriv.SourceCursor.Toward.linearDispatchWith_selectedBody
                 ((Ninst.pop ::: candidate) <?>
                   linearDispatchWith fallback (next :: rest))) at cursor
             rcases route.dropLineRun (by
-                simp [Ninst.pushB256]) with
+                simp only [Fin.isValue, Ninst.pushB256, List.mem_cons, List.not_mem_nil, or_false,
+                  ne_eq, forall_eq_or_imp, reduceCtorEq, not_false_eq_true, forall_eq, and_self]) with
               ⟨branchPath, branchCursor, lineRun, branchChronology,
                 branchRoute⟩
             rcases Line.of_run_cons lineRun with
@@ -314,13 +324,13 @@ theorem Exec.Deriv.SourceCursor.Toward.linearDispatchWith_selectedBody
               prefix_of_dup_val dupRun (by show_nth) selectorPrefix
             have pushed : word :: selector :: selector :: stack <<+
                 afterPush.stack := by
-              simpa using prefix_of_push
-                (of_run_pushB256 pushRun) duplicated
+              simpa only [List.cons_append, List.nil_append] using
+                prefix_of_push (of_run_pushB256 pushRun) duplicated
             have flagPrefix : (word =? selector) :: selector :: stack <<+
                 branchCursor.pre.stack :=
               prefix_of_eq eqRun pushed
             rw [show (word =? selector) = 0 from by
-              simp [B256.eqCheck, wordNe]] at flagPrefix
+              simp only [B256.eqCheck, wordNe, ↓reduceIte]] at flagPrefix
             rcases branchRoute.selectBranchZero branchCursor compiled
                 (by trivial) execAt flagPrefix with
               ⟨tailCursor, tailRoute, tailPrefix⟩
@@ -387,7 +397,7 @@ private theorem Exec.Deriv.SourceCursor.noExec_core :
               Func.sourceSites path.functionIndex path.steps cursor.pc
                 (.next instruction tail) := by
             rcases path with ⟨functionIndex, steps⟩
-            simp [site, Func.sourceSites]
+            simp only [Func.sourceSites, List.mem_cons, true_or, site]
           have sourceAt :
               Ninst.At root.sevm.code cursor.pc instruction :=
             Func.sourceSites_sound cursor.codeSlice cursor.codeBoundary
@@ -482,7 +492,7 @@ theorem Exec.noExecOccurrence_of_no_sameFrame_execAt
       noDescendants occurrence.reached
   have execAt :
       Ninst.At occurrence.node.sevm.code occurrence.node.pc (.exec x) := by
-    simpa [instructionEq] using occurrence.decoded
+    simpa only [instructionEq] using occurrence.decoded
   exact noSameFrame occurrence.node sameFrame x execAt
 
 /-- Same-frame `.exec` exclusion is a contract-neutral sufficient condition

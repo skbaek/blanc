@@ -66,11 +66,11 @@ theorem prorata_deposit_exec_effect
     DepositEffect sevm pre post := by
   rcases exec_enters_prorataSelector_logs exc (installed_prorata_compile h_code)
     h_sel h_nonempty (show (selector "deposit" [], deposit) ∈ prorataFuncs by
-      simp [prorataFuncs]) with
+      simp only [prorataFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, or_true]) with
     ⟨entry, hstor, hbal, hcodeEntry, hmem, hlogs, hout, run⟩
   have heffect := deposit_effect run
   unfold DepositEffect at heffect ⊢
-  dsimp at heffect ⊢
+  dsimp only [Lean.Elab.WF.paramLet] at heffect ⊢
   rw [hstor, hbal, hcodeEntry, hlogs] at heffect
   exact heffect
 
@@ -84,13 +84,14 @@ theorem prorata_withdraw_exec_effect
     WithdrawPaysExactly sevm pre post := by
   rcases exec_enters_prorataSelector_logs exc (installed_prorata_compile h_code)
     h_sel h_nonempty (show (selector "withdraw" [.uint256], withdraw) ∈ prorataFuncs by
-      simp [prorataFuncs]) with
+      simp only [prorataFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+        or_true]) with
     ⟨entry, hstor, hbal, hcodeEntry, hmem, hlogs, hout, run⟩
   have heffect := withdraw_pays_exactly run hfork
   unfold WithdrawPaysExactly at heffect ⊢
-  dsimp at heffect ⊢
+  dsimp only [Lean.Elab.WF.paramLet] at heffect ⊢
   unfold WithdrawPreCallEffect at heffect ⊢
-  dsimp at heffect ⊢
+  dsimp only [Lean.Elab.WF.paramLet] at heffect ⊢
   rw [hstor, hbal, hcodeEntry, hmem, hlogs, hout] at heffect
   exact heffect
 
@@ -103,11 +104,12 @@ theorem prorata_convertToShares_exec_effect
     SharesViewEffect sevm pre post := by
   rcases exec_enters_prorataSelector_logs exc (installed_prorata_compile h_code)
     h_sel h_nonempty (show (selector "convertToShares" [.uint256], convertToShares) ∈ prorataFuncs by
-      simp [prorataFuncs]) with
+      simp only [prorataFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+        or_true]) with
     ⟨entry, hstor, hbal, hcodeEntry, hmem, hlogs, hout, run⟩
   have heffect := convertToShares_effect run
   unfold SharesViewEffect at heffect ⊢
-  dsimp at heffect ⊢
+  dsimp only [Lean.Elab.WF.paramLet] at heffect ⊢
   rw [hstor, hbal, hcodeEntry, hlogs] at heffect
   exact heffect
 
@@ -120,11 +122,11 @@ theorem prorata_convertToAssets_exec_effect
     AssetsViewEffect sevm pre post := by
   rcases exec_enters_prorataSelector_logs exc (installed_prorata_compile h_code)
     h_sel h_nonempty (show (selector "convertToAssets" [.uint256], convertToAssets) ∈ prorataFuncs by
-      simp [prorataFuncs]) with
+      simp only [prorataFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or]) with
     ⟨entry, hstor, hbal, hcodeEntry, hmem, hlogs, hout, run⟩
   have heffect := convertToAssets_effect run
   unfold AssetsViewEffect at heffect ⊢
-  dsimp at heffect ⊢
+  dsimp only [Lean.Elab.WF.paramLet] at heffect ⊢
   rw [hstor, hbal, hcodeEntry, hlogs] at heffect
   exact heffect
 
@@ -154,7 +156,7 @@ theorem prorata_convertToShares_eq_deposit_mint
     hdepositSel hdepositNonempty
   unfold SharesViewEffect at hview
   unfold DepositEffect at hdeposit
-  dsimp at hview hdeposit
+  dsimp only [Lean.Elab.WF.paramLet] at hview hdeposit
   rcases hview with ⟨hv1, hv2, hv3, hviewWord, hv4, hv5, hv6, hv7⟩
   rcases hdeposit with ⟨hd1, hd2, hd3, hd4, hd5, hd6, hd7, hdepositWord⟩
   refine ⟨depositCall.value *
@@ -194,7 +196,7 @@ theorem prorata_convertToAssets_eq_withdraw_pay
     hwithdrawSel hwithdrawNonempty hfork
   unfold AssetsViewEffect at hview
   unfold WithdrawPaysExactly at hpay
-  dsimp at hview hpay
+  dsimp only [Lean.Elab.WF.paramLet] at hview hpay
   rcases hview with ⟨hv1, hv2, hviewWord, hv3, hv4, hv5, hv6⟩
   rcases hpay with ⟨callPre, callPost, guardPost, returnPre, hpre, hpayout, hwithdrawWord⟩
   refine ⟨Sevm.argWord withdrawal 0 *

@@ -283,7 +283,8 @@ theorem flashLoan_runCompiledTo_mint {sevm : Sevm} {pre : Devm}
     rw [h_arg0, ← addressMask_eq_shl]
     exact validAdr_iff.mp h_addr
   -- guard (2): the supply read, priced without deciding warmth
-  refine Func.runCompiledTo_sload_step hfork rfl (by simp)
+  refine Func.runCompiledTo_sload_step hfork rfl (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT])
     (v := Devm.getStorVal pre sevm.currentTarget supplySlot) rfl
     (M := Mem.empty) rfl
     (by simp only [Devm.gasLeft_setMach, gasColdSload]; omega) ?_
@@ -298,7 +299,8 @@ theorem flashLoan_runCompiledTo_mint {sevm : Sevm} {pre : Devm}
       then (1 : B256) else 0) = 0
     rw [if_neg (not_lt_of_ge (B256.le_not_of_nof h_nof))]
   -- (3) the mint: the receiver's balance, read then written
-  refine Func.runCompiledTo_sload_step hfork rfl (by simp)
+  refine Func.runCompiledTo_sload_step hfork rfl (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT])
     (v := Devm.getStorVal b₁ sevm.currentTarget (Sevm.argWord sevm 0)) rfl
     (M := Mem.empty) rfl
     (by simp only [Devm.gasLeft_setMach, gasColdSload]; omega) ?_
@@ -746,7 +748,8 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
       rw [h_arg0, ← addressMask_eq_shl]
       exact validAdr_iff.mp h_addr
     exact hex
-  refine Func.execSat_sload_step hfork rfl (by simp)
+  refine Func.execSat_sload_step hfork rfl (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT])
     (v := Devm.getStorVal pre sevm.currentTarget supplySlot) rfl
     (M := Mem.empty) rfl
     (by simp only [Devm.gasLeft_setMach, gasColdSload]; omega) ?_
@@ -764,7 +767,8 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
         then (1 : B256) else 0) = 0
       rw [if_neg (not_lt_of_ge (B256.le_not_of_nof h_nof))]
     exact hex
-  refine Func.execSat_sload_step hfork rfl (by simp)
+  refine Func.execSat_sload_step hfork rfl (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT])
     (v := Devm.getStorVal b₁ sevm.currentTarget (Sevm.argWord sevm 0)) rfl
     (M := Mem.empty) rfl
     (by simp only [Devm.gasLeft_setMach, gasColdSload]; omega) ?_
@@ -1249,7 +1253,8 @@ theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
   · -- the depth-limit arm: no child is spawned, the flag is `0`
     refine Func.execSat_next
       (Ninst.runCompiled_call_zero_value_zero_depth hfork rfl h_ext hdel hacc.symm
-        h_split h_gcross hd (by simp [hd1s'])) ?_
+        h_split h_gcross hd (by simp only [hd1s', List.length_cons, List.length_nil, zero_add,
+          Nat.reduceAdd, Nat.reduceLT])) ?_
     rw [hd1s', hd1m', Mem.extends_covered h_cov]
     exact h_flag0 _ _ (by omega)
   · -- the spawn
@@ -1268,7 +1273,8 @@ theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
     have hP'g : P'.gasLeft = d1.gasLeft - (mcs + acc + 0) := by
       rw [hP', callSpawnParent_gasLeft]
     have hP'K : K ≤ P'.gasLeft := by rw [hP'g]; exact h_K_return
-    have hroom : P'.stack.length < 1024 := by simp [hP's]
+    have hroom : P'.stack.length < 1024 := by simp only [hP's, List.length_cons, List.length_nil,
+      zero_add, Nat.reduceAdd, Nat.reduceLT]
     rcases henter : (Frame.ofCall msg').enter with r | cevm
     · -- the frame resolves without entering: a precompile, or the transfer
       rcases r with ⟨e, st', ca, tra⟩ | child
@@ -1290,7 +1296,7 @@ theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
             (h_flag0 (incorporateChildOnError P' child child.output)
               (P'.gasLeft + child.gasLeft) (by omega))
         · have hce' : child.error.isSome = false := by
-            revert hce; cases child.error.isSome <;> simp
+            revert hce; cases child.error.isSome <;> simp only [Bool.false_eq_true, not_false_eq_true, imp_self, not_true_eq_false, Bool.true_eq_false]
           have hres : Resume.run (.call P' ((0 : B256)).toNat ((0 : B256)).toNat)
               (.ok child)
               = .ok ((incorporateChildOnSuccess P' child child.output).setMach
@@ -1331,7 +1337,7 @@ theorem flashLoan_execSat_flag {sevm : Sevm} {pre : Devm}
               (P'.gasLeft + child.gasLeft) (by omega))
         · -- the borrower settled clean: the resume pushes `1`
           have hce' : child.error.isSome = false := by
-            revert hce; cases child.error.isSome <;> simp
+            revert hce; cases child.error.isSome <;> simp only [Bool.false_eq_true, not_false_eq_true, imp_self, not_true_eq_false, Bool.true_eq_false]
           have hres : Resume.run (.call P' ((0 : B256)).toNat ((0 : B256)).toNat)
               ((Frame.ofCall msg').settle (exec cevm))
               = .ok ((incorporateChildOnSuccess P' child child.output).setMach
@@ -2495,7 +2501,8 @@ theorem fmint_amount_over_bound_reverts {sevm : Sevm} {pre : Devm}
       exact validAdr_iff.mp h_addr
     exact hex
   refine Func.execSat_sload_step hfork
-    (v := Devm.getStorVal pre sevm.currentTarget supplySlot) rfl (by simp)
+    (v := Devm.getStorVal pre sevm.currentTarget supplySlot) rfl (by simp only [List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT])
     rfl (M := pre.memory) rfl
     (by simp only [Devm.gasLeft_setMach, gasColdSload]; omega) ?_
   intro base c G h_in h_mono h_stor _h_bal _h_code h_rc h_logs _h_output h_er
@@ -2655,7 +2662,8 @@ theorem frame_settles_of_exec_settles {msg : Msg} {benv : Benv} {xl : Xlot}
       subst h_evm
       unfold processMessage.settle at hset
       dsimp only [bind, Except.bind] at hset
-      rw [if_neg (by rw [herr]; simp)] at hset
+      rw [if_neg (by rw [herr]; simp only [Option.isSome_none, Bool.false_eq_true,
+        not_false_eq_true])] at hset
       exact Or.inl (by rw [Except.ok.inj hset, herr])
     · rw [hx] at key
       have h_evm : post.withError (some .revert) = evm := Except.ok.inj key

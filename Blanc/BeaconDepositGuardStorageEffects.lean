@@ -64,7 +64,7 @@ theorem depositLengthGuard_storageEffectRun
       (r := .eq) (f := B256.eqCheck) (cost := gVerylow)
       (x := expected) (y := expected) (v := 1) (s := [])
       (G := G + 16) (by rintro ⟨⟩) rfl rfl
-      (by simp [B256.eqCheck])
+      (by simp only [B256.eqCheck, ↓reduceIte])
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [List.length_nil]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
@@ -176,7 +176,7 @@ theorem depositValueLowerGuard_storageEffectRun
       (x := sevm.value) (y := Nat.toB256 oneEther)
       (v := 0) (s := []) (G := G + 13)
       (by rintro ⟨⟩) rfl rfl
-      (by simp [B256.ltCheck, not_lt_of_ge hlower])
+      (by simp only [B256.ltCheck, not_lt_of_ge hlower, ↓reduceIte])
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [List.length_nil]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
@@ -226,7 +226,7 @@ theorem depositGweiMultipleGuard_storageEffectRun
       (x := sevm.value) (y := Nat.toB256 oneGwei)
       (v := 0) (s := []) (G := G + 13)
       (by rintro ⟨⟩) rfl rfl
-      (by simpa using hgwei)
+      (by simpa only using hgwei)
       (by simp only [Devm.gasLeft_setMach, gLow])
       (by simp only [List.length_nil]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)

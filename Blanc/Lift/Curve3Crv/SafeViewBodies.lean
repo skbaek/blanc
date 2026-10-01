@@ -349,8 +349,8 @@ theorem safe_strView (hfork : CoveredFork sevm.benvStat.fork) (hcd : sevm.data.l
   have hM2 : M2.size = 320 := by simp only [M2, Mem.size_write_word_at, hM1]; decide
   have hwf2 : Mem.Wf M2 := hwf1.write _ _
   have hc2 : (M2.read 0x120 32).1 = (Nat.toB256 0).toBytes := Mem.read_write_word_of_wf hwf1 _ _
-  have hkC : k ∉ ([] : List Nat) := by simp
-  have hjC : j ∉ ([] : List Nat) := by simp
+  have hkC : k ∉ ([] : List Nat) := by simp only [List.not_mem_nil, not_false_eq_true]
+  have hjC : j ∉ ([] : List Nat) := by simp only [List.not_mem_nil, not_false_eq_true]
   have hcap1 : Bytes.toB256 [cp] + Nat.toB256 0 ≠ Nat.toB256 (0 + 1) := by
     rcases hcase with ⟨rfl, -⟩ | ⟨rfl, -⟩ <;> decide
   -- iteration 0
@@ -400,10 +400,10 @@ theorem safe_strView (hfork : CoveredFork sevm.benvStat.fork) (hcd : sevm.data.l
       (Nat.toB256 (0 + 1)).toBytes).write hwf3 (384 + 32 * 1) u1.toBytes).write
       (hwf3.write _ _) 0x120 (Nat.toB256 (1 + 1)).toBytes)
     refine ⟨?_, ?_, ?_⟩
-    · rw [hr4.read, Bytes.sliceD_writeAt_after _ _ _ _ _ (by simp [B256.length_toBytes]),
+    · rw [hr4.read, Bytes.sliceD_writeAt_after _ _ _ _ _ (by simp only [B256.length_toBytes, Nat.reduceAdd, Nat.reduceLeDiff]),
         Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega),
-        Bytes.sliceD_writeAt_after _ _ _ _ _ (by simp [B256.length_toBytes]),
-        Bytes.sliceD_writeAt_inside _ _ _ _ _ (by omega) (by simp [B256.length_toBytes]),
+        Bytes.sliceD_writeAt_after _ _ _ _ _ (by simp only [B256.length_toBytes, zero_add, Nat.reduceAdd, Nat.reduceLeDiff]),
+        Bytes.sliceD_writeAt_inside _ _ _ _ _ (by omega) (by simp only [B256.length_toBytes, Nat.reduceAdd, mul_zero, add_zero, Std.le_refl]),
         show 384 - (384 + 32 * 0) = 0 from rfl, Bytes.sliceD_zero_length (B256.length_toBytes _), hu0]
     · by_cases hL32 : L ≤ 32
       · left
@@ -462,17 +462,17 @@ theorem safe_strView (hfork : CoveredFork sevm.benvStat.fork) (hcd : sevm.data.l
         have hr5 := (hr4.write hwf4 (384 + 32 * 2) u2.toBytes).write (hwf4.write _ _) 0x120
           (Nat.toB256 (2 + 1)).toBytes
         refine ⟨?_, ?_, ?_⟩
-        · rw [hr5.read, Bytes.sliceD_writeAt_after _ _ _ _ _ (by simp [B256.length_toBytes]),
+        · rw [hr5.read, Bytes.sliceD_writeAt_after _ _ _ _ _ (by simp only [B256.length_toBytes, Nat.reduceAdd, Nat.reduceLeDiff]),
             Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega), ← hr4.read, hLw4]
         · rw [hr5.read, List.sliceD_split,
-            Bytes.sliceD_writeAt_after _ _ _ _ _ (by simp [B256.length_toBytes]),
+            Bytes.sliceD_writeAt_after _ _ _ _ _ (by simp only [B256.length_toBytes, Nat.reduceAdd, Nat.reduceLeDiff]),
             Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega), ← hr4.read,
-            Bytes.sliceD_writeAt_after _ _ _ _ _ (by simp [B256.length_toBytes]),
-            Bytes.sliceD_writeAt_inside _ _ _ _ _ (by omega) (by simp [B256.length_toBytes]; omega),
+            Bytes.sliceD_writeAt_after _ _ _ _ _ (by simp only [B256.length_toBytes, Nat.reduceAdd, Nat.reduceLeDiff]),
+            Bytes.sliceD_writeAt_inside _ _ _ _ _ (by omega) (by simp only [B256.length_toBytes, Nat.reduceAdd, Nat.reduceMul]; omega),
             show 416 + 32 - (384 + 32 * 2) = 0 from rfl,
             sliceD_zero_take _ (by rw [B256.length_toBytes]; omega), hr4.read,
-            Bytes.sliceD_writeAt_after _ _ _ _ _ (by simp [B256.length_toBytes]),
-            Bytes.sliceD_writeAt_inside _ _ _ _ _ (by omega) (by simp [B256.length_toBytes]),
+            Bytes.sliceD_writeAt_after _ _ _ _ _ (by simp only [B256.length_toBytes, Nat.reduceAdd, Nat.reduceLeDiff]),
+            Bytes.sliceD_writeAt_inside _ _ _ _ _ (by omega) (by simp only [B256.length_toBytes, Nat.reduceAdd, mul_one, Std.le_refl]),
             show 416 - (384 + 32 * 1) = 0 from rfl,
             Bytes.sliceD_zero_length (B256.length_toBytes _), vyStrOf, hLst, hW,
             List.take_append, B256.length_toBytes,

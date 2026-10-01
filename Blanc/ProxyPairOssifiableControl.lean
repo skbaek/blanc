@@ -29,11 +29,11 @@ namespace ProxyPair
 /-- The concrete seven-entry table has no selector collision. -/
 theorem runtimeBaselineEntries_selectorUnique :
     selectorUnique runtimeBaselineEntries := by
-  simp [selectorUnique, runtimeBaselineEntries,
-    proxyGetAdminSelector, proxyGetImplementationSelector,
-    proxyGetIsOssifiedSelector, proxyOssifySelector,
-    proxyChangeAdminSelector, proxyUpgradeToSelector,
-    proxyUpgradeToAndCallSelector]
+  simp only [selectorUnique, ne_eq, runtimeBaselineEntries, proxyGetAdminSelector,
+    proxyGetImplementationSelector, proxyGetIsOssifiedSelector, proxyOssifySelector,
+    proxyChangeAdminSelector, proxyUpgradeToSelector, proxyUpgradeToAndCallSelector,
+    List.pairwise_cons, List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq,
+    IsEmpty.forall_iff, implies_true, List.Pairwise.nil, and_self, and_true]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -135,7 +135,7 @@ theorem selector_of_proxyGetAdminCalldata {sevm : Sevm}
   apply selector_eq_of_data_eq_abiSelectorBytes_append
       (selected := proxyGetAdminSelector) (tail := [])
   · rfl
-  · simpa [proxyGetAdminCalldata] using hdata
+  · simpa only [List.append_nil, proxyGetAdminCalldata] using hdata
 
 theorem selector_of_proxyGetImplementationCalldata {sevm : Sevm}
     (hdata : sevm.data = proxyGetImplementationCalldata) :
@@ -143,7 +143,7 @@ theorem selector_of_proxyGetImplementationCalldata {sevm : Sevm}
   apply selector_eq_of_data_eq_abiSelectorBytes_append
       (selected := proxyGetImplementationSelector) (tail := [])
   · rfl
-  · simpa [proxyGetImplementationCalldata] using hdata
+  · simpa only [List.append_nil, proxyGetImplementationCalldata] using hdata
 
 theorem selector_of_proxyGetIsOssifiedCalldata {sevm : Sevm}
     (hdata : sevm.data = proxyGetIsOssifiedCalldata) :
@@ -151,7 +151,7 @@ theorem selector_of_proxyGetIsOssifiedCalldata {sevm : Sevm}
   apply selector_eq_of_data_eq_abiSelectorBytes_append
       (selected := proxyGetIsOssifiedSelector) (tail := [])
   · rfl
-  · simpa [proxyGetIsOssifiedCalldata] using hdata
+  · simpa only [List.append_nil, proxyGetIsOssifiedCalldata] using hdata
 
 theorem selector_of_proxyOssifyCalldata {sevm : Sevm}
     (hdata : sevm.data = proxyOssifyCalldata) :
@@ -159,7 +159,7 @@ theorem selector_of_proxyOssifyCalldata {sevm : Sevm}
   apply selector_eq_of_data_eq_abiSelectorBytes_append
       (selected := proxyOssifySelector) (tail := [])
   · rfl
-  · simpa [proxyOssifyCalldata] using hdata
+  · simpa only [List.append_nil, proxyOssifyCalldata] using hdata
 
 theorem selector_of_proxyChangeAdminCalldata {sevm : Sevm} {newAdmin : Adr}
     (hdata : sevm.data = proxyChangeAdminCalldata newAdmin) :
@@ -168,7 +168,7 @@ theorem selector_of_proxyChangeAdminCalldata {sevm : Sevm} {newAdmin : Adr}
       (selected := proxyChangeAdminSelector)
       (tail := newAdmin.toB256.toBytes)
   · rfl
-  · simpa [proxyChangeAdminCalldata] using hdata
+  · simpa only [proxyChangeAdminCalldata] using hdata
 
 theorem selector_of_proxyUpgradeToCalldata
     {sevm : Sevm} {newImplementation : Adr}
@@ -178,7 +178,7 @@ theorem selector_of_proxyUpgradeToCalldata
       (selected := proxyUpgradeToSelector)
       (tail := newImplementation.toB256.toBytes)
   · rfl
-  · simpa [proxyUpgradeToCalldata] using hdata
+  · simpa only [proxyUpgradeToCalldata] using hdata
 
 theorem selector_of_proxyUpgradeToAndCallCalldata
     {sevm : Sevm} {newImplementation : Adr}
@@ -193,7 +193,7 @@ theorem selector_of_proxyUpgradeToAndCallCalldata
         (if forceCall then (1 : B256) else 0).toBytes ++
         abiBytesTail setupCalldata)
   · rfl
-  · simpa [proxyUpgradeToAndCallCalldata, List.append_assoc] using hdata
+  · simpa only [List.append_assoc, proxyUpgradeToAndCallCalldata] using hdata
 
 /-! ## Authorization precedence at endpoint altitude -/
 
@@ -311,7 +311,8 @@ theorem activeAdminControl_route
       change (Devm.getStor slotPost sevm.currentTarget).get adminSlotLit =
         (Devm.getStor pre sevm.currentTarget).get adminSlotLit
       rw [← congrFun slotStor sevm.currentTarget]
-    simpa [storedAdminWord, canonicalAddressWord, hraw] using pAdmin0
+    simpa only [storedAdminWord, canonicalAddressWord, hraw, List.append_eq, List.nil_append] using
+      pAdmin0
   obtain ⟨dupPost, qdup, run⟩ := runCompiledTo_next_inv run
   obtain ⟨testPre, qzero, outerBranch⟩ := runCompiledTo_next_inv run
   have pDup := prefix_of_dup_val (Ninst.Run.of_runCompiled qdup)
@@ -320,7 +321,7 @@ theorem activeAdminControl_route
   by_cases hzero : storedAdminWord pre sevm.currentTarget = 0
   · have pOne : (1 : B256) ::
         storedAdminWord pre sevm.currentTarget :: tail <<+ testPre.stack := by
-      simpa [hzero, B256.eqCheck] using pTest
+      simpa only [hzero, B256.eqCheck, ↓reduceIte] using pTest
     obtain ⟨callPre, _, _, hpop, callRun, pCall⟩ :=
       Func.RunCompiledTo.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) pOne outerBranch
@@ -346,7 +347,7 @@ theorem activeAdminControl_route
     exact .ossified callPre hzero callRun pCall callStor callMemory callLogs
   · have pZero : (0 : B256) ::
         storedAdminWord pre sevm.currentTarget :: tail <<+ testPre.stack := by
-      simpa [B256.eqCheck, hzero] using pTest
+      simpa only [B256.eqCheck, hzero, ↓reduceIte] using pTest
     obtain ⟨callerPre, houterPop, callerRun, pCallerPre⟩ :=
       Func.RunCompiledTo.zero_branch_of_prefix pZero outerBranch
     obtain ⟨callerPost, qcaller, callerRun⟩ :=
@@ -392,7 +393,7 @@ theorem activeAdminControl_route
     by_cases heq : storedAdminWord pre sevm.currentTarget =
         sevm.caller.toB256
     · have pOne : (1 : B256) :: tail <<+ callerTest.stack := by
-        simpa [heq, B256.eqCheck] using pEq
+        simpa only [B256.eqCheck, heq, ↓reduceIte] using pEq
       obtain ⟨bodyPre, _, _, hpop, bodyRun, pBody⟩ :=
         Func.RunCompiledTo.succ_branch_of_prefix
           (by decide : (1 : B256) ≠ 0) pOne callerBranch
@@ -400,7 +401,7 @@ theorem activeAdminControl_route
         (prefixStor.trans (funext (getStor_eq_of_state_eq hpop.state)))
         (prefixMemory.trans hpop.memory) (prefixLogs.trans hpop.logs)
     · have pZero : (0 : B256) :: tail <<+ callerTest.stack := by
-        simpa [B256.eqCheck, Ne.symm heq] using pEq
+        simpa only [B256.eqCheck, Ne.symm heq, ↓reduceIte] using pEq
       obtain ⟨callPre, hpop, callRun, pCall⟩ :=
         Func.RunCompiledTo.zero_branch_of_prefix pZero callerBranch
       exact .unauthorized callPre hzero heq callRun pCall
@@ -493,7 +494,7 @@ theorem decodeAddressArg0Control_body
     (of_run_calldatasize (Ninst.Run.of_runCompiled qsize)) pWord
   have pLt := prefix_of_lt (Ninst.Run.of_runCompiled qlt) pSize
   have pSizeZero : (0 : B256) :: tail <<+ sizeBranchPre.stack := by
-    simpa [hsize] using pLt
+    simpa only [hsize, List.append_eq, List.nil_append] using pLt
   obtain ⟨addressGuardPre, hsizePop, addressGuardRun, pAddressGuard⟩ :=
     Func.RunCompiledTo.zero_branch_of_prefix pSizeZero sizeBranch
   obtain ⟨addressTest, addressLine, addressBranch⟩ :=
@@ -502,7 +503,7 @@ theorem decodeAddressArg0Control_body
     prefix_of_argCheckNonAddress pAddressGuard addressLine
   have hdirtyZero : dirty = 0 := hdirty.mpr hvalid
   have pAddressZero : (0 : B256) :: tail <<+ addressTest.stack := by
-    simpa [hdirtyZero] using pDirty
+    simpa only [hdirtyZero] using pDirty
   obtain ⟨bodyPre, haddressPop, bodyRun, pBody⟩ :=
     Func.RunCompiledTo.zero_branch_of_prefix pAddressZero addressBranch
   have prefixStor : Devm.getStor pre = Devm.getStor addressGuardPre :=
@@ -597,13 +598,13 @@ def upgradeToAndCallAfter : Func :=
 
 theorem proxyChangeAdminCalldata_length (newAdmin : Adr) :
     (proxyChangeAdminCalldata newAdmin).length = 36 := by
-  simp [proxyChangeAdminCalldata, abiSelectorBytes_length,
-    B256.length_toBytes]
+  simp only [proxyChangeAdminCalldata, List.length_append, abiSelectorBytes_length,
+    B256.length_toBytes, Nat.reduceAdd]
 
 theorem proxyUpgradeToCalldata_length (newImplementation : Adr) :
     (proxyUpgradeToCalldata newImplementation).length = 36 := by
-  simp [proxyUpgradeToCalldata, abiSelectorBytes_length,
-    B256.length_toBytes]
+  simp only [proxyUpgradeToCalldata, List.length_append, abiSelectorBytes_length,
+    B256.length_toBytes, Nat.reduceAdd]
 
 theorem proxyChangeAdminCalldata_arg0
     {sevm : Sevm} {newAdmin : Adr}
@@ -614,7 +615,7 @@ theorem proxyChangeAdminCalldata_arg0
     (pre := abiSelectorBytes proxyChangeAdminSelector) (post := [])
   · rw [abiSelectorBytes_length]
     rfl
-  · simpa [proxyChangeAdminCalldata] using hdata
+  · simpa only [List.append_nil, proxyChangeAdminCalldata] using hdata
 
 theorem proxyUpgradeToCalldata_arg0
     {sevm : Sevm} {newImplementation : Adr}
@@ -625,15 +626,15 @@ theorem proxyUpgradeToCalldata_arg0
     (pre := abiSelectorBytes proxyUpgradeToSelector) (post := [])
   · rw [abiSelectorBytes_length]
     rfl
-  · simpa [proxyUpgradeToCalldata] using hdata
+  · simpa only [List.append_nil, proxyUpgradeToCalldata] using hdata
 
 theorem proxyUpgradeToAndCallCalldata_length
     (newImplementation : Adr) (setupCalldata : Bytes) (forceCall : Bool) :
     (proxyUpgradeToAndCallCalldata newImplementation setupCalldata forceCall).length =
       132 + ceil32 setupCalldata.length := by
   have hceil := Nat.le_ceil32 setupCalldata.length
-  simp [proxyUpgradeToAndCallCalldata, abiBytesTail,
-    abiSelectorBytes_length, B256.length_toBytes]
+  simp only [proxyUpgradeToAndCallCalldata, List.append_assoc, abiBytesTail, List.length_append,
+    abiSelectorBytes_length, B256.length_toBytes, List.length_replicate]
   omega
 
 theorem proxyUpgradeToAndCallCalldata_arg0
@@ -647,7 +648,7 @@ theorem proxyUpgradeToAndCallCalldata_arg0
     (pre := abiSelectorBytes proxyUpgradeToAndCallSelector)
   · rw [abiSelectorBytes_length]
     rfl
-  · simpa [proxyUpgradeToAndCallCalldata, List.append_assoc] using hdata
+  · simpa only [proxyUpgradeToAndCallCalldata, List.append_assoc] using hdata
 
 theorem proxyUpgradeToAndCallCalldata_arg1
     {sevm : Sevm} {newImplementation : Adr} {setupCalldata : Bytes}
@@ -659,9 +660,9 @@ theorem proxyUpgradeToAndCallCalldata_arg1
   apply dataWord_of_append
     (pre := abiSelectorBytes proxyUpgradeToAndCallSelector ++
       newImplementation.toB256.toBytes)
-  · simp [abiSelectorBytes_length, B256.length_toBytes]
+  · simp only [List.length_append, abiSelectorBytes_length, B256.length_toBytes, Nat.reduceAdd]
     decide +kernel
-  · simpa [proxyUpgradeToAndCallCalldata, List.append_assoc] using hdata
+  · simpa only [List.append_assoc, proxyUpgradeToAndCallCalldata] using hdata
 
 theorem proxyUpgradeToAndCallCalldata_arg2
     {sevm : Sevm} {newImplementation : Adr} {setupCalldata : Bytes}
@@ -673,9 +674,10 @@ theorem proxyUpgradeToAndCallCalldata_arg2
   apply dataWord_of_append
     (pre := abiSelectorBytes proxyUpgradeToAndCallSelector ++
       newImplementation.toB256.toBytes ++ (96 : B256).toBytes)
-  · simp [abiSelectorBytes_length, B256.length_toBytes]
+  · simp only [List.append_assoc, List.length_append, abiSelectorBytes_length, B256.length_toBytes,
+    Nat.reduceAdd]
     decide +kernel
-  · simpa [proxyUpgradeToAndCallCalldata, List.append_assoc] using hdata
+  · simpa only [List.append_assoc, proxyUpgradeToAndCallCalldata] using hdata
 
 theorem proxyUpgradeToAndCallCalldata_setupLength
     {sevm : Sevm} {newImplementation : Adr} {setupCalldata : Bytes}
@@ -687,10 +689,10 @@ theorem proxyUpgradeToAndCallCalldata_setupLength
     (pre := abiSelectorBytes proxyUpgradeToAndCallSelector ++
       newImplementation.toB256.toBytes ++ (96 : B256).toBytes ++
       (if forceCall then (1 : B256) else 0).toBytes)
-  · simp [abiSelectorBytes_length, B256.length_toBytes]
+  · simp only [List.append_assoc, List.length_append, abiSelectorBytes_length, B256.length_toBytes,
+    Nat.reduceAdd]
     decide +kernel
-  · simpa [proxyUpgradeToAndCallCalldata, abiBytesTail,
-      List.append_assoc] using hdata
+  · simpa only [List.append_assoc, proxyUpgradeToAndCallCalldata, abiBytesTail] using hdata
 
 theorem proxyUpgradeToAndCallCalldata_setupSlice
     {sevm : Sevm} {newImplementation : Adr} {setupCalldata : Bytes}
@@ -705,12 +707,13 @@ theorem proxyUpgradeToAndCallCalldata_setupSlice
         (Nat.toB256 setupCalldata.length).toBytes) ++
       (setupCalldata ++
         List.replicate (ceil32 setupCalldata.length - setupCalldata.length) 0) := by
-    simpa [proxyUpgradeToAndCallCalldata, abiBytesTail,
-      List.append_assoc] using hdata
+    simpa only [List.append_assoc, proxyUpgradeToAndCallCalldata, abiBytesTail] using hdata
   rw [hd, List.sliceD,
     List.drop_length_append' (by
-      simp [abiSelectorBytes_length, B256.length_toBytes]),
-    List.takeD_eq_take _ (by simp [List.length_append]),
+      simp only [List.append_assoc, List.length_append, abiSelectorBytes_length,
+        B256.length_toBytes, Nat.reduceAdd]),
+    List.takeD_eq_take _ (by simp only [List.length_append, List.length_replicate,
+      le_add_iff_nonneg_right, zero_le]),
     List.take_length_append' rfl]
 
 /-! ## Exact source-shape locks used by route consumers -/
@@ -819,7 +822,8 @@ theorem getAdmin_successful_body_returns
       change (Devm.getStor slotPost sevm.currentTarget).get adminSlotLit =
         (Devm.getStor pre sevm.currentTarget).get adminSlotLit
       rw [← congrFun slotStor sevm.currentTarget]
-    simpa [storedAdminWord, canonicalAddressWord, hraw] using pAdmin0
+    simpa only [storedAdminWord, canonicalAddressWord, hraw, List.append_eq, List.nil_append] using
+      pAdmin0
   exact (returnsWord_of_storeReturn pAdmin returnRun).1
 
 /-- The successful implementation getter has the same exact return shape at
@@ -858,8 +862,8 @@ theorem getImplementation_successful_body_returns
         (Devm.getStor slotPost sevm.currentTarget).get implementationSlotLit =
           (Devm.getStor pre sevm.currentTarget).get implementationSlotLit
       rw [← congrFun slotStor sevm.currentTarget]
-    simpa [storedImplementationWord, canonicalAddressWord, hraw] using
-      pImplementation0
+    simpa only [storedImplementationWord, canonicalAddressWord, hraw, List.append_eq,
+      List.nil_append] using pImplementation0
   exact (returnsWord_of_storeReturn pImplementation returnRun).1
 
 /-- `proxy__getIsOssified()` is exactly the zero test of the canonical admin
@@ -901,7 +905,8 @@ theorem getIsOssified_successful_body_returns
       change (Devm.getStor slotPost sevm.currentTarget).get adminSlotLit =
         (Devm.getStor pre sevm.currentTarget).get adminSlotLit
       rw [← congrFun slotStor sevm.currentTarget]
-    simpa [storedAdminWord, canonicalAddressWord, hraw] using pAdmin0
+    simpa only [storedAdminWord, canonicalAddressWord, hraw, List.append_eq, List.nil_append] using
+      pAdmin0
   have pFlag := prefix_of_iszero qzero pAdmin
   exact (returnsWord_of_storeReturn pFlag returnRun).1
 
@@ -957,8 +962,11 @@ theorem getAdmin_body_of_program
       Devm.getStor entry = Devm.getStor bodyPre := by
   exact endpoint_body_of_program (slot := getAdminSlot) (endpoint := getAdmin)
     hprog hentryStack hvalue
-    (selector_of_proxyGetAdminCalldata hdata) (by simp [runtimeBaselineEntries])
-    (by simp [runtimeBaseline, runtimeBaselineAux, getAdminSlot])
+    (selector_of_proxyGetAdminCalldata hdata) (by simp only [runtimeBaselineEntries, List.mem_cons,
+      Prod.mk.injEq, List.not_mem_nil, or_false, true_or])
+    (by simp only [runtimeBaseline, runtimeBaselineAux, getAdminSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero])
 
 theorem getImplementation_body_of_program
     {sevm : Sevm} {entry : Devm} {out : Execution}
@@ -974,8 +982,11 @@ theorem getImplementation_body_of_program
   exact endpoint_body_of_program (slot := getImplementationSlot)
     (endpoint := getImplementation) hprog hentryStack hvalue
     (selector_of_proxyGetImplementationCalldata hdata)
-    (by simp [runtimeBaselineEntries])
-    (by simp [runtimeBaseline, runtimeBaselineAux, getImplementationSlot])
+    (by simp only [runtimeBaselineEntries, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      true_or, or_true])
+    (by simp only [runtimeBaseline, runtimeBaselineAux, getImplementationSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero])
 
 theorem getIsOssified_body_of_program
     {sevm : Sevm} {entry : Devm} {out : Execution}
@@ -991,8 +1002,11 @@ theorem getIsOssified_body_of_program
   exact endpoint_body_of_program (slot := getIsOssifiedSlot)
     (endpoint := getIsOssified) hprog hentryStack hvalue
     (selector_of_proxyGetIsOssifiedCalldata hdata)
-    (by simp [runtimeBaselineEntries])
-    (by simp [runtimeBaseline, runtimeBaselineAux, getIsOssifiedSlot])
+    (by simp only [runtimeBaselineEntries, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      true_or, or_true])
+    (by simp only [runtimeBaseline, runtimeBaselineAux, getIsOssifiedSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero])
 
 theorem ossify_body_of_program
     {sevm : Sevm} {entry : Devm} {out : Execution}
@@ -1008,8 +1022,11 @@ theorem ossify_body_of_program
   exact endpoint_body_of_program (slot := ossifySlot) (endpoint := ossify)
     hprog hentryStack hvalue
     (selector_of_proxyOssifyCalldata hdata)
-    (by simp [runtimeBaselineEntries])
-    (by simp [runtimeBaseline, runtimeBaselineAux, ossifySlot])
+    (by simp only [runtimeBaselineEntries, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      true_or, or_true])
+    (by simp only [runtimeBaseline, runtimeBaselineAux, ossifySlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero])
 
 theorem changeAdmin_body_of_program
     {sevm : Sevm} {entry : Devm} {out : Execution} {newAdmin : Adr}
@@ -1025,8 +1042,11 @@ theorem changeAdmin_body_of_program
   exact endpoint_body_of_program (slot := changeAdminSlot)
     (endpoint := changeAdmin) hprog hentryStack hvalue
     (selector_of_proxyChangeAdminCalldata hdata)
-    (by simp [runtimeBaselineEntries])
-    (by simp [runtimeBaseline, runtimeBaselineAux, changeAdminSlot])
+    (by simp only [runtimeBaselineEntries, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      true_or, or_true])
+    (by simp only [runtimeBaseline, runtimeBaselineAux, changeAdminSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero])
 
 theorem upgradeTo_body_of_program
     {sevm : Sevm} {entry : Devm} {out : Execution}
@@ -1043,8 +1063,11 @@ theorem upgradeTo_body_of_program
   exact endpoint_body_of_program (slot := upgradeToSlot) (endpoint := upgradeTo)
     hprog hentryStack hvalue
     (selector_of_proxyUpgradeToCalldata hdata)
-    (by simp [runtimeBaselineEntries])
-    (by simp [runtimeBaseline, runtimeBaselineAux, upgradeToSlot])
+    (by simp only [runtimeBaselineEntries, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      true_or, or_true])
+    (by simp only [runtimeBaseline, runtimeBaselineAux, upgradeToSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero])
 
 theorem upgradeToAndCall_body_of_program
     {sevm : Sevm} {entry : Devm} {out : Execution}
@@ -1062,8 +1085,11 @@ theorem upgradeToAndCall_body_of_program
   exact endpoint_body_of_program (slot := upgradeToAndCallSlot)
     (endpoint := upgradeToAndCall) hprog hentryStack hvalue
     (selector_of_proxyUpgradeToAndCallCalldata hdata)
-    (by simp [runtimeBaselineEntries])
-    (by simp [runtimeBaseline, runtimeBaselineAux, upgradeToAndCallSlot])
+    (by simp only [runtimeBaselineEntries, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      or_true])
+    (by simp only [runtimeBaseline, runtimeBaselineAux, upgradeToAndCallSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero])
 
 /-! ## Program-to-authorization consumers -/
 
@@ -1102,7 +1128,8 @@ theorem getAdmin_exact_of_program
   have hmember :
       (proxyGetAdminSelector, nonpayable (.call getAdminSlot)) ∈
         runtimeBaselineEntries := by
-    simp [runtimeBaselineEntries]
+    simp only [runtimeBaselineEntries, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      true_or]
   obtain ⟨dispatchPre, dispatchRun, dispatchStack, _⟩ :=
     runtime_selected_body_of_prog_run_empty_frame hprog hentryStack hselector
       hmember
@@ -1140,7 +1167,8 @@ theorem getImplementation_exact_of_program
       (proxyGetImplementationSelector,
         nonpayable (.call getImplementationSlot)) ∈
         runtimeBaselineEntries := by
-    simp [runtimeBaselineEntries]
+    simp only [runtimeBaselineEntries, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      true_or, or_true]
   obtain ⟨dispatchPre, dispatchRun, dispatchStack, _⟩ :=
     runtime_selected_body_of_prog_run_empty_frame hprog hentryStack hselector
       hmember
@@ -1176,7 +1204,8 @@ theorem getIsOssified_exact_of_program
   have hmember :
       (proxyGetIsOssifiedSelector, nonpayable (.call getIsOssifiedSlot)) ∈
         runtimeBaselineEntries := by
-    simp [runtimeBaselineEntries]
+    simp only [runtimeBaselineEntries, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      true_or, or_true]
   obtain ⟨dispatchPre, dispatchRun, dispatchStack, _⟩ :=
     runtime_selected_body_of_prog_run_empty_frame hprog hentryStack hselector
       hmember
@@ -1452,7 +1481,8 @@ theorem getAdmin_with_value_reverts
   exact named_call_with_value_reverts_before_endpoint (slot := getAdminSlot)
     hprog hentryStack hvalue
     (selector_of_proxyGetAdminCalldata hdata)
-    (by simp [runtimeBaselineEntries])
+    (by simp only [runtimeBaselineEntries, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      true_or])
 
 theorem getImplementation_with_value_reverts
     {sevm : Sevm} {entry : Devm} {out : Execution}
@@ -1463,7 +1493,8 @@ theorem getImplementation_with_value_reverts
   exact named_call_with_value_reverts_before_endpoint
     (slot := getImplementationSlot) hprog hentryStack hvalue
     (selector_of_proxyGetImplementationCalldata hdata)
-    (by simp [runtimeBaselineEntries])
+    (by simp only [runtimeBaselineEntries, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      true_or, or_true])
 
 theorem getIsOssified_with_value_reverts
     {sevm : Sevm} {entry : Devm} {out : Execution}
@@ -1474,7 +1505,8 @@ theorem getIsOssified_with_value_reverts
   exact named_call_with_value_reverts_before_endpoint
     (slot := getIsOssifiedSlot) hprog hentryStack hvalue
     (selector_of_proxyGetIsOssifiedCalldata hdata)
-    (by simp [runtimeBaselineEntries])
+    (by simp only [runtimeBaselineEntries, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      true_or, or_true])
 
 theorem changeAdmin_with_value_reverts
     {sevm : Sevm} {entry : Devm} {out : Execution} {newAdmin : Adr}
@@ -1485,7 +1517,8 @@ theorem changeAdmin_with_value_reverts
   exact named_call_with_value_reverts_before_endpoint (slot := changeAdminSlot)
     hprog hentryStack hvalue
     (selector_of_proxyChangeAdminCalldata hdata)
-    (by simp [runtimeBaselineEntries])
+    (by simp only [runtimeBaselineEntries, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      true_or, or_true])
 
 theorem upgradeTo_with_value_reverts
     {sevm : Sevm} {entry : Devm} {out : Execution}
@@ -1497,7 +1530,8 @@ theorem upgradeTo_with_value_reverts
   exact named_call_with_value_reverts_before_endpoint (slot := upgradeToSlot)
     hprog hentryStack hvalue
     (selector_of_proxyUpgradeToCalldata hdata)
-    (by simp [runtimeBaselineEntries])
+    (by simp only [runtimeBaselineEntries, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      true_or, or_true])
 
 theorem upgradeToAndCall_with_value_reverts
     {sevm : Sevm} {entry : Devm} {out : Execution}
@@ -1510,7 +1544,8 @@ theorem upgradeToAndCall_with_value_reverts
   exact named_call_with_value_reverts_before_endpoint
     (slot := upgradeToAndCallSlot) hprog hentryStack hvalue
     (selector_of_proxyUpgradeToAndCallCalldata hdata)
-    (by simp [runtimeBaselineEntries])
+    (by simp only [runtimeBaselineEntries, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      or_true])
 
 theorem ossify_with_value_reverts
     {sevm : Sevm} {entry : Devm} {out : Execution}
@@ -1521,7 +1556,8 @@ theorem ossify_with_value_reverts
   exact named_call_with_value_reverts_before_endpoint (slot := ossifySlot)
     hprog hentryStack hvalue
     (selector_of_proxyOssifyCalldata hdata)
-    (by simp [runtimeBaselineEntries])
+    (by simp only [runtimeBaselineEntries, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      true_or, or_true])
 
 end ProxyPair
 end Blanc

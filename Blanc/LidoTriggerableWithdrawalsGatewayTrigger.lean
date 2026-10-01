@@ -150,7 +150,7 @@ theorem localSlotOf_of_labelOfLocalSlot? {n : Nat} {lbl : TriggerLabel}
   all_goals
     first
       | (injection h with h; subst h; rfl)
-      | exact absurd h (by simp)
+      | exact absurd h (by simp only [reduceCtorEq, not_false_eq_true])
 
 /-- Qualified composite label for TWG runtime auxiliary table entries.
 Can be either the root dispatcher (0), a base runtime slot (1..17),
@@ -191,7 +191,8 @@ theorem compositeSlotOf_compositeLabelOfLocalSlot {n : Nat} (baseCount : Nat)
     (h : (labelOfLocalSlot? n).isSome) :
     compositeSlotOf baseCount (compositeLabelOfLocalSlot n) = baseCount + n := by
   rcases hd : labelOfLocalSlot? n with _ | lbl
-  · rw [hd] at h; exact absurd h (by simp)
+  · rw [hd] at h; exact absurd h (by simp only [Option.isSome_none, Bool.false_eq_true,
+    not_false_eq_true])
   · simp only [compositeLabelOfLocalSlot, hd, compositeSlotOf,
       localSlotOf_of_labelOfLocalSlot? hd]
 
@@ -360,7 +361,7 @@ def panicData (code : B256) : Bytes :=
 
 def selectorRevert (sel : B256) : Func :=
   Func.revertSelector (sel.toBytes.drop 28) (by
-    simp [B256.length_toBytes])
+    simp only [List.length_drop, B256.length_toBytes, Nat.reduceSub])
 
 def zeroMsgValueRevert : Func :=
   Func.revertData (zeroArgumentData "msg.value")

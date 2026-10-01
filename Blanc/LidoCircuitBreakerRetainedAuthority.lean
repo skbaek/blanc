@@ -30,15 +30,18 @@ private theorem Exec.mem_rawFrameDescendants_of_mem_descendantFrames :
         (Blanc.Exec.Frame.rootDeriv frame) ∈ Exec.rawFrameDescendants run := by
   intro pc sevm pre out run
   induction run with
-  | halt hstep => simp [Exec.descendantFrames, Exec.rawFrameDescendants]
+  | halt hstep => simp only [Exec.descendantFrames, List.not_mem_nil, Exec.rawFrameDescendants,
+    imp_self, implies_true]
   | cont hstep next ih =>
-      simpa [Exec.descendantFrames, Exec.rawFrameDescendants] using ih
+      simpa only [Exec.descendantFrames, Exec.rawFrameDescendants] using ih
   | doneErr hstep henter hresume =>
-      simp [Exec.descendantFrames, Exec.rawFrameDescendants]
+      simp only [Exec.descendantFrames, List.not_mem_nil, Exec.rawFrameDescendants, imp_self,
+        implies_true]
   | doneOk hstep henter hresume next ih =>
-      simpa [Exec.descendantFrames, Exec.rawFrameDescendants] using ih
+      simpa only [Exec.descendantFrames, Exec.rawFrameDescendants] using ih
   | runErr hstep henter child hresume =>
-      simp [Exec.descendantFrames, Exec.rawFrameDescendants]
+      simp only [Exec.descendantFrames, List.not_mem_nil, Exec.rawFrameDescendants, List.mem_cons,
+        IsEmpty.forall_iff, implies_true]
   | runOk hstep henter child hresume next childIh nextIh =>
       intro frame member
       simp only [Exec.descendantFrames, Exec.rawFrameDescendants] at member ⊢
@@ -71,7 +74,7 @@ private theorem Exec.mem_rawFrameRoots_of_mem_committedFrames
       exact Or.inr
         (Exec.mem_rawFrameDescendants_of_mem_descendantFrames
           run frame descendant)
-  next notCommitted => simp at member
+  next notCommitted => simp only [List.not_mem_nil] at member
 
 /-- Complete retained authority for one changed CircuitBreaker-owned cell.
 The selected successful SSTORE is the exact last retained write of `final` to
@@ -246,7 +249,7 @@ theorem Exec.no_committedFrame_of_not_commits
     (frame : Exec.Frame) :
     frame ∉ Exec.committedFrames run := by
   rw [Exec.committedFrames_eq_nil_of_not_commits run notCommitted]
-  simp
+  simp only [List.not_mem_nil, not_false_eq_true]
 
 /-- A noncommitting raw root retains no successful SSTORE, including no write
 owned by the CircuitBreaker account. -/
@@ -261,7 +264,7 @@ theorem Exec.no_retainedOwnerSstore_of_not_commits
   unfold Exec.SuccessfulSstoreOccurrence.Retained
     Exec.NinstOccurrence.Retained at retained
   rw [Exec.retainedNodes_eq_nil_of_not_commits run notCommitted] at retained
-  simp at retained
+  simp only [List.not_mem_nil] at retained
 
 /-- Consequently a noncommitting root cannot carry the retained-authority
 witness: it has neither a committed exact frame nor a retained last writer. -/
@@ -363,7 +366,7 @@ theorem exists_runtimeWriteAuthority_of_directPauseControl :
   refine ⟨sevm, pre, raw, rootExec, write, row, site, role, ?_, ?_,
     storageOwner, rowMember, found, sitePc, siteInstruction, rolePermitted,
     authority⟩
-  · simp [Execution.commits]
+  · simp only [Execution.commits, ne_eq, Bool.false_eq_true, not_false_eq_true]
   · rw [Exec.rawFrameRoots, descendants]
 
 end Blanc.LidoCircuitBreaker

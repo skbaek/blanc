@@ -71,7 +71,7 @@ theorem solRegistryStorage_assignment (raw : Stor) (target : B256)
   have h := tagged_region_payload (region := assignmentRegion)
     (by norm_num [assignmentRegion]) (canonicalAddress_payload_lt hcanonical)
   simp only [assignmentSlot, solRegistryStorage, h.1, h.2]
-  simp
+  simp only [↓reduceIte]
 
 theorem solRegistryStorage_index (raw : Stor) (target : B256)
     (hcanonical : canonicalAddress target) :
@@ -80,7 +80,7 @@ theorem solRegistryStorage_index (raw : Stor) (target : B256)
   have h := tagged_region_payload (region := indexRegion)
     (by norm_num [indexRegion]) (canonicalAddress_payload_lt hcanonical)
   simp only [indexSlot, solRegistryStorage, h.1, h.2]
-  simp [assignmentRegion, indexRegion]
+  simp only [indexRegion, assignmentRegion, Nat.succ_ne_self, ↓reduceIte]
 
 theorem solRegistryStorage_count (raw : Stor) (pauser : B256)
     (hcanonical : canonicalAddress pauser) :
@@ -89,7 +89,8 @@ theorem solRegistryStorage_count (raw : Stor) (pauser : B256)
   have h := tagged_region_payload (region := countRegion)
     (by norm_num [countRegion]) (canonicalAddress_payload_lt hcanonical)
   simp only [countSlot, solRegistryStorage, h.1, h.2]
-  simp [assignmentRegion, indexRegion, countRegion]
+  simp only [countRegion, assignmentRegion, Nat.reduceEqDiff, ↓reduceIte, indexRegion,
+    Nat.succ_ne_self]
 
 theorem solRegistryStorage_length (raw : Stor) :
     (solRegistryStorage raw).read arrayLengthSlot = raw.get 5 := by
@@ -98,7 +99,8 @@ theorem solRegistryStorage_length (raw : Stor) :
       change (0 : Nat) < 2 ^ 252
       norm_num)
   simp only [arrayLengthSlot, solRegistryStorage, h.1, h.2]
-  simp [assignmentRegion, indexRegion, countRegion, arrayRegion]
+  simp only [arrayRegion, assignmentRegion, Nat.reduceEqDiff, ↓reduceIte, indexRegion, countRegion,
+    Nat.succ_ne_self]
 
 theorem solRegistryStorage_array (raw : Stor) (index : Nat)
     (hindex : index + 1 < 2 ^ 252) :
@@ -119,9 +121,10 @@ theorem solRegistryStorage_array (raw : Stor) (index : Nat)
     change index + 1 = 0 at hn
     omega
   have hpred : Nat.toB256 (index + 1) - 1 = Nat.toB256 index := by
-    simpa using (natToB256_pred_eq_sub_one (index + 1) (by omega) h256).symm
-  simp [assignmentRegion, indexRegion, countRegion, arrayRegion,
-    hnonzero, hpred, registryArraySlot]
+    simpa only [add_tsub_cancel_right] using
+      (natToB256_pred_eq_sub_one (index + 1) (by omega) h256).symm
+  simp only [arrayRegion, assignmentRegion, Nat.reduceEqDiff, ↓reduceIte, indexRegion, countRegion,
+    Nat.succ_ne_self, hnonzero, hpred, registryArraySlot]
 
 /-! ## A single collision-freedom premise for every raw-write transport
 
@@ -151,21 +154,22 @@ theorem solKey_assignmentSlot {probe : B256} (h : canonicalAddress probe) :
   have h' := tagged_region_payload (region := assignmentRegion)
     (by norm_num [assignmentRegion]) (canonicalAddress_payload_lt h)
   simp only [assignmentSlot, solKey, h'.1, h'.2]
-  simp
+  simp only [↓reduceIte]
 
 theorem solKey_indexSlot {probe : B256} (h : canonicalAddress probe) :
     solKey (indexSlot probe) = mapSlot probe 4 := by
   have h' := tagged_region_payload (region := indexRegion)
     (by norm_num [indexRegion]) (canonicalAddress_payload_lt h)
   simp only [indexSlot, solKey, h'.1, h'.2]
-  simp [assignmentRegion, indexRegion]
+  simp only [indexRegion, assignmentRegion, Nat.succ_ne_self, ↓reduceIte]
 
 theorem solKey_countSlot {probe : B256} (h : canonicalAddress probe) :
     solKey (countSlot probe) = mapSlot probe 6 := by
   have h' := tagged_region_payload (region := countRegion)
     (by norm_num [countRegion]) (canonicalAddress_payload_lt h)
   simp only [countSlot, solKey, h'.1, h'.2]
-  simp [assignmentRegion, indexRegion, countRegion]
+  simp only [countRegion, assignmentRegion, Nat.reduceEqDiff, ↓reduceIte, indexRegion,
+    Nat.succ_ne_self]
 
 theorem solKey_arrayLengthSlot : solKey arrayLengthSlot = 5 := by
   have h' := tagged_region_payload (region := arrayRegion) (payload := 0)
@@ -173,7 +177,8 @@ theorem solKey_arrayLengthSlot : solKey arrayLengthSlot = 5 := by
       change (0 : Nat) < 2 ^ 252
       norm_num)
   simp only [arrayLengthSlot, solKey, h'.1, h'.2]
-  simp [assignmentRegion, indexRegion, countRegion, arrayRegion]
+  simp only [arrayRegion, assignmentRegion, Nat.reduceEqDiff, ↓reduceIte, indexRegion, countRegion,
+    Nat.succ_ne_self]
 
 theorem solKey_arrayEntrySlot {index : Nat} (hindex : index + 1 < 2 ^ 252) :
     solKey (arrayEntrySlot (Nat.toB256 (index + 1))) = registryArraySlot index := by
@@ -191,9 +196,10 @@ theorem solKey_arrayEntrySlot {index : Nat} (hindex : index + 1 < 2 ^ 252) :
     change index + 1 = 0 at hn
     omega
   have hpred : Nat.toB256 (index + 1) - 1 = Nat.toB256 index := by
-    simpa using (natToB256_pred_eq_sub_one (index + 1) (by omega) h256).symm
-  simp [assignmentRegion, indexRegion, countRegion, arrayRegion,
-    hnonzero, hpred, registryArraySlot]
+    simpa only [add_tsub_cancel_right] using
+      (natToB256_pred_eq_sub_one (index + 1) (by omega) h256).symm
+  simp only [arrayRegion, assignmentRegion, Nat.reduceEqDiff, ↓reduceIte, indexRegion, countRegion,
+    Nat.succ_ne_self, hnonzero, hpred, registryArraySlot]
 
 /-- The logical keys a `RegistryWitness` observes: canonical-address
 payloads for the three mapping families, and array payloads `0 .. bound`
@@ -283,7 +289,7 @@ theorem registryRawValue_assignmentSlot {probe old value : B256}
   have h' := tagged_region_payload (region := assignmentRegion)
     (by norm_num [assignmentRegion]) (canonicalAddress_payload_lt h)
   simp only [assignmentSlot, registryRawValue, h'.1, h'.2]
-  simp
+  simp only [↓reduceIte]
 
 theorem registryRawValue_indexSlot {probe old value : B256}
     (h : canonicalAddress probe) :
@@ -291,7 +297,8 @@ theorem registryRawValue_indexSlot {probe old value : B256}
   have h' := tagged_region_payload (region := indexRegion)
     (by norm_num [indexRegion]) (canonicalAddress_payload_lt h)
   simp only [indexSlot, registryRawValue, h'.1, h'.2]
-  simp [assignmentRegion, indexRegion, arrayRegion]
+  simp only [indexRegion, assignmentRegion, Nat.succ_ne_self, ↓reduceIte, arrayRegion,
+    Nat.reduceEqDiff, ne_eq, false_and]
 
 theorem registryRawValue_countSlot {probe old value : B256}
     (h : canonicalAddress probe) :
@@ -299,7 +306,8 @@ theorem registryRawValue_countSlot {probe old value : B256}
   have h' := tagged_region_payload (region := countRegion)
     (by norm_num [countRegion]) (canonicalAddress_payload_lt h)
   simp only [countSlot, registryRawValue, h'.1, h'.2]
-  simp [assignmentRegion, countRegion, arrayRegion]
+  simp only [countRegion, assignmentRegion, Nat.reduceEqDiff, ↓reduceIte, arrayRegion, ne_eq,
+    false_and]
 
 theorem registryRawValue_arrayLengthSlot {old value : B256} :
     registryRawValue arrayLengthSlot old value = value := by
@@ -308,7 +316,8 @@ theorem registryRawValue_arrayLengthSlot {old value : B256} :
       change (0 : Nat) < 2 ^ 252
       norm_num)
   simp only [arrayLengthSlot, registryRawValue, h'.1, h'.2]
-  simp [assignmentRegion, arrayRegion]
+  simp only [arrayRegion, assignmentRegion, Nat.reduceEqDiff, ↓reduceIte, ne_eq, not_true_eq_false,
+    and_false]
 
 theorem registryRawValue_arrayEntrySlot {index : Nat} {old value : B256}
     (hindex : index + 1 < 2 ^ 252) :
@@ -327,7 +336,8 @@ theorem registryRawValue_arrayEntrySlot {index : Nat} {old value : B256}
     change index + 1 = 0 at hn
     omega
   simp only [arrayEntrySlot, registryRawValue, h'.1, h'.2]
-  simp [assignmentRegion, arrayRegion, hnonzero]
+  simp only [arrayRegion, assignmentRegion, Nat.reduceEqDiff, ↓reduceIte, ne_eq, hnonzero,
+    not_false_eq_true, and_self]
 
 /-- A chronological chain of logical Registry writes, applied at their raw
 Solidity slots with the actual Solidity write shape (plain word, or a

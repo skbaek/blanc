@@ -99,7 +99,7 @@ theorem pauseStat_stagedWord_survives {sevm : Sevm} {target : Adr}
         (child.output.take 32) := by rw [hsmem, hpmem]
   refine MemWordAt.extendsWrite hmem (Or.inr ?_) window
   have hlen : (child.output.take 32).length ≤ 32 := by
-    simp [List.length_take]
+    simp only [List.length_take, min_le_iff, Std.le_refl, true_or]
   omega
 
 /-- **The converse, and the reason `pauseSuccess` re-stages memory word zero.**
@@ -129,7 +129,7 @@ theorem pauseStat_window_holdsAnswer {sevm : Sevm} {target : Adr}
   rw [hsmem]
   exact Mem.read_write_zero parent.memory (by
     intro h
-    exact hne (by simpa using h))
+    exact hne (by simpa only [List.take_eq_nil_iff, OfNat.ofNat_ne_zero, false_or] using h))
 
 /-! ## Walking the observation's branch
 
@@ -641,7 +641,8 @@ theorem pauseDecode_false_payload {fs : List Func} {sevm : Sevm}
   · obtain ⟨mid, -, hbody⟩ := runCompiledTo_call_inv h_failed hcall
     rw [show pauseFailedError =
       Func.revertSelector (customErrorData "PauseFailed")
-        (by simp [customErrorData, B256.length_toBytes]) from rfl] at hbody
+        (by simp only [customErrorData, List.length_take, B256.length_toBytes, Nat.reduceLeDiff,
+          inf_of_le_left]) from rfl] at hbody
     exact runCompiledTo_revertSelector_inv hbody
   · exact absurd h_zero hne0
   · exact absurd (h_zero.symm.trans hone) (by decide)
@@ -713,7 +714,8 @@ theorem pauseDecode_accepts_one_withTail {fs : List Func} {sevm : Sevm}
   refine pauseDecode_accepts_one h_mem h_rd h_flag ?_ run
   have hslice : (word ++ tail).sliceD 0 32 0 = word := by
     unfold List.sliceD
-    rw [List.drop_zero, List.takeD_eq_take _ (by simp [h_word]), ← h_word,
+    rw [List.drop_zero, List.takeD_eq_take _ (by simp only [List.length_append, h_word,
+      le_add_iff_nonneg_right, zero_le]), ← h_word,
       List.take_left]
   rw [pausedAnswer, hslice]
   exact h_one
@@ -799,7 +801,8 @@ theorem pauseObservation_outcomes {fs : List Func} {sevm : Sevm} {target : Adr}
     · obtain ⟨_, -, hbody⟩ := runCompiledTo_call_inv h_failed hcall
       rw [show pauseFailedError =
         Func.revertSelector (customErrorData "PauseFailed")
-          (by simp [customErrorData, B256.length_toBytes]) from rfl] at hbody
+          (by simp only [customErrorData, List.length_take, B256.length_toBytes, Nat.reduceLeDiff,
+            inf_of_le_left]) from rfl] at hbody
       exact Or.inr (Or.inr (Or.inl
         ⟨herr, hns, hlong, hzero, runCompiledTo_revertSelector_inv hbody⟩))
     · obtain ⟨_, -, hbody⟩ := runCompiledTo_call_inv h_empty hcall
@@ -828,8 +831,8 @@ private lemma of_extcodesize_val {e : Sevm} {s r : Devm} {x : B256} {xs : Stack}
   simp only [Rinst.run, Rinst.runCore] at hrun
   rcases Except.bind_eq_ok hrun with ⟨⟨adr, d1⟩, hpopAdr, hrun⟩
   rw [Devm.popToAdr_def] at hpopAdr
-  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at hpopAdr
-  rcases hpop : Devm.pop s with _ | ⟨word, d0⟩ <;> simp [hpop] at hpopAdr
+  dsimp only [Functor.mapRev, Functor.map, Except.map] at hpopAdr
+  rcases hpop : Devm.pop s with _ | ⟨word, d0⟩ <;> simp only [hpop, reduceCtorEq, Except.ok.injEq] at hpopAdr
   rcases hpopAdr with ⟨rfl, rfl⟩
   have hpop' := Devm.pop_of_pop hpop
   have hx : x = word :=

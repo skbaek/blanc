@@ -55,7 +55,8 @@ theorem SFunc.RunExact.toCut {fs : List SFunc} {sevm : Sevm} {C E : List Nat}
     exact .toZero d pop (ih hf.2)
   | @toSucc _ _ _ g k _ d w hw hget pop _ ih =>
     simp only [SFunc.avoids, Bool.and_eq_true, List.contains_iff_mem, Bool.not_eq_true'] at hf
-    have hnot : k ∉ C := by simp_all
+    have hnot : k ∉ C := by simp_all only [ne_eq, List.contains_eq_mem, decide_eq_false_iff_not,
+      not_false_eq_true]
     exact .toSucc d w hw hnot hget pop (ih (hE k g hf.1.1 hget))
   | last h => exact .last h
   | next h _ ih =>
@@ -66,7 +67,8 @@ theorem SFunc.RunExact.toCut {fs : List SFunc} {sevm : Sevm} {C E : List Nat}
     exact .dest burn (ih hf)
   | @jump _ _ k g _ d hget pop _ ih =>
     simp only [SFunc.avoids, Bool.and_eq_true, List.contains_iff_mem, Bool.not_eq_true'] at hf
-    have hnot : k ∉ C := by simp_all
+    have hnot : k ∉ C := by simp_all only [List.contains_eq_mem, decide_eq_false_iff_not,
+      not_false_eq_true]
     exact .jump d hnot hget pop (ih (hE k g hf.1 hget))
   | ret d pop => exact .ret d pop
   | callHalt d hget pop hrun => exact .callHalt d hget pop hrun

@@ -23,7 +23,7 @@ section Walk
 open Blanc.BeaconDeposit
 
 theorem insertDepth_lt : ∀ (fuel x : Nat), 1 ≤ x → x < 2 ^ fuel → insertDepth fuel x < fuel
-  | 0, x, h1, h2 => by simp at h2; omega
+  | 0, x, h1, h2 => by simp only [pow_zero, Nat.lt_one_iff] at h2; omega
   | fuel + 1, x, h1, h2 => by
     unfold insertDepth
     split_ifs with h
@@ -32,23 +32,23 @@ theorem insertDepth_lt : ∀ (fuel x : Nat), 1 ≤ x → x < 2 ^ fuel → insert
       omega
 
 theorem insertDepth_dead : ∀ (fuel x h : Nat), h < insertDepth fuel x → (x / 2 ^ h) % 2 = 0
-  | 0, x, h, hh => by simp [insertDepth] at hh
+  | 0, x, h, hh => by simp only [insertDepth, not_lt_zero] at hh
   | fuel + 1, x, h, hh => by
     unfold insertDepth at hh
     split_ifs at hh with hx
     · omega
     · rcases h with _ | h
-      · simpa using hx
+      · simpa only [pow_zero, Nat.div_one, Nat.mod_two_not_eq_one] using hx
       · have := insertDepth_dead fuel (x / 2) h (by omega)
         rwa [Nat.pow_succ, Nat.mul_comm, ← Nat.div_div_eq_div_mul]
 
 theorem insertDepth_live : ∀ (fuel x : Nat), 1 ≤ x → x < 2 ^ fuel →
     (x / 2 ^ insertDepth fuel x) % 2 = 1
-  | 0, x, h1, h2 => by simp at h2; omega
+  | 0, x, h1, h2 => by simp only [pow_zero, Nat.lt_one_iff] at h2; omega
   | fuel + 1, x, h1, h2 => by
     unfold insertDepth
     split_ifs with hx
-    · simpa using hx
+    · simpa only [pow_zero, Nat.div_one] using hx
     · have := insertDepth_live fuel (x / 2) (by omega) (by rw [Nat.pow_succ] at h2; omega)
       rwa [Nat.pow_succ, Nat.mul_comm, ← Nat.div_div_eq_div_mul]
 
@@ -57,7 +57,7 @@ theorem walk_insertNode (H : Bytes → B256) (br : Nat → B256) (node0 : B256) 
       walk H br fuel h x (insertNode H br h node0) =
         some (setSlot br (h + insertDepth fuel x)
           (insertNode H br (h + insertDepth fuel x) node0))
-  | 0, h, x, h1, h2 => by simp at h2; omega
+  | 0, h, x, h1, h2 => by simp only [pow_zero, Nat.lt_one_iff] at h2; omega
   | fuel + 1, h, x, h1, h2 => by
     unfold walk insertDepth
     split_ifs with hx
@@ -98,11 +98,11 @@ theorem mem_sloadAccessedStorageKeys {t : Adr} {keys : KeySet} {k : B256} {y : A
   · rw [Std.HashSet.mem_insert]
     constructor
     · rintro (h | h)
-      · exact .inr (by simp at h; exact h.symm)
+      · exact .inr (by simp only [beq_iff_eq] at h; exact h.symm)
       · exact .inl h
     · rintro (h | rfl)
       · exact .inr h
-      · exact .inl (by simp)
+      · exact .inl (by simp only [BEq.rfl])
 
 /-! ## The base through the insertion loop -/
 
@@ -424,8 +424,11 @@ theorem deposit_body_runExact (sevm : Sevm) (b : Devm) (sel : B256) (g : Nat)
     hsha.of_eq (fun x => by rw [hK2.code, hc1]) (by rw [hK2.addrs, ha1])
   set ev := bodyEvent sevm pP wP sP a w
   have hlen : (BeaconDeposit.abiDepositEvent ev).length = 576 := by
-    simp [ev, bodyEvent, BeaconDeposit.abiDepositEvent, abiBytesTail, List.length_sliceD,
-      BeaconDeposit.le64, ceil32, B256.length_toBytes]
+    simp only [BeaconDeposit.abiDepositEvent, List.append_assoc, abiBytesTail, bodyEvent,
+      BeaconDeposit.le64, Nat.toUInt8_eq, List.length_sliceD, ceil32, Nat.reduceMod, Nat.reduceAdd,
+      Nat.succ_eq_add_one, Nat.reduceSub, List.reduceReplicate, Nat.mod_self, tsub_self,
+      List.replicate_zero, List.append_nil, List.cons_append, List.nil_append, List.length_cons,
+      List.length_nil, zero_add, List.length_append, B256.length_toBytes, ev]
   obtain ⟨b3, M3, hK3, hM3, r3⟩ := body_pubkeyRoot (sevm := sevm) (b := b2) (sel := sel) (rt := rt)
     (sP := sP) (wP := wP) (pP := pP) (a := a) (G := G3) hsha2 hdepth hstatic hlen (by omega) hM2
   -- world facts so far
@@ -488,7 +491,7 @@ theorem deposit_body_runExact (sevm : Sevm) (b : Devm) (sel : B256) (g : Nat)
     rw [hK6.stor, afterSstore_getStor_self, hstor5]
   have hbr : ∀ h < 32, stor1.get (solBranchSlot h) = br h := fun h hh => by
     rw [Stor.get_set_ne _ (Ne.symm (solBranchSlot_ne_count hh))]
-    simp [br, solAcc, hh, stor]
+    simp only [solAcc, hh, ↓reduceIte, stor, br]
   have hkeys6 : ∀ j < 32, ((sevm.currentTarget, solBranchSlot j) ∈ b6.accessedStorageKeys ↔
       (sevm.currentTarget, solBranchSlot j) ∈ b.accessedStorageKeys) := fun j hj => by
     rw [hK6.keys, afterSstore_accessedStorageKeys, mem_sloadAccessedStorageKeys, hkeys5,
@@ -515,7 +518,8 @@ theorem deposit_body_runExact (sevm : Sevm) (b : Devm) (sel : B256) (g : Nat)
     (node0 := rt) (br := br) (keys0 := b.accessedStorageKeys) (stor1 := stor1)
     (x₁ := sR) (x₂ := pkR) (x₃ := 128) (x₄ := a) (y₁ := rt) (y₂ := 96) (y₃ := sP) (y₄ := 32)
     (y₅ := wP) (y₆ := 48) (y₇ := pP) (d := 440) (rest := [sel]) hsha.fork hstatic
-    (hsha.of_eq hc6 ha6) hdepth (by simp) (by omega) hn (fun h hh => insertDepth_dead 32 x h hh)
+    (hsha.of_eq hc6 ha6) hdepth (by simp only [List.length_cons, List.length_nil, zero_add,
+      Nat.one_le_ofNat]) (by omega) hn (fun h hh => insertDepth_dead 32 x h hh)
     (insertDepth_live 32 x (by omega) hx32) hb6stor hbr hkeys6 (by rw [hlc]; omega)
     n 0 b6 M6 (by omega) hL0' hM6' (by rw [hlc]; show g + 1 + L < 2 ^ 256; omega)
   rw [hlc] at rL
@@ -559,7 +563,7 @@ theorem deposit_body_runExact (sevm : Sevm) (b : Devm) (sel : B256) (g : Nat)
       · rw [ite_eq_right hh]
         unfold BeaconDeposit.setSlot
         rw [ite_eq_right (by omega)]
-        simp [br, solAcc, hh]
+        simp only [solAcc, hh, ↓reduceIte, br]
     · rw [Stor.get_set_ne _ (solBranchSlot_ne_count hn), Stor.get_set_self]
       have := congrArg B256.toNat e1
       rw [Nat.pow_zero, Nat.div_one, B256.toNat_toB256_of_lt (by omega)] at this

@@ -42,7 +42,8 @@ theorem safe_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
   obtain ⟨hwf, hs, img, hr, hfp, hf⟩ := hM
   have h40 : (Bytes.toB256 [0x40]).toNat = 64 := by decide
   have hdata : img.sliceD 256 576 0 = data := by
-    have := hf (0x100, data) (by simp); rwa [hlen] at this
+    have := hf (0x100, data) (by simp only [List.mem_cons, Prod.mk.injEq, Nat.reduceEqDiff,
+      false_and, List.not_mem_nil, or_false, or_true]); rwa [hlen] at this
   have run := run.cut
   unfold t_071c_c4 at run
   obtain ⟨G1, run⟩ := ric_dest run
@@ -206,7 +207,7 @@ theorem safe_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
     (k := 12) (C := []) (T := t_086e_c12) (fail1 := t_0850_c12) (fail2 := t_086a_c12)
     (show prog[12]? = some (mcpyTree 0x07 0xfc 0x07 0xbf 12
       (mergeTree (shaCallTree 0x08 0x59 0x08 0x6e t_0850_c12 t_086a_c12 t_086e_c12))) from rfl)
-    (by simp) (by decide) hwf4 hr4 hs4 (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+    (by simp only [List.not_mem_nil, not_false_eq_true]) (by decide) hwf4 hr4 hs4 (by norm_num) (by norm_num) (by norm_num) (by norm_num)
     (by norm_num) (by norm_num) hfp4 hw1 hw2 hsha'.nodeleg hsha'.warm hsha'.pre hsha'.fork
     run
   refine ⟨b', M', G', Keep.of_sha hpost, ⟨hwf', by rw [hs']; rfl, shaImg img4 352 w1 w2, hr', ?_,
@@ -218,10 +219,12 @@ theorem safe_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
     rcases hp with rfl | rfl | rfl
     · simp only [B256.length_toBytes]
       rw [shaImg_out (by norm_num), hlow4 128 32 (by norm_num) (by norm_num)]
-      have := hf (0x80, (8 : B256).toBytes) (by simp); rwa [B256.length_toBytes] at this
+      have := hf (0x80, (8 : B256).toBytes) (by simp only [List.mem_cons, Prod.mk.injEq,
+        Nat.reduceEqDiff, false_and, List.not_mem_nil, or_self, or_false]); rwa [B256.length_toBytes] at this
     · simp only [show (BeaconDeposit.le64 a.toNat).length = 8 from rfl]
       rw [shaImg_out (by norm_num), hlow4 160 8 (by norm_num) (by norm_num)]
-      have := hf (0xa0, BeaconDeposit.le64 a.toNat) (by simp)
+      have := hf (0xa0, BeaconDeposit.le64 a.toNat) (by simp only [List.mem_cons, Prod.mk.injEq,
+        Nat.reduceEqDiff, false_and, List.not_mem_nil, or_self, or_false, or_true])
       rwa [show (BeaconDeposit.le64 a.toNat).length = 8 from rfl] at this
     · simp only [B256.length_toBytes]
       rw [shaImg_digest, hin]; rfl

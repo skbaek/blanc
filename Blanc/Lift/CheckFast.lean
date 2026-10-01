@@ -42,18 +42,20 @@ theorem LTrie.get?_ofList {α : Type} (d : Nat) (l : List α) (hl : l.length ≤
   induction d generalizing l i with
   | zero =>
     cases l with
-    | nil => simp [LTrie.ofList, LTrie.get?]
+    | nil => simp only [ofList, List.head?_nil, get?, ite_self, List.length_nil, not_lt_zero,
+      not_false_eq_true, getElem?_neg]
     | cons x xs =>
-      have hxs : xs.length = 0 := by simpa using hl
+      have hxs : xs.length = 0 := by simpa only [List.length_eq_zero_iff, List.length_cons,
+        pow_zero, add_le_iff_nonpos_left, nonpos_iff_eq_zero] using hl
       have : xs = [] := List.eq_nil_of_length_eq_zero hxs
       subst xs
-      cases i <;> simp [LTrie.ofList, LTrie.get?]
+      cases i <;> simp only [ofList, List.head?_cons, get?, ↓reduceIte, List.length_cons, List.length_nil, zero_add, zero_lt_one, getElem?_pos, List.getElem_cons_zero, Nat.add_eq_zero_iff, one_ne_zero, and_false, add_lt_iff_neg_right, not_lt_zero, not_false_eq_true, getElem?_neg]
   | succ d ih =>
     simp only [LTrie.ofList, LTrie.get?]
     by_cases hi : i < 2 ^ d
     · rw [if_pos hi]
       rw [ih (l := l.take (2 ^ d)) (i := i)]
-      · simp [hi]
+      · simp only [hi, List.getElem?_take_of_lt]
       · have htake : (l.take (2 ^ d)).length ≤ 2 ^ d := by
           rw [List.length_take]
           exact min_le_left _ _
@@ -64,11 +66,12 @@ theorem LTrie.get?_ofList {α : Type} (d : Nat) (l : List α) (hl : l.length ≤
             (xs.drop n)[j - n]? = xs[j]? := by
           intro n
           induction n with
-          | zero => intro xs j _; simp
+          | zero => intro xs j _; simp only [List.drop_zero, tsub_zero]
           | succ n ih =>
             intro xs j hj
             cases xs with
-            | nil => simp
+            | nil => simp only [List.drop_nil, List.length_nil, not_lt_zero, not_false_eq_true,
+              getElem?_neg]
             | cons x xs =>
               cases j with
               | zero => omega
@@ -175,14 +178,16 @@ private lemma bytesAtT_eq {code : ByteArray} {d : Nat} {t : LTrie UInt8}
     simp only [bytesAt]
     rw [getElem?_eq_drop_head]
     cases h : code.data.toList.drop pc with
-    | nil => simp [h]
+    | nil => simp only [List.head?_nil, Option.none_beq_some, Bool.false_and, List.length_cons,
+      List.take_nil, List.nil_eq, reduceCtorEq, decide_false]
     | cons c cs =>
       have hnext : code.data.toList.drop (pc + 1) = cs := by
         rw [show pc + 1 = pc + 1 by rfl, ← List.drop_drop, h]
         rfl
       have hbeq : (c == b) = decide (c = b) := by
         rfl
-      simp [h, hnext, hbeq]
+      simp only [List.head?_cons, Option.some_beq_some, hbeq, hnext, List.length_cons,
+        List.take_succ_cons, List.cons.injEq, Bool.decide_and]
 
 theorem checkNodeT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es : List Entry)
     (m pc : Nat) (a : List AVal) (f : SFunc) :
@@ -202,16 +207,16 @@ theorem checkNodeT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es : 
       · intro pc a
         cases h : absNinst n a <;>
           simp [Q, checkNodeT, checkNode, byteAt, bytesAtT_eq T.bytes_eq, ih.1, h]
-      · simp [P]
+      · simp only
     | last l =>
       constructor
       · intro pc a
-        simp [Q, checkNodeT, checkNode, byteAt, T.bytes_eq]
-      · simp [P]
+        simp only [checkNodeT, T.bytes_eq, Array.getElem?_toList, checkNode, byteAt]
+      · simp only
     | dest f ih =>
       constructor
       · intro pc a
-        simp [Q, checkNodeT, checkNode, byteAt, T.bytes_eq, ih.1]
+        simp only [checkNodeT, T.bytes_eq, Array.getElem?_toList, ih.1, checkNode, byteAt, Q]
       · exact ih.1
     | branch f g ihf ihg =>
       constructor
@@ -220,8 +225,8 @@ theorem checkNodeT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es : 
         | nil => rfl
         | cons av a =>
           cases av <;> cases a <;>
-            simp [Q, checkNodeT, checkNode, byteAt, T.bytes_eq, ihf.1, ihg.1]
-      · simp [P]
+            simp only [checkNodeT, checkNode, Q, T.bytes_eq, Array.getElem?_toList, ihf.1, ihg.1, byteAt]
+      · simp only
     | branchTo f k ih =>
       constructor
       · intro pc a
@@ -229,8 +234,8 @@ theorem checkNodeT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es : 
         | nil => rfl
         | cons av a =>
           cases av <;> cases a <;> cases h : es[k]? <;>
-            simp [Q, checkNodeT, checkNode, byteAt, T.bytes_eq, ih.1, h]
-      · simp [P]
+            simp only [checkNodeT, checkNode, Q, h, T.bytes_eq, Array.getElem?_toList, ih.1, byteAt]
+      · simp only
     | jump k =>
       constructor
       · intro pc a
@@ -238,8 +243,8 @@ theorem checkNodeT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es : 
         | nil => rfl
         | cons av a =>
           cases av <;> cases h : es[k]? <;>
-            simp [Q, checkNodeT, checkNode, byteAt, T.bytes_eq, h]
-      · simp [P]
+            simp only [checkNodeT, h, checkNode, T.bytes_eq, Array.getElem?_toList, byteAt]
+      · simp only
     | callNext k f ih =>
       constructor
       · intro pc a
@@ -247,25 +252,25 @@ theorem checkNodeT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es : 
         | nil => rfl
         | cons av a =>
           cases av <;> cases f <;> cases h : es[k]? <;>
-            simp [Q, checkNodeT, checkNode, byteAt, T.bytes_eq, ih.1, ih.2, h, *] <;> rfl
-      · simp [P]
+            simp only [checkNodeT, checkNode, Q, h, T.bytes_eq, Array.getElem?_toList, ih.2, byteAt] <;> rfl
+      · simp only
     | ret =>
       constructor
       · intro pc a
         cases a with
         | nil => rfl
         | cons av a =>
-          cases av <;> simp [Q, checkNodeT, checkNode, byteAt, T.bytes_eq]
-      · simp [P]
+          cases av <;> simp only [checkNodeT, checkNode, T.bytes_eq, Array.getElem?_toList, byteAt]
+      · simp only
     | pcAt p f ih =>
       constructor
       · intro pc a
-        simp [Q, checkNodeT, checkNode, bytesAtT_eq T.bytes_eq, ih.1]
-      · simp [P]
+        simp only [checkNodeT, bytesAtT_eq T.bytes_eq, ih.1, checkNode, Q]
+      · simp only
     | undefined =>
       constructor
       · intro pc a; rfl
-      · simp [P]
+      · simp only
   exact (hall f).1 pc a
 
 /-- `jumpdestOk`, reading the code byte and the instruction-start flag from the tries. -/
@@ -277,22 +282,25 @@ theorem jumpdestOkT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (k : 
     jumpdestOkT code d T k = jumpdestOk code k := by
   by_cases hk : k < code.size
   · have hlist : k < code.data.toList.length := by
-      simpa [ByteArray.size_eq_length_toList] using hk
+      simpa only [Array.length_toList, ByteArray.size_data, ByteArray.size_eq_length_toList] using
+        hk
     have hget : code.data.toList[k]? = some code[k] := by
       exact List.getElem?_eq_getElem hlist
     have hdata : code.data[k] = code[k] := by rfl
     have ha : code.data[k]? = some code[k] := by
       rw [← hdata]
-      simp [hk]
+      simp only [ByteArray.size_data, hk, getElem?_pos]
     have hbyte : (code.data[k]? == some (Jinst.toUInt8 .jumpdest)) =
         decide (code[k] = Jinst.toUInt8 .jumpdest) := by
       rw [ha]
       rfl
     have hbeq : (code[k] == Jinst.toUInt8 .jumpdest) =
         decide (code[k] = Jinst.toUInt8 .jumpdest) := by rfl
-    simp [jumpdestOkT, jumpdestOk, instStartAt, hk, T.bytes_eq, T.starts_eq,
-      hget, hlist, hdata, ha, hbyte, hbeq]
-  · simp [jumpdestOkT, jumpdestOk, hk]
+    simp only [jumpdestOkT, hk, decide_true, T.bytes_eq, Array.length_toList, ByteArray.size_data,
+      getElem?_pos, Array.getElem_toList, hdata, Option.some_beq_some, hbeq, Bool.true_and,
+      T.starts_eq, List.getD_eq_getElem?_getD, jumpdestOk, ↓reduceDIte, instStartAt,
+      Bool.decide_and, Bool.decide_eq_true]
+  · simp only [jumpdestOkT, hk, decide_false, Bool.false_and, jumpdestOk, ↓reduceDIte]
 
 /-- `jumpsOkNode` with `jumpdestOk` replaced by `jumpdestOkT` (every other arm identical). -/
 def jumpsOkNodeT (code : ByteArray) (d : Nat) (T : CodeTries code d) (es : List Entry) :
@@ -353,16 +361,16 @@ theorem jumpsOkNodeT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es 
       constructor
       · intro a
         cases h : absNinst n a <;>
-          simp [Q, jumpsOkNodeT, jumpsOkNode, ih.1, h]
-      · simp [P]
+          simp only [jumpsOkNodeT, h, jumpsOkNode, Q, ih.1]
+      · simp only
     | last l =>
       constructor
       · intro a; rfl
-      · simp [P]
+      · simp only
     | dest f ih =>
       constructor
       · intro a
-        simp [Q, jumpsOkNodeT, jumpsOkNode, ih.1]
+        simp only [jumpsOkNodeT, ih.1, jumpsOkNode, Q]
       · exact ih.1
     | branch f g ihf ihg =>
       constructor
@@ -373,7 +381,7 @@ theorem jumpsOkNodeT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es 
           cases av <;> cases a <;>
             simp [Q, jumpsOkNodeT, jumpsOkNode, jumpdestOkT_eq T,
               ihf.1, ihg.1]
-      · simp [P]
+      · simp only
     | branchTo f k ih =>
       constructor
       · intro a
@@ -382,7 +390,7 @@ theorem jumpsOkNodeT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es 
         | cons av a =>
           cases av <;> cases a <;> cases h : es[k]? <;>
             simp [Q, jumpsOkNodeT, jumpsOkNode, jumpdestOkT_eq T, ih.1, h]
-      · simp [P]
+      · simp only
     | jump k =>
       constructor
       · intro a
@@ -391,7 +399,7 @@ theorem jumpsOkNodeT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es 
         | cons av a =>
           cases av <;> cases h : es[k]? <;>
             simp [Q, jumpsOkNodeT, jumpsOkNode, jumpdestOkT_eq T, h]
-      · simp [P]
+      · simp only
     | callNext k f ih =>
       constructor
       · intro a
@@ -401,20 +409,20 @@ theorem jumpsOkNodeT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es 
           cases av <;> cases f <;> cases h : es[k]? <;>
             simp [Q, jumpsOkNodeT, jumpsOkNode, jumpdestOkT_eq T,
               ih.1, ih.2, h, *] <;> rfl
-      · simp [P]
+      · simp only
     | ret =>
       constructor
       · intro a; rfl
-      · simp [P]
+      · simp only
     | pcAt p f ih =>
       constructor
       · intro a
-        simp [Q, jumpsOkNodeT, jumpsOkNode, ih.1]
-      · simp [P]
+        simp only [jumpsOkNodeT, ih.1, jumpsOkNode, Q]
+      · simp only
     | undefined =>
       constructor
       · intro a; rfl
-      · simp [P]
+      · simp only
   exact (hall f).1 a
 
 /-! ## The memory-tracking checkers, reading from tries -/
@@ -491,37 +499,39 @@ theorem checkNodeMT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es :
     intro f
     induction f with
     | next n f ih =>
-      refine ⟨fun pc a μ => ?_, by simp [P]⟩
+      refine ⟨fun pc a μ => ?_, by simp only⟩
       cases h : absNinst n a <;>
         simp [Q, checkNodeMT, checkNodeM, byteAt, bytesAtT_eq T.bytes_eq, ih.1, h]
-    | last l => exact ⟨fun pc a μ => by simp [Q, checkNodeMT, checkNodeM, byteAt, T.bytes_eq],
-        by simp [P]⟩
+    | last l => exact ⟨fun pc a μ => by simp only [checkNodeMT, T.bytes_eq,
+      Array.getElem?_toList, checkNodeM, byteAt],
+        by simp only⟩
     | dest f ih =>
-      exact ⟨fun pc a μ => by simp [Q, checkNodeMT, checkNodeM, byteAt, T.bytes_eq, ih.1], ih.1⟩
+      exact ⟨fun pc a μ => by simp only [checkNodeMT, T.bytes_eq, Array.getElem?_toList, ih.1,
+        checkNodeM, byteAt, Q], ih.1⟩
     | branch f g ihf ihg =>
-      refine ⟨fun pc a μ => ?_, by simp [P]⟩
+      refine ⟨fun pc a μ => ?_, by simp only⟩
       rcases a with _ | ⟨_ | _ | _, _ | ⟨_, a⟩⟩ <;>
-        simp [Q, checkNodeMT, checkNodeM, byteAt, T.bytes_eq, ihf.1, ihg.1]
+        simp only [checkNodeMT, checkNodeM, Q, T.bytes_eq, Array.getElem?_toList, ihf.1, ihg.1, byteAt]
     | branchTo f k ih =>
-      refine ⟨fun pc a μ => ?_, by simp [P]⟩
+      refine ⟨fun pc a μ => ?_, by simp only⟩
       rcases a with _ | ⟨_ | _ | _, _ | ⟨_, a⟩⟩ <;> cases h : es[k]? <;>
-        simp [Q, checkNodeMT, checkNodeM, byteAt, T.bytes_eq, ih.1, h]
+        simp only [checkNodeMT, checkNodeM, Q, h, T.bytes_eq, Array.getElem?_toList, List.getD_eq_getElem?_getD, ih.1, byteAt]
     | jump k =>
-      refine ⟨fun pc a μ => ?_, by simp [P]⟩
+      refine ⟨fun pc a μ => ?_, by simp only⟩
       rcases a with _ | ⟨_ | _ | _, a⟩ <;> cases h : es[k]? <;>
-        simp [Q, checkNodeMT, checkNodeM, byteAt, T.bytes_eq, h]
+        simp only [checkNodeMT, checkNodeM, h, T.bytes_eq, Array.getElem?_toList, List.getD_eq_getElem?_getD, byteAt]
     | callNext k f ih =>
-      refine ⟨fun pc a μ => ?_, by simp [P]⟩
+      refine ⟨fun pc a μ => ?_, by simp only⟩
       rcases a with _ | ⟨_ | _ | _, a⟩ <;> cases f <;> cases h : es[k]? <;>
-        simp [Q, checkNodeMT, checkNodeM, byteAt, T.bytes_eq, ih.1, ih.2, h, *] <;> rfl
+        simp only [checkNodeMT, checkNodeM, Q, h, T.bytes_eq, Array.getElem?_toList, List.getD_eq_getElem?_getD, ih.2, byteAt] <;> rfl
     | ret =>
       exact ⟨fun pc a μ => by
-        rcases a with _ | ⟨_ | _ | _, a⟩ <;> simp [Q, checkNodeMT, checkNodeM, byteAt, T.bytes_eq],
-        by simp [P]⟩
+        rcases a with _ | ⟨_ | _ | _, a⟩ <;> simp only [checkNodeMT, checkNodeM, T.bytes_eq, Array.getElem?_toList, byteAt],
+        by simp only⟩
     | pcAt p f ih =>
       exact ⟨fun pc a μ => by
-        simp [Q, checkNodeMT, checkNodeM, bytesAtT_eq T.bytes_eq, ih.1], by simp [P]⟩
-    | undefined => exact ⟨fun pc a μ => rfl, by simp [P]⟩
+        simp only [checkNodeMT, bytesAtT_eq T.bytes_eq, ih.1, checkNodeM, Q], by simp only⟩
+    | undefined => exact ⟨fun pc a μ => rfl, by simp only⟩
   exact (hall f).1 pc a μ
 
 /-- `jumpsOkNodeM` with `jumpdestOk` replaced by `jumpdestOkT`. -/
@@ -581,30 +591,30 @@ theorem jumpsOkNodeMT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es
     intro f
     induction f with
     | next n f ih =>
-      refine ⟨fun a μ => ?_, by simp [P]⟩
-      cases h : absNinst n a <;> simp [Q, jumpsOkNodeMT, jumpsOkNodeM, ih.1, h]
-    | last l => exact ⟨fun a μ => rfl, by simp [P]⟩
-    | dest f ih => exact ⟨fun a μ => by simp [Q, jumpsOkNodeMT, jumpsOkNodeM, ih.1], ih.1⟩
+      refine ⟨fun a μ => ?_, by simp only⟩
+      cases h : absNinst n a <;> simp only [jumpsOkNodeMT, h, jumpsOkNodeM, Q, ih.1]
+    | last l => exact ⟨fun a μ => rfl, by simp only⟩
+    | dest f ih => exact ⟨fun a μ => by simp only [jumpsOkNodeMT, ih.1, jumpsOkNodeM, Q], ih.1⟩
     | branch f g ihf ihg =>
-      refine ⟨fun a μ => ?_, by simp [P]⟩
+      refine ⟨fun a μ => ?_, by simp only⟩
       rcases a with _ | ⟨_ | _ | _, _ | ⟨_, a⟩⟩ <;>
         simp [Q, jumpsOkNodeMT, jumpsOkNodeM, jumpdestOkT_eq T, ihf.1, ihg.1]
     | branchTo f k ih =>
-      refine ⟨fun a μ => ?_, by simp [P]⟩
+      refine ⟨fun a μ => ?_, by simp only⟩
       rcases a with _ | ⟨_ | _ | _, _ | ⟨_, a⟩⟩ <;> cases h : es[k]? <;>
         simp [Q, jumpsOkNodeMT, jumpsOkNodeM, jumpdestOkT_eq T, ih.1, h]
     | jump k =>
-      refine ⟨fun a μ => ?_, by simp [P]⟩
+      refine ⟨fun a μ => ?_, by simp only⟩
       rcases a with _ | ⟨_ | _ | _, a⟩ <;> cases h : es[k]? <;>
         simp [Q, jumpsOkNodeMT, jumpsOkNodeM, jumpdestOkT_eq T, h]
     | callNext k f ih =>
-      refine ⟨fun a μ => ?_, by simp [P]⟩
+      refine ⟨fun a μ => ?_, by simp only⟩
       rcases a with _ | ⟨_ | _ | _, a⟩ <;> cases f <;> cases h : es[k]? <;>
         simp [Q, jumpsOkNodeMT, jumpsOkNodeM, jumpdestOkT_eq T, ih.1, ih.2, h, *] <;> rfl
-    | ret => exact ⟨fun a μ => rfl, by simp [P]⟩
+    | ret => exact ⟨fun a μ => rfl, by simp only⟩
     | pcAt p f ih =>
-      exact ⟨fun a μ => by simp [Q, jumpsOkNodeMT, jumpsOkNodeM, ih.1], by simp [P]⟩
-    | undefined => exact ⟨fun a μ => rfl, by simp [P]⟩
+      exact ⟨fun a μ => by simp only [jumpsOkNodeMT, ih.1, jumpsOkNodeM, Q], by simp only⟩
+    | undefined => exact ⟨fun a μ => rfl, by simp only⟩
   exact (hall f).1 a μ
 
 /-! ## Assembling a memory-tracking certificate from per-entry decisions -/
@@ -624,9 +634,9 @@ theorem Cert.checkEntriesM_of_indexedFrom {code : ByteArray} {es : List Entry}
   | [], _, _ => rfl
   | (e, f) :: c, k, h => by
     simp only [Cert.checkEntriesM, Bool.and_eq_true]
-    exact ⟨h k (e, f) (by simp [Cert.indexedFrom]),
+    exact ⟨h k (e, f) (by simp only [indexedFrom, List.mem_cons, true_or]),
       Cert.checkEntriesM_of_indexedFrom c (k + 1)
-        (fun j p hp => h j p (by simp [Cert.indexedFrom, hp]))⟩
+        (fun j p hp => h j p (by simp only [indexedFrom, List.mem_cons, Prod.mk.injEq, hp, or_true]))⟩
 
 theorem Cert.jumpsEntriesM_of_indexedFrom {code : ByteArray} {es : List Entry}
     {ms : List MemMap} {b : Bool} : ∀ (c : Cert) (k : Nat),
@@ -636,9 +646,9 @@ theorem Cert.jumpsEntriesM_of_indexedFrom {code : ByteArray} {es : List Entry}
   | [], _, _ => rfl
   | (e, f) :: c, k, h => by
     simp only [Cert.jumpsEntriesM, Bool.and_eq_true]
-    exact ⟨h k (e, f) (by simp [Cert.indexedFrom]),
+    exact ⟨h k (e, f) (by simp only [indexedFrom, List.mem_cons, true_or]),
       Cert.jumpsEntriesM_of_indexedFrom c (k + 1)
-        (fun j p hp => h j p (by simp [Cert.indexedFrom, hp]))⟩
+        (fun j p hp => h j p (by simp only [indexedFrom, List.mem_cons, Prod.mk.injEq, hp, or_true]))⟩
 
 theorem Cert.jumpsOkM_of_indexed {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     (hall : ∀ k p, (k, p) ∈ Cert.indexed c →

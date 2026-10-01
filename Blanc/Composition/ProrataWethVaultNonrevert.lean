@@ -132,7 +132,7 @@ theorem redeem_success_within_maxRedeem
         (Devm.getStorVal pre sevm.currentTarget (Sevm.argWord sevm 2)).toNat := by
   obtain ⟨-, -, -, -, -, -, -, -, -, -, burnable, -⟩ :=
     redeem_compiled_effect (hfork := hfork) config memoryWf run selectorEq
-  simpa [Blanc.ProrataWethVault.maxRedeemN] using burnable
+  simpa only [ProrataWethVault.maxRedeemN] using burnable
 
 /-! ## Exec-level revert cause of the capacity views
 

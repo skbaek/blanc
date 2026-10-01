@@ -228,8 +228,9 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThenFork
         SpendStorageFork frame.sevm cursor.pre bodyCursor.pre amount := by
   unfold spendCallerAllowanceThen at cursor
   rcases cursor.peelChildlessLine (line := spendOwnerEqLine)
-      (by simp [spendOwnerEqLine, arg, cdl, NinstIsChildless,
-        Ninst.pushB256]) with
+      (by simp only [spendOwnerEqLine, arg, cdl, pushB256, List.cons_append, List.nil_append,
+        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
+        and_self]) with
     ⟨callerBranchCursor, hcallerLine⟩
   have hcallerPrefix :
       [frame.sevm.caller.toB256 =? Sevm.argWord frame.sevm 0] <<+
@@ -256,7 +257,7 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThenFork
   by_cases hself : Sevm.argWord frame.sevm 0 = frame.sevm.caller.toB256
   · -- the self-owner path bypasses the allowance read entirely
     have hflag : (frame.sevm.caller.toB256 =? Sevm.argWord frame.sevm 0) = 1 := by
-      simp [B256.eqCheck, hself]
+      simp only [B256.eqCheck, hself, ↓reduceIte]
     rw [hflag] at hcallerPrefix
     rcases callerBranchCursor.selectBranchSuccSilent (flag := (1 : B256))
         (by decide) hcallerPrefix with
@@ -276,7 +277,7 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThenFork
   · have hne : frame.sevm.caller.toB256 ≠ Sevm.argWord frame.sevm 0 :=
       fun h => hself h.symm
     have hflag : (frame.sevm.caller.toB256 =? Sevm.argWord frame.sevm 0) = 0 := by
-      simp [B256.eqCheck, hne]
+      simp only [B256.eqCheck, hne, ↓reduceIte]
     rw [hflag] at hcallerPrefix
     rcases callerBranchCursor.selectBranchZeroSilent hcallerPrefix with
       ⟨allowanceCursor, _hallowanceStack, hallowanceSilent⟩
@@ -290,9 +291,10 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThenFork
       MemCarried.trans hcallerMem
         (MemCarried.of_eq hallowanceSilent.memory) hwf hreads
     rcases allowanceCursor.peelChildlessLine (line := spendAllowanceLoadLine)
-        (by simp [spendAllowanceLoadLine, arg, cdl, mstoreAt,
-          allowanceKeyFromMemory, pushList, isMax, NinstIsChildless,
-          Ninst.pushB256]) with
+        (by simp only [spendAllowanceLoadLine, arg, cdl, pushB256, mstoreAt, List.cons_append,
+          List.nil_append, allowanceKeyFromMemory, pushList, List.map_cons, List.map_nil,
+          Fin.isValue, isMax, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+          forall_eq_or_imp, forall_eq, and_self]) with
       ⟨maxBranchCursor, hloadLine⟩
     obtain ⟨allowance, hallowanceVal, hloadPrefix, hwfMax, outMax, hreadsMax⟩ :=
       spendAllowanceLoadLine_effect hwfLoad hreadsLoad hloadLine
@@ -308,13 +310,14 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThenFork
     · -- an infinite allowance is preserved
       have hmaxFlag : ((~~~ allowance) =? 0) = 1 := by
         rw [hmax, B256.not_max]
-        simp [B256.eqCheck]
+        simp only [B256.eqCheck, ↓reduceIte]
       rw [hmaxFlag] at hloadPrefix
       rcases maxBranchCursor.selectBranchSuccSilent (flag := (1 : B256))
           (by decide) hloadPrefix with
         ⟨maxCursor, _hmaxStack, hmaxSilent⟩
       rcases maxCursor.peelChildlessLine (line := [Ninst.pop, Ninst.pop])
-          (by simp [NinstIsChildless]) with
+          (by simp only [List.mem_cons, List.not_mem_nil, or_false, or_self, NinstIsChildless,
+            forall_eq]) with
         ⟨coreCallCursor, hpopLine⟩
       rcases coreCallCursor.enterCallSilent hcode with
         ⟨body, hget, bodyCursor, hbodySilent⟩
@@ -348,8 +351,9 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThenFork
         ⟨finiteCursor, hfiniteStack, hfiniteSilent⟩
       rcases finiteCursor.peelChildlessLine
           (line := spendAllowanceCheckLine amount)
-          (by simp [spendAllowanceCheckLine, arg, cdl, balanceTooSmall,
-            NinstIsChildless, Ninst.pushB256]) with
+          (by simp only [spendAllowanceCheckLine, arg, cdl, pushB256, Fin.isValue, List.cons_append,
+            List.nil_append, balanceTooSmall, List.mem_cons, List.not_mem_nil, or_false,
+            or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
         ⟨spendBranchCursor, hcheckLine⟩
       have hcheckStack :
           (allowance <? Sevm.argWord frame.sevm amount) :: allowance ::
@@ -393,9 +397,10 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThenFork
             successCursor.pre.stack := cons_pref_cons_inv hcheckStack
       rcases successCursor.peelChildlessLine
           (line := spendAllowanceStoreLine ++ spendAllowanceAfterStoreLine)
-          (by simp [spendAllowanceStoreLine, spendAllowanceAfterStoreLine,
-            arg, cdl, emitApproval, mstoreAt, logWith, NinstIsChildless,
-            Ninst.pushB256]) with
+          (by simp only [spendAllowanceStoreLine, Fin.isValue, spendAllowanceAfterStoreLine, arg,
+            cdl, pushB256, List.cons_append, List.nil_append, emitApproval, mstoreAt, logWith,
+            Fin.reduceSucc, List.mem_cons, List.not_mem_nil, or_false, or_self, NinstIsChildless,
+            forall_eq_or_imp, forall_eq, and_self]) with
         ⟨coreCallCursor, hspendLine⟩
       rcases of_run_append spendAllowanceStoreLine hspendLine with
         ⟨afterStore, hstoreLine, hafterLine⟩
@@ -570,7 +575,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceStorage
           (Exec.attributionInner dp ca frame.run) key := by
   rcases frame with ⟨fpc, e, fpre, fout, frun, fcommitted⟩
   cases fout with
-  | error err => simp [Execution.commits] at fcommitted
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at fcommitted
   | ok fpost =>
       intro key hkey
       have htargetE : e.currentTarget = ca := htarget
@@ -578,9 +583,10 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceStorage
       unfold redeemFromBody at cursor
       rcases cursor.peelChildlessLine
           (line := redeemFromCheckLine ownerArg amountArg)
-          (by simp [redeemFromCheckLine, loadArgBalanceAmount, addressArg,
-            normalizeAddress, pushAddressMask, balanceTooSmall, arg, cdl,
-            NinstIsChildless, Ninst.pushB256]) with
+          (by simp only [redeemFromCheckLine, loadArgBalanceAmount, addressArg, arg, cdl, pushB256,
+            normalizeAddress, pushAddressMask, List.cons_append, List.nil_append, Fin.isValue,
+            balanceTooSmall, List.mem_cons, List.not_mem_nil, or_false, or_self_left,
+            NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
         ⟨branchCursor, hcheck⟩
       unfold redeemFromCheckLine at hcheck
       rcases of_run_append (loadArgBalanceAmount ownerArg amountArg)
@@ -627,7 +633,8 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceStorage
             hbalancePop.memory)
       -- the owner-key debit
       rcases successCursor.peelChildlessLine (line := debitLoadedBalance)
-          (by simp [debitLoadedBalance, NinstIsChildless]) with
+          (by simp only [debitLoadedBalance, Fin.isValue, List.mem_cons, List.not_mem_nil, or_false,
+            NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
         ⟨afterDebitCursor, hdebit⟩
       have hdebitCode : Devm.getCode successCursor.pre =
           Devm.getCode afterDebitCursor.pre :=
@@ -663,9 +670,10 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceStorage
       -- the burn event and the send operands
       rcases afterDebitCursor.peelChildlessLine
           (line := redeemFromEventLine ownerArg amountArg)
-          (by simp [redeemFromEventLine, addressArg, normalizeAddress,
-            pushAddressMask, arg, cdl, emitTransfer, Blanc.transferFromLog,
-            mstoreAt, logWith, NinstIsChildless, Ninst.pushB256]) with
+          (by simp only [redeemFromEventLine, addressArg, arg, cdl, pushB256, normalizeAddress,
+            pushAddressMask, List.cons_append, List.nil_append, emitTransfer, transferFromLog,
+            Fin.isValue, mstoreAt, logWith, Fin.reduceSucc, List.mem_cons, List.not_mem_nil,
+            or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
         ⟨sendCursor, heventRun⟩
       unfold redeemFromEventLine at heventRun
       rcases of_run_append (addressArg ownerArg) heventRun with
@@ -737,7 +745,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceStorage
           have hstepAt : Ninst.StepRun callCursor.pc e callCursor.pre
               Ninst.call xl (.ok midD) :=
             Ninst.stepRun_pc_irrel (pc' := callCursor.pc)
-              (by simp [Ninst.pcFree]) ostep
+              (by simp only [pcFree]) ostep
           -- the trailing guard excludes the reverter arm
           have htailPlain : Func.Run ((weth10 dp).main :: weth10Aux) e midD
               (Ninst.iszero ::: ((.call errSlot) <?>
@@ -762,7 +770,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceStorage
             have hzero : ((0 : B256) =? 0) = 0 :=
               pref_head_unique htest (pref_append [(0 : B256)] afterGuard.stack)
             rw [show ((0 : B256) =? 0) = 1 from by
-              simp [B256.eqCheck]] at hzero
+              simp only [B256.eqCheck, ↓reduceIte]] at hzero
             exact B256.zero_ne_one hzero.symm
           · rcases hsuccess with
               ⟨callParent, child, xlRaw, hasDelegation, resolvedCallee, code,
@@ -827,7 +835,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceStorage
                 rw [if_neg (not_delegation_of_compile hcallCodeAt)]
               rcases hdelegation with ⟨_, hna, _, _⟩ | ⟨_, hsome, _, _, _⟩
               · exact hna.trans htargetCa
-              · simp [hnone] at hsome
+              · simp only [hnone, reduceCtorEq] at hsome
             have htargetCode :
                 (callMsg e callParent
                   (min gasWord.toNat (except64th availableGas) +
@@ -919,7 +927,8 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdrawFrom
   have hmem : (Sevm.selector frame.sevm, nonpayable withdrawFrom) ∈
       weth10Funcs dp := by
     rw [hselector]
-    simp [withdrawFromSelector, weth10Funcs]
+    simp only [weth10Funcs, withdrawFromSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+      or_false, true_or, or_true]
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCountedSilent (frame := frame) context hnonempty
       hmem with
     ⟨wrapperCursor, hentrySilent⟩
@@ -939,7 +948,9 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdrawFrom
     ⟨body, hget, coreCursor, hwfCore, ⟨imgCore, hreadsCore⟩, hcodeCore,
       hfork⟩
   have hbody : body = withdrawFromCore := by
-    simpa [weth10, weth10Aux, withdrawFromCoreSlot] using hget.symm
+    simpa only [weth10, weth10Aux, withdrawFromCoreSlot, List.length_cons, List.length_nil,
+      zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero, Option.some.injEq] using hget.symm
   subst body
   change Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
     ((weth10 dp).main :: weth10Aux)
@@ -954,18 +965,19 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdrawFrom
       rw [← congrFun hcodeCore ca,
         ← getCode_eq_of_state_eq hspendSilent.state ca]
       exact context.installed.1)
-    (by simp [redeemSendToArgPrefix, pushList, arg, cdl, NinstIsChildless,
-      Ninst.pushB256])
+    (by simp only [redeemSendToArgPrefix, pushList, List.map_cons, pushB256, List.map_nil,
+      Fin.isValue, List.cons_append, List.nil_append, arg, cdl, List.mem_cons, List.not_mem_nil,
+      or_false, or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
     (by
       intro sendPre callPre value tail hp hrun
       exact redeemSendToArgPrefix_effect 1 hp hrun)
-    (by simp)
+    (by simp only [List.not_mem_nil, IsEmpty.forall_iff, implies_true])
     (by func_inv)
     hdeeper context.covered
   have hnotlast : ownRecordLast frame.sevm = false := by
-    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
-      withdrawFromSelector_ne_flashLoanSelector,
-      withdrawFromSelector_ne_permitSelector]
+    simp only [ownRecordLast, isFlashInvocation, ne_eq, decide_not, hselector,
+      withdrawFromSelector_ne_flashLoanSelector, decide_false, Bool.and_false, isPermitInvocation,
+      withdrawFromSelector_ne_permitSelector, Bool.or_self]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -989,10 +1001,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdrawFrom
     rcases hfork with ⟨hself, hstorEq⟩ | ⟨hnself, hmaxOrFinite⟩
     · have hown : (CountedFrame.ofFrame dp ca frame).allowance = none := by
         show frameAllowanceEvent frame.sevm frame.pre frame.post = none
-        simp [frameAllowanceEvent, hnonempty, hselector,
-          withdrawFromSelector_ne_approveSelector,
-          withdrawFromSelector_ne_approveAndCallSelector,
-          withdrawFromSelector_ne_permitSelector, hself]
+        simp only [frameAllowanceEvent, hnonempty, ↓reduceIte, hselector,
+          withdrawFromSelector_ne_approveSelector, decide_false,
+          withdrawFromSelector_ne_approveAndCallSelector, Bool.or_self, Bool.false_eq_true,
+          withdrawFromSelector_ne_permitSelector, decide_true, Bool.or_true, hself]
       rw [htarget] at hstorEq
       rw [hown, hstorEq, ← congrFun hpreStor ca]
     · rcases hmaxOrFinite with
@@ -1010,10 +1022,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdrawFrom
                    depth := frame.sevm.depth
                    visit := .spendMax } := by
           show frameAllowanceEvent frame.sevm frame.pre frame.post = _
-          simp [frameAllowanceEvent, hnonempty, hselector,
-            withdrawFromSelector_ne_approveSelector,
-            withdrawFromSelector_ne_approveAndCallSelector,
-            withdrawFromSelector_ne_permitSelector, hnself, hbefore]
+          simp only [frameAllowanceEvent, hnonempty, ↓reduceIte, hselector,
+            withdrawFromSelector_ne_approveSelector, decide_false,
+            withdrawFromSelector_ne_approveAndCallSelector, Bool.or_self, Bool.false_eq_true,
+            withdrawFromSelector_ne_permitSelector, decide_true, Bool.or_true, hnself, hbefore]
         rw [htarget] at hstorEq
         rw [hown]
         simp only [AllowanceVisit.written?, ite_self]
@@ -1031,10 +1043,11 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdrawFrom
                    visit := .spendFinite allowance
                      (allowance - Sevm.argWord frame.sevm 2) } := by
           show frameAllowanceEvent frame.sevm frame.pre frame.post = _
-          simp [frameAllowanceEvent, hnonempty, hselector,
-            withdrawFromSelector_ne_approveSelector,
-            withdrawFromSelector_ne_approveAndCallSelector,
-            withdrawFromSelector_ne_permitSelector, hnself, hbefore, hneMax]
+          simp only [frameAllowanceEvent, hnonempty, ↓reduceIte, hselector,
+            withdrawFromSelector_ne_approveSelector, decide_false,
+            withdrawFromSelector_ne_approveAndCallSelector, Bool.or_self, Bool.false_eq_true,
+            withdrawFromSelector_ne_permitSelector, decide_true, Bool.or_true, hnself, hbefore,
+            hneMax]
         rw [htarget] at hstorSet
         rw [hown]
         unfold AllowanceEvent.key
@@ -1073,7 +1086,8 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromZero
   have hmem : (Sevm.selector frame.sevm, nonpayable transferFrom) ∈
       weth10Funcs dp := by
     rw [hselector]
-    simp [transferFromSelector, weth10Funcs]
+    simp only [weth10Funcs, transferFromSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+      or_false, true_or, or_true]
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCountedSilent (frame := frame) context hnonempty
       hmem with
     ⟨wrapperCursor, hentrySilent⟩
@@ -1093,7 +1107,9 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromZero
     ⟨body, hget, coreCursor, hwfCore, ⟨imgCore, hreadsCore⟩, hcodeCore,
       hfork⟩
   have hbody : body = transferFromCore := by
-    simpa [weth10, weth10Aux, transferFromCoreSlot] using hget.symm
+    simpa only [weth10, weth10Aux, transferFromCoreSlot, List.length_cons, List.length_nil,
+      zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero, Option.some.injEq] using hget.symm
   subst body
   change Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
     ((weth10 dp).main :: weth10Aux)
@@ -1101,7 +1117,8 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromZero
     ((arg 1 ++ [iszero]) +++ (transferFromZero <?> transferFromNonzero))
     frame.post at coreCursor
   rcases coreCursor.peelChildlessLine
-      (by simp [arg, cdl, NinstIsChildless, Ninst.pushB256]) with
+      (by simp only [arg, cdl, pushB256, List.cons_append, List.nil_append, List.mem_cons,
+        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨targetBranchCursor, htargetLine⟩
   have htargetPrefix : [Sevm.argWord frame.sevm 1 =? 0] <<+
       targetBranchCursor.pre.stack := by
@@ -1111,7 +1128,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromZero
     cases hnil
     exact prefix_of_iszero hzeroRun (prefix_of_arg nil_pref harg)
   have htargetCheck : (Sevm.argWord frame.sevm 1 =? 0) = 1 := by
-    simp [B256.eqCheck, hzero]
+    simp only [B256.eqCheck, hzero, ↓reduceIte]
   rw [htargetCheck] at htargetPrefix
   rcases targetBranchCursor.selectBranchSuccSilent (flag := (1 : B256))
       (by decide) htargetPrefix with
@@ -1144,19 +1161,21 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromZero
         ← congrFun hlineCode ca, ← congrFun hcodeCore ca,
         ← getCode_eq_of_state_eq hspendSilent.state ca]
       exact context.installed.1)
-    (by simp [redeemSendToCallerPrefix, pushList, NinstIsChildless,
-      Ninst.pushB256])
+    (by simp only [redeemSendToCallerPrefix, pushList, List.map_cons, pushB256, List.map_nil,
+      Fin.isValue, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false,
+      or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
     (by
       intro sendPre callPre value tail hp hrun
       exact redeemSendToCallerPrefix_effect hp hrun)
-    (by simp [redeemReturnTrueLine, mstoreAt, pushList, NinstIsChildless,
-      Ninst.pushB256])
+    (by simp only [redeemReturnTrueLine, pushB256, mstoreAt, List.cons_append, List.nil_append,
+      pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
+      NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
     (by func_inv)
     hdeeper context.covered
   have hnotlast : ownRecordLast frame.sevm = false := by
-    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
-      transferFromSelector_ne_flashLoanSelector,
-      transferFromSelector_ne_permitSelector]
+    simp only [ownRecordLast, isFlashInvocation, ne_eq, decide_not, hselector,
+      transferFromSelector_ne_flashLoanSelector, decide_false, Bool.and_false, isPermitInvocation,
+      transferFromSelector_ne_permitSelector, Bool.or_self]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -1180,10 +1199,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromZero
     rcases hfork with ⟨hself, hstorEq⟩ | ⟨hnself, hmaxOrFinite⟩
     · have hown : (CountedFrame.ofFrame dp ca frame).allowance = none := by
         show frameAllowanceEvent frame.sevm frame.pre frame.post = none
-        simp [frameAllowanceEvent, hnonempty, hselector,
-          transferFromSelector_ne_approveSelector,
-          transferFromSelector_ne_approveAndCallSelector,
-          transferFromSelector_ne_permitSelector, hself]
+        simp only [frameAllowanceEvent, hnonempty, ↓reduceIte, hselector,
+          transferFromSelector_ne_approveSelector, decide_false,
+          transferFromSelector_ne_approveAndCallSelector, Bool.or_self, Bool.false_eq_true,
+          transferFromSelector_ne_permitSelector, decide_true, Bool.true_or, hself]
       rw [htarget] at hstorEq
       rw [hown, hstorEq, ← congrFun hpreStor ca]
     · rcases hmaxOrFinite with
@@ -1201,10 +1220,10 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromZero
                    depth := frame.sevm.depth
                    visit := .spendMax } := by
           show frameAllowanceEvent frame.sevm frame.pre frame.post = _
-          simp [frameAllowanceEvent, hnonempty, hselector,
-            transferFromSelector_ne_approveSelector,
-            transferFromSelector_ne_approveAndCallSelector,
-            transferFromSelector_ne_permitSelector, hnself, hbefore]
+          simp only [frameAllowanceEvent, hnonempty, ↓reduceIte, hselector,
+            transferFromSelector_ne_approveSelector, decide_false,
+            transferFromSelector_ne_approveAndCallSelector, Bool.or_self, Bool.false_eq_true,
+            transferFromSelector_ne_permitSelector, decide_true, Bool.true_or, hnself, hbefore]
         rw [htarget] at hstorEq
         rw [hown]
         simp only [AllowanceVisit.written?, ite_self]
@@ -1222,10 +1241,11 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromZero
                    visit := .spendFinite allowance
                      (allowance - Sevm.argWord frame.sevm 2) } := by
           show frameAllowanceEvent frame.sevm frame.pre frame.post = _
-          simp [frameAllowanceEvent, hnonempty, hselector,
-            transferFromSelector_ne_approveSelector,
-            transferFromSelector_ne_approveAndCallSelector,
-            transferFromSelector_ne_permitSelector, hnself, hbefore, hneMax]
+          simp only [frameAllowanceEvent, hnonempty, ↓reduceIte, hselector,
+            transferFromSelector_ne_approveSelector, decide_false,
+            transferFromSelector_ne_approveAndCallSelector, Bool.or_self, Bool.false_eq_true,
+            transferFromSelector_ne_permitSelector, decide_true, Bool.true_or, hnself, hbefore,
+            hneMax]
         rw [htarget] at hstorSet
         rw [hown]
         unfold AllowanceEvent.key
@@ -1297,16 +1317,17 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceSound
         (Exec.attributionInner dp ca frame.run) := by
   rcases frame with ⟨fpc, e, fpre, fout, frun, fcommitted⟩
   cases fout with
-  | error err => simp [Execution.commits] at fcommitted
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at fcommitted
   | ok fpost =>
       have htargetE : e.currentTarget = ca := htarget
       -- the guarded balance check
       unfold redeemFromBody at cursor
       rcases cursor.peelChildlessLine
           (line := redeemFromCheckLine ownerArg amountArg)
-          (by simp [redeemFromCheckLine, loadArgBalanceAmount, addressArg,
-            normalizeAddress, pushAddressMask, balanceTooSmall, arg, cdl,
-            NinstIsChildless, Ninst.pushB256]) with
+          (by simp only [redeemFromCheckLine, loadArgBalanceAmount, addressArg, arg, cdl, pushB256,
+            normalizeAddress, pushAddressMask, List.cons_append, List.nil_append, Fin.isValue,
+            balanceTooSmall, List.mem_cons, List.not_mem_nil, or_false, or_self_left,
+            NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
         ⟨branchCursor, hcheck⟩
       unfold redeemFromCheckLine at hcheck
       rcases of_run_append (loadArgBalanceAmount ownerArg amountArg)
@@ -1354,7 +1375,8 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceSound
             hbalancePop.memory)
       -- the owner-key debit
       rcases successCursor.peelChildlessLine (line := debitLoadedBalance)
-          (by simp [debitLoadedBalance, NinstIsChildless]) with
+          (by simp only [debitLoadedBalance, Fin.isValue, List.mem_cons, List.not_mem_nil, or_false,
+            NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
         ⟨afterDebitCursor, hdebit⟩
       have hdebitCode : Devm.getCode successCursor.pre =
           Devm.getCode afterDebitCursor.pre :=
@@ -1390,9 +1412,10 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceSound
       -- the burn event and the send operands
       rcases afterDebitCursor.peelChildlessLine
           (line := redeemFromEventLine ownerArg amountArg)
-          (by simp [redeemFromEventLine, addressArg, normalizeAddress,
-            pushAddressMask, arg, cdl, emitTransfer, Blanc.transferFromLog,
-            mstoreAt, logWith, NinstIsChildless, Ninst.pushB256]) with
+          (by simp only [redeemFromEventLine, addressArg, arg, cdl, pushB256, normalizeAddress,
+            pushAddressMask, List.cons_append, List.nil_append, emitTransfer, transferFromLog,
+            Fin.isValue, mstoreAt, logWith, Fin.reduceSucc, List.mem_cons, List.not_mem_nil,
+            or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
         ⟨sendCursor, heventRun⟩
       unfold redeemFromEventLine at heventRun
       rcases of_run_append (addressArg ownerArg) heventRun with
@@ -1467,7 +1490,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceSound
           have hstepAt : Ninst.StepRun callCursor.pc e callCursor.pre
               Ninst.call xl (.ok midD) :=
             Ninst.stepRun_pc_irrel (pc' := callCursor.pc)
-              (by simp [Ninst.pcFree]) ostep
+              (by simp only [pcFree]) ostep
           -- the trailing guard excludes the reverter arm
           have htailPlain : Func.Run ((weth10 dp).main :: weth10Aux) e midD
               (Ninst.iszero ::: ((.call errSlot) <?>
@@ -1492,7 +1515,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceSound
             have hzero : ((0 : B256) =? 0) = 0 :=
               pref_head_unique htest (pref_append [(0 : B256)] afterGuard.stack)
             rw [show ((0 : B256) =? 0) = 1 from by
-              simp [B256.eqCheck]] at hzero
+              simp only [B256.eqCheck, ↓reduceIte]] at hzero
             exact B256.zero_ne_one hzero.symm
           · rcases hsuccess with
               ⟨callParent, child, xlRaw, hasDelegation, resolvedCallee, code,
@@ -1557,7 +1580,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceSound
                 rw [if_neg (not_delegation_of_compile hcallCodeAt)]
               rcases hdelegation with ⟨_, hna, _, _⟩ | ⟨_, hsome, _, _, _⟩
               · exact hna.trans htargetCa
-              · simp [hnone] at hsome
+              · simp only [hnone, reduceCtorEq] at hsome
             have htargetCode :
                 (callMsg e callParent
                   (min gasWord.toNat (except64th availableGas) +
@@ -1663,7 +1686,8 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_withdrawFrom
   have hmem : (Sevm.selector frame.sevm, nonpayable withdrawFrom) ∈
       weth10Funcs dp := by
     rw [hselector]
-    simp [withdrawFromSelector, weth10Funcs]
+    simp only [weth10Funcs, withdrawFromSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+      or_false, true_or, or_true]
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCountedSilent (frame := frame) context hnonempty
       hmem with
     ⟨wrapperCursor, hentrySilent⟩
@@ -1683,7 +1707,9 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_withdrawFrom
     ⟨body, hget, coreCursor, hwfCore, ⟨imgCore, hreadsCore⟩, hcodeCore,
       hfork⟩
   have hbody : body = withdrawFromCore := by
-    simpa [weth10, weth10Aux, withdrawFromCoreSlot] using hget.symm
+    simpa only [weth10, weth10Aux, withdrawFromCoreSlot, List.length_cons, List.length_nil,
+      zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero, Option.some.injEq] using hget.symm
   subst body
   change Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
     ((weth10 dp).main :: weth10Aux)
@@ -1700,18 +1726,19 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_withdrawFrom
     (by
       rw [← hcoreCode]
       exact context.installed.1)
-    (by simp [redeemSendToArgPrefix, pushList, arg, cdl, NinstIsChildless,
-      Ninst.pushB256])
+    (by simp only [redeemSendToArgPrefix, pushList, List.map_cons, pushB256, List.map_nil,
+      Fin.isValue, List.cons_append, List.nil_append, arg, cdl, List.mem_cons, List.not_mem_nil,
+      or_false, or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
     (by
       intro sendPre callPre value tail hp hrun
       exact redeemSendToArgPrefix_effect 1 hp hrun)
-    (by simp)
+    (by simp only [List.not_mem_nil, IsEmpty.forall_iff, implies_true])
     (by func_inv)
     hdeeper context.covered
   have hnotlast : ownRecordLast frame.sevm = false := by
-    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
-      withdrawFromSelector_ne_flashLoanSelector,
-      withdrawFromSelector_ne_permitSelector]
+    simp only [ownRecordLast, isFlashInvocation, ne_eq, decide_not, hselector,
+      withdrawFromSelector_ne_flashLoanSelector, decide_false, Bool.and_false, isPermitInvocation,
+      withdrawFromSelector_ne_permitSelector, Bool.or_self]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -1733,10 +1760,10 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_withdrawFrom
     rcases hfork with ⟨hself, hstorEq⟩ | ⟨hnself, hmaxOrFinite⟩
     · have hown : (CountedFrame.ofFrame dp ca frame).allowance = none := by
         show frameAllowanceEvent frame.sevm frame.pre frame.post = none
-        simp [frameAllowanceEvent, hnonempty, hselector,
-          withdrawFromSelector_ne_approveSelector,
-          withdrawFromSelector_ne_approveAndCallSelector,
-          withdrawFromSelector_ne_permitSelector, hself]
+        simp only [frameAllowanceEvent, hnonempty, ↓reduceIte, hselector,
+          withdrawFromSelector_ne_approveSelector, decide_false,
+          withdrawFromSelector_ne_approveAndCallSelector, Bool.or_self, Bool.false_eq_true,
+          withdrawFromSelector_ne_permitSelector, decide_true, Bool.or_true, hself]
       rw [htarget] at hstorEq
       rw [hown, hstorEq, ← congrFun hpreStor ca]
     · rcases hmaxOrFinite with
@@ -1754,10 +1781,10 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_withdrawFrom
                    depth := frame.sevm.depth
                    visit := .spendMax } := by
           show frameAllowanceEvent frame.sevm frame.pre frame.post = _
-          simp [frameAllowanceEvent, hnonempty, hselector,
-            withdrawFromSelector_ne_approveSelector,
-            withdrawFromSelector_ne_approveAndCallSelector,
-            withdrawFromSelector_ne_permitSelector, hnself, hbefore]
+          simp only [frameAllowanceEvent, hnonempty, ↓reduceIte, hselector,
+            withdrawFromSelector_ne_approveSelector, decide_false,
+            withdrawFromSelector_ne_approveAndCallSelector, Bool.or_self, Bool.false_eq_true,
+            withdrawFromSelector_ne_permitSelector, decide_true, Bool.or_true, hnself, hbefore]
         rw [htarget] at hstorEq
         rw [hown]
         simp only [AllowanceVisit.written?, ite_self]
@@ -1775,10 +1802,11 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_withdrawFrom
                    visit := .spendFinite allowance
                      (allowance - Sevm.argWord frame.sevm 2) } := by
           show frameAllowanceEvent frame.sevm frame.pre frame.post = _
-          simp [frameAllowanceEvent, hnonempty, hselector,
-            withdrawFromSelector_ne_approveSelector,
-            withdrawFromSelector_ne_approveAndCallSelector,
-            withdrawFromSelector_ne_permitSelector, hnself, hbefore, hneMax]
+          simp only [frameAllowanceEvent, hnonempty, ↓reduceIte, hselector,
+            withdrawFromSelector_ne_approveSelector, decide_false,
+            withdrawFromSelector_ne_approveAndCallSelector, Bool.or_self, Bool.false_eq_true,
+            withdrawFromSelector_ne_permitSelector, decide_true, Bool.or_true, hnself, hbefore,
+            hneMax]
         rw [htarget] at hstorSet
         rw [hown]
         unfold AllowanceEvent.key
@@ -1820,7 +1848,8 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferFromZero
   have hmem : (Sevm.selector frame.sevm, nonpayable transferFrom) ∈
       weth10Funcs dp := by
     rw [hselector]
-    simp [transferFromSelector, weth10Funcs]
+    simp only [weth10Funcs, transferFromSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+      or_false, true_or, or_true]
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCountedSilent (frame := frame) context hnonempty
       hmem with
     ⟨wrapperCursor, hentrySilent⟩
@@ -1840,7 +1869,9 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferFromZero
     ⟨body, hget, coreCursor, hwfCore, ⟨imgCore, hreadsCore⟩, hcodeCore,
       hfork⟩
   have hbody : body = transferFromCore := by
-    simpa [weth10, weth10Aux, transferFromCoreSlot] using hget.symm
+    simpa only [weth10, weth10Aux, transferFromCoreSlot, List.length_cons, List.length_nil,
+      zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero, Option.some.injEq] using hget.symm
   subst body
   change Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca
     ((weth10 dp).main :: weth10Aux)
@@ -1848,7 +1879,8 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferFromZero
     ((arg 1 ++ [iszero]) +++ (transferFromZero <?> transferFromNonzero))
     frame.post at coreCursor
   rcases coreCursor.peelChildlessLine
-      (by simp [arg, cdl, NinstIsChildless, Ninst.pushB256]) with
+      (by simp only [arg, cdl, pushB256, List.cons_append, List.nil_append, List.mem_cons,
+        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨targetBranchCursor, htargetLine⟩
   have htargetPrefix : [Sevm.argWord frame.sevm 1 =? 0] <<+
       targetBranchCursor.pre.stack := by
@@ -1858,7 +1890,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferFromZero
     cases hnil
     exact prefix_of_iszero hzeroRun (prefix_of_arg nil_pref harg)
   have htargetCheck : (Sevm.argWord frame.sevm 1 =? 0) = 1 := by
-    simp [B256.eqCheck, hzero]
+    simp only [B256.eqCheck, hzero, ↓reduceIte]
   rw [htargetCheck] at htargetPrefix
   rcases targetBranchCursor.selectBranchSuccSilent (flag := (1 : B256))
       (by decide) htargetPrefix with
@@ -1894,19 +1926,21 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferFromZero
     (by
       rw [← hzeroCode]
       exact context.installed.1)
-    (by simp [redeemSendToCallerPrefix, pushList, NinstIsChildless,
-      Ninst.pushB256])
+    (by simp only [redeemSendToCallerPrefix, pushList, List.map_cons, pushB256, List.map_nil,
+      Fin.isValue, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false,
+      or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
     (by
       intro sendPre callPre value tail hp hrun
       exact redeemSendToCallerPrefix_effect hp hrun)
-    (by simp [redeemReturnTrueLine, mstoreAt, pushList, NinstIsChildless,
-      Ninst.pushB256])
+    (by simp only [redeemReturnTrueLine, pushB256, mstoreAt, List.cons_append, List.nil_append,
+      pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
+      NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
     (by func_inv)
     hdeeper context.covered
   have hnotlast : ownRecordLast frame.sevm = false := by
-    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
-      transferFromSelector_ne_flashLoanSelector,
-      transferFromSelector_ne_permitSelector]
+    simp only [ownRecordLast, isFlashInvocation, ne_eq, decide_not, hselector,
+      transferFromSelector_ne_flashLoanSelector, decide_false, Bool.and_false, isPermitInvocation,
+      transferFromSelector_ne_permitSelector, Bool.or_self]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -1928,10 +1962,10 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferFromZero
     rcases hfork with ⟨hself, hstorEq⟩ | ⟨hnself, hmaxOrFinite⟩
     · have hown : (CountedFrame.ofFrame dp ca frame).allowance = none := by
         show frameAllowanceEvent frame.sevm frame.pre frame.post = none
-        simp [frameAllowanceEvent, hnonempty, hselector,
-          transferFromSelector_ne_approveSelector,
-          transferFromSelector_ne_approveAndCallSelector,
-          transferFromSelector_ne_permitSelector, hself]
+        simp only [frameAllowanceEvent, hnonempty, ↓reduceIte, hselector,
+          transferFromSelector_ne_approveSelector, decide_false,
+          transferFromSelector_ne_approveAndCallSelector, Bool.or_self, Bool.false_eq_true,
+          transferFromSelector_ne_permitSelector, decide_true, Bool.true_or, hself]
       rw [htarget] at hstorEq
       rw [hown, hstorEq, ← congrFun hpreStor ca]
     · rcases hmaxOrFinite with
@@ -1949,10 +1983,10 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferFromZero
                    depth := frame.sevm.depth
                    visit := .spendMax } := by
           show frameAllowanceEvent frame.sevm frame.pre frame.post = _
-          simp [frameAllowanceEvent, hnonempty, hselector,
-            transferFromSelector_ne_approveSelector,
-            transferFromSelector_ne_approveAndCallSelector,
-            transferFromSelector_ne_permitSelector, hnself, hbefore]
+          simp only [frameAllowanceEvent, hnonempty, ↓reduceIte, hselector,
+            transferFromSelector_ne_approveSelector, decide_false,
+            transferFromSelector_ne_approveAndCallSelector, Bool.or_self, Bool.false_eq_true,
+            transferFromSelector_ne_permitSelector, decide_true, Bool.true_or, hnself, hbefore]
         rw [htarget] at hstorEq
         rw [hown]
         simp only [AllowanceVisit.written?, ite_self]
@@ -1970,10 +2004,11 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferFromZero
                    visit := .spendFinite allowance
                      (allowance - Sevm.argWord frame.sevm 2) } := by
           show frameAllowanceEvent frame.sevm frame.pre frame.post = _
-          simp [frameAllowanceEvent, hnonempty, hselector,
-            transferFromSelector_ne_approveSelector,
-            transferFromSelector_ne_approveAndCallSelector,
-            transferFromSelector_ne_permitSelector, hnself, hbefore, hneMax]
+          simp only [frameAllowanceEvent, hnonempty, ↓reduceIte, hselector,
+            transferFromSelector_ne_approveSelector, decide_false,
+            transferFromSelector_ne_approveAndCallSelector, Bool.or_self, Bool.false_eq_true,
+            transferFromSelector_ne_permitSelector, decide_true, Bool.true_or, hnself, hbefore,
+            hneMax]
         rw [htarget] at hstorSet
         rw [hown]
         unfold AllowanceEvent.key

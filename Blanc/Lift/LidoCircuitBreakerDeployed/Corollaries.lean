@@ -36,8 +36,8 @@ theorem assignmentCount_eq_count_map
       simp only [assignmentCount, List.map_cons, List.count_cons, ih]
       by_cases h : entry.2 = pauser
       · subst h
-        simp [Nat.add_comm]
-      · simp [h]
+        simp only [↓reduceIte, BEq.rfl, Nat.add_comm]
+      · simp only [h, ↓reduceIte, zero_add, beq_iff_eq, add_zero]
 
 /-- **L1 logical membership**: for canonical target `t`, assignment and index
 reads are nonzero iff `t` is registered, and a found entry pins the assignment,
@@ -164,7 +164,7 @@ theorem l3_count_sum {s : Stor} {entries : List Entry}
             apply Finset.sum_congr rfl
             intro p hp
             have hpMem : p ∈ entries.map Prod.snd := by
-              simpa using hp
+              simpa only [List.mem_map, Prod.exists, exists_eq_right, List.mem_toFinset] using hp
             obtain ⟨entry, hentry, hpEq⟩ := List.mem_map.mp hpMem
             have hcanonical : canonicalAddress p := by
               rw [← hpEq]
@@ -178,7 +178,7 @@ theorem l3_count_sum {s : Stor} {entries : List Entry}
             exact assignmentCount_eq_count_map entries p
     _ = entries.length := by
             rw [List.sum_toFinset_count_eq_length]
-            simp
+            simp only [List.length_map]
 
 /-- **L3 raw count conservation**: the raw Solidity storage counterpart of `l3_count_sum`,
 with count reads rewritten to slot `mapSlot p 6`. -/
@@ -210,7 +210,7 @@ theorem l3_count_sum_raw {s : Stor} {entries : List Entry}
           apply Finset.sum_congr rfl
           intro p hp
           have hpMem : p ∈ entries.map Prod.snd := by
-            simpa using hp
+            simpa only [List.mem_map, Prod.exists, exists_eq_right, List.mem_toFinset] using hp
           obtain ⟨entry, hentry, hpEq⟩ := List.mem_map.mp hpMem
           have hcanonical : canonicalAddress p := by
             rw [← hpEq]
@@ -232,11 +232,11 @@ entries `[]`, satisfying the contract state invariant. -/
 theorem inv_of_registryZero {s : Stor} (h : RegistryZero s) :
     ∃ entries, RegistryWitness (solRegistryStorage s) entries := by
   refine ⟨[], ?_⟩
-  refine ⟨by simp, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · intro entry hentry; simp at hentry
-  · intro entry hentry; simp at hentry
+  refine ⟨by simp only [List.map_nil, List.nodup_nil], ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · intro entry hentry; simp only [List.not_mem_nil] at hentry
+  · intro entry hentry; simp only [List.not_mem_nil] at hentry
   · exact h.1
-  · intro index hindex; simp at hindex
+  · intro index hindex; simp only [List.length_nil, not_lt_zero] at hindex
   · intro target htarget; exact (h.2 target htarget).1
   · intro target htarget; exact (h.2 target htarget).2.1
   · intro pauser hpauser; exact (h.2 pauser hpauser).2.2

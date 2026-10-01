@@ -172,7 +172,7 @@ theorem pairState_proxyImplSlot_zero :
   rw [pairState_proxyAcct]
   unfold proxyAcct
   rw [Stor.get_set_ne _ implSlot_ne_implementationSlot.symm]
-  simp [Stor.empty, Stor.get]
+  simp only [Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc, Std.TreeMap.getD_emptyc]
 
 /-! ## The two fixed messages -/
 
@@ -181,7 +181,7 @@ def successData : Bytes := (1 : B256).toBytes
 def revertData : Bytes := (0 : B256).toBytes
 
 theorem successData_length : successData.length = 32 := by
-  simp [successData, B256.length_toBytes]
+  simp only [successData, B256.length_toBytes]
 
 def pairBenv : Benv :=
   { (default : Benv) with
@@ -233,7 +233,7 @@ private lemma proxy_empty_extCost (S : List B256) (G : Nat) :
     ((initDevm proxyMsgSuccess).setMach
       ⟨S, (initDevm proxyMsgSuccess).memory, G, (initDevm proxyMsgSuccess).stateGas⟩).extCost [⟨0, 32⟩] = gMemory := by
   rw [show (initDevm proxyMsgSuccess).memory = Mem.empty by rfl]
-  simpa [initDevm, proxyMsgSuccess] using
+  simpa only [initDevm, proxyMsgSuccess, Bool.false_eq_true, ↓reduceIte] using
     (Devm.extCost_empty_word (devm := initDevm proxyMsgSuccess) (S := S) (G := G))
 
 private def proxyCallPreSuccess : Devm :=
@@ -296,7 +296,8 @@ private theorem proxy_success_child_run :
     change ((proxyAdr, implSlot) : Adr × B256) ∉
       (Std.HashSet.emptyWithCapacity : KeySet).insert
         (proxyAdr, implementationSlotLit)
-    simpa [implementationSlotLit_eq_slot] using
+    simpa only [implementationSlotLit_eq_slot, Std.HashSet.mem_insert, beq_iff_eq, Prod.mk.injEq,
+      true_and, Std.HashSet.not_mem_emptyWithCapacity, or_false, ne_eq] using
       implSlot_ne_implementationSlot.symm
   have h_orig :
       getOrigStorVal (initSevm proxySuccessChild)
@@ -339,7 +340,7 @@ private theorem proxy_success_child_exec :
       Prog.compile implGuardedProg := by
     rw [show (initSevm proxySuccessChild).code = implGuardedCode by rfl]
     rw [show implGuardedCode.toList = implGuardedBytes by
-      simp [implGuardedCode, ByteArray.toList_eq_toList_data]]
+      simp only [implGuardedCode, ByteArray.toList_eq_toList_data]]
     exact implGuardedProg_compile.symm
   refine ⟨post, Prog.exec_of_runCompiledTo hrun h_code, herr, hout, hgas,
     hstate, htra, hlogs⟩
@@ -360,15 +361,17 @@ private theorem proxy_success_child_frame_roots
     refine ⟨rfl, rfl, rfl, ?_⟩
     change some implGuardedCode.toList = Prog.compile implGuardedProg
     rw [show implGuardedCode.toList = implGuardedBytes by
-      simp [implGuardedCode, ByteArray.toList_eq_toList_data]]
+      simp only [implGuardedCode, ByteArray.toList_eq_toList_data]]
     exact implGuardedProg_compile.symm
   have noExecSource :
       ∀ site ∈ implGuardedProg.sourceSites, ∀ x : Xinst,
         site.instruction ≠ .exec x := by
     intro site member x
-    simp [implGuardedProg, implGuarded, implSuccess, implRevert,
-      Prog.sourceSites, table, cdl, mstoreAt, prepend,
-      Func.sourceSites] at member
+    simp only [Prog.sourceSites, table, implGuardedProg, implGuarded, cdl, implSuccess, mstoreAt,
+      prepend, implRevert, zero_add, List.length_cons, List.length_nil, List.range_one,
+      List.flatMap_cons, zero_lt_one, getElem?_pos, List.getElem_cons_zero, Func.sourceSites,
+      List.nil_append, List.cons_append, List.flatMap_nil, List.append_nil, List.mem_cons,
+      List.not_mem_nil, or_false] at member
     aesop (add simp [Ninst.pushB256])
   have childless : Exec.rawFrameDescendants child = [] := by
     apply Exec.rawFrameDescendants_eq_nil_of_no_sameFrame_xinstAt child
@@ -397,18 +400,18 @@ theorem proxySuccessChildMsg_exec :
   have hexec :
       exec ⟨0, initSevm proxySuccessChildMsg, initDevm proxySuccessChildMsg⟩ =
         .ok post := by
-    simpa [proxySuccessChildMsg, initEvm] using h_exec
+    simpa only [proxySuccessChildMsg, initEvm] using h_exec
   have hderiv :
       Nonempty (Exec 0 (initSevm proxySuccessChildMsg)
         (initDevm proxySuccessChildMsg) (.ok post)) :=
     (exec_iff_exec_eq _ _ _ _).mpr hexec
   refine ⟨post, hexec, hderiv, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · simpa [proxySuccessChildMsg] using herr
+  · simpa only [proxySuccessChildMsg] using herr
   · exact hout
   · exact hgas
   · exact hstate
-  · simpa [proxySuccessChildMsg] using htra
-  · simpa [proxySuccessChildMsg] using hlogs
+  · simpa only [proxySuccessChildMsg] using htra
+  · simpa only [proxySuccessChildMsg] using hlogs
 
 private theorem proxy_success_h_ext :
     (proxyCallBaseSuccess.setMach
@@ -441,7 +444,7 @@ private theorem proxy_success_h_acc :
       (Std.HashSet.emptyWithCapacity : AdrSet) := by rfl
   rw [h]
   unfold accessCost
-  simp
+  simp only [Std.HashSet.not_mem_emptyWithCapacity, ↓reduceIte, add_zero]
 
 private theorem proxy_success_h_gas : 24744 + 0 ≤ proxySuccessD1.gasLeft := by
   decide
@@ -464,13 +467,11 @@ private theorem proxy_success_delegatecall_spawn :
     change calculateMsgCallGas 0 25095 25095 0 gasColdAccountAccess =
       (24744, 22144)
     exact proxy_call_gas_split
-  simpa [proxySuccessParent, proxySuccessChild,
-    show (0 : B256).toNat = 0 by decide,
+  simpa only [proxySuccessChild, proxySuccessParent, add_zero, show (0 : B256).toNat = 0 by decide,
     show (32 : B256).toNat = 32 by decide] using
-    (Xinst.step_delegatecall_spawn
-      (by change CoveredFork .prague; exact CoveredFork.prague) h_stk proxy_success_h_ext
-      proxy_success_h_del proxy_success_h_acc h_split
-      proxy_success_h_gas proxy_success_h_depth)
+    (Xinst.step_delegatecall_spawn (by change CoveredFork .prague; exact CoveredFork.prague) h_stk
+      proxy_success_h_ext proxy_success_h_del proxy_success_h_acc h_split proxy_success_h_gas
+      proxy_success_h_depth)
 
 private theorem proxy_success_delegatecall_allChildRoots {post : Devm} :
     ninstAllChildRoots
@@ -522,8 +523,9 @@ private theorem proxy_success_delegatecall :
         (exec (initEvm proxySuccessChild)) = .ok childPost := by
     rw [hchild]
     have hsg : proxySuccessChild.benv.stat.rules.stateGas = none := rfl
-    simp [Frame.ofCall, Frame.settle, Frame.settleMsg, processMessage.settle,
-      hsg, executeCode.handleErrorWith_none, executeCode.handleError, h_ok]
+    simp only [Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
+      processMessage.settle, hsg, executeCode.handleErrorWith_none, executeCode.handleError,
+      Except.bind_ok, h_ok]
   let post := (((incorporateChildOnSuccess proxySuccessParent childPost
       childPost.output).setMach
         ⟨1 :: proxySuccessParent.stack, proxySuccessParent.memory,
@@ -566,7 +568,8 @@ private theorem proxy_success_delegatecall :
                 exact proxy_success_child_enters
               · have h0 : (0 : B256).toNat = 0 := by decide
                 have h32 : (32 : B256).toNat = 32 := by decide
-                simpa [post, proxySuccessParent, proxySuccessChild, h0, h32] using hres
+                simpa only [ExceptT.stM_eq, add_zero, h0, h32, proxySuccessChild,
+                  proxySuccessParent, List.take_zero] using hres
             · constructor
               · dsimp only [post]
               · constructor
@@ -606,7 +609,7 @@ private theorem proxy_success_tail (childPost : Devm)
       final.transientStorage = proxyCallPreSuccess.transientStorage ∧
       final.logs = proxyCallPreSuccess.logs := by
   have hbound : (0 : Nat) + 32 ≤ implReturnWord.toBytes.length := by
-    simp [B256.length_toBytes]
+    simp only [zero_add, B256.length_toBytes, Std.le_refl]
   let base := incorporateChildOnSuccess proxySuccessParent childPost childPost.output
   let final :=
     (((base.setMach ⟨[], proxySuccessParent.memory.write 0
@@ -618,12 +621,12 @@ private theorem proxy_success_tail (childPost : Devm)
             ⟨1 :: proxySuccessParent.stack, proxySuccessParent.memory, 351, (incorporateChildOnSuccess proxySuccessParent childPost childPost.output).stateGas⟩).memWrite
           0 (childPost.output.take 0)) =
         base.setMach ⟨[1], proxySuccessParent.memory, 351, base.stateGas⟩ := by
-      simp [base, Devm.memWrite, Mach.memWrite, liftMachPure,
-        Mem.write, hout]
+      simp only [Devm.memWrite, liftMachPure, hout, Mach.memWrite, Mem.write, List.take_zero,
+        Devm.setMach_stateGas, base]
       rfl
     rw [hstart]
     have hbase_returnData : base.returnData = implReturnWord.toBytes := by
-      dsimp [base]
+      dsimp only [base]
       rw [incorporateChildOnSuccess_returnData, hout]
     have hpmem : proxySuccessParent.memory.size = 32 := by
       decide
@@ -637,7 +640,7 @@ private theorem proxy_success_tail (childPost : Devm)
         List.sliceD implReturnWord.toBytes 0 32 0 = implReturnWord.toBytes := by
       decide +kernel
     func_run [6]
-    all_goals simp_all [Devm.returnData_setMach, B256.length_toBytes]
+    all_goals simp_all only [zero_add, B256.length_toBytes, Std.le_refl, List.take_zero, Devm.setMach_gasLeft, Nat.reduceSub, Nat.reduceAdd, Devm.returnData_setMach]
     all_goals try decide
     case h_cost =>
       simp only [show Nat.toB256 32 = (32 : B256) by decide,
@@ -646,7 +649,7 @@ private theorem proxy_success_tail (childPost : Devm)
       rw [hext]
       decide
     case h_arm =>
-      dsimp [final]
+      dsimp only [final]
       rw [show Nat.toB256 32 = (32 : B256) by decide,
         show (B256.toNat (0 : B256)) = 0 by decide,
         show (B256.toNat (32 : B256)) = 32 by decide,
@@ -656,7 +659,7 @@ private theorem proxy_success_tail (childPost : Devm)
         intro h
         have := B256.length_toBytes implReturnWord
         rw [h] at this
-        simp at this
+        simp only [List.length_nil, OfNat.zero_ne_ofNat] at this
       have hread :
           ((proxySuccessParent.memory.write 0 implReturnWord.toBytes).read 0 32).1 =
             implReturnWord.toBytes := by
@@ -721,12 +724,12 @@ private theorem proxy_success_func_run :
         pushB256 implementationSlotLit ::: sload ::: gas ::: delegatecall :::
         proxySuccessTail) (.ok final)
     proxy_rooted_run [9]
-    all_goals simp_all
+    all_goals simp_all only [add_zero, List.take_zero, Devm.memWrite_memory, Devm.memWrite_gasLeft, Devm.setMach_gasLeft, Nat.reduceSub, Nat.reduceAdd, Devm.addAccessedStorageKey_setMach_setMach]
     all_goals try decide
     case h_cold =>
       change ((proxyAdr, implementationSlotLit) : Adr × B256) ∉
         (Std.HashSet.emptyWithCapacity : KeySet)
-      simp
+      simp only [Std.HashSet.not_mem_emptyWithCapacity, not_false_eq_true]
     case tail =>
       have h_stk : proxyCallPreSuccess.stack =
           25095 :: implAdr.toB256 :: 0 :: 32 :: 0 :: 0 :: [] := by
@@ -743,7 +746,8 @@ private theorem proxy_success_func_run :
           (fun root => (Blanc.Exec.Deriv.exactInvocation implGuardedProg proxyAdr implAdr root))
           htail :=
         rootedRunCompiledTo_of_execFree (run := htail) (by
-          simp [proxySuccessTail, proxyReturnTail, funcExecFree, Ninst.pushB256])
+          simp only [proxySuccessTail, proxyReturnTail, pushB256, Fin.isValue, funcExecFree,
+            and_self])
       have known : proxyRootedRun [proxyFallback]
           (initSevm proxyMsgSuccess) proxyCallPreSuccess
           (delegatecall ::: proxySuccessTail) (.ok final) := by
@@ -785,7 +789,7 @@ theorem proxyProg_success_runCompiledTo :
       some (initSevm proxyMsgSuccess).code.toList = Prog.compile proxyProg := by
     rw [show (initSevm proxyMsgSuccess).code = proxyCode by rfl]
     rw [show proxyCode.toList = proxyBytes by
-      simp [proxyCode, proxyBytes, ByteArray.toList_eq_toList_data]]
+      simp only [proxyCode, proxyBytes, ByteArray.toList_eq_toList_data]]
     exact proxyProg_compile
   have htra0 :
       proxyCallPreSuccess.transientStorage =
@@ -880,7 +884,8 @@ private theorem proxy_revert_child_run :
     change ((proxyAdr, implSlot) : Adr × B256) ∉
       (Std.HashSet.emptyWithCapacity : KeySet).insert
         (proxyAdr, implementationSlotLit)
-    simpa [implementationSlotLit_eq_slot] using
+    simpa only [implementationSlotLit_eq_slot, Std.HashSet.mem_insert, beq_iff_eq, Prod.mk.injEq,
+      true_and, Std.HashSet.not_mem_emptyWithCapacity, or_false, ne_eq] using
       implSlot_ne_implementationSlot.symm
   have h_data : Sevm.dataWord (initSevm proxyRevertChild) 0 = 0 := by
     change Bytes.toB256 revertData = 0
@@ -912,10 +917,10 @@ private theorem proxy_revert_child_exec :
       Prog.compile implGuardedProg := by
     rw [show (initSevm proxyRevertChild).code = implGuardedCode by rfl]
     rw [show implGuardedCode.toList = implGuardedBytes by
-      simp [implGuardedCode, ByteArray.toList_eq_toList_data]]
+      simp only [implGuardedCode, ByteArray.toList_eq_toList_data]]
     exact implGuardedProg_compile.symm
   refine ⟨raw, ?_, herr, hout, hgas, hstate, htra, hlogs⟩
-  simpa [initEvm] using Prog.exec_of_runCompiledTo hrun h_code
+  simpa only [initEvm] using Prog.exec_of_runCompiledTo hrun h_code
 
 private theorem proxy_revert_child_frame_roots
     {raw : Execution}
@@ -933,15 +938,17 @@ private theorem proxy_revert_child_frame_roots
     refine ⟨rfl, rfl, rfl, ?_⟩
     change some implGuardedCode.toList = Prog.compile implGuardedProg
     rw [show implGuardedCode.toList = implGuardedBytes by
-      simp [implGuardedCode, ByteArray.toList_eq_toList_data]]
+      simp only [implGuardedCode, ByteArray.toList_eq_toList_data]]
     exact implGuardedProg_compile.symm
   have noExecSource :
       ∀ site ∈ implGuardedProg.sourceSites, ∀ x : Xinst,
         site.instruction ≠ .exec x := by
     intro site member x
-    simp [implGuardedProg, implGuarded, implSuccess, implRevert,
-      Prog.sourceSites, table, cdl, mstoreAt, prepend,
-      Func.sourceSites] at member
+    simp only [Prog.sourceSites, table, implGuardedProg, implGuarded, cdl, implSuccess, mstoreAt,
+      prepend, implRevert, zero_add, List.length_cons, List.length_nil, List.range_one,
+      List.flatMap_cons, zero_lt_one, getElem?_pos, List.getElem_cons_zero, Func.sourceSites,
+      List.nil_append, List.cons_append, List.flatMap_nil, List.append_nil, List.mem_cons,
+      List.not_mem_nil, or_false] at member
     aesop (add simp [Ninst.pushB256])
   have childless : Exec.rawFrameDescendants child = [] := by
     apply Exec.rawFrameDescendants_eq_nil_of_no_sameFrame_xinstAt child
@@ -974,28 +981,27 @@ theorem proxyRevertChildMsg_exec :
       Prog.compile implGuardedProg := by
     rw [show (initSevm proxyRevertChild).code = implGuardedCode by rfl]
     rw [show implGuardedCode.toList = implGuardedBytes by
-      simp [implGuardedCode, ByteArray.toList_eq_toList_data]]
+      simp only [implGuardedCode, ByteArray.toList_eq_toList_data]]
     exact implGuardedProg_compile.symm
   have hexec :
       exec (initEvm proxyRevertChildMsg) = .error (.revert, raw) :=
     by
-      simpa [proxyRevertChildMsg, initEvm] using
-        (Prog.exec_of_runCompiledTo hrun h_code)
+      simpa only [initEvm, proxyRevertChildMsg] using (Prog.exec_of_runCompiledTo hrun h_code)
   have hderiv :
       Nonempty (Exec 0 (initSevm proxyRevertChildMsg)
         (initDevm proxyRevertChildMsg) (.error (.revert, raw))) := by
     have h_eq :
         exec ⟨0, initSevm proxyRevertChildMsg,
           initDevm proxyRevertChildMsg⟩ = .error (.revert, raw) := by
-      simpa [proxyRevertChildMsg, initEvm] using hexec
+      simpa only [proxyRevertChildMsg, initEvm] using hexec
     exact (exec_iff_exec_eq _ _ _ _).mpr h_eq
   refine ⟨raw, hrun, hexec, hderiv, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · simpa [proxyRevertChildMsg] using herr
+  · simpa only [proxyRevertChildMsg] using herr
   · exact hout
   · exact hgas
   · exact hstate
-  · simpa [proxyRevertChildMsg] using htra
-  · simpa [proxyRevertChildMsg] using hlogs
+  · simpa only [proxyRevertChildMsg] using htra
+  · simpa only [proxyRevertChildMsg] using hlogs
 
 private theorem proxy_revert_h_ext :
     (proxyCallBaseRevert.setMach
@@ -1028,7 +1034,7 @@ private theorem proxy_revert_h_acc :
       (Std.HashSet.emptyWithCapacity : AdrSet) := by rfl
   rw [h]
   unfold accessCost
-  simp
+  simp only [Std.HashSet.not_mem_emptyWithCapacity, ↓reduceIte, add_zero]
 
 private theorem proxy_revert_h_gas :
     24744 + 0 ≤ proxyRevertD1.gasLeft := by
@@ -1052,13 +1058,11 @@ private theorem proxy_revert_delegatecall_spawn :
     change calculateMsgCallGas 0 25095 25095 0 gasColdAccountAccess =
       (24744, 22144)
     exact proxy_call_gas_split
-  simpa [proxyRevertParent, proxyRevertChild,
-    show (0 : B256).toNat = 0 by decide,
+  simpa only [proxyRevertChild, proxyRevertParent, add_zero, show (0 : B256).toNat = 0 by decide,
     show (32 : B256).toNat = 32 by decide] using
-    (Xinst.step_delegatecall_spawn
-      (by change CoveredFork .prague; exact CoveredFork.prague) h_stk proxy_revert_h_ext
-      proxy_revert_h_del proxy_revert_h_acc h_split
-      proxy_revert_h_gas proxy_revert_h_depth)
+    (Xinst.step_delegatecall_spawn (by change CoveredFork .prague; exact CoveredFork.prague) h_stk
+      proxy_revert_h_ext proxy_revert_h_del proxy_revert_h_acc h_split proxy_revert_h_gas
+      proxy_revert_h_depth)
 
 private theorem proxy_revert_delegatecall_allChildRoots {post : Devm} :
     ninstAllChildRoots
@@ -1110,9 +1114,9 @@ private theorem proxy_revert_delegatecall :
         (exec (initEvm proxyRevertChild)) = .ok childPost := by
     rw [hchild]
     have hsg : proxyRevertChild.benv.stat.rules.stateGas = none := rfl
-    simp [childPost, Frame.ofCall, Frame.settle, Frame.settleMsg,
-      processMessage.settle, hsg, executeCode.handleErrorWith_none,
-      executeCode.handleError, hrawerr]
+    simp only [Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
+      processMessage.settle, hsg, executeCode.handleErrorWith_none, executeCode.handleError,
+      Except.bind_ok, hrawerr, Except.ok.injEq, childPost]
     unfold Devm.rollback
     apply Devm.ext
     · rfl
@@ -1178,8 +1182,8 @@ private theorem proxy_revert_delegatecall :
                   exact proxy_revert_child_enters
                 · have h0 : (0 : B256).toNat = 0 := by decide
                   have h32 : (32 : B256).toNat = 32 := by decide
-                  simpa [post, proxyRevertParent, proxyRevertChild, h0, h32]
-                    using hres
+                  simpa only [ExceptT.stM_eq, add_zero, h0, h32, proxyRevertChild,
+                    proxyRevertParent, List.take_zero] using hres
               · constructor
                 · dsimp only [post]
                 · constructor
@@ -1224,21 +1228,22 @@ private theorem proxy_revert_tail (childPost : Devm)
           ⟨0 :: proxyRevertParent.stack, proxyRevertParent.memory, 22468, (incorporateChildOnError proxyRevertParent childPost childPost.output).stateGas⟩).memWrite
             0 (childPost.output.take 0)) =
         base.setMach ⟨[0], proxyRevertParent.memory, 22468, base.stateGas⟩ := by
-      simp [base, Devm.memWrite, Mach.memWrite, liftMachPure, Mem.write, hout]
+      simp only [Devm.memWrite, liftMachPure, hout, Mach.memWrite, Mem.write, List.take_nil,
+        Devm.setMach_stateGas, base]
       rfl
     rw [hstart]
     have hbase_returnData : base.returnData = [] := by
-      dsimp [base]
+      dsimp only [base]
       rw [incorporateChildOnError_returnData, hout]
     func_run [3]
-    all_goals simp_all [Devm.returnData_setMach]
+    all_goals simp_all only [List.take_nil, Devm.setMach_gasLeft, Nat.reduceSub, Nat.reduceAdd, Devm.returnData_setMach, List.length_nil, nonpos_iff_eq_zero, Nat.add_eq_zero_iff]
     all_goals try decide
     case h_cost =>
       simp only [show (Nat.toB256 0).toNat = 0 by decide]
       rw [Devm.extCost_empty_window]
       decide
     case h_arm =>
-      dsimp [final]
+      dsimp only [final]
       have hrun := Func.runCompiledTo_revert
         (fs := [proxyFallback]) (sevm := initSevm proxyMsgRevert)
         (devm := base.setMach ⟨[0, 0], proxyRevertParent.memory, 22439, base.stateGas⟩)
@@ -1258,7 +1263,7 @@ private theorem proxy_revert_tail (childPost : Devm)
                 (B256.toNat 0) 0) = proxyRevertParent.memory := by
         rw [hslice]
         rfl
-      simpa [hmemzero, show Nat.toB256 0 = (0 : B256) by decide] using hrun
+      simpa only [show Nat.toB256 0 = (0 : B256) by decide, hmemzero] using hrun
   · rfl
   · rfl
   · simp only [final, Devm.withOutput_state, Devm.setMach_state]
@@ -1304,12 +1309,12 @@ private theorem proxy_revert_func_run :
         pushB256 implementationSlotLit ::: sload ::: gas ::: delegatecall :::
         proxySuccessTail) (.error (.revert, final))
     proxy_rooted_run [9]
-    all_goals simp_all
+    all_goals simp_all only [List.take_nil, Devm.memWrite_memory, Devm.memWrite_gasLeft, Devm.setMach_gasLeft, Nat.reduceEqDiff, Nat.reduceAdd, Nat.reduceSub, Devm.addAccessedStorageKey_setMach_setMach]
     all_goals try decide
     case h_cold =>
       change ((proxyAdr, implementationSlotLit) : Adr × B256) ∉
         (Std.HashSet.emptyWithCapacity : KeySet)
-      simp
+      simp only [Std.HashSet.not_mem_emptyWithCapacity, not_false_eq_true]
     case tail =>
       have h_stk : proxyCallPreRevert.stack =
           25095 :: implAdr.toB256 :: 0 :: 32 :: 0 :: 0 :: [] := by
@@ -1326,7 +1331,8 @@ private theorem proxy_revert_func_run :
           (fun root => (Blanc.Exec.Deriv.exactInvocation implGuardedProg proxyAdr implAdr root))
           htail :=
         rootedRunCompiledTo_of_execFree (run := htail) (by
-          simp [proxySuccessTail, proxyReturnTail, funcExecFree, Ninst.pushB256])
+          simp only [proxySuccessTail, proxyReturnTail, pushB256, Fin.isValue, funcExecFree,
+            and_self])
       have known : proxyRootedRun [proxyFallback]
           (initSevm proxyMsgRevert) proxyCallPreRevert
           (delegatecall ::: proxySuccessTail) (.error (.revert, final)) := by
@@ -1369,7 +1375,7 @@ theorem proxyProg_revert_runCompiledTo :
       some (initSevm proxyMsgRevert).code.toList = Prog.compile proxyProg := by
     rw [show (initSevm proxyMsgRevert).code = proxyCode by rfl]
     rw [show proxyCode.toList = proxyBytes by
-      simp [proxyCode, proxyBytes, ByteArray.toList_eq_toList_data]]
+      simp only [proxyCode, proxyBytes, ByteArray.toList_eq_toList_data]]
     exact proxyProg_compile
   have hburn : Devm.BurnBy gJumpdest (initDevm proxyMsgRevert)
       ((initDevm proxyMsgRevert).setMach

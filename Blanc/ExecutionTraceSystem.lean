@@ -28,8 +28,8 @@ theorem Exec.rawFrameDescendants_eq_nil {pc : Nat} {sevm : Sevm} {pre : Devm} {o
     (run : Exec pc sevm pre out) (h : SpawnFree sevm.code) :
     Exec.rawFrameDescendants run = [] := by
   induction run with
-  | halt hstep => simp [Exec.rawFrameDescendants]
-  | cont hstep next ih => simpa [Exec.rawFrameDescendants] using ih h
+  | halt hstep => simp only [rawFrameDescendants]
+  | cont hstep next ih => simpa only [rawFrameDescendants] using ih h
   | doneErr hstep henter hresume =>
       obtain ⟨x, hx, -⟩ := Evm.step_spawn_inv hstep
       exact absurd hx (h _ x)
@@ -63,11 +63,12 @@ theorem RetainedXlot.rawFrames_sevm_of_spawnFree {slot : Xlot} (retained : Retai
     (hrun : RunFrame frame slot out) (ht : frame.inner.currentTarget = t) :
     ∀ root ∈ retained.rawFrames, root.sevm.currentTarget = t := by
   cases retained with
-  | none => intro root member; simp [RetainedXlot.rawFrames] at member
+  | none => intro root member; simp only [rawFrames, List.not_mem_nil] at member
   | @some pc sevm pre execution run =>
       obtain ⟨henter, _⟩ := RunFrame.some_inv hrun
       have hself : SpawnFree sevm.code :=
-        h ⟨pc, sevm, pre, execution, run⟩ (by simp [RetainedXlot.rawFrames, Exec.rawFrameRoots])
+        h ⟨pc, sevm, pre, execution, run⟩ (by simp only [rawFrames, Exec.rawFrameRoots,
+          List.mem_cons, true_or])
       intro root member
       have := Exec.rawFrameRoots_of_spawnFree run hself root member
       rw [this, Frame.enter_run_currentTarget henter]
@@ -86,8 +87,8 @@ theorem MessageCallTrace.rawFrames_target_of_spawnFree
     (h : ∀ root ∈ trace.rawFrames, SpawnFree root.sevm.code) :
     ∀ root ∈ trace.rawFrames, root.sevm.currentTarget = msg.currentTarget := by
   cases trace with
-  | createCollision => intro root member; simp [MessageCallTrace.rawFrames] at member
-  | createRun target => simp [htarget] at target
+  | createCollision => intro root member; simp only [rawFrames, List.not_mem_nil] at member
+  | createRun target => simp only [htarget, Bool.false_eq_true] at target
   | callRun target delegated refund delegation execMsg execMsgEq evm core coreTrace result =>
       subst execMsgEq
       refine RetainedXlot.rawFrames_sevm_of_spawnFree coreTrace.retained h coreTrace.run ?_
@@ -101,7 +102,7 @@ theorem SystemMessageTrace.rawFrames_target_of_spawnFree
     (h : ∀ root ∈ trace.rawFrames, SpawnFree root.sevm.code) :
     ∀ root ∈ trace.rawFrames, root.sevm.currentTarget = target := by
   have htarget : (systemTransactionMessage benv target data).target.isNone = false := by
-    simp [systemTransactionMessage, processSystemTransactionMsg]
+    simp only [systemTransactionMessage, processSystemTransactionMsg, Option.isNone_some]
   exact trace.message.rawFrames_target_of_spawnFree htarget h
 
 /-- The four system-message targets of a block body. -/
@@ -142,7 +143,7 @@ theorem ConfiguredHistoryTrace.systemRawFrames_target_of_spawnFree
     (h : ∀ root ∈ trace.systemRawFrames, SpawnFree root.sevm.code) :
     ∀ root ∈ trace.systemRawFrames, root.sevm.currentTarget ∈ systemTargets := by
   induction trace with
-  | refl => intro root member; simp [ConfiguredHistoryTrace.systemRawFrames] at member
+  | refl => intro root member; simp only [systemRawFrames, List.not_mem_nil] at member
   | step prior block ih =>
       intro root member
       simp only [ConfiguredHistoryTrace.systemRawFrames, List.mem_append] at member

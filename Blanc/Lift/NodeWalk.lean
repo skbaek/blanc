@@ -56,7 +56,7 @@ theorem Exec.Deriv.step_cont {x : Exec.Deriv} {pc' : Nat} {d' : Devm}
   | halt h' => simp only at h; rw [h] at h'; cases h'
   | cont h' next =>
     simp only at h; rw [h] at h'; cases h'
-    exact ⟨_, .cont h next, rfl, rfl, rfl, rfl, by simp [Exec.rawFrameDescendants]⟩
+    exact ⟨_, .cont h next, rfl, rfl, rfl, rfl, by simp only [Exec.rawFrameDescendants]⟩
   | doneErr h' _ _ => simp only at h; rw [h] at h'; cases h'
   | doneOk h' _ _ _ => simp only at h; rw [h] at h'; cases h'
   | runErr h' _ _ _ => simp only at h; rw [h] at h'; cases h'
@@ -71,7 +71,7 @@ theorem Exec.Deriv.step_halt {x : Exec.Deriv} {ex : Execution}
   cases exc with
   | halt h' =>
     simp only at h; rw [h] at h'; cases h'
-    refine ⟨rfl, fun y hy => ?_, by simp [Exec.rawFrameDescendants]⟩
+    refine ⟨rfl, fun y hy => ?_, by simp only [Exec.rawFrameDescendants]⟩
     cases hy with
     | refl => rfl
     | step head _ => cases head
@@ -110,7 +110,7 @@ theorem Exec.Deriv.step_spawn {x : Exec.Deriv} {f : Frame} {rsm : Resume} {pc' :
     refine ⟨⟨_, _, _, _, child⟩, .runErr h henter child hr, rfl, rfl, rfl, fun post hp => ?_, fun e he => ?_⟩
     · simp only at hp; rw [hr] at hp; cases hp
     · simp only at he; rw [hr] at he; cases he
-      refine ⟨rfl, fun y hy => ?_, by simp [Exec.rawFrameDescendants]⟩
+      refine ⟨rfl, fun y hy => ?_, by simp only [Exec.rawFrameDescendants]⟩
       cases hy with
       | refl => rfl
       | step head _ => cases head
@@ -119,7 +119,7 @@ theorem Exec.Deriv.step_spawn {x : Exec.Deriv} {f : Frame} {rsm : Resume} {pc' :
     refine ⟨⟨_, _, _, _, child⟩, .runOk h henter child hr next, rfl, rfl, rfl, fun post hp => ?_, fun e he => ?_⟩
     · simp only at hp; rw [hr] at hp; cases hp
       exact ⟨_, .runOk h henter child hr next, rfl, rfl, rfl, rfl,
-        by simp [Exec.rawFrameDescendants]⟩
+        by simp only [Exec.rawFrameDescendants]⟩
     · simp only at he; rw [hr] at he; cases he
 
 /-! ## The pc-level walk -/
@@ -172,16 +172,19 @@ theorem bytesAtT_eq' {code : ByteArray} {d : Nat} {t : LTrie UInt8}
       induction i generalizing xs with
       | zero => cases xs <;> rfl
       | succ i ih => cases xs with
-        | nil => simp
+        | nil => simp only [List.length_nil, not_lt_zero, not_false_eq_true, getElem?_neg,
+          List.drop_nil, List.head?_nil]
         | cons x xs => exact ih xs
     rw [hd]
     cases h : code.data.toList.drop pc with
-    | nil => simp
+    | nil => simp only [List.head?_nil, Option.none_beq_some, Bool.false_and, List.length_cons,
+      List.take_nil, List.nil_eq, reduceCtorEq, decide_false]
     | cons c cs =>
       have hnext : code.data.toList.drop (pc + 1) = cs := by
         rw [← List.drop_drop, h]; rfl
       have hbeq : (c == b) = decide (c = b) := rfl
-      simp [hnext, hbeq]
+      simp only [List.head?_cons, Option.some_beq_some, hbeq, hnext, List.length_cons,
+        List.take_succ_cons, List.cons.injEq, Bool.decide_and]
 
 /-- A decoded instruction is the real one. -/
 theorem decodeT_sound {code : ByteArray} {d : Nat} (T : CodeTries code d) {pc : Nat}
@@ -194,8 +197,10 @@ theorem decodeT_sound {code : ByteArray} {d : Nat} (T : CodeTries code d) {pc : 
       rw [bytesAtT_eq' T.bytes_eq] at hb
       cases i with
       | next n => exact Ninst.at_of_slice (bytesAt_slice (ninst_bytes_ne_nil n) hb)
-      | jump j => exact Jinst.at_of_slice (xs := []) (bytesAt_slice (by simp) hb)
-      | last l => exact Linst.at_of_slice (xs := []) (bytesAt_slice (by simp) hb)
+      | jump j => exact Jinst.at_of_slice (xs := []) (bytesAt_slice (by simp only [ne_eq,
+        List.cons_ne_self, not_false_eq_true]) hb)
+      | last l => exact Linst.at_of_slice (xs := []) (bytesAt_slice (by simp only [ne_eq,
+        List.cons_ne_self, not_false_eq_true]) hb)
     · cases h
   · cases h
 
@@ -514,12 +519,13 @@ theorem pstepH_cont {pol : HashPol} {code : ByteArray} {d : Nat} (T : CodeTries 
             intro hk
             rw [← hcode, Ninst.At, hat] at hk
             cases hk
-            simp [HashPol.allows] at hal
+            simp only [HashPol.allows, Bool.false_eq_true] at hal
           | avoid s =>
             intro hk
             rw [← hcode, Ninst.At, hat] at hk
             cases hk
-            simpa [HashPol.allows] using hal
+            simpa only [ne_eq, HashPol.allows, decide_not, Bool.not_eq_eq_eq_not, Bool.not_true,
+              decide_eq_false_iff_not] using hal
       · cases h
     · cases h
   · rename_i j hdec
@@ -667,7 +673,7 @@ theorem pwalkH_halt (pol : HashPol) {code : ByteArray} {d : Nat} (T : CodeTries 
     ∀ (n : Nat) (c : PCfg) (ex : Execution), PAgree c → pwalkH pol T sevm ok n c = .halt ex →
       ∀ x, NodeAt sevm c x → x.exn = ex ∧ Exec.rawFrameDescendants x.exc = [] ∧
         ∀ y, ParentPrefix x y → NodeOKH code ok pol y
-  | 0, c, ex, _, h => by simp [pwalkH] at h
+  | 0, c, ex, _, h => by simp only [pwalkH, reduceCtorEq] at h
   | n + 1, c, ex, hag, h => by
     simp only [pwalkH] at h
     split at h
@@ -923,14 +929,18 @@ theorem frame_settle_error {f : Frame} {e : EvmError} {d : Devm} (hcr : f.isCrea
   rcases hk with rfl | ⟨r, rfl⟩
   · refine ⟨(d.withError (some .revert)).rollback f.inner.benv.state
       f.inner.tenv.transientStorage, ?_, rfl, rfl⟩
-    simp [Frame.settle, Frame.settleMsg, hcr, executeCode.handleErrorWith, hsg,
-      executeCode.handleError, processMessage.settle, bind, Except.bind]
+    simp only [Frame.settle, Frame.settleMsg, hcr, Bool.false_eq_true, ↓reduceIte,
+      processMessage.settle, bind, Except.bind, executeCode.handleErrorWith, hsg,
+      executeCode.handleError, ite_eq_left_iff, Bool.not_eq_true, Option.isSome_eq_false_iff,
+      Option.isNone_iff_eq_none, Except.ok.injEq]
     intro h; cases h
   · refine ⟨(let evm := d.withGasLeft 0
       evm.setMeta {evm.meta with output := [], error := some (.halt r)}).rollback
       f.inner.benv.state f.inner.tenv.transientStorage, ?_, rfl, rfl⟩
-    simp [Frame.settle, Frame.settleMsg, hcr, executeCode.handleErrorWith, hsg,
-      executeCode.handleError, processMessage.settle, bind, Except.bind]
+    simp only [Frame.settle, Frame.settleMsg, hcr, Bool.false_eq_true, ↓reduceIte,
+      processMessage.settle, bind, Except.bind, executeCode.handleErrorWith, hsg,
+      executeCode.handleError, ite_eq_left_iff, Bool.not_eq_true, Option.isSome_eq_false_iff,
+      Option.isNone_iff_eq_none, Except.ok.injEq]
     intro h; cases h
 
 /-- A failed child: the parent resumes with its own shadows (the child's world was rolled
@@ -964,10 +974,10 @@ theorem resume_agree_ok_of {c : PCfg} {cp : CallPrep} {child d : Devm}
   · show x ∈ d.accessedStorageKeys ↔ x ∈ c.keys ++ ckeys
     rw [hdk x, hce, hF.keys, show x ∈ c.devm.accessedStorageKeys ↔ x ∈ c.keys from hag.1 x,
       hca.2.1 x, List.mem_append]
-    simp
+    simp only [true_and]
   · show a ∈ d.accessedAddresses ↔ a ∈ cp.adrs ++ cadrs
     rw [hda a, hce, hF.adrs a, hca.1 a, List.mem_append]
-    simp
+    simp only [true_and]
   · show storOf d.state a k = lookupS cstor a k
     rw [resumeCallB_state hr]; exact hca.2.2.1 a k
   · show acctView (d.state.get a) = lookupA cacs a

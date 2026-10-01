@@ -59,8 +59,10 @@ theorem withdraw_body {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {M : Me
     (S := 96 :: wad :: 0 :: sevm.caller.toB256 :: wad :: ret :: S) (G := G + 1488) (c := cC)
     (gw := 0) (cw := sevm.caller.toB256) (vw := wad) (iiw := 96) (isw := 96 - 96) (oiw := 96)
     (osw := 0) hfork hwad (by decide) (by decide) (by decide)
-    (by simpa [toAdr_toB256] using hcode) (by simpa [toAdr_toB256] using hprec) hstatic hdepth hbal
-    (by simp; omega) (by rw [toAdr_toB256]; exact hC) hcallgas
+    (by simpa only [toAdr_toB256, afterSstore_getCode, afterSload_getCode,
+      ByteArray.size_eq_zero_iff] using hcode) (by simpa only [toAdr_toB256, Bool.false_eq_true,
+      eq_iff_iff, iff_false] using hprec) hstatic hdepth hbal
+    (by simp only [List.length_cons]; omega) (by rw [toAdr_toB256]; exact hC) hcallgas
   rw [toAdr_toB256] at hpost
   refine ⟨post, hpost, ?_⟩
   rdest
@@ -95,7 +97,7 @@ theorem withdraw_body {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {M : Me
   rdup
   rswap
   rdup
-  refine rx_iszero (v := 0) (by simp [B256.eqCheck, hwad]) (by rroom) ?_
+  refine rx_iszero (v := 0) (by simp only [B256.eqCheck, hwad, ↓reduceIte]) (by rroom) ?_
   refine rx_mul (v := 0) (by decide) (by rroom) ?_
   rswap
   rpush
@@ -206,7 +208,7 @@ theorem withdraw_body_send {sevm : Sevm} {b : Devm} {G X : Nat} {S : List B256} 
   rdup
   rswap
   rdup
-  refine rx_iszero (v := 0) (by simp [B256.eqCheck, hwad]) (by rroom) ?_
+  refine rx_iszero (v := 0) (by simp only [B256.eqCheck, hwad, ↓reduceIte]) (by rroom) ?_
   refine rx_mul (v := 0) (by decide) (by rroom) ?_
   rswap
   rpush
@@ -285,8 +287,10 @@ theorem withdraw_body_zero {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {M
     (S := 96 :: 0 :: 2300 :: sevm.caller.toB256 :: 0 :: ret :: S) (G := G + 1488) (c := cC)
     (gw := 2300) (cw := sevm.caller.toB256) (iiw := 96) (isw := 96 - 96) (oiw := 96)
     (osw := 0) hfork (by decide) (by decide) (by decide)
-    (by simpa [toAdr_toB256] using hcode) (by simpa [toAdr_toB256] using hprec) hdepth
-    (by simp; omega) (by rw [toAdr_toB256]; exact hC)
+    (by simpa only [toAdr_toB256, afterSstore_getCode, afterSload_getCode,
+      ByteArray.size_eq_zero_iff] using hcode) (by simpa only [toAdr_toB256, Bool.false_eq_true,
+      eq_iff_iff, iff_false] using hprec) hdepth
+    (by simp only [List.length_cons]; omega) (by rw [toAdr_toB256]; exact hC)
   rw [toAdr_toB256] at hpost
   refine ⟨post, hpost, ?_⟩
   rdest
@@ -321,7 +325,7 @@ theorem withdraw_body_zero {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {M
   rdup
   rswap
   rdup
-  refine rx_iszero (v := 1) (by simp [B256.eqCheck]) (by rroom) ?_
+  refine rx_iszero (v := 1) (by simp only [B256.eqCheck, ↓reduceIte]) (by rroom) ?_
   refine rx_mul (v := 2300) (by decide) (by rroom) ?_
   rswap
   rpush
@@ -391,8 +395,9 @@ theorem withdraw_wrapper {sevm : Sevm} {b b' : Devm} {G X : Nat} {sel : B256} {M
       post = St b' [sel] M' G := by
   refine ⟨St b' [sel] M' G, ?_, rfl⟩
   rdest
-  refine rx_callvalue (by simp) ?_
-  refine rx_iszero (v := 1) (by simp [B256.eqCheck, hval]) (by simp) ?_
+  refine rx_callvalue (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_iszero (v := 1) (by simp only [B256.eqCheck, hval, ↓reduceIte]) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
   rpush
   refine rx_branch_succ (by decide) ?_
   rdest
@@ -496,15 +501,17 @@ theorem weth9_withdraw_runExact_post {sevm : Sevm} {pre : Devm} {G : Nat}
     (cH := sloadCost sevm pre (balSlot sevm.caller))
     (c2 := sloadCost sevm (wB1 sevm pre) (balSlot sevm.caller))
     (cS := sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller) (wV sevm pre (Sevm.dataWord sevm 4)))
-    (cC := callNet pre sevm.caller) hfork h_static h_depth fp_memFp (by simp) hwad hle rfl rfl rfl
+    (cC := callNet pre sevm.caller) hfork h_static h_depth fp_memFp (by simp only [List.length_cons,
+      List.length_nil, zero_add, Nat.one_lt_ofNat]) hwad hle rfl rfl rfl
     (by rw [callNet_wB3]) h_sentry h_callgas
-    (by simpa [wB3, wB2, wB1] using h_code) h_prec
+    (by simpa only [wB3, wB2, wB1, afterSstore_getCode, afterSload_getCode,
+      ByteArray.size_eq_zero_iff] using h_code) h_prec
     (by
       have e : ((wB3 sevm pre (Sevm.dataWord sevm 4)).getAcct sevm.currentTarget).bal =
           (pre.getAcct sevm.currentTarget).bal := by
         have h1 := afterSstore_getBal (sevm := sevm) (b := wB2 sevm pre) (key := balSlot sevm.caller)
           (value := wV sevm pre (Sevm.dataWord sevm 4)) sevm.currentTarget
-        simpa [Devm.getBal, wB3, wB2, wB1, afterSload_getAcct] using h1
+        simpa only [wB3, wB2, wB1, Devm.getBal, afterSload_getAcct] using h1
       rw [e]; exact h_eth)
   obtain ⟨postW, hw, hpe⟩ := withdraw_wrapper (sevm := sevm) (b := pre) (G := G) (X := _)
     (sel := Sevm.selector sevm) h_value hbody
@@ -516,35 +523,38 @@ theorem weth9_withdraw_runExact_post {sevm : Sevm} {pre : Devm} {G : Nat}
   · rw [hpe]
     show post.output = pre.output
     rw [hcp.output]
-    simp [wB3, wB2, wB1]
+    simp only [wB3, wB2, wB1, afterSstore_output, afterSload_output]
   · rw [hpe]
     show post.error = pre.error
     rw [hcp.error]
-    simp [wB3, wB2, wB1]
+    simp only [wB3, wB2, wB1, afterSstore_error, afterSload_error]
   · rw [hpe]
     show post.logs ++ _ = pre.logs ++ _
     rw [hcp.logs]
-    simp [wB3, wB2, wB1]
+    simp only [wB3, wB2, wB1, afterSstore_logs, afterSload_logs]
   · rw [hpe]
     show post.refundCounter = _
     rw [hcp.refund]
-    simp [wB3, wB2, wB1, wV, getStorVal_afterSload, afterSload_refundCounter]
+    simp only [wB3, wB2, wB1, wV, getStorVal_afterSload, afterSstore_refundCounter,
+      afterSload_refundCounter]
   · rw [hpe]
     show post.accountsToDelete.isEmpty = _
     rw [hcp.accountsToDelete]
-    simp [wB3, wB2, wB1, afterSload_accountsToDelete]
+    simp only [wB3, wB2, wB1, afterSstore_accountsToDelete, afterSload_accountsToDelete]
   · rw [hpe]
     obtain ⟨stmid, hsub, hst⟩ := hcp.state
     exact ⟨stmid, hsub, hst⟩
   · rw [hpe]
     show Devm.getStor post sevm.currentTarget = _
     rw [hcp.getStor]
-    simp [wB3, wB2, wB1, wV, getStorVal_afterSload]
+    simp only [wB3, wB2, wB1, wV, getStorVal_afterSload, afterSstore_getStor_self,
+      afterSload_getStor]
   · intro a ha
     rw [hpe]
     show Devm.getStor post a = _
     rw [hcp.getStor]
-    simp [wB3, wB2, wB1, ha.symm]
+    simp only [wB3, wB2, wB1, ne_eq, ha.symm, not_false_eq_true, afterSstore_getStor_ne,
+      afterSload_getStor]
 
 
 /-- **What `withdraw(0)` costs** for a code-free caller: as `withdrawGas` with the send at the account
@@ -586,8 +596,10 @@ theorem weth9_withdraw_zero_runExact_post {sevm : Sevm} {pre : Devm} {G : Nat}
     (c2 := sloadCost sevm (wB1 sevm pre) (balSlot sevm.caller))
     (cS := sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller) (wV sevm pre (Sevm.dataWord sevm 4)))
     (cC := accessCost sevm.caller pre.accessedAddresses) hw0 hfork h_static h_depth fp_memFp
-    (by simp) (by rw [hw0]; exact B256.zero_le _) rfl rfl rfl (by simp [wB3, wB2, wB1]) h_sentry
-    (by simpa [wB3, wB2, wB1] using h_code) h_prec
+    (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) (by rw [hw0]; exact B256.zero_le _) rfl rfl rfl (by simp only [wB3, wB2, wB1,
+      afterSstore_accessedAddresses, afterSload_accessedAddresses]) h_sentry
+    (by simpa only [wB3, wB2, wB1, afterSstore_getCode, afterSload_getCode,
+      ByteArray.size_eq_zero_iff] using h_code) h_prec
   obtain ⟨postW, hw, hpe⟩ := withdraw_wrapper (sevm := sevm) (b := pre) (G := G) (X := _)
     (sel := Sevm.selector sevm) h_value hbody
   refine ⟨postW, ⟨_, rfl, ?_⟩, ?_, ⟨?_, ?_, ?_, ?_, ?_, ?_⟩, ?_, ?_⟩
@@ -598,23 +610,24 @@ theorem weth9_withdraw_zero_runExact_post {sevm : Sevm} {pre : Devm} {G : Nat}
   · rw [hpe]
     show post.output = pre.output
     rw [hcp.output]
-    simp [wB3, wB2, wB1]
+    simp only [wB3, wB2, wB1, afterSstore_output, afterSload_output]
   · rw [hpe]
     show post.error = pre.error
     rw [hcp.error]
-    simp [wB3, wB2, wB1]
+    simp only [wB3, wB2, wB1, afterSstore_error, afterSload_error]
   · rw [hpe]
     show post.logs ++ _ = pre.logs ++ _
     rw [hcp.logs]
-    simp [wB3, wB2, wB1]
+    simp only [wB3, wB2, wB1, afterSstore_logs, afterSload_logs]
   · rw [hpe]
     show post.refundCounter = _
     rw [hcp.refund]
-    simp [wB3, wB2, wB1, wV, getStorVal_afterSload, afterSload_refundCounter]
+    simp only [wB3, wB2, wB1, wV, getStorVal_afterSload, afterSstore_refundCounter,
+      afterSload_refundCounter]
   · rw [hpe]
     show post.accountsToDelete.isEmpty = _
     rw [hcp.accountsToDelete]
-    simp [wB3, wB2, wB1, afterSload_accountsToDelete]
+    simp only [wB3, wB2, wB1, afterSstore_accountsToDelete, afterSload_accountsToDelete]
   · rw [hpe]
     obtain ⟨stmid, hsub, hst⟩ := hcp.state
     rw [hw0] at hsub ⊢
@@ -622,11 +635,13 @@ theorem weth9_withdraw_zero_runExact_post {sevm : Sevm} {pre : Devm} {G : Nat}
   · rw [hpe]
     show Devm.getStor post sevm.currentTarget = _
     rw [hcp.getStor]
-    simp [wB3, wB2, wB1, wV, getStorVal_afterSload]
+    simp only [wB3, wB2, wB1, wV, getStorVal_afterSload, afterSstore_getStor_self,
+      afterSload_getStor]
   · intro a ha
     rw [hpe]
     show Devm.getStor post a = _
     rw [hcp.getStor]
-    simp [wB3, wB2, wB1, ha.symm]
+    simp only [wB3, wB2, wB1, ne_eq, ha.symm, not_false_eq_true, afterSstore_getStor_ne,
+      afterSload_getStor]
 
 end Blanc.Lift.Weth9

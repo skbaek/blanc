@@ -248,11 +248,17 @@ theorem foot_frame_post_in (hinj : KeyInj U) {R : Exec.Deriv} {entry : Sevm → 
         (footSpec U).Post sevm.currentTarget sevm' post')
     (hpre : (footSpec U).Pre sevm.currentTarget sevm pre) :
     (footSpec U).Post sevm.currentTarget sevm post := by
-  have hcaller : U (.bal sevm.caller) := hkeys _ (by simp [frameKeys])
-  have ha0 : U (.bal (Sevm.dataWord sevm 4).toAdr) := hkeys _ (by simp [frameKeys])
-  have ha1 : U (.bal (Sevm.dataWord sevm 36).toAdr) := hkeys _ (by simp [frameKeys])
-  have hoc : U (.allow (Sevm.dataWord sevm 4).toAdr sevm.caller) := hkeys _ (by simp [frameKeys])
-  have hco : U (.allow sevm.caller (Sevm.dataWord sevm 4).toAdr) := hkeys _ (by simp [frameKeys])
+  have hcaller : U (.bal sevm.caller) := hkeys _ (by simp only [frameKeys, List.mem_cons,
+    Key.bal.injEq, reduceCtorEq, List.not_mem_nil, or_self, or_false, true_or])
+  have ha0 : U (.bal (Sevm.dataWord sevm 4).toAdr) := hkeys _ (by simp only [frameKeys,
+    List.mem_cons, Key.bal.injEq, reduceCtorEq, List.not_mem_nil, or_self, or_false, true_or,
+    or_true])
+  have ha1 : U (.bal (Sevm.dataWord sevm 36).toAdr) := hkeys _ (by simp only [frameKeys,
+    List.mem_cons, Key.bal.injEq, reduceCtorEq, List.not_mem_nil, or_self, or_false, or_true])
+  have hoc : U (.allow (Sevm.dataWord sevm 4).toAdr sevm.caller) := hkeys _ (by simp only [frameKeys,
+    List.mem_cons, reduceCtorEq, Key.allow.injEq, List.not_mem_nil, or_false, true_or, or_true])
+  have hco : U (.allow sevm.caller (Sevm.dataWord sevm 4).toAdr) := hkeys _ (by simp only [frameKeys,
+    List.mem_cons, reduceCtorEq, Key.allow.injEq, List.not_mem_nil, or_false, or_true])
   refine frame_post_of (footSpec U) StepIn.toRun hrun ?_ ?_ ?_ ?_ ?_ hpre
   · intro d o g hg hd r
     exact foot_deposit hinj hfork hg hcaller hd r

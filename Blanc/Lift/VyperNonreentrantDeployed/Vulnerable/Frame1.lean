@@ -115,7 +115,8 @@ def c0 : Cfg := ⟨pre1, t_0000_c0, [], [], [implementationAddress], stor1, acs0
 theorem c0_agree : Agree c0 := by
   refine ⟨fun x => ?_, fun a => ?_, ?_, ?_⟩
   · show x ∈ (default : Devm).accessedStorageKeys ↔ x ∈ ([] : List (Adr × B256))
-    simp [show (default : Devm).accessedStorageKeys = .emptyWithCapacity from rfl]
+    simp only [show (default : Devm).accessedStorageKeys = .emptyWithCapacity from rfl,
+      Std.HashSet.not_mem_emptyWithCapacity, List.not_mem_nil]
   · show a ∈ (default : Devm).accessedAddresses.insert implementationAddress ↔
       a ∈ [implementationAddress]
     rw [Std.HashSet.mem_insert, List.mem_singleton, beq_iff_eq,

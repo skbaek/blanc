@@ -95,15 +95,14 @@ theorem dispatchWith_run_prefix_of_sorted :
           ⟨s₁, mid₁, hline, hbranch, hpre₁⟩
         have h_pfx₁ : (w =? w) :: ws <<+ s₁.stack := by
           generalize_line_prefix
-        rw [show (w =? w) = 1 from by simp [B256.eqCheck]] at h_pfx₁
+        rw [show (w =? w) = 1 from by simp only [B256.eqCheck, ↓reduceIte]] at h_pfx₁
         rcases run_prefix_branch (path := mid₁) hbranch with
           ⟨s₂, mid₂, hpop, hmiss, hpreB⟩ |
           ⟨v, s₂, s₃, mid₃, hne, hpop, hburn, hbody, hpreB⟩
         · exact absurd (popBurn_pref hpop h_pfx₁).1 B256.zero_ne_one
         · rcases popBurn_pref hpop h_pfx₁ with ⟨-, h_pfx₂⟩
           refine ⟨s₃, mid₃, ?_, ?_, ?_,
-            (by simpa [DispatchTree.build, dispatchWith, prepend] using
-              hpre₁.trans hpreB), hbody⟩
+            (by simpa only [DispatchTree.build, dispatchWith, prepend] using hpre₁.trans hpreB), hbody⟩
           · rw [← hburn.stack]; exact h_pfx₂
           · exact (Line.of_inv Devm.state (by line_inv) hline).trans
               (hpop.state.trans hburn.state)
@@ -323,7 +322,7 @@ theorem run_prefix_nonpayable_logs {fs : List Func}
     have hv : sevm.value = 0 := by
       by_cases hv : sevm.value = 0
       · exact hv
-      · simp [B256.eqCheck, hv] at hflag
+      · simp only [B256.eqCheck, hv, ↓reduceIte, ne_eq, not_true_eq_false] at hflag
     exact ⟨s3, mid3, hv,
       (Line.of_inv Devm.state (by line_inv) hline).trans
         (hpop.state.trans hburn.state),

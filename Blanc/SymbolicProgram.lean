@@ -242,7 +242,7 @@ theorem Func.erase_toSymbolic (f : Func) (sym : SymbolicFunc Label)
     sym.erase map = f := by
   induction f generalizing sym with
   | last o =>
-    simp [Func.toSymbolic?] at h
+    simp only [toSymbolic?, Option.some.injEq] at h
     subst h
     rfl
   | next i f ih =>
@@ -255,7 +255,7 @@ theorem Func.erase_toSymbolic (f : Func) (sym : SymbolicFunc Label)
       rw [hf] at h
       injection h with h_eq
       subst h_eq
-      simp [SymbolicFunc.erase, ih f' hf]
+      simp only [SymbolicFunc.erase, ih f' hf]
   | branch f g ihf ihg =>
     simp only [Func.toSymbolic?] at h
     cases hf : f.toSymbolic? Label with
@@ -272,9 +272,9 @@ theorem Func.erase_toSymbolic (f : Func) (sym : SymbolicFunc Label)
         rw [hg] at h
         injection h with h_eq
         subst h_eq
-        simp [SymbolicFunc.erase, ihf f' hf, ihg g' hg]
+        simp only [SymbolicFunc.erase, ihf f' hf, ihg g' hg]
   | call n =>
-    simp [Func.toSymbolic?] at h
+    simp only [toSymbolic?, reduceCtorEq] at h
 
 /-- Lift a call-free `Func` into `SymbolicFunc Label`. Fails at compile time if `f` contains calls. -/
 def Func.liftCallFree (Label : Type) (f : Func) (h : (f.toSymbolic? Label).isSome = true := by decide) :
@@ -353,7 +353,7 @@ theorem Func.erase_mapCalls (g : Nat → Label) (map : Label → Nat) (f : Func)
     (hmap : ∀ n ∈ f.callTargets, map (g n) = n) :
     (f.mapCalls g).erase map = f := by
   have h := Func.erase_mapCalls_eq_mapTargets g map id f hmap
-  simpa using h
+  simpa only [mapTargets_id] using h
 
 /-- Totally inverted naming needs no membership side condition. -/
 theorem Func.erase_mapCalls_of_inverse (g : Nat → Label) (map : Label → Nat)
@@ -387,7 +387,7 @@ theorem SymbolicFunc.erase_prepend (l : Line) (f : SymbolicFunc Label) (map : La
   induction l with
   | nil => rfl
   | cons x xs ih =>
-    simp [SymbolicFunc.prepend, SymbolicFunc.erase, ih]
+    simp only [prepend, erase, ih]
     rfl
 
 /-! ## Structural erasure theorems -/
@@ -403,7 +403,7 @@ theorem resolveFunc_eq_erase [DecidableEq Label]
   | next i f ih =>
     simp only [SymbolicFunc.calls] at h_lookup
     have ih_app := ih path h_lookup
-    simp [resolveFunc, ih_app, SymbolicFunc.erase]
+    simp only [resolveFunc, ih_app, SymbolicFunc.erase]
   | branch f g ihf ihg =>
     simp only [SymbolicFunc.calls, List.mem_append] at h_lookup
     have hf : ∀ target ∈ f.calls, p.findLabel? target = some (map target) :=
@@ -412,11 +412,11 @@ theorem resolveFunc_eq_erase [DecidableEq Label]
       fun target ht => h_lookup target (Or.inr ht)
     have ihf_app := ihf (path ++ [.left]) hf
     have ihg_app := ihg (path ++ [.right]) hg
-    simp [resolveFunc, ihf_app, ihg_app, SymbolicFunc.erase]
+    simp only [resolveFunc, ihf_app, ihg_app, SymbolicFunc.erase]
   | call target =>
     simp only [SymbolicFunc.calls, List.mem_singleton] at h_lookup
     have ht : p.findLabel? target = some (map target) := h_lookup target rfl
-    simp [resolveFunc, ht, SymbolicFunc.erase]
+    simp only [resolveFunc, ht, SymbolicFunc.erase]
 
 /-- Successful resolution of auxiliary bodies equals their pointwise erasure. -/
 theorem resolveAux_eq_erase [DecidableEq Label]
@@ -434,7 +434,7 @@ theorem resolveAux_eq_erase [DecidableEq Label]
       fun l b hb => h_lookup l b (List.Mem.tail _ hb)
     have h_res := resolveFunc_eq_erase p lbl [] map body h_body
     have ih_app := ih h_tail
-    simp [resolveAux, h_res, ih_app]
+    simp only [resolveAux, h_res, ih_app, List.map_cons]
 
 /-- Full program resolution equals whole-program erasure when all calls resolve. -/
 theorem resolve_eq_erase [DecidableEq Label]
@@ -445,7 +445,7 @@ theorem resolve_eq_erase [DecidableEq Label]
     resolve p = .ok (p.erase map) := by
   have h_res_main := resolveFunc_eq_erase p p.root [] map p.main h_main
   have h_res_aux := resolveAux_eq_erase p map p.aux h_aux
-  simp [resolve, h_valid, h_res_main, h_res_aux, SymbolicProg.erase]
+  simp only [resolve, h_valid, h_res_main, h_res_aux, SymbolicProg.erase]
 
 /-! ### A decidable front end for `resolve_eq_erase`
 
@@ -506,11 +506,11 @@ theorem erase_eq_of_resolveFunc [DecidableEq Label]
     f' = f.erase map := by
   induction f generalizing path f' with
   | last o =>
-    simp [resolveFunc] at h_res
+    simp only [resolveFunc, Except.ok.injEq] at h_res
     subst h_res
     rfl
   | next i f ih =>
-    simp [resolveFunc] at h_res
+    simp only [resolveFunc] at h_res
     cases hf : resolveFunc p owner path f with
     | error e =>
       rw [hf] at h_res
@@ -519,9 +519,9 @@ theorem erase_eq_of_resolveFunc [DecidableEq Label]
       rw [hf] at h_res
       injection h_res with h_eq
       subst h_eq
-      simp [SymbolicFunc.erase, ih path f_sub hf]
+      simp only [ih path f_sub hf, SymbolicFunc.erase]
   | branch f g ihf ihg =>
-    simp [resolveFunc] at h_res
+    simp only [resolveFunc] at h_res
     cases hf : resolveFunc p owner (path ++ [.left]) f with
     | error e =>
       rw [hf] at h_res
@@ -536,9 +536,10 @@ theorem erase_eq_of_resolveFunc [DecidableEq Label]
         rw [hg] at h_res
         injection h_res with h_eq
         subst h_eq
-        simp [SymbolicFunc.erase, ihf (path ++ [.left]) f_sub hf, ihg (path ++ [.right]) g_sub hg]
+        simp only [ihf (path ++ [.left]) f_sub hf, ihg (path ++ [.right]) g_sub hg,
+          SymbolicFunc.erase]
   | call target =>
-    simp [resolveFunc] at h_res
+    simp only [resolveFunc] at h_res
     cases h_opt : p.findLabel? target with
     | none =>
       rw [h_opt] at h_res
@@ -560,12 +561,12 @@ theorem aux_erase_eq_of_resolveAux [DecidableEq Label]
     fs = aux.map fun (_, body) => body.erase map := by
   induction aux generalizing fs with
   | nil =>
-    simp [resolveAux] at h_res
+    simp only [resolveAux, Except.ok.injEq, List.nil_eq] at h_res
     subst h_res
     rfl
   | cons head tail ih =>
     rcases head with ⟨lbl, body⟩
-    simp [resolveAux] at h_res
+    simp only [resolveAux] at h_res
     cases hb : resolveFunc p lbl [] body with
     | error e =>
       rw [hb] at h_res
@@ -582,7 +583,7 @@ theorem aux_erase_eq_of_resolveAux [DecidableEq Label]
         subst h_eq
         have hb_eq := erase_eq_of_resolveFunc p lbl [] map body body' hb h_agree
         have ht_eq := ih tail' ht
-        simp [List.map_cons, hb_eq, ht_eq]
+        simp only [hb_eq, ht_eq, List.map_cons]
 
 /-- Successfully resolved complete programs equal structural erasure.
 
@@ -600,7 +601,7 @@ theorem erase_eq_of_resolve [DecidableEq Label]
     (h_res : resolve p = .ok prog)
     (h_agree : ∀ target n, p.findLabel? target = some n → map target = n) :
     prog = p.erase map := by
-  simp [resolve] at h_res
+  simp only [resolve] at h_res
   cases hv : p.validateDefinitions with
   | error e =>
     rw [hv] at h_res
@@ -623,7 +624,7 @@ theorem erase_eq_of_resolve [DecidableEq Label]
         subst h_eq
         have hm_eq := erase_eq_of_resolveFunc p p.root [] map p.main main' hm h_agree
         have ha_eq := aux_erase_eq_of_resolveAux p map p.aux aux' ha h_agree
-        simp [SymbolicProg.erase, hm_eq, ha_eq]
+        simp only [hm_eq, ha_eq, SymbolicProg.erase]
 
 /-! ## Generic symbolic dispatch
 
@@ -665,16 +666,16 @@ the erased bodies, with the fallback label at its assigned coordinate. -/
 
 theorem findLabel?_root [DecidableEq Label] (p : SymbolicProg Label) :
     p.findLabel? p.root = some 0 := by
-  simp [SymbolicProg.findLabel?]
+  simp only [SymbolicProg.findLabel?, ↓reduceIte]
 
 theorem findAux_ne_zero [DecidableEq Label] (target : Label) (idx : Nat)
     (aux : List (Label × SymbolicFunc Label)) :
     findAux target idx aux ≠ some 0 := by
   induction aux generalizing idx with
-  | nil => simp [findAux]
+  | nil => simp only [findAux, ne_eq, reduceCtorEq, not_false_eq_true]
   | cons head tail ih =>
     rcases head with ⟨l, body⟩
-    simp [findAux]
+    simp only [findAux, ne_eq]
     split
     · intro h
       injection h with h
@@ -759,11 +760,11 @@ theorem checkLink_eq_error_compileFailed [DecidableEq Label]
   split
   · rename_i e h
     rw [h_res] at h
-    exact absurd h (by simp)
+    exact absurd h (by simp only [reduceCtorEq, not_false_eq_true])
   · rename_i r h
     rw [h_res] at h
     obtain rfl : r = resolved := (Except.ok.inj h).symm
-    simp [h_comp]
+    simp only [h_comp, Bool.false_eq_true, ↓reduceDIte]
 
 /-- Checked linking succeeds exactly when resolution succeeds and the resolved
 program passes the compiler's own decision. -/
@@ -776,7 +777,7 @@ theorem checkLink_isOk [DecidableEq Label]
   split
   · rename_i e h
     rw [h_res] at h
-    exact absurd h (by simp)
+    exact absurd h (by simp only [reduceCtorEq, not_false_eq_true])
   · rename_i r h
     rw [h_res] at h
     obtain rfl : r = resolved := (Except.ok.inj h).symm
@@ -982,9 +983,7 @@ theorem workedProg_erase_of_resolve : workedNumbered = workedProg.erase workedMa
     (by
       intro target n h
       cases target <;>
-        simp_all [workedMap, workedProg_findLabel_root, workedProg_findLabel_ping,
-          workedProg_findLabel_loop, workedProg_findLabel_dead,
-          workedProg_findLabel_missing, workedProg_findLabel_pong])
+        simp_all only [workedProg_findLabel_root, Option.some.injEq, workedMap, workedProg_findLabel_loop, workedProg_findLabel_ping, workedProg_findLabel_pong, reduceCtorEq, workedProg_findLabel_dead, workedProg_findLabel_missing])
 
 /-- Checked linking on the same program. This is the statement the three
 controls above make, and on its own it still says nothing about
@@ -1064,18 +1063,18 @@ theorem erase_padSymbolic (map : TestLabel → Nat) (n : Nat)
     (padSymbolic n f).erase map = padFunc n (f.erase map) := by
   induction n with
   | zero => rfl
-  | succ n ih => simp [padSymbolic, padFunc, SymbolicFunc.erase, ih]
+  | succ n ih => simp only [padSymbolic, SymbolicFunc.erase, ih, padFunc]
 
 theorem calls_padSymbolic (n : Nat) (f : SymbolicFunc TestLabel) :
     (padSymbolic n f).calls = f.calls := by
   induction n with
   | zero => rfl
-  | succ n ih => simp [padSymbolic, SymbolicFunc.calls, ih]
+  | succ n ih => simp only [padSymbolic, SymbolicFunc.calls, ih]
 
 theorem compsize_padFunc (n : Nat) (f : Func) :
     compsize (padFunc n f) = n + compsize f := by
   induction n with
-  | zero => simp [padFunc]
+  | zero => simp only [padFunc, zero_add]
   | succ n ih =>
       simp only [padFunc, compsize, ih, Ninst.toBytes, List.length_cons,
         List.length_nil]
@@ -1085,15 +1084,17 @@ theorem isSome_compile_next_pop (l : List (Nat × Func)) (m : Nat) (p : Func) :
     (Func.compile l m (.next (.reg .pop) p)).isSome
       = (Func.compile l (m + 1) p).isSome := by
   cases h : Func.compile l (m + 1) p with
-  | none => simp [Func.compile, Ninst.size, h]
-  | some bs => simp [Func.compile, Ninst.size, Ninst.immAccepted, h]
+  | none => simp only [Func.compile, Ninst.size, h, Option.pure_def, Option.bind_eq_bind,
+    Option.bind_none, Option.bind_fun_none, Option.isSome_none]
+  | some bs => simp only [Func.compile, Ninst.immAccepted, guard_true, Option.pure_def, Ninst.size,
+    h, Option.bind_eq_bind, Option.bind_some, Option.isSome_some]
 
 theorem isSome_compile_padFunc (l : List (Nat × Func)) (f : Func) :
     ∀ (n m : Nat), (Func.compile l m (padFunc n f)).isSome
       = (Func.compile l (m + n) f).isSome := by
   intro n
   induction n with
-  | zero => intro m; simp [padFunc]
+  | zero => intro m; simp only [padFunc, add_zero]
   | succ n ih =>
       intro m
       rw [show padFunc (n + 1) f = .next (.reg .pop) (padFunc n f) from rfl,
@@ -1127,8 +1128,8 @@ theorem boundaryCallProg_resolve (padding : Nat) :
     resolve (boundaryCallProg padding) = .ok (boundaryResolved padding) := by
   have h := resolve_eq_erase (boundaryCallProg padding) boundaryMap rfl ?_ ?_
   · rw [h]
-    simp [SymbolicProg.erase, boundaryResolved, boundaryCallProg,
-      erase_padSymbolic, SymbolicFunc.erase, boundaryMap]
+    simp only [SymbolicProg.erase, boundaryCallProg, erase_padSymbolic, SymbolicFunc.erase,
+      boundaryMap, List.map_cons, List.map_nil, boundaryResolved]
   · intro target htarget
     rw [show (boundaryCallProg padding).main
         = padSymbolic padding (.call .loop) from rfl,
@@ -1164,8 +1165,16 @@ theorem isSome_boundaryResolved_compile (padding : Nat) :
       (padFunc padding (.call 1))).isSome = decide (padding + 5 < 2 ^ 16) := by
     rw [isSome_compile_padFunc]
     by_cases hlt : padding + 5 < 65536
-    · simp [boundaryProgTable, Func.compile, guard, hlt]
-    · simp [boundaryProgTable, Func.compile, guard, hlt]
+    · simp only [Func.compile, boundaryProgTable, List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.one_lt_ofNat, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+      guard, Nat.reducePow, Option.pure_def, Option.failure_eq_none, Nat.toUInt8_eq,
+      List.cons_append, List.nil_append, Option.bind_eq_bind, Option.bind_some, hlt, ↓reduceIte,
+      UInt8.ofNat_add, UInt8.reduceOfNat, Option.isSome_some, decide_true]
+    · simp only [Func.compile, boundaryProgTable, List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.one_lt_ofNat, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+      guard, Nat.reducePow, Option.pure_def, Option.failure_eq_none, Nat.toUInt8_eq,
+      List.cons_append, List.nil_append, Option.bind_eq_bind, Option.bind_some, hlt, ↓reduceIte,
+      UInt8.ofNat_add, UInt8.reduceOfNat, Option.bind_none, Option.isSome_none, decide_false]
   have htail : Table.compile (boundaryProgTable padding)
         (boundaryProgTable padding)
       = (Func.compile (boundaryProgTable padding) 1

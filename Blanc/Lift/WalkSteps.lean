@@ -37,7 +37,7 @@ theorem ri_caller {d : Devm}
   have hp := of_run_caller h
   have hs : d.stack = sevm.caller.toB256 :: S := by
     have := hp.stack
-    simpa [Stack.Push, Split] using this
+    simpa only [Stack.Push, Split, St.stack, List.cons_append, List.nil_append] using this
   have e := St.of_stackRel hp
   rw [hs] at e
   exact ⟨_, e⟩
@@ -167,7 +167,7 @@ theorem ri_timestamp {d : Devm}
   simp only [Rinst.run, Rinst.runCore] at run
   have hp := Devm.pushBurn_of_pushItem run
   have hs : d.stack = sevm.benvStat.time :: S := by
-    simpa [Stack.Push, Split] using hp.stack
+    simpa only [Stack.Push, Split, St.stack, List.cons_append, List.nil_append] using hp.stack
   have e := St.of_stackRel hp
   rw [hs] at e
   exact ⟨_, e⟩
@@ -243,7 +243,7 @@ end Steps
 theorem Mem.reads_data (μ : Mem) : Mem.Reads μ μ.data.toList := by
   intro index
   by_cases bound : index < μ.data.size <;>
-    simp [Array.getD, bound, List.getD_eq_getElem?_getD]
+    simp only [Array.getD, bound, ↓reduceDIte, Array.getInternal_eq_getElem, List.getD_eq_getElem?_getD, Array.length_toList, getElem?_pos, Array.getElem_toList, Option.getD_some, not_false_eq_true, getElem?_neg, Option.getD_none]
 
 /-- A word written into a well-formed memory reads back. -/
 theorem Mem.read_write_word_of_wf {M : Mem} (hwf : Mem.Wf M) (n : Nat) (v : B256) :

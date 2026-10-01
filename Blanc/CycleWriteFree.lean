@@ -50,26 +50,31 @@ theorem Func.localSstoreFree_iff {body : Func} :
     body.localSstoreFree = true ↔ body.LocalSstoreFree := by
   induction body with
   | last outcome =>
-      simp [Func.localSstoreFree, Func.LocalSstoreFree]
+      simp only [localSstoreFree, LocalSstoreFree]
   | call index =>
-      simp [Func.localSstoreFree, Func.LocalSstoreFree]
+      simp only [localSstoreFree, LocalSstoreFree]
   | branch left right left_ih right_ih =>
-      simp [Func.localSstoreFree, Func.LocalSstoreFree, left_ih, right_ih]
+      simp only [localSstoreFree, Bool.and_eq_true, left_ih, right_ih, LocalSstoreFree]
   | next instruction tail tail_ih =>
       cases instruction with
       | reg operation =>
           cases operation <;>
-            simp [Func.localSstoreFree, Func.LocalSstoreFree, tail_ih]
+            simp only [localSstoreFree, tail_ih, LocalSstoreFree, ne_eq, Ninst.reg.injEq, reduceCtorEq, not_false_eq_true, true_and, Bool.false_eq_true, not_true_eq_false, false_and]
       | exec operation =>
-          simp [Func.localSstoreFree, Func.LocalSstoreFree, tail_ih]
+          simp only [localSstoreFree, tail_ih, LocalSstoreFree, ne_eq, reduceCtorEq,
+            not_false_eq_true, true_and]
       | push bytes size =>
-          simp [Func.localSstoreFree, Func.LocalSstoreFree, tail_ih]
+          simp only [localSstoreFree, tail_ih, LocalSstoreFree, ne_eq, reduceCtorEq,
+            not_false_eq_true, true_and]
       | dupn immediate =>
-          simp [Func.localSstoreFree, Func.LocalSstoreFree, tail_ih]
+          simp only [localSstoreFree, tail_ih, LocalSstoreFree, ne_eq, reduceCtorEq,
+            not_false_eq_true, true_and]
       | swapn immediate =>
-          simp [Func.localSstoreFree, Func.LocalSstoreFree, tail_ih]
+          simp only [localSstoreFree, tail_ih, LocalSstoreFree, ne_eq, reduceCtorEq,
+            not_false_eq_true, true_and]
       | exchange immediate =>
-          simp [Func.localSstoreFree, Func.LocalSstoreFree, tail_ih]
+          simp only [localSstoreFree, tail_ih, LocalSstoreFree, ne_eq, reduceCtorEq,
+            not_false_eq_true, true_and]
 
 /-- Exact reflection for `Func.callsIn` when the executable predicate is
 membership in one finite call component. -/
@@ -78,13 +83,13 @@ theorem Func.callsIn_mem_iff {body : Func} {members : List Nat} :
       body.CallsIn (fun index => index ∈ members) := by
   induction body with
   | last outcome =>
-      simp [Func.callsIn, Func.CallsIn]
+      simp only [callsIn, CallsIn]
   | call index =>
-      simp [Func.callsIn, Func.CallsIn]
+      simp only [callsIn, decide_eq_true_eq, CallsIn]
   | next instruction tail tail_ih =>
-      simpa [Func.callsIn, Func.CallsIn] using tail_ih
+      simpa only [callsIn, CallsIn] using tail_ih
   | branch left right left_ih right_ih =>
-      simp [Func.callsIn, Func.CallsIn, left_ih, right_ih]
+      simp only [callsIn, Bool.and_eq_true, left_ih, right_ih, CallsIn]
 
 /-- Resolve the compiler function-table index used by `Func.call`.
 Index zero is the program's main body and index one is its first auxiliary
@@ -130,7 +135,7 @@ theorem Prog.componentSstoreFree_iff
       (List.all_eq_true.mp accepted) index member
     cases lookup : program.function? index with
     | none =>
-        simp [lookup] at selected
+        simp only [lookup, Bool.false_eq_true] at selected
     | some body =>
         simp only [lookup, Bool.and_eq_true] at selected
         exact ⟨body, rfl,
@@ -197,7 +202,8 @@ theorem Prog.entrySstoreFree_nil_iff
     {program : Prog} {entry : Func} :
     program.entrySstoreFree entry [] = true ↔
       entry.localSstoreFree = true ∧ entry.callFree = true := by
-  simp [Prog.entrySstoreFree, Func.callFree]
+  simp only [entrySstoreFree, List.not_mem_nil, decide_false, componentSstoreFree_nil,
+    Bool.and_true, Bool.and_eq_true, Func.callFree]
 
 /-- Duplicating an already selected index adds no certificate authority. -/
 theorem Prog.entrySstoreFree_duplicate_iff
@@ -205,7 +211,7 @@ theorem Prog.entrySstoreFree_duplicate_iff
     program.entrySstoreFree entry (index :: index :: members) = true ↔
       program.entrySstoreFree entry (index :: members) = true := by
   simp only [Prog.entrySstoreFree_iff]
-  simp [Prog.EntrySstoreFree, Prog.ClosedSstoreFree]
+  simp only [EntrySstoreFree, List.mem_cons, or_self_left, ClosedSstoreFree, forall_eq_or_imp]
 
 /-- Removing every duplicate from the finite member list preserves exactly the
 same entry-and-component authority. -/
@@ -214,7 +220,7 @@ theorem Prog.entrySstoreFree_eraseDups_iff
     program.entrySstoreFree entry members.eraseDups = true ↔
       program.entrySstoreFree entry members = true := by
   simp only [Prog.entrySstoreFree_iff]
-  simp [Prog.EntrySstoreFree, Prog.ClosedSstoreFree]
+  simp only [EntrySstoreFree, List.mem_eraseDups, ClosedSstoreFree]
 
 /-! ## Arbitrary-outcome same-frame execution soundness -/
 
@@ -275,7 +281,7 @@ private theorem Exec.Deriv.SourceCursor.noSstore_core :
               Func.sourceSites path.functionIndex path.steps cursor.pc
                 (.next instruction tail) := by
             rcases path with ⟨functionIndex, steps⟩
-            simp [site, Func.sourceSites]
+            simp only [Func.sourceSites, List.mem_cons, true_or, site]
           have sourceAt :
               Ninst.At root.sevm.code cursor.pc instruction :=
             Func.sourceSites_sound cursor.codeSlice cursor.codeBoundary
@@ -347,7 +353,7 @@ theorem Exec.NinstOccurrence.instruction_ne_sstore_of_entrySstoreFree
   have storeAt :
       Ninst.At occurrence.node.sevm.code occurrence.node.pc
         (.reg .sstore) := by
-    simpa [instructionEq] using occurrence.decoded
+    simpa only [instructionEq] using occurrence.decoded
   exact cursor.noSstore_of_entrySstoreFree compiled members accepted
     owned storeAt
 

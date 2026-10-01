@@ -150,17 +150,17 @@ theorem validateTransaction_ok_of_facts {rules : ForkRules} {tx : Tx} {sender : 
     (hcap : checkTransactionGasCap rules.tx tx.gas = .ok ()) :
     validateTransaction rules tx sender = .ok (i, f) := by
   have hnone : tx.type.receiver?.isNone = false := by
-    cases h : tx.type.receiver? <;> simp_all
+    cases h : tx.type.receiver? <;> simp_all only [sup_le_iff, ne_eq, Option.isSome_none, Bool.false_eq_true, Option.isSome_some, Option.isNone_some]
   have hinit : checkInitcodeSize rules.code tx.type.receiver? tx.data.length = .ok () := by
     unfold checkInitcodeSize
-    simp [hnone]
+    simp only [hnone, gt_iff_lt, Bool.false_and, Bool.false_eq_true, ↓reduceIte]
   unfold validateTransaction
   simp only [hsg, hcost, Nat.not_lt.mpr hgas, ↓reduceIte]
   cases hm : rules.tx.maxGas with
   | none =>
-    simp [hnonce, hinit, bind, Except.bind]
+    simp only [hnonce, ↓reduceIte, bind, Except.bind, hinit]
   | some m =>
-    simp [hnonce, hinit, hcap, bind, Except.bind]
+    simp only [bind, Except.bind, hinit, hcap, hnonce, ↓reduceIte]
 
 /-- The message a call transaction with receiver `t` prepares: it calls `t`'s current code with the
 transaction's data and value, from the origin, at the outermost depth, with the origin, the receiver
@@ -215,7 +215,7 @@ theorem processMessage_call_of_exec {msg : Msg} {benv : Benv} {post : Devm} {t :
   refine MessageExecution.processMessage_clean_of_exec_afterTransfer_of_codeEntry msg benv post hentry ?_ hexec herror
   refine MessageExecution.executeCode_enter_of_codeAddress_not_precompile msg benv t hcodeAddress ?_
   rw [benvAfterTransfer_stat hentry]
-  simp [hprec]
+  simp only [hprec, Bool.false_eq_true, decide_false]
 
 /-- **A transaction from its stages, with its gas accounting.**  The stages of
 `processTransaction_of_stages`, and the block output the transaction leaves: its cumulative and block
@@ -322,7 +322,7 @@ theorem transactionBlobGasFee_two {benv : Benv} {tx : Tx} {chainId : UInt64}
 
 theorem Int.toNat?_eq_some_of_nonneg {i : Int} (h : 0 ≤ i) : Int.toNat? i = some i.toNat := by
   unfold Int.toNat?
-  split <;> simp_all
+  split <;> simp_all only [Int.ofNat_eq_natCast, Nat.cast_nonneg, Int.toNat_natCast, Int.negSucc_not_nonneg]
 
 /-- The debit of a sender that can pay: the nonce is bumped and the amount taken from the balance. -/
 theorem subBal_incrNonce_of_le {st : State} {E : Adr} {v : B256} (h : v ≤ st.bal E) :
@@ -429,7 +429,7 @@ theorem processTransaction_call_of_exec
           benv.stat.baseFeePerGas)).toB256)) }
       (transactionTenv benv.beginTransaction tx index E
         (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)
-        intrinsicGas []) tx t) (by simp [callMessage, hvalue]; rfl)
+        intrinsicGas []) tx t) (by simp only [callMessage, hvalue]; rfl)
   have hdebit' : (benv.state.incrNonce E).subBal E
       (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
         benv.stat.baseFeePerGas) + transactionBlobGasFee benv tx).toB256 = some
@@ -458,7 +458,8 @@ theorem processTransaction_call_of_exec
           benv.stat.baseFeePerGas)).toB256)) }
       (transactionTenv benv.beginTransaction tx index E
         (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)
-        intrinsicGas []) tx t) hsg rfl (by simp [callMessage, transactionTenv, Tx.auths, htype]) hcode
+        intrinsicGas []) tx t) hsg rfl (by simp only [callMessage, transactionTenv,
+          Std.TreeMap.empty_eq_emptyc, Tx.auths, htype, List.isEmpty_nil]) hcode
     hpm herr (Int.toNat?_eq_some_of_nonneg hrf)
   obtain ⟨bout', hproc, hcum, hblk⟩ := processTransaction_of_stages_gasUsed (benv := benv)
     (bout := bout) (tx := tx) (index := index) (intrinsicGas := intrinsicGas)
@@ -482,14 +483,14 @@ theorem calldataTokens_foldl (l : Bytes) (n : Nat) :
     l.foldl (fun acc x => acc + (if x = 0 then 1 else 4)) n = n + calldataTokens l := by
   unfold calldataTokens
   induction l generalizing n with
-  | nil => simp
+  | nil => simp only [List.foldl_nil, add_zero]
   | cons x xs ih =>
     simp only [List.foldl_cons, ih (n + _), ih (0 + _)]
     omega
 
 theorem calldataTokens_le (data : Bytes) : calldataTokens data ≤ 4 * data.length := by
   induction data with
-  | nil => simp [calldataTokens]
+  | nil => simp only [calldataTokens, List.foldl_nil, List.length_nil, mul_zero, Std.le_refl]
   | cons x xs ih =>
     have h := calldataTokens_foldl xs (if x = 0 then 1 else 4)
     have : calldataTokens (x :: xs) = (if x = 0 then 1 else 4) + calldataTokens xs := by
@@ -524,7 +525,8 @@ theorem calculateIntrinsicCost_two_call {rules : ForkRules} {tx : Tx} {sender : 
       (rules.gas.txBase + calldataTokens tx.data * standardCallDataTokenCost,
         calldataTokens tx.data * rules.gas.floorTokenCost + rules.gas.txBase) := by
   unfold calculateIntrinsicCost calldataTokens
-  simp [hsg, htype, TxType.receiver?]
+  simp only [TxType.receiver?, htype, hsg, add_zero, Option.isNone_some, Bool.false_eq_true,
+    ↓reduceIte, List.map_nil, List.sum_nil]
 
 /-- **The per-transaction gas cap on the covered forks**: no cap at Prague, the EIP-7825 cap `2 ^ 24`
 from Osaka; a transaction whose gas is at most `2 ^ 24` passes on every covered fork. -/
@@ -535,7 +537,7 @@ theorem CoveredFork.checkTransactionGasCap_ok {s : BenvStat} (h : CoveredFork s.
       (Fork.ruleSet f).tx.maxGas = some 16777216) (Or.inl rfl) (Or.inr rfl) (Or.inr rfl) (Or.inr rfl)
   unfold checkTransactionGasCap
   rcases hcap with hc | hc <;> rw [hc]
-  simp [Nat.not_lt.mpr hgas]
+  simp only [gt_iff_lt, Nat.not_lt.mpr hgas, ↓reduceIte]
 
 /-- The sender's debit (nonce bump and balance write) leaves every other account alone. -/
 theorem debit_get_ne {st : State} {E a : Adr} {v : B256} (h : E ≠ a) :

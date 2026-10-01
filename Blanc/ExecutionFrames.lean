@@ -51,15 +51,17 @@ theorem Exec.mem_rawFrameDescendants_of_mem_descendantFrames :
         (Blanc.Exec.Frame.rootDeriv (frame := frame)) ∈ Exec.rawFrameDescendants run := by
   intro pc sevm pre out run
   induction run with
-  | halt hstep => simp [Exec.descendantFrames, Exec.rawFrameDescendants]
+  | halt hstep => simp only [descendantFrames, not_mem_nil, rawFrameDescendants, imp_self,
+    implies_true]
   | cont hstep next ih =>
-      simpa [Exec.descendantFrames, Exec.rawFrameDescendants] using ih
+      simpa only [descendantFrames, rawFrameDescendants] using ih
   | doneErr hstep henter hresume =>
-      simp [Exec.descendantFrames, Exec.rawFrameDescendants]
+      simp only [descendantFrames, not_mem_nil, rawFrameDescendants, imp_self, implies_true]
   | doneOk hstep henter hresume next ih =>
-      simpa [Exec.descendantFrames, Exec.rawFrameDescendants] using ih
+      simpa only [descendantFrames, rawFrameDescendants] using ih
   | runErr hstep henter child hresume =>
-      simp [Exec.descendantFrames, Exec.rawFrameDescendants]
+      simp only [descendantFrames, not_mem_nil, rawFrameDescendants, mem_cons, IsEmpty.forall_iff,
+        implies_true]
   | runOk hstep henter child hresume next childIh nextIh =>
       intro frame member
       simp only [Exec.descendantFrames, Exec.rawFrameDescendants] at member ⊢
@@ -90,11 +92,11 @@ theorem Exec.mem_rawFrameRoots_of_mem_committedFrames
     simp only [List.mem_cons] at member
     rcases member with rfl | descendant
     · change (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv) ∈ Exec.rawFrameRoots run
-      simp [Exec.rawFrameRoots]
+      simp only [rawFrameRoots, mem_cons, true_or]
     · simp only [Exec.rawFrameRoots, List.mem_cons]
       exact Or.inr
         (Exec.mem_rawFrameDescendants_of_mem_descendantFrames run frame descendant)
-  next notCommitted => simp at member
+  next notCommitted => simp only [not_mem_nil] at member
 
 /-- The selected outer execution always heads its raw-frame traversal. -/
 theorem Exec.mem_rawFrameRoots_self
@@ -102,7 +104,7 @@ theorem Exec.mem_rawFrameRoots_self
     (run : Exec pc sevm pre out) :
     (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv) ∈
       Exec.rawFrameRoots run := by
-  simp [Exec.rawFrameRoots]
+  simp only [rawFrameRoots, mem_cons, true_or]
 
 /-- A failed parent resume still retains the entered child and all of its raw
 descendant frame roots. -/
@@ -118,7 +120,7 @@ descendant frame roots. -/
       ⟨pc, sevm, pre, .error error,
         Exec.runErr hstep henter child hresume⟩ ::
         Exec.rawFrameRoots child := by
-  simp [Exec.rawFrameRoots, Exec.rawFrameDescendants]
+  simp only [rawFrameRoots, rawFrameDescendants]
 
 /-- On a successful parent resume, the child's complete raw-frame segment
 precedes every child frame entered later by the resumed parent. -/
@@ -135,7 +137,7 @@ precedes every child frame entered later by the resumed parent. -/
       ⟨pc, sevm, pre, out,
         Exec.runOk hstep henter child hresume next⟩ ::
         (Exec.rawFrameRoots child ++ Exec.rawFrameDescendants next) := by
-  simp [Exec.rawFrameRoots, Exec.rawFrameDescendants]
+  simp only [rawFrameRoots, rawFrameDescendants, cons_append]
 
 /-- A trace-local entry condition for every actually entered frame executing
 at `ca`. Frames at unrelated targets impose no condition. -/

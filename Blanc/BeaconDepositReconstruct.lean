@@ -465,7 +465,8 @@ theorem reconstructedDepositNode_eq_model
     simp only [List.length_drop]
     omega
   have hamountPadded : (amountLE ++ zeros 24).length = 32 := by
-    simp [List.length_append, hamount, zeros]
+    simp only [zeros, List.reduceReplicate, List.length_append, hamount, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd]
   have hzero : (0 : B256).toBytes = zeros 32 := by
     decide +kernel
   simp only [reconstructSignatureSecondDigest, depositDataNode, pubkeyRoot,

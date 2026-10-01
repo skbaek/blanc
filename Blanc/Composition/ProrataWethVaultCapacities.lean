@@ -89,7 +89,7 @@ theorem readTotalAssets_capacity_body_effect
   have memory : MemoryImage entry entry.memory.data.toList := by
     refine ⟨memoryWf, ?_⟩
     intro index
-    simp
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
   obtain ⟨callPre, callPost, staging, crossing, suffix⟩ :=
     readTotalAssets_trace run
   have stagingCode : Devm.getCode entry = Devm.getCode callPre :=
@@ -109,7 +109,7 @@ theorem readTotalAssets_capacity_body_effect
   have bodyReads :
       Mem.Reads bodyPre.memory bodyPre.memory.data.toList := by
     intro index
-    simp
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
   have bodySupplyWindow := preservesWindow
     (by decide +kernel : 64 ≤ (supplyWord * 32).toNat) supplyWindow
   obtain ⟨resultFits, result⟩ :=
@@ -170,8 +170,8 @@ theorem maxMint_body_effect
   have routedRun : Func.RunCompiledTo (vault.main :: vault.aux) sevm entry
       (canonicalAddressArg 0 (receiverCapacityBody maxMintReadBody))
       (.ok post) := by
-    simpa [maxMint, receiverCapacityBody, stagedSupplyCapacityBody,
-      stableCapacityBody, maxMintReadBody] using run
+    simpa only [receiverCapacityBody, stagedSupplyCapacityBody, stableCapacityBody, maxMintReadBody,
+      maxMint] using run
   obtain ⟨receiverPre, receiverValid, receiverRun, receiverStack,
       entryState, entryMemory, entryLogs⟩ :=
     canonicalAddressArg_body_of_ok (R := Func.RunOk) nil_pref routedRun
@@ -321,8 +321,8 @@ theorem maxDeposit_body_effect
   have routedRun : Func.RunCompiledTo (vault.main :: vault.aux) sevm entry
       (canonicalAddressArg 0 (receiverCapacityBody maxDepositReadBody))
       (.ok post) := by
-    simpa [maxDeposit, receiverCapacityBody, stagedSupplyCapacityBody,
-      stableCapacityBody, maxDepositReadBody] using run
+    simpa only [receiverCapacityBody, stagedSupplyCapacityBody, stableCapacityBody,
+      maxDepositReadBody, maxDeposit] using run
   obtain ⟨receiverPre, receiverValid, receiverRun, receiverStack,
       entryState, entryMemory, entryLogs⟩ :=
     canonicalAddressArg_body_of_ok (R := Func.RunOk) nil_pref routedRun
@@ -478,8 +478,8 @@ theorem maxWithdraw_body_effect
       (canonicalAddressArg 0
         (arg 0 +++ sload ::: mstoreAt amountWord +++
           stagedSupplyCapacityBody maxWithdrawReadBody)) (.ok post) := by
-    simpa [maxWithdraw, stagedSupplyCapacityBody, stableCapacityBody,
-      maxWithdrawReadBody] using run
+    simpa only [stagedSupplyCapacityBody, stableCapacityBody, maxWithdrawReadBody,
+      maxWithdraw] using run
   obtain ⟨ownerPre, ownerValid, ownerRun, ownerStack, entryState,
       entryMemory, entryLogs⟩ :=
     canonicalAddressArg_body_of_ok (R := Func.RunOk) nil_pref routedRun
@@ -613,12 +613,14 @@ theorem maxWithdraw_body_effect
 
 private theorem returnWord_lookup :
     (vault.main :: vault.aux)[returnWordSlot]? = some returnWord := by
-  simp [vault, vaultAux, returnWordSlot]
+  simp only [vault, vaultAux, returnWordSlot, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
 
 private theorem maxMintAfterAssetCap_lookup :
     (vault.main :: vault.aux)[maxMintAfterAssetCapSlot]? =
       some maxMintAfterAssetCap := by
-  simp [vault, vaultAux, maxMintAfterAssetCapSlot]
+  simp only [vault, vaultAux, maxMintAfterAssetCapSlot, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.lt_add_one, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
 
 /-- Positional membership avoids reducing selector hashes or comparing the
 large compiled capacity bodies. -/
@@ -862,7 +864,7 @@ theorem maxMint_compiled_effect_stable
         pre post := by
   obtain ⟨valueZero, valid, fits, effect⟩ :=
     maxMint_compiled_effect config hfork memoryWf run selectorEq
-  simpa [maxMintViewN, receiverNonzero, Nat.not_lt_of_ge stable] using
+  simpa only [maxMintViewN, receiverNonzero, ↓reduceIte, Nat.not_lt_of_ge stable] using
     And.intro valueZero (And.intro valid (And.intro fits effect))
 
 /-- Stable nonzero-receiver specialization of `maxDeposit`. -/
@@ -893,7 +895,7 @@ theorem maxDeposit_compiled_effect_stable
         pre post := by
   obtain ⟨valueZero, valid, fits, effect⟩ :=
     maxDeposit_compiled_effect config hfork memoryWf run selectorEq
-  simpa [maxDepositViewN, receiverNonzero, Nat.not_lt_of_ge stable] using
+  simpa only [maxDepositViewN, receiverNonzero, ↓reduceIte, Nat.not_lt_of_ge stable] using
     And.intro valueZero (And.intro valid (And.intro fits effect))
 
 /-- In a stable conserved share ledger, an owner's balance is bounded by
@@ -939,12 +941,11 @@ theorem maxWithdraw_compiled_effect_exact
     sevm.currentTarget.toB256).toNat
   let supply := (Devm.getStorVal pre sevm.currentTarget supplySlot).toNat
   have claimLeAssets : maxWithdrawN balance assets supply ≤ assets := by
-    exact maxWithdrawN_le_assets (by simpa [balance, supply] using balanceLe)
+    exact maxWithdrawN_le_assets (by simpa only [balance, supply] using balanceLe)
   have assetsLeMax : assets ≤ maxWordN := by
     have assetsLt : assets < wordModulusN := by
-      simpa [assets, wordModulusN] using
-        B256.toNat_lt
-          ((pre.state.getStor wethAccount).get sevm.currentTarget.toB256)
+      simpa only [assets, wordModulusN, Nat.reducePow] using
+        B256.toNat_lt ((pre.state.getStor wethAccount).get sevm.currentTarget.toB256)
     unfold maxWordN
     omega
   have uncapped : min maxWordN (maxWithdrawN balance assets supply) =
@@ -952,9 +953,8 @@ theorem maxWithdraw_compiled_effect_exact
     Nat.min_eq_right (claimLeAssets.trans assetsLeMax)
   have exactFits : maxWithdrawN balance assets supply < wordModulusN :=
     (claimLeAssets.trans assetsLeMax).trans_lt maxWordN_lt_wordModulusN
-  refine ⟨valueZero, valid, by simpa [balance, assets, supply] using exactFits,
+  refine ⟨valueZero, valid, by simpa only [balance, assets, supply] using exactFits,
     ?_⟩
-  simpa [maxWithdrawViewN, balance, assets, supply,
-    Nat.not_lt_of_ge stable, uncapped] using effect
+  simpa only [maxWithdrawViewN, balance, assets, supply, Nat.not_lt_of_ge stable, uncapped, ↓reduceIte] using effect
 
 end Blanc.Composition.ProrataWethVault

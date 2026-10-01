@@ -26,11 +26,11 @@ private theorem payload_and_low252Mask {payload : B256}
   intro i
   rw [Nat.testBit_and, Nat.testBit_two_pow_sub_one]
   by_cases hi : i < 252
-  · simp [hi]
+  · simp only [hi, decide_true, Bool.and_true]
   · rw [Nat.testBit_lt_two_pow
       (Nat.lt_of_lt_of_le hpayload
         (Nat.pow_le_pow_right (by omega) (by omega)))]
-    simp [hi]
+    simp only [hi, decide_false, Bool.and_self]
 
 /-- A payload already below the 252-bit boundary is unchanged by masking. -/
 theorem encode_eq_of_payload_lt {region : Nat} {payload : B256}

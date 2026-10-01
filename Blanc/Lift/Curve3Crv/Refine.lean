@@ -90,12 +90,15 @@ theorem VyInv.strs_set_word {stor : Stor} {s : Curve3Crv.State} {x v : B256}
     (hy : VyStr stor vySymbolBase 1 s.symbol) :
     VyStr (stor.set x v) vyNameBase 2 s.name ∧ VyStr (stor.set x v) vySymbolBase 1 s.symbol := by
   have h := vyStrSlots_apart.1
-  refine ⟨hn.set_ne (h _ (by simp [vyNameSlots]) x hx) (fun j hj => h _ ?_ x hx),
-    hy.set_ne (h _ (by simp [vySymbolSlots]) x hx) (fun j hj => h _ ?_ x hx)⟩
+  refine ⟨hn.set_ne (h _ (by simp only [vyNameSlots, List.cons_append, List.nil_append,
+    List.mem_cons, true_or]) x hx) (fun j hj => h _ ?_ x hx),
+    hy.set_ne (h _ (by simp only [vySymbolSlots, List.mem_append, List.mem_cons, List.not_mem_nil,
+      or_false, true_or, or_true]) x hx) (fun j hj => h _ ?_ x hx)⟩
   · have : j = 0 ∨ j = 1 := by omega
-    rcases this with rfl | rfl <;> simp [vyNameSlots]
+    rcases this with rfl | rfl <;> simp only [vyNameSlots, List.cons_append, List.nil_append, zero_add, List.mem_cons, true_or, or_true, Nat.reduceAdd]
   · have : j = 0 := by omega
-    subst this; simp [vySymbolSlots]
+    subst this; simp only [vySymbolSlots, zero_add, List.mem_append, List.mem_cons,
+      List.not_mem_nil, or_false, or_true]
 
 /-- A write to one of the three word slots, with the model changed only in those words. -/
 theorem VyInv.of_set_word {stor : Stor} {s s' : Curve3Crv.State} {K : Key → Prop} {x v : B256}
@@ -107,9 +110,9 @@ theorem VyInv.of_set_word {stor : Stor} {s s' : Curve3Crv.State} {K : Key → Pr
     VyInv (stor.set x v) s' K := by
   have hxf : x ∈ vyFixedSlots := by
     simp only [vyWordSlots, List.mem_cons, List.not_mem_nil, or_false] at hx
-    rcases hx with rfl | rfl | rfl <;> simp [vyFixedSlots]
+    rcases hx with rfl | rfl | rfl <;> simp only [vyFixedSlots, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
   have hval : ∀ k : Key, k.val s' = k.val s := by
-    intro k; cases k <;> simp [Key.val, hbal, hall]
+    intro k; cases k <;> simp only [Key.val, hbal, hall]
   obtain ⟨hn, hy⟩ := VyInv.strs_set_word (v := v) hx h.name h.symbol
   refine ⟨hdec, hsup, hmin, hname ▸ hn, hsym ▸ hy, fun k hk => ?_, fun k hk => ?_, fun y hy' => ?_,
     h.inj, h.apart, hcons⟩
@@ -169,19 +172,22 @@ theorem VyInv.update {stor stor' : Stor} {s s' : Curve3Crv.State} {K : Key → P
       simp only [List.mem_append, vyNameSlots, vySymbolSlots, List.mem_cons,
         List.not_mem_nil, or_false] at hx
       simp only [vyFixedSlots, List.mem_cons, List.not_mem_nil, or_false]
-      rcases hx with (rfl | rfl | rfl) | (rfl | rfl) <;> simp
+      rcases hx with (rfl | rfl | rfl) | (rfl | rfl) <;> simp only [true_or, or_true]
     · intro hw
       exact hstr x hx x (hws x hw) rfl
   refine ⟨hdec, hsup, hmin, ?_, ?_, fun k hk => ?_, fun k hk => ?_, fun y hy => ?_, ?_, ?_,
     hcons⟩
   · rw [hname]
-    refine h.name.congr (hkeep _ (by simp [vyNameSlots])) (fun j hj => hkeep _ ?_)
+    refine h.name.congr (hkeep _ (by simp only [vyNameSlots, List.cons_append, List.nil_append,
+      List.mem_cons, true_or])) (fun j hj => hkeep _ ?_)
     have : j = 0 ∨ j = 1 := by omega
-    rcases this with rfl | rfl <;> simp [vyNameSlots]
+    rcases this with rfl | rfl <;> simp only [vyNameSlots, List.cons_append, List.nil_append, zero_add, List.mem_cons, true_or, or_true, Nat.reduceAdd]
   · rw [hsym]
-    refine h.symbol.congr (hkeep _ (by simp [vySymbolSlots])) (fun j hj => hkeep _ ?_)
+    refine h.symbol.congr (hkeep _ (by simp only [vySymbolSlots, List.mem_append, List.mem_cons,
+      List.not_mem_nil, or_false, true_or, or_true])) (fun j hj => hkeep _ ?_)
     have : j = 0 := by omega
-    subst this; simp [vySymbolSlots]
+    subst this; simp only [vySymbolSlots, zero_add, List.mem_append, List.mem_cons,
+      List.not_mem_nil, or_false, or_true]
   · by_cases hks : k ∈ ks
     · exact hkeys k hks
     · have hK : K k := hk.resolve_right hks
@@ -195,7 +201,7 @@ theorem VyInv.update {stor stor' : Stor} {s s' : Curve3Crv.State} {K : Key → P
         exact h.apart k hK (by
           have := hws _ hw
           simp only [vyWordSlots, List.mem_cons, List.not_mem_nil, or_false] at this
-          rcases this with h1 | h1 | h1 <;> rw [h1] <;> simp [vyFixedSlots])
+          rcases this with h1 | h1 | h1 <;> rw [h1] <;> simp only [vyFixedSlots, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])
   · have hks : k ∉ ks := fun h' => hk (.inr h')
     rw [hval k hks]
     exact h.unknown k (fun h' => hk (.inl h'))
@@ -207,7 +213,7 @@ theorem VyInv.update {stor stor' : Stor} {s s' : Curve3Crv.State} {K : Key → P
       · left
         have := hws _ hw
         simp only [vyWordSlots, List.mem_cons, List.not_mem_nil, or_false] at this
-        rcases this with h1 | h1 | h1 <;> rw [h1] <;> simp [vyFixedSlots]
+        rcases this with h1 | h1 | h1 <;> rw [h1] <;> simp only [vyFixedSlots, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
       · rw [hoff y hk hw] at hy
         rcases h.support y hy with hx | ⟨k, hK, he⟩
         · exact .inl hx
@@ -316,7 +322,7 @@ theorem refine_setMinter (hinv : VyInv stor s K)
     (sevm.value = 0 ∧ (Sevm.argWord sevm 0).toNat < 2 ^ 160 ∧ sevm.caller = s.minter) ?_ ?_ ?_
   · intro r
     simp only [rawOf, rawSetMinter, hcall]
-    split_ifs <;> simp_all [eq_comm]
+    split_ifs <;> simp_all only [eq_comm, iff_true, Nat.reducePow, Option.some.injEq, and_self, true_and, not_and, false_iff, isEmpty_Prop, not_false_eq_true, implies_true, IsEmpty.forall_iff]
   · intro o
     simp only [callAt, Curve3Crv.step, Curve3Crv.body, c3ctx]
     by_cases hv : sevm.value = 0
@@ -324,13 +330,15 @@ theorem refine_setMinter (hinv : VyInv stor s K)
       constructor
       · rintro ⟨h1, h2, h3⟩; exact ⟨⟨h1, h2⟩, h3⟩
       · rintro ⟨⟨h1, h2⟩, h3⟩; exact ⟨h1, h2, h3⟩
-    · simp [hv]
+    · simp only [ExceptT.stM_eq, hv, ↓reduceIte, reduceCtorEq, Nat.reducePow, false_and]
   · rintro ⟨-, hm, -⟩
     refine ⟨?_, rfl, rfl⟩
     have hext : Key.extend K (callKeys sevm.caller (callAt sevm 0)) = K := by
-      funext k; simp [Key.extend, SlotFootprint.extendBy, callKeys, callAt]
+      funext k; simp only [Key.extend, SlotFootprint.extendBy, callKeys, callAt, List.not_mem_nil,
+        or_false]
     rw [hext]
-    refine hinv.of_set_word (by simp [vyWordSlots]) rfl rfl rfl rfl ?_ ?_ ?_ hinv.conserved
+    refine hinv.of_set_word (by simp only [vyWordSlots, List.mem_cons, List.not_mem_nil, or_false,
+      or_true]) rfl rfl rfl rfl ?_ ?_ ?_ hinv.conserved
     · rw [Stor.get_set_ne _ (by decide)]; exact hinv.decimals
     · rw [Stor.get_set_ne _ (by decide)]; exact hinv.supply
     · rw [Stor.get_set_self]; exact (B256.toAdr_toB256_of_lt hm).symm
@@ -370,14 +378,14 @@ theorem refine_setName (hinv : VyInv stor s K)
     dsimp only
     split_ifs with h
     · exact ⟨fun h' => ⟨h, (Option.some.inj h').symm⟩, fun ⟨_, h'⟩ => h' ▸ rfl⟩
-    · exact ⟨fun h' => absurd h' (by simp), fun ⟨hP, _⟩ => absurd hP h⟩
+    · exact ⟨fun h' => absurd h' (by simp only [not_false_eq_true]), fun ⟨hP, _⟩ => absurd hP h⟩
   · intro o
     have hl0 : (strArg sevm 0).length = L0 := List.length_sliceD _ _ _ _
     have hl1 : (strArg sevm 1).length = L1 := List.length_sliceD _ _ _ _
     simp only [callAt, Curve3Crv.step, Curve3Crv.body, Curve3Crv.setName, c3ctx, hl0, hl1]
     clear hL0def hL1def
     rcases ow with _ | w <;> split_ifs <;> simp [*, eq_comm]
-    by_cases hw : w = sevm.caller.toB256 <;> simp [hw, eq_comm]
+    by_cases hw : w = sevm.caller.toB256 <;> simp only [hw, ↓reduceIte, Except.ok.injEq, true_and, eq_comm, reduceCtorEq, false_and]
   rintro ⟨-, hL0, hL1, -⟩
   refine ⟨?_, rfl, rfl⟩
   -- the written slots
@@ -385,15 +393,17 @@ theorem refine_setName (hinv : VyInv stor s K)
     intro i hi
     have : i = 0 ∨ i = 1 ∨ i = 2 := by omega
     rcases this with rfl | rfl | rfl
-    · rw [add_toB256_zero]; simp [vyNameSlots]
-    · simp [vyNameSlots]
-    · simp [vyNameSlots]
+    · rw [add_toB256_zero]; simp only [vyNameSlots, List.mem_cons, List.not_mem_nil, or_false,
+      true_or]
+    · simp only [vyNameSlots, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
+    · simp only [vyNameSlots, List.mem_cons, List.not_mem_nil, or_false, or_true]
   have hsym : ∀ i < 2, vySymbolBase + Nat.toB256 i ∈ vySymbolSlots := by
     intro i hi
     have : i = 0 ∨ i = 1 := by omega
     rcases this with rfl | rfl
-    · rw [add_toB256_zero]; simp [vySymbolSlots]
-    · simp [vySymbolSlots]
+    · rw [add_toB256_zero]; simp only [vySymbolSlots, List.mem_cons, List.not_mem_nil, or_false,
+      true_or]
+    · simp only [vySymbolSlots, List.mem_cons, List.not_mem_nil, or_false, or_true]
   have hn0 : n0 ≤ 3 := Nat.min_le_left _ _
   have hn0' : 2 ≤ n0 := by simp only [n0]; omega
   have hn1 : n1 = 2 := by simp only [n1]; omega
@@ -401,7 +411,7 @@ theorem refine_setName (hinv : VyInv stor s K)
     intro x hx
     simp only [List.mem_append, vyNameSlots, vySymbolSlots, List.mem_cons, List.not_mem_nil,
       or_false] at hx
-    rcases hx with (rfl | rfl | rfl) | (rfl | rfl) <;> simp [vyFixedSlots]
+    rcases hx with (rfl | rfl | rfl) | (rfl | rfl) <;> simp only [vyFixedSlots, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
   have hoff : ∀ x, x ∉ vyNameSlots ++ vySymbolSlots → T.get x = stor.get x := by
     intro x hx
     rw [vyCopyStore_get_off (fun i hi he =>
@@ -425,9 +435,10 @@ theorem refine_setName (hinv : VyInv stor s K)
     fun s' w L h => Bytes.sliceD_sliceD_of_le _ _ _ _ _ h
   refine ⟨?_, ?_, ?_, ?_, ?_, fun k hk => ?_, fun k hk => ?_, fun y hy => ?_, ?_, ?_,
     hinv.conserved⟩
-  · rw [hword _ (by simp [vyWordSlots])]; exact hinv.decimals
-  · rw [hword _ (by simp [vyWordSlots])]; exact hinv.supply
-  · rw [hword _ (by simp [vyWordSlots])]; exact hinv.minter
+  · rw [hword _ (by simp only [vyWordSlots, List.mem_cons, List.not_mem_nil, or_false, true_or])]; exact hinv.decimals
+  · rw [hword _ (by simp only [vyWordSlots, List.mem_cons, List.not_mem_nil, or_false, true_or,
+    or_true])]; exact hinv.supply
+  · rw [hword _ (by simp only [vyWordSlots, List.mem_cons, List.not_mem_nil, or_false, or_true])]; exact hinv.minter
   · -- the new name
     have hlen0 : (strArg sevm 0).length = L0 := List.length_sliceD _ _ _ _
     refine ⟨?_, by rw [hlen0]; omega, ?_⟩
@@ -438,7 +449,8 @@ theorem refine_setName (hinv : VyInv stor s K)
         hw0 src0 s0 (by rw [List.length_sliceD]) (by rw [List.length_sliceD]; omega), hlen0]
     · have hW : vyStrWords T vyNameBase 2 =
           (T.get (vyNameBase + Nat.toB256 1)).toBytes ++ (T.get (vyNameBase + Nat.toB256 2)).toBytes := by
-        simp [vyStrWords, List.range_succ]
+        simp only [vyStrWords, List.range_succ, List.range_zero, List.nil_append, List.cons_append,
+          List.flatMap_cons, zero_add, Nat.reduceAdd, List.flatMap_nil, List.append_nil]
       rw [hW, hlen0, hsymoff 1 (by omega), vyCopyStore_bytes_at (by omega) (by omega)]
       by_cases h32 : L0 ≤ 32
       · rw [List.take_append_of_le_length (by rw [List.length_sliceD]; omega),
@@ -457,12 +469,14 @@ theorem refine_setName (hinv : VyInv stor s K)
       rw [vyCopyStore_get_zero (by omega) (by omega),
         hw0 src1 s1 (by rw [List.length_sliceD]) (by rw [List.length_sliceD]; omega), hlen1]
     · have hW : vyStrWords T vySymbolBase 1 = (T.get (vySymbolBase + Nat.toB256 1)).toBytes := by
-        simp [vyStrWords]
+        simp only [vyStrWords, List.range_one, List.flatMap_cons, zero_add, List.flatMap_nil,
+          List.append_nil]
       rw [hW, hlen1, vyCopyStore_bytes_at (by omega) (by omega),
         ← sliceD_zero_take _ (by rw [List.length_sliceD]; omega),
         Bytes.sliceD_sliceD_of_le _ _ _ _ _ (by omega), Nat.add_zero, hsl s1 64 L1 (by omega)]
       rfl
-  · have hK : K k := by simpa [Key.extend, SlotFootprint.extendBy] using hk
+  · have hK : K k := by simpa only [Key.extend, SlotFootprint.extendBy, List.not_mem_nil,
+    or_false] using hk
     rw [hoff _ (fun hs => hinv.apart k hK (hfix _ hs))]
     cases k <;> exact hinv.known _ hK
   · have hK : ¬ K k := fun h => hk (.inl h)
@@ -494,23 +508,23 @@ theorem refine_wordView {k : Nat} (hk : k = 2 ∨ k = 3 ∨ k = 11 ∨ k = 12) (
   rcases hk with rfl | rfl | rfl | rfl
   · refine RawRefines.of_iff (stor, [], some (stor.get vySupplySlot).toBytes)
       (s, [], .word s.totalSupply) (sevm.value = 0) ?_ ?_ ?_
-    · intro r; simp only [rawOf, rawTotalSupply]; split_ifs <;> simp_all [eq_comm]
+    · intro r; simp only [rawOf, rawTotalSupply]; split_ifs <;> simp_all only [eq_comm, Option.some.injEq, true_and, false_and]
     · intro o
       simp only [callAt, Curve3Crv.step, Curve3Crv.body, Curve3Crv.totalSupplyView, c3ctx]
-      split_ifs <;> simp_all [eq_comm]
+      split_ifs <;> simp_all only [ExceptT.stM_eq, ↓reduceIte, eq_comm, Except.ok.injEq, true_and, reduceCtorEq, false_and]
     · intro _
       exact ⟨hext, rfl, by simp only [RetMatch, RetOut, hinv.supply]⟩
   · refine RawRefines.of_iff (stor, [], some (stor.get (mapSlot (mapSlot 4
       (Sevm.argWord sevm 0)) (Sevm.argWord sevm 1))).toBytes) (s, [], .word (s.allowances (Sevm.argWord sevm 0).toAdr
       (Sevm.argWord sevm 1).toAdr)) (sevm.value = 0 ∧ (Sevm.argWord sevm 0).toNat < 2 ^ 160 ∧
       (Sevm.argWord sevm 1).toNat < 2 ^ 160) ?_ ?_ ?_
-    · intro r; simp only [rawOf, rawAllowance]; split_ifs <;> simp_all [eq_comm]
+    · intro r; simp only [rawOf, rawAllowance]; split_ifs <;> simp_all only [Nat.reducePow, eq_comm, Option.some.injEq, and_self, true_and, not_and, not_lt, false_iff, isEmpty_Prop, implies_true, IsEmpty.forall_iff]
     · intro o
       simp only [callAt, Curve3Crv.step, Curve3Crv.body, Curve3Crv.allowanceView, c3ctx]
       by_cases h1 : sevm.value = 0
       · simp only [h1, ite_true, true_and]
-        split_ifs <;> simp_all [eq_comm]
-      · simp [h1]
+        split_ifs <;> simp_all only [Nat.reducePow, ExceptT.stM_eq, eq_comm, Except.ok.injEq, and_self, true_and, not_lt, false_iff, not_and, isEmpty_Prop, IsEmpty.forall_iff]
+      · simp only [ExceptT.stM_eq, h1, ↓reduceIte, reduceCtorEq, Nat.reducePow, false_and]
     · rintro ⟨-, h0, h1⟩
       refine ⟨hext, rfl, ?_⟩
       have hs := hinv.get_slot (hf.1 _ (List.mem_singleton_self _))
@@ -520,22 +534,22 @@ theorem refine_wordView {k : Nat} (hk : k = 2 ∨ k = 3 ∨ k = 11 ∨ k = 12) (
       rw [hs]
   · refine RawRefines.of_iff (stor, [], some (stor.get vyDecimalsSlot).toBytes)
       (s, [], .word s.decimals) (sevm.value = 0) ?_ ?_ ?_
-    · intro r; simp only [rawOf, rawDecimals]; split_ifs <;> simp_all [eq_comm]
+    · intro r; simp only [rawOf, rawDecimals]; split_ifs <;> simp_all only [eq_comm, Option.some.injEq, true_and, false_and]
     · intro o
       simp only [callAt, Curve3Crv.step, Curve3Crv.body, Curve3Crv.decimalsView, c3ctx]
-      split_ifs <;> simp_all [eq_comm]
+      split_ifs <;> simp_all only [ExceptT.stM_eq, ↓reduceIte, eq_comm, Except.ok.injEq, true_and, reduceCtorEq, false_and]
     · intro _
       exact ⟨hext, rfl, by simp only [RetMatch, RetOut, hinv.decimals]⟩
   · refine RawRefines.of_iff (stor, [], some (stor.get (mapSlot 3 (Sevm.argWord sevm 0))).toBytes)
       (s, [], .word (s.balanceOf (Sevm.argWord sevm 0).toAdr))
       (sevm.value = 0 ∧ (Sevm.argWord sevm 0).toNat < 2 ^ 160) ?_ ?_ ?_
-    · intro r; simp only [rawOf, rawBalanceOf]; split_ifs <;> simp_all [eq_comm]
+    · intro r; simp only [rawOf, rawBalanceOf]; split_ifs <;> simp_all only [Nat.reducePow, eq_comm, Option.some.injEq, and_self, true_and, not_and, not_lt, false_iff, isEmpty_Prop, implies_true, IsEmpty.forall_iff]
     · intro o
       simp only [callAt, Curve3Crv.step, Curve3Crv.body, Curve3Crv.balanceOfView, c3ctx]
       by_cases h1 : sevm.value = 0
       · simp only [h1, ite_true, true_and]
-        split_ifs <;> simp_all [eq_comm]
-      · simp [h1]
+        split_ifs <;> simp_all only [Nat.reducePow, ExceptT.stM_eq, eq_comm, Except.ok.injEq, true_and, not_lt, false_iff, not_and, isEmpty_Prop, IsEmpty.forall_iff]
+      · simp only [ExceptT.stM_eq, h1, ↓reduceIte, reduceCtorEq, Nat.reducePow, false_and]
     · rintro ⟨-, h0⟩
       refine ⟨hext, rfl, ?_⟩
       have hs := hinv.get_slot (hf.1 _ (List.mem_singleton_self _))
@@ -562,10 +576,10 @@ theorem refine_stringView {k : Nat} (hk : k = 9 ∨ k = 10) (hinv : VyInv stor s
       (sevm.value = 0) ?_ ?_ ?_
     · intro r
       simp only [rawOf, rawName, hl, hstr hinv.name]
-      split_ifs <;> simp_all [eq_comm]
+      split_ifs <;> simp_all only [eq_comm, Nat.reduceMul, and_true, Option.some.injEq, true_and, false_and]
     · intro o
       simp only [callAt, Curve3Crv.step, Curve3Crv.body, Curve3Crv.nameView, c3ctx]
-      split_ifs <;> simp_all [eq_comm]
+      split_ifs <;> simp_all only [eq_comm, Nat.reduceMul, ExceptT.stM_eq, ↓reduceIte, Except.ok.injEq, true_and, reduceCtorEq, false_and]
     · intro _
       exact ⟨hext, rfl, rfl⟩
   · obtain ⟨hl, hle, -⟩ := hinv.symbol
@@ -573,10 +587,10 @@ theorem refine_stringView {k : Nat} (hk : k = 9 ∨ k = 10) (hinv : VyInv stor s
       (sevm.value = 0) ?_ ?_ ?_
     · intro r
       simp only [rawOf, rawSymbol, hl, hstr hinv.symbol]
-      split_ifs <;> simp_all [eq_comm]
+      split_ifs <;> simp_all only [eq_comm, mul_one, and_true, Option.some.injEq, true_and, false_and]
     · intro o
       simp only [callAt, Curve3Crv.step, Curve3Crv.body, Curve3Crv.symbolView, c3ctx]
-      split_ifs <;> simp_all [eq_comm]
+      split_ifs <;> simp_all only [eq_comm, mul_one, ExceptT.stM_eq, ↓reduceIte, Except.ok.injEq, true_and, reduceCtorEq, false_and]
     · intro _
       exact ⟨hext, rfl, rfl⟩
 
@@ -597,7 +611,8 @@ theorem refine_transfer (hinv : VyInv stor s K)
   set v := Sevm.argWord sevm 1 with hv_def
   set f := s.balanceOf with hf_def
   have hks : callKeys a (callAt sevm 4) = [.bal a, .bal d.toAdr] := rfl
-  have hfa : stor.get (vyBalSlot a) = f a := hinv.get_slot (hf.1 (.bal a) (by simp [hks]))
+  have hfa : stor.get (vyBalSlot a) = f a := hinv.get_slot (hf.1 (.bal a) (by simp only [hks,
+    List.mem_cons, Key.bal.injEq, List.not_mem_nil, or_false, true_or]))
   by_cases hd : d.toNat < 2 ^ 160
   swap
   · refine ⟨fun r hr => ?_, fun o ho => ?_⟩
@@ -608,13 +623,16 @@ theorem refine_transfer (hinv : VyInv stor s K)
       by_cases hv : sevm.value = 0
       · simp only [hv, ite_true] at ho
         exact absurd (Curve3Crv.transfer_eq_ok.mp ho).1 hd
-      · simp [hv] at ho
+      · simp only [ExceptT.stM_eq, hv, ↓reduceIte, reduceCtorEq] at ho
   set d' := d.toAdr
   have hs2 : mapSlot 3 d = vyBalSlot d' := by
     simp only [vyBalSlot, d', B256.toAdr_toB256_of_lt hd]
-  have hfd : stor.get (vyBalSlot d') = f d' := hinv.get_slot (hf.1 (.bal d') (by simp [hks]))
+  have hfd : stor.get (vyBalSlot d') = f d' := hinv.get_slot (hf.1 (.bal d') (by simp only [hks,
+    List.mem_cons, Key.bal.injEq, List.not_mem_nil, or_false, or_true]))
   have hne : a ≠ d' → vyBalSlot a ≠ vyBalSlot d' := fun h e =>
-    h (Key.bal.inj (hf.2 (.bal a) (by simp [hks]) (.bal d') (by simp [hks]) e))
+    h (Key.bal.inj (hf.2 (.bal a) (by simp only [hks, List.mem_cons, Key.bal.injEq,
+      List.not_mem_nil, or_false, true_or]) (.bal d') (by simp only [hks, List.mem_cons,
+      Key.bal.injEq, List.not_mem_nil, or_false, or_true]) e))
   have hy : ((stor.set (vyBalSlot a) (f a - v)).get (vyBalSlot d')) = ledgerDebit f a v d' := by
     by_cases had : d' = a
     · rw [had, Stor.get_set_self, ledgerDebit_self]
@@ -627,7 +645,7 @@ theorem refine_transfer (hinv : VyInv stor s K)
   · intro r
     simp only [rawOf, rawTransfer, ← ha_def, ← hd_def, ← hv_def]
     rw [hs2, hfa, hy]
-    split_ifs with hc <;> simp_all [eq_comm]
+    split_ifs with hc <;> simp_all only [Nat.reducePow, ne_eq, eq_comm, true_and, Option.some.injEq, and_self, not_and, not_lt, false_iff, isEmpty_Prop, implies_true, IsEmpty.forall_iff]
   · intro o
     simp only [callAt, Curve3Crv.step, Curve3Crv.body, c3ctx]
     by_cases hv : sevm.value = 0
@@ -635,7 +653,7 @@ theorem refine_transfer (hinv : VyInv stor s K)
       constructor
       · rintro ⟨-, h1, h2, h3⟩; exact ⟨⟨h1, h2⟩, h3⟩
       · rintro ⟨⟨h1, h2⟩, h3⟩; exact ⟨hd, h1, h2, h3⟩
-    · simp [hv]
+    · simp only [ExceptT.stM_eq, hv, ↓reduceIte, reduceCtorEq, Nat.reducePow, false_and]
   · rintro ⟨hv, hle, hnof⟩
     have hstep : Curve3Crv.step (c3ctx sevm ow) (callAt sevm 4) s =
         .ok (s', [.transfer a d' v], .bool true) := by
@@ -643,12 +661,15 @@ theorem refine_transfer (hinv : VyInv stor s K)
       exact Curve3Crv.transfer_eq_ok.mpr ⟨hd, hle, hnof, rfl⟩
     refine ⟨?_, ?_, rfl⟩
     · rw [hks]
-      refine hinv.update (ws := []) (hf := hks ▸ hf) (by simp) ?_ ?_ ?_ rfl rfl ?_ ?_ ?_
+      refine hinv.update (ws := []) (hf := hks ▸ hf) (by simp only [List.not_mem_nil,
+        IsEmpty.forall_iff, implies_true]) ?_ ?_ ?_ rfl rfl ?_ ?_ ?_
         (Curve3Crv.step_conserved hinv.conserved hstep)
       · intro x hx _
         dsimp only
-        have h1 := hx (.bal a) (by simp)
-        have h2 := hx (.bal d') (by simp)
+        have h1 := hx (.bal a) (by simp only [List.mem_cons, Key.bal.injEq, List.not_mem_nil,
+          or_false, true_or])
+        have h2 := hx (.bal d') (by simp only [List.mem_cons, Key.bal.injEq, List.not_mem_nil,
+          or_false, or_true])
         rw [Stor.get_set_ne (k := vyBalSlot d') _ h2, Stor.get_set_ne (k := vyBalSlot a) _ h1]
       · intro k hk
         simp only [List.mem_cons, List.not_mem_nil, or_false] at hk
@@ -672,24 +693,36 @@ theorem refine_transfer (hinv : VyInv stor s K)
       · dsimp only
         rw [Stor.get_set_ne _ ?_, Stor.get_set_ne _ ?_]
         · exact hinv.decimals
-        · exact fun e => hinv.slot_apart (hf.1 (.bal a) (by simp [hks])) (by
-            rw [show (Key.bal a).slot = vyBalSlot a from rfl, e]; simp [vyFixedSlots])
-        · exact fun e => hinv.slot_apart (hf.1 (.bal d') (by simp [hks])) (by
-            rw [show (Key.bal d').slot = vyBalSlot d' from rfl, e]; simp [vyFixedSlots])
+        · exact fun e => hinv.slot_apart (hf.1 (.bal a) (by simp only [hks, List.mem_cons,
+          Key.bal.injEq, List.not_mem_nil, or_false, true_or])) (by
+            rw [show (Key.bal a).slot = vyBalSlot a from rfl, e]; simp only [vyFixedSlots,
+              List.mem_cons, List.not_mem_nil, or_false, true_or])
+        · exact fun e => hinv.slot_apart (hf.1 (.bal d') (by simp only [hks, List.mem_cons,
+          Key.bal.injEq, List.not_mem_nil, or_false, or_true])) (by
+            rw [show (Key.bal d').slot = vyBalSlot d' from rfl, e]; simp only [vyFixedSlots,
+              List.mem_cons, List.not_mem_nil, or_false, true_or])
       · dsimp only
         rw [Stor.get_set_ne _ ?_, Stor.get_set_ne _ ?_]
         · exact hinv.supply
-        · exact fun e => hinv.slot_apart (hf.1 (.bal a) (by simp [hks])) (by
-            rw [show (Key.bal a).slot = vyBalSlot a from rfl, e]; simp [vyFixedSlots])
-        · exact fun e => hinv.slot_apart (hf.1 (.bal d') (by simp [hks])) (by
-            rw [show (Key.bal d').slot = vyBalSlot d' from rfl, e]; simp [vyFixedSlots])
+        · exact fun e => hinv.slot_apart (hf.1 (.bal a) (by simp only [hks, List.mem_cons,
+          Key.bal.injEq, List.not_mem_nil, or_false, true_or])) (by
+            rw [show (Key.bal a).slot = vyBalSlot a from rfl, e]; simp only [vyFixedSlots,
+              List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])
+        · exact fun e => hinv.slot_apart (hf.1 (.bal d') (by simp only [hks, List.mem_cons,
+          Key.bal.injEq, List.not_mem_nil, or_false, or_true])) (by
+            rw [show (Key.bal d').slot = vyBalSlot d' from rfl, e]; simp only [vyFixedSlots,
+              List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])
       · dsimp only
         rw [Stor.get_set_ne _ ?_, Stor.get_set_ne _ ?_]
         · exact hinv.minter
-        · exact fun e => hinv.slot_apart (hf.1 (.bal a) (by simp [hks])) (by
-            rw [show (Key.bal a).slot = vyBalSlot a from rfl, e]; simp [vyFixedSlots])
-        · exact fun e => hinv.slot_apart (hf.1 (.bal d') (by simp [hks])) (by
-            rw [show (Key.bal d').slot = vyBalSlot d' from rfl, e]; simp [vyFixedSlots])
+        · exact fun e => hinv.slot_apart (hf.1 (.bal a) (by simp only [hks, List.mem_cons,
+          Key.bal.injEq, List.not_mem_nil, or_false, true_or])) (by
+            rw [show (Key.bal a).slot = vyBalSlot a from rfl, e]; simp only [vyFixedSlots,
+              List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])
+        · exact fun e => hinv.slot_apart (hf.1 (.bal d') (by simp only [hks, List.mem_cons,
+          Key.bal.injEq, List.not_mem_nil, or_false, or_true])) (by
+            rw [show (Key.bal d').slot = vyBalSlot d' from rfl, e]; simp only [vyFixedSlots,
+              List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])
     · simp only [List.map, eventLog, List.cons.injEq, and_true]
       rw [B256.toAdr_toB256_of_lt hd]
 
@@ -716,7 +749,7 @@ private theorem refine_transferFrom_spend (hinv : VyInv stor s K)
       by_cases hv0 : sevm.value = 0
       · simp only [hv0, ite_true] at ho
         exact absurd (Curve3Crv.transferFrom_eq_ok.mp ho).1 hfr
-      · simp [hv0] at ho
+      · simp only [ExceptT.stM_eq, hv0, ↓reduceIte, reduceCtorEq] at ho
   by_cases hdr : d.toNat < 2 ^ 160
   swap
   · refine ⟨fun r hr => ?_, fun o ho => ?_⟩
@@ -726,27 +759,35 @@ private theorem refine_transferFrom_spend (hinv : VyInv stor s K)
       by_cases hv0 : sevm.value = 0
       · simp only [hv0, ite_true] at ho
         exact absurd (Curve3Crv.transferFrom_eq_ok.mp ho).2.1 hdr
-      · simp [hv0] at ho
+      · simp only [ExceptT.stM_eq, hv0, ↓reduceIte, reduceCtorEq] at ho
   set f' := f.toAdr with hf'_def
   set d' := d.toAdr with hd'_def
   have hs1 : mapSlot 3 f = vyBalSlot f' := by
     simp only [vyBalSlot, hf'_def, B256.toAdr_toB256_of_lt hfr]
   have hs2 : mapSlot 3 d = vyBalSlot d' := by
     simp only [vyBalSlot, hd'_def, B256.toAdr_toB256_of_lt hdr]
-  have hff : stor.get (vyBalSlot f') = bf f' := hinv.get_slot (hf.1 (.bal f') (by simp [hks]))
-  have hfd : stor.get (vyBalSlot d') = bf d' := hinv.get_slot (hf.1 (.bal d') (by simp [hks]))
+  have hff : stor.get (vyBalSlot f') = bf f' := hinv.get_slot (hf.1 (.bal f') (by simp only [hks,
+    List.mem_cons, Key.bal.injEq, reduceCtorEq, List.not_mem_nil, or_self, or_false, true_or]))
+  have hfd : stor.get (vyBalSlot d') = bf d' := hinv.get_slot (hf.1 (.bal d') (by simp only [hks,
+    List.mem_cons, Key.bal.injEq, reduceCtorEq, List.not_mem_nil, or_self, or_false, or_true]))
   have hnebd : f' ≠ d' → vyBalSlot f' ≠ vyBalSlot d' := fun h e =>
-    h (Key.bal.inj (hf.2 (.bal f') (by simp [hks]) (.bal d') (by simp [hks]) e))
+    h (Key.bal.inj (hf.2 (.bal f') (by simp only [hks, List.mem_cons, Key.bal.injEq, reduceCtorEq,
+      List.not_mem_nil, or_self, or_false, true_or]) (.bal d') (by simp only [hks, List.mem_cons,
+      Key.bal.injEq, reduceCtorEq, List.not_mem_nil, or_self, or_false, or_true]) e))
   have hy : (stor.set (vyBalSlot f') (bf f' - v)).get (vyBalSlot d') = ledgerDebit bf f' v d' := by
     by_cases had : d' = f'
     · rw [had, Stor.get_set_self, ledgerDebit_self]
     · rw [Stor.get_set_ne _ (hnebd (Ne.symm had)), ledgerDebit_ne _ had, hfd]
   have hbf_apart : vyBalSlot f' ≠ vyMinterSlot := fun e =>
-    hinv.slot_apart (hf.1 (.bal f') (by simp [hks])) (by
-      rw [show (Key.bal f').slot = vyBalSlot f' from rfl, e]; simp [vyFixedSlots])
+    hinv.slot_apart (hf.1 (.bal f') (by simp only [hks, List.mem_cons, Key.bal.injEq, reduceCtorEq,
+      List.not_mem_nil, or_self, or_false, true_or])) (by
+      rw [show (Key.bal f').slot = vyBalSlot f' from rfl, e]; simp only [vyFixedSlots,
+        List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])
   have hbd_apart : vyBalSlot d' ≠ vyMinterSlot := fun e =>
-    hinv.slot_apart (hf.1 (.bal d') (by simp [hks])) (by
-      rw [show (Key.bal d').slot = vyBalSlot d' from rfl, e]; simp [vyFixedSlots])
+    hinv.slot_apart (hf.1 (.bal d') (by simp only [hks, List.mem_cons, Key.bal.injEq, reduceCtorEq,
+      List.not_mem_nil, or_self, or_false, or_true])) (by
+      rw [show (Key.bal d').slot = vyBalSlot d' from rfl, e]; simp only [vyFixedSlots,
+        List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])
   set st1 := stor.set (vyBalSlot f') (bf f' - v) with hst1_def
   set st2 := st1.set (vyBalSlot d') (ledgerDebit bf f' v d' + v) with hst2_def
   have hminter2 : st2.get vyMinterSlot = stor.get vyMinterSlot := by
@@ -757,31 +798,39 @@ private theorem refine_transferFrom_spend (hinv : VyInv stor s K)
   have hne_f3 : vyBalSlot f' ≠ s3 := by
     rw [hs3eq]
     intro e
-    have heq := hf.2 (.bal f') (by simp [hks]) (.allow f' a) (by simp [hks]) e
+    have heq := hf.2 (.bal f') (by simp only [hks, List.mem_cons, Key.bal.injEq, reduceCtorEq,
+      List.not_mem_nil, or_self, or_false, true_or]) (.allow f' a) (by simp only [hks, List.mem_cons,
+      reduceCtorEq, List.not_mem_nil, or_false, or_true]) e
     injection heq
   have hne_d3 : vyBalSlot d' ≠ s3 := by
     rw [hs3eq]
     intro e
-    have heq := hf.2 (.bal d') (by simp [hks]) (.allow f' a) (by simp [hks]) e
+    have heq := hf.2 (.bal d') (by simp only [hks, List.mem_cons, Key.bal.injEq, reduceCtorEq,
+      List.not_mem_nil, or_self, or_false, or_true]) (.allow f' a) (by simp only [hks, List.mem_cons,
+      reduceCtorEq, List.not_mem_nil, or_false, or_true]) e
     injection heq
   have hst2s3 : st2.get s3 = stor.get s3 := by
     rw [hst2_def, Stor.get_set_ne _ hne_d3, hst1_def, Stor.get_set_ne _ hne_f3]
   have hz : st2.get s3 = s.allowances f' a := by
     rw [hst2s3, hs3eq]
-    exact hinv.get_slot (hf.1 (.allow f' a) (by simp [hks]))
-  have hbf_fixed : vyBalSlot f' ∉ vyFixedSlots := hinv.slot_apart (hf.1 (.bal f') (by simp [hks]))
-  have hbd_fixed : vyBalSlot d' ∉ vyFixedSlots := hinv.slot_apart (hf.1 (.bal d') (by simp [hks]))
+    exact hinv.get_slot (hf.1 (.allow f' a) (by simp only [hks, List.mem_cons, reduceCtorEq,
+      List.not_mem_nil, or_false, or_true]))
+  have hbf_fixed : vyBalSlot f' ∉ vyFixedSlots := hinv.slot_apart (hf.1 (.bal f') (by simp only [hks,
+    List.mem_cons, Key.bal.injEq, reduceCtorEq, List.not_mem_nil, or_self, or_false, true_or]))
+  have hbd_fixed : vyBalSlot d' ∉ vyFixedSlots := hinv.slot_apart (hf.1 (.bal d') (by simp only [hks,
+    List.mem_cons, Key.bal.injEq, reduceCtorEq, List.not_mem_nil, or_self, or_false, or_true]))
   have hbf_word : ∀ x ∈ vyWordSlots, vyBalSlot f' ≠ x := fun x hx e => hbf_fixed (by
     rw [e]; simp only [vyWordSlots, List.mem_cons, List.not_mem_nil, or_false] at hx
-    rcases hx with rfl | rfl | rfl <;> simp [vyFixedSlots])
+    rcases hx with rfl | rfl | rfl <;> simp only [vyFixedSlots, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])
   have hbd_word : ∀ x ∈ vyWordSlots, vyBalSlot d' ≠ x := fun x hx e => hbd_fixed (by
     rw [e]; simp only [vyWordSlots, List.mem_cons, List.not_mem_nil, or_false] at hx
-    rcases hx with rfl | rfl | rfl <;> simp [vyFixedSlots])
+    rcases hx with rfl | rfl | rfl <;> simp only [vyFixedSlots, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])
   have hs3_fixed : s3 ∉ vyFixedSlots := by
-    rw [hs3eq]; exact hinv.slot_apart (hf.1 (.allow f' a) (by simp [hks]))
+    rw [hs3eq]; exact hinv.slot_apart (hf.1 (.allow f' a) (by simp only [hks, List.mem_cons,
+      reduceCtorEq, List.not_mem_nil, or_false, or_true]))
   have hs3_word : ∀ x ∈ vyWordSlots, s3 ≠ x := fun x hx e => hs3_fixed (by
     rw [e]; simp only [vyWordSlots, List.mem_cons, List.not_mem_nil, or_false] at hx
-    rcases hx with rfl | rfl | rfl <;> simp [vyFixedSlots])
+    rcases hx with rfl | rfl | rfl <;> simp only [vyFixedSlots, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])
   have hfks : FreshKeys K [Key.bal f', Key.bal d', Key.allow f' a] := hks ▸ hf
   have hmint : ¬ a = s.minter := hmint
   -- the caller is not the minter: the allowance is spent
@@ -802,7 +851,7 @@ private theorem refine_transferFrom_spend (hinv : VyInv stor s K)
   · intro r
     simp only [rawOf, rawTransferFrom, ← ha_def, ← hf_def, ← hd_def, ← hv_def]
     rw [hs1, hs2, hff, hy, ← hst1_def, ← hst2_def, if_pos hspend, ← hz_def, ← hst3_def]
-    split_ifs with hc <;> simp_all [eq_comm]
+    split_ifs with hc <;> simp_all only [ne_eq, Nat.reducePow, eq_comm, not_false_eq_true, forall_const, true_and, Option.some.injEq, and_self, not_and, not_le, false_iff, isEmpty_Prop, implies_true, IsEmpty.forall_iff]
   · intro o
     simp only [callAt, Curve3Crv.step, Curve3Crv.body, c3ctx, ← ha_def, ← hf_def, ← hd_def,
       ← hv_def, ← hf'_def, ← hd'_def]
@@ -811,26 +860,31 @@ private theorem refine_transferFrom_spend (hinv : VyInv stor s K)
       constructor
       · rintro ⟨-, -, h1, h2, hal, rfl⟩
         refine ⟨⟨h1, h2, hal hmint⟩, ?_⟩
-        simp [hs'_def, hmint, hbf_def, hf'_def, hd'_def]
+        simp only [hmint, ↓reduceIte, hs'_def, hbf_def, hf'_def, hd'_def]
       · rintro ⟨⟨h1, h2, hal⟩, rfl⟩
         exact ⟨hfr, hdr, h1, h2, fun _ => hal,
-          by simp [hs'_def, hmint, hbf_def, hf'_def, hd'_def]⟩
-    · simp [hv]
+          by simp only [hs'_def, hbf_def, hf'_def, hd'_def, hmint, ↓reduceIte]⟩
+    · simp only [ExceptT.stM_eq, hv, ↓reduceIte, reduceCtorEq, Nat.reducePow, false_and]
   · rintro ⟨hv, hle, hnof, hal⟩
     have hstep : Curve3Crv.step (c3ctx sevm ow) (callAt sevm 5) s =
         .ok (s', [.transfer f' d' v], .bool true) := by
       simp only [callAt, Curve3Crv.step, Curve3Crv.body, c3ctx, ← ha_def, ← hf_def, ← hd_def,
         ← hv_def, ← hf'_def, ← hd'_def, hv, ite_true]
       exact Curve3Crv.transferFrom_eq_ok.mpr
-        ⟨hfr, hdr, hle, hnof, fun _ => hal, by simp [hs'_def, hmint, hbf_def, hf'_def, hd'_def]⟩
+        ⟨hfr, hdr, hle, hnof, fun _ => hal, by simp only [hs'_def, hbf_def, hf'_def, hd'_def,
+          hmint, ↓reduceIte]⟩
     refine And.intro ?_ (And.intro ?_ rfl)
     · have hcons := Curve3Crv.step_conserved hinv.conserved hstep
       rw [hks]
-      refine hinv.update (ws := []) (hf := hfks) (by simp) ?_ ?_ ?_ rfl rfl ?_ ?_ ?_ hcons
+      refine hinv.update (ws := []) (hf := hfks) (by simp only [List.not_mem_nil,
+        IsEmpty.forall_iff, implies_true]) ?_ ?_ ?_ rfl rfl ?_ ?_ ?_ hcons
       · intro x hx _
-        have h1 : vyBalSlot f' ≠ x := hx (.bal f') (by simp [hks])
-        have h2 : vyBalSlot d' ≠ x := hx (.bal d') (by simp [hks])
-        have h3 : s3 ≠ x := by rw [hs3eq]; exact hx (.allow f' a) (by simp [hks])
+        have h1 : vyBalSlot f' ≠ x := hx (.bal f') (by simp only [List.mem_cons, Key.bal.injEq,
+          reduceCtorEq, List.not_mem_nil, or_self, or_false, true_or])
+        have h2 : vyBalSlot d' ≠ x := hx (.bal d') (by simp only [List.mem_cons, Key.bal.injEq,
+          reduceCtorEq, List.not_mem_nil, or_self, or_false, or_true])
+        have h3 : s3 ≠ x := by rw [hs3eq]; exact hx (.allow f' a) (by simp only [List.mem_cons,
+          reduceCtorEq, List.not_mem_nil, or_false, or_true])
         rw [hst3_def, Stor.get_set_ne _ h3, hst2_def, Stor.get_set_ne _ h2, hst1_def,
           Stor.get_set_ne _ h1]
       · intro k hk
@@ -871,15 +925,22 @@ private theorem refine_transferFrom_spend (hinv : VyInv stor s K)
             rw [Function.update_self]
             exact ledgerDebit_ne v (fun he => hk.2.2 ⟨rfl, he⟩)
           · rw [Function.update_of_ne ho]
-      · rw [hst3_def, Stor.get_set_ne _ (hs3_word _ (by simp [vyWordSlots])), hst2_def,
-          Stor.get_set_ne _ (hbd_word _ (by simp [vyWordSlots])), hst1_def,
-          Stor.get_set_ne _ (hbf_word _ (by simp [vyWordSlots]))]
+      · rw [hst3_def, Stor.get_set_ne _ (hs3_word _ (by simp only [vyWordSlots, List.mem_cons,
+        List.not_mem_nil, or_false, true_or])), hst2_def,
+          Stor.get_set_ne _ (hbd_word _ (by simp only [vyWordSlots, List.mem_cons, List.not_mem_nil,
+            or_false, true_or])), hst1_def,
+          Stor.get_set_ne _ (hbf_word _ (by simp only [vyWordSlots, List.mem_cons, List.not_mem_nil,
+            or_false, true_or]))]
         exact hinv.decimals
-      · rw [hst3_def, Stor.get_set_ne _ (hs3_word _ (by simp [vyWordSlots])), hst2_def,
-          Stor.get_set_ne _ (hbd_word _ (by simp [vyWordSlots])), hst1_def,
-          Stor.get_set_ne _ (hbf_word _ (by simp [vyWordSlots]))]
+      · rw [hst3_def, Stor.get_set_ne _ (hs3_word _ (by simp only [vyWordSlots, List.mem_cons,
+        List.not_mem_nil, or_false, true_or, or_true])), hst2_def,
+          Stor.get_set_ne _ (hbd_word _ (by simp only [vyWordSlots, List.mem_cons, List.not_mem_nil,
+            or_false, true_or, or_true])), hst1_def,
+          Stor.get_set_ne _ (hbf_word _ (by simp only [vyWordSlots, List.mem_cons, List.not_mem_nil,
+            or_false, true_or, or_true]))]
         exact hinv.supply
-      · rw [hst3_def, Stor.get_set_ne _ (hs3_word _ (by simp [vyWordSlots]))]
+      · rw [hst3_def, Stor.get_set_ne _ (hs3_word _ (by simp only [vyWordSlots, List.mem_cons,
+        List.not_mem_nil, or_false, or_true]))]
         exact hminter2.trans hinv.minter
     · simp only [List.map, eventLog, List.cons.injEq, and_true]
       rw [hf'_def, hd'_def, B256.toAdr_toB256_of_lt hfr, B256.toAdr_toB256_of_lt hdr]
@@ -908,7 +969,7 @@ theorem refine_transferFrom (hinv : VyInv stor s K)
       by_cases hv0 : sevm.value = 0
       · simp only [hv0, ite_true] at ho
         exact absurd (Curve3Crv.transferFrom_eq_ok.mp ho).1 hfr
-      · simp [hv0] at ho
+      · simp only [ExceptT.stM_eq, hv0, ↓reduceIte, reduceCtorEq] at ho
   by_cases hdr : d.toNat < 2 ^ 160
   swap
   · refine ⟨fun r hr => ?_, fun o ho => ?_⟩
@@ -918,27 +979,35 @@ theorem refine_transferFrom (hinv : VyInv stor s K)
       by_cases hv0 : sevm.value = 0
       · simp only [hv0, ite_true] at ho
         exact absurd (Curve3Crv.transferFrom_eq_ok.mp ho).2.1 hdr
-      · simp [hv0] at ho
+      · simp only [ExceptT.stM_eq, hv0, ↓reduceIte, reduceCtorEq] at ho
   set f' := f.toAdr with hf'_def
   set d' := d.toAdr with hd'_def
   have hs1 : mapSlot 3 f = vyBalSlot f' := by
     simp only [vyBalSlot, hf'_def, B256.toAdr_toB256_of_lt hfr]
   have hs2 : mapSlot 3 d = vyBalSlot d' := by
     simp only [vyBalSlot, hd'_def, B256.toAdr_toB256_of_lt hdr]
-  have hff : stor.get (vyBalSlot f') = bf f' := hinv.get_slot (hf.1 (.bal f') (by simp [hks]))
-  have hfd : stor.get (vyBalSlot d') = bf d' := hinv.get_slot (hf.1 (.bal d') (by simp [hks]))
+  have hff : stor.get (vyBalSlot f') = bf f' := hinv.get_slot (hf.1 (.bal f') (by simp only [hks,
+    List.mem_cons, Key.bal.injEq, reduceCtorEq, List.not_mem_nil, or_self, or_false, true_or]))
+  have hfd : stor.get (vyBalSlot d') = bf d' := hinv.get_slot (hf.1 (.bal d') (by simp only [hks,
+    List.mem_cons, Key.bal.injEq, reduceCtorEq, List.not_mem_nil, or_self, or_false, or_true]))
   have hnebd : f' ≠ d' → vyBalSlot f' ≠ vyBalSlot d' := fun h e =>
-    h (Key.bal.inj (hf.2 (.bal f') (by simp [hks]) (.bal d') (by simp [hks]) e))
+    h (Key.bal.inj (hf.2 (.bal f') (by simp only [hks, List.mem_cons, Key.bal.injEq, reduceCtorEq,
+      List.not_mem_nil, or_self, or_false, true_or]) (.bal d') (by simp only [hks, List.mem_cons,
+      Key.bal.injEq, reduceCtorEq, List.not_mem_nil, or_self, or_false, or_true]) e))
   have hy : (stor.set (vyBalSlot f') (bf f' - v)).get (vyBalSlot d') = ledgerDebit bf f' v d' := by
     by_cases had : d' = f'
     · rw [had, Stor.get_set_self, ledgerDebit_self]
     · rw [Stor.get_set_ne _ (hnebd (Ne.symm had)), ledgerDebit_ne _ had, hfd]
   have hbf_apart : vyBalSlot f' ≠ vyMinterSlot := fun e =>
-    hinv.slot_apart (hf.1 (.bal f') (by simp [hks])) (by
-      rw [show (Key.bal f').slot = vyBalSlot f' from rfl, e]; simp [vyFixedSlots])
+    hinv.slot_apart (hf.1 (.bal f') (by simp only [hks, List.mem_cons, Key.bal.injEq, reduceCtorEq,
+      List.not_mem_nil, or_self, or_false, true_or])) (by
+      rw [show (Key.bal f').slot = vyBalSlot f' from rfl, e]; simp only [vyFixedSlots,
+        List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])
   have hbd_apart : vyBalSlot d' ≠ vyMinterSlot := fun e =>
-    hinv.slot_apart (hf.1 (.bal d') (by simp [hks])) (by
-      rw [show (Key.bal d').slot = vyBalSlot d' from rfl, e]; simp [vyFixedSlots])
+    hinv.slot_apart (hf.1 (.bal d') (by simp only [hks, List.mem_cons, Key.bal.injEq, reduceCtorEq,
+      List.not_mem_nil, or_self, or_false, or_true])) (by
+      rw [show (Key.bal d').slot = vyBalSlot d' from rfl, e]; simp only [vyFixedSlots,
+        List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])
   set st1 := stor.set (vyBalSlot f') (bf f' - v) with hst1_def
   set st2 := st1.set (vyBalSlot d') (ledgerDebit bf f' v d' + v) with hst2_def
   have hminter2 : st2.get vyMinterSlot = stor.get vyMinterSlot := by
@@ -949,31 +1018,39 @@ theorem refine_transferFrom (hinv : VyInv stor s K)
   have hne_f3 : vyBalSlot f' ≠ s3 := by
     rw [hs3eq]
     intro e
-    have heq := hf.2 (.bal f') (by simp [hks]) (.allow f' a) (by simp [hks]) e
+    have heq := hf.2 (.bal f') (by simp only [hks, List.mem_cons, Key.bal.injEq, reduceCtorEq,
+      List.not_mem_nil, or_self, or_false, true_or]) (.allow f' a) (by simp only [hks, List.mem_cons,
+      reduceCtorEq, List.not_mem_nil, or_false, or_true]) e
     injection heq
   have hne_d3 : vyBalSlot d' ≠ s3 := by
     rw [hs3eq]
     intro e
-    have heq := hf.2 (.bal d') (by simp [hks]) (.allow f' a) (by simp [hks]) e
+    have heq := hf.2 (.bal d') (by simp only [hks, List.mem_cons, Key.bal.injEq, reduceCtorEq,
+      List.not_mem_nil, or_self, or_false, or_true]) (.allow f' a) (by simp only [hks, List.mem_cons,
+      reduceCtorEq, List.not_mem_nil, or_false, or_true]) e
     injection heq
   have hst2s3 : st2.get s3 = stor.get s3 := by
     rw [hst2_def, Stor.get_set_ne _ hne_d3, hst1_def, Stor.get_set_ne _ hne_f3]
   have hz : st2.get s3 = s.allowances f' a := by
     rw [hst2s3, hs3eq]
-    exact hinv.get_slot (hf.1 (.allow f' a) (by simp [hks]))
-  have hbf_fixed : vyBalSlot f' ∉ vyFixedSlots := hinv.slot_apart (hf.1 (.bal f') (by simp [hks]))
-  have hbd_fixed : vyBalSlot d' ∉ vyFixedSlots := hinv.slot_apart (hf.1 (.bal d') (by simp [hks]))
+    exact hinv.get_slot (hf.1 (.allow f' a) (by simp only [hks, List.mem_cons, reduceCtorEq,
+      List.not_mem_nil, or_false, or_true]))
+  have hbf_fixed : vyBalSlot f' ∉ vyFixedSlots := hinv.slot_apart (hf.1 (.bal f') (by simp only [hks,
+    List.mem_cons, Key.bal.injEq, reduceCtorEq, List.not_mem_nil, or_self, or_false, true_or]))
+  have hbd_fixed : vyBalSlot d' ∉ vyFixedSlots := hinv.slot_apart (hf.1 (.bal d') (by simp only [hks,
+    List.mem_cons, Key.bal.injEq, reduceCtorEq, List.not_mem_nil, or_self, or_false, or_true]))
   have hbf_word : ∀ x ∈ vyWordSlots, vyBalSlot f' ≠ x := fun x hx e => hbf_fixed (by
     rw [e]; simp only [vyWordSlots, List.mem_cons, List.not_mem_nil, or_false] at hx
-    rcases hx with rfl | rfl | rfl <;> simp [vyFixedSlots])
+    rcases hx with rfl | rfl | rfl <;> simp only [vyFixedSlots, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])
   have hbd_word : ∀ x ∈ vyWordSlots, vyBalSlot d' ≠ x := fun x hx e => hbd_fixed (by
     rw [e]; simp only [vyWordSlots, List.mem_cons, List.not_mem_nil, or_false] at hx
-    rcases hx with rfl | rfl | rfl <;> simp [vyFixedSlots])
+    rcases hx with rfl | rfl | rfl <;> simp only [vyFixedSlots, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])
   have hs3_fixed : s3 ∉ vyFixedSlots := by
-    rw [hs3eq]; exact hinv.slot_apart (hf.1 (.allow f' a) (by simp [hks]))
+    rw [hs3eq]; exact hinv.slot_apart (hf.1 (.allow f' a) (by simp only [hks, List.mem_cons,
+      reduceCtorEq, List.not_mem_nil, or_false, or_true]))
   have hs3_word : ∀ x ∈ vyWordSlots, s3 ≠ x := fun x hx e => hs3_fixed (by
     rw [e]; simp only [vyWordSlots, List.mem_cons, List.not_mem_nil, or_false] at hx
-    rcases hx with rfl | rfl | rfl <;> simp [vyFixedSlots])
+    rcases hx with rfl | rfl | rfl <;> simp only [vyFixedSlots, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])
   have hfks : FreshKeys K [Key.bal f', Key.bal d', Key.allow f' a] := hks ▸ hf
   by_cases hmint : a = s.minter
   · -- the caller is the minter: no allowance is spent
@@ -988,7 +1065,7 @@ theorem refine_transferFrom (hinv : VyInv stor s K)
     · intro r
       simp only [rawOf, rawTransferFrom, ← ha_def, ← hf_def, ← hd_def, ← hv_def, ← hbf_def]
       rw [hs1, hs2, hff, hy, ← hst1_def, ← hst2_def, if_neg hspend]
-      split_ifs with hc <;> simp_all [eq_comm]
+      split_ifs with hc <;> simp_all only [eq_comm, Nat.reducePow, ne_eq, Decidable.not_not, not_true_eq_false, IsEmpty.forall_iff, and_true, true_and, Option.some.injEq, and_self, not_and, not_lt, false_iff, isEmpty_Prop, implies_true]
     · intro o
       simp only [callAt, Curve3Crv.step, Curve3Crv.body, c3ctx, ← ha_def, ← hf_def, ← hd_def,
         ← hv_def, ← hf'_def, ← hd'_def]
@@ -997,11 +1074,11 @@ theorem refine_transferFrom (hinv : VyInv stor s K)
         constructor
         · rintro ⟨-, -, h1, h2, -, rfl⟩
           refine ⟨⟨h1, h2⟩, ?_⟩
-          simp [hs'_def, hmint, hbf_def, hf'_def, hd'_def]
+          simp only [hmint, ↓reduceIte, hs'_def, hbf_def, hf'_def, hd'_def]
         · rintro ⟨⟨h1, h2⟩, rfl⟩
           exact ⟨hfr, hdr, h1, h2, fun hc => absurd hmint hc,
-            by simp [hs'_def, hmint, hbf_def, hf'_def, hd'_def]⟩
-      · simp [hv]
+            by simp only [hs'_def, hbf_def, hf'_def, hd'_def, hmint, ↓reduceIte]⟩
+      · simp only [ExceptT.stM_eq, hv, ↓reduceIte, reduceCtorEq, Nat.reducePow, false_and]
     · rintro ⟨hv, hle, hnof⟩
       have hstep : Curve3Crv.step (c3ctx sevm ow) (callAt sevm 5) s =
           .ok (s', [.transfer f' d' v], .bool true) := by
@@ -1009,14 +1086,17 @@ theorem refine_transferFrom (hinv : VyInv stor s K)
           ← hv_def, ← hf'_def, ← hd'_def, hv, ite_true]
         exact Curve3Crv.transferFrom_eq_ok.mpr
           ⟨hfr, hdr, hle, hnof, fun hc => absurd hmint hc,
-            by simp [hs'_def, hmint, hbf_def, hf'_def, hd'_def]⟩
+            by simp only [hs'_def, hbf_def, hf'_def, hd'_def, hmint, ↓reduceIte]⟩
       refine ⟨?_, ?_, rfl⟩
       · rw [hks]
-        refine hinv.update (ws := []) (hf := hfks) (by simp) ?_ ?_ ?_ rfl rfl ?_ ?_ ?_
+        refine hinv.update (ws := []) (hf := hfks) (by simp only [List.not_mem_nil,
+          IsEmpty.forall_iff, implies_true]) ?_ ?_ ?_ rfl rfl ?_ ?_ ?_
           (Curve3Crv.step_conserved hinv.conserved hstep)
         · intro x hx _
-          have h1 : vyBalSlot f' ≠ x := hx (.bal f') (by simp [hks])
-          have h2 : vyBalSlot d' ≠ x := hx (.bal d') (by simp [hks])
+          have h1 : vyBalSlot f' ≠ x := hx (.bal f') (by simp only [List.mem_cons, Key.bal.injEq,
+            reduceCtorEq, List.not_mem_nil, or_self, or_false, true_or])
+          have h2 : vyBalSlot d' ≠ x := hx (.bal d') (by simp only [List.mem_cons, Key.bal.injEq,
+            reduceCtorEq, List.not_mem_nil, or_self, or_false, or_true])
           rw [hst2_def, Stor.get_set_ne _ h2, hst1_def, Stor.get_set_ne _ h1]
         · intro k hk
           simp only [hks, List.mem_cons, List.not_mem_nil, or_false] at hk
@@ -1039,12 +1119,16 @@ theorem refine_transferFrom (hinv : VyInv stor s K)
             rw [ledgerCredit_ne _ hk.2.1, ledgerDebit_ne _ hk.1]
           | allow o p => rfl
         · show st2.get vyDecimalsSlot = s'.decimals
-          rw [hst2_def, Stor.get_set_ne _ (hbd_word _ (by simp [vyWordSlots])),
-            hst1_def, Stor.get_set_ne _ (hbf_word _ (by simp [vyWordSlots]))]
+          rw [hst2_def, Stor.get_set_ne _ (hbd_word _ (by simp only [vyWordSlots, List.mem_cons,
+            List.not_mem_nil, or_false, true_or])),
+            hst1_def, Stor.get_set_ne _ (hbf_word _ (by simp only [vyWordSlots, List.mem_cons,
+              List.not_mem_nil, or_false, true_or]))]
           exact hinv.decimals
         · show st2.get vySupplySlot = s'.totalSupply
-          rw [hst2_def, Stor.get_set_ne _ (hbd_word _ (by simp [vyWordSlots])),
-            hst1_def, Stor.get_set_ne _ (hbf_word _ (by simp [vyWordSlots]))]
+          rw [hst2_def, Stor.get_set_ne _ (hbd_word _ (by simp only [vyWordSlots, List.mem_cons,
+            List.not_mem_nil, or_false, true_or, or_true])),
+            hst1_def, Stor.get_set_ne _ (hbf_word _ (by simp only [vyWordSlots, List.mem_cons,
+              List.not_mem_nil, or_false, true_or, or_true]))]
           exact hinv.supply
         · exact hminter2.trans hinv.minter
       · simp only [List.map, eventLog, List.cons.injEq, and_true]
@@ -1072,14 +1156,15 @@ theorem refine_approve (hinv : VyInv stor s K)
       by_cases hv : sevm.value = 0
       · simp only [hv, ite_true] at ho
         exact absurd (Curve3Crv.approve_eq_ok.mp ho).1 hp
-      · simp [hv] at ho
+      · simp only [ExceptT.stM_eq, hv, ↓reduceIte, reduceCtorEq] at ho
   set p' := p.toAdr
   have hks : callKeys a (callAt sevm 6) = [.allow a p'] := rfl
   have hslot : mapSlot (mapSlot 4 a.toB256) p = vyAllowSlot a p' := by
     simp only [vyAllowSlot, p', B256.toAdr_toB256_of_lt hp]
   have hcur : stor.get (vyAllowSlot a p') = s.allowances a p' :=
-    hinv.get_slot (hf.1 (.allow a p') (by simp [hks]))
-  have hap : vyAllowSlot a p' ∉ vyFixedSlots := hinv.slot_apart (hf.1 (.allow a p') (by simp [hks]))
+    hinv.get_slot (hf.1 (.allow a p') (by simp only [hks, List.mem_cons, List.not_mem_nil, or_false]))
+  have hap : vyAllowSlot a p' ∉ vyFixedSlots := hinv.slot_apart (hf.1 (.allow a p') (by simp only [hks,
+    List.mem_cons, List.not_mem_nil, or_false]))
   set s' : Curve3Crv.State :=
     { s with allowances := (Function.update s.allowances a (Function.update (s.allowances a) p' v)) }
   refine RawRefines.of_iff (stor.set (vyAllowSlot a p') v,
@@ -1089,7 +1174,7 @@ theorem refine_approve (hinv : VyInv stor s K)
   · intro r
     simp only [rawOf, rawApprove, ← ha_def, ← hp_def, ← hv_def]
     rw [hslot, hcur]
-    split_ifs with hc <;> simp_all [eq_comm]
+    split_ifs with hc <;> simp_all only [Nat.reducePow, eq_comm, true_and, Option.some.injEq, and_self, not_and, not_or, false_iff, isEmpty_Prop, or_self, not_false_eq_true, implies_true, IsEmpty.forall_iff]
   · intro o
     simp only [callAt, Curve3Crv.step, Curve3Crv.body, c3ctx]
     by_cases hv : sevm.value = 0
@@ -1097,7 +1182,7 @@ theorem refine_approve (hinv : VyInv stor s K)
       constructor
       · rintro ⟨-, h1, h2⟩; exact ⟨h1, h2⟩
       · rintro ⟨h1, h2⟩; exact ⟨hp, h1, h2⟩
-    · simp [hv]
+    · simp only [ExceptT.stM_eq, hv, ↓reduceIte, reduceCtorEq, false_and]
   · rintro ⟨hv, hz⟩
     have hstep : Curve3Crv.step (c3ctx sevm ow) (callAt sevm 6) s =
         .ok (s', [.approval a p' v], .bool true) := by
@@ -1107,18 +1192,20 @@ theorem refine_approve (hinv : VyInv stor s K)
     · rw [hks]
       have hne : ∀ x ∈ vyWordSlots, vyAllowSlot a p' ≠ x := fun x hx e => hap (by
         rw [e]; simp only [vyWordSlots, List.mem_cons, List.not_mem_nil, or_false] at hx
-        rcases hx with rfl | rfl | rfl <;> simp [vyFixedSlots])
-      refine hinv.update (ws := []) (hf := hks ▸ hf) (by simp) ?_ ?_ ?_ rfl rfl ?_ ?_ ?_
+        rcases hx with rfl | rfl | rfl <;> simp only [vyFixedSlots, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])
+      refine hinv.update (ws := []) (hf := hks ▸ hf) (by simp only [List.not_mem_nil,
+        IsEmpty.forall_iff, implies_true]) ?_ ?_ ?_ rfl rfl ?_ ?_ ?_
         (Curve3Crv.step_conserved hinv.conserved hstep)
       · intro x hx _
         dsimp only
-        rw [Stor.get_set_ne (k := vyAllowSlot a p') _ (hx (.allow a p') (by simp))]
+        rw [Stor.get_set_ne (k := vyAllowSlot a p') _ (hx (.allow a p') (by simp only [List.mem_cons,
+          List.not_mem_nil, or_false]))]
       · intro k hk
         simp only [List.mem_cons, List.not_mem_nil, or_false] at hk
         subst hk
         show (stor.set (vyAllowSlot a p') v).get (vyAllowSlot a p') =
           Function.update s.allowances a (Function.update (s.allowances a) p' v) a p'
-        simp [Stor.get_set_self]
+        simp only [Stor.get_set_self, Function.update_self]
       · intro k hk
         cases k with
         | bal c => rfl
@@ -1128,16 +1215,19 @@ theorem refine_approve (hinv : VyInv stor s K)
             s.allowances o q
           by_cases ho : o = a
           · subst ho
-            simp [Function.update_of_ne (hk rfl)]
-          · simp [Function.update_of_ne ho]
+            simp only [Function.update_self, Function.update_of_ne (hk rfl)]
+          · simp only [Function.update_of_ne ho]
       · dsimp only
-        rw [Stor.get_set_ne _ (hne _ (by simp [vyWordSlots]))]
+        rw [Stor.get_set_ne _ (hne _ (by simp only [vyWordSlots, List.mem_cons, List.not_mem_nil,
+          or_false, true_or]))]
         exact hinv.decimals
       · dsimp only
-        rw [Stor.get_set_ne _ (hne _ (by simp [vyWordSlots]))]
+        rw [Stor.get_set_ne _ (hne _ (by simp only [vyWordSlots, List.mem_cons, List.not_mem_nil,
+          or_false, true_or, or_true]))]
         exact hinv.supply
       · dsimp only
-        rw [Stor.get_set_ne _ (hne _ (by simp [vyWordSlots]))]
+        rw [Stor.get_set_ne _ (hne _ (by simp only [vyWordSlots, List.mem_cons, List.not_mem_nil,
+          or_false, or_true]))]
         exact hinv.minter
     · simp only [List.map, eventLog, List.cons.injEq, and_true]
       rw [B256.toAdr_toB256_of_lt hp]
@@ -1166,16 +1256,21 @@ theorem refine_mint (hinv : VyInv stor s K)
       by_cases hv : sevm.value = 0
       · simp only [hv, ite_true] at ho
         exact absurd (Curve3Crv.mint_eq_ok.mp ho).1 hd
-      · simp [hv] at ho
+      · simp only [ExceptT.stM_eq, hv, ↓reduceIte, reduceCtorEq] at ho
   set d' := d.toAdr
   have hks : callKeys sevm.caller (callAt sevm 7) = [.bal d'] := rfl
   have hs2 : mapSlot 3 d = vyBalSlot d' := by
     simp only [vyBalSlot, d', B256.toAdr_toB256_of_lt hd]
-  have hfd : stor.get (vyBalSlot d') = f d' := hinv.get_slot (hf.1 (.bal d') (by simp [hks]))
-  have hap : vyBalSlot d' ∉ vyFixedSlots := hinv.slot_apart (hf.1 (.bal d') (by simp [hks]))
-  have h5 : vyBalSlot d' ≠ vySupplySlot := fun e => hap (by rw [e]; simp [vyFixedSlots])
-  have h2 : vyBalSlot d' ≠ vyDecimalsSlot := fun e => hap (by rw [e]; simp [vyFixedSlots])
-  have h6 : vyBalSlot d' ≠ vyMinterSlot := fun e => hap (by rw [e]; simp [vyFixedSlots])
+  have hfd : stor.get (vyBalSlot d') = f d' := hinv.get_slot (hf.1 (.bal d') (by simp only [hks,
+    List.mem_cons, List.not_mem_nil, or_false]))
+  have hap : vyBalSlot d' ∉ vyFixedSlots := hinv.slot_apart (hf.1 (.bal d') (by simp only [hks,
+    List.mem_cons, List.not_mem_nil, or_false]))
+  have h5 : vyBalSlot d' ≠ vySupplySlot := fun e => hap (by rw [e]; simp only [vyFixedSlots,
+    List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])
+  have h2 : vyBalSlot d' ≠ vyDecimalsSlot := fun e => hap (by rw [e]; simp only [vyFixedSlots,
+    List.mem_cons, List.not_mem_nil, or_false, true_or])
+  have h6 : vyBalSlot d' ≠ vyMinterSlot := fun e => hap (by rw [e]; simp only [vyFixedSlots,
+    List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])
   have hyE : (stor.set vySupplySlot (s.totalSupply + v)).get (vyBalSlot d') = f d' := by
     rw [Stor.get_set_ne _ (Ne.symm h5), hfd]
   set s' : Curve3Crv.State := { s with totalSupply := s.totalSupply + v, balanceOf := ledgerCredit f d' v }
@@ -1185,7 +1280,7 @@ theorem refine_mint (hinv : VyInv stor s K)
   · intro r
     simp only [rawOf, rawMint, ← hd_def, ← hv_def]
     rw [hs2, hinv.supply, hyE]
-    split_ifs with hc <;> simp_all [eq_comm]
+    split_ifs with hc <;> simp_all only [true_iff, Nat.reducePow, ne_eq, eq_comm, true_and, Option.some.injEq, not_false_eq_true, and_self, not_and, not_lt, false_iff, isEmpty_Prop, implies_true, IsEmpty.forall_iff]
   · intro o
     simp only [callAt, Curve3Crv.step, Curve3Crv.body, c3ctx]
     by_cases hv : sevm.value = 0
@@ -1193,19 +1288,21 @@ theorem refine_mint (hinv : VyInv stor s K)
       constructor
       · rintro ⟨-, h1, h2, h3, h4, h5⟩; exact ⟨⟨h1, h2, h3, h4⟩, h5⟩
       · rintro ⟨⟨h1, h2, h3, h4⟩, h5⟩; exact ⟨hd, h1, h2, h3, h4, h5⟩
-    · simp [hv]
+    · simp only [ExceptT.stM_eq, hv, ↓reduceIte, reduceCtorEq, ne_eq, Nat.reducePow, false_and]
   · rintro ⟨hv, hmn, hnz, hs1, hs2'⟩
     have hstep : Curve3Crv.step (c3ctx sevm ow) (callAt sevm 7) s = .ok (s', [.transfer 0 d' v], .bool true) := by
       simp only [callAt, Curve3Crv.step, Curve3Crv.body, c3ctx, hv, ite_true]
       exact Curve3Crv.mint_eq_ok.mpr ⟨hd, hmn, hnz, hs1, hs2', rfl⟩
     refine ⟨?_, ?_, rfl⟩
     · rw [hks]
-      refine hinv.update (ws := [vySupplySlot]) (hf := hks ▸ hf) (by simp [vyWordSlots]) ?_ ?_ ?_
+      refine hinv.update (ws := [vySupplySlot]) (hf := hks ▸ hf) (by simp only [List.mem_cons,
+        List.not_mem_nil, or_false, vyWordSlots, forall_eq, true_or, or_true]) ?_ ?_ ?_
         rfl rfl ?_ ?_ ?_ (Curve3Crv.step_conserved hinv.conserved hstep)
       · intro x hx hw
         dsimp only
-        have h1 := hx (.bal d') (by simp)
-        have h3 : vySupplySlot ≠ x := fun e => hw (by simp [e])
+        have h1 := hx (.bal d') (by simp only [List.mem_cons, List.not_mem_nil, or_false])
+        have h3 : vySupplySlot ≠ x := fun e => hw (by simp only [e, List.mem_cons,
+          List.not_mem_nil, or_false])
         rw [Stor.get_set_ne (k := vyBalSlot d') _ h1, Stor.get_set_ne _ h3]
       · intro k hk
         simp only [List.mem_cons, List.not_mem_nil, or_false] at hk
@@ -1256,16 +1353,21 @@ theorem refine_burnFrom (hinv : VyInv stor s K)
       by_cases hv : sevm.value = 0
       · simp only [hv, ite_true] at ho
         exact absurd (Curve3Crv.burnFrom_eq_ok.mp ho).1 hd
-      · simp [hv] at ho
+      · simp only [ExceptT.stM_eq, hv, ↓reduceIte, reduceCtorEq] at ho
   set d' := d.toAdr
   have hks : callKeys sevm.caller (callAt sevm 8) = [.bal d'] := rfl
   have hs2 : mapSlot 3 d = vyBalSlot d' := by
     simp only [vyBalSlot, d', B256.toAdr_toB256_of_lt hd]
-  have hfd : stor.get (vyBalSlot d') = f d' := hinv.get_slot (hf.1 (.bal d') (by simp [hks]))
-  have hap : vyBalSlot d' ∉ vyFixedSlots := hinv.slot_apart (hf.1 (.bal d') (by simp [hks]))
-  have h5 : vyBalSlot d' ≠ vySupplySlot := fun e => hap (by rw [e]; simp [vyFixedSlots])
-  have h2 : vyBalSlot d' ≠ vyDecimalsSlot := fun e => hap (by rw [e]; simp [vyFixedSlots])
-  have h6 : vyBalSlot d' ≠ vyMinterSlot := fun e => hap (by rw [e]; simp [vyFixedSlots])
+  have hfd : stor.get (vyBalSlot d') = f d' := hinv.get_slot (hf.1 (.bal d') (by simp only [hks,
+    List.mem_cons, List.not_mem_nil, or_false]))
+  have hap : vyBalSlot d' ∉ vyFixedSlots := hinv.slot_apart (hf.1 (.bal d') (by simp only [hks,
+    List.mem_cons, List.not_mem_nil, or_false]))
+  have h5 : vyBalSlot d' ≠ vySupplySlot := fun e => hap (by rw [e]; simp only [vyFixedSlots,
+    List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])
+  have h2 : vyBalSlot d' ≠ vyDecimalsSlot := fun e => hap (by rw [e]; simp only [vyFixedSlots,
+    List.mem_cons, List.not_mem_nil, or_false, true_or])
+  have h6 : vyBalSlot d' ≠ vyMinterSlot := fun e => hap (by rw [e]; simp only [vyFixedSlots,
+    List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])
   have hyE : (stor.set vySupplySlot (s.totalSupply - v)).get (vyBalSlot d') = f d' := by
     rw [Stor.get_set_ne _ (Ne.symm h5), hfd]
   set s' : Curve3Crv.State := { s with totalSupply := s.totalSupply - v, balanceOf := ledgerDebit f d' v }
@@ -1275,7 +1377,7 @@ theorem refine_burnFrom (hinv : VyInv stor s K)
   · intro r
     simp only [rawOf, rawBurnFrom, ← hd_def, ← hv_def]
     rw [hs2, hinv.supply, hyE]
-    split_ifs with hc <;> simp_all [eq_comm]
+    split_ifs with hc <;> simp_all only [true_iff, Nat.reducePow, ne_eq, eq_comm, true_and, Option.some.injEq, not_false_eq_true, and_self, not_and, not_le, false_iff, isEmpty_Prop, implies_true, IsEmpty.forall_iff]
   · intro o
     simp only [callAt, Curve3Crv.step, Curve3Crv.body, c3ctx]
     by_cases hv : sevm.value = 0
@@ -1283,19 +1385,21 @@ theorem refine_burnFrom (hinv : VyInv stor s K)
       constructor
       · rintro ⟨-, h1, h2, h3, h4, h5⟩; exact ⟨⟨h1, h2, h3, h4⟩, h5⟩
       · rintro ⟨⟨h1, h2, h3, h4⟩, h5⟩; exact ⟨hd, h1, h2, h3, h4, h5⟩
-    · simp [hv]
+    · simp only [ExceptT.stM_eq, hv, ↓reduceIte, reduceCtorEq, ne_eq, false_and]
   · rintro ⟨hv, hmn, hnz, hs1, hs2'⟩
     have hstep : Curve3Crv.step (c3ctx sevm ow) (callAt sevm 8) s = .ok (s', [.transfer d' 0 v], .bool true) := by
       simp only [callAt, Curve3Crv.step, Curve3Crv.body, c3ctx, hv, ite_true]
       exact Curve3Crv.burnFrom_eq_ok.mpr ⟨hd, hmn, hnz, hs1, hs2', rfl⟩
     refine ⟨?_, ?_, rfl⟩
     · rw [hks]
-      refine hinv.update (ws := [vySupplySlot]) (hf := hks ▸ hf) (by simp [vyWordSlots]) ?_ ?_ ?_
+      refine hinv.update (ws := [vySupplySlot]) (hf := hks ▸ hf) (by simp only [List.mem_cons,
+        List.not_mem_nil, or_false, vyWordSlots, forall_eq, true_or, or_true]) ?_ ?_ ?_
         rfl rfl ?_ ?_ ?_ (Curve3Crv.step_conserved hinv.conserved hstep)
       · intro x hx hw
         dsimp only
-        have h1 := hx (.bal d') (by simp)
-        have h3 : vySupplySlot ≠ x := fun e => hw (by simp [e])
+        have h1 := hx (.bal d') (by simp only [List.mem_cons, List.not_mem_nil, or_false])
+        have h3 : vySupplySlot ≠ x := fun e => hw (by simp only [e, List.mem_cons,
+          List.not_mem_nil, or_false])
         rw [Stor.get_set_ne (k := vyBalSlot d') _ h1, Stor.get_set_ne _ h3]
       · intro k hk
         simp only [List.mem_cons, List.not_mem_nil, or_false] at hk
@@ -1333,17 +1437,21 @@ theorem refine_at {sevm : Sevm} {stor : Stor} {s : Curve3Crv.State} {K : Key →
   rcases k with _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | k
   · exact refine_setMinter hinv hf
   · exact refine_setName hinv hf
-  · exact refine_wordView (by simp) hinv hf
-  · exact refine_wordView (by simp) hinv hf
+  · exact refine_wordView (by simp only [zero_add, Nat.reduceAdd, Nat.reduceEqDiff, or_self,
+    or_false]) hinv hf
+  · exact refine_wordView (by simp only [zero_add, Nat.reduceAdd, Nat.succ_ne_self,
+    Nat.reduceEqDiff, or_self, or_false, or_true]) hinv hf
   · exact refine_transfer hinv hf
   · exact refine_transferFrom hinv hf
   · exact refine_approve hinv hf
   · exact refine_mint hinv hf
   · exact refine_burnFrom hinv hf
-  · exact refine_stringView (by simp) hinv hf
-  · exact refine_stringView (by simp) hinv hf
-  · exact refine_wordView (by simp) hinv hf
-  · exact refine_wordView (by simp) hinv hf
+  · exact refine_stringView (by simp only [zero_add, Nat.reduceAdd, Nat.reduceEqDiff, or_false]) hinv hf
+  · exact refine_stringView (by simp only [zero_add, Nat.reduceAdd, Nat.succ_ne_self, or_true]) hinv hf
+  · exact refine_wordView (by simp only [zero_add, Nat.reduceAdd, Nat.reduceEqDiff, or_false,
+    or_true]) hinv hf
+  · exact refine_wordView (by simp only [zero_add, Nat.reduceAdd, Nat.reduceEqDiff,
+    Nat.succ_ne_self, or_true]) hinv hf
   · omega
 
 end Blanc.Lift.Curve3Crv

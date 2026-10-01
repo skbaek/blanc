@@ -43,7 +43,7 @@ theorem stepN_add : ∀ (m : Nat) {n : Nat} {evm evm' evm'' : Evm},
   | 0, n, evm, evm', evm'', h1, h2 => by
     simp only [stepN, Option.some.injEq] at h1
     subst h1
-    simpa using h2
+    simpa only [zero_add] using h2
   | m + 1, n, evm, evm', evm'', h1, h2 => by
     rw [Nat.add_right_comm]
     simp only [stepN] at h1 ⊢
@@ -66,7 +66,7 @@ def Exec.ofStepN : ∀ (n : Nat) {evm evm' : Evm} {ex : Execution},
     split at h
     · rename_i pc devm hstep
       exact Exec.cont hstep (Exec.ofStepN n (evm := ⟨pc, evm.sta, devm⟩) h d)
-    · exact absurd h (by simp)
+    · exact absurd h (by simp only [reduceCtorEq, not_false_eq_true])
 
 /-- The `Prop` form of `Exec.ofStepN`. -/
 theorem exec_of_stepN {n : Nat} {evm evm' : Evm} {ex : Execution}

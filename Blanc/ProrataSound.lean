@@ -108,7 +108,7 @@ private theorem withdraw_post
       WithdrawPreCallEffect.settlement_inv hpreCall hinvPre
   have heffect := hpreCall
   unfold WithdrawPreCallEffect at heffect
-  dsimp at heffect
+  dsimp only [Lean.Elab.WF.paramLet] at heffect
   rcases heffect with
     ⟨_, _, _, hbalCall, hcodeCall, _, _, _, _⟩
   have hcode :
@@ -174,7 +174,7 @@ private theorem withdraw_post
   · have : child.error.isSome = true := by
       rw [← heq]
       exact herr
-    simp [hclean] at this
+    simp only [hclean, Bool.false_eq_true] at this
   rw [hchild] at hexec herr
   have hchildPost : prorataSpec.Post ca
       (initSevm (childMsg.withBenv benv)) child := by

@@ -109,7 +109,7 @@ theorem RuntimePersistentWrite.mem_runtimePersistentSourceSites
   have sound := RuntimePersistentWrite.sourceSite?_sound found
   unfold runtimePersistentSourceSites
   rw [List.mem_filter]
-  exact ⟨sound.1, by simp [sound.2, isPersistentWriteInstruction]⟩
+  exact ⟨sound.1, by simp only [isPersistentWriteInstruction, sound.2]⟩
 
 /-! ## Refuting a permitted-role widening
 
@@ -252,8 +252,9 @@ theorem setPauserKernel_routeTo_assignment
           List.replicate setPauserKernelAssignmentPrefix.length
             Prog.SourceStep.rest) =
         setPauserAssignmentPath.steps := by
-    simp [setPauserAssignmentPath, setPauserKernelZeroCheck,
-      setPauserKernelAssignmentPrefix]
+    simp only [setPauserKernelZeroCheck, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      List.reduceReplicate, List.nil_append, List.cons_append, setPauserKernelAssignmentPrefix,
+      Fin.isValue, setPauserAssignmentPath]
   exact pathEq ▸ routeTo_head write setPauserAssignmentPath
 
 /-- The dispatcher's entry guard, spelled literally. -/
@@ -289,7 +290,8 @@ theorem runtimeMain_routeTo_dispatch (dp : DeployParams)
             Prog.SourceStep.rest) ++ [Prog.SourceStep.branchLeft] =
         List.replicate 5 Prog.SourceStep.rest ++
           [Prog.SourceStep.branchLeft] := by
-    simp [runtimeMainEntryPrefix]
+    simp only [runtimeMainEntryPrefix, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      List.reduceReplicate, List.nil_append, List.cons_append]
   exact pathEq ▸ dispatchRoute body arm
 
 /-- A crossing that leaves the world state alone leaves storage alone.  Every
@@ -645,8 +647,9 @@ theorem setPauserKernel_routeTo_assignment_ok (dp : DeployParams)
           List.replicate setPauserKernelAssignmentPrefix.length
             Prog.SourceStep.rest) =
         setPauserAssignmentPath.steps := by
-    simp [setPauserAssignmentPath, setPauserKernelZeroCheck,
-      setPauserKernelAssignmentPrefix]
+    simp only [setPauserKernelZeroCheck, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      List.reduceReplicate, List.nil_append, List.cons_append, setPauserKernelAssignmentPrefix,
+      Fin.isValue, setPauserAssignmentPath]
   exact pathEq ▸ routeTo_head write setPauserAssignmentPath
 
 theorem call_setPauserSlot_routeTo_assignment_ok (dp : DeployParams)
@@ -794,7 +797,7 @@ theorem attainable_setPauserAssignment_adminRegistry :
   have routedMember : site ∈ runtimePersistentSourceSites officialParams := by
     unfold runtimePersistentSourceSites
     rw [List.mem_filter]
-    exact ⟨hmem, by simp [hinstrTarget, isPersistentWriteInstruction]⟩
+    exact ⟨hmem, by simp only [isPersistentWriteInstruction, hinstrTarget]⟩
   have siteEq : rowSite = site :=
     runtimePersistentSourceSite_eq_of_pc
       (RuntimePersistentWrite.mem_runtimePersistentSourceSites found)
@@ -805,7 +808,8 @@ theorem attainable_setPauserAssignment_adminRegistry :
   subst rowEq
   have roleEq : role = .adminRegistry := by
     have alternatives : role = .adminRegistry ∨ role = .pauseRegistry := by
-      simpa [RuntimePersistentWrite.permittedRoles] using rolePermitted
+      simpa only [RuntimePersistentWrite.permittedRoles, List.mem_cons, List.not_mem_nil,
+        or_false] using rolePermitted
     rcases alternatives with rfl | rfl
     · rfl
     · exfalso
@@ -817,7 +821,7 @@ theorem attainable_setPauserAssignment_adminRegistry :
             have witness := freshWorld_preWitness.assignments freshWorldTarget
               freshWorld_targetValid.2
             rw [freshWorld_getStorVal, ← freshWorld_getStor]
-            simpa [logicalStorageOfStor, assignmentAt] using witness
+            simpa only [logicalStorageOfStor, assignmentAt] using witness
           rw [show (⟨0, freshWorldSevm, freshWorldPre, .ok post, exc⟩ :
                 Exec.Deriv).sevm = freshWorldSevm from rfl,
             freshWorld_currentTarget, freshWorld_dataFacts.2.2.1,
@@ -884,7 +888,7 @@ theorem freshWorld_assignment_zero (m : B256) :
     freshWorldPre.getStorVal freshWorldOwner (assignmentSlot m) = 0 := by
   rw [freshWorld_getStorVal, freshWorldStor,
     Stor.get_set_ne _ (heartbeatIntervalSlot_ne_assignmentSlot m)]
-  simp [Stor.get, Stor.empty]
+  simp only [Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc, Std.TreeMap.getD_emptyc]
 
 /-- `setPauserKernelAssignmentPrefix` continued across the assignment `SSTORE`
 and the previous-pauser zero test: the line whose last word decides the
@@ -1322,8 +1326,9 @@ theorem runtimeMain_routeTo_appendArrayEntry {devm post : Devm}
       have pathEq :
           ([] ++ List.replicate appendArrayEntryPrefix.length
             Prog.SourceStep.rest) = appendArrayEntryPath.steps := by
-        simp [appendArrayEntryPath, appendArrayEntryPrefix, mstoreAt, loadWord,
-          tagTop]
+        simp only [appendArrayEntryPrefix, Fin.isValue, mstoreAt, List.cons_append, List.nil_append,
+          loadWord, tagTop, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+          List.reduceReplicate, appendArrayEntryPath]
       exact pathEq ▸ routeTo_head write appendArrayEntryPath
 
 /-- The reverse-index write: `appendTarget`'s second `SSTORE`. -/
@@ -1347,9 +1352,9 @@ theorem runtimeMain_routeTo_appendReverseIndex {devm post : Devm}
               Prog.SourceStep.rest) ++
             List.replicate appendReverseIndexPrefix.length
               Prog.SourceStep.rest) = appendReverseIndexPath.steps := by
-        simp [appendReverseIndexPath, appendArrayEntryPrefix,
-          appendReverseIndexPrefix, mstoreAt, loadWord, tagTop,
-          targetIndexKey]
+        simp only [appendArrayEntryPrefix, Fin.isValue, mstoreAt, List.cons_append, List.nil_append,
+          loadWord, tagTop, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+          List.reduceReplicate, appendReverseIndexPrefix, targetIndexKey, appendReverseIndexPath]
       exact pathEq ▸ routeTo_head write appendReverseIndexPath
 
 /-- The array-length write: `appendTarget`'s third `SSTORE`. -/
@@ -1376,9 +1381,10 @@ theorem runtimeMain_routeTo_appendArrayLength {devm post : Devm}
                 Prog.SourceStep.rest) ++
             List.replicate appendArrayLengthPrefix.length
               Prog.SourceStep.rest) = appendArrayLengthPath.steps := by
-        simp [appendArrayLengthPath, appendArrayEntryPrefix,
-          appendReverseIndexPrefix, appendArrayLengthPrefix, mstoreAt,
-          loadWord, tagTop, targetIndexKey]
+        simp only [appendArrayEntryPrefix, Fin.isValue, mstoreAt, List.cons_append, List.nil_append,
+          loadWord, tagTop, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+          List.reduceReplicate, appendReverseIndexPrefix, targetIndexKey, appendArrayLengthPrefix,
+          appendArrayLengthPath]
       exact pathEq ▸ routeTo_head write appendArrayLengthPath
 
 /-! ### Pinning the three rows
@@ -1474,7 +1480,7 @@ theorem attainable_of_route {row : RuntimePersistentWrite}
   have routedMember : site ∈ runtimePersistentSourceSites officialParams := by
     unfold runtimePersistentSourceSites
     rw [List.mem_filter]
-    exact ⟨hmem, by simp [hinstrTarget, isPersistentWriteInstruction]⟩
+    exact ⟨hmem, by simp only [isPersistentWriteInstruction, hinstrTarget]⟩
   have siteEq : rowSite = site :=
     runtimePersistentSourceSite_eq_of_pc
       (RuntimePersistentWrite.mem_runtimePersistentSourceSites found)
@@ -1663,7 +1669,8 @@ theorem afterOldPauser_routeTo_newCountArm {devm post : Devm}
             Prog.SourceStep.rest) ++ [Prog.SourceStep.branchLeft] =
         List.replicate 3 Prog.SourceStep.rest ++
           [Prog.SourceStep.branchLeft] := by
-    simp [memoryZeroCheck, loadWord]
+    simp only [memoryZeroCheck, loadWord, List.cons_append, List.nil_append, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, List.reduceReplicate]
   exact pathEq ▸ armRoute _
     (KernelWindows.of_memory_eq hpop.memory.symm
       (windows.acrossMemoryZeroCheck r5)) arm
@@ -1692,8 +1699,9 @@ theorem runtimeMain_routeTo_afterOldNewCount {devm post : Devm}
             [Prog.SourceStep.branchLeft]) ++
           List.replicate afterOldNewCountPrefix.length Prog.SourceStep.rest) =
         afterOldNewCountPath.steps := by
-    simp [afterOldNewCountPath, sourceRests, afterOldNewCountPrefix, loadWord,
-      newCountKey, tagTop]
+    simp only [List.reduceReplicate, List.cons_append, List.nil_append, afterOldNewCountPrefix,
+      newCountKey, loadWord, tagTop, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      afterOldNewCountPath, sourceRests]
   exact pathEq ▸ routeTo_head write afterOldNewCountPath
 
 /-- Inventory index `8` -- `.afterOldNewCount` -- is the only one nominating
@@ -1901,8 +1909,9 @@ theorem runtimeMain_routeTo_registerFreshArmExpiry {devm post : Devm}
           [Prog.SourceStep.branchLeft]) ++
         List.replicate registerFreshArmExpiryPrefix.length
           Prog.SourceStep.rest) = registerFreshArmExpiryPath.steps := by
-    simp [registerFreshArmExpiryPath, memoryZeroCheck, checkedExpiryPrefix,
-      registerFreshArmExpiryPrefix, loadWord, mstoreAt, tagTop]
+    simp only [memoryZeroCheck, loadWord, List.cons_append, List.nil_append, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, List.reduceReplicate, checkedExpiryPrefix,
+      Fin.isValue, registerFreshArmExpiryPrefix, mstoreAt, tagTop, registerFreshArmExpiryPath]
   exact pathEq ▸ routeTo_head write registerFreshArmExpiryPath
 
 /-- Inventory index `17` is the only one nominating
@@ -2124,7 +2133,7 @@ theorem attainable_of_entryRoute_frame {sevm : Sevm} {pre : Devm} {ca : Adr}
   have routedMember : site ∈ runtimePersistentSourceSites officialParams := by
     unfold runtimePersistentSourceSites
     rw [List.mem_filter]
-    exact ⟨hmem, by simp [hinstrTarget, isPersistentWriteInstruction]⟩
+    exact ⟨hmem, by simp only [isPersistentWriteInstruction, hinstrTarget]⟩
   have siteEq : rowSite = site :=
     runtimePersistentSourceSite_eq_of_pc
       (RuntimePersistentWrite.mem_runtimePersistentSourceSites found)
@@ -2241,7 +2250,7 @@ theorem configWorld_arg :
     (w := configWorldDuration) (post := [])
   · rw [abiSelectorBytes_length]
     rfl
-  · simpa [setPauseDurationCalldata] using configWorld_data
+  · simpa only [List.append_nil, setPauseDurationCalldata] using configWorld_data
 
 theorem configWorld_warm :
     (⟨configWorldSevm.currentTarget, pauseDurationSlot⟩ : Adr × B256) ∈
@@ -2311,9 +2320,9 @@ theorem setPauseDuration_body_runCompiledTo
     mstoreAt logWith
   func_run [0, 1, 0, 0, 3, 3, 1262, 20000]
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  case h_val => simp [B256.eqCheck, hadmin]
-  case h_val => rw [harg]; simp [B256.ltCheck, B256.not_lt.mpr hmin]
-  case h_val => rw [harg]; simp [B256.gtCheck, B256.not_lt.mpr hmax]
+  case h_val => simp only [B256.eqCheck, hadmin, ↓reduceIte]
+  case h_val => rw [harg]; simp only [B256.ltCheck, B256.not_lt.mpr hmin, ↓reduceIte]
+  case h_val => rw [harg]; simp only [B256.gtCheck, gt_iff_lt, B256.not_lt.mpr hmax, ↓reduceIte]
   case h_ext =>
     rw [show ((0 : B256) * 32).toNat = 0 by decide]
     exact Devm.extCost_empty_word
@@ -2669,7 +2678,7 @@ theorem intervalWorld_arg :
     (w := intervalWorldInterval) (post := [])
   · rw [abiSelectorBytes_length]
     rfl
-  · simpa [setHeartbeatIntervalCalldata] using intervalWorld_data
+  · simpa only [List.append_nil, setHeartbeatIntervalCalldata] using intervalWorld_data
 
 theorem intervalWorld_warm :
     (⟨intervalWorldSevm.currentTarget, heartbeatIntervalSlot⟩ : Adr × B256) ∈
@@ -4127,9 +4136,10 @@ theorem runtimeMain_routeTo_registerRetainedArmExpiry {devm post : Devm}
           [Prog.SourceStep.branchLeft]) ++
         List.replicate registerFreshArmExpiryPrefix.length
           Prog.SourceStep.rest) = registerRetainedArmExpiryPath.steps := by
-    simp [registerRetainedArmExpiryPath, sourceRests, memoryZeroCheck,
-      checkedExpiryPrefix, registerFreshArmExpiryPrefix, registerPreviousCountCheck,
-      previousCountKey, loadWord, mstoreAt, tagTop]
+    simp only [memoryZeroCheck, loadWord, List.cons_append, List.nil_append, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, List.reduceReplicate, registerPreviousCountCheck,
+      previousCountKey, tagTop, checkedExpiryPrefix, Fin.isValue, registerFreshArmExpiryPrefix,
+      mstoreAt, registerRetainedArmExpiryPath, sourceRests]
   exact pathEq ▸ routeTo_head write registerRetainedArmExpiryPath
 
 /-- The complete route to the retiring pauser's expiry clear: the same leg,
@@ -4172,8 +4182,9 @@ theorem runtimeMain_routeTo_registerOldLastClear {devm post : Devm}
                 Prog.SourceStep.rest) ++ [Prog.SourceStep.branchRight]) ++
           List.replicate registerOldLastClearPrefix.length
             Prog.SourceStep.rest) = registerOldLastClearPath.steps := by
-    simp [registerOldLastClearPath, memoryZeroCheck, registerPreviousCountCheck,
-      registerOldLastClearPrefix, previousCountKey, loadWord, tagTop]
+    simp only [memoryZeroCheck, loadWord, List.cons_append, List.nil_append, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, List.reduceReplicate, registerPreviousCountCheck,
+      previousCountKey, tagTop, registerOldLastClearPrefix, registerOldLastClearPath]
   exact pathEq ▸ routeTo_head write registerOldLastClearPath
 
 /-- The complete route to the new pauser's expiry write on the old-last arm:
@@ -4240,11 +4251,11 @@ theorem runtimeMain_routeTo_registerOldLastNewExpiry {devm post : Devm}
           [Prog.SourceStep.branchLeft]) ++
         List.replicate registerFreshArmExpiryPrefix.length
           Prog.SourceStep.rest) = registerOldLastNewExpiryPath.steps := by
-    simp [registerOldLastNewExpiryPath, memoryZeroCheck,
-      registerPreviousCountCheck, registerOldLastClearPrefix,
-      registerOldLastRecordPrefix, checkedExpiryPrefix,
-      registerFreshArmExpiryPrefix, previousCountKey, loadWord, mstoreAt,
-      tagTop, logWith]
+    simp only [memoryZeroCheck, loadWord, List.cons_append, List.nil_append, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, List.reduceReplicate, registerPreviousCountCheck,
+      previousCountKey, tagTop, registerOldLastClearPrefix, registerOldLastRecordPrefix, mstoreAt,
+      logWith, Fin.isValue, Fin.succ_one_eq_two, checkedExpiryPrefix, registerFreshArmExpiryPrefix,
+      registerOldLastNewExpiryPath]
   exact pathEq ▸ routeTo_head write registerOldLastNewExpiryPath
 
 /-! ### Pinning the three rows, and the witnesses -/

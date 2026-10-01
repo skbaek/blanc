@@ -30,16 +30,18 @@ theorem processMessage_clean_rawPost
   have commits : Execution.commits raw = true :=
     Frame.raw_commits_of_settlementCommits settles
   cases raw with
-  | error err => simp [Execution.commits] at commits
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at commits
   | ok rawPost =>
       cases errorEq : rawPost.error with
-      | some err => simp [Execution.commits, errorEq] at commits
+      | some err => simp only [Execution.commits, errorEq, Option.isNone_some,
+        Bool.false_eq_true] at commits
       | none =>
           refine ⟨rawPost, rfl, errorEq, ?_, ?_⟩
           · exact ProcessMessage.ok_state_eq_committedPost process commits
           · have settleEq := (RunFrame.some_inv process).2
-            simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-              executeCode.handleErrorWith_ok, processMessage.settle, errorEq] at settleEq
+            simp only [Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
+              processMessage.settle, executeCode.handleErrorWith_ok, Except.bind_ok, errorEq,
+              Option.isSome_none, Except.ok.injEq] at settleEq
             exact congrArg Devm.output settleEq
 
 /-- Facts inherited by a retained code frame from its actual message entry.
@@ -68,7 +70,7 @@ theorem processMessage_entry_facts
   have codeAddress := congrArg (fun evm : Evm => evm.sta.codeAddress) evmEq
   have time := congrArg (fun evm : Evm => evm.sta.benvStat.time) evmEq
   have state := congrArg (fun evm : Evm => evm.dyna.state) evmEq
-  dsimp [Frame.ofCall, initEvm, initSevm, initDevm, Msg.withBenv] at codeEq current codeAddress data time memory
+  dsimp only at codeEq current codeAddress data time memory
   change pre.state = benv.state at state
   have statEq : benv.stat = msg.benv.stat := by
     by_cases transfers : msg.shouldTransferValue = true
@@ -97,7 +99,7 @@ theorem processMessage_entry_stack
   have enter := (RunFrame.some_inv process).1
   rcases Frame.enter_run_inv enter with ⟨benv, transfer, evmEq⟩
   have stack := congrArg (fun evm : Evm => evm.dyna.stack) evmEq
-  dsimp [Frame.ofCall, initEvm, initSevm, initDevm, Msg.withBenv] at stack
+  dsimp only [Frame.ofCall, Msg.withBenv, initEvm, initSevm, initDevm] at stack
   exact stack
 
 /-- A retained code frame also starts with empty memory.  Kept separate from

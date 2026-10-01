@@ -242,7 +242,7 @@ theorem of_returnTrue_exact {fs : List Func} {e : Sevm} {s r : Devm}
   intro hempty
   have hlen := B256.length_toBytes (1 : B256)
   rw [hempty] at hlen
-  simp at hlen
+  simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
 
 /-- Observable strengthening of the caller-value sender: in addition to the
 seven CALL operands, all parent-frame fields changed only by the CALL itself
@@ -1047,7 +1047,7 @@ theorem of_callerBurnThen_callback_effect
     have h01 : ((0 : B256) =? 0) = 0 :=
       pref_head_unique hpTest (pref_append [(0 : B256)] guardPost.stack)
     rw [show ((0 : B256) =? 0) = 1 from by
-      simp [B256.eqCheck]] at h01
+      simp only [B256.eqCheck, ↓reduceIte]] at h01
     exact B256.zero_ne_one h01.symm
   rcases hcallSuccess with
     ⟨parent, child, xl, delegated, _na, code, avail, _pc, _hstep,
@@ -1661,7 +1661,8 @@ theorem weth10_transfer_successEffect (dp : DeployParams)
   have h_mem :
       (selector "transfer" [.address, .uint256], nonpayable transfer) ∈
         weth10Funcs dp := by
-    simp [weth10Funcs]
+    simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   rcases exec_enters_weth10Nonpayable_logs
       exc h_code h_sel h_nonempty h_mem with
     ⟨mid, hvalue, hstor, hbal, hcode, hmemory,
@@ -1693,7 +1694,8 @@ theorem weth10_withdraw_successEffect (dp : DeployParams)
   have h_mem :
       (selector "withdraw" [.uint256], nonpayable withdraw) ∈
         weth10Funcs dp := by
-    simp [weth10Funcs]
+    simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   rcases exec_enters_weth10Nonpayable_logs
       exc h_code h_sel h_nonempty h_mem with
     ⟨mid, hvalue, hstor, hbal, hcode, hmemory,
@@ -1726,7 +1728,8 @@ theorem weth10_withdrawTo_successEffect (dp : DeployParams)
   have h_mem :
       (selector "withdrawTo" [.address, .uint256],
         nonpayable withdrawTo) ∈ weth10Funcs dp := by
-    simp [weth10Funcs]
+    simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   rcases exec_enters_weth10Nonpayable_logs
       exc h_code h_sel h_nonempty h_mem with
     ⟨mid, hvalue, hstor, hbal, hcode, hmemory,
@@ -2418,7 +2421,7 @@ theorem of_spendCallerAllowanceThen_effect
       have hneMax : allowance ≠ B256.max := by
         intro hmaxAllowance
         rw [hmaxAllowance, B256.not_max,
-          show ((0 : B256) =? 0) = 1 from by simp [B256.eqCheck]]
+          show ((0 : B256) =? 0) = 1 from by simp only [B256.eqCheck, ↓reduceIte]]
           at hmaxFlag
         exact B256.zero_ne_one hmaxFlag.symm
       rw [hmaxFlag] at hpLoad
@@ -2746,7 +2749,8 @@ theorem transferFrom_successEffect (dp : DeployParams)
   have hlookup :
       ((weth10 dp).main :: weth10Aux)[transferFromCoreSlot]? =
         some transferFromCore := by
-    simp [weth10, weth10Aux, transferFromCoreSlot]
+    simp only [weth10, weth10Aux, transferFromCoreSlot, List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   obtain ⟨corePre, hcore, hallowance, hwfCore,
       out, hreadsCore⟩ :=
     of_spendCallerAllowanceThen_effect dp 2 transferFromCoreSlot
@@ -2765,7 +2769,8 @@ theorem withdrawFrom_successEffect (dp : DeployParams)
   have hlookup :
       ((weth10 dp).main :: weth10Aux)[withdrawFromCoreSlot]? =
         some withdrawFromCore := by
-    simp [weth10, weth10Aux, withdrawFromCoreSlot]
+    simp only [weth10, weth10Aux, withdrawFromCoreSlot, List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   obtain ⟨corePre, hcore, hallowance, hwfCore,
       out, hreadsCore⟩ :=
     of_spendCallerAllowanceThen_effect dp 2 withdrawFromCoreSlot
@@ -2828,7 +2833,8 @@ theorem weth10_transferFrom_successEffect (dp : DeployParams)
   have h_mem :
       (selector "transferFrom" [.address, .address, .uint256],
         nonpayable transferFrom) ∈ weth10Funcs dp := by
-    simp [weth10Funcs]
+    simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   rcases exec_enters_weth10Nonpayable_logs
       exc h_code h_sel h_nonempty h_mem with
     ⟨mid, hvalue, hstor, hbal, hcode, hmemory,
@@ -2858,7 +2864,8 @@ theorem weth10_withdrawFrom_successEffect (dp : DeployParams)
   have h_mem :
       (selector "withdrawFrom" [.address, .address, .uint256],
         nonpayable withdrawFrom) ∈ weth10Funcs dp := by
-    simp [weth10Funcs]
+    simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   rcases exec_enters_weth10Nonpayable_logs
       exc h_code h_sel h_nonempty h_mem with
     ⟨mid, hvalue, hstor, hbal, hcode, hmemory,

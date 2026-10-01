@@ -85,10 +85,10 @@ theorem canonicalDeploymentTransaction_succeeds
     processMessageCall_establishes_officialRegistryStable ca ctx.msg
       ctx.target_eq ctx.msg_target_eq ctx.noCodeOrNonce ctx.noStorage
       ctx.msg_value_eq ctx.msg_codeAddress_eq ctx.msg_code_eq hgas hmax
-      (by simpa [ctx.target_eq] using ctx.pauseCold)
-      (by simpa [ctx.target_eq] using ctx.pauseOriginal)
-      (by simpa [ctx.target_eq] using ctx.heartbeatCold)
-      (by simpa [ctx.target_eq] using ctx.heartbeatOriginal)
+      (by simpa only [ctx.target_eq] using ctx.pauseCold)
+      (by simpa only [ctx.target_eq] using ctx.pauseOriginal)
+      (by simpa only [ctx.target_eq] using ctx.heartbeatCold)
+      (by simpa only [ctx.target_eq] using ctx.heartbeatOriginal)
       ctx.msg_static_eq hfork
   obtain ⟨createPost, hcreate, hmessagePost, hmessageOut⟩ :=
     hmessage.creation
@@ -121,7 +121,7 @@ theorem canonicalDeploymentTransaction_succeeds
       checkTransaction ctx.txInput.beginTransaction
           (deploymentTxPreludeBout .init tx 0) tx =
         .ok (sender, deploymentEffectiveGasPrice ctx.txInput tx, [], 0) := by
-    simpa [ctx.systemPrefix.environment_eq, hprice] using henv.checked
+    simpa only [ctx.systemPrefix.environment_eq, hprice] using henv.checked
   have hdebit := ctx.debit_eq
   rw [ctx.begun_eq] at hdebit
   simp only [Benv.beginTransaction] at hdebit
@@ -135,7 +135,10 @@ theorem canonicalDeploymentTransaction_succeeds
   have hintrinsic :
       calculateIntrinsicCost pragueRules tx 0 =
         calculateIntrinsicCost pragueRules tx sender := by
-    simp [calculateIntrinsicCost, htype]
+    simp only [calculateIntrinsicCost, pragueRules_gas_txBase, htype, pragueRules_gas_createAccess,
+      pragueRules_stateGas, Option.isNone_iff_eq_none, pragueRules_gas_txAccessListAddress,
+      pragueRules_gas_txAccessListStorageKey, List.map_nil, List.sum_nil, add_zero,
+      pragueRules_gas_floorTokenCost]
   have hprepare := ctx.prepare_eq
   rw [ctx.begun_eq, ctx.tenv_eq] at hprepare
   have hrun : processTransaction ctx.txInput .init tx 0 =
@@ -182,10 +185,10 @@ theorem canonicalDeploymentTransaction_succeeds
           messageOut.gasLeft messageOut.stateGasLeft messageOut.refundCounter.toNat
           messageOut.stateGasUsed =
           ⟨usedGas, tx.gas - usedGas, usedGas, 0⟩ := by
-      simp [settleTransactionGas, usedGas,
-        deploymentUsedGasFromMessage, deploymentCalldataFloorGas]
+      simp only [settleTransactionGas, pragueRules_stateGas, deploymentUsedGasFromMessage,
+        deploymentCalldataFloorGas, TransactionGasSettlement.mk.injEq, and_true, usedGas]
       rw [htxRules]
-      simp
+      simp only [and_self]
     rw [hsettlement]
     have hforkBalNone : pragueRules.bal = none := by
       rfl
@@ -220,20 +223,20 @@ theorem canonicalDeploymentTransaction_succeeds
     ⟨hinstalled, by rw [hstor]; exact hmessage.stable.coherent⟩
   have hblockLogs : bout.blockLogs = officialConstructorLogs ca := by
     dsimp only [bout, deploymentFinalBout]
-    simp [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout,
-      hmessage.logs, BlockOutput.init]
+    simp only [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout, BlockOutput.init,
+      Std.TreeMap.empty_eq_emptyc, hmessage.logs, List.nil_append]
   have hrequests : bout.requests = [] := by
     dsimp only [bout, deploymentFinalBout]
-    simp [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout,
-      BlockOutput.init]
+    simp only [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout, BlockOutput.init,
+      Std.TreeMap.empty_eq_emptyc]
   have hblockAccessList : bout.blockAccessList = [] := by
     dsimp only [bout, deploymentFinalBout]
-    simp [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout,
-      BlockOutput.init]
+    simp only [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout, BlockOutput.init,
+      Std.TreeMap.empty_eq_emptyc]
   have hreceiptKeys : bout.receiptKeys = [deploymentReceiptKey 0] := by
     dsimp only [bout, deploymentFinalBout]
-    simp [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout,
-      BlockOutput.init]
+    simp only [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout, BlockOutput.init,
+      Std.TreeMap.empty_eq_emptyc, List.nil_append]
   have hentry :
       Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0) =
         some (makeReceipt tx messageOut.error
@@ -253,7 +256,8 @@ theorem canonicalDeploymentTransaction_succeeds
     rw [hreceiptKeys]
     have hentry' := hentry
     change bout.receiptsTrie[deploymentReceiptKey 0]? = _ at hentry'
-    simp
+    simp only [bind_pure_comp, List.forIn_cons, List.forIn_nil, bind_assoc, bind_map_left,
+      bind_pure]
     rw [hentry']
     unfold makeReceipt
     rw [htype, hmessage.logs]
@@ -275,7 +279,9 @@ theorem canonicalDeploymentTransaction_succeeds
     have hheartbeatEvent :
         heartbeatIntervalUpdatedEvent ≠ depositEventSignatureHash := by
       decide +kernel
-    simp [hinit, hpauseEvent, hheartbeatEvent]
+    simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.ofNat_pos,
+      getElem?_pos, List.getElem_cons_zero, Option.some.injEq, hinit, and_false, ↓reduceIte,
+      zero_lt_one, hpauseEvent, hheartbeatEvent, pure_bind]
   have hreceiptEntry : ∃ entry,
       Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0) = some entry ∧
       entry.2.logs = officialConstructorLogs ca ∧
@@ -283,18 +289,18 @@ theorem canonicalDeploymentTransaction_succeeds
     refine ⟨makeReceipt tx messageOut.error
       ((BlockOutput.init : BlockOutput).blockGasUsed + usedGas)
       messageOut.logs, hentry, ?_, ?_⟩
-    · simp [makeReceipt, hmessage.logs]
-    · simp [makeReceipt, hmessage.error]
+    · simp only [makeReceipt, Fin.isValue, hmessage.logs]
+    · simp only [makeReceipt, Fin.isValue, hmessage.error, Option.isNone_none]
   have hreceiptLogs :
       (Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0)).map
         (fun entry => entry.2.logs) = some (officialConstructorLogs ca) := by
     rw [hentry]
-    simp [makeReceipt, hmessage.logs]
+    simp only [makeReceipt, Fin.isValue, hmessage.logs, Option.map_some]
   have hreceiptSucceeded :
       (Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0)).map
         (fun entry => entry.2.succeeded) = some true := by
     rw [hentry]
-    simp [makeReceipt, hmessage.error]
+    simp only [makeReceipt, Fin.isValue, hmessage.error, Option.isNone_none, Option.map_some]
   rcases of_processCreateMessage ctx.msg (.ok createPost) hcreate.run with
     ⟨xl, hfilled, hcreateRel⟩
   have hcodeRel : Xlot.Rel Devm.CodePreserve xl :=
@@ -324,7 +330,7 @@ theorem canonicalDeploymentTransaction_succeeds
       apply Prog.compile_ne_nil (p := deploymentSystemProgram)
       rw [← hbaseCode, hemptyCode]
     have hne' : a ≠ ctx.msg.currentTarget := by
-      simpa [ctx.target_eq] using hne
+      simpa only [ctx.target_eq, ne_eq] using hne
     have hc := hcreateCode a hne' hnonempty
     change createPost.state.getCode a = ctx.msg.benv.state.getCode a at hc
     rw [← hmessagePost, hinputCode] at hc

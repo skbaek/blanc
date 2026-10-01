@@ -69,7 +69,7 @@ theorem exit_gasHead_prefix {sevm : Sevm} {pre post : Devm}
     ⟨s2, path2, hst2, hmm2, -, -, hpfx, hpre2, hdispatch⟩
   rw [hsel] at hpfx
   have hmem : (exitSelector, nonpayable (exactCalldata 36 exit)) ∈ funcs := by
-    simp [funcs]
+    simp only [funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or, or_true]
   rcases reach_of_dispatch_logs (path := path2) funcs_sorted hmem hpfx
       hdispatch with
     ⟨s3, path3, -, hst3, hmm3, -, -, hpre3, hwrapped⟩
@@ -122,7 +122,7 @@ theorem runtime_call_site_pc {site : Prog.SourceSite}
     (isCall : site.instruction = call) : site.pc = exitCallSitePc := by
   have checked := List.all_eq_true.mp runtime_call_sites_checked site member
   rw [isCall] at checked
-  simpa [isCallInstruction] using checked
+  simpa only [isCallInstruction, Bool.not_true, Bool.false_or, beq_iff_eq] using checked
 
 /-- Spine twin of `exit_callNode_identity_of_exec`: the same actual `CALL`
 node, with the whole same-frame chain before it and after its resume free of
@@ -212,7 +212,8 @@ theorem exit_callNode_spine_of_exec {sevm : Sevm} {pre post : Devm}
       (callCursor.sourceIncluded
         (site := ⟨⟨target.functionIndex, target.steps ++ [.rest]⟩,
           callCursor.pc, call⟩)
-        (by simp [Func.sourceSites])) rfl
+        (by simp only [Func.sourceSites, List.append_assoc, List.cons_append, List.nil_append,
+          List.mem_cons, List.mem_append, true_or])) rfl
   have stateT : t.state = gasCursor.pre.state := agree.state
   have stackT : t.stack = gasCursor.pre.stack := agree.stack
   have memoryT : t.memory = gasCursor.pre.memory := agree.memory
@@ -383,8 +384,9 @@ theorem ofCall_settle_of_clean {raw : Execution} {child : Devm}
       · simp only [bind, Except.bind, flagged, if_true, Except.ok.injEq] at settled
         subst settled
         exfalso
-        simp [Devm.rollback, Devm.setWorld, Devm.error] at clean
-        simp [Devm.error, clean] at flagged
+        simp only [Devm.error, Devm.rollback, Devm.setWorld, Option.isSome_eq_false_iff,
+          Option.isNone_iff_eq_none] at clean
+        simp only [Devm.error, clean, Option.isSome_none, Bool.false_eq_true] at flagged
       · simp only [bind, Except.bind, flagged, Bool.false_eq_true, if_false] at settled ⊢
         exact settled
 

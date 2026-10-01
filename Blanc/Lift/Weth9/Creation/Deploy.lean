@@ -47,7 +47,8 @@ theorem deployedStor_metadata :
     · by_cases h0 : (0 : B256) = x
       · rw [← h0]; exact List.mem_cons_self ..
       · rw [if_neg h2, if_neg h1, if_neg h0] at hx
-        exact absurd (by simp [Stor.get, Stor.empty]) hx
+        exact absurd (by simp only [Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc,
+          Std.TreeMap.getD_emptyc]) hx
 
 /-- **Deploying WETH9.**  The recorded creation input, executed as a zero-value CREATE message
 with enough gas under a covered fork, succeeds; the new account's code is the certified deployed
@@ -72,7 +73,8 @@ theorem weth9_create (msg : Msg) (hvalue : msg.value = 0)
     show benv.state.getStor msg.currentTarget = _
     rw [benvAfterTransfer_ok_getStor htransfer, processCreateMessage_msg_getStor_currentTarget]
   have hstor : ∀ x, (Devm.getStor b sevm.currentTarget).get x = 0 := fun x => by
-    rw [hempty]; simp [Stor.get, Stor.empty]
+    rw [hempty]; simp only [Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc,
+      Std.TreeMap.getD_emptyc]
   have hle := ctorCost_le sevm b
   obtain ⟨raw, hrun, hout, herr, hst, hgasLeft⟩ :=
     ctor_run fr hcode hvalue hstor (G := msg.gas - ctorCost sevm b) (by omega)
@@ -112,7 +114,9 @@ theorem weth9Address_eq : weth9Address = computeContractAddress deployer 446 := 
       0x0f, 0xdc, 0x30, 0xa8, 0x76, 0x38, 0xd5, 0x3d, 0x0b, 0x08, 0x76], .bytes [0x01, 0xbe]]) =
       [0xd8, 0x94, 0x4f, 0x26, 0xff, 0xbe, 0x5f, 0x04, 0xed, 0x43, 0x63, 0x0f, 0xdc, 0x30, 0xa8,
         0x76, 0x38, 0xd5, 0x3d, 0x0b, 0x08, 0x76, 0x82, 0x01, 0xbe] := by
-    simp [BLT.toBytes, BLTs.toBytes, BLTs.toBytesJoin]
+    simp only [BLT.toBytes, BLTs.toBytes, BLTs.toBytesJoin, List.length_cons, List.length_nil,
+      zero_add, Nat.reduceAdd, Nat.reduceLT, ↓reduceIte, Nat.toUInt8_eq, UInt8.reduceOfNat,
+      UInt8.reduceAdd, List.append_nil, List.cons_append, List.nil_append]
   unfold computeContractAddress
   simp only [hsender, hnonce, hrlp]
   decide +kernel

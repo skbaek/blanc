@@ -68,7 +68,7 @@ theorem frame2_child (d3 : Devm)
             have s := s3.trans (callResume_cont h4 k2 a2)
             generalize hr : wrun fs1 e2T.sta 188 c4 = r at hk
             rcases r with c | ⟨post | post, cl'⟩ | _
-            · simp [obs2T, obs2TEELS] at hk
+            · simp only [obs2T, obs2TEELS, List.map_append, reduceCtorEq] at hk
             · simp only [obs2T, obs2TEELS, Option.some.injEq, Prod.mk.injEq, Bool.and_eq_true,
                 decide_eq_true_eq] at hk
               obtain ⟨hg, ho, h26, hA, h2', ⟨he, hrf⟩, hatd⟩ := hk
@@ -86,12 +86,12 @@ theorem frame2_child (d3 : Devm)
               exact ⟨post, cl', hx, hs, ha, hg,
                 List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) ho, herr, h26, hA, h2', hrf,
                 hatd⟩
-            · simp [obs2T, obs2TEELS] at hk
-            · simp [obs2T, obs2TEELS] at hk
-          · simp [obs2T, obs2TEELS] at hk
-        all_goals simp [obs2T, obs2TEELS] at hk
-      · simp [obs2T, obs2TEELS] at hk
-    · simp [obs2T, obs2TEELS] at hk
-  · simp [obs2T, obs2TEELS] at hk
+            · simp only [obs2T, obs2TEELS, List.map_append, reduceCtorEq] at hk
+            · simp only [obs2T, obs2TEELS, List.map_append, reduceCtorEq] at hk
+          · simp only [obs2T, obs2TEELS, List.map_append, reduceCtorEq] at hk
+        all_goals simp only [obs2T, obs2TEELS, List.map_append, reduceCtorEq] at hk
+      · simp only [obs2T, obs2TEELS, List.map_append, reduceCtorEq] at hk
+    · simp only [obs2T, obs2TEELS, List.map_append, reduceCtorEq] at hk
+  · simp only [obs2T, obs2TEELS, List.map_append, reduceCtorEq] at hk
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx

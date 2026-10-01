@@ -37,7 +37,7 @@ theorem Exec.Deriv.ParentStep.exists_of_ninstAt_ok
     (instructionAt : Ninst.At start.sevm.code start.pc instruction) :
     ∃ next : Exec.Deriv, Exec.Deriv.ParentStep next start := by
   rcases start with ⟨pc, sevm, pre, out, run⟩
-  dsimp at ok instructionAt
+  dsimp only at ok instructionAt
   subst ok
   have hstatic :
       Evm.step ⟨pc, sevm, pre⟩ = Ninst.step ⟨pc, sevm, pre⟩ instruction :=
@@ -62,7 +62,7 @@ theorem Exec.Deriv.ParentStep.exists_of_pushAt_ok
         ⟨start.pc + xs.length + 1, start.sevm, inter, start.exn, next⟩ start ∧
       Devm.PushBurn [xs.toB256] start.devm inter := by
   rcases start with ⟨pc, sevm, pre, out, run⟩
-  dsimp at ok pushAt ⊢
+  dsimp only at ok pushAt ⊢
   subst ok
   rcases pushAt with ⟨le, pushAt⟩
   have hstatic :
@@ -94,7 +94,7 @@ theorem Exec.Deriv.ParentStep.exists_of_jinstAt_ok
       Jinst.Run ⟨start.pc, start.sevm, start.devm⟩ instruction
         (.ok ⟨nextPc, inter⟩) := by
   rcases start with ⟨pc, sevm, pre, out, run⟩
-  dsimp at ok jumpAt ⊢
+  dsimp only at ok jumpAt ⊢
   subst ok
   have hstatic :
       Evm.step ⟨pc, sevm, pre⟩ =
@@ -212,7 +212,8 @@ theorem Exec.Deriv.SourceCursor.mainForwardFree
     sourceBoundary, by
       intro site member
       simp only [Prog.sourceSites, List.mem_flatMap]
-      refine ⟨0, by simp, ?_⟩
+      refine ⟨0, by simp only [List.length_cons, List.mem_range, lt_add_iff_pos_left, add_pos_iff,
+        zero_lt_one, or_true], ?_⟩
       simpa only [hget] using member⟩,
     Exec.Deriv.ExecFreeUntil.ofStep edge (Blanc.Jinst.At.not_exec jumpdestAt), burn⟩
 
@@ -244,7 +245,7 @@ theorem Exec.Deriv.SourceCursor.ninstAt
     (functionIndex := path.functionIndex) (steps := path.steps)
     (site := { path := path, pc := cursor.pc, instruction := instruction })
     (by rcases path with ⟨functionIndex, steps⟩
-        simp [Func.sourceSites])
+        simp only [Func.sourceSites, List.mem_cons, true_or])
 
 /-- Forward dual of `nextOfParentStep`: a successful frame crosses the current
 source instruction, and the crossing is the exact `Ninst.Run`. -/
@@ -285,7 +286,7 @@ theorem Exec.Deriv.SourceCursor.branchForwardFree
     ⟨loc, hlocEq, hloc, pushAt, jumpiAt, leftSlice, leftBoundary,
       jumpdestAt, jumpable, rightSlice, rightBoundary⟩
   rcases Exec.Deriv.ParentStep.exists_of_pushAt_ok (start := cursor.node)
-      ok ⟨_, pushAt⟩ (by simp) with
+      ok ⟨_, pushAt⟩ (by simp only [Nat.toUInt8_eq, ne_eq, reduceCtorEq, not_false_eq_true]) with
     ⟨afterPushPre, afterPush, pushEdge, pushBurn⟩
   rw [List.toB256_pair _ hloc] at pushBurn
   rcases Exec.Deriv.ParentStep.exists_of_jinstAt_ok
@@ -397,9 +398,9 @@ theorem Exec.Deriv.SourceCursor.callForwardFree
   have hgetBody : (program.main :: program.aux)[index]? = some body := by
     have h := @Prog.get?_table 0 index (program.main :: program.aux)
     rw [hgetTable] at h
-    simpa using h.symm
+    simpa only [Option.map_eq_map, Option.map_some] using h.symm
   rcases Exec.Deriv.ParentStep.exists_of_pushAt_ok (start := cursor.node)
-      ok pushAt (by simp) with
+      ok pushAt (by simp only [Nat.toUInt8_eq, ne_eq, reduceCtorEq, not_false_eq_true]) with
     ⟨afterPushPre, afterPush, pushEdge, pushBurn⟩
   rw [List.toB256_pair _ hloc] at pushBurn
   rcases Exec.Deriv.ParentStep.exists_of_jinstAt_ok
@@ -634,7 +635,7 @@ theorem Exec.Deriv.ExecFreeUntil.descendantFrames_eq {start stop : Exec.Deriv}
         fun node reached => clean node (.step edge reached)
       rw [← ih nextClean]
       cases edge with
-      | cont hstep next => simp [Exec.descendantFrames]
+      | cont hstep next => simp only [descendantFrames]
       | doneOk hstep henter hresume next =>
           rcases Evm.step_spawn_inv hstep with ⟨x, decoded, -, -⟩
           exact (rootClean x decoded).elim

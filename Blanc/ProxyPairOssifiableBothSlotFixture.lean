@@ -64,7 +64,7 @@ theorem setupMain_compile :
   decide +kernel
 
 theorem setupMain_noCalls : setupMain.NoCalls := by
-  simp [setupMain, Func.NoCalls]
+  simp only [setupMain, Func.NoCalls]
 
 def setupBodyGas : Nat := 22218
 
@@ -298,10 +298,10 @@ theorem message_success :
     · rfl
     · rfl
     · exact raw
-    · simpa [initDevm, Devm.error] using error
+    · simpa only [Devm.error, initDevm] using error
   have hsg : message.benv.stat.rules.stateGas = none := rfl
-  exact ⟨post, settled, by simpa [initDevm, Devm.error] using error, output,
+  exact ⟨post, settled, by simpa only [Devm.error, initDevm] using error, output,
     implementationSlot, adminSlot,
-      by simpa [initDevm, Devm.logs, hsg] using logs⟩
+      by simpa only [Devm.logs, initDevm, hsg] using logs⟩
 
 end Blanc.ProxyPair.OssifiableBothSlotFixture

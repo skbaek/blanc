@@ -249,7 +249,8 @@ theorem RegistryCoherent.expiry_set {s : Stor} (h : RegistryCoherent s)
 `Adr.toNat`, which is below `2 ^ 160`. -/
 theorem canonicalAddress_toB256 (a : Adr) : canonicalAddress a.toB256 := by
   have heq : a.toB256.toNat = a.toNat := by
-    simp [Adr.toB256, Adr.toNat, B256.toNat, B128.toNat]
+    simp only [B256.toNat, B128.toNat, Adr.toB256, UInt64.toNat_zero, Nat.zero_shiftLeft,
+      UInt32.toNat_toUInt64, Nat.zero_or, Adr.toNat]
   show a.toB256.toNat < 2 ^ 160
   rw [heq]
   exact Adr.toNat_lt_size a

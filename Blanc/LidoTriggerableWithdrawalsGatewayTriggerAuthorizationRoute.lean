@@ -37,8 +37,8 @@ theorem triggerEmptyAuthorizationCalldata_length
     (refundRecipient : Adr) (exitType : B256) :
     (triggerEmptyAuthorizationCalldata refundRecipient exitType).length =
       132 := by
-  simp [triggerEmptyAuthorizationCalldata, abiSelectorBytes_length,
-    B256.length_toBytes]
+  simp only [triggerEmptyAuthorizationCalldata, List.append_assoc, List.length_append,
+    abiSelectorBytes_length, B256.length_toBytes, Nat.reduceAdd]
 
 theorem selector_of_triggerEmptyAuthorizationCalldata
     {sevm : Sevm} {refundRecipient : Adr} {exitType : B256}
@@ -51,7 +51,7 @@ theorem selector_of_triggerEmptyAuthorizationCalldata
         refundRecipient.toB256.toBytes ++ exitType.toBytes ++
         (Nat.toB256 0).toBytes)
   · rfl
-  · simpa [triggerEmptyAuthorizationCalldata] using hdata
+  · simpa only [List.append_assoc, triggerEmptyAuthorizationCalldata] using hdata
 
 /-- Every failed check in the trigger's private flat guard reaches the runtime
 AccessControl selector reverter. -/
@@ -119,7 +119,7 @@ private theorem rebaseLocalCalls_prepend (line : Line) (rest : Func) :
       line +++ rebaseIntegratedTriggerCalls rest := by
   induction line with
   | nil => rfl
-  | cons op tail ih => simp [prepend, rebaseIntegratedTriggerCalls, ih]
+  | cons op tail ih => simp only [prepend, rebaseIntegratedTriggerCalls, ih]
 
 def rebasedTriggerAuthorizedContinuation : Func :=
   rebaseIntegratedTriggerCalls <|
@@ -213,7 +213,7 @@ theorem triggerEmptyAuthorization_arg0
   · rw [abiSelectorBytes_length]
     rfl
   · rw [hdata, triggerEmptyAuthorizationCalldata]
-    simp [List.append_assoc]
+    simp only [List.append_assoc, List.append_cancel_left_eq, List.append_cancel_right_eq]
     rfl
 
 theorem triggerEmptyAuthorization_arg1
@@ -229,7 +229,7 @@ theorem triggerEmptyAuthorization_arg1
   · rw [List.length_append, abiSelectorBytes_length, B256.length_toBytes]
     rfl
   · rw [hdata, triggerEmptyAuthorizationCalldata]
-    simp [List.append_assoc]
+    simp only [List.append_assoc]
 
 theorem triggerEmptyAuthorization_arg2
     {sevm : Sevm} {refundRecipient : Adr} {exitType : B256}
@@ -241,9 +241,10 @@ theorem triggerEmptyAuthorization_arg2
     (pre := abiSelectorBytes selTriggerFullWithdrawals ++
       (Nat.toB256 0x60).toBytes ++ refundRecipient.toB256.toBytes)
     (post := (Nat.toB256 0).toBytes)
-  · simp [abiSelectorBytes_length, B256.length_toBytes]
+  · simp only [List.append_assoc, List.length_append, abiSelectorBytes_length, B256.length_toBytes,
+    Nat.reduceAdd]
     rfl
-  · simpa [triggerEmptyAuthorizationCalldata, List.append_assoc] using hdata
+  · simpa only [List.append_assoc, triggerEmptyAuthorizationCalldata] using hdata
 
 theorem triggerEmptyAuthorization_arrayLength
     {sevm : Sevm} {refundRecipient : Adr} {exitType : B256}
@@ -255,10 +256,11 @@ theorem triggerEmptyAuthorization_arrayLength
       (Nat.toB256 0x60).toBytes ++ refundRecipient.toB256.toBytes ++
       exitType.toBytes)
     (post := [])
-  · simp [abiSelectorBytes_length, B256.length_toBytes]
+  · simp only [List.append_assoc, List.length_append, abiSelectorBytes_length, B256.length_toBytes,
+    Nat.reduceAdd]
     rfl
   · rw [hdata, triggerEmptyAuthorizationCalldata]
-    simp [List.append_assoc]
+    simp only [List.append_assoc, List.append_nil, List.append_cancel_left_eq]
     rfl
 
 /-! These two helpers expose only the concrete effects of the trigger's fixed
@@ -279,7 +281,7 @@ private theorem triggerStoreWord_step
         (Bytes.writeAt image (word * 32).toNat value.toBytes) ∧
       pre.state = post.state := by
   have storeRun : Line.Run sevm pre (mstoreAt word) post := by
-    simpa [Trigger.storeWord] using run
+    simpa only [Trigger.storeWord] using run
   obtain ⟨stack, memory⟩ := of_run_mstoreAt_val storeRun hp
   refine ⟨stack, ?_, ?_, Line.of_inv Devm.state (by line_inv) storeRun⟩
   · rw [memory]
@@ -316,7 +318,7 @@ private theorem triggerLoadWord_step
     prefix_of_mload_val loadRun pPush pushReads
   refine ⟨?_, ?_, ?_, Line.of_inv Devm.state (by line_inv)
     (Line.Run.cons pushRun (Line.Run.cons loadRun Line.Run.nil))⟩
-  · simpa [hvalue] using loaded
+  · simpa only [hvalue, List.append_eq, List.nil_append] using loaded
   · rw [memory]
     exact pushWf.extend _ _
   · rw [memory]
@@ -418,7 +420,8 @@ private theorem validator_step_size
     exact triggerEmptyAuthorizationCalldata_length refundRecipient exitType
   have hflag : (Nat.toB256 sevm.data.length <? (100 : B256)) = 0 := by
     rw [hlen]; decide
-  have g : (0 : B256) :: tail <<+ s3.stack := by simpa [hflag] using p3
+  have g : (0 : B256) :: tail <<+ s3.stack := by simpa only [hflag, List.append_eq,
+    List.nil_append] using p3
   obtain ⟨next, nextRun, pNext, stateNext, memNext⟩ :=
     trigger_guard_passes g run
   refine ⟨next, nextRun, pNext, ?_, ?_⟩
@@ -458,7 +461,8 @@ private theorem validator_step_address
   simp only [rebaseLocalCalls_prepend] at run
   have r1 := Ninst.Run.of_runCompiled q1
   have p1 : Nat.toB256 132 :: tail <<+ s1.stack := by
-    simpa [hlen] using prefix_of_push (of_run_calldatasize r1) hp
+    simpa only [hlen, List.cons_append, List.nil_append] using
+      prefix_of_push (of_run_calldatasize r1) hp
   have wf1 : Mem.Wf s1.memory := by
     rw [← Ninst.Hinv.inv (f := Devm.memory) r1]; exact hwf
   have reads1 : Mem.Reads s1.memory image := by
@@ -550,13 +554,12 @@ private theorem validator_step_offset
   obtain ⟨s6, arg0Run, run⟩ := runCompiledTo_prepend_inv run
   have p6 : (0x60 : B256) :: Trigger.maxUint64 :: tail <<+ s6.stack := by
     rw [← triggerEmptyAuthorization_arg0 hdata]
-    simpa using prefix_of_arg p5 arg0Run
+    simpa only [List.cons_append, List.nil_append] using prefix_of_arg p5 arg0Run
   obtain ⟨s7, q7, run⟩ := runCompiledTo_next_inv run
   have r7 := Ninst.Run.of_runCompiled q7
   have p7 := prefix_of_gt r7 p6
   have g : (0 : B256) :: tail <<+ s7.stack := by
-    simpa [show ((0x60 : B256) >? Trigger.maxUint64) = 0 from by decide]
-      using p7
+    simpa only [show ((0x60 : B256) >? Trigger.maxUint64) = 0 from by decide] using p7
   obtain ⟨next, nextRun, pNext, stateNext, memNext⟩ :=
     trigger_guard_passes g run
   have mem5 : s4.memory = s5.memory := Ninst.Hinv.inv (f := Devm.memory) r5
@@ -629,8 +632,7 @@ private theorem validator_step_header
   have r5 := Ninst.Run.of_runCompiled q5
   have p4 := prefix_of_push (of_run_pushB256 r4) p3
   have p5 : (100 : B256) :: tail <<+ s5.stack := by
-    simpa [show ((4 : B256) + 0x60) = 100 from by decide]
-      using prefix_of_add r5 p4
+    simpa only [show ((4 : B256) + 0x60) = 100 from by decide] using prefix_of_add r5 p4
   have wf5 : Mem.Wf s5.memory := by
     rw [← Ninst.Hinv.inv (f := Devm.memory) r5,
       ← Ninst.Hinv.inv (f := Devm.memory) r4]
@@ -669,8 +671,7 @@ private theorem validator_step_header
   have r9 := Ninst.Run.of_runCompiled q9
   have p8 := prefix_of_push (of_run_pushB256 r8) p7
   have p9 : (132 : B256) :: tail <<+ s9.stack := by
-    simpa [show ((32 : B256) + 100) = 132 from by decide]
-      using prefix_of_add r9 p8
+    simpa only [show ((32 : B256) + 100) = 132 from by decide] using prefix_of_add r9 p8
   have wf9 : Mem.Wf s9.memory := by
     rw [← Ninst.Hinv.inv (f := Devm.memory) r9,
       ← Ninst.Hinv.inv (f := Devm.memory) r8]
@@ -690,8 +691,7 @@ private theorem validator_step_header
   obtain ⟨s11, q11, run⟩ := runCompiledTo_next_inv run
   have r11 := Ninst.Run.of_runCompiled q11
   have g : (0 : B256) :: tail <<+ s11.stack := by
-    simpa [show ((Nat.toB256 132 : B256) <? 132) = 0 from by decide]
-      using prefix_of_lt r11 p10
+    simpa only [show ((Nat.toB256 132 : B256) <? 132) = 0 from by decide] using prefix_of_lt r11 p10
   obtain ⟨next, nextRun, pNext, stateNext, memNext⟩ :=
     trigger_guard_passes g run
   refine ⟨next,
@@ -750,8 +750,8 @@ private theorem validator_step_count
   cases hnil
   have p1 : (0 : B256) :: tail <<+ s1.stack := by
     rw [← triggerEmptyAuthorization_arrayLength hdata]
-    simpa [show (Nat.toB256 100 : B256) = 100 from by decide]
-      using prefix_of_calldataload_val clStep pm
+    simpa only [show (Nat.toB256 100 : B256) = 100 from by decide] using
+      prefix_of_calldataload_val clStep pm
   have wf1 : Mem.Wf s1.memory := by
     rw [← Ninst.Hinv.inv (f := Devm.memory) clStep]; exact wfm
   have reads1 : Mem.Reads s1.memory image := by
@@ -788,8 +788,8 @@ private theorem validator_step_count
   obtain ⟨s5, q5, run⟩ := runCompiledTo_next_inv run
   have r5 := Ninst.Run.of_runCompiled q5
   have g : (0 : B256) :: tail <<+ s5.stack := by
-    simpa [show ((0 : B256) >? Trigger.maxUint64) = 0 from by decide]
-      using prefix_of_gt r5 p4
+    simpa only [show ((0 : B256) >? Trigger.maxUint64) = 0 from by decide, List.append_eq,
+      List.nil_append] using prefix_of_gt r5 p4
   obtain ⟨next, nextRun, pNext, stateNext, memNext⟩ :=
     trigger_guard_passes g run
   refine ⟨next, Bytes.writeAt image 160 (0 : B256).toBytes,
@@ -835,8 +835,7 @@ private theorem validator_step_bounds
   have r3 := Ninst.Run.of_runCompiled q3
   have p2 := prefix_of_push (of_run_pushB256 r2) p1
   have p3 : (132 : B256) :: tail <<+ s3.stack := by
-    simpa [show ((32 : B256) + Nat.toB256 100) = 132 from by decide]
-      using prefix_of_add r3 p2
+    simpa only [show ((32 : B256) + Nat.toB256 100) = 132 from by decide] using prefix_of_add r3 p2
   have wf3 : Mem.Wf s3.memory := by
     rw [← Ninst.Hinv.inv (f := Devm.memory) r3,
       ← Ninst.Hinv.inv (f := Devm.memory) r2]
@@ -881,11 +880,9 @@ private theorem validator_step_bounds
   have r9 := Ninst.Run.of_runCompiled q9
   have p7 := prefix_of_push (of_run_pushB256 r7) p6
   have p8 : (0 : B256) :: (132 : B256) :: tail <<+ s8.stack := by
-    simpa [show ((32 : B256) * 0) = 0 from by decide]
-      using prefix_of_mul r8 p7
+    simpa only [show ((32 : B256) * 0) = 0 from by decide] using prefix_of_mul r8 p7
   have p9 : (132 : B256) :: tail <<+ s9.stack := by
-    simpa [show ((0 : B256) + 132) = 132 from by decide]
-      using prefix_of_add r9 p8
+    simpa only [show ((0 : B256) + 132) = 132 from by decide] using prefix_of_add r9 p8
   have wf9 : Mem.Wf s9.memory := by
     rw [← Ninst.Hinv.inv (f := Devm.memory) r9,
       ← Ninst.Hinv.inv (f := Devm.memory) r8,
@@ -906,8 +903,7 @@ private theorem validator_step_bounds
   obtain ⟨s11, q11, run⟩ := runCompiledTo_next_inv run
   have r11 := Ninst.Run.of_runCompiled q11
   have g : (0 : B256) :: tail <<+ s11.stack := by
-    simpa [show ((Nat.toB256 132 : B256) <? 132) = 0 from by decide]
-      using prefix_of_lt r11 p10
+    simpa only [show ((Nat.toB256 132 : B256) <? 132) = 0 from by decide] using prefix_of_lt r11 p10
   obtain ⟨next, nextRun, pNext, stateNext, memNext⟩ :=
     trigger_guard_passes g run
   refine ⟨next, Bytes.writeAt image 128 (132 : B256).toBytes,
@@ -1285,7 +1281,7 @@ theorem triggerCoreFlatRoleGuard_route
       (congrFun keyStor sevm.currentTarget).symm
   by_cases hnonzero : membership ≠ 0
   · have pZero : (0 : B256) :: tail <<+ testPre.stack := by
-      simpa [B256.eqCheck, hnonzero] using pTest
+      simpa only [B256.eqCheck, hnonzero, ↓reduceIte] using pTest
     obtain ⟨bodyPre, hpop, bodyRun, pBody⟩ :=
       Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
     have bodyStor : Devm.getStor pre = Devm.getStor bodyPre :=
@@ -1311,9 +1307,9 @@ theorem triggerCoreFlatRoleGuard_route
       rw [← membershipAtEntry]
       exact hnonzero
     exact .authorized bodyPre hasRole bodyRun pBody bodyStor bodyBal
-  · have hzero : membership = 0 := by simpa using hnonzero
+  · have hzero : membership = 0 := by simpa only [ne_eq, Decidable.not_not] using hnonzero
     have pOne : (1 : B256) :: tail <<+ testPre.stack := by
-      simpa [B256.eqCheck, hzero] using pTest
+      simpa only [B256.eqCheck, hzero, ↓reduceIte] using pTest
     obtain ⟨callPre, _, -, hpop, callRun, pCall⟩ :=
       Func.RunCompiledTo.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) pOne branchRun
@@ -1406,10 +1402,10 @@ theorem triggerAuthorizedContinuation_paused_route
     exact Ninst.Hinv.inv (f := fun d => d.getBal sevm.currentTarget) rcallvalue
   have pBalance : pre.getBal sevm.currentTarget :: sevm.value :: tail <<+
       balancePost.stack := by
-    simpa [← balancePreserved] using pBalance0
+    simpa only [← balancePreserved, List.cons_append, List.nil_append] using pBalance0
   have pBalanceTest := prefix_of_lt rlt pBalance
   have pBalanceZero : (0 : B256) :: tail <<+ balanceTest.stack := by
-    simpa [hbalance] using pBalanceTest
+    simpa only [hbalance] using pBalanceTest
   obtain ⟨afterBalance, hbalancePop, run, pAfterBalance⟩ :=
     Func.RunCompiledTo.zero_branch_of_prefix pBalanceZero balanceBranch
   have afterBalanceStor : Devm.getStor pre = Devm.getStor afterBalance :=
@@ -1433,7 +1429,7 @@ theorem triggerAuthorizedContinuation_paused_route
   have pDifference := prefix_of_sub rsub pBalance2
   have storeWordRun : Line.Run sevm differencePost
       (mstoreAt Trigger.balanceBeforeWord) afterStore := by
-    simpa [Trigger.storeWord] using storeRun
+    simpa only [Trigger.storeWord] using storeRun
   have pAfterStore := prefix_of_mstoreAt storeWordRun pDifference
   have storeStor : Devm.getStor afterBalance = Devm.getStor afterStore :=
     (Ninst.Hinv.inv (f := Devm.getStor) rcallvalue2).trans
@@ -1467,7 +1463,7 @@ theorem triggerAuthorizedContinuation_paused_route
         pauseTest.stack := pPauseTest
   obtain ⟨callPre, _, -, hpausePop, callRun, pCall⟩ :=
     Func.RunCompiledTo.succ_branch_of_prefix
-      (by simpa [hResumeSinceAtEntry] using hpaused)
+      (by simpa only [hResumeSinceAtEntry, ne_eq] using hpaused)
       pPauseNonzero pauseBranch
   have callStor : Devm.getStor pre = Devm.getStor callPre :=
     resumeLoadStor.trans
@@ -1581,7 +1577,8 @@ theorem triggerFullWithdrawals_selected_paused_not_ok
     have pBalance :
         authorizedPre.getBal sevm.currentTarget :: sevm.value :: [] <<+
           balancePost.stack := by
-      simpa [← balancePreserved] using pBalance0
+      simpa only [← balancePreserved, List.append_nil, List.cons_append, List.nil_append] using
+        pBalance0
     have pBalanceTest := prefix_of_lt rlt pBalance
     obtain ⟨_afterBalance, balanceZero, _balancePop, _restRun, _tail⟩ :=
       Func.RunCompiledTo.zero_branch_of_ok_of_right_not_ok_of_prefix

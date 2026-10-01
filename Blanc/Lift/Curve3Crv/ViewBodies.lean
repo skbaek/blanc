@@ -40,12 +40,14 @@ private theorem word_tail (hfork : CoveredFork sevm.benvStat.fork) {M : Mem} {im
     exact sliceD_word_same _ _ _
   refine ⟨((St (afterSload sevm b k) [] (M.write 0 (b.getStorVal sevm.currentTarget k).toBytes)
     G).memRead 0 32).2.withOutput (b.getStorVal sevm.currentTarget k).toBytes,
-    rx_sload_sel hfork (by simp) ?_, rfl, ?_⟩
-  · refine rx_push (w := 0) rfl (by simp) ?_
+    rx_sload_sel hfork (by simp only [List.length_nil, Nat.ofNat_pos]) ?_, rfl, ?_⟩
+  · refine rx_push (w := 0) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.one_lt_ofNat]) ?_
     refine rx_mstore (c := 3) ?_ rfl ?_
     · rw [h0, St, Devm.extCost_zero_of_le hn32 (by omega)]; rfl
-    refine rx_push (w := 32) rfl (by simp) ?_
-    refine rx_push (w := 0) rfl (by simp) ?_
+    refine rx_push (w := 32) rfl (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+    refine rx_push (w := 0) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+      Nat.one_lt_ofNat]) ?_
     refine rx_return ?_ hread
     rw [h0, h32, St, Devm.extCost_zero_of_le (by rw [hsz]; exact hn32) (by rw [hsz]; omega)]
   · refine ⟨?_, fun a _ => ?_, ?_, fun o ho => ?_, fun h => by cases h⟩
@@ -79,14 +81,14 @@ theorem live_totalSupply (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
   unfold entrySt t_0240_c0
   rw [show G + (34 + sloadCost sevm b vySupplySlot) =
     G + 3 + 3 + 3 + 3 + sloadCost sevm b vySupplySlot + 3 + 1 + 10 + 3 + 3 + 2 by omega]
-  refine rx_callvalue (by simp) ?_
+  refine rx_callvalue (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   rw [hv]
-  refine rx_iszero (v := 1) (by simp [B256.eqCheck]) (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_iszero (v := 1) (by simp only [B256.eqCheck, ↓reduceIte]) (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_024a_c0
   refine rx_dest ?_
-  refine rx_push (w := vySupplySlot) rfl (by simp) ?_
+  refine rx_push (w := vySupplySlot) rfl (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   exact hrun
 
 /-- `decimals()`: 34 gas and the `SLOAD` of slot 2. -/
@@ -103,8 +105,9 @@ theorem live_decimals (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
   unfold entrySt
   rw [show G + (34 + sloadCost sevm b vyDecimalsSlot) =
     G + 3 + 3 + 3 + 3 + sloadCost sevm b vyDecimalsSlot + 3 + 19 by omega]
-  refine rx_vyNonpayable (h := 0x08) (l := 0x88) (fail := t_0884_c0) hv (by simp) ?_
-  refine rx_push (w := vyDecimalsSlot) rfl (by simp) ?_
+  refine rx_vyNonpayable (h := 0x08) (l := 0x88) (fail := t_0884_c0) hv (by simp only [List.length_nil,
+    zero_add, Nat.reduceLT]) ?_
+  refine rx_push (w := vyDecimalsSlot) rfl (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   exact hrun
 
 /-- `balanceOf(a)`: the non-payable guard, the address clamp, the slot `keccak(3 ‖ a)`, 140 gas
@@ -132,14 +135,18 @@ theorem live_balanceOf (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
   rw [show G + (140 + sloadCost sevm b (mapSlot 3 a)) =
     G + 3 + 3 + 3 + 3 + sloadCost sevm b (mapSlot 3 a) + 42 + 3 + 3 + 3 + 3 + 9 + 3 + 3 + 3 + 3
       + 34 + 19 by omega]
-  refine rx_vyNonpayable (h := 0x08) (l := 0xaf) (fail := t_08ab_c0) hv (by simp) ?_
+  refine rx_vyNonpayable (h := 0x08) (l := 0xaf) (fail := t_08ab_c0) hv (by simp only [List.length_nil,
+    zero_add, Nat.reduceLT]) ?_
   refine rx_vyAddrArg (p := 0x04) (h := 0x08) (l := 0xc0) (fail := t_08bc_c0) (entry_reads sevm)
-    (vyImg_clamps _ _) (by rw [hM]) (by rw [hM]; omega) (by rw [ha4]; exact ha) (by simp) ?_
-  refine rx_push (w := 3) rfl (by simp) ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_calldataload (by simp) ?_
+    (vyImg_clamps _ _) (by rw [hM]) (by rw [hM]; omega) (by rw [ha4]; exact ha) (by simp only [List.length_nil,
+      zero_add, Nat.reduceLT]) ?_
+  refine rx_push (w := 3) rfl (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_calldataload (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.one_lt_ofNat]) ?_
   rw [ha4]
-  exact rx_vySlot (c1 := 9) hM (by omega) (by decide) (by decide) (by simp) hrun
+  exact rx_vySlot (c1 := 9) hM (by omega) (by decide) (by decide) (by simp only [List.length_nil,
+    zero_add, Nat.reduceLT]) hrun
 
 /-- `allowance(o, p)`: the guard, two clamps, the nested slot `keccak(keccak(4 ‖ o) ‖ p)`, 240 gas
 and its `SLOAD`. -/
@@ -176,20 +183,27 @@ theorem live_allowance (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
   rw [show G + (240 + sloadCost sevm b k) =
     G + 3 + 3 + 3 + 3 + sloadCost sevm b k + 42 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 42 + 3 + 3 + 3
       + 3 + 9 + 3 + 3 + 3 + 3 + 34 + 34 + 19 by omega]
-  refine rx_vyNonpayable (h := 0x02) (l := 0x71) (fail := t_026d_c0) hv (by simp) ?_
+  refine rx_vyNonpayable (h := 0x02) (l := 0x71) (fail := t_026d_c0) hv (by simp only [List.length_nil,
+    zero_add, Nat.reduceLT]) ?_
   refine rx_vyAddrArg (p := 0x04) (h := 0x02) (l := 0x82) (fail := t_027e_c0) (entry_reads sevm)
-    (vyImg_clamps _ _) (by rw [hM]) (by rw [hM]; omega) (by rw [ho4]; exact ho) (by simp) ?_
+    (vyImg_clamps _ _) (by rw [hM]) (by rw [hM]; omega) (by rw [ho4]; exact ho) (by simp only [List.length_nil,
+      zero_add, Nat.reduceLT]) ?_
   refine rx_vyAddrArg (p := 0x24) (h := 0x02) (l := 0x94) (fail := t_0290_c0) (entry_reads sevm)
-    (vyImg_clamps _ _) (by rw [hM]) (by rw [hM]; omega) (by rw [hq4]; exact hp) (by simp) ?_
-  refine rx_push (w := 4) rfl (by simp) ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_calldataload (by simp) ?_
+    (vyImg_clamps _ _) (by rw [hM]) (by rw [hM]; omega) (by rw [hq4]; exact hp) (by simp only [List.length_nil,
+      zero_add, Nat.reduceLT]) ?_
+  refine rx_push (w := 4) rfl (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_calldataload (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.one_lt_ofNat]) ?_
   rw [ho4]
-  refine rx_vySlot (c1 := 9) hM (by omega) (by decide) (by decide) (by simp) ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_calldataload (by simp) ?_
+  refine rx_vySlot (c1 := 9) hM (by omega) (by decide) (by decide) (by simp only [List.length_nil,
+    zero_add, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_calldataload (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.one_lt_ofNat]) ?_
   rw [hq4]
-  exact rx_vySlot (c1 := 3) hs1 (by omega) (by decide) (by decide) (by simp) hrun
+  exact rx_vySlot (c1 := 3) hs1 (by omega) (by decide) (by decide) (by simp only [List.length_nil,
+    zero_add, Nat.reduceLT]) hrun
 
 end
 

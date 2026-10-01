@@ -221,7 +221,7 @@ lemma Pre.child_of_outbound_transfer
     (h_value : sevm'.value = value) :
     c.Pre ca sevm' devm' := by
   exact pre_ofSem (ContractSpecSem.Pre.child_of_outbound_transfer (c := c.toSem)
-    (by simpa [ContractSpec.toSem, Prog.codeSem] using h_code)
+    (by simpa only [toSem, Prog.codeSem] using h_code)
     h_side h_inv h_sub h_state h_ct h_value)
 
 
@@ -363,7 +363,7 @@ def sound_toSem {c : ContractSpec} {ca : Adr} (h : c.Sound ca) :
   · intro pc' sevm' pre' post' hex hd hat hfork' hpw
     apply post_ofSem
     apply ih pc' sevm' pre' post' hex hd
-      (by simpa [Prog.codeSem, CodeSem.At, Prog.At, ContractSpec.toSem] using hat) hfork'
+      (by simpa only [CodeSem.At, toSem, Prog.codeSem, Prog.At] using hat) hfork'
       (preWf_toSem hpw)
   · exact hwf
   · exact pre_ofSem hpre
@@ -376,7 +376,7 @@ def soundNoMem_toSem {c : ContractSpec} {ca : Adr} (h : c.SoundNoMem ca) :
   · intro pc' sevm' pre' post' hex hd hat hfork' hpw
     apply post_ofSem
     apply ih pc' sevm' pre' post' hex hd
-      (by simpa [Prog.codeSem, CodeSem.At, Prog.At, ContractSpec.toSem] using hat) hfork'
+      (by simpa only [CodeSem.At, toSem, Prog.codeSem, Prog.At] using hat) hfork'
       (preWf_toSem hpw)
   · exact pre_ofSem hpre
 
@@ -386,7 +386,7 @@ def preserves_toSem {c : ContractSpec} {ca : Adr} (h : c.Preserves ca) :
   apply post_toSem
   apply h sevm pre post hfork hex
   · intro hca
-    simpa [Prog.codeSem, ContractSpec.toSem] using hcode hca
+    simpa only [toSem, Prog.codeSem] using hcode hca
   · exact hwf
   · exact pre_ofSem hpre
 
@@ -396,7 +396,7 @@ def preservesNoMem_toSem {c : ContractSpec} {ca : Adr}
   apply post_toSem
   apply h sevm pre post hfork hex
   · intro hca
-    simpa [Prog.codeSem, ContractSpec.toSem] using hcode hca
+    simpa only [toSem, Prog.codeSem] using hcode hca
   · exact pre_ofSem hpre
 
 def preserves_ofSem {c : ContractSpec} {ca : Adr}
@@ -405,7 +405,7 @@ def preserves_ofSem {c : ContractSpec} {ca : Adr}
   apply post_ofSem
   apply h sevm pre post hfork hex
   · intro hca
-    simpa [Prog.codeSem, ContractSpec.toSem] using hcode hca
+    simpa only [toSem, Prog.codeSem] using hcode hca
   · exact hwf
   · exact pre_toSem hpre
 
@@ -415,7 +415,7 @@ def preservesNoMem_ofSem {c : ContractSpec} {ca : Adr}
   apply post_ofSem
   apply h sevm pre post hfork hex
   · intro hca
-    simpa [Prog.codeSem, ContractSpec.toSem] using hcode hca
+    simpa only [toSem, Prog.codeSem] using hcode hca
   · exact pre_toSem hpre
 
 /-! ### The frame-level ladder
@@ -462,7 +462,7 @@ theorem exec_preserves_noMem (c : ContractSpec) (ca : Adr)
     (h_pc : c.Pre ca sevm pre) : c.Post ca sevm post :=
   post_ofSem (ContractSpecSem.exec_preserves_noMem_sem c.toSem ca
     (preservesNoMem_toSem hp) sevm pre post hfork h_run
-    (by simpa [ContractSpec.toSem, Prog.codeSem] using h_code)
+    (by simpa only [toSem, Prog.codeSem] using h_code)
     (pre_toSem h_pc))
 
 
@@ -972,7 +972,7 @@ def msgInv_toSem {c : ContractSpec} {wa : Adr} {msg : Msg}
     (h : c.MsgInv wa msg) : (c.toSem).MsgInv wa msg :=
   { state := stateInv_toSem h.state
     nodel := h.nodel
-    code := by simpa [ContractSpec.toSem, Prog.codeSem] using h.code
+    code := by simpa only [Option.isNone_eq_false_iff, toSem, Prog.codeSem] using h.code
     codeAddress := h.codeAddress
     ne := h.ne
     val0 := h.val0 }
@@ -981,7 +981,7 @@ def msgInv_ofSem {c : ContractSpec} {wa : Adr} {msg : Msg}
     (h : (c.toSem).MsgInv wa msg) : c.MsgInv wa msg :=
   { state := stateInv_ofSem h.state
     nodel := h.nodel
-    code := by simpa [ContractSpec.toSem, Prog.codeSem] using h.code
+    code := by simpa only [Option.isNone_eq_false_iff, toSem, Prog.codeSem] using h.code
     codeAddress := h.codeAddress
     ne := h.ne
     val0 := h.val0 }
@@ -1006,7 +1006,7 @@ lemma StateInv.of_exec_precond {wa : Adr} {sevm : Sevm} {pre post : Devm}
     c.StateInv wa post.state := by
   exact stateInv_ofSem (ContractSpecSem.StateInv.of_exec_precond (c := c.toSem)
     (preserves_toSem hp) hfork (pre_toSem h_pc)
-    (by simpa [ContractSpec.toSem, Prog.codeSem] using h_code) h_wf exc)
+    (by simpa only [toSem, Prog.codeSem] using h_code) h_wf exc)
 
 theorem processMessage_preserves_inv {wa : Adr} {msg : Msg} {evm : Devm}
     (hfork : CoveredFork msg.benv.stat.fork)
@@ -1019,7 +1019,7 @@ theorem processMessage_preserves_inv {wa : Adr} {msg : Msg} {evm : Devm}
     c.StateInv wa evm.state := by
   exact stateInv_ofSem (ContractSpecSem.processMessage_preserves_inv (c := c.toSem)
     hfork (preserves_toSem hp) h_run
-    (by simpa [ContractSpec.toSem, Prog.codeSem] using h_code) h_ne h_val0
+    (by simpa only [toSem, Prog.codeSem] using h_code) h_ne h_val0
     (stateInv_toSem h_inv))
 
 lemma MsgInv.pc {wa : Adr} {msg : Msg} {codeSrc : Adr → ByteArray}

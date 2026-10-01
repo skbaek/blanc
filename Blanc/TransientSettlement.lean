@@ -26,7 +26,7 @@ private theorem tra_getD_set_self (tra : Tra) (a : Adr) (s : Stor) :
     rw [hcmp]
     exact (Std.TreeMap.eq_empty_iff_isEmpty.mpr (by assumption)).symm
   · rw [Std.TreeMap.getD_insert]
-    simp
+    simp only [Std.compare_self, ↓reduceIte]
 
 private theorem tra_get_set_self (tra : Tra) (a : Adr) (k v : B256) :
     ((tra.setStorVal a k v).getD a .empty).get k = v := by
@@ -50,12 +50,12 @@ private theorem tra_get_set_other_address (tra : Tra)
     have hcmp : compare a b ≠ Ordering.eq := by
       intro h
       exact hab (compare_eq_iff_eq.mp h)
-    simp [hcmp]
+    simp only [hcmp, ↓reduceIte]
   · rw [Std.TreeMap.getD_insert]
     have hcmp : compare a b ≠ Ordering.eq := by
       intro h
       exact hab (compare_eq_iff_eq.mp h)
-    simp [hcmp]
+    simp only [hcmp, ↓reduceIte]
 
 /-- An actual successful TSTORE pops key then value, changes exactly the
 ordered transient cell `(currentTarget, key)`, leaves persistent state alone,
@@ -118,7 +118,7 @@ theorem tstore_run_cell
       · subst otherAddress
         apply tra_get_set_same_address
         intro hkey
-        exact hne (by simp [hkey])
+        exact hne (by simp only [hkey])
       · exact tra_get_set_other_address pre.transientStorage hadr
           key value otherKey
     constructor
@@ -136,7 +136,7 @@ theorem tstore_run_cell
     injection hr with hpost
     unfold assertDynamic Except.assert at ha
     by_cases hs : sevm.isStatic
-    · simp [hs] at ha
+    · simp only [hs, Bool.not_true, Bool.false_eq_true, ↓reduceIte, reduceCtorEq] at ha
     · exact finish hc (Bool.eq_false_iff.mpr hs) hpost
   | some rules =>
     rw [hrules] at hr
@@ -149,7 +149,7 @@ theorem tstore_run_cell
     injection hr with hpost
     unfold assertDynamic Except.assert at ha
     by_cases hs : sevm.isStatic
-    · simp [hs] at ha
+    · simp only [hs, Bool.not_true, Bool.false_eq_true, ↓reduceIte, reduceCtorEq] at ha
     · exact finish hc (Bool.eq_false_iff.mpr hs) hpost
 
 /-- An actual successful TLOAD pushes the selected `(currentTarget, key)`
@@ -183,8 +183,8 @@ theorem tload_run_cell
   constructor
   · have hstack := hpush.stack
     rw [← hb.stack] at hstack
-    simpa [Stack.Push, Split, d0, Devm.getTransVal,
-      Devm.transientStorage, Devm.stack] using hstack
+    simpa only [Devm.stack, Devm.getTransVal, Devm.transientStorage, Stack.Push, Split,
+      List.cons_append, List.nil_append] using hstack
   exact ⟨hf.transientStorage.symm, hf.state.symm, hf⟩
 
 /-! ## Opcode-proven direct call edges -/
@@ -232,7 +232,7 @@ theorem directCall_nonzero_spawn
   refine ⟨Xinst.step_call_nonzero_spawn hfork h_stk h_value h_ext h_del h_acc
     h_create h_split h_gas h_dynamic h_sender h_depth,
     rfl, rfl, rfl, rfl, rfl, ?_, ?_⟩
-  · simp [valueCallSpawnMsg, callMsg, h_dynamic]
+  · simp only [valueCallSpawnMsg, callMsg, h_dynamic, Bool.or_self]
   · have hf := accessDelegation_instructionFrame
       (addAccessedAddress
         (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) cw.toAdr) cw.toAdr
@@ -399,7 +399,8 @@ theorem cleanCall_childSettlement
       resumed.state = child.state ∧
       resumed.transientStorage = child.transientStorage := by
   have hlogs := Resume.call_logs hresume
-  rw [if_neg (by simpa using hclean)] at hlogs
+  rw [if_neg (by simpa only [Bool.not_eq_true, Option.isSome_eq_false_iff,
+    Option.isNone_iff_eq_none] using hclean)] at hlogs
   exact ⟨hlogs, Resume.call_state hresume,
     Resume.call_transientStorage hresume⟩
 
@@ -490,10 +491,10 @@ theorem preparedTransactionMessage_exists
   exact ⟨⟨intrinsicGas, calldataFloorGasCost, validationSender, sender,
     effectiveGasPrice, blobVersionedHashes, txBlobGasUsed, debitState, msg,
     messageState, output,
-    by simpa [Benv.beginTransaction] using hv,
-    by simpa [Benv.beginTransaction] using hc,
-    by simpa [Benv.beginTransaction] using Option.toExcept_eq_ok hd,
-    by simpa [Benv.beginTransaction] using hm,
+    by simpa only [Benv.beginTransaction] using hv,
+    by simpa only [Benv.beginTransaction] using hc,
+    by simpa only [Benv.beginTransaction] using Option.toExcept_eq_ok hd,
+    by simpa only [Benv.beginTransaction, Std.TreeMap.empty_eq_emptyc] using hm,
     hpm,
     hresult⟩⟩
 
@@ -509,7 +510,7 @@ theorem PreparedTransactionMessage.transientStorage_eq_empty
   unfold prepareMessage at hp
   split at hp
   all_goals injection hp with heq
-  all_goals simp [← heq]
+  all_goals simp only [← heq, Std.TreeMap.empty_eq_emptyc]
 
 /-! ## Top-level observable logs -/
 
@@ -523,7 +524,7 @@ private theorem processTopLevelAmsterdam_error_logs
   | error failure =>
     rw [hprepare] at run
     obtain ⟨error, devm⟩ := failure
-    cases error <;> simp [settleTopLevelPreparationFailure] at run
+    cases error <;> simp only [settleTopLevelPreparationFailure, Except.ok.injEq, Prod.mk.injEq, reduceCtorEq] at run
     all_goals rcases run with ⟨_, rfl⟩
     all_goals rfl
   | ok prepared =>
@@ -561,7 +562,7 @@ private theorem processTopLevelAmsterdam_error_logs
     · rw [if_pos clean] at hrest
       rcases Except.bind_eq_ok hrest with ⟨refund, hrefund, hfinal⟩
       cases hfinal
-      simp_all
+      simp_all only [Option.isNone_iff_eq_none, Option.isSome_none, Bool.false_eq_true]
     · rw [if_neg clean] at hrest
       cases hrest
       simp only [if_neg clean]
@@ -581,7 +582,8 @@ private theorem processMessageCall_create_error_logs
       · rw [if_pos clean] at hrest
         rcases Except.bind_eq_ok hrest with ⟨refund, hrefund, hfinal⟩
         cases hfinal
-        simp_all
+        simp_all only [Bool.or_eq_true, not_or, Bool.not_eq_true, Option.isNone_iff_eq_none,
+          Option.isSome_none, Bool.false_eq_true]
       · rw [if_neg clean] at hrest
         cases hrest
         simp only [if_neg clean]
@@ -601,7 +603,8 @@ private theorem processMessageCall_call_error_logs
       · rw [if_pos clean] at hrest
         rcases Except.bind_eq_ok hrest with ⟨refund, hrefund, hfinal⟩
         cases hfinal
-        simp_all
+        simp_all only [List.isEmpty_iff, Option.isNone_iff_eq_none, Option.isSome_none,
+          Bool.false_eq_true]
       · rw [if_neg clean] at hrest
         cases hrest
         simp only [if_neg clean]
@@ -613,7 +616,8 @@ private theorem processMessageCall_call_error_logs
       · rw [if_pos clean] at hrest
         rcases Except.bind_eq_ok hrest with ⟨refund, hrefund, hfinal⟩
         cases hfinal
-        simp_all
+        simp_all only [List.isEmpty_iff, Option.isNone_iff_eq_none, Option.isSome_none,
+          Bool.false_eq_true]
       · rw [if_neg clean] at hrest
         cases hrest
         simp only [if_neg clean]

@@ -128,10 +128,10 @@ private lemma allowanceTag_bits (x : UInt64) :
       allowanceTag.toBitVec := by rfl
   have hmask : tagMask.toBitVec &&& payloadMask.toBitVec = 0 := by rfl
   rw [htags, hmask]
-  simp
+  simp only [BitVec.ofNat_eq_ofNat, BitVec.and_zero, BitVec.or_zero]
 
 theorem balanceKey_region (a : Adr) : InRegion .balance (balanceKey a) := by
-  simp [InRegion, keyTag, balanceKey, regionTag, tagMask, Adr.toB256]
+  simp only [InRegion, keyTag, tagMask, balanceKey, Adr.toB256, UInt64.and_zero, regionTag]
 
 theorem nonceKey_region (a : Adr) : InRegion .nonce (nonceKey a) := by
   change tagMask &&& nonceTag = nonceTag

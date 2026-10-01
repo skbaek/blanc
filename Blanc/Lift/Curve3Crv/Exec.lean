@@ -40,7 +40,8 @@ theorem c3crv_exec {sevm : Sevm} {pre : Devm} {k : Nat} {ow : Option B256} {r : 
         Lands sevm pre post r := by
   obtain ⟨f, hf⟩ : ∃ f, bodies[k]? = some f := by
     have hlt : k < sels.length := (List.getElem?_eq_some_iff.mp hk).1
-    exact ⟨_, List.getElem?_eq_getElem (by simpa [sels, bodies] using hlt)⟩
+    exact ⟨_, List.getElem?_eq_getElem (by simpa only [bodies, List.length_cons, List.length_nil,
+      zero_add, Nat.reduceAdd, sels] using hlt)⟩
   obtain ⟨c, hc⟩ := live_at hfork hstatic hcd hk1 hf hr
   refine ⟨c + dispatchGas k, fun G hG => ?_⟩
   obtain ⟨post, hrun, hg, hl⟩ := hc G hG
@@ -70,7 +71,8 @@ theorem c3crv_step_exec {sevm : Sevm} {pre : Devm} {s : Curve3Crv.State} {K : Ke
   rw [hdec] at hfresh hok ⊢
   have hk13 : k < 13 := by
     have := (List.getElem?_eq_some_iff.mp hk).1
-    simpa [sels] using this
+    simpa only [gt_iff_lt, sels, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd] using
+      this
   obtain ⟨r, hr, hc⟩ := (refine_at (ow := ow) hk13 hinv hfresh).2 o hok
   obtain ⟨c, hx⟩ := c3crv_exec hcode hfork hstatic hk1 hk hlen hcd hr
   refine ⟨c, fun G hG => ?_⟩

@@ -24,7 +24,8 @@ stable three-byte instruction width. -/
 def pushB256AsPush2OrPush32 (word : B256) : Ninst :=
   let value := word.toNat
   if value < 2 ^ 16 then
-    Ninst.push [(value >>> 8).toUInt8, value.toUInt8] (by simp)
+    Ninst.push [(value >>> 8).toUInt8, value.toUInt8] (by simp only [Nat.toUInt8_eq,
+      List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLeDiff])
   else
     Ninst.push word.toBytes (by rw [B256.length_toBytes])
 
@@ -44,14 +45,15 @@ theorem Ninst.runCompiled_pushB256AsPush2OrPush32
   · let bytes : Bytes :=
       [(word.toNat >>> 8).toUInt8, word.toNat.toUInt8]
     have cost : pushCost bytes = gVerylow := by
-      simp [bytes, pushCost]
+      simp only [pushCost, Nat.toUInt8_eq, reduceCtorEq, ↓reduceIte, bytes]
     have pushed : Bytes.toB256 bytes = word := by
       change Bytes.toB256
         [(word.toNat >>> 8).toUInt8, word.toNat.toUInt8] = word
       rw [List.toB256_pair word.toNat fit, Jaune.toB256_toNat]
     have run := Ninst.runCompiled_pushBytes
       (sevm := sevm) (devm := devm) (xs := bytes)
-      (le := by simp [bytes]) (c := gVerylow) (G := G)
+      (le := by simp only [Nat.toUInt8_eq, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLeDiff, bytes]) (c := gVerylow) (G := G)
       cost gas room
     rw [CreationArtifact.pushB256AsPush2OrPush32, if_pos fit]
     simpa only [bytes, pushed] using run
@@ -65,7 +67,7 @@ theorem Ninst.runCompiled_pushB256AsPush2OrPush32
           have lengths := congrArg List.length empty
           simp only [B256.length_toBytes, List.length_nil] at lengths
           omega
-        simp [pushCost, hne]) gas room
+        simp only [pushCost, hne, ↓reduceIte]) gas room
     rw [CreationArtifact.pushB256AsPush2OrPush32, if_neg fit]
     simpa only [B256.toB256_toBytes] using run
 
@@ -195,7 +197,7 @@ theorem checkCreationCoordinates_isSome_of_cert
   split
   · rename_i h0
     rw [cert.provisional_compile] at h0
-    exact absurd h0 (by simp)
+    exact absurd h0 (by simp only [reduceCtorEq, not_false_eq_true])
   · rename_i b0 h0
     rw [cert.provisional_compile] at h0
     have hb0 : b0 = cert.provisionalBytes := by
@@ -207,7 +209,7 @@ theorem checkCreationCoordinates_isSome_of_cert
     split
     · rename_i h1
       rw [hlen, cert.final_compile] at h1
-      exact absurd h1 (by simp)
+      exact absurd h1 (by simp only [reduceCtorEq, not_false_eq_true])
     · rename_i b1 h1
       rw [hlen, cert.final_compile] at h1
       have hb1 : b1 = cert.finalBytes := by

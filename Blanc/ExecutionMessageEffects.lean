@@ -168,9 +168,9 @@ private theorem setDelegation_benv_stat
     ⟨⟨loopMsg, loopRefund⟩, loop, rest⟩
   have stat := setDelegationLoop_benv_stat loop
   cases codeAddress : loopMsg.codeAddress with
-  | none => simp [codeAddress] at rest
+  | none => simp only [codeAddress, Except.bind_error, reduceCtorEq] at rest
   | some address =>
-      simp [codeAddress] at rest
+      simp only [codeAddress, Except.bind_ok, Except.ok.injEq, Prod.mk.injEq] at rest
       rcases rest with ⟨rfl, rfl⟩
       exact stat
 
@@ -184,9 +184,9 @@ theorem setDelegation_getStor_eq
     ⟨⟨loopMsg, loopRefund⟩, loop, rest⟩
   have storage := setDelegationLoop_getStor_eq loop
   cases codeAddress : loopMsg.codeAddress with
-  | none => simp [codeAddress] at rest
+  | none => simp only [codeAddress, Except.bind_error, reduceCtorEq] at rest
   | some address =>
-      simp [codeAddress] at rest
+      simp only [codeAddress, Except.bind_ok, Except.ok.injEq, Prod.mk.injEq] at rest
       rcases rest with ⟨rfl, rfl⟩
       exact storage
 
@@ -200,9 +200,9 @@ theorem setDelegation_bal_eq
     ⟨⟨loopMsg, loopRefund⟩, loop, rest⟩
   have balance := setDelegationLoop_bal_eq loop
   cases codeAddress : loopMsg.codeAddress with
-  | none => simp [codeAddress] at rest
+  | none => simp only [codeAddress, Except.bind_error, reduceCtorEq] at rest
   | some address =>
-      simp [codeAddress] at rest
+      simp only [codeAddress, Except.bind_ok, Except.ok.injEq, Prod.mk.injEq] at rest
       rcases rest with ⟨rfl, rfl⟩
       exact balance
 
@@ -269,7 +269,7 @@ theorem messageCallDelegation_fields
   split at run
   · simp only [Except.ok.injEq, Prod.mk.injEq] at run
     rcases run with ⟨rfl, rfl⟩
-    simp
+    simp only [and_self]
   · rcases Except.bind_eq_ok run with
       ⟨⟨delegated', refundWord⟩, delegatedRun, rest⟩
     simp only [Except.ok.injEq, Prod.mk.injEq] at rest
@@ -385,7 +385,7 @@ theorem messageCreateCollision_false_getStor_eq_empty
       (msg.benv.state.getStor msg.currentTarget).isEmpty = true := by
     have noStorage := collision.2
     unfold accountHasStorage at noStorage
-    simpa using noStorage
+    simpa only [Bool.not_eq_eq_eq_not, Bool.not_false] using noStorage
   exact Std.TreeMap.eq_empty_of_isEmpty isEmpty
 
 /-- A successful create-collision wrapper leaves the world state unchanged. -/
@@ -532,25 +532,23 @@ theorem MsgInv.processCreateMessage_msg
     c.MsgInv ca (processCreateMessage.msg msg) := by
   have state : c.StateInv ca
       (processCreateMessage.msg msg).benv.state := by
-    simpa [processCreateMessage.msg, Msg.withBenv,
-      addCreatedAccount, Benv.setStor, Benv.incrNonce] using
-      (ContractSpec.StateInv.incrNonce
-        (ContractSpec.StateInv.setStor_ne targetNe ready.state))
+    simpa only [processCreateMessage.msg, Msg.withBenv, Benv.incrNonce, addCreatedAccount,
+      Benv.setStor] using
+      (ContractSpec.StateInv.incrNonce (ContractSpec.StateInv.setStor_ne targetNe ready.state))
   refine ⟨state, ?_, ?_, ?_, ?_, ?_⟩
   · refine ⟨?_, ?_⟩
-    · simpa [processCreateMessage.msg, Msg.withBenv,
-        addCreatedAccount, Benv.setStor, Benv.incrNonce,
-        targetNe] using ready.nodel.ca
+    · simpa only [processCreateMessage.msg, Msg.withBenv, Benv.incrNonce, addCreatedAccount,
+      Benv.setStor, Std.HashSet.mem_insert, beq_iff_eq, targetNe, false_or] using ready.nodel.ca
     · exact fun empty => Prog.compile_ne_nil
         (state.code.symm.trans (congrArg some empty))
   · intro target
-    simp [processCreateMessage.msg, Msg.withBenv, targetNone] at target
+    simp only [processCreateMessage.msg, Msg.withBenv, targetNone, Bool.true_eq_false] at target
   · intro target
-    simp [processCreateMessage.msg, Msg.withBenv, targetNone] at target
-  · simpa [processCreateMessage.msg, Msg.withBenv] using ready.ne
+    simp only [processCreateMessage.msg, Msg.withBenv, targetNone, Bool.true_eq_false] at target
+  · simpa only [processCreateMessage.msg, Msg.withBenv, ne_eq] using ready.ne
   · intro _ current
     exact False.elim (targetNe (by
-      simpa [processCreateMessage.msg, Msg.withBenv] using current))
+      simpa only [processCreateMessage.msg, Msg.withBenv] using current))
 
 /-- Contract message invariants survive the normalized EIP-7702 prefix. -/
 theorem MsgInv.of_messageCallDelegation

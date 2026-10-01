@@ -21,7 +21,7 @@ theorem checkLiveCovered_setEntryAt {entries : List LidoCircuitBreaker.Entry}
     checkLiveCovered (setEntryAt index (target, newPauser) entries) probes = true := by
   rw [checkLiveCovered_eq_true] at hcover ⊢
   induction entries generalizing index with
-  | nil => simp [setEntryAt]
+  | nil => simp only [setEntryAt, List.not_mem_nil, IsEmpty.forall_iff, implies_true]
   | cons e rest ih =>
       cases index with
       | zero =>
@@ -29,13 +29,13 @@ theorem checkLiveCovered_setEntryAt {entries : List LidoCircuitBreaker.Entry}
           simp only [setEntryAt, List.mem_cons] at hx
           rcases hx with rfl | hx
           · exact ⟨ht, hn⟩
-          · exact hcover x (by simp [hx])
+          · exact hcover x (by simp only [List.mem_cons, hx, or_true])
       | succ index =>
           intro x hx
           simp only [setEntryAt, List.mem_cons] at hx
           rcases hx with rfl | hx
-          · exact hcover x (by simp)
-          · exact ih (fun x hx => hcover x (by simp [hx])) x hx
+          · exact hcover x (by simp only [List.mem_cons, true_or])
+          · exact ih (fun x hx => hcover x (by simp only [List.mem_cons, hx, or_true])) x hx
 
 /-- Lift the finite entry-32 observation through both heartbeat calls. The only
 extra separation check compares their two expiry slots against the same finite
@@ -79,9 +79,9 @@ theorem registerPauser_body_finite {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     (b := b) (ra := ra) (xs := base) (D := post)
   · intro _ _
     rw [hp0]
-    exact hsingle _ (by simp)
+    exact hsingle _ (by simp only [List.mem_cons, List.not_mem_nil, or_false, true_or])
   · intro _ _
-    exact hsingle _ (by simp)
+    exact hsingle _ (by simp only [List.mem_cons, List.not_mem_nil, or_false, or_true])
   · intro _ b' M' G' post' hs hm rmid
     have hw' : RegistryOn (solRegistryStorage (Devm.getStor b' sevm.currentTarget))
         entries probes := by rw [hs]; exact hw

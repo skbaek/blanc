@@ -256,12 +256,10 @@ theorem withdrawQuote_arithmetic_trace
       productOverTwoPow256TraceImage image amount denominator, ?_, quoteImage,
       productOverTwoPow256TraceImage_wordFrame image amount denominator,
       bodyState.trans quoteState, quoteRun⟩
-    · simpa [previewWithdrawN, denominator, assetsMax, maxWord_toNat,
-        assetFactorN_maxWord, stagedDenominator_toNat stable] using
-        ceilingFits
-    · simpa [previewWithdrawN, denominator, assetsMax, maxWord_toNat,
-        assetFactorN_maxWord, stagedDenominator_toNat stable] using
-        quoteStack
+    · simpa only [previewWithdrawN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
+      stagedDenominator_toNat stable] using ceilingFits
+    · simpa only [previewWithdrawN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
+      stagedDenominator_toNat stable] using quoteStack
   · rcases ordinaryArm with
       ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyState,
         bodyRun⟩
@@ -274,10 +272,10 @@ theorem withdrawQuote_arithmetic_trace
         bodyStack lookup bodyRun
     refine ⟨?_, quotePre, quoteImage, ?_, quoteMemImage, quoteFrame,
       bodyState.trans quoteState, quoteRun⟩
-    · simpa [previewWithdrawN, stagedDenominator_toNat stable,
-        stagedAssetFactor_toNat_of_ne_max assetsNotMax] using ceilingFits
-    · simpa [previewWithdrawN, stagedDenominator_toNat stable,
-        stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quoteStack
+    · simpa only [previewWithdrawN, stagedDenominator_toNat stable,
+      stagedAssetFactor_toNat_of_ne_max assetsNotMax] using ceilingFits
+    · simpa only [previewWithdrawN, stagedDenominator_toNat stable,
+      stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quoteStack
 
 /-- The `redeem` arithmetic suffix quotes exactly `floor(shares*X/D)` from the
 booked assets and supply and calls `redeemAfterQuote`.
@@ -327,12 +325,10 @@ theorem redeemQuote_arithmetic_trace
         bodyStack lookup bodyRun
     refine ⟨?_, quotePre, quoteImage, ?_, quoteMemImage, quoteFrame,
       bodyState.trans quoteState, quoteRun⟩
-    · simpa [previewRedeemN, convertToAssetsN, assetsMax, maxWord_toNat,
-        assetFactorN_maxWord, stagedDenominator_toNat stable] using
-        quotientFits
-    · simpa [previewRedeemN, convertToAssetsN, assetsMax, maxWord_toNat,
-        assetFactorN_maxWord, stagedDenominator_toNat stable] using
-        quoteStack
+    · simpa only [previewRedeemN, convertToAssetsN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
+      stagedDenominator_toNat stable] using quotientFits
+    · simpa only [previewRedeemN, convertToAssetsN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
+      stagedDenominator_toNat stable] using quoteStack
   · rcases ordinaryArm with
       ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyState,
         bodyRun⟩
@@ -345,10 +341,10 @@ theorem redeemQuote_arithmetic_trace
         bodyStack lookup bodyRun
     refine ⟨?_, quotePre, quoteImage, ?_, quoteMemImage, quoteFrame,
       bodyState.trans quoteState, quoteRun⟩
-    · simpa [previewRedeemN, convertToAssetsN, stagedDenominator_toNat stable,
-        stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quotientFits
-    · simpa [previewRedeemN, convertToAssetsN, stagedDenominator_toNat stable,
-        stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quoteStack
+    · simpa only [previewRedeemN, convertToAssetsN, stagedAssetFactor_toNat_of_ne_max assetsNotMax,
+      stagedDenominator_toNat stable] using quotientFits
+    · simpa only [previewRedeemN, convertToAssetsN, stagedAssetFactor_toNat_of_ne_max assetsNotMax,
+      stagedDenominator_toNat stable] using quoteStack
 
 /-! ## Outbound guards -/
 
@@ -518,13 +514,13 @@ theorem ownerHasShares_trace
   have balanceLarge : ¬ balance < shares := by
     intro balanceLt
     have onePrefix : (1 : B256) :: tail <<+ branchPre.stack := by
-      simpa [B256.ltCheck, balanceLt] using testPrefix
+      simpa only [B256.ltCheck, balanceLt, ↓reduceIte] using testPrefix
     obtain ⟨succArmPre, -, revertRun, -⟩ :=
       Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
     exact absurd revertRun Func.WalkInv.noRevert
   have zeroPrefix : (0 : B256) :: tail <<+ branchPre.stack := by
-    simpa [B256.ltCheck, balanceLarge] using testPrefix
+    simpa only [B256.ltCheck, balanceLarge, ↓reduceIte] using testPrefix
   obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
     Func.WalkInv.zero_branch_of_prefix zeroPrefix branchRun
   have bodyWf : Mem.Wf bodyPre.memory := by
@@ -955,13 +951,13 @@ theorem spendAllowance_trace
     have covered : ¬ allowance < amount := by
       intro allowanceLt
       have onePrefix : (1 : B256) :: tail <<+ coverBranchPre.stack := by
-        simpa [B256.ltCheck, allowanceLt] using coverTestPrefix
+        simpa only [B256.ltCheck, allowanceLt, ↓reduceIte] using coverTestPrefix
       obtain ⟨succArmPre, -, revertRun, -⟩ :=
         Func.WalkInv.succ_branch_of_prefix
           (by decide : (1 : B256) ≠ 0) onePrefix coverBranchRun
       exact absurd revertRun Func.WalkInv.noRevert
     have coverZeroPrefix : (0 : B256) :: tail <<+ coverBranchPre.stack := by
-      simpa [B256.ltCheck, covered] using coverTestPrefix
+      simpa only [B256.ltCheck, covered, ↓reduceIte] using coverTestPrefix
     obtain ⟨spendPre, coverPop, run, spendStack⟩ :=
       Func.WalkInv.zero_branch_of_prefix coverZeroPrefix coverBranchRun
     have spendWf : Mem.Wf spendPre.memory := by
@@ -1238,7 +1234,7 @@ theorem outboundAuthorization_trace
   by_cases ownerIsCaller : sevm.caller.toB256 = owner
   · -- The caller owns the shares: tail-call the burn directly.
     have onePrefix : (1 : B256) :: tail <<+ branchPre.stack := by
-      simpa [B256.eqCheck, ownerIsCaller] using testPrefix
+      simpa only [B256.eqCheck, ownerIsCaller, ↓reduceIte] using testPrefix
     obtain ⟨callPre, callPop, callRun, callStack⟩ :=
       Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
@@ -1269,7 +1265,7 @@ theorem outboundAuthorization_trace
       exact branchReads
   · -- Otherwise a staged allowance must cover the burn.
     have zeroPrefix : (0 : B256) :: tail <<+ branchPre.stack := by
-      simpa [B256.eqCheck, ownerIsCaller] using testPrefix
+      simpa only [B256.eqCheck, ownerIsCaller, ↓reduceIte] using testPrefix
     obtain ⟨spendPre, spendPop, spendRun, spendStack⟩ :=
       Func.WalkInv.zero_branch_of_prefix zeroPrefix branchRun
     have spendWf : Mem.Wf spendPre.memory := by
@@ -1476,13 +1472,13 @@ theorem outboundBurn_trace
   have supplyLarge : ¬ supply < shares := by
     intro supplyLt
     have onePrefix : (1 : B256) :: tail <<+ roomBranchPre.stack := by
-      simpa [B256.ltCheck, supplyLt] using roomTestPrefix
+      simpa only [B256.ltCheck, supplyLt, ↓reduceIte] using roomTestPrefix
     obtain ⟨revertPre, revertPop, revertRun, -⟩ :=
       Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix roomBranchRun
     exact absurd revertRun Func.WalkInv.noRevert
   have roomZeroPrefix : (0 : B256) :: tail <<+ roomBranchPre.stack := by
-    simpa [B256.ltCheck, supplyLarge] using roomTestPrefix
+    simpa only [B256.ltCheck, supplyLarge, ↓reduceIte] using roomTestPrefix
   obtain ⟨decrPre, roomPop, run, decrStack⟩ :=
     Func.WalkInv.zero_branch_of_prefix roomZeroPrefix roomBranchRun
   have decrWf : Mem.Wf decrPre.memory := by
@@ -1596,8 +1592,9 @@ theorem outboundBurn_trace
       (Bytes.writeAt image ((0 : B256) * 32).toNat shares.toBytes) := by
     rw [← eventPush.memory]; exact e4Reads
   obtain ⟨bodyStack, emitted⟩ :=
-    of_logWith_val (topics := [transferEvent, owner, 0]) (by simp)
-      (by simpa using e5Prefix) logRun
+    of_logWith_val (topics := [transferEvent, owner, 0]) (by simp only [List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.reduceMod])
+      (by simpa only [List.cons_append, List.nil_append] using e5Prefix) logRun
   obtain ⟨bodyWf, bodyReads⟩ := of_logWith_image e5Wf e5Reads logRun
   have logWindow : (e5.memory.read ((0 : B256) * 32).toNat
       ((1 : B256) * 32).toNat).1 = shares.toBytes := by
@@ -1810,7 +1807,8 @@ theorem outboundSettle_trace
   obtain ⟨returnLoadStack, emitted⟩ :=
     of_logWith_val
       (topics := [withdrawEvent, sevm.caller.toB256, receiver, owner])
-      (by simp) (by simpa using topicPrefix) logRun
+      (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Fin.isValue,
+        Fin.coe_ofNat_eq_mod, Nat.mod_succ]) (by simpa only [List.cons_append, List.nil_append] using topicPrefix) logRun
   obtain ⟨returnLoadWf, returnLoadReads⟩ := of_logWith_image w7Wf w7Reads logRun
   have dataWindow : (w7.memory.read ((0 : B256) * 32).toNat
       ((2 : B256) * 32).toNat).1 = assets.toBytes ++ shares.toBytes := by

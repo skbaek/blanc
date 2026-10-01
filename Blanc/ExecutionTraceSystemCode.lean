@@ -37,7 +37,7 @@ theorem RetainedXlot.rawFrames_target_of_reach {slot : Xlot} (retained : Retaine
     (ht : frame.inner.currentTarget = t) :
     ∀ root ∈ retained.rawFrames, root.sevm.currentTarget = t := by
   cases retained with
-  | none => intro root member; simp [RetainedXlot.rawFrames] at member
+  | none => intro root member; simp only [rawFrames, List.not_mem_nil] at member
   | @some pc sevm pre execution run =>
       obtain ⟨henter, _⟩ := RunFrame.some_inv hrun
       have hpc : pc = 0 := Frame.enter_run_pc henter
@@ -57,8 +57,8 @@ theorem MessageCallTrace.rawFrames_target_of_reach
       SpawnFreeReach (messageCallExecutionMessage delegated).code) :
     ∀ root ∈ trace.rawFrames, root.sevm.currentTarget = msg.currentTarget := by
   cases trace with
-  | createCollision => intro root member; simp [MessageCallTrace.rawFrames] at member
-  | createRun target => simp [htarget] at target
+  | createCollision => intro root member; simp only [rawFrames, List.not_mem_nil] at member
+  | createRun target => simp only [htarget, Bool.false_eq_true] at target
   | callRun target delegated refund delegation execMsg execMsgEq evm core coreTrace result =>
       subst execMsgEq
       refine RetainedXlot.rawFrames_target_of_reach coreTrace.retained coreTrace.run
@@ -75,11 +75,12 @@ theorem SystemMessageTrace.rawFrames_target_of_code
     (hnd : ¬ isValidDelegation (benv.state.getCode target)) :
     ∀ root ∈ trace.rawFrames, root.sevm.currentTarget = target := by
   have htarget : (systemTransactionMessage benv target data).target.isNone = false := by
-    simp [systemTransactionMessage, processSystemTransactionMsg]
+    simp only [systemTransactionMessage, processSystemTransactionMsg, Option.isNone_some]
   refine trace.message.rawFrames_target_of_reach htarget ?_
   intro delegated refund hdel
   have hauths : (systemTransactionMessage benv target data).tenv.stat.auths.isEmpty = true := by
-    simp [systemTransactionMessage, processSystemTransactionMsg, processSystemTransactionTenv]
+    simp only [systemTransactionMessage, processSystemTransactionMsg, processSystemTransactionTenv,
+      Std.TreeMap.empty_eq_emptyc, List.isEmpty_nil]
   have hdelegated : delegated = systemTransactionMessage benv target data := by
     unfold messageCallDelegation at hdel
     simp only [hauths, ↓reduceIte] at hdel
@@ -88,7 +89,7 @@ theorem SystemMessageTrace.rawFrames_target_of_code
   have hnone : getDelegatedCodeAddress (systemTransactionMessage benv target data).code = none := by
     rw [hcode]
     have h : ¬ isValidDelegation (benv.state.getCode target) := hnd
-    simp [getDelegatedCodeAddress, h]
+    simp only [getDelegatedCodeAddress, h, ↓reduceIte]
   subst hdelegated
   unfold messageCallExecutionMessage
   rw [hnone]
@@ -144,10 +145,12 @@ theorem RequestsTrace.systemFrames_of_installed
       simp only [RequestsTrace.rawFrames, List.mem_append]
       exact Or.inr member)
   have hW := trace.withdrawal.rawFrames_target_of_installed
-    (c := withdrawalRequestCode) (by simp [systemContracts]) installed
+    (c := withdrawalRequestCode) (by simp only [systemContracts, List.mem_cons, Prod.mk.injEq,
+      List.not_mem_nil, or_false, true_or, or_true]) installed
   have installedW := trace.withdrawal.installed_keep hfork installed avoidW
   have hC := trace.consolidation.rawFrames_target_of_installed
-    (c := consolidationRequestCode) (by simp [systemContracts]) installedW
+    (c := consolidationRequestCode) (by simp only [systemContracts, List.mem_cons, Prod.mk.injEq,
+      List.not_mem_nil, or_false, or_true]) installedW
   have installedC := trace.consolidation.installed_keep
     (benv := benv.withState trace.withdrawalState) hfork installedW avoidC
   refine ⟨?_, ?_⟩
@@ -198,11 +201,13 @@ theorem AppliedBodyTrace.systemFrames_of_installed
       exact Or.inr member)
   -- the beacon-roots message, then the history-storage message
   have hBeacon := trace.beacon.rawFrames_target_of_installed
-    (c := beaconRootsCode) (by simp [systemContracts]) installed
+    (c := beaconRootsCode) (by simp only [systemContracts, List.mem_cons, Prod.mk.injEq,
+      List.not_mem_nil, or_false, true_or]) installed
   have installedBeacon := trace.beacon.installed_keep hfork installed avoidBeacon
   have hHistory := trace.history.rawFrames_target_of_installed
     (benv := benv.withState trace.beaconState) (c := historyStorageCode)
-    (by simp [systemContracts]) installedBeacon
+    (by simp only [systemContracts, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      true_or, or_true]) installedBeacon
   have installedHistory := trace.history.installed_keep
     (benv := benv.withState trace.beaconState) hfork installedBeacon avoidHistory
   -- the transactions
@@ -277,7 +282,7 @@ theorem ConfiguredHistoryTrace.systemFrames_of_installed
       SystemCodeInstalled future.state := by
   induction trace with
   | refl =>
-      exact ⟨fun root member => by simp [ConfiguredHistoryTrace.systemRawFrames] at member,
+      exact ⟨fun root member => by simp only [systemRawFrames, List.not_mem_nil] at member,
         installed⟩
   | step prior block ih =>
       obtain ⟨hprior, hpriorState⟩ := ih (fun p hp => (hauth p hp).1)

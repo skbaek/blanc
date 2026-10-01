@@ -127,14 +127,17 @@ theorem output_ne_nil_of_run_revert {sevm : Sevm} {devm raw : Devm}
     · injection heq with hpair
       rw [← hpair] at run
       injection run with hfst
-      exact absurd hfst (by simp)
-    · exact absurd heq (by simp)
+      exact absurd hfst (by simp only [Devm.setMach_gasLeft, Prod.mk.injEq, reduceCtorEq, false_and,
+        not_false_eq_true])
+    · exact absurd heq (by simp only [ExceptT.stM_eq, Devm.setMach_gasLeft, Devm.setMach_stateGas,
+      reduceCtorEq, not_false_eq_true])
   · rename_i v _heq
     injection run with hpair
     rw [Prod.mk.injEq] at hpair
     rw [← hpair.2, hsize]
-    simp [Devm.output, Devm.setMeta, Devm.withOutput, Devm.memRead, Mem.read,
-      Array.sliceD, Array.sliceD.aux]
+    simp only [Devm.output, Devm.withOutput, Devm.setMeta, Devm.memRead, Mem.read, Array.sliceD,
+      Array.sliceD.aux, add_zero, Array.getD_eq_getD_getElem?, ne_eq, reduceCtorEq,
+      not_false_eq_true]
 
 /-- A walk that reverts through the compact selector reverter carries a
 nonempty payload.  Nothing about the memory image is used: the four bytes are
@@ -225,7 +228,8 @@ theorem routeTo_branchRight_of_leftRefuted {fs : List Func} {sevm : Sevm}
 /-- Every named runtime error's payload is a four-byte selector. -/
 theorem customErrorData_length (name : String) :
     (customErrorData name).length = 4 := by
-  simp [customErrorData, B256.length_toBytes]
+  simp only [customErrorData, List.length_take, B256.length_toBytes, Nat.reduceLeDiff,
+    inf_of_le_left]
 
 /-- A call to a named runtime error, refuted by the walk's empty payload. -/
 theorem call_namedError_refuted {fs : List Func} {sevm : Sevm}
@@ -248,8 +252,7 @@ theorem runtime_error_lookups (dp : DeployParams) :
       ((runtime dp).main :: (runtime dp).aux)[reentrantCallErrorSlot]? =
         some reentrantCallError := by
   refine ⟨?_, ?_, ?_, ?_⟩ <;>
-    simp [runtime, aux, pausableZeroErrorSlot, senderNotPauserErrorSlot,
-      heartbeatExpiredErrorSlot, reentrantCallErrorSlot]
+    simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux, pausableZeroErrorSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero, senderNotPauserErrorSlot, heartbeatExpiredErrorSlot, reentrantCallErrorSlot]
 
 /-! ## Stack-prefix primitives
 

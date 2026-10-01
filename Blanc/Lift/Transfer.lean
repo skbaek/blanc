@@ -95,42 +95,42 @@ private theorem dropTransfer_append (n : Nat) {words output below : Pattern}
   | zero => cases checked; rfl
   | succ n ih =>
       cases words with
-      | nil => simp [dropTransfer] at checked
+      | nil => simp only [dropTransfer, reduceCtorEq] at checked
       | cons word words =>
           apply ih
-          simpa [dropTransfer] using checked
+          simpa only [dropTransfer] using checked
 
 private theorem unaryTransfer_map (φ : Option B256 → Option B256)
     (hφ : φ none = none) {words output : Pattern}
     (checked : unaryTransfer words = some output) :
     unaryTransfer (words.map φ) = some (output.map φ) := by
   cases words with
-  | nil => simp [unaryTransfer] at checked
+  | nil => simp only [unaryTransfer, reduceCtorEq] at checked
   | cons word words =>
       simp only [unaryTransfer, Option.some.injEq] at checked ⊢
       cases checked
-      simp [hφ]
+      simp only [List.map_cons, hφ]
 
 private theorem binaryTransfer_map (φ : Option B256 → Option B256)
     (hφ : φ none = none) {words output : Pattern}
     (checked : binaryTransfer words = some output) :
     binaryTransfer (words.map φ) = some (output.map φ) := by
   cases words with
-  | nil => simp [binaryTransfer] at checked
+  | nil => simp only [binaryTransfer, reduceCtorEq] at checked
   | cons first words =>
       cases words with
-      | nil => simp [binaryTransfer] at checked
+      | nil => simp only [binaryTransfer, reduceCtorEq] at checked
       | cons second words =>
           simp only [binaryTransfer, Option.some.injEq] at checked ⊢
           cases checked
-          simp [hφ]
+          simp only [List.map_cons, hφ]
 
 private theorem dropOneTransfer_map (φ : Option B256 → Option B256)
     (_hφ : φ none = none) {words output : Pattern}
     (checked : dropOneTransfer words = some output) :
     dropOneTransfer (words.map φ) = some (output.map φ) := by
   cases words with
-  | nil => simp [dropOneTransfer] at checked
+  | nil => simp only [dropOneTransfer, reduceCtorEq] at checked
   | cons word words =>
       simp only [dropOneTransfer, Option.some.injEq] at checked ⊢
       cases checked
@@ -141,10 +141,10 @@ private theorem dropTwoTransfer_map (φ : Option B256 → Option B256)
     (checked : dropTwoTransfer words = some output) :
     dropTwoTransfer (words.map φ) = some (output.map φ) := by
   cases words with
-  | nil => simp [dropTwoTransfer] at checked
+  | nil => simp only [dropTwoTransfer, reduceCtorEq] at checked
   | cons first words =>
       cases words with
-      | nil => simp [dropTwoTransfer] at checked
+      | nil => simp only [dropTwoTransfer, reduceCtorEq] at checked
       | cons second words =>
           simp only [dropTwoTransfer, Option.some.injEq] at checked ⊢
           cases checked
@@ -154,7 +154,7 @@ private theorem unaryTransfer_append {words output below : Pattern}
     (checked : unaryTransfer words = some output) :
     unaryTransfer (words ++ below) = some (output ++ below) := by
   cases words with
-  | nil => simp [unaryTransfer] at checked
+  | nil => simp only [unaryTransfer, reduceCtorEq] at checked
   | cons word words =>
       simp only [unaryTransfer, Option.some.injEq] at checked ⊢
       cases checked
@@ -164,10 +164,10 @@ private theorem binaryTransfer_append {words output below : Pattern}
     (checked : binaryTransfer words = some output) :
     binaryTransfer (words ++ below) = some (output ++ below) := by
   cases words with
-  | nil => simp [binaryTransfer] at checked
+  | nil => simp only [binaryTransfer, reduceCtorEq] at checked
   | cons first words =>
       cases words with
-      | nil => simp [binaryTransfer] at checked
+      | nil => simp only [binaryTransfer, reduceCtorEq] at checked
       | cons second words =>
           simp only [binaryTransfer, Option.some.injEq] at checked ⊢
           cases checked
@@ -177,7 +177,7 @@ private theorem dropOneTransfer_append {words output below : Pattern}
     (checked : dropOneTransfer words = some output) :
     dropOneTransfer (words ++ below) = some (output ++ below) := by
   cases words with
-  | nil => simp [dropOneTransfer] at checked
+  | nil => simp only [dropOneTransfer, reduceCtorEq] at checked
   | cons word words =>
       simp only [dropOneTransfer, Option.some.injEq] at checked ⊢
       cases checked
@@ -187,10 +187,10 @@ private theorem dropTwoTransfer_append {words output below : Pattern}
     (checked : dropTwoTransfer words = some output) :
     dropTwoTransfer (words ++ below) = some (output ++ below) := by
   cases words with
-  | nil => simp [dropTwoTransfer] at checked
+  | nil => simp only [dropTwoTransfer, reduceCtorEq] at checked
   | cons first words =>
       cases words with
-      | nil => simp [dropTwoTransfer] at checked
+      | nil => simp only [dropTwoTransfer, reduceCtorEq] at checked
       | cons second words =>
           simp only [dropTwoTransfer, Option.some.injEq] at checked ⊢
           cases checked
@@ -208,21 +208,24 @@ private theorem swap_map (φ : Option B256 → Option B256) (words : Pattern)
           have mapped : (words.map φ)[index]? = none := by
             rw [List.getElem?_map, lookup]
             rfl
-          simp [Jaune.List.swap, lookup, mapped]
+          simp only [Jaune.List.swap, List.map_cons, mapped, Option.bind_eq_bind, Option.bind_none,
+            lookup, Option.map_none]
       | some selected =>
           have mapped : (words.map φ)[index]? = some (φ selected) := by
             rw [List.getElem?_map, lookup]
             rfl
-          simp [Jaune.List.swap, lookup, mapped, List.map_set]
+          simp only [Jaune.List.swap, List.map_cons, mapped, Option.bind_eq_bind, Option.bind_some,
+            lookup, Option.map_some, List.map_set]
 
 private theorem swap_append {words output below : Pattern} {index : Nat}
     (checked : Jaune.List.swap words index = some output) :
     Jaune.List.swap (words ++ below) index = some (output ++ below) := by
   cases words with
-  | nil => simp [Jaune.List.swap] at checked
+  | nil => simp only [Jaune.List.swap, reduceCtorEq] at checked
   | cons word words =>
       cases lookup : words[index]? with
-      | none => simp [Jaune.List.swap, lookup] at checked
+      | none => simp only [Jaune.List.swap, lookup, Option.bind_eq_bind, Option.bind_none,
+        reduceCtorEq] at checked
       | some selected =>
           have bound : index < words.length :=
             (List.getElem?_eq_some_iff.mp lookup).1
@@ -233,7 +236,8 @@ private theorem swap_append {words output below : Pattern} {index : Nat}
           rw [List.getElem?_append_left bound,
             List.set_append_left index word bound]
           have output_eq : selected :: words.set index word = output := by
-            simpa [Jaune.List.swap, lookup] using checked
+            simpa only [Jaune.List.swap, lookup, Option.bind_eq_bind, Option.bind_some,
+              Option.some.injEq] using checked
           rw [← output_eq, lookup]
           rfl
 
@@ -248,12 +252,12 @@ private theorem regularTransfer_map {r : Rinst} {words output : Pattern}
       exact unaryTransfer_map φ hφ checked
   case caller | callvalue | calldatasize | timestamp | gas =>
       cases checked
-      simp [hφ]
+      simp only [List.map_cons, hφ]
   case pop => exact dropOneTransfer_map φ hφ checked
   case mstore | sstore => exact dropTwoTransfer_map φ hφ checked
   case dup index =>
       cases lookup : words[index]? with
-      | none => simp [lookup] at checked
+      | none => simp only [lookup, reduceCtorEq] at checked
       | some selected =>
           simp only [lookup, Option.some.injEq] at checked
           subst output
@@ -268,7 +272,8 @@ private theorem regularTransfer_map {r : Rinst} {words output : Pattern}
           rfl
   case swap index =>
       rw [swap_map φ words index.val]
-      simpa using congrArg (Option.map (List.map φ)) checked
+      simpa only [Option.map_eq_some_iff, Option.map_some] using
+        congrArg (Option.map (List.map φ)) checked
   all_goals cases checked
 
 private theorem regularTransfer_append {r : Rinst} {words output below : Pattern}
@@ -286,7 +291,7 @@ private theorem regularTransfer_append {r : Rinst} {words output below : Pattern
   case mstore | sstore => exact dropTwoTransfer_append checked
   case dup index =>
       cases lookup : words[index]? with
-      | none => simp [lookup] at checked
+      | none => simp only [lookup, reduceCtorEq] at checked
       | some selected =>
           simp only [lookup, Option.some.injEq] at checked
           subst output
@@ -310,15 +315,18 @@ private theorem liftRegularTransfer_map {r : Rinst} {words output : Pattern}
   cases r <;> simp only [liftRegularTransfer] at checked ⊢
   case exp | slt | keccak256 | sdiv | signextend | sgt => exact binaryTransfer_map φ hφ checked
   case not | balance | extcodesize | tload => exact unaryTransfer_map φ hφ checked
-  case address | origin | chainid | selfbalance | codesize => cases checked; simp [hφ]
+  case address | origin | chainid | selfbalance | codesize => cases checked; simp only [List.map_cons,
+    hφ]
   case log n =>
       rw [← dropTransfer_map φ hφ (n.val + 2) words]
-      simpa using congrArg (Option.map (List.map φ)) checked
+      simpa only [Option.map_eq_some_iff, Option.map_some] using
+        congrArg (Option.map (List.map φ)) checked
   case mod | or | xor | byte | shl => exact binaryTransfer_map φ hφ checked
   case calldatacopy | codecopy | returndatacopy =>
       rw [← dropTransfer_map φ hφ 3 words]
-      simpa using congrArg (Option.map (List.map φ)) checked
-  case returndatasize => cases checked; simp [hφ]
+      simpa only [Option.map_eq_some_iff, Option.map_some] using
+        congrArg (Option.map (List.map φ)) checked
+  case returndatasize => cases checked; simp only [List.map_cons, hφ]
   case mstore8 | tstore => exact dropTwoTransfer_map φ hφ checked
   all_goals exact regularTransfer_map φ hφ checked
 
@@ -342,53 +350,53 @@ private theorem callTransfer_map (φ : Option B256 → Option B256)
     (checked : callTransfer words = some output) :
     callTransfer (words.map φ) = some (output.map φ) := by
   cases words with
-  | nil => simp [callTransfer] at checked
+  | nil => simp only [callTransfer, reduceCtorEq] at checked
   | cons a words =>
       cases words with
-      | nil => simp [callTransfer] at checked
+      | nil => simp only [callTransfer, reduceCtorEq] at checked
       | cons b words =>
           cases words with
-          | nil => simp [callTransfer] at checked
+          | nil => simp only [callTransfer, reduceCtorEq] at checked
           | cons c words =>
               cases words with
-              | nil => simp [callTransfer] at checked
+              | nil => simp only [callTransfer, reduceCtorEq] at checked
               | cons d words =>
                   cases words with
-                  | nil => simp [callTransfer] at checked
+                  | nil => simp only [callTransfer, reduceCtorEq] at checked
                   | cons e words =>
                       cases words with
-                      | nil => simp [callTransfer] at checked
+                      | nil => simp only [callTransfer, reduceCtorEq] at checked
                       | cons f words =>
                           cases words with
-                          | nil => simp [callTransfer] at checked
+                          | nil => simp only [callTransfer, reduceCtorEq] at checked
                           | cons g words =>
                               simp only [callTransfer, Option.some.injEq] at checked ⊢
                               cases checked
-                              simp [hφ]
+                              simp only [List.map_cons, hφ]
 
 private theorem callTransfer_append {words output below : Pattern}
     (checked : callTransfer words = some output) :
     callTransfer (words ++ below) = some (output ++ below) := by
   cases words with
-  | nil => simp [callTransfer] at checked
+  | nil => simp only [callTransfer, reduceCtorEq] at checked
   | cons a words =>
       cases words with
-      | nil => simp [callTransfer] at checked
+      | nil => simp only [callTransfer, reduceCtorEq] at checked
       | cons b words =>
           cases words with
-          | nil => simp [callTransfer] at checked
+          | nil => simp only [callTransfer, reduceCtorEq] at checked
           | cons c words =>
               cases words with
-              | nil => simp [callTransfer] at checked
+              | nil => simp only [callTransfer, reduceCtorEq] at checked
               | cons d words =>
                   cases words with
-                  | nil => simp [callTransfer] at checked
+                  | nil => simp only [callTransfer, reduceCtorEq] at checked
                   | cons e words =>
                       cases words with
-                      | nil => simp [callTransfer] at checked
+                      | nil => simp only [callTransfer, reduceCtorEq] at checked
                       | cons f words =>
                           cases words with
-                          | nil => simp [callTransfer] at checked
+                          | nil => simp only [callTransfer, reduceCtorEq] at checked
                           | cons g words =>
                               simp only [callTransfer, Option.some.injEq] at checked ⊢
                               cases checked
@@ -399,47 +407,47 @@ private theorem staticcallTransfer_map (φ : Option B256 → Option B256)
     (checked : staticcallTransfer words = some output) :
     staticcallTransfer (words.map φ) = some (output.map φ) := by
   cases words with
-  | nil => simp [staticcallTransfer] at checked
+  | nil => simp only [staticcallTransfer, reduceCtorEq] at checked
   | cons a words =>
       cases words with
-      | nil => simp [staticcallTransfer] at checked
+      | nil => simp only [staticcallTransfer, reduceCtorEq] at checked
       | cons b words =>
           cases words with
-          | nil => simp [staticcallTransfer] at checked
+          | nil => simp only [staticcallTransfer, reduceCtorEq] at checked
           | cons c words =>
               cases words with
-              | nil => simp [staticcallTransfer] at checked
+              | nil => simp only [staticcallTransfer, reduceCtorEq] at checked
               | cons d words =>
                   cases words with
-                  | nil => simp [staticcallTransfer] at checked
+                  | nil => simp only [staticcallTransfer, reduceCtorEq] at checked
                   | cons e words =>
                       cases words with
-                      | nil => simp [staticcallTransfer] at checked
+                      | nil => simp only [staticcallTransfer, reduceCtorEq] at checked
                       | cons f words =>
                           simp only [staticcallTransfer, Option.some.injEq] at checked ⊢
                           cases checked
-                          simp [hφ]
+                          simp only [List.map_cons, hφ]
 
 private theorem staticcallTransfer_append {words output below : Pattern}
     (checked : staticcallTransfer words = some output) :
     staticcallTransfer (words ++ below) = some (output ++ below) := by
   cases words with
-  | nil => simp [staticcallTransfer] at checked
+  | nil => simp only [staticcallTransfer, reduceCtorEq] at checked
   | cons a words =>
       cases words with
-      | nil => simp [staticcallTransfer] at checked
+      | nil => simp only [staticcallTransfer, reduceCtorEq] at checked
       | cons b words =>
           cases words with
-          | nil => simp [staticcallTransfer] at checked
+          | nil => simp only [staticcallTransfer, reduceCtorEq] at checked
           | cons c words =>
               cases words with
-              | nil => simp [staticcallTransfer] at checked
+              | nil => simp only [staticcallTransfer, reduceCtorEq] at checked
               | cons d words =>
                   cases words with
-                  | nil => simp [staticcallTransfer] at checked
+                  | nil => simp only [staticcallTransfer, reduceCtorEq] at checked
                   | cons e words =>
                       cases words with
-                      | nil => simp [staticcallTransfer] at checked
+                      | nil => simp only [staticcallTransfer, reduceCtorEq] at checked
                       | cons f words =>
                           simp only [staticcallTransfer, Option.some.injEq] at checked ⊢
                           cases checked
@@ -453,16 +461,18 @@ private theorem matches_pop {input : Pattern} {xs : Stack}
   | nil =>
       simp only [Stack.Pop, Split, List.nil_append] at popped
       subst s
-      simpa using matched
+      simpa only [List.length_nil, List.drop_zero] using matched
   | cons x xs ih =>
       cases input with
       | nil =>
           cases s with
-          | nil => simp [Stack.Pop, Split] at popped
+          | nil => simp only [Stack.Pop, Split, List.cons_append, List.nil_eq,
+            reduceCtorEq] at popped
           | cons value values => cases matched
       | cons word input =>
           cases s with
-          | nil => simp [Stack.Pop, Split] at popped
+          | nil => simp only [Stack.Pop, Split, List.cons_append, List.nil_eq,
+            reduceCtorEq] at popped
           | cons value values =>
               obtain ⟨head, tail⟩ := matched
               simp only [Stack.Pop, Split, List.cons_append] at popped
@@ -475,7 +485,7 @@ private theorem matches_push_none {tail : Pattern} {zs mid final : Stack}
   simp only [Stack.Push, Split] at pushed
   subst final
   induction zs generalizing mid with
-  | nil => simpa using matched
+  | nil => simpa only [List.length_nil, List.replicate_zero, List.nil_append] using matched
   | cons z zs ih =>
       change Matches (none :: (List.replicate zs.length none ++ tail))
         (z :: (zs ++ mid))
@@ -495,9 +505,9 @@ private theorem dropTransfer_eq_drop {n : Nat} {input output : Pattern}
   | zero => cases checked; rfl
   | succ n ih =>
       cases input with
-      | nil => simp [dropTransfer] at checked
+      | nil => simp only [dropTransfer, reduceCtorEq] at checked
       | cons word input =>
-          exact ih (by simpa [dropTransfer] using checked)
+          exact ih (by simpa only [dropTransfer] using checked)
 
 private theorem diff_of_pop_push {xs zs s mid s' : Stack}
     (popped : Stack.Pop xs s mid) (pushed : Stack.Push zs mid s') :
@@ -505,17 +515,17 @@ private theorem diff_of_pop_push {xs zs s mid s' : Stack}
 
 private theorem diff_of_pop {xs s s' : Stack} (popped : Stack.Pop xs s s') :
     Stack.Diff xs [] s s' :=
-  diff_of_pop_push popped (by simp [Stack.Push, Split])
+  diff_of_pop_push popped (by simp only [Stack.Push, Split, List.nil_append])
 
 private theorem diff_of_push {zs s s' : Stack} (pushed : Stack.Push zs s s') :
     Stack.Diff [] zs s s' :=
-  diff_of_pop_push (by simp [Stack.Pop, Split]) pushed
+  diff_of_pop_push (by simp only [Stack.Pop, Split, List.nil_append]) pushed
 
 private theorem unary_checked {input output : Pattern}
     (checked : unaryTransfer input = some output) :
     ∃ head tail, input = head :: tail ∧ output = none :: tail := by
   cases input with
-  | nil => simp [unaryTransfer] at checked
+  | nil => simp only [unaryTransfer, reduceCtorEq] at checked
       | cons word tail =>
           simp only [unaryTransfer, Option.some.injEq] at checked
           exact ⟨word, tail, rfl, checked.symm⟩
@@ -524,10 +534,10 @@ private theorem binary_checked {input output : Pattern}
     (checked : binaryTransfer input = some output) :
     ∃ head head' tail, input = head :: head' :: tail ∧ output = none :: tail := by
   cases input with
-  | nil => simp [binaryTransfer] at checked
+  | nil => simp only [binaryTransfer, reduceCtorEq] at checked
   | cons word rest =>
       cases rest with
-      | nil => simp [binaryTransfer] at checked
+      | nil => simp only [binaryTransfer, reduceCtorEq] at checked
       | cons word' tail =>
           simp only [binaryTransfer, Option.some.injEq] at checked
           exact ⟨word, word', tail, rfl, checked.symm⟩
@@ -536,7 +546,7 @@ private theorem dropOne_checked {input output : Pattern}
     (checked : dropOneTransfer input = some output) :
     ∃ head tail, input = head :: tail ∧ output = tail := by
   cases input with
-  | nil => simp [dropOneTransfer] at checked
+  | nil => simp only [dropOneTransfer, reduceCtorEq] at checked
   | cons head tail =>
       simp only [dropOneTransfer, Option.some.injEq] at checked
       exact ⟨head, tail, rfl, checked.symm⟩
@@ -545,10 +555,10 @@ private theorem dropTwo_checked {input output : Pattern}
     (checked : dropTwoTransfer input = some output) :
     ∃ head head' tail, input = head :: head' :: tail ∧ output = tail := by
   cases input with
-  | nil => simp [dropTwoTransfer] at checked
+  | nil => simp only [dropTwoTransfer, reduceCtorEq] at checked
   | cons head rest =>
       cases rest with
-      | nil => simp [dropTwoTransfer] at checked
+      | nil => simp only [dropTwoTransfer, reduceCtorEq] at checked
       | cons head' tail =>
           simp only [dropTwoTransfer, Option.some.injEq] at checked
           exact ⟨head, head', tail, rfl, checked.symm⟩
@@ -569,19 +579,19 @@ private theorem matches_six {a b c d e f : Option B256} {tail : Pattern}
   | nil => simp only [Matches] at matched
   | cons x1 s =>
     cases s with
-    | nil => simp_all [Matches]
+    | nil => simp_all only [Matches, and_false]
     | cons x2 s =>
       cases s with
-      | nil => simp_all [Matches]
+      | nil => simp_all only [Matches, and_false]
       | cons x3 s =>
         cases s with
-        | nil => simp_all [Matches]
+        | nil => simp_all only [Matches, and_false]
         | cons x4 s =>
           cases s with
-          | nil => simp_all [Matches]
+          | nil => simp_all only [Matches, and_false]
           | cons x5 s =>
             cases s with
-            | nil => simp_all [Matches]
+            | nil => simp_all only [Matches, and_false]
             | cons x6 xs =>
               simp only [Matches] at matched
               exact ⟨x1, x2, x3, x4, x5, x6, xs, rfl,
@@ -595,22 +605,22 @@ private theorem matches_seven {a b c d e f g : Option B256} {tail : Pattern}
   | nil => simp only [Matches] at matched
   | cons x1 s =>
     cases s with
-    | nil => simp_all [Matches]
+    | nil => simp_all only [Matches, and_false]
     | cons x2 s =>
       cases s with
-      | nil => simp_all [Matches]
+      | nil => simp_all only [Matches, and_false]
       | cons x3 s =>
         cases s with
-        | nil => simp_all [Matches]
+        | nil => simp_all only [Matches, and_false]
         | cons x4 s =>
           cases s with
-          | nil => simp_all [Matches]
+          | nil => simp_all only [Matches, and_false]
           | cons x5 s =>
             cases s with
-            | nil => simp_all [Matches]
+            | nil => simp_all only [Matches, and_false]
             | cons x6 s =>
               cases s with
-              | nil => simp_all [Matches]
+              | nil => simp_all only [Matches, and_false]
               | cons x7 xs =>
                 simp only [Matches] at matched
                 exact ⟨x1, x2, x3, x4, x5, x6, x7, xs, rfl,
@@ -686,7 +696,7 @@ private theorem call_fail_stack_exact {sevm : Sevm} {s sf : Devm}
       simp only [hp11] at eq10 h_run
       have hs9 : s9.stack = s7.stack := by
         have h := congrArg (fun q => (q.2.2.2.2 : Devm).stack) hp11
-        dsimp at h
+        dsimp only at h
         rw [← h, GasSchedule.accessDelegation_stack]
         rfl
       have hs10 : s10.stack = xs := by
@@ -762,25 +772,25 @@ private theorem ninstTransfer_run_call {sevm : Sevm} {devm devm' : Devm}
     (run : Ninst.Run sevm devm (.exec .call) devm') :
     Matches output devm'.stack := by
   cases input with
-  | nil => simp [callTransfer] at checked
+  | nil => simp only [callTransfer, reduceCtorEq] at checked
   | cons a input =>
       cases input with
-      | nil => simp [callTransfer] at checked
+      | nil => simp only [callTransfer, reduceCtorEq] at checked
       | cons b input =>
           cases input with
-          | nil => simp [callTransfer] at checked
+          | nil => simp only [callTransfer, reduceCtorEq] at checked
           | cons c input =>
               cases input with
-              | nil => simp [callTransfer] at checked
+              | nil => simp only [callTransfer, reduceCtorEq] at checked
               | cons d input =>
                   cases input with
-                  | nil => simp [callTransfer] at checked
+                  | nil => simp only [callTransfer, reduceCtorEq] at checked
                   | cons e input =>
                       cases input with
-                      | nil => simp [callTransfer] at checked
+                      | nil => simp only [callTransfer, reduceCtorEq] at checked
                       | cons f input =>
                           cases input with
-                          | nil => simp [callTransfer] at checked
+                          | nil => simp only [callTransfer, reduceCtorEq] at checked
                           | cons g rest =>
                               simp only [callTransfer, Option.some.injEq] at checked
                               cases checked
@@ -817,7 +827,8 @@ private theorem ninstTransfer_run_call {sevm : Sevm} {devm devm' : Devm}
                                 exact matches_push_word (head := none)
                                   (x := (1 : B256))
                                   (headMatch := Or.inl rfl) hrest
-                                  (by simp [Stack.Push, Split])
+                                  (by simp only [Stack.Push, Split, List.cons_append,
+                                    List.nil_append])
 
 private theorem staticcall_fail_stack_exact {sevm : Sevm} {s sf : Devm}
     {g t ii is oi os : B256} {xs : Stack}
@@ -888,7 +899,7 @@ private theorem staticcall_fail_stack_exact {sevm : Sevm} {s sf : Devm}
       simp only [hp10] at eq10 h_run
       have hs9 : s9.stack = s6.stack := by
         have h := congrArg (fun q => (q.2.2.2.2 : Devm).stack) hp10
-        dsimp at h
+        dsimp only at h
         rw [← h, GasSchedule.accessDelegation_stack]
         rfl
       have hs10 : s10.stack = xs := by
@@ -937,22 +948,22 @@ private theorem ninstTransfer_run_staticcall {sevm : Sevm} {devm devm' : Devm}
     (run : Ninst.Run sevm devm (.exec .staticcall) devm') :
     Matches output devm'.stack := by
   cases input with
-  | nil => simp [staticcallTransfer] at checked
+  | nil => simp only [staticcallTransfer, reduceCtorEq] at checked
   | cons a input =>
       cases input with
-      | nil => simp [staticcallTransfer] at checked
+      | nil => simp only [staticcallTransfer, reduceCtorEq] at checked
       | cons b input =>
           cases input with
-          | nil => simp [staticcallTransfer] at checked
+          | nil => simp only [staticcallTransfer, reduceCtorEq] at checked
           | cons c input =>
               cases input with
-              | nil => simp [staticcallTransfer] at checked
+              | nil => simp only [staticcallTransfer, reduceCtorEq] at checked
               | cons d input =>
                   cases input with
-                  | nil => simp [staticcallTransfer] at checked
+                  | nil => simp only [staticcallTransfer, reduceCtorEq] at checked
                   | cons e input =>
                       cases input with
-                      | nil => simp [staticcallTransfer] at checked
+                      | nil => simp only [staticcallTransfer, reduceCtorEq] at checked
                       | cons f rest =>
                           simp only [staticcallTransfer, Option.some.injEq] at checked
                           cases checked
@@ -989,7 +1000,7 @@ private theorem ninstTransfer_run_staticcall {sevm : Sevm} {devm devm' : Devm}
                             rw [hflag, hparent]
                             exact matches_push_word (head := none) (x := (1 : B256))
                               (headMatch := Or.inl rfl) hrest
-                              (by simp [Stack.Push, Split])
+                              (by simp only [Stack.Push, Split, List.cons_append, List.nil_append])
 
 /-- Success-only soundness: a successful run of an accepted instruction leaves
 a stack matching the transferred pattern. -/
@@ -1036,7 +1047,7 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
       | tload =>
           rcases unary_checked checked with ⟨head, tail, rfl, rfl⟩
           cases hstack : devm.stack with
-          | nil => simp [Matches, hstack] at matched
+          | nil => simp only [hstack, Matches] at matched
           | cons key rest =>
               rw [hstack] at matched
               obtain ⟨_, tailMatched⟩ := matched
@@ -1046,10 +1057,10 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
       | tstore =>
           rcases dropTwo_checked checked with ⟨head, head', tail, rfl, rfl⟩
           cases hstack : devm.stack with
-          | nil => simp [Matches, hstack] at matched
+          | nil => simp only [hstack, Matches] at matched
           | cons key rest =>
               cases rest with
-              | nil => simp [Matches, hstack] at matched
+              | nil => simp only [hstack, matches_cons, Matches, and_false] at matched
               | cons value xs =>
                   rw [hstack] at matched
                   obtain ⟨_, _, tailMatched⟩ := matched
@@ -1081,7 +1092,7 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
           have hd := matches_pop matched hp
           rw [← dropTransfer_eq_drop checked]
           rw [← hlen]
-          simpa using hd
+          simpa only using hd
       | mod | or | xor | byte | shl | sdiv | signextend | sgt =>
           rcases binary_checked checked with ⟨head, head', tail, rfl, rfl⟩
           rcases of_run_reg run with ⟨pc, hr⟩
@@ -1165,30 +1176,31 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
             liftMachMetaWorldExecution, liftMachMetaExecution, liftMachMeta,
             Footprint.toExecution, Footprint.liftOutcome] at hr
           cases hpop : devm.mach.pop with
-          | error e => simp [hpop] at hr
+          | error e => simp only [ExceptT.stM_eq, hpop, reduceCtorEq] at hr
           | ok p =>
               rcases p with ⟨top, mach0⟩
               cases hgas : Mach.chargeGas
                 (if top.toAdr ∈ devm.meta.accessedAddresses then gasWarmAccess
                  else sevm.benvStat.rules.gas.coldAccountAccess) mach0 with
-              | error e => simp [hpop, hgas] at hr
+              | error e => simp only [ExceptT.stM_eq, hpop, hgas, reduceCtorEq] at hr
               | ok q =>
                   rcases q with ⟨u, mach1⟩
                   cases hpush : Mach.push (devm.world.state.get top.toAdr).bal mach1 with
-                  | error e => simp [hpop, hgas, hpush] at hr
+                  | error e => simp only [ExceptT.stM_eq, hpop, hgas, hpush, reduceCtorEq] at hr
                   | ok q =>
                       rcases q with ⟨u, mach2⟩
-                      simp [hpop, hgas, hpush] at hr
+                      simp only [ExceptT.stM_eq, hpop, hgas, hpush, Except.ok.injEq] at hr
                       rw [← hr]
                       have hp0 : Stack.Pop [top] devm.stack mach0.stack := by
                         cases hstack : devm.mach.stack with
-                        | nil => simp [hstack, Mach.pop] at hpop
+                        | nil => simp only [ExceptT.stM_eq, Mach.pop, hstack, reduceCtorEq] at hpop
                         | cons a rest =>
-                            simp [hstack, Mach.pop] at hpop
+                            simp only [ExceptT.stM_eq, Mach.pop, hstack, Except.ok.injEq,
+                              Prod.mk.injEq] at hpop
                             rcases hpop with ⟨htop, hmach⟩
                             change devm.mach.stack = top :: mach0.stack
                             rw [hstack, htop]
-                            simpa using congrArg Mach.stack hmach
+                            simpa only [List.cons.injEq, true_and] using congrArg Mach.stack hmach
                       have h01 : mach0.stack = mach1.stack := by
                         simp only [Mach.chargeGas] at hgas
                         split at hgas
@@ -1205,7 +1217,7 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
                         simp only [Mach.push] at hpush
                         split at hpush
                         · cases hpush
-                          simp [Stack.Push, Split]
+                          simp only [Stack.Push, Split, List.cons_append, List.nil_append]
                         · cases hpush
                       apply matches_push_word (head := none)
                         (x := (devm.world.state.get top.toAdr).bal)
@@ -1214,14 +1226,14 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
       | extcodesize =>
           rcases unary_checked checked with ⟨head, tail, rfl, rfl⟩
           cases hstack : devm.stack with
-          | nil => simp [Matches, hstack] at matched
+          | nil => simp only [hstack, Matches] at matched
           | cons address xs =>
               rw [hstack] at matched
               obtain ⟨_, tailMatched⟩ := matched
               have pref :
                   (devm.getCode address.toAdr).size.toB256 :: xs <<+ devm'.stack :=
                 (prefix_of_extcodesize_val
-                  (by rw [hstack]; simpa using pref_append (address :: xs) []) run).1
+                  (by rw [hstack]; simpa only [List.append_nil] using pref_append (address :: xs) []) run).1
               have sameLength : devm'.stack.length = (address :: xs).length := by
                 rcases of_run_reg run with ⟨pc, hr⟩
                 simp only [Rinst.run, Rinst.runCore] at hr
@@ -1235,22 +1247,23 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
                   have hpushStack := (Devm.push_of_push hpush).stack
                   simp only [Stack.Pop, Stack.Push, Split,
                     Devm.balReadAccount_stack] at hpStack hpushStack
-                  simp [hstack] at hpStack
+                  simp only [hstack, List.cons_append, List.nil_append, List.cons.injEq] at hpStack
                   change d0.stack = d1.stack at hbStack
                   rw [hpushStack]
                   simp only [List.length_cons]
                   rw [← hbStack, ← hpStack.2]
-                  simp
+                  simp only [Jaune.Devm.balReadAccount_getCode, List.cons_append, List.nil_append,
+                    List.length_cons]
               have exactStack :
                   (devm.getCode address.toAdr).size.toB256 :: xs = devm'.stack :=
-                List.pref_unique (by simpa using sameLength.symm) pref
-                  (by simpa using pref_append devm'.stack [])
+                List.pref_unique (by simpa only [List.length_cons] using sameLength.symm) pref
+                  (by simpa only [List.append_nil] using pref_append devm'.stack [])
               rw [← exactStack]
               exact ⟨Or.inl rfl, tailMatched⟩
       | dup index =>
           simp only [regularTransfer] at checked
           rcases lookup : input[index]? with _ | selected
-          · simp [lookup] at checked
+          · simp only [lookup, reduceCtorEq] at checked
           · simp only [lookup, Option.some.injEq] at checked
             subst output
             rcases of_run_dup run with ⟨x, hx, hp⟩
@@ -1265,7 +1278,7 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
           obtain ⟨actual, hactual, hmatch⟩ := matched.swap checked
           have : actual = devm'.stack := Option.some.inj (hactual.symm.trans hswap)
           subst actual
-          simpa using hmatch
+          simpa only using hmatch
       | _ => cases checked
   | exec x =>
       cases x with

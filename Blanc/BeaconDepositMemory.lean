@@ -49,7 +49,8 @@ private lemma list_ext_getD_of_length_eq
   apply List.ext_get hlen
   intro i hleft hright
   have hi := hget i
-  simpa [List.getD, List.get_eq_getElem, hleft, hright] using hi
+  simpa only [List.get_eq_getElem, List.getD, hleft, getElem?_pos, Option.getD_some, hright] using
+    hi
 
 private lemma bytesWriteAt_single_then
     (image : Bytes) (base : Nat) (byte : UInt8) (tail : Bytes) :
@@ -65,7 +66,10 @@ private lemma bytesWriteAt_single_then
     · rw [if_neg (by omega), if_neg (by omega), if_neg (by omega)]
     · by_cases hieq : i = base
       · subst i
-        simp
+        simp only [add_le_iff_nonpos_right, nonpos_iff_eq_zero, one_ne_zero, false_and, ↓reduceIte,
+          Std.le_refl, zero_add, lt_add_iff_pos_right, zero_lt_one, and_self, tsub_self,
+          List.getD_eq_getElem?_getD, List.length_cons, List.length_nil, getElem?_pos,
+          List.getElem_cons_zero, Option.getD_some, add_pos_iff, or_true]
       · have hgt : base + 1 ≤ i := by omega
         by_cases htail : i < base + 1 + tail.length
         · rw [if_pos ⟨hgt, htail⟩, if_pos (by omega)]
@@ -121,7 +125,7 @@ private lemma lowByte_eq (word : B256) :
   simp only [Nat.or_mod_two_pow]
   rw [Nat.shiftLeft_mod_two_pow_eq_zero _ _ _ (by omega)]
   rw [Nat.shiftLeft_mod_two_pow_eq_zero _ _ _ (by omega)]
-  simp
+  simp only [Nat.reducePow, Nat.zero_or]
 
 private lemma concat_shr_eight_nat
     (x y width : Nat) (hwidth : 8 ≤ width) :
@@ -192,7 +196,7 @@ private lemma B128.toNat_shiftLeft_120 (word : B128) :
         b.toNat % 2 ^ 8 := by
     rw [Nat.or_mod_two_pow]
     rw [Nat.shiftLeft_mod_two_pow_eq_zero _ _ _ (by omega)]
-    simp
+    simp only [Nat.reducePow, Nat.zero_or]
   have hb56 := Jaune.Nat.lo_shl (k := b.toNat) (m := 8) (n := 56)
   simp only [Jaune.Nat.lo] at hb56
   norm_num at hb56
@@ -235,7 +239,7 @@ private lemma lowBytes_eq_lowBytesNat : ∀ n word,
 private theorem lowBytes_eight_eq_le64 (word : B256) :
     lowBytes 8 word = le64 word.toNat := by
   rw [lowBytes_eq_lowBytesNat]
-  simp [lowBytesNat, le64, ← Nat.shiftRight_add]
+  simp only [lowBytesNat, Nat.toUInt8_eq, ← Nat.shiftRight_add, Nat.reduceAdd, le64]
 
 theorem storeLe64Image_eq_le64
     (image : Bytes) (base : Nat) (word : B256) :
@@ -361,8 +365,9 @@ theorem getDepositCountResultImage_eq (word : B256) :
     (suffix := List.replicate 24 0)
     (replacement := le64 word.toNat)
     (offset := 64)
-    (by simp [B256.length_toBytes])
-    (by simp [le64])
+    (by simp only [List.length_append, B256.length_toBytes, Nat.reduceAdd])
+    (by simp only [List.reduceReplicate, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      le64, Nat.toUInt8_eq])
   simpa only [List.append_assoc] using h
 
 /-- The exact symbolic memory image handed to the count endpoint's return. -/

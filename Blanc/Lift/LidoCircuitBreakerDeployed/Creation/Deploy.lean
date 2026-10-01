@@ -157,7 +157,9 @@ theorem breakerAddress_eq : breakerAddress = computeContractAddress deployer 0 :
       0x2f, 0x5b, 0x96, 0xb7, 0x0f, 0x2e, 0xa4, 0x64, 0xd3, 0xcd, 0xf3], .bytes []]) =
       [0xd6, 0x94, 0xac, 0xf5, 0xf1, 0x11, 0x39, 0x9a, 0x7c, 0x61, 0x3d, 0x2f, 0x5b, 0x96, 0xb7,
         0x0f, 0x2e, 0xa4, 0x64, 0xd3, 0xcd, 0xf3, 0x80] := by
-    simp [BLT.toBytes, BLTs.toBytes, BLTs.toBytesJoin]
+    simp only [BLT.toBytes, BLTs.toBytes, BLTs.toBytesJoin, List.length_cons, List.length_nil,
+      zero_add, Nat.reduceAdd, Nat.reduceLT, ↓reduceIte, Nat.toUInt8_eq, UInt8.reduceOfNat,
+      UInt8.reduceAdd, Nat.ofNat_pos, add_zero, List.append_nil, List.cons_append, List.nil_append]
   unfold computeContractAddress
   simp only [hsender, hnonce, hrlp]
   decide +kernel

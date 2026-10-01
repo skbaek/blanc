@@ -34,7 +34,7 @@ theorem totalAssets_body_effect
   have memory : MemoryImage entry entry.memory.data.toList := by
     refine ⟨memoryWf, ?_⟩
     intro index
-    simp
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
   have actualResources := totalAssetsResources_of_run config hfork memoryWf run
   unfold Blanc.ProrataWethVault.totalAssets at run
   obtain ⟨callPre, callPost, staging, crossing, suffix⟩ :=
@@ -110,7 +110,8 @@ theorem totalAssets_compiled_effect
         Blanc.ProrataWethVault.routed 0
           Blanc.ProrataWethVault.totalAssets) ∈
         Blanc.ProrataWethVault.vaultFuncs := by
-    simp [Blanc.ProrataWethVault.vaultFuncs]
+    simp only [ProrataWethVault.vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+      or_false, true_or]
   rcases Blanc.ProrataWethVault.runCompiled_enters_body_compiled_logs
       run hselector hmember with
     ⟨bodyPre, hvalue, -, entryState, entryMemory, entryLogs, -, bodyRun⟩

@@ -233,7 +233,7 @@ theorem extract_walk {sevm : Sevm} {s s' : Devm} {xs : Stack} (hp : xs <<+ s.sta
   have q3 : pow224 :: Sevm.dataWord sevm 0 :: xs <<+ s3.stack :=
     prefix_of_push (of_run_push h3) q2
   have q4 : Sevm.dataWord sevm 0 :: pow224 :: xs <<+ s4.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h4) q3
   have q5 := prefix_of_div h5 q4
   have q6 := prefix_of_push (of_run_push h6) q5
@@ -358,7 +358,9 @@ theorem extractLine_nonexec : ∀ n ∈ extractLine, ∀ x, n ≠ .exec x := by
   rcases hn with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> cases h
 
 theorem wrapper24_lookup : prog[24]? = some t_0243_c24 := by
-  simp [prog, Cert.prog, cert]
+  simp only [prog, Cert.prog, cert, List.map_cons, List.map_nil, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+    List.getElem_cons_zero]
 
 /-- **Where an external instruction can be reached.**  A reach from the frame's start to an external
 instruction passes only the `withdraw` wrapper (entry 24), and then the calldata selector is
@@ -388,7 +390,8 @@ theorem weth9_reach_route (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d
           rcases hl with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
             first | exact absurd rfl hk | decide
         exact Reach.false_of_execFree execFreeEntries_set run'
-          hT (ExecFreeSet.lookup execFreeEntries_set hkE hg) (by simp)
+          hT (ExecFreeSet.lookup execFreeEntries_set hkE hg) (by simp only [List.not_mem_nil,
+            IsEmpty.forall_iff, implies_true])
       by_cases h24 : l.k = 24
       · rw [h24, wrapper24_lookup] at hg
         cases hg
@@ -397,8 +400,9 @@ theorem weth9_reach_route (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d
           first | exact hsel | exact absurd h24 (by decide)
       · exact (hfree h24).elim
     · exact (Reach.false_of_execFree execFreeEntries_set run' hT fallback_execFree
-        (by simp)).elim
-  · exact (Reach.false_of_execFree execFreeEntries_set run hT fallback_execFree (by simp)).elim
+        (by simp only [List.not_mem_nil, IsEmpty.forall_iff, implies_true])).elim
+  · exact (Reach.false_of_execFree execFreeEntries_set run hT fallback_execFree (by simp only [List.not_mem_nil,
+    IsEmpty.forall_iff, implies_true])).elim
 
 end ReachForm
 

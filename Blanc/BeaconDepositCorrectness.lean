@@ -41,7 +41,7 @@ theorem div_mul_eq_sub_mod (n m : Nat) : n / m * m = n - n % m := by
 quotient. -/
 theorem pred_div_eq (m b : Nat) (h : 0 < m % b) : (m - 1) / b = m / b := by
   rcases Nat.eq_zero_or_pos b with hb | hb
-  · subst hb; simp
+  · subst hb; simp only [Nat.div_zero]
   · have hd := Nat.div_add_mod m b
     have hlt : m % b < b := Nat.mod_lt _ hb
     have hcomm : b * (m / b) = m / b * b := Nat.mul_comm _ _
@@ -53,7 +53,7 @@ theorem pred_div_eq (m b : Nat) (h : 0 < m % b) : (m - 1) / b = m / b := by
 /-- Decrementing inside a nonzero residue class decrements the residue. -/
 theorem pred_mod_of_pos (m b : Nat) (h : 0 < m % b) : (m - 1) % b = m % b - 1 := by
   rcases Nat.eq_zero_or_pos b with hb | hb
-  · subst hb; simp
+  · subst hb; simp only [Nat.mod_zero]
   · have hd := Nat.div_add_mod m b
     have hlt : m % b < b := Nat.mod_lt _ hb
     have hsplit : m - 1 = b * (m / b) + (m % b - 1) := by omega
@@ -90,7 +90,7 @@ theorem pred_div_pow_eq (m h j : Nat) (hj : h + 1 ≤ j) (hm : 0 < m % 2 ^ (h + 
 theorem mod_two_pow_eq_zero_iff (m k : Nat) :
     m % 2 ^ k = 0 ↔ ∀ j, j < k → m / 2 ^ j % 2 = 0 := by
   induction k with
-  | zero => simp [Nat.mod_one]
+  | zero => simp only [pow_zero, Nat.mod_one, not_lt_zero, IsEmpty.forall_iff, implies_true]
   | succ k ih =>
       rw [Nat.mod_pow_succ]
       constructor
@@ -181,8 +181,8 @@ def Inv (H : Bytes → B256) (s : Acc) (ls : List B256) : Prop :=
 
 /-- The empty seed satisfies the invariant. -/
 theorem empty_inv (H : Bytes → B256) : Inv H Acc.empty [] := by
-  refine ⟨rfl, by simp, fun h _ hbit => ?_⟩
-  simp [Acc.empty, Nat.zero_div] at hbit
+  refine ⟨rfl, by simp only [List.length_nil, Nat.reducePow, Nat.ofNat_pos], fun h _ hbit => ?_⟩
+  simp only [Acc.empty, Nat.zero_div, Nat.zero_mod, zero_ne_one] at hbit
 
 /-! ## Root-computation correctness -/
 
@@ -260,7 +260,7 @@ theorem climb_spec (H : Bytes → B256) (ls : List B256) :
   | zero =>
       intro h br hlt _
       have hmod : ls.length % 2 ^ h = ls.length :=
-        Nat.mod_eq_of_lt (by simpa using hlt)
+        Nat.mod_eq_of_lt (by simpa only [add_zero] using hlt)
       simp only [climb, pending, hmod, Nat.sub_self, List.drop_zero,
         Nat.add_zero]
   | succ k ih =>
@@ -284,14 +284,15 @@ reference mixed root of its leaf list. -/
 theorem root_correct (H : Bytes → B256) (s : Acc) (ls : List B256)
     (hInv : Inv H s ls) : Acc.root H s = mixedRootOf H ls := by
   obtain ⟨hc, hlt, hbr⟩ := hInv
-  have h0 : ls.length / 2 ^ 0 = ls.length := by simp
+  have h0 : ls.length / 2 ^ 0 = ls.length := by simp only [pow_zero, Nat.div_one]
   have hpend : rootAt H 0 (pending 0 ls.length ls) = 0 := by
     have hnil : pending 0 ls.length ls = ([] : List B256) := by
       unfold pending
       rw [Nat.pow_zero, Nat.mod_one, Nat.sub_zero, List.drop_length]
     rw [hnil, rootAt_nil]
     rfl
-  have hclimb := climb_spec H ls 32 0 s.branch (by simpa using hc ▸ hlt)
+  have hclimb := climb_spec H ls 32 0 s.branch (by simpa only [zero_add, Nat.reducePow] using
+    hc ▸ hlt)
     (fun h' _ h2 hbit => hc ▸ hbr h' (by omega) (hc ▸ hbit))
   rw [h0, hpend, Nat.zero_add] at hclimb
   unfold Acc.root mixedRootOf rootOf
@@ -339,14 +340,14 @@ theorem firstLive_existsUnique (m : Nat) (hm0 : 0 < m) (hm32 : m < 2 ^ 32) :
     exact hmod ((mod_two_pow_eq_zero_iff m 32).mpr hall)
   let h := Nat.find hex
   have hspec : h < 32 ∧ m / 2 ^ h % 2 = 1 := by
-    simpa [h] using Nat.find_spec hex
+    simpa only [h, Nat.find_lt_iff, and_self_left] using Nat.find_spec hex
   have hfirst : FirstLive m h := by
     refine ⟨hspec.2, ?_⟩
     intro j hj
     rcases Nat.mod_two_eq_zero_or_one (m / 2 ^ j) with hz | ho
     · exact hz
     · have hle : h ≤ j := by
-        dsimp [h]
+        dsimp only [h]
         exact Nat.find_min' hex ⟨by omega, ho⟩
       omega
   refine ⟨h, ⟨hspec.1, hfirst⟩, ?_⟩
@@ -373,13 +374,13 @@ theorem walk_eq_some_firstLive (H : Bytes → B256) (branch : Nat → B256)
   | zero =>
       rcases fuel with _ | fuel
       · omega
-      · have hbit : size % 2 = 1 := by simpa [FirstLive] using hfirst.1
-        simp [walk, hbit, accumulatedNode]
+      · have hbit : size % 2 = 1 := by simpa only [pow_zero, Nat.div_one] using hfirst.1
+        simp only [walk, hbit, ↓reduceIte, add_zero, accumulatedNode]
   | succ live ih =>
       rcases fuel with _ | fuel
       · omega
       · have hzero : size % 2 = 0 := by
-          simpa [FirstLive] using hfirst.2 0 (by omega)
+          simpa only [pow_zero, Nat.div_one] using hfirst.2 0 (by omega)
         have hfirst' : FirstLive (size / 2) live := by
           constructor
           · rw [div_two_div_pow]
@@ -404,7 +405,7 @@ theorem walk_eq_none_iff (H : Bytes → B256) :
       walk H br k h size node = none ↔ ∀ j, j < k → size / 2 ^ j % 2 = 0 := by
   intro k
   induction k with
-  | zero => intro h size node br; simp [walk]
+  | zero => intro h size node br; simp only [walk, not_lt_zero, IsEmpty.forall_iff, implies_true]
   | succ k ih =>
       intro h size node br
       simp only [walk]
@@ -464,7 +465,8 @@ theorem insert_isSome_iff (H : Bytes → B256) (s : Acc) (node : B256) :
     · intro _; exact hc
     · intro _; omega
   · rw [if_neg hc]
-    simp
+    simp only [Option.isSome_none, Bool.false_eq_true, Nat.reducePow, Nat.add_one_sub_one,
+      false_iff, not_lt]
     omega
 
 /-- Under the cap, a known first live height determines the complete insertion
@@ -477,7 +479,7 @@ theorem insert_eq_some_firstLive (H : Bytes → B256) (s : Acc) (node : B256)
         (accumulatedNode H s.branch 0 h node), s.count + 1⟩ := by
   unfold Acc.insert
   rw [if_pos hcap, walk_eq_some_firstLive H s.branch node hh hfirst]
-  simp
+  simp only [zero_add, Option.map_some]
 
 /-! ## Insertion preserves the invariant -/
 
@@ -573,7 +575,8 @@ theorem walk_insert_spec (H : Bytes → B256) (ls : List B256) (leaf : B256) :
       exact absurd (Nat.lt_one_iff.mp hlt) hne
   | succ k ih =>
       intro h br hk32 hmod hne hlt hbr
-      have hlen' : (ls ++ [leaf]).length = ls.length + 1 := by simp
+      have hlen' : (ls ++ [leaf]).length = ls.length + 1 := by simp only [List.length_append,
+        List.length_cons, List.length_nil, zero_add]
       have hq1 : 1 ≤ (ls.length + 1) / 2 ^ h := Nat.pos_of_ne_zero hne
       have hpowh : 0 < 2 ^ h := Nat.two_pow_pos h
       have hge : 2 ^ h ≤ ls.length + 1 := by
@@ -709,8 +712,9 @@ theorem insert_spec (H : Bytes → B256) (s : Acc) (ls : List B256)
   · unfold Acc.insert
     rw [if_pos hcap, hwalk]
     rfl
-  · simp [hc]
-  · have hl : (ls ++ [leaf]).length = ls.length + 1 := by simp
+  · simp only [hc, List.length_append, List.length_cons, List.length_nil, zero_add]
+  · have hl : (ls ++ [leaf]).length = ls.length + 1 := by simp only [List.length_append,
+    List.length_cons, List.length_nil, zero_add]
     omega
   · intro h h32 hbit
     rw [hc] at hbit
@@ -732,7 +736,7 @@ theorem deposit_ne_assert_false (H : Bytes → B256) (s : Acc)
   split at hEq <;> try split at hEq <;> try split at hEq <;>
     try split at hEq <;> try split at hEq <;> try split at hEq <;>
     try split at hEq <;> try split at hEq <;> try split at hEq
-  all_goals simp at hEq
+  all_goals simp only [Except.error.injEq, reduceCtorEq] at hEq
   rename_i _discr hwalk
   have hcap' : s.count < 2 ^ 32 - 1 := by omega
   have hall := (walk_eq_none_iff H 32 0 (s.count + 1) _ s.branch).mp hwalk
@@ -764,7 +768,7 @@ theorem deposit_ok_spec (H : Bytes → B256) (s : Acc)
   split at hEq <;> try split at hEq <;> try split at hEq <;>
     try split at hEq <;> try split at hEq <;> try split at hEq <;>
     try split at hEq <;> try split at hEq <;> try split at hEq
-  all_goals simp at hEq
+  all_goals simp only [reduceCtorEq, Except.ok.injEq, Prod.mk.injEq] at hEq
   rename_i hcapNN _discr br hwalk
   obtain ⟨h1, h2⟩ := hEq
   have hrootEq : depositDataNode H pubkey withdrawal_credentials signature

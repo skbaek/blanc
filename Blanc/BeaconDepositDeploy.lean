@@ -158,7 +158,7 @@ private theorem provisionalConstructorPrefix_length :
 
 theorem constructorRuntimeOffset_exact :
     constructorRuntimeOffset = 146 := by
-  simpa [constructorRuntimeOffset] using provisionalConstructorPrefix_length
+  simpa only [constructorRuntimeOffset] using provisionalConstructorPrefix_length
 
 /-- Fixed-width immediates make the final prefix exactly as long as the
 provisional offset embedded into it. -/
@@ -173,12 +173,12 @@ theorem constructorInitPrefix_length_exact :
 
 theorem constructorAppendedRuntime_length_exact :
     code.length = 2891 := by
-  simpa [codeSize] using codeSize_exact
+  simpa only [codeSize] using codeSize_exact
 
 theorem creationCode_length_exact :
     creationCode.length = 3037 := by
-  simp [creationCode, constructorInitPrefix_length_exact,
-    constructorAppendedRuntime_length_exact]
+  simp only [creationCode, List.length_append, constructorInitPrefix_length_exact,
+    constructorAppendedRuntime_length_exact, Nat.reduceAdd]
 
 theorem eip3860InitcodeLimit_exact :
     eip3860InitcodeLimit = 49152 := by
@@ -191,7 +191,7 @@ theorem creationCode_eip3860 :
 
 theorem creationCode_drop_prefix :
     creationCode.drop constructorInitPrefix.length = code := by
-  simp [creationCode]
+  simp only [creationCode, List.drop_left']
 
 /-- The constructor's CODECOPY window is exactly the appended runtime. -/
 theorem creationCode_slice_runtime :
@@ -246,11 +246,10 @@ theorem mem_constructorSstoreSourceSites_iff
         site.instruction = .reg .sstore := by
   rcases site with ⟨path, pc, instruction⟩
   cases instruction <;>
-    simp [constructorSstoreSourceSites, constructorSourceSitesMatching,
-      constructorIsSstore]
+    simp only [constructorSstoreSourceSites, constructorSourceSitesMatching, constructorIsSstore, List.mem_filter, reg.injEq, and_congr_right_iff, Bool.false_eq_true, and_false, reduceCtorEq]
   rename_i regular
   cases regular <;>
-    simp
+    simp only [Bool.false_eq_true, reduceCtorEq, implies_true]
 
 def runtimeAndConstructorStaticcallSourceSites : List Prog.SourceSite :=
   runtimeStaticcallSourceSites ++ constructorStaticcallSourceSites
@@ -287,7 +286,7 @@ theorem constructorSstoreSourceSite_pc
   have pcMember : site.pc ∈ Prog.SourceSite.pcs constructorSstoreSourceSites :=
     List.mem_map_of_mem member
   rw [constructorSstoreSourceSites_pcs] at pcMember
-  simpa using pcMember
+  simpa only [List.mem_cons, List.not_mem_nil, or_false] using pcMember
 
 theorem constructorSstoreSourceSite_coordinate
     {site : Prog.SourceSite}
@@ -298,7 +297,7 @@ theorem constructorSstoreSourceSite_coordinate
         Prog.SourceSite.coordinates constructorSstoreSourceSites :=
     List.mem_map_of_mem member
   rw [constructorSstoreSourceSites_coordinates] at coordinateMember
-  simpa using coordinateMember
+  simpa only [List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false] using coordinateMember
 
 theorem constructorStaticcallSourceSites_length :
     constructorStaticcallSourceSites.length = 1 :=

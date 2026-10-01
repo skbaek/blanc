@@ -71,7 +71,7 @@ theorem popBurnBy1 {devm : Devm} {x : B256} {s : List B256} {cost : Nat}
 theorem popBurnBy2 {devm : Devm} {x w : B256} {s : List B256} {cost : Nat}
     (hs : devm.stack = x :: w :: s) (hg : cost ≤ devm.gasLeft) :
     Devm.PopBurnBy [x, w] cost devm (mach' devm s cost) :=
-  { stack := hs, memory := rfl, gasLeft := by simp [mach']; omega,
+  { stack := hs, memory := rfl, gasLeft := by simp only [mach', Devm.setMach_gasLeft]; omega,
     logs := rfl, refundCounter := rfl, output := rfl, accountsToDelete := rfl,
     returnData := rfl, error := rfl, accessedAddresses := rfl,
     accessedStorageKeys := rfl, state := rfl, createdAccounts := rfl,
@@ -127,7 +127,7 @@ theorem storOf_setStorVal (st : State) (ct a : Adr) (k k' v : B256) :
   unfold storOf State.setStorVal
   by_cases h : ct = a
   · subst h; rw [State.get_set_self]; simp only [true_and]; exact Stor.get_set_ite _ _ _ _
-  · rw [State.get_set_ne _ h]; simp [h]
+  · rw [State.get_set_ne _ h]; simp only [h, false_and, ↓reduceIte]
 
 /-- A storage-empty state agrees with the empty storage shadow `[]`. -/
 theorem storAgree_nil {st : State} (h : ∀ a k, storOf st a k = 0) :
@@ -296,7 +296,7 @@ theorem generic_cont {fs : List SFunc} {sevm : Sevm} {c : Cfg} {n : Ninst} {g : 
     rw [hk.2.2]; exact hc.2.2.2 a
   · rw [hf]
     exact .next (Ninst.runCompiled_of_run (pcFree_of_ninstAccKeeps hn)
-      ⟨.none, trivial, 0, by simp [Ninst.StepRun, hstep, Step.Run]⟩) r
+      ⟨.none, trivial, 0, by simp only [Ninst.StepRun, Step.Run, hstep, ExceptT.stM_eq, and_self]⟩) r
 
 theorem mstoreStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
     (h : mstoreStep c g = some c') (hf : c.f = .next (.reg .mstore) g) :
@@ -385,7 +385,7 @@ theorem logStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc} {n
       have hs' : devm.stack = i :: sz :: (rest.take n.val ++ rest.drop n.val) := by
         rw [List.take_append_drop]; exact hs
       exact StepOk.same rfl rfl rfl rfl ⟨rfl, rfl, rfl⟩ rfl fun o r =>
-        .next (Ninst.runCompiled_log_of hs' (by simp; omega) hstatic rfl
+        .next (Ninst.runCompiled_log_of hs' (by simp only [List.length_take, inf_eq_left]; omega) hstatic rfl
           (by simp only [Mem.read, array_sliceD_eq_list]) rfl
           (by exact (Nat.sub_add_cancel hgas).symm)) r
     · cases h
@@ -463,10 +463,10 @@ theorem callRun_cont {fs : List SFunc} {sevm : Sevm} {c : Cfg} {g : SFunc} {cp :
     refine ⟨fun x => ?_, fun a => ?_, fun a k => ?_, fun a => ?_⟩
     · show x ∈ d.accessedStorageKeys ↔ x ∈ c.keys ++ ckeys
       rw [hdk x, hce, hpk, hc.1 x, hca.2.1 x, List.mem_append]
-      simp
+      simp only [true_and]
     · show a ∈ d.accessedAddresses ↔ a ∈ cp.adrs ++ cadrs
       rw [hda a, hce, hpa a, hca.1 a, List.mem_append]
-      simp
+      simp only [true_and]
     · show storOf d.state a k = lookupS cstor a k
       rw [resumeCallB_state hr]; exact hca.2.2.1 a k
     · show acctView (d.state.get a) = lookupA cacs a
@@ -576,11 +576,11 @@ theorem wstep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg}
     · rename_i q d hstep
       cases h
       refine StepOk.same rfl rfl rfl rfl (pc_step_accKeep hstep) rfl fun o r => .pcAt ?_ r
-      simp [Ninst.StepRun, hstep, Step.Run]
+      simp only [Ninst.StepRun, Step.Run, hstep, ExceptT.stM_eq, and_self]
     · cases h
   | last l =>
     cases l <;> simp only [wstep] at h <;> (try split at h) <;> cases h
-  | undefined => simp [wstep] at h
+  | undefined => simp only [wstep, reduceCtorEq] at h
   | next n g =>
     simp only [wstep] at h
     split at h
@@ -679,7 +679,7 @@ theorem wstep_done {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {o : Outcome}
       (try split at h) <;> cases h
   | callNext k f => simp only [wstep] at h; split at h <;> (try split at h) <;> cases h
   | pcAt p g => simp only [wstep] at h; split at h <;> cases h
-  | undefined => simp [wstep] at h
+  | undefined => simp only [wstep, reduceCtorEq] at h
 
 /-- A chunk of `n` steps to a configuration. -/
 theorem wrun_cont {fs : List SFunc} {sevm : Sevm} :
@@ -702,7 +702,7 @@ configuration that produced it, and (halted) that configuration's world. -/
 theorem wrun_done {fs : List SFunc} {sevm : Sevm} :
     ∀ {n : Nat} {c c' : Cfg} {o : Outcome}, wrun fs sevm n c = .done o c' → Agree c →
       RunK fs sevm c.devm c.f c.K o ∧ Agree c' ∧ ∀ d, o = .halted d → d.state = c'.devm.state
-  | 0, c, c', o, h, _ => by simp [wrun] at h
+  | 0, c, c', o, h, _ => by simp only [wrun, reduceCtorEq] at h
   | n + 1, c, c', o, h, hc => by
     simp only [wrun] at h
     split at h

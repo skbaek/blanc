@@ -48,7 +48,7 @@ private lemma reach_of_dispatch_leaf_logs {sig w : B256} {f p : Func}
     intro h₂
     have h_pfx1 : (sig =? sig) :: ws <<+ s₁.stack := by
       generalize_line_prefix
-    rw [show (sig =? sig) = 1 from by simp [B256.eqCheck]] at h_pfx1
+    rw [show (sig =? sig) = 1 from by simp only [B256.eqCheck, ↓reduceIte]] at h_pfx1
     have hfree : Line.gasFree [pushB256 sig, eq] = true := by
       simp only [Line.gasFree, Ninst.pushB256, Ninst.gasFree, Rinst.gasFree,
         Bool.true_and]

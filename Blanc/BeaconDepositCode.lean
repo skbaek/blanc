@@ -94,10 +94,10 @@ theorem mem_runtimeSstoreSourceSites_iff
       site ∈ runtime.sourceSites ∧ site.instruction = .reg .sstore := by
   rcases site with ⟨path, pc, instruction⟩
   cases instruction <;>
-    simp [runtimeSstoreSourceSites, sourceSitesMatching, isSstore]
+    simp only [runtimeSstoreSourceSites, sourceSitesMatching, isSstore, List.mem_filter, Ninst.reg.injEq, and_congr_right_iff, Bool.false_eq_true, and_false, reduceCtorEq]
   rename_i regular
   cases regular <;>
-    simp
+    simp only [Bool.false_eq_true, reduceCtorEq, implies_true]
 
 theorem runtimeSstoreSourceSites_pcs :
     Prog.SourceSite.pcs runtimeSstoreSourceSites = [1070, 2869] := by
@@ -120,7 +120,7 @@ theorem runtimeSstoreSourceSite_pc
   have pcMember : site.pc ∈ Prog.SourceSite.pcs runtimeSstoreSourceSites :=
     List.mem_map_of_mem member
   rw [runtimeSstoreSourceSites_pcs] at pcMember
-  simpa using pcMember
+  simpa only [List.mem_cons, List.not_mem_nil, or_false] using pcMember
 
 theorem runtimeSstoreSourceSite_coordinate
     {site : Prog.SourceSite}
@@ -132,7 +132,7 @@ theorem runtimeSstoreSourceSite_coordinate
         Prog.SourceSite.coordinates runtimeSstoreSourceSites :=
     List.mem_map_of_mem member
   rw [runtimeSstoreSourceSites_coordinates] at coordinateMember
-  simpa using coordinateMember
+  simpa only [List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false] using coordinateMember
 
 theorem runtimeStaticcallSourceSites_length :
     runtimeStaticcallSourceSites.length = 11 := by

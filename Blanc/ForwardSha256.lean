@@ -125,8 +125,9 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64
       (Frame.ofCall msg).settle (.ok child) = .ok child := by
     rw [Frame.settle_eq_settleMsg_handleErrorWith,
       executeCode.handleErrorWith_ok]
-    simp [Frame.ofCall, Frame.settleMsg, processMessage.settle, child, cev,
-      initEvm, initDevm]
+    simp only [Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte, processMessage.settle,
+      initEvm, initDevm, Msg.withBenv_gas, Msg.withBenv_stat_rules, Except.bind_ok,
+      ite_eq_right_iff, Except.ok.injEq, child, cev]
     intro h
     cases h
   have hroom : p.stack.length < 1024 := by
@@ -150,7 +151,7 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64
   have hrun : Ninst.ChildlessRunCompiled sevm devm (.exec .staticcall) post :=
     Ninst.childlessRunCompiled_staticcall_doneFrame
       hfork h_stk (by simpa only [h64, h32] using h_ext) h_del h_acc
-      (by simpa using h_split) h_gas h_depth
+      (by simpa only using h_split) h_gas h_depth
       (by simpa only [p, msg, h64, h32, h2adr] using henter)
       (by simpa only [p, msg, h64, h32] using hres)
   simpa only [p, msg, cev, child, post] using hrun
@@ -206,8 +207,8 @@ lemma rawInsertListIfNew_eq_self_of_forall_contains
   | cons hd tl ih =>
       rw [Std.DHashMap.Internal.Raw₀.insertListIfNewₘ,
         rawInsertIfNew_eq_self_of_contains m hd.1 hd.2
-          (h hd (by simp))]
-      exact ih (fun p hp => h p (by simp [hp]))
+          (h hd (by simp only [List.mem_cons, true_or]))]
+      exact ih (fun p hp => h p (by simp only [List.mem_cons, hp, or_true]))
 
 lemma rawUnion_self
     {α : Type} {β : α → Type}
@@ -446,13 +447,13 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
     exact hfork.rules_stateGas_none
   have hchildLogs : child.logs = [] := by
     change cev.dyna.logs = []
-    dsimp [cev, initEvm, initDevm]
+    dsimp only [cev, initEvm, initDevm, Msg.withBenv_gas, Msg.withBenv_stat_rules]
     rw [hstateGas]
     rfl
   have hsub' :
       devm.state.subBal sevm.currentTarget 0 = some stmid := by
     have hp : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa [msg, staticcallSpawnMsg, callMsg] using hsub
+      simpa only [msg, staticcallSpawnMsg, callMsg, Bool.true_or] using hsub
     exact hp
   have hchildState : child.state = stmid.addBal 2 0 := by
     rfl
@@ -541,7 +542,7 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
     dsimp only [post, child, cev, initEvm, initDevm]
     change p.refundCounter + 0 = devm.refundCounter
     rw [show p.refundCounter = devm.refundCounter from rfl]
-    simp
+    simp only [add_zero]
   have hdeletePost :
       post.accountsToDelete.isEmpty = devm.accountsToDelete.isEmpty := by
     dsimp only [post, child, cev, initEvm, initDevm]
@@ -549,7 +550,8 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
       Std.HashSet.emptyWithCapacity).isEmpty =
         devm.accountsToDelete.isEmpty
     rw [show p.accountsToDelete = devm.accountsToDelete from rfl]
-    simp
+    simp only [Std.HashSet.union_eq, Std.HashSet.isEmpty_union,
+      Std.HashSet.isEmpty_emptyWithCapacity, Bool.and_true]
   have houtputPost : post.output = devm.output := by
     change p.output = devm.output
     rfl

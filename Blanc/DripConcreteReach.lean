@@ -61,7 +61,7 @@ theorem concreteConfig_covered {timestamp : Nat} {fork : Fork}
     (hfork : concreteConfig.forkAt timestamp = .ok fork) :
     CoveredFork fork := by
   have hprague : concreteConfig.forkAt timestamp = .ok .prague := by
-    simpa [concreteConfig] using ChainConfig.pragueOnly_forkAt 1 timestamp
+    simpa only [concreteConfig] using ChainConfig.pragueOnly_forkAt 1 timestamp
   rw [hprague] at hfork
   cases hfork
   exact CoveredFork.prague

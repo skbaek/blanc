@@ -223,18 +223,18 @@ theorem Exec.Deriv.ParentStepActions.descendantFlowActions_eq
       actions ++ Exec.Deriv.descendantFlowActions dp ca next := by
   cases edge with
   | cont =>
-      simp [Exec.Deriv.descendantFlowActions, Exec.descendantFrames]
+      simp only [descendantFlowActions, Exec.descendantFrames, List.nil_append]
   | doneOk =>
-      simp [Exec.Deriv.descendantFlowActions, Exec.descendantFrames]
+      simp only [descendantFlowActions, Exec.descendantFrames, List.nil_append]
   | runOk hstep henter child hresume next =>
       simp only [Exec.Deriv.descendantFlowActions,
         Exec.descendantFrames]
       split <;> rename_i hcommit
       · have hraw :=
           Jaune.Frame.raw_commits_of_settlementCommits hcommit
-        simp [Exec.flowActions, Exec.committedFrames, hraw]
+        simp only [List.cons_append, flowActions, Exec.committedFrames, hraw, ↓reduceDIte]
         rw [← List.cons_append, List.filterMap_append]
-      · simp
+      · simp only [List.nil_append]
 
 /-- The weighted prefix relation accounts for every successful spawn before
 its endpoint and leaves exactly that endpoint's remaining descendants. -/
@@ -245,7 +245,7 @@ theorem Exec.Deriv.ParentPrefixActions.descendantFlowActions_eq
     Exec.Deriv.descendantFlowActions dp ca root =
       actions ++ Exec.Deriv.descendantFlowActions dp ca tail := by
   induction hprefix with
-  | refl => simp
+  | refl => simp only [List.nil_append]
   | step head rest ih =>
       rw [head.descendantFlowActions_eq, ih, List.append_assoc]
 
@@ -257,7 +257,7 @@ theorem Exec.Deriv.ParentPrefixActions.trans
     (hright : Exec.Deriv.ParentPrefixActions dp ca mid tail right) :
     Exec.Deriv.ParentPrefixActions dp ca root tail (left ++ right) := by
   induction hleft with
-  | refl => simpa using hright
+  | refl => simpa only [List.nil_append] using hright
   | step head rest ih =>
       simpa only [List.append_assoc] using
         Exec.Deriv.ParentPrefixActions.step head (ih hright)
@@ -271,8 +271,8 @@ theorem Exec.Deriv.ParentPrefixActions.snoc
     Exec.Deriv.ParentPrefixActions dp ca root next
       (before ++ selected) := by
   apply hprefix.trans
-  simpa using Exec.Deriv.ParentPrefixActions.step hedge
-    (Exec.Deriv.ParentPrefixActions.refl next)
+  simpa only [List.append_nil] using
+    Exec.Deriv.ParentPrefixActions.step hedge (Exec.Deriv.ParentPrefixActions.refl next)
 
 /-- The non-circular root/descendant ledger split for a classified retained
 frame.  Unlike an endpoint-only effect, this equation is indexed by the
@@ -356,7 +356,7 @@ theorem Ninst.StepRun.unique_exec_of_filled
     (hright : Ninst.StepRun pc₂ sevm pre (.exec x) right out₂) :
     left = right ∧ out₁ = out₂ := by
   have hright' : Ninst.StepRun pc₁ sevm pre (.exec x) right out₂ :=
-    Ninst.stepRun_pc_irrel (by simp [Ninst.pcFree]) hright
+    Ninst.stepRun_pc_irrel (by simp only [Ninst.pcFree]) hright
   unfold Ninst.StepRun at hleft hright'
   exact Blanc.Step.Run.unique_of_filled
     hleftFilled hrightFilled hleft hright'
@@ -388,7 +388,7 @@ theorem Exec.Frame.advance_runCompiled_next
         (before ++ selected) := by
   rcases frame with ⟨rootPc, sevm, rootPre, out, rootRun, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok final =>
       rcases compiled with ⟨xl, hfilled, hcompiled⟩
       have hstepEq : Evm.step ⟨pc, sevm, stepPre⟩ =
@@ -506,15 +506,15 @@ theorem Exec.Frame.advance_cont
         ⟨nextPc, frame.sevm, nextPre, frame.out, continuation⟩ before := by
   rcases frame with ⟨rootPc, sevm, rootPre, out, rootRun, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok final =>
       cases current with
       | halt h => cases hstep.symm.trans h
       | cont h next =>
           cases hstep.symm.trans h
           refine ⟨next, ?_⟩
-          simpa using hprefix.snoc
-            (Exec.Deriv.ParentStepActions.cont hstep next)
+          simpa only [List.append_nil] using
+            hprefix.snoc (Exec.Deriv.ParentStepActions.cont hstep next)
       | doneOk h henter hresume next => cases hstep.symm.trans h
       | runOk h henter child hresume next => cases hstep.symm.trans h
 
@@ -550,7 +550,7 @@ theorem Exec.Frame.advance_runCompiled_prepend
       noPushBefore frame.sevm.code tailPc 32 = true := by
   induction line generalizing pc stepPre before with
   | nil =>
-      exact ⟨pc, stepPre, current, [], by simpa using hprefix,
+      exact ⟨pc, stepPre, current, [], by simpa only [List.append_nil] using hprefix,
         .nil, compiled, sub, boundary⟩
   | cons n line ih =>
       change Func.RunCompiled fs frame.sevm stepPre
@@ -1141,7 +1141,7 @@ theorem Exec.Deriv.ParentStepActions.selected_eq_retained_of_call
           have hcommit : Frame.settlementCommits
               (Frame.ofCall msg) raw = true :=
             Frame.settlementCommits_ofCall_of_raw_commits commits
-          simp [hcommit, RetainedXlot.flowActions]
+          simp only [hcommit, ↓reduceIte, RetainedXlot.flowActions]
 
 /-- Align a committed retained CALL boundary with its exact source occurrence
 and advance the original-frame cursor by precisely that child's action list. -/
@@ -1172,7 +1172,7 @@ theorem Exec.Frame.CompiledCursor.alignCommittedCallStep
       Ninst.call rawSlot (.ok tailCursor.pre) := by
     have transported :=
       Ninst.stepRun_pc_irrel (pc' := cursor.pc)
-        (by simp [Ninst.pcFree]) rawStep
+        (by simp only [Ninst.pcFree]) rawStep
     simpa only [hpre] using transported
   have hselected := edge.selected_eq_retained_of_call
     hat rawFilled exactStep retained commits
@@ -1231,7 +1231,7 @@ theorem Exec.Frame.CompiledCursor.selectNextChildless
         Func.noPushBefore_next cursor.codeSlice cursor.codeBoundary
       let tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table tail final :=
         ⟨cursor.pc + n.size, _, continuation, cursor.actions, by
-          simpa using hnextPrefix, htail, nextSub, nextBoundary⟩
+          simpa only [List.append_nil] using hnextPrefix, htail, nextSub, nextBoundary⟩
       exact ⟨tailCursor, xl, Ninst.Run.of_runCompiled hcompiled,
         occurrence, rfl⟩
 
@@ -1251,9 +1251,9 @@ theorem Exec.Frame.CompiledCursor.peelChildlessLine
   | cons n line ih =>
       change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
         (.next n (line +++ tail)) final at cursor
-      rcases cursor.selectNextChildless (hchildless n (by simp)) with
+      rcases cursor.selectNextChildless (hchildless n (by simp only [List.mem_cons, true_or])) with
         ⟨nextCursor, xl, hrun, occurrence, hactions⟩
-      rcases ih nextCursor (fun i hi => hchildless i (by simp [hi])) with
+      rcases ih nextCursor (fun i hi => hchildless i (by simp only [List.mem_cons, hi, or_true])) with
         ⟨tailCursor, hline, htailActions⟩
       exact ⟨tailCursor, .cons hrun hline, htailActions.trans hactions⟩
 
@@ -1271,20 +1271,20 @@ private theorem compiledDispatchPcFree_build
   | zero =>
       cases entries with
       | nil =>
-          simp [DispatchTree.build, CompiledDispatchPcFree, Func.revert,
-            Func.pcFreeBody, Ninst.pushB256, Ninst.pcFree]
+          simp only [DispatchTree.build, Func.revert, Ninst.pushB256, CompiledDispatchPcFree,
+            Func.pcFreeBody, Ninst.pcFree, Bool.and_self]
       | cons head tail =>
           cases tail with
-          | nil => exact hentries head (by simp)
-          | cons second rest => exact hentries head (by simp)
+          | nil => exact hentries head (by simp only [List.mem_cons, List.not_mem_nil, or_false])
+          | cons second rest => exact hentries head (by simp only [List.mem_cons, true_or])
   | succ n ih =>
       cases entries with
       | nil =>
-          simp [DispatchTree.build, CompiledDispatchPcFree, Func.revert,
-            Func.pcFreeBody, Ninst.pushB256, Ninst.pcFree]
+          simp only [DispatchTree.build, Func.revert, Ninst.pushB256, CompiledDispatchPcFree,
+            Func.pcFreeBody, Ninst.pcFree, Bool.and_self]
       | cons head tail =>
           cases tail with
-          | nil => exact hentries head (by simp)
+          | nil => exact hentries head (by simp only [List.mem_cons, List.not_mem_nil, or_false])
           | cons second rest =>
               simp only [DispatchTree.build, CompiledDispatchPcFree]
               constructor
@@ -1300,12 +1300,12 @@ private theorem compiledDispatchWith_pcFree
     (dispatchWith fallbackSlot tree).pcFreeBody = true := by
   induction tree with
   | leaf selector body =>
-      simpa [CompiledDispatchPcFree, dispatchWith, Func.pcFreeBody,
-        Ninst.pcFree, Ninst.pushB256] using h
+      simpa only [dispatchWith, Ninst.pushB256, Func.pcFreeBody, Ninst.pcFree, Bool.true_and,
+        CompiledDispatchPcFree] using h
   | fork left right ihLeft ihRight =>
       rcases h with ⟨hleft, hright⟩
-      simp [dispatchWith, Func.pcFreeBody, Ninst.pcFree,
-        Ninst.pushB256, ihLeft hleft, ihRight hright]
+      simp only [dispatchWith, Fin.isValue, Ninst.pushB256, Func.pcFreeBody, Ninst.pcFree,
+        ihRight hright, ihLeft hleft, Bool.and_self]
 
 /-! The pc-freedom proof below deliberately never reduces the complete closed
 WETH10 syntax tree.  Each source-shape equality unfolds one small constructor
@@ -1323,7 +1323,7 @@ private theorem prependStore_pcFreeBody
     (w : B256) (i : Nat) (rest : Func)
     (hrest : rest.pcFreeBody = true) :
     (prependStore w i rest).pcFreeBody = true := by
-  simp [prependStore, Func.pcFreeBody, Ninst.pcFree, Ninst.pushB256, hrest]
+  simp only [prependStore, Ninst.pushB256, Func.pcFreeBody, Ninst.pcFree, hrest, Bool.and_self]
 
 private theorem prependStoresRev_pcFreeBody
     (stores : List (B256 × Nat)) (rest : Func)
@@ -1496,7 +1496,7 @@ theorem Exec.Frame.compiledMainCursor
       cursor.actions = [] := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -1530,7 +1530,7 @@ theorem Exec.Frame.compiledMainCursor
       have hprefix : Exec.Deriv.ParentPrefixActions dp ca
           ⟨0, e, pre, .ok post, run⟩
           ⟨1, e, actualMid, .ok post, actualContinuation⟩ [] := by
-        simpa using hentryPrefix
+        simpa only using hentryPrefix
       exact ⟨⟨1, actualMid, actualContinuation, [], hprefix, hmain,
         hsub, hboundary⟩, rfl⟩
 
@@ -1547,7 +1547,7 @@ private theorem Exec.Frame.compiledMainCursorSilent
       Devm.DispatchSilent frame.pre cursor.pre := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -1581,7 +1581,7 @@ private theorem Exec.Frame.compiledMainCursorSilent
       have hprefix : Exec.Deriv.ParentPrefixActions dp ca
           ⟨0, e, pre, .ok post, run⟩
           ⟨1, e, actualMid, .ok post, actualContinuation⟩ [] := by
-        simpa using hentryPrefix
+        simpa only using hentryPrefix
       exact ⟨⟨1, actualMid, actualContinuation, [], hprefix, hmain,
         hsub, hboundary⟩, rfl,
         Devm.DispatchSilent.of_burnBy hcompiledBurn⟩
@@ -1606,16 +1606,18 @@ private theorem Exec.Frame.CompiledCursor.reachDispatchLeaf
   change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
     ([Ninst.pushB256 sig, Ninst.eq] +++ (f <?> .call k)) final at cursor
   rcases cursor.peelChildlessLine
-      (by simp [NinstIsChildless, Ninst.pushB256]) with
+      (by simp only [Ninst.pushB256, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+        forall_eq_or_imp, forall_eq, and_self]) with
     ⟨branchCursor, hline, hbranchActions⟩
   have hflag : (sig =? sig) :: stack <<+ branchCursor.pre.stack := by
     rcases Line.of_run_cons hline with ⟨afterPush, hpush, hrest⟩
     rcases Line.of_run_cons hrest with ⟨afterEq, heq, hnil⟩
     cases hnil
     have hpushed : sig :: sig :: stack <<+ afterPush.stack := by
-      simpa using prefix_of_push (of_run_pushB256 hpush) hstack
+      simpa only [List.cons_append, List.nil_append] using
+        prefix_of_push (of_run_pushB256 hpush) hstack
     exact prefix_of_eq heq hpushed
-  rw [show (sig =? sig) = 1 from by simp [B256.eqCheck]] at hflag
+  rw [show (sig =? sig) = 1 from by simp only [B256.eqCheck, ↓reduceIte]] at hflag
   rcases branchCursor.selectBranchSucc
       (left := .call k) (right := f) (flag := (1 : B256))
       (stack := stack) (by decide) hflag with
@@ -1712,7 +1714,8 @@ private theorem Exec.Frame.CompiledCursor.reachDispatchWith_build :
                   (((w, body) :: y :: ys).drop
                     ((((w, body) :: y :: ys).length + 1) / 2))))) final at cursor
         rcases cursor.peelChildlessLine
-            (by simp [NinstIsChildless, Ninst.pushB256]) with
+            (by simp only [Fin.isValue, Ninst.pushB256, List.length_cons, List.mem_cons,
+              List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
           ⟨branchCursor, hline, hbranchActions⟩
         have hflagPrefix :
             (leftmostFsig (DispatchTree.build n
@@ -1733,7 +1736,8 @@ private theorem Exec.Frame.CompiledCursor.reachDispatchWith_build :
                   (((w, body) :: y :: ys).drop
                     ((((w, body) :: y :: ys).length + 1) / 2))) ::
                 sig :: sig :: stack <<+ afterPush.stack := by
-            simpa using prefix_of_push (of_run_pushB256 hpush) hdupStack
+            simpa only [List.length_cons, List.cons_append, List.nil_append] using
+              prefix_of_push (of_run_pushB256 hpush) hdupStack
           exact prefix_of_gt hgt hpushStack
         have hleftmost :
             leftmostFsig (DispatchTree.build n
@@ -1750,7 +1754,7 @@ private theorem Exec.Frame.CompiledCursor.reachDispatchWith_build :
             exact DispatchTree.fst_lt_of_sorted_append
               hsortedSplit hmemTake hz
           have hcheck : (z.fst >? sig) = 1 := by
-            simp [B256.gtCheck, hlt]
+            simp only [B256.gtCheck, gt_iff_lt, hlt, ↓reduceIte]
           rw [hcheck] at hflagPrefix
           rcases branchCursor.selectBranchSucc (flag := (1 : B256))
               (by decide) hflagPrefix with
@@ -1766,7 +1770,7 @@ private theorem Exec.Frame.CompiledCursor.reachDispatchWith_build :
             rw [hdrop] at hmemDrop
             exact DispatchTree.fst_le_of_sorted_mem hsortedZ hmemDrop
           have hcheck : (z.fst >? sig) = 0 := by
-            simp [B256.gtCheck, not_lt_of_ge hle]
+            simp only [B256.gtCheck, gt_iff_lt, not_lt_of_ge hle, ↓reduceIte]
           rw [hcheck] at hflagPrefix
           rcases branchCursor.selectBranchZero hflagPrefix with
             ⟨rightCursor, hrightStack, hrightActions⟩
@@ -1795,7 +1799,8 @@ private theorem Exec.Frame.CompiledCursor.reachDispatchLeafSilent
   change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
     ([Ninst.pushB256 sig, Ninst.eq] +++ (f <?> .call k)) final at cursor
   rcases cursor.peelChildlessLine
-      (by simp [NinstIsChildless, Ninst.pushB256]) with
+      (by simp only [Ninst.pushB256, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+        forall_eq_or_imp, forall_eq, and_self]) with
     ⟨branchCursor, hline, hbranchActions⟩
   have hlineSilent : Devm.DispatchSilent cursor.pre branchCursor.pre :=
     Devm.DispatchSilent.of_pushEq hline
@@ -1804,9 +1809,10 @@ private theorem Exec.Frame.CompiledCursor.reachDispatchLeafSilent
     rcases Line.of_run_cons hrest with ⟨afterEq, heq, hnil⟩
     cases hnil
     have hpushed : sig :: sig :: stack <<+ afterPush.stack := by
-      simpa using prefix_of_push (of_run_pushB256 hpush) hstack
+      simpa only [List.cons_append, List.nil_append] using
+        prefix_of_push (of_run_pushB256 hpush) hstack
     exact prefix_of_eq heq hpushed
-  rw [show (sig =? sig) = 1 from by simp [B256.eqCheck]] at hflag
+  rw [show (sig =? sig) = 1 from by simp only [B256.eqCheck, ↓reduceIte]] at hflag
   rcases branchCursor.selectBranchSuccSilent
       (left := .call k) (right := f) (flag := (1 : B256))
       (stack := stack) (by decide) hflag with
@@ -1905,7 +1911,8 @@ private theorem Exec.Frame.CompiledCursor.reachDispatchWithSilent_build :
                   (((w, body) :: y :: ys).drop
                     ((((w, body) :: y :: ys).length + 1) / 2))))) final at cursor
         rcases cursor.peelChildlessLine
-            (by simp [NinstIsChildless, Ninst.pushB256]) with
+            (by simp only [Fin.isValue, Ninst.pushB256, List.length_cons, List.mem_cons,
+              List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
           ⟨branchCursor, hline, hbranchActions⟩
         have hlineSilent :
             Devm.DispatchSilent cursor.pre branchCursor.pre :=
@@ -1929,7 +1936,8 @@ private theorem Exec.Frame.CompiledCursor.reachDispatchWithSilent_build :
                   (((w, body) :: y :: ys).drop
                     ((((w, body) :: y :: ys).length + 1) / 2))) ::
                 sig :: sig :: stack <<+ afterPush.stack := by
-            simpa using prefix_of_push (of_run_pushB256 hpush) hdupStack
+            simpa only [List.length_cons, List.cons_append, List.nil_append] using
+              prefix_of_push (of_run_pushB256 hpush) hdupStack
           exact prefix_of_gt hgt hpushStack
         have hleftmost :
             leftmostFsig (DispatchTree.build n
@@ -1946,7 +1954,7 @@ private theorem Exec.Frame.CompiledCursor.reachDispatchWithSilent_build :
             exact DispatchTree.fst_lt_of_sorted_append
               hsortedSplit hmemTake hz
           have hcheck : (z.fst >? sig) = 1 := by
-            simp [B256.gtCheck, hlt]
+            simp only [B256.gtCheck, gt_iff_lt, hlt, ↓reduceIte]
           rw [hcheck] at hflagPrefix
           rcases branchCursor.selectBranchSuccSilent (flag := (1 : B256))
               (by decide) hflagPrefix with
@@ -1963,7 +1971,7 @@ private theorem Exec.Frame.CompiledCursor.reachDispatchWithSilent_build :
             rw [hdrop] at hmemDrop
             exact DispatchTree.fst_le_of_sorted_mem hsortedZ hmemDrop
           have hcheck : (z.fst >? sig) = 0 := by
-            simp [B256.gtCheck, not_lt_of_ge hle]
+            simp only [B256.gtCheck, gt_iff_lt, not_lt_of_ge hle, ↓reduceIte]
           rw [hcheck] at hflagPrefix
           rcases branchCursor.selectBranchZeroSilent hflagPrefix with
             ⟨rightCursor, hrightStack, hrightActions, hrightSilent⟩
@@ -1998,7 +2006,7 @@ private theorem Exec.descendantFrames_eq_nil_of_halt_step
     (hstep : Evm.step ⟨pc, sevm, pre⟩ = .halt haltOut) :
     Exec.descendantFrames run = [] := by
   cases run with
-  | halt h => simp [Exec.descendantFrames]
+  | halt h => simp only [Exec.descendantFrames]
   | cont h next => cases hstep.symm.trans h
   | doneErr h henter hresume => cases hstep.symm.trans h
   | doneOk h henter hresume next => cases hstep.symm.trans h
@@ -2019,14 +2027,14 @@ theorem Exec.Frame.CompiledCursor.finishLast
     have hat : Linst.At frame.sevm.code cursor.pc i :=
       Linst.at_of_slice cursor.codeSlice
     have hstep := Evm.step_last (devm := cursor.pre) hat
-    simp [Exec.Deriv.descendantFlowActions,
-      Exec.descendantFrames_eq_nil_of_halt_step cursor.current hstep]
+    simp only [Deriv.descendantFlowActions,
+      Exec.descendantFrames_eq_nil_of_halt_step cursor.current hstep, List.filterMap_nil]
   have hp := cursor.parentPrefix.descendantFlowActions_eq
   change Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
     cursor.actions ++ Exec.Deriv.descendantFlowActions dp ca
       ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩ at hp
   rw [htail] at hp
-  simpa using hp
+  simpa only [List.append_nil] using hp
 
 /-- Entry-silent exact cursor for a successful recognized selector. -/
 theorem Exec.Frame.compiledSelectorBodyCursorSilent
@@ -2049,7 +2057,8 @@ theorem Exec.Frame.compiledSelectorBodyCursorSilent
         (fsig +++ dispatchWith fallbackSlot (weth10Tree dp))))
     frame.post at mainCursor
   rcases mainCursor.peelChildlessLine
-      (by simp [NinstIsChildless]) with
+      (by simp only [List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp,
+        forall_eq, and_self]) with
     ⟨entryBranchCursor, hentryLine, hentryActions⟩
   have hentrySilent :
       Devm.DispatchSilent mainCursor.pre entryBranchCursor.pre :=
@@ -2067,7 +2076,7 @@ theorem Exec.Frame.compiledSelectorBodyCursorSilent
       prefix_of_push (of_run_calldatasize hsize) nil_pref
     exact prefix_of_iszero hzero hsizePrefix
   have hflagZero : (frame.sevm.data.length.toB256 =? 0) = 0 := by
-    simp [B256.eqCheck, hnonempty]
+    simp only [B256.eqCheck, hnonempty, ↓reduceIte]
   rw [hflagZero] at hflagPrefix
   rcases entryBranchCursor.selectBranchZeroSilent hflagPrefix with
     ⟨dispatchPrefixCursor, hdispatchStack, hdispatchActions,
@@ -2078,8 +2087,9 @@ theorem Exec.Frame.compiledSelectorBodyCursorSilent
     (fsig +++ dispatchWith fallbackSlot (weth10Tree dp))
     frame.post at dispatchPrefixCursor
   rcases dispatchPrefixCursor.peelChildlessLine
-      (by simp [fsig, cdl, shiftRight, NinstIsChildless,
-        Ninst.pushB256]) with
+      (by simp only [fsig, cdl, Ninst.pushB256, shiftRight, List.cons_append, List.nil_append,
+        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
+        and_self]) with
     ⟨dispatchCursor, hfsig, hfsigActions⟩
   have hfsigSilent :
       Devm.DispatchSilent dispatchPrefixCursor.pre dispatchCursor.pre :=
@@ -2136,7 +2146,8 @@ theorem Exec.Frame.CompiledCursor.enterNonpayableSilent
   change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
     ([Ninst.callvalue, Ninst.iszero] +++ (body <?> Func.revert)) final at cursor
   rcases cursor.peelChildlessLine
-      (by simp [NinstIsChildless]) with
+      (by simp only [List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp,
+        forall_eq, and_self]) with
     ⟨branchCursor, hline, hbranchActions⟩
   have hlineSilent : Devm.DispatchSilent cursor.pre branchCursor.pre :=
     Devm.DispatchSilent.of_callvalueFlag hline
@@ -2151,7 +2162,7 @@ theorem Exec.Frame.CompiledCursor.enterNonpayableSilent
       prefix_of_push (of_run_callvalue hcallvalue) nil_pref
     exact prefix_of_iszero hzero hvaluePrefix
   rw [hvalue] at hflagPrefix
-  have hone : ((0 : B256) =? 0) = 1 := by simp [B256.eqCheck]
+  have hone : ((0 : B256) =? 0) = 1 := by simp only [B256.eqCheck, ↓reduceIte]
   rw [hone] at hflagPrefix
   rcases branchCursor.selectBranchSuccSilent (flag := (1 : B256))
       (by decide) hflagPrefix with
@@ -2251,45 +2262,52 @@ theorem Exec.Frame.CompiledCursor.reachCallBoolCallbackWithPrefix
   rcases cursor.peelChildlessLine
       (line := arg targetArg ++
         [Ninst.dup 0, Ninst.extcodesize, Ninst.iszero])
-      (by simp [arg, cdl, NinstIsChildless, Ninst.pushB256]) with
+      (by simp only [arg, cdl, Ninst.pushB256, Fin.isValue, List.cons_append, List.nil_append,
+        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
+        and_self]) with
     ⟨branchCursor, hcheck, hcheckActions⟩
   rcases branchCursor.selectBranchLeftWithBurn
       (fun _ => not_run_revert) with
     ⟨successCursor, hpopCheck, hbranchActions⟩
   rcases successCursor.selectNextChildless (by
-      simp [NinstIsChildless]) with
+      simp only [NinstIsChildless]) with
     ⟨valueCursor, _, hpop, _, hpopActions⟩
   rcases valueCursor.peelChildlessLine hvalueChildless with
     ⟨headCursor, hvalueRun, hvalueActions⟩
   rcases headCursor.peelChildlessLine
       (line := storeTokenCallbackHead sel)
-      (by simp [storeTokenCallbackHead, mstoreAt,
-        NinstIsChildless, Ninst.pushB256]) with
+      (by simp only [storeTokenCallbackHead, Ninst.pushB256, mstoreAt, List.cons_append,
+        List.nil_append, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+        forall_eq_or_imp, forall_eq, and_self]) with
     ⟨zerosCursor, hhead, hheadActions⟩
   rcases zerosCursor.peelChildlessLine
       (line := pushList [0, 0])
-      (by simp [pushList, NinstIsChildless, Ninst.pushB256]) with
+      (by simp only [pushList, List.map_cons, Ninst.pushB256, List.map_nil, List.mem_cons,
+        List.not_mem_nil, or_false, or_self, NinstIsChildless, forall_eq]) with
     ⟨tailCursor, hzeros, hzerosActions⟩
   rcases tailCursor.peelChildlessLine
       (line := forwardArgTail dataArg 4)
-      (by simp [forwardArgTail, arg, cdl, mstoreAt,
-        NinstIsChildless, Ninst.pushB256]) with
+      (by simp only [forwardArgTail, arg, cdl, Ninst.pushB256, Fin.isValue, mstoreAt,
+        List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false,
+        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨sizeCursor, htail, htailActions⟩
   rcases sizeCursor.peelChildlessLine
       (line := tokenCallbackArgsSize)
-      (by simp [tokenCallbackArgsSize, NinstIsChildless,
-        Ninst.pushB256]) with
+      (by simp only [tokenCallbackArgsSize, Ninst.pushB256, List.mem_cons, List.not_mem_nil,
+        or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨offsetCursor, hsize, hsizeActions⟩
   rcases offsetCursor.peelChildlessLine
       (line := [Ninst.pushB256 callbackArgsOffset, Ninst.pushB256 0])
-      (by simp [NinstIsChildless, Ninst.pushB256]) with
+      (by simp only [Ninst.pushB256, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+        forall_eq_or_imp, forall_eq, and_self]) with
     ⟨targetCursor, hoffsets, hoffsetsActions⟩
   rcases targetCursor.peelChildlessLine
       (line := arg targetArg)
-      (by simp [arg, cdl, NinstIsChildless, Ninst.pushB256]) with
+      (by simp only [arg, cdl, Ninst.pushB256, List.mem_cons, List.not_mem_nil, or_false,
+        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨gasCursor, htarget, htargetActions⟩
   rcases gasCursor.selectNextChildless (by
-      simp [NinstIsChildless]) with
+      simp only [NinstIsChildless]) with
     ⟨callCursor, _, hgas, _, hgasActions⟩
   have hprefix := rawTokenCallbackCallPrefix_of_runs
     sel targetArg dataArg valueWord value h_value_stack h_value_stor
@@ -2339,19 +2357,21 @@ theorem Exec.Frame.CompiledCursor.finishBoolReturnCall
   rcases cursor.enterCall hcode with
     ⟨body, hget, bodyCursor, hbodyActions⟩
   have hbody : body = boolReturn := by
-    simpa [weth10, weth10Aux, boolReturnSlot] using hget.symm
+    simpa only [weth10, weth10Aux, boolReturnSlot, List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+      Option.some.injEq] using hget.symm
   subst body
   unfold boolReturn at bodyCursor
   rcases bodyCursor.selectNextChildless (by
-      simp [NinstIsChildless]) with
+      simp only [NinstIsChildless]) with
     ⟨firstBranchCursor, _, _hiszero, _, hiszeroActions⟩
   rcases firstBranchCursor.selectBranchWithActions with
       hdecode | hbubble
   · rcases hdecode with ⟨decodePrefixCursor, hdecodeActions⟩
     rcases decodePrefixCursor.peelChildlessLine
         (line := returnDataShorterThan 32)
-        (by simp [returnDataShorterThan, NinstIsChildless,
-          Ninst.pushB256]) with
+        (by simp only [returnDataShorterThan, Ninst.pushB256, List.mem_cons, List.not_mem_nil,
+          or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
       ⟨secondBranchCursor, _hshort, hshortActions⟩
     rcases secondBranchCursor.selectBranchWithActions with
         hreturn | hrev
@@ -2365,7 +2385,9 @@ theorem Exec.Frame.CompiledCursor.finishBoolReturnCall
           mstoreAt 0 ++ pushList [32, 0]) +++ Func.return_) final
         at returnCursor
       have hdesc := returnCursor.finishTerminalChildlessLine (by
-        simp [pushList, mstoreAt, NinstIsChildless, Ninst.pushB256])
+        simp only [pushList, List.map_cons, Ninst.pushB256, List.map_nil, List.cons_append,
+          List.nil_append, mstoreAt, List.mem_cons, List.not_mem_nil, or_false, or_self_left,
+          NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
       exact hdesc.trans (hreturnActions.trans
         (hshortActions.trans (hdecodeActions.trans
           (hiszeroActions.trans hbodyActions))))
@@ -2375,7 +2397,9 @@ theorem Exec.Frame.CompiledCursor.finishBoolReturnCall
     rcases bubbleCursor.enterCall hcode with
       ⟨bubbleBody, hbubbleGet, bubbleBodyCursor, _⟩
     have hb : bubbleBody = bubbleRevert := by
-      simpa [weth10, weth10Aux, bubbleRevertSlot] using hbubbleGet.symm
+      simpa only [weth10, weth10Aux, bubbleRevertSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hbubbleGet.symm
     subst bubbleBody
     exact (not_run_bubbleRevert
       (Func.Run.of_runCompiled bubbleBodyCursor.run)).elim
@@ -2503,15 +2527,17 @@ theorem Exec.Frame.compiledDepositToAndCallChronology
   have hmem :
       (Sevm.selector frame.sevm, depositToAndCall) ∈ weth10Funcs dp := by
     rw [hselector]
-    simp [depositToAndCallSelector, weth10Funcs]
+    simp only [weth10Funcs, depositToAndCallSelector, List.mem_cons, Prod.mk.injEq,
+      List.not_mem_nil, or_false, true_or, or_true]
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorSilent (frame := frame) context hnonempty hmem with
     ⟨bodyCursor, _hbodyStack, hbodyActions, hentrySilent⟩
   unfold depositToAndCall at bodyCursor
   rcases bodyCursor.peelChildlessLine
       (line := mintToPrefix)
-      (by simp [mintToPrefix, addressArg, arg, cdl, normalizeAddress,
-        pushAddressMask, mstoreAt, logWith, NinstIsChildless,
-        Ninst.pushB256]) with
+      (by simp only [mintToPrefix, addressArg, arg, cdl, Ninst.pushB256, normalizeAddress,
+        pushAddressMask, List.cons_append, List.nil_append, mstoreAt, logWith, Fin.isValue,
+        Fin.reduceSucc, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+        forall_eq_or_imp, forall_eq, and_self]) with
     ⟨callbackCursor, hmint, hcallbackActions⟩
   have hwfBody : Mem.Wf bodyCursor.pre.memory := by
     rw [← hentrySilent.memory]
@@ -2527,7 +2553,7 @@ theorem Exec.Frame.compiledDepositToAndCallChronology
     (sel := onTokenTransferSelector) (targetArg := 0) (dataArg := 1)
     (valueWord := frame.sevm.value) (value := [Ninst.callvalue])
     (img := frame.sevm.value.toBytes)
-    (by simp [NinstIsChildless])
+    (by simp only [List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq])
     (by
       intro a b xs hp hline
       rcases Line.of_run_cons hline with ⟨c, hcv, hnil⟩
@@ -2594,7 +2620,8 @@ theorem Exec.Frame.compiledApproveAndCallChronology
       (Sevm.selector frame.sevm, nonpayable approveAndCall) ∈
         weth10Funcs dp := by
     rw [hselector]
-    simp [approveAndCallSelector, weth10Funcs]
+    simp only [weth10Funcs, approveAndCallSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+      or_false, true_or, or_true]
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorSilent (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor, _hwrapperStack, hwrapperActions, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
@@ -2604,9 +2631,10 @@ theorem Exec.Frame.compiledApproveAndCallChronology
   unfold approveAndCall at bodyCursor
   rcases bodyCursor.peelChildlessLine
       (line := approvePrefix)
-      (by simp [approvePrefix, allowanceKeyFromMemory, Blanc.logApprove,
-        argCopy, cdc, arg, cdl, mstoreAt, logWith, pushList,
-        NinstIsChildless, Ninst.pushB256]) with
+      (by simp only [approvePrefix, mstoreAt, Ninst.pushB256, List.cons_append, List.nil_append,
+        argCopy, cdc, allowanceKeyFromMemory, pushList, List.map_cons, List.map_nil, arg, cdl,
+        Fin.isValue, logApprove, logWith, Fin.reduceSucc, List.mem_cons, List.not_mem_nil, or_false,
+        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨callbackCursor, hprefix, hcallbackActions⟩
   have hwfBody : Mem.Wf bodyCursor.pre.memory := by
     rw [← hbodySilent.memory]
@@ -2622,7 +2650,8 @@ theorem Exec.Frame.compiledApproveAndCallChronology
     (sel := onTokenApprovalSelector) (targetArg := 0) (dataArg := 2)
     (valueWord := Sevm.argWord frame.sevm 1) (value := arg 1)
     (img := callbackImg)
-    (by simp [arg, cdl, NinstIsChildless, Ninst.pushB256])
+    (by simp only [arg, cdl, Ninst.pushB256, List.mem_cons, List.not_mem_nil, or_false,
+      NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
     (by
       intro a b xs hp hline
       exact prefix_of_arg hp hline)
@@ -2683,11 +2712,12 @@ private theorem RedemptionOwnerSource.childless
     (source : RedemptionOwnerSource) :
     ∀ n ∈ source.line, NinstIsChildless n := by
   cases source with
-  | caller => simp [RedemptionOwnerSource.line, NinstIsChildless]
+  | caller => simp only [line, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+    forall_eq]
   | arg k =>
-      simp [RedemptionOwnerSource.line, addressArg, Blanc.arg, cdl,
-        normalizeAddress, pushAddressMask, NinstIsChildless,
-        Ninst.pushB256]
+      simp only [line, addressArg, Blanc.arg, cdl, Ninst.pushB256, normalizeAddress,
+        pushAddressMask, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil,
+        or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]
 
 private theorem RedemptionOwnerSource.prefix_of_line
     (source : RedemptionOwnerSource)
@@ -2746,14 +2776,15 @@ private theorem valueRedemptionCheckLine_childless
       NinstIsChildless n := by
   cases source with
   | caller =>
-      simp [valueRedemptionCheckLine, redemptionLoadBalanceAmount,
-        RedemptionOwnerSource.line, balanceTooSmall, Blanc.arg, cdl,
-        NinstIsChildless, Ninst.pushB256]
+      simp only [valueRedemptionCheckLine, redemptionLoadBalanceAmount, RedemptionOwnerSource.line,
+        Fin.isValue, List.cons_append, List.nil_append, arg, cdl, Ninst.pushB256, balanceTooSmall,
+        List.mem_cons, List.not_mem_nil, or_false, or_self_left, NinstIsChildless, forall_eq_or_imp,
+        forall_eq, and_self]
   | arg k =>
-      simp [valueRedemptionCheckLine, redemptionLoadBalanceAmount,
-        RedemptionOwnerSource.line, addressArg, normalizeAddress,
-        pushAddressMask, balanceTooSmall, Blanc.arg, cdl,
-        NinstIsChildless, Ninst.pushB256]
+      simp only [valueRedemptionCheckLine, redemptionLoadBalanceAmount, RedemptionOwnerSource.line,
+        addressArg, arg, cdl, Ninst.pushB256, normalizeAddress, pushAddressMask, List.cons_append,
+        List.nil_append, Fin.isValue, balanceTooSmall, List.mem_cons, List.not_mem_nil, or_false,
+        or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]
 
 private structure RedemptionLineObservations (pre post : Devm) : Prop where
   storage : Devm.getStor pre = Devm.getStor post
@@ -3060,7 +3091,7 @@ private theorem exists_acceptedValueCallTrace_same_slot
     have hzero : ((0 : B256) =? 0) = 0 :=
       pref_head_unique htest (pref_append [(0 : B256)] guardPost.stack)
     rw [show ((0 : B256) =? 0) = 1 from by
-      simp [B256.eqCheck]] at hzero
+      simp only [B256.eqCheck, ↓reduceIte]] at hzero
     exact B256.zero_ne_one hzero.symm
   · rcases hsuccess with
       ⟨parent, child, slot, delegated, na, code, availableGas, pc, hstep,
@@ -3243,7 +3274,8 @@ private theorem Exec.Frame.CompiledCursor.compiledValueRedemptionContinuation
     cons_pref_cons_inv hguardStack
   rcases successCursor.peelChildlessLine
       (line := debitLoadedBalance)
-      (by simp [debitLoadedBalance, NinstIsChildless]) with
+      (by simp only [debitLoadedBalance, Fin.isValue, List.mem_cons, List.not_mem_nil, or_false,
+        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨afterDebitCursor, hdebit, hdebitActions⟩
   have hcheckObs :=
     valueRedemptionCheckLine_observations source amountArg hcheck
@@ -3266,9 +3298,10 @@ private theorem Exec.Frame.CompiledCursor.compiledValueRedemptionContinuation
       eventCursor.pre.stack := source.prefix_of_line nil_pref howner
   rcases eventCursor.peelChildlessLine
       (line := valueRedemptionEventLine amountArg)
-      (by simp [valueRedemptionEventLine, arg, cdl, emitTransfer,
-        Blanc.transferFromLog, mstoreAt, logWith, NinstIsChildless,
-        Ninst.pushB256]) with
+      (by simp only [valueRedemptionEventLine, arg, cdl, Ninst.pushB256, List.cons_append,
+        List.nil_append, emitTransfer, transferFromLog, Fin.isValue, mstoreAt, logWith,
+        Fin.reduceSucc, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+        forall_eq_or_imp, forall_eq, and_self]) with
     ⟨sendCursor, hevent, heventActions⟩
   have hmemoryPreEvent : cursor.pre.memory = eventCursor.pre.memory := by
     calc
@@ -3304,7 +3337,7 @@ private theorem Exec.Frame.CompiledCursor.compiledValueRedemptionContinuation
   have hcall : Ninst.Run frame.sevm callCursor.pre Ninst.call
       testCursor.pre := ⟨actualSlot, actualFilled, actualPc, actualStep⟩
   rcases testCursor.selectNextChildless (by
-      simp [NinstIsChildless]) with
+      simp only [NinstIsChildless]) with
     ⟨guardBranchCursor, _testSlot, hiszero, _testOccurrence,
       htestGuardActions⟩
   rcases guardBranchCursor.selectBranchLeftWithBurn
@@ -3347,7 +3380,7 @@ private theorem Exec.Frame.CompiledCursor.compiledValueRedemptionContinuation
   have actualStepAt : Ninst.StepRun callCursor.pc frame.sevm
       callCursor.pre Ninst.call trace.retained.slot (.ok testCursor.pre) :=
     Ninst.stepRun_pc_irrel (pc' := callCursor.pc)
-      (by simp [Ninst.pcFree]) actualStep
+      (by simp only [Ninst.pcFree]) actualStep
   have hselected : actualSelected =
       Blanc.Weth10.RetainedXlot.flowActions dp ca
         trace.retained.retained :=
@@ -3542,15 +3575,18 @@ theorem Exec.Frame.CompiledCursor.enterTransferZeroThen
   rcases cursor.compiledValueRedemptionContinuation
       (sendErrorReason := "WETH: ETH transfer failed")
       hstack hwf hreads
-      (by simp [sendValueToCallerPrefix, pushList, NinstIsChildless,
-        Ninst.pushB256])
+      (by simp only [sendValueToCallerPrefix, pushList, List.map_cons, Ninst.pushB256, List.map_nil,
+        Fin.isValue, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false,
+        or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
       (by
         intro pre callPre value tail hp hrun
         exact sendValueToCallerPrefix_effect hp hrun)
-      (by simp [weth10, weth10Aux, burnBalanceErrorSlot,
-        burnBalanceError])
-      (by simp [weth10, weth10Aux, ethTransferErrorSlot,
-        ethTransferError]) hfork with
+      (by simp only [weth10, weth10Aux, burnBalanceError, burnBalanceErrorSlot, List.length_cons,
+        List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos,
+        List.getElem_cons_succ, List.getElem_cons_zero])
+      (by simp only [weth10, weth10Aux, ethTransferError, ethTransferErrorSlot, List.length_cons,
+        List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos,
+        List.getElem_cons_succ, List.getElem_cons_zero]) hfork with
     ⟨callPre, successCursor, trace, burn, htraceSlot, hcommits,
       occurrence, hactions, hwfSuccess, hreadsSuccess⟩
   refine ⟨callPre, successCursor.pre, trace, successCursor, ?_,
@@ -3572,7 +3608,8 @@ theorem Exec.Frame.compiledWithdrawChronology
   have hmem :
       (Sevm.selector frame.sevm, nonpayable withdraw) ∈ weth10Funcs dp := by
     rw [hselector]
-    simp [withdrawSelector, weth10Funcs]
+    simp only [weth10Funcs, withdrawSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+      or_false, true_or, or_true]
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorSilent (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor, _hwrapperStack, hwrapperActions, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
@@ -3594,9 +3631,10 @@ theorem Exec.Frame.compiledWithdrawChronology
     (successLine := []) (successLast := .stop)
     (sendErrorReason := "WETH: ETH transfer failed")
     hbodyStack hwfBody hreadsBody
-    (by simp [sendValueToCallerPrefix, pushList, NinstIsChildless,
-      Ninst.pushB256])
-    (by simp)
+    (by simp only [sendValueToCallerPrefix, pushList, List.map_cons, Ninst.pushB256, List.map_nil,
+      Fin.isValue, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false,
+      or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+    (by simp only [List.not_mem_nil, IsEmpty.forall_iff, implies_true])
     (by func_inv)
     (by func_inv)
     stop_getCode_inv
@@ -3604,10 +3642,12 @@ theorem Exec.Frame.compiledWithdrawChronology
     (by
       intro pre callPre value tail hp hrun
       exact sendValueToCallerPrefix_effect hp hrun)
-    (by simp [weth10, weth10Aux, burnBalanceErrorSlot,
-      burnBalanceError])
-    (by simp [weth10, weth10Aux, ethTransferErrorSlot,
-      ethTransferError])
+    (by simp only [weth10, weth10Aux, burnBalanceError, burnBalanceErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero])
+    (by simp only [weth10, weth10Aux, ethTransferError, ethTransferErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero])
   have chronology := chronology context.covered
   have rebased := chronology.of_entry_eq
     (funext (getStor_eq_of_state_eq hbodySilent.state))
@@ -3633,7 +3673,8 @@ theorem Exec.Frame.compiledWithdrawToChronology
   have hmem :
       (Sevm.selector frame.sevm, nonpayable withdrawTo) ∈ weth10Funcs dp := by
     rw [hselector]
-    simp [withdrawToSelector, weth10Funcs]
+    simp only [weth10Funcs, withdrawToSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+      or_false, true_or, or_true]
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorSilent (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor, _hwrapperStack, hwrapperActions, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
@@ -3655,9 +3696,10 @@ theorem Exec.Frame.compiledWithdrawToChronology
     (successLine := []) (successLast := .stop)
     (sendErrorReason := "WETH: ETH transfer failed")
     hbodyStack hwfBody hreadsBody
-    (by simp [sendValueToArgPrefix, pushList, arg, cdl,
-      NinstIsChildless, Ninst.pushB256])
-    (by simp)
+    (by simp only [sendValueToArgPrefix, pushList, List.map_cons, Ninst.pushB256, List.map_nil,
+      Fin.isValue, List.cons_append, List.nil_append, arg, cdl, List.mem_cons, List.not_mem_nil,
+      or_false, or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+    (by simp only [List.not_mem_nil, IsEmpty.forall_iff, implies_true])
     (by func_inv)
     (by func_inv)
     stop_getCode_inv
@@ -3665,10 +3707,12 @@ theorem Exec.Frame.compiledWithdrawToChronology
     (by
       intro pre callPre value tail hp hrun
       exact sendValueToArgPrefix_effect 0 hp hrun)
-    (by simp [weth10, weth10Aux, burnBalanceErrorSlot,
-      burnBalanceError])
-    (by simp [weth10, weth10Aux, ethTransferErrorSlot,
-      ethTransferError])
+    (by simp only [weth10, weth10Aux, burnBalanceError, burnBalanceErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero])
+    (by simp only [weth10, weth10Aux, ethTransferError, ethTransferErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero])
   have chronology := chronology context.covered
   have rebased := chronology.of_entry_eq
     (funext (getStor_eq_of_state_eq hbodySilent.state))
@@ -3711,7 +3755,8 @@ theorem Exec.Frame.compiledTransferZeroChronology
   have hmem :
       (Sevm.selector frame.sevm, nonpayable transfer) ∈ weth10Funcs dp := by
     rw [hselector]
-    simp [transferSelector, weth10Funcs]
+    simp only [weth10Funcs, transferSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+      or_false, true_or, or_true]
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorSilent (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor, _hwrapperStack, hwrapperActions, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
@@ -3725,8 +3770,9 @@ theorem Exec.Frame.compiledTransferZeroChronology
       (transferZeroThen returnTrue <?> transferNonzeroThen returnTrue))
     frame.post at bodyCursor
   rcases bodyCursor.peelChildlessLine
-      (by simp [transferZeroSelectLine, arg, cdl, NinstIsChildless,
-        Ninst.pushB256]) with
+      (by simp only [transferZeroSelectLine, arg, cdl, Ninst.pushB256, List.cons_append,
+        List.nil_append, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+        forall_eq_or_imp, forall_eq, and_self]) with
     ⟨targetBranchCursor, htargetLine, htargetActions⟩
   have htargetPrefix :
       [Sevm.argWord frame.sevm 0 =? 0] <<+
@@ -3739,7 +3785,7 @@ theorem Exec.Frame.compiledTransferZeroChronology
     cases hnil
     exact prefix_of_iszero hzero (prefix_of_arg nil_pref harg)
   rw [hto] at htargetPrefix
-  have hone : ((0 : B256) =? 0) = 1 := by simp [B256.eqCheck]
+  have hone : ((0 : B256) =? 0) = 1 := by simp only [B256.eqCheck, ↓reduceIte]
   rw [hone] at htargetPrefix
   rcases targetBranchCursor.selectBranchSuccSilent (flag := (1 : B256))
       (by decide) htargetPrefix with
@@ -3785,10 +3831,12 @@ theorem Exec.Frame.compiledTransferZeroChronology
     (successLine := returnTruePrefixCompiled) (successLast := .return_)
     (sendErrorReason := "WETH: ETH transfer failed")
     nil_pref hwfZero hreadsZero
-    (by simp [sendValueToCallerPrefix, pushList, NinstIsChildless,
-      Ninst.pushB256])
-    (by simp [returnTruePrefixCompiled, mstoreAt, pushList,
-      NinstIsChildless, Ninst.pushB256])
+    (by simp only [sendValueToCallerPrefix, pushList, List.map_cons, Ninst.pushB256, List.map_nil,
+      Fin.isValue, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false,
+      or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+    (by simp only [returnTruePrefixCompiled, Ninst.pushB256, mstoreAt, List.cons_append,
+      List.nil_append, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil,
+      or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
     (by unfold returnTruePrefixCompiled; func_inv)
     (by unfold returnTruePrefixCompiled; func_inv)
     returnTrue_getCode_inv
@@ -3796,10 +3844,12 @@ theorem Exec.Frame.compiledTransferZeroChronology
     (by
       intro pre callPre value tail hp hrun
       exact sendValueToCallerPrefix_effect hp hrun)
-    (by simp [weth10, weth10Aux, burnBalanceErrorSlot,
-      burnBalanceError])
-    (by simp [weth10, weth10Aux, ethTransferErrorSlot,
-      ethTransferError])
+    (by simp only [weth10, weth10Aux, burnBalanceError, burnBalanceErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero])
+    (by simp only [weth10, weth10Aux, ethTransferError, ethTransferErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero])
   have chronology := chronology context.covered
   have rebased := chronology.of_entry_eq
     hownStor hownBal hownCode hownLogs hownOutput
@@ -4055,7 +4105,8 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThen
   unfold spendCallerAllowanceThen at cursor
   rcases cursor.peelChildlessLine
       (line := arg 0 ++ [Ninst.caller, Ninst.eq])
-      (by simp [arg, cdl, NinstIsChildless, Ninst.pushB256]) with
+      (by simp only [arg, cdl, Ninst.pushB256, List.cons_append, List.nil_append, List.mem_cons,
+        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨callerBranchCursor, _hcallerLine, hcallerActions⟩
   rcases callerBranchCursor.selectBranchWithActions with
       hallowance | hdirect
@@ -4064,16 +4115,19 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThen
         (line := arg 0 ++ mstoreAt 0 ++ [Ninst.caller] ++ mstoreAt 1 ++
           allowanceKeyFromMemory ++
           [Ninst.dup 0, Ninst.sload, Ninst.dup 0] ++ isMax)
-        (by simp [arg, cdl, mstoreAt, allowanceKeyFromMemory, pushList,
-          isMax, NinstIsChildless, Ninst.pushB256]) with
+        (by simp only [arg, cdl, Ninst.pushB256, mstoreAt, List.cons_append, List.nil_append,
+          allowanceKeyFromMemory, pushList, List.map_cons, List.map_nil, Fin.isValue, isMax,
+          List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
+          and_self]) with
       ⟨maxBranchCursor, _hloadLine, hloadActions⟩
     rcases maxBranchCursor.selectBranchWithActions with
         hfinite | hmax
     · rcases hfinite with ⟨finiteCursor, hfiniteActions⟩
       rcases finiteCursor.peelChildlessLine
           (line := arg amount ++ [Ninst.swap 0] ++ balanceTooSmall)
-          (by simp [arg, cdl, balanceTooSmall, NinstIsChildless,
-            Ninst.pushB256]) with
+          (by simp only [arg, cdl, Ninst.pushB256, Fin.isValue, List.cons_append, List.nil_append,
+            balanceTooSmall, List.mem_cons, List.not_mem_nil, or_false, or_self_left,
+            NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
         ⟨spendBranchCursor, _hspendCheck, hspendCheckActions⟩
       rcases spendBranchCursor.selectBranchWithActions with
           hsuccess | herror
@@ -4083,8 +4137,9 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThen
                 Ninst.sstore] ++
               arg 0 ++ [Ninst.swap 0, Ninst.caller] ++ emitApproval ++
               [Ninst.pop, Ninst.pop])
-            (by simp [arg, cdl, emitApproval, mstoreAt,
-              logWith, NinstIsChildless, Ninst.pushB256]) with
+            (by simp only [Fin.isValue, arg, cdl, Ninst.pushB256, List.cons_append, List.nil_append,
+              emitApproval, mstoreAt, logWith, Fin.reduceSucc, List.mem_cons, List.not_mem_nil,
+              or_false, or_self, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
           ⟨coreCallCursor, _hwriteLine, hwriteActions⟩
         rcases coreCallCursor.enterCall hcode with
           ⟨body, hget, bodyCursor, hbodyActions⟩
@@ -4105,7 +4160,8 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThen
     · rcases hmax with ⟨maxCursor, hmaxActions⟩
       rcases maxCursor.peelChildlessLine
           (line := [Ninst.pop, Ninst.pop])
-          (by simp [NinstIsChildless]) with
+          (by simp only [List.mem_cons, List.not_mem_nil, or_false, or_self, NinstIsChildless,
+            forall_eq]) with
         ⟨coreCallCursor, _hpopLine, hpopActions⟩
       rcases coreCallCursor.enterCall hcode with
         ⟨body, hget, bodyCursor, hbodyActions⟩
@@ -4142,8 +4198,9 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThenWithObservations
   unfold spendCallerAllowanceThen at cursor
   rcases cursor.peelChildlessLine
       (line := spendOwnerEqLineCompiled)
-      (by simp [spendOwnerEqLineCompiled, arg, cdl,
-        NinstIsChildless, Ninst.pushB256]) with
+      (by simp only [spendOwnerEqLineCompiled, arg, cdl, Ninst.pushB256, List.cons_append,
+        List.nil_append, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+        forall_eq_or_imp, forall_eq, and_self]) with
     ⟨callerBranchCursor, hcallerLine, hcallerActions⟩
   have hcallerPrefix :
       [frame.sevm.caller.toB256 =? Sevm.argWord frame.sevm 0] <<+
@@ -4177,9 +4234,10 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThenWithObservations
         hallowanceBranchSilent⟩
     rcases allowanceCursor.peelChildlessLine
         (line := spendAllowanceLoadLineCompiled)
-        (by simp [spendAllowanceLoadLineCompiled, arg, cdl, mstoreAt,
-          allowanceKeyFromMemory, pushList, isMax, NinstIsChildless,
-          Ninst.pushB256]) with
+        (by simp only [spendAllowanceLoadLineCompiled, arg, cdl, Ninst.pushB256, mstoreAt,
+          List.cons_append, List.nil_append, allowanceKeyFromMemory, pushList, List.map_cons,
+          List.map_nil, Fin.isValue, isMax, List.mem_cons, List.not_mem_nil, or_false,
+          NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
       ⟨maxBranchCursor, hloadLine, hloadActions⟩
     rcases prefix_of_callerAllowanceIsMax 0 nil_pref hloadLine with
       ⟨hash, allowance, _hallowance, hloadPrefix⟩
@@ -4204,8 +4262,9 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThenWithObservations
           hfiniteBranchSilent⟩
       rcases finiteCursor.peelChildlessLine
           (line := spendAllowanceCheckLineCompiled amount)
-          (by simp [spendAllowanceCheckLineCompiled, arg, cdl,
-            balanceTooSmall, NinstIsChildless, Ninst.pushB256]) with
+          (by simp only [spendAllowanceCheckLineCompiled, arg, cdl, Ninst.pushB256, Fin.isValue,
+            List.cons_append, List.nil_append, balanceTooSmall, List.mem_cons, List.not_mem_nil,
+            or_false, or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
         ⟨spendBranchCursor, hcheckLine, hcheckActions⟩
       have hguardPrefix :
           (allowance <? Sevm.argWord frame.sevm amount) :: allowance ::
@@ -4242,8 +4301,8 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThenWithObservations
           ⟨0, Devm.PopBurn.of_popBurnBy hsuccessPopBy⟩ hguardPrefix
       rcases successCursor.peelChildlessLine
           (line := spendAllowanceBeforeStoreCompiled)
-          (by simp [spendAllowanceBeforeStoreCompiled,
-            NinstIsChildless]) with
+          (by simp only [spendAllowanceBeforeStoreCompiled, Fin.isValue, List.mem_cons,
+            List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
         ⟨storeCursor, hbeforeStore, hbeforeActions⟩
       rcases Line.of_run_cons hbeforeStore with
         ⟨afterSub, hsub, hbeforeStore⟩
@@ -4277,14 +4336,15 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThenWithObservations
               <<+ storeCursor.pre.stack :=
         Stack.prefix_of_swap hstoreSwap (of_run_swap hswap) hdupPrefix
       rcases storeCursor.selectNextChildless (by
-          simp [NinstIsChildless]) with
+          simp only [NinstIsChildless]) with
         ⟨afterStoreCursor, _storeSlot, hstore, _storeOccurrence,
           hstoreActions⟩
       rcases afterStoreCursor.peelChildlessLine
           (line := spendAllowanceAfterStoreCompiled)
-          (by simp [spendAllowanceAfterStoreCompiled, arg, cdl,
-            emitApproval, mstoreAt, logWith, NinstIsChildless,
-            Ninst.pushB256]) with
+          (by simp only [spendAllowanceAfterStoreCompiled, arg, cdl, Ninst.pushB256, Fin.isValue,
+            List.cons_append, List.nil_append, emitApproval, mstoreAt, logWith, Fin.reduceSucc,
+            List.mem_cons, List.not_mem_nil, or_false, or_self, NinstIsChildless, forall_eq_or_imp,
+            forall_eq, and_self]) with
         ⟨coreCallCursor, hafterStore, hafterActions⟩
       have hset : Devm.getStor afterStoreCursor.pre
           frame.sevm.currentTarget =
@@ -4385,7 +4445,8 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThenWithObservations
         ⟨maxCursor, _hmaxStack, hmaxActions, hmaxBranchSilent⟩
       rcases maxCursor.peelChildlessLine
           (line := [Ninst.pop, Ninst.pop])
-          (by simp [NinstIsChildless]) with
+          (by simp only [List.mem_cons, List.not_mem_nil, or_false, or_self, NinstIsChildless,
+            forall_eq]) with
         ⟨coreCallCursor, hpopLine, hpopActions⟩
       rcases coreCallCursor.enterCallSilent hcode with
         ⟨body, hget, bodyCursor, hbodyActions, hcallSilent⟩
@@ -4438,7 +4499,8 @@ theorem Exec.Frame.compiledTransferFromZeroChronology
       (Sevm.selector frame.sevm, nonpayable transferFrom) ∈
         weth10Funcs dp := by
     rw [hselector]
-    simp [transferFromSelector, weth10Funcs]
+    simp only [weth10Funcs, transferFromSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+      or_false, true_or, or_true]
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorSilent (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor, _hwrapperStack, hwrapperActions, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
@@ -4454,10 +4516,14 @@ theorem Exec.Frame.compiledTransferFromZeroChronology
     (spendCallerAllowanceThen 2 transferFromCoreSlot) frame.post at transferCursor
   rcases transferCursor.enterSpendCallerAllowanceThenWithObservations
       context.invocation.2.2.2 (by
-        simp [weth10, weth10Aux, allowanceErrorSlot]) with
+        simp only [weth10, weth10Aux, allowanceErrorSlot, List.length_cons, List.length_nil,
+          zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+          List.getElem_cons_zero]) with
     ⟨body, hget, coreCursor, hcoreActions, hallowanceObs⟩
   have hbody : body = transferFromCore := by
-    simpa [weth10, weth10Aux, transferFromCoreSlot] using hget.symm
+    simpa only [weth10, weth10Aux, transferFromCoreSlot, List.length_cons, List.length_nil,
+      zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero, Option.some.injEq] using hget.symm
   subst body
   change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
@@ -4465,8 +4531,9 @@ theorem Exec.Frame.compiledTransferFromZeroChronology
     (transferFromSelectLine +++
       (transferFromZero <?> transferFromNonzero)) frame.post at coreCursor
   rcases coreCursor.peelChildlessLine
-      (by simp [transferFromSelectLine, arg, cdl, NinstIsChildless,
-        Ninst.pushB256]) with
+      (by simp only [transferFromSelectLine, arg, cdl, Ninst.pushB256, List.cons_append,
+        List.nil_append, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+        forall_eq_or_imp, forall_eq, and_self]) with
     ⟨targetBranchCursor, htargetLine, htargetActions⟩
   have htargetPrefix :
       [Sevm.argWord frame.sevm 1 =? 0] <<+
@@ -4479,7 +4546,7 @@ theorem Exec.Frame.compiledTransferFromZeroChronology
     cases hnil
     exact prefix_of_iszero hzero (prefix_of_arg nil_pref harg)
   rw [hto] at htargetPrefix
-  have hone : ((0 : B256) =? 0) = 1 := by simp [B256.eqCheck]
+  have hone : ((0 : B256) =? 0) = 1 := by simp only [B256.eqCheck, ↓reduceIte]
   rw [hone] at htargetPrefix
   rcases targetBranchCursor.selectBranchSuccSilent (flag := (1 : B256))
       (by decide) htargetPrefix with
@@ -4504,10 +4571,12 @@ theorem Exec.Frame.compiledTransferFromZeroChronology
     (successLine := returnTruePrefixCompiled) (successLast := .return_)
     (sendErrorReason := "WETH: ETH transfer failed")
     nil_pref hwfZero hreadsZero
-    (by simp [sendValueToCallerPrefix, pushList, NinstIsChildless,
-      Ninst.pushB256])
-    (by simp [returnTruePrefixCompiled, mstoreAt, pushList,
-      NinstIsChildless, Ninst.pushB256])
+    (by simp only [sendValueToCallerPrefix, pushList, List.map_cons, Ninst.pushB256, List.map_nil,
+      Fin.isValue, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false,
+      or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+    (by simp only [returnTruePrefixCompiled, Ninst.pushB256, mstoreAt, List.cons_append,
+      List.nil_append, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil,
+      or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
     (by unfold returnTruePrefixCompiled; func_inv)
     (by unfold returnTruePrefixCompiled; func_inv)
     returnTrue_getCode_inv
@@ -4515,10 +4584,12 @@ theorem Exec.Frame.compiledTransferFromZeroChronology
     (by
       intro pre callPre value tail hp hrun
       exact sendValueToCallerPrefix_effect hp hrun)
-    (by simp [weth10, weth10Aux, burnBalanceErrorSlot,
-      burnBalanceError])
-    (by simp [weth10, weth10Aux, ethTransferErrorSlot,
-      ethTransferError])
+    (by simp only [weth10, weth10Aux, burnBalanceError, burnBalanceErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero])
+    (by simp only [weth10, weth10Aux, ethTransferError, ethTransferErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero])
   have chronology := chronology context.covered
   have hactions : zeroCursor.actions = [] :=
     hzeroActions.trans (htargetActions.trans
@@ -4544,7 +4615,8 @@ theorem Exec.Frame.compiledWithdrawFromChronology
       (Sevm.selector frame.sevm, nonpayable withdrawFrom) ∈
         weth10Funcs dp := by
     rw [hselector]
-    simp [withdrawFromSelector, weth10Funcs]
+    simp only [weth10Funcs, withdrawFromSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+      or_false, true_or, or_true]
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorSilent (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor, _hwrapperStack, hwrapperActions, hentrySilent⟩
   rcases wrapperCursor.enterNonpayableSilent with
@@ -4560,10 +4632,14 @@ theorem Exec.Frame.compiledWithdrawFromChronology
     (spendCallerAllowanceThen 2 withdrawFromCoreSlot) frame.post at withdrawCursor
   rcases withdrawCursor.enterSpendCallerAllowanceThenWithObservations
       context.invocation.2.2.2 (by
-        simp [weth10, weth10Aux, allowanceErrorSlot]) with
+        simp only [weth10, weth10Aux, allowanceErrorSlot, List.length_cons, List.length_nil,
+          zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+          List.getElem_cons_zero]) with
     ⟨body, hget, ownCursor, hownActions, hallowanceObs⟩
   have hbody : body = withdrawFromCore := by
-    simpa [weth10, weth10Aux, withdrawFromCoreSlot] using hget.symm
+    simpa only [weth10, weth10Aux, withdrawFromCoreSlot, List.length_cons, List.length_nil,
+      zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero, Option.some.injEq] using hget.symm
   subst body
   have hownObs : AllowancePrefixObservations frame.sevm frame.pre
       ownCursor.pre := hentryObs.trans hallowanceObs
@@ -4578,9 +4654,10 @@ theorem Exec.Frame.compiledWithdrawFromChronology
     (successLine := []) (successLast := .stop)
     (sendErrorReason := "WETH: Ether transfer failed")
     nil_pref hwfOwn hreadsOwn
-    (by simp [sendValueToArgPrefix, pushList, arg, cdl,
-      NinstIsChildless, Ninst.pushB256])
-    (by simp)
+    (by simp only [sendValueToArgPrefix, pushList, List.map_cons, Ninst.pushB256, List.map_nil,
+      Fin.isValue, List.cons_append, List.nil_append, arg, cdl, List.mem_cons, List.not_mem_nil,
+      or_false, or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+    (by simp only [List.not_mem_nil, IsEmpty.forall_iff, implies_true])
     (by func_inv)
     (by func_inv)
     stop_getCode_inv
@@ -4588,10 +4665,12 @@ theorem Exec.Frame.compiledWithdrawFromChronology
     (by
       intro pre callPre value tail hp hrun
       exact sendValueToArgPrefix_effect 1 hp hrun)
-    (by simp [weth10, weth10Aux, burnBalanceErrorSlot,
-      burnBalanceError])
-    (by simp [weth10, weth10Aux, etherTransferErrorSlot,
-      etherTransferError])
+    (by simp only [weth10, weth10Aux, burnBalanceError, burnBalanceErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero])
+    (by simp only [weth10, weth10Aux, etherTransferError, etherTransferErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero])
   have chronology := chronology context.covered
   have hactions : ownCursor.actions = [] :=
     hownActions.trans (hwithdrawActions.trans hwrapperActions)
@@ -4623,17 +4702,22 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_transferFromNonzero
       (Sevm.selector frame.sevm, nonpayable transferFrom) ∈
         weth10Funcs dp := by
     rw [hselector]
-    simp [transferFromSelector, weth10Funcs]
+    simp only [weth10Funcs, transferFromSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+      or_false, true_or, or_true]
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursor (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor, _hwrapperStack, hwrapperActions⟩
   rcases wrapperCursor.enterNonpayable with
     ⟨transferCursor, _htransferStack, htransferActions⟩
   rcases transferCursor.enterSpendCallerAllowanceThen
       context.invocation.2.2.2 (by
-        simp [weth10, weth10Aux, allowanceErrorSlot]) with
+        simp only [weth10, weth10Aux, allowanceErrorSlot, List.length_cons, List.length_nil,
+          zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+          List.getElem_cons_zero]) with
     ⟨body, hget, coreCursor, hcoreActions⟩
   have hbody : body = transferFromCore := by
-    simpa [weth10, weth10Aux, transferFromCoreSlot] using hget.symm
+    simpa only [weth10, weth10Aux, transferFromCoreSlot, List.length_cons, List.length_nil,
+      zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero, Option.some.injEq] using hget.symm
   subst body
   change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
     ((weth10 dp).main :: weth10Aux)
@@ -4641,8 +4725,9 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_transferFromNonzero
     (transferFromSelectLine +++
       (transferFromZero <?> transferFromNonzero)) frame.post at coreCursor
   rcases coreCursor.peelChildlessLine
-      (by simp [transferFromSelectLine, arg, cdl, NinstIsChildless,
-        Ninst.pushB256]) with
+      (by simp only [transferFromSelectLine, arg, cdl, Ninst.pushB256, List.cons_append,
+        List.nil_append, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+        forall_eq_or_imp, forall_eq, and_self]) with
     ⟨targetBranchCursor, htargetLine, htargetActions⟩
   have htargetPrefix :
       [Sevm.argWord frame.sevm 1 =? 0] <<+
@@ -4655,7 +4740,7 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_transferFromNonzero
     cases hnil
     exact prefix_of_iszero hzero (prefix_of_arg nil_pref harg)
   have htargetCheck : (Sevm.argWord frame.sevm 1 =? 0) = 0 := by
-    simp [B256.eqCheck, hto]
+    simp only [B256.eqCheck, hto, ↓reduceIte]
   rw [htargetCheck] at htargetPrefix
   rcases targetBranchCursor.selectBranchZero htargetPrefix with
     ⟨nonzeroCursor, _hnonzeroStack, hnonzeroActions⟩
@@ -4667,18 +4752,20 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_transferFromNonzero
         (transferFromNonzeroSuccessLine +++ Func.return_)))
     frame.post at nonzeroCursor
   rcases nonzeroCursor.peelChildlessLine
-      (by simp [transferFromBalanceCheckLine, loadArgBalanceAmount,
-        balanceTooSmall, addressArg, arg, cdl, normalizeAddress,
-        pushAddressMask, NinstIsChildless, Ninst.pushB256]) with
+      (by simp only [transferFromBalanceCheckLine, loadArgBalanceAmount, addressArg, arg, cdl,
+        Ninst.pushB256, normalizeAddress, pushAddressMask, List.cons_append, List.nil_append,
+        Fin.isValue, balanceTooSmall, List.mem_cons, List.not_mem_nil, or_false, or_self_left,
+        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨balanceBranchCursor, _hbalanceLine, hbalanceActions⟩
   rcases balanceBranchCursor.selectBranchWithActions with
       hsuccess | herror
   · rcases hsuccess with ⟨successCursor, hsuccessActions⟩
     have hdesc := successCursor.finishTerminalChildlessLine (by
-      simp [transferFromNonzeroSuccessLine, debitLoadedBalance,
-        addressArg, arg, cdl, normalizeAddress, pushAddressMask,
-        emitTransfer, Blanc.transferFromLog, mstoreAt, logWith, pushList,
-        NinstIsChildless, Ninst.pushB256])
+      simp only [transferFromNonzeroSuccessLine, debitLoadedBalance, Fin.isValue, addressArg, arg,
+        cdl, Ninst.pushB256, normalizeAddress, pushAddressMask, List.cons_append, List.nil_append,
+        emitTransfer, transferFromLog, mstoreAt, logWith, Fin.reduceSucc, pushList, List.map_cons,
+        List.map_nil, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp,
+        forall_eq, and_self])
     exact hdesc.trans (hsuccessActions.trans
       (hbalanceActions.trans (hnonzeroActions.trans
         (htargetActions.trans (hcoreActions.trans
@@ -4687,7 +4774,9 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_transferFromNonzero
     rcases errorCursor.enterCall context.invocation.2.2.2 with
       ⟨errorBody, herrorGet, errorBodyCursor, _herrorBodyActions⟩
     have herrorBody : errorBody = transferBalanceError := by
-      simpa [weth10Aux, transferBalanceErrorSlot] using herrorGet.symm
+      simpa only [weth10Aux, transferBalanceErrorSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using herrorGet.symm
     subst errorBody
     exact (Func.not_run_revertWith
       (Func.Run.of_runCompiled errorBodyCursor.run)).elim
@@ -4956,7 +5045,7 @@ private theorem recognized_of_run_dispatchWith
       · have hflag : v = (w =? sig) := (popBurn_pref hpop hpfx').1
         have heq : w = sig := by
           by_contra hne
-          have hz : (w =? sig) = 0 := by simp [B256.eqCheck, hne]
+          have hz : (w =? sig) = 0 := by simp only [B256.eqCheck, hne, ↓reduceIte]
           exact hnz (hflag.trans hz)
         subst w
         exact ⟨body, rfl⟩
@@ -4971,7 +5060,7 @@ theorem Exec.Frame.recognizedSelector_of_nonempty
     ∃ body, (Sevm.selector frame.sevm, body) ∈ weth10Funcs dp := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -5009,11 +5098,13 @@ theorem Exec.Frame.recognizedSelector_of_nonempty
             (c := (weth10 dp).main :: weth10Aux)
             (k := fallbackSlot) (fallback := Func.revert)
             (tree := weth10Tree dp)
-            (by simp [fallbackSlot, weth10, weth10Aux])
+            (by simp only [weth10, weth10Aux, fallbackSlot, List.length_cons, List.length_nil,
+              zero_add, Nat.reduceAdd, Nat.one_lt_ofNat, getElem?_pos, List.getElem_cons_succ,
+              List.getElem_cons_zero])
             (fun {_ _} => not_run_revert)
             hselectorPfx htreeRun with ⟨body, hmem⟩
         exact ⟨body, DispatchTree.mem_of_mem_ofSorted
-          (by simp [weth10Funcs]) hmem⟩
+          (by simp only [weth10Funcs, ne_eq, reduceCtorEq, not_false_eq_true]) hmem⟩
       · have hpop' := hpop.stack
         simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpop'
         rw [hpop'] at hflagPfx
@@ -5023,7 +5114,7 @@ theorem Exec.Frame.recognizedSelector_of_nonempty
           rw [hw]
           exact hnz
         have hflagZero : (e.data.length.toB256 =? 0) = 0 := by
-          simp [B256.eqCheck, hnonempty]
+          simp only [B256.eqCheck, hnonempty, ↓reduceIte]
         exact (hflagNonzero hflagZero).elim
 
 theorem action_eq_of_flowAction_eq
@@ -5054,7 +5145,7 @@ private theorem debit_eq_of_flowAction_eq
   unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
   rw [if_pos context.invocation] at haction
   cases hatom : primaryFlowAtom frame.sevm with
-  | none => simp [hatom] at haction
+  | none => simp only [hatom, Option.map_none, reduceCtorEq] at haction
   | some atom =>
       simp only [hatom, Option.map_some, Option.some.injEq] at haction
       subst action
@@ -5123,15 +5214,15 @@ private theorem callerAllowanceBranch_accepted
       (callerAllowanceBranch e pre amountArg) := by
   unfold callerAllowanceBranch
   rcases h.1 with hself | ⟨hnotself, hspend⟩
-  · simp [hself.1, CallerAllowanceAccepted, CallerAllowanceTag, h]
+  · simp only [CallerAllowanceAccepted, h, CallerAllowanceTag, hself.1, ↓reduceIte, and_self]
   · simp only [hnotself, ↓reduceIte]
     rcases hspend with hmax | hfinite
-    · simp [hmax.1, CallerAllowanceAccepted, CallerAllowanceTag, h,
-        hnotself]
+    · simp only [CallerAllowanceAccepted, h, CallerAllowanceTag, hmax.1, ↓reduceIte, ne_eq,
+      hnotself, not_false_eq_true, and_self]
     · rcases hfinite with
         ⟨allowance, hnotmax, hle, hget, hstor, hlogs⟩
-      simp [hget, hnotmax, CallerAllowanceAccepted, CallerAllowanceTag,
-        h, hnotself, hle]
+      simp only [CallerAllowanceAccepted, h, CallerAllowanceTag, hget, hnotmax, ↓reduceIte, ne_eq,
+        hnotself, not_false_eq_true, hle, and_self]
 
 /-- Post-state reconstruction of the flash repayment visit.  The burn
 continuation never touches the tagged repayment cell, so the word the
@@ -5219,8 +5310,8 @@ private theorem localSegment_ordinaryTransfer
         else pre recipient) := by
     by_cases hself : source = recipient
     · subst recipient
-      simpa using ((hdecrease source).1 rfl).symm
-    · simpa [hself] using ((hdecrease recipient).2 hself).symm
+      simpa only [↓reduceIte] using ((hdecrease source).1 rfl).symm
+    · simpa only [hself, ↓reduceIte] using ((hdecrease recipient).2 hself).symm
   apply LocalActionSegment.ordinaryTransfer rawSource rawRecipient source
     recipient amountWord hatom
     { amount_le := hle
@@ -5290,8 +5381,8 @@ private theorem localOwnEffect_ordinaryTransfer
         else pre recipient) := by
     by_cases hself : source = recipient
     · subst recipient
-      simpa using ((hdecrease source).1 rfl).symm
-    · simpa [hself] using ((hdecrease recipient).2 hself).symm
+      simpa only [↓reduceIte] using ((hdecrease source).1 rfl).symm
+    · simpa only [hself, ↓reduceIte] using ((hdecrease recipient).2 hself).symm
   apply LocalOwnEffect.ordinaryTransfer
   apply LocalActionSegment.ordinaryTransfer rawSource rawRecipient source
     recipient amountWord hatom
@@ -5341,7 +5432,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_receive
     Blanc.Weth10.Exec.Frame.HasLocalOwnEffect ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -5351,8 +5442,8 @@ theorem Exec.Frame.hasLocalOwnEffect_of_receive
       have htarget : e.currentTarget = ca := context.invocation.2.1
       rw [htarget] at hinc
       have haction' := haction
-      simp [Blanc.Weth10.Exec.Frame.flowAction?, context.invocation, primaryFlowAtom,
-        primaryDebitProvenance, hempty] at haction'
+      simp only [flowAction?, context.invocation, ↓reduceIte, primaryDebitProvenance, hempty,
+        primaryFlowAtom, Option.map_some, Option.some.injEq] at haction'
       symm at haction'
       subst action
       unfold Blanc.Weth10.Exec.Frame.HasLocalOwnEffect
@@ -5375,7 +5466,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_deposit
     Blanc.Weth10.Exec.Frame.HasLocalOwnEffect ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -5386,15 +5477,13 @@ theorem Exec.Frame.hasLocalOwnEffect_of_deposit
       have htarget : e.currentTarget = ca := context.invocation.2.1
       rw [htarget] at hinc
       have haction' := haction
-      simp [Blanc.Weth10.Exec.Frame.flowAction?, context.invocation, primaryFlowAtom,
-        primaryDebitProvenance, hnonempty, hselector,
-        depositSelector_ne_transferSelector,
-        depositSelector_ne_transferAndCallSelector,
-        depositSelector_ne_withdrawSelector,
-        depositSelector_ne_withdrawToSelector,
-        depositSelector_ne_transferFromSelector,
-        depositSelector_ne_withdrawFromSelector,
-        depositSelector_ne_flashLoanSelector] at haction'
+      simp only [flowAction?, context.invocation, ↓reduceIte, primaryDebitProvenance, hnonempty,
+        hselector, depositSelector_ne_transferSelector, decide_false,
+        depositSelector_ne_transferAndCallSelector, Bool.or_self,
+        depositSelector_ne_withdrawSelector, depositSelector_ne_withdrawToSelector,
+        Bool.false_eq_true, depositSelector_ne_transferFromSelector,
+        depositSelector_ne_withdrawFromSelector, depositSelector_ne_flashLoanSelector,
+        primaryFlowAtom, Option.map_some, Option.some.injEq] at haction'
       symm at haction'
       subst action
       unfold Blanc.Weth10.Exec.Frame.HasLocalOwnEffect
@@ -5417,7 +5506,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transfer
     Blanc.Weth10.Exec.Frame.HasLocalOwnEffect ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -5433,10 +5522,10 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transfer
         have hatom : primaryFlowAtom e = some
             (.redemption e.caller.toB256 e.caller e.caller
               (Sevm.argWord e 1).toNat) := by
-          simp [primaryFlowAtom, hnonempty, hselector,
-            transferSelector_ne_depositSelector,
-            transferSelector_ne_depositToSelector,
-            transferSelector_ne_depositToAndCallSelector, hraw]
+          simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+            transferSelector_ne_depositSelector, transferSelector_ne_depositToSelector,
+            decide_false, transferSelector_ne_depositToAndCallSelector, Bool.or_self,
+            Bool.false_eq_true, decide_true, Bool.true_or, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
         unfold Blanc.Weth10.Exec.Frame.HasLocalOwnEffect
@@ -5445,7 +5534,8 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transfer
         · rfl
         · rfl
         · unfold FlowAction.HasDebitSource
-          simp [primaryDebitProvenance, hnonempty, hselector]
+          simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector, decide_true,
+            Bool.true_or, Option.some.injEq, exists_eq_left', and_self]
         · exact hprefix.2.1
         · exact hprefix.1
       · rcases hnonzero with
@@ -5460,10 +5550,10 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transfer
             (.transfer e.caller.toB256 (Sevm.argWord e 0) e.caller
               (Sevm.argWord e 0).toAdr
               (Sevm.argWord e 1).toNat) := by
-          simp [primaryFlowAtom, hnonempty, hselector,
-            transferSelector_ne_depositSelector,
-            transferSelector_ne_depositToSelector,
-            transferSelector_ne_depositToAndCallSelector, hraw]
+          simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+            transferSelector_ne_depositSelector, transferSelector_ne_depositToSelector,
+            decide_false, transferSelector_ne_depositToAndCallSelector, Bool.or_self,
+            Bool.false_eq_true, decide_true, Bool.true_or, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
         unfold Blanc.Weth10.Exec.Frame.HasLocalOwnEffect
@@ -5474,7 +5564,8 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transfer
           simp only [FlowAtom.creditOccurrence]
           rw [toB256_toNat]
         · unfold FlowAction.HasDebitSource
-          simp [primaryDebitProvenance, hnonempty, hselector]
+          simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector, decide_true,
+            Bool.true_or, Option.some.injEq, exists_eq_left', and_self]
         · exact htransfer
 
 theorem Exec.Frame.hasLocalOwnEffect_of_depositTo
@@ -5487,7 +5578,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_depositTo
     Blanc.Weth10.Exec.Frame.HasLocalOwnEffect ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -5505,8 +5596,8 @@ theorem Exec.Frame.hasLocalOwnEffect_of_depositTo
       have hatom : primaryFlowAtom e = some
           (.ordinaryMint (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr
             e.value.toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector,
-          depositToSelector_ne_depositSelector]
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+          depositToSelector_ne_depositSelector, decide_true, Bool.true_or]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
       unfold Blanc.Weth10.Exec.Frame.HasLocalOwnEffect
@@ -5516,14 +5607,12 @@ theorem Exec.Frame.hasLocalOwnEffect_of_depositTo
       · unfold FlowAction.ExactCredit
         simp only [FlowAtom.creditOccurrence]
         rw [toB256_toNat]
-      · simp [primaryDebitProvenance, hnonempty, hselector,
-        depositToSelector_ne_transferSelector,
-          depositToSelector_ne_transferAndCallSelector,
-          depositToSelector_ne_transferFromSelector,
-          depositToSelector_ne_withdrawSelector,
-          depositToSelector_ne_withdrawToSelector,
-          depositToSelector_ne_withdrawFromSelector,
-          depositToSelector_ne_flashLoanSelector]
+      · simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector,
+        depositToSelector_ne_transferSelector, decide_false,
+        depositToSelector_ne_transferAndCallSelector, Bool.or_self,
+        depositToSelector_ne_withdrawSelector, depositToSelector_ne_withdrawToSelector,
+        Bool.false_eq_true, depositToSelector_ne_transferFromSelector,
+        depositToSelector_ne_withdrawFromSelector, depositToSelector_ne_flashLoanSelector]
       · exact hincrease
 
 theorem Exec.Frame.hasLocalOwnEffect_of_depositToAndCall
@@ -5537,7 +5626,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_depositToAndCall
     Blanc.Weth10.Exec.Frame.HasLocalOwnEffect ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -5558,8 +5647,8 @@ theorem Exec.Frame.hasLocalOwnEffect_of_depositToAndCall
       have hatom : primaryFlowAtom e = some
           (.ordinaryMint (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr
             e.value.toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector,
-          depositToAndCallSelector_ne_depositSelector]
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+          depositToAndCallSelector_ne_depositSelector, decide_true, Bool.or_true]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
       unfold Blanc.Weth10.Exec.Frame.HasLocalOwnEffect
@@ -5569,14 +5658,14 @@ theorem Exec.Frame.hasLocalOwnEffect_of_depositToAndCall
       · unfold FlowAction.ExactCredit
         simp only [FlowAtom.creditOccurrence]
         rw [toB256_toNat]
-      · simp [primaryDebitProvenance, hnonempty, hselector,
-        depositToAndCallSelector_ne_transferSelector,
-          depositToAndCallSelector_ne_transferAndCallSelector,
-          depositToAndCallSelector_ne_transferFromSelector,
-          depositToAndCallSelector_ne_withdrawSelector,
-          depositToAndCallSelector_ne_withdrawToSelector,
-          depositToAndCallSelector_ne_withdrawFromSelector,
-          depositToAndCallSelector_ne_flashLoanSelector]
+      · simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector,
+        depositToAndCallSelector_ne_transferSelector, decide_false,
+        depositToAndCallSelector_ne_transferAndCallSelector, Bool.or_self,
+        depositToAndCallSelector_ne_withdrawSelector,
+        depositToAndCallSelector_ne_withdrawToSelector, Bool.false_eq_true,
+        depositToAndCallSelector_ne_transferFromSelector,
+        depositToAndCallSelector_ne_withdrawFromSelector,
+        depositToAndCallSelector_ne_flashLoanSelector]
       · exact hincrease
 
 theorem Exec.Frame.hasLocalOwnEffect_of_transferAndCall
@@ -5589,7 +5678,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferAndCall
     Blanc.Weth10.Exec.Frame.HasLocalOwnEffect ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -5606,10 +5695,11 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferAndCall
         have hatom : primaryFlowAtom e = some
             (.redemption e.caller.toB256 e.caller e.caller
               (Sevm.argWord e 1).toNat) := by
-          simp [primaryFlowAtom, hnonempty, hselector,
+          simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
             transferAndCallSelector_ne_depositSelector,
-            transferAndCallSelector_ne_depositToSelector,
-            transferAndCallSelector_ne_depositToAndCallSelector, hraw]
+            transferAndCallSelector_ne_depositToSelector, decide_false,
+            transferAndCallSelector_ne_depositToAndCallSelector, Bool.or_self, Bool.false_eq_true,
+            decide_true, Bool.or_true, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
         unfold Blanc.Weth10.Exec.Frame.HasLocalOwnEffect
@@ -5618,7 +5708,8 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferAndCall
         · rfl
         · rfl
         · unfold FlowAction.HasDebitSource
-          simp [primaryDebitProvenance, hnonempty, hselector]
+          simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector, decide_true,
+            Bool.or_true, Bool.true_or, Option.some.injEq, exists_eq_left', and_self]
         · exact hprefix.2.1
         · exact hprefix.1
       · rcases hnonzero with
@@ -5634,10 +5725,11 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferAndCall
             (.transfer e.caller.toB256 (Sevm.argWord e 0) e.caller
               (Sevm.argWord e 0).toAdr
               (Sevm.argWord e 1).toNat) := by
-          simp [primaryFlowAtom, hnonempty, hselector,
+          simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
             transferAndCallSelector_ne_depositSelector,
-            transferAndCallSelector_ne_depositToSelector,
-            transferAndCallSelector_ne_depositToAndCallSelector, hraw]
+            transferAndCallSelector_ne_depositToSelector, decide_false,
+            transferAndCallSelector_ne_depositToAndCallSelector, Bool.or_self, Bool.false_eq_true,
+            decide_true, Bool.or_true, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
         unfold Blanc.Weth10.Exec.Frame.HasLocalOwnEffect
@@ -5648,7 +5740,8 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferAndCall
           simp only [FlowAtom.creditOccurrence]
           rw [toB256_toNat]
         · unfold FlowAction.HasDebitSource
-          simp [primaryDebitProvenance, hnonempty, hselector]
+          simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector, decide_true,
+            Bool.or_true, Bool.true_or, Option.some.injEq, exists_eq_left', and_self]
         · exact htransfer
 
 theorem Exec.Frame.hasLocalOwnEffect_of_transferFrom
@@ -5661,7 +5754,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferFrom
     Blanc.Weth10.Exec.Frame.HasLocalOwnEffect ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -5688,11 +5781,10 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferFrom
         have hatom : primaryFlowAtom e = some
             (.redemption (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr
               e.caller (Sevm.argWord e 2).toNat) := by
-          simp [primaryFlowAtom, hnonempty, hselector,
-            transferFromSelector_ne_depositSelector,
-            transferFromSelector_ne_depositToSelector,
-            transferFromSelector_ne_depositToAndCallSelector,
-            transferFromSelector_ne_transferSelector,
+          simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+            transferFromSelector_ne_depositSelector, transferFromSelector_ne_depositToSelector,
+            decide_false, transferFromSelector_ne_depositToAndCallSelector, Bool.or_self,
+            Bool.false_eq_true, transferFromSelector_ne_transferSelector,
             transferFromSelector_ne_transferAndCallSelector, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
@@ -5702,11 +5794,11 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferFrom
         · rfl
         · rfl
         · unfold FlowAction.HasDebitSource
-          simp [primaryDebitProvenance, hnonempty, hselector,
-            transferFromSelector_ne_transferSelector,
-            transferFromSelector_ne_transferAndCallSelector,
-            transferFromSelector_ne_withdrawSelector,
-            transferFromSelector_ne_withdrawToSelector]
+          simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector,
+            transferFromSelector_ne_transferSelector, decide_false,
+            transferFromSelector_ne_transferAndCallSelector, Bool.or_self,
+            transferFromSelector_ne_withdrawSelector, transferFromSelector_ne_withdrawToSelector,
+            Bool.false_eq_true, Option.some.injEq, exists_eq_left', and_self]
         · exact hprefix.2.1
         · exact hprefix.1
       · rcases hnonzero with
@@ -5722,11 +5814,10 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferFrom
             (.transfer (Sevm.argWord e 0) (Sevm.argWord e 1)
               (Sevm.argWord e 0).toAdr (Sevm.argWord e 1).toAdr
               (Sevm.argWord e 2).toNat) := by
-          simp [primaryFlowAtom, hnonempty, hselector,
-            transferFromSelector_ne_depositSelector,
-            transferFromSelector_ne_depositToSelector,
-            transferFromSelector_ne_depositToAndCallSelector,
-            transferFromSelector_ne_transferSelector,
+          simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+            transferFromSelector_ne_depositSelector, transferFromSelector_ne_depositToSelector,
+            decide_false, transferFromSelector_ne_depositToAndCallSelector, Bool.or_self,
+            Bool.false_eq_true, transferFromSelector_ne_transferSelector,
             transferFromSelector_ne_transferAndCallSelector, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
@@ -5738,11 +5829,11 @@ theorem Exec.Frame.hasLocalOwnEffect_of_transferFrom
           simp only [FlowAtom.creditOccurrence]
           rw [toB256_toNat]
         · unfold FlowAction.HasDebitSource
-          simp [primaryDebitProvenance, hnonempty, hselector,
-            transferFromSelector_ne_transferSelector,
-            transferFromSelector_ne_transferAndCallSelector,
-            transferFromSelector_ne_withdrawSelector,
-            transferFromSelector_ne_withdrawToSelector]
+          simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector,
+            transferFromSelector_ne_transferSelector, decide_false,
+            transferFromSelector_ne_transferAndCallSelector, Bool.or_self,
+            transferFromSelector_ne_withdrawSelector, transferFromSelector_ne_withdrawToSelector,
+            Bool.false_eq_true, Option.some.injEq, exists_eq_left', and_self]
         · exact htransfer
 
 theorem Exec.Frame.hasLocalOwnEffect_of_withdraw
@@ -5755,7 +5846,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_withdraw
     Blanc.Weth10.Exec.Frame.HasLocalOwnEffect ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -5770,12 +5861,10 @@ theorem Exec.Frame.hasLocalOwnEffect_of_withdraw
       have hatom : primaryFlowAtom e = some
           (.redemption e.caller.toB256 e.caller e.caller
             (Sevm.argWord e 0).toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector,
-          withdrawSelector_ne_depositSelector,
-          withdrawSelector_ne_depositToSelector,
-          withdrawSelector_ne_depositToAndCallSelector,
-          withdrawSelector_ne_transferSelector,
-          withdrawSelector_ne_transferAndCallSelector,
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+          withdrawSelector_ne_depositSelector, withdrawSelector_ne_depositToSelector, decide_false,
+          withdrawSelector_ne_depositToAndCallSelector, Bool.or_self, Bool.false_eq_true,
+          withdrawSelector_ne_transferSelector, withdrawSelector_ne_transferAndCallSelector,
           withdrawSelector_ne_transferFromSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
@@ -5785,7 +5874,8 @@ theorem Exec.Frame.hasLocalOwnEffect_of_withdraw
       · rfl
       · rfl
       · unfold FlowAction.HasDebitSource
-        simp [primaryDebitProvenance, hnonempty, hselector]
+        simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector, decide_true,
+          Bool.or_true, Bool.true_or, Option.some.injEq, exists_eq_left', and_self]
       · exact hprefix.2.1
       · exact hprefix.1
 
@@ -5799,7 +5889,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_withdrawTo
     Blanc.Weth10.Exec.Frame.HasLocalOwnEffect ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -5814,13 +5904,11 @@ theorem Exec.Frame.hasLocalOwnEffect_of_withdrawTo
       have hatom : primaryFlowAtom e = some
           (.redemption e.caller.toB256 e.caller
             (Sevm.argWord e 0).toAdr (Sevm.argWord e 1).toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector,
-          withdrawToSelector_ne_depositSelector,
-          withdrawToSelector_ne_depositToSelector,
-          withdrawToSelector_ne_depositToAndCallSelector,
-          withdrawToSelector_ne_transferSelector,
-          withdrawToSelector_ne_transferAndCallSelector,
-          withdrawToSelector_ne_transferFromSelector,
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+          withdrawToSelector_ne_depositSelector, withdrawToSelector_ne_depositToSelector,
+          decide_false, withdrawToSelector_ne_depositToAndCallSelector, Bool.or_self,
+          Bool.false_eq_true, withdrawToSelector_ne_transferSelector,
+          withdrawToSelector_ne_transferAndCallSelector, withdrawToSelector_ne_transferFromSelector,
           withdrawToSelector_ne_withdrawSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
@@ -5830,7 +5918,8 @@ theorem Exec.Frame.hasLocalOwnEffect_of_withdrawTo
       · rfl
       · rfl
       · unfold FlowAction.HasDebitSource
-        simp [primaryDebitProvenance, hnonempty, hselector]
+        simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector, decide_true,
+          Bool.or_true, Option.some.injEq, exists_eq_left', and_self]
       · exact hprefix.2.1
       · exact hprefix.1
 
@@ -5844,7 +5933,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_withdrawFrom
     Blanc.Weth10.Exec.Frame.HasLocalOwnEffect ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -5865,14 +5954,12 @@ theorem Exec.Frame.hasLocalOwnEffect_of_withdrawFrom
       have hatom : primaryFlowAtom e = some
           (.redemption (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr
             (Sevm.argWord e 1).toAdr (Sevm.argWord e 2).toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector,
-          withdrawFromSelector_ne_depositSelector,
-          withdrawFromSelector_ne_depositToSelector,
-          withdrawFromSelector_ne_depositToAndCallSelector,
-          withdrawFromSelector_ne_transferSelector,
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+          withdrawFromSelector_ne_depositSelector, withdrawFromSelector_ne_depositToSelector,
+          decide_false, withdrawFromSelector_ne_depositToAndCallSelector, Bool.or_self,
+          Bool.false_eq_true, withdrawFromSelector_ne_transferSelector,
           withdrawFromSelector_ne_transferAndCallSelector,
-          withdrawFromSelector_ne_transferFromSelector,
-          withdrawFromSelector_ne_withdrawSelector,
+          withdrawFromSelector_ne_transferFromSelector, withdrawFromSelector_ne_withdrawSelector,
           withdrawFromSelector_ne_withdrawToSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
@@ -5882,12 +5969,12 @@ theorem Exec.Frame.hasLocalOwnEffect_of_withdrawFrom
       · rfl
       · rfl
       · unfold FlowAction.HasDebitSource
-        simp [primaryDebitProvenance, hnonempty, hselector,
-          withdrawFromSelector_ne_transferSelector,
-          withdrawFromSelector_ne_transferAndCallSelector,
-          withdrawFromSelector_ne_transferFromSelector,
-          withdrawFromSelector_ne_withdrawSelector,
-          withdrawFromSelector_ne_withdrawToSelector]
+        simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector,
+          withdrawFromSelector_ne_transferSelector, decide_false,
+          withdrawFromSelector_ne_transferAndCallSelector, Bool.or_self,
+          withdrawFromSelector_ne_withdrawSelector, withdrawFromSelector_ne_withdrawToSelector,
+          Bool.false_eq_true, withdrawFromSelector_ne_transferFromSelector, Option.some.injEq,
+          exists_eq_left', and_self]
       · exact hprefix.2.1
       · exact hprefix.1
 
@@ -5901,7 +5988,7 @@ theorem Exec.Frame.hasLocalOwnEffect_of_flashLoan
     Blanc.Weth10.Exec.Frame.HasLocalOwnEffect ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -5930,15 +6017,12 @@ theorem Exec.Frame.hasLocalOwnEffect_of_flashLoan
       have hatom : primaryFlowAtom e = some
           (.flashPair (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr
             (Sevm.argWord e 2).toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector,
-          flashLoanSelector_ne_depositSelector,
-          flashLoanSelector_ne_depositToSelector,
-          flashLoanSelector_ne_depositToAndCallSelector,
-          flashLoanSelector_ne_transferSelector,
-          flashLoanSelector_ne_transferAndCallSelector,
-          flashLoanSelector_ne_transferFromSelector,
-          flashLoanSelector_ne_withdrawSelector,
-          flashLoanSelector_ne_withdrawToSelector,
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+          flashLoanSelector_ne_depositSelector, flashLoanSelector_ne_depositToSelector,
+          decide_false, flashLoanSelector_ne_depositToAndCallSelector, Bool.or_self,
+          Bool.false_eq_true, flashLoanSelector_ne_transferSelector,
+          flashLoanSelector_ne_transferAndCallSelector, flashLoanSelector_ne_transferFromSelector,
+          flashLoanSelector_ne_withdrawSelector, flashLoanSelector_ne_withdrawToSelector,
           flashLoanSelector_ne_withdrawFromSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
@@ -5950,13 +6034,13 @@ theorem Exec.Frame.hasLocalOwnEffect_of_flashLoan
         simp only [FlowAtom.creditOccurrence]
         rw [toB256_toNat]
       · unfold FlowAction.HasFlashDebitSource
-        simp [primaryDebitProvenance, hnonempty, hselector,
-          flashLoanSelector_ne_transferSelector,
-          flashLoanSelector_ne_transferAndCallSelector,
-          flashLoanSelector_ne_transferFromSelector,
-          flashLoanSelector_ne_withdrawSelector,
-          flashLoanSelector_ne_withdrawToSelector,
-          flashLoanSelector_ne_withdrawFromSelector]
+        simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector,
+          flashLoanSelector_ne_transferSelector, decide_false,
+          flashLoanSelector_ne_transferAndCallSelector, Bool.or_self,
+          flashLoanSelector_ne_withdrawSelector, flashLoanSelector_ne_withdrawToSelector,
+          Bool.false_eq_true, flashLoanSelector_ne_transferFromSelector,
+          flashLoanSelector_ne_withdrawFromSelector, Option.some.injEq, exists_and_left,
+          exists_eq_left', DebitBranch.flash.injEq, exists_eq', and_self]
       · exact hincrease
       · exact hle
       · exact hdecrease
@@ -5973,7 +6057,7 @@ theorem Exec.Frame.hasAcceptedDebit_of_flowAction?_eq_some
     Blanc.Weth10.Exec.Frame.HasAcceptedDebit dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -5982,25 +6066,29 @@ theorem Exec.Frame.hasAcceptedDebit_of_flowAction?_eq_some
       by_cases hempty : e.data.length.toB256 = 0
       · apply FlowAction.AcceptedDebit.none
         rw [hdebit]
-        simp [primaryDebitProvenance, hempty]
+        simp only [primaryDebitProvenance, hempty, ↓reduceIte]
       have hnonempty : e.data.length.toB256 ≠ 0 := hempty
       by_cases htransfer : Sevm.selector e = transferSelector
       · apply FlowAction.AcceptedDebit.direct e.caller.toB256 e.caller
         rw [hdebit]
-        simp [primaryDebitProvenance, hnonempty, htransfer]
+        simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, htransfer, decide_true,
+          Bool.true_or]
       by_cases htransferCall :
           Sevm.selector e = transferAndCallSelector
       · apply FlowAction.AcceptedDebit.direct e.caller.toB256 e.caller
         rw [hdebit]
-        simp [primaryDebitProvenance, hnonempty, htransferCall]
+        simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, htransferCall, decide_true,
+          Bool.or_true, Bool.true_or]
       by_cases hwithdraw : Sevm.selector e = withdrawSelector
       · apply FlowAction.AcceptedDebit.direct e.caller.toB256 e.caller
         rw [hdebit]
-        simp [primaryDebitProvenance, hnonempty, hwithdraw]
+        simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hwithdraw, decide_true,
+          Bool.or_true, Bool.true_or]
       by_cases hwithdrawTo : Sevm.selector e = withdrawToSelector
       · apply FlowAction.AcceptedDebit.direct e.caller.toB256 e.caller
         rw [hdebit]
-        simp [primaryDebitProvenance, hnonempty, hwithdrawTo]
+        simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hwithdrawTo, decide_true,
+          Bool.or_true]
       by_cases htransferFrom : Sevm.selector e = transferFromSelector
       · have heffect := (weth10_transferFrom_successEffect dp
           context.memory_wf context.memory_reads_empty run
@@ -6012,11 +6100,11 @@ theorem Exec.Frame.hasAcceptedDebit_of_flowAction?_eq_some
           (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr corePre
           (callerAllowanceBranch e pre 2)
         · rw [hdebit]
-          simp [primaryDebitProvenance, hnonempty, htransferFrom,
-            transferFromSelector_ne_transferSelector,
-            transferFromSelector_ne_transferAndCallSelector,
-            transferFromSelector_ne_withdrawSelector,
-            transferFromSelector_ne_withdrawToSelector]
+          simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, htransferFrom,
+            transferFromSelector_ne_transferSelector, decide_false,
+            transferFromSelector_ne_transferAndCallSelector, Bool.or_self,
+            transferFromSelector_ne_withdrawSelector, transferFromSelector_ne_withdrawToSelector,
+            Bool.false_eq_true]
         · exact callerAllowanceBranch_accepted hallowance
       by_cases hwithdrawFrom : Sevm.selector e = withdrawFromSelector
       · have heffect := (weth10_withdrawFrom_successEffect dp
@@ -6029,12 +6117,11 @@ theorem Exec.Frame.hasAcceptedDebit_of_flowAction?_eq_some
           (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr corePre
           (callerAllowanceBranch e pre 2)
         · rw [hdebit]
-          simp [primaryDebitProvenance, hnonempty, hwithdrawFrom,
-            withdrawFromSelector_ne_transferSelector,
-            withdrawFromSelector_ne_transferAndCallSelector,
-            withdrawFromSelector_ne_withdrawSelector,
-            withdrawFromSelector_ne_withdrawToSelector,
-            withdrawFromSelector_ne_transferFromSelector]
+          simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hwithdrawFrom,
+            withdrawFromSelector_ne_transferSelector, decide_false,
+            withdrawFromSelector_ne_transferAndCallSelector, Bool.or_self,
+            withdrawFromSelector_ne_withdrawSelector, withdrawFromSelector_ne_withdrawToSelector,
+            Bool.false_eq_true, withdrawFromSelector_ne_transferFromSelector]
         · exact callerAllowanceBranch_accepted hallowance
       by_cases hflash : Sevm.selector e = flashLoanSelector
       · have htarget : e.currentTarget = ca := context.invocation.2.1
@@ -6057,20 +6144,18 @@ theorem Exec.Frame.hasAcceptedDebit_of_flowAction?_eq_some
           (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr settle burn
           (flashAllowanceBranchFromPost e post)
         · rw [hdebit]
-          simp [primaryDebitProvenance, hnonempty, hflash,
-            flashLoanSelector_ne_transferSelector,
-            flashLoanSelector_ne_transferAndCallSelector,
-            flashLoanSelector_ne_withdrawSelector,
-            flashLoanSelector_ne_withdrawToSelector,
-            flashLoanSelector_ne_transferFromSelector,
-            flashLoanSelector_ne_withdrawFromSelector,
-            Exec.Frame.post, Execution.committedPost]
+          simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hflash,
+            flashLoanSelector_ne_transferSelector, decide_false,
+            flashLoanSelector_ne_transferAndCallSelector, Bool.or_self,
+            flashLoanSelector_ne_withdrawSelector, flashLoanSelector_ne_withdrawToSelector,
+            Bool.false_eq_true, flashLoanSelector_ne_transferFromSelector,
+            flashLoanSelector_ne_withdrawFromSelector, Exec.Frame.post, Execution.committedPost]
         · exact flashSettlement_reconstruction hallowance hburnRun
-        · simpa [Exec.Frame.post, Execution.committedPost] using hburnRun
+        · simpa only [Exec.Frame.post, Execution.committedPost] using hburnRun
       · apply FlowAction.AcceptedDebit.none
         rw [hdebit]
-        simp [primaryDebitProvenance, hnonempty, htransfer,
-          htransferCall, hwithdraw, hwithdrawTo, htransferFrom,
+        simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, htransfer, decide_false,
+          htransferCall, Bool.or_self, hwithdraw, hwithdrawTo, Bool.false_eq_true, htransferFrom,
           hwithdrawFrom, hflash]
 
 /-- Every executable flow classification is paired with the exact emitter
@@ -6085,7 +6170,7 @@ theorem Exec.Frame.hasGenuineWethEmitterEffect_of_flowAction?_eq_some
     Blanc.Weth10.Exec.Frame.HasGenuineWethEmitterEffect dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -6174,10 +6259,11 @@ theorem Exec.Frame.hasGenuineWethEmitterEffect_of_flowAction?_eq_some
           context.memory_wf context.memory_reads_empty run context.covered).2
         simpa only [Exec.Frame.post, Execution.committedPost] using heffect
       have hprimary : primaryFlowAtom e = none := by
-        simp [primaryFlowAtom, hnonempty, hdeposit, hdepositTo,
-          hdepositCall, htransfer, htransferCall, htransferFrom,
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hdeposit, hdepositTo, decide_false,
+          hdepositCall, Bool.or_self, Bool.false_eq_true, htransfer, htransferCall, htransferFrom,
           hwithdraw, hwithdrawTo, hwithdrawFrom, hflash]
-      simp [Blanc.Weth10.Exec.Frame.flowAction?, context.invocation, hprimary] at haction
+      simp only [flowAction?, context.invocation, ↓reduceIte, hprimary, Option.map_none,
+        reduceCtorEq] at haction
 
 /-- Reverse leaf classification for every recognized non-flow selector.
 The recognized-leaf premise is deliberately explicit: deriving it from an
@@ -6195,107 +6281,97 @@ theorem Exec.Frame.hasNoWethBalanceOwnEffect_of_recognized
     Blanc.Weth10.Exec.Frame.HasNoWethBalanceOwnEffect dp ca frame := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
       refine ⟨context, hnone, ?_⟩
       by_cases hempty : e.data.length.toB256 = 0
       · have hprimary : primaryFlowAtom e ≠ none := by
-          simp [primaryFlowAtom, hempty]
+          simp only [primaryFlowAtom, hempty, ↓reduceIte, ne_eq, reduceCtorEq, not_false_eq_true]
         unfold Blanc.Weth10.Exec.Frame.flowAction? at hnone
         rw [if_pos context.invocation] at hnone
         cases h : primaryFlowAtom e with
         | none => exact (hprimary h).elim
-        | some atom => simp [h] at hnone
+        | some atom => simp only [h, Option.map_some, reduceCtorEq] at hnone
       have hnonempty : e.data.length.toB256 ≠ 0 := hempty
       have hprimary : primaryFlowAtom e = none := by
         unfold Blanc.Weth10.Exec.Frame.flowAction? at hnone
         rw [if_pos context.invocation] at hnone
         cases h : primaryFlowAtom e with
         | none => rfl
-        | some atom => simp [h] at hnone
+        | some atom => simp only [h, Option.map_some, reduceCtorEq] at hnone
       have hnotDeposit : Sevm.selector e ≠ depositSelector := by
         intro h
-        simp [primaryFlowAtom, hnonempty, h] at hprimary
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, h, reduceCtorEq] at hprimary
       have hnotDepositTo : Sevm.selector e ≠ depositToSelector := by
         intro h
-        simp [primaryFlowAtom, hnonempty, h,
-          depositToSelector_ne_depositSelector] at hprimary
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, h, depositToSelector_ne_depositSelector,
+          decide_true, Bool.true_or, reduceCtorEq] at hprimary
       have hnotDepositCall :
           Sevm.selector e ≠ depositToAndCallSelector := by
         intro h
-        simp [primaryFlowAtom, hnonempty, h,
-          depositToAndCallSelector_ne_depositSelector] at hprimary
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, h,
+          depositToAndCallSelector_ne_depositSelector, decide_true, Bool.or_true,
+          reduceCtorEq] at hprimary
       have hnotTransfer : Sevm.selector e ≠ transferSelector := by
         intro h
-        simp [primaryFlowAtom, hnonempty, h,
-          transferSelector_ne_depositSelector,
-          transferSelector_ne_depositToSelector,
-          transferSelector_ne_depositToAndCallSelector] at hprimary
-        split at hprimary <;> simp_all
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, h, transferSelector_ne_depositSelector,
+          transferSelector_ne_depositToSelector, decide_false,
+          transferSelector_ne_depositToAndCallSelector, Bool.or_self, Bool.false_eq_true,
+          decide_true, Bool.true_or] at hprimary
+        split at hprimary <;> simp_all only [not_false_eq_true, ne_eq, reduceCtorEq]
       have hnotTransferCall :
           Sevm.selector e ≠ transferAndCallSelector := by
         intro h
-        simp [primaryFlowAtom, hnonempty, h,
-          transferAndCallSelector_ne_depositSelector,
-          transferAndCallSelector_ne_depositToSelector,
-          transferAndCallSelector_ne_depositToAndCallSelector] at hprimary
-        split at hprimary <;> simp_all
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, h,
+          transferAndCallSelector_ne_depositSelector, transferAndCallSelector_ne_depositToSelector,
+          decide_false, transferAndCallSelector_ne_depositToAndCallSelector, Bool.or_self,
+          Bool.false_eq_true, decide_true, Bool.or_true] at hprimary
+        split at hprimary <;> simp_all only [not_false_eq_true, ne_eq, reduceCtorEq]
       have hnotTransferFrom :
           Sevm.selector e ≠ transferFromSelector := by
         intro h
-        simp [primaryFlowAtom, hnonempty, h,
-          transferFromSelector_ne_depositSelector,
-          transferFromSelector_ne_depositToSelector,
-          transferFromSelector_ne_depositToAndCallSelector,
-          transferFromSelector_ne_transferSelector,
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, h,
+          transferFromSelector_ne_depositSelector, transferFromSelector_ne_depositToSelector,
+          decide_false, transferFromSelector_ne_depositToAndCallSelector, Bool.or_self,
+          Bool.false_eq_true, transferFromSelector_ne_transferSelector,
           transferFromSelector_ne_transferAndCallSelector] at hprimary
-        split at hprimary <;> simp_all
+        split at hprimary <;> simp_all only [not_false_eq_true, ne_eq, reduceCtorEq]
       have hnotWithdraw : Sevm.selector e ≠ withdrawSelector := by
         intro h
-        simp [primaryFlowAtom, hnonempty, h,
-          withdrawSelector_ne_depositSelector,
-          withdrawSelector_ne_depositToSelector,
-          withdrawSelector_ne_depositToAndCallSelector,
-          withdrawSelector_ne_transferSelector,
-          withdrawSelector_ne_transferAndCallSelector,
-          withdrawSelector_ne_transferFromSelector]
-          at hprimary
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, h, withdrawSelector_ne_depositSelector,
+          withdrawSelector_ne_depositToSelector, decide_false,
+          withdrawSelector_ne_depositToAndCallSelector, Bool.or_self, Bool.false_eq_true,
+          withdrawSelector_ne_transferSelector, withdrawSelector_ne_transferAndCallSelector,
+          withdrawSelector_ne_transferFromSelector, reduceCtorEq] at hprimary
       have hnotWithdrawTo : Sevm.selector e ≠ withdrawToSelector := by
         intro h
-        simp [primaryFlowAtom, hnonempty, h,
-          withdrawToSelector_ne_depositSelector,
-          withdrawToSelector_ne_depositToSelector,
-          withdrawToSelector_ne_depositToAndCallSelector,
-          withdrawToSelector_ne_transferSelector,
-          withdrawToSelector_ne_transferAndCallSelector,
-          withdrawToSelector_ne_transferFromSelector,
-          withdrawToSelector_ne_withdrawSelector] at hprimary
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, h, withdrawToSelector_ne_depositSelector,
+          withdrawToSelector_ne_depositToSelector, decide_false,
+          withdrawToSelector_ne_depositToAndCallSelector, Bool.or_self, Bool.false_eq_true,
+          withdrawToSelector_ne_transferSelector, withdrawToSelector_ne_transferAndCallSelector,
+          withdrawToSelector_ne_transferFromSelector, withdrawToSelector_ne_withdrawSelector,
+          reduceCtorEq] at hprimary
       have hnotWithdrawFrom :
           Sevm.selector e ≠ withdrawFromSelector := by
         intro h
-        simp [primaryFlowAtom, hnonempty, h,
-          withdrawFromSelector_ne_depositSelector,
-          withdrawFromSelector_ne_depositToSelector,
-          withdrawFromSelector_ne_depositToAndCallSelector,
-          withdrawFromSelector_ne_transferSelector,
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, h,
+          withdrawFromSelector_ne_depositSelector, withdrawFromSelector_ne_depositToSelector,
+          decide_false, withdrawFromSelector_ne_depositToAndCallSelector, Bool.or_self,
+          Bool.false_eq_true, withdrawFromSelector_ne_transferSelector,
           withdrawFromSelector_ne_transferAndCallSelector,
-          withdrawFromSelector_ne_transferFromSelector,
-          withdrawFromSelector_ne_withdrawSelector,
-          withdrawFromSelector_ne_withdrawToSelector] at hprimary
+          withdrawFromSelector_ne_transferFromSelector, withdrawFromSelector_ne_withdrawSelector,
+          withdrawFromSelector_ne_withdrawToSelector, reduceCtorEq] at hprimary
       have hnotFlash : Sevm.selector e ≠ flashLoanSelector := by
         intro h
-        simp [primaryFlowAtom, hnonempty, h,
-          flashLoanSelector_ne_depositSelector,
-          flashLoanSelector_ne_depositToSelector,
-          flashLoanSelector_ne_depositToAndCallSelector,
-          flashLoanSelector_ne_transferSelector,
-          flashLoanSelector_ne_transferAndCallSelector,
-          flashLoanSelector_ne_transferFromSelector,
-          flashLoanSelector_ne_withdrawSelector,
-          flashLoanSelector_ne_withdrawToSelector,
-          flashLoanSelector_ne_withdrawFromSelector] at hprimary
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, h, flashLoanSelector_ne_depositSelector,
+          flashLoanSelector_ne_depositToSelector, decide_false,
+          flashLoanSelector_ne_depositToAndCallSelector, Bool.or_self, Bool.false_eq_true,
+          flashLoanSelector_ne_transferSelector, flashLoanSelector_ne_transferAndCallSelector,
+          flashLoanSelector_ne_transferFromSelector, flashLoanSelector_ne_withdrawSelector,
+          flashLoanSelector_ne_withdrawToSelector, flashLoanSelector_ne_withdrawFromSelector,
+          reduceCtorEq] at hprimary
       rcases hrecognized with ⟨body, hbody⟩
       have hselmem : Sevm.selector e ∈
           (weth10Funcs dp).map Prod.fst := by
@@ -6407,7 +6483,8 @@ theorem Exec.Frame.hasNoWethBalanceOwnEffect_of_recognized
           simpa only [approveAndCallSelector] using happroveCall
         rcases exec_enters_weth10Nonpayable_logs (body := approveAndCall) run
             context.invocation.2.2.2 happroveCall' hnonempty
-            (by simp [weth10Funcs, approveAndCallSelector]) with
+            (by simp only [weth10Funcs, approveAndCallSelector, List.mem_cons, Prod.mk.injEq,
+              List.not_mem_nil, or_false, true_or, or_true]) with
           ⟨bodyPre, hvalue, hstor, hbal, hcode, hmemory, hlogs,
             houtput, hbodyRun⟩
         simp only [approveAndCall] at hbodyRun
@@ -6463,7 +6540,7 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_receive
     Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -6473,8 +6550,8 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_receive
       have htarget : e.currentTarget = ca := context.invocation.2.1
       rw [htarget] at hinc
       have haction' := haction
-      simp [Blanc.Weth10.Exec.Frame.flowAction?, context.invocation, primaryFlowAtom,
-        primaryDebitProvenance, hempty] at haction'
+      simp only [flowAction?, context.invocation, ↓reduceIte, primaryDebitProvenance, hempty,
+        primaryFlowAtom, Option.map_some, Option.some.injEq] at haction'
       symm at haction'
       subst action
       refine ⟨context, haction, .ordinaryMint ?_⟩
@@ -6496,7 +6573,7 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_deposit
     Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -6507,15 +6584,13 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_deposit
       have htarget : e.currentTarget = ca := context.invocation.2.1
       rw [htarget] at hinc
       have haction' := haction
-      simp [Blanc.Weth10.Exec.Frame.flowAction?, context.invocation, primaryFlowAtom,
-        primaryDebitProvenance, hnonempty, hselector,
-        depositSelector_ne_transferSelector,
-        depositSelector_ne_transferAndCallSelector,
-        depositSelector_ne_withdrawSelector,
-        depositSelector_ne_withdrawToSelector,
-        depositSelector_ne_transferFromSelector,
-        depositSelector_ne_withdrawFromSelector,
-        depositSelector_ne_flashLoanSelector] at haction'
+      simp only [flowAction?, context.invocation, ↓reduceIte, primaryDebitProvenance, hnonempty,
+        hselector, depositSelector_ne_transferSelector, decide_false,
+        depositSelector_ne_transferAndCallSelector, Bool.or_self,
+        depositSelector_ne_withdrawSelector, depositSelector_ne_withdrawToSelector,
+        Bool.false_eq_true, depositSelector_ne_transferFromSelector,
+        depositSelector_ne_withdrawFromSelector, depositSelector_ne_flashLoanSelector,
+        primaryFlowAtom, Option.map_some, Option.some.injEq] at haction'
       symm at haction'
       subst action
       refine ⟨context, haction, .ordinaryMint ?_⟩
@@ -6537,7 +6612,7 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_depositTo
     Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -6555,8 +6630,8 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_depositTo
       have hatom : primaryFlowAtom e = some
           (.ordinaryMint (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr
             e.value.toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector,
-          depositToSelector_ne_depositSelector]
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+          depositToSelector_ne_depositSelector, decide_true, Bool.true_or]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
       refine ⟨context, haction, .ordinaryMint ?_⟩
@@ -6565,14 +6640,12 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_depositTo
       · unfold FlowAction.ExactCredit
         simp only [FlowAtom.creditOccurrence]
         rw [toB256_toNat]
-      · simp [primaryDebitProvenance, hnonempty, hselector,
-        depositToSelector_ne_transferSelector,
-          depositToSelector_ne_transferAndCallSelector,
-          depositToSelector_ne_transferFromSelector,
-          depositToSelector_ne_withdrawSelector,
-          depositToSelector_ne_withdrawToSelector,
-          depositToSelector_ne_withdrawFromSelector,
-          depositToSelector_ne_flashLoanSelector]
+      · simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector,
+        depositToSelector_ne_transferSelector, decide_false,
+        depositToSelector_ne_transferAndCallSelector, Bool.or_self,
+        depositToSelector_ne_withdrawSelector, depositToSelector_ne_withdrawToSelector,
+        Bool.false_eq_true, depositToSelector_ne_transferFromSelector,
+        depositToSelector_ne_withdrawFromSelector, depositToSelector_ne_flashLoanSelector]
       · exact hincrease
 
 theorem Exec.Frame.hasRichLocalStorageEffect_of_depositToAndCall
@@ -6585,7 +6658,7 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_depositToAndCall
     Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -6605,8 +6678,8 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_depositToAndCall
       have hatom : primaryFlowAtom e = some
           (.ordinaryMint (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr
             e.value.toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector,
-          depositToAndCallSelector_ne_depositSelector]
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+          depositToAndCallSelector_ne_depositSelector, decide_true, Bool.or_true]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
       refine ⟨context, haction, ?_⟩
@@ -6619,14 +6692,14 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_depositToAndCall
         · unfold FlowAction.ExactCredit
           simp only [FlowAtom.creditOccurrence]
           rw [toB256_toNat]
-        · simp [primaryDebitProvenance, hnonempty, hselector,
-          depositToAndCallSelector_ne_transferSelector,
-            depositToAndCallSelector_ne_transferAndCallSelector,
-            depositToAndCallSelector_ne_transferFromSelector,
-            depositToAndCallSelector_ne_withdrawSelector,
-            depositToAndCallSelector_ne_withdrawToSelector,
-            depositToAndCallSelector_ne_withdrawFromSelector,
-            depositToAndCallSelector_ne_flashLoanSelector]
+        · simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector,
+          depositToAndCallSelector_ne_transferSelector, decide_false,
+          depositToAndCallSelector_ne_transferAndCallSelector, Bool.or_self,
+          depositToAndCallSelector_ne_withdrawSelector,
+          depositToAndCallSelector_ne_withdrawToSelector, Bool.false_eq_true,
+          depositToAndCallSelector_ne_transferFromSelector,
+          depositToAndCallSelector_ne_withdrawFromSelector,
+          depositToAndCallSelector_ne_flashLoanSelector]
         · exact hincrease
       · exact congrFun hcode ca
       · exact hboundary
@@ -6641,7 +6714,7 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transfer
     Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -6661,10 +6734,10 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transfer
         have hatom : primaryFlowAtom e = some
             (.redemption e.caller.toB256 e.caller e.caller
               (Sevm.argWord e 1).toNat) := by
-          simp [primaryFlowAtom, hnonempty, hselector,
-            transferSelector_ne_depositSelector,
-            transferSelector_ne_depositToSelector,
-            transferSelector_ne_depositToAndCallSelector, hraw]
+          simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+            transferSelector_ne_depositSelector, transferSelector_ne_depositToSelector,
+            decide_false, transferSelector_ne_depositToAndCallSelector, Bool.or_self,
+            Bool.false_eq_true, decide_true, Bool.true_or, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
         refine ⟨context, haction, ?_⟩
@@ -6676,7 +6749,8 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transfer
           · rfl
           · rfl
           · unfold FlowAction.HasDebitSource
-            simp [primaryDebitProvenance, hnonempty, hselector]
+            simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector, decide_true,
+              Bool.true_or, Option.some.injEq, exists_eq_left', and_self]
           · exact hprefix'.2.1
           · exact hprefix'.1
         · exact hprefix
@@ -6694,10 +6768,10 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transfer
             (.transfer e.caller.toB256 (Sevm.argWord e 0) e.caller
               (Sevm.argWord e 0).toAdr
               (Sevm.argWord e 1).toNat) := by
-          simp [primaryFlowAtom, hnonempty, hselector,
-            transferSelector_ne_depositSelector,
-            transferSelector_ne_depositToSelector,
-            transferSelector_ne_depositToAndCallSelector, hraw]
+          simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+            transferSelector_ne_depositSelector, transferSelector_ne_depositToSelector,
+            decide_false, transferSelector_ne_depositToAndCallSelector, Bool.or_self,
+            Bool.false_eq_true, decide_true, Bool.true_or, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
         refine ⟨context, haction, .ordinaryTransfer ?_⟩
@@ -6707,7 +6781,8 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transfer
           simp only [FlowAtom.creditOccurrence]
           rw [toB256_toNat]
         · unfold FlowAction.HasDebitSource
-          simp [primaryDebitProvenance, hnonempty, hselector]
+          simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector, decide_true,
+            Bool.true_or, Option.some.injEq, exists_eq_left', and_self]
         · exact htransfer
 
 theorem Exec.Frame.hasRichLocalStorageEffect_of_transferAndCall
@@ -6720,7 +6795,7 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transferAndCall
     Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -6739,10 +6814,11 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transferAndCall
         have hatom : primaryFlowAtom e = some
             (.redemption e.caller.toB256 e.caller e.caller
               (Sevm.argWord e 1).toNat) := by
-          simp [primaryFlowAtom, hnonempty, hselector,
+          simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
             transferAndCallSelector_ne_depositSelector,
-            transferAndCallSelector_ne_depositToSelector,
-            transferAndCallSelector_ne_depositToAndCallSelector, hraw]
+            transferAndCallSelector_ne_depositToSelector, decide_false,
+            transferAndCallSelector_ne_depositToAndCallSelector, Bool.or_self, Bool.false_eq_true,
+            decide_true, Bool.or_true, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
         refine ⟨context, haction, ?_⟩
@@ -6756,7 +6832,8 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transferAndCall
           · rfl
           · rfl
           · unfold FlowAction.HasDebitSource
-            simp [primaryDebitProvenance, hnonempty, hselector]
+            simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector, decide_true,
+              Bool.or_true, Bool.true_or, Option.some.injEq, exists_eq_left', and_self]
           · exact hprefix'.2.1
           · exact hprefix'.1
         · exact hprefix
@@ -6775,10 +6852,11 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transferAndCall
             (.transfer e.caller.toB256 (Sevm.argWord e 0) e.caller
               (Sevm.argWord e 0).toAdr
               (Sevm.argWord e 1).toNat) := by
-          simp [primaryFlowAtom, hnonempty, hselector,
+          simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
             transferAndCallSelector_ne_depositSelector,
-            transferAndCallSelector_ne_depositToSelector,
-            transferAndCallSelector_ne_depositToAndCallSelector, hraw]
+            transferAndCallSelector_ne_depositToSelector, decide_false,
+            transferAndCallSelector_ne_depositToAndCallSelector, Bool.or_self, Bool.false_eq_true,
+            decide_true, Bool.or_true, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
         refine ⟨context, haction, ?_⟩
@@ -6792,7 +6870,8 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transferAndCall
             simp only [FlowAtom.creditOccurrence]
             rw [toB256_toNat]
           · unfold FlowAction.HasDebitSource
-            simp [primaryDebitProvenance, hnonempty, hselector]
+            simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector, decide_true,
+              Bool.or_true, Bool.true_or, Option.some.injEq, exists_eq_left', and_self]
           · exact htransfer
         · exact congrFun hcode ca
         · exact hboundary
@@ -6807,7 +6886,7 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transferFrom
     Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -6836,11 +6915,10 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transferFrom
         have hatom : primaryFlowAtom e = some
             (.redemption (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr
               e.caller (Sevm.argWord e 2).toNat) := by
-          simp [primaryFlowAtom, hnonempty, hselector,
-            transferFromSelector_ne_depositSelector,
-            transferFromSelector_ne_depositToSelector,
-            transferFromSelector_ne_depositToAndCallSelector,
-            transferFromSelector_ne_transferSelector,
+          simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+            transferFromSelector_ne_depositSelector, transferFromSelector_ne_depositToSelector,
+            decide_false, transferFromSelector_ne_depositToAndCallSelector, Bool.or_self,
+            Bool.false_eq_true, transferFromSelector_ne_transferSelector,
             transferFromSelector_ne_transferAndCallSelector, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
@@ -6853,11 +6931,11 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transferFrom
           · rfl
           · rfl
           · unfold FlowAction.HasDebitSource
-            simp [primaryDebitProvenance, hnonempty, hselector,
-              transferFromSelector_ne_transferSelector,
-              transferFromSelector_ne_transferAndCallSelector,
-              transferFromSelector_ne_withdrawSelector,
-              transferFromSelector_ne_withdrawToSelector]
+            simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector,
+              transferFromSelector_ne_transferSelector, decide_false,
+              transferFromSelector_ne_transferAndCallSelector, Bool.or_self,
+              transferFromSelector_ne_withdrawSelector, transferFromSelector_ne_withdrawToSelector,
+              Bool.false_eq_true, Option.some.injEq, exists_eq_left', and_self]
           · exact hprefix'.2.1
           · exact hprefix'.1
         · simpa only [hsource] using hprefix
@@ -6876,11 +6954,10 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transferFrom
             (.transfer (Sevm.argWord e 0) (Sevm.argWord e 1)
               (Sevm.argWord e 0).toAdr (Sevm.argWord e 1).toAdr
               (Sevm.argWord e 2).toNat) := by
-          simp [primaryFlowAtom, hnonempty, hselector,
-            transferFromSelector_ne_depositSelector,
-            transferFromSelector_ne_depositToSelector,
-            transferFromSelector_ne_depositToAndCallSelector,
-            transferFromSelector_ne_transferSelector,
+          simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+            transferFromSelector_ne_depositSelector, transferFromSelector_ne_depositToSelector,
+            decide_false, transferFromSelector_ne_depositToAndCallSelector, Bool.or_self,
+            Bool.false_eq_true, transferFromSelector_ne_transferSelector,
             transferFromSelector_ne_transferAndCallSelector, hraw]
         have heq := action_eq_of_flowAction_eq context hatom haction
         subst action
@@ -6891,11 +6968,11 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_transferFrom
           simp only [FlowAtom.creditOccurrence]
           rw [toB256_toNat]
         · unfold FlowAction.HasDebitSource
-          simp [primaryDebitProvenance, hnonempty, hselector,
-            transferFromSelector_ne_transferSelector,
-            transferFromSelector_ne_transferAndCallSelector,
-            transferFromSelector_ne_withdrawSelector,
-            transferFromSelector_ne_withdrawToSelector]
+          simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector,
+            transferFromSelector_ne_transferSelector, decide_false,
+            transferFromSelector_ne_transferAndCallSelector, Bool.or_self,
+            transferFromSelector_ne_withdrawSelector, transferFromSelector_ne_withdrawToSelector,
+            Bool.false_eq_true, Option.some.injEq, exists_eq_left', and_self]
         · exact htransfer
 
 theorem Exec.Frame.hasRichLocalStorageEffect_of_withdraw
@@ -6908,7 +6985,7 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_withdraw
     Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -6925,12 +7002,10 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_withdraw
       have hatom : primaryFlowAtom e = some
           (.redemption e.caller.toB256 e.caller e.caller
             (Sevm.argWord e 0).toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector,
-          withdrawSelector_ne_depositSelector,
-          withdrawSelector_ne_depositToSelector,
-          withdrawSelector_ne_depositToAndCallSelector,
-          withdrawSelector_ne_transferSelector,
-          withdrawSelector_ne_transferAndCallSelector,
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+          withdrawSelector_ne_depositSelector, withdrawSelector_ne_depositToSelector, decide_false,
+          withdrawSelector_ne_depositToAndCallSelector, Bool.or_self, Bool.false_eq_true,
+          withdrawSelector_ne_transferSelector, withdrawSelector_ne_transferAndCallSelector,
           withdrawSelector_ne_transferFromSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
@@ -6943,7 +7018,8 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_withdraw
         · rfl
         · rfl
         · unfold FlowAction.HasDebitSource
-          simp [primaryDebitProvenance, hnonempty, hselector]
+          simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector, decide_true,
+            Bool.or_true, Bool.true_or, Option.some.injEq, exists_eq_left', and_self]
         · exact hprefix'.2.1
         · exact hprefix'.1
       · exact hprefix
@@ -6960,7 +7036,7 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_withdrawTo
     Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -6978,13 +7054,11 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_withdrawTo
       have hatom : primaryFlowAtom e = some
           (.redemption e.caller.toB256 e.caller
             (Sevm.argWord e 0).toAdr (Sevm.argWord e 1).toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector,
-          withdrawToSelector_ne_depositSelector,
-          withdrawToSelector_ne_depositToSelector,
-          withdrawToSelector_ne_depositToAndCallSelector,
-          withdrawToSelector_ne_transferSelector,
-          withdrawToSelector_ne_transferAndCallSelector,
-          withdrawToSelector_ne_transferFromSelector,
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+          withdrawToSelector_ne_depositSelector, withdrawToSelector_ne_depositToSelector,
+          decide_false, withdrawToSelector_ne_depositToAndCallSelector, Bool.or_self,
+          Bool.false_eq_true, withdrawToSelector_ne_transferSelector,
+          withdrawToSelector_ne_transferAndCallSelector, withdrawToSelector_ne_transferFromSelector,
           withdrawToSelector_ne_withdrawSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
@@ -6997,7 +7071,8 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_withdrawTo
         · rfl
         · rfl
         · unfold FlowAction.HasDebitSource
-          simp [primaryDebitProvenance, hnonempty, hselector]
+          simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector, decide_true,
+            Bool.or_true, Option.some.injEq, exists_eq_left', and_self]
         · exact hprefix'.2.1
         · exact hprefix'.1
       · exact hprefix
@@ -7014,7 +7089,7 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_withdrawFrom
     Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -7038,14 +7113,12 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_withdrawFrom
       have hatom : primaryFlowAtom e = some
           (.redemption (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr
             (Sevm.argWord e 1).toAdr (Sevm.argWord e 2).toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector,
-          withdrawFromSelector_ne_depositSelector,
-          withdrawFromSelector_ne_depositToSelector,
-          withdrawFromSelector_ne_depositToAndCallSelector,
-          withdrawFromSelector_ne_transferSelector,
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+          withdrawFromSelector_ne_depositSelector, withdrawFromSelector_ne_depositToSelector,
+          decide_false, withdrawFromSelector_ne_depositToAndCallSelector, Bool.or_self,
+          Bool.false_eq_true, withdrawFromSelector_ne_transferSelector,
           withdrawFromSelector_ne_transferAndCallSelector,
-          withdrawFromSelector_ne_transferFromSelector,
-          withdrawFromSelector_ne_withdrawSelector,
+          withdrawFromSelector_ne_transferFromSelector, withdrawFromSelector_ne_withdrawSelector,
           withdrawFromSelector_ne_withdrawToSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
@@ -7059,12 +7132,12 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_withdrawFrom
         · rfl
         · rfl
         · unfold FlowAction.HasDebitSource
-          simp [primaryDebitProvenance, hnonempty, hselector,
-            withdrawFromSelector_ne_transferSelector,
-            withdrawFromSelector_ne_transferAndCallSelector,
-            withdrawFromSelector_ne_transferFromSelector,
-            withdrawFromSelector_ne_withdrawSelector,
-            withdrawFromSelector_ne_withdrawToSelector]
+          simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector,
+            withdrawFromSelector_ne_transferSelector, decide_false,
+            withdrawFromSelector_ne_transferAndCallSelector, Bool.or_self,
+            withdrawFromSelector_ne_withdrawSelector, withdrawFromSelector_ne_withdrawToSelector,
+            Bool.false_eq_true, withdrawFromSelector_ne_transferFromSelector, Option.some.injEq,
+            exists_eq_left', and_self]
         · exact hprefix'.2.1
         · exact hprefix'.1
       · simpa only [hsource] using hprefix
@@ -7081,13 +7154,14 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_flashLoan
     Blanc.Weth10.Exec.Frame.HasRichLocalStorageEffect dp ca frame action := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
       have hmem :
           (flashLoanSelector, nonpayable flashLoan) ∈ weth10Funcs dp := by
-        simp [flashLoanSelector, weth10Funcs]
+        simp only [weth10Funcs, flashLoanSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+          or_false, true_or, or_true]
       rcases exec_enters_weth10Nonpayable_logs run
           context.invocation.2.2.2 hselector hnonempty hmem with
         ⟨bodyPre, hvalue, hstorEntry, hbalEntry, hcodeEntry, hmemoryEntry,
@@ -7143,15 +7217,12 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_flashLoan
       have hatom : primaryFlowAtom e = some
           (.flashPair (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr
             (Sevm.argWord e 2).toNat) := by
-        simp [primaryFlowAtom, hnonempty, hselector,
-          flashLoanSelector_ne_depositSelector,
-          flashLoanSelector_ne_depositToSelector,
-          flashLoanSelector_ne_depositToAndCallSelector,
-          flashLoanSelector_ne_transferSelector,
-          flashLoanSelector_ne_transferAndCallSelector,
-          flashLoanSelector_ne_transferFromSelector,
-          flashLoanSelector_ne_withdrawSelector,
-          flashLoanSelector_ne_withdrawToSelector,
+        simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+          flashLoanSelector_ne_depositSelector, flashLoanSelector_ne_depositToSelector,
+          decide_false, flashLoanSelector_ne_depositToAndCallSelector, Bool.or_self,
+          Bool.false_eq_true, flashLoanSelector_ne_transferSelector,
+          flashLoanSelector_ne_transferAndCallSelector, flashLoanSelector_ne_transferFromSelector,
+          flashLoanSelector_ne_withdrawSelector, flashLoanSelector_ne_withdrawToSelector,
           flashLoanSelector_ne_withdrawFromSelector]
       have heq := action_eq_of_flowAction_eq context hatom haction
       subst action
@@ -7182,13 +7253,13 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_flashLoan
           rw [toB256_toNat])
         (by
           unfold FlowAction.HasFlashDebitSource
-          simp [primaryDebitProvenance, hnonempty, hselector,
-            flashLoanSelector_ne_transferSelector,
-            flashLoanSelector_ne_transferAndCallSelector,
-            flashLoanSelector_ne_transferFromSelector,
-            flashLoanSelector_ne_withdrawSelector,
-            flashLoanSelector_ne_withdrawToSelector,
-            flashLoanSelector_ne_withdrawFromSelector])
+          simp only [primaryDebitProvenance, hnonempty, ↓reduceIte, hselector,
+            flashLoanSelector_ne_transferSelector, decide_false,
+            flashLoanSelector_ne_transferAndCallSelector, Bool.or_self,
+            flashLoanSelector_ne_withdrawSelector, flashLoanSelector_ne_withdrawToSelector,
+            Bool.false_eq_true, flashLoanSelector_ne_transferFromSelector,
+            flashLoanSelector_ne_withdrawFromSelector, Option.some.injEq, exists_and_left,
+            exists_eq_left', DebitBranch.flash.injEq, exists_eq', and_self])
         hincrease hcover hdecrease
       refine ⟨context, haction, ?_⟩
       apply RichLocalStorageEffect.flash sc mid settle burn
@@ -7251,10 +7322,11 @@ theorem Exec.Frame.hasRichLocalStorageEffect_of_flowAction?_eq_some
   · exact Blanc.Weth10.Exec.Frame.hasRichLocalStorageEffect_of_flashLoan (frame := frame) context hflash
       hnonempty haction
   have hprimary : primaryFlowAtom frame.sevm = none := by
-    simp [primaryFlowAtom, hnonempty, hdeposit, hdepositTo,
-      hdepositCall, htransfer, htransferCall, htransferFrom, hwithdraw,
-      hwithdrawTo, hwithdrawFrom, hflash]
-  simp [Blanc.Weth10.Exec.Frame.flowAction?, context.invocation, hprimary] at haction
+    simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hdeposit, hdepositTo, decide_false,
+      hdepositCall, Bool.or_self, Bool.false_eq_true, htransfer, htransferCall, htransferFrom,
+      hwithdraw, hwithdrawTo, hwithdrawFrom, hflash]
+  simp only [flowAction?, context.invocation, ↓reduceIte, hprimary, Option.map_none,
+    reduceCtorEq] at haction
 
 /-- Exhaustive compiled-program classifier for receive plus all 27 selector
 leaves.  Nonempty successful calldata is first proved to have entered an
@@ -7272,12 +7344,12 @@ theorem Exec.Frame.hasCompiledBalanceOwnEffect
   | none =>
       by_cases hempty : frame.sevm.data.length.toB256 = 0
       · have hprimary : primaryFlowAtom frame.sevm ≠ none := by
-          simp [primaryFlowAtom, hempty]
+          simp only [primaryFlowAtom, hempty, ↓reduceIte, ne_eq, reduceCtorEq, not_false_eq_true]
         unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
         rw [if_pos context.invocation] at haction
         cases hatom : primaryFlowAtom frame.sevm with
         | none => exact (hprimary hatom).elim
-        | some atom => simp [hatom] at haction
+        | some atom => simp only [hatom, Option.map_some, reduceCtorEq] at haction
       · exact .noFlow
           (Blanc.Weth10.Exec.Frame.hasNoWethBalanceOwnEffect_of_recognized (frame := frame) context haction
             (Blanc.Weth10.Exec.Frame.recognizedSelector_of_nonempty (frame := frame) context hempty))
@@ -7306,8 +7378,8 @@ theorem Exec.Frame.hasClassifiedActionLedger_of_flowAction_eq_some
   have hroot : Blanc.Weth10.Exec.Frame.flowAction? dp ca
       (Exec.Frame.ofRun run committed) = some action := by
     exact haction
-  simp [Exec.flowActions, Exec.committedFrames,
-    Blanc.Weth10.Exec.Frame.descendantFlowActions, committed, hroot]
+  simp only [flowActions, Exec.committedFrames, committed, ↓reduceDIte, hroot, Option.some.injEq,
+    List.filterMap_cons_some, descendantFlowActions]
 
 /-- Every executable flow classification of an authentic committed WETH10
 frame is backed by the exact local balance segment executed by that frame.
@@ -7358,10 +7430,11 @@ theorem Exec.Frame.hasLocalOwnEffect_of_flowAction?_eq_some
   · exact Blanc.Weth10.Exec.Frame.hasLocalOwnEffect_of_flashLoan (frame := frame) context hflash hnonempty
       haction
   have hprimary : primaryFlowAtom frame.sevm = none := by
-    simp [primaryFlowAtom, hnonempty, hdeposit, hdepositTo,
-      hdepositCall, htransfer, htransferCall, htransferFrom, hwithdraw,
-      hwithdrawTo, hwithdrawFrom, hflash]
-  simp [Blanc.Weth10.Exec.Frame.flowAction?, context.invocation, hprimary] at haction
+    simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hdeposit, hdepositTo, decide_false,
+      hdepositCall, Bool.or_self, Bool.false_eq_true, htransfer, htransferCall, htransferFrom,
+      hwithdraw, hwithdrawTo, hwithdrawFrom, hflash]
+  simp only [flowAction?, context.invocation, ↓reduceIte, hprimary, Option.map_none,
+    reduceCtorEq] at haction
 
 /-! ## Literal generated-program SSTORE inventory
 
@@ -7402,23 +7475,23 @@ private theorem sourceSstoreSiteCount_next (n : Ninst) (rest : Func) :
       ninstSourceSstoreSiteCount n + sourceSstoreSiteCount rest := by
   cases n with
   | reg r => cases r <;>
-      simp [sourceSstoreSiteCount, Func.sourceSiteCount,
-        ninstSourceSstoreSiteCount]
+      simp only [sourceSstoreSiteCount, Func.sourceSiteCount, Bool.false_eq_true, ↓reduceIte,
+        zero_add, ninstSourceSstoreSiteCount]
   | exec x =>
-      simp [sourceSstoreSiteCount, Func.sourceSiteCount,
-        ninstSourceSstoreSiteCount]
+      simp only [sourceSstoreSiteCount, Func.sourceSiteCount, Bool.false_eq_true, ↓reduceIte,
+        zero_add, ninstSourceSstoreSiteCount]
   | push bs h =>
-      simp [sourceSstoreSiteCount, Func.sourceSiteCount,
-        ninstSourceSstoreSiteCount]
+      simp only [sourceSstoreSiteCount, Func.sourceSiteCount, Bool.false_eq_true, ↓reduceIte,
+        zero_add, ninstSourceSstoreSiteCount]
   | dupn a =>
-      simp [sourceSstoreSiteCount, Func.sourceSiteCount,
-        ninstSourceSstoreSiteCount]
+      simp only [sourceSstoreSiteCount, Func.sourceSiteCount, Bool.false_eq_true, ↓reduceIte,
+        zero_add, ninstSourceSstoreSiteCount]
   | swapn a =>
-      simp [sourceSstoreSiteCount, Func.sourceSiteCount,
-        ninstSourceSstoreSiteCount]
+      simp only [sourceSstoreSiteCount, Func.sourceSiteCount, Bool.false_eq_true, ↓reduceIte,
+        zero_add, ninstSourceSstoreSiteCount]
   | exchange a =>
-      simp [sourceSstoreSiteCount, Func.sourceSiteCount,
-        ninstSourceSstoreSiteCount]
+      simp only [sourceSstoreSiteCount, Func.sourceSiteCount, Bool.false_eq_true, ↓reduceIte,
+        zero_add, ninstSourceSstoreSiteCount]
 
 private def lineSourceSstoreSiteCount (line : Line) : Nat :=
   (line.map ninstSourceSstoreSiteCount).sum
@@ -7427,10 +7500,10 @@ private theorem sourceSstoreSiteCount_prepend (line : Line) (rest : Func) :
     sourceSstoreSiteCount (line +++ rest) =
       lineSourceSstoreSiteCount line + sourceSstoreSiteCount rest := by
   induction line with
-  | nil => simp [prepend, lineSourceSstoreSiteCount]
+  | nil => simp only [prepend, lineSourceSstoreSiteCount, List.map_nil, List.sum_nil, zero_add]
   | cons n line ih =>
-      simp [prepend, sourceSstoreSiteCount_next,
-        lineSourceSstoreSiteCount, ih, Nat.add_assoc]
+      simp only [prepend, sourceSstoreSiteCount_next, ih, lineSourceSstoreSiteCount, List.map_cons,
+        List.sum_cons, Nat.add_assoc]
 
 private def dispatchTreeSourceSstoreSiteCount : DispatchTree → Nat
   | .leaf _ body => sourceSstoreSiteCount body
@@ -7446,12 +7519,13 @@ private theorem dispatchWith_sourceSstoreSiteCount
   | leaf selector body =>
       simp only [dispatchWith, Ninst.pushB256, sourceSstoreSiteCount,
         dispatchTreeSourceSstoreSiteCount]
-      simp [Func.sourceSiteCount]
+      simp only [Func.sourceSiteCount, Bool.false_eq_true, ↓reduceIte, zero_add]
   | fork left right ihLeft ihRight =>
       simp only [dispatchWith, Ninst.pushB256, sourceSstoreSiteCount,
         dispatchTreeSourceSstoreSiteCount]
       unfold sourceSstoreSiteCount at ihLeft ihRight
-      simp [Func.sourceSiteCount, ihLeft, ihRight, Nat.add_comm]
+      simp only [Func.sourceSiteCount, Bool.false_eq_true, ↓reduceIte, ihRight, ihLeft,
+        Nat.add_comm, zero_add]
 
 private theorem dispatchTreeSourceSstoreSiteCount_build :
     ∀ (n : Nat) (entries : List (B256 × Func)),
@@ -7507,7 +7581,7 @@ private theorem weth10Tree_sourceSstoreSiteCount (dp : DeployParams) :
         (fun entry => sourceSstoreSiteCount entry.2)).sum := by
   unfold weth10Tree DispatchTree.ofSorted
   apply dispatchTreeSourceSstoreSiteCount_build
-  · simp [weth10Funcs]
+  · simp only [weth10Funcs, ne_eq, reduceCtorEq, not_false_eq_true]
   · omega
 
 /-! Named leaf facts keep the literal inventory local to each generated body.
@@ -7568,18 +7642,20 @@ private theorem nonpayable_sourceSstoreSiteCount (body : Func) :
   sourceSstoreSiteCount (nonpayable body) =
       sourceSstoreSiteCount body := by
   unfold nonpayable Func.revert
-  simp [sourceSstoreSiteCount, Func.sourceSiteCount, Ninst.pushB256]
+  simp only [sourceSstoreSiteCount, Func.sourceSiteCount, Bool.false_eq_true, ↓reduceIte,
+    Ninst.pushB256, add_zero, zero_add]
 private theorem permit_public_sourceSstoreSiteCount (dp : DeployParams) :
     sourceSstoreSiteCount (nonpayable (permit dp)) = 1 := by
   rw [nonpayable_sourceSstoreSiteCount]
   unfold permit
-  simp [sourceSstoreSiteCount_next, sourceSstoreSiteCount_prepend,
-    lineSourceSstoreSiteCount, ninstSourceSstoreSiteCount,
-    pushDeployWord, Ninst.pushB256, arg, addressArg, tagNonceKey,
-    mstoreAt, argCopy, pushList, calculateDomainSeparator, cdl, cdc,
-    normalizeAddress]
+  simp only [arg, cdl, Ninst.pushB256, addressArg, normalizeAddress, List.cons_append,
+    List.nil_append, Fin.isValue, tagNonceKey, mstoreAt, argCopy, cdc, pushList, List.map_cons,
+    List.map_nil, pushDeployWord, calculateDomainSeparator, sourceSstoreSiteCount_prepend,
+    lineSourceSstoreSiteCount, ninstSourceSstoreSiteCount, List.sum_cons, List.sum_nil, add_zero,
+    sourceSstoreSiteCount_next, zero_add]
   unfold sourceSstoreSiteCount
-  simp [Func.sourceSiteCount, prepend, pushAddressMask, Ninst.pushB256]
+  simp only [Func.sourceSiteCount, Bool.false_eq_true, ↓reduceIte, prepend, pushAddressMask,
+    Ninst.pushB256, List.cons_append, List.nil_append, Fin.isValue, add_zero, zero_add]
 private theorem flashFee_public_sourceSstoreSiteCount :
     sourceSstoreSiteCount (nonpayable flashFee) = 0 := by rfl
 private theorem allowance_public_sourceSstoreSiteCount :
@@ -7589,8 +7665,8 @@ private theorem prependStore_sourceSstoreSiteCount
     (w : B256) (i : Nat) (rest : Func) :
     sourceSstoreSiteCount (prependStore w i rest) =
       sourceSstoreSiteCount rest := by
-  simp [prependStore, sourceSstoreSiteCount_next,
-    ninstSourceSstoreSiteCount, Ninst.pushB256]
+  simp only [prependStore, Ninst.pushB256, sourceSstoreSiteCount_next, ninstSourceSstoreSiteCount,
+    zero_add]
 
 private theorem prependStoresRev_sourceSstoreSiteCount
     (stores : List (B256 × Nat)) (rest : Func) :

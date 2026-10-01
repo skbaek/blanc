@@ -277,7 +277,8 @@ theorem exec_enters_drip {sevm : Sevm} {pre post : Devm}
         pre.logs = entry.logs ∧ pre.output = entry.output ∧
         Func.Run (runtime.main :: runtime.aux) sevm entry drip post :=
   entry_of_nonpayable_selector exc hcode hsel hnonempty
-    (by simp [funcs])
+    (by simp only [funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true])
 
 theorem exec_enters_exit {sevm : Sevm} {pre post : Devm}
     (exc : Exec 0 sevm pre (.ok post))
@@ -289,7 +290,8 @@ theorem exec_enters_exit {sevm : Sevm} {pre post : Devm}
         pre.logs = entry.logs ∧ pre.output = entry.output ∧
         Func.Run (runtime.main :: runtime.aux) sevm entry exit post :=
   entry_of_nonpayable_selector exc hcode hsel hnonempty
-    (by simp [funcs])
+    (by simp only [funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true])
 
 theorem exec_enters_convertToAssets {sevm : Sevm} {pre post : Devm}
     (exc : Exec 0 sevm pre (.ok post))
@@ -301,7 +303,7 @@ theorem exec_enters_convertToAssets {sevm : Sevm} {pre post : Devm}
         pre.logs = entry.logs ∧ pre.output = entry.output ∧
         Func.Run (runtime.main :: runtime.aux) sevm entry convertToAssets post :=
   entry_of_nonpayable_selector exc hcode hsel hnonempty
-    (by simp [funcs])
+    (by simp only [funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or])
 
 theorem exec_enters_convertToUnits {sevm : Sevm} {pre post : Devm}
     (exc : Exec 0 sevm pre (.ok post))
@@ -313,7 +315,8 @@ theorem exec_enters_convertToUnits {sevm : Sevm} {pre post : Devm}
         pre.logs = entry.logs ∧ pre.output = entry.output ∧
         Func.Run (runtime.main :: runtime.aux) sevm entry convertToUnits post :=
   entry_of_nonpayable_selector exc hcode hsel hnonempty
-    (by simp [funcs])
+    (by simp only [funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true])
 
 /-- `join()` is the one payable entry, so its theorem forces only the frozen
 exact calldata length. -/
@@ -327,7 +330,8 @@ theorem exec_enters_join {sevm : Sevm} {pre post : Devm}
         pre.logs = entry.logs ∧ pre.output = entry.output ∧
         Func.Run (runtime.main :: runtime.aux) sevm entry join post := by
   rcases exec_enters_entry exc hcode hsel hnonempty
-      (show (joinSelector, exactCalldata 4 join) ∈ funcs by simp [funcs]) with
+      (show (joinSelector, exactCalldata 4 join) ∈ funcs by simp only [funcs, List.mem_cons,
+        Prod.mk.injEq, List.not_mem_nil, or_false, or_true]) with
     ⟨mid, hst, hmm, hlg, hou, hwrapped⟩
   rcases of_run_exactCalldata hwrapped with
     ⟨entry, hsize, hst', hmm', hlg', hou', hbody⟩
@@ -422,30 +426,31 @@ theorem drip_exec_error_noRetainedWriteTo {sevm : Sevm} {pre : Devm} {err}
     (_hcode : sevm.code.toList = code)
     (owner : Adr) (key : B256) :
     Exec.NoRetainedWriteTo exc owner key :=
-  (Blanc.Exec.noRetainedWriteTo_of_not_commits exc) (by simp [Execution.commits]) owner key
+  (Blanc.Exec.noRetainedWriteTo_of_not_commits exc) (by simp only [Execution.commits, ne_eq,
+    Bool.false_eq_true, not_false_eq_true]) owner key
 
 theorem drip_exec_error_retainedWrites_nil {sevm : Sevm} {pre : Devm} {err}
     (exc : Exec 0 sevm pre (.error err))
     (_hcode : sevm.code.toList = code) :
     Exec.retainedStorageWrites exc = [] := by
   have hnc : Execution.commits (.error err) ≠ true := by
-    simp [Execution.commits]
+    simp only [Execution.commits, ne_eq, Bool.false_eq_true, not_false_eq_true]
   have hnodes := Exec.retainedNodes_eq_nil_of_not_commits exc hnc
-  simp [Exec.retainedStorageWrites, hnodes]
+  simp only [Exec.retainedStorageWrites, hnodes, List.filterMap_nil]
 
 theorem drip_exec_error_retainedTriples_nil {sevm : Sevm} {pre : Devm} {err}
     (exc : Exec 0 sevm pre (.error err))
     (hcode : sevm.code.toList = code) :
     Exec.retainedStorageEffectTriples exc = [] := by
   have hwrites := drip_exec_error_retainedWrites_nil exc hcode
-  simp [Exec.retainedStorageEffectTriples, hwrites]
+  simp only [Exec.retainedStorageEffectTriples, hwrites, List.map_nil]
 
 theorem drip_exec_error_committedFrames_nil {sevm : Sevm} {pre : Devm} {err}
     (exc : Exec 0 sevm pre (.error err))
     (_hcode : sevm.code.toList = code) :
     Exec.committedFrames exc = [] := by
   apply Exec.committedFrames_eq_nil_of_not_commits
-  simp [Execution.commits]
+  simp only [Execution.commits, ne_eq, Bool.false_eq_true, not_false_eq_true]
 
 /-! ## Failure paths, deep guards: surface and machine-guard absence
 
@@ -906,7 +911,7 @@ theorem exit_exec_effect {sevm : Sevm} {pre post : Devm}
       Devm.getStor pre sevm.currentTarget :=
     getStor_eq_of_state_eq hst.symm sevm.currentTarget
   unfold ExitPaysExactly at heffect ⊢
-  dsimp at heffect ⊢
+  dsimp only [Lean.Elab.WF.paramLet] at heffect ⊢
   simp only [hgv, hg] at heffect
   exact heffect
 

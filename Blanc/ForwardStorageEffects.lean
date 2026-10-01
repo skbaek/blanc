@@ -39,28 +39,34 @@ private theorem Ninst.successfulSstore_effectTriples
       some (.next instruction) := instructionAt
   cases instruction with
   | push bytes bound =>
-      simp [Exec.Deriv.successfulSstore?, Ninst.storageEffectTriple?, decoded]
+      simp only [Exec.Deriv.successfulSstore?, decoded, Option.toList_none, List.map_nil,
+        storageEffectTriple?]
   | dupn immediate =>
-      simp [Exec.Deriv.successfulSstore?, Ninst.storageEffectTriple?, decoded]
+      simp only [Exec.Deriv.successfulSstore?, decoded, Option.toList_none, List.map_nil,
+        storageEffectTriple?]
   | swapn immediate =>
-      simp [Exec.Deriv.successfulSstore?, Ninst.storageEffectTriple?, decoded]
+      simp only [Exec.Deriv.successfulSstore?, decoded, Option.toList_none, List.map_nil,
+        storageEffectTriple?]
   | exchange immediate =>
-      simp [Exec.Deriv.successfulSstore?, Ninst.storageEffectTriple?, decoded]
+      simp only [Exec.Deriv.successfulSstore?, decoded, Option.toList_none, List.map_nil,
+        storageEffectTriple?]
   | exec operation =>
-      simp [Exec.Deriv.successfulSstore?, Ninst.storageEffectTriple?, decoded]
+      simp only [Exec.Deriv.successfulSstore?, decoded, Option.toList_none, List.map_nil,
+        storageEffectTriple?]
   | reg operation =>
       cases operation <;>
-        simp [Exec.Deriv.successfulSstore?, Ninst.storageEffectTriple?, decoded]
+        simp only [Exec.Deriv.successfulSstore?, decoded, Option.toList_none, List.map_nil, storageEffectTriple?]
       case sstore =>
         cases stackEq : pre.stack with
         | nil =>
-            simp
+            simp only [Option.toList_none, List.map_nil]
         | cons key rest =>
             cases rest with
             | nil =>
-                simp
+                simp only [Option.toList_none, List.map_nil]
             | cons value tail =>
-                simp [Exec.StorageWrite.effectTriple]
+                simp only [Option.toList_some, List.map_cons, Exec.StorageWrite.effectTriple,
+                  List.map_nil]
 
 private theorem Jinst.successfulSstore_effectTriples
     {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
@@ -73,7 +79,7 @@ private theorem Jinst.successfulSstore_effectTriples
         Exec.StorageWrite.effectTriple = [] := by
   have decoded : Evm.getInst ⟨pc, sevm, pre⟩ =
       some (.jump instruction) := instructionAt
-  simp [Exec.Deriv.successfulSstore?, decoded]
+  simp only [Exec.Deriv.successfulSstore?, decoded, Option.toList_none, List.map_nil]
 
 /-- Exact retained storage-effect annotation for a selected committing source
 walk.  Its list is in execution order. -/
@@ -157,7 +163,7 @@ theorem Func.RunCompiledTo.StorageEffectPath.of_noRawSstorePath
         | exec operation => rfl
         | reg operation =>
             cases operation <;>
-              simp [Ninst.storageEffectTriple?] at instructionNe ⊢
+              simp only [ne_eq, Ninst.reg.injEq, reduceCtorEq, not_false_eq_true, Ninst.storageEffectTriple?, not_true_eq_false] at instructionNe ⊢
       simpa only [none, Option.toList_none, List.nil_append] using
         (Func.RunCompiledTo.StorageEffectPath.next
           (instructionRun := instructionRun)
@@ -205,12 +211,17 @@ theorem Func.RunCompiledTo.StorageEffectPath.noRawSstorePath_of_nil
             rcases hrun with ⟨_, hrun⟩
             cases hstate : sevm.benvStat.rules.stateGas with
             | none =>
-                simp [Rinst.run, Rinst.runCore, Devm.pop_def, Devm.stack,
-                  Devm.setMach, assertDynamic, Except.assert, hstate] at hrun
+                simp only [ExceptT.stM_eq, Rinst.run, Rinst.runCore, hstate, Devm.pop_def,
+                  Devm.stack, Devm.setMach, Except.assert, Devm.balReadStorage_accessedStorageKeys,
+                  ite_not, Devm.balReadStorage_getStorVal, ne_eq, assertDynamic,
+                  Bool.not_eq_eq_eq_not, Bool.not_true, Except.bind_ok, Except.bind_error,
+                  reduceCtorEq] at hrun
             | some state =>
-                simp [Rinst.run, Rinst.runCore, Devm.pop_def, Devm.stack,
-                  Devm.setMach, assertDynamic, Except.assert, hstate] at hrun
-                split at hrun <;> simp at hrun
+                simp only [ExceptT.stM_eq, Rinst.run, Rinst.runCore, hstate, assertDynamic,
+                  Except.assert, Bool.not_eq_eq_eq_not, Bool.not_true, Devm.pop_def, Devm.stack,
+                  Devm.setMach, ite_not, sup_le_iff, Devm.balReadStorage_getStorVal, decide_not,
+                  Devm.balReadStorage_refundCounter, Except.bind_error] at hrun
+                split at hrun <;> simp only [Except.bind_ok, reduceCtorEq, Except.bind_error] at hrun
         | cons key rest =>
             cases rest with
             | nil =>
@@ -219,14 +230,20 @@ theorem Func.RunCompiledTo.StorageEffectPath.noRawSstorePath_of_nil
                 rcases hrun with ⟨_, hrun⟩
                 cases hstate : sevm.benvStat.rules.stateGas with
                 | none =>
-                    simp [Rinst.run, Rinst.runCore, Devm.pop_def, Devm.stack,
-                      Devm.setMach, assertDynamic, Except.assert, hstate] at hrun
+                    simp only [ExceptT.stM_eq, Rinst.run, Rinst.runCore, hstate, Devm.pop_def,
+                      Devm.stack, Devm.setMach, Except.assert,
+                      Devm.balReadStorage_accessedStorageKeys, ite_not,
+                      Devm.balReadStorage_getStorVal, ne_eq, assertDynamic, Bool.not_eq_eq_eq_not,
+                      Bool.not_true, Except.bind_ok, Except.bind_error, reduceCtorEq] at hrun
                 | some state =>
-                    simp [Rinst.run, Rinst.runCore, Devm.pop_def, Devm.stack,
-                      Devm.setMach, assertDynamic, Except.assert, hstate] at hrun
-                    split at hrun <;> simp at hrun
+                    simp only [ExceptT.stM_eq, Rinst.run, Rinst.runCore, hstate, assertDynamic,
+                      Except.assert, Bool.not_eq_eq_eq_not, Bool.not_true, Devm.pop_def, Devm.stack,
+                      Devm.setMach, ite_not, sup_le_iff, Devm.balReadStorage_getStorVal, decide_not,
+                      Devm.balReadStorage_refundCounter, Except.bind_ok, Except.bind_error] at hrun
+                    split at hrun <;> simp only [Except.bind_ok, reduceCtorEq, Except.bind_error] at hrun
             | cons value tail =>
-                simp [Ninst.storageEffectTriple?, Devm.stack] at hparts
+                simp only [Ninst.storageEffectTriple?, Devm.stack, Option.toList_some,
+                  List.cons_ne_self, false_and] at hparts
       exact .next (instructionRun := instructionRun) hnotSstore
         instructionChildless
         (ih hparts.2.symm)
@@ -312,7 +329,7 @@ theorem Func.StorageEffectRun.next_effectNeutral
     | exec operation => rfl
     | reg operation =>
         cases operation <;>
-          simp [Ninst.storageEffectTriple?] at notSstore ⊢
+          simp only [ne_eq, Ninst.reg.injEq, reduceCtorEq, not_false_eq_true, Ninst.storageEffectTriple?, not_true_eq_false] at notSstore ⊢
   simpa only [none, Option.toList_none, List.nil_append] using
     Func.StorageEffectRun.next_of_not_exec instructionRun notExec tail
 
@@ -604,9 +621,9 @@ theorem Func.RunCompiledTo.SuccessfulStopPrefix.of_execFree
   | last terminal =>
       cases run with
       | last terminalRun =>
-          cases terminal <;> simp [Func.SuccessStopOnly] at stopOnly
+          cases terminal <;> simp only [SuccessStopOnly] at stopOnly
           have hpost : stopPost = pre := by
-            simpa [Linst.Run, Linst.run] using terminalRun.symm
+            simpa only [Linst.run, Except.ok.injEq] using terminalRun.symm
           subst stopPost
           exact Func.RunCompiledTo.SuccessfulStopPrefix.last
             (terminalRun := terminalRun)
@@ -619,40 +636,40 @@ theorem Func.RunCompiledTo.SuccessfulStopPrefix.of_execFree
                 (instructionRun.childless_of_not_exec (by
                   intro external impossible
                   cases impossible))
-                (ih tail (by simpa [funcExecFree] using execFree)
+                (ih tail (by simpa only [funcExecFree] using execFree)
                   storeFree.2 stopOnly)
           | push bytes size =>
               exact .next (instructionRun := instructionRun) storeFree.1
                 (instructionRun.childless_of_not_exec (by
                   intro external impossible
                   cases impossible))
-                (ih tail (by simpa [funcExecFree] using execFree)
+                (ih tail (by simpa only [funcExecFree] using execFree)
                   storeFree.2 stopOnly)
           | dupn immediate =>
               exact .next (instructionRun := instructionRun) storeFree.1
                 (instructionRun.childless_of_not_exec (by
                   intro external impossible
                   cases impossible))
-                (ih tail (by simpa [funcExecFree] using execFree)
+                (ih tail (by simpa only [funcExecFree] using execFree)
                   storeFree.2 stopOnly)
           | swapn immediate =>
               exact .next (instructionRun := instructionRun) storeFree.1
                 (instructionRun.childless_of_not_exec (by
                   intro external impossible
                   cases impossible))
-                (ih tail (by simpa [funcExecFree] using execFree)
+                (ih tail (by simpa only [funcExecFree] using execFree)
                   storeFree.2 stopOnly)
           | exchange immediate =>
               exact .next (instructionRun := instructionRun) storeFree.1
                 (instructionRun.childless_of_not_exec (by
                   intro external impossible
                   cases impossible))
-                (ih tail (by simpa [funcExecFree] using execFree)
+                (ih tail (by simpa only [funcExecFree] using execFree)
                   storeFree.2 stopOnly)
           | exec operation =>
-              simp [funcExecFree] at execFree
+              simp only [funcExecFree] at execFree
   | call index =>
-      simp [Func.SuccessStopOnly] at stopOnly
+      simp only [SuccessStopOnly] at stopOnly
 
 /-- Replace the designated successful `STOP` reached by a neutral prefix with
 an arbitrary exact-effect continuation.  The continuation's effect list is
@@ -689,7 +706,7 @@ theorem Func.RunCompiledTo.SuccessfulStopPrefix.splice
         | exec operation => rfl
         | reg operation =>
             cases operation <;>
-              simp [Ninst.storageEffectTriple?] at instructionNe ⊢
+              simp only [ne_eq, Ninst.reg.injEq, reduceCtorEq, not_false_eq_true, Ninst.storageEffectTriple?, not_true_eq_false] at instructionNe ⊢
       simpa only [Func.replaceStopWith, none, Option.toList_none,
           List.nil_append] using
         (Func.StorageEffectRun.next instructionChildless (ih tail))

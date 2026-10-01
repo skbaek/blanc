@@ -69,7 +69,8 @@ theorem officialFullCreateInput_slice_runtimeTemplate {sevm : Sevm}
   rw [List.append_assoc]
   rw [List.drop_left]
   rw [List.takeD_eq_take _ (by
-    simp [runtimeTemplateCode_length_exact])]
+    simp only [List.length_append, runtimeTemplateCode_length_exact, le_add_iff_nonneg_right,
+      zero_le])]
   rw [show 4282 = runtimeTemplateCode.length from
     runtimeTemplateCode_length_exact.symm]
   exact List.take_append_length
@@ -341,7 +342,8 @@ theorem officialConstructorDecodedMemory_read_argument (i : Fin 7) :
   rw [show Bytes.writeAt [] 0
       (abiEncodeConstructorArgs officialConstructorArgs) =
       abiEncodeConstructorArgs officialConstructorArgs by
-    simp [Bytes.writeAt]]
+    simp only [Bytes.writeAt, List.takeD_nil, List.replicate_zero, List.nil_append, zero_add,
+      List.drop_nil, List.append_nil]]
   unfold abiEncodeConstructorArgs
   rcases i with ⟨i, hi⟩
   have hcases :
@@ -359,7 +361,8 @@ theorem officialConstructorDecodedMemory_size :
   rcases hbytes : abiEncodeConstructorArgs officialConstructorArgs with _ | ⟨b, bs⟩
   · have hlen := abiEncodeConstructorArgs_length officialConstructorArgs
     rw [hbytes] at hlen
-    simp [constructorArgumentBytes] at hlen
+    simp only [List.length_nil, constructorArgumentBytes, Nat.reduceMul,
+      OfNat.zero_ne_ofNat] at hlen
   · rw [Mem.size_write_cons]
     have hlen : (b :: bs).length = 224 := by
       rw [← hbytes, abiEncodeConstructorArgs_length]
@@ -383,7 +386,7 @@ theorem officialConstructorCopiedMemory_size :
   rcases hbytes : runtimeTemplateCode with _ | ⟨b, bs⟩
   · have hlen := runtimeTemplateCode_length_exact
     rw [hbytes] at hlen
-    simp at hlen
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
   · rw [Mem.size_write_cons]
     have hlen : (b :: bs).length = 4282 := by
       rw [← hbytes, runtimeTemplateCode_length_exact]
@@ -1103,7 +1106,7 @@ private theorem constructorSlice_split {ξ : Type} (xs : List ξ) (d : ξ) :
   induction a with
   | zero =>
       intro m b
-      simp [List.sliceD, List.takeD]
+      simp only [List.sliceD, zero_add, List.takeD, add_zero, List.nil_append]
   | succ a ih =>
       intro m b
       rw [show a + 1 + b = (a + b) + 1 by omega,
@@ -1156,27 +1159,23 @@ theorem officialConstructorPatchedMemory_read_initializedData :
   have hminPause :
       officialConstructorPatchInvariant12.image.sliceD 32 32 0 =
         officialParams.minPauseDuration.toBytes := by
-    simpa [officialConstructorArgumentWord] using
-      officialConstructorPatchInvariant12.read_argument_bytes
-        ⟨1, by decide⟩
+    simpa only [mul_one, officialConstructorArgumentWord] using
+      officialConstructorPatchInvariant12.read_argument_bytes ⟨1, by decide⟩
   have hmaxPause :
       officialConstructorPatchInvariant12.image.sliceD 64 32 0 =
         officialParams.maxPauseDuration.toBytes := by
-    simpa [officialConstructorArgumentWord] using
-      officialConstructorPatchInvariant12.read_argument_bytes
-        ⟨2, by decide⟩
+    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
+      officialConstructorPatchInvariant12.read_argument_bytes ⟨2, by decide⟩
   have hminHeartbeat :
       officialConstructorPatchInvariant12.image.sliceD 96 32 0 =
         officialParams.minHeartbeatInterval.toBytes := by
-    simpa [officialConstructorArgumentWord] using
-      officialConstructorPatchInvariant12.read_argument_bytes
-        ⟨3, by decide⟩
+    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
+      officialConstructorPatchInvariant12.read_argument_bytes ⟨3, by decide⟩
   have hmaxHeartbeat :
       officialConstructorPatchInvariant12.image.sliceD 128 32 0 =
         officialParams.maxHeartbeatInterval.toBytes := by
-    simpa [officialConstructorArgumentWord] using
-      officialConstructorPatchInvariant12.read_argument_bytes
-        ⟨4, by decide⟩
+    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
+      officialConstructorPatchInvariant12.read_argument_bytes ⟨4, by decide⟩
   rw [constructorSlice_split
       officialConstructorPatchInvariant12.image 0 32 32 96,
     constructorSlice_split
@@ -1245,9 +1244,11 @@ theorem officialConstructorColdStore_runCompiled
     · simpa only [Devm.gasLeft_setMach] using hsentry
     · exact hstatic
     · simp only [Devm.getStorVal_setMach, hcurrent, horiginal]
-      simp [sstoreValueCost, hzeroValue, gasColdSload, gasStorageSet]
+      simp only [gasColdSload, sstoreValueCost, ne_eq, hzeroValue, not_false_eq_true, and_self,
+        ↓reduceIte, gasStorageSet, Nat.reduceAdd]
     · simp only [Devm.setMach, Devm.refundCounter, horiginal]
-      simp [sstoreNewRefundCounter, hzeroValue]
+      simp only [sstoreNewRefundCounter, ne_eq, hzeroValue, ↓reduceIte, not_true_eq_false,
+        false_and, ite_self]
     · simp only [Devm.gasLeft_setMach]
   · change Func.RunCompiled fs sevm
       ((officialConstructorColdStore sevm base key value).setMach
@@ -2148,14 +2149,14 @@ private theorem officialConstructorHeartbeatMemory_argument_window :
 private theorem officialConstructorHeartbeatMemory_read_initialInterval :
     Bytes.toB256 ((officialConstructorHeartbeatMemory.read 192 32).1) =
       officialConstructorArgs.initialHeartbeatInterval := by
-  simpa [officialConstructorArgumentWord] using
+  simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
     officialConstructorHeartbeatMemory_read_argument ⟨6, by decide⟩
 
 private theorem officialConstructorHeartbeatMemory_read_same :
     (officialConstructorHeartbeatMemory.read 192 32).2 =
       officialConstructorHeartbeatMemory := by
-  simpa using officialConstructorHeartbeatMemory_read_argument_memory
-    ⟨6, by decide⟩
+  simpa only [Nat.reduceMul] using
+    officialConstructorHeartbeatMemory_read_argument_memory ⟨6, by decide⟩
 
 theorem officialConstructorHeartbeatStoreLine_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
@@ -2309,14 +2310,14 @@ private theorem officialConstructorHeartbeatZeroMemory_store_window :
 private theorem officialConstructorHeartbeatZeroMemory_read_initialInterval :
     Bytes.toB256 ((officialConstructorHeartbeatZeroMemory.read 192 32).1) =
       officialConstructorArgs.initialHeartbeatInterval := by
-  simpa [officialConstructorArgumentWord] using
+  simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
     officialConstructorHeartbeatZeroMemory_read_argument ⟨6, by decide⟩
 
 private theorem officialConstructorHeartbeatZeroMemory_read_same :
     (officialConstructorHeartbeatZeroMemory.read 192 32).2 =
       officialConstructorHeartbeatZeroMemory := by
-  simpa using officialConstructorHeartbeatZeroMemory_read_argument_memory
-    ⟨6, by decide⟩
+  simpa only [Nat.reduceMul] using
+    officialConstructorHeartbeatZeroMemory_read_argument_memory ⟨6, by decide⟩
 
 private theorem officialConstructorHeartbeatZeroMemory_write_initialInterval :
     officialConstructorHeartbeatZeroMemory.write
@@ -2484,14 +2485,14 @@ private theorem officialConstructorPauseMemory_argument_window :
 private theorem officialConstructorPauseMemory_read_initialDuration :
     Bytes.toB256 ((officialConstructorPauseMemory.read 160 32).1) =
       officialConstructorArgs.initialPauseDuration := by
-  simpa [officialConstructorArgumentWord] using
+  simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
     officialConstructorPauseMemory_read_argument ⟨5, by decide⟩
 
 private theorem officialConstructorPauseMemory_read_same_store :
     (officialConstructorPauseMemory.read 160 32).2 =
       officialConstructorPauseMemory := by
-  simpa using officialConstructorPauseMemory_read_argument_memory
-    ⟨5, by decide⟩
+  simpa only [Nat.reduceMul] using
+    officialConstructorPauseMemory_read_argument_memory ⟨5, by decide⟩
 
 private theorem officialConstructorPauseSstore_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
@@ -2670,14 +2671,14 @@ private theorem officialConstructorPauseZeroMemory_load_window :
 private theorem officialConstructorPauseZeroMemory_read_initialDuration :
     Bytes.toB256 ((officialConstructorPauseZeroMemory.read 160 32).1) =
       officialConstructorArgs.initialPauseDuration := by
-  simpa [officialConstructorArgumentWord] using
+  simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
     officialConstructorPauseZeroMemory_read_argument ⟨5, by decide⟩
 
 private theorem officialConstructorPauseZeroMemory_read_same :
     (officialConstructorPauseZeroMemory.read 160 32).2 =
       officialConstructorPauseZeroMemory := by
-  simpa using officialConstructorPauseZeroMemory_read_argument_memory
-    ⟨5, by decide⟩
+  simpa only [Nat.reduceMul] using
+    officialConstructorPauseZeroMemory_read_argument_memory ⟨5, by decide⟩
 
 private theorem officialConstructorPauseZeroMemory_write_initialDuration :
     officialConstructorPauseZeroMemory.write
@@ -2892,7 +2893,7 @@ theorem officialConstructorInitializedLogLine_runCompiled
   have hvalue : Bytes.toB256
       ((officialConstructorPatchedMemory.read 0 32).1) =
         officialParams.admin := by
-    simpa [officialConstructorArgumentWord] using
+    simpa only [mul_zero, officialConstructorArgumentWord] using
       officialConstructorPatchedMemory_read_argument ⟨0, by decide⟩
   have hmemory : (officialConstructorPatchedMemory.read 0 32).2 =
       officialConstructorPatchedMemory := by
@@ -3176,19 +3177,19 @@ private theorem officialConstructorInitialHeartbeatMaxStage_runCompiled
   have hv4 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 128 32).1) =
       officialParams.maxHeartbeatInterval := by
-    simpa [officialConstructorArgumentWord] using
+    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
       officialConstructorDecodedMemory_read_argument ⟨4, by decide⟩
   have hv6 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 192 32).1) =
       officialConstructorArgs.initialHeartbeatInterval := by
-    simpa [officialConstructorArgumentWord] using
+    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
       officialConstructorDecodedMemory_read_argument ⟨6, by decide⟩
   have hm4 : (officialConstructorDecodedMemory.read 128 32).2 =
       officialConstructorDecodedMemory := by
-    simpa using officialConstructorDecodedMemory_read_memory ⟨4, by decide⟩
+    simpa only [Nat.reduceMul] using officialConstructorDecodedMemory_read_memory ⟨4, by decide⟩
   have hm6 : (officialConstructorDecodedMemory.read 192 32).2 =
       officialConstructorDecodedMemory := by
-    simpa using officialConstructorDecodedMemory_read_memory ⟨6, by decide⟩
+    simpa only [Nat.reduceMul] using officialConstructorDecodedMemory_read_memory ⟨6, by decide⟩
   unfold officialConstructorInitialHeartbeatMaxStage
   simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
@@ -3223,19 +3224,19 @@ private theorem officialConstructorInitialHeartbeatMinStage_runCompiled
   have hv3 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 96 32).1) =
       officialParams.minHeartbeatInterval := by
-    simpa [officialConstructorArgumentWord] using
+    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
       officialConstructorDecodedMemory_read_argument ⟨3, by decide⟩
   have hv6 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 192 32).1) =
       officialConstructorArgs.initialHeartbeatInterval := by
-    simpa [officialConstructorArgumentWord] using
+    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
       officialConstructorDecodedMemory_read_argument ⟨6, by decide⟩
   have hm3 : (officialConstructorDecodedMemory.read 96 32).2 =
       officialConstructorDecodedMemory := by
-    simpa using officialConstructorDecodedMemory_read_memory ⟨3, by decide⟩
+    simpa only [Nat.reduceMul] using officialConstructorDecodedMemory_read_memory ⟨3, by decide⟩
   have hm6 : (officialConstructorDecodedMemory.read 192 32).2 =
       officialConstructorDecodedMemory := by
-    simpa using officialConstructorDecodedMemory_read_memory ⟨6, by decide⟩
+    simpa only [Nat.reduceMul] using officialConstructorDecodedMemory_read_memory ⟨6, by decide⟩
   unfold officialConstructorInitialHeartbeatMinStage
   simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
@@ -3270,19 +3271,19 @@ private theorem officialConstructorInitialPauseMaxStage_runCompiled
   have hv2 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 64 32).1) =
       officialParams.maxPauseDuration := by
-    simpa [officialConstructorArgumentWord] using
+    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
       officialConstructorDecodedMemory_read_argument ⟨2, by decide⟩
   have hv5 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 160 32).1) =
       officialConstructorArgs.initialPauseDuration := by
-    simpa [officialConstructorArgumentWord] using
+    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
       officialConstructorDecodedMemory_read_argument ⟨5, by decide⟩
   have hm2 : (officialConstructorDecodedMemory.read 64 32).2 =
       officialConstructorDecodedMemory := by
-    simpa using officialConstructorDecodedMemory_read_memory ⟨2, by decide⟩
+    simpa only [Nat.reduceMul] using officialConstructorDecodedMemory_read_memory ⟨2, by decide⟩
   have hm5 : (officialConstructorDecodedMemory.read 160 32).2 =
       officialConstructorDecodedMemory := by
-    simpa using officialConstructorDecodedMemory_read_memory ⟨5, by decide⟩
+    simpa only [Nat.reduceMul] using officialConstructorDecodedMemory_read_memory ⟨5, by decide⟩
   unfold officialConstructorInitialPauseMaxStage
   simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
@@ -3317,19 +3318,19 @@ private theorem officialConstructorInitialPauseMinStage_runCompiled
   have hv1 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 32 32).1) =
       officialParams.minPauseDuration := by
-    simpa [officialConstructorArgumentWord] using
+    simpa only [mul_one, officialConstructorArgumentWord] using
       officialConstructorDecodedMemory_read_argument ⟨1, by decide⟩
   have hv5 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 160 32).1) =
       officialConstructorArgs.initialPauseDuration := by
-    simpa [officialConstructorArgumentWord] using
+    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
       officialConstructorDecodedMemory_read_argument ⟨5, by decide⟩
   have hm1 : (officialConstructorDecodedMemory.read 32 32).2 =
       officialConstructorDecodedMemory := by
-    simpa using officialConstructorDecodedMemory_read_memory ⟨1, by decide⟩
+    simpa only [mul_one] using officialConstructorDecodedMemory_read_memory ⟨1, by decide⟩
   have hm5 : (officialConstructorDecodedMemory.read 160 32).2 =
       officialConstructorDecodedMemory := by
-    simpa using officialConstructorDecodedMemory_read_memory ⟨5, by decide⟩
+    simpa only [Nat.reduceMul] using officialConstructorDecodedMemory_read_memory ⟨5, by decide⟩
   unfold officialConstructorInitialPauseMinStage
   simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
@@ -3364,19 +3365,19 @@ private theorem officialConstructorHeartbeatBoundsStage_runCompiled
   have hv4 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 128 32).1) =
       officialParams.maxHeartbeatInterval := by
-    simpa [officialConstructorArgumentWord] using
+    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
       officialConstructorDecodedMemory_read_argument ⟨4, by decide⟩
   have hv3 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 96 32).1) =
       officialParams.minHeartbeatInterval := by
-    simpa [officialConstructorArgumentWord] using
+    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
       officialConstructorDecodedMemory_read_argument ⟨3, by decide⟩
   have hm4 : (officialConstructorDecodedMemory.read 128 32).2 =
       officialConstructorDecodedMemory := by
-    simpa using officialConstructorDecodedMemory_read_memory ⟨4, by decide⟩
+    simpa only [Nat.reduceMul] using officialConstructorDecodedMemory_read_memory ⟨4, by decide⟩
   have hm3 : (officialConstructorDecodedMemory.read 96 32).2 =
       officialConstructorDecodedMemory := by
-    simpa using officialConstructorDecodedMemory_read_memory ⟨3, by decide⟩
+    simpa only [Nat.reduceMul] using officialConstructorDecodedMemory_read_memory ⟨3, by decide⟩
   unfold officialConstructorHeartbeatBoundsStage
   simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
@@ -3411,11 +3412,11 @@ private theorem officialConstructorMinHeartbeatNonzeroStage_runCompiled
   have hv3 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 96 32).1) =
       officialParams.minHeartbeatInterval := by
-    simpa [officialConstructorArgumentWord] using
+    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
       officialConstructorDecodedMemory_read_argument ⟨3, by decide⟩
   have hm3 : (officialConstructorDecodedMemory.read 96 32).2 =
       officialConstructorDecodedMemory := by
-    simpa using officialConstructorDecodedMemory_read_memory ⟨3, by decide⟩
+    simpa only [Nat.reduceMul] using officialConstructorDecodedMemory_read_memory ⟨3, by decide⟩
   unfold officialConstructorMinHeartbeatNonzeroStage
   simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
@@ -3442,19 +3443,19 @@ private theorem officialConstructorPauseBoundsStage_runCompiled
   have hv2 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 64 32).1) =
       officialParams.maxPauseDuration := by
-    simpa [officialConstructorArgumentWord] using
+    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
       officialConstructorDecodedMemory_read_argument ⟨2, by decide⟩
   have hv1 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 32 32).1) =
       officialParams.minPauseDuration := by
-    simpa [officialConstructorArgumentWord] using
+    simpa only [mul_one, officialConstructorArgumentWord] using
       officialConstructorDecodedMemory_read_argument ⟨1, by decide⟩
   have hm2 : (officialConstructorDecodedMemory.read 64 32).2 =
       officialConstructorDecodedMemory := by
-    simpa using officialConstructorDecodedMemory_read_memory ⟨2, by decide⟩
+    simpa only [Nat.reduceMul] using officialConstructorDecodedMemory_read_memory ⟨2, by decide⟩
   have hm1 : (officialConstructorDecodedMemory.read 32 32).2 =
       officialConstructorDecodedMemory := by
-    simpa using officialConstructorDecodedMemory_read_memory ⟨1, by decide⟩
+    simpa only [mul_one] using officialConstructorDecodedMemory_read_memory ⟨1, by decide⟩
   unfold officialConstructorPauseBoundsStage
   simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
@@ -3489,11 +3490,11 @@ private theorem officialConstructorMinPauseNonzeroStage_runCompiled
   have hv1 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 32 32).1) =
       officialParams.minPauseDuration := by
-    simpa [officialConstructorArgumentWord] using
+    simpa only [mul_one, officialConstructorArgumentWord] using
       officialConstructorDecodedMemory_read_argument ⟨1, by decide⟩
   have hm1 : (officialConstructorDecodedMemory.read 32 32).2 =
       officialConstructorDecodedMemory := by
-    simpa using officialConstructorDecodedMemory_read_memory ⟨1, by decide⟩
+    simpa only [mul_one] using officialConstructorDecodedMemory_read_memory ⟨1, by decide⟩
   unfold officialConstructorMinPauseNonzeroStage
   simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
@@ -3520,11 +3521,11 @@ private theorem officialConstructorAdminNonzeroStage_runCompiled
   have hv0 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 0 32).1) =
       officialParams.admin := by
-    simpa [officialConstructorArgumentWord] using
+    simpa only [mul_zero, officialConstructorArgumentWord] using
       officialConstructorDecodedMemory_read_argument ⟨0, by decide⟩
   have hm0 : (officialConstructorDecodedMemory.read 0 32).2 =
       officialConstructorDecodedMemory := by
-    simpa using officialConstructorDecodedMemory_read_memory ⟨0, by decide⟩
+    simpa only [mul_zero] using officialConstructorDecodedMemory_read_memory ⟨0, by decide⟩
   unfold officialConstructorAdminNonzeroStage
   simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
@@ -3551,11 +3552,11 @@ private theorem officialConstructorCanonicalAdminStage_runCompiled
   have hv0 : Bytes.toB256
       ((officialConstructorDecodedMemory.read 0 32).1) =
       officialParams.admin := by
-    simpa [officialConstructorArgumentWord] using
+    simpa only [mul_zero, officialConstructorArgumentWord] using
       officialConstructorDecodedMemory_read_argument ⟨0, by decide⟩
   have hm0 : (officialConstructorDecodedMemory.read 0 32).2 =
       officialConstructorDecodedMemory := by
-    simpa using officialConstructorDecodedMemory_read_memory ⟨0, by decide⟩
+    simpa only [mul_zero] using officialConstructorDecodedMemory_read_memory ⟨0, by decide⟩
   unfold officialConstructorCanonicalAdminStage checkNonAddress pushAddressMask
   simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   func_run (2) [3]
@@ -3590,7 +3591,7 @@ private theorem officialConstructorValidationDecode_runCompiled
     if_pos (show 4898 < 2 ^ 16 by decide)]
   func_run (11) [1, 0, 45]
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  all_goals try simp [B256.eqCheck, hvalue]
+  all_goals try simp only [B256.eqCheck, hvalue, ↓reduceIte, Nat.reduceShiftRight, Nat.toUInt8_eq, UInt8.reduceOfNat, Nat.reduceSubDiff, add_tsub_cancel_right]
   all_goals try simp_rw [hcodeSize]
   all_goals try
     exact Devm.extCost_add_of_size

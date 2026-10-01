@@ -198,29 +198,29 @@ theorem jumpsOkNode_eq_jumpsOkNodeM (code : ByteArray) (es : List Entry) (f : SF
     intro f
     induction f with
     | next n f ih =>
-      refine ⟨fun a => ?_, by simp [P]⟩
-      cases h : absNinst n a <;> simp [Q, jumpsOkNode, jumpsOkNodeM, h, ih.1]
-    | last l => exact ⟨fun a => rfl, by simp [P]⟩
-    | dest f ih => exact ⟨fun a => by simp [Q, jumpsOkNode, jumpsOkNodeM, ih.1], ih.1⟩
+      refine ⟨fun a => ?_, by simp only⟩
+      cases h : absNinst n a <;> simp only [jumpsOkNode, h, jumpsOkNodeM, Q, ih.1, Bool.false_eq_true, ↓reduceIte]
+    | last l => exact ⟨fun a => rfl, by simp only⟩
+    | dest f ih => exact ⟨fun a => by simp only [jumpsOkNode, ih.1, jumpsOkNodeM, Q], ih.1⟩
     | branch f g ihf ihg =>
-      refine ⟨fun a => ?_, by simp [P]⟩
+      refine ⟨fun a => ?_, by simp only⟩
       rcases a with _ | ⟨_ | _ | _, _ | ⟨_, a⟩⟩ <;>
-        simp [Q, jumpsOkNode, jumpsOkNodeM, ihf.1, ihg.1]
+        simp only [jumpsOkNode, jumpsOkNodeM, Q, ihf.1, ihg.1]
     | branchTo f k ih =>
-      refine ⟨fun a => ?_, by simp [P]⟩
+      refine ⟨fun a => ?_, by simp only⟩
       rcases a with _ | ⟨_ | _ | _, _ | ⟨_, a⟩⟩ <;> cases h : es[k]? <;>
-        simp [Q, jumpsOkNode, jumpsOkNodeM, ih.1, h]
+        simp only [jumpsOkNode, jumpsOkNodeM, Q, h, ih.1]
     | jump k =>
-      refine ⟨fun a => ?_, by simp [P]⟩
+      refine ⟨fun a => ?_, by simp only⟩
       rcases a with _ | ⟨_ | _ | _, a⟩ <;> cases h : es[k]? <;>
-        simp [Q, jumpsOkNode, jumpsOkNodeM, h]
+        simp only [jumpsOkNode, jumpsOkNodeM, h]
     | callNext k f ih =>
-      refine ⟨fun a => ?_, by simp [P]⟩
+      refine ⟨fun a => ?_, by simp only⟩
       rcases a with _ | ⟨_ | _ | _, a⟩ <;> cases f <;> cases h : es[k]? <;>
-        simp [Q, jumpsOkNode, jumpsOkNodeM, ih.1, ih.2, h] <;> rfl
-    | ret => exact ⟨fun a => rfl, by simp [P]⟩
-    | pcAt p f ih => exact ⟨fun a => by simp [Q, jumpsOkNode, jumpsOkNodeM, ih.1], by simp [P]⟩
-    | undefined => exact ⟨fun a => rfl, by simp [P]⟩
+        simp only [jumpsOkNode, jumpsOkNodeM, Q, List.cons.injEq, AVal.const.injEq, SFunc.dest.injEq, h, reduceCtorEq, imp_self, implies_true, Option.some.injEq, ih.2] <;> rfl
+    | ret => exact ⟨fun a => rfl, by simp only⟩
+    | pcAt p f ih => exact ⟨fun a => by simp only [jumpsOkNode, ih.1, jumpsOkNodeM, Q], by simp only⟩
+    | undefined => exact ⟨fun a => rfl, by simp only⟩
   exact (hall f).1 a
 
 /-- Every entry is jump-safe from its declared map. -/
@@ -251,29 +251,34 @@ theorem Cert.jumpsOkM_of_jumpsOk {code : ByteArray} {c : Cert}
   intro k e f he hf
   have h := cert_jumpsOk_at hj k e f he hf
   rw [jumpsOkNode_eq_jumpsOkNodeM] at h
-  simpa using h
+  simpa only [List.getD_eq_getElem?_getD, List.length_nil, not_lt_zero, not_false_eq_true,
+    getElem?_neg, Option.getD_none] using h
 
 theorem Cert.jumpsEntriesM_at {code : ByteArray} {es : List Entry} {ms : List MemMap}
     {b : Bool} : ∀ (c : Cert) (k : Nat), Cert.jumpsEntriesM code es ms b k c = true →
       ∀ j e f, c.entries[j]? = some e → c.prog[j]? = some f →
         jumpsOkNodeM code es b f e.frame (ms.getD (k + j) []) = true
-  | [], _, _, j, e, f, he, _ => by simp [Cert.entries] at he
+  | [], _, _, j, e, f, he, _ => by simp only [entries, List.map_nil, List.length_nil, not_lt_zero,
+    not_false_eq_true, getElem?_neg, reduceCtorEq] at he
   | (e0, f0) :: c, k, h, 0, e, f, he, hf => by
       simp only [Cert.entries, Cert.prog, List.map_cons, List.getElem?_cons_zero,
         Option.some.injEq] at he hf
       subst he hf
       simp only [Cert.jumpsEntriesM, Bool.and_eq_true] at h
-      simpa using h.1
+      simpa only [add_zero, List.getD_eq_getElem?_getD] using h.1
   | (e0, f0) :: c, k, h, j + 1, e, f, he, hf => by
       simp only [Cert.jumpsEntriesM, Bool.and_eq_true] at h
-      have := Cert.jumpsEntriesM_at c (k + 1) h.2 j e f (by simpa [Cert.entries] using he)
-        (by simpa [Cert.prog] using hf)
-      simpa [Nat.add_assoc, Nat.add_comm 1 j] using this
+      have := Cert.jumpsEntriesM_at c (k + 1) h.2 j e f (by simpa only [entries, List.getElem?_map,
+        Option.map_eq_some_iff, Prod.exists, exists_and_right, exists_eq_right, List.map_cons,
+        List.getElem?_cons_succ] using he)
+        (by simpa only [prog, List.getElem?_map, Option.map_eq_some_iff, Prod.exists,
+          exists_eq_right, List.map_cons, List.getElem?_cons_succ] using hf)
+      simpa only [List.getD_eq_getElem?_getD, Nat.add_assoc, Nat.add_comm 1 j] using this
 
 theorem Cert.jumpsOkM_of_jumpsOkM {code : ByteArray} {c : Cert} {ms : List MemMap}
     {b : Bool} (hj : Cert.jumpsOkM code c ms b = true) : Cert.JumpsOkM code c ms b := by
   intro k e f he hf
-  simpa using Cert.jumpsEntriesM_at c 0 hj k e f he hf
+  simpa only [List.getD_eq_getElem?_getD, zero_add] using Cert.jumpsEntriesM_at c 0 hj k e f he hf
 
 private lemma popBurnBy_state {xs : List B256} {cost : Nat} {devm devm' : Devm}
     (h : Devm.PopBurnBy xs cost devm devm') :
@@ -288,11 +293,11 @@ private lemma popBurnBy_state {xs : List B256} {cost : Nat} {devm devm' : Devm}
 
 private lemma popBurnBy_one_stack {x : B256} {s s' : Devm}
     (h : Devm.PopBurnBy [x] gMid s s') : s.stack = x :: s'.stack := by
-  simpa [Stack.Pop, Split] using h.stack
+  simpa only [Stack.Pop, Split, List.cons_append, List.nil_append] using h.stack
 
 private lemma popBurnBy_two_stack {x y : B256} {s s' : Devm}
     (h : Devm.PopBurnBy [x, y] gHigh s s') : s.stack = x :: y :: s'.stack := by
-  simpa [Stack.Pop, Split] using h.stack
+  simpa only [Stack.Pop, Split, List.cons_append, List.nil_append] using h.stack
 
 private lemma cond_matches {ρ : B256} {av av2 : AVal} {a' : List AVal}
     {S base : List B256} {devm devm' : Devm} {d w : B256}
@@ -330,7 +335,7 @@ private lemma jumpi_zero_cont {pc : Nat} {sevm : Sevm} {devm devm' : Devm}
   have hg : gHigh ≤ devm.gasLeft := by have := h.gasLeft; omega
   have hstep := Evm.jumpi_cont_zero h_at hs hg
   have heq := popBurnBy_state h
-  simpa [heq] using hstep
+  simpa only [heq] using hstep
 
 private lemma jumpi_succ_cont {pc : Nat} {sevm : Sevm} {devm devm' : Devm}
     {d w : B256} (h_at : Jinst.At sevm.code pc .jumpi)
@@ -341,7 +346,7 @@ private lemma jumpi_succ_cont {pc : Nat} {sevm : Sevm} {devm devm' : Devm}
   have hg : gHigh ≤ devm.gasLeft := by have := h.gasLeft; omega
   have hstep := Evm.jumpi_cont_jump h_at hs hne hg hjp
   have heq := popBurnBy_state h
-  simpa [heq] using hstep
+  simpa only [heq] using hstep
 
 private lemma jump_cont_exact {pc : Nat} {sevm : Sevm} {devm devm' : Devm}
     {d : B256} (h_at : Jinst.At sevm.code pc .jump)
@@ -352,7 +357,7 @@ private lemma jump_cont_exact {pc : Nat} {sevm : Sevm} {devm devm' : Devm}
   have hg : gMid ≤ devm.gasLeft := by have := h.gasLeft; omega
   have hstep := Evm.jump_cont h_at hs hg hjp
   have heq := popBurnBy_state h
-  simpa [heq] using hstep
+  simpa only [heq] using hstep
 
 private lemma dest_cont_exact {pc : Nat} {sevm : Sevm} {devm devm' : Devm}
     (h_at : Jinst.At sevm.code pc .jumpdest)
@@ -387,25 +392,25 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     (fun {devm devm' f g o} d hpop hrun ih => by
       intro pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
       cases a with
-      | nil => simp [checkNodeM] at hcheck
+      | nil => simp only [checkNodeM, Bool.false_eq_true] at hcheck
       | cons av a0 =>
         cases av with
-        | ret => simp [checkNodeM] at hcheck
-        | unk => simp [checkNodeM] at hcheck
+        | ret => simp only [checkNodeM, Bool.false_eq_true] at hcheck
+        | unk => simp only [checkNodeM, Bool.false_eq_true] at hcheck
         | const t =>
           cases a0 with
-          | nil => simp [checkNodeM] at hcheck
+          | nil => simp only [checkNodeM, Bool.false_eq_true] at hcheck
           | cons av2 a' =>
             have hcheck0 :
                 (byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧
                   (av2.jumps? = some true ∨ checkNodeM code c.entries ms b m (pc + 1) a' μ f = true)) ∧
                 (av2.jumps? = some false ∨ checkNodeM code c.entries ms b m t.toNat a' μ g = true) := by
-              simpa [checkNodeM] using hcheck
+              simpa only [checkNodeM, Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true] using hcheck
             have hjump0 :
                 (av2.jumps? = some true ∨ jumpsOkNodeM code c.entries b f a' μ = true) ∧
                 (av2.jumps? = some false ∨
                   (jumpdestOk code t.toNat = true ∧ jumpsOkNodeM code c.entries b g a' μ = true)) := by
-              simpa [jumpsOkNodeM] using hjump
+              simpa only [jumpsOkNodeM, Bool.and_eq_true, Bool.or_eq_true, beq_iff_eq] using hjump
             have hv := cond_matches hframe hstack hpop
             have hcheck' :
                 (byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧
@@ -421,7 +426,9 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
             | nil => cases hframe
             | cons s0 S0 =>
               cases S0 with
-              | nil => have := List.Forall₂.length_eq hframe; simp at this
+              | nil => have := List.Forall₂.length_eq hframe; simp only [List.length_cons,
+                List.length_nil, zero_add, Nat.add_eq_right, Nat.add_eq_zero_iff,
+                List.length_eq_zero_iff, one_ne_zero, and_false] at this
               | cons s1 S1 =>
                 cases hframe with
                 | cons h0 hrest =>
@@ -463,25 +470,25 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     (fun {devm devm' f g o} d w hne hpop hrun ih => by
       intro pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
       cases a with
-      | nil => simp [checkNodeM] at hcheck
+      | nil => simp only [checkNodeM, Bool.false_eq_true] at hcheck
       | cons av a0 =>
         cases av with
-        | ret => simp [checkNodeM] at hcheck
-        | unk => simp [checkNodeM] at hcheck
+        | ret => simp only [checkNodeM, Bool.false_eq_true] at hcheck
+        | unk => simp only [checkNodeM, Bool.false_eq_true] at hcheck
         | const t =>
           cases a0 with
-          | nil => simp [checkNodeM] at hcheck
+          | nil => simp only [checkNodeM, Bool.false_eq_true] at hcheck
           | cons av2 a' =>
             have hcheck0 :
                 (byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧
                   (av2.jumps? = some true ∨ checkNodeM code c.entries ms b m (pc + 1) a' μ f = true)) ∧
                 (av2.jumps? = some false ∨ checkNodeM code c.entries ms b m t.toNat a' μ g = true) := by
-              simpa [checkNodeM] using hcheck
+              simpa only [checkNodeM, Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true] using hcheck
             have hjump0 :
                 (av2.jumps? = some true ∨ jumpsOkNodeM code c.entries b f a' μ = true) ∧
                 (av2.jumps? = some false ∨
                   (jumpdestOk code t.toNat = true ∧ jumpsOkNodeM code c.entries b g a' μ = true)) := by
-              simpa [jumpsOkNodeM] using hjump
+              simpa only [jumpsOkNodeM, Bool.and_eq_true, Bool.or_eq_true, beq_iff_eq] using hjump
             have hv := cond_matches hframe hstack hpop
             have hcheck' :
                 (byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧ True) ∧
@@ -500,7 +507,9 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
             | nil => cases hframe
             | cons s0 S0 =>
               cases S0 with
-              | nil => have := List.Forall₂.length_eq hframe; simp at this
+              | nil => have := List.Forall₂.length_eq hframe; simp only [List.length_cons,
+                List.length_nil, zero_add, Nat.add_eq_right, Nat.add_eq_zero_iff,
+                List.length_eq_zero_iff, one_ne_zero, and_false] at this
               | cons s1 S1 =>
                 cases hframe with
                 | cons h0 hrest =>
@@ -547,17 +556,17 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     (fun {devm devm' f k o} d hpop hrun ih => by
       intro pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
       cases a with
-      | nil => simp [checkNodeM] at hcheck
+      | nil => simp only [checkNodeM, Bool.false_eq_true] at hcheck
       | cons av a0 =>
         cases av with
-        | ret => simp [checkNodeM] at hcheck
-        | unk => simp [checkNodeM] at hcheck
+        | ret => simp only [checkNodeM, Bool.false_eq_true] at hcheck
+        | unk => simp only [checkNodeM, Bool.false_eq_true] at hcheck
         | const t =>
           cases a0 with
-          | nil => simp [checkNodeM] at hcheck
+          | nil => simp only [checkNodeM, Bool.false_eq_true] at hcheck
           | cons av2 a' =>
             cases hk : c.entries[k]? with
-            | none => simp [checkNodeM, hk] at hcheck
+            | none => simp only [checkNodeM, hk, Bool.false_eq_true] at hcheck
             | some e =>
               have hcheck0 :
                   ((((byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧
@@ -565,8 +574,10 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
                     gotoCompat a' e.frame = true) ∧ memCompat μ (ms[k]?.getD []) = true) ∧
                     (av2.jumps? = some true ∨
                       checkNodeM code c.entries ms b m (pc + 1) a' μ f = true) := by
-                simpa [checkNodeM, hk] using hcheck
-              have hmc : memCompat μ (ms.getD k []) = true := by simpa using hcheck0.1.2
+                simpa only [checkNodeM, hk, List.getD_eq_getElem?_getD, Bool.and_eq_true,
+                  beq_iff_eq, Bool.or_eq_true] using hcheck
+              have hmc : memCompat μ (ms.getD k []) = true := by simpa only [List.getD_eq_getElem?_getD] using
+                hcheck0.1.2
               replace hcheck0 := And.intro hcheck0.1.1 hcheck0.2
               have hv := cond_matches hframe hstack hpop
               have hcheck' :
@@ -578,7 +589,8 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
               have hjump0 :
                   jumpdestOk code e.pc = true ∧
                     (av2.jumps? = some true ∨ jumpsOkNodeM code c.entries b f a' μ = true) := by
-                simpa [jumpsOkNodeM, hk, Bool.and_eq_true] using hjump
+                simpa only [jumpsOkNodeM, hk, Bool.and_eq_true, Bool.or_eq_true, beq_iff_eq] using
+                  hjump
               have hjump' :
                   jumpdestOk code e.pc = true ∧
                     jumpsOkNodeM code c.entries b f a' μ = true :=
@@ -591,7 +603,9 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
               | nil => cases hframe
               | cons s0 S0 =>
                 cases S0 with
-                | nil => have := List.Forall₂.length_eq hframe; simp at this
+                | nil => have := List.Forall₂.length_eq hframe; simp only [List.length_cons,
+                  List.length_nil, zero_add, Nat.add_eq_right, Nat.add_eq_zero_iff,
+                  List.length_eq_zero_iff, one_ne_zero, and_false] at this
                 | cons s1 S1 =>
                   cases hframe with
                   | cons h0 hrest =>
@@ -630,17 +644,17 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     (fun {devm devm' f g k o} d w hne hget hpop hrun ih => by
       intro pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
       cases a with
-      | nil => simp [checkNodeM] at hcheck
+      | nil => simp only [checkNodeM, Bool.false_eq_true] at hcheck
       | cons av a0 =>
         cases av with
-        | ret => simp [checkNodeM] at hcheck
-        | unk => simp [checkNodeM] at hcheck
+        | ret => simp only [checkNodeM, Bool.false_eq_true] at hcheck
+        | unk => simp only [checkNodeM, Bool.false_eq_true] at hcheck
         | const t =>
           cases a0 with
-          | nil => simp [checkNodeM] at hcheck
+          | nil => simp only [checkNodeM, Bool.false_eq_true] at hcheck
           | cons av2 a' =>
             cases hk : c.entries[k]? with
-            | none => simp [checkNodeM, hk] at hcheck
+            | none => simp only [checkNodeM, hk, Bool.false_eq_true] at hcheck
             | some e =>
               have hcheck0 :
                   ((((byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧
@@ -648,8 +662,10 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
                     gotoCompat a' e.frame = true) ∧ memCompat μ (ms[k]?.getD []) = true) ∧
                     (av2.jumps? = some true ∨
                       checkNodeM code c.entries ms b m (pc + 1) a' μ f = true) := by
-                simpa [checkNodeM, hk] using hcheck
-              have hmc : memCompat μ (ms.getD k []) = true := by simpa using hcheck0.1.2
+                simpa only [checkNodeM, hk, List.getD_eq_getElem?_getD, Bool.and_eq_true,
+                  beq_iff_eq, Bool.or_eq_true] using hcheck
+              have hmc : memCompat μ (ms.getD k []) = true := by simpa only [List.getD_eq_getElem?_getD] using
+                hcheck0.1.2
               have hcheck' := And.intro hcheck0.1.1 hcheck0.2
               rcases cert_prog_of_entry c k e hk with ⟨g', hg'⟩
               have hgg : g = g' := Option.some.inj (hget.symm.trans hg')
@@ -658,13 +674,14 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
               have hjump' :
                   jumpdestOk code e.pc = true ∧
                     (av2.jumps? = some true ∨ jumpsOkNodeM code c.entries b f a' μ = true) := by
-                simpa [jumpsOkNodeM, hk, Bool.and_eq_true] using hjump
+                simpa only [jumpsOkNodeM, hk, Bool.and_eq_true, Bool.or_eq_true, beq_iff_eq] using
+                  hjump
               have h_at : Jinst.At sevm.code pc .jumpi := by
                 apply byteAt_jinst_at
                 rw [hcode]
                 exact hcheck'.1.1.1.1
               have hje : jumpdestOk code t.toNat = true := by
-                simpa [hcheck'.1.1.1.2] using hjump'.1
+                simpa only [hcheck'.1.1.1.2] using hjump'.1
               have hjp : jumpable sevm.code t.toNat = true := by
                 rw [hcode]
                 exact jumpable_of_jumpdestOk hje
@@ -672,7 +689,9 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
               | nil => cases hframe
               | cons s0 S0 =>
                 cases S0 with
-                | nil => have := List.Forall₂.length_eq hframe; simp at this
+                | nil => have := List.Forall₂.length_eq hframe; simp only [List.length_cons,
+                  List.length_nil, zero_add, Nat.add_eq_right, Nat.add_eq_zero_iff,
+                  List.length_eq_zero_iff, one_ne_zero, and_false] at this
                 | cons s1 S1 =>
                   cases hframe with
                   | cons h0 hrest =>
@@ -689,7 +708,7 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
                         frameMatches_gotoCompat hcheck'.1.2 htail
                       have hentry' :
                           checkNodeM code c.entries ms b e.rets t.toNat e.frame (ms.getD k []) g = true := by
-                        simpa [hcheck'.1.1.1.2] using hentry
+                        simpa only [List.getD_eq_getElem?_getD, hcheck'.1.1.1.2] using hentry
                       have hjg : jumpsOkNodeM code c.entries b g e.frame (ms.getD k []) = true :=
                         hj k e g hk hget
                       cases o with
@@ -717,7 +736,7 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
                         have hret' : RetIn a' μ :=
                           hret.imp (ret_mem_of_gotoCompat hcheck'.1.2) (mem_snd_of_memCompat hmc)
                         have hlen' : S'.length = m := by
-                          simpa [hcheck'.1.1.2] using hlen
+                          simpa only [hcheck'.1.1.2] using hlen
                         refine ⟨RetIn.of_frame (fun h => List.mem_cons_of_mem _
                             (List.mem_cons_of_mem _ h)) hret', S', hst, hlen', ?_⟩
                         intro r hr
@@ -728,7 +747,7 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     (fun {devm devm' l} hrun => by
       intro pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
       have hbyte : byteAt code pc = some l.toUInt8 := by
-        simpa [checkNodeM] using hcheck
+        simpa only [checkNodeM, beq_iff_eq] using hcheck
       have h_at : Linst.At sevm.code pc l := by
         apply byteAt_linst_at
         rw [hcode]
@@ -771,7 +790,7 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
         rcases matches_split hout with ⟨S', below, hsp, hfirst, hbelow⟩
         have hbelow' : below = base := matches_some_map_eq hbelow
         have hinter : devm'.stack = S' ++ base := by
-          simpa [hbelow'] using hsp
+          simpa only [hbelow'] using hsp
         have hframe0 : FrameMatches ρ a0 S' := by
           rw [hfold]
           exact frameMatches_foldTop hframe hstack ⟨xl, hfilled, pc, hstep0⟩ hinter
@@ -822,7 +841,7 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
             (if b then absMem (.push bs fits) a μ else []) → RetIn a μ := by
           intro h
           rcases RetIn.of_step b h with h | h | h
-          · exact .inl (by simpa using h)
+          · exact .inl (by simpa only [List.mem_cons, reduceCtorEq, false_or] using h)
           · exact .inl h
           · exact .inr h
         have hrec := ih (pc + (Ninst.push bs fits).size) m
@@ -847,7 +866,7 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
           rw [hcode]
           exact hchk.1.1
         cases ha : absNinst (Ninst.reg r) a with
-        | none => simp [ha] at hchk
+        | none => simp only [ha, Bool.false_eq_true, and_false] at hchk
         | some a0 =>
           have hchild := hchk.2
           simp only [ha] at hchild
@@ -867,7 +886,7 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
           rw [hcode]
           exact hchk.1.1
         cases ha : absNinst (Ninst.exec x) a with
-        | none => simp [ha] at hchk
+        | none => simp only [ha, Bool.false_eq_true, and_false] at hchk
         | some a0 =>
           have hchild := hchk.2
           simp only [ha] at hchild
@@ -887,7 +906,7 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
           rw [hcode]
           exact hchk.1.1
         cases ha : absNinst (Ninst.dupn i) a with
-        | none => simp [ha] at hchk
+        | none => simp only [ha, Bool.false_eq_true, and_false] at hchk
         | some a0 =>
           have hchild := hchk.2
           simp only [ha] at hchild
@@ -907,7 +926,7 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
           rw [hcode]
           exact hchk.1.1
         cases ha : absNinst (Ninst.swapn i) a with
-        | none => simp [ha] at hchk
+        | none => simp only [ha, Bool.false_eq_true, and_false] at hchk
         | some a0 =>
           have hchild := hchk.2
           simp only [ha] at hchild
@@ -927,7 +946,7 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
           rw [hcode]
           exact hchk.1.1
         cases ha : absNinst (Ninst.exchange i) a with
-        | none => simp [ha] at hchk
+        | none => simp only [ha, Bool.false_eq_true, and_false] at hchk
         | some a0 =>
           have hchild := hchk.2
           simp only [ha] at hchild
@@ -943,7 +962,7 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
       have hcheck' :
           byteAt code pc = some (Jinst.toUInt8 .jumpdest) ∧
             checkNodeM code c.entries ms b m (pc + 1) a μ f = true := by
-        simpa [checkNodeM] using hcheck
+        simpa only [checkNodeM, Bool.and_eq_true, beq_iff_eq] using hcheck
       have h_at : Jinst.At sevm.code pc .jumpdest := by
         apply byteAt_jinst_at
         rw [hcode]
@@ -951,7 +970,7 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
       have hstack' : devm'.stack = S ++ base := by
         rw [← hburn.stack, hstack]
       have hrec := ih (pc + 1) m a ρ S base μ
-        hcheck'.2 (by simpa [jumpsOkNodeM] using hjump) hstack' hframe
+        hcheck'.2 (by simpa only [jumpsOkNodeM] using hjump) hstack' hframe
         (hmem.of_memory_eq hburn.memory) hρ
       cases o with
       | halted post =>
@@ -966,28 +985,30 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     (fun {devm devm' k f o} d hget hpop hrun ih => by
       intro pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
       cases a with
-      | nil => simp [checkNodeM] at hcheck
+      | nil => simp only [checkNodeM, Bool.false_eq_true] at hcheck
       | cons av a' =>
         cases av with
-        | ret => simp [checkNodeM] at hcheck
-        | unk => simp [checkNodeM] at hcheck
+        | ret => simp only [checkNodeM, Bool.false_eq_true] at hcheck
+        | unk => simp only [checkNodeM, Bool.false_eq_true] at hcheck
         | const t =>
           cases hk : c.entries[k]? with
-          | none => simp [checkNodeM, hk] at hcheck
+          | none => simp only [checkNodeM, hk, Bool.false_eq_true] at hcheck
           | some e =>
             have hcheck0 :
                 ((((byteAt code pc = some (Jinst.toUInt8 .jump) ∧
                   e.pc = t.toNat) ∧ e.rets = m) ∧
                   gotoCompat a' e.frame = true) ∧ memCompat μ (ms[k]?.getD []) = true) := by
-              simpa [checkNodeM, hk] using hcheck
+              simpa only [checkNodeM, hk, List.getD_eq_getElem?_getD, Bool.and_eq_true,
+                beq_iff_eq] using hcheck
             have hcheck' := hcheck0.1
-            have hmc : memCompat μ (ms.getD k []) = true := by simpa using hcheck0.2
+            have hmc : memCompat μ (ms.getD k []) = true := by simpa only [List.getD_eq_getElem?_getD] using
+              hcheck0.2
             rcases cert_prog_of_entry c k e hk with ⟨g, hg⟩
             have hfg : f = g := Option.some.inj (hget.symm.trans hg)
             subst g
             have hentry := hc k e f hk hg
             have hjump' : jumpdestOk code e.pc = true := by
-              simpa [jumpsOkNodeM, hk] using hjump
+              simpa only [jumpsOkNodeM, hk] using hjump
             have hjg : jumpsOkNodeM code c.entries b f e.frame (ms.getD k []) = true :=
               hj k e f hk hg
             have h_at : Jinst.At sevm.code pc .jump := by
@@ -995,7 +1016,7 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
               rw [hcode]
               exact hcheck'.1.1.1
             have hje : jumpdestOk code t.toNat = true := by
-              simpa [hcheck'.1.1.2] using hjump'
+              simpa only [hcheck'.1.1.2] using hjump'
             have hjp : jumpable sevm.code t.toNat = true := by
               rw [hcode]
               exact jumpable_of_jumpdestOk hje
@@ -1015,7 +1036,7 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
                   frameMatches_gotoCompat hcheck'.2 htail
                 have hentry' :
                     checkNodeM code c.entries ms b e.rets t.toNat e.frame (ms.getD k []) f = true := by
-                  simpa [hcheck'.1.1.2] using hentry
+                  simpa only [List.getD_eq_getElem?_getD, hcheck'.1.1.2] using hentry
                 cases o with
                 | halted post =>
                   have hrec := ih t.toNat e.rets e.frame ρ S1 base (ms.getD k [])
@@ -1039,7 +1060,7 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
                   have hret' : RetIn a' μ :=
                     hret.imp (ret_mem_of_gotoCompat hcheck'.2) (mem_snd_of_memCompat hmc)
                   have hlen' : S'.length = m := by
-                    simpa [hcheck'.1.2] using hlen
+                    simpa only [hcheck'.1.2] using hlen
                   refine ⟨RetIn.of_frame (List.mem_cons_of_mem _) hret', S', hst, hlen', ?_⟩
                   intro r hr
                   rcases hcont hr with ⟨exc⟩
@@ -1049,15 +1070,15 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     (fun {devm devm'} d hpop => by
       intro pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
       cases a with
-      | nil => simp [checkNodeM] at hcheck
+      | nil => simp only [checkNodeM, Bool.false_eq_true] at hcheck
       | cons av a' =>
         cases av with
-        | const c => simp [checkNodeM] at hcheck
-        | unk => simp [checkNodeM] at hcheck
+        | const c => simp only [checkNodeM, Bool.false_eq_true] at hcheck
+        | unk => simp only [checkNodeM, Bool.false_eq_true] at hcheck
         | ret =>
           have hcheck' : byteAt code pc = some (Jinst.toUInt8 .jump) ∧
               a'.length = m := by
-            simpa [checkNodeM] using hcheck
+            simpa only [checkNodeM, Bool.and_eq_true, beq_iff_eq] using hcheck
           have h_at : Jinst.At sevm.code pc .jump := by
             apply byteAt_jinst_at
             rw [hcode]
@@ -1071,37 +1092,42 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
               have hs := popBurnBy_one_stack hpop
               rw [hstack] at hs
               have htx : t = d := by
-                simpa using congrArg List.head? hs
+                simpa only [List.cons_append, List.head?_cons, Option.some.injEq] using
+                  congrArg List.head? hs
               have hd : d = ρ := htx.symm.trans ht
               have hinter : devm'.stack = S1 ++ base := by
-                simpa [hd] using (congrArg List.tail? hs).symm
+                simpa only [hd, List.tail?_cons, List.cons_append, Option.some.injEq] using
+                  (congrArg List.tail? hs).symm
               have hlen : S1.length = m :=
                 (List.Forall₂.length_eq htail).symm.trans hcheck'.2
               have hjp : jumpable sevm.code ρ.toNat = true := by
                 rw [hcode]
-                exact jumpable_of_jumpdestOk (hρ (by simp [RetIn]))
+                exact jumpable_of_jumpdestOk (hρ (by simp only [RetIn, List.mem_cons, true_or,
+                  List.mem_map, Prod.exists, exists_eq_right]))
               have hpop' : Devm.PopBurnBy [ρ] gMid devm devm' := by
-                simpa [hd] using hpop
-              refine ⟨by simp [RetIn], S1, hinter, hlen, ?_⟩
+                simpa only [hd] using hpop
+              refine ⟨by simp only [RetIn, List.mem_cons, true_or, List.mem_map, Prod.exists,
+                exists_eq_right], S1, hinter, hlen, ?_⟩
               intro r hr
               rcases hr with ⟨exc⟩
               exact ⟨Exec.cont (jump_cont_exact h_at hjp hpop') exc⟩)
     (fun {devm devm' devm'' k f g} d hget hpop hrun ih => by
       intro pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
       cases a with
-      | nil => simp [checkNodeM] at hcheck
+      | nil => simp only [checkNodeM, Bool.false_eq_true] at hcheck
       | cons av a' =>
         cases av with
-        | ret => simp [checkNodeM] at hcheck
-        | unk => simp [checkNodeM] at hcheck
+        | ret => simp only [checkNodeM, Bool.false_eq_true] at hcheck
+        | unk => simp only [checkNodeM, Bool.false_eq_true] at hcheck
         | const t =>
           cases f with
           | dest dcont =>
             cases hk : c.entries[k]? with
-            | none => simp [checkNodeM, hk] at hcheck
+            | none => simp only [checkNodeM, hk, Bool.false_eq_true] at hcheck
             | some e =>
-              simp [checkNodeM, hk] at hcheck
-              simp [jumpsOkNodeM, hk] at hjump
+              simp only [checkNodeM, hk, List.getD_eq_getElem?_getD, Bool.and_eq_true, beq_iff_eq,
+                decide_eq_true_eq, List.isEmpty_iff] at hcheck
+              simp only [hk, Option.some.injEq, jumpsOkNodeM, Bool.and_eq_true] at hjump
               have hentry := hc k e g hk hget
               have hjentry := hj k e g hk hget
               have hempty : ms[k]?.getD [] = [] := hcheck.1.2
@@ -1124,51 +1150,52 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
                   have hinter : devm'.stack = S1 ++ base :=
                     (List.cons.inj hs).2.symm
                   have hje : jumpdestOk code t.toNat = true := by
-                    simpa [hcheck.1.1.1.2] using hjump.1
+                    simpa only [hcheck.1.1.1.2] using hjump.1
                   have hjp : jumpable sevm.code t.toNat = true := by
                     rw [hcode]
                     exact jumpable_of_jumpdestOk hje
                   have hentry' :
                       checkNodeM code c.entries ms b e.rets t.toNat e.frame (ms.getD k []) g = true := by
-                    simpa [hcheck.1.1.1.2] using hentry
+                    simpa only [List.getD_eq_getElem?_getD, hcheck.1.1.1.2] using hentry
                   cases hidx : e.frame.findIdx? (· == .ret) with
                   | none =>
                     have hcall : callCompat 0 a' e.frame = true := by
-                      simpa [hidx] using hcheck.2
+                      simpa only [hidx] using hcheck.2
                     rcases frameMatches_callCompat hcall htail with
                       ⟨Sf, Sr, hsplit, hframee, hframer⟩
                     have hstacke : devm'.stack = Sf ++ (Sr ++ base) := by
                       rw [hinter, hsplit]
-                      simp [List.append_assoc]
+                      simp only [List.append_assoc]
                     have hrec := ih t.toNat e.rets e.frame 0 Sf (Sr ++ base) (ms.getD k [])
                       hentry' hjentry hstacke hframee hmemc (by
                         intro hret
                         rcases hret with hret | hret
                         · exact (ret_not_mem_of_findIdx_none hidx AVal.ret hret rfl).elim
-                        · simp [List.getD_eq_getElem?_getD, hempty] at hret)
+                        · simp only [List.getD_eq_getElem?_getD, hempty, List.map_nil,
+                          List.not_mem_nil] at hret)
                     rcases hrec with ⟨exc⟩
                     subst d
                     subst s0
                     exact ⟨Exec.cont (jump_cont_exact h_at hjp hpop) exc⟩
                   | some i =>
                     cases haidx : a'[i]? with
-                    | none => simp [hidx, haidx] at hcheck
+                    | none => simp only [hidx, haidx, Bool.false_eq_true, and_false] at hcheck
                     | some av =>
                       cases av with
-                      | ret => simp [hidx, haidx] at hcheck
-                      | unk => simp [hidx, haidx] at hcheck
+                      | ret => simp only [hidx, haidx, Bool.false_eq_true, and_false] at hcheck
+                      | unk => simp only [hidx, haidx, Bool.false_eq_true, and_false] at hcheck
                       | const r =>
                         have hcall : callCompat r a' e.frame = true ∧
                             byteAt code r.toNat = some (Jinst.toUInt8 .jumpdest) ∧
                             checkNodeM code c.entries ms b m (r.toNat + 1)
                               (List.replicate e.rets .unk ++
                                 a'.drop e.frame.length) [] dcont = true := by
-                          simpa [hidx, haidx, Bool.and_eq_true] using hcheck.2
+                          simpa only [hidx, haidx, Bool.and_eq_true, beq_iff_eq] using hcheck.2
                         rcases frameMatches_callCompat hcall.1 htail with
                           ⟨Sf, Sr, hsplit, hframee, hframer⟩
                         have hstacke : devm'.stack = Sf ++ (Sr ++ base) := by
                           rw [hinter, hsplit]
-                          simp [List.append_assoc]
+                          simp only [List.append_assoc]
                         have hframee' : FrameMatches r e.frame Sf := hframee
                         have hjr : jumpdestOk code r.toNat = true := by
                           have hh : jumpdestOk code e.pc = true ∧
@@ -1176,8 +1203,7 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
                                 jumpsOkNodeM code c.entries b dcont
                                   (List.replicate e.rets .unk ++
                                     a'.drop e.frame.length) [] = true := by
-                            simpa [jumpsOkNodeM, hk, hidx, haidx,
-                              Bool.and_eq_true] using hjump
+                            simpa only [hidx, haidx, Bool.and_eq_true] using hjump
                           exact hh.2.1
                         have hrec := ih t.toNat e.rets e.frame r Sf (Sr ++ base) (ms.getD k [])
                           hentry' hjentry hstacke hframee'
@@ -1189,31 +1215,32 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
                         subst d
                         subst s0
                         exact ⟨Exec.cont (jump_cont_exact h_at hjp hpop) exc⟩
-          | branch _ _ => simp [checkNodeM] at hcheck
-          | branchTo _ _ => simp [checkNodeM] at hcheck
-          | last _ => simp [checkNodeM] at hcheck
-          | next _ _ => simp [checkNodeM] at hcheck
-          | jump _ => simp [checkNodeM] at hcheck
-          | callNext _ _ => simp [checkNodeM] at hcheck
-          | ret => simp [checkNodeM] at hcheck
-          | pcAt _ _ => simp [checkNodeM] at hcheck
-          | undefined => simp [checkNodeM] at hcheck)
+          | branch _ _ => simp only [checkNodeM, Bool.false_eq_true] at hcheck
+          | branchTo _ _ => simp only [checkNodeM, Bool.false_eq_true] at hcheck
+          | last _ => simp only [checkNodeM, Bool.false_eq_true] at hcheck
+          | next _ _ => simp only [checkNodeM, Bool.false_eq_true] at hcheck
+          | jump _ => simp only [checkNodeM, Bool.false_eq_true] at hcheck
+          | callNext _ _ => simp only [checkNodeM, Bool.false_eq_true] at hcheck
+          | ret => simp only [checkNodeM, Bool.false_eq_true] at hcheck
+          | pcAt _ _ => simp only [checkNodeM, Bool.false_eq_true] at hcheck
+          | undefined => simp only [checkNodeM, Bool.false_eq_true] at hcheck)
     (fun {devm devm' devm'' k f g o} d hget hpop hrun hcont ihrun ihcont => by
       intro pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
       cases a with
-      | nil => simp [checkNodeM] at hcheck
+      | nil => simp only [checkNodeM, Bool.false_eq_true] at hcheck
       | cons av a' =>
         cases av with
-        | ret => simp [checkNodeM] at hcheck
-        | unk => simp [checkNodeM] at hcheck
+        | ret => simp only [checkNodeM, Bool.false_eq_true] at hcheck
+        | unk => simp only [checkNodeM, Bool.false_eq_true] at hcheck
         | const t =>
           cases f with
           | dest dcont =>
             cases hk : c.entries[k]? with
-            | none => simp [checkNodeM, hk] at hcheck
+            | none => simp only [checkNodeM, hk, Bool.false_eq_true] at hcheck
             | some e =>
-              simp [checkNodeM, hk] at hcheck
-              simp [jumpsOkNodeM, hk] at hjump
+              simp only [checkNodeM, hk, List.getD_eq_getElem?_getD, Bool.and_eq_true, beq_iff_eq,
+                decide_eq_true_eq, List.isEmpty_iff] at hcheck
+              simp only [hk, Option.some.injEq, jumpsOkNodeM, Bool.and_eq_true] at hjump
               have hentry := hc k e g hk hget
               have hjentry := hj k e g hk hget
               have hempty : ms[k]?.getD [] = [] := hcheck.1.2
@@ -1236,60 +1263,60 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
                   have hinter : devm'.stack = S1 ++ base :=
                     (List.cons.inj hs).2.symm
                   have hje : jumpdestOk code t.toNat = true := by
-                    simpa [hcheck.1.1.1.2] using hjump.1
+                    simpa only [hcheck.1.1.1.2] using hjump.1
                   have hjp : jumpable sevm.code t.toNat = true := by
                     rw [hcode]
                     exact jumpable_of_jumpdestOk hje
                   have hentry' :
                       checkNodeM code c.entries ms b e.rets t.toNat e.frame (ms.getD k []) g = true := by
-                    simpa [hcheck.1.1.1.2] using hentry
+                    simpa only [List.getD_eq_getElem?_getD, hcheck.1.1.1.2] using hentry
                   cases hidx : e.frame.findIdx? (· == .ret) with
                   | none =>
                     have hcall : callCompat 0 a' e.frame = true := by
-                      simpa [hidx] using hcheck.2
+                      simpa only [hidx] using hcheck.2
                     have hret_no : ∀ x, x ∈ e.frame → x ≠ AVal.ret :=
                       ret_not_mem_of_findIdx_none hidx
                     rcases frameMatches_callCompat hcall htail with
                       ⟨Sf, Sr, hsplit, hframee, hframer⟩
                     have hstacke : devm'.stack = Sf ++ (Sr ++ base) := by
                       rw [hinter, hsplit]
-                      simp [List.append_assoc]
+                      simp only [List.append_assoc]
                     have hretno : ¬ RetIn e.frame (ms.getD k []) := by
                       intro hret
                       rcases hret with hret | hret
                       · exact hret_no AVal.ret hret rfl
-                      · simp [List.getD_eq_getElem?_getD, hempty] at hret
+                      · simp only [List.getD_eq_getElem?_getD, hempty, List.map_nil,
+                        List.not_mem_nil] at hret
                     have hrec := ihrun t.toNat e.rets e.frame 0 Sf (Sr ++ base) (ms.getD k [])
                       hentry' hjentry hstacke hframee hmemc (fun h => (hretno h).elim)
                     rcases hrec with ⟨hret, Sret, hst, hlen, hchildcont⟩
                     exact (hretno hret).elim
                   | some i =>
                     cases haidx : a'[i]? with
-                    | none => simp [hidx, haidx] at hcheck
+                    | none => simp only [hidx, haidx, Bool.false_eq_true, and_false] at hcheck
                     | some av =>
                       cases av with
-                      | ret => simp [hidx, haidx] at hcheck
-                      | unk => simp [hidx, haidx] at hcheck
+                      | ret => simp only [hidx, haidx, Bool.false_eq_true, and_false] at hcheck
+                      | unk => simp only [hidx, haidx, Bool.false_eq_true, and_false] at hcheck
                       | const r =>
                         have hcall : callCompat r a' e.frame = true ∧
                             byteAt code r.toNat = some (Jinst.toUInt8 .jumpdest) ∧
                             checkNodeM code c.entries ms b m (r.toNat + 1)
                               (List.replicate e.rets .unk ++
                                 a'.drop e.frame.length) [] dcont = true := by
-                          simpa [hidx, haidx, Bool.and_eq_true] using hcheck.2
+                          simpa only [hidx, haidx, Bool.and_eq_true, beq_iff_eq] using hcheck.2
                         rcases frameMatches_callCompat hcall.1 htail with
                           ⟨Sf, Sr, hsplit, hframee, hframer⟩
                         have hstacke : devm'.stack = Sf ++ (Sr ++ base) := by
                           rw [hinter, hsplit]
-                          simp [List.append_assoc]
+                          simp only [List.append_assoc]
                         have hjr : jumpdestOk code r.toNat = true := by
                           have hh : jumpdestOk code e.pc = true ∧
                               jumpdestOk code r.toNat = true ∧
                                 jumpsOkNodeM code c.entries b dcont
                                   (List.replicate e.rets .unk ++
                                     a'.drop e.frame.length) [] = true := by
-                            simpa [jumpsOkNodeM, hk, hidx, haidx,
-                              Bool.and_eq_true] using hjump
+                            simpa only [hidx, haidx, Bool.and_eq_true] using hjump
                           exact hh.2.1
                         have hrec := ihrun t.toNat e.rets e.frame r Sf (Sr ++ base) (ms.getD k [])
                           hentry' hjentry hstacke hframee
@@ -1311,14 +1338,14 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
                           · exact frameMatches_matches hunk
                           · exact frameMatches_matches hframer
                         have hst' : devm''.stack = (Sret ++ Sr) ++ base := by
-                          simpa [framec, List.append_assoc] using hst
+                          simpa only [List.append_assoc] using hst
                         have hretc : RetIn framec [] → AVal.ret ∈ a' := by
                           intro h
                           rcases h with h | h
                           · rcases List.mem_append.mp h with h | h
-                            · simp at h
+                            · simp only [List.mem_replicate, ne_eq, reduceCtorEq, and_false] at h
                             · exact List.mem_of_mem_drop h
-                          · simp at h
+                          · simp only [List.map_nil, List.not_mem_nil] at h
                         have hρc : RetIn framec [] →
                             jumpdestOk code ρ.toNat = true := by
                           intro h
@@ -1326,14 +1353,14 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
                         have hcheckc :
                             checkNodeM code c.entries ms b m r.toNat framec []
                               (.dest dcont) = true := by
-                          simp [framec, checkNodeM, hcall.2.1, hcall.2.2]
+                          simp only [checkNodeM, hcall.2.1, BEq.rfl, hcall.2.2, Bool.and_self,
+                            framec]
                         have hjumpc : jumpsOkNodeM code c.entries b
                             (.dest dcont) framec [] = true := by
                           have hh : jumpdestOk code e.pc = true ∧
                               jumpdestOk code r.toNat = true ∧
                                 jumpsOkNodeM code c.entries b dcont framec [] = true := by
-                            simpa [framec, jumpsOkNodeM, hk, hidx, haidx,
-                              Bool.and_eq_true] using hjump
+                            simpa only [hidx, haidx, Bool.and_eq_true] using hjump
                           exact hh.2.2
                         cases o with
                         | halted post =>
@@ -1360,21 +1387,21 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
                           subst d
                           subst s0
                           exact ⟨Exec.cont (jump_cont_exact h_at hjp hpop) exct⟩
-          | branch _ _ => simp [checkNodeM] at hcheck
-          | branchTo _ _ => simp [checkNodeM] at hcheck
-          | last _ => simp [checkNodeM] at hcheck
-          | next _ _ => simp [checkNodeM] at hcheck
-          | jump _ => simp [checkNodeM] at hcheck
-          | callNext _ _ => simp [checkNodeM] at hcheck
-          | ret => simp [checkNodeM] at hcheck
-          | pcAt _ _ => simp [checkNodeM] at hcheck
-          | undefined => simp [checkNodeM] at hcheck)
+          | branch _ _ => simp only [checkNodeM, Bool.false_eq_true] at hcheck
+          | branchTo _ _ => simp only [checkNodeM, Bool.false_eq_true] at hcheck
+          | last _ => simp only [checkNodeM, Bool.false_eq_true] at hcheck
+          | next _ _ => simp only [checkNodeM, Bool.false_eq_true] at hcheck
+          | jump _ => simp only [checkNodeM, Bool.false_eq_true] at hcheck
+          | callNext _ _ => simp only [checkNodeM, Bool.false_eq_true] at hcheck
+          | ret => simp only [checkNodeM, Bool.false_eq_true] at hcheck
+          | pcAt _ _ => simp only [checkNodeM, Bool.false_eq_true] at hcheck
+          | undefined => simp only [checkNodeM, Bool.false_eq_true] at hcheck)
     (fun {devm devm' p f o} hstepPc _ ih => by
       intro pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
       have hcheck' :
           (bytesAt code pc (Ninst.toBytes (Ninst.reg .pc)) = true ∧ p = pc) ∧
             checkNodeM code c.entries ms b m (pc + 1) (.const (Nat.toB256 pc) :: a) μ f = true := by
-        simpa [checkNodeM] using hcheck
+        simpa only [checkNodeM, Bool.and_eq_true, beq_iff_eq] using hcheck
       obtain ⟨⟨hbytes, rfl⟩, hchild⟩ := hcheck'
       have h_at : Ninst.At sevm.code p (Ninst.reg .pc) := by
         apply Ninst.at_of_slice
@@ -1387,17 +1414,19 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
           FrameMatches ρ (.const (Nat.toB256 p) :: a) (Nat.toB256 p :: S) :=
         List.Forall₂.cons rfl hframe
       have hrec := ih (p + 1) m (.const (Nat.toB256 p) :: a) ρ (Nat.toB256 p :: S) base μ
-        hchild (by simpa [jumpsOkNodeM] using hjump) hstack' hframe'
+        hchild (by simpa only [jumpsOkNodeM] using hjump) hstack' hframe'
         (hmem.of_memory_eq (pc_stepRun_memory hstepPc).symm) (by
           intro h
-          exact hρ (RetIn.of_frame (fun h => by simpa using h) h))
+          exact hρ (RetIn.of_frame (fun h => by simpa only [List.mem_cons, reduceCtorEq,
+            false_or] using h) h))
       cases o with
       | halted post =>
         rcases hrec with ⟨exc⟩
         exact Ninst.exec_of_stepRun (xl := .none) h_at trivial hstepPc ⟨exc⟩
       | returned devm'' =>
         rcases hrec with ⟨hret, Sret, hst, hlenret, hcont⟩
-        refine ⟨RetIn.of_frame (fun h => by simpa using h) hret, Sret, hst, hlenret, ?_⟩
+        refine ⟨RetIn.of_frame (fun h => by simpa only [List.mem_cons, reduceCtorEq,
+          false_or] using h) hret, Sret, hst, hlenret, ?_⟩
         intro r hr
         rcases hcont hr with ⟨exc⟩
         exact Ninst.exec_of_stepRun (xl := .none) h_at trivial hstepPc ⟨exc⟩)
@@ -1414,14 +1443,23 @@ theorem lift_exactM_core {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
     Nonempty (Exec 0 sevm pre (.ok post)) := by
   obtain ⟨e, f, cs, rfl, hepc, hef, hm0⟩ := hstart
   rcases hrun with ⟨f0, hf0, hrf⟩
-  have hf0' : f0 = f := by simpa [Cert.prog] using hf0.symm
+  have hf0' : f0 = f := by simpa only [Cert.prog, List.map_cons, List.length_cons, List.length_map,
+    lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos, List.getElem_cons_zero,
+    Option.some.injEq] using hf0.symm
   subst f0
-  have hf := hc 0 e f (by simp [Cert.entries]) (by simp [Cert.prog])
-  have hentry := hj 0 e f (by simp [Cert.entries]) (by simp [Cert.prog])
+  have hf := hc 0 e f (by simp only [Cert.entries, List.map_cons, List.length_cons, List.length_map,
+    lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos, List.getElem_cons_zero]) (by simp only [Cert.prog, List.map_cons,
+    List.length_cons, List.length_map, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true,
+    getElem?_pos, List.getElem_cons_zero])
+  have hentry := hj 0 e f (by simp only [Cert.entries, List.map_cons, List.length_cons,
+    List.length_map, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos,
+    List.getElem_cons_zero]) (by simp only [Cert.prog, List.map_cons,
+    List.length_cons, List.length_map, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true,
+    getElem?_pos, List.getElem_cons_zero])
   rw [hm0, hepc, hef] at hf
   rw [hm0, hef] at hentry
   exact node_exactM hc hj hcode hfork hrf 0 e.rets [] 0 [] pre.stack [] hf hentry rfl
-    (by simp [FrameMatches]) (memMatches_nil _ _) (fun h => absurd h retIn_nil_nil)
+    (by simp only [FrameMatches, List.forall₂_nil_right_iff]) (memMatches_nil _ _) (fun h => absurd h retIn_nil_nil)
 
 /-- The top-level gas-exact converse. -/
 theorem lift_exact {code : ByteArray} {c : Cert}
@@ -1433,11 +1471,13 @@ theorem lift_exact {code : ByteArray} {c : Cert}
   apply lift_exactM_core (Cert.checkedM_of_check hc) (Cert.jumpsOkM_of_jumpsOk hj) _
     hcode hfork hrun
   cases c with
-  | nil => simp [Cert.check] at hc
+  | nil => simp only [Cert.check, List.all_nil, Bool.and_true, Bool.false_eq_true] at hc
   | cons p cs =>
     rcases p with ⟨e, f⟩
-    simp [Cert.check] at hc
-    exact ⟨e, f, cs, rfl, by simpa using hc.1.1, by simpa using hc.1.2, by simp⟩
+    simp only [Cert.check, List.beq_nil_eq, List.all_cons, Bool.and_eq_true, beq_iff_eq,
+      List.isEmpty_iff, List.all_eq_true, Prod.forall] at hc
+    exact ⟨e, f, cs, rfl, by simpa only using hc.1.1, by simpa only using hc.1.2, by simp only [List.getD_eq_getElem?_getD,
+      List.length_nil, lt_self_iff_false, not_false_eq_true, getElem?_neg, Option.getD_none]⟩
 
 /-- **The gas-exact converse, with a constant memory map.** -/
 theorem lift_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
@@ -1449,7 +1489,8 @@ theorem lift_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
   apply lift_exactM_core (Cert.checkedM_of_checkM hc) (Cert.jumpsOkM_of_jumpsOkM hj) _
     hcode hfork hrun
   cases c with
-  | nil => simp [Cert.checkM] at hc
+  | nil => simp only [Cert.checkM, List.getD_eq_getElem?_getD, Bool.false_and,
+    Bool.false_eq_true] at hc
   | cons p cs =>
     rcases p with ⟨e, f⟩
     simp only [Cert.checkM, Bool.and_eq_true, beq_iff_eq, List.isEmpty_iff] at hc

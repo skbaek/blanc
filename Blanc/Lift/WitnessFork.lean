@@ -61,7 +61,7 @@ theorem childStart_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork
       cases hr : frameEnterS cp.f c.acs with
       | run e => simp only [FrameEntry.withFork, hN, hN', ↓reduceIte, Option.map_some]; rfl
       | done r => rfl
-    · have h1 : frameEntryForkFree cp.f = false := by simpa using hN
+    · have h1 : frameEntryForkFree cp.f = false := by simpa only [Bool.not_eq_true] using hN
       have h2 : frameEntryForkFree (cp.withFork g).f = false := h1
       simp only [h1, h2, Bool.false_eq_true, ↓reduceIte]
       split <;> split <;> rfl
@@ -117,7 +117,7 @@ theorem callResume_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork
             cases hr : frameEnterS cp.f c.acs with
             | run e => rfl
             | done r => rfl
-          · have h1 : frameEntryForkFree cp.f = false := by simpa using hN
+          · have h1 : frameEntryForkFree cp.f = false := by simpa only [Bool.not_eq_true] using hN
             have h2 : frameEntryForkFree (cp.withFork g).f = false := h1
             simp only [h1, h2, Bool.false_eq_true, and_false, ↓reduceIte]
             split <;> split <;> rfl

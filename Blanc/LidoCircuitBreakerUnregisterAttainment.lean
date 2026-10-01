@@ -153,7 +153,7 @@ theorem setPauserKernel_routeTo_oldCountArm_ok (dp : DeployParams)
             Prog.SourceStep.rest) ++ [Prog.SourceStep.branchLeft] ++
           List.replicate pauseKernelAppendPrefix.length Prog.SourceStep.rest) ++
             [Prog.SourceStep.branchLeft] = kernelOldCountSteps := by
-    simp [kernelOldCountSteps]
+    simp only [List.nil_append, List.append_assoc, List.cons_append, kernelOldCountSteps]
   exact pathEq ▸ armRoute c wNc tail3
 
 /-- The `setPauser.oldCount` row on a successful walk. -/
@@ -199,7 +199,9 @@ theorem setPauserKernel_routeTo_removeTarget_ok (dp : DeployParams)
   refine routeTo_next tail2 (fun e erun tail3 => ?_)
   have wNe := wNd.acrossNinst (Ninst.Run.of_runCompiled erun)
   refine routeTo_call (body := afterOldPauser) tail3
-    (by simp [runtime, aux, afterOldPauserSlot]) (fun f fburn tail4 => ?_)
+    (by simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      afterOldPauserSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]) (fun f fburn tail4 => ?_)
   have wNf := MemWordAt.of_memory_eq fburn.memory.symm wNe
   refine routeTo_line (memoryZeroCheck newPauserWord) tail4
     (fun g grun tail5 => ?_)
@@ -209,7 +211,9 @@ theorem setPauserKernel_routeTo_removeTarget_ok (dp : DeployParams)
       decide)
     (fun _armStart arm => ?_)
   exact routeTo_call (body := removeTarget) arm
-    (by simp [runtime, aux, removeTargetSlot])
+    (by simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      removeTargetSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero])
     (fun i _iburn tail6 => bodyRoute i tail6)
 
 /-! ## The whole route, at the unregistration world -/
@@ -308,7 +312,7 @@ theorem attainable_adminRegistry_of_route {row : RuntimePersistentWrite}
   have routedMember : site ∈ runtimePersistentSourceSites officialParams := by
     unfold runtimePersistentSourceSites
     rw [List.mem_filter]
-    exact ⟨hmem, by simp [hinstrTarget, isPersistentWriteInstruction]⟩
+    exact ⟨hmem, by simp only [isPersistentWriteInstruction, hinstrTarget]⟩
   have siteEq : rowSite = site :=
     runtimePersistentSourceSite_eq_of_pc
       (RuntimePersistentWrite.mem_runtimePersistentSourceSites foundSite)
@@ -327,7 +331,7 @@ theorem attainable_adminRegistry_of_route {row : RuntimePersistentWrite}
   subst rowEq
   have roleEq : role = .adminRegistry := by
     have alternatives : role = .adminRegistry ∨ role = .pauseRegistry := by
-      simpa [roles] using rolePermitted
+      simpa only [roles, List.mem_cons, List.not_mem_nil, or_false] using rolePermitted
     rcases alternatives with rfl | rfl
     · rfl
     · exfalso

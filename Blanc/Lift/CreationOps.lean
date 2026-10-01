@@ -24,7 +24,7 @@ theorem rx_push0 {le : ([] : Bytes).length ≤ 32} (hroom : S.length < 1024)
     (k : SFunc.RunExact fs sevm (St b (0 :: S) M G) f o) :
     SFunc.RunExact fs sevm (St b S M (G + 2)) (.next (.push [] le) f) o :=
   .next (Ninst.runCompiled_pushBytes (devm := St b S M (G + 2)) (c := gBase) (G := G)
-    (by simp [pushCost]) rfl hroom) k
+    (by simp only [pushCost, ↓reduceIte]) rfl hroom) k
 
 /-- `SLT`. -/
 theorem rx_slt {x y v : B256} (hv : B256.sltCheck x y = v) (hroom : S.length < 1024)

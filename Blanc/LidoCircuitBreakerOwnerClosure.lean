@@ -257,7 +257,7 @@ theorem Exec.CoreRuntimeOwnerClosed.error
     {error : EvmError × Devm} :
     Exec.CoreRuntimeOwnerClosed dp ca pc sevm pre (.error error) := by
   intro run committed
-  simp [Execution.commits] at committed
+  simp only [Execution.commits, Bool.false_eq_true] at committed
 
 /-- A successful nonrecursive step in a foreign frame contributes no owner
 frame; every retained descendant is supplied by the continuation. -/
@@ -436,28 +436,34 @@ theorem Exec.CoreRuntimeOwnerClosed.nextSome
     Exec.CoreRuntimeOwnerClosed dp ca pc sevm pre out := by
   cases n with
   | reg r =>
-      simp [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at hstep
+      simp only [StepRun, step_reg, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at hstep
   | push xs hxs =>
-      simp [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hstep
+      simp only [StepRun, step_push, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at hstep
   | dupn imm =>
-      simp [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at hstep
+      simp only [StepRun, step_dupn, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at hstep
   | swapn imm =>
-      simp [Ninst.StepRun, Ninst.step_swapn, Step.run_ofExecution] at hstep
+      simp only [StepRun, step_swapn, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at hstep
   | exchange imm =>
-      simp [Ninst.StepRun, Ninst.step_exchange, Step.run_ofExecution] at hstep
+      simp only [StepRun, step_exchange, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at hstep
   | exec x =>
       intro run committed installed direct frame member owner
       have hxrun := XStep.run_toStep.mp hstep
       cases hs : Xinst.step sevm pre x with
       | done execution =>
-          simp [hs, XStep.Run] at hxrun
+          simp only [XStep.Run, hs, ExceptT.stM_eq, reduceCtorEq, false_and] at hxrun
       | spawn spawned resume =>
           simp only [hs, XStep.Run] at hxrun
           obtain ⟨result, hframe, hresume⟩ := hxrun
           cases result with
           | error error =>
               cases resume <;>
-                simp [Resume.run, liftToExecution] at hresume
+                simp only [ExceptT.stM_eq, Resume.run, liftToExecution, Except.bind_error,
+                  reduceCtorEq] at hresume
           | ok settled =>
               have henter := (RunFrame.some_inv hframe).1
               have hsettle := (RunFrame.some_inv hframe).2
@@ -515,7 +521,7 @@ theorem Exec.CoreRuntimeOwnerClosed.nextSome
                   ⟨benv, htransfer, hinit⟩
                 have hcadrInit :=
                   congrArg (fun e : Evm => e.sta.codeAddress) hinit
-                dsimp [initEvm, initSevm, Msg.withBenv] at hcadrInit
+                dsimp only [Msg.withBenv, initEvm, initSevm] at hcadrInit
                 rw [hcadrInit, hcadr, hinnerTarget]
               have hchildRel :
                   Xlot.Rel Devm.CodePreserve (.some ⟨cevm, raw⟩) :=
@@ -553,12 +559,12 @@ theorem Exec.CoreRuntimeOwnerClosed.nextSome
                   · apply childClosed (Exec.Frame.ofRun child childCommits)
                     · unfold Exec.committedFrames
                       rw [dif_pos childCommits]
-                      simp
+                      simp only [mem_cons, true_or]
                     · simpa only [Exec.Frame.ofRun] using owner
                   · apply childClosed frame
                     · unfold Exec.committedFrames
                       rw [dif_pos childCommits]
-                      simp [hchild]
+                      simp only [mem_cons, hchild, or_true]
                     · exact owner
                   · apply tail frame
                     · unfold Exec.committedFrames
@@ -601,7 +607,7 @@ private theorem Exec.runtimeDescendantOwnerClosure :
   case halt curPc s d e hstep =>
       intro dp ca rootPc rootPre rootOut rootRun invocation sameFrame installed hdeeper
         frame member owner
-      simp [Exec.descendantFrames] at member
+      simp only [Exec.descendantFrames, not_mem_nil] at member
   case cont curPc s d nextPc nextPre e hstep next ih =>
       intro dp ca rootPc rootPre rootOut rootRun invocation sameFrame installed hdeeper
         frame member owner
@@ -622,7 +628,7 @@ private theorem Exec.runtimeDescendantOwnerClosure :
   case doneErr curPc s d spawned resume nextPc settled e hstep henter hresume =>
       intro dp ca rootPc rootPre rootOut rootRun invocation sameFrame installed hdeeper
         frame member owner
-      simp [Exec.descendantFrames] at member
+      simp only [Exec.descendantFrames, not_mem_nil] at member
   case doneOk curPc s d spawned resume nextPc settled nextPre e hstep henter
       hresume next ih =>
       intro dp ca rootPc rootPre rootOut rootRun invocation sameFrame installed hdeeper
@@ -646,7 +652,7 @@ private theorem Exec.runtimeDescendantOwnerClosure :
       hresume ihChild =>
       intro dp ca rootPc rootPre rootOut rootRun invocation sameFrame installed hdeeper
         frame member owner
-      simp [Exec.descendantFrames] at member
+      simp only [Exec.descendantFrames, not_mem_nil] at member
   case runOk curPc s d spawned resume nextPc cevm raw nextPre e hstep henter
       child hresume next ihChild ihNext =>
       intro dp ca rootPc rootPre rootOut rootRun invocation sameFrame installed hdeeper
@@ -683,7 +689,7 @@ private theorem Exec.runtimeDescendantOwnerClosure :
               exact not_delegation_of_compile installed)
         rcases Frame.enter_run_inv henter with ⟨benv, htransfer, hinit⟩
         have hcadrInit := congrArg (fun e : Evm => e.sta.codeAddress) hinit
-        dsimp [initEvm, initSevm, Msg.withBenv] at hcadrInit
+        dsimp only [Msg.withBenv, initEvm, initSevm] at hcadrInit
         rw [hcadrInit, hcadr, hinnerTarget]
       have hdepth : cevm.sta.depth < s.depth := by
         rw [Frame.enter_run_depth henter]
@@ -717,11 +723,11 @@ private theorem Exec.runtimeDescendantOwnerClosure :
             (Exec.Frame.ofRun child childCommits)
             (by unfold Exec.committedFrames
                 rw [dif_pos childCommits]
-                simp) owner
+                simp only [mem_cons, true_or]) owner
         · exact childClosed child childCommits hchildAt hchildDirect retained
             (by unfold Exec.committedFrames
                 rw [dif_pos childCommits]
-                simp [childMember]) owner
+                simp only [mem_cons, childMember, or_true]) owner
         · exact nextClosed retained nextMember owner
       · rw [Exec.descendantFrames_runOk_of_not_settlementCommits
           hstep henter child hresume next childSettles] at member

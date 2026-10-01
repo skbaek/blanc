@@ -46,7 +46,7 @@ theorem requireStaticArgs_body_of_sufficient_calldata
   have p2 := prefix_of_push (of_run_calldatasize qsize) p1
   have p3 := prefix_of_lt qlt p2
   have pZero : (0 : B256) :: tail <<+ testPre.stack := by
-    simpa [hsize] using p3
+    simpa only [hsize, List.append_eq, List.nil_append] using p3
   obtain ⟨bodyPre, hpop, bodyRun, pBody⟩ :=
     Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
   have bodyStor : Devm.getStor pre = Devm.getStor bodyPre :=
@@ -136,7 +136,7 @@ theorem onlyRole_route
     rw [← congrFun keyStor sevm.currentTarget]
   by_cases hnonzero : membership ≠ 0
   · have pZero : (0 : B256) :: tail <<+ testPre.stack := by
-      simpa [B256.eqCheck, hnonzero] using pTest
+      simpa only [B256.eqCheck, hnonzero, ↓reduceIte] using pTest
     obtain ⟨bodyPre, hpop, bodyRun, pBody⟩ :=
       Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
     have bodyStor : Devm.getStor pre = Devm.getStor bodyPre :=
@@ -152,9 +152,9 @@ theorem onlyRole_route
       rw [← membershipAtEntry]
       exact hnonzero
     exact .authorized bodyPre hasRole bodyRun pBody bodyStor
-  · have hzero : membership = 0 := by simpa using hnonzero
+  · have hzero : membership = 0 := by simpa only [ne_eq, Decidable.not_not] using hnonzero
     have pOne : (1 : B256) :: tail <<+ testPre.stack := by
-      simpa [B256.eqCheck, hzero] using pTest
+      simpa only [B256.eqCheck, hzero, ↓reduceIte] using pTest
     obtain ⟨callPre, _, -, hpop, callRun, pCall⟩ :=
       Func.RunCompiledTo.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) pOne branchRun
@@ -189,9 +189,11 @@ theorem onlyRole_body_of_ok
   | missingRole callPre membershipZero callRun stack storage =>
     have hget : ((runtime dp).main :: (runtime dp).aux)[missingRoleSlot]? =
         some (runtimeError "AccessControlUnauthorizedAccount" []) := by
-      simp [runtime, aux, baseAux, missingRoleSlot]
+      simp only [runtime, aux, baseAux, List.cons_append, List.nil_append, List.append_assoc,
+        missingRoleSlot, List.length_cons, lt_add_iff_pos_left, add_pos_iff, Nat.ofNat_pos, or_true,
+        getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
     exact (Func.RunCompiledTo.not_ok_call_revertSelector
-      (by simpa [runtimeError] using hget) callRun).elim
+      (by simpa only [runtimeError] using hget) callRun).elim
 
 end LidoTriggerableWithdrawalsGateway
 end Blanc

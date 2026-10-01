@@ -12,25 +12,26 @@ theorem dispatch_deposit {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome}
     (hsel : Sevm.selector sevm = 0x22895118)
     (k : SFunc.RunExact prog sevm (St b [Sevm.selector sevm] mem0 g) t_00a4_c32 o) :
     SFunc.RunExact prog sevm (St b [] Mem.empty (g + 95)) t_0000_c0 o := by
-  refine rx_push rfl (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_push rfl (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
   refine rx_mstore (c := 12) (M' := mem0) ?_ (by rw [show (Bytes.toB256 [0x40]).toNat = 64 by decide]; rfl) ?_
   · rw [St.extCost_eq (n := 0) rfl]; decide
-  refine rx_push rfl (by simp) ?_
-  refine rx_calldatasize (by simp) ?_
-  refine rx_lt (v := 0) ?_ (by simp) ?_
+  refine rx_push rfl (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_calldatasize (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.one_lt_ofNat]) ?_
+  refine rx_lt (v := 0) ?_ (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   · rw [B256.ltCheck, ite_eq_right]
     intro h
     have h1 := B256.toNat_lt_toNat h
     rw [B256.toNat_toB256_of_lt h_len'] at h1
     have h4 : (Bytes.toB256 [0x04]).toNat = 4 := by decide
     omega
-  refine rx_push rfl (by simp) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
   refine rx_branch_zero ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_calldataload (by simp) ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_shr (v := Sevm.selector sevm) ?_ (by simp) ?_
+  refine rx_push rfl (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_calldataload (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_shr (v := Sevm.selector sevm) ?_ (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   · rw [show (Bytes.toB256 [0xe0]).toNat = 224 by decide,
       show Bytes.toB256 [0x00] = 0 by decide]
     rfl
@@ -116,41 +117,61 @@ theorem offset0 {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome} {sel : B256}
   have hoff : B256.gtCheck (argOff sevm 0) (Nat.toB256 (2 ^ 32)) = 0 :=
     gtCheck_eq_zero_of_toNat_le (by rw [hmax]; exact ho)
   have hbound : B256.gtCheck ((4 + argOff sevm 0) + 32) sevm.data.length.toB256 = 0 :=
-    gtCheck_eq_zero_of_toNat_le (by simpa [hlen] using hh)
+    gtCheck_eq_zero_of_toNat_le (by simpa only [hlen] using hh)
   refine rx_dest ?_
-  refine rx_dup2 (S := [0x01b8, sel]) (by simp) ?_
-  refine rx_add' (v := sevm.data.length.toB256) (by rw [hcancel']) (by simp) ?_
+  refine rx_dup2 (S := [0x01b8, sel]) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := sevm.data.length.toB256) (by rw [hcancel']) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap1 ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_dup2 (S := [sevm.data.length.toB256, 0x01b8, sel]) (by simp) ?_
-  refine rx_add' (v := 36) (by decide) (by simp) ?_
-  refine rx_dup2 (S := [sevm.data.length.toB256, 0x01b8, sel]) (by simp) ?_
-  refine rx_calldataload (by simp) ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_dup2 (S := [36, 4, sevm.data.length.toB256, 0x01b8, sel]) (by simp) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_dup2 (S := [sevm.data.length.toB256, 0x01b8, sel]) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 36) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup2 (S := [sevm.data.length.toB256, 0x01b8, sel]) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_calldataload (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_dup2 (S := [36, 4, sevm.data.length.toB256, 0x01b8, sel]) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   have hmaxword : Bytes.toB256 [0x01, 0, 0, 0, 0] = Nat.toB256 (2 ^ 32) := by decide
   have harg : argOff sevm 0 = Sevm.dataWord sevm 4 := by
     unfold argOff
     rw [show Nat.toB256 0 = (0 : B256) by decide]
     congr 1
   have hoff' : B256.gtCheck (Sevm.dataWord sevm 4) (Bytes.toB256 [0x01, 0, 0, 0, 0]) = 0 := by
-    simpa [harg, hmaxword] using hoff
-  refine rx_gt (v := 0) hoff' (by simp) ?_
-  refine rx_iszero (v := 1) (by simp [B256.eqCheck]) (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+    simpa only [hmaxword, Nat.reducePow, harg] using hoff
+  refine rx_gt (v := 0) hoff' (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_iszero (v := 1) (by simp only [B256.eqCheck, ↓reduceIte]) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_branch_succ (d := Bytes.toB256 [0, 0xd5]) (w := 1)
     (S := [argOff sevm 0, 36, 4, sevm.data.length.toB256, 0x01b8, sel]) (by decide) ?_
   refine rx_dest ?_
-  refine rx_dup3 (S := [sevm.data.length.toB256, 0x01b8, sel]) (by simp) ?_
-  refine rx_add' (v := 4 + argOff sevm 0) (by simp) (by simp) ?_
-  refine rx_dup4 (S := [0x01b8, sel]) (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_dup3 (S := [sevm.data.length.toB256, 0x01b8, sel]) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 4 + argOff sevm 0) (by simp only) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup4 (S := [0x01b8, sel]) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_dup3 (S := [36, 4, sevm.data.length.toB256, 0x01b8, sel])
-    (by simp) ?_
-  refine rx_add' (v := (4 + argOff sevm 0) + 32) rfl (by simp) ?_
-  refine rx_gt (v := 0) (by simpa using hbound) (by simp) ?_
-  refine rx_iszero (v := 1) (by simp [B256.eqCheck]) (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+    (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := (4 + argOff sevm 0) + 32) rfl (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_gt (v := 0) (by simpa only using hbound) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_iszero (v := 1) (by simp only [B256.eqCheck, ↓reduceIte]) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   exact rx_branch_succ (d := Bytes.toB256 [0, 0xe7]) (w := 1)
     (S := [4 + argOff sevm 0, 36, 4, sevm.data.length.toB256, 0x01b8, sel]) (by decide) k
 
@@ -176,16 +197,25 @@ theorem head_block {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome} {sel : B256}
   have hlt : B256.ltCheck (sevm.data.length.toB256 - 4) (Bytes.toB256 [0x80]) = 0 :=
     ltCheck_eq_zero_of_toNat_le (by rw [h80, hsub]; omega)
   refine rx_dest ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_dup1 (by simp) ?_
-  refine rx_calldatasize (by simp) ?_
-  refine rx_sub' (v := sevm.data.length.toB256 - 4) rfl (by simp) ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_dup2 (by simp) ?_
-  refine rx_lt (v := 0) hlt (by simp) ?_
-  refine rx_iszero (v := 1) (by simp [B256.eqCheck]) (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_dup1 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_calldatasize (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_sub' (v := sevm.data.length.toB256 - 4) rfl (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_dup2 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_lt (v := 0) hlt (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_iszero (v := 1) (by simp only [B256.eqCheck, ↓reduceIte]) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   exact rx_branch_succ (d := Bytes.toB256 [0x00, 0xba]) (w := 1) (by decide) k
 
 /-- The length guard for dynamic argument `0` (`pc 0x00e7`-`0x0109`): `argLen 0 ≤ 2^32` and
@@ -202,31 +232,48 @@ theorem len_block0 {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome} {sel : B256}
     B256.toNat_toB256_of_lt hcd
   have hmax : (Nat.toB256 (2 ^ 32)).toNat = 2 ^ 32 := by decide
   have hguard1 : B256.gtCheck (argPtr sevm 0 + argLen sevm 0) sevm.data.length.toB256 = 0 :=
-    gtCheck_eq_zero_of_toNat_le (by simpa [hlen] using ht.2.2.2)
+    gtCheck_eq_zero_of_toNat_le (by simpa only [hlen] using ht.2.2.2)
   have hguard2 : B256.gtCheck (argLen sevm 0) (Nat.toB256 (2 ^ 32)) = 0 :=
     gtCheck_eq_zero_of_toNat_le (by rw [hmax]; exact ht.2.2.1)
   refine rx_dest ?_
-  refine rx_dup1 (by simp) ?_
-  refine rx_calldataload (by simp) ?_
+  refine rx_dup1 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_calldataload (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_swap1 ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_add' (v := argPtr sevm 0)
-    (by rw [show Bytes.toB256 [0x20] = (32 : B256) by decide]; rfl) (by simp) ?_
+    (by rw [show Bytes.toB256 [0x20] = (32 : B256) by decide]; rfl) (by simp only [List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap2 ?_
-  refine rx_dup (n := 4) rfl (by simp) ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_dup4 (by simp) ?_
+  refine rx_dup (n := 4) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_dup4 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_mul (v := argLen sevm 0)
-    (by rw [show Bytes.toB256 [0x01] = (1 : B256) by decide]; exact mul_one_b256 _) (by simp) ?_
-  refine rx_dup (n := 4) rfl (by simp) ?_
-  refine rx_add' (v := argPtr sevm 0 + argLen sevm 0) rfl (by simp) ?_
-  refine rx_gt (v := 0) hguard1 (by simp) ?_
-  refine rx_push (w := Nat.toB256 (2 ^ 32)) (by decide) (by simp) ?_
-  refine rx_dup4 (by simp) ?_
-  refine rx_gt (v := 0) hguard2 (by simp) ?_
-  refine rx_or (v := 0) (by decide) (by simp) ?_
-  refine rx_iszero (v := 1) (by simp [B256.eqCheck]) (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+    (by rw [show Bytes.toB256 [0x01] = (1 : B256) by decide]; exact mul_one_b256 _) (by simp only [List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 4) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := argPtr sevm 0 + argLen sevm 0) rfl (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_gt (v := 0) hguard1 (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := Nat.toB256 (2 ^ 32)) (by decide) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup4 (by simp only [Nat.reducePow, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_gt (v := 0) hguard2 (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_or (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_iszero (v := 1) (by simp only [B256.eqCheck, ↓reduceIte]) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   exact rx_branch_succ (d := Bytes.toB256 [0x01, 0x09]) (w := 1) (by decide) k
 
 /-- The length guard for dynamic argument `1` (`pc 0x0139`-`0x015b`), argument `0`'s decoded
@@ -243,31 +290,48 @@ theorem len_block1 {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome} {sel : B256}
     B256.toNat_toB256_of_lt hcd
   have hmax : (Nat.toB256 (2 ^ 32)).toNat = 2 ^ 32 := by decide
   have hguard1 : B256.gtCheck (argPtr sevm 1 + argLen sevm 1) sevm.data.length.toB256 = 0 :=
-    gtCheck_eq_zero_of_toNat_le (by simpa [hlen] using ht.2.2.2)
+    gtCheck_eq_zero_of_toNat_le (by simpa only [hlen] using ht.2.2.2)
   have hguard2 : B256.gtCheck (argLen sevm 1) (Nat.toB256 (2 ^ 32)) = 0 :=
     gtCheck_eq_zero_of_toNat_le (by rw [hmax]; exact ht.2.2.1)
   refine rx_dest ?_
-  refine rx_dup1 (by simp) ?_
-  refine rx_calldataload (by simp) ?_
+  refine rx_dup1 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_calldataload (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_swap1 ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_add' (v := argPtr sevm 1)
-    (by rw [show Bytes.toB256 [0x20] = (32 : B256) by decide]; rfl) (by simp) ?_
+    (by rw [show Bytes.toB256 [0x20] = (32 : B256) by decide]; rfl) (by simp only [List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap2 ?_
-  refine rx_dup (n := 4) rfl (by simp) ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_dup4 (by simp) ?_
+  refine rx_dup (n := 4) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_dup4 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_mul (v := argLen sevm 1)
-    (by rw [show Bytes.toB256 [0x01] = (1 : B256) by decide]; exact mul_one_b256 _) (by simp) ?_
-  refine rx_dup (n := 4) rfl (by simp) ?_
-  refine rx_add' (v := argPtr sevm 1 + argLen sevm 1) rfl (by simp) ?_
-  refine rx_gt (v := 0) hguard1 (by simp) ?_
-  refine rx_push (w := Nat.toB256 (2 ^ 32)) (by decide) (by simp) ?_
-  refine rx_dup4 (by simp) ?_
-  refine rx_gt (v := 0) hguard2 (by simp) ?_
-  refine rx_or (v := 0) (by decide) (by simp) ?_
-  refine rx_iszero (v := 1) (by simp [B256.eqCheck]) (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+    (by rw [show Bytes.toB256 [0x01] = (1 : B256) by decide]; exact mul_one_b256 _) (by simp only [List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 4) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := argPtr sevm 1 + argLen sevm 1) rfl (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_gt (v := 0) hguard1 (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := Nat.toB256 (2 ^ 32)) (by decide) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup4 (by simp only [Nat.reducePow, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_gt (v := 0) hguard2 (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_or (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_iszero (v := 1) (by simp only [B256.eqCheck, ↓reduceIte]) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   exact rx_branch_succ (d := Bytes.toB256 [0x01, 0x5b]) (w := 1) (by decide) k
 
 /-- The length guard for dynamic argument `2` (`pc 0x018b`-`0x01ad`), arguments `0` and `1`'s
@@ -286,31 +350,48 @@ theorem len_block2 {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome} {sel : B256}
     B256.toNat_toB256_of_lt hcd
   have hmax : (Nat.toB256 (2 ^ 32)).toNat = 2 ^ 32 := by decide
   have hguard1 : B256.gtCheck (argPtr sevm 2 + argLen sevm 2) sevm.data.length.toB256 = 0 :=
-    gtCheck_eq_zero_of_toNat_le (by simpa [hlen] using ht.2.2.2)
+    gtCheck_eq_zero_of_toNat_le (by simpa only [hlen] using ht.2.2.2)
   have hguard2 : B256.gtCheck (argLen sevm 2) (Nat.toB256 (2 ^ 32)) = 0 :=
     gtCheck_eq_zero_of_toNat_le (by rw [hmax]; exact ht.2.2.1)
   refine rx_dest ?_
-  refine rx_dup1 (by simp) ?_
-  refine rx_calldataload (by simp) ?_
+  refine rx_dup1 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_calldataload (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_swap1 ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_add' (v := argPtr sevm 2)
-    (by rw [show Bytes.toB256 [0x20] = (32 : B256) by decide]; rfl) (by simp) ?_
+    (by rw [show Bytes.toB256 [0x20] = (32 : B256) by decide]; rfl) (by simp only [List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap2 ?_
-  refine rx_dup (n := 4) rfl (by simp) ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_dup4 (by simp) ?_
+  refine rx_dup (n := 4) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_dup4 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_mul (v := argLen sevm 2)
-    (by rw [show Bytes.toB256 [0x01] = (1 : B256) by decide]; exact mul_one_b256 _) (by simp) ?_
-  refine rx_dup (n := 4) rfl (by simp) ?_
-  refine rx_add' (v := argPtr sevm 2 + argLen sevm 2) rfl (by simp) ?_
-  refine rx_gt (v := 0) hguard1 (by simp) ?_
-  refine rx_push (w := Nat.toB256 (2 ^ 32)) (by decide) (by simp) ?_
-  refine rx_dup4 (by simp) ?_
-  refine rx_gt (v := 0) hguard2 (by simp) ?_
-  refine rx_or (v := 0) (by decide) (by simp) ?_
-  refine rx_iszero (v := 1) (by simp [B256.eqCheck]) (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+    (by rw [show Bytes.toB256 [0x01] = (1 : B256) by decide]; exact mul_one_b256 _) (by simp only [List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 4) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := argPtr sevm 2 + argLen sevm 2) rfl (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_gt (v := 0) hguard1 (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := Nat.toB256 (2 ^ 32)) (by decide) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup4 (by simp only [Nat.reducePow, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_gt (v := 0) hguard2 (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_or (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_iszero (v := 1) (by simp only [B256.eqCheck, ↓reduceIte]) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   exact rx_branch_succ (d := Bytes.toB256 [0x01, 0xad]) (w := 1) (by decide) k
 
 /-- The swap dance restaging argument `0`'s `(len, ptr)` and recomputing `argOff 1` (`pc 0x0109`
@@ -332,7 +413,7 @@ theorem tail1 {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome} {sel : B256}
   have hguard1 : B256.gtCheck (argOff sevm 1) (Nat.toB256 (2 ^ 32)) = 0 :=
     gtCheck_eq_zero_of_toNat_le (by rw [hmax]; exact ht.1)
   have hguard2 : B256.gtCheck ((4 + argOff sevm 1) + 32) sevm.data.length.toB256 = 0 :=
-    gtCheck_eq_zero_of_toNat_le (by simpa [hlen] using ht.2.1)
+    gtCheck_eq_zero_of_toNat_le (by simpa only [hlen] using ht.2.1)
   refine rx_dest ?_
   refine rx_swap2 ?_
   refine rx_swap (n := 3) rfl ?_
@@ -340,28 +421,46 @@ theorem tail1 {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome} {sel : B256}
   refine rx_swap3 ?_
   refine rx_swap1 ?_
   refine rx_swap2 ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_dup2 (by simp) ?_
-  refine rx_add' (v := 68) (by decide) (by simp) ?_
+  refine rx_push rfl (by simp only [List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup2 (by simp only [List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 68) (by decide) (by simp only [List.set_cons_zero, List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap1 ?_
-  refine rx_calldataload (by simp) ?_
+  refine rx_calldataload (by simp only [List.set_cons_zero, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   rw [← hoff1]
-  refine rx_push (w := Nat.toB256 (2 ^ 32)) (by decide) (by simp) ?_
-  refine rx_dup2 (by simp) ?_
-  refine rx_gt (v := 0) hguard1 (by simp) ?_
-  refine rx_iszero (v := 1) (by simp [B256.eqCheck]) (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_push (w := Nat.toB256 (2 ^ 32)) (by decide) (by simp only [List.set_cons_zero,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup2 (by simp only [Nat.reducePow, List.set_cons_zero, List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_gt (v := 0) hguard1 (by simp only [List.set_cons_zero, List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_iszero (v := 1) (by simp only [B256.eqCheck, ↓reduceIte]) (by simp only [List.set_cons_zero,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_branch_succ (d := Bytes.toB256 [0x01, 0x27]) (w := 1) (by decide) ?_
   refine rx_dest ?_
-  refine rx_dup3 (by simp) ?_
-  refine rx_add' (v := 4 + argOff sevm 1) rfl (by simp) ?_
-  refine rx_dup4 (by simp) ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_dup3 (by simp) ?_
-  refine rx_add' (v := (4 + argOff sevm 1) + 32) rfl (by simp) ?_
-  refine rx_gt (v := 0) hguard2 (by simp) ?_
-  refine rx_iszero (v := 1) (by simp [B256.eqCheck]) (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_dup3 (by simp only [List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 4 + argOff sevm 1) rfl (by simp only [List.set_cons_zero, List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup4 (by simp only [List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup3 (by simp only [List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := (4 + argOff sevm 1) + 32) rfl (by simp only [List.set_cons_zero,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_gt (v := 0) hguard2 (by simp only [List.set_cons_zero, List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_iszero (v := 1) (by simp only [B256.eqCheck, ↓reduceIte]) (by simp only [List.set_cons_zero,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   exact rx_branch_succ (d := Bytes.toB256 [0x01, 0x39]) (w := 1) (by decide) k
 
 /-- The swap dance restaging arguments `0,1`'s `(len, ptr)` and recomputing `argOff 2`
@@ -383,7 +482,7 @@ theorem tail2 {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome} {sel : B256}
   have hguard1 : B256.gtCheck (argOff sevm 2) (Nat.toB256 (2 ^ 32)) = 0 :=
     gtCheck_eq_zero_of_toNat_le (by rw [hmax]; exact ht.1)
   have hguard2 : B256.gtCheck ((4 + argOff sevm 2) + 32) sevm.data.length.toB256 = 0 :=
-    gtCheck_eq_zero_of_toNat_le (by simpa [hlen] using ht.2.1)
+    gtCheck_eq_zero_of_toNat_le (by simpa only [hlen] using ht.2.1)
   refine rx_dest ?_
   refine rx_swap2 ?_
   refine rx_swap (n := 3) rfl ?_
@@ -391,28 +490,46 @@ theorem tail2 {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome} {sel : B256}
   refine rx_swap3 ?_
   refine rx_swap1 ?_
   refine rx_swap2 ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_dup2 (by simp) ?_
-  refine rx_add' (v := 100) (by decide) (by simp) ?_
+  refine rx_push rfl (by simp only [List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup2 (by simp only [List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 100) (by decide) (by simp only [List.set_cons_zero, List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap1 ?_
-  refine rx_calldataload (by simp) ?_
+  refine rx_calldataload (by simp only [List.set_cons_zero, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   rw [← hoff2]
-  refine rx_push (w := Nat.toB256 (2 ^ 32)) (by decide) (by simp) ?_
-  refine rx_dup2 (by simp) ?_
-  refine rx_gt (v := 0) hguard1 (by simp) ?_
-  refine rx_iszero (v := 1) (by simp [B256.eqCheck]) (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_push (w := Nat.toB256 (2 ^ 32)) (by decide) (by simp only [List.set_cons_zero,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup2 (by simp only [Nat.reducePow, List.set_cons_zero, List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_gt (v := 0) hguard1 (by simp only [List.set_cons_zero, List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_iszero (v := 1) (by simp only [B256.eqCheck, ↓reduceIte]) (by simp only [List.set_cons_zero,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_branch_succ (d := Bytes.toB256 [0x01, 0x79]) (w := 1) (by decide) ?_
   refine rx_dest ?_
-  refine rx_dup3 (by simp) ?_
-  refine rx_add' (v := 4 + argOff sevm 2) rfl (by simp) ?_
-  refine rx_dup4 (by simp) ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_dup3 (by simp) ?_
-  refine rx_add' (v := (4 + argOff sevm 2) + 32) rfl (by simp) ?_
-  refine rx_gt (v := 0) hguard2 (by simp) ?_
-  refine rx_iszero (v := 1) (by simp [B256.eqCheck]) (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_dup3 (by simp only [List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 4 + argOff sevm 2) rfl (by simp only [List.set_cons_zero, List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup4 (by simp only [List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup3 (by simp only [List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := (4 + argOff sevm 2) + 32) rfl (by simp only [List.set_cons_zero,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_gt (v := 0) hguard2 (by simp only [List.set_cons_zero, List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_iszero (v := 1) (by simp only [B256.eqCheck, ↓reduceIte]) (by simp only [List.set_cons_zero,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   exact rx_branch_succ (d := Bytes.toB256 [0x01, 0x8b]) (w := 1) (by decide) k
 
 theorem deposit_wrapper {sevm : Sevm} {b b' : Devm} {M' : Mem} {g g' : Nat} {sel : B256}
@@ -437,8 +554,10 @@ theorem deposit_wrapper {sevm : Sevm} {b b' : Devm} {M' : Mem} {g g' : Nat} {sel
   refine rx_pop ?_
   refine rx_swap2 ?_
   refine rx_pop ?_
-  refine rx_calldataload (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_calldataload (by simp only [List.set_cons_zero, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_callRet (j := 7) rfl body ?_
   refine rx_dest ?_
   exact .last rfl

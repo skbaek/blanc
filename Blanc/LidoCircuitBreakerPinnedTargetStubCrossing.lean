@@ -161,7 +161,8 @@ private lemma runCompiled_call_zero_value_stubPause
     rw [hchildOriginal, hchildCurrent]
     unfold sstoreNewRefundCounter
     rw [if_pos (fun h => h_new h.symm)]
-    simp
+    simp only [↓reduceIte, ne_eq, not_true_eq_false, and_true, false_and, and_self, zero_add,
+      ite_eq_right_iff]
     intro hz
     exact False.elim (h_new hz.symm)
   have hatdOut : out.accountsToDelete = Std.HashSet.emptyWithCapacity := by
@@ -206,7 +207,7 @@ private lemma runCompiled_call_zero_value_stubPause
     rw [show exec child = .ok out from hexec,
       Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
     show processMessage.settle _ (.ok out) = .ok out
-    simp [processMessage.settle, herr]
+    simp only [processMessage.settle, herr, Except.bind_ok, Option.isSome_none, Bool.false_eq_true, ↓reduceIte]
   have hdi := accessDelegation_inv h_del
   have hd1stack : d1.stack = s := by
     have h := hdi.1
@@ -239,7 +240,7 @@ private lemma runCompiled_call_zero_value_stubPause
     rw [hsettle, Resume.run_call_ok (by rw [herr]; rfl) hpstack]
   have hrun : Ninst.RunCompiled sevm devm (.exec .call) post :=
     Ninst.runCompiled_call_zero_value hfork h_stk h_ext h_del h_acc h_split h_gas
-      h_depth (by simpa [p, msg]) (by simpa [p, msg] using hres)
+      h_depth (by simpa only [p, msg]) (by simpa only [p, msg, ExceptT.stM_eq] using hres)
   refine ⟨post, hrun, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
     ?_, ?_, stmid, ?_, ?_⟩
   · rw [Devm.memWrite_stack, Devm.stack_setMach]
@@ -270,7 +271,8 @@ private lemma runCompiled_call_zero_value_stubPause
       devm.accountsToDelete.isEmpty
     rw [hatdOut]
     rw [show p.accountsToDelete = devm.accountsToDelete from hd1delete]
-    simp
+    simp only [Std.HashSet.union_eq, Std.HashSet.isEmpty_union,
+      Std.HashSet.isEmpty_emptyWithCapacity, Bool.and_true]
   · change out.transientStorage = devm.transientStorage
     rw [htransOut]
     exact hd1wm.1
@@ -301,7 +303,7 @@ private lemma runCompiled_call_zero_value_stubPause
     exact heffectOut
   · rw [← hd1state]
     have hsub' : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa [msg, callSpawnMsg, callMsg] using hsub
+      simpa only [msg, callSpawnMsg, callMsg, Bool.false_or] using hsub
     rw [show p.state = d1.state from rfl] at hsub'
     exact hsub'
   · change out.state = _
@@ -599,7 +601,7 @@ private lemma runCompiled_staticcall_stubQuery
     rw [show exec child = .ok out from hexec,
       Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
     show processMessage.settle _ (.ok out) = .ok out
-    simp [processMessage.settle, herr]
+    simp only [processMessage.settle, herr, Except.bind_ok, Option.isSome_none, Bool.false_eq_true, ↓reduceIte]
   have hdi := accessDelegation_inv h_del
   have hd1stack : d1.stack = s := by
     have h := hdi.1
@@ -634,7 +636,7 @@ private lemma runCompiled_staticcall_stubQuery
     Ninst.runCompiled_exec_run
       (Xinst.step_staticcall_spawn hfork h_stk h_ext h_del h_acc h_split h_gas
         h_depth)
-      (by simpa [p, msg] using henter) (by simpa [p, msg] using hres)
+      (by simpa only [p, msg] using henter) (by simpa only [p, msg, ExceptT.stM_eq] using hres)
   refine ⟨post, hrun, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
     ?_, stmid, ?_, ?_⟩
   · rw [Devm.memWrite_stack, Devm.stack_setMach]
@@ -664,7 +666,8 @@ private lemma runCompiled_staticcall_stubQuery
       devm.accountsToDelete.isEmpty
     rw [hatdOut]
     rw [show p.accountsToDelete = devm.accountsToDelete from hd1delete]
-    simp
+    simp only [Std.HashSet.union_eq, Std.HashSet.isEmpty_union,
+      Std.HashSet.isEmpty_emptyWithCapacity, Bool.and_true]
   · change out.transientStorage = devm.transientStorage
     rw [htransOut]
     exact hd1wm.1
@@ -685,7 +688,7 @@ private lemma runCompiled_staticcall_stubQuery
     exact heffectOut
   · rw [← hd1state]
     have hsub' : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa [msg, staticcallSpawnMsg, callMsg] using hsub
+      simpa only [msg, staticcallSpawnMsg, callMsg, Bool.true_or] using hsub
     rw [show p.state = d1.state from rfl] at hsub'
     exact hsub'
   · change out.state = stmid.addBal tw.toAdr 0
@@ -1143,7 +1146,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
     intro h
     have hlen := B256.length_toBytes (1 : B256)
     rw [h] at hlen
-    simp at hlen
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
   have hdecodedValue :
       ((pauseDecodedMemory M duration).read 0 32).1.toB256 = 1 := by
     rw [pauseDecodedMemory, show (32 : Nat) =
@@ -1199,7 +1202,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
           (temporalAccountAccessBase base target.toAdr).accessedStorageKeys
         rw [temporalAccountAccessBase_accessedStorageKeys]
         exact hcold)
-      hdynamic hnew hdepth hnp (by omega) hbound (by simp)
+      hdynamic hnew hdepth hnp (by omega) hbound (by simp only [List.length_nil, Nat.ofNat_pos])
   have hgas1' : post1.gasLeft = Gb + 378 := by
     rw [hgas1]
     omega
@@ -1255,7 +1258,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
       (by
         apply (hask1 (target.toAdr, pausedUntilSlot)).mpr
         exact Or.inl rfl)
-      hpaused hdepth hnp (by omega) (by omega) (by simp)
+      hpaused hdepth hnp (by omega) (by omega) (by simp only [List.length_nil, Nat.ofNat_pos])
   have hgas2' : post2.gasLeft = Gb + 62 := by
     rw [hgas2]
     omega
@@ -1482,7 +1485,8 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
     have h := temporal_extcodesize_runCompiled (hfork := hfork) (sevm := sevm) (base := base)
       (x := target) (v := stubCode.size.toB256) (stack := [target])
       (M := M) (G := Gb + 22722)
-      (by rw [hstubCode]) (by simp)
+      (by rw [hstubCode]) (by simp only [List.length_cons, List.length_nil, zero_add,
+        Nat.one_lt_ofNat])
     rw [hcodeCost] at h
     exact h
   func_run (3) [3]

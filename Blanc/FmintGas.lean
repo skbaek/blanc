@@ -478,7 +478,7 @@ theorem fmintGas_le_max {sel : B256} {sevm : Sevm} {pre : Devm} {cost : Nat}
       subst h_cost
       exact Nat.le_refl _
     · rw [if_neg hd] at h_cost
-      exact absurd h_cost (by simp)
+      exact absurd h_cost (by simp only [reduceCtorEq, not_false_eq_true])
 
 end Fmint
 end Blanc

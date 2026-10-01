@@ -94,7 +94,7 @@ private theorem getTransVal_setTransVal_self (devm : Devm) (a : Adr)
   rw [Std.TreeMap.getD_eq_getD_getElem?, Tra.getElem?_set, if_pos rfl]
   split
   · show Stor.get .empty k = 0
-    simp [Stor.get, Stor.empty]
+    simp only [Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc, Std.TreeMap.getD_emptyc]
   · show ((Option.getD (some _)) Stor.empty).get k = 0
     exact Stor.get_set_self _ _ _
 
@@ -1369,7 +1369,7 @@ private theorem lastSvc_reset {orig new : B256} (hnew : orig ≠ new)
 
 private theorem lastSvc_noop {orig cur : B256} :
     sstoreValueCost orig cur cur = 100 := by
-  rw [sstoreValueCost, if_neg (by simp)]
+  rw [sstoreValueCost, if_neg (by simp only [ne_eq, not_true_eq_false, and_false, not_false_eq_true])]
   rfl
 
 /-! ## The kernel prefix reserve, closed -/

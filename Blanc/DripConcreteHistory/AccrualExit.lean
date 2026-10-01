@@ -543,7 +543,7 @@ private theorem concreteDripStorageBase_warm (key : B256) (hk : key = chiSlot �
     (concreteCreateTarget, key) ∈ concreteDripStorageBase.accessedStorageKeys := by
   change (concreteCreateTarget, key) ∈ (concreteDripDevm.accessedStorageKeys.insert
     (concreteCreateTarget, chiSlot)).insert (concreteCreateTarget, rhoSlot)
-  rcases hk with rfl | rfl <;> simp
+  rcases hk with rfl | rfl <;> simp only [Std.HashSet.mem_insert, beq_iff_eq, Prod.mk.injEq, true_and, BEq.rfl, true_or, or_true]
 
 private theorem concreteDrip_chiStore :
     sstoreCost concreteDripSevm concreteDripStorageBase chiSlot concreteDripChi = 2900 ∧
@@ -703,8 +703,9 @@ theorem concreteDrip_processMessage :
     processMessage concreteDripMessage = .ok (concreteDripRuntimePost 467925) := by
   unfold processMessage runFrame
   rw [concreteDrip_frameEntry]
-  simp [Frame.settle_eq_settleMsg_handleErrorWith, Frame.settleMsg, concreteDrip_exec,
-    executeCode.handleErrorWith_ok, Frame.ofCall, processMessage.settle, concreteDrip_postError]
+  simp only [Frame.ofCall, concreteDrip_exec, Frame.settle_eq_settleMsg_handleErrorWith,
+    Frame.settleMsg, Bool.false_eq_true, ↓reduceIte, processMessage.settle,
+    executeCode.handleErrorWith_ok, Except.bind_ok, concreteDrip_postError, Option.isSome_none]
 
 noncomputable def concreteDripMessageState : State := (concreteDripRuntimePost 467925).state
 
@@ -858,12 +859,13 @@ theorem concreteDrip_requestSuffix :
   obtain ⟨withdrawalOut, hw, _, _, _, _, hwr⟩ :=
     processCheckedSystemTransaction_deploymentSystemProgram
       (concreteDripTxInput.withState concreteDripTransactionState) withdrawalRequestPredeployAddress []
-      (hcode _ (by simp)) (by change ¬ pragueRules.isPrecomp withdrawalRequestPredeployAddress; decide)
+      (hcode _ (by simp only [List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])) (by change ¬ pragueRules.isPrecomp withdrawalRequestPredeployAddress; decide)
       CoveredFork.prague
   obtain ⟨consolidationOut, hc, _, _, _, _, hcr⟩ :=
     processCheckedSystemTransaction_deploymentSystemProgram
       ((concreteDripTxInput.withState concreteDripTransactionState).withState concreteDripTransactionState)
-      consolidationRequestPredeployAddress [] (hcode _ (by simp))
+      consolidationRequestPredeployAddress [] (hcode _ (by simp only [List.mem_cons,
+        List.not_mem_nil, or_false, or_true]))
       (by change ¬ pragueRules.isPrecomp consolidationRequestPredeployAddress; decide) CoveredFork.prague
   have hrequests :
       (concreteDripTxInput.withState concreteDripTransactionState).stat.rules.requests =
@@ -875,7 +877,7 @@ theorem concreteDrip_requestSuffix :
       (concreteDripTxInput.withState concreteDripTransactionState)
       withdrawalRequestPredeployAddress [] =
       .ok (concreteDripTransactionState, withdrawalOut) := by
-    simpa [Benv.withState] using hw
+    simpa only [Benv.withState] using hw
   have hbalNone :
       (concreteDripTxInput.withState concreteDripTransactionState).stat.rules.bal = none := by
     change pragueRules.bal = none
@@ -887,13 +889,16 @@ theorem concreteDrip_requestSuffix :
     unfold parseDepositRequests
     have hk : concreteDripTransactionBout.receiptKeys = [deploymentReceiptKey 0] := rfl
     rw [hk]
-    simp
+    simp only [bind_pure_comp, List.forIn_cons, List.forIn_nil, bind_assoc, bind_map_left,
+      bind_pure]
     rw [concreteDrip_receiptEntry]
     unfold makeReceipt
     rfl
   unfold processGeneralPurposeRequests processGeneralPurposeRequestsAt
   rw [hd, hrequests]
-  simp [runRequestContracts, hw', hc, hwr, hcr, hbalNone, hbaseBalNone]
+  simp only [runRequestContracts, hw', gt_iff_lt, List.cons_append, List.nil_append,
+    Benv.withState_stat, hbaseBalNone, Except.bind_ok, hc, hwr, List.length_nil, lt_self_iff_false,
+    ↓reduceIte, hcr, Except.ok.injEq, Prod.mk.injEq, and_true]
   rfl
 
 theorem concreteDrip_body :
@@ -902,13 +907,15 @@ theorem concreteDrip_body :
   obtain ⟨beaconOut, hb, _⟩ := processUncheckedSystemTransaction_deploymentSystemProgram
     concreteDripTxInput beaconRootsAddress concreteDripTxInput.stat.parentBeaconBlockRoot.toBytes
     (by change some (concreteJoined.state.getCode _).toList = _
-        rw [concreteJoinedCode]; exact concreteDeployedSystemCode _ (by simp))
+        rw [concreteJoinedCode]; exact concreteDeployedSystemCode _ (by simp only [List.mem_cons,
+          List.not_mem_nil, or_false, true_or]))
     (by change ¬ pragueRules.isPrecomp beaconRootsAddress; decide) CoveredFork.prague
   obtain ⟨historyOut, hh, _⟩ := processUncheckedSystemTransaction_deploymentSystemProgram
     (concreteDripTxInput.withState concreteJoined.state) historyStorageAddress
     concreteJoinBlock.header.hash.toBytes
     (by change some (concreteJoined.state.getCode _).toList = _
-        rw [concreteJoinedCode]; exact concreteDeployedSystemCode _ (by simp))
+        rw [concreteJoinedCode]; exact concreteDeployedSystemCode _ (by simp only [List.mem_cons,
+          List.not_mem_nil, or_false, true_or, or_true]))
     (by change ¬ pragueRules.isPrecomp historyStorageAddress; decide) CoveredFork.prague
   have hl : (concreteDripTxInput.withState concreteJoined.state).stat.blockHashes.getLast? =
       some concreteJoinBlock.header.hash := by rfl
@@ -1190,8 +1197,12 @@ theorem concreteExitSigningEncoded :
   change 2 :: (BLT.list [.bytes [1], .bytes [3], .bytes (Nat.toBytes 1),
     .bytes (Nat.toBytes 8), .bytes (Nat.toBytes 500000), .bytes concreteCreateTarget.toBytes,
     .bytes (Nat.toBytes 0), .bytes [0x7f, 0x86, 0x61, 0xa1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x28], .list []]).toBytes = _
-  simp [BLT.toBytes, BLTs.toBytes, BLTs.toBytesJoin, ht, hlen,
-    Nat.toBytes, Nat.toBytes.aux, concreteExitSigningPayload]
+  simp only [Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, zero_add, Nat.one_mod,
+    Nat.toUInt8_eq, UInt8.ofNat_one, Nat.reduceDiv, Nat.reduceAdd, Nat.reduceMod, UInt8.reduceOfNat,
+    BLT.toBytes, BLTs.toBytes, BLTs.toBytesJoin, UInt8.reduceLT, ↓reduceIte, List.length_cons,
+    List.length_nil, Nat.reduceLT, UInt8.reduceAdd, ht, Nat.ofNat_pos, add_zero, List.append_nil,
+    List.cons_append, List.nil_append, List.length_append, hlen, concreteExitSigningPayload,
+    List.append_assoc, List.cons.injEq, true_and]
   rw [show Nat.toBytesPack 68 = [68] by decide +kernel]
   exact ⟨rfl, rfl⟩
 
@@ -1399,7 +1410,7 @@ theorem concreteExitMessage_code : concreteExitMessage.code.toList = code := by
   rw [State.incrNonce_get_code]
   change (concreteDripped.state.getCode concreteCreateTarget).toList = code
   rw [concreteDrippedCode, concreteJoinedCode, concreteDeploymentRoot.installed]
-  simp [ByteArray.toList_eq_toList_data]
+  simp only [ByteArray.toList_eq_toList_data]
 
 theorem concreteExitDebit_balance :
     concreteExitDebit.bal concreteCreateSender = 999999999997823644 := by
@@ -1455,7 +1466,7 @@ theorem concreteExitDevm_rho : concreteExitDevm.getStorVal concreteCreateTarget 
 theorem concreteExitDevm_cold (k : B256) :
     (concreteCreateTarget, k) ∉ concreteExitDevm.accessedStorageKeys := by
   change (concreteCreateTarget, k) ∉ (∅ : Std.HashSet (Adr × B256))
-  simp
+  simp only [Std.HashSet.not_mem_empty, not_false_eq_true]
 
 theorem concreteJoinedTargetBalance : concreteJoined.state.bal concreteCreateTarget = 100 := by
   have hm : concreteJoinMessageState.bal concreteCreateTarget = concreteJoinEntry.state.bal concreteCreateTarget := by
@@ -2178,7 +2189,7 @@ private theorem concreteExitStorageBase_warm (key : B256)
   change (concreteCreateTarget, key) ∈ (((concreteExitDevm.accessedStorageKeys.insert
     (concreteCreateTarget, concreteCreateSender.toB256)).insert (concreteCreateTarget, totalUnitsSlot)).insert
       (concreteCreateTarget, chiSlot)).insert (concreteCreateTarget, rhoSlot)
-  rcases hk with rfl | rfl | rfl | rfl <;> simp
+  rcases hk with rfl | rfl | rfl | rfl <;> simp only [Std.HashSet.mem_insert, beq_iff_eq, Prod.mk.injEq, true_and, BEq.rfl, true_or, or_true]
 
 private theorem concreteExit_chiStore :
     sstoreCost concreteExitSevm concreteExitStorageBase chiSlot concreteExitChi = 2900 ∧
@@ -2490,7 +2501,10 @@ private theorem concreteExitCall_warm :
     accessCost concreteCreateSender concreteExitTotalBase.accessedAddresses = 100 := by
   change accessCost concreteCreateSender ((Std.HashSet.ofList [0]).insertMany
     (pragueRules.precompiles ++ [concreteCreateSender, concreteCreateTarget])) = 100
-  simp [accessCost, Std.HashSet.mem_insertMany_list, gasWarmAccess]
+  simp only [accessCost, Std.HashSet.ofList_singleton, Std.HashSet.mem_insertMany_list,
+    Std.HashSet.mem_insert, beq_iff_eq, Std.HashSet.not_mem_empty, or_false, List.contains_eq_mem,
+    List.mem_append, List.mem_cons, List.not_mem_nil, true_or, or_true, decide_true, ↓reduceIte,
+    gasWarmAccess]
 
 /-- Actual value-bearing empty-code child execution, with the exact parent gas split. -/
 private theorem concreteExit_call_exists :
@@ -2691,8 +2705,9 @@ theorem concreteExit_processMessage :
     processMessage concreteExitMessage = .ok concreteExitRuntimePost := by
   unfold processMessage runFrame
   rw [concreteExit_frameEntry]
-  simp [Frame.settle_eq_settleMsg_handleErrorWith, Frame.settleMsg, concreteExit_exec,
-    executeCode.handleErrorWith_ok, Frame.ofCall, processMessage.settle, concreteExit_postError]
+  simp only [Frame.ofCall, concreteExit_exec, Frame.settle_eq_settleMsg_handleErrorWith,
+    Frame.settleMsg, Bool.false_eq_true, ↓reduceIte, processMessage.settle,
+    executeCode.handleErrorWith_ok, Except.bind_ok, concreteExit_postError, Option.isSome_none]
 
 noncomputable def concreteExitMessageState : State := concreteExitRuntimePost.state
 
@@ -2845,12 +2860,13 @@ theorem concreteExit_requestSuffix :
   obtain ⟨withdrawalOut, hw, _, _, _, _, hwr⟩ :=
     processCheckedSystemTransaction_deploymentSystemProgram
       (concreteExitTxInput.withState concreteExitTransactionState) withdrawalRequestPredeployAddress []
-      (hcode _ (by simp)) (by change ¬ pragueRules.isPrecomp withdrawalRequestPredeployAddress; decide)
+      (hcode _ (by simp only [List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])) (by change ¬ pragueRules.isPrecomp withdrawalRequestPredeployAddress; decide)
       CoveredFork.prague
   obtain ⟨consolidationOut, hc, _, _, _, _, hcr⟩ :=
     processCheckedSystemTransaction_deploymentSystemProgram
       ((concreteExitTxInput.withState concreteExitTransactionState).withState concreteExitTransactionState)
-      consolidationRequestPredeployAddress [] (hcode _ (by simp))
+      consolidationRequestPredeployAddress [] (hcode _ (by simp only [List.mem_cons,
+        List.not_mem_nil, or_false, or_true]))
       (by change ¬ pragueRules.isPrecomp consolidationRequestPredeployAddress; decide) CoveredFork.prague
   have hrequests :
       (concreteExitTxInput.withState concreteExitTransactionState).stat.rules.requests =
@@ -2862,7 +2878,7 @@ theorem concreteExit_requestSuffix :
       (concreteExitTxInput.withState concreteExitTransactionState)
       withdrawalRequestPredeployAddress [] =
       .ok (concreteExitTransactionState, withdrawalOut) := by
-    simpa [Benv.withState] using hw
+    simpa only [Benv.withState] using hw
   have hbalNone :
       (concreteExitTxInput.withState concreteExitTransactionState).stat.rules.bal = none := by
     change pragueRules.bal = none
@@ -2874,13 +2890,16 @@ theorem concreteExit_requestSuffix :
     unfold parseDepositRequests
     have hk : concreteExitTransactionBout.receiptKeys = [deploymentReceiptKey 0] := rfl
     rw [hk]
-    simp
+    simp only [bind_pure_comp, List.forIn_cons, List.forIn_nil, bind_assoc, bind_map_left,
+      bind_pure]
     rw [concreteExit_receiptEntry]
     unfold makeReceipt
     rfl
   unfold processGeneralPurposeRequests processGeneralPurposeRequestsAt
   rw [hd, hrequests]
-  simp [runRequestContracts, hw', hc, hwr, hcr, hbalNone, hbaseBalNone]
+  simp only [runRequestContracts, hw', gt_iff_lt, List.cons_append, List.nil_append,
+    Benv.withState_stat, hbaseBalNone, Except.bind_ok, hc, hwr, List.length_nil, lt_self_iff_false,
+    ↓reduceIte, hcr, Except.ok.injEq, Prod.mk.injEq, and_true]
   rfl
 
 theorem concreteExit_body :
@@ -2889,13 +2908,15 @@ theorem concreteExit_body :
   obtain ⟨beaconOut, hb, _⟩ := processUncheckedSystemTransaction_deploymentSystemProgram
     concreteExitTxInput beaconRootsAddress concreteExitTxInput.stat.parentBeaconBlockRoot.toBytes
     (by change some (concreteDripped.state.getCode _).toList = _
-        rw [concreteDrippedCode, concreteJoinedCode]; exact concreteDeployedSystemCode _ (by simp))
+        rw [concreteDrippedCode, concreteJoinedCode]; exact concreteDeployedSystemCode _ (by simp only [List.mem_cons,
+          List.not_mem_nil, or_false, true_or]))
     (by change ¬ pragueRules.isPrecomp beaconRootsAddress; decide) CoveredFork.prague
   obtain ⟨historyOut, hh, _⟩ := processUncheckedSystemTransaction_deploymentSystemProgram
     (concreteExitTxInput.withState concreteDripped.state) historyStorageAddress
     concreteDripBlock.header.hash.toBytes
     (by change some (concreteDripped.state.getCode _).toList = _
-        rw [concreteDrippedCode, concreteJoinedCode]; exact concreteDeployedSystemCode _ (by simp))
+        rw [concreteDrippedCode, concreteJoinedCode]; exact concreteDeployedSystemCode _ (by simp only [List.mem_cons,
+          List.not_mem_nil, or_false, true_or, or_true]))
     (by change ¬ pragueRules.isPrecomp historyStorageAddress; decide) CoveredFork.prague
   have hl : (concreteExitTxInput.withState concreteDripped.state).stat.blockHashes.getLast? =
       some concreteDripBlock.header.hash := by rfl

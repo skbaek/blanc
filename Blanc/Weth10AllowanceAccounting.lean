@@ -35,16 +35,18 @@ theorem lastAllowanceWriteAt_append
       | some value => some value
       | none => lastAllowanceWriteAt ys key := by
   induction xs with
-  | nil => simp [lastAllowanceWriteAt]
+  | nil => simp only [List.nil_append, lastAllowanceWriteAt]
   | cons frame rest ih =>
       cases hallow : frame.allowance with
-      | none => simpa [lastAllowanceWriteAt, hallow] using ih
+      | none => simpa only [List.cons_append, lastAllowanceWriteAt, hallow] using ih
       | some event =>
           by_cases hkey : event.key = key
           · cases hwrite : event.visit.written? with
-            | some value => simp [lastAllowanceWriteAt, hallow, hkey, hwrite]
-            | none => simpa [lastAllowanceWriteAt, hallow, hkey, hwrite] using ih
-          · simpa [lastAllowanceWriteAt, hallow, hkey] using ih
+            | some value => simp only [List.cons_append, lastAllowanceWriteAt, hallow, hkey,
+              ↓reduceIte, hwrite]
+            | none => simpa only [List.cons_append, lastAllowanceWriteAt, hallow, hkey, ↓reduceIte,
+              hwrite] using ih
+          · simpa only [List.cons_append, lastAllowanceWriteAt, hallow, hkey, ↓reduceIte] using ih
 
 /-- The committed value at `key` after replaying a chronological ledger over
 an entry storage: the last committed write in the ledger, or the entry value
@@ -69,8 +71,8 @@ theorem applyAllowanceLedger_append
   unfold applyAllowanceLedger
   rw [List.reverse_append, lastAllowanceWriteAt_append]
   cases hright : lastAllowanceWriteAt right.reverse key with
-  | some value => simp
-  | none => simpa [applyAllowanceLedger] using hmid.symm
+  | some value => simp only
+  | none => simpa only [applyAllowanceLedger] using hmid.symm
 
 /-- Replaying a single counted frame: its allowance visit's written word at
 a matching key, otherwise the entry value. -/
@@ -87,13 +89,17 @@ theorem applyAllowanceLedger_singleton (pre : Stor) (frame : CountedFrame)
       | none => pre.get key := by
   unfold applyAllowanceLedger lastAllowanceWriteAt
   cases hallow : frame.allowance with
-  | none => simp [lastAllowanceWriteAt, hallow]
+  | none => simp only [List.reverse_cons, List.reverse_nil, List.nil_append, hallow,
+    lastAllowanceWriteAt]
   | some event =>
       by_cases hkey : event.key = key
       · cases hwrite : event.visit.written? with
-        | some value => simp [hallow, hkey, hwrite]
-        | none => simp [lastAllowanceWriteAt, hallow, hkey, hwrite]
-      · simp [lastAllowanceWriteAt, hallow, hkey]
+        | some value => simp only [List.reverse_cons, List.reverse_nil, List.nil_append, hallow,
+          hkey, ↓reduceIte, hwrite]
+        | none => simp only [List.reverse_cons, List.reverse_nil, List.nil_append, hallow, hkey,
+          ↓reduceIte, hwrite, lastAllowanceWriteAt]
+      · simp only [List.reverse_cons, List.reverse_nil, List.nil_append, hallow, hkey, ↓reduceIte,
+        lastAllowanceWriteAt]
 
 /-- A leading eventless record is transparent to the ledger replay. -/
 theorem applyAllowanceLedger_cons_none
@@ -103,7 +109,7 @@ theorem applyAllowanceLedger_cons_none
       applyAllowanceLedger pre rest key := by
   have h := applyAllowanceLedger_append pre pre [record] rest key
     (by rw [applyAllowanceLedger_singleton, hnone])
-  simpa using h
+  simpa only [List.cons_append, List.nil_append] using h
 
 /-- The ledger replay reads its entry storage only at the replayed key. -/
 theorem applyAllowanceLedger_congr
@@ -139,7 +145,7 @@ theorem Exec.frameContribution_eq_cons
     Exec.frameContribution dp ca frame inner =
       CountedFrame.ofFrame dp ca frame :: inner := by
   unfold Exec.frameContribution
-  rw [if_pos hexact, if_neg (by simp [hnotlast])]
+  rw [if_pos hexact, if_neg (by simp only [hnotlast, Bool.false_eq_true, not_false_eq_true])]
 
 /-- A frame whose allowance activity follows its spawns — `flashLoan`'s
 post-callback settlement, `permit`'s post-`STATICCALL` store — contributes
@@ -237,15 +243,17 @@ theorem frameAllowanceEvent_read_eq_pre
     v = (Devm.getStor pre e.currentTarget).get event.key := by
   unfold frameAllowanceEvent at hevent
   split at hevent
-  · exact absurd hevent (by simp)
+  · exact absurd hevent (by simp only [reduceCtorEq, not_false_eq_true])
   · rename_i hne0
     split at hevent
-    · cases hevent; exact absurd hread (by simp [AllowanceVisit.read?])
+    · cases hevent; exact absurd hread (by simp only [AllowanceVisit.read?, reduceCtorEq,
+      not_false_eq_true])
     · split at hevent
-      · cases hevent; exact absurd hread (by simp [AllowanceVisit.read?])
+      · cases hevent; exact absurd hread (by simp only [AllowanceVisit.read?, reduceCtorEq,
+        not_false_eq_true])
       · split at hevent
         · split at hevent
-          · exact absurd hevent (by simp)
+          · exact absurd hevent (by simp only [reduceCtorEq, not_false_eq_true])
           · cases hevent
             simp only [AllowanceEvent.key,
               ← callerAllowanceRuntimeKey_eq_projected]
@@ -257,11 +265,12 @@ theorem frameAllowanceEvent_read_eq_pre
         · split at hevent
           · rename_i hflash
             exact absurd hnotflash
-              (by simp [isFlashInvocation, hne0, hflash])
+              (by simp only [isFlashInvocation, ne_eq, hne0, not_false_eq_true, decide_true, hflash,
+                Bool.and_self, Bool.true_eq_false])
           · split at hevent
             · cases hevent
               exact (Option.some.inj hread).symm
-            · exact absurd hevent (by simp)
+            · exact absurd hevent (by simp only [reduceCtorEq, not_false_eq_true])
 
 /-- Entry-read soundness for one ledger: every record's allowance read
 observed exactly the word the ledger prefix strictly before that record
@@ -292,7 +301,8 @@ def AllowanceEntryReadSound (pre : Stor) (ledger : List CountedFrame) : Prop :=
 theorem AllowanceEntryReadSound.nil (pre : Stor) :
     AllowanceEntryReadSound pre [] := by
   intro earlier record later hsplit
-  exact absurd hsplit.symm (by simp)
+  exact absurd hsplit.symm (by simp only [List.append_eq_nil_iff, reduceCtorEq, and_false,
+    not_false_eq_true])
 
 /-- A one-record ledger is entry-read sound exactly when its own record's
 read is the entry word at its key: the only admissible split has an empty
@@ -309,7 +319,8 @@ theorem AllowanceEntryReadSound.singleton
       obtain ⟨hrec, -⟩ := List.cons.injEq .. ▸ hsplit
       subst hrec
       exact h event hevent v hread
-  | cons head tail => exact absurd hsplit (by simp)
+  | cons head tail => exact absurd hsplit (by simp only [List.cons_append, List.cons.injEq,
+    List.nil_eq, List.append_eq_nil_iff, reduceCtorEq, and_false, not_false_eq_true])
 
 /-- The counted record of a non-flash frame is entry-read sound on its own:
 its event, if any, reads the frame's entry storage. -/
@@ -347,7 +358,7 @@ theorem AllowanceEntryReadSound.append
     | nil =>
         rw [List.append_nil] at hleftSplit
         subst hleftSplit
-        exact (hright [] record later (by simpa using hconsSplit.symm)
+        exact (hright [] record later (by simpa only [List.nil_append] using hconsSplit.symm)
           event hevent v hread).trans (hstorage event.key hkey)
     | cons head rest =>
         rw [List.cons_append] at hconsSplit
@@ -406,14 +417,15 @@ theorem ownRecordLast_eq_false_of_selector {e : Sevm} {sig : B256}
     (hneFlash : sig ≠ flashLoanSelector)
     (hnePermit : sig ≠ permitSelector) :
     ownRecordLast e = false := by
-  simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
-    hneFlash, hnePermit]
+  simp only [ownRecordLast, isFlashInvocation, ne_eq, decide_not, hselector, hneFlash, decide_false,
+    Bool.and_false, isPermitInvocation, hnePermit, Bool.or_self]
 
 /-- A frame entered with empty calldata dispatches to neither `flashLoan`
 nor `permit`, so it too records its own contribution first. -/
 theorem ownRecordLast_eq_false_of_data_empty {e : Sevm}
     (hempty : e.data.length.toB256 = 0) : ownRecordLast e = false := by
-  simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hempty]
+  simp only [ownRecordLast, isFlashInvocation, hempty, ne_eq, not_true_eq_false, decide_false,
+    Bool.false_and, isPermitInvocation, Bool.or_self]
 
 /-- The attribution stream of an own-record-first exact invocation with no
 counted descendants is that frame's own record alone. -/

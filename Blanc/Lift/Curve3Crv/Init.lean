@@ -31,15 +31,18 @@ def curveInitState : Curve3Crv.State where
 def curveInitStor : Stor := Stor.empty
 
 theorem curveInitStor_get (x : B256) : curveInitStor.get x = 0 := by
-  simp [curveInitStor, Stor.get, Stor.empty]
+  simp only [Stor.get, curveInitStor, Stor.empty, Std.TreeMap.empty_eq_emptyc,
+    Std.TreeMap.getD_emptyc]
 
 /-- **The Curve checkpoint premise is satisfiable** over the empty live-key set. -/
 theorem curve_init_vyInv : VyInv curveInitStor curveInitState (fun _ => False) where
   decimals := by rw [curveInitStor_get]; rfl
   supply := by rw [curveInitStor_get]; rfl
   minter := by rw [curveInitStor_get]; rfl
-  name := by simp [VyStr, curveInitState, curveInitStor_get, B256.toNat_zero]
-  symbol := by simp [VyStr, curveInitState, curveInitStor_get, B256.toNat_zero]
+  name := by simp only [VyStr, curveInitStor_get, B256.toNat_zero, curveInitState, List.length_nil,
+    Nat.reduceMul, zero_le, List.take_zero, and_self]
+  symbol := by simp only [VyStr, curveInitStor_get, B256.toNat_zero, curveInitState,
+    List.length_nil, mul_one, zero_le, List.take_zero, and_self]
   known := fun _ h => h.elim
   unknown := fun k _ => by cases k <;> rfl
   support := fun x hx => absurd (curveInitStor_get x) hx
@@ -87,7 +90,7 @@ theorem get_ne_zero_mem_set {s : Stor} {l : List B256} (h : ∀ x, s.get x ≠ 0
   intro x hx
   rw [Stor.get_set_ite] at hx
   by_cases e : k = x
-  · simp [e]
+  · simp only [e, List.mem_cons, true_or]
   · simp only [e, ↓reduceIte] at hx
     exact List.mem_cons_of_mem _ (h x hx)
 

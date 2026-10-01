@@ -54,26 +54,30 @@ def bytesWordsBytes (bs : Bytes) : Bytes :=
 lemma bytesWordsBytes_take (bs : Bytes) :
     (bytesWordsBytes bs).take bs.length = bs := by
   fun_induction bytesWords bs with
-  | case1 => simp [bytesWordsBytes]
+  | case1 => simp only [List.length_nil, bytesWordsBytes, List.take_zero]
   | case2 b bs ih =>
       simp only [bytesWordsBytes, bytesWords, List.flatMap_cons]
       rw [Bytes.toBytes_toB256_of_length]
-      · simp_all [bytesWordsBytes]
+      · simp_all only [List.drop_succ_cons, List.length_drop, bytesWordsBytes, List.length_cons,
+        List.take_succ_cons, List.cons_append, List.append_assoc, List.cons.injEq, true_and]
         by_cases hlen : bs.length ≤ 31
-        · simp [List.take_of_length_le hlen]
+        · simp only [List.take_of_length_le hlen, List.take_left']
         · simp only [min_eq_left (by omega : 32 ≤ bs.length + 1),
             min_eq_left (by omega : 31 ≤ bs.length), Nat.sub_self,
             List.replicate_zero, List.nil_append, List.take_append,
             List.length_take]
-          rw [ih, List.take_of_length_le (by simp)]
+          rw [ih, List.take_of_length_le (by simp only [List.length_take, min_le_iff, Std.le_refl,
+            or_true])]
           exact List.take_append_drop 31 bs
-      · simp
+      · simp only [List.take_succ_cons, List.length_cons, List.cons_append, List.length_append,
+        List.length_take, List.length_replicate, Nat.reduceEqDiff]
         omega
 
 /-- The represented image is a whole number of memory words. -/
 lemma bytesWordsBytes_length (bs : Bytes) :
     (bytesWordsBytes bs).length = 32 * (bytesWords bs).length := by
-  simp [bytesWordsBytes, B256.length_toBytes]
+  simp only [bytesWordsBytes, List.length_flatMap, B256.length_toBytes, List.map_const',
+    List.sum_replicate, nsmul_eq_mul, Nat.cast_id]
   omega
 
 /-- The represented image covers the unpadded blob. -/
@@ -89,9 +93,9 @@ lemma List.takeD_length_add_append {α} (xs ys : List α) (m : Nat) (d : α) :
     List.takeD (xs.length + m) (xs ++ ys) d =
       xs ++ List.takeD m ys d := by
   induction xs with
-  | nil => simp
+  | nil => simp only [List.length_nil, zero_add, List.nil_append]
   | cons x xs ih =>
-      rw [show (x :: xs).length + m = (xs.length + m) + 1 by simp; omega]
+      rw [show (x :: xs).length + m = (xs.length + m) + 1 by simp only [List.length_cons]; omega]
       show (x :: (xs ++ ys)).head?.getD d ::
         List.takeD (xs.length + m) (x :: (xs ++ ys)).tail d = _
       rw [show (x :: (xs ++ ys)).tail = xs ++ ys from rfl, ih]
@@ -171,7 +175,7 @@ lemma Mem.read_writeStoresRev_bytesWords {M : Mem} {img blob : Bytes}
           symm
           exact List.take_takeD_of_le _ _ _ _ (by omega)
     _ = (bytesWordsBytes blob).take blob.length := by
-      simpa [bytesWordsBytes] using congrArg (List.take blob.length) hfull
+      simpa only [bytesWordsBytes] using congrArg (List.take blob.length) hfull
     _ = blob := bytesWordsBytes_take blob
 
 /-- One aligned constant-word store. -/
@@ -359,7 +363,7 @@ lemma Func.runCompiledTo_prependStoresRev {fs : List Func} {sevm : Sevm}
       let e := Blanc.Mem.expansionCost Mt (32 * iw.2) 32
       let cw := pushCost iw.1.toBytes.sig
       let ci := pushCost (Nat.toB256 (32 * iw.2)).toBytes.sig
-      have hb : 32 * iw.2 < 2 ^ 256 := h_bound iw (by simp)
+      have hb : 32 * iw.2 < 2 ^ 256 := h_bound iw (by simp only [List.mem_cons, true_or])
       have htail := ih h_mem
         (G := G + (cw + ci + gVerylow + e))
         (rest := prependStore iw.1 iw.2 rest)
@@ -367,7 +371,7 @@ lemma Func.runCompiledTo_prependStoresRev {fs : List Func} {sevm : Sevm}
           simp only [storesRevCost, storeCost] at h_gas ⊢
           dsimp only [Mt, e, cw, ci] at h_gas ⊢
           omega)
-        h_room (fun x hx => h_bound x (by simp [hx])) ?_
+        h_room (fun x hx => h_bound x (by simp only [List.mem_cons, hx, or_true])) ?_
       · simpa only [prependStoresRev] using htail
       · refine Func.RunCompiledTo.next
           (Ninst.runCompiled_pushB256 (c := cw)
@@ -402,9 +406,11 @@ private lemma Bytes.toB256_toBytes_drop28_of_length_four
     (data : Bytes) (h : data.length = 4) :
     data.toB256.toBytes.drop 28 = data := by
   have hp := Bytes.toBytes_toB256_of_length
-    (xs := List.replicate 28 0 ++ data) (by simp [h])
+    (xs := List.replicate 28 0 ++ data) (by simp only [List.reduceReplicate, List.cons_append,
+      List.nil_append, List.length_cons, h, Nat.reduceAdd])
   exact (by
-    simpa [Bytes.toB256_zero_cons] using congrArg (List.drop 28) hp)
+    simpa only [List.reduceReplicate, List.cons_append, List.nil_append, Bytes.toB256_zero_cons,
+      List.drop_succ_cons, List.drop_zero] using congrArg (List.drop 28) hp)
 
 /-- Reading the low four bytes of the selector word returns the exact input,
 independently of the prior memory image. -/
@@ -413,7 +419,7 @@ private lemma Bytes.sliceD_writeAt_selector
     (Bytes.writeAt img 0 data.toB256.toBytes).sliceD 28 4 0 = data := by
   rw [List.sliceD_eq_map]
   apply List.ext_getElem
-  · simp [h]
+  · simp only [List.getD_eq_getElem?_getD, List.length_map, List.length_range, h]
   · intro i h₁ h₂
     simp only [List.getElem_map, List.getElem_range]
     rw [Bytes.getD_writeAt, if_pos (by
@@ -422,7 +428,7 @@ private lemma Bytes.sliceD_writeAt_selector
     have hd := congrArg (fun bs : Bytes => bs.getD i 0)
       (Bytes.toB256_toBytes_drop28_of_length_four data h)
     rw [List.getD_drop] at hd
-    simpa [List.getD_eq_getElem?_getD, h₂] using hd
+    simpa only [tsub_zero, List.getD_eq_getElem?_getD, h₂, getElem?_pos, Option.getD_some] using hd
 
 /-- A word write preserves word alignment of the logical memory size. -/
 lemma Mem.aligned_write_word {M : Mem} {i : Nat} {w : B256}
@@ -452,9 +458,9 @@ lemma Func.runCompiledTo_revertSelector {fs : List Func} {sevm : Sevm}
   have hdata : data ≠ [] := by
     intro hd
     rw [hd] at hlen
-    simp at hlen
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
   have hpush : pushCost data = gVerylow := by
-    simp [pushCost, hdata]
+    simp only [pushCost, hdata, ↓reduceIte]
   have hn4 : Nat.toB256 4 ≠ 0 := by
     intro hz
     have hh := congrArg B256.toNat hz
@@ -652,12 +658,14 @@ lemma storesRevCost_zipIdx (M : Mem) (ws : List B256) (k : Nat)
         Mem.expansionCost M (32 * k) (32 * ws.length) := by
   induction ws generalizing k with
   | nil =>
-      simp [storesRevCost, storesFixedCost, Mem.expansionCost, memExtSize]
+      simp only [List.zipIdx_nil, storesRevCost, storesFixedCost, Mem.expansionCost, memExtSize,
+        List.length_nil, mul_zero, ↓reduceIte, tsub_self, add_zero]
   | cons w ws ih =>
       simp only [List.zipIdx_cons, storesRevCost, storesFixedCost, storeCost]
       by_cases hnil : ws = []
       · subst ws
-        simp [storesRevCost, storesFixedCost, Mem.writeStoresRev]
+        simp only [List.zipIdx_nil, storesRevCost, Mem.writeStoresRev, zero_add, storesFixedCost,
+          List.length_cons, List.length_nil, mul_one]
       · have hi := ih (k := k + 1)
         have hz := Mem.expansionCost_writeStoresRev_lower_zero
           M ws k halign hnil
@@ -674,11 +682,13 @@ lemma Mem.expansionCost_writeStoresRev_blob_zero
       (Mem.writeStoresRev M (bytesWords blob).zipIdx) 0 blob.length = 0 := by
   by_cases hb : blob = []
   · subst blob
-    simp [bytesWords, Mem.writeStoresRev, Mem.expansionCost, memExtSize]
+    simp only [expansionCost, memExtSize, List.length_nil, ↓reduceIte, bytesWords, List.zipIdx_nil,
+      writeStoresRev, tsub_self]
   · have hw : bytesWords blob ≠ [] := by
       cases blob with
       | nil => contradiction
-      | cons b bs => simp [bytesWords]
+      | cons b bs => simp only [bytesWords, List.take_succ_cons, List.length_cons, List.cons_append,
+        List.drop_succ_cons, ne_eq, reduceCtorEq, not_false_eq_true]
     have ha := Mem.aligned_writeStoresRev
       (iws := (bytesWords blob).zipIdx) halign
     have hc := Mem.size_writeStoresRev_zipIdx_of_ne_nil M (bytesWords blob) 0 hw
@@ -764,12 +774,13 @@ lemma Func.runCompiledTo_revertData {fs : List Func} {sevm : Sevm}
       Mem.aligned_writeStoresRev (iws := ws.zipIdx) halign
     have hc : blob.length ≤ M'.size := by
       by_cases hb : blob = []
-      · subst blob; simp
+      · subst blob; simp only [List.length_nil, zero_le]
       · have hw : ws ≠ [] := by
           dsimp only [ws]
           cases blob with
           | nil => contradiction
-          | cons b bs => simp [bytesWords]
+          | cons b bs => simp only [bytesWords, List.take_succ_cons, List.length_cons,
+            List.cons_append, List.drop_succ_cons, ne_eq, reduceCtorEq, not_false_eq_true]
         have hcov := Mem.size_writeStoresRev_zipIdx_of_ne_nil
           devm.memory ws 0 hw
         have hp := bytesWordsBytes_covers blob
@@ -947,7 +958,7 @@ lemma Func.runCompiledTo_revertReturnData {fs : List Func} {sevm : Sevm}
       simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
       have ha : M'.size % 32 = 0 := by
         rcases hrd : devm.returnData with _ | ⟨b, bs⟩
-        · simpa [M', hrd, Mem.write] using halign
+        · simpa only [M', hrd, Mem.write] using halign
         · dsimp only [M']
           rw [hrd, Mem.size_write_cons]
           split
@@ -956,12 +967,12 @@ lemma Func.runCompiledTo_revertReturnData {fs : List Func} {sevm : Sevm}
             omega
       have hc : n ≤ M'.size := by
         rcases hrd : devm.returnData with _ | ⟨b, bs⟩
-        · simp [n, M', hrd]
+        · simp only [n, M', hrd, List.length_nil, zero_le]
         · dsimp only [n, M']
           rw [hrd, Mem.size_write_cons]
           split
           · omega
-          · simpa using Nat.le_ceil32 (b :: bs).length
+          · simpa only [List.length_cons, zero_add] using Nat.le_ceil32 (b :: bs).length
       have hext :
           (devm.setMach
             ⟨(0 : B256) :: w :: devm.stack, M', G, devm.stateGas⟩).extCost
@@ -1080,7 +1091,7 @@ private lemma Mem.read_write_zero_len (μ : Mem) (ys : Bytes) :
     ((μ.write 0 ys).read 0 ys.length).1 = ys := by
   cases ys with
   | nil => rfl
-  | cons b bs => exact Mem.read_write_zero μ (by simp)
+  | cons b bs => exact Mem.read_write_zero μ (by simp only [ne_eq, reduceCtorEq, not_false_eq_true])
 
 /-- **`Func.revertReturnData`'s walk, inverted.**
 
@@ -1210,11 +1221,11 @@ theorem rollback_revert_of_exec_revert {msg : Msg} {benv : Benv} {xl : Xlot}
     cases hsg : benv.stat.rules.stateGas with
     | none =>
         refine ⟨post.withError (some .revert), ?_, rfl, rfl⟩
-        simpa [executeCode.handleErrorWith, hsg, executeCode.handleError] using h_he.symm
+        simpa only [executeCode.handleErrorWith, hsg, executeCode.handleError] using h_he.symm
     | some rules =>
         refine ⟨post.restoreStateGas.withError (some .revert), ?_, rfl, rfl⟩
-        simpa [executeCode.handleErrorWith, hsg, executeCode.handleErrorAmsterdam]
-          using h_he.symm
+        simpa only [executeCode.handleErrorWith, hsg, executeCode.handleErrorAmsterdam] using
+          h_he.symm
   have h_r0 : ∃ handled, r0 = .ok handled ∧ handled.error = some .revert ∧
       handled.output = post.output := by
     rcases h_ca : (msg.withBenv benv).codeAddress with _ | adr
@@ -1233,16 +1244,16 @@ theorem rollback_revert_of_exec_revert {msg : Msg} {benv : Benv} {xl : Xlot}
   rw [h_r0] at hset
   unfold processMessage.settle at hset
   dsimp only [bind, Except.bind] at hset
-  rw [if_pos (by simp [h_handled])] at hset
+  rw [if_pos (by simp only [h_handled, Option.isSome_some])] at hset
   have h_out := Except.ok.inj hset
   have h_err : out.error = some .revert := by
     rw [h_out]
-    simpa [Devm.rollback, Devm.setWorld, Devm.error] using h_handled
+    simpa only [Devm.error, Devm.rollback, Devm.setWorld] using h_handled
   have h_output : out.output = post.output := by
     rw [h_out]
-    simpa [Devm.output, Devm.rollback, Devm.setWorld] using h_handled_output
+    simpa only [Devm.output, Devm.rollback, Devm.setWorld] using h_handled_output
   exact ⟨h_err, h_output,
-    ProcessMessage.rollback_of_error h_pm (by simp [h_err])⟩
+    ProcessMessage.rollback_of_error h_pm (by simp only [h_err, Option.isSome_some])⟩
 
 /-- Fuse a gas-exact compiled walk ending in a revert with the message-frame
 transport.  This is message-call altitude: it claims neither transaction-level

@@ -48,13 +48,10 @@ theorem pair_attack_carrier_inhabited :
           Blanc.Prorata.VictimDeposit.post,
           Blanc.Prorata.mintN, Blanc.Prorata.payN])⟩ p3
   refine ⟨_, p4, ?_, ?_, ?_, ?_, ?_⟩ <;>
-    simp [Blanc.ProrataWethVault.offsetN, PairAttackState.genesis,
-      Blanc.Prorata.ProrataAttackState.genesis,
-      PairAttackState.inbound,
-      PairAttackState.credited, PairAttackState.victimDeposited,
-      PairAttackState.outbound, Blanc.Prorata.AttackAttribution.coalitionAmount,
-      Blanc.Prorata.AttackAttribution.outsideAmount,
-      Blanc.Prorata.VictimDeposit.post,
-      Blanc.Prorata.mintN, Blanc.Prorata.payN]
+    simp only [ProrataWethVault.offsetN, PairAttackState.outbound, PairAttackState.victimDeposited,
+      VictimDeposit.post, PairAttackState.credited, PairAttackState.inbound,
+      PairAttackState.genesis, ProrataAttackState.genesis, zero_add,
+      AttackAttribution.coalitionAmount, AttackAttribution.outsideAmount, add_zero, Nat.reduceAdd,
+      Nat.reduceSub, tsub_self]
 
 end Blanc.Composition.ProrataWethVault

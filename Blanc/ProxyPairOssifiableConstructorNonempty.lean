@@ -73,7 +73,8 @@ theorem OssifiableConstructorDelegateOutcome.success_of_ok
   cases status : child.error.isSome with
   | false =>
       have pOne : (1 : B256) :: spawn.parent.stack <<+ callPost.stack :=
-        ⟨[], by simpa [Split, status] using stack⟩
+        ⟨[], by simpa only [Split, List.append_nil, status, Bool.false_eq_true, ↓reduceIte] using
+          stack⟩
       obtain ⟨afterPre, _, _, branchPop, afterRun, pAfter⟩ :=
         Func.RunCompiledTo.succ_branch_of_prefix
           (by decide : (1 : B256) ≠ 0) pOne run
@@ -85,10 +86,11 @@ theorem OssifiableConstructorDelegateOutcome.success_of_ok
         exact memoryReads
       · exact branchPop.state.symm.trans callState
       · exact branchPop.transientStorage.symm.trans callTransient
-      · exact branchPop.logs.symm.trans (by simpa [status] using callLogs)
+      · exact branchPop.logs.symm.trans (by simpa only [status, Bool.false_eq_true,
+        ↓reduceIte] using callLogs)
   | true =>
       have pZero : (0 : B256) :: spawn.parent.stack <<+ callPost.stack :=
-        ⟨[], by simpa [Split, status] using stack⟩
+        ⟨[], by simpa only [Split, List.append_nil, status, ↓reduceIte] using stack⟩
       obtain ⟨failedPre, failedPop, failedRun, _⟩ :=
         Func.RunCompiledTo.zero_branch_of_prefix pZero run
       obtain ⟨sizePost, sizeRun, payloadBranch⟩ :=
@@ -101,15 +103,16 @@ theorem OssifiableConstructorDelegateOutcome.success_of_ok
       · have pLengthZero : (0 : B256) :: failedPre.stack <<+
             sizePost.stack :=
           ⟨[], by
-            simpa [Split, Stack.Push, failedReturnData, lengthWordZero]
-              using sizePush.stack⟩
+            simpa only [Split, List.append_nil, Stack.Push, failedReturnData, lengthWordZero,
+              List.cons_append, List.nil_append] using sizePush.stack⟩
         obtain ⟨_, _, errorRun, _⟩ :=
           Func.RunCompiledTo.zero_branch_of_prefix pLengthZero payloadBranch
         exact (Func.RunCompiledTo.not_ok_call_revertData hEmpty errorRun).elim
       · have pLength : Nat.toB256 child.output.length :: failedPre.stack <<+
             sizePost.stack :=
           ⟨[], by
-            simpa [Split, Stack.Push, failedReturnData] using sizePush.stack⟩
+            simpa only [Split, List.append_nil, Stack.Push, failedReturnData, List.cons_append,
+              List.nil_append] using sizePush.stack⟩
         obtain ⟨_, _, _, _, bubbleRun, _⟩ :=
           Func.RunCompiledTo.succ_branch_of_prefix
             lengthWordZero pLength payloadBranch

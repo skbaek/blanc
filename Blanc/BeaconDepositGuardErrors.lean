@@ -310,7 +310,7 @@ private theorem depositPostHashError_endpoint_runCompiledTo
       (oldCount := oldCount) (amount := amount) (stack := [])
       (success := depositSuccessGuards) (K := K)
       hsource hnodeleg' hwarm' hpre hdepth (by
-        simpa only [K] using hbound) (by simp)
+        simpa only [K] using hbound) (by simp only [List.length_nil, Nat.ofNat_pos])
   obtain ⟨hregisters⟩ := hregisters
   have hnodeEq := reconstructedDepositNode_eq_model pubkey
     withdrawalCredentials signature (le64 amount.toNat)
@@ -430,7 +430,7 @@ private theorem depositLengthGuard_failure_runCompiledTo
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
     Devm.memory_setMach]
   func_run (2) [0, 1]
-  case h_val => simp [B256.eqCheck, Ne.symm hne]
+  case h_val => simp only [B256.eqCheck, Ne.symm hne, ↓reduceIte]
   simpa only [guardBase, errorCost, Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas,
       Devm.memory_setMach, Nat.add_sub_cancel] using
     (reachableErrorGuard_exact_runCompiledTo
@@ -468,7 +468,7 @@ private theorem depositValueLowerGuard_failure_runCompiledTo
   have hmod : memory.size % 32 = 0 := by
     rw [hmem.size_eq]
   func_run (3) [1]
-  case h_val => simp [B256.ltCheck, hlower]
+  case h_val => simp only [B256.ltCheck, hlower, ↓reduceIte]
   simpa only [guardBase, errorCost, Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas,
       Devm.memory_setMach, ReachableReason.slot,
       Nat.add_sub_cancel] using
@@ -609,7 +609,7 @@ private theorem depositRootGuard_failure_runCompiledTo
   case h_val =>
     change Sevm.argWord sevm 3 =? (memory.read 640 32).1.toB256 = 0
     rw [hread]
-    simp [B256.eqCheck, hroot]
+    simp only [B256.eqCheck, hroot, ↓reduceIte]
   simpa only [guardBase, errorCost, Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas,
       Devm.memory_setMach,
       show (nodeWord * 32 : B256).toNat = 640 by decide +kernel,

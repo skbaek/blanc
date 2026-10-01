@@ -45,7 +45,8 @@ theorem processMessage_ok_of_exec
   unfold Frame.settle Frame.settleMsg
   simp only [Msg.withBenv, hcodeAddress] at hexec
   rw [hexec]
-  simp [executeCode.handleErrorWith_ok, processMessage.settle, herror]
+  simp only [Bool.false_eq_true, ↓reduceIte, processMessage.settle, executeCode.handleErrorWith_ok,
+    Except.bind_ok, herror, Option.isSome_none]
 
 /-- Successful inner-message execution followed by successful code charging is
 the successful CREATE settlement, with the charged output installed at the
@@ -60,7 +61,7 @@ theorem processCreateMessage_ok_of_processMessage_and_charge
       .ok (charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩) := by
   rw [processCreateMessage_eq, hprocess]
   unfold processCreateMessage.settle
-  simp [herror, hcharge]
+  simp only [Option.isNone_iff_eq_none, ExceptT.stM_eq, Except.bind_ok, herror, ↓reduceIte, hcharge]
 
 /-- An inner creation frame whose error marker is set bypasses code charging
 and settles successfully with its entry world and transient storage restored.
@@ -293,7 +294,7 @@ theorem processUncheckedSystemTransaction_deploymentSystemProgram
       gasLeft := (initDevm msg).gasLeft - gJumpdest}
   have hcompile : some msg.code.toList =
       Prog.compile deploymentSystemProgram := by
-    simpa [msg, processSystemTransactionMsg] using hcode
+    simpa only [msg, processSystemTransactionMsg] using hcode
   have hrun : Prog.RunCompiled (initSevm msg) (initDevm msg)
       deploymentSystemProgram post := by
     apply Prog.runCompiled_stop
@@ -308,17 +309,15 @@ theorem processUncheckedSystemTransaction_deploymentSystemProgram
     change (Fork.ruleSet benv.stat.fork).stateGas = none
     exact hfork.stateGas_none
   have hmsgStateGas : msg.benv.stat.rules.stateGas = none := by
-    simpa [msg, begun, processSystemTransactionMsg] using hstateGas'
+    simpa only [msg, begun, processSystemTransactionMsg] using hstateGas'
   have henter : (Frame.ofCall msg).enter = .run (initEvm msg) := by
-    simp [Frame.enter, Frame.ofCall, executeCode.enter,
-      Msg.benvAfterTransfer, Msg.withBenv, msg, begun,
-      processSystemTransactionMsg, hnp']
+    simp only [Frame.enter, Frame.ofCall, executeCode.enter, Msg.benvAfterTransfer, Msg.withBenv, msg, begun, processSystemTransactionMsg, hnp', Bool.false_eq_true, ↓reduceIte, Bool.not_false, decide_false, Bool.and_false, ExceptT.stM_eq]
   have hrefund : post.refundCounter = 0 := rfl
   have hcall := processMessageCall_ok_of_compiled_exec
     (p := deploymentSystemProgram) (msg := msg)
     (child := initEvm msg) (post := post)
     (by rfl) (by rfl) hcompile henter hexec
-    (by rfl) hmsgStateGas (by simp [hrefund])
+    (by rfl) hmsgStateGas (by simp only [hrefund, Std.le_refl])
   let out : MsgCallOutput :=
     { gasLeft := post.gasLeft
       refundCounter := post.refundCounter.toNat
@@ -336,7 +335,7 @@ theorem processUncheckedSystemTransaction_deploymentSystemProgram
     exact hcallOut
   · rfl
   · rfl
-  · simp [out, post, initDevm, Devm.setMach, Devm.logs, hmsgStateGas]
+  · simp only [out, post, initDevm, Devm.setMach, Devm.logs, hmsgStateGas]
   · rfl
   · rfl
 
@@ -366,14 +365,15 @@ theorem processCheckedSystemTransaction_deploymentSystemProgram
       intro hempty
       apply hlistne
       rw [hempty]
-      simp
-    simpa [ByteArray.isEmpty] using hbytesne
+      simp only [ByteArray.toList_empty]
+    simpa only [ByteArray.isEmpty, beq_eq_false_iff_ne, ne_eq, ByteArray.size_eq_zero_iff] using
+      hbytesne
   refine ⟨out, ?_, herr, hrefund, hlogs, hdelete, hreturn⟩
   unfold processCheckedSystemTransaction
   simp only [hne, Bool.false_eq_true, if_false]
   unfold processUncheckedSystemTransaction at hrun
   rw [hrun]
-  simp [Except.mapError, herr]
+  simp only [Except.mapError, Prod.mk.eta, Except.bind_ok, herr]
 
 /-- Reconstruct the mandatory beacon-roots and history-storage prefix from the
 configured prestate. -/
@@ -387,18 +387,18 @@ theorem canonicalDeploymentSystemPrefix
   obtain ⟨outBeacon, hbeacon, _⟩ :=
     processUncheckedSystemTransaction_deploymentSystemProgram
       initial beaconRootsAddress cb.block.header.parentBeaconBlockRoot.toBytes
-      (by simpa [initial, initBenv] using hbase.beaconCode)
+      (by simpa only [initBenv, initial] using hbase.beaconCode)
       (by change ¬ (Fork.ruleSet fork).isPrecomp beaconRootsAddress
           exact hfork.beaconRoots_not_precompile)
-      (by simpa [initial, initBenv, initBenvStat] using hfork)
+      (by simpa only [initBenv, initBenvStat, initial] using hfork)
   obtain ⟨lastHash, hlast⟩ := hbase.lastBlockHash
   obtain ⟨outHistory, hhistory, _⟩ :=
     processUncheckedSystemTransaction_deploymentSystemProgram
       (initial.withState base.state) historyStorageAddress lastHash.toBytes
-      (by simpa [initial, initBenv, Benv.withState] using hbase.historyCode)
+      (by simpa only [Benv.withState, initBenv, initial] using hbase.historyCode)
       (by change ¬ (Fork.ruleSet fork).isPrecomp historyStorageAddress
           exact hfork.historyStorage_not_precompile)
-      (by simpa [initial, initBenv, initBenvStat, Benv.withState] using hfork)
+      (by simpa only [Benv.withState, initBenv, initBenvStat, initial] using hfork)
   refine ⟨⟨initial, {
     outBeacon := outBeacon
     stBeacon := base.state
@@ -412,7 +412,7 @@ theorem canonicalDeploymentSystemPrefix
     environment_eq := by rfl
     state_eq := by rfl
     createdAccounts_eq := by rfl }⟩⟩
-  · simpa [initial, initBenv, initBenvStat, Benv.withState] using hlast
-  · simpa [initial, Benv.withState] using hhistory
+  · simpa only [Benv.withState, initBenv, initBenvStat] using hlast
+  · simpa only [Benv.withState] using hhistory
 
 end Blanc

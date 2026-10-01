@@ -89,8 +89,8 @@ theorem acceptedBoolWord_iff_of_output
     AcceptedBoolWord post result ↔ word = result := by
   have sliceEq : word.toBytes.sliceD 0 word.toBytes.length 0 =
       word.toBytes := by
-    simpa [Bytes.writeAt] using
-      (Bytes.sliceD_writeAt ([] : Bytes) word.toBytes 0)
+    simpa only [Bytes.writeAt, List.takeD_nil, List.replicate_zero, List.nil_append, zero_add,
+      List.drop_nil, List.append_nil] using (Bytes.sliceD_writeAt ([] : Bytes) word.toBytes 0)
   have headEq : Bytes.toB256 (post.output.sliceD 0 32 0) = word := by
     rw [outputEq,
       show (32 : Nat) = word.toBytes.length from
@@ -156,7 +156,7 @@ theorem compact_pause_word_eq_projection (time duration : B256) :
   by_cases infinite : duration = pauseInfiniteSentinel
   · subst duration
     have one_ne_zero : (1 : B256) ≠ 0 := by decide
-    simp [pauseForProjection, B256.eqCheck, one_ne_zero]
+    simp only [B256.eqCheck, ↓reduceIte, one_ne_zero, pauseForProjection]
     have mulZero : time * (0 : B256) = 0 := by
       change (time.toNat * 0).toB256 = 0
       rw [Nat.mul_zero]
@@ -164,7 +164,7 @@ theorem compact_pause_word_eq_projection (time duration : B256) :
     rw [mulZero]
     rfl
   · have reverse : pauseInfiniteSentinel ≠ duration := Ne.symm infinite
-    simp [pauseForProjection, B256.eqCheck, infinite, reverse]
+    simp only [B256.eqCheck, reverse, ↓reduceIte, pauseForProjection, infinite]
     have mulOne : time * (1 : B256) = time := by
       change (time.toNat * 1).toB256 = time
       rw [Nat.mul_one]

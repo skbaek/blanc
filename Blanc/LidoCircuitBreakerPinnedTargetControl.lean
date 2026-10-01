@@ -86,7 +86,7 @@ private structure StubFrame (target : Adr) (calldata : Bytes)
 private lemma mem_reads_self (memory : Mem) :
     Mem.Reads memory memory.data.toList := by
   intro index
-  simp
+  simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
 
 /-- Successful execution of the compiled stub exposes its source main body. -/
 private theorem stubMain_run_of_exec
@@ -100,7 +100,7 @@ private theorem stubMain_run_of_exec
     stubProgram_pcFree run uses
   rcases compiled with ⟨entry, entryBurn, body⟩
   refine ⟨entry, entryBurn, ?_⟩
-  simpa [stubProgram] using Func.Run.of_runCompiled body
+  simpa only [stubProgram] using Func.Run.of_runCompiled body
 
 private theorem stubBase_run_of_main
     {fs : List Func} {sevm : Sevm} {pre post : Devm}
@@ -245,7 +245,7 @@ theorem stub_pauseFor_effect
         (pre := abiSelectorBytes pauseForSelector) (post := [])
       · rw [abiSelectorBytes_length]
         rfl
-      · simpa [pauseForCalldata] using frame.data
+      · simpa only [List.append_nil, pauseForCalldata] using frame.data
     rw [argEq] at argPrefix
     have dupPrefix : duration :: duration :: [] <<+ afterDup.stack :=
       prefix_of_dup_val dupRun (by show_nth) argPrefix
@@ -531,7 +531,7 @@ theorem stub_isPaused_truthful
     left
     apply (acceptedIff 0).mpr
     unfold PausedAt at notPaused
-    simp [B256.ltCheck, notPaused]
+    simp only [B256.ltCheck, notPaused, ↓reduceIte]
   · have flagEq : flag = ((36 : B256) =? sevm.data.length.toB256) :=
       (popBurn_pref flagPop flagPrefix).1
     rw [dispatchZero] at flagEq
@@ -807,7 +807,7 @@ private theorem BenignCallContPrefix.rawFrameDescendants_run
   induction trace with
   | refl => rfl
   | step head rest ih =>
-      simpa [BenignCallContPrefix.run, Exec.rawFrameDescendants] using ih tail
+      simpa only [run, Exec.rawFrameDescendants] using ih tail
 
 /-- The first spawned frame reached from one concrete message entry. -/
 structure BenignCallSpawn (entry : Evm) where
@@ -1017,9 +1017,9 @@ private theorem benignCallStep_takeCont (evm : Evm)
     evm.step = .cont (benignCallTakeCont evm).pc
       (benignCallTakeCont evm).dyna := by
   cases h : evm.step with
-  | halt _ => simp [benignCallContSuccess, h] at success
-  | spawn _ _ _ => simp [benignCallContSuccess, h] at success
-  | cont _ _ => simp [benignCallTakeCont, h]
+  | halt _ => simp only [benignCallContSuccess, h, Bool.false_eq_true] at success
+  | spawn _ _ _ => simp only [benignCallContSuccess, h, Bool.false_eq_true] at success
+  | cont _ _ => simp only [benignCallTakeCont, h]
 
 private def benignCallEvm1 := benignCallTakeCont benignCallEntryEvm
 private def benignCallEvm2 := benignCallTakeCont benignCallEvm1
@@ -1103,7 +1103,7 @@ private theorem benignCallAccessCost_eq : benignCallAccessCost = 2600 := by
       benignCallBase.accessedAddresses by
     rw [show benignCallBase.accessedAddresses =
         Std.HashSet.emptyWithCapacity by rfl]
-    simp)]
+    simp only [Std.HashSet.not_mem_emptyWithCapacity, not_false_eq_true])]
   rfl
 
 private theorem benignCallDelegated_gasLeft :
@@ -1143,9 +1143,8 @@ private theorem benignCallDelegation :
           (benignCallDelegated.getCode benignCallTarget) := by
     rw [benignCallDelegated_childCode]
     decide +kernel
-  simpa [benignCallDelegated_childCode] using
-    (accessDelegation_of_not_delegation
-      (d := benignCallDelegated) (adr := benignCallTarget) hnot)
+  simpa only [benignCallDelegated_childCode] using
+    (accessDelegation_of_not_delegation (d := benignCallDelegated) (adr := benignCallTarget) hnot)
 
 private theorem benignCallXstep :
     Xinst.step benignCallEvm8.sta benignCallEvm8.dyna .call =
@@ -1295,18 +1294,16 @@ private theorem BenignCallFixture.rawFrameRoots_eq
     Exec.rawFrameRoots w.run = [w.root, w.childRoot] := by
   unfold Exec.rawFrameRoots BenignCallFixture.run
   rw [BenignCallContPrefix.rawFrameDescendants_run]
-  simp [BenignCallFixture.root, BenignCallFixture.childRoot,
-    BenignCallFixture.tailRun, BenignCallFixture.childRun,
-    BenignCallFixture.nextRun, BenignCallFixture.run,
-    Exec.rawFrameDescendants]
+  simp only [tailRun, childRun, nextRun, Exec.rawFrameDescendants, List.append_nil, root, run,
+    childRoot]
 
 private theorem BenignCallFixture.has_descendant
     (w : BenignCallFixture) :
     Exec.rawFrameDescendants w.run ≠ [] := by
   unfold BenignCallFixture.run
   rw [BenignCallContPrefix.rawFrameDescendants_run]
-  simp [BenignCallFixture.tailRun, BenignCallFixture.childRun,
-    BenignCallFixture.nextRun, Exec.rawFrameDescendants]
+  simp only [tailRun, childRun, nextRun, Exec.rawFrameDescendants, List.append_nil, ne_eq,
+    List.cons_ne_self, not_false_eq_true]
 
 private theorem benignCallExactCall :
     ExactTargetCall benignCircuitBreaker benignCallParentTarget
@@ -1322,8 +1319,7 @@ private theorem benignCallMessageUsesProgram :
     MessageUsesProgram benignCallMsg benignCallProgram := by
   unfold MessageUsesProgram
   rw [benignCallProgram_compile]
-  simp [benignCallMsg, benignCallParentCode, benignCallBytes,
-    ByteArray.toList_eq_toList_data]
+  simp only [benignCallMsg, benignCallParentCode, benignCallBytes, ByteArray.toList_eq_toList_data]
 
 private theorem BenignCallFixture.executes (w : BenignCallFixture) :
     MessageExecutesProgram benignCallMsg w.slot benignCallProgram := by
@@ -1359,7 +1355,7 @@ private theorem BenignCallFixture.noRetainedWriteTo
   apply Exec.noRetainedWriteTo_of_frame_owners_ne
   intro frameRoot member
   rw [w.rawFrameRoots_eq] at member
-  simp at member
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at member
   rcases member with rfl | rfl
   · change w.rootEvm.sta.currentTarget ≠ benignCircuitBreaker
     rw [w.rootTarget]
@@ -1602,14 +1598,13 @@ private theorem wrongBoolMessageUsesProgram :
     MessageUsesProgram wrongBoolMsg wrongBoolProgram := by
   unfold MessageUsesProgram
   rw [wrongBoolProgram_compile]
-  simp [wrongBoolMsg, wrongBoolCode, wrongBoolBytes,
-    ByteArray.toList_eq_toList_data]
+  simp only [wrongBoolMsg, wrongBoolCode, wrongBoolBytes, ByteArray.toList_eq_toList_data]
 
 private theorem wrongBoolMessagePaused :
     PausedAt pausedUntil wrongBoolMsg.benv.state wrongBoolTarget
       wrongBoolMsg.benv.stat.time := by
-  simp [PausedAt, pausedUntil, wrongBoolMsg, wrongBoolState, wrongBoolStor,
-    State.getStor, State.get_set_self, Stor.set]
+  simp only [PausedAt, wrongBoolMsg, wrongBoolState, Std.TreeMap.empty_eq_emptyc, wrongBoolStor,
+    Stor.set, pausedUntil, State.getStor, State.get_set_self]
   decide +kernel
 
 /-- The compiled wrong-return program has a complete clean message execution
@@ -1822,7 +1817,7 @@ private theorem retainedWriteMessageUsesProgram :
     MessageUsesProgram retainedWriteMsg retainedWriteProgram := by
   unfold MessageUsesProgram
   rw [retainedWriteProgram_compile]
-  simp [retainedWriteMsg, retainedWriteCode, retainedWriteBytes,
+  simp only [retainedWriteMsg, retainedWriteCode, retainedWriteBytes,
     ByteArray.toList_eq_toList_data]
 
 private theorem RetainedWriteFixture.process (w : RetainedWriteFixture) :
@@ -1839,13 +1834,13 @@ private theorem RetainedWriteFixture.notNoRetainedWrite (w :
       retainedWriteKey := by
   intro noWrite
   have committed : Execution.commits (.ok w.rootPost) = true := by
-    simp [Execution.commits, w.rootClean]
+    simp only [Execution.commits, w.rootClean, Option.isNone_none]
   have preserved := Exec.committedCell_eq_of_noRetainedWriteTo w.run
     committed (by
       rw [Frame.enter_run_benvStat w.enter]
       decide) retainedWriteCircuitBreaker retainedWriteKey noWrite
   apply w.rootChanged
-  simpa [Execution.committedPost] using preserved.symm
+  simpa only [Execution.committedPost] using preserved.symm
 
 private theorem RetainedWriteFixture.hasDescendant
     (w : RetainedWriteFixture) :
@@ -1890,14 +1885,14 @@ theorem retainedWrite_distinctTarget_descendant_falsifier
         write.key = retainedWriteKey ∧
         write.IsLastRetained := by
   have committed : Execution.commits (.ok w.rootPost) = true := by
-    simp [Execution.commits, w.rootClean]
+    simp only [Execution.commits, w.rootClean, Option.isNone_none]
   have changed :
       (Devm.getStor w.rootEvm.dyna retainedWriteCircuitBreaker).get
           retainedWriteKey ≠
         (Devm.getStor
           (Execution.committedPost (.ok w.rootPost) committed)
           retainedWriteCircuitBreaker).get retainedWriteKey := by
-    simpa [Execution.committedPost] using w.rootChanged
+    simpa only [Execution.committedPost, ne_eq] using w.rootChanged
   rcases Exec.exists_lastRetainedSstore_of_getStor_ne w.run committed
       (by
       rw [Frame.enter_run_benvStat w.enter]
@@ -1933,7 +1928,8 @@ theorem retainedWriteProgram_noninterference_falsifier
       retainedWriteMsg :=
     Or.inl ⟨1, retainedWriteExactCall⟩
   have claimed := bundle.circuitBreaker_noninterference inbound executes
-    w.process retainedWriteKey (by simp [retainedWriteKey])
+    w.process retainedWriteKey (by simp only [retainedWriteKey, List.mem_cons, List.not_mem_nil,
+      or_false, or_true])
   unfold TargetInvocationNoRetainedWriteTo at claimed
   exact w.notNoRetainedWrite (claimed w.run)
 

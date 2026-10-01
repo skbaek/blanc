@@ -227,7 +227,7 @@ private theorem externalSource_of_toward
       obtain ⟨form, before, historyEq, formInstruction⟩ :=
         exactWethSourceBody_external closedBody ⟨x, instructionEq⟩
       have whole : Line.Run root.sevm start history cursor.pre := by
-        simpa using extend [] cursor.pre Line.Run.nil
+        simpa only [List.append_nil] using extend [] cursor.pre Line.Run.nil
       rw [historyEq] at whole
       obtain ⟨entry, -, staging⟩ := of_run_append before whole
       refine ⟨form, entry, ?_, ?_, ?_⟩
@@ -246,22 +246,22 @@ private theorem externalSource_of_toward
       intro rest post run
       have extended := extend (instruction :: rest) post
         (Line.Run.cons (cursor.ninstRun_of_nextEdge edge) run)
-      simpa [List.append_assoc] using extended
+      simpa only [List.append_assoc, List.cons_append, List.nil_append] using extended
   | @branchLeft path left right cursor chronology arm compilerPrefix rest ih =>
       intro history start closedBody extend
       exact ih [] arm.pre (Bool.and_eq_true_iff.mp closedBody).1
-        (fun rest post run => by simpa using run)
+        (fun rest post run => by simpa only [List.nil_append] using run)
   | @branchRight path left right cursor chronology arm compilerPrefix rest ih =>
       intro history start closedBody extend
       exact ih [] arm.pre (Bool.and_eq_true_iff.mp closedBody).2
-        (fun rest post run => by simpa using run)
+        (fun rest post run => by simpa only [List.nil_append] using run)
   | @call path index body cursor chronology lookup bodyCursor compilerPrefix
       rest ih =>
       intro history start closedBody extend
       have closedCallee : exactWethSourceBody [] body = true :=
         List.all_eq_true.mp closed body (List.mem_of_getElem? lookup)
       exact ih [] bodyCursor.pre closedCallee
-        (fun rest post run => by simpa using run)
+        (fun rest post run => by simpa only [List.nil_append] using run)
 
 /-- **SourceCursor traversal.**  Every actually reached external opcode of a
 same-frame execution of the exact vault code is preceded, in that frame, by
@@ -291,7 +291,7 @@ theorem vault_externalSource_run
     List.all_eq_true.mp vault_externalWethCallSites_complete _
       List.mem_cons_self
   exact externalSource_of_toward vault_externalWethCallSites_complete route
-    [] mainCursor.pre closedMain (fun rest post run => by simpa using run)
+    [] mainCursor.pre closedMain (fun rest post run => by simpa only [List.nil_append] using run)
 
 /-- The traversal at an exact instruction occurrence of the frame, in the shape
 `Exec.LocatedFrame.EnteringOccurrence` retains (`occurrence`, `sameFrame`). -/
@@ -364,7 +364,7 @@ private lemma sliceD_split {ξ : Type} (xs : List ξ) (d : ξ) :
         xs.sliceD m a d ++ xs.sliceD (m + a) b d := by
   intro a
   induction a with
-  | zero => intro m b; simp [List.sliceD, List.takeD]
+  | zero => intro m b; simp only [List.sliceD, zero_add, List.takeD, add_zero, List.nil_append]
   | succ a ih =>
     intro m b
     rw [show a + 1 + b = (a + b) + 1 from by omega,
@@ -1253,7 +1253,7 @@ private theorem exactSizeGuard_of_ok
     have sizeWord : pre.returnData.length.toB256 = 32 := by
       by_cases sizeWord : pre.returnData.length.toB256 = 32
       · exact sizeWord
-      · simp [B256.eqCheck, sizeWord] at testZero
+      · simp only [B256.eqCheck, sizeWord, ↓reduceIte] at testZero
         exact (B256.zero_ne_one testZero.symm).elim
     have sizeNat := congrArg B256.toNat sizeWord
     rw [B256.toNat_toB256_of_lt returndataBound] at sizeNat
@@ -1318,7 +1318,7 @@ private theorem call_outputWindow_of_success
       gasWord :: target :: 0 :: 28 :: inputSize :: 0 :: 32 :: rest <<+
         pre.stack := by
     rw [stack]
-    exact ⟨[], by simp [Split]⟩
+    exact ⟨[], by simp only [Split, List.append_nil]⟩
   rcases of_run_call_val_with_depth operandPrefix
       (Ninst.Run.of_runCompiled crossing) hfork with failure | success
   · obtain ⟨zeroPrefix, -⟩ := failure
@@ -1361,7 +1361,7 @@ private theorem staticcall_outputWindow_of_success
       gasWord :: target :: 28 :: inputSize :: 0 :: 32 :: rest <<+
         pre.stack := by
     rw [stack]
-    exact ⟨[], by simp [Split]⟩
+    exact ⟨[], by simp only [Split, List.append_nil]⟩
   rcases of_run_staticcall_val_with_depth operandPrefix
       (Ninst.Run.of_runCompiled crossing) hfork with failure | success
   · obtain ⟨zeroPrefix, -, -⟩ := failure
@@ -1596,7 +1596,7 @@ theorem checkedCanonicalTrue_successFrame
     have loadedEq : Bytes.toB256 callPost.returnData = 1 := by
       by_cases equal : (1 : B256) = Bytes.toB256 callPost.returnData
       · exact equal.symm
-      · simp [B256.eqCheck, equal] at testZero
+      · simp only [B256.eqCheck, equal, ↓reduceIte] at testZero
         exact (B256.zero_ne_one testZero.symm).elim
     have outputEq : callPost.returnData = (1 : B256).toBytes := by
       calc
@@ -1703,7 +1703,7 @@ theorem checkedCanonicalTrue_success
     have loadedEq : Bytes.toB256 callPost.returnData = 1 := by
       by_cases equal : (1 : B256) = Bytes.toB256 callPost.returnData
       · exact equal.symm
-      · simp [B256.eqCheck, equal] at testZero
+      · simp only [B256.eqCheck, equal, ↓reduceIte] at testZero
         exact (B256.zero_ne_one testZero.symm).elim
     have outputEq : callPost.returnData = (1 : B256).toBytes := by
       calc
@@ -1734,7 +1734,7 @@ private theorem checkedCall_depth_ne_zero
       gasWord :: wethAccount.toB256 :: 0 :: 28 :: inputSize :: 0 :: 32 ::
         rest <<+ pre.stack := by
     rw [stack]
-    exact ⟨[], by simp [Split]⟩
+    exact ⟨[], by simp only [Split, List.append_nil]⟩
   obtain ⟨status, tail, _, statusStack, statusNonzero, _⟩ :=
     checkedCall_status_nonzero suffix
   rcases of_run_call_val_with_depth operands
@@ -1818,9 +1818,9 @@ theorem callGasAvailable_of_runCompiled
   split at execution
   · cases XStep.run_ofExcept_error execution
   · rename_i charged charge
-    simpa [show (0 : B256).toNat = 0 from rfl,
-      show (28 : B256).toNat = 28 from rfl,
-      show (32 : B256).toNat = 32 from rfl] using chargeGas_le charge
+    simpa only [addAccessedAddress_gasLeft, Devm.setMach_gasLeft, ge_iff_le,
+      show (0 : B256).toNat = 0 from rfl, show (28 : B256).toNat = 28 from rfl,
+      show (32 : B256).toNat = 32 from rfl, or_true, ↓reduceIte, add_zero] using chargeGas_le charge
 
 /-! ## Source-level exact effects and rollback -/
 
@@ -1872,7 +1872,7 @@ theorem readTotalAssets_exactEffect
         gasWord :: wethAccount.toB256 :: 28 :: 36 :: 0 :: 32 :: rest <<+
           callPre.stack := by
       rw [stack]
-      exact ⟨[], by simp [Split]⟩
+      exact ⟨[], by simp only [Split, List.append_nil]⟩
     rcases of_run_staticcall_val_with_depth operandPrefix
         (Ninst.Run.of_runCompiled crossing) hfork with failure | success
     · obtain ⟨zeroPrefix, -, -⟩ := failure
@@ -1922,7 +1922,7 @@ theorem readTotalAssets_exactEffect
         gasWord :: wethAccount.toB256 :: 28 :: 36 :: 0 :: 32 :: rest <<+
           callPre.stack := by
       rw [stack]
-      exact ⟨[], by simp [Split]⟩
+      exact ⟨[], by simp only [Split, List.append_nil]⟩
     have callPostWindow := callPreWindow.acrossStaticcall
       (by
         change 32 ≤ offset
@@ -2014,7 +2014,7 @@ theorem callWethTransferFrom_worldEffect_linked
       gasWord :: wethAccount.toB256 :: 0 :: 28 :: 100 :: 0 :: 32 :: rest <<+
         callPre.stack := by
     rw [stack]
-    exact ⟨[], by simp [Split]⟩
+    exact ⟨[], by simp only [Split, List.append_nil]⟩
   have callPostWf : Mem.Wf callPost.memory := by
     rcases of_run_call_val_with_depth operandPrefix
         (Ninst.Run.of_runCompiled crossing) hfork with failure | success
@@ -2232,7 +2232,7 @@ theorem callWethTransfer_worldEffect_quiet
       gasWord :: wethAccount.toB256 :: 0 :: 28 :: 68 :: 0 :: 32 :: rest <<+
         callPre.stack := by
     rw [stack]
-    exact ⟨[], by simp [Split]⟩
+    exact ⟨[], by simp only [Split, List.append_nil]⟩
   have callPostWf : Mem.Wf callPost.memory := by
     rcases of_run_call_val_with_depth operandPrefix
         (Ninst.Run.of_runCompiled crossing) hfork with failure | success
@@ -2290,7 +2290,8 @@ theorem callWethTransfer_worldEffect_quiet
       runCompiled_enters_wethNonpayable compiled selectorEq
         (show (selector "transfer" [.address, .uint256],
           nonpayable Blanc.transfer) ∈ Blanc.wethFuncs by
-          simp [Blanc.wethFuncs])
+          simp only [wethFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+            or_true])
     have off := (transferBody_exactEffect wethBodyRun).2.1
     rw [currentTarget] at off
     have entryWeth : Devm.getStor callPre wethAccount =
@@ -2500,7 +2501,7 @@ private theorem readTotalAssets_depth_ne_zero
   have memory : MemoryImage entry entry.memory.data.toList := by
     refine ⟨memoryWf, ?_⟩
     intro index
-    simp
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
   obtain ⟨callPre, callPost, staging, crossing, suffix⟩ :=
     readTotalAssets_trace run
   obtain ⟨gasWord, rest, stack, -, -⟩ :=
@@ -2509,7 +2510,7 @@ private theorem readTotalAssets_depth_ne_zero
       gasWord :: wethAccount.toB256 :: 28 :: 36 :: 0 :: 32 :: rest <<+
         callPre.stack := by
     rw [stack]
-    exact ⟨[], by simp [Split]⟩
+    exact ⟨[], by simp only [Split, List.append_nil]⟩
   obtain ⟨status, tail, _, statusStack, statusNonzero, _⟩ :=
     checkedCall_status_nonzero suffix
   rcases of_run_staticcall_val_with_depth operands
@@ -2598,7 +2599,7 @@ private theorem balanceOfStaging_run_eq
     | reg r =>
         have notPc : r ≠ .pc := by
           rintro rfl
-          simp [Blanc.Ninst.pcFree] at pcFree
+          simp only [Ninst.pcFree, Bool.false_eq_true] at pcFree
         obtain ⟨leftPc, leftEq⟩ := of_run_reg left
         obtain ⟨rightPc, rightEq⟩ := of_run_reg right
         change Rinst.runCore leftPc pre sevm r = .ok post₁ at leftEq
@@ -2641,18 +2642,19 @@ private theorem balanceOfStaging_run_eq
         | cons leftHead leftTail =>
           cases right with
           | cons rightHead rightTail =>
-            have headSafe := safe head (by simp)
+            have headSafe := safe head (by simp only [List.mem_cons, true_or])
             have middleEq := ninstUnique headSafe.1 headSafe.2
               leftHead rightHead
             subst middleEq
-            exact ih (fun n member => safe n (by simp [member]))
+            exact ih (fun n member => safe n (by simp only [List.mem_cons, member, or_true]))
               leftTail rightTail
   refine lineUnique ?_ left right
   intro n member
-  simp [balanceOfStaging, mstoreAt, pushList] at member
+  simp only [balanceOfStaging, mstoreAt, List.cons_append, List.nil_append, pushList, List.map_cons,
+    List.map_nil, List.mem_cons, List.not_mem_nil, or_false] at member
   rcases member with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
     rfl | rfl | rfl | rfl | rfl | rfl | rfl
-  all_goals simp [Ninst.pushB256, Blanc.Ninst.pcFree]
+  all_goals simp only [pcFree, pushB256, ne_eq, reduceCtorEq, not_false_eq_true, implies_true, and_self]
 
 /-- Successful execution of a vault balance query supplies its complete
 depth-and-gas package for every exact run of the fixed staging line. -/
@@ -2749,7 +2751,7 @@ theorem quoteSnapshot_effect
     Line.of_inv Devm.logs (by line_inv) staging
   have stageReads : Mem.Reads stagePre.memory stagePre.memory.data.toList := by
     intro index
-    simp
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
   obtain ⟨supply, quotePre, supplyEq, stable, quoteStack, quoteWf,
       quoteReads, quoteStorage, quoteCode, quoteLogs, quoteRun⟩ :=
     Blanc.ProrataWethVault.conversionStaging_trace (R := Func.RunOk) stageWf stageReads
@@ -2972,7 +2974,7 @@ theorem vault_exactWethChild_of_occurrence
   have memory : MemoryImage entry entry.memory.data.toList := by
     refine ⟨source.memoryWf form entry staging', ?_⟩
     intro index
-    simp
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
   cases form with
   | balanceOf =>
       have crossing :

@@ -95,18 +95,15 @@ private theorem address_observation_effect
     exact hremoved ((hkeys .removedIndex).mp h.symm)
   have hassignmentKey :
       mapSlot target 3 = rawKey ↔ assignmentSlot target = logicalKey := by
-    simpa [removalRawKey, removalLogicalKey, eq_comm] using
-      (hkeys .assignment)
+    simpa only [eq_comm, removalRawKey, removalLogicalKey] using (hkeys .assignment)
   have hholeKey :
       registryArraySlot index = rawKey ↔
         arrayEntrySlot (Nat.toB256 (index + 1)) = logicalKey := by
-    simpa [removalRawKey, removalLogicalKey, eq_comm] using
-      (hkeys .hole)
+    simpa only [eq_comm, removalRawKey, removalLogicalKey] using (hkeys .hole)
   have htailKey :
       registryArraySlot (entries.length - 1) = rawKey ↔
         arrayEntrySlot (Nat.toB256 entries.length) = logicalKey := by
-    simpa [removalRawKey, removalLogicalKey, eq_comm] using
-      (hkeys .tail)
+    simpa only [eq_comm, removalRawKey, removalLogicalKey] using (hkeys .tail)
   have hraw :
       addressSlotReadWord
         ((rawRemovalPost raw entries target oldPauser index).get rawKey) =
@@ -136,8 +133,8 @@ private theorem address_observation_effect
         sourceLastTarget entries
       else if assignmentSlot target = logicalKey then 0
       else (solRegistryStorage raw).read logicalKey := by
-    simp [logicalRemovalPost, Ne.symm hcount, Ne.symm hmoved,
-      Ne.symm hlength, Ne.symm hremoved]
+    simp only [logicalRemovalPost, List.foldl_cons, List.foldl_nil, Ne.symm hremoved, ↓reduceIte,
+      Ne.symm hlength, Ne.symm hmoved, Ne.symm hcount]
   rw [hraw, hlogical, hbase]
   simp only [hassignmentKey, hholeKey, htailKey]
 
@@ -164,21 +161,17 @@ private theorem word_observation_effect
     exact htail ((hkeys .tail).mp h.symm)
   have hcountKey :
       mapSlot oldPauser 6 = rawKey ↔ countSlot oldPauser = logicalKey := by
-    simpa [removalRawKey, removalLogicalKey, eq_comm] using
-      (hkeys .count)
+    simpa only [eq_comm, removalRawKey, removalLogicalKey] using (hkeys .count)
   have hmovedKey :
       mapSlot (sourceLastTarget entries) 4 = rawKey ↔
         indexSlot (sourceLastTarget entries) = logicalKey := by
-    simpa [removalRawKey, removalLogicalKey, eq_comm] using
-      (hkeys .movedIndex)
+    simpa only [eq_comm, removalRawKey, removalLogicalKey] using (hkeys .movedIndex)
   have hlengthKey :
       (5 : B256) = rawKey ↔ arrayLengthSlot = logicalKey := by
-    simpa [removalRawKey, removalLogicalKey, eq_comm] using
-      (hkeys .length)
+    simpa only [eq_comm, removalRawKey, removalLogicalKey] using (hkeys .length)
   have hremovedKey :
       mapSlot target 4 = rawKey ↔ indexSlot target = logicalKey := by
-    simpa [removalRawKey, removalLogicalKey, eq_comm] using
-      (hkeys .removedIndex)
+    simpa only [eq_comm, removalRawKey, removalLogicalKey] using (hkeys .removedIndex)
   have hraw :
       (rawRemovalPost raw entries target oldPauser index).get rawKey =
       if mapSlot target 4 = rawKey then 0
@@ -220,8 +213,8 @@ private theorem word_observation_effect
       else if countSlot oldPauser = logicalKey then
         Nat.toB256 (assignmentCount entries oldPauser - 1)
       else (solRegistryStorage raw).read logicalKey := by
-    simp [logicalRemovalPost, Ne.symm hassignment, Ne.symm hhole,
-      Ne.symm htail]
+    simp only [logicalRemovalPost, List.foldl_cons, List.foldl_nil, Ne.symm htail, ↓reduceIte,
+      Ne.symm hhole, Ne.symm hassignment]
   rw [hraw, hlogical, hbase]
   simp only [hcountKey, hmovedKey, hlengthKey, hremovedKey]
 
@@ -254,7 +247,7 @@ theorem rawRemovalReadEffect_of_local_keys
   have hlastValid : nonzeroCanonicalAddress last.1 :=
     hw.targetsValid last (last_mem_of_last entries hlast)
   have hm : nonzeroCanonicalAddress (sourceLastTarget entries) := by
-    simpa [sourceLastTarget, hlast] using hlastValid
+    simpa only [sourceLastTarget, hlast] using hlastValid
   have hmClean : addressSlotReadWord (sourceLastTarget entries) =
       sourceLastTarget entries := by
     have hlastBound : entries.length - 1 + 1 < 2 ^ 252 := by omega
@@ -262,7 +255,7 @@ theorem rawRemovalReadEffect_of_local_keys
     rw [solRegistryStorage_array _ _ hlastBound,
       targetAt_last_of_last entries hlast] at harray
     have hsource : sourceLastTarget entries = last.1 := by
-      simp [sourceLastTarget, hlast]
+      simp only [sourceLastTarget, hlast]
     rw [hsource]
     calc
       addressSlotReadWord last.1 =
@@ -425,14 +418,14 @@ private theorem removalRawKey_eq_solKey
   have hlastValid : nonzeroCanonicalAddress last.1 :=
     hw.targetsValid last (last_mem_of_last entries hlast)
   have hm : nonzeroCanonicalAddress (sourceLastTarget entries) := by
-    simpa [sourceLastTarget, hlast] using hlastValid
+    simpa only [sourceLastTarget, hlast] using hlastValid
   cases write with
-  | assignment => simp [removalRawKey, removalLogicalKey, solKey_assignmentSlot htarget.2]
-  | count => simp [removalRawKey, removalLogicalKey, solKey_countSlot hold.2]
+  | assignment => simp only [removalRawKey, removalLogicalKey, solKey_assignmentSlot htarget.2]
+  | count => simp only [removalRawKey, removalLogicalKey, solKey_countSlot hold.2]
   | hole =>
     have hbound : index + 1 < 2 ^ 252 := by omega
-    simp [removalRawKey, removalLogicalKey, solKey_arrayEntrySlot hbound]
-  | movedIndex => simp [removalRawKey, removalLogicalKey, solKey_indexSlot hm.2]
+    simp only [removalRawKey, removalLogicalKey, solKey_arrayEntrySlot hbound]
+  | movedIndex => simp only [removalRawKey, removalLogicalKey, solKey_indexSlot hm.2]
   | tail =>
     have htailBound : entries.length - 1 + 1 < 2 ^ 252 := by omega
     have htailEq : entries.length - 1 + 1 = entries.length := by omega
@@ -440,8 +433,8 @@ private theorem removalRawKey_eq_solKey
     rw [htailEq] at h
     simp only [removalRawKey, removalLogicalKey]
     exact h.symm
-  | length => simp [removalRawKey, removalLogicalKey, solKey_arrayLengthSlot]
-  | removedIndex => simp [removalRawKey, removalLogicalKey, solKey_indexSlot htarget.2]
+  | length => simp only [removalRawKey, removalLogicalKey, solKey_arrayLengthSlot]
+  | removedIndex => simp only [removalRawKey, removalLogicalKey, solKey_indexSlot htarget.2]
 
 /-- Every `LocalRemovalKeys` obligation is `RegistryKeysFaithful` read back at
 the write whose raw/logical key pair it names. -/
@@ -460,7 +453,7 @@ theorem LocalRemovalKeys_of_registryKeysFaithful
     have hrw := removalRawKey_eq_solKey hw htarget hfind write
     have hmem : removalLogicalKey entries target oldPauser index write ∈
         removalWriteKeys entries target oldPauser index := by
-      cases write <;> simp [removalWriteKeys, removalLogicalKey]
+      cases write <;> simp only [removalWriteKeys, removalLogicalKey, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
     constructor
     · intro h
       apply hfaithful _ hmem logicalKey hobs

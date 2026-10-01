@@ -146,7 +146,7 @@ theorem implGuarded_runCompiledTo_nonzero
   · unfold implGuarded cdl
     func_run [0, 22100, 3]
     case h_legacy => exact hfork.rules_stateGas_none
-    all_goals try {simp [B256.eqCheck, h_data]}
+    all_goals try {simp only [Devm.setMach_gasLeft, B256.eqCheck, h_data, ↓reduceIte]}
     all_goals try {rw [Devm.getStorVal_setMach, h_orig, h_cur]; decide}
     case h_ext =>
       rw [show ((0 : B256) * 32).toNat = 0 by decide]
@@ -206,7 +206,7 @@ theorem implGuarded_runCompiledTo_zero
   · unfold implGuarded cdl implRevert post
     rw [implGuardedRevertGas_eq]
     func_run [1]
-    all_goals try {simp [B256.eqCheck, h_data]}
+    all_goals try {simp only [B256.eqCheck, h_data, ↓reduceIte, add_tsub_cancel_right]}
     simp only [Nat.add_sub_cancel]
     apply Func.runCompiledTo_revert (G := G)
     · rfl
@@ -261,8 +261,9 @@ private lemma static_sstore_run
       let d ← chargeGas gasCost3 d
       assertDynamic sevm d
       .ok (d.setStorVal sevm.currentTarget key new_value)) from by
-    simp [Rinst.run, Rinst.runCore, h_legacy, h_bal, h_gas,
-      Devm.balReadAccount_of_bal_none, Devm.balReadStorage_of_bal_none]]
+    simp only [ExceptT.stM_eq, Rinst.run, Rinst.runCore, h_legacy, h_bal,
+      Devm.balReadStorage_of_bal_none, ite_not, ne_eq, h_gas, Devm.balReadAccount_of_bal_none,
+      Except.bind_ok]]
   have h_pop : (d.setMach ⟨[1], d.memory, d.gasLeft, d.stateGas⟩).pop =
       .ok ⟨1, d.setMach ⟨[], d.memory, d.gasLeft, d.stateGas⟩⟩ := by rfl
   have h_if : (if (0 : B256) = 1 then gasColdSload + gasWarmAccess
@@ -290,9 +291,10 @@ private lemma static_sstore_run
     d.gasLeft - (gasColdSload + gasStorageSet), d2.stateGas⟩
   refine ⟨post, ?_, ?_, ?_, ?_⟩
   rw [Devm.pop_eq_ok h_stack]
-  simp [h_pop, h_if, assertDynamic, Except.assert,
-    Devm.setMach_accessedStorageKeys, Devm.getStorVal_setMach,
-    h_static, h_stipend, h_cold, h_orig, h_cur, d0, d1, d2, h_charge, post]
+  simp only [ExceptT.stM_eq, Except.assert, ite_not, ne_eq, assertDynamic, h_static, Bool.not_true,
+    Bool.false_eq_true, ↓reduceIte, Except.bind_error, Except.bind_ok, h_pop, h_orig,
+    Devm.setMach_gasLeft, h_stipend, Devm.getStorVal_setMach, h_cur, true_and,
+    Devm.setMach_accessedStorageKeys, h_cold, h_if, h_charge, d2, d1, d0, post]
   · rw [Devm.setMach_state]
     exact hworld.1.symm
   · rw [Devm.setMach_transientStorage]
@@ -456,7 +458,7 @@ theorem implGuarded_static_halt_exec
     decide +kernel
   have hEntryBurn : Devm.BurnBy gJumpdest dEntry d0 := by
     have hg : gJumpdest ≤ dEntry.gasLeft := by
-      simp [dEntry, implGuardedSuccessEntryGas_eq, gJumpdest]
+      simp only [dEntry, implGuardedSuccessEntryGas_eq, gJumpdest, Devm.setMach_gasLeft, le_add_iff_nonneg_left, zero_le]
     have h := Devm.burnBy_setMach
       (devm := dEntry) (cost := gJumpdest) hg
     exact h
@@ -468,8 +470,8 @@ theorem implGuarded_static_halt_exec
       (sevm := sevm) (devm := d0)
       (w := 0) (c := gBase) (G := G + 22141)
       pushCost_zero
-      (by simp [d0, dEntry, implGuardedSuccessEntryGas_eq,
-        gJumpdest, gBase])
+      (by simp only [d0, dEntry, implGuardedSuccessEntryGas_eq, gJumpdest, gBase,
+        Devm.setMach_gasLeft, Nat.add_one_sub_one, Devm.setMach_stateGas])
       (by change ([] : List B256).length < 1024; decide)
   have rload :=
     Ninst.runCompiled_calldataload
@@ -477,8 +479,8 @@ theorem implGuarded_static_halt_exec
       (x := 0) (v := Sevm.dataWord sevm 0) (s := [])
       (G := G + 22138)
       (by rfl) (by rfl)
-      (by simp [d1, d0, dEntry, gVerylow, gJumpdest,
-        implGuardedSuccessEntryGas_eq])
+      (by simp only [d1, d0, dEntry, gVerylow, gJumpdest, implGuardedSuccessEntryGas_eq,
+        Devm.setMach_gasLeft, Nat.add_one_sub_one, Devm.setMach_stateGas])
       (by decide)
   have riszero :=
     Ninst.runCompiled_unary
@@ -487,30 +489,30 @@ theorem implGuarded_static_halt_exec
       (x := Sevm.dataWord sevm 0) (v := 0) (s := [])
       (cost := gVerylow) (G := G + 22135)
       (by rintro ⟨⟩) (by rfl) (by rfl)
-      (by simp [B256.eqCheck, h_data])
-      (by simp [d2, gVerylow]) (by decide)
+      (by simp only [B256.eqCheck, h_data, ↓reduceIte])
+      (by simp only [d2, gVerylow, Devm.setMach_gasLeft]) (by decide)
   have rpush1 :=
     Ninst.runCompiled_pushB256
       (sevm := sevm) (devm := d8)
       (w := 1) (c := gVerylow) (G := G + 22119)
       (pushCost_of_ne_zero (by decide))
-      (by simp [d8, implBodyGas_eq, gVerylow])
+      (by simp only [d8, implBodyGas_eq, gVerylow, Devm.setMach_gasLeft])
       (by change ([] : List B256).length < 1024; decide)
   have rpushSlot :=
     Ninst.runCompiled_pushB256
       (sevm := sevm) (devm := d10)
       (w := implSlot) (c := gVerylow) (G := G + 22116)
       (pushCost_of_ne_zero (by decide))
-      (by simp [d10, gVerylow])
+      (by simp only [d10, gVerylow, Devm.setMach_gasLeft])
       (by change ([1] : List B256).length < 1024; decide)
   have hpop :=
     Devm.popBurnBy_setMach
       (devm := d4) (x := 0) (s := [])
       (cost := gVerylow + gHigh) (G := G + implBodyGas)
       (by rfl)
-      (by simp [d4, d3, d2, d1, d0, dEntry,
-        implBodyGas_eq, gVerylow, gHigh, gJumpdest,
-        implGuardedSuccessEntryGas_eq])
+      (by simp only [d4, d3, d2, d1, d0, dEntry, implBodyGas_eq, gVerylow, gHigh, gJumpdest,
+        implGuardedSuccessEntryGas_eq, Devm.setMach_gasLeft, Nat.add_one_sub_one,
+        Devm.setMach_stateGas, Nat.reduceAdd])
   rcases Evm.branch_zero_steps
       (pc := 4) (loc := 21)
       hbranchPush hjumpi (by decide)
@@ -525,17 +527,15 @@ theorem implGuarded_static_halt_exec
     implGuarded_static_sstore_halt
       12 sevm d12 hsstore hfork h_static
       (by rfl)
-      (by simp [d12, gCallStipend])
+      (by simp only [d12, gCallStipend, Devm.setMach_gasLeft, lt_add_iff_pos_left, add_pos_iff, Nat.ofNat_pos, or_true])
       (by
         have h1 : gasColdSload = 2100 := rfl
         have h2 : gasStorageSet = 20000 := rfl
         show gasColdSload + gasStorageSet ≤ G + 22116
         omega)
-      (by simpa [d12, d10, d8, d4, d3, d2, d1, d0, dEntry,
-        Devm.setMach_accessedStorageKeys] using h_cold)
-      (by simpa [d12, d10, d8, d4, d3, d2, d1, d0, dEntry] using h_orig)
-      (by simpa [d12, d10, d8, d4, d3, d2, d1, d0, dEntry,
-        Devm.getStorVal_setMach] using h_cur)
+      (by simpa only [d12, d10, d8, d4, d3, d2, d1, d0, dEntry, Devm.setMach_accessedStorageKeys, Devm.setMach_gasLeft, Devm.setMach_stateGas] using h_cold)
+      (by simpa only [d12, d10, d8, d4, d3, d2, d1, d0, dEntry] using h_orig)
+      (by simpa only [d12, d10, d8, d4, d3, d2, d1, d0, dEntry, Devm.getStorVal_setMach, Devm.setMach_gasLeft, Devm.setMach_stateGas] using h_cur)
   obtain ⟨e12⟩ := h12
   obtain ⟨e10⟩ :=
     Ninst.exec_of_stepRun hpushSlot hfill4 (hstep4 10) ⟨e12⟩
@@ -555,11 +555,9 @@ theorem implGuarded_static_halt_exec
     ⟨Exec.cont hEntryStep e1⟩
   refine ⟨post, hexec, ?_, ?_, ?_, ?_⟩
   · exact (exec_iff_exec_eq 0 sevm dEntry finalEx).mp hexec
-  · simpa [d12, d10, d8, d4, d3, d2, d1, d0, dEntry,
-      Devm.setMach_state] using hstate
-  · simpa [d12, d10, d8, d4, d3, d2, d1, d0, dEntry,
-      Devm.setMach_transientStorage] using htrans
-  · simpa [d12, d10, d8, d4, d3, d2, d1, d0, dEntry,
-      Devm.setMach_logs] using hlogs
+  · simpa only [d12, d10, d8, d4, d3, d2, d1, d0, dEntry, Devm.setMach_state, Devm.setMach_gasLeft, Devm.setMach_stateGas] using hstate
+  · simpa only [d12, d10, d8, d4, d3, d2, d1, d0, dEntry, Devm.setMach_transientStorage, Devm.setMach_gasLeft, Devm.setMach_stateGas] using
+    htrans
+  · simpa only [d12, d10, d8, d4, d3, d2, d1, d0, dEntry, Devm.setMach_logs, Devm.setMach_gasLeft, Devm.setMach_stateGas] using hlogs
 
 end Blanc.ProxyPair

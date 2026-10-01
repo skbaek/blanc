@@ -139,7 +139,7 @@ theorem frame4C_child_at (hg : CoveredFork g) :
     exact ⟨.ok post4C, hx3, frame_settle_ok hcr3 hsg3 herr⟩
   · show a ∈ post4C.accessedAddresses ↔ _
     rw [show post4C = post4CF post5C from rfl, hka, (hacc.1 a), hpe, hpa a, ha4.1 a]
-    simp [adrsH4C]
+    simp only [true_and, adrsH4C, List.mem_append]
   · show x ∈ post4C.accessedStorageKeys ↔ _
     rw [show post4C = post4CF post5C from rfl, hkk, (hacc.2 x), hpe, hpk, ha4.2.1 x]
     simp only [true_and, keysH4C, List.mem_append]

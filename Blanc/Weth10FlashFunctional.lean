@@ -56,7 +56,7 @@ lemma flashCallbackImage_nil (sel cal slf amt lenw : B256)
   have hlen : ∀ x : B256, (B256.toBytes x).length = 32 :=
     B256.length_toBytes
   have e0 : Bytes.writeAt ([] : Bytes) 0 amt.toBytes = amt.toBytes :=
-    Bytes.writeAt_zero_of_le (by simp)
+    Bytes.writeAt_zero_of_le (by simp only [List.length_nil, zero_le])
   have e1 : Bytes.writeAt amt.toBytes 0 sel.toBytes = sel.toBytes :=
     Bytes.writeAt_zero_of_le (by rw [hlen, hlen])
   have e2 : Bytes.writeAt sel.toBytes 32 cal.toBytes =
@@ -64,30 +64,34 @@ lemma flashCallbackImage_nil (sel cal slf amt lenw : B256)
     Bytes.writeAt_of_length_eq (hlen sel)
   have e3 : Bytes.writeAt (sel.toBytes ++ cal.toBytes) 64 slf.toBytes =
       sel.toBytes ++ cal.toBytes ++ slf.toBytes :=
-    Bytes.writeAt_of_length_eq (by simp [hlen])
+    Bytes.writeAt_of_length_eq (by simp only [List.length_append, hlen, Nat.reduceAdd])
   have e4 : Bytes.writeAt
       (sel.toBytes ++ cal.toBytes ++ slf.toBytes) 96 amt.toBytes =
       sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes :=
-    Bytes.writeAt_of_length_eq (by simp [hlen])
+    Bytes.writeAt_of_length_eq (by simp only [List.append_assoc, List.length_append, hlen,
+      Nat.reduceAdd])
   have e5 : Bytes.writeAt
       (sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes)
       128 (0 : B256).toBytes =
       sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes ++
         (0 : B256).toBytes :=
-    Bytes.writeAt_of_length_eq (by simp [hlen])
+    Bytes.writeAt_of_length_eq (by simp only [List.append_assoc, List.length_append, hlen,
+      Nat.reduceAdd])
   have e6 : Bytes.writeAt
       (sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes ++
         (0 : B256).toBytes) 160 (0xa0 : B256).toBytes =
       sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes ++
         (0 : B256).toBytes ++ (0xa0 : B256).toBytes :=
-    Bytes.writeAt_of_length_eq (by simp [hlen])
+    Bytes.writeAt_of_length_eq (by simp only [List.append_assoc, List.length_append, hlen,
+      Nat.reduceAdd])
   have e7 : Bytes.writeAt
       (sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes ++
         (0 : B256).toBytes ++ (0xa0 : B256).toBytes)
       192 lenw.toBytes =
       sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes ++
         (0 : B256).toBytes ++ (0xa0 : B256).toBytes ++ lenw.toBytes :=
-    Bytes.writeAt_of_length_eq (by simp [hlen])
+    Bytes.writeAt_of_length_eq (by simp only [List.append_assoc, List.length_append, hlen,
+      Nat.reduceAdd])
   have e8 : Bytes.writeAt
       (sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes ++
         (0 : B256).toBytes ++ (0xa0 : B256).toBytes ++ lenw.toBytes)
@@ -95,7 +99,8 @@ lemma flashCallbackImage_nil (sel cal slf amt lenw : B256)
       sel.toBytes ++ cal.toBytes ++ slf.toBytes ++ amt.toBytes ++
         (0 : B256).toBytes ++ (0xa0 : B256).toBytes ++ lenw.toBytes ++
         payload :=
-    Bytes.writeAt_of_length_eq (by simp [hlen])
+    Bytes.writeAt_of_length_eq (by simp only [List.append_assoc, List.length_append, hlen,
+      Nat.reduceAdd])
   rw [e0, e1, e2, e3, e4, e5, e6, e7, e8]
 
 /-- The call window is the canonical ERC-3156 callback encoding, including
@@ -116,7 +121,7 @@ lemma flashCallbackWindow (sel cal slf amt : B256) (payload : Bytes) :
       sel.toBytes ++ (cal.toBytes ++ slf.toBytes ++ amt.toBytes ++
         (0 : B256).toBytes ++ (0xa0 : B256).toBytes ++
         (Nat.toB256 payload.length).toBytes ++ payload) := by
-    simp [List.append_assoc]
+    simp only [List.append_assoc]
   unfold List.sliceD
   rw [himg, List.drop_append_of_le_length (by rw [hlen]; omega)]
   rw [List.takeD_of_length_le]
@@ -498,7 +503,8 @@ theorem of_rawFlashLoanSuccessTail_step
     have h_bubble_lookup :
         ((weth10 dp).main :: weth10Aux)[bubbleRevertSlot]? =
           some bubbleRevert := by
-      simp [weth10, weth10Aux, bubbleRevertSlot]
+      simp only [weth10, weth10Aux, bubbleRevertSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
     rcases of_run_branch_call_bubbleFunctional h_bubble_lookup h_run with
       ⟨s2, hpb2, -⟩
     have hps2 := hpb2.stack
@@ -506,7 +512,7 @@ theorem of_rawFlashLoanSuccessTail_step
     rw [hps2] at hp1
     have h01 : ((0 : B256) =? 0) = 0 :=
       pref_head_unique hp1 (pref_append [(0 : B256)] s2.stack)
-    rw [show ((0 : B256) =? 0) = 1 from by simp [B256.eqCheck]] at h01
+    rw [show ((0 : B256) =? 0) = 1 from by simp only [B256.eqCheck, ↓reduceIte]] at h01
     exact B256.zero_ne_one h01.symm
   · rcases h_ok with
       ⟨parent, child, xl, delegated, na, code, avail, pc, hstep,
@@ -551,7 +557,8 @@ theorem of_rawFlashLoanSuccessTail_step
     have h_bubble_lookup :
         ((weth10 dp).main :: weth10Aux)[bubbleRevertSlot]? =
           some bubbleRevert := by
-      simp [weth10, weth10Aux, bubbleRevertSlot]
+      simp only [weth10, weth10Aux, bubbleRevertSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
     rcases of_run_branch_call_bubbleFunctional h_bubble_lookup h_run with
       ⟨s2, hpb2, h_run⟩
     have hps2 := hpb2.stack
@@ -596,7 +603,9 @@ theorem of_rawFlashLoanSuccessTail_step
     have h_failed_lookup :
         ((weth10 dp).main :: weth10Aux)[flashFailedErrorSlot]? =
           some (Func.revertWith "WETH: flash loan failed") := by
-      simp [weth10, weth10Aux, flashFailedErrorSlot, flashFailedError]
+      simp only [weth10, weth10Aux, flashFailedError, flashFailedErrorSlot, List.length_cons,
+        List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos,
+        List.getElem_cons_succ, List.getElem_cons_zero]
     rcases of_run_branch_call_revertWithFunctional h_failed_lookup h_run with
       ⟨s7, hpb7, h_run⟩
     have hps7 := hpb7.stack
@@ -613,7 +622,7 @@ theorem of_rawFlashLoanSuccessTail_step
         simp only [B256.eqCheck]
         exact if_neg (fun h => hne h.symm)
       rw [h0, show ((0 : B256) =? 0) = 1 from by
-        simp [B256.eqCheck]] at h_flag2
+        simp only [B256.eqCheck, ↓reduceIte]] at h_flag2
       exact B256.zero_ne_one h_flag2.symm
     rw [h_flag2] at hp6
     have hlen : 32 ≤ child.output.length := by
@@ -632,7 +641,8 @@ theorem of_rawFlashLoanSuccessTail_step
     have h_settle_lookup :
         ((weth10 dp).main :: weth10Aux)[flashSettleSlot]? =
           some flashSettle := by
-      simp [weth10, weth10Aux, flashSettleSlot]
+      simp only [weth10, weth10Aux, flashSettleSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
     have hf : f = flashSettle := by
       rw [h_settle_lookup] at hget
       exact Option.some.inj hget.symm
@@ -1207,7 +1217,8 @@ theorem of_flashSettle_allowance
     exact hreadsKey
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[flashBurnSlot]? = some flashBurn := by
-    simp [weth10, weth10Aux, flashBurnSlot]
+    simp only [weth10, weth10Aux, flashBurnSlot, List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
 
   rcases of_run_branch runBranch with
       ⟨sf, hfinitePop, hfinite⟩ |
@@ -1221,7 +1232,7 @@ theorem of_flashSettle_allowance
     have hneMax : allowance ≠ B256.max := by
       intro hmaxAllowance
       rw [hmaxAllowance, B256.not_max,
-        show ((0 : B256) =? 0) = 1 from by simp [B256.eqCheck]]
+        show ((0 : B256) =? 0) = 1 from by simp only [B256.eqCheck, ↓reduceIte]]
         at hmaxFlag
       exact B256.zero_ne_one hmaxFlag.symm
     rw [hmaxFlag] at hpLoad
@@ -1259,7 +1270,9 @@ theorem of_flashSettle_allowance
     have h_allowance_lookup :
         ((weth10 dp).main :: weth10Aux)[allowanceErrorSlot]? =
           some (Func.revertWith "WETH: request exceeds allowance") := by
-      simp [weth10, weth10Aux, allowanceErrorSlot, allowanceError]
+      simp only [weth10, weth10Aux, allowanceError, allowanceErrorSlot, List.length_cons,
+        List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos,
+        List.getElem_cons_succ, List.getElem_cons_zero]
     rcases of_run_branch_call_revertWithFunctional h_allowance_lookup
         runGuard with ⟨sb, hguardPop, runMutate⟩
     have hguardStack := hguardPop.stack
@@ -1697,7 +1710,9 @@ theorem flashBurn_effect
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
         some (Func.revertWith "WETH: burn amount exceeds balance") := by
-    simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
+    simp only [weth10, weth10Aux, burnBalanceError, burnBalanceErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   rcases of_run_branch_call_revertWithFunctional h_burn_lookup run2 with
     ⟨s3, hguardPop, run3⟩
   have hguardStack := hguardPop.stack

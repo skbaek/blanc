@@ -40,7 +40,8 @@ def customErrorData (name : String) (args : List ArgType := []) : Bytes :=
 
 def runtimeError (name : String) (args : List ArgType := []) : Func :=
   Func.revertSelector (customErrorData name args) (by
-    simp [customErrorData, B256.length_toBytes])
+    simp only [customErrorData, List.length_take, B256.length_toBytes, Nat.reduceLeDiff,
+      inf_of_le_left])
 
 def fallbackSlot : Nat := 1
 def missingRoleSlot : Nat := 2
@@ -595,7 +596,8 @@ theorem integratedSlotOf_integratedLabel (n : Nat)
     (h : (Trigger.labelOfLocalSlot? n).isSome) :
     integratedSlotOf (integratedLabelOfLocalSlot n) = integratedTriggerSlot n := by
   rcases heq : Trigger.labelOfLocalSlot? n with _ | lbl
-  · rw [heq] at h; exact absurd h (by simp)
+  · rw [heq] at h; exact absurd h (by simp only [Option.isSome_none, Bool.false_eq_true,
+    not_false_eq_true])
   · exact integratedSlotOf_integratedLabelOfLocalSlot heq
 
 /-- The integrated rebase is the shared target renumbering owner
@@ -933,7 +935,7 @@ theorem runtime_compiles (dp : DeployParams) :
 
 theorem runtime_compile (dp : DeployParams) :
     Prog.compile (runtime dp) = some (runtimeCode dp) := by
-  simpa [runtimeCode] using
+  simpa only [runtimeCode] using
     Prog.compile_eq_some_getD_of_compiles (runtime dp) (runtime_compiles dp)
 
 /-- Checked link certificate for the symbolic gateway runtime.  `runtime` is left
@@ -962,14 +964,15 @@ private theorem runtimeStructuralLength_eq_zero (dp : DeployParams) :
       (((runtime ⟨0⟩).main :: (runtime ⟨0⟩).aux).map fun f => 1 + compsize f).sum := by
   have h := runtime_compileShape_eq_zero dp
   have hm : (runtime dp).main.compileShape = (runtime ⟨0⟩).main.compileShape := by
-    simpa [Prog.compileShape] using congrArg Prog.CompileShape.main h
+    simpa only [Prog.compileShape] using congrArg Prog.CompileShape.main h
   have ha : (runtime dp).aux.map Func.compileShape =
       (runtime ⟨0⟩).aux.map Func.compileShape := by
-    simpa [Prog.compileShape] using congrArg Prog.CompileShape.aux h
+    simpa only [Prog.compileShape] using congrArg Prog.CompileShape.aux h
   have hmap : ∀ l : List Func, (l.map fun f => 1 + compsize f) =
       (l.map Func.compileShape).map (fun sh => 1 + sh.byteSize) := by
     intro l
-    simp [List.map_map, Func.CompileShape.byteSize_compileShape]
+    simp only [List.map_map, List.map_inj_left, Function.comp_apply,
+      Func.CompileShape.byteSize_compileShape, implies_true]
   rw [List.map_cons, List.map_cons, List.sum_cons, List.sum_cons, hmap, hmap,
     ← Func.CompileShape.byteSize_compileShape, ← Func.CompileShape.byteSize_compileShape,
     hm, ha]

@@ -91,9 +91,8 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
               List.length_nil]; omega))
       have hrevSafe : Func.RunCompiledTo.NoRawSstorePath hrev :=
         Func.RunCompiledTo.NoRawSstorePath.of_execFree hrev
-          (by simp [Func.revert, Ninst.pushB256, funcExecFree])
-          (by simp [Func.revert, Ninst.pushB256,
-            Func.LocalSstoreFree])
+          (by simp only [Func.revert, Ninst.pushB256, funcExecFree, pushB256])
+          (by simp only [Func.revert, Ninst.pushB256, Func.LocalSstoreFree, pushB256, ne_eq, reduceCtorEq, not_false_eq_true, and_self])
       let branchPre := base.setMach ⟨[(0 : B256)], Mem.empty, G + 17, base.stateGas⟩
       have hroom : branchPre.stack.length < 1024 := by
         simp only [branchPre, Devm.stack_setMach, List.length_cons,
@@ -134,7 +133,7 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
           (r := .eq) (f := B256.eqCheck) (cost := gVerylow)
           (G := G + 17) (v := 0)
           (by rintro ⟨⟩) rfl rfl
-          (by simp [B256.eqCheck, hne])
+          (by simp only [B256.eqCheck, hne, ↓reduceIte])
           (by simp only [afterPush, Devm.gasLeft_setMach, gVerylow])
           (by simp only [List.length_nil]; omega)
       let run : Func.RunCompiledTo (program.main :: program.aux) sevm
@@ -236,7 +235,7 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
             (r := .gt) (f := B256.gtCheck) (cost := gVerylow)
             (G := G + childGas + 14) (v := 1)
             (by rintro ⟨⟩) rfl rfl
-            (by simp [B256.gtCheck, hpivot])
+            (by simp only [B256.gtCheck, hpivot, ↓reduceIte])
             (by simp only [afterPush, Devm.gasLeft_setMach, gVerylow])
             (by simp only [List.length_cons, List.length_nil]; omega)
         let run0 : Func.RunCompiledTo (program.main :: program.aux) sevm
@@ -278,8 +277,7 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
                   (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])),
               Func.RunCompiledTo.NoRawSstorePath run :=
           ⟨run0, run0Safe⟩
-        simpa [DispatchTree.dispatchMissGas, pivot, hpivot,
-          Nat.add_assoc] using packaged
+        simpa only [DispatchTree.dispatchMissGas, pivot, hpivot, Nat.add_assoc, dispatchMissGas, gt_iff_lt, ↓reduceIte] using packaged
       · obtain ⟨hchild, hchildSafe⟩ :=
           ihRight hright
         let childGas := right.dispatchMissGas selector
@@ -348,7 +346,7 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
             (r := .gt) (f := B256.gtCheck) (cost := gVerylow)
             (G := G + childGas + 13) (v := 0)
             (by rintro ⟨⟩) rfl rfl
-            (by simp [B256.gtCheck, hpivot])
+            (by simp only [B256.gtCheck, hpivot, ↓reduceIte])
             (by simp only [afterPush, Devm.gasLeft_setMach, gVerylow])
             (by simp only [List.length_cons, List.length_nil]; omega)
         let run0 : Func.RunCompiledTo (program.main :: program.aux) sevm
@@ -389,7 +387,6 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
                   (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])),
               Func.RunCompiledTo.NoRawSstorePath run :=
           ⟨run0, run0Safe⟩
-        simpa [DispatchTree.dispatchMissGas, pivot, hpivot,
-          Nat.add_assoc] using packaged
+        simpa only [DispatchTree.dispatchMissGas, pivot, hpivot, Nat.add_assoc, dispatchMissGas, gt_iff_lt, ↓reduceIte] using packaged
 
 end Blanc

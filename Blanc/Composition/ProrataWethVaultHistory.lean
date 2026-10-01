@@ -113,15 +113,15 @@ theorem append {vault : Adr} {pre mid post : PairBoundary}
     PairReplay vault pre (left ++ right) post := by
   induction before with
   | nil boundary =>
-      simpa using after
+      simpa only [List.nil_append] using after
   | @cons pre mid post record steps preEq postEq tail ih =>
-      simpa using PairReplay.cons record preEq postEq (ih after)
+      simpa only [List.cons_append] using PairReplay.cons record preEq postEq (ih after)
 
 /-- The ledger of a composed history is the composed ledger. -/
 theorem ledger_append {vault : Adr} {xs ys : List (PairStepRecord vault)} :
     PairStepRecord.ledger (xs ++ ys) =
       PairStepRecord.ledger xs ++ PairStepRecord.ledger ys := by
-  simp [PairStepRecord.ledger]
+  simp only [PairStepRecord.ledger, List.filterMap_append]
 
 end PairReplay
 
@@ -137,7 +137,7 @@ variable {vault : Adr} {ok ok' : PairStepRecord vault → Prop}
 
 theorem nil_of_eq {pre post : PairBoundary} (eq : post = pre) :
     PairReplayWith vault ok pre post :=
-  ⟨[], PairReplay.nil_of_eq eq, by simp⟩
+  ⟨[], PairReplay.nil_of_eq eq, by simp only [List.not_mem_nil, IsEmpty.forall_iff, implies_true]⟩
 -- H:270–272 at a general predicate.
 
 theorem append {pre mid post : PairBoundary}
@@ -311,7 +311,7 @@ theorem Exec.CorePairReplay.vaultFrame {vault : Adr} {pc : Nat} {sevm : Sevm} {p
     Exec.CorePairReplay vault pc sevm pre out := by
   intro run committed hfork vaultAt _ inv vaultDirect _ blockIndex transactionIndex framePath _
   cases out with
-  | error error => simp [Execution.commits] at committed
+  | error error => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       obtain ⟨code, pcZero⟩ := vaultAt.2 target
       subst pcZero
@@ -666,7 +666,7 @@ variable {vault : Adr} {blockIndex : Nat} {transactionIndex : Option Nat}
 
 theorem nil_of_eq {pre post : PairBoundary} (eq : post = pre) :
     PairReplayBetween vault blockIndex transactionIndex framePath pre post :=
-  ⟨[], PairReplay.nil_of_eq eq, by simp⟩
+  ⟨[], PairReplay.nil_of_eq eq, by simp only [List.not_mem_nil, IsEmpty.forall_iff, implies_true]⟩
 
 end PairReplayBetween
 
@@ -681,7 +681,8 @@ def pairCarrierWith (vault : Adr) (ok : PairStepRecord vault → Prop) :
   Replay pre steps post := PairReplay vault pre steps post ∧ ∀ r ∈ steps, ok r
   ofState := PairBoundary.ofState vault
   frameEntry _ state := PairBoundary.ofState vault state
-  nil boundary := ⟨.nil boundary, by simp⟩
+  nil boundary := ⟨.nil boundary, by simp only [List.not_mem_nil, IsEmpty.forall_iff,
+    implies_true]⟩
   worldSilent := by
     intro _ _ storage_eq _
     exact PairBoundary.ofState_eq (congrFun storage_eq vault) (congrFun storage_eq wethAccount)
@@ -717,7 +718,7 @@ theorem Exec.CorePairReplay.error {vault : Adr} {pc : Nat} {sevm : Sevm} {pre : 
     {error : EvmError × Devm} :
     Exec.CorePairReplay vault pc sevm pre (.error error) := by
   intro _ committed _
-  simp [Execution.commits] at committed
+  simp only [Execution.commits, Bool.false_eq_true] at committed
 
 /-- The continuation of a genuinely foreign frame, re-entered at the transported invariant. -/
 private theorem Exec.CorePairReplay.resume {vault : Adr} {pc : Nat} {sevm : Sevm}
@@ -752,7 +753,7 @@ theorem Exec.CorePairReplay.nextNone {vault : Adr} {pc : Nat} {sevm : Sevm} {pre
   · exact Exec.CorePairReplay.vaultFrame vaultSeg vaultEq
   intro run committed hfork _ _ inv _ _ blockIndex transactionIndex framePath nextChild
   cases out with
-  | error error => simp [Execution.commits] at committed
+  | error error => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
   have sub : ∀ d ∈ Exec.rawFrameDescendants next, d ∈ Exec.rawFrameRoots run :=
     fun d member => List.mem_cons.mpr
@@ -795,7 +796,7 @@ theorem Exec.CorePairReplay.last {vault : Adr} {pc : Nat} {sevm : Sevm} {pre : D
   · exact Exec.CorePairReplay.vaultFrame vaultSeg vaultEq
   intro _ committed _ _ _ _ _ _ blockIndex transactionIndex framePath _
   cases out with
-  | error error => simp [Execution.commits] at committed
+  | error error => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have storage := _root_.Blanc.Linst.getStor_eq step
       exact PairReplayWith.nil_of_eq
@@ -815,7 +816,7 @@ theorem Exec.CorePairReplay.jump {vault : Adr} {pc : Nat} {sevm : Sevm} {pre : D
   · exact Exec.CorePairReplay.vaultFrame vaultSeg vaultEq
   intro run committed hfork _ _ inv _ _ blockIndex transactionIndex framePath nextChild
   cases out with
-  | error error => simp [Execution.commits] at committed
+  | error error => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
   have sub : ∀ d ∈ Exec.rawFrameDescendants next, d ∈ Exec.rawFrameRoots run :=
     fun d member => List.mem_cons.mpr
@@ -852,16 +853,18 @@ theorem Exec.CorePairReplay.nextSome {vault : Adr} {pc : Nat} {sevm : Sevm} {pre
   · exact Exec.CorePairReplay.vaultFrame vaultSeg vaultEq
   cases n with
   | reg r =>
-      simp [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at step
+      simp only [Ninst.StepRun, Ninst.step_reg, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at step
   | push xs length =>
-      simp [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at step
+      simp only [Ninst.StepRun, Ninst.step_push, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at step
   | dupn _ | swapn _ | exchange _ =>
       cases ((Step.run_ofExecution (xl := (.some ⟨cevm, raw⟩ : Xlot))).mp step).1
   | exec x =>
       intro run committed hfork vaultAt wethAt inv _ _
         blockIndex transactionIndex framePath nextChild
       cases out with
-      | error error => simp [Execution.commits] at committed
+      | error error => simp only [Execution.commits, Bool.false_eq_true] at committed
       | ok post =>
       obtain ⟨childSub, nextSub⟩ :=
         Exec.rawFrameDescendants_sub_of_stepSome hat step child next run
@@ -873,14 +876,15 @@ theorem Exec.CorePairReplay.nextSome {vault : Adr} {pc : Nat} {sevm : Sevm} {pre
       have hxrun := XStep.run_toStep.mp step
       cases spawnEq : Xinst.step sevm pre x with
       | done execution =>
-          simp [spawnEq, XStep.Run] at hxrun
+          simp only [XStep.Run, spawnEq, ExceptT.stM_eq, reduceCtorEq, false_and] at hxrun
       | spawn frame resume =>
           simp only [spawnEq, XStep.Run] at hxrun
           obtain ⟨result, frameRun, resumeRun⟩ := hxrun
           cases result with
           | error error =>
               cases resume <;>
-                simp [Resume.run, liftToExecution] at resumeRun
+                simp only [ExceptT.stM_eq, Resume.run, liftToExecution, Except.bind_error,
+                  reduceCtorEq] at resumeRun
           | ok settled =>
               have enter := (RunFrame.some_inv frameRun).1
               have evmStep : Evm.step ⟨pc, sevm, pre⟩ =
@@ -915,7 +919,7 @@ theorem Exec.CorePairReplay.nextSome {vault : Adr} {pc : Nat} {sevm : Sevm} {pre
                 ⟨entry, transfer, childEvmEq⟩
               have childCallerEq : cevm.sta.caller = frame.inner.caller := by
                 have eq := congrArg (fun evm : Evm => evm.sta.caller) childEvmEq
-                dsimp [initEvm, initSevm, Msg.withBenv] at eq
+                dsimp only [Msg.withBenv, initEvm, initSevm] at eq
                 exact eq
               -- a child aimed at an installed account is a direct call
               have childDirectOf : ∀ {p : Prog} {ca : Adr},
@@ -943,7 +947,7 @@ theorem Exec.CorePairReplay.nextSome {vault : Adr} {pc : Nat} {sevm : Sevm} {pre
                         rw [if_neg (not_delegation_of_compile installed)])
                 have childCodeAddress :=
                   congrArg (fun evm : Evm => evm.sta.codeAddress) childEvmEq
-                dsimp [initEvm, initSevm, Msg.withBenv] at childCodeAddress
+                dsimp only [Msg.withBenv, initEvm, initSevm] at childCodeAddress
                 rw [childCodeAddress, codeAddress, innerTarget]
               have innerTargetOf : ∀ {ca : Adr}, cevm.sta.currentTarget = ca →
                   frame.inner.currentTarget = ca := by

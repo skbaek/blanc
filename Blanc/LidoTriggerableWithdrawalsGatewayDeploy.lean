@@ -66,7 +66,8 @@ private def storeByteOffset (offset : Nat) : Line :=
 
 private def constructorError (name : String) : Func :=
   Func.revertSelector (customErrorData name) (by
-    simp [customErrorData, B256.length_toBytes])
+    simp only [customErrorData, List.length_take, B256.length_toBytes, Nat.reduceLeDiff,
+      inf_of_le_left])
 
 private def patchLocatorLine (runtimeBase : Nat) : Line :=
   locatorWordOffsets.flatMap fun offset =>
@@ -193,18 +194,18 @@ def lidoTwgFullCreateInput (args : ConstructorArgs) : Bytes :=
 
 theorem abiEncodeConstructorArgs_length (args : ConstructorArgs) :
     (abiEncodeConstructorArgs args).length = constructorArgumentBytes := by
-  simp [abiEncodeConstructorArgs, constructorArgumentBytes,
-    B256.length_toBytes]
+  simp only [abiEncodeConstructorArgs, List.append_assoc, List.length_append, B256.length_toBytes,
+    Nat.reduceAdd, constructorArgumentBytes, Nat.reduceMul]
 
 theorem creation_template_runtime_suffix :
     lidoTwgCreationTemplate.drop lidoTwgInitPrefix.length =
       runtimeTemplateCode := by
-  simp [lidoTwgCreationTemplate]
+  simp only [lidoTwgCreationTemplate, List.drop_left']
 
 theorem full_create_input_length (args : ConstructorArgs) :
     (lidoTwgFullCreateInput args).length =
       lidoTwgCreationTemplate.length + constructorArgumentBytes := by
-  simp [lidoTwgFullCreateInput, abiEncodeConstructorArgs_length]
+  simp only [lidoTwgFullCreateInput, List.length_append, abiEncodeConstructorArgs_length]
 
 /-- Constructor writes are classified one-for-one.  Internal `Func.call`
 table edges are not external EVM calls. -/

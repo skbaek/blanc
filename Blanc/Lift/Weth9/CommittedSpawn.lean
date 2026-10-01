@@ -121,7 +121,8 @@ theorem weth9_spawnReplay (ca : Adr) {U : Key → Prop} (hinj : KeyInj U) :
     by_cases h : (decodeCall sevm).isSome = true
     · simp only [target, hstatic, h, and_self, ↓reduceIte]
       rfl
-    · have h' : (decodeCall sevm).isSome = false := by simpa using h
+    · have h' : (decodeCall sevm).isSome = false := by simpa only [Option.isSome_eq_false_iff,
+      Option.isNone_iff_eq_none, Bool.not_eq_true] using h
       simp only [h', Bool.false_eq_true, and_false, ↓reduceIte]
   refine ⟨if (decodeCall sevm).isSome = true then [⟨sevm, pre, post⟩] else [], ?_, ?_, ?_⟩
   · show _ = committedFrameInvocations ca (Exec.Frame.ofRun run committed)

@@ -74,11 +74,11 @@ private theorem ninst_state_of_silent {sevm : Sevm} {pre post : Devm} {n : Ninst
       · have hsstore : r ≠ .sstore := by
           intro h
           subst r
-          simp [Ninst.stateSilent] at hn
+          simp only [Ninst.stateSilent, Bool.false_eq_true] at hn
         have hframe := Rinst.preserves_state (pc := pc) (sevm := sevm)
           (pre := pre) (post := post) hsstore ht hrun'
         exact hframe.symm
-  | exec x => simp [Ninst.stateSilent] at hn
+  | exec x => simp only [Ninst.stateSilent, Bool.false_eq_true] at hn
   | push bs hbs =>
       rcases run with ⟨xl, -, pc, hrun⟩
       have hxl : xl = .none := by
@@ -130,7 +130,7 @@ private theorem linst_state_of_silent {sevm : Sevm} {pre post : Devm} {l : Linst
   have hnot : l ≠ .selfdestruct := by
     intro h
     subst l
-    simp at hl
+    simp only [bne_self_eq_false, Bool.false_eq_true] at hl
   have hframe := Linst.run_instructionFrame sevm pre l hnot
   rw [run] at hframe
   exact hframe.state.symm
@@ -146,58 +146,56 @@ theorem SFunc.RunP.state_of_silent {P : Sevm → Devm → Ninst → Devm → Pro
     intro k g hk hget
     have h := (List.all_eq_true.mp hS) k hk
     rw [hget] at h
-    simpa using h
+    simpa only [List.all_eq_true, decide_eq_true_eq, Bool.and_eq_true] using h
   induction run with
   | zero d pop run ih =>
       have hff := hf
       have hfr := hrefs
       simp only [SFunc.silent, Bool.and_eq_true] at hff
       simp only [SFunc.refs, List.all_append, Bool.and_eq_true] at hfr
-      simpa [Outcome.devm] using (ih hff.1 hfr.1).trans pop.state.symm
+      simpa only [Outcome.devm] using (ih hff.1 hfr.1).trans pop.state.symm
   | succ d w hnz pop run ih =>
       have hff := hf
       have hfr := hrefs
       simp only [SFunc.silent, Bool.and_eq_true] at hff
       simp only [SFunc.refs, List.all_append, Bool.and_eq_true] at hfr
-      simpa [Outcome.devm] using (ih hff.2 hfr.2).trans pop.state.symm
+      simpa only [Outcome.devm] using (ih hff.2 hfr.2).trans pop.state.symm
   | toZero d pop run ih =>
       have hfr := hrefs
       simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hfr
-      simpa [Outcome.devm] using (ih hf hfr.2).trans pop.state.symm
+      simpa only [Outcome.devm] using (ih hf hfr.2).trans pop.state.symm
   | toSucc d w hnz lookup pop run ih =>
       have hfr := hrefs
       simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hfr
       have htarget := closed (of_decide_eq_true hfr.1) lookup
-      simpa [SFunc.refs, SFunc.silent, Outcome.devm] using
-        (ih htarget.1 htarget.2).trans pop.state.symm
+      simpa only [Outcome.devm] using (ih htarget.1 htarget.2).trans pop.state.symm
   | last hrun =>
       simpa [Outcome.devm] using linst_state_of_silent (by simpa [SFunc.silent] using hf) hrun
   | next hrun run ih =>
       have hfn := hf
       simp only [SFunc.silent, Bool.and_eq_true] at hfn
-      simpa [Outcome.devm] using
-        (ih hfn.2 hrefs).trans (ninst_state_of_silent hfn.1 (hP hrun))
+      simpa only [Outcome.devm] using (ih hfn.2 hrefs).trans (ninst_state_of_silent hfn.1 (hP hrun))
   | dest burn run ih =>
-      simpa [Outcome.devm] using (ih hf hrefs).trans burn.state.symm
+      simpa only [Outcome.devm] using (ih hf hrefs).trans burn.state.symm
   | jump d lookup pop run ih =>
       have hfr := hrefs
       simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hfr
       have htarget := closed (of_decide_eq_true hfr.1) lookup
-      simpa [Outcome.devm] using (ih htarget.1 htarget.2).trans pop.state.symm
+      simpa only [Outcome.devm] using (ih htarget.1 htarget.2).trans pop.state.symm
   | ret d pop =>
-      simpa [Outcome.devm] using pop.state.symm
+      simpa only [Outcome.devm] using pop.state.symm
   | callHalt d lookup pop run ih =>
       have hfr := hrefs
       simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hfr
       have htarget := closed (of_decide_eq_true hfr.1) lookup
-      simpa [Outcome.devm] using (ih htarget.1 htarget.2).trans pop.state.symm
+      simpa only [Outcome.devm] using (ih htarget.1 htarget.2).trans pop.state.symm
   | callRet d lookup pop run tail ihRun ihTail =>
       have hfr := hrefs
       simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hfr
       have htarget := closed (of_decide_eq_true hfr.1) lookup
       have hfn := hf
       simp only [SFunc.silent] at hfn
-      simpa [Outcome.devm] using
+      simpa only [Outcome.devm] using
         (ihTail hfn hfr.2).trans ((ihRun htarget.1 htarget.2).trans pop.state.symm)
   | pcAt hrun _ run ih =>
       simpa [Outcome.devm] using

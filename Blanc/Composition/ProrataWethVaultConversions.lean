@@ -96,7 +96,7 @@ theorem readTotalAssets_conversion_body_effect
   have memory : MemoryImage entry entry.memory.data.toList := by
     refine ⟨memoryWf, ?_⟩
     intro index
-    simp
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
   obtain ⟨callPre, callPost, staging, crossing, suffix⟩ :=
     readTotalAssets_trace run
   have stagingCode : Devm.getCode entry = Devm.getCode callPre :=
@@ -116,7 +116,7 @@ theorem readTotalAssets_conversion_body_effect
   have bodyReads :
       Mem.Reads bodyPre.memory bodyPre.memory.data.toList := by
     intro index
-    simp
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
   obtain ⟨supply, supplyEq, stable, resultFits, result,
       resultStorage, resultLogs⟩ :=
     localEffect bodyWf bodyReads wordPrefix bodyRun
@@ -347,7 +347,8 @@ private theorem conversion_compiled_effect
 
 private theorem returnWord_lookup :
     (vault.main :: vault.aux)[returnWordSlot]? = some returnWord := by
-  simp [vault, vaultAux, returnWordSlot]
+  simp only [vault, vaultAux, returnWordSlot, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
 
 /-! ## Six public compiled endpoints -/
 
@@ -377,7 +378,8 @@ theorem convertToShares_compiled_effect
         pre post := by
   apply conversion_compiled_effect (body := convertToShares)
     (calculate := convertToSharesN) config memoryWf (by
-    simp [vaultFuncs]) _ run selectorEq
+    simp only [vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]) _ run selectorEq
   intro entry bodyConfig bodyMemory bodyRun
   exact convertToShares_body_effect bodyConfig hfork bodyMemory returnWord_lookup bodyRun
 
@@ -407,7 +409,8 @@ theorem convertToAssets_compiled_effect
         pre post := by
   apply conversion_compiled_effect (body := convertToAssets)
     (calculate := convertToAssetsN) config memoryWf (by
-    simp [vaultFuncs]) _ run selectorEq
+    simp only [vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]) _ run selectorEq
   intro entry bodyConfig bodyMemory bodyRun
   exact convertToAssets_body_effect bodyConfig hfork bodyMemory returnWord_lookup bodyRun
 
@@ -436,7 +439,7 @@ theorem previewDeposit_compiled_effect
         pre post := by
   apply conversion_compiled_effect (body := previewDeposit)
     (calculate := previewDepositN) config memoryWf (by
-    simp [vaultFuncs]) _ run selectorEq
+    simp only [vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, or_true]) _ run selectorEq
   intro entry bodyConfig bodyMemory bodyRun
   have effect := convertToShares_body_effect bodyConfig hfork bodyMemory
     returnWord_lookup (by
@@ -468,7 +471,8 @@ theorem previewRedeem_compiled_effect
         pre post := by
   apply conversion_compiled_effect (body := previewRedeem)
     (calculate := previewRedeemN) config memoryWf (by
-    simp [vaultFuncs]) _ run selectorEq
+    simp only [vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]) _ run selectorEq
   intro entry bodyConfig bodyMemory bodyRun
   have effect := convertToAssets_body_effect bodyConfig hfork bodyMemory
     returnWord_lookup (by
@@ -499,7 +503,8 @@ theorem previewMint_compiled_effect
         pre post := by
   apply conversion_compiled_effect (body := previewMint)
     (calculate := previewMintN) config memoryWf (by
-    simp [vaultFuncs]) _ run selectorEq
+    simp only [vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]) _ run selectorEq
   intro entry bodyConfig bodyMemory bodyRun
   exact previewMint_body_effect bodyConfig hfork bodyMemory returnWord_lookup bodyRun
 
@@ -528,7 +533,8 @@ theorem previewWithdraw_compiled_effect
         pre post := by
   apply conversion_compiled_effect (body := previewWithdraw)
     (calculate := previewWithdrawN) config memoryWf (by
-    simp [vaultFuncs]) _ run selectorEq
+    simp only [vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]) _ run selectorEq
   intro entry bodyConfig bodyMemory bodyRun
   exact previewWithdraw_body_effect bodyConfig hfork bodyMemory returnWord_lookup bodyRun
 

@@ -235,9 +235,9 @@ theorem freshStor_eq_rawFreshPost
       (arrayEntrySlot (Nat.toB256 (entries.length + 1))) :=
     Or.inr (Or.inr (Or.inr (Or.inr ⟨entries.length, by omega, rfl⟩)))
   have hmemLen : arrayLengthSlot ∈ freshWriteKeys entries target newPauser := by
-    simp [freshWriteKeys]
+    simp only [freshWriteKeys, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
   have hmemCnt : countSlot newPauser ∈ freshWriteKeys entries target newPauser := by
-    simp [freshWriteKeys]
+    simp only [freshWriteKeys, List.mem_cons, List.not_mem_nil, or_false, or_true]
   have h35 : mapSlot target 3 ≠ 5 := by
     rw [← solKey_assignmentSlot htarget.2, ← solKey_arrayLengthSlot]
     exact solKey_ne_of_faithful hfaithful hmemLen hobsA
@@ -364,7 +364,7 @@ theorem absentZeroStor_eq_rawAbsentZeroPost
   have hkeys : ∀ k, k = assignmentSlot target ∨ k = indexSlot target ∨ k = arrayLengthSlot ∨
       k = arrayEntrySlot (Nat.toB256 (entries.length + 1)) →
       k ∈ (absentZeroWrites entries target).map Prod.fst := by
-    rintro k (rfl | rfl | rfl | rfl) <;> simp [absentZeroWrites]
+    rintro k (rfl | rfl | rfl | rfl) <;> simp only [absentZeroWrites, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true, or_self]
   have hobsE : RegistryObservable (entries.length + 1)
       (arrayEntrySlot (Nat.toB256 (entries.length + 1))) :=
     Or.inr (Or.inr (Or.inr (Or.inr ⟨entries.length, by omega, rfl⟩)))
@@ -391,7 +391,8 @@ theorem absentZeroStor_eq_rawAbsentZeroPost
   have hsucc : Nat.toB256 entries.length + 1 = Nat.toB256 (entries.length + 1) :=
     (natToB256_succ_eq_add_one _ (by omega)).symm
   have hpred : Nat.toB256 (entries.length + 1) - 1 = Nat.toB256 entries.length := by
-    simpa using (natToB256_pred_eq_sub_one (entries.length + 1) (by omega) (by omega)).symm
+    simpa only [add_tsub_cancel_right] using
+      (natToB256_pred_eq_sub_one (entries.length + 1) (by omega) (by omega)).symm
   have he : Nat.toB256 entries.length + registryArrayBase =
       registryArraySlot entries.length := by
     rw [hRA, B256.add_comm]

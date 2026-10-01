@@ -22,10 +22,10 @@ private theorem replayCell_eq_of_none
   | nil => rfl
   | cons head tail ih =>
       simp only [Exec.StorageWrite.replayCell, List.foldl_cons]
-      rw [if_neg (none head (by simp))]
+      rw [if_neg (none head (by simp only [List.mem_cons, true_or]))]
       exact ih (by
         intro write member
-        exact none write (by simp [member]))
+        exact none write (by simp only [List.mem_cons, member, or_true]))
 
 private theorem pinnedPause_cell_eq
     {sevm : Sevm}
@@ -145,7 +145,8 @@ private theorem failedCall_not_ok
   obtain ⟨_, -, body⟩ := runCompiledTo_call_inv lookup run
   rw [show pauseFailedError =
     Func.revertSelector (customErrorData "PauseFailed")
-      (by simp [customErrorData, B256.length_toBytes]) from rfl] at body
+      (by simp only [customErrorData, List.length_take, B256.length_toBytes, Nat.reduceLeDiff,
+        inf_of_le_left]) from rfl] at body
   rcases runCompiledTo_revertSelector_inv body with
     ⟨_, hex⟩ | ⟨_, hex, -⟩ <;> cases hex
 
@@ -380,7 +381,8 @@ private theorem pinnedTrace_final_cell_eq
 private theorem canonicalAddress_toB256_local (a : Adr) :
     canonicalAddress a.toB256 := by
   have wordNat : a.toB256.toNat = a.toNat := by
-    simp [Adr.toB256, Adr.toNat, B256.toNat, B128.toNat]
+    simp only [B256.toNat, B128.toNat, Adr.toB256, UInt64.toNat_zero, Nat.zero_shiftLeft,
+      UInt32.toNat_toUInt64, Nat.zero_or, Adr.toNat]
   show a.toB256.toNat < 2 ^ 160
   rw [wordNat]
   exact Adr.toNat_lt_size a
@@ -424,11 +426,11 @@ private theorem pinnedTrace_noninterference
   · exact (pauseSuccess_ok_getStorVal_eq_of_ne h_panic countDifferent
       successRun).symm.trans
         (pinnedTrace_final_cell_eq (hfork := hfork) h_empty h_bubble h_failed h_panic
-          bundle hook hex (by simp) countDifferent)
+          bundle hook hex (by simp only [List.mem_cons, List.not_mem_nil, or_false, true_or]) countDifferent)
   · exact (pauseSuccess_ok_getStorVal_eq_of_ne h_panic intervalDifferent
       successRun).symm.trans
         (pinnedTrace_final_cell_eq (hfork := hfork) h_empty h_bubble h_failed h_panic
-          bundle hook hex (by simp) intervalDifferent)
+          bundle hook hex (by simp only [List.mem_cons, List.not_mem_nil, or_false, or_true]) intervalDifferent)
 
 private theorem runFrame_result_unique
     {frame : Jaune.Frame} {xl : Xlot}
@@ -480,7 +482,7 @@ private theorem stubProgram_compile_toList :
     Prog.compile PinnedTargetControl.stubProgram =
       some PinnedTargetControl.stubCode.toList := by
   rw [PinnedTargetControl.stubProgram_compile]
-  simp [PinnedTargetControl.stubCode, PinnedTargetControl.stubBytes,
+  simp only [PinnedTargetControl.stubBytes, PinnedTargetControl.stubCode,
     ByteArray.toList_eq_toList_data]
 
 /-- Directly installed code is not a delegation designator, so at a state with
@@ -632,7 +634,7 @@ theorem directBoundaryExecutions_of_afterSet_ok
   have installedNonzero : (entry.getCode target).size.toB256 ≠ 0 := by
     rcases pauseAfterSet_codeGuard_arms_windows h_empty targetWindow
         durationWindow run with ⟨_, _, reverted, _⟩ | ⟨nonzero, _⟩
-    · exact absurd reverted (by simp)
+    · exact absurd reverted (by simp only [ExceptT.stM_eq, reduceCtorEq, not_false_eq_true])
     · exact nonzero
   have nonempty : code ≠ .empty := fun isEmpty =>
     installedNonzero (by rw [installed, isEmpty]; rfl)

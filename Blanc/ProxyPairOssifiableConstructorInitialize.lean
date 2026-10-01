@@ -134,7 +134,7 @@ theorem ossifiableConstructorInitializeImplementation_route
       (pre.getCode implementation.toAdr).size.toB256 = 0
   · have pOne : (1 : B256) :: implementation :: tail <<+
         testPre.stack := by
-      simpa [hzero, B256.eqCheck] using pTest
+      simpa only [B256.eqCheck, hzero, ↓reduceIte] using pTest
     obtain ⟨callPre, _, _, branchPop, callRun, pCall⟩ :=
       Func.RunCompiledTo.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) pOne branchRun
@@ -157,7 +157,7 @@ theorem ossifiableConstructorInitializeImplementation_route
       callStor, callLogs, outcome⟩
   · have pZero : (0 : B256) :: implementation :: tail <<+
         testPre.stack := by
-      simpa [hzero, B256.eqCheck] using pTest
+      simpa only [B256.eqCheck, hzero, ↓reduceIte] using pTest
     obtain ⟨commitPre, branchPop, commitRun, pCommit⟩ :=
       Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
     exact .accepted commitPre hzero commitRun pCommit
@@ -262,7 +262,7 @@ theorem ossifiableConstructorSetupSelection_route
   have logsLength := of_run_loadWordAt_logs (word := 4) lengthRun
   by_cases hzero : length = 0
   · have pZero : (0 : B256) :: tail <<+ lengthPost.stack := by
-      simpa [hzero] using pLength
+      simpa only [hzero] using pLength
     obtain ⟨afterPre, branchPop, afterRun, pAfter⟩ :=
       ossifiableConstructorEmptySetup_selectsAfterSetup pZero branchRun
     exact .empty afterPre hzero afterRun pAfter

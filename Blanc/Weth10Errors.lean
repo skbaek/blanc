@@ -490,11 +490,11 @@ theorem callbackMagicMismatchPrefix_runCompiledTo {dp : DeployParams}
     omega
   rw [show G + (pushCost CALLBACK_SUCCESS.toBytes.sig + 24) =
       (G + (pushCost CALLBACK_SUCCESS.toBytes.sig + 11)) + 13 by omega]
-  simpa [checkReturnDataHead, pushList, prepend,
-      show (0 * 32 : B256) = 0 from by decide] using
+  simpa only [checkReturnDataHead, pushList, show (0 * 32 : B256) = 0 from by decide, List.map_cons,
+    List.map_nil, List.cons_append, List.nil_append, prepend] using
     callbackHeadCopyPrefix_runCompiledTo h_len h32 h_msz
-      (callbackHeadMismatchReadPrefix_runCompiledTo h_neq hs1 h32 h_msz
-        h_tail (by omega)) (by omega)
+      (callbackHeadMismatchReadPrefix_runCompiledTo h_neq hs1 h32 h_msz h_tail (by omega))
+      (by omega)
 
 /-- From the full-word decoder, a magic mismatch reaches the exact locked
 flash-failure payload.  The symbolic-width decoder and error guard are
@@ -597,7 +597,7 @@ theorem nonpayable_runCompiledTo {dp : DeployParams} {sevm : Sevm}
     simp only [Devm.stack_setMach, List.length_cons] at *
     omega }
   all_goals try omega
-  · simp [B256.eqCheck, h_value]
+  · simp only [B256.eqCheck, h_value, ↓reduceIte]
   · exact Func.runCompiledTo_revert_func
       (devm := base.setMach ⟨base.stack, base.memory, G + 4, base.stateGas⟩) (G := G) (by
       simp only [Devm.gasLeft_setMach, gBase]) (by
@@ -638,7 +638,7 @@ theorem flashFee_wrongToken_runCompiledTo {dp : DeployParams} {sevm : Sevm}
   all_goals try omega
   · change sevm.currentTarget.toB256 =? Sevm.argWord sevm 0 = 0
     rw [h_arg]
-    simp [B256.eqCheck, Ne.symm h_ne]
+    simp only [B256.eqCheck, Ne.symm h_ne, ↓reduceIte]
   · exact Func.runCompiledTo_errorGuard (flashTokenError_lookup dp)
       (by decide) rfl hwf hr halign h_blob h_words (by
         simp only [Devm.gasLeft_setMach, errorGuardCost, errorCallCost,

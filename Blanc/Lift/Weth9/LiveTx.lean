@@ -23,7 +23,8 @@ theorem abiSelectorBytes_wdSel : Bytes.toB256 (abiSelectorBytes wdSel) = wdSel :
 
 theorem withdrawCalldata_length (wad : B256) : (withdrawCalldata wad).length = 36 := by
   unfold withdrawCalldata
-  simp [abiSelectorBytes, B256.length_toBytes]
+  simp only [abiSelectorBytes, List.length_append, List.length_drop, B256.length_toBytes,
+    Nat.reduceSub, Nat.reduceAdd]
 
 theorem selector_withdrawCalldata {sevm : Sevm} {wad : B256}
     (h : sevm.data = withdrawCalldata wad) : Sevm.selector sevm = wdSel :=
@@ -33,7 +34,8 @@ theorem dataWord_withdrawCalldata {sevm : Sevm} {wad : B256}
     (h : sevm.data = withdrawCalldata wad) : Sevm.dataWord sevm 4 = wad := by
   unfold Sevm.dataWord
   rw [h]
-  have hl : (abiSelectorBytes wdSel).length = 4 := by simp [abiSelectorBytes, B256.length_toBytes]
+  have hl : (abiSelectorBytes wdSel).length = 4 := by simp only [abiSelectorBytes, List.length_drop,
+    B256.length_toBytes, Nat.reduceSub]
   have h4 : (4 : B256).toNat = 4 := by decide
   have hw : wad.toBytes.length = 32 := B256.length_toBytes wad
   rw [h4]
@@ -72,7 +74,7 @@ theorem mem_afterSload_accessedStorageKeys (sevm : Sevm) (b : Devm) (key : B256)
   unfold sloadAccessedStorageKeys
   split
   · assumption
-  · simp
+  · simp only [Std.HashSet.mem_insert, BEq.rfl, true_or]
 
 /-- The frame's cost at a transaction's entry: the cold `SLOAD` (2100), the warm one (100), the
 `SSTORE` of a changed nonzero original (2900), the ether send to the warm, non-empty caller (6800),
@@ -110,18 +112,19 @@ theorem withdrawGas_eq {sevm : Sevm} {pre : Devm} {b wad : B256} {E ca : Adr}
   have e2 : sloadCost sevm (wB1 sevm pre) (balSlot sevm.caller) = 100 := by
     unfold sloadCost; simp only [hk1, ↓reduceIte]; rfl
   have hcur : (wB2 sevm pre).getStorVal sevm.currentTarget (balSlot sevm.caller) = b := by
-    rw [← hb]; simp [wB2, wB1, getStorVal_afterSload]
+    rw [← hb]; simp only [wB2, wB1, getStorVal_afterSload]
   have e3 : sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller)
       (wV sevm pre (Sevm.dataWord sevm 4)) = 2900 := by
     unfold sstoreCost
     simp only [hk2, ↓reduceIte, horig, hcur]
     have hv : wV sevm pre (Sevm.dataWord sevm 4) = b - Sevm.dataWord sevm 4 := by
       unfold wV
-      simp [wB1, getStorVal_afterSload, hb]
+      simp only [wB1, getStorVal_afterSload, hb]
     rw [hv]
     unfold sstoreValueCost
     have hne' : b ≠ b - Sevm.dataWord sevm 4 := fun h => hlt h.symm
-    simp [hne', hb0, gasStorageUpdate, gasColdSload]
+    simp only [ne_eq, hne', not_false_eq_true, and_self, ↓reduceIte, hb0, gasStorageUpdate,
+      gasColdSload, Nat.reduceSub, zero_add]
   have e4 : callNet pre sevm.caller = 6800 := by
     unfold callNet accessCost
     simp only [hwarm, hne, not_false_eq_true, ↓reduceIte]
@@ -147,16 +150,16 @@ theorem withdrawZeroGas_eq {sevm : Sevm} {pre : Devm} {b : B256} {E ca : Adr}
   have e2 : sloadCost sevm (wB1 sevm pre) (balSlot sevm.caller) = 100 := by
     unfold sloadCost; simp only [hk1, ↓reduceIte]; rfl
   have hcur : (wB2 sevm pre).getStorVal sevm.currentTarget (balSlot sevm.caller) = b := by
-    rw [← hb]; simp [wB2, wB1, getStorVal_afterSload]
+    rw [← hb]; simp only [wB2, wB1, getStorVal_afterSload]
   have hv : wV sevm pre (Sevm.dataWord sevm 4) = b := by
     unfold wV
-    simp [wB1, getStorVal_afterSload, hb, hdw, B256.sub_zero]
+    simp only [wB1, getStorVal_afterSload, hb, hdw, B256.sub_zero]
   have e3 : sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller)
       (wV sevm pre (Sevm.dataWord sevm 4)) = 100 := by
     unfold sstoreCost
     simp only [hk2, ↓reduceIte, horig, hcur, hv]
     unfold sstoreValueCost
-    simp [gasWarmAccess]
+    simp only [ne_eq, not_true_eq_false, and_false, ↓reduceIte, gasWarmAccess, zero_add]
   have e4 : accessCost sevm.caller pre.accessedAddresses = 100 := by
     unfold accessCost
     simp only [hwarm, ↓reduceIte]
@@ -254,7 +257,7 @@ theorem weth9_withdraw_entry {sevm : Sevm} {pre : Devm} {E ca : Adr} {b wad : B2
         withdrawZeroGas_eq rfl rfl hcold hwarm hb horig (by rw [hdw]; exact hw0)
       obtain ⟨post, hex, hg, hp, hs1, hs2⟩ := weth9_withdraw_zero_live_post (G := G) hcode hfork
         h_static h_value hsel (by omega) (by omega) h_stack h_mem h_depth (by rw [hdw]; exact hw0)
-        h_eoa h_prec (by rw [h_gas, withdrawFrameGas, hgas]; simp [hw0]) (by omega)
+        h_eoa h_prec (by rw [h_gas, withdrawFrameGas, hgas]; simp only [hw0, ↓reduceIte]) (by omega)
       rw [hdw] at hp
       exact ⟨post, hex, hg, hp, hs1, hs2⟩
     · have hgas : withdrawGas sevm pre = 13940 :=
@@ -262,12 +265,12 @@ theorem weth9_withdraw_entry {sevm : Sevm} {pre : Devm} {E ca : Adr} {b wad : B2
       obtain ⟨post, hex, hg, hp, hs1, hs2⟩ := weth9_withdraw_live_post (G := G) hcode hfork h_static
         h_value hsel (by omega) (by omega) h_stack h_mem h_depth (by rw [hdw]; exact hw0)
         (by rw [hdw, hb]; exact hle) h_eoa h_prec (by rw [hdw]; exact h_eth)
-        (by rw [h_gas, hgas, withdrawFrameGas]; simp [hw0]) hG
+        (by rw [h_gas, hgas, withdrawFrameGas]; simp only [hw0, ↓reduceIte]) hG
       rw [hdw] at hp
       exact ⟨post, hex, hg, hp, hs1, hs2⟩
   have hv : wV sevm pre wad = b - wad := by
     unfold wV
-    simp [wB1, getStorVal_afterSload, hb]
+    simp only [wB1, getStorVal_afterSload, hb]
   refine ⟨post, hex, ?_, hg, ?_, hp.accountsToDelete, ?_, ?_, ?_, ?_, ?_⟩
   · rw [hp.error, h_error]
   · rw [hp.refund, h_refund, hv, horig]
@@ -275,7 +278,8 @@ theorem weth9_withdraw_entry {sevm : Sevm} {pre : Devm} {E ca : Adr} {b wad : B2
     by_cases hw0 : wad = 0
     · subst hw0
       unfold sstoreNewRefundCounter withdrawRefund
-      simp [hcur, B256.sub_zero]
+      simp only [hcur, B256.sub_zero, ne_eq, not_true_eq_false, ↓reduceIte, false_and,
+        Nat.cast_zero]
     · have hb0 : b ≠ 0 := by
         intro h0
         subst h0
@@ -309,7 +313,7 @@ theorem weth9_withdraw_entry {sevm : Sevm} {pre : Devm} {E ca : Adr} {b wad : B2
       unfold sstoreNewRefundCounter withdrawRefund
       simp only [hcur, CoveredFork.rules_storageClearRefund hfork, hne', ne_eq, not_false_eq_true,
         ↓reduceIte, hb0, and_false, hz, hw0, true_and]
-      by_cases h : wad = b <;> simp [h]
+      by_cases h : wad = b <;> simp only [h, ↓reduceIte, Nat.cast_ofNat, zero_add, Nat.cast_zero]
   · have h1 := hs1
     rw [hdw, hb] at h1
     exact h1
@@ -341,7 +345,7 @@ theorem getDelegatedCodeAddress_code : getDelegatedCodeAddress code = none := by
     change code.size = eoaDelegatedCodeLength at h1
     revert h1
     decide +kernel
-  simp [h]
+  simp only [h, ↓reduceIte]
 
 /-- **`withdraw(wad)` as a transaction: `processTransaction` succeeds.**  A type-2 transaction `tx` from
 the externally owned account `E` (no code, nonce `tx.nonce`, funds for the maximum fee) to the deployed
@@ -463,10 +467,16 @@ theorem weth9_tx_withdraw
     have hm_state : msg.benv.state = debit := by rw [← hm]; rfl
     have hm_keys : (⟨ca, balSlot E⟩ : Adr × B256) ∉ msg.accessedStorageKeys := by
       rw [← hm]
-      simp [callMessage, transactionTenv, Tx.accessList, htype, TxType.accessList]
+      simp only [callMessage, transactionTenv, Std.TreeMap.empty_eq_emptyc, Tx.accessList,
+        TxType.accessList, htype, List.map_nil, Std.HashSet.ofList_singleton, List.flatten_nil,
+        Std.HashSet.ofList_nil, Std.HashSet.not_mem_empty, not_false_eq_true]
     have hm_addrs : E ∈ msg.accessedAddresses := by
       rw [← hm]
-      simp [callMessage, transactionTenv, Std.HashSet.mem_insertMany_list]
+      simp only [callMessage, transactionTenv, Std.TreeMap.empty_eq_emptyc,
+        Std.HashSet.mem_insertMany_list, Std.HashSet.mem_ofList, List.contains_eq_mem,
+        List.mem_cons, List.mem_map, Prod.exists, exists_and_right, exists_eq_right,
+        List.decide_mem_cons, Bool.or_eq_true, beq_iff_eq, decide_eq_true_eq, List.mem_append,
+        List.not_mem_nil, or_false, true_or, or_true, decide_true]
     have hafter : ∀ a, after.state.get a = debit.get a := fun a => by
       have := benvAfterTransfer_get_of_value_zero hm_value hentry a
       rw [this, hm_state]
@@ -546,7 +556,7 @@ theorem weth9_tx_withdraw
     hfork htype hvalue hchain hprio hbase hcost hmaxgas (CoveredFork.checkTransactionGasCap_ok (s := benv.stat) hfork hcap)
     hnonceMax hroom hrecover hnonce (by
       have h0 : (benv.state.get E).code.size = 0 := hnocode
-      simp [ByteArray.isEmpty, h0]) hfunds hnodeleg hprecCa hexec
+      simp only [ByteArray.isEmpty, h0, BEq.rfl]) hfunds hnodeleg hprecCa hexec
   obtain ⟨hgl, hrf, hatd, hstCa, hstOther, hbalE, hnonceE, hbalCa⟩ := hQ
   have hdel : post.accountsToDelete.toList = [] := by
     apply List.isEmpty_iff.mp
@@ -561,11 +571,11 @@ theorem weth9_tx_withdraw
     rw [hrfn]
     have hi : withdrawIntrinsicGas wad = 21000 + 4 * calldataTokens (withdrawCalldata wad) := rfl
     by_cases hw0 : wad = 0
-    · have h1 : withdrawFrameGas wad = 4440 := by simp [withdrawFrameGas, hw0]
+    · have h1 : withdrawFrameGas wad = 4440 := by simp only [withdrawFrameGas, hw0, ↓reduceIte]
       have h2 : withdrawRefund ((benv.state.getStor ca).get (balSlot E)) wad = 0 := by
-        simp [withdrawRefund, hw0]
+        simp only [withdrawRefund, hw0, ne_eq, not_true_eq_false, false_and, ↓reduceIte]
       omega
-    · have h1 : withdrawFrameGas wad = 13940 := by simp [withdrawFrameGas, hw0]
+    · have h1 : withdrawFrameGas wad = 13940 := by simp only [withdrawFrameGas, hw0, ↓reduceIte]
       have h2 : withdrawRefund ((benv.state.getStor ca).get (balSlot E)) wad ≤ 4800 := by
         unfold withdrawRefund; split_ifs <;> omega
       omega

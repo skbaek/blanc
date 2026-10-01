@@ -65,7 +65,8 @@ theorem exampleRegistryOn_of_check
     hwobs hclean hobs]
   have hzero : (solRegistryStorage Stor.empty).read key = 0 := by
     have hz : addressSlotReadWord 0 = 0 := rfl
-    simp [solRegistryStorage, Stor.get, Stor.empty, hz]
+    simp only [solRegistryStorage, Nat.reducePow, Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc,
+      Std.TreeMap.getD_emptyc, hz, ite_self]
   rw [hzero]
 
 /-- Concrete separation for the constructed five-write pre-state, discharged

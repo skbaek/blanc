@@ -133,35 +133,35 @@ theorem rootedRunCompiledTo_of_execFree
             (ninstAllChildRoots_of_not_exec ?_) (ih ?_)
           · intro x h
             cases h
-          · simpa [funcExecFree] using free
+          · simpa only [funcExecFree] using free
       | push bytes size =>
           refine rootedRunCompiledTo.next (step := step) (tail := tail)
             (ninstAllChildRoots_of_not_exec ?_) (ih ?_)
           · intro x h
             cases h
-          · simpa [funcExecFree] using free
+          · simpa only [funcExecFree] using free
       | exec x =>
-          simp [funcExecFree] at free
+          simp only [funcExecFree] at free
       | dupn imm =>
           refine rootedRunCompiledTo.next (step := step) (tail := tail)
             (ninstAllChildRoots_of_not_exec ?_) (ih ?_)
           · intro x h
             cases h
-          · simpa [funcExecFree] using free
+          · simpa only [funcExecFree] using free
       | swapn imm =>
           refine rootedRunCompiledTo.next (step := step) (tail := tail)
             (ninstAllChildRoots_of_not_exec ?_) (ih ?_)
           · intro x h
             cases h
-          · simpa [funcExecFree] using free
+          · simpa only [funcExecFree] using free
       | exchange imm =>
           refine rootedRunCompiledTo.next (step := step) (tail := tail)
             (ninstAllChildRoots_of_not_exec ?_) (ih ?_)
           · intro x h
             cases h
-          · simpa [funcExecFree] using free
+          · simpa only [funcExecFree] using free
   | call found room burn tail ih =>
-      simp [funcExecFree] at free
+      simp only [funcExecFree] at free
 
 /-- A spawning instruction carries a predicate proved for all roots of the
 entered child execution. -/
@@ -211,13 +211,13 @@ theorem Ninst.exec_of_stepRun_with_frameRoots
       refine ⟨Exec.cont ?_ next, ?_⟩
       · rw [hstep, Ninst.step_reg, ← h_step.2]
         rfl
-      · simpa [Exec.rawFrameDescendants] using nextRoots
+      · simpa only [Exec.rawFrameDescendants] using nextRoots
   | push xs le =>
       rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at h_step
       refine ⟨Exec.cont ?_ next, ?_⟩
       · rw [hstep, Ninst.step_push, ← h_step.2]
         rfl
-      · simpa [Exec.rawFrameDescendants] using nextRoots
+      · simpa only [Exec.rawFrameDescendants] using nextRoots
   | exec x =>
       rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at h_step
       cases hx : Xinst.step sevm devm x with
@@ -227,7 +227,7 @@ theorem Ninst.exec_of_stepRun_with_frameRoots
           refine ⟨Exec.cont ?_ next, ?_⟩
           · rw [hstep, Ninst.step_exec, hx, ← h_step.2]
             rfl
-          · simpa [Exec.rawFrameDescendants] using nextRoots
+          · simpa only [Exec.rawFrameDescendants] using nextRoots
       | spawn frame resume =>
           rw [hx] at h_step
           rcases h_step with ⟨result, frameRun, resultEq⟩
@@ -270,19 +270,19 @@ theorem Ninst.exec_of_stepRun_with_frameRoots
       refine ⟨Exec.cont ?_ next, ?_⟩
       · rw [hstep, Ninst.step_dupn, ← h_step.2]
         rfl
-      · simpa [Exec.rawFrameDescendants] using nextRoots
+      · simpa only [Exec.rawFrameDescendants] using nextRoots
   | swapn imm =>
       rw [Ninst.StepRun, Ninst.step_swapn, Step.run_ofExecution] at h_step
       refine ⟨Exec.cont ?_ next, ?_⟩
       · rw [hstep, Ninst.step_swapn, ← h_step.2]
         rfl
-      · simpa [Exec.rawFrameDescendants] using nextRoots
+      · simpa only [Exec.rawFrameDescendants] using nextRoots
   | exchange imm =>
       rw [Ninst.StepRun, Ninst.step_exchange, Step.run_ofExecution] at h_step
       refine ⟨Exec.cont ?_ next, ?_⟩
       · rw [hstep, Ninst.step_exchange, ← h_step.2]
         rfl
-      · simpa [Exec.rawFrameDescendants] using nextRoots
+      · simpa only [Exec.rawFrameDescendants] using nextRoots
 
 /-- Core compiler bridge for a rooted compiled function walk. -/
 theorem Func.exec_of_rootedRunCompiledTo_core
@@ -309,7 +309,7 @@ theorem Func.exec_of_rootedRunCompiledTo_core
       obtain ⟨tailExec, tailRoots⟩ :=
         ih compiled hFS (pc + 4) hsubp hbp
       refine ⟨Exec.cont step₁ (Exec.cont step₂ tailExec), ?_⟩
-      simpa [Exec.rawFrameDescendants] using tailRoots
+      simpa only [Exec.rawFrameDescendants] using tailRoots
   | succ tailRooted ih =>
       rename_i _ _ _ _ _ _ _ _ _ hne hroom hpop _
       rcases subcode_compile_branch_jumpable sub boundary with
@@ -321,13 +321,13 @@ theorem Func.exec_of_rootedRunCompiledTo_core
         ih compiled hFS (loc + 1) hsubq hbq
       refine ⟨Exec.cont step₁ (Exec.cont step₂
         (Exec.cont step₃ tailExec)), ?_⟩
-      simpa [Exec.rawFrameDescendants] using tailRoots
+      simpa only [Exec.rawFrameDescendants] using tailRoots
   | last =>
       rename_i _ _ _ _ _ _ hlast
       refine ⟨Exec.halt ?_, ?_⟩
       · rw [Evm.step_last (Linst.at_of_slice sub)]
         exact congrArg Step.halt hlast
-      · simp [Exec.rawFrameDescendants]
+      · simp only [Exec.rawFrameDescendants, List.not_mem_nil, IsEmpty.forall_iff, implies_true]
   | next stepRoots tailRooted ih =>
       rename_i _ _ _ _ _ _ _ hstep _
       rcases Func.noPushBefore_next sub boundary with ⟨boundary', sub'⟩
@@ -361,7 +361,7 @@ theorem Func.exec_of_rootedRunCompiledTo_core
         ih compiled rfl (loc + 1) hsubbody hjumpable.2
       refine ⟨Exec.cont step₁ (Exec.cont step₂
         (Exec.cont step₃ bodyExec)), ?_⟩
-      simpa [Exec.rawFrameDescendants] using bodyRoots
+      simpa only [Exec.rawFrameDescendants] using bodyRoots
 
 /-- Lift a rooted compiled main-function walk through the program entry
 `JUMPDEST` into an `Exec` derivation. -/
@@ -385,7 +385,7 @@ theorem Prog.exec_of_rootedRunCompiledTo
   obtain ⟨body, bodyRoots⟩ :=
     Func.exec_of_rootedRunCompiledTo_core rooted compiled' rfl 1 sub boundary
   refine ⟨Exec.cont first body, ?_⟩
-  simpa [Exec.rawFrameDescendants] using bodyRoots
+  simpa only [Exec.rawFrameDescendants] using bodyRoots
 
 /-- An instruction known structurally not to be an execution instruction. -/
 class NonExecInstruction (instruction : Ninst) : Prop where

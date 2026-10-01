@@ -58,7 +58,8 @@ private theorem silentIn_rootContinuation :
   unfold rootContinuation loadWord mstoreAt
   silent_structure with
     (change RootSilentSlot rootLoopSlot
-     simp [RootSilentSlot, rootLoopSlot, emptyRevertSlot, bubbleRevertSlot])
+     simp only [RootSilentSlot, rootLoopSlot, emptyRevertSlot, OfNat.ofNat_ne_one, bubbleRevertSlot,
+       Nat.reduceEqDiff, true_or, or_true])
 
 /-- The root loop's SHA-256 crossing is a `STATICCALL`, whose storage
 silence is a covered-fork fact, so the loop is silent in each covered
@@ -72,14 +73,14 @@ private theorem silentAt_rootLoop {sevm : Sevm}
     first
     | exact fun run => Ninst.staticcall_inv_getStor hfork run
     | (change RootSilentSlot emptyRevertSlot
-       simp [RootSilentSlot, emptyRevertSlot, bubbleRevertSlot,
-         rootLoopSlot, rootContinuationSlot])
+       simp only [RootSilentSlot, emptyRevertSlot, bubbleRevertSlot, OfNat.one_ne_ofNat,
+         rootLoopSlot, rootContinuationSlot, or_self, or_false])
     | (change RootSilentSlot bubbleRevertSlot
-       simp [RootSilentSlot, emptyRevertSlot, bubbleRevertSlot,
-         rootLoopSlot, rootContinuationSlot])
+       simp only [RootSilentSlot, bubbleRevertSlot, emptyRevertSlot, OfNat.ofNat_ne_one,
+         rootLoopSlot, Nat.reduceEqDiff, rootContinuationSlot, or_self, or_false, or_true])
     | (change RootSilentSlot rootContinuationSlot
-       simp [RootSilentSlot, emptyRevertSlot, bubbleRevertSlot,
-         rootLoopSlot, rootContinuationSlot])
+       simp only [RootSilentSlot, rootContinuationSlot, emptyRevertSlot, OfNat.ofNat_ne_one,
+         bubbleRevertSlot, Nat.reduceEqDiff, rootLoopSlot, Nat.succ_ne_self, or_true])
 
 private theorem silentIn_getDepositRoot :
   Func.SilentIn Devm.storageView RootSilentSlot
@@ -88,8 +89,8 @@ private theorem silentIn_getDepositRoot :
   silent_structure with
     first
     | (change RootSilentSlot rootLoopSlot
-       simp [RootSilentSlot, emptyRevertSlot, bubbleRevertSlot,
-         rootLoopSlot, rootContinuationSlot])
+       simp only [RootSilentSlot, rootLoopSlot, emptyRevertSlot, OfNat.ofNat_ne_one,
+         bubbleRevertSlot, Nat.reduceEqDiff, rootContinuationSlot, or_false, or_true])
 
 private theorem rootSilentSlot_closed {sevm : Sevm}
     (hfork : CoveredFork sevm.benvStat.fork) :
@@ -323,7 +324,8 @@ private theorem historySpec_sound_of_targets
   · intro e s r wf member state targetRun
     exact h_all wf (by
       change DispatchTree.mem tree wf at member
-      simpa [tree, funcs, DispatchTree.mem] using member)
+      simpa only [funcs, List.mem_cons, List.not_mem_nil, or_false, tree, DispatchTree.mem] using
+        member)
       state.1 state.2.1 state.2.2.1 state.2.2.2.1 state.2.2.2.2 targetRun
 
 /-- The actual four-selector Beacon runtime satisfies its baseline-relative

@@ -147,37 +147,38 @@ private def flashFeeDispatch (dp : DeployParams) : Func :=
 
 private theorem totalSupplyDispatch_eq (dp : DeployParams) :
     dispatchWith fallbackSlot (weth10Tree dp) = totalSupplyDispatch dp := by
-  simp [weth10Tree, DispatchTree.ofSorted, weth10Funcs, DispatchTree.build,
-    treeSlice, dispatch26_14_13, dispatch25_7_7, dispatch24_4_3,
-    dispatch23_0_2, dispatch22_3_1, totalSupplyDispatch, dispatchWith,
-    leftmostFsig,
-    totalSupplySel_eq, withdrawToSel_eq, transferFromSel_eq, decimalsSel_eq,
-    noncesSel_eq]
+  simp only [weth10Tree, DispatchTree.ofSorted, weth10Funcs, totalSupplySel_eq, withdrawToSel_eq,
+    transferFromSel_eq, decimalsSel_eq, noncesSel_eq, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, DispatchTree.build, Nat.reduceDiv, List.take_succ_cons, List.take_zero,
+    List.drop_succ_cons, List.drop_zero, dispatchWith, Fin.isValue, leftmostFsig,
+    totalSupplyDispatch, dispatch26_14_13, treeSlice, List.take_nil, dispatch25_7_7, dispatch24_4_3,
+    dispatch22_3_1, dispatch23_0_2]
 
 private theorem maxFlashLoanDispatch_eq (dp : DeployParams) :
     dispatchWith fallbackSlot (weth10Tree dp) = maxFlashLoanDispatch dp := by
-  simp [weth10Tree, DispatchTree.ofSorted, weth10Funcs, DispatchTree.build,
-    treeSlice, dispatch26_14_13, dispatch25_0_7, dispatch24_7_4,
-    dispatch23_13_1, dispatch22_11_1, maxFlashLoanDispatch, dispatchWith,
-    leftmostFsig,
-    decimalsSel_eq, depositToAndCallSel_eq, maxFlashLoanSel_eq,
-    balanceOfSel_eq, noncesSel_eq]
+  simp only [weth10Tree, DispatchTree.ofSorted, weth10Funcs, decimalsSel_eq, depositToAndCallSel_eq,
+    maxFlashLoanSel_eq, balanceOfSel_eq, noncesSel_eq, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, DispatchTree.build, Nat.reduceDiv, List.take_succ_cons, List.take_zero,
+    List.drop_succ_cons, List.drop_zero, dispatchWith, Fin.isValue, leftmostFsig,
+    maxFlashLoanDispatch, dispatch26_14_13, treeSlice, List.take_nil, dispatch23_13_1,
+    dispatch22_11_1, dispatch24_7_4, dispatch25_0_7]
 
 private theorem balanceOfDispatch_eq (dp : DeployParams) :
     dispatchWith fallbackSlot (weth10Tree dp) = balanceOfDispatch dp := by
-  simp [weth10Tree, DispatchTree.ofSorted, weth10Funcs, DispatchTree.build,
-    treeSlice, dispatch26_14_13, dispatch25_0_7, dispatch24_7_4,
-    dispatch23_11_2, balanceOfDispatch, dispatchWith, leftmostFsig,
-    decimalsSel_eq, depositToAndCallSel_eq, balanceOfSel_eq, noncesSel_eq]
+  simp only [weth10Tree, DispatchTree.ofSorted, weth10Funcs, decimalsSel_eq, depositToAndCallSel_eq,
+    balanceOfSel_eq, noncesSel_eq, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    DispatchTree.build, Nat.reduceDiv, List.take_succ_cons, List.take_zero, List.drop_succ_cons,
+    List.drop_zero, dispatchWith, Fin.isValue, leftmostFsig, balanceOfDispatch, dispatch26_14_13,
+    treeSlice, List.take_nil, dispatch23_11_2, dispatch24_7_4, dispatch25_0_7]
 
 private theorem flashFeeDispatch_eq (dp : DeployParams) :
     dispatchWith fallbackSlot (weth10Tree dp) = flashFeeDispatch dp := by
-  simp [weth10Tree, DispatchTree.ofSorted, weth10Funcs, DispatchTree.build,
-    treeSlice, dispatch26_0_14, dispatch25_14_7, dispatch24_21_3,
-    dispatch23_26_1, dispatch22_24_1, flashFeeDispatch, dispatchWith,
-    leftmostFsig,
-    noncesSel_eq, approveAndCallSel_eq, permitSel_eq, flashFeeSel_eq,
-    allowanceSel_eq]
+  simp only [weth10Tree, DispatchTree.ofSorted, weth10Funcs, noncesSel_eq, approveAndCallSel_eq,
+    permitSel_eq, flashFeeSel_eq, allowanceSel_eq, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, DispatchTree.build, Nat.reduceDiv, List.take_succ_cons, List.take_zero,
+    List.drop_succ_cons, List.drop_zero, dispatchWith, Fin.isValue, leftmostFsig, flashFeeDispatch,
+    dispatch23_26_1, treeSlice, List.take_nil, dispatch22_24_1, dispatch24_21_3, dispatch25_14_7,
+    dispatch26_0_14]
 
 private def totalSupplyMain (dp : DeployParams) : Func :=
   calldatasize ::: iszero :::
@@ -993,16 +994,16 @@ theorem flashFee_runCompiled (dp : DeployParams) {sevm : Sevm} {pre : Devm}
         (by
           have h_data_nz :
               B256.eqCheck sevm.data.length.toB256 0 = 0 := by
-            simp [B256.eqCheck, h_data]
+            simp only [B256.eqCheck, h_data, ↓reduceIte]
           have h_sel' :
               Sevm.dataWord sevm 0 >>> B256.toNat 224 =
                 (0xd9d98ce4 : B256) := h_sel
           have h_value_zero : B256.eqCheck sevm.value 0 = 1 := by
-            simp [B256.eqCheck, h_value]
+            simp only [B256.eqCheck, h_value, ↓reduceIte]
           have h_token_eq :
               B256.eqCheck sevm.currentTarget.toB256
                 (Sevm.dataWord sevm 4) = 1 := by
-            simp [B256.eqCheck, h_token]
+            simp only [B256.eqCheck, h_token, ↓reduceIte]
           have h_fork0 :
               B256.gtCheck (0x7ecebe00 : B256) 0xd9d98ce4 = 0 := by decide
           have h_fork1 :
@@ -1062,12 +1063,12 @@ theorem balanceOf_cold_runCompiled (dp : DeployParams)
         (by
           have h_data_nz :
               B256.eqCheck sevm.data.length.toB256 0 = 0 := by
-            simp [B256.eqCheck, h_data]
+            simp only [B256.eqCheck, h_data, ↓reduceIte]
           have h_sel' :
               Sevm.dataWord sevm 0 >>> B256.toNat 224 =
                 (0x70a08231 : B256) := h_sel
           have h_value_zero : B256.eqCheck sevm.value 0 = 1 := by
-            simp [B256.eqCheck, h_value]
+            simp only [B256.eqCheck, h_value, ↓reduceIte]
           have h_fork0 :
               B256.gtCheck (0x7ecebe00 : B256) 0x70a08231 = 1 := by decide
           have h_fork1 :
@@ -1115,12 +1116,12 @@ theorem balanceOf_warm_runCompiled (dp : DeployParams)
         (by
           have h_data_nz :
               B256.eqCheck sevm.data.length.toB256 0 = 0 := by
-            simp [B256.eqCheck, h_data]
+            simp only [B256.eqCheck, h_data, ↓reduceIte]
           have h_sel' :
               Sevm.dataWord sevm 0 >>> B256.toNat 224 =
                 (0x70a08231 : B256) := h_sel
           have h_value_zero : B256.eqCheck sevm.value 0 = 1 := by
-            simp [B256.eqCheck, h_value]
+            simp only [B256.eqCheck, h_value, ↓reduceIte]
           have h_fork0 :
               B256.gtCheck (0x7ecebe00 : B256) 0x70a08231 = 1 := by decide
           have h_fork1 :
@@ -1178,12 +1179,12 @@ theorem totalSupply_cold_runCompiled (dp : DeployParams)
         (by
           have h_data_nz :
               B256.eqCheck sevm.data.length.toB256 0 = 0 := by
-            simp [B256.eqCheck, h_data]
+            simp only [B256.eqCheck, h_data, ↓reduceIte]
           have h_sel' :
               Sevm.dataWord sevm 0 >>> B256.toNat 224 =
                 (0x18160ddd : B256) := h_sel
           have h_value_zero : B256.eqCheck sevm.value 0 = 1 := by
-            simp [B256.eqCheck, h_value]
+            simp only [B256.eqCheck, h_value, ↓reduceIte]
           have h_fork0 :
               B256.gtCheck (0x7ecebe00 : B256) 0x18160ddd = 1 := by decide
           have h_fork1 :
@@ -1238,12 +1239,12 @@ theorem totalSupply_warm_runCompiled (dp : DeployParams)
         (by
           have h_data_nz :
               B256.eqCheck sevm.data.length.toB256 0 = 0 := by
-            simp [B256.eqCheck, h_data]
+            simp only [B256.eqCheck, h_data, ↓reduceIte]
           have h_sel' :
               Sevm.dataWord sevm 0 >>> B256.toNat 224 =
                 (0x18160ddd : B256) := h_sel
           have h_value_zero : B256.eqCheck sevm.value 0 = 1 := by
-            simp [B256.eqCheck, h_value]
+            simp only [B256.eqCheck, h_value, ↓reduceIte]
           have h_fork0 :
               B256.gtCheck (0x7ecebe00 : B256) 0x18160ddd = 1 := by decide
           have h_fork1 :
@@ -1298,16 +1299,16 @@ theorem maxFlashLoan_cold_runCompiled (dp : DeployParams)
         (by
           have h_data_nz :
               B256.eqCheck sevm.data.length.toB256 0 = 0 := by
-            simp [B256.eqCheck, h_data]
+            simp only [B256.eqCheck, h_data, ↓reduceIte]
           have h_sel' :
               Sevm.dataWord sevm 0 >>> B256.toNat 224 =
                 (0x613255ab : B256) := h_sel
           have h_value_zero : B256.eqCheck sevm.value 0 = 1 := by
-            simp [B256.eqCheck, h_value]
+            simp only [B256.eqCheck, h_value, ↓reduceIte]
           have h_token_eq :
               B256.eqCheck sevm.currentTarget.toB256
                 (Sevm.dataWord sevm 4) = 1 := by
-            simp [B256.eqCheck, h_token]
+            simp only [B256.eqCheck, h_token, ↓reduceIte]
           have h_fork0 :
               B256.gtCheck (0x7ecebe00 : B256) 0x613255ab = 1 := by decide
           have h_fork1 :
@@ -1358,16 +1359,16 @@ theorem maxFlashLoan_warm_runCompiled (dp : DeployParams)
         (by
           have h_data_nz :
               B256.eqCheck sevm.data.length.toB256 0 = 0 := by
-            simp [B256.eqCheck, h_data]
+            simp only [B256.eqCheck, h_data, ↓reduceIte]
           have h_sel' :
               Sevm.dataWord sevm 0 >>> B256.toNat 224 =
                 (0x613255ab : B256) := h_sel
           have h_value_zero : B256.eqCheck sevm.value 0 = 1 := by
-            simp [B256.eqCheck, h_value]
+            simp only [B256.eqCheck, h_value, ↓reduceIte]
           have h_token_eq :
               B256.eqCheck sevm.currentTarget.toB256
                 (Sevm.dataWord sevm 4) = 1 := by
-            simp [B256.eqCheck, h_token]
+            simp only [B256.eqCheck, h_token, ↓reduceIte]
           have h_fork0 :
               B256.gtCheck (0x7ecebe00 : B256) 0x613255ab = 1 := by decide
           have h_fork1 :
@@ -1422,19 +1423,19 @@ theorem maxFlashLoan_other_runCompiled (dp : DeployParams)
         (by
           have h_data_nz :
               B256.eqCheck sevm.data.length.toB256 0 = 0 := by
-            simp [B256.eqCheck, h_data]
+            simp only [B256.eqCheck, h_data, ↓reduceIte]
           have h_sel' :
               Sevm.dataWord sevm 0 >>> B256.toNat 224 =
                 (0x613255ab : B256) := h_sel
           have h_value_zero : B256.eqCheck sevm.value 0 = 1 := by
-            simp [B256.eqCheck, h_value]
+            simp only [B256.eqCheck, h_value, ↓reduceIte]
           have h_token_ne :
               sevm.currentTarget.toB256 ≠ Sevm.dataWord sevm 4 :=
             Ne.symm h_token
           have h_token_not_eq :
               B256.eqCheck sevm.currentTarget.toB256
                 (Sevm.dataWord sevm 4) = 0 := by
-            simp [B256.eqCheck, h_token_ne]
+            simp only [B256.eqCheck, h_token_ne, ↓reduceIte]
           have h_fork0 :
               B256.gtCheck (0x7ecebe00 : B256) 0x613255ab = 1 := by decide
           have h_fork1 :

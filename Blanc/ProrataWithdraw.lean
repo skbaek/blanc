@@ -253,7 +253,7 @@ theorem withdraw_settles_before_call
     apply B256.not_lt.mp
     intro hlt
     have hone : (Devm.getStor pre sevm.currentTarget).get sevm.caller.toB256 <?
-        Sevm.argWord sevm 0 = 1 := by simp [B256.ltCheck, hlt]
+        Sevm.argWord sevm 0 = 1 := by simp only [B256.ltCheck, hlt, ↓reduceIte]
     exact B256.zero_ne_one (hone.symm.trans hcoverFlag).symm
   have p8 : (Devm.getStor pre sevm.currentTarget).get sevm.caller.toB256 ::
       Sevm.argWord sevm 0 :: Sevm.argWord sevm 0 :: supplySlot :: [] <<+
@@ -326,7 +326,7 @@ theorem withdraw_settles_before_call
     intro hlt
     have hone : B256.shiftRight B256.max 130 <? Devm.getBal pre sevm.currentTarget = 1 := by
       rw [hBcap]
-      simp [B256.ltCheck, hlt]
+      simp only [B256.ltCheck, hlt, ↓reduceIte]
     exact B256.zero_ne_one (hone.symm.trans hBraw).symm
   have r7 : Devm.getBal pre sevm.currentTarget :: Sevm.argWord sevm 0 :: supplySlot :: [] <<+
       v7.stack := by
@@ -526,7 +526,7 @@ theorem withdraw_settles_before_call
       _ = z3.memory := Line.of_inv Devm.memory (by line_inv) hsupplyStoreInv
   refine ⟨callPre, callPost, ?_, hcall, ?_⟩
   · unfold WithdrawPreCallEffect
-    dsimp
+    dsimp only [Lean.Elab.WF.paramLet]
     refine ⟨hcover, hbalance, ?_, hbalSend.trans hbalPreZ3.symm,
       hcodeSend.trans hcodePreZ3.symm, hlogsSend.trans hlogsPreZ3.symm,
       houtSend.trans houtPreZ3.symm, hmemSend.trans hmemPreZ3.symm, ?_⟩
@@ -583,7 +583,7 @@ theorem withdraw_pays_exactly
     (hfork : CoveredFork sevm.benvStat.fork) :
     WithdrawPaysExactly sevm pre post := by
   unfold WithdrawPaysExactly
-  dsimp
+  dsimp only [Lean.Elab.WF.paramLet]
   let B := Devm.getBal pre sevm.currentTarget
   let S := (Devm.getStor pre sevm.currentTarget).get supplySlot
   let p := Sevm.argWord sevm 0 * (B + 1) / (S + offset)
@@ -605,7 +605,7 @@ theorem withdraw_pays_exactly
   · exact (not_run_revert hrev).elim
   have hpre := hpreRaw
   unfold WithdrawPreCallEffect at hpre
-  dsimp at hpre
+  dsimp only [Lean.Elab.WF.paramLet] at hpre
   rcases hpre with ⟨hcover, hbalance, hstor, hbal, hcode, hlogs, hout, hmem,
     gasWord, hstack⟩
   have hstack' :

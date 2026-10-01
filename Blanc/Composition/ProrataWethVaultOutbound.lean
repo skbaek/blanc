@@ -334,7 +334,7 @@ theorem outboundAfterQuote_effect_quiet
   -- Transport every operation word across the calldata frame and the child.
   have tailReads : Mem.Reads tailPre.memory tailPre.memory.data.toList := by
     intro index
-    simp
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
   have carry : ∀ {offset : Nat} {w : B256}, 96 ≤ offset →
       Bytes.toB256 (childImage.sliceD offset 32 0) = w →
       Bytes.toB256 (tailPre.memory.data.toList.sliceD offset 32 0) = w := by
@@ -468,7 +468,7 @@ theorem outboundAfterQuote_effect_quiet
         ← authLogs, ← balanceLogs, ← guardLogs,
         show receiver.toAdr = receiverAdr by
           rw [← receiverAdrEq, toAdr_toB256]]
-      simp [List.append_assoc]
+      simp only [List.append_assoc, List.cons_append, List.nil_append]
   · have wethAfter : Devm.getStor post wethAccount =
         Devm.getStor tailPre wethAccount :=
       congrFun settleStorage wethAccount
@@ -536,7 +536,7 @@ theorem outboundQuoteStaging_effect
       Func.RunCompiledTo fs sevm quotePre arithmetic (.ok post) := by
   have entryReads : Mem.Reads entry.memory entry.memory.data.toList := by
     intro index
-    simp
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
   obtain ⟨readPre, readStack, readWf, readReads, argState, argLogs,
       readRun⟩ :=
     Blanc.ProrataWethVault.outboundArgs_trace (R := Func.RunOk) memoryWf entryReads stack run
@@ -1110,44 +1110,50 @@ private theorem withdrawAfterQuote_lookup :
       Blanc.ProrataWethVault.vault.aux)[
         Blanc.ProrataWethVault.withdrawAfterQuoteSlot]? =
       some Blanc.ProrataWethVault.withdrawAfterQuote := by
-  simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
-    Blanc.ProrataWethVault.withdrawAfterQuoteSlot]
+  simp only [ProrataWethVault.vault, ProrataWethVault.vaultAux,
+    ProrataWethVault.withdrawAfterQuoteSlot, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
 
 private theorem redeemAfterQuote_lookup :
     (Blanc.ProrataWethVault.vault.main ::
       Blanc.ProrataWethVault.vault.aux)[
         Blanc.ProrataWethVault.redeemAfterQuoteSlot]? =
       some Blanc.ProrataWethVault.redeemAfterQuote := by
-  simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
-    Blanc.ProrataWethVault.redeemAfterQuoteSlot]
+  simp only [ProrataWethVault.vault, ProrataWethVault.vaultAux,
+    ProrataWethVault.redeemAfterQuoteSlot, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
 
 private theorem withdrawBurn_lookup :
     (Blanc.ProrataWethVault.vault.main ::
       Blanc.ProrataWethVault.vault.aux)[
         Blanc.ProrataWethVault.withdrawBurnSlot]? =
       some Blanc.ProrataWethVault.withdrawBurn := by
-  simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
-    Blanc.ProrataWethVault.withdrawBurnSlot]
+  simp only [ProrataWethVault.vault, ProrataWethVault.vaultAux, ProrataWethVault.withdrawBurnSlot,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos,
+    List.getElem_cons_succ, List.getElem_cons_zero]
 
 private theorem redeemBurn_lookup :
     (Blanc.ProrataWethVault.vault.main ::
       Blanc.ProrataWethVault.vault.aux)[
         Blanc.ProrataWethVault.redeemBurnSlot]? =
       some Blanc.ProrataWethVault.redeemBurn := by
-  simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
-    Blanc.ProrataWethVault.redeemBurnSlot]
+  simp only [ProrataWethVault.vault, ProrataWethVault.vaultAux, ProrataWethVault.redeemBurnSlot,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos,
+    List.getElem_cons_succ, List.getElem_cons_zero]
 
 private theorem withdraw_mem_vaultFuncs :
     (selector "withdraw" [.uint256, .address, .address],
       Blanc.ProrataWethVault.routed 3 Blanc.ProrataWethVault.withdraw) ∈
       Blanc.ProrataWethVault.vaultFuncs := by
-  simp [Blanc.ProrataWethVault.vaultFuncs]
+  simp only [ProrataWethVault.vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+    true_or, or_true]
 
 private theorem redeem_mem_vaultFuncs :
     (selector "redeem" [.uint256, .address, .address],
       Blanc.ProrataWethVault.routed 3 Blanc.ProrataWethVault.redeem) ∈
       Blanc.ProrataWethVault.vaultFuncs := by
-  simp [Blanc.ProrataWethVault.vaultFuncs]
+  simp only [ProrataWethVault.vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+    true_or, or_true]
 
 /-- `withdraw_compiled_effect` together with WETH's kept non-address cells. -/
 theorem withdraw_compiled_effect_quiet

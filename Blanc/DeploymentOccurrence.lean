@@ -50,7 +50,7 @@ theorem Exec.Deriv.SourceCursor.mainToward_appended
   rcases root with ⟨pc, sevm, pre, out, run⟩
   rcases identity with ⟨hpc, compiled⟩
   rcases compiled with ⟨hcompile, hcode⟩
-  dsimp at hpc hcompile hcode reached instructionAt
+  dsimp only at hpc hcompile hcode reached instructionAt
   subst pc
   have hget :
       (table 0 (program.main :: program.aux))[0]? =
@@ -87,7 +87,8 @@ theorem Exec.Deriv.SourceCursor.mainToward_appended
             ⟨1, _, next, parentPrefix, sourceSlice, sourceBoundary, by
               intro site member
               simp only [Prog.sourceSites, List.mem_flatMap]
-              refine ⟨0, by simp, ?_⟩
+              refine ⟨0, by simp only [List.length_cons, List.mem_range, lt_add_iff_pos_left,
+                add_pos_iff, zero_lt_one, or_true], ?_⟩
               simpa only [hget] using member⟩
           have notStore : ¬ Ninst.At sevm.code 0 (.reg .sstore) := by
             intro storeHere
@@ -187,7 +188,7 @@ private theorem Exec.Deriv.ParentPrefix.advanceJumpToward_appended
       Jinst.Run ⟨start.pc, start.sevm, start.devm⟩ instruction
         (.ok ⟨nextPc, inter⟩) := by
   rcases start with ⟨pc, sevm, pre, out, run⟩
-  dsimp at reached instructionAt jumpAt
+  dsimp only at reached instructionAt jumpAt
   cases reached with
   | refl => exact ((Blanc.Ninst.At.false_of_jinstAt instructionAt) jumpAt).elim
   | step edge rest =>
@@ -235,8 +236,9 @@ theorem Exec.Deriv.SourceCursor.callToward_appended
   have hgetBody : (program.main :: program.aux)[index]? = some body := by
     have h := @Prog.get?_table 0 index (program.main :: program.aux)
     rw [hgetTable] at h
-    simpa using h.symm
-  rcases (Blanc.Exec.Deriv.ParentPrefix.advancePushToward_appended reached) ⟨pushLe, pushAt⟩ (by simp)
+    simpa only [Option.map_eq_map, Option.map_some] using h.symm
+  rcases (Blanc.Exec.Deriv.ParentPrefix.advancePushToward_appended reached) ⟨pushLe, pushAt⟩ (by simp only [Nat.toUInt8_eq,
+    ne_eq, reduceCtorEq, not_false_eq_true])
       targetNonPush instructionAt with
     ⟨afterPushPre, afterPush, pushEdge, afterPushReached, pushBurn⟩
   rw [List.toB256_pair _ hloc] at pushBurn
@@ -361,7 +363,7 @@ private theorem Exec.Deriv.SourceCursor.toward_appended_core :
               Func.sourceSites path.functionIndex path.steps cursor.pc
                 (.next instruction tail) := by
             rcases path with ⟨functionIndex, steps⟩
-            simp [site, Func.sourceSites]
+            simp only [Func.sourceSites, List.mem_cons, true_or, site]
           have sourceAt : Ninst.At root.sevm.code cursor.pc instruction :=
             Func.sourceSites_sound cursor.codeSlice cursor.codeBoundary
               localMember

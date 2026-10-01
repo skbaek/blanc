@@ -101,7 +101,7 @@ theorem ossifiableConstructorDecodeSpec_shortHead
     {code : Bytes} {argsOffset : Nat}
     (short : code.length < argsOffset + 96) :
     ossifiableConstructorDecodeSpec code argsOffset = .emptyRevert := by
-  simp [ossifiableConstructorDecodeSpec, short]
+  simp only [ossifiableConstructorDecodeSpec, short, ↓reduceIte]
 
 theorem ossifiableConstructorDecodeSpec_dirtyImplementation
     {code : Bytes} {argsOffset : Nat}
@@ -109,7 +109,8 @@ theorem ossifiableConstructorDecodeSpec_dirtyImplementation
     (dirty : addressMask &&&
       ossifiableConstructorCodeWord code argsOffset ≠ 0) :
     ossifiableConstructorDecodeSpec code argsOffset = .emptyRevert := by
-  simp [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head, dirty]
+  simp only [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head, ↓reduceIte, ne_eq, dirty,
+    not_false_eq_true]
 
 theorem ossifiableConstructorDecodeSpec_dirtyAdmin
     {code : Bytes} {argsOffset : Nat}
@@ -119,8 +120,8 @@ theorem ossifiableConstructorDecodeSpec_dirtyAdmin
     (adminDirty : addressMask &&&
       ossifiableConstructorCodeWord code (argsOffset + 32) ≠ 0) :
     ossifiableConstructorDecodeSpec code argsOffset = .emptyRevert := by
-  simp [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head,
-    implementationClean, adminDirty]
+  simp only [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head, ↓reduceIte, implementationClean,
+    ne_eq, not_true_eq_false, adminDirty, not_false_eq_true]
 
 theorem ossifiableConstructorDecodeSpec_largeOffset
     {code : Bytes} {argsOffset : Nat}
@@ -132,8 +133,8 @@ theorem ossifiableConstructorDecodeSpec_largeOffset
     (large : ossifiableConstructorAbiMaxUint64 <
       ossifiableConstructorCodeWord code (argsOffset + 64)) :
     ossifiableConstructorDecodeSpec code argsOffset = .emptyRevert := by
-  simp [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head,
-    implementationClean, adminClean, large]
+  simp only [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head, ↓reduceIte, implementationClean,
+    ne_eq, not_true_eq_false, adminClean, large]
 
 theorem ossifiableConstructorDecodeSpec_incompleteLength
     {code : Bytes} {argsOffset : Nat}
@@ -148,8 +149,8 @@ theorem ossifiableConstructorDecodeSpec_incompleteLength
       (ossifiableConstructorDataPointer argsOffset
         (ossifiableConstructorCodeWord code (argsOffset + 64)) + 32).toNat) :
     ossifiableConstructorDecodeSpec code argsOffset = .emptyRevert := by
-  simp [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head,
-    implementationClean, adminClean, offsetBound, short]
+  simp only [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head, ↓reduceIte, implementationClean,
+    ne_eq, not_true_eq_false, adminClean, offsetBound, short]
 
 theorem ossifiableConstructorDecodeSpec_largeLength
     {code : Bytes} {argsOffset : Nat}
@@ -169,9 +170,8 @@ theorem ossifiableConstructorDecodeSpec_largeLength
         (ossifiableConstructorDataPointer argsOffset
           (ossifiableConstructorCodeWord code (argsOffset + 64))).toNat) :
     ossifiableConstructorDecodeSpec code argsOffset = .allocationPanic := by
-  simp [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head,
-    implementationClean, adminClean, offsetBound,
-    Nat.not_lt.mpr lengthComplete, large]
+  simp only [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head, ↓reduceIte, implementationClean,
+    ne_eq, not_true_eq_false, adminClean, offsetBound, Nat.not_lt.mpr lengthComplete, large]
 
 theorem ossifiableConstructorDecodeSpec_payloadOutOfBounds
     {code : Bytes} {argsOffset : Nat}
@@ -205,9 +205,8 @@ theorem ossifiableConstructorDecodeSpec_payloadOutOfBounds
             (ossifiableConstructorCodeWord code (argsOffset + 64))).toNat).toNat := by
     simpa only [ossifiableConstructorDataEnd,
       ossifiableConstructorDataStart] using payloadShort
-  simp [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head,
-    implementationClean, adminClean, offsetBound,
-    Nat.not_lt.mpr lengthComplete, lengthBound,
+  simp only [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head, ↓reduceIte, implementationClean,
+    ne_eq, not_true_eq_false, adminClean, offsetBound, Nat.not_lt.mpr lengthComplete, lengthBound,
     payloadShort']
 
 theorem ossifiableConstructorDecodeSpec_accepted
@@ -254,10 +253,10 @@ theorem ossifiableConstructorDecodeSpec_accepted
         ≤ code.length := by
     simpa only [ossifiableConstructorDataEnd,
       ossifiableConstructorDataStart] using payloadComplete
-  simp [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head,
-    implementationClean, adminClean, offsetBound,
-    Nat.not_lt.mpr lengthComplete, lengthBound,
-    payloadComplete', ossifiableConstructorDataStart]
+  simp only [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head, ↓reduceIte, implementationClean,
+    ne_eq, not_true_eq_false, adminClean, offsetBound, Nat.not_lt.mpr lengthComplete, lengthBound,
+    ossifiableConstructorDataStart, ite_eq_right_iff, reduceCtorEq, imp_false, not_lt,
+    payloadComplete']
 
 /-! ## Implementation validation and ordered installation effect -/
 

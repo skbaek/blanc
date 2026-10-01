@@ -75,10 +75,10 @@ theorem holderCreditLossOfActions_eq_zero_of_creditNof
   induction actions with
   | nil => rfl
   | cons action actions ih =>
-      have haction : action.CreditNof := h action (by simp)
+      have haction : action.CreditNof := h action (by simp only [List.mem_cons, true_or])
       have htail : FlowActionsCreditNof actions := by
         intro tail hmem
-        exact h tail (by simp [hmem])
+        exact h tail (by simp only [List.mem_cons, hmem, or_true])
       simp only [holderCreditLossOfActions, List.map_cons, List.sum_cons]
       rw [action.holderCreditLoss_eq_zero_of_creditNof haction u]
       change 0 + holderCreditLossOfActions actions u = 0
@@ -241,7 +241,7 @@ theorem FlowActionsCreditNof.of_creditLoss_lt_modulus
     (h : creditLossOfActions actions < 2 ^ 256) :
     FlowActionsCreditNof actions := by
   induction actions with
-  | nil => simp [FlowActionsCreditNof]
+  | nil => simp only [FlowActionsCreditNof, List.not_mem_nil, IsEmpty.forall_iff, implies_true]
   | cons head tail ih =>
       have hhead : head.creditLossTotal < 2 ^ 256 := by
         simp only [creditLossOfActions, List.map_cons, List.sum_cons] at h

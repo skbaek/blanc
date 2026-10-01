@@ -99,19 +99,19 @@ lemma slice_two_words (img : Bytes) (a : B256) (b : Bytes)
       List.nil_append, Nat.zero_add]
   have e2 : Bytes.writeAt (a.toBytes ++ img.drop 32) 32 b =
       a.toBytes ++ (b ++ (img.drop 32).drop 32) := by
-    rw [Bytes.writeAt, hb, List.takeD_eq_take _ (by simp [ha]),
+    rw [Bytes.writeAt, hb, List.takeD_eq_take _ (by simp only [ha, List.length_append, List.length_drop, le_add_iff_nonneg_right, zero_le]),
       List.take_left' ha,
       show 32 + 32 = a.toBytes.length + 32 from by rw [ha],
       List.drop_append, List.append_assoc]
-    simp [ha]
+    simp only [ha, Nat.reduceAdd, Nat.reduceSub, List.drop_drop, List.append_cancel_left_eq, List.append_left_eq_self, List.drop_eq_nil_iff, Nat.reduceLeDiff]
   rw [e1, e2]
   unfold List.sliceD
   rw [List.drop_zero,
-    List.takeD_eq_take _ (by simp [ha, hb]; omega)]
+    List.takeD_eq_take _ (by simp only [ha, hb, List.drop_drop, Nat.reduceAdd, List.length_append, List.length_drop]; omega)]
   rw [show a.toBytes ++ (b ++ List.drop 32 (List.drop 32 img)) =
       (a.toBytes ++ b) ++ List.drop 32 (List.drop 32 img) by
-        simp [List.append_assoc],
-    List.take_left' (by simp [ha, hb])]
+        simp only [List.append_assoc, List.drop_drop, Nat.reduceAdd],
+    List.take_left' (by simp only [ha, hb, List.length_append, Nat.reduceAdd])]
 
 /-- Value-carrying allowance-key computation for an exact readable memory
 image. -/
@@ -428,7 +428,8 @@ theorem approve_exec_effect (dp : DeployParams)
   have h_mem :
       (selector "approve" [.address, .uint256], nonpayable approve) ∈
         weth10Funcs dp := by
-    simp [weth10Funcs]
+    simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   rcases exec_enters_weth10Nonpayable_logs
       exc h_code h_sel h_nonempty h_mem with
     ⟨mid, hvalue, hstor0, hbal0, hcode0, hmemory, hlogs0, _, hbody⟩
@@ -793,7 +794,8 @@ theorem depositTo_exec_effect (dp : DeployParams)
       Devm.getCode post = Devm.getCode pre ∧
       post.output = pre.output := by
   have h_mem : (selector "depositTo" [.address], depositTo) ∈ weth10Funcs dp := by
-    simp [weth10Funcs]
+    simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   rcases exec_enters_weth10Selector_logs
       exc h_code h_sel h_nonempty h_mem with
     ⟨mid, hstor0, hbal0, hcode0, hmemory, hlogs0, houtput0, hbody⟩
@@ -986,7 +988,8 @@ theorem deposit_exec_effect (dp : DeployParams)
       Devm.getCode post = Devm.getCode pre ∧
       post.output = pre.output := by
   have h_mem : (selector "deposit" [], deposit) ∈ weth10Funcs dp := by
-    simp [weth10Funcs]
+    simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   rcases exec_enters_weth10Selector_logs
       exc h_code h_sel h_nonempty h_mem with
     ⟨mid, hstor0, hbal0, hcode0, hmemory, hlogs0, houtput0, hbody⟩

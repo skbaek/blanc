@@ -113,7 +113,7 @@ private theorem reach_of_dispatchWith_leaf_compiled_logs
     simpa only [List.cons_append, List.nil_append] using pushed
   have p2 : (1 : B256) :: tail <<+ testPre.stack := by
     have compared := prefix_of_eq qeq p1
-    simpa [B256.eqCheck] using compared
+    simpa only [B256.eqCheck, ↓reduceIte, List.append_eq, List.nil_append] using compared
   obtain ⟨bodyPre, branchWord, -, hpop, bodyRun, bodyStack⟩ :=
     Func.RunCompiledTo.succ_branch_of_prefix
       (by decide : (1 : B256) ≠ 0) p2 branchRun
@@ -301,7 +301,7 @@ private theorem run_body_of_run_nonpayable_compiled_frame_logs
     prefix_of_push (of_run_callvalue rvalue) nil_pref
   have ptest : (1 : B256) :: [] <<+ testPre.stack := by
     have p := prefix_of_iszero rzero pvalue
-    simpa [hvalue, B256.eqCheck] using p
+    simpa only [B256.eqCheck, hvalue, ↓reduceIte] using p
   obtain ⟨bodyPre, branchWord, -, hpop, bodyRun, -⟩ :=
     Func.RunCompiledTo.succ_branch_of_prefix
       (by decide : (1 : B256) ≠ 0) ptest branchRun
@@ -362,7 +362,7 @@ private theorem run_body_of_run_requireStaticArgs_compiled_frame_logs
           (Ninst.Hinv.inv (f := Devm.output) qlt))).trans hpop.output
   · rcases hsucc with ⟨flag, revertPre, -, -, -, revertRun⟩
     rcases runCompiledTo_revert_inv revertRun with ⟨revertPost, hbad, -⟩
-    simp at hbad
+    simp only [ExceptT.stM_eq, reduceCtorEq] at hbad
 
 /-! ## Exact selector and body entry -/
 
@@ -507,7 +507,8 @@ theorem selector_mem_vaultFuncs_of_ok
     prefix_of_fsig nil_pref hfsig
   have revertLookup :
       (vault.main :: vault.aux)[revertSlot]? = some Func.revert := by
-    simp [vault, vaultAux, revertSlot]
+    simp only [vault, revertSlot, vaultAux, List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.one_lt_ofNat, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   obtain ⟨body, treeMem⟩ :=
     sig_mem_of_dispatchWith_ok revertLookup selectorPrefix hdispatch
   exact ⟨body, DispatchTree.mem_of_mem_ofSorted (by decide) treeMem⟩

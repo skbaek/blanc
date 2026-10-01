@@ -91,8 +91,9 @@ theorem notAdmin_call_exact
   apply controlErrorCall_exact
       (slot := notAdminErrorSlot) (blob := notAdminErrorData)
       (image := image) (out := out)
-  · simp [runtimeBaseline, runtimeBaselineAux, notAdminErrorSlot,
-      notAdminError]
+  · simp only [runtimeBaseline, runtimeBaselineAux, notAdminError, notAdminErrorSlot,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos,
+    List.getElem_cons_succ, List.getElem_cons_zero]
   · exact hwf
   · exact hreads
   · decide +kernel
@@ -109,8 +110,9 @@ theorem proxyIsOssified_call_exact
   apply controlErrorCall_exact
       (slot := proxyIsOssifiedErrorSlot) (blob := proxyIsOssifiedErrorData)
       (image := image) (out := out)
-  · simp [runtimeBaseline, runtimeBaselineAux, proxyIsOssifiedErrorSlot,
-      proxyIsOssifiedError]
+  · simp only [runtimeBaseline, runtimeBaselineAux, proxyIsOssifiedError, proxyIsOssifiedErrorSlot,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos,
+    List.getElem_cons_succ, List.getElem_cons_zero]
   · exact hwf
   · exact hreads
   · decide +kernel
@@ -128,8 +130,9 @@ theorem noCodeImplementation_call_exact
       (slot := noCodeImplementationErrorSlot)
       (blob := noCodeImplementationErrorData)
       (image := image) (out := out)
-  · simp [runtimeBaseline, runtimeBaselineAux,
-      noCodeImplementationErrorSlot, noCodeImplementationError]
+  · simp only [runtimeBaseline, runtimeBaselineAux, noCodeImplementationError,
+    noCodeImplementationErrorSlot, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   · exact hwf
   · exact hreads
   · decide +kernel
@@ -147,8 +150,9 @@ theorem emptyDelegatecallError_call_exact
       (slot := emptyDelegatecallErrorSlot)
       (blob := emptyDelegatecallErrorData)
       (image := image) (out := out)
-  · simp [runtimeBaseline, runtimeBaselineAux,
-      emptyDelegatecallErrorSlot, emptyDelegatecallError]
+  · simp only [runtimeBaseline, runtimeBaselineAux, emptyDelegatecallError,
+    emptyDelegatecallErrorSlot, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   · exact hwf
   · exact hreads
   · decide +kernel
@@ -294,7 +298,7 @@ private theorem upgradeToAndCallDecoder_step_size
   have p2 := prefix_of_push (of_run_calldatasize r2) p1
   have p3 := prefix_of_lt r3 p2
   have pZero : (0 : B256) :: tail <<+ s3.stack := by
-    simpa [hsize] using p3
+    simpa only [hsize, List.append_eq, List.nil_append] using p3
   obtain ⟨next, hpop, nextRun, pNext⟩ :=
     Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
   exact ⟨next, nextRun, pNext,
@@ -332,7 +336,7 @@ private theorem upgradeToAndCallDecoder_step_address
     of_check_non_address pArg checkRun
   have hdirtyZero : dirty = 0 := hdirty.mpr hvalid
   have pZero : (0 : B256) :: tail <<+ testPre.stack := by
-    simpa [hdirtyZero] using pDirty
+    simpa only [hdirtyZero] using pDirty
   obtain ⟨next, hpop, nextRun, pNext⟩ :=
     Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
   exact ⟨next, nextRun, pNext,
@@ -391,8 +395,7 @@ private theorem upgradeToAndCallDecoder_step_implementation
   have r5 := Ninst.Run.of_runCompiled q5
   have p5 := prefix_of_gt r5 p4
   have pZero : (0 : B256) :: tail <<+ s5.stack := by
-    simpa [show ((96 : B256) >? upgradeToAndCallAbiMaxUint64) = 0
-      from by decide] using p5
+    simpa only [show ((96 : B256) >? upgradeToAndCallAbiMaxUint64) = 0 from by decide] using p5
   obtain ⟨next, hpop, nextRun, pNext⟩ :=
     Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
   refine ⟨next, nextRun, pNext, ?_, ?_, ?_, ?_⟩
@@ -467,12 +470,11 @@ private theorem upgradeToAndCallDecoder_step_offset
   have r7 := Ninst.Run.of_runCompiled q7
   have p4 := prefix_of_push (of_run_pushB256 r4) p3
   have p5 : (132 : B256) :: tail <<+ s5.stack := by
-    simpa [show ((36 : B256) + 96) = 132 from by decide]
-      using prefix_of_add r5 p4
+    simpa only [show ((36 : B256) + 96) = 132 from by decide] using prefix_of_add r5 p4
   have p6 := prefix_of_push (of_run_calldatasize r6) p5
   have p7 := prefix_of_lt r7 p6
   have pZero : (0 : B256) :: tail <<+ s7.stack := by
-    simpa [hheader] using p7
+    simpa only [hheader] using p7
   obtain ⟨next, hpop, nextRun, pNext⟩ :=
     Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
   refine ⟨next, nextRun, pNext, ?_, ?_, ?_, ?_⟩
@@ -543,8 +545,7 @@ private theorem upgradeToAndCallDecoder_step_header
   have r4 := Ninst.Run.of_runCompiled q4
   have p2 := prefix_of_push (of_run_pushB256 r2) p1
   have p3 : (100 : B256) :: tail <<+ s3.stack := by
-    simpa [show ((4 : B256) + 96) = 100 from by decide]
-      using prefix_of_add r3 p2
+    simpa only [show ((4 : B256) + 96) = 100 from by decide] using prefix_of_add r3 p2
   have p4 : Nat.toB256 setupCalldata.length :: tail <<+ s4.stack := by
     rw [← hsetupLength]
     exact prefix_of_calldataload_val r4 p3
@@ -582,7 +583,7 @@ private theorem upgradeToAndCallDecoder_step_header
   have r8 := Ninst.Run.of_runCompiled q8
   have p8 := prefix_of_gt r8 p7
   have pZero : (0 : B256) :: tail <<+ s8.stack := by
-    simpa [hlengthGuard] using p8
+    simpa only [hlengthGuard, List.append_eq, List.nil_append] using p8
   obtain ⟨next, hpop, nextRun, pNext⟩ :=
     Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
   refine ⟨next, nextRun, pNext, ?_, ?_, ?_, ?_⟩
@@ -646,8 +647,7 @@ private theorem upgradeToAndCallDecoder_step_payload_bound
   have r3 := Ninst.Run.of_runCompiled q3
   have p2 := prefix_of_push (of_run_pushB256 r2) p1
   have p3 : (132 : B256) :: tail <<+ s3.stack := by
-    simpa [show ((36 : B256) + 96) = 132 from by decide]
-      using prefix_of_add r3 p2
+    simpa only [show ((36 : B256) + 96) = 132 from by decide] using prefix_of_add r3 p2
   have wf3 : Mem.Wf s3.memory := by
     rw [← Ninst.Hinv.inv (f := Devm.memory) r3,
       ← Ninst.Hinv.inv (f := Devm.memory) r2]
@@ -675,7 +675,7 @@ private theorem upgradeToAndCallDecoder_step_payload_bound
   have p6 := prefix_of_push (of_run_calldatasize r6) p5
   have p7 := prefix_of_lt r7 p6
   have pZero : (0 : B256) :: tail <<+ s7.stack := by
-    simpa [hpayloadGuard] using p7
+    simpa only [hpayloadGuard] using p7
   obtain ⟨next, hpop, nextRun, pNext⟩ :=
     Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
   refine ⟨next, nextRun, pNext, ?_, ?_, ?_, ?_⟩
@@ -758,8 +758,7 @@ private theorem upgradeToAndCallDecoder_step_copy
   have p3 := prefix_of_push (of_run_pushB256 r3) p2
   have p4 : (132 : B256) :: Nat.toB256 setupCalldata.length :: tail <<+
       s4.stack := by
-    simpa [show ((36 : B256) + 96) = 132 from by decide]
-      using prefix_of_add r4 p3
+    simpa only [show ((36 : B256) + 96) = 132 from by decide] using prefix_of_add r4 p3
   have p5 := prefix_of_push (of_run_pushB256 r5) p4
   obtain ⟨p6, memory6⟩ := prefix_of_calldatacopy_val r6 p5
   have wf5 : Mem.Wf s5.memory := by
@@ -954,7 +953,7 @@ theorem decodeUpgradeToAndCallControl_boundary_of_guards
     upgradeToAndCallDecoder_step_copy p6 wf6 reads6 hoffset5 hlength5
       hlengthBound hsetupSlice harg2 run6
   refine ⟨n7, run7, p7, wf7, ?_, ?_, ?_⟩
-  · simpa [upgradeToAndCallDecodedImage] using reads7
+  · simpa only [upgradeToAndCallDecodedImage] using reads7
   · exact state1.trans (state2.trans (state3.trans (state4.trans
       (state5.trans (state6.trans state7)))))
   · exact logs1.trans (logs2.trans (logs3.trans (logs4.trans
@@ -1132,7 +1131,7 @@ theorem upgradeToAndCallAfter_route
     cases forceCall with
     | false =>
       have pForceZero : (0 : B256) :: tail <<+ forcePost.stack := by
-        simpa using pForce
+        simpa only [Bool.false_eq_true, ↓reduceIte] using pForce
       obtain ⟨stopPre, hforcePop, stopRun, pStop⟩ :=
         Func.RunCompiledTo.zero_branch_of_prefix pForceZero forceBranch
       exact .skipped setupEmpty rfl stopPre stopRun pStop
@@ -1144,7 +1143,7 @@ theorem upgradeToAndCallAfter_route
           (logsForce.trans hforcePop.logs)))
     | true =>
       have pForceOne : (1 : B256) :: tail <<+ forcePost.stack := by
-        simpa using pForce
+        simpa only [↓reduceIte] using pForce
       obtain ⟨delegatePre, _, _, hforcePop, delegateRun, pDelegate⟩ :=
         Func.RunCompiledTo.succ_branch_of_prefix
           (by decide : (1 : B256) ≠ 0) pForceOne forceBranch
@@ -1163,7 +1162,7 @@ theorem upgradeToAndCallAfter_route
       exact hzero hnat
     obtain ⟨delegatePre, _, _, hlengthPop, delegateRun, pDelegate⟩ :=
       Func.RunCompiledTo.succ_branch_of_prefix hwordNonzero pLength branchRun
-    exact .nonempty (by intro hnil; apply hzero; simp [hnil])
+    exact .nonempty (by intro hnil; apply hzero; simp only [hnil, List.length_nil])
       delegatePre delegateRun pDelegate
       (by rw [← hlengthPop.memory]; exact wfLength)
       (by rw [← hlengthPop.memory]; exact readsLength)
@@ -1215,7 +1214,8 @@ theorem upgradeImplementationWordCommit_boundary
   have pTopic := prefix_of_push topicPush pStore
   obtain ⟨pNext, hlog⟩ := of_logWith_val (k := 1) (x := 0) (y := 0)
     (topics := [upgradedEventTopic, implementation])
-    (by simp) (by simpa using pTopic) logRun
+    (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Fin.isValue,
+      Fin.coe_ofNat_eq_mod, Nat.one_mod]) (by simpa only [List.cons_append, List.nil_append] using pTopic) logRun
   have preToDupStor : Devm.getStor pre = Devm.getStor dupPost :=
     Ninst.Hinv.inv (f := Devm.getStor) dupRun
   have storeToNextStor : Devm.getStor storePost = Devm.getStor next :=
@@ -1243,11 +1243,12 @@ theorem upgradeImplementationWordCommit_boundary
     exact @pref_trans _
       [0, 0, upgradedEventTopic, implementation]
       ([0, 0, upgradedEventTopic, implementation] ++ tail) _
-      ⟨tail, rfl⟩ (by simpa using pOffset)
+      ⟨tail, rfl⟩ (by simpa only [List.cons_append, List.nil_append] using pOffset)
   have heq :
       ([0, 0, upgradedEventTopic, implementation] : List B256) =
         mi :: sz :: topics :=
-    List.pref_unique (by simp [htopics]) hknown (pref_of_split hpop)
+    List.pref_unique (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      htopics, Fin.isValue, Fin.succ_one_eq_two, Fin.coe_ofNat_eq_mod, Nat.reduceMod]) hknown (pref_of_split hpop)
   simp only [List.cons.injEq] at heq
   rcases heq with ⟨rfl, rfl, rfl⟩
   have logMemory : next.memory = topicPost.memory := by
@@ -1273,7 +1274,7 @@ theorem upgradeImplementationWordCommit_boundary
   · rw [hlog, ← preToTopicLogs]
     have hzero : ((0 : B256) * 32).toNat = 0 := by rfl
     have hempty : (topicPost.memory.read 0 0).1 = [] := by rfl
-    simp [rawUpgradedLog, hzero, hempty]
+    simp only [hzero, hempty, rawUpgradedLog]
 
 theorem upgradeImplementationControl_split_shape (continuation : Func) :
     upgradeImplementationControl continuation =
@@ -1357,7 +1358,7 @@ theorem upgradeImplementationControl_route
       (pre.getCode (Sevm.argWord sevm 0).toAdr).size.toB256 = 0
   · have pOne : (1 : B256) :: Sevm.argWord sevm 0 :: tail <<+
         testPre.stack := by
-      simpa [hzero, B256.eqCheck] using pTest
+      simpa only [B256.eqCheck, hzero, ↓reduceIte] using pTest
     obtain ⟨callPre, _, _, hpop, callRun, pCall⟩ :=
       Func.RunCompiledTo.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) pOne branchRun
@@ -1366,7 +1367,7 @@ theorem upgradeImplementationControl_route
       prefixLogs.trans hpop.logs, prefixMemory.trans hpop.memory⟩
   · have pZero : (0 : B256) :: Sevm.argWord sevm 0 :: tail <<+
         testPre.stack := by
-      simpa [hzero, B256.eqCheck] using pTest
+      simpa only [B256.eqCheck, hzero, ↓reduceIte] using pTest
     obtain ⟨commitPre, hpop, commitRun, pCommit⟩ :=
       Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
     exact Or.inr ⟨hzero, commitPre, commitRun, pCommit,
@@ -1442,7 +1443,8 @@ theorem upgradeImplementationControl_success
       (of_run_pushB256 (Ninst.Run.of_runCompiled qtopic)) pStore
     obtain ⟨_, hlog⟩ := of_logWith_val (k := 1) (x := 0) (y := 0)
       (topics := [upgradedEventTopic, Sevm.argWord sevm 0])
-      (by simp) (by simpa using pTopic) logRun
+      (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Fin.isValue,
+        Fin.coe_ofNat_eq_mod, Nat.one_mod]) (by simpa only [List.cons_append, List.nil_append] using pTopic) logRun
     have postEq : post = logPost := Func.RunCompiledTo.stop_eq stopRun
     have commitToStore : Devm.getStor commitPre = Devm.getStor dupPost :=
       Ninst.Hinv.inv (f := Devm.getStor)
@@ -1480,7 +1482,7 @@ theorem upgradeImplementationControl_success
     · rw [postEq, hlog, ← preToTopicLogs]
       have hzero : ((0 : B256) * 32).toNat = 0 := by rfl
       have hempty : (topicPost.memory.read 0 0).1 = [] := by rfl
-      simp [rawUpgradedLog, hzero, hempty]
+      simp only [hzero, hempty, rawUpgradedLog]
 
 /-! ## changeAdmin mutation -/
 
@@ -1526,8 +1528,9 @@ theorem changeAdminMutation_success
   obtain ⟨logPost, logRun, run⟩ := runCompiledTo_prepend_inv run
   obtain ⟨pLogged, hlogsRaw⟩ :=
     of_logWith_val (k := 0) (x := 0) (y := 2)
-      (topics := [adminChangedEventTopic]) (by simp)
-      (by simpa using pTopic) logRun
+      (topics := [adminChangedEventTopic]) (by simp only [List.length_cons, List.length_nil,
+        zero_add, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod])
+      (by simpa only [List.cons_append, List.nil_append] using pTopic) logRun
   have argMemory : oldPost.memory = argPost.memory :=
     Line.of_inv Devm.memory (by line_inv) argRun
   have hlogData :
@@ -1561,13 +1564,13 @@ theorem changeAdminMutation_success
     (Ninst.Run.of_runCompiled qzero) pTestArg
   by_cases hnewZero : Sevm.argWord sevm 0 = 0
   · have pOne : (1 : B256) :: tail <<+ testPre.stack := by
-      simpa [hnewZero, B256.eqCheck] using pTest
+      simpa only [B256.eqCheck, hnewZero, ↓reduceIte] using pTest
     obtain ⟨callPre, _, _, _, callRun, _⟩ :=
       Func.RunCompiledTo.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) pOne branchRun
     exact (Func.RunCompiledTo.not_ok_call_revertData hZeroAdmin callRun).elim
   · have pZero : (0 : B256) :: tail <<+ testPre.stack := by
-      simpa [hnewZero, B256.eqCheck] using pTest
+      simpa only [B256.eqCheck, hnewZero, ↓reduceIte] using pTest
     obtain ⟨writePre, hpop, writeRun, pWrite⟩ :=
       Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
     obtain ⟨writeArgPost, writeArgRun, writeRun⟩ :=
@@ -1680,8 +1683,9 @@ theorem ossifyMutation_success
     runCompiledTo_prepend_inv run
   obtain ⟨pAdminLogged, hadminLogsRaw⟩ :=
     of_logWith_val (k := 0) (x := 0) (y := 2)
-      (topics := [adminChangedEventTopic]) (by simp)
-      (by simpa using pAdminTopic) adminLogRun
+      (topics := [adminChangedEventTopic]) (by simp only [List.length_cons, List.length_nil,
+        zero_add, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod])
+      (by simpa only [List.cons_append, List.nil_append, List.append_eq] using pAdminTopic) adminLogRun
   have hadminData :
       (adminTopicPost.memory.read ((0 : B256) * 32).toNat
           ((2 : B256) * 32).toNat).1 =
@@ -1715,8 +1719,9 @@ theorem ossifyMutation_success
     runCompiledTo_prepend_inv run
   obtain ⟨_, hossifiedLogsRaw⟩ :=
     of_logWith_val (k := 0) (x := 0) (y := 0)
-      (topics := [proxyOssifiedEventTopic]) (by simp)
-      (by simpa using pOssifiedTopic) ossifiedLogRun
+      (topics := [proxyOssifiedEventTopic]) (by simp only [List.length_cons, List.length_nil,
+        zero_add, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod])
+      (by simpa only [List.cons_append, List.nil_append] using pOssifiedTopic) ossifiedLogRun
   have postEq : post = ossifiedLogPost :=
     Func.RunCompiledTo.stop_eq stopRun
   have preToStorePre : Devm.getStor pre = Devm.getStor zeroStorePre :=
@@ -1750,7 +1755,8 @@ theorem ossifyMutation_success
   · rw [postEq, hossifiedLogsRaw, ← ossifiedTopicPush.logs, hadminLogs]
     have hzero : ((0 : B256) * 32).toNat = 0 := by rfl
     have hempty : (ossifiedTopicPost.memory.read 0 0).1 = [] := by rfl
-    simp [proxyOssifiedLog, hzero, hempty, List.append_assoc]
+    simp only [hzero, hempty, List.append_assoc, List.cons_append, List.nil_append,
+      proxyOssifiedLog]
 
 /-- The exact packed zero write makes the public address view of the admin
 slot zero, irrespective of arbitrary raw high bits. -/
@@ -1898,8 +1904,9 @@ theorem changeAdmin_authorized_success_opened_of_program
   intro image hwf hreads
   have effect := changeAdminMutation_success
     (fs := runtimeBaseline.main :: runtimeBaseline.aux)
-    (by simp [runtimeBaseline, runtimeBaselineAux, zeroAdminErrorSlot,
-      zeroAdminError])
+    (by simp only [runtimeBaseline, runtimeBaselineAux, zeroAdminError, zeroAdminErrorSlot,
+      List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos,
+      List.getElem_cons_succ, List.getElem_cons_zero])
     hwf hreads pMutation mutationRun
   rw [proxyChangeAdminCalldata_arg0 hdata] at effect
   exact effect
@@ -1930,8 +1937,9 @@ theorem upgradeTo_authorized_success_opened_of_program
   refine ⟨checkPre, checkRun, ?_⟩
   have effect := upgradeImplementationControl_success
     (fs := runtimeBaseline.main :: runtimeBaseline.aux)
-    (by simp [runtimeBaseline, runtimeBaselineAux,
-      noCodeImplementationErrorSlot, noCodeImplementationError]) pCheck checkRun
+    (by simp only [runtimeBaseline, runtimeBaselineAux, noCodeImplementationError,
+      noCodeImplementationErrorSlot, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]) pCheck checkRun
   rw [proxyUpgradeToCalldata_arg0 hdata] at effect
   rw [toAdr_toB256] at effect
   exact effect

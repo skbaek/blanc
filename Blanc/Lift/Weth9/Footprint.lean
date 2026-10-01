@@ -91,10 +91,10 @@ section Ledger
 variable {K : Key → Prop} {s : Stor}
 
 theorem tracked_self {a : Adr} (ha : K (.bal a)) : tracked K s a = s.get (balSlot a) := by
-  simp [tracked, ha]
+  simp only [tracked, ha, ↓reduceIte]
 
 theorem tracked_of_not {a : Adr} (ha : ¬ K (.bal a)) : tracked K s a = 0 := by
-  simp [tracked, ha]
+  simp only [tracked, ha, ↓reduceIte]
 
 /-- A write at a tracked holder's balance slot changes exactly that holder's row. -/
 theorem tracked_set_bal (hK : KeyInj K) {a : Adr} (ha : K (.bal a)) (w : B256) :
@@ -162,7 +162,7 @@ theorem trackedSum_withdraw (hK : KeyInj K) {a : Adr} (ha : K (.bal a)) {v : B25
     (B256.toNat_le_toNat hle).trans le_sum
   have hs' : trackedSum K s - v.toNat =
       trackedSum K (s.set (balSlot a) (s.get (balSlot a) - v)) := by
-    simpa [trackedSum] using hs
+    simpa only [trackedSum] using hs
   omega
 
 /-- A balance transfer between two tracked holders (possibly the same) keeps the tracked ledger. -/
@@ -171,7 +171,7 @@ theorem trackedSum_transfer (hK : KeyInj K) {src dst : Adr} (hsrc : K (.bal src)
     (hsum : trackedSum K s < 2 ^ 256) :
     let s₁ := s.set (balSlot src) (s.get (balSlot src) - wad)
     trackedSum K (s₁.set (balSlot dst) (s₁.get (balSlot dst) + wad)) = trackedSum K s := by
-  dsimp
+  dsimp only [Lean.Elab.WF.paramLet]
   have hle' : wad ≤ tracked K s src := by
     rw [tracked_self hsrc]
     exact hle

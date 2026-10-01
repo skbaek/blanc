@@ -216,19 +216,19 @@ private theorem deposit_guard_prefix
     intro ha
     by_cases hb : maxBalance < Devm.getBal pre sevm.currentTarget - sevm.value
     · have hz : (1 : B256) + 1 = 0 := by
-        simpa [B256.ltCheck, ha, hb] using hzero
+        simpa only [B256.ltCheck, ha, ↓reduceIte, hb] using hzero
       exact (by decide +kernel : (1 : B256) + 1 ≠ 0) hz
     · have hz : (1 : B256) + 0 = 0 := by
-        simpa [B256.ltCheck, ha, hb] using hzero
+        simpa only [B256.ltCheck, ha, ↓reduceIte, hb] using hzero
       exact (by decide +kernel : (1 : B256) + 0 ≠ 0) hz
   have hb : ¬ maxBalance < Devm.getBal pre sevm.currentTarget - sevm.value := by
     intro hb
     by_cases ha : maxValue < sevm.value
     · have hz : (1 : B256) + 1 = 0 := by
-        simpa [B256.ltCheck, ha, hb] using hzero
+        simpa only [B256.ltCheck, ha, ↓reduceIte, hb] using hzero
       exact (by decide +kernel : (1 : B256) + 1 ≠ 0) hz
     · have hz : (0 : B256) + 1 = 0 := by
-        simpa [B256.ltCheck, ha, hb] using hzero
+        simpa only [B256.ltCheck, ha, ↓reduceIte, hb] using hzero
       exact (by decide +kernel : (0 : B256) + 1 ≠ 0) hz
   have hfa : (maxValue <? sevm.value) = 0 := by
     simp only [B256.ltCheck]
@@ -245,7 +245,7 @@ private theorem deposit_guard_prefix
       ((Line.of_inv Devm.getBal (by line_inv) hlineInv).trans (PopBurn.Inv.inv hpop))
   · have hcodePop : Devm.getCode s13 = Devm.getCode after := by
       funext a
-      simp [Devm.getCode, Devm.getAcct]
+      simp only [Devm.getCode, Devm.getAcct]
       rw [hpop.state]
     exact (Line.of_inv Devm.getCode (by line_inv) hcacheInv).trans
       ((Line.of_inv Devm.getCode (by line_inv) hlineInv).trans hcodePop)
@@ -442,7 +442,7 @@ theorem deposit_effect
         hfirstInv).trans (Line.of_inv Devm.getCode (by line_inv) hlineInv)))
     have hcodePop : Devm.getCode s18 = Devm.getCode s19 := by
       funext a
-      simp [Devm.getCode, Devm.getAcct]
+      simp only [Devm.getCode, Devm.getAcct]
       rw [hpop.state]
     exact hcode18.trans hcodePop
   have hlogs19 : s0.logs = s19.logs :=

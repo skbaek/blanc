@@ -48,7 +48,7 @@ theorem nonexec_of_all {xs : List Ninst} (h : xs.all (fun n => !isExecB n) = tru
   intro n hn x hx
   have := List.all_eq_true.mp h n hn
   subst hx
-  simp [isExecB] at this
+  simp only [isExecB, Bool.not_true, Bool.false_eq_true] at this
 
 /-- A revert tail is never left. -/
 theorem not_reach_revert_tail {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc}
@@ -111,20 +111,20 @@ theorem wdLine_walk {sevm : Sevm} {s s' : Devm} (run : Line.Run sevm s wdLine s'
   have hp5 := prefix_of_calldataload_val h5 hp4
   generalize Sevm.dataWord sevm 4 = v at hp5 ⊢
   have hp6 : [(4 : B256), v, 4, r] <<+ s6.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h6) hp5
   have hp7 : [(32 : B256), 4, v, 4, r] <<+ s7.stack := by
     have := prefix_of_push (of_run_push h7) hp6
     rwa [w20_eq] at this
   have hp8 : [(32 : B256) + 4, v, 4, r] <<+ s8.stack := prefix_of_add h8 hp7
   have hp9 : [v, (32 : B256) + 4, 4, r] <<+ s9.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h9) hp8
   have hp10 : [(4 : B256), (32 : B256) + 4, v, r] <<+ s10.stack :=
-    Stack.prefix_of_swap (n := 1) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 1) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h10) hp9
   have hp11 : [(32 : B256) + 4, 4, v, r] <<+ s11.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h11) hp10
   have hp13 := prefix_of_pop (of_run_pop h13) (prefix_of_pop (of_run_pop h12) hp11)
   exact ⟨_, r, prefix_of_push (of_run_push h14) hp13⟩
@@ -198,11 +198,13 @@ theorem weth9_withdraw_reach {P : Sevm → Devm → Ninst → Devm → Prop}
   have s56 : Same d5 d6 := Same.of_state pop2.state
   have sAll : Same pre d6 := hs.trans (s12.trans (s35.trans s56))
   have hp6 : [Sevm.dataWord sevm 4, r9] <<+ d6.stack := by
-    have := prefix_of_popBurn1 (a := t9) (by simpa using hp5) pop2
-    simpa using this
+    have := prefix_of_popBurn1 (a := t9) (by simpa only using hp5) pop2
+    simpa only using this
   rcases hcases with ⟨T', reach', rfl⟩ | ⟨d7, hret, run'⟩
   · have hT' : AtExec T' := AtExec.below.mp hT
-    have hg' : g = t_09d9_c8 := by simpa [prog, Cert.prog, cert] using hg.symm
+    have hg' : g = t_09d9_c8 := by simpa only [prog, Cert.prog, cert, List.map_cons, List.map_nil,
+      List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos,
+      List.getElem_cons_succ, List.getElem_cons_zero, Option.some.injEq] using hg.symm
     subst hg'
     rw [withdraw_tree_eq] at reach'
     obtain ⟨e0, burn0, reach⟩ := Reach.dest reach' hT'
@@ -243,7 +245,7 @@ theorem weth9_withdraw_reach {P : Sevm → Devm → Ninst → Devm → Prop}
       rcases Reach.exec reach with h | ⟨d', hstep, reach2⟩
       · exact h
       · exact (Reach.false_of_execFree (E := []) rfl reach2 hT' afterCall_execFree
-          (by simp)).elim
+          (by simp only [List.not_mem_nil, IsEmpty.forall_iff, implies_true])).elim
     refine ⟨e10, gw, cw, ys, ?_, hle, hstor, hp10⟩
     rw [hT'eq]
     rfl

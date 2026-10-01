@@ -208,7 +208,7 @@ theorem readTotalAssets_avoiding {fs : List Func} {sevm : Sevm}
   have memory : MemoryImage entry entry.memory.data.toList := by
     refine ⟨memoryWf, ?_⟩
     intro index
-    simp
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
   rw [readTotalAssets_sourceShape] at run
   obtain ⟨callPre, staging, run⟩ := Func.RunCompiledToAvoiding.prepend_inv run
   obtain ⟨callPost, crossing, notRefused, run⟩ :=
@@ -219,7 +219,7 @@ theorem readTotalAssets_avoiding {fs : List Func} {sevm : Sevm}
       gasWord :: wethAccount.toB256 :: 28 :: 36 :: 0 :: 32 :: rest <<+
         callPre.stack := by
     rw [stack]
-    exact ⟨[], by simp [Split]⟩
+    exact ⟨[], by simp only [Split, List.append_nil]⟩
   have crossingSource := Ninst.Run.of_runCompiled crossing
   -- A status-zero crossing is exactly the refused child this walk avoids.
   have depth : sevm.depth ≠ 0 := by
@@ -294,7 +294,7 @@ theorem readTotalAssets_avoiding {fs : List Func} {sevm : Sevm}
       rw [oneStack]
       exact pref_append [1] tail
     have oneNonzero : (1 : B256) ≠ 0 := by decide
-    simpa [B256.eqCheck, oneNonzero] using
+    simpa only [B256.eqCheck, oneNonzero, ↓reduceIte] using
       prefix_of_iszero statusZeroSource onePrefix
   obtain ⟨sizePre, statusPop, sizeRun, -⟩ :=
     Func.RunCompiledToAvoiding.zero_branch_of_prefix statusPrefix statusBranch
@@ -326,7 +326,7 @@ theorem readTotalAssets_avoiding {fs : List Func} {sevm : Sevm}
   have sizeZeroPrefix : (0 : B256) :: [] <<+ sizeBranchPre.stack := by
     have size32 : Nat.toB256 32 = (32 : B256) := by decide +kernel
     have oneNonzero : (1 : B256) ≠ 0 := by decide
-    simpa [B256.eqCheck, size32, oneNonzero] using p4
+    simpa only [B256.eqCheck, size32, ↓reduceIte, oneNonzero] using p4
   obtain ⟨decodePre, sizePop, decodeRun, -⟩ :=
     Func.RunCompiledToAvoiding.zero_branch_of_prefix sizeZeroPrefix sizeBranch
   have sizePop' := Devm.PopBurn.of_popBurnBy sizePop
@@ -345,7 +345,8 @@ theorem readTotalAssets_avoiding {fs : List Func} {sevm : Sevm}
       ← Ninst.Hinv.inv (f := Devm.memory) r3, ← returnSize.memory,
       ← push32.memory, ← statusPop'.memory,
       ← Ninst.Hinv.inv (f := Devm.memory) statusZeroSource]
-  refine ⟨_, bodyPre, ⟨loadTail, by simpa [Stack.Push, Split] using pushed⟩, ?_, ?_, bodyRun⟩
+  refine ⟨_, bodyPre, ⟨loadTail, by simpa only [Split, List.cons_append, List.nil_append,
+    Stack.Push] using pushed⟩, ?_, ?_, bodyRun⟩
   · rw [loadMemory, mloadMemory]
     exact callPostWf.extend _ _
   · intro offset w afterCalldata window
@@ -408,7 +409,7 @@ theorem staticcallOutputWindow {sevm : Sevm} {pre post : Devm}
       gasWord :: target :: 28 :: inputSize :: 0 :: 32 :: rest <<+
         pre.stack := by
     rw [stack]
-    exact ⟨[], by simp [Split]⟩
+    exact ⟨[], by simp only [Split, List.append_nil]⟩
   rcases of_run_staticcall_val_with_depth operandPrefix
       (Ninst.Run.of_runCompiled crossing) hfork with failure | success
   · obtain ⟨zeroPrefix, -, -⟩ := failure
@@ -450,7 +451,7 @@ theorem callOutputWindow {sevm : Sevm} {pre post : Devm}
       gasWord :: target :: 0 :: 28 :: inputSize :: 0 :: 32 :: rest <<+
         pre.stack := by
     rw [stack]
-    exact ⟨[], by simp [Split]⟩
+    exact ⟨[], by simp only [Split, List.append_nil]⟩
   rcases of_run_call_val_with_depth operandPrefix
       (Ninst.Run.of_runCompiled crossing) hfork with failure | success
   · obtain ⟨zeroPrefix, -⟩ := failure
@@ -501,7 +502,7 @@ theorem checkedWordSuffix_avoiding {fs : List Func} {sevm : Sevm}
   have statusZeroSource := Ninst.Run.of_runCompiled statusZeroRun
   have statusPrefix : (0 : B256) :: tail <<+ statusPre.stack := by
     have oneNonzero : (1 : B256) ≠ 0 := by decide
-    simpa [B256.eqCheck, oneNonzero] using
+    simpa only [B256.eqCheck, oneNonzero, ↓reduceIte] using
       prefix_of_iszero statusZeroSource statusOne
   obtain ⟨sizePre, statusPop, sizeRun, sizeTail⟩ :=
     Func.RunCompiledToAvoiding.zero_branch_of_prefix statusPrefix statusBranch
@@ -532,7 +533,7 @@ theorem checkedWordSuffix_avoiding {fs : List Func} {sevm : Sevm}
   have sizeZeroPrefix : (0 : B256) :: tail <<+ sizeBranchPre.stack := by
     have size32 : Nat.toB256 32 = (32 : B256) := by decide +kernel
     have oneNonzero : (1 : B256) ≠ 0 := by decide
-    simpa [B256.eqCheck, size32, oneNonzero] using p4
+    simpa only [B256.eqCheck, size32, ↓reduceIte, oneNonzero] using p4
   obtain ⟨decodePre, sizePop, decodeRun, decodeTail⟩ :=
     Func.RunCompiledToAvoiding.zero_branch_of_prefix sizeZeroPrefix sizeBranch
   have sizePop' := Devm.PopBurn.of_popBurnBy sizePop
@@ -556,7 +557,7 @@ theorem checkedWordSuffix_avoiding {fs : List Func} {sevm : Sevm}
       ← Ninst.Hinv.inv (f := Devm.state) statusZeroSource]
   have selfReads : Mem.Reads mloadPre.memory mloadPre.memory.data.toList := by
     intro index
-    simp
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
   obtain ⟨loaded, loadMemory, -⟩ :=
     prefix_of_mload_val r6 (prefix_of_push (of_run_pushB256 r5) decodeTail)
       selfReads
@@ -594,7 +595,7 @@ theorem readTotalAssets_exact_avoiding {fs : List Func} {sevm : Sevm}
   have memory : MemoryImage entry entry.memory.data.toList := by
     refine ⟨memoryWf, ?_⟩
     intro index
-    simp
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
   rw [readTotalAssets_sourceShape] at run
   obtain ⟨callPre, staging, run⟩ := Func.RunCompiledToAvoiding.prepend_inv run
   obtain ⟨callPost, crossing, notRefused, run⟩ :=
@@ -605,7 +606,7 @@ theorem readTotalAssets_exact_avoiding {fs : List Func} {sevm : Sevm}
       gasWord :: wethAccount.toB256 :: 28 :: 36 :: 0 :: 32 :: rest <<+
         callPre.stack := by
     rw [stack]
-    exact ⟨[], by simp [Split]⟩
+    exact ⟨[], by simp only [Split, List.append_nil]⟩
   have crossingSource := Ninst.Run.of_runCompiled crossing
   have depth : sevm.depth ≠ 0 := by
     rcases of_run_staticcall_val_with_depth operandPrefix crossingSource hfork with
@@ -663,7 +664,8 @@ theorem readTotalAssets_exact_avoiding {fs : List Func} {sevm : Sevm}
   obtain ⟨statusTail, statusStack⟩ := successFlag
   obtain ⟨bodyPre, wordPrefix, bodyState, bodyMemory, bodyRun⟩ :=
     checkedWordSuffix_avoiding (tail := [])
-      (by rw [statusStack]; exact ⟨statusTail, by simp [Split]⟩)
+      (by rw [statusStack]; exact ⟨statusTail, by simp only [Split, List.cons_append,
+        List.nil_append]⟩)
       returnDataLength window run
   have callPostWf : Mem.Wf callPost.memory := by
     rcases of_run_staticcall_val_with_depth operandPrefix crossingSource hfork with
@@ -732,7 +734,7 @@ theorem canonicalTrueSuffix_avoiding {fs : List Func} {sevm : Sevm}
     (prefix_of_eq r2 (prefix_of_push (of_run_pushB256 r1) wordPrefix))
   have zeroPrefix : (0 : B256) :: tail <<+ s3.stack := by
     have oneNonzero : (1 : B256) ≠ 0 := by decide
-    simpa [B256.eqCheck, oneNonzero] using flag
+    simpa only [B256.eqCheck, ↓reduceIte, oneNonzero] using flag
   obtain ⟨bodyPre, pop, bodyRun, bodyTail⟩ :=
     Func.RunCompiledToAvoiding.zero_branch_of_prefix zeroPrefix branchRun
   have pop' := Devm.PopBurn.of_popBurnBy pop
@@ -781,7 +783,7 @@ theorem wethMutationCall_avoiding {fs : List Func} {sevm : Sevm}
       gasWord :: wethAccount.toB256 :: 0 :: 28 :: inputSize :: 0 :: 32 :: rest
         <<+ callPre.stack := by
     rw [stack]
-    exact ⟨[], by simp [Split]⟩
+    exact ⟨[], by simp only [Split, List.append_nil]⟩
   have crossingSource := Ninst.Run.of_runCompiled crossing
   have depth : sevm.depth ≠ 0 := by
     rcases of_run_call_val_with_depth operandPrefix crossingSource hfork with
@@ -828,7 +830,8 @@ theorem wethMutationCall_avoiding {fs : List Func} {sevm : Sevm}
   obtain ⟨statusTail, statusStack⟩ := successFlag
   obtain ⟨bodyPre, -, bodyState, bodyMemory, bodyRun⟩ :=
     canonicalTrueSuffix_avoiding (tail := [])
-      (by rw [statusStack]; exact ⟨statusTail, by simp [Split]⟩)
+      (by rw [statusStack]; exact ⟨statusTail, by simp only [Split, List.cons_append,
+        List.nil_append]⟩)
       returnDataLength outputWindow run
   have callPostWf : Mem.Wf callPost.memory := by
     rcases of_run_call_val_with_depth operandPrefix crossingSource hfork with
@@ -962,7 +965,7 @@ variable {P : Sevm → Devm → Ninst → Devm → Prop}
 /-- Any memory reads its own bytes. -/
 theorem selfReads (d : Devm) : Mem.Reads d.memory d.memory.data.toList := by
   intro index
-  simp
+  simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
 
 /-- A word window read against the memory's own bytes. -/
 theorem MemWordAt.self_toB256 {d : Devm} {offset : Nat} {w : B256}
@@ -990,7 +993,7 @@ theorem nonzeroCaller_avoiding {pre : Devm} {out : Execution} {body : Func}
   have callerPush := of_run_caller callerSource
   have flag := prefix_of_iszero zeroSource (prefix_of_push callerPush stack)
   have zeroPrefix : (0 : B256) :: tail <<+ testPost.stack := by
-    simpa [B256.eqCheck, callerNonzero] using flag
+    simpa only [B256.eqCheck, callerNonzero, ↓reduceIte, List.append_eq, List.nil_append] using flag
   obtain ⟨bodyPre, pop, bodyRun, bodyTail⟩ :=
     Func.RunCompiledToAvoiding.zero_branch_of_prefix zeroPrefix branchRun
   have pop' := Devm.PopBurn.of_popBurnBy pop
@@ -1042,7 +1045,7 @@ theorem canonicalNonzero_avoiding {pre : Devm} {out : Execution}
     Func.RunCompiledToAvoiding.next_inv run
   have testSource := Ninst.Run.of_runCompiled testRun
   have testZero : (0 : B256) :: tail <<+ testPre.stack := by
-    simpa [B256.eqCheck, nonzero] using prefix_of_iszero testSource zeroTail
+    simpa only [B256.eqCheck, nonzero, ↓reduceIte] using prefix_of_iszero testSource zeroTail
   obtain ⟨bodyPre, pop2, bodyRun, bodyTail⟩ :=
     Func.RunCompiledToAvoiding.zero_branch_of_prefix testZero testBranch
   have pop2' := Devm.PopBurn.of_popBurnBy pop2
@@ -1088,7 +1091,7 @@ theorem guardStableSupply_avoiding {pre : Devm} {out : Execution}
     rw [Blanc.ProrataWethVault.maxSupply_toNat] at this
     omega
   have zeroPrefix : (0 : B256) :: tail <<+ branchPre.stack := by
-    simpa [B256.ltCheck, notUnstable] using testPrefix
+    simpa only [B256.ltCheck, notUnstable, ↓reduceIte] using testPrefix
   obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
     Func.RunCompiledToAvoiding.zero_branch_of_prefix zeroPrefix run
   have bodyPop' := Devm.PopBurn.of_popBurnBy bodyPop

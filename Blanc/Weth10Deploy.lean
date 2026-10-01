@@ -130,13 +130,13 @@ prefix to that tail; that is a separate semantic crossing. -/
 /-- The zero-parameter template is the complete suffix of the initcode. -/
 theorem weth10InitCode_drop_prefix :
     weth10InitCode.drop weth10InitPrefix.length = weth10RuntimeTemplate := by
-  simp [weth10InitCode]
+  simp only [weth10InitCode, List.drop_left']
 
 /-- The initcode consists of exactly the prefix and runtime-template lengths. -/
 theorem weth10InitCode_length_add :
     weth10InitCode.length =
       weth10InitPrefix.length + weth10RuntimeTemplate.length := by
-  simp [weth10InitCode]
+  simp only [weth10InitCode, List.length_append]
 
 /-- The zero-parameter runtime template used as the initcode tail is 6,313
 bytes. -/
@@ -156,10 +156,10 @@ private theorem compileShapeByteSize_eq (p : Func) :
   induction p with
   | last => rfl
   | next i p ih =>
-      simp [Func.compileShape, compileShapeByteSize, compsize, ih,
-        Ninst.size_eq_length_toBytes]
+      simp only [Func.compileShape, Ninst.size_eq_length_toBytes, compileShapeByteSize, ih,
+        compsize]
   | branch p q ihp ihq =>
-      simp [Func.compileShape, compileShapeByteSize, compsize, ihp, ihq]
+      simp only [Func.compileShape, compileShapeByteSize, ihp, ihq, compsize]
   | call => rfl
 
 private def programShapeByteSize (s : Prog.CompileShape) : Nat :=
@@ -169,8 +169,9 @@ private def programShapeByteSize (s : Prog.CompileShape) : Nat :=
 private theorem programShapeByteSize_eq (p : Prog) :
     programShapeByteSize p.compileShape =
       ((p.main :: p.aux).map fun f => 1 + compsize f).sum := by
-  simp [Prog.compileShape, programShapeByteSize, compileShapeByteSize_eq,
-    List.map_map, Function.comp_def, Nat.add_assoc]
+  simp only [programShapeByteSize, Prog.compileShape, compileShapeByteSize_eq, List.map_map,
+    Function.comp_def, List.sum_map_add, List.map_const', List.sum_replicate, nsmul_eq_mul,
+    Nat.cast_id, mul_one, Nat.add_assoc, List.map_cons, List.sum_cons]
 
 /-- Fixed-width deployment words preserve the 6,313-byte length of every
 member of the parameterized runtime family. -/
@@ -232,7 +233,7 @@ private theorem runtimeSlices_eq (bs : Bytes) (hlen : bs.length = 6313) :
   repeat rw [List.takeD_eq_take _ (by
     simp only [List.length_drop]
     omega)]
-  simp [← List.take_add]
+  simp only [List.drop_zero, ← List.take_add, Nat.reduceAdd, List.take_eq_self_iff]
   omega
 
 private def runtimeSegments (chainId domainSeparator : B256) : Bytes :=
@@ -293,7 +294,7 @@ private lemma Bytes.writeAt_five_spans
       (pre := a0) (old := w1)
       (post := a1 ++ w2 ++ a2 ++ w3 ++ a3 ++ w4 ++ a4 ++ w5 ++ a5)
       (new := chainId.toBytes)
-      (by simpa [hw1] using (B256.length_toBytes chainId).symm)
+      (by simpa only [hw1] using (B256.length_toBytes chainId).symm)
     rw [ha0] at h
     simpa only [List.append_assoc] using h
   rw [h1]
@@ -307,10 +308,11 @@ private lemma Bytes.writeAt_five_spans
     have h := Bytes.writeAt_append_middle
       (pre := a0 ++ chainId.toBytes ++ a1 ++ w2 ++ a2) (old := w3)
       (post := a3 ++ w4 ++ a4 ++ w5 ++ a5) (new := chainId.toBytes)
-      (by simpa [hw3] using (B256.length_toBytes chainId).symm)
+      (by simpa only [hw3] using (B256.length_toBytes chainId).symm)
     have hpre :
         (a0 ++ chainId.toBytes ++ a1 ++ w2 ++ a2).length = 691 := by
-      simp [ha0, ha1, ha2, hw2, B256.length_toBytes]
+      simp only [List.append_assoc, List.length_append, ha0, B256.length_toBytes, ha1, hw2, ha2,
+        Nat.reduceAdd]
     rw [hpre] at h
     simpa only [List.append_assoc] using h
   rw [h2]
@@ -325,11 +327,12 @@ private lemma Bytes.writeAt_five_spans
       (pre := a0 ++ chainId.toBytes ++ a1 ++ w2 ++ a2 ++
         chainId.toBytes ++ a3)
       (old := w4) (post := a4 ++ w5 ++ a5) (new := chainId.toBytes)
-      (by simpa [hw4] using (B256.length_toBytes chainId).symm)
+      (by simpa only [hw4] using (B256.length_toBytes chainId).symm)
     have hpre :
         (a0 ++ chainId.toBytes ++ a1 ++ w2 ++ a2 ++ chainId.toBytes ++
           a3).length = 2875 := by
-      simp [ha0, ha1, ha2, ha3, hw2, B256.length_toBytes]
+      simp only [List.append_assoc, List.length_append, ha0, B256.length_toBytes, ha1, hw2, ha2,
+        ha3, Nat.reduceAdd]
     rw [hpre] at h
     simpa only [List.append_assoc] using h
   rw [h3]
@@ -345,9 +348,10 @@ private lemma Bytes.writeAt_five_spans
       (post := a2 ++ chainId.toBytes ++ a3 ++ chainId.toBytes ++
         a4 ++ w5 ++ a5)
       (new := domainSeparator.toBytes)
-      (by simpa [hw2] using (B256.length_toBytes domainSeparator).symm)
+      (by simpa only [hw2] using (B256.length_toBytes domainSeparator).symm)
     have hpre : (a0 ++ chainId.toBytes ++ a1).length = 536 := by
-      simp [ha0, ha1, B256.length_toBytes]
+      simp only [List.append_assoc, List.length_append, ha0, B256.length_toBytes, ha1,
+        Nat.reduceAdd]
     rw [hpre] at h
     simpa only [List.append_assoc] using h
   rw [h4]
@@ -363,12 +367,13 @@ private lemma Bytes.writeAt_five_spans
       (pre := a0 ++ chainId.toBytes ++ a1 ++ domainSeparator.toBytes ++
         a2 ++ chainId.toBytes ++ a3 ++ chainId.toBytes ++ a4)
       (old := w5) (post := a5) (new := domainSeparator.toBytes)
-      (by simpa [hw5] using (B256.length_toBytes domainSeparator).symm)
+      (by simpa only [hw5] using (B256.length_toBytes domainSeparator).symm)
     have hpre :
         (a0 ++ chainId.toBytes ++ a1 ++ domainSeparator.toBytes ++
           a2 ++ chainId.toBytes ++ a3 ++ chainId.toBytes ++ a4).length =
           3039 := by
-      simp [ha0, ha1, ha2, ha3, ha4, B256.length_toBytes]
+      simp only [List.append_assoc, List.length_append, ha0, B256.length_toBytes, ha1, ha2, ha3,
+        ha4, Nat.reduceAdd]
     rw [hpre] at h
     simpa only [List.append_assoc] using h
   exact h5
@@ -383,7 +388,7 @@ private theorem weth10PatchedRuntime_eq_segments
   rw [← runtimeChunks_eq weth10RuntimeTemplate]
   unfold runtimeChunks runtimeSegments
   apply Bytes.writeAt_five_spans
-  all_goals simp [List.length_take, weth10RuntimeTemplate_length]
+  all_goals simp only [List.length_take, weth10RuntimeTemplate_length, Nat.reduceLeDiff, inf_of_le_left, List.length_drop, Nat.reduceSub]
 
 private lemma Bytes.take_eq_take_of_getD_eq
     (xs ys : Bytes) (n : Nat) (d : UInt8)
@@ -398,7 +403,7 @@ private lemma Bytes.take_eq_take_of_getD_eq
       _ = (List.range n).map (fun j => ys.getD (0 + j) d) := by
         apply List.map_congr_left
         intro i hi
-        simpa using h i (List.mem_range.mp hi)
+        simpa only [zero_add, List.getD_eq_getElem?_getD] using h i (List.mem_range.mp hi)
       _ = ys.sliceD 0 n d :=
         (List.sliceD_eq_map ys d n 0).symm
   unfold List.sliceD at hs
@@ -421,8 +426,7 @@ private theorem dispatchForkByteAt_eq_prefix
   have hdup : (Ninst.dup 0).size = 1 := by decide +kernel
   have hgt : Ninst.gt.size = 1 := by decide +kernel
   interval_cases i <;>
-    simp [dispatchWith, Func.byteAtByShape, Func.compileShape,
-      hselector, hdup, hgt, hpush]
+    simp only [dispatchWith, Fin.isValue, Func.compileShape, hdup, hpush, hgt, hselector, Func.byteAtByShape, zero_lt_one, ↓reduceIte, List.takeD_succ, List.takeD_zero, List.getD_eq_getElem?_getD, List.length_cons, List.length_nil, zero_add, getElem?_pos, List.getElem_cons_zero, Option.getD_some, lt_self_iff_false, tsub_self, Nat.ofNat_pos, List.head?_tail, List.getElem?_tail, Nat.reduceAdd, Nat.not_ofNat_lt_one, Nat.add_one_sub_one, Nat.one_lt_ofNat, List.getElem_cons_succ, Nat.reduceLT, Nat.lt_add_one, Nat.reduceSub, Nat.toUInt8_eq, UInt8.ofNat_add, UInt8.ofNat_one, UInt8.reduceOfNat]
 
 private def weth10TreeLeft (dp : DeployParams) : DispatchTree :=
   DispatchTree.build 26 ((weth10Funcs dp).take 14)
@@ -432,13 +436,16 @@ private def weth10TreeRight (dp : DeployParams) : DispatchTree :=
 
 private theorem weth10Tree_eq_fork (dp : DeployParams) :
     weth10Tree dp = .fork (weth10TreeLeft dp) (weth10TreeRight dp) := by
-  simp [weth10Tree, DispatchTree.ofSorted, weth10TreeLeft,
-    weth10TreeRight, weth10Funcs, DispatchTree.build]
+  simp only [weth10Tree, DispatchTree.ofSorted, weth10Funcs, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, DispatchTree.build, Nat.reduceDiv, List.take_succ_cons, List.take_zero,
+    List.drop_succ_cons, List.drop_zero, weth10TreeLeft, weth10TreeRight]
 
 private theorem weth10TreeRight_leftmost_eq (dp : DeployParams) :
     leftmostFsig (weth10TreeRight dp) =
       leftmostFsig (weth10TreeRight (⟨0, 0⟩ : DeployParams)) := by
-  simp [weth10TreeRight, weth10Funcs, DispatchTree.build, leftmostFsig]
+  simp only [weth10TreeRight, weth10Funcs, List.drop_succ_cons, List.drop_zero, DispatchTree.build,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceDiv, List.take_succ_cons,
+    List.take_zero, leftmostFsig]
 
 private theorem allowanceSel_eq :
     selector "allowance" [.address, .address] = (0xdd62ed3e : B256) := by
@@ -447,14 +454,15 @@ private theorem allowanceSel_eq :
 private theorem dispatch23_26_1_eq_zero (dp : DeployParams) :
     dispatch23_26_1 dp =
       dispatch23_26_1 (⟨0, 0⟩ : DeployParams) := by
-  simp [dispatch23_26_1, treeSlice, weth10Funcs, DispatchTree.build,
-    dispatchWith, allowanceSel_eq]
+  simp only [dispatch23_26_1, treeSlice, weth10Funcs, allowanceSel_eq, List.drop_succ_cons,
+    List.drop_zero, List.take_succ_cons, List.take_nil, DispatchTree.build, dispatchWith]
 
 private theorem dispatch25_14_7_eq_zero (dp : DeployParams) :
     dispatch25_14_7 dp =
       dispatch25_14_7 (⟨0, 0⟩ : DeployParams) := by
-  simp [dispatch25_14_7, treeSlice, weth10Funcs, DispatchTree.build,
-    dispatchWith]
+  simp only [dispatch25_14_7, treeSlice, weth10Funcs, List.drop_succ_cons, List.drop_zero,
+    List.take_succ_cons, List.take_zero, DispatchTree.build, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceDiv, dispatchWith, Fin.isValue]
 
 private def approveAndCallLeaf : Func :=
   Ninst.pushB256 (selector "approveAndCall"
@@ -481,11 +489,11 @@ private def deploymentDispatch (dp : DeployParams) : Func :=
 
 private theorem dispatch24_21_3_eq_deploymentDispatch (dp : DeployParams) :
     dispatch24_21_3 dp = deploymentDispatch dp := by
-  simp [dispatch24_21_3, treeSlice, weth10Funcs, DispatchTree.build,
-    deploymentDispatch, deploymentPairDispatch, deploymentChainIdLeaf,
-    deploymentChainIdLeafPrefix, approveAndCallLeaf, depositLeaf,
-    dispatchNode, dispatchWith, prepend,
-    leftmostFsig]
+  simp only [dispatch24_21_3, treeSlice, weth10Funcs, List.drop_succ_cons, List.drop_zero,
+    List.take_succ_cons, List.take_zero, DispatchTree.build, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceDiv, dispatchWith, Fin.isValue, leftmostFsig,
+    deploymentDispatch, dispatchNode, depositLeaf, deploymentPairDispatch, deploymentChainIdLeaf,
+    deploymentChainIdLeafPrefix, prepend, approveAndCallLeaf]
 
 /-! ## Composed dispatch sizes
 
@@ -1283,7 +1291,8 @@ private lemma List.getD_cons_of_pos {α : Type} (x : α) (xs : List α)
 private lemma List.getD_append_of_lt {α : Type} (xs ys : List α)
     (i : Nat) (d : α) (hi : i < xs.length) :
     (xs ++ ys).getD i d = xs.getD i d := by
-  simp [List.getD_eq_getElem?_getD, List.getElem?_append, hi]
+  simp only [List.getD_eq_getElem?_getD, List.getElem?_append, hi, ↓reduceIte, getElem?_pos,
+    Option.getD_some]
 
 private theorem Bytes.sliceD_eq_drop_take_of_getD_eq
     (xs ys : Bytes) (start len : Nat)
@@ -1379,11 +1388,9 @@ private theorem deploymentChainIdByteAt_word
         (deploymentChainId dp) (1 + j) 0 =
       dp.deploymentChainId.toBytes.getD j 0 := by
   unfold deploymentChainId returnDeployWord
-  simpa [Nat.add_comm, pushDeployWord] using
-    (byteAt_pushFullWord_data locations n
-      (mstoreAt 0 +++ returnMemoryRange 0 32)
-      (mstoreAt 0 +++ returnMemoryRange 0 32)
-      dp.deploymentChainId j hj)
+  simpa only [pushDeployWord, Nat.add_comm, List.getD_eq_getElem?_getD] using
+    (byteAt_pushFullWord_data locations n (mstoreAt 0 +++ returnMemoryRange 0 32)
+      (mstoreAt 0 +++ returnMemoryRange 0 32) dp.deploymentChainId j hj)
 
 private theorem nonpayableDeploymentChainIdByteAt_word
     (locations : List Nat) (n : Nat) (dp : DeployParams)
@@ -1749,7 +1756,7 @@ private theorem deploymentChainIdLeafByteAt_eq_zero_58_64
   have hiIndex : i - 15 - 2 - (5 + 3) = i - 25 := by omega
   rw [hn, hiIndex]
   have hpush : (pushDeployWord 0).size = 33 := by
-    simp [pushDeployWord, Ninst.size, B256.length_toBytes]
+    simp only [Ninst.size, pushDeployWord, B256.length_toBytes, Nat.reduceAdd]
   rw [byteAt_next_to_tail locations (n + 25)
       (pushDeployWord 0) (pushDeployWord dp.deploymentChainId)
       (mstoreAt 0 +++ returnMemoryRange 0 32)
@@ -2293,8 +2300,8 @@ private theorem weth10Code_slice_372_404
       apply List.map_congr_left
       intro j hj
       have hj' : j < 32 := List.mem_range.mp hj
-      simpa using weth10Code_getD_chainWord
-        (⟨chainId, domainSeparator⟩ : DeployParams) j hj'
+      simpa only [List.getD_eq_getElem?_getD, zero_add] using
+        weth10Code_getD_chainWord (⟨chainId, domainSeparator⟩ : DeployParams) j hj'
     _ = chainId.toBytes := by
       unfold List.sliceD
       simp only [List.drop_zero]
@@ -2330,8 +2337,8 @@ private theorem weth10Code_slice_691_723
       apply List.map_congr_left
       intro j hj
       have hj' : j < 32 := List.mem_range.mp hj
-      simpa using weth10Code_getD_deploymentChainWord
-        (⟨chainId, domainSeparator⟩ : DeployParams) j hj'
+      simpa only [List.getD_eq_getElem?_getD, zero_add] using
+        weth10Code_getD_deploymentChainWord (⟨chainId, domainSeparator⟩ : DeployParams) j hj'
     _ = chainId.toBytes := by
       unfold List.sliceD
       simp only [List.drop_zero]
@@ -2407,11 +2414,12 @@ private theorem emitByShape_branch_drop_right
         (4 + leftShape.byteSize) =
       Jinst.jumpdest.toUInt8 :: rightBytes
   rw [List.append_assoc (header ++ leftBytes)]
-  have hheader : header.length = 4 := by simp [header]
+  have hheader : header.length = 4 := by simp only [Nat.toUInt8_eq, UInt8.ofNat_add,
+    UInt8.reduceOfNat, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, header]
   have hleft : leftBytes.length = leftShape.byteSize := by
-    simp [leftBytes, Func.length_emitByShape]
+    simp only [Func.length_emitByShape, leftBytes]
   have hlen : (header ++ leftBytes).length = 4 + leftShape.byteSize := by
-    simp [hheader, hleft]
+    simp only [List.length_append, hheader, hleft]
   rw [← hlen, List.drop_left]
   rfl
 
@@ -2493,7 +2501,7 @@ private theorem weth10Code_drop_3951 (dp : DeployParams) :
       simp only [Nat.zero_add]
     · simp only [List.length_cons, Func.length_emitByShape]
       have hmain : 3950 ≤ zeroMainShape.byteSize := by
-        simpa [zeroMainShape] using weth10ZeroMain_size_lower
+        simpa only using weth10ZeroMain_size_lower
       omega
   calc
     (Prog.emitByShape
@@ -2562,8 +2570,8 @@ private theorem weth10Code_slice_536_568
       apply List.map_congr_left
       intro j hj
       have hj' : j < 32 := List.mem_range.mp hj
-      simpa using weth10Code_getD_cachedWord_536
-        (⟨chainId, domainSeparator⟩ : DeployParams) j hj'
+      simpa only [List.getD_eq_getElem?_getD, zero_add] using
+        weth10Code_getD_cachedWord_536 (⟨chainId, domainSeparator⟩ : DeployParams) j hj'
     _ = domainSeparator.toBytes := by
       unfold List.sliceD
       simp only [List.drop_zero]
@@ -2660,8 +2668,8 @@ private theorem weth10Code_slice_2875_2907
       apply List.map_congr_left
       intro j hj
       have hj' : j < 32 := List.mem_range.mp hj
-      simpa using weth10Code_getD_chainWord_2875
-        (⟨chainId, domainSeparator⟩ : DeployParams) j hj'
+      simpa only [List.getD_eq_getElem?_getD, zero_add] using
+        weth10Code_getD_chainWord_2875 (⟨chainId, domainSeparator⟩ : DeployParams) j hj'
     _ = chainId.toBytes := by
       unfold List.sliceD
       simp only [List.drop_zero]
@@ -2724,8 +2732,8 @@ private theorem weth10Code_slice_3039_3071
       apply List.map_congr_left
       intro j hj
       have hj' : j < 32 := List.mem_range.mp hj
-      simpa using weth10Code_getD_cachedWord_3039
-        (⟨chainId, domainSeparator⟩ : DeployParams) j hj'
+      simpa only [List.getD_eq_getElem?_getD, zero_add] using
+        weth10Code_getD_cachedWord_3039 (⟨chainId, domainSeparator⟩ : DeployParams) j hj'
     _ = domainSeparator.toBytes := by
       unfold List.sliceD
       simp only [List.drop_zero]
@@ -2834,7 +2842,8 @@ bridge while treating the appended runtime template as ordinary CODECOPY data.
 -/
 
 private abbrev initPush2Inst (n : Nat) : Ninst :=
-  .push [(n >>> 8).toUInt8, n.toUInt8] (by simp)
+  .push [(n >>> 8).toUInt8, n.toUInt8] (by simp only [Nat.toUInt8_eq, List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLeDiff])
 
 private abbrev initPush32Inst (w : B256) : Ninst :=
   .push w.toBytes (by rw [B256.length_toBytes])
@@ -2918,9 +2927,11 @@ private lemma deploymentSuccess_compile
   · intro i hi
     cases i <;> first
       | rfl
-      | simp [deploymentSuccessLine, weth10InitCopyLine, weth10InitChainLine,
-          weth10InitPreHashLine, weth10InitHashLine, weth10InitSeparatorLine,
-          weth10InitReturnLine, Ninst.pushB256] at hi
+      | simp only [deploymentSuccessLine, weth10InitCopyLine, Ninst.pushB256, weth10InitChainLine,
+        List.cons_append, List.nil_append, weth10InitPreHashLine, weth10InitHashLine,
+        List.append_assoc, weth10InitSeparatorLine, Fin.isValue, weth10InitReturnLine,
+        List.mem_cons, reduceCtorEq, List.mem_append, List.mem_flatMap, List.not_mem_nil, or_self,
+        and_false, exists_const] at hi
 
 private lemma deploymentReject_compile
     (entries : List (Nat × Func)) (n : Nat) :
@@ -2975,9 +2986,9 @@ runtime-data suffix. -/
 theorem weth10InitFunc_noCalls : weth10InitFunc.NoCalls := by
   change Func.revert.NoCalls ∧ (weth10InitSuccess 6313 177).NoCalls
   constructor
-  · simp [Func.revert, Func.NoCalls]
+  · simp only [Func.revert, Func.NoCalls]
   · unfold weth10InitSuccess
-    exact Func.NoCalls.prepend _ (by simp [Func.return_, Func.NoCalls])
+    exact Func.NoCalls.prepend _ (by simp only [Func.return_, Func.NoCalls])
 
 end Weth10
 

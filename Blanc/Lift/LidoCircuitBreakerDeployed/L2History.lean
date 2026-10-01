@@ -115,7 +115,7 @@ theorem lido_history_l2_committed
   subst hpc
   subst target
   cases out with
-  | error e => simp [Execution.commits] at committed
+  | error e => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
     have hinstalled : Devm.getCode pre sevm.currentTarget = code := eq_code_of_image installed.1
     have hcode : sevm.code = Devm.getCode pre sevm.currentTarget := by

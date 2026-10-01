@@ -70,7 +70,8 @@ theorem wrapper24_shape :
   decide +kernel
 
 theorem entry0_lookup : prog[0]? = some t_0000_c0 := by
-  simp [prog, Cert.prog, cert]
+  simp only [prog, Cert.prog, cert, List.map_cons, List.map_nil, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.ofNat_pos, getElem?_pos, List.getElem_cons_zero]
 
 private theorem hzero {j : Nat} {g : SFunc} (hj : j ∈ silentSet)
     (hjg : prog[j]? = some g) : g.silentCalls silentSet 0 = true := by
@@ -86,7 +87,7 @@ private theorem closed_of {P : SFunc → Bool} {S : List Nat}
     P g = true ∧ g.refs.all (· ∈ S) = true := by
   have h := (List.all_eq_true.mp hS) k hk
   rw [hg] at h
-  simpa using h
+  simpa only [List.all_eq_true, decide_eq_true_eq, Bool.and_eq_true] using h
 
 section Frame
 
@@ -171,32 +172,42 @@ theorem frame_post_of (c : ContractSpecSem) {P : Sevm → Devm → Ninst → Dev
       exact stable1 c (SFunc.RunP.state_of_silent hP viewWrappers_silent hs hr r).symm
         (ContractSpecSem.post_of_pre hd)
     rcases hk with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
-    · exact silentCase (by simp)
+    · exact silentCase (by simp only [List.mem_cons, Nat.reduceEqDiff, List.not_mem_nil, or_self,
+      or_false])
     · -- 19: deposit wrapper
       have hshape := wrapper19_shape
       rw [hg] at hshape
       simp only [Bool.and_eq_true] at hshape
-      have h1 : prog[1]? = some t_0440_c1 := by simp [prog, Cert.prog, cert]
+      have h1 : prog[1]? = some t_0440_c1 := by simp only [prog, Cert.prog, cert, List.map_cons,
+        List.map_nil, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.one_lt_ofNat,
+        getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
       exact SFunc.RunP.hoare_wrapper hP silentSet_closed hzero
         (fun _ h => ContractSpecSem.post_of_pre h) (stable0 c) (stable1 c) h1
         (fun hd' r' => hdeposit h1 hd' (r'.mono hP)) hshape.1 hshape.2 r hd
     · exact htransfer hg hd (r.mono hP)
-    · exact silentCase (by simp)
-    · exact silentCase (by simp)
-    · exact silentCase (by simp)
+    · exact silentCase (by simp only [List.mem_cons, Nat.reduceEqDiff, List.not_mem_nil, or_self,
+      or_false, or_true])
+    · exact silentCase (by simp only [List.mem_cons, Nat.reduceEqDiff, Nat.succ_ne_self,
+      List.not_mem_nil, or_self, or_false, or_true])
+    · exact silentCase (by simp only [List.mem_cons, Nat.reduceEqDiff, Nat.succ_ne_self,
+      List.not_mem_nil, or_self, or_false, or_true])
     · -- 24: withdraw wrapper
       have hshape := wrapper24_shape
       rw [hg] at hshape
       simp only [Bool.and_eq_true] at hshape
-      have h8 : prog[8]? = some t_09d9_c8 := by simp [prog, Cert.prog, cert]
+      have h8 : prog[8]? = some t_09d9_c8 := by simp only [prog, Cert.prog, cert, List.map_cons,
+        List.map_nil, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT,
+        getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
       exact SFunc.RunP.hoare_wrapper hP silentSet_closed hzero
         (fun _ h => ContractSpecSem.post_of_pre h) (stable0 c) (stable1 c) h8
         (fun hd' r' => hwithdraw h8 hd' r')
         hshape.1 hshape.2 r hd
     · exact htransferFrom hg hd (r.mono hP)
-    · exact silentCase (by simp)
+    · exact silentCase (by simp only [List.mem_cons, Nat.reduceEqDiff, List.not_mem_nil, or_self,
+      or_false, or_true])
     · exact happrove hg hd (r.mono hP)
-    · exact silentCase (by simp)
+    · exact silentCase (by simp only [List.mem_cons, Nat.reduceEqDiff, List.not_mem_nil, or_false,
+      or_true])
 
 /-- The token wrappers (20, 25, 27) leave every balance alone. -/
 theorem tokenWrapper_getBal {k : Nat} (hk : k ∈ [20, 25, 27]) {d o : Devm} {g : SFunc}
@@ -204,7 +215,7 @@ theorem tokenWrapper_getBal {k : Nat} (hk : k ∈ [20, 25, 27]) {d o : Devm} {g 
     (ho : o = Outcome.devm oc) : o.getBal = d.getBal := by
   subst ho
   obtain ⟨hs, hr⟩ := closed_of (P := SFunc.balSilent) tokenWrappers_balSilent
-    (List.mem_append_right _ (by simp at hk ⊢; omega)) hg
+    (List.mem_append_right _ (by simp only [List.mem_cons, List.not_mem_nil, or_false] at hk ⊢; omega)) hg
   exact SFunc.RunP.getBal_of_balSilent id tokenWrappers_balSilent hs hr run
 
 /-- **The WETH9 frame postcondition, over any step relation.**  Every run of
@@ -224,13 +235,16 @@ theorem frame_post_gen {P : Sevm → Devm → Ninst → Devm → Prop}
   frame_post_of weth9Spec hP hrun
     (fun hg hd r => deposit_post hfork hg hd r)
     (fun hg hd r => post_of_solvent hd
-      (tokenWrapper_getBal (k := 20) (by simp) hg r rfl)
+      (tokenWrapper_getBal (k := 20) (by simp only [List.mem_cons, Nat.reduceEqDiff,
+        List.not_mem_nil, or_self, or_false]) hg r rfl)
       (Weth9.transfer_wrapper_solvent hg (hd.inv.left rfl) r))
     (fun hg hd r => post_of_solvent hd
-      (tokenWrapper_getBal (k := 25) (by simp) hg r rfl)
+      (tokenWrapper_getBal (k := 25) (by simp only [List.mem_cons, Nat.reduceEqDiff,
+        List.not_mem_nil, or_self, or_false, or_true]) hg r rfl)
       (Weth9.transferFrom_wrapper_solvent hg hadm (hd.inv.left rfl) r))
     (fun hg hd r => post_of_solvent hd
-      (tokenWrapper_getBal (k := 27) (by simp) hg r rfl)
+      (tokenWrapper_getBal (k := 27) (by simp only [List.mem_cons, Nat.reduceEqDiff,
+        List.not_mem_nil, or_false, or_true]) hg r rfl)
       (approve_wrapper_solvent hg hadm (hd.inv.left rfl) r))
     hwithdraw hpre
 

@@ -10,14 +10,15 @@ private theorem splitAt_aux_append (xs ys acc : List α) :
     Jaune.List.splitAt?.aux xs.length acc (xs ++ ys) =
       some (acc.reverse ++ xs, ys) := by
   induction xs generalizing acc with
-  | nil => simp [Jaune.List.splitAt?.aux]
+  | nil => simp only [List.length_nil, List.nil_append, List.splitAt?.aux, List.append_nil]
   | cons x xs ih =>
-    simpa [Jaune.List.splitAt?.aux, List.reverse_cons, List.append_assoc] using ih (x :: acc)
+    simpa only [List.length_cons, List.cons_append, List.splitAt?.aux, List.reverse_cons,
+      List.append_assoc, List.nil_append] using ih (x :: acc)
 
 /-- Splitting at a retained prefix's exact length preserves its suffix. -/
 theorem splitAt_append (xs ys : List α) :
     Jaune.List.splitAt? xs.length (xs ++ ys) = some (xs, ys) := by
-  simpa [Jaune.List.splitAt?] using splitAt_aux_append xs ys []
+  simpa only [List.splitAt?, List.reverse_nil, List.nil_append] using splitAt_aux_append xs ys []
 
 /-- A byte payload of at least two bytes uses the length-prefixed encoder arm. -/
 theorem encode_bytes_many (bs : Bytes) (h : 2 ≤ bs.length) :
@@ -26,11 +27,12 @@ theorem encode_bytes_many (bs : Bytes) (h : 2 ≤ bs.length) :
       else let lbs := bs.length.toBytesPack
            (0xb7 + lbs.length.toUInt8) :: (lbs ++ bs) := by
   cases bs with
-  | nil => simp at h
+  | nil => simp only [List.length_nil, nonpos_iff_eq_zero, OfNat.ofNat_ne_zero] at h
   | cons a bs =>
     cases bs with
-    | nil => simp at h
-    | cons b bs => rw [BLT.toBytes]; simp
+    | nil => simp only [List.length_cons, List.length_nil, zero_add, Nat.not_ofNat_le_one] at h
+    | cons b bs => rw [BLT.toBytes]; simp only [List.cons.injEq, reduceCtorEq, and_false, imp_self,
+      implies_true]
 
 /-- The two-byte long-string header consumes exactly its declared payload. -/
 theorem decode_bytes_long_two (k : Nat) (hi lo : UInt8) (bs tail : Bytes)
@@ -103,7 +105,7 @@ theorem decode_bytes_short (k n : Nat) (bs tail : Bytes)
       (0x80 + i.val.toUInt8 - 0x80).toNat = i.val := by decide +kernel
   obtain ⟨htag, hsize⟩ := tags ⟨n, hn⟩
   rw [Bytes.toBLTDiff?]
-  split <;> simp_all
+  split <;> simp_all only [Nat.toUInt8_eq, add_sub_cancel_left, UInt8.toNat_ofNat', Nat.reducePow, Nat.mod_succ_eq_iff_lt, Nat.succ_eq_add_one, Nat.reduceAdd, Bool.false_eq_true, imp_false, Bool.not_eq_true, Option.map_eq_map, Option.map_eq_some_iff, Prod.exists, Prod.map_apply, id_eq, Prod.mk.injEq, BLT.bytes.injEq, exists_eq_right_right, exists_eq_right]
   rw [Nat.mod_eq_of_lt (by omega), ← hlen, splitAt_append]
 
 /-- A full-width scalar retains its exact thirty-two bytes and outer suffix. -/

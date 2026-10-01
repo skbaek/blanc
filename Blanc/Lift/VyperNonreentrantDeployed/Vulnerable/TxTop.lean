@@ -228,7 +228,7 @@ theorem e0tx_keys : ∀ x, x ∈ e0tx.dyna.accessedStorageKeys ↔ x ∈ ([] : L
   rw [he]
   show x ∈ msg0tx.accessedStorageKeys ↔ _
   rw [msg0tx_keys_empty]
-  simp
+  simp only [Std.HashSet.ofList_nil, Std.HashSet.not_mem_empty, List.not_mem_nil]
 
 theorem e0tx_stor : ∀ a k, storOf e0tx.dyna.state a k = storOf worldTx a k := by
   obtain ⟨benv, hb, he⟩ := e0tx_meta

@@ -1284,7 +1284,7 @@ theorem stubRunSvc_reset {orig new : B256} (hnew : orig ≠ new)
 
 theorem stubRunSvc_noop {orig cur : B256} :
     sstoreValueCost orig cur cur = 100 := by
-  rw [sstoreValueCost, if_neg (by simp)]
+  rw [sstoreValueCost, if_neg (by simp only [ne_eq, not_true_eq_false, and_false, not_false_eq_true])]
   rfl
 
 /-! ## The kernel prefix reserve, closed -/

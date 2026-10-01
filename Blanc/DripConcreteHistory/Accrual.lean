@@ -95,7 +95,7 @@ theorem concreteDripMessage_code : concreteDripMessage.code.toList = code := by
   rw [State.incrNonce_get_code]
   change (concreteJoined.state.getCode concreteCreateTarget).toList = code
   rw [concreteJoinedCode, concreteDeploymentRoot.installed]
-  simp [ByteArray.toList_eq_toList_data]
+  simp only [ByteArray.toList_eq_toList_data]
 
 theorem concreteDripDebit_balance :
     concreteDripDebit.bal concreteCreateSender = 999999999997887794 := by
@@ -151,7 +151,7 @@ theorem concreteDripDevm_rho : concreteDripDevm.getStorVal concreteCreateTarget 
 theorem concreteDripDevm_cold (k : B256) :
     (concreteCreateTarget, k) ∉ concreteDripDevm.accessedStorageKeys := by
   change (concreteCreateTarget, k) ∉ (∅ : Std.HashSet (Adr × B256))
-  simp
+  simp only [Std.HashSet.not_mem_empty, not_false_eq_true]
 
 def concreteDripStagingMemory : Mem := Mem.empty.write 32 (4 : B256).toBytes
 

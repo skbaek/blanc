@@ -466,7 +466,7 @@ private theorem rootLoopLive_storageEffectRun
       (by rw [hoff, hmem.size_eq]; omega)
   unfold rootLoop loadWord
   storage_effect_run (9) [1, 3, ((1 : B256) &&& shiftedSize)]
-  case h_val => simp [B256.ltCheck, hheight]
+  case h_val => simp only [B256.ltCheck, hheight, ↓reduceIte]
   case h_val =>
     rw [hread]
     change ((1 : B256) &&& shiftedSize) =
@@ -717,7 +717,7 @@ private theorem rootLoopDead_storageEffectRun
       (by rw [hoff, hmem.size_eq]; omega)
   unfold rootLoop loadWord
   storage_effect_run (9) [1, 3, ((1 : B256) &&& shiftedSize)]
-  case h_val => simp [B256.ltCheck, hheight]
+  case h_val => simp only [B256.ltCheck, hheight, ↓reduceIte]
   case h_val =>
     rw [hread]
     change ((1 : B256) &&& shiftedSize) =
@@ -1264,12 +1264,12 @@ private theorem rootFinish_storageEffectRun
     have hprefix :
         Func.RunCompiledTo.SuccessfulStopPrefix hprefixRun := by
       apply Func.RunCompiledTo.SuccessfulStopPrefix.of_execFree hprefixRun
-      · simp [loadWord, mstoreAt, storeLe64At, prepend, Func.stop,
-          funcExecFree, Ninst.pushB256]
-      · simp [loadWord, mstoreAt, storeLe64At, prepend, Func.stop,
-          Func.LocalSstoreFree, Ninst.pushB256]
-      · simp [loadWord, mstoreAt, storeLe64At, prepend, Func.stop,
-          Func.SuccessStopOnly, Ninst.pushB256]
+      · simp only [funcExecFree, loadWord, pushB256, mstoreAt, storeLe64At, Fin.isValue, Func.stop,
+        prepend]
+      · simp only [Func.LocalSstoreFree, ne_eq, reg.injEq, reduceCtorEq, not_false_eq_true,
+        loadWord, pushB256, mstoreAt, storeLe64At, Fin.isValue, Func.stop, prepend, and_self]
+      · simp only [Func.SuccessStopOnly, loadWord, pushB256, mstoreAt, storeLe64At, Fin.isValue,
+        Func.stop, prepend]
     have hspliced := hprefix.splice hsha
     simpa only [rootFinish, Func.stop, Func.replaceStopWith_prepend,
         Func.replaceStopWith] using hspliced

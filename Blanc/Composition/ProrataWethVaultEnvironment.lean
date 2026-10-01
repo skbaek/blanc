@@ -195,7 +195,7 @@ theorem WethFrameClass.classification_sound
               · exact notTransferFrom (equal.trans transferFrom)
               · exact notTransfer (equal.trans transfer)
               · exact notWithdraw (equal.trans withdraw)
-  · simp at classified
+  · simp only [reduceCtorEq] at classified
 
 /-- Every classified frame is retained by the classifier at exactly its own
 class.  This is where a classifier that routed one selector to another
@@ -295,17 +295,23 @@ theorem weth_view_compiled_effect {sevm : Sevm} {pre post : Devm}
   simp only [wethViewSelectors, List.mem_cons, List.not_mem_nil, or_false]
     at selected
   rcases selected with sel | sel | sel | sel | sel | sel
-  · exact entry (body := Blanc.name) (by rw [sel]; simp [Blanc.wethFuncs])
+  · exact entry (body := Blanc.name) (by rw [sel]; simp only [wethFuncs, List.mem_cons,
+    Prod.mk.injEq, List.not_mem_nil, or_false, true_or])
       (by unfold Blanc.name; func_inv)
-  · exact entry (body := Blanc.totalSupply) (by rw [sel]; simp [Blanc.wethFuncs])
+  · exact entry (body := Blanc.totalSupply) (by rw [sel]; simp only [wethFuncs, List.mem_cons,
+    Prod.mk.injEq, List.not_mem_nil, or_false, true_or, or_true])
       (by unfold Blanc.totalSupply; func_inv)
-  · exact entry (body := Blanc.decimals) (by rw [sel]; simp [Blanc.wethFuncs])
+  · exact entry (body := Blanc.decimals) (by rw [sel]; simp only [wethFuncs, List.mem_cons,
+    Prod.mk.injEq, List.not_mem_nil, or_false, true_or, or_true])
       (by unfold Blanc.decimals; func_inv)
-  · exact entry (body := Blanc.balanceOf) (by rw [sel]; simp [Blanc.wethFuncs])
+  · exact entry (body := Blanc.balanceOf) (by rw [sel]; simp only [wethFuncs, List.mem_cons,
+    Prod.mk.injEq, List.not_mem_nil, or_false, true_or, or_true])
       (by unfold Blanc.balanceOf; func_inv)
-  · exact entry (body := Blanc.symbol) (by rw [sel]; simp [Blanc.wethFuncs])
+  · exact entry (body := Blanc.symbol) (by rw [sel]; simp only [wethFuncs, List.mem_cons,
+    Prod.mk.injEq, List.not_mem_nil, or_false, true_or, or_true])
       (by unfold Blanc.symbol; func_inv)
-  · exact entry (body := Blanc.allowance) (by rw [sel]; simp [Blanc.wethFuncs])
+  · exact entry (body := Blanc.allowance) (by rw [sel]; simp only [wethFuncs, List.mem_cons,
+    Prod.mk.injEq, List.not_mem_nil, or_false, or_true])
       (by unfold Blanc.allowance; func_inv)
 
 /-- The general-caller `transfer` effect: the debit is from the actual frame
@@ -323,7 +329,8 @@ theorem weth_transfer_compiled_effect {sevm : Sevm} {pre post : Devm}
         Devm.getStor post account = Devm.getStor pre account) := by
   obtain ⟨bodyPre, -, entryState, -, -, -, bodyRun⟩ :=
     runCompiled_enters_wethNonpayable (body := Blanc.transfer) run selected
-      (by simp [Blanc.wethFuncs])
+      (by simp only [wethFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+        or_true])
   obtain ⟨move, off, foreign, -, -⟩ := transferBody_exactEffect bodyRun
   have storage : Devm.getStor pre = Devm.getStor bodyPre :=
     funext (getStor_eq_of_state_eq entryState)
@@ -348,7 +355,8 @@ theorem weth_transferFrom_compiled_row_effect {sevm : Sevm} {pre post : Devm}
         Devm.getStor post account = Devm.getStor pre account) := by
   obtain ⟨bodyPre, -, entryState, -, -, -, bodyRun⟩ :=
     runCompiled_enters_wethNonpayable (body := Blanc.transferFrom) run selected
-      (by simp [Blanc.wethFuncs])
+      (by simp only [wethFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+        or_true])
   obtain ⟨move, foreign, -, -, -⟩ := transferFromBody_exactEffect bodyRun
   have storage : Devm.getStor pre = Devm.getStor bodyPre :=
     funext (getStor_eq_of_state_eq entryState)
@@ -390,7 +398,7 @@ private theorem run_dispatchWith_miss {fs : List Func} {k : Nat} {fallback : Fun
       have hpa : w :: sig :: tail <<+ a.stack :=
         prefix_of_push (of_run_pushB256 push) hp
       have hpb : (0 : B256) :: tail <<+ s₁.stack := by
-        simpa [B256.eqCheck, different] using prefix_of_eq eqRun hpa
+        simpa only [B256.eqCheck, different, ↓reduceIte] using prefix_of_eq eqRun hpa
       rcases of_run_branch branchRun with
         ⟨s₂, pop, callRun⟩ | ⟨v, s₂, s₃, vne, pop, burn, -⟩
       · cases callRun with
@@ -655,7 +663,8 @@ theorem weth_withdraw_preCall_split {sevm : Sevm} {pre post : Devm}
           success ≠ 0 ∧ Devm.PopBurn [success] callPost guardPost := by
   obtain ⟨bodyPre, -, entryState, -, -, -, bodyRun⟩ :=
     runCompiled_enters_wethNonpayable (body := Blanc.withdraw) run selected
-      (by simp [Blanc.wethFuncs])
+      (by simp only [wethFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+        or_true])
   have entryStorage : Devm.getStor pre = Devm.getStor bodyPre :=
     funext (getStor_eq_of_state_eq entryState)
   simp only [Blanc.withdraw] at bodyRun
@@ -783,7 +792,7 @@ theorem wethFrame_runCompiled {frame : Exec.Frame}
   rcases frame with ⟨pc, sevm, pre, out, run, committed⟩
   cases pcZero
   cases out with
-  | error error => simp [Execution.commits] at committed
+  | error error => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       show Prog.RunCompiled sevm pre Blanc.weth post
       exact Prog.runCompiled_of_exec sevm pre Blanc.weth post weth_pcFree run code
@@ -815,7 +824,8 @@ theorem weth_transferFrom_compiled_src_valid {sevm : Sevm} {pre post : Devm}
     ValidAdr (Sevm.argWord sevm 0) := by
   obtain ⟨bodyPre, -, -, -, -, -, bodyRun⟩ :=
     runCompiled_enters_wethNonpayable (body := Blanc.transferFrom) run selected
-      (by simp [Blanc.wethFuncs])
+      (by simp only [wethFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+        or_true])
   exact transferFromBody_src_valid bodyRun
 
 /-- A balance transfer between two rows that are both distinct from the vault,
@@ -949,7 +959,8 @@ theorem wethFrame_vaultRow_classified (vault : Adr) (frame : Exec.Frame)
           rw [toAdr_toB256] at debited
           rw [debited]
         refine Or.inr (Or.inr (Or.inl ⟨⟨frame.sevm, frame.pre, frame.post,
-          false, target, memoryWf, run, by simpa using selected⟩,
+          false, target, memoryWf, run, by simpa only [Bool.false_eq_true, ↓reduceIte] using
+            selected⟩,
           rfl, rfl, rfl, rfl, owner, ?_⟩))
         simp only [WethAllowanceInvocation.pair?, owner,
           if_neg (Ne.symm (vaultKeyNe callerNotVault)), Bool.false_eq_true,
@@ -1033,7 +1044,7 @@ theorem weth_message_run_or_quiet {msg : Msg} {post : Devm} {slot : Xlot}
         rfl
       · refine Or.inl (fun owner key => ?_)
         have postError : post.error.isSome = true := by
-          cases errorEq : post.error <;> simp_all
+          cases errorEq : post.error <;> simp_all only [ExceptT.stM_eq, Option.isSome_none, not_true_eq_false, Option.isSome_some, Bool.true_eq_false, not_false_eq_true]
         rw [(ProcessMessage.rollback_of_error process postError).1]
 
 /-- **Gap 1 (transfer), as a theorem.**  A non-static WETH `transfer` message

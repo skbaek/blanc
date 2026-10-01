@@ -297,8 +297,8 @@ private lemma pauseSuccess_zeroCountArm
     PauseExpiryWrite sevm pre sevm.currentTarget 0 := by
   rcases of_runCompiledTo_next hrun with ⟨s', hpush, hfinish⟩
   have hp : [(0 : B256)] <<+ s'.stack := by
-    simpa using prefix_of_push
-      (of_run_pushB256 (Ninst.Run.of_runCompiled hpush)) nil_pref
+    simpa only [List.append_nil] using
+      prefix_of_push (of_run_pushB256 (Ninst.Run.of_runCompiled hpush)) nil_pref
   have hstor' : Devm.getStor pre = Devm.getStor s' :=
     hstor.trans (Ninst.Hinv.inv (f := Devm.getStor)
       (Ninst.Run.of_runCompiled hpush))
@@ -340,8 +340,8 @@ private lemma pauseSuccess_checkedArm
   have hp1 : [sevm.benvStat.time] <<+ t1.stack :=
     prefix_of_timestamp nil_pref (Ninst.Run.of_runCompiled htime1)
   have hp2 : [heartbeatIntervalSlot, sevm.benvStat.time] <<+ t2.stack := by
-    simpa using prefix_of_push
-      (of_run_pushB256 (Ninst.Run.of_runCompiled hpushSlot)) hp1
+    simpa only [List.cons_append, List.nil_append] using
+      prefix_of_push (of_run_pushB256 (Ninst.Run.of_runCompiled hpushSlot)) hp1
   rcases prefix_of_sload (Ninst.Run.of_runCompiled hsload) hp2 with
     ⟨read, hp3, hreadVal⟩
   have hstor2 : Devm.getStor pre = Devm.getStor t2 :=

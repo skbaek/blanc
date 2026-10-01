@@ -127,7 +127,8 @@ private theorem forwardingReadCopiedMemory
     ((memory.write 0 output).read 0 output.length).1 = output := by
   cases output with
   | nil => rfl
-  | cons byte bytes => exact Mem.read_write_zero memory (by simp)
+  | cons byte bytes => exact Mem.read_write_zero memory (by simp only [ne_eq, reduceCtorEq,
+    not_false_eq_true])
 
 /-- Writing at offset zero preserves word alignment (when the old image is
 large enough) or expands to a word boundary, and always covers the payload. -/
@@ -139,18 +140,18 @@ private theorem forwardingCopiedMemory_shape
   let copied := memory.write 0 output
   constructor
   · rcases houtput : output with _ | ⟨byte, bytes⟩
-    · simpa [copied, houtput, Mem.write] using aligned
+    · simpa only [Mem.write] using aligned
     · rw [Mem.size_write_cons]
       split
       · exact aligned
       · rw [ceil32_eq_mul]
         omega
   · rcases houtput : output with _ | ⟨byte, bytes⟩
-    · simp
+    · simp only [List.length_nil, zero_le]
     · rw [Mem.size_write_cons]
       split
       · omega
-      · simpa using Nat.le_ceil32 (byte :: bytes).length
+      · simpa only [List.length_cons, zero_add] using Nat.le_ceil32 (byte :: bytes).length
 
 @[simp] theorem forwardingCleanResume_returnData
     {sevm : Sevm} {callPre : Devm}
@@ -356,15 +357,13 @@ theorem forwardingCleanTailRun_of_budget
               ⟨0 :: w :: d.parent.stack, copied, gas, resume.stateGas⟩)
             (i := 0) (sz := w) (s := d.parent.stack)
             (out := child.output) (G := gas) (e := 0)
-            rfl terminalExt (by simp) (by
+            rfl terminalExt (by simp only [Devm.setMach_gasLeft, add_zero]) (by
               have outputRead := congrArg Prod.fst terminalRead
               simpa only [wordRoundtrip, B256.toNat_zero,
                 Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using outputRead)
-          simpa [forwardingCleanPost, forwardingCopiedMemory,
-            resume, copied, n, wordRoundtrip, readPost, terminalRead,
-            terminalMemory, B256.toNat_zero,
-            Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using
-            terminalRun
+          simpa only [forwardingCleanPost, forwardingCopiedMemory, Devm.memory_setMach,
+            Devm.stateGas_setMach, Devm.setMach_setMach, B256.toNat_zero, wordRoundtrip,
+            terminalRead] using terminalRun
 
 /-- A failing tail walk is likewise derived from primitive resources; its
 terminal opcode is the wrapper's ordinary `REVERT`. -/
@@ -523,13 +522,11 @@ theorem forwardingFailedTailRun_of_budget
               ⟨0 :: w :: d.parent.stack, copied, gas, resume.stateGas⟩)
             (i := 0) (sz := w) (s := d.parent.stack)
             (out := child.output) (d' := readPost) (G := gas) (e := 0)
-            rfl terminalExt (by simp) (by
+            rfl terminalExt (by simp only [Devm.setMach_gasLeft, add_zero]) (by
               simpa only [B256.toNat_zero, Devm.setMach_setMach, Devm.stateGas_setMach,
                 Devm.memory_setMach] using
                 terminalRead)
-          simpa [forwardingFailedPost, forwardingCopiedMemory,
-            resume, copied, n, wordRoundtrip, readPost, terminalRead,
-            Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using terminalRun
+          simpa only [forwardingFailedPost, forwardingCopiedMemory] using terminalRun
 
 /-- Frame facts established by the runtime prefix before the exact
 `DELEGATECALL`.  Storage is compared with the outer message's saved world
@@ -560,9 +557,9 @@ private theorem clean_tail_relation
       ((Frame.ofCall outer).settle
         (.ok (forwardingCleanPost d child gas))) := by
   have statusNone : child.error.isNone = true := by
-    cases h : child.error <;> simp_all
+    cases h : child.error <;> simp_all only [Option.isSome_none, Option.isNone_none, Option.isSome_some, Bool.true_eq_false]
   have statusEq : child.error = none := by
-    cases h : child.error <;> simp_all
+    cases h : child.error <;> simp_all only [Option.isSome_none, Option.isNone_none, Option.isSome_some, Bool.true_eq_false]
   have finalError : (forwardingCleanPost d child gas).error = none := by
     rw [forwardingCleanPost_error, context.parentError]
   have settledEq :
@@ -587,7 +584,7 @@ private theorem clean_tail_relation
     output := forwardingCleanPost_output d child gas
     logs := by
       rw [forwardingCleanPost_logs, context.parentLogs]
-      simp [statusNone]
+      simp only [List.nil_append, statusNone, ↓reduceIte]
     storage := by
       intro key
       rw [forwardingCleanPost_state]
@@ -607,9 +604,9 @@ private theorem failed_tail_relation
       ((Frame.ofCall outer).settle
         (.error (.revert, forwardingFailedPost d child gas))) := by
   have childRollback := ProcessMessage.rollback_of_error
-    certificate.process (by simp [status])
+    certificate.process (by simp only [status])
   have statusNone : child.error.isNone = false := by
-    cases h : child.error <;> simp_all
+    cases h : child.error <;> simp_all only [Option.isSome_none, Bool.false_eq_true, Option.isSome_some, Option.isNone_some]
   have settledEq :
       (Frame.ofCall outer).settle
           (.error (.revert, forwardingFailedPost d child gas)) =
@@ -628,7 +625,7 @@ private theorem failed_tail_relation
     logs := by
       rw [MessageExecution.settledRevert_logs,
         forwardingFailedPost_logs, context.parentLogs]
-      simp [statusNone]
+      simp only [statusNone, Bool.false_eq_true, ↓reduceIte]
     storage := by
       intro key
       rw [childRollback.1]
@@ -705,9 +702,8 @@ theorem forwarding_atCall_execSat
               ((Frame.ofCall d.child).settle (exec (initEvm d.child))) =
               .ok (forwardingCleanResume d child) := by
             rw [childResult]
-            simpa [DelegatecallSpawnDescriptor.resume,
-              forwardingCleanResume] using
-              (Resume.run_call_ok status context.parentStackRoom)
+            simpa only [ExceptT.stM_eq, DelegatecallSpawnDescriptor.resume,
+              forwardingCleanResume] using (Resume.run_call_ok status context.parentStackRoom)
           have callRun : Ninst.RunCompiled sevm callPre
               (.exec .delegatecall) (forwardingCleanResume d child) :=
             Ninst.runCompiled_exec_run d.step childEnter resume
@@ -721,9 +717,8 @@ theorem forwarding_atCall_execSat
               ((Frame.ofCall d.child).settle (exec (initEvm d.child))) =
               .ok (forwardingFailedResume d child) := by
             rw [childResult]
-            simpa [DelegatecallSpawnDescriptor.resume,
-              forwardingFailedResume] using
-              (Resume.run_call_err status context.parentStackRoom)
+            simpa only [ExceptT.stM_eq, DelegatecallSpawnDescriptor.resume,
+              forwardingFailedResume] using (Resume.run_call_err status context.parentStackRoom)
           have callRun : Ninst.RunCompiled sevm callPre
               (.exec .delegatecall) (forwardingFailedResume d child) :=
             Ninst.runCompiled_exec_run d.step childEnter resume
@@ -1080,7 +1075,9 @@ theorem runtimeSelectors_miss_of_data_nil (sevm : Sevm)
     ∀ selector ∈ runtimeSelectors, selector ≠ Sevm.selector sevm := by
   apply runtimeSelectors_miss_of_selector_lowByte_zero
   rw [Sevm.selector_eq_toB256_takeD_four, data]
-  simp [List.takeD, Bytes.toB256, Bytes.toB256.go]
+  simp only [Bytes.toB256, List.takeD, List.headD_eq_head?_getD, List.head?_nil, Option.getD_none,
+    List.tail_nil, Bytes.toB256.go, UInt64.zero_shiftLeft, UInt64.zero_shiftRight, UInt64.or_self,
+    Nat.ofNat_pos, UInt8.toUInt64_ofNat, UInt64.toUInt8_ofNat]
 
 /-- One-byte calldata is zero-padded by `CALLDATALOAD` and misses the census. -/
 theorem runtimeSelectors_miss_of_data_one (sevm : Sevm) (b0 : UInt8)
@@ -1120,14 +1117,14 @@ theorem runtimeSelectors_miss_of_shortData (sevm : Sevm)
   rcases data0 : sevm.data with _ | ⟨b0, tail0⟩
   · exact runtimeSelectors_miss_of_data_nil sevm data0
   · rcases data1 : tail0 with _ | ⟨b1, tail1⟩
-    · exact runtimeSelectors_miss_of_data_one sevm b0 (by simp [data0, data1])
+    · exact runtimeSelectors_miss_of_data_one sevm b0 (by simp only [data0, data1])
     · rcases data2 : tail1 with _ | ⟨b2, tail2⟩
       · exact runtimeSelectors_miss_of_data_two sevm b0 b1
-          (by simp [data0, data1, data2])
+          (by simp only [data0, data1, data2])
       · rcases data3 : tail2 with _ | ⟨b3, tail3⟩
         · exact runtimeSelectors_miss_of_data_three sevm b0 b1 b2
-            (by simp [data0, data1, data2, data3])
-        · simp [data0, data1, data2, data3] at short
+            (by simp only [data0, data1, data2, data3])
+        · simp only [data0, data1, data2, data3, List.length_cons] at short
           omega
 
 /-- Exact state at which the selector-miss dispatcher enters `proxyFallback`. -/
@@ -1504,7 +1501,7 @@ theorem ForwardingTailBudget.rejects_insufficient_clean_tail
   intro tail
   cases tail with
   | clean _ _ _ _ gas budget => omega
-  | failed failedStatus _ _ _ _ _ => simp_all
+  | failed failedStatus _ _ _ _ _ => simp_all only [Bool.true_eq_false]
 
 /-- A valid installation cannot name empty executed code. -/
 theorem OssifiableForwardingRoute.ValidInstallation.rejects_missing_code

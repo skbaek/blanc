@@ -219,7 +219,7 @@ def rootLoopCarrier_step_live
       (callPost.memory.write 608 (s.size >>> 1).toBytes)
       oldCount (s.step sevm.currentTarget stor) := by
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · simpa [RootLoopState.step, hlive] using hmem.shiftSize
+  · simpa only [RootLoopState.step, hlive, ↓reduceIte] using hmem.shiftSize
   · intro a
     rw [hstorage, rootAfterSload_getStor, carrier.stor]
   · intro a
@@ -253,7 +253,7 @@ def rootLoopCarrier_step_dead
       (callPost.memory.write 608 (s.size >>> 1).toBytes)
       oldCount (s.step sevm.currentTarget stor) := by
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · simpa [RootLoopState.step, hdead] using hmem.shiftSize
+  · simpa only [RootLoopState.step, hdead, ↓reduceIte] using hmem.shiftSize
   · intro a
     rw [hstorage, rootAfterSload_getStor, carrier.stor]
   · intro a

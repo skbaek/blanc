@@ -21,7 +21,7 @@ private theorem pushDeployWord_word_byte
         (pushDeployWord w ::: p) (j + 1) d =
       w.toBytes.getD j d := by
   have hsize0 : (pushDeployWord 0).size = 33 := by
-    simp [pushDeployWord, Ninst.size, B256.length_toBytes]
+    simp only [Ninst.size, pushDeployWord, B256.length_toBytes, Nat.reduceAdd]
   change
     Func.byteAtByShape locations n
       (.next (pushDeployWord 0).size
@@ -34,7 +34,8 @@ private theorem pushDeployWord_word_byte
     B256.length_toBytes]
   rw [List.takeD_eq_self 0 (by
     simp only [B256.length_toBytes, List.length_cons])]
-  simp
+  simp only [Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.getD_eq_getElem?_getD,
+    List.getElem?_cons_succ]
 
 private def domainHead : Line := [Ninst.chainid, Ninst.dup 0]
 
@@ -148,12 +149,12 @@ private theorem domainCachedPathByteAt_eq_zero_34_40
   rw [byteAt_next_to_tail locations (n + 1)
       (pushDeployWord 0) (pushDeployWord dp.cachedDomainSeparator)
       domainReturnTail domainReturnTail (i - 1) 0 (by
-        simp [pushDeployWord, Ninst.size, B256.length_toBytes]
+        simp only [Ninst.size, pushDeployWord, B256.length_toBytes, Nat.reduceAdd]
         omega),
     byteAt_next_to_tail locations (n + 1)
       (pushDeployWord 0) (pushDeployWord 0)
       domainReturnTail domainReturnTail (i - 1) 0 (by
-        simp [pushDeployWord, Ninst.size, B256.length_toBytes]
+        simp only [Ninst.size, pushDeployWord, B256.length_toBytes, Nat.reduceAdd]
         omega)]
 
 private theorem domainAfterChainByteAt_eq_zero_0_132
@@ -262,9 +263,9 @@ private theorem domainByteAt_to_afterChain
       (pushDeployWord 0) (pushDeployWord dp.deploymentChainId)
       (domainAfterChain (⟨0, 0⟩ : DeployParams)) (domainAfterChain dp)
       (i - 2) 0 (by
-        simp [pushDeployWord, Ninst.size, B256.length_toBytes]
+        simp only [Ninst.size, pushDeployWord, B256.length_toBytes, Nat.reduceAdd]
         omega)]
-  simp [pushDeployWord, Ninst.size, B256.length_toBytes]
+  simp only [Ninst.size, pushDeployWord, B256.length_toBytes, Nat.reduceAdd]
   congr 1
 
 private theorem domainSeparatorByteAt_eq_zero_0_3
@@ -415,49 +416,54 @@ private theorem dispatch26_0_14_eq_node (dp : DeployParams) :
     dispatch26_0_14 dp =
       dispatchNode (selector "decimals" [])
         (dispatch25_0_7 dp) (dispatch25_7_7 dp) := by
-  simp [dispatch26_0_14, dispatch25_0_7, dispatch25_7_7, treeSlice,
-    weth10Funcs, DispatchTree.build, dispatchNode, dispatchWith,
-    leftmostFsig]
+  simp only [dispatch26_0_14, treeSlice, weth10Funcs, List.drop_zero, List.take_succ_cons,
+    List.take_zero, DispatchTree.build, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceDiv, List.drop_succ_cons, dispatchWith, Fin.isValue, leftmostFsig, dispatchNode,
+    dispatch25_7_7, dispatch25_0_7]
 
 private theorem dispatch25_7_7_eq_node (dp : DeployParams) :
     dispatch25_7_7 dp =
       dispatchNode (selector "depositToAndCall" [.address, .dynBytes])
         (dispatch24_7_4 dp) (dispatch24_11_3 dp) := by
-  simp [dispatch25_7_7, dispatch24_7_4, dispatch24_11_3, treeSlice,
-    weth10Funcs, DispatchTree.build, dispatchNode, dispatchWith,
-    leftmostFsig]
+  simp only [dispatch25_7_7, treeSlice, weth10Funcs, List.drop_succ_cons, List.drop_zero,
+    List.take_succ_cons, List.take_zero, DispatchTree.build, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceDiv, dispatchWith, Fin.isValue, leftmostFsig, dispatchNode,
+    dispatch24_11_3, dispatch24_7_4]
 
 private theorem dispatch24_7_4_eq_node (dp : DeployParams) :
     dispatch24_7_4 dp =
       dispatchNode
         (selector "transferAndCall" [.address, .uint256, .dynBytes])
         (dispatch23_7_2 dp) (dispatch23_9_2 dp) := by
-  simp [dispatch24_7_4, dispatch23_7_2, dispatch23_9_2, treeSlice,
-    weth10Funcs, DispatchTree.build, dispatchNode, dispatchWith,
-    leftmostFsig]
+  simp only [dispatch24_7_4, treeSlice, weth10Funcs, List.drop_succ_cons, List.drop_zero,
+    List.take_succ_cons, List.take_zero, DispatchTree.build, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceDiv, dispatchWith, Fin.isValue, leftmostFsig, dispatchNode,
+    dispatch23_9_2, dispatch23_7_2]
 
 private theorem dispatch23_7_2_eq_node (dp : DeployParams) :
     dispatch23_7_2 dp =
       dispatchNode (selector "DOMAIN_SEPARATOR" [])
         (dispatch22_7_1 dp) (dispatch22_8_1 dp) := by
-  simp [dispatch23_7_2, dispatch22_7_1, dispatch22_8_1, treeSlice,
-    weth10Funcs, DispatchTree.build, dispatchNode, dispatchWith,
-    leftmostFsig]
+  simp only [dispatch23_7_2, treeSlice, weth10Funcs, List.drop_succ_cons, List.drop_zero,
+    List.take_succ_cons, List.take_zero, DispatchTree.build, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceDiv, dispatchWith, Fin.isValue, leftmostFsig, dispatchNode,
+    dispatch22_8_1, dispatch22_7_1]
 
 private theorem dispatch22_8_1_eq_leaf (dp : DeployParams) :
     dispatch22_8_1 dp =
       Ninst.pushB256 (selector "DOMAIN_SEPARATOR" []) ::: Ninst.eq :::
         ((nonpayable (domainSeparator dp)) <?> .call fallbackSlot) := by
-  simp [dispatch22_8_1, treeSlice, weth10Funcs, DispatchTree.build,
-    dispatchWith]
+  simp only [dispatch22_8_1, treeSlice, weth10Funcs, List.drop_succ_cons, List.drop_zero,
+    List.take_succ_cons, List.take_zero, DispatchTree.build, dispatchWith]
 
 private theorem fullDispatch_eq_root (dp : DeployParams) :
     dispatchWith fallbackSlot (weth10Tree dp) =
       dispatchNode (selector "nonces" [.address])
         (dispatch26_0_14 dp) (dispatch26_14_13 dp) := by
-  simp [weth10Tree, DispatchTree.ofSorted, dispatch26_0_14,
-    dispatch26_14_13, treeSlice, weth10Funcs, DispatchTree.build,
-    dispatchNode, dispatchWith, leftmostFsig]
+  simp only [weth10Tree, DispatchTree.ofSorted, weth10Funcs, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, DispatchTree.build, Nat.reduceDiv, List.take_succ_cons, List.take_zero,
+    List.drop_succ_cons, List.drop_zero, dispatchWith, Fin.isValue, leftmostFsig, dispatchNode,
+    dispatch26_14_13, treeSlice, List.take_nil, dispatch26_0_14]
 
 /- Subtree sizes are composed bottom-up through `dispatchNode_size` from a
 few leaf-level `decide`s: kernel-evaluating `byteSize` over a subtree
@@ -979,26 +985,29 @@ private def dispatchHeaderPrefix (selector : B256) : Line :=
 private theorem dispatch25_0_7_eq_zero (dp : DeployParams) :
     dispatch25_0_7 dp =
       dispatch25_0_7 (⟨0, 0⟩ : DeployParams) := by
-  simp [dispatch25_0_7, treeSlice, weth10Funcs, DispatchTree.build,
-    dispatchWith]
+  simp only [dispatch25_0_7, treeSlice, weth10Funcs, List.drop_zero, List.take_succ_cons,
+    List.take_zero, DispatchTree.build, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceDiv, List.drop_succ_cons, dispatchWith, Fin.isValue]
 
 private theorem dispatch24_11_3_eq_zero (dp : DeployParams) :
     dispatch24_11_3 dp =
       dispatch24_11_3 (⟨0, 0⟩ : DeployParams) := by
-  simp [dispatch24_11_3, treeSlice, weth10Funcs, DispatchTree.build,
-    dispatchWith]
+  simp only [dispatch24_11_3, treeSlice, weth10Funcs, List.drop_succ_cons, List.drop_zero,
+    List.take_succ_cons, List.take_zero, DispatchTree.build, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceDiv, dispatchWith, Fin.isValue]
 
 private theorem dispatch23_9_2_eq_zero (dp : DeployParams) :
     dispatch23_9_2 dp =
       dispatch23_9_2 (⟨0, 0⟩ : DeployParams) := by
-  simp [dispatch23_9_2, treeSlice, weth10Funcs, DispatchTree.build,
-    dispatchWith]
+  simp only [dispatch23_9_2, treeSlice, weth10Funcs, List.drop_succ_cons, List.drop_zero,
+    List.take_succ_cons, List.take_zero, DispatchTree.build, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceDiv, dispatchWith, Fin.isValue]
 
 private theorem dispatch22_7_1_eq_zero (dp : DeployParams) :
     dispatch22_7_1 dp =
       dispatch22_7_1 (⟨0, 0⟩ : DeployParams) := by
-  simp [dispatch22_7_1, treeSlice, weth10Funcs, DispatchTree.build,
-    dispatchWith]
+  simp only [dispatch22_7_1, treeSlice, weth10Funcs, List.drop_succ_cons, List.drop_zero,
+    List.take_succ_cons, List.take_zero, DispatchTree.build, dispatchWith]
 
 private theorem dispatch23_7_2ByteAt_eq_zero_0_39
     (locations : List Nat) (n : Nat) (dp : DeployParams)

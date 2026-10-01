@@ -99,8 +99,8 @@ private theorem Exec.Frame.allowanceRegionEffect_of_storageInvariantView
     AllowanceRegionEffect ca frame.pre frame.post
       (Exec.attributionStream dp ca frame.run) := by
   have hnotlast : ownRecordLast frame.sevm = false := by
-    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hselector,
-      hneFlash, hnePermit]
+    simp only [ownRecordLast, isFlashInvocation, ne_eq, decide_not, hselector, hneFlash,
+      decide_false, Bool.and_false, isPermitInvocation, hnePermit, Bool.or_self]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -113,8 +113,8 @@ private theorem Exec.Frame.allowanceRegionEffect_of_storageInvariantView
   rw [hstream]
   have hown : (CountedFrame.ofFrame dp ca frame).allowance = none := by
     show frameAllowanceEvent frame.sevm frame.pre frame.post = none
-    simp [frameAllowanceEvent, hnonempty, hselector, hneApprove,
-      hneApproveCall, hnePermit, hneTransferFrom, hneWithdrawFrom,
+    simp only [frameAllowanceEvent, hnonempty, ↓reduceIte, hselector, hneApprove, decide_false,
+      hneApproveCall, Bool.or_self, Bool.false_eq_true, hnePermit, hneTransferFrom, hneWithdrawFrom,
       hneFlash, hneAllowance]
   refine ⟨fun key _ => ?_, hcode⟩
   rw [applyAllowanceLedger_singleton, hown, congrFun hstor ca]
@@ -136,9 +136,11 @@ theorem Exec.Frame.attributionInner_eq_nil_of_name
     have hshape : nonpayable (nameLine +++ Func.last .return_) =
         nonpayable name := rfl
     rw [hshape]
-    simp [weth10Funcs]
+    simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or]
   have hchildless : ∀ n ∈ nameLine, NinstIsChildless n := by
-    simp [nameLine, NinstIsChildless, Ninst.pushB256, pushList, mstoreAt]
+    simp only [nameLine, pushB256, pushList, List.map_cons, List.map_nil, List.cons_append,
+      List.nil_append, mstoreAt, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+      forall_eq_or_imp, forall_eq, and_self]
   exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless (frame := frame)
     context hnonempty hmem hchildless
 
@@ -157,7 +159,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_name
         Devm.getCode frame.pre ca = Devm.getCode frame.post ca := by
     rcases frame with ⟨pc, e, pre, out, run, committed⟩
     cases out with
-    | error _ => simp [Execution.commits] at committed
+    | error _ => simp only [Execution.commits, Bool.false_eq_true] at committed
     | ok post =>
         have hpc : pc = 0 := context.root.1
         subst hpc
@@ -190,9 +192,12 @@ theorem Exec.Frame.attributionInner_eq_nil_of_symbol
     have hshape : nonpayable (symbolLine +++ Func.last .return_) =
         nonpayable symbol := rfl
     rw [hshape]
-    simp [weth10Funcs]
+    simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   have hchildless : ∀ n ∈ symbolLine, NinstIsChildless n := by
-    simp [symbolLine, NinstIsChildless, Ninst.pushB256, pushList, mstoreAt]
+    simp only [symbolLine, pushB256, pushList, List.map_cons, List.map_nil, List.cons_append,
+      List.nil_append, mstoreAt, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+      forall_eq_or_imp, forall_eq, and_self]
   exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless (frame := frame)
     context hnonempty hmem hchildless
 
@@ -209,7 +214,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_symbol
         Devm.getCode frame.pre ca = Devm.getCode frame.post ca := by
     rcases frame with ⟨pc, e, pre, out, run, committed⟩
     cases out with
-    | error _ => simp [Execution.commits] at committed
+    | error _ => simp only [Execution.commits, Bool.false_eq_true] at committed
     | ok post =>
         have hpc : pc = 0 := context.root.1
         subst hpc
@@ -245,10 +250,12 @@ theorem Exec.Frame.attributionInner_eq_nil_of_decimals
     have hshape : nonpayable (returnWordLine 0x12 +++ Func.last .return_) =
         nonpayable decimals := rfl
     rw [hshape]
-    simp [weth10Funcs]
+    simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   have hchildless : ∀ n ∈ returnWordLine 0x12, NinstIsChildless n := by
-    simp [returnWordLine, NinstIsChildless, Ninst.pushB256, mstoreAt,
-      pushList]
+    simp only [returnWordLine, pushB256, mstoreAt, List.cons_append, List.nil_append, pushList,
+      List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+      forall_eq_or_imp, forall_eq, and_self]
   exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless (frame := frame)
     context hnonempty hmem hchildless
 
@@ -265,7 +272,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_decimals
         Devm.getCode frame.pre ca = Devm.getCode frame.post ca := by
     rcases frame with ⟨pc, e, pre, out, run, committed⟩
     cases out with
-    | error _ => simp [Execution.commits] at committed
+    | error _ => simp only [Execution.commits, Bool.false_eq_true] at committed
     | ok post =>
         have hpc : pc = 0 := context.root.1
         subst hpc
@@ -304,11 +311,13 @@ theorem Exec.Frame.attributionInner_eq_nil_of_permitTypehash
         nonpayable (returnWordLine PERMIT_TYPEHASH +++ Func.last .return_) =
           nonpayable permitTypehash := rfl
     rw [hshape]
-    simp [weth10Funcs]
+    simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   have hchildless : ∀ n ∈ returnWordLine PERMIT_TYPEHASH,
       NinstIsChildless n := by
-    simp [returnWordLine, NinstIsChildless, Ninst.pushB256, mstoreAt,
-      pushList]
+    simp only [returnWordLine, pushB256, mstoreAt, List.cons_append, List.nil_append, pushList,
+      List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+      forall_eq_or_imp, forall_eq, and_self]
   exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless (frame := frame)
     context hnonempty hmem hchildless
 
@@ -326,7 +335,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_permitTypehash
         Devm.getCode frame.pre ca = Devm.getCode frame.post ca := by
     rcases frame with ⟨pc, e, pre, out, run, committed⟩
     cases out with
-    | error _ => simp [Execution.commits] at committed
+    | error _ => simp only [Execution.commits, Bool.false_eq_true] at committed
     | ok post =>
         have hpc : pc = 0 := context.root.1
         subst hpc
@@ -366,11 +375,13 @@ theorem Exec.Frame.attributionInner_eq_nil_of_callbackSuccess
         nonpayable (returnWordLine CALLBACK_SUCCESS +++ Func.last .return_) =
           nonpayable callbackSuccess := rfl
     rw [hshape]
-    simp [weth10Funcs]
+    simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   have hchildless : ∀ n ∈ returnWordLine CALLBACK_SUCCESS,
       NinstIsChildless n := by
-    simp [returnWordLine, NinstIsChildless, Ninst.pushB256, mstoreAt,
-      pushList]
+    simp only [returnWordLine, pushB256, mstoreAt, List.cons_append, List.nil_append, pushList,
+      List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+      forall_eq_or_imp, forall_eq, and_self]
   exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless (frame := frame)
     context hnonempty hmem hchildless
 
@@ -388,7 +399,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_callbackSuccess
         Devm.getCode frame.pre ca = Devm.getCode frame.post ca := by
     rcases frame with ⟨pc, e, pre, out, run, committed⟩
     cases out with
-    | error _ => simp [Execution.commits] at committed
+    | error _ => simp only [Execution.commits, Bool.false_eq_true] at committed
     | ok post =>
         have hpc : pc = 0 := context.root.1
         subst hpc
@@ -425,10 +436,12 @@ theorem Exec.Frame.attributionInner_eq_nil_of_totalSupply
     have hshape : nonpayable (totalSupplyLine +++ Func.last .return_) =
         nonpayable totalSupply := rfl
     rw [hshape]
-    simp [weth10Funcs]
+    simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   have hchildless : ∀ n ∈ totalSupplyLine, NinstIsChildless n := by
-    simp [totalSupplyLine, pushFlashMintedSlot, NinstIsChildless,
-      Ninst.pushB256, mstoreAt, pushList]
+    simp only [totalSupplyLine, pushFlashMintedSlot, pushB256, List.cons_append, List.nil_append,
+      mstoreAt, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
+      NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]
   exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless (frame := frame)
     context hnonempty hmem hchildless
 
@@ -445,7 +458,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_totalSupply
         Devm.getCode frame.pre ca = Devm.getCode frame.post ca := by
     rcases frame with ⟨pc, e, pre, out, run, committed⟩
     cases out with
-    | error _ => simp [Execution.commits] at committed
+    | error _ => simp only [Execution.commits, Bool.false_eq_true] at committed
     | ok post =>
         have hpc : pc = 0 := context.root.1
         subst hpc
@@ -483,10 +496,12 @@ theorem Exec.Frame.attributionInner_eq_nil_of_balanceOf
     have hshape : nonpayable (balanceOfLine +++ Func.last .return_) =
         nonpayable balanceOfEndpoint := rfl
     rw [hshape]
-    simp [weth10Funcs]
+    simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   have hchildless : ∀ n ∈ balanceOfLine, NinstIsChildless n := by
-    simp [balanceOfLine, arg, cdl, NinstIsChildless, Ninst.pushB256,
-      mstoreAt, pushList]
+    simp only [balanceOfLine, arg, cdl, pushB256, List.cons_append, List.nil_append, mstoreAt,
+      pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
+      NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]
   exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless (frame := frame)
     context hnonempty hmem hchildless
 
@@ -504,7 +519,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_balanceOf
         Devm.getCode frame.pre ca = Devm.getCode frame.post ca := by
     rcases frame with ⟨pc, e, pre, out, run, committed⟩
     cases out with
-    | error _ => simp [Execution.commits] at committed
+    | error _ => simp only [Execution.commits, Bool.false_eq_true] at committed
     | ok post =>
         have hpc : pc = 0 := context.root.1
         subst hpc
@@ -541,10 +556,12 @@ theorem Exec.Frame.attributionInner_eq_nil_of_nonces
     have hshape : nonpayable (noncesLine +++ Func.last .return_) =
         nonpayable nonces := rfl
     rw [hshape]
-    simp [weth10Funcs]
+    simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   have hchildless : ∀ n ∈ noncesLine, NinstIsChildless n := by
-    simp [noncesLine, arg, cdl, tagNonceKey, NinstIsChildless,
-      Ninst.pushB256, mstoreAt, pushList]
+    simp only [noncesLine, arg, cdl, pushB256, tagNonceKey, List.cons_append, List.nil_append,
+      mstoreAt, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
+      NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]
   exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless (frame := frame)
     context hnonempty hmem hchildless
 
@@ -561,7 +578,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_nonces
         Devm.getCode frame.pre ca = Devm.getCode frame.post ca := by
     rcases frame with ⟨pc, e, pre, out, run, committed⟩
     cases out with
-    | error _ => simp [Execution.commits] at committed
+    | error _ => simp only [Execution.commits, Bool.false_eq_true] at committed
     | ok post =>
         have hpc : pc = 0 := context.root.1
         subst hpc
@@ -596,10 +613,12 @@ theorem Exec.Frame.attributionInner_eq_nil_of_flashMinted
     have hshape : nonpayable (flashMintedLine +++ Func.last .return_) =
         nonpayable flashMinted := rfl
     rw [hshape]
-    simp [weth10Funcs]
+    simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   have hchildless : ∀ n ∈ flashMintedLine, NinstIsChildless n := by
-    simp [flashMintedLine, pushFlashMintedSlot, NinstIsChildless,
-      Ninst.pushB256, mstoreAt, pushList]
+    simp only [flashMintedLine, pushFlashMintedSlot, pushB256, List.cons_append, List.nil_append,
+      mstoreAt, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
+      NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]
   exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless (frame := frame)
     context hnonempty hmem hchildless
 
@@ -616,7 +635,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_flashMinted
         Devm.getCode frame.pre ca = Devm.getCode frame.post ca := by
     rcases frame with ⟨pc, e, pre, out, run, committed⟩
     cases out with
-    | error _ => simp [Execution.commits] at committed
+    | error _ => simp only [Execution.commits, Bool.false_eq_true] at committed
     | ok post =>
         have hpc : pc = 0 := context.root.1
         subst hpc
@@ -656,10 +675,12 @@ theorem Exec.Frame.attributionInner_eq_nil_of_deploymentChainId
         nonpayable (deploymentChainIdLine dp +++ Func.last .return_) =
           nonpayable (deploymentChainId dp) := rfl
     rw [hshape]
-    simp [weth10Funcs]
+    simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   have hchildless : ∀ n ∈ deploymentChainIdLine dp, NinstIsChildless n := by
-    simp [deploymentChainIdLine, pushDeployWord, NinstIsChildless,
-      Ninst.pushB256, mstoreAt, pushList]
+    simp only [deploymentChainIdLine, pushDeployWord, mstoreAt, pushB256, List.cons_append,
+      List.nil_append, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil,
+      or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]
   exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless (frame := frame)
     context hnonempty hmem hchildless
 
@@ -677,7 +698,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_deploymentChainId
         Devm.getCode frame.pre ca = Devm.getCode frame.post ca := by
     rcases frame with ⟨pc, e, pre, out, run, committed⟩
     cases out with
-    | error _ => simp [Execution.commits] at committed
+    | error _ => simp only [Execution.commits, Bool.false_eq_true] at committed
     | ok post =>
         have hpc : pc = 0 := context.root.1
         subst hpc
@@ -720,23 +741,27 @@ theorem Exec.Frame.attributionInner_eq_nil_of_domainSeparator
           (domainCachedLine dp +++ Func.last .return_)) =
         nonpayable (domainSeparator dp) := rfl
     rw [hshape]
-    simp [weth10Funcs]
+    simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCounted (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor⟩
   rcases wrapperCursor.enterNonpayable with ⟨bodyCursor⟩
   rcases bodyCursor.peelChildlessLine
-      (by simp [domainSelectLine, pushDeployWord, NinstIsChildless]) with
+      (by simp only [domainSelectLine, Fin.isValue, pushDeployWord, List.mem_cons, List.not_mem_nil,
+        or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨branchCursor, -⟩
   rcases branchCursor.selectBranchSplit with
     ⟨⟨freshCursor⟩⟩ | ⟨⟨cachedCursor⟩⟩
   · rcases freshCursor.peelChildlessLine
-        (by simp [domainFreshLine, calculateDomainSeparator,
-          NinstIsChildless, Ninst.pushB256, mstoreAt, pushList]) with
+        (by simp only [domainFreshLine, calculateDomainSeparator, mstoreAt, pushB256,
+          List.cons_append, List.nil_append, pushList, List.map_cons, List.map_nil, List.mem_cons,
+          List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
       ⟨lastCursor, -⟩
     exact lastCursor.finishAttributionInner
   · rcases cachedCursor.peelChildlessLine
-        (by simp [domainCachedLine, pushDeployWord, NinstIsChildless,
-          Ninst.pushB256, mstoreAt, pushList]) with
+        (by simp only [domainCachedLine, pushDeployWord, mstoreAt, pushB256, List.cons_append,
+          List.nil_append, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil,
+          or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
       ⟨lastCursor, -⟩
     exact lastCursor.finishAttributionInner
 
@@ -754,7 +779,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_domainSeparator
         Devm.getCode frame.pre ca = Devm.getCode frame.post ca := by
     rcases frame with ⟨pc, e, pre, out, run, committed⟩
     cases out with
-    | error _ => simp [Execution.commits] at committed
+    | error _ => simp only [Execution.commits, Bool.false_eq_true] at committed
     | ok post =>
         have hpc : pc = 0 := context.root.1
         subst hpc
@@ -798,24 +823,28 @@ theorem Exec.Frame.attributionInner_eq_nil_of_maxFlashLoan
           (maxFlashLoanAvailableLine +++ Func.last .return_)) =
         nonpayable maxFlashLoan := rfl
     rw [hshape]
-    simp [weth10Funcs]
+    simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCounted (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor⟩
   rcases wrapperCursor.enterNonpayable with ⟨bodyCursor⟩
   rcases bodyCursor.peelChildlessLine
-      (by simp [maxFlashLoanSelectLine, arg, cdl, NinstIsChildless,
-        Ninst.pushB256]) with
+      (by simp only [maxFlashLoanSelectLine, arg, cdl, pushB256, List.cons_append, List.nil_append,
+        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
+        and_self]) with
     ⟨branchCursor, -⟩
   rcases branchCursor.selectBranchSplit with
     ⟨⟨zeroCursor⟩⟩ | ⟨⟨availCursor⟩⟩
   · rcases zeroCursor.peelChildlessLine
-        (by simp [returnWordLine, NinstIsChildless, Ninst.pushB256,
-          mstoreAt, pushList]) with
+        (by simp only [returnWordLine, pushB256, mstoreAt, List.cons_append, List.nil_append,
+          pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
+          NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
       ⟨lastCursor, -⟩
     exact lastCursor.finishAttributionInner
   · rcases availCursor.peelChildlessLine
-        (by simp [maxFlashLoanAvailableLine, pushFlashMintedSlot,
-          NinstIsChildless, Ninst.pushB256, mstoreAt, pushList]) with
+        (by simp only [maxFlashLoanAvailableLine, pushFlashMintedSlot, pushB256, List.cons_append,
+          List.nil_append, mstoreAt, pushList, List.map_cons, List.map_nil, List.mem_cons,
+          List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
       ⟨lastCursor, -⟩
     exact lastCursor.finishAttributionInner
 
@@ -833,7 +862,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_maxFlashLoan
         Devm.getCode frame.pre ca = Devm.getCode frame.post ca := by
     rcases frame with ⟨pc, e, pre, out, run, committed⟩
     cases out with
-    | error _ => simp [Execution.commits] at committed
+    | error _ => simp only [Execution.commits, Bool.false_eq_true] at committed
     | ok post =>
         have hpc : pc = 0 := context.root.1
         subst hpc
@@ -876,19 +905,22 @@ theorem Exec.Frame.attributionInner_eq_nil_of_flashFee
           (Func.call flashTokenErrorSlot)) =
         nonpayable flashFee := rfl
     rw [hshape]
-    simp [weth10Funcs]
+    simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCounted (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor⟩
   rcases wrapperCursor.enterNonpayable with ⟨bodyCursor⟩
   rcases bodyCursor.peelChildlessLine
-      (by simp [flashFeeSelectLine, arg, cdl, NinstIsChildless,
-        Ninst.pushB256]) with
+      (by simp only [flashFeeSelectLine, arg, cdl, pushB256, List.cons_append, List.nil_append,
+        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
+        and_self]) with
     ⟨branchCursor, -⟩
   rcases branchCursor.selectBranchSplit with
     ⟨⟨successCursor⟩⟩ | ⟨⟨errorCursor⟩⟩
   · rcases successCursor.peelChildlessLine
-        (by simp [returnWordLine, NinstIsChildless, Ninst.pushB256,
-          mstoreAt, pushList]) with
+        (by simp only [returnWordLine, pushB256, mstoreAt, List.cons_append, List.nil_append,
+          pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
+          NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
       ⟨lastCursor, -⟩
     exact lastCursor.finishAttributionInner
   · exfalso
@@ -914,7 +946,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_flashFee
         Devm.getCode frame.pre ca = Devm.getCode frame.post ca := by
     rcases frame with ⟨pc, e, pre, out, run, committed⟩
     cases out with
-    | error _ => simp [Execution.commits] at committed
+    | error _ => simp only [Execution.commits, Bool.false_eq_true] at committed
     | ok post =>
         have hpc : pc = 0 := context.root.1
         subst hpc

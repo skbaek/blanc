@@ -98,7 +98,8 @@ theorem calculateBlobGasPrice_zero (b : BlobSchedule) (h : 0 < b.baseFeeUpdateFr
     calculateBlobGasPrice b 0 = 1 := by
   have h0 : b.baseFeeUpdateFraction ≠ 0 := by omega
   rw [calculateBlobGasPrice_eq, fakeExpAux]
-  simp [h0, Nat.div_self h]
+  simp only [one_mul, h0, ↓reduceDIte, Nat.reduceAdd, mul_zero, mul_one, Nat.zero_div,
+    fakeExpAux_zero, add_zero, Nat.div_self h]
 
 /-- Every instruction but `CLZ` (EIP-7939, defined from Osaka) and `BLOBBASEFEE` (it reads the
 blob schedule BPO1/BPO2 move) runs identically under covered forks; `BLOBBASEFEE` too when the
@@ -292,9 +293,12 @@ theorem isPrecomp_withFork {f g : Fork} (hf : CoveredFork f) (hg : CoveredFork g
   have key : ∀ g, CoveredFork g → ((Fork.ruleSet g).isPrecomp adr ↔ adr ∈ praguePrecompiles) :=
     fun _ hg => hg.cases (motive := fun g => (Fork.ruleSet g).isPrecomp adr ↔ adr ∈ praguePrecompiles)
       Iff.rfl
-      (by simp [ForkRules.isPrecomp, Fork.ruleSet, osakaRules, osakaPrecompiles, h])
-      (by simp [ForkRules.isPrecomp, Fork.ruleSet, bpo1Rules, osakaRules, osakaPrecompiles, h])
-      (by simp [ForkRules.isPrecomp, Fork.ruleSet, bpo2Rules, osakaRules, osakaPrecompiles, h])
+      (by simp only [ForkRules.isPrecomp, Fork.ruleSet, osakaRules, osakaPrecompiles,
+        List.mem_append, List.mem_cons, h, List.not_mem_nil, or_self, or_false])
+      (by simp only [ForkRules.isPrecomp, Fork.ruleSet, bpo1Rules, osakaRules, osakaPrecompiles,
+        List.mem_append, List.mem_cons, h, List.not_mem_nil, or_self, or_false])
+      (by simp only [ForkRules.isPrecomp, Fork.ruleSet, bpo2Rules, osakaRules, osakaPrecompiles,
+        List.mem_append, List.mem_cons, h, List.not_mem_nil, or_self, or_false])
   exact (key g hg).trans (key f hf).symm
 
 theorem msg_eq_of_prague {α : Sort _} (F : Msg → α) {m : Msg} {g : Fork}
@@ -372,18 +376,22 @@ theorem executeCode_enter_withFork {m : Msg} {g : Fork} (hf : CoveredFork m.benv
   | none => rfl
   | some adr =>
     rcases hp with hdp | hn
-    · simp [hdp]
+    · simp only [ExceptT.stM_eq, hdp, Bool.not_true, Bool.false_and, Bool.false_eq_true,
+      ↓reduceIte, Sum.map_inl]
     · obtain ⟨h5, h100⟩ := hn adr hc
       have hiff := isPrecomp_withFork (adr := adr) hf hg h100
       by_cases hpre : (Fork.ruleSet m.benv.stat.fork).isPrecomp adr
       · have hpre' := hiff.mpr hpre
         by_cases hdp : m.disablePrecompiles = true
-        · simp [hdp]
+        · simp only [ExceptT.stM_eq, hdp, Bool.not_true, Bool.false_and, Bool.false_eq_true,
+          ↓reduceIte, Sum.map_inl]
         · have hr : m.benv.stat.rules.isPrecomp adr := hpre
-          simp [hdp, hr, hpre', executePrecomp_withFork _ _ _ h5]
+          simp only [ExceptT.stM_eq, hdp, Bool.not_false, hpre', decide_true, Bool.and_self,
+            ↓reduceIte, executePrecomp_withFork _ _ _ h5, hr, Sum.map_inr, id_eq]
       · have hpre' : ¬ (Fork.ruleSet g).isPrecomp adr := fun h => hpre (hiff.mp h)
         have hr : ¬ m.benv.stat.rules.isPrecomp adr := hpre
-        simp [hr, hpre']
+        simp only [ExceptT.stM_eq, hpre', decide_false, Bool.and_false, Bool.false_eq_true,
+          ↓reduceIte, hr, Sum.map_inl]
 
 /-- Frame entry through any value-transfer function that commutes with the fork change and
 keeps the block environment's static part: the shape shared by `Frame.enter` and the

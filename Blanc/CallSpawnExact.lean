@@ -134,17 +134,17 @@ theorem Ninst.step_call_spawn_exact
   simp only [hp11] at hx
   have h_st9 : devm9.state = devm7.state := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).state) hp11
-    dsimp at h
+    dsimp only at h
     rw [← h, GasSchedule.accessDelegation_state]
     rfl
   have h_stk9 : devm9.stack = devm7.stack := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).stack) hp11
-    dsimp at h
+    dsimp only at h
     rw [← h, GasSchedule.accessDelegation_stack]
     rfl
   have h_mem9 : devm9.memory = devm7.memory := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).memory) hp11
-    dsimp at h
+    dsimp only at h
     rw [← h, GasSchedule.accessDelegation_memory]
     rfl
   have h_gc7 : (addAccessedAddress devm7 c.toAdr).state.getCode c.toAdr

@@ -269,10 +269,11 @@ theorem RuntimePersistentWrite.sourceSite?_sound
   rcases site with ⟨path, pc, instruction⟩
   cases instruction with
   | reg regular =>
-      cases regular <;> simp_all [isPersistentWriteInstruction]
-  | exec execution => simp_all [isPersistentWriteInstruction]
-  | push bytes bound => simp_all [isPersistentWriteInstruction]
-  | dupn _ | swapn _ | exchange _ => simp_all [isPersistentWriteInstruction]
+      cases regular <;> simp_all only [isPersistentWriteInstruction, Bool.false_eq_true, and_false, and_true]
+  | exec execution => simp_all only [isPersistentWriteInstruction, Bool.false_eq_true, and_false]
+  | push bytes bound => simp_all only [isPersistentWriteInstruction, Bool.false_eq_true, and_false]
+  | dupn _ | swapn _ | exchange _ => simp_all only [isPersistentWriteInstruction,
+    Bool.false_eq_true, and_false]
 
 /-! ## Parameter-independent structural projection -/
 
@@ -369,11 +370,9 @@ theorem PersistentSourceShape.byteSize_eq
   induction body with
   | last outcome => rfl
   | next inst rest ih =>
-      simp [persistentSourceShape, PersistentSourceShape.byteSize,
-        compsize, ih, Ninst.size_eq_length_toBytes]
+      simp only [persistentSourceShape, size_eq_length_toBytes, byteSize, ih, compsize]
   | branch left right ihl ihr =>
-      simp [persistentSourceShape, PersistentSourceShape.byteSize,
-        compsize, ihl, ihr]
+      simp only [persistentSourceShape, byteSize, ihl, ihr, compsize]
   | call index => rfl
 
 theorem persistentSourceSites_eq
@@ -440,7 +439,7 @@ theorem persistentProgramSourceSites_eq (program : Prog) :
       rw [hnone]
       rfl
     rw [hget] at mapped
-    simp [mapped]
+    simp only [List.filter_nil, mapped]
 
 theorem filterPersistent_nonPush (sites : List Prog.SourceSite) :
     (sites.filter fun site =>
@@ -501,12 +500,14 @@ theorem linearDispatchWith_persistentSourceShape_eq
   | nil =>
       cases ys with
       | nil => rfl
-      | cons y ys => simp [persistentDispatchEntryShapes] at h
+      | cons y ys => simp only [persistentDispatchEntryShapes, List.map_nil, List.map_cons,
+        List.nil_eq, reduceCtorEq] at h
   | cons x xs ih =>
       cases xs with
       | nil =>
           cases ys with
-          | nil => simp [persistentDispatchEntryShapes] at h
+          | nil => simp only [persistentDispatchEntryShapes, List.map_cons, List.map_nil,
+            List.cons_ne_self] at h
           | cons y ys =>
               cases ys with
               | nil =>
@@ -514,16 +515,20 @@ theorem linearDispatchWith_persistentSourceShape_eq
                   | mk xw xb =>
                     cases y with
                     | mk yw yb =>
-                      simp [persistentDispatchEntryShapes] at h
+                      simp only [persistentDispatchEntryShapes, List.map_cons, List.map_nil,
+                        List.cons.injEq, Prod.mk.injEq, and_true] at h
                       rcases h with ⟨rfl, hb⟩
-                      simp [linearDispatchWith, persistentSourceShape, hb]
-              | cons y' ys => simp [persistentDispatchEntryShapes] at h
+                      simp only [linearDispatchWith, persistentSourceShape, hb]
+              | cons y' ys => simp only [persistentDispatchEntryShapes, List.map_cons, List.map_nil,
+                List.cons.injEq, Prod.mk.injEq, List.nil_eq, reduceCtorEq, and_false] at h
       | cons x' xs =>
           cases ys with
-          | nil => simp [persistentDispatchEntryShapes] at h
+          | nil => simp only [persistentDispatchEntryShapes, List.map_cons, List.map_nil,
+            reduceCtorEq] at h
           | cons y ys =>
               cases ys with
-              | nil => simp [persistentDispatchEntryShapes] at h
+              | nil => simp only [persistentDispatchEntryShapes, List.map_cons, List.map_nil,
+                List.cons.injEq, Prod.mk.injEq, reduceCtorEq, and_false] at h
               | cons y' ys =>
                   cases x with
                   | mk xw xb =>
@@ -532,13 +537,13 @@ theorem linearDispatchWith_persistentSourceShape_eq
                       have hhead :
                           (xw, persistentSourceShape xb) =
                             (yw, persistentSourceShape yb) := by
-                        simpa [persistentDispatchEntryShapes] using
-                          congrArg List.head? h
+                        simpa only [Prod.mk.injEq, persistentDispatchEntryShapes, List.map_cons,
+                          List.head?_cons, Option.some.injEq] using congrArg List.head? h
                       have htail :
                           persistentDispatchEntryShapes (x' :: xs) =
                             persistentDispatchEntryShapes (y' :: ys) := by
-                        simpa [persistentDispatchEntryShapes] using
-                          congrArg List.tail h
+                        simpa only [persistentDispatchEntryShapes, List.map_cons, List.cons.injEq,
+                          Prod.mk.injEq, List.tail_cons] using congrArg List.tail h
                       have hw : xw = yw := congrArg Prod.fst hhead
                       have hb : persistentSourceShape xb =
                           persistentSourceShape yb :=
@@ -556,7 +561,7 @@ theorem splitDispatch_persistentSourceShape_eq
     persistentSourceShape (splitDispatch pivot left right) =
       persistentSourceShape (splitDispatch pivot' left' right') := by
   subst pivot'
-  simp [splitDispatch, persistentSourceShape, hl, hr]
+  simp only [splitDispatch, Fin.isValue, persistentSourceShape, hr, hl]
 
 theorem firstSelector_eq_of_persistentDispatchEntryShapes_eq
     {xs ys : List (B256 × Func)}
@@ -567,17 +572,20 @@ theorem firstSelector_eq_of_persistentDispatchEntryShapes_eq
   | nil =>
       cases ys with
       | nil => rfl
-      | cons y ys => simp [persistentDispatchEntryShapes] at h
+      | cons y ys => simp only [persistentDispatchEntryShapes, List.map_nil, List.map_cons,
+        List.nil_eq, reduceCtorEq] at h
   | cons x xs =>
       cases ys with
-      | nil => simp [persistentDispatchEntryShapes] at h
+      | nil => simp only [persistentDispatchEntryShapes, List.map_cons, List.map_nil,
+        reduceCtorEq] at h
       | cons y ys =>
           have hhead :
               (x.1, persistentSourceShape x.2) =
                 (y.1, persistentSourceShape y.2) := by
-            simpa [persistentDispatchEntryShapes] using
-              congrArg List.head? h
-          simpa [firstSelector] using congrArg Prod.fst hhead
+            simpa only [Prod.mk.injEq, persistentDispatchEntryShapes, List.map_cons,
+              List.head?_cons, Option.some.injEq] using congrArg List.head? h
+          simpa only [firstSelector, List.head?_cons, Option.map_some, Option.getD_some] using
+            congrArg Prod.fst hhead
 
 theorem hybridDispatchWith_persistentSourceShape_eq
     {xs ys : List (B256 × Func)}
@@ -588,15 +596,15 @@ theorem hybridDispatchWith_persistentSourceShape_eq
   have htake (n : Nat) :
       persistentDispatchEntryShapes (xs.take n) =
         persistentDispatchEntryShapes (ys.take n) := by
-    simpa [persistentDispatchEntryShapes] using congrArg (List.take n) h
+    simpa only [persistentDispatchEntryShapes, List.map_take] using congrArg (List.take n) h
   have hdrop (n : Nat) :
       persistentDispatchEntryShapes (xs.drop n) =
         persistentDispatchEntryShapes (ys.drop n) := by
-    simpa [persistentDispatchEntryShapes] using congrArg (List.drop n) h
+    simpa only [persistentDispatchEntryShapes, List.map_drop] using congrArg (List.drop n) h
   have hslice (drop take : Nat) :
       persistentDispatchEntryShapes ((xs.drop drop).take take) =
         persistentDispatchEntryShapes ((ys.drop drop).take take) := by
-    simpa [persistentDispatchEntryShapes] using
+    simpa only [persistentDispatchEntryShapes, List.map_take, List.map_drop] using
       congrArg (List.take take) (hdrop drop)
   unfold hybridDispatchWith
   apply splitDispatch_persistentSourceShape_eq
@@ -623,7 +631,7 @@ theorem prepend_persistentSourceShape_eq (line : Line) {body body' : Func}
   induction line with
   | nil => exact h
   | cons instruction line ih =>
-      simp [prepend, persistentSourceShape, ih]
+      simp only [prepend, persistentSourceShape, ih]
 
 theorem runtimeMain_persistentSourceShape_eq_zero (dp : DeployParams) :
     persistentSourceShape (runtimeMain dp) =
@@ -634,7 +642,7 @@ theorem runtimeMain_persistentSourceShape_eq_zero (dp : DeployParams) :
   unfold runtimeMain
   exact prepend_persistentSourceShape_eq
     [callvalue, pushB256 4, calldatasize, lt, Ninst.or] <| by
-      simp [persistentSourceShape, prefixedShape]
+      simp only [persistentSourceShape, prefixedShape]
 
 /-- The complete persistent source shape is independent of all five deployed
 words.  This is stronger than a cardinality claim: the full function/path/PC
@@ -642,8 +650,8 @@ map of retained SSTOREs is fixed. -/
 theorem runtime_persistentProgramShape_eq_zero (dp : DeployParams) :
     persistentProgramShape (runtime dp) =
       persistentProgramShape (runtime ⟨0, 0, 0, 0, 0⟩) := by
-  simp [runtime, persistentProgramShape,
-    runtimeMain_persistentSourceShape_eq_zero dp]
+  simp only [persistentProgramShape, runtime, symbolicLinkCert_resolved, legacyRuntime_main,
+    runtimeMain_persistentSourceShape_eq_zero dp, legacyRuntime_aux]
 
 theorem runtime_persistentProgramShape_eq (dp : DeployParams) :
     persistentProgramShape (runtime dp) =
@@ -703,14 +711,14 @@ theorem runtimePersistentSourceSites_pcs (dp : DeployParams) :
   unfold runtimePersistentSourceSites
   rw [← filterPersistent_nonPush, persistentProgramSourceSites_eq,
     runtime_persistentProgramShape_eq]
-  simpa using congrArg (fun inventory => inventory.1.1)
-    runtimeSourceEffectPcs_official
+  simpa only using congrArg (fun inventory => inventory.1.1) runtimeSourceEffectPcs_official
 
 theorem runtimePersistentSourceSites_length (dp : DeployParams) :
     (runtimePersistentSourceSites dp).length = 20 := by
   have exactLength := congrArg List.length
     (runtimePersistentSourceSites_pcs dp)
-  simpa using exactLength
+  simpa only [List.length_map, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd] using
+    exactLength
 
 theorem runtimePersistentSourceSites_nodup (dp : DeployParams) :
     (runtimePersistentSourceSites dp).Nodup := by
@@ -732,7 +740,7 @@ theorem map_getElem?_range {α : Type} (xs : List α) :
           ((fun index => (head :: tail)[index]?) ∘ Nat.succ) =
             fun index => tail[index]? := by
         funext index
-        simp [Function.comp_apply, Nat.succ_eq_add_one]
+        simp only [Function.comp_apply, Nat.succ_eq_add_one, List.getElem?_cons_succ]
       rw [hfun, ih]
 
 theorem RuntimePersistentWrite.all_indices :
@@ -778,13 +786,13 @@ theorem runtimePersistentSourceSite_iff_row
     rcases List.mem_map.mp mapped with
       ⟨candidate, candidate_mem, candidate_eq⟩
     simp only [Option.some.injEq] at candidate_eq
-    simpa [candidate_eq] using candidate_mem
+    simpa only [candidate_eq] using candidate_mem
 
 theorem RuntimePersistentWrite.index_injective :
     Function.Injective RuntimePersistentWrite.index := by
   intro left right equal
   cases left <;> cases right <;>
-    simp_all [RuntimePersistentWrite.index]
+    simp_all only [index, zero_ne_one, OfNat.zero_ne_ofNat, one_ne_zero, OfNat.one_ne_ofNat, OfNat.ofNat_ne_zero, OfNat.ofNat_ne_one, Nat.reduceEqDiff, Nat.succ_ne_self]
 
 /-- Structural source ownership is unique: two typed rows cannot name the
 same full source site. -/
@@ -813,7 +821,7 @@ theorem classifyRuntimePersistentWrite_sound
   have matched := List.find?_some classified
   unfold RuntimePersistentWrite.matchesSource at matched
   split at matched
-  next hnone => simp at matched
+  next hnone => simp only [Bool.false_eq_true] at matched
   next site hsite =>
     simp only [Bool.and_eq_true, beq_iff_eq] at matched
     exact ⟨site, hsite, matched.1, matched.2⟩
@@ -826,12 +834,12 @@ theorem List.find?_eq_some_of_mem_of_unique
       predicate candidate = true → candidate = target) :
     xs.find? predicate = some target := by
   induction xs with
-  | nil => simp at member
+  | nil => simp only [List.not_mem_nil] at member
   | cons head tail ih =>
       rw [List.find?]
       cases found : predicate head with
       | false =>
-          simp
+          simp only
           apply ih
           · rcases List.mem_cons.mp member with head_eq | tail_mem
             · subst head
@@ -842,8 +850,8 @@ theorem List.find?_eq_some_of_mem_of_unique
             exact unique candidate
               (List.mem_cons_of_mem head candidate_mem) candidate_matches
       | true =>
-          simp
-          rw [unique head (by simp) found]
+          simp only [Option.some.injEq]
+          rw [unique head (by simp only [List.mem_cons, true_or]) found]
 
 /-- Conversely, classifying the exact path and PC of any row returns that row,
 not merely some member of a cardinality-matched list. -/
@@ -854,14 +862,14 @@ theorem classifyRuntimePersistentWrite_complete
     classifyRuntimePersistentWrite dp site.path site.pc = some row := by
   unfold classifyRuntimePersistentWrite
   apply List.find?_eq_some_of_mem_of_unique
-  · cases row <;> simp [RuntimePersistentWrite.all]
+  · cases row <;> simp only [RuntimePersistentWrite.all, List.mem_cons, reduceCtorEq, List.not_mem_nil, or_self, or_false, or_true]
   · unfold RuntimePersistentWrite.matchesSource
     rw [found]
-    simp
+    simp only [BEq.rfl, Bool.and_self]
   · intro candidate candidate_mem candidate_matches
     unfold RuntimePersistentWrite.matchesSource at candidate_matches
     split at candidate_matches
-    next hnone => simp at candidate_matches
+    next hnone => simp only [Bool.false_eq_true] at candidate_matches
     next candidateSite candidate_found =>
       simp only [Bool.and_eq_true, beq_iff_eq] at candidate_matches
       have candidate_sound := candidate.sourceSite?_sound candidate_found
@@ -869,7 +877,7 @@ theorem classifyRuntimePersistentWrite_complete
       have site_eq : candidateSite = site := by
         cases candidateSite
         cases site
-        simp_all
+        simp_all only
       rw [site_eq] at candidate_found
       exact RuntimePersistentWrite.sourceSite?_injective
         candidate_found found
@@ -883,7 +891,7 @@ theorem RuntimePersistentWrite.sourceSite?_compiledAt
     (found : row.sourceSite? dp = some site) :
     Ninst.At code site.pc (.reg .sstore) := by
   have sound := row.sourceSite?_sound found
-  simpa [sound.2] using (runtime dp).sourceSites_sound compiled sound.1
+  simpa only [sound.2] using (runtime dp).sourceSites_sound compiled sound.1
 
 /-! ## Separation from transient, external-call, and constructor domains -/
 
@@ -902,8 +910,7 @@ theorem runtimeTransientSourceSites_pcs (dp : DeployParams) :
   unfold runtimeTransientSourceSites
   rw [← filterTransient_nonPush, persistentProgramSourceSites_eq,
     runtime_persistentProgramShape_eq]
-  simpa using congrArg (fun inventory => inventory.1.2)
-    runtimeSourceEffectPcs_official
+  simpa only using congrArg (fun inventory => inventory.1.2) runtimeSourceEffectPcs_official
 
 theorem runtimeExternalCallSourceSites_pcs (dp : DeployParams) :
     (runtimeExternalCallSourceSites dp).map (fun site => site.pc) =
@@ -911,8 +918,7 @@ theorem runtimeExternalCallSourceSites_pcs (dp : DeployParams) :
   unfold runtimeExternalCallSourceSites
   rw [← filterExternal_nonPush, persistentProgramSourceSites_eq,
     runtime_persistentProgramShape_eq]
-  simpa using congrArg (fun inventory => inventory.2)
-    runtimeSourceEffectPcs_official
+  simpa only using congrArg (fun inventory => inventory.2) runtimeSourceEffectPcs_official
 
 theorem runtimeExternalCallInstructions_official :
     let sites :=
@@ -936,11 +942,13 @@ theorem runtimeExternalCallSourceSites_instructions (dp : DeployParams) :
 
 theorem runtimeTransientSourceSites_length (dp : DeployParams) :
     (runtimeTransientSourceSites dp).length = 3 := by
-  simpa using congrArg List.length (runtimeTransientSourceSites_pcs dp)
+  simpa only [List.length_map, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd] using
+    congrArg List.length (runtimeTransientSourceSites_pcs dp)
 
 theorem runtimeExternalCallSourceSites_length (dp : DeployParams) :
     (runtimeExternalCallSourceSites dp).length = 2 := by
-  simpa using congrArg List.length (runtimeExternalCallSourceSites_pcs dp)
+  simpa only [List.length_map, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd] using
+    congrArg List.length (runtimeExternalCallSourceSites_pcs dp)
 
 theorem runtimeTransientSourceSite_instruction
     {dp : DeployParams} {site : Prog.SourceSite}
@@ -950,10 +958,11 @@ theorem runtimeTransientSourceSite_instruction
   rw [List.mem_filter] at member
   rcases site with ⟨path, pc, instruction⟩
   cases instruction with
-  | reg regular => cases regular <;> simp_all [isTransientWriteInstruction]
-  | exec execution => simp_all [isTransientWriteInstruction]
-  | push bytes bound => simp_all [isTransientWriteInstruction]
-  | dupn _ | swapn _ | exchange _ => simp_all [isTransientWriteInstruction]
+  | reg regular => cases regular <;> simp_all only [isTransientWriteInstruction, Bool.false_eq_true, and_false, and_true]
+  | exec execution => simp_all only [isTransientWriteInstruction, Bool.false_eq_true, and_false]
+  | push bytes bound => simp_all only [isTransientWriteInstruction, Bool.false_eq_true, and_false]
+  | dupn _ | swapn _ | exchange _ => simp_all only [isTransientWriteInstruction, Bool.false_eq_true,
+    and_false]
 
 theorem runtimeExternalCallSourceSite_instruction
     {dp : DeployParams} {site : Prog.SourceSite}
@@ -963,10 +972,11 @@ theorem runtimeExternalCallSourceSite_instruction
   rw [List.mem_filter] at member
   rcases site with ⟨path, pc, instruction⟩
   cases instruction with
-  | reg regular => simp_all [isExternalCallInstruction]
+  | reg regular => simp_all only [isExternalCallInstruction, Bool.false_eq_true, and_false]
   | exec execution => exact ⟨execution, rfl⟩
-  | push bytes bound => simp_all [isExternalCallInstruction]
-  | dupn _ | swapn _ | exchange _ => simp_all [isExternalCallInstruction]
+  | push bytes bound => simp_all only [isExternalCallInstruction, Bool.false_eq_true, and_false]
+  | dupn _ | swapn _ | exchange _ => simp_all only [isExternalCallInstruction, Bool.false_eq_true,
+    and_false]
 
 /-- Every structural runtime external edge is exactly CALL or STATICCALL;
 CALLCODE and DELEGATECALL are absent. -/
@@ -984,7 +994,8 @@ theorem runtimeExternalCallSourceSite_instruction_exact
   rcases runtimeExternalCallSourceSite_instruction member with
     ⟨instruction, instructionEq⟩
   rw [instructionEq] at projected ⊢
-  simpa [externalInstruction?] using projected
+  simpa only [exec.injEq, externalInstruction?, List.mem_cons, Option.some.injEq, List.not_mem_nil,
+    or_false] using projected
 
 /-- Any actually reached same-frame execution opcode in an exact runtime
 invocation is one of the runtime's two structural external edges.  The
@@ -1003,13 +1014,13 @@ theorem runtimeExec_instruction_exact
   have external : site ∈ runtimeExternalCallSourceSites dp := by
     unfold runtimeExternalCallSourceSites
     rw [List.mem_filter]
-    exact ⟨member, by simp [siteInstruction, isExternalCallInstruction]⟩
+    exact ⟨member, by simp only [isExternalCallInstruction, siteInstruction]⟩
   rcases runtimeExternalCallSourceSite_instruction_exact external with
     callEq | staticcallEq
   · rw [siteInstruction] at callEq
-    exact Or.inl (by simpa using callEq)
+    exact Or.inl (by simpa only [exec.injEq] using callEq)
   · rw [siteInstruction] at staticcallEq
-    exact Or.inr (by simpa using staticcallEq)
+    exact Or.inr (by simpa only [exec.injEq] using staticcallEq)
 
 theorem runtimePersistent_effectDomains_separate
     {dp : DeployParams} {site : Prog.SourceSite}
@@ -1022,10 +1033,12 @@ theorem runtimePersistent_effectDomains_separate
     rcases site with ⟨path, pc, inst⟩
     cases inst with
     | reg regular =>
-        cases regular <;> simp_all [isPersistentWriteInstruction]
-    | exec execution => simp_all [isPersistentWriteInstruction]
-    | push bytes bound => simp_all [isPersistentWriteInstruction]
-    | dupn _ | swapn _ | exchange _ => simp_all [isPersistentWriteInstruction]
+        cases regular <;> simp_all only [isPersistentWriteInstruction, Bool.false_eq_true, and_false, and_true]
+    | exec execution => simp_all only [isPersistentWriteInstruction, Bool.false_eq_true, and_false]
+    | push bytes bound => simp_all only [isPersistentWriteInstruction, Bool.false_eq_true,
+      and_false]
+    | dupn _ | swapn _ | exchange _ => simp_all only [isPersistentWriteInstruction,
+      Bool.false_eq_true, and_false]
   constructor
   · intro transient
     rw [runtimeTransientSourceSite_instruction transient] at instruction

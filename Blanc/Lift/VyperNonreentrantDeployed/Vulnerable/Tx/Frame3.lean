@@ -95,7 +95,7 @@ theorem callback_of_child (d3 : Devm) (k3 : ChildOk e3T.sta aCallT d3)
   · rename_i c hc
     generalize hr : wrun fs3 e3T.sta 2 c = r at hk ⊢
     rcases r with c' | ⟨d | d, cl⟩ | _
-    · simp [obs3] at hk
+    · simp only [obs3, reduceCtorEq] at hk
     · simp only [obs3, Option.some.injEq, Prod.mk.injEq, Bool.and_eq_true,
         decide_eq_true_eq] at hk
       obtain ⟨hg, ho, ⟨⟨⟨⟨he, hkk⟩, hka⟩, hks⟩, hrf⟩, hkc, hatd⟩ := hk
@@ -107,9 +107,9 @@ theorem callback_of_child (d3 : Devm) (k3 : ChildOk e3T.sta aCallT d3)
       rw [hkk, hka, hks, hkc] at hag
       exact ⟨hok, hag, hg, List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) ho,
         herr, hrf, hatd⟩
-    · simp [obs3] at hk
-    · simp [obs3] at hk
-  · simp [obs3] at hk
+    · simp only [obs3, reduceCtorEq] at hk
+    · simp only [obs3, reduceCtorEq] at hk
+  · simp only [obs3, reduceCtorEq] at hk
 
 /-- **The callback subtree as frame 2's child** (tx frames 3-5). -/
 theorem callback_child : ChildOk e2T.sta cfg339T post3T ∧ ChildAgree post3T keysAT adrsAT storAT acsAT ∧

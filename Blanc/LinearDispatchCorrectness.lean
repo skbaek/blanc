@@ -174,13 +174,13 @@ private theorem eqFrame {e : Sevm} {a b : Devm}
 theorem stack_of_pushBurn {x : B256} {a b : Devm} {xs : Stack}
     (h : Devm.PushBurn [x] a b) (ha : a.stack = xs) :
     b.stack = x :: xs := by
-  simpa [Devm.PushBurn, Stack.Push, Split, ha] using h.stack
+  simpa only [Stack.Push, Split, ha, List.cons_append, List.nil_append] using h.stack
 
 /-- Resolve the exact stack produced by a singleton pop-and-burn. -/
 theorem stack_of_popBurnBy {x : B256} {cost : Nat} {a b : Devm}
     {xs : Stack} (h : Devm.PopBurnBy [x] cost a b)
     (ha : a.stack = x :: xs) : b.stack = xs := by
-  simpa [Devm.PopBurnBy, Stack.Pop, Split, ha] using h.stack.symm
+  simpa only [List.cons_append, List.nil_append, ha, List.cons.injEq, true_and] using h.stack.symm
 
 /-- Resolve a unary value-carrying stack difference against a known stack. -/
 theorem stack_of_diffBurn_one
@@ -190,12 +190,12 @@ theorem stack_of_diffBurn_one
   rcases h with ⟨x', mid, hpop, hpush⟩
   simp only [Stack.Pop, Stack.Push, Split] at hpop hpush
   have hpre : x :: xs = x' :: mid := by
-    simpa [ha, List.cons_append, List.nil_append] using hpop
+    simpa only [List.cons.injEq, ha, List.cons_append, List.nil_append] using hpop
   have hx : x = x' := (List.cons.inj hpre).1
   have htail : xs = mid := (List.cons.inj hpre).2
   subst x'
   subst mid
-  simpa [List.cons_append, List.nil_append] using hpush
+  simpa only [List.cons_append, List.nil_append] using hpush
 
 /-- Resolve a binary value-carrying stack difference against a known stack. -/
 theorem stack_of_diffBurn_two
@@ -206,24 +206,26 @@ theorem stack_of_diffBurn_two
   rcases h with ⟨x', y', mid, hpop, hpush⟩
   simp only [Stack.Pop, Stack.Push, Split] at hpop hpush
   have hpre : x :: y :: xs = x' :: y' :: mid := by
-    simpa [ha, List.cons_append, List.nil_append] using hpop
+    simpa only [List.cons.injEq, ha, List.cons_append, List.nil_append] using hpop
   have hx : x = x' := (List.cons.inj hpre).1
   have hy : y = y' := (List.cons.inj (List.cons.inj hpre).2).1
   have htail : xs = mid := (List.cons.inj (List.cons.inj hpre).2).2
   subst x'
   subst y'
   subst mid
-  simpa [List.cons_append, List.nil_append] using hpush
+  simpa only [List.cons_append, List.nil_append] using hpush
 
 private theorem stack_of_popBurn {x : B256} {a b : Devm} {xs : Stack}
     (h : Devm.PopBurn [x] a b) (ha : a.stack = x :: xs) : b.stack = xs := by
-  simpa [Devm.PopBurn, Stack.Pop, Split, ha] using h.stack.symm
+  simpa only [List.cons_append, List.nil_append, ha, List.cons.injEq, true_and] using h.stack.symm
 
 private theorem stack_of_dup {e : Sevm} {a b : Devm} {x : B256}
     {xs : Stack} (h : Ninst.Run e a (Ninst.dup 0) b)
     (ha : a.stack = x :: xs) : b.stack = x :: x :: xs := by
   rcases of_run_dup h with ⟨v, hv, hpush⟩
-  have hv' : v = x := by simpa [ha] using hv.symm
+  have hv' : v = x := by simpa only [ha, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
+    List.length_cons, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos,
+    List.getElem_cons_zero, Option.some.injEq] using hv.symm
   subst v
   exact stack_of_pushBurn hpush ha
 
@@ -236,7 +238,7 @@ private theorem stack_of_eqRun {e : Sevm} {a b : Devm}
   rcases hdiff.stack with ⟨mid, hpop, hpush⟩
   simp only [Stack.Pop, Stack.Push, Split] at hpop hpush
   have hpre : x :: y :: xs = x' :: y' :: mid := by
-    simpa [ha, List.cons_append, List.nil_append] using hpop
+    simpa only [List.cons.injEq, ha, List.cons_append, List.nil_append] using hpop
   have hxy : x = x' := (List.cons.inj hpre).1
   have htail' : y :: xs = y' :: mid := (List.cons.inj hpre).2
   have hy : y = y' := (List.cons.inj htail').1
@@ -290,13 +292,13 @@ private theorem exists_selected_split
     (hmem : selected ∈ entries) :
     ∃ pre suffix, entries = pre ++ selected :: suffix := by
   induction entries with
-  | nil => simp at hmem
+  | nil => simp only [List.not_mem_nil] at hmem
   | cons head tail ih =>
       simp only [List.mem_cons] at hmem
       rcases hmem with rfl | htail
       · exact ⟨[], tail, rfl⟩
       · rcases ih htail with ⟨pre, suffix, hs⟩
-        exact ⟨head :: pre, suffix, by simp [hs]⟩
+        exact ⟨head :: pre, suffix, by simp only [hs, List.cons_append]⟩
 
 private theorem selectorUnique_prefix_ne
     {pre suffix : List (B256 × Func)} {selected candidate : B256 × Func}
@@ -304,15 +306,17 @@ private theorem selectorUnique_prefix_ne
     (hmem : candidate ∈ pre) :
     candidate.1 ≠ selected.1 := by
   induction pre with
-  | nil => simp at hmem
+  | nil => simp only [List.not_mem_nil] at hmem
   | cons head tail ih =>
       simp only [List.mem_cons] at hmem
       have hpairs :
           (head :: (tail ++ selected :: suffix)).Pairwise
             (fun a b : B256 × Func => a.1 ≠ b.1) := by
-        simpa [selectorUnique] using huniq
+        simpa only [ne_eq, List.pairwise_cons, List.mem_append, List.mem_cons, Prod.forall,
+          selectorUnique, List.cons_append] using huniq
       rcases hmem with rfl | htail
-      · exact (List.pairwise_cons.mp hpairs).1 selected (by simp)
+      · exact (List.pairwise_cons.mp hpairs).1 selected (by simp only [List.mem_append,
+        List.mem_cons, true_or, or_true])
       · exact ih (List.pairwise_cons.mp hpairs).2 htail
 
 private theorem dispatch_select_prefix
@@ -352,7 +356,7 @@ private theorem dispatch_select_prefix
             stack_of_eqRun heq hpushStack
           have hflag : afterEq.stack = (1 : B256) :: tail := by
             rw [hflagStack]
-            simp [B256.eqCheck]
+            simp only [B256.eqCheck, ↓reduceIte]
           have hlineFrame : Devm.DispatchFramePreserved entry afterEq :=
             (pushFrame hpush).trans (eqFrame heq)
           rcases runCompiledTo_branch_inv hbranch with
@@ -376,7 +380,7 @@ private theorem dispatch_select_prefix
                 ((Ninst.pop ::: body) <?>
                   Blanc.linearDispatchWith fallback
                     ((headSelector, headBody) :: suffix'))) out := by
-            simpa [Blanc.linearDispatchWith] using hrun
+            simpa only [Fin.isValue, List.nil_append, linearDispatchWith] using hrun
           obtain ⟨afterDup, afterPush, afterEq, hdup, hpush, heq, hbranch⟩ :=
             runCompiledTo_three_inv hrun'
           have hdupStack : afterDup.stack = selector :: selector :: tail :=
@@ -388,7 +392,7 @@ private theorem dispatch_select_prefix
             stack_of_eqRun heq hpushStack
           have hflag : afterEq.stack = (1 : B256) :: selector :: tail := by
             rw [hflagStack]
-            simp [B256.eqCheck]
+            simp only [B256.eqCheck, ↓reduceIte]
           have hlineFrame : Devm.DispatchFramePreserved entry afterEq :=
             (dupFrame hdup).trans
               ((pushFrame hpush).trans (eqFrame heq))
@@ -410,7 +414,8 @@ private theorem dispatch_select_prefix
             rcases of_run_pop hpopRun with ⟨v, hpopBurn⟩
             have hv : v = selector := by
               have : armPre.stack = v :: afterPop.stack := by
-                simpa [Devm.PopBurn, Stack.Pop, Split] using hpopBurn.stack
+                simpa only [Stack.Pop, Split, List.cons_append, List.nil_append] using
+                  hpopBurn.stack
               rw [harmStack] at this
               exact (List.cons.inj this).1.symm
             subst v
@@ -428,7 +433,8 @@ private theorem dispatch_select_prefix
             ((Ninst.pop ::: headBody) <?>
               Blanc.linearDispatchWith fallback
                 (pre ++ (selector, body) :: suffix))) out := by
-        simpa [Blanc.linearDispatchWith] using hrun
+        simpa only [Fin.isValue, List.cons_append, List.append_eq_nil_iff, reduceCtorEq, and_false,
+          imp_self, linearDispatchWith] using hrun
       obtain ⟨afterDup, afterPush, afterEq, hdup, hpush, heq, hbranch⟩ :=
         runCompiledTo_three_inv hrun'
       have hdupStack : afterDup.stack = selector :: selector :: tail :=
@@ -440,10 +446,10 @@ private theorem dispatch_select_prefix
           (headSelector =? selector) :: selector :: tail :=
         stack_of_eqRun heq hpushStack
       have hne : headSelector ≠ selector := by
-        exact hbefore (headSelector, headBody) (by simp)
+        exact hbefore (headSelector, headBody) (by simp only [List.mem_cons, true_or])
       have hflag : afterEq.stack = (0 : B256) :: selector :: tail := by
         rw [hflagStack]
-        simp [B256.eqCheck, hne]
+        simp only [B256.eqCheck, hne, ↓reduceIte]
       have hlineFrame : Devm.DispatchFramePreserved entry afterEq :=
         (dupFrame hdup).trans
           ((pushFrame hpush).trans (eqFrame heq))
@@ -454,7 +460,7 @@ private theorem dispatch_select_prefix
           stack_of_popBurnBy hpop hflag
         obtain ⟨bodyPre, hbody, hbodyStack, hbodyFrame⟩ :=
           ih suffix armPre (fun candidate hmem =>
-            hbefore candidate (by simp [hmem])) harm harmStack
+            hbefore candidate (by simp only [List.mem_cons, hmem, or_true])) harm harmStack
         exact ⟨bodyPre, hbody, hbodyStack,
           hlineFrame.trans
             ((dispatchFrame_of_popBurnBy hpop).trans
@@ -482,7 +488,7 @@ theorem dispatchBodyWitness_of_runCompiledTo
   rw [hsplit] at hwalk
   have hbefore : ∀ candidate ∈ pre, candidate.1 ≠ selector := by
     intro candidate hcandidate
-    exact selectorUnique_prefix_ne (by simpa [hsplit] using huniq) hcandidate
+    exact selectorUnique_prefix_ne (by simpa only [hsplit] using huniq) hcandidate
   obtain ⟨bodyPre, hbody, hbodyStack, hframe⟩ :=
     dispatch_select_prefix pre suffix entry hbefore hwalk hstack
   exact ⟨bodyPre, hmember, hbody, hbodyStack, hframe⟩
@@ -510,7 +516,7 @@ private theorem dispatch_miss_nonempty
       intro entry _ hmiss hrun hstack
       rcases head with ⟨headSelector, headBody⟩
       have hne : headSelector ≠ selector :=
-        hmiss (headSelector, headBody) (by simp)
+        hmiss (headSelector, headBody) (by simp only [List.mem_cons, true_or])
       cases rest with
       | nil =>
           change Func.RunCompiledTo fs sevm entry
@@ -532,7 +538,7 @@ private theorem dispatch_miss_nonempty
             stack_of_eqRun heq hpushStack
           have hflag : afterEq.stack = (0 : B256) :: tail := by
             rw [hflagStack]
-            simp [B256.eqCheck, hne]
+            simp only [B256.eqCheck, hne, ↓reduceIte]
           have hlineFrame : Devm.DispatchFramePreserved entry afterEq :=
             (pushFrame hpush).trans (eqFrame heq)
           rcases runCompiledTo_branch_inv hbranch with
@@ -548,7 +554,7 @@ private theorem dispatch_miss_nonempty
               (Ninst.dup 0 ::: Ninst.pushB256 headSelector ::: Ninst.eq :::
                 ((Ninst.pop ::: headBody) <?>
                   Blanc.linearDispatchWith fallback (next :: rest'))) out := by
-            simpa [Blanc.linearDispatchWith] using hrun
+            simpa only [Fin.isValue, linearDispatchWith] using hrun
           obtain ⟨afterDup, afterPush, afterEq, hdup, hpush, heq, hbranch⟩ :=
             runCompiledTo_three_inv hrun'
           have hdupStack :
@@ -563,7 +569,7 @@ private theorem dispatch_miss_nonempty
           have hflag :
               afterEq.stack = (0 : B256) :: selector :: tail := by
             rw [hflagStack]
-            simp [B256.eqCheck, hne]
+            simp only [B256.eqCheck, hne, ↓reduceIte]
           have hlineFrame : Devm.DispatchFramePreserved entry afterEq :=
             (dupFrame hdup).trans
               ((pushFrame hpush).trans (eqFrame heq))
@@ -574,7 +580,7 @@ private theorem dispatch_miss_nonempty
               stack_of_popBurnBy hpop hflag
             obtain ⟨fallbackPre, hfallback, hfallbackStack,
                 hfallbackFrame⟩ :=
-              ih armPre (by simp)
+              ih armPre (by simp only [ne_eq, reduceCtorEq, not_false_eq_true])
                 (fun candidate hmem =>
                   hmiss candidate (List.mem_cons_of_mem _ hmem))
                 harm harmStack
@@ -651,7 +657,7 @@ theorem Func.execWitness_linearDispatchWith_fallback
   | cons head rest ih =>
       rcases head with ⟨word, body⟩
       have hne : word ≠ selector :=
-        hmiss (word, body) (by simp)
+        hmiss (word, body) (by simp only [List.mem_cons, true_or])
       cases rest with
       | nil =>
           let callCost := gVerylow + gMid + gJumpdest

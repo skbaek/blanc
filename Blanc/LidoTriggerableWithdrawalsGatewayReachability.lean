@@ -908,7 +908,7 @@ private theorem pauseFiniteLogTail_runCompiledTo
   have hne : duration.toBytes ≠ [] := by
     intro h
     rw [h] at hlen
-    simp at hlen
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
   have hscratchread : (((staged2.write
       ((0 : B256) * 32).toNat duration.toBytes).read 0 32).1) =
       duration.toBytes := by
@@ -945,7 +945,7 @@ private theorem pauseFiniteLogTail_runCompiledTo
         ([Ninst.pushB256 (signatureHash "Paused" [.uint256])] ++
           logWith 0 0 1) +++ Func.stop)
   · exact pushCost_zero
-  · simp
+  · simp only [List.length_nil, Nat.ofNat_pos]
   · intro S G'
     have hscratch64 : staged2.size = 64 := by
       rw [← hstaged2]
@@ -978,7 +978,7 @@ private theorem pauseFiniteLogTail_exact_runCompiledTo
   have hne : duration.toBytes ≠ [] := by
     intro h
     rw [h] at hlen
-    simp at hlen
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
   have hscratchread : (((staged2.write
       ((0 : B256) * 32).toNat duration.toBytes).read 0 32).1) =
       duration.toBytes := by
@@ -1012,7 +1012,7 @@ private theorem pauseFiniteLogTail_exact_runCompiledTo
         ([Ninst.pushB256 (signatureHash "Paused" [.uint256])] ++
           logWith 0 0 1) +++ Func.stop)
   · exact pushCost_zero
-  · simp
+  · simp only [List.length_nil, Nat.ofNat_pos]
   · intro S G'
     have hscratch64 : staged2.size = 64 := by
       rw [← hstaged2]
@@ -1200,7 +1200,7 @@ private theorem pauseForFinite_runCompiledTo
   func_run (2) [0]
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_val =>
-    simp [B256.gtCheck, not_lt_of_ge (le_of_lt htime)]
+    simp only [B256.gtCheck, gt_iff_lt, not_lt_of_ge (le_of_lt htime), ↓reduceIte]
   func_run (1)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   have hgas : G + 21060 - 32 = G + 21028 := by omega
@@ -1239,14 +1239,14 @@ private theorem pauseForUnpausedFinite_runCompiledTo
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_val =>
     rw [show 32 * (0 : B256) + 4 = 4 by decide, harg]
-    simp [B256.eqCheck, hduration]
+    simp only [B256.eqCheck, hduration, ↓reduceIte]
   func_run (1)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   func_run (4) [0]
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_val =>
     rw [show 32 * (0 : B256) + 4 = 4 by decide, harg]
-    simp [B256.eqCheck, Ne.symm hfinite]
+    simp only [B256.eqCheck, Ne.symm hfinite, ↓reduceIte]
   func_run (1)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   have hgas : G + 21107 - 47 = G + 21060 := by omega
@@ -1303,7 +1303,7 @@ private theorem pauseForGuardFinite_runCompiledTo
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_val =>
     rw [Devm.getStorVal_setMach, hresume]
-    simp [B256.ltCheck, hnotlt]
+    simp only [B256.ltCheck, hnotlt, ↓reduceIte]
   func_run (1)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   change Func.RunCompiledTo fs sevm
@@ -1355,7 +1355,7 @@ private theorem pauseForFinite_exact_runCompiledTo
   case h_val =>
     rw [show 32 * (0 : B256) + 4 = 4 by decide, harg]
   case h_val =>
-    simp [B256.gtCheck, not_lt_of_ge (le_of_lt htime)]
+    simp only [B256.gtCheck, gt_iff_lt, not_lt_of_ge (le_of_lt htime), ↓reduceIte]
   func_run (1)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   have hgas : G + 21060 - 32 = G + 21028 := by omega
@@ -1396,14 +1396,14 @@ private theorem pauseForUnpausedFinite_exact_runCompiledTo
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_val =>
     rw [show 32 * (0 : B256) + 4 = 4 by decide, harg]
-    simp [B256.eqCheck, hduration]
+    simp only [B256.eqCheck, hduration, ↓reduceIte]
   func_run (1)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   func_run (4) [0]
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_val =>
     rw [show 32 * (0 : B256) + 4 = 4 by decide, harg]
-    simp [B256.eqCheck, Ne.symm hfinite]
+    simp only [B256.eqCheck, Ne.symm hfinite, ↓reduceIte]
   func_run (1)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   have hgas : G + 21107 - 47 = G + 21060 := by omega
@@ -1461,7 +1461,7 @@ private theorem pauseForGuardFinite_exact_runCompiledTo
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_val =>
     rw [Devm.getStorVal_setMach, hresume]
-    simp [B256.ltCheck, hnotlt]
+    simp only [B256.ltCheck, hnotlt, ↓reduceIte]
   func_run (1)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   change Func.RunCompiledTo fs sevm
@@ -1546,7 +1546,7 @@ private theorem routeSkipped_runCompiledTo
         (taken <?> tail)) (.ok post) := by
   func_run (4) [0]
   case h_val =>
-    simp [B256.eqCheck, Ne.symm hne]
+    simp only [B256.eqCheck, Ne.symm hne, ↓reduceIte]
   have hgas : G + 22 - 22 = G := by omega
   rw [hgas]
   exact htail
@@ -1718,7 +1718,7 @@ theorem pauseForFinite_exec
     apply selector_eq_of_data_eq_abiSelectorBytes_append
       (selected := selPauseFor) (tail := duration.toBytes)
     · rfl
-    · simpa [pauseForCalldata] using hdata'
+    · simpa only [pauseForCalldata] using hdata'
   have hsize : (initSevm m).data.length.toB256 <? 36 = 0 := by
     rw [hdata', pauseForCalldata_length]
     decide
@@ -1727,7 +1727,7 @@ theorem pauseForFinite_exec
       (pre := abiSelectorBytes selPauseFor) (post := [])
     · rw [abiSelectorBytes_length]
       rfl
-    · simpa [pauseForCalldata] using hdata'
+    · simpa only [List.append_nil, pauseForCalldata] using hdata'
   have walk := pauseForFinite_runtime_runCompiledTo (hfork := hfork)
     (dp := dp) (sevm := initSevm m) (base := initDevm m)
     (duration := duration) (G := G) hguard hselector hsize hvalue
@@ -1757,7 +1757,7 @@ private theorem pauseSentinelEventTail_runCompiledTo
   have hne : pauseInfinitely.toBytes ≠ [] := by
     intro h
     rw [h] at hlen
-    simp at hlen
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
   have hscratchread : (((staged9.write
       ((0 : B256) * 32).toNat pauseInfinitely.toBytes).read 0 32).1) =
       pauseInfinitely.toBytes := by
@@ -1796,7 +1796,7 @@ private theorem pauseSentinelEventTail_runCompiledTo
         ([Ninst.pushB256 (signatureHash "Paused" [.uint256])] ++
           logWith 0 0 1) +++ Func.stop)
   · exact pushCost_zero
-  · simp
+  · simp only [List.length_nil, Nat.ofNat_pos]
   · intro S G'
     have hscratch64 : staged9.size = 64 := by
       rw [← hstagedS]
@@ -1826,7 +1826,7 @@ private theorem pauseSentinelEventTail_exact_runCompiledTo
   have hne : pauseInfinitely.toBytes ≠ [] := by
     intro h
     rw [h] at hlen
-    simp at hlen
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
   have hscratchread : (((staged9.write
       ((0 : B256) * 32).toNat pauseInfinitely.toBytes).read 0 32).1) =
       pauseInfinitely.toBytes := by
@@ -1864,7 +1864,7 @@ private theorem pauseSentinelEventTail_exact_runCompiledTo
         ([Ninst.pushB256 (signatureHash "Paused" [.uint256])] ++
           logWith 0 0 1) +++ Func.stop)
   · exact pushCost_zero
-  · simp
+  · simp only [List.length_nil, Nat.ofNat_pos]
   · intro S G'
     have hscratch64 : staged9.size = 64 := by
       rw [← hstagedS]
@@ -2006,7 +2006,7 @@ private theorem pauseForUnpausedSentinel_runCompiledTo
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_val =>
     rw [show 32 * (0 : B256) + 4 = 4 by decide, harg]
-    simp [B256.eqCheck]
+    simp only [B256.eqCheck, ↓reduceIte]
   func_run (1)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   have hgas : G + 21076 - 48 = G + 21028 := by omega
@@ -2048,7 +2048,7 @@ private theorem pauseForUnpausedSentinel_exact_runCompiledTo
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_val =>
     rw [show 32 * (0 : B256) + 4 = 4 by decide, harg]
-    simp [B256.eqCheck]
+    simp only [B256.eqCheck, ↓reduceIte]
   func_run (1)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   have hgas : G + 21076 - 48 = G + 21028 := by omega
@@ -2100,7 +2100,7 @@ private theorem pauseForGuardSentinel_exact_runCompiledTo
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_val =>
     rw [Devm.getStorVal_setMach, hresume]
-    simp [B256.ltCheck, hnotlt]
+    simp only [B256.ltCheck, hnotlt, ↓reduceIte]
   func_run (1)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   change Func.RunCompiledTo fs sevm
@@ -2213,7 +2213,7 @@ theorem pauseForSentinel_exec
     apply selector_eq_of_data_eq_abiSelectorBytes_append
       (selected := selPauseFor) (tail := pauseInfinitely.toBytes)
     · rfl
-    · simpa [pauseForCalldata] using hdata'
+    · simpa only [pauseForCalldata] using hdata'
   have hsize : (initSevm m).data.length.toB256 <? 36 = 0 := by
     rw [hdata', pauseForCalldata_length]
     decide
@@ -2222,7 +2222,7 @@ theorem pauseForSentinel_exec
       (pre := abiSelectorBytes selPauseFor) (post := [])
     · rw [abiSelectorBytes_length]
       rfl
-    · simpa [pauseForCalldata] using hdata'
+    · simpa only [List.append_nil, pauseForCalldata] using hdata'
   have walk := pauseForSentinel_runtime_exact_runCompiledTo (hfork := hfork)
     (dp := dp) (sevm := initSevm m) (base := initDevm m) (G := G)
     hguard hselector hsize hvalue hmembership hcold harg hresume horiginal
@@ -2273,7 +2273,7 @@ private theorem isPaused_true_warm_runCompiledTo
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     case h_val =>
       rw [Devm.getStorVal_setMach, hstored]
-      simp [B256.ltCheck, hpaused]
+      simp only [B256.ltCheck, hpaused, ↓reduceIte]
     case h_ext => exact Devm.extCost_empty_word
     case a =>
       apply Func.runCompiledTo_return_word (i := 0) (sz := 32) (s := [])
@@ -2415,7 +2415,7 @@ theorem isPaused_true_warm_exec
     apply selector_eq_of_data_eq_abiSelectorBytes_append
       (selected := selIsPaused) (tail := [])
     · rfl
-    · simpa [isPausedCalldata] using hdata'
+    · simpa only [List.append_nil, isPausedCalldata] using hdata'
   obtain ⟨post, walk, output, stored, gas, error, hmeta, world⟩ :=
     isPaused_true_warm_runtime_runCompiledTo (hfork := hfork)
       (dp := dp) (sevm := initSevm m) (base := initDevm m)
@@ -2457,7 +2457,7 @@ private theorem isPaused_true_cold_runCompiledTo
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     case h_val =>
       rw [Devm.getStorVal_setMach, hstored]
-      simp [B256.ltCheck, hpaused]
+      simp only [B256.ltCheck, hpaused, ↓reduceIte]
     case h_ext => exact Devm.extCost_empty_word
     case a =>
       apply Func.runCompiledTo_return_word (i := 0) (sz := 32) (s := [])

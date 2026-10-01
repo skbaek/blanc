@@ -20,17 +20,17 @@ def Devm.EqModGas : Devm → Devm → Prop :=
   Devm.Rel { Devm.Rels.eq with gasLeft := fun _ _ => True }
 
 theorem Devm.EqModGas.refl (a : Devm) : EqModGas a a := by
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp [Devm.Rels.eq]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp only [Devm.Rels.eq]
 
 theorem Devm.EqModGas.symm {a b : Devm} (h : EqModGas a b) : EqModGas b a := by
   rcases h with ⟨hs, hm, -, hl, hr, ho, had, hrd, he, haa, has, hst, hca, hts, hsg, har, hsr⟩
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all [Devm.Rels.eq]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all only [Devm.Rels.eq]
 
 theorem Devm.EqModGas.trans {a b c : Devm}
     (h1 : EqModGas a b) (h2 : EqModGas b c) : EqModGas a c := by
   rcases h1 with ⟨hs1, hm1, -, hl1, hr1, ho1, had1, hrd1, he1, haa1, has1, hst1, hca1, hts1, hsg1, har1, hsr1⟩
   rcases h2 with ⟨hs2, hm2, -, hl2, hr2, ho2, had2, hrd2, he2, haa2, has2, hst2, hca2, hts2, hsg2, har2, hsr2⟩
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all [Devm.Rels.eq]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all only [Devm.Rels.eq]
 
 /-- Two `Burn` steps from agreeing states land on agreeing states. -/
 theorem Devm.EqModGas.of_burn {a a' b b' : Devm}
@@ -39,7 +39,7 @@ theorem Devm.EqModGas.of_burn {a a' b b' : Devm}
   rcases h1 with ⟨hs1, hm1, -, hl1, hr1, ho1, had1, hrd1, he1, haa1, has1, hst1, hca1, hts1, hsg1, har1, hsr1⟩
   rcases h2 with ⟨hs2, hm2, -, hl2, hr2, ho2, had2, hrd2, he2, haa2, has2, hst2, hca2, hts2, hsg2, har2, hsr2⟩
   rcases h with ⟨hs, hm, -, hl, hr, ho, had, hrd, he, haa, has, hst, hca, hts, hsg, har, hsr⟩
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all [Devm.Rels.eq]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all only [Devm.Rels.eq]
 
 /-- Two `Pop` steps from agreeing states pop equal words onto agreeing states. -/
 theorem Devm.EqModGas.of_pop {a a₁ b b₁ : Devm} {x y : B256}
@@ -50,9 +50,10 @@ theorem Devm.EqModGas.of_pop {a a₁ b b₁ : Devm} {x y : B256}
   rcases h with ⟨hs, hm, -, hl, hr, ho, had, hrd, he, haa, has, hst, hca, hts, hsg, har, hsr⟩
   simp only [Stack.Pop, Split, Devm.Rels.eq] at *
   have hcons : x :: a₁.stack = y :: b₁.stack := by
-    simpa using hs1.symm.trans (hs.trans hs2)
+    simpa only [List.cons.injEq, List.cons_append, List.nil_append] using
+      hs1.symm.trans (hs.trans hs2)
   rcases List.cons_eq_cons.mp hcons with ⟨hxy, hstk⟩
-  refine ⟨hxy, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all [Devm.Rels.eq]
+  refine ⟨hxy, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all only [List.cons_append, List.nil_append, Devm.Rels.eq]
 
 /-- Two `Push` steps of the same word from agreeing states land agreeing. -/
 theorem Devm.EqModGas.of_push {a a₁ b b₁ : Devm} {x : B256}
@@ -62,7 +63,7 @@ theorem Devm.EqModGas.of_push {a a₁ b b₁ : Devm} {x : B256}
   rcases h2 with ⟨hs2, hm2, hg2, hl2, hr2, ho2, had2, hrd2, he2, haa2, has2, hst2, hca2, hts2, hsg2, har2, hsr2⟩
   rcases h with ⟨hs, hm, -, hl, hr, ho, had, hrd, he, haa, has, hst, hca, hts, hsg, har, hsr⟩
   simp only [Stack.Push, Split, Devm.Rels.eq] at *
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all [Devm.Rels.eq]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all only [List.cons_append, List.nil_append, Devm.Rels.eq]
 
 /-- Two `PopBurn` steps from agreeing states pop equal words onto agreeing states. -/
 theorem Devm.EqModGas.of_popBurn {a a' b b' : Devm} {x y : B256}
@@ -73,9 +74,10 @@ theorem Devm.EqModGas.of_popBurn {a a' b b' : Devm} {x y : B256}
   rcases h with ⟨hs, hm, -, hl, hr, ho, had, hrd, he, haa, has, hst, hca, hts, hsg, har, hsr⟩
   simp only [Stack.Pop, Split, Devm.Rels.eq] at *
   have hcons : x :: a'.stack = y :: b'.stack := by
-    simpa using hs1.symm.trans (hs.trans hs2)
+    simpa only [List.cons.injEq, List.cons_append, List.nil_append] using
+      hs1.symm.trans (hs.trans hs2)
   rcases List.cons_eq_cons.mp hcons with ⟨hxy, hstk⟩
-  refine ⟨hxy, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all [Devm.Rels.eq]
+  refine ⟨hxy, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all only [List.cons_append, List.nil_append, Devm.Rels.eq]
 
 /-- Two `PushBurn` steps of the same word from agreeing states land agreeing. -/
 theorem Devm.EqModGas.of_pushBurn {a a' b b' : Devm} {x : B256}
@@ -85,7 +87,7 @@ theorem Devm.EqModGas.of_pushBurn {a a' b b' : Devm} {x : B256}
   rcases h2 with ⟨hs2, hm2, -, hl2, hr2, ho2, had2, hrd2, he2, haa2, has2, hst2, hca2, hts2, hsg2, har2, hsr2⟩
   rcases h with ⟨hs, hm, -, hl, hr, ho, had, hrd, he, haa, has, hst, hca, hts, hsg, har, hsr⟩
   simp only [Stack.Push, Split, Devm.Rels.eq] at *
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all [Devm.Rels.eq]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all only [List.cons_append, List.nil_append, Devm.Rels.eq]
 
 /-- `memWrite` of equal indices/values from agreeing states lands agreeing. -/
 theorem Devm.EqModGas.of_memWrite {a b : Devm} {i : Nat} {v : Bytes}
@@ -124,7 +126,7 @@ theorem Devm.EqModGas.of_memWrite {a b : Devm} {i : Nat} {v : Bytes}
   have hmar' : (b.memWrite i v).meta.accountReads = b.meta.accountReads := rfl
   have hmsr : (a.memWrite i v).meta.storageReads = a.meta.storageReads := rfl
   have hmsr' : (b.memWrite i v).meta.storageReads = b.meta.storageReads := rfl
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all [Devm.Rels.eq]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all only [memWrite_memory, Devm.Rels.eq]
 
 /-- `addAccessedStorageKey` from agreeing states lands agreeing. -/
 theorem Devm.EqModGas.of_addAccessedStorageKey {a b : Devm} {t : Adr} {k : B256}
@@ -166,7 +168,7 @@ theorem Devm.EqModGas.of_addAccessedStorageKey {a b : Devm} {t : Adr} {k : B256}
   have har0' : (addAccessedStorageKey b t k).meta.accountReads = b.meta.accountReads := rfl
   have hsr0 : (addAccessedStorageKey a t k).meta.storageReads = a.meta.storageReads := rfl
   have hsr0' : (addAccessedStorageKey b t k).meta.storageReads = b.meta.storageReads := rfl
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all [Devm.Rels.eq]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all only [Devm.Rels.eq]
 
 /-- BAL storage reads preserve agreement: both sides record the same key. -/
 theorem Devm.EqModGas.of_balReadStorage {a b : Devm} {rules : ForkRules}
@@ -235,9 +237,9 @@ theorem Devm.EqModGas.of_balReadStorage {a b : Devm} {rules : ForkRules}
   have hsr0 : (a.balReadStorage rules t k).meta.storageReads =
       (b.balReadStorage rules t k).meta.storageReads := by
     by_cases hbal : rules.bal.isSome
-    · simp [Devm.balReadStorage, Devm.setMeta, Meta.readStorage, hbal, hsr]
-    · simp [Devm.balReadStorage, Devm.setMeta, hbal, hsr]
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all [Devm.Rels.eq]
+    · simp only [Devm.balReadStorage, Devm.setMeta, hbal, ↓reduceIte, Meta.readStorage, hsr]
+    · simp only [Devm.balReadStorage, Devm.setMeta, hbal, Bool.false_eq_true, ↓reduceIte, hsr]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all only [Devm.balReadStorage_stack, Devm.balReadStorage_refundCounter, Devm.balReadStorage_accessedAddresses, Devm.balReadStorage_accessedStorageKeys, Devm.balReadStorage_state, Devm.balReadStorage_createdAccounts, Devm.balReadStorage_transientStorage, Devm.balReadStorage_stateGas, Devm.Rels.eq]
 
 /-- BAL account reads preserve agreement: both sides record the same address. -/
 theorem Devm.EqModGas.of_balReadAccount {a b : Devm} {rules : ForkRules}
@@ -302,13 +304,13 @@ theorem Devm.EqModGas.of_balReadAccount {a b : Devm} {rules : ForkRules}
   have har0 : (a.balReadAccount rules t).meta.accountReads =
       (b.balReadAccount rules t).meta.accountReads := by
     by_cases hbal : rules.bal.isSome
-    · simp [Devm.balReadAccount, Devm.setMeta, Meta.readAccount, hbal, har]
-    · simp [Devm.balReadAccount, Devm.setMeta, hbal, har]
+    · simp only [Devm.balReadAccount, Devm.setMeta, hbal, ↓reduceIte, Meta.readAccount, har]
+    · simp only [Devm.balReadAccount, Devm.setMeta, hbal, Bool.false_eq_true, ↓reduceIte, har]
   have hsr0 : (a.balReadAccount rules t).meta.storageReads = a.meta.storageReads := by
     unfold Devm.balReadAccount; split <;> rfl
   have hsr0' : (b.balReadAccount rules t).meta.storageReads = b.meta.storageReads := by
     unfold Devm.balReadAccount; split <;> rfl
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all [Devm.Rels.eq]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all only [Devm.balReadAccount_stack, Devm.balReadAccount_logs, Devm.balReadAccount_refundCounter, Devm.balReadAccount_accessedAddresses, Devm.balReadAccount_accessedStorageKeys, Devm.balReadAccount_state, Devm.balReadAccount_createdAccounts, Devm.balReadAccount_transientStorage, Devm.balReadAccount_stateGas, Devm.Rels.eq]
 
 /-- `withRefundCounter` of equal refunds from agreeing states lands agreeing. -/
 theorem Devm.EqModGas.of_withRefundCounter {a b : Devm} {r : Int}
@@ -348,7 +350,7 @@ theorem Devm.EqModGas.of_withRefundCounter {a b : Devm} {r : Int}
   have har0' : (b.withRefundCounter r).meta.accountReads = b.meta.accountReads := rfl
   have hsr0 : (a.withRefundCounter r).meta.storageReads = a.meta.storageReads := rfl
   have hsr0' : (b.withRefundCounter r).meta.storageReads = b.meta.storageReads := rfl
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all [Devm.Rels.eq]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all only [Devm.Rels.eq]
 
 /-- `setStorVal` of equal args from agreeing states lands agreeing. -/
 theorem Devm.EqModGas.of_setStorVal {a b : Devm} {t : Adr} {k v : B256}
@@ -388,7 +390,7 @@ theorem Devm.EqModGas.of_setStorVal {a b : Devm} {t : Adr} {k v : B256}
   have har0' : (b.setStorVal t k v).meta.accountReads = b.meta.accountReads := rfl
   have hsr0 : (a.setStorVal t k v).meta.storageReads = a.meta.storageReads := rfl
   have hsr0' : (b.setStorVal t k v).meta.storageReads = b.meta.storageReads := rfl
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all [Devm.Rels.eq]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all only [Devm.Rels.eq]
 
 /-- `withMemory` of equal memories from agreeing states lands agreeing. -/
 theorem Devm.EqModGas.of_withMemory {a b : Devm} {m : Mem}
@@ -427,7 +429,7 @@ theorem Devm.EqModGas.of_withMemory {a b : Devm} {m : Mem}
   have har0' : (b.withMemory m).meta.accountReads = b.meta.accountReads := rfl
   have hsr0 : (a.withMemory m).meta.storageReads = a.meta.storageReads := rfl
   have hsr0' : (b.withMemory m).meta.storageReads = b.meta.storageReads := rfl
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all [Devm.Rels.eq]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all only [Devm.Rels.eq]
 
 /-- `withStack` of equal stacks from agreeing states lands agreeing. -/
 theorem Devm.EqModGas.of_withStack {a b : Devm} {s : Stack}
@@ -466,14 +468,14 @@ theorem Devm.EqModGas.of_withStack {a b : Devm} {s : Stack}
   have har0' : (b.withStack s).meta.accountReads = b.meta.accountReads := rfl
   have hsr0 : (a.withStack s).meta.storageReads = a.meta.storageReads := rfl
   have hsr0' : (b.withStack s).meta.storageReads = b.meta.storageReads := rfl
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all [Devm.Rels.eq]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> simp_all only [Devm.Rels.eq]
 
 /-- Memory expansion cost agrees on agreeing states. -/
 theorem Devm.EqModGas.extCost_congr {a b : Devm} {l : List (Nat × Nat)}
     (h : EqModGas a b) : a.extCost l = b.extCost l := by
   have hm : a.memory = b.memory := by
     rcases h with ⟨_, hm, _, _, _, _, _, _, _, _, _, _, _, _⟩
-    simpa [Devm.Rels.eq] using hm
+    simpa only [Devm.Rels.eq] using hm
   unfold Devm.extCost
   rw [hm]
 
@@ -482,7 +484,7 @@ theorem Devm.EqModGas.getStorVal_congr {a b : Devm} {t : Adr} {k : B256}
     (h : EqModGas a b) : a.getStorVal t k = b.getStorVal t k := by
   have hst : a.state = b.state := by
     rcases h with ⟨_, _, _, _, _, _, _, _, _, _, _, hst, _, _⟩
-    simpa [Devm.Rels.eq] using hst
+    simpa only [Devm.Rels.eq] using hst
   unfold Devm.getStorVal Devm.getAcct
   rw [hst]
 
@@ -493,7 +495,7 @@ theorem Devm.EqModGas.memRead_congr {a b : Devm} {i n : Nat}
       EqModGas (a.memRead i n).2 (b.memRead i n).2 := by
   have hm : a.memory = b.memory := by
     rcases h with ⟨_, hm, _, _, _, _, _, _, _, _, _, _, _, _⟩
-    simpa [Devm.Rels.eq] using hm
+    simpa only [Devm.Rels.eq] using hm
   have hread : a.memory.read i n = b.memory.read i n := by rw [hm]
   simp only [Devm.memRead, hread]
   refine ⟨trivial, ?_⟩
@@ -677,7 +679,7 @@ private theorem popBurn_of_run_pop {e : Sevm} {a a' : Devm} {pc : Nat}
   simp only [Rinst.run, Rinst.runCore] at h
   rcases Except.bind_eq_ok h with ⟨a1, hmap, hburn⟩
   simp only [Functor.mapRev, Functor.map, Except.map] at hmap
-  rcases hp : Devm.pop a with _ | ⟨x, a2⟩ <;> simp [hp] at hmap
+  rcases hp : Devm.pop a with _ | ⟨x, a2⟩ <;> simp only [hp, reduceCtorEq, Except.ok.injEq] at hmap
   subst hmap
   exact ⟨x, Devm.popBurn_of_pop_of_burn (Devm.pop_of_pop hp)
     (Devm.burn_of_chargeGas hburn)⟩
@@ -767,7 +769,7 @@ private theorem run_sload {e : Sevm} {a a' b b' : Devm} {pc1 pc2 : Nat}
   obtain ⟨hkey, hag1⟩ := h.of_pop (Devm.pop_of_pop hp1) (Devm.pop_of_pop hp2)
   have hasa1 : a1.accessedStorageKeys = b1.accessedStorageKeys := by
     rcases hag1 with ⟨_, _, _, _, _, _, _, _, _, _, has, _, _, _⟩
-    simpa [Devm.Rels.eq] using has
+    simpa only [Devm.Rels.eq] using has
   have hcond : (⟨e.currentTarget, k1⟩ ∈ a1.accessedStorageKeys) ↔
       (⟨e.currentTarget, k2⟩ ∈ b1.accessedStorageKeys) := by
     rw [hkey, hasa1]
@@ -835,10 +837,10 @@ private theorem run_sstore {e : Sevm} {a a' b b' : Devm} {pc1 pc2 : Nat}
   obtain ⟨hnew, hag2⟩ := hag1.of_pop (Devm.pop_of_pop hq1) (Devm.pop_of_pop hq2)
   have hasa2 : a2.accessedStorageKeys = b2.accessedStorageKeys := by
     rcases hag2 with ⟨_, _, _, _, _, _, _, _, _, _, has, _, _, _⟩
-    simpa [Devm.Rels.eq] using has
+    simpa only [Devm.Rels.eq] using has
   have hsta2 : a2.state = b2.state := by
     rcases hag2 with ⟨_, _, _, _, _, _, _, _, _, _, _, hst, _, _⟩
-    simpa [Devm.Rels.eq] using hst
+    simpa only [Devm.Rels.eq] using hst
   injection hacc1 with hacc1
   injection hacc2 with hacc2
   simp only [Devm.balReadStorage_accessedStorageKeys] at hacc1 hacc2
@@ -886,7 +888,7 @@ private theorem run_sstore {e : Sevm} {a a' b b' : Devm} {pc1 pc2 : Nat}
     rw [horig, hcurr, hnew, hg2eq]
   have hrc : a3.refundCounter = b3.refundCounter := by
     rcases hag3 with ⟨_, _, _, _, hrc, _, _, _, _, _, _, _, _, _⟩
-    simpa [Devm.Rels.eq] using hrc
+    simpa only [Devm.Rels.eq] using hrc
   have hrf : sstoreNewRefundCounter e.benvStat.rules.gas n1
         (getOrigStorVal e e.currentTarget k1)
         (a2.getStorVal e.currentTarget k1) a3.refundCounter =
@@ -930,7 +932,7 @@ private theorem run_dup {n : Fin 16} {e : Sevm} {a a' b b' : Devm}
     · rename_i w2 hw2
       have hst : c1.stack = c2.stack := by
         rcases hagc with ⟨hst, _, _, _, _, _, _, _, _, _, _, _, _, _⟩
-        simpa [Devm.Rels.eq] using hst
+        simpa only [Devm.Rels.eq] using hst
       have hw : w1 = w2 := by
         rw [hst] at hw1
         exact Option.some.inj (hw1.symm.trans hw2)
@@ -954,7 +956,7 @@ private theorem run_swap {n : Fin 16} {e : Sevm} {a a' b b' : Devm}
     · rename_i s2 hsw2
       have hst : c1.stack = c2.stack := by
         rcases hagc with ⟨hst, _, _, _, _, _, _, _, _, _, _, _, _, _⟩
-        simpa [Devm.Rels.eq] using hst
+        simpa only [Devm.Rels.eq] using hst
       have hs12 : s1 = s2 := by
         rw [hst] at hsw1
         exact Option.some.inj (hsw1.symm.trans hsw2)
@@ -1019,13 +1021,13 @@ theorem Ninst.run_eqModGas {e : Sevm} {a a' b b' : Devm} {i : Ninst}
   | push xs le =>
     exact h.of_pushBurn (of_run_push h1) (of_run_push h2)
   | exec x =>
-    simp [Ninst.gasFree] at hfree
+    simp only [gasFree, Bool.false_eq_true] at hfree
   | dupn u =>
-    simp [Ninst.gasFree] at hfree
+    simp only [gasFree, Bool.false_eq_true] at hfree
   | swapn u =>
-    simp [Ninst.gasFree] at hfree
+    simp only [gasFree, Bool.false_eq_true] at hfree
   | exchange u =>
-    simp [Ninst.gasFree] at hfree
+    simp only [gasFree, Bool.false_eq_true] at hfree
 
 /-- Two successful runs of a gas-free line from agreeing states land on
 agreeing states. -/

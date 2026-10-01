@@ -81,7 +81,7 @@ theorem callbackC_of_child_at (hg : CoveredFork g) (d3 : Devm)
       (callResume_withFork hf3 hg _ _ _ _ _ _).trans hc
     generalize hr : wrun fs3 e3C.sta 2 c = r at hk ⊢
     rcases r with c' | ⟨d | d, cl⟩ | _
-    · simp [obs3C] at hk
+    · simp only [obs3C, reduceCtorEq] at hk
     · simp only [obs3C, Option.some.injEq, Prod.mk.injEq, Bool.and_eq_true,
         decide_eq_true_eq] at hk
       obtain ⟨hgas, ho, ⟨⟨⟨⟨he, hkk⟩, hka⟩, hks⟩, hrf⟩, hkc, hatd⟩ := hk
@@ -95,9 +95,9 @@ theorem callbackC_of_child_at (hg : CoveredFork g) (d3 : Devm)
       rw [hkk, hka, hks, hkc] at hag
       exact ⟨hok, hag, hgas, List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) ho,
         herr, hrf, hatd⟩
-    · simp [obs3C] at hk
-    · simp [obs3C] at hk
-  · simp [obs3C] at hk
+    · simp only [obs3C, reduceCtorEq] at hk
+    · simp only [obs3C, reduceCtorEq] at hk
+  · simp only [obs3C, reduceCtorEq] at hk
 
 /-- **The callback subtree as frame 2's child** (tx frames 3-5), under any covered fork. -/
 theorem callbackC_child_at (hg : CoveredFork g) :

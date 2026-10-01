@@ -108,9 +108,9 @@ theorem increase_setBal (l : Ledger) (a : Adr) (v : B256) :
   by_cases h : a = b
   · subst h
     refine ⟨fun _ => ?_, fun h' => absurd rfl h'⟩
-    simp
+    simp only [setBal_bal, Function.update_self]
   · refine ⟨fun h' => absurd h' h, fun _ => ?_⟩
-    simp [Function.update_of_ne (Ne.symm h)]
+    simp only [setBal_bal, Function.update_of_ne (Ne.symm h)]
 
 theorem decrease_setBal (l : Ledger) (a : Adr) (v : B256) :
     Decrease a v l.bal (l.setBal a (l.bal a - v)).bal := by
@@ -118,9 +118,9 @@ theorem decrease_setBal (l : Ledger) (a : Adr) (v : B256) :
   by_cases h : a = b
   · subst h
     refine ⟨fun _ => ?_, fun h' => absurd rfl h'⟩
-    simp
+    simp only [setBal_bal, Function.update_self]
   · refine ⟨fun h' => absurd h' h, fun _ => ?_⟩
-    simp [Function.update_of_ne (Ne.symm h)]
+    simp only [setBal_bal, Function.update_of_ne (Ne.symm h)]
 
 /-- A credit raises the total by at most the credit. -/
 theorem sum_deposit_le (l : Ledger) (a : Adr) (v : B256) :
@@ -157,8 +157,8 @@ theorem transferFrom_total_le {l l' : Ledger} {who src dst : Adr} {wad : B256}
     · cases h
     · cases h
       have := sum_xfer_le (l.setAllow src who (l.allow src who - wad)) src dst
-        (wad := wad) (by simpa using hle)
-      simpa [total] using this
+        (wad := wad) (by simpa only [setAllow_bal] using hle)
+      simpa only [total, ge_iff_le, setAllow_bal] using this
   · cases h
     exact sum_xfer_le l src dst hle
 
@@ -218,7 +218,7 @@ theorem step_total_le {l l' : Ledger} {c : Call} (h : l.step c = some l') :
   | approve who g w =>
       rw [step_approve] at h
       cases h
-      simp [total, Call.inflow]
+      simp only [total, setAllow_bal, Call.inflow, add_zero, Std.le_refl]
 
 end Ledger
 

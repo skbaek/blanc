@@ -38,7 +38,7 @@ private theorem singletonUnits (state : State) :
       pieN (state.getStor concreteCreateTarget) concreteCreateSender := by
   unfold coalitionUnits
   rw [Finset.toList_singleton]
-  simp
+  simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero]
 
 theorem concreteDeployed_snapshot :
     snapshot {concreteCreateSender} concreteCreateTarget concreteDeployed.state =
@@ -238,7 +238,7 @@ theorem concreteHistory_not_draftedKinds (joiner exiter : Adr) :
   rw [entry2, rho1] at rho2
   rw [entry3, rho2] at rho3
   rw [final] at rho3
-  simp at rho3
+  simp only [add_zero, Nat.reduceAdd, Nat.reduceEqDiff] at rho3
 
 end Drip
 

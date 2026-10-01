@@ -64,7 +64,7 @@ theorem two_mem_precompiles {f : Fork} (hf : CoveredFork f) :
 /-- Empty code is not a delegation designator. -/
 theorem getDelegatedCodeAddress_empty : getDelegatedCodeAddress ByteArray.empty = none := by
   have h : ¬ isValidDelegation ByteArray.empty := fun h => absurd h.1 (by decide)
-  simp [getDelegatedCodeAddress, h]
+  simp only [getDelegatedCodeAddress, h, ↓reduceIte]
 
 /-- **The environment part of `beaconEntry` at every deposit frame is derived.**  Warmth of `2`
 from the transaction pre-warm, no delegation at `2` from empty code at the checkpoint, no
@@ -192,12 +192,16 @@ theorem not_mem_systemTargets_of_installed {w : State} {ca : Adr}
     simp only [systemContracts, List.mem_cons, List.not_mem_nil, or_false] at hp
     rcases hp with rfl | rfl | rfl | rfl <;> revert this <;> decide +kernel
   rcases hmem with rfl | rfl | rfl | rfl
-  · exact hsize (beaconRootsAddress, beaconRootsCode) (by simp [systemContracts]) rfl
-  · exact hsize (historyStorageAddress, historyStorageCode) (by simp [systemContracts]) rfl
+  · exact hsize (beaconRootsAddress, beaconRootsCode) (by simp only [systemContracts,
+    List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or]) rfl
+  · exact hsize (historyStorageAddress, historyStorageCode) (by simp only [systemContracts,
+    List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or, or_true]) rfl
   · exact hsize (withdrawalRequestPredeployAddress, withdrawalRequestCode)
-      (by simp [systemContracts]) rfl
+      (by simp only [systemContracts, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+        true_or, or_true]) rfl
   · exact hsize (consolidationRequestPredeployAddress, consolidationRequestCode)
-      (by simp [systemContracts]) rfl
+      (by simp only [systemContracts, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+        or_true]) rfl
 
 /-- **The system exclusion is derived** from the canonical system code being installed at the
 checkpoint. -/

@@ -67,7 +67,8 @@ private theorem size_writeZero_word_of_le
     {M : Mem} {w : B256} (h : 32 ≤ M.size) :
     (M.write 0 w.toBytes).size = M.size := by
   rcases hb : w.toBytes with _ | ⟨b, bs⟩
-  · exact absurd (hb ▸ B256.length_toBytes w) (by simp)
+  · exact absurd (hb ▸ B256.length_toBytes w) (by simp only [List.length_nil,
+    OfNat.zero_ne_ofNat, not_false_eq_true])
   · have hlen : (b :: bs).length = 32 := hb ▸ B256.length_toBytes w
     simp only [Mem.write, hlen, Nat.zero_add]
     rw [if_pos h]
@@ -216,9 +217,8 @@ theorem temporalSstorePost_self
     (sevm : Sevm) (base : Devm) (key value : B256) :
     (temporalSstorePost sevm base key value).getStorVal
       sevm.currentTarget key = value := by
-  simp [temporalSstorePost, Devm.getStorVal, Devm.getAcct,
-    Devm.setStorVal, Devm.withState, Devm.setWorld, State.setStorVal,
-    Devm.state, State.get_set_self, Stor.get_set_self]
+  simp only [Devm.getStorVal, Devm.getAcct, Devm.state, temporalSstorePost, Devm.setStorVal,
+    Devm.withState, Devm.setWorld, State.setStorVal, State.get_set_self, Stor.get_set_self]
 
 theorem temporalSstorePost_accessedStorageKeys
     (sevm : Sevm) (base : Devm) (key value : B256) :
@@ -310,11 +310,13 @@ theorem finishSetPauser_registerAfterSet_runCompiled
     rw [Mem.Reads.read hreads]
     exact hcontinuation
   have hreadZero : M.read 0 0 = ([], M) := by
-    simp [Mem.read, Mem.extend, memExtSize]
+    simp only [Mem.read, Mem.extend, memExtSize, ↓reduceIte, Prod.mk.injEq, and_true]
     rfl
   let fs := (runtime dp).main :: (runtime dp).aux
   have hlookup : fs[registerAfterSetSlot]? = some registerAfterSet := by
-    simp [fs, runtime, aux, registerAfterSetSlot]
+    simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      registerAfterSetSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero, fs]
   have hcall : Func.RunCompiled fs sevm
       (eventBase.setMach ⟨stack, M, G + 12, eventBase.stateGas⟩)
       (.call registerAfterSetSlot) post := by
@@ -393,7 +395,9 @@ theorem afterOldPauser_removeTarget_runCompiled
       (base.setMach ⟨stack, M, G + 35, base.stateGas⟩) afterOldPauser post := by
   let fs := (runtime dp).main :: (runtime dp).aux
   have hlookup : fs[removeTargetSlot]? = some removeTarget := by
-    simp [fs, runtime, aux, removeTargetSlot]
+    simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      removeTargetSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero, fs]
   have hcall : Func.RunCompiled fs sevm
       (base.setMach ⟨stack, M, G + 12, base.stateGas⟩)
       (.call removeTargetSlot) post := by
@@ -492,7 +496,7 @@ theorem afterOldPauser_finishSetPauser_runCompiled
     temporalSloadBase_warm sevm base countKey
   let fs := (runtime dp).main :: (runtime dp).aux
   have hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser := by
-    simp [fs, runtime, aux, finishSetPauserSlot]
+    simp only [fs, runtime, aux, finishSetPauserSlot, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   have hfinishCall : Func.RunCompiled fs sevm
       (countPost.setMach ⟨stack, M, G + 12, countPost.stateGas⟩)
       (.call finishSetPauserSlot) post := by
@@ -529,7 +533,7 @@ theorem afterOldPauser_finishSetPauser_runCompiled
     func_run (4) [3, countKey]
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     all_goals try {
-      simpa [countKey, countSlot, slot] using
+      simpa only [countKey, countSlot, slot] using
         congrArg (fun x : B256 => (regionWord countRegion).or x) hnewValue }
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign hnewCovered]
@@ -572,7 +576,7 @@ theorem afterOldPauser_finishSetPauser_runCompiled
     func_run (4) [3, countKey]
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     all_goals try {
-      simpa [countKey, countSlot, slot] using
+      simpa only [countKey, countSlot, slot] using
         congrArg (fun x : B256 => (regionWord countRegion).or x) hnewValue }
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign hnewCovered]
@@ -679,9 +683,8 @@ theorem targetKey_prepend_runCompiled
       (targetKey +++ tail) post := by
   func_run (4) [3, assignmentSlot target]
   all_goals try {
-    simpa [assignmentSlot, slot] using
-      congrArg (fun x : B256 =>
-        (regionWord assignmentRegion).or x) hvalue }
+    simpa only [assignmentSlot, slot] using
+      congrArg (fun x : B256 => (regionWord assignmentRegion).or x) hvalue }
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hcovered]
     norm_num [gVerylow]
@@ -726,7 +729,7 @@ theorem previousCountKey_prepend_runCompiled
       (previousCountKey +++ tail) post := by
   func_run (4) [3, countSlot oldPauser]
   all_goals try {
-    simpa [countSlot, slot] using
+    simpa only [countSlot, slot] using
       congrArg (fun x : B256 => (regionWord countRegion).or x) hvalue }
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hcovered]
@@ -810,7 +813,7 @@ theorem registerAfterSet_oldLast_newPauserTail_runCompiled
     intro h
     have hlen := B256.length_toBytes (0 : B256)
     rw [h] at hlen
-    simp at hlen
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
   have hsizeM' : M'.size = M.size :=
     Mem.size_write_of_le (by
       simpa only [B256.length_toBytes] using (show 0 + 32 ≤ M.size by omega))
@@ -902,9 +905,8 @@ theorem registerAfterSet_oldLast_newPauserTail_runCompiled
     have hor : (regionWord expiryRegion).or
         (M.read (previousPauserWord * 32).toNat 32).1.toB256 =
         expirySlot oldPauser := by
-      simpa [expirySlot, slot] using
-        congrArg (fun x : B256 => (regionWord expiryRegion).or x)
-          hpreviousValue
+      simpa only [expirySlot, slot] using
+        congrArg (fun x : B256 => (regionWord expiryRegion).or x) hpreviousValue
     func_run (5) [3]
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
@@ -928,7 +930,7 @@ theorem registerAfterSet_oldLast_newPauserTail_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_val =>
       rw [Devm.getStorVal_setMach, hcount]
-      simp [B256.eqCheck]
+      simp only [B256.eqCheck, ↓reduceIte]
     case h_arm =>
       have hg : G + 1533 + clearCost - 117 = G + 1416 + clearCost := by omega
       rw [hg]
@@ -952,7 +954,7 @@ theorem registerAfterSet_oldLast_newPauserTail_runCompiled
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hpreviousCovered]
     norm_num [gVerylow]
-  case h_val => simp [hpreviousValue, B256.eqCheck, holdNonzero]
+  case h_val => simp only [B256.eqCheck, hpreviousValue, holdNonzero, ↓reduceIte]
   case h_arm =>
     rw [hpreviousMemory]
     have hg : G + 1567 + clearCost - 22 = G + 1545 + clearCost := by omega
@@ -1022,7 +1024,7 @@ private theorem registerAfterSet_expiryStoreLogTail_runCompiled
     intro h
     have hlen := B256.length_toBytes expiry
     rw [h] at hlen
-    simp at hlen
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
   have hzeroRead' : (M'.read 0 32).1 = expiry.toBytes := by
     simpa only [B256.length_toBytes] using (Mem.read_write_zero M hexpiryBytes)
   have hsstore : Ninst.RunCompiled sevm
@@ -1187,13 +1189,13 @@ theorem registerAfterSet_nonzeroNewPauserTail_runCompiled
     norm_num [gVerylow]
   case h_val =>
     rw [hnewValue]
-    simp [B256.eqCheck, hnewNonzero]
+    simp only [B256.eqCheck, hnewNonzero, ↓reduceIte]
   case h_val =>
     simp only [Devm.getStorVal_setMach]
     rw [hinterval, htime, B256.add_comm, hsum]
   case h_val =>
     rw [htime]
-    simp [B256.ltCheck, hle]
+    simp only [B256.ltCheck, ite_eq_right_iff, isEmpty_Prop, not_lt, hle, IsEmpty.forall_iff]
   case h_ext =>
     rw [hnewMemory]
     simp only [show ((0 : B256) * 32).toNat = 0 by decide]
@@ -1320,7 +1322,9 @@ theorem setPauserKernel_append_runCompiled
   have hnewValue' : (M'.read (newPauserWord * 32).toNat 32).1.toB256 =
       newPauser := by rw [Mem.Reads.read hreads']; exact hnew'
   have happendLookup : fs[appendTargetSlot]? = some appendTarget := by
-    simp [fs, runtime, aux, appendTargetSlot]
+    simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      appendTargetSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero, fs]
   have happendCall : Func.RunCompiled fs sevm
       (assignPost.setMach ⟨[], M', Ga + 12, assignPost.stateGas⟩)
       (.call appendTargetSlot) out := by
@@ -1384,7 +1388,8 @@ theorem setPauserKernel_append_runCompiled
       out := by
     simp only [assignmentKey] at hstore
     have hrun := targetKey_prepend_runCompiled htargetValue' htargetMemory'
-      halign' htargetCovered' (by simp) hstore
+      halign' htargetCovered' (by simp only [List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT]) hstore
     have hg : Ga + 29 + assignmentCost + 12 =
         Ga + 41 + assignmentCost := by omega
     rw [hg] at hrun
@@ -1397,7 +1402,8 @@ theorem setPauserKernel_append_runCompiled
             previousCountKey +++ Ninst.sstore ::: .call afterOldPauserSlot)))
       out := by
     have hrun := newPauserWord_prepend_runCompiled hnewValue' hnewMemory'
-      halign' hnewCovered' (by simp) htargetKeySecond
+      halign' hnewCovered' (by simp only [List.length_cons, List.length_nil, zero_add,
+        Nat.one_lt_ofNat]) htargetKeySecond
     have hg : Ga + 41 + assignmentCost + 6 =
         Ga + 47 + assignmentCost := by omega
     rw [hg] at hrun
@@ -1463,7 +1469,7 @@ theorem setPauserKernel_append_runCompiled
       out := by
     simp only [assignmentKey] at hsload
     have hrun := targetKey_prepend_runCompiled htargetValue htargetMemory
-      halign htargetCovered (by simp) hsload
+      halign htargetCovered (by simp only [List.length_nil, Nat.ofNat_pos]) hsload
     have hg : Ga + 56 + assignmentCost +
           temporalSloadCost sevm base (assignmentSlot target) + 12 =
         Ga + 68 + assignmentCost +
@@ -1533,7 +1539,7 @@ theorem setPauserKernel_append_runCompiled
           temporalSloadCost sevm base assignmentKey, base.stateGas⟩)
       setPauserKernel out := by
     have hrun := targetWord_prepend_runCompiled htargetValue htargetMemory
-      halign htargetCovered (by simp) hguard
+      halign htargetCovered (by simp only [List.length_nil, Nat.ofNat_pos]) hguard
     have hg : Ga + 84 + assignmentCost +
           temporalSloadCost sevm base assignmentKey + 6 =
         Ga + 90 + assignmentCost +
@@ -1677,7 +1683,9 @@ theorem setPauserKernel_found_runCompiled
       (M'.read (previousPauserWord * 32).toNat 32).1.toB256 = oldPauser := by
     rw [Mem.Reads.read hreads']; exact hprevious'
   have hafterLookup : fs[afterOldPauserSlot]? = some afterOldPauser := by
-    simp [fs, runtime, aux, afterOldPauserSlot]
+    simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      afterOldPauserSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero, fs]
   have hafterCall : Func.RunCompiled fs sevm
       (countPost.setMach ⟨[], M', G + afterGas + 12, countPost.stateGas⟩)
       (.call afterOldPauserSlot) out := by
@@ -1711,7 +1719,8 @@ theorem setPauserKernel_found_runCompiled
       (previousCountKey +++ Ninst.sstore ::: .call afterOldPauserSlot)
       out := by
     have hrun := previousCountKey_prepend_runCompiled hpreviousValue'
-      hpreviousMemory' halign' hpreviousCovered' (by simp) hstoreCount
+      hpreviousMemory' halign' hpreviousCovered' (by simp only [List.length_cons, List.length_nil,
+        zero_add, Nat.one_lt_ofNat]) hstoreCount
     have hg : G + afterGas + 12 + countCost + 12 =
         G + afterGas + 24 + countCost := by omega
     rw [hg] at hrun
@@ -1741,7 +1750,7 @@ theorem setPauserKernel_found_runCompiled
         previousCountKey +++ Ninst.sstore ::: .call afterOldPauserSlot)
       out := by
     have hrun := previousCountKey_prepend_runCompiled hpreviousValue'
-      hpreviousMemory' halign' hpreviousCovered' (by simp) hcountSload
+      hpreviousMemory' halign' hpreviousCovered' (by simp only [List.length_nil, Nat.ofNat_pos]) hcountSload
     have hg : G + afterGas + 33 + countCost +
           temporalSloadCost sevm assignPost (countSlot oldPauser) + 12 =
         elseGas := by
@@ -1815,7 +1824,8 @@ theorem setPauserKernel_found_runCompiled
             .call afterOldPauserSlot)))
       out := by
     have hrun := targetKey_prepend_runCompiled htargetValue' htargetMemory'
-      halign' htargetCovered' (by simp) hstore
+      halign' htargetCovered' (by simp only [List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT]) hstore
     have hg : elseGas + 16 + assignmentCost + 12 =
         elseGas + 28 + assignmentCost := by omega
     rw [hg] at hrun
@@ -1830,7 +1840,8 @@ theorem setPauserKernel_found_runCompiled
             .call afterOldPauserSlot)))
       out := by
     have hrun := newPauserWord_prepend_runCompiled hnewValue' hnewMemory'
-      halign' hnewCovered' (by simp) htargetKeySecond
+      halign' hnewCovered' (by simp only [List.length_cons, List.length_nil, zero_add,
+        Nat.one_lt_ofNat]) htargetKeySecond
     have hg : elseGas + 28 + assignmentCost + 6 =
         elseGas + 34 + assignmentCost := by omega
     rw [hg] at hrun
@@ -1898,7 +1909,7 @@ theorem setPauserKernel_found_runCompiled
             .call afterOldPauserSlot)))
       out := by
     have hrun := targetKey_prepend_runCompiled htargetValue htargetMemory
-      halign htargetCovered (by simp) hsload
+      halign htargetCovered (by simp only [List.length_nil, Nat.ofNat_pos]) hsload
     have hg : elseGas + 43 + assignmentCost +
           temporalSloadCost sevm base (assignmentSlot target) + 12 =
         elseGas + 55 + assignmentCost +
@@ -1969,7 +1980,7 @@ theorem setPauserKernel_found_runCompiled
           temporalSloadCost sevm base (assignmentSlot target), base.stateGas⟩)
       setPauserKernel out := by
     have hrun := targetWord_prepend_runCompiled htargetValue htargetMemory
-      halign htargetCovered (by simp) hguard
+      halign htargetCovered (by simp only [List.length_nil, Nat.ofNat_pos]) hguard
     have hg : elseGas + 71 + assignmentCost +
           temporalSloadCost sevm base (assignmentSlot target) + 6 =
         elseGas + 77 + assignmentCost +
@@ -2086,7 +2097,7 @@ theorem setPauserKernel_foundNonzero_finishSetPauser_runCompiled
   have hafter := afterOldPauser_finishSetPauser_runCompiled (hfork := hfork) dp sevm
     (foundKernelPost sevm base target newPauser oldPauser oldCount) M' img'
     newPauser newCount nextCount newCountOriginal [] newCountCost G out
-    (by simp) hreads' hnew' hnewNonzero (by omega) halign' hnewCount
+    (by simp only [List.length_nil, zero_le]) hreads' hnew' hnewNonzero (by omega) halign' hnewCount
     hnewCountOrig hnewCountNext hnewCountCost hgasStipend hstatic hfinish
   have hg : G + 64 + temporalSloadCost sevm
         (foundKernelPost sevm base target newPauser oldPauser oldCount)
@@ -2233,7 +2244,7 @@ theorem registerPauser_dispatch_runCompiledTo
       omega
     · rfl
     · have hvalueZero : B256.eqCheck sevm.value 0 = 1 := by
-        simp [B256.eqCheck, hvalue]
+        simp only [B256.eqCheck, hvalue, ↓reduceIte]
       have hlt : sevm.data.length.toB256 <? 4 = 0 := by
         rw [hdata]
         decide +kernel
@@ -2277,8 +2288,8 @@ theorem registerPauserCalldata_spec (sevm : Sevm)
     rw [hdata]
     rw [show B256.toNat 0 = 0 from rfl, List.drop_zero,
       List.takeD_eq_take _ (by
-        simp [registerPauserCalldata, abiSelectorBytes_length,
-          B256.length_toBytes])]
+        simp only [registerPauserCalldata, List.append_assoc, List.length_append,
+          abiSelectorBytes_length, B256.length_toBytes, Nat.reduceAdd, Nat.reduceLeDiff])]
     rw [registerPauserCalldata,
       show selector "registerPauser" [.address, .address] =
         (0x338d93fc : B256) by decide +kernel,
@@ -2310,7 +2321,7 @@ theorem registerPauserCalldata_spec (sevm : Sevm)
       (w := target) (post := newPauser.toBytes)
     · rw [abiSelectorBytes_length]
       rfl
-    · simpa [registerPauserCalldata] using hdata
+    · simpa only [registerPauserCalldata, List.append_assoc] using hdata
   · apply dataWord_of_append
       (pre := abiSelectorBytes
         (selector "registerPauser" [.address, .address]) ++ target.toBytes)
@@ -2318,7 +2329,7 @@ theorem registerPauserCalldata_spec (sevm : Sevm)
     · simp only [List.length_append, abiSelectorBytes_length,
         B256.length_toBytes]
       rfl
-    · simpa [registerPauserCalldata] using hdata
+    · simpa only [List.append_nil, List.append_assoc, registerPauserCalldata] using hdata
 
 /-- Clean settlement of an exact direct fresh-registration message retains
 the raw successful poststate. -/
@@ -2337,11 +2348,10 @@ theorem registerPauser_success_settles_cleanly
     (hclean : final.error.isNone = true) :
     settled = final := by
   have hsettle := (RunFrame.some_inv hprocess).2
-  simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-    executeCode.handleErrorWith_ok,
-    executeCode.handleError, processMessage.settle] at hsettle
+  simp only [Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
+    processMessage.settle, executeCode.handleErrorWith_ok, Except.bind_ok] at hsettle
   have hnotError : final.error.isSome ≠ true := by
-    cases herror : final.error <;> simp_all
+    cases herror : final.error <;> simp_all only [ExceptT.stM_eq, Option.isSome_none, Bool.false_eq_true, ↓reduceIte, Option.isNone_none, Except.ok.injEq, ne_eq, not_false_eq_true, Option.isSome_some, Option.isNone_some]
   rw [if_neg hnotError] at hsettle
   exact Except.ok.inj hsettle
 
@@ -2490,7 +2500,9 @@ private theorem removeTarget_restoreTail_runCompiled
     exact hlengthWord
   let fs := (runtime dp).main :: (runtime dp).aux
   have hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser := by
-    simp [fs, runtime, aux, finishSetPauserSlot]
+    simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      finishSetPauserSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero, fs]
   have hfinishCall : Func.RunCompiled fs sevm
       (removePost.setMach ⟨stack, M, G + finishGas + 12, removePost.stateGas⟩)
       (.call finishSetPauserSlot)
@@ -3636,9 +3648,8 @@ theorem removeTarget_toFinish_runCompiled
       post := by
     func_run (4) [3, indexKey]
     all_goals try {
-      simpa [indexKey, indexSlot, slot] using
-        congrArg (fun x : B256 => (regionWord indexRegion).or x)
-          htargetValue }
+      simpa only [indexKey, indexSlot, slot] using
+        congrArg (fun x : B256 => (regionWord indexRegion).or x) htargetValue }
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign htargetCovered]
@@ -4861,9 +4872,8 @@ theorem removeTarget_swapPop_toFinish_runCompiled
       post := by
     func_run (4) [3, indexKey]
     all_goals try {
-      simpa [indexKey, indexSlot, slot] using
-        congrArg (fun x : B256 => (regionWord indexRegion).or x)
-          htargetValue }
+      simpa only [indexKey, indexSlot, slot] using
+        congrArg (fun x : B256 => (regionWord indexRegion).or x) htargetValue }
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign htargetCovered]

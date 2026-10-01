@@ -145,7 +145,7 @@ theorem e0C_keys : ∀ x, x ∈ e0C.dyna.accessedStorageKeys ↔ x ∈ ([] : Lis
   rw [he]
   show x ∈ msgC.accessedStorageKeys ↔ _
   rw [msgC_keys_empty]
-  simp
+  simp only [Std.HashSet.ofList_nil, Std.HashSet.not_mem_empty, List.not_mem_nil]
 
 theorem e0C_stor : ∀ a k, storOf e0C.dyna.state a k = storOf worldTx a k := by
   obtain ⟨benv, hb, he⟩ := e0C_meta

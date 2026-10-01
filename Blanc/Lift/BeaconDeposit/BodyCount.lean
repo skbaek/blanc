@@ -44,7 +44,7 @@ theorem body_countBump {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR nd : B
   obtain ⟨hwf, hs, img, hr, hfp, hf⟩ := hM
   set w := b.getStorVal sevm.currentTarget solCountSlot
   have hnd : img.sliceD 928 32 0 = nd.toBytes := by
-    have := hf (928, nd.toBytes) (by simp)
+    have := hf (928, nd.toBytes) (by simp only [List.mem_cons, List.not_mem_nil, or_false])
     rwa [B256.length_toBytes] at this
   have hleg := hfork.rules_stateGas_none
   have hgt : B256.gtCheck (Bytes.toB256 [0xff, 0xff, 0xff, 0xff]) w = 1 := by
@@ -53,13 +53,15 @@ theorem body_countBump {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR nd : B
     rw [B256.lt_iff_toNat_lt_toNat, show (Bytes.toB256 [0xff, 0xff, 0xff, 0xff]).toNat =
       2 ^ 32 - 1 from rfl]
     exact hcap
-  refine ⟨_, M, Keep.refl _, ⟨hwf, hs, img, hr, hfp, by simp⟩, fun o k => ?_⟩
+  refine ⟨_, M, Keep.refl _, ⟨hwf, hs, img, hr, hfp, by simp only [List.not_mem_nil,
+    IsEmpty.forall_iff, implies_true]⟩, fun o k => ?_⟩
   rw [show G + (281 + sstoreCost sevm b solCountSlot (1 + w)) =
     ((G + 3) + sstoreCost sevm b solCountSlot (1 + w)) + 278 by omega]
   unfold t_0ea6_c20
   refine rx_dest ?_
   refine rx_pop ?_
-  refine rx_mload (c := 3) (v := nd) ?_ ?_ ?_ (by simp) ?_
+  refine rx_mload (c := 3) (v := nd) ?_ ?_ ?_ (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   · rw [St.extCost_eq hs, show (928 : B256).toNat = 928 from rfl,
       memExtSize_of_le (by decide) (by decide)]
     rfl
@@ -68,33 +70,49 @@ theorem body_countBump {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR nd : B
     exact Mem.read_snd_eq_self (by rw [hs]; exact memExtSize_of_le (by decide) (by decide))
   refine rx_swap1 ?_
   refine rx_pop ?_
-  refine rx_dup (n := 5) rfl (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_eq (v := 1) (by rw [hroot]; simp [B256.eqCheck]) (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_dup (n := 5) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_eq (v := 1) (by rw [hroot]; simp only [B256.eqCheck, ↓reduceIte]) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_0f02_c20
   refine rx_dest ?_
-  refine rx_push (w := solCountSlot) (by decide) (by simp) ?_
-  refine rx_sload_warm hleg hwarm (by simp) ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_gt hgt (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_push (w := solCountSlot) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_sload_warm hleg hwarm (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_gt hgt (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_0f60_c20
   refine rx_dest ?_
-  refine rx_push (w := solCountSlot) (by decide) (by simp) ?_
-  refine rx_dup (n := 0) rfl (by simp) ?_
-  refine rx_sload_warm hleg hwarm (by simp) ?_
-  refine rx_push (w := 1) (by decide) (by simp) ?_
-  refine rx_add (by simp) ?_
+  refine rx_push (w := solCountSlot) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 0) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_sload_warm hleg hwarm (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 1) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_swap (n := 0) rfl ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
+  refine rx_dup (n := 1) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
+    List.set_cons_zero, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 0) rfl ?_
   refine .next (Ninst.runCompiled_sstore_selected_setMach hfork (by omega) hstatic) ?_
   dsimp only [List.set]
   rw [← afterSstore_stateGas (sevm := sevm) (devm := b) (key := solCountSlot) (value := 1 + w)]
-  refine rx_push (w := 0) (by decide) (by simp) ?_
+  refine rx_push (w := 0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   exact k
 
 end Blanc.Lift.BeaconDeposit

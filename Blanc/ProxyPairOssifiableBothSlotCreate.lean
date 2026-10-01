@@ -77,7 +77,8 @@ private theorem bytesWord_of_append
     Bytes.toB256 (code.sliceD idx 32 0) = word := by
   simp only [hcode, List.sliceD]
   rw [List.drop_length_append' hlen,
-    List.takeD_eq_take _ (by simp [B256.length_toBytes]),
+    List.takeD_eq_take _ (by simp only [List.length_append, B256.length_toBytes,
+      le_add_iff_nonneg_right, zero_le]),
     List.take_length_append' (B256.length_toBytes word).symm,
     B256.toB256_toBytes]
 
@@ -243,7 +244,7 @@ private theorem spawnDescriptor_exists
         Devm.setMach_accessedAddresses,
         show implementation.toB256.toAdr = implementation by
           exact toAdr_toB256 implementation]
-      simp [accessCost, hwarm, gasWarmAccess]
+      simp only [accessCost, hwarm, ↓reduceIte, gasWarmAccess, add_zero]
     splitEq := by
       unfold d1 afterAccess callPre
       change calculateMsgCallGas 0 499979 499979 0 100 =
@@ -429,8 +430,8 @@ private theorem spawnChild_success
   have process : processMessage spawn.child = .ok child := by
     rw [MessageExecution.processMessage_eq_settle_exec_of_enter
       spawn.child (initEvm spawn.child) spawn.crossing.1, raw]
-    simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-      executeCode.handleErrorWith_ok, processMessage.settle,
+    simp only [Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
+      processMessage.settle, executeCode.handleErrorWith_ok, Except.bind_ok,
       show child.error.isSome = false by rw [error]; rfl]
   obtain ⟨trace⟩ := ExecutionTrace.exists_processMessageTrace
     spawn.child (.ok child) process
@@ -600,7 +601,7 @@ private theorem callAndTail_success
     intro hnil
     have hlength := hruntimeLength
     rw [hnil] at hlength
-    simp at hlength
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlength
   obtain ⟨post, hafterRun, hstorage, hlogs, houtput, hgas, herror⟩ :=
     ossifiableConstructorAfterSetup_dirtyAdmin_forward_exact (hfork := hfork)
       (fs := ossifiableConstructorFunctions 1249 2188)
@@ -947,8 +948,8 @@ private theorem program_success_from_layout
     rw [ossifiableConstructorProgram_main_shape]
     func_run (3) [1]
     all_goals try norm_num [gBase, gVerylow, gHigh, gJumpdest]
-    all_goals try simp [B256.eqCheck, hvalue]
-    simpa using hdecode
+    all_goals try simp only [B256.eqCheck, hvalue, ↓reduceIte]
+    simpa only using hdecode
   refine ⟨post, ?_, himplementationPost, hadminPost, hlogsPost,
     houtputPost, hgasPost, herrorPost⟩
   apply Prog.runCompiled_intro (G := 526247)
@@ -1026,9 +1027,8 @@ theorem program_success
   have hruntime :
       sevm.code.sliceD 1249 2188 (Linst.toUInt8 .stop) =
         runtimeBaselineBytes := by
-    simpa [ByteArray.sliceD_eq,
-      show Linst.toUInt8 .stop = 0 by decide, hinput, createInput] using
-      createInput_runtime
+    simpa only [show Linst.toUInt8 .stop = 0 by decide, ByteArray.sliceD_eq, hinput,
+      createInput] using createInput_runtime
   exact program_success_from_layout (hfork := hfork) hvalue hcodeSize himplementation
     hrequested hoffset hlength hsetup himplementationNonzero
     himplementationCode hcodeSizeNonzero haddressCold himplementationRaw

@@ -47,19 +47,19 @@ def HolderFlow.add {u : Adr} (x y : HolderFlow u) : HolderFlow u :=
 @[simp] theorem HolderFlow.zero_add {u : Adr} (x : HolderFlow u) :
     (HolderFlow.zero u).add x = x := by
   cases x
-  simp [HolderFlow.zero, HolderFlow.add]
+  simp only [add, zero, _root_.zero_add]
 
 @[simp] theorem HolderFlow.add_zero {u : Adr} (x : HolderFlow u) :
     x.add (HolderFlow.zero u) = x := by
   cases x
-  simp [HolderFlow.zero, HolderFlow.add]
+  simp only [add, zero, _root_.add_zero]
 
 theorem HolderFlow.add_assoc {u : Adr} (x y z : HolderFlow u) :
     (x.add y).add z = x.add (y.add z) := by
   cases x
   cases y
   cases z
-  simp [HolderFlow.add, Nat.add_assoc]
+  simp only [add, Nat.add_assoc]
 
 /-- The exact runtime arm accepted before a delegated debit.  Raw keys and
 before/after allowance words are retained for the successor provenance goal;
@@ -254,7 +254,7 @@ private theorem holderFlowOfActions_from_eq_add
     initial.add (holderFlowOfActions actions u) := by
   unfold holderFlowOfActions
   induction actions generalizing initial with
-  | nil => simp
+  | nil => simp only [List.foldl_nil, HolderFlow.add_zero]
   | cons action actions ih =>
       simp only [List.foldl_cons]
       rw [ih]
@@ -340,7 +340,7 @@ private theorem holderFlowOfObservations_from_eq_add
     initial.add (holderFlowOfObservations observations u) := by
   unfold holderFlowOfObservations
   induction observations generalizing initial with
-  | nil => simp
+  | nil => simp only [List.foldl_nil, HolderFlow.add_zero]
   | cons observation observations ih =>
       simp only [List.foldl_cons]
       rw [ih]
@@ -592,8 +592,8 @@ theorem Exec.retainedChildActions_eq_nil_of_create_codeDepositRollback
     unfold Jaune.Frame.settlementCommits at hcommit
     rw [hframeSettle] at hcommit
     cases hoption : settled.error with
-    | none => simp [hoption] at herror
-    | some error => simp [hoption] at hcommit
+    | none => simp only [hoption, Option.isSome_none, Bool.false_eq_true] at herror
+    | some error => simp only [hoption, Option.isNone_some, Bool.false_eq_true] at hcommit
   simp only [if_neg hnot]
 
 /-- Executable observations for one root derivation, in enclosing-frame then

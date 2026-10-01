@@ -61,9 +61,9 @@ theorem increase_holder_eq
         (if recipient = u then creditLoss (pre recipient) amountWord else 0) := by
   by_cases hrecipient : recipient = u
   · subst recipient
-    simpa using increase_toNat_add_creditLoss increase
+    simpa only [↓reduceIte] using increase_toNat_add_creditLoss increase
   · have hsame : pre u = post u := (increase u).2 hrecipient
-    simp [hrecipient, hsame]
+    simp only [hsame, hrecipient, ↓reduceIte, add_zero]
 
 /-- Pointwise exact equation for a checked debit. -/
 theorem decrease_holder_eq
@@ -74,9 +74,9 @@ theorem decrease_holder_eq
       (post u).toNat + (if source = u then amountWord.toNat else 0) := by
   by_cases hsource : source = u
   · subst source
-    simpa using (decrease_toNat_add decrease amount_le).symm
+    simpa only [↓reduceIte] using (decrease_toNat_add decrease amount_le).symm
   · have hsame : pre u = post u := (decrease u).2 hsource
-    simp [hsource, hsame]
+    simp only [hsame, hsource, ↓reduceIte, add_zero]
 
 /-- Pointwise exact equation for a checked debit followed by an unchecked
 credit.  The same formula covers external transfers and self-transfers. -/
@@ -112,7 +112,7 @@ theorem ExactTransferWitness.holder_eq
       exact hincrease
     · have hincrease : intermediate u = post u :=
         (increase u).2 hrecipient
-      simp [hsource, hrecipient, hdecrease, hincrease]
+      simp only [hdecrease, hincrease, hrecipient, ↓reduceIte, add_zero, hsource]
 
 /-- A checked self-transfer's credit exactly restores its own debit, so this
 credit cannot wrap even before any global conservation argument. -/
@@ -274,10 +274,9 @@ theorem LocalActionSegment.holder_eq
   | redemption rawSource source ethRecipient amountWord atom_eq credit_eq
       debit_source amount_le decrease =>
       by_cases hsource : source = u <;>
-        simpa [LocalSegmentKind.holderIn, LocalSegmentKind.holderOut,
-          LocalSegmentKind.holderLoss, atom_eq, FlowAtom.holderFlow,
-          HolderFlow.zero, hsource] using
-          (decrease_holder_eq (u := u) amount_le decrease)
+        simpa only [LocalSegmentKind.holderIn, add_zero, LocalSegmentKind.holderOut,
+          FlowAtom.holderFlow, atom_eq, hsource, ↓reduceIte, HolderFlow.zero,
+          LocalSegmentKind.holderLoss] using (decrease_holder_eq (u := u) amount_le decrease)
   | flashCredit rawReceiver receiver amountWord atom_eq credit_eq
       debit_source increase =>
       unfold FlowAction.ExactCredit at credit_eq
@@ -290,10 +289,9 @@ theorem LocalActionSegment.holder_eq
   | flashRepayment rawReceiver receiver amountWord creditBefore atom_eq
       credit_eq debit_source amount_le decrease =>
       by_cases hreceiver : receiver = u <;>
-        simpa [LocalSegmentKind.holderIn, LocalSegmentKind.holderOut,
-          LocalSegmentKind.holderLoss, atom_eq, FlowAtom.holderFlow,
-          HolderFlow.zero, hreceiver] using
-          (decrease_holder_eq (u := u) amount_le decrease)
+        simpa only [LocalSegmentKind.holderIn, add_zero, LocalSegmentKind.holderOut,
+          FlowAtom.holderFlow, atom_eq, hreceiver, ↓reduceIte, HolderFlow.zero,
+          LocalSegmentKind.holderLoss] using (decrease_holder_eq (u := u) amount_le decrease)
 
 /-- Constructor-shaped equations for one complete local action.  The flash
 case exposes the two equations on either side of the unconstrained callback
@@ -382,8 +380,8 @@ theorem LocalSegmentChain.holder_eq
         localSegmentsHolderLoss segments u := by
   induction chain with
   | nil balances =>
-      simp [localSegmentsHolderIn, localSegmentsHolderOut,
-        localSegmentsHolderLoss]
+      simp only [localSegmentsHolderIn, List.map_nil, List.sum_nil, add_zero,
+        localSegmentsHolderOut, localSegmentsHolderLoss]
   | cons head rest ih =>
       have hhead := head.holder_eq u
       simp only [localSegmentsHolderIn, localSegmentsHolderOut,

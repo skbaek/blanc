@@ -305,7 +305,7 @@ private theorem stageMask_complete
     · exact Devm.extCost_add_of_size hsize2 (by decide)
     · simp only [show (32 : B256).toNat = 32 by decide]
       rw [hvalue2]
-      simp [B256.eqCheck, hrequestedNonzero]
+      simp only [B256.eqCheck, hrequestedNonzero, ↓reduceIte]
     simp only [show (32 : B256).toNat = 32 by decide]
     rw [hmemory2]
     unfold stageBranch
@@ -480,7 +480,7 @@ private theorem stageMask_dirtyCovered_complete
     · exact Devm.extCost_add_of_size hsize2 (by decide)
     · simp only [show (32 : B256).toNat = 32 by decide]
       rw [hvalue2]
-      simp [B256.eqCheck, hrequestedNonzero]
+      simp only [B256.eqCheck, hrequestedNonzero, ↓reduceIte]
     simp only [show (32 : B256).toNat = 32 by decide]
     rw [hmemory2]
     unfold stageBranch

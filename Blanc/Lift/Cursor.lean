@@ -197,17 +197,19 @@ theorem parentStep_pc {n' n : Exec.Deriv}
   cases edge with
   | cont hstep next =>
     have hs := hstep0.symm.trans hstep
-    cases hr : Rinst.run ⟨pc, sevm, pre⟩ .pc <;> simp [hr, Step.ofExecution] at hs
+    cases hr : Rinst.run ⟨pc, sevm, pre⟩ .pc <;> simp only [Step.ofExecution, hr, reduceCtorEq, Step.cont.injEq] at hs
     obtain ⟨rfl, rfl⟩ := hs
     refine ⟨rfl, ?_⟩
     simp only [Ninst.StepRun, Ninst.step_reg, hr, Step.ofExecution, Step.Run]
     exact ⟨trivial, trivial⟩
   | doneOk hstep _ _ _ =>
     have hs := hstep0.symm.trans hstep
-    cases hr : Rinst.run ⟨pc, sevm, pre⟩ .pc <;> simp [hr, Step.ofExecution] at hs
+    cases hr : Rinst.run ⟨pc, sevm, pre⟩ .pc <;> simp only [Step.ofExecution, hr,
+      reduceCtorEq] at hs
   | runOk hstep _ _ _ _ =>
     have hs := hstep0.symm.trans hstep
-    cases hr : Rinst.run ⟨pc, sevm, pre⟩ .pc <;> simp [hr, Step.ofExecution] at hs
+    cases hr : Rinst.run ⟨pc, sevm, pre⟩ .pc <;> simp only [Step.ofExecution, hr,
+      reduceCtorEq] at hs
 
 theorem parentStep_false_of_linst {n' n : Exec.Deriv} {l : Linst}
     (edge : Exec.Deriv.ParentStep n' n) (hat : Linst.At n.sevm.code n.pc l) : False := by
@@ -231,7 +233,7 @@ theorem ret_mem_of_absNinst {n : Ninst} {a a' : List AVal}
   · obtain ⟨bs, fits, rfl⟩ := hpush
     simp only [absNinst, Option.some.injEq] at h
     subst h
-    simpa using hm
+    simpa only [List.mem_cons, reduceCtorEq, false_or] using hm
   · have hn : ∀ (bs : Bytes) (fits : bs.length ≤ 32), n ≠ .push bs fits :=
       fun bs fits he => hpush ⟨bs, fits, he⟩
     obtain ⟨_, out, a0, _, hread, hfold⟩ := absNinst_nonpush_spec hn h
@@ -327,18 +329,23 @@ theorem cursor_start {code : ByteArray} {c : Cert} (hc : Cert.check code c = tru
     {F : Exec.Deriv} (hpc : F.pc = 0) (hcode : F.sevm.code = code) :
     CursorOK code c F (Cursor.start c) := by
   cases c with
-  | nil => simp [Cert.check] at hc
+  | nil => simp only [Cert.check, List.all_nil, Bool.and_true, Bool.false_eq_true] at hc
   | cons p c =>
     rcases p with ⟨e, f⟩
     have hc0 : Cert.check code ((e, f) :: c) = true := hc
-    simp [Cert.check] at hc
-    have hepc : e.pc = 0 := by simpa using hc.1.1
-    have hef : e.frame = [] := by simpa using hc.1.2
+    simp only [Cert.check, List.beq_nil_eq, List.all_cons, Bool.and_eq_true, beq_iff_eq,
+      List.isEmpty_iff, List.all_eq_true, Prod.forall] at hc
+    have hepc : e.pc = 0 := by simpa only using hc.1.1
+    have hef : e.frame = [] := by simpa only using hc.1.2
     have hf : checkNode code (Cert.entries ((e, f) :: c)) e.rets e.pc e.frame f = true :=
-      cert_check_at hc0 0 e f (by simp [Cert.entries]) (by simp [Cert.prog])
+      cert_check_at hc0 0 e f (by simp only [Cert.entries, List.map_cons, List.length_cons,
+        List.length_map, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos,
+        List.getElem_cons_zero]) (by simp only [Cert.prog, List.map_cons,
+        List.length_cons, List.length_map, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true,
+        getElem?_pos, List.getElem_cons_zero])
     refine ⟨hcode, hpc, ?_, ?_, [], F.devm.stack, rfl, List.Forall₂.nil, .nil _⟩
-    · simpa [Cursor.start, hepc, hef] using hf
-    · intro hm; simp [Cursor.start] at hm
+    · simpa only [Cursor.start, hepc, hef] using hf
+    · intro hm; simp only [Cursor.start, List.not_mem_nil] at hm
 
 /-- The stateful image of a cursor: the node's state, the cursor's tree, and
 its pending continuation trees. -/
@@ -364,7 +371,7 @@ theorem cursor_stepS {code : ByteArray} {c : Cert} (hc : Cert.check code c = tru
     simp only [checkNode, Bool.and_eq_true] at hcheck
     obtain ⟨⟨hbytes, _⟩, hrest⟩ := hcheck
     cases habs : absNinst i a with
-    | none => simp [habs] at hrest
+    | none => simp only [habs, Bool.false_eq_true] at hrest
     | some a' =>
       simp only [habs] at hrest
       have hat : Ninst.At n.sevm.code n.pc i := by
@@ -372,16 +379,16 @@ theorem cursor_stepS {code : ByteArray} {c : Cert} (hc : Cert.check code c = tru
         exact Ninst.at_of_slice (bytesAt_slice (ninst_bytes_ne_nil i) hbytes)
       obtain ⟨hpc', runIn⟩ := Cursor.parentStep_ninstIn edge hat
       obtain ⟨S', hst', hfr'⟩ := Cursor.absNinst_run_stack hfork habs hstack hframe runIn.toRun
-      exact ⟨_, .next habs, .next runIn, hcode', by simp [hpc', hpc], hrest,
+      exact ⟨_, .next habs, .next runIn, hcode', by simp only [hpc', hpc], hrest,
         fun hm => hret (Cursor.ret_mem_of_absNinst habs hm), S', rest, hst', hfr', hK⟩
   | dest f =>
     have h' : byteAt code pc = some (Jinst.toUInt8 .jumpdest) ∧
         checkNode code c.entries m (pc + 1) a f = true := by
-      simpa [checkNode] using hcheck
+      simpa only [checkNode, Bool.and_eq_true, beq_iff_eq] using hcheck
     have hat : Jinst.At n.sevm.code n.pc .jumpdest := by
       rw [hcode, hpc]; exact byteAt_jinst_at h'.1
     obtain ⟨hpc', burn⟩ := of_jumpdest_run (Cursor.parentStep_jinst edge hat)
-    refine ⟨_, .dest, .dest burn, hcode', by simp [hpc', hpc], h'.2, hret, S, rest, ?_, hframe, hK⟩
+    refine ⟨_, .dest, .dest burn, hcode', by simp only [hpc', hpc], h'.2, hret, S, rest, ?_, hframe, hK⟩
     rw [← burn.stack, hstack]
   | branch f g =>
     match a, hcheck, hret, hframe with
@@ -389,7 +396,7 @@ theorem cursor_stepS {code : ByteArray} {c : Cert} (hc : Cert.check code c = tru
       have h' : (byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧
             (v.jumps? = some true ∨ checkNode code c.entries m (pc + 1) a' f = true)) ∧
           (v.jumps? = some false ∨ checkNode code c.entries m t.toNat a' g = true) := by
-        simpa [checkNode] using hcheck
+        simpa only [checkNode, Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true] using hcheck
       have hat : Jinst.At n.sevm.code n.pc .jumpi := by
         rw [hcode, hpc]; exact byteAt_jinst_at h'.1.1
       have hret' : RetOK a' m K := fun hm =>
@@ -397,28 +404,28 @@ theorem cursor_stepS {code : ByteArray} {c : Cert} (hc : Cert.check code c = tru
       rcases of_jumpi_run (Cursor.parentStep_jinst edge hat) with
         ⟨x, hpc', pop⟩ | ⟨x, y, hpc', pop, _, hy⟩
       · obtain ⟨_, S1, hst, hfr⟩ := Cursor.pop_two_frame hstack hframe pop
-        exact ⟨_, .zero, .zero x pop, hcode', by simp [hpc', hpc],
+        exact ⟨_, .zero, .zero x pop, hcode', by simp only [hpc', hpc],
           live_fall (Cursor.pop_two_second hstack hframe pop) h'.1.2, hret', S1, rest, hst, hfr, hK⟩
       · have hv := Cursor.pop_two_second hstack hframe pop
         obtain ⟨hx, S1, hst, hfr⟩ := Cursor.pop_two_frame hstack hframe pop
         have hx : x = t := hx
         subst hx
         exact ⟨_, .succ, .succ _ y hy pop, hcode', hpc', live_taken hy hv h'.2, hret', S1, rest, hst, hfr, hK⟩
-    | [], hcheck, _, _ => simp [checkNode] at hcheck
-    | [.const _], hcheck, _, _ => simp [checkNode] at hcheck
-    | .ret :: _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .unk :: _, hcheck, _, _ => simp [checkNode] at hcheck
+    | [], hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | [.const _], hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .ret :: _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .unk :: _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
   | branchTo f k =>
     match a, hcheck, hret, hframe with
     | .const t :: v :: a', hcheck, hret, hframe =>
       cases hk : c.entries[k]? with
-      | none => simp [checkNode, hk] at hcheck
+      | none => simp only [checkNode, hk, Bool.false_eq_true] at hcheck
       | some e =>
         have h' : (((byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧
               e.pc = t.toNat) ∧ e.rets = m) ∧
               gotoCompat a' e.frame = true) ∧
               (v.jumps? = some true ∨ checkNode code c.entries m (pc + 1) a' f = true) := by
-          simpa [checkNode, hk] using hcheck
+          simpa only [checkNode, hk, Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true] using hcheck
         have hat : Jinst.At n.sevm.code n.pc .jumpi := by
           rw [hcode, hpc]; exact byteAt_jinst_at h'.1.1.1.1
         have hret' : RetOK a' m K := fun hm =>
@@ -426,32 +433,32 @@ theorem cursor_stepS {code : ByteArray} {c : Cert} (hc : Cert.check code c = tru
         rcases of_jumpi_run (Cursor.parentStep_jinst edge hat) with
           ⟨x, hpc', pop⟩ | ⟨x, y, hpc', pop, _, hy⟩
         · obtain ⟨_, S1, hst, hfr⟩ := Cursor.pop_two_frame hstack hframe pop
-          exact ⟨_, .toZero, .toZero x pop, hcode', by simp [hpc', hpc],
+          exact ⟨_, .toZero, .toZero x pop, hcode', by simp only [hpc', hpc],
             live_fall (Cursor.pop_two_second hstack hframe pop) h'.2, hret', S1, rest, hst, hfr, hK⟩
         · obtain ⟨hx, S1, hst, hfr⟩ := Cursor.pop_two_frame hstack hframe pop
           have hx : x = t := hx
           subst hx
           obtain ⟨g, hg⟩ := cert_prog_of_entry c k e hk
-          refine ⟨_, .toSucc hk hg, .toSucc _ y hy hg pop, hcode', by simp [hpc', h'.1.1.1.2], ?_, ?_, S1, rest, hst,
+          refine ⟨_, .toSucc hk hg, .toSucc _ y hy hg pop, hcode', by simp only [hpc', h'.1.1.1.2], ?_, ?_, S1, rest, hst,
             frameMatches_gotoCompat h'.1.2 hfr, hK⟩
           · exact cert_check_at hc k e g hk hg
           · intro hm
             rw [h'.1.1.2]
             exact hret' (ret_mem_of_gotoCompat h'.1.2 hm)
-    | [], hcheck, _, _ => simp [checkNode] at hcheck
-    | [.const _], hcheck, _, _ => simp [checkNode] at hcheck
-    | .ret :: _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .unk :: _, hcheck, _, _ => simp [checkNode] at hcheck
+    | [], hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | [.const _], hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .ret :: _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .unk :: _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
   | jump k =>
     match a, hcheck, hret, hframe with
     | .const t :: a', hcheck, hret, hframe =>
       cases hk : c.entries[k]? with
-      | none => simp [checkNode, hk] at hcheck
+      | none => simp only [checkNode, hk, Bool.false_eq_true] at hcheck
       | some e =>
         have h' : (((byteAt code pc = some (Jinst.toUInt8 .jump) ∧
               e.pc = t.toNat) ∧ e.rets = m) ∧
               gotoCompat a' e.frame = true) := by
-          simpa [checkNode, hk] using hcheck
+          simpa only [checkNode, hk, Bool.and_eq_true, beq_iff_eq] using hcheck
         have hat : Jinst.At n.sevm.code n.pc .jump := by
           rw [hcode, hpc]; exact byteAt_jinst_at h'.1.1.1
         obtain ⟨x, hpc', pop, _⟩ := of_jump_run (Cursor.parentStep_jinst edge hat)
@@ -459,20 +466,20 @@ theorem cursor_stepS {code : ByteArray} {c : Cert} (hc : Cert.check code c = tru
         have hx : x = t := hx
         subst hx
         obtain ⟨g, hg⟩ := cert_prog_of_entry c k e hk
-        refine ⟨_, .jump hk hg, .jump _ hg pop, hcode', by simp [hpc', h'.1.1.2], ?_, ?_, S1, rest, hst,
+        refine ⟨_, .jump hk hg, .jump _ hg pop, hcode', by simp only [hpc', h'.1.1.2], ?_, ?_, S1, rest, hst,
           frameMatches_gotoCompat h'.2 hfr, hK⟩
         · exact cert_check_at hc k e g hk hg
         · intro hm
           rw [h'.1.2]
           exact hret (List.mem_cons_of_mem _ (ret_mem_of_gotoCompat h'.2 hm))
-    | [], hcheck, _, _ => simp [checkNode] at hcheck
-    | .ret :: _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .unk :: _, hcheck, _, _ => simp [checkNode] at hcheck
+    | [], hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .ret :: _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .unk :: _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
   | callNext k f =>
     match a, f, hcheck, hret, hframe with
     | .const t :: a', .dest f0, hcheck, hret, hframe =>
       cases hk : c.entries[k]? with
-      | none => simp [checkNode, hk] at hcheck
+      | none => simp only [checkNode, hk, Bool.false_eq_true] at hcheck
       | some e =>
         simp only [checkNode, hk, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hcheck
         obtain ⟨⟨⟨hbyte, hepc⟩, hlen⟩, hmatch⟩ := hcheck
@@ -491,7 +498,8 @@ theorem cursor_stepS {code : ByteArray} {c : Cert} (hc : Cert.check code c = tru
           simp only [hi] at hmatch
           obtain ⟨sf, sr, hS0, hsf, hsr⟩ := frameMatches_callCompat hmatch hfr
           let κc : Cont := ⟨.dest f0, 0, a'.drop e.frame.length, m, e.rets, false⟩
-          refine ⟨_, .call κc hk hg rfl rfl rfl rfl, .call _ hg pop, hcode', by simp [hpc', hepc], hentry,
+          refine ⟨_, .call κc hk hg rfl rfl rfl rfl, .call _ hg pop, hcode', by simp only [hpc',
+            hepc], hentry,
             ?_, sf, sr ++ rest, by rw [hst, hS0, List.append_assoc], hsf,
             .cons hsr hretDrop (fun h => by cases h) hK⟩
           intro hm
@@ -499,40 +507,44 @@ theorem cursor_stepS {code : ByteArray} {c : Cert} (hc : Cert.check code c = tru
         | some i =>
           simp only [hi] at hmatch
           cases har : a'[i]? with
-          | none => simp [har] at hmatch
+          | none => simp only [har, Bool.false_eq_true] at hmatch
           | some av =>
             cases av with
-            | ret => simp [har] at hmatch
-            | unk => simp [har] at hmatch
+            | ret => simp only [har, Bool.false_eq_true] at hmatch
+            | unk => simp only [har, Bool.false_eq_true] at hmatch
             | const r =>
               simp only [har, Bool.and_eq_true] at hmatch
               obtain ⟨hcall, hcont⟩ := hmatch
               obtain ⟨sf, sr, hS0, hsf, hsr⟩ := frameMatches_callCompat hcall hfr
               let κc : Cont := ⟨.dest f0, r, a'.drop e.frame.length, m, e.rets, true⟩
-              refine ⟨_, .call κc hk hg rfl rfl rfl rfl, .call _ hg pop, hcode', by simp [hpc', hepc], hentry,
+              refine ⟨_, .call κc hk hg rfl rfl rfl rfl, .call _ hg pop, hcode', by simp only [hpc',
+                hepc], hentry,
                 fun _ => ⟨κc, K, rfl, rfl, rfl⟩, sf, sr ++ rest,
                 by rw [hst, hS0, List.append_assoc], hsf,
                 .cons hsr hretDrop (fun _ => by
                   show checkNode code c.entries m r.toNat
                     (List.replicate e.rets .unk ++ a'.drop e.frame.length) (.dest f0) = true
-                  simpa [checkNode] using hcont) hK⟩
-    | [], _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .ret :: _, _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .unk :: _, _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .const _ :: _, .next _ _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .const _ :: _, .branch _ _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .const _ :: _, .branchTo _ _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .const _ :: _, .last _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .const _ :: _, .jump _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .const _ :: _, .callNext _ _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .const _ :: _, .ret, hcheck, _, _ => simp [checkNode] at hcheck
-    | .const _ :: _, .pcAt _ _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .const _ :: _, .undefined, hcheck, _, _ => simp [checkNode] at hcheck
+                  simpa only [checkNode, Bool.and_eq_true, beq_iff_eq] using hcont) hK⟩
+    | [], _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .ret :: _, _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .unk :: _, _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .const _ :: _, .next _ _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .const _ :: _, .branch _ _, hcheck, _, _ => simp only [checkNode,
+      Bool.false_eq_true] at hcheck
+    | .const _ :: _, .branchTo _ _, hcheck, _, _ => simp only [checkNode,
+      Bool.false_eq_true] at hcheck
+    | .const _ :: _, .last _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .const _ :: _, .jump _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .const _ :: _, .callNext _ _, hcheck, _, _ => simp only [checkNode,
+      Bool.false_eq_true] at hcheck
+    | .const _ :: _, .ret, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .const _ :: _, .pcAt _ _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .const _ :: _, .undefined, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
   | ret =>
     match a, hcheck, hret, hframe with
     | .ret :: a', hcheck, hret, hframe =>
       have h' : byteAt code pc = some (Jinst.toUInt8 .jump) ∧ a'.length = m := by
-        simpa [checkNode] using hcheck
+        simpa only [checkNode, Bool.and_eq_true, beq_iff_eq] using hcheck
       obtain ⟨k, K', rfl, hlive, hrets⟩ := hret List.mem_cons_self
       cases hK with
       | @cons _ _ S1 rest1 hS1 hretk hchk hK' =>
@@ -548,36 +560,37 @@ theorem cursor_stepS {code : ByteArray} {c : Cert} (hc : Cert.check code c = tru
           by rw [hst, List.append_assoc], ?_, hK'⟩
         · intro hm
           rcases List.mem_append.mp hm with hm | hm
-          · simp [List.mem_replicate] at hm
+          · simp only [List.mem_replicate, ne_eq, reduceCtorEq, and_false] at hm
           · exact hretk hm
         · rw [← hlenS]
           exact List.rel_append (frameMatches_unk_length S') hS1
-    | [], hcheck, _, _ => simp [checkNode] at hcheck
-    | .const _ :: _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .unk :: _, hcheck, _, _ => simp [checkNode] at hcheck
+    | [], hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .const _ :: _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .unk :: _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
   | last l =>
-    have hbyte : byteAt code pc = some l.toUInt8 := by simpa [checkNode] using hcheck
+    have hbyte : byteAt code pc = some l.toUInt8 := by simpa only [checkNode, beq_iff_eq] using
+      hcheck
     have hat : Linst.At n.sevm.code n.pc l := by
       rw [hcode, hpc]; exact byteAt_linst_at hbyte
     exact (Cursor.parentStep_false_of_linst edge hat).elim
   | pcAt p f =>
     have h' : (bytesAt code pc (Ninst.toBytes (Ninst.reg .pc)) = true ∧ p = pc) ∧
         checkNode code c.entries m (pc + 1) (.const (Nat.toB256 pc) :: a) f = true := by
-      simpa [checkNode] using hcheck
+      simpa only [checkNode, Bool.and_eq_true, beq_iff_eq] using hcheck
     obtain ⟨⟨hbytes, rfl⟩, hrest⟩ := h'
     have hat : Ninst.At n.sevm.code n.pc (.reg .pc) := by
       rw [hcode, hpc]
       exact Ninst.at_of_slice (bytesAt_slice (ninst_bytes_ne_nil _) hbytes)
     obtain ⟨hpc', hrun⟩ := Cursor.parentStep_pc edge hat
     rw [hpc] at hrun
-    refine ⟨_, .pcAt, .pcAt ⟨.none, trivial, _, hrun⟩ hrun, hcode', by simp [hpc', hpc], hrest,
-      fun hm => hret (by simpa using hm), Nat.toB256 p :: S, rest, ?_,
+    refine ⟨_, .pcAt, .pcAt ⟨.none, trivial, _, hrun⟩ hrun, hcode', by simp only [hpc', hpc], hrest,
+      fun hm => hret (by simpa only [List.mem_cons, reduceCtorEq, false_or] using hm), Nat.toB256 p :: S, rest, ?_,
       List.Forall₂.cons rfl hframe, hK⟩
     rw [pc_stepRun_stack hrun, hstack]
     rfl
   | undefined =>
     have hnone : n.sevm.code.getInst n.pc = none := by
-      rw [hcode, hpc]; simpa [checkNode, Option.isNone_iff_eq_none] using hcheck
+      rw [hcode, hpc]; simpa only [checkNode, Option.isNone_iff_eq_none] using hcheck
     exact (Cursor.parentStep_false_of_none edge hnone).elim
 
 /-- **One same-frame edge is one synthetic step.**  `cursor_stepS` without the
@@ -637,42 +650,42 @@ theorem CursorOK.tree_of_exec {code : ByteArray} {c : Cert} {n : Exec.Deriv}
     exact ⟨g, rfl, hcheck'⟩
   | last l =>
     have hl := byteAt_linst_at (show byteAt code pc = some l.toUInt8 by
-      simpa [checkNode] using hcheck)
+      simpa only [checkNode, beq_iff_eq] using hcheck)
     unfold Linst.At at hl
     unfold Ninst.At at hat
     rw [hat] at hl
     cases hl
   | undefined =>
     have hnone : code.getInst pc = none := by
-      simpa [checkNode, Option.isNone_iff_eq_none] using hcheck
+      simpa only [checkNode, Option.isNone_iff_eq_none] using hcheck
     unfold Ninst.At at hat
     rw [hat] at hnone
     cases hnone
-  | dest g => exact (hjump _ (by simp [checkNode] at hcheck; exact hcheck.1)).elim
+  | dest g => exact (hjump _ (by simp only [checkNode, Bool.and_eq_true, beq_iff_eq] at hcheck; exact hcheck.1)).elim
   | branch g h =>
     simp only [checkNode] at hcheck
     split at hcheck
-    · exact (hjump _ (by simp at hcheck; exact hcheck.1.1)).elim
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true] at hcheck; exact hcheck.1.1)).elim
     · cases hcheck
   | branchTo g k =>
     simp only [checkNode] at hcheck
     split at hcheck
-    · exact (hjump _ (by simp at hcheck; exact hcheck.1.1.1.1)).elim
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true] at hcheck; exact hcheck.1.1.1.1)).elim
     · cases hcheck
   | jump k =>
     simp only [checkNode] at hcheck
     split at hcheck
-    · exact (hjump _ (by simp at hcheck; exact hcheck.1.1.1)).elim
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq] at hcheck; exact hcheck.1.1.1)).elim
     · cases hcheck
   | callNext k g =>
     simp only [checkNode] at hcheck
     split at hcheck
-    · exact (hjump _ (by simp at hcheck; exact hcheck.1.1.1)).elim
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hcheck; exact hcheck.1.1.1)).elim
     · cases hcheck
   | ret =>
     simp only [checkNode] at hcheck
     split at hcheck
-    · exact (hjump _ (by simp at hcheck; exact hcheck.1)).elim
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq] at hcheck; exact hcheck.1)).elim
     · cases hcheck
   | pcAt p g =>
     simp only [checkNode, Bool.and_eq_true] at hcheck
@@ -692,10 +705,10 @@ theorem CursorOK.exec_call_or_staticcall {code : ByteArray} {c : Cert} {n : Exec
   simp only [checkNode, Bool.and_eq_true] at hcheck
   obtain ⟨_, hrest⟩ := hcheck
   cases habs : absNinst (.exec x) κ.a with
-  | none => simp [habs] at hrest
+  | none => simp only [habs, Bool.false_eq_true] at hrest
   | some a' =>
     obtain ⟨_, out, _, htrans, _⟩ := absNinst_nonpush_spec (fun _ _ h => by cases h) habs
-    cases x <;> simp [ninstTransfer] at htrans ⊢
+    cases x <;> simp only [ninstTransfer, reduceCtorEq, or_false, or_true] at htrans ⊢
 
 /-- **The stateful prefix form of the lift.**  Every node `N` of the same-frame
 chain of a frame `R` entered at pc `0` of certified bytes — whatever `R`'s

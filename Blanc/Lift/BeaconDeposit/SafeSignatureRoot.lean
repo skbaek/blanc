@@ -116,7 +116,7 @@ private theorem inv_site1 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : 
   have hw1 : img3.sliceD 384 32 0 = (cdWord sevm sP.toNat).toBytes := by
     rw [himg3, sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg2,
       sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg1]
-    simpa using sliceD_cd_word img sevm 384 sP.toNat 64 0 (by omega)
+    simpa only [add_zero] using sliceD_cd_word img sevm 384 sP.toNat 64 0 (by omega)
   have hw2 : img3.sliceD (384 + 32) 32 0 = (cdWord sevm (sP.toNat + 32)).toBytes := by
     rw [himg3, sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg2,
       sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg1]
@@ -209,7 +209,7 @@ private theorem inv_site1 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : 
   obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_sha (s := 384) (d := 448) (n := 832)
     (x1 := Nat.toB256 384) (x3 := Nat.toB256 448) (x4 := Nat.toB256 352)
     (R := 2 :: 0 :: pkR :: 0x80 :: a :: rt :: 96 :: sP :: R)
-    prog_14 (by simp) (by decide) hwf3 hr3 hs3 (by decide) (by decide) (by decide) (by decide)
+    prog_14 (by simp only [List.not_mem_nil, not_false_eq_true]) (by decide) hwf3 hr3 hs3 (by decide) (by decide) (by decide) (by decide)
     (by decide) (by decide) hfp3 hw1 hw2 hsha.nodeleg hsha.warm hsha.pre hsha.fork run
   rw [cdWord_pair] at hpost
   exact ⟨b', M', G', hpost, hwf', hr', by rw [hs']; rfl, run⟩
@@ -269,7 +269,7 @@ private theorem inv_site2 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : 
     rw [himg4, sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg3,
       sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg2,
       sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg1]
-    simpa using sliceD_cd_word img sevm 480 p 32 0 (by omega)
+    simpa only [add_zero] using sliceD_cd_word img sevm 480 p 32 0 (by omega)
   have hw2 : img4.sliceD (480 + 32) 32 0 = (0 : B256).toBytes := by
     rw [himg4, sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg3,
       sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg2]
@@ -367,7 +367,7 @@ private theorem inv_site2 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : 
   obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_sha (s := 480) (d := 544) (n := 832)
     (x1 := Nat.toB256 480) (x3 := Nat.toB256 544) (x4 := Nat.toB256 448)
     (R := h1 :: 2 :: 0 :: pkR :: 0x80 :: a :: rt :: 96 :: sP :: R)
-    prog_15 (by simp) (by decide) hwf4 hr4 hs4 (by decide) (by decide) (by decide) (by decide)
+    prog_15 (by simp only [List.not_mem_nil, not_false_eq_true]) (by decide) hwf4 hr4 hs4 (by decide) (by decide) (by decide) (by decide)
     (by decide) (by decide) hfp4 hw1 hw2 hsha.nodeleg hsha.warm hsha.pre hsha.fork run
   rw [cdWord_toBytes] at hpost
   exact ⟨b', M', G', hpost, hwf', hr', by rw [hs']; rfl, run⟩
@@ -504,7 +504,7 @@ private theorem inv_site3 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : 
   rw [t_0a9d_c15_eq] at run
   obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_sha (s := 576) (d := 640) (n := 832)
     (x1 := Nat.toB256 576) (x3 := Nat.toB256 640) (x4 := Nat.toB256 544) (R := R)
-    prog_16 (by simp) (by decide) hwf4 hr4 hs4 (by decide) (by decide) (by decide) (by decide)
+    prog_16 (by simp only [List.not_mem_nil, not_false_eq_true]) (by decide) hwf4 hr4 hs4 (by decide) (by decide) (by decide) (by decide)
     (by decide) (by decide) hfp4 hw1 hw2 hsha.nodeleg hsha.warm hsha.pre hsha.fork run
   exact ⟨b', M', G', hpost, hwf', hr', by rw [hs']; rfl, run⟩
 
@@ -535,13 +535,16 @@ theorem safe_signatureRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR : B25
   have hfp0 : img.sliceD 64 32 0 = (Nat.toB256 352).toBytes := by
     rw [hfp]; rfl
   have hpk : img.sliceD 352 32 0 = pkR.toBytes := by
-    have := hf (0x160, pkR.toBytes) (by simp)
+    have := hf (0x160, pkR.toBytes) (by simp only [List.mem_cons, Prod.mk.injEq, Nat.reduceEqDiff,
+      false_and, List.not_mem_nil, or_false, or_true])
     rwa [B256.length_toBytes] at this
   have h80 : img.sliceD 128 32 0 = (8 : B256).toBytes := by
-    have := hf (0x80, (8 : B256).toBytes) (by simp)
+    have := hf (0x80, (8 : B256).toBytes) (by simp only [List.mem_cons, Prod.mk.injEq,
+      Nat.reduceEqDiff, false_and, List.not_mem_nil, or_self, or_false])
     rwa [B256.length_toBytes] at this
   have ha0 : img.sliceD 160 8 0 = BeaconDeposit.le64 a.toNat :=
-    hf (0xa0, BeaconDeposit.le64 a.toNat) (by simp)
+    hf (0xa0, BeaconDeposit.le64 a.toNat) (by simp only [List.mem_cons, Prod.mk.injEq,
+      Nat.reduceEqDiff, false_and, List.not_mem_nil, or_self, or_false, or_true])
   set R := [(32 : B256), wP, 48, pP, 0x01b8, sel] with hR
   -- site 1
   obtain ⟨b1, M1, G1, hp1, hwf1, hr1, hs1, run⟩ :=

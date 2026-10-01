@@ -195,14 +195,15 @@ theorem OssifiableConstructorDelegateBoundary.settled_child_exact
       (pref_append
         [gasWord, implementation, 0x100, Nat.toB256 setupData.length, 0, 0]
         tail)
-      (by simpa using pCall)
+      (by simpa only [List.cons_append, List.nil_append] using pCall)
   have spawnPref :
       ([spawn.gasWord, spawn.codeWord, spawn.inputOffsetWord,
           spawn.inputSizeWord, spawn.outputOffsetWord,
           spawn.outputSizeWord] : List B256) <<+ callPre.stack := by
     rw [spawn.stackEq]
     exact ⟨spawn.stackTail, rfl⟩
-  have operands := List.pref_unique (by simp) knownPref spawnPref
+  have operands := List.pref_unique (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd]) knownPref spawnPref
   simp only [List.cons.injEq, and_true] at operands
   rcases operands with
     ⟨gasEq, codeEq, inputOffsetEq, inputSizeEq, outputOffsetEq,

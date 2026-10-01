@@ -119,7 +119,7 @@ theorem attainable_of_entryRoute_frame_burn {sevm : Sevm} {pre : Devm}
   have routedMember : site ∈ runtimePersistentSourceSites officialParams := by
     unfold runtimePersistentSourceSites
     rw [List.mem_filter]
-    exact ⟨hmem, by simp [hinstrTarget, isPersistentWriteInstruction]⟩
+    exact ⟨hmem, by simp only [isPersistentWriteInstruction, hinstrTarget]⟩
   have siteEq : rowSite = site :=
     runtimePersistentSourceSite_eq_of_pc
       (RuntimePersistentWrite.mem_runtimePersistentSourceSites found)
@@ -1048,7 +1048,9 @@ theorem runtimeMain_routeTo_pauseKernel_ok (dp : DeployParams)
             staging).trans (hstor'.trans (hstor.trans gb))).symm]
     exact wD
   refine routeTo_call (body := setPauserKernel) callTail
-    (by simp [runtime, aux, setPauserSlot]) (fun kernelStart kburn ktail => ?_)
+    (by simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      setPauserSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]) (fun kernelStart kburn ktail => ?_)
   exact kernelRoute kernelStart
     (MemWordAt.of_memory_eq kburn.memory.symm wT)
     (MemWordAt.of_memory_eq kburn.memory.symm wN)
@@ -1147,7 +1149,9 @@ theorem runtimeMain_to_pauseKernel_any (dp : DeployParams) {P : Prop}
             staging).trans (hstor'.trans (hstor.trans gb))).symm]
     exact wD
   refine runToCallResult (body := setPauserKernel) callTail
-    (by simp [runtime, aux, setPauserSlot]) (fun kernelStart kburn ktail => ?_)
+    (by simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      setPauserSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]) (fun kernelStart kburn ktail => ?_)
   exact kernelResult kernelStart
     (MemWordAt.of_memory_eq kburn.memory.symm wT)
     (MemWordAt.of_memory_eq kburn.memory.symm wN)
@@ -1252,7 +1256,9 @@ theorem runtimeMain_routeTo_pauseKernel_any (dp : DeployParams)
             staging).trans (hstor'.trans (hstor.trans gb))).symm]
     exact wD
   refine routeTo_call (body := setPauserKernel) callTail
-    (by simp [runtime, aux, setPauserSlot]) (fun kernelStart kburn ktail => ?_)
+    (by simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      setPauserSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]) (fun kernelStart kburn ktail => ?_)
   exact kernelRoute kernelStart
     (MemWordAt.of_memory_eq kburn.memory.symm wT)
     (MemWordAt.of_memory_eq kburn.memory.symm wN)
@@ -1471,7 +1477,7 @@ theorem pauseKernel_previousPauserNonzero3 {sevm : Sevm} {devm devm' : Devm}
     chainEnd windowD8, chainEnd windowP8, ?_⟩
   · intro w rest hstack
     rw [head_of_stack_prefix p16 hstack]
-    simp [B256.eqCheck, hnonzero]
+    simp only [B256.eqCheck, hnonzero, ↓reduceIte]
   · intro key hkey
     show (Devm.getStor devm' sevm.currentTarget).get key = _
     rw [← hstor16, hset, Stor.get_set_ne _ hkey, hstor14]
@@ -1765,7 +1771,9 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
       rw [hsetE, Stor.get_set_ne _ hneCE]
       exact arrD.2.2⟩
   refine routeTo_call (body := afterOldPauser) tail5
-    (by simp [runtime, aux, afterOldPauserSlot]) (fun f fburn tail6 => ?_)
+    (by simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      afterOldPauserSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]) (fun f fburn tail6 => ?_)
   have wTf := MemWordAt.of_memory_eq fburn.memory.symm wTe
   have wNf := MemWordAt.of_memory_eq fburn.memory.symm wNe
   have wCf := MemWordAt.of_memory_eq fburn.memory.symm wCe
@@ -1795,7 +1803,9 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
   have ki := (cellOf (getStor_of_state hpopi.state).symm).trans kg
   have arrI := arrOf (getStor_of_state hpopi.state).symm arrG
   refine routeTo_call (body := removeTarget) arm2
-    (by simp [runtime, aux, removeTargetSlot]) (fun j jburn tail8 => ?_)
+    (by simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      removeTargetSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]) (fun j jburn tail8 => ?_)
   have wTj := MemWordAt.of_memory_eq jburn.memory.symm wTi
   have wCj := MemWordAt.of_memory_eq jburn.memory.symm wCi
   have wDj := MemWordAt.of_memory_eq jburn.memory.symm wDi
@@ -1819,7 +1829,9 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
   have kl := (hRemoveCount j k l wTj arrJ.1 arrJ.2.1 arrJ.2.2 krun
     lrun).trans kj
   refine routeTo_call (body := finishSetPauser) tail10
-    (by simp [runtime, aux, finishSetPauserSlot]) (fun m mburn tail11 => ?_)
+    (by simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      finishSetPauserSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]) (fun m mburn tail11 => ?_)
   have wTm := MemWordAt.of_memory_eq mburn.memory.symm wTl
   have wCm := MemWordAt.of_memory_eq mburn.memory.symm wCl
   have wDm := MemWordAt.of_memory_eq mburn.memory.symm wDl
@@ -1838,7 +1850,9 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall (dp : DeployParams)
   have co := cn.ofState hpopo.state
   have ko := (cellOf (getStor_of_state hpopo.state).symm).trans kn
   refine routeTo_call (body := pauseAfterSet) arm3
-    (by simp [runtime, aux, pauseAfterSetSlot]) (fun p pburn tail13 => ?_)
+    (by simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      pauseAfterSetSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]) (fun p pburn tail13 => ?_)
   exact bodyRoute p (MemWordAt.of_memory_eq pburn.memory.symm wTo)
     (MemWordAt.of_memory_eq pburn.memory.symm wDo)
     (co.ofState pburn.state)
@@ -1931,7 +1945,7 @@ theorem setPauserKernel_to_pauseAfterSet_any (dp : DeployParams) {P : Prop}
   refine runToBranchLeftResult tail
     (fun w rest hstack => by
       rw [memoryZeroCheck_word (k := targetWord) windowT zrun w rest hstack]
-      simp [B256.eqCheck, targetNonzero])
+      simp only [B256.eqCheck, targetNonzero, ↓reduceIte])
     (fun a hpop arm => ?_)
   have ga : Devm.getStor a = Devm.getStor devm :=
     (getStor_of_state hpop.state).symm.trans gz
@@ -2030,7 +2044,9 @@ theorem setPauserKernel_to_pauseAfterSet_any (dp : DeployParams) {P : Prop}
       rw [hsetE, Stor.get_set_ne _ hneCE]
       exact arrD.2.2⟩
   refine runToCallResult (body := afterOldPauser) tail5
-    (by simp [runtime, aux, afterOldPauserSlot]) (fun f fburn tail6 => ?_)
+    (by simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      afterOldPauserSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]) (fun f fburn tail6 => ?_)
   have wTf := MemWordAt.of_memory_eq fburn.memory.symm wTe
   have wNf := MemWordAt.of_memory_eq fburn.memory.symm wNe
   have wCf := MemWordAt.of_memory_eq fburn.memory.symm wCe
@@ -2060,7 +2076,9 @@ theorem setPauserKernel_to_pauseAfterSet_any (dp : DeployParams) {P : Prop}
   have ki := (cellOf (getStor_of_state hpopi.state).symm).trans kg
   have arrI := arrOf (getStor_of_state hpopi.state).symm arrG
   refine runToCallResult (body := removeTarget) arm2
-    (by simp [runtime, aux, removeTargetSlot]) (fun j jburn tail8 => ?_)
+    (by simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      removeTargetSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]) (fun j jburn tail8 => ?_)
   have wTj := MemWordAt.of_memory_eq jburn.memory.symm wTi
   have wCj := MemWordAt.of_memory_eq jburn.memory.symm wCi
   have wDj := MemWordAt.of_memory_eq jburn.memory.symm wDi
@@ -2084,7 +2102,9 @@ theorem setPauserKernel_to_pauseAfterSet_any (dp : DeployParams) {P : Prop}
   have kl := (hRemoveCount j k l wTj arrJ.1 arrJ.2.1 arrJ.2.2 krun
     lrun).trans kj
   refine runToCallResult (body := finishSetPauser) tail10
-    (by simp [runtime, aux, finishSetPauserSlot]) (fun m mburn tail11 => ?_)
+    (by simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      finishSetPauserSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]) (fun m mburn tail11 => ?_)
   have wTm := MemWordAt.of_memory_eq mburn.memory.symm wTl
   have wCm := MemWordAt.of_memory_eq mburn.memory.symm wCl
   have wDm := MemWordAt.of_memory_eq mburn.memory.symm wDl
@@ -2103,7 +2123,9 @@ theorem setPauserKernel_to_pauseAfterSet_any (dp : DeployParams) {P : Prop}
   have co := cn.ofState hpopo.state
   have ko := (cellOf (getStor_of_state hpopo.state).symm).trans kn
   refine runToCallResult (body := pauseAfterSet) arm3
-    (by simp [runtime, aux, pauseAfterSetSlot]) (fun p pburn tail13 => ?_)
+    (by simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      pauseAfterSetSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]) (fun p pburn tail13 => ?_)
   exact bodyResult p (MemWordAt.of_memory_eq pburn.memory.symm wTo)
     (MemWordAt.of_memory_eq pburn.memory.symm wDo)
     (co.ofState pburn.state)
@@ -2193,7 +2215,7 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall_any (dp : DeployParams)
   refine routeTo_branchLeft_frame tail
     (fun w rest hstack => by
       rw [memoryZeroCheck_word (k := targetWord) windowT zrun w rest hstack]
-      simp [B256.eqCheck, targetNonzero])
+      simp only [B256.eqCheck, targetNonzero, ↓reduceIte])
     (fun a hpop arm => ?_)
   have ga : Devm.getStor a = Devm.getStor devm :=
     (getStor_of_state hpop.state).symm.trans gz
@@ -2292,7 +2314,9 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall_any (dp : DeployParams)
       rw [hsetE, Stor.get_set_ne _ hneCE]
       exact arrD.2.2⟩
   refine routeTo_call (body := afterOldPauser) tail5
-    (by simp [runtime, aux, afterOldPauserSlot]) (fun f fburn tail6 => ?_)
+    (by simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      afterOldPauserSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]) (fun f fburn tail6 => ?_)
   have wTf := MemWordAt.of_memory_eq fburn.memory.symm wTe
   have wNf := MemWordAt.of_memory_eq fburn.memory.symm wNe
   have wCf := MemWordAt.of_memory_eq fburn.memory.symm wCe
@@ -2322,7 +2346,9 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall_any (dp : DeployParams)
   have ki := (cellOf (getStor_of_state hpopi.state).symm).trans kg
   have arrI := arrOf (getStor_of_state hpopi.state).symm arrG
   refine routeTo_call (body := removeTarget) arm2
-    (by simp [runtime, aux, removeTargetSlot]) (fun j jburn tail8 => ?_)
+    (by simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      removeTargetSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]) (fun j jburn tail8 => ?_)
   have wTj := MemWordAt.of_memory_eq jburn.memory.symm wTi
   have wCj := MemWordAt.of_memory_eq jburn.memory.symm wCi
   have wDj := MemWordAt.of_memory_eq jburn.memory.symm wDi
@@ -2346,7 +2372,9 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall_any (dp : DeployParams)
   have kl := (hRemoveCount j k l wTj arrJ.1 arrJ.2.1 arrJ.2.2 krun
     lrun).trans kj
   refine routeTo_call (body := finishSetPauser) tail10
-    (by simp [runtime, aux, finishSetPauserSlot]) (fun m mburn tail11 => ?_)
+    (by simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      finishSetPauserSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]) (fun m mburn tail11 => ?_)
   have wTm := MemWordAt.of_memory_eq mburn.memory.symm wTl
   have wCm := MemWordAt.of_memory_eq mburn.memory.symm wCl
   have wDm := MemWordAt.of_memory_eq mburn.memory.symm wDl
@@ -2365,7 +2393,9 @@ theorem setPauserKernel_routeTo_pauseAfterSetCall_any (dp : DeployParams)
   have co := cn.ofState hpopo.state
   have ko := (cellOf (getStor_of_state hpopo.state).symm).trans kn
   refine routeTo_call (body := pauseAfterSet) arm3
-    (by simp [runtime, aux, pauseAfterSetSlot]) (fun p pburn tail13 => ?_)
+    (by simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      pauseAfterSetSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]) (fun p pburn tail13 => ?_)
   exact bodyRoute p (MemWordAt.of_memory_eq pburn.memory.symm wTo)
     (MemWordAt.of_memory_eq pburn.memory.symm wDo)
     (co.ofState pburn.state)
@@ -2434,7 +2464,7 @@ instance : Rinst.Hinv Devm.memory Rinst.extcodesize := ⟨by
     rw [Devm.popToAdr_def] at h1
     simp only [Functor.mapRev, Functor.map, Except.map] at h1
     rcases hp : Devm.pop pre with _ | ⟨x, s₂⟩ <;>
-      simp [hp, Prod.mapFst] at h1
+      simp only [hp, reduceCtorEq, Prod.mapFst, Prod.map_apply, id_eq, Except.ok.injEq, Prod.mk.injEq] at h1
     rw [← h1.2]
     exact (Devm.pop_of_pop hp).memory
   refine hm1.trans ?_
@@ -3059,7 +3089,7 @@ theorem runtimeMain_routeTo_pauseRetainedExpiry
   refine routeTo_branchLeft_frame btail
     (fun w rest hs => by
       rw [pauseCount_word ks rline w rest hs]
-      simp [B256.eqCheck, hnz])
+      simp only [B256.eqCheck, hnz, ↓reduceIte])
     (fun _s' _hpop armTail => ?_)
   refine routeTo_line checkedHeartbeatExpiryTest armTail
     (fun _s'' _r'' tail'' => ?_)

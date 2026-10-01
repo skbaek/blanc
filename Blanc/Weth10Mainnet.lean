@@ -27,7 +27,7 @@ private theorem mainnet_forkAt?_ne_amsterdam (t : Nat) :
     by_cases h2 : mainnetOsakaTimestamp ≤ t <;>
     by_cases h3 : mainnetBpo1Timestamp ≤ t <;>
     by_cases h4 : mainnetBpo2Timestamp ≤ t <;>
-    simp [h1, h2, h3, h4]
+    simp only [h1, decide_true, h2, h3, h4, List.getLast?_cons_cons, List.getLast?_singleton, Option.map_some, ne_eq, Option.some.injEq, reduceCtorEq, not_false_eq_true, decide_false, List.getLast?_nil, Option.map_none]
 
 /-- Every successful lookup in the currently modeled mainnet schedule selects
 one of the four rule records named by that schedule. -/
@@ -38,7 +38,7 @@ theorem mainnet_rulesAt_eq_named
       rules = bpo1Rules ∨ rules = bpo2Rules := by
   rw [ChainConfig.rulesAt] at h
   cases hf : mainnetChainConfig.forkAt timestamp with
-  | error e => simp [hf] at h
+  | error e => simp only [hf, Except.bind_error, reduceCtorEq] at h
   | ok f =>
     rw [hf] at h
     simp only [Fork.rules, bind, Except.bind, Except.mapError,
@@ -57,7 +57,7 @@ theorem mainnet_rulesAt_eq_named
     unfold ChainConfig.forkAt at hf
     rw [hv] at hf
     cases hq : mainnetChainConfig.forkAt? timestamp with
-    | none => simp [hq, Except.mapError, bind, Except.bind] at hf
+    | none => simp only [bind, Except.bind, Except.mapError, hq, reduceCtorEq] at hf
     | some g =>
       simp only [hq, Except.mapError, bind, Except.bind, Except.ok.injEq] at hf
       rw [hf]
@@ -70,9 +70,10 @@ theorem mainnet_rulesAt_eq_bpo2_of_ge
   change 1_767_747_671 ≤ timestamp at h
   have hvalid : mainnetChainConfig.validate = .ok () := by decide
   rw [ChainConfig.rulesAt, ChainConfig.forkAt, hvalid]
-  simp [ChainConfig.forkAt?, mainnetChainConfig, mainnetPragueTimestamp,
-    mainnetOsakaTimestamp, mainnetBpo1Timestamp, mainnetBpo2Timestamp, h,
-    Fork.rules, Fork.rules?]
+  simp only [ChainConfig.forkAt?, mainnetChainConfig, mainnetPragueTimestamp, mainnetOsakaTimestamp,
+    mainnetBpo1Timestamp, mainnetBpo2Timestamp, List.getLast?_filter, List.reverse_cons,
+    List.reverse_nil, List.nil_append, List.cons_append, h, decide_true, List.find?_cons_of_pos,
+    Option.map_some, Fork.rules, bind_assoc, Except.bind_ok]
   rfl
 
 /-! ## Closed redemption ceiling under every mainnet rule set -/
@@ -116,8 +117,7 @@ theorem mainnet_checkTransactionGasCap_of_le
     (hgas : gas ≤ 2 ^ 24) :
     checkTransactionGasCap rules.tx gas = .ok () := by
   rcases mainnet_rulesAt_eq_named hrules with h | h | h | h <;> subst h <;>
-    simp [checkTransactionGasCap, pragueRules, osakaRules, bpo1Rules,
-      bpo2Rules, pragueTransactionLimits, osakaTransactionLimits] <;>
+    simp only [checkTransactionGasCap, pragueRules, pragueTransactionLimits, osakaRules, osakaTransactionLimits, gt_iff_lt, Nat.toString_eq_repr, ite_eq_right_iff, reduceCtorEq, imp_false, not_lt, bpo1Rules, bpo2Rules] <;>
     omega
 
 /-! ## BPO2 deployment root -/

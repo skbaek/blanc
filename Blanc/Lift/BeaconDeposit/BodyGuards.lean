@@ -71,7 +71,7 @@ theorem body_guards {sevm : Sevm} {b : Devm} {sel rt sP wP pP : B256} {G : Nat}
       (G := G + (874 + sloadCost sevm b solCountSlot)) (v := gweiAmount sevm)
       (ret := (1344 : B256))
       (rest := [96, gweiAmount sevm, rt, 96, sP, 32, wP, 48, pP, 440, sel])
-      (by simp) wf_mem0 reads_mem0 (by rw [mem0_size]) (by rw [mem0_size])
+      (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) wf_mem0 reads_mem0 (by rw [mem0_size]) (by rw [mem0_size])
       img0_fp (by rw [p80]) (by rw [p80]; omega) (by rw [p80]; decide) hcd
   have himg1 : Mem.Reads M1 (img1 (gweiAmount sevm)) := hr1
   have hs1' : M1.size = 192 := by rw [hs1, mem0_size, p80]; decide
@@ -82,7 +82,7 @@ theorem body_guards {sevm : Sevm} {b : Devm} {sel rt sP wP pP : B256} {G : Nat}
       (G := G) (v := cnt) (ret := (1397 : B256))
       (rest := [96, sP, (128 : B256), 32, wP, 48, pP, BeaconDeposit.depositEventTopic,
         (128 : B256), gweiAmount sevm, rt, 96, sP, 32, wP, 48, pP, 440, sel])
-      (by simp) hwf1 himg1 (by rw [hs1']) (by rw [hs1']; decide) hfp2
+      (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) hwf1 himg1 (by rw [hs1']) (by rw [hs1']; decide) hfp2
       (by decide) (by decide) (by decide) hcd
   set img2 := leImg (img1 (gweiAmount sevm)) (192 : B256) cnt with himg2def
   have himg2_eq : img2 = Bytes.writeAt
@@ -152,58 +152,92 @@ theorem body_guards {sevm : Sevm} {b : Devm} {sel rt sP wP pP : B256} {G : Nat}
     (((G + (874 + sloadCost sevm b solCountSlot)) + 830) + 8) + 170 by omega]
   unfold t_0304_c7
   refine rx_dest ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_dup (n := 6) rfl (by simp) ?_
-  refine rx_eq (v := 1) (by decide) (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_dup (n := 6) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_eq (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_035d_c7
   refine rx_dest ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_dup (n := 4) rfl (by simp) ?_
-  refine rx_eq (v := 1) (by decide) (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_dup (n := 4) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_eq (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_03b6_c7
   refine rx_dest ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_dup (n := 2) rfl (by simp) ?_
-  refine rx_eq (v := 1) (by decide) (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_dup (n := 2) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_eq (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_040f_c7
   refine rx_dest ?_
-  refine rx_push (w := 0x0de0b6b3a7640000) (by decide) (by simp) ?_
-  refine rx_callvalue (by simp) ?_
-  refine rx_lt hltz (by simp) ?_
-  refine rx_iszero (v := 1) (by decide) (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_push (w := 0x0de0b6b3a7640000) (by decide) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_callvalue (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_lt hltz (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_iszero (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_0470_c7
   refine rx_dest ?_
-  refine rx_push (w := 1000000000) (by decide) (by simp) ?_
-  refine rx_callvalue (by simp) ?_
-  refine rx_mod hmodv (by simp) ?_
-  refine rx_iszero (v := 1) (by decide) (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_push (w := 1000000000) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_callvalue (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_mod hmodv (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_iszero (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_04cd_c7
   refine rx_dest ?_
-  refine rx_push (w := 1000000000) (by decide) (by simp) ?_
-  refine rx_callvalue (by simp) ?_
-  refine rx_div (v := gweiAmount sevm) rfl (by simp) ?_
-  refine rx_push (w := 0xffffffffffffffff) (by decide) (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_gt hgtz (by simp) ?_
-  refine rx_iszero (v := 1) (by decide) (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_push (w := 1000000000) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_callvalue (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_div (v := gweiAmount sevm) rfl (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0xffffffffffffffff) (by decide) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_gt hgtz (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_iszero (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_0535_c7
   refine rx_dest ?_
-  refine rx_push (w := 96) (by decide) (by simp) ?_
-  refine rx_push (w := 1344) (by decide) (by simp) ?_
-  refine rx_dup (n := 2) rfl (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_push (w := 96) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 1344) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 2) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_callRet (j := 25) rfl hcall1 ?_
   rw [show G + (874 + sloadCost sevm b solCountSlot) =
     (((G + 827) + 11) + sloadCost sevm b solCountSlot) + 36 by omega]
@@ -212,18 +246,30 @@ theorem body_guards {sevm : Sevm} {b : Devm} {sel rt sP wP pP : B256} {G : Nat}
   refine rx_swap1 ?_
   refine rx_pop ?_
   refine rx_push (w := BeaconDeposit.depositEventTopic)
-    (by rw [BeaconDeposit.depositEventTopic_eq]; decide) (by simp) ?_
-  refine rx_dup (n := 9) rfl (by simp) ?_
-  refine rx_dup (n := 9) rfl (by simp) ?_
-  refine rx_dup (n := 9) rfl (by simp) ?_
-  refine rx_dup (n := 9) rfl (by simp) ?_
-  refine rx_dup (n := 5) rfl (by simp) ?_
-  refine rx_dup (n := 10) rfl (by simp) ?_
-  refine rx_dup (n := 10) rfl (by simp) ?_
-  refine rx_push (w := 1397) (by decide) (by simp) ?_
-  refine rx_push (w := solCountSlot) (by decide) (by simp) ?_
-  refine rx_sload_sel hfork (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+    (by rw [BeaconDeposit.depositEventTopic_eq]; decide) (by simp only [List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 9) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 9) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 9) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 9) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 5) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 10) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 10) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 1397) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := solCountSlot) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_sload_sel hfork (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   exact rx_callRet (j := 25) rfl hcall2 k
 
 end Blanc.Lift.BeaconDeposit

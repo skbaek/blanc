@@ -61,7 +61,7 @@ theorem attacker_of_child (d3 : Devm) (k3 : ChildOk e2.sta aCall d3)
   · rename_i c hc
     generalize hr : wrun fs2 e2.sta 2 c = r at hk ⊢
     rcases r with c' | ⟨d | d, cl⟩ | _
-    · simp [obs2] at hk
+    · simp only [obs2, reduceCtorEq] at hk
     · simp only [obs2, Option.some.injEq, Prod.mk.injEq, Bool.and_eq_true,
         decide_eq_true_eq] at hk
       obtain ⟨hg, ho, ⟨⟨⟨he, hkk⟩, hka⟩, hks⟩, hkc⟩ := hk
@@ -73,9 +73,9 @@ theorem attacker_of_child (d3 : Devm) (k3 : ChildOk e2.sta aCall d3)
       rw [hkk, hka, hks, hkc] at hag
       exact ⟨hok, hag, hg, List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) ho,
         herr⟩
-    · simp [obs2] at hk
-    · simp [obs2] at hk
-  · simp [obs2] at hk
+    · simp only [obs2, reduceCtorEq] at hk
+    · simp only [obs2, reduceCtorEq] at hk
+  · simp only [obs2, reduceCtorEq] at hk
 
 /-- **The attacker's subtree as frame 1's child** (EELS frames 2-4). -/
 theorem attacker_child : ChildOk sevm1 cfg339 post2 ∧ ChildAgree post2 keysA adrsA storA acsA ∧

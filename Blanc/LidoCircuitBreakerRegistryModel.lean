@@ -69,17 +69,17 @@ theorem findEntry_targetAt {entries target index pauser}
     (h : findEntry entries target = some (index, pauser)) :
     targetAt entries index = target := by
   induction entries generalizing index pauser with
-  | nil => simp [findEntry] at h
+  | nil => simp only [findEntry, reduceCtorEq] at h
   | cons entry rest ih =>
       by_cases heq : entry.1 = target
-      · simp [findEntry, heq] at h
+      · simp only [findEntry, heq, ↓reduceIte, Option.some.injEq, Prod.mk.injEq] at h
         obtain ⟨rfl, rfl⟩ := h
-        simpa [targetAt] using heq
+        simpa only [targetAt] using heq
       · cases hfind : findEntry rest target with
-        | none => simp [findEntry, heq, hfind] at h
+        | none => simp only [findEntry, heq, ↓reduceIte, hfind, reduceCtorEq] at h
         | some found =>
             obtain ⟨foundIndex, foundPauser⟩ := found
-            simp [findEntry, heq, hfind] at h
+            simp only [findEntry, heq, ↓reduceIte, hfind, Option.some.injEq, Prod.mk.injEq] at h
             obtain ⟨rfl, rfl⟩ := h
             exact ih hfind
 
@@ -87,37 +87,38 @@ theorem findEntry_assignmentAt {entries target index pauser}
     (h : findEntry entries target = some (index, pauser)) :
     assignmentAt entries target = pauser := by
   induction entries generalizing index pauser with
-  | nil => simp [findEntry] at h
+  | nil => simp only [findEntry, reduceCtorEq] at h
   | cons entry rest ih =>
       by_cases heq : entry.1 = target
-      · simp [findEntry, heq] at h
+      · simp only [findEntry, heq, ↓reduceIte, Option.some.injEq, Prod.mk.injEq] at h
         obtain ⟨rfl, rfl⟩ := h
-        simp [assignmentAt, heq]
+        simp only [assignmentAt, heq, ↓reduceIte]
       · cases hfind : findEntry rest target with
-        | none => simp [findEntry, heq, hfind] at h
+        | none => simp only [findEntry, heq, ↓reduceIte, hfind, reduceCtorEq] at h
         | some found =>
             obtain ⟨foundIndex, foundPauser⟩ := found
-            simp [findEntry, heq, hfind] at h
+            simp only [findEntry, heq, ↓reduceIte, hfind, Option.some.injEq, Prod.mk.injEq] at h
             obtain ⟨rfl, rfl⟩ := h
-            simpa [assignmentAt, heq] using ih hfind
+            simpa only [assignmentAt, heq, ↓reduceIte] using ih hfind
 
 theorem findEntry_oneBasedIndexAt {entries target index pauser}
     (h : findEntry entries target = some (index, pauser)) :
     oneBasedIndexAt entries target = index + 1 := by
   induction entries generalizing index pauser with
-  | nil => simp [findEntry] at h
+  | nil => simp only [findEntry, reduceCtorEq] at h
   | cons entry rest ih =>
       by_cases heq : entry.1 = target
-      · simp [findEntry, heq] at h
+      · simp only [findEntry, heq, ↓reduceIte, Option.some.injEq, Prod.mk.injEq] at h
         obtain ⟨rfl, rfl⟩ := h
-        simp [oneBasedIndexAt, heq]
+        simp only [oneBasedIndexAt, heq, ↓reduceIte, zero_add]
       · cases hfind : findEntry rest target with
-        | none => simp [findEntry, heq, hfind] at h
+        | none => simp only [findEntry, heq, ↓reduceIte, hfind, reduceCtorEq] at h
         | some found =>
             obtain ⟨foundIndex, foundPauser⟩ := found
-            simp [findEntry, heq, hfind] at h
+            simp only [findEntry, heq, ↓reduceIte, hfind, Option.some.injEq, Prod.mk.injEq] at h
             obtain ⟨rfl, rfl⟩ := h
-            simp [oneBasedIndexAt, heq, ih hfind]
+            simp only [oneBasedIndexAt, heq, ↓reduceIte, ih hfind, Nat.add_eq_zero_iff, one_ne_zero,
+              and_false]
 
 def assignmentCount : List Entry → B256 → Nat
   | [], _ => 0
@@ -128,10 +129,10 @@ theorem findEntry_none_target_not_mem_targets
     (h : findEntry entries target = none) :
     target ∉ entries.map Prod.fst := by
   induction entries with
-  | nil => simp
+  | nil => simp only [List.map_nil, List.not_mem_nil, not_false_eq_true]
   | cons entry rest ih =>
       by_cases heq : entry.1 = target
-      · simp [findEntry, heq] at h
+      · simp only [findEntry, heq, ↓reduceIte, reduceCtorEq] at h
       · cases hfind : findEntry rest target with
         | none =>
             simp only [List.map_cons, List.mem_cons]
@@ -140,7 +141,7 @@ theorem findEntry_none_target_not_mem_targets
             · exact heq hmem.symm
             · exact ih hfind hmem
         | some found =>
-            simp [findEntry, heq, hfind] at h
+            simp only [findEntry, heq, ↓reduceIte, hfind, reduceCtorEq] at h
 
 theorem findEntry_none_assignmentAt
     {entries : List Entry} {target : B256}
@@ -150,10 +151,10 @@ theorem findEntry_none_assignmentAt
   | nil => rfl
   | cons entry rest ih =>
       by_cases heq : entry.1 = target
-      · simp [findEntry, heq] at h
+      · simp only [findEntry, heq, ↓reduceIte, reduceCtorEq] at h
       · cases hfind : findEntry rest target with
-        | none => simp [assignmentAt, heq, ih hfind]
-        | some found => simp [findEntry, heq, hfind] at h
+        | none => simp only [assignmentAt, heq, ↓reduceIte, ih hfind]
+        | some found => simp only [findEntry, heq, ↓reduceIte, hfind, reduceCtorEq] at h
 
 theorem findEntry_none_oneBasedIndexAt
     {entries : List Entry} {target : B256}
@@ -163,17 +164,17 @@ theorem findEntry_none_oneBasedIndexAt
   | nil => rfl
   | cons entry rest ih =>
       by_cases heq : entry.1 = target
-      · simp [findEntry, heq] at h
+      · simp only [findEntry, heq, ↓reduceIte, reduceCtorEq] at h
       · cases hfind : findEntry rest target with
-        | none => simp [oneBasedIndexAt, heq, ih hfind]
-        | some found => simp [findEntry, heq, hfind] at h
+        | none => simp only [oneBasedIndexAt, heq, ↓reduceIte, ih hfind]
+        | some found => simp only [findEntry, heq, ↓reduceIte, hfind, reduceCtorEq] at h
 
 theorem targetAt_append_old
     (entries : List Entry) (entry : Entry) {index : Nat}
     (hindex : index < entries.length) :
     targetAt (entries ++ [entry]) index = targetAt entries index := by
   induction entries generalizing index with
-  | nil => simp at hindex
+  | nil => simp only [List.length_nil, not_lt_zero] at hindex
   | cons head rest ih =>
       cases index with
       | zero => rfl
@@ -187,15 +188,15 @@ theorem findEntry_append_of_none
     findEntry (entries ++ [(target, pauser)]) target =
       some (entries.length, pauser) := by
   induction entries with
-  | nil => simp [findEntry]
+  | nil => simp only [List.nil_append, findEntry, ↓reduceIte, List.length_nil]
   | cons entry rest ih =>
       by_cases heq : entry.1 = target
-      · simp [findEntry, heq] at h
+      · simp only [findEntry, heq, ↓reduceIte, reduceCtorEq] at h
       · cases hfind : findEntry rest target with
         | none =>
-            simp [findEntry, heq, ih hfind]
+            simp only [List.cons_append, findEntry, heq, ↓reduceIte, ih hfind, List.length_cons]
         | some found =>
-            simp [findEntry, heq, hfind] at h
+            simp only [findEntry, heq, ↓reduceIte, hfind, reduceCtorEq] at h
 
 theorem targetAt_append_length_of_findEntry_none
     {entries : List Entry} {target pauser : B256}
@@ -209,11 +210,11 @@ theorem assignmentAt_append_of_ne
     assignmentAt (entries ++ [(target, pauser)]) wanted =
       assignmentAt entries wanted := by
   induction entries with
-  | nil => simp [assignmentAt, Ne.symm hneq]
+  | nil => simp only [List.nil_append, assignmentAt, Ne.symm hneq, ↓reduceIte]
   | cons entry rest ih =>
       by_cases hhead : entry.1 = wanted
-      · simp [assignmentAt, hhead]
-      · simp [assignmentAt, hhead, ih]
+      · simp only [List.cons_append, assignmentAt, hhead, ↓reduceIte]
+      · simp only [List.cons_append, assignmentAt, hhead, ↓reduceIte, ih]
 
 theorem assignmentAt_append_target_of_findEntry_none
     {entries : List Entry} {target pauser : B256}
@@ -227,11 +228,11 @@ theorem oneBasedIndexAt_append_of_ne
     oneBasedIndexAt (entries ++ [(target, pauser)]) wanted =
       oneBasedIndexAt entries wanted := by
   induction entries with
-  | nil => simp [oneBasedIndexAt, Ne.symm hneq]
+  | nil => simp only [List.nil_append, oneBasedIndexAt, Ne.symm hneq, ↓reduceIte]
   | cons entry rest ih =>
       by_cases hhead : entry.1 = wanted
-      · simp [oneBasedIndexAt, hhead]
-      · simp [oneBasedIndexAt, hhead, ih]
+      · simp only [List.cons_append, oneBasedIndexAt, hhead, ↓reduceIte]
+      · simp only [List.cons_append, oneBasedIndexAt, hhead, ↓reduceIte, ih]
 
 theorem oneBasedIndexAt_append_target_of_findEntry_none
     {entries : List Entry} {target pauser : B256}
@@ -245,9 +246,9 @@ theorem assignmentCount_append
     assignmentCount (entries ++ [entry]) wanted =
       (if entry.2 = wanted then 1 else 0) + assignmentCount entries wanted := by
   induction entries with
-  | nil => simp [assignmentCount]
+  | nil => simp only [List.nil_append, assignmentCount, add_zero]
   | cons head rest ih =>
-      simp [assignmentCount, ih, Nat.add_left_comm]
+      simp only [List.cons_append, assignmentCount, ih, Nat.add_left_comm]
 
 /-- One ordered entry list witnesses every projected Registry region.  Raw
 Solidity slot equality and global Keccak-injectivity are intentionally absent. -/
@@ -269,10 +270,10 @@ structure RegistryWitness (storage : LogicalStorage) (entries : List Entry) : Pr
 def emptyStorage : LogicalStorage := { read := fun _ => 0 }
 
 theorem emptyWitness : RegistryWitness emptyStorage [] := by
-  refine ⟨by simp, ?_, ?_, by rfl, ?_, ?_, ?_, ?_, by rfl⟩
-  · intro entry member; simp at member
-  · intro entry member; simp at member
-  · intro index bound; simp at bound
+  refine ⟨by simp only [List.map_nil, List.nodup_nil], ?_, ?_, by rfl, ?_, ?_, ?_, ?_, by rfl⟩
+  · intro entry member; simp only [List.not_mem_nil] at member
+  · intro entry member; simp only [List.not_mem_nil] at member
+  · intro index bound; simp only [List.length_nil, not_lt_zero] at bound
   · intro target canonical; rfl
   · intro target canonical; rfl
   · intro pauser canonical; rfl
@@ -303,7 +304,7 @@ def abiAddressArrayOrderMutantRejected : Bool :=
 theorem assignmentCount_le_length (entries : List Entry) (pauser : B256) :
     assignmentCount entries pauser ≤ entries.length := by
   induction entries with
-  | nil => simp [assignmentCount]
+  | nil => simp only [assignmentCount, List.length_nil, Std.le_refl]
   | cons entry rest ih =>
       simp only [assignmentCount, List.length_cons]
       split <;> omega
@@ -311,7 +312,7 @@ theorem assignmentCount_le_length (entries : List Entry) (pauser : B256) :
 theorem oneBasedIndexAt_le_length (entries : List Entry) (target : B256) :
     oneBasedIndexAt entries target ≤ entries.length := by
   induction entries with
-  | nil => simp [oneBasedIndexAt]
+  | nil => simp only [oneBasedIndexAt, List.length_nil, Std.le_refl]
   | cons entry rest ih =>
       simp only [oneBasedIndexAt, List.length_cons]
       split
@@ -322,18 +323,18 @@ theorem findEntry_index_lt {entries target index pauser}
     (h : findEntry entries target = some (index, pauser)) :
     index < entries.length := by
   induction entries generalizing index pauser with
-  | nil => simp [findEntry] at h
+  | nil => simp only [findEntry, reduceCtorEq] at h
   | cons entry rest ih =>
       by_cases heq : entry.1 = target
-      · simp [findEntry, heq] at h
+      · simp only [findEntry, heq, ↓reduceIte, Option.some.injEq, Prod.mk.injEq] at h
         obtain ⟨hindex, hpauser⟩ := h
         rw [← hindex]
         exact Nat.zero_lt_succ _
       · cases hfind : findEntry rest target with
-        | none => simp [findEntry, heq, hfind] at h
+        | none => simp only [findEntry, heq, ↓reduceIte, hfind, reduceCtorEq] at h
         | some found =>
             obtain ⟨foundIndex, foundPauser⟩ := found
-            simp [findEntry, heq, hfind] at h
+            simp only [findEntry, heq, ↓reduceIte, hfind, Option.some.injEq, Prod.mk.injEq] at h
             obtain ⟨rfl, rfl⟩ := h
             exact Nat.succ_lt_succ (ih hfind)
 
@@ -343,17 +344,17 @@ theorem mem_of_findEntry {entries : List Entry} {target : B256}
     (h : findEntry entries target = some (index, pauser)) :
     (target, pauser) ∈ entries := by
   induction entries generalizing index pauser with
-  | nil => simp [findEntry] at h
+  | nil => simp only [findEntry, reduceCtorEq] at h
   | cons entry rest ih =>
       by_cases heq : entry.1 = target
-      · simp [findEntry, heq] at h
+      · simp only [findEntry, heq, ↓reduceIte, Option.some.injEq, Prod.mk.injEq] at h
         obtain ⟨rfl, rfl⟩ := h
-        simp [← heq]
+        simp only [← heq, Prod.mk.eta, List.mem_cons, true_or]
       · cases hrest : findEntry rest target with
-        | none => simp [findEntry, heq, hrest] at h
+        | none => simp only [findEntry, heq, ↓reduceIte, hrest, reduceCtorEq] at h
         | some found =>
             obtain ⟨foundIndex, foundPauser⟩ := found
-            simp [findEntry, heq, hrest] at h
+            simp only [findEntry, heq, ↓reduceIte, hrest, Option.some.injEq, Prod.mk.injEq] at h
             obtain ⟨rfl, rfl⟩ := h
             exact List.mem_cons_of_mem entry (ih hrest)
 
@@ -361,34 +362,34 @@ theorem assignmentCount_pos_of_findEntry {entries target index pauser}
     (h : findEntry entries target = some (index, pauser)) :
     0 < assignmentCount entries pauser := by
   induction entries generalizing index with
-  | nil => simp [findEntry] at h
+  | nil => simp only [findEntry, reduceCtorEq] at h
   | cons entry rest ih =>
       by_cases heq : entry.1 = target
-      · simp [findEntry, heq] at h
+      · simp only [findEntry, heq, ↓reduceIte, Option.some.injEq, Prod.mk.injEq] at h
         obtain ⟨hindex, hpauser⟩ := h
-        simp [assignmentCount, hpauser]
+        simp only [assignmentCount, hpauser, ↓reduceIte, add_pos_iff, zero_lt_one, true_or]
       · cases hfind : findEntry rest target with
-        | none => simp [findEntry, heq, hfind] at h
+        | none => simp only [findEntry, heq, ↓reduceIte, hfind, reduceCtorEq] at h
         | some found =>
             obtain ⟨foundIndex, foundPauser⟩ := found
-            simp [findEntry, heq, hfind] at h
+            simp only [findEntry, heq, ↓reduceIte, hfind, Option.some.injEq, Prod.mk.injEq] at h
             obtain ⟨rfl, rfl⟩ := h
             simp only [assignmentCount]
             split
             · omega
-            · simpa using ih hfind
+            · simpa only [zero_add] using ih hfind
 
 theorem setEntryAt_length_of_lt
     (entries : List Entry) (entry : Entry) {index : Nat}
     (hindex : index < entries.length) :
     (setEntryAt index entry entries).length = entries.length := by
   induction entries generalizing index with
-  | nil => simp at hindex
+  | nil => simp only [List.length_nil, not_lt_zero] at hindex
   | cons head rest ih =>
       cases index with
-      | zero => simp [setEntryAt]
+      | zero => simp only [setEntryAt, List.length_cons]
       | succ index =>
-          simp [setEntryAt, ih (Nat.lt_of_succ_lt_succ hindex)]
+          simp only [setEntryAt, List.length_cons, ih (Nat.lt_of_succ_lt_succ hindex)]
 
 theorem setEntryAt_targets_of_findEntry
     {entries : List Entry} {target newPauser : B256} {index : Nat} {oldPauser : B256}
@@ -396,19 +397,19 @@ theorem setEntryAt_targets_of_findEntry
     (setEntryAt index (target, newPauser) entries).map Prod.fst =
       entries.map Prod.fst := by
   induction entries generalizing index oldPauser with
-  | nil => simp [findEntry] at h
+  | nil => simp only [findEntry, reduceCtorEq] at h
   | cons entry rest ih =>
       by_cases heq : entry.1 = target
-      · simp [findEntry, heq] at h
+      · simp only [findEntry, heq, ↓reduceIte, Option.some.injEq, Prod.mk.injEq] at h
         obtain ⟨rfl, rfl⟩ := h
-        simp [setEntryAt, heq]
+        simp only [setEntryAt, List.map_cons, heq]
       · cases hfind : findEntry rest target with
-        | none => simp [findEntry, heq, hfind] at h
+        | none => simp only [findEntry, heq, ↓reduceIte, hfind, reduceCtorEq] at h
         | some found =>
             obtain ⟨foundIndex, foundPauser⟩ := found
-            simp [findEntry, heq, hfind] at h
+            simp only [findEntry, heq, ↓reduceIte, hfind, Option.some.injEq, Prod.mk.injEq] at h
             obtain ⟨rfl, rfl⟩ := h
-            simp [setEntryAt, ih hfind]
+            simp only [setEntryAt, List.map_cons, ih hfind]
 
 theorem findEntry_setEntryAt_of_findEntry
     {entries : List Entry} {target newPauser : B256} {index : Nat} {oldPauser : B256}
@@ -416,19 +417,19 @@ theorem findEntry_setEntryAt_of_findEntry
     findEntry (setEntryAt index (target, newPauser) entries) target =
       some (index, newPauser) := by
   induction entries generalizing index oldPauser with
-  | nil => simp [findEntry] at h
+  | nil => simp only [findEntry, reduceCtorEq] at h
   | cons entry rest ih =>
       by_cases heq : entry.1 = target
-      · simp [findEntry, heq] at h
+      · simp only [findEntry, heq, ↓reduceIte, Option.some.injEq, Prod.mk.injEq] at h
         obtain ⟨rfl, rfl⟩ := h
-        simp [findEntry, setEntryAt]
+        simp only [setEntryAt, findEntry, ↓reduceIte]
       · cases hfind : findEntry rest target with
-        | none => simp [findEntry, heq, hfind] at h
+        | none => simp only [findEntry, heq, ↓reduceIte, hfind, reduceCtorEq] at h
         | some found =>
             obtain ⟨foundIndex, foundPauser⟩ := found
-            simp [findEntry, heq, hfind] at h
+            simp only [findEntry, heq, ↓reduceIte, hfind, Option.some.injEq, Prod.mk.injEq] at h
             obtain ⟨rfl, rfl⟩ := h
-            simp [findEntry, setEntryAt, heq, ih hfind]
+            simp only [setEntryAt, findEntry, heq, ↓reduceIte, ih hfind]
 
 theorem targetAt_setEntryAt_of_findEntry
     {entries : List Entry} {target newPauser : B256} {index : Nat} {oldPauser : B256}
@@ -437,19 +438,19 @@ theorem targetAt_setEntryAt_of_findEntry
     targetAt (setEntryAt index (target, newPauser) entries) wantedIndex =
       targetAt entries wantedIndex := by
   induction entries generalizing index oldPauser wantedIndex with
-  | nil => simp [findEntry] at h
+  | nil => simp only [findEntry, reduceCtorEq] at h
   | cons entry rest ih =>
       by_cases heq : entry.1 = target
-      · simp [findEntry, heq] at h
+      · simp only [findEntry, heq, ↓reduceIte, Option.some.injEq, Prod.mk.injEq] at h
         obtain ⟨rfl, rfl⟩ := h
         cases wantedIndex with
-        | zero => simpa [setEntryAt, targetAt] using heq.symm
+        | zero => simpa only [setEntryAt, targetAt] using heq.symm
         | succ wantedIndex => rfl
       · cases hfind : findEntry rest target with
-        | none => simp [findEntry, heq, hfind] at h
+        | none => simp only [findEntry, heq, ↓reduceIte, hfind, reduceCtorEq] at h
         | some found =>
             obtain ⟨foundIndex, foundPauser⟩ := found
-            simp [findEntry, heq, hfind] at h
+            simp only [findEntry, heq, ↓reduceIte, hfind, Option.some.injEq, Prod.mk.injEq] at h
             obtain ⟨rfl, rfl⟩ := h
             cases wantedIndex with
             | zero => rfl
@@ -464,21 +465,21 @@ theorem assignmentAt_setEntryAt_of_findEntry_ne
     assignmentAt (setEntryAt index (target, newPauser) entries) wanted =
       assignmentAt entries wanted := by
   induction entries generalizing index oldPauser with
-  | nil => simp [findEntry] at h
+  | nil => simp only [findEntry, reduceCtorEq] at h
   | cons entry rest ih =>
       by_cases heq : entry.1 = target
-      · simp [findEntry, heq] at h
+      · simp only [findEntry, heq, ↓reduceIte, Option.some.injEq, Prod.mk.injEq] at h
         obtain ⟨rfl, rfl⟩ := h
-        simp [setEntryAt, assignmentAt, heq, Ne.symm hneq]
+        simp only [setEntryAt, assignmentAt, Ne.symm hneq, ↓reduceIte, heq]
       · cases hfind : findEntry rest target with
-        | none => simp [findEntry, heq, hfind] at h
+        | none => simp only [findEntry, heq, ↓reduceIte, hfind, reduceCtorEq] at h
         | some found =>
             obtain ⟨foundIndex, foundPauser⟩ := found
-            simp [findEntry, heq, hfind] at h
+            simp only [findEntry, heq, ↓reduceIte, hfind, Option.some.injEq, Prod.mk.injEq] at h
             obtain ⟨rfl, rfl⟩ := h
             by_cases hwanted : entry.1 = wanted
-            · simp [setEntryAt, assignmentAt, hwanted]
-            · simp [setEntryAt, assignmentAt, hwanted, ih hfind]
+            · simp only [setEntryAt, assignmentAt, hwanted, ↓reduceIte]
+            · simp only [setEntryAt, assignmentAt, hwanted, ↓reduceIte, ih hfind]
 
 theorem oneBasedIndexAt_setEntryAt_of_findEntry
     {entries : List Entry} {target newPauser wanted : B256} {index : Nat} {oldPauser : B256}
@@ -486,21 +487,21 @@ theorem oneBasedIndexAt_setEntryAt_of_findEntry
     oneBasedIndexAt (setEntryAt index (target, newPauser) entries) wanted =
       oneBasedIndexAt entries wanted := by
   induction entries generalizing index oldPauser with
-  | nil => simp [findEntry] at h
+  | nil => simp only [findEntry, reduceCtorEq] at h
   | cons entry rest ih =>
       by_cases heq : entry.1 = target
-      · simp [findEntry, heq] at h
+      · simp only [findEntry, heq, ↓reduceIte, Option.some.injEq, Prod.mk.injEq] at h
         obtain ⟨rfl, rfl⟩ := h
-        simp [setEntryAt, oneBasedIndexAt, heq]
+        simp only [setEntryAt, oneBasedIndexAt, heq]
       · cases hfind : findEntry rest target with
-        | none => simp [findEntry, heq, hfind] at h
+        | none => simp only [findEntry, heq, ↓reduceIte, hfind, reduceCtorEq] at h
         | some found =>
             obtain ⟨foundIndex, foundPauser⟩ := found
-            simp [findEntry, heq, hfind] at h
+            simp only [findEntry, heq, ↓reduceIte, hfind, Option.some.injEq, Prod.mk.injEq] at h
             obtain ⟨rfl, rfl⟩ := h
             by_cases hwanted : entry.1 = wanted
-            · simp [setEntryAt, oneBasedIndexAt, hwanted]
-            · simp [setEntryAt, oneBasedIndexAt, hwanted, ih hfind]
+            · simp only [setEntryAt, oneBasedIndexAt, hwanted, ↓reduceIte]
+            · simp only [setEntryAt, oneBasedIndexAt, hwanted, ↓reduceIte, ih hfind]
 
 theorem assignmentCount_setEntryAt_of_findEntry
     {entries : List Entry} {target newPauser wanted : B256} {index : Nat} {oldPauser : B256}
@@ -509,17 +510,17 @@ theorem assignmentCount_setEntryAt_of_findEntry
       (assignmentCount entries wanted - (if oldPauser = wanted then 1 else 0)) +
         (if newPauser = wanted then 1 else 0) := by
   induction entries generalizing index oldPauser with
-  | nil => simp [findEntry] at h
+  | nil => simp only [findEntry, reduceCtorEq] at h
   | cons entry rest ih =>
       by_cases heq : entry.1 = target
-      · simp [findEntry, heq] at h
+      · simp only [findEntry, heq, ↓reduceIte, Option.some.injEq, Prod.mk.injEq] at h
         obtain ⟨rfl, rfl⟩ := h
-        simp [setEntryAt, assignmentCount, Nat.add_comm]
+        simp only [setEntryAt, assignmentCount, add_tsub_cancel_left, Nat.add_comm]
       · cases hfind : findEntry rest target with
-        | none => simp [findEntry, heq, hfind] at h
+        | none => simp only [findEntry, heq, ↓reduceIte, hfind, reduceCtorEq] at h
         | some found =>
             obtain ⟨foundIndex, foundPauser⟩ := found
-            simp [findEntry, heq, hfind] at h
+            simp only [findEntry, heq, ↓reduceIte, hfind, Option.some.injEq, Prod.mk.injEq] at h
             obtain ⟨rfl, rfl⟩ := h
             simp only [setEntryAt, assignmentCount]
             rw [ih hfind]
@@ -527,9 +528,9 @@ theorem assignmentCount_setEntryAt_of_findEntry
               assignmentCount_pos_of_findEntry hfind
             by_cases hfound : foundPauser = wanted
             · subst wanted
-              simp at hpos ⊢
+              simp only [↓reduceIte] at hpos ⊢
               omega
-            · simp [hfound, Nat.add_assoc]
+            · simp only [hfound, ↓reduceIte, tsub_zero, Nat.add_assoc]
 
 theorem setEntryAt_targetsValid_of_findEntry
     {entries : List Entry} {target newPauser : B256} {index : Nat} {oldPauser : B256}
@@ -554,29 +555,29 @@ theorem setEntryAt_pausersValid_of_findEntry
       nonzeroCanonicalAddress entry.2 := by
   revert hvalid hnew
   induction entries generalizing index oldPauser with
-  | nil => simp [findEntry] at h
+  | nil => simp only [findEntry, reduceCtorEq] at h
   | cons entry rest ih =>
       intro hvalid hnew
       by_cases heq : entry.1 = target
-      · simp [findEntry, heq] at h
+      · simp only [findEntry, heq, ↓reduceIte, Option.some.injEq, Prod.mk.injEq] at h
         obtain ⟨rfl, rfl⟩ := h
         intro candidate hcandidate
         simp only [setEntryAt, List.mem_cons] at hcandidate
         rcases hcandidate with hcandidate | hcandidate
-        · simpa [hcandidate] using hnew
-        · exact hvalid candidate (by simp [hcandidate])
+        · simpa only [hcandidate] using hnew
+        · exact hvalid candidate (by simp only [List.mem_cons, hcandidate, or_true])
       · cases hfind : findEntry rest target with
-        | none => simp [findEntry, heq, hfind] at h
+        | none => simp only [findEntry, heq, ↓reduceIte, hfind, reduceCtorEq] at h
         | some found =>
             obtain ⟨foundIndex, foundPauser⟩ := found
-            simp [findEntry, heq, hfind] at h
+            simp only [findEntry, heq, ↓reduceIte, hfind, Option.some.injEq, Prod.mk.injEq] at h
             obtain ⟨rfl, rfl⟩ := h
             intro candidate hcandidate
             simp only [setEntryAt, List.mem_cons] at hcandidate
             rcases hcandidate with hcandidate | hcandidate
-            · exact hvalid candidate (by simp [hcandidate])
+            · exact hvalid candidate (by simp only [hcandidate, List.mem_cons, true_or])
             · exact ih hfind
-                (fun old hold => hvalid old (by simp [hold]))
+                (fun old hold => hvalid old (by simp only [List.mem_cons, hold, or_true]))
                 hnew candidate hcandidate
 
 theorem setEntryAt_length_of_findEntry
@@ -605,7 +606,7 @@ theorem dropLast_length (entries : List Entry) :
 theorem last_some_of_length_pos (entries : List Entry) (h : 0 < entries.length) :
     ∃ last, last? entries = some last := by
   induction entries with
-  | nil => simp at h
+  | nil => simp only [List.length_nil, lt_self_iff_false] at h
   | cons entry rest ih =>
       cases rest with
       | nil => exact ⟨entry, rfl⟩
@@ -623,11 +624,11 @@ theorem last_mem_of_last
     (entries : List Entry) {last : Entry} (h : last? entries = some last) :
     last ∈ entries := by
   induction entries with
-  | nil => simp [last?] at h
+  | nil => simp only [last?, reduceCtorEq] at h
   | cons entry rest ih =>
       cases rest with
       | nil =>
-          simp [last?] at h
+          simp only [last?, Option.some.injEq] at h
           exact h.symm ▸ List.mem_singleton_self entry
       | cons head tail =>
           simp only [last?] at h
@@ -638,11 +639,11 @@ theorem targetAt_last_of_last
     (h : last? entries = some last) :
     targetAt entries (entries.length - 1) = last.1 := by
   induction entries with
-  | nil => simp [last?] at h
+  | nil => simp only [last?, reduceCtorEq] at h
   | cons entry rest ih =>
       cases rest with
       | nil =>
-          simp [last?] at h
+          simp only [last?, Option.some.injEq] at h
           obtain rfl := h
           rfl
       | cons head tail =>
@@ -654,10 +655,11 @@ theorem targetAt_dropLast_of_lt
     (hindex : index < entries.length - 1) :
     targetAt (dropLast entries) index = targetAt entries index := by
   induction entries generalizing index with
-  | nil => simp at hindex
+  | nil => simp only [List.length_nil, zero_tsub, not_lt_zero] at hindex
   | cons entry rest ih =>
       cases rest with
-      | nil => simp at hindex
+      | nil => simp only [List.length_cons, List.length_nil, zero_add, tsub_self,
+        not_lt_zero] at hindex
       | cons head tail =>
           cases index with
           | zero => rfl
@@ -672,7 +674,7 @@ theorem targetAt_setEntryAt_self
     (hindex : index < entries.length) :
     targetAt (setEntryAt index entry entries) index = entry.1 := by
   induction entries generalizing index with
-  | nil => simp at hindex
+  | nil => simp only [List.length_nil, not_lt_zero] at hindex
   | cons head rest ih =>
       cases index with
       | zero => rfl
@@ -711,12 +713,12 @@ theorem targetAt_setEntryAt_of_ne
     targetAt (setEntryAt index entry entries) wantedIndex =
       targetAt entries wantedIndex := by
   induction entries generalizing index wantedIndex with
-  | nil => simp at hindex
+  | nil => simp only [List.length_nil, not_lt_zero] at hindex
   | cons head rest ih =>
       cases index with
       | zero =>
           cases wantedIndex with
-          | zero => simp at hneq
+          | zero => simp only [ne_eq, not_true_eq_false] at hneq
           | succ wantedIndex => rfl
       | succ index =>
           cases wantedIndex with
@@ -744,10 +746,11 @@ theorem targetAt_mem_targets_of_lt
     (entries : List Entry) {index : Nat} (hindex : index < entries.length) :
     targetAt entries index ∈ entries.map Prod.fst := by
   induction entries generalizing index with
-  | nil => simp at hindex
+  | nil => simp only [List.length_nil, not_lt_zero] at hindex
   | cons entry rest ih =>
       cases index with
-      | zero => simp [targetAt]
+      | zero => simp only [List.map_cons, targetAt, List.mem_cons, List.mem_map, Prod.exists,
+        exists_and_right, exists_eq_right, true_or]
       | succ index =>
           simp only [targetAt, List.map_cons, List.mem_cons]
           exact Or.inr (ih (Nat.lt_of_succ_lt_succ hindex))
@@ -758,12 +761,12 @@ theorem oneBasedIndexAt_targetAt_of_lt
     (hindex : index < entries.length) :
     oneBasedIndexAt entries (targetAt entries index) = index + 1 := by
   induction entries generalizing index with
-  | nil => simp at hindex
+  | nil => simp only [List.length_nil, not_lt_zero] at hindex
   | cons entry rest ih =>
       simp only [List.map_cons, List.nodup_cons] at hnodup
       rcases hnodup with ⟨hnot, hrestNodup⟩
       cases index with
-      | zero => simp [targetAt, oneBasedIndexAt]
+      | zero => simp only [oneBasedIndexAt, targetAt, ↓reduceIte, zero_add]
       | succ index =>
           have hmem := targetAt_mem_targets_of_lt rest
             (Nat.lt_of_succ_lt_succ hindex)
@@ -773,7 +776,8 @@ theorem oneBasedIndexAt_targetAt_of_lt
             rw [heq]
             exact hmem
           have htail := ih hrestNodup (Nat.lt_of_succ_lt_succ hindex)
-          simp [targetAt, oneBasedIndexAt, hne, htail]
+          simp only [oneBasedIndexAt, targetAt, hne, ↓reduceIte, htail, Nat.add_eq_zero_iff,
+            one_ne_zero, and_false]
 
 private theorem last?_eq_getLast? (entries : List Entry) :
     last? entries = entries.getLast? := by
@@ -782,7 +786,7 @@ private theorem last?_eq_getLast? (entries : List Entry) :
   | cons head rest ih =>
       cases rest with
       | nil => rfl
-      | cons next tail => simpa [last?] using ih
+      | cons next tail => simpa only [last?, List.getLast?_cons_cons] using ih
 
 private theorem setEntryAt_eq_set
     (entries : List Entry) (index : Nat) (entry : Entry) :
@@ -810,7 +814,7 @@ private theorem dropLast_eq_listDropLast (entries : List Entry) :
 private theorem last_cons_of_ne_nil (head : Entry) (rest : List Entry)
     (h : rest ≠ []) : last? (head :: rest) = last? rest := by
   cases rest with
-  | nil => simp at h
+  | nil => simp only [ne_eq, not_true_eq_false] at h
   | cons head' rest' => rfl
 
 private theorem setEntryAt_ne_nil_of_lt
@@ -820,7 +824,7 @@ private theorem setEntryAt_ne_nil_of_lt
   intro hnil
   have hlength := setEntryAt_length_of_lt entries entry hindex
   rw [hnil] at hlength
-  simp at hlength
+  simp only [List.length_nil] at hlength
   omega
 
 theorem last_setEntryAt_self_last
@@ -828,25 +832,25 @@ theorem last_setEntryAt_self_last
     (hlast : last? entries = some last) (hindex : index < entries.length) :
     last? (setEntryAt index last entries) = some last := by
   induction entries generalizing index with
-  | nil => simp at hindex
+  | nil => simp only [List.length_nil, not_lt_zero] at hindex
   | cons entry rest ih =>
       cases index with
       | zero =>
           cases rest with
           | nil =>
-              simp [last?] at hlast
+              simp only [last?, Option.some.injEq] at hlast
               obtain rfl := hlast
               rfl
           | cons head tail =>
               simp only [setEntryAt]
               rw [last_cons_of_ne_nil]
               · exact hlast
-              · simp
+              · simp only [ne_eq, reduceCtorEq, not_false_eq_true]
       | succ index =>
           have hrest : index < rest.length := Nat.lt_of_succ_lt_succ hindex
           have hrestne : rest ≠ [] := by
             intro hnil
-            simp [hnil] at hrest
+            simp only [hnil, List.length_nil, not_lt_zero] at hrest
           have hlastRest : last? rest = some last := by
             rw [← last_cons_of_ne_nil entry rest hrestne]
             exact hlast
@@ -870,7 +874,7 @@ theorem swapPop_perm_eraseIdx_of_lt
       (setEntryAt index last entries)[entries.length - 1]? = some last := by
     rw [last?_eq_getLast?] at hupdatedLast
     rw [List.getLast?_eq_getElem?] at hupdatedLast
-    simpa [hupdatedLength] using hupdatedLast
+    simpa only [hupdatedLength] using hupdatedLast
   have hperm :
       List.Perm (setEntryAt index last entries)
         (last :: entries.eraseIdx index) := by
@@ -879,7 +883,8 @@ theorem swapPop_perm_eraseIdx_of_lt
   have hsame :
       (setEntryAt index last entries)[entries.length - 1]? =
         (last :: entries.eraseIdx index)[0]? := by
-    simpa using hgetLast
+    simpa only [List.length_cons, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true,
+      getElem?_pos, List.getElem_cons_zero] using hgetLast
   have herased :
       List.Perm
         ((setEntryAt index last entries).eraseIdx (entries.length - 1))
@@ -889,7 +894,7 @@ theorem swapPop_perm_eraseIdx_of_lt
   rw [dropLast_eq_listDropLast]
   rw [List.dropLast_eq_eraseIdx (by omega : entries.length - 1 + 1 =
     (setEntryAt index last entries).length)]
-  simpa using herased
+  simpa only [List.eraseIdx_zero, List.tail_cons] using herased
 
 theorem swapPop_targetsNodup_of_findEntry
     {entries : List Entry} {target oldPauser : B256} {index : Nat}
@@ -930,20 +935,20 @@ private theorem assignmentAt_eq_of_mem_of_nodup
     (hmem : (wanted, pauser) ∈ entries) :
     assignmentAt entries wanted = pauser := by
   induction entries with
-  | nil => simp at hmem
+  | nil => simp only [List.not_mem_nil] at hmem
   | cons entry rest ih =>
       simp only [List.map_cons, List.nodup_cons] at hnodup
       rcases hnodup with ⟨hnot, hrestNodup⟩
       simp only [List.mem_cons] at hmem
       rcases hmem with hmem | hmem
       · subst entry
-        simp [assignmentAt]
+        simp only [assignmentAt, ↓reduceIte]
       · by_cases heq : entry.1 = wanted
         · exfalso
           apply hnot
           rw [heq]
           exact List.mem_map.mpr ⟨(wanted, pauser), hmem, rfl⟩
-        · simp [assignmentAt, heq, ih hrestNodup hmem]
+        · simp only [assignmentAt, heq, ↓reduceIte, ih hrestNodup hmem]
 
 private theorem assignmentAt_eq_zero_of_not_mem_targets
     {entries : List Entry} {wanted : B256}
@@ -955,11 +960,12 @@ private theorem assignmentAt_eq_zero_of_not_mem_targets
       have hhead : entry.1 ≠ wanted := by
         intro heq
         apply hnot
-        simp [heq]
+        simp only [List.map_cons, heq, List.mem_cons, List.mem_map, Prod.exists, exists_and_right,
+          exists_eq_right, true_or]
       have hrest : wanted ∉ rest.map Prod.fst := by
         intro hmem
-        exact hnot (by simp [hmem])
-      simp [assignmentAt, hhead, ih hrest]
+        exact hnot (by simp only [List.map_cons, List.mem_cons, hmem, or_true])
+      simp only [assignmentAt, hhead, ↓reduceIte, ih hrest]
 
 private theorem assignmentAt_eq_of_perm_targetsNodup
     {left right : List Entry} (hperm : List.Perm left right)
@@ -992,22 +998,23 @@ private theorem assignmentAt_eraseIdx_target_of_findEntry
     (hnodup : (entries.map Prod.fst).Nodup) :
     assignmentAt (entries.eraseIdx index) target = 0 := by
   induction entries generalizing index oldPauser with
-  | nil => simp [findEntry] at hfind
+  | nil => simp only [findEntry, reduceCtorEq] at hfind
   | cons entry rest ih =>
       simp only [List.map_cons, List.nodup_cons] at hnodup
       rcases hnodup with ⟨hnot, hrestNodup⟩
       by_cases heq : entry.1 = target
-      · simp [findEntry, heq] at hfind
+      · simp only [findEntry, heq, ↓reduceIte, Option.some.injEq, Prod.mk.injEq] at hfind
         obtain ⟨rfl, rfl⟩ := hfind
         exact assignmentAt_eq_zero_of_not_mem_targets (by
-          simpa [heq] using hnot)
+          simpa only [List.eraseIdx_zero, List.tail_cons, List.mem_map, Prod.exists,
+            exists_and_right, exists_eq_right, not_exists, heq] using hnot)
       · cases hrest : findEntry rest target with
-        | none => simp [findEntry, heq, hrest] at hfind
+        | none => simp only [findEntry, heq, ↓reduceIte, hrest, reduceCtorEq] at hfind
         | some found =>
             obtain ⟨foundIndex, foundPauser⟩ := found
-            simp [findEntry, heq, hrest] at hfind
+            simp only [findEntry, heq, ↓reduceIte, hrest, Option.some.injEq, Prod.mk.injEq] at hfind
             obtain ⟨rfl, rfl⟩ := hfind
-            simp [List.eraseIdx, assignmentAt, heq, ih hrest hrestNodup]
+            simp only [List.eraseIdx, assignmentAt, heq, ↓reduceIte, ih hrest hrestNodup]
 
 private theorem assignmentAt_eraseIdx_of_findEntry_ne
     {entries : List Entry} {target oldPauser wanted : B256} {index : Nat}
@@ -1016,21 +1023,21 @@ private theorem assignmentAt_eraseIdx_of_findEntry_ne
     assignmentAt (entries.eraseIdx index) wanted =
       assignmentAt entries wanted := by
   induction entries generalizing index oldPauser with
-  | nil => simp [findEntry] at hfind
+  | nil => simp only [findEntry, reduceCtorEq] at hfind
   | cons entry rest ih =>
       by_cases heq : entry.1 = target
-      · simp [findEntry, heq] at hfind
+      · simp only [findEntry, heq, ↓reduceIte, Option.some.injEq, Prod.mk.injEq] at hfind
         obtain ⟨rfl, rfl⟩ := hfind
-        simp [assignmentAt, heq, Ne.symm hneq]
+        simp only [List.eraseIdx_zero, List.tail_cons, assignmentAt, heq, Ne.symm hneq, ↓reduceIte]
       · cases hrest : findEntry rest target with
-        | none => simp [findEntry, heq, hrest] at hfind
+        | none => simp only [findEntry, heq, ↓reduceIte, hrest, reduceCtorEq] at hfind
         | some found =>
             obtain ⟨foundIndex, foundPauser⟩ := found
-            simp [findEntry, heq, hrest] at hfind
+            simp only [findEntry, heq, ↓reduceIte, hrest, Option.some.injEq, Prod.mk.injEq] at hfind
             obtain ⟨rfl, rfl⟩ := hfind
             by_cases hwanted : entry.1 = wanted
-            · simp [List.eraseIdx, assignmentAt, hwanted]
-            · simp [List.eraseIdx, assignmentAt, hwanted, ih hrest]
+            · simp only [List.eraseIdx, assignmentAt, hwanted, ↓reduceIte]
+            · simp only [List.eraseIdx, assignmentAt, hwanted, ↓reduceIte, ih hrest]
 
 theorem assignmentAt_swapPop_target_of_findEntry
     {entries : List Entry} {target oldPauser : B256} {index : Nat}
@@ -1065,11 +1072,12 @@ private theorem oneBasedIndexAt_eq_zero_of_not_mem_targets
       have hhead : entry.1 ≠ wanted := by
         intro heq
         apply hnot
-        simp [heq]
+        simp only [List.map_cons, heq, List.mem_cons, List.mem_map, Prod.exists, exists_and_right,
+          exists_eq_right, true_or]
       have hrest : wanted ∉ rest.map Prod.fst := by
         intro hmem
-        exact hnot (by simp [hmem])
-      simp [oneBasedIndexAt, hhead, ih hrest]
+        exact hnot (by simp only [List.map_cons, List.mem_cons, hmem, or_true])
+      simp only [oneBasedIndexAt, hhead, ↓reduceIte, ih hrest]
 
 private theorem target_not_mem_eraseIdx_of_findEntry
     {entries : List Entry} {target oldPauser : B256} {index : Nat}
@@ -1077,21 +1085,23 @@ private theorem target_not_mem_eraseIdx_of_findEntry
     (hnodup : (entries.map Prod.fst).Nodup) :
     target ∉ (entries.eraseIdx index).map Prod.fst := by
   induction entries generalizing index oldPauser with
-  | nil => simp [findEntry] at hfind
+  | nil => simp only [findEntry, reduceCtorEq] at hfind
   | cons entry rest ih =>
       simp only [List.map_cons, List.nodup_cons] at hnodup
       rcases hnodup with ⟨hnot, hrestNodup⟩
       by_cases heq : entry.1 = target
-      · simp [findEntry, heq] at hfind
+      · simp only [findEntry, heq, ↓reduceIte, Option.some.injEq, Prod.mk.injEq] at hfind
         obtain ⟨rfl, rfl⟩ := hfind
-        simpa [heq] using hnot
+        simpa only [List.eraseIdx_zero, List.tail_cons, List.mem_map, Prod.exists, exists_and_right,
+          exists_eq_right, not_exists, heq] using hnot
       · cases hrest : findEntry rest target with
-        | none => simp [findEntry, heq, hrest] at hfind
+        | none => simp only [findEntry, heq, ↓reduceIte, hrest, reduceCtorEq] at hfind
         | some found =>
             obtain ⟨foundIndex, foundPauser⟩ := found
-            simp [findEntry, heq, hrest] at hfind
+            simp only [findEntry, heq, ↓reduceIte, hrest, Option.some.injEq, Prod.mk.injEq] at hfind
             obtain ⟨rfl, rfl⟩ := hfind
-            simp [List.eraseIdx, Ne.symm heq, ih hrest hrestNodup]
+            simp only [List.eraseIdx, List.map_cons, List.mem_cons, Ne.symm heq,
+              ih hrest hrestNodup, or_self, not_false_eq_true]
 
 theorem oneBasedIndexAt_swapPop_target_of_findEntry
     {entries : List Entry} {target oldPauser : B256} {index : Nat}
@@ -1183,17 +1193,17 @@ private theorem assignmentCount_pos_of_last
     (entries : List Entry) {last : Entry} (h : last? entries = some last) :
     0 < assignmentCount entries last.2 := by
   induction entries with
-  | nil => simp [last?] at h
+  | nil => simp only [last?, reduceCtorEq] at h
   | cons entry rest ih =>
       cases rest with
       | nil =>
-          simp [last?] at h
+          simp only [last?, Option.some.injEq] at h
           obtain rfl := h
-          simp [assignmentCount]
+          simp only [assignmentCount, ↓reduceIte, add_zero, zero_lt_one]
       | cons head tail =>
           simp only [last?] at h
           have hpos := ih h
-          simpa [assignmentCount] using
+          simpa only [assignmentCount, add_pos_iff] using
             Nat.lt_of_lt_of_le hpos (Nat.le_add_left _ _)
 
 private theorem assignmentCount_setEntryAt_snd
@@ -1202,12 +1212,12 @@ private theorem assignmentCount_setEntryAt_snd
     assignmentCount (setEntryAt index (left, pauser) entries) wanted =
       assignmentCount (setEntryAt index (right, pauser) entries) wanted := by
   induction entries generalizing index with
-  | nil => simp [setEntryAt, assignmentCount]
+  | nil => simp only [setEntryAt, assignmentCount]
   | cons entry rest ih =>
       cases index with
       | zero => rfl
       | succ index =>
-          simp [setEntryAt, assignmentCount, ih index]
+          simp only [setEntryAt, assignmentCount, ih index]
 
 theorem assignmentCount_dropLast_of_last
     (entries : List Entry) {last : Entry} (h : last? entries = some last)
@@ -1215,22 +1225,22 @@ theorem assignmentCount_dropLast_of_last
     assignmentCount (dropLast entries) wanted =
       assignmentCount entries wanted - (if last.2 = wanted then 1 else 0) := by
   induction entries with
-  | nil => simp [last?] at h
+  | nil => simp only [last?, reduceCtorEq] at h
   | cons entry rest ih =>
       cases rest with
       | nil =>
-          simp [last?] at h
+          simp only [last?, Option.some.injEq] at h
           obtain rfl := h
-          simp [assignmentCount, dropLast]
+          simp only [dropLast, assignmentCount, add_zero, tsub_self]
       | cons head tail =>
           simp only [dropLast, assignmentCount]
           rw [ih h]
           by_cases hlast : last.2 = wanted
           · subst wanted
             have hpos := assignmentCount_pos_of_last (head :: tail) h
-            simp [assignmentCount] at hpos ⊢
+            simp only [assignmentCount, add_pos_iff, ↓reduceIte] at hpos ⊢
             omega
-          · simp [hlast, assignmentCount]
+          · simp only [assignmentCount, hlast, ↓reduceIte, tsub_zero]
 
 theorem assignmentCount_swapPop_of_findEntry
     {entries : List Entry} {target wanted : B256} {index : Nat} {oldPauser : B256}
@@ -1244,7 +1254,7 @@ theorem assignmentCount_swapPop_of_findEntry
   rw [assignmentCount_setEntryAt_snd entries index last.1 target last.2 wanted]
   rw [assignmentCount_setEntryAt_of_findEntry (wanted := wanted) hfind]
   by_cases hlastWanted : last.2 = wanted
-  · simp [hlastWanted]
-  · simp [hlastWanted]
+  · simp only [hlastWanted, ↓reduceIte, add_tsub_cancel_right]
+  · simp only [hlastWanted, ↓reduceIte, add_zero, tsub_zero]
 
 end Blanc.LidoCircuitBreaker

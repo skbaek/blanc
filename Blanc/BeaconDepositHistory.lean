@@ -30,7 +30,7 @@ def HistoryExtends (baseline : List B256) (stor : Stor) : Prop :=
 
 theorem HistoryExtends.base {baseline : List B256} {stor : Stor}
     (artifact : ArtifactInv stor baseline) : HistoryExtends baseline stor := by
-  exact ⟨[], by simpa using artifact⟩
+  exact ⟨[], by simpa only [List.append_nil] using artifact⟩
 
 /-- Baseline history validity is extensional in observable storage words. -/
 theorem HistoryExtends.of_get_eq

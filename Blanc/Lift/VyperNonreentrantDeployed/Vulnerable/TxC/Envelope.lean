@@ -157,7 +157,7 @@ theorem vminus_txC_process (g : Fork) (hg : CoveredFork g) (bout : BlockOutput)
     (txC_validated hg) (txC_checked hg bout hroom hrecover) (txC_debit hg) (txC_prepared hg)
     hcall (by rfl)
   refine ⟨_, bout', hproc, ?_⟩
-  have hlist : Std.HashSet.toList post.accountsToDelete = [] := by rw [hatd]; simp
+  have hlist : Std.HashSet.toList post.accountsToDelete = [] := by rw [hatd]; simp only [Std.HashSet.toList_emptyWithCapacity]
   have hst : ∀ (v₁ v₂ : B256) (a : Adr) (k : B256),
       storOf ((post.state.addBal eAddress v₁).addBal (benvPre.withFork g).stat.coinbase v₂) a k =
         storOf post.state a k := by

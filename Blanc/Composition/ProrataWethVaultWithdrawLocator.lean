@@ -120,7 +120,8 @@ theorem weth_withdraw_callHead_prefix {sevm : Sevm} {pre post : Devm}
   rw [hsel] at hpfx
   have hmem : (selector "withdraw" [.uint256], nonpayable Blanc.withdraw) ∈
       Blanc.wethFuncs := by
-    simp [Blanc.wethFuncs]
+    simp only [wethFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   rcases dispatchWith_run_prefix_of_sorted_list (path := path2)
       Blanc.wethFuncs_sorted hmem
       hpfx hdispatch with
@@ -255,7 +256,7 @@ theorem weth_withdraw_callHead_prefix {sevm : Sevm} {pre post : Devm}
       rw [← B256.not_lt]
       intro hlt
       have one : (balance <? Sevm.argWord sevm 0) = 1 := by
-        simp [B256.ltCheck, hlt]
+        simp only [B256.ltCheck, hlt, ↓reduceIte]
       exact B256.zero_ne_one (lessZero'.trans one)
     have debitRun : Line.Run sevm g2
         [Blanc.Ninst.sub, Blanc.Ninst.caller, Blanc.Ninst.sstore] g5 :=
@@ -494,12 +495,14 @@ private theorem call_settle_clean_transport
   cases rawEq
   have settled := (RunFrame.some_inv process).2
   have settled' : (Except.ok child : Execution) = Except.ok rawPost := by
-    simpa [Frame.ofCall, Frame.settle, Frame.settleMsg,
-      executeCode.handleErrorWith_ok, processMessage.settle, rawClean] using settled
+    simpa only [Except.ok.injEq, Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true,
+      ↓reduceIte, processMessage.settle, executeCode.handleErrorWith_ok, Except.bind_ok, rawClean,
+      Option.isSome_none] using settled
   have childEq : child = rawPost := Except.ok.inj settled'
   rw [childEq]
-  simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-    executeCode.handleErrorWith_ok, processMessage.settle, rawClean]
+  simp only [Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
+    processMessage.settle, executeCode.handleErrorWith_ok, Except.bind_ok, rawClean,
+    Option.isSome_none]
 
 private theorem retained_rawFrames_of_slot
     {xl : Xlot} {retained : ExecutionTrace.RetainedXlot xl}
@@ -535,7 +538,7 @@ private theorem rawChild_of_spawn
   let childRoot : Exec.Deriv := ⟨cevm.pc, cevm.sta, cevm.dyna, raw, childRun⟩
   refine ⟨childRoot, ?_, ?_⟩
   · rw [nodeEq]
-    simp [childRoot, Exec.rawFrameDescendants]
+    simp only [Exec.rawFrameDescendants, List.mem_cons, List.mem_append, true_or, childRoot]
   · rfl
 
 theorem wethWithdrawAcceptedPayoutAt_body {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post))
@@ -593,7 +596,7 @@ theorem wethWithdrawAcceptedPayoutAt_body {sevm : Sevm} {pre post : Devm} (run :
   rw [rawEq] at hd
   cases retained with
   | none =>
-      simp [facts, ExecutionTrace.RetainedXlot.rawFrames] at hd
+      simp only [ExecutionTrace.RetainedXlot.rawFrames, List.not_mem_nil, facts] at hd
   | some childRun =>
       have sevmEq : node.node.sevm = sevm := (Blanc.Exec.Deriv.ParentPrefix.sevm_eq sameFrame)
       have acceptedStep' := Ninst.stepRun_pc_irrel (n := call) rfl
@@ -640,7 +643,7 @@ theorem wethWithdrawAcceptedPayoutAt_body {sevm : Sevm} {pre post : Devm} (run :
         rw [← resultEq, stepEq]
       by_cases postClean : post.error = none
       · have rootCommitted : Execution.commits (.ok post) = true := by
-          simp [Execution.commits, postClean]
+          simp only [Execution.commits, postClean, Option.isNone_none]
         rcases Exec.NinstOccurrence.exists_root_call_child run rootCommitted node
             sameFrame slotEq spawn process hclean resumed with
           ⟨located, member, entering, parentEq, occurrenceEq, pathEq, locatedSlot⟩

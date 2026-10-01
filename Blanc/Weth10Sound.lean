@@ -252,7 +252,9 @@ theorem run_flashFee_observations_eq
           (Func.of_inv Devm.getBal Devm.getBal (by func_inv) hret))
   · rcases of_run_call hcall with ⟨f, s3, hget, hcallBurn, hrev⟩
     have hf : f = flashTokenError := by
-      simpa [weth10, weth10Aux, flashTokenErrorSlot] using hget.symm
+      simpa only [weth10, weth10Aux, flashTokenErrorSlot, List.length_cons, List.length_nil,
+        zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+        List.getElem_cons_zero, Option.some.injEq] using hget.symm
     subst f
     exact absurd hrev Func.not_run_revertWith
 

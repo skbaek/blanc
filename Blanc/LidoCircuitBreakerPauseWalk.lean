@@ -237,7 +237,7 @@ theorem runCompiled_tstore_of
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach,
     Devm.stack_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
   rw [hremaining]
-  simp [assertDynamic, Except.assert, hstatic]
+  simp only [assertDynamic, Except.assert, hstatic, Bool.not_false, ↓reduceIte]
 
 /-! ## Dispatcher reserve -/
 
@@ -276,7 +276,7 @@ theorem pause_dispatch_runCompiledTo
       omega
     · rfl
     · have hvalueZero : B256.eqCheck sevm.value 0 = 1 := by
-        simp [B256.eqCheck, hvalue]
+        simp only [B256.eqCheck, hvalue, ↓reduceIte]
       have hlt : sevm.data.length.toB256 <? 4 = 0 := by
         rw [hdata]
         decide +kernel
@@ -767,7 +767,7 @@ theorem pause_body_runCompiled
         (key := lockKey) (value := 0) (stack := [])
         (G := total - 57 - 100) rfl hlock
         (by simp only [Devm.gasLeft_setMach, gasWarmAccess]; omega)
-        (by simp)
+        (by simp only [List.length_nil, Nat.ofNat_pos])
       simpa only [Devm.memory_setMach, Devm.setMach_setMach, Devm.stateGas_setMach] using h
   refine Func.RunCompiled.next htload ?_
   func_run (2) [1]
@@ -804,14 +804,14 @@ theorem pause_body_runCompiled
       (base := pauseLockPost sevm base) (key := assignmentSlot target)
       (value := pauser) (stack := []) (M := Mem.empty)
       (G := total - 57 - 235 - assignmentCost)
-      hauthorizationStorage (by simp)
+      hauthorizationStorage (by simp only [List.length_nil, Nat.ofNat_pos])
     rw [hassignmentCost,
       show total - 57 - 235 - assignmentCost + assignmentCost =
         total - 57 - 235 by omega] at h
     exact h
   refine Func.RunCompiled.next hassignSload ?_
   func_run (3) [1]
-  case h_val => simp [B256.eqCheck, hcaller]
+  case h_val => simp only [B256.eqCheck, hcaller, ↓reduceIte]
   have hexpiryGas :
       total - 57 - 235 - assignmentCost - 19 =
         total - 57 - 235 - assignmentCost - 27 + 8 := by
@@ -832,14 +832,14 @@ theorem pause_body_runCompiled
       (base := pauseExpiryBase sevm base target) (key := expirySlot pauser)
       (value := expiry) (stack := []) (M := Mem.empty)
       (G := total - 57 - 235 - assignmentCost - 27 - expiryCost)
-      hexpiryStorage (by simp)
+      hexpiryStorage (by simp only [List.length_nil, Nat.ofNat_pos])
     rw [hexpiryCost,
       show total - 57 - 235 - assignmentCost - 27 - expiryCost +
         expiryCost = total - 57 - 235 - assignmentCost - 27 by omega] at h
     exact h
   refine Func.RunCompiled.next hexpirySload ?_
   func_run (3) [1]
-  case h_val => simp [B256.ltCheck, hlive]
+  case h_val => simp only [B256.ltCheck, hlive, ↓reduceIte]
   func_run (1)
   -- The configured pause duration is staged with the rest of the image.
   have hdurationSload : Ninst.RunCompiled sevm
@@ -852,7 +852,8 @@ theorem pause_body_runCompiled
     have h := temporal_sload_runCompiled (hfork := hfork) (sevm := sevm)
       (base := pauseDurationBase sevm base target pauser)
       (key := pauseDurationSlot) (value := duration) (stack := [])
-      (M := Mem.empty) (G := kernelGas + 128) hdurationStorage (by simp)
+      (M := Mem.empty) (G := kernelGas + 128) hdurationStorage (by simp only [List.length_nil,
+        Nat.ofNat_pos])
     rw [hdurationCost] at h
     rw [show total - 57 - 235 - assignmentCost - 27 - expiryCost - 22 =
       kernelGas + 128 + durationCost by omega]
@@ -946,11 +947,13 @@ theorem finishSetPauser_pauseAfterSet_runCompiled
     rw [Mem.Reads.read hreads]
     exact hcontinuation
   have hreadZero : M.read 0 0 = ([], M) := by
-    simp [Mem.read, Mem.extend, memExtSize]
+    simp only [Mem.read, Mem.extend, memExtSize, ↓reduceIte, Prod.mk.injEq, and_true]
     rfl
   let fs := (runtime dp).main :: (runtime dp).aux
   have hlookup : fs[pauseAfterSetSlot]? = some pauseAfterSet := by
-    simp [fs, runtime, aux, pauseAfterSetSlot]
+    simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      pauseAfterSetSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero, fs]
   have hcall : Func.RunCompiled fs sevm
       (eventBase.setMach ⟨stack, M, G + 12, eventBase.stateGas⟩)
       (.call pauseAfterSetSlot) post := by

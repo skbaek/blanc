@@ -31,7 +31,7 @@ theorem Exec.frameAdmitted_benvStat {pc : Nat} {sevm : Sevm} {pre : Devm}
   induction run with
   | halt hstep =>
       intro root member target
-      simp [Exec.rawFrameRoots, Exec.rawFrameDescendants] at member
+      simp only [rawFrameRoots, rawFrameDescendants, mem_cons, not_mem_nil, or_false] at member
       rcases member with rfl
       rfl
   | cont hstep next ih =>
@@ -39,10 +39,10 @@ theorem Exec.frameAdmitted_benvStat {pc : Nat} {sevm : Sevm} {pre : Devm}
       simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons] at member
       rcases member with rfl | member
       · rfl
-      · exact ih root (by simp [Exec.rawFrameRoots, member]) target
+      · exact ih root (by simp only [rawFrameRoots, mem_cons, member, or_true]) target
   | doneErr hstep henter hresume =>
       intro root member target
-      simp [Exec.rawFrameRoots, Exec.rawFrameDescendants] at member
+      simp only [rawFrameRoots, rawFrameDescendants, mem_cons, not_mem_nil, or_false] at member
       rcases member with rfl
       rfl
   | doneOk hstep henter hresume next ih =>
@@ -50,7 +50,7 @@ theorem Exec.frameAdmitted_benvStat {pc : Nat} {sevm : Sevm} {pre : Devm}
       simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons] at member
       rcases member with rfl | member
       · rfl
-      · exact ih root (by simp [Exec.rawFrameRoots, member]) target
+      · exact ih root (by simp only [rawFrameRoots, mem_cons, member, or_true]) target
   | runErr hstep henter child hresume ih =>
       intro root member target
       simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons] at member
@@ -58,7 +58,7 @@ theorem Exec.frameAdmitted_benvStat {pc : Nat} {sevm : Sevm} {pre : Devm}
       · rfl
       · rcases member with rfl | member
         · exact Frame.enter_run_benvStat_of_step hstep henter
-        · exact (ih root (by simp [Exec.rawFrameRoots, member]) target).trans
+        · exact (ih root (by simp only [rawFrameRoots, mem_cons, member, or_true]) target).trans
             (Frame.enter_run_benvStat_of_step hstep henter)
   | runOk hstep henter child hresume next ihChild ihNext =>
       intro root member target
@@ -69,9 +69,9 @@ theorem Exec.frameAdmitted_benvStat {pc : Nat} {sevm : Sevm} {pre : Devm}
       · rcases member with rfl | member
         · exact Frame.enter_run_benvStat_of_step hstep henter
         · rcases member with member | member
-          · exact (ihChild root (by simp [Exec.rawFrameRoots, member]) target).trans
+          · exact (ihChild root (by simp only [rawFrameRoots, mem_cons, member, or_true]) target).trans
               (Frame.enter_run_benvStat_of_step hstep henter)
-          · exact ihNext root (by simp [Exec.rawFrameRoots, member]) target
+          · exact ihNext root (by simp only [rawFrameRoots, mem_cons, member, or_true]) target
 
 /-! ## Retained traces run at their block's environment
 

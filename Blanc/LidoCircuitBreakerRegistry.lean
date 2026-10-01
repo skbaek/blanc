@@ -233,7 +233,7 @@ theorem assignmentSlot_injective
     (hslot : assignmentSlot left = assignmentSlot right) : left = right := by
   exact addressSlot_injective (region := assignmentRegion)
     (by norm_num [assignmentRegion]) hleft hright
-    (by simpa [assignmentSlot] using hslot)
+    (by simpa only [assignmentSlot] using hslot)
 
 theorem indexSlot_injective
     {left right : B256}
@@ -241,7 +241,7 @@ theorem indexSlot_injective
     (hslot : indexSlot left = indexSlot right) : left = right := by
   exact addressSlot_injective (region := indexRegion)
     (by norm_num [indexRegion]) hleft hright
-    (by simpa [indexSlot] using hslot)
+    (by simpa only [indexSlot] using hslot)
 
 theorem countSlot_injective
     {left right : B256}
@@ -249,7 +249,7 @@ theorem countSlot_injective
     (hslot : countSlot left = countSlot right) : left = right := by
   exact addressSlot_injective (region := countRegion)
     (by norm_num [countRegion]) hleft hright
-    (by simpa [countSlot] using hslot)
+    (by simpa only [countSlot] using hslot)
 
 theorem arrayEntrySlot_nat_injective_of_lt
     {left right : Nat}
@@ -265,9 +265,9 @@ theorem arrayEntrySlot_nat_injective_of_lt
   have hpayload : Nat.toB256 left = Nat.toB256 right :=
     slot_injective_payload (region := arrayRegion)
       (by norm_num [arrayRegion])
-      (by simpa [B256.toNat_toB256_of_lt hleft256] using hleft)
-      (by simpa [B256.toNat_toB256_of_lt hright256] using hright)
-      (by simpa [arrayEntrySlot] using hslots)
+      (by simpa only [B256.toNat_toB256_of_lt hleft256, Nat.reducePow] using hleft)
+      (by simpa only [B256.toNat_toB256_of_lt hright256, Nat.reducePow] using hright)
+      (by simpa only [arrayEntrySlot] using hslots)
   exact natToB256_injective_of_lt hleft256 hright256 hpayload
 
 /-- Assignment, reverse-index, and count address families are pairwise
@@ -281,22 +281,19 @@ theorem registryAddressFamilies_pairwise
     assignmentSlot assignmentTarget ≠ countSlot countedPauser ∧
     indexSlot indexTarget ≠ countSlot countedPauser := by
   constructor
-  · simpa [assignmentSlot, indexSlot] using
-      addressSlots_ne_of_region_ne
-        (leftRegion := assignmentRegion) (rightRegion := indexRegion)
-        (by norm_num [assignmentRegion]) (by norm_num [indexRegion])
-        hassignment hindex (by norm_num [assignmentRegion, indexRegion])
+  · simpa only [assignmentSlot, indexSlot, ne_eq] using
+    addressSlots_ne_of_region_ne (leftRegion := assignmentRegion) (rightRegion := indexRegion)
+      (by norm_num [assignmentRegion]) (by norm_num [indexRegion]) hassignment hindex
+      (by norm_num [assignmentRegion, indexRegion])
   constructor
-  · simpa [assignmentSlot, countSlot] using
-      addressSlots_ne_of_region_ne
-        (leftRegion := assignmentRegion) (rightRegion := countRegion)
-        (by norm_num [assignmentRegion]) (by norm_num [countRegion])
-        hassignment hcount (by norm_num [assignmentRegion, countRegion])
-  · simpa [indexSlot, countSlot] using
-      addressSlots_ne_of_region_ne
-        (leftRegion := indexRegion) (rightRegion := countRegion)
-        (by norm_num [indexRegion]) (by norm_num [countRegion])
-        hindex hcount (by norm_num [indexRegion, countRegion])
+  · simpa only [assignmentSlot, countSlot, ne_eq] using
+    addressSlots_ne_of_region_ne (leftRegion := assignmentRegion) (rightRegion := countRegion)
+      (by norm_num [assignmentRegion]) (by norm_num [countRegion]) hassignment hcount
+      (by norm_num [assignmentRegion, countRegion])
+  · simpa only [indexSlot, countSlot, ne_eq] using
+    addressSlots_ne_of_region_ne (leftRegion := indexRegion) (rightRegion := countRegion)
+      (by norm_num [indexRegion]) (by norm_num [countRegion]) hindex hcount
+      (by norm_num [indexRegion, countRegion])
 
 /-- The expiry family is disjoint from all address-keyed Registry families. -/
 theorem expirySlot_ne_registryAddressFamilies
@@ -308,22 +305,19 @@ theorem expirySlot_ne_registryAddressFamilies
     expirySlot expiryPauser ≠ indexSlot target ∧
     expirySlot expiryPauser ≠ countSlot countedPauser := by
   constructor
-  · simpa [expirySlot, assignmentSlot] using
-      addressSlots_ne_of_region_ne
-        (leftRegion := expiryRegion) (rightRegion := assignmentRegion)
-        (by norm_num [expiryRegion]) (by norm_num [assignmentRegion])
-        hexpiry htarget (by norm_num [expiryRegion, assignmentRegion])
+  · simpa only [expirySlot, assignmentSlot, ne_eq] using
+    addressSlots_ne_of_region_ne (leftRegion := expiryRegion) (rightRegion := assignmentRegion)
+      (by norm_num [expiryRegion]) (by norm_num [assignmentRegion]) hexpiry htarget
+      (by norm_num [expiryRegion, assignmentRegion])
   constructor
-  · simpa [expirySlot, indexSlot] using
-      addressSlots_ne_of_region_ne
-        (leftRegion := expiryRegion) (rightRegion := indexRegion)
-        (by norm_num [expiryRegion]) (by norm_num [indexRegion])
-        hexpiry htarget (by norm_num [expiryRegion, indexRegion])
-  · simpa [expirySlot, countSlot] using
-      addressSlots_ne_of_region_ne
-        (leftRegion := expiryRegion) (rightRegion := countRegion)
-        (by norm_num [expiryRegion]) (by norm_num [countRegion])
-        hexpiry hcount (by norm_num [expiryRegion, countRegion])
+  · simpa only [expirySlot, indexSlot, ne_eq] using
+    addressSlots_ne_of_region_ne (leftRegion := expiryRegion) (rightRegion := indexRegion)
+      (by norm_num [expiryRegion]) (by norm_num [indexRegion]) hexpiry htarget
+      (by norm_num [expiryRegion, indexRegion])
+  · simpa only [expirySlot, countSlot, ne_eq] using
+    addressSlots_ne_of_region_ne (leftRegion := expiryRegion) (rightRegion := countRegion)
+      (by norm_num [expiryRegion]) (by norm_num [countRegion]) hexpiry hcount
+      (by norm_num [expiryRegion, countRegion])
 
 /-- Address-keyed Registry families are disjoint from every bounded array
 entry key. -/
@@ -336,25 +330,19 @@ theorem registryAddressFamilies_ne_arrayEntrySlot
     indexSlot target ≠ arrayEntrySlot oneBasedIndex ∧
     countSlot pauser ≠ arrayEntrySlot oneBasedIndex := by
   constructor
-  · simpa [assignmentSlot, arrayEntrySlot] using
-      slot_ne_of_region_ne
-        (leftRegion := assignmentRegion) (rightRegion := arrayRegion)
-        (by norm_num [assignmentRegion]) (by norm_num [arrayRegion])
-        (canonicalAddress_payload_lt htarget) hindex
-        (by norm_num [assignmentRegion, arrayRegion])
+  · simpa only [assignmentSlot, arrayEntrySlot, ne_eq] using
+    slot_ne_of_region_ne (leftRegion := assignmentRegion) (rightRegion := arrayRegion)
+      (by norm_num [assignmentRegion]) (by norm_num [arrayRegion])
+      (canonicalAddress_payload_lt htarget) hindex (by norm_num [assignmentRegion, arrayRegion])
   constructor
-  · simpa [indexSlot, arrayEntrySlot] using
-      slot_ne_of_region_ne
-        (leftRegion := indexRegion) (rightRegion := arrayRegion)
-        (by norm_num [indexRegion]) (by norm_num [arrayRegion])
-        (canonicalAddress_payload_lt htarget) hindex
-        (by norm_num [indexRegion, arrayRegion])
-  · simpa [countSlot, arrayEntrySlot] using
-      slot_ne_of_region_ne
-        (leftRegion := countRegion) (rightRegion := arrayRegion)
-        (by norm_num [countRegion]) (by norm_num [arrayRegion])
-        (canonicalAddress_payload_lt hpauser) hindex
-        (by norm_num [countRegion, arrayRegion])
+  · simpa only [indexSlot, arrayEntrySlot, ne_eq] using
+    slot_ne_of_region_ne (leftRegion := indexRegion) (rightRegion := arrayRegion)
+      (by norm_num [indexRegion]) (by norm_num [arrayRegion]) (canonicalAddress_payload_lt htarget)
+      hindex (by norm_num [indexRegion, arrayRegion])
+  · simpa only [countSlot, arrayEntrySlot, ne_eq] using
+    slot_ne_of_region_ne (leftRegion := countRegion) (rightRegion := arrayRegion)
+      (by norm_num [countRegion]) (by norm_num [arrayRegion]) (canonicalAddress_payload_lt hpauser)
+      hindex (by norm_num [countRegion, arrayRegion])
 
 theorem registryAddressFamilies_ne_arrayLengthSlot
     {target pauser : B256}
@@ -368,7 +356,7 @@ theorem registryAddressFamilies_ne_arrayLengthSlot
     (by
       change (0 : Nat) < 2 ^ 252
       norm_num)
-  simpa [arrayEntrySlot, arrayLengthSlot] using h
+  simpa only [arrayLengthSlot, ne_eq, arrayEntrySlot] using h
 
 /-- The expiry family is disjoint from the array length and every bounded
 array-entry key. -/
@@ -379,21 +367,17 @@ theorem expirySlot_ne_arrayFamily
     expirySlot pauser ≠ arrayLengthSlot ∧
     expirySlot pauser ≠ arrayEntrySlot oneBasedIndex := by
   constructor
-  · simpa [expirySlot, arrayLengthSlot] using
-      slot_ne_of_region_ne
-        (leftRegion := expiryRegion) (rightRegion := arrayRegion)
-        (by norm_num [expiryRegion]) (by norm_num [arrayRegion])
-        (canonicalAddress_payload_lt hpauser)
-        (by
-          change (0 : Nat) < 2 ^ 252
-          norm_num)
-        (by norm_num [expiryRegion, arrayRegion])
-  · simpa [expirySlot, arrayEntrySlot] using
-      slot_ne_of_region_ne
-        (leftRegion := expiryRegion) (rightRegion := arrayRegion)
-        (by norm_num [expiryRegion]) (by norm_num [arrayRegion])
-        (canonicalAddress_payload_lt hpauser) hindex
-        (by norm_num [expiryRegion, arrayRegion])
+  · simpa only [expirySlot, arrayLengthSlot, ne_eq] using
+    slot_ne_of_region_ne (leftRegion := expiryRegion) (rightRegion := arrayRegion)
+      (by norm_num [expiryRegion]) (by norm_num [arrayRegion]) (canonicalAddress_payload_lt hpauser)
+      (by
+        change (0 : Nat) < 2 ^ 252
+        norm_num)
+      (by norm_num [expiryRegion, arrayRegion])
+  · simpa only [expirySlot, arrayEntrySlot, ne_eq] using
+    slot_ne_of_region_ne (leftRegion := expiryRegion) (rightRegion := arrayRegion)
+      (by norm_num [expiryRegion]) (by norm_num [arrayRegion]) (canonicalAddress_payload_lt hpauser)
+      hindex (by norm_num [expiryRegion, arrayRegion])
 
 /-- Writing one canonical pauser's expiry cannot alter any projected Registry
 field. -/
@@ -512,7 +496,7 @@ theorem arrayLengthSlot_ne_arrayEntrySlot_of_pos_lt
         change (0 : Nat) < 2 ^ 252
         norm_num)
       hindex
-      (by simpa [arrayLengthSlot, arrayEntrySlot] using h)
+      (by simpa only [arrayLengthSlot, arrayEntrySlot] using h)
   exact hpos hpayload.symm
 
 theorem RegistryWitness.arrayLengthSlot_ne_arrayEntrySlot
@@ -562,7 +546,7 @@ theorem RegistryWitness.arrayEntrySlot_injective
   have hpayload : Nat.toB256 (left + 1) = Nat.toB256 (right + 1) :=
     slot_injective_payload (region := arrayRegion)
       (by norm_num [arrayRegion]) hleft252 hright252
-      (by simpa [arrayEntrySlot] using hslots)
+      (by simpa only [arrayEntrySlot] using hslots)
   exact Nat.add_right_cancel
     (natToB256_injective_of_lt hleft256 hright256 hpayload)
 
@@ -648,7 +632,8 @@ theorem RegistryWitness.applyFreshWritesOfReadEffect
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · simp only [List.map_append, List.map_cons, List.map_nil]
     rw [List.nodup_append]
-    refine ⟨hw.targetsNodup, by simp, ?_⟩
+    refine ⟨hw.targetsNodup, by simp only [List.nodup_cons, List.not_mem_nil, not_false_eq_true,
+      List.nodup_nil, and_self], ?_⟩
     intro a ha b hb
     simp only [List.mem_singleton] at hb
     subst b
@@ -668,7 +653,8 @@ theorem RegistryWitness.applyFreshWritesOfReadEffect
     · exact hnew
   · rw [hread]
     simp only [List.foldl_cons, List.foldl_nil]
-    simp [haddressLength.2.2]
+    simp only [haddressLength.2.2, ↓reduceIte, List.length_append, List.length_cons,
+      List.length_nil, zero_add]
   · intro index hindex
     by_cases hold : index < entries.length
     · have hold256 : index + 1 < 2 ^ 256 := by
@@ -696,10 +682,9 @@ theorem RegistryWitness.applyFreshWritesOfReadEffect
         omega
       rw [hread]
       simp only [List.foldl_cons, List.foldl_nil]
-      simp [hfamilies.1, hfamilies.2.1, hfamilies.2.2,
-        hnewOld, hlengthOld,
+      simp only [hfamilies.2.2, ↓reduceIte, hlengthOld, hfamilies.2.1, hnewOld, hfamilies.1,
         targetAt_append_old entries (target, newPauser) hold]
-      simpa using hw.arrayWords index hold
+      simpa only using hw.arrayWords index hold
     · have heq : index = entries.length := by
         simp only [List.length_append, List.length_cons, List.length_nil]
           at hindex
@@ -710,8 +695,7 @@ theorem RegistryWitness.applyFreshWritesOfReadEffect
           htarget.2 hnew.2 hnext252
       rw [hread]
       simp only [List.foldl_cons, List.foldl_nil]
-      simp [hfamilies.2.1, hfamilies.2.2,
-        hlengthNext,
+      simp only [hfamilies.2.2, ↓reduceIte, hlengthNext, hfamilies.2.1,
         targetAt_append_length_of_findEntry_none hfind]
   · intro wanted hwanted
     have hpair :=
@@ -724,19 +708,18 @@ theorem RegistryWitness.applyFreshWritesOfReadEffect
     · subst wanted
       rw [hread]
       simp only [List.foldl_cons, List.foldl_nil]
-      simp [Ne.symm harray.1, Ne.symm hpair.1,
-        Ne.symm hlength.1, Ne.symm hpair.2.1,
-        assignmentAt_append_target_of_findEntry_none hfind]
+      simp only [Ne.symm hpair.2.1, ↓reduceIte, Ne.symm hlength.1, Ne.symm hpair.1,
+        Ne.symm harray.1, assignmentAt_append_target_of_findEntry_none hfind]
     · have hassignment : assignmentSlot target ≠ assignmentSlot wanted := by
         intro hslots
         exact (Ne.symm heq)
           (assignmentSlot_injective htarget.2 hwanted hslots)
       rw [hread]
       simp only [List.foldl_cons, List.foldl_nil]
-      simp [hassignment, Ne.symm harray.1, Ne.symm hpair.1,
-        Ne.symm hlength.1, Ne.symm hpair.2.1,
+      simp only [Ne.symm hpair.2.1, ↓reduceIte, Ne.symm hlength.1, Ne.symm hpair.1,
+        Ne.symm harray.1, hassignment,
         assignmentAt_append_of_ne entries target newPauser wanted heq]
-      simpa using hw.assignments wanted hwanted
+      simpa only using hw.assignments wanted hwanted
   · intro wanted hwanted
     have hpair :=
       registryAddressFamilies_pairwise htarget.2 hwanted hnew.2
@@ -748,17 +731,16 @@ theorem RegistryWitness.applyFreshWritesOfReadEffect
     · subst wanted
       rw [hread]
       simp only [List.foldl_cons, List.foldl_nil]
-      simp [Ne.symm hpair.2.2,
+      simp only [Ne.symm hpair.2.2, ↓reduceIte, ite_self,
         oneBasedIndexAt_append_target_of_findEntry_none hfind]
     · have hindexSlot : indexSlot target ≠ indexSlot wanted := by
         intro hslots
         exact (Ne.symm heq) (indexSlot_injective htarget.2 hwanted hslots)
       rw [hread]
       simp only [List.foldl_cons, List.foldl_nil]
-      simp [hpair.1, Ne.symm harray.2.1, hindexSlot,
-        Ne.symm hlength.2.1, Ne.symm hpair.2.2,
-        oneBasedIndexAt_append_of_ne entries target newPauser wanted heq]
-      simpa using hw.indices wanted hwanted
+      simp only [Ne.symm hpair.2.2, ↓reduceIte, Ne.symm hlength.2.1, hindexSlot, Ne.symm harray.2.1,
+        hpair.1, oneBasedIndexAt_append_of_ne entries target newPauser wanted heq]
+      simpa only using hw.indices wanted hwanted
   · intro wanted hwanted
     have hpair :=
       registryAddressFamilies_pairwise htarget.2 htarget.2 hwanted
@@ -770,16 +752,15 @@ theorem RegistryWitness.applyFreshWritesOfReadEffect
     · subst wanted
       rw [hread]
       simp only [List.foldl_cons, List.foldl_nil]
-      simp [assignmentCount_append, Nat.add_comm]
+      simp only [↓reduceIte, Nat.add_comm, assignmentCount_append]
     · have hcountSlot : countSlot newPauser ≠ countSlot wanted := by
         intro hslots
         exact (Ne.symm heq) (countSlot_injective hnew.2 hwanted hslots)
       rw [hread]
       simp only [List.foldl_cons, List.foldl_nil]
-      simp [hpair.2.1, Ne.symm harray.2.2, hpair.2.2,
-        Ne.symm hlength.2.2, hcountSlot, assignmentCount_append,
-        if_neg (Ne.symm heq)]
-      simpa using hw.counts wanted hwanted
+      simp only [hcountSlot, ↓reduceIte, Ne.symm hlength.2.2, hpair.2.2, Ne.symm harray.2.2,
+        hpair.2.1, assignmentCount_append, if_neg (Ne.symm heq), zero_add]
+      simpa only using hw.counts wanted hwanted
   · have hzeroCanonical : canonicalAddress (0 : B256) := by
       unfold canonicalAddress
       change (0 : Nat) < 2 ^ 160
@@ -797,9 +778,8 @@ theorem RegistryWitness.applyFreshWritesOfReadEffect
       exact hnew.1 (countSlot_injective hnew.2 hzeroCanonical hslots)
     rw [hread]
     simp only [List.foldl_cons, List.foldl_nil]
-    simp [hpair.2.1, Ne.symm harray.2.2, hpair.2.2,
-      Ne.symm hlength.2.2, hcount0]
-    simpa using hw.zeroCount
+    simp only [hcount0, ↓reduceIte, Ne.symm hlength.2.2, hpair.2.2, Ne.symm harray.2.2, hpair.2.1]
+    simpa only using hw.zeroCount
 
 /-- A fresh nonzero registration's exact five writes restore the combined
 Registry witness at the post-Registry boundary. -/
@@ -865,9 +845,9 @@ theorem RegistryWitness.applyFoundNonzeroWritesOfReadEffect
       registryAddressFamilies_ne_arrayLengthSlot htarget.2 hnew.2
     rw [hread]
     simp only [List.foldl_cons, List.foldl_nil]
-    simp [holdLength.1, holdLength.2.2, hnewLength.2.2,
+    simp only [hnewLength.2.2, ↓reduceIte, holdLength.2.2, holdLength.1,
       setEntryAt_length_of_findEntry hfind]
-    simpa using hw.lengthWord
+    simpa only using hw.lengthWord
   · intro wantedIndex hwantedIndex
     have holdIndex : wantedIndex < entries.length := by
       rw [setEntryAt_length_of_findEntry hfind] at hwantedIndex
@@ -888,9 +868,9 @@ theorem RegistryWitness.applyFoundNonzeroWritesOfReadEffect
       registryAddressFamilies_ne_arrayEntrySlot htarget.2 hnew.2 hword252
     rw [hread]
     simp only [List.foldl_cons, List.foldl_nil]
-    simp [holdArray.1, holdArray.2.2, hnewArray.2.2,
+    simp only [hnewArray.2.2, ↓reduceIte, holdArray.2.2, holdArray.1,
       targetAt_setEntryAt_of_findEntry hfind holdIndex]
-    simpa using hw.arrayWords wantedIndex holdIndex
+    simpa only using hw.arrayWords wantedIndex holdIndex
   · intro wanted hwanted
     have holdPair :=
       registryAddressFamilies_pairwise hwanted htarget.2 hold.2
@@ -900,7 +880,7 @@ theorem RegistryWitness.applyFoundNonzeroWritesOfReadEffect
     · subst wanted
       rw [hread]
       simp only [List.foldl_cons, List.foldl_nil]
-      simp [Ne.symm holdPair.2.1, Ne.symm hnewPair.2.1,
+      simp only [Ne.symm hnewPair.2.1, ↓reduceIte, Ne.symm holdPair.2.1,
         assignmentAt_setEntryAt_target_of_findEntry hfind]
     · have hassignment : assignmentSlot target ≠ assignmentSlot wanted := by
         intro hslots
@@ -908,9 +888,9 @@ theorem RegistryWitness.applyFoundNonzeroWritesOfReadEffect
           (assignmentSlot_injective htarget.2 hwanted hslots)
       rw [hread]
       simp only [List.foldl_cons, List.foldl_nil]
-      simp [hassignment, Ne.symm holdPair.2.1, Ne.symm hnewPair.2.1,
+      simp only [Ne.symm hnewPair.2.1, ↓reduceIte, Ne.symm holdPair.2.1, hassignment,
         assignmentAt_setEntryAt_of_findEntry_ne hfind heq]
-      simpa using hw.assignments wanted hwanted
+      simpa only using hw.assignments wanted hwanted
   · intro wanted hwanted
     have holdPair :=
       registryAddressFamilies_pairwise htarget.2 hwanted hold.2
@@ -918,9 +898,9 @@ theorem RegistryWitness.applyFoundNonzeroWritesOfReadEffect
       registryAddressFamilies_pairwise htarget.2 hwanted hnew.2
     rw [hread]
     simp only [List.foldl_cons, List.foldl_nil]
-    simp [holdPair.1, Ne.symm holdPair.2.2, Ne.symm hnewPair.2.2,
+    simp only [Ne.symm hnewPair.2.2, ↓reduceIte, Ne.symm holdPair.2.2, holdPair.1,
       oneBasedIndexAt_setEntryAt_of_findEntry hfind]
-    simpa using hw.indices wanted hwanted
+    simpa only using hw.indices wanted hwanted
   · intro wanted hwanted
     have hassignment :=
       registryAddressFamilies_pairwise htarget.2 htarget.2 hwanted
@@ -928,7 +908,7 @@ theorem RegistryWitness.applyFoundNonzeroWritesOfReadEffect
     · subst wanted
       rw [hread]
       simp only [List.foldl_cons, List.foldl_nil]
-      simp [assignmentCount_setEntryAt_of_findEntry hfind]
+      simp only [↓reduceIte, assignmentCount_setEntryAt_of_findEntry hfind]
     · have hcountNew : countSlot newPauser ≠ countSlot wanted := by
         intro hslots
         exact (Ne.symm hnewEq)
@@ -937,18 +917,18 @@ theorem RegistryWitness.applyFoundNonzeroWritesOfReadEffect
       · subst wanted
         rw [hread]
         simp only [List.foldl_cons, List.foldl_nil]
-        simp [hcountNew, Ne.symm hnewEq,
-          assignmentCount_setEntryAt_of_findEntry hfind]
+        simp only [hcountNew, ↓reduceIte, assignmentCount_setEntryAt_of_findEntry hfind,
+          Ne.symm hnewEq, add_zero]
       · have hcountOld : countSlot oldPauser ≠ countSlot wanted := by
           intro hslots
           exact (Ne.symm holdEq)
             (countSlot_injective hold.2 hwanted hslots)
         rw [hread]
         simp only [List.foldl_cons, List.foldl_nil]
-        simp [hassignment.2.1, hcountOld, hcountNew]
+        simp only [hcountNew, ↓reduceIte, hcountOld, hassignment.2.1]
         rw [assignmentCount_setEntryAt_of_findEntry hfind]
-        simp [Ne.symm holdEq, Ne.symm hnewEq]
-        simpa using hw.counts wanted hwanted
+        simp only [Ne.symm holdEq, ↓reduceIte, tsub_zero, Ne.symm hnewEq, add_zero]
+        simpa only using hw.counts wanted hwanted
   · have hzeroCanonical : canonicalAddress (0 : B256) := by
       unfold canonicalAddress
       change (0 : Nat) < 2 ^ 160
@@ -963,8 +943,8 @@ theorem RegistryWitness.applyFoundNonzeroWritesOfReadEffect
       exact hnew.1 (countSlot_injective hnew.2 hzeroCanonical hslots)
     rw [hread]
     simp only [List.foldl_cons, List.foldl_nil]
-    simp [hassignment.2.1, hold0, hnew0]
-    simpa using hw.zeroCount
+    simp only [hnew0, ↓reduceIte, hold0, hassignment.2.1]
+    simpa only using hw.zeroCount
 
 /-- Reassigning an existing target to a nonzero pauser preserves the combined
 Registry witness after the exact assignment, decrement, and increment chronology. -/
@@ -1042,7 +1022,7 @@ theorem RegistryWitness.applyAbsentZeroWritesOfReadEffect
         registryAddressFamilies_ne_arrayLengthSlot htarget.2 htarget.2
       rw [hread]
       simp only [List.foldl_cons, List.foldl_nil]
-      simp [hlength.2.1]
+      simp only [hlength.2.1, ↓reduceIte]
     arrayWords := by
       intro index hindex
       have hold256 : index + 1 < 2 ^ 256 := by
@@ -1071,8 +1051,8 @@ theorem RegistryWitness.applyAbsentZeroWritesOfReadEffect
         omega
       rw [hread]
       simp only [List.foldl_cons, List.foldl_nil]
-      simp [hfamilies.1, hfamilies.2.1, hfreshOld, holdLength]
-      simpa using hw.arrayWords index hindex
+      simp only [hfamilies.2.1, ↓reduceIte, holdLength, hfreshOld, hfamilies.1]
+      simpa only using hw.arrayWords index hindex
     assignments := by
       intro wanted hwanted
       have harray :=
@@ -1085,7 +1065,7 @@ theorem RegistryWitness.applyAbsentZeroWritesOfReadEffect
       · subst wanted
         rw [hread]
         simp only [List.foldl_cons, List.foldl_nil]
-        simp [Ne.symm harray.1, Ne.symm hpair.1, Ne.symm hlength.1,
+        simp only [Ne.symm hpair.1, ↓reduceIte, Ne.symm hlength.1, Ne.symm harray.1,
           findEntry_none_assignmentAt hfind]
       · have hassignment : assignmentSlot target ≠ assignmentSlot wanted := by
           intro hslots
@@ -1093,9 +1073,8 @@ theorem RegistryWitness.applyAbsentZeroWritesOfReadEffect
             (assignmentSlot_injective htarget.2 hwanted hslots)
         rw [hread]
         simp only [List.foldl_cons, List.foldl_nil]
-        simp [hassignment, Ne.symm harray.1, Ne.symm hpair.1,
-          Ne.symm hlength.1]
-        simpa using hw.assignments wanted hwanted
+        simp only [Ne.symm hpair.1, ↓reduceIte, Ne.symm hlength.1, Ne.symm harray.1, hassignment]
+        simpa only using hw.assignments wanted hwanted
     indices := by
       intro wanted hwanted
       have harray :=
@@ -1108,16 +1087,15 @@ theorem RegistryWitness.applyAbsentZeroWritesOfReadEffect
       · subst wanted
         rw [hread]
         simp only [List.foldl_cons, List.foldl_nil]
-        (simp [findEntry_none_oneBasedIndexAt hfind]; rfl)
+        (simp only [↓reduceIte, findEntry_none_oneBasedIndexAt hfind]; rfl)
       · have hindexSlot : indexSlot target ≠ indexSlot wanted := by
           intro hslots
           exact (Ne.symm heq)
             (indexSlot_injective htarget.2 hwanted hslots)
         rw [hread]
         simp only [List.foldl_cons, List.foldl_nil]
-        simp [hpair.1, Ne.symm harray.2.1, hindexSlot,
-          Ne.symm hlength.2.1]
-        simpa using hw.indices wanted hwanted
+        simp only [hindexSlot, ↓reduceIte, Ne.symm hlength.2.1, Ne.symm harray.2.1, hpair.1]
+        simpa only using hw.indices wanted hwanted
     counts := by
       intro wanted hwanted
       have harray :=
@@ -1128,9 +1106,8 @@ theorem RegistryWitness.applyAbsentZeroWritesOfReadEffect
         registryAddressFamilies_pairwise htarget.2 htarget.2 hwanted
       rw [hread]
       simp only [List.foldl_cons, List.foldl_nil]
-      simp [hpair.2.1, hpair.2.2, Ne.symm harray.2.2,
-        Ne.symm hlength.2.2]
-      simpa using hw.counts wanted hwanted
+      simp only [hpair.2.2, ↓reduceIte, Ne.symm hlength.2.2, Ne.symm harray.2.2, hpair.2.1]
+      simpa only using hw.counts wanted hwanted
     zeroCount := by
       have hzeroCanonical : canonicalAddress (0 : B256) := by
         unfold canonicalAddress
@@ -1145,9 +1122,8 @@ theorem RegistryWitness.applyAbsentZeroWritesOfReadEffect
         registryAddressFamilies_pairwise htarget.2 htarget.2 hzeroCanonical
       rw [hread]
       simp only [List.foldl_cons, List.foldl_nil]
-      simp [hpair.2.1, hpair.2.2, Ne.symm harray.2.2,
-        Ne.symm hlength.2.2]
-      simpa using hw.zeroCount
+      simp only [hpair.2.2, ↓reduceIte, Ne.symm hlength.2.2, Ne.symm harray.2.2, hpair.2.1]
+      simpa only using hw.zeroCount
   }
 
 /-- The absent-target/zero-pauser path restores the original witness after its
@@ -1289,7 +1265,7 @@ private theorem prefix_of_targetKey_image
     ⟨hp1, hwf1, hr1, hs1⟩
   rcases prefix_of_tagTop hp1 htag with ⟨hp2, hm2, hs2⟩
   refine ⟨?_, ?_, ?_, hs1.trans hs2⟩
-  · simpa [assignmentSlot] using hp2
+  · simpa only [assignmentSlot] using hp2
   · rw [← hm2]
     exact hwf1
   · rw [← hm2]
@@ -1315,7 +1291,7 @@ private theorem prefix_of_previousCountKey_image
     ⟨hp1, hwf1, hr1, hs1⟩
   rcases prefix_of_tagTop hp1 htag with ⟨hp2, hm2, hs2⟩
   refine ⟨?_, ?_, ?_, hs1.trans hs2⟩
-  · simpa [countSlot] using hp2
+  · simpa only [countSlot] using hp2
   · rw [← hm2]
     exact hwf1
   · rw [← hm2]
@@ -1341,7 +1317,7 @@ private theorem prefix_of_newCountKey_image
     ⟨hp1, hwf1, hr1, hs1⟩
   rcases prefix_of_tagTop hp1 htag with ⟨hp2, hm2, hs2⟩
   refine ⟨?_, ?_, ?_, hs1.trans hs2⟩
-  · simpa [countSlot] using hp2
+  · simpa only [countSlot] using hp2
   · rw [← hm2]
     exact hwf1
   · rw [← hm2]
@@ -1367,7 +1343,7 @@ private theorem prefix_of_targetIndexKey_image
     ⟨hp1, hwf1, hr1, hs1⟩
   rcases prefix_of_tagTop hp1 htag with ⟨hp2, hm2, hs2⟩
   refine ⟨?_, ?_, ?_, hs1.trans hs2⟩
-  · simpa [indexSlot] using hp2
+  · simpa only [indexSlot] using hp2
   · rw [← hm2]
     exact hwf1
   · rw [← hm2]
@@ -1400,7 +1376,7 @@ private theorem pausableZeroError_not_run
     {fs : List Func} {sevm : Sevm} {pre post : Devm} :
     ¬ Func.Run fs sevm pre pausableZeroError post := by
   intro h
-  dsimp [pausableZeroError, Func.revertSelector] at h
+  dsimp only [pausableZeroError] at h
   rcases of_run_next h with ⟨s1, _, h1⟩
   rcases of_run_next h1 with ⟨s2, _, h2⟩
   rcases of_run_next h2 with ⟨s3, _, h3⟩
@@ -1485,7 +1461,7 @@ theorem setPauser_run_extracts_nonzero_guard
       have htarget : target ≠ 0 := by
         intro heq
         rw [heq] at hflag
-        simp [B256.eqCheck] at hflag
+        simp only [B256.eqCheck, ↓reduceIte] at hflag
         exact (by decide : (0 : B256) ≠ 1) hflag
       have hrGuard : Mem.Reads guardPre.memory img := by
         rw [← hpop.memory]
@@ -1571,7 +1547,7 @@ theorem setPauser_run_extracts_assignment_write
       _ = (Devm.getStor pre ca).get (assignmentSlot target) := by
         rw [howner, ← congrFun hstorKey ca]
       _ = assignmentAt entries target := by
-        simpa [logicalStorageOfStor] using hw.assignments target htarget.2
+        simpa only [logicalStorageOfStor] using hw.assignments target htarget.2
   have hdupPrefix :
       oldPauser :: oldPauser :: xs <<+ sDup.stack :=
     prefix_of_dup_val hdup (by show_nth) holdPrefix
@@ -1595,7 +1571,7 @@ theorem setPauser_run_extracts_assignment_write
         (newPauserWord * 32).toNat + 32 ≤
           (previousPauserWord * 32).toNat := by
       decide
-    dsimp [imgPrev]
+    dsimp only [imgPrev]
     rw [Bytes.sliceD_writeAt_before _ _ _ _ _ hoff]
     exact hnewRead
   rcases prefix_of_loadWord_image hprevPrefix hwfPrev hrPrev hnewPrev
@@ -1606,7 +1582,7 @@ theorem setPauser_run_extracts_assignment_write
         (targetWord * 32).toNat + 32 ≤
           (previousPauserWord * 32).toNat := by
       decide
-    dsimp [imgPrev]
+    dsimp only [imgPrev]
     rw [Bytes.sliceD_writeAt_before _ _ _ _ _ hoff]
     exact htargetRead
   rcases prefix_of_targetKey_image hnewPrefix hwfNew hrNew htargetPrev hkey2 with
@@ -1694,7 +1670,7 @@ private theorem setPauser_run_split_old_assignment
       have hold : oldPauser ≠ 0 := by
         intro heq
         rw [heq] at hflag
-        simp [B256.eqCheck] at hflag
+        simp only [B256.eqCheck, ↓reduceIte] at hflag
         exact (by decide : (0 : B256) ≠ 1) hflag
       have hmem : pre.memory = oldCountPre.memory :=
         hmemIszero.trans hpop.memory
@@ -1794,8 +1770,7 @@ private theorem setPauser_run_extracts_old_count_write
       _ = entryStor.get (countSlot oldPauser) := by
         rw [Stor.get_set_ne _ hfamilies.2.1]
       _ = Nat.toB256 (assignmentCount entries oldPauser) := by
-        simpa [logicalStorageOfStor] using
-          hw.counts oldPauser holdValid.2
+        simpa only [logicalStorageOfStor] using hw.counts oldPauser holdValid.2
   rw [hcount] at hcountPrefix
   have hpushPrefix :
       (1 : B256) :: Nat.toB256 (assignmentCount entries oldPauser) :: xs
@@ -1948,7 +1923,7 @@ private theorem appendTarget_run_extracts_writes
       _ = entryStor.get arrayLengthSlot :=
         Stor.get_set_ne entryStor hassignmentLength newPauser
       _ = Nat.toB256 entries.length := by
-        simpa [logicalStorageOfStor] using hw.lengthWord
+        simpa only [logicalStorageOfStor] using hw.lengthWord
   have hpOne : (1 : B256) :: lengthWord :: xs <<+ sOne.stack :=
     prefix_of_push (of_run_pushB256 hpushOne) hpLength
   have hpNext : Nat.toB256 (entries.length + 1) :: xs <<+ sAdd.stack := by
@@ -1988,13 +1963,13 @@ private theorem appendTarget_run_extracts_writes
     have hoff :
         (targetWord * 32).toNat + 32 ≤
           (arrayLengthWord * 32).toNat := by decide
-    dsimp [imgNext]
+    dsimp only [imgNext]
     rw [Bytes.sliceD_writeAt_before _ _ _ _ _ hoff]
     exact htargetRead
   have hlengthNext : Bytes.toB256
       (imgNext.sliceD (arrayLengthWord * 32).toNat 32 0) =
         Nat.toB256 (entries.length + 1) := by
-    dsimp [imgNext]
+    dsimp only [imgNext]
     rw [show 32 = (Nat.toB256 (entries.length + 1)).toBytes.length by
       rw [B256.length_toBytes]]
     rw [Bytes.sliceD_writeAt, B256.toB256_toBytes]
@@ -2010,7 +1985,7 @@ private theorem appendTarget_run_extracts_writes
       arrayEntrySlot (Nat.toB256 (entries.length + 1)) ::
         target :: Nat.toB256 (entries.length + 1) :: xs <<+
           sArrayKey.stack := by
-    simpa [arrayEntrySlot] using hpArray0
+    simpa only [arrayEntrySlot] using hpArray0
   have hwfArray : Mem.Wf sArrayKey.memory := by
     rw [← hmemArray]
     exact hwfLength1
@@ -2194,7 +2169,7 @@ private theorem afterOldPauser_run_split_new_assignment
       have hnew : newPauser ≠ 0 := by
         intro heq
         rw [heq] at hflag
-        simp [B256.eqCheck] at hflag
+        simp only [B256.eqCheck, ↓reduceIte] at hflag
         exact (by decide : (0 : B256) ≠ 1) hflag
       have hmem : sLoad.memory = newCountPre.memory :=
         hmemIszero.trans hpop.memory
@@ -2520,7 +2495,7 @@ private theorem removeTarget_run_extracts_writes
     lengthWord.toBytes
   have hlengthInLength : Bytes.toB256
       (imgLength.sliceD (arrayLengthWord * 32).toNat 32 0) = lengthWord := by
-    dsimp [imgLength]
+    dsimp only [imgLength]
     rw [show 32 = lengthWord.toBytes.length by rw [B256.length_toBytes]]
     rw [Bytes.sliceD_writeAt, B256.toB256_toBytes]
   rcases prefix_of_loadWord_image hpLengthMem hwfLengthMem hrLengthMem
@@ -2530,7 +2505,7 @@ private theorem removeTarget_run_extracts_writes
   rcases prefix_of_tagTop hpLengthForLast hlastKey with
     ⟨hpLastKey0, hmemLastKey, hstorLastKey⟩
   have hpLastKey : arrayEntrySlot lengthWord :: xs <<+ sLastKey.stack := by
-    simpa [arrayEntrySlot] using hpLastKey0
+    simpa only [arrayEntrySlot] using hpLastKey0
   rcases prefix_of_sload hsloadLast hpLastKey with
     ⟨loadedLast, hpLoadedLast, hloadedLastRead⟩
   have hstorLengthLoad : Devm.getStor sLengthSlot = Devm.getStor sLengthLoad :=
@@ -2568,7 +2543,7 @@ private theorem removeTarget_run_extracts_writes
         (arrayLengthWord * 32).toNat := by decide
     have h3 : (targetWord * 32).toNat + 32 ≤
         (lastTargetWord * 32).toNat := by decide
-    dsimp [imgLast, imgLength, imgIndex]
+    dsimp only [imgLast, imgLength, imgIndex]
     rw [Bytes.sliceD_writeAt_before _ _ _ _ _ h3,
       Bytes.sliceD_writeAt_before _ _ _ _ _ h2,
       Bytes.sliceD_writeAt_before _ _ _ _ _ h1]
@@ -2579,7 +2554,7 @@ private theorem removeTarget_run_extracts_writes
         (arrayLengthWord * 32).toNat := by decide
     have h3 : (removedIndexWord * 32).toNat + 32 ≤
         (lastTargetWord * 32).toNat := by decide
-    dsimp [imgLast, imgLength, imgIndex]
+    dsimp only [imgLast, imgLength, imgIndex]
     rw [Bytes.sliceD_writeAt_before _ _ _ _ _ h3,
       Bytes.sliceD_writeAt_before _ _ _ _ _ h2]
     rw [show 32 = indexWord.toBytes.length by rw [B256.length_toBytes]]
@@ -2588,13 +2563,13 @@ private theorem removeTarget_run_extracts_writes
       (imgLast.sliceD (arrayLengthWord * 32).toNat 32 0) = lengthWord := by
     have h3 : (arrayLengthWord * 32).toNat + 32 ≤
         (lastTargetWord * 32).toNat := by decide
-    dsimp [imgLast, imgLength]
+    dsimp only [imgLast, imgLength]
     rw [Bytes.sliceD_writeAt_before _ _ _ _ _ h3]
     rw [show 32 = lengthWord.toBytes.length by rw [B256.length_toBytes]]
     rw [Bytes.sliceD_writeAt, B256.toB256_toBytes]
   have hlastFinal : Bytes.toB256
       (imgLast.sliceD (lastTargetWord * 32).toNat 32 0) = lastTarget := by
-    dsimp [imgLast]
+    dsimp only [imgLast]
     rw [show 32 = lastTarget.toBytes.length by rw [B256.length_toBytes]]
     rw [Bytes.sliceD_writeAt, B256.toB256_toBytes]
   rcases prefix_of_loadWord_image hpLastMem hwfLastMem hrLastMem hlastFinal
@@ -2608,7 +2583,7 @@ private theorem removeTarget_run_extracts_writes
     ⟨hpHole0, hmemHole, hstorHoleKey⟩
   have hpHole : arrayEntrySlot indexWord :: lastTarget :: xs <<+
       sHoleKey.stack := by
-    simpa [arrayEntrySlot] using hpHole0
+    simpa only [arrayEntrySlot] using hpHole0
   have hmemStoreHole : sHoleKey.memory = sHoleStore.memory :=
     Ninst.Hinv.inv (f := Devm.memory) hstoreHole
   have hpAfterHole : xs <<+ sHoleStore.stack :=
@@ -2638,13 +2613,13 @@ private theorem removeTarget_run_extracts_writes
       hstorIndexForMoved⟩
   have hmovedKeyRun : Line.Run sevm sIndexForMoved
       (loadWord lastTargetWord ++ tagTop indexRegion) sMovedKey := by
-    simpa [lastTargetIndexKey] using hmovedKey
+    simpa only [lastTargetIndexKey] using hmovedKey
   rcases prefix_of_taggedWordKey_image hpIndexForMoved hwfIndexForMoved
       hrIndexForMoved hlastFinal hmovedKeyRun with
     ⟨hpMoved0, hwfMoved, hrMoved, hstorMovedKey⟩
   have hpMoved : indexSlot lastTarget :: indexWord :: xs <<+
       sMovedKey.stack := by
-    simpa [indexSlot] using hpMoved0
+    simpa only [indexSlot] using hpMoved0
   have hpAfterMoved : xs <<+ sMovedStore.stack :=
     prefix_of_sstore hstoreMoved hpMoved
   have hmemMovedStore : sMovedKey.memory = sMovedStore.memory :=
@@ -2682,7 +2657,7 @@ private theorem removeTarget_run_extracts_writes
     ⟨hpTail0, hmemTail, hstorTailKey⟩
   have hpTail : arrayEntrySlot lengthWord :: (0 : B256) :: xs <<+
       sTailKey.stack := by
-    simpa [arrayEntrySlot] using hpTail0
+    simpa only [arrayEntrySlot] using hpTail0
   have hpAfterTail : xs <<+ sTailStore.stack :=
     prefix_of_sstore hstoreTail hpTail
   have hmemTailStore : sTailKey.memory = sTailStore.memory :=
@@ -2777,13 +2752,13 @@ private theorem removeTarget_run_extracts_writes
     exact hrAfterLength
   have hremovedKeyRun : Line.Run sevm sZeroIndex
       (loadWord targetWord ++ tagTop indexRegion) sRemovedKey := by
-    simpa [targetIndexKey] using hremovedKey
+    simpa only [targetIndexKey] using hremovedKey
   rcases prefix_of_taggedWordKey_image hpZeroIndex hwfZeroIndex
       hrZeroIndex htargetFinal hremovedKeyRun with
     ⟨hpRemoved0, hwfRemoved, hrRemoved, hstorRemovedKey⟩
   have hpRemoved : indexSlot target :: (0 : B256) :: xs <<+
       sRemovedKey.stack := by
-    simpa [indexSlot] using hpRemoved0
+    simpa only [indexSlot] using hpRemoved0
   have hpAfterRemoved : xs <<+ sRemovedStore.stack :=
     prefix_of_sstore hstoreRemoved hpRemoved
   have hmemRemovedStore : sRemovedKey.memory = sRemovedStore.memory :=
@@ -2874,7 +2849,7 @@ private theorem appendedRegistryStorage_reads
     current.get (countSlot newPauser) =
       Nat.toB256 (assignmentCount entries newPauser) ∧
     next - 1 = Nat.toB256 entries.length := by
-  dsimp
+  dsimp only [Lean.Elab.WF.paramLet]
   have hnext252 :
       (Nat.toB256 (entries.length + 1)).toNat < 2 ^ 252 := by
     rw [B256.toNat_toB256_of_lt hw.fresh_length_lt_2pow256]
@@ -2902,10 +2877,10 @@ private theorem appendedRegistryStorage_reads
       Stor.get_set_ne _ hpair.2.2,
       Stor.get_set_ne _ (Ne.symm harray.2.2),
       Stor.get_set_ne _ hpair.2.1]
-    simpa [logicalStorageOfStor] using hw.counts newPauser hnew
+    simpa only [logicalStorageOfStor] using hw.counts newPauser hnew
   · symm
-    simpa using natToB256_pred_eq_sub_one (entries.length + 1)
-      (by omega) hw.fresh_length_lt_2pow256
+    simpa only [add_tsub_cancel_right] using
+      natToB256_pred_eq_sub_one (entries.length + 1) (by omega) hw.fresh_length_lt_2pow256
 
 private theorem reassignedRegistryStorage_newCount
     {s : Stor} {entries : List Entry}
@@ -2921,7 +2896,7 @@ private theorem reassignedRegistryStorage_newCount
       (Nat.toB256 (assignmentCount entries oldPauser - 1))
     current.get (countSlot newPauser) = Nat.toB256 countBefore ∧
     Nat.toB256 (countBefore + 1) = Nat.toB256 countBefore + 1 := by
-  dsimp
+  dsimp only [Lean.Elab.WF.paramLet]
   have hold : nonzeroCanonicalAddress oldPauser :=
     hw.pausersValid (target, oldPauser) (mem_of_findEntry hfind)
   have hpair :=
@@ -2930,13 +2905,13 @@ private theorem reassignedRegistryStorage_newCount
   · by_cases heq : oldPauser = newPauser
     · subst oldPauser
       rw [Stor.get_set_self]
-      simp
+      simp only [↓reduceIte]
     · have hcountNe : countSlot oldPauser ≠ countSlot newPauser := by
         intro hslots
         exact heq (countSlot_injective hold.2 hnew.2 hslots)
       rw [Stor.get_set_ne _ hcountNe, Stor.get_set_ne _ hpair.2.1]
-      simp [heq]
-      simpa [logicalStorageOfStor] using hw.counts newPauser hnew.2
+      simp only [heq, ↓reduceIte, tsub_zero]
+      simpa only [logicalStorageOfStor] using hw.counts newPauser hnew.2
   · apply natToB256_succ_eq_add_one
     have hcount := assignmentCount_le_length entries newPauser
     have hlength := hw.entries_length_le
@@ -2958,7 +2933,7 @@ private theorem foundRemovalStorage_reads
       sourceLastTarget entries ∧
     Nat.toB256 entries.length - 1 =
       Nat.toB256 (entries.length - 1) := by
-  dsimp
+  dsimp only [Lean.Elab.WF.paramLet]
   have hold : nonzeroCanonicalAddress oldPauser :=
     hw.pausersValid (target, oldPauser) (mem_of_findEntry hfind)
   obtain ⟨last, hlast⟩ := last_some_of_findEntry hfind
@@ -2979,11 +2954,11 @@ private theorem foundRemovalStorage_reads
   refine ⟨?_, ?_, ?_, ?_⟩
   · rw [Stor.get_set_ne _ (Ne.symm htargetPair.2.2),
       Stor.get_set_ne _ htargetPair.1]
-    simpa [logicalStorageOfStor, findEntry_oneBasedIndexAt hfind] using
+    simpa only [logicalStorageOfStor, findEntry_oneBasedIndexAt hfind] using
       hw.indices target htarget.2
   · rw [Stor.get_set_ne _ hlengthFamilies.2.2,
       Stor.get_set_ne _ hlengthFamilies.1]
-    simpa [logicalStorageOfStor] using hw.lengthWord
+    simpa only [logicalStorageOfStor] using hw.lengthWord
   · rw [Stor.get_set_ne _ harrayFamilies.2.2,
       Stor.get_set_ne _ harrayFamilies.1]
     have hindex : entries.length - 1 < entries.length := by
@@ -2994,18 +2969,19 @@ private theorem foundRemovalStorage_reads
     change s.get (arrayEntrySlot (Nat.toB256 entries.length)) =
       sourceLastTarget entries
     rw [show sourceLastTarget entries = last.1 by
-      simp [sourceLastTarget, hlast]]
+      simp only [sourceLastTarget, hlast]]
     have hlengthPos : 1 ≤ entries.length := by
       have hi := findEntry_index_lt hfind
       omega
     simpa only [logicalStorageOfStor,
       Nat.sub_add_cancel hlengthPos] using harray
   · symm
-    simpa using natToB256_pred_eq_sub_one entries.length
-      (by
-        have hi := findEntry_index_lt hfind
-        omega)
-      hlength256
+    simpa only using
+      natToB256_pred_eq_sub_one entries.length
+        (by
+          have hi := findEntry_index_lt hfind
+          omega)
+        hlength256
 
 /-- The seven chronological logical Registry writes preserve the witness for
 any functional storage observation with the stated pointwise write effect. -/
@@ -3036,7 +3012,7 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
   have hlastTarget : nonzeroCanonicalAddress last.1 :=
     hw.targetsValid last hlastMem
   have hsource : sourceLastTarget entries = last.1 := by
-    simp [sourceLastTarget, hlast]
+    simp only [sourceLastTarget, hlast]
   rw [hsource] at hread
   have hindex256 : index + 1 < 2 ^ 256 := by
     have hbound := hw.entries_length_le
@@ -3071,7 +3047,7 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
         registryAddressFamilies_ne_arrayLengthSlot hlastTarget.2 hold.2
       rw [hread]
       simp only [List.foldl_cons, List.foldl_nil]
-      simp [hfamilies.2.1, swapPop_length_of_findEntry hfind]
+      simp only [hfamilies.2.1, ↓reduceIte, swapPop_length_of_findEntry hfind]
     arrayWords := by
       intro wantedIndex hwanted
       have hpostIndex : wantedIndex < entries.length - 1 := by
@@ -3115,8 +3091,7 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
               arrayEntrySlot (Nat.toB256 (index + 1)) := htail
         rw [hread]
         simp only [List.foldl_cons, List.foldl_nil]
-        simp [htargetArray.2.1,
-          hlastArray.2.1, htailHole, hlengthArray]
+        simp only [htargetArray.2.1, ↓reduceIte, hlengthArray, htailHole, hlastArray.2.1]
         rw [htargetMoved, targetAt_last_of_last entries hlast]
       · have hhole :
             arrayEntrySlot (Nat.toB256 (index + 1)) ≠
@@ -3125,10 +3100,10 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
           exact heq (hw.arrayEntrySlot_injective hindexLt hwantedOld hslots).symm
         rw [hread]
         simp only [List.foldl_cons, List.foldl_nil]
-        simp [htargetArray.1, htargetArray.2.1, htargetArray.2.2,
-          hlastArray.2.1, hhole, htail, hlengthArray]
+        simp only [htargetArray.2.1, ↓reduceIte, hlengthArray, htail, hlastArray.2.1, hhole,
+          htargetArray.2.2, htargetArray.1]
         rw [targetAt_swapPop_of_ne entries hindexLt hpostIndex heq]
-        simpa using hw.arrayWords wantedIndex hwantedOld
+        simpa only using hw.arrayWords wantedIndex hwantedOld
     assignments := by
       intro wanted hwanted
       have hhole :=
@@ -3147,9 +3122,8 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
       · subst wanted
         rw [hread]
         simp only [List.foldl_cons, List.foldl_nil]
-        simp [Ne.symm hcountPair.2.1, Ne.symm hhole.1,
-          Ne.symm hlastPair.1, Ne.symm htail.1, Ne.symm hlength.1,
-          Ne.symm htargetPair.1,
+        simp only [Ne.symm htargetPair.1, ↓reduceIte, Ne.symm hlength.1, Ne.symm htail.1,
+          Ne.symm hlastPair.1, Ne.symm hhole.1, Ne.symm hcountPair.2.1,
           assignmentAt_swapPop_target_of_findEntry hfind hw.targetsNodup]
       · have hassignment : assignmentSlot target ≠ assignmentSlot wanted := by
           intro hslots
@@ -3157,11 +3131,10 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
             (assignmentSlot_injective htarget.2 hwanted hslots)
         rw [hread]
         simp only [List.foldl_cons, List.foldl_nil]
-        simp [hassignment, Ne.symm hcountPair.2.1, Ne.symm hhole.1,
-          Ne.symm hlastPair.1, Ne.symm htail.1, Ne.symm hlength.1,
-          Ne.symm htargetPair.1]
+        simp only [Ne.symm htargetPair.1, ↓reduceIte, Ne.symm hlength.1, Ne.symm htail.1,
+          Ne.symm hlastPair.1, Ne.symm hhole.1, Ne.symm hcountPair.2.1, hassignment]
         rw [assignmentAt_swapPop_of_findEntry_ne hfind hw.targetsNodup heq]
-        simpa using hw.assignments wanted hwanted
+        simpa only using hw.assignments wanted hwanted
     indices := by
       intro wanted hwanted
       have hassignmentPair :=
@@ -3176,8 +3149,7 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
       · subst wanted
         rw [hread]
         simp only [List.foldl_cons, List.foldl_nil]
-        simp [oneBasedIndexAt_swapPop_target_of_findEntry
-          hfind hw.targetsNodup]
+        simp only [↓reduceIte, oneBasedIndexAt_swapPop_target_of_findEntry hfind hw.targetsNodup]
         rfl
       · have htargetIndex : indexSlot target ≠ indexSlot wanted := by
           intro hslots
@@ -3196,9 +3168,8 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
                 (indexSlot_injective hlastTarget.2 hwanted hslots)
             rw [hread]
             simp only [List.foldl_cons, List.foldl_nil]
-            simp [hassignmentPair.1, Ne.symm hassignmentPair.2.2,
-              Ne.symm hhole.2.1, hlastIndex, Ne.symm htail.2.1,
-              Ne.symm hlength.2.1, htargetIndex,
+            simp only [htargetIndex, ↓reduceIte, Ne.symm hlength.2.1, Ne.symm htail.2.1, hlastIndex,
+              Ne.symm hhole.2.1, Ne.symm hassignmentPair.2.2, hassignmentPair.1,
               oneBasedIndexAt_swapPop_of_findEntry_none hfind hwantedFind]
             have hbase := hw.indices wanted hwanted
             change s.read (indexSlot wanted) =
@@ -3218,22 +3189,20 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
                 exact htargetEq htargetAt
               rw [hread]
               simp only [List.foldl_cons, List.foldl_nil]
-              simp [Ne.symm htail.2.1, Ne.symm hlength.2.1, htargetIndex,
-                oneBasedIndexAt_swapPop_moved_of_lt_last
-                  entries hfind hw.targetsNodup hlast hnonself]
+              simp only [htargetIndex, ↓reduceIte, Ne.symm hlength.2.1, Ne.symm htail.2.1,
+                oneBasedIndexAt_swapPop_moved_of_lt_last entries hfind hw.targetsNodup hlast
+                    hnonself]
             · have hlastIndex : indexSlot last.1 ≠ indexSlot wanted := by
                 intro hslots
                 exact (Ne.symm hlastEq)
                   (indexSlot_injective hlastTarget.2 hwanted hslots)
               rw [hread]
               simp only [List.foldl_cons, List.foldl_nil]
-              simp [hassignmentPair.1, Ne.symm hassignmentPair.2.2,
-                Ne.symm hhole.2.1, hlastIndex, Ne.symm htail.2.1,
-                Ne.symm hlength.2.1, htargetIndex]
+              simp only [htargetIndex, ↓reduceIte, Ne.symm hlength.2.1, Ne.symm htail.2.1,
+                hlastIndex, Ne.symm hhole.2.1, Ne.symm hassignmentPair.2.2, hassignmentPair.1]
               rw [oneBasedIndexAt_swapPop_of_findEntry_ne_last
                 hfind hwantedFind hw.targetsNodup hlast htargetEq hlastEq]
-              simpa [logicalStorageOfStor, findEntry_oneBasedIndexAt hwantedFind]
-                using hw.indices wanted hwanted
+              simpa only [findEntry_oneBasedIndexAt hwantedFind] using hw.indices wanted hwanted
     counts := by
       intro wanted hwanted
       have hassignment :=
@@ -3250,21 +3219,19 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
       · subst wanted
         rw [hread]
         simp only [List.foldl_cons, List.foldl_nil]
-        simp [hassignment.2.2, Ne.symm hhole.2.2,
-          hlastIndex.2.2, Ne.symm htail.2.2, Ne.symm hlength.2.2,
-          assignmentCount_swapPop_of_findEntry hfind]
+        simp only [hassignment.2.2, ↓reduceIte, Ne.symm hlength.2.2, Ne.symm htail.2.2,
+          hlastIndex.2.2, Ne.symm hhole.2.2, assignmentCount_swapPop_of_findEntry hfind]
       · have hcount : countSlot oldPauser ≠ countSlot wanted := by
           intro hslots
           exact (Ne.symm heq)
             (countSlot_injective hold.2 hwanted hslots)
         rw [hread]
         simp only [List.foldl_cons, List.foldl_nil]
-        simp [hassignment.2.1, hassignment.2.2, hcount,
-          Ne.symm hhole.2.2, hlastIndex.2.2,
-          Ne.symm htail.2.2, Ne.symm hlength.2.2]
+        simp only [hassignment.2.2, ↓reduceIte, Ne.symm hlength.2.2, Ne.symm htail.2.2,
+          hlastIndex.2.2, Ne.symm hhole.2.2, hcount, hassignment.2.1]
         rw [assignmentCount_swapPop_of_findEntry hfind]
-        simp [Ne.symm heq]
-        simpa using hw.counts wanted hwanted
+        simp only [Ne.symm heq, ↓reduceIte, tsub_zero]
+        simpa only using hw.counts wanted hwanted
     zeroCount := by
       have hzeroCanonical : canonicalAddress (0 : B256) := by
         unfold canonicalAddress
@@ -3287,10 +3254,9 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
         registryAddressFamilies_ne_arrayLengthSlot htarget.2 hzeroCanonical
       rw [hread]
       simp only [List.foldl_cons, List.foldl_nil]
-      simp [hassignment.2.1, hassignment.2.2, hcount,
-        Ne.symm hhole.2.2, hlastIndex.2.2,
-        Ne.symm htail.2.2, Ne.symm hlength.2.2]
-      simpa using hw.zeroCount
+      simp only [hassignment.2.2, ↓reduceIte, Ne.symm hlength.2.2, Ne.symm htail.2.2,
+        hlastIndex.2.2, Ne.symm hhole.2.2, hcount, hassignment.2.1]
+      simpa only using hw.zeroCount
   }
 
 /-- The found-target/zero-pauser path removes the entry by swap-pop and
@@ -3390,7 +3356,7 @@ def setPauserSourceTrace (entries : List Entry) (target newPauser : B256) :
 theorem setPauserSourceTrace_target_zero
     (entries : List Entry) (newPauser : B256) :
     setPauserSourceTrace entries 0 newPauser = none := by
-  simp [setPauserSourceTrace, setPauser]
+  simp only [setPauserSourceTrace, setPauser, ↓reduceIte]
 
 theorem setPauserSourceWrites_fresh_nonzero
     (entries : List Entry) (target newPauser : B256)
@@ -3403,7 +3369,8 @@ theorem setPauserSourceWrites_fresh_nonzero
         (arrayLengthSlot, Nat.toB256 (entries.length + 1)),
         (countSlot newPauser,
           Nat.toB256 (assignmentCount entries newPauser + 1))] := by
-  simp [setPauserSourceWrites, htarget, hfind, hnew]
+  simp only [setPauserSourceWrites, htarget, ↓reduceIte, hfind, hnew, List.cons_append,
+    List.nil_append]
 
 theorem setPauserSourceWrites_absent_zero
     (entries : List Entry) (target : B256)
@@ -3418,7 +3385,7 @@ theorem setPauserSourceWrites_absent_zero
         (arrayEntrySlot (Nat.toB256 (entries.length + 1)), 0),
         (arrayLengthSlot, Nat.toB256 entries.length),
         (indexSlot target, 0)] := by
-  simp [setPauserSourceWrites, htarget, hfind]
+  simp only [setPauserSourceWrites, htarget, ↓reduceIte, hfind, List.cons_append, List.nil_append]
 
 theorem setPauserSourceWrites_found_zero
     (entries : List Entry) (target : B256) (index : Nat)
@@ -3434,7 +3401,7 @@ theorem setPauserSourceWrites_found_zero
         (arrayEntrySlot (Nat.toB256 entries.length), 0),
         (arrayLengthSlot, Nat.toB256 (entries.length - 1)),
         (indexSlot target, 0)] := by
-  simp [setPauserSourceWrites, htarget, hfind]
+  simp only [setPauserSourceWrites, htarget, ↓reduceIte, hfind]
 
 theorem setPauserSourceWrites_found_nonzero
     (entries : List Entry) (target newPauser : B256) (index : Nat)
@@ -3450,7 +3417,7 @@ theorem setPauserSourceWrites_found_nonzero
           Nat.toB256
             ((assignmentCount entries newPauser -
               (if oldPauser = newPauser then 1 else 0)) + 1))] := by
-  simp [setPauserSourceWrites, htarget, hfind, hnew]
+  simp only [setPauserSourceWrites, htarget, ↓reduceIte, hfind, hnew]
 
 theorem setPauserSourceTrace_writes
     (entries : List Entry) (target newPauser : B256) :
@@ -3458,11 +3425,11 @@ theorem setPauserSourceTrace_writes
       (setPauserSourceTrace entries target newPauser) =
       setPauserSourceWrites entries target newPauser := by
   by_cases htarget : target = 0
-  · simp [setPauserSourceTrace, setPauserSourceWrites, setPauser, htarget]
+  · simp only [setPauserSourceTrace, setPauser, htarget, ↓reduceIte, Option.map_none,
+    setPauserSourceWrites]
   · cases hfind : findEntry entries target <;>
       by_cases hnew : newPauser = 0 <;>
-      simp [setPauserSourceTrace, setPauserSourceWrites, setPauser,
-        htarget, hfind, hnew]
+      simp only [setPauserSourceTrace, setPauser, htarget, ↓reduceIte, hfind, hnew, setPauserSourceWrites, List.cons_append, List.nil_append, Option.getD_some, Option.map_some]
 
 theorem setPauser_sourceTrace_refines_model {entries target newPauser}
     (htarget0 : target ≠ 0) {trace}
@@ -3471,26 +3438,26 @@ theorem setPauser_sourceTrace_refines_model {entries target newPauser}
       setPauserSourceWrites entries target newPauser = some trace.writes := by
   cases hfind : findEntry entries target <;>
     by_cases hnew : newPauser = 0 <;>
-    simp [setPauserSourceTrace, setPauserSourceWrites, setPauser,
-      htarget0, hfind, hnew] at htrace
+    simp only [setPauserSourceTrace, setPauser, htarget0, ↓reduceIte, hfind, hnew, setPauserSourceWrites, List.cons_append, List.nil_append, Option.getD_some, Option.some.injEq] at htrace
   all_goals cases htrace
-  all_goals simp [setPauser, setPauserSourceWrites, htarget0, hfind, hnew]
+  all_goals simp only [setPauser, htarget0, ↓reduceIte, hfind, hnew, setPauserSourceWrites, List.cons_append, List.nil_append, and_self]
 
 private theorem oneBasedIndexAt_ne_zero_of_mem
     {entries : List Entry} {target : B256}
     (hmem : target ∈ entries.map Prod.fst) :
     oneBasedIndexAt entries target ≠ 0 := by
   induction entries with
-  | nil => simp at hmem
+  | nil => simp only [List.map_nil, List.not_mem_nil] at hmem
   | cons entry rest ih =>
       simp only [List.map_cons, List.mem_cons] at hmem
       by_cases hhead : entry.1 = target
-      · simp [oneBasedIndexAt, hhead]
+      · simp only [oneBasedIndexAt, hhead, ↓reduceIte, ne_eq, one_ne_zero, not_false_eq_true]
       · have hrest : target ∈ rest.map Prod.fst := by
           rcases hmem with heq | hmem
           · exact (hhead heq.symm).elim
           · exact hmem
-        simp [oneBasedIndexAt, hhead, ih hrest]
+        simp only [oneBasedIndexAt, hhead, ↓reduceIte, ih hrest, ne_eq, Nat.add_eq_zero_iff,
+          one_ne_zero, and_self, not_false_eq_true]
 
 /-- Setting a nonzero target's pauser to zero removes the target from the
 model, so both lookup projections become zero. -/
@@ -3504,14 +3471,14 @@ theorem setPauser_zero_removes
     oneBasedIndexAt postEntries target = 0 := by
   cases hfind : findEntry entries target with
   | none =>
-      simp [setPauser, htarget, hfind] at hset
+      simp only [setPauser, htarget, ↓reduceIte, hfind, Option.some.injEq] at hset
       subst postEntries
       exact ⟨findEntry_none_target_not_mem_targets hfind,
         findEntry_none_assignmentAt hfind,
         findEntry_none_oneBasedIndexAt hfind⟩
   | some found =>
       obtain ⟨index, oldPauser⟩ := found
-      simp [setPauser, htarget, hfind] at hset
+      simp only [setPauser, htarget, ↓reduceIte, hfind, Option.some.injEq] at hset
       subst postEntries
       have hindex :=
         oneBasedIndexAt_swapPop_target_of_findEntry hfind hnodup
@@ -3534,35 +3501,37 @@ theorem RegistryWitness.applySetPauserSourceTrace
       trace.postEntries := by
   by_cases htarget0 : target = 0
   · subst target
-    simp [setPauserSourceTrace_target_zero] at htrace
+    simp only [setPauserSourceTrace_target_zero, reduceCtorEq] at htrace
   · have htargetValid : nonzeroCanonicalAddress target :=
       ⟨htarget0, htarget⟩
     cases hfind : findEntry entries target with
     | none =>
         by_cases hnew0 : newPauser = 0
         · subst newPauser
-          simp [setPauserSourceTrace, setPauserSourceWrites, setPauser,
-            htarget0, hfind] at htrace
+          simp only [setPauserSourceTrace, setPauser, htarget0, ↓reduceIte, hfind,
+            setPauserSourceWrites, List.cons_append, List.nil_append, Option.getD_some,
+            Option.some.injEq] at htrace
           cases htrace
           exact hw.applyAbsentZeroWrites htargetValid hfind
         · have hnewValid : nonzeroCanonicalAddress newPauser :=
             ⟨hnew0, hnew⟩
-          simp [setPauserSourceTrace, setPauserSourceWrites, setPauser,
-            htarget0, hfind, hnew0] at htrace
+          simp only [setPauserSourceTrace, setPauser, htarget0, ↓reduceIte, hfind, hnew0,
+            setPauserSourceWrites, List.cons_append, List.nil_append, Option.getD_some,
+            Option.some.injEq] at htrace
           cases htrace
           exact hw.applyFreshWrites htargetValid hnewValid hfind
     | some found =>
         obtain ⟨index, oldPauser⟩ := found
         by_cases hnew0 : newPauser = 0
         · subst newPauser
-          simp [setPauserSourceTrace, setPauserSourceWrites, setPauser,
-            htarget0, hfind] at htrace
+          simp only [setPauserSourceTrace, setPauser, htarget0, ↓reduceIte, hfind,
+            setPauserSourceWrites, Option.getD_some, Option.some.injEq] at htrace
           cases htrace
           exact hw.applyFoundZeroWrites htargetValid hfind
         · have hnewValid : nonzeroCanonicalAddress newPauser :=
             ⟨hnew0, hnew⟩
-          simp [setPauserSourceTrace, setPauserSourceWrites, setPauser,
-            htarget0, hfind, hnew0] at htrace
+          simp only [setPauserSourceTrace, setPauser, htarget0, ↓reduceIte, hfind, hnew0,
+            setPauserSourceWrites, Option.getD_some, Option.some.injEq] at htrace
           cases htrace
           exact hw.applyFoundNonzeroWrites htargetValid hnewValid hfind
 
@@ -3635,26 +3604,26 @@ theorem setPauser_run_extracts_sourceTrace
       (imgPrev.sliceD (targetWord * 32).toNat 32 0) = target := by
     have hoff : (targetWord * 32).toNat + 32 ≤
         (previousPauserWord * 32).toNat := by decide
-    dsimp [imgPrev]
+    dsimp only [imgPrev]
     rw [Bytes.sliceD_writeAt_before _ _ _ _ _ hoff]
     exact htargetRead
   have hnewPrev : Bytes.toB256
       (imgPrev.sliceD (newPauserWord * 32).toNat 32 0) = newPauser := by
     have hoff : (newPauserWord * 32).toNat + 32 ≤
         (previousPauserWord * 32).toNat := by decide
-    dsimp [imgPrev]
+    dsimp only [imgPrev]
     rw [Bytes.sliceD_writeAt_before _ _ _ _ _ hoff]
     exact hnewRead
   have hpreviousPrev : Bytes.toB256
       (imgPrev.sliceD (previousPauserWord * 32).toNat 32 0) =
         assignmentAt entries target := by
-    dsimp [imgPrev]
+    dsimp only [imgPrev]
     rw [show 32 = oldPauser.toBytes.length by rw [B256.length_toBytes]]
     rw [Bytes.sliceD_writeAt, B256.toB256_toBytes, holdPauser]
   have hcontinuationPrev : Bytes.toB256
       (imgPrev.sliceD (continuationWord * 32).toNat 32 0) =
         continuation := by
-    dsimp [imgPrev]
+    dsimp only [imgPrev]
     rw [Bytes.sliceD_writeAt_after _ _ _ _ _
       (by rw [B256.length_toBytes]; decide)]
     exact hcontinuationRead
@@ -3720,7 +3689,7 @@ theorem setPauser_run_extracts_sourceTrace
             (imgNext.sliceD (targetWord * 32).toNat 32 0) = target := by
           have hoff : (targetWord * 32).toNat + 32 ≤
               (arrayLengthWord * 32).toNat := by decide
-          dsimp [imgNext]
+          dsimp only [imgNext]
           rw [Bytes.sliceD_writeAt_before _ _ _ _ _ hoff]
           exact htargetPrev
         have hnewNext : Bytes.toB256
@@ -3728,7 +3697,7 @@ theorem setPauser_run_extracts_sourceTrace
               newPauser := by
           have hoff : (newPauserWord * 32).toNat + 32 ≤
               (arrayLengthWord * 32).toNat := by decide
-          dsimp [imgNext]
+          dsimp only [imgNext]
           rw [Bytes.sliceD_writeAt_before _ _ _ _ _ hoff]
           exact hnewPrev
         have hpreviousNext : Bytes.toB256
@@ -3736,7 +3705,7 @@ theorem setPauser_run_extracts_sourceTrace
               assignmentAt entries target := by
           have hoff : (previousPauserWord * 32).toNat + 32 ≤
               (arrayLengthWord * 32).toNat := by decide
-          dsimp [imgNext]
+          dsimp only [imgNext]
           rw [Bytes.sliceD_writeAt_before _ _ _ _ _ hoff]
           exact hpreviousPrev
         have hcontinuationNext : Bytes.toB256
@@ -3744,7 +3713,7 @@ theorem setPauser_run_extracts_sourceTrace
               continuation := by
           have hoff : (continuationWord * 32).toNat + 32 ≤
               (arrayLengthWord * 32).toNat := by decide
-          dsimp [imgNext]
+          dsimp only [imgNext]
           rw [Bytes.sliceD_writeAt_before _ _ _ _ _ hoff]
           exact hcontinuationPrev
         rcases afterOldPauser_run_split_new_assignment
@@ -3784,7 +3753,7 @@ theorem setPauser_run_extracts_sourceTrace
                 congrFun (Burn.Inv.inv hremoveBurn).symm ca
               _ = Devm.getStor postAppend ca :=
                 congrFun hstorRemoveCall.symm ca
-              _ = _ := by simpa [entryStor] using hstorPostAppend
+              _ = _ := by simpa only [entryStor] using hstorPostAppend
           have hreads := appendedRegistryStorage_reads
             hwGuard htarget hnewCanonical
           rcases removeTarget_run_extracts_writes
@@ -3802,28 +3771,28 @@ theorem setPauser_run_extracts_sourceTrace
             (lastTargetWord * 32).toNat target.toBytes
           have htargetPost : Bytes.toB256
               (postImg.sliceD (targetWord * 32).toNat 32 0) = target := by
-            dsimp [postImg]
+            dsimp only [postImg]
             rw [removeImage_sliceD _ _ _ _ _ _
               (by decide) (by decide) (by decide)]
             exact htargetNext
           have hnewPost : Bytes.toB256
               (postImg.sliceD (newPauserWord * 32).toNat 32 0) =
                 newPauser := by
-            dsimp [postImg]
+            dsimp only [postImg]
             rw [removeImage_sliceD _ _ _ _ _ _
               (by decide) (by decide) (by decide)]
             exact hnewNext
           have hpreviousPost : Bytes.toB256
               (postImg.sliceD (previousPauserWord * 32).toNat 32 0) =
                 assignmentAt entries target := by
-            dsimp [postImg]
+            dsimp only [postImg]
             rw [removeImage_sliceD _ _ _ _ _ _
               (by decide) (by decide) (by decide)]
             exact hpreviousNext
           have hcontinuationPost : Bytes.toB256
               (postImg.sliceD (continuationWord * 32).toNat 32 0) =
                 continuation := by
-            dsimp [postImg]
+            dsimp only [postImg]
             rw [removeImage_sliceD _ _ _ _ _ _
               (by decide) (by decide) (by decide)]
             exact hcontinuationNext
@@ -3838,7 +3807,7 @@ theorem setPauser_run_extracts_sourceTrace
             rw [← hwritesEq]
             simp only [applyRegistryWrites, List.foldl_cons, List.foldl_nil]
             rw [hstorPostRegistry]
-            dsimp [entryStor]
+            dsimp only [entryStor]
             rw [hnewZero, ← congrFun hstorGuard ca]
           refine ⟨postRegistry, postImg, hwfPost, hrPost, htargetPost,
             hnewPost, hpreviousPost, hcontinuationPost, hpostStor, ?_,
@@ -3863,7 +3832,7 @@ theorem setPauser_run_extracts_sourceTrace
                 (indexSlot target) (Nat.toB256 (entries.length + 1))).set
                 arrayLengthSlot (Nat.toB256 (entries.length + 1)) := by
             exact (congrFun hstorNewCount ca).symm.trans
-              (by simpa [entryStor] using hstorPostAppend)
+              (by simpa only [entryStor] using hstorPostAppend)
           rcases afterOldPauser_run_extracts_new_count_write
               hnewCountStack hwfNewCount hrNewCount hnewNext howner
               hcurrent hreads.2.2.2.1
@@ -3881,7 +3850,7 @@ theorem setPauser_run_extracts_sourceTrace
             rw [← hwritesEq]
             simp only [applyRegistryWrites, List.foldl_cons, List.foldl_nil]
             rw [hstorPostRegistry]
-            dsimp [entryStor]
+            dsimp only [entryStor]
             rw [← congrFun hstorGuard ca]
           refine ⟨postRegistry, imgNext, hwfPost, hrPost, htargetNext,
             hnewNext, hpreviousNext, hcontinuationNext, hpostStor, ?_,
@@ -3906,7 +3875,7 @@ theorem setPauser_run_extracts_sourceTrace
         have hprevPrev : Bytes.toB256
             (imgPrev.sliceD (previousPauserWord * 32).toNat 32 0) =
               oldPauser := by
-          dsimp [imgPrev]
+          dsimp only [imgPrev]
           rw [show 32 = oldPauser.toBytes.length by
             rw [B256.length_toBytes]]
           rw [Bytes.sliceD_writeAt, B256.toB256_toBytes]
@@ -3999,28 +3968,28 @@ theorem setPauser_run_extracts_sourceTrace
               (sourceLastTarget entries).toBytes
           have htargetPost : Bytes.toB256
               (postImg.sliceD (targetWord * 32).toNat 32 0) = target := by
-            dsimp [postImg]
+            dsimp only [postImg]
             rw [removeImage_sliceD _ _ _ _ _ _
               (by decide) (by decide) (by decide)]
             exact htargetPrev
           have hnewPost : Bytes.toB256
               (postImg.sliceD (newPauserWord * 32).toNat 32 0) =
                 newPauser := by
-            dsimp [postImg]
+            dsimp only [postImg]
             rw [removeImage_sliceD _ _ _ _ _ _
               (by decide) (by decide) (by decide)]
             exact hnewPrev
           have hpreviousPost : Bytes.toB256
               (postImg.sliceD (previousPauserWord * 32).toNat 32 0) =
                 assignmentAt entries target := by
-            dsimp [postImg]
+            dsimp only [postImg]
             rw [removeImage_sliceD _ _ _ _ _ _
               (by decide) (by decide) (by decide)]
             exact hpreviousPrev
           have hcontinuationPost : Bytes.toB256
               (postImg.sliceD (continuationWord * 32).toNat 32 0) =
                 continuation := by
-            dsimp [postImg]
+            dsimp only [postImg]
             rw [removeImage_sliceD _ _ _ _ _ _
               (by decide) (by decide) (by decide)]
             exact hcontinuationPrev
@@ -4161,7 +4130,7 @@ theorem finishSetPauser_run_split_continuation
   have hlog' : Line.Run sevm sEvent
       [pushB256 (0 * 32), pushB256 (0 * 32),
         log ((3 : Fin 4).succ)] sLog := by
-    simpa [logWith] using hlog
+    simpa only [logWith, Fin.isValue, Fin.reduceSucc] using hlog
   rcases Line.of_run_cons hlog' with
     ⟨sSize, hpushSize, hlogRest1⟩
   rcases Line.of_run_cons hlogRest1 with
@@ -4182,12 +4151,12 @@ theorem finishSetPauser_run_split_continuation
   let loggedWords : Stack :=
     [0, 0, pauserSetEvent, target, previousPauser, newPauser]
   have hpLogged : loggedWords ++ pre.stack <<+ sOffset.stack := by
-    simpa [loggedWords] using hpOffset
+    simpa only [loggedWords, List.cons_append, List.nil_append] using hpOffset
   rcases of_run_log hlogInst with ⟨zs, hzsLength, hpopLog⟩
   have hpZs : zs <<+ sOffset.stack := pref_of_split hpopLog
   have hloggedLength :
       loggedWords.length = ((3 : Fin 4).succ).val + 2 := by
-    simp [loggedWords]
+    simp only [loggedWords, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Fin.isValue, Fin.reduceSucc, Fin.coe_ofNat_eq_mod, Nat.mod_succ]
   have hpLoggedHead : loggedWords <<+ sOffset.stack :=
     @pref_trans _ loggedWords (loggedWords ++ pre.stack) _
       ⟨pre.stack, rfl⟩ hpLogged
@@ -4252,7 +4221,7 @@ theorem finishSetPauser_run_split_continuation
       have hcontinuation : continuation ≠ 0 := by
         intro heq
         rw [heq] at hflag
-        simp [B256.eqCheck] at hflag
+        simp only [B256.eqCheck, ↓reduceIte] at hflag
         exact (by decide : (0 : B256) ≠ 1) hflag
       rcases of_run_call hpauseCall with
         ⟨body, pausePre, hget, hburn, hbody⟩
@@ -4506,7 +4475,7 @@ private theorem expiry_write_suffix
     ⟨hpLoad, hwfLoad, hrLoad, hsLoad⟩
   rcases prefix_of_tagTop hpLoad htag with ⟨hpKey, hmKey, hsKey⟩
   have hpStore : expirySlot pauser :: writeValue :: xs <<+ sKey.stack := by
-    simpa [expirySlot] using hpKey
+    simpa only [expirySlot] using hpKey
   have hmemStore : sKey.memory = postStore.memory :=
     Ninst.Hinv.inv (f := Devm.memory) hstore
   have hwfStore : Mem.Wf postStore.memory := by
@@ -4559,12 +4528,15 @@ private theorem register_write_body_preserves_registry
     ⟨sMem, hmstore, h2⟩
   rcases of_run_dup hdup with ⟨expiry, htop, _⟩
   cases hpreStack : pre.stack with
-  | nil => simp [hpreStack] at htop
+  | nil => simp only [hpreStack, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.length_nil,
+    lt_self_iff_false, not_false_eq_true, getElem?_neg, reduceCtorEq] at htop
   | cons head tail =>
-      simp [hpreStack] at htop
+      simp only [hpreStack, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.length_cons,
+        lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos,
+        List.getElem_cons_zero, Option.some.injEq] at htop
       subst head
       have hstack : expiry :: tail <<+ pre.stack := by
-        simpa [hpreStack] using pref_append (expiry :: tail) []
+        simpa only [hpreStack, List.append_nil] using pref_append (expiry :: tail) []
       have hpDup : expiry :: expiry :: tail <<+ sDup.stack :=
         prefix_of_dup_val hdup (by show_nth) hstack
       have hmemDup : pre.memory = sDup.memory :=
@@ -4578,7 +4550,7 @@ private theorem register_write_body_preserves_registry
       have hnewMem : Bytes.toB256
           (imgMem.sliceD (newPauserWord * 32).toNat 32 0) =
             newPauser := by
-        dsimp [imgMem]
+        dsimp only [imgMem]
         rw [Bytes.sliceD_writeAt_after]
         · exact hnewRead
         · rw [B256.length_toBytes]
@@ -4645,9 +4617,9 @@ private theorem checkedHeartbeatExpiry_preserves_registry
   letI : Rinst.Hinv Devm.memory Rinst.timestamp := by
     show_hinv_mem_push
   have hmemPrefix : pre.memory = sFlag.memory :=
-    Line.of_inv Devm.memory (by dsimp [checkedLine]; line_inv) hprefix
+    Line.of_inv Devm.memory (by dsimp only [Fin.isValue, checkedLine]; line_inv) hprefix
   have hstorPrefix : Devm.getStor pre = Devm.getStor sFlag :=
-    Line.of_inv Devm.getStor (by dsimp [checkedLine]; line_inv) hprefix
+    Line.of_inv Devm.getStor (by dsimp only [Fin.isValue, checkedLine]; line_inv) hprefix
   cases hbranch with
   | zero hpop hbody =>
       rename_i bodyPre
@@ -4814,7 +4786,7 @@ private theorem clear_old_then_new_preserves_registry
   let imgMem := Bytes.writeAt img 0 (0 : B256).toBytes
   have hnewMem : Bytes.toB256
       (imgMem.sliceD (newPauserWord * 32).toNat 32 0) = newPauser := by
-    dsimp [imgMem]
+    dsimp only [imgMem]
     rw [Bytes.sliceD_writeAt_after]
     · exact hnewRead
     · rw [B256.length_toBytes]
@@ -4822,7 +4794,7 @@ private theorem clear_old_then_new_preserves_registry
   have hpreviousMem : Bytes.toB256
       (imgMem.sliceD (previousPauserWord * 32).toNat 32 0) =
         previousPauser := by
-    dsimp [imgMem]
+    dsimp only [imgMem]
     rw [Bytes.sliceD_writeAt_after]
     · exact hpreviousRead
     · rw [B256.length_toBytes]
@@ -4845,7 +4817,7 @@ private theorem clear_old_then_new_preserves_registry
   have hlog' : Line.Run sevm sEvent
       [pushB256 (1 * 32), pushB256 (0 * 32),
         log ((1 : Fin 4).succ)] optionalPre := by
-    simpa [logWith] using hlog
+    simpa only [Fin.isValue, Fin.succ_one_eq_two, logWith] using hlog
   rcases Line.of_run_cons hlog' with
     ⟨sSize, hpushSize, hlogRest1⟩
   rcases Line.of_run_cons hlogRest1 with
@@ -5463,7 +5435,7 @@ private theorem Func.RunCompiledTo.exists_exec_targetZeroRawSstoreFree :
         ⟨_, _, compileEq'⟩
       rcases of_bind_eq_some compileEq' with
         ⟨tailCode, tailCompileEq, codeEq⟩
-      simp [pure] at codeEq
+      simp only [pure, Option.some.injEq] at codeEq
       rw [← codeEq] at slice
       have instructionAt : Ninst.At sevm.code pc _ :=
         Ninst.at_of_slice (List.slice_prefix slice)
@@ -5604,7 +5576,8 @@ private theorem directPausePath_prepend_sstore
     .next instructionRun tail
   have path : Func.RunCompiledTo.DirectPausePath ca target
       (phase := phase) run :=
-    .next (instructionRun := instructionRun) (tail := tail) (by simp) tailPath
+    .next (instructionRun := instructionRun) (tail := tail) (by simp only [ne_eq, reduceCtorEq,
+      not_false_eq_true, implies_true]) tailPath
   exact ⟨run, path⟩
 
 /-- Prepend any childless instruction without changing a direct-pause phase. -/
@@ -5645,7 +5618,7 @@ private theorem directPausePath_prepend_pushB256
     (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := pre) (w := word)
       (c := c) (G := G) hcost hgas hroom) (by
         unfold Ninst.pushB256
-        simp) tail tailPath
+        simp only [ne_eq, reduceCtorEq, not_false_eq_true, implies_true]) tail tailPath
 
 /-- Exact two-instruction `tagTop` prepend. -/
 private theorem directPausePath_prepend_tagTop
@@ -5671,7 +5644,8 @@ private theorem directPausePath_prepend_tagTop
     exact Ninst.runCompiled_binary (by rintro ⟨⟩) (by rfl) rfl rfl
       (by change G + gVerylow = G + gVerylow; rfl) (by omega)
   rcases directPausePath_prepend_childless
-      (ca := ca) (target := target) hor (by simp) tail tailPath with
+      (ca := ca) (target := target) hor (by simp only [ne_eq, reduceCtorEq, not_false_eq_true,
+        implies_true]) tail tailPath with
     ⟨orRun, orPath⟩
   rcases directPausePath_prepend_pushB256
       (ca := ca) (target := target) (word := regionWord region)
@@ -5775,7 +5749,7 @@ private theorem directPausePath_sload_revert_step
     .next instructionRun tail
   exact ⟨raw, run, rawOutput,
     .next (instructionRun := instructionRun) (tail := tail)
-      (by simp) tailPath⟩
+      (by simp only [ne_eq, reduceCtorEq, not_false_eq_true, implies_true]) tailPath⟩
 
 /-- Existential-output companion for `MSTORE`, used when its written memory
 image determines the eventual revert state. -/
@@ -5818,7 +5792,7 @@ private theorem directPausePath_mstore_revert_step
     .next instructionRun tail
   exact ⟨raw, run, rawOutput,
     .next (instructionRun := instructionRun) (tail := tail)
-      (by simp) tailPath⟩
+      (by simp only [ne_eq, reduceCtorEq, not_false_eq_true, implies_true]) tailPath⟩
 
 /-- Existential-output companion used when the successor itself determines the
 revert state. -/
@@ -5920,7 +5894,7 @@ private theorem directPausePath_sstore_warm_revert_step
     .next instructionRun tail
   exact ⟨raw, run, rawOutput,
     .next (instructionRun := instructionRun) (tail := tail)
-      (by simp) tailPath⟩
+      (by simp only [ne_eq, reduceCtorEq, not_false_eq_true, implies_true]) tailPath⟩
 
 /-- Existential-output warm assignment-clear step.  This is the unique CPS
 store constructor that changes the direct-pause certificate to `beforeWrite`. -/
@@ -6217,7 +6191,7 @@ private theorem Func.RunCompiledTo.exists_exec_directPausePath :
         ⟨_, _, compileEq'⟩
       rcases of_bind_eq_some compileEq' with
         ⟨tailCode, tailCompileEq, codeEq⟩
-      simp [pure] at codeEq
+      simp only [pure, Option.some.injEq] at codeEq
       rw [← codeEq] at slice
       have instructionAt : Ninst.At certSevm.code pc instruction :=
         Ninst.at_of_slice (List.slice_prefix slice)
@@ -6271,7 +6245,7 @@ private theorem Func.RunCompiledTo.exists_exec_directPausePath :
         ⟨_, _, compileEq'⟩
       rcases of_bind_eq_some compileEq' with
         ⟨tailCode, tailCompileEq, codeEq⟩
-      simp [pure] at codeEq
+      simp only [pure, Option.some.injEq] at codeEq
       rw [← codeEq] at slice
       have instructionAt : Ninst.At certSevm.code pc (.reg .extcodesize) :=
         Ninst.at_of_slice (List.slice_prefix slice)
@@ -6301,7 +6275,7 @@ private theorem Func.RunCompiledTo.exists_exec_directPausePath :
         ⟨_, _, compileEq'⟩
       rcases of_bind_eq_some compileEq' with
         ⟨tailCode, tailCompileEq, codeEq⟩
-      simp [pure] at codeEq
+      simp only [pure, Option.some.injEq] at codeEq
       rw [← codeEq] at slice
       have instructionAt : Ninst.At certSevm.code pc (.reg .sstore) :=
         Ninst.at_of_slice (List.slice_prefix slice)
@@ -6442,10 +6416,10 @@ private theorem Exec.DirectPausePath.exists_zeroCodeOccurrence_of_eq
           decoded := instructionAt
           filled := filled
           stepRun := by
-            simpa [root] using steps pathPc }
+            simpa only [root] using steps pathPc }
       refine ⟨occurrence, rfl, ?_, ?_⟩
-      · simpa [occurrence, root] using stack
-      · simpa [occurrence, root] using codeSize
+      · simpa only using stack
+      · simpa only [ByteArray.size_eq_zero_iff] using codeSize
   | write instructionAt instructionRun owner popped tailPath ih =>
       cases hphase
 
@@ -6536,7 +6510,7 @@ private theorem Exec.DirectPausePath.exists_writeBeforeZeroCode_of_eq
           reached := Exec.mem_rawNodes_self _
           decoded := instructionAt
           filled := filled
-          stepRun := by simpa [root] using steps pathPc }
+          stepRun := by simpa only [root] using steps pathPc }
       let write : Exec.SuccessfulSstoreOccurrence root :=
         { occurrence := occurrence
           instruction_eq := rfl
@@ -6544,7 +6518,7 @@ private theorem Exec.DirectPausePath.exists_writeBeforeZeroCode_of_eq
           stepSuccess := rfl
           key := assignmentSlot target
           value := 0
-          popped := by simpa [occurrence, root] using popped }
+          popped := by simpa only [root, occurrence] using popped }
       rcases zeroCode.rawNodes_decomposition with
         ⟨before, after, zeroDecomposition⟩
       have order : Exec.RawBefore (root := root)
@@ -6555,8 +6529,7 @@ private theorem Exec.DirectPausePath.exists_writeBeforeZeroCode_of_eq
         exact congrArg (root :: ·) zeroDecomposition
       refine ⟨write, ?_, rfl, rfl, liftedZero,
         zeroInstruction, zeroStack, zeroSize, order⟩
-      simpa [Exec.SuccessfulSstoreOccurrence.storageOwner,
-        write, occurrence, root] using owner
+      simpa only [Exec.SuccessfulSstoreOccurrence.storageOwner] using owner
 
 /-- Complete raw evidence exposed by a before-write execution certificate. -/
 private theorem Exec.DirectPausePath.beforeWriteEvidence
@@ -6595,7 +6568,8 @@ private theorem ProcessMessage.error_isSome_of_raw_revert
   have hsettle := (RunFrame.some_inv hprocess).2
   simp only [Frame.ofCall, Frame.settle, Frame.settleMsg] at hsettle
   rw [hsg] at hsettle
-  simp [executeCode.handleErrorWith_none, executeCode.handleError] at hsettle
+  simp only [Bool.false_eq_true, ↓reduceIte, executeCode.handleErrorWith_none,
+    executeCode.handleError] at hsettle
   have herr : (raw.withError (some .revert)).error.isSome = true := by rfl
   unfold processMessage.settle at hsettle
   simp only [bind, Except.bind] at hsettle
@@ -6771,11 +6745,13 @@ private theorem pauseAfterSet_zeroCode_runCompiledTo
     cases hrev with
     | next firstRun firstTail =>
         refine .next (instructionRun := firstRun) (tail := firstTail)
-          (by unfold Ninst.pushB256; simp) ?_
+          (by unfold Ninst.pushB256; simp only [ne_eq, reduceCtorEq, not_false_eq_true,
+            implies_true]) ?_
         cases firstTail with
         | next secondRun secondTail =>
             refine .next (instructionRun := secondRun) (tail := secondTail)
-              (by unfold Ninst.pushB256; simp) ?_
+              (by unfold Ninst.pushB256; simp only [ne_eq, reduceCtorEq, not_false_eq_true,
+                implies_true]) ?_
             cases secondTail with
             | last terminalRun => exact .last (terminalRun := terminalRun)
   have hcallRoom :
@@ -6850,7 +6826,8 @@ private theorem pauseAfterSet_zeroCode_runCompiledTo
   let iszeroTail := Func.RunCompiledTo.next hiszero hbranch
   have iszeroPath : Func.RunCompiledTo.DirectPausePath
       sevm.currentTarget target (phase := .afterZeroCode) iszeroTail :=
-    .next (instructionRun := hiszero) (tail := hbranch) (by simp) hbranchPath
+    .next (instructionRun := hiszero) (tail := hbranch) (by simp only [ne_eq, reduceCtorEq,
+      not_false_eq_true, implies_true]) hbranchPath
   let extTail := Func.RunCompiledTo.next hext iszeroTail
   have extPath : Func.RunCompiledTo.DirectPausePath
       sevm.currentTarget target (phase := .beforeZeroCode) extTail := by
@@ -6860,11 +6837,13 @@ private theorem pauseAfterSet_zeroCode_runCompiledTo
   let dupTail := Func.RunCompiledTo.next hdup extTail
   have dupPath : Func.RunCompiledTo.DirectPausePath
       sevm.currentTarget target (phase := .beforeZeroCode) dupTail :=
-    .next (instructionRun := hdup) (tail := extTail) (by simp) extPath
+    .next (instructionRun := hdup) (tail := extTail) (by simp only [Fin.isValue, ne_eq,
+      reduceCtorEq, not_false_eq_true, implies_true]) extPath
   let loadTail := Func.RunCompiledTo.next hload dupTail
   have loadPath : Func.RunCompiledTo.DirectPausePath
       sevm.currentTarget target (phase := .beforeZeroCode) loadTail :=
-    .next (instructionRun := hload) (tail := dupTail) (by simp) dupPath
+    .next (instructionRun := hload) (tail := dupTail) (by simp only [ne_eq, reduceCtorEq,
+      not_false_eq_true, implies_true]) dupPath
   let hrun : Func.RunCompiledTo fs sevm pre pauseAfterSet
       (.error (.revert, raw)) := by
     simp only [pauseAfterSet]
@@ -6872,7 +6851,7 @@ private theorem pauseAfterSet_zeroCode_runCompiledTo
   have hrunPath : Func.RunCompiledTo.DirectPausePath
       sevm.currentTarget target (phase := .beforeZeroCode) hrun :=
     .next (instructionRun := hpush) (tail := loadTail)
-      (by unfold Ninst.pushB256; simp) loadPath
+      (by unfold Ninst.pushB256; simp only [ne_eq, reduceCtorEq, not_false_eq_true, implies_true]) loadPath
   exact ⟨hrun, hrunPath⟩
 
 /-- Cost of one `loadWord`, with its current memory image explicit. -/
@@ -6924,13 +6903,14 @@ private theorem loadWord_prepend_directPause
   have loadPath : Func.RunCompiledTo.DirectPausePath
       sevm.currentTarget markedTarget
       (phase := phase) loadTail :=
-    .next (instructionRun := hload) (tail := tail) (by simp) tailPath
+    .next (instructionRun := hload) (tail := tail) (by simp only [ne_eq, reduceCtorEq,
+      not_false_eq_true, implies_true]) tailPath
   let run : Func.RunCompiledTo fs sevm pre (loadWord word +++ rest) out := by
     change Func.RunCompiledTo fs sevm pre
       (.next (Ninst.pushB256 offset) (.next mload rest)) out
     exact .next hpush loadTail
   exact ⟨run, .next (instructionRun := hpush) (tail := loadTail)
-    (by unfold Ninst.pushB256; simp) loadPath⟩
+    (by unfold Ninst.pushB256; simp only [ne_eq, reduceCtorEq, not_false_eq_true, implies_true]) loadPath⟩
 
 /-- Package the warm/cold account-access split around the exact target-zero
 `pauseAfterSet` construction. -/
@@ -6957,7 +6937,7 @@ private theorem pauseAfterSet_zeroCode_runCompiledTo_by_access
         (phase := .beforeZeroCode) run := by
   rcases haccess with hwarm | hcold
   · have hcost : accessCost target.toAdr pre.accessedAddresses =
-        gasWarmAccess := by simp [accessCost, hwarm]
+        gasWarmAccess := by simp only [accessCost, hwarm, ↓reduceIte]
     rw [hcost] at hgas
     rcases pauseAfterSet_zeroCode_runCompiledTo (hfork := hfork) hstack hwf hr htargetRead
         hcodeSize (.warm hwarm) hgas hroom hemptyLookup with ⟨run, path⟩
@@ -6966,7 +6946,7 @@ private theorem pauseAfterSet_zeroCode_runCompiledTo_by_access
     exact ⟨raw, run, rfl, path⟩
   · let coldBase := addAccessedAddress pre target.toAdr
     have hcost : accessCost target.toAdr pre.accessedAddresses =
-        gasColdAccountAccess := by simp [accessCost, hcold]
+        gasColdAccountAccess := by simp only [accessCost, hcold, ↓reduceIte]
     rw [hcost] at hgas
     rcases pauseAfterSet_zeroCode_runCompiledTo (hfork := hfork) hstack hwf hr htargetRead
         hcodeSize (.cold hcold) hgas hroom hemptyLookup with ⟨run, path⟩
@@ -7127,7 +7107,8 @@ private theorem finishSetPauser_pause_branch_runCompiledTo
   let run := Func.RunCompiledTo.next hiszero hbranch
   have path : Func.RunCompiledTo.DirectPausePath
       sevm.currentTarget target (phase := .beforeZeroCode) run :=
-    .next (instructionRun := hiszero) (tail := hbranch) (by simp) hbranchPath
+    .next (instructionRun := hiszero) (tail := hbranch) (by simp only [ne_eq, reduceCtorEq,
+      not_false_eq_true, implies_true]) hbranchPath
   have hstartGas : G + finishSetPauserPauseBranchCost base target =
       G + callCost + branchCost + gVerylow := by
     dsimp only [finishSetPauserPauseBranchCost, callCost, branchCost]
@@ -7209,9 +7190,9 @@ private theorem finishSetPauser_pause_terminal_runCompiledTo
     omega
   rw [hstartGas]
   exact ⟨raw,
-    by simpa [finishSetPauserPauseTerminal] using run,
+    by simpa only [finishSetPauserPauseTerminal] using run,
     rawOutput,
-    by simpa [finishSetPauserPauseTerminal] using path⟩
+    by simpa only [finishSetPauserPauseTerminal] using path⟩
 
 private def finishSetPauserPauseSuffix : Func :=
   pushB256 pauserSetEvent ::: logWith 3 0 0 +++
@@ -7304,7 +7285,7 @@ private theorem finishSetPauser_pause_suffix_runCompiledTo
   have hlogPath : Func.RunCompiledTo.DirectPausePath
       sevm.currentTarget target (phase := .beforeZeroCode) hlogTail :=
     .next (instructionRun := hlog) (tail := hterminal)
-      (by simp) hterminalPath
+      (by simp only [Fin.isValue, ne_eq, reduceCtorEq, not_false_eq_true, implies_true]) hterminalPath
   let zeroCost := pushCost zeroWord.toBytes.sig
   let eventCost := pushCost pauserSetEvent.toBytes.sig
   let pushedGas := G + terminalCost + logCost
@@ -7327,7 +7308,7 @@ private theorem finishSetPauser_pause_suffix_runCompiledTo
   have hzero₂Path : Func.RunCompiledTo.DirectPausePath
       sevm.currentTarget target (phase := .beforeZeroCode) hzero₂Tail :=
     .next (instructionRun := hzero₂) (tail := hlogTail)
-      (by unfold Ninst.pushB256; simp) hlogPath
+      (by unfold Ninst.pushB256; simp only [ne_eq, reduceCtorEq, not_false_eq_true, implies_true]) hlogPath
   have hzero₁ : Ninst.RunCompiled sevm
       (base.setMach ⟨pauserSetEvent :: target :: previousPauser ::
         newPauser :: stack, base.memory, pushedGas + zeroCost + zeroCost, base.stateGas⟩)
@@ -7347,7 +7328,7 @@ private theorem finishSetPauser_pause_suffix_runCompiledTo
   have hzero₁Path : Func.RunCompiledTo.DirectPausePath
       sevm.currentTarget target (phase := .beforeZeroCode) hzero₁Tail :=
     .next (instructionRun := hzero₁) (tail := hzero₂Tail)
-      (by unfold Ninst.pushB256; simp) hzero₂Path
+      (by unfold Ninst.pushB256; simp only [ne_eq, reduceCtorEq, not_false_eq_true, implies_true]) hzero₂Path
   have hevent : Ninst.RunCompiled sevm
       (base.setMach ⟨target :: previousPauser :: newPauser :: stack,
         base.memory, pushedGas + zeroCost + zeroCost + eventCost, base.stateGas⟩)
@@ -7368,7 +7349,7 @@ private theorem finishSetPauser_pause_suffix_runCompiledTo
   have heventPath : Func.RunCompiledTo.DirectPausePath
       sevm.currentTarget target (phase := .beforeZeroCode) heventTail :=
     .next (instructionRun := hevent) (tail := hzero₁Tail)
-      (by unfold Ninst.pushB256; simp) hzero₁Path
+      (by unfold Ninst.pushB256; simp only [ne_eq, reduceCtorEq, not_false_eq_true, implies_true]) hzero₁Path
   have hstartGas : G + finishSetPauserPauseSuffixCost base target =
       pushedGas + zeroCost + zeroCost + eventCost := by
     dsimp only [finishSetPauserPauseSuffixCost, pushedGas, logCost,
@@ -7539,10 +7520,10 @@ private theorem finishSetPauser_pause_runCompiledTo
       (by omega) hprevious hpreviousPath with
     ⟨run, path⟩
   exact ⟨raw,
-    by simpa [finishSetPauser, finishSetPauserPauseSuffix,
+    by simpa only [finishSetPauser, Fin.isValue, finishSetPauserPauseSuffix,
       finishSetPauserPauseTerminal] using run,
     rawOutput,
-    by simpa [finishSetPauser, finishSetPauserPauseSuffix,
+    by simpa only [finishSetPauser, Fin.isValue, finishSetPauserPauseSuffix,
       finishSetPauserPauseTerminal] using path⟩
 
 /-- The common `finishSetPauser` continuation can be entered directly from a
@@ -7969,7 +7950,8 @@ private theorem removeTarget_length_pause_suffix_runCompiledTo
           simp only [Devm.gasLeft_setMach]
           dsimp only [subGas]) (by omega)
   rcases directPausePath_prepend_childless
-      (ca := sevm.currentTarget) (target := target) hsub (by simp)
+      (ca := sevm.currentTarget) (target := target) hsub (by simp only [ne_eq, reduceCtorEq,
+        not_false_eq_true, implies_true])
       slotRun slotPath with ⟨subRun, subPath⟩
   have hswap : Ninst.RunCompiled sevm
       (loaded.setMach ⟨1 :: arrayLength :: stack, M, swapGas, loaded.stateGas⟩) (swap 0)
@@ -7984,7 +7966,8 @@ private theorem removeTarget_length_pause_suffix_runCompiledTo
           simp only [Devm.gasLeft_setMach]
           dsimp only [swapGas])
   rcases directPausePath_prepend_childless
-      (ca := sevm.currentTarget) (target := target) hswap (by simp)
+      (ca := sevm.currentTarget) (target := target) hswap (by simp only [Fin.isValue, ne_eq,
+        reduceCtorEq, not_false_eq_true, implies_true])
       subRun subPath with ⟨swapRun, swapPath⟩
   rcases directPausePath_prepend_pushB256
       (ca := sevm.currentTarget) (target := target) (word := 1)
@@ -9918,7 +9901,8 @@ private theorem afterOldPauser_pause_runCompiledTo
       (.error (.revert, raw)) := .next hiszero branchRun
   have iszeroPath : Func.RunCompiledTo.DirectPausePath
       sevm.currentTarget target (phase := .beforeZeroCode) iszeroRun :=
-    .next (instructionRun := hiszero) (tail := branchRun) (by simp) branchPath
+    .next (instructionRun := hiszero) (tail := branchRun) (by simp only [ne_eq, reduceCtorEq,
+      not_false_eq_true, implies_true]) branchPath
   have hloadGas : pre.gasLeft =
       (G + removeCost + callCost + branchCost + gVerylow) +
         finishLoadWordCost pre newPauserWord := by
@@ -10315,7 +10299,8 @@ private theorem previousCount_decrement_pause_suffix_runCompiledTo
                 dsimp only [subGas]
                 omega) (by omega)
         rcases directPausePath_prepend_childless
-            (ca := sevm.currentTarget) (target := target) hsub (by simp)
+            (ca := sevm.currentTarget) (target := target) hsub (by simp only [ne_eq, reduceCtorEq,
+              not_false_eq_true, implies_true])
             secondRun secondPath with ⟨subRun, subPath⟩
         have hswap : Ninst.RunCompiled sevm
             (base.setMach ⟨1 :: countValue :: stack, M₁,
@@ -10332,7 +10317,8 @@ private theorem previousCount_decrement_pause_suffix_runCompiledTo
                 dsimp only [swapGas]
                 omega)
         rcases directPausePath_prepend_childless
-            (ca := sevm.currentTarget) (target := target) hswap (by simp)
+            (ca := sevm.currentTarget) (target := target) hswap (by simp only [Fin.isValue, ne_eq,
+              reduceCtorEq, not_false_eq_true, implies_true])
             subRun subPath with ⟨swapRun, swapPath⟩
         let pushPre := base.setMach
           ⟨countValue :: stack, M₁, onePushGas + sloadSpare, base.stateGas⟩
@@ -10525,7 +10511,7 @@ private theorem postAssignment_decrement_pause_branch_runCompiledTo
       (tail := suffixRun) suffixPath
   have hiszero : Ninst.RunCompiled sevm pre iszero branchPre := by
     exact Ninst.runCompiled_unary (by rintro ⟨⟩) rfl hstack (by
-      simp [B256.eqCheck, hpreviousNonzero]) (by
+      simp only [B256.eqCheck, hpreviousNonzero, ↓reduceIte]) (by
       rw [hgas]
       dsimp only [postAssignmentDecrementPauseCost, suffixCost, branchCost]
       omega) (by omega)
@@ -10536,7 +10522,8 @@ private theorem postAssignment_decrement_pause_branch_runCompiledTo
       (.error (.revert, raw)) := .next hiszero branchRun
   have path : Func.RunCompiledTo.DirectPausePath
       sevm.currentTarget target (phase := .beforeZeroCode) run :=
-    .next (instructionRun := hiszero) (tail := branchRun) (by simp) branchPath
+    .next (instructionRun := hiszero) (tail := branchRun) (by simp only [ne_eq, reduceCtorEq,
+      not_false_eq_true, implies_true]) branchPath
   exact ⟨raw, run, rawOutput, path⟩
 
 /-- Worst-case reserved source cost for the zero assignment write and the
@@ -11202,7 +11189,8 @@ private theorem previousAssignment_save_pause_suffix_runCompiledTo
                   simp only [Devm.stack_setMach, List.length_cons]
                   omega)
         rcases directPausePath_prepend_childless
-            (ca := sevm.currentTarget) (target := target) hdup (by simp)
+            (ca := sevm.currentTarget) (target := target) hdup (by simp only [Fin.isValue, ne_eq,
+              reduceCtorEq, not_false_eq_true, implies_true])
             offsetRun offsetPath with ⟨dupRun, dupPath⟩
         exact ⟨raw,
           by simpa only [mstoreAt, prepend, htailGas] using dupRun,
@@ -11377,7 +11365,7 @@ private theorem setPauserKernel_singletonRemoval_pause_runCompiledTo
       (tail := bodyRun) bodyPath
   have hiszero : Ninst.RunCompiled sevm iszeroPre iszero branchPre := by
     exact Ninst.runCompiled_unary (by rintro ⟨⟩) rfl rfl (by
-      simp [B256.eqCheck, htargetNonzero]) (by
+      simp only [B256.eqCheck, htargetNonzero, ↓reduceIte]) (by
       simp only [iszeroPre, Devm.gasLeft_setMach]) (by omega)
   let guardedRun : Func.RunCompiledTo fs sevm iszeroPre
       (iszero ::: ((.call pausableZeroErrorSlot) <?>
@@ -11390,7 +11378,7 @@ private theorem setPauserKernel_singletonRemoval_pause_runCompiledTo
   have guardedPath : Func.RunCompiledTo.DirectPausePath
       sevm.currentTarget target (phase := .beforeWrite) guardedRun :=
     .next (instructionRun := hiszero) (tail := branchRun)
-      (by simp) branchPath
+      (by simp only [ne_eq, reduceCtorEq, not_false_eq_true, implies_true]) branchPath
   have hloadGas : pre.gasLeft =
       (G + bodyCost + branchCost + gVerylow) +
         finishLoadWordCost pre targetWord := by
@@ -12151,7 +12139,8 @@ private theorem directPausePath_prepend_arg_zero
         (by simp only [Devm.gasLeft_setMach])
         (by omega)
   rcases directPausePath_prepend_childless
-      (ca := sevm.currentTarget) (target := markedTarget) hload (by simp)
+      (ca := sevm.currentTarget) (target := markedTarget) hload (by simp only [ne_eq, reduceCtorEq,
+        not_false_eq_true, implies_true])
       tail tailPath with ⟨loadRun, loadPath⟩
   have hpushGas : pre.gasLeft =
       (G + gVerylow) + pushCost (4 : B256).toBytes.sig := by
@@ -12952,12 +12941,13 @@ private theorem liveExpiry_pause_runCompiledTo
             (pop := hbranchPop) (tail := suffixRun) suffixPath
         have hlt : Ninst.RunCompiled sevm ltPre lt branchPre := by
           exact Ninst.runCompiled_binary (by rintro ⟨⟩) rfl rfl (by
-            simp [B256.ltCheck, hlive]) (by
+            simp only [B256.ltCheck, hlive, ↓reduceIte]) (by
               simp only [ltPre, Devm.gasLeft_setMach]
               dsimp only [ltGas]
               omega) (by omega)
         rcases directPausePath_prepend_childless
-            (ca := sevm.currentTarget) (target := target) hlt (by simp)
+            (ca := sevm.currentTarget) (target := target) hlt (by simp only [ne_eq, reduceCtorEq,
+              not_false_eq_true, implies_true])
             branchRun branchPath with ⟨ltRun, ltPath⟩
         have htimestamp : Ninst.RunCompiled sevm timestampPre timestamp
             ltPre := by
@@ -12978,7 +12968,7 @@ private theorem liveExpiry_pause_runCompiledTo
                 omega)
         rcases directPausePath_prepend_childless
             (ca := sevm.currentTarget) (target := target) htimestamp
-            (by simp) (by simpa only [timestampPre, ltPre,
+            (by simp only [ne_eq, reduceCtorEq, not_false_eq_true, implies_true]) (by simpa only [timestampPre, ltPre,
               Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
               Devm.memory_setMach] using ltRun)
             (by simpa only [timestampPre, ltPre, Devm.setMach_setMach, Devm.stateGas_setMach,
@@ -13015,7 +13005,8 @@ private theorem liveExpiry_pause_runCompiledTo
       (x := sevm.caller.toB256) (cost := gBase) (G := tagGas)
       (by rintro ⟨⟩) rfl hcallerGas (by rw [hstack]; omega)
   rcases directPausePath_prepend_childless
-      (ca := sevm.currentTarget) (target := target) hcallerRun (by simp)
+      (ca := sevm.currentTarget) (target := target) hcallerRun (by simp only [ne_eq, reduceCtorEq,
+        not_false_eq_true, implies_true])
       (by simpa only [tagGas, Devm.setMach_setMach, Devm.stateGas_setMach,
           Devm.stack_setMach, Devm.memory_setMach] using tagRun)
       (by simpa only [tagGas, Devm.setMach_setMach, Devm.stateGas_setMach,
@@ -13311,12 +13302,13 @@ private theorem authorized_liveExpiry_pause_runCompiledTo
             (pop := hbranchPop) (tail := suffixRun) suffixPath
         have heq : Ninst.RunCompiled sevm eqPre eq branchPre := by
           exact Ninst.runCompiled_binary (by rintro ⟨⟩) rfl rfl (by
-            simp [B256.eqCheck]) (by
+            simp only [B256.eqCheck, ↓reduceIte]) (by
               simp only [eqPre, Devm.gasLeft_setMach]
               dsimp only [eqGas]
               omega) (by omega)
         rcases directPausePath_prepend_childless
-            (ca := sevm.currentTarget) (target := target) heq (by simp)
+            (ca := sevm.currentTarget) (target := target) heq (by simp only [ne_eq, reduceCtorEq,
+              not_false_eq_true, implies_true])
             branchRun branchPath with ⟨eqRun, eqPath⟩
         have hcallerRun : Ninst.RunCompiled sevm callerPre caller eqPre := by
           have hcallerGas : callerPre.gasLeft =
@@ -13334,7 +13326,7 @@ private theorem authorized_liveExpiry_pause_runCompiledTo
                 omega)
         rcases directPausePath_prepend_childless
             (ca := sevm.currentTarget) (target := target) hcallerRun
-            (by simp) (by simpa only [callerPre, eqPre,
+            (by simp only [ne_eq, reduceCtorEq, not_false_eq_true, implies_true]) (by simpa only [callerPre, eqPre,
               Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
               Devm.memory_setMach] using eqRun)
             (by simpa only [callerPre, eqPre, Devm.setMach_setMach, Devm.stateGas_setMach,
@@ -13417,7 +13409,8 @@ private theorem directPausePath_prepend_tload
       (pre.setMach ⟨value :: stack, pre.memory, G, pre.stateGas⟩) :=
     Ninst.runCompiled_reg (by rintro ⟨⟩) hcore
   exact directPausePath_prepend_childless
-    (ca := ca) (target := target) instructionRun (by simp) tail tailPath
+    (ca := ca) (target := target) instructionRun (by simp only [ne_eq, reduceCtorEq,
+      not_false_eq_true, implies_true]) tail tailPath
 
 /-- Exact phase-preserving `TSTORE` prepend.  The machine pops the key first,
 then its new value. -/
@@ -13462,13 +13455,14 @@ private theorem directPausePath_prepend_tstore
     simp only [Devm.setMach_setMach, Devm.stateGas_setMach,
       Devm.stack_setMach, Devm.memory_setMach, Devm.gasLeft_setMach]
     rw [hremaining]
-    simp [assertDynamic, Except.assert, hstatic]
+    simp only [assertDynamic, Except.assert, hstatic, Bool.not_false, ↓reduceIte]
   have instructionRun : Ninst.RunCompiled sevm pre tstore
       ((pre.setMach ⟨stack, pre.memory, G, pre.stateGas⟩).setTransVal
         sevm.currentTarget key value) :=
     Ninst.runCompiled_reg (by rintro ⟨⟩) hcore
   exact directPausePath_prepend_childless
-    (ca := ca) (target := target) instructionRun (by simp) tail tailPath
+    (ca := ca) (target := target) instructionRun (by simp only [ne_eq, reduceCtorEq,
+      not_false_eq_true, implies_true]) tail tailPath
 
 /-- Exact cost of taking the pause lock before the authorized live-expiry
 path. -/
@@ -13885,11 +13879,12 @@ private theorem unlocked_guard_pause_runCompiledTo
       (pop := hbranchPop) (tail := suffixRun) suffixPath
   have hiszero : Ninst.RunCompiled sevm iszeroPre iszero branchPre := by
     exact Ninst.runCompiled_unary (by rintro ⟨⟩) rfl rfl (by
-      simp [B256.eqCheck]) (by
+      simp only [B256.eqCheck, ↓reduceIte]) (by
       simp only [iszeroPre, Devm.gasLeft_setMach]
       dsimp only [iszeroGas]) (by omega)
   rcases directPausePath_prepend_childless
-      (ca := sevm.currentTarget) (target := target) hiszero (by simp)
+      (ca := sevm.currentTarget) (target := target) hiszero (by simp only [ne_eq, reduceCtorEq,
+        not_false_eq_true, implies_true])
       branchRun branchPath with ⟨iszeroRun, iszeroPath⟩
   have htloadGas : tloadPre.gasLeft = iszeroGas + gasWarmAccess := by
     simp only [tloadPre, Devm.gasLeft_setMach]
@@ -13961,16 +13956,18 @@ private theorem directPausePath_prepend_checkNonAddress_zero
     exact Ninst.runCompiled_binary (by rintro ⟨⟩) rfl rfl hmask (by
       simp only [andPre, Devm.gasLeft_setMach]) (by omega)
   rcases directPausePath_prepend_childless
-      (ca := ca) (target := markedTarget) hand (by simp) tail tailPath with
+      (ca := ca) (target := markedTarget) hand (by simp only [ne_eq, reduceCtorEq,
+        not_false_eq_true, implies_true]) tail tailPath with
     ⟨andRun, andPath⟩
   have hshl : Ninst.RunCompiled sevm shlPre (.reg .shl) andPre := by
     exact Ninst.runCompiled_binary (by rintro ⟨⟩) rfl rfl (by
-      simpa using addressMask_eq_shl.symm) (by
+      simpa only using addressMask_eq_shl.symm) (by
       simp only [shlPre, Devm.gasLeft_setMach]) (by
       simp only [List.length_cons]
       omega)
   rcases directPausePath_prepend_childless
-      (ca := ca) (target := markedTarget) hshl (by simp)
+      (ca := ca) (target := markedTarget) hshl (by simp only [ne_eq, reduceCtorEq,
+        not_false_eq_true, implies_true])
       (by simpa only [shlPre, andPre, Devm.setMach_setMach, Devm.stateGas_setMach,
           Devm.stack_setMach, Devm.memory_setMach] using andRun)
       (by simpa only [shlPre, andPre, Devm.setMach_setMach, Devm.stateGas_setMach,
@@ -13993,7 +13990,8 @@ private theorem directPausePath_prepend_checkNonAddress_zero
       simp only [List.length_cons]
       omega)
   rcases directPausePath_prepend_childless
-      (ca := ca) (target := markedTarget) hnot (by simp)
+      (ca := ca) (target := markedTarget) hnot (by simp only [ne_eq, reduceCtorEq,
+        not_false_eq_true, implies_true])
       (by simpa only [notPre, push160Pre, Devm.setMach_setMach, Devm.stateGas_setMach,
           Devm.stack_setMach, Devm.memory_setMach] using push160Run)
       (by simpa only [notPre, push160Pre, Devm.setMach_setMach, Devm.stateGas_setMach,
@@ -14394,11 +14392,12 @@ private theorem exact_pause_runCompiledTo
       (tail := suffixRun) suffixPath
   have hlt : Ninst.RunCompiled sevm ltPre lt branchPre := by
     exact Ninst.runCompiled_binary (by rintro ⟨⟩) rfl rfl (by
-      simp [B256.ltCheck]) (by
+      simp only [B256.ltCheck, lt_self_iff_false, ↓reduceIte]) (by
       simp only [ltPre, Devm.gasLeft_setMach]
       dsimp only [ltGas]) (by omega)
   rcases directPausePath_prepend_childless
-      (ca := sevm.currentTarget) (target := target) hlt (by simp)
+      (ca := sevm.currentTarget) (target := target) hlt (by simp only [ne_eq, reduceCtorEq,
+        not_false_eq_true, implies_true])
       branchRun branchPath with ⟨ltRun, ltPath⟩
   have hcalldataGas : calldataPre.gasLeft = ltGas + gBase := by
     simp only [calldataPre, Devm.gasLeft_setMach]
@@ -14412,7 +14411,8 @@ private theorem exact_pause_runCompiledTo
           simp only [calldataPre, Devm.stack_setMach, List.length_cons]
           omega)
   rcases directPausePath_prepend_childless
-      (ca := sevm.currentTarget) (target := target) hcalldata (by simp)
+      (ca := sevm.currentTarget) (target := target) hcalldata (by simp only [ne_eq, reduceCtorEq,
+        not_false_eq_true, implies_true])
       (by simpa only [calldataPre, ltPre, Devm.setMach_setMach, Devm.stateGas_setMach,
           Devm.stack_setMach, Devm.memory_setMach] using ltRun)
       (by simpa only [calldataPre, ltPre, Devm.setMach_setMach, Devm.stateGas_setMach,
@@ -14585,7 +14585,8 @@ private theorem third_group_pause_dispatch_runCompiledTo
   have hpop : Ninst.RunCompiled sevm popPre pop pausePre := by
     exact Ninst.runCompiled_pop rfl hpopGas
   rcases directPausePath_prepend_childless
-      (ca := sevm.currentTarget) (target := target) hpop (by simp)
+      (ca := sevm.currentTarget) (target := target) hpop (by simp only [ne_eq, reduceCtorEq,
+        not_false_eq_true, implies_true])
       pauseRun pausePath with ⟨popRun, popPath⟩
   have hbranchRoom : branchPre.stack.length < 1024 := by
     simp only [branchPre, Devm.stack_setMach, List.length_cons]
@@ -14612,12 +14613,13 @@ private theorem third_group_pause_dispatch_runCompiledTo
       (pop := hbranchPop) (tail := popRun) popPath
   have heq : Ninst.RunCompiled sevm eqPre eq branchPre := by
     exact Ninst.runCompiled_binary (by rintro ⟨⟩) rfl rfl (by
-      simp [B256.eqCheck]) (by
+      simp only [B256.eqCheck, ↓reduceIte]) (by
       simp only [eqPre, Devm.gasLeft_setMach]) (by
       simp only [List.length_cons]
       omega)
   rcases directPausePath_prepend_childless
-      (ca := sevm.currentTarget) (target := target) heq (by simp)
+      (ca := sevm.currentTarget) (target := target) heq (by simp only [ne_eq, reduceCtorEq,
+        not_false_eq_true, implies_true])
       branchRun branchPath with ⟨eqRun, eqPath⟩
   rcases directPausePath_prepend_pushB256
       (ca := sevm.currentTarget) (target := target)
@@ -14651,16 +14653,19 @@ private theorem third_group_pause_dispatch_runCompiledTo
           simp only [List.length_cons]
           omega)
   rcases directPausePath_prepend_childless
-      (ca := sevm.currentTarget) (target := target) hdup (by simp)
+      (ca := sevm.currentTarget) (target := target) hdup (by simp only [Fin.isValue, ne_eq,
+        reduceCtorEq, not_false_eq_true, implies_true])
       (by simpa only [pushPre, pauseSelector, Devm.setMach_setMach, Devm.stateGas_setMach,
           Devm.stack_setMach, Devm.memory_setMach] using pushRun)
       (by simpa only [pushPre, pauseSelector, Devm.setMach_setMach, Devm.stateGas_setMach,
           Devm.stack_setMach, Devm.memory_setMach] using pushPath) with
     ⟨run, path⟩
   exact ⟨raw,
-    by simpa [linearDispatchWith, funcs, pauseSelector] using run,
+    by simpa only [funcs, List.drop_succ_cons, List.drop_zero, List.take_succ_cons, List.take_zero,
+      linearDispatchWith, Fin.isValue] using run,
     rawOutput,
-    by simpa [linearDispatchWith, funcs, pauseSelector] using path⟩
+    by simpa only [funcs, List.drop_succ_cons, List.drop_zero, List.take_succ_cons, List.take_zero,
+      linearDispatchWith, Fin.isValue] using path⟩
 
 /-- Exact cost of the two selected hybrid pivots followed by the third-group
 pause dispatch. -/
@@ -14821,7 +14826,7 @@ private theorem hybrid_pause_dispatch_runCompiledTo
       hfinishLookup hremoveLookup hafterLookup hsetPauserLookup hthirdGas with
     ⟨raw, thirdRun, rawOutput, thirdPath⟩
   have hinnerValue : B256.gtCheck innerPivot pauseSelector = 1 := by
-    dsimp [innerPivot, pauseSelector, funcs, firstSelector]
+    dsimp only [funcs, firstSelector, innerPivot, pauseSelector]
     rfl
   have hinnerBranchRoom : innerBranchPre.stack.length < 1024 := by
     simp only [innerBranchPre, Devm.stack_setMach, List.length_cons]
@@ -14850,7 +14855,8 @@ private theorem hybrid_pause_dispatch_runCompiledTo
       simp only [List.length_cons]
       omega)
   rcases directPausePath_prepend_childless
-      (ca := sevm.currentTarget) (target := target) hinnerGt (by simp)
+      (ca := sevm.currentTarget) (target := target) hinnerGt (by simp only [ne_eq, reduceCtorEq,
+        not_false_eq_true, implies_true])
       innerBranchRun innerBranchPath with ⟨innerGtRun, innerGtPath⟩
   rcases directPausePath_prepend_pushB256
       (ca := sevm.currentTarget) (target := target)
@@ -14877,7 +14883,8 @@ private theorem hybrid_pause_dispatch_runCompiledTo
           simp only [innerPre, Devm.stack_setMach, List.length_cons]
           omega)
   rcases directPausePath_prepend_childless
-      (ca := sevm.currentTarget) (target := target) hinnerDup (by simp)
+      (ca := sevm.currentTarget) (target := target) hinnerDup (by simp only [Fin.isValue, ne_eq,
+        reduceCtorEq, not_false_eq_true, implies_true])
       (by simpa only [innerPushPre, Devm.setMach_setMach, Devm.stateGas_setMach,
           Devm.stack_setMach, Devm.memory_setMach] using innerPushRun)
       (by simpa only [innerPushPre, Devm.setMach_setMach, Devm.stateGas_setMach,
@@ -14916,12 +14923,13 @@ private theorem hybrid_pause_dispatch_runCompiledTo
   have houterGt : Ninst.RunCompiled sevm outerGtPre gt outerBranchPre := by
     exact Ninst.runCompiled_binary (by rintro ⟨⟩) rfl rfl (by
       rw [houterPivot]
-      simp [B256.gtCheck]) (by
+      simp only [B256.gtCheck, gt_iff_lt, lt_self_iff_false, ↓reduceIte]) (by
       simp only [outerGtPre, Devm.gasLeft_setMach]) (by
       simp only [List.length_cons]
       omega)
   rcases directPausePath_prepend_childless
-      (ca := sevm.currentTarget) (target := target) houterGt (by simp)
+      (ca := sevm.currentTarget) (target := target) houterGt (by simp only [ne_eq, reduceCtorEq,
+        not_false_eq_true, implies_true])
       outerBranchRun outerBranchPath with ⟨outerGtRun, outerGtPath⟩
   rcases directPausePath_prepend_pushB256
       (ca := sevm.currentTarget) (target := target)
@@ -14959,18 +14967,18 @@ private theorem hybrid_pause_dispatch_runCompiledTo
           simp only [List.length_cons]
           omega)
   rcases directPausePath_prepend_childless
-      (ca := sevm.currentTarget) (target := target) houterDup (by simp)
+      (ca := sevm.currentTarget) (target := target) houterDup (by simp only [Fin.isValue, ne_eq,
+        reduceCtorEq, not_false_eq_true, implies_true])
       (by simpa only [outerPushPre, pauseSelector, Devm.setMach_setMach, Devm.stateGas_setMach,
           Devm.stack_setMach, Devm.memory_setMach] using outerPushRun)
       (by simpa only [outerPushPre, pauseSelector, Devm.setMach_setMach, Devm.stateGas_setMach,
           Devm.stack_setMach, Devm.memory_setMach] using outerPushPath) with
     ⟨run, path⟩
   exact ⟨raw,
-    by simpa [hybridDispatchWith, splitDispatch, outerPivot, innerPivot]
-      using run,
+    by simpa only [hybridDispatchWith, splitDispatch, Fin.isValue, outerPivot, innerPivot] using run,
     rawOutput,
-    by simpa [hybridDispatchWith, splitDispatch, outerPivot, innerPivot]
-      using path⟩
+    by simpa only [hybridDispatchWith, splitDispatch, Fin.isValue, outerPivot, innerPivot] using
+      path⟩
 
 /-- Exact phase-preserving prepend for the four-instruction selector extractor. -/
 private theorem directPausePath_prepend_fsig
@@ -15005,7 +15013,8 @@ private theorem directPausePath_prepend_fsig
       exact hshift) (by
       simp only [shrPre, Devm.gasLeft_setMach]) (by omega)
   rcases directPausePath_prepend_childless
-      (ca := sevm.currentTarget) (target := markedTarget) hshr (by simp)
+      (ca := sevm.currentTarget) (target := markedTarget) hshr (by simp only [ne_eq, reduceCtorEq,
+        not_false_eq_true, implies_true])
       tail tailPath with ⟨shrRun, shrPath⟩
   rcases directPausePath_prepend_pushB256
       (ca := sevm.currentTarget) (target := markedTarget)
@@ -15028,7 +15037,8 @@ private theorem directPausePath_prepend_fsig
         rfl hdata (by simp only [loadPre, Devm.gasLeft_setMach])
         (by omega)
   rcases directPausePath_prepend_childless
-      (ca := sevm.currentTarget) (target := markedTarget) hload (by simp)
+      (ca := sevm.currentTarget) (target := markedTarget) hload (by simp only [ne_eq, reduceCtorEq,
+        not_false_eq_true, implies_true])
       (by simpa only [shrPushPre, Devm.setMach_setMach, Devm.stateGas_setMach,
           Devm.stack_setMach, Devm.memory_setMach] using shrPushRun)
       (by simpa only [shrPushPre, Devm.setMach_setMach, Devm.stateGas_setMach,
@@ -15366,10 +15376,11 @@ private theorem runtimeMain_pause_runCompiledTo
     exact Ninst.runCompiled_binary (by rintro ⟨⟩) rfl rfl rfl (by
       simp only [orPre, Devm.gasLeft_setMach]) (by omega)
   rcases directPausePath_prepend_childless
-      (ca := sevm.currentTarget) (target := target) hor (by simp)
+      (ca := sevm.currentTarget) (target := target) hor (by simp only [ne_eq, reduceCtorEq,
+        not_false_eq_true, implies_true])
       branchRun branchPath with ⟨orRun, orPath⟩
   have hltValue : B256.ltCheck (Nat.toB256 36) (4 : B256) = 0 := by
-    simp [B256.ltCheck]
+    simp only [B256.ltCheck, ite_eq_right_iff]
     intro h
     have hh := B256.toNat_lt_toNat h
     change 36 ↾ 256 < 4 ↾ 256 at hh
@@ -15382,7 +15393,8 @@ private theorem runtimeMain_pause_runCompiledTo
       simp only [List.length_cons]
       omega)
   rcases directPausePath_prepend_childless
-      (ca := sevm.currentTarget) (target := target) hlt (by simp)
+      (ca := sevm.currentTarget) (target := target) hlt (by simp only [ne_eq, reduceCtorEq,
+        not_false_eq_true, implies_true])
       (by simpa only [orPre, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
           Devm.memory_setMach] using orRun)
       (by simpa only [orPre, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
@@ -15400,7 +15412,8 @@ private theorem runtimeMain_pause_runCompiledTo
           simp only [calldataPre, Devm.stack_setMach, List.length_cons]
           omega)
   rcases directPausePath_prepend_childless
-      (ca := sevm.currentTarget) (target := target) hcalldata (by simp)
+      (ca := sevm.currentTarget) (target := target) hcalldata (by simp only [ne_eq, reduceCtorEq,
+        not_false_eq_true, implies_true])
       (by simpa only [calldataPre, ltPre, Devm.setMach_setMach, Devm.stateGas_setMach,
           Devm.stack_setMach, Devm.memory_setMach] using ltRun)
       (by simpa only [calldataPre, ltPre, Devm.setMach_setMach, Devm.stateGas_setMach,
@@ -15434,7 +15447,8 @@ private theorem runtimeMain_pause_runCompiledTo
           rw [hstack]
           omega)
   rcases directPausePath_prepend_childless
-      (ca := sevm.currentTarget) (target := target) hcallvalue (by simp)
+      (ca := sevm.currentTarget) (target := target) hcallvalue (by simp only [ne_eq, reduceCtorEq,
+        not_false_eq_true, implies_true])
       (by simpa only [pushPre, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
           Devm.memory_setMach] using pushRun)
       (by simpa only [pushPre, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
@@ -15931,10 +15945,7 @@ theorem pause_direct_postWrite_revert_settles_and_restores_registry
       (raw := .error (.revert, raw)) hframeEntry
     have hsg : msg.benv.stat.rules.stateGas = none :=
       hmsgFork.rules_stateGas_none
-    simpa [post, Frame.ofCall, Frame.settle, Frame.settleMsg, hsg,
-      executeCode.handleErrorWith_none,
-      executeCode.handleError, processMessage.settle, Devm.error,
-      Devm.withError, Devm.setMeta] using hrun
+    simpa only [post, Frame.ofCall, Frame.settle, Frame.settleMsg, hsg, executeCode.handleErrorWith_none, executeCode.handleError, processMessage.settle, Devm.error, Devm.withError, Devm.setMeta, ExceptT.stM_eq, Bool.false_eq_true, ↓reduceIte, Except.bind_ok, Option.isSome_some] using hrun
   have herror : post.error.isSome :=
     ProcessMessage.error_isSome_of_raw_revert
       hmsgFork.rules_stateGas_none hprocess
@@ -15975,28 +15986,32 @@ private theorem runCompiledTo_revertSelector_targetZeroPathFree
   cases run with
   | next firstRun firstTail =>
       refine .next (instructionRun := firstRun) (tail := firstTail)
-        (by simp) (by simp) ?_
+        (by simp only [ne_eq, reduceCtorEq, not_false_eq_true]) (by simp only [ne_eq, reduceCtorEq, not_false_eq_true, implies_true]) ?_
       cases firstTail with
       | next secondRun secondTail =>
           refine .next (instructionRun := secondRun) (tail := secondTail)
-            (by unfold Ninst.pushB256; simp)
-            (by unfold Ninst.pushB256; simp) ?_
+            (by unfold Ninst.pushB256; simp only [ne_eq, reduceCtorEq, not_false_eq_true])
+            (by unfold Ninst.pushB256; simp only [ne_eq, reduceCtorEq, not_false_eq_true,
+              implies_true]) ?_
           cases secondTail with
           | next thirdRun thirdTail =>
               refine .next (instructionRun := thirdRun) (tail := thirdTail)
-                (by simp) (by simp) ?_
+                (by simp only [ne_eq, reg.injEq, reduceCtorEq, not_false_eq_true]) (by simp only [ne_eq, reduceCtorEq, not_false_eq_true, implies_true]) ?_
               cases thirdTail with
               | next fourthRun fourthTail =>
                   refine .next (instructionRun := fourthRun)
                     (tail := fourthTail)
-                    (by unfold Ninst.pushB256; simp)
-                    (by unfold Ninst.pushB256; simp) ?_
+                    (by unfold Ninst.pushB256; simp only [ne_eq, reduceCtorEq, not_false_eq_true])
+                    (by unfold Ninst.pushB256; simp only [ne_eq, reduceCtorEq, not_false_eq_true,
+                      implies_true]) ?_
                   cases fourthTail with
                   | next fifthRun fifthTail =>
                       refine .next (instructionRun := fifthRun)
                         (tail := fifthTail)
-                        (by unfold Ninst.pushB256; simp)
-                        (by unfold Ninst.pushB256; simp) ?_
+                        (by unfold Ninst.pushB256; simp only [ne_eq, reduceCtorEq,
+                          not_false_eq_true])
+                        (by unfold Ninst.pushB256; simp only [ne_eq, reduceCtorEq,
+                          not_false_eq_true, implies_true]) ?_
                       cases fifthTail with
                       | last terminalRun =>
                           exact .last (terminalRun := terminalRun)
@@ -16059,8 +16074,7 @@ private theorem setPauser_zero_runCompiledTo_source
       (G + loadCost + gVerylow + branchCost + callCost + selectorCost) +
         gVerylow := by
     rw [hgas]
-    dsimp [setPauserZeroCost, loadCost, branchCost, callCost,
-      selectorCost, offset, M]
+    dsimp only [setPauserZeroCost, loadCost, offset, branchCost, callCost, selectorCost, M]
     rw [hstack]
     omega
   have hpush : Ninst.RunCompiled sevm pre (Ninst.pushB256 offset)
@@ -16109,10 +16123,11 @@ private theorem setPauser_zero_runCompiledTo_source
     simp only [memExtSize]
     split
     · exact halign
-    · simp
+    · simp only [Nat.mul_mod_right]
   have hdataLength : data.length = 4 := by
     dsimp only [data]
-    simp [customErrorData, B256.length_toBytes]
+    simp only [customErrorData, List.length_take, B256.length_toBytes, Nat.reduceLeDiff,
+      inf_of_le_left]
   have hbody : Func.RunCompiledTo fs sevm
       (pre.setMach ⟨stack, M, G + selectorCost, pre.stateGas⟩)
       pausableZeroError
@@ -16217,13 +16232,15 @@ private theorem setPauser_zero_runCompiledTo_source
     refine .next (instructionRun := hpush) (tail :=
       .next hload (.next hiszero hbranch)) ?_ ?_ ?_
     · unfold Ninst.pushB256
-      simp
+      simp only [ne_eq, reduceCtorEq, not_false_eq_true]
     · unfold Ninst.pushB256
-      simp
+      simp only [ne_eq, reduceCtorEq, not_false_eq_true, implies_true]
     · refine .next (instructionRun := hload)
-        (tail := .next hiszero hbranch) (by simp) (by simp) ?_
+        (tail := .next hiszero hbranch) (by simp only [ne_eq, reg.injEq, reduceCtorEq,
+          not_false_eq_true]) (by simp only [ne_eq, reduceCtorEq,
+          not_false_eq_true, implies_true]) ?_
       refine .next (instructionRun := hiszero) (tail := hbranch)
-        (by simp) (by simp) hbranchFree
+        (by simp only [ne_eq, reg.injEq, reduceCtorEq, not_false_eq_true]) (by simp only [ne_eq, reduceCtorEq, not_false_eq_true, implies_true]) hbranchFree
   exact ⟨hrun, hrunFree⟩
 
 /-- The shared Registry kernel's exact compiler-table entry exists for every
@@ -16236,13 +16253,15 @@ theorem setPauserKernel_tableEntry (dp : DeployParams) :
         ((runtime dp).main :: (runtime dp).aux))[setPauserSlot]? =
         some setPauserKernel := by
     rw [Prog.get?_table]
-    simp [runtime, aux, setPauserSlot]
+    simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      setPauserSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   cases hentry :
       (table 0 ((runtime dp).main :: (runtime dp).aux))[setPauserSlot]? with
-  | none => simp [hentry] at hsnd
+  | none => simp only [hentry, Option.map_eq_map, Option.map_none, reduceCtorEq] at hsnd
   | some entry =>
       obtain ⟨loc, body⟩ := entry
-      simp [hentry] at hsnd
+      simp only [hentry, Option.map_eq_map, Option.map_some, Option.some.injEq] at hsnd
       subst body
       exact ⟨loc, rfl⟩
 
@@ -16255,8 +16274,10 @@ theorem runtime_registry_lookups (dp : DeployParams) :
     fs[afterOldPauserSlot]? = some afterOldPauser ∧
     fs[removeTargetSlot]? = some removeTarget ∧
     fs[finishSetPauserSlot]? = some finishSetPauser := by
-  simp [runtime, aux, pausableZeroErrorSlot, appendTargetSlot,
-    afterOldPauserSlot, removeTargetSlot, finishSetPauserSlot]
+  simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+    pausableZeroErrorSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero, appendTargetSlot,
+    afterOldPauserSlot, removeTargetSlot, finishSetPauserSlot, and_self]
 
 /-- Every continuation and panic call used after the Registry suffix resolves
 to its exact source body in the production runtime table. -/
@@ -16266,8 +16287,11 @@ theorem runtime_caller_lookups (dp : DeployParams) :
     fs[pauseAfterSetSlot]? = some pauseAfterSet ∧
     ∃ panicData,
       fs[arithmeticPanicSlot]? = some (Func.revertData panicData) := by
-  simp [runtime, aux, registerAfterSetSlot, pauseAfterSetSlot,
-    arithmeticPanicSlot, arithmeticPanic]
+  simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+    arithmeticPanic, registerAfterSetSlot, slotOf, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+    pauseAfterSetSlot, arithmeticPanicSlot, Nat.lt_add_one, Option.some.injEq,
+    exists_apply_eq_apply', and_self]
 
 /-! ### Concrete post-write direct-pause control -/
 
@@ -16441,19 +16465,18 @@ private theorem directPauseControl_registryReads :
       directPauseControlOwner).get
         (assignmentSlot directPauseControlTarget) =
       directPauseControlPauser
-    simpa [logicalStorageOfStor, assignmentAt,
-      directPauseControlTarget, directPauseControlPauser] using
-      hw.assignments directPauseControlTarget
-        directPauseControl_targetCanonical
+    simpa only [directPauseControlTarget, directPauseControlPauser, logicalStorageOfStor,
+      assignmentAt, ↓reduceIte] using
+      hw.assignments directPauseControlTarget directPauseControl_targetCanonical
   · change (Devm.getStor directPauseControlPre
       directPauseControlOwner).get
         (indexSlot directPauseControlTarget) = 1
-    simpa [logicalStorageOfStor, oneBasedIndexAt, hone,
-      directPauseControlTarget] using
-      hw.indices directPauseControlTarget directPauseControl_targetCanonical
+    simpa only [directPauseControlTarget, logicalStorageOfStor, oneBasedIndexAt, ↓reduceIte,
+      hone] using hw.indices directPauseControlTarget directPauseControl_targetCanonical
   · change (Devm.getStor directPauseControlPre
       directPauseControlOwner).get arrayLengthSlot = 1
-    simpa [logicalStorageOfStor, hone] using hw.lengthWord
+    simpa only [logicalStorageOfStor, List.length_cons, List.length_nil, zero_add, hone] using
+      hw.lengthWord
   · change (Devm.getStor directPauseControlPre
       directPauseControlOwner).get (arrayEntrySlot 1) =
         directPauseControlTarget
@@ -16462,9 +16485,8 @@ private theorem directPauseControl_registryReads :
   · change (Devm.getStor directPauseControlPre
       directPauseControlOwner).get
         (countSlot directPauseControlPauser) = 1
-    simpa [logicalStorageOfStor, assignmentCount, hone,
-      directPauseControlPauser] using
-      hw.counts directPauseControlPauser directPauseControl_pauserCanonical
+    simpa only [directPauseControlPauser, logicalStorageOfStor, assignmentCount, ↓reduceIte,
+      add_zero, hone] using hw.counts directPauseControlPauser directPauseControl_pauserCanonical
 
 private theorem directPauseControl_expiryRead :
     directPauseControlPre.getStorVal directPauseControlOwner
@@ -16486,11 +16508,9 @@ private theorem directPauseControl_durationRead :
         region ≠ configRegion →
         slot region payload ≠ pauseDurationSlot := by
       intro region payload hregion hpayload hregionNe
-      simpa [pauseDurationSlot] using
-        slot_ne_of_region_ne
-          (leftRegion := region) (rightRegion := configRegion)
-          (left := payload) (right := (0 : B256))
-          hregion (by norm_num [configRegion]) hpayload
+      simpa only [pauseDurationSlot, ne_eq] using
+        slot_ne_of_region_ne (leftRegion := region) (rightRegion := configRegion) (left := payload)
+          (right := (0 : B256)) hregion (by norm_num [configRegion]) hpayload
           (by
             change (0 : Nat) < 2 ^ 252
             norm_num)
@@ -16531,21 +16551,20 @@ private theorem directPauseControl_durationRead :
         (by norm_num [countRegion]) hpauserPayload
         (by norm_num [countRegion, configRegion])
     rw [directPauseControlRegistryStor, applyRegistryWrites_get]
-    simp [hassignment, hentry, hindex, hlength, hcount,
-      Stor.get, Stor.empty]
-  · simpa [expirySlot, pauseDurationSlot] using
-      slot_ne_of_region_ne
-        (leftRegion := expiryRegion) (rightRegion := configRegion)
-        (left := directPauseControlPauser) (right := (0 : B256))
-        (by norm_num [expiryRegion]) (by norm_num [configRegion])
-        (by
-          unfold directPauseControlPauser
-          change (9 : Nat) < 2 ^ 252
-          norm_num)
-        (by
-          change (0 : Nat) < 2 ^ 252
-          norm_num)
-        (by norm_num [expiryRegion, configRegion])
+    simp only [Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc, Std.TreeMap.getD_emptyc,
+      List.foldl_cons, hassignment, ↓reduceIte, hentry, hindex, hlength, hcount, List.foldl_nil]
+  · simpa only [expirySlot, pauseDurationSlot, ne_eq] using
+    slot_ne_of_region_ne (leftRegion := expiryRegion) (rightRegion := configRegion) (left :=
+      directPauseControlPauser) (right := (0 : B256)) (by norm_num [expiryRegion])
+      (by norm_num [configRegion])
+      (by
+        unfold directPauseControlPauser
+        change (9 : Nat) < 2 ^ 252
+        norm_num)
+      (by
+        change (0 : Nat) < 2 ^ 252
+        norm_num)
+      (by norm_num [expiryRegion, configRegion])
 
 private theorem directPauseControl_frameEntry :
     (Frame.ofCall directPauseControlMsg).enter =
@@ -16566,9 +16585,8 @@ private theorem directPauseControl_dataFacts :
     Sevm.dataWord directPauseControlSevm 0 >>> 224 =
       selector "pause" [.address] := by
   refine ⟨?_, ?_, ?_⟩
-  · simp [directPauseControlSevm, directPauseControlMsg,
-      directPauseControlBaseMsg, initSevm, pauseCalldata,
-      abiSelectorBytes_length, B256.length_toBytes]
+  · simp only [directPauseControlSevm, initSevm, directPauseControlMsg, directPauseControlBaseMsg,
+    pauseCalldata, List.length_append, abiSelectorBytes_length, B256.length_toBytes, Nat.reduceAdd]
   · apply dataWord_of_append
       (e := directPauseControlSevm) (idx := (4 : B256))
       (pre := abiSelectorBytes (selector "pause" [.address]))
@@ -16627,13 +16645,15 @@ private theorem directPauseControl_machineFacts :
         [(directPauseControlOwner, arrayEntrySlot (1 : B256)),
           (directPauseControlOwner, indexSlot directPauseControlTarget)]
     rw [Std.HashSet.mem_ofList]
-    simp
+    simp only [List.contains_eq_mem, List.mem_cons, Prod.mk.injEq, true_and, List.not_mem_nil,
+      or_false, true_or, decide_true]
   · change (directPauseControlOwner, indexSlot directPauseControlTarget) ∈
       Std.HashSet.ofList
         [(directPauseControlOwner, arrayEntrySlot (1 : B256)),
           (directPauseControlOwner, indexSlot directPauseControlTarget)]
     rw [Std.HashSet.mem_ofList]
-    simp
+    simp only [List.contains_eq_mem, List.mem_cons, Prod.mk.injEq, true_and, List.not_mem_nil,
+      or_false, or_true, decide_true]
 
 private theorem directPauseControl_zeroCode :
     (directPauseControlPre.getCode directPauseControlTarget.toAdr).size =
@@ -16700,12 +16720,16 @@ private theorem directPauseControl_run :
       ((runtime officialParams).main ::
         (runtime officialParams).aux)[emptyRevertSlot]? =
           some Func.revert := by
-    simp [runtime, aux, emptyRevertSlot]
+    simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      emptyRevertSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   have hsetPauser :
       ((runtime officialParams).main ::
         (runtime officialParams).aux)[setPauserSlot]? =
           some setPauserKernel := by
-    simp [runtime, aux, setPauserSlot]
+    simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      setPauserSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   have hmsgCode : directPauseControlMsg.code.toList =
       lidoCircuitBreakerCode officialParams := by
     simpa only [directPauseControlSevm, initSevm] using
@@ -16740,7 +16764,7 @@ private theorem directPauseControl_run :
     hindex hlength (by decide) hlast directPauseControl_targetCanonical
     directPauseControl_zeroCode (Or.inr haccess) hwarmHole
     hwarmMovedIndex hroom hstatic hempty hpause hfinish hremove hafter
-    hsetPauser (by simpa using directPauseControl_gas)
+    hsetPauser (by simpa only [zero_add] using directPauseControl_gas)
 
 /-- A fully inhabited production-runtime control for direct `pause`: target
 `7` is assigned to the live caller `9` in a singleton Registry owned by
@@ -16897,7 +16921,7 @@ theorem setPauser_zero_runCompiledTo_pausableZero_noRegistryWrite
   refine ⟨run, execution, ?_⟩
   intro occurrence instructionEq
   apply executionFree.noSstoreAt occurrence.node occurrence.reached
-  simpa [instructionEq] using occurrence.decoded
+  simpa only [instructionEq] using occurrence.decoded
 
 set_option maxRecDepth 2048 in
 /-- Invert an actual successful execution at the exact emitted kernel slice
@@ -17041,7 +17065,8 @@ theorem setPauserKernel_exec_extracts_sourceTrace
       ∃ trace, setPauserSourceTrace entries target newPauser = some trace := by
     cases hfind : findEntry entries target <;>
       by_cases hnew0 : newPauser = 0 <;>
-      simp [setPauserSourceTrace, setPauser, htarget0, hfind, hnew0]
+      simp only [setPauserSourceTrace, setPauser, htarget0, ↓reduceIte, hfind, hnew0,
+        Option.some.injEq, exists_eq']
   rcases setPauserKernel_exec_extracts_sourceTrace_of_trace dp howner
       hcodeAddress hbytes htable hwf hr htargetRead hnewRead
       hcontinuationRead hw htarget hnew hexec htrace with
@@ -17193,13 +17218,12 @@ theorem pause_kernel_exec_reaches_pauseAfterSet
     · calc
         (Devm.getStor pausePre ca).get (assignmentSlot target) =
             assignmentAt trace.postEntries target := by
-          simpa [logicalStorageOfStor] using
-            hwPause.assignments target htarget
+          simpa only [logicalStorageOfStor] using hwPause.assignments target htarget
         _ = 0 := hassignment
     · calc
         (Devm.getStor pausePre ca).get (indexSlot target) =
             Nat.toB256 (oneBasedIndexAt trace.postEntries target) := by
-          simpa [logicalStorageOfStor] using hwPause.indices target htarget
+          simpa only [logicalStorageOfStor] using hwPause.indices target htarget
         _ = 0 := by rw [hindex]; rfl
 
 /-- A concrete Registry witness makes assignment and index membership
@@ -17223,11 +17247,11 @@ theorem membershipEquivalence_registerPauser
   have hassignment :
       (Devm.getStor post ca).get (assignmentSlot target) =
         assignmentAt entries target := by
-    simpa [logicalStorageOfStor] using hw.assignments target htarget
+    simpa only [logicalStorageOfStor] using hw.assignments target htarget
   have hindex :
       (Devm.getStor post ca).get (indexSlot target) =
         Nat.toB256 (oneBasedIndexAt entries target) := by
-    simpa [logicalStorageOfStor] using hw.indices target htarget
+    simpa only [logicalStorageOfStor] using hw.indices target htarget
   cases hfind : findEntry entries target with
   | none =>
       have hnotmem := findEntry_none_target_not_mem_targets hfind
@@ -17326,14 +17350,14 @@ theorem cleanStateAfterRemoval_registerPauser
       (applyRegistryWrites s trace.writes).get
           (assignmentSlot target) = 0 := by
     have hread := hpostWitness.assignments target htarget.2
-    simpa [logicalStorageOfStor, hremoved.2.1] using hread
+    simpa only [logicalStorageOfStor, hremoved.2.1] using hread
   have hindex :
       (applyRegistryWrites s trace.writes).get
           (indexSlot target) = 0 := by
     have hread := hpostWitness.indices target htarget.2
     calc
       _ = Nat.toB256 (oneBasedIndexAt trace.postEntries target) := by
-        simpa [logicalStorageOfStor] using hread
+        simpa only [logicalStorageOfStor] using hread
       _ = 0 := by rw [hremoved.2.2]; rfl
   refine ⟨⟨hassignment, hindex, hremoved.1⟩, ?_⟩
   cases hfind : findEntry entries target with
@@ -17423,7 +17447,7 @@ theorem cleanStateAfterRemoval_registerPauser
           have hlastValid := hw.targetsValid last hlastMem
           have hmovedCanonical :
               canonicalAddress (sourceLastTarget entries) := by
-            simpa [sourceLastTarget, hlast] using hlastValid.2
+            simpa only [sourceLastTarget, hlast] using hlastValid.2
           have hindexBeforeLast : index + 1 < entries.length := by
             have hindexLt := findEntry_index_lt hfind
             by_contra hnot
@@ -17440,17 +17464,18 @@ theorem cleanStateAfterRemoval_registerPauser
           have hmodelIndex' :
               oneBasedIndexAt (swapPop entries index)
                   (sourceLastTarget entries) = index + 1 := by
-            simpa [sourceLastTarget, hlast] using hmodelIndex
+            simpa only [sourceLastTarget, hlast] using hmodelIndex
           have hpostEntries :
               trace.postEntries = swapPop entries index := by
-            simpa [setPauser, htarget.1, hfind] using hrefines.1.symm
+            simpa only [setPauser, htarget.1, ↓reduceIte, hfind, Option.some.injEq] using
+              hrefines.1.symm
           have hread :=
             hpostWitness.indices (sourceLastTarget entries) hmovedCanonical
           calc
             _ = Nat.toB256
                 (oneBasedIndexAt (swapPop entries index)
                   (sourceLastTarget entries)) := by
-              simpa [logicalStorageOfStor, hpostEntries] using hread
+              simpa only [logicalStorageOfStor, hpostEntries] using hread
             _ = Nat.toB256 (index + 1) :=
               congrArg Nat.toB256 hmodelIndex'
 
@@ -17459,13 +17484,13 @@ private theorem assignmentCount_eq_count_map
     assignmentCount entries pauser =
       (entries.map Prod.snd).count pauser := by
   induction entries with
-  | nil => simp [assignmentCount]
+  | nil => simp only [assignmentCount, List.map_nil, List.count_nil]
   | cons entry rest ih =>
       simp only [assignmentCount, List.map_cons, List.count_cons]
       rw [ih]
       by_cases h : entry.2 = pauser
-      · simp [h, Nat.add_comm]
-      · simp [h]
+      · simp only [h, ↓reduceIte, BEq.rfl, Nat.add_comm]
+      · simp only [h, ↓reduceIte, zero_add, beq_iff_eq, add_zero]
 
 /-- Registry counts agree with the witness multiplicities, the zero-pauser
 count is clear, and the sum of live per-pauser counts is the array length. -/
@@ -17482,8 +17507,8 @@ theorem globalCountConservation_registerPauser
         entries.length := by
   refine ⟨?_, ?_, ?_⟩
   · intro pauser hpauser
-    simpa [logicalStorageOfStor] using hw.counts pauser hpauser
-  · simpa [logicalStorageOfStor] using hw.zeroCount
+    simpa only [logicalStorageOfStor] using hw.counts pauser hpauser
+  · simpa only [logicalStorageOfStor] using hw.zeroCount
   · calc
       (∑ pauser ∈ (entries.map Prod.snd).toFinset,
         ((Devm.getStor post ca).get (countSlot pauser)).toNat) =
@@ -17492,7 +17517,8 @@ theorem globalCountConservation_registerPauser
               apply Finset.sum_congr rfl
               intro pauser hpauser
               have hpauserMem : pauser ∈ entries.map Prod.snd := by
-                simpa using hpauser
+                simpa only [List.mem_map, Prod.exists, exists_eq_right, List.mem_toFinset] using
+                  hpauser
               obtain ⟨entry, hentry, hpauserEq⟩ :=
                 List.mem_map.mp hpauserMem
               have hcanonical : canonicalAddress pauser := by
@@ -17501,8 +17527,7 @@ theorem globalCountConservation_registerPauser
               have hcount :
                   (Devm.getStor post ca).get (countSlot pauser) =
                     Nat.toB256 (assignmentCount entries pauser) := by
-                simpa [logicalStorageOfStor] using
-                  hw.counts pauser hcanonical
+                simpa only [logicalStorageOfStor] using hw.counts pauser hcanonical
               rw [hcount, B256.toNat_toB256_of_lt
                 (hw.assignmentCount_lt_2pow256 pauser)]
       _ = ∑ pauser ∈ (entries.map Prod.snd).toFinset,
@@ -17512,6 +17537,6 @@ theorem globalCountConservation_registerPauser
               exact assignmentCount_eq_count_map entries pauser
       _ = entries.length := by
               rw [List.sum_toFinset_count_eq_length]
-              simp
+              simp only [List.length_map]
 
 end Blanc.LidoCircuitBreaker

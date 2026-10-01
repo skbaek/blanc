@@ -168,7 +168,7 @@ theorem exec_enters_weth10Selector_logs
       rw [hw]
       exact h_nz
     have hz : (sevm.data.length.toB256 =? 0) = 0 := by
-      simp [B256.eqCheck, h_nonempty]
+      simp only [B256.eqCheck, h_nonempty, ↓reduceIte]
     exact absurd hz hflag
 
 /-- Empty calldata enters the payable receive body rather than selector

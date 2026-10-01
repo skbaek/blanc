@@ -123,8 +123,9 @@ theorem rx_exp' {x y : B256} {c : Nat} (hc : gExp + gExpbyte * y.bytecount = c)
   refine .next ?_ k
   have h := Ninst.runCompiled_reg (sevm := sevm) (r := .exp) (by rintro ⟨⟩)
     (Rinst.runCore_exp_eq_ok (devm := St b (x :: y :: S) M (G + (gExp + gExpbyte * y.bytecount)))
-      rfl (by simp) hroom)
-  simpa [St, Devm.setMach_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using h
+      rfl (by simp only [St.gasLeft, le_add_iff_nonneg_left, zero_le]) hroom)
+  simpa only [St, Devm.memory_setMach, Devm.setMach_gasLeft, add_tsub_cancel_right,
+    Devm.stateGas_setMach, Devm.setMach_setMach] using h
 
 theorem rx_dup4 {x y z w : B256} (hroom : (x :: y :: z :: w :: S).length < 1024)
     (k : SFunc.RunExact fs sevm (St b (w :: x :: y :: z :: w :: S) M G) f o) :

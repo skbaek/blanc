@@ -52,7 +52,7 @@ def ReachableReason.slot : ReachableReason → Nat
 `assert_false` label. -/
 theorem ReachableReason.reason_ne_assertFalse (error : ReachableReason) :
     error.reason ≠ .assert_false := by
-  cases error <;> simp [ReachableReason.reason]
+  cases error <;> simp only [reason, ne_eq, reduceCtorEq, not_false_eq_true]
 
 /-- The runtime table contains the exact constant-error body at every
 catalogued slot. -/

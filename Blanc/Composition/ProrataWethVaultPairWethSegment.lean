@@ -43,7 +43,8 @@ private theorem weth_approve_compiled_foreign {sevm : Sevm} {pre post : Devm}
     Devm.getStor post account = Devm.getStor pre account := by
   obtain ⟨bodyPre, -, entryState, -, -, -, bodyRun⟩ :=
     runCompiled_enters_wethNonpayable (body := Blanc.approve) run selected
-      (by simp [Blanc.wethFuncs])
+      (by simp only [wethFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+        or_true])
   rcases of_run_prepend (arg 0 ++ checkNonAddress) _ bodyRun with
     ⟨a, ha, run⟩
   rcases of_run_branch_revert run with ⟨b, hb, run⟩
@@ -252,7 +253,7 @@ theorem wethFramePairSegment (vault : Adr) : WethFramePairSegment vault := by
         Stor.rest (Devm.getStor pre wethAccount) vault := by
       simp only [Stor.rest, Function.comp_apply, written, Stor.get_set_ne _ keyNe]
     let call : WethAllowanceInvocation :=
-      ⟨sevm, pre, post, true, target, memoryWf, run, by simpa using isApprove⟩
+      ⟨sevm, pre, post, true, target, memoryWf, run, by simpa only [↓reduceIte] using isApprove⟩
     exact wethRecord_segment
       (silentRecord vaultKept rowKept (some call)
         (linked_self (call := call) rfl rfl callerNe) (fun impossible => nomatch impossible)
@@ -266,7 +267,8 @@ theorem wethFramePairSegment (vault : Adr) : WethFramePairSegment vault := by
     have vaultKept : Devm.getStor post vault = Devm.getStor pre vault :=
       foreignAll vault foreignVault
     let call : WethAllowanceInvocation :=
-      ⟨sevm, pre, post, false, target, memoryWf, run, by simpa using isTransferFrom⟩
+      ⟨sevm, pre, post, false, target, memoryWf, run, by simpa only [Bool.false_eq_true,
+        ↓reduceIte] using isTransferFrom⟩
     have linked := linked_self (vault := vault) (call := call) rfl rfl callerNe
     by_cases debited : (Sevm.argWord sevm 0).toAdr = vault
     · obtain ⟨sourceAdr, sourceEq⟩ := weth_transferFrom_compiled_src_valid run isTransferFrom
@@ -318,7 +320,8 @@ theorem wethFramePairSegment (vault : Adr) : WethFramePairSegment vault := by
   · have kept := weth_view_compiled_effect run isView
     exact ⟨[], PairReplay.nil_of_eq
       (PairBoundary.ofState_eq (congrFun kept vault).symm
-        (congrFun kept wethAccount).symm), by simp⟩
+        (congrFun kept wethAccount).symm), by simp only [List.not_mem_nil, IsEmpty.forall_iff,
+          implies_true]⟩
   have miss : ∀ sel ∈ wethSelectors, Sevm.selector sevm ≠ sel := by
     intro sel member equal
     rcases mem_wethSelectors_cases sel member with

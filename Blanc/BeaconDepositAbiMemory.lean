@@ -193,7 +193,10 @@ def depositDecodedMemory_carrier (data : Bytes) :
     change 32 * max 0 6 = 192
     decide +kernel
   · rw [depositDecodedImage, MemoryStage.applyImage_words_length]
-    simp [depositDecodedWrites]
+    simp only [List.length_nil, depositDecodedWrites, depositLengthWord_eq_calldataWord,
+      depositOffsetWord_eq_calldataWord, mul_zero, add_zero, mul_one, Nat.reduceAdd, Nat.reduceMul,
+      List.foldl_cons, zero_le, sup_of_le_right, zero_add, Nat.reduceLeDiff, sup_of_le_left,
+      List.foldl_nil]
   · simpa only [depositDecodedImage, depositDecodedWrites,
       List.cons_append, List.nil_append] using
       (MemoryStage.read_written_word

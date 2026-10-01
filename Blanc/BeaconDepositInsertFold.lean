@@ -180,8 +180,7 @@ private def insertionLoopCarrier_step
       (callPost.memory.write 608 (s.size >>> 1).toBytes)
       oldCount (s.step sevm.currentTarget stor) := by
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · simpa [InsertionLoopState.step] using
-      hmem.writeShiftedSize (s.size >>> 1)
+  · simpa only [InsertionLoopState.step] using hmem.writeShiftedSize (s.size >>> 1)
   · intro a
     rw [hstorage, Blanc.afterSload_getStor, carrier.stor]
   · intro a

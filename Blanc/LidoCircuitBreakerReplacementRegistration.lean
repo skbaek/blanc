@@ -94,7 +94,7 @@ theorem foundNonzeroReplacement_sourceTrace_witness
         trace.postEntries := by
   have hpost : setPauser entries target newPauser =
       some (setEntryAt index (target, newPauser) entries) := by
-    simp [setPauser, htarget.1, hfind, hnew.1]
+    simp only [setPauser, htarget.1, ↓reduceIte, hfind, hnew.1]
   have htrace : setPauserSourceTrace entries target newPauser =
       some {
         postEntries := setEntryAt index (target, newPauser) entries
@@ -106,9 +106,10 @@ theorem foundNonzeroReplacement_sourceTrace_witness
              Nat.toB256
                ((assignmentCount entries newPauser -
                  (if oldPauser = newPauser then 1 else 0)) + 1))] } := by
-    simp [setPauserSourceTrace, hpost,
-      setPauserSourceWrites_found_nonzero entries target newPauser index
-        oldPauser htarget.1 hfind hnew.1]
+    simp only [setPauserSourceTrace, hpost,
+      setPauserSourceWrites_found_nonzero entries target newPauser index oldPauser htarget.1 hfind
+          hnew.1,
+      Option.getD_some]
   refine ⟨_, htrace, rfl, rfl, ?_⟩
   exact hw.applyFoundNonzeroWrites htarget hnew hfind
 
@@ -445,7 +446,7 @@ private theorem registerAfterSet_retained_newPauserTail_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_val =>
       rw [Devm.getStorVal_setMach, hcount]
-      simp [B256.eqCheck, hremaining]
+      simp only [B256.eqCheck, hremaining, ↓reduceIte]
     case h_arm => exact htail
   have holdTail : Func.RunCompiled fs sevm
       (base.setMach ⟨stack, M, G + 128, base.stateGas⟩) oldBranch post :=
@@ -457,7 +458,7 @@ private theorem registerAfterSet_retained_newPauserTail_runCompiled
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hpreviousCovered]
     norm_num [gVerylow]
-  case h_val => simp [hpreviousValue, B256.eqCheck, holdNonzero]
+  case h_val => simp only [B256.eqCheck, hpreviousValue, holdNonzero, ↓reduceIte]
   case h_arm =>
     rw [hpreviousMemory]
     have hg : G + 150 - 22 = G + 128 := by omega
@@ -814,7 +815,7 @@ theorem setPauserKernel_retainedNonzero_runCompiled
     (M.write (previousPauserWord * 32).toNat oldPauser.toBytes)
     (Bytes.writeAt img (previousPauserWord * 32).toNat oldPauser.toBytes)
     target oldPauser remaining newPauser timestamp interval expiry
-    currentExpiry expiryOriginal [] storeCost G (by simp)
+    currentExpiry expiryOriginal [] storeCost G (by simp only [List.length_nil, zero_le])
     (Mem.Wf.write hwf _ _) (Mem.Reads.write hwf hreads _ _) htarget'
     hprevious' hnew' hcontinuation' holdValid.1 hnewNonzero hremaining
     hremainingCount hwarmOldCount htime hinterval hintervalCold hexpiry
@@ -995,8 +996,8 @@ private theorem replacementOnlyAdmin_success_runCompiled
       (onlyAdmin dp body) post := by
   unfold onlyAdmin pushDeployWord
   func_run (4) [1]
-  case h_val => simp [hadmin, B256.eqCheck]
-  case h_arm => simpa using hbody
+  case h_val => simp only [B256.eqCheck, hadmin, ↓reduceIte]
+  case h_arm => simpa only [add_tsub_cancel_right] using hbody
 
 private theorem replacementRegisterPauserBody_fromStage_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base post : Devm)
@@ -1464,39 +1465,39 @@ theorem registerPauser_retainedNonzero_success_settled_effects
             trace.postEntries := by
   have hdataInit : (initSevm msg).data =
       registerPauserCalldata target newPauser := by
-    simpa [initSevm] using hdata
+    simpa only [initSevm] using hdata
   rcases registerPauserCalldata_spec (initSevm msg) target newPauser
     hdataInit with ⟨hdataLength, hselector, hargTarget, hargNew⟩
   have hvalueInit : (initSevm msg).value = 0 := by
-    simpa [initSevm] using hvalue
+    simpa only [initSevm] using hvalue
   have hownerInit : (initSevm msg).currentTarget = ca := by
-    simpa [initSevm] using howner
+    simpa only [initSevm] using howner
   have hcodeAddressInit : (initSevm msg).codeAddress =
       some (initSevm msg).currentTarget := by
-    simpa [initSevm, howner] using hcodeAddress
+    simpa only [initSevm, howner] using hcodeAddress
   have hcodeInit : (initSevm msg).code.toList =
       lidoCircuitBreakerCode dp := by
-    simpa [initSevm] using hcode
+    simpa only [initSevm] using hcode
   have hadminInit : (initSevm msg).caller.toB256 = dp.admin := by
-    simpa [initSevm] using hadmin
+    simpa only [initSevm] using hadmin
   rcases registerPauser_runCompiledTo_retainedNonzero (hfork := hfork) dp (initSevm msg)
       (initDevm msg) target newPauser oldPauser oldCount newCount nextCount
       remaining timestamp interval expiry currentExpiry expiryOriginal
       assignmentOriginal countOriginal newCountOriginal assignmentCost
       countCost newCountCost storeCost G hdataLength hvalueInit hselector
       hcodeAddressInit hcodeInit hadminInit hargTarget hargNew htargetValid
-      hnewValid holdValid (by simpa [hownerInit] using hassignment)
-      (by simpa [hownerInit] using hassignmentOrig) hassignmentCost
-      (by simpa [hownerInit] using hcount)
-      (by simpa [hownerInit] using hcountOrig) hcountCost
-      (by simpa [hownerInit] using hnewCount)
-      (by simpa [hownerInit] using hnewCountOrig) hnewCountNext hnewCountCost
-      hremaining (by simpa [hownerInit] using hremainingCount) htime
-      (by simpa [hownerInit] using hinterval)
-      (by simpa [hownerInit] using hintervalCold)
-      (by simpa [hownerInit] using hexpiry)
-      (by simpa [hownerInit] using hexpiryOrig)
-      (by simpa [hownerInit] using hwarmNewExpiry) hstoreCost hgasStipend
+      hnewValid holdValid (by simpa only [hownerInit] using hassignment)
+      (by simpa only [hownerInit] using hassignmentOrig) hassignmentCost
+      (by simpa only [hownerInit] using hcount)
+      (by simpa only [hownerInit] using hcountOrig) hcountCost
+      (by simpa only [hownerInit] using hnewCount)
+      (by simpa only [hownerInit] using hnewCountOrig) hnewCountNext hnewCountCost
+      hremaining (by simpa only [hownerInit] using hremainingCount) htime
+      (by simpa only [hownerInit] using hinterval)
+      (by simpa only [hownerInit] using hintervalCold)
+      (by simpa only [hownerInit] using hexpiry)
+      (by simpa only [hownerInit] using hexpiryOrig)
+      (by simpa only [hownerInit] using hwarmNewExpiry) hstoreCost hgasStipend
       hstatic hextension with
     ⟨post, hrun, hgas, hstore, hlogs, hexpiries, hcompile⟩
   have hentryState :
@@ -1526,10 +1527,10 @@ theorem registerPauser_retainedNonzero_success_settled_effects
   have hsettledPost : settled = post := hsettledFinal.trans hfinalPost
   rw [hsettledPost]
   refine ⟨hgas, ?_, ?_, ?_, ?_⟩
-  · simpa [hownerInit] using hstore
-  · simpa [hownerInit] using hlogs
+  · simpa only [hownerInit] using hstore
+  · simpa only [hownerInit] using hlogs
   · intro pauser hpauser hne
-    simpa [hownerInit] using hexpiries pauser hpauser hne
+    simpa only [hownerInit] using hexpiries pauser hpauser hne
   · intro entries index hw hfind
     exact foundNonzeroReplacement_sourceTrace_witness hw htargetValid hnewValid
       hfind
@@ -1711,7 +1712,8 @@ theorem setPauserKernel_oldLastNonzero_runCompiled
     (M.write (previousPauserWord * 32).toNat oldPauser.toBytes)
     (Bytes.writeAt img (previousPauserWord * 32).toNat oldPauser.toBytes)
     target oldPauser oldExpiry oldExpiryOriginal newPauser timestamp interval
-    expiry currentExpiry expiryOriginal [] clearCost storeCost G (by simp)
+    expiry currentExpiry expiryOriginal [] clearCost storeCost G (by simp only [List.length_nil,
+      zero_le])
     (Mem.Wf.write hwf _ _) (Mem.Reads.write hwf hreads _ _) htarget'
     hprevious' hnew' hcontinuation' holdValid.1 hnewNonzero hcountZero
     hwarmOldCount holdExpiry holdExpiryOrig hwarmOldExpiry hclearCost htime
@@ -2268,21 +2270,21 @@ theorem registerPauser_oldLastNonzero_success_settled_effects
             trace.postEntries := by
   have hdataInit : (initSevm msg).data =
       registerPauserCalldata target newPauser := by
-    simpa [initSevm] using hdata
+    simpa only [initSevm] using hdata
   rcases registerPauserCalldata_spec (initSevm msg) target newPauser
     hdataInit with ⟨hdataLength, hselector, hargTarget, hargNew⟩
   have hvalueInit : (initSevm msg).value = 0 := by
-    simpa [initSevm] using hvalue
+    simpa only [initSevm] using hvalue
   have hownerInit : (initSevm msg).currentTarget = ca := by
-    simpa [initSevm] using howner
+    simpa only [initSevm] using howner
   have hcodeAddressInit : (initSevm msg).codeAddress =
       some (initSevm msg).currentTarget := by
-    simpa [initSevm, howner] using hcodeAddress
+    simpa only [initSevm, howner] using hcodeAddress
   have hcodeInit : (initSevm msg).code.toList =
       lidoCircuitBreakerCode dp := by
-    simpa [initSevm] using hcode
+    simpa only [initSevm] using hcode
   have hadminInit : (initSevm msg).caller.toB256 = dp.admin := by
-    simpa [initSevm] using hadmin
+    simpa only [initSevm] using hadmin
   rcases registerPauser_runCompiledTo_oldLastNonzero (hfork := hfork) dp (initSevm msg)
       (initDevm msg) target newPauser oldPauser oldCount newCount nextCount
       oldExpiry oldExpiryOriginal timestamp interval expiry currentExpiry
@@ -2290,21 +2292,21 @@ theorem registerPauser_oldLastNonzero_success_settled_effects
       assignmentCost countCost newCountCost clearCost storeCost G hdataLength
       hvalueInit hselector hcodeAddressInit hcodeInit hadminInit hargTarget
       hargNew htargetValid hnewValid holdValid
-      (by simpa [hownerInit] using hassignment)
-      (by simpa [hownerInit] using hassignmentOrig) hassignmentCost
-      (by simpa [hownerInit] using hcount)
-      (by simpa [hownerInit] using hcountOrig) hcountCost
-      (by simpa [hownerInit] using hnewCount)
-      (by simpa [hownerInit] using hnewCountOrig) hnewCountNext hnewCountCost
-      (by simpa [hownerInit] using hcountZero)
-      (by simpa [hownerInit] using holdExpiry)
-      (by simpa [hownerInit] using holdExpiryOrig)
-      (by simpa [hownerInit] using hwarmOldExpiry) hclearCost htime
-      (by simpa [hownerInit] using hinterval)
-      (by simpa [hownerInit] using hintervalCold)
-      (by simpa [hownerInit] using hexpiry)
-      (by simpa [hownerInit] using hexpiryOrig)
-      (by simpa [hownerInit] using hwarmNewExpiry) hstoreCost hgasStipend
+      (by simpa only [hownerInit] using hassignment)
+      (by simpa only [hownerInit] using hassignmentOrig) hassignmentCost
+      (by simpa only [hownerInit] using hcount)
+      (by simpa only [hownerInit] using hcountOrig) hcountCost
+      (by simpa only [hownerInit] using hnewCount)
+      (by simpa only [hownerInit] using hnewCountOrig) hnewCountNext hnewCountCost
+      (by simpa only [hownerInit] using hcountZero)
+      (by simpa only [hownerInit] using holdExpiry)
+      (by simpa only [hownerInit] using holdExpiryOrig)
+      (by simpa only [hownerInit] using hwarmOldExpiry) hclearCost htime
+      (by simpa only [hownerInit] using hinterval)
+      (by simpa only [hownerInit] using hintervalCold)
+      (by simpa only [hownerInit] using hexpiry)
+      (by simpa only [hownerInit] using hexpiryOrig)
+      (by simpa only [hownerInit] using hwarmNewExpiry) hstoreCost hgasStipend
       hstatic hextension with
     ⟨post, hrun, hgas, hstore, hlogs, holdExpiryPost, hexpiries, hcompile⟩
   have hentryState :
@@ -2334,11 +2336,11 @@ theorem registerPauser_oldLastNonzero_success_settled_effects
   have hsettledPost : settled = post := hsettledFinal.trans hfinalPost
   rw [hsettledPost]
   refine ⟨hgas, ?_, ?_, ?_, ?_, ?_⟩
-  · simpa [hownerInit] using hstore
-  · simpa [hownerInit] using hlogs
-  · simpa [hownerInit] using holdExpiryPost
+  · simpa only [hownerInit] using hstore
+  · simpa only [hownerInit] using hlogs
+  · simpa only [hownerInit] using holdExpiryPost
   · intro pauser hpauser hneOld hneNew
-    simpa [hownerInit] using hexpiries pauser hpauser hneOld hneNew
+    simpa only [hownerInit] using hexpiries pauser hpauser hneOld hneNew
   · intro entries index hw hfind
     exact foundNonzeroReplacement_sourceTrace_witness hw htargetValid hnewValid
       hfind

@@ -358,20 +358,19 @@ def flashFeeDispatch (dp : DeployParams) : Func :=
 
 theorem flashFeeDispatch_eq (dp : DeployParams) :
     dispatchWith fallbackSlot (weth10Tree dp) = flashFeeDispatch dp := by
-  simp [weth10Tree, DispatchTree.ofSorted, weth10Funcs, DispatchTree.build,
-    treeSlice, dispatch26_0_14, dispatch25_14_7, dispatch24_21_3,
-    dispatch23_26_1, dispatch22_24_1, flashFeeDispatch, dispatchCae9,
-    dispatchD505, dispatchDd, dispatchD9, flashFeeLeaf, dispatchNode,
-    dispatchWith,
-    leftmostFsig, noncesSel_eq, approveAndCallSel_eq, permitSel_eq,
-    flashFeeSel_eq, allowanceSel_eq]
+  simp only [weth10Tree, DispatchTree.ofSorted, weth10Funcs, noncesSel_eq, approveAndCallSel_eq,
+    permitSel_eq, flashFeeSel_eq, allowanceSel_eq, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, DispatchTree.build, Nat.reduceDiv, List.take_succ_cons, List.take_zero,
+    List.drop_succ_cons, List.drop_zero, dispatchWith, Fin.isValue, leftmostFsig, flashFeeDispatch,
+    dispatchNode, dispatchCae9, dispatchD505, dispatchDd, dispatch23_26_1, treeSlice, List.take_nil,
+    dispatchD9, flashFeeLeaf, dispatch22_24_1, dispatch24_21_3, dispatch25_14_7, dispatch26_0_14]
 
 theorem dispatch22_24_1_eq_permit (dp : DeployParams) :
     dispatch22_24_1 dp =
       Ninst.pushB256 (0xd505accf : B256) ::: Ninst.eq :::
         ((nonpayable (permit dp)) <?> .call fallbackSlot) := by
-  simp [dispatch22_24_1, treeSlice, weth10Funcs, DispatchTree.build,
-    dispatchWith, permitSel_eq]
+  simp only [dispatch22_24_1, treeSlice, weth10Funcs, permitSel_eq, List.drop_succ_cons,
+    List.drop_zero, List.take_succ_cons, List.take_zero, DispatchTree.build, dispatchWith]
 
 private def permitLeafPrefix : Line :=
   [Ninst.pushB256 (0xd505accf : B256), Ninst.eq]
@@ -1060,10 +1059,10 @@ private def dispatch24Factored (dp : DeployParams) : Func :=
 
 private theorem dispatch24_21_3_eq_factored (dp : DeployParams) :
     dispatch24_21_3 dp = dispatch24Factored dp := by
-  simp [dispatch24_21_3, treeSlice, weth10Funcs, DispatchTree.build,
-    dispatchWith, dispatch24Factored, dispatchNode, dispatchLeaf,
-    leftmostFsig, approveAndCallSel_eq, deploymentChainIdSel_eq,
-    depositSel_eq]
+  simp only [dispatch24_21_3, treeSlice, weth10Funcs, approveAndCallSel_eq, deploymentChainIdSel_eq,
+    depositSel_eq, List.drop_succ_cons, List.drop_zero, List.take_succ_cons, List.take_zero,
+    DispatchTree.build, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceDiv,
+    dispatchWith, Fin.isValue, leftmostFsig, dispatch24Factored, dispatchNode, dispatchLeaf]
 
 private def dispatchLeafPrefix (selector : B256) : Line :=
   [Ninst.pushB256 selector, Ninst.eq]
@@ -1094,7 +1093,7 @@ private theorem dispatchLeafByteAt_eq_before_body
   rw [dispatchLeaf_eq selector body, dispatchLeaf_eq selector body0]
   have heq : Ninst.eq.size = 1 := by decide +kernel
   have hprefix : prefixByteSize (dispatchLeafPrefix selector) = 6 := by
-    simp [dispatchLeafPrefix, prefixByteSize, hpush, heq]
+    simp only [dispatchLeafPrefix, prefixByteSize, hpush, heq, add_zero, Nat.reduceAdd]
   by_cases hpre : i < 6
   · apply byteAt_prepend_eq_prefix
     simpa only [hprefix] using hpre
@@ -1129,7 +1128,7 @@ private theorem dispatchLeafByteAt_to_body
   rw [dispatchLeaf_eq selector body, dispatchLeaf_eq selector body0]
   have heq : Ninst.eq.size = 1 := by decide +kernel
   have hprefix : prefixByteSize (dispatchLeafPrefix selector) = 6 := by
-    simp [dispatchLeafPrefix, prefixByteSize, hpush, heq]
+    simp only [dispatchLeafPrefix, prefixByteSize, hpush, heq, add_zero, Nat.reduceAdd]
   conv_lhs => rw [byteAt_prepend_to_tail
       (locations := locations) (n := n)
       (l := dispatchLeafPrefix selector)

@@ -74,9 +74,10 @@ theorem Exec.Frame.attributionInner_eq_nil_of_approve
     simp only [weth10Funcs, List.mem_cons]
     exact Or.inr (Or.inl (by rfl))
   have hchildless : ∀ n ∈ approveLine, NinstIsChildless n := by
-    simp [approveLine, approvePrefix, returnTrueLine,
-      argCopy, cdc, arg, cdl, allowanceKeyFromMemory, Blanc.logApprove,
-      NinstIsChildless, Ninst.pushB256, mstoreAt, logWith, pushList]
+    simp only [approveLine, approvePrefix, mstoreAt, pushB256, List.cons_append, List.nil_append,
+      argCopy, cdc, allowanceKeyFromMemory, pushList, List.map_cons, List.map_nil, arg, cdl,
+      Fin.isValue, logApprove, logWith, Fin.reduceSucc, returnTrueLine, List.mem_cons,
+      List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]
   exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless
     context hnonempty hmem hchildless
 
@@ -95,8 +96,9 @@ theorem Exec.Frame.allowanceRegionEffect_of_approve
     Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_approve context hselector hnonempty
   have hsel : Sevm.selector frame.sevm = approveSelector := hselector
   have hnotlast : ownRecordLast frame.sevm = false := by
-    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hsel,
-      approveSelector_ne_flashLoanSelector, approveSelector_ne_permitSelector]
+    simp only [ownRecordLast, isFlashInvocation, ne_eq, decide_not, hsel,
+      approveSelector_ne_flashLoanSelector, decide_false, Bool.and_false, isPermitInvocation,
+      approveSelector_ne_permitSelector, Bool.or_self]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -109,7 +111,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_approve
   rw [hstream]
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error _ => simp [Execution.commits] at committed
+  | error _ => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst hpc
@@ -137,7 +139,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_approve
                  caller := e.caller
                  depth := e.depth
                  visit := .approveStore (Sevm.argWord e 1) }
-        simp [frameAllowanceEvent, hne0, hselE]
+        simp only [frameAllowanceEvent, hne0, ↓reduceIte, hselE, decide_true, Bool.true_or]
       have hcode : Devm.getCode pre ca = Devm.getCode post ca :=
         (congrFun heffect.2.2.2.2.2 ca).symm
       refine ⟨fun key _ => ?_, hcode⟩
@@ -176,10 +178,11 @@ theorem Exec.Frame.attributionInner_eq_nil_of_allowance
     have hshape : nonpayable (allowanceLine +++ Func.last .return_) =
         nonpayable allowance := rfl
     rw [hshape]
-    simp [weth10Funcs]
+    simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, or_true]
   have hchildless : ∀ n ∈ allowanceLine, NinstIsChildless n := by
-    simp [allowanceLine, argCopy, cdc, allowanceKeyFromMemory,
-      NinstIsChildless, Ninst.pushB256, mstoreAt, pushList]
+    simp only [allowanceLine, argCopy, cdc, pushB256, allowanceKeyFromMemory, pushList,
+      List.map_cons, List.map_nil, List.cons_append, List.nil_append, mstoreAt, List.mem_cons,
+      List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]
   exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless
     context hnonempty hmem hchildless
 
@@ -198,9 +201,9 @@ theorem Exec.Frame.allowanceRegionEffect_of_allowance
     Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_allowance context hselector hnonempty
   have hsel : Sevm.selector frame.sevm = allowanceSelector := hselector
   have hnotlast : ownRecordLast frame.sevm = false := by
-    simp [ownRecordLast, isFlashInvocation, isPermitInvocation, hsel,
-      allowanceSelector_ne_flashLoanSelector,
-      allowanceSelector_ne_permitSelector]
+    simp only [ownRecordLast, isFlashInvocation, ne_eq, decide_not, hsel,
+      allowanceSelector_ne_flashLoanSelector, decide_false, Bool.and_false, isPermitInvocation,
+      allowanceSelector_ne_permitSelector, Bool.or_self]
   have hframe : Exec.Frame.ofRun frame.run frame.committed = frame := by
     cases frame
     rfl
@@ -213,7 +216,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_allowance
   rw [hstream]
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error _ => simp [Execution.commits] at committed
+  | error _ => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst hpc
@@ -242,13 +245,11 @@ theorem Exec.Frame.allowanceRegionEffect_of_allowance
                  visit := .viewRead ((Devm.getStor pre e.currentTarget).get
                    (projectedAllowanceKey (Sevm.argWord e 0)
                      (Sevm.argWord e 1))) }
-        simp [frameAllowanceEvent, hne0, hselE,
-          allowanceSelector_ne_approveSelector,
-          allowanceSelector_ne_approveAndCallSelector,
-          allowanceSelector_ne_permitSelector,
-          allowanceSelector_ne_transferFromSelector,
-          allowanceSelector_ne_withdrawFromSelector,
-          allowanceSelector_ne_flashLoanSelector]
+        simp only [frameAllowanceEvent, hne0, ↓reduceIte, hselE,
+          allowanceSelector_ne_approveSelector, decide_false,
+          allowanceSelector_ne_approveAndCallSelector, Bool.or_self, Bool.false_eq_true,
+          allowanceSelector_ne_permitSelector, allowanceSelector_ne_transferFromSelector,
+          allowanceSelector_ne_withdrawFromSelector, allowanceSelector_ne_flashLoanSelector]
       refine ⟨fun key _ => ?_, hcode⟩
       show (Devm.getStor post ca).get key =
         applyAllowanceLedger (Devm.getStor pre ca)

@@ -52,7 +52,7 @@ theorem DeploymentRoot.snapshot_eq
       scalarSlots_distinct.2.2.symm, B256.toNat_zero]
   have hunits : coalitionUnits coalition ca deployed.state = 0 := by
     unfold coalitionUnits
-    simp [hrow]
+    simp only [hrow, List.map_const', Finset.length_toList, List.sum_replicate, nsmul_zero]
   unfold snapshot
   rw [hunits, htotal, root.bal, B256.toNat_zero]
   unfold chiN

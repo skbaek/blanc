@@ -461,7 +461,8 @@ theorem exit_handoff_of_components (coalition : Finset Adr) {sevm : Sevm}
     exact caller_ne
   rcases RunFrame.decompose process with
     ⟨error, _, _, failed⟩ | ⟨entry, result, transfer, _, _⟩
-  · simp [Frame.ofCall, Frame.settleMsg, processMessage.settle] at failed
+  · simp only [Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
+    processMessage.settle, Except.bind_error, reduceCtorEq] at failed
   have transfer' : childMsg.benvAfterTransfer = .ok entry := transfer
   rcases of_benvAfterTransfer (msg := childMsg) rfl transfer' with
     ⟨debit, sub, entryEq⟩
@@ -983,7 +984,7 @@ theorem exitChild_facts (coalition : Finset Adr) {sevm : Sevm}
     congrArg (fun evm : Evm => evm.dyna) childEvmEq
   have childTargetNe : childSevm.currentTarget ≠ sevm.currentTarget := by
     rw [childSevmEq]
-    simpa [initSevm, Msg.withBenv] using targetNe
+    simpa only [initSevm, Msg.withBenv, ne_eq] using targetNe
   have childPrecondition :
       dripEntrySpec.Pre sevm.currentTarget childSevm childPre := by
     rw [childSevmEq, childPreEq]
@@ -1061,7 +1062,7 @@ theorem Exec.CoreDripAccounting.error
     {error : EvmError × Devm} :
     Exec.CoreDripAccounting coalition ca pc sevm pre (.error error) := by
   intro _ committed
-  simp [Execution.commits] at committed
+  simp only [Execution.commits, Bool.false_eq_true] at committed
 
 /-- T2.  The compiled DRIP frame handler.  Every route closes in one tagged
 head step; `exit` then recurses into exactly its settlement-retained payout
@@ -1174,7 +1175,7 @@ theorem Exec.CoreDripAccounting.last
   intro _ committed hfork _ precondition _ _ _
   cases out with
   | error error =>
-      simp [Execution.commits] at committed
+      simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have sumNof : sum pre.state.bal < 2 ^ 256 := precondition.side
       rcases (carrier coalition ca).ofStorageEqBalanceMono ()
@@ -1238,14 +1239,15 @@ theorem Drip.foreignSpawn_facts {ca : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm}
   have hxrun := XStep.run_toStep.mp step
   cases spawnEq : Xinst.step sevm pre x with
   | done execution =>
-      simp [spawnEq, XStep.Run] at hxrun
+      simp only [XStep.Run, spawnEq, ExceptT.stM_eq, reduceCtorEq, false_and] at hxrun
   | spawn frame resume =>
       simp only [spawnEq, XStep.Run] at hxrun
       obtain ⟨result, frameRun, resumeRun⟩ := hxrun
       cases result with
       | error error =>
           cases resume <;>
-            simp [Resume.run, liftToExecution] at resumeRun
+            simp only [ExceptT.stM_eq, Resume.run, liftToExecution, Except.bind_error,
+              reduceCtorEq] at resumeRun
       | ok settled =>
           have enter := (RunFrame.some_inv frameRun).1
           have evmStep : Evm.step ⟨pc, sevm, pre⟩ =
@@ -1294,7 +1296,7 @@ theorem Drip.foreignSpawn_facts {ca : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm}
                       (not_delegation_of_compile installed.1)])
             have childCodeAddress :=
               congrArg (fun evm : Evm => evm.sta.codeAddress) childEvmEq
-            dsimp [initEvm, initSevm, Msg.withBenv] at childCodeAddress
+            dsimp only [Msg.withBenv, initEvm, initSevm] at childCodeAddress
             rw [childCodeAddress, codeAddress, innerTarget]
           have childCaller : cevm.sta.currentTarget = ca →
               cevm.sta.caller ≠ ca := by
@@ -1307,7 +1309,7 @@ theorem Drip.foreignSpawn_facts {ca : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm}
                 spawnEq target_ne innerTarget
             have childCallerEq :=
               congrArg (fun evm : Evm => evm.sta.caller) childEvmEq
-            dsimp [initEvm, initSevm, Msg.withBenv] at childCallerEq
+            dsimp only [Msg.withBenv, initEvm, initSevm] at childCallerEq
             rw [childCallerEq]
             exact callerNe
           have childCanonical : cevm.sta.currentTarget = ca →
@@ -1356,9 +1358,11 @@ theorem Exec.CoreDripAccounting.nextSome
     Exec.CoreDripAccounting coalition ca pc sevm pre out := by
   cases n with
   | reg r =>
-      simp [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at step
+      simp only [StepRun, step_reg, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at step
   | push xs length =>
-      simp [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at step
+      simp only [StepRun, step_push, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at step
   | dupn imm =>
       cases (Step.run_ofExecution.mp step).1
   | swapn imm =>
@@ -1499,23 +1503,23 @@ theorem Drip.messageRoot_facts {ca : Adr} {msg : Msg} {entry : Benv}
     refine ⟨?_, rfl⟩
     rcases ready.codeOrForeign with call | foreign
     · exact ready.ready.code call
-        (by simpa [initSevm, Msg.withBenv] using target)
+        (by simpa only [initSevm, Msg.withBenv] using target)
     · exact False.elim (foreign
-        (by simpa [initSevm, Msg.withBenv] using target))
+        (by simpa only [initSevm, Msg.withBenv] using target))
   have direct :
       (initSevm (msg.withBenv entry)).currentTarget = ca →
         (initSevm (msg.withBenv entry)).codeAddress = some ca := by
     intro target
     rcases ready.codeOrForeign with call | foreign
     · exact ready.ready.codeAddress call
-        (by simpa [initSevm, Msg.withBenv] using target)
+        (by simpa only [initSevm, Msg.withBenv] using target)
     · exact False.elim (foreign
-        (by simpa [initSevm, Msg.withBenv] using target))
+        (by simpa only [initSevm, Msg.withBenv] using target))
   have caller :
       (initSevm (msg.withBenv entry)).currentTarget = ca →
         (initSevm (msg.withBenv entry)).caller ≠ ca := by
     intro target
-    exact caller_ne (by simpa [initSevm, Msg.withBenv] using target)
+    exact caller_ne (by simpa only [initSevm, Msg.withBenv] using target)
   exact ⟨installed, precondition, direct, caller, fun _ => rfl⟩
 
 /-- Instantiate the recursive interpreter theorem at the exact EVM root

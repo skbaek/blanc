@@ -97,12 +97,12 @@ theorem entry22_stor {sevm : Sevm} {d : Devm} {o : Outcome} {v p : B256} {xs : S
   have hp11 : (64 : B256) :: (0 : B256) :: q :: v :: p :: xs <<+ d11.stack :=
     prefix_of_push (of_run_push h11) hB.1
   have hp12 : (0 : B256) :: (64 : B256) :: q :: v :: p :: xs <<+ d12.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h12) hp11
   have hp13 : (64 : B256) :: (0 : B256) :: (64 : B256) :: q :: v :: p :: xs <<+ d13.stack :=
     prefix_of_dup_val h13 (by show_nth) hp12
   have hp14 : (0 : B256) :: (64 : B256) :: (64 : B256) :: q :: v :: p :: xs <<+ d14.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h14) hp13
   have hm8 : d7.memory = d9.memory :=
     Line.of_inv Devm.memory (by line_inv) (.cons h8 (.cons h9 .nil))
@@ -121,7 +121,7 @@ theorem entry22_stor {sevm : Sevm} {d : Devm} {o : Outcome} {v p : B256} {xs : S
   have hp16 : v :: mapSlot q 2 :: (64 : B256) :: q :: v :: p :: xs <<+ d16.stack :=
     prefix_of_dup_val h16 (by show_nth) hK
   have hp17 : mapSlot q 2 :: v :: (64 : B256) :: q :: v :: p :: xs <<+ d17.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
     (of_run_swap h17) hp16
   have hset := sstore_getStor_set h18 hp17
   have hpre : Devm.getStor d0 = Devm.getStor d17 :=
@@ -220,9 +220,9 @@ theorem entry23_ret {sevm : Sevm} {d d' : Devm} {a b ra : B256} {xs : Stack}
     rename_i e0 e1 e2 e3 e4
     have q0 : (b + a) :: a :: b :: ra :: xs <<+ e0.stack := by rw [← burn2.stack]; exact hp9
     have q1 : ra :: a :: b :: (b + a) :: xs <<+ e1.stack :=
-      Stack.prefix_of_swap (n := 2) (by simp [Stack.Swap, Stack.SwapCore]) (of_run_swap g1) q0
+      Stack.prefix_of_swap (n := 2) (by simp only [Stack.Swap, Stack.SwapCore, and_self]) (of_run_swap g1) q0
     have q2 : b :: a :: ra :: (b + a) :: xs <<+ e2.stack :=
-      Stack.prefix_of_swap (n := 1) (by simp [Stack.Swap, Stack.SwapCore]) (of_run_swap g2) q1
+      Stack.prefix_of_swap (n := 1) (by simp only [Stack.Swap, Stack.SwapCore, and_self]) (of_run_swap g2) q1
     have q4 := prefix_of_pop (of_run_pop g4) (prefix_of_pop (of_run_pop g3) q2)
     exact ⟨b + a, (popBurn_pref pop2 q4).2⟩
 
@@ -319,10 +319,11 @@ theorem entry14_regInv {sevm : Sevm} {d : Devm} {o : Outcome}
   have p6 := prefix_of_push (of_run_push k6) p5
   have p7 : y :: sevm.benvStat.time :: Bytes.toB256 [0x04, 0x46] :: sevm.caller.toB256 ::
       Bytes.toB256 [0x04, 0xee] :: [] <<+ e7.stack :=
-    Stack.prefix_of_swap (n := 1) (by simp [Stack.Swap, Stack.SwapCore]) (of_run_swap k7) p6
+    Stack.prefix_of_swap (n := 1) (by simp only [Stack.Swap, List.cons_append, List.nil_append,
+      List.append_eq, Stack.SwapCore, and_self]) (of_run_swap k7) p6
   have p8 : sevm.benvStat.time :: y :: Bytes.toB256 [0x04, 0x46] :: sevm.caller.toB256 ::
       Bytes.toB256 [0x04, 0xee] :: [] <<+ e8.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore]) (of_run_swap k8) p7
+    Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self]) (of_run_swap k8) p7
   have p9 := prefix_of_push (of_run_push k9) p8
   have h23 : prog[23]? = some t_10a8_c23 := rfl
   have h22 : prog[22]? = some t_0cd5_c22 := rfl

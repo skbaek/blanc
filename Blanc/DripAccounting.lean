@@ -223,9 +223,9 @@ theorem accounting_exact (mono : ∀ chi k, chi ≤ fresh chi k)
         Nat.add_zero, Nat.mul_zero]
       exact (accrue_eq cu chi (fresh chi elapsed) (mono chi elapsed)).symm
   | externalCredit chi rho cu total balance amount positive =>
-      simp [accrual, joined, joinResidue, paid, exitResidue]
+      simp only [joinResidue, add_zero, paid, mul_zero, exitResidue, accrual, joined]
   | silent snapshot =>
-      simp [accrual, joined, joinResidue, paid, exitResidue]
+      simp only [joinResidue, add_zero, paid, mul_zero, exitResidue, accrual, joined]
 
 /-- **The adjacent-step balance identity.**  Every realized step moves the
 target's balance by exactly what it paid out, took in, and was given. -/
@@ -234,9 +234,9 @@ theorem balance_exact (step : Step scale fresh) :
       step.pre.balance + step.allJoined + step.gift := by
   rcases step with ⟨pre, kind, post, effect⟩
   cases effect with
-  | drip => simp [allPaid, allJoined, gift]
-  | joinCounted => simp [allPaid, allJoined, gift]
-  | joinOutside => simp [allPaid, allJoined, gift]
+  | drip => simp only [allPaid, add_zero, allJoined, gift]
+  | joinCounted => simp only [allPaid, add_zero, allJoined, gift]
+  | joinOutside => simp only [allPaid, add_zero, allJoined, gift]
   | exitCounted chi rho cu total balance actor units payout elapsed
       owned htotal funded quote =>
       simp only [allPaid, allJoined, gift, Nat.add_zero]
@@ -245,8 +245,8 @@ theorem balance_exact (step : Step scale fresh) :
       htotal funded quote =>
       simp only [allPaid, allJoined, gift, Nat.add_zero]
       exact Nat.sub_add_cancel funded
-  | externalCredit => simp [allPaid, allJoined, gift]
-  | silent => simp [allPaid, allJoined, gift]
+  | externalCredit => simp only [allPaid, add_zero, allJoined, gift]
+  | silent => simp only [allPaid, add_zero, allJoined, gift]
 
 /-- Every realized step leaves the index nondecreasing.  This is R4's step
 case, stated where the carrier lives. -/
@@ -389,7 +389,8 @@ theorem accounting_exact (mono : ∀ chi k, chi ≤ fresh chi k)
       s.coalitionUnits * s.chi + accrualSum steps +
         scale * joinedSum steps := by
   induction chain with
-  | nil s => simp
+  | nil s => simp only [joinResidueSum_nil, add_zero, paidSum_nil, mul_zero, exitResidueSum_nil,
+    accrualSum_nil, joinedSum_nil]
   | cons entry tail ih =>
       rename_i s t step rest
       have hstep := Step.accounting_exact mono step
@@ -407,7 +408,7 @@ theorem balance_exact {s t : Snapshot} {steps : List (Step scale fresh)}
     t.balance + allPaidSum steps =
       s.balance + allJoinedSum steps + giftSum steps := by
   induction chain with
-  | nil s => simp
+  | nil s => simp only [allPaidSum_nil, add_zero, allJoinedSum_nil, giftSum_nil]
   | cons entry tail ih =>
       rename_i s t step rest
       have hstep := Step.balance_exact step
@@ -486,7 +487,7 @@ theorem exitPayoutOf_sum_le (scale chi : Nat) (units : List Nat) :
     (units.map (fun u => exitPayoutOf scale u chi)).sum ≤
       exitPayoutOf scale units.sum chi := by
   induction units with
-  | nil => simp [exitPayoutOf]
+  | nil => simp only [exitPayoutOf, List.map_nil, List.sum_nil, zero_mul, Nat.zero_div, Std.le_refl]
   | cons u rest ih =>
       simp only [List.map_cons, List.sum_cons, exitPayoutOf] at ih ⊢
       calc u * chi / scale + (rest.map (fun v => v * chi / scale)).sum
@@ -545,8 +546,8 @@ private theorem dripSteps_chain_chi (s : Snapshot) (ks : List Nat)
       cases chain with
       | cons entry tail =>
           have htail := ih (dripStep s elapsed).post tail
-          simpa [dripStep, dripPost, freshNat, factorNat, mulr,
-            segmentIndex, segmentIndexFrom] using htail
+          simpa only [segmentIndex, segmentIndexFrom, scaleNat_exact, halfNat_exact, rateNat_exact,
+            mulr, add_zero, dripStep, dripPost, freshNat, factorNat] using htail
 
 /-! ## G5 — pure segmentation -/
 

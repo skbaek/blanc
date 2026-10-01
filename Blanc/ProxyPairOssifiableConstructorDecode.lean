@@ -136,13 +136,13 @@ private theorem constructorDecode_step_head
   have r3 := Ninst.Run.of_runCompiled q3
   have pushHead := of_run_push r1
   have p1 : Nat.toB256 (argsOffset + 96) :: tail <<+ s1.stack := by
-    simpa [ossifiablePushCreationCoordinate, B256.toB256_toBytes] using
+    simpa only [B256.toB256_toBytes, List.cons_append, List.nil_append] using
       prefix_of_push pushHead hp
   have codeSize := of_run_codesize r2
   have p2 := prefix_of_push codeSize p1
   have p3 := prefix_of_lt r3 p2
   have pZero : (0 : B256) :: tail <<+ s3.stack := by
-    simpa [hguard] using p3
+    simpa only [hguard] using p3
   obtain ⟨next, hpop, nextRun, pNext⟩ :=
     Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
   exact ⟨next, nextRun, pNext,
@@ -193,7 +193,7 @@ theorem ossifiableConstructorDecode_headBoundary
   have p1 := prefix_of_push pushSize pCopy
   have pushOffset := of_run_push r2
   have p2 : Nat.toB256 argsOffset :: (96 : B256) :: tail <<+ s2.stack := by
-    simpa [ossifiablePushCreationCoordinate, B256.toB256_toBytes] using
+    simpa only [B256.toB256_toBytes, List.cons_append, List.nil_append] using
       prefix_of_push pushOffset p1
   have pushZero := of_run_pushB256 r3
   have p3 := prefix_of_push pushZero p2
@@ -208,11 +208,10 @@ theorem ossifiableConstructorDecode_headBoundary
   obtain ⟨pNext, wfNext, readsNext, stateNext, logsNext⟩ :=
     of_run_codecopy_image p3 wf3 reads3 r4
   refine ⟨next, nextRun, pNext, wfNext, ?_, ?_, ?_⟩
-  · simpa [ossifiableConstructorHeadImage, ByteArray.sliceD_eq,
-      B256.toNat_toB256_of_lt (by omega : argsOffset < 2 ^ 256),
-      show ((0 : B256)).toNat = 0 from by decide,
-      show ((96 : B256)).toNat = 96 from by decide,
-      show Linst.toUInt8 .stop = 0 from by decide] using readsNext
+  · simpa only [ossifiableConstructorHeadImage, show ((0 : B256)).toNat = 0 from by decide,
+    B256.toNat_toB256_of_lt (by omega : argsOffset < 2 ^ 256),
+    show ((96 : B256)).toNat = 96 from by decide, show Linst.toUInt8 .stop = 0 from by decide,
+    ByteArray.sliceD_eq] using readsNext
   · exact stateCopy.trans
       (pushSize.state.trans (pushOffset.state.trans
         (pushZero.state.trans stateNext)))
@@ -253,7 +252,7 @@ private theorem constructorDecode_step_cleanAddress
     of_check_non_address pLoaded checkRun
   have valid : ValidAdr value := validAdr_iff.mpr hclean
   have pZero : (0 : B256) :: tail <<+ tested.stack := by
-    simpa [dirtyZero.mpr valid] using pDirty
+    simpa only [dirtyZero.mpr valid] using pDirty
   obtain ⟨next, hpop, nextRun, pNext⟩ :=
     Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
   refine ⟨next, nextRun, pNext, ?_, ?_, ?_, ?_⟩
@@ -451,7 +450,7 @@ theorem OssifiableConstructorAddressBoundary.offsetBound
     unfold B256.gtCheck
     rw [if_neg hbound]
   have pZero : (0 : B256) :: tail <<+ s3.stack := by
-    simpa [hguard] using p3
+    simpa only [hguard, List.append_eq, List.nil_append] using p3
   obtain ⟨next, hpop, nextRun, pNext⟩ :=
     Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
   refine ⟨next, nextRun, pNext, ?_, ?_, ?_, ?_⟩
@@ -518,7 +517,7 @@ theorem OssifiableConstructorOffsetBoundary.storePointer
   have p2 : Nat.toB256 argsOffset ::
       ossifiableConstructorCodeWord sevm.code.toList (argsOffset + 64) ::
       tail <<+ s2.stack := by
-    simpa [ossifiablePushCreationCoordinate, B256.toB256_toBytes] using
+    simpa only [B256.toB256_toBytes, List.cons_append, List.nil_append] using
       prefix_of_push pushBase p1
   obtain ⟨s3, q3, pointerRun⟩ := runCompiledTo_next_inv pointerRun
   have r3 := Ninst.Run.of_runCompiled q3
@@ -548,7 +547,7 @@ theorem OssifiableConstructorOffsetBoundary.storePointer
     of_run_mstoreAt_image p3 wf3 reads3 storeRun
   rw [show ((3 : B256) * 32).toNat = 96 from by decide] at readsNext
   refine ⟨next, nextRun, pNext, wfNext, ?_, ?_, ?_⟩
-  · simpa [ossifiableConstructorPointerImage] using readsNext
+  · simpa only [ossifiableConstructorPointerImage] using readsNext
   · exact statePointer.trans (state1.trans (pushBase.state.trans
       ((Ninst.Hinv.inv (f := Devm.state) r3).trans stateNext)))
   · exact logsPointer.trans (logs1.trans (pushBase.logs.trans
@@ -649,7 +648,7 @@ theorem OssifiableConstructorPointerBoundary.lengthComplete
       B256.toNat_toB256_of_lt hcodeSize]
     omega
   have pZero : (0 : B256) :: tail <<+ s5.stack := by
-    simpa [hguard] using p5
+    simpa only [hguard] using p5
   obtain ⟨next, hpop, nextRun, pNext⟩ :=
     Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
   refine ⟨next, nextRun, pNext, ?_, ?_, ?_, ?_⟩
@@ -762,10 +761,9 @@ theorem OssifiableConstructorLengthCompleteBoundary.copyLength
   obtain ⟨pNext, wfNext, readsNext, stateNext, logsNext⟩ :=
     of_run_codecopy_image p3 wf3 reads3 r4
   refine ⟨next, nextRun, pNext, wfNext, ?_, ?_, ?_⟩
-  · simpa [ossifiableConstructorLengthImage, ByteArray.sliceD_eq,
-      show ((128 : B256)).toNat = 128 from by decide,
-      show ((32 : B256)).toNat = 32 from by decide,
-      show Linst.toUInt8 .stop = 0 from by decide] using readsNext
+  · simpa only [ossifiableConstructorLengthImage, show ((128 : B256)).toNat = 128 from by decide,
+    show ((32 : B256)).toNat = 32 from by decide, show Linst.toUInt8 .stop = 0 from by decide,
+    ByteArray.sliceD_eq] using readsNext
   · exact stateCopy.trans (pushSize.state.trans (state2.trans
       (pushDest.state.trans stateNext)))
   · exact logsCopy.trans (pushSize.logs.trans (logs2.trans
@@ -839,7 +837,7 @@ theorem OssifiableConstructorLengthBoundary.lengthBound
     unfold B256.gtCheck
     rw [if_neg hbound]
   have pZero : (0 : B256) :: tail <<+ s3.stack := by
-    simpa [hguard] using p3
+    simpa only [hguard, List.append_eq, List.nil_append] using p3
   obtain ⟨next, hpop, nextRun, pNext⟩ :=
     Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
   refine ⟨next, nextRun, pNext, ?_, ?_, ?_, ?_⟩
@@ -998,7 +996,7 @@ theorem OssifiableConstructorLengthBoundBoundary.payloadComplete
       B256.toNat_toB256_of_lt hcodeSize]
     omega
   have pZero : (0 : B256) :: tail <<+ s7.stack := by
-    simpa [hguard] using p7
+    simpa only [hguard] using p7
   obtain ⟨next, hpop, nextRun, pNext⟩ :=
     Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
   refine ⟨next, nextRun, pNext, ?_, ?_, ?_, ?_⟩
@@ -1179,10 +1177,9 @@ theorem OssifiableConstructorPayloadCompleteBoundary.copyPayload
   obtain ⟨pBody, wfBody, readsBody, state6, logs6⟩ :=
     of_run_codecopy_image p5 wf5 reads5 r6
   refine ⟨bodyPre, bodyRun, pBody, wfBody, ?_, ?_, ?_⟩
-  · simpa [ossifiableConstructorDecodedImage,
-      ossifiableConstructorDataStart, ByteArray.sliceD_eq,
-      show ((0x100 : B256)).toNat = 0x100 from by decide,
-      show Linst.toUInt8 .stop = 0 from by decide] using readsBody
+  · simpa only [ossifiableConstructorDecodedImage,
+    show ((0x100 : B256)).toNat = 0x100 from by decide, ossifiableConstructorDataStart,
+    show Linst.toUInt8 .stop = 0 from by decide, ByteArray.sliceD_eq] using readsBody
   · exact stateCopy.trans (state1.trans (state2.trans
       (push32.state.trans ((Ninst.Hinv.inv (f := Devm.state) r4).trans
         (pushDest.state.trans state6)))))
@@ -1329,7 +1326,7 @@ theorem ossifiableConstructorDecode_shortHead_route
   have r3 := Ninst.Run.of_runCompiled q3
   have pushHead := of_run_push r1
   have p1 : Nat.toB256 (argsOffset + 96) :: tail <<+ s1.stack := by
-    simpa [ossifiablePushCreationCoordinate, B256.toB256_toBytes] using
+    simpa only [B256.toB256_toBytes, List.cons_append, List.nil_append] using
       prefix_of_push pushHead hp
   have codeSize := of_run_codesize r2
   have p2 := prefix_of_push codeSize p1
@@ -1344,7 +1341,7 @@ theorem ossifiableConstructorDecode_shortHead_route
     unfold B256.ltCheck
     rw [if_pos hlt]
   have pOne : (1 : B256) :: tail <<+ s3.stack := by
-    simpa [hguard] using p3
+    simpa only [hguard] using p3
   obtain ⟨callPre, _, _, hpop, callRun, pCall⟩ :=
     Func.RunCompiledTo.succ_branch_of_prefix
       (by decide : (1 : B256) ≠ 0) pOne branchRun
@@ -1521,7 +1518,7 @@ private theorem constructorDecode_step_largeWord
     unfold B256.gtCheck
     rw [if_pos hlarge]
   have pOne : (1 : B256) :: tail <<+ s3.stack := by
-    simpa [hguard] using p3
+    simpa only [hguard, List.append_eq, List.nil_append] using p3
   obtain ⟨callPre, _, _, hpop, callRun, pCall⟩ :=
     Func.RunCompiledTo.succ_branch_of_prefix
       (by decide : (1 : B256) ≠ 0) pOne branchRun
@@ -1635,7 +1632,7 @@ private theorem constructorDecode_step_codeSizeShort
     unfold B256.ltCheck
     rw [if_pos hlt]
   have pOne : (1 : B256) :: tail <<+ s2.stack := by
-    simpa [hguard] using p2
+    simpa only [hguard] using p2
   obtain ⟨callPre, _, _, hpop, callRun, pCall⟩ :=
     Func.RunCompiledTo.succ_branch_of_prefix
       (by decide : (1 : B256) ≠ 0) pOne branchRun
@@ -1886,7 +1883,7 @@ private theorem ossifiableConstructorDecode_classifyAddress
         (head.dirtyImplementation_route himplementationDirty hspec)
     · have himplementationClean : addressMask &&&
           ossifiableConstructorCodeWord sevm.code.toList argsOffset = 0 := by
-        simpa using himplementationDirty
+        simpa only [ne_eq, Decidable.not_not] using himplementationDirty
       have implementation := head.implementationClean himplementationClean
       by_cases hadminDirty : addressMask &&&
           ossifiableConstructorCodeWord sevm.code.toList
@@ -1899,7 +1896,7 @@ private theorem ossifiableConstructorDecode_classifyAddress
       · have hadminClean : addressMask &&&
             ossifiableConstructorCodeWord sevm.code.toList
               (argsOffset + 32) = 0 := by
-          simpa using hadminDirty
+          simpa only [ne_eq, Decidable.not_not] using hadminDirty
         exact .ready hheadComplete himplementationClean hadminClean
           (implementation.adminClean hadminClean)
 

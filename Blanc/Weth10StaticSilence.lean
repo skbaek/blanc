@@ -99,12 +99,12 @@ theorem lastAllowanceWriteAt_eq_none_of_writeFree
       have hrest : WriteFreeLedger rest := fun f hf =>
         hfree f (List.mem_cons_of_mem _ hf)
       cases hallow : frame.allowance with
-      | none => simpa [lastAllowanceWriteAt, hallow] using ih hrest
+      | none => simpa only [lastAllowanceWriteAt, hallow] using ih hrest
       | some event =>
           have hwrite : event.visit.written? = none := hframe event hallow
           by_cases hkey : event.key = key
-          · simpa [lastAllowanceWriteAt, hallow, hkey, hwrite] using ih hrest
-          · simpa [lastAllowanceWriteAt, hallow, hkey] using ih hrest
+          · simpa only [lastAllowanceWriteAt, hallow, hkey, ↓reduceIte, hwrite] using ih hrest
+          · simpa only [lastAllowanceWriteAt, hallow, hkey, ↓reduceIte] using ih hrest
 
 /-- Replaying a write-free ledger is the identity on the entry storage. -/
 theorem applyAllowanceLedger_writeFree
@@ -184,39 +184,51 @@ theorem storesOrHalts_flashTokenErrorSlot (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux)
       (Func.call flashTokenErrorSlot) :=
   storesOrHalts_revertWithSlot (reason := "WETH: flash mint only WETH10")
-    (by simp [weth10Aux, flashTokenErrorSlot, flashTokenError])
+    (by simp only [weth10Aux, flashTokenError, flashTokenErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero])
 
 theorem storesOrHalts_individualLimitErrorSlot (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux)
       (Func.call individualLimitErrorSlot) :=
   storesOrHalts_revertWithSlot
     (reason := "WETH: individual loan limit exceeded")
-    (by simp [weth10Aux, individualLimitErrorSlot, individualLimitError])
+    (by simp only [weth10Aux, individualLimitError, individualLimitErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero])
 
 theorem storesOrHalts_allowanceErrorSlot (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux)
       (Func.call allowanceErrorSlot) :=
   storesOrHalts_revertWithSlot (reason := "WETH: request exceeds allowance")
-    (by simp [weth10Aux, allowanceErrorSlot, allowanceError])
+    (by simp only [weth10Aux, allowanceError, allowanceErrorSlot, List.length_cons, List.length_nil,
+      zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero])
 
 theorem storesOrHalts_burnBalanceErrorSlot (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux)
       (Func.call burnBalanceErrorSlot) :=
   storesOrHalts_revertWithSlot (reason := "WETH: burn amount exceeds balance")
-    (by simp [weth10Aux, burnBalanceErrorSlot, burnBalanceError])
+    (by simp only [weth10Aux, burnBalanceError, burnBalanceErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero])
 
 theorem storesOrHalts_expiredPermitErrorSlot (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux)
       (Func.call expiredPermitErrorSlot) :=
   storesOrHalts_revertWithSlot (reason := "WETH: Expired permit")
-    (by simp [weth10Aux, expiredPermitErrorSlot, expiredPermitError])
+    (by simp only [weth10Aux, expiredPermitError, expiredPermitErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero])
 
 theorem storesOrHalts_transferBalanceErrorSlot (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux)
       (Func.call transferBalanceErrorSlot) :=
   storesOrHalts_revertWithSlot
     (reason := "WETH: transfer amount exceeds balance")
-    (by simp [weth10Aux, transferBalanceErrorSlot, transferBalanceError])
+    (by simp only [weth10Aux, transferBalanceError, transferBalanceErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero])
 
 /-- Discharge the guard arms a `stores_walk` leaves behind. -/
 syntax "stores_slots" : tactic
@@ -254,13 +266,15 @@ theorem storesOrHalts_withdrawFromCore (dp : DeployParams) :
 theorem storesOrHalts_transferFromCoreSlot (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux)
       (Func.call transferFromCoreSlot) :=
-  .call (by simp [weth10Aux, transferFromCoreSlot])
+  .call (by simp only [weth10Aux, transferFromCoreSlot, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero])
     (storesOrHalts_transferFromCore dp)
 
 theorem storesOrHalts_withdrawFromCoreSlot (dp : DeployParams) :
     StoresOrHalts ((weth10 dp).main :: weth10Aux)
       (Func.call withdrawFromCoreSlot) :=
-  .call (by simp [weth10Aux, withdrawFromCoreSlot])
+  .call (by simp only [weth10Aux, withdrawFromCoreSlot, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero])
     (storesOrHalts_withdrawFromCore dp)
 
 theorem storesOrHalts_transferFrom (dp : DeployParams) :
@@ -325,7 +339,7 @@ theorem Exec.Frame.isStatic_eq_false_of_storesOrHalts
     frame.sevm.isStatic = false := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error _ => simp [Execution.commits] at committed
+  | error _ => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := hexact.1
       subst hpc
@@ -357,7 +371,7 @@ theorem frameAllowanceEvent_written_eq_none_of_static
     event.visit.written? = none := by
   unfold frameAllowanceEvent at hevent
   split at hevent
-  · exact absurd hevent (by simp)
+  · exact absurd hevent (by simp only [reduceCtorEq, not_false_eq_true])
   · rename_i hnonempty
     split at hevent
     · exfalso
@@ -396,7 +410,7 @@ theorem frameAllowanceEvent_written_eq_none_of_static
           · split at hevent
             · cases hevent
               rfl
-            · exact absurd hevent (by simp)
+            · exact absurd hevent (by simp only [reduceCtorEq, not_false_eq_true])
 
 /-! ## Write-freeness of a static subtree -/
 
@@ -545,7 +559,7 @@ theorem AllowanceEntryReadSound.snoc_writeFree {pre : Stor}
     (fun key _ => (applyAllowanceLedger_writeFree pre key hfree).symm) hrest ?_
   refine .singleton (fun event hevent v hread => ?_)
   rw [hown event hevent] at hread
-  exact absurd hread (by simp)
+  exact absurd hread (by simp only [reduceCtorEq, not_false_eq_true])
 
 /-- Read-sound snoc form: a frame whose own record already transports the
 region and records no read keeps transporting it read-soundly once a

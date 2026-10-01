@@ -151,13 +151,14 @@ theorem approve_entry {sevm : Sevm} {b : Devm} {G : Nat} {sel : B256}
       post.gasLeft = G ∧ post.output = (1 : B256).toBytes := by
   obtain ⟨b', hbody⟩ := approve_body (S := [sel]) (ret := Bytes.toB256 [1, 135]) (G := G + 62)
     (wad := Sevm.dataWord sevm 36) (guy := (Sevm.dataWord sevm 4).toAdr) hfork hstatic
-    fp_memFp (by simp) hsentry
+    fp_memFp (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) hsentry
   obtain ⟨post, htail, hg, ho⟩ := bool_tail (sevm := sevm) (b := b') (G := G)
     (sel := sel) (apMem_fp fp_memFp _ _ _ _)
   refine ⟨post, ?_, hg, ho⟩
   rdest
-  refine rx_callvalue (by simp) ?_
-  refine rx_iszero (v := 1) (by simp [B256.eqCheck, hval]) (by simp) ?_
+  refine rx_callvalue (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_iszero (v := 1) (by simp only [B256.eqCheck, hval, ↓reduceIte]) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
   rpush
   refine rx_branch_succ (by decide) ?_
   rdest

@@ -315,11 +315,11 @@ def genesis (o : Nat) : PairAttackState o where
 theorem genesis_invariant (o : Nat) : (genesis o).Invariant := by
   have h := ProrataAttackState.genesis_invariant o
   refine ⟨h.1, h.2.1, trivial, ?_, ?_⟩
-  · simp [GiftBook, genesis]
+  · simp only [GiftBook, genesis, zero_add, zero_le]
   · have hclaim := h.2.2.2
     unfold ProrataAttackState.ClaimBound at hclaim
     unfold ClaimBound
-    simpa [genesis] using hclaim
+    simpa only [genesis, add_zero, ge_iff_le] using hclaim
 
 /-- Inbound step paid by a non-victim, shares to a non-victim. -/
 def inbound (pre : PairAttackState o) (attribution : AttackAttribution)
