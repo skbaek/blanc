@@ -158,22 +158,39 @@ inductive Continuation
   | syncBalance1 (reserves : CachedReserves) (balance0 : B256)
   | permitRecovery (owner spender : Adr) (value : B256)
 
+/-- Owned receipt provenance includes the configured root's invocation prefix. -/
+structure ReceiptOrigin where
+  invocation : List Nat
+  segment : Nat
+  afterCall : Option CallSite
+
+structure TaggedOracleUpdate where
+  origin : ReceiptOrigin
+  update : OracleUpdate
+
+structure ExternalOrigin where
+  invocation : List Nat
+  site : CallSite
+  turn : Nat
+
 /-- Pending logs are chronological; an uncommitted ancestor discards descendants. -/
 inductive PendingLog
-  | owned (event : Event)
-  | foreign (emitter : Adr) (topics : List B256) (data : Bytes)
+  | owned (origin : ReceiptOrigin) (event : Event)
+  | foreign (origin : ExternalOrigin) (emitter : Adr) (topics : List B256) (data : Bytes)
 
 /-- An external call's checkpoint is later than its Pair parent's entry checkpoint. -/
 structure Checkpoint where
   state : State
   logs : List PendingLog
-  updates : List OracleUpdate
+  updates : List TaggedOracleUpdate
 
 structure Frame where
   context : Context
   entry : Entry
   checkpoint : Checkpoint
   current : Checkpoint
+  segment : Nat
+  afterCall : Option CallSite
 
 inductive SegmentResult
   | finished (frame : Frame) (returndata : Bytes)
@@ -184,7 +201,14 @@ inductive SegmentResult
 namespace Frame
 
 def enter (current : Checkpoint) (context : Context) (entry : Entry) : Frame :=
-  { context := context, entry := entry, checkpoint := current, current := current }
+  { context := context, entry := entry, checkpoint := current, current := current,
+    segment := 0, afterCall := none }
+
+def origin (frame : Frame) : ReceiptOrigin :=
+  { invocation := frame.context.invocation, segment := frame.segment, afterCall := frame.afterCall }
+
+def beginResume (frame : Frame) (request : Request) : Frame :=
+  { frame with segment := frame.segment + 1, afterCall := some request.site }
 
 /-- Restore the whole frame, including previously settled descendants. -/
 def fail (frame : Frame) (failure : Failure) : SegmentResult :=
@@ -194,7 +218,7 @@ def finish (frame : Frame) (returndata : Bytes) : SegmentResult :=
   .finished frame returndata
 
 def withEvents (frame : Frame) (post : State) (events : List Event) : Frame :=
-  { frame with current := { frame.current with state := post, logs := frame.current.logs ++ events.map PendingLog.owned } }
+  { frame with current := { frame.current with state := post, logs := frame.current.logs ++ events.map (PendingLog.owned frame.origin) } }
 
 def finishLP (frame : Frame) (result : Except Failure (State × List Event))
     (returndata : Bytes) : SegmentResult :=
@@ -204,8 +228,8 @@ def finishLP (frame : Frame) (result : Except Failure (State × List Event))
 
 def withUpdate (frame : Frame) (post : State) (event : Event) (update : OracleUpdate) : Frame :=
   { frame with current :=
-    { state := post, logs := frame.current.logs ++ [.owned event],
-      updates := frame.current.updates ++ [update] } }
+    { state := post, logs := frame.current.logs ++ [.owned frame.origin event],
+      updates := frame.current.updates ++ [{ origin := frame.origin, update := update }] } }
 
 end Frame
 
@@ -410,5 +434,265 @@ def afterSwapTransfer0 (frame : Frame) (locals : SwapLocals) : SegmentResult :=
   else frame.afterSwapTransfer1 locals
 
 end Frame
+
+
+namespace Frame
+
+def mintAfterFee (frame : Frame) (observed : MintObserved) (fee : FeeResult) : SegmentResult :=
+  let charged := frame.withEvents fee.state fee.events
+  let supply := fee.state.totalSupply
+  match mintAmount observed.amount0 observed.amount1 supply
+      observed.reserves.reserve0.val observed.reserves.reserve1.val with
+  | .error failure => charged.fail failure
+  | .ok liquidity =>
+    let initial : Except Failure (State × List Event) :=
+      if supply = 0 then fee.state.mintLP 0 1000 else .ok (fee.state, [])
+    match initial with
+    | .error failure => charged.fail failure
+    | .ok (postMinimum, minimumEvents) =>
+      let minimum := charged.withEvents postMinimum minimumEvents
+      if liquidity > 0 then
+        match postMinimum.mintLP observed.recipient (Nat.toB256 liquidity) with
+        | .error failure => minimum.fail failure
+        | .ok (post, events) =>
+          (minimum.withEvents post events).finishUpdated observed.balance0 observed.balance1
+            observed.reserves fee.feeOn
+            (some (.mint frame.context.sender observed.amount0 observed.amount1))
+            (encodeWords [Nat.toB256 liquidity])
+      else minimum.fail (.sourceGuard "UniswapV2: INSUFFICIENT_LIQUIDITY_MINTED")
+
+def burnAfterFee (frame : Frame) (observed : BurnObserved) (fee : FeeResult) : SegmentResult :=
+  let charged := frame.withEvents fee.state fee.events
+  let supply := fee.state.totalSupply
+  match burnAmounts observed.liquidity observed.balance0 observed.balance1 supply with
+  | .error failure => charged.fail failure
+  | .ok (amount0, amount1) =>
+    if amount0 > 0 ∧ amount1 > 0 then
+      match fee.state.burnLP frame.context.pair observed.liquidity with
+      | .error failure => charged.fail failure
+      | .ok (post, events) =>
+        let priced : BurnPriced :=
+          { observed := observed, feeOn := fee.feeOn, feeMinted := fee.minted,
+            supply := supply, amount0 := Nat.toB256 amount0, amount1 := Nat.toB256 amount1 }
+        (charged.withEvents post events).suspend .burnTransfer0 observed.locals.token0
+          (.transfer observed.locals.recipient priced.amount0) (.burnTransfer0 priced)
+    else charged.fail (.sourceGuard "UniswapV2: INSUFFICIENT_LIQUIDITY_BURNED")
+
+end Frame
+
+/-- Resume one owned segment. Child state can enter only through the finite driver. -/
+def resumeSegment (prior : Frame) (request : Request) (continuation : Continuation)
+    (result : ExternalResult) : SegmentResult :=
+  let frame := prior.beginResume request
+  match decodeExternal request result with
+  | .error failure => frame.fail failure
+  | .ok decoded =>
+    let st := frame.current.state
+    match continuation, decoded with
+    | .mintBalance0 recipient reserves, .word balance0 =>
+      frame.suspend .mintBalance1 st.token1 (.balanceOf frame.context.pair)
+        (.mintBalance1 recipient reserves balance0)
+    | .mintBalance1 recipient reserves balance0, .word balance1 =>
+      if reserves.reserve0.val ≤ balance0.toNat ∧ reserves.reserve1.val ≤ balance1.toNat then
+        let observed : MintObserved :=
+          { recipient := recipient, reserves := reserves, balance0 := balance0, balance1 := balance1,
+            amount0 := balance0 - Nat.toB256 reserves.reserve0.val,
+            amount1 := balance1 - Nat.toB256 reserves.reserve1.val }
+        frame.suspend .mintFeeTo st.factory .feeTo (.mintFee observed)
+      else frame.fail (.sourceGuard "ds-math-sub-underflow")
+    | .mintFee observed, .address feeTo =>
+      match mintFee st feeTo observed.reserves.reserve0.val observed.reserves.reserve1.val with
+      | .error failure => frame.fail failure
+      | .ok fee => frame.mintAfterFee observed fee
+    | .burnInitialBalance0 locals, .word balance0 =>
+      frame.suspend .burnInitialBalance1 locals.token1 (.balanceOf frame.context.pair)
+        (.burnInitialBalance1 locals balance0)
+    | .burnInitialBalance1 locals balance0, .word balance1 =>
+      let observed : BurnObserved :=
+        { locals := locals, balance0 := balance0, balance1 := balance1,
+          liquidity := st.balanceOf frame.context.pair }
+      frame.suspend .burnFeeTo st.factory .feeTo (.burnFee observed)
+    | .burnFee observed, .address feeTo =>
+      match mintFee st feeTo observed.locals.reserves.reserve0.val observed.locals.reserves.reserve1.val with
+      | .error failure => frame.fail failure
+      | .ok fee => frame.burnAfterFee observed fee
+    | .burnTransfer0 priced, .unit =>
+      frame.suspend .burnTransfer1 priced.observed.locals.token1
+        (.transfer priced.observed.locals.recipient priced.amount1) (.burnTransfer1 priced)
+    | .burnTransfer1 priced, .unit =>
+      frame.suspend .burnFinalBalance0 priced.observed.locals.token0 (.balanceOf frame.context.pair)
+        (.burnFinalBalance0 priced)
+    | .burnFinalBalance0 priced, .word balance0 =>
+      frame.suspend .burnFinalBalance1 priced.observed.locals.token1 (.balanceOf frame.context.pair)
+        (.burnFinalBalance1 priced balance0)
+    | .burnFinalBalance1 priced balance0, .word balance1 =>
+      frame.finishUpdated balance0 balance1 priced.observed.locals.reserves priced.feeOn
+        (some (.burn frame.context.sender priced.amount0 priced.amount1 priced.observed.locals.recipient))
+        (encodeWords [priced.amount0, priced.amount1])
+    | .swapTransfer0 locals, .unit => frame.afterSwapTransfer0 locals
+    | .swapTransfer1 locals, .unit => frame.afterSwapTransfer1 locals
+    | .swapCallback locals, .unit =>
+      frame.suspend .swapBalance0 locals.token0 (.balanceOf frame.context.pair) (.swapBalance0 locals)
+    | .swapBalance0 locals, .word balance0 =>
+      frame.suspend .swapBalance1 locals.token1 (.balanceOf frame.context.pair) (.swapBalance1 locals balance0)
+    | .swapBalance1 locals balance0, .word balance1 =>
+      let (amount0In, amount1In) := swapInputs balance0 balance1 locals.amount0Out locals.amount1Out
+        locals.reserves.reserve0.val locals.reserves.reserve1.val
+      match swapCheck balance0 balance1 amount0In amount1In locals.reserves.reserve0.val locals.reserves.reserve1.val with
+      | .error failure => frame.fail failure
+      | .ok () =>
+        frame.finishUpdated balance0 balance1 locals.reserves false
+          (some (.swap frame.context.sender (Nat.toB256 amount0In) (Nat.toB256 amount1In)
+            locals.amount0Out locals.amount1Out locals.recipient)) []
+    | .skimBalance0 locals, .word balance0 =>
+      if st.reserve0.val ≤ balance0.toNat then
+        frame.suspend .skimTransfer0 locals.token0
+          (.transfer locals.recipient (balance0 - Nat.toB256 st.reserve0.val)) (.skimTransfer0 locals)
+      else frame.fail (.sourceGuard "ds-math-sub-underflow")
+    | .skimTransfer0 locals, .unit =>
+      frame.suspend .skimBalance1 locals.token1 (.balanceOf frame.context.pair) (.skimBalance1 locals)
+    | .skimBalance1 locals, .word balance1 =>
+      if st.reserve1.val ≤ balance1.toNat then
+        frame.suspend .skimTransfer1 locals.token1
+          (.transfer locals.recipient (balance1 - Nat.toB256 st.reserve1.val)) (.skimTransfer1 locals)
+      else frame.fail (.sourceGuard "ds-math-sub-underflow")
+    | .skimTransfer1 _, .unit => frame.finishLocked []
+    | .syncBalance0 reserves, .word balance0 =>
+      frame.suspend .syncBalance1 st.token1 (.balanceOf frame.context.pair) (.syncBalance1 reserves balance0)
+    | .syncBalance1 reserves balance0, .word balance1 =>
+      frame.finishUpdated balance0 balance1 reserves false none []
+    | .permitRecovery owner spender value, .address recovered =>
+      if recovered ≠ 0 ∧ recovered = owner then
+        frame.finishLP (st.approveLP frame.context owner spender value) []
+      else frame.fail (.sourceGuard "UniswapV2: INVALID_SIGNATURE")
+    | _, _ => frame.fail .incompleteTranscript
+
+
+def CallSite.ordinal : CallSite → Nat
+  | .mintBalance0 => 0 | .mintBalance1 => 1 | .mintFeeTo => 2
+  | .burnInitialBalance0 => 3 | .burnInitialBalance1 => 4 | .burnFeeTo => 5
+  | .burnTransfer0 => 6 | .burnTransfer1 => 7 | .burnFinalBalance0 => 8 | .burnFinalBalance1 => 9
+  | .swapTransfer0 => 10 | .swapTransfer1 => 11 | .swapCallback => 12
+  | .swapBalance0 => 13 | .swapBalance1 => 14
+  | .skimBalance0 => 15 | .skimTransfer0 => 16 | .skimBalance1 => 17 | .skimTransfer1 => 18
+  | .syncBalance0 => 19 | .syncBalance1 => 20 | .permitRecovery => 21
+
+/-- Finite observations, not an arbitrary Pair-state or log suffix patch. -/
+inductive Transcript
+  | done
+  | next (result : ExternalResult) (turns : Transcript) (tail : Transcript)
+  | foreignLog (emitter : Adr) (topics : List B256) (data : Bytes) (tail : Transcript)
+  | invoke (sender : Adr) (value : B256) (isStatic : Bool) (entry : Entry)
+      (transcript : Transcript) (tail : Transcript)
+
+/-- Count syntax nodes structurally, without inspecting word or returndata magnitudes. -/
+def Transcript.work : Transcript → Nat
+  | .done => 0
+  | .next _ turns tail => 1 + turns.work + tail.work
+  | .foreignLog _ _ _ tail => 1 + tail.work
+  | .invoke _ _ _ _ transcript tail => 1 + transcript.work + tail.work
+
+inductive RunStatus
+  | success (returndata : Bytes)
+  | failed (failure : Failure)
+  | incomplete
+
+/-- Return observations survive as trace facts; pending state effects obey rollback. -/
+structure ChildReturn where
+  context : Context
+  entry : Entry
+  status : RunStatus
+
+structure RunResult where
+  status : RunStatus
+  frame : Frame
+  remaining : Transcript
+  childReturns : List ChildReturn
+
+structure TurnsResult where
+  complete : Bool
+  frame : Frame
+  childReturns : List ChildReturn
+
+def SegmentResult.frame : SegmentResult → Frame
+  | .finished frame _ | .failed frame _ | .suspended frame _ _ => frame
+
+def externalStatic (frame : Frame) (request : Request) : Bool :=
+  frame.context.isStatic || request.kind == .staticCall
+
+/-- Prefixing by the configured root and source call site separates message roots. -/
+def childContext (frame : Frame) (request : Request) (turn : Nat) (sender : Adr)
+    (value : B256) (isStatic : Bool) : Context :=
+  { frame.context with
+    sender := sender
+    value := value
+    isStatic := externalStatic frame request || isStatic
+    invocation := frame.context.invocation ++ [request.site.ordinal, turn] }
+
+mutual
+
+def drive (fuel : Nat) (segment : SegmentResult) (transcript : Transcript) : RunResult :=
+  match fuel with
+  | 0 => { status := .incomplete, frame := segment.frame, remaining := transcript, childReturns := [] }
+  | fuel + 1 =>
+    match segment with
+    | .finished frame returndata =>
+      { status := .success returndata, frame := frame, remaining := transcript, childReturns := [] }
+    | .failed frame .incompleteTranscript =>
+      { status := .incomplete, frame := frame, remaining := transcript, childReturns := [] }
+    | .failed frame failure =>
+      { status := .failed failure, frame := frame, remaining := transcript, childReturns := [] }
+    | .suspended frame request continuation =>
+      match transcript with
+      | .done => { status := .incomplete, frame := frame, remaining := .done, childReturns := [] }
+      | .next result turns tail =>
+        if request.requiresCode && !result.codeExists then
+          drive fuel (resumeSegment frame request continuation result) tail
+        else
+          let executed := driveTurns fuel frame request 0 turns
+          if executed.complete then
+            let settled := if result.success then executed.frame
+              else { executed.frame with current := frame.current }
+            let resumed := drive fuel (resumeSegment settled request continuation result) tail
+            { resumed with childReturns := executed.childReturns ++ resumed.childReturns }
+          else
+            { status := .incomplete, frame := executed.frame, remaining := tail,
+              childReturns := executed.childReturns }
+      | _ => { status := .incomplete, frame := frame, remaining := transcript, childReturns := [] }
+
+def driveTurns (fuel : Nat) (frame : Frame) (request : Request) (turn : Nat)
+    (turns : Transcript) : TurnsResult :=
+  match fuel with
+  | 0 => { complete := false, frame := frame, childReturns := [] }
+  | fuel + 1 =>
+    match turns with
+    | .done => { complete := true, frame := frame, childReturns := [] }
+    | .foreignLog emitter topics data tail =>
+      if externalStatic frame request then
+        { complete := false, frame := frame, childReturns := [] }
+      else
+        let origin : ExternalOrigin :=
+          { invocation := frame.context.invocation, site := request.site, turn := turn }
+        let logged : Frame := { frame with current :=
+          { frame.current with logs := frame.current.logs ++ [.foreign origin emitter topics data] } }
+        driveTurns fuel logged request (turn + 1) tail
+    | .invoke sender value isStatic entry transcript tail =>
+      let context := childContext frame request turn sender value isStatic
+      let child := drive fuel (startTyped frame.current context entry) transcript
+      match child.status with
+      | .incomplete => { complete := false, frame := frame, childReturns := child.childReturns }
+      | _ =>
+        let settled := { frame with current := child.frame.current }
+        let remaining := driveTurns fuel settled request (turn + 1) tail
+        { remaining with childReturns := child.childReturns ++
+          [{ context := context, entry := entry, status := child.status }] ++ remaining.childReturns }
+    | .next _ _ _ => { complete := false, frame := frame, childReturns := [] }
+
+end
+
+/-- Fuel is derived from the finite input syntax, not a caller/callee acceptance premise. -/
+def runTyped (st : State) (ctx : Context) (entry : Entry) (transcript : Transcript) : RunResult :=
+  let current : Checkpoint := { state := st, logs := [], updates := [] }
+  drive (transcript.work + 2) (startTyped current ctx entry) transcript
 
 end Blanc.Lift.UniswapV2Pair
