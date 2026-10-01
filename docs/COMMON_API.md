@@ -1682,6 +1682,17 @@ the finite trace. These statements establish no finite-word no-overflow,
 bytecode refinement, gas cost or history property. This is a theorem-directed
 numeric interface; it has no execution-goal recipe.
 
+For the unsigned B256 recurrence, use
+[`Blanc/WordFakeExponential.lean`](../Blanc/WordFakeExponential.lean).
+`Blanc.WordFakeExponential.Run` carries the initial output prefix, active-body
+count and final word sum. `run_exists` supplies a finite run bounded by
+`measure`; `Run.deterministic` identifies both its count and output, and
+`run_exists_unique` packages the unique pair. Termination uses the counter's
+countdown to zero and unsigned division by zero, for arbitrary word numerator
+and denominator. These theorems establish no equality with the Nat recurrence,
+bytecode refinement, gas bound or history property. This interface has no
+execution-goal recipe.
+
 ## M — bytes and memory
 
 For concrete RLP encoding and parsing, use
