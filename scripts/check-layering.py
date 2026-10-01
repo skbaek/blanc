@@ -214,6 +214,7 @@ CONTRACTS = {
                            "Lift.WithdrawalRequest.FrameEffects",
                            "Lift.WithdrawalRequest.BalanceHistory", "Lift.WithdrawalRequest.BlockRequests",
                            "Lift.WithdrawalRequest.WordReplay", "Lift.WithdrawalRequest.NatFee",
+                           "Lift.WithdrawalRequest.WordBudget",
                            "Lift.WithdrawalRequest.CodeFacts",
                            "Lift.WithdrawalRequest.Semantics",
                            "Lift.WithdrawalRequest.SystemHistory",
