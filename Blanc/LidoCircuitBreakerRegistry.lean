@@ -6641,7 +6641,7 @@ private theorem pauseAfterSet_zeroCode_runCompiledTo
       (G := G + loadCost + gVerylow + codeCost + suffixCost)
       (pushCost_of_ne_zero hoffset) (by
         rw [hgas]
-        dsimp [pauseAfterSetZeroCodeCost, loadCost, suffixCost, offset]
+        dsimp only [pauseAfterSetZeroCodeCost, loadCost, offset, suffixCost]
         omega) (by rw [hstack]; omega)
   have hload : Ninst.RunCompiled sevm
       (pre.setMach ⟨offset :: stack, pre.memory,
@@ -6888,7 +6888,7 @@ private theorem loadWord_prepend_directPause
       (sevm := sevm) (devm := pre) (w := offset)
       (c := pushCost offset.toBytes.sig) (G := G + loadCost) rfl (by
         rw [hgas]
-        dsimp [finishLoadWordCost, loadCost, offset]
+        dsimp only [finishLoadWordCost, loadCost, offset]
         omega) (by rw [hstack]; omega)
   have hload : Ninst.RunCompiled sevm
       (pre.setMach ⟨offset :: stack, pre.memory, G + loadCost, pre.stateGas⟩) mload
@@ -7262,7 +7262,8 @@ private theorem finishSetPauser_pause_suffix_runCompiledTo
         G + terminalCost + logCost, base.stateGas⟩)
       (.reg (.log 4))
       (logged.setMach ⟨stack, base.memory, G + terminalCost, base.stateGas⟩) := by
-    simpa [logged, entry, Devm.addLog, liftMachMetaPure, Devm.setMach, Devm.stateGas] using
+    simpa only [logged, entry, Devm.setMach, Devm.stateGas, Fin.isValue, Devm.addLog,
+      liftMachMetaPure] using
       Ninst.runCompiled_log_of
         (sevm := sevm)
         (devm := base.setMach
@@ -16480,8 +16481,8 @@ private theorem directPauseControl_registryReads :
   · change (Devm.getStor directPauseControlPre
       directPauseControlOwner).get (arrayEntrySlot 1) =
         directPauseControlTarget
-    simpa [logicalStorageOfStor, targetAt, hone,
-      directPauseControlTarget] using hw.arrayWords 0 (by simp only [List.length_cons,
+    simpa only [directPauseControlTarget, logicalStorageOfStor, zero_add, hone,
+      targetAt] using hw.arrayWords 0 (by simp only [List.length_cons,
         List.length_nil, zero_add, zero_lt_one])
   · change (Devm.getStor directPauseControlPre
       directPauseControlOwner).get

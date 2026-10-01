@@ -299,7 +299,7 @@ theorem enumPrefixMemory_invariant (entries done : List Entry) :
     Mem.Wf (enumPrefixMemory entries done) ∧
       (enumPrefixMemory entries done).size = 64 + 32 * done.length ∧
       Mem.Reads (enumPrefixMemory entries done) (enumPrefixImage entries done) := by
-  simpa [enumPrefixMemory, enumPrefixImage] using
+  simpa only [enumPrefixMemory, enumPrefixImage, List.foldl_nil, zero_add] using
     enumMemory_fold done (enumPrefixMemory entries []) (enumHeaderImage entries) 0
       (enumHeaderMemory_wf entries)
     (by simpa only [mul_zero, add_zero] using enumHeaderMemory_size entries)

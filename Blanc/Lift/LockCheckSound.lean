@@ -279,7 +279,7 @@ theorem forall₂_getElem? {ρ : Nat → B256} :
   | _ :: _, _ :: _, .cons h0 hr, j, s, h => by
     cases j with
     | zero => simp only [List.length_cons, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos, List.getElem_cons_zero, Option.some.injEq] at h ⊢; rw [← h, h0]
-    | succ j => simpa using forall₂_getElem? hr (by simpa only [List.getElem?_cons_succ] using h)
+    | succ j => simpa only [List.getElem?_cons_succ] using forall₂_getElem? hr (by simpa only [List.getElem?_cons_succ] using h)
 
 theorem forall₂_update_of_not_mem {ρ : Nat → B256} {r : Nat} {w : B256} :
     ∀ {kv : List Nat} {S : List B256}, r ∉ kv →
@@ -352,7 +352,7 @@ theorem transfer_combine_zero (hS : List.Forall₂ (fun s w => ρ s = w) kv S) (
               List.count_cons_of_ne] using hc
             refine .cons ?_ (transfer_combine_zero hS hr w ht hM.2 hc')
             have hw := hM.1
-            simp only [List.map_cons, wordOf, Option.bind_some,
+            simp only [wordOf, Option.bind_some,
               forall₂_getElem? hS hs] at hw
             rw [Function.update_of_ne (by rintro rfl; exact hr (List.mem_of_getElem? hs))]
             exact (AbstractStackSafety.WordMatches.eq_of_some hw).symm
@@ -370,7 +370,7 @@ theorem transfer_combine (hS : List.Forall₂ (fun s w => ρ s = w) kv S) (hr : 
       have hm0 := hm
       rw [List.mapM_cons] at hm
       cases ht : out.mapM (fun l => match l with | none => some r | some j => kv[j.toNat]?) with
-      | none => cases l <;> simp only [ht, Option.pure_def, Option.bind_eq_bind, Option.bind_none, Option.bind_fun_none, reduceCtorEq] at hm <;> (split at hm <;> simp at hm)
+      | none => cases l <;> simp only [ht, Option.pure_def, Option.bind_eq_bind, Option.bind_none, Option.bind_fun_none, reduceCtorEq] at hm
       | some kt =>
         cases l with
         | none =>
@@ -388,7 +388,7 @@ theorem transfer_combine (hS : List.Forall₂ (fun s w => ρ s = w) kv S) (hr : 
             obtain ⟨w, hw⟩ := transfer_combine hS hr ht hM.2 hc'
             refine ⟨w, .cons ?_ hw⟩
             have hx := hM.1
-            simp only [List.map_cons, wordOf, Option.bind_some,
+            simp only [wordOf, Option.bind_some,
               forall₂_getElem? hS hs] at hx
             rw [Function.update_of_ne (by rintro rfl; exact hr (List.mem_of_getElem? hs))]
             exact (AbstractStackSafety.WordMatches.eq_of_some hx).symm

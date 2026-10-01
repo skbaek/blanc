@@ -170,7 +170,7 @@ theorem SFunc.RunP.state_of_silent {P : Sevm → Devm → Ninst → Devm → Pro
       have htarget := closed (of_decide_eq_true hfr.1) lookup
       simpa only [Outcome.devm] using (ih htarget.1 htarget.2).trans pop.state.symm
   | last hrun =>
-      simpa [Outcome.devm] using linst_state_of_silent (by simpa only [bne_iff_ne, ne_eq, silent,
+      simpa only [Outcome.devm] using linst_state_of_silent (by simpa only [bne_iff_ne, ne_eq, silent,
         Bool.ite_true_right, Bool.or_false, Bool.not_eq_eq_eq_not, Bool.not_true,
         decide_eq_false_iff_not] using hf) hrun
   | next hrun run ih =>
@@ -200,7 +200,7 @@ theorem SFunc.RunP.state_of_silent {P : Sevm → Devm → Ninst → Devm → Pro
       simpa only [Outcome.devm] using
         (ihTail hfn hfr.2).trans ((ihRun htarget.1 htarget.2).trans pop.state.symm)
   | pcAt hrun _ run ih =>
-      simpa [Outcome.devm] using
+      simpa only [Outcome.devm] using
         (ih (by simpa only [silent] using hf) (by simpa only [List.all_eq_true, decide_eq_true_eq,
           refs] using hrefs)).trans
           (ninst_state_of_silent (n := .reg .pc) rfl (hP hrun))

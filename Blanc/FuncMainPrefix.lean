@@ -115,7 +115,7 @@ theorem dispatchWith_run_prefix_of_sorted :
       intro xs sig f fs k e s r ws path h_sorted h_len h_mem h_pfx h_run
       rcases xs with _ | ⟨⟨w, p⟩, _ | ⟨y, ys⟩⟩
       · cases h_mem
-      · simpa [DispatchTree.build] using
+      · simpa only [DispatchTree.build, exists_and_left, exists_and_right] using
           (ih (xs := [(w, p)])
             (sig := sig) (f := f) (fs := fs) (k := k) (e := e) (s := s)
             (r := r) (ws := ws) (path := path) (by simpa only using h_sorted)
@@ -158,8 +158,8 @@ theorem dispatchWith_run_prefix_of_sorted :
                 (((w, p) :: y :: ys).drop
                   ((((w, p) :: y :: ys).length + 1) / 2)))), Ninst.gt])
             (path := path)
-            (by simp only [Line.gasFree, Ninst.dup, Ninst.pushB256,
-              Ninst.gt, Ninst.gasFree, Rinst.gasFree, Bool.true_and]) h_run with
+            (by simp only [Line.gasFree, Ninst.pushB256,
+              Ninst.gasFree, Rinst.gasFree, Bool.true_and]) h_run with
           ⟨s₁, mid₁, hline, hbranch, hpre₁⟩
         have h_pfx₁ :
             (leftmostFsig (DispatchTree.build n

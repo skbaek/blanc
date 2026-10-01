@@ -175,8 +175,7 @@ theorem rebasedTriggerRoleFailure_call_reverts_exact
     TriggerRoleFailure out := by
   obtain ⟨_, _, bodyRun⟩ := runCompiledTo_call_inv
     (runtime_rebasedTriggerRoleFailure_get dp) run
-  simpa [TriggerRoleFailure,
-    runtimeError, customErrorData] using
+  simpa only [TriggerRoleFailure, ExceptT.stM_eq, customErrorData] using
       runCompiledTo_revertSelector_inv
         (hlen := by simp only [customErrorData, List.length_take, B256.length_toBytes,
           Nat.reduceLeDiff, inf_of_le_left]) bodyRun
