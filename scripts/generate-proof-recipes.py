@@ -97,6 +97,7 @@ DECL_KINDS = {
 }
 QUALIFIED = rf"{LEAN_PART}(?:\.{LEAN_PART})*"
 NAMESPACE_RE = re.compile(rf"^\s*namespace\s+({QUALIFIED})\s*$")
+MUTUAL_RE = re.compile(r"^\s*mutual\s*$")
 SECTION_RE = re.compile(rf"^\s*(?:noncomputable\s+)?section(?:\s+{QUALIFIED})?\s*$")
 END_RE = re.compile(rf"^\s*end(?:\s+{QUALIFIED})?\s*$")
 DECL_RE = re.compile(
@@ -357,7 +358,7 @@ def declarations_in(path: Path) -> Set[str]:
     for number, line in enumerate(clean.splitlines(), 1):
         if match := NAMESPACE_RE.match(line):
             scopes.append(("namespace", match.group(1).split(".")))
-        elif SECTION_RE.match(line):
+        elif SECTION_RE.match(line) or MUTUAL_RE.match(line):
             scopes.append(("section", []))
         elif END_RE.match(line):
             if not scopes:
@@ -372,7 +373,7 @@ def declarations_in(path: Path) -> Set[str]:
             ]
             found.add(qualify(namespace, match.group(1)))
     if scopes:
-        raise RecipeError(f"{path}: unclosed namespace or section")
+        raise RecipeError(f"{path}: unclosed namespace, section or mutual block")
     return found
 
 
@@ -792,16 +793,17 @@ def constructors_in(path: Path) -> Set[str]:
     scopes: List[Tuple[str, List[str]]] = []
     found: Set[str] = set()
     owner: Optional[str] = None
-    for line in clean.splitlines():
+    for number, line in enumerate(clean.splitlines(), 1):
         if match := NAMESPACE_RE.match(line):
             scopes.append(("namespace", match.group(1).split(".")))
             owner = None
-        elif SECTION_RE.match(line):
+        elif SECTION_RE.match(line) or MUTUAL_RE.match(line):
             scopes.append(("section", []))
             owner = None
         elif END_RE.match(line):
-            if scopes:
-                scopes.pop()
+            if not scopes:
+                raise RecipeError(f"{path}:{number}: unmatched end")
+            scopes.pop()
             owner = None
         elif match := DECL_RE.match(line):
             namespace = [
@@ -819,6 +821,8 @@ def constructors_in(path: Path) -> Set[str]:
             found.add(f"{owner}.{match.group(1)}")
         elif line.strip() and not line[0].isspace():
             owner = None
+    if scopes:
+        raise RecipeError(f"{path}: unclosed namespace, section or mutual block")
     return found
 
 
@@ -973,7 +977,6 @@ FOREIGN_STRUCT_RE = re.compile(
     rf"(structure|inductive)\s+({QUALIFIED})(?=\s|:|\(|\{{|$)"
 )
 FOREIGN_FIELD_RE = re.compile(rf"^\s+(?:«({LEAN_PART})»|({LEAN_PART}))\s*:(?!=)")
-MUTUAL_RE = re.compile(r"^\s*mutual\s*$")
 
 
 def foreign_qualify(namespace: Sequence[str], name: str) -> str:
@@ -987,16 +990,11 @@ def foreign_declarations_in(path: Path) -> Set[str]:
 
     A separate, additive census, for the same reason ``constructors_in`` is one:
     the shared Blanc inventory that symbol validation uses keeps its exact
-    meaning. It differs from that inventory in three ways that a dependency
-    needs and Blanc's own sources do not:
+    meaning. It differs from that inventory in two ways a dependency needs:
 
     * qualification is generic -- ``declarations_in`` short-circuits names that
       already start with ``Blanc.``, which would silently drop a dependency's
       namespace;
-    * ``mutual``/``end`` is a scope, which Jaune uses and Blanc does not. Without
-      it the reader pops the enclosing ``namespace Jaune`` at the first such
-      ``end`` and every later declaration is censused unqualified, so a live name
-      reads as dead; and
     * structure fields are projections a trigger arm legitimately dispatches on
       (``Jaune.Devm.mach`` is a field, not a ``def``), so they are counted --
       only inside a ``structure`` body, so an indented ``name : type`` elsewhere
@@ -1804,7 +1802,51 @@ def remove_first_scalar_field(text: str, key: str, label: str) -> str:
     return mutated
 
 
+def mutual_scope_self_test() -> None:
+    """Local and dependency indexes retain scope across a mutual boundary."""
+    source = """namespace Blanc.Fixture
+section Outer
+namespace Nested
+mutual
+inductive First where
+  | first : First
+inductive Second where
+  | second : Second
+end
+inductive After where
+  | after : After
+end Nested
+end Outer
+end Blanc.Fixture
+"""
+    names = {f"Blanc.Fixture.Nested.{name}" for name in ("First", "Second", "After")}
+    constructors = {f"{name}.{name.rsplit('.', 1)[1].lower()}" for name in names}
+    with tempfile.TemporaryDirectory(prefix="proof-recipes-mutual-") as directory:
+        path = Path(directory) / "Scope.lean"
+        path.write_text(source, encoding="utf-8")
+        if declarations_in(path) != names or constructors_in(path) != constructors:
+            raise RecipeError("self-test mutual: local symbol/constructor qualification changed")
+        if foreign_declarations_in(path) != names | constructors:
+            raise RecipeError("self-test mutual: dependency qualification changed")
+        for label, malformed in (
+            ("extra-end", source + "end\n"),
+            ("unclosed-mutual", source.replace("end\n", "", 1)),
+        ):
+            path.write_text(malformed, encoding="utf-8")
+            for scanner in (declarations_in, constructors_in, foreign_declarations_in):
+                try:
+                    scanner(path)
+                except RecipeError as error:
+                    expected = "unmatched end" if label == "extra-end" else "unclosed namespace"
+                    if expected not in str(error):
+                        raise
+                else:
+                    raise RecipeError(f"self-test mutual {label}: {scanner.__name__} passed")
+    print("OK — proof recipe mutual indexes: 3 exact-name and 6 malformed-scope controls passed")
+
+
 def self_test(root: Path) -> None:
+    mutual_scope_self_test()
     policy_controls, closed_skips, explicit_sites = policy_self_test(
         Path(__file__).resolve().parents[1]
     )
