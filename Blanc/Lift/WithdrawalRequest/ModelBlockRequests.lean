@@ -198,4 +198,124 @@ theorem block_model_requests_of_nat_paid
     resetEq ▸ resetPre, beforeHistory, requestRep, payload.1, payload.2.1, payload.2.2,
     fullOutputs, finalModel, afterHistory, conservation, finalRep⟩
 
+private theorem WordStorageReplay.inhibited_empty {pre post : Stor}
+    {events : List WordReplayEvent} (replay : WordStorageReplay pre events post)
+    (inhibited : pre.get 0 = B256.max)
+    (users : ∀ event ∈ events, event.frame.sevm.caller ≠ systemAddress) :
+    events = [] := by
+  cases events with
+  | nil => rfl
+  | cons event events =>
+    have input := replay.head_guard.input
+    have user := users event List.mem_cons_self
+    cases kind : event.kind with
+    | system =>
+      simp only [wordEventInput, kind] at input
+      exact False.elim (user input)
+    | submission entry iterations output =>
+      simp only [wordEventInput, kind] at input
+      exact False.elim (input.2.2.2.1 inhibited)
+    | getter iterations output =>
+      simp only [wordEventInput, kind] at input
+      exact False.elim (input.2.2.2.1 inhibited)
+
+/-- The first actual configured block after INIT has no committed nonstatic
+user observation at the withdrawal contract. Its canonical reset emits no
+withdrawal request and establishes the activated empty model state. No Nat
+payment or fee-domain premise is assumed. This is the activation base case,
+not the induction step for later blocks. -/
+theorem activation_block_model_requests
+    {cfg : ChainConfig} {checkpoint post : BlockChain}
+    (valid : cfg.Valid) (context : checkpoint.ValidContext)
+    (chain : cfg.chainId = checkpoint.chainId)
+    (block : ConfiguredBlockTrace cfg checkpoint post)
+    (installed : SystemCodeInstalled checkpoint.state)
+    (senders : (ConfiguredHistoryTrace.step (.refl valid context chain) block).NoSenderAt systemAddress)
+    (authorities : (ConfiguredHistoryTrace.step (.refl valid context chain) block).NoAuthorityAt systemAddress)
+    (avoid : ∀ root ∈ (ConfiguredHistoryTrace.step (.refl valid context chain) block).rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
+    (systemEmpty : checkpoint.state.getCode systemAddress = ByteArray.empty)
+    (init : RepresentsStorage (checkpoint.state.getStor withdrawalRequestPredeployAddress).get initial) :
+    block.bodyTrace.transactions.settledFrames.flatMap balanceFrameObservation = [] ∧
+    block.bodyTrace.requests.withdrawalOut.returnData = [] ∧
+    block.blockOutput.requests = block.bodyTrace.transactionBout.requests ++
+      optionalRequestEntry 0 block.bodyTrace.requests.depositRequests ++
+      optionalRequestEntry 2 block.bodyTrace.requests.consolidationOut.returnData ∧
+    RepresentsStorage (post.state.getStor withdrawalRequestPredeployAddress).get
+      (Blanc.WithdrawalRequest.system initial) := by
+  let history : ConfiguredHistoryTrace cfg checkpoint checkpoint := .refl valid context chain
+  have code : checkpoint.state.getCode withdrawalRequestPredeployAddress =
+      Blanc.withdrawalRequestCode := by
+    apply installed (withdrawalRequestPredeployAddress, Blanc.withdrawalRequestCode)
+    simp only [systemContracts, List.mem_cons, List.not_mem_nil, or_false]
+    exact Or.inr (Or.inr (Or.inl trivial))
+  obtain ⟨events, replay, observed⟩ := history_word_storage_replay (.step history block) code
+  obtain ⟨resetFrame, partition, _, resetCaller, _, _, _, _, userCallers⟩ :=
+    block_protocol_observation_partition history block installed senders authorities avoid systemEmpty
+  have mapped : events.map WordReplayEvent.frame =
+      block.bodyTrace.transactions.settledFrames.flatMap balanceFrameObservation ++ [resetFrame] := by
+    rw [observed]
+    simpa only [history, ConfiguredHistoryTrace.settledFrames, List.flatMap_append,
+      List.flatMap_nil, List.nil_append] using partition
+  obtain ⟨transactionEvents, remaining, eventsEq, transactionMap, remainingMap⟩ :=
+    List.map_eq_append_iff.mp mapped
+  obtain ⟨reset, rest, remainingEq, resetEq, restMap⟩ := List.map_eq_cons_iff.mp remainingMap
+  have restEq : rest = [] := List.map_eq_nil_iff.mp restMap
+  have equality : events = transactionEvents ++ [reset] := by
+    rw [eventsEq, remainingEq, restEq]
+  have splitReplay : WordStorageReplay (checkpoint.state.getStor withdrawalRequestPredeployAddress)
+      (transactionEvents ++ [reset]) (post.state.getStor withdrawalRequestPredeployAddress) :=
+    equality ▸ replay
+  have inhibited : (checkpoint.state.getStor withdrawalRequestPredeployAddress).get 0 =
+      B256.max := by
+    rw [init.excess]
+    rfl
+  have transactionNil : transactionEvents = [] :=
+    WordStorageReplay.inhibited_empty splitReplay.split.1 inhibited (by
+      intro event member
+      apply userCallers event.frame
+      rw [← transactionMap]
+      exact List.mem_map.mpr ⟨event, member, rfl⟩)
+  have transactionObsNil :
+      block.bodyTrace.transactions.settledFrames.flatMap balanceFrameObservation = [] := by
+    rw [← transactionMap, transactionNil]
+    rfl
+  have single : events = [reset] := by rw [equality, transactionNil, List.nil_append]
+  have singleReplay : WordStorageReplay (checkpoint.state.getStor withdrawalRequestPredeployAddress)
+      [reset] (post.state.getStor withdrawalRequestPredeployAddress) := single ▸ replay
+  have resetKind : reset.kind = .system :=
+    singleReplay.head_guard.system_kind (by rw [resetEq]; exact resetCaller)
+  have paid : ∀ before event after, events = before ++ event :: after →
+      match event.kind with
+      | .submission _ _ _ => fee (before.foldl wordModelUpdate initial) ≤ event.frame.sevm.value.toNat
+      | _ => True := by
+    intro before event after eventEq
+    have member : event ∈ events := by
+      rw [eventEq]
+      exact List.mem_append_right before List.mem_cons_self
+    rw [single] at member
+    have same : event = reset := List.mem_singleton.mp member
+    rw [same, resetKind]
+    trivial
+  obtain ⟨past, transactions, last, _, pastMap, transactionsMap, _, _, _, _,
+      payload, requests, _, _, _, _, _, finalRep⟩ :=
+    block_model_requests_of_nat_paid history block installed senders authorities avoid
+      systemEmpty init replay observed paid
+  have pastNil : past = [] := List.map_eq_nil_iff.mp (by
+    simpa only [history, ConfiguredHistoryTrace.settledFrames, List.flatMap_nil] using pastMap)
+  have transactionsNil : transactions = [] :=
+    List.map_eq_nil_iff.mp (transactionsMap.trans transactionObsNil)
+  simp only [pastNil, transactionsNil, List.nil_append, List.foldl_nil] at payload requests
+  have finalModel : events.foldl wordModelUpdate initial = Blanc.WithdrawalRequest.system initial := by
+    rw [single]
+    simp only [List.foldl_cons, List.foldl_nil, wordModelUpdate, resetKind]
+  rw [finalModel] at finalRep
+  change block.bodyTrace.requests.withdrawalOut.returnData = [] at payload
+  change block.blockOutput.requests = block.bodyTrace.transactionBout.requests ++
+    optionalRequestEntry 0 block.bodyTrace.requests.depositRequests ++
+    optionalRequestEntry 1 [] ++
+    optionalRequestEntry 2 block.bodyTrace.requests.consolidationOut.returnData at requests
+  rw [show optionalRequestEntry 1 [] = [] from rfl, List.append_nil] at requests
+  exact ⟨transactionObsNil, payload, requests, finalRep⟩
+
 end Blanc.Lift.WithdrawalRequest
