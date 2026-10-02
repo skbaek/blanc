@@ -45,8 +45,10 @@ private theorem zero_excess_history (entry : Blanc.WithdrawalRequest.Entry)
       rw [total]
 
 /-- The original Nat model and resource certificate admit terminal states
-outside every Nat fee no-wrap domain, while recording a word-sized total
-payment. No later accepted submission or actual execution is asserted. -/
+outside every Nat fee no-wrap domain. The recorded payments plus the
+canonical word recurrence's quote still fit in one word, although no word
+value pays the Nat fee. No later accepted submission or actual execution
+is asserted. -/
 theorem model_resources_fee_domain_limit (entry : Blanc.WithdrawalRequest.Entry)
     (n : Nat) (large : natFeeExcessCeiling + 2 ≤ n) (cap : n ≤ 2 * 2 ^ 64) :
     ∃ (state : Blanc.WithdrawalRequest.State) (submissions : List Submission)
@@ -56,7 +58,10 @@ theorem model_resources_fee_domain_limit (entry : Blanc.WithdrawalRequest.Entry)
         (submissions.map Submission.value).sum = n ∧ n < 2 ^ 256 ∧
         state.excess = n - 2 ∧
         (∀ iterations, ¬ NatFeeDomain state.excess.toB256 iterations) ∧
-        (∀ value : B256, ¬ fee state ≤ value.toNat) := by
+        (∀ value : B256, ¬ fee state ≤ value.toNat) ∧
+        ∃ iterations output,
+          WordFakeExponential.Run state.excess.toB256 17 1 17 0 iterations output ∧
+          n + (output / (17 : B256)).toNat < 2 ^ 256 := by
   obtain ⟨state, submissions, outputs, history, resources, zero, count, length, total⟩ :=
     zero_excess_history entry n n (Nat.le_refl n)
   have capWidth : 2 * (2 : Nat) ^ 64 < 2 ^ 256 := by decide
@@ -74,13 +79,20 @@ theorem model_resources_fee_domain_limit (entry : Blanc.WithdrawalRequest.Entry)
     omega
   refine ⟨Blanc.WithdrawalRequest.system state, submissions, outputs ++ emitted state,
     History.system history, ModelResources.system resources, length, total,
-    paymentWidth, excessEq, ?_, ?_⟩
+    paymentWidth, excessEq, ?_, ?_, ?_⟩
   · intro iterations domain
     have small := domain.excess_lt
     rw [B256.toNat_toB256_of_lt excessWidth] at small
     omega
   · intro value paid
     have small := nat_paid_excess_lt (Blanc.WithdrawalRequest.system state) value paid
+    omega
+  · obtain ⟨iterations, output, run, _⟩ := WordFakeExponential.run_exists
+      (Blanc.WithdrawalRequest.system state).excess.toB256 17 1 17 0
+    refine ⟨iterations, output, run, ?_⟩
+    rw [B256.toNat_div (by decide : (17 : B256) ≠ 0)]
+    change n + output.toNat / 17 < 2 ^ 256
+    have outputWidth := B256.toNat_lt output
     omega
 
 end Blanc.Lift.WithdrawalRequest
