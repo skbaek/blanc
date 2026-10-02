@@ -319,6 +319,57 @@ theorem validateHeader_ok_of_facts {rules : ForkRules} {chain : BlockChain}
     hslot, ne_eq, not_true_eq_false, ite_false]
   rfl
 
+/-- A header template with the block-dependent fields committed to a body and
+the parent.  The remaining consensus fields stay explicit template inputs. -/
+def commitHeader (rules : ForkRules) (parent : Block) (template : Header)
+    (st : State) (bout : BlockOutput) : Header :=
+  { template with
+    parentHash := parent.header.hash
+    ommersHash := emptyOmmerHash
+    stateRoot := st.root
+    txsRoot := getTransactionsRoot bout
+    receiptRoot := getReceiptRoot bout
+    bloom := logsBloom bout.blockLogs
+    difficulty := 0
+    number := parent.header.number + 1
+    gasUsed := bout.blockGasUsed
+    timestamp := parent.header.timestamp + 1
+    nonce := 0
+    withdrawalsRoot := getWithdrawalsRoot bout
+    blobGasUsed := bout.blobGasUsed
+    excessBlobGas := calculateExcessBlobGas rules.blob parent.header
+    requestsHash := some (computeRequestsHash bout.requests) }
+
+/-- The committed header validates from its parent tip, base-fee equation,
+extra-data bound, and rule-dependent optional-field facts. -/
+theorem commitHeader_ok {rules : ForkRules} {chain : BlockChain} {parent : Block}
+    {template : Header} {st : State} {bout : BlockOutput}
+    (hlast : chain.blocks.getLast? = some parent)
+    (hbase : calculateBaseFeePerGas (commitHeader rules parent template st bout).gasLimit
+      parent.header.gasLimit parent.header.gasUsed parent.header.baseFeePerGas =
+      .ok (commitHeader rules parent template st bout).baseFeePerGas)
+    (hgas : bout.blockGasUsed ≤ template.gasLimit)
+    (hextra : template.extraData.length ≤ 32)
+    (hbal : template.blockAccessListHash.isSome = rules.header.blockAccessListHash)
+    (hslot : template.slotNumber.isSome = rules.header.slotNumber) :
+    validateHeader rules chain (commitHeader rules parent template st bout) = .ok () := by
+  apply validateHeader_ok_of_facts (header := commitHeader rules parent template st bout)
+  · exact hlast
+  · rfl
+  · exact hbase
+  · rfl
+  · change bout.blockGasUsed ≤ template.gasLimit
+    exact hgas
+  · change parent.header.timestamp < parent.header.timestamp + 1
+    omega
+  · rfl
+  · exact hextra
+  · rfl
+  · rfl
+  · rfl
+  · simpa only [commitHeader] using hbal
+  · simpa only [commitHeader] using hslot
+
 /-! ## The transition -/
 
 /-- Every commitment check passes when the header commits to exactly the

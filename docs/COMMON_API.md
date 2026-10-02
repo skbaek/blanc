@@ -2690,7 +2690,8 @@ premises; the theorem does not construct a signed transaction or a configured hi
 `processTransaction_call_of_exec` retains the original zero-value interface as a specialization.
 The shared parts are `checkTransactionGasFee_two`, `checkTransactionChainId_two`,
 `checkTransactionBlobData_two`, `checkTransactionReceiver_two`, `checkTransactionAuthorizationList_two`,
-`checkTransactionSenderAccount_ok_of_noCode`, `validateTransaction_ok_of_facts`,
+`checkTransactionSenderAccount_ok_of_noCode`, `checkTransaction_sender`,
+`validateTransaction_ok_of_facts`,
 `calculateIntrinsicCost_two_call` (with `calldataTokens` and the covered-fork constants
 `CoveredFork.rules_txBase`, `rules_floorTokenCost`, `rules_storageClearRefund`,
 `CoveredFork.checkTransactionGasCap_ok`), `prepareMessage_call`/`callMessage`,
@@ -2892,6 +2893,9 @@ Nothing in it names a contract; the only fork premise is `CoveredFork`.
   `checkGasLimit_self` and `calculateBaseFeePerGas_unit` settle an unchanged
   admissible gas limit and a unit base fee when the parent used at most its
   target, so the base fee is a bound, never an evaluation.
+- `BlockForward.commitHeader` and `BlockForward.commitHeader_ok` fill the parent,
+  body commitments, successor number/timestamp, and excess-blob-gas fields before
+  applying the shared header validator.
 - `BlockForward.stateTransitionChecks_ok_of_eq` and
   `stateTransitionUsing_forward`: the configured transition
   `stateTransitionUsing cfg pre block = .ok ⟨appendBlock pre.blocks block, st, pre.chainId⟩`
