@@ -1,11 +1,12 @@
 import Blanc.ExecutionTraceCalldata
+import Blanc.Lift.PrecompileOutputBound
 
 /-!
 # Return-data bounds from interpreter producers
 
 The ordinary-code theory tracks the enclosing output independently of child
-return-data. Child inputs and precompile output shapes will connect this
-provenance to actual CALL-family observations.
+return-data. Actual frame entry, bounded child input and precompile producers
+compose through settlement to bound the full returndata of CALL and STATICCALL.
 -/
 
 namespace Blanc.Lift.ReturnDataBound
@@ -412,5 +413,211 @@ theorem exec_output {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
       have ho := h (f.settle raw)
       rw [hr] at ho
       exact provenance_left_eq ho (ih hsg)
+
+private def SuccessfulOutputBound : Except (EvmError × State × AdrSet × Tra) Devm → Prop
+  | .error _ => True
+  | .ok d => d.output.length < 2^256
+
+private theorem output_of_seed_bound {pre : Devm} {raw : Execution}
+    (hs : pre.output.length < 2^256) (hp : Execution.Rel OutputProvenance pre raw) :
+    Execution.Rel (fun _ d => d.output.length < 2^256) pre raw := by
+  cases raw <;> change List.length _ < 2^256
+  all_goals rcases hp with he | hb
+  · rw [← he]; exact hs
+  · exact hb
+  · rw [← he]; exact hs
+  · exact hb
+
+private theorem handleError_output {pre : Devm} {raw : Execution}
+    (h : Execution.Rel (fun _ d => d.output.length < 2^256) pre raw) :
+    SuccessfulOutputBound (executeCode.handleError raw) := by
+  cases raw with
+  | ok d => exact h
+  | error e =>
+    rcases e with ⟨reason, d⟩
+    cases reason
+    · exact (show (0 : Nat) < 2^256 from by decide)
+    · exact h
+    · exact True.intro
+    · exact True.intro
+
+private theorem process_settle_output (msg : Msg)
+    (r : Except (EvmError × State × AdrSet × Tra) Devm)
+    (h : SuccessfulOutputBound r) : SuccessfulOutputBound (processMessage.settle msg r) := by
+  cases r with
+  | error e => exact True.intro
+  | ok d =>
+    unfold processMessage.settle
+    dsimp only [bind, Except.bind]
+    split <;> exact h
+
+private theorem executeCode_output {msg : Msg} {xl : Xlot}
+    {r : Except (EvmError × State × AdrSet × Tra) Devm}
+    (hf : xl.Filled) (hc : ExecuteCode msg xl r)
+    (hsg : msg.benv.stat.rules.stateGas = none) (hi : msg.data.length < 2^256) :
+    SuccessfulOutputBound r := by
+  cases xl with
+  | none =>
+    unfold ExecuteCode at hc
+    cases he : executeCode.enter msg with
+    | inl evm =>
+      rw [he] at hc
+      obtain ⟨raw, hxl, _⟩ := hc
+      cases hxl
+    | inr raw =>
+      rw [he] at hc
+      rw [hc.2, hsg, executeCode.handleErrorWith_none]
+      obtain ⟨adr, rfl⟩ := executeCode.enter_inr he
+      exact handleError_output
+        (PrecompileOutputBound.executePrecomp_output (initEvm msg) adr hi (by change (0 : Nat) < 2^256; decide))
+  | some v =>
+    rcases v with ⟨evm, raw⟩
+    obtain ⟨he, hr⟩ := ExecuteCode.some_inv hc
+    obtain ⟨cr⟩ := hf
+    subst evm
+    rw [hr, hsg, executeCode.handleErrorWith_none]
+    exact handleError_output (output_of_seed_bound (by change (0 : Nat) < 2^256; decide) (exec_output cr hsg))
+
+/-- A real retained message call produces short output, including normally
+settled REVERT and exceptional-halt children. Its ordinary seed is initialized
+by the interpreter, and its precompile input is the actual message data. -/
+theorem processMessage_output {msg : Msg} {xl : Xlot} {child : Devm}
+    (hf : xl.Filled) (hm : ProcessMessage msg xl (.ok child))
+    (hsg : msg.benv.stat.rules.stateGas = none) (hi : msg.data.length < 2^256) :
+    child.output.length < 2^256 := by
+  obtain ⟨r0, hb, hs⟩ := ProcessMessage.iff_body.mp hm
+  have hp : SuccessfulOutputBound (.ok child) := by
+    rw [hs]
+    apply process_settle_output
+    unfold FrameBody at hb
+    cases ht : msg.benvAfterTransfer with
+    | error e =>
+      rw [ht] at hb
+      rw [hb.2]
+      exact True.intro
+    | ok benv =>
+      rw [ht] at hb
+      apply executeCode_output hf hb
+      · change benv.stat.rules.stateGas = none
+        rw [Msg.benvAfterTransfer_ok_stateGas ht]
+        exact hsg
+      · exact hi
+  exact hp
+
+private def CallShape : XStep → Prop
+  | .done ex => ∀ post, ex = .ok post → post.returnData = []
+  | .spawn f rsm => ∃ msg parent oi os,
+      f = Frame.ofCall msg ∧ rsm = Resume.call parent oi os
+
+private theorem callShape_bind {α : Type} {out : Except (EvmError × Devm) α}
+    {f : α → Except (EvmError × Devm) XStep}
+    (hf : ∀ a, out = .ok a → CallShape (XStep.ofExcept (f a))) :
+    CallShape (XStep.ofExcept (out >>= f)) := by
+  cases out with
+  | error e => intro post he; cases he
+  | ok a => exact hf a rfl
+
+open _root_.Lean _root_.Lean.Meta _root_.Lean.Elab _root_.Lean.Elab.Tactic in
+elab "call_shape_step" : tactic => do
+  withoutRecover <| evalTactic (← `(tactic| try dsimp only [id_eq]))
+  let target ← instantiateMVars (← getMainTarget)
+  unless target.isAppOf ``CallShape do throwError "expected CallShape"
+  let e := target.getAppArgs.back!
+  let run (s : TacticM (TSyntax `tactic)) : TacticM Unit := do
+    withoutRecover <| evalTactic (← s)
+  if e.isAppOfArity ``XStep.ofExcept 1 then
+    let out := e.getArg! 0
+    if out.isAppOfArity ``Bind.bind 6 then
+      match (out.getArg! 4).getAppFn.constName? with
+      | some ``Except.assert => run `(tactic| (simp only [Except.assert]; split))
+      | some ``Pure.pure => run `(tactic| dsimp only [Pure.pure, Except.pure, Except.bind_ok])
+      | some ``Except.ok => run `(tactic| dsimp only [Except.bind_ok])
+      | some ``Except.error => run `(tactic| (intro post he; cases he))
+      | _ => run `(tactic| (apply callShape_bind; intro value hvalue))
+    else
+      match out.getAppFn.constName? with
+      | some ``Pure.pure => run `(tactic| dsimp only [Pure.pure, Except.pure, XStep.ofExcept])
+      | some ``Except.ok => run `(tactic| dsimp only [XStep.ofExcept])
+      | some ``Except.error => run `(tactic| (intro post he; cases he))
+      | _ => run `(tactic| split)
+  else
+    match e.getAppFn.constName? with
+    | some ``Jaune.genericCall.step => run `(tactic| (unfold genericCall.step; split))
+    | some ``XStep.done =>
+      run `(tactic| (intro post he; cases he))
+      try run `(tactic| rfl)
+      catch _ => withMainContext do
+        for decl in ← getLCtx do
+          let ty ← instantiateMVars decl.type
+          if ty.isAppOfArity ``Eq 3 && (ty.getArg! 1).isAppOf ``Devm.push then
+            let hp := mkIdent decl.userName
+            run `(tactic| (rw [← (Devm.push_of_push $hp).returnData]; rfl))
+            return
+        throwError "expected the retained successful push equation"
+    | some ``XStep.spawn => run `(tactic| exact ⟨_, _, _, _, rfl, rfl⟩)
+    | _ => run `(tactic| split)
+
+private theorem call_shape {sevm : Sevm} {pre : Devm} {x : Xinst}
+    (hx : x = .call ∨ x = .staticcall)
+    (hsg : sevm.benvStat.rules.stateGas = none) : CallShape (Xinst.step sevm pre x) := by
+  rcases hx with rfl | rfl
+  all_goals simp only [Xinst.step, hsg]
+  all_goals repeat' call_shape_step
+
+private theorem call_xstep_returnData_length_lt
+    {sevm : Sevm} {pre post : Devm} {x : Xinst} {xl : Xlot}
+    (hx : x = .call ∨ x = .staticcall) (hsg : sevm.benvStat.rules.stateGas = none)
+    (hf : xl.Filled) (hrun : XStep.Run (Xinst.step sevm pre x) xl (.ok post)) :
+    post.returnData.length < 2^256 := by
+  have hs := call_shape (pre := pre) hx hsg
+  cases he : Xinst.step sevm pre x with
+  | done ex =>
+    rw [he] at hs hrun
+    have hret := hs post hrun.2.symm
+    rw [hret]
+    decide
+  | spawn f rsm =>
+    have hi := Blanc.ExecutionTrace.Xinst.step_spawn_inner_data_length_lt hsg he
+    have hstat := Xinst.step_spawn_benvStat he
+    rw [he] at hs hrun
+    obtain ⟨msg, parent, oi, os, rfl, rfl⟩ := hs
+    obtain ⟨r, hm, hr⟩ := hrun
+    cases r with
+    | error e =>
+      unfold Resume.run liftToExecution at hr
+      dsimp only [bind, Except.bind] at hr
+      cases hr
+    | ok child =>
+      have ho := processMessage_output hf hm (by
+        change msg.benv.stat = sevm.benvStat at hstat
+        rw [hstat]
+        exact hsg) hi
+      rw [Resume.call_returnData hr.symm]
+      exact ho
+
+/-- Actual CALL/STATICCALL steps install short full returndata. The bound comes
+from the retained child producer and includes normally settled failed children,
+independently of the caller's requested output-copy window. -/
+theorem call_step_returnData_length_lt
+    {pc : Nat} {sevm : Sevm} {pre post : Devm} {x : Xinst} {xl : Xlot}
+    (hx : x = .call ∨ x = .staticcall) (hsg : sevm.benvStat.rules.stateGas = none)
+    (hf : xl.Filled) (hrun : Ninst.StepRun pc sevm pre (.exec x) xl (.ok post)) :
+    post.returnData.length < 2^256 := by
+  rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at hrun
+  exact call_xstep_returnData_length_lt hx hsg hf hrun
+
+/-- A successful actual CALL result has short full returndata on covered forks. -/
+theorem call_returnData_length_lt {sevm : Sevm} {pre post : Devm}
+    (hrun : Ninst.Run sevm pre Ninst.call post) (hfork : CoveredFork sevm.benvStat.fork) :
+    post.returnData.length < 2^256 := by
+  obtain ⟨xl, hf, pc, hr⟩ := hrun
+  exact call_step_returnData_length_lt (Or.inl rfl) hfork.rules_stateGas_none hf hr
+
+/-- A successful actual STATICCALL result has short full returndata on covered forks. -/
+theorem staticcall_returnData_length_lt {sevm : Sevm} {pre post : Devm}
+    (hrun : Ninst.Run sevm pre Ninst.staticcall post) (hfork : CoveredFork sevm.benvStat.fork) :
+    post.returnData.length < 2^256 := by
+  obtain ⟨xl, hf, pc, hr⟩ := hrun
+  exact call_step_returnData_length_lt (Or.inr rfl) hfork.rules_stateGas_none hf hr
 
 end Blanc.Lift.ReturnDataBound

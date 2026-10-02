@@ -2208,9 +2208,16 @@ execution does not imply a bounded output. Regular instructions and jumps
 preserve output; RETURN/REVERT use a popped word for their full output size;
 normal CREATE/CALL resumption preserves the enclosing output across either
 child outcome. The theorem composes those facts over the actual interpreter.
-A call-level consumer must separately derive its real entry seed, precompile
-output bounds and settlement/returndata installation; this theorem does not
-assume or provide those remaining facts.
+For the actual call-level bound, use `call_returnData_length_lt` or
+`staticcall_returnData_length_lt` on a real `Ninst.Run` and `CoveredFork`.
+Both bound the complete post-state returndata, independently of the requested
+output-copy window, including normally settled REVERT and exceptional-halt
+children. `call_step_returnData_length_lt` is the `StepRun`/`Filled` interface;
+`processMessage_output` is the message/settlement interface with actual bounded
+input and `stateGas = none`. These consume actual initialized output seeds,
+precompile producers and child-input bounds; no bounded-callee-output ENV
+hypothesis is needed. Ordinary arbitrary-seed `exec_output` retains its explicit
+disjunction above.
 
 #### I need a bound on actual precompile output
 
