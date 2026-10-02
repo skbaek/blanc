@@ -2663,6 +2663,15 @@ grants, including their descendants without any code-identity premise.
 same block's validated header limit to obtain a count below `2 ^ 64`.
 The counted list is the ordinary settlement-retained full-body trace.
 
+For ordered cuts around consecutive protocol withdrawal calls, use
+[`Blanc/ExecutionRequestSegments.lean`](../Blanc/ExecutionRequestSegments.lean).
+`ConfiguredBlockTrace.beforeWithdrawalFrames` retains beacon, history and
+transaction frames; `afterWithdrawalFrames` retains consolidation frames.
+`consecutive_withdrawal_segments` partitions the two actual consecutive block
+lists around their complete withdrawal-message subtrees, preserving the
+previous suffix followed by the next prefix. These are whole-subtree cuts;
+the theorem does not identify an internal storage reset or prove its counter.
+
 Use [`Blanc/ExecutionBodyEffects.lean`](../Blanc/ExecutionBodyEffects.lean),
 the body-level sibling of T3:
 

@@ -151,7 +151,7 @@ SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "ExecutionAccountingLadder", "CallSpawnExact", "StaticCallStorage",
            "ChargeGas", "CallOutOfGas", "SourceSiteCount", "CompiledShape",
            "SymbolicProgram",
-           "ExecutionTraceFrames", "ExecutionTraceAdmission", "ExecutionTraceSettledFrames", "ExecutionTraceEntry",
+           "ExecutionTraceFrames", "ExecutionTraceAdmission", "ExecutionTraceSettledFrames", "ExecutionRequestSegments", "ExecutionTraceEntry",
            "ExecutionAccountingObserved", "ExecutionAccountingAdmission", "ExecutionAccountingCore", "ExecutionEntryAccounting", "ExecutionModelAccounting", "ExecutionDirectCode", "FuncMainPrefix",
            "ChunkedDecide"]
 # The ladder over arbitrary code images and the generic bytecode lift
@@ -217,6 +217,7 @@ CONTRACTS = {
                            "Lift.WithdrawalRequest.WordBudget",
                            "Lift.WithdrawalRequest.NatFeeBound",
                            "Lift.WithdrawalRequest.SubmissionCount",
+                           "Lift.WithdrawalRequest.ResetWindowCount",
                            "Lift.WithdrawalRequest.CodeFacts",
                            "Lift.WithdrawalRequest.Semantics",
                            "Lift.WithdrawalRequest.SystemHistory",
