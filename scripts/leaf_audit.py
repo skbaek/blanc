@@ -408,21 +408,31 @@ def scan_external_sources(sources: Dict[str, str], population: Set[str]
     The first result records every path mentioning a declaration. The second marks mentions in
     Lean files as uses: those files are compiled proofs. Non-Lean script mentions are deliberately
     report-only, since a shell/Python gate can name a declaration without elaborating a proof.
-    Comments and string contents use the same lexical stripping and namespace/open resolution as
-    ``scan_uses``. A token must resolve exactly to a population name; substrings never count.
+    Lean files use the same lexical stripping and namespace/open resolution as ``scan_uses``;
+    other text is scanned raw for fully qualified names. A token must resolve exactly to a
+    population name; substrings never count.
     """
 
     consumers: Dict[str, Set[str]] = {}
     lean_uses: Set[str] = set()
     for path, text in sources.items():
-        code = strip_comments_and_strings(text, path)
-        offsets, states = context_events(code)
         is_lean = path == "Main.lean" or path.endswith(".lean")
+        if is_lean:
+            code = strip_comments_and_strings(text, path)
+            offsets, states = context_events(code)
+        else:
+            # Shell/Python/Markdown text has no Lean comments, namespaces or `open`s: its `/-` is
+            # not a comment opener and its strings are exactly where a gate names a declaration,
+            # so it is scanned raw and only a fully qualified mention resolves.
+            code = text
+            offsets, states = [0], [((), ())]
         for match in IDENT.finditer(code):
             token = match.group(0)
             ns, opens = states[bisect.bisect_right(offsets, match.start()) - 1]
             found: Optional[str] = None
-            for candidate in _candidates(token, ns, opens):
+            # Outside Lean a closing quote is not an identifier character (`'Name'`, `"Name"`).
+            tokens = [token] if is_lean else list(dict.fromkeys([token, token.rstrip("'")]))
+            for candidate in (c for t in tokens for c in _candidates(t, ns, opens)):
                 if candidate in population:
                     found = candidate
                     break
@@ -1235,12 +1245,14 @@ def self_test(root: Path) -> int:
     checks += 1
     external, lean_external = scan_external_sources(
         {"scripts/check-fixture.sh": "echo LeafFixture.definition_leaf\n",
+         "scripts/check-fixture.py": "print('LeafFixture.definition_leaf')  # a /- in Python text\n",
          "scripts/ProofFixture.lean": "theorem t : LeafFixture.definition_leaf = 41 := rfl\n"},
         {ns + "definition_leaf"})
     external_result = analyze(base_census, {"_current": base}, external, lean_external)
     ext_rows = [r for r in external_result["definition_leaves"]
                 if r["name"] == ns + "definition_leaf"]
-    if external != {ns + "definition_leaf": ["scripts/ProofFixture.lean", "scripts/check-fixture.sh"]} \
+    if external != {ns + "definition_leaf": ["scripts/ProofFixture.lean", "scripts/check-fixture.py",
+                                             "scripts/check-fixture.sh"]} \
             or lean_external != {ns + "definition_leaf"} or ext_rows:
         failures.append(f"external consumer control: {external} {lean_external} {ext_rows}")
     else:
