@@ -1,4 +1,4 @@
-import Blanc.ExecutionStateTrace
+import Blanc.Lift.CommittedLogs
 
 /-!
 Exact contiguous regrouping of the existing state chronology.  A chunk retains
@@ -201,5 +201,38 @@ theorem Exec.simulateCommittedChunks
     rw [aligned]
     exact List.mem_append_right prior List.mem_cons_self
   exact localStep prior chunk suffix aligned (admissible chunk member) q cut
+
+/-- A local producer whose observations are the actual successful LOGs yields
+both exact chronological observations and the concrete committed endpoint logs. -/
+theorem Exec.simulateCommittedLogChunks
+    {Q Step : Type}
+    (R : Q → List Step → Q → Prop)
+    (nil : ∀ q, R q [] q)
+    (append : ∀ {a b c xs ys}, R a xs b → R b ys c → R a (xs ++ ys) c)
+    (obs : List Step → List Log) (obs_nil : obs [] = [])
+    (obs_append : ∀ xs ys, obs (xs ++ ys) = obs xs ++ obs ys)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true)
+    (fork : CoveredFork sevm.benvStat.fork)
+    {chunks : List (ReplayChunk Exec.StateBoundaryOrigin)}
+    (exactChunks : ExactChunks (Exec.committedStateBoundaries run) chunks)
+    (admissible : Exec.AdmissibleCuts chunks)
+    (Link : List (ReplayChunk Exec.StateBoundaryOrigin) → State → Q → Prop)
+    {q₀ : Q} (opening : Link [] pre.state q₀)
+    (localStep : ∀ prior chunk suffix,
+      chunks = prior ++ chunk :: suffix → Exec.AdmissibleChunk chunk →
+      ∀ q, Link prior chunk.before q →
+      ∃ q' steps, R q steps q' ∧ Link (prior ++ [chunk]) chunk.after q' ∧
+        obs steps = chunk.origin.flatMap Exec.boundaryOwnLogs) :
+    ∃ q' steps, R q₀ steps q' ∧
+      Link chunks (Execution.committedPost out committed).state q' ∧
+      obs steps = (Exec.committedStateBoundaries run).flatMap Exec.boundaryOwnLogs ∧
+      (Execution.committedPost out committed).logs = pre.logs ++ obs steps := by
+  obtain ⟨q', steps, model, ending, logs⟩ :=
+    Exec.simulateCommittedChunks R nil append obs obs_nil obs_append
+      Exec.boundaryOwnLogs run committed exactChunks admissible Link opening localStep
+  refine ⟨q', steps, model, ending, logs, ?_⟩
+  rw [logs]
+  exact Exec.committed_logs run committed fork
 
 end Blanc
