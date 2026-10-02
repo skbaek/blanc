@@ -165,7 +165,7 @@ SHARED += ["LadderBase", "LadderSem", "ContractAdmissionSem", "ExecutionAdmissio
 SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.ExactWalkOps",
            "Lift.ExactWalkCut", "Lift.ExactWalkCutOps", "Lift.CopyLoop", "Lift.PackedSha",
            "Lift.PackedShaCovered", "Lift.Quiet", "Lift.InvWalk", "Lift.InvWalkOps",
-           "Lift.InvWalkWorld", "Lift.InvWalkSha", "Lift.InvWalkDispatch"]
+           "Lift.InvWalkWorld", "Lift.InvWalkSha", "Lift.InvWalkDispatch", "Lift.InvWalkProvenance"]
 # Creation code (deploy-init-v1): the size-optimised packed-hash site and the CREATE bridge
 # for lifted creation code; contract-neutral.
 SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps"]
@@ -239,6 +239,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.WriterEntries",
         "Lift.UniswapV2Pair.UpdateArithmetic",
         "Lift.UniswapV2Pair.UpdateSource",
+        "Lift.UniswapV2Pair.BalanceCallWalk",
         "Lift.UniswapV2Pair.UpdateWalk",
         "Lift.UniswapV2Pair.UpdateTailWalk",
         "Lift.UniswapV2Pair.GetterStorageReservesCore",

@@ -1,4 +1,5 @@
 import Blanc.Lift.Quiet
+import Blanc.Lift.ReturnDataBound
 import Blanc.Lift.ExactWalk
 import Blanc.Lift.Transfer
 import Blanc.LadderBase
@@ -144,6 +145,18 @@ theorem ri_staticcall {g t ii is oi os : B256} {d : Devm}
       hret, fun a => congrFun hw.1 a, hw.2,
       fun _ => (Resume.call_output hresume).trans houtput, .inr h1⟩, fun _ => ?_⟩
     exact ⟨parent, child, xl, dp, na, code, _, hstate, hdel, hfill, hproc, hclean, rfl⟩
+
+/-- The actual static-call producer bounds the full return data in the same outcome. -/
+theorem ri_staticcall_bounded {g t ii is oi os : B256} {d : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (h : Ninst.Run sevm (St b (g :: t :: ii :: is :: oi :: os :: S) M G) (.exec .staticcall) d) :
+    ∃ flag out, StaticCallPost b d S M ii is oi os flag out ∧
+      out.length < 2^256 ∧
+      (flag = 1 → StaticAnswered sevm b t.toAdr (M.read ii.toNat is.toNat).1 out) := by
+  obtain ⟨flag, out, hpost, hans⟩ := ri_staticcall hfork h
+  have bound := ReturnDataBound.staticcall_returnData_length_lt h hfork
+  rw [hpost.returnData] at bound
+  exact ⟨flag, out, hpost, bound, hans⟩
 
 /-- **`STATICCALL` to an arbitrary callee, forward.**  Given the step itself (a premise about the
 callee), the run continues from its outcome as `ri_staticcall` describes it. -/
