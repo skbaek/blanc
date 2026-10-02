@@ -66,6 +66,27 @@ theorem checkTransaction_ok_of_parts {benv : Benv} {bout : BlockOutput} {tx : Tx
   simp only [bind, Except.bind, Except.mapError, hgas, hchain, hrecover, hfee, hblob, hreceiver,
     hauth, hsender]
 
+/-- A successful admission check recovers the sender reported in its result. -/
+theorem checkTransaction_sender {benv : Benv} {bout : BlockOutput} {tx : Tx}
+    {sender : Adr} {effectiveGasPrice : Nat} {blobHashes : List B256} {blobGas : Nat}
+    (h : checkTransaction benv bout tx =
+      .ok (sender, effectiveGasPrice, blobHashes, blobGas)) :
+    recoverSender benv.stat.chainId tx = .ok sender := by
+  unfold checkTransaction at h
+  rcases Except.bind_eq_ok h with ⟨_, hgas, h⟩
+  rcases Except.bind_eq_ok h with ⟨_, hchain, h⟩
+  rcases Except.bind_eq_ok h with ⟨senderAddress, hrecover, h⟩
+  rw [Except.mapError_eq_ok_iff] at hrecover
+  rcases Except.bind_eq_ok h with ⟨_, hfee, h⟩
+  rcases Except.bind_eq_ok h with ⟨_, hblob, h⟩
+  rcases Except.bind_eq_ok h with ⟨_, hreceiver, h⟩
+  rcases Except.bind_eq_ok h with ⟨_, hauth, h⟩
+  rcases Except.bind_eq_ok h with ⟨_, hsender, h⟩
+  have hsender_eq : senderAddress = sender :=
+    congrArg Prod.fst (Except.ok.inj h)
+  rw [hsender_eq] at hrecover
+  exact hrecover
+
 /-- The block-gas check of a transaction without a state-gas dimension: the transaction's gas
 fits the block's remaining execution gas and its blob gas the remaining blob gas. -/
 theorem checkTransactionGasLimits_ok_of_room {benv : Benv} {bout : BlockOutput} {tx : Tx}

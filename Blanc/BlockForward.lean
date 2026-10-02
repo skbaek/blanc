@@ -401,6 +401,19 @@ theorem configuredBlockTrace_forward {cfg : ChainConfig} {pre : BlockChain} {blo
   cases hfork'
   exact hcovered
 
+/-- A configured trace whose post-chain has the append shape identifies its
+literal retained block. -/
+theorem ConfiguredBlockTrace.block_eq
+    {cfg : ChainConfig} {pre post : BlockChain} {block : Block} {st : State}
+    (trace : ConfiguredBlockTrace cfg pre post)
+    (hpost : post = ⟨appendBlock pre.blocks block, st, pre.chainId⟩) :
+    trace.block = block := by
+  cases hpost
+  have htrace := congrArg (fun chain : BlockChain => chain.blocks.getLast?) trace.postEq
+  have htrace' : some block = some trace.block := by
+    simpa only [appendBlock_getLast?] using htrace
+  exact (Option.some.inj htrace').symm
+
 /-- A block without withdrawals never increases the total balance, so the
 next block's bound follows from this one's. -/
 theorem ConfiguredBlockTrace.sum_post_le {cfg : ChainConfig} {pre post : BlockChain}
