@@ -67,15 +67,15 @@ private theorem registerAfterSetLogExecSatOf
   apply Func.execSat_of_runCompiledTo
   · func_run [3, 1381]
     all_goals try {
-      simp [hextNew, hextZero, hnewMemory, hnew, runtime, aux,
-        gVerylow, gLog, gLogdata, gLogtopic] }
+      simp only [hextNew, hnewMemory, hnew, gVerylow, Devm.setMach_gasLeft,
+        Nat.reduceSub, Nat.reduceAdd, add_zero] }
     all_goals try {
       simp only [Devm.stack_setMach, List.length_cons]
       omega }
     all_goals try omega
     case h_cost =>
       rw [hextZeroAfter, hlogLen]
-      norm_num [gLog, gLogdata, gLogtopic]
+      norm_num only [gLog, gLogdata, gLogtopic, Fin.val_succ, Fin.val_one]
     case a => exact .last rfl
   · exact ⟨_, rfl⟩
 
@@ -105,12 +105,12 @@ private theorem registerAfterSetStoreExecSatOf
     · change (e.currentTarget, expirySlot 9) ∈ d.accessedStorageKeys
       exact hwarmExpiry
     · simp only [Devm.gasLeft_setMach]
-      norm_num [gCallStipend, gasStorageSet]
+      norm_num only [gCallStipend, gasStorageSet]
     · exact hstatic
     · change sstoreValueCost
         (getOrigStorVal e e.currentTarget (expirySlot 9))
         (d.getStorVal e.currentTarget (expirySlot 9)) 10 = gasStorageSet
-      simp [hexpiryOrig, hexpiry, sstoreValueCost]
+      simp only [sstoreValueCost, hexpiryOrig, hexpiry, ne_eq, true_and, ↓reduceIte, ite_not, ite_eq_right_iff]
       intro h
       exact False.elim ((by decide : (0 : B256) ≠ 10) h)
     · rfl
@@ -138,7 +138,7 @@ private theorem size_writeZero_word_of_le
     {M : Mem} {w : B256} (h : 32 ≤ M.size) :
     (M.write 0 w.toBytes).size = M.size := by
   rcases hb : w.toBytes with _ | ⟨b, bs⟩
-  · exact absurd (hb ▸ B256.length_toBytes w) (by simp)
+  · exact absurd (hb ▸ B256.length_toBytes w) (by simp only [List.length_nil, OfNat.zero_ne_ofNat, not_false_eq_true])
   · have hlen : (b :: bs).length = 32 := hb ▸ B256.length_toBytes w
     simp only [Mem.write, hlen, Nat.zero_add]
     rw [if_pos h]
@@ -199,7 +199,7 @@ private theorem registerAfterSetWriteExecSatOf
         (d.setMach ⟨_, M', _, d.stateGas⟩).extCost
           [⟨(newPauserWord * 32).toNat, 32⟩] = 3
       rw [Devm.extCost_zero_of_le halign' hnewCovered']
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case h_f =>
       rw [show ((0 : B256) * 32).toNat = 0 by decide]
       change Func.ExecWitness _ _
@@ -210,7 +210,7 @@ private theorem registerAfterSetWriteExecSatOf
             10000 + gasStorageSet + 20 - 20, d.stateGas⟩) _ ex
       rw [hnew', hnewMemory']
       rw [show (regionWord expiryRegion).or 9 = expirySlot 9 by rfl]
-      norm_num
+      simp only [add_tsub_cancel_right, Fin.isValue]
       exact htail
   · exact registerAfterSetStoreExecSatOf
       (stack := stack) hfork hnew' hsize' halign'
@@ -248,9 +248,9 @@ private theorem registerAfterSetCheckedExecSatOf
   have hwarmExpiry' :
       (e.currentTarget, expirySlot 9) ∈ d'.accessedStorageKeys := by
     rcases d with ⟨mach, mt, world⟩
-    simpa [d', addAccessedStorageKey, liftMachMetaPure,
-      Meta.addAccessedStorageKey, Devm.accessedStorageKeys]
-      using (Or.inr hwarmExpiry :
+    simpa only [d', Devm.accessedStorageKeys, addAccessedStorageKey, liftMachMetaPure, Meta.addAccessedStorageKey,
+    Std.HashSet.mem_insert, beq_iff_eq, Prod.mk.injEq, true_and] using
+    (Or.inr hwarmExpiry :
         heartbeatIntervalSlot = expirySlot 9 ∨
           (e.currentTarget, expirySlot 9) ∈ mt.accessedStorageKeys)
   have hsuffix := registerAfterSetWriteExecSatOf
@@ -305,7 +305,7 @@ private theorem registerAfterSetCheckedExecSatOf
               ⟨heartbeatIntervalSlot :: e.benvStat.time :: stack, M,
                 10000 + gasStorageSet + 20 + 2132 - 5, d'.stateGas⟩ := rfl
       rw [haddMach, htime]
-      norm_num [gVerylow, gHigh]
+      norm_num only [gVerylow, gHigh]
       exact htail
   · exact hbranch
 
@@ -392,10 +392,10 @@ private theorem registerAfterSetExecSatOf
       all_goals try omega
       case h_cost =>
         rw [Devm.extCost_zero_of_le halign hnewCovered]
-        norm_num [gVerylow]
+        norm_num only [gVerylow]
       case h_f =>
         rw [hnew, hnewMemory]
-        norm_num [gVerylow, gHigh]
+        norm_num only [gVerylow, gHigh]
         exact htail
     · exact hnewBranch
   have hpreviousBranch : Func.ExecSat
@@ -412,7 +412,7 @@ private theorem registerAfterSetExecSatOf
         (by decide) rfl (by
       simp only [Devm.stack_setMach, List.length_cons]
       omega)
-    · norm_num [gVerylow, gHigh, gJumpdest]
+    · norm_num only [gVerylow, gHigh, gJumpdest, Devm.gasLeft_setMach]
     · exact hw
   have hpreviousCovered :
       (previousPauserWord * 32).toNat + 32 ≤ M.size := by
@@ -434,10 +434,10 @@ private theorem registerAfterSetExecSatOf
     all_goals try omega
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign hpreviousCovered]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case h_f =>
       rw [hprevious, hpreviousMemory]
-      norm_num [gVerylow, gHigh, gJumpdest]
+      norm_num only [gVerylow, gHigh, gJumpdest]
       exact htail
   · exact hpreviousBranch
 
@@ -475,7 +475,9 @@ private theorem finishSetPauserContinuationExecSatOf
       ((runtime officialParams).main ::
         (runtime officialParams).aux)[registerAfterSetSlot]? =
           some registerAfterSet := by
-    simp [runtime, aux, registerAfterSetSlot]
+    simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux, registerAfterSetSlot,
+    slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos,
+    List.getElem_cons_succ, List.getElem_cons_zero]
   have hcall : Func.ExecSat
       ((runtime officialParams).main :: (runtime officialParams).aux)
       e (d.setMach ⟨stack, M,
@@ -504,7 +506,7 @@ private theorem finishSetPauserContinuationExecSatOf
         (by decide) rfl (by
           simp only [Devm.stack_setMach, List.length_cons]
           omega)
-    · norm_num [gVerylow, gMid, gHigh, gJumpdest]
+    · norm_num only [gVerylow, gMid, gHigh, gJumpdest, Devm.gasLeft_setMach]
     · exact hw
   have hcontinuationCovered :
       (continuationWord * 32).toNat + 32 ≤ M.size := by
@@ -525,10 +527,10 @@ private theorem finishSetPauserContinuationExecSatOf
     all_goals try omega
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign hcontinuationCovered]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case h_f =>
       rw [hcontinuation, hcontinuationMemory]
-      norm_num
+      simp only [Nat.reduceSubDiff]
       exact htail
   · exact hbranch
 
@@ -602,7 +604,7 @@ private theorem finishSetPauserExecSatOf
       (M.read (newPauserWord * 32).toNat 32).2 = M := by
     rw [Mem.read_snd_eq_self (memExtSize_of_le halign hnewCovered)]
   have hreadZero : M.read 0 0 = ([], M) := by
-    simp [Mem.read, Mem.extend, memExtSize]
+    simp only [Mem.read, Mem.extend, memExtSize, ↓reduceIte, Prod.mk.injEq, and_true]
     rfl
   have hextNew (base : Devm) (S : List B256) (G : Nat) :
       (base.setMach ⟨S, M, G, base.stateGas⟩).extCost
@@ -644,17 +646,17 @@ private theorem finishSetPauserExecSatOf
     all_goals try omega
     all_goals try {
       rw [hextNew]
-      norm_num [gVerylow] }
+      norm_num only [gVerylow, Fin.val_succ, Fin.coe_ofNat_eq_mod, Nat.reduceMod] }
     all_goals try {
       rw [hextPrevious]
-      norm_num [gVerylow] }
+      norm_num only [gVerylow] }
     all_goals try {
       rw [hextTarget]
-      norm_num [gVerylow] }
+      norm_num only [gVerylow] }
     case h_cost =>
       rw [hextZero]
       rw [show ((0 : B256) * 32).toNat = 0 by decide]
-      norm_num [gLog, gLogdata, gLogtopic]
+      norm_num only [gLog, gLogdata, gLogtopic, Fin.val_succ, Fin.coe_ofNat_eq_mod, Nat.reduceMod]
     case h_f =>
       rw [hnewMemory, hpreviousMemory, htargetMemory]
       rw [hnew, hprevious, htarget]
@@ -709,8 +711,8 @@ private theorem newCountUpdateTailExecSatOf
   have hwarmCount₁ :
       (e.currentTarget, countSlot 9) ∈ d₁.accessedStorageKeys := by
     rcases d with ⟨mach, mt, world⟩
-    simp [d₁, addAccessedStorageKey, liftMachMetaPure,
-      Meta.addAccessedStorageKey, Devm.accessedStorageKeys]
+    simp only [Devm.accessedStorageKeys, addAccessedStorageKey, liftMachMetaPure, Meta.addAccessedStorageKey,
+    Std.HashSet.mem_insert, BEq.rfl, true_or, d₁]
   have hother₂ : ∀ (a : Adr) (k : B256),
       (a, k) ≠ (e.currentTarget, countSlot 9) →
       d₂.getStorVal a k = d₁.getStorVal a k := by
@@ -753,16 +755,16 @@ private theorem newCountUpdateTailExecSatOf
     have haccess : d₂.accessedStorageKeys = d₁.accessedStorageKeys := rfl
     rw [haccess]
     rcases d with ⟨mach, mt, world⟩
-    simpa [d₁, addAccessedStorageKey, liftMachMetaPure,
-      Meta.addAccessedStorageKey, Devm.accessedStorageKeys] using And.intro
-        (by decide : countSlot 9 ≠ heartbeatIntervalSlot) hintervalCold
+    simpa only [d₁, Devm.accessedStorageKeys, addAccessedStorageKey, liftMachMetaPure, Meta.addAccessedStorageKey,
+    Std.HashSet.mem_insert, beq_iff_eq, Prod.mk.injEq, true_and, not_or, ne_eq] using
+    And.intro (by decide : countSlot 9 ≠ heartbeatIntervalSlot) hintervalCold
   have hwarmExpiry₂ :
       (e.currentTarget, expirySlot 9) ∈ d₂.accessedStorageKeys := by
     have haccess : d₂.accessedStorageKeys = d₁.accessedStorageKeys := rfl
     rw [haccess]
     rcases d with ⟨mach, mt, world⟩
-    simpa [d₁, addAccessedStorageKey, liftMachMetaPure,
-      Meta.addAccessedStorageKey, Devm.accessedStorageKeys] using
+    simpa only [d₁, Devm.accessedStorageKeys, addAccessedStorageKey, liftMachMetaPure, Meta.addAccessedStorageKey,
+    Std.HashSet.mem_insert, beq_iff_eq, Prod.mk.injEq, true_and] using
       (Or.inr hwarmExpiry : countSlot 9 = expirySlot 9 ∨
         (e.currentTarget, expirySlot 9) ∈ mt.accessedStorageKeys)
   have hfinish := finishSetPauserExecSatOf
@@ -773,7 +775,9 @@ private theorem newCountUpdateTailExecSatOf
       ((runtime officialParams).main ::
         (runtime officialParams).aux)[finishSetPauserSlot]? =
           some finishSetPauser := by
-    simp [runtime, aux, finishSetPauserSlot]
+    simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux, finishSetPauserSlot,
+    slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos,
+    List.getElem_cons_succ, List.getElem_cons_zero]
   have hcall : Func.ExecSat
       ((runtime officialParams).main :: (runtime officialParams).aux)
       e (d₂.setMach ⟨stack, M,
@@ -801,12 +805,12 @@ private theorem newCountUpdateTailExecSatOf
       · exact hfork.rules_stateGas_none
       · rfl
       · exact hwarmCount₁
-      · norm_num [gCallStipend, gasStorageSet]
+      · norm_num only [gCallStipend, gasStorageSet, Devm.gasLeft_setMach]
       · exact hstatic
       · change sstoreValueCost
           (getOrigStorVal e e.currentTarget (countSlot 9))
           (d₁.getStorVal e.currentTarget (countSlot 9)) 1 = gasStorageSet
-        simp [hcountOrig, hcount₁, sstoreValueCost]
+        simp only [sstoreValueCost, hcountOrig, hcount₁, ne_eq, true_and, ↓reduceIte, ite_not, ite_eq_right_iff]
         intro h
         exact False.elim ((by decide : (0 : B256) ≠ 1) h)
       · rfl
@@ -837,9 +841,9 @@ private theorem newCountUpdateTailExecSatOf
     all_goals try {
       simp only [Devm.extCost, Devm.memory_setMach, memExtsSize,
         memExtSize_of_le halign hnewCovered, Nat.sub_self]
-      norm_num [gVerylow] }
+      norm_num only [gVerylow] }
     all_goals try {
-      simpa [countSlot, slot] using
+      simpa only [countSlot, slot] using
         congrArg (fun x : B256 => (regionWord countRegion).or x) hnew }
     all_goals try {
       change 1 + d.getStorVal e.currentTarget (countSlot 9) = 1
@@ -847,7 +851,7 @@ private theorem newCountUpdateTailExecSatOf
       rfl }
     case h_f =>
       rw [hnewMemory, haddMach]
-      norm_num
+      simp only [add_tsub_cancel_right]
       change Func.ExecWitness _ _
         (d₁.setMach ⟨countSlot 9 :: 1 :: stack, M,
           10000 + gasStorageSet + 20 + 2132 + 45 + 1935 + 12 +
@@ -921,9 +925,9 @@ private theorem afterOldPauserExecSatOf
       all_goals try omega
       all_goals try {
         rw [Devm.extCost_zero_of_le halign hnewCovered]
-        norm_num [gVerylow] }
+        norm_num only [gVerylow] }
       all_goals try {
-        simpa [countSlot, slot] using
+        simpa only [countSlot, slot] using
           congrArg (fun x : B256 => (regionWord countRegion).or x) hnew }
       case h_f =>
         rw [hnewMemory]
@@ -957,10 +961,10 @@ private theorem afterOldPauserExecSatOf
     all_goals try omega
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign hnewCovered]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case h_f =>
       rw [hnew, hnewMemory]
-      norm_num
+      simp only [Nat.reduceSubDiff]
       change Func.ExecWitness _ _
         (d.setMach ⟨0 :: stack, M,
           10000 + gasStorageSet + 20 + 2132 + 45 + 1935 + 12 +
@@ -1082,12 +1086,12 @@ private theorem execSat_successfulWrite_step
     · exact hfork.rules_stateGas_none
     · rfl
     · exact hwarm
-    · norm_num [gCallStipend, gasStorageSet]
+    · simp only [Devm.gasLeft_setMach, gCallStipend, gasStorageSet]; omega
     · exact hstatic
     · change sstoreValueCost
         (getOrigStorVal e e.currentTarget key)
         (d.getStorVal e.currentTarget key) value = gasStorageSet
-      simp [horiginal, hcurrent, sstoreValueCost]
+      simp only [sstoreValueCost, horiginal, hcurrent, ne_eq, true_and, ↓reduceIte, ite_not, ite_eq_right_iff]
       intro h
       exact False.elim (hvalue h.symm)
     · rfl
@@ -1125,7 +1129,7 @@ private theorem execSat_loadWord_prepend
     · apply Ninst.runCompiled_mload_of (c := gVerylow) (G := G)
       · rfl
       · rw [Devm.extCost_zero_of_le halign hcovered]
-        norm_num [gVerylow]
+        norm_num only [gVerylow]
       · exact hread
       · exact hmemory
       · rfl
@@ -1201,7 +1205,7 @@ private theorem execSat_loadWord_pushB256_prepend
         (c := gVerylow) (G := G + valueCost)
       · rfl
       · rw [Devm.extCost_zero_of_le halign hcovered]
-        norm_num [gVerylow]
+        norm_num only [gVerylow]
       · exact hread
       · exact hmemory
       · rfl
@@ -1271,7 +1275,7 @@ private theorem execSat_loadWord_targetIndexKey_prepend
         (c := gVerylow) (G := G + gVerylow + tagCost)
       · rfl
       · rw [Devm.extCost_zero_of_le halign htargetCovered]
-        norm_num [gVerylow]
+        norm_num only [gVerylow]
       · exact htarget
       · exact htargetMemory
       · rfl
@@ -1348,7 +1352,7 @@ private theorem execSat_mstoreAt_word_prepend
     · apply Ninst.runCompiled_mstore_of (e := 0) (G := G)
       · rfl
       · rw [Devm.extCost_zero_of_le halign hcovered]
-      · norm_num [gVerylow]
+      · norm_num only [gVerylow, Devm.gasLeft_setMach]
       · rfl
     · exact hnext hwf' hreads'
   apply Func.execSat_next
@@ -1543,14 +1547,16 @@ private theorem appendTarget_write_suffixExecSatOf
   have hafter := afterOldPauserExecSatOf
     (e := e) (d := length.write.post) (stack := stack) hfork hwf hreads htarget hprevious hnew
     hcontinuation hsize halign htime hcountL hcountOrig
-    (by simpa [haccessL] using hcountCold) hintervalL
-    (by simpa [haccessL] using hintervalCold) hexpiryL hexpiryOrig
-    (by simpa [haccessL] using hwarmExpiry) hroom hstatic
+    (by simpa only [haccessL] using hcountCold) hintervalL
+    (by simpa only [haccessL] using hintervalCold) hexpiryL hexpiryOrig
+    (by simpa only [haccessL] using hwarmExpiry) hroom hstatic
   have hlookup :
       ((runtime officialParams).main ::
         (runtime officialParams).aux)[afterOldPauserSlot]? =
           some afterOldPauser := by
-    simp [runtime, aux, afterOldPauserSlot]
+    simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux, afterOldPauserSlot,
+    slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos,
+    List.getElem_cons_succ, List.getElem_cons_zero]
   have hcall : Func.ExecSat
       ((runtime officialParams).main :: (runtime officialParams).aux)
       e (length.write.post.setMach ⟨stack, M,
@@ -1585,7 +1591,7 @@ private theorem appendTarget_write_suffixExecSatOf
     exact execSat_loadWord_pushB256_prepend
       (offsetCost := 3) (valueCost := 3)
       hlengthCovered halign hlength hlengthOffsetCost hlengthSlotCost (by omega)
-      (by norm_num [gVerylow]) hlengthStore
+      (by norm_num only [gVerylow]) hlengthStore
   have hindexStore := execSat_successfulWrite_step hfork index.write
     index.currentZero index.originalZero (by decide) index.warm hstatic
     hlengthSuffix
@@ -1609,7 +1615,7 @@ private theorem appendTarget_write_suffixExecSatOf
       (wordOffsetCost := 3) (targetOffsetCost := 3) (tagCost := 3)
       hlengthCovered htargetCovered halign hlength htarget rfl
       hlengthOffsetCost htargetOffsetCost hindexTagCost (by omega)
-      (by norm_num [gVerylow]) hindexStore
+      (by norm_num only [gVerylow]) hindexStore
   exact execSat_successfulWrite_step hfork array.write array.currentZero
     array.originalZero (by decide) array.warm hstatic hindexSuffix
 
@@ -1723,39 +1729,39 @@ private theorem appendTargetExecSatOf
   have hwarmArray₁ :
       (e.currentTarget, arrayEntrySlot 1) ∈ d₁.accessedStorageKeys := by
     rcases d with ⟨mach, mt, world⟩
-    simpa [d₁, addAccessedStorageKey, liftMachMetaPure,
-      Meta.addAccessedStorageKey, Devm.accessedStorageKeys] using
+    simpa only [d₁, Devm.accessedStorageKeys, addAccessedStorageKey, liftMachMetaPure, Meta.addAccessedStorageKey,
+    Std.HashSet.mem_insert, beq_iff_eq, Prod.mk.injEq, true_and] using
       (Or.inr hwarmArray : arrayLengthSlot = arrayEntrySlot 1 ∨
         (e.currentTarget, arrayEntrySlot 1) ∈ mt.accessedStorageKeys)
   have hwarmIndex₁ :
       (e.currentTarget, indexSlot 7) ∈ d₁.accessedStorageKeys := by
     rcases d with ⟨mach, mt, world⟩
-    simpa [d₁, addAccessedStorageKey, liftMachMetaPure,
-      Meta.addAccessedStorageKey, Devm.accessedStorageKeys] using
+    simpa only [d₁, Devm.accessedStorageKeys, addAccessedStorageKey, liftMachMetaPure, Meta.addAccessedStorageKey,
+    Std.HashSet.mem_insert, beq_iff_eq, Prod.mk.injEq, true_and] using
       (Or.inr hwarmIndex : arrayLengthSlot = indexSlot 7 ∨
         (e.currentTarget, indexSlot 7) ∈ mt.accessedStorageKeys)
   have hwarmLength₁ :
       (e.currentTarget, arrayLengthSlot) ∈ d₁.accessedStorageKeys := by
     rcases d with ⟨mach, mt, world⟩
-    simp [d₁, addAccessedStorageKey, liftMachMetaPure,
-      Meta.addAccessedStorageKey, Devm.accessedStorageKeys]
+    simp only [Devm.accessedStorageKeys, addAccessedStorageKey, liftMachMetaPure, Meta.addAccessedStorageKey,
+    Std.HashSet.mem_insert, BEq.rfl, true_or, d₁]
   have hcountCold₁ :
       (e.currentTarget, countSlot 9) ∉ d₁.accessedStorageKeys := by
     rcases d with ⟨mach, mt, world⟩
-    simpa [d₁, addAccessedStorageKey, liftMachMetaPure,
-      Meta.addAccessedStorageKey, Devm.accessedStorageKeys] using And.intro
+    simpa only [d₁, Devm.accessedStorageKeys, addAccessedStorageKey, liftMachMetaPure, Meta.addAccessedStorageKey,
+    Std.HashSet.mem_insert, beq_iff_eq, Prod.mk.injEq, true_and, not_or, ne_eq] using And.intro
         (by decide : arrayLengthSlot ≠ countSlot 9) hcountCold
   have hintervalCold₁ :
       (e.currentTarget, heartbeatIntervalSlot) ∉ d₁.accessedStorageKeys := by
     rcases d with ⟨mach, mt, world⟩
-    simpa [d₁, addAccessedStorageKey, liftMachMetaPure,
-      Meta.addAccessedStorageKey, Devm.accessedStorageKeys] using And.intro
+    simpa only [d₁, Devm.accessedStorageKeys, addAccessedStorageKey, liftMachMetaPure, Meta.addAccessedStorageKey,
+    Std.HashSet.mem_insert, beq_iff_eq, Prod.mk.injEq, true_and, not_or, ne_eq] using And.intro
         (by decide : arrayLengthSlot ≠ heartbeatIntervalSlot) hintervalCold
   have hwarmExpiry₁ :
       (e.currentTarget, expirySlot 9) ∈ d₁.accessedStorageKeys := by
     rcases d with ⟨mach, mt, world⟩
-    simpa [d₁, addAccessedStorageKey, liftMachMetaPure,
-      Meta.addAccessedStorageKey, Devm.accessedStorageKeys] using
+    simpa only [d₁, Devm.accessedStorageKeys, addAccessedStorageKey, liftMachMetaPure, Meta.addAccessedStorageKey,
+    Std.HashSet.mem_insert, beq_iff_eq, Prod.mk.injEq, true_and] using
       (Or.inr hwarmExpiry : arrayLengthSlot = expirySlot 9 ∨
         (e.currentTarget, expirySlot 9) ∈ mt.accessedStorageKeys)
   have hmstoreTail : Func.ExecSat
@@ -1768,7 +1774,7 @@ private theorem appendTargetExecSatOf
     apply execSat_mstoreAt_word_prepend
       (offsetCost := 3) (G := suffixGas + 18) (Gpre := suffixGas + 24)
       hwf hreads hlengthCovered halign (by decide) (by decide) (by
-        norm_num [gVerylow])
+        norm_num only [gVerylow])
     intro hwf₁ hreads₁
     have readAfterBefore {word : B256}
         (hbefore :
@@ -1819,7 +1825,7 @@ private theorem appendTargetExecSatOf
       exact execSat_tagTop_prepend (region := arrayRegion)
         (top := 1) (tagged := arrayEntrySlot 1) (stack := [7, 1])
         (tagCost := 3) (G := suffixGas) (Gpre := suffixGas + 6)
-        rfl (by decide) (by decide) (by norm_num [gVerylow]) hsuffix
+        rfl (by decide) (by decide) (by norm_num only [gVerylow]) hsuffix
     have hlengthLoad : Func.ExecSat
         ((runtime officialParams).main :: (runtime officialParams).aux)
         e (d₁.setMach ⟨7 :: 1 :: [], M₁, suffixGas + 12, d₁.stateGas⟩)
@@ -1828,11 +1834,11 @@ private theorem appendTargetExecSatOf
       exact execSat_loadWord_prepend (offsetCost := 3)
         (G := suffixGas + 6) (Gpre := suffixGas + 12)
         hlengthCovered₁ halign₁ hlengthM₁
-        (by decide) (by decide) (by norm_num [gVerylow]) htag
+        (by decide) (by decide) (by norm_num only [gVerylow]) htag
     exact execSat_loadWord_prepend (offsetCost := 3)
       (G := suffixGas + 12) (Gpre := suffixGas + 18)
       htargetCovered₁ halign₁ htargetM₁
-      (by decide) (by decide) (by norm_num [gVerylow]) hlengthLoad
+      (by decide) (by decide) (by norm_num only [gVerylow]) hlengthLoad
   have harith : Func.ExecSat
       ((runtime officialParams).main :: (runtime officialParams).aux)
       e (d₁.setMach ⟨[0], M, suffixGas + 33, d₁.stateGas⟩)
@@ -1848,7 +1854,7 @@ private theorem appendTargetExecSatOf
     · intro ex htail
       func_run (3) [1]
       case h_f =>
-        norm_num [suffixGas]
+        norm_num only [suffixGas]
         exact htail
     · exact hmstoreTail
   have hsload : Func.ExecSat
@@ -1859,7 +1865,7 @@ private theorem appendTargetExecSatOf
         loadWord arrayLengthWord +++ tagTop arrayRegion +++ suffix)
       (fun ex => ∃ post, ex = .ok post) := by
     exact execSat_sload_cold_prepend hfork hlength hlengthCold (by decide)
-      (by norm_num [gasColdSload]) harith
+      (by norm_num only [gasColdSload]) harith
   apply Func.execSat_next
   · apply Ninst.runCompiled_pushB256 (c := 3) (G := suffixGas + 2133)
       (by decide) rfl
@@ -1990,7 +1996,9 @@ private theorem setPauserFreshAssignmentCallExecSatOf
       ((runtime officialParams).main ::
         (runtime officialParams).aux)[appendTargetSlot]? =
           some appendTarget := by
-    simp [runtime, aux, appendTargetSlot]
+    simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux, appendTargetSlot, slotOf,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+    List.getElem_cons_zero]
   have hcall : Func.ExecSat
       ((runtime officialParams).main :: (runtime officialParams).aux)
       e (assign.post.setMach ⟨[], M, appendGas + 12, (assign.post).stateGas⟩)
@@ -2013,7 +2021,7 @@ private theorem setPauserFreshAssignmentCallExecSatOf
       (by decide) rfl (by
         simp only [Devm.stack_setMach, List.length_cons]
         decide)
-    · norm_num [gVerylow, gMid, gHigh, gJumpdest]
+    · simp only [Devm.gasLeft_setMach, gVerylow, gHigh, gJumpdest]
     · change Func.ExecWitness _ _
         (assign.post.setMach ⟨[], M, appendGas + 12, (assign.post).stateGas⟩)
         (.call appendTargetSlot) ex
@@ -2026,7 +2034,7 @@ private theorem setPauserFreshAssignmentCallExecSatOf
     · exact Ninst.runCompiled_unary (x := 0) (v := 1) (s := [])
         (cost := gVerylow) (G := appendGas + 26)
         (by rintro ⟨⟩) rfl rfl rfl
-        (by norm_num [gVerylow]) (by decide)
+        (by simp only [Devm.gasLeft_setMach, gVerylow]) (by decide)
     · exact hbranch
   simpa only [branch, oldTail, appendGas, Nat.add_right_comm] using
     (execSat_successfulWrite_step hfork assign hassignment hassignmentOrig
@@ -2149,23 +2157,22 @@ private theorem setPauserFreshBodyExecSatOf
   have hwarmAssignment₁ :
       (e.currentTarget, assignmentSlot 7) ∈ d₁.accessedStorageKeys := by
     rcases d with ⟨mach, mt, world⟩
-    simp [d₁, addAccessedStorageKey, liftMachMetaPure,
-      Meta.addAccessedStorageKey, Devm.accessedStorageKeys]
+    simp only [Devm.accessedStorageKeys, addAccessedStorageKey, liftMachMetaPure, Meta.addAccessedStorageKey,
+    Std.HashSet.mem_insert, BEq.rfl, true_or, d₁]
   have warmOld {key : B256}
       (hmem : (e.currentTarget, key) ∈ d.accessedStorageKeys) :
       (e.currentTarget, key) ∈ d₁.accessedStorageKeys := by
     rcases d with ⟨mach, mt, world⟩
-    simpa [d₁, addAccessedStorageKey, liftMachMetaPure,
-      Meta.addAccessedStorageKey, Devm.accessedStorageKeys] using
+    simpa only [d₁, Devm.accessedStorageKeys, addAccessedStorageKey, liftMachMetaPure, Meta.addAccessedStorageKey,
+    Std.HashSet.mem_insert, beq_iff_eq, Prod.mk.injEq, true_and] using
       (Or.inr hmem : assignmentSlot 7 = key ∨
         (e.currentTarget, key) ∈ mt.accessedStorageKeys)
   have coldOld {key : B256} (hne : assignmentSlot 7 ≠ key)
       (hmem : (e.currentTarget, key) ∉ d.accessedStorageKeys) :
       (e.currentTarget, key) ∉ d₁.accessedStorageKeys := by
     rcases d with ⟨mach, mt, world⟩
-    simpa [d₁, addAccessedStorageKey, liftMachMetaPure,
-      Meta.addAccessedStorageKey, Devm.accessedStorageKeys] using
-      And.intro hne hmem
+    simpa only [d₁, Devm.accessedStorageKeys, addAccessedStorageKey, liftMachMetaPure, Meta.addAccessedStorageKey,
+    Std.HashSet.mem_insert, beq_iff_eq, Prod.mk.injEq, true_and, not_or, ne_eq] using And.intro hne hmem
   have hmstoreTail : Func.ExecSat
       ((runtime officialParams).main :: (runtime officialParams).aux)
       e (d₁.setMach ⟨[0, 0], M, assignmentGas + 24, d₁.stateGas⟩)
@@ -2176,7 +2183,7 @@ private theorem setPauserFreshBodyExecSatOf
       (offsetCost := 3) (G := assignmentGas + 18)
       (Gpre := assignmentGas + 24)
       hwf hreads hpreviousCovered halign (by decide) (by decide)
-      (by norm_num [gVerylow])
+      (by norm_num only [gVerylow])
     intro hwf₁ hreads₁
     have sliceBefore {word : B256}
         (hbefore :
@@ -2238,7 +2245,7 @@ private theorem setPauserFreshBodyExecSatOf
         (top := 7) (tagged := assignmentSlot 7) (stack := [9, 0])
         (tagCost := 3) (G := assignmentGas)
         (Gpre := assignmentGas + 6)
-        rfl (by decide) (by decide) (by norm_num [gVerylow]) (by
+        rfl (by decide) (by decide) (by norm_num only [gVerylow]) (by
           simpa only [suffix, assignmentGas, appendGas] using hassign)
     have htargetKey : Func.ExecSat
         ((runtime officialParams).main :: (runtime officialParams).aux)
@@ -2249,11 +2256,11 @@ private theorem setPauserFreshBodyExecSatOf
         (execSat_loadWord_prepend (offsetCost := 3)
           (G := assignmentGas + 6) (Gpre := assignmentGas + 12)
           htargetCovered₁ hMalign₁ htargetM₁
-          (by decide) (by decide) (by norm_num [gVerylow]) htag)
+          (by decide) (by decide) (by norm_num only [gVerylow]) htag)
     exact execSat_loadWord_prepend (offsetCost := 3)
       (G := assignmentGas + 12) (Gpre := assignmentGas + 18)
       hnewCovered₁ hMalign₁ hnewM₁
-      (by decide) (by decide) (by norm_num [gVerylow]) htargetKey
+      (by decide) (by decide) (by norm_num only [gVerylow]) htargetKey
   have hdup : Func.ExecSat
       ((runtime officialParams).main :: (runtime officialParams).aux)
       e (d₁.setMach ⟨[0], M, assignmentGas + 27, d₁.stateGas⟩)
@@ -2262,7 +2269,7 @@ private theorem setPauserFreshBodyExecSatOf
       (fun ex => ∃ post, ex = .ok post) := by
     apply Func.execSat_next
     · exact Ninst.runCompiled_dup (n := 0) (w := 0)
-        (G := assignmentGas + 24) rfl (by norm_num [gVerylow]) (by
+        (G := assignmentGas + 24) rfl (by simp only [Devm.gasLeft_setMach, gVerylow]) (by
           simp only [Devm.stack_setMach, List.length_cons]
           decide)
     · exact hmstoreTail
@@ -2274,7 +2281,7 @@ private theorem setPauserFreshBodyExecSatOf
         loadWord newPauserWord +++ targetKey +++ suffix)
       (fun ex => ∃ post, ex = .ok post) := by
     exact execSat_sload_cold_prepend hfork hassignment hassignmentCold (by decide)
-      (by norm_num [gasColdSload]) hdup
+      (by norm_num only [gasColdSload]) hdup
   have htag : Func.ExecSat
       ((runtime officialParams).main :: (runtime officialParams).aux)
       e (d.setMach ⟨[7], M,
@@ -2287,13 +2294,13 @@ private theorem setPauserFreshBodyExecSatOf
       (top := 7) (tagged := assignmentSlot 7) (stack := [])
       (tagCost := 3) (G := assignmentGas + 27 + gasColdSload)
       (Gpre := assignmentGas + 27 + gasColdSload + 6)
-      rfl (by decide) (by decide) (by norm_num [gVerylow]) hsload
+      rfl (by decide) (by decide) (by norm_num only [gVerylow]) hsload
   simpa only [targetKey, suffix, prepend_append] using
     (execSat_loadWord_prepend (offsetCost := 3)
       (G := assignmentGas + 27 + gasColdSload + 6)
       (Gpre := assignmentGas + 2139)
       htargetCovered halign htarget (by decide) (by decide)
-      (by norm_num [gasColdSload, gVerylow]) htag)
+      (by norm_num only [gasColdSload, gVerylow]) htag)
 
 private theorem setPauserKernelFreshExecSatOf
     {e : Sevm} {d : Devm} {M : Mem} {bs : Bytes}
@@ -2381,7 +2388,7 @@ private theorem setPauserKernelFreshExecSatOf
       rfl (by
         simp only [Devm.stack_setMach, List.length_cons]
         decide)
-    · norm_num [gVerylow, gHigh]
+    · simp only [Devm.gasLeft_setMach, gVerylow, gHigh]
     · change Func.ExecWitness _ _
         (d.setMach ⟨[], M, assignmentGas + 2139, d.stateGas⟩) body ex
       exact hw
@@ -2393,13 +2400,13 @@ private theorem setPauserKernelFreshExecSatOf
     · exact Ninst.runCompiled_unary (x := 7) (v := 0) (s := [])
         (cost := gVerylow) (G := assignmentGas + 2152)
         (by rintro ⟨⟩) rfl rfl (by decide)
-        (by norm_num [gVerylow]) (by decide)
+        (by simp only [Devm.gasLeft_setMach, gVerylow]) (by decide)
     · exact hbranch
   simpa only [setPauserKernel, guarded, body] using
     (execSat_loadWord_prepend (offsetCost := 3)
       (G := assignmentGas + 2155) (Gpre := assignmentGas + 2161)
       htargetCovered halign htarget (by decide) (by decide)
-      (by norm_num [gVerylow]) htest)
+      (by norm_num only [gVerylow]) htest)
 
 private def freshKernelOwner : Adr := Nat.toAdr 100
 
@@ -2503,7 +2510,8 @@ private theorem freshKernelState_facts :
             (freshKernelOwner, indexSlot (7 : B256)),
             (freshKernelOwner, expirySlot (9 : B256))] ↔ _
     rw [Std.HashSet.mem_ofList]
-    simp
+    simp only [List.contains_eq_mem, List.mem_cons, Prod.mk.injEq, true_and, List.not_mem_nil, or_false, Bool.decide_or,
+    Bool.or_eq_true, decide_eq_true_eq]
 
 private def freshKernelSuccess : Execution → Prop
   | .ok _ => True
@@ -2526,7 +2534,7 @@ private theorem freshKernelExecSat :
       (freshKernelSevm.currentTarget, key) ∉
         freshKernelBase.accessedStorageKeys := by
     rw [haccess]
-    simp [hneArray, hneIndex, hneExpiry]
+    simp only [hneArray, hneIndex, hneExpiry, or_self, not_false_eq_true]
   have hwarmArray :
       (freshKernelSevm.currentTarget, arrayEntrySlot (1 : B256)) ∈
         freshKernelBase.accessedStorageKeys := by
@@ -2583,7 +2591,7 @@ private theorem freshKernel_tableEntry :
         ((runtime officialParams).main ::
           (runtime officialParams).aux))[setPauserSlot]? =
         some (loc, setPauserKernel) := by
-  simp [runtime, aux, setPauserSlot]
+  simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux, setPauserSlot, slotOf]
   exact ⟨_, rfl⟩
 
 set_option maxRecDepth 32768 in
@@ -2624,10 +2632,10 @@ private theorem freshKernel_canonicalFacts :
   constructor
   · unfold canonicalAddress
     change (7 : Nat) < 2 ^ 160
-    norm_num
+    norm_num only
   · unfold canonicalAddress
     change (9 : Nat) < 2 ^ 160
-    norm_num
+    norm_num only
 
 set_option maxRecDepth 32768 in
 theorem freshRegistration_exactCode_success_control :
@@ -2748,7 +2756,7 @@ theorem freshRegistration_extracts_sourceTrace_control :
     exact hcontinuationMemory
   have hwEntry' : RegistryWitness
       (logicalStorageOfStor (Devm.getStor pre owner)) [] := by
-    simpa [logicalStorageOfStor] using hwEntry
+    simpa only [logicalStorageOfStor] using hwEntry
   rcases setPauserKernel_exec_extracts_sourceTrace officialParams
       hcurrent hcodeAddress hcode htable hwf hreads htargetImage hnewImage
       hcontinuationImage hwEntry' htargetCanonical hnewCanonical execution with

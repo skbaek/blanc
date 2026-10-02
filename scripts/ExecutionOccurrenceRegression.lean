@@ -122,8 +122,7 @@ private theorem terminalError_occurs (fixture : TerminalFixture) :
     fixture.occurrence.instruction = .reg .sstore ∧
       fixture.occurrence.stepResult = .error fixture.err ∧
       Exec.rawNodes fixture.run = [fixture.root] := by
-  exact ⟨rfl, rfl, by simp [TerminalFixture.run, TerminalFixture.root,
-    Exec.rawNodes]⟩
+  exact ⟨rfl, rfl, by simp only [TerminalFixture.run, Exec.rawNodes, TerminalFixture.root]⟩
 
 private def noOpCode : ByteArray := ByteArray.mk #[0x55, 0x00]
 private def noOpSevm : Sevm :=
@@ -240,8 +239,7 @@ private def HistoryFixture.occurrence14 (w : HistoryFixture) :
     slot := .none
     stepResult := .ok w.s15
     reached := by
-      simp [HistoryFixture.root, HistoryFixture.run, HistoryFixture.node14,
-        Exec.rawNodes]
+      simp only [root, run, Exec.rawNodes, node14, List.mem_cons, Exec.Deriv.mk.injEq, OfNat.ofNat_ne_zero, ExceptT.stM_eq, true_and, false_and, Nat.reduceEqDiff, List.not_mem_nil, or_self, or_false, or_true]
     decoded := by
       change Ninst.At historySevm.code 14 (.reg .sstore)
       rfl
@@ -292,15 +290,15 @@ private def historyFixture? : Option HistoryFixture :=
                                   some {
                                     s2, s4, s5, s7, s9, s10, s12, s14, s15,
                                     out
-                                    h0 := by simpa [hp2] using h0
-                                    h2 := by simpa [hp4] using h2
-                                    h4 := by simpa [hp5] using h4
-                                    h5 := by simpa [hp7] using h5
-                                    h7 := by simpa [hp9] using h7
-                                    h9 := by simpa [hp10] using h9
-                                    h10 := by simpa [hp12] using h10
-                                    h12 := by simpa [hp14] using h12
-                                    h14 := by simpa [hp15] using h14
+                                    h0 := by simpa only [hp2] using h0
+                                    h2 := by simpa only [hp4] using h2
+                                    h4 := by simpa only [hp5] using h4
+                                    h5 := by simpa only [hp7] using h5
+                                    h7 := by simpa only [hp9] using h7
+                                    h9 := by simpa only [hp10] using h9
+                                    h10 := by simpa only [hp12] using h10
+                                    h12 := by simpa only [hp14] using h12
+                                    h14 := by simpa only [hp15] using h14
                                     h15, commits, changed, finalValue,
                                     stack4, stack9, stack14 }
                                 else none else none else none
@@ -337,9 +335,7 @@ private theorem history_lastWriter (fixture : HistoryFixture) :
     unfold Exec.NinstOccurrence.Retained
     rw [occurrenceEq]
     show fixture.occurrence14.node ∈ Exec.retainedNodes fixture.run
-    simp [HistoryFixture.occurrence14,
-      HistoryFixture.run, HistoryFixture.node14, Exec.retainedNodes,
-      Exec.retainedNodesOfCommits, fixture.commits]
+    simp only [Exec.retainedNodes, fixture.commits, ↓reduceDIte, HistoryFixture.run, Exec.retainedNodesOfCommits, HistoryFixture.occurrence14, HistoryFixture.node14, ExceptT.stM_eq, List.mem_cons, Exec.Deriv.mk.injEq, OfNat.ofNat_ne_zero, true_and, false_and, Nat.reduceEqDiff, List.not_mem_nil, or_self, or_false, or_true]
   have owner : write.storageOwner = historySevm.currentTarget := by
     rw [Exec.SuccessfulSstoreOccurrence.storageOwner, occurrenceEq]
     rfl
@@ -349,10 +345,10 @@ private theorem history_lastWriter (fixture : HistoryFixture) :
     write.key :: write.value :: write.stepPost.stack at popped
   rw [fixture.stack14] at popped
   have key : write.key = 0 := by
-    exact Option.some.inj (by simpa using
+    exact Option.some.inj (by simpa only [Option.some.injEq, List.head?_cons] using
       (congrArg List.head? popped).symm)
   have value : write.value = 7 := by
-    exact Option.some.inj (by simpa using
+    exact Option.some.inj (by simpa only [Option.some.injEq, List.tail_cons, List.head?_cons] using
       (congrArg (fun stack => stack.tail.head?) popped).symm)
   have pc : write.occurrence.node.pc = 14 := by
     rw [occurrenceEq]
@@ -361,13 +357,12 @@ private theorem history_lastWriter (fixture : HistoryFixture) :
   unfold Exec.SuccessfulSstoreOccurrence.IsLastRetained
   let beforeNodes := (Exec.retainedNodes fixture.run).take 8
   let beforeWrites := beforeNodes.filterMap Exec.Deriv.successfulSstore?
-  refine ⟨beforeWrites, [], ?_, by simp⟩
+  refine ⟨beforeWrites, [], ?_, by simp only [List.not_mem_nil, not_and, IsEmpty.forall_iff, implies_true]⟩
   have nodes : Exec.retainedNodes fixture.run =
       beforeNodes ++ fixture.node14 ::
         [(⟨15, historySevm, fixture.s15, fixture.out,
           .halt fixture.h15⟩ : Exec.Deriv)] := by
-    simp [beforeNodes, HistoryFixture.run, HistoryFixture.node14,
-      Exec.retainedNodes, Exec.retainedNodesOfCommits, fixture.commits]
+    simp only [Exec.retainedNodes, fixture.commits, ↓reduceDIte, HistoryFixture.run, Exec.retainedNodesOfCommits, List.take_succ_cons, List.take_zero, HistoryFixture.node14, List.cons_append, List.nil_append, beforeNodes]
   unfold Exec.retainedStorageWrites
   change (Exec.retainedNodes fixture.run).filterMap
     Exec.Deriv.successfulSstore? = beforeWrites ++ [write.storageWrite]
@@ -381,8 +376,7 @@ private theorem history_lastWriter (fixture : HistoryFixture) :
       owner := historySevm.currentTarget
       key := 0
       value := 7 } := by
-    simp [Exec.Deriv.successfulSstore?, HistoryFixture.node14,
-      get14, fixture.stack14]
+    simp only [Exec.Deriv.successfulSstore?, HistoryFixture.node14, get14, fixture.stack14]
   have suffix : [fixture.node14,
       (⟨15, historySevm, fixture.s15, fixture.out,
         .halt fixture.h15⟩ : Exec.Deriv)].filterMap
@@ -392,10 +386,9 @@ private theorem history_lastWriter (fixture : HistoryFixture) :
       key := 0
       value := 7 }] := by
     simp only [List.filterMap_cons, List.filterMap_nil, projected14]
-    simp [Exec.Deriv.successfulSstore?]
+    simp only [Exec.Deriv.successfulSstore?]
   rw [suffix]
-  simp [beforeWrites, HistoryFixture.occurrence14,
-    HistoryFixture.node14]
+  simp only [HistoryFixture.node14, HistoryFixture.occurrence14, ExceptT.stM_eq, beforeWrites]
 
 /-- The same concrete history also instantiates the public changed-cell
 last-writer theorem; the explicit theorem above identifies its maximal event
@@ -474,8 +467,7 @@ private def SourceFixture.occurrence (w : SourceFixture) :
     slot := .none
     stepResult := .ok w.afterStore
     reached := by
-      simp [SourceFixture.frame, SourceFixture.run,
-        SourceFixture.node, Exec.Frame.rootDeriv, Exec.rawNodes]
+      simp only [frame, run, Exec.Frame.rootDeriv, Exec.rawNodes, node, List.mem_cons, Exec.Deriv.mk.injEq, one_ne_zero, ExceptT.stM_eq, true_and, false_and, true_or, or_true]
     decoded := by
       change Ninst.At sourceSevm.code 1 (.reg .sstore)
       rfl
@@ -505,8 +497,8 @@ private def sourceFixture? : Option SourceFixture :=
                 afterJump
                 afterStore
                 out
-                step0 := by simpa [hpc1] using step0
-                step1 := by simpa [hpc2] using step1
+                step0 := by simpa only [hpc1] using step0
+                step1 := by simpa only [hpc2] using step1
                 tail
                 commits
                 compiled }
@@ -548,7 +540,7 @@ private theorem sourceFixture_nonempty : Nonempty SourceFixture := by
     repeat' split
     all_goals grind
   cases fixture : sourceFixture? with
-  | none => simp [fixture] at hsome
+  | none => simp only [fixture, Option.isSome_none, Bool.false_eq_true] at hsome
   | some witness => exact ⟨witness⟩
 
 private theorem SourceFixture.exact (w : SourceFixture) :
@@ -643,7 +635,7 @@ private theorem entryOogFixture_nonempty : Nonempty EntryOogFixture := by
     repeat' split
     all_goals grind
   cases fixture : entryOogFixture? with
-  | none => simp [fixture] at hsome
+  | none => simp only [fixture, Option.isSome_none, Bool.false_eq_true] at hsome
   | some witness => exact ⟨witness⟩
 
 private theorem EntryOogFixture.exact (w : EntryOogFixture) :
@@ -658,12 +650,11 @@ private theorem EntryOogFixture.boundary (w : EntryOogFixture) :
       Exec.rawNodes w.run = [w.root] ∧
       ¬ ∃ target : Exec.Deriv,
         Exec.Deriv.ParentPrefix w.root target ∧ target.pc = 1 := by
-  refine ⟨by simp [EntryOogFixture.run, EntryOogFixture.root,
-      Exec.rawFrameRoots, Exec.rawFrameDescendants],
-    by simp [EntryOogFixture.run, EntryOogFixture.root, Exec.rawNodes], ?_⟩
+  refine ⟨by simp only [Exec.rawFrameRoots, run, Exec.rawFrameDescendants, root],
+    by simp only [run, Exec.rawNodes, root], ?_⟩
   rintro ⟨target, hprefix, targetPc⟩
   cases hprefix with
-  | refl => simp [EntryOogFixture.root] at targetPc
+  | refl => simp only [root, zero_ne_one] at targetPc
   | step edge _ => cases edge
 
 private def terminalSourcePre : Devm :=
@@ -693,8 +684,7 @@ private def TerminalSourceFixture.occurrence (w : TerminalSourceFixture) :
     slot := .none
     stepResult := .error w.err
     reached := by
-      simp [TerminalSourceFixture.root, TerminalSourceFixture.run,
-        TerminalSourceFixture.node, Exec.rawNodes]
+      simp only [root, run, Exec.rawNodes, node, List.mem_cons, Exec.Deriv.mk.injEq, one_ne_zero, ExceptT.stM_eq, true_and, false_and, List.not_mem_nil, or_false, or_true]
     decoded := by
       change Ninst.At sourceSevm.code 1 (.reg .sstore)
       rfl
@@ -725,7 +715,7 @@ private def terminalSourceFixture? : Option TerminalSourceFixture :=
           | .halt (.error err) => some {
               afterJump
               err
-              step0 := by simpa [hpc1] using step0
+              step0 := by simpa only [hpc1] using step0
               step1
               compiled }
           | _ => none
@@ -756,7 +746,7 @@ private theorem terminalSourceFixture_nonempty :
     repeat' split
     all_goals grind
   cases fixture : terminalSourceFixture? with
-  | none => simp [fixture] at hsome
+  | none => simp only [fixture, Option.isSome_none, Bool.false_eq_true] at hsome
   | some witness => exact ⟨witness⟩
 
 /-- The all-frame bridge attributes the terminal error to the exact structural
@@ -775,10 +765,10 @@ private theorem TerminalSourceFixture.exactAttribution
   have pathEq : path = (⟨0, []⟩ : Prog.SourcePath) := by
     rcases Prog.acceptsSstoreSite_iff.mp accepted with
       ⟨site, member, hpath, hpc, hinstruction⟩
-    simp [sourceProgram, Prog.sourceSites, table, Func.sourceSites] at member
+    simp only [Prog.sourceSites, table, sourceProgram, zero_add, List.length_cons, List.length_nil, List.range_one, List.flatMap_cons, zero_lt_one, getElem?_pos, List.getElem_cons_zero, Func.sourceSites, List.flatMap_nil, List.append_nil, List.mem_cons, List.not_mem_nil, or_false] at member
     rcases member with rfl
     exact hpath.symm
-  exact ⟨rfl, rfl, by simpa [pathEq] using accepted⟩
+  exact ⟨rfl, rfl, by simpa only [pathEq] using accepted⟩
 
 private theorem concrete_raw_attribution_controls :
     (∃ w : EntryOogFixture,
@@ -882,8 +872,7 @@ private def SuccessfulSourceFixture.occurrence
     slot := .none
     stepResult := .ok w.afterStore
     reached := by
-      simp [SuccessfulSourceFixture.root, SuccessfulSourceFixture.run,
-        SuccessfulSourceFixture.node, Exec.rawNodes]
+      simp only [root, run, Exec.rawNodes, node, List.mem_cons, Exec.Deriv.mk.injEq, one_ne_zero, ExceptT.stM_eq, true_and, false_and, true_or, or_true]
     decoded := by
       change Ninst.At code 1 (.reg .sstore)
       exact decoded
@@ -892,7 +881,7 @@ private def SuccessfulSourceFixture.occurrence
       change Ninst.StepRun 1 (attributedSevm code) w.afterJump
         (.reg .sstore) .none (.ok w.afterStore)
       unfold Ninst.StepRun
-      rw [← Evm.step_next (by simpa [attributedSevm] using decoded), w.step1]
+      rw [← Evm.step_next (by simpa only [attributedSevm] using decoded), w.step1]
       exact ⟨rfl, rfl⟩ }
 
 private theorem SuccessfulSourceFixture.sameFrame
@@ -925,8 +914,8 @@ private def successfulSourceFixture?
                   afterJump
                   afterStore
                   out
-                  step0 := by simpa [hpc1] using step0
-                  step1 := by simpa [hpc2] using step1
+                  step0 := by simpa only [hpc1] using step0
+                  step1 := by simpa only [hpc2] using step1
                   tail
                   compiled }
               else none
@@ -975,7 +964,7 @@ private theorem successfulSourceFixture_nonempty
     repeat' split
     all_goals grind
   cases fixture : successfulSourceFixture? program code pre with
-  | none => simp [fixture] at hsome
+  | none => simp only [fixture, Option.isSome_none, Bool.false_eq_true] at hsome
   | some witness => exact ⟨witness⟩
 
 private theorem noOpSourceFixture_nonempty :
@@ -1023,14 +1012,14 @@ private theorem SuccessfulSourceFixture.exactAttribution
   have pathEq := pathUnique path accepted
   refine ⟨rfl, rfl, ?_⟩
   change program.acceptsSstoreSite ⟨0, []⟩ 1 = true
-  simpa [pathEq] using accepted
+  simpa only [pathEq] using accepted
 
 private theorem noOpSourcePathUnique (path : Prog.SourcePath)
     (accepted : sourceProgram.acceptsSstoreSite path 1 = true) :
     path = (⟨0, []⟩ : Prog.SourcePath) := by
   rcases Prog.acceptsSstoreSite_iff.mp accepted with
     ⟨site, member, hpath, hpc, hinstruction⟩
-  simp [sourceProgram, Prog.sourceSites, table, Func.sourceSites] at member
+  simp only [Prog.sourceSites, table, sourceProgram, zero_add, List.length_cons, List.length_nil, List.range_one, List.flatMap_cons, zero_lt_one, getElem?_pos, List.getElem_cons_zero, Func.sourceSites, List.flatMap_nil, List.append_nil, List.mem_cons, List.not_mem_nil, or_false] at member
   rcases member with rfl
   exact hpath.symm
 
@@ -1039,7 +1028,7 @@ private theorem revertedSourcePathUnique (path : Prog.SourcePath)
     path = (⟨0, []⟩ : Prog.SourcePath) := by
   rcases Prog.acceptsSstoreSite_iff.mp accepted with
     ⟨site, member, hpath, hpc, hinstruction⟩
-  simp [revertedSourceProgram, Prog.sourceSites, table, Func.sourceSites] at member
+  simp only [Prog.sourceSites, table, revertedSourceProgram, zero_add, List.length_cons, List.length_nil, List.range_one, List.flatMap_cons, zero_lt_one, getElem?_pos, List.getElem_cons_zero, Func.sourceSites, List.flatMap_nil, List.append_nil, List.mem_cons, List.not_mem_nil, or_false] at member
   rcases member with rfl
   exact hpath.symm
 
@@ -1048,10 +1037,10 @@ private theorem laterOogSourcePathUnique (path : Prog.SourcePath)
     path = (⟨0, []⟩ : Prog.SourcePath) := by
   rcases Prog.acceptsSstoreSite_iff.mp accepted with
     ⟨site, member, hpath, hpc, hinstruction⟩
-  simp [laterOogSourceProgram, Prog.sourceSites, table, Func.sourceSites] at member
+  simp only [Prog.sourceSites, table, laterOogSourceProgram, zero_add, List.length_cons, List.length_nil, List.range_one, List.flatMap_cons, zero_lt_one, getElem?_pos, List.getElem_cons_zero, Func.sourceSites, List.nil_append, List.flatMap_nil, List.append_nil, List.mem_cons, List.not_mem_nil, or_false] at member
   rcases member with rfl | rfl
   · exact hpath.symm
-  · simp_all
+  · simp_all only [Nat.add_eq_left, Ninst.reg.injEq, reduceCtorEq]
 
 private theorem concrete_successful_source_outcomes :
     (∃ w : SuccessfulSourceFixture sourceProgram sourceCode noOpSourcePre,
@@ -1087,7 +1076,7 @@ private theorem concrete_successful_source_outcomes :
     simp only [Bool.and_eq_true] at available
     have runEq := (exec_iff_exec_eq 0 (attributedSevm sourceCode)
       noOpSourcePre noOp.out).mp ⟨noOp.run⟩
-    simpa [runEq] using available.2
+    simpa only [runEq] using available.2
   have revertedOutcome : ∃ post, reverted.out = .error (.revert, post) := by
     have available : revertedSourceAvailable = true := by native_decide
     unfold revertedSourceAvailable at available
@@ -1097,7 +1086,7 @@ private theorem concrete_successful_source_outcomes :
     split at available
     next result post resultEq =>
       exact ⟨post, (resultEq.symm.trans runEq).symm⟩
-    all_goals simp_all
+    all_goals simp_all only [ExceptT.stM_eq, imp_false, Bool.false_eq_true, and_false]
   have laterOogOutcome :
       ∃ post, laterOog.out = .error (.halt (.outOfGas .none), post) := by
     have available : laterOogSourceAvailable = true := by native_decide
@@ -1108,7 +1097,7 @@ private theorem concrete_successful_source_outcomes :
     split at available
     next result post resultEq =>
       exact ⟨post, (resultEq.symm.trans runEq).symm⟩
-    all_goals simp_all
+    all_goals simp_all only [ExceptT.stM_eq, imp_false, Bool.false_eq_true, and_false]
   refine ⟨⟨noOp, noOpAttributed.1, noOpAttributed.2.1,
       by rw [← noOpAttributed.2.1]; exact noOpAttributed.2.2, noOpOutcome⟩,
     ⟨reverted, revertedAttributed.1, revertedAttributed.2.1,
@@ -1119,10 +1108,10 @@ private theorem concrete_successful_source_outcomes :
       laterOogOutcome, ?_⟩⟩
   · rcases revertedOutcome with ⟨post, outcome⟩
     rw [outcome]
-    simp [Execution.commits]
+    simp only [Execution.commits, ne_eq, Bool.false_eq_true, not_false_eq_true]
   · rcases laterOogOutcome with ⟨post, outcome⟩
     rw [outcome]
-    simp [Execution.commits]
+    simp only [Execution.commits, ne_eq, Bool.false_eq_true, not_false_eq_true]
 
 private def successfulSourceOutcomesAvailable : Bool :=
   noOpSourceAvailable && revertedSourceAvailable && laterOogSourceAvailable
@@ -1221,7 +1210,7 @@ private theorem ContTrace.getLast?_pcs
   induction trace with
   | refl => rfl
   | step hstep rest ih =>
-      cases rest <;> simp_all [ContTrace.pcs, ContTrace.endPc]
+      cases rest <;> simp_all only [pcs, List.getLast?_singleton, endPc, List.getLast?_cons_cons]
 
 private def fixtureSevm (code : ByteArray) : Sevm :=
   { (default : Sevm) with
@@ -1279,7 +1268,7 @@ private def fixture?
           match buildContTrace? (fixtureSevm code) 1 afterGlue depth with
           | some trace => some {
               afterGlue
-              entryStep := by simpa [hpc] using entryStep
+              entryStep := by simpa only [hpc] using entryStep
               trace
               compiled }
           | none => none
@@ -1315,7 +1304,7 @@ private theorem branchEqFixture_exists :
     native_decide
   unfold branchEqAvailable at available
   cases fixture : branchEqFixture? with
-  | none => simp [fixture] at available
+  | none => simp only [fixture, Bool.false_eq_true] at available
   | some witness =>
       rw [fixture] at available
       simp only [Bool.and_eq_true] at available
@@ -1341,7 +1330,7 @@ private theorem chronology_branch_eq_before_sstore_control :
   have targetPc : w.target.pc = 6 := by
     have last := w.trace.getLast?_pcs
     rw [pcs] at last
-    simpa [Fixture.target, ContTrace.node] using last.symm
+    simpa only [Fixture.target, ContTrace.node, List.getLast?_cons_cons, List.getLast?_singleton, Option.some.injEq] using last.symm
   have targetAt : Ninst.At w.target.sevm.code w.target.pc
       (.reg .sstore) := by
     rw [targetPc]
@@ -1402,7 +1391,7 @@ private theorem callEqFixture_exists :
     native_decide
   unfold callEqAvailable at available
   cases fixture : callEqFixture? with
-  | none => simp [fixture] at available
+  | none => simp only [fixture, Bool.false_eq_true] at available
   | some witness =>
       rw [fixture] at available
       simp only [Bool.and_eq_true] at available
@@ -1430,7 +1419,7 @@ private theorem chronology_call_eq_before_sstore_control :
   have targetPc : w.target.pc = 7 := by
     have last := w.trace.getLast?_pcs
     rw [pcs] at last
-    simpa [Fixture.target, ContTrace.node] using last.symm
+    simpa only [Fixture.target, ContTrace.node, List.getLast?_cons_cons, List.getLast?_singleton, Option.some.injEq] using last.symm
   have targetAt : Ninst.At w.target.sevm.code w.target.pc
       (.reg .sstore) := by
     rw [targetPc]
@@ -1444,7 +1433,7 @@ private theorem chronology_call_eq_before_sstore_control :
   refine ⟨w, mainCursor, ?_⟩
   cases route with
   | call cursor chronology lookup body compilerPrefix rest =>
-      cases Option.some.inj (by simpa [callEqProgram] using lookup)
+      cases Option.some.inj (by simpa only [Option.some.injEq, callEqProgram, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.one_lt_ofNat, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero] using lookup)
       cases rest with
       | atTarget cursor chronology site siteEq sourceMember targetEq instructionEq =>
           cases instructionEq
@@ -1491,13 +1480,13 @@ private theorem errorChronologyFixture_exists :
     native_decide
   unfold errorChronologyAvailable at available
   cases fixture : errorChronologyFixture? with
-  | none => simp [fixture] at available
+  | none => simp only [fixture, Bool.false_eq_true] at available
   | some witness =>
       rw [fixture] at available
       simp only [Bool.and_eq_true] at available
       have notCommitted : Execution.commits witness.out ≠ true := by
         intro committed
-        simp [committed] at available
+        simp only [beq_iff_eq, committed, Bool.not_true, Bool.false_eq_true, and_false] at available
       exact ⟨witness, beq_iff_eq.mp available.1, notCommitted⟩
 
 /-- Chronology is retained for a reached SSTORE even though a later SLOAD in
@@ -1518,7 +1507,7 @@ private theorem chronology_error_suffix_control :
   have targetPc : w.target.pc = 2 := by
     have last := w.trace.getLast?_pcs
     rw [pcs] at last
-    simpa [Fixture.target, ContTrace.node] using last.symm
+    simpa only [Fixture.target, ContTrace.node, List.getLast?_cons_cons, List.getLast?_singleton, Option.some.injEq] using last.symm
   have targetAt : Ninst.At w.target.sevm.code w.target.pc
       (.reg .sstore) := by
     rw [targetPc]
@@ -1626,7 +1615,7 @@ private theorem CallFixture.rawFrameRoot_order (w : CallFixture) :
     Exec.rawFrameRoots w.run =
       w.root ::
         (Exec.rawFrameRoots w.child ++ Exec.rawFrameDescendants w.next) := by
-  simp [CallFixture.run, CallFixture.root, Exec.rawFrameRoots]
+  simp only [Exec.rawFrameRoots, run, root, List.cons_append, List.cons.injEq, true_and]
   conv_lhs => unfold Exec.rawFrameDescendants
 
 private theorem CallFixture.retained_order_of_settles
@@ -1634,7 +1623,7 @@ private theorem CallFixture.retained_order_of_settles
     (settles : Frame.settlementCommits w.frame w.raw = true) :
     Exec.retainedNodes w.run =
       w.root :: (Exec.retainedNodes w.child ++ Exec.retainedNodes w.next) := by
-  simpa [CallFixture.run, CallFixture.root] using
+  simpa only [run, root] using
     Exec.retainedNodes_runOk_of_settlementCommits
       w.hstep w.henter w.child w.hresume w.next w.rootCommits settles
 
@@ -1642,7 +1631,7 @@ private theorem CallFixture.retained_prunes_of_not_settles
     (w : CallFixture)
     (notSettles : Frame.settlementCommits w.frame w.raw ≠ true) :
     Exec.retainedNodes w.run = w.root :: Exec.retainedNodes w.next := by
-  simpa [CallFixture.run, CallFixture.root] using
+  simpa only [run, root] using
     Exec.retainedNodes_runOk_of_not_settlementCommits
       w.hstep w.henter w.child w.hresume w.next w.rootCommits notSettles
 
@@ -1764,7 +1753,7 @@ private theorem committedCallFixture_nonempty : Nonempty CommittedCallFixture :=
     repeat' split
     all_goals grind
   cases fixture : committedCallFixture? with
-  | none => simp [fixture] at hsome
+  | none => simp only [fixture, Option.isSome_none, Bool.false_eq_true] at hsome
   | some witness => exact ⟨witness⟩
 
 private theorem caughtCallFixture_nonempty : Nonempty CaughtCallFixture := by
@@ -1775,7 +1764,7 @@ private theorem caughtCallFixture_nonempty : Nonempty CaughtCallFixture := by
     repeat' split
     all_goals grind
   cases fixture : caughtCallFixture? with
-  | none => simp [fixture] at hsome
+  | none => simp only [fixture, Option.isSome_none, Bool.false_eq_true] at hsome
   | some witness => exact ⟨witness⟩
 
 /-- Both exact option builders are inhabited and feed the proof-indexed raw
@@ -1897,7 +1886,8 @@ private theorem RawCallFixture.childSelected {parentCode childCode : ByteArray}
   simp only [RawCallFixture.run, RawCallFixture.childRoot,
     Exec.rawFrameRoots]
   unfold Exec.rawFrameDescendants
-  simp
+  simp only [List.mem_cons, Exec.Deriv.mk.injEq, ExceptT.stM_eq, List.mem_append,
+    true_or, or_true]
 
 private theorem RawCallFixture.childExact {parentCode childCode : ByteArray}
     (w : RawCallFixture parentCode childCode) (program : Prog)
@@ -1975,7 +1965,7 @@ private theorem caughtFixture_nonempty : Nonempty CaughtFixture := by
                     hstep := hstep
                     henter := henter
                     child := child
-                    hresume := by simpa [raw] using hresume
+                    hresume := by simpa only [ExceptT.stM_eq, raw] using hresume
                     next := next
                     childPc := childPc
                     storageTarget := storageTarget
@@ -1984,18 +1974,18 @@ private theorem caughtFixture_nonempty : Nonempty CaughtFixture := by
                   exact ⟨{
                     call := call
                     afterEntry := afterEntry
-                    entryStep := by simpa [entryPc] using entryStep
-                    rawFails := by simpa [call, raw] using rawFails
-                    outerCommits := by simpa [call, out] using outerCommits
+                    entryStep := by simpa only [entryPc] using entryStep
+                    rawFails := by simpa only [ne_eq, Bool.not_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true, raw, call] using rawFails
+                    outerCommits := by simpa only [out, call] using outerCommits
                     compiled := compiled }⟩
               | error error =>
-                  simp [hstep, henter, entryStep, hresume] at available
-          | halt result => simp [hstep, henter, entryStep] at available
+                  simp only [hstep, henter, entryStep, hresume, Bool.and_false, Bool.false_eq_true] at available
+          | halt result => simp only [hstep, henter, entryStep, Bool.and_false, Bool.false_eq_true] at available
           | spawn childFrame childResume childNextPc =>
-              simp [hstep, henter, entryStep] at available
-      | done settled => simp [hstep, henter] at available
-  | halt result => simp [hstep] at available
-  | cont nextPc post => simp [hstep] at available
+              simp only [hstep, henter, entryStep, Bool.and_false, Bool.false_eq_true] at available
+      | done settled => simp only [hstep, henter, Bool.false_eq_true] at available
+  | halt result => simp only [hstep, Bool.false_eq_true] at available
+  | cont nextPc post => simp only [hstep, Bool.false_eq_true] at available
 
 private theorem CaughtFixture.control (w : CaughtFixture) :
     w.call.childRoot ∈ Exec.rawFrameRoots w.call.run ∧
@@ -2016,7 +2006,7 @@ private theorem CaughtFixture.control (w : CaughtFixture) :
     rw [w.call.codeEq]
     rfl
   have reachedChild : Exec.Deriv.ParentPrefix w.call.childRoot node := by
-    simpa [node, RawCallFixture.childRoot] using childPrefix
+    simpa only [RawCallFixture.childRoot] using childPrefix
   have reachedGlobal : node ∈ Exec.rawNodes w.call.run :=
     (Exec.mem_rawNodes_iff_rawFrameRoot_parentPrefix w.call.run node).mpr
       ⟨w.call.childRoot, w.call.childSelected, reachedChild⟩
@@ -2024,19 +2014,22 @@ private theorem CaughtFixture.control (w : CaughtFixture) :
       (root := w.call.root) reachedGlobal decoded with
     ⟨occurrence, occurrenceNode, instructionEq⟩
   have reachedOccurrence : Exec.Deriv.ParentPrefix w.call.childRoot
-      occurrence.node := by simpa [occurrenceNode] using reachedChild
+      occurrence.node := by simpa only [occurrenceNode] using reachedChild
   rcases occurrence.acceptsSource_of_rawFrameRoot instructionEq
       w.call.childSelected (w.call.childExact caughtProgram w.compiled)
       reachedOccurrence with ⟨path, accepted⟩
   have pathEq : path = (⟨0, []⟩ : Prog.SourcePath) := by
     rcases Prog.acceptsSstoreSite_iff.mp accepted with
       ⟨site, member, hpath, hpc, hinstruction⟩
-    simp [caughtProgram, Prog.sourceSites, table, Func.sourceSites] at member
+    simp only [Prog.sourceSites, table, caughtProgram, zero_add, List.length_cons,
+      List.length_nil, List.range_one, List.flatMap_cons, zero_lt_one, getElem?_pos,
+      List.getElem_cons_zero, Func.sourceSites, List.flatMap_nil, List.append_nil,
+      List.mem_cons, List.not_mem_nil, or_false] at member
     rcases member with rfl
     exact hpath.symm
   refine ⟨occurrence, instructionEq, reachedOccurrence, ?_, ?_⟩
-  · simp [occurrenceNode, node]
-  · simpa [pathEq, occurrenceNode, node] using accepted
+  · simp only [occurrenceNode, node]
+  · simpa only [occurrenceNode, pathEq] using accepted
 
 private structure RollbackFixture where
   call : RawCallFixture rollbackParentCode rollbackCode
@@ -2129,7 +2122,7 @@ private theorem rollbackFixture_nonempty : Nonempty RollbackFixture := by
                             hstep := hstep
                             henter := henter
                             child := child
-                            hresume := by simpa [raw] using hresume
+                            hresume := by simpa only [ExceptT.stM_eq, raw] using hresume
                             next := next
                             childPc := childPc
                             storageTarget := storageTarget
@@ -2140,33 +2133,33 @@ private theorem rollbackFixture_nonempty : Nonempty RollbackFixture := by
                             afterEntry := afterEntry
                             afterValue := afterValue
                             beforeStore := beforeStore
-                            entryStep := by simpa [entryPc] using entryStep
-                            valueStep := by simpa [valuePc] using valueStep
-                            keyStep := by simpa [keyPc] using keyStep
+                            entryStep := by simpa only [entryPc] using entryStep
+                            valueStep := by simpa only [valuePc] using valueStep
+                            keyStep := by simpa only [keyPc] using keyStep
                             childCommits := by
-                              simpa [call, raw] using childCommits
+                              simpa only [raw, call] using childCommits
                             outerFails := by
-                              simpa [call, out] using outerFails
+                              simpa only [ne_eq, Bool.not_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true, out, call] using outerFails
                             compiled := compiled }⟩
                       | error error =>
-                          simp [hstep, henter, entryStep, valueStep,
-                            keyStep, hresume] at available
+                          simp only [hstep, henter, entryStep, valueStep,
+                            keyStep, hresume, Bool.and_false, Bool.false_eq_true] at available
                   | halt result =>
-                      simp [hstep, henter, entryStep, valueStep,
-                        keyStep] at available
+                      simp only [hstep, henter, entryStep, valueStep,
+                        keyStep, Bool.and_false, Bool.false_eq_true] at available
                   | spawn childFrame childResume childNextPc =>
-                      simp [hstep, henter, entryStep, valueStep,
-                        keyStep] at available
+                      simp only [hstep, henter, entryStep, valueStep,
+                        keyStep, Bool.and_false, Bool.false_eq_true] at available
               | halt result =>
-                  simp [hstep, henter, entryStep, valueStep] at available
+                  simp only [hstep, henter, entryStep, valueStep, Bool.and_false, Bool.false_eq_true] at available
               | spawn childFrame childResume childNextPc =>
-                  simp [hstep, henter, entryStep, valueStep] at available
-          | halt result => simp [hstep, henter, entryStep] at available
+                  simp only [hstep, henter, entryStep, valueStep, Bool.and_false, Bool.false_eq_true] at available
+          | halt result => simp only [hstep, henter, entryStep, Bool.and_false, Bool.false_eq_true] at available
           | spawn childFrame childResume childNextPc =>
-              simp [hstep, henter, entryStep] at available
-      | done settled => simp [hstep, henter] at available
-  | halt result => simp [hstep] at available
-  | cont nextPc post => simp [hstep] at available
+              simp only [hstep, henter, entryStep, Bool.and_false, Bool.false_eq_true] at available
+      | done settled => simp only [hstep, henter, Bool.false_eq_true] at available
+  | halt result => simp only [hstep, Bool.false_eq_true] at available
+  | cont nextPc post => simp only [hstep, Bool.false_eq_true] at available
 
 private theorem RollbackFixture.control (w : RollbackFixture) :
     w.call.childRoot ∈ Exec.rawFrameRoots w.call.run ∧
@@ -2191,7 +2184,7 @@ private theorem RollbackFixture.control (w : RollbackFixture) :
     rw [w.call.codeEq]
     rfl
   have reachedChild : Exec.Deriv.ParentPrefix w.call.childRoot node := by
-    simpa [node, RawCallFixture.childRoot] using prefix4
+    simpa only [RawCallFixture.childRoot] using prefix4
   have reachedGlobal : node ∈ Exec.rawNodes w.call.run :=
     (Exec.mem_rawNodes_iff_rawFrameRoot_parentPrefix w.call.run node).mpr
       ⟨w.call.childRoot, w.call.childSelected, reachedChild⟩
@@ -2199,7 +2192,7 @@ private theorem RollbackFixture.control (w : RollbackFixture) :
       (root := w.call.root) reachedGlobal decoded with
     ⟨occurrence, occurrenceNode, instructionEq⟩
   have reachedOccurrence : Exec.Deriv.ParentPrefix w.call.childRoot
-      occurrence.node := by simpa [occurrenceNode] using reachedChild
+      occurrence.node := by simpa only [occurrenceNode] using reachedChild
   rcases occurrence.acceptsSource_of_rawFrameRoot instructionEq
       w.call.childSelected (w.call.childExact rollbackProgram w.compiled)
       reachedOccurrence with ⟨path, accepted⟩
@@ -2207,15 +2200,18 @@ private theorem RollbackFixture.control (w : RollbackFixture) :
       (⟨0, [.rest, .rest]⟩ : Prog.SourcePath) := by
     rcases Prog.acceptsSstoreSite_iff.mp accepted with
       ⟨site, member, hpath, hpc, hinstruction⟩
-    simp [rollbackProgram, Prog.sourceSites, table, Func.sourceSites,
-      Ninst.pushB256] at member
+    simp only [Prog.sourceSites, table, rollbackProgram, Ninst.pushB256, zero_add,
+      List.length_cons, List.length_nil, List.range_one, List.flatMap_cons, zero_lt_one,
+      getElem?_pos, List.getElem_cons_zero, Func.sourceSites, List.nil_append,
+      List.cons_append, List.flatMap_nil, List.append_nil, List.mem_cons, List.not_mem_nil,
+      or_false] at member
     rcases member with rfl | rfl | rfl
-    · simp_all
-    · simp_all
+    · simp_all only [reduceCtorEq]
+    · simp_all only [reduceCtorEq]
     · exact hpath.symm
   refine ⟨occurrence, instructionEq, reachedOccurrence, ?_, ?_⟩
-  · simp [occurrenceNode, node]
-  · simpa [pathEq, occurrenceNode, node] using accepted
+  · simp only [occurrenceNode, node]
+  · simpa only [occurrenceNode, pathEq] using accepted
 
 private theorem concrete_controls :
     Nonempty CaughtFixture ∧ Nonempty RollbackFixture :=
@@ -2272,7 +2268,7 @@ private theorem parentPrefix_sevm_eq {root tail : Exec.Deriv}
   induction hprefix with
   | refl => rfl
   | step head rest ih =>
-      cases head <;> simpa using ih
+      cases head <;> simpa only using ih
 
 private theorem CaughtFixture.child_not_parent_prefix (w : CaughtFixture) :
     ¬ Exec.Deriv.ParentPrefix w.call.root w.call.childRoot := by

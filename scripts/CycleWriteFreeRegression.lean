@@ -213,7 +213,7 @@ private theorem ContTrace.getLast?_pcs
   induction trace with
   | refl => rfl
   | step hstep rest ih =>
-      cases rest <;> simp_all [ContTrace.pcs, ContTrace.endPc]
+      cases rest <;> simp_all only [pcs, List.getLast?_singleton, endPc, List.getLast?_cons_cons]
 
 private def cycleSevm (code : ByteArray) : Sevm :=
   { (default : Sevm) with code, codeAddress := some 0x600 }
@@ -276,7 +276,7 @@ private def cycleFixture?
             match buildContTrace? (cycleSevm code) 1 afterGlue cycleDepth with
             | some trace => some {
                 afterGlue
-                entryStep := by simpa [hpc] using entryStep
+                entryStep := by simpa only [hpc] using entryStep
                 trace
                 compiled
                 accepted }
@@ -320,7 +320,7 @@ private theorem CycleFixture.sourceSlice
         some (0, program.main) := rfl
   rcases subcode_of_get?_eq_some w.compiled hget with
     ⟨_, sourceSlice⟩
-  simpa using sourceSlice
+  simpa only [zero_add] using sourceSlice
 
 private theorem CycleFixture.sourceBoundary
     {program : Prog} {code : ByteArray} {pre : Devm} {members : List Nat}
@@ -347,7 +347,7 @@ private def CycleFixture.cursor
             some (0, program.main) := rfl
       intro site member
       simp only [Prog.sourceSites, List.mem_flatMap]
-      refine ⟨0, by simp, ?_⟩
+      refine ⟨0, by simp only [List.length_cons, List.mem_range, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true], ?_⟩
       simpa only [hget] using member }
 
 private theorem CycleFixture.cyclePrefix
@@ -355,7 +355,7 @@ private theorem CycleFixture.cyclePrefix
     (w : CycleFixture program code pre members) :
     Exec.Deriv.ParentPrefix w.cursor.node w.postCycle := by
   change Exec.Deriv.ParentPrefix w.trace.root w.trace.node
-  simpa [ContTrace.root] using
+  simpa only [ContTrace.root] using
     w.trace.parentPrefix
 
 /-- Exact same-frame universal no-SSTORE specialization for a concrete cyclic
@@ -384,7 +384,7 @@ private theorem selfLoopFixture_nonempty :
     native_decide
   unfold selfLoopExecutionAvailable at available
   cases fixture : selfLoopFixture? with
-  | none => simp [fixture] at available
+  | none => simp only [fixture, Bool.false_eq_true] at available
   | some witness => exact ⟨witness⟩
 
 private theorem twoNodeFixture_nonempty :
@@ -393,7 +393,7 @@ private theorem twoNodeFixture_nonempty :
     native_decide
   unfold twoNodeExecutionAvailable at available
   cases fixture : twoNodeFixture? with
-  | none => simp [fixture] at available
+  | none => simp only [fixture, Bool.false_eq_true] at available
   | some witness => exact ⟨witness⟩
 
 /-- The self-loop fixture pins the exact compiled execution, independent
@@ -411,18 +411,18 @@ private theorem concrete_selfLoop_cycle :
   have available : selfLoopExecutionAvailable = true := by native_decide
   unfold selfLoopExecutionAvailable at available
   cases fixture : selfLoopFixture? with
-  | none => simp [fixture] at available
+  | none => simp only [fixture, Bool.false_eq_true] at available
   | some w =>
   rw [fixture] at available
   simp only [Bool.and_eq_true, beq_iff_eq] at available
   have lastPc := congrArg List.getLast? available.1
   rw [w.trace.getLast?_pcs] at lastPc
-  norm_num at lastPc
+  simp only [List.getLast?_cons_cons, List.getLast?_singleton, Option.some.injEq] at lastPc
   have endPc : w.postCycle.pc = 1 := by
     change w.trace.endPc = 1
     exact lastPc
   exact ⟨w, available.1, endPc, w.cyclePrefix, w.noSstore,
-    Bool.eq_false_of_not_eq_true (by simpa using available.2)⟩
+    Bool.eq_false_of_not_eq_true (by simpa only [Bool.not_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true] using available.2)⟩
 
 /-- The two-node fixture pins `0 → 1 → 0`, the independently built cursor,
 the cycle-spanning same-frame prefix, the universal theorem application, and a
@@ -440,13 +440,13 @@ private theorem concrete_twoNode_cycle :
   have available : twoNodeExecutionAvailable = true := by native_decide
   unfold twoNodeExecutionAvailable at available
   cases fixture : twoNodeFixture? with
-  | none => simp [fixture] at available
+  | none => simp only [fixture, Bool.false_eq_true] at available
   | some w =>
   rw [fixture] at available
   simp only [Bool.and_eq_true, beq_iff_eq] at available
   have lastPc := congrArg List.getLast? available.1
   rw [w.trace.getLast?_pcs] at lastPc
-  norm_num at lastPc
+  simp only [List.getLast?_cons_cons, List.getLast?_singleton, Option.some.injEq] at lastPc
   have endPc : w.postCycle.pc = 1 := by
     change w.trace.endPc = 1
     exact lastPc
@@ -528,7 +528,7 @@ private theorem parentPrefix_sevm_eq {root tail : Exec.Deriv}
     root.sevm = tail.sevm := by
   induction hprefix with
   | refl => rfl
-  | step head rest ih => cases head <;> simpa using ih
+  | step head rest ih => cases head <;> simpa only using ih
 
 namespace ExternalChild
 
@@ -580,7 +580,7 @@ private theorem Fixture.sourceSlice (_w : Fixture) :
       (table 0 (parentProgram.main :: parentProgram.aux))[0]? =
       some (0, parentProgram.main) := rfl
   rcases subcode_of_get?_eq_some compiled hget with ⟨_, sourceSlice⟩
-  simpa [parentProgram] using sourceSlice
+  simpa only [parentProgram, zero_add] using sourceSlice
 
 private theorem Fixture.sourceBoundary (_w : Fixture) :
     noPushBefore parentCode 1 32 = true := by
@@ -606,7 +606,7 @@ private def Fixture.cursor (w : Fixture) :
           some (0, parentProgram.main) := rfl
       intro site member
       simp only [Prog.sourceSites, List.mem_flatMap]
-      refine ⟨0, by simp, ?_⟩
+      refine ⟨0, by simp only [List.length_cons, List.mem_range, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true], ?_⟩
       simpa only [hget] using member }
 
 private theorem Fixture.cursorNode (w : Fixture) :
@@ -686,14 +686,14 @@ private theorem fixture_nonempty : Nonempty Fixture := by
           hstep := hstep
           henter := henter
           child := child
-          hresume := by simpa [raw] using hresume
+          hresume := by simpa only [ExceptT.stM_eq, raw] using hresume
           next := next
           childPc := h.1.1
           childCodeEq := of_decide_eq_true h.1.2 }⟩
-      | error error => simp [hstep, henter, hresume] at h
-    | done settled => simp [hstep, henter] at h
-  | halt result => simp [hstep] at h
-  | cont pc post => simp [hstep] at h
+      | error error => simp only [hstep, henter, hresume, Bool.and_false, Bool.false_eq_true] at h
+    | done settled => simp only [hstep, henter, Bool.false_eq_true] at h
+  | halt result => simp only [hstep, Bool.false_eq_true] at h
+  | cont pc post => simp only [hstep, Bool.false_eq_true] at h
 
 private theorem Fixture.child_not_parent_prefix (w : Fixture) :
     ¬ Exec.Deriv.ParentPrefix w.root w.childRoot := by
@@ -710,8 +710,7 @@ private theorem Fixture.child_sstore (w : Fixture) :
       Exec.Deriv.ParentPrefix w.childRoot occurrence.node ∧
       ¬ Exec.Deriv.ParentPrefix w.root occurrence.node := by
   have childSelected : w.childRoot ∈ Exec.rawFrameRoots w.run := by
-    simp [Fixture.run, Fixture.childRoot, Exec.rawFrameRoots,
-      Exec.rawFrameDescendants]
+    simp only [Exec.rawFrameRoots, run, Exec.rawFrameDescendants, childRoot, List.mem_cons, Exec.Deriv.mk.injEq, ExceptT.stM_eq, List.mem_append, true_or, or_true]
   have decoded : Ninst.At w.childRoot.sevm.code w.childRoot.pc
       (.reg .sstore) := by
     change Ninst.At w.childEvm.sta.code w.childEvm.pc (.reg .sstore)
@@ -723,11 +722,11 @@ private theorem Fixture.child_sstore (w : Fixture) :
   rcases Exec.exists_ninstOccurrence_of_mem_rawNodes
       (root := w.root) global decoded with
     ⟨occurrence, nodeEq, instructionEq⟩
-  refine ⟨occurrence, instructionEq, by simpa [nodeEq] using
+  refine ⟨occurrence, instructionEq, by simpa only [nodeEq] using
     (Exec.Deriv.ParentPrefix.refl w.childRoot), ?_⟩
   intro hprefix
   apply w.child_not_parent_prefix
-  simpa [nodeEq] using hprefix
+  simpa only [nodeEq] using hprefix
 
 theorem control :
     ∃ w : Fixture,
@@ -742,9 +741,8 @@ theorem control :
         ¬ Exec.Deriv.ParentPrefix w.cursor.node occurrence.node) := by
   rcases fixture_nonempty with ⟨w⟩
   refine ⟨w, by native_decide, rfl, ⟨w.cursor⟩, ?_, ?_⟩
-  · simp [Fixture.run, Fixture.childRoot, Exec.rawFrameRoots,
-    Exec.rawFrameDescendants]
-  · simpa [w.cursorNode] using w.child_sstore
+  · simp only [Exec.rawFrameRoots, Fixture.run, Exec.rawFrameDescendants, Fixture.childRoot, List.mem_cons, Exec.Deriv.mk.injEq, ExceptT.stM_eq, List.mem_append, true_or, or_true]
+  · simpa only [w.cursorNode] using w.child_sstore
 
 theorem false_all_frame_refuted :
     ¬ (∀ w : Fixture, ∀ occurrence : Exec.NinstOccurrence w.root,
@@ -753,7 +751,7 @@ theorem false_all_frame_refuted :
   rintro falseClaim
   rcases control with ⟨w, _, _, _, _, occurrence, isStore, _, notOwned⟩
   have wronglyOwned : Exec.Deriv.ParentPrefix w.cursor.node occurrence.node := by
-    simpa [w.cursorNode] using falseClaim w occurrence isStore
+    simpa only [w.cursorNode] using falseClaim w occurrence isStore
   exact notOwned wronglyOwned
 
 end ExternalChild
@@ -828,7 +826,7 @@ private theorem Fixture.sourceSlice (_w : Fixture) :
       (table 0 (parentProgram.main :: parentProgram.aux))[0]? =
       some (0, parentProgram.main) := rfl
   rcases subcode_of_get?_eq_some compiled hget with ⟨_, sourceSlice⟩
-  simpa [parentProgram] using sourceSlice
+  simpa only [parentProgram, zero_add] using sourceSlice
 
 private theorem Fixture.sourceBoundary (_w : Fixture) :
     noPushBefore parentCode 1 32 = true := by
@@ -854,7 +852,7 @@ private def Fixture.cursor (w : Fixture) :
           some (0, parentProgram.main) := rfl
       intro site member
       simp only [Prog.sourceSites, List.mem_flatMap]
-      refine ⟨0, by simp, ?_⟩
+      refine ⟨0, by simp only [List.length_cons, List.mem_range, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true], ?_⟩
       simpa only [hget] using member }
 
 private theorem Fixture.cursorNode (w : Fixture) :
@@ -922,7 +920,7 @@ private theorem fixture_nonempty : Nonempty Fixture := by
               hstep
               henter
               child
-              hresume := by simpa [raw] using hresume
+              hresume := by simpa only [ExceptT.stM_eq, raw] using hresume
               next
               childPc := h.1.1.1.1.1.2
               childCodeEq := h.1.1.1.1.2
@@ -931,17 +929,17 @@ private theorem fixture_nonempty : Nonempty Fixture := by
               parentCommits := h.1.2
               afterValue
               afterKey
-              valueStep := by simpa [h.1.1.1.1.1.1.1] using valueStep
-              keyStep := by simpa [h.1.1.1.1.1.1.2] using keyStep
+              valueStep := by simpa only [h.1.1.1.1.1.1.1] using valueStep
+              keyStep := by simpa only [h.1.1.1.1.1.1.2] using keyStep
               storageChanged := h.2 }⟩
-          | error error => simp [hstep, henter, valueStep, keyStep, hresume, raw] at h
-        | halt result => simp [hstep, henter, valueStep, keyStep] at h
-        | spawn f r pc => simp [hstep, henter, valueStep, keyStep] at h
-      | halt result => simp [hstep, henter, valueStep] at h
-      | spawn f r pc => simp [hstep, henter, valueStep] at h
-    | done settled => simp [hstep, henter] at h
-  | halt result => simp [hstep] at h
-  | cont pc post => simp [hstep] at h
+          | error error => simp only [hstep, henter, valueStep, keyStep, hresume, Bool.false_eq_true, raw] at h
+        | halt result => simp only [hstep, henter, valueStep, keyStep, Bool.false_eq_true] at h
+        | spawn f r pc => simp only [hstep, henter, valueStep, keyStep, Bool.false_eq_true] at h
+      | halt result => simp only [hstep, henter, valueStep, Bool.false_eq_true] at h
+      | spawn f r pc => simp only [hstep, henter, valueStep, Bool.false_eq_true] at h
+    | done settled => simp only [hstep, henter, Bool.false_eq_true] at h
+  | halt result => simp only [hstep, Bool.false_eq_true] at h
+  | cont pc post => simp only [hstep, Bool.false_eq_true] at h
 
 private theorem Fixture.child_not_parent_prefix (w : Fixture) :
     ¬ Exec.Deriv.ParentPrefix w.root w.childRoot := by
@@ -958,8 +956,7 @@ private theorem Fixture.child_sstore (w : Fixture) :
       Exec.Deriv.ParentPrefix w.childRoot occurrence.node ∧
       ¬ Exec.Deriv.ParentPrefix w.root occurrence.node := by
   have childSelected : w.childRoot ∈ Exec.rawFrameRoots w.run := by
-    simp [Fixture.run, Fixture.childRoot, Exec.rawFrameRoots,
-      Exec.rawFrameDescendants]
+    simp only [Exec.rawFrameRoots, run, Exec.rawFrameDescendants, childRoot, List.mem_cons, Exec.Deriv.mk.injEq, ExceptT.stM_eq, List.mem_append, true_or, or_true]
   rcases (Blanc.Exec.Deriv.ParentPrefix.advance_cont
       w.child (Exec.Deriv.ParentPrefix.refl w.childRoot)) w.valueStep with ⟨atTwo, edgeTwo, prefixTwo⟩
   rcases (Blanc.Exec.Deriv.ParentPrefix.advance_cont atTwo prefixTwo) w.keyStep with
@@ -971,7 +968,7 @@ private theorem Fixture.child_sstore (w : Fixture) :
     rw [w.childCodeEq]
     rfl
   have reachedChild : Exec.Deriv.ParentPrefix w.childRoot node := by
-    simpa [node, Fixture.childRoot] using prefixFour
+    simpa only [childRoot] using prefixFour
   have childNode : node ∈ Exec.rawNodes w.run :=
     (Exec.mem_rawNodes_iff_rawFrameRoot_parentPrefix w.run node).mpr
       ⟨w.childRoot, childSelected, reachedChild⟩
@@ -979,7 +976,7 @@ private theorem Fixture.child_sstore (w : Fixture) :
       (root := w.root) childNode decoded with
     ⟨occurrence, nodeEq, instructionEq⟩
   refine ⟨occurrence, instructionEq, ?_, ?_⟩
-  · simpa [nodeEq] using reachedChild
+  · simpa only [nodeEq] using reachedChild
   · intro hprefix
     have sameCode := congrArg (fun sevm : Sevm => sevm.code)
       (parentPrefix_sevm_eq hprefix)
@@ -1008,7 +1005,7 @@ theorem control :
   refine ⟨w, by native_decide, rfl, ⟨w.cursor⟩,
     w.sameOwner, w.childCommits,
     w.parentCommits, w.storageChanged, ?_⟩
-  simpa [w.cursorNode] using w.child_sstore
+  simpa only [w.cursorNode] using w.child_sstore
 
 theorem storage_equality_refuted :
     ¬ (∀ w : Fixture,
