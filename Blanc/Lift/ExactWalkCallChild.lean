@@ -149,6 +149,86 @@ theorem calculateMsgCallGas_all {value gas gl extra : Nat} (hv : value ≠ 0) (h
   unfold calculateMsgCallGas
   simp only [hv, ite_false, show ¬ gl < extra + 0 by omega, hmin]
 
+/-- A zero-value `CALL` to a non-precompile callee whose entered child halts cleanly
+resumes in `callChildPost`.  The zero-value sibling of `Ninst.runCompiled_call_nonzero_child`;
+the child message is `callChildMsg` at value `0`. -/
+lemma Ninst.runCompiled_call_zero_child {sevm : Sevm} {devm : Devm}
+    {gw cw iiw isw oiw osw : B256} {s : List B256}
+    {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
+    {ext acc mcc mcs : Nat} {stmid : State} {cpost : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (h_stk : devm.stack = gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: s)
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
+      [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
+    (h_del : accessDelegation
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
+        cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
+    (h_acc : accessCost cw.toAdr
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
+        + dgc = acc)
+    (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
+    (h_gas : mcc + ext ≤ d1.gasLeft)
+    (h_depth : sevm.depth ≠ 0)
+    (h_nonprecompile : sevm.benvStat.rules.isPrecomp dadr = false)
+    (h_room : s.length < 1024)
+    (h_sub : d1.state.subBal sevm.currentTarget 0 = some stmid)
+    (h_exec : exec (initEvm (callChildMsg sevm
+      (callSpawnParent d1 (mcc + ext) iiw.toNat isw.toNat oiw.toNat osw.toNat)
+      mcs 0 cw.toAdr dadr iiw.toNat isw.toNat code dp stmid)) = .ok cpost)
+    (h_error : cpost.error = none) :
+    Ninst.RunCompiled sevm devm (.exec .call)
+      (callChildPost (callSpawnParent d1 (mcc + ext) iiw.toNat isw.toNat oiw.toNat osw.toNat)
+        cpost oiw.toNat osw.toNat) := by
+  let p := callSpawnParent d1 (mcc + ext) iiw.toNat isw.toNat oiw.toNat osw.toNat
+  let msg := callSpawnMsg sevm p mcs cw.toAdr dadr iiw.toNat isw.toNat code dp
+  have h_afford : ¬ msg.benv.state.bal msg.caller < msg.value := by
+    change ¬ d1.state.bal sevm.currentTarget < 0
+    rw [B256.not_lt]
+    exact B256.zero_le _
+  obtain ⟨stmid', hsub', hbt⟩ := Msg.benvAfterTransfer_of_affordable msg rfl h_afford
+  have hstmid : stmid' = stmid := by
+    have h := hsub'
+    change d1.state.subBal sevm.currentTarget 0 = some stmid' at h
+    exact Option.some.inj (h.symm.trans h_sub)
+  subst hstmid
+  let benv' := (msg.benv.withState stmid').addBal msg.currentTarget msg.value
+  let child := initEvm (msg.withBenv benv')
+  have henter : (Frame.ofCall msg).enter = .run child := by
+    apply Frame.enter_run_of_nonprecompile hbt
+    · rfl
+    · change sevm.benvStat.rules.isPrecomp dadr = false
+      exact h_nonprecompile
+  have hexec : exec child = .ok cpost := h_exec
+  have hsettle : (Frame.ofCall msg).settle (exec child) = .ok cpost := by
+    rw [hexec, Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
+    simp only [Frame.ofCall, Frame.settleMsg, processMessage.settle, h_error,
+      Option.isSome_none, Bool.false_eq_true, ite_false, bind, Except.bind]
+  have hdi := accessDelegation_inv h_del
+  have hpstack : p.stack.length < 1024 := by
+    change d1.stack.length < 1024
+    rw [hdi.1]
+    exact h_room
+  have hres : Resume.run (.call p oiw.toNat osw.toNat)
+      ((Frame.ofCall msg).settle (exec child)) =
+        .ok (callChildPost p cpost oiw.toNat osw.toNat) := by
+    rw [hsettle, Resume.run_call_ok (by rw [h_error]; rfl) hpstack]
+    rfl
+  exact Ninst.runCompiled_call_zero_value hfork h_stk h_ext h_del h_acc
+    h_split h_gas h_depth henter hres
+
+/-- A resumed parent whose output window is empty: the child's world is adopted and the
+parent's stack, memory and error stay, whatever the child returned. -/
+theorem callChildPost_facts_zero (p cpost : Devm) (oi os : Nat) (hos : os = 0) :
+    (callChildPost p cpost oi os).stack = 1 :: p.stack ∧
+    (callChildPost p cpost oi os).memory = p.memory ∧
+    (callChildPost p cpost oi os).gasLeft = p.gasLeft + cpost.gasLeft ∧
+    (callChildPost p cpost oi os).state = cpost.state ∧
+    (callChildPost p cpost oi os).error = p.error := by
+  subst hos
+  unfold callChildPost
+  rw [List.take_zero, Devm.memWrite_nil]
+  exact ⟨rfl, rfl, rfl, rfl, rfl⟩
+
 /-! ## Cut-run steps for loops around a call -/
 
 section CutSteps

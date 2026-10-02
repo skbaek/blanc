@@ -360,6 +360,9 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
   `callChildPost_facts` projects every field when the child returned nothing.
   A lifted callee supplies `exec … = .ok _` through `exec_iff_exec_eq` from its
   `Exec` derivation; a code-free callee is `Ninst.runCompiled_call_nonzero_codeFree`.
+  The zero-value sibling is `Ninst.runCompiled_call_zero_child` (child message
+  `callChildMsg … 0 …`); `callChildPost_facts_zero` projects the resumed parent
+  when the output window is empty, whatever the child returned.
   For a loop that calls once per iteration (`GAS; CALL` forwarding everything),
   `calculateMsgCallGas_all` closes `calculateMsgCallGas` to all but one 64th of
   the gas left after the fixed charge (plus the stipend), and the cut-run steps
