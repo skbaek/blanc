@@ -1,3 +1,5 @@
+import Blanc.Lift.UniswapV2Pair.Consumption
+import Blanc.Lift.UniswapV2Pair.Properties
 import Blanc.Lift.UniswapV2Pair.BalanceCallWalk
 import Blanc.Lift.UniswapV2Pair.GetterWalk
 import Blanc.Lift.UniswapV2Pair.GetterStringWalk
@@ -986,9 +988,125 @@ theorem syncResultWorld_storage_frame {sevm : Sevm} {b : Devm}
     unfold syncUpdatedWorld
     rw [updateWorld_storage_frame (Or.inl account), getStorVal_afterSload]
 
+
+/-- Both actual primitive calls, their successful full-response posts and
+decoder continuations occur in the same certified callee derivation. -/
+def SyncPrimitiveCallPair (D : Exec.Deriv) (sevm : Sevm) (b : Devm)
+    (M : Mem) (R : List B256) (tag : B256) (d0 d1 : Devm)
+    (out0 out1 : Bytes) (o : Outcome) : Prop :=
+  ∃ (gw0 : B256) (gas0 decoded0 : Nat) (gw1 : B256) (gas1 decoded1 : Nat),
+    let token0 := syncFirstToken sevm b
+    let token1 := (d0.getStorVal sevm.currentTarget 7).toAdr.toB256
+    let w0 := temporalAccountAccessBase (syncFirstWorld sevm b) token0.toAdr
+    let w1 := temporalAccountAccessBase (afterSload sevm d0 7) token1.toAdr
+    let M0 := balanceReplyMemory M sevm.currentTarget out0
+    let balance0 := Bytes.toB256 (out0.take 32)
+    ((syncFirstWorld sevm b).getCode token0.toAdr).size.toB256 ≠ 0 ∧
+    StepIn D sevm
+      (St w0 (gw0 :: token0 :: 128 :: 36 :: 128 :: 32 :: 164 ::
+        0x70a08231 :: token0 :: 0x1fd4 :: tag :: R)
+        (balanceRequestMemory M sevm.currentTarget) gas0) (.exec .staticcall) d0 ∧
+    StaticCallPost w0 d0 (164 :: 0x70a08231 :: token0 :: 0x1fd4 :: tag :: R)
+      (balanceRequestMemory M sevm.currentTarget) 128 36 128 32 1 out0 ∧
+    SFunc.RunCutP (StepIn D) cert.prog sevm []
+      (St d0 (balance0 :: 0x1fd4 :: tag :: R) M0 decoded0)
+      SyncBalanceSite.first.afterDecodeTree (.done o) ∧
+    ((afterSload sevm d0 7).getCode token1.toAdr).size.toB256 ≠ 0 ∧
+    StepIn D sevm
+      (St w1 (gw1 :: token1 :: 128 :: 36 :: 128 :: 32 :: 164 ::
+        0x70a08231 :: token1 :: balance0 :: 0x1fd4 :: tag :: R)
+        (balanceRequestMemory M0 sevm.currentTarget) gas1) (.exec .staticcall) d1 ∧
+    StaticCallPost w1 d1 (164 :: 0x70a08231 :: token1 :: balance0 :: 0x1fd4 :: tag :: R)
+      (balanceRequestMemory M0 sevm.currentTarget) 128 36 128 32 1 out1 ∧
+    SFunc.RunCutP (StepIn D) cert.prog sevm []
+      (St d1 (Bytes.toB256 (out1.take 32) :: balance0 :: 0x1fd4 :: tag :: R)
+        (balanceReplyMemory M0 sevm.currentTarget out1) decoded1)
+      SyncBalanceSite.second.afterDecodeTree (.done o)
+
+
 /-- The actual successful callee supplies the arbitrary ordered observations
 used by the source update. Entry-field correspondence is transported through
 the concrete lock and both primitive static posts; no endpoint is assumed. -/
+theorem syncCalleeSourceCalls_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {tag : B256} {o : Outcome}
+    {st : State} {ctx : Context}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (slots : ReserveSlotMatches st sevm b)
+    (cum0 : b.getStorVal sevm.currentTarget 9 = st.price0CumulativeLast)
+    (cum1 : b.getStorVal sevm.currentTarget 10 = st.price1CumulativeLast)
+    (token0 : (b.getStorVal sevm.currentTarget 6).toAdr = st.token0)
+    (token1 : (b.getStorVal sevm.currentTarget 7).toAdr = st.token1)
+    (time : ctx.timestamp = sevm.benvStat.time) (pair : ctx.pair = sevm.currentTarget)
+    (run : SFunc.RunP (StepIn D) cert.prog sevm (St b (tag :: R) M G) t_1df5_c31 o) :
+    ∃ (d0 d1 : Devm) (out0 out1 : Bytes) (gas : Nat) (post : State)
+      (event : Event) (oracle : OracleUpdate),
+      let balance0 := Bytes.toB256 (out0.take 32)
+      let balance1 := Bytes.toB256 (out1.take 32)
+      let result := syncResultWorld sevm d1 balance0 balance1
+      StaticAnswered sevm (temporalAccountAccessBase (syncFirstWorld sevm b) st.token0)
+        st.token0 (ExternalOperation.encode (.balanceOf ctx.pair)) out0 ∧
+      StaticAnswered sevm (temporalAccountAccessBase (afterSload sevm d0 7) st.token1)
+        st.token1 (ExternalOperation.encode (.balanceOf ctx.pair)) out1 ∧
+      32 ≤ out0.length ∧ out0.length < 2 ^ 256 ∧
+      32 ≤ out1.length ∧ out1.length < 2 ^ 256 ∧
+      st.update ctx balance0 balance1 st.reserve0.val st.reserve1.val = .ok (post, event, oracle) ∧
+      ReserveSlotMatches { post with unlocked := 1 } sevm result ∧
+      result.getStorVal sevm.currentTarget 9 = post.price0CumulativeLast ∧
+      result.getStorVal sevm.currentTarget 10 = post.price1CumulativeLast ∧
+      result.getStorVal sevm.currentTarget 12 = 1 ∧
+      event = .sync balance0.toNat balance1.toNat ∧
+      result.logs = b.logs ++ [⟨ctx.pair, [updateSyncTopic], encodeWords [balance0, balance1]⟩] ∧
+      (∀ a k, a ≠ sevm.currentTarget ∨ (k ≠ 8 ∧ k ≠ 9 ∧ k ≠ 10 ∧ k ≠ 12) →
+        result.getStorVal a k = b.getStorVal a k) ∧
+      result.output = b.output ∧
+      o = .returned (St result R
+        (syncResultMemory sevm d1
+          (balanceReplyMemory (balanceReplyMemory M sevm.currentTarget out0) sevm.currentTarget out1)
+          balance0 balance1) gas) ∧
+      SyncPrimitiveCallPair D sevm b M R tag d0 d1 out0 out1 o := by
+  obtain ⟨_, _, gw0, callGas0, d0, out0, decodedGas0, gw1, callGas1, d1, out1,
+    decodedGas1, gas, code0, call0, post0, long0, bound0, answered0, decoded0,
+    code1, call1, post1, long1, bound1, answered1, stor0, stor1, logs1, output1,
+    decoded1, balanceBound0, balanceBound1, result⟩ := syncCallee_inv fork mem run
+  have selected (k : B256) (key : k ≠ 12) :
+      d1.getStorVal sevm.currentTarget k = b.getStorVal sevm.currentTarget k := by
+    change (Devm.getStor _ _).get k = _
+    rw [stor1 sevm.currentTarget]
+    exact syncFirstWorld_storage_frame (Or.inr key)
+  have slots1 : ReserveSlotMatches st sevm d1 := by
+    simpa only [ReserveSlotMatches, selected 8 (by decide)] using slots
+  obtain ⟨post, event, oracle, source, reserves, price0, price1, lock, sync, logs⟩ :=
+    syncUpdateSource_result slots1 (by rw [selected 9 (by decide)]; exact cum0)
+      (by rw [selected 10 (by decide)]; exact cum1) time pair balanceBound0 balanceBound1
+  have firstToken : (syncFirstToken sevm b).toAdr = st.token0 := by
+    unfold syncFirstToken
+    rw [toAdr_toB256]
+    unfold syncLockedWorld
+    rw [getStorVal_afterStore, Stor.get_set_ne _ (by decide : (12 : B256) ≠ 6)]
+    exact token0
+  have secondToken : (d0.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr = st.token1 := by
+    rw [toAdr_toB256]
+    have slot0 := congrArg (fun storage : Stor => storage.get (7 : B256)) (stor0 sevm.currentTarget)
+    change d0.getStorVal sevm.currentTarget 7 = (syncFirstWorld sevm b).getStorVal sevm.currentTarget 7 at slot0
+    rw [slot0, syncFirstWorld_storage_frame (Or.inr (by decide : (7 : B256) ≠ 12))]
+    exact token1
+  have output : (syncResultWorld sevm d1 (Bytes.toB256 (out0.take 32))
+      (Bytes.toB256 (out1.take 32))).output = b.output := by
+    unfold syncResultWorld syncUpdatedWorld
+    rw [afterSstore_output, updateWorld_output, afterSload_output, output1]
+  refine ⟨d0, d1, out0, out1, gas, post, event, oracle, ?_, ?_, long0, bound0,
+    long1, bound1, source, reserves, price0, price1, lock, sync, ?_, ?_, output, result, ?_⟩
+  · simpa only [firstToken, pair] using answered0
+  · simpa only [secondToken, pair] using answered1
+  · rw [logs, logs1]
+  · intro a k frame
+    rw [syncResultWorld_storage_frame frame]
+    change (Devm.getStor d1 a).get k = _
+    rw [stor1 a]
+    exact syncFirstWorld_storage_frame (frame.imp_right (fun h => h.2.2.2))
+  · exact ⟨gw0, callGas0, decodedGas0, gw1, callGas1, decodedGas1,
+      code0, call0, post0, decoded0, code1, call1, post1, decoded1⟩
+
 theorem syncCalleeSource_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     {R : List B256} {M : Mem} {G : Nat} {tag : B256} {o : Outcome}
     {st : State} {ctx : Context}
@@ -1025,46 +1143,13 @@ theorem syncCalleeSource_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
         (syncResultMemory sevm d1
           (balanceReplyMemory (balanceReplyMemory M sevm.currentTarget out0) sevm.currentTarget out1)
           balance0 balance1) gas) := by
-  obtain ⟨_, _, gw0, callGas0, d0, out0, decodedGas0, gw1, callGas1, d1, out1,
-    decodedGas1, gas, code0, call0, post0, long0, bound0, answered0, decoded0,
-    code1, call1, post1, long1, bound1, answered1, stor0, stor1, logs1, output1,
-    decoded1, balanceBound0, balanceBound1, result⟩ := syncCallee_inv fork mem run
-  have selected (k : B256) (key : k ≠ 12) :
-      d1.getStorVal sevm.currentTarget k = b.getStorVal sevm.currentTarget k := by
-    change (Devm.getStor _ _).get k = _
-    rw [stor1 sevm.currentTarget]
-    exact syncFirstWorld_storage_frame (Or.inr key)
-  have slots1 : ReserveSlotMatches st sevm d1 := by
-    simpa only [ReserveSlotMatches, selected 8 (by decide)] using slots
-  obtain ⟨post, event, oracle, source, reserves, price0, price1, lock, sync, logs⟩ :=
-    syncUpdateSource_result slots1 (by rw [selected 9 (by decide)]; exact cum0)
-      (by rw [selected 10 (by decide)]; exact cum1) time pair balanceBound0 balanceBound1
-  have firstToken : (syncFirstToken sevm b).toAdr = st.token0 := by
-    unfold syncFirstToken
-    rw [toAdr_toB256]
-    unfold syncLockedWorld
-    rw [getStorVal_afterStore, Stor.get_set_ne _ (by decide : (12 : B256) ≠ 6)]
-    exact token0
-  have secondToken : (d0.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr = st.token1 := by
-    rw [toAdr_toB256]
-    have slot0 := congrArg (fun storage : Stor => storage.get (7 : B256)) (stor0 sevm.currentTarget)
-    change d0.getStorVal sevm.currentTarget 7 = (syncFirstWorld sevm b).getStorVal sevm.currentTarget 7 at slot0
-    rw [slot0, syncFirstWorld_storage_frame (Or.inr (by decide : (7 : B256) ≠ 12))]
-    exact token1
-  have output : (syncResultWorld sevm d1 (Bytes.toB256 (out0.take 32))
-      (Bytes.toB256 (out1.take 32))).output = b.output := by
-    unfold syncResultWorld syncUpdatedWorld
-    rw [afterSstore_output, updateWorld_output, afterSload_output, output1]
-  refine ⟨d0, d1, out0, out1, gas, post, event, oracle, ?_, ?_, long0, bound0,
-    long1, bound1, source, reserves, price0, price1, lock, sync, ?_, ?_, output, result⟩
-  · simpa only [firstToken, pair] using answered0
-  · simpa only [secondToken, pair] using answered1
-  · rw [logs, logs1]
-  · intro a k frame
-    rw [syncResultWorld_storage_frame frame]
-    change (Devm.getStor d1 a).get k = _
-    rw [stor1 a]
-    exact syncFirstWorld_storage_frame (frame.imp_right (fun h => h.2.2.2))
+  obtain ⟨d0, d1, out0, out1, gas, post, event, oracle,
+    answered0, answered1, long0, bound0, long1, bound1, source, reserves,
+    price0, price1, lock, sync, logs, frame, output, result, _⟩ :=
+    syncCalleeSourceCalls_inv fork mem slots cum0 cum1 token0 token1 time pair run
+  exact ⟨d0, d1, out0, out1, gas, post, event, oracle,
+    answered0, answered1, long0, bound0, long1, bound1, source, reserves,
+    price0, price1, lock, sync, logs, frame, output, result⟩
 
 
 /-- The public sync wrapper enters the actual callee with its return tag and
@@ -1605,6 +1690,317 @@ theorem syncPc0_exact {sevm : Sevm} {b d0 d1 : Devm}
   exact syncCallee_exact fork getterInitMemory_ptr (by decide) static unlocked sentry nonzero0
     call0 success0 returnedGas0 long0 nonzero1 call1 success1 returnedGas1 long1 bound0 bound1
     headerCharge packedLoadCharge packedStoreCharge oracleCharges sentry8 sentry10 sentry9 unlockSentry
+
+
+
+/-- The certified raw pc0 execution supplies the very same derivation to the
+public guards, selector, wrapper and callee. No call provenance is erased. -/
+theorem sync_raw_inv {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
+      ∃ calleeGas d finalGas,
+        SFunc.RunP (StepIn ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)
+          cert.prog sevm (St b [0x0257, 0xfff6cae9] getterInitMemory calleeGas)
+          t_1df5_c31 (.returned d) ∧
+        post = St d d.stack d.memory finalGas := by
+  exact syncPc0_inv fork selector (lift_sound_in cert_check codeEq fork run)
+
+
+
+/-- The source lock preserves the invocation checkpoint and captures reserves
+before either external observation. -/
+def syncSourceLockedFrame (current : Checkpoint) (ctx : Context) : Frame :=
+  { Frame.enter current ctx .sync with
+    current := { current with state := { current.state with unlocked := 0 } } }
+
+theorem sync_startTyped_suspended {current : Checkpoint} {ctx : Context}
+    (value : ctx.value = 0) (nonstatic : ctx.isStatic = false)
+    (unlocked : current.state.unlocked = 1) :
+    startTyped current ctx .sync =
+      .suspended (syncSourceLockedFrame current ctx)
+        (requestFor .syncBalance0 current.state.token0 (.balanceOf ctx.pair))
+        (.syncBalance0 current.state.cachedReserves) := by
+  have opened : (Frame.enter current ctx .sync).lock =
+      .ok (syncSourceLockedFrame current ctx) := by
+    simp only [Frame.lock, Frame.enter, unlocked, nonstatic, ite_true, Bool.false_eq_true,
+      ite_false, syncSourceLockedFrame]
+  simp only [startTyped, startImmediate, ite_eq_right (fun (bad : ctx.value ≠ 0) => bad value),
+    getterResult, opened, Frame.suspend]
+  rfl
+
+/-- The first full successful answer advances the actual source segment and
+requests token1 from the current checkpoint, retaining the entry reserve cache. -/
+theorem sync_resumeBalance0 {frame : Frame} {reserves : CachedReserves}
+    {result : ExternalResult}
+    (codeExists : result.codeExists = true) (success : result.success = true)
+    (long : 32 ≤ result.returndata.length) :
+    let request := requestFor .syncBalance0 frame.current.state.token0
+      (.balanceOf frame.context.pair)
+    resumeSegment frame request (.syncBalance0 reserves) result =
+      .suspended (frame.beginResume request)
+        (requestFor .syncBalance1 frame.current.state.token1 (.balanceOf frame.context.pair))
+        (.syncBalance1 reserves (Bytes.toB256 (result.returndata.take 32))) := by
+  simp only [resumeSegment, decodeExternal, requestFor, codeExists, success,
+    Bool.not_true, Bool.and_false, Bool.false_eq_true, ite_false, ite_true,
+    ite_eq_left long, Frame.suspend, Frame.beginResume]
+
+/-- The source update appends its owned log and oracle receipt at the actual
+resumption origin, then restores the lock. -/
+def syncSourceUpdatedFrame (frame : Frame) (post : State) (event : Event)
+    (oracle : OracleUpdate) : Frame :=
+  { frame.withUpdate post event oracle with
+    current := { (frame.withUpdate post event oracle).current with
+      state := { post with unlocked := 1 } } }
+
+theorem sync_finishUpdated {frame : Frame} {reserves : CachedReserves}
+    {balance0 balance1 : B256} {post : State} {event : Event} {oracle : OracleUpdate}
+    (updated : frame.current.state.update frame.context balance0 balance1
+      reserves.reserve0.val reserves.reserve1.val = .ok (post, event, oracle)) :
+    frame.finishUpdated balance0 balance1 reserves false none [] =
+      .finished (syncSourceUpdatedFrame frame post event oracle) [] := by
+  rw [Frame.finishUpdated, updated]
+  simp only [Bool.false_eq_true, ite_false, Frame.finishLocked, Frame.withEvents,
+    Frame.finish, syncSourceUpdatedFrame, Frame.withUpdate, List.map_nil, List.append_nil]
+
+/-- The second full answer consumes the reviewed source update; its oracle
+origin is the second resumption, independent of either nested turn count. -/
+theorem sync_resumeBalance1 {frame : Frame} {reserves : CachedReserves}
+    {balance0 : B256} {result : ExternalResult} {post : State}
+    {event : Event} {oracle : OracleUpdate}
+    (codeExists : result.codeExists = true) (success : result.success = true)
+    (long : 32 ≤ result.returndata.length)
+    (updated : frame.current.state.update frame.context balance0
+      (Bytes.toB256 (result.returndata.take 32))
+      reserves.reserve0.val reserves.reserve1.val = .ok (post, event, oracle)) :
+    let request := requestFor .syncBalance1 frame.current.state.token1
+      (.balanceOf frame.context.pair)
+    resumeSegment frame request (.syncBalance1 reserves balance0) result =
+      .finished (syncSourceUpdatedFrame (frame.beginResume request) post event oracle) [] := by
+  simp only [resumeSegment, decodeExternal, requestFor, codeExists, success,
+    Bool.not_true, Bool.and_false, Bool.false_eq_true, ite_false, ite_true,
+    ite_eq_left long]
+  apply sync_finishUpdated
+  exact updated
+
+
+
+/-- Every recursively exact balance-call turn queue retains the source frame.
+Successful static Pair views remain in the queue and retain their returns. -/
+theorem syncBalanceTurns_frame {frame : Frame} {site : CallSite} {target : Adr}
+    {turn : Nat} {turns : Transcript} {executed : TurnsResult}
+    (during : ExactTurns frame
+      (requestFor site target (.balanceOf frame.context.pair)) turn turns executed) :
+    executed.frame = frame := by
+  rw [← ExactTurns.realizes during (turns.work + 1) (Nat.le_refl _)]
+  apply driveTurns_static_frame
+  simp only [externalStatic, requestFor, BEq.rfl, Bool.or_true]
+
+
+
+/-- The source continuation after the first balance response has advanced once. -/
+def syncSourceSecondFrame (current : Checkpoint) (ctx : Context) : Frame :=
+  (syncSourceLockedFrame current ctx).beginResume
+    (requestFor .syncBalance0 current.state.token0 (.balanceOf ctx.pair))
+
+/-- Two actual recursively exact turn queues and two full successful responses
+consume the source handler. Completion and the ordered child-return list are
+conclusions; neither is supplied as a desired driver endpoint. -/
+theorem sync_source_exact_consumption {current : Checkpoint} {ctx : Context}
+    {result0 result1 : ExternalResult} {turns0 turns1 : Transcript}
+    {executed0 executed1 : TurnsResult} {post : State} {event : Event}
+    {oracle : OracleUpdate}
+    (value : ctx.value = 0) (nonstatic : ctx.isStatic = false)
+    (unlocked : current.state.unlocked = 1)
+    (code0 : result0.codeExists = true) (success0 : result0.success = true)
+    (long0 : 32 ≤ result0.returndata.length)
+    (code1 : result1.codeExists = true) (success1 : result1.success = true)
+    (long1 : 32 ≤ result1.returndata.length)
+    (during0 : ExactTurns (syncSourceLockedFrame current ctx)
+      (requestFor .syncBalance0 current.state.token0 (.balanceOf ctx.pair))
+      0 turns0 executed0)
+    (during1 : ExactTurns (syncSourceSecondFrame current ctx)
+      (requestFor .syncBalance1 current.state.token1 (.balanceOf ctx.pair))
+      0 turns1 executed1)
+    (updated : (syncSourceSecondFrame current ctx).current.state.update ctx
+      (Bytes.toB256 (result0.returndata.take 32))
+      (Bytes.toB256 (result1.returndata.take 32))
+      current.state.reserve0.val current.state.reserve1.val = .ok (post, event, oracle)) :
+    ExactConsumes (startTyped current ctx .sync)
+      (.next result0 turns0 (.next result1 turns1 .done))
+      { status := .success [],
+        frame := syncSourceUpdatedFrame
+          ((syncSourceSecondFrame current ctx).beginResume
+            (requestFor .syncBalance1 current.state.token1 (.balanceOf ctx.pair)))
+          post event oracle,
+        remaining := .done,
+        childReturns := executed0.childReturns ++ executed1.childReturns } := by
+  let frame0 := syncSourceLockedFrame current ctx
+  let frame1 := syncSourceSecondFrame current ctx
+  let request0 := requestFor .syncBalance0 current.state.token0 (.balanceOf ctx.pair)
+  let request1 := requestFor .syncBalance1 current.state.token1 (.balanceOf ctx.pair)
+  have kept0 : executed0.frame = frame0 := syncBalanceTurns_frame during0
+  have kept1 : executed1.frame = frame1 := syncBalanceTurns_frame during1
+  have resumed0 :
+      resumeSegment frame0 request0 (.syncBalance0 current.state.cachedReserves) result0 =
+        .suspended frame1 request1
+          (.syncBalance1 current.state.cachedReserves (Bytes.toB256 (result0.returndata.take 32))) :=
+    sync_resumeBalance0 code0 success0 long0
+  have resumed1 :
+      resumeSegment frame1 request1
+        (.syncBalance1 current.state.cachedReserves (Bytes.toB256 (result0.returndata.take 32))) result1 =
+        .finished (syncSourceUpdatedFrame (frame1.beginResume request1) post event oracle) [] :=
+    sync_resumeBalance1 code1 success1 long1 updated
+  have terminal := ExactConsumes.finished
+    (syncSourceUpdatedFrame (frame1.beginResume request1) post event oracle) []
+  rw [← resumed1] at terminal
+  have second := ExactConsumes.nextCall
+    (frame := frame1) (request := request1)
+    (continuation := .syncBalance1 current.state.cachedReserves
+      (Bytes.toB256 (result0.returndata.take 32)))
+    (result := result1)
+    (by simp only [request1, requestFor, code1, Bool.not_true, Bool.and_false])
+    (by intro absent; rw [code1] at absent; cases absent)
+    during1
+    (by simpa only [success1, ite_true, kept1] using terminal)
+  rw [← resumed0] at second
+  have first := ExactConsumes.nextCall
+    (frame := frame0) (request := request0)
+    (continuation := .syncBalance0 current.state.cachedReserves) (result := result0)
+    (by simp only [request0, requestFor, code0, Bool.not_true, Bool.and_false])
+    (by intro absent; rw [code0] at absent; cases absent)
+    during0
+    (by simpa only [success0, ite_true, kept0] using second)
+  rw [sync_startTyped_suspended value nonstatic unlocked]
+  simpa only [List.append_nil] using first
+
+
+
+/-- The lock changes only the lock field of the accepted update result; it
+does not change its cached reserves, modular oracle calculation or event. -/
+theorem sync_source_update_locked {st : State} {ctx : Context}
+    {balance0 balance1 : B256} {old0 old1 : Nat}
+    {post : State} {event : Event} {oracle : OracleUpdate}
+    (bound0 : balance0.toNat < 2 ^ 112) (bound1 : balance1.toNat < 2 ^ 112)
+    (updated : st.update ctx balance0 balance1 old0 old1 = .ok (post, event, oracle)) :
+    ({ st with unlocked := 0 } : State).update ctx balance0 balance1 old0 old1 =
+      .ok ({ post with unlocked := 0 }, event, oracle) := by
+  simp only [State.update, dite_eq_left bound0, dite_eq_left bound1] at updated ⊢
+  have fields := Except.ok.inj updated
+  simp only [Prod.mk.injEq] at fields
+  obtain ⟨rfl, rfl, rfl⟩ := fields
+  rfl
+
+
+
+/-- A source response records the full arbitrary bytes authenticated by a
+successful guarded balance call. Recovery output is unused by this operation. -/
+def syncExternalReply (out : Bytes) : ExternalResult :=
+  { success := true, returndata := out, codeExists := true, recoveryOutput := 0 }
+
+/-- Raw successful sync derives source acceptance and authenticates both full
+responses with the same primitive call witnesses. Recursive exact turn queues
+remain producer obligations, exposed as implications and consumed here. -/
+theorem sync_raw_source_handler_inv {current : Checkpoint} {ctx : Context}
+    {sevm : Sevm} {b rawPost : Devm} {G : Nat}
+    (slots : ReserveSlotMatches current.state sevm b)
+    (cum0 : b.getStorVal sevm.currentTarget 9 = current.state.price0CumulativeLast)
+    (cum1 : b.getStorVal sevm.currentTarget 10 = current.state.price1CumulativeLast)
+    (token0 : (b.getStorVal sevm.currentTarget 6).toAdr = current.state.token0)
+    (token1 : (b.getStorVal sevm.currentTarget 7).toAdr = current.state.token1)
+    (lockRep : b.getStorVal sevm.currentTarget 12 = current.state.unlocked)
+    (valueRep : ctx.value = sevm.value) (staticRep : ctx.isStatic = sevm.isStatic)
+    (time : ctx.timestamp = sevm.benvStat.time) (pair : ctx.pair = sevm.currentTarget)
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok rawPost)) :
+    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
+    sevm.isStatic = false ∧ current.state.unlocked = 1 ∧
+    ∃ (d0 d1 : Devm) (out0 out1 : Bytes) (gas finalGas : Nat)
+      (post : State) (event : Event) (oracle : OracleUpdate),
+      let D : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok rawPost, run⟩
+      let balance0 := Bytes.toB256 (out0.take 32)
+      let balance1 := Bytes.toB256 (out1.take 32)
+      let result := syncResultWorld sevm d1 balance0 balance1
+      let called := St result [0xfff6cae9]
+        (syncResultMemory sevm d1
+          (balanceReplyMemory (balanceReplyMemory getterInitMemory sevm.currentTarget out0)
+            sevm.currentTarget out1) balance0 balance1) gas
+      SyncPrimitiveCallPair D sevm b getterInitMemory [0xfff6cae9]
+        0x0257 d0 d1 out0 out1 (.returned called) ∧
+      StaticAnswered sevm
+        (temporalAccountAccessBase (syncFirstWorld sevm b) current.state.token0)
+        current.state.token0 (ExternalOperation.encode (.balanceOf ctx.pair)) out0 ∧
+      StaticAnswered sevm
+        (temporalAccountAccessBase (afterSload sevm d0 7) current.state.token1)
+        current.state.token1 (ExternalOperation.encode (.balanceOf ctx.pair)) out1 ∧
+      32 ≤ out0.length ∧ out0.length < 2 ^ 256 ∧
+      32 ≤ out1.length ∧ out1.length < 2 ^ 256 ∧
+      current.state.update ctx balance0 balance1
+        current.state.reserve0.val current.state.reserve1.val = .ok (post, event, oracle) ∧
+      ReserveSlotMatches { post with unlocked := 1 } sevm result ∧
+      result.getStorVal sevm.currentTarget 9 = post.price0CumulativeLast ∧
+      result.getStorVal sevm.currentTarget 10 = post.price1CumulativeLast ∧
+      result.getStorVal sevm.currentTarget 12 = 1 ∧
+      event = .sync balance0.toNat balance1.toNat ∧
+      result.logs = b.logs ++ [⟨ctx.pair, [updateSyncTopic], encodeWords [balance0, balance1]⟩] ∧
+      (∀ a k, a ≠ sevm.currentTarget ∨ (k ≠ 8 ∧ k ≠ 9 ∧ k ≠ 10 ∧ k ≠ 12) →
+        result.getStorVal a k = b.getStorVal a k) ∧
+      result.output = b.output ∧
+      rawPost = St called called.stack called.memory finalGas ∧
+      let sourceFrame := syncSourceUpdatedFrame
+        ((syncSourceSecondFrame current ctx).beginResume
+          (requestFor .syncBalance1 current.state.token1 (.balanceOf ctx.pair)))
+        { post with unlocked := 0 } event oracle
+      sourceFrame.checkpoint = current ∧ sourceFrame.context = ctx ∧
+      sourceFrame.current =
+        { state := { post with unlocked := 1 },
+          logs := current.logs ++
+            [.owned ⟨ctx.invocation, 2, some .syncBalance1⟩ event],
+          updates := current.updates ++
+            [⟨⟨ctx.invocation, 2, some .syncBalance1⟩, oracle⟩] } ∧
+      (∀ (turns0 turns1 : Transcript) (executed0 executed1 : TurnsResult),
+        ExactTurns (syncSourceLockedFrame current ctx)
+          (requestFor .syncBalance0 current.state.token0 (.balanceOf ctx.pair))
+          0 turns0 executed0 →
+        ExactTurns (syncSourceSecondFrame current ctx)
+          (requestFor .syncBalance1 current.state.token1 (.balanceOf ctx.pair))
+          0 turns1 executed1 →
+        ExactConsumes (startTyped current ctx .sync)
+          (.next (syncExternalReply out0) turns0 (.next (syncExternalReply out1) turns1 .done))
+          { status := .success [],
+            frame := sourceFrame,
+            remaining := .done,
+            childReturns := executed0.childReturns ++ executed1.childReturns }) := by
+  obtain ⟨value, size, calleeGas, d, finalGas, callee, raw⟩ :=
+    sync_raw_inv codeEq fork selector run
+  have guards := syncCallee_inv fork getterInitMemory_ptr callee
+  have unlocked : current.state.unlocked = 1 := lockRep.symm.trans guards.1
+  have nonstatic : sevm.isStatic = false := guards.2.1
+  have contextValue : ctx.value = 0 := valueRep.trans value
+  have contextStatic : ctx.isStatic = false := staticRep.trans nonstatic
+  obtain ⟨d0, d1, out0, out1, gas, post, event, oracle,
+    answered0, answered1, long0, bound0, long1, bound1, source, reserves,
+    price0, price1, lock, sync, logs, frame, output, result, calls⟩ :=
+    syncCalleeSourceCalls_inv fork getterInitMemory_ptr slots cum0 cum1 token0 token1 time pair callee
+  have calledEq := Outcome.returned.inj result
+  subst d
+  refine ⟨value, size, nonstatic, unlocked, d0, d1, out0, out1, gas, finalGas,
+    post, event, oracle, calls, answered0, answered1, long0, bound0, long1, bound1,
+    source, reserves, price0, price1, lock, sync, logs, frame, output, raw,
+    rfl, rfl, rfl, ?_⟩
+  intro turns0 turns1 executed0 executed1 during0 during1
+  have acceptedFields := State.update_supply_reserves source
+  have balanceBound0 : (Bytes.toB256 (out0.take 32)).toNat < 2 ^ 112 := by
+    rw [← acceptedFields.2.1]
+    exact post.reserve0.isLt
+  have balanceBound1 : (Bytes.toB256 (out1.take 32)).toNat < 2 ^ 112 := by
+    rw [← acceptedFields.2.2]
+    exact post.reserve1.isLt
+  have lockedUpdate := sync_source_update_locked balanceBound0 balanceBound1 source
+  exact sync_source_exact_consumption contextValue contextStatic unlocked
+    (by rfl) (by rfl) long0 (by rfl) (by rfl) long1 during0 during1 lockedUpdate
 
 
 end Blanc.Lift.UniswapV2Pair
