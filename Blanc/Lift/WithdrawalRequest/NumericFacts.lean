@@ -16,10 +16,31 @@ def wordFeeFuel (fuel excess : Nat) : Option Nat :=
   (WordFakeExponentialEval.runFuel fuel excess 17 1 17 0).map
     (fun result => result.2 / 17)
 
+theorem word_run_2893 :
+    WordFakeExponentialEval.runFuel 1000 2893 17 1 17 0 =
+      some (457,
+        545485220060489857066268109499810576327418688227975047986437738206577926843) := by
+  decide +kernel
+
 theorem word_fee_2893 :
     wordFeeFuel 1000 2893 =
       some 32087365885911168062721653499988857431024628719292649881555161070975172167 := by
   decide +kernel
+
+theorem word_run_2893_existing :
+    WordFakeExponential.Run (2893 : Nat).toB256 (17 : Nat).toB256
+      (1 : Nat).toB256 (17 : Nat).toB256 (0 : Nat).toB256 457
+      (545485220060489857066268109499810576327418688227975047986437738206577926843 : Nat).toB256 := by
+  apply WordFakeExponentialEval.run_of_runFuel
+  exact word_run_2893
+
+theorem word_run_2893_fee :
+    ((545485220060489857066268109499810576327418688227975047986437738206577926843 : Nat).toB256 /
+      (17 : Nat).toB256).toNat =
+      32087365885911168062721653499988857431024628719292649881555161070975172167 := by
+  rw [B256.toNat_div (by decide +kernel)]
+  rw [B256.toNat_toB256_of_lt (by decide +kernel)]
+  rw [B256.toNat_toB256_of_lt (by decide +kernel)]
 
 theorem nat_fee_2893 :
     FakeExponentialEval.fakeExpFuel 1000 1 2893 17 =

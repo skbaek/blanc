@@ -1723,8 +1723,10 @@ execution-goal recipe.
 [`Blanc/WordFakeExponentialEval.lean`](../Blanc/WordFakeExponentialEval.lean)
 spells out the word recurrence as a Nat evaluator: `nextNat` and `addNat`
 apply `% 2^256` at each word operation. `runFuel_of_run` transports an
-existing word trace through Jaune's `B256.toNat` bridges; closed computations
-using this evaluator never evaluate B256 limb arithmetic in the kernel.
+existing word trace through Jaune's `B256.toNat` bridges, while
+`run_of_runFuel` reifies a completed Nat evaluation as a word trace; closed
+computations using this evaluator never evaluate B256 limb arithmetic in the
+kernel.
 
 For a shorter word-run bound under a sufficiently large eventual divisor, use
 [`Blanc/WordFakeExponentialBound.lean`](../Blanc/WordFakeExponentialBound.lean).

@@ -113,4 +113,129 @@ theorem runFuel_of_run
           nextNatEq divisor, addNatEq]
         rw [ih (by omega)]
 
+theorem runFuel_output_lt
+    {fuel numerator denominator counter accumulator output iterations finalOutput : Nat}
+    (output_lt : output < modulus)
+    (evaluates : runFuel fuel numerator denominator counter accumulator output =
+      some (iterations, finalOutput)) :
+    finalOutput < modulus := by
+  induction fuel generalizing numerator denominator counter accumulator output iterations finalOutput with
+  | zero =>
+    rw [runFuel] at evaluates
+    by_cases active : accumulator = 0
+    · rw [ite_eq_left active] at evaluates
+      cases evaluates
+      exact output_lt
+    · rw [ite_eq_right active] at evaluates
+      contradiction
+  | succ fuel ih =>
+    by_cases active : accumulator = 0
+    · rw [runFuel, ite_eq_left active] at evaluates
+      cases evaluates
+      exact output_lt
+    · rw [runFuel, ite_eq_right active] at evaluates
+      cases htail : runFuel fuel numerator denominator (incNat counter)
+          (nextNat numerator denominator counter accumulator)
+          (addNat output accumulator) with
+      | none => rw [htail] at evaluates; contradiction
+      | some result =>
+        rw [htail] at evaluates
+        cases result with
+        | mk tailIterations tailOutput =>
+          have resultEq : (tailIterations + 1, tailOutput) = (iterations, finalOutput) :=
+            Option.some.inj evaluates
+          have outputEq : tailOutput = finalOutput := congrArg Prod.snd resultEq
+          rw [← outputEq]
+          have addBound : addNat output accumulator < modulus := by
+            unfold addNat
+            exact Nat.mod_lt _ (by unfold modulus; positivity)
+          exact ih (numerator := numerator) (denominator := denominator)
+            (counter := incNat counter)
+            (accumulator := nextNat numerator denominator counter accumulator)
+            (output := addNat output accumulator)
+            (iterations := tailIterations) (finalOutput := tailOutput)
+            addBound htail
+
+theorem run_of_runFuel
+    {numerator denominator counter accumulator output : B256}
+    {fuel iterations finalOutput : Nat}
+    (evaluates : runFuel fuel numerator.toNat denominator.toNat counter.toNat
+      accumulator.toNat output.toNat = some (iterations, finalOutput)) :
+    WordFakeExponential.Run numerator denominator counter accumulator output
+      iterations finalOutput.toB256 := by
+  induction fuel generalizing numerator denominator counter accumulator output iterations finalOutput with
+  | zero =>
+    rw [runFuel] at evaluates
+    by_cases activeNat : accumulator.toNat = 0
+    · rw [ite_eq_left activeNat] at evaluates
+      cases evaluates
+      have activeWord : accumulator = 0 := by
+        apply B256.toNat_inj
+        rw [activeNat, B256.toNat_zero]
+      have finalWord : (output.toNat).toB256 = output := by
+        apply B256.toNat_inj
+        exact B256.toNat_toB256_of_lt (B256.toNat_lt output)
+      rw [activeWord, finalWord]
+      exact WordFakeExponential.Run.stop counter output
+    · rw [ite_eq_right activeNat] at evaluates
+      contradiction
+  | succ fuel ih =>
+    by_cases activeNat : accumulator.toNat = 0
+    · rw [runFuel, ite_eq_left activeNat] at evaluates
+      cases evaluates
+      have activeWord : accumulator = 0 := by
+        apply B256.toNat_inj
+        rw [activeNat, B256.toNat_zero]
+      have finalWord : (output.toNat).toB256 = output := by
+        apply B256.toNat_inj
+        exact B256.toNat_toB256_of_lt (B256.toNat_lt output)
+      rw [activeWord, finalWord]
+      exact WordFakeExponential.Run.stop counter output
+    · rw [runFuel, ite_eq_right activeNat] at evaluates
+      cases htail : runFuel fuel numerator.toNat denominator.toNat
+          (incNat counter.toNat)
+          (nextNat numerator.toNat denominator.toNat counter.toNat accumulator.toNat)
+          (addNat output.toNat accumulator.toNat) with
+      | none => rw [htail] at evaluates; contradiction
+      | some result =>
+        rw [htail] at evaluates
+        cases result with
+        | mk tailIterations tailOutput =>
+          have resultEq : (tailIterations + 1, tailOutput) = (iterations, finalOutput) :=
+            Option.some.inj evaluates
+          have countEq : tailIterations + 1 = iterations := congrArg Prod.fst resultEq
+          have outputEq : tailOutput = finalOutput := congrArg Prod.snd resultEq
+          rw [← countEq, ← outputEq]
+          have activeWord : accumulator ≠ 0 := by
+            intro zero
+            apply activeNat
+            rw [zero, B256.toNat_zero]
+          have incEq := incNat_toNat counter
+          have addEq := addNat_toNat output accumulator
+          by_cases divisor : denominator * counter = 0
+          · have nextEq := nextNat_toNat_zero numerator denominator counter accumulator divisor
+            have tailEval :
+                runFuel fuel numerator.toNat denominator.toNat (counter + 1).toNat
+                  (WordFakeExponential.nextAccumulator numerator denominator counter accumulator).toNat
+                  (output + accumulator).toNat = some (tailIterations, tailOutput) := by
+              rw [← incEq, ← nextEq, ← addEq]
+              exact htail
+            have tailRun := ih (numerator := numerator) (denominator := denominator)
+              (counter := counter + 1)
+              (accumulator := WordFakeExponential.nextAccumulator numerator denominator counter accumulator)
+              (output := output + accumulator) tailEval
+            exact WordFakeExponential.Run.step activeWord tailRun
+          · have nextEq := nextNat_toNat numerator denominator counter accumulator divisor
+            have tailEval :
+                runFuel fuel numerator.toNat denominator.toNat (counter + 1).toNat
+                  (WordFakeExponential.nextAccumulator numerator denominator counter accumulator).toNat
+                  (output + accumulator).toNat = some (tailIterations, tailOutput) := by
+              rw [← incEq, ← nextEq, ← addEq]
+              exact htail
+            have tailRun := ih (numerator := numerator) (denominator := denominator)
+              (counter := counter + 1)
+              (accumulator := WordFakeExponential.nextAccumulator numerator denominator counter accumulator)
+              (output := output + accumulator) tailEval
+            exact WordFakeExponential.Run.step activeWord tailRun
+
 end Blanc.WordFakeExponentialEval
