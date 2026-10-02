@@ -39,27 +39,27 @@ private theorem findEntry_none_of_not_mem
   | nil => rfl
   | cons entry rest ih =>
       simp only [List.map_cons, List.mem_cons, not_or] at h
-      simp [findEntry, Ne.symm h.1, ih h.2]
+      simp only [findEntry, Ne.symm h.1, ↓reduceIte, ih h.2]
 
 private theorem controlEntries_target_toNat_le :
     ∀ {n : Nat} {target : B256}, n ≤ 64 →
       target ∈ (controlEntries n).map Prod.fst → target.toNat ≤ n := by
   intro n
   induction n with
-  | zero => simp [controlEntries]
+  | zero => simp only [zero_le, controlEntries, List.map_nil, List.not_mem_nil, nonpos_iff_eq_zero, IsEmpty.forall_iff, imp_self, implies_true]
   | succ n ih =>
       intro target hn hmem
       simp only [controlEntries, List.map_append, List.map_cons, List.map_nil,
         List.mem_append, List.mem_singleton] at hmem
       rcases hmem with hmem | rfl
       · exact Nat.le_trans (ih (by omega) hmem) (by omega)
-      · rw [B256.toNat_toB256_of_lt (by norm_num; omega)]
+      · rw [B256.toNat_toB256_of_lt (by norm_num only; omega)]
 
 private theorem controlEntries_fresh_not_mem (n : Nat) (hn : n < 64) :
     Nat.toB256 (n + 1) ∉ (controlEntries n).map Prod.fst := by
   intro hmem
   have hle := controlEntries_target_toNat_le (n := n) (by omega) hmem
-  rw [B256.toNat_toB256_of_lt (by norm_num; omega)] at hle
+  rw [B256.toNat_toB256_of_lt (by norm_num only; omega)] at hle
   omega
 
 private theorem controlTarget_valid (n : Nat) (hn : n < 64) :
@@ -67,12 +67,12 @@ private theorem controlTarget_valid (n : Nat) (hn : n < 64) :
   constructor
   · intro h
     have hnat := congrArg B256.toNat h
-    rw [B256.toNat_toB256_of_lt (by norm_num; omega),
+    rw [B256.toNat_toB256_of_lt (by norm_num only; omega),
       B256.toNat_zero] at hnat
     omega
   · unfold canonicalAddress
-    rw [B256.toNat_toB256_of_lt (by norm_num; omega)]
-    norm_num
+    rw [B256.toNat_toB256_of_lt (by norm_num only; omega)]
+    norm_num only
     omega
 
 private theorem controlPauser_valid (n : Nat) (hn : n < 64) :
@@ -80,12 +80,12 @@ private theorem controlPauser_valid (n : Nat) (hn : n < 64) :
   constructor
   · intro h
     have hnat := congrArg B256.toNat h
-    rw [B256.toNat_toB256_of_lt (by norm_num; omega),
+    rw [B256.toNat_toB256_of_lt (by norm_num only; omega),
       B256.toNat_zero] at hnat
     omega
   · unfold canonicalAddress
-    rw [B256.toNat_toB256_of_lt (by norm_num; omega)]
-    norm_num
+    rw [B256.toNat_toB256_of_lt (by norm_num only; omega)]
+    norm_num only
     omega
 
 theorem controlRegistryWitness : ∀ n, n ≤ 64 →
@@ -188,24 +188,24 @@ def sixtyFour : List Entry :=
 theorem empty_image_control :
     abiAddressArray ([] : List Entry) =
       (Nat.toB256 32).toBytes ++ (Nat.toB256 0).toBytes := by
-  simp [abiAddressArray]
+  simp only [abiAddressArray, List.length_nil, List.map_nil, List.flatMap_nil, List.append_nil]
 
 theorem singleton_size_control :
     (abiAddressArray singleton).length = 96 := by
-  simpa [singleton] using abiAddressArray_length singleton
+  simpa only [singleton, List.length_cons, List.length_nil, zero_add, mul_one, Nat.reduceAdd] using abiAddressArray_length singleton
 
 theorem sixtyFour_size_control :
     (abiAddressArray sixtyFour).length = 2112 := by
   rw [abiAddressArray_length]
-  simp [sixtyFour]
+  simp only [sixtyFour, List.length_map, List.length_range, Nat.reduceMul, Nat.reduceAdd]
 
 theorem sixtyFour_not_capped_at_one : sixtyFour.length ≠ 1 := by
-  simp [sixtyFour]
+  simp only [sixtyFour, List.length_map, List.length_range, ne_eq, OfNat.ofNat_ne_one, not_false_eq_true]
 
 theorem full_prefix_image_control :
     ((enumPrefixMemory sixtyFour sixtyFour).read 0 2112).1 =
       abiAddressArray sixtyFour := by
-  simpa [sixtyFour] using enumPrefixMemory_full_read sixtyFour
+  simpa only [sixtyFour, List.length_map, List.length_range, Nat.reduceMul, Nat.reduceAdd] using enumPrefixMemory_full_read sixtyFour
 
 theorem cursor_not_memory_resident_control
     (base : Devm) (done : List Entry) (cursor cursor' G : Nat) :
@@ -254,7 +254,7 @@ theorem abi_header_size_and_padding_control :
 
 theorem unbounded_offset_needs_witness_bound :
     ¬ 64 + 32 * (2 ^ 256) < 2 ^ 256 := by
-  norm_num
+  norm_num only
 
 theorem noop_shaped_transitions_still_exist :
     setPauser ([] : List Entry) 7 0 = some [] ∧
@@ -282,23 +282,23 @@ theorem event_shape_mutants_rejected :
   · intro h
     have ha := congrArg Log.address h
     have hne : Nat.toAdr 100 ≠ Nat.toAdr 101 := by decide
-    exact hne (by simpa [expectedEvent] using ha)
+    exact hne (by simpa only [expectedEvent] using ha)
   constructor
   · intro h
     have ht := congrArg Log.topics h
     have hne : pauserSetEvent ≠ (0 : B256) := by decide
     have ht' : pauserSetEvent = 0 := by
-      simpa [expectedEvent] using ht
+      simpa only [expectedEvent, List.cons.injEq, and_true] using ht
     exact hne ht'
   constructor
   · intro h
     have ht := congrArg Log.topics h
     have hne : (7 : B256) ≠ 9 := by decide
     have ht' : (7 : B256) = 9 ∧ (9 : B256) = 7 := by
-      simpa [expectedEvent] using ht
+      simpa only [expectedEvent, List.cons.injEq, and_true, true_and] using ht
     exact hne ht'.1
   · intro h
     have hd := congrArg Log.data h
-    simp [expectedEvent] at hd
+    simp only [expectedEvent, List.ne_cons_self] at hd
 
 end Blanc.LidoCircuitBreaker.EnumerationControls

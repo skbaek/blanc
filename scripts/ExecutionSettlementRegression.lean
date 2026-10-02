@@ -81,7 +81,7 @@ private theorem Fixture.rawTraversal_retains (w : Fixture) :
         rawCommittedDescendantFrames w.child ++
           rawCommittedDescendantFrames w.next := by
   have hchild : Execution.commits w.child.outcome = true := w.rawCommits
-  simp [Fixture.run, rawCommittedDescendantFrames, hchild]
+  simp only [run, rawCommittedDescendantFrames, hchild, ↓reduceDIte, List.cons_append]
 
 /-- The canonical all-outcome traversal retains the actual constructor child
 root even though complete CREATE settlement rejects it. -/
@@ -89,7 +89,7 @@ private theorem Fixture.rawFrameRoots_retains (w : Fixture) :
     Exec.rawFrameRoots w.run =
       w.root ::
         (Exec.rawFrameRoots w.child ++ Exec.rawFrameDescendants w.next) := by
-  simp [Fixture.run, Fixture.root]
+  simp only [run, Exec.rawFrameRoots_runOk, root]
 
 private theorem concrete_create_raw_vs_settlement (w : Fixture) :
     w.childRoot ∈ Exec.rawFrameRoots w.run ∧
@@ -97,7 +97,7 @@ private theorem concrete_create_raw_vs_settlement (w : Fixture) :
       Frame.settlementCommits w.frame w.raw ≠ true := by
   refine ⟨?_, w.settlementTraversal_prunes, w.settlementDoesNotCommit⟩
   rw [w.rawFrameRoots_retains]
-  simp [Fixture.childRoot, Exec.rawFrameRoots]
+  simp only [Exec.rawFrameRoots, List.cons_append, Fixture.childRoot, List.mem_cons, List.mem_append, true_or, or_true]
 
 /-- Lean-level positive manifest used by the settlement gate's deletion
 control. -/

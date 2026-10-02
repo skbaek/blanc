@@ -994,7 +994,7 @@ private def twoWriteEnd : Devm :=
 
 private theorem state_get_empty {a : Adr} :
     State.get Std.TreeMap.empty a = Acct.nil := by
-  simp [State.get]
+  simp only [State.get, Std.TreeMap.empty_eq_emptyc, Std.TreeMap.getD_emptyc]
 
 private theorem acctNil_nonce : Acct.nil.nonce = 0 := rfl
 private theorem acctNil_bal : Acct.nil.bal = 0 := rfl
@@ -1002,7 +1002,7 @@ private theorem acctNil_stor : Acct.nil.stor = Stor.empty := rfl
 private theorem acctNil_code : Acct.nil.code = ByteArray.mk #[] := rfl
 
 private theorem stor_get_empty {k : B256} : Stor.get Stor.empty k = 0 := by
-  simp [Stor.get, Stor.empty]
+  simp only [Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc, Std.TreeMap.getD_emptyc]
 
 private theorem b256_zero_eq_one_false : ((0 : B256) = 1) = False := by
   simp only [eq_iff_iff, iff_false]
@@ -1205,12 +1205,12 @@ private theorem twoWrite_lastRetained_value
             List.cons.injEq] at split
           obtain ⟨-, hsw, -⟩ := split
           have projected := congrArg Exec.StorageWrite.value hsw
-          simpa [Exec.SuccessfulSstoreOccurrence.storageWrite] using
+          simpa only [Exec.SuccessfulSstoreOccurrence.storageWrite] using
             projected.symm
       | cons b2 bs2 =>
           simp only [List.cons_append, List.cons.injEq] at split
           obtain ⟨-, -, h⟩ := split
-          simp at h
+          simp only [List.nil_eq, List.append_eq_nil_iff, reduceCtorEq, and_false] at h
 
 /-- Attribution is to the last retained writer, never the first: a synthetic
 committed run writes `1` and then `2` to one cell of one account.  The
