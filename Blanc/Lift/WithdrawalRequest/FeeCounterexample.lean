@@ -1,4 +1,6 @@
 import Blanc.Lift.WithdrawalRequest.FloodTx
+import Blanc.Lift.WithdrawalRequest.ProtocolOccurrences
+import Blanc.Lift.WithdrawalRequest.BalanceHistory
 import Blanc.BlockForward
 
 /-!
@@ -54,6 +56,25 @@ theorem settled_of_no_deletions (post : Devm) (E coinbase : Adr) (refund tip : B
   rw [hlist]
   rfl
 
+/-- The deposit parse of a block output holding one receipt whose logs all sit at the
+withdrawal predeploy. -/
+theorem parseDepositRequests_of_predeploy_logs {bout : BlockOutput} {tx : Tx} {cum : Nat}
+    {logs : List Log} {index : Nat}
+    (hkeys : bout.receiptKeys = [BLT.toBytes (.bytes index.toBytes)])
+    (hreceipt : bout.receiptsTrie[BLT.toBytes (.bytes index.toBytes)]? =
+      some (makeReceipt tx none cum logs))
+    (hlogs : ∀ log ∈ logs, log.address = withdrawalRequestPredeployAddress) :
+    parseDepositRequests bout = .ok [] := by
+  apply parseDepositRequests_of_no_deposit_logs
+  intro key hkey
+  rw [hkeys, List.mem_singleton] at hkey
+  subst hkey
+  refine ⟨_, hreceipt, ?_⟩
+  intro log hlog
+  change log ∈ logs at hlog
+  rw [hlogs log hlog]
+  decide
+
 /-! ## Block C -/
 
 /-- **Block C's body.**  The two unchecked system calls and the two checked request
@@ -84,8 +105,7 @@ theorem blockC_body {benv : Benv} {iters : Nat} {out : B256}
     (hrun : WordFakeExponential.Run σ.excess.toB256 17 1 17 0 iters out)
     (hpaid : (out / (17 : B256)).toNat ≤ 2 ^ 245)
     (hiters : iters ≤ 10000)
-    -- the rest of the body, on whatever the transaction leaves
-    (hdeposit : ∀ bout : BlockOutput, parseDepositRequests bout = .ok [])
+    -- the request calls, on whatever the transaction leaves
     (hW : ∀ benvTxs : Benv, ∃ stW outW,
       processCheckedSystemTransaction benvTxs withdrawalRequestPredeployAddress [] =
         .ok (stW, outW))
@@ -115,10 +135,16 @@ theorem blockC_body {benv : Benv} {iters : Nat} {out : B256}
   set benvTx : Benv := (benv.withState stBeacon).withState stHistory with hbenvTx
   have hstat : benvTx.stat = benv.stat := rfl
   have hstate : benvTx.state = stHistory := rfl
-  obtain ⟨post, bout', hQ, hproc, -, -⟩ := txC_processTransaction
+  obtain ⟨post, bout', hQ, hproc, -, -, hkeys, hreceipt⟩ := txC_processTransaction
     (benv := benv.withState stHistory) (bout := BlockOutput.init) (index := 0)
     hfork hchain hbase (by show 2 ^ 20 ≤ benv.stat.blockGasLimit - 0; exact hroom) hrecover
     hnonce hnocode hfunds hcode hrep hbounds hexcess hrun hpaid hiters
+  have hdeposit : parseDepositRequests bout' = .ok [] :=
+    parseDepositRequests_of_predeploy_logs hkeys hreceipt (by
+      rw [hQ.2.1]
+      intro log hlog
+      rw [List.mem_singleton] at hlog
+      rw [hlog])
   have hproc' : processTransaction benvTx BlockOutput.init txC 0 = .ok
       (settledState post senderE benv.stat.coinbase
         ((txC.gas - txGasUsed txC.gas 23000 post.gasLeft post.refundCounter.toNat) *
@@ -132,7 +158,7 @@ theorem blockC_body {benv : Benv} {iters : Nat} {out : B256}
   obtain ⟨stC, outC, hCrun⟩ := hC ((benvTx.withState _).withState stW)
   refine ⟨post, bout', stW, stC, outW, outC, hQ, ?_, hWrun, hCrun⟩
   exact applyBody_forward hfork hbeacon hlast hhistory (decode_single txC)
-    (by rw [putIndex_single]; exact applyTransactions_single hproc') (hdeposit bout') hWrun hCrun
+    (by rw [putIndex_single]; exact applyTransactions_single hproc') hdeposit hWrun hCrun
 
 /-! ## Block B -/
 
@@ -166,7 +192,6 @@ theorem blockB_body {benv : Benv} {σ0 : Blanc.WithdrawalRequest.State}
     (hqueue : ∀ n o, σ0.tail ≤ n → n < σ0.tail + 2895 → o ≤ 2 →
       (stHistory.getStor withdrawalRequestPredeployAddress).get
         (Blanc.WithdrawalRequest.queueSlot n o) = 0)
-    (hdeposit : ∀ bout : BlockOutput, parseDepositRequests bout = .ok [])
     (hW : ∀ benvTxs : Benv, ∃ stW outW,
       processCheckedSystemTransaction benvTxs withdrawalRequestPredeployAddress [] =
         .ok (stW, outW))
@@ -191,15 +216,20 @@ theorem blockB_body {benv : Benv} {σ0 : Blanc.WithdrawalRequest.State}
         ((((benv.withState stBeacon).withState stHistory).withState stTx).withState stW)
         consolidationRequestPredeployAddress [] = .ok (stC, outC) := by
   set benvTx : Benv := (benv.withState stBeacon).withState stHistory with hbenvTx
-  obtain ⟨post, bout', hQ, hproc, -, -⟩ := txB_processTransaction
+  obtain ⟨post, bout', hQ, hproc, -, -, hkeys, hreceipt⟩ := txB_processTransaction
     (benv := benv.withState stHistory) (bout := BlockOutput.init) (index := 0)
     hfork hnocap hchain hbase (by show 2 ^ 28 ≤ benv.stat.blockGasLimit - 0; exact hroom)
     hrecover hnonce hnocode hfunds hLcode hLbal hcode hrep hexcess hcountLt htailLt hqueue
+  have hdeposit : parseDepositRequests bout' = .ok [] :=
+    parseDepositRequests_of_predeploy_logs hkeys hreceipt (by
+      rw [hQ.2.2.1]
+      intro log hlog
+      rw [(List.mem_replicate.mp hlog).2])
   obtain ⟨stW, outW, hWrun⟩ := hW (benvTx.withState _)
   obtain ⟨stC, outC, hCrun⟩ := hC ((benvTx.withState _).withState stW)
   refine ⟨post, bout', _, stW, stC, outW, outC, hQ, rfl, ?_, hWrun, hCrun⟩
   exact applyBody_forward hfork hbeacon hlast hhistory (decode_single txB)
-    (by rw [putIndex_single]; exact applyTransactions_single hproc) (hdeposit bout') hWrun hCrun
+    (by rw [putIndex_single]; exact applyTransactions_single hproc) hdeposit hWrun hCrun
 
 /-! ## From a body to a configured block trace -/
 
@@ -238,5 +268,181 @@ def history_of_three {cfg : ChainConfig} {checkpoint chainA chainB chainC : Bloc
     (traceC : ConfiguredBlockTrace cfg chainB chainC) :
     ConfiguredHistoryTrace cfg checkpoint chainC :=
   .step (.step (.step (.refl hcfg hctx hid) traceA) traceB) traceC
+
+/-! ## The statement -/
+
+/-- **B, the mathematical-fee guarantee**, in the vocabulary of the retained word-fee
+theorem: on every configured history under the original hypotheses, every committed
+submission frame whose word fee loop ran to `output` and was paid at least `output / 17`
+also paid at least the Nat reference fee `fakeExp 1 excess 17` of the model at its incoming
+excess. -/
+def NatFeeGuarantee : Prop :=
+  ∀ (cfg : ChainConfig) (checkpoint future : BlockChain)
+    (trace : ConfiguredHistoryTrace cfg checkpoint future),
+    SystemCodeInstalled checkpoint.state →
+    trace.NoSenderAt systemAddress → trace.NoAuthorityAt systemAddress →
+    (∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ systemAddress) →
+    checkpoint.state.getCode systemAddress = ByteArray.empty →
+    Blanc.WithdrawalRequest.RepresentsStorage
+      (checkpoint.state.getStor withdrawalRequestPredeployAddress).get
+      Blanc.WithdrawalRequest.initial →
+    ∀ frame ∈ trace.settledFrames.flatMap balanceFrameObservation,
+      ∀ (model : Blanc.WithdrawalRequest.State) (iterations : Nat) (output : B256),
+        submissionPaymentFrame frame →
+        model.excess = ((frame.pre.getStor withdrawalRequestPredeployAddress).get 0).toNat →
+        WordFakeExponential.Run ((frame.pre.getStor withdrawalRequestPredeployAddress).get 0)
+          17 1 17 0 iterations output →
+        (output / 17).toNat ≤ frame.sevm.value.toNat →
+        Blanc.WithdrawalRequest.fee model ≤ frame.sevm.value.toNat
+
+/-- **The refutation of B**: a configured history under the original hypotheses with a
+committed submission frame that paid its executed word fee but less than the Nat fee. -/
+def NatFeeGuaranteeRefuted : Prop :=
+  ∃ (cfg : ChainConfig) (checkpoint future : BlockChain)
+    (trace : ConfiguredHistoryTrace cfg checkpoint future),
+    SystemCodeInstalled checkpoint.state ∧
+    trace.NoSenderAt systemAddress ∧ trace.NoAuthorityAt systemAddress ∧
+    (∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ systemAddress) ∧
+    checkpoint.state.getCode systemAddress = ByteArray.empty ∧
+    Blanc.WithdrawalRequest.RepresentsStorage
+      (checkpoint.state.getStor withdrawalRequestPredeployAddress).get
+      Blanc.WithdrawalRequest.initial ∧
+    ∃ frame ∈ trace.settledFrames.flatMap balanceFrameObservation,
+      ∃ (model : Blanc.WithdrawalRequest.State) (iterations : Nat) (output : B256),
+        submissionPaymentFrame frame ∧
+        model.excess = ((frame.pre.getStor withdrawalRequestPredeployAddress).get 0).toNat ∧
+        WordFakeExponential.Run ((frame.pre.getStor withdrawalRequestPredeployAddress).get 0)
+          17 1 17 0 iterations output ∧
+        (output / 17).toNat ≤ frame.sevm.value.toNat ∧
+        frame.sevm.value.toNat < Blanc.WithdrawalRequest.fee model
+
+theorem not_natFeeGuarantee_of_refuted (h : NatFeeGuaranteeRefuted) : ¬ NatFeeGuarantee := by
+  intro guarantee
+  obtain ⟨cfg, checkpoint, future, trace, installed, senders, authorities, avoid, systemEmpty,
+    init, frame, member, model, iterations, output, payment, excess, run, paid, below⟩ := h
+  exact Nat.lt_irrefl _ (Nat.lt_of_lt_of_le below
+    (guarantee cfg checkpoint future trace installed senders authorities avoid systemEmpty init
+      frame member model iterations output payment excess run paid))
+
+/-- The witness history's remaining inputs: the three-block configured history with the
+original hypotheses, and block C's submission frame among its settled frames at excess
+`2893` and value `2 ^ 245`. -/
+structure RefutationWitness where
+  cfg : ChainConfig
+  checkpoint : BlockChain
+  future : BlockChain
+  trace : ConfiguredHistoryTrace cfg checkpoint future
+  installed : SystemCodeInstalled checkpoint.state
+  senders : trace.NoSenderAt systemAddress
+  authorities : trace.NoAuthorityAt systemAddress
+  avoid : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+    root.sevm.currentTarget ≠ systemAddress
+  systemEmpty : checkpoint.state.getCode systemAddress = ByteArray.empty
+  init : Blanc.WithdrawalRequest.RepresentsStorage
+    (checkpoint.state.getStor withdrawalRequestPredeployAddress).get
+    Blanc.WithdrawalRequest.initial
+  frame : Exec.Frame
+  member : frame ∈ trace.settledFrames.flatMap balanceFrameObservation
+  payment : submissionPaymentFrame frame
+  excess : (frame.pre.getStor withdrawalRequestPredeployAddress).get 0 = (2893 : Nat).toB256
+  value : frame.sevm.value = (2 ^ 245 : Nat).toB256
+
+/-- The Nat fee at excess `2893` (U2a's `fee_2893`). -/
+def natFee2893 : Nat :=
+  80668064690921409049190791237320678716946849613533250306370202067869504081
+
+/-- The word fee loop's output at excess `2893` (U2a's `word_run_2893_existing`). -/
+def wordOutput2893 : Nat :=
+  545485220060489857066268109499810576327418688227975047986437738206577926843
+
+/-- The executed word fee at excess `2893` (U2a's `word_run_2893_fee`). -/
+def wordFee2893 : Nat :=
+  32087365885911168062721653499988857431024628719292649881555161070975172167
+
+/-- **B is refuted by the witness.**  The numeric inputs are stated in the shapes of
+U2a's `NumericFacts` (`word_run_2893_existing`, `word_run_2893_fee`,
+`word_fee_2893_le_two_pow_245`, `fee_2893`, `two_pow_245_lt_nat_fee_2893`) so they
+discharge by citation once that module is merged. -/
+theorem natFeeGuaranteeRefuted_of_witness (w : RefutationWitness)
+    (word_run_2893_existing : WordFakeExponential.Run (2893 : Nat).toB256 (17 : Nat).toB256
+      (1 : Nat).toB256 (17 : Nat).toB256 (0 : Nat).toB256 457 wordOutput2893.toB256)
+    (word_run_2893_fee : (wordOutput2893.toB256 / (17 : Nat).toB256).toNat = wordFee2893)
+    (word_fee_2893_le_two_pow_245 : wordFee2893 ≤ 2 ^ 245)
+    (fee_2893 : ∀ {state : Blanc.WithdrawalRequest.State}, state.excess = 2893 →
+      Blanc.WithdrawalRequest.fee state = natFee2893)
+    (two_pow_245_lt_nat_fee_2893 : 2 ^ 245 < natFee2893) :
+    NatFeeGuaranteeRefuted := by
+  have h17 : (17 : Nat).toB256 = (17 : B256) := by decide
+  have h1 : (1 : Nat).toB256 = (1 : B256) := by decide
+  have h0 : (0 : Nat).toB256 = (0 : B256) := by decide
+  have h2893 : ((2893 : Nat).toB256).toNat = 2893 := B256.toNat_toB256_of_lt (by decide)
+  have h245 : ((2 ^ 245 : Nat).toB256).toNat = 2 ^ 245 := B256.toNat_toB256_of_lt (by decide)
+  rw [h17, h1, h0] at word_run_2893_existing
+  rw [h17] at word_run_2893_fee
+  refine ⟨w.cfg, w.checkpoint, w.future, w.trace, w.installed, w.senders, w.authorities, w.avoid,
+    w.systemEmpty, w.init, w.frame, w.member, ⟨2893, 0, 0, 0, []⟩, 457, wordOutput2893.toB256,
+    w.payment, ?_, ?_, ?_, ?_⟩
+  · rw [w.excess, h2893]
+  · rw [w.excess]; exact word_run_2893_existing
+  · rw [w.value, h245, word_run_2893_fee]; exact word_fee_2893_le_two_pow_245
+  · rw [w.value, h245, fee_2893 rfl]; exact two_pow_245_lt_nat_fee_2893
+
+/-- The witness from three configured block traces: per-block sender, authority and
+creation-frame facts, and block C's submission frame. -/
+def RefutationWitness.ofBlocks {cfg : ChainConfig} {checkpoint chainA chainB chainC : BlockChain}
+    (hcfg : cfg.Valid) (hctx : checkpoint.ValidContext) (hid : cfg.chainId = checkpoint.chainId)
+    (traceA : ConfiguredBlockTrace cfg checkpoint chainA)
+    (traceB : ConfiguredBlockTrace cfg chainA chainB)
+    (traceC : ConfiguredBlockTrace cfg chainB chainC)
+    (installed : SystemCodeInstalled checkpoint.state)
+    (sendersA : traceA.bodyTrace.transactions.NoSenderAt systemAddress)
+    (sendersB : traceB.bodyTrace.transactions.NoSenderAt systemAddress)
+    (sendersC : traceC.bodyTrace.transactions.NoSenderAt systemAddress)
+    (authoritiesA : ∀ p ∈ traceA.bodyTrace.decodedTxs.putIndex, ∀ auth ∈ p.2.auths,
+      ∀ authority, recoverAuthority auth = .ok authority → authority ≠ systemAddress)
+    (authoritiesB : ∀ p ∈ traceB.bodyTrace.decodedTxs.putIndex, ∀ auth ∈ p.2.auths,
+      ∀ authority, recoverAuthority auth = .ok authority → authority ≠ systemAddress)
+    (authoritiesC : ∀ p ∈ traceC.bodyTrace.decodedTxs.putIndex, ∀ auth ∈ p.2.auths,
+      ∀ authority, recoverAuthority auth = .ok authority → authority ≠ systemAddress)
+    (avoidA : ∀ root ∈ traceA.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ systemAddress)
+    (avoidB : ∀ root ∈ traceB.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ systemAddress)
+    (avoidC : ∀ root ∈ traceC.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ systemAddress)
+    (systemEmpty : checkpoint.state.getCode systemAddress = ByteArray.empty)
+    (init : Blanc.WithdrawalRequest.RepresentsStorage
+      (checkpoint.state.getStor withdrawalRequestPredeployAddress).get
+      Blanc.WithdrawalRequest.initial)
+    (frame : Exec.Frame)
+    (memberC : frame ∈ traceC.settledFrames.flatMap balanceFrameObservation)
+    (payment : submissionPaymentFrame frame)
+    (excess : (frame.pre.getStor withdrawalRequestPredeployAddress).get 0 = (2893 : Nat).toB256)
+    (value : frame.sevm.value = (2 ^ 245 : Nat).toB256) : RefutationWitness :=
+  { cfg := cfg, checkpoint := checkpoint, future := chainC
+    trace := history_of_three hcfg hctx hid traceA traceB traceC
+    installed := installed
+    senders := ⟨⟨⟨trivial, sendersA⟩, sendersB⟩, sendersC⟩
+    authorities := ⟨⟨⟨trivial, authoritiesA⟩, authoritiesB⟩, authoritiesC⟩
+    avoid := by
+      intro root member
+      simp only [history_of_three, ConfiguredHistoryTrace.rawFrames, List.nil_append,
+        List.mem_append] at member
+      rcases member with (hA | hB) | hC
+      · exact avoidA root hA
+      · exact avoidB root hB
+      · exact avoidC root hC
+    systemEmpty := systemEmpty
+    init := init
+    frame := frame
+    member := by
+      simp only [history_of_three, ConfiguredHistoryTrace.settledFrames, List.nil_append,
+        List.flatMap_append]
+      exact List.mem_append_right _ memberC
+    payment := payment
+    excess := excess
+    value := value }
 
 end Blanc.Lift.WithdrawalRequest.FeeCounterexample

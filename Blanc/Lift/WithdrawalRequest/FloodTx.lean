@@ -201,7 +201,10 @@ theorem txC_processTransaction
       bout'.cumulativeGasUsed = bout.cumulativeGasUsed +
         txGasUsed txC.gas 23000 post.gasLeft post.refundCounter.toNat ∧
       bout'.blockGasUsed = bout.blockGasUsed +
-        txGasUsed txC.gas 23000 post.gasLeft post.refundCounter.toNat := by
+        txGasUsed txC.gas 23000 post.gasLeft post.refundCounter.toNat ∧
+      bout'.receiptKeys = bout.receiptKeys ++ [BLT.toBytes (.bytes index.toBytes)] ∧
+      bout'.receiptsTrie[BLT.toBytes (.bytes index.toBytes)]? =
+        some (makeReceipt txC none bout'.cumulativeGasUsed post.logs) := by
   have hsg : benv.stat.rules.stateGas = none := CoveredFork.rules_stateGas_none hfork
   have hEP : senderE ≠ withdrawalRequestPredeployAddress := by decide
   have hEsys : senderE ≠ systemAddress := by decide
@@ -388,13 +391,14 @@ theorem txC_processTransaction
       have hmg : m.gas = 1026776 := hm_gas
       rw [hmg]
       constructor <;> omega
-  obtain ⟨_, post, bout', hQ, hproc, hcum, hblk⟩ := processTransaction_call_value_of_exec
+  obtain ⟨_, post, bout', hQ, hproc, hcum, hblk, hkeys, hreceipt⟩ :=
+    processTransaction_call_value_of_exec_receipts
     (E := senderE) (t := withdrawalRequestPredeployAddress)
     (Q := fun _ post => TxCPost benv σ iters post)
     hfork rfl hchain.symm (by decide) hbase hcost (by decide)
     (CoveredFork.checkTransactionGasCap_ok hfork (by decide)) (by decide) hroom hrecover hnonce
     hnocode hfunds hnodeleg hprec hexec
-  exact ⟨post, bout', hQ, hproc, hcum, hblk⟩
+  exact ⟨post, bout', hQ, hproc, hcum, hblk, hkeys, hreceipt⟩
 
 /-- The flood caller's code is a plain contract: no EIP-7702 delegation. -/
 theorem looper_nondelegated :
@@ -489,7 +493,10 @@ theorem txB_processTransaction
       bout'.cumulativeGasUsed = bout.cumulativeGasUsed +
         txGasUsed txB.gas 23380 post.gasLeft post.refundCounter.toNat ∧
       bout'.blockGasUsed = bout.blockGasUsed +
-        txGasUsed txB.gas 23380 post.gasLeft post.refundCounter.toNat := by
+        txGasUsed txB.gas 23380 post.gasLeft post.refundCounter.toNat ∧
+      bout'.receiptKeys = bout.receiptKeys ++ [BLT.toBytes (.bytes index.toBytes)] ∧
+      bout'.receiptsTrie[BLT.toBytes (.bytes index.toBytes)]? =
+        some (makeReceipt txB none bout'.cumulativeGasUsed post.logs) := by
   have hsg : benv.stat.rules.stateGas = none := CoveredFork.rules_stateGas_none hfork
   have hEL : senderE ≠ looperAddress := by decide
   have hcost : calculateIntrinsicCost benv.stat.rules txB senderE = (21952, 23380) :=
@@ -614,11 +621,12 @@ theorem txB_processTransaction
     rw [hct] at hbal'
     show (post.getBal looperAddress).toNat = _
     omega
-  obtain ⟨_, post, bout', hQ, hproc, hcum, hblk⟩ := processTransaction_call_value_of_exec
+  obtain ⟨_, post, bout', hQ, hproc, hcum, hblk, hkeys, hreceipt⟩ :=
+    processTransaction_call_value_of_exec_receipts
     (E := senderE) (t := looperAddress) (Q := fun _ post => TxBPost benv σ0 post)
     hfork rfl hchain.symm (by decide) hbase hcost (by decide) hcap (by decide) hroom hrecover
     hnonce hnocode hfunds hnodeleg (looper_isPrecomp_false hfork) hexec
-  exact ⟨post, bout', hQ, hproc, hcum, hblk⟩
+  exact ⟨post, bout', hQ, hproc, hcum, hblk, hkeys, hreceipt⟩
 
 -- The two witness transactions' signatures recover senderE from key 1.
 -- The concrete recoverSender proof (decide +kernel over the RLP signing hash)

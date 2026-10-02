@@ -2677,7 +2677,10 @@ the whole envelope from field-level facts: `processTransaction_call_value_of_exe
 code-free sender, gas and signature facts (`hrecover` the only cryptographic premise) and the message's
 interpreter run `hexec` (a success with no frame error and a non-negative refund counter, for the debited
 state, `callMessage` and its entry environment), and returns `processTransaction`'s settled state and the
-block's gas counters (`txGasUsed`). Its funds premise covers `tx.gas * maxFee + tx.value`;
+block's gas counters (`txGasUsed`); `processTransaction_call_value_of_exec_receipts` is the same
+envelope that also returns the appended receipt key and the receipt at it (`makeReceipt tx none`, the
+cumulative gas, the frame's logs), and `processTransaction_of_stages_receipts` is the stage form behind
+it. Its funds premise covers `tx.gas * maxFee + tx.value`;
 it derives affordability after the gas debit and constructs the value transfer with the shared
 `Msg.benvAfterTransfer_of_affordable` lemma. The signature and successful raw execution remain
 premises; the theorem does not construct a signed transaction or a configured history.
@@ -2874,7 +2877,9 @@ Nothing in it names a contract; the only fork premise is `CoveredFork`.
   entries appended and an empty block access list. Withdrawals must be `[]`.
 - `BlockForward.parseDepositRequests_of_no_logs` /
   `parseDepositRequests_of_no_receipts` discharge the deposit parse for
-  receipts without logs;
+  receipts without logs, and `parseDepositRequests_of_no_deposit_logs` for
+  receipts whose logs all sit away from the deposit contract (via the
+  body-generic `forIn_logs_yield_of_skip`);
   `BlockForward.runRequestContracts_prague` and
   `processGeneralPurposeRequests_forward` are the request-pass pieces.
 - `BlockForward.validateHeader_ok_of_facts`: header validity from the parent

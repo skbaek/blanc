@@ -50,6 +50,64 @@ theorem parseDepositRequests_of_no_logs {bout : BlockOutput}
   cases bout
   exact this
 
+/-- A loop body that yields its accumulator unchanged on every log away from the
+deposit contract leaves the accumulator unchanged over such a log list. -/
+theorem forIn_logs_yield_of_skip {m : Type → Type} [Monad m] [LawfulMonad m]
+    (f : Log → Bytes → m (ForInStep Bytes))
+    (hf : ∀ log acc, log.address ≠ depositContractAddress → f log acc = pure (.yield acc)) :
+    ∀ (logs : List Log) (acc : Bytes),
+      (∀ log ∈ logs, log.address ≠ depositContractAddress) → forIn logs acc f = pure acc
+  | [], _, _ => List.forIn_nil
+  | log :: logs, acc, h => by
+    rw [List.forIn_cons, hf log acc (h log List.mem_cons_self), pure_bind]
+    exact forIn_logs_yield_of_skip f hf logs acc (fun l hl => h l (List.mem_cons_of_mem log hl))
+
+/-- Receipts whose logs avoid the deposit contract contribute no deposit request,
+generalized over the key list as above. -/
+private theorem parseDepositRequests_keys_of_no_deposit {bout : BlockOutput} :
+    ∀ keys : List Bytes,
+      (∀ key ∈ keys, ∃ entry, bout.receiptsTrie[key]? = some entry ∧
+        ∀ log ∈ entry.2.logs, log.address ≠ depositContractAddress) →
+      parseDepositRequests { bout with receiptKeys := keys } = .ok []
+  | [], _ => by
+    unfold parseDepositRequests
+    dsimp only
+    rw [List.forIn_nil]
+    rfl
+  | key :: keys, h => by
+    obtain ⟨entry, hentry, hlogs⟩ := h key List.mem_cons_self
+    have ih := parseDepositRequests_keys_of_no_deposit keys
+      (fun k hk => h k (List.mem_cons_of_mem key hk))
+    unfold parseDepositRequests at ih ⊢
+    dsimp only at ih ⊢
+    generalize hF : (fun (log : Log) (depositRequests : Bytes) =>
+      if log.address = depositContractAddress ∧
+          log.topics[0]? = some depositEventSignatureHash then do
+        let request ← Except.mapError TransitionError.block (extractDepositData log.data)
+        pure (ForInStep.yield (depositRequests ++ request))
+      else pure (ForInStep.yield depositRequests)) = F at ih ⊢
+    have hskip : ∀ log acc, log.address ≠ depositContractAddress → F log acc = pure (.yield acc) := by
+      intro log acc hne
+      have hc : ¬ (log.address = depositContractAddress ∧
+          log.topics[0]? = some depositEventSignatureHash) := fun hc => hne hc.1
+      rw [← hF]
+      simp only [hc, ite_false]
+    rw [List.forIn_cons, hentry]
+    simp only [Option.toExcept, bind, Except.bind]
+    rw [forIn_logs_yield_of_skip F hskip entry.2.logs [] hlogs]
+    simp only [pure, Except.pure]
+    exact ih
+
+/-- A block whose every receipt's logs avoid the deposit contract parses no deposit
+request. -/
+theorem parseDepositRequests_of_no_deposit_logs {bout : BlockOutput}
+    (h : ∀ key ∈ bout.receiptKeys, ∃ entry, bout.receiptsTrie[key]? = some entry ∧
+      ∀ log ∈ entry.2.logs, log.address ≠ depositContractAddress) :
+    parseDepositRequests bout = .ok [] := by
+  have := parseDepositRequests_keys_of_no_deposit bout.receiptKeys h
+  cases bout
+  exact this
+
 /-- A block without transactions parses no deposit request. -/
 theorem parseDepositRequests_of_no_receipts {bout : BlockOutput}
     (h : bout.receiptKeys = []) : parseDepositRequests bout = .ok [] := by
