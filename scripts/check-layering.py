@@ -215,6 +215,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.Model",
         "Lift.UniswapV2Pair.Execution",
         "Lift.UniswapV2Pair.Properties",
+        "Lift.UniswapV2Pair.ModelControls",
         "Lift.UniswapV2Pair.SqrtWalk",
         "Lift.UniswapV2Pair.GetterMemory",
         "Lift.UniswapV2Pair.GetterWalk",
