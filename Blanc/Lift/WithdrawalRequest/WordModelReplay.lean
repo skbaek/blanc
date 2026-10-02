@@ -55,7 +55,7 @@ private theorem WordModelAdmission.tail {bound : Nat}
     rw [List.cons_append, equality])
   simpa only [List.foldl_cons] using original
 
-private theorem WordReplayGuard.enabled {storage : Stor}
+theorem WordReplayGuard.enabled {storage : Stor}
     {state : Blanc.WithdrawalRequest.State} (rep : RepresentsStorage storage.get state)
     (active : storage.get 0 ≠ B256.max) : state.excess ≠ excessInhibitor := by
   intro inhibited
@@ -64,7 +64,7 @@ private theorem WordReplayGuard.enabled {storage : Stor}
   rfl
 
 /-- The guarded raw system update inherits the typed storage theorem. -/
-private theorem wordSystemStorage_represents {storage : Stor} {event : WordReplayEvent}
+theorem wordSystemStorage_represents {storage : Stor} {event : WordReplayEvent}
     {state : Blanc.WithdrawalRequest.State} (guard : WordReplayGuard storage event)
     (rep : RepresentsStorage storage.get state)
     (sumBound : effectiveExcess state + state.count < 2 ^ 256) :
@@ -83,7 +83,7 @@ private theorem wordSystemStorage_represents {storage : Stor} {event : WordRepla
   exact outgoing
 
 /-- The guarded raw submission update inherits the typed storage theorem. -/
-private theorem wordSubmissionStorage_represents {storage : Stor} {event : WordReplayEvent}
+theorem wordSubmissionStorage_represents {storage : Stor} {event : WordReplayEvent}
     {state : Blanc.WithdrawalRequest.State} (guard : WordReplayGuard storage event)
     (rep : RepresentsStorage storage.get state) (bounds : SubmissionBounds state)
     (entry : Blanc.WithdrawalRequest.Entry) (caller : entry.caller = event.frame.sevm.caller)

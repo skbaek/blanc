@@ -101,4 +101,23 @@ theorem ConfiguredBlockTrace.settledFrames_length_lt
   simp only [systemTransactionGas] at budget
   omega
 
+/-- The number of configured blocks appended after a history's checkpoint. -/
+def ConfiguredHistoryTrace.blockCount {cfg : ChainConfig} {checkpoint : BlockChain} :
+    {future : BlockChain} → ConfiguredHistoryTrace cfg checkpoint future → Nat
+  | _, .refl _ _ _ => 0
+  | _, .step prior _ => prior.blockCount + 1
+
+/-- A configured history retains fewer than `2 ^ 64` settled frames per block. -/
+theorem ConfiguredHistoryTrace.settledFrames_length_le
+    {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future) :
+    trace.settledFrames.length ≤ trace.blockCount * 2 ^ 64 := by
+  induction trace with
+  | refl valid context chainId => exact Nat.zero_le _
+  | step prior block ih =>
+    have current := block.settledFrames_length_lt
+    rw [ConfiguredHistoryTrace.settledFrames, List.length_append,
+      ConfiguredHistoryTrace.blockCount, Nat.succ_mul]
+    omega
+
 end Blanc.ExecutionTrace
