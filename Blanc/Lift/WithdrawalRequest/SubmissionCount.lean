@@ -7,7 +7,7 @@ open Jaune ExecutionTrace
 
 /-- Each retained frame contributes at most one submission-payment tag.
 This counts occurrences, including repeated frames, rather than distinct states. -/
-private theorem submissionFramePayments_length_le (frames : List Exec.Frame) :
+theorem submissionFramePayments_length_le (frames : List Exec.Frame) :
     (frames.flatMap submissionFramePayments).length ≤ frames.length := by
   induction frames with
   | nil => simp only [List.flatMap_nil, List.length_nil, Nat.le_refl]

@@ -2735,6 +2735,9 @@ grants, including their descendants without any code-identity premise.
 `ConfiguredBlockTrace.settledFrames_length_lt` combines that budget with the
 same block's validated header limit to obtain a count below `2 ^ 64`.
 The counted list is the ordinary settlement-retained full-body trace.
+`ConfiguredHistoryTrace.blockCount` counts a history's appended blocks, and
+`ConfiguredHistoryTrace.settledFrames_length_le` lifts the per-block bound to
+`settledFrames.length ≤ blockCount * 2 ^ 64` for a whole configured history.
 
 For ordered cuts around consecutive protocol withdrawal calls, use
 [`Blanc/ExecutionRequestSegments.lean`](../Blanc/ExecutionRequestSegments.lean).

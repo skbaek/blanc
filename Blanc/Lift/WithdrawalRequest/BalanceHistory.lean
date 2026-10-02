@@ -199,7 +199,7 @@ private theorem submissionCreditPayments_factor (credit : SignedBalanceCredit) :
       List.flatMap_cons, List.flatMap_nil, List.append_nil, submissionFramePayments]
   | incidental amount => rfl
 
-private theorem submissionFramePayments_observed (frame : Exec.Frame) :
+theorem submissionFramePayments_observed (frame : Exec.Frame) :
     (balanceFrameObservation frame).flatMap submissionFramePayments =
       submissionFramePayments frame := by
   by_cases observed : frame.sevm.currentTarget = withdrawalRequestPredeployAddress ∧
