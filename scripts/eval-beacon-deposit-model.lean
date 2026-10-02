@@ -56,15 +56,15 @@ theorem chain_spec (H : Bytes → B256) :
       intro hn
       obtain ⟨s, hs, hinv⟩ := ih (by omega)
       have hcount : s.count = n := by
-        rw [hinv.1]; simp [leaves]
+        rw [hinv.1]; simp only [leaves, List.length_map, List.length_range]
       obtain ⟨s', hins, _, hinv'⟩ :=
         insert_spec H s (leaves n) (leaf n) hinv (by omega)
       refine ⟨s', ?_, ?_⟩
       · unfold chain at hs ⊢
         rw [List.range_succ, List.foldlM_append, hs]
-        simp [hins]
+        simp only [List.foldlM_cons, List.foldlM_nil, Option.pure_def, Option.bind_eq_bind, Option.bind_fun_some, Option.bind_some, hins]
       · have : leaves (n + 1) = leaves n ++ [leaf n] := by
-          simp [leaves, List.range_succ]
+          simp only [leaves, List.range_succ, List.map_append, List.map_cons, List.map_nil]
         rw [this]; exact hinv'
 
 /-- What the retired `naive_root`/`naive_mixed_root` series asserted, for
@@ -81,14 +81,14 @@ theorem naive_agrees (H : Bytes → B256) (n : Nat) (hn : n < 2 ^ 31) (s : Acc)
   cases hs'
   refine ⟨?_, ?_⟩
   · obtain ⟨hc, hlt, hbr⟩ := hInv
-    have h0 : (leaves n).length / 2 ^ 0 = (leaves n).length := by simp
+    have h0 : (leaves n).length / 2 ^ 0 = (leaves n).length := by simp only [pow_zero, Nat.div_one]
     have hpend : rootAt H 0 (pending 0 (leaves n).length (leaves n)) = 0 := by
       have hnil : pending 0 (leaves n).length (leaves n) = ([] : List B256) := by
         unfold pending
         rw [Nat.pow_zero, Nat.mod_one, Nat.sub_zero, List.drop_length]
       rw [hnil, rootAt_nil]
       rfl
-    have hclimb := climb_spec H (leaves n) 32 0 s.branch (by simpa using hc ▸ hlt)
+    have hclimb := climb_spec H (leaves n) 32 0 s.branch (by simpa only [zero_add, Nat.reducePow] using hc ▸ hlt)
       (fun h' _ h2 hbit => hc ▸ hbr h' (by omega) (hc ▸ hbit))
     rw [h0, hpend, Nat.zero_add] at hclimb
     rw [hc, hclimb, rootAtE_eq]
