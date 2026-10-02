@@ -144,7 +144,7 @@ def depositWord : B256 := Bytes.toB256
 private lemma nat_mask_shift_iff (x c : Nat) (hx : x < 2^64) (hc : c < 2^32) :
     x &&& (0xffffffff00000000 : Nat) = c <<< 32 ↔ x >>> 32 = c := by
   have hm : (0xffffffff00000000 : Nat) = (2^32 - 1) <<< 32 := by
-    norm_num [Nat.shiftLeft_eq]
+    norm_num only [Nat.shiftLeft_eq]
   rw [hm]
   have hmask_bit (i : Nat) (hi32 : 32 ≤ i) (hi64 : i < 64) :
       ((2^32 - 1) <<< 32).testBit i = true := by
@@ -170,12 +170,12 @@ private lemma nat_mask_shift_iff (x c : Nat) (hx : x < 2^64) (hc : c < 2^32) :
   have hc_bit_high (i : Nat) (hi : ¬ i < 32) :
       c.testBit i = false := by
     apply Nat.testBit_lt_two_pow
-    exact lt_of_lt_of_le hc (Nat.pow_le_pow_right (by norm_num) (by omega))
+    exact lt_of_lt_of_le hc (Nat.pow_le_pow_right (by norm_num only) (by omega))
   have hcs_lt : (c <<< 32 : Nat) < 2^64 := by
     rw [Nat.shiftLeft_eq]
     calc
-      c * 2^32 < 2^32 * 2^32 := Nat.mul_lt_mul_of_pos_right hc (by norm_num)
-      _ = 2^64 := by norm_num
+      c * 2^32 < 2^32 * 2^32 := Nat.mul_lt_mul_of_pos_right hc (by norm_num only)
+      _ = 2^64 := by norm_num only
   constructor
   · intro h
     apply Nat.eq_of_testBit_eq
@@ -189,7 +189,7 @@ private lemma nat_mask_shift_iff (x c : Nat) (hx : x < 2^64) (hc : c < 2^32) :
       have hx0 : x.testBit (32 + i) = false := by
         apply Nat.testBit_lt_two_pow
         have he : 64 ≤ 32+i := by omega
-        exact lt_of_lt_of_le hx (Nat.pow_le_pow_right (by norm_num) he)
+        exact lt_of_lt_of_le hx (Nat.pow_le_pow_right (by norm_num only) he)
       rw [hx0, hc_bit_high i hi]
   · intro h
     apply Nat.eq_of_testBit_eq
@@ -209,16 +209,16 @@ private lemma nat_mask_shift_iff (x c : Nat) (hx : x < 2^64) (hc : c < 2^32) :
         rw [Nat.testBit_and]
         have hx0 : x.testBit i = false := by
           apply Nat.testBit_lt_two_pow
-          exact lt_of_lt_of_le hx (Nat.pow_le_pow_right (by norm_num) hi64')
+          exact lt_of_lt_of_le hx (Nat.pow_le_pow_right (by norm_num only) hi64')
         have hm0 : ((2^32 - 1) <<< 32 : Nat).testBit i = false := by
           apply Nat.testBit_lt_two_pow
           have hm_lt : ((2^32 - 1) <<< 32 : Nat) < 2^64 := by
             rw [Nat.shiftLeft_eq]
-            norm_num
-          exact lt_of_lt_of_le hm_lt (Nat.pow_le_pow_right (by norm_num) hi64')
+            norm_num only
+          exact lt_of_lt_of_le hm_lt (Nat.pow_le_pow_right (by norm_num only) hi64')
         have hc0 : (c <<< 32 : Nat).testBit i = false := by
           apply Nat.testBit_lt_two_pow
-          exact lt_of_lt_of_le hcs_lt (Nat.pow_le_pow_right (by norm_num) hi64')
+          exact lt_of_lt_of_le hcs_lt (Nat.pow_le_pow_right (by norm_num only) hi64')
         rw [hx0, hm0, hc0]
         simp only [Bool.and_self]
 
@@ -227,14 +227,14 @@ private lemma u64_mask_shift_iff (x c : UInt64) (hc : c.toNat < 2^32) :
       x >>> (32 : UInt64) = c := by
   have hshift : (c <<< (32 : UInt64)).toNat = c.toNat <<< 32 := by
     simp only [UInt64.toNat_shiftLeft]
-    norm_num
+    norm_num only [UInt64.toNat_ofNat]
     have hlt : c.toNat <<< 32 < 2^64 := by
       rw [Nat.shiftLeft_eq]
       calc
         c.toNat * 2^32 < 2^32 * 2^32 :=
-          Nat.mul_lt_mul_of_pos_right hc (by norm_num)
-        _ = 2^64 := by norm_num
-    exact hlt
+          Nat.mul_lt_mul_of_pos_right hc (by norm_num only)
+        _ = 2^64 := by norm_num only
+    exact Nat.mod_eq_of_lt hlt
   constructor
   · intro h
     apply UInt64.toNat_inj.mp
@@ -287,13 +287,13 @@ theorem mask_erc_iff (x : B256) :
     x &&& mask4 = ercWord ↔ x >>> 224 = Blanc.BeaconDeposit.erc165InterfaceId := by
   change x &&& mask4 = ((0x01ffc9a700000000, 0), (0, 0)) ↔
     x >>> 224 = ((0, 0), (0, 0x01ffc9a7))
-  exact mask_word_iff x 0x01ffc9a7 (by norm_num)
+  exact mask_word_iff x 0x01ffc9a7 (by norm_num only [UInt64.toNat_ofNat])
 
 theorem mask_deposit_iff (x : B256) :
     x &&& mask4 = depositWord ↔ x >>> 224 = Blanc.BeaconDeposit.depositInterfaceId := by
   change x &&& mask4 = ((0x8564090700000000, 0), (0, 0)) ↔
     x >>> 224 = ((0, 0), (0, 0x85640907))
-  exact mask_word_iff x 0x85640907 (by norm_num)
+  exact mask_word_iff x 0x85640907 (by norm_num only [UInt64.toNat_ofNat])
 
 open Blanc.Lift in
 theorem callee_false {sevm : Sevm} {b : Devm} {g : Nat} {arg r sel : B256} {M : Mem}

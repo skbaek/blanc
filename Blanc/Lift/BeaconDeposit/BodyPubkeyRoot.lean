@@ -78,10 +78,10 @@ theorem body_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
   have hfp0 : img.sliceD 64 32 0 = (Nat.toB256 256).toBytes := by
     rw [hfp, show (0x100 : B256) = Nat.toB256 256 by decide]
   have h40 : (Bytes.toB256 [0x40]).toNat = 64 := by decide
-  have t256 : (Nat.toB256 256).toNat = 256 := toNat_toB256' (by norm_num)
-  have t288 : (Nat.toB256 288).toNat = 288 := toNat_toB256' (by norm_num)
-  have t336 : (Nat.toB256 336).toNat = 336 := toNat_toB256' (by norm_num)
-  have t576 : (Nat.toB256 576).toNat = 576 := toNat_toB256' (by norm_num)
+  have t256 : (Nat.toB256 256).toNat = 256 := toNat_toB256' (by norm_num only)
+  have t288 : (Nat.toB256 288).toNat = 288 := toNat_toB256' (by norm_num only)
+  have t336 : (Nat.toB256 336).toNat = 336 := toNat_toB256' (by norm_num only)
+  have t576 : (Nat.toB256 576).toNat = 576 := toNat_toB256' (by norm_num only)
   -- the memory images
   set M1 := M.write 288 pk with hM1
   set M2 := M1.write 336 (0 : B256).toBytes with hM2
@@ -99,23 +99,23 @@ theorem body_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
   have hr3 := hr2.write hwf2 256 (Nat.toB256 64).toBytes
   have hr4 : Mem.Reads M4 img4 := hr3.write hwf3 64 _
   have hs1 : M1.size = 832 := by
-    rw [hM1, Mem.size_write_of_le (by rw [hs, hpkl]; norm_num), hs]
+    rw [hM1, Mem.size_write_of_le (by rw [hs, hpkl]; norm_num only), hs]
   have hs2 : M2.size = 832 := by
-    rw [hM2, Mem.size_write_of_le (by rw [hs1, B256.length_toBytes]; norm_num), hs1]
+    rw [hM2, Mem.size_write_of_le (by rw [hs1, B256.length_toBytes]; norm_num only), hs1]
   have hs3 : M3.size = 832 := by
-    rw [hM3, Mem.size_write_word_aligned (by rw [hs2]) (by norm_num), hs2]; rfl
+    rw [hM3, Mem.size_write_word_aligned (by rw [hs2]) (by norm_num only), hs2]; rfl
   have hs4 : M4.size = 832 := by
-    rw [hM4, Mem.size_write_word_aligned (by rw [hs3]) (by norm_num), hs3]; rfl
+    rw [hM4, Mem.size_write_word_aligned (by rw [hs3]) (by norm_num only), hs3]; rfl
   have hfp2 : (Bytes.writeAt (Bytes.writeAt img 288 pk) 336 (0 : B256).toBytes).sliceD 64 32 0 =
       (Nat.toB256 256).toBytes := by
-    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by norm_num),
-      Bytes.sliceD_writeAt_before _ _ _ _ _ (by norm_num), hfp0]
+    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by norm_num only),
+      Bytes.sliceD_writeAt_before _ _ _ _ _ (by norm_num only), hfp0]
   have h64_4 : (Bytes.writeAt X 256 (Nat.toB256 64).toBytes).sliceD 256 32 0 =
       (Nat.toB256 64).toBytes := by
     have := Bytes.sliceD_writeAt X (Nat.toB256 64).toBytes 256
     rwa [B256.length_toBytes] at this
   have h256_4 : img4.sliceD 256 32 0 = (Nat.toB256 64).toBytes := by
-    rw [himg4, Bytes.sliceD_writeAt_after _ _ _ _ _ (by rw [B256.length_toBytes]; norm_num),
+    rw [himg4, Bytes.sliceD_writeAt_after _ _ _ _ _ (by rw [B256.length_toBytes]; norm_num only),
       h64_4]
   have hfp4 : img4.sliceD 64 32 0 = (Nat.toB256 352).toBytes := by
     have := Bytes.sliceD_writeAt (Bytes.writeAt X 256 (Nat.toB256 64).toBytes)
@@ -136,10 +136,10 @@ theorem body_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
     (Bytes.toBytes_toB256_of_length (List.length_sliceD _ _ _ _)).symm
   have hin : w1.toBytes ++ w2.toBytes = pk ++ BeaconDeposit.zeros 16 := by
     rw [← hw1, ← hw2, ← List.sliceD_split img4 0 32 288 32, himg4,
-      Bytes.sliceD_writeAt_after _ _ _ _ _ (by rw [B256.length_toBytes]; norm_num),
+      Bytes.sliceD_writeAt_after _ _ _ _ _ (by rw [B256.length_toBytes]; norm_num only),
       Bytes.sliceD_writeAt_after _ _ _ _ _ (by rw [B256.length_toBytes]),
       show 32 + 32 = 48 + 16 from rfl, List.sliceD_split X 0 48 288 16, hX,
-      Bytes.sliceD_writeAt_before _ _ _ _ _ (by norm_num)]
+      Bytes.sliceD_writeAt_before _ _ _ _ _ (by norm_num only)]
     have e1 : (Bytes.writeAt img 288 pk).sliceD 288 48 0 = pk := by
       have := Bytes.sliceD_writeAt img pk 288; rwa [hpkl] at this
     have e2 : (Bytes.writeAt (Bytes.writeAt img 288 pk) 336 (0 : B256).toBytes).sliceD
@@ -159,8 +159,8 @@ theorem body_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
       (c1 := 0x59) (v0 := 0x08) (v1 := 0x6e) (X0 := t_07fc_c4) (img := img4) (n := 832)
       (s := 288) (d := 352) (w1 := w1) (w2 := w2) (x1 := Nat.toB256 288)
       (x3 := Nat.toB256 352) (x4 := Nat.toB256 256)
-      prog_12 (by simp only [List.not_mem_nil, not_false_eq_true]) hwf4 hr4 hs4 (by norm_num) (by norm_num) (by norm_num) (by norm_num)
-      (by norm_num) (by norm_num) hfp4 hw1 hw2 (by simp only [hR0, List.length_cons,
+      prog_12 (by simp only [List.not_mem_nil, not_false_eq_true]) hwf4 hr4 hs4 (by norm_num only) (by norm_num only) (by norm_num only) (by norm_num only)
+      (by norm_num only) (by norm_num only) hfp4 hw1 hw2 (by simp only [hR0, List.length_cons,
         List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) hsha'.nodeleg hsha'.warm
       hsha'.pre hsha'.fork hdepth (by omega)
   refine ⟨b', M', ⟨hpost.stor, hpost.code, hpost.addrs, hpost.keys, hpost.logs, hpost.output,
@@ -170,9 +170,9 @@ theorem body_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
     simp only [List.mem_cons, List.mem_nil_iff, or_false] at hp
     rcases hp with rfl | rfl | rfl
     · simp only [B256.length_toBytes]
-      rw [hlow 128 32 (by norm_num), hlow4 128 32 (by norm_num) (by norm_num), h80]
+      rw [hlow 128 32 (by norm_num only), hlow4 128 32 (by norm_num only) (by norm_num only), h80]
     · simp only [show (BeaconDeposit.le64 a.toNat).length = 8 from rfl]
-      rw [hlow 160 8 (by norm_num), hlow4 160 8 (by norm_num) (by norm_num), ha0]
+      rw [hlow 160 8 (by norm_num only), hlow4 160 8 (by norm_num only) (by norm_num only), ha0]
     · simp only [B256.length_toBytes]
       rw [hh', hin]; rfl
   -- the walk
@@ -190,9 +190,9 @@ theorem body_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
   refine rx_push rfl (by simp only [hR0, List.set_cons_zero, List.length_cons, List.length_nil,
     zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_mload (c := 3) (v := Nat.toB256 256) ?_ (by rw [h40]; exact read_word hr 64 hfp0)
-    (by rw [h40]; exact read_covered hs (by norm_num) (by norm_num)) (by simp only [hR0,
+    (by rw [h40]; exact read_covered hs (by norm_num only) (by norm_num only)) (by simp only [hR0,
       List.set_cons_zero, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
-  · rw [h40]; exact charge_covered hs (by norm_num) (by norm_num)
+  · rw [h40]; exact charge_covered hs (by norm_num only) (by norm_num only)
   refine rx_dup (n := 0) rfl (by simp only [hR0, List.set_cons_zero, List.length_cons,
     List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 1) rfl ?_
@@ -201,11 +201,11 @@ theorem body_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
   refine rx_swap (n := 0) rfl ?_
   refine rx_log1 (c := 5358) (i := Nat.toB256 256) (sz := Nat.toB256 576) (data := data)
     hstatic ?_ ?_ ?_ ?_
-  · rw [t256, t576, St.extCost_eq hs, memExtSize_of_le (by norm_num) (by norm_num), Nat.sub_self]
+  · rw [t256, t576, St.extCost_eq hs, memExtSize_of_le (by norm_num only) (by norm_num only), Nat.sub_self]
     rfl
   · rw [t256, t576, hr.read, hdata]
   · rw [t256, t576]
-    exact Mem.read_snd_eq_self (by rw [hs]; exact memExtSize_of_le (by norm_num) (by norm_num))
+    exact Mem.read_snd_eq_self (by rw [hs]; exact memExtSize_of_le (by norm_num only) (by norm_num only))
   refine rx_push (w := 0) (by decide) (by simp only [hR0, List.length_cons, List.length_nil,
     zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_push (w := 2) (by decide) (by simp only [hR0, List.length_cons, List.length_nil,
@@ -223,12 +223,12 @@ theorem body_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
   refine rx_push rfl (by simp only [hR0, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
   refine rx_mload (c := 3) (v := Nat.toB256 256) ?_ (by rw [h40]; exact read_word hr 64 hfp0)
-    (by rw [h40]; exact read_covered hs (by norm_num) (by norm_num)) (by simp only [hR0,
+    (by rw [h40]; exact read_covered hs (by norm_num only) (by norm_num only)) (by simp only [hR0,
       List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
-  · rw [h40]; exact charge_covered hs (by norm_num) (by norm_num)
+  · rw [h40]; exact charge_covered hs (by norm_num only) (by norm_num only)
   refine rx_push rfl (by simp only [hR0, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
-  refine rx_add' (push20_add (a := 256) (by norm_num)) (by simp only [hR0, List.length_cons,
+  refine rx_add' (push20_add (a := 256) (by norm_num only)) (by simp only [hR0, List.length_cons,
     List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_dup (n := 0) rfl (by simp only [Nat.reduceAdd, hR0, List.length_cons, List.length_nil,
     zero_add, Nat.reduceLT]) ?_
@@ -244,7 +244,7 @@ theorem body_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
     zero_add, Nat.reduceLT]) ?_
   refine rx_calldatacopy (c := 9) (M' := M1) ?_ (by rw [t288]; rfl) ?_
   · rw [t288, St.extCost_eq hs, show (48 : B256).toNat = 48 by decide,
-      memExtSize_of_le (by norm_num) (by norm_num), Nat.sub_self]
+      memExtSize_of_le (by norm_num only) (by norm_num only), Nat.sub_self]
     rfl
   refine rx_push rfl (by simp only [Nat.reduceAdd, hR0, List.length_cons, List.length_nil, zero_add,
     Nat.reduceLT]) ?_
@@ -263,7 +263,7 @@ theorem body_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
     List.set_cons_zero, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.length_cons,
     List.length_nil, zero_add, Nat.reduceLT]) ?_
   refine rx_mstore (c := 3) (M' := M2) ?_ (by rw [t336]) ?_
-  · rw [t336]; exact charge_covered hs1 (by norm_num) (by norm_num)
+  · rw [t336]; exact charge_covered hs1 (by norm_num only) (by norm_num only)
   refine rx_push rfl (by simp only [Nat.reduceAdd, hR0, List.set_cons_succ, List.set_cons_zero,
     Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.length_cons, List.length_nil, zero_add,
     Nat.reduceLT]) ?_
@@ -271,10 +271,10 @@ theorem body_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
     List.set_cons_zero, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.length_cons,
     List.length_nil, zero_add, Nat.reduceLT]) ?_
   refine rx_mload (c := 3) (v := Nat.toB256 256) ?_ (by rw [h40]; exact read_word hr2 64 hfp2)
-    (by rw [h40]; exact read_covered hs2 (by norm_num) (by norm_num)) (by simp only [Nat.reduceAdd,
+    (by rw [h40]; exact read_covered hs2 (by norm_num only) (by norm_num only)) (by simp only [Nat.reduceAdd,
       hR0, List.set_cons_succ, List.set_cons_zero, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
       List.length_cons, List.length_nil, zero_add, Nat.reduceLT]) ?_
-  · rw [h40]; exact charge_covered hs2 (by norm_num) (by norm_num)
+  · rw [h40]; exact charge_covered hs2 (by norm_num only) (by norm_num only)
   refine rx_push rfl (by simp only [Nat.reduceAdd, hR0, List.set_cons_succ, List.set_cons_zero,
     Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.length_cons, List.length_nil, zero_add,
     Nat.reduceLT]) ?_
@@ -294,7 +294,7 @@ theorem body_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
     List.set_cons_zero, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.length_cons,
     List.length_nil, zero_add, Nat.reduceLT]) ?_
   refine rx_mstore (c := 3) (M' := M3) ?_ (by rw [t256]) ?_
-  · rw [t256]; exact charge_covered hs2 (by norm_num) (by norm_num)
+  · rw [t256]; exact charge_covered hs2 (by norm_num only) (by norm_num only)
   refine rx_push rfl (by simp only [Nat.reduceAdd, hR0, List.set_cons_succ, List.set_cons_zero,
     Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.length_cons, List.length_nil, zero_add,
     Nat.reduceLT]) ?_
@@ -309,15 +309,15 @@ theorem body_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
     List.length_nil, zero_add, Nat.reduceLT]) ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_mstore (c := 3) (M' := M4) ?_ (by rw [h40]) ?_
-  · rw [h40]; exact charge_covered hs3 (by norm_num) (by norm_num)
+  · rw [h40]; exact charge_covered hs3 (by norm_num only) (by norm_num only)
   refine rx_dup (n := 1) rfl (by simp only [Nat.reduceAdd, hR0, List.set_cons_succ,
     List.set_cons_zero, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.length_cons,
     List.length_nil, zero_add, Nat.reduceLT]) ?_
   refine rx_mload (c := 3) (v := Nat.toB256 64) ?_ (by rw [t256]; exact read_word hr4 256 h256_4)
-    (by rw [t256]; exact read_covered hs4 (by norm_num) (by norm_num)) (by simp only [Nat.reduceAdd,
+    (by rw [t256]; exact read_covered hs4 (by norm_num only) (by norm_num only)) (by simp only [Nat.reduceAdd,
       hR0, List.set_cons_succ, List.set_cons_zero, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
       List.length_cons, List.length_nil, zero_add, Nat.reduceLT]) ?_
-  · rw [t256]; exact charge_covered hs4 (by norm_num) (by norm_num)
+  · rw [t256]; exact charge_covered hs4 (by norm_num only) (by norm_num only)
   refine rx_swap (n := 1) rfl ?_
   refine rx_swap (n := 5) rfl ?_
   refine rx_pop ?_

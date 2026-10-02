@@ -1270,9 +1270,9 @@ private theorem proxy_prefix
     simp only [show Nat.toB256 32 = (32 : B256) by decide,
       show (B256.toNat (0 : B256)) = 0 by decide,
       show (B256.toNat (32 : B256)) = 32 by decide]
-    norm_num [Devm.extCost, memExtsSize, memExtSize,
+    norm_num only [Devm.extCost, memExtsSize, memExtSize,
       calculateMemoryGasCost, Mem.empty, ceilDiv, gMemory,
-      Devm.memory_setMach]
+      Devm.memory_setMach, ite_true, ite_false, Nat.max_def]
   case h_cold =>
     rw [premises.currentTarget]
     simpa only [implementationSlotLit_eq_slot] using premises.implementationSlotCold
@@ -1312,7 +1312,7 @@ private theorem proxy_exec_of_func
       (mid := proxyEntry m atCallGas) ?_ rfl run
     change m.gas = (atCallGas + 2128) + gJumpdest
     rw [budget.messageGasEq]
-    norm_num [proxyPrefixGas32Cold, gJumpdest]
+    norm_num only [proxyPrefixGas32Cold, gJumpdest]
     omega
   have hmcode : m.code = proxyCode :=
     premises.proxyCodeLink.trans proxyInstalled

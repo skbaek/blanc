@@ -2872,17 +2872,17 @@ theorem depositEndpoint_history_success_of_run
   have hdenNe : Nat.toB256 oneGwei ≠ 0 := by
     intro hzero
     have h := congrArg B256.toNat hzero
-    rw [B256.toNat_toB256_of_lt (by norm_num [oneGwei])] at h
+    rw [B256.toNat_toB256_of_lt (by norm_num only [oneGwei])] at h
     simp only [B256.toNat_zero] at h
-    norm_num [oneGwei] at h
+    norm_num only [oneGwei] at h
   have hdenNat : (Nat.toB256 oneGwei).toNat = oneGwei :=
-    B256.toNat_toB256_of_lt (by norm_num [oneGwei])
+    B256.toNat_toB256_of_lt (by norm_num only [oneGwei])
   have amountNat : amount.toNat = sevm.value.toNat / oneGwei := by
     dsimp only [amount]
     rw [B256.toNat_div hdenNe, hdenNat]
   have lowerNat : oneEther ≤ sevm.value.toNat := by
     have h := (B256.le_iff_toNat_le_toNat).mp hlower
-    rw [B256.toNat_toB256_of_lt (by norm_num [oneEther])] at h
+    rw [B256.toNat_toB256_of_lt (by norm_num only [oneEther])] at h
     exact h
   have gweiNat : sevm.value.toNat % oneGwei = 0 := by
     have h := congrArg B256.toNat hgwei

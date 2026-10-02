@@ -182,7 +182,7 @@ theorem root_iter_live {b : Devm} {h size : Nat} {node : B256} {img : Bytes}
   unfold t_10d1_c24 t_10db_c24 t_10e7_c24
   have h20 : Bytes.toB256 [0x20] = Nat.toB256 32 := by decide
   have hlt : B256.ltCheck (Nat.toB256 h) (Bytes.toB256 [0x20]) = 1 := by
-    rw [h20, lt_toB256 (by omega) (by norm_num)]; simp only [hh, ↓reduceIte]
+    rw [h20, lt_toB256 (by omega) (by norm_num only)]; simp only [hh, ↓reduceIte]
   refine rxc_dest ?_
   refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rxc_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
@@ -279,7 +279,7 @@ theorem root_iter_dead {b : Devm} {h size : Nat} {node : B256} {img : Bytes}
   unfold t_10d1_c24 t_10db_c24 t_11e6_c24
   have h20 : Bytes.toB256 [0x20] = Nat.toB256 32 := by decide
   have hlt : B256.ltCheck (Nat.toB256 h) (Bytes.toB256 [0x20]) = 1 := by
-    rw [h20, lt_toB256 (by omega) (by norm_num)]; simp only [hh, ↓reduceIte]
+    rw [h20, lt_toB256 (by omega) (by norm_num only)]; simp only [hh, ↓reduceIte]
   refine rxc_dest ?_
   refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rxc_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_

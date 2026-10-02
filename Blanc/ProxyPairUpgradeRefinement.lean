@@ -1119,7 +1119,7 @@ private theorem fixtureV1ValueChild_run :
           exact CoveredFork.rules_stateGas_none
             (by change CoveredFork .prague; exact CoveredFork.prague))
         all_goals try
-          norm_num [Devm.gasLeft_setMach, gBase, gVerylow, gHigh,
+          norm_num only [Devm.gasLeft_setMach, gBase, gVerylow, gHigh,
             gJumpdest, gasColdSload]
         case h_ext => decide
         case a =>
@@ -1175,7 +1175,7 @@ private theorem fixtureV2ValueChild_run :
           exact CoveredFork.rules_stateGas_none
             (by change CoveredFork .prague; exact CoveredFork.prague))
         all_goals try
-          norm_num [Devm.gasLeft_setMach, gBase, gVerylow, gHigh,
+          norm_num only [Devm.gasLeft_setMach, gBase, gVerylow, gHigh,
             gJumpdest, gasColdSload]
         case h_ext => decide
         case a =>

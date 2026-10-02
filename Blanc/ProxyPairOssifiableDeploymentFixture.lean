@@ -114,7 +114,7 @@ theorem message_success :
   · change (target, adminSlotLit) ∉ Std.HashSet.emptyWithCapacity
     exact Std.HashSet.not_mem_emptyWithCapacity
   · rfl
-  · norm_num [ossifiableCreateMessageGas, message]
+  · norm_num only [ossifiableCreateMessageGas, message]
   · change 2188 ≤ pragueRules.code.maxCodeSize
     decide
 

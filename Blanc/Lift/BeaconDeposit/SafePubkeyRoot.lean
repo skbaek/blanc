@@ -53,7 +53,7 @@ theorem safe_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_mload s1
-  rw [h40, read_word hr 64 hfp, read_covered hs (by norm_num) (by norm_num)] at run
+  rw [h40, read_word hr 64 hfp, read_covered hs (by norm_num only) (by norm_num only)] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_dup rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_swap rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_sub s1
@@ -63,7 +63,7 @@ theorem safe_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
   have e576 : ((832 : B256) - 256).toNat = 576 := by decide
   have hfst : (M.read 256 576).1 = data := by rw [hr.read, hdata]
   have hsnd : (M.read 256 576).2 = M :=
-    Mem.read_snd_eq_self (by rw [hs]; exact memExtSize_of_le (by norm_num) (by norm_num))
+    Mem.read_snd_eq_self (by rw [hs]; exact memExtSize_of_le (by norm_num only) (by norm_num only))
   rw [e256, e576, hfst, hsnd] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
@@ -74,7 +74,7 @@ theorem safe_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_val (w := 0) (by decide) (ri_shl s1)
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
-  rw [h40, read_word hr 64 hfp, read_covered hs (by norm_num) (by norm_num)] at run
+  rw [h40, read_word hr 64 hfp, read_covered hs (by norm_num only) (by norm_num only)] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_val (w := 288) (by decide) (ri_add s1)
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
@@ -103,17 +103,17 @@ theorem safe_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
   have hwf2 : Mem.Wf ((M.write 288 pk).write 336 (0 : B256).toBytes) := hwf1.write _ _
   have hr2 := (hr.write hwf 288 pk).write hwf1 336 (0 : B256).toBytes
   have hs1 : (M.write 288 pk).size = 832 := by
-    rw [Mem.size_write_of_le (by rw [hs, hpkl]; norm_num), hs]
+    rw [Mem.size_write_of_le (by rw [hs, hpkl]; norm_num only), hs]
   have hs2 : ((M.write 288 pk).write 336 (0 : B256).toBytes).size = 832 := by
-    rw [Mem.size_write_of_le (by rw [hs1, B256.length_toBytes]; norm_num), hs1]
+    rw [Mem.size_write_of_le (by rw [hs1, B256.length_toBytes]; norm_num only), hs1]
   have hfp2 : (Bytes.writeAt (Bytes.writeAt img 288 pk) 336 (0 : B256).toBytes).sliceD 64 32 0 =
       (0x100 : B256).toBytes := by
-    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by norm_num),
-      Bytes.sliceD_writeAt_before _ _ _ _ _ (by norm_num), hfp]
+    rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by norm_num only),
+      Bytes.sliceD_writeAt_before _ _ _ _ _ (by norm_num only), hfp]
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
-  rw [h40, read_word hr2 64 hfp2, read_covered hs2 (by norm_num) (by norm_num)] at run
+  rw [h40, read_word hr2 64 hfp2, read_covered hs2 (by norm_num only) (by norm_num only)] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
@@ -142,15 +142,15 @@ theorem safe_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
   have hs4 : ((((M.write 288 pk).write 336 (0 : B256).toBytes).write 256
       (64 : B256).toBytes).write 64 (352 : B256).toBytes).size = 832 := by
     rw [Mem.size_write_word_aligned
-        (by rw [Mem.size_write_word_aligned (by rw [hs2]) (by norm_num), hs2]; rfl) (by norm_num),
-      Mem.size_write_word_aligned (by rw [hs2]) (by norm_num), hs2]; rfl
+        (by rw [Mem.size_write_word_aligned (by rw [hs2]) (by norm_num only), hs2]; rfl) (by norm_num only),
+      Mem.size_write_word_aligned (by rw [hs2]) (by norm_num only), hs2]; rfl
   have h256_4 : img4.sliceD 256 32 0 = (64 : B256).toBytes := by
-    rw [himg4, Bytes.sliceD_writeAt_after _ _ _ _ _ (by rw [B256.length_toBytes]; norm_num)]
+    rw [himg4, Bytes.sliceD_writeAt_after _ _ _ _ _ (by rw [B256.length_toBytes]; norm_num only)]
     have := Bytes.sliceD_writeAt X (64 : B256).toBytes 256
     rwa [B256.length_toBytes] at this
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
-  rw [e256, read_word hr4 256 h256_4, read_covered hs4 (by norm_num) (by norm_num)] at run
+  rw [e256, read_word hr4 256 h256_4, read_covered hs4 (by norm_num only) (by norm_num only)] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
@@ -185,10 +185,10 @@ theorem safe_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
     (Bytes.toBytes_toB256_of_length (List.length_sliceD _ _ _ _)).symm
   have hin : w1.toBytes ++ w2.toBytes = pk ++ BeaconDeposit.zeros 16 := by
     rw [← hw1, ← hw2, ← List.sliceD_split img4 0 32 288 32, himg4,
-      Bytes.sliceD_writeAt_after _ _ _ _ _ (by rw [B256.length_toBytes]; norm_num),
+      Bytes.sliceD_writeAt_after _ _ _ _ _ (by rw [B256.length_toBytes]; norm_num only),
       Bytes.sliceD_writeAt_after _ _ _ _ _ (by rw [B256.length_toBytes]),
       show 32 + 32 = 48 + 16 from rfl, List.sliceD_split X 0 48 288 16, hX,
-      Bytes.sliceD_writeAt_before _ _ _ _ _ (by norm_num)]
+      Bytes.sliceD_writeAt_before _ _ _ _ _ (by norm_num only)]
     have e1 : (Bytes.writeAt img 288 pk).sliceD 288 48 0 = pk := by
       have := Bytes.sliceD_writeAt img pk 288; rwa [hpkl] at this
     have e2 : (Bytes.writeAt (Bytes.writeAt img 288 pk) 336 (0 : B256).toBytes).sliceD
@@ -207,22 +207,22 @@ theorem safe_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
     (k := 12) (C := []) (T := t_086e_c12) (fail1 := t_0850_c12) (fail2 := t_086a_c12)
     (show prog[12]? = some (mcpyTree 0x07 0xfc 0x07 0xbf 12
       (mergeTree (shaCallTree 0x08 0x59 0x08 0x6e t_0850_c12 t_086a_c12 t_086e_c12))) from rfl)
-    (by simp only [List.not_mem_nil, not_false_eq_true]) (by decide) hwf4 hr4 hs4 (by norm_num) (by norm_num) (by norm_num) (by norm_num)
-    (by norm_num) (by norm_num) hfp4 hw1 hw2 hsha'.nodeleg hsha'.warm hsha'.pre hsha'.fork
+    (by simp only [List.not_mem_nil, not_false_eq_true]) (by decide) hwf4 hr4 hs4 (by norm_num only) (by norm_num only) (by norm_num only) (by norm_num only)
+    (by norm_num only) (by norm_num only) hfp4 hw1 hw2 hsha'.nodeleg hsha'.warm hsha'.pre hsha'.fork
     run
   refine ⟨b', M', G', Keep.of_sha hpost, ⟨hwf', by rw [hs']; rfl, shaImg img4 352 w1 w2, hr', ?_,
     ?_⟩, run.uncut⟩
-  · rw [shaImg_out (by norm_num)]
+  · rw [shaImg_out (by norm_num only [true_or])]
     exact hfp4
   · intro p hp
     simp only [List.mem_cons, List.mem_nil_iff, or_false] at hp
     rcases hp with rfl | rfl | rfl
     · simp only [B256.length_toBytes]
-      rw [shaImg_out (by norm_num), hlow4 128 32 (by norm_num) (by norm_num)]
+      rw [shaImg_out (by norm_num only [true_or]), hlow4 128 32 (by norm_num only) (by norm_num only)]
       have := hf (0x80, (8 : B256).toBytes) (by simp only [List.mem_cons, Prod.mk.injEq,
         Nat.reduceEqDiff, false_and, List.not_mem_nil, or_self, or_false]); rwa [B256.length_toBytes] at this
     · simp only [show (BeaconDeposit.le64 a.toNat).length = 8 from rfl]
-      rw [shaImg_out (by norm_num), hlow4 160 8 (by norm_num) (by norm_num)]
+      rw [shaImg_out (by norm_num only [true_or]), hlow4 160 8 (by norm_num only) (by norm_num only)]
       have := hf (0xa0, BeaconDeposit.le64 a.toNat) (by simp only [List.mem_cons, Prod.mk.injEq,
         Nat.reduceEqDiff, false_and, List.not_mem_nil, or_self, or_false, or_true])
       rwa [show (BeaconDeposit.le64 a.toNat).length = 8 from rfl] at this

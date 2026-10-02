@@ -48,8 +48,8 @@ private theorem b256_sub_zero (x : B256) : x - 0 = x := by
 private theorem b256_add_zero (x : B256) : x + 0 = x := by
   apply B256.toNat_inj
   rw [B256.toNat_add, B256.toNat_zero]
-  norm_num [Nat.lo_eq]
-  exact B256.toNat_lt x
+  norm_num only [Nat.lo_eq, Nat.add_zero]
+  exact Nat.mod_eq_of_lt (B256.toNat_lt x)
 -- Weth10Redeemable.lean:2283–2288 verbatim.
 
 /-- A zero-amount `Transfer` leaves its source row where it was, whatever its destination — the source

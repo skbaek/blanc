@@ -624,7 +624,7 @@ private theorem callAndTail_success
         List.length_nil]
       decide
     · simp only [callPost, Devm.gasLeft_setMach]
-      norm_num [gVerylow, gHigh, gJumpdest]
+      norm_num only [gVerylow, gHigh, gJumpdest]
     · apply Func.runCompiled_call' (G := 477635)
         (ossifiableConstructorFunctions_afterSetup 1249 2188)
       · simp only [callPost, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
@@ -632,7 +632,7 @@ private theorem callAndTail_success
         decide
       · simp only [callPost, Devm.setMach_setMach, Devm.stateGas_setMach,
           Devm.gasLeft_setMach]
-        norm_num [gVerylow, gMid, gJumpdest]
+        norm_num only [gVerylow, gMid, gJumpdest]
       · simpa only [callPost, Devm.setMach_setMach, Devm.stateGas_setMach,
           Devm.memory_setMach, Devm.stack_setMach] using hafterRun
   refine ⟨post, Func.RunCompiled.next hcall htail, ?_, ?_, ?_,
@@ -709,26 +709,26 @@ private theorem delegateSetup_success
     houtputPost, hgasPost, herrorPost⟩
   rw [ossifiableConstructorDelegateSetup_split_shape]
   func_run (2)
-  · norm_num
-  · norm_num
+  · norm_num only [Devm.gasLeft_setMach]
+  · norm_num only [Devm.gasLeft_setMach]
   func_run (2) [3]
-  · norm_num
+  · norm_num only [Devm.gasLeft_setMach]
   · exact Devm.extCost_add_of_size (i := 128) (sz := 32) (n := 288)
       (a := gVerylow) (e := 3) hsize (by decide)
-  · norm_num
+  · norm_num only [Devm.gasLeft_setMach]
   simp only [show (128 : B256).toNat = 128 by decide]
   rw [Mem.Reads.read hreads, hlength, hmemory128]
   func_run (1)
-  · norm_num
+  · norm_num only [Devm.gasLeft_setMach]
   func_run (2) [3]
-  · norm_num
+  · norm_num only [Devm.gasLeft_setMach]
   · exact Devm.extCost_add_of_size (i := 0) (sz := 32) (n := 288)
       (a := gVerylow) (e := 3) hsize (by decide)
-  · norm_num
+  · norm_num only [Devm.gasLeft_setMach]
   simp only [show (0 : B256).toNat = 0 by decide]
   rw [Mem.Reads.read hreads, himplementation, hmemory0]
   func_run (1)
-  · norm_num [gBase]
+  · norm_num only [Devm.gasLeft_setMach, gBase]
   simpa only [callPre, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
     Devm.stack_setMach] using hrest
 
@@ -947,13 +947,13 @@ private theorem program_success_from_layout
       (ossifiableConstructorProgram 1249 3437 2188).main post := by
     rw [ossifiableConstructorProgram_main_shape]
     func_run (3) [1]
-    all_goals try norm_num [gBase, gVerylow, gHigh, gJumpdest]
+    all_goals try norm_num only [Devm.gasLeft_setMach, gBase, gVerylow, gHigh, gJumpdest]
     all_goals try simp only [B256.eqCheck, hvalue, ↓reduceIte]
     simpa only using hdecode
   refine ⟨post, ?_, himplementationPost, hadminPost, hlogsPost,
     houtputPost, hgasPost, herrorPost⟩
   apply Prog.runCompiled_intro (G := 526247)
-  · norm_num [gJumpdest]
+  · norm_num only [Devm.gasLeft_setMach, gJumpdest]
   · rfl
   · exact hmain
 
