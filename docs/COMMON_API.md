@@ -2251,6 +2251,7 @@ consumer needs canonical interpreter ingress as one conjunct:
   trace-level caller-exclusion theorem.
   `SystemMessageTrace.mem_rawFrames_of_mem_settledFrames` supplies the same
   membership transport for a protocol system invocation.
+- To place the entered top-level root frame of a committed message or call transaction among settled frames, import [`Blanc/ExecutionTraceRootFrame.lean`](../Blanc/ExecutionTraceRootFrame.lean).
 - To preserve fixed nonempty, nondelegating code across a configured history
   and the next block's protocol boundaries, import
   [`Blanc/ExecutionImmutableCode.lean`](../Blanc/ExecutionImmutableCode.lean).
