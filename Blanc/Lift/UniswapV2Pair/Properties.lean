@@ -2822,4 +2822,477 @@ theorem runTyped_feeOff_product {st : State} {ctx : Context} {entry : Entry}
   have zeroFee : entryFeeAmount st entry transcript = 0 := entryFeeAmount_eq_zero feeOff
   simpa only [zeroFee, Nat.add_zero] using runTyped_product positiveSupply noShrink successful
 
+
+/-- Initial pricing uses the checked product and its exact floor root minus the locked minimum. -/
+theorem mintAmount_initial_spec {amount0 amount1 supply : B256}
+    {reserve0 reserve1 liquidity : Nat} (zeroSupply : supply = 0)
+    (accepted : mintAmount amount0 amount1 supply reserve0 reserve1 = .ok liquidity) :
+    liquidity = Nat.sqrt (amount0.toNat * amount1.toNat) - 1000 ∧
+      liquidity < 2 ^ 256 ∧ 1000 ≤ Nat.sqrt (amount0.toNat * amount1.toNat) ∧
+      amount0.toNat * amount1.toNat < 2 ^ 256 := by
+  rw [mintAmount, ite_eq_left zeroSupply] at accepted
+  by_cases productBound : amount0.toNat * amount1.toNat < 2 ^ 256
+  · rw [ite_eq_left productBound] at accepted
+    by_cases minimumCovered : 1000 ≤ Nat.sqrt (amount0.toNat * amount1.toNat)
+    · rw [ite_eq_left minimumCovered] at accepted
+      have liquidityEq := (Except.ok.inj accepted).symm
+      refine ⟨liquidityEq, ?_, minimumCovered, productBound⟩
+      rw [liquidityEq]
+      exact Nat.lt_of_le_of_lt
+        ((Nat.sub_le _ _).trans (Nat.sqrt_le_self _)) productBound
+    · rw [ite_eq_right minimumCovered] at accepted
+      cases accepted
+  · rw [ite_eq_right productBound] at accepted
+    cases accepted
+
+/-- At zero supply a successful protocol-fee query issues no LP credit or fee event. -/
+theorem mintFee_zero_supply {st : State} {feeTo : Adr} {reserve0 reserve1 : Nat}
+    {fee : FeeResult} (zeroSupply : st.totalSupply = 0)
+    (accepted : mintFee st feeTo reserve0 reserve1 = .ok fee) :
+    fee.state.totalSupply = 0 ∧ fee.state.balanceOf = st.balanceOf ∧
+      fee.minted = 0 ∧ fee.events = [] := by
+  rw [mintFee] at accepted
+  by_cases feeOff : feeTo = 0
+  · rw [ite_eq_left feeOff] at accepted
+    rw [← Except.ok.inj accepted]
+    exact ⟨zeroSupply, rfl, rfl, rfl⟩
+  · rw [ite_eq_right feeOff] at accepted
+    by_cases noLast : st.kLast = 0
+    · rw [ite_eq_left noLast] at accepted
+      rw [← Except.ok.inj accepted]
+      exact ⟨zeroSupply, rfl, rfl, rfl⟩
+    · rw [ite_eq_right noLast] at accepted
+      by_cases growing : Nat.sqrt st.kLast.toNat < Nat.sqrt (reserve0 * reserve1)
+      · rw [ite_eq_left growing] at accepted
+        have zeroBound : 0 < 2 ^ 256 := by decide
+        simp only [zeroSupply, B256.toNat_zero, Nat.zero_mul, zeroBound, ite_true,
+          Nat.zero_div, Nat.lt_irrefl, ite_false] at accepted
+        by_cases scaledRootBound : Nat.sqrt (reserve0 * reserve1) * 5 < 2 ^ 256
+        · rw [ite_eq_left scaledRootBound] at accepted
+          by_cases denominatorBound :
+              Nat.sqrt (reserve0 * reserve1) * 5 + Nat.sqrt st.kLast.toNat < 2 ^ 256
+          · rw [ite_eq_left denominatorBound] at accepted
+            rw [← Except.ok.inj accepted]
+            exact ⟨zeroSupply, rfl, rfl, rfl⟩
+          · rw [ite_eq_right denominatorBound] at accepted
+            cases accepted
+        · rw [ite_eq_right scaledRootBound] at accepted
+          cases accepted
+      · rw [ite_eq_right growing] at accepted
+        rw [← Except.ok.inj accepted]
+        exact ⟨zeroSupply, rfl, rfl, rfl⟩
+
+/-- A successful checked LP mint retains the exact sequential ledger credit and event. -/
+theorem State.mintLP_ledger {st post : State} {recipient : Adr} {value : B256}
+    {events : List Event} (accepted : st.mintLP recipient value = .ok (post, events)) :
+    post.balanceOf = Blanc.ledgerCredit st.balanceOf recipient value ∧
+      events = [.transfer 0 recipient value] := by
+  rw [State.mintLP] at accepted
+  by_cases supplyBound : st.totalSupply.toNat + value.toNat < 2 ^ 256
+  · rw [ite_eq_left supplyBound] at accepted
+    by_cases balanceBound : (st.balanceOf recipient).toNat + value.toNat < 2 ^ 256
+    · rw [ite_eq_left balanceBound] at accepted
+      have fields := Prod.mk.inj (Except.ok.inj accepted)
+      rw [← fields.1, ← fields.2]
+      exact ⟨rfl, rfl⟩
+    · rw [ite_eq_right balanceBound] at accepted
+      cases accepted
+  · rw [ite_eq_right supplyBound] at accepted
+    cases accepted
+
+
+/-- Reserve accounting retains the already-issued LP ledger. -/
+theorem State.update_ledger {st post : State} {ctx : Context}
+    {balance0 balance1 : B256} {reserve0 reserve1 : Nat} {event : Event} {update : OracleUpdate}
+    (accepted : st.update ctx balance0 balance1 reserve0 reserve1 = .ok (post, event, update)) :
+    post.balanceOf = st.balanceOf := by
+  rw [State.update] at accepted
+  by_cases bound0 : balance0.toNat < 2 ^ 112
+  · rw [dite_eq_left bound0] at accepted
+    by_cases bound1 : balance1.toNat < 2 ^ 112
+    · rw [dite_eq_left bound1] at accepted
+      exact (congrArg (fun result : State × Event × OracleUpdate => result.1.balanceOf)
+        (Except.ok.inj accepted)).symm
+    · rw [dite_eq_right bound1] at accepted
+      cases accepted
+  · rw [dite_eq_right bound0] at accepted
+    cases accepted
+
+/-- Completing an update retains the LP ledger and the selected return bytes. -/
+theorem Frame.finishUpdated_ledger_output {frame final : Frame} {balance0 balance1 : B256}
+    {reserves : CachedReserves} {feeOn : Bool} {lastEvent : Option Event} {returndata output : Bytes}
+    (accepted : frame.finishUpdated balance0 balance1 reserves feeOn lastEvent returndata =
+      .finished final output) :
+    final.current.state.balanceOf = frame.current.state.balanceOf ∧ output = returndata := by
+  rw [Frame.finishUpdated] at accepted
+  cases updated : frame.current.state.update frame.context balance0 balance1
+      reserves.reserve0.val reserves.reserve1.val with
+  | error failure =>
+    simp only [updated, Frame.fail] at accepted
+    cases accepted
+  | ok result =>
+    rcases result with ⟨post, event, update⟩
+    simp only [updated] at accepted
+    have ledger := State.update_ledger updated
+    cases feeOn <;> cases lastEvent <;>
+      simp only [Bool.false_eq_true, ite_false, ite_true, Frame.withUpdate, Frame.withEvents,
+        Frame.finishLocked, Frame.finish, SegmentResult.finished.injEq] at accepted
+    all_goals
+      rw [← accepted.1]
+      exact ⟨ledger, accepted.2.symm⟩
+
+/-- Exact first-mint economics, with two sequential credits even when the addresses alias. -/
+def InitialMintResult (prior : State) (observed : MintObserved) (post : State)
+    (returndata : Bytes) : Prop :=
+  let root := Nat.sqrt (observed.amount0.toNat * observed.amount1.toNat)
+  1000 < root ∧ observed.amount0.toNat * observed.amount1.toNat < 2 ^ 256 ∧
+    post.totalSupply.toNat = root ∧
+    post.balanceOf = Blanc.ledgerCredit (Blanc.ledgerCredit prior.balanceOf 0 1000)
+      observed.recipient (Nat.toB256 (root - 1000)) ∧
+    post.reserve0.val = observed.balance0.toNat ∧ post.reserve1.val = observed.balance1.toNat ∧
+    returndata = encodeWords [Nat.toB256 (root - 1000)]
+
+
+/-- A successful first-mint continuation realizes its floor root, locked credit and return. -/
+theorem Frame.mintAfterFee_initial {frame final : Frame} {observed : MintObserved}
+    {fee : FeeResult} {feeTo : Adr} {returndata : Bytes}
+    (zeroSupply : frame.current.state.totalSupply = 0)
+    (feeAccepted : mintFee frame.current.state feeTo observed.reserves.reserve0.val
+      observed.reserves.reserve1.val = .ok fee)
+    (accepted : frame.mintAfterFee observed fee = .finished final returndata) :
+    InitialMintResult frame.current.state observed final.current.state returndata := by
+  have feeSpec := mintFee_zero_supply zeroSupply feeAccepted
+  rw [Frame.mintAfterFee] at accepted
+  cases priced : mintAmount observed.amount0 observed.amount1 fee.state.totalSupply
+      observed.reserves.reserve0.val observed.reserves.reserve1.val with
+  | error failure =>
+    simp only [priced, Frame.fail] at accepted
+    cases accepted
+  | ok liquidity =>
+    simp only [priced, ite_eq_left feeSpec.1] at accepted
+    cases minimumMinted : fee.state.mintLP 0 1000 with
+    | error failure =>
+      simp only [minimumMinted, Frame.fail] at accepted
+      cases accepted
+    | ok minimumResult =>
+      rcases minimumResult with ⟨postMinimum, minimumEvents⟩
+      simp only [minimumMinted] at accepted
+      by_cases positive : liquidity > 0
+      · rw [ite_eq_left positive] at accepted
+        cases userMinted : postMinimum.mintLP observed.recipient (Nat.toB256 liquidity) with
+        | error failure =>
+          simp only [userMinted, Frame.fail] at accepted
+          cases accepted
+        | ok userResult =>
+          rcases userResult with ⟨post, events⟩
+          simp only [userMinted] at accepted
+          have pricing := mintAmount_initial_spec feeSpec.1 priced
+          have minimumSupply := State.mintLP_supply minimumMinted
+          have userSupply := State.mintLP_supply userMinted
+          have minimumNat : (1000 : B256).toNat = 1000 := by decide
+          rw [feeSpec.1, B256.toNat_zero, minimumNat, Nat.zero_add] at minimumSupply
+          rw [B256.toNat_toB256_of_lt pricing.2.1] at userSupply
+          have minimumLedger := State.mintLP_ledger minimumMinted
+          have userLedger := State.mintLP_ledger userMinted
+          have finalFields := Frame.finishUpdated_supply_reserves accepted
+          have finalLedger := Frame.finishUpdated_ledger_output accepted
+          have rootPositive : 1000 < Nat.sqrt (observed.amount0.toNat * observed.amount1.toNat) := by
+            have increasing := Nat.add_lt_add_left positive 1000
+            rw [pricing.1, Nat.add_zero, Nat.add_sub_of_le pricing.2.2.1] at increasing
+            exact increasing
+          rw [InitialMintResult]
+          refine ⟨rootPositive, pricing.2.2.2, ?_, ?_,
+            finalFields.2.1, finalFields.2.2, ?_⟩
+          · rw [finalFields.1]
+            change post.totalSupply.toNat = Nat.sqrt (observed.amount0.toNat * observed.amount1.toNat)
+            rw [userSupply, minimumSupply, pricing.1]
+            exact Nat.add_sub_of_le pricing.2.2.1
+          · rw [finalLedger.1]
+            change post.balanceOf = _
+            rw [userLedger.1, minimumLedger.1, feeSpec.2.1, pricing.1]
+          · rw [finalLedger.2, pricing.1]
+      · simp only [ite_eq_right positive, Frame.fail] at accepted
+        cases accepted
+
+/-- The first-mint continuation always terminates without another external request. -/
+theorem Frame.mintAfterFee_terminal_initial (frame : Frame) (observed : MintObserved)
+    (fee : FeeResult) (zeroSupply : fee.state.totalSupply = 0) :
+    (frame.mintAfterFee observed fee).Terminal := by
+  rw [Frame.mintAfterFee]
+  cases priced : mintAmount observed.amount0 observed.amount1 fee.state.totalSupply
+      observed.reserves.reserve0.val observed.reserves.reserve1.val with
+  | error failure => simp only [Frame.fail, SegmentResult.Terminal]
+  | ok liquidity =>
+    simp only [ite_eq_left zeroSupply]
+    cases minimumMinted : fee.state.mintLP 0 1000 with
+    | error failure => simp only [Frame.fail, SegmentResult.Terminal]
+    | ok minimumResult =>
+      rcases minimumResult with ⟨postMinimum, minimumEvents⟩
+      dsimp only []
+      by_cases positive : liquidity > 0
+      · rw [ite_eq_left positive]
+        cases userMinted : postMinimum.mintLP observed.recipient (Nat.toB256 liquidity) with
+        | error failure => simp only [Frame.fail, SegmentResult.Terminal]
+        | ok userResult =>
+          rcases userResult with ⟨post, events⟩
+          exact Frame.finishUpdated_terminal _ observed.balance0 observed.balance1 observed.reserves
+            fee.feeOn (some (.mint frame.context.sender observed.amount0 observed.amount1))
+            (encodeWords [Nat.toB256 liquidity])
+      · simp only [ite_eq_right positive, Frame.fail, SegmentResult.Terminal]
+
+/-- The finite driver consumes the actual first-mint completion, including its aliased credits. -/
+theorem Frame.mintAfterFee_driver_initial {fuel : Nat} {frame : Frame} {observed : MintObserved}
+    {fee : FeeResult} {feeTo : Adr} {transcript : Transcript} {returndata : Bytes}
+    (zeroSupply : frame.current.state.totalSupply = 0)
+    (feeAccepted : mintFee frame.current.state feeTo observed.reserves.reserve0.val
+      observed.reserves.reserve1.val = .ok fee)
+    (successful : (drive fuel (frame.mintAfterFee observed fee) transcript).status = .success returndata) :
+    InitialMintResult frame.current.state observed
+      (drive fuel (frame.mintAfterFee observed fee) transcript).frame.current.state returndata := by
+  have feeSpec := mintFee_zero_supply zeroSupply feeAccepted
+  obtain ⟨final, finished, frameEq⟩ :=
+    drive_terminal_success
+      (Frame.mintAfterFee_terminal_initial frame observed fee feeSpec.1) successful
+  rw [frameEq]
+  exact Frame.mintAfterFee_initial zeroSupply feeAccepted finished
+
+
+/-- The two balance observations determine mint's cached deposit words. -/
+def mintObservation (recipient : Adr) (reserves : CachedReserves)
+    (balance0 balance1 : B256) : MintObserved :=
+  { recipient := recipient, reserves := reserves, balance0 := balance0, balance1 := balance1,
+    amount0 := balance0 - Nat.toB256 reserves.reserve0.val,
+    amount1 := balance1 - Nat.toB256 reserves.reserve1.val }
+
+/-- A successful initial fee query consumes the actual decoded recipient and completion. -/
+theorem drive_mintFee_initial {fuel : Nat} {frame : Frame} {request : Request}
+    {observed : MintObserved} {transcript : Transcript} {returndata : Bytes}
+    (zeroSupply : frame.current.state.totalSupply = 0)
+    (kind : request.kind = .staticCall)
+    (successful : (drive fuel (.suspended frame request (.mintFee observed))
+      transcript).status = .success returndata) :
+    InitialMintResult frame.current.state observed
+      (drive fuel (.suspended frame request (.mintFee observed))
+        transcript).frame.current.state returndata := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    obtain ⟨result, turns, tail, shape, complete, resumedSuccess, frameEq⟩ :=
+      drive_suspended_success successful
+    have staticExternal : externalStatic frame request = true := by
+      rw [externalStatic, kind]
+      cases frame.context.isStatic <;> rfl
+    have settled := Frame.settleExternal_static_frame frame fuel request result turns staticExternal
+    rw [settled] at resumedSuccess frameEq
+    cases decoded : decodeExternal request result with
+    | error failure =>
+      exact False.elim (resumeSegment_error_not_success decoded fuel tail returndata resumedSuccess)
+    | ok decodedResult =>
+      cases decodedResult with
+      | word value =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | unit =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | address feeTo =>
+        cases charged : mintFee (frame.beginResume request).current.state feeTo
+            observed.reserves.reserve0.val observed.reserves.reserve1.val with
+        | error failure =>
+          simp only [resumeSegment, decoded, charged, Frame.fail] at resumedSuccess
+          exact False.elim (drive_failed_not_success fuel _ failure tail returndata resumedSuccess)
+        | ok fee =>
+          simp only [resumeSegment, decoded, charged] at resumedSuccess frameEq
+          have initial := Frame.mintAfterFee_driver_initial
+            (frame := frame.beginResume request) zeroSupply charged resumedSuccess
+          rw [frameEq]
+          exact initial
+
+/-- Initial mint's checked second observation reaches the exact source fee/completion result. -/
+theorem drive_mintBalance1_initial {fuel : Nat} {frame : Frame} {request : Request}
+    {recipient owner : Adr} {reserves : CachedReserves} {balance0 : B256}
+    {transcript : Transcript} {returndata : Bytes}
+    (zeroSupply : frame.current.state.totalSupply = 0)
+    (operation : request.operation = .balanceOf owner) (kind : request.kind = .staticCall)
+    (successful : (drive fuel (.suspended frame request (.mintBalance1 recipient reserves balance0))
+      transcript).status = .success returndata) :
+    InitialMintResult frame.current.state (mintObservation recipient reserves balance0 transcript.firstWord)
+      (drive fuel (.suspended frame request (.mintBalance1 recipient reserves balance0))
+        transcript).frame.current.state returndata := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    obtain ⟨result, turns, tail, shape, complete, resumedSuccess, frameEq⟩ :=
+      drive_suspended_success successful
+    have staticExternal : externalStatic frame request = true := by
+      rw [externalStatic, kind]
+      cases frame.context.isStatic <;> rfl
+    have settled := Frame.settleExternal_static_frame frame fuel request result turns staticExternal
+    rw [settled] at resumedSuccess frameEq
+    cases decoded : decodeExternal request result with
+    | error failure =>
+      exact False.elim (resumeSegment_error_not_success decoded fuel tail returndata resumedSuccess)
+    | ok decodedResult =>
+      cases decodedResult with
+      | address address =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | unit =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | word balance1 =>
+        have observedWord := decodeExternal_balance_word operation decoded
+        simp only [resumeSegment, decoded] at resumedSuccess frameEq
+        by_cases backing : reserves.reserve0.val ≤ balance0.toNat ∧
+            reserves.reserve1.val ≤ balance1.toNat
+        · rw [ite_eq_left backing] at resumedSuccess frameEq
+          simp only [Frame.suspend] at resumedSuccess frameEq
+          have initial := drive_mintFee_initial (frame := frame.beginResume request)
+            zeroSupply rfl resumedSuccess
+          rw [frameEq]
+          simpa only [shape, Transcript.firstWord, ← observedWord, mintObservation,
+            Frame.beginResume] using initial
+        · simp only [ite_eq_right backing, Frame.fail] at resumedSuccess
+          exact False.elim (drive_failed_not_success fuel _
+            (.sourceGuard "ds-math-sub-underflow") tail returndata resumedSuccess)
+
+
+/-- The first mint balance query preserves its ledger and selects both actual returned words. -/
+theorem drive_mintBalance0_initial {fuel : Nat} {frame : Frame} {request : Request}
+    {recipient owner : Adr} {reserves : CachedReserves} {transcript : Transcript} {returndata : Bytes}
+    (zeroSupply : frame.current.state.totalSupply = 0)
+    (operation : request.operation = .balanceOf owner) (kind : request.kind = .staticCall)
+    (successful : (drive fuel (.suspended frame request (.mintBalance0 recipient reserves))
+      transcript).status = .success returndata) :
+    InitialMintResult frame.current.state
+      (mintObservation recipient reserves transcript.firstWord transcript.ownTail.firstWord)
+      (drive fuel (.suspended frame request (.mintBalance0 recipient reserves))
+        transcript).frame.current.state returndata := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    obtain ⟨result, turns, tail, shape, complete, resumedSuccess, frameEq⟩ :=
+      drive_suspended_success successful
+    have staticExternal : externalStatic frame request = true := by
+      rw [externalStatic, kind]
+      cases frame.context.isStatic <;> rfl
+    have settled := Frame.settleExternal_static_frame frame fuel request result turns staticExternal
+    rw [settled] at resumedSuccess frameEq
+    cases decoded : decodeExternal request result with
+    | error failure =>
+      exact False.elim (resumeSegment_error_not_success decoded fuel tail returndata resumedSuccess)
+    | ok decodedResult =>
+      cases decodedResult with
+      | address address =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | unit =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | word balance0 =>
+        have observedWord := decodeExternal_balance_word operation decoded
+        simp only [resumeSegment, decoded, Frame.suspend] at resumedSuccess frameEq
+        have initial := drive_mintBalance1_initial (frame := frame.beginResume request)
+          zeroSupply rfl rfl resumedSuccess
+        rw [frameEq]
+        simpa only [shape, Transcript.firstWord, Transcript.ownTail, ← observedWord,
+          Frame.beginResume] using initial
+
+/-- Successful zero-supply entries derive their source guards and complete the first-mint formula. -/
+theorem drive_startTyped_mint_initial {fuel : Nat} {current : Checkpoint} {ctx : Context}
+    {recipient : Adr} {transcript : Transcript} {returndata : Bytes}
+    (zeroSupply : current.state.totalSupply = 0)
+    (successful : (drive fuel (startTyped current ctx (.mint recipient)) transcript).status =
+      .success returndata) :
+    InitialMintResult current.state
+      (mintObservation recipient current.state.cachedReserves
+        transcript.firstWord transcript.ownTail.firstWord)
+      (drive fuel (startTyped current ctx (.mint recipient))
+        transcript).frame.current.state returndata := by
+  by_cases paid : ctx.value ≠ 0
+  · simp only [startTyped, startImmediate, ite_eq_left paid, Frame.fail] at successful
+    exact False.elim (drive_failed_not_success fuel _ .emptyRevert transcript returndata successful)
+  · by_cases unlocked : current.state.unlocked = 1
+    · by_cases staticContext : ctx.isStatic = true
+      · simp only [startTyped, startImmediate, ite_eq_right paid, getterResult, Frame.lock,
+          Frame.enter, ite_eq_left unlocked, staticContext, ite_true, Frame.fail] at successful
+        exact False.elim (drive_failed_not_success fuel _ .staticWrite transcript returndata successful)
+      · let lockedFrame : Frame :=
+          { Frame.enter current ctx (.mint recipient) with
+            current := { current with state := { current.state with unlocked := 0 } } }
+        let reserves := current.state.cachedReserves
+        have enteredUnlocked : (Frame.enter current ctx (.mint recipient)).current.state.unlocked = 1 :=
+          unlocked
+        have enteredStatic : ¬(Frame.enter current ctx (.mint recipient)).context.isStatic = true :=
+          staticContext
+        have opened : (Frame.enter current ctx (.mint recipient)).lock = .ok lockedFrame := by
+          rw [Frame.lock, ite_eq_left enteredUnlocked, ite_eq_right enteredStatic]
+          rfl
+        have stage : startTyped current ctx (.mint recipient) =
+            lockedFrame.suspend .mintBalance0 current.state.token0 (.balanceOf ctx.pair)
+              (.mintBalance0 recipient reserves) := by
+          simp only [startTyped, startImmediate, ite_eq_right paid, getterResult, opened]
+          rfl
+        have suspendedSuccess :
+            (drive fuel (.suspended lockedFrame
+              (requestFor .mintBalance0 current.state.token0 (.balanceOf ctx.pair))
+              (.mintBalance0 recipient reserves)) transcript).status = .success returndata := by
+          simpa only [stage, Frame.suspend] using successful
+        have initial := drive_mintBalance0_initial (frame := lockedFrame)
+          zeroSupply rfl rfl suspendedSuccess
+        rw [stage, Frame.suspend]
+        simpa only [InitialMintResult, lockedFrame, Frame.enter, reserves] using initial
+    · have enteredLocked : ¬(Frame.enter current ctx (.mint recipient)).current.state.unlocked = 1 :=
+        unlocked
+      have closed : (Frame.enter current ctx (.mint recipient)).lock =
+          .error (.sourceGuard "UniswapV2: LOCKED") := by
+        rw [Frame.lock, ite_eq_right enteredLocked]
+      simp only [startTyped, startImmediate, ite_eq_right paid, getterResult, closed, Frame.fail] at successful
+      exact False.elim (drive_failed_not_success fuel _
+        (.sourceGuard "UniswapV2: LOCKED") transcript returndata successful)
+
+/-- Actual first mint returns floor sqrt minus 1000 and credits the minimum before the recipient. -/
+theorem runTyped_mint_initial {st : State} {ctx : Context} {recipient : Adr}
+    {transcript : Transcript} {returndata : Bytes} (zeroSupply : st.totalSupply = 0)
+    (successful : (runTyped st ctx (.mint recipient) transcript).status = .success returndata) :
+    InitialMintResult st
+      (mintObservation recipient st.cachedReserves transcript.firstWord transcript.ownTail.firstWord)
+      (runTyped st ctx (.mint recipient) transcript).frame.current.state returndata := by
+  exact drive_startTyped_mint_initial
+    (current := { state := st, logs := [], updates := [] }) (ctx := ctx) (recipient := recipient)
+    (fuel := transcript.work + 2) (transcript := transcript) (returndata := returndata)
+    zeroSupply successful
+
+
+/-- The first-mint final supply is the floor-root reference integer for the checked deposits. -/
+theorem runTyped_mint_initial_floor {st : State} {ctx : Context} {recipient : Adr}
+    {transcript : Transcript} {returndata : Bytes} (zeroSupply : st.totalSupply = 0)
+    (successful : (runTyped st ctx (.mint recipient) transcript).status = .success returndata) :
+    let observed := mintObservation recipient st.cachedReserves
+      transcript.firstWord transcript.ownTail.firstWord
+    let product := observed.amount0.toNat * observed.amount1.toNat
+    (runTyped st ctx (.mint recipient) transcript).frame.current.state.totalSupply.toNat ^ 2 ≤ product ∧
+      product < ((runTyped st ctx (.mint recipient) transcript).frame.current.state.totalSupply.toNat + 1) ^ 2 := by
+  dsimp only []
+  exact Nat.eq_sqrt'.mp (runTyped_mint_initial zeroSupply successful).2.2.1
+
+/-- When the user recipient is zero, both source credits accumulate in that same LP row. -/
+theorem runTyped_mint_initial_zero_recipient {st : State} {ctx : Context}
+    {transcript : Transcript} {returndata : Bytes} (zeroSupply : st.totalSupply = 0)
+    (successful : (runTyped st ctx (.mint 0) transcript).status = .success returndata) :
+    let observed := mintObservation 0 st.cachedReserves
+      transcript.firstWord transcript.ownTail.firstWord
+    (runTyped st ctx (.mint 0) transcript).frame.current.state.balanceOf 0 =
+      st.balanceOf 0 + 1000 +
+        Nat.toB256 (Nat.sqrt (observed.amount0.toNat * observed.amount1.toNat) - 1000) := by
+  dsimp only []
+  have credited := congrFun (runTyped_mint_initial zeroSupply successful).2.2.2.1 0
+  simpa only [mintObservation, Blanc.ledgerCredit_self] using credited
+
 end Blanc.Lift.UniswapV2Pair

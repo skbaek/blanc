@@ -323,25 +323,14 @@ theorem Frame.ofCreate_inner_data_nil {sevm : Sevm} {devm : Devm}
       (createMsg sevm devm createGas endowment newAddress calldata)).inner.data
       = [] := rfl
 
-/-- Every entered child of a covered-fork spawn has short calldata with a
-covered fork: CALL-family children carry a memory slice sized by a popped
-`B256.toNat`; CREATE-family children carry `[]`. -/
-theorem Evm.step_spawn_child_data {pc : Nat} {sevm : Sevm} {pre : Devm}
-    {f : Frame} {rsm : Resume} {pc' : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (hs : Evm.step (⟨pc, sevm, pre⟩ : Evm) = .spawn f rsm pc')
-    {cevm : Evm} (henter : f.enter = .run cevm) :
-    cevm.sta.data.length < 2 ^ 256 ∧ CoveredFork cevm.sta.benvStat.fork := by
-  obtain ⟨x, -, hx, -⟩ := Evm.step_spawn_inv hs
-  have hsg : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
-  have hdata : cevm.sta.data = f.inner.data := Frame.enter_data_eq henter
-  have hstat : cevm.sta.benvStat = sevm.benvStat := by
-    rw [Frame.enter_run_benvStat henter, Xinst.step_spawn_benvStat hx]
-  have hfork' : CoveredFork cevm.sta.benvStat.fork := by
-    rw [hstat]
-    exact hfork
-  refine ⟨?_, hfork'⟩
-  rw [hdata]
+/-- A spawned child has word-sized calldata before entry. CALL-family
+inputs are memory slices sized by a popped word, and CREATE-family inputs
+are empty. This also covers synchronous precompile entry. -/
+theorem Xinst.step_spawn_inner_data_length_lt {sevm : Sevm} {pre : Devm}
+    {x : Xinst} {f : Frame} {rsm : Resume}
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (hx : Xinst.step sevm pre x = .spawn f rsm) :
+    f.inner.data.length < 2 ^ 256 := by
   cases x with
   | create =>
     simp only [Xinst.step, Bind.bind, Except.bind, Except.assert] at hx
@@ -505,6 +494,24 @@ theorem Evm.step_spawn_child_data {pc : Nat} {sevm : Sevm} {pre : Devm}
       all_goals
         rw [Frame.ofCall_inner_data, callMsg_data, Array.sliceD_length]
         exact B256.toNat_lt _
+
+/-- Every entered child of a covered-fork spawn has short calldata with a
+covered fork: CALL-family children carry a memory slice sized by a popped
+`B256.toNat`; CREATE-family children carry `[]`. -/
+theorem Evm.step_spawn_child_data {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {f : Frame} {rsm : Resume} {pc' : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (hs : Evm.step (⟨pc, sevm, pre⟩ : Evm) = .spawn f rsm pc')
+    {cevm : Evm} (henter : f.enter = .run cevm) :
+    cevm.sta.data.length < 2 ^ 256 ∧ CoveredFork cevm.sta.benvStat.fork := by
+  obtain ⟨x, -, hx, -⟩ := Evm.step_spawn_inv hs
+  constructor
+  · rw [Frame.enter_data_eq henter]
+    exact Xinst.step_spawn_inner_data_length_lt hfork.rules_stateGas_none hx
+  · have hstat : cevm.sta.benvStat = sevm.benvStat := by
+      rw [Frame.enter_run_benvStat henter, Xinst.step_spawn_benvStat hx]
+    rw [hstat]
+    exact hfork
 
 /-- Every entered frame of a covered-fork execution has short calldata. -/
 theorem Exec.rawFrameRoots_data_bound {pc : Nat} {sevm : Sevm} {pre : Devm}

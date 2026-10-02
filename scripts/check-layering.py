@@ -178,6 +178,8 @@ SHARED += ["Lift.ExactWalkMemory"]
 SHARED += ["LedgerUpdate"]
 # Floor share bounds for two-reserve AMMs: contract-neutral.
 SHARED += ["Lift.AMMArithmetic", "Lift.BabylonianSqrt"]
+# Ordinary interpreter output provenance for actual-call returndata bounds.
+SHARED += ["Lift.ReturnDataBound", "Lift.PrecompileOutputBound"]
 # Walk steps for arbitrary static calls, CALLER/KECCAK256/LOG3/SSTORE, hashed slots and the
 # Vyper 0.2.x front end (vyper-3crv-bytecode-v1): contract-neutral.
 SHARED += ["Lift.StaticCall", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper", "Lift.PackedWord"]
@@ -213,6 +215,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.Model",
         "Lift.UniswapV2Pair.Execution",
         "Lift.UniswapV2Pair.Properties",
+        "Lift.UniswapV2Pair.ModelControls",
         "Lift.UniswapV2Pair.SqrtWalk",
         "Lift.UniswapV2Pair.GetterMemory",
         "Lift.UniswapV2Pair.GetterWalk",

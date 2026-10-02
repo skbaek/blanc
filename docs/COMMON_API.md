@@ -2191,7 +2191,12 @@ consumer needs canonical interpreter ingress as one conjunct:
   `tx.gas ≤ blockGasLimit < 2 ^ 63` (`checkTransaction`, `checkGasLimit` via
   `ConfiguredBlockTrace.header_gasLimit_lt`); child frames carry a memory slice
   sized by a popped word (`Evm.step_spawn_child_data`), and system messages
-  fixed data. `Exec.rawFrameRoots_data_bound` is the execution-level form. Worked
+  fixed data. Before child entry, including synchronous precompile entry,
+  `ExecutionTrace.Xinst.step_spawn_inner_data_length_lt` derives
+  `frame.inner.data.length < 2 ^ 256` directly from an actual `Xinst.step` spawn
+  and `stateGas = none`; it needs no entered-child witness or bounded-output
+  premise. The entered-child theorem consumes this same opcode proof.
+  `Exec.rawFrameRoots_data_bound` is the execution-level form. Worked
   consumers: `Lift.BeaconDeposit.configuredHistory_solInv_env` (and
   `_count_env`/`_root_env`) and `Lift.Curve3Crv.c3crv_history_committed_derived`.
 - Every retained carrier from `ProcessMessageTrace` through
@@ -2203,6 +2208,41 @@ This layer does not manufacture environment, storage, routing, delegation, or
 precompile facts, constrain an execution's result, or filter by settlement.
 A consumer must derive every independent admission from its actual trace and
 use the retained/committed APIs when rollback matters.
+
+#### I need an ordinary execution output bound
+
+Use [`Blanc/Lift/ReturnDataBound.lean`](../Blanc/Lift/ReturnDataBound.lean).
+`Lift.ReturnDataBound.exec_output` proves, on both success and error outcomes,
+that `Exec` leaves the enclosing output equal to its initial value or produces
+an output of length less than `2 ^ 256`, assuming `stateGas = none`.
+`OutputProvenance` states that disjunction explicitly: arbitrary seeded
+execution does not imply a bounded output. Regular instructions and jumps
+preserve output; RETURN/REVERT use a popped word for their full output size;
+normal CREATE/CALL resumption preserves the enclosing output across either
+child outcome. The theorem composes those facts over the actual interpreter.
+For the actual call-level bound, use `call_returnData_length_lt` or
+`staticcall_returnData_length_lt` on a real `Ninst.Run` and `CoveredFork`.
+Both bound the complete post-state returndata, independently of the requested
+output-copy window, including normally settled REVERT and exceptional-halt
+children. `call_step_returnData_length_lt` is the `StepRun`/`Filled` interface;
+`processMessage_output` is the message/settlement interface with actual bounded
+input and `stateGas = none`. These consume actual initialized output seeds,
+precompile producers and child-input bounds; no bounded-callee-output ENV
+hypothesis is needed. Ordinary arbitrary-seed `exec_output` retains its explicit
+disjunction above.
+
+#### I need a bound on actual precompile output
+
+Use [`Blanc/Lift/PrecompileOutputBound.lean`](../Blanc/Lift/PrecompileOutputBound.lean).
+`PrecompileOutputBound.precompile_run_output` follows all implemented producer
+branches and bounds successful output length by `2 ^ 256`. Identity consumes
+the actual input-length bound; MODEXP consumes its 32-byte modulus-length
+header; the other producers use their fixed output serializers.
+`PrecompileOutputBound.executePrecomp_output` gives the bound on both outcome
+channels when actual input and incoming output seed are short. Errors preserve
+the seed. Derive those premises from the real frame entry; this API does not
+supply a separate environmental assumption about precompile output.
+The immediate consumer is actual-entry composition in `Lift.ReturnDataBound`.
 
 ### T2b. I need a contract's own ledger replay across retained settlement
 
