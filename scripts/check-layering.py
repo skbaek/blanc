@@ -243,6 +243,8 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.WriterStorage",
         "Lift.UniswapV2Pair.ApproveSource",
         "Lift.UniswapV2Pair.TransferCore",
+        "Lift.UniswapV2Pair.LPMintCore",
+        "Lift.UniswapV2Pair.LPMintSource",
         "Lift.UniswapV2Pair.TransferFromCore",
         "Lift.UniswapV2Pair.TransferFromEntries",
         "Lift.UniswapV2Pair.TransferFromSource",
