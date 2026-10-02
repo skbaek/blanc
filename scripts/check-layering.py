@@ -237,6 +237,8 @@ CONTRACTS = {
                            "Lift.WithdrawalRequest.SystemHistory",
                            "Lift.WithdrawalRequest.SystemProtocol",
                            "Lift.WithdrawalRequest.UserGas",
+                           "Lift.FloodLooper.Cert", "Lift.FloodLooper.Check",
+                           "Lift.WithdrawalRequest.FloodWalk", "Lift.WithdrawalRequest.FloodTx",
                            "Lift.WithdrawalRequest.Creation.Address",
                            "Lift.WithdrawalRequest.Creation.Cert",
                            "Lift.WithdrawalRequest.Creation.Check",
