@@ -79,6 +79,9 @@ registry has identified the likely vocabulary.
   `exec_withFork`, `exec_out_withFork`, `runFrame_withFork`, `processMessage_withFork`,
   `processCreateMessage_withFork` (same outcome). A closed `*_deploy` instance needs none of
   this when its general `*_create` already quantifies `CoveredFork`.
+- Build a configured block *forward* from proof-produced evidence about its
+  parts (a reachable history, a counterexample, a liveness witness): go to
+  [T7](#t7-i-must-construct-a-configured-block-forward-from-its-parts).
 
 ## E — execution
 
@@ -2829,6 +2832,49 @@ history that crosses later activations; a fresh current-fork creation block is
 evidence for a different claim. If a future fork changes execution semantics
 rather than rule data already represented by Jaune, update Jaune and re-prove
 the consumer instead of adding a premise that assumes the new semantics away.
+
+### T7. I must construct a configured block forward from its parts
+
+Use [`Blanc/BlockForward.lean`](../Blanc/BlockForward.lean), the forward
+direction of T5/T6: it turns proof-produced evidence about the parts of a block
+body into Jaune's own `applyBody`, `stateTransitionUsing` and
+`ConfiguredBlockTrace` results, so a reachable history (a liveness witness or
+a counterexample) is built without evaluating any root, bloom or hash.
+Nothing in it names a contract; the only fork premise is `CoveredFork`.
+
+- `BlockForward.applyBody_forward`: from the two unchecked system calls (each
+  `processUncheckedSystemTransaction … = .ok _`), the retained last block hash,
+  the decoded transaction list (`txs.mapM decodeTx = .ok txList`), the fold
+  `applyTransactions txList.putIndex … BlockOutput.init = .ok _`, an empty
+  deposit parse and the two checked request calls, conclude
+  `applyBody benv txs [] = .ok (stC, requestsOutput boutTxs wData cData)`;
+  `requestsOutput` is the transaction output with the two optional request
+  entries appended and an empty block access list. Withdrawals must be `[]`.
+- `BlockForward.parseDepositRequests_of_no_logs` /
+  `parseDepositRequests_of_no_receipts` discharge the deposit parse for
+  receipts without logs;
+  `BlockForward.runRequestContracts_prague` and
+  `processGeneralPurposeRequests_forward` are the request-pass pieces.
+- `BlockForward.validateHeader_ok_of_facts`: header validity from the parent
+  tip and field equalities (parent hash, computed base fee, excess blob gas,
+  `gasUsed ≤ gasLimit`, strictly later timestamp, `number + 1`, extra data,
+  zero difficulty/nonce, empty ommers, rule-dependent field presence);
+  `checkGasLimit_self` and `calculateBaseFeePerGas_unit` settle an unchanged
+  admissible gas limit and a unit base fee when the parent used at most its
+  target, so the base fee is a bound, never an evaluation.
+- `BlockForward.stateTransitionChecks_ok_of_eq` and
+  `stateTransitionUsing_forward`: the configured transition
+  `stateTransitionUsing cfg pre block = .ok ⟨appendBlock pre.blocks block, st, pre.chainId⟩`
+  once the header commits, by construction, to the body's `blockGasUsed`,
+  transaction/receipt/withdrawal roots, bloom, blob gas and
+  `some (computeRequestsHash bout.requests)`.
+- `BlockForward.configuredBlockTrace_forward` packages that transition into the
+  `ConfiguredBlockTrace` carrier of T6 from `sum pre.state.bal < 2 ^ 256`, and
+  `BlockForward.ConfiguredBlockTrace.sum_post_le` carries that bound to the
+  next block when the withdrawal list is empty.
+
+This remains COMMON_API-only: the goal shape is a fixed Jaune equation and the
+current recipe matchers have no forward-transition shape to bind.
 
 ## C — compilation and deployment
 
