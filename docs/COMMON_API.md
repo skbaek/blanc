@@ -2108,6 +2108,22 @@ Blanc's [`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean):
 - For exact retained wrapper carriers continue to E6; for their ordered state
   chronology continue to E8.
 
+For a gas budget on retained frame multiplicity, use
+[`Blanc/ExecutionCommittedGas.lean`](../Blanc/ExecutionCommittedGas.lean).
+`Blanc.Exec.descendantFrames_settledGas` bounds the descendant count plus
+returned gas after error handling by the actual execution's entry gas measure.
+`Blanc.Exec.committedFrames_length_gas_le` includes the root with one extra
+unit: a root may execute a free STOP. Child settlement determines which
+descendants survive; this is a count of list occurrences, not distinct frames.
+The bound itself needs no code-identity or successful-child premise.
+For message wrappers, use
+[`Blanc/ExecutionMessageGas.lean`](../Blanc/ExecutionMessageGas.lean):
+`ExecutionTrace.MessageCallTrace.settledFrames_length_gas_le` bounds retained
+frame occurrences plus returned execution gas by the message grant plus one
+on covered forks. Its `ProcessMessageTrace` and `ProcessCreateMessageTrace`
+companions use the settled machine's gas measure. The call wrapper follows
+delegation and the create wrapper includes code-deposit settlement.
+
 ### T2a. I need a frame invariant under trace-local entry premises
 
 Before lifting through a wrapper, an invariant may need a positive condition
@@ -2566,6 +2582,16 @@ use `ExecutionTrace.TransactionStateChronology`,
 `ExecutionTrace.TransactionStateChronology.stateReplay` in
 [`Blanc/ExecutionTransactionStateTrace.lean`](../Blanc/ExecutionTransactionStateTrace.lean).
 
+For the actual trace's gas counters, use
+[`Blanc/ExecutionTransactionGas.lean`](../Blanc/ExecutionTransactionGas.lean).
+On a covered fork, `ExecutionTrace.TransactionTrace.exists_gasSettlement`
+identifies the counter increments with the retained message outcome and its
+refund. `TransactionTrace.grossGas_refund_bound` gives
+`4 * grossGas ≤ 5 * blockGasIncrement`, and `TransactionTrace.chargedGas_le`
+bounds the charge by the validated transaction reservation. These statements
+account for the refund cap and calldata floor. The block gas limit bounds the
+settled counter increments; it does not bound the sum of transaction gas reservations.
+
 For the converse (a transaction *succeeds*, and I have its stages) use
 [`Blanc/TransactionForward.lean`](../Blanc/TransactionForward.lean):
 `checkTransactionGasLimits_ok_of_room` and `checkTransaction_ok_of_parts` assemble the
@@ -2626,6 +2652,16 @@ Use
   arbitrary installed contract invariant through the wrapper.
 
 ### T5. The wrapper is a block body and the fact is about an installed contract
+
+For a gas-derived bound on actual retained frame occurrences, use
+[`Blanc/ExecutionBodyGas.lean`](../Blanc/ExecutionBodyGas.lean).
+`ExecutionTrace.ApplyTransactionsTrace.settledFrames_gas_budget` telescopes
+the actual settled transaction increments, with the refund factor retained.
+`AppliedBodyTrace.settledFrames_gas_bound` adds all four protocol system-call
+grants, including their descendants without any code-identity premise.
+`ConfiguredBlockTrace.settledFrames_length_lt` combines that budget with the
+same block's validated header limit to obtain a count below `2 ^ 64`.
+The counted list is the ordinary settlement-retained full-body trace.
 
 Use [`Blanc/ExecutionBodyEffects.lean`](../Blanc/ExecutionBodyEffects.lean),
 the body-level sibling of T3:
