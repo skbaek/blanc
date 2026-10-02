@@ -3,6 +3,7 @@ import Blanc.Lift.WithdrawalRequest.FloodTxRecover
 import Blanc.Lift.WithdrawalRequest.ProtocolOccurrences
 import Blanc.Lift.WithdrawalRequest.BalanceHistory
 import Blanc.BlockForward
+import Blanc.ExecutionTraceRootFrame
 
 /-!
 # The mathematical-fee refutation: block assembly
@@ -38,6 +39,44 @@ theorem applyTransactions_single {benv : Benv} {bout bout' : BlockOutput} {tx : 
 theorem putIndex_single (tx : Tx) : [tx].putIndex = [(0, tx)] := rfl
 
 theorem decode_single (tx : Tx) : [Sum.inr tx].mapM decodeTx = .ok [tx] := rfl
+
+/-- A one-transaction body retains exactly that decoded transaction. -/
+theorem AppliedBodyTrace.decodedTxs_eq {benv : Benv} {tx : Tx} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv [Sum.inr tx] wds state bout) :
+    trace.decodedTxs = [tx] := by
+  exact Except.ok.inj (trace.decodeRun.symm.trans (decode_single tx))
+
+theorem noSenderAt_single {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    {tx : Tx} (trace : ApplyTransactionsTrace [(0, tx)] benv bout finalBenv finalBout)
+    (hrecover : recoverSender benv.stat.chainId tx = .ok senderE) :
+    trace.NoSenderAt systemAddress := by
+  cases trace with
+  | cons head tail =>
+    cases tail with
+    | nil =>
+      refine ⟨?_, trivial⟩
+      intro hsender
+      have hrecover' := checkTransaction_sender head.checked
+      have hrecover'' : recoverSender benv.stat.chainId tx = .ok head.sender := by
+        simpa only [Benv.beginTransaction] using hrecover'
+      have hsender' : senderE = head.sender :=
+        Except.ok.inj (hrecover.symm.trans hrecover'')
+      exact (by decide : senderE ≠ systemAddress) (hsender'.trans hsender)
+
+theorem noAuthorityAt_single {benv : Benv} {tx : Tx} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv [Sum.inr tx] wds state bout)
+    (hauths : tx.auths = []) :
+    ∀ p ∈ trace.decodedTxs.putIndex, ∀ auth ∈ p.2.auths, ∀ authority,
+      recoverAuthority auth = .ok authority → authority ≠ systemAddress := by
+  rw [AppliedBodyTrace.decodedTxs_eq trace, putIndex_single]
+  intro p hp
+  rw [List.mem_singleton] at hp
+  subst p
+  rw [hauths]
+  intro auth hauth
+  exact False.elim (List.not_mem_nil hauth)
 
 /-- The settled state of a transaction whose frame scheduled no deletion and whose
 sender and coinbase are credited, as `processTransaction` returns it. -/
