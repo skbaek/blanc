@@ -985,8 +985,20 @@ For the same local fold over an existing configured-history witness, use
 boundaries, and `ExecutionTrace.ConfiguredHistoryStateChronology.simulateChunks`
 consumes its `stateReplay`. Its `canonicalChunks`/`canonicalChunks_spec` and
 `simulateCanonicalChunks` derive and consume exact admissible cuts through the
-original wrappers. Local producers remain required; retained target-turn coverage
-and a contract's model refinement remain separate obligations.
+original wrappers. Local producers and a contract's model refinement remain required.
+
+The same module's `Exec.retainedTargetTurns` selects original located frames by
+storage owner and retains foreign boundaries. A selected target root stops the
+outer traversal; failed ancestor settlement prunes the entire child subtree.
+`retainedTargetTurns_expand` recovers the complete original chronology in order,
+while `retainedTargetTurns_spec` preserves the selected frames' original ordered
+sublist, ownership and foreign-boundary distinction. `retainedTargetTurns_entering`
+supplies the actual entering occurrence for each selected non-root frame.
+`retainedTargetTurns_cover` preserves ordered target/LOG observations.
+`Exec.simulateRetainedTargetLogChunks` consumes canonical cuts of that actual
+expanded queue and supplies the proven provenance to local chunk producers,
+deriving the concrete committed log endpoint without a target-frame model
+endpoint premise. Nested activity inside a selected frame remains in its expansion.
 The existing `goal-head:StateReplay` recipe selects chronology continuity;
 the joint chunk/Link/observation premises are discovered through this registry.
 
