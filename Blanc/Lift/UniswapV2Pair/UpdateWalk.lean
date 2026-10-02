@@ -209,4 +209,560 @@ theorem update_header_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     apply rx_iszero rfl (by simp only [List.length_cons]; omega)
     exact body
 
+/-- Successful header bytes derive the actual current timestamp and oracle
+prefix, preserving the SLOAD metadata and arbitrary cached reserves. -/
+theorem update_header_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {r0 r1 b0 b1 tag : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (run : SFunc.Run cert.prog sevm (St b (r1 :: r0 :: b1 :: b0 :: tag :: R) M G)
+      t_2377_c19 o) :
+    ∃ G', SFunc.Run cert.prog sevm
+      (St (afterSload sevm b 8)
+        (updateOraclePrefixWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time r0 ::
+         updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time ::
+         updateTimestampWord sevm.benvStat.time :: r1 :: r0 :: b1 :: b0 :: tag :: R) M G')
+      t_23c7_c20 o := by
+  have h := run.cut
+  unfold t_2377_c19 at h
+  obtain ⟨_, h⟩ := ric_dest h
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sload fork hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_timestamp hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_div hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+  have lastWord : reserveMask32 &&& (b.getStorVal sevm.currentTarget 8 / reserveDiv224) =
+      reserveTimestampRead (b.getStorVal sevm.currentTarget 8) := B256.and_comm _ _
+  change SFunc.RunCut cert.prog sevm []
+    (St (afterSload sevm b 8)
+      ((reserveMask32 &&& (b.getStorVal sevm.currentTarget 8 / reserveDiv224)) :: reserveMask32 ::
+       updateTimestampWord sevm.benvStat.time :: r1 :: r0 :: b1 :: b0 :: tag :: R) M _) _ (.done o) at h
+  rw [lastWord] at h
+  clear * - h
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sub hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  clear * - h
+  rcases ric_branchTo (g := t_23c7_c20) (by decide) rfl h with
+      ⟨guard, _, h⟩ | ⟨guard, g, h⟩
+  · have elapsedNotZero : updateElapsedWord (b.getStorVal sevm.currentTarget 8)
+        sevm.benvStat.time &&& reserveMask32 ≠ 0 := by
+      intro elapsedZero
+      have flag : updateElapsedZeroWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time = 1 := by
+        simp only [updateElapsedZeroWord, elapsedZero, B256.eqCheck, ite_true]
+      change updateElapsedZeroWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time = 0 at guard
+      rw [flag] at guard
+      exact (by decide : (1 : B256) ≠ 0) guard
+    simp only [updateOraclePrefixWord, elapsedNotZero, ite_false]
+    unfold t_23b3_c19 at h
+    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
+    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
+    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
+    exact ⟨_, h.uncut⟩
+  · have elapsedZero := eq_zero_of_iszero_ne_zero guard
+    change updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time &&& reserveMask32 = 0
+      at elapsedZero
+    have flag : updateElapsedZeroWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time = 1 := by
+      simp only [updateElapsedZeroWord, elapsedZero, B256.eqCheck, ite_true]
+    change SFunc.RunCut cert.prog sevm []
+      (St (afterSload sevm b 8)
+        (B256.eqCheck (updateElapsedZeroWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time) 0 ::
+         updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time ::
+         updateTimestampWord sevm.benvStat.time :: r1 :: r0 :: b1 :: b0 :: tag :: R) M g)
+      t_23c7_c20 (.done o) at h
+    rw [flag] at h
+    simp only [updateOraclePrefixWord, elapsedZero, ite_true]
+    exact ⟨g, h.uncut⟩
+
+/-- The actual cached reserve1 short circuit at entry20. -/
+def updateOracleReserveFlagWord (prefixFlag reserve1 : B256) : B256 :=
+  if prefixFlag = 0 then 0 else B256.eqCheck (B256.eqCheck (reserve1 &&& reserveMask112) 0) 0
+
+/-- Entry20 retains a failed prefixFlag or checks the second cached reserve, with
+its exact branch-dependent gas. -/
+theorem update_oracle_reserve_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {prefixFlag dt ts r0 r1 b0 b1 tag : B256} {o : Outcome}
+    (room : R.length ≤ 1014)
+    (body : SFunc.RunExact cert.prog sevm
+      (St b (updateOracleReserveFlagWord prefixFlag r1 :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M G)
+      t_23e2_c21 o) :
+    SFunc.RunExact cert.prog sevm
+      (St b (prefixFlag :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M
+        (G + 20 + if prefixFlag = 0 then 0 else 17)) t_23c7_c20 o := by
+  by_cases prefixZero : prefixFlag = 0
+  · simp only [prefixZero, updateOracleReserveFlagWord, ite_true, Nat.add_zero] at body ⊢
+    unfold t_23c7_c20
+    apply rx_dest
+    apply rx_dup1 (by simp only [List.length_cons]; omega)
+    apply rx_iszero (v := 1) (by decide) (by simp only [List.length_cons]; omega)
+    apply rx_push (w := 0x23e2) rfl (by simp only [List.length_cons]; omega)
+    apply rx_branchTo_succ (by decide : (1 : B256) ≠ 0) rfl
+    exact body
+  · simp only [prefixZero, updateOracleReserveFlagWord, ite_false] at body ⊢
+    unfold t_23c7_c20 t_23ce_c20
+    apply rx_dest
+    apply rx_dup1 (by simp only [List.length_cons]; omega)
+    apply rx_iszero (v := 0) (by simp only [B256.eqCheck, ite_eq_right prefixZero])
+      (by simp only [List.length_cons]; omega)
+    apply rx_push (w := 0x23e2) rfl (by simp only [List.length_cons]; omega)
+    apply rx_branchTo_zero
+    apply rx_pop
+    apply rx_push (w := reserveMask112) rfl (by simp only [List.length_cons]; omega)
+    apply rx_dup (w := r1) rfl (by simp only [List.length_cons]; omega)
+    apply rx_and rfl (by simp only [List.length_cons]; omega)
+    apply rx_iszero rfl (by simp only [List.length_cons]; omega)
+    apply rx_iszero rfl (by simp only [List.length_cons]; omega)
+    exact body
+
+/-- Successful entry20 bytes recover their actual cached reserve1 test. -/
+theorem update_oracle_reserve_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {prefixFlag dt ts r0 r1 b0 b1 tag : B256} {o : Outcome}
+    (run : SFunc.Run cert.prog sevm
+      (St b (prefixFlag :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M G) t_23c7_c20 o) :
+    ∃ G', SFunc.Run cert.prog sevm
+      (St b (updateOracleReserveFlagWord prefixFlag r1 :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M G')
+      t_23e2_c21 o := by
+  have h := run.cut
+  unfold t_23c7_c20 at h
+  obtain ⟨_, h⟩ := ric_dest h
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  clear * - h
+  rcases ric_branchTo (g := t_23e2_c21) (by decide) rfl h with
+      ⟨guard, _, h⟩ | ⟨guard, g, h⟩
+  · have prefixNonzero : prefixFlag ≠ 0 := by
+      intro prefixZero
+      rw [prefixZero] at guard
+      exact (by decide : B256.eqCheck (0 : B256) 0 ≠ 0) guard
+    simp only [updateOracleReserveFlagWord, prefixNonzero, ite_false]
+    unfold t_23ce_c20 at h
+    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
+    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
+    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
+    exact ⟨_, h.uncut⟩
+  · have prefixZero := eq_zero_of_iszero_ne_zero guard
+    simp only [updateOracleReserveFlagWord, prefixZero, ite_true]
+    rw [prefixZero] at h
+    exact ⟨g, h.uncut⟩
+
+/-- The actual final oracle flag chooses the accumulator path or the packed
+reserve write path, preserving both header words and the cached reserves. -/
+theorem update_oracle_route_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {flag dt ts r0 r1 b0 b1 tag : B256} {o : Outcome}
+    (room : R.length ≤ 1015)
+    (body : SFunc.RunExact cert.prog sevm
+      (St b (dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M G)
+      (if flag = 0 then t_2492_c22 else t_23e8_c21) o) :
+    SFunc.RunExact cert.prog sevm
+      (St b (flag :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M (G + 17)) t_23e2_c21 o := by
+  unfold t_23e2_c21
+  apply rx_dest
+  by_cases flagZero : flag = 0
+  · subst flag
+    simp only [ite_true] at body
+    apply rx_iszero (v := 1) (by decide) (by simp only [List.length_cons]; omega)
+    apply rx_push (w := 0x2492) rfl (by simp only [List.length_cons]; omega)
+    apply rx_branchTo_succ (by decide : (1 : B256) ≠ 0) rfl
+    exact body
+  · simp only [flagZero, ite_false] at body
+    apply rx_iszero (v := 0) (by simp only [B256.eqCheck, ite_eq_right flagZero])
+      (by simp only [List.length_cons]; omega)
+    apply rx_push (w := 0x2492) rfl (by simp only [List.length_cons]; omega)
+    apply rx_branchTo_zero
+    exact body
+
+/-- Successful oracle routing derives the real branch from the computed flag. -/
+theorem update_oracle_route_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {flag dt ts r0 r1 b0 b1 tag : B256} {o : Outcome}
+    (run : SFunc.Run cert.prog sevm
+      (St b (flag :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M G) t_23e2_c21 o) :
+    ∃ G', SFunc.Run cert.prog sevm
+      (St b (dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M G')
+      (if flag = 0 then t_2492_c22 else t_23e8_c21) o := by
+  have h := run.cut
+  unfold t_23e2_c21 at h
+  obtain ⟨_, h⟩ := ric_dest h
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  clear * - h
+  rcases ric_branchTo (g := t_2492_c22) (by decide) rfl h with
+      ⟨guard, g, h⟩ | ⟨guard, g, h⟩
+  · have flagNonzero : flag ≠ 0 := by
+      intro flagZero
+      rw [flagZero] at guard
+      exact (by decide : B256.eqCheck (0 : B256) 0 ≠ 0) guard
+    simp only [flagNonzero, ite_false]
+    exact ⟨g, h.uncut⟩
+  · have flagZero := eq_zero_of_iszero_ne_zero guard
+    simp only [flagZero, ite_true]
+    exact ⟨g, h.uncut⟩
+
+/-- The bytecode's three short circuits are precisely modular elapsed time
+and the two caller-cached masked reserves, independently of current storage. -/
+theorem update_oracle_flag_source {raw timestamp reserve0 reserve1 : B256} :
+    updateOracleReserveFlagWord (updateOraclePrefixWord raw timestamp reserve0) reserve1 =
+      if updateElapsedWord raw timestamp &&& reserveMask32 ≠ 0 ∧
+          reserve0 &&& reserveMask112 ≠ 0 ∧ reserve1 &&& reserveMask112 ≠ 0 then 1 else 0 := by
+  by_cases elapsedZero : updateElapsedWord raw timestamp &&& reserveMask32 = 0
+  · simp only [updateOracleReserveFlagWord, updateOraclePrefixWord, elapsedZero,
+      ite_true, ne_eq, not_true_eq_false, false_and, ite_false]
+  · by_cases reserve0Zero : reserve0 &&& reserveMask112 = 0
+    · simp only [updateOracleReserveFlagWord, updateOraclePrefixWord, elapsedZero,
+        reserve0Zero, B256.eqCheck, ite_false, ite_true,
+        show (1 : B256) ≠ 0 from by decide, ne_eq, not_false_eq_true,
+        not_true_eq_false, false_and, true_and]
+    · by_cases reserve1Zero : reserve1 &&& reserveMask112 = 0
+      · simp only [updateOracleReserveFlagWord, updateOraclePrefixWord, elapsedZero,
+          reserve0Zero, reserve1Zero, B256.eqCheck, ite_false, ite_true,
+          show (1 : B256) ≠ 0 from by decide, ne_eq, not_false_eq_true,
+          not_true_eq_false, and_false]
+      · simp only [updateOracleReserveFlagWord, updateOraclePrefixWord, elapsedZero,
+          reserve0Zero, reserve1Zero, B256.eqCheck, ite_false, ite_true,
+          show (1 : B256) ≠ 0 from by decide, ne_eq, not_false_eq_true,
+          and_true]
+
+/-- Actual masked UQ helper composition for one cached-reserve price. -/
+def updatePriceWord (denominator numeratorReserve : B256) : B256 :=
+  uqDivWord denominator (uqEncodeWord numeratorReserve &&& uqMask224)
+
+/-- The first actual UQ calls reach the slot9 accumulator load, returning the
+cached reserve1/reserve0 price after exactly149gas. -/
+theorem update_price0_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {dt ts r0 r1 b0 b1 tag : B256} {o : Outcome}
+    (nonzero : r0 &&& reserveMask112 ≠ 0) (room : R.length ≤ 1008)
+    (body : SFunc.RunExact cert.prog sevm
+      (St b (updatePriceWord r0 r1 :: (dt &&& reserveMask32) :: dt :: ts ::
+        r1 :: r0 :: b1 :: b0 :: tag :: R) M G) t_2425_c21 o) :
+    SFunc.RunExact cert.prog sevm
+      (St b (dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M (G + 149)) t_23e8_c21 o := by
+  unfold t_23e8_c21
+  apply rx_dup1 (by simp only [List.length_cons]; omega)
+  apply rx_push (w := reserveMask32) rfl (by simp only [List.length_cons]; omega)
+  apply rx_and (v := dt &&& reserveMask32) (B256.and_comm _ _)
+    (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 0x2425) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup (w := r0) rfl (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 0x23fb) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup (w := r1) rfl (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 0x2a57) rfl (by simp only [List.length_cons]; omega)
+  have encodeGas : G + 125 = (G + 91 + 26) + 8 := by omega
+  rw [encodeGas]
+  apply rx_callRet (g := t_2a57_c65) rfl (uq_encode_exact (G := G + 91)
+    (by simp only [List.length_cons]; omega))
+  unfold t_23fb_c21
+  apply rx_dest
+  apply rx_push (w := uqMask224) rfl (by simp only [List.length_cons]; omega)
+  apply rx_and (v := uqEncodeWord r1 &&& uqMask224) (B256.and_comm _ _)
+    (by simp only [List.length_cons]; omega)
+  apply rx_swap1
+  apply rx_push (w := reserveMask32) rfl (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 0x2a7b) rfl (by simp only [List.length_cons]; omega)
+  apply rx_and (v := 0x2a7b) (by decide) (by simp only [List.length_cons]; omega)
+  have divGas : G + 72 = (G + 64) + 8 := by omega
+  rw [divGas]
+  apply rx_callRet (g := t_2a7b_c66) rfl (uq_div_exact (G := G) nonzero
+    (by simp only [List.length_cons]; omega))
+  exact body
+
+/-- Successful actual UQ calls derive the denominator guard and the exact
+cached price before any accumulator storage is read or written. -/
+theorem update_price0_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {dt ts r0 r1 b0 b1 tag : B256} {o : Outcome}
+    (run : SFunc.Run cert.prog sevm
+      (St b (dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M G) t_23e8_c21 o) :
+    r0 &&& reserveMask112 ≠ 0 ∧ ∃ G', SFunc.Run cert.prog sevm
+      (St b (updatePriceWord r0 r1 :: (dt &&& reserveMask32) :: dt :: ts ::
+        r1 :: r0 :: b1 :: b0 :: tag :: R) M G') t_2425_c21 o := by
+  have h := run.cut
+  unfold t_23e8_c21 at h
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+  change SFunc.RunCut cert.prog sevm []
+    (St b ((reserveMask32 &&& dt) :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M _) _ (.done o) at h
+  rw [B256.and_comm reserveMask32 dt] at h
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  clear * - h
+  obtain ⟨_, h⟩ := ric_call (g := t_2a57_c65) rfl h
+  rcases h with ⟨D, callee, h⟩ | ⟨D, callee, _⟩
+  · obtain ⟨_, eq⟩ := uq_encode_inv callee
+    cases eq
+    unfold t_23fb_c21 at h
+    obtain ⟨_, h⟩ := ric_dest h
+    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+    change SFunc.RunCut cert.prog sevm []
+      (St b ((uqMask224 &&& uqEncodeWord r1) :: r0 :: 0x2425 :: (dt &&& reserveMask32) ::
+        dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M _) _ (.done o) at h
+    rw [B256.and_comm uqMask224 (uqEncodeWord r1)] at h
+    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+    clear * - h
+    obtain ⟨_, h⟩ := ric_call (g := t_2a7b_c66) rfl h
+    rcases h with ⟨D, callee, h⟩ | ⟨D, callee, _⟩
+    · obtain ⟨nonzero, _, eq⟩ := uq_div_inv callee
+      cases eq
+      exact ⟨nonzero, _, h.uncut⟩
+    · obtain ⟨_, _, eq⟩ := uq_div_inv callee
+      cases eq
+  · obtain ⟨_, eq⟩ := uq_encode_inv callee
+    cases eq
+
+/-- The actual word addition retains cumulative uint256 wrapping. -/
+def updateAccumulatorWord (old price elapsed : B256) : B256 :=
+  (price &&& uqMask224) * (elapsed &&& reserveMask32) + old
+
+def updateAccumulatorPost (sevm : Sevm) (b : Devm) (key price elapsed : B256) : Devm :=
+  afterSstore sevm (afterSload sevm b key) key
+    (updateAccumulatorWord (b.getStorVal sevm.currentTarget key) price elapsed)
+
+/-- Actual slot9 SLOAD/SSTORE followed by the second UQ price calls. The
+individual SSTORE sentry and both actual mutable charges remain explicit. -/
+theorem update_accumulator0_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G loadCost storeCost : Nat} {price dt ts r0 r1 b0 b1 tag : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = false)
+    (loadCharge : loadCost = sloadCost sevm b 9)
+    (storeCharge : storeCost = sstoreCost sevm (afterSload sevm b 9) 9
+      (updateAccumulatorWord (b.getStorVal sevm.currentTarget 9) price dt))
+    (sentry : gCallStipend < G + 149 + storeCost)
+    (nonzero : r1 &&& reserveMask112 ≠ 0) (room : R.length ≤ 1008)
+    (body : SFunc.RunExact cert.prog sevm
+      (St (updateAccumulatorPost sevm b 9 price dt)
+        (updatePriceWord r1 r0 :: (dt &&& reserveMask32) :: dt :: ts ::
+          r1 :: r0 :: b1 :: b0 :: tag :: R) M G) t_2465_c21 o) :
+    SFunc.RunExact cert.prog sevm
+      (St b (price :: (dt &&& reserveMask32) :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R)
+        M (G + loadCost + storeCost + 191)) t_2425_c21 o := by
+  unfold t_2425_c21
+  apply rx_dest
+  apply rx_push (w := 9) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup1 (by simp only [List.length_cons]; omega)
+  have loadGas : G + loadCost + storeCost + 184 = (G + storeCost + 184) + loadCost := by omega
+  rw [loadGas]
+  apply rx_sload_selC fork loadCharge (by simp only [List.length_cons]; omega)
+  apply rx_push (w := uqMask224) rfl (by simp only [List.length_cons]; omega)
+  apply rx_swap3
+  apply rx_swap1
+  apply rx_swap3
+  apply rx_and (v := price &&& uqMask224) (B256.and_comm _ _)
+    (by simp only [List.length_cons]; omega)
+  apply rx_swap3
+  apply rx_swap1
+  apply rx_swap3
+  apply rx_mul rfl (by simp only [List.length_cons]; omega)
+  apply rx_add' (v := updateAccumulatorWord (b.getStorVal sevm.currentTarget 9) price dt)
+    rfl (by simp only [List.length_cons]; omega)
+  apply rx_swap1
+  have storeGas : G + storeCost + 149 = (G + 149) + storeCost := by omega
+  rw [storeGas]
+  apply rx_sstoreC fork storeCharge sentry static
+  apply rx_push (w := reserveMask32) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup (w := dt) rfl (by simp only [List.length_cons]; omega)
+  apply rx_and rfl (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 0x2465) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup (w := r1) rfl (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 0x23fb) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup (w := r0) rfl (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 0x2a57) rfl (by simp only [List.length_cons]; omega)
+  have encodeGas : G + 125 = (G + 91 + 26) + 8 := by omega
+  rw [encodeGas]
+  apply rx_callRet (g := t_2a57_c65) rfl (uq_encode_exact (G := G + 91)
+    (by simp only [List.length_cons]; omega))
+  unfold t_23fb_c21_1
+  apply rx_dest
+  apply rx_push (w := uqMask224) rfl (by simp only [List.length_cons]; omega)
+  apply rx_and (v := uqEncodeWord r0 &&& uqMask224) (B256.and_comm _ _)
+    (by simp only [List.length_cons]; omega)
+  apply rx_swap1
+  apply rx_push (w := reserveMask32) rfl (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 0x2a7b) rfl (by simp only [List.length_cons]; omega)
+  apply rx_and (v := 0x2a7b) (by decide) (by simp only [List.length_cons]; omega)
+  have divGas : G + 72 = (G + 64) + 8 := by omega
+  rw [divGas]
+  apply rx_callRet (g := t_2a7b_c66) rfl (uq_div_exact (G := G) nonzero
+    (by simp only [List.length_cons]; omega))
+  exact body
+
+/-- Successful slot9 bytes derive non-static execution, the actual modular
+accumulator write, and the second cached price from its real UQ calls. -/
+theorem update_accumulator0_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {price dt ts r0 r1 b0 b1 tag : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (run : SFunc.Run cert.prog sevm
+      (St b (price :: (dt &&& reserveMask32) :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M G)
+      t_2425_c21 o) :
+    sevm.isStatic = false ∧ r1 &&& reserveMask112 ≠ 0 ∧ ∃ G', SFunc.Run cert.prog sevm
+      (St (updateAccumulatorPost sevm b 9 price dt)
+        (updatePriceWord r1 r0 :: (dt &&& reserveMask32) :: dt :: ts ::
+          r1 :: r0 :: b1 :: b0 :: tag :: R) M G') t_2465_c21 o := by
+  have h := run.cut
+  unfold t_2425_c21 at h
+  obtain ⟨_, h⟩ := ric_dest h
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sload fork hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+  change SFunc.RunCut cert.prog sevm []
+    (St (afterSload sevm b 9)
+      ((uqMask224 &&& price) :: 9 :: b.getStorVal sevm.currentTarget 9 ::
+        (dt &&& reserveMask32) :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M _) _ (.done o) at h
+  rw [B256.and_comm uqMask224 price] at h
+  clear * - h fork
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_mul hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_add hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h
+  have nonstatic := ri_sstore_nonstatic fork hd
+  obtain ⟨_, rfl⟩ := ri_sstore fork hd
+  change SFunc.RunCut cert.prog sevm []
+    (St (updateAccumulatorPost sevm b 9 price dt)
+      (dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M _) _ (.done o) at h
+  clear * - h nonstatic
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  clear * - h nonstatic
+  obtain ⟨_, h⟩ := ric_call (g := t_2a57_c65) rfl h
+  rcases h with ⟨D, callee, h⟩ | ⟨D, callee, _⟩
+  · obtain ⟨_, eq⟩ := uq_encode_inv callee
+    cases eq
+    unfold t_23fb_c21_1 at h
+    obtain ⟨_, h⟩ := ric_dest h
+    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+    change SFunc.RunCut cert.prog sevm []
+      (St (updateAccumulatorPost sevm b 9 price dt)
+        ((uqMask224 &&& uqEncodeWord r0) :: r1 :: 0x2465 :: (dt &&& reserveMask32) ::
+          dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M _) _ (.done o) at h
+    rw [B256.and_comm uqMask224 (uqEncodeWord r0)] at h
+    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+    clear * - h nonstatic
+    obtain ⟨_, h⟩ := ric_call (g := t_2a7b_c66) rfl h
+    rcases h with ⟨D, callee, h⟩ | ⟨D, callee, _⟩
+    · obtain ⟨nonzero, _, eq⟩ := uq_div_inv callee
+      cases eq
+      exact ⟨nonstatic, nonzero, _, h.uncut⟩
+    · obtain ⟨_, _, eq⟩ := uq_div_inv callee
+      cases eq
+  · obtain ⟨_, eq⟩ := uq_encode_inv callee
+    cases eq
+
+/-- The actual second accumulator reaches the sole packed-reserve write path,
+with its own selected storage charges and SSTORE sentry. -/
+theorem update_accumulator1_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G loadCost storeCost : Nat} {price dt ts r0 r1 b0 b1 tag : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = false)
+    (loadCharge : loadCost = sloadCost sevm b 10)
+    (storeCharge : storeCost = sstoreCost sevm (afterSload sevm b 10) 10
+      (updateAccumulatorWord (b.getStorVal sevm.currentTarget 10) price dt))
+    (sentry : gCallStipend < G + storeCost) (room : R.length ≤ 1012)
+    (body : SFunc.RunExact cert.prog sevm
+      (St (updateAccumulatorPost sevm b 10 price dt)
+        (dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M G) t_2492_c22 o) :
+    SFunc.RunExact cert.prog sevm
+      (St b (price :: (dt &&& reserveMask32) :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R)
+        M (G + loadCost + storeCost + 42)) t_2465_c21 o := by
+  unfold t_2465_c21
+  apply rx_dest
+  apply rx_push (w := 10) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup1 (by simp only [List.length_cons]; omega)
+  have loadGas : G + loadCost + storeCost + 35 = (G + storeCost + 35) + loadCost := by omega
+  rw [loadGas]
+  apply rx_sload_selC fork loadCharge (by simp only [List.length_cons]; omega)
+  apply rx_push (w := uqMask224) rfl (by simp only [List.length_cons]; omega)
+  apply rx_swap3
+  apply rx_swap1
+  apply rx_swap3
+  apply rx_and (v := price &&& uqMask224) (B256.and_comm _ _)
+    (by simp only [List.length_cons]; omega)
+  apply rx_swap3
+  apply rx_swap1
+  apply rx_swap3
+  apply rx_mul rfl (by simp only [List.length_cons]; omega)
+  apply rx_add' (v := updateAccumulatorWord (b.getStorVal sevm.currentTarget 10) price dt)
+    rfl (by simp only [List.length_cons]; omega)
+  apply rx_swap1
+  apply rx_sstoreC fork storeCharge sentry static
+  exact body
+
+/-- The actual slot10 inverse recovers its modular accumulator update and
+non-static frame before the packed-reserve write. -/
+theorem update_accumulator1_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {price dt ts r0 r1 b0 b1 tag : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (run : SFunc.Run cert.prog sevm
+      (St b (price :: (dt &&& reserveMask32) :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M G)
+      t_2465_c21 o) :
+    sevm.isStatic = false ∧ ∃ G', SFunc.Run cert.prog sevm
+      (St (updateAccumulatorPost sevm b 10 price dt)
+        (dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M G') t_2492_c22 o := by
+  have h := run.cut
+  unfold t_2465_c21 at h
+  obtain ⟨_, h⟩ := ric_dest h
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sload fork hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+  change SFunc.RunCut cert.prog sevm []
+    (St (afterSload sevm b 10)
+      ((uqMask224 &&& price) :: 10 :: b.getStorVal sevm.currentTarget 10 ::
+        (dt &&& reserveMask32) :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M _) _ (.done o) at h
+  rw [B256.and_comm uqMask224 price] at h
+  clear * - h fork
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_mul hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_add hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h
+  have nonstatic := ri_sstore_nonstatic fork hd
+  obtain ⟨g, rfl⟩ := ri_sstore fork hd
+  exact ⟨nonstatic, g, h.uncut⟩
+
 end Blanc.Lift.UniswapV2Pair
