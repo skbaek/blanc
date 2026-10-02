@@ -135,15 +135,25 @@ theorem ModelResources.bookkeeping {bound : Nat}
 /-- Concrete prospective storage margins derived from the resource certificate.
 This is a model theorem, not an actual-trace admission certificate. -/
 theorem ModelResources.prospective_margins
+    {bound : Nat}
     {state : Blanc.WithdrawalRequest.State} {submissions : List Submission}
     {outputs : List Blanc.WithdrawalRequest.Entry} {history : History initial state submissions outputs}
-    (resources : ModelResources (2 ^ 64) history) :
+    (resources : ModelResources bound history) (boundCap : bound ≤ 2 * 2 ^ 64) :
     SubmissionBounds state ∧ effectiveExcess state + state.count < 2 ^ 256 := by
-  have inhibitorMargin : natFeeExcessCeiling + 2 ^ 64 ≤ excessInhibitor := by decide
-  have resourceMargin : natFeeExcessCeiling + 2 ^ 64 < 2 ^ 256 := by decide
-  have countMargin : (2 : Nat) ^ 64 + 1 < 2 ^ 256 := by decide
+  have inhibitorMargin : natFeeExcessCeiling + bound ≤ excessInhibitor := by
+    have ceiling : natFeeExcessCeiling + 2 * 2 ^ 64 ≤ excessInhibitor := by decide
+    omega
+  have resourceMargin : natFeeExcessCeiling + bound < 2 ^ 256 := by
+    have ceiling : natFeeExcessCeiling + 2 * 2 ^ 64 < 2 ^ 256 := by decide
+    omega
+  have countMargin : bound + 1 < 2 ^ 256 := by
+    have ceiling : 2 * (2 : Nat) ^ 64 + 1 < 2 ^ 256 := by decide
+    omega
   have slotMargin :
-      24 * (natFeeExcessCeiling + 2 ^ 64) + 42 ≤ 7 * 2 ^ 256 := by decide
+      24 * (natFeeExcessCeiling + bound) + 42 ≤ 7 * 2 ^ 256 := by
+    have ceiling : 24 * (natFeeExcessCeiling + 2 * 2 ^ 64) + 42 ≤ 7 * 2 ^ 256 := by decide
+    exact Nat.le_trans (Nat.add_le_add_right
+      (Nat.mul_le_mul_left 24 (Nat.add_le_add_left boundCap natFeeExcessCeiling)) 42) ceiling
   have invariant := resources.bookkeeping inhibitorMargin
   have resourceLt := invariant.resource_lt
   have credit := invariant.queue_credit
