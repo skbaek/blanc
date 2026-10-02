@@ -180,6 +180,8 @@ SHARED += ["LedgerUpdate"]
 SHARED += ["Lift.AMMArithmetic", "Lift.BabylonianSqrt"]
 # Ordinary interpreter output provenance for actual-call returndata bounds.
 SHARED += ["Lift.ReturnDataBound", "Lift.PrecompileOutputBound"]
+# Exact chunks and local simulation over existing configured state chronology.
+SHARED += ["Lift.CommittedLogs", "Lift.SegmentedReplay", "Lift.SegmentedHistory"]
 # Walk steps for arbitrary static calls, CALLER/KECCAK256/LOG3/SSTORE, hashed slots and the
 # Vyper 0.2.x front end (vyper-3crv-bytecode-v1): contract-neutral.
 SHARED += ["Lift.StaticCall", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper", "Lift.PackedWord"]
@@ -231,6 +233,10 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.GetterStorageMappingWalk",
         "Lift.UniswapV2Pair.Consumption",
         "Lift.UniswapV2Pair.Layout",
+        "Lift.UniswapV2Pair.WriterArithmetic",
+        "Lift.UniswapV2Pair.WriterMemory",
+        "Lift.UniswapV2Pair.ApproveCore",
+        "Lift.UniswapV2Pair.WriterEntries",
         "Lift.UniswapV2Pair.UpdateArithmetic",
         "Lift.UniswapV2Pair.UpdateSource",
         "Lift.UniswapV2Pair.UpdateWalk",
