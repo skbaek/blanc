@@ -1,4 +1,5 @@
 import Blanc.Lift.WithdrawalRequest.FloodWalk
+import Blanc.Lift.WithdrawalRequest.FloodRun
 import Blanc.TransactionForward
 
 /-!
@@ -433,6 +434,191 @@ theorem txB_calldata :
   show (2895 : B256).toBytes ++ payload = (Nat.toB256 2895).toBytes ++ payload
   have h : (2895 : B256) = Nat.toB256 2895 := by decide
   rw [h]
+
+/-- What block B's transaction leaves of the frame it ran: the predeploy still installed
+and representing the model after `2895` submissions of `entryWith looperAddress`, the
+`2895` submission logs, and the flood caller's balance back where it started (its `2895`
+wei received were all spent on fees). -/
+def TxBPost (benv : Benv) (σ0 : Blanc.WithdrawalRequest.State) (post : Devm) : Prop :=
+  post.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode ∧
+  Blanc.WithdrawalRequest.RepresentsStorage
+    (post.state.getStor withdrawalRequestPredeployAddress).get
+    (floodState σ0 (entryWith looperAddress) 2895) ∧
+  post.logs = List.replicate 2895 ⟨withdrawalRequestPredeployAddress, [],
+    Blanc.WithdrawalRequest.submissionLog (entryWith looperAddress)⟩ ∧
+  (post.state.get looperAddress).bal.toNat = (benv.state.bal looperAddress).toNat
+
+/-- **Block B's transaction, forwarded.**  Its sender recovery is the one named premise
+`hrecover`.  The transaction's `2 ^ 28` gas needs an uncapped fork (`hnocap`: Prague); the
+flood caller `L` holds the looper code; the predeploy is installed, represents `σ0` at
+excess zero with room for `2895` more records, and its queue region ahead of the tail is
+untouched (`hqueue`). -/
+theorem txB_processTransaction
+    {benv : Benv} {bout : BlockOutput} {index : Nat}
+    {σ0 : Blanc.WithdrawalRequest.State}
+    (hfork : CoveredFork benv.stat.fork)
+    (hnocap : benv.stat.rules.tx.maxGas = none)
+    (hchain : benv.stat.chainId = 1)
+    (hbase : benv.stat.baseFeePerGas ≤ 8)
+    (hroom : 2 ^ 28 ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
+    (hrecover : recoverSender benv.stat.chainId txB = .ok senderE)
+    (hnonce : (benv.state.get senderE).nonce = 0)
+    (hnocode : (benv.state.get senderE).code.isEmpty = true)
+    (hfunds : 2 ^ 28 * 8 + 2895 ≤ (benv.state.get senderE).bal.toNat)
+    (hLcode : benv.state.getCode looperAddress = Blanc.Lift.FloodLooper.code)
+    (hLbal : (benv.state.bal looperAddress).toNat + 2895 < 2 ^ 256)
+    (hcode : benv.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode)
+    (hrep : Blanc.WithdrawalRequest.RepresentsStorage
+      (benv.state.getStor withdrawalRequestPredeployAddress).get σ0)
+    (hexcess : σ0.excess = 0)
+    (hcountLt : σ0.count + 2895 < 2 ^ 256)
+    (htailLt : Blanc.WithdrawalRequest.queueBase (σ0.tail + 2895) + 2 < 2 ^ 256)
+    (hqueue : ∀ n o, σ0.tail ≤ n → n < σ0.tail + 2895 → o ≤ 2 →
+      (benv.state.getStor withdrawalRequestPredeployAddress).get
+        (Blanc.WithdrawalRequest.queueSlot n o) = 0) :
+    ∃ (post : Devm) (bout' : BlockOutput), TxBPost benv σ0 post ∧
+      processTransaction benv bout txB index = .ok
+        (post.accountsToDelete.toList.foldl destroyAccount
+          ((post.state.addBal senderE
+              ((txB.gas - txGasUsed txB.gas 23380 post.gasLeft post.refundCounter.toNat) *
+                (min 1 (8 - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)).toB256).addBal
+            benv.stat.coinbase
+              (txGasUsed txB.gas 23380 post.gasLeft post.refundCounter.toNat *
+                (min 1 (8 - benv.stat.baseFeePerGas))).toB256),
+          bout') ∧
+      bout'.cumulativeGasUsed = bout.cumulativeGasUsed +
+        txGasUsed txB.gas 23380 post.gasLeft post.refundCounter.toNat ∧
+      bout'.blockGasUsed = bout.blockGasUsed +
+        txGasUsed txB.gas 23380 post.gasLeft post.refundCounter.toNat := by
+  have hsg : benv.stat.rules.stateGas = none := CoveredFork.rules_stateGas_none hfork
+  have hEL : senderE ≠ looperAddress := by decide
+  have hcost : calculateIntrinsicCost benv.stat.rules txB senderE = (21952, 23380) :=
+    txB_intrinsic hsg (CoveredFork.rules_txBase hfork) (CoveredFork.rules_floorTokenCost hfork) _
+  have hcap : checkTransactionGasCap benv.stat.rules.tx txB.gas = .ok () := by
+    unfold checkTransactionGasCap
+    rw [hnocap]
+  have hnodeleg : getDelegatedCodeAddress (benv.state.getCode looperAddress) = none := by
+    rw [hLcode]; exact looper_nondelegated
+  have h2895 : ((2895 : Nat).toB256).toNat = 2895 := B256.toNat_toB256_of_lt (by decide)
+  have hexec : ∀ (debit : State) (msg : Msg) (after : Benv),
+      (benv.state.incrNonce senderE).subBal senderE
+        (txB.gas * (min 1 (8 - benv.stat.baseFeePerGas) +
+          benv.stat.baseFeePerGas)).toB256 = some debit →
+      prepareMessage { benv.beginTransaction with state := debit }
+        (transactionTenv benv.beginTransaction txB index senderE
+          (min 1 (8 - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas) 21952 []) txB =
+          .ok msg →
+      msg.benvAfterTransfer = .ok after →
+      ∃ post, exec (initEvm (msg.withBenv after)) = .ok post ∧ post.error = none ∧
+        0 ≤ post.refundCounter ∧ TxBPost benv σ0 post := by
+    intro debit msg after hdebit hprep hentry
+    set v : B256 := (txB.gas * (min 1 (8 - benv.stat.baseFeePerGas) +
+      benv.stat.baseFeePerGas)).toB256 with hv
+    rw [prepareMessage_call rfl] at hprep
+    have hm := Except.ok.inj hprep
+    obtain ⟨-, hdeb⟩ := State.of_subBal hdebit
+    have hd_ne : ∀ a, senderE ≠ a → debit.get a = benv.state.get a := fun a h => by
+      rw [hdeb]; exact debit_get_ne h
+    have hd_E : debit.get senderE = { benv.state.get senderE with
+        nonce := (benv.state.get senderE).nonce + 1, bal := benv.state.bal senderE - v } := by
+      rw [hdeb, debit_get_self, State.incrNonce_bal]
+    have hm_caller : msg.caller = senderE := by rw [← hm]; rfl
+    have hm_ct : msg.currentTarget = looperAddress := by rw [← hm]; rfl
+    have hm_value : msg.value = (2895 : Nat).toB256 := by rw [← hm]; rfl
+    have hm_data : msg.data = txB.data := by rw [← hm]; rfl
+    have hm_static : msg.isStatic = false := by rw [← hm]; rfl
+    have hm_depth : msg.depth = 1024 := by rw [← hm]; rfl
+    have hm_code : msg.code = debit.getCode looperAddress := by rw [← hm]; rfl
+    have hm_gas : msg.gas = 268413504 := by rw [← hm]; rfl
+    have hm_state : msg.benv.state = debit := by rw [← hm]; rfl
+    have hm_stat : msg.benv.stat = benv.beginTransaction.stat := by rw [← hm]; rfl
+    have hm_stv : msg.shouldTransferValue = true := by rw [← hm]; rfl
+    obtain ⟨mid, hmid, hafter⟩ := of_benvAfterTransfer hm_stv hentry
+    obtain ⟨-, hmid'⟩ := State.of_subBal hmid
+    have hstat : after.stat = benv.beginTransaction.stat := by
+      rw [benvAfterTransfer_stat hentry, hm_stat]
+    have hstor : ∀ a, after.state.getStor a = benv.state.getStor a := fun a => by
+      rw [benvAfterTransfer_ok_getStor hentry a, hm_state]
+      show (debit.get a).stor = (benv.state.get a).stor
+      by_cases h : senderE = a
+      · subst h; rw [hd_E]
+      · rw [hd_ne a h]
+    have hcodeAll : ∀ a, after.state.getCode a = benv.state.getCode a := fun a => by
+      rw [benvAfterTransfer_ok_getCode hentry a, hm_state]
+      show (debit.get a).code = (benv.state.get a).code
+      by_cases h : senderE = a
+      · subst h; rw [hd_E]
+      · rw [hd_ne a h]
+    have hafter_L : after.state.get looperAddress =
+        (benv.state.get looperAddress).withBal
+          (benv.state.bal looperAddress + (2895 : Nat).toB256) := by
+      rw [hafter]
+      show (mid.addBal msg.currentTarget msg.value).get looperAddress = _
+      rw [hm_ct, hm_value, addBal_get_self, hmid', hm_state, hm_caller]
+      simp only [State.bal, State.setBal_get_ne hEL, hd_ne _ hEL]
+    -- the frame
+    set m := msg.withBenv after with hmdef
+    have hfork' : CoveredFork m.benv.stat.fork := by
+      show CoveredFork after.stat.fork; rw [hstat]; exact hfork
+    have horigStor : ∀ key, getOrigStorVal (initSevm m) withdrawalRequestPredeployAddress key =
+        (benv.state.getStor withdrawalRequestPredeployAddress).get key := by
+      intro key
+      show ((after.stat.origState.get _).stor).get key = _
+      rw [hstat]
+      rfl
+    have env : FloodEnv (initSevm m) 2895 (entryWith looperAddress) σ0 :=
+      { fork := hfork'
+        static := hm_static
+        depth := by show msg.depth ≠ 0; rw [hm_depth]; decide
+        data := by show msg.data = _; rw [hm_data]; exact txB_calldata
+        caller := by show looperAddress = msg.currentTarget; rw [hm_ct]
+        user := by show msg.currentTarget ≠ _; rw [hm_ct]; decide
+        self := by show msg.currentTarget ≠ _; rw [hm_ct]; decide
+        excess := hexcess
+        countLt := hcountLt
+        tailLt := htailLt
+        origCount := by rw [horigStor]; exact hrep.count
+        origTail := by rw [horigStor]; exact hrep.tail
+        queueOrig := by
+          intro n o h1 h2 h3
+          rw [horigStor]
+          exact hqueue n o h1 h2 h3 }
+    have hbalL : 2895 ≤ (m.benv.state.bal m.currentTarget).toNat := by
+      show 2895 ≤ (after.state.get msg.currentTarget).bal.toNat
+      rw [hm_ct, hafter_L]
+      change 2895 ≤ (benv.state.bal looperAddress + (2895 : Nat).toB256).toNat
+      rw [B256.toNat_add_eq_of_nof _ _ (by unfold B256.Nof; rw [h2895]; exact hLbal), h2895]
+      omega
+    have hgasm : floodGas 2895 ≤ m.gas := by
+      have h : floodGas 2895 + 1048576 ≤ 268435456 := floodGas_2895
+      show _ ≤ msg.gas
+      rw [hm_gas]
+      generalize floodGas 2895 = g at h ⊢
+      omega
+    obtain ⟨post, hex, herr, hcodeP, hrepP, hbalP, hlogsP, hrefund⟩ := flood_exec env
+      (by show msg.code = _; rw [hm_code, State.getCode, hd_ne _ hEL]; exact hLcode)
+      (by show after.state.getCode _ = _; rw [hcodeAll]; exact hcode)
+      (by
+        show Blanc.WithdrawalRequest.RepresentsStorage (after.state.getStor _).get σ0
+        rw [hstor]; exact hrep)
+      hbalL hgasm (by show msg.gas < 2 ^ 256; rw [hm_gas]; decide)
+    refine ⟨post, hex, herr, hrefund, hcodeP, hrepP, hlogsP, ?_⟩
+    have hL : (m.benv.state.bal m.currentTarget).toNat = (benv.state.bal looperAddress).toNat + 2895 := by
+      show (after.state.get msg.currentTarget).bal.toNat = _
+      rw [hm_ct, hafter_L]
+      change (benv.state.bal looperAddress + (2895 : Nat).toB256).toNat = _
+      rw [B256.toNat_add_eq_of_nof _ _ (by unfold B256.Nof; rw [h2895]; exact hLbal), h2895]
+    have hbal' := hbalP
+    rw [hL] at hbal'
+    have hct : m.currentTarget = looperAddress := hm_ct
+    rw [hct] at hbal'
+    show (post.getBal looperAddress).toNat = _
+    omega
+  obtain ⟨_, post, bout', hQ, hproc, hcum, hblk⟩ := processTransaction_call_value_of_exec
+    (E := senderE) (t := looperAddress) (Q := fun _ post => TxBPost benv σ0 post)
+    hfork rfl hchain.symm (by decide) hbase hcost (by decide) hcap (by decide) hroom hrecover
+    hnonce hnocode hfunds hnodeleg (looper_isPrecomp_false hfork) hexec
+  exact ⟨post, bout', hQ, hproc, hcum, hblk⟩
 
 -- The two witness transactions' signatures recover senderE from key 1.
 -- The concrete recoverSender proof (decide +kernel over the RLP signing hash)
