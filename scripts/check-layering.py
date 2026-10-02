@@ -180,7 +180,7 @@ SHARED += ["LedgerUpdate"]
 SHARED += ["Lift.AMMArithmetic", "Lift.BabylonianSqrt"]
 # Walk steps for arbitrary static calls, CALLER/KECCAK256/LOG3/SSTORE, hashed slots and the
 # Vyper 0.2.x front end (vyper-3crv-bytecode-v1): contract-neutral.
-SHARED += ["Lift.StaticCall", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper"]
+SHARED += ["Lift.StaticCall", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper", "Lift.PackedWord"]
 # The frame cursor, the reentrancy-lock exclusion kit and its bytecode checker, owner
 # discipline, and concrete-run evaluation (deployed-lido-vyper-v1): contract-neutral.
 SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachChain", "Lift.Cursor", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
@@ -228,6 +228,8 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.GetterStorageMappingWalk",
         "Lift.UniswapV2Pair.Consumption",
         "Lift.UniswapV2Pair.Layout",
+        "Lift.UniswapV2Pair.UpdateArithmetic",
+        "Lift.UniswapV2Pair.UpdateWalk",
         "Lift.UniswapV2Pair.GetterStorageReservesCore",
         "Lift.UniswapV2Pair.GetterStorageReservesMemory",
         "Lift.UniswapV2Pair.GetterStorageReservesWrapper",

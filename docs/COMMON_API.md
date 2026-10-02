@@ -1477,6 +1477,18 @@ through the nested word representation. In `CommonProofs`,
 bitwise conjunction and exclusive-or, while `B256.and_idem_right` removes a
 repeated identical mask.
 
+For a low-bit field of an EVM word, use
+[`Blanc/Lift/PackedWord.lean`](../Blanc/Lift/PackedWord.lean).
+`Lift.PackedWord.lowMask_toNat` identifies the low `k` bits with the natural
+residue modulo `2^k` for `k ≤ 256`; `lowMask_eq_self_of_lt` removes that mask
+from a bounded word. `lowMask_sub_toNat` identifies masked word subtraction
+with subtraction modulo the field width when the right operand is below
+`2^k`, including full-word borrowing. These facts preserve wraparound and
+require no timestamp ordering. The immediate consumers are the deployed
+Pair's UQ112x112 arithmetic and uint32 elapsed-time bridge. Discovery remains
+in this registry: the field width and caller's desired word/natural form
+must be chosen before applying these lemmas.
+
 For exact two-word multiplication, `productLowWord`, `productScratchWord`,
 `productHighBeforeBorrowWord`, `productBorrowWord`, and `productHighWord` name
 the standard `MUL`/`MULMOD` staging and carry correction, while
@@ -3142,6 +3154,7 @@ contract-neutral.
   `getStor_afterStore_ne`, `getStorVal_afterStore`, `logs_afterStore`, `getStor_addLog`,
   `logs_addLog`, `getStor_St_return`, `logs_St_return`, `output_St_return`) are in
   [`Blanc/Lift/WalkSteps.lean`](../Blanc/Lift/WalkSteps.lean), which also holds
+  exact forward `TIMESTAMP` (`rx_timestamp`, actual block-header time and two gas),
   `SLT`, `TIMESTAMP`, `LOG2`, `TLOAD` and `TSTORE` inverted (`ri_slt`, `ri_timestamp`,
   `ri_log2`, `ri_tload`, `ri_tstore`; `getStor_setTransVal`, `getCode_setTransVal`) and
   `StorStep sevm b b' s`, a chain of loads and stores that changed only the executing
