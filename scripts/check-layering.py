@@ -255,6 +255,8 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.UpdateSource",
         "Lift.UniswapV2Pair.BalanceCallWalk",
         "Lift.UniswapV2Pair.SyncWalk",
+        "Lift.UniswapV2Pair.StaticViewClassify",
+        "Lift.UniswapV2Pair.StaticViewSource",
         "Lift.UniswapV2Pair.UpdateWalk",
         "Lift.UniswapV2Pair.UpdateOverflowWalk",
         "Lift.UniswapV2Pair.UpdateTailWalk",
