@@ -363,6 +363,8 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
   `callChildPost_facts` projects every field when the child returned nothing.
   A lifted callee supplies `exec … = .ok _` through `exec_iff_exec_eq` from its
   `Exec` derivation; a code-free callee is `Ninst.runCompiled_call_nonzero_codeFree`.
+  `adrSet_union_isEmpty` carries an empty deletion set through the resumed
+  parent's `accountsToDelete` union.
   For a loop that calls once per iteration (`GAS; CALL` forwarding everything),
   `calculateMsgCallGas_all` closes `calculateMsgCallGas` to all but one 64th of
   the gas left after the fixed charge (plus the stipend), and the cut-run steps

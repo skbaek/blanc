@@ -446,7 +446,26 @@ def TxBPost (benv : Benv) (σ0 : Blanc.WithdrawalRequest.State) (post : Devm) : 
     (floodState σ0 (entryWith looperAddress) 2895) ∧
   post.logs = List.replicate 2895 ⟨withdrawalRequestPredeployAddress, [],
     Blanc.WithdrawalRequest.submissionLog (entryWith looperAddress)⟩ ∧
-  (post.state.get looperAddress).bal.toNat = (benv.state.bal looperAddress).toNat
+  (post.state.get looperAddress).bal.toNat = (benv.state.bal looperAddress).toNat ∧
+  post.accountsToDelete.isEmpty = true ∧
+  post.state.get senderE = { benv.state.get senderE with
+    nonce := (benv.state.get senderE).nonce + 1
+    bal := benv.state.bal senderE -
+      (txB.gas * (min 1 (8 - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)).toB256 -
+      (2895 : Nat).toB256 } ∧
+  (∀ a, a ≠ senderE → a ≠ looperAddress → a ≠ withdrawalRequestPredeployAddress →
+    post.state.get a = benv.state.get a)
+
+/-- Block B's flood frame schedules no deletion: settling it folds nothing away. -/
+theorem TxBPost.no_deletions {benv : Benv} {σ0 : Blanc.WithdrawalRequest.State} {post : Devm}
+    (h : TxBPost benv σ0 post) (st : State) :
+    post.accountsToDelete.toList.foldl destroyAccount st = st := by
+  have hlist : post.accountsToDelete.toList = [] := by
+    apply List.isEmpty_iff.mp
+    rw [Std.HashSet.isEmpty_toList]
+    exact h.2.2.2.2.1
+  rw [hlist]
+  rfl
 
 /-- **Block B's transaction, forwarded.**  Its sender recovery is the one named premise
 `hrecover`.  The transaction's `2 ^ 28` gas needs an uncapped fork (`hnocap`: Prague); the
@@ -595,14 +614,39 @@ theorem txB_processTransaction
       rw [hm_gas]
       generalize floodGas 2895 = g at h ⊢
       omega
-    obtain ⟨post, hex, herr, hcodeP, hrepP, hbalP, hlogsP, hrefund⟩ := flood_exec env
+    obtain ⟨post, hex, herr, hcodeP, hrepP, hbalP, hlogsP, hrefund, hdelP, hothersP⟩ :=
+      flood_exec env
       (by show msg.code = _; rw [hm_code, State.getCode, hd_ne _ hEL]; exact hLcode)
       (by show after.state.getCode _ = _; rw [hcodeAll]; exact hcode)
       (by
         show Blanc.WithdrawalRequest.RepresentsStorage (after.state.getStor _).get σ0
         rw [hstor]; exact hrep)
       hbalL hgasm (by show msg.gas < 2 ^ 256; rw [hm_gas]; decide)
-    refine ⟨post, hex, herr, hrefund, hcodeP, hrepP, hlogsP, ?_⟩
+    have hmid_get : ∀ a, mid.get a = if senderE = a then
+        (debit.get senderE).withBal (debit.bal senderE - (2895 : Nat).toB256) else debit.get a := by
+      intro a
+      rw [hmid', hm_state, hm_caller, hm_value]
+      by_cases h : senderE = a
+      · subst h; rw [State.setBal_get_self, if_pos rfl]
+      · rw [State.setBal_get_ne h, if_neg h]
+    have hafter_ne : ∀ a, a ≠ looperAddress → after.state.get a = mid.get a := by
+      intro a ha
+      rw [hafter]
+      show (mid.addBal msg.currentTarget msg.value).get a = _
+      rw [hm_ct]
+      exact addBal_get_ne _ (Ne.symm ha)
+    have hpost_ne : ∀ a, a ≠ looperAddress → a ≠ withdrawalRequestPredeployAddress →
+        post.state.get a = after.state.get a := fun a haL haP =>
+      hothersP a (by show a ≠ msg.currentTarget; rw [hm_ct]; exact haL) haP
+    refine ⟨post, hex, herr, hrefund, hcodeP, hrepP, hlogsP, ?_, hdelP, ?_, ?_⟩
+    rotate_left
+    · have hdbal : debit.bal senderE = benv.state.bal senderE - v := by
+        show (debit.get senderE).bal = _
+        rw [hd_E]
+      rw [hpost_ne _ hEL (by decide), hafter_ne _ hEL, hmid_get, if_pos rfl, hdbal, hd_E]
+      rfl
+    · intro a haE haL haP
+      rw [hpost_ne a haL haP, hafter_ne a haL, hmid_get, if_neg (Ne.symm haE), hd_ne a (Ne.symm haE)]
     have hL : (m.benv.state.bal m.currentTarget).toNat = (benv.state.bal looperAddress).toNat + 2895 := by
       show (after.state.get msg.currentTarget).bal.toNat = _
       rw [hm_ct, hafter_L]
