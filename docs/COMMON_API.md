@@ -1714,6 +1714,16 @@ and denominator. These theorems establish no equality with the Nat recurrence,
 bytecode refinement, gas bound or history property. This interface has no
 execution-goal recipe.
 
+For a shorter word-run bound under a sufficiently large eventual divisor, use
+[`Blanc/WordFakeExponentialBound.lean`](../Blanc/WordFakeExponentialBound.lean).
+`WordFakeExponential.Run.iterations_le_of_halving_horizon` allows an arbitrary
+warm-up of `H` steps and bounds the remaining active steps by the word width,
+256. It takes positive Nat counter/denominator, an exact-divisor margin through
+`counter + H + 256`, and `2 * numerator.toNat ≤ denominator * (counter + H)`.
+The numerator products and output sums may wrap; the proof uses modular
+reduction decreasing the quotient, then repeated halving. This is an arithmetic
+run-length bound, with no execution or gas premise.
+
 For a sufficient domain relating these two recurrences, use
 [`Blanc/FakeExponentialWordCorrespondence.lean`](../Blanc/FakeExponentialWordCorrespondence.lean).
 `NoWrap` is indexed by an existing `FakeExponential.Run` and its initial sum
@@ -1726,6 +1736,17 @@ under an explicit denominator width. Cast counter increment needs no extra
 width premise. These APIs establish neither a maximal equality domain nor
 reachability, bytecode, gas or history properties. Their namespace is
 `Blanc.FakeExponentialWordCorrespondence`; they have no execution-goal recipe.
+
+For the converse on a bounded executed word trace, use
+[`Blanc/FakeExponentialWordDomain.lean`](../Blanc/FakeExponentialWordDomain.lean).
+`FakeExponentialWordDomain.Run.quotient_eq_iff_noWrap` takes positive Nat
+counter `c` and denominator `d`, zero initial output, and
+`d * d * (c + iterations) ≤ 2 ^ 256`. Equality of the final quotient with the
+canonical Nat recurrence is then equivalent to an existing Nat run of the
+same length with `NoWrap` at prefix zero. The margin makes active divisors
+exact and each overflowing product lose enough to affect final division;
+extra Nat terms after early word termination are included. This is an exact
+arithmetic domain within that window, with no reachable-history claim.
 
 ## M — bytes and memory
 
