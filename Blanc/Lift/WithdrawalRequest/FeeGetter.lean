@@ -122,17 +122,6 @@ theorem feeGetterPost_facts (b : Devm) (M : Mem) (fee : B256) (G : Nat)
 def userFeeGetterGas (sevm : Sevm) (b : Devm) (M : Mem) (iterations : Nat) : Nat :=
   feeGetterGas M + 75 + feeLoopGas iterations + userSetupGas sevm b + dispatchGas
 
-theorem userFeeGetterGas_eq (sevm : Sevm) (b : Devm) (M : Mem) (iterations : Nat) :
-    userFeeGetterGas sevm b M iterations =
-      177 + 87 * iterations + sloadCost sevm b 0 +
-        (calculateMemoryGasCost (memExtSize M.size 0 32) - calculateMemoryGasCost M.size) := by
-  calc
-    _ = (10 + 75 + 25 + 46 + 21) + (87 * iterations + sloadCost sevm b 0 +
-        (calculateMemoryGasCost (memExtSize M.size 0 32) - calculateMemoryGasCost M.size)) := by
-      simp only [userFeeGetterGas, feeGetterGas, feeGetterFixedGas_eq, feeLoopGas_eq,
-        userSetupGas, userSetupFixedGas_eq, dispatchGas_eq,
-        Nat.add_assoc, Nat.add_comm, Nat.add_left_comm]
-    _ = _ := by simp only [← Nat.add_assoc]
 
 theorem userFeeGetterGas_empty (sevm : Sevm) (b : Devm) (iterations : Nat) :
     userFeeGetterGas sevm b Mem.empty iterations = 180 + 87 * iterations + sloadCost sevm b 0 := by

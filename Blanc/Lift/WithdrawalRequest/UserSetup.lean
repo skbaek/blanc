@@ -23,13 +23,6 @@ theorem userSetupFixedGas_eq : userSetupFixedGas = 46 := rfl
 def userSetupGas (sevm : Sevm) (b : Devm) : Nat :=
   userSetupFixedGas + sloadCost sevm b 0
 
-/-- The pinned warm/cold slot-zero schedule, with the fixed prefix charge included. -/
-theorem userSetupGas_eq (sevm : Sevm) (b : Devm) :
-    userSetupGas sevm b =
-      if (sevm.currentTarget, (0 : B256)) ∈ b.accessedStorageKeys then 146 else 2146 := by
-  by_cases hw : (sevm.currentTarget, (0 : B256)) ∈ b.accessedStorageKeys
-  · simp only [userSetupGas, userSetupFixedGas_eq, sloadCost, ite_eq_left hw, gasWarmAccess]
-  · simp only [userSetupGas, userSetupFixedGas_eq, sloadCost, ite_eq_right hw, gasColdSload]
 
 private theorem denominator_push : Bytes.toB256 [0x11] = (17 : B256) := rfl
 private theorem zero_push : Bytes.toB256 [] = (0 : B256) := rfl

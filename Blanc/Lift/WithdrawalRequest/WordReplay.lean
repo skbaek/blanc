@@ -277,18 +277,5 @@ theorem history_word_storage_replay {cfg : ChainConfig} {checkpoint future : Blo
     some Blanc.withdrawalRequestCode.toList
   rw [code]
 
-/-- The connected replay computes the exact endpoint by an input-derived deterministic fold. -/
-theorem history_word_storage_fold {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ExecutionTrace.ConfiguredHistoryTrace cfg checkpoint future)
-    (code : checkpoint.state.getCode withdrawalRequestPredeployAddress =
-      Blanc.withdrawalRequestCode) :
-    ∃ events : List WordReplayEvent,
-      WordStorageReplay (checkpoint.state.getStor withdrawalRequestPredeployAddress) events
-        (future.state.getStor withdrawalRequestPredeployAddress) ∧
-      events.foldl wordEventUpdate (checkpoint.state.getStor withdrawalRequestPredeployAddress) =
-        future.state.getStor withdrawalRequestPredeployAddress ∧
-      events.map WordReplayEvent.frame = trace.settledFrames.flatMap balanceFrameObservation := by
-  obtain ⟨events, replay, observed⟩ := history_word_storage_replay trace code
-  exact ⟨events, replay, replay.fold_eq, observed⟩
 
 end Blanc.Lift.WithdrawalRequest

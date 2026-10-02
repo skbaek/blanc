@@ -272,15 +272,6 @@ theorem systemLoopFold_charges_closed (sevm : Sevm) (head : B256) (index n : Nat
     unfold systemRecordReadGas
     omega
 
-/-- The allocation formula in the protocol's ceilDiv vocabulary. -/
-theorem systemAllocatedSize_eq (n : Nat) :
-    systemAllocatedSize n = if n=0 then 0 else 32*ceilDiv (76*n+8) 32 := by
-  unfold systemAllocatedSize
-  split
-  · rfl
-  · rw [ceil32_eq_mul]
-    unfold ceilDiv
-    split <;> omega
 
 /-- The canonical queue loop's allocation from any zero-size memory. -/
 theorem systemQueuePost_size (sevm : Sevm) (base : Devm) (memory : Mem)

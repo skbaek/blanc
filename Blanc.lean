@@ -61,6 +61,7 @@ import Blanc.SystemContracts
 import Blanc.ExecutionTraceCodeKeep
 import Blanc.ExecutionTraceSystemCode
 import Blanc.ExecutionTraceCalldata
+import Blanc.ExecutionTraceCallerExclusion
 import Blanc.ExecutionTraceSettledFrames
 import Blanc.ExecutionTraceEntry
 import Blanc.ExecutionAccountingObserved
@@ -634,6 +635,12 @@ import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5ChunkB
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5Chunks
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5Full
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Run
+
+import Blanc.Lift.WithdrawalRequest.BlockRequests
+import Blanc.Lift.WithdrawalRequest.Creation.Deploy
+import Blanc.Lift.WithdrawalRequest.NatLiveness
+import Blanc.Lift.WithdrawalRequest.ResetWindowCount
+import Blanc.Lift.WithdrawalRequest.WordBudget
 
 -- The COMPOSITION stratum is strictly downstream of every contract family, so
 -- it is aggregated last. Roots aggregate composition; nothing imports back.

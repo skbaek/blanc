@@ -25,9 +25,6 @@ theorem decodeSubmission_payload (sevm : Sevm) (hlen : sevm.data.length = 56) :
   simp only [submissionPayload, decodeSubmission]
   rw [Blanc.Bytes.toBytes_toUInt64_of_length suffixLength, List.take_append_drop]
 
-/-- The stored caller is exactly the typed caller field. -/
-theorem decodeSubmission_callerWord (sevm : Sevm) (hlen : sevm.data.length = 56) :
-    callerWord (decodeSubmission sevm hlen) = sevm.caller.toB256 := rfl
 
 theorem submission_dataWords (sevm : Sevm) (entry : Blanc.WithdrawalRequest.Entry)
     (payload : sevm.data = submissionPayload entry) :

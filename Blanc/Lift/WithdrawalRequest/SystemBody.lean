@@ -36,8 +36,6 @@ def systemBodyMemory (sevm : Sevm) (base : Devm) (head index : B256) (memory : M
   systemRecordMemory index (systemBodyCaller sevm base head index)
     (systemBodyPubkey sevm base head index) (systemBodyPacked sevm base head index) memory
 
-/-- Both certified copies of the body execute the identical one-record tree. -/
-theorem systemBody_tree_eq : t_00e9_c1 = t_00e9_c6 := rfl
 
 
 /-- Named continuation extracted from the certified body. -/
@@ -401,16 +399,5 @@ theorem systemBody_exact {sevm : Sevm} {base : Devm} {memory : Mem} {gas : Nat}
   rw [gasEq]
   exact ready
 
-/-- The canonical backedge body's identical tree consumes the same exact interface. -/
-theorem systemBody_exact_c6 {sevm : Sevm} {base : Devm} {memory : Mem} {gas : Nat}
-    {index count head tail : B256} {out : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (next : SFunc.RunExact prog sevm
-      (St (systemBodyBase sevm base head index) [1 + index, count, head, tail]
-        (systemBodyMemory sevm base head index memory) gas) t_00e1_c6 out) :
-    SFunc.RunExact prog sevm (St base [index, count, head, tail]
-      memory (gas + systemBodyGas sevm base head index memory)) t_00e9_c6 out := by
-  rw [← systemBody_tree_eq]
-  exact systemBody_exact fork next
 
 end Blanc.Lift.WithdrawalRequest

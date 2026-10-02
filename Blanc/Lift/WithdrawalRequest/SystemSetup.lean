@@ -30,11 +30,6 @@ def systemCount (sevm : Sevm) (base : Devm) : B256 :=
 def systemSetupBase (sevm : Sevm) (base : Devm) : Devm :=
   afterSload sevm (afterSload sevm base 3) 2
 
-theorem systemSetupBase_keys (sevm : Sevm) (base : Devm) :
-    (systemSetupBase sevm base).accessedStorageKeys =
-      sloadAccessedStorageKeys sevm.currentTarget
-        (sloadAccessedStorageKeys sevm.currentTarget base.accessedStorageKeys 3) 2 := by
-  simp only [systemSetupBase, afterSload_accessedStorageKeys]
 
 theorem systemCount_toNat (sevm : Sevm) (base : Devm) :
     (systemCount sevm base).toNat = min 16 (systemDifference sevm base).toNat := by

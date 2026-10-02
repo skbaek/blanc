@@ -871,8 +871,8 @@ For the exact request bytes appended by a retained request pass, import
 withdrawal return data and type-2 consolidation return data, in that order.
 `ExecutionTrace.optionalRequestEntry` contributes a singleton typed request
 for a nonempty payload and no entry for an empty one;
-`optionalRequestEntry_eq_nil_iff` and `optionalRequestEntry_of_nonempty` expose
-those cases. `append_optionalRequestEntry` is the conditional-append equation
+`optionalRequestEntry_eq_nil_iff` identifies the empty case.
+`append_optionalRequestEntry` is the conditional-append equation
 used by the trace theorem. No premise excludes type-1 entries from the incoming
 prefix or empties consolidation output. Payload validity, withdrawal FIFO
 provenance, configured-history correspondence and contract refinement remain
@@ -1681,8 +1681,8 @@ guessed fuel bound.
 
 [`Blanc/FakeExponential.lean`](../Blanc/FakeExponential.lean) adds
 `Blanc.FakeExponential.Run`, a finite recurrence trace carrying the iteration
-count and series output. `run_exists` provides a trace for every input and
-`Run.output_eq` identifies every trace's output with the canonical series.
+count and series output. `Run.output_eq` identifies every trace's output with
+the canonical series.
 `accumulator_le` and `factor_le` provide lower bounds; the latter requires a
 positive denominator. `accumulator_zero_numerator` and `value_zero_numerator`
 give the exact zero-numerator boundary, with positivity required for the
@@ -2282,9 +2282,8 @@ consumer needs canonical interpreter ingress as one conjunct:
   `ConfiguredHistoryTrace.txRawFrames_caller_excluded` in
   [`Blanc/ExecutionTraceCallerExclusion.lean`](../Blanc/ExecutionTraceCallerExclusion.lean)
   derives that exclusion from initially empty code, retained `NoSenderAt`,
-  `NoAuthorityAt`, and trace-local CREATE avoidance. Its `TxFrameAdmitted`
-  corollary selects transaction frames at a consumer address. Calls to the
-  empty-code address remain allowed; system frames are outside the conclusion.
+  `NoAuthorityAt`, and trace-local CREATE avoidance. Calls to the empty-code
+  address remain allowed; system frames are outside the conclusion.
   `SpawnFree` and
   `ConfiguredHistoryTrace.systemRawFrames_target_of_spawnFree`
   ([`Blanc/ExecutionTraceSystem.lean`](../Blanc/ExecutionTraceSystem.lean)) confine

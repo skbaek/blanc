@@ -45,20 +45,7 @@ theorem systemPointers_drained_iff (sevm : Sevm) (base : Devm)
     congr 1
     omega
 
-theorem systemLoopFold_logs (sevm : Sevm) (head : B256) (index remaining : Nat)
-    (base : Devm) (memory : Mem) :
-    (systemLoopFold sevm head index remaining base memory).base.logs = base.logs := by
-  induction remaining generalizing index base memory with
-  | zero => rfl
-  | succ remaining ih =>
-    simp only [systemLoopFold]
-    rw [ih]
-    simp only [systemBodyBase, systemBodyBase2, systemBodyBase1, afterSload_logs]
 
-theorem systemQueuePost_logs (sevm : Sevm) (base : Devm) (memory : Mem) :
-    (systemQueuePost sevm base memory).base.logs = base.logs := by
-  rw [systemQueuePost, systemLoopFold_logs]
-  simp only [systemSetupBase, afterSload_logs]
 
 theorem systemFramePointers_storage (sevm : Sevm) (base : Devm) (memory : Mem)
     (state : WithdrawalRequest.State)
@@ -350,16 +337,6 @@ theorem systemFramePost_other_storage (sevm : Sevm) (base : Devm) (memory : Mem)
       systemQueuePost_storage]
   · rw [afterSstore_getStor_ne _ _ _ _ _ other, systemQueuePost_storage]
 
-theorem systemFramePost_logs (sevm : Sevm) (base : Devm) (memory : Mem) (gas : Nat) :
-    (systemFramePost sevm base memory gas).logs = base.logs := by
-  simp only [systemFramePost, systemBookkeepingPost, returnPost, Devm.withOutput_logs,
-    Devm.memRead_logs, Devm.setMach_logs, St]
-  simp only [systemBookkeepingBase, systemExcessStore, systemCountRead, systemExcessRead,
-    afterSstore_logs, afterSload_logs]
-  unfold systemFramePointers systemPointerBase
-  split
-  · rw [afterSstore_logs, afterSstore_logs, systemQueuePost_logs]
-  · rw [afterSstore_logs, systemQueuePost_logs]
 
 theorem systemFramePost_error (sevm : Sevm) (base : Devm) (memory : Mem) (gas : Nat) :
     (systemFramePost sevm base memory gas).error = base.error := by

@@ -176,16 +176,6 @@ theorem FrameEffect.static_preserves {sevm : Sevm} {pre post : Devm}
     rw [preserved.2.1 address]
     simp only [Devm.getBal, afterSload_getAcct]
 
-/-- Every successful canonical frame preserves balances, foreign storage and inherited error. -/
-theorem exec_frame_preserves {sevm : Sevm} {pre post : Devm}
-    (code : sevm.code = Blanc.withdrawalRequestCode)
-    (fork : CoveredFork sevm.benvStat.fork) (stack : pre.stack = [])
-    (aligned : pre.memory.size % 32 = 0) (wf : Mem.Wf pre.memory)
-    (lengthBound : sevm.data.length < 2 ^ 256) (exec : Exec 0 sevm pre (.ok post)) :
-    (∀ address, post.getBal address = pre.getBal address) ∧
-    (∀ address, address ≠ sevm.currentTarget → post.getStor address = pre.getStor address) ∧
-    post.error = pre.error := by
-  exact (exec_frame_effect code fork stack aligned wf lengthBound exec).preserves
 
 /-- A successful static canonical frame is a zero-value, empty-calldata fee read. -/
 theorem exec_static_frame {sevm : Sevm} {pre post : Devm}
@@ -244,23 +234,6 @@ theorem exec_user_inhibited_no_ok {sevm : Sevm} {pre post : Devm}
     (exec : Exec 0 sevm pre (.ok post)) : False := by
   exact ((exec_frame_effect code fork stack aligned wf lengthBound exec).user_guards user).1 inhibited
 
-/-- The literal submission branch ends in STOP with inherited output. -/
-theorem exec_submission_output {sevm : Sevm} {pre post : Devm}
-    (code : sevm.code = Blanc.withdrawalRequestCode)
-    (fork : CoveredFork sevm.benvStat.fork) (stack : pre.stack = [])
-    (user : sevm.caller ≠ systemAddress) (length : sevm.data.length = 56)
-    (exec : Exec 0 sevm pre (.ok post)) : post.output = pre.output := by
-  obtain ⟨_, _, _, _, _, _, gas, state⟩ := exec_submission code fork stack user length exec
-  rw [state, (submissionPost_inherited _ _ _ gas).1, afterSload_output]
 
-/-- The system branch returns its actual queue-memory slice. -/
-theorem exec_system_output {sevm : Sevm} {pre post : Devm}
-    (code : sevm.code = Blanc.withdrawalRequestCode)
-    (fork : CoveredFork sevm.benvStat.fork) (stack : pre.stack = [])
-    (caller : sevm.caller = systemAddress) (exec : Exec 0 sevm pre (.ok post)) :
-    post.output = ((systemQueuePost sevm pre pre.memory).memory.read 0
-      (76 * (systemCount sevm pre).toNat)).1 := by
-  obtain ⟨_, gas, state⟩ := exec_system_frame code fork stack caller exec
-  rw [state, systemFramePost_output]
 
 end Blanc.Lift.WithdrawalRequest

@@ -256,23 +256,6 @@ theorem systemRecordImage_prefix_extend (i : Nat) (hi : i < 16) (entry : Entry)
   rw [show 76 * (i + 1) = 76 * i + 76 by omega, List.sliceD_split,
     Nat.zero_add, systemRecordImage_prefix i hi, systemRecordImage_record i hi]
 
-/-- A previously represented output prefix extends by the next ordered entry. -/
-theorem systemRecordImage_outputRecords (entries : List Entry) (entry : Entry)
-    (image : Bytes) (hi : entries.length < 16)
-    (hPrefix : image.sliceD 0 (76 * entries.length) 0 = outputRecords entries) :
-    (systemRecordImage entries.length.toB256 (callerWord entry) (pubkeyWord entry)
-      (pubkeyAmountWord entry) image).sliceD 0 (76 * (entries.length + 1)) 0 =
-      outputRecords (entries ++ [entry]) := by
-  rw [systemRecordImage_prefix_extend entries.length hi, hPrefix,
-    outputRecords_append, outputRecords, outputRecords, List.append_nil]
 
-/-- The corresponding read from actual staged memory returns the same record. -/
-theorem systemRecordMemory_record (i : Nat) (hi : i < 16) (entry : Entry)
-    {memory : Mem} {image : Bytes} (wf : Mem.Wf memory) (reads : Mem.Reads memory image) :
-    ((systemRecordMemory i.toB256 (callerWord entry) (pubkeyWord entry)
-      (pubkeyAmountWord entry) memory).read (76 * i) 76).1 = outputRecord entry := by
-  rw [(systemRecordMemory_image i.toB256 (callerWord entry) (pubkeyWord entry)
-    (pubkeyAmountWord entry) wf reads).2.read]
-  exact systemRecordImage_record i hi entry image
 
 end Blanc.Lift.WithdrawalRequest

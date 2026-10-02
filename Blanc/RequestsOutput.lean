@@ -23,10 +23,6 @@ theorem optionalRequestEntry_eq_nil_iff (requestType : UInt8) (payload : Bytes) 
   · have positive : payload.length > 0 := List.length_pos_iff.mpr empty
     simp only [optionalRequestEntry, ite_eq_left positive, List.cons_ne_nil, empty]
 
-theorem optionalRequestEntry_of_nonempty (requestType : UInt8) {payload : Bytes}
-    (nonempty : payload ≠ []) :
-    optionalRequestEntry requestType payload = [[requestType] ++ payload] := by
-  exact ite_eq_left (List.length_pos_iff.mpr nonempty)
 
 theorem append_optionalRequestEntry (prior : List Bytes) (requestType : UInt8)
     (payload : Bytes) :

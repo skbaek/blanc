@@ -201,16 +201,6 @@ theorem user_fee_dispatch_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
   · simp only [feeBranch, ite_eq_right hlen] at run
     exact .inr (getter_inv run)
 
-/-- All other word calldata/value combinations exclude successful execution of this fragment. -/
-theorem user_fee_dispatch_no_run {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
-    {output accumulator counter numerator denominator : B256} {o : Outcome}
-    (rejected : ¬ ((sevm.data.length.toB256 = 56 ∧ (output / denominator).toNat ≤ sevm.value.toNat) ∨
-      (sevm.data.length.toB256 = 0 ∧ sevm.value = 0)))
-    (run : SFunc.Run prog sevm
-      (St b [output, accumulator, counter, numerator, denominator] M G) t_0068_c0 o) : False := by
-  rcases user_fee_dispatch_inv run with ⟨hlen, paid, _⟩ | ⟨empty, zero, _⟩
-  · exact rejected (.inl ⟨hlen, paid⟩)
-  · exact rejected (.inr ⟨empty, zero⟩)
 
 /-- Either visible accepted exit continuation transports through its exact selected charge. -/
 theorem user_fee_dispatch_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}

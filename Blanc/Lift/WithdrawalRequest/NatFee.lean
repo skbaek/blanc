@@ -86,23 +86,5 @@ theorem exec_user_nat_fee {sevm : Sevm} {pre post : Devm} {iterations : Nat}
   exact ⟨fun length => effect.submission_paid_nat user length domain model excessEq,
     fun empty => effect.getter_output_nat user empty domain model excessEq⟩
 
-/-- Fresh getter liveness returns canonical Nat-fee bytes at the existing
-closed charge. Static reads are permitted; no SSTORE slack is required. -/
-theorem exec_fee_getter_nat_fresh {sevm : Sevm} {b : Devm} {G iterations : Nat}
-    (code : sevm.code = Blanc.withdrawalRequestCode) (fork : CoveredFork sevm.benvStat.fork)
-    (user : sevm.caller ≠ systemAddress) (empty : sevm.data = []) (zero : sevm.value = 0)
-    (active : b.getStorVal sevm.currentTarget 0 ≠ B256.max)
-    (domain : NatFeeDomain (b.getStorVal sevm.currentTarget 0) iterations)
-    (model : Blanc.WithdrawalRequest.State)
-    (excessEq : model.excess = (b.getStorVal sevm.currentTarget 0).toNat) :
-    Nonempty (Exec 0 sevm
-      (St b [] Mem.empty (G + (180 + 87 * iterations + sloadCost sevm b 0)))
-      (.ok (feeGetterPost (afterSload sevm b 0) Mem.empty
-        (Blanc.WithdrawalRequest.fee model).toB256 G))) := by
-  obtain ⟨result, ⟨wordRun, live⟩, _⟩ := exec_fee_getter_word_live code fork user empty zero active
-  have same := domain.word_result model excessEq wordRun
-  have executed := live G
-  rw [same.1, same.2.2] at executed
-  exact executed
 
 end Blanc.Lift.WithdrawalRequest

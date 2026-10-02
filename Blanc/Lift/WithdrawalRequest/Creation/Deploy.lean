@@ -83,11 +83,6 @@ def deployMsg (fork : Fork) : Msg where
   accessedStorageKeys := .emptyWithCapacity
   disablePrecompiles := false
 
-theorem deployMsg_fresh (fork : Fork) :
-    (deployMsg fork).benv.state.getNonce deployer = 0 ∧
-    (deployMsg fork).benv.state.getNonce (deployMsg fork).currentTarget = 0 ∧
-    (deployMsg fork).benv.state.getCode (deployMsg fork).currentTarget = ByteArray.empty := by
-  exact ⟨rfl, rfl, rfl⟩
 
 /-- Every covered fork admits the closed constructor message and reaches actual INIT. -/
 theorem deploy_initial (fork : Fork) (hfork : CoveredFork fork) :

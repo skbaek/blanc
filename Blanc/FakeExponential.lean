@@ -18,18 +18,6 @@ inductive Run (numerator denominator : Nat) : Nat → Nat → Nat → Nat → Pr
         (accumulator * numerator / (denominator * i)) iterations output) :
       Run numerator denominator i accumulator (iterations + 1) (accumulator + output)
 
-/-- Every input reaches zero after finitely many iterations; no guessed fuel. -/
-theorem run_exists (numerator denominator i accumulator : Nat) :
-    ∃ iterations, Run numerator denominator i accumulator iterations
-      (fakeExpAux numerator denominator i accumulator) := by
-  induction i, accumulator using fakeExpAux.induct numerator denominator with
-  | case1 i =>
-    rw [fakeExpAux_zero]
-    exact ⟨0, Run.stop i⟩
-  | case2 i accumulator positive ih =>
-    obtain ⟨iterations, next⟩ := ih
-    rw [fakeExpAux_succ positive]
-    exact ⟨iterations + 1, Run.step positive next⟩
 
 /-- A finite loop trace has exactly the canonical mathematical output. -/
 theorem Run.output_eq {numerator denominator i accumulator iterations output : Nat}

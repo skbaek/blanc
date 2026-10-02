@@ -230,23 +230,6 @@ theorem ConfiguredHistoryTrace.txRawFrames_caller_excluded
   have empty := (trace.codeAt_empty authorities avoid initial).1
   exact ConfiguredHistoryTrace.txCallers_of_empty trace senders empty avoid
 
-/-- Admission restricted to the transaction roots of a configured history. -/
-def ConfiguredHistoryTrace.TxFrameAdmitted
-    {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (ca : Adr) (entry : Sevm → Devm → Prop) : Prop :=
-  ∀ root ∈ trace.txRawFrames, root.sevm.currentTarget = ca → entry root.sevm root.devm
 
-/-- Derived transaction admission for consumers selecting any target address. -/
-theorem ConfiguredHistoryTrace.txFrameAdmitted_caller_excluded
-    {cfg : ChainConfig} {checkpoint future : BlockChain} {a ca : Adr}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (senders : trace.NoSenderAt a) (authorities : trace.NoAuthorityAt a)
-    (avoid : ∀ root ∈ trace.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a)
-    (initial : checkpoint.state.getCode a = ByteArray.empty) :
-    trace.TxFrameAdmitted ca (fun sevm _ => sevm.caller ≠ a) := by
-  intro root member _
-  exact trace.txRawFrames_caller_excluded senders authorities avoid initial root member
 
 end Blanc.ExecutionTrace

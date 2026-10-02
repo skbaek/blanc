@@ -54,24 +54,5 @@ theorem history_word_fee_budget {cfg : ChainConfig} {checkpoint future : BlockCh
   refine ⟨events, replay, observed, ?_, B256.toNat_lt _⟩
   exact Nat.le_trans (Nat.add_le_add_left replay.price_sum_le _) values
 
-/-- Every list prefix of these same replay events fits within the final retained balance. -/
-theorem history_word_fee_prefix_budget {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ExecutionTrace.ConfiguredHistoryTrace cfg checkpoint future)
-    (code : checkpoint.state.getCode withdrawalRequestPredeployAddress =
-      Blanc.withdrawalRequestCode) :
-    ∃ events : List WordReplayEvent,
-      WordStorageReplay (checkpoint.state.getStor withdrawalRequestPredeployAddress) events
-        (future.state.getStor withdrawalRequestPredeployAddress) ∧
-      events.map WordReplayEvent.frame = trace.settledFrames.flatMap balanceFrameObservation ∧
-      (future.state.bal withdrawalRequestPredeployAddress).toNat < 2 ^ 256 ∧
-      ∀ left right : List WordReplayEvent, events = left ++ right →
-        (checkpoint.state.bal withdrawalRequestPredeployAddress).toNat +
-            (left.map wordEventPrice).sum ≤
-          (future.state.bal withdrawalRequestPredeployAddress).toNat := by
-  obtain ⟨events, replay, observed, budget, wordBound⟩ := history_word_fee_budget trace code
-  refine ⟨events, replay, observed, wordBound, ?_⟩
-  intro left right split
-  rw [split, List.map_append, List.sum_append] at budget
-  omega
 
 end Blanc.Lift.WithdrawalRequest
