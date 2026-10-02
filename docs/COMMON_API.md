@@ -2213,6 +2213,15 @@ consumer needs canonical interpreter ingress as one conjunct:
   and use its `settledFrames` projections instead of `rawFrames`; it mirrors
   the same trace-carrier route and concatenation order while applying the
   message and CREATE settlement tests at their roots.
+- To apply a property of raw transaction roots to a settlement-committed
+  transaction frame, import
+  [`Blanc/ExecutionTraceSettledOrigin.lean`](../Blanc/ExecutionTraceSettledOrigin.lean).
+  `ApplyTransactionsTrace.mem_rawFrames_of_mem_settledFrames` places the
+  frame's `Exec.Frame.rootDeriv` in the transaction traversal's `rawFrames`.
+  It preserves the outer message and CREATE settlement filters and proves
+  membership only, not uniqueness or a full chronology. The withdrawal
+  `block_settled_transaction_caller_ne_system` consumes it with the existing
+  trace-level caller-exclusion theorem.
 - When a consumer needs every entered frame's block environment (timestamp,
   number, …) to be the execution root's, import
   [`Blanc/ExecutionFrameTime.lean`](../Blanc/ExecutionFrameTime.lean):
