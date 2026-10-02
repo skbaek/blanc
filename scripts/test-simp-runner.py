@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
+from unittest.mock import patch
 
 HERE=Path(__file__).resolve().parent
 def load(name,path):
@@ -260,6 +261,43 @@ def test_native_stage_bindings():
         runner.execute=failed;assert runner.collect('Blanc/A.lean',original,setup,ev,'failed') is None
         assert original.read_bytes()==b'original'
 
+def test_platform_metrics_routing():
+    for host,flag in [('Darwin','-l'),('Linux','-v')]:
+        with tempfile.TemporaryDirectory() as tmp, patch.object(r.platform,'system',return_value=host):
+            root=Path(tmp);(root/'Blanc').mkdir()
+            source=root/'Blanc/A.lean';source.write_bytes(b'original')
+            buffer=root/'buffer.lean';buffer.write_bytes(b'candidate')
+            setup=root/'setup.json';setup.write_bytes(b'{}')
+            ev=root/'evidence';ev.mkdir();events=[]
+            output=ev/'native.json'
+            payload={'schema':1,'source_sha256':r.file_sha(buffer),'original_sha256':r.file_sha(source),
+                     'setup_sha256':r.file_sha(setup),'original_path':'Blanc/A.lean',
+                     'setup_path':str(setup),'module':'Blanc.A','inventory':[]}
+            expected=['/usr/bin/time',flag,'lake','env',str(root/'.lake/build/bin/simpCollector'),
+                      'Blanc/A.lean',str(buffer),str(setup),str(output)]
+            def execute(argv,**kwargs):
+                assert events==['renew'], 'collector launched before renewal'
+                assert argv==expected, 'incorrect platform metrics prefix or collector arguments'
+                assert kwargs['cwd']==root and kwargs['stderr']==r.subprocess.STDOUT
+                events.append('collect');output.write_text(json.dumps(payload))
+                return SimpleNamespace(returncode=0)
+            runner=r.Runner(root,ev,'goal',execute=execute);runner.held=True
+            def renew(directory,stage):
+                assert runner.held and directory==ev and stage=='native'
+                events.append('renew')
+            runner.renew=renew
+            assert runner.collect('Blanc/A.lean',buffer,setup,ev,'native')==payload
+            assert events==['renew','collect']
+            assert runner.journal[0]['argv']==expected
+            assert source.read_bytes()==b'original' and buffer.read_bytes()==b'candidate'
+    for host in ('FreeBSD','Windows',''):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(r.platform,'system',return_value=host):
+            ev=Path(tmp);calls=[]
+            try:r.Runner(ev,ev,'goal',execute=lambda *a,**k:calls.append(a))
+            except r.RunnerError as error:assert str(error)=='unsupported process metrics host: '+host
+            else:raise AssertionError('unsupported host did not refuse before command launch')
+            assert not calls and not list(ev.iterdir())
+
 def innermost_fixture():
     original,baseline=f.nested_fixture()
     inst=r.instrument(original,baseline,preserve_nested=True,innermost_nested=True)
@@ -473,6 +511,6 @@ def test_innermost_file_routing_and_replay_failure():
     assert r.environment_identity is old_environment and r.alternate_no_using is old_alternate
 
 if __name__=='__main__':
-    for test in [test_partial,test_no_using_alternate,test_original_arguments,test_native_omissions,test_outputs_and_apply,test_routing_and_renewal,test_census,test_resume,test_batch_preflight,test_executable_inputs,test_aggregate_source_paths,test_native_stage_bindings,test_innermost_parent_sources,test_innermost_shell_and_quotation,test_innermost_resume_and_before_write,test_innermost_already_explicit_scalars,test_innermost_file_routing_and_replay_failure]:
+    for test in [test_partial,test_no_using_alternate,test_original_arguments,test_native_omissions,test_outputs_and_apply,test_routing_and_renewal,test_census,test_resume,test_batch_preflight,test_executable_inputs,test_aggregate_source_paths,test_native_stage_bindings,test_platform_metrics_routing,test_innermost_parent_sources,test_innermost_shell_and_quotation,test_innermost_resume_and_before_write,test_innermost_already_explicit_scalars,test_innermost_file_routing_and_replay_failure]:
         test();print('PASS '+test.__name__)
-    print('PASS17 runner control groups; mocks are integrity evidence only')
+    print('PASS18 runner control groups; mocks are integrity evidence only')

@@ -12,6 +12,7 @@ from contextlib import ExitStack
 import hashlib
 import json
 import os
+import platform
 import re
 import stat
 from pathlib import Path
@@ -35,6 +36,12 @@ class RunnerError(ValueError):
 
 class AdmissionError(Exception):
     pass
+
+def process_metrics_prefix():
+    host=platform.system()
+    if host=='Darwin': return ['/usr/bin/time','-l']
+    if host=='Linux': return ['/usr/bin/time','-v']
+    raise RunnerError('unsupported process metrics host: '+host)
 
 def sha(data):
     return hashlib.sha256(data).hexdigest()
@@ -405,6 +412,7 @@ def apply_candidate(root, raw, original_sha, candidate):
 class Runner:
     def __init__(self, root, evidence, goal, execute=subprocess.run, *, innermost_nested=False):
         if type(innermost_nested) is not bool:raise RunnerError('innermost mode must be boolean')
+        self.metrics_prefix=process_metrics_prefix()
         self.root=root;self.evidence=evidence;self.goal=goal;self.execute=execute
         self.held=False;self.journal=[];self.innermost_nested=innermost_nested
 
@@ -446,7 +454,7 @@ class Runner:
     def collect(self, raw, buffer, setup, directory, stage):
         self.renew(directory,stage)
         output=directory/(stage+'.json');log=directory/(stage+'.log')
-        code=self.command(['/usr/bin/time','-l','lake','env',str(self.root/'.lake/build/bin/simpCollector'),
+        code=self.command([*self.metrics_prefix,'lake','env',str(self.root/'.lake/build/bin/simpCollector'),
                            raw,str(buffer),str(setup),str(output)],log,output)
         if code: return None
         if not output.is_file(): raise RunnerError('successful stage missing JSON')
