@@ -113,7 +113,10 @@ theorem systemTrace_reset_occurrence {benv : Benv} {state : State} {out : MsgCal
 
 /-- At every configured extension, the entire retained withdrawal subtree is
 the actual nonstatic SYSTEM root. Its post-state is the withdrawal boundary,
-its storage is the raw word update, and it contributes no submission payment. -/
+its storage is the raw word update, and it contributes no submission payment.
+The reset excess is at least two below the word maximum, independently of
+fee correspondence or queue bounds. This is the withdrawal boundary, before
+the remaining protocol processing. -/
 theorem block_requests_reset_occurrence {cfg : ChainConfig} {checkpoint pre post : BlockChain}
     (history : ConfiguredHistoryTrace cfg checkpoint pre)
     (block : ConfiguredBlockTrace cfg pre post)
@@ -130,7 +133,8 @@ theorem block_requests_reset_occurrence {cfg : ChainConfig} {checkpoint pre post
           withdrawalRequestPredeployAddress) ∧
       (frame.post.getStor withdrawalRequestPredeployAddress).get 1 = 0 ∧
       block.bodyTrace.requests.withdrawal.settledFrames.flatMap balanceFrameObservation = [frame] ∧
-      block.bodyTrace.requests.withdrawal.settledFrames.flatMap submissionFramePayments = [] := by
+      block.bodyTrace.requests.withdrawal.settledFrames.flatMap submissionFramePayments = [] ∧
+      ((frame.post.getStor withdrawalRequestPredeployAddress).get 0).toNat + 2 < 2 ^ 256 := by
   obtain ⟨frame, frames, sevm, entry, endpoint⟩ := systemTrace_reset_occurrence
     block.bodyTrace.requests.withdrawal (block.bodyTrace.requestBenv_covered block.covered)
     (block_request_code history block code)
@@ -153,7 +157,7 @@ theorem block_requests_reset_occurrence {cfg : ChainConfig} {checkpoint pre post
     change frame.post.state.getStor withdrawalRequestPredeployAddress = _
     rw [boundary]
     exact block_requests_storage history block code
-  refine ⟨frame, frames, target, caller, dynamic, ?_, boundary, storage, ?_, ?_, ?_⟩
+  refine ⟨frame, frames, target, caller, dynamic, ?_, boundary, storage, ?_, ?_, ?_, ?_⟩
   · rw [entry]
     rfl
   · change (frame.post.state.getStor withdrawalRequestPredeployAddress).get 1 = 0
@@ -167,5 +171,22 @@ theorem block_requests_reset_occurrence {cfg : ChainConfig} {checkpoint pre post
     apply ite_eq_right
     intro submission
     exact submission.2.1 caller
+  · rw [storage]
+    dsimp only [wordSystemStorage]
+    rw [Stor.get_set_ne _ (by decide : (1 : B256) ≠ 0), Stor.get_set_self]
+    let pointers := wordSystemPointers
+      (block.bodyTrace.requestBenv.state.getStor withdrawalRequestPredeployAddress)
+    let total := pointers.get 1 + if pointers.get 0 = B256.max then 0 else pointers.get 0
+    change (if (2 : B256) < total then total - 2 else 0).toNat + 2 < 2 ^ 256
+    by_cases positive : (2 : B256) < total
+    · rw [ite_eq_left positive, B256.toNat_sub_eq_of_le _ _ (B256.le_of_lt positive)]
+      have positiveNat := B256.toNat_lt_toNat positive
+      have totalBound := B256.toNat_lt total
+      change 2 < total.toNat at positiveNat
+      change total.toNat - 2 + 2 < 2 ^ 256
+      omega
+    · rw [ite_eq_right positive]
+      change (0 : Nat) + 2 < 2 ^ 256
+      decide
 
 end Blanc.Lift.WithdrawalRequest
