@@ -1,4 +1,5 @@
 import Blanc.Lift.PackedWord
+import Blanc.WordArithmetic
 import Blanc.Lift.UniswapV2Pair.Layout
 import Blanc.Lift.UniswapV2Pair.Cert
 import Blanc.Lift.InvWalkOps
@@ -154,7 +155,7 @@ theorem updateElapsedWord_source {raw timestamp : B256} {last : Nat}
   have timestampRead : (updateTimestampWord timestamp).toNat = timestamp.toNat % 2 ^ 32 := by
     unfold updateTimestampWord
     rw [B256.and_comm, show reserveMask32 = (2 ^ 32 - 1).toB256 from rfl]
-    exact PackedWord.lowMask_toNat timestamp (by decide)
+    exact PackedWord.lowMask_toNat timestamp (k := 32) (by decide)
   unfold updateElapsedWord
   rw [show reserveMask32 = (2 ^ 32 - 1).toB256 from rfl,
     PackedWord.lowMask_sub_toNat (by decide) (by rw [lastRead]; exact lastBound),
@@ -165,5 +166,140 @@ uint32 timestamp contributes one elapsed second. -/
 theorem update_timestamp_wrap_control :
     (((0 : B256) - (2 ^ 32 - 1).toB256) &&& reserveMask32).toNat = 1 := by
   decide
+
+
+/-- The two literal preservation masks used before the sole packed reserve store. -/
+def updateKeepHigh144 : B256 :=
+  0xffffffffffffffffffffffffffffffffffff0000000000000000000000000000
+
+def updateKeepTimestampLow112 : B256 :=
+  0xffffffff0000000000000000000000000000ffffffffffffffffffffffffffff
+
+/-- Actual operand order of the three mask/OR stages at t2492. -/
+def updatePackedWord (raw balance0 balance1 timestamp : B256) : B256 :=
+  ((timestamp &&& reserveMask32) * reserveDiv224) |||
+    (uqMask224 &&& ((reserveDiv112 * (reserveMask112 &&& balance1)) |||
+      (updateKeepTimestampLow112 &&& ((reserveMask112 &&& balance0) |||
+        (updateKeepHigh144 &&& raw)))))
+
+/-- Every original bit is replaced by its actual 112/112/32 field. -/
+theorem updatePackedWord_toNat (raw balance0 balance1 timestamp : B256) :
+    (updatePackedWord raw balance0 balance1 timestamp).toNat =
+      ((timestamp.toNat % 2 ^ 32) <<< 224) |||
+        (((balance1.toNat % 2 ^ 112) <<< 112) ||| (balance0.toNat % 2 ^ 112)) := by
+  have low0 : (reserveMask112 &&& balance0).toNat = balance0.toNat % 2 ^ 112 := by
+    rw [B256.and_comm]
+    exact PackedWord.lowMask_toNat balance0 (k := 112) (by decide)
+  have low1 : (reserveMask112 &&& balance1).toNat = balance1.toNat % 2 ^ 112 := by
+    rw [B256.and_comm]
+    exact PackedWord.lowMask_toNat balance1 (k := 112) (by decide)
+  have lowTs : (timestamp &&& reserveMask32).toNat = timestamp.toNat % 2 ^ 32 :=
+    PackedWord.lowMask_toNat timestamp (k := 32) (by decide)
+  have shift1 : (reserveDiv112 * (reserveMask112 &&& balance1)).toNat =
+      (balance1.toNat % 2 ^ 112) <<< 112 := by
+    rw [B256.toNat_mul_mod, low1, show reserveDiv112.toNat = 2 ^ 112 from rfl]
+    rw [Nat.mod_eq_of_lt (by have := Nat.mod_lt balance1.toNat (Nat.two_pow_pos 112); omega),
+      Nat.shiftLeft_eq, Nat.mul_comm]
+  have shiftTs : ((timestamp &&& reserveMask32) * reserveDiv224).toNat =
+      (timestamp.toNat % 2 ^ 32) <<< 224 := by
+    rw [B256.toNat_mul_mod, lowTs, show reserveDiv224.toNat = 2 ^ 224 from rfl]
+    rw [Nat.mod_eq_of_lt (by have := Nat.mod_lt timestamp.toNat (Nat.two_pow_pos 32); omega),
+      Nat.shiftLeft_eq]
+  unfold updatePackedWord
+  rw [B256.toNat_or, shiftTs, B256.toNat_and, B256.toNat_or, shift1,
+    B256.toNat_and, B256.toNat_or, low0, B256.toNat_and]
+  change _ ||| ((2 ^ 224 - 1) &&& (_ |||
+    ((((2 ^ 32 - 1) <<< 224) ||| (2 ^ 112 - 1)) &&&
+      (_ ||| (((2 ^ 144 - 1) <<< 112) &&& raw.toNat))))) = _
+  congr 1
+  apply Nat.eq_of_testBit_eq
+  intro i
+  simp only [Nat.testBit_and, Nat.testBit_or, Nat.testBit_two_pow_sub_one,
+    Nat.testBit_shiftLeft]
+  by_cases hi : i < 112
+  · have h224 : i < 224 := by omega
+    have h112 : ¬112 ≤ i := by omega
+    have hn224 : ¬224 ≤ i := by omega
+    simp only [hi, h224, h112, hn224, decide_true, decide_false,
+      Bool.false_and, Bool.true_and,
+      Bool.false_or, Bool.or_false]
+  · have h112 : 112 ≤ i := by omega
+    have lowZero := Nat.testBit_lt_two_pow (Nat.lt_of_lt_of_le
+      (Nat.mod_lt balance0.toNat (Nat.two_pow_pos 112))
+      (Nat.pow_le_pow_right (by omega) h112))
+    rw [lowZero]
+    by_cases h224 : i < 224
+    · have hn224 : ¬224 ≤ i := by omega
+      simp only [hi, h224, h112, hn224, decide_true, decide_false,
+        Bool.false_and, Bool.true_and,
+        Bool.false_or, Bool.or_false]
+    · have h224le : 224 ≤ i := by omega
+      have bitZero := Nat.testBit_lt_two_pow (Nat.lt_of_lt_of_le
+        (Nat.mod_lt balance1.toNat (Nat.two_pow_pos 112))
+        (Nat.pow_le_pow_right (by omega) (by omega : 112 ≤ i - 112)))
+      rw [bitZero]
+      simp only [hi, h224, h112, h224le, decide_true, decide_false,
+        Bool.false_and, Bool.true_and,
+        Bool.false_or, Bool.or_false]
+
+
+/-- The actual packed store has precisely the three extraction equations used by Layout. -/
+theorem updatePackedWord_layout (raw balance0 balance1 timestamp : B256) :
+    reserve0Read (updatePackedWord raw balance0 balance1 timestamp) = balance0 &&& reserveMask112 ∧
+    reserve1Read (updatePackedWord raw balance0 balance1 timestamp) = balance1 &&& reserveMask112 ∧
+    reserveTimestampRead (updatePackedWord raw balance0 balance1 timestamp) = timestamp &&& reserveMask32 := by
+  have low0 : (balance0 &&& reserveMask112).toNat = balance0.toNat % 2 ^ 112 :=
+    PackedWord.lowMask_toNat balance0 (k := 112) (by decide)
+  have low1 : (balance1 &&& reserveMask112).toNat = balance1.toNat % 2 ^ 112 :=
+    PackedWord.lowMask_toNat balance1 (k := 112) (by decide)
+  have lowTs : (timestamp &&& reserveMask32).toNat = timestamp.toNat % 2 ^ 32 :=
+    PackedWord.lowMask_toNat timestamp (k := 32) (by decide)
+  have tsDiv112 : ((timestamp.toNat % 2 ^ 32) <<< 224) / 2 ^ 112 =
+      (timestamp.toNat % 2 ^ 32) <<< 112 := by
+    rw [show 224 = 112 + 112 from rfl, Nat.shiftLeft_add,
+      ← Nat.shiftRight_eq_div_pow, Nat.shiftLeft_shiftRight]
+  have b1Div112 : ((balance1.toNat % 2 ^ 112) <<< 112) / 2 ^ 112 =
+      balance1.toNat % 2 ^ 112 := by
+    rw [← Nat.shiftRight_eq_div_pow, Nat.shiftLeft_shiftRight]
+  have tsDiv224 : ((timestamp.toNat % 2 ^ 32) <<< 224) / 2 ^ 224 =
+      timestamp.toNat % 2 ^ 32 := by
+    rw [← Nat.shiftRight_eq_div_pow, Nat.shiftLeft_shiftRight]
+  have b1Div224 : ((balance1.toNat % 2 ^ 112) <<< 112) / 2 ^ 224 = 0 := by
+    apply Nat.div_eq_of_lt
+    rw [Nat.shiftLeft_eq]
+    have := Nat.mod_lt balance1.toNat (Nat.two_pow_pos 112)
+    omega
+  refine ⟨?_, ?_, ?_⟩
+  · apply B256.toNat_inj
+    rw [reserve0Read, low0, show reserveMask112 = (2 ^ 112 - 1).toB256 from rfl,
+      PackedWord.lowMask_toNat _ (k := 112) (by decide),
+      updatePackedWord_toNat, Nat.or_mod_two_pow, Nat.or_mod_two_pow,
+      show ((timestamp.toNat % 2 ^ 32) <<< 224) % 2 ^ 112 = 0 from
+        by simpa only [Nat.lo_eq] using (Nat.shl_lo_eq_zero_of_le
+          (k := timestamp.toNat % 2 ^ 32) (by decide : 112 ≤ 224)),
+      show ((balance1.toNat % 2 ^ 112) <<< 112) % 2 ^ 112 = 0 from
+        by simpa only [Nat.lo_eq] using (Nat.shl_lo_eq_zero_of_le
+          (k := balance1.toNat % 2 ^ 112) (by decide : 112 ≤ 112)),
+      Nat.mod_mod, Nat.zero_or, Nat.zero_or]
+  · apply B256.toNat_inj
+    rw [reserve1Read, low1, show reserveMask112 = (2 ^ 112 - 1).toB256 from rfl,
+      PackedWord.lowMask_toNat _ (k := 112) (by decide),
+      B256.toNat_div (by decide : reserveDiv112 ≠ 0),
+      show reserveDiv112.toNat = 2 ^ 112 from rfl, updatePackedWord_toNat,
+      Nat.or_div_two_pow, Nat.or_div_two_pow, tsDiv112, b1Div112,
+      Nat.div_eq_of_lt (Nat.mod_lt balance0.toNat (Nat.two_pow_pos 112)), Nat.or_zero,
+      Nat.or_mod_two_pow,
+      show ((timestamp.toNat % 2 ^ 32) <<< 112) % 2 ^ 112 = 0 from
+        by simpa only [Nat.lo_eq] using (Nat.shl_lo_eq_zero_of_le
+          (k := timestamp.toNat % 2 ^ 32) (by decide : 112 ≤ 112)),
+      Nat.mod_mod, Nat.zero_or]
+  · apply B256.toNat_inj
+    rw [reserveTimestampRead, lowTs, show reserveMask32 = (2 ^ 32 - 1).toB256 from rfl,
+      PackedWord.lowMask_toNat _ (k := 32) (by decide),
+      B256.toNat_div (by decide : reserveDiv224 ≠ 0),
+      show reserveDiv224.toNat = 2 ^ 224 from rfl, updatePackedWord_toNat,
+      Nat.or_div_two_pow, Nat.or_div_two_pow, tsDiv224, b1Div224,
+      Nat.div_eq_of_lt (by have := Nat.mod_lt balance0.toNat (Nat.two_pow_pos 112); omega),
+      Nat.zero_or, Nat.or_zero, Nat.mod_mod]
 
 end Blanc.Lift.UniswapV2Pair

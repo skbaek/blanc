@@ -233,6 +233,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.Layout",
         "Lift.UniswapV2Pair.UpdateArithmetic",
         "Lift.UniswapV2Pair.UpdateWalk",
+        "Lift.UniswapV2Pair.UpdateTailWalk",
         "Lift.UniswapV2Pair.GetterStorageReservesCore",
         "Lift.UniswapV2Pair.GetterStorageReservesMemory",
         "Lift.UniswapV2Pair.GetterStorageReservesWrapper",
