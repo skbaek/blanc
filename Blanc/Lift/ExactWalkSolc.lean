@@ -33,7 +33,8 @@ namespace Blanc.Lift
 
 open Jaune
 
-macro "rroom" : tactic => `(tactic| (first | omega | (simp <;> omega)))
+macro "rroom" : tactic =>
+  `(tactic| (first | omega | (simp only [List.length_cons, List.length_nil] <;> omega)))
 
 section Steps
 

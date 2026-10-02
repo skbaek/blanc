@@ -210,9 +210,9 @@ syntax "simple_solvent" : tactic
 set_option hygiene false in
 macro_rules
 | `(tactic| simple_solvent) =>
-  `(tactic| revert h_sv; simp [Devm.PostSolvent, Devm.PreSolvent]; intro h_sv;
+  `(tactic| unfold Devm.PostSolvent;
             apply solvent_zero_of_solvent;
-            apply solvent_of_same_stor h_sv <;>
+            apply solvent_of_same_stor (h_sv.1 rfl) <;>
             apply congr_fun <| Func.of_inv _ _ (by func_inv) run )
 
 lemma name_preserves_solvent {sevm : Sevm} {s r : Devm}

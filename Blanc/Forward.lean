@@ -2552,15 +2552,15 @@ def gasTacs : ForwardM (List (TSyntax `tactic)) := do
 
 /-- The stack-headroom obligation, on a literal stack. -/
 def roomTacs : ForwardM (List (TSyntax `tactic)) := do
-  let a ← `(tactic| (simp only [Devm.stack_setMach]; simp))
-  let b ← `(tactic| simp)
+  let a ← `(tactic| (simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega))
+  let b ← `(tactic| (simp only [List.length_cons, List.length_nil]; omega))
   let c ← `(tactic| decide)
   return [a, b, c]
 
 /-- The stack-shape obligation, true by construction. -/
 def rflTacs : ForwardM (List (TSyntax `tactic)) := do
   let a ← `(tactic| rfl)
-  let b ← `(tactic| simp)
+  let b ← `(tactic| simp only [Devm.stack_setMach])
   return [a, b]
 
 /-- A value obligation `f x … = v`: `rfl` when the walk kept the application,
@@ -2570,8 +2570,7 @@ def valTacs : ForwardM (List (TSyntax `tactic)) := do
   let b ← `(tactic| assumption)
   let c ← `(tactic| decide)
   let d ← `(tactic| decide +kernel)
-  let e ← `(tactic| simp)
-  return [a, b, c, d, e]
+  return [a, b, c, d]
 
 /-- Elaborate the next hint at the expected type, or nothing if none is left. -/
 def nextHint (g : MVarId) (expected : Expr) : ForwardM (Option Expr) := do
