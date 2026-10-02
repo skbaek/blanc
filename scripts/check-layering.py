@@ -231,6 +231,8 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.GetterStorageMappingWalk",
         "Lift.UniswapV2Pair.Consumption",
         "Lift.UniswapV2Pair.Layout",
+        "Lift.UniswapV2Pair.WriterArithmetic",
+        "Lift.UniswapV2Pair.WriterMemory",
         "Lift.UniswapV2Pair.GetterStorageReservesCore",
         "Lift.UniswapV2Pair.GetterStorageReservesMemory",
         "Lift.UniswapV2Pair.GetterStorageReservesWrapper",
