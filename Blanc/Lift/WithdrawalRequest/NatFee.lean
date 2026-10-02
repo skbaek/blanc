@@ -86,28 +86,6 @@ theorem exec_user_nat_fee {sevm : Sevm} {pre post : Devm} {iterations : Nat}
   exact ⟨fun length => effect.submission_paid_nat user length domain model excessEq,
     fun empty => effect.getter_output_nat user empty domain model excessEq⟩
 
-/-- Nat-paid fresh submission liveness at the existing closed selected charge.
-The no-wrap domain and sufficient SSTORE sentry slack remain explicit. -/
-theorem exec_submission_nat_fresh {sevm : Sevm} {b : Devm} {G iterations : Nat}
-    (code : sevm.code = Blanc.withdrawalRequestCode) (fork : CoveredFork sevm.benvStat.fork)
-    (user : sevm.caller ≠ systemAddress) (length : sevm.data.length = 56)
-    (dynamic : sevm.isStatic = false) (slack : gCallStipend < G)
-    (active : b.getStorVal sevm.currentTarget 0 ≠ B256.max)
-    (domain : NatFeeDomain (b.getStorVal sevm.currentTarget 0) iterations)
-    (model : Blanc.WithdrawalRequest.State)
-    (excessEq : model.excess = (b.getStorVal sevm.currentTarget 0).toNat)
-    (paid : Blanc.WithdrawalRequest.fee model ≤ sevm.value.toNat) :
-    Nonempty (Exec 0 sevm (St b [] Mem.empty
-      (G + (1258 + 87 * iterations + sloadScheduleCost sevm (userSubmissionReads sevm b) +
-        submissionStoreGas sevm (afterSload sevm b 0) Mem.empty)))
-      (.ok (submissionPost sevm (afterSload sevm b 0) Mem.empty G))) := by
-  obtain ⟨result, ⟨wordRun, live⟩, _⟩ :=
-    exec_submission_word_live code fork user length dynamic active
-  have same := domain.word_result model excessEq wordRun
-  have executed := live G slack (by rw [same.2.1]; exact paid)
-  rw [same.1] at executed
-  exact executed
-
 /-- Fresh getter liveness returns canonical Nat-fee bytes at the existing
 closed charge. Static reads are permitted; no SSTORE slack is required. -/
 theorem exec_fee_getter_nat_fresh {sevm : Sevm} {b : Devm} {G iterations : Nat}

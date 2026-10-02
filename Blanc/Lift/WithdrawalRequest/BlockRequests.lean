@@ -1,4 +1,5 @@
 import Blanc.Lift.WithdrawalRequest.SystemHistory
+import Blanc.Lift.WithdrawalRequest.WordReplay
 import Blanc.ExecutionBodyPrefixAdmission
 
 /-! Canonical withdrawal code and checked results at the exact pre-request
@@ -67,6 +68,35 @@ theorem block_requests_result {cfg : ChainConfig} {checkpoint pre post : BlockCh
   have retained : block.blockOutput.requests = block.bodyTrace.requestBout.requests :=
     (congrArg BlockOutput.requests block.bodyTrace.requestBout_eq).symm
   exact ⟨result.1, result.2, retained.trans ordered⟩
+
+/-- The retained withdrawal applies the existing raw word replay transformer
+at the actual pre-request storage, before the later consolidation call. -/
+theorem block_requests_storage {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    (history : ConfiguredHistoryTrace cfg checkpoint pre)
+    (block : ConfiguredBlockTrace cfg pre post)
+    (code : checkpoint.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode) :
+    block.bodyTrace.requests.withdrawalState.getStor withdrawalRequestPredeployAddress =
+      wordSystemStorage (block.bodyTrace.requestBenv.state.getStor
+        withdrawalRequestPredeployAddress) := by
+  rw [(block_requests_result history block code).1]
+  change (systemProtocolPost block.bodyTrace.requestBenv).getStor
+    withdrawalRequestPredeployAddress = _
+  have storage := systemFramePost_word_storage
+    (systemProtocolSevm block.bodyTrace.requestBenv)
+    (systemProtocolBase block.bodyTrace.requestBenv) Mem.empty
+    (systemTransactionGas - systemProtocolGas block.bodyTrace.requestBenv)
+  rw [(systemProtocol_seed block.bodyTrace.requestBenv).2.1] at storage
+  exact storage
+
+/-- The actual retained withdrawal resets the submission count slot. This
+states the withdrawal boundary, rather than the final post-consolidation state. -/
+theorem block_requests_count_reset {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    (history : ConfiguredHistoryTrace cfg checkpoint pre)
+    (block : ConfiguredBlockTrace cfg pre post)
+    (code : checkpoint.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode) :
+    (block.bodyTrace.requests.withdrawalState.getStor withdrawalRequestPredeployAddress).get 1 = 0 := by
+  rw [block_requests_storage history block code]
+  simp only [wordSystemStorage, Stor.get_set_self]
 
 /-- Conditional representation identifies this block's FIFO payload and exact
 empty-entry omission. A reachable representation invariant is not assumed implicit. -/
