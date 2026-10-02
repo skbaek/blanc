@@ -2222,6 +2222,15 @@ consumer needs canonical interpreter ingress as one conjunct:
   membership only, not uniqueness or a full chronology. The withdrawal
   `block_settled_transaction_caller_ne_system` consumes it with the existing
   trace-level caller-exclusion theorem.
+  `SystemMessageTrace.mem_rawFrames_of_mem_settledFrames` supplies the same
+  membership transport for a protocol system invocation.
+- To preserve fixed nonempty, nondelegating code across a configured history
+  and the next block's protocol boundaries, import
+  [`Blanc/ExecutionImmutableCode.lean`](../Blanc/ExecutionImmutableCode.lean).
+  `ConfiguredHistoryTrace.block_code_boundaries` gives exact code identity at
+  the opening, after beacon processing, before requests and after withdrawal
+  processing. It uses the actual trace's admission and resource facts; it
+  requires no address exclusions or contract-specific frame-entry premise.
 - When a consumer needs every entered frame's block environment (timestamp,
   number, …) to be the execution root's, import
   [`Blanc/ExecutionFrameTime.lean`](../Blanc/ExecutionFrameTime.lean):

@@ -69,4 +69,11 @@ theorem ApplyTransactionsTrace.mem_rawFrames_of_mem_settledFrames
     · exact Or.inl (head.mem_rawFrames_of_mem_settledFrames frame headMember)
     · exact Or.inr (ih tailMember)
 
+/-- A settlement-retained system invocation came from an actual raw entry. -/
+theorem SystemMessageTrace.mem_rawFrames_of_mem_settledFrames
+    (trace : SystemMessageTrace benv target data state out) (frame : Exec.Frame)
+    (member : frame ∈ trace.settledFrames) :
+    (Blanc.Exec.Frame.rootDeriv (frame := frame)) ∈ trace.rawFrames :=
+  trace.message.mem_rawFrames_of_mem_settledFrames frame member
+
 end Blanc.ExecutionTrace

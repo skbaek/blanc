@@ -64,6 +64,7 @@ import Blanc.ExecutionTraceCalldata
 import Blanc.ExecutionTraceCallerExclusion
 import Blanc.ExecutionTraceSettledFrames
 import Blanc.ExecutionTraceSettledOrigin
+import Blanc.ExecutionImmutableCode
 import Blanc.ExecutionTraceEntry
 import Blanc.ExecutionAccountingObserved
 import Blanc.DeploymentOccurrence
@@ -645,6 +646,7 @@ import Blanc.Lift.WithdrawalRequest.ModelBounds
 import Blanc.Lift.WithdrawalRequest.WordModelReplay
 import Blanc.Lift.WithdrawalRequest.WordModelCount
 import Blanc.Lift.WithdrawalRequest.UserOccurrence
+import Blanc.Lift.WithdrawalRequest.ProtocolOccurrences
 import Blanc.Lift.WithdrawalRequest.ResetWindowCount
 import Blanc.Lift.WithdrawalRequest.WordBudget
 
