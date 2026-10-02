@@ -3107,6 +3107,14 @@ contract-neutral.
   are linear per instruction and a 1,474-node entry of the 6,358-byte beacon
   deposit contract passed 16 GiB, while the trie decides it in 6 s / 3.4 GiB
   (`Blanc/Lift/BeaconDeposit/Check.lean` is the template).
+- To relate the unsigned ABI word-length guards to a natural calldata bound,
+  use `word_calldata_guards_iff` in
+  [`Blanc/Lift/CalldataGuards.lean`](../Blanc/Lift/CalldataGuards.lean).
+  With both the actual calldata length and argument-byte count below `2^256`,
+  the guards `4 ≤ length` and `n ≤ length - 4` on words are equivalent to
+  `n + 4 ≤ length` on naturals. The representability hypotheses are explicit;
+  a modular length alone does not establish the natural bound. This arithmetic
+  equivalence has no execution-relation trigger, so discovery stays here.
 - Execution to lifted run (safety): `lift_sound`, and `lift_sound_in`, which
   keeps each step's derivation (`StepIn`) for arguments about re-entrant child
   frames, in [`Blanc/Lift/Sound.lean`](../Blanc/Lift/Sound.lean).

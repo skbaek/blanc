@@ -184,7 +184,7 @@ SHARED += ["Lift.ReturnDataBound", "Lift.PrecompileOutputBound"]
 SHARED += ["Lift.CommittedLogs", "Lift.SegmentedReplay", "Lift.SegmentedHistory"]
 # Walk steps for arbitrary static calls, CALLER/KECCAK256/LOG3/SSTORE, hashed slots and the
 # Vyper 0.2.x front end (vyper-3crv-bytecode-v1): contract-neutral.
-SHARED += ["Lift.StaticCall", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper", "Lift.PackedWord"]
+SHARED += ["Lift.CalldataGuards", "Lift.StaticCall", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper", "Lift.PackedWord"]
 # The frame cursor, the reentrancy-lock exclusion kit and its bytecode checker, owner
 # discipline, and concrete-run evaluation (deployed-lido-vyper-v1): contract-neutral.
 SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachChain", "Lift.Cursor", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
@@ -245,6 +245,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.TransferCore",
         "Lift.UniswapV2Pair.TransferFromCore",
         "Lift.UniswapV2Pair.TransferFromEntries",
+        "Lift.UniswapV2Pair.TransferFromSource",
         "Lift.UniswapV2Pair.TransferEntries",
         "Lift.UniswapV2Pair.TransferSource",
         "Lift.UniswapV2Pair.UpdateArithmetic",
