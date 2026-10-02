@@ -3,7 +3,8 @@
 
 Elaborated by `python3 scripts/leaf_audit.py self-test` together with the byte-identical body of
 `scripts/LeafCensus.lean`. It is deliberately compliant: with `compliant.leaves` the fixture has
-exactly the leaves listed there, and every other theorem is used. Each control of the self-test is
+exactly the theorem leaves listed there, with definition leaves in `compliant.definitions`, and every
+other theorem or definition is used. Each control of the self-test is
 a one-line change to this text and must move exactly the leaf set the control names.
 
 * `headline_one`, `headline_two`, `headline_calls`, `Elsewhere.headline_open`, `fp_binder`, `dup`:
@@ -12,14 +13,14 @@ a one-line change to this text and must move exactly the leaf set the control na
 * `uses_gq`: a leaf. `gq_iff` (a non-`rfl` `@[simp]` iff lemma) is used by `uses_gq`'s `by simp`,
   whose proof term mentions the generated `gq_iff._simp_1`, never `gq_iff` itself: an auxiliary is
   a use of its parent, so `gq_iff` is not a leaf.
-* `simp_nonrfl_fact` (`@[simp]`, proved by `omega`), `Pt.ext_fx` (`@[ext]`) and `instNonemptyPt`
-  (an instance): used by no term. An attribute is a use only for an `rfl`-proved simp lemma, so
-  these three are leaves.
+* `simp_nonrfl_fact` (`@[simp]`), `Pt.ext_fx` (`@[ext]`), `instNonemptyPt` (an instance), and
+  `simp_only_fact` (an `rfl`-proved `@[simp]` theorem): used by no term, so all four are leaves.
 * `base_fact`: used by `headline_one` (a plain term use), so not a leaf.
 * `bound_fact`: used only inside the proof of the definition `picked` (a compiler-abstracted
   `picked._proof_N` auxiliary, attributed to its parent), so not a leaf.
-* `simp_only_fact`: used by no term, but an `rfl`-proved `@[simp]` theorem, whose only possible use
-  leaves no term trace (attribute-exempt), so not a leaf.
+* `definition_leaf` is an unused definition and is reported in the separate definition-leaf list;
+  `used_definition` is used by `uses_definition` and is not a definition leaf. `Qt` is used by
+  `qtWitness`, so the unused-definition control is not an accidental structure artifact.
 * The compiler-generated theorems of `Pt` and `Qt` (`Qt.mk.injEq`, `Qt.mk.inj`,
   `Qt.mk.sizeOf_spec`, ...) are auxiliaries attributed to their structure, not population, so
   they are not leaves (`Qt.mk.inj` is used by nothing and would be one if it counted).
@@ -31,6 +32,10 @@ a one-line change to this text and must move exactly the leaf set the control na
 namespace LeafFixture
 
 def step (n : Nat) : Nat := n + 1
+
+def definition_leaf : Nat := 41
+def used_definition : Nat := 42
+theorem uses_definition : used_definition = 42 := rfl
 
 theorem base_fact : 1 + 1 = 2 := rfl
 
@@ -54,6 +59,9 @@ structure Pt where
 structure Qt where
   a : Nat
   b : Nat
+
+def qtWitness : Qt := ⟨0, 0⟩
+theorem uses_qt : qtWitness.a = 0 := rfl
 
 @[ext (iff := false)] theorem Pt.ext_fx {a b : Pt} (h : a.x = b.x) : a = b := by
   cases a; cases b; simp_all

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The leaf search: which Blanc theorems are leaves, how many there are, and which are new.
+"""The leaf search: which Blanc declarations are leaves, how many theorem leaves there are, and which are new.
 
 The user's standing rule (theorem-necessity principles, 2026-09-27 and the 2026-09-29 addenda): a
 theorem is a *leaf* if and only if it is independently valuable, and every leaf is checked for
@@ -10,7 +10,8 @@ worth keeping is a human judgement, made by a periodic sweep. This module suppli
 and the published claims need:
 
 * ``check``: elaborate ``scripts/LeafCensus.lean`` over the built library (a host hold is taken),
-  read the sources for the uses the environment cannot show, and print the leaf count. It fails
+  read the sources for the uses the environment cannot show, and print the theorem leaf count.
+  It also reports definition leaves informationally. It fails
   closed on an empty, unparseable or internally inconsistent census, on an attribute the census
   cannot count, and when ``scripts/leaf-count.json`` (the number the README publishes) does not
   equal the count just computed. It also prints, informationally, how many leaves are new or
@@ -19,16 +20,17 @@ and the published claims need:
 * ``generate [--ledger]``: the registered generator of ``scripts/leaf-count.json`` and, with
   ``--ledger``, of ``scripts/leaf-review.json`` (the review ledger a sweep writes at its close).
   Neither file is ever edited by hand and the ledger is not an input of any gate verdict.
-* ``review``: list the leaves that are new or whose statement changed since the ledger.
+* ``review``: list theorem and definition leaves that are new or whose statement changed since the ledger.
 * ``self-test``: bite controls on small fixture environments elaborated by the byte-identical
   driver body, plus the pure-Python controls of the source scan, the count comparison and the ledger.
 
 What counts as use is documented in ``scripts/GATES.md`` ("Leaf audit") and in the header of
-``scripts/LeafCensus.lean``. In short: a term mention in any Blanc declaration, a registered simp
-set (an ``rfl``-proved simp lemma only: the one use a proof term cannot show), or a name written
-in the lemma list of a rewriting tactic call (``simp``, ``simp only``, ``dsimp``, ``simpa``, ``rw``, ...), a double-backtick name literal, or anywhere in a tactic macro of
-any ``Blanc/**/*.lean`` file. The last kind leaves no trace in the environment when the lemma is
-proved by ``rfl``, so the census alone would call such a lemma a leaf.
+``scripts/LeafCensus.lean``. In short: a term mention in any Blanc declaration, or a name written
+in the lemma list of a rewriting tactic call (``simp``, ``simp only``, ``dsimp``, ``simpa``, ``rw``, ...),
+a double-backtick name literal, or anywhere in a tactic macro of any ``Blanc/**/*.lean`` file.
+Attributes alone never count, including an ``rfl`` simp registration. The same exact-identifier
+scan records mentions in tracked ``scripts/`` text and ``Main.lean``; Lean files count as compiled
+proof uses, while non-Lean script mentions are report-only external consumers.
 
 Command line (from the repository root)::
 
@@ -59,16 +61,15 @@ COUNT_RELATIVE = "scripts/leaf-count.json"
 LEDGER_RELATIVE = "scripts/leaf-review.json"
 FIXTURE_DIR_RELATIVE = "scripts/fixtures/leaf-audit"
 BODY_MARKER = "-- LEAF-CENSUS-BODY"
-CENSUS_SCHEMA = 2
+CENSUS_SCHEMA = 3
 COUNT_SCHEMA = 1
-LEDGER_SCHEMA = 1
+LEDGER_SCHEMA = 2
 GENERATOR_COUNT = "python3 scripts/leaf_audit.py generate"
 GENERATOR_LEDGER = "python3 scripts/leaf_audit.py generate --ledger"
 
-# Attribute heads the driver reads from the environment. Only membership in a registered simp set of
-# an `rfl`-proved lemma counts as a use (it leaves no term trace); an `ext` lemma, an instance or a
-# non-`rfl` simp lemma that no term mentions is unused and a leaf. They stay classified here so that
-# a new attribute head is refused until someone decides what it does.
+# Attribute heads the driver reads from the environment. Attributes never make a declaration used,
+# but known heads remain classified so that a new attribute head is refused until someone decides
+# what it does.
 USE_ATTRIBUTES = frozenset({"simp", "ext", "instance"})
 # Attribute heads that cannot make a theorem used. Anything else found in the source is refused
 # until it is classified here and, if it uses a theorem, taught to the driver.
@@ -400,6 +401,67 @@ def scan_uses(sources: Dict[str, str], population: Set[str]) -> Dict[str, Tuple[
     return used
 
 
+def scan_external_sources(sources: Dict[str, str], population: Set[str]
+                          ) -> Tuple[Dict[str, List[str]], Set[str]]:
+    """Find exact leaf-name mentions in tracked script text.
+
+    The first result records every path mentioning a declaration. The second marks mentions in
+    Lean files as uses: those files are compiled proofs. Non-Lean script mentions are deliberately
+    report-only, since a shell/Python gate can name a declaration without elaborating a proof.
+    Comments and string contents use the same lexical stripping and namespace/open resolution as
+    ``scan_uses``. A token must resolve exactly to a population name; substrings never count.
+    """
+
+    consumers: Dict[str, Set[str]] = {}
+    lean_uses: Set[str] = set()
+    for path, text in sources.items():
+        code = strip_comments_and_strings(text, path)
+        offsets, states = context_events(code)
+        is_lean = path == "Main.lean" or path.endswith(".lean")
+        for match in IDENT.finditer(code):
+            token = match.group(0)
+            ns, opens = states[bisect.bisect_right(offsets, match.start()) - 1]
+            found: Optional[str] = None
+            for candidate in _candidates(token, ns, opens):
+                if candidate in population:
+                    found = candidate
+                    break
+            if found is None:
+                continue
+            consumers.setdefault(found, set()).add(path)
+            if is_lean:
+                lean_uses.add(found)
+    return {name: sorted(paths) for name, paths in consumers.items()}, lean_uses
+
+
+def tracked_external_sources(root: Path) -> Dict[str, str]:
+    """Read tracked ``scripts/`` text plus the root ``Main.lean`` for external-consumer reporting."""
+
+    done = subprocess.run(
+        ["git", "ls-files", "-z", "--", "scripts", "Main.lean"],
+        cwd=str(root), stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+    )
+    if done.returncode != 0:
+        raise LeafAuditError(f"could not enumerate tracked script sources: {done.stderr.decode(errors='replace')}")
+    result: Dict[str, str] = {}
+    for raw in done.stdout.split(b"\0"):
+        if not raw:
+            continue
+        relative = raw.decode("utf-8")
+        path = root / relative
+        try:
+            data = path.read_bytes()
+        except OSError as exc:
+            raise LeafAuditError(f"could not read tracked external source {relative}: {exc}")
+        if b"\0" in data:
+            continue
+        try:
+            result[relative] = data.decode("utf-8")
+        except UnicodeDecodeError:
+            continue
+    return result
+
+
 # --------------------------------------------------------------------------------------------
 # Attribute vocabulary guard
 # --------------------------------------------------------------------------------------------
@@ -565,25 +627,31 @@ def validate_census(census: dict) -> None:
 
     if census.get("schema") != CENSUS_SCHEMA:
         fail(f"schema {census.get('schema')!r}, expected {CENSUS_SCHEMA}")
-    for key in ("leaves", "attribute_only", "population_names"):
+    for key in ("leaves", "definition_leaves", "population_names"):
         if not isinstance(census.get(key), list):
             fail(f"field {key!r} is missing or not a list")
     population = census.get("population")
     if not isinstance(population, int) or population <= 0:
-        fail("the theorem population is empty")
+        fail("the declaration population is empty")
+    for key in ("theorem_population", "definition_population"):
+        if not isinstance(census.get(key), int) or census[key] < 0:
+            fail(f"field {key!r} is missing or invalid")
+    if census["theorem_population"] + census["definition_population"] != population:
+        fail("theorem and definition populations do not add up")
     if not census["leaves"]:
         fail("the leaf set is empty; a repository with theorems always has leaves")
-    for row in census["leaves"] + census["attribute_only"]:
+    for row in census["leaves"] + census["definition_leaves"]:
         if not isinstance(row, dict) or not isinstance(row.get("name"), str) \
                 or not isinstance(row.get("private"), bool) or not isinstance(row.get("module"), str) \
+                or row.get("kind") not in ("theorem", "definition") \
                 or not isinstance(row.get("fp"), str) or len(row["fp"]) != 16:
             fail(f"malformed row {row!r}")
-    if len(census["leaves"]) + len(census["attribute_only"]) > population:
-        fail("more leaves than theorems")
-    for row in census["attribute_only"]:
-        if not any(isinstance(a, str) and a.startswith("simp-set:")
-                   for a in row.get("attributes", [])):
-            fail(f"{row['name']}: listed as attribute-exempt without a simp-set attribute")
+    if len(census["leaves"]) + len(census["definition_leaves"]) > population:
+        fail("more leaves than declarations")
+    if any(row.get("kind") != "theorem" for row in census["leaves"]):
+        fail("theorem leaf list contains a non-theorem")
+    if any(row.get("kind") != "definition" for row in census["definition_leaves"]):
+        fail("definition leaf list contains a non-definition")
 
 
 def leaf_key(row: dict) -> str:
@@ -592,28 +660,50 @@ def leaf_key(row: dict) -> str:
     return f"{row['name']} [private, {row['module']}]" if row["private"] else row["name"]
 
 
-def analyze(census: dict, sources: Dict[str, str]) -> dict:
-    """The final leaf set: the census's leaves minus those the sources show to be used."""
+def analyze(census: dict, sources: Dict[str, str],
+            external: Optional[Dict[str, List[str]]] = None,
+            external_lean_uses: Optional[Set[str]] = None) -> dict:
+    """The final leaf sets, with source uses and external consumer paths attached."""
 
     validate_census(census)
     population = set(census["population_names"])
     uses = scan_uses(sources, population)
+    external = external or {}
+    external_lean_uses = external_lean_uses or set()
     kept: List[dict] = []
+    definition_kept: List[dict] = []
     removed: List[Tuple[dict, Tuple[str, int, str]]] = []
-    for row in census["leaves"]:
+    for original in census["leaves"]:
+        row = dict(original)
+        row["external_consumers"] = sorted(external.get(row["name"], []))
         evidence = uses.get(row["name"])
-        if evidence is not None and (not row["private"] or evidence[0] == row["module"]):
+        if row["name"] in external_lean_uses:
+            removed.append((row, ("scripts", 0, "compiled Lean external consumer")))
+        elif evidence is not None and (not row["private"] or evidence[0] == row["module"]):
             removed.append((row, evidence))
         else:
             kept.append(row)
+    for original in census["definition_leaves"]:
+        row = dict(original)
+        row["external_consumers"] = sorted(external.get(row["name"], []))
+        if row["name"] in external_lean_uses:
+            removed.append((row, ("scripts", 0, "compiled Lean external consumer")))
+        elif evidence := uses.get(row["name"]):
+            if not row["private"] or evidence[0] == row["module"]:
+                removed.append((row, evidence))
+            else:
+                definition_kept.append(row)
+        else:
+            definition_kept.append(row)
     kept.sort(key=lambda r: (r["name"], r["module"]))
+    definition_kept.sort(key=lambda r: (r["name"], r["module"]))
     removed.sort(key=lambda pair: pair[0]["name"])
     return {
         "leaves": kept,
+        "definition_leaves": definition_kept,
         "census_leaves": len(census["leaves"]),
+        "census_definition_leaves": len(census["definition_leaves"]),
         "removed_by_source_use": removed,
-        "attribute_only": len(census["attribute_only"]),
-        "attribute_exempt_rows": sorted(census["attribute_only"], key=leaf_key),
         "population": census["population"],
     }
 
@@ -660,22 +750,25 @@ def compare_count(committed: dict, counts: dict) -> List[str]:
         f"`{GENERATOR_COUNT}`, then update the surfaces that quote it"]
 
 
-def ledger_document(toolchain: str, leaves: List[dict],
-                    exempt: Sequence[dict] = (), unreviewed: Optional[dict] = None) -> str:
-    """The ledger. ``exempt`` are the attribute-exempt (``rfl`` simp) lemmas: kept, recorded beside
-    the leaves for the record, and never part of the new/changed comparison."""
+def ledger_document(toolchain: str, leaves: List[dict], definition_leaves: Sequence[dict] = (),
+                    unreviewed: Optional[dict] = None) -> str:
+    """The ledger for theorem and definition leaves.
 
+    Schema 1 ledgers stored bare fingerprints and are read as theorem-only. New rows carry their
+    kind explicitly so a definition leaf cannot be mistaken for a theorem during review.
+    """
+
+    all_leaves = list(leaves) + list(definition_leaves)
     return json.dumps({"schema": LEDGER_SCHEMA, "generator": GENERATOR_LEDGER,
                        "toolchain": toolchain,
-                       "leaves": {leaf_key(r): r["fp"] for r in sorted(leaves, key=leaf_key)},
-                       "attribute_exempt": {leaf_key(r): r["fp"]
-                                            for r in sorted(exempt, key=leaf_key)},
+                       "leaves": {leaf_key(r): {"fp": r["fp"], "kind": r["kind"]}
+                                  for r in sorted(all_leaves, key=leaf_key)},
                        **({"unreviewed_excluded": unreviewed} if unreviewed else {})},
                       indent=1, sort_keys=True) + "\n"
 
 
 def read_ledger(root: Path) -> Optional[dict]:
-    """The ledger's ``{key: fingerprint}``; ``None`` when it has not been seeded yet."""
+    """The normalized ledger's ``{key: {fp, kind}}``; old ledgers are theorem-only."""
 
     path = root / LEDGER_RELATIVE
     if not path.is_file():
@@ -684,18 +777,33 @@ def read_ledger(root: Path) -> Optional[dict]:
         data = json.loads(path.read_text())
     except (OSError, ValueError) as exc:
         raise LeafAuditError(f"{LEDGER_RELATIVE} is unparseable: {exc}")
-    if not isinstance(data, dict) or data.get("schema") != LEDGER_SCHEMA \
+    if not isinstance(data, dict) or data.get("schema") not in (1, LEDGER_SCHEMA) \
             or not isinstance(data.get("leaves"), dict):
         raise LeafAuditError(f"{LEDGER_RELATIVE} is malformed")
-    return data["leaves"]
+    normalized: Dict[str, dict] = {}
+    for key, value in data["leaves"].items():
+        if not isinstance(key, str):
+            raise LeafAuditError(f"{LEDGER_RELATIVE} has a non-string leaf key")
+        if data.get("schema") == 1:
+            if not isinstance(value, str):
+                raise LeafAuditError(f"{LEDGER_RELATIVE} has a malformed old fingerprint")
+            normalized[key] = {"fp": value, "kind": "theorem"}
+        elif isinstance(value, dict) and isinstance(value.get("fp"), str) \
+                and value.get("kind") in ("theorem", "definition"):
+            normalized[key] = {"fp": value["fp"], "kind": value["kind"]}
+        else:
+            raise LeafAuditError(f"{LEDGER_RELATIVE} has a malformed leaf row for {key}")
+    return normalized
 
 
-def ledger_diff(ledger: Optional[dict], leaves: List[dict]) -> Optional[dict]:
-    """``None`` for an unseeded ledger, else the new, changed and removed leaf keys."""
+def ledger_diff(ledger: Optional[dict], leaves: List[dict],
+                definition_leaves: Sequence[dict] = ()) -> Optional[dict]:
+    """``None`` for an unseeded ledger, else new/changed/removed theorem or definition leaves."""
 
     if ledger is None:
         return None
-    now = {leaf_key(r): r["fp"] for r in leaves}
+    now = {leaf_key(r): {"fp": r["fp"], "kind": r["kind"]}
+           for r in list(leaves) + list(definition_leaves)}
     return {
         "new": sorted(k for k in now if k not in ledger),
         "changed": sorted(k for k in now if k in ledger and ledger[k] != now[k]),
@@ -705,11 +813,12 @@ def ledger_diff(ledger: Optional[dict], leaves: List[dict]) -> Optional[dict]:
 
 def review_lines(diff: Optional[dict], total: int, limit: int = 12) -> List[str]:
     if diff is None:
-        return [f"LEAF-REVIEW: ledger {LEDGER_RELATIVE} not yet seeded; all {total} leaves are "
+        return [f"LEAF-REVIEW: ledger {LEDGER_RELATIVE} not yet seeded; all {total} theorem and "
+                f"definition leaves are "
                 f"unreviewed (informational; a sweep seeds it with `{GENERATOR_LEDGER}` at its "
                 f"close)"]
     fresh = diff["new"] + diff["changed"]
-    lines = [f"LEAF-REVIEW: {len(fresh)} leaves new or changed since the last review "
+    lines = [f"LEAF-REVIEW: {len(fresh)} theorem/definition leaves new or changed since the last review "
              f"({len(diff['new'])} new, {len(diff['changed'])} changed; {len(diff['removed'])} "
              f"reviewed leaves are gone) (informational)"]
     for key in fresh[:limit]:
@@ -736,17 +845,18 @@ def production_result(root: Path) -> Tuple[dict, dict]:
     if problems:
         raise LeafAuditError("; ".join(problems))
     census = run_census(root)
-    result = analyze(census, sources)
+    external, lean_external = scan_external_sources(
+        tracked_external_sources(root), set(census.get("population_names", [])))
+    result = analyze(census, sources, external, lean_external)
     return census, result
 
 
 def summary_line(result: dict) -> str:
     c = counts_of(result)
-    return (f"{c['leaves']} leaves ({c['public']} public, {c['private']} private) among "
-            f"{result['population']} theorems; {len(result['removed_by_source_use'])} of the "
-            f"{result['census_leaves']} census leaves are used by a rewriting tactic call or macro "
-            f"and are not leaves; {result['attribute_only']} more theorems are `rfl` simp lemmas "
-            f"exempt because their simp-set membership is their only possible use")
+    return (f"{c['leaves']} theorem leaves ({c['public']} public, {c['private']} private) among "
+            f"{result['population']} declarations; {len(result['definition_leaves'])} definition "
+            f"leaves; {len(result['removed_by_source_use'])} census leaves are used by a term, "
+            f"rewriting tactic call, macro or compiled script proof and are not leaves")
 
 
 def cmd_check(root: Path) -> int:
@@ -754,12 +864,13 @@ def cmd_check(root: Path) -> int:
         census, result = production_result(root)
         counts = counts_of(result)
         lines = compare_count(read_count(root), counts)
-        diff = ledger_diff(read_ledger(root), result["leaves"])
+        diff = ledger_diff(read_ledger(root), result["leaves"], result["definition_leaves"])
     except LeafAuditError as exc:
         print(f"REGRESSION — leaf audit: {exc}")
         return 1
     print(f"LEAF-COUNT {counts['leaves']}")
-    for line in review_lines(diff, counts["leaves"]):
+    print(f"DEFINITION-LEAVES {len(result['definition_leaves'])} (informational; not in leaf-count.json)")
+    for line in review_lines(diff, counts["leaves"] + len(result["definition_leaves"])):
         print(line)
     if lines:
         print("\n".join(lines))
@@ -780,6 +891,7 @@ def cmd_generate(root: Path, ledger: bool, unreviewed_path: Optional[Path] = Non
           f"{counts['private']} private)")
     if ledger:
         reviewed = list(result["leaves"])
+        definition_reviewed = list(result["definition_leaves"])
         unreviewed = None
         if unreviewed_path is not None:
             # Leaves the closing sweep never classified (e.g. theorems that became leaves because
@@ -787,43 +899,45 @@ def cmd_generate(root: Path, ledger: bool, unreviewed_path: Optional[Path] = Non
             # as new instead of treating them as judged.
             text = unreviewed_path.read_text()
             wanted = [line.strip() for line in text.splitlines() if line.strip()]
-            current = {leaf_key(r) for r in reviewed}
+            current = {leaf_key(r) for r in reviewed + definition_reviewed}
             stray = sorted(set(wanted) - current)
             if stray:
                 print(f"REGRESSION — leaf audit: --unreviewed names {len(stray)} non-leaves, e.g. {stray[:3]}")
                 return 1
             reviewed = [r for r in reviewed if leaf_key(r) not in set(wanted)]
+            definition_reviewed = [r for r in definition_reviewed if leaf_key(r) not in set(wanted)]
             unreviewed = {"count": len(set(wanted)),
                           "sha256": hashlib.sha256(text.encode()).hexdigest(),
                           "source": unreviewed_path.name}
         (root / LEDGER_RELATIVE).write_text(ledger_document(
-            toolchain_of(root), reviewed, result["attribute_exempt_rows"], unreviewed))
-        print(f"wrote {LEDGER_RELATIVE}: {len(reviewed)} reviewed leaves"
+            toolchain_of(root), reviewed, definition_reviewed, unreviewed))
+        print(f"wrote {LEDGER_RELATIVE}: {len(reviewed)} theorem and {len(definition_reviewed)} definition leaves"
               + (f" ({unreviewed['count']} unreviewed leaves left out, listed as new by `review`)"
-                 if unreviewed else "")
-              + f" and {len(result['attribute_exempt_rows'])} attribute-exempt `rfl` simp lemmas")
+                 if unreviewed else ""))
     return 0
 
 
 def cmd_review(root: Path) -> int:
     try:
         census, result = production_result(root)
-        diff = ledger_diff(read_ledger(root), result["leaves"])
+        diff = ledger_diff(read_ledger(root), result["leaves"], result["definition_leaves"])
     except LeafAuditError as exc:
         print(f"REGRESSION — leaf audit: {exc}")
         return 1
-    modules = {leaf_key(r): r["module"] for r in result["leaves"]}
+    all_leaves = result["leaves"] + result["definition_leaves"]
+    modules = {leaf_key(r): (r["module"], r["kind"]) for r in all_leaves}
     if diff is None:
-        print(review_lines(None, len(result["leaves"]))[0])
-        for r in result["leaves"]:
-            print(f"  unreviewed: {leaf_key(r)}  ({r['module']})")
+        print(review_lines(None, len(all_leaves))[0])
+        for r in all_leaves:
+            print(f"  unreviewed: {leaf_key(r)}  ({r['kind']}, {r['module']})")
         return 0
     for label in ("new", "changed"):
         for key in diff[label]:
-            print(f"{label}: {key}  ({modules[key]})")
+            module, kind = modules[key]
+            print(f"{label}: {key}  ({kind}, {module})")
     for key in diff["removed"]:
         print(f"gone: {key}")
-    print(review_lines(diff, len(result["leaves"]), limit=0)[0])
+    print(review_lines(diff, len(all_leaves), limit=0)[0])
     return 0
 
 
@@ -889,6 +1003,9 @@ def self_test(root: Path) -> int:
     expected_base_leaves = [line.strip() for line in
                             (fixture_dir / "compliant.leaves").read_text().splitlines()
                             if line.strip()]
+    expected_base_definitions = [line.strip() for line in
+                                 (fixture_dir / "compliant.definitions").read_text().splitlines()
+                                 if line.strip()]
     ns = "LeafFixture."
 
     failures: List[str] = []
@@ -901,6 +1018,11 @@ def self_test(root: Path) -> int:
         result = analyze(census_of(source), {"_current": source})
         return [leaf_key(r) if not r["private"] else r["name"] for r in result["leaves"]]
 
+    def definition_names(source: str) -> List[str]:
+        result = analyze(census_of(source), {"_current": source})
+        return [leaf_key(r) if not r["private"] else r["name"]
+                for r in result["definition_leaves"]]
+
     def expect_leaves(label: str, source: str, expected: Sequence[str]) -> None:
         nonlocal checks
         checks += 1
@@ -910,6 +1032,15 @@ def self_test(root: Path) -> int:
         else:
             print(f"OK — {label}: leaves {got}")
 
+    def expect_definitions(label: str, source: str, expected: Sequence[str]) -> None:
+        nonlocal checks
+        checks += 1
+        got = sorted(definition_names(source))
+        if got != sorted(expected):
+            failures.append(f"{label}: expected definition leaves {sorted(expected)}, got {got}")
+        else:
+            print(f"OK — {label}: definition leaves {got}")
+
     def replaced(text: str, old: str, new: str, label: str) -> str:
         if text.count(old) != 1:
             failures.append(f"{label}: the fixture lost its edit site {old!r}")
@@ -918,6 +1049,7 @@ def self_test(root: Path) -> int:
 
     # The compliant fixture is the green baseline every control is a one-line change from.
     expect_leaves("compliant fixture", base, expected_base_leaves)
+    expect_definitions("compliant fixture definitions", base, expected_base_definitions)
     checks += 1
     base_census = census_of(base)
     if base_census.get("excluded_auxiliary_theorems", 0) < 1:
@@ -937,6 +1069,12 @@ def self_test(root: Path) -> int:
     else:
         print(f"OK — private leaf: {leaf_key(rows[0])}")
 
+    # Definitions have their own leaf list and a definition used in a theorem is not a leaf.
+    expect_definitions("used definition loses its only user",
+                       replaced(base, "theorem uses_definition : used_definition = 42 := rfl",
+                                "theorem uses_definition : 42 = 42 := rfl", "definition user"),
+                       expected_base_definitions + [ns + "used_definition"])
+
     # A theorem another theorem uses is not a leaf: delete the only user and it becomes one.
     expect_leaves("used theorem loses its only user",
                   replaced(base, "theorem headline_one : (1 + 1 = 2) ∧ True := ⟨base_fact, trivial⟩",
@@ -949,24 +1087,29 @@ def self_test(root: Path) -> int:
                            "⟨2, by decide⟩", "bound_fact user"),
                   expected_base_leaves + [ns + "bound_fact"])
 
-    # Attribute use is narrow: only an `rfl`-proved simp lemma is exempt (its use leaves no term
-    # trace). The compliant fixture holds one exempt lemma (`simp_only_fact`, not a leaf) and three
-    # attribute-carrying leaves that nothing uses: a non-`rfl` `@[simp]` lemma, an `@[ext]` lemma and
-    # an instance. Each control below flips exactly one of them.
+    # Attributes do not exempt anything: the unused rfl simp lemma is an ordinary theorem leaf,
+    # just like the unused non-rfl simp lemma, ext lemma and instance.
     checks += 1
-    exempt = [r["name"] for r in base_census["attribute_only"]]
-    if exempt != [ns + "simp_only_fact"]:
-        failures.append(f"attribute-exempt lemma: expected only {ns}simp_only_fact, got {exempt}")
+    raw_names = {r["name"] for r in base_census["leaves"]}
+    expected_attribute_leaves = {ns + "simp_only_fact", ns + "simp_nonrfl_fact",
+                                 ns + "Pt.ext_fx", ns + "instNonemptyPt"}
+    if not expected_attribute_leaves <= raw_names or "attribute_only" in base_census:
+        failures.append("attribute rule: rfl simp lemmas must be ordinary leaves and attribute_only "
+                        "must be absent")
     else:
-        print(f"OK — attribute-exempt: {exempt} (an unused `rfl` `@[simp]` lemma is not a leaf)")
-    expect_leaves("@[simp] removed from the `rfl` simp lemma",
-                  replaced(base, "@[simp] theorem simp_only_fact", "theorem simp_only_fact",
-                           "simp attribute"),
-                  expected_base_leaves + [ns + "simp_only_fact"])
-    expect_leaves("non-`rfl` simp lemma proved by `rfl` becomes attribute-exempt",
-                  replaced(base, "n + 0 + 0 = n := by omega", "n + 0 + 0 = n := rfl",
-                           "non-rfl simp lemma"),
-                  [n for n in expected_base_leaves if n != ns + "simp_nonrfl_fact"])
+        print(f"OK — attribute rule removed: {sorted(expected_attribute_leaves)} are leaves")
+    # A mutation restoring the former rfl-simp exemption must visibly remove simp leaves.
+    checks += 1
+    blanket = run_census(root, source=fixture_source(
+        root, base, ('if kind == "theorem" then leaves := leaves.push row',
+                     'if kind == "theorem" && !ks.any (·.startsWith "simp-set:") then '
+                     'leaves := leaves.push row')))
+    lost = sorted(set(r["name"] for r in base_census["leaves"])
+                  - set(r["name"] for r in blanket["leaves"]))
+    if lost != [ns + "simp_nonrfl_fact", ns + "simp_only_fact"]:
+        failures.append(f"attribute-exemption control: expected simp leaves to vanish, got {lost}")
+    else:
+        print(f"OK — old attribute-exemption mutation loses only simp leaves: {lost}")
     expect_leaves("simp lemma no longer used by the `simp` call that mentions its `_simp_1`",
                   replaced(base, "theorem uses_gq : gq 1 = true := by simp",
                            "theorem uses_gq : gq 1 = true := by decide", "gq user"),
@@ -981,8 +1124,8 @@ def self_test(root: Path) -> int:
                            "def ptExtUse (a b : Pt) (h : a.x = b.x) : a = b := Pt.ext_fx h\n\n"
                            "end LeafFixture\n\nnamespace Elsewhere", "ext user"),
                   [n for n in expected_base_leaves if n != ns + "Pt.ext_fx"])
-    # The driver's rule itself bites: with the old blanket rule (any attribute exempts) the three
-    # attribute-carrying leaves vanish from the leaf set.
+    # The used-side attribution rule itself bites: without it the generated theorem auxiliary
+    # (`gq_iff._simp_1`) fails to keep its parent out of the leaf set.
     checks += 1
     blanket = run_census(root, source=fixture_source(
         root, base, ("if rflSimp then attrOnly", "if !ks.isEmpty then attrOnly")))
@@ -1067,6 +1210,30 @@ def self_test(root: Path) -> int:
         print("OK — source scan: rewriting-tactic lemma lists, namespaces, `open`s, sections, "
               "macros, comments and strings resolved as specified")
 
+    # External consumers: a Lean proof file removes a leaf, while a shell/Python mention is
+    # retained on the row as report-only evidence.
+    checks += 1
+    external, lean_external = scan_external_sources(
+        {"scripts/check-fixture.sh": "echo LeafFixture.definition_leaf\n",
+         "scripts/ProofFixture.lean": "theorem t : LeafFixture.definition_leaf = 41 := rfl\n"},
+        {ns + "definition_leaf"})
+    external_result = analyze(base_census, {"_current": base}, external, lean_external)
+    ext_rows = [r for r in external_result["definition_leaves"]
+                if r["name"] == ns + "definition_leaf"]
+    if external != {ns + "definition_leaf": ["scripts/ProofFixture.lean", "scripts/check-fixture.sh"]} \
+            or lean_external != {ns + "definition_leaf"} or ext_rows:
+        failures.append(f"external consumer control: {external} {lean_external} {ext_rows}")
+    else:
+        report_only = analyze(base_census, {"_current": base},
+                              {ns + "definition_leaf": ["scripts/check-fixture.sh"]}, set())
+        rows = [r for r in report_only["definition_leaves"]
+                if r["name"] == ns + "definition_leaf"]
+        if len(rows) != 1 or rows[0]["external_consumers"] != ["scripts/check-fixture.sh"]:
+            failures.append(f"non-Lean external consumer was not recorded: {rows}")
+        else:
+            print("OK — external consumers: Lean mentions count as uses; non-Lean script mentions "
+                  "are recorded without silently exempting the leaf")
+
     # The statement fingerprint follows the type, not the proof or the binder names.
     checks += 1
     fp = {r["name"]: r["fp"] for r in base_census["leaves"]}
@@ -1093,23 +1260,27 @@ def self_test(root: Path) -> int:
     checks += 1
     result = analyze(base_census, {"_current": base})
     leaves = result["leaves"]
-    if ledger_diff(None, leaves) is not None or "not yet seeded" not in review_lines(None, 1)[0]:
+    definitions = result["definition_leaves"]
+    if ledger_diff(None, leaves, definitions) is not None or "not yet seeded" not in review_lines(None, 1)[0]:
         failures.append("ledger: an unseeded ledger must be reported as such")
-    doc = json.loads(ledger_document("t", leaves))
+    doc = json.loads(ledger_document("t", leaves, definitions))
     ledger = doc["leaves"]
-    if ledger_diff(ledger, leaves) != {"new": [], "changed": [], "removed": []}:
+    if ledger_diff(ledger, leaves, definitions) != {"new": [], "changed": [], "removed": []} \
+            or ledger[ns + "definition_leaf"]["kind"] != "definition":
         failures.append("ledger: a ledger generated from the leaves must show no difference")
     edited = dict(ledger)
-    edited[ns + "headline_two"] = "0" * 16
+    edited[ns + "headline_two"] = {"fp": "0" * 16, "kind": "theorem"}
     gone = {k: v for k, v in ledger.items() if k != ns + "headline_one"}
-    edited_diff = ledger_diff(edited, leaves)
-    gone_diff = ledger_diff(gone, leaves)
-    extra_diff = ledger_diff({**ledger, "Blanc.deleted_result": "1" * 16}, leaves)
+    edited_diff = ledger_diff(edited, leaves, definitions)
+    gone_diff = ledger_diff(gone, leaves, definitions)
+    extra_diff = ledger_diff({**ledger, "Blanc.deleted_result": {"fp": "1" * 16,
+                                                                  "kind": "theorem"}},
+                             leaves, definitions)
     if edited_diff != {"new": [], "changed": [ns + "headline_two"], "removed": []} \
             or gone_diff != {"new": [ns + "headline_one"], "changed": [], "removed": []} \
             or extra_diff != {"new": [], "changed": [], "removed": ["Blanc.deleted_result"]}:
         failures.append(f"ledger: unexpected differences {edited_diff} {gone_diff} {extra_diff}")
-    elif "1 leaves new or changed" not in review_lines(edited_diff, len(leaves))[0]:
+    elif "1 theorem/definition leaves new or changed" not in review_lines(edited_diff, len(leaves))[0]:
         failures.append("ledger: the review line must state the number of new or changed leaves")
     else:
         print("OK — review ledger: unseeded is informational; a changed statement, a new leaf and a "
@@ -1127,7 +1298,7 @@ def self_test(root: Path) -> int:
 
     # Fail-closed controls on the census itself.
     for label, mutate in (
-        ("empty leaf set", lambda c: c.update(leaves=[], attribute_only=[])),
+        ("empty leaf set", lambda c: c.update(leaves=[], definition_leaves=[])),
         ("empty population", lambda c: c.update(population=0)),
         ("wrong schema", lambda c: c.update(schema=99)),
         ("missing field", lambda c: c.pop("population_names")),
