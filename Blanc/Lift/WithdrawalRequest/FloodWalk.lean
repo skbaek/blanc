@@ -5,6 +5,7 @@ import Blanc.Lift.WithdrawalRequest.NatLiveness
 import Blanc.Lift.WithdrawalRequest.CodeFacts
 import Blanc.Lift.WithdrawalRequest.SubmissionLayout
 import Blanc.Lift.WithdrawalRequest.SystemProtocol
+import Blanc.Lift.ExactWalkSolc
 
 /-!
 # The flood caller makes exactly `k` committed submissions
@@ -92,34 +93,14 @@ theorem submission_child_exec {msg : Msg} {iters : Nat} {out : B256}
 /-- An `SSTORE` keeps every account's code and balance. -/
 private theorem afterSstore_code_bal {sevm : Sevm} {b : Devm} {key value : B256} (a : Adr) :
     ((afterSstore sevm b key value).getAcct a).code = (b.getAcct a).code ∧
-    ((afterSstore sevm b key value).getAcct a).bal = (b.getAcct a).bal := by
-  have core : ∀ (d : Devm) (rc : Int),
-      (((d.withRefundCounter rc).setStorVal sevm.currentTarget key value).getAcct a).code =
-        (d.getAcct a).code ∧
-      (((d.withRefundCounter rc).setStorVal sevm.currentTarget key value).getAcct a).bal =
-        (d.getAcct a).bal := by
-    intro d rc
-    show (((d.withRefundCounter rc).state.setStorVal sevm.currentTarget key value).get a).code =
-        (d.state.get a).code ∧
-      (((d.withRefundCounter rc).state.setStorVal sevm.currentTarget key value).get a).bal =
-        (d.state.get a).bal
-    unfold State.setStorVal
-    by_cases h : sevm.currentTarget = a
-    · subst h
-      rw [State.get_set_self]
-      exact ⟨rfl, rfl⟩
-    · rw [State.get_set_ne _ h]
-      exact ⟨rfl, rfl⟩
-  unfold afterSstore
-  split
-  · exact core _ _
-  · exact core (addAccessedStorageKey b sevm.currentTarget key) _
+    ((afterSstore sevm b key value).getAcct a).bal = (b.getAcct a).bal :=
+  ⟨afterSstore_getCode sevm b key value a, afterSstore_getBal a⟩
 
 private theorem afterSload_code_bal {sevm : Sevm} {b : Devm} {key : B256} (a : Adr) :
     ((afterSload sevm b key).getAcct a).code = (b.getAcct a).code ∧
     ((afterSload sevm b key).getAcct a).bal = (b.getAcct a).bal := by
-  unfold afterSload
-  split <;> exact ⟨rfl, rfl⟩
+  rw [afterSload_getAcct]
+  exact ⟨rfl, rfl⟩
 
 /-- A committed submission keeps every account's code and balance. -/
 theorem submissionPost_code_bal (sevm : Sevm) (b : Devm) (M : Mem) (G : Nat) (a : Adr) :
@@ -157,24 +138,6 @@ theorem submissionPost_code_bal (sevm : Sevm) (b : Devm) (M : Mem) (G : Nat) (a 
   rw [h1.1, h1.2]
   unfold submissionCountRead
   exact h0
-
-/-- An `SSTORE`'s selected charge: at most a cold access plus its value charge. -/
-theorem sstoreCost_le_value (sevm : Sevm) (d : Devm) (key value : B256) :
-    sstoreCost sevm d key value ≤ gasColdSload +
-      sstoreValueCost (getOrigStorVal sevm sevm.currentTarget key)
-        (d.getStorVal sevm.currentTarget key) value := by
-  unfold sstoreCost
-  split <;> omega
-
-theorem sstoreValueCost_le (orig cur new : B256) : sstoreValueCost orig cur new ≤ gasStorageSet := by
-  unfold sstoreValueCost
-  split_ifs <;> decide
-
-theorem sstoreValueCost_of_ne {orig cur new : B256} (h : orig ≠ cur) :
-    sstoreValueCost orig cur new = gasWarmAccess := by
-  have hn : ¬(orig = cur ∧ cur ≠ new) := fun hc => h hc.1
-  unfold sstoreValueCost
-  simp only [hn, ite_false]
 
 /-- The tail word survives the three queue writes when no queue key aliases slot 3. -/
 theorem submissionLogged_tail (sevm : Sevm) (b : Devm) (M : Mem) (σ : Blanc.WithdrawalRequest.State)
@@ -297,20 +260,6 @@ theorem wordRun_zero : WordFakeExponential.Run 0 17 1 17 0 1 17 := by
   rw [hacc, show (0 : B256) + 17 = 17 by decide]
   exact WordFakeExponential.Run.stop _ _
 
-/-- With the whole remaining gas asked for, a value-bearing `CALL` forwards all but one
-64th of what is left after its fixed charge, plus the stipend. -/
-theorem calculateMsgCallGas_all {value gas gl extra : Nat} (hv : value ≠ 0) (hg : gl ≤ gas)
-    (he : extra ≤ gl) :
-    calculateMsgCallGas value gas gl 0 extra =
-      ⟨except64th (gl - extra) + extra, except64th (gl - extra) + gCallStipend⟩ := by
-  have hmin : min gas (except64th (gl - 0 - extra)) = except64th (gl - extra) := by
-    have hle : except64th (gl - extra) ≤ gas := by
-      unfold except64th
-      omega
-    rw [Nat.sub_zero]
-    exact Nat.min_eq_right hle
-  unfold calculateMsgCallGas
-  simp only [hv, ite_false, show ¬ gl < extra + 0 by omega, hmin]
 
 /-! ## One looper `CALL`: a committed submission paying 1 -/
 

@@ -55,4 +55,25 @@ theorem sloadScheduleCost_le (sevm : Sevm) (schedule : SloadSchedule) :
   simp only [gasWarmAccess, gasColdSload]
   omega
 
+/-- An `SSTORE`'s selected charge: at most a cold access plus its value charge. -/
+theorem sstoreCost_le_value (sevm : Sevm) (d : Devm) (key value : B256) :
+    sstoreCost sevm d key value ≤ gasColdSload +
+      sstoreValueCost (getOrigStorVal sevm sevm.currentTarget key)
+        (d.getStorVal sevm.currentTarget key) value := by
+  unfold sstoreCost
+  split <;> omega
+
+/-- The value part of an `SSTORE` charge is at most a fresh set. -/
+theorem sstoreValueCost_le (orig cur new : B256) : sstoreValueCost orig cur new ≤ gasStorageSet := by
+  unfold sstoreValueCost
+  split_ifs <;> decide
+
+/-- A dirty slot (current value differs from the transaction's original) costs the warm
+charge, whatever is written. -/
+theorem sstoreValueCost_of_ne {orig cur new : B256} (h : orig ≠ cur) :
+    sstoreValueCost orig cur new = gasWarmAccess := by
+  have hn : ¬(orig = cur ∧ cur ≠ new) := fun hc => h hc.1
+  unfold sstoreValueCost
+  simp only [hn, ite_false]
+
 end Blanc
