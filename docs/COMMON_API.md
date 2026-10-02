@@ -2648,11 +2648,16 @@ prepared message and message-call outcome, with the exact settled state (gas ref
 fee credited, accounts deleted).  Worked use:
 `Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Tx/Envelope.lean`.
 For a *symbolic* type-2 call to a contract (no concrete transaction to evaluate) the same module discharges
-the whole envelope from field-level facts: `processTransaction_call_of_exec` takes the fee, nonce, funds,
+the whole envelope from field-level facts: `processTransaction_call_value_of_exec` takes the fee, nonce, funds,
 code-free sender, gas and signature facts (`hrecover` the only cryptographic premise) and the message's
 interpreter run `hexec` (a success with no frame error and a non-negative refund counter, for the debited
 state, `callMessage` and its entry environment), and returns `processTransaction`'s settled state and the
-block's gas counters (`txGasUsed`); its parts are `checkTransactionGasFee_two`, `checkTransactionChainId_two`,
+block's gas counters (`txGasUsed`). Its funds premise covers `tx.gas * maxFee + tx.value`;
+it derives affordability after the gas debit and constructs the value transfer with the shared
+`Msg.benvAfterTransfer_of_affordable` lemma. The signature and successful raw execution remain
+premises; the theorem does not construct a signed transaction or a configured history.
+`processTransaction_call_of_exec` retains the original zero-value interface as a specialization.
+The shared parts are `checkTransactionGasFee_two`, `checkTransactionChainId_two`,
 `checkTransactionBlobData_two`, `checkTransactionReceiver_two`, `checkTransactionAuthorizationList_two`,
 `checkTransactionSenderAccount_ok_of_noCode`, `validateTransaction_ok_of_facts`,
 `calculateIntrinsicCost_two_call` (with `calldataTokens` and the covered-fork constants
