@@ -237,6 +237,8 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.WriterMemory",
         "Lift.UniswapV2Pair.ApproveCore",
         "Lift.UniswapV2Pair.WriterEntries",
+        "Lift.UniswapV2Pair.WriterStorage",
+        "Lift.UniswapV2Pair.ApproveSource",
         "Lift.UniswapV2Pair.UpdateArithmetic",
         "Lift.UniswapV2Pair.UpdateSource",
         "Lift.UniswapV2Pair.BalanceCallWalk",
