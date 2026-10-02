@@ -421,8 +421,9 @@ def scan_source(code_raw: str, path: str) -> List[Finding]:
 # name a tracked file; a stale or Blanc/ entry refuses the population.
 EXEMPT_FIXTURES: Dict[str, str] = {
     "scripts/fixtures/leaf-audit/compliant.lean":
-        "leaf-audit self-test fixture: its @[simp] lemmas and `by simp` proofs are the"
-        " attribute-exemption and _simp_1 auxiliary cases check-leaf-audit.sh --self-test asserts",
+        "leaf-audit self-test fixture: its @[simp] lemmas and `by simp`/`simpa`/`simp_all` proofs"
+        " are the cases leaf_audit.py self-test asserts (a simp attribute no longer exempts a leaf;"
+        " a `by simp` use is attributed through the generated _simp_1 auxiliary)",
     "scripts/SimpaUsingSyntaxControl.lean":
         "parser control for the simpa-using migration tooling: its `(tactic| simpa ...)`"
         " quotation is a syntax pattern it matches, not a proof call",

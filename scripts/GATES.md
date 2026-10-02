@@ -681,7 +681,7 @@ record counts say how current it is.
 | `lake build` | integration elaboration, including the audited compile witnesses, production Lido runtime/constructor artifact family, WETH10 deployment declarations and configured deployment root, stable-state packaging, constructive redemption certificates, committed holder-flow conservation, and the BeaconDeposit model/runtime/constructor/effect family, and the PRORATA WETH vault artifact | 1530 jobs | incremental builds are a few seconds; clean rebuilds are substantially longer |
 | `scripts/check.sh --no-build` | elaborates the committed proof-recipe suggestion controls after the authoritative build, then runs ONE union axiom walk over the whole library and the leaf search. `scripts/AxiomCheck.lean` imports every Blanc module (`Blanc`, `Blanc.ProofRecipeTactic`, `Blanc.ProofRecipesGenerated`: the last two are deliberately unreachable from `Blanc.lean`) and runs the pinned Jaune's `#union_axioms_of_modules Blanc`: every constant of every module named `Blanc` or `Blanc.…` is a root of a single from-scratch walk over `Environment.find?` with one shared visited set (`Jaune.AxiomAudit.walkMany`), and the walk fails elaboration, naming the offending axiom and up to twenty roots that reach it with the chain of constants, unless the union of the axioms reached is within `propext`, `Classical.choice` and `Quot.sound`; an empty population and a reached constant absent from the environment fail too. That bounds `sorryAx`, `Lean.ofReduceBool`, `native_decide`/`bv_decide` auxiliary axioms and a bespoke `axiom` for every declaration at once, so no theorem has a row of its own and there is no pin table. Lean's `#print axioms` is never the verdict source (user decision 2026-09-24, until lean4#15226 is fixed): since v4.30.0 it reads a per-module set precomputed at olean export, whose cycle sentinel can record an imported inductive as axiom-free depending on declaration hash order, which let `ReplayCarrier.nilOfEq` pass a "no axioms" pin it never had. The only per-declaration checks left are the STRICTER CLAIMS, the `#expect_axioms NAME [axioms]` rows of `AxiomCheck.lean` for the nine declarations whose smaller-than-standard set a register or a gate states — `LIDO_CIRCUIT_BREAKER_ASSURANCE.md` REG-2, REG-12 and ACC-3 (`none`), and the four frozen deployment names of `check-lido-circuit-breaker-deployment.py` — each checked in both directions by the same walker; the register gates read them from that file, and every claim there must be stated by a register row or frozen by the deployment gate. Before Lean runs, `scripts/axiom_audit.py` checks the pinned walker's source, requires `AxiomCheck.lean`, comments aside, to hold only its imports, exactly one `#union_axioms_of_modules Blanc` with no allowed-axiom override, and claim rows (no `#print axioms`, `#eval`, new `elab`, report marker or row inside a comment; no duplicate claim), and refuses the audit unless every `Blanc/**/*.lean` module is reachable from its imports, because the population is what is imported; afterwards it requires exactly one `UNION-AXIOMS 'Blanc'` report over a positive number of roots and modules and exactly one `AXIOM OK` report per claim. The leaf search (`scripts/leaf_audit.py`, see "Leaf audit" below) then prints the leaf count, the published figure, and must equal the generated `scripts/leaf-count.json`; the informational `LEAF-REVIEW` line counts the leaves new or changed since the last review ledger and is never a failure. The verdict line is `OK — axiom audit: one union walk over Blanc reaches only the standard axioms; N leaf results` | 1384 leaves; the union walk's roots, modules and visited constants are printed | ~28 s (measured 2026-09-30; was ~69 s with 1396 rows) |
 | `scripts/check.sh --suggestions-only` | elaborates the exact committed `scripts/ProofRecipeSuggestions.lean` in isolation and audits nothing else. Every positive and negative assertion in that file is decided by the PRODUCTION dispatch `Blanc.proofRecipeMatches` — the one function `blanc_suggest` consults — over the recipe records registered in `Blanc.ProofRecipesGenerated`, resolved by declared trigger or by recipe id, so deleting the leaf delegation inside `proofRecipeMatches` fails this gate instead of leaving a harness-local copy green. An unregistered trigger or id is an error, never a silent false. Before elaborating it reads the three assertion populations out of the committed file and refuses an emptied harness, and it refuses a harness that no longer names `proofRecipeMatches` at all. It builds nothing: the default audit and `--no-build` couple these controls to the whole `AxiomCheck.lean` artifact set, so one unrelated missing object denies them a baseline and a control campaign cannot show that anything bites. It is an addition to those modes, not a substitute for either, and carries its own verdict line | 62 positive, 37 negative and 2 whole-recipe assertions over 44 registered recipes | ~4 s |
-| `scripts/check-leaf-audit.sh --self-test` | shows the leaf search bites, on small fixture environments elaborated by the byte-identical `scripts/LeafCensus.lean` body: the compliant fixture has exactly the leaves `compliant.leaves` lists; each control is a one-line change that must move exactly the leaf set it names — an unused theorem added, a private leaf, a used theorem losing its only user (plain, or through a definition's proof auxiliary), the `@[simp]` attribute removed from the unused `rfl` simp lemma (the one attribute-exempt case), a non-`rfl` simp lemma proved by `rfl` becoming exempt, an unused instance or `@[ext]` lemma leaving the leaf set when a term uses it, a driver mutation restoring the old blanket attribute rule losing three leaves, a non-`rfl` simp lemma used only through its generated `_simp_1` (a `simp` proof mentions the auxiliary, never the lemma) staying out of the leaf set until that `simp` call goes, and a driver mutation dropping the used-side attribution making it a leaf, an `rfl`-proved lemma whose only use is a `simp only`, `dsimp only` or `simpa` call, a tactic macro (used or never invoked) or an `open`ed namespace losing that use, a same-named theorem in another namespace staying a leaf, a name that survives only in a comment, a string or an erased `-name`; disabling auxiliary attribution in the driver changes the population; the statement fingerprint ignores a new proof and a renamed binder and follows a new statement; the review ledger tells an unseeded ledger, a changed, a new and a gone leaf apart; a stale count artifact is a regression; an empty, wrongly-versioned or incomplete census is refused; an unclassified attribute or an unexported `local`/`scoped` use-attribute in a source is refused; and 23 table controls of the source scan (`simp`/`rw` lists, flags and configs, `←`, erasure, projections, namespaces, `open` and section scoping, macro bodies, `attribute` commands, name literals, comments and strings) hold. Inputs are the harness, the driver and the fixture only: the production tree is not read | 35 controls | ~2 min |
+| `scripts/check-leaf-audit.sh --self-test` | shows the leaf search bites on the byte-identical driver body: the fixture has theorem leaves in `compliant.leaves` and definition leaves in `compliant.definitions`; controls cover unused and private theorem leaves, a definition leaf, a definition becoming used, compiler-auxiliary attribution, removal of the old attribute exemption (including an unused rfl simp theorem), term and source-scan uses, Lean and non-Lean external consumers, fingerprints, the kinded review ledger, the theorem-only published count, fail-closed census fields, attribute vocabulary, and the namespace/open/macro/comment/string source-scan table. The Lean external-consumer control removes a leaf; the shell/Python control records `external_consumers` without exempting it. Inputs are the harness, the driver and the fixture only: the production tree is not read | 35 controls | ~2 min |
 | `scripts/check-claims.sh` | Lean-checked exact statement pins for the common direct spawned-code-address and source-chronology theorems, WETH10 generic/current-mainnet/Prague flagships, the Lido artifact, projection, Registry mutation, arbitrary-finite enumeration, coherent-view, local raw/settled observability, constructor/message/transaction/block, and direct-deployment-root boundaries, the proxy-pair canonical constructor/direct-CREATE/closed-fixture boundaries plus its nonempty setup chronology, exact both-slot setup child, and failed whole-CREATE rollback, and PRORATA's SF-frozen P3 headlines (genesis-anchored reachable invariant, the pure and realized cumulative-dust identities, and both directions of the realized carrier's non-vacuity against chain reachability) and its three P4 headlines, the PRORATA WETH vault's compiled, capacity, nonrevert (`*_exec_revert_visits_refused_weth_child`, `maxRedeem_exec_never_reverts`, `*_success_within_max*`), pair-history and attack headlines together with the reverting-walk vocabulary (`Prog.RunCompiledToVisiting`, every `Func.RunCompiledToVisiting` constructor, `WethChildRefused`) their meaning rests on, plus BeaconDeposit's compiled P1–P6 and exact P7/P8 deployment/frame/history/count-root headlines, the Lido CircuitBreaker × gateway composition's pinned-target closure (both ABI agreements, the specialized bundle, the direct-installation adapter, the headline theorem, and the concrete and infinite-sentinel reachability worlds), and DRIP's R1–R4 headlines (the compiled `drip()` index rescale, the `rpow` error band and its rounding telescope, history realization with the executed-flow accounting and balance identities, the no-stale-index boundaries of `drip()`/`join()` and `exit()`, the entitlement bound, same-elapsed-time segment drift, the clock-paired invariant, and the monotone index and clock); then elaborates `scripts/CoveredForkControls.lean`, the fork-coverage controls (a positive witness for each covered fork Prague, Osaka, BPO1 and BPO2 in bare and frame-premise form, mainnet's schedule premise discharged by `mainnetChainConfig_covered` and consumed by the configured-chain ladder, the Amsterdam-negative control in both forms, and an exact pin of `coveredForks`), which are kept out of the axiom audit so neither published count moves | exactly 410 definitions/statements and constructors, plus the coverage controls | ~2 s |
 
 #### WETH10 configured-mainnet interpretation
@@ -889,17 +889,18 @@ remains a separate pre-mainnet lane.
 
 ## Leaf audit
 
-There is no list of audited theorems. The user's standing rule (theorem-necessity principles,
-2026-09-27 and the 2026-09-29 addenda) is that a theorem is a **leaf** if and only if it is
+There is no list of audited declarations. The user's standing rule (theorem-necessity principles,
+2026-09-27 and the 2026-09-29 addenda) is that a theorem or definition is a **leaf** if and only if it is
 independently valuable, and every leaf is checked for axioms — by the ONE union walk of
 `scripts/check.sh`, which covers every constant, so the leaves need no rows. What remains is to
 *find* the leaves, to publish their number, and to let a sweep review only what is new.
 
-**What is a leaf.** A theorem of a `Blanc.*` module that nothing uses. It is *used* when a Blanc
-declaration's type or value mentions it (auxiliaries — `_proof_N`, `match_N`, `eq_def`, `injEq`, `_simp_N`,
-recursors, constructors and projections of a structure — attributed to their parent declaration, on the using side and on the used side),
-when it is an `rfl`-proved lemma in a registered simp set (the one attribute use a proof term cannot
-show: `simp`/`dsimp` apply it by definitional unfolding and leave no trace), or when its name is
+**What is a leaf.** A theorem or definition-like declaration of a `Blanc.*` module that nothing
+uses. The census includes `def`, `abbrev`, `opaque`, instances, and structure/inductive/class types;
+constructors, projections and recursors are attributed to their parent declaration on both the using
+and used sides. A declaration is *used* when a Blanc declaration's type or value mentions it
+(auxiliaries — `_proof_N`, `match_N`, `eq_def`, `injEq`, `_simp_N`, recursors, constructors and
+projections — are attributed to their parent declaration), or when its name is
 written where the environment records no trace: in the lemma list of a `simp`, `simp only`,
 `dsimp`, `simpa`, `rw`, `norm_num`, `grind`, ... call, anywhere in a `macro`, `macro_rules`,
 `syntax`, `elab` or `notation` command, in an `attribute [..]` command, or as a double-backtick name
@@ -907,17 +908,19 @@ literal (``` ``foo`` ```, a rule table naming its lemmas: the elaborator resolve
 contain it), of any
 `Blanc/**/*.lean` file (comments and string contents stripped; a `-name` erases and is not a use;
 a token is resolved like an identifier, innermost enclosing namespace first and then the active
-`open`s, and counts only if it names a Blanc theorem). An `rfl`-proved lemma named only in a
+`open`s, and counts only if it names a Blanc declaration). An `rfl`-proved lemma named only in a
 `simp only [..]` leaves no term in the proof, so the census alone would call it a leaf; the source
-scan is what says it is used. **Attribute membership is not otherwise a use.** An instance that
-instance synthesis selects, an `@[ext]` lemma that `ext` applies and a non-`rfl` simp lemma that
-`simp` rewrites with each appear in the term of the declaration that used them, so one that no term
-mentions is unused and is a leaf, whatever attributes it carries; an `rfl` simp lemma nothing
-mentions is the only "attribute-exempt" case (its census key stays `attribute_only`). The
-self-test controls this on the fixture: an unused non-`rfl` `@[simp]` lemma, `@[ext]` lemma and
-instance are leaves; the unused `rfl` `@[simp]` lemma is exempt; proving the first by `rfl` exempts
-it, and a term that uses the instance or the `@[ext]` lemma removes it from the leaf set; a driver
-mutation restoring the old blanket rule loses all three. Whether a leaf is worth keeping is a human judgement made by a
+scan is what says it is used. **Attribute membership is never a use.** An instance that instance
+synthesis selects, an `@[ext]` lemma that `ext` applies and a simp lemma that `simp` rewrites with
+each appear in the term of the declaration that used them, so one that no term mentions is unused
+and is a leaf, whatever attributes it carries. The self-test controls this on the fixture: unused
+simp (including rfl), `@[ext]` and instance declarations are leaves, while a term using the
+instance or ext lemma removes it from the leaf set; a mutation restoring the old attribute
+exemption loses the simp leaves. The published `leaf-count.json` count remains theorem leaves only.
+Definition leaves are printed informationally by `check` and reviewed separately. The source scan
+also reports exact identifier mentions in tracked `scripts/` text and `Main.lean` as
+`external_consumers` on rows. Mentions in Lean proof files count as uses; mentions in shell/Python
+gate scripts are report-only. Whether a leaf is worth keeping is a human judgement made by a
 periodic sweep; nothing here decides it.
 
 **The count.** `scripts/check.sh` prints `LEAF-COUNT N` and requires `N`, with its public and
@@ -927,20 +930,25 @@ generate`, never edited by hand: a sweep that deletes a leaf regenerates it in t
 the surfaces that quote the number. A private leaf is counted (a private theorem is either dead
 code or a result that should be public, which is the sweep's question).
 
-**The review ledger.** `scripts/leaf-review.json` records the kept leaves with a fingerprint of
-each statement (the hash of the theorem's TYPE, independent of its proof and of binder names), so
+**The review ledger.** `scripts/leaf-review.json` records the kept theorem and definition leaves
+with a `kind` and a fingerprint of each statement (the hash of its TYPE, independent of its proof
+and of binder names), so
 a sweep reviews only leaves that are new or whose statement changed. It is generated by
 `python3 scripts/leaf_audit.py generate --ledger` at the close of a sweep, never edited by hand, and
 is not an input of any gate verdict: `check.sh` prints the informational line `LEAF-REVIEW: N leaves
 new or changed since the last review` (or that the ledger is not yet seeded) and never fails on it.
-`python3 scripts/leaf_audit.py review` lists them. The ledger also records, under
-`attribute_exempt`, the `rfl` simp lemmas that are kept without being leaves (they are not part of
-the new/changed comparison; the queued goal `make-simps-explicit-v1` is what would remove them). A toolchain bump changes the fingerprints; the
-next sweep regenerates the ledger.
+`python3 scripts/leaf_audit.py review` lists them. Schema-1 ledgers are read as theorem-only; a
+toolchain bump changes the fingerprints, and the next sweep regenerates the ledger.
 
 **Fail-closed.** An empty, unparseable or inconsistent census, an attribute the census cannot count
 (an unclassified head, or a `local`/`scoped` `simp`/`ext`/`instance`, which is not exported), a
 stale `leaf-count.json`, and an unbuilt library are REGRESSIONs, never a pass.
+
+The self-test fixture also has an unused definition in `compliant.definitions` and a used definition,
+and its unused rfl simp theorem remains in `compliant.leaves`. It exercises the old attribute rule
+as a biting mutation, plus Lean and non-Lean external consumers: compiled Lean mentions remove a
+leaf, while shell/Python mentions are retained as report-only `external_consumers` paths. The
+definition-leaf total is informational and never changes the published theorem count.
 
 
 ## Pass criteria
