@@ -248,6 +248,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.TransferFromSource",
         "Lift.UniswapV2Pair.InitializeCore",
         "Lift.UniswapV2Pair.InitializeEntries",
+        "Lift.UniswapV2Pair.InitializeSource",
         "Lift.UniswapV2Pair.TransferEntries",
         "Lift.UniswapV2Pair.TransferSource",
         "Lift.UniswapV2Pair.UpdateArithmetic",
