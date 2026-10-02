@@ -84,6 +84,13 @@ def owner (env : Environment) (n : Name) : Option Name :=
   | _ =>
     if let some info := env.getProjectionFnInfo? n then
       some info.ctorName.getPrefix
+    -- The per-constructor eliminator `C.elim` Lean generates for an inductive with several
+    -- constructors belongs to the inductive, like the constructor itself.
+    else if let some (.ctorInfo v) := (match n with | .str p "elim" => env.find? p | _ => (none : Option ConstantInfo)) then
+      some v.induct
+    -- A matcher (`f.match_1`, `f.match_1_1`, ...) belongs to the declaration it was compiled for.
+    else if Meta.isMatcherCore env n && !n.getPrefix.isAnonymous && env.contains n.getPrefix then
+      some n.getPrefix
     else
       let (pfx, rest) := match privatePrefix? n with
         | some p => (p, n.replacePrefix p .anonymous)

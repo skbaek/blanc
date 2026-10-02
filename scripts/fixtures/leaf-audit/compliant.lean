@@ -23,6 +23,8 @@ a one-line change to this text and must move exactly the leaf set the control na
   `qtWitness`, so the unused-definition control is not an accidental structure artifact.
   `uses_definition` and `uses_qt` are themselves used by nothing, so they are theorem leaves. The
   parser descriptors the fixture's tactic macros generate are not population.
+* `Two`'s generated per-constructor eliminators (`Two.left.elim`, `Two.right.elim`) are attributed
+  to `Two`, like its constructors; `uses_two` is used by nothing and is a theorem leaf.
 * The compiler-generated theorems of `Pt` and `Qt` (`Qt.mk.injEq`, `Qt.mk.inj`,
   `Qt.mk.sizeOf_spec`, ...) are auxiliaries attributed to their structure, not population, so
   they are not leaves (`Qt.mk.inj` is used by nothing and would be one if it counted).
@@ -64,6 +66,13 @@ structure Qt where
 
 def qtWitness : Qt := ⟨0, 0⟩
 theorem uses_qt : qtWitness.a = 0 := rfl
+
+inductive Two where
+  | left
+  | right
+
+def twoWitness : Two := .left
+theorem uses_two : twoWitness = .left := rfl
 
 @[ext (iff := false)] theorem Pt.ext_fx {a b : Pt} (h : a.x = b.x) : a = b := by
   cases a; cases b; simp_all

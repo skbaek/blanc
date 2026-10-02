@@ -1167,6 +1167,21 @@ def self_test(root: Path) -> int:
         print(f"OK — parser-descriptor rule disabled in the driver: {gained} become definition "
               f"leaves; the shared driver leaves syntax machinery out of the population")
 
+    # Generated per-constructor eliminators (`Two.left.elim`) belong to their inductive: without
+    # the rule every multi-constructor inductive contributes one definition leaf per constructor.
+    checks += 1
+    with_elims = run_census(root, source=fixture_source(
+        root, base, ('(match n with | .str p "elim" => env.find? p | _ => (none : Option ConstantInfo))',
+                     "(none : Option ConstantInfo)")))
+    gained = sorted(set(r["name"] for r in with_elims["definition_leaves"])
+                    - set(r["name"] for r in base_census["definition_leaves"]))
+    if gained != [ns + "Two.left.elim", ns + "Two.right.elim"]:
+        failures.append(f"constructor-eliminator control: expected Two's two eliminators to become "
+                        f"definition leaves, got {gained}")
+    else:
+        print(f"OK — constructor-eliminator attribution disabled in the driver: {gained} become "
+              f"definition leaves; the shared driver attributes them to their inductive")
+
     # The used side is attributed to the parent as well: without it `gq_iff` (used only through its
     # generated `gq_iff._simp_1`) is a leaf although the `simp` call in `uses_gq` needs it.
     checks += 1
