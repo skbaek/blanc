@@ -3222,6 +3222,11 @@ contract-neutral.
   They retain an arbitrary stack suffix and cut set, select the actual comparison
   continuation, and require the real target lookup and non-cut proof for EQ.
   The Pair scalar getter inversions consume both helpers.
+  For a cut run over an arbitrary instruction relation, `ric_nextP`, `ric_destP`
+  and `ric_branchP` in
+  [`Blanc/Lift/InvWalkProvenance.lean`](../Blanc/Lift/InvWalkProvenance.lean)
+  retain that relation in the exposed instruction and the continuation. Use these
+  projections when a walk must preserve execution-derivation provenance.
 - A `STATICCALL` to an arbitrary callee, whose code is unknown: its abstract outcome
   (`StaticCallPost`: flag, returned bytes as output window and return data, every storage
   map and the log list kept) and, for a set flag, the successful static child message
@@ -3230,6 +3235,9 @@ contract-neutral.
   `StaticCallPost.output` retains the parent's enclosing output when the flag
   is set; child bytes populate memory and `returnData`. It reuses
   `Resume.call_output` in `Blanc/LadderBase.lean`.
+  `ri_staticcall_bounded` additionally derives `out.length < 2^256` from the
+  actual static-call producer, for the same outcome and full return data. This
+  bound is independent of the caller's output window and needs no callee premise.
   `CALLER` (`rx_caller`, `ri_caller`), `KECCAK256` inverted (`ri_keccak`), `LOG3`
   (`rx_log3`, `ri_log3`), `SSTORE` forward at its selected cost (`rx_sstore`), `RETURN`
   inverted (`ri_return`), the memory facts `Mem.reads_data`/`Mem.read_write_word_of_wf`, and
