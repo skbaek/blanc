@@ -149,6 +149,11 @@ theorem calculateMsgCallGas_all {value gas gl extra : Nat} (hv : value ≠ 0) (h
   unfold calculateMsgCallGas
   simp only [hv, ite_false, show ¬ gl < extra + 0 by omega, hmin]
 
+/-- An address set extended by an empty one is empty exactly when it was. -/
+theorem adrSet_union_isEmpty (s t : AdrSet) (ht : t.isEmpty = true) :
+    (s.union t).isEmpty = s.isEmpty := by
+  rw [Std.HashSet.union_eq, Std.HashSet.isEmpty_union, ht, Bool.and_true]
+
 /-! ## Cut-run steps for loops around a call -/
 
 section CutSteps

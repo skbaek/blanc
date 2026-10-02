@@ -349,6 +349,52 @@ theorem userSubmissionGas_le (sevm : Sevm) (b : Devm) (σ : Blanc.WithdrawalRequ
   simp only [gasColdSload, gasStorageSet] at reads s1 s2 s3 s4 s5 v2 v3 v4
   omega
 
+/-- An `SSTORE` leaves every account other than the executing one as it was. -/
+private theorem afterSstore_get_ne {sevm : Sevm} {b : Devm} {key value : B256} {a : Adr}
+    (ha : sevm.currentTarget ≠ a) :
+    (afterSstore sevm b key value).state.get a = b.state.get a := by
+  have core : ∀ (d : Devm) (rc : Int),
+      ((d.withRefundCounter rc).setStorVal sevm.currentTarget key value).state.get a =
+        d.state.get a := by
+    intro d rc
+    show ((d.withRefundCounter rc).state.setStorVal sevm.currentTarget key value).get a = _
+    unfold State.setStorVal
+    rw [State.get_set_ne _ ha]
+    rfl
+  unfold afterSstore
+  split
+  · exact core _ _
+  · exact core (addAccessedStorageKey b sevm.currentTarget key) _
+
+private theorem afterSload_get {sevm : Sevm} {b : Devm} {key : B256} {a : Adr} :
+    (afterSload sevm b key).state.get a = b.state.get a := by
+  unfold afterSload
+  split <;> rfl
+
+/-- A committed submission leaves every account other than the predeploy as it was. -/
+theorem submissionPost_get_ne (sevm : Sevm) (b : Devm) (M : Mem) (G : Nat) {a : Adr}
+    (ha : sevm.currentTarget ≠ a) :
+    (submissionPost sevm b M G).state.get a = b.state.get a := by
+  have hSt : ∀ d : Devm, (St d [] (submissionMemory sevm M) G).state = d.state := fun _ => rfl
+  have hLog : ∀ (d : Devm) (l : Log), (d.addLog l).state = d.state := fun _ _ => rfl
+  rw [submissionPost, hSt, submissionBase, afterSstore_get_ne ha, submissionLogged, hLog,
+    submissionWordsStore, afterSstore_get_ne ha, submissionWord1Store, afterSstore_get_ne ha,
+    submissionCallerStore, afterSstore_get_ne ha, submissionTailRead, afterSload_get,
+    submissionCountStore, afterSstore_get_ne ha, submissionCountRead, afterSload_get]
+
+/-- A committed submission schedules no account deletion. -/
+theorem submissionPost_accountsToDelete (sevm : Sevm) (b : Devm) (M : Mem) (G : Nat) :
+    (submissionPost sevm b M G).accountsToDelete = b.accountsToDelete := by
+  have hSt : ∀ d : Devm, (St d [] (submissionMemory sevm M) G).accountsToDelete =
+      d.accountsToDelete := fun _ => rfl
+  have hLog : ∀ (d : Devm) (l : Log), (d.addLog l).accountsToDelete = d.accountsToDelete :=
+    fun _ _ => rfl
+  rw [submissionPost, hSt, submissionBase, afterSstore_accountsToDelete, submissionLogged,
+    hLog, submissionWordsStore, afterSstore_accountsToDelete, submissionWord1Store,
+    afterSstore_accountsToDelete, submissionCallerStore, afterSstore_accountsToDelete,
+    submissionTailRead, afterSload_accountsToDelete, submissionCountStore,
+    afterSstore_accountsToDelete, submissionCountRead, afterSload_accountsToDelete]
+
 /-! ## The looper's calldata, memory and per-call constants -/
 
 /-- The looper's memory after its one `CALLDATACOPY`: the payload at offset 0. -/
@@ -451,7 +497,10 @@ theorem flood_call {sevm : Sevm} {base : Devm} {S : List B256} {Gc : Nat} {cw : 
       post.error = base.error ∧
       post.logs = base.logs ++ [⟨withdrawalRequestPredeployAddress, [],
         Blanc.WithdrawalRequest.submissionLog entry⟩] ∧
-      base.refundCounter ≤ post.refundCounter := by
+      base.refundCounter ≤ post.refundCounter ∧
+      post.accountsToDelete.isEmpty = base.accountsToDelete.isEmpty ∧
+      (∀ a, a ≠ sevm.currentTarget → a ≠ withdrawalRequestPredeployAddress →
+        post.state.get a = base.state.get a) := by
   have hplen := Blanc.WithdrawalRequest.submissionPayload_length entry
   have hMsize := payloadMem_size hplen
   generalize hMp : payloadMem (Blanc.WithdrawalRequest.submissionPayload entry) = Mp at hMsize ⊢
@@ -670,8 +719,18 @@ theorem flood_call {sevm : Sevm} {base : Devm} {S : List B256} {Gc : Nat} {cw : 
       rw [afterSload_refundCounter]; rfl
     rw [h0] at h
     exact h
+  have catd : (submissionPost (initSevm msg) (afterSload (initSevm msg) (initDevm msg) 0)
+      Mem.empty (fwd + gCallStipend - U)).accountsToDelete.isEmpty = true := by
+    rw [submissionPost_accountsToDelete, afterSload_accountsToDelete]
+    exact Std.HashSet.isEmpty_emptyWithCapacity
+  have cothers : ∀ a, a ≠ withdrawalRequestPredeployAddress →
+      (submissionPost (initSevm msg) (afterSload (initSevm msg) (initDevm msg) 0)
+        Mem.empty (fwd + gCallStipend - U)).state.get a = (initDevm msg).state.get a := by
+    intro a ha
+    rw [submissionPost_get_ne _ _ _ _ (by change msg.currentTarget ≠ a; rw [mtarget]; exact Ne.symm ha),
+      afterSload_get]
   generalize hcp : submissionPost (initSevm msg) (afterSload (initSevm msg) (initDevm msg) 0)
-    Mem.empty (fwd + gCallStipend - U) = cpost at run cout crep clogs cacct cfacts crefund
+    Mem.empty (fwd + gCallStipend - U) = cpost at run cout crep clogs cacct cfacts crefund catd cothers
   -- the world the child started from
   have hinit : ∀ a, (initDevm msg).getAcct a = (stmid.addBal cw.toAdr 1).get a := by
     intro a
@@ -719,12 +778,12 @@ theorem flood_call {sevm : Sevm} {base : Devm} {S : List B256} {Gc : Nat} {cw : 
       (fwd + (accessCost cw.toAdr base.accessedAddresses + 0 + gasCallValue) + 0)
       (0 : B256).toNat (56 : B256).toNat (0 : B256).toNat (0 : B256).toNat) cpost
     (0 : B256).toNat (0 : B256).toNat = post at run pfacts
-  obtain ⟨pstack, pmem', pgas, pstate, -, plogs, prefund, perr, -⟩ := pfacts
+  obtain ⟨pstack, pmem', pgas, pstate, -, plogs, prefund, perr, -, -, patd, -⟩ := pfacts
   rw [pmem] at pmem'
   have pstack' : post.stack = 1 :: S := pstack
   have hSt := St.self pstack' pmem'
   have hd1gas : (addAccessedAddress (St base S Mp Gc) cw.toAdr).gasLeft = Gc := rfl
-  refine ⟨post, post.gasLeft, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨post, post.gasLeft, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [← hSt]; exact run
   · have hf : fwd ≤ Gc - (accessCost cw.toAdr base.accessedAddresses + 0 + gasCallValue) := by
       rw [← hfwd]; unfold except64th; omega
@@ -758,5 +817,13 @@ theorem flood_call {sevm : Sevm} {base : Devm} {S : List B256} {Gc : Nat} {cw : 
         base.refundCounter := rfl
     rw [hp]
     omega
+  · rw [patd, adrSet_union_isEmpty _ _ catd]
+    rfl
+  · intro a haL haP
+    rw [pstate, cothers a haP, ← hmsg]
+    change (stmid.addBal cw.toAdr 1).get a = _
+    have hne : cw.toAdr ≠ a := by rw [hcw]; exact Ne.symm haP
+    unfold State.addBal
+    rw [State.setBal_get_ne hne, ← hstmid, State.setBal_get_ne (Ne.symm haL)]
 
 end Blanc.Lift.WithdrawalRequest.FloodWalk

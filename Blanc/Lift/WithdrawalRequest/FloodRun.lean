@@ -73,7 +73,8 @@ def floodReserve (k i : Nat) : Nat :=
 after `i` submissions, `i` wei paid, error unchanged, `i` logs appended, and the reserve. -/
 structure FloodInv (sevm : Sevm) (k : Nat) (entry : Blanc.WithdrawalRequest.Entry)
     (σ0 : Blanc.WithdrawalRequest.State) (bal0 : Nat) (logs0 : List Log)
-    (err0 : Option SettledHalt) (i : Nat) (base : Devm) (G : Nat) : Prop where
+    (err0 : Option SettledHalt) (st0 : State) (del0 : Bool) (i : Nat) (base : Devm) (G : Nat) :
+    Prop where
   code : base.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode
   rep : Blanc.WithdrawalRequest.RepresentsStorage
     (base.getStor withdrawalRequestPredeployAddress).get (floodState σ0 entry i)
@@ -84,6 +85,9 @@ structure FloodInv (sevm : Sevm) (k : Nat) (entry : Blanc.WithdrawalRequest.Entr
   gasLt : G < 2 ^ 256
   reserve : floodReserve k i ≤ G
   refund : 0 ≤ base.refundCounter
+  del : base.accountsToDelete.isEmpty = del0
+  others : ∀ a, a ≠ sevm.currentTarget → a ≠ withdrawalRequestPredeployAddress →
+    base.state.get a = st0.get a
 
 theorem floodState_bounds {sevm : Sevm} {k : Nat} {entry : Blanc.WithdrawalRequest.Entry}
     {σ0 : Blanc.WithdrawalRequest.State} (env : FloodEnv sevm k entry σ0) {i : Nat} (hi : i < k) :
@@ -160,15 +164,15 @@ at its own entry runs through one committed submission back to the head with the
 `i + 1`, keeping the invariant. -/
 theorem flood_iter {sevm : Sevm} {k : Nat} {entry : Blanc.WithdrawalRequest.Entry}
     {σ0 : Blanc.WithdrawalRequest.State} {bal0 : Nat} {logs0 : List Log}
-    {err0 : Option SettledHalt} (env : FloodEnv sevm k entry σ0) {i : Nat} (hi : i < k)
-    {base : Devm} {G : Nat} (inv : FloodInv sevm k entry σ0 bal0 logs0 err0 i base G)
+    {err0 : Option SettledHalt} {st0 : State} {del0 : Bool} (env : FloodEnv sevm k entry σ0) {i : Nat} (hi : i < k)
+    {base : Devm} {G : Nat} (inv : FloodInv sevm k entry σ0 bal0 logs0 err0 st0 del0 i base G)
     (hbal0 : k ≤ bal0) :
     ∃ base' G', SFunc.RunExactCut prog sevm [1]
         (St base [Nat.toB256 i] (payloadMem (Blanc.WithdrawalRequest.submissionPayload entry)) G)
         Blanc.Lift.FloodLooper.t_0007_c1
         (.at 1 (St base' [Nat.toB256 (i + 1)]
           (payloadMem (Blanc.WithdrawalRequest.submissionPayload entry)) G')) ∧
-      FloodInv sevm k entry σ0 bal0 logs0 err0 (i + 1) base' G' := by
+      FloodInv sevm k entry σ0 bal0 logs0 err0 st0 del0 (i + 1) base' G' := by
   have hres := inv.reserve
   have hmeta := metaValueGas_flood env hi
   have hGlt := inv.gasLt
@@ -192,7 +196,7 @@ theorem flood_iter {sevm : Sevm} {k : Nat} {entry : Blanc.WithdrawalRequest.Entr
       have hz : (0 : B256) = Nat.toB256 0 := rfl
       rw [hz]
       exact toB256_ne_of_lt (by omega) (by decide) (by omega)
-  obtain ⟨post, G', run, hle, hge, hcode, hrep, hbal', herr, hlogs, hrefund⟩ :=
+  obtain ⟨post, G', run, hle, hge, hcode, hrep, hbal', herr, hlogs, hrefund, hdel, hothers⟩ :=
     flood_call (S := [Nat.toB256 i]) (Gc := G0) env.fork env.static env.depth env.caller
       env.user env.self looper_callee inv.code inv.rep
       (by rw [f.1]; exact env.excess) (floodState_bounds env hi)
@@ -233,7 +237,7 @@ theorem flood_iter {sevm : Sevm} {k : Nat} {entry : Blanc.WithdrawalRequest.Entr
     refine rxc_add' (one_add_toB256 (by omega)) (by simp only [List.length_nil]; omega) ?_
     refine rxc_push rfl (by simp only [List.length_cons, List.length_nil]; omega) ?_
     exact rxc_jumpCut (by decide)
-  · refine ⟨hcode, hrep, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · refine ⟨hcode, hrep, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · have := inv.bal
       omega
     · rw [herr]; exact inv.err
@@ -241,11 +245,15 @@ theorem flood_iter {sevm : Sevm} {k : Nat} {entry : Blanc.WithdrawalRequest.Entr
     · omega
     · exact reserve_step hi hres hge hmeta
     · exact Int.le_trans inv.refund hrefund
+    · rw [hdel]; exact inv.del
+    · intro a haL haP
+      rw [hothers a haL haP]
+      exact inv.others a haL haP
 
 /-- What the run leaves at `STOP` after `k` submissions. -/
 def FloodDone (sevm : Sevm) (k : Nat) (entry : Blanc.WithdrawalRequest.Entry)
     (σ0 : Blanc.WithdrawalRequest.State) (bal0 : Nat) (logs0 : List Log)
-    (err0 : Option SettledHalt) (post : Devm) : Prop :=
+    (err0 : Option SettledHalt) (st0 : State) (del0 : Bool) (post : Devm) : Prop :=
   post.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode ∧
   Blanc.WithdrawalRequest.RepresentsStorage
     (post.getStor withdrawalRequestPredeployAddress).get (floodState σ0 entry k) ∧
@@ -253,21 +261,24 @@ def FloodDone (sevm : Sevm) (k : Nat) (entry : Blanc.WithdrawalRequest.Entry)
   post.error = err0 ∧
   post.logs = logs0 ++ List.replicate k
     ⟨withdrawalRequestPredeployAddress, [], Blanc.WithdrawalRequest.submissionLog entry⟩ ∧
-  0 ≤ post.refundCounter
+  0 ≤ post.refundCounter ∧
+  post.accountsToDelete.isEmpty = del0 ∧
+  (∀ a, a ≠ sevm.currentTarget → a ≠ withdrawalRequestPredeployAddress →
+    post.state.get a = st0.get a)
 
 /-- **The exit.**  At `i = k` the head's comparison succeeds and the looper stops. -/
 theorem flood_exit {sevm : Sevm} {k : Nat} {entry : Blanc.WithdrawalRequest.Entry}
     {σ0 : Blanc.WithdrawalRequest.State} {bal0 : Nat} {logs0 : List Log}
-    {err0 : Option SettledHalt} (env : FloodEnv sevm k entry σ0) {base : Devm} {G : Nat}
-    (inv : FloodInv sevm k entry σ0 bal0 logs0 err0 k base G) :
+    {err0 : Option SettledHalt} {st0 : State} {del0 : Bool} (env : FloodEnv sevm k entry σ0) {base : Devm} {G : Nat}
+    (inv : FloodInv sevm k entry σ0 bal0 logs0 err0 st0 del0 k base G) :
     ∃ post, SFunc.RunExactCut prog sevm [1]
         (St base [Nat.toB256 k] (payloadMem (Blanc.WithdrawalRequest.submissionPayload entry)) G)
         Blanc.Lift.FloodLooper.t_0007_c1 (.done (.halted post)) ∧
-      FloodDone sevm k entry σ0 bal0 logs0 err0 post := by
+      FloodDone sevm k entry σ0 bal0 logs0 err0 st0 del0 post := by
   have hres := inv.reserve
   obtain ⟨G0, rfl⟩ : ∃ G0, G = G0 + 26 := ⟨G - 26, by unfold floodReserve at hres; omega⟩
   refine ⟨St base [Nat.toB256 k] (payloadMem (Blanc.WithdrawalRequest.submissionPayload entry))
-    G0, ?_, inv.code, inv.rep, inv.bal, inv.err, inv.logs, inv.refund⟩
+    G0, ?_, inv.code, inv.rep, inv.bal, inv.err, inv.logs, inv.refund, inv.del, inv.others⟩
   unfold Blanc.Lift.FloodLooper.t_0007_c1
   refine rxc_dest ?_
   refine rxc_dup (n := 0) (w := Nat.toB256 k) rfl
@@ -288,18 +299,18 @@ theorem flood_exit {sevm : Sevm} {k : Nat} {entry : Blanc.WithdrawalRequest.Entr
 iterations and stops. -/
 theorem flood_loop {sevm : Sevm} {k : Nat} {entry : Blanc.WithdrawalRequest.Entry}
     {σ0 : Blanc.WithdrawalRequest.State} {bal0 : Nat} {logs0 : List Log}
-    {err0 : Option SettledHalt} (env : FloodEnv sevm k entry σ0) (hbal0 : k ≤ bal0)
-    {base : Devm} {G : Nat} (inv : FloodInv sevm k entry σ0 bal0 logs0 err0 0 base G) :
+    {err0 : Option SettledHalt} {st0 : State} {del0 : Bool} (env : FloodEnv sevm k entry σ0) (hbal0 : k ≤ bal0)
+    {base : Devm} {G : Nat} (inv : FloodInv sevm k entry σ0 bal0 logs0 err0 st0 del0 0 base G) :
     ∃ post, SFunc.RunExactCut prog sevm []
         (St base [Nat.toB256 0] (payloadMem (Blanc.WithdrawalRequest.submissionPayload entry)) G)
         Blanc.Lift.FloodLooper.t_0007_c1 (.done (.halted post)) ∧
-      FloodDone sevm k entry σ0 bal0 logs0 err0 post := by
+      FloodDone sevm k entry σ0 bal0 logs0 err0 st0 del0 post := by
   have loop := SFunc.RunExactCut.iterate (fs := prog) (sevm := sevm) (C := []) (k := 1)
     prog_head (by simp only [List.not_mem_nil, not_false_eq_true])
     (fun i devm => ∃ base G, devm = St base [Nat.toB256 i]
       (payloadMem (Blanc.WithdrawalRequest.submissionPayload entry)) G ∧
-      FloodInv sevm k entry σ0 bal0 logs0 err0 i base G) k
-    (fun r => ∃ post, r = .done (.halted post) ∧ FloodDone sevm k entry σ0 bal0 logs0 err0 post)
+      FloodInv sevm k entry σ0 bal0 logs0 err0 st0 del0 i base G) k
+    (fun r => ∃ post, r = .done (.halted post) ∧ FloodDone sevm k entry σ0 bal0 logs0 err0 st0 del0 post)
     (by
       rintro i hi devm ⟨base, G, rfl, inv⟩
       obtain ⟨base', G', run, inv'⟩ := flood_iter env hi inv hbal0
@@ -331,12 +342,14 @@ theorem flood_frame {sevm : Sevm} {k : Nat} {entry : Blanc.WithdrawalRequest.Ent
     (hgas : floodGas k ≤ pre.gasLeft) (hlt : pre.gasLeft < 2 ^ 256)
     (hrefund : 0 ≤ pre.refundCounter) :
     ∃ post, Nonempty (Exec 0 sevm pre (.ok post)) ∧
-      FloodDone sevm k entry σ0 (pre.getBal sevm.currentTarget).toNat pre.logs pre.error post := by
+      FloodDone sevm k entry σ0 (pre.getBal sevm.currentTarget).toNat pre.logs pre.error
+        pre.state pre.accountsToDelete.isEmpty post := by
   obtain ⟨G, hG⟩ : ∃ G, G + 25 = pre.gasLeft := ⟨pre.gasLeft - 25, by unfold floodGas at hgas; omega⟩
   have hpre := pre_eq_St hstack hmem hG
-  have inv : FloodInv sevm k entry σ0 (pre.getBal sevm.currentTarget).toNat pre.logs pre.error 0
+  have inv : FloodInv sevm k entry σ0 (pre.getBal sevm.currentTarget).toNat pre.logs pre.error
+      pre.state pre.accountsToDelete.isEmpty 0
       pre G := by
-    refine ⟨hinstalled, hrep, rfl, rfl, ?_, by omega, by unfold floodGas at hgas; omega, hrefund⟩
+    refine ⟨hinstalled, hrep, rfl, rfl, ?_, by omega, by unfold floodGas at hgas; omega, hrefund, rfl, fun _ _ _ => rfl⟩
     rw [List.replicate_zero, List.append_nil]
   obtain ⟨post, loop, done⟩ := flood_loop env hbal inv
   refine ⟨post, lift_exact Blanc.Lift.FloodLooper.cert_check Blanc.Lift.FloodLooper.jumps_ok
@@ -376,9 +389,10 @@ predeploy is installed with storage representing an active model state `σ0` at 
 the looper holds at least `k` wei and the gas is at least `floodGas k`, executes without
 error.  Its committed effects: the predeploy storage represents `σ0` after `k` submissions of
 `entry` (the looper as caller, the payload's pubkey and amount), the looper paid exactly `k`
-wei, the frame's logs are exactly the `k` submission logs, and its refund counter is
+wei, the frame's logs are exactly the `k` submission logs, its refund counter is
 nonnegative (`FloodEnv.queueOrig`: the queue region is fresh in the transaction-original
-state). -/
+state), it schedules no account deletion, and every account other than the looper and the
+predeploy is exactly as the message found it. -/
 theorem flood_exec {msg : Msg} {k : Nat} {entry : Blanc.WithdrawalRequest.Entry}
     {σ0 : Blanc.WithdrawalRequest.State} (env : FloodEnv (initSevm msg) k entry σ0)
     (hcode : msg.code = Blanc.Lift.FloodLooper.code)
@@ -395,18 +409,22 @@ theorem flood_exec {msg : Msg} {k : Nat} {entry : Blanc.WithdrawalRequest.Entry}
       (post.getBal msg.currentTarget).toNat + k = (msg.benv.state.bal msg.currentTarget).toNat ∧
       post.logs = List.replicate k
         ⟨withdrawalRequestPredeployAddress, [], Blanc.WithdrawalRequest.submissionLog entry⟩ ∧
-      0 ≤ post.refundCounter := by
+      0 ≤ post.refundCounter ∧ post.accountsToDelete.isEmpty = true ∧
+      (∀ a, a ≠ msg.currentTarget → a ≠ withdrawalRequestPredeployAddress →
+        post.state.get a = msg.benv.state.get a) := by
   have hlog0 : (initDevm msg).logs = [] := by
     change (match msg.benv.stat.rules.stateGas with
       | none => []
       | some _ => _) = []
     have hsg : msg.benv.stat.rules.stateGas = none := CoveredFork.rules_stateGas_none env.fork
     rw [hsg]
-  obtain ⟨post, run, code, rep, bal, err, logs, refund⟩ := flood_frame env hcode
+  obtain ⟨post, run, code, rep, bal, err, logs, refund, del, others⟩ := flood_frame env hcode
     (pre := initDevm msg) rfl rfl hinstalled hrep hbal hgas hlt (Int.le_refl 0)
   obtain ⟨run⟩ := run
   refine ⟨post, (exec_iff_exec_eq 0 (initSevm msg) (initDevm msg) _).mp ⟨run⟩, err, code, rep,
-    bal, ?_, refund⟩
-  rw [logs, hlog0, List.nil_append]
+    bal, ?_, refund, ?_, others⟩
+  · rw [logs, hlog0, List.nil_append]
+  · rw [del]
+    exact Std.HashSet.isEmpty_emptyWithCapacity
 
 end Blanc.Lift.WithdrawalRequest.FloodWalk
