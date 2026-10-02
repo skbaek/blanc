@@ -241,6 +241,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.ApproveSource",
         "Lift.UniswapV2Pair.TransferCore",
         "Lift.UniswapV2Pair.TransferEntries",
+        "Lift.UniswapV2Pair.TransferSource",
         "Lift.UniswapV2Pair.UpdateArithmetic",
         "Lift.UniswapV2Pair.UpdateSource",
         "Lift.UniswapV2Pair.BalanceCallWalk",
