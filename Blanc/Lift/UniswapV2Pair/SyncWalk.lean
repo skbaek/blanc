@@ -1,5 +1,8 @@
 import Blanc.Lift.UniswapV2Pair.BalanceCallWalk
+import Blanc.Lift.UniswapV2Pair.GetterWalk
+import Blanc.Lift.UniswapV2Pair.GetterStringWalk
 import Blanc.Lift.CodeSizeWalk
+import Blanc.Lift.InvWalkDispatch
 
 namespace Blanc.Lift.UniswapV2Pair
 
@@ -1163,5 +1166,445 @@ theorem syncCalleePrefix_exact {sevm : Sevm} {b d0 d1 : Devm}
   apply syncFirstRequest_exact fork mem room static rfl sentry
   exact syncBalancePair_exact fork (balanceRequestMemory_ptr mem sevm.currentTarget) mem.wf room
     nonzero0 call0 success0 returnedGas0 long0 nonzero1 call1 success1 returnedGas1 long1 body
+
+/-- Gas of the actual slot-8 extraction, shared update and unlock. The oracle
+charges occur only when the shared update takes its accumulator branch. -/
+def syncUpdateUnlockGas (sevm : Sevm) (b : Devm) (balance0 balance1 : B256)
+    (n headerLoad load9 store9 load10 store10 load8 store8 G : Nat) : Nat :=
+  let u := afterSload sevm b 8
+  let old0 := reserve0Read (b.getStorVal sevm.currentTarget 8)
+  let old1 := reserve1Read (b.getStorVal sevm.currentTarget 8)
+  G + 8 + sstoreCost sevm (syncUpdatedWorld sevm b balance0 balance1) 12 1 + 7 +
+    updateSyncGas n + load8 + store8 + 110 +
+    (if updateOracleActive sevm u old0 old1 then load9 + store9 + load10 + store10 + 382 else 0) +
+    17 + 20 +
+    (if updateOraclePrefixWord (u.getStorVal sevm.currentTarget 8) sevm.benvStat.time old0 = 0
+      then 0 else 17) + headerLoad + 75 +
+    (if updateElapsedWord (u.getStorVal sevm.currentTarget 8) sevm.benvStat.time &&& reserveMask32 = 0
+      then 0 else 17) + 60 + sloadCost sevm b 8 + 43
+
+/-- The post-decoder suffix is closed by the actual shared-update theorem,
+including the one packed store, conditional oracle writes, Sync log and unlock.
+Only selected primitive charges and separate SSTORE sentries are supplied. -/
+theorem syncUpdateUnlock_gasExact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G n headerLoad load9 store9 load10 store10 load8 store8 : Nat}
+    {balance0 balance1 tag : B256}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 n M)
+    (static : sevm.isStatic = false) (bound0 : balance0.toNat < 2 ^ 112)
+    (bound1 : balance1.toNat < 2 ^ 112) (room : R.length ≤ 1007) :
+    let u := afterSload sevm b 8
+    let old0 := reserve0Read (b.getStorVal sevm.currentTarget 8)
+    let old1 := reserve1Read (b.getStorVal sevm.currentTarget 8)
+    let finalGas := G + 8 + sstoreCost sevm (syncUpdatedWorld sevm b balance0 balance1) 12 1 + 7
+    headerLoad = sloadCost sevm u 8 →
+    load8 = sloadCost sevm (updateOracleWorld sevm u old0 old1) 8 →
+    store8 = sstoreCost sevm (afterSload sevm (updateOracleWorld sevm u old0 old1) 8) 8
+      (updateFinalPackedWord sevm u old0 old1 balance0 balance1) →
+    (updateOracleActive sevm u old0 old1 →
+      load9 = sloadCost sevm (afterSload sevm u 8) 9 ∧
+      store9 = sstoreCost sevm (afterSload sevm (afterSload sevm u 8) 9) 9
+        (updateAccumulatorWord ((afterSload sevm u 8).getStorVal sevm.currentTarget 9)
+          (updatePriceWord old0 old1)
+          (updateElapsedWord (u.getStorVal sevm.currentTarget 8) sevm.benvStat.time)) ∧
+      load10 = sloadCost sevm
+        (updateAccumulatorPost sevm (afterSload sevm u 8) 9 (updatePriceWord old0 old1)
+          (updateElapsedWord (u.getStorVal sevm.currentTarget 8) sevm.benvStat.time)) 10 ∧
+      store10 = sstoreCost sevm (afterSload sevm
+        (updateAccumulatorPost sevm (afterSload sevm u 8) 9 (updatePriceWord old0 old1)
+          (updateElapsedWord (u.getStorVal sevm.currentTarget 8) sevm.benvStat.time)) 10) 10
+        (updateAccumulatorWord
+          ((updateAccumulatorPost sevm (afterSload sevm u 8) 9 (updatePriceWord old0 old1)
+            (updateElapsedWord (u.getStorVal sevm.currentTarget 8) sevm.benvStat.time)).getStorVal
+            sevm.currentTarget 10) (updatePriceWord old1 old0)
+          (updateElapsedWord (u.getStorVal sevm.currentTarget 8) sevm.benvStat.time))) →
+    gCallStipend < finalGas + updateSyncGas n + store8 →
+    (updateOracleActive sevm u old0 old1 →
+      gCallStipend < finalGas + updateSyncGas n + load8 + store8 + 110 + store10) →
+    (updateOracleActive sevm u old0 old1 →
+      gCallStipend < finalGas + updateSyncGas n + load8 + store8 + 110 +
+        load10 + store10 + 42 + 149 + store9) →
+    gCallStipend < G + 8 + sstoreCost sevm (syncUpdatedWorld sevm b balance0 balance1) 12 1 →
+    SFunc.RunExact cert.prog sevm
+      (St b (balance1 :: balance0 :: 0x1fd4 :: tag :: R) M
+        (syncUpdateUnlockGas sevm b balance0 balance1 n headerLoad load9 store9 load10 store10 load8 store8 G))
+      SyncBalanceSite.second.afterDecodeTree
+      (.returned (St (syncResultWorld sevm b balance0 balance1) R
+        (syncResultMemory sevm b M balance0 balance1) G)) := by
+  dsimp only
+  intro headerCharge packedLoadCharge packedStoreCharge oracleCharges sentry8 sentry10 sentry9 unlockSentry
+  unfold syncUpdateUnlockGas
+  apply syncUpdateUnlock_exact fork static (by omega) rfl unlockSentry
+  exact update_exact fork mem static bound0 bound1
+    (by simp only [List.length_cons]; omega)
+    headerCharge packedLoadCharge packedStoreCharge oracleCharges sentry8 sentry10 sentry9
+
+
+/-- The complete sync callee forward run consumes both actual compiled
+calls and the closed update/unlock suffix. No endpoint run is an ENV premise. -/
+theorem syncCallee_exact {sevm : Sevm} {b d0 d1 : Devm}
+    {R : List B256} {M : Mem} {callGas0 callGas1 G headerLoad load9 store9 load10 store10 load8 store8 : Nat}
+    {tag : B256}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (mem : PtrMem 128 96 M) (room : R.length ≤ 1007)
+    (static : sevm.isStatic = false) (unlocked : b.getStorVal sevm.currentTarget 12 = 1)
+    (sentry : gCallStipend <
+      (callGas0 + 5 + 22 + temporalAccountAccessCost (syncFirstWorld sevm b)
+        (syncFirstToken sevm b).toAdr) + sloadCost sevm (syncLockedWorld sevm b) 6 + 119 +
+      sstoreCost sevm (afterSload sevm b 12) 12 0)
+    (nonzero0 : ((syncFirstWorld sevm b).getCode (syncFirstToken sevm b).toAdr).size.toB256 ≠ 0)
+    (call0 : Ninst.RunCompiled sevm
+      (St (temporalAccountAccessBase (syncFirstWorld sevm b) (syncFirstToken sevm b).toAdr)
+        (callGas0.toB256 :: (syncFirstToken sevm b) :: 128 :: 36 :: 128 :: 32 :: 164 ::
+          0x70a08231 :: (syncFirstToken sevm b) :: 0x1fd4 :: tag :: R)
+        (balanceRequestMemory M sevm.currentTarget) callGas0) (.exec .staticcall) d0)
+    (success0 : d0.stack = 1 :: 164 :: 0x70a08231 :: (syncFirstToken sevm b) :: 0x1fd4 :: tag :: R)
+    (returnedGas0 : d0.gasLeft = callGas1 + 5 + 22 +
+      temporalAccountAccessCost (afterSload sevm d0 7)
+        (d0.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr +
+      sloadCost sevm d0 7 + 113 + 70)
+    (long0 : 32 ≤ d0.returnData.length)
+    (nonzero1 : ((afterSload sevm d0 7).getCode
+      (d0.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr).size.toB256 ≠ 0)
+    (call1 : Ninst.RunCompiled sevm
+      (St (temporalAccountAccessBase (afterSload sevm d0 7)
+          (d0.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr)
+        (callGas1.toB256 :: (d0.getStorVal sevm.currentTarget 7).toAdr.toB256 ::
+          128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
+          (d0.getStorVal sevm.currentTarget 7).toAdr.toB256 ::
+          Bytes.toB256 (d0.returnData.take 32) :: 0x1fd4 :: tag :: R)
+        (balanceRequestMemory (balanceReplyMemory M sevm.currentTarget d0.returnData)
+          sevm.currentTarget) callGas1) (.exec .staticcall) d1)
+    (success1 : d1.stack = 1 :: 164 :: 0x70a08231 ::
+      (d0.getStorVal sevm.currentTarget 7).toAdr.toB256 ::
+      Bytes.toB256 (d0.returnData.take 32) :: 0x1fd4 :: tag :: R)
+    (returnedGas1 : d1.gasLeft = (syncUpdateUnlockGas sevm d1 (Bytes.toB256 (d0.returnData.take 32)) (Bytes.toB256 (d1.returnData.take 32)) 192 headerLoad load9 store9 load10 store10 load8 store8 G) + 70)
+    (long1 : 32 ≤ d1.returnData.length)
+    (bound0 : (Bytes.toB256 (d0.returnData.take 32)).toNat < 2 ^ 112)
+    (bound1 : (Bytes.toB256 (d1.returnData.take 32)).toNat < 2 ^ 112) :
+    let balance0 := (Bytes.toB256 (d0.returnData.take 32))
+    let balance1 := (Bytes.toB256 (d1.returnData.take 32))
+    let u := afterSload sevm d1 8
+    let old0 := reserve0Read (d1.getStorVal sevm.currentTarget 8)
+    let old1 := reserve1Read (d1.getStorVal sevm.currentTarget 8)
+    let finalGas := G + 8 + sstoreCost sevm (syncUpdatedWorld sevm d1 balance0 balance1) 12 1 + 7
+    headerLoad = sloadCost sevm u 8 →
+    load8 = sloadCost sevm (updateOracleWorld sevm u old0 old1) 8 →
+    store8 = sstoreCost sevm (afterSload sevm (updateOracleWorld sevm u old0 old1) 8) 8
+      (updateFinalPackedWord sevm u old0 old1 balance0 balance1) →
+    (updateOracleActive sevm u old0 old1 →
+      load9 = sloadCost sevm (afterSload sevm u 8) 9 ∧
+      store9 = sstoreCost sevm (afterSload sevm (afterSload sevm u 8) 9) 9
+        (updateAccumulatorWord ((afterSload sevm u 8).getStorVal sevm.currentTarget 9)
+          (updatePriceWord old0 old1)
+          (updateElapsedWord (u.getStorVal sevm.currentTarget 8) sevm.benvStat.time)) ∧
+      load10 = sloadCost sevm
+        (updateAccumulatorPost sevm (afterSload sevm u 8) 9 (updatePriceWord old0 old1)
+          (updateElapsedWord (u.getStorVal sevm.currentTarget 8) sevm.benvStat.time)) 10 ∧
+      store10 = sstoreCost sevm (afterSload sevm
+        (updateAccumulatorPost sevm (afterSload sevm u 8) 9 (updatePriceWord old0 old1)
+          (updateElapsedWord (u.getStorVal sevm.currentTarget 8) sevm.benvStat.time)) 10) 10
+        (updateAccumulatorWord
+          ((updateAccumulatorPost sevm (afterSload sevm u 8) 9 (updatePriceWord old0 old1)
+            (updateElapsedWord (u.getStorVal sevm.currentTarget 8) sevm.benvStat.time)).getStorVal
+            sevm.currentTarget 10) (updatePriceWord old1 old0)
+          (updateElapsedWord (u.getStorVal sevm.currentTarget 8) sevm.benvStat.time))) →
+    gCallStipend < finalGas + updateSyncGas 192 + store8 →
+    (updateOracleActive sevm u old0 old1 →
+      gCallStipend < finalGas + updateSyncGas 192 + load8 + store8 + 110 + store10) →
+    (updateOracleActive sevm u old0 old1 →
+      gCallStipend < finalGas + updateSyncGas 192 + load8 + store8 + 110 +
+        load10 + store10 + 42 + 149 + store9) →
+    gCallStipend < G + 8 + sstoreCost sevm (syncUpdatedWorld sevm d1 balance0 balance1) 12 1 →
+    SFunc.RunExact cert.prog sevm
+      (St b (tag :: R) M (syncCalleePrefixGas sevm b callGas0)) t_1df5_c31
+      (.returned (St (syncResultWorld sevm d1 balance0 balance1) R
+        (syncResultMemory sevm d1
+          (balanceReplyMemory (balanceReplyMemory M sevm.currentTarget d0.returnData)
+            sevm.currentTarget d1.returnData) balance0 balance1) G)) := by
+  dsimp only
+  intro headerCharge packedLoadCharge packedStoreCharge oracleCharges sentry8 sentry10 sentry9 unlockSentry
+  have request0 : PtrMem 128 192 (balanceRequestMemory M sevm.currentTarget) :=
+    balanceRequestMemory_ptr mem sevm.currentTarget
+  have reply0 := balanceReplyMemory_ptr d0.returnData request0
+  have request1 : PtrMem 128 192
+      (balanceRequestMemory (balanceReplyMemory M sevm.currentTarget d0.returnData)
+        sevm.currentTarget) := balanceRequestMemory_ptr reply0 sevm.currentTarget
+  have reply1 := balanceReplyMemory_ptr d1.returnData request1
+  apply syncCalleePrefix_exact fork mem (by omega) static unlocked sentry nonzero0 call0 success0
+    returnedGas0 long0 nonzero1 call1 success1 returnedGas1 long1
+  exact syncUpdateUnlock_gasExact fork reply1 static bound0 bound1 room
+    headerCharge packedLoadCharge packedStoreCharge oracleCharges sentry8 sentry10 sentry9 unlockSentry
+
+/-- The literal sync selector follows the actual dispatcher to its wrapper.
+Every cut step keeps the instruction provenance from the same raw derivation. -/
+theorem syncSelector_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {M : Mem} {G : Nat} {o : Outcome}
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
+    (run : SFunc.RunP (StepIn D) cert.prog sevm (St b [] M G) t_001a_c0 o) :
+    ∃ G', SFunc.RunP (StepIn D) cert.prog sevm (St b [0xfff6cae9] M G') t_067b_c78 o := by
+  have h := SFunc.runP_iff_runCutP_nil.mp run
+  unfold t_001a_c0 at h
+  obtain ⟨d, hd, h⟩ := ric_nextP h
+  obtain ⟨_, rfl⟩ := ri_push hd.toRun
+  obtain ⟨d, hd, h⟩ := ric_nextP h
+  obtain ⟨_, rfl⟩ := ri_calldataload hd.toRun
+  obtain ⟨d, hd, h⟩ := ric_nextP h
+  obtain ⟨_, rfl⟩ := ri_push hd.toRun
+  obtain ⟨d, hd, h⟩ := ric_nextP h
+  obtain ⟨_, hd⟩ := ri_shr hd.toRun
+  simp only [show Bytes.toB256 [0x00] = (0 : B256) from rfl,
+    show Bytes.toB256 [0xe0] = (224 : B256) from rfl,
+    show (224 : B256).toNat = 224 from rfl,
+    show Sevm.dataWord sevm 0 >>> 224 = (0xfff6cae9 : B256) from selector] at hd
+  subst d
+  obtain ⟨_, h⟩ := ric_cmp_gtP StepIn.toRun h
+  simp only [show B256.gtCheck (Bytes.toB256 [0x6a, 0x62, 0x78, 0x42])
+    (0xfff6cae9 : B256) = 0 from by decide, ite_true] at h
+  unfold t_002b_c0 at h
+  obtain ⟨_, h⟩ := ric_cmp_gtP StepIn.toRun h
+  simp only [show B256.gtCheck (Bytes.toB256 [0xba, 0x9a, 0x7a, 0x56])
+    (0xfff6cae9 : B256) = 0 from by decide, ite_true] at h
+  unfold t_0036_c0 at h
+  obtain ⟨_, h⟩ := ric_cmp_gtP StepIn.toRun h
+  simp only [show B256.gtCheck (Bytes.toB256 [0xd2, 0x12, 0x20, 0xa7])
+    (0xfff6cae9 : B256) = 0 from by decide, ite_true] at h
+  unfold t_0041_c0 at h
+  obtain ⟨_, h⟩ := ric_cmp_eqP (g := t_05da_c75) StepIn.toRun (by decide) rfl h
+  simp only [show B256.eqCheck (Bytes.toB256 [0xd2, 0x12, 0x20, 0xa7])
+    (0xfff6cae9 : B256) = 0 from by decide, ite_true] at h
+  unfold t_004c_c0 at h
+  obtain ⟨_, h⟩ := ric_cmp_eqP (g := t_05e2_c76) StepIn.toRun (by decide) rfl h
+  simp only [show B256.eqCheck (Bytes.toB256 [0xd5, 0x05, 0xac, 0xcf])
+    (0xfff6cae9 : B256) = 0 from by decide, ite_true] at h
+  unfold t_0057_c0 at h
+  obtain ⟨_, h⟩ := ric_cmp_eqP (g := t_0640_c77) StepIn.toRun (by decide) rfl h
+  simp only [show B256.eqCheck (Bytes.toB256 [0xdd, 0x62, 0xed, 0x3e])
+    (0xfff6cae9 : B256) = 0 from by decide, ite_true] at h
+  unfold t_0062_c0 at h
+  obtain ⟨gas, h⟩ := ric_cmp_eqP (g := t_067b_c78) StepIn.toRun (by decide) rfl h
+  simp only [show B256.eqCheck (Bytes.toB256 [0xff, 0xf6, 0xca, 0xe9])
+    (0xfff6cae9 : B256) = 1 from by decide,
+    show ¬ ((1 : B256) = 0) from by decide, ite_false] at h
+  exact ⟨gas, SFunc.runP_iff_runCutP_nil.mpr h⟩
+
+
+/-- Reuse the public guard facts and retain the original instruction relation
+through the same actual scratch/value/size prefix. -/
+theorem syncGuards_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {G : Nat} {o : Outcome}
+    (run : SFunc.RunP (StepIn D) cert.prog sevm (St b [] Mem.empty G) t_0000_c0 o) :
+    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
+      ∃ G', SFunc.RunP (StepIn D) cert.prog sevm
+        (St b [] getterInitMemory G') t_001a_c0 o := by
+  obtain ⟨value, size, _, _⟩ := getter_guards_inv (run.mono StepIn.toRun)
+  have h := SFunc.runP_iff_runCutP_nil.mp run
+  unfold t_0000_c0 at h
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push hd.toRun
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push hd.toRun
+  obtain ⟨d, hd, h⟩ := ric_nextP h
+  obtain ⟨_, hd⟩ := ri_mstore hd.toRun
+  simp only [show Bytes.toB256 [0x40] = (64 : B256) from rfl,
+    show (64 : B256).toNat = 64 from rfl,
+    show Bytes.toB256 [0x80] = (128 : B256) from rfl] at hd
+  subst d
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_callvalue hd.toRun
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl hd.toRun
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero hd.toRun
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push hd.toRun
+  rcases ric_branchP h with ⟨zero, _, _⟩ | ⟨_, _, h⟩
+  · simp only [value, B256.eqCheck, ite_true] at zero
+    exact ((by decide : (1 : B256) ≠ 0) zero).elim
+  · rw [value] at h
+    unfold t_0010_c0 at h
+    obtain ⟨_, h⟩ := ric_destP h
+    obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_pop hd.toRun
+    obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push hd.toRun
+    obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_calldatasize hd.toRun
+    obtain ⟨d, hd, h⟩ := ric_nextP h
+    obtain ⟨_, hd⟩ := ri_lt hd.toRun
+    simp only [show Bytes.toB256 [0x04] = (4 : B256) from rfl] at hd
+    subst d
+    obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push hd.toRun
+    rcases ric_branchP h with ⟨_, gas, h⟩ | ⟨nonzero, _, _⟩
+    · exact ⟨value, size, gas, SFunc.runP_iff_runCutP_nil.mpr h⟩
+    · have zero : B256.ltCheck sevm.data.length.toB256 4 = 0 := by
+        simp only [B256.ltCheck, not_lt.mpr size, ite_false]
+      exact (nonzero zero).elim
+
+/-- The real pc-zero sync run reaches its callee through the public guards,
+selector and wrapper, retaining the same raw derivation for both child calls. -/
+theorem syncPc0_inv {D : Exec.Deriv} {sevm : Sevm} {b post : Devm} {G : Nat}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
+    (run : SProg.RunP (StepIn D) cert.prog sevm (St b [] Mem.empty G) post) :
+    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
+      ∃ calleeGas d finalGas,
+        SFunc.RunP (StepIn D) cert.prog sevm
+          (St b [0x0257, 0xfff6cae9] getterInitMemory calleeGas) t_1df5_c31 (.returned d) ∧
+        post = St d d.stack d.memory finalGas := by
+  obtain ⟨f, entry, run⟩ := run
+  rw [show cert.prog[0]? = some t_0000_c0 from rfl] at entry
+  cases entry
+  obtain ⟨value, size, _, run⟩ := syncGuards_inv run
+  obtain ⟨_, run⟩ := syncSelector_inv selector run
+  obtain ⟨calleeGas, d, finalGas, callee, result⟩ := syncEntry_inv fork getterInitMemory_ptr run
+  exact ⟨value, size, calleeGas, d, finalGas, callee, Outcome.halted.inj result⟩
+
+
+/-- The actual sync selector dispatcher costs166 gas after the public guards. -/
+theorem syncSelector_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
+    (body : SFunc.RunExact cert.prog sevm (St b [0xfff6cae9] M G) t_067b_c78 o) :
+    SFunc.RunExact cert.prog sevm (St b [] M (G + 166)) t_001a_c0 o := by
+  unfold t_001a_c0
+  apply rx_push (w := 0) rfl (by decide)
+  apply rx_calldataload (by decide)
+  apply rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_shr (v := 0xfff6cae9) selector (by decide)
+  apply rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_push (w := 0xf9) rfl (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_branch_zero
+  unfold t_002b_c0
+  apply rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_push (w := 0xba9a7a56) rfl (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_push (w := 0x97) rfl (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_branch_zero
+  unfold t_0036_c0
+  apply rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_push (w := 0xd21220a7) rfl (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_push (w := 0x71) rfl (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_branch_zero
+  unfold t_0041_c0
+  apply cmp_miss (by decide)
+  unfold t_004c_c0
+  apply cmp_miss (by decide)
+  unfold t_0057_c0
+  apply cmp_miss (by decide)
+  unfold t_0062_c0
+  exact cmp_hit (tgt := t_067b_c78) rfl (by rfl) body
+
+/-- The actual public guard and sync selector route costs229 gas, with the
+existing scratch initialization and no imposed upper calldata-size premise. -/
+theorem syncDispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
+    (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
+    (body : SFunc.RunExact cert.prog sevm (St b [0xfff6cae9] getterInitMemory G) t_067b_c78 o) :
+    SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + 229)) t_0000_c0 o := by
+  exact getterString_guards_exact value size (syncSelector_exact selector body)
+
+/-- The wrapper adds15 gas before the callee and one gas for the final
+JUMPDEST; STOP preserves all returned raw fields except that last gas charge. -/
+theorem syncEntry_exact {sevm : Sevm} {b d : Devm} {R : List B256} {M M' : Mem}
+    {G calleeGas : Nat} (room : R.length ≤ 1021)
+    (callee : SFunc.RunExact cert.prog sevm
+      (St b (0x0257 :: R) M calleeGas) t_1df5_c31 (.returned (St d R M' (G + 1)))) :
+    SFunc.RunExact cert.prog sevm (St b R M (calleeGas + 15)) t_067b_c78
+      (.halted (St d R M' G)) := by
+  unfold t_067b_c78
+  apply rx_dest
+  apply rx_push (w := 0x0257) rfl (by omega)
+  apply rx_push (w := 0x1df5) rfl (by simp only [List.length_cons]; omega)
+  apply rx_callRet rfl callee
+  unfold t_0257_c78
+  apply rx_dest
+  exact rx_stop
+
+
+/-- Exact pc-zero sync liveness on the certified tree. The ENV is precisely
+the two compiled child calls, successful widths/gas and selected primitive
+charges/sentries; the whole handler run is constructed from the closed callee. -/
+theorem syncPc0_exact {sevm : Sevm} {b d0 d1 : Devm}
+    {callGas0 callGas1 G headerLoad load9 store9 load10 store10 load8 store8 : Nat}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
+    (static : sevm.isStatic = false) (unlocked : b.getStorVal sevm.currentTarget 12 = 1)
+    (sentry : gCallStipend <
+      (callGas0 + 5 + 22 + temporalAccountAccessCost (syncFirstWorld sevm b)
+        (syncFirstToken sevm b).toAdr) + sloadCost sevm (syncLockedWorld sevm b) 6 + 119 +
+      sstoreCost sevm (afterSload sevm b 12) 12 0)
+    (nonzero0 : ((syncFirstWorld sevm b).getCode (syncFirstToken sevm b).toAdr).size.toB256 ≠ 0)
+    (call0 : Ninst.RunCompiled sevm
+      (St (temporalAccountAccessBase (syncFirstWorld sevm b) (syncFirstToken sevm b).toAdr)
+        (callGas0.toB256 :: (syncFirstToken sevm b) :: 128 :: 36 :: 128 :: 32 :: 164 ::
+          0x70a08231 :: (syncFirstToken sevm b) :: 0x1fd4 :: 0x0257 :: [0xfff6cae9])
+        (balanceRequestMemory getterInitMemory sevm.currentTarget) callGas0) (.exec .staticcall) d0)
+    (success0 : d0.stack = 1 :: 164 :: 0x70a08231 :: (syncFirstToken sevm b) :: 0x1fd4 :: 0x0257 :: [0xfff6cae9])
+    (returnedGas0 : d0.gasLeft = callGas1 + 5 + 22 +
+      temporalAccountAccessCost (afterSload sevm d0 7)
+        (d0.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr +
+      sloadCost sevm d0 7 + 113 + 70)
+    (long0 : 32 ≤ d0.returnData.length)
+    (nonzero1 : ((afterSload sevm d0 7).getCode
+      (d0.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr).size.toB256 ≠ 0)
+    (call1 : Ninst.RunCompiled sevm
+      (St (temporalAccountAccessBase (afterSload sevm d0 7)
+          (d0.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr)
+        (callGas1.toB256 :: (d0.getStorVal sevm.currentTarget 7).toAdr.toB256 ::
+          128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
+          (d0.getStorVal sevm.currentTarget 7).toAdr.toB256 ::
+          Bytes.toB256 (d0.returnData.take 32) :: 0x1fd4 :: 0x0257 :: [0xfff6cae9])
+        (balanceRequestMemory (balanceReplyMemory getterInitMemory sevm.currentTarget d0.returnData)
+          sevm.currentTarget) callGas1) (.exec .staticcall) d1)
+    (success1 : d1.stack = 1 :: 164 :: 0x70a08231 ::
+      (d0.getStorVal sevm.currentTarget 7).toAdr.toB256 ::
+      Bytes.toB256 (d0.returnData.take 32) :: 0x1fd4 :: 0x0257 :: [0xfff6cae9])
+    (returnedGas1 : d1.gasLeft = (syncUpdateUnlockGas sevm d1 (Bytes.toB256 (d0.returnData.take 32)) (Bytes.toB256 (d1.returnData.take 32)) 192 headerLoad load9 store9 load10 store10 load8 store8 (G + 1)) + 70)
+    (long1 : 32 ≤ d1.returnData.length)
+    (bound0 : (Bytes.toB256 (d0.returnData.take 32)).toNat < 2 ^ 112)
+    (bound1 : (Bytes.toB256 (d1.returnData.take 32)).toNat < 2 ^ 112) :
+    let balance0 := (Bytes.toB256 (d0.returnData.take 32))
+    let balance1 := (Bytes.toB256 (d1.returnData.take 32))
+    let u := afterSload sevm d1 8
+    let old0 := reserve0Read (d1.getStorVal sevm.currentTarget 8)
+    let old1 := reserve1Read (d1.getStorVal sevm.currentTarget 8)
+    let finalGas := (G + 1) + 8 + sstoreCost sevm (syncUpdatedWorld sevm d1 balance0 balance1) 12 1 + 7
+    headerLoad = sloadCost sevm u 8 →
+    load8 = sloadCost sevm (updateOracleWorld sevm u old0 old1) 8 →
+    store8 = sstoreCost sevm (afterSload sevm (updateOracleWorld sevm u old0 old1) 8) 8
+      (updateFinalPackedWord sevm u old0 old1 balance0 balance1) →
+    (updateOracleActive sevm u old0 old1 →
+      load9 = sloadCost sevm (afterSload sevm u 8) 9 ∧
+      store9 = sstoreCost sevm (afterSload sevm (afterSload sevm u 8) 9) 9
+        (updateAccumulatorWord ((afterSload sevm u 8).getStorVal sevm.currentTarget 9)
+          (updatePriceWord old0 old1)
+          (updateElapsedWord (u.getStorVal sevm.currentTarget 8) sevm.benvStat.time)) ∧
+      load10 = sloadCost sevm
+        (updateAccumulatorPost sevm (afterSload sevm u 8) 9 (updatePriceWord old0 old1)
+          (updateElapsedWord (u.getStorVal sevm.currentTarget 8) sevm.benvStat.time)) 10 ∧
+      store10 = sstoreCost sevm (afterSload sevm
+        (updateAccumulatorPost sevm (afterSload sevm u 8) 9 (updatePriceWord old0 old1)
+          (updateElapsedWord (u.getStorVal sevm.currentTarget 8) sevm.benvStat.time)) 10) 10
+        (updateAccumulatorWord
+          ((updateAccumulatorPost sevm (afterSload sevm u 8) 9 (updatePriceWord old0 old1)
+            (updateElapsedWord (u.getStorVal sevm.currentTarget 8) sevm.benvStat.time)).getStorVal
+            sevm.currentTarget 10) (updatePriceWord old1 old0)
+          (updateElapsedWord (u.getStorVal sevm.currentTarget 8) sevm.benvStat.time))) →
+    gCallStipend < finalGas + updateSyncGas 192 + store8 →
+    (updateOracleActive sevm u old0 old1 →
+      gCallStipend < finalGas + updateSyncGas 192 + load8 + store8 + 110 + store10) →
+    (updateOracleActive sevm u old0 old1 →
+      gCallStipend < finalGas + updateSyncGas 192 + load8 + store8 + 110 +
+        load10 + store10 + 42 + 149 + store9) →
+    gCallStipend < (G + 1) + 8 + sstoreCost sevm (syncUpdatedWorld sevm d1 balance0 balance1) 12 1 →
+    SProg.RunExact cert.prog sevm
+      (St b [] Mem.empty (syncCalleePrefixGas sevm b callGas0 + 15 + 229))
+      (St (syncResultWorld sevm d1 balance0 balance1) [0xfff6cae9]
+        (syncResultMemory sevm d1
+          (balanceReplyMemory (balanceReplyMemory getterInitMemory sevm.currentTarget d0.returnData)
+            sevm.currentTarget d1.returnData) balance0 balance1) G) := by
+  dsimp only
+  intro headerCharge packedLoadCharge packedStoreCharge oracleCharges sentry8 sentry10 sentry9 unlockSentry
+  refine ⟨t_0000_c0, rfl, ?_⟩
+  apply syncDispatch_exact value size selector
+  apply syncEntry_exact (by decide)
+  exact syncCallee_exact fork getterInitMemory_ptr (by decide) static unlocked sentry nonzero0
+    call0 success0 returnedGas0 long0 nonzero1 call1 success1 returnedGas1 long1 bound0 bound1
+    headerCharge packedLoadCharge packedStoreCharge oracleCharges sentry8 sentry10 sentry9 unlockSentry
+
 
 end Blanc.Lift.UniswapV2Pair

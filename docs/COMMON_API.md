@@ -3222,6 +3222,12 @@ contract-neutral.
   They retain an arbitrary stack suffix and cut set, select the actual comparison
   continuation, and require the real target lookup and non-cut proof for EQ.
   The Pair scalar getter inversions consume both helpers.
+  Their relation-preserving variants, `ric_cmp_gtP` and `ric_cmp_eqP`, take
+  an explicit projection from the instruction relation to `Ninst.Run` and
+  retain that relation, stack suffix, cut set and final segment in the
+  selected continuation. EQ also requires the same target lookup and
+  non-cut proof. The Pair `syncSelector_inv` consumes both variants with
+  `StepIn D`, preserving the actual execution derivation for child calls.
   For a cut run over an arbitrary instruction relation, `ric_nextP`, `ric_destP`
   and `ric_branchP` in
   [`Blanc/Lift/InvWalkProvenance.lean`](../Blanc/Lift/InvWalkProvenance.lean)
