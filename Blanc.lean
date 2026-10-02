@@ -65,6 +65,7 @@ import Blanc.ExecutionTraceCalldata
 import Blanc.ExecutionTraceCallerExclusion
 import Blanc.ExecutionTraceSettledFrames
 import Blanc.ExecutionTraceSettledOrigin
+import Blanc.ExecutionTraceRootFrame
 import Blanc.ExecutionImmutableCode
 import Blanc.ExecutionTraceEntry
 import Blanc.ExecutionAccountingObserved
