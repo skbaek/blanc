@@ -164,7 +164,7 @@ theorem drip_rpow_runtime_ops_le_62 {k : Nat}
     simp only [rpowOps, rateNat_exact, OfNat.ofNat_ne_zero, ↓reduceIte, zero_le]
   · rw [drip_rpow_runtime_ops_exact, if_neg hk0]
     have hhalf : k / 2 < 2 ^ 31 := by
-      norm_num
+      norm_num only
       omega
     have hd := binaryDepth_le_of_lt_pow_two hhalf
     have hw := binaryWeight_le_of_lt_pow_two hhalf

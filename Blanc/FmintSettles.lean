@@ -1389,7 +1389,7 @@ lemma execSat_returnDataShort_leaf {sevm : Sevm} {d : Devm}
     rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256,
       show ((32 : B256)).toNat = 32 from rfl,
       Nat.lo_eq_of_lt (show d.returnData.length < 2 ^ 256 from
-        Nat.lt_of_lt_of_le h_rd (by norm_num))]
+        Nat.lt_of_lt_of_le h_rd (by norm_num only))]
     exact h_rd
   apply Func.execSat_of_runCompiledTo
   · func_run (6) [0, 1]

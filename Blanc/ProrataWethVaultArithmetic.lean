@@ -97,7 +97,7 @@ theorem shareRoomN_add_one_lt_wordModulusN (supply : Nat) :
     unfold maxSupplyN
     exact Nat.sub_add_cancel (by
       unfold maxWordN wordModulusN offsetN
-      norm_num)
+      norm_num only)
   have offsetPositive : 0 < offsetN := by decide
   have roomPlusOneLe : shareRoomN supply + 1 ≤ maxWordN := by
     omega
@@ -137,7 +137,7 @@ theorem denominatorN_le_maxWord
   simp only [denominatorN, maxSupplyN, offsetN] at stable ⊢
   have hlarge : 1000 ≤ maxWordN := by
     unfold maxWordN wordModulusN
-    norm_num
+    norm_num only
   omega
 
 theorem supply_add_shareRoomN

@@ -53,7 +53,7 @@ theorem slot_ne_of_region_ne
   exact TaggedStorage.encode_ne_of_region_ne hlr hrr hleft hright hne
 
 private def addressFin (word : B256) : Fin (2 ^ 160) :=
-  ⟨word.toNat % (2 ^ 160), Nat.mod_lt _ (by norm_num)⟩
+  ⟨word.toNat % (2 ^ 160), Nat.mod_lt _ (by norm_num only)⟩
 
 theorem RegistryWitness.entries_length_le
     {storage : LogicalStorage} {entries : List Entry}
@@ -99,35 +99,35 @@ theorem RegistryWitness.entries_length_le
 theorem canonicalAddress_payload_lt {word : B256}
     (h : canonicalAddress word) : word.toNat < 2 ^ 252 := by
   unfold canonicalAddress at h
-  norm_num at h ⊢
+  norm_num only at h ⊢
   omega
 
 theorem RegistryWitness.entries_length_lt_2pow252
     {storage : LogicalStorage} {entries : List Entry}
     (h : RegistryWitness storage entries) : entries.length < 2 ^ 252 := by
   have hlength := h.entries_length_le
-  norm_num at hlength ⊢
+  norm_num only at hlength ⊢
   omega
 
 theorem RegistryWitness.entries_length_lt_2pow256
     {storage : LogicalStorage} {entries : List Entry}
     (h : RegistryWitness storage entries) : entries.length < 2 ^ 256 := by
   have hlength := h.entries_length_le
-  norm_num at hlength ⊢
+  norm_num only at hlength ⊢
   omega
 
 theorem RegistryWitness.fresh_length_lt_2pow252
     {storage : LogicalStorage} {entries : List Entry}
     (h : RegistryWitness storage entries) : entries.length + 1 < 2 ^ 252 := by
   have hlength := h.entries_length_le
-  norm_num at hlength ⊢
+  norm_num only at hlength ⊢
   omega
 
 theorem RegistryWitness.fresh_length_lt_2pow256
     {storage : LogicalStorage} {entries : List Entry}
     (h : RegistryWitness storage entries) : entries.length + 1 < 2 ^ 256 := by
   have hlength := h.entries_length_le
-  norm_num at hlength ⊢
+  norm_num only at hlength ⊢
   omega
 
 theorem RegistryWitness.assignmentCount_lt_2pow256
@@ -136,7 +136,7 @@ theorem RegistryWitness.assignmentCount_lt_2pow256
     assignmentCount entries pauser < 2 ^ 256 := by
   have hcount := assignmentCount_le_length entries pauser
   have hlength := h.entries_length_le
-  norm_num at hlength ⊢
+  norm_num only at hlength ⊢
   omega
 
 /-- `Nat.toB256` is injective below the word modulus. -/
@@ -193,7 +193,7 @@ theorem RegistryWitness.assignmentCountWord_succ_eq_add_one
   apply natToB256_succ_eq_add_one
   have hcount := assignmentCount_le_length entries pauser
   have hlength := h.entries_length_le
-  norm_num at hlength ⊢
+  norm_num only at hlength ⊢
   omega
 
 theorem RegistryWitness.assignmentCountWord_pred_eq_sub_one
@@ -232,7 +232,7 @@ theorem assignmentSlot_injective
     (hleft : canonicalAddress left) (hright : canonicalAddress right)
     (hslot : assignmentSlot left = assignmentSlot right) : left = right := by
   exact addressSlot_injective (region := assignmentRegion)
-    (by norm_num [assignmentRegion]) hleft hright
+    (by norm_num only [assignmentRegion]) hleft hright
     (by simpa only [assignmentSlot] using hslot)
 
 theorem indexSlot_injective
@@ -240,7 +240,7 @@ theorem indexSlot_injective
     (hleft : canonicalAddress left) (hright : canonicalAddress right)
     (hslot : indexSlot left = indexSlot right) : left = right := by
   exact addressSlot_injective (region := indexRegion)
-    (by norm_num [indexRegion]) hleft hright
+    (by norm_num only [indexRegion]) hleft hright
     (by simpa only [indexSlot] using hslot)
 
 theorem countSlot_injective
@@ -248,7 +248,7 @@ theorem countSlot_injective
     (hleft : canonicalAddress left) (hright : canonicalAddress right)
     (hslot : countSlot left = countSlot right) : left = right := by
   exact addressSlot_injective (region := countRegion)
-    (by norm_num [countRegion]) hleft hright
+    (by norm_num only [countRegion]) hleft hright
     (by simpa only [countSlot] using hslot)
 
 theorem arrayEntrySlot_nat_injective_of_lt
@@ -257,14 +257,14 @@ theorem arrayEntrySlot_nat_injective_of_lt
     (hslots : arrayEntrySlot (Nat.toB256 left) =
       arrayEntrySlot (Nat.toB256 right)) : left = right := by
   have hleft256 : left < 2 ^ 256 := by
-    norm_num at hleft ⊢
+    norm_num only at hleft ⊢
     omega
   have hright256 : right < 2 ^ 256 := by
-    norm_num at hright ⊢
+    norm_num only at hright ⊢
     omega
   have hpayload : Nat.toB256 left = Nat.toB256 right :=
     slot_injective_payload (region := arrayRegion)
-      (by norm_num [arrayRegion])
+      (by norm_num only [arrayRegion])
       (by simpa only [B256.toNat_toB256_of_lt hleft256, Nat.reducePow] using hleft)
       (by simpa only [B256.toNat_toB256_of_lt hright256, Nat.reducePow] using hright)
       (by simpa only [arrayEntrySlot] using hslots)
@@ -283,17 +283,17 @@ theorem registryAddressFamilies_pairwise
   constructor
   · simpa only [assignmentSlot, indexSlot, ne_eq] using
     addressSlots_ne_of_region_ne (leftRegion := assignmentRegion) (rightRegion := indexRegion)
-      (by norm_num [assignmentRegion]) (by norm_num [indexRegion]) hassignment hindex
-      (by norm_num [assignmentRegion, indexRegion])
+      (by norm_num only [assignmentRegion]) (by norm_num only [indexRegion]) hassignment hindex
+      (by norm_num only [assignmentRegion, indexRegion])
   constructor
   · simpa only [assignmentSlot, countSlot, ne_eq] using
     addressSlots_ne_of_region_ne (leftRegion := assignmentRegion) (rightRegion := countRegion)
-      (by norm_num [assignmentRegion]) (by norm_num [countRegion]) hassignment hcount
-      (by norm_num [assignmentRegion, countRegion])
+      (by norm_num only [assignmentRegion]) (by norm_num only [countRegion]) hassignment hcount
+      (by norm_num only [assignmentRegion, countRegion])
   · simpa only [indexSlot, countSlot, ne_eq] using
     addressSlots_ne_of_region_ne (leftRegion := indexRegion) (rightRegion := countRegion)
-      (by norm_num [indexRegion]) (by norm_num [countRegion]) hindex hcount
-      (by norm_num [indexRegion, countRegion])
+      (by norm_num only [indexRegion]) (by norm_num only [countRegion]) hindex hcount
+      (by norm_num only [indexRegion, countRegion])
 
 /-- The expiry family is disjoint from all address-keyed Registry families. -/
 theorem expirySlot_ne_registryAddressFamilies
@@ -307,17 +307,17 @@ theorem expirySlot_ne_registryAddressFamilies
   constructor
   · simpa only [expirySlot, assignmentSlot, ne_eq] using
     addressSlots_ne_of_region_ne (leftRegion := expiryRegion) (rightRegion := assignmentRegion)
-      (by norm_num [expiryRegion]) (by norm_num [assignmentRegion]) hexpiry htarget
-      (by norm_num [expiryRegion, assignmentRegion])
+      (by norm_num only [expiryRegion]) (by norm_num only [assignmentRegion]) hexpiry htarget
+      (by norm_num only [expiryRegion, assignmentRegion])
   constructor
   · simpa only [expirySlot, indexSlot, ne_eq] using
     addressSlots_ne_of_region_ne (leftRegion := expiryRegion) (rightRegion := indexRegion)
-      (by norm_num [expiryRegion]) (by norm_num [indexRegion]) hexpiry htarget
-      (by norm_num [expiryRegion, indexRegion])
+      (by norm_num only [expiryRegion]) (by norm_num only [indexRegion]) hexpiry htarget
+      (by norm_num only [expiryRegion, indexRegion])
   · simpa only [expirySlot, countSlot, ne_eq] using
     addressSlots_ne_of_region_ne (leftRegion := expiryRegion) (rightRegion := countRegion)
-      (by norm_num [expiryRegion]) (by norm_num [countRegion]) hexpiry hcount
-      (by norm_num [expiryRegion, countRegion])
+      (by norm_num only [expiryRegion]) (by norm_num only [countRegion]) hexpiry hcount
+      (by norm_num only [expiryRegion, countRegion])
 
 /-- Address-keyed Registry families are disjoint from every bounded array
 entry key. -/
@@ -332,17 +332,17 @@ theorem registryAddressFamilies_ne_arrayEntrySlot
   constructor
   · simpa only [assignmentSlot, arrayEntrySlot, ne_eq] using
     slot_ne_of_region_ne (leftRegion := assignmentRegion) (rightRegion := arrayRegion)
-      (by norm_num [assignmentRegion]) (by norm_num [arrayRegion])
-      (canonicalAddress_payload_lt htarget) hindex (by norm_num [assignmentRegion, arrayRegion])
+      (by norm_num only [assignmentRegion]) (by norm_num only [arrayRegion])
+      (canonicalAddress_payload_lt htarget) hindex (by norm_num only [assignmentRegion, arrayRegion])
   constructor
   · simpa only [indexSlot, arrayEntrySlot, ne_eq] using
     slot_ne_of_region_ne (leftRegion := indexRegion) (rightRegion := arrayRegion)
-      (by norm_num [indexRegion]) (by norm_num [arrayRegion]) (canonicalAddress_payload_lt htarget)
-      hindex (by norm_num [indexRegion, arrayRegion])
+      (by norm_num only [indexRegion]) (by norm_num only [arrayRegion]) (canonicalAddress_payload_lt htarget)
+      hindex (by norm_num only [indexRegion, arrayRegion])
   · simpa only [countSlot, arrayEntrySlot, ne_eq] using
     slot_ne_of_region_ne (leftRegion := countRegion) (rightRegion := arrayRegion)
-      (by norm_num [countRegion]) (by norm_num [arrayRegion]) (canonicalAddress_payload_lt hpauser)
-      hindex (by norm_num [countRegion, arrayRegion])
+      (by norm_num only [countRegion]) (by norm_num only [arrayRegion]) (canonicalAddress_payload_lt hpauser)
+      hindex (by norm_num only [countRegion, arrayRegion])
 
 theorem registryAddressFamilies_ne_arrayLengthSlot
     {target pauser : B256}
@@ -355,7 +355,7 @@ theorem registryAddressFamilies_ne_arrayLengthSlot
     (oneBasedIndex := (0 : B256)) htarget hpauser
     (by
       change (0 : Nat) < 2 ^ 252
-      norm_num)
+      norm_num only)
   simpa only [arrayLengthSlot, ne_eq, arrayEntrySlot] using h
 
 /-- The expiry family is disjoint from the array length and every bounded
@@ -369,15 +369,15 @@ theorem expirySlot_ne_arrayFamily
   constructor
   · simpa only [expirySlot, arrayLengthSlot, ne_eq] using
     slot_ne_of_region_ne (leftRegion := expiryRegion) (rightRegion := arrayRegion)
-      (by norm_num [expiryRegion]) (by norm_num [arrayRegion]) (canonicalAddress_payload_lt hpauser)
+      (by norm_num only [expiryRegion]) (by norm_num only [arrayRegion]) (canonicalAddress_payload_lt hpauser)
       (by
         change (0 : Nat) < 2 ^ 252
-        norm_num)
-      (by norm_num [expiryRegion, arrayRegion])
+        norm_num only)
+      (by norm_num only [expiryRegion, arrayRegion])
   · simpa only [expirySlot, arrayEntrySlot, ne_eq] using
     slot_ne_of_region_ne (leftRegion := expiryRegion) (rightRegion := arrayRegion)
-      (by norm_num [expiryRegion]) (by norm_num [arrayRegion]) (canonicalAddress_payload_lt hpauser)
-      hindex (by norm_num [expiryRegion, arrayRegion])
+      (by norm_num only [expiryRegion]) (by norm_num only [arrayRegion]) (canonicalAddress_payload_lt hpauser)
+      hindex (by norm_num only [expiryRegion, arrayRegion])
 
 /-- Writing one canonical pauser's expiry cannot alter any projected Registry
 field. -/
@@ -402,7 +402,7 @@ theorem RegistryWitness.expiry_set
   · have h := expirySlot_ne_arrayFamily (pauser := pauser)
       (oneBasedIndex := (0 : B256)) hpauser (by
         change (0 : Nat) < 2 ^ 252
-        norm_num)
+        norm_num only)
     change (s.set (expirySlot pauser) value).get arrayLengthSlot =
       Nat.toB256 entries.length
     rw [Stor.get_set_ne _ h.1]
@@ -410,13 +410,13 @@ theorem RegistryWitness.expiry_set
   · intro index hindex
     have hindex256 : index + 1 < 2 ^ 256 := by
       have hbound := hw.entries_length_le
-      norm_num at hbound ⊢
+      norm_num only at hbound ⊢
       omega
     have hindex252 :
         (Nat.toB256 (index + 1)).toNat < 2 ^ 252 := by
       rw [B256.toNat_toB256_of_lt hindex256]
       have hbound := hw.entries_length_le
-      norm_num at hbound ⊢
+      norm_num only at hbound ⊢
       omega
     have h := expirySlot_ne_arrayFamily hpauser hindex252
     change (s.set (expirySlot pauser) value).get
@@ -444,7 +444,7 @@ theorem RegistryWitness.expiry_set
   · have hzero : canonicalAddress (0 : B256) := by
       unfold canonicalAddress
       change (0 : Nat) < 2 ^ 160
-      norm_num
+      norm_num only
     have h := expirySlot_ne_registryAddressFamilies hpauser hzero hzero
     change (s.set (expirySlot pauser) value).get (countSlot 0) = 0
     rw [Stor.get_set_ne _ h.2.2]
@@ -491,10 +491,10 @@ theorem arrayLengthSlot_ne_arrayEntrySlot_of_pos_lt
   have hpayload : (0 : B256) = oneBasedIndex :=
     slot_injective_payload (region := arrayRegion)
       (left := 0) (right := oneBasedIndex)
-      (by norm_num [arrayRegion])
+      (by norm_num only [arrayRegion])
       (by
         change (0 : Nat) < 2 ^ 252
-        norm_num)
+        norm_num only)
       hindex
       (by simpa only [arrayLengthSlot, arrayEntrySlot] using h)
   exact hpos hpayload.symm
@@ -506,7 +506,7 @@ theorem RegistryWitness.arrayLengthSlot_ne_arrayEntrySlot
     arrayLengthSlot ≠ arrayEntrySlot (Nat.toB256 (index + 1)) := by
   have hbound256 : index + 1 < 2 ^ 256 := by
     have hlength := h.entries_length_le
-    norm_num at hlength ⊢
+    norm_num only at hlength ⊢
     omega
   apply arrayLengthSlot_ne_arrayEntrySlot_of_pos_lt
   · intro hzero
@@ -516,7 +516,7 @@ theorem RegistryWitness.arrayLengthSlot_ne_arrayEntrySlot
     omega
   · rw [B256.toNat_toB256_of_lt hbound256]
     have hlength := h.entries_length_le
-    norm_num at hlength ⊢
+    norm_num only at hlength ⊢
     omega
 
 theorem RegistryWitness.arrayEntrySlot_injective
@@ -527,25 +527,25 @@ theorem RegistryWitness.arrayEntrySlot_injective
       arrayEntrySlot (Nat.toB256 (right + 1))) : left = right := by
   have hleft256 : left + 1 < 2 ^ 256 := by
     have hlength := h.entries_length_le
-    norm_num at hlength ⊢
+    norm_num only at hlength ⊢
     omega
   have hright256 : right + 1 < 2 ^ 256 := by
     have hlength := h.entries_length_le
-    norm_num at hlength ⊢
+    norm_num only at hlength ⊢
     omega
   have hleft252 : (Nat.toB256 (left + 1)).toNat < 2 ^ 252 := by
     rw [B256.toNat_toB256_of_lt hleft256]
     have hlength := h.entries_length_le
-    norm_num at hlength ⊢
+    norm_num only at hlength ⊢
     omega
   have hright252 : (Nat.toB256 (right + 1)).toNat < 2 ^ 252 := by
     rw [B256.toNat_toB256_of_lt hright256]
     have hlength := h.entries_length_le
-    norm_num at hlength ⊢
+    norm_num only at hlength ⊢
     omega
   have hpayload : Nat.toB256 (left + 1) = Nat.toB256 (right + 1) :=
     slot_injective_payload (region := arrayRegion)
-      (by norm_num [arrayRegion]) hleft252 hright252
+      (by norm_num only [arrayRegion]) hleft252 hright252
       (by simpa only [arrayEntrySlot] using hslots)
   exact Nat.add_right_cancel
     (natToB256_injective_of_lt hleft256 hright256 hpayload)
@@ -587,7 +587,7 @@ theorem RegistryWitness.assignmentAt_canonical
       rw [findEntry_none_assignmentAt hfind]
       unfold canonicalAddress
       change (0 : Nat) < 2 ^ 160
-      norm_num
+      norm_num only
   | some found =>
       obtain ⟨index, pauser⟩ := found
       have hmem : (target, pauser) ∈ entries := mem_of_findEntry hfind
@@ -659,12 +659,12 @@ theorem RegistryWitness.applyFreshWritesOfReadEffect
     by_cases hold : index < entries.length
     · have hold256 : index + 1 < 2 ^ 256 := by
         have hlength := hw.entries_length_le
-        norm_num at hlength ⊢
+        norm_num only at hlength ⊢
         omega
       have hold252 : (Nat.toB256 (index + 1)).toNat < 2 ^ 252 := by
         rw [B256.toNat_toB256_of_lt hold256]
         have hlength := hw.entries_length_le
-        norm_num at hlength ⊢
+        norm_num only at hlength ⊢
         omega
       have hfamilies :=
         registryAddressFamilies_ne_arrayEntrySlot
@@ -677,7 +677,7 @@ theorem RegistryWitness.applyFreshWritesOfReadEffect
           hw.fresh_length_lt_2pow252
           (by
             have hlength := hw.entries_length_le
-            norm_num at hlength ⊢
+            norm_num only at hlength ⊢
             omega) heq
         omega
       rw [hread]
@@ -764,7 +764,7 @@ theorem RegistryWitness.applyFreshWritesOfReadEffect
   · have hzeroCanonical : canonicalAddress (0 : B256) := by
       unfold canonicalAddress
       change (0 : Nat) < 2 ^ 160
-      norm_num
+      norm_num only
     have hpair :=
       registryAddressFamilies_pairwise htarget.2 htarget.2 hzeroCanonical
     have harray :=
@@ -854,13 +854,13 @@ theorem RegistryWitness.applyFoundNonzeroWritesOfReadEffect
       exact hwantedIndex
     have hword256 : wantedIndex + 1 < 2 ^ 256 := by
       have hlength := hw.entries_length_le
-      norm_num at hlength ⊢
+      norm_num only at hlength ⊢
       omega
     have hword252 :
         (Nat.toB256 (wantedIndex + 1)).toNat < 2 ^ 252 := by
       rw [B256.toNat_toB256_of_lt hword256]
       have hlength := hw.entries_length_le
-      norm_num at hlength ⊢
+      norm_num only at hlength ⊢
       omega
     have holdArray :=
       registryAddressFamilies_ne_arrayEntrySlot htarget.2 hold.2 hword252
@@ -932,7 +932,7 @@ theorem RegistryWitness.applyFoundNonzeroWritesOfReadEffect
   · have hzeroCanonical : canonicalAddress (0 : B256) := by
       unfold canonicalAddress
       change (0 : Nat) < 2 ^ 160
-      norm_num
+      norm_num only
     have hassignment :=
       registryAddressFamilies_pairwise htarget.2 htarget.2 hzeroCanonical
     have hold0 : countSlot oldPauser ≠ countSlot 0 := by
@@ -1027,12 +1027,12 @@ theorem RegistryWitness.applyAbsentZeroWritesOfReadEffect
       intro index hindex
       have hold256 : index + 1 < 2 ^ 256 := by
         have hbound := hw.entries_length_le
-        norm_num at hbound ⊢
+        norm_num only at hbound ⊢
         omega
       have hold252 : (Nat.toB256 (index + 1)).toNat < 2 ^ 252 := by
         rw [B256.toNat_toB256_of_lt hold256]
         have hbound := hw.entries_length_le
-        norm_num at hbound ⊢
+        norm_num only at hbound ⊢
         omega
       have hfamilies :=
         registryAddressFamilies_ne_arrayEntrySlot
@@ -1046,7 +1046,7 @@ theorem RegistryWitness.applyAbsentZeroWritesOfReadEffect
           hw.fresh_length_lt_2pow252
           (by
             have hbound := hw.entries_length_le
-            norm_num at hbound ⊢
+            norm_num only at hbound ⊢
             omega) heq
         omega
       rw [hread]
@@ -1112,7 +1112,7 @@ theorem RegistryWitness.applyAbsentZeroWritesOfReadEffect
       have hzeroCanonical : canonicalAddress (0 : B256) := by
         unfold canonicalAddress
         change (0 : Nat) < 2 ^ 160
-        norm_num
+        norm_num only
       have harray :=
         registryAddressFamilies_ne_arrayEntrySlot
           htarget.2 hzeroCanonical hnext252
@@ -2915,7 +2915,7 @@ private theorem reassignedRegistryStorage_newCount
   · apply natToB256_succ_eq_add_one
     have hcount := assignmentCount_le_length entries newPauser
     have hlength := hw.entries_length_le
-    norm_num at hlength ⊢
+    norm_num only at hlength ⊢
     omega
 
 private theorem foundRemovalStorage_reads
@@ -3016,12 +3016,12 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
   rw [hsource] at hread
   have hindex256 : index + 1 < 2 ^ 256 := by
     have hbound := hw.entries_length_le
-    norm_num at hbound ⊢
+    norm_num only at hbound ⊢
     omega
   have hindex252 : (Nat.toB256 (index + 1)).toNat < 2 ^ 252 := by
     rw [B256.toNat_toB256_of_lt hindex256]
     have hbound := hw.entries_length_le
-    norm_num at hbound ⊢
+    norm_num only at hbound ⊢
     omega
   have hlength256 : entries.length < 2 ^ 256 :=
     hw.entries_length_lt_2pow256
@@ -3056,13 +3056,13 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
       have hwantedOld : wantedIndex < entries.length := by omega
       have hwanted256 : wantedIndex + 1 < 2 ^ 256 := by
         have hbound := hw.entries_length_le
-        norm_num at hbound ⊢
+        norm_num only at hbound ⊢
         omega
       have hwanted252 :
           (Nat.toB256 (wantedIndex + 1)).toNat < 2 ^ 252 := by
         rw [B256.toNat_toB256_of_lt hwanted256]
         have hbound := hw.entries_length_le
-        norm_num at hbound ⊢
+        norm_num only at hbound ⊢
         omega
       have htargetArray :=
         registryAddressFamilies_ne_arrayEntrySlot
@@ -3079,7 +3079,7 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
           hw.entries_length_lt_2pow252
           (by
             have hbound := hw.entries_length_le
-            norm_num at hbound ⊢
+            norm_num only at hbound ⊢
             omega) heq
         omega
       by_cases heq : wantedIndex = index
@@ -3236,7 +3236,7 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
       have hzeroCanonical : canonicalAddress (0 : B256) := by
         unfold canonicalAddress
         change (0 : Nat) < 2 ^ 160
-        norm_num
+        norm_num only
       have hassignment :=
         registryAddressFamilies_pairwise htarget.2 htarget.2 hzeroCanonical
       have hcount : countSlot oldPauser ≠ countSlot 0 := by
@@ -12156,7 +12156,7 @@ private theorem directPausePath_prepend_arg_zero
       (by simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
           Devm.memory_setMach] using loadPath) with
     ⟨run, path⟩
-  norm_num [arg, cdl] at *
+  norm_num only [arg, cdl] at *
   exact ⟨run, path⟩
 
 /-- Exact reserved cost of loading ABI argument zero and saving the target
@@ -15056,7 +15056,7 @@ private theorem directPausePath_prepend_fsig
       (by simpa only [loadPre, Devm.setMach_setMach, Devm.stateGas_setMach,
           Devm.stack_setMach, Devm.memory_setMach] using loadPath) with
     ⟨run, path⟩
-  norm_num [fsig, cdl, shiftRight, prepend] at *
+  norm_num only [fsig, cdl, shiftRight, prepend] at *
   exact ⟨run, path⟩
 
 /-- The hybrid pause dispatch budget depends on machine state only through
@@ -15385,8 +15385,8 @@ private theorem runtimeMain_pause_runCompiledTo
     intro h
     have hh := B256.toNat_lt_toNat h
     change 36 ↾ 256 < 4 ↾ 256 at hh
-    rw [Nat.lo_eq_of_lt (by norm_num : 36 < 2 ^ 256),
-      Nat.lo_eq_of_lt (by norm_num : 4 < 2 ^ 256)] at hh
+    rw [Nat.lo_eq_of_lt (by norm_num only : 36 < 2 ^ 256),
+      Nat.lo_eq_of_lt (by norm_num only : 4 < 2 ^ 256)] at hh
     omega
   have hlt : Ninst.RunCompiled sevm ltPre lt orPre := by
     exact Ninst.runCompiled_binary (by rintro ⟨⟩) rfl rfl hltValue (by
@@ -16329,21 +16329,21 @@ private theorem directPauseControlStor_witness :
       · decide
       · unfold canonicalAddress directPauseControlTarget
         change (7 : Nat) < 2 ^ 160
-        norm_num)
+        norm_num only)
     (by
       constructor
       · decide
       · unfold canonicalAddress directPauseControlPauser
         change (9 : Nat) < 2 ^ 160
-        norm_num)
+        norm_num only)
     (by rfl)
   have hexpiry := hfresh.expiry_set
     (pauser := directPauseControlPauser)
     (value := directPauseControlExpiry) (by
       unfold canonicalAddress directPauseControlPauser
       change (9 : Nat) < 2 ^ 160
-      norm_num)
-  norm_num [directPauseControlStor, directPauseControlRegistryStor,
+      norm_num only)
+  norm_num only [directPauseControlStor, directPauseControlRegistryStor,
     directPauseControlTarget, directPauseControlPauser,
     directPauseControlExpiry, assignmentCount] at hexpiry ⊢
   exact hexpiry
@@ -16440,13 +16440,13 @@ private theorem directPauseControl_targetCanonical :
     canonicalAddress directPauseControlTarget := by
   unfold canonicalAddress directPauseControlTarget
   change (7 : Nat) < 2 ^ 160
-  norm_num
+  norm_num only
 
 private theorem directPauseControl_pauserCanonical :
     canonicalAddress directPauseControlPauser := by
   unfold canonicalAddress directPauseControlPauser
   change (9 : Nat) < 2 ^ 160
-  norm_num
+  norm_num only
 
 private theorem directPauseControl_registryReads :
     directPauseControlPre.getStorVal directPauseControlOwner
@@ -16512,61 +16512,61 @@ private theorem directPauseControl_durationRead :
       intro region payload hregion hpayload hregionNe
       simpa only [pauseDurationSlot, ne_eq] using
         slot_ne_of_region_ne (leftRegion := region) (rightRegion := configRegion) (left := payload)
-          (right := (0 : B256)) hregion (by norm_num [configRegion]) hpayload
+          (right := (0 : B256)) hregion (by norm_num only [configRegion]) hpayload
           (by
             change (0 : Nat) < 2 ^ 252
-            norm_num)
+            norm_num only)
           hregionNe
     have htargetPayload : directPauseControlTarget.toNat < 2 ^ 252 := by
       unfold directPauseControlTarget
       change (7 : Nat) < 2 ^ 252
-      norm_num
+      norm_num only
     have hpauserPayload : directPauseControlPauser.toNat < 2 ^ 252 := by
       unfold directPauseControlPauser
       change (9 : Nat) < 2 ^ 252
-      norm_num
+      norm_num only
     have honePayload : (1 : B256).toNat < 2 ^ 252 := by
       change (1 : Nat) < 2 ^ 252
-      norm_num
+      norm_num only
     have hzeroPayload : (0 : B256).toNat < 2 ^ 252 := by
       change (0 : Nat) < 2 ^ 252
-      norm_num
+      norm_num only
     have hassignment : assignmentSlot directPauseControlTarget ≠
         pauseDurationSlot := by
       exact hne assignmentRegion directPauseControlTarget
-        (by norm_num [assignmentRegion]) htargetPayload
-        (by norm_num [assignmentRegion, configRegion])
+        (by norm_num only [assignmentRegion]) htargetPayload
+        (by norm_num only [assignmentRegion, configRegion])
     have hentry : arrayEntrySlot 1 ≠ pauseDurationSlot := by
-      exact hne arrayRegion 1 (by norm_num [arrayRegion]) honePayload
-        (by norm_num [arrayRegion, configRegion])
+      exact hne arrayRegion 1 (by norm_num only [arrayRegion]) honePayload
+        (by norm_num only [arrayRegion, configRegion])
     have hindex : indexSlot directPauseControlTarget ≠
         pauseDurationSlot := by
       exact hne indexRegion directPauseControlTarget
-        (by norm_num [indexRegion]) htargetPayload
-        (by norm_num [indexRegion, configRegion])
+        (by norm_num only [indexRegion]) htargetPayload
+        (by norm_num only [indexRegion, configRegion])
     have hlength : arrayLengthSlot ≠ pauseDurationSlot := by
-      exact hne arrayRegion 0 (by norm_num [arrayRegion]) hzeroPayload
-        (by norm_num [arrayRegion, configRegion])
+      exact hne arrayRegion 0 (by norm_num only [arrayRegion]) hzeroPayload
+        (by norm_num only [arrayRegion, configRegion])
     have hcount : countSlot directPauseControlPauser ≠
         pauseDurationSlot := by
       exact hne countRegion directPauseControlPauser
-        (by norm_num [countRegion]) hpauserPayload
-        (by norm_num [countRegion, configRegion])
+        (by norm_num only [countRegion]) hpauserPayload
+        (by norm_num only [countRegion, configRegion])
     rw [directPauseControlRegistryStor, applyRegistryWrites_get]
     simp only [Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc, Std.TreeMap.getD_emptyc,
       List.foldl_cons, hassignment, ↓reduceIte, hentry, hindex, hlength, hcount, List.foldl_nil]
   · simpa only [expirySlot, pauseDurationSlot, ne_eq] using
     slot_ne_of_region_ne (leftRegion := expiryRegion) (rightRegion := configRegion) (left :=
-      directPauseControlPauser) (right := (0 : B256)) (by norm_num [expiryRegion])
-      (by norm_num [configRegion])
+      directPauseControlPauser) (right := (0 : B256)) (by norm_num only [expiryRegion])
+      (by norm_num only [configRegion])
       (by
         unfold directPauseControlPauser
         change (9 : Nat) < 2 ^ 252
-        norm_num)
+        norm_num only)
       (by
         change (0 : Nat) < 2 ^ 252
-        norm_num)
-      (by norm_num [expiryRegion, configRegion])
+        norm_num only)
+      (by norm_num only [expiryRegion, configRegion])
 
 private theorem directPauseControl_frameEntry :
     (Frame.ofCall directPauseControlMsg).enter =
@@ -16638,7 +16638,7 @@ private theorem directPauseControl_machineFacts :
   · rfl
   · decide
   · change [].length < 1017
-    norm_num
+    norm_num only [List.length_nil]
   · change directPauseControlTarget.toAdr ∉
       (Std.HashSet.emptyWithCapacity : AdrSet)
     exact Std.HashSet.not_mem_emptyWithCapacity
@@ -16762,7 +16762,7 @@ private theorem directPauseControl_run :
     directPauseControl_pauserCanonical hcount (by decide)
     (by
       change (1 : Nat) < 2 ^ 252
-      norm_num)
+      norm_num only)
     hindex hlength (by decide) hlast directPauseControl_targetCanonical
     directPauseControl_zeroCode (Or.inr haccess) hwarmHole
     hwarmMovedIndex hroom hstatic hempty hpause hfinish hremove hafter
@@ -17181,7 +17181,7 @@ theorem pause_kernel_exec_reaches_pauseAfterSet
   have hzeroCanonical : canonicalAddress (0 : B256) := by
     unfold canonicalAddress
     change (0 : Nat) < 2 ^ 160
-    norm_num
+    norm_num only
   rcases setPauserKernel_exec_extracts_sourceTrace dp howner hcodeAddress
       hbytes htable hwf hr htargetRead hnewRead hcontinuationRead
       hw htarget hzeroCanonical hexec with
@@ -17345,7 +17345,7 @@ theorem cleanStateAfterRemoval_registerPauser
     hw.applySetPauserSourceTrace htarget.2 (by
       unfold canonicalAddress
       change (0 : Nat) < 2 ^ 160
-      norm_num) htrace
+      norm_num only) htrace
   have hremoved :=
     setPauser_zero_removes hw.targetsNodup htarget.1 hrefines.1
   have hassignment :

@@ -269,7 +269,7 @@ theorem mcpy_iter {s d l n n' : Nat} (hl : 32 ≤ l) (hl' : l < 2 ^ 256) (hs : M
   refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rxc_dup (n := 3) rfl (by simp only [List.length_cons]; omega) ?_
   refine rxc_lt (v := 0) ?_ (by simp only [List.length_cons]; omega) ?_
-  · rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, lt_toB256 hl' (by norm_num)]
+  · rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, lt_toB256 hl' (by norm_num only)]
     simp only [show ¬l < 32 by omega, ↓reduceIte]
   refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rxc_branch_zero ?_
@@ -308,7 +308,7 @@ theorem mcpy_exit {s d l : Nat} (hl : l < 32) (hR : R.length < 1000)
   refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rxc_dup (n := 3) rfl (by simp only [List.length_cons]; omega) ?_
   refine rxc_lt (v := 1) ?_ (by simp only [List.length_cons]; omega) ?_
-  · rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, lt_toB256 (by omega) (by norm_num)]
+  · rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, lt_toB256 (by omega) (by norm_num only)]
     simp only [hl, ↓reduceIte]
   refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
   exact rxc_branch_succ (by decide) kont

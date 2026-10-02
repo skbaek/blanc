@@ -1616,7 +1616,7 @@ private theorem Exec.mem_rawNodes_iff_rawFrameDescendant_parentPrefix :
         .cont hstep next
       simp only [Exec.rawNodes, Exec.rawFrameDescendants, List.mem_cons, ih]
       rw [(Blanc.Exec.Deriv.ParentStep.parentPrefix_iff edge)]
-      aesop
+      aesop (config := { enableSimp := false })
   | doneErr hstep henter hresume =>
       intro node
       constructor
@@ -1637,7 +1637,7 @@ private theorem Exec.mem_rawNodes_iff_rawFrameDescendant_parentPrefix :
         .doneOk hstep henter hresume next
       simp only [Exec.rawNodes, Exec.rawFrameDescendants, List.mem_cons, ih]
       rw [(Blanc.Exec.Deriv.ParentStep.parentPrefix_iff edge)]
-      aesop
+      aesop (config := { enableSimp := false })
   | runErr hstep henter child hresume ih =>
       intro node
       constructor
@@ -1720,7 +1720,7 @@ theorem Exec.mem_rawNodes_iff_rawFrameRoot_parentPrefix
         Exec.Deriv.ParentPrefix root node := by
   rw [Exec.mem_rawNodes_iff_rawFrameDescendant_parentPrefix run node]
   simp only [Exec.rawFrameRoots, List.mem_cons]
-  aesop
+  aesop (config := { enableSimp := false })
 
 /-- Same-frame strengthening of `Exec.rawFrameDescendants_eq_nil_of_no_xinstAt`:
 only the outer root's own continuation chain has to be free of executable
@@ -1799,7 +1799,7 @@ private theorem Exec.mem_retainedNodesOfCommits_iff_parentPrefix
       simp only [Exec.retainedNodesOfCommits, Exec.descendantFrames,
         List.mem_cons, ih committed]
       rw [(Blanc.Exec.Deriv.ParentStep.parentPrefix_iff edge)]
-      aesop
+      aesop (config := { enableSimp := false })
   | doneErr hstep henter hresume => simp only [Execution.commits, Bool.false_eq_true] at committed
   | doneOk hstep henter hresume next ih =>
       let edge : Exec.Deriv.ParentStep
@@ -1809,7 +1809,7 @@ private theorem Exec.mem_retainedNodesOfCommits_iff_parentPrefix
       simp only [Exec.retainedNodesOfCommits, Exec.descendantFrames,
         List.mem_cons, ih committed]
       rw [(Blanc.Exec.Deriv.ParentStep.parentPrefix_iff edge)]
-      aesop
+      aesop (config := { enableSimp := false })
   | runErr hstep henter child hresume =>
       simp only [Execution.commits, Bool.false_eq_true] at committed
   | runOk hstep henter child hresume next childIh nextIh =>
@@ -1827,11 +1827,11 @@ private theorem Exec.mem_retainedNodesOfCommits_iff_parentPrefix
         simp only [childIh childCommits, nextIh committed, List.mem_cons]
         rw [(Blanc.Exec.Deriv.ParentStep.parentPrefix_iff edge)]
         simp only [Exec.Frame.rootDeriv, Exec.Frame.ofRun]
-        aesop
+        aesop (config := { enableSimp := false })
       next childDoesNotSettle =>
         simp only [List.not_mem_nil, false_or, nextIh committed]
         rw [(Blanc.Exec.Deriv.ParentStep.parentPrefix_iff edge)]
-        aesop
+        aesop (config := { enableSimp := false })
 
 /-- A node survives settlement exactly when it is owned by the same-frame
 prefix of one of `committedFrames`.  This is the membership counterpart of
@@ -1848,7 +1848,7 @@ theorem Exec.mem_retainedNodes_iff_committedFrame_parentPrefix
   next committed =>
     rw [Exec.mem_retainedNodesOfCommits_iff_parentPrefix run committed node]
     simp only [List.mem_cons, Exec.Frame.rootDeriv, Exec.Frame.ofRun]
-    aesop
+    aesop (config := { enableSimp := false })
   next notCommitted => simp only [List.not_mem_nil, false_and, exists_false]
 
 /-- One same-frame edge splits the global chronology.  A successful entered
