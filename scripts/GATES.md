@@ -247,6 +247,7 @@ scripts/check-gates.sh                # the checkpoint: execute what moved, reus
 scripts/check-gates.sh --fresh        # execute every row and refresh its evidence
 scripts/check-gates.sh --plan         # what would run, without running it
 scripts/check-gates.sh --explain      # ... and exactly which input moved
+scripts/check-gates.sh --defer-elab   # verify non-timing rows; incomplete, exit 3
 scripts/check-gates.sh --audit        # registry against this file and against CI
 scripts/check-gates.sh --self-test    # the fail-closed control suite
 scripts/check-gates.sh --inventory    # regenerate docs/GATE_INPUTS.md
@@ -258,6 +259,36 @@ with its disposition, fingerprint, exact terminal summary, and evidence source.
 A credited row says *reused successful evidence*, never that the gate ran here;
 the build row separately says *exact build certificate*. Both files are
 candidate-local disposable state under `.lake/`.
+
+When timing is explicitly deferred to a later verification handoff,
+`--defer-elab` retains the exact `scripts/check-elab.sh --no-build` row as
+*deferred*. It reads no timing fingerprint or prior timing verdict, starts no
+timing command, and admits no timing record. Every other catalogue row keeps
+its ordinary command, verdict, prerequisites and content-valid reuse, including
+static performance checks and the synthetic elaboration-comparator controls.
+The same flag works with `--plan` and `--explain`. It accepts no arbitrary row
+selection and refuses `--fresh`, audit, self-test, inventory and certification
+combinations, or an absent/changed timing command.
+
+Execution in this mode requires a current exact goal-owned full build
+certificate before any row runs; an absent or changed certificate refuses
+instead of falling back to bare Lake. The compilation owner must build and
+certify first. Dependencies on the deferred row remain blocked. Final checks
+revalidate the certificate and the fingerprints of fresh and reused non-timing
+rows, including dirty-worktree verdicts; drift cannot describe a green handoff.
+Authentic green non-timing records may still enter the shared store under its
+ordinary clean-candidate and locking rules.
+
+A successful selection prints `GATES INCOMPLETE`, explicitly says there is no
+timing verdict, and exits **3**. Its manifest preserves the whole row population
+with `green: false`, `complete: false`, `scope: non-timing`, `deferred: [elab]`,
+and `non_timing_green: true`. Red, missing, blocked or drifting selected evidence
+keeps `non_timing_green: false` and the normal failure/refusal exit. This is
+incomplete evidence, so full catalogue acceptance still requires the deferred
+timing verdict. Omitting the flag preserves the ordinary full-run selection,
+manifest and `GATES OK`/exit 0 behavior. Focused controls run with
+`python3 -B scripts/test-gate-cache-defer-elab.py`; they use disposable synthetic
+commands and mocked certificates and perform no Lean or timing measurement.
 
 A row's output is streamed while it runs, not captured until it ends: every
 line goes to `.lake/gate-run.log` as it is produced (and to the terminal under
