@@ -88,7 +88,7 @@ theorem RegistryWitness.of_foreign_set {s : Stor} {entries : List Entry} {bound 
       have hzero : canonicalAddress (0 : B256) := by
         unfold canonicalAddress
         change (0 : Nat) < 2 ^ 160
-        norm_num
+        norm_num only
       rw [hread _ (Or.inr (Or.inr (Or.inl ⟨0, hzero, rfl⟩)))]
       exact h.zeroCount
   }
@@ -105,7 +105,7 @@ theorem RegistryWitness.of_foreign_set_160 {s : Stor} {entries : List Entry} {w 
     have hle := h.entries_length_le
     omega
   have hlength : 2 ^ 160 < 2 ^ 252 := by
-    norm_num
+    norm_num only
   exact of_foreign_set hlength hbound hapart h
 
 end Blanc.Lift.LidoCircuitBreakerDeployed

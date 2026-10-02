@@ -328,7 +328,7 @@ theorem finishSetPauser_registerAfterSet_runCompiled
           (devm := eventBase.setMach ⟨stack, M, G + 12, eventBase.stateGas⟩)
           (cost := gVerylow + gMid + gJumpdest) (G := G)
           (by simp only [Devm.gasLeft_setMach]
-              norm_num [gVerylow, gMid, gJumpdest]))
+              norm_num only [gVerylow, gMid, gJumpdest]))
     · exact hregister
   have hbranch : Func.RunCompiled fs sevm
       (eventBase.setMach ⟨1 :: stack, M, G + 26, eventBase.stateGas⟩)
@@ -343,7 +343,7 @@ theorem finishSetPauser_registerAfterSet_runCompiled
           (cost := gVerylow + gHigh + gJumpdest) (G := G + 12)
           (h_stk := rfl) (h := by
             simp only [Devm.gasLeft_setMach]
-            norm_num [gVerylow, gHigh, gJumpdest]))
+            norm_num only [gVerylow, gHigh, gJumpdest]))
     · exact hcall
   have hcontinuationRun : Func.RunCompiled fs sevm
       (eventBase.setMach ⟨stack, M, G + 35, eventBase.stateGas⟩)
@@ -353,10 +353,10 @@ theorem finishSetPauser_registerAfterSet_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign hcontinuationCovered]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hcontinuationValue, hcontinuationMemory]
-      norm_num
+      norm_num only
       exact hbranch
   simp only [finishSetPauser]
   func_run (10) [3, 3, 3, 1875]
@@ -366,11 +366,11 @@ theorem finishSetPauser_registerAfterSet_runCompiled
   all_goals try simp_rw [htargetMemory]
   all_goals try {
     erw [Devm.extCost_zero_of_le halign (by omega)]
-    norm_num [gVerylow, gLog, gLogdata, gLogtopic] }
+    norm_num only [gVerylow, gLog, gLogdata, gLogtopic] }
   case h_cost =>
     simp only [show ((0 : B256) * 32).toNat = 0 by decide]
     erw [Devm.extCost_zero_of_le halign (by omega)]
-    norm_num [gLog, gLogdata, gLogtopic]
+    norm_num only [gLog, gLogdata, gLogtopic, Fin.val_succ, Fin.coe_ofNat_eq_mod]
   case a =>
     rw [hnewValue, hpreviousValue, htargetValue]
     rw [show ((0 : B256) * 32).toNat = 0 by decide, hreadZero]
@@ -409,7 +409,7 @@ theorem afterOldPauser_removeTarget_runCompiled
           (devm := base.setMach ⟨stack, M, G + 12, base.stateGas⟩)
           (cost := gVerylow + gMid + gJumpdest) (G := G)
           (by simp only [Devm.gasLeft_setMach]
-              norm_num [gVerylow, gMid, gJumpdest]))
+              norm_num only [gVerylow, gMid, gJumpdest]))
     · exact hremove
   have hbranch : Func.RunCompiled fs sevm
       (base.setMach ⟨1 :: stack, M, G + 26, base.stateGas⟩)
@@ -427,7 +427,7 @@ theorem afterOldPauser_removeTarget_runCompiled
           (cost := gVerylow + gHigh + gJumpdest) (G := G + 12)
           (h_stk := rfl) (h := by
             simp only [Devm.gasLeft_setMach]
-            norm_num [gVerylow, gHigh, gJumpdest]))
+            norm_num only [gVerylow, gHigh, gJumpdest]))
     · exact hcall
   have hnewCovered : (newPauserWord * 32).toNat + 32 ≤ M.size := by
     have hoff : (newPauserWord * 32).toNat + 32 = 576 := by decide
@@ -439,7 +439,7 @@ theorem afterOldPauser_removeTarget_runCompiled
   all_goals try ((try simp only [Devm.stack_setMach]); omega)
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hnewCovered]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case a =>
     rw [Mem.Reads.read hreads, hnew, hnewMemory]
     have hg : G + 35 - 9 = G + 26 := by omega
@@ -508,7 +508,7 @@ theorem afterOldPauser_finishSetPauser_runCompiled
           (devm := countPost.setMach ⟨stack, M, G + 12, countPost.stateGas⟩)
           (cost := gVerylow + gMid + gJumpdest) (G := G)
           (by simp only [Devm.gasLeft_setMach]
-              norm_num [gVerylow, gMid, gJumpdest]))
+              norm_num only [gVerylow, gMid, gJumpdest]))
     · exact hfinish
   have hstoreCount : Func.RunCompiled fs sevm
       (countBase.setMach ⟨countKey :: nextCount :: stack, M,
@@ -537,7 +537,7 @@ theorem afterOldPauser_finishSetPauser_runCompiled
         congrArg (fun x : B256 => (regionWord countRegion).or x) hnewValue }
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign hnewCovered]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hnewMemory]
       have hg : G + 24 + countCost - 12 = G + 12 + countCost := by
@@ -580,7 +580,7 @@ theorem afterOldPauser_finishSetPauser_runCompiled
         congrArg (fun x : B256 => (regionWord countRegion).or x) hnewValue }
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign hnewCovered]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hnewMemory]
       have hg : G + 42 + temporalSloadCost sevm base countKey +
@@ -613,7 +613,7 @@ theorem afterOldPauser_finishSetPauser_runCompiled
           (G := G + 42 + temporalSloadCost sevm base countKey + countCost)
           (h_stk := rfl) (h := by
             simp only [Devm.gasLeft_setMach]
-            norm_num [gVerylow, gHigh]
+            norm_num only [gVerylow, gHigh]
             omega))
     · exact hcountBody
   simp only [afterOldPauser]
@@ -621,7 +621,7 @@ theorem afterOldPauser_finishSetPauser_runCompiled
   all_goals try ((try simp only [Devm.stack_setMach]); omega)
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hnewCovered]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case a =>
     rw [Mem.Reads.read hreads, hnew, hnewMemory]
     simp only [B256.eqCheck, if_neg hnewNonzero]
@@ -663,7 +663,7 @@ theorem newPauserWord_prepend_runCompiled
   func_run (2) [3]
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hcovered]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case a => rw [hvalue, hmemory]; exact htail
   all_goals first | omega | (simp only [Devm.stack_setMach]; omega)
 
@@ -687,7 +687,7 @@ theorem targetKey_prepend_runCompiled
       congrArg (fun x : B256 => (regionWord assignmentRegion).or x) hvalue }
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hcovered]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case a => rw [hmemory]; exact htail
   all_goals first | omega | (simp only [Devm.stack_setMach, List.length_cons]; omega)
 
@@ -708,7 +708,7 @@ theorem targetWord_prepend_runCompiled
   func_run (2) [3]
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hcovered]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case a => rw [hvalue, hmemory]; exact htail
   all_goals first | omega | (simp only [Devm.stack_setMach]; omega)
 
@@ -733,7 +733,7 @@ theorem previousCountKey_prepend_runCompiled
       congrArg (fun x : B256 => (regionWord countRegion).or x) hvalue }
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hcovered]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case a => rw [hmemory]; exact htail
   all_goals first | omega |
     (simp only [Devm.stack_setMach, List.length_cons]; omega)
@@ -862,13 +862,13 @@ theorem registerAfterSet_oldLast_newPauserTail_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign' hpreviousCovered']
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case h_cost =>
       rw [hpreviousMemory']
       simp only [show ((0 : B256) * 32).toNat = 0 by decide,
         show ((1 : B256) * 32).toNat = 32 by decide]
       rw [Devm.extCost_zero_of_le halign' hzeroCovered']
-      norm_num [gLog, gLogdata, gLogtopic]
+      norm_num only [gLog, gLogdata, gLogtopic, Fin.val_succ, Fin.coe_ofNat_eq_mod]
     case a =>
       rw [hpreviousMemory', hpreviousValue']
       simp only [show ((0 : B256) * 32).toNat = 0 by decide,
@@ -911,7 +911,7 @@ theorem registerAfterSet_oldLast_newPauserTail_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign hpreviousCovered]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hpreviousMemory, hor]
       have hg : G + 1416 + clearCost - 14 = G + 1402 + clearCost := by omega
@@ -953,7 +953,7 @@ theorem registerAfterSet_oldLast_newPauserTail_runCompiled
   all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hpreviousCovered]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case h_val => simp only [B256.eqCheck, hpreviousValue, holdNonzero, ↓reduceIte]
   case h_arm =>
     rw [hpreviousMemory]
@@ -1055,13 +1055,13 @@ private theorem registerAfterSet_expiryStoreLogTail_runCompiled
       all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
       case h_cost =>
         rw [Devm.extCost_zero_of_le halign' hnewCovered']
-        norm_num [gVerylow]
+        norm_num only [gVerylow]
       case h_cost =>
         rw [show ((0 : B256) * 32).toNat = 0 by decide,
           show ((1 : B256) * 32).toNat = 32 by decide]
         rw [hnewMemory']
         rw [Devm.extCost_zero_of_le halign' (by omega)]
-        norm_num [gLog, gLogdata, gLogtopic]
+        norm_num only [gLog, gLogdata, gLogtopic, Fin.val_succ, Fin.coe_ofNat_eq_mod]
       case a => exact Func.RunCompiled.last rfl
     · rw [hnewValue', hnewMemory']
       rw [show ((0 : B256) * 32).toNat = 0 by decide,
@@ -1186,7 +1186,7 @@ theorem registerAfterSet_nonzeroNewPauserTail_runCompiled
   all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hnewCovered]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case h_val =>
     rw [hnewValue]
     simp only [B256.eqCheck, hnewNonzero, ↓reduceIte]
@@ -1204,7 +1204,7 @@ theorem registerAfterSet_nonzeroNewPauserTail_runCompiled
     rw [hnewMemory]
     simp only [show ((0 : B256) * 32).toNat = 0 by decide]
     erw [Devm.extCost_zero_of_le halignM' hnewCoveredM']
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case h_val =>
     rw [hnewMemory]
     simp only [show ((0 : B256) * 32).toNat = 0 by decide]
@@ -1337,7 +1337,7 @@ theorem setPauserKernel_append_runCompiled
           (devm := assignPost.setMach ⟨[], M', Ga + 12, assignPost.stateGas⟩)
           (cost := gVerylow + gMid + gJumpdest) (G := Ga)
           (by simp only [Devm.gasLeft_setMach]
-              norm_num [gVerylow, gMid, gJumpdest]))
+              norm_num only [gVerylow, gMid, gJumpdest]))
     · exact happend
   have hbranch : Func.RunCompiled fs sevm
       (assignPost.setMach ⟨[1], M', Ga + 26, assignPost.stateGas⟩)
@@ -1356,7 +1356,7 @@ theorem setPauserKernel_append_runCompiled
           (cost := gVerylow + gHigh + gJumpdest) (G := Ga + 12)
           (h_stk := rfl) (h := by
             simp only [Devm.gasLeft_setMach]
-            norm_num [gVerylow, gHigh, gJumpdest]))
+            norm_num only [gVerylow, gHigh, gJumpdest]))
     · exact happendCall
   have hiszero : Func.RunCompiled fs sevm
       (assignPost.setMach ⟨[0], M', Ga + 29, assignPost.stateGas⟩)
@@ -1507,7 +1507,7 @@ theorem setPauserKernel_append_runCompiled
             temporalSloadCost sevm base assignmentKey)
           (h_stk := rfl) (h := by
             simp only [Devm.gasLeft_setMach]
-            norm_num [gVerylow, gHigh]))
+            norm_num only [gVerylow, gHigh]))
     · exact htargetKeyFirst
   have hguard : Func.RunCompiled fs sevm
       (base.setMach ⟨[target], M,
@@ -1698,7 +1698,7 @@ theorem setPauserKernel_found_runCompiled
           (devm := countPost.setMach ⟨[], M', G + afterGas + 12, countPost.stateGas⟩)
           (cost := gVerylow + gMid + gJumpdest) (G := G + afterGas)
           (by simp only [Devm.gasLeft_setMach]
-              norm_num [gVerylow, gMid, gJumpdest]))
+              norm_num only [gVerylow, gMid, gJumpdest]))
     · exact hafter
   have hcountBase : countBase.getStorVal sevm.currentTarget
       (countSlot oldPauser) = oldCount := by
@@ -1775,7 +1775,7 @@ theorem setPauserKernel_found_runCompiled
           (G := elseGas)
           (h_stk := rfl) (h := by
             simp only [Devm.gasLeft_setMach]
-            norm_num [gVerylow, gHigh]))
+            norm_num only [gVerylow, gHigh]))
     · exact helse
   have hiszero : Func.RunCompiled fs sevm
       (assignPost.setMach ⟨[oldPauser], M', elseGas + 16, assignPost.stateGas⟩)
@@ -1948,7 +1948,7 @@ theorem setPauserKernel_found_runCompiled
             temporalSloadCost sevm base (assignmentSlot target))
           (h_stk := rfl) (h := by
             simp only [Devm.gasLeft_setMach]
-            norm_num [gVerylow, gHigh]))
+            norm_num only [gVerylow, gHigh]))
     · exact htargetKeyFirst
   have hguard : Func.RunCompiled fs sevm
       (base.setMach ⟨[target], M,
@@ -2304,13 +2304,15 @@ theorem registerPauserCalldata_spec (sevm : Sevm)
     simp only [B256.shiftRight]
     change (⟨0, B128.shiftRight ⟨_, _⟩ 96⟩ : B256) = _
     simp only [B128.shiftRight]
-    norm_num [UInt64.ofBytes_eq_halves]
+    dsimp only [B128]
+    norm_num only [UInt64.ofBytes_eq_halves]
+    simp only [ite_true, ite_false]
     congr 3
     rw [← UInt64.toNat_inj]
     have widen32 (z : UInt32) : z.toUInt64.toNat = z.toNat := rfl
     simp only [UInt64.toNat_shiftRight, UInt64.toNat_or,
       UInt64.toNat_shiftLeft_lo, widen32]
-    norm_num
+    norm_num only [UInt64.toNat_ofNat, toNat_toUInt64, Nat.lo_eq]
     rw [Nat.shiftRight_or_distrib]
     rw [Nat.shiftRight_eq_zero _ _ (UInt32.toNat_lt _)]
     decide +kernel
@@ -2396,7 +2398,7 @@ theorem pushZero_targetIndexKey_prepend_runCompiled
       (Ninst.runCompiled_pushB256 (sevm := sevm)
         (devm := base.setMach ⟨stack, M, G + 14, base.stateGas⟩)
         (w := 0) (c := gBase) (G := G + 12) rfl
-        (by simp only [Devm.gasLeft_setMach]; norm_num [gBase])
+        (by simp only [Devm.gasLeft_setMach]; norm_num only [gBase])
         (by simp only [Devm.stack_setMach]; omega))
   · exact hload'
 
@@ -2518,7 +2520,7 @@ private theorem removeTarget_restoreTail_runCompiled
           (cost := gVerylow + gMid + gJumpdest) (G := G + finishGas)
           (by
             simp only [Devm.gasLeft_setMach]
-            norm_num [gVerylow, gMid, gJumpdest]))
+            norm_num only [gVerylow, gMid, gJumpdest]))
     · simpa only [fs] using hfinish
   have hstoreIndex : Func.RunCompiled fs sevm
       (lengthPost.setMach
@@ -2570,7 +2572,7 @@ private theorem removeTarget_restoreTail_runCompiled
   all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hlengthCovered]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case a =>
     rw [hlengthValue, hlengthMemory]
     change Func.RunCompiled _ _
@@ -2885,7 +2887,7 @@ private theorem removeTarget_storePrefix_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered arrayLengthWord (by decide))]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hlengthValue, hlengthMemory]
       have hg : G + finishGas + 56 + lengthRestoreCost + indexClearCost +
@@ -2965,7 +2967,7 @@ private theorem removeTarget_storePrefix_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered lastTargetWord (by decide))]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hlastValue, hlastMemory]
       have hg : G + finishGas + 70 + lengthRestoreCost + indexClearCost +
@@ -2990,7 +2992,7 @@ private theorem removeTarget_storePrefix_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered removedIndexWord (by decide))]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hremovedValue, hremovedMemory]
       have hg : G + finishGas + 76 + lengthRestoreCost + indexClearCost +
@@ -3055,7 +3057,7 @@ private theorem removeTarget_storePrefix_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered removedIndexWord (by decide))]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hremovedValue, hremovedMemory]
       have hg : G + finishGas + 88 + lengthRestoreCost + indexClearCost +
@@ -3082,7 +3084,7 @@ private theorem removeTarget_storePrefix_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered lastTargetWord (by decide))]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hlastValue, hlastMemory]
       have hg : G + finishGas + 94 + lengthRestoreCost + indexClearCost +
@@ -3426,7 +3428,7 @@ theorem removeTarget_toFinish_runCompiled
       rw [Devm.extCost_zero_of_le halignLength (by
         rw [hsizeLength, show (arrayLengthWord * 32).toNat + 32 = 704 by decide]
         exact Nat.le_max_right _ _)]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hlengthValue, hlengthMemory]
       have hg : G + finishGas + 212 + lastExtCost + holeCost + movedIndexCost +
@@ -3653,7 +3655,7 @@ theorem removeTarget_toFinish_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign htargetCovered]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [htargetMemory]
       have hg : G + finishGas + 439 + lastExtCost + indexExtCost + lengthExtCost +
@@ -3930,7 +3932,7 @@ private theorem removeTarget_swapPop_storePrefix_runCompiled
     intro h
     exact hidxNeLen
       (slot_injective_payload (region := arrayRegion)
-        (by norm_num [arrayRegion]) hlenBound hidxBound
+        (by norm_num only [arrayRegion]) hlenBound hidxBound
         (by simpa only [tailKey, holeKey, arrayEntrySlot] using h)).symm
   have hmovedHolePost : holePost.getStorVal sevm.currentTarget movedKey =
       movedCurrent := by
@@ -4088,7 +4090,7 @@ private theorem removeTarget_swapPop_storePrefix_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered arrayLengthWord (by decide))]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hlengthValue, hlengthMemory]
       have hg : G + finishGas + 56 + lengthRestoreCost + indexClearCost +
@@ -4168,7 +4170,7 @@ private theorem removeTarget_swapPop_storePrefix_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered lastTargetWord (by decide))]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hlastValue, hlastMemory]
       have hg : G + finishGas + 70 + lengthRestoreCost + indexClearCost +
@@ -4193,7 +4195,7 @@ private theorem removeTarget_swapPop_storePrefix_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered removedIndexWord (by decide))]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hremovedValue, hremovedMemory]
       have hg : G + finishGas + 76 + lengthRestoreCost + indexClearCost +
@@ -4258,7 +4260,7 @@ private theorem removeTarget_swapPop_storePrefix_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered removedIndexWord (by decide))]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hremovedValue, hremovedMemory]
       have hg : G + finishGas + 88 + lengthRestoreCost + indexClearCost +
@@ -4285,7 +4287,7 @@ private theorem removeTarget_swapPop_storePrefix_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered lastTargetWord (by decide))]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hlastValue, hlastMemory]
       have hg : G + finishGas + 94 + lengthRestoreCost + indexClearCost +
@@ -4650,7 +4652,7 @@ theorem removeTarget_swapPop_toFinish_runCompiled
       rw [Devm.extCost_zero_of_le halignLength (by
         rw [hsizeLength, show (arrayLengthWord * 32).toNat + 32 = 704 by decide]
         exact Nat.le_max_right _ _)]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hlengthValue, hlengthMemory]
       have hg : G + finishGas + 212 + lastExtCost + holeCost + movedIndexCost +
@@ -4877,7 +4879,7 @@ theorem removeTarget_swapPop_toFinish_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign htargetCovered]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [htargetMemory]
       have hg : G + finishGas + 439 + lastExtCost + indexExtCost + lengthExtCost +

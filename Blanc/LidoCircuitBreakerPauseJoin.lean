@@ -1438,7 +1438,7 @@ theorem pauseRetainedWorld_join :
   · refine absurd (show B256.Nof pauseRetainedSevm.benvStat.time
       pauseWorldInterval from ?_) hwrap
     show pauseWorldTime.toNat + pauseWorldInterval.toNat < 2 ^ 256
-    norm_num [show pauseWorldTime.toNat = 10 from by decide,
+    norm_num only [show pauseWorldTime.toNat = 10 from by decide,
       show pauseWorldInterval.toNat = 2592000 from by decide]
 
 end Blanc.LidoCircuitBreaker

@@ -156,7 +156,7 @@ private theorem registerAfterSet_freshNonzero_runCompiled
     func_run (4) [3, 1]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign hpreviousCovered]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case h_val => simp only [B256.eqCheck, hpreviousValue, ↓reduceIte]
     case h_arm =>
       rw [hpreviousMemory]
@@ -322,10 +322,10 @@ private theorem afterOldPauser_freshNonzero_runCompiled
     simpa only [countKey, countSlot, heartbeatIntervalSlot] using
       slot_ne_of_region_ne
         (leftRegion := countRegion) (rightRegion := configRegion)
-        (by norm_num [countRegion]) (by norm_num [configRegion])
+        (by norm_num only [countRegion]) (by norm_num only [configRegion])
         (canonicalAddress_payload_lt hnewValid.2)
-        (by change (1 : Nat) < 2 ^ 252; norm_num)
-        (by norm_num [countRegion, configRegion])
+        (by change (1 : Nat) < 2 ^ 252; norm_num only)
+        (by norm_num only [countRegion, configRegion])
   have hcountExpiry : countKey ≠ expirySlot newPauser := by
     exact Ne.symm
       (expirySlot_ne_registryAddressFamilies hnewValid.2 hnewValid.2
@@ -369,7 +369,7 @@ private theorem afterOldPauser_freshNonzero_runCompiled
       newPauser count nextCount countOriginal [carry] countCost (G + 25527)
       post (by simp only [List.length_cons, List.length_nil, zero_add, Std.le_refl]) hreads hnew hnewValid.1 (by omega) halign hcount
       hcountOrig hcountNext hcountCost
-      (by norm_num [gCallStipend]; omega) hstatic hfinish
+      (by norm_num only [gCallStipend]; omega) hstatic hfinish
     have hg : G + 25527 + 64 +
         temporalSloadCost sevm base (countSlot newPauser) + countCost =
         G + 25591 +
@@ -487,10 +487,10 @@ private theorem appendTarget_freshNonzero_runCompiled
       slot_ne_of_region_ne
         (leftRegion := arrayRegion) (rightRegion := configRegion)
         (left := (0 : B256)) (right := (1 : B256))
-        (by norm_num [arrayRegion]) (by norm_num [configRegion])
-        (by change (0 : Nat) < 2 ^ 252; norm_num)
-        (by change (1 : Nat) < 2 ^ 252; norm_num)
-        (by norm_num [arrayRegion, configRegion])
+        (by norm_num only [arrayRegion]) (by norm_num only [configRegion])
+        (by change (0 : Nat) < 2 ^ 252; norm_num only)
+        (by change (1 : Nat) < 2 ^ 252; norm_num only)
+        (by norm_num only [arrayRegion, configRegion])
   have pairNe {left right : B256} (h : left ≠ right) :
       (sevm.currentTarget, left) ≠ (sevm.currentTarget, right) := by
     intro hp
@@ -560,19 +560,19 @@ private theorem appendTarget_freshNonzero_runCompiled
           slot_ne_of_region_ne
           (leftRegion := configRegion) (rightRegion := indexRegion)
           (left := (1 : B256)) (right := target)
-          (by norm_num [configRegion]) (by norm_num [indexRegion])
-          (by change (1 : Nat) < 2 ^ 252; norm_num)
+          (by norm_num only [configRegion]) (by norm_num only [indexRegion])
+          (by change (1 : Nat) < 2 ^ 252; norm_num only)
           (canonicalAddress_payload_lt htargetValid.2)
-          (by norm_num [configRegion, indexRegion])))]
+          (by norm_num only [configRegion, indexRegion])))]
     rw [temporalSstorePost_other sevm lengthBase arrayKey target
       sevm.currentTarget heartbeatIntervalSlot (pairNe (by
         simpa only [heartbeatIntervalSlot, arrayKey, arrayEntrySlot] using
           slot_ne_of_region_ne
           (leftRegion := configRegion) (rightRegion := arrayRegion)
           (left := (1 : B256)) (right := next)
-          (by norm_num [configRegion]) (by norm_num [arrayRegion])
-          (by change (1 : Nat) < 2 ^ 252; norm_num) hnextBound
-          (by norm_num [configRegion, arrayRegion])))]
+          (by norm_num only [configRegion]) (by norm_num only [arrayRegion])
+          (by change (1 : Nat) < 2 ^ 252; norm_num only) hnextBound
+          (by norm_num only [configRegion, arrayRegion])))]
     rw [temporalSloadBase_getStorVal]
     exact hinterval
   have hintervalColdPost : (sevm.currentTarget, heartbeatIntervalSlot) ∉
@@ -669,7 +669,7 @@ private theorem appendTarget_freshNonzero_runCompiled
           (devm := lengthPost.setMach ⟨[next], M', afterGas + 12, lengthPost.stateGas⟩)
           (cost := gVerylow + gMid + gJumpdest) (G := afterGas)
           (by simp only [Devm.gasLeft_setMach];
-              norm_num [gVerylow, gMid, gJumpdest]))
+              norm_num only [gVerylow, gMid, gJumpdest]))
     · exact hafter
   have hstoreLength : Func.RunCompiled fs sevm
       (indexPost.setMach ⟨[arrayLengthSlot, next, next], M',
@@ -677,7 +677,7 @@ private theorem appendTarget_freshNonzero_runCompiled
       (Ninst.sstore ::: .call afterOldPauserSlot) post := by
     exact Func.RunCompiled.next
       (temporal_sstore_runCompiled (hfork := hfork) hlengthIndex hlengthOrig hlengthCost
-        hwarmLengthIndex (by norm_num [gCallStipend]; omega) hstatic)
+        hwarmLengthIndex (by norm_num only [gCallStipend]; omega) hstatic)
       hafterCall
   have hlengthTail : Func.RunCompiled fs sevm
       (indexPost.setMach ⟨[next], M', afterGas + 21 + lengthCost, indexPost.stateGas⟩)
@@ -686,7 +686,7 @@ private theorem appendTarget_freshNonzero_runCompiled
     func_run (3) [3]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign' harrayLengthOff']
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       have hmem : (M'.read (arrayLengthWord * 32).toNat 32).2 = M' := by
         rw [Mem.read_snd_eq_self
@@ -709,7 +709,7 @@ private theorem appendTarget_freshNonzero_runCompiled
         .call afterOldPauserSlot) post := by
     exact Func.RunCompiled.next
       (temporal_sstore_runCompiled (hfork := hfork) hindexArray hindexOrig hindexCost
-        hwarmIndexArray (by norm_num [gCallStipend]; omega) hstatic)
+        hwarmIndexArray (by norm_num only [gCallStipend]; omega) hstatic)
       hlengthTail
   have htargetOff' : (targetWord * 32).toNat + 32 ≤ M'.size := by
     have hoff : (targetWord * 32).toNat + 32 ≤ 640 := by decide
@@ -751,7 +751,7 @@ private theorem appendTarget_freshNonzero_runCompiled
     func_run (2) [3]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign' htargetOff']
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [htargetVal, htargetMem]
       have hg : afterGas + 33 + lengthCost + indexCost - 6 =
@@ -767,7 +767,7 @@ private theorem appendTarget_freshNonzero_runCompiled
     func_run (2) [3]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign' hlengthOff']
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hlengthVal, hlengthMem]
       have hg : afterGas + 39 + lengthCost + indexCost - 6 =
@@ -783,7 +783,7 @@ private theorem appendTarget_freshNonzero_runCompiled
         .call afterOldPauserSlot) post := by
     exact Func.RunCompiled.next
       (temporal_sstore_runCompiled (hfork := hfork) harrayBase harrayOrig harrayCost
-        hwarmArrayBase (by norm_num [gCallStipend]; omega) hstatic)
+        hwarmArrayBase (by norm_num only [gCallStipend]; omega) hstatic)
       hindexTail
   have harrayTag : Func.RunCompiled fs sevm
       (lengthBase.setMach ⟨[next, target, next], M',
@@ -808,7 +808,7 @@ private theorem appendTarget_freshNonzero_runCompiled
     func_run (2) [3]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign' hlengthOff']
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hlengthVal, hlengthMem]
       have hg : afterGas + 51 + arrayCost + indexCost + lengthCost - 6 =
@@ -826,7 +826,7 @@ private theorem appendTarget_freshNonzero_runCompiled
     func_run (2) [3]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign' htargetOff']
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [htargetVal, htargetMem]
       have hg : afterGas + 57 + arrayCost + indexCost + lengthCost - 6 =
@@ -1202,7 +1202,7 @@ theorem setPauserKernel_freshNonzero_runCompiled
     post target newPauser assignmentOriginal assignmentCost appendGas
     hwf hreads htarget hnew htargetValid hsize halign hassignment
     hassignmentOrig hassignmentCost
-    (by simp only [appendGas]; norm_num [gCallStipend]; omega) hstatic
+    (by simp only [appendGas]; norm_num only [gCallStipend]; omega) hstatic
     happend
   rcases freshRegistration_sourceTrace_witness hw htargetValid hnewValid hfind with
     ⟨trace, htrace, hpostEntries, hwrites, hwpost⟩

@@ -103,7 +103,7 @@ theorem RegistryWitness.enumeration_offsets_lt_2pow256
       64 + 32 * entries.length < 2 ^ 256 ∧
       i + 1 < 2 ^ 256 := by
   have hlength := h.entries_length_le
-  norm_num at hlength ⊢
+  norm_num only at hlength ⊢
   omega
 
 theorem RegistryWitness.enumeration_offsets_toB256_toNat
@@ -129,14 +129,14 @@ theorem RegistryWitness.enumeration_word_arithmetic
   rcases h.enumeration_offsets_lt_2pow256 hi with ⟨hword, htarget, _, hslot⟩
   have hi256 : i < 2 ^ 256 := by
     have hlength := h.entries_length_le
-    norm_num at hlength ⊢
+    norm_num only at hlength ⊢
     omega
   have hone : (1 : B256).toNat = 1 :=
-    B256.toNat_toB256_of_lt (by norm_num)
+    B256.toNat_toB256_of_lt (by norm_num only)
   have h32 : (32 : B256).toNat = 32 :=
-    B256.toNat_toB256_of_lt (by norm_num)
+    B256.toNat_toB256_of_lt (by norm_num only)
   have h64 : (64 : B256).toNat = 64 :=
-    B256.toNat_toB256_of_lt (by norm_num)
+    B256.toNat_toB256_of_lt (by norm_num only)
   constructor
   · apply B256.toNat_inj
     have hnof : (Nat.toB256 i).Nof (1 : B256) := by
@@ -168,7 +168,7 @@ theorem RegistryWitness.enumeration_total_toB256_toNat
       64 + 32 * entries.length := by
   apply B256.toNat_toB256_of_lt
   have hlength := h.entries_length_le
-  norm_num at hlength ⊢
+  norm_num only at hlength ⊢
   omega
 
 theorem RegistryWitness.enumeration_total_word_arithmetic
@@ -178,20 +178,20 @@ theorem RegistryWitness.enumeration_total_word_arithmetic
       Nat.toB256 (64 + 32 * entries.length) := by
   have hn : entries.length < 2 ^ 256 := by
     have hlength := h.entries_length_le
-    norm_num at hlength ⊢
+    norm_num only at hlength ⊢
     omega
   have hmul : 32 * entries.length < 2 ^ 256 := by
     have hlength := h.entries_length_le
-    norm_num at hlength ⊢
+    norm_num only at hlength ⊢
     omega
   have htotal : 64 + 32 * entries.length < 2 ^ 256 := by
     have hlength := h.entries_length_le
-    norm_num at hlength ⊢
+    norm_num only at hlength ⊢
     omega
   have h32 : (32 : B256).toNat = 32 :=
-    B256.toNat_toB256_of_lt (by norm_num)
+    B256.toNat_toB256_of_lt (by norm_num only)
   have h64 : (64 : B256).toNat = 64 :=
-    B256.toNat_toB256_of_lt (by norm_num)
+    B256.toNat_toB256_of_lt (by norm_num only)
   have hmulEq : (32 : B256) * Nat.toB256 entries.length =
       Nat.toB256 (32 * entries.length) := by
     apply B256.toNat_inj
@@ -700,7 +700,7 @@ private theorem enumLoop_done_runCompiled
         (abiAddressArray entries)) := by
   unfold enumLoop
   have h32 : (32 : B256).toNat = 32 :=
-    B256.toNat_toB256_of_lt (by norm_num)
+    B256.toNat_toB256_of_lt (by norm_num only)
   func_run [3, 0, 3]
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · rw [h32, enumPrefixMemory_extCost_length]
@@ -710,7 +710,7 @@ private theorem enumLoop_done_runCompiled
   · rw [h32, enumPrefixMemory_read_length_snd, enumPrefixMemory_extCost_length]
     rfl
   · change G + 49 - 36 = G + 49 - 41 + gLow
-    norm_num [gLow]
+    norm_num only [gLow]; omega
   · simp only [h32, enumPrefixMemory_read_length_snd,
       enumPrefixMemory_read_length_fst, B256.toB256_toBytes,
       hw.enumeration_total_word_arithmetic]
@@ -783,14 +783,14 @@ theorem enumLoop_runCompiled
         rw [hw.arrayWords done.length hdone, hsplit,
           targetAt_append_cons_length]
       have h32 : (32 : B256).toNat = 32 :=
-        B256.toNat_toB256_of_lt (by norm_num)
+        B256.toNat_toB256_of_lt (by norm_num only)
       have hdone256 : done.length < 2 ^ 256 := by
         have hlength := hw.entries_length_le
-        norm_num at hlength ⊢
+        norm_num only at hlength ⊢
         omega
       have hlength256 : entries.length < 2 ^ 256 := by
         have hlength := hw.entries_length_le
-        norm_num at hlength ⊢
+        norm_num only at hlength ⊢
         omega
       have hltWord :
           Nat.toB256 done.length < Nat.toB256 entries.length := by
@@ -806,7 +806,7 @@ theorem enumLoop_runCompiled
       repeat (case h_legacy => exact hfork.rules_stateGas_none)
       all_goals try {
         simp only [Devm.gasLeft_setMach, enumLoopGasWarmFrom_cons]
-        norm_num [gVerylow, gLow, gHigh, gJumpdest, gasWarmAccess]
+        norm_num only [gVerylow, gLow, gHigh, gJumpdest, gasWarmAccess]
         omega }
       all_goals try { rw [h32, enumPrefixMemory_extCost_length]; rfl }
       all_goals try {
@@ -859,7 +859,7 @@ theorem enumLoop_runCompiled
             entries done
             (G + enumLoopGasWarmFrom done.length (entry :: rest) - 158)
         · simp only [Devm.gasLeft_setMach, enumLoopGasWarmFrom_cons]
-          norm_num [gVerylow, delta]
+          norm_num only [gVerylow, delta]
           omega
         · rw [Devm.memory_setMach, hoffsetNat]
           exact (enumPrefixMemory_append entries done entry).symm
@@ -871,7 +871,7 @@ theorem enumLoop_runCompiled
         hfs (by simp only [Devm.stack_setMach, List.length_singleton]; omega)
         ?_ ?_
       · simp only [Devm.gasLeft_setMach]
-        norm_num [gVerylow, gMid, gJumpdest]
+        norm_num only [gVerylow, gMid, gJumpdest]; omega
       · have hsplit' : entries = (done ++ [entry]) ++ rest := by
           simpa only [List.append_assoc, List.cons_append, List.nil_append] using hsplit
         simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
@@ -910,7 +910,7 @@ theorem getPausables_body_runCompiled
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try {
     simp only [Devm.gasLeft_setMach]
-    norm_num [getPausablesGasWarm, gVerylow, gBase]
+    norm_num only [getPausablesGasWarm, gVerylow, gBase]
     omega }
   all_goals try { exact Devm.extCost_empty_word }
   refine Func.RunCompiled.next
@@ -926,13 +926,13 @@ theorem getPausables_body_runCompiled
         Nat.toB256 entries.length
     exact hw.lengthWord
   · simp only [Devm.gasLeft_setMach]
-    norm_num [gasWarmAccess, getPausablesGasWarm]
+    norm_num only [gasWarmAccess, getPausablesGasWarm]
     omega
   func_run (3) [3]
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try {
     simp only [Devm.gasLeft_setMach]
-    norm_num [getPausablesGasWarm, gVerylow, gBase]
+    norm_num only [getPausablesGasWarm, gVerylow, gBase]
     omega }
   all_goals try {
     simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
@@ -943,8 +943,8 @@ theorem getPausables_body_runCompiled
   · simp only [Devm.stack_setMach, List.length_singleton]
     omega
   · simp only [Devm.gasLeft_setMach]
-    norm_num [getPausablesGasWarm, calculateMemoryGasCost, ceilDiv,
-      gMemory, gVerylow, gMid, gJumpdest]
+    norm_num only [getPausablesGasWarm, calculateMemoryGasCost, ceilDiv,
+      gMemory, gVerylow, gMid, gJumpdest, ite_true]
     omega
   · have hzeroOffset : ((0 : B256) * 32).toNat = 0 := by decide
     have honeOffset : ((1 : B256) * 32).toNat = 32 := by decide
@@ -1373,7 +1373,7 @@ theorem registryViews_coherent
   have hzeroCanonical : canonicalAddress (0 : B256) := by
     unfold canonicalAddress
     rw [B256.toNat_zero]
-    norm_num
+    norm_num only
   have hzeroWord : Nat.toB256 (assignmentCount entries 0) = 0 := by
     have hcount := hw.counts 0 hzeroCanonical
     exact hcount.symm.trans hw.zeroCount
@@ -2123,7 +2123,7 @@ theorem pauserSet_target_zero_no_success
   have hzeroCanonical : canonicalAddress (0 : B256) := by
     unfold canonicalAddress
     change (0 : Nat) < 2 ^ 160
-    norm_num
+    norm_num only
   rcases setPauserKernel_exec_extracts_sourceTrace dp howner hcodeAddress
       hbytes htable hwf hr htargetRead hnewRead hcontinuationRead
       hw hzeroCanonical hnew hexec with

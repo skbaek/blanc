@@ -267,18 +267,18 @@ theorem pauseAfterSetEntry_assignment (sevm : Sevm) (base : Devm)
   have hlastIndex : assignmentSlot target ≠ indexSlot lastTarget := by
     simpa only [assignmentSlot, indexSlot, ne_eq] using
       addressSlots_ne_of_region_ne (leftRegion := assignmentRegion) (rightRegion := indexRegion)
-        (by norm_num [assignmentRegion]) (by norm_num [indexRegion]) htarget hlastTarget
-        (by norm_num [assignmentRegion, indexRegion])
+        (by norm_num only [assignmentRegion]) (by norm_num only [indexRegion]) htarget hlastTarget
+        (by norm_num only [assignmentRegion, indexRegion])
   have hindex : assignmentSlot target ≠ indexSlot target := by
     simpa only [assignmentSlot, indexSlot, ne_eq] using
       addressSlots_ne_of_region_ne (leftRegion := assignmentRegion) (rightRegion := indexRegion)
-        (by norm_num [assignmentRegion]) (by norm_num [indexRegion]) htarget htarget
-        (by norm_num [assignmentRegion, indexRegion])
+        (by norm_num only [assignmentRegion]) (by norm_num only [indexRegion]) htarget htarget
+        (by norm_num only [assignmentRegion, indexRegion])
   have hcount : assignmentSlot target ≠ countSlot oldPauser := by
     simpa only [assignmentSlot, countSlot, ne_eq] using
       addressSlots_ne_of_region_ne (leftRegion := assignmentRegion) (rightRegion := countRegion)
-        (by norm_num [assignmentRegion]) (by norm_num [countRegion]) htarget holdPauser
-        (by norm_num [assignmentRegion, countRegion])
+        (by norm_num only [assignmentRegion]) (by norm_num only [countRegion]) htarget holdPauser
+        (by norm_num only [assignmentRegion, countRegion])
   rw [addLog_setMach_getStorVal,
     removalPost_getStorVal_other _ _ _ _ _ _ _ _ hmoved hlastIndex htail
       hlength hindex]
@@ -525,7 +525,7 @@ theorem pause_body_runCompiledTo_error_of_locked
         · rfl
         · simp only [Devm.gasLeft_setMach, revertSelectorCost]
           rw [Devm.extCost_empty_word]
-          norm_num [gVerylow, gBase, gMemory]
+          norm_num only [gVerylow, gBase, gMemory]
           omega
         · simp only [Devm.stack_setMach, List.length_nil]
           omega

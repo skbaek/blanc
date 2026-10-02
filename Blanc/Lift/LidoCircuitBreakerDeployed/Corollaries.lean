@@ -193,7 +193,7 @@ theorem l3_count_sum_raw {s : Stor} {entries : List Entry}
   have hzero_can : canonicalAddress 0 := by
     unfold canonicalAddress
     change (0 : Nat) < 2 ^ 160
-    norm_num
+    norm_num only
   have hcount_raw : ∀ p, canonicalAddress p →
       s.get (mapSlot p 6) = Nat.toB256 (assignmentCount entries p) := by
     intro p hp
@@ -243,7 +243,7 @@ theorem inv_of_registryZero {s : Stor} (h : RegistryZero s) :
   · have h0 : canonicalAddress 0 := by
       unfold canonicalAddress
       change (0 : Nat) < 2 ^ 160
-      norm_num
+      norm_num only
     exact (h.2 0 h0).2.2
 
 

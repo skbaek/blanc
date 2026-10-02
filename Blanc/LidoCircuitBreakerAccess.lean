@@ -567,7 +567,7 @@ private theorem heartbeat_storeLogTail_runCompiled_update
       rw [show ((0 : B256) * 32).toNat = 0 by decide,
         show ((1 : B256) * 32).toNat = 32 by decide]
       erw [Devm.extCost_word_word Mem.size_write_word]
-      norm_num [gLog, gLogdata, gLogtopic]
+      norm_num only [gLog, gLogdata, gLogtopic, Fin.val_succ, Fin.coe_ofNat_eq_mod]
     case a => exact Func.RunCompiled.last rfl
   · refine ⟨?_, ?_, ?_⟩
     · simp only [Devm.gasLeft_setMach]
@@ -639,7 +639,7 @@ private theorem heartbeat_storeLogTail_runCompiled_other
       rw [show ((0 : B256) * 32).toNat = 0 by decide,
         show ((1 : B256) * 32).toNat = 32 by decide]
       erw [Devm.extCost_word_word Mem.size_write_word]
-      norm_num [gLog, gLogdata, gLogtopic]
+      norm_num only [gLog, gLogdata, gLogtopic, Fin.val_succ, Fin.coe_ofNat_eq_mod]
     case a => exact Func.RunCompiled.last rfl
   · refine ⟨?_, ?_, ?_⟩
     · simp only [Devm.gasLeft_setMach]
@@ -880,12 +880,12 @@ theorem heartbeat_body_runCompiled_of_checkedExtension
       rw [horigExpiry, Devm.getStorVal_setMach, holdExpiry]
       rw [sstoreValueCost, if_pos ⟨rfl, hchanged⟩,
         if_neg holdNonzero]
-      norm_num [gasStorageUpdate, gasColdSload] }
+      norm_num only [gasStorageUpdate, gasColdSload] }
     case h_cost =>
       rw [show ((0 : B256) * 32).toNat = 0 by decide,
         show ((1 : B256) * 32).toNat = 32 by decide]
       erw [Devm.extCost_word_word Mem.size_write_word]
-      norm_num [gLog, gLogdata, gLogtopic]
+      norm_num only [gLog, gLogdata, gLogtopic, Fin.val_succ, Fin.coe_ofNat_eq_mod]
     case a => exact Func.RunCompiled.last rfl
   · refine ⟨?_, ?_, ?_⟩
     · simp only [Devm.gasLeft_setMach]
@@ -1464,14 +1464,14 @@ theorem expirySlot_ne_heartbeatIntervalSlot
     expirySlot pauser ≠ heartbeatIntervalSlot := by
   have hpayload : pauser.toNat < 2 ^ 252 := by
     unfold canonicalAddress at hpauser
-    exact lt_trans hpauser (by norm_num)
+    exact lt_trans hpauser (by norm_num only)
   simpa only [expirySlot, heartbeatIntervalSlot, ne_eq] using
     slot_ne_of_region_ne (leftRegion := expiryRegion) (rightRegion := configRegion) (left := pauser)
-      (right := (1 : B256)) (by norm_num [expiryRegion]) (by norm_num [configRegion]) hpayload
+      (right := (1 : B256)) (by norm_num only [expiryRegion]) (by norm_num only [configRegion]) hpayload
       (by
         change (1 : Nat) < 2 ^ 252
-        norm_num)
-      (by norm_num [expiryRegion, configRegion])
+        norm_num only)
+      (by norm_num only [expiryRegion, configRegion])
 
 private def setHeartbeatIntervalStoreTail : Func :=
   arg 0 +++ Ninst.pushB256 heartbeatIntervalSlot :::
@@ -1647,7 +1647,7 @@ private theorem setHeartbeatIntervalStoreTail_runCompiled
           Devm.getStorVal base sevm.currentTarget (expirySlot pauser) := by
   have hsstoreCost : sstoreValueCost old old newInterval = 2900 := by
     rw [sstoreValueCost, if_pos ⟨rfl, hchanged⟩, if_neg holdNonzero]
-    norm_num [gasStorageUpdate, gasColdSload]
+    norm_num only [gasStorageUpdate, gasColdSload]
   unfold setHeartbeatIntervalStoreTail
     setHeartbeatIntervalStoreTailGasWarmUpdate
   apply Exists.intro
@@ -1700,7 +1700,7 @@ private theorem setHeartbeatIntervalStoreTail_runCompiled_zero
           Devm.getStorVal base sevm.currentTarget (expirySlot pauser) := by
   have hsstoreCost : sstoreValueCost 0 0 newInterval = 20000 := by
     rw [sstoreValueCost, if_pos ⟨rfl, hnewNonzero.symm⟩, if_pos rfl]
-    norm_num [gasStorageSet]
+    norm_num only [gasStorageSet]
   unfold setHeartbeatIntervalStoreTail
     setHeartbeatIntervalStoreTailGasWarmSet
   apply Exists.intro
@@ -2894,7 +2894,7 @@ theorem setHeartbeatInterval_body_runCompiledTo_error_of_not_admin
       · rfl
       · simp only [Devm.gasLeft_setMach, revertSelectorCost]
         rw [Devm.extCost_empty_word]
-        norm_num [gVerylow, gBase, gMemory]
+        norm_num only [gVerylow, gBase, gMemory]; omega
       · simp only [Devm.stack_setMach, List.length_nil]
         omega
   · intro a k
@@ -2934,7 +2934,7 @@ theorem setHeartbeatInterval_body_runCompiledTo_error_of_below_min
       · rfl
       · simp only [Devm.gasLeft_setMach, revertSelectorCost]
         rw [Devm.extCost_empty_word]
-        norm_num [gVerylow, gBase, gMemory]
+        norm_num only [gVerylow, gBase, gMemory]; omega
       · simp only [Devm.stack_setMach, List.length_nil]
         omega
   · intro a k
@@ -2978,7 +2978,7 @@ theorem setHeartbeatInterval_body_runCompiledTo_error_of_above_max
       · rfl
       · simp only [Devm.gasLeft_setMach, revertSelectorCost]
         rw [Devm.extCost_empty_word]
-        norm_num [gVerylow, gBase, gMemory]
+        norm_num only [gVerylow, gBase, gMemory]; omega
       · simp only [Devm.stack_setMach, List.length_nil]
         omega
   · intro a k
@@ -3555,13 +3555,15 @@ theorem setHeartbeatInterval_success_settled_effects
     simp only [B256.shiftRight]
     change (⟨0, B128.shiftRight ⟨_, _⟩ 96⟩ : B256) = _
     simp only [B128.shiftRight]
-    norm_num [UInt64.ofBytes_eq_halves]
+    dsimp only [B128]
+    norm_num only [UInt64.ofBytes_eq_halves]
+    simp only [ite_true, ite_false]
     congr 3
     rw [← UInt64.toNat_inj]
     have widen32 (z : UInt32) : z.toUInt64.toNat = z.toNat := rfl
     simp only [UInt64.toNat_shiftRight, UInt64.toNat_or,
       UInt64.toNat_shiftLeft_lo, widen32]
-    norm_num
+    norm_num only [UInt64.toNat_ofNat, toNat_toUInt64, Nat.lo_eq]
     rw [Nat.shiftRight_or_distrib]
     rw [Nat.shiftRight_eq_zero _ _ (UInt32.toNat_lt _)]
     decide +kernel
@@ -3688,7 +3690,7 @@ theorem heartbeat_body_runCompiledTo_error_of_count_zero
       · rfl
       · simp only [Devm.gasLeft_setMach, revertSelectorCost]
         rw [Devm.extCost_empty_word]
-        norm_num [gVerylow, gBase, gMemory]
+        norm_num only [gVerylow, gBase, gMemory]; omega
       · simp only [Devm.stack_setMach, List.length_nil]
         omega
   · intro a k
@@ -3744,7 +3746,7 @@ theorem heartbeat_body_runCompiledTo_error_of_expired
       · rfl
       · simp only [Devm.gasLeft_setMach, revertSelectorCost]
         rw [Devm.extCost_empty_word]
-        norm_num [gVerylow, gBase, gMemory]
+        norm_num only [gVerylow, gBase, gMemory]; omega
       · simp only [Devm.stack_setMach, List.length_nil]
         omega
   · intro a k
@@ -4060,7 +4062,7 @@ theorem heartbeat_body_runCompiledTo_error_of_add_wrap
         rw [hfixed, hext]
         omega
       · simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
-        norm_num
+        norm_num only
   · intro a k
     rfl
 

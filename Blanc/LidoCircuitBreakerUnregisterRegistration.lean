@@ -196,7 +196,7 @@ private theorem registerAfterSet_retainedOldZero_runCompiled
     all_goals try { simp only [B256.eqCheck, ite_eq_right_iff, Nat.reduceSubDiff, hnewValue, ↓reduceIte, add_tsub_cancel_right] }
     all_goals try {
       rw [Devm.extCost_zero_of_le halign hnewCovered]
-      norm_num [gVerylow] }
+      norm_num only [gVerylow] }
     all_goals try simp_rw [hnewMemory]
     case h_val =>
       rw [Devm.getStorVal_setMach, hcount]
@@ -212,7 +212,7 @@ private theorem registerAfterSet_retainedOldZero_runCompiled
   all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hpreviousCovered]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case h_val => simp only [B256.eqCheck, hpreviousValue, holdNonzero, ↓reduceIte]
   case h_arm =>
     rw [hpreviousMemory]
@@ -312,7 +312,7 @@ theorem registerAfterSet_oldLastZero_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign' hnewCovered']
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case h_val => simp only [B256.eqCheck, hnewValue', ↓reduceIte]
     case h_arm =>
       rw [hnewMemory']
@@ -812,7 +812,7 @@ theorem setPauserKernel_foundZeroRetainedLast_runCompiled
   have hzeroCanonical : canonicalAddress (0 : B256) := by
     unfold canonicalAddress
     change (0 : Nat) < 2 ^ 160
-    norm_num
+    norm_num only
   have pairNe {left right : B256} (h : left ≠ right) :
       (sevm.currentTarget, left) ≠ (sevm.currentTarget, right) := by
     intro hp
@@ -2145,7 +2145,7 @@ theorem setPauserKernel_foundZeroRetainedSwapPop_runCompiled
   have hzeroCanonical : canonicalAddress (0 : B256) := by
     unfold canonicalAddress
     change (0 : Nat) < 2 ^ 160
-    norm_num
+    norm_num only
   have pairNe {left right : B256} (h : left ≠ right) :
       (sevm.currentTarget, left) ≠ (sevm.currentTarget, right) := by
     intro hp
@@ -3453,7 +3453,7 @@ theorem setPauserKernel_foundZeroOldLast_runCompiled
   have hzeroCanonical : canonicalAddress (0 : B256) := by
     unfold canonicalAddress
     change (0 : Nat) < 2 ^ 160
-    norm_num
+    norm_num only
   have pairNe {left right : B256} (h : left ≠ right) :
       (sevm.currentTarget, left) ≠ (sevm.currentTarget, right) := by
     intro hp
@@ -3465,7 +3465,7 @@ theorem setPauserKernel_foundZeroOldLast_runCompiled
       expirySlot left ≠ expirySlot right := by
     intro hslot
     exact hne (addressSlot_injective (region := expiryRegion)
-      (by norm_num [expiryRegion]) hleft hright
+      (by norm_num only [expiryRegion]) hleft hright
       (by simpa only [expirySlot] using hslot))
   have hindexLt : index < entries.length := findEntry_index_lt hfind
   let next : B256 := Nat.toB256 entries.length
@@ -4715,7 +4715,7 @@ theorem setPauserKernel_foundZeroOldLastSwapPop_runCompiled
   have hzeroCanonical : canonicalAddress (0 : B256) := by
     unfold canonicalAddress
     change (0 : Nat) < 2 ^ 160
-    norm_num
+    norm_num only
   have pairNe {left right : B256} (h : left ≠ right) :
       (sevm.currentTarget, left) ≠ (sevm.currentTarget, right) := by
     intro hp
@@ -4727,7 +4727,7 @@ theorem setPauserKernel_foundZeroOldLastSwapPop_runCompiled
       expirySlot left ≠ expirySlot right := by
     intro hslot
     exact hne (addressSlot_injective (region := expiryRegion)
-      (by norm_num [expiryRegion]) hleft hright
+      (by norm_num only [expiryRegion]) hleft hright
       (by simpa only [expirySlot] using hslot))
   have hindexLt : index < entries.length := findEntry_index_lt hfind
   obtain ⟨lastEntry, hlast⟩ := last_some_of_findEntry hfind

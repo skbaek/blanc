@@ -469,7 +469,9 @@ private lemma shiftRight224_of_take4_eq_pause (x : B256)
   simp only [B256.shiftRight]
   change (⟨0, B128.shiftRight ⟨_, _⟩ 96⟩ : B256) = _
   simp only [B128.shiftRight]
-  norm_num
+  dsimp only [B128]
+  norm_num only
+  simp only [ite_true, ite_false]
   congr 3
   change x3 >>> (32 : UInt64) = (4092873159 : UInt64)
   rcases h with ⟨h0, h1, h2, h3⟩
@@ -494,7 +496,7 @@ private lemma shiftRight224_of_take4_eq_pause (x : B256)
     rw [UInt64.toNat_shiftRight]
     change x3.toNat >>> 32 < 4294967296
     rw [Nat.shiftRight_eq_div_pow]
-    norm_num
+    norm_num only
     have hx := UInt64.toNat_lt x3
     omega
   rw [← UInt64.toNat_inj]
@@ -513,7 +515,9 @@ private lemma shiftRight224_of_take4_eq_query (x : B256)
   simp only [B256.shiftRight]
   change (⟨0, B128.shiftRight ⟨_, _⟩ 96⟩ : B256) = _
   simp only [B128.shiftRight]
-  norm_num
+  dsimp only [B128]
+  norm_num only
+  simp only [ite_true, ite_false]
   congr 3
   change x3 >>> (32 : UInt64) = (2978463014 : UInt64)
   rcases h with ⟨h0, h1, h2, h3⟩
@@ -538,7 +542,7 @@ private lemma shiftRight224_of_take4_eq_query (x : B256)
     rw [UInt64.toNat_shiftRight]
     change x3.toNat >>> 32 < 4294967296
     rw [Nat.shiftRight_eq_div_pow]
-    norm_num
+    norm_num only
     have hx := UInt64.toNat_lt x3
     omega
   rw [← UInt64.toNat_inj]

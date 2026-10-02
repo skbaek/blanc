@@ -1384,12 +1384,12 @@ private theorem gatewayPauseWorld_afterSetGatewaySeam :
       (by show (1024 : Nat) ≠ 0; decide)
       (by simpa only [toAdr_toB256] using
         gatewayPauseWorld_target_not_precompile)
-      (by norm_num)
+      (by norm_num only)
       (by
         have hfiniteCost : pauseWorldDuration ≠ pauseInfiniteSentinel := by
           decide +kernel
         simp only [gatewayPauseChildCost, if_neg hfiniteCost]
-        norm_num)
+        norm_num only)
   rcases hchain with ⟨st₁, st₂, hsub₁, hsub₂, hstate⟩
   have htargetOwner : pauseWorldCallee.toB256.toAdr ≠
       configWorldOwner := by
@@ -1435,7 +1435,7 @@ private theorem gatewayPauseWorld_afterSetGatewaySeam :
   have hfiniteCost : pauseWorldDuration ≠ pauseInfiniteSentinel := by
     decide +kernel
   simp only [gatewayPauseChildCost, if_neg hfiniteCost] at h
-  rw [show (42362 + 25598 + 594 + 2600 : Nat) = 71154 from by norm_num] at h
+  rw [show (42362 + 25598 + 594 + 2600 : Nat) = 71154 from by norm_num only] at h
   exact h
 
 private theorem gatewayPauseWorld_originalExpiry :
@@ -1544,11 +1544,11 @@ private theorem gatewayPauseWorld_successSuffix :
       exact gatewayPauseWorld_originalExpiry)
     hwarmExpiry
     (stubRunSvc_reset (by decide) (by decide))
-    (by norm_num [gCallStipend])
+    (by norm_num only [gCallStipend])
     rfl
   have hmidEta : mid.setMach
       ⟨[], gatewayRunDecodedMemory, 35999 + 3322 + 100 + 2900, mid.stateGas⟩ = mid := by
-    rw [show (35999 + 3322 + 100 + 2900 : Nat) = 42321 from by norm_num,
+    rw [show (35999 + 3322 + 100 + 2900 : Nat) = 42321 from by norm_num only,
       gatewayRunDecodedMemory, ← hgas, ← hmem, ← hstk]
     rfl
   rw [hmidEta] at hW8
@@ -1603,7 +1603,7 @@ private theorem gatewayPauseWorld_productionRun :
     (by
       simpa only [gatewayRunAfterSetNoLog, gatewayRunAfterSetBase,
         gatewayRunRemoveBase3, gatewayRunCountPost, gatewayRunKernelBase] using hafter)
-  rw [show (71154 + 1934 : Nat) = 73088 from by norm_num] at hfin
+  rw [show (71154 + 1934 : Nat) = 73088 from by norm_num only] at hfin
   have hrem := removeTarget_toFinish_coldEntry_runCompiled (hfork := by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide) officialParams
     gatewayPauseWorldSevm gatewayRunCountPost gatewayRunMemory1 gatewayRunImage1
     pauseWorldCallee.toB256 0 1 [] (by decide)
@@ -1632,10 +1632,10 @@ private theorem gatewayPauseWorld_productionRun :
     (stubRunSvc_reset (by decide) (by decide))
     (stubRunSvc_reset (by decide) (by decide))
     (stubRunSvc_reset (by decide) (by decide))
-    (by decide) (by norm_num [gCallStipend]) rfl _
+    (by decide) (by norm_num only [gCallStipend]) rfl _
     (by dsimp only; exact hfin)
   rw [show (0 + 73088 + 139 + 0 + 0 + 0 + 2100 + 2100 + 2100 + 100 +
-    100 + 2900 + 2900 + 2900 : Nat) = 88427 from by norm_num] at hrem
+    100 + 2900 + 2900 + 2900 : Nat) = 88427 from by norm_num only] at hrem
   have hglue := afterOldPauser_removeTarget_runCompiled officialParams
     gatewayPauseWorldSevm gatewayRunCountPost gatewayRunMemory1 gatewayRunImage1 []
     88427 _ (by decide)
@@ -1644,7 +1644,7 @@ private theorem gatewayPauseWorld_productionRun :
     (by rw [gatewayRunMemory1, stubRunMem_size1]; decide)
     (by rw [gatewayRunMemory1, stubRunMem_size1])
     hrem
-  rw [show (88427 + 35 : Nat) = 88462 from by norm_num] at hglue
+  rw [show (88427 + 35 : Nat) = 88462 from by norm_num only] at hglue
   have hker := setPauserKernel_found_runCompiled (hfork := by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide) officialParams
     gatewayPauseWorldSevm gatewayRunKernelBase
     (pauseMemory pauseWorldCallee.toB256 pauseWorldDuration)
@@ -1669,7 +1669,7 @@ private theorem gatewayPauseWorld_productionRun :
       pauseLastStor_count)
     ((gatewayPauseWorld_getOrigStorVal _).trans pauseLastStor_count)
     (stubRunSvc_reset (by decide) (by decide))
-    (by norm_num [gCallStipend]) rfl
+    (by norm_num only [gCallStipend]) rfl
     (by
       dsimp only [gatewayRunKernelBase, gatewayRunCountPost, gatewayRunMemory1,
         gatewayRunImage1]
@@ -1679,7 +1679,7 @@ private theorem gatewayPauseWorld_productionRun :
       gatewayRunKernelBase pauseWorldCallee.toB256 0 pauseWorldPauser
       2900 2900 = 8122 from by
         simpa only [gatewayRunKernelBase] using gatewayRunKernelPrefixGas,
-    show (0 + 88462 + 8122 : Nat) = 96584 from by norm_num] at hker
+    show (0 + 88462 + 8122 : Nat) = 96584 from by norm_num only] at hker
   have hcalldata := pauseCalldata_facts
     gatewayPauseWorld_publicPausePremises.calldata
   have hbody := pause_body_runCompiled (hfork := by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide) officialParams gatewayPauseWorldSevm
@@ -1703,7 +1703,7 @@ private theorem gatewayPauseWorld_productionRun :
       exact (gatewayRunStor_lockPost _).trans pauseLastStor_duration)
     gatewayRunCost_duration rfl hker
   rw [show (96584 + (469 + 2100 + 2100 + 2100) : Nat) = 103353 from by
-    norm_num] at hbody
+    norm_num only] at hbody
   have hbodyTo := Func.RunCompiledTo.of_runCompiled hbody
   obtain ⟨hprog, _hcompile⟩ := pause_dispatch_runCompiledTo officialParams
     gatewayPauseWorldSevm gatewayPauseWorldPre 103353 0 _
@@ -1718,7 +1718,7 @@ private theorem gatewayPauseWorld_productionRun :
       ⟨[], Mem.empty, 0 + pauseDispatchGas + 103353, gatewayPauseWorldPre.stateGas⟩ =
       gatewayPauseWorldPre := by
     rw [show (0 + pauseDispatchGas + 103353 : Nat) = gatewayPauseWorldGas from by
-      norm_num [pauseDispatchGas, gatewayPauseWorldGas]]
+      norm_num only [pauseDispatchGas, gatewayPauseWorldGas]]
     rfl
   rw [hentry] at hprog
   exact ⟨successPre, final, hprog, hsuccessTo, hafterTo, hni⟩

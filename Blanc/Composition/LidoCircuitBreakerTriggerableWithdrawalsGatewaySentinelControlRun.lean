@@ -1708,10 +1708,10 @@ private theorem sentinelGatewayPauseWorld_afterSetGatewaySeam :
       (by show (1024 : Nat) ≠ 0; decide)
       (by simpa only [toAdr_toB256] using
         sentinelGatewayPauseWorld_target_not_precompile)
-      (by norm_num)
+      (by norm_num only)
       (by
         simp only [gatewayPauseChildCost]
-        norm_num)
+        norm_num only [ite_true])
   rcases hchain with ⟨st₁, st₂, hsub₁, hsub₂, hstate⟩
   have htargetOwner : pauseWorldCallee.toB256.toAdr ≠
       configWorldOwner := by
@@ -1756,7 +1756,7 @@ private theorem sentinelGatewayPauseWorld_afterSetGatewaySeam :
   have h := hclose final hrun
   simp only [gatewayPauseChildCost, ↓reduceIte, Nat.reduceAdd] at h
   simpa only [show (42362 + 25567 + 594 + 2600 : Nat) = 71123 from by
-    norm_num] using h
+    norm_num only] using h
 
 private theorem sentinelGatewayPauseWorld_originalExpiry :
     getOrigStorVal sentinelGatewayPauseWorldSevm configWorldOwner
@@ -1868,11 +1868,11 @@ private theorem sentinelGatewayPauseWorld_successSuffix :
       exact sentinelGatewayPauseWorld_originalExpiry)
     hwarmExpiry
     (stubRunSvc_reset (by decide) (by decide))
-    (by norm_num [gCallStipend])
+    (by norm_num only [gCallStipend])
     rfl
   have hmidEta : mid.setMach
       ⟨[], gatewayRunDecodedMemory, 35999 + 3322 + 100 + 2900, mid.stateGas⟩ = mid := by
-    rw [show (35999 + 3322 + 100 + 2900 : Nat) = 42321 from by norm_num,
+    rw [show (35999 + 3322 + 100 + 2900 : Nat) = 42321 from by norm_num only,
       gatewayRunDecodedMemory, ← hgas, ← hmem, ← hstk]
     rfl
   rw [hmidEta] at hW8
@@ -1932,7 +1932,7 @@ private theorem sentinelGatewayPauseWorld_productionRun :
     (by
       simpa only [gatewayRunAfterSetNoLog, gatewayRunAfterSetBase,
         gatewayRunRemoveBase3, gatewayRunCountPost, gatewayRunKernelBase] using hafter)
-  rw [show (71123 + 1934 : Nat) = 73057 from by norm_num] at hfin
+  rw [show (71123 + 1934 : Nat) = 73057 from by norm_num only] at hfin
   have hrem := removeTarget_toFinish_coldEntry_runCompiled (hfork := by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide) officialParams
     sentinelGatewayPauseWorldSevm gatewayRunCountPost gatewayRunMemory1 gatewayRunImage1
     pauseWorldCallee.toB256 0 1 [] (by decide)
@@ -1961,10 +1961,10 @@ private theorem sentinelGatewayPauseWorld_productionRun :
     (stubRunSvc_reset (by decide) (by decide))
     (stubRunSvc_reset (by decide) (by decide))
     (stubRunSvc_reset (by decide) (by decide))
-    (by decide) (by norm_num [gCallStipend]) rfl _
+    (by decide) (by norm_num only [gCallStipend]) rfl _
     (by dsimp only; exact hfin)
   rw [show (0 + 73057 + 139 + 0 + 0 + 0 + 2100 + 2100 + 2100 + 100 +
-    100 + 2900 + 2900 + 2900 : Nat) = 88396 from by norm_num] at hrem
+    100 + 2900 + 2900 + 2900 : Nat) = 88396 from by norm_num only] at hrem
   have hglue := afterOldPauser_removeTarget_runCompiled officialParams
     sentinelGatewayPauseWorldSevm gatewayRunCountPost gatewayRunMemory1 gatewayRunImage1 []
     88396 _ (by decide)
@@ -1973,7 +1973,7 @@ private theorem sentinelGatewayPauseWorld_productionRun :
     (by rw [gatewayRunMemory1, sentinelRunMem_size1]; decide)
     (by rw [gatewayRunMemory1, sentinelRunMem_size1])
     hrem
-  rw [show (88396 + 35 : Nat) = 88431 from by norm_num] at hglue
+  rw [show (88396 + 35 : Nat) = 88431 from by norm_num only] at hglue
   have hker := setPauserKernel_found_runCompiled (hfork := by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide) officialParams
     sentinelGatewayPauseWorldSevm gatewayRunKernelBase
     (pauseMemory pauseWorldCallee.toB256 pauseInfiniteSentinel)
@@ -1998,7 +1998,7 @@ private theorem sentinelGatewayPauseWorld_productionRun :
       sentinelPauseLastStor_count)
     ((sentinelGatewayPauseWorld_getOrigStorVal _).trans sentinelPauseLastStor_count)
     (stubRunSvc_reset (by decide) (by decide))
-    (by norm_num [gCallStipend]) rfl
+    (by norm_num only [gCallStipend]) rfl
     (by
       dsimp only [gatewayRunKernelBase, gatewayRunCountPost, gatewayRunMemory1,
         gatewayRunImage1]
@@ -2008,7 +2008,7 @@ private theorem sentinelGatewayPauseWorld_productionRun :
       gatewayRunKernelBase pauseWorldCallee.toB256 0 pauseWorldPauser
       2900 2900 = 8122 from by
         simpa only [gatewayRunKernelBase] using gatewayRunKernelPrefixGas,
-    show (0 + 88431 + 8122 : Nat) = 96553 from by norm_num] at hker
+    show (0 + 88431 + 8122 : Nat) = 96553 from by norm_num only] at hker
   have hcalldata := pauseCalldata_facts
     sentinelGatewayPauseWorld_publicPausePremises.calldata
   have hbody := pause_body_runCompiled (hfork := by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide) officialParams sentinelGatewayPauseWorldSevm
@@ -2032,7 +2032,7 @@ private theorem sentinelGatewayPauseWorld_productionRun :
       exact (gatewayRunStor_lockPost _).trans sentinelPauseLastStor_duration)
     gatewayRunCost_duration rfl hker
   rw [show (96553 + (469 + 2100 + 2100 + 2100) : Nat) = 103322 from by
-    norm_num] at hbody
+    norm_num only] at hbody
   have hbodyTo := Func.RunCompiledTo.of_runCompiled hbody
   obtain ⟨hprog, _hcompile⟩ := pause_dispatch_runCompiledTo officialParams
     sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre 103322 0 _
@@ -2047,7 +2047,7 @@ private theorem sentinelGatewayPauseWorld_productionRun :
       ⟨[], Mem.empty, 0 + pauseDispatchGas + 103322, sentinelGatewayPauseWorldPre.stateGas⟩ =
       sentinelGatewayPauseWorldPre := by
     rw [show (0 + pauseDispatchGas + 103322 : Nat) = sentinelGatewayPauseWorldGas from by
-      norm_num [pauseDispatchGas, sentinelGatewayPauseWorldGas]]
+      norm_num only [pauseDispatchGas, sentinelGatewayPauseWorldGas]]
     rfl
   rw [hentry] at hprog
   exact ⟨successPre, final, hprog, hsuccessTo, hafterTo, hni⟩

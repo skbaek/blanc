@@ -81,42 +81,42 @@ them whose regions differ.  Those are the only separations the world needs. -/
 
 private theorem freshWorld_payload_zero : (0 : B256).toNat < 2 ^ 252 := by
   change (0 : Nat) < 2 ^ 252
-  norm_num
+  norm_num only
 
 private theorem freshWorld_payload_one : (1 : B256).toNat < 2 ^ 252 := by
   change (1 : Nat) < 2 ^ 252
-  norm_num
+  norm_num only
 
 private theorem freshWorld_payload_target :
     freshWorldTarget.toNat < 2 ^ 252 := by
   unfold freshWorldTarget
   change (7 : Nat) < 2 ^ 252
-  norm_num
+  norm_num only
 
 private theorem freshWorld_payload_pauser :
     freshWorldPauser.toNat < 2 ^ 252 := by
   unfold freshWorldPauser
   change (9 : Nat) < 2 ^ 252
-  norm_num
+  norm_num only
 
 theorem freshWorld_targetValid : nonzeroCanonicalAddress freshWorldTarget := by
   constructor
   · decide
   · unfold canonicalAddress freshWorldTarget
     change (7 : Nat) < 2 ^ 160
-    norm_num
+    norm_num only
 
 theorem freshWorld_pauserValid : nonzeroCanonicalAddress freshWorldPauser := by
   constructor
   · decide
   · unfold canonicalAddress freshWorldPauser
     change (9 : Nat) < 2 ^ 160
-    norm_num
+    norm_num only
 
 private theorem freshWorld_payload_of_canonical {w : B256}
     (h : canonicalAddress w) : w.toNat < 2 ^ 252 := by
   unfold canonicalAddress at h
-  exact lt_trans h (by norm_num)
+  exact lt_trans h (by norm_num only)
 
 /-- The configured-interval slot is separated from every registry slot by its
 region alone. -/
@@ -128,7 +128,7 @@ private theorem freshWorld_interval_ne
   simpa only [heartbeatIntervalSlot] using
     slot_ne_of_region_ne (leftRegion := configRegion) (rightRegion := region)
       (left := (1 : B256)) (right := payload)
-      (by norm_num [configRegion]) hregion freshWorld_payload_one hpayload hne
+      (by norm_num only [configRegion]) hregion freshWorld_payload_one hpayload hne
 
 private theorem freshWorld_stor_get_zero {k : B256}
     (h : heartbeatIntervalSlot ≠ k) : freshWorldStor.get k = 0 := by
@@ -138,42 +138,42 @@ private theorem freshWorld_stor_get_zero {k : B256}
 private theorem freshWorld_stor_assignment {t : B256}
     (h : canonicalAddress t) : freshWorldStor.get (assignmentSlot t) = 0 :=
   freshWorld_stor_get_zero
-    (freshWorld_interval_ne (by norm_num [assignmentRegion])
+    (freshWorld_interval_ne (by norm_num only [assignmentRegion])
       (freshWorld_payload_of_canonical h)
-      (by norm_num [configRegion, assignmentRegion]))
+      (by norm_num only [configRegion, assignmentRegion]))
 
 private theorem freshWorld_stor_index {t : B256}
     (h : canonicalAddress t) : freshWorldStor.get (indexSlot t) = 0 :=
   freshWorld_stor_get_zero
-    (freshWorld_interval_ne (by norm_num [indexRegion])
+    (freshWorld_interval_ne (by norm_num only [indexRegion])
       (freshWorld_payload_of_canonical h)
-      (by norm_num [configRegion, indexRegion]))
+      (by norm_num only [configRegion, indexRegion]))
 
 private theorem freshWorld_stor_count {p : B256}
     (h : canonicalAddress p) : freshWorldStor.get (countSlot p) = 0 :=
   freshWorld_stor_get_zero
-    (freshWorld_interval_ne (by norm_num [countRegion])
+    (freshWorld_interval_ne (by norm_num only [countRegion])
       (freshWorld_payload_of_canonical h)
-      (by norm_num [configRegion, countRegion]))
+      (by norm_num only [configRegion, countRegion]))
 
 private theorem freshWorld_stor_arrayLength :
     freshWorldStor.get arrayLengthSlot = 0 :=
   freshWorld_stor_get_zero
-    (freshWorld_interval_ne (by norm_num [arrayRegion]) freshWorld_payload_zero
-      (by norm_num [configRegion, arrayRegion]))
+    (freshWorld_interval_ne (by norm_num only [arrayRegion]) freshWorld_payload_zero
+      (by norm_num only [configRegion, arrayRegion]))
 
 private theorem freshWorld_stor_arrayEntry {i : B256}
     (h : i.toNat < 2 ^ 252) : freshWorldStor.get (arrayEntrySlot i) = 0 :=
   freshWorld_stor_get_zero
-    (freshWorld_interval_ne (by norm_num [arrayRegion]) h
-      (by norm_num [configRegion, arrayRegion]))
+    (freshWorld_interval_ne (by norm_num only [arrayRegion]) h
+      (by norm_num only [configRegion, arrayRegion]))
 
 private theorem freshWorld_stor_expiry {p : B256}
     (h : canonicalAddress p) : freshWorldStor.get (expirySlot p) = 0 :=
   freshWorld_stor_get_zero
-    (freshWorld_interval_ne (by norm_num [expiryRegion])
+    (freshWorld_interval_ne (by norm_num only [expiryRegion])
       (freshWorld_payload_of_canonical h)
-      (by norm_num [configRegion, expiryRegion]))
+      (by norm_num only [configRegion, expiryRegion]))
 
 private theorem freshWorld_stor_interval :
     freshWorldStor.get heartbeatIntervalSlot = freshWorldInterval := by
@@ -206,7 +206,7 @@ theorem freshWorldStor_witness :
     exact freshWorld_stor_count (by
       unfold canonicalAddress
       change (0 : Nat) < 2 ^ 160
-      norm_num)
+      norm_num only)
 
 /-! ## Gas
 
@@ -373,25 +373,25 @@ theorem freshWorld_coldInterval :
     or_false, not_or, beq_iff_eq, Prod.mk.injEq, not_and]
   refine ⟨fun _ => ?_, fun _ => ?_, fun _ => ?_, fun _ => ?_, fun _ => ?_⟩
   · show slot expiryRegion freshWorldPauser ≠ slot configRegion 1
-    exact slot_ne_of_region_ne (by norm_num [expiryRegion])
-      (by norm_num [configRegion]) freshWorld_payload_pauser
-      freshWorld_payload_one (by norm_num [expiryRegion, configRegion])
+    exact slot_ne_of_region_ne (by norm_num only [expiryRegion])
+      (by norm_num only [configRegion]) freshWorld_payload_pauser
+      freshWorld_payload_one (by norm_num only [expiryRegion, configRegion])
   · show slot indexRegion freshWorldTarget ≠ slot configRegion 1
-    exact slot_ne_of_region_ne (by norm_num [indexRegion])
-      (by norm_num [configRegion]) freshWorld_payload_target
-      freshWorld_payload_one (by norm_num [indexRegion, configRegion])
+    exact slot_ne_of_region_ne (by norm_num only [indexRegion])
+      (by norm_num only [configRegion]) freshWorld_payload_target
+      freshWorld_payload_one (by norm_num only [indexRegion, configRegion])
   · show slot arrayRegion 1 ≠ slot configRegion 1
-    exact slot_ne_of_region_ne (by norm_num [arrayRegion])
-      (by norm_num [configRegion]) freshWorld_payload_one
-      freshWorld_payload_one (by norm_num [arrayRegion, configRegion])
+    exact slot_ne_of_region_ne (by norm_num only [arrayRegion])
+      (by norm_num only [configRegion]) freshWorld_payload_one
+      freshWorld_payload_one (by norm_num only [arrayRegion, configRegion])
   · show slot arrayRegion 0 ≠ slot configRegion 1
-    exact slot_ne_of_region_ne (by norm_num [arrayRegion])
-      (by norm_num [configRegion]) freshWorld_payload_zero
-      freshWorld_payload_one (by norm_num [arrayRegion, configRegion])
+    exact slot_ne_of_region_ne (by norm_num only [arrayRegion])
+      (by norm_num only [configRegion]) freshWorld_payload_zero
+      freshWorld_payload_one (by norm_num only [arrayRegion, configRegion])
   · show slot assignmentRegion freshWorldTarget ≠ slot configRegion 1
-    exact slot_ne_of_region_ne (by norm_num [assignmentRegion])
-      (by norm_num [configRegion]) freshWorld_payload_target
-      freshWorld_payload_one (by norm_num [assignmentRegion, configRegion])
+    exact slot_ne_of_region_ne (by norm_num only [assignmentRegion])
+      (by norm_num only [configRegion]) freshWorld_payload_target
+      freshWorld_payload_one (by norm_num only [assignmentRegion, configRegion])
 
 theorem freshWorld_coldCount :
     (freshWorldOwner, countSlot freshWorldPauser) ∉ freshWorldKeys := by
@@ -400,26 +400,26 @@ theorem freshWorld_coldCount :
     or_false, not_or, beq_iff_eq, Prod.mk.injEq, not_and]
   refine ⟨fun _ => ?_, fun _ => ?_, fun _ => ?_, fun _ => ?_, fun _ => ?_⟩
   · show slot expiryRegion freshWorldPauser ≠ slot countRegion freshWorldPauser
-    exact slot_ne_of_region_ne (by norm_num [expiryRegion])
-      (by norm_num [countRegion]) freshWorld_payload_pauser
-      freshWorld_payload_pauser (by norm_num [expiryRegion, countRegion])
+    exact slot_ne_of_region_ne (by norm_num only [expiryRegion])
+      (by norm_num only [countRegion]) freshWorld_payload_pauser
+      freshWorld_payload_pauser (by norm_num only [expiryRegion, countRegion])
   · show slot indexRegion freshWorldTarget ≠ slot countRegion freshWorldPauser
-    exact slot_ne_of_region_ne (by norm_num [indexRegion])
-      (by norm_num [countRegion]) freshWorld_payload_target
-      freshWorld_payload_pauser (by norm_num [indexRegion, countRegion])
+    exact slot_ne_of_region_ne (by norm_num only [indexRegion])
+      (by norm_num only [countRegion]) freshWorld_payload_target
+      freshWorld_payload_pauser (by norm_num only [indexRegion, countRegion])
   · show slot arrayRegion 1 ≠ slot countRegion freshWorldPauser
-    exact slot_ne_of_region_ne (by norm_num [arrayRegion])
-      (by norm_num [countRegion]) freshWorld_payload_one
-      freshWorld_payload_pauser (by norm_num [arrayRegion, countRegion])
+    exact slot_ne_of_region_ne (by norm_num only [arrayRegion])
+      (by norm_num only [countRegion]) freshWorld_payload_one
+      freshWorld_payload_pauser (by norm_num only [arrayRegion, countRegion])
   · show slot arrayRegion 0 ≠ slot countRegion freshWorldPauser
-    exact slot_ne_of_region_ne (by norm_num [arrayRegion])
-      (by norm_num [countRegion]) freshWorld_payload_zero
-      freshWorld_payload_pauser (by norm_num [arrayRegion, countRegion])
+    exact slot_ne_of_region_ne (by norm_num only [arrayRegion])
+      (by norm_num only [countRegion]) freshWorld_payload_zero
+      freshWorld_payload_pauser (by norm_num only [arrayRegion, countRegion])
   · show slot assignmentRegion freshWorldTarget ≠
       slot countRegion freshWorldPauser
-    exact slot_ne_of_region_ne (by norm_num [assignmentRegion])
-      (by norm_num [countRegion]) freshWorld_payload_target
-      freshWorld_payload_pauser (by norm_num [assignmentRegion, countRegion])
+    exact slot_ne_of_region_ne (by norm_num only [assignmentRegion])
+      (by norm_num only [countRegion]) freshWorld_payload_target
+      freshWorld_payload_pauser (by norm_num only [assignmentRegion, countRegion])
 
 /-! ## The assignment-write boundary
 
@@ -467,23 +467,23 @@ theorem freshWorld_assignmentPost_getStorVal {key : B256}
 private theorem freshWorld_assignment_ne_arrayEntry :
     assignmentSlot freshWorldTarget ≠ arrayEntrySlot 1 :=
   slot_ne_of_region_ne (leftRegion := assignmentRegion)
-    (rightRegion := arrayRegion) (by norm_num [assignmentRegion])
-    (by norm_num [arrayRegion]) freshWorld_payload_target
-    freshWorld_payload_one (by norm_num [assignmentRegion, arrayRegion])
+    (rightRegion := arrayRegion) (by norm_num only [assignmentRegion])
+    (by norm_num only [arrayRegion]) freshWorld_payload_target
+    freshWorld_payload_one (by norm_num only [assignmentRegion, arrayRegion])
 
 private theorem freshWorld_assignment_ne_interval :
     assignmentSlot freshWorldTarget ≠ heartbeatIntervalSlot :=
   slot_ne_of_region_ne (leftRegion := assignmentRegion)
-    (rightRegion := configRegion) (by norm_num [assignmentRegion])
-    (by norm_num [configRegion]) freshWorld_payload_target
-    freshWorld_payload_one (by norm_num [assignmentRegion, configRegion])
+    (rightRegion := configRegion) (by norm_num only [assignmentRegion])
+    (by norm_num only [configRegion]) freshWorld_payload_target
+    freshWorld_payload_one (by norm_num only [assignmentRegion, configRegion])
 
 private theorem freshWorld_assignment_ne_expiry :
     assignmentSlot freshWorldTarget ≠ expirySlot freshWorldPauser :=
   slot_ne_of_region_ne (leftRegion := assignmentRegion)
-    (rightRegion := expiryRegion) (by norm_num [assignmentRegion])
-    (by norm_num [expiryRegion]) freshWorld_payload_target
-    freshWorld_payload_pauser (by norm_num [assignmentRegion, expiryRegion])
+    (rightRegion := expiryRegion) (by norm_num only [assignmentRegion])
+    (by norm_num only [expiryRegion]) freshWorld_payload_target
+    freshWorld_payload_pauser (by norm_num only [assignmentRegion, expiryRegion])
 
 /-! ### Original words
 
@@ -585,7 +585,7 @@ theorem freshWorld_extension :
   constructor
   · unfold freshWorldTime freshWorldInterval
     change (10 : Nat) + 2592000 < 2 ^ 256
-    norm_num
+    norm_num only
   · decide
 
 theorem freshWorld_expiryNonzero : freshWorldExpiry ≠ 0 := by decide
@@ -659,7 +659,7 @@ theorem freshWorld_bodyGasEq :
       freshWorld_warmArrayLength,
     freshWorld_arrayLengthLoadBase,
     freshWorld_coldCost htower freshWorld_coldCount]
-  norm_num [freshWorldBodyGas, gasStorageSet, gasWarmAccess, gasColdSload]
+  norm_num only [freshWorldBodyGas, gasStorageSet, gasWarmAccess, gasColdSload]
 
 /-! ### Warm and cold keys at the assignment-write boundary -/
 

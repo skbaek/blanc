@@ -2314,7 +2314,7 @@ theorem setPauseDuration_body_runCompiledTo
         (setPauseDuration dp) (.ok post) := by
   have hsstoreCost : sstoreValueCost 0 0 duration = 20000 := by
     rw [sstoreValueCost, if_pos ⟨rfl, hnonzero.symm⟩, if_pos rfl]
-    norm_num [gasStorageSet]
+    norm_num only [gasStorageSet]
   apply Exists.intro
   unfold setPauseDuration requireStaticArgs onlyAdmin arg cdl pushDeployWord
     mstoreAt logWith
@@ -2984,13 +2984,13 @@ configuration worlds write one slot each. -/
 
 private theorem heartbeatWorld_payload_one : (1 : B256).toNat < 2 ^ 252 := by
   change (1 : Nat) < 2 ^ 252
-  norm_num
+  norm_num only
 
 private theorem heartbeatWorld_payload_pauser :
     heartbeatWorldPauser.toNat < 2 ^ 252 := by
   unfold heartbeatWorldPauser
   change (9 : Nat) < 2 ^ 252
-  norm_num
+  norm_num only
 
 private theorem heartbeatWorld_expiry_ne_count :
     expirySlot heartbeatWorldPauser ≠ countSlot heartbeatWorldPauser := by
@@ -2998,9 +2998,9 @@ private theorem heartbeatWorld_expiry_ne_count :
     slot_ne_of_region_ne (leftRegion := expiryRegion)
       (rightRegion := countRegion) (left := heartbeatWorldPauser)
       (right := heartbeatWorldPauser)
-      (by norm_num [expiryRegion]) (by norm_num [countRegion])
+      (by norm_num only [expiryRegion]) (by norm_num only [countRegion])
       heartbeatWorld_payload_pauser heartbeatWorld_payload_pauser
-      (by norm_num [expiryRegion, countRegion])
+      (by norm_num only [expiryRegion, countRegion])
 
 private theorem heartbeatWorld_expiry_ne_interval :
     expirySlot heartbeatWorldPauser ≠ heartbeatIntervalSlot := by
@@ -3008,9 +3008,9 @@ private theorem heartbeatWorld_expiry_ne_interval :
     slot_ne_of_region_ne (leftRegion := expiryRegion)
       (rightRegion := configRegion) (left := heartbeatWorldPauser)
       (right := (1 : B256))
-      (by norm_num [expiryRegion]) (by norm_num [configRegion])
+      (by norm_num only [expiryRegion]) (by norm_num only [configRegion])
       heartbeatWorld_payload_pauser heartbeatWorld_payload_one
-      (by norm_num [expiryRegion, configRegion])
+      (by norm_num only [expiryRegion, configRegion])
 
 private theorem heartbeatWorld_count_ne_interval :
     countSlot heartbeatWorldPauser ≠ heartbeatIntervalSlot := by
@@ -3018,9 +3018,9 @@ private theorem heartbeatWorld_count_ne_interval :
     slot_ne_of_region_ne (leftRegion := countRegion)
       (rightRegion := configRegion) (left := heartbeatWorldPauser)
       (right := (1 : B256))
-      (by norm_num [countRegion]) (by norm_num [configRegion])
+      (by norm_num only [countRegion]) (by norm_num only [configRegion])
       heartbeatWorld_payload_pauser heartbeatWorld_payload_one
-      (by norm_num [countRegion, configRegion])
+      (by norm_num only [countRegion, configRegion])
 
 /-! ### Frame, calldata and storage facts -/
 

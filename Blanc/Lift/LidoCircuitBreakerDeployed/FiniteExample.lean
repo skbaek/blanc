@@ -63,7 +63,7 @@ theorem exampleRegistryOn_of_check
     simp only [exampleInitialWrites, List.mem_cons, List.not_mem_nil, or_false] at hw
     rcases hw with rfl | rfl | rfl | rfl | rfl <;> rfl
   unfold exampleStorage
-  rw [solRegistryStorage_applyRegistryRawWrites_at (by norm_num : 1 < 2 ^ 252)
+  rw [solRegistryStorage_applyRegistryRawWrites_at (by norm_num only : 1 < 2 ^ 252)
     (fun t ht => SlotFootprint.checkFaithfulOn_eq_true.mp hcheck t ht key hk)
     hwobs hclean hobs]
   have hzero : (solRegistryStorage Stor.empty).read key = 0 := by

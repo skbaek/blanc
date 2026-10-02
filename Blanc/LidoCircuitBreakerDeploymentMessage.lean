@@ -366,10 +366,10 @@ theorem officialConstructorPost_emptyRegistryWitness
       (payload := (0 : B256))
       (value := officialConstructorArgs.initialPauseDuration)
       (by simpa only [B256.toNat_zero] using
-        (show 0 < 2 ^ 252 by norm_num))).config_set
+        (show 0 < 2 ^ 252 by norm_num only))).config_set
         (payload := (1 : B256))
         (value := officialConstructorArgs.initialHeartbeatInterval)
-        (by change 1 < 2 ^ 252; norm_num))
+        (by change 1 < 2 ^ 252; norm_num only))
 
 /-- The same execution-derived empty witness, existentially packaged as the
 landed Registry coherence invariant. -/

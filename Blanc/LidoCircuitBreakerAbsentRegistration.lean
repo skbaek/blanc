@@ -108,11 +108,11 @@ private theorem registerAfterSet_absentZero_runCompiled
   all_goals try { simp only [Nat.reduceSubDiff, B256.eqCheck, hpreviousValue, ↓reduceIte, ite_eq_left_iff, add_tsub_cancel_right] }
   all_goals try {
     rw [Devm.extCost_zero_of_le halign hpreviousCovered]
-    norm_num [gVerylow] }
+    norm_num only [gVerylow] }
   all_goals try {
     rw [hpreviousMemory]
     rw [Devm.extCost_zero_of_le halign hnewCovered]
-    norm_num [gVerylow] }
+    norm_num only [gVerylow] }
   case h_val =>
     rw [hpreviousMemory, hnewValue]
     simp only [B256.eqCheck, ↓reduceIte]
@@ -480,7 +480,7 @@ private theorem appendTarget_then_runCompiled
           (devm := lengthPost.setMach ⟨[next], M', afterGas + 12, lengthPost.stateGas⟩)
           (cost := gVerylow + gMid + gJumpdest) (G := afterGas)
           (by simp only [Devm.gasLeft_setMach]
-              norm_num [gVerylow, gMid, gJumpdest]))
+              norm_num only [gVerylow, gMid, gJumpdest]))
     · exact hafter'
   have hstoreLength : Func.RunCompiled fs sevm
       (indexPost.setMach ⟨[arrayLengthSlot, next, next], M',
@@ -497,7 +497,7 @@ private theorem appendTarget_then_runCompiled
     func_run (3) [3]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign' harrayLengthOff']
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       have hmem : (M'.read (arrayLengthWord * 32).toNat 32).2 = M' := by
         rw [Mem.read_snd_eq_self
@@ -560,7 +560,7 @@ private theorem appendTarget_then_runCompiled
     func_run (2) [3]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign' htargetOff']
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [htargetVal, htargetMem]
       have hg : afterGas + 33 + lengthCost + indexCost - 6 =
@@ -576,7 +576,7 @@ private theorem appendTarget_then_runCompiled
     func_run (2) [3]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign' harrayLengthOff']
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hlengthVal, hlengthMem]
       have hg : afterGas + 39 + lengthCost + indexCost - 6 =
@@ -617,7 +617,7 @@ private theorem appendTarget_then_runCompiled
     func_run (2) [3]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign' harrayLengthOff']
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hlengthVal, hlengthMem]
       have hg : afterGas + 51 + arrayCost + indexCost + lengthCost - 6 =
@@ -635,7 +635,7 @@ private theorem appendTarget_then_runCompiled
     func_run (2) [3]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign' htargetOff']
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [htargetVal, htargetMem]
       have hg : afterGas + 57 + arrayCost + indexCost + lengthCost - 6 =
@@ -1209,7 +1209,7 @@ theorem setPauserKernel_absentZero_runCompiled
     post target 0 assignmentOriginal assignmentCost appendGas
     hwf hreads htarget hnew htargetValid (by omega) halign hassignment
     hassignmentOrig hassignmentCost
-    (by simp only [appendGas]; norm_num [gCallStipend]; omega) hstatic
+    (by simp only [appendGas]; norm_num only [gCallStipend]; omega) hstatic
     happend
   rcases absentZeroRegistration_sourceTrace_witness hw htargetValid hfind with
     ⟨trace, htrace, hpostEntries, _hwrites, hwpost⟩

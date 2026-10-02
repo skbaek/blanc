@@ -224,7 +224,7 @@ where
   canonicalAddress_zero : canonicalAddress (0 : B256) := by
     unfold canonicalAddress
     change (0 : Nat) < 2 ^ 160
-    norm_num
+    norm_num only
 
 /-! ## The single-address decoder (entry 7) and the bool decoder (entry 33) -/
 

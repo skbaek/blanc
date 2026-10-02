@@ -491,7 +491,7 @@ private lemma gatewayPause_call_crossing
     intro hvalid
     have hs := hvalid.1
     rw [hsize] at hs
-    norm_num [eoaDelegatedCodeLength] at hs
+    norm_num only [eoaDelegatedCodeLength] at hs
   have hdel : accessDelegation
       (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         target.toAdr) target.toAdr =
@@ -536,7 +536,7 @@ private lemma gatewayPause_call_crossing
         unfold except64th
         omega
       rw [Nat.min_eq_right h1]
-      norm_num
+      norm_num only [Nat.sub_zero]
     rw [hmin] at hsplit
     have h1 : except64th (G - 100) + 100 = mcc :=
       congrArg Prod.fst hsplit
@@ -899,7 +899,7 @@ private lemma gatewayQuery_statcall_crossing
     intro hvalid
     have hs := hvalid.1
     rw [hsize] at hs
-    norm_num [eoaDelegatedCodeLength] at hs
+    norm_num only [eoaDelegatedCodeLength] at hs
   have hdel : accessDelegation
       (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         target.toAdr) target.toAdr =
@@ -943,7 +943,7 @@ private lemma gatewayQuery_statcall_crossing
         unfold except64th
         omega
       rw [Nat.min_eq_right h1]
-      norm_num
+      norm_num only [Nat.sub_zero]
     rw [hmin] at hsplit
     have h1 : except64th (G - 100) + 100 = mcc :=
       congrArg Prod.fst hsplit
@@ -1449,7 +1449,7 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
     case h_cost =>
       simp only [show ((0 : B256) * 32).toNat = 0 by decide]
       rw [Devm.extCost_zero_of_le (by omega) (by omega)]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case h_arm =>
       have hg : Gb + 40 - 81 = Gb - 41 := by omega
       rw [hg, show ((0 : B256) * 32).toNat = 0 from by decide,
@@ -1482,7 +1482,7 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
       rw [Devm.extCost_zero_of_le halign3 (by
         have hoff : (targetWord * 32).toNat + 32 ≤ 768 := by decide
         omega)]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [htargetValue3]
       have hg : Gb + 401 - 19 = Gb + 382 := by omega
@@ -1597,7 +1597,7 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
     rw [Devm.extCost_zero_of_le halign (by
       have hoff : (targetWord * 32).toNat + 32 ≤ 768 := by decide
       omega)]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case a =>
     rw [htargetValue0, htargetMemory0]
     have hg : Gb + gatewayPauseChildCost duration + 594 + codeCost - 9 =

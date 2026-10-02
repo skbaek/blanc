@@ -123,133 +123,133 @@ and the two expiry slots, whose regions do not. -/
 
 private theorem replWorld_payload_one : (1 : B256).toNat < 2 ^ 252 := by
   change (1 : Nat) < 2 ^ 252
-  norm_num
+  norm_num only
 
 private theorem replWorld_payload_target :
     replWorldTarget.toNat < 2 ^ 252 := by
   unfold replWorldTarget
   change (7 : Nat) < 2 ^ 252
-  norm_num
+  norm_num only
 
 private theorem replWorld_payload_old : replWorldOldPauser.toNat < 2 ^ 252 := by
   unfold replWorldOldPauser
   change (9 : Nat) < 2 ^ 252
-  norm_num
+  norm_num only
 
 private theorem replWorld_payload_new : replWorldNewPauser.toNat < 2 ^ 252 := by
   unfold replWorldNewPauser
   change (11 : Nat) < 2 ^ 252
-  norm_num
+  norm_num only
 
 theorem replWorld_targetValid : nonzeroCanonicalAddress replWorldTarget := by
   refine ⟨by decide, ?_⟩
   unfold canonicalAddress replWorldTarget
   change (7 : Nat) < 2 ^ 160
-  norm_num
+  norm_num only
 
 theorem replWorld_oldValid : nonzeroCanonicalAddress replWorldOldPauser := by
   refine ⟨by decide, ?_⟩
   unfold canonicalAddress replWorldOldPauser
   change (9 : Nat) < 2 ^ 160
-  norm_num
+  norm_num only
 
 theorem replWorld_newValid : nonzeroCanonicalAddress replWorldNewPauser := by
   refine ⟨by decide, ?_⟩
   unfold canonicalAddress replWorldNewPauser
   change (11 : Nat) < 2 ^ 160
-  norm_num
+  norm_num only
 
 /-- The two count slots are separated by their payloads alone. -/
 theorem replWorld_newCount_ne_oldCount :
     countSlot replWorldNewPauser ≠ countSlot replWorldOldPauser := by
   intro heq
-  exact absurd (slot_injective_payload (by norm_num [countRegion])
+  exact absurd (slot_injective_payload (by norm_num only [countRegion])
     replWorld_payload_new replWorld_payload_old heq) (by decide)
 
 /-- The two expiry slots, likewise. -/
 theorem replWorld_newExpiry_ne_oldExpiry :
     expirySlot replWorldNewPauser ≠ expirySlot replWorldOldPauser := by
   intro heq
-  exact absurd (slot_injective_payload (by norm_num [expiryRegion])
+  exact absurd (slot_injective_payload (by norm_num only [expiryRegion])
     replWorld_payload_new replWorld_payload_old heq) (by decide)
 
 theorem replWorld_assignment_ne_oldCount :
     assignmentSlot replWorldTarget ≠ countSlot replWorldOldPauser :=
-  slot_ne_of_region_ne (by norm_num [assignmentRegion])
-    (by norm_num [countRegion]) replWorld_payload_target replWorld_payload_old
-    (by norm_num [assignmentRegion, countRegion])
+  slot_ne_of_region_ne (by norm_num only [assignmentRegion])
+    (by norm_num only [countRegion]) replWorld_payload_target replWorld_payload_old
+    (by norm_num only [assignmentRegion, countRegion])
 
 theorem replWorld_assignment_ne_newCount :
     assignmentSlot replWorldTarget ≠ countSlot replWorldNewPauser :=
-  slot_ne_of_region_ne (by norm_num [assignmentRegion])
-    (by norm_num [countRegion]) replWorld_payload_target replWorld_payload_new
-    (by norm_num [assignmentRegion, countRegion])
+  slot_ne_of_region_ne (by norm_num only [assignmentRegion])
+    (by norm_num only [countRegion]) replWorld_payload_target replWorld_payload_new
+    (by norm_num only [assignmentRegion, countRegion])
 
 theorem replWorld_assignment_ne_newExpiry :
     assignmentSlot replWorldTarget ≠ expirySlot replWorldNewPauser :=
-  slot_ne_of_region_ne (by norm_num [assignmentRegion])
-    (by norm_num [expiryRegion]) replWorld_payload_target replWorld_payload_new
-    (by norm_num [assignmentRegion, expiryRegion])
+  slot_ne_of_region_ne (by norm_num only [assignmentRegion])
+    (by norm_num only [expiryRegion]) replWorld_payload_target replWorld_payload_new
+    (by norm_num only [assignmentRegion, expiryRegion])
 
 theorem replWorld_assignment_ne_oldExpiry :
     assignmentSlot replWorldTarget ≠ expirySlot replWorldOldPauser :=
-  slot_ne_of_region_ne (by norm_num [assignmentRegion])
-    (by norm_num [expiryRegion]) replWorld_payload_target replWorld_payload_old
-    (by norm_num [assignmentRegion, expiryRegion])
+  slot_ne_of_region_ne (by norm_num only [assignmentRegion])
+    (by norm_num only [expiryRegion]) replWorld_payload_target replWorld_payload_old
+    (by norm_num only [assignmentRegion, expiryRegion])
 
 theorem replWorld_assignment_ne_interval :
     assignmentSlot replWorldTarget ≠ heartbeatIntervalSlot :=
-  slot_ne_of_region_ne (by norm_num [assignmentRegion])
-    (by norm_num [configRegion]) replWorld_payload_target replWorld_payload_one
-    (by norm_num [assignmentRegion, configRegion])
+  slot_ne_of_region_ne (by norm_num only [assignmentRegion])
+    (by norm_num only [configRegion]) replWorld_payload_target replWorld_payload_one
+    (by norm_num only [assignmentRegion, configRegion])
 
 theorem replWorld_oldCount_ne_newExpiry :
     countSlot replWorldOldPauser ≠ expirySlot replWorldNewPauser :=
-  slot_ne_of_region_ne (by norm_num [countRegion]) (by norm_num [expiryRegion])
+  slot_ne_of_region_ne (by norm_num only [countRegion]) (by norm_num only [expiryRegion])
     replWorld_payload_old replWorld_payload_new
-    (by norm_num [countRegion, expiryRegion])
+    (by norm_num only [countRegion, expiryRegion])
 
 theorem replWorld_oldCount_ne_oldExpiry :
     countSlot replWorldOldPauser ≠ expirySlot replWorldOldPauser :=
-  slot_ne_of_region_ne (by norm_num [countRegion]) (by norm_num [expiryRegion])
+  slot_ne_of_region_ne (by norm_num only [countRegion]) (by norm_num only [expiryRegion])
     replWorld_payload_old replWorld_payload_old
-    (by norm_num [countRegion, expiryRegion])
+    (by norm_num only [countRegion, expiryRegion])
 
 theorem replWorld_oldCount_ne_interval :
     countSlot replWorldOldPauser ≠ heartbeatIntervalSlot :=
-  slot_ne_of_region_ne (by norm_num [countRegion]) (by norm_num [configRegion])
+  slot_ne_of_region_ne (by norm_num only [countRegion]) (by norm_num only [configRegion])
     replWorld_payload_old replWorld_payload_one
-    (by norm_num [countRegion, configRegion])
+    (by norm_num only [countRegion, configRegion])
 
 theorem replWorld_newCount_ne_newExpiry :
     countSlot replWorldNewPauser ≠ expirySlot replWorldNewPauser :=
-  slot_ne_of_region_ne (by norm_num [countRegion]) (by norm_num [expiryRegion])
+  slot_ne_of_region_ne (by norm_num only [countRegion]) (by norm_num only [expiryRegion])
     replWorld_payload_new replWorld_payload_new
-    (by norm_num [countRegion, expiryRegion])
+    (by norm_num only [countRegion, expiryRegion])
 
 theorem replWorld_newCount_ne_oldExpiry :
     countSlot replWorldNewPauser ≠ expirySlot replWorldOldPauser :=
-  slot_ne_of_region_ne (by norm_num [countRegion]) (by norm_num [expiryRegion])
+  slot_ne_of_region_ne (by norm_num only [countRegion]) (by norm_num only [expiryRegion])
     replWorld_payload_new replWorld_payload_old
-    (by norm_num [countRegion, expiryRegion])
+    (by norm_num only [countRegion, expiryRegion])
 
 theorem replWorld_newCount_ne_interval :
     countSlot replWorldNewPauser ≠ heartbeatIntervalSlot :=
-  slot_ne_of_region_ne (by norm_num [countRegion]) (by norm_num [configRegion])
+  slot_ne_of_region_ne (by norm_num only [countRegion]) (by norm_num only [configRegion])
     replWorld_payload_new replWorld_payload_one
-    (by norm_num [countRegion, configRegion])
+    (by norm_num only [countRegion, configRegion])
 
 theorem replWorld_oldExpiry_ne_interval :
     expirySlot replWorldOldPauser ≠ heartbeatIntervalSlot :=
-  slot_ne_of_region_ne (by norm_num [expiryRegion]) (by norm_num [configRegion])
+  slot_ne_of_region_ne (by norm_num only [expiryRegion]) (by norm_num only [configRegion])
     replWorld_payload_old replWorld_payload_one
-    (by norm_num [expiryRegion, configRegion])
+    (by norm_num only [expiryRegion, configRegion])
 
 theorem replWorld_newExpiry_ne_interval :
     expirySlot replWorldNewPauser ≠ heartbeatIntervalSlot :=
-  slot_ne_of_region_ne (by norm_num [expiryRegion]) (by norm_num [configRegion])
+  slot_ne_of_region_ne (by norm_num only [expiryRegion]) (by norm_num only [configRegion])
     replWorld_payload_new replWorld_payload_one
-    (by norm_num [expiryRegion, configRegion])
+    (by norm_num only [expiryRegion, configRegion])
 
 /-! ## The entry storage, read cell by cell -/
 
@@ -667,7 +667,7 @@ theorem replWorld_extension :
   constructor
   · unfold replWorldTime replWorldInterval
     change (10 : Nat) + 2592000 < 2 ^ 256
-    norm_num
+    norm_num only
   · decide
 
 /-! ## The retained world
@@ -701,7 +701,7 @@ theorem replRetained_bodyGasEq :
       replWorld_warmOldCount,
     replWorld_warmCost (replWorld_foundKernelPost_accessed _ _)
       replWorld_warmNewCount]
-  norm_num [replRetainedWorldBodyGas, replWorldResetCost, gasStorageSet,
+  norm_num only [replRetainedWorldBodyGas, replWorldResetCost, gasStorageSet,
     gasWarmAccess, gasStorageUpdate, gasColdSload]
 
 /-- A fully inhabited production-runtime **retained** replacement.  The admin
@@ -862,7 +862,7 @@ theorem replOldLast_bodyGasEq :
       replWorld_warmOldCount,
     replWorld_warmCost (replWorld_foundKernelPost_accessed _ _)
       replWorld_warmNewCount]
-  norm_num [replOldLastWorldBodyGas, replWorldResetCost, gasStorageSet,
+  norm_num only [replOldLastWorldBodyGas, replWorldResetCost, gasStorageSet,
     gasWarmAccess, gasStorageUpdate, gasColdSload]
 
 /-- A fully inhabited production-runtime **old-last** replacement.  The admin

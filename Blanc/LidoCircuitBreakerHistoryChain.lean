@@ -928,7 +928,7 @@ private theorem coherent_of_pauseKernelRun (dp : DeployParams)
   have hzeroCanonical : canonicalAddress (0 : B256) := by
     unfold canonicalAddress
     change (0 : Nat) < 2 ^ 160
-    norm_num
+    norm_num only
   have htarget0 : target ≠ 0 :=
     (setPauser_run_extracts_nonzero_guard hwf hr htargetRead herror hrun).1
   obtain ⟨trace, htrace⟩ :

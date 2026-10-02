@@ -139,42 +139,42 @@ supplied here, on the same skeleton. -/
 
 private theorem zero_payload_lt : (0 : B256).toNat < 2 ^ 252 := by
   change (0 : Nat) < 2 ^ 252
-  norm_num
+  norm_num only
 
 private theorem one_payload_lt : (1 : B256).toNat < 2 ^ 252 := by
   change (1 : Nat) < 2 ^ 252
-  norm_num
+  norm_num only
 
 private theorem configSlot_ne_arrayLengthSlot {payload : B256}
     (hpayload : payload.toNat < 2 ^ 252) :
     slot configRegion payload ≠ arrayLengthSlot :=
-  slot_ne_of_region_ne (by norm_num [configRegion]) (by norm_num [arrayRegion])
-    hpayload zero_payload_lt (by norm_num [configRegion, arrayRegion])
+  slot_ne_of_region_ne (by norm_num only [configRegion]) (by norm_num only [arrayRegion])
+    hpayload zero_payload_lt (by norm_num only [configRegion, arrayRegion])
 
 private theorem configSlot_ne_arrayEntrySlot {payload index : B256}
     (hpayload : payload.toNat < 2 ^ 252) (hindex : index.toNat < 2 ^ 252) :
     slot configRegion payload ≠ arrayEntrySlot index :=
-  slot_ne_of_region_ne (by norm_num [configRegion]) (by norm_num [arrayRegion])
-    hpayload hindex (by norm_num [configRegion, arrayRegion])
+  slot_ne_of_region_ne (by norm_num only [configRegion]) (by norm_num only [arrayRegion])
+    hpayload hindex (by norm_num only [configRegion, arrayRegion])
 
 private theorem configSlot_ne_assignmentSlot {payload target : B256}
     (hpayload : payload.toNat < 2 ^ 252) (htarget : target.toNat < 2 ^ 252) :
     slot configRegion payload ≠ assignmentSlot target :=
-  slot_ne_of_region_ne (by norm_num [configRegion])
-    (by norm_num [assignmentRegion]) hpayload htarget
-    (by norm_num [configRegion, assignmentRegion])
+  slot_ne_of_region_ne (by norm_num only [configRegion])
+    (by norm_num only [assignmentRegion]) hpayload htarget
+    (by norm_num only [configRegion, assignmentRegion])
 
 private theorem configSlot_ne_indexSlot {payload target : B256}
     (hpayload : payload.toNat < 2 ^ 252) (htarget : target.toNat < 2 ^ 252) :
     slot configRegion payload ≠ indexSlot target :=
-  slot_ne_of_region_ne (by norm_num [configRegion]) (by norm_num [indexRegion])
-    hpayload htarget (by norm_num [configRegion, indexRegion])
+  slot_ne_of_region_ne (by norm_num only [configRegion]) (by norm_num only [indexRegion])
+    hpayload htarget (by norm_num only [configRegion, indexRegion])
 
 private theorem configSlot_ne_countSlot {payload pauser : B256}
     (hpayload : payload.toNat < 2 ^ 252) (hpauser : pauser.toNat < 2 ^ 252) :
     slot configRegion payload ≠ countSlot pauser :=
-  slot_ne_of_region_ne (by norm_num [configRegion]) (by norm_num [countRegion])
-    hpayload hpauser (by norm_num [configRegion, countRegion])
+  slot_ne_of_region_ne (by norm_num only [configRegion]) (by norm_num only [countRegion])
+    hpayload hpauser (by norm_num only [configRegion, countRegion])
 
 /-- Writing one configuration word cannot alter any projected Registry field.
 The region-1 counterpart of `RegistryWitness.expiry_set`. -/
@@ -202,12 +202,12 @@ theorem RegistryWitness.config_set {s : Stor} {entries : List Entry}
   · intro index hindex
     have hindex256 : index + 1 < 2 ^ 256 := by
       have hbound := hw.entries_length_le
-      norm_num at hbound ⊢
+      norm_num only at hbound ⊢
       omega
     have hindex252 : (Nat.toB256 (index + 1)).toNat < 2 ^ 252 := by
       rw [B256.toNat_toB256_of_lt hindex256]
       have hbound := hw.entries_length_le
-      norm_num at hbound ⊢
+      norm_num only at hbound ⊢
       omega
     change (s.set (slot configRegion payload) value).get
       (arrayEntrySlot (Nat.toB256 (index + 1))) = targetAt entries index

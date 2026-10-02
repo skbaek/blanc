@@ -266,7 +266,7 @@ private lemma responder_call_crossing
       have h1 : except64th (G - 0 - 100) ≤ G := by
         unfold except64th; omega
       rw [Nat.min_eq_right h1]
-      norm_num
+      norm_num only [Nat.sub_zero]
     rw [hmin] at hsplit
     have h1 : except64th (G - 100) + 100 = mcc := congrArg Prod.fst hsplit
     have h2 : except64th (G - 100) + 0 = mcs := congrArg Prod.snd hsplit
@@ -374,7 +374,7 @@ private lemma responder_staticcall_crossing
       have h1 : except64th (G - 0 - 100) ≤ G := by
         unfold except64th; omega
       rw [Nat.min_eq_right h1]
-      norm_num
+      norm_num only [Nat.sub_zero]
     rw [hmin] at hsplit
     have h1 : except64th (G - 100) + 100 = mcc := congrArg Prod.fst hsplit
     have h2 : except64th (G - 100) + 0 = mcs := congrArg Prod.snd hsplit
@@ -487,7 +487,7 @@ theorem pauseExpiryFinish_ok_runCompiled
       simp only [show ((0 : B256) * 32).toNat = 0 by decide,
         show ((1 : B256) * 32).toNat = 32 by decide]
       rw [Devm.extCost_zero_of_le halign' hzeroCovered']
-      norm_num [gLog, gLogdata, gLogtopic]
+      norm_num only [gLog, gLogdata, gLogtopic, Fin.val_succ, Fin.val_two]
     case a =>
       simp only [show ((0 : B256) * 32).toNat = 0 by decide,
         show ((1 : B256) * 32).toNat = 32 by decide]
@@ -716,16 +716,16 @@ theorem pauseSuccess_zeroCount_ok_runCompiled
   all_goals try simp_rw [htargetMemory']
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hdurationCovered]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case h_ext =>
     exact Devm.extCost_zero_of_le halign hzeroCovered
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign' htargetCovered']
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case h_cost =>
     simp only [show ((1 : B256) * 32).toNat = 32 by decide]
     rw [Devm.extCost_zero_of_le halign' hzeroCovered']
-    norm_num [gLog, gLogdata, gLogtopic]
+    norm_num only [gLog, gLogdata, gLogtopic, Fin.val_succ, Fin.val_two]
   case h_val =>
     simpa only [countSlot, slot] using
       congrArg (fun x : B256 => (regionWord countRegion).or x) hcaller
@@ -971,16 +971,16 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
   all_goals try simp_rw [htargetMemory']
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hdurationCovered]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case h_ext =>
     exact Devm.extCost_zero_of_le halign hzeroCovered
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign' htargetCovered']
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case h_cost =>
     simp only [show ((1 : B256) * 32).toNat = 32 by decide]
     rw [Devm.extCost_zero_of_le halign' hzeroCovered']
-    norm_num [gLog, gLogdata, gLogtopic]
+    norm_num only [gLog, gLogdata, gLogtopic, Fin.val_succ, Fin.val_two]
   case h_val =>
     simpa only [countSlot, slot] using
       congrArg (fun x : B256 => (regionWord countRegion).or x) hcaller
@@ -1353,7 +1353,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
     case h_cost =>
       simp only [show ((0 : B256) * 32).toNat = 0 by decide]
       rw [Devm.extCost_zero_of_le (by omega) (by omega)]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case h_arm =>
       have hg : Gb + 81 - 81 = Gb := by omega
       rw [hg, show ((0 : B256) * 32).toNat = 0 from by decide, hdecodedMemory]
@@ -1379,7 +1379,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
       rw [Devm.extCost_zero_of_le halign3 (by
         have hoff : (targetWord * 32).toNat + 32 ≤ 768 := by decide
         omega)]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [htargetValue3]
       have hg : Gb + 242 - 44 = Gb + 198 := by omega
@@ -1417,14 +1417,14 @@ theorem pauseAfterSet_toSuccess_runCompiled
       rw [Devm.extCost_zero_of_le (by omega) (by
         have hoff : (durationWord * 32).toNat + 32 ≤ 768 := by decide
         omega)]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case h_ext =>
       exact Devm.extCost_zero_of_le (by omega) (by omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign2 (by
         have hoff : (targetWord * 32).toNat + 32 ≤ 768 := by decide
         omega)]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [htargetValue2]
       have hg : Gb + 418 - 59 = Gb + 359 := by omega
@@ -1451,7 +1451,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
     rw [Devm.extCost_zero_of_le halign (by
       have hoff : (targetWord * 32).toNat + 32 ≤ 768 := by decide
       omega)]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case a =>
     rw [htargetValue0, htargetMemory0]
     have hg : Gb + 427 + codeCost - 9 = Gb + 418 + codeCost := by omega

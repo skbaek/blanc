@@ -188,7 +188,7 @@ theorem lidoCircuitBreakerConstructorProgram_main_official :
   rw [DeploymentProof.lidoCircuitBreakerConstructorProgram_eq,
     provisionalConstructorPrefix_length_exact,
     runtimeTemplateCode_length_exact]
-  norm_num
+  norm_num only
   rw [constructorProgramForProof_eq, constructorBody_official_eq]
 
 /-! ## Body-pinned validation and table-call layout -/

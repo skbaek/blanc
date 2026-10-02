@@ -30,7 +30,7 @@ theorem registryModelStorage_assignment (entries : List LidoCircuitBreaker.Entry
     (hp : canonicalAddress p) :
     (registryModelStorage entries).read (assignmentSlot p) = assignmentAt entries p := by
   have h := tagged_region_payload (region := assignmentRegion)
-    (by norm_num [assignmentRegion]) (canonicalAddress_payload_lt hp)
+    (by norm_num only [assignmentRegion]) (canonicalAddress_payload_lt hp)
   simp only [assignmentSlot, registryModelStorage, h.1, h.2]
   simp only [↓reduceIte]
 
@@ -38,7 +38,7 @@ theorem registryModelStorage_index (entries : List LidoCircuitBreaker.Entry) {p 
     (hp : canonicalAddress p) :
     (registryModelStorage entries).read (indexSlot p) = Nat.toB256 (oneBasedIndexAt entries p) := by
   have h := tagged_region_payload (region := indexRegion)
-    (by norm_num [indexRegion]) (canonicalAddress_payload_lt hp)
+    (by norm_num only [indexRegion]) (canonicalAddress_payload_lt hp)
   simp only [indexSlot, registryModelStorage, h.1, h.2]
   simp only [indexRegion, assignmentRegion, Nat.succ_ne_self, ↓reduceIte]
 
@@ -46,7 +46,7 @@ theorem registryModelStorage_count (entries : List LidoCircuitBreaker.Entry) {p 
     (hp : canonicalAddress p) :
     (registryModelStorage entries).read (countSlot p) = Nat.toB256 (assignmentCount entries p) := by
   have h := tagged_region_payload (region := countRegion)
-    (by norm_num [countRegion]) (canonicalAddress_payload_lt hp)
+    (by norm_num only [countRegion]) (canonicalAddress_payload_lt hp)
   simp only [countSlot, registryModelStorage, h.1, h.2]
   simp only [countRegion, assignmentRegion, Nat.reduceEqDiff, ↓reduceIte, indexRegion,
     Nat.succ_ne_self]
@@ -54,7 +54,7 @@ theorem registryModelStorage_count (entries : List LidoCircuitBreaker.Entry) {p 
 theorem registryModelStorage_length (entries : List LidoCircuitBreaker.Entry) :
     (registryModelStorage entries).read arrayLengthSlot = Nat.toB256 entries.length := by
   have h := tagged_region_payload (region := arrayRegion) (payload := 0)
-    (by norm_num [arrayRegion]) (by change (0 : Nat) < 2 ^ 252; norm_num)
+    (by norm_num only [arrayRegion]) (by change (0 : Nat) < 2 ^ 252; norm_num only)
   simp only [arrayLengthSlot, registryModelStorage, h.1, h.2]
   simp only [arrayRegion, assignmentRegion, Nat.reduceEqDiff, ↓reduceIte, indexRegion, countRegion,
     Nat.succ_ne_self]
@@ -67,7 +67,7 @@ theorem registryModelStorage_array (entries : List LidoCircuitBreaker.Entry) {i 
   have hword : (Nat.toB256 (i + 1)).toNat < 2 ^ 252 := by
     rw [B256.toNat_toB256_of_lt h256]; exact hi
   have h := tagged_region_payload (region := arrayRegion)
-    (by norm_num [arrayRegion]) hword
+    (by norm_num only [arrayRegion]) hword
   have hnz : Nat.toB256 (i + 1) ≠ 0 := by
     intro heq
     have hn := congrArg B256.toNat heq
@@ -90,7 +90,7 @@ theorem registryModelWitness {entries : List LidoCircuitBreaker.Entry}
   · intro p hp; exact registryModelStorage_assignment entries hp
   · intro p hp; exact registryModelStorage_index entries hp
   · intro p hp; exact registryModelStorage_count entries hp
-  · rw [registryModelStorage_count entries (by change (0 : Nat) < 2 ^ 160; norm_num)]
+  · rw [registryModelStorage_count entries (by change (0 : Nat) < 2 ^ 160; norm_num only)]
     have hc : assignmentCount entries 0 = 0 := by
       clear hlen hn ht
       induction entries with

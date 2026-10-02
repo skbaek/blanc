@@ -457,7 +457,7 @@ private theorem registerAfterSet_retained_newPauserTail_runCompiled
   all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hpreviousCovered]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case h_val => simp only [B256.eqCheck, hpreviousValue, holdNonzero, ↓reduceIte]
   case h_arm =>
     rw [hpreviousMemory]
@@ -1210,7 +1210,7 @@ theorem registerPauser_body_retainedNonzero_runCompiled
     have hexpiryNew : expirySlot pauser ≠ expirySlot newPauser := by
       intro hslot
       exact hne (addressSlot_injective (region := expiryRegion)
-        (by norm_num [expiryRegion]) hpauser hnewValid.2
+        (by norm_num only [expiryRegion]) hpauser hnewValid.2
         (by simpa only [expirySlot] using hslot))
     have hold := expirySlot_ne_registryAddressFamilies hpauser htargetValid.2
       holdValid.2
@@ -1953,7 +1953,7 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
     · have hexpiryNe : expirySlot oldPauser ≠ expirySlot newPauser := by
         intro hslot
         exact hsame (addressSlot_injective (region := expiryRegion)
-          (by norm_num [expiryRegion]) holdValid.2 hnewValid.2
+          (by norm_num only [expiryRegion]) holdValid.2 hnewValid.2
           (by simpa only [expirySlot] using hslot))
       rw [if_neg hsame, getStorVal_setMach, getStorVal_addLog,
         temporalSstorePost_other _ _ (expirySlot newPauser) expiry _
@@ -1974,7 +1974,7 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
         expirySlot left ≠ expirySlot right := by
       intro hslot
       exact h (addressSlot_injective (region := expiryRegion)
-        (by norm_num [expiryRegion]) hleft hright
+        (by norm_num only [expiryRegion]) hleft hright
         (by simpa only [expirySlot] using hslot))
     have hold := expirySlot_ne_registryAddressFamilies hpauser htargetValid.2
       holdValid.2

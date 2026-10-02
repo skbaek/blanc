@@ -159,7 +159,7 @@ private theorem removeTarget_restoreTail_runCompiled
           (cost := gVerylow + gMid + gJumpdest) (G := G + finishGas)
           (by
             simp only [Devm.gasLeft_setMach]
-            norm_num [gVerylow, gMid, gJumpdest]))
+            norm_num only [gVerylow, gMid, gJumpdest]))
     · simpa only [fs] using hfinish
   have hstoreIndex : Func.RunCompiled fs sevm
       (lengthPost.setMach
@@ -212,7 +212,7 @@ private theorem removeTarget_restoreTail_runCompiled
   all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hlengthCovered]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case a =>
     rw [hlengthValue, hlengthMemory]
     change Func.RunCompiled _ _
@@ -488,7 +488,7 @@ private theorem removeTarget_storePrefix_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered arrayLengthWord (by decide))]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hlengthValue, hlengthMemory]
       have hg : G + finishGas + 56 + lengthRestoreCost + indexClearCost +
@@ -571,7 +571,7 @@ private theorem removeTarget_storePrefix_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered lastTargetWord (by decide))]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hlastValue, hlastMemory]
       have hg : G + finishGas + 70 + lengthRestoreCost + indexClearCost +
@@ -597,7 +597,7 @@ private theorem removeTarget_storePrefix_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered removedIndexWord (by decide))]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hremovedValue, hremovedMemory]
       have hg : G + finishGas + 76 + lengthRestoreCost + indexClearCost +
@@ -664,7 +664,7 @@ private theorem removeTarget_storePrefix_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered removedIndexWord (by decide))]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hremovedValue, hremovedMemory]
       have hg : G + finishGas + 88 + lengthRestoreCost + indexClearCost +
@@ -692,7 +692,7 @@ private theorem removeTarget_storePrefix_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered lastTargetWord (by decide))]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hlastValue, hlastMemory]
       have hg : G + finishGas + 94 + lengthRestoreCost + indexClearCost +
@@ -1181,7 +1181,7 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
       rw [Devm.extCost_zero_of_le halignLength (by
         rw [hsizeLength, show (arrayLengthWord * 32).toNat + 32 = 704 by decide]
         exact Nat.le_max_right _ _)]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hlengthValue, hlengthMemory]
       have hg : G + finishGas + 112 + lastExtCost + holeCost + movedIndexCost +
@@ -1493,7 +1493,7 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign htargetCovered]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [htargetValue, htargetMemory]
       have hg : G + finishGas + 139 + lastExtCost + indexExtCost +
@@ -1596,7 +1596,7 @@ private theorem removeTarget_holeStorePrefix_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign hremovedCovered]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hremovedValue, hremovedMemory]
       have hg : G + 12 - 6 = G + 6 := by omega
@@ -1606,7 +1606,7 @@ private theorem removeTarget_holeStorePrefix_runCompiled
   all_goals try ((try simp only [Devm.stack_setMach]); omega)
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hlastCovered]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case a =>
     rw [hlastValue, hlastMemory]
     have hg : G + 18 - 6 = G + 12 := by omega
@@ -1786,7 +1786,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
     intro h
     exact hidxNeLen
       (slot_injective_payload (region := arrayRegion)
-        (by norm_num [arrayRegion]) hlenBound hidxBound
+        (by norm_num only [arrayRegion]) hlenBound hidxBound
         (by simpa only [tailKey, holeKey, arrayEntrySlot] using h)).symm
   -- the three reads' values and the two cold write keys, at the threaded base
   have hhole3 : base3.getStorVal sevm.currentTarget holeKey = holeCurrent := by
@@ -2166,7 +2166,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
     case h_cost =>
       rw [Devm.extCost_zero_of_le halignLast
         (hMLastCovered arrayLengthWord (by decide))]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hlengthValue, hlengthMemory]
       have hg : G + finishGas + 56 + lengthRestoreCost + indexClearCost +
@@ -2251,7 +2251,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
     case h_cost =>
       rw [Devm.extCost_zero_of_le halignLast
         (hMLastCovered lastTargetWord (by decide))]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hlastValue, hlastMemory]
       have hg : G + finishGas + 70 + lengthRestoreCost + indexClearCost +
@@ -2278,7 +2278,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
     case h_cost =>
       rw [Devm.extCost_zero_of_le halignLast
         (hMLastCovered removedIndexWord (by decide))]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hremovedValue, hremovedMemory]
       have hg : G + finishGas + 76 + lengthRestoreCost + indexClearCost +
@@ -2528,7 +2528,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
       rw [Devm.extCost_zero_of_le halignLength (by
         rw [hsizeLength, show (arrayLengthWord * 32).toNat + 32 = 704 by decide]
         exact Nat.le_max_right _ _)]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hlengthValueMid, hlengthMemoryMid]
       have hg : G + finishGas + 112 + lastExtCost + gasColdSload +
@@ -2844,7 +2844,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign htargetCovered]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [htargetValue, htargetMemory]
       have hg : G + finishGas + 139 + lastExtCost + indexExtCost +

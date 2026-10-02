@@ -154,7 +154,7 @@ private lemma concat_shr_eight (x y : UInt64) :
       ((x.toNat <<< 64) ||| y.toNat) >>> 8 := by
   simp only [UInt64.toNat_shiftRight, UInt64.toNat_shiftLeft,
     UInt64.toNat_or]
-  norm_num
+  norm_num only [UInt64.toNat_ofNat']
   exact concat_shr_eight_nat x.toNat y.toNat 64 (by omega)
 
 private lemma B128.toNat_or (x y : B128) :
@@ -180,7 +180,9 @@ private lemma B128.toNat_shift_eight (word : B128) :
     (B128.shiftRight word 8).toNat = word.toNat >>> 8 := by
   rcases word with ⟨x, y⟩
   simp only [B128.shiftRight]
-  norm_num
+  dsimp only [B128]
+  norm_num only
+  simp only [ite_true, ite_false]
   simp only [B128.toNat]
   exact concat_shr_eight x y
 
@@ -189,7 +191,9 @@ private lemma B128.toNat_shiftLeft_120 (word : B128) :
       (word.toNat <<< 120) % 2 ^ 128 := by
   rcases word with ⟨a, b⟩
   simp only [B128.shiftLeft]
-  norm_num
+  dsimp only [B128]
+  norm_num only
+  simp only [ite_true, ite_false]
   simp only [B128.toNat]
   have hlow :
       ((a.toNat <<< 64) ||| b.toNat) % 2 ^ 8 =
@@ -199,13 +203,13 @@ private lemma B128.toNat_shiftLeft_120 (word : B128) :
     simp only [Nat.reducePow, Nat.zero_or]
   have hb56 := Jaune.Nat.lo_shl (k := b.toNat) (m := 8) (n := 56)
   simp only [Jaune.Nat.lo] at hb56
-  norm_num at hb56
+  norm_num only at hb56
   have hw120 := Jaune.Nat.lo_shl
     (k := (a.toNat <<< 64) ||| b.toNat) (m := 8) (n := 120)
   simp only [Jaune.Nat.lo] at hw120
-  norm_num at hw120 hlow
+  norm_num only at hw120 hlow
   simp only [UInt64.toNat_shiftLeft]
-  norm_num
+  norm_num only [UInt64.toNat_ofNat, Jaune.toNat_toUInt64, Nat.lo_eq, Nat.or_zero]
   rw [← hw120, hlow, ← hb56, ← Nat.shiftLeft_add]
 
 private lemma B256.toNat_shift_eight (word : B256) :
@@ -214,7 +218,9 @@ private lemma B256.toNat_shift_eight (word : B256) :
   change (B256.shiftRight (x, y) 8).toNat =
     B256.toNat (x, y) >>> 8
   simp only [B256.shiftRight]
-  norm_num
+  dsimp only [B256]
+  norm_num only
+  simp only [ite_true, ite_false]
   change
     ((B128.shiftRight x 8).toNat <<< 128 |||
       (B128.or (B128.shiftLeft x 120)
@@ -459,15 +465,10 @@ private theorem storeByteShiftStack_runCompiled
         pushB256 8 ::: shr ::: rest)
       post := by
   func_run (5) [0]
-  · simp only [Devm.stack_setMach, List.length_cons]
-    omega
-  · simp only [Devm.stack_setMach, List.length_cons]
-    omega
-  · exact Devm.extCost_zero_of_le hsize32 hfit
-  · simp only [Devm.stack_setMach, List.length_cons]
-    omega
-  · omega
-  · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
+  case h_ext => exact Devm.extCost_zero_of_le hsize32 hfit
+  case h_room => omega
+  case a =>
+    simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
       show (8 : B256).toNat = 8 by decide +kernel,
       show G + 15 - 15 = G by omega] using hrest
 
@@ -488,10 +489,9 @@ private theorem storeByteLastStack_runCompiled
       (pushB256 i ::: mstore8 ::: rest)
       post := by
   func_run (2) [0]
-  · simp only [Devm.stack_setMach, List.length_cons]
-    omega
-  · exact Devm.extCost_zero_of_le hsize32 hfit
-  · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
+  case h_ext => exact Devm.extCost_zero_of_le hsize32 hfit
+  case a =>
+    simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
       show G + 6 - 6 = G by omega] using hrest
 
 /-- Execute `storeLe64At` at any non-wrapping concrete address.  The
@@ -799,15 +799,10 @@ private theorem storeByteShiftStack_runCompiledTo
         pushB256 8 ::: shr ::: rest)
       ex := by
   func_run (5) [0]
-  · simp only [Devm.stack_setMach, List.length_cons]
-    omega
-  · simp only [Devm.stack_setMach, List.length_cons]
-    omega
-  · exact Devm.extCost_zero_of_le hsize32 hfit
-  · simp only [Devm.stack_setMach, List.length_cons]
-    omega
-  · omega
-  · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
+  case h_ext => exact Devm.extCost_zero_of_le hsize32 hfit
+  case h_room => omega
+  case a =>
+    simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
       show (8 : B256).toNat = 8 by decide +kernel,
       show G + 15 - 15 = G by omega] using hrest
 
@@ -828,10 +823,9 @@ private theorem storeByteLastStack_runCompiledTo
       (pushB256 i ::: mstore8 ::: rest)
       ex := by
   func_run (2) [0]
-  · simp only [Devm.stack_setMach, List.length_cons]
-    omega
-  · exact Devm.extCost_zero_of_le hsize32 hfit
-  · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
+  case h_ext => exact Devm.extCost_zero_of_le hsize32 hfit
+  case a =>
+    simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
       show G + 6 - 6 = G by omega] using hrest
 
 /-- Execute `storeLe64At` before an arbitrary final `Execution`.  This is the

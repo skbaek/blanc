@@ -841,7 +841,7 @@ theorem lidoCircuitBreakerConstructorProgram_compile :
   rw [DeploymentProof.lidoCircuitBreakerConstructorProgram_eq]
   rw [provisionalConstructorPrefix_length_exact,
     runtimeTemplateCode_length_exact]
-  norm_num
+  norm_num only
   exact finalConstructorProgram_compiles
 
 /-- Exact constructor prefix length, hence exact runtime and ABI coordinates. -/
@@ -851,7 +851,7 @@ theorem lidoCircuitBreakerInitPrefix_length_exact :
   rw [DeploymentProof.lidoCircuitBreakerConstructorProgram_eq]
   rw [provisionalConstructorPrefix_length_exact,
     runtimeTemplateCode_length_exact]
-  norm_num
+  norm_num only
   rcases constructor_immutable_word_offsets_exact with
     ⟨hadmin, hminPause, hmaxPause, hminHeartbeat, hmaxHeartbeat⟩
   simp only [constructorProgramForProof_eq, constructorBodyForProof_eq,

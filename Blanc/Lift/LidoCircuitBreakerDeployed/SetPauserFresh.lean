@@ -315,7 +315,7 @@ theorem setPauser_fresh_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
   have hzero : canonicalAddress (0 : B256) := by
     unfold canonicalAddress
     change (0 : Nat) < 2 ^ 160
-    norm_num
+    norm_num only
   have hassign : addressSlotReadWord
       (b.getStorVal sevm.currentTarget (mapSlot target 3)) = 0 := by
     have h := hw.assignments target htarget.2
@@ -458,7 +458,7 @@ theorem setPauser_absentZero_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
   have hzero : canonicalAddress (0 : B256) := by
     unfold canonicalAddress
     change (0 : Nat) < 2 ^ 160
-    norm_num
+    norm_num only
   have hassign : addressSlotReadWord
       (b.getStorVal sevm.currentTarget (mapSlot target 3)) = 0 := by
     have h := hw.assignments target htarget.2

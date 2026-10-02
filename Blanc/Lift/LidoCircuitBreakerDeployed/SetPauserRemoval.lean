@@ -556,7 +556,7 @@ theorem removalArm_inv {oldP target R : B256} {base : List B256} {post : Devm}
   have hzero : canonicalAddress (0 : B256) := by
     unfold canonicalAddress
     change (0 : Nat) < 2 ^ 160
-    norm_num
+    norm_num only
   obtain ⟨-, -, hwf1, hal1⟩ := scratch_mapSlot hmem halign target 4
   obtain ⟨b3, G3, h3, run⟩ := t0ada_inv hfork htarget hmem halign run
   obtain ⟨-, -, hwf2, hal2⟩ := scratch_word hwf1 hal1 5
@@ -637,9 +637,9 @@ theorem arrayEntrySlot_ne_arrayLengthSlot {i : Nat} (hi : i + 1 < 2 ^ 252) :
     exact hi
   have hzero : (0 : B256).toNat < 2 ^ 252 := by
     rw [B256.toNat_zero]
-    norm_num
+    norm_num only
   have hpayload : Nat.toB256 (i + 1) = 0 :=
-    slot_injective_payload (region := arrayRegion) (by norm_num [arrayRegion]) hb hzero heq
+    slot_injective_payload (region := arrayRegion) (by norm_num only [arrayRegion]) hb hzero heq
   have hn := congrArg B256.toNat hpayload
   rw [B256.toNat_toB256_of_lt hb256] at hn
   simp only [B256.toNat_zero] at hn
@@ -799,7 +799,7 @@ theorem setPauser_removal_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
   have hzero : canonicalAddress (0 : B256) := by
     unfold canonicalAddress
     change (0 : Nat) < 2 ^ 160
-    norm_num
+    norm_num only
   have hold : nonzeroCanonicalAddress oldPauser :=
     hw.pausersValid (target, oldPauser) (mem_of_findEntry hfind)
   have hassign : addressSlotReadWord

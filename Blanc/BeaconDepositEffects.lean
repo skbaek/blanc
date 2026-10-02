@@ -260,13 +260,11 @@ theorem nonpayableEndpoint_zero_runCompiled
       (nonpayableEndpoint body) post := by
   unfold nonpayableEndpoint nonpayableEndpointZeroGas
   func_run (1) []
-  · simp only [Devm.stack_setMach]
-    omega
-  · rw [hvalue]
+  case a =>
+    rw [hvalue]
     func_run (1) []
-    · simp only [Devm.stack_setMach, List.length_cons]
-      omega
-    · have hboundary : G + 15 - 15 = G := by omega
+    case h_arm =>
+      have hboundary : G + 15 - 15 = G := by omega
       simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, hboundary] using hbody
 
 theorem nonpayableEndpoint_zero_runCompiledTo
@@ -282,13 +280,11 @@ theorem nonpayableEndpoint_zero_runCompiledTo
       (nonpayableEndpoint body) out := by
   unfold nonpayableEndpoint nonpayableEndpointZeroGas
   func_run (1) []
-  · simp only [Devm.stack_setMach]
-    omega
-  · rw [hvalue]
+  case a =>
+    rw [hvalue]
     func_run (1) []
-    · simp only [Devm.stack_setMach, List.length_cons]
-      omega
-    · have hboundary : G + 15 - 15 = G := by omega
+    case h_arm =>
+      have hboundary : G + 15 - 15 = G := by omega
       simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, hboundary] using hbody
 
 /-- Nonzero value is rejected before `body` can inspect calldata or world
@@ -306,9 +302,8 @@ theorem nonpayableEndpoint_nonzero_runCompiledTo
         (base.setMach ⟨base.stack, base.memory, G, base.stateGas⟩).withOutput [])) := by
   unfold nonpayableEndpoint nonpayableEndpointRevertGas
   func_run (1) []
-  · simp only [Devm.stack_setMach]
-    omega
-  · refine Func.runCompiledTo_branch_succ (G := G + 4)
+  case a =>
+    refine Func.runCompiledTo_branch_succ (G := G + 4)
       hvalue rfl ?_ ?_ ?_
     · simp only [Devm.stack_setMach, List.length_cons]
       omega

@@ -1049,12 +1049,12 @@ private theorem pauseFiniteSstore_runCompiled
     unfold sstoreCost
     simp only [hwarm, if_pos, Nat.zero_add, horiginal, hresume]
     rw [sstoreValueCost, if_pos ⟨rfl, hvalueNonzero.symm⟩, if_pos rfl]
-    norm_num [gasStorageSet]
+    norm_num only [gasStorageSet]
   simpa only [hcost] using
     (Ninst.runCompiled_sstore_selected_setMach
       (sevm := sevm) (base := base) (key := resumeSinceSlot)
       (value := value) (stack := []) (memory := memory) (G := G)
-      hfork (by norm_num [hcost, gCallStipend]) hstatic)
+      hfork (by norm_num only [hcost, gCallStipend]; omega) hstatic)
 
 /-- Install the finite resume timestamp, then execute the calldata/event tail.
 The guard's preceding `SLOAD` has already warmed `resumeSinceSlot`, so the

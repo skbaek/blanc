@@ -965,7 +965,7 @@ theorem finishSetPauser_pauseAfterSet_runCompiled
           (devm := eventBase.setMach ⟨stack, M, G + 12, eventBase.stateGas⟩)
           (cost := gVerylow + gMid + gJumpdest) (G := G)
           (by simp only [Devm.gasLeft_setMach]
-              norm_num [gVerylow, gMid, gJumpdest]))
+              norm_num only [gVerylow, gMid, gJumpdest]))
     · exact hpause
   have hbranch : Func.RunCompiled fs sevm
       (eventBase.setMach ⟨0 :: stack, M, G + 25, eventBase.stateGas⟩)
@@ -980,7 +980,7 @@ theorem finishSetPauser_pauseAfterSet_runCompiled
           (cost := gVerylow + gHigh) (G := G + 12)
           (h_stk := rfl) (h := by
             simp only [Devm.gasLeft_setMach]
-            norm_num [gVerylow, gHigh]))
+            norm_num only [gVerylow, gHigh]))
     · exact hcall
   have hcontinuationRun : Func.RunCompiled fs sevm
       (eventBase.setMach ⟨stack, M, G + 34, eventBase.stateGas⟩)
@@ -990,10 +990,10 @@ theorem finishSetPauser_pauseAfterSet_runCompiled
     all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign hcontinuationCovered]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hcontinuationValue, hcontinuationMemory]
-      norm_num
+      norm_num only
       exact hbranch
   simp only [finishSetPauser]
   func_run (10) [3, 3, 3, 1875]
@@ -1003,11 +1003,11 @@ theorem finishSetPauser_pauseAfterSet_runCompiled
   all_goals try simp_rw [htargetMemory]
   all_goals try {
     rw [Devm.extCost_zero_of_le halign (by omega)]
-    norm_num [gVerylow, gLog, gLogdata, gLogtopic] }
+    norm_num only [gVerylow, gLog, gLogdata, gLogtopic] }
   case h_cost =>
     simp only [show ((0 : B256) * 32).toNat = 0 by decide]
     rw [Devm.extCost_zero_of_le halign (by omega)]
-    norm_num [gLog, gLogdata, gLogtopic]
+    norm_num only [gLog, gLogdata, gLogtopic, Fin.val_succ, Fin.coe_ofNat_eq_mod]
   case a =>
     rw [hnewValue, hpreviousValue, htargetValue]
     rw [show ((0 : B256) * 32).toNat = 0 by decide, hreadZero]

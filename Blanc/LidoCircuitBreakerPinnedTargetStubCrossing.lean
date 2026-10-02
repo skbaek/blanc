@@ -126,7 +126,7 @@ private lemma runCompiled_call_zero_value_stubPause
       (pauseForProjection sevm.benvStat.time duration) = 22100
     rw [sstoreValueCost,
       if_pos ⟨rfl, fun h => h_new h.symm⟩, if_pos rfl]
-    norm_num [gasColdSload, gasStorageSet]
+    norm_num only [gasColdSload, gasStorageSet]
   obtain ⟨out, hexec, herr, hout, hgasOut, hmetaOut, hworldOut,
     heffectOut⟩ :=
     stubPause_exec (msg.withBenv benv') duration (mcs - 22185)
@@ -371,7 +371,7 @@ private lemma stubPause_call_crossing
     intro hvalid
     have hs := hvalid.1
     rw [hsize] at hs
-    norm_num [eoaDelegatedCodeLength] at hs
+    norm_num only [eoaDelegatedCodeLength] at hs
   have hdel : accessDelegation
       (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         target.toAdr) target.toAdr =
@@ -415,7 +415,7 @@ private lemma stubPause_call_crossing
         unfold except64th
         omega
       rw [Nat.min_eq_right h1]
-      norm_num
+      norm_num only [Nat.sub_zero]
     rw [hmin] at hsplit
     have h1 : except64th (G - 100) + 100 = mcc :=
       congrArg Prod.fst hsplit
@@ -749,7 +749,7 @@ private lemma stubQuery_staticcall_crossing
     intro hvalid
     have hs := hvalid.1
     rw [hsize] at hs
-    norm_num [eoaDelegatedCodeLength] at hs
+    norm_num only [eoaDelegatedCodeLength] at hs
   have hdel : accessDelegation
       (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         target.toAdr) target.toAdr =
@@ -793,7 +793,7 @@ private lemma stubQuery_staticcall_crossing
         unfold except64th
         omega
       rw [Nat.min_eq_right h1]
-      norm_num
+      norm_num only [Nat.sub_zero]
     rw [hmin] at hsplit
     have h1 : except64th (G - 100) + 100 = mcc :=
       congrArg Prod.fst hsplit
@@ -931,7 +931,7 @@ theorem installedCallArgs_runCompiled
   all_goals try simp_rw [hreadMemory]
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hcover]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case a =>
     rw [hreadValue]
     have hg : G + 20 - 20 = G := by omega
@@ -955,7 +955,7 @@ theorem installedDurationWrite_runCompiled
   all_goals try simp_rw [hreadMemory]
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hreadCover]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case h_ext =>
     exact Devm.extCost_zero_of_le halign hwriteCover
   case a =>
@@ -1361,7 +1361,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
     case h_cost =>
       simp only [show ((0 : B256) * 32).toNat = 0 by decide]
       rw [Devm.extCost_zero_of_le (by omega) (by omega)]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case h_arm =>
       have hg : Gb + 62 - 81 = Gb - 19 := by omega
       rw [hg, show ((0 : B256) * 32).toNat = 0 from by decide,
@@ -1394,7 +1394,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
       rw [Devm.extCost_zero_of_le halign3 (by
         have hoff : (targetWord * 32).toNat + 32 ≤ 768 := by decide
         omega)]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [htargetValue3]
       have hg : Gb + 353 - 19 = Gb + 334 := by omega
@@ -1495,7 +1495,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
     rw [Devm.extCost_zero_of_le halign (by
       have hoff : (targetWord * 32).toNat + 32 ≤ 768 := by decide
       omega)]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case a =>
     rw [htargetValue0, htargetMemory0]
     have hg : Gb + 22731 + codeCost - 9 =

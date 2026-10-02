@@ -734,7 +734,7 @@ theorem pauseWorld_count_ne_expiry :
 private theorem pauseWorld_payload_of_canonical {w : B256}
     (h : canonicalAddress w) : w.toNat < 2 ^ 252 := by
   unfold canonicalAddress at h
-  exact lt_trans h (by norm_num)
+  exact lt_trans h (by norm_num only)
 
 /-! ### The two entry storages -/
 

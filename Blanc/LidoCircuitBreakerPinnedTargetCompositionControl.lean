@@ -1280,7 +1280,7 @@ theorem stubRunMem_durLast :
 theorem stubRunSvc_reset {orig new : B256} (hnew : orig ≠ new)
     (hzero : ¬ orig = 0) : sstoreValueCost orig orig new = 2900 := by
   rw [sstoreValueCost, if_pos ⟨rfl, hnew⟩, if_neg hzero]
-  norm_num [gasStorageUpdate, gasColdSload]
+  norm_num only [gasStorageUpdate, gasColdSload]
 
 theorem stubRunSvc_noop {orig cur : B256} :
     sstoreValueCost orig cur cur = 100 := by
@@ -1901,8 +1901,8 @@ private theorem stubPauseWorld_afterSetStubSeam :
       (by show (1024 : Nat) ≠ 0; decide)
       (by simpa only [toAdr_toB256] using
         stubPauseWorld_target_not_precompile)
-      (by norm_num)
-      (by norm_num)
+      (by norm_num only)
+      (by norm_num only)
   rcases hchain with ⟨st₁, st₂, hsub₁, hsub₂, hstate⟩
   have htargetOwner : pauseWorldCallee.toB256.toAdr ≠
       configWorldOwner := by
@@ -1942,7 +1942,7 @@ private theorem stubPauseWorld_afterSetStubSeam :
     (hask _).mpr (Or.inr stubRunAfterSetBase_warmExpiry), ?_⟩
   intro final hrun
   have h := hclose final hrun
-  rw [show (42362 + 22731 + 2600 : Nat) = 67693 from by norm_num] at h
+  rw [show (42362 + 22731 + 2600 : Nat) = 67693 from by norm_num only] at h
   exact h
 
 private theorem stubPauseWorld_originalExpiry :
@@ -2056,11 +2056,11 @@ private theorem stubPauseWorld_successSuffix :
       exact stubPauseWorld_originalExpiry)
     hwarmExpiry
     (stubRunSvc_reset (by decide) (by decide))
-    (by norm_num [gCallStipend])
+    (by norm_num only [gCallStipend])
     rfl
   have hmidEta : mid.setMach
       ⟨[], stubRunDecodedMemory, 36021 + 3322 + 100 + 2900, mid.stateGas⟩ = mid := by
-    rw [show (36021 + 3322 + 100 + 2900 : Nat) = 42343 from by norm_num,
+    rw [show (36021 + 3322 + 100 + 2900 : Nat) = 42343 from by norm_num only,
       stubRunDecodedMemory, ← hgas, ← hmem, ← hstk]
     rfl
   rw [hmidEta] at hW8
@@ -2110,7 +2110,7 @@ private theorem stubPauseWorld_productionRun :
     (by
       simpa only [stubRunAfterSetNoLog, stubRunAfterSetBase,
         stubRunRemoveBase3, stubRunCountPost, stubRunKernelBase] using hafter)
-  rw [show (67693 + 1934 : Nat) = 69627 from by norm_num] at hfin
+  rw [show (67693 + 1934 : Nat) = 69627 from by norm_num only] at hfin
   have hrem := removeTarget_toFinish_coldEntry_runCompiled (hfork := hfork) officialParams
     stubPauseWorldSevm stubRunCountPost stubRunMemory1 stubRunImage1
     pauseWorldCallee.toB256 0 1 [] (by decide)
@@ -2139,10 +2139,10 @@ private theorem stubPauseWorld_productionRun :
     (stubRunSvc_reset (by decide) (by decide))
     (stubRunSvc_reset (by decide) (by decide))
     (stubRunSvc_reset (by decide) (by decide))
-    (by decide) (by norm_num [gCallStipend]) rfl _
+    (by decide) (by norm_num only [gCallStipend]) rfl _
     (by dsimp only; exact hfin)
   rw [show (0 + 69627 + 139 + 0 + 0 + 0 + 2100 + 2100 + 2100 + 100 +
-    100 + 2900 + 2900 + 2900 : Nat) = 84966 from by norm_num] at hrem
+    100 + 2900 + 2900 + 2900 : Nat) = 84966 from by norm_num only] at hrem
   have hglue := afterOldPauser_removeTarget_runCompiled officialParams
     stubPauseWorldSevm stubRunCountPost stubRunMemory1 stubRunImage1 []
     84966 _ (by decide)
@@ -2151,7 +2151,7 @@ private theorem stubPauseWorld_productionRun :
     (by rw [stubRunMemory1, stubRunMem_size1]; decide)
     (by rw [stubRunMemory1, stubRunMem_size1])
     hrem
-  rw [show (84966 + 35 : Nat) = 85001 from by norm_num] at hglue
+  rw [show (84966 + 35 : Nat) = 85001 from by norm_num only] at hglue
   have hker := setPauserKernel_found_runCompiled (hfork := hfork) officialParams
     stubPauseWorldSevm stubRunKernelBase
     (pauseMemory pauseWorldCallee.toB256 pauseWorldDuration)
@@ -2176,7 +2176,7 @@ private theorem stubPauseWorld_productionRun :
       pauseLastStor_count)
     ((stubPauseWorld_getOrigStorVal _).trans pauseLastStor_count)
     (stubRunSvc_reset (by decide) (by decide))
-    (by norm_num [gCallStipend]) rfl
+    (by norm_num only [gCallStipend]) rfl
     (by
       dsimp only [stubRunKernelBase, stubRunCountPost, stubRunMemory1,
         stubRunImage1]
@@ -2186,7 +2186,7 @@ private theorem stubPauseWorld_productionRun :
       stubRunKernelBase pauseWorldCallee.toB256 0 pauseWorldPauser
       2900 2900 = 8122 from by
         simpa only [stubRunKernelBase] using stubRunKernelPrefixGas,
-    show (0 + 85001 + 8122 : Nat) = 93123 from by norm_num] at hker
+    show (0 + 85001 + 8122 : Nat) = 93123 from by norm_num only] at hker
   have hcalldata := pauseCalldata_facts
     stubPauseWorld_publicPausePremises.calldata
   have hbody := pause_body_runCompiled (hfork := hfork) officialParams stubPauseWorldSevm
@@ -2210,7 +2210,7 @@ private theorem stubPauseWorld_productionRun :
       exact (stubRunStor_lockPost _).trans pauseLastStor_duration)
     stubRunCost_duration rfl hker
   rw [show (93123 + (469 + 2100 + 2100 + 2100) : Nat) = 99892 from by
-    norm_num] at hbody
+    norm_num only] at hbody
   have hbodyTo := Func.RunCompiledTo.of_runCompiled hbody
   obtain ⟨hprog, _hcompile⟩ := pause_dispatch_runCompiledTo officialParams
     stubPauseWorldSevm stubPauseWorldPre 99892 0 _
@@ -2225,7 +2225,7 @@ private theorem stubPauseWorld_productionRun :
       ⟨[], Mem.empty, 0 + pauseDispatchGas + 99892, stubPauseWorldPre.stateGas⟩ =
       stubPauseWorldPre := by
     rw [show (0 + pauseDispatchGas + 99892 : Nat) = stubPauseWorldGas from by
-      norm_num [pauseDispatchGas, stubPauseWorldGas]]
+      norm_num only [pauseDispatchGas, stubPauseWorldGas]]
     rfl
   rw [hentry] at hprog
   exact ⟨successPre, final, hprog, hsuccessTo, hafterTo, hni⟩

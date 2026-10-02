@@ -53,7 +53,7 @@ theorem L2Post.set_foreign {entries : List Entry} {t : B256} {s : Stor} {w v : B
     L2Post entries t (s.set w v) := by
   have ht : canonicalAddress t := h.1.2
   have hlt : entries.length < 2 ^ 252 := by
-    have : (2 : Nat) ^ 160 < 2 ^ 252 := by norm_num
+    have : (2 : Nat) ^ 160 < 2 ^ 252 := by norm_num only
     omega
   have gA : (s.set w v).get (mapSlot t 3) = s.get (mapSlot t 3) := by
     rw [← solKey_assignmentSlot ht]; exact foreign_get hfa (Or.inl ⟨t, ht, rfl⟩)
@@ -110,7 +110,7 @@ theorem l2_registerPauser_zero_wrapper {sevm : Sevm} {d : Devm} {o : Outcome} {w
     L2Post entries (Sevm.dataWord sevm 4) (Devm.getStor (Outcome.devm o) sevm.currentTarget) := by
   have hlen : entries.length < 2 ^ 160 := by
     have := hwit.entries_length_le
-    have : 0 < 2 ^ 160 := by norm_num
+    have : 0 < 2 ^ 160 := by norm_num only
     omega
   have hAe := hA entries hwit
   refine registerPauser_wrapper_foreign (Φ := L2Post entries (Sevm.dataWord sevm 4))
