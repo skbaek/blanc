@@ -58,7 +58,7 @@ private theorem wordModelFold_count_le (events : List WordReplayEvent)
     simp only [List.foldl_cons, List.length_cons]
     omega
 
-private theorem balanceObservation_length_le (frames : List Exec.Frame) :
+theorem balanceObservation_length_le (frames : List Exec.Frame) :
     (frames.flatMap balanceFrameObservation).length ≤ frames.length := by
   induction frames with
   | nil => exact Nat.le_refl _
