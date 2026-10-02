@@ -128,4 +128,26 @@ theorem WordMargin.submission_bounds {occurrences : Nat} {state : Blanc.Withdraw
   · simp only [queueBase]
     omega
 
+/-- E7 slot safety: every live queue read slot and the next write slot
+(`head ≤ index ≤ tail`, offsets 0–2) is the unwrapped word `4 + 3 * index + offset`,
+hence never one of the bookkeeping slots 0–3. -/
+def QueueSlotsSafe (state : Blanc.WithdrawalRequest.State) : Prop :=
+  ∀ index, state.head ≤ index → index ≤ state.tail → ∀ offset, offset ≤ 2 →
+    (queueSlot index offset).toNat = queueBase index + offset ∧
+      4 ≤ (queueSlot index offset).toNat
+
+theorem WordMargin.slots_safe {occurrences : Nat} {state : Blanc.WithdrawalRequest.State}
+    (margin : WordMargin occurrences state) (cap : occurrences ≤ wordOccurrenceCap) :
+    QueueSlotsSafe state := by
+  have tailSlot := (margin.bounds cap).2.2.2.2.2.2
+  intro index _ upper offset small
+  have fits : queueBase index + offset < 2 ^ 256 := by
+    simp only [queueBase] at tailSlot ⊢
+    omega
+  have value := submission_queueSlot_toNat index offset fits
+  refine ⟨value, ?_⟩
+  rw [value]
+  simp only [queueBase]
+  omega
+
 end Blanc.Lift.WithdrawalRequest

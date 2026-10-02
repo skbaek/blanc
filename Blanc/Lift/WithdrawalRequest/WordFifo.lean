@@ -98,28 +98,67 @@ theorem WordStorageReplay.wordModel {pre post : Stor} {events : List WordReplayE
       simpa only [List.foldl_cons, wordModelUpdate, kind, wordModelSubmissions,
         List.flatMap_cons, List.nil_append, wordModelOutputs] using result
 
-/-- Recorded model submissions are exactly the submission-payment occurrences
-of the replayed frames. -/
-theorem WordStorageReplay.submissions_length {pre post : Stor} {events : List WordReplayEvent}
-    (replay : WordStorageReplay pre events post) :
-    (wordModelSubmissions events).length =
-      ((events.map WordReplayEvent.frame).flatMap submissionFramePayments).length := by
-  induction replay with
+/-- Each actual submission occurrence's committed frame with its typed entry, in replay order. -/
+def wordSubmissionFrames (events : List WordReplayEvent) :
+    List (Exec.Frame × Blanc.WithdrawalRequest.Entry) :=
+  events.flatMap fun event =>
+    match event.kind with
+    | .submission entry _ _ => [(event.frame, entry)]
+    | _ => []
+
+/-- The typed entries of the occurrence frames are the recorded model submissions. -/
+theorem wordSubmissionFrames_entries (events : List WordReplayEvent) :
+    (wordSubmissionFrames events).map Prod.snd =
+      (wordModelSubmissions events).map Submission.entry := by
+  induction events with
   | nil => rfl
+  | cons event events ih =>
+    cases kind : event.kind <;>
+      simp only [wordSubmissionFrames, wordModelSubmissions, List.flatMap_cons, kind,
+        List.map_cons, List.nil_append, List.singleton_append] at ih ⊢ <;>
+      rw [ih]
+
+/-- Retained observation followed by the submission-payment projection is the
+submission-payment projection of the original frames. -/
+theorem observed_submissionFramePayments (frames : List Exec.Frame) :
+    (frames.flatMap balanceFrameObservation).flatMap submissionFramePayments =
+      frames.flatMap submissionFramePayments := by
+  rw [List.flatMap_assoc]
+  apply congrArg (fun projection => frames.flatMap projection)
+  funext frame
+  exact submissionFramePayments_observed frame
+
+/-- The occurrence frames are exactly the submission-payment frames of the
+replayed frames, in order, and each frame's caller and 56-byte calldata are
+its entry's caller and `(pubkey, amount)` payload. -/
+theorem WordStorageReplay.submissionFrames {pre post : Stor} {events : List WordReplayEvent}
+    (replay : WordStorageReplay pre events post) :
+    (wordSubmissionFrames events).map Prod.fst =
+      ((events.map WordReplayEvent.frame).flatMap submissionFramePayments).map Prod.fst ∧
+    ∀ pair ∈ wordSubmissionFrames events,
+      pair.1.sevm.caller = pair.2.caller ∧ pair.1.sevm.data = submissionPayload pair.2 := by
+  induction replay with
+  | nil =>
+    refine ⟨rfl, ?_⟩
+    intro pair member
+    exact False.elim (List.not_mem_nil member)
   | @cons storage post event rest guard tail ih =>
     have target := guard.target
     have dynamic := guard.dynamic
-    have head : (wordModelSubmissions [event]).length =
-        (submissionFramePayments event.frame).length := by
+    have head : (wordSubmissionFrames [event]).map Prod.fst =
+          (submissionFramePayments event.frame).map Prod.fst ∧
+        ∀ pair ∈ wordSubmissionFrames [event],
+          pair.1.sevm.caller = pair.2.caller ∧ pair.1.sevm.data = submissionPayload pair.2 := by
       cases kind : event.kind with
       | system =>
         have caller : event.frame.sevm.caller = systemAddress := by
           simpa only [wordEventInput, kind] using guard.input
         have other : ¬ submissionPaymentFrame event.frame := fun frame => frame.2.1 caller
-        simp only [wordModelSubmissions, List.flatMap_cons, List.flatMap_nil, kind,
-          List.append_nil, submissionFramePayments, ite_eq_right other, List.length_nil]
+        simp only [wordSubmissionFrames, List.flatMap_cons, List.flatMap_nil, kind,
+          List.append_nil, submissionFramePayments, ite_eq_right other, List.map_nil,
+          List.not_mem_nil, false_imp_iff, imp_true_iff, and_self]
       | submission entry iterations output =>
-        obtain ⟨caller, _, payload, _⟩ :=
+        obtain ⟨caller, entryCaller, payload, _⟩ :=
           (show event.frame.sevm.caller ≠ systemAddress ∧ entry.caller = event.frame.sevm.caller ∧
             event.frame.sevm.data = submissionPayload entry ∧ storage.get 0 ≠ B256.max ∧
             WordFakeExponential.Run (storage.get 0) 17 1 17 0 iterations output ∧
@@ -128,8 +167,12 @@ theorem WordStorageReplay.submissions_length {pre post : Stor} {events : List Wo
         have length : event.frame.sevm.data.length = 56 := by
           rw [payload, submissionPayload_length]
         have frame : submissionPaymentFrame event.frame := ⟨⟨target, dynamic⟩, caller, length⟩
-        simp only [wordModelSubmissions, List.flatMap_cons, List.flatMap_nil, kind,
-          List.append_nil, submissionFramePayments, ite_eq_left frame, List.length_singleton]
+        simp only [wordSubmissionFrames, List.flatMap_cons, List.flatMap_nil, kind,
+          List.append_nil, submissionFramePayments, ite_eq_left frame, List.map_cons,
+          List.map_nil, List.mem_singleton, true_and]
+        intro pair member
+        rw [member]
+        exact ⟨entryCaller.symm, payload⟩
       | getter iterations output =>
         obtain ⟨_, empty, _⟩ :=
           (show event.frame.sevm.caller ≠ systemAddress ∧ event.frame.sevm.data = [] ∧
@@ -141,26 +184,41 @@ theorem WordStorageReplay.submissions_length {pre post : Stor} {events : List Wo
           have length := frame.2.2
           rw [empty] at length
           exact absurd length (by decide)
-        simp only [wordModelSubmissions, List.flatMap_cons, List.flatMap_nil, kind,
-          List.append_nil, submissionFramePayments, ite_eq_right other, List.length_nil]
-    have split : wordModelSubmissions (event :: rest) =
-        wordModelSubmissions [event] ++ wordModelSubmissions rest := by
-      simp only [wordModelSubmissions, List.flatMap_cons, List.flatMap_nil, List.append_nil]
-    rw [split, List.map_cons, List.flatMap_cons, List.length_append, List.length_append, head, ih]
+        simp only [wordSubmissionFrames, List.flatMap_cons, List.flatMap_nil, kind,
+          List.append_nil, submissionFramePayments, ite_eq_right other, List.map_nil,
+          List.not_mem_nil, false_imp_iff, imp_true_iff, and_self]
+    have split : wordSubmissionFrames (event :: rest) =
+        wordSubmissionFrames [event] ++ wordSubmissionFrames rest := by
+      simp only [wordSubmissionFrames, List.flatMap_cons, List.flatMap_nil, List.append_nil]
+    refine ⟨?_, ?_⟩
+    · rw [split, List.map_cons, List.flatMap_cons, List.map_append, List.map_append, head.1, ih.1]
+    · intro pair member
+      rw [split, List.mem_append] at member
+      rcases member with first | later
+      · exact head.2 pair first
+      · exact ih.2 pair later
 
-/-- Model submissions of the observed history equal its submission-payment occurrences. -/
-theorem history_word_submissions_length {cfg : ChainConfig} {checkpoint future : BlockChain}
+/-- History form: the occurrence frames are exactly the trace's committed
+submission-payment frames, with per-frame provenance, and their number is the
+number of recorded model submissions. -/
+theorem history_word_submission_frames {cfg : ChainConfig} {checkpoint future : BlockChain}
     (trace : ConfiguredHistoryTrace cfg checkpoint future) {pre post : Stor}
     {events : List WordReplayEvent} (replay : WordStorageReplay pre events post)
     (observed : events.map WordReplayEvent.frame =
       trace.settledFrames.flatMap balanceFrameObservation) :
+    (wordSubmissionFrames events).map Prod.fst =
+      (trace.settledFrames.flatMap submissionFramePayments).map Prod.fst ∧
+    (∀ pair ∈ wordSubmissionFrames events,
+      pair.1.sevm.caller = pair.2.caller ∧ pair.1.sevm.data = submissionPayload pair.2) ∧
     (wordModelSubmissions events).length =
       (trace.settledFrames.flatMap submissionFramePayments).length := by
-  rw [replay.submissions_length, observed, List.flatMap_assoc]
-  congr 1
-  apply congrArg (fun projection => trace.settledFrames.flatMap projection)
-  funext frame
-  exact submissionFramePayments_observed frame
+  have frames := replay.submissionFrames
+  rw [observed, observed_submissionFramePayments] at frames
+  refine ⟨frames.1, frames.2, ?_⟩
+  have entries := congrArg List.length (wordSubmissionFrames_entries events)
+  have lengths := congrArg List.length frames.1
+  simp only [List.length_map] at entries lengths
+  omega
 
 /-- Form H, whole history: under INIT and canonical code at the checkpoint,
 if at most `wordOccurrenceCap` submission payments occur, every exact prefix
@@ -192,9 +250,9 @@ theorem history_word_model {cfg : ChainConfig} {checkpoint future : BlockChain}
         model.head ≤ model.tail ∧ model.tail ≤ wordOccurrenceCap ∧
         model.queue.length = model.tail - model.head ∧
         effectiveExcess model + model.count < 2 ^ 256 ∧
-        queueBase model.tail + 2 < 2 ^ 256 := by
+        queueBase model.tail + 2 < 2 ^ 256 ∧ QueueSlotsSafe model := by
   obtain ⟨events, replay, observed⟩ := history_word_storage_replay trace code
-  have total := history_word_submissions_length trace replay observed
+  have total := (history_word_submission_frames trace replay observed).2.2
   have full := replay.wordModel WordHistory.start init (by
     rw [List.length_nil, Nat.zero_add, total]
     exact occurrences)
@@ -214,7 +272,9 @@ theorem history_word_model {cfg : ChainConfig} {checkpoint future : BlockChain}
   have margin := prefixModel.1.margin
   have conservation := prefixModel.1.conservation
   simp only [Blanc.WithdrawalRequest.initial, List.nil_append] at conservation
-  exact ⟨prefixModel.1, prefixModel.2, conservation, margin.bounds (by omega)⟩
+  obtain ⟨excessLe, countLe, headLe, tailLe, lengthEq, sumLt, slotLt⟩ := margin.bounds (by omega)
+  exact ⟨prefixModel.1, prefixModel.2, conservation, excessLe, countLe, headLe, tailLe, lengthEq,
+    sumLt, slotLt, margin.slots_safe (by omega)⟩
 
 /-- FIFO for one actual configured block under word-fee admission: the block's
 exact word events split into the earlier history, its user transactions and
@@ -222,7 +282,12 @@ its canonical reset; the model at the request boundary is a word-admitted
 history represented in storage; the block's withdrawal request bytes are
 `systemOutput` of that model, i.e. its first `min 16 queue` entries in order;
 outputs plus the remaining queue are exactly the committed submissions in
-order; and every bookkeeping value stays within `wordOccurrenceCap`. -/
+order; each output is, position for position, the `(caller, pubkey, amount)` of
+exactly one committed submission frame of the trace before this block's
+request phase (an order-preserving bijection onto outputs plus final queue);
+every bookkeeping value stays within `wordOccurrenceCap`; and every live
+queue read slot and next write slot is the unwrapped `4 + 3 * index + offset`,
+never slots 0–3, before and after the block's reset. -/
 def BlockWordFifo {cfg : ChainConfig} {checkpoint pre post : BlockChain}
     (history : ConfiguredHistoryTrace cfg checkpoint pre)
     (block : ConfiguredBlockTrace cfg pre post) : Prop :=
@@ -253,6 +318,17 @@ def BlockWordFifo {cfg : ChainConfig} {checkpoint pre post : BlockChain}
     (wordModelSubmissions ((past ++ transactionEvents) ++ [reset])).map Submission.entry =
       (wordModelOutputs initial past ++ emitted model) ++
         (Blanc.WithdrawalRequest.system model).queue ∧
+    let submissions := wordSubmissionFrames (past ++ transactionEvents)
+    submissions.map Prod.fst =
+      ((history.settledFrames ++ block.bodyTrace.transactions.settledFrames).flatMap
+        submissionFramePayments).map Prod.fst ∧
+    submissions.map Prod.fst =
+      ((ConfiguredHistoryTrace.step history block).settledFrames.flatMap
+        submissionFramePayments).map Prod.fst ∧
+    (∀ pair ∈ submissions,
+      pair.1.sevm.caller = pair.2.caller ∧ pair.1.sevm.data = submissionPayload pair.2) ∧
+    submissions.map Prod.snd = (wordModelOutputs initial past ++ emitted model) ++
+      (Blanc.WithdrawalRequest.system model).queue ∧
     RepresentsStorage (post.state.getStor withdrawalRequestPredeployAddress).get
       (Blanc.WithdrawalRequest.system model) ∧
     effectiveExcess model ≤ wordOccurrenceCap ∧ model.count ≤ wordOccurrenceCap ∧
@@ -260,7 +336,8 @@ def BlockWordFifo {cfg : ChainConfig} {checkpoint pre post : BlockChain}
     model.queue.length = model.tail - model.head ∧
     effectiveExcess model + model.count < 2 ^ 256 ∧ queueBase model.tail + 2 < 2 ^ 256 ∧
     effectiveExcess (Blanc.WithdrawalRequest.system model) ≤ wordOccurrenceCap ∧
-    (Blanc.WithdrawalRequest.system model).tail ≤ wordOccurrenceCap
+    (Blanc.WithdrawalRequest.system model).tail ≤ wordOccurrenceCap ∧
+    QueueSlotsSafe model ∧ QueueSlotsSafe (Blanc.WithdrawalRequest.system model)
 
 /-- Form H: under the original INIT/CODE/SYSTEM hypotheses, every block of a
 history with at most `wordOccurrenceCap` submission-payment occurrences since
@@ -293,15 +370,32 @@ theorem block_word_fifo
   obtain ⟨prefixOutputs, fullOutputs, finalModel⟩ := outputs initial
   subst equality
   obtain ⟨prefixHistory, prefixRep, _, excessLe, countLe, headLe, tailLe, lengthEq, sumLt,
-      slotLt⟩ := prefixes (past ++ transactionEvents) [reset] rfl
-  obtain ⟨fullHistory, fullRep, conservation, fullExcessLe, _, _, fullTailLe, _⟩ :=
-    prefixes ((past ++ transactionEvents) ++ [reset]) [] (List.append_nil _).symm
+      slotLt, prefixSlots⟩ := prefixes (past ++ transactionEvents) [reset] rfl
+  obtain ⟨fullHistory, fullRep, conservation, fullExcessLe, _, _, fullTailLe, _, _, _,
+      fullSlots⟩ := prefixes ((past ++ transactionEvents) ++ [reset]) [] (List.append_nil _).symm
+  have resetFrames : wordSubmissionFrames ((past ++ transactionEvents) ++ [reset]) =
+      wordSubmissionFrames (past ++ transactionEvents) := by
+    simp only [wordSubmissionFrames, List.flatMap_append, List.flatMap_cons, List.flatMap_nil,
+      resetKind, List.append_nil]
+  have resetSubmissions : wordModelSubmissions ((past ++ transactionEvents) ++ [reset]) =
+      wordModelSubmissions (past ++ transactionEvents) := by
+    simp only [wordModelSubmissions, List.flatMap_append, List.flatMap_cons, List.flatMap_nil,
+      resetKind, List.append_nil]
+  have prefixFrames := prefixReplay.submissionFrames
+  rw [List.map_append, pastMap, transactionMap, ← List.flatMap_append,
+    observed_submissionFramePayments] at prefixFrames
+  have fullFrames := (history_word_submission_frames (.step history block) replay observed).1
+  rw [resetFrames] at fullFrames
+  have entries := wordSubmissionFrames_entries (past ++ transactionEvents)
+  rw [← resetSubmissions] at entries
   rw [prefixReplay.fold_eq, prefixOutputs] at *
   rw [replay.fold_eq, finalModel, fullOutputs] at *
   have payload := block_requests_of_request_rep history block code _ prefixRep
   exact ⟨past, transactionEvents, reset, replay, pastMap, transactionMap, resetKind, resetPre,
     prefixHistory, prefixRep, payload.1, payload.2.1, payload.2.2, fullHistory, conservation,
-    fullRep, excessLe, countLe, headLe, tailLe, lengthEq, sumLt, slotLt, fullExcessLe, fullTailLe⟩
+    prefixFrames.1, fullFrames, prefixFrames.2, entries.trans conservation,
+    fullRep, excessLe, countLe, headLe, tailLe, lengthEq, sumLt, slotLt, fullExcessLe, fullTailLe,
+    prefixSlots, fullSlots⟩
 
 /-- Form D: the same FIFO with no length premise, or more than
 `wordOccurrenceCap` submission-payment occurrences since the checkpoint. -/
