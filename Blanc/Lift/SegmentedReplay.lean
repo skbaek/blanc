@@ -235,4 +235,204 @@ theorem Exec.simulateCommittedLogChunks
   rw [logs]
   exact Exec.committed_logs run committed fork
 
+private def StateTransition.singletonChunk {Origin : Type}
+    (boundary : StateTransition Origin) : ReplayChunk Origin :=
+  {origin := [boundary], before := boundary.before, after := boundary.after}
+
+def Exec.canPrepend (boundary : Exec.StateBoundary)
+    (chunk : ReplayChunk Exec.StateBoundaryOrigin) : Prop :=
+  Exec.StateBoundary.isOwn boundary ∧ boundary.origin.kind = .instruction ∧
+    ∀ event ∈ chunk.origin,
+      Exec.StateBoundary.isOwn event ∧ event.origin.framePath = boundary.origin.framePath
+
+/-- Deterministic contiguous cuts for a semantic prepend policy.  The original
+boundaries and their endpoints are retained without selecting an arbitrary partition. -/
+noncomputable def StateTransition.canonicalChunks {Origin : Type}
+    (canPrepend : StateTransition Origin → ReplayChunk Origin → Prop) :
+    List (StateTransition Origin) → List (ReplayChunk Origin)
+  | [] => []
+  | boundary :: rest => by
+      classical
+      exact match StateTransition.canonicalChunks canPrepend rest with
+      | [] => [StateTransition.singletonChunk boundary]
+      | chunk :: chunks =>
+          if canPrepend boundary chunk then
+            {origin := boundary :: chunk.origin,
+              before := boundary.before, after := chunk.after} :: chunks
+          else StateTransition.singletonChunk boundary :: chunk :: chunks
+
+/-- Coalesce a same-path own instruction prefix; external instructions and every
+seam remain separate, and terminals close a chunk. -/
+noncomputable def Exec.canonicalChunks :
+    List Exec.StateBoundary → List (ReplayChunk Exec.StateBoundaryOrigin) :=
+  StateTransition.canonicalChunks Exec.canPrepend
+
+theorem Exec.singleton_admissible (boundary : Exec.StateBoundary) :
+    Exec.AdmissibleChunk
+      {origin := [boundary], before := boundary.before, after := boundary.after} := by
+  classical
+  by_cases own : Exec.StateBoundary.isOwn boundary
+  · exact Or.inl ⟨[], boundary, rfl, fun _ member => (List.not_mem_nil member).elim, own⟩
+  · exact Or.inr ⟨boundary, rfl, own⟩
+
+theorem Exec.prepend_admissible
+    {boundary : Exec.StateBoundary} {chunk : ReplayChunk Exec.StateBoundaryOrigin}
+    (can : Exec.canPrepend boundary chunk) (admissible : Exec.AdmissibleChunk chunk) :
+    Exec.AdmissibleChunk
+      {origin := boundary :: chunk.origin, before := boundary.before, after := chunk.after} := by
+  rcases admissible with ⟨before, last, eq, all, own⟩ | ⟨event, eq, notOwn⟩
+  · have lastMember : last ∈ chunk.origin := by
+      rw [eq]
+      exact List.mem_append_right _ List.mem_cons_self
+    have path := (can.2.2 last lastMember).2
+    refine Or.inl ⟨boundary :: before, last, ?_, ?_, own⟩
+    · rw [eq]
+      rfl
+    · intro event member
+      rcases List.mem_cons.mp member with rfl | member
+      · exact ⟨path.symm, can.2.1, can.1⟩
+      · exact all event member
+  · have eventMember : event ∈ chunk.origin := by
+      rw [eq]; exact List.mem_cons_self
+    exact (notOwn (can.2.2 event eventMember).1).elim
+
+/-- A local semantic policy is preserved by the actual deterministic cuts. -/
+theorem StateTransition.canonicalChunks_satisfies {Origin : Type}
+    (canPrepend : StateTransition Origin → ReplayChunk Origin → Prop)
+    (P : ReplayChunk Origin → Prop)
+    (singleton : ∀ boundary, P
+      {origin := [boundary], before := boundary.before, after := boundary.after})
+    (prepend : ∀ boundary chunk, canPrepend boundary chunk → P chunk → P
+      {origin := boundary :: chunk.origin, before := boundary.before, after := chunk.after})
+    (raw : List (StateTransition Origin)) :
+    ∀ chunk ∈ StateTransition.canonicalChunks canPrepend raw, P chunk := by
+  classical
+  induction raw with
+  | nil => intro chunk member; exact (List.not_mem_nil member).elim
+  | cons boundary rest ih =>
+      simp only [StateTransition.canonicalChunks]
+      cases cuts : StateTransition.canonicalChunks canPrepend rest with
+      | nil =>
+          intro chunk member
+          obtain rfl := List.mem_singleton.mp member
+          exact singleton boundary
+      | cons chunk chunks =>
+          dsimp only
+          rw [cuts] at ih
+          split
+          next can =>
+            intro piece member
+            rcases List.mem_cons.mp member with rfl | member
+            · exact prepend boundary chunk can (ih chunk List.mem_cons_self)
+            · exact ih piece (List.mem_cons_of_mem chunk member)
+          next cannot =>
+            intro piece member
+            rcases List.mem_cons.mp member with rfl | member
+            · exact singleton boundary
+            · exact ih piece member
+
+/-- The canonical coalescing procedure produces only semantic admissible cuts. -/
+theorem Exec.canonicalChunks_admissible (raw : List Exec.StateBoundary) :
+    Exec.AdmissibleCuts (Exec.canonicalChunks raw) :=
+  StateTransition.canonicalChunks_satisfies Exec.canPrepend Exec.AdmissibleChunk
+    Exec.singleton_admissible (fun _ _ => Exec.prepend_admissible) raw
+
+private theorem StateReplay.head_before
+    {Origin : Type} {pre post : State} {event : StateTransition Origin}
+    {tail : List (StateTransition Origin)}
+    (replay : StateReplay pre (event :: tail) post) : pre = event.before := by
+  cases replay
+  rfl
+
+/-- Every canonical chunk is a nonempty contiguous segment of the actual replay,
+with its endpoints derived from that replay and exact original flattening. -/
+theorem StateReplay.canonicalChunks_exact
+    {Origin : Type} (canPrepend : StateTransition Origin → ReplayChunk Origin → Prop)
+    {pre post : State} {raw : List (StateTransition Origin)}
+    (replay : StateReplay pre raw post) :
+    ExactChunks raw (StateTransition.canonicalChunks canPrepend raw) := by
+  classical
+  induction replay with
+  | nil state => exact ⟨rfl, fun _ member => (List.not_mem_nil member).elim⟩
+  | @cons tail post boundary rest ih =>
+      simp only [StateTransition.canonicalChunks]
+      cases cuts : StateTransition.canonicalChunks canPrepend tail with
+      | nil =>
+          rw [cuts] at ih
+          refine ⟨?_, ?_⟩
+          · rw [← ih.1]
+            rfl
+          · intro piece member
+            obtain rfl := List.mem_singleton.mp member
+            exact ⟨List.cons_ne_nil _ _, .cons boundary (.nil _)⟩
+      | cons chunk chunks =>
+          dsimp only
+          have tailChunksReplay := rest.rechunk ih
+          rw [cuts] at ih tailChunksReplay
+          have cutAligned := StateReplay.head_before tailChunksReplay
+          split
+          next can =>
+            refine ⟨?_, ?_⟩
+            · change boundary :: (chunk.origin ++ chunks.flatMap (fun c => c.origin)) =
+                boundary :: tail
+              exact congrArg (List.cons boundary) ih.1
+            · intro piece member
+              rcases List.mem_cons.mp member with rfl | member
+              · obtain ⟨_, chunkReplay⟩ := ih.2 chunk List.mem_cons_self
+                rw [← cutAligned] at chunkReplay
+                exact ⟨List.cons_ne_nil _ _, .cons boundary chunkReplay⟩
+              · exact ih.2 piece (List.mem_cons_of_mem chunk member)
+          next cannot =>
+            refine ⟨?_, ?_⟩
+            · change boundary :: (chunk.origin ++ chunks.flatMap (fun c => c.origin)) =
+                boundary :: tail
+              exact congrArg (List.cons boundary) ih.1
+            · intro piece member
+              rcases List.mem_cons.mp member with rfl | member
+              · exact ⟨List.cons_ne_nil _ _, .cons boundary (.nil _)⟩
+              · exact ih.2 piece member
+
+/-- Canonical cuts of the actual committing execution need no supplied partition. -/
+noncomputable def Exec.committedCanonicalChunks
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) : List (ReplayChunk Exec.StateBoundaryOrigin) :=
+  Exec.canonicalChunks (Exec.committedStateBoundaries run)
+
+/-- Canonical cuts are exact and semantic on the existing committed chronology. -/
+theorem Exec.committedCanonicalChunks_spec
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true) :
+    ExactChunks (Exec.committedStateBoundaries run) (Exec.committedCanonicalChunks run) ∧
+      Exec.AdmissibleCuts (Exec.committedCanonicalChunks run) :=
+  ⟨StateReplay.canonicalChunks_exact Exec.canPrepend
+      (Exec.committedStateReplay run committed), Exec.canonicalChunks_admissible _⟩
+
+/-- Consume the canonical semantic cuts of the actual execution; no supplied
+partition, admissibility premise, or committed log endpoint premise is needed. -/
+theorem Exec.simulateCanonicalLogChunks
+    {Q Step : Type}
+    (R : Q → List Step → Q → Prop)
+    (nil : ∀ q, R q [] q)
+    (append : ∀ {a b c xs ys}, R a xs b → R b ys c → R a (xs ++ ys) c)
+    (obs : List Step → List Log) (obs_nil : obs [] = [])
+    (obs_append : ∀ xs ys, obs (xs ++ ys) = obs xs ++ obs ys)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true)
+    (fork : CoveredFork sevm.benvStat.fork)
+    (Link : List (ReplayChunk Exec.StateBoundaryOrigin) → State → Q → Prop)
+    {q₀ : Q} (opening : Link [] pre.state q₀)
+    (localStep : ∀ prior chunk suffix,
+      Exec.committedCanonicalChunks run = prior ++ chunk :: suffix →
+      Exec.AdmissibleChunk chunk → ∀ q, Link prior chunk.before q →
+      ∃ q' steps, R q steps q' ∧ Link (prior ++ [chunk]) chunk.after q' ∧
+        obs steps = chunk.origin.flatMap Exec.boundaryOwnLogs) :
+    ∃ q' steps, R q₀ steps q' ∧
+      Link (Exec.committedCanonicalChunks run)
+        (Execution.committedPost out committed).state q' ∧
+      obs steps = (Exec.committedStateBoundaries run).flatMap Exec.boundaryOwnLogs ∧
+      (Execution.committedPost out committed).logs = pre.logs ++ obs steps := by
+  obtain ⟨exactCuts, admissible⟩ := Exec.committedCanonicalChunks_spec run committed
+  exact Exec.simulateCommittedLogChunks R nil append obs obs_nil obs_append
+    run committed fork exactCuts admissible Link opening localStep
+
 end Blanc

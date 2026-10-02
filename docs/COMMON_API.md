@@ -973,14 +973,20 @@ one frame path and permit terminal only at the end. `Exec.simulateCommittedChunk
 applies the fold to the actual committed execution stream.
 `Exec.simulateCommittedLogChunks` additionally connects the local producer's
 ordered observations to the concrete endpoint logs using `Exec.committed_logs`.
+`StateTransition.canonicalChunks` deterministically coalesces contiguous own
+instruction prefixes under a semantic prepend policy. `StateReplay.canonicalChunks_exact`
+derives exact coverage and endpoints; `Exec.committedCanonicalChunks_spec` supplies
+admissibility on the actual committed stream. `Exec.simulateCanonicalLogChunks`
+consumes those cuts without a supplied partition or log-endpoint premise.
 
 For the same local fold over an existing configured-history witness, use
 [`Blanc/Lift/SegmentedHistory.lean`](../Blanc/Lift/SegmentedHistory.lean):
 `ExecutionTrace.ConfiguredAdmissibleChunk` preserves the original wrapper
 boundaries, and `ExecutionTrace.ConfiguredHistoryStateChronology.simulateChunks`
-consumes its `stateReplay`. These interfaces require exact admissible chunks and
-a local producer; they do not construct canonical cuts, establish retained
-target-turn coverage, or provide a contract's model refinement.
+consumes its `stateReplay`. Its `canonicalChunks`/`canonicalChunks_spec` and
+`simulateCanonicalChunks` derive and consume exact admissible cuts through the
+original wrappers. Local producers remain required; retained target-turn coverage
+and a contract's model refinement remain separate obligations.
 The existing `goal-head:StateReplay` recipe selects chronology continuity;
 the joint chunk/Link/observation premises are discovered through this registry.
 
