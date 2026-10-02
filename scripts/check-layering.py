@@ -217,6 +217,7 @@ CONTRACTS = {
                            "Lift.WithdrawalRequest.WordBudget",
                            "Lift.WithdrawalRequest.NatFeeBound",
                            "Lift.WithdrawalRequest.ExactFeeDomain",
+                           "Lift.WithdrawalRequest.NatLiveness",
                            "Lift.WithdrawalRequest.SubmissionCount",
                            "Lift.WithdrawalRequest.ResetWindowCount",
                            "Lift.WithdrawalRequest.CodeFacts",

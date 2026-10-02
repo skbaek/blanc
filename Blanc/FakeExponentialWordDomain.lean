@@ -172,6 +172,21 @@ private theorem quotient_toNat (r : B256) {d : Nat} (dBound : d < 2 ^ 256) :
     ((Nat.div_le_self _ _).trans_lt (B256.toNat_lt r)),
     B256.toNat_toB256_of_lt dBound]
 
+/-- Bounded positive divisors make the word quotient no larger than the
+canonical Nat quotient, without assuming any product or sum avoids wrap. -/
+theorem Run.quotient_le {e a r : B256} {d c N : Nat}
+    (run : WordFakeExponential.Run e d.toB256 c.toB256 a 0 N r)
+    (dPos : 0 < d) (cPos : 0 < c)
+    (horizon : d * d * (c + N) ≤ 2 ^ 256) :
+    (r / d.toB256).toNat ≤ fakeExpAux e.toNat d c a.toNat / d := by
+  have dBound := denominator_lt dPos cPos horizon
+  have window : d * (c + N) ≤ 2 ^ 256 :=
+    (Nat.mul_le_mul_right (c + N) (Nat.le_mul_of_pos_left d dPos)).trans horizon
+  have lower := comparison run c a.toNat rfl dPos cPos dBound window (Nat.le_refl _)
+  simp only [Nat.sub_self, Nat.add_zero, B256.toNat_zero, Nat.zero_add] at lower
+  rw [quotient_toNat r dBound]
+  exact Nat.div_le_div_right lower
+
 /-- In the bounded positive-divisor window, equality of the final quotients
 is exactly the existing Nat trace's no-wrap domain at the same iteration count. -/
 theorem Run.quotient_eq_iff_noWrap {e a r : B256} {d c N : Nat}

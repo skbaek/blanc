@@ -1747,6 +1747,10 @@ same length with `NoWrap` at prefix zero. The margin makes active divisors
 exact and each overflowing product lose enough to affect final division;
 extra Nat terms after early word termination are included. This is an exact
 arithmetic domain within that window, with no reachable-history claim.
+`FakeExponentialWordDomain.Run.quotient_le` takes the same bounded window and
+proves that the word quotient is at most the Nat quotient, without any
+no-wrap premise. It supports sufficient-payment liveness without requiring
+fee equality; it does not turn a successful word-fee guard into Nat payment.
 
 ## M — bytes and memory
 
