@@ -2207,6 +2207,19 @@ A call-level consumer must separately derive its real entry seed, precompile
 output bounds and settlement/returndata installation; this theorem does not
 assume or provide those remaining facts.
 
+#### I need a bound on actual precompile output
+
+Use [`Blanc/Lift/PrecompileOutputBound.lean`](../Blanc/Lift/PrecompileOutputBound.lean).
+`PrecompileOutputBound.precompile_run_output` follows all implemented producer
+branches and bounds successful output length by `2 ^ 256`. Identity consumes
+the actual input-length bound; MODEXP consumes its 32-byte modulus-length
+header; the other producers use their fixed output serializers.
+`PrecompileOutputBound.executePrecomp_output` gives the bound on both outcome
+channels when actual input and incoming output seed are short. Errors preserve
+the seed. Derive those premises from the real frame entry; this API does not
+supply a separate environmental assumption about precompile output.
+The immediate consumer is actual-entry composition in `Lift.ReturnDataBound`.
+
 ### T2b. I need a contract's own ledger replay across retained settlement
 
 A contract that reads one account and reports an *ordered* replay of the moves
